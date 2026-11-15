@@ -51,6 +51,14 @@ export function makeCityLandscape(config, proj, index, route) {
     const t = Math.max(0, Math.min(1, ((x - index.xs[i]) * dx + (z - index.zs[i]) * dz) / l2));
     return route.ele[i] + (route.ele[j] - route.ele[i]) * t;
   };
+  // outbound route samples on a 20 m grid, for "every stretch of road near here"
+  const near = new Map();
+  for (let i = 0; i <= end; i++) { const k = `${Math.floor(index.xs[i] / 20)},${Math.floor(index.zs[i] / 20)}`; if (!near.has(k)) near.set(k, []); near.get(k).push(i); }
+  const nearbyRoute = (x, z) => {
+    const out = [], cx = Math.floor(x / 20), cz = Math.floor(z / 20);
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const i of near.get(`${cx + a},${cz + b}`) || []) out.push(i);
+    return out;
+  };
   const gridH = (u, v) => {
     u = Math.max(0, Math.min(D.nx - 1.001, u)); v = Math.max(0, Math.min(D.ny - 1.001, v));
     const i = Math.floor(u), j = Math.floor(v), a = u - i, b = v - j, H = D.heights, n = D.nx;
@@ -90,7 +98,17 @@ export function makeCityLandscape(config, proj, index, route) {
       const i = outbound(road.i), s = route.dist[i];
       const bridge = onRouteBridge(s, 6);
       if (!bridge) h += (roadEle(i, x, z) - .5 - h) * (1 - smoothstep(13, 60, road.d));
-      else if (road.d < 14) h = Math.min(h, route.ele[i] - 2.5);   // keep the ground under a deck
+      else {
+        if (road.d < 14) h = Math.min(h, route.ele[i] - 2.5);   // keep the ground under a deck
+        // a stretch of the route that passes under this deck (the North Shore Trail under the Clemente ramp)
+        let under = null;
+        for (const j of nearbyRoute(x, z)) {
+          if (onRouteBridge(route.dist[j], 6)) continue;
+          const dj = Math.hypot(index.xs[j] - x, index.zs[j] - z);
+          if (dj < 20 && (!under || dj < under.d)) under = { j, d: dj };
+        }
+        if (under) h += (roadEle(under.j, x, z) - .5 - h) * (1 - smoothstep(13, 20, under.d));
+      }
     }
     return h;
   };

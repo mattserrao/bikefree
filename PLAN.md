@@ -273,7 +273,7 @@ Goal: the first city course — a loop full of life: riverside trails, famous br
 - [x] **Night** time of day (all routes): moon, stars and a city glow on the horizon; in the city the windows, street lamps, bridge lights, stadium lights, aircraft beacons, the Gulf Tower beacon, car head/tail lights, shop signs and light on the rivers; a front light on the bike
 - [x] Route surface follows the route: streets keep lane paint, trails and park paths get a plain surface; concrete sidewalks instead of gravel shoulders
 - [x] Course QC (`npm run qc`) runs on the city; `test/city.test.mjs`
-- [ ] Known: at 0.42 km the trail passes 10 m from the Clemente Bridge ramp (5 m higher) — the ground between them steps (QC: 1 fail, cosmetic)
+- [x] QC: 0 fail — the North Shore Trail at 0.42 km passes under the start of the Clemente Bridge deck; the ground there now follows the trail (11 warnings: tight city corners and narrow carves beside ramps)
 - [ ] On-bike check and M4 Air smoothness (Light / Balanced / High)
 
 ### Later ideas
