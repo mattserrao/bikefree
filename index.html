@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>bikefree</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ccircle cx=%2250%22 cy=%2250%22 r=%2240%22 fill=%22%23ff7a1a%22/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <h1>bike<span>free</span></h1>
+    <span class="version">v0.1 · connection test</span>
+  </header>
+
+  <div id="unsupported" class="banner" hidden>
+    Web Bluetooth isn't available here. Open this page in <b>Chrome</b> on your Mac, from <b>localhost</b> or <b>https</b>.
+  </div>
+
+  <main>
+    <section class="devices">
+      <div class="device" id="trainerCard">
+        <div class="device-head">
+          <span class="dot" id="trainerDot"></span>
+          <div>
+            <div class="device-name">Trainer</div>
+            <div class="device-sub" id="trainerSub">KICKR CORE 2 · not connected</div>
+          </div>
+        </div>
+        <button id="trainerBtn" class="primary">Connect trainer</button>
+      </div>
+
+      <div class="device" id="rideCard">
+        <div class="device-head">
+          <span class="dot" id="rideDot"></span>
+          <div>
+            <div class="device-name">Handlebars</div>
+            <div class="device-sub" id="rideSub">Zwift Ride · not connected</div>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button id="rideBtn" class="primary">Connect handlebars</button>
+          <button id="rideAnyBtn" class="ghost" title="Show every Zwift device in the picker">Show all Zwift devices</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="tiles">
+      <div class="tile"><div class="label">Power</div><div class="value" id="power">--</div><div class="unit">W</div></div>
+      <div class="tile"><div class="label">Cadence</div><div class="value" id="cadence">--</div><div class="unit">rpm</div></div>
+      <div class="tile"><div class="label">Speed (trainer)</div><div class="value" id="speed">--</div><div class="unit">mph</div></div>
+      <div class="tile"><div class="label">Resistance</div><div class="value" id="mode">--</div><div class="unit" id="modeUnit">mode</div></div>
+    </section>
+
+    <section class="panel">
+      <h2>Resistance test</h2>
+      <div class="controls">
+        <div class="control">
+          <label for="ergInput">ERG target</label>
+          <div class="inline">
+            <input type="number" id="ergInput" value="120" min="0" max="1000" step="5">
+            <span>W</span>
+            <button id="ergBtn" disabled>Set ERG</button>
+          </div>
+        </div>
+        <div class="control">
+          <label for="gradeInput">SIM grade <b id="gradeOut">0.0%</b></label>
+          <div class="inline">
+            <input type="range" id="gradeInput" min="-10" max="16" step="0.5" value="0">
+            <button id="gradeBtn" disabled>Set grade</button>
+          </div>
+        </div>
+        <div class="control">
+          <label>&nbsp;</label>
+          <button id="flatBtn" disabled>Flat road (0%)</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Handlebar buttons</h2>
+      <div class="pads">
+        <div class="pad" id="padLeft">
+          <div class="pad-title">Left</div>
+          <div class="keys">
+            <span data-btn="paddleLeft">Paddle</span>
+            <span data-btn="shiftUpLeft">Shift up</span>
+            <span data-btn="shiftDownLeft">Shift down</span>
+            <span data-btn="powerUpLeft">Power-up</span>
+            <span data-btn="navUp">▲</span>
+            <span data-btn="navLeft">◀</span>
+            <span data-btn="navRight">▶</span>
+            <span data-btn="navDown">▼</span>
+            <span data-btn="onOffLeft">On/Off</span>
+          </div>
+        </div>
+        <div class="pad" id="padRight">
+          <div class="pad-title">Right</div>
+          <div class="keys">
+            <span data-btn="paddleRight">Paddle</span>
+            <span data-btn="shiftUpRight">Shift up</span>
+            <span data-btn="shiftDownRight">Shift down</span>
+            <span data-btn="powerUpRight">Power-up</span>
+            <span data-btn="Y">Y</span>
+            <span data-btn="Z">Z</span>
+            <span data-btn="A">A</span>
+            <span data-btn="B">B</span>
+            <span data-btn="onOffRight">On/Off</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="log-head">
+        <h2>Log</h2>
+        <div class="inline">
+          <label class="check"><input type="checkbox" id="rawToggle"> Raw controller bytes</label>
+          <label class="check"><input type="checkbox" id="debugToggle" checked> Details</label>
+          <button id="copyLog" class="ghost">Copy log</button>
+          <button id="clearLog" class="ghost">Clear</button>
+        </div>
+      </div>
+      <ol id="log"></ol>
+    </section>
+  </main>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
