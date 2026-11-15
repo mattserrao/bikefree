@@ -40,18 +40,38 @@ for (const item of catalog) {
   if (item.outAndBack) row.outAndBack = true;
   if (item.scene) {
     const scene = JSON.parse(read(item.scene));
-    if (scene.format !== 'bikefree-scene-1' || scene.terrain !== 'authored-coast') throw new Error(`${item.id}: unsupported scene format or terrain`);
-    if (!Array.isArray(scene.coastline) || scene.coastline.length < 2) throw new Error(`${item.id}: a coastline needs at least two coordinates`);
-    for (const [lat, lon] of scene.coastline) if (!Number.isFinite(lat) || Math.abs(lat) > 90 || !Number.isFinite(lon) || Math.abs(lon) > 180) throw new Error(`${item.id}: invalid coastline coordinate`);
+    if (scene.format !== 'bikefree-scene-1' || !['authored-coast', 'authored-region'].includes(scene.terrain)) throw new Error(`${item.id}: unsupported scene format or terrain`);
+    if (scene.terrain === 'authored-coast' && (!Array.isArray(scene.coastline) || scene.coastline.length < 2)) throw new Error(`${item.id}: a coastline needs at least two coordinates`);
+    for (const [lat, lon] of scene.coastline || []) if (!Number.isFinite(lat) || Math.abs(lat) > 90 || !Number.isFinite(lon) || Math.abs(lon) > 180) throw new Error(`${item.id}: invalid coastline coordinate`);
     if (!scene.assets?.startsWith('models/scenery/') || scene.assets.includes('..') || !existsSync(resolve(root, scene.assets))) throw new Error(`${item.id}: missing scenery asset kit`);
     const kit = JSON.parse(read(scene.assets));
     if (kit.format !== 'bikefree-scenery-1') throw new Error(`${item.id}: invalid scenery asset kit`);
+    for (const extra of scene.extraAssets || []) {
+      if (!extra.startsWith('models/scenery/') || extra.includes('..')) throw new Error(`${item.id}: invalid extra scenery path`);
+      const extension = JSON.parse(read(extra));
+      if (extension.format !== 'bikefree-scenery-1') throw new Error(`${item.id}: invalid extra scenery kit`);
+      Object.assign(kit.assets, extension.assets); paths.push(extra);
+    }
+    const validCoordinate = (p) => Number.isFinite(p.lat) && Math.abs(p.lat) <= 90 && Number.isFinite(p.lon) && Math.abs(p.lon) <= 180;
+    const validRadius = (p) => Array.isArray(p.radiusM) && p.radiusM.length === 2 && p.radiusM.every((r) => Number.isFinite(r) && r > 0);
+    for (const lake of scene.lakes || []) if (!validCoordinate(lake) || !Number.isFinite(lake.elevationM) || !validRadius(lake)) throw new Error(`${item.id}: invalid lake placement or dimensions`);
+    for (const form of [...(scene.formations || []), ...(scene.islands || [])]) if (!validCoordinate(form) || !validRadius(form) || !(form.heightM > 0)) throw new Error(`${item.id}: invalid landform placement or dimensions`);
+    for (const river of scene.rivers || []) if (!(river.widthM > 0) || !Array.isArray(river.path) || river.path.length < 2 || river.path.some(([lat, lon]) => !validCoordinate({ lat, lon }))) throw new Error(`${item.id}: invalid river path or width`);
+    for (const name of [...(scene.vegetation?.trees || []), ...(scene.vegetation?.shrubs || []), ...(scene.vegetation?.cover || [])]) if (!kit.assets[name]) throw new Error(`${item.id}: missing vegetation model ${name}`);
+    for (const range of scene.bridgeRanges || []) if (!(range.fromM >= 0 && range.toM > range.fromM && range.toM <= (route.turnS || route.total))) throw new Error(`${item.id}: invalid bridge range`);
     for (const landmark of scene.landmarks || []) {
       if (!kit.assets[landmark.asset]) throw new Error(`${item.id}: missing landmark model ${landmark.asset}`);
       if (!(landmark.span > 0) || !Number.isFinite(landmark.lat) || !Number.isFinite(landmark.lon)) throw new Error(`${item.id}: invalid landmark placement`);
+      if (landmark.creekWidthM !== undefined && !(landmark.creekWidthM > 0)) throw new Error(`${item.id}: creekWidthM must be positive`);
       let distance = Infinity;
       for (let i = 0; i < route.lat.length; i += 5) distance = Math.min(distance, haversine(landmark, { lat: route.lat[i], lon: route.lon[i] }));
       if (distance > 120) throw new Error(`${item.id}: landmark is ${Math.round(distance)} m from the road`);
+    }
+    for (const feature of [...(scene.signs || []), ...(scene.lookouts || []), ...(scene.seaStacks || [])]) {
+      if (!Number.isFinite(feature.atM) || feature.atM < 0 || feature.atM > (route.turnS || route.total)) throw new Error(`${item.id}: scenery feature must be placed on the outbound route`);
+      for (const key of ['widthM', 'heightM', 'lengthM', 'offshoreM']) {
+        if (feature[key] !== undefined && !(feature[key] > 0)) throw new Error(`${item.id}: ${key} must be positive`);
+      }
     }
     paths.push(item.scene, scene.assets);
     row.scene = item.scene;

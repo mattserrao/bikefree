@@ -2,7 +2,7 @@
 import * as THREE from '../../vendor/three.module.min.js';
 import { makeProjection, makeRouteIndex } from './geo.js';
 import { Terrain } from './terrain.js';
-import { StylizedTerrain } from './stylized-terrain.js';
+import { StylizedTerrain, COASTAL_QUALITY } from './stylized-terrain.js';
 import { headingSpan } from '../routes.js';
 import { loadRider } from './rider.js';
 import { wrapDist } from '../gpx.js';
@@ -19,7 +19,7 @@ export class World {
   /**
    * @param {HTMLElement} container
    * @param {object} route  built route (gpx.js) — should be a closed loop
-   * @param {{log?:Function}} [opts]
+   * @param {{log?:Function, quality?:'low'|'balanced'|'high'}} [opts]
    */
   constructor(container, route, opts = {}) {
     this.container = container;
@@ -31,6 +31,7 @@ export class World {
     this.running = false;
     this.source = null;       // () => {pos, speed, cadence, riding}
     this.stylized = route.scene?.style === 'stylized';
+    this.qualityKey = Object.hasOwn(COASTAL_QUALITY, opts.quality) ? opts.quality : 'balanced';
 
     // Projection centred on the route
     let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
@@ -43,7 +44,7 @@ export class World {
 
     // Renderer
     this.renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.stylized ? 1.5 : 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.stylized ? COASTAL_QUALITY[this.qualityKey].pixelRatio : 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     container.prepend(this.renderer.domElement);
@@ -57,6 +58,15 @@ export class World {
     // Light + sky
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
     this.sun = new THREE.DirectionalLight(0xffffff, 1.5);
+    if (this.stylized) {
+      this.renderer.shadowMap.enabled = COASTAL_QUALITY[this.qualityKey].shadows;
+      this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      this.sun.castShadow = true;
+      const shadowResolution = this.qualityKey === 'high' ? 2048 : 1024;
+      this.sun.shadow.mapSize.set(shadowResolution, shadowResolution);
+      Object.assign(this.sun.shadow.camera, { near: 10, far: 800, left: -170, right: 170, top: 170, bottom: -170 });
+      this.sun.shadow.bias = -.00015; this.sun.shadow.normalBias = .055;
+    }
     this.scene.add(this.hemi, this.sun, this.sun.target);
     this.sky = makeSky();
     this.scene.add(this.sky);
@@ -65,6 +75,7 @@ export class World {
     const TerrainClass = this.stylized ? StylizedTerrain : Terrain;
     this.terrain = new TerrainClass(this.scene, this.proj, this.index, {
       route,
+      quality: this.qualityKey,
       bbox: { minLat, maxLat, minLon, maxLon },
       renderer: this.renderer,
       onError: (err) => this.log('3d', `Tile load problem: ${err.message}`, 'debug'),
@@ -81,6 +92,7 @@ export class World {
       if (this.disposed) return;
       this.scene.remove(this.rider.group);
       this.rider = r;
+      if (this.stylized) r.group.traverse((o) => { if (o.isMesh && !o.material.transparent) { o.castShadow = true; o.receiveShadow = true; } });
       this.scene.add(r.group);
       this.log('3d', `Rider model loaded (${r.triangles.toLocaleString()} triangles)`, 'debug');
     }).catch((err) => this.log('3d', `Using the simple rider: ${err.message}`, 'debug'));
@@ -106,10 +118,26 @@ export class World {
 
   setCamera(mode) { this.cameraMode = mode; this._camInit = false; }
 
+  setQuality(key) {
+    if (!this.stylized) return;
+    this.qualityKey = Object.hasOwn(COASTAL_QUALITY, key) ? key : 'balanced';
+    const quality = COASTAL_QUALITY[this.qualityKey];
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.pixelRatio));
+    this.renderer.shadowMap.enabled = quality.shadows;
+    const resolution = this.qualityKey === 'high' ? 2048 : 1024;
+    if (this.sun.shadow.mapSize.x !== resolution) {
+      this.sun.shadow.map?.dispose(); this.sun.shadow.map = null;
+      this.sun.shadow.mapSize.set(resolution, resolution);
+    }
+    this.terrain.setQuality(this.qualityKey);
+    this.scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => { m.needsUpdate = true; }); });
+    this._resize?.();
+  }
+
   setTimeOfDay(key) {
     let t = TIME_PRESETS[key] || TIME_PRESETS.midday;
-    if (this.stylized) t = { ...t, sunI: 1.35, hemiI: 1.45,
-      ...(key === 'midday' ? { top: '#78afd1', horizon: '#d6e3df', hemiSky: '#f4f4ee', hemiGround: '#a2a18b', sun: '#fff6e2', exposure: 1.08 } : {}) };
+    if (this.stylized) t = { ...t, sunI: key === 'golden' ? 2.5 : 2.1, hemiI: key === 'golden' ? .95 : 1.1,
+      ...(key === 'midday' ? { elev: 46, az: 238, top: '#70a9d2', horizon: '#d5e2db', hemiSky: '#e8f0ed', hemiGround: '#9c9d7e', sun: '#fff2d5', exposure: 1.03 } : {}) };
     this.timeKey = key;
     const el = THREE.MathUtils.degToRad(t.elev), az = THREE.MathUtils.degToRad(t.az);
     // azimuth from north, clockwise; north is −z, east is +x
@@ -201,8 +229,17 @@ export class World {
     this.terrain.update(this.camera.position.x, this.camera.position.z);
 
     this.sky.position.copy(this.camera.position);
-    this.sun.position.copy(this.camera.position).addScaledVector(this.sunDir, 5000);
-    this.sun.target.position.copy(this.camera.position);
+    if (this.stylized) {
+      const target = this.cameraMode === 'vista' ? this.camTarget.clone() : riderPos.clone().addScaledVector(flat, 40);
+      this.sun.position.copy(target).addScaledVector(this.sunDir, 350);
+      this.sun.target.position.copy(target);
+      const span = this.cameraMode === 'vista' ? 170 : 105;
+      Object.assign(this.sun.shadow.camera, { left: -span, right: span, top: span, bottom: -span });
+      this.sun.shadow.camera.updateProjectionMatrix();
+    } else {
+      this.sun.position.copy(this.camera.position).addScaledVector(this.sunDir, 5000);
+      this.sun.target.position.copy(this.camera.position);
+    }
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -260,9 +297,10 @@ export class World {
     this.stop();
     this._ro.disconnect();
     this.terrain.dispose();
+    this.sun.shadow.map?.dispose(); this.sun.shadow.mapPass?.dispose();
     this.scene.traverse((o) => {
       if (o.geometry) o.geometry.dispose();
-      if (o.material) [].concat(o.material).forEach((m) => { m.map?.dispose(); m.dispose(); });
+      if (o.material) [].concat(o.material).forEach((m) => { for (const key of ['map', 'bumpMap', 'roughnessMap']) m[key]?.dispose(); m.dispose(); });
     });
     this.renderer.dispose();
     this.renderer.domElement.remove();
@@ -354,7 +392,12 @@ function makeRoad(route, index) {
   ctx.fillStyle = '#d8b23a'; ctx.fillRect(30, 0, 1.5, 150); ctx.fillRect(32.5, 0, 1.5, 150);
   if (stylized) {
     // Crisp, restrained paint and grain suit the sculpted scenery.
-    ctx.fillStyle = '#555c60'; ctx.fillRect(0, 0, 64, c.height);
+    ctx.fillStyle = '#555c60'; ctx.fillRect(0, 0, c.width, c.height);
+    for (let k = 0; k < 13000; k++) {
+      const g = 69 + Math.random() * 24;
+      ctx.fillStyle = `rgba(${g},${g + 3},${g + 5},.3)`;
+      ctx.fillRect(Math.random() * c.width, Math.random() * c.height, .6, 1);
+    }
     ctx.fillStyle = '#e8e4d0'; ctx.fillRect(8, 0, 3, c.height); ctx.fillRect(245, 0, 3, c.height);
     ctx.fillStyle = '#e4c36a'; ctx.fillRect(124, 0, 2, c.height); ctx.fillRect(130, 0, 2, c.height);
   }
@@ -363,10 +406,19 @@ function makeRoad(route, index) {
   tex.wrapT = THREE.RepeatWrapping;
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
-  const mat = new THREE.MeshLambertMaterial({ map: tex, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const roadOptions = { map: tex, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 };
+  const mat = stylized ? new THREE.MeshStandardMaterial({ ...roadOptions, roughness: .94, metalness: .015 }) : new THREE.MeshLambertMaterial(roadOptions);
+  if (stylized) {
+    const data = new Uint8Array(128 * 128 * 4);
+    for (let k = 0; k < data.length; k += 4) { const v = 105 + Math.random() * 45; data.set([v, v, v, 255], k); }
+    const bump = new THREE.DataTexture(data, 128, 128); bump.wrapS = bump.wrapT = THREE.RepeatWrapping;
+    bump.repeat.set(5, 10); bump.generateMipmaps = true; bump.minFilter = THREE.LinearMipmapLinearFilter; bump.needsUpdate = true;
+    mat.bumpMap = bump; mat.bumpScale = .003;
+  }
   const mesh = new THREE.Mesh(geo, mat);
   mesh.frustumCulled = false;
   mesh.renderOrder = 2;
+  mesh.receiveShadow = stylized;
   return mesh;
 }
 

@@ -51,7 +51,8 @@
           -119.6465
         ]
       }
-    }
+    },
+    "scene": "routes/scenes/yosemite.json"
   },
   {
     "id": "acadia",
@@ -109,7 +110,8 @@
           -68.253
         ]
       }
-    }
+    },
+    "scene": "routes/scenes/acadia.json"
   },
   {
     "id": "teton",
@@ -159,7 +161,8 @@
           -110.724
         ]
       }
-    }
+    },
+    "scene": "routes/scenes/teton.json"
   },
   {
     "id": "craterlake",
@@ -217,7 +220,8 @@
           -122.168
         ]
       }
-    }
+    },
+    "scene": "routes/scenes/craterlake.json"
   },
   {
     "id": "monumentvalley",
@@ -259,7 +263,8 @@
           -110.112
         ]
       }
-    }
+    },
+    "scene": "routes/scenes/monumentvalley.json"
   },
   {
     "id": "bigsur",
@@ -361,7 +366,8 @@
           -113.718
         ]
       }
-    }
+    },
+    "scene": "routes/scenes/goingtothesun.json"
   },
   {
     "id": "zion",
@@ -403,7 +409,8 @@
           -112.9478
         ]
       }
-    }
+    },
+    "scene": "routes/scenes/zion.json"
   },
   {
     "id": "sevenmile",
@@ -446,7 +453,8 @@
           -81.279
         ]
       }
-    }
+    },
+    "scene": "routes/scenes/sevenmile.json"
   },
   {
     "id": "route28",
@@ -500,6 +508,7 @@
           -74.71
         ]
       }
-    }
+    },
+    "scene": "routes/scenes/route28.json"
   }
 ]

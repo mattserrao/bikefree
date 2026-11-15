@@ -5,7 +5,8 @@
     "park": "Yosemite National Park, California",
     "km": 20.6,
     "climbM": 138,
-    "file": "routes/parks/yosemite.gpx"
+    "file": "routes/parks/yosemite.gpx",
+    "scene": "routes/scenes/yosemite.json"
   },
   {
     "id": "acadia",
@@ -13,7 +14,8 @@
     "park": "Acadia National Park, Maine",
     "km": 32.4,
     "climbM": 489,
-    "file": "routes/parks/acadia.gpx"
+    "file": "routes/parks/acadia.gpx",
+    "scene": "routes/scenes/acadia.json"
   },
   {
     "id": "teton",
@@ -21,7 +23,8 @@
     "park": "Grand Teton National Park, Wyoming",
     "km": 71.8,
     "climbM": 403,
-    "file": "routes/parks/teton.gpx"
+    "file": "routes/parks/teton.gpx",
+    "scene": "routes/scenes/teton.json"
   },
   {
     "id": "craterlake",
@@ -29,7 +32,8 @@
     "park": "Crater Lake National Park, Oregon",
     "km": 51.4,
     "climbM": 1185,
-    "file": "routes/parks/craterlake.gpx"
+    "file": "routes/parks/craterlake.gpx",
+    "scene": "routes/scenes/craterlake.json"
   },
   {
     "id": "monumentvalley",
@@ -38,7 +42,8 @@
     "km": 52.9,
     "climbM": 545,
     "file": "routes/parks/monumentvalley.gpx",
-    "outAndBack": true
+    "outAndBack": true,
+    "scene": "routes/scenes/monumentvalley.json"
   },
   {
     "id": "bigsur",
@@ -57,7 +62,8 @@
     "km": 68.1,
     "climbM": 1034,
     "file": "routes/parks/goingtothesun.gpx",
-    "outAndBack": true
+    "outAndBack": true,
+    "scene": "routes/scenes/goingtothesun.json"
   },
   {
     "id": "zion",
@@ -66,7 +72,8 @@
     "km": 25.3,
     "climbM": 188,
     "file": "routes/parks/zion.gpx",
-    "outAndBack": true
+    "outAndBack": true,
+    "scene": "routes/scenes/zion.json"
   },
   {
     "id": "sevenmile",
@@ -75,7 +82,8 @@
     "km": 41.2,
     "climbM": 12,
     "file": "routes/parks/sevenmile.gpx",
-    "outAndBack": true
+    "outAndBack": true,
+    "scene": "routes/scenes/sevenmile.json"
   },
   {
     "id": "route28",
@@ -84,6 +92,7 @@
     "km": 57.2,
     "climbM": 298,
     "file": "routes/parks/route28.gpx",
-    "outAndBack": true
+    "outAndBack": true,
+    "scene": "routes/scenes/route28.json"
   }
 ]

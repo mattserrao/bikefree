@@ -1,0 +1,164 @@
+{
+  "format": "bikefree-scene-1",
+  "style": "stylized",
+  "terrain": "authored-region",
+  "assets": "models/scenery/coastal.json",
+  "extraAssets": [
+    "models/scenery/regional.json"
+  ],
+  "seed": 1101,
+  "description": "An artistic landscape aligned to the real GPX, with regional landforms, vegetation and water. Not surveyed terrain.",
+  "title": "Grand Teton Loop",
+  "region": "teton-meadow",
+  "biome": "alpine",
+  "reliefM": 35,
+  "palette": {
+    "grass": "#8c9e70",
+    "meadow": "#b3af7a",
+    "rock": "#999c97",
+    "cliff": "#b8b7a9",
+    "water": "#397f99"
+  },
+  "vegetation": {
+    "trees": [
+      "fir0",
+      "fir1",
+      "pine0"
+    ],
+    "treeDensity": 0.29,
+    "density": 0.9,
+    "cover": [
+      "grass",
+      "grass",
+      "sage",
+      "alpineflowers",
+      "alpineflowers"
+    ],
+    "shrubs": [
+      "sage",
+      "shrub0"
+    ],
+    "vergeDensity": 0.7,
+    "treelineM": 2800
+  },
+  "snowLineM": 2900,
+  "formations": [
+    {
+      "name": "Grand Teton",
+      "lat": 43.742,
+      "lon": -110.803,
+      "radiusM": [
+        2100,
+        2400
+      ],
+      "heightM": 1600,
+      "shape": "peak"
+    },
+    {
+      "name": "Middle Teton",
+      "lat": 43.729,
+      "lon": -110.81,
+      "radiusM": [
+        1700,
+        1700
+      ],
+      "heightM": 1400,
+      "shape": "peak"
+    },
+    {
+      "name": "Mount Moran",
+      "lat": 43.836,
+      "lon": -110.775,
+      "radiusM": [
+        2400,
+        2200
+      ],
+      "heightM": 1600,
+      "shape": "peak"
+    }
+  ],
+  "lakes": [
+    {
+      "name": "Jenny Lake",
+      "lat": 43.763,
+      "lon": -110.746,
+      "radiusM": [
+        1000,
+        2000
+      ],
+      "elevationM": 2060
+    },
+    {
+      "name": "Jackson Lake",
+      "lat": 43.867,
+      "lon": -110.688,
+      "radiusM": [
+        3300,
+        6500
+      ],
+      "elevationM": 2063
+    }
+  ],
+  "rivers": [
+    {
+      "name": "Snake River",
+      "widthM": 26,
+      "depthM": 12,
+      "path": [
+        [
+          43.88,
+          -110.563
+        ],
+        [
+          43.845,
+          -110.515
+        ],
+        [
+          43.795,
+          -110.571
+        ],
+        [
+          43.735,
+          -110.646
+        ],
+        [
+          43.65,
+          -110.714
+        ]
+      ]
+    }
+  ],
+  "preview": {
+    "positionM": 5500,
+    "camera": "drone"
+  },
+  "signs": [
+    {
+      "atM": 46795,
+      "side": "ocean",
+      "label": "MORAN JUNCTION",
+      "subtitle": "GRAND TETON LOOP"
+    },
+    {
+      "atM": 5315,
+      "side": "ocean",
+      "label": "SOUTH JENNY LAKE",
+      "subtitle": "GRAND TETON LOOP"
+    }
+  ],
+  "roadside": [
+    {
+      "fromM": 4800,
+      "toM": 6700,
+      "side": "ocean"
+    }
+  ],
+  "lookouts": [
+    {
+      "atM": 5300,
+      "side": "ocean",
+      "widthM": 8,
+      "lengthM": 28
+    }
+  ]
+}

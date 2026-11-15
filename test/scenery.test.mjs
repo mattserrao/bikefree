@@ -5,6 +5,8 @@ import { buildCatalogRoute, headingSpan, loadRouteScene } from '../js/routes.js'
 import { routeAt, haversine } from '../js/gpx.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
 import { makeCoastLandscape } from '../js/world/coast.js';
+import { coastalRoadFrame, fitBridgeToRoad } from '../js/world/coastal-details.js';
+import * as THREE from '../vendor/three.module.min.js';
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const catalog = JSON.parse(read('routes/catalog.json'));
@@ -41,6 +43,11 @@ test('authored coast stays below the road and leaves the bridge canyon open', ()
   const bridge = coast.landmarks[0];
   assert.ok(coast.heightAt(bridge.x, bridge.z) < bridge.y - 40);
   assert.ok(coast.heightAt(coast.coastX(bridge.z) - 100, bridge.z) < 0, 'ocean floor lies below the sea');
+  for (const creek of coast.creeks) for (let t = creek.start + 25; t < creek.mouth - 10; t += 25) {
+    const p = creek.positionAt(t);
+    assert.ok(coast.creekAt(p.x, p.z));
+    assert.ok(coast.heightAt(p.x, p.z) < creek.waterAt(t) - .1, 'creek water remains above its carved bed');
+  }
 });
 
 test('scene fetch failure is explicit rather than silently accepting bad scenery', async () => {
@@ -50,7 +57,7 @@ test('scene fetch failure is explicit rather than silently accepting bad scenery
 
 test('Blender assets have complete vertex streams and the bridge has full-span railings', () => {
   const kit = JSON.parse(read(scene.assets));
-  for (const [name, asset] of Object.entries(kit.assets)) {
+  for (const [name, asset] of Object.entries({ ...kit.assets, ...JSON.parse(read('models/scenery/regional.json')).assets })) {
     const positions = Buffer.from(asset.position, 'base64');
     assert.equal(positions.length, asset.triangles * 9 * 2, name);
     assert.equal(Buffer.from(asset.normal, 'base64').length, positions.length / 2, name);
@@ -60,4 +67,45 @@ test('Blender assets have complete vertex streams and the bridge has full-span r
   let low = Infinity, high = -Infinity;
   for (let i = 4; i < p.length; i += 6) { const z = p.readInt16LE(i) / kit.positionScale; low = Math.min(low, z); high = Math.max(high, z); }
   assert.ok(high - low >= 218, 'bridge and railings cover the crossing');
+});
+
+test('bridge model follows the curved GPX and preserves deck-to-road clearance', () => {
+  const kit = JSON.parse(read(scene.assets)), source = kit.assets.bridge;
+  const packed = Buffer.from(source.position, 'base64');
+  const position = new Float32Array(packed.length / 2);
+  for (let i = 0; i < position.length; i++) position[i] = packed.readInt16LE(i * 2) / kit.positionScale;
+  const original = new THREE.BufferGeometry();
+  original.setAttribute('position', new THREE.BufferAttribute(position, 3));
+  const landmark = coast.landmarks[0], fitted = fitBridgeToRoad(original, route, index, landmark);
+  const vertices = fitted.attributes.position;
+  for (let i = 0; i < vertices.count; i += 19) {
+    const x = position[i * 3], y = position[i * 3 + 1], z = position[i * 3 + 2];
+    const s = landmark.s + z, a = routeAt(route, s);
+    const start = routeAt(route, Math.floor(s / 10) * 10), end = routeAt(route, Math.floor(s / 10) * 10 + 10);
+    const pa = proj.toLocal(a.lat, a.lon), p0 = proj.toLocal(start.lat, start.lon), p1 = proj.toLocal(end.lat, end.lon);
+    const len = Math.hypot(p1.x - p0.x, p1.z - p0.z);
+    const expectedX = pa.x + (p1.z - p0.z) / len * x;
+    const expectedZ = pa.z - (p1.x - p0.x) / len * x;
+    assert.ok(Math.hypot(vertices.getX(i) - expectedX, vertices.getZ(i) - expectedZ) < .15);
+    assert.ok(Math.abs(vertices.getY(i) - a.ele - y) < .001);
+  }
+  original.dispose(); fitted.dispose();
+});
+
+test('tree detail levels preserve the silhouette height while distant geometry is cheaper', () => {
+  const kit = JSON.parse(read(scene.assets));
+  const peak = (part) => {
+    const data = Buffer.from(part.position, 'base64'); let max = -Infinity;
+    for (let i = 2; i < data.length; i += 6) max = Math.max(max, data.readInt16LE(i) / kit.positionScale);
+    return max;
+  };
+  for (const name of ['cypress0', 'cypress1', 'cypress2', 'pine0', 'pine1']) {
+    assert.ok(kit.assets[`${name}-lod`].triangles < kit.assets[name].triangles, name);
+    assert.ok(Math.abs(peak(kit.assets[`${name}-lod`]) - peak(kit.assets[name])) < .9, name);
+  }
+  for (const sign of scene.signs) {
+    const frame = coastalRoadFrame(route, index, sign.atM, sign.side === 'inland' ? -5.7 : 5.7);
+    assert.ok(Number.isFinite(frame.position.y));
+    assert.ok(Math.abs(frame.forward.dot(frame.right)) < 1e-9);
+  }
 });

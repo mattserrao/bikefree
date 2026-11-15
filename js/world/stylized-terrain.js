@@ -1,6 +1,15 @@
 import * as THREE from '../../vendor/three.module.min.js';
 import { makeCoastLandscape, randomSequence, smoothstep } from './coast.js';
 import { loadSceneryAssets } from './scenery-assets.js';
+import { makeCoastalGroundMaterial, makeCoastalWaterMaterial } from './coastal-materials.js';
+import { CoastalDetails, fitBridgeToRoad, coastalRoadFrame } from './coastal-details.js';
+import { makeRegionalLandscape } from './regional-landscape.js';
+
+export const COASTAL_QUALITY = {
+  low: { pixelRatio: 1, shadows: false, scatterRange: 2, candidates: 150, coverCandidates: 100 },
+  balanced: { pixelRatio: 1.5, shadows: true, scatterRange: 3, candidates: 230, coverCandidates: 320 },
+  high: { pixelRatio: 2, shadows: true, scatterRange: 4, candidates: 310, coverCandidates: 480 },
+};
 
 /** Bundled style-C coastal scene. No tile/imagery requests, including offline. */
 export class StylizedTerrain {
@@ -9,25 +18,33 @@ export class StylizedTerrain {
     this.config = opts.route.scene;
     this.route = opts.route;
     this.index = routeIndex;
-    this.landscape = makeCoastLandscape(this.config, proj, routeIndex, opts.route);
+    this.quality = COASTAL_QUALITY[opts.quality] || COASTAL_QUALITY.balanced;
+    const makeLandscape = this.config.terrain === 'authored-region' ? makeRegionalLandscape : makeCoastLandscape;
+    this.landscape = makeLandscape(this.config, proj, routeIndex, opts.route);
+    this.inlandAt = this.landscape.inlandAt || ((x, z) => x - this.landscape.coastX(z));
+    this.lookoutFootprints = (this.config.lookouts || []).map((l) => ({ ...l,
+      ...coastalRoadFrame(this.route, routeIndex, l.atM, (l.side === 'inland' ? -1 : 1) * (3.5 + l.widthM / 2)) }));
     this.uniforms = { uTime: { value: 0 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
       uSkyTop: { value: new THREE.Color() }, uSkyHorizon: { value: new THREE.Color() } };
     this.group = new THREE.Group();
-    this.group.name = 'Big Sur · stylized coast';
+    this.group.name = `${this.config.title || this.route.name} · stylized scenery`;
     scene.add(this.group);
     this.patches = new Map();
     this.scatter = new Map();
+    this.cover = new Map();
+    this.landmarkGeometries = new Set();
     this.stats = { ready: 0, loading: 1, queued: 0, errors: 0 };
     this.palette = Object.fromEntries(Object.entries(this.config.palette).map(([k, v]) => [k, new THREE.Color(v)]));
-    this.groundMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
+    this.groundMaterial = makeCoastalGroundMaterial(this.config.palette, this.config);
     this._makeOcean();
     this._makeClouds();
     this._makeShadows();
     this._makeRoadside();
-    this.ready = loadSceneryAssets(this.config.assets).then((kit) => {
+    this.ready = loadSceneryAssets(this.config.assets, { uniforms: this.uniforms, extraPaths: this.config.extraAssets }).then((kit) => {
       if (this.disposed) { kit.dispose(); return; }
       this.kit = kit;
       this._makeLandmarks();
+      this.details = new CoastalDetails(this.group, this.route, this.index, this.landscape, kit, this.uniforms);
       this._lastX = Infinity;
       this.stats.loading = 0;
     }).catch((err) => { this.stats.loading = 0; this.stats.errors++; opts.onError?.(err); });
@@ -50,7 +67,8 @@ export class StylizedTerrain {
     const route = this.route, index = this.index;
     for (const range of this.config.roadside || []) {
       for (let s = range.fromM; s < range.toM; s += 8) {
-        const i = Math.min(route.turnIdx - 2, Math.floor(s / 10)), j = i + 1;
+        const i = Math.min((route.turnIdx || route.dist.length - 1) - 2, Math.floor(s / 10)), j = i + 1;
+        if ((this.config.lookouts || []).some((l) => (l.side || 'ocean') === (range.side || 'ocean') && Math.abs(s - l.atM) < (l.lengthM || 32) / 2 + 6)) continue;
         const f = (s - route.dist[i]) / (route.dist[j] - route.dist[i]);
         const x = index.xs[i] + (index.xs[j] - index.xs[i]) * f, z = index.zs[i] + (index.zs[j] - index.zs[i]) * f;
         if (this.landscape.bridgeAt(x, z, 12)) continue;
@@ -70,7 +88,7 @@ export class StylizedTerrain {
     const material = new THREE.MeshLambertMaterial({ color: '#b7b5a1' });
     for (const [geometry, matrices] of [[new THREE.BoxGeometry(.16, 1.1, .16), posts], [new THREE.BoxGeometry(.16, .23, 1), rails]]) {
       const mesh = new THREE.InstancedMesh(geometry, material, matrices.length);
-      matrices.forEach((m, i) => mesh.setMatrixAt(i, m)); mesh.computeBoundingSphere(); this.roadside.add(mesh);
+      matrices.forEach((m, i) => mesh.setMatrixAt(i, m)); mesh.castShadow = mesh.receiveShadow = true; mesh.computeBoundingSphere(); this.roadside.add(mesh);
     }
     this.group.add(this.roadside);
   }
@@ -78,13 +96,13 @@ export class StylizedTerrain {
   _makeClouds() {
     const rand = randomSequence(1101);
     const geometry = new THREE.SphereGeometry(1, 10, 6);
-    const material = new THREE.MeshBasicMaterial({ color: '#f1f0df', transparent: true, opacity: .76, depthWrite: false, fog: true });
+    const material = new THREE.MeshLambertMaterial({ color: '#f1f0df', transparent: true, opacity: .84, depthWrite: false, fog: true });
     const mesh = new THREE.InstancedMesh(geometry, material, 72);
     const matrix = new THREE.Matrix4(), q = new THREE.Quaternion(), scale = new THREE.Vector3(), p = new THREE.Vector3();
     for (let i = 0; i < 72; i++) {
       const group = Math.floor(i / 4), angle = group * 2.399;
       const radius = 8500 + Math.sin(group * 5) * 3000;
-      p.set(Math.cos(angle) * radius + rand() * 700, 1800 + Math.sin(group * 3) * 400 + rand() * 120, Math.sin(angle) * radius + rand() * 350);
+      p.set(Math.cos(angle) * radius + rand() * 700, Math.max(1800, this.route.maxEle + 900) + Math.sin(group * 3) * 400 + rand() * 120, Math.sin(angle) * radius + rand() * 350);
       scale.set(300 + rand() * 300, 65 + rand() * 75, 150 + rand() * 200);
       mesh.setMatrixAt(i, matrix.compose(p, q, scale));
     }
@@ -92,23 +110,11 @@ export class StylizedTerrain {
   }
 
   _makeOcean() {
-    const material = new THREE.MeshPhongMaterial({ color: this.config.palette.water, shininess: 70,
-      specular: '#a5d9d3', transparent: false });
-    material.onBeforeCompile = (shader) => {
-      Object.assign(shader.uniforms, this.uniforms);
-      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vSeaPosition;')
-        .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvSeaPosition = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vSeaPosition;\nuniform float uTime;')
-        .replace('#include <color_fragment>', `#include <color_fragment>
-          float swell = sin(vSeaPosition.x * .012 + vSeaPosition.z * .009 + uTime * .4);
-          float ripples = pow(max(0., sin(vSeaPosition.x * .105 - vSeaPosition.z * .07 + uTime * .32)), 22.);
-          diffuseColor.rgb *= .97 + .035 * swell;
-          diffuseColor.rgb += vec3(.006, .009, .008) * ripples;
-        `);
-    };
+    const material = makeCoastalWaterMaterial(this.landscape, this.uniforms, this.config.palette.water, this.config.palette.shallowWater);
     this.ocean = new THREE.Mesh(new THREE.PlaneGeometry(160000, 160000), material);
     this.ocean.rotation.x = -Math.PI / 2;
     this.ocean.position.y = .05;
+    this.ocean.visible = this.landscape.hasOcean !== false;
     this.group.add(this.ocean);
     // White surf follows the authored coastline rather than the road.
     const pos = [], idx = [];
@@ -120,40 +126,57 @@ export class StylizedTerrain {
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); geo.computeVertexNormals();
-    this.surf = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: '#e1ead4', transparent: true, opacity: .65, side: THREE.DoubleSide }));
+    this.surf = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: '#e1ead4', transparent: true, opacity: .28, side: THREE.DoubleSide }));
     this.group.add(this.surf);
+    this.surf.visible = this.landscape.hasOcean !== false;
+    this.lakeMeshes = [];
+    for (const lake of this.landscape.lakes || []) {
+      const mesh = new THREE.Mesh(new THREE.CircleGeometry(1, 96), material);
+      mesh.rotation.x = -Math.PI / 2; mesh.scale.set(lake.rx, lake.rz, 1);
+      mesh.position.set(lake.x, lake.level, lake.z); mesh.name = lake.name;
+      this.lakeMeshes.push(mesh); this.group.add(mesh);
+    }
   }
 
   _makeLandmarks() {
     for (const landmark of this.landscape.landmarks) {
       const asset = this.kit.assets[landmark.asset];
       if (!asset) continue;
-      const mesh = new THREE.Mesh(asset.geometry, asset.material);
+      const fitted = ['bridge', 'viaduct'].includes(landmark.asset) ? fitBridgeToRoad(asset.geometry, this.route, this.index, landmark) : null;
+      if (fitted) this.landmarkGeometries.add(fitted);
+      const mesh = new THREE.Mesh(fitted || asset.geometry, asset.material);
       const forward = new THREE.Vector3(landmark.fx, landmark.slope, landmark.fz).normalize();
       const right = new THREE.Vector3(forward.z, 0, -forward.x).normalize();
       const up = forward.clone().cross(right).normalize();
-      mesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, up, forward));
-      mesh.position.set(landmark.x, landmark.y, landmark.z);
+      if (!fitted) {
+        mesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, up, forward));
+        mesh.position.set(landmark.x, landmark.y, landmark.z);
+      }
       mesh.name = landmark.name;
+      mesh.castShadow = mesh.receiveShadow = true;
       this.group.add(mesh);
     }
   }
 
   _makePatch(x, z, size) {
     const S = 16, N = S + 1;
-    const positions = [], colors = [], indices = [];
+    const positions = [], colors = [], indices = [], normals = [];
     const c = new THREE.Color();
     const P = this.palette;
     for (let j = 0; j <= S; j++) for (let i = 0; i <= S; i++) {
       const px = x + size * i / S, pz = z + size * j / S;
       const y = this.heightAt(px, pz);
       positions.push(px, y, pz);
-      const coastal = px - this.landscape.coastX(pz);
+      const coastal = this.inlandAt(px, pz);
       const patch = .5 + Math.sin(px / 130 + Math.sin(pz / 260)) * Math.cos(pz / 190) * .5;
       c.copy(P.grass).lerp(P.meadow, smoothstep(.15, .9, patch) * .65);
-      const rise = Math.hypot(this.heightAt(px + 16, pz) - y, this.heightAt(px, pz + 16) - y) / 16;
+      const hx = this.heightAt(px + 4, pz), hz = this.heightAt(px, pz + 4);
+      const normal = new THREE.Vector3((y - hx) / 4, 1, (y - hz) / 4).normalize(); normals.push(normal.x, normal.y, normal.z);
+      const rise = Math.hypot(hx - y, hz - y) / 4;
       c.lerp(P.rock, smoothstep(.45, 1.4, rise));
       c.lerp(P.cliff, (1 - smoothstep(20, 85, coastal)) * .65);
+      const regionalColor = this.landscape.colorAt?.(px, pz);
+      if (regionalColor) c.lerp(new THREE.Color(regionalColor), .8);
       c.multiplyScalar(.94 + Math.sin(px / 47 + pz / 73) * .035);
       colors.push(c.r, c.g, c.b);
       if (i < S && j < S) {
@@ -165,24 +188,31 @@ export class StylizedTerrain {
     for (const edge of [Array.from({ length: N }, (_, i) => i), Array.from({ length: N }, (_, i) => S * N + i),
       Array.from({ length: N }, (_, i) => i * N), Array.from({ length: N }, (_, i) => i * N + S)]) {
       const base = positions.length / 3;
-      for (const k of edge) {
-        positions.push(positions[k * 3], positions[k * 3 + 1] - Math.max(3, size / 48), positions[k * 3 + 2]);
+      for (const depth of [0, Math.max(20, size * .6)]) for (const k of edge) {
+        positions.push(positions[k * 3], positions[k * 3 + 1] - depth, positions[k * 3 + 2]);
         colors.push(...colors.slice(k * 3, k * 3 + 3));
       }
-      for (let i = 0; i < S; i++) indices.push(edge[i], base + i, edge[i + 1], edge[i + 1], base + i, base + i + 1);
+      for (let i = 0; i < S; i++) indices.push(base + i, base + N + i, base + i + 1, base + i + 1, base + N + i, base + N + i + 1);
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    geometry.setIndex(indices); geometry.computeVertexNormals(); geometry.computeBoundingSphere();
+    geometry.setIndex(indices); geometry.computeVertexNormals();
+    geometry.attributes.normal.array.set(normals); geometry.computeBoundingSphere();
     const mesh = new THREE.Mesh(geometry, this.groundMaterial);
+    mesh.receiveShadow = true;
     this.group.add(mesh);
     return mesh;
   }
 
-  _makeScatter(cx, cz) {
-    const size = 192, rand = randomSequence((cx * 73856093 ^ cz * 19349663) + this.config.seed);
+  _makeScatter(cx, cz, detailed = false, coverOnly = false) {
+    const size = 192, rand = randomSequence((cx * 73856093 ^ cz * 19349663) + this.config.seed + (coverOnly ? 7711 : 0));
     const lists = {};
+    const onLookout = (x, z) => this.lookoutFootprints.some((l) => {
+      const dx = x - l.position.x, dz = z - l.position.z;
+      return Math.abs(dx * l.right.x + dz * l.right.z) < l.widthM / 2 + .8
+        && Math.abs(dx * l.forward.x + dz * l.forward.z) < l.lengthM / 2 + .8;
+    });
     const matrix = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), scale = new THREE.Vector3();
     const add = (name, x, y, z, width, height = width) => {
       if (!this.kit.assets[name] && name !== 'shadow') return;
@@ -190,33 +220,74 @@ export class StylizedTerrain {
       p.set(x, y, z); scale.set(width, height, width);
       (lists[name] ||= []).push(matrix.compose(p, q, scale).clone());
     };
-    for (let k = 0; k < 180; k++) {
+    const vegetation = this.config.vegetation || {};
+    const count = (coverOnly ? this.quality.coverCandidates : this.quality.candidates) * (vegetation.density || 1);
+    for (let k = 0; k < count; k++) {
       const x = cx * size + rand() * size, z = cz * size + rand() * size;
-      const inland = x - this.landscape.coastX(z), y = this.heightAt(x, z);
-      if (inland < 10 || y < 1 || this.landscape.bridgeAt(x, z, 10)) continue;
+      const inland = this.inlandAt(x, z), y = this.heightAt(x, z);
+      if (inland < 10 || y < 1 || this.landscape.isWater?.(x, z, y) || this.landscape.bridgeAt(x, z, 10) || this.landscape.creekAt(x, z) || onLookout(x, z)) continue;
       const road = this.index.nearest(x, z, 10);
       if (road && road.d < 7.5) continue;
       const slope = Math.hypot(this.heightAt(x + 4, z) - y, this.heightAt(x, z + 4) - y) / 4;
       if (slope > 1.3) continue;
       const pick = rand();
-      if (pick < .025 && inland > 45 && (!road || road.d > 10) && slope < .55) {
-        const width = .65 + rand() * .5;
-        add(`cypress${Math.floor(rand() * 3)}`, x, y - .1, z, width, .8 + rand() * .35);
-        add('shadow', x, y + .045, z, width * 8);
-      } else if (pick < .38) {
-        const width = .9 + rand() * 1.2;
-        add(`shrub${Math.floor(rand() * 2)}`, x, y - .12, z, width);
-        add('shadow', x, y + .04, z, width * 2.5);
+      if (coverOnly) {
+        const name = vegetation.cover ? vegetation.cover[Math.floor(pick * vegetation.cover.length)] : pick < .12 ? 'poppy' : pick < .18 ? 'lupine' : pick < .33 ? 'succulent' : pick < .4 ? 'flowers' : 'grass';
+        add(name, x, y - .09, z, .75 + rand() * 1.2);
+        continue;
       }
-      else if (pick < .48) add(`rock${Math.floor(rand() * 2)}`, x, y - .3, z, .5 + rand() * 1.4);
-      else if (pick < .63) add('flowers', x, y - .02, z, 1 + rand());
-      else add('grass', x, y - .04, z, .8 + rand() * 1.4);
+      const grove = .5 + Math.sin(x / 125 + Math.cos(z / 260)) * .32 + Math.sin(z / 180) * .22;
+      if (grove > (this.config.biome === 'forest' ? .18 : .5) && pick < (vegetation.treeDensity ?? .14) * Math.max(this.config.biome === 'forest' ? .5 : 0, grove) && inland > 65 && slope < .8 && y < (vegetation.treelineM || Infinity)) {
+        const width = .7 + rand() * .55;
+        const name = vegetation.trees ? vegetation.trees[Math.floor(rand() * vegetation.trees.length)] : inland > 350 && grove > .7 ? `pine${Math.floor(rand() * 2)}` : `cypress${Math.floor(rand() * 3)}`;
+        if (!name) continue;
+        const tree = !detailed && this.kit.assets[`${name}-lod`] ? `${name}-lod` : name;
+        add(tree, x, y - .15, z, width, .8 + rand() * .45);
+        if (detailed) add('shadow', x, y + .045, z, width * 8);
+      } else if (slope > .25 && pick < .16 && !this.index.nearest(x, z, 16)) {
+        const width = .45 + rand() * .95;
+        add(`outcrop${Math.floor(rand() * 2)}`, x, y - width * .9, z, width, width * (.65 + rand() * .65));
+      } else if (pick < .57) {
+        const width = .65 + rand() * 1.1;
+        const shrub = vegetation.shrubs ? vegetation.shrubs[Math.floor(rand() * vegetation.shrubs.length)] : `shrub${Math.floor(rand() * 2)}`;
+        add(shrub, x, y - .12, z, width);
+        if (detailed) add('shadow', x, y + .04, z, width * 2.5);
+      }
+      else if (pick < .69) add(`rock${Math.floor(rand() * 2)}`, x, y - .3, z, .5 + rand() * 1.4);
+      else if (detailed && pick < .79) add('grass', x, y - .08, z, .9 + rand());
+    }
+    if (coverOnly) {
+      // A denser verge reads from the bike without filling distant hills with
+      // tiny meshes. These placements remain deterministic across quality tiers.
+      for (let i = 0; i < (this.route.turnIdx || this.index.xs.length - 1); i += 2) {
+        const x0 = this.index.xs[i], z0 = this.index.zs[i];
+        if (x0 < cx * size || x0 >= (cx + 1) * size || z0 < cz * size || z0 >= (cz + 1) * size) continue;
+        const dx = this.index.xs[i + 1] - x0, dz = this.index.zs[i + 1] - z0, len = Math.hypot(dx, dz) || 1;
+        const vergeCount = (this.quality === COASTAL_QUALITY.low ? 28 : this.quality === COASTAL_QUALITY.high ? 132 : 96) * (vegetation.vergeDensity || 1);
+        for (let k = 0; k < vergeCount; k++) {
+          const off = (k % 2 ? -1 : 1) * (5.4 + rand() * 11), along = (rand() - .5) * 18;
+          const x = x0 - dz / len * off + dx / len * along, z = z0 + dx / len * off + dz / len * along;
+          if (this.inlandAt(x, z) < 8 || this.landscape.bridgeAt(x, z, 14) || this.landscape.creekAt(x, z) || onLookout(x, z)) continue;
+          const y = this.heightAt(x, z), pick = rand();
+          if (this.landscape.isWater?.(x, z, y)) continue;
+          const name = vegetation.cover ? vegetation.cover[Math.floor(pick * vegetation.cover.length)] : pick < .2 ? 'poppy' : pick < .28 ? 'lupine' : pick < .42 ? 'succulent' : 'grass';
+          add(name, x, y - .09, z, .8 + rand() * .9);
+        }
+      }
     }
     const group = new THREE.Group();
     for (const [name, matrices] of Object.entries(lists)) {
       const asset = name === 'shadow' ? this.shadowAsset : this.kit.assets[name];
       const mesh = new THREE.InstancedMesh(asset.geometry, asset.material, matrices.length);
-      matrices.forEach((m, i) => mesh.setMatrixAt(i, m)); mesh.instanceMatrix.needsUpdate = true;
+      matrices.forEach((m, i) => {
+        mesh.setMatrixAt(i, m);
+        if (name !== 'shadow') {
+          const tint = this.config.biome === 'desert' && /^(rock|outcrop)/.test(name) ? new THREE.Color(this.config.palette.rock) : new THREE.Color();
+          mesh.setColorAt(i, tint.multiplyScalar(.9 + (i % 5) * .04));
+        }
+      }); mesh.instanceMatrix.needsUpdate = true;
+      mesh.castShadow = /^(cypress|pine|fir|broadleaf|palm|rock|outcrop)/.test(name);
+      mesh.receiveShadow = name !== 'shadow';
       mesh.computeBoundingSphere(); group.add(mesh);
     }
     this.group.add(group);
@@ -244,31 +315,53 @@ export class StylizedTerrain {
     }
     if (this.kit) {
       const visible = new Set(), sx = Math.floor(cx / 192), sz = Math.floor(cz / 192);
-      for (let x = sx - 3; x <= sx + 3; x++) for (let z = sz - 3; z <= sz + 3; z++) {
-        const key = `${x}/${z}`; visible.add(key);
-        if (!this.scatter.has(key)) this.scatter.set(key, this._makeScatter(x, z));
+      const range = this.quality.scatterRange;
+      for (let x = sx - range; x <= sx + range; x++) for (let z = sz - range; z <= sz + range; z++) {
+        const detailed = Math.hypot((x + .5) * 192 - cx, (z + .5) * 192 - cz) < 260;
+        const key = `${x}/${z}/${detailed}`; visible.add(key);
+        if (!this.scatter.has(key)) this.scatter.set(key, this._makeScatter(x, z, detailed));
       }
       for (const [key, group] of this.scatter) if (!visible.has(key)) {
         this.group.remove(group); group.children.forEach((m) => m.dispose()); this.scatter.delete(key);
+      }
+      const near = new Set();
+      for (let x = sx - 1; x <= sx + 1; x++) for (let z = sz - 1; z <= sz + 1; z++) {
+        const key = `${x}/${z}`; near.add(key);
+        if (!this.cover.has(key)) this.cover.set(key, this._makeScatter(x, z, true, true));
+      }
+      for (const [key, group] of this.cover) if (!near.has(key)) {
+        this.group.remove(group); group.children.forEach((m) => m.dispose()); this.cover.delete(key);
       }
     }
     this.stats.ready = this.patches.size;
   }
 
   heightAt(x, z) { return this.landscape.heightAt(x, z); }
+  setQuality(key) {
+    this.quality = COASTAL_QUALITY[key] || COASTAL_QUALITY.balanced;
+    for (const map of [this.scatter, this.cover]) {
+      for (const group of map.values()) { this.group.remove(group); group.children.forEach((m) => m.dispose()); }
+      map.clear();
+    }
+    this._lastX = Infinity;
+  }
   get loadingCount() { return this.stats.loading; }
   dispose() {
     this.disposed = true;
     this.scene.remove(this.group);
     for (const mesh of this.patches.values()) mesh.geometry.dispose();
     for (const group of this.scatter.values()) group.children.forEach((m) => m.dispose());
+    for (const group of this.cover.values()) group.children.forEach((m) => m.dispose());
+    this.details?.dispose();
+    this.landmarkGeometries.forEach((g) => g.dispose()); this.landmarkGeometries.clear();
     this.surf.geometry.dispose(); this.surf.material.dispose();
     this.ocean.geometry.dispose(); this.ocean.material.dispose();
+    this.lakeMeshes.forEach((m) => m.geometry.dispose());
     this.clouds.geometry.dispose(); this.clouds.material.dispose(); this.clouds.dispose();
     this.shadowAsset.geometry.dispose(); this.shadowAsset.material.map.dispose(); this.shadowAsset.material.dispose();
     this.roadside.children.forEach((m) => { m.geometry.dispose(); m.dispose(); });
     this.roadside.children[0]?.material.dispose();
     this.groundMaterial.dispose(); this.kit?.dispose();
-    this.patches.clear(); this.scatter.clear();
+    this.patches.clear(); this.scatter.clear(); this.cover.clear();
   }
 }

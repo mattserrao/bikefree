@@ -44,6 +44,22 @@ export function makeCoastLandscape(config, proj, index, route) {
   const bridgeAt = (x, z, margin = 0) => landmarks.find((b) => b.asset === 'bridge'
     && Math.abs((x - b.x) * b.fx + (z - b.z) * b.fz) < b.span / 2 + margin
     && Math.abs((x - b.x) * -b.fz + (z - b.z) * b.fx) < 28);
+  const creeks = landmarks.filter((b) => b.creekWidthM > 0).map((b) => {
+    const positionAt = (t) => {
+      const meander = Math.sin(t / 65) * 7 + Math.sin(t / 24) * 1.4;
+      return { x: b.x - b.fz * t + b.fx * meander, z: b.z + b.fx * t + b.fz * meander };
+    };
+    let mouth = 20;
+    while (mouth < 1800) { const p = positionAt(mouth); if (p.x < coastX(p.z)) break; mouth += 5; }
+    const waterAt = (t) => .13 + Math.max(3, b.y - b.depth - 4) * (1 - smoothstep(-60, mouth, t));
+    return { bridge: b, width: b.creekWidthM, mouth, start: -420, positionAt, waterAt };
+  });
+  const creekAt = (x, z) => creeks.find((c) => {
+    const b = c.bridge, t = (x - b.x) * -b.fz + (z - b.z) * b.fx;
+    if (t < c.start || t > c.mouth) return false;
+    const along = (x - b.x) * b.fx + (z - b.z) * b.fz;
+    return Math.abs(along - Math.sin(t / 65) * 7 - Math.sin(t / 24) * 1.4) < c.width / 2 + 1;
+  });
   const baseHeight = (x, z) => {
     const inland = x - coastX(z);
     if (inland < 0) return -10 + Math.max(-30, inland * .1);
@@ -76,7 +92,17 @@ export function makeCoastLandscape(config, proj, index, route) {
       const reach = 1 - smoothstep(450, 1300, Math.abs(across));
       h = h * (1 - canyon * reach) + Math.min(h, Math.max(2, b.y - b.depth - 4)) * canyon * reach;
     }
-    return Math.max(.3, h);
+    for (const creek of creeks) {
+      const b = creek.bridge;
+      const t = (x - b.x) * -b.fz + (z - b.z) * b.fx;
+      if (t < creek.start - 20 || t > creek.mouth + 15) continue;
+      const along = (x - b.x) * b.fx + (z - b.z) * b.fz;
+      const meander = Math.sin(t / 65) * 7 + Math.sin(t / 24) * 1.4;
+      const channel = 1 - smoothstep(creek.width / 2, creek.width / 2 + 5, Math.abs(along - meander));
+      const blend = smoothstep(creek.start - 20, creek.start + 20, t);
+      h += (Math.min(h, creek.waterAt(t) - .5) - h) * channel * blend;
+    }
+    return Math.max(-.5, h);
   };
-  return { coast, coastX, landmarks, heightAt, baseHeight, bridgeAt };
+  return { coast, coastX, landmarks, creeks, creekAt, heightAt, baseHeight, bridgeAt };
 }

@@ -369,7 +369,7 @@ async function openWorld(route) {
   }
   if (world) { world.dispose(); world = null; }
   try {
-    world = new worldModule.World($('worldView'), route, { log });
+    world = new worldModule.World($('worldView'), route, { log, quality: settings.worldQuality });
   } catch (err) {
     log('3d', `3D view needs WebGL: ${err.message}`, 'error');
     document.body.classList.add('no-world');
@@ -1078,6 +1078,7 @@ function fillSettings() {
   f.ftp.value = settings.ftp;
   f.worldCam.value = settings.worldCam;
   f.worldTime.value = settings.worldTime;
+  f.worldQuality.value = settings.worldQuality;
   f.shiftMode.value = settings.shiftMode;
   f.difficulty.value = settings.difficulty;
   $('diffOut').textContent = `${settings.difficulty}%`;
@@ -1107,6 +1108,7 @@ dlg.addEventListener('close', () => {
     ftp: Math.round(Number(f.ftp.value)) || settings.ftp,
     worldCam: f.worldCam.value,
     worldTime: f.worldTime.value,
+    worldQuality: f.worldQuality.value,
     shiftMode: f.shiftMode.value,
     difficulty: Number(f.difficulty.value),
     realRatio: Math.max(0, Number(f.realRatio.value) || 0),
@@ -1118,6 +1120,7 @@ dlg.addEventListener('close', () => {
   session.settingsChanged();
   world?.setCamera(settings.worldCam);
   world?.setTimeOfDay(settings.worldTime);
+  world?.setQuality(settings.worldQuality);
   renderRouteCards();
   renderWorkoutList();
   renderProfile();

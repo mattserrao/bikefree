@@ -56,20 +56,51 @@ npm run routes:build
 The Python router reads the same catalog. A GPX-only entry needs no `routing`
 object. Road routing and scenery authoring are separate operations.
 
-## Style-C scenery: Big Sur prototype
+## Style-C scenery for every scenic route
 
-Big Sur's optional `scene` field points to `routes/scenes/bigsur.json`. The scene
-defines a palette, an authored coastline, a seed, roadside barrier ranges and
-landmarks with latitude/longitude coordinates. The GPX remains the source for
+Every scenic catalog entry has a `scene` path under `routes/scenes/`. Big Sur uses
+`terrain: authored-coast`; the other nine use `terrain: authored-region`. Each scene
+defines a palette, an authored coastline, a seed, roadside barrier ranges, and
+landmarks with latitude/longitude coordinates. Optional `signs`, `lookouts`, and
+`seaStacks` arrays place detailed road furniture, viewpoints and coastal rocks.
+Each uses `atM` in metres along the outbound leg; dimensions such as `widthM`,
+`lengthM`, `heightM`, and `offshoreM` are also metres. The preparation command
+checks feature positions and positive dimensions. A bridge can also set
+`creekWidthM` to carve and render a small creek through its authored canyon. The GPX remains the source for
 the road and riding profile. The surrounding landforms are an artistic
 interpretation, **not surveyed terrain or a replacement elevation dataset**.
 
 The renderer builds nearby terrain at finer resolution, instances repeated
-vegetation, and uses bundled models. Big Sur makes no elevation or imagery
-service requests. Other scenic routes retain their existing terrain renderer
-until the Big Sur art direction has been reviewed. Further regions need their
-own landform presets and assets; copying this coastline is not a forest, desert
-or alpine scene authoring workflow.
+vegetation, and uses bundled models. Close vegetation uses detailed meshes and
+denser grass/flower verges; distant trees use cheaper meshes with matching
+silhouette heights. Ground and water shaders provide weathered stone, grass/soil
+variation, shallow-water color, foam, waves and sun reflections. Cast shadows
+anchor the rider, bridge and vegetation. Bridge geometry bends to the GPX so
+the detailed deck, curbs and railings follow the riding surface. All ten scenic routes use bundled scenery without elevation or imagery service
+requests. Each region has its own landforms, vegetation, water and palette:
+Yosemite granite and the Merced River; Acadia coast and ponds; Teton peaks and
+lakes; Crater Lake and Wizard Island; Monument Valley mesas; Big Sur coast and
+Bixby; Glacier alpine ridges; Zion canyon and Virgin River; Keys islands and both
+Seven Mile bridges; and Adirondack forest and lakes.
+
+To author another region, copy the closest scene preset, set `title`, `seed`,
+`palette` and `biome`, then adjust these optional fields:
+
+- `formations`: latitude/longitude, `radiusM: [x, z]`, `heightM`, and `shape`
+  (`peak`, `mesa`, `dome`, `half-dome`); `island: true` places a formation in a lake.
+- `valley`: two latitude/longitude points in `axis`, a `widthM` and `heightM`.
+- `lakes`: named ellipses with latitude/longitude, `radiusM`, and `elevationM`.
+- `rivers`: named latitude/longitude `path`, `widthM` and `depthM`; short road
+  crossings receive bridge decks fitted to the GPX.
+- `islands`: tropical land ellipses with `radiusM` and `heightM`.
+- `bridgeRanges`: `fromM`, `toM`, `depthM` and optional `lateralM` for parallel bridges.
+- `vegetation`: asset names in `trees`, `shrubs` and `cover`; `treeDensity`,
+  `density`, `vergeDensity` and optional `treelineM`; `snowLineM` colors high ground.
+- `preview`: `positionM` and `camera` establish a useful initial review view.
+
+Add the scene path to the new catalog entry and run `npm run routes:build`.
+Check the full route with the preview slider and all quality settings. The builder
+validates files, models and dimensions; it cannot judge an artistic composition.
 
 Rebuild the original Blender coastal kit without third-party assets:
 
@@ -78,7 +109,14 @@ blender --background --python tools/build_coastal_assets.py
 npm run routes:build
 ```
 
-The kit exports to `models/scenery/coastal.json`. Source models use metres, Y up,
+Build both kits (the regional builder also rebuilds the coastal kit):
+
+```sh
+blender --background --python tools/build_regional_assets.py
+npm run routes:build
+```
+
+The kits export to `models/scenery/coastal.json` and `models/scenery/regional.json`. Source models use metres, Y up,
 and +Z along the road; bridge decks sit at Y=0. The web renderer places the bridge
 on the nearest outbound route sample and opens a canyon below its deck.
 
@@ -89,7 +127,7 @@ python3 -m http.server 8765 --bind 127.0.0.1
 ```
 
 Open `http://127.0.0.1:8765/tools/world-preview.html`. Use the position slider,
-Ride/Pause, camera and lighting controls. Useful URLs:
+route picker, Ride/Pause, camera and lighting controls. Useful URLs:
 
 - `?park=bigsur&pos=15420&cam=chase` — bridge approach.
 - `?park=bigsur&pos=15670&cam=vista` — bridge structure and coast.
@@ -98,6 +136,11 @@ Ride/Pause, camera and lighting controls. Useful URLs:
 
 `clean=1` hides preview controls for captures. `speed=10` rides at 10 m/s. The
 preview and main app use the same loader and renderer, including turnarounds.
+Scenery detail has Light, Balanced and High settings in both the preview and
+Settings. Balanced is the default for the M4 Air target; High increases vegetation
+and shadow resolution, while Light turns off cast shadows and lowers density.
+These are explicit settings, not measured hardware performance guarantees.
+The preview also accepts `quality=low`, `quality=balanced`, or `quality=high`.
 The service worker caches the preview and scene after successful installation.
 
 To share a standalone preview that opens directly in Chrome, without a server:

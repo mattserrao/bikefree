@@ -1,0 +1,141 @@
+{
+  "format": "bikefree-scene-1",
+  "style": "stylized",
+  "terrain": "authored-region",
+  "assets": "models/scenery/coastal.json",
+  "extraAssets": [
+    "models/scenery/regional.json"
+  ],
+  "seed": 1101,
+  "description": "An artistic landscape aligned to the real GPX, with regional landforms, vegetation and water. Not surveyed terrain.",
+  "title": "Zion Canyon",
+  "region": "red-rock-canyon",
+  "biome": "desert",
+  "reliefM": 16,
+  "palette": {
+    "grass": "#a39165",
+    "meadow": "#c4a678",
+    "rock": "#ae765b",
+    "cliff": "#cc9a76",
+    "water": "#729889"
+  },
+  "vegetation": {
+    "trees": [
+      "broadleaf0",
+      "broadleaf1"
+    ],
+    "treeDensity": 0.08,
+    "density": 0.7,
+    "cover": [
+      "grass",
+      "sage",
+      "yucca",
+      "grass"
+    ],
+    "shrubs": [
+      "sage"
+    ],
+    "vergeDensity": 0.35
+  },
+  "valley": {
+    "axis": [
+      [
+        37.2,
+        -112.987
+      ],
+      [
+        37.285,
+        -112.947
+      ]
+    ],
+    "widthM": 330,
+    "heightM": 650
+  },
+  "formations": [
+    {
+      "name": "Angels Landing",
+      "lat": 37.269,
+      "lon": -112.949,
+      "radiusM": [
+        800,
+        1000
+      ],
+      "heightM": 650,
+      "shape": "mesa"
+    },
+    {
+      "name": "Great White Throne",
+      "lat": 37.256,
+      "lon": -112.935,
+      "radiusM": [
+        1000,
+        1400
+      ],
+      "heightM": 900,
+      "shape": "dome",
+      "color": "#d8c9aa"
+    }
+  ],
+  "rivers": [
+    {
+      "name": "Virgin River",
+      "widthM": 12,
+      "depthM": 10,
+      "path": [
+        [
+          37.197,
+          -112.987
+        ],
+        [
+          37.224,
+          -112.979
+        ],
+        [
+          37.25,
+          -112.958
+        ],
+        [
+          37.27,
+          -112.953
+        ],
+        [
+          37.286,
+          -112.948
+        ]
+      ]
+    }
+  ],
+  "preview": {
+    "positionM": 6700,
+    "camera": "chase"
+  },
+  "signs": [
+    {
+      "atM": 6775,
+      "side": "ocean",
+      "label": "ZION LODGE",
+      "subtitle": "ZION CANYON"
+    },
+    {
+      "atM": 12555,
+      "side": "ocean",
+      "label": "TEMPLE OF SINAWAVA",
+      "subtitle": "ZION CANYON"
+    }
+  ],
+  "roadside": [
+    {
+      "fromM": 6000,
+      "toM": 7900,
+      "side": "ocean"
+    }
+  ],
+  "lookouts": [
+    {
+      "atM": 6500,
+      "side": "ocean",
+      "widthM": 8,
+      "lengthM": 28
+    }
+  ]
+}

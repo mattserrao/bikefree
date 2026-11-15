@@ -2,17 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>bikefree · Big Sur visual preview</title>
+<title>bikefree · Scenic route preview</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22%3E%3Ccircle cx=%2210%22 cy=%2210%22 r=%228%22 fill=%22%236c8761%22/%3E%3C/svg%3E">
 <style>
-:root{color-scheme:light;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#283b36}*{box-sizing:border-box}body{margin:0;background:#dae6df}#view{position:fixed;inset:0}.world-canvas{display:block;width:100%;height:100%}.panel{background:#fffdf0ed;border:1px solid #ffffff80;box-shadow:0 8px 40px #21392c14;backdrop-filter:blur(16px);border-radius:14px}header{position:fixed;top:24px;left:24px;padding:18px 22px;width:320px}.brand{font-size:24px;font-weight:760;letter-spacing:-1.1px;font-style:italic}.brand span{color:#6c8761}.eyebrow{text-transform:uppercase;font-size:10px;letter-spacing:1.8px;font-weight:700;color:#72826c}h1{margin:15px 0 6px;font-size:21px;letter-spacing:-.7px;font-weight:600}p{font-size:12px;line-height:1.55;margin:0;color:#6b7766}#status{position:fixed;right:24px;top:24px;padding:11px 16px;font-size:11px;max-width:320px}#error{position:fixed;left:24px;top:230px;padding:12px 18px;background:#fff0d8;max-width:400px;border-radius:10px}footer{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);width:min(780px,calc(100% - 48px));padding:17px 22px 14px}.row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.spacer{flex:1}button,select{font:inherit;font-size:11px;padding:8px 11px;border:1px solid #cdd4c3;color:#314a3b;background:#fffef7;border-radius:7px;cursor:pointer}button:hover{background:#e8eddd}button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #6c8761;outline-offset:3px}.primary{background:#355a46;border-color:#355a46;color:white;min-width:70px}.primary:hover{background:#294a38}#seek{width:100%;margin:14px 0 6px;accent-color:#597a58;cursor:pointer}.caption{display:flex;justify-content:space-between;font-size:10px;color:#7a856f}.clean header,.clean footer,.clean #status{display:none}@media(max-width:650px){header{top:12px;left:12px;width:260px;padding:14px}#status{top:auto;bottom:185px;right:12px}footer{bottom:12px;width:calc(100% - 24px);padding:14px}}
+:root{color-scheme:light;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#283b36}*{box-sizing:border-box}body{margin:0;background:#dae6df}#view{position:fixed;inset:0}.world-canvas{display:block;width:100%;height:100%}.panel{background:#fffdf0ed;border:1px solid #ffffff80;box-shadow:0 8px 40px #21392c14;backdrop-filter:blur(16px);border-radius:14px}header{position:fixed;top:24px;left:24px;padding:18px 22px;width:320px}.brand{font-size:24px;font-weight:760;letter-spacing:-1.1px;font-style:italic}.brand span{color:#6c8761}.eyebrow{text-transform:uppercase;font-size:10px;letter-spacing:1.8px;font-weight:700;color:#72826c}h1{margin:15px 0 6px;font-size:21px;letter-spacing:-.7px;font-weight:600}p{font-size:12px;line-height:1.55;margin:0;color:#6b7766}#status{position:fixed;right:24px;top:24px;padding:11px 16px;font-size:11px;max-width:320px}#error{position:fixed;left:24px;top:230px;padding:12px 18px;background:#fff0d8;max-width:400px;border-radius:10px}footer{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);width:min(920px,calc(100% - 48px));padding:17px 22px 14px}.row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.spacer{flex:1}button,select{font:inherit;font-size:11px;padding:8px 11px;border:1px solid #cdd4c3;color:#314a3b;background:#fffef7;border-radius:7px;cursor:pointer}button:hover{background:#e8eddd}button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #6c8761;outline-offset:3px}.primary{background:#355a46;border-color:#355a46;color:white;min-width:70px}.primary:hover{background:#294a38}#seek{width:100%;margin:14px 0 6px;accent-color:#597a58;cursor:pointer}.caption{display:flex;justify-content:space-between;font-size:10px;color:#7a856f}.clean header,.clean footer,.clean #status{display:none}@media(max-width:650px){header{top:12px;left:12px;width:260px;padding:14px}#status{top:auto;bottom:185px;right:12px}footer{bottom:12px;width:calc(100% - 24px);padding:14px}}
 </style>
 </head>
 <body>
 <main id="view" aria-label="Interactive 3D cycling scene"></main>
-<header class="panel"><div class="row"><div class="brand">bike<span>free</span></div><div class="spacer"></div><span class="eyebrow" id="version"></span></div><h1 id="name">Loading the coast…</h1><p>Style C · sculpted scenery<br>Ride the real route through an authored landscape.</p></header>
+<header class="panel"><div class="row"><div class="brand">bike<span>free</span></div><div class="spacer"></div><span class="eyebrow" id="version"></span></div><h1 id="name">Loading scenery…</h1><select id="routePicker" aria-label="Scenic route" style="width:100%;margin:8px 0"></select><p>Style C · detailed regional scenery<br>Ride the real route through an authored landscape.</p></header>
 <div id="status" class="panel" role="status" aria-live="polite">Preparing scenery…</div><div id="error" hidden role="alert"></div>
-<footer class="panel"><div class="row"><button class="primary" id="play">Ride</button><button data-pos="15420">Bridge approach</button><button data-pos="15669">Bixby Bridge</button><button data-pos="17700">Coastline</button><div class="spacer"></div><select id="camera" aria-label="Camera"><option value="chase">Chase camera</option><option value="eye">On the bike</option><option value="vista">Scenic view</option><option value="drone">Drone</option><option value="side">Side</option></select><select id="time" aria-label="Time of day"><option value="midday">Daylight</option><option value="golden">Golden hour</option><option value="morning">Morning</option></select></div><input id="seek" type="range" min="0" max="1" value="0" step="10" aria-label="Position along the route"><div class="caption"><span id="distance">0.0 km</span><span>Visual prototype · no trainer required</span><span id="total"></span></div></footer>
+<footer class="panel"><div class="row"><button class="primary" id="play">Ride</button><button data-pos="15230">Overlook</button><button data-pos="15420">Bridge approach</button><button data-pos="15669">Bixby Bridge</button><button data-pos="17700">Coastline</button><div class="spacer"></div><select id="camera" aria-label="Camera"><option value="chase">Chase camera</option><option value="eye">On the bike</option><option value="vista">Scenic view</option><option value="drone">Drone</option><option value="side">Side</option></select><select id="time" aria-label="Time of day"><option value="midday">Daylight</option><option value="golden">Golden hour</option><option value="morning">Morning</option></select><select id="quality" aria-label="Graphics quality"><option value="low">Light detail</option><option value="balanced" selected>Balanced detail</option><option value="high">High detail</option></select></div><input id="seek" type="range" min="0" max="1" value="0" step="10" aria-label="Position along the route"><div class="caption"><span id="distance">0.0 km</span><span>Visual prototype · no trainer required</span><span id="total"></span></div></footer>
 <script type="module">
 import { World } from '../js/world/world.js';
 import { buildCatalogRoute, loadRouteScene } from '../js/routes.js';
@@ -29,28 +29,37 @@ try {
  if (!catalogResponse.ok) throw new Error('The route catalog could not load.');
  const catalog = await catalogResponse.json();
  const item = catalog.find((p) => p.id === park);
+ $('routePicker').replaceChildren(...catalog.map((p) => { const option = document.createElement('option'); option.value = p.id; option.textContent = p.name; return option; }));
+ $('routePicker').value = park;
+ $('routePicker').addEventListener('change', (e) => { const url = new URL(location.href); url.searchParams.set('park', e.target.value); url.searchParams.delete('pos'); location.assign(url.href); });
  if (!item) throw new Error(`Unknown route: ${park}`);
  const response = await fetch(`../${item.file}`);
  if (!response.ok) throw new Error('The route GPX could not load.');
  const route = buildCatalogRoute(await response.text(), item);
  if (q.get('style') !== 'legacy') await loadRouteScene(route);
- const world = new World($('view'), route, { log: (...args) => console.log(...args) });
+ const world = new World($('view'), route, { quality: q.get('quality') || 'balanced', log: (...args) => console.log(...args) });
  let pos = Math.max(0, Math.min(route.total, Number(q.get('pos') ?? route.scene?.preview?.positionM ?? 0) || 0));
  let speed = Math.max(0, Math.min(45, Number(q.get('speed')) || 0));
  let last = performance.now();
  function seek(value) { pos = Number(value); world.s = pos; world._camInit = false; }
  world.s = pos;
- $('camera').value = q.get('cam') || 'chase'; $('time').value = q.get('time') || 'midday';
- world.setCamera($('camera').value); world.setTimeOfDay($('time').value);
+ $('play').textContent = speed ? 'Pause' : 'Ride';
+ $('camera').value = q.get('cam') || route.scene?.preview?.camera || 'chase'; $('time').value = q.get('time') || 'midday';
+ world.setCamera($('camera').value); world.setTimeOfDay($('time').value); $('quality').value = world.qualityKey;
  world.setSource(() => { const now = performance.now(); pos = (pos + speed * (now - last) / 1000) % route.total; last = now; return { pos, speed, cadence: speed ? 84 : 0, riding: true }; });
  window.world = world; window.preview = { seek, setSpeed(value) { speed = value; last = performance.now(); }, route };
- $('name').textContent = park === 'bigsur' ? 'Big Sur, California' : route.name;
+ $('name').textContent = route.scene?.title || (park === 'bigsur' ? 'Big Sur, California' : route.name);
  $('seek').max = route.total - 1; $('seek').value = pos;
  $('total').textContent = `${(route.total / 1000).toFixed(1)} km · ${route.outAndBack ? 'out & back' : 'loop'}`;
  $('seek').addEventListener('input', (e) => seek(e.target.value));
- document.querySelectorAll('[data-pos]').forEach((b) => b.addEventListener('click', () => seek(b.dataset.pos)));
+ const sceneStops = park === 'bigsur' ? null : (route.scene?.signs || []).slice(0, 4);
+ document.querySelectorAll('[data-pos]').forEach((b, i) => {
+   if (sceneStops) { const stop = sceneStops[i]; b.hidden = !stop; if (stop) { b.dataset.pos = stop.atM; b.textContent = stop.label.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()); } }
+   b.addEventListener('click', () => seek(b.dataset.pos));
+ });
  $('camera').addEventListener('change', (e) => world.setCamera(e.target.value));
  $('time').addEventListener('change', (e) => world.setTimeOfDay(e.target.value));
+ $('quality').addEventListener('change', (e) => world.setQuality(e.target.value));
  $('play').addEventListener('click', () => { speed = speed ? 0 : 10; last = performance.now(); $('play').textContent = speed ? 'Pause' : 'Ride'; });
  world.start();
  setInterval(() => { $('seek').value = pos; $('distance').textContent = `${(pos / 1000).toFixed(1)} km`; const s = world.terrain.stats; $('status').textContent = s.errors ? 'Scenery unavailable · check connection and reload' : world.loading ? 'Preparing scenery…' : route.scene ? 'Bundled scenery · no map downloads' : `${s.ready} terrain tiles ready`; }, 500);
