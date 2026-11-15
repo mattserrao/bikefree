@@ -30,5 +30,59 @@
     "km": 51.4,
     "climbM": 1193,
     "file": "routes/parks/craterlake.gpx"
+  },
+  {
+    "id": "monumentvalley",
+    "name": "Monument Valley \u00b7 Forrest Gump Point",
+    "park": "US-163, Monument Valley, Utah & Arizona",
+    "km": 52.9,
+    "climbM": 545,
+    "file": "routes/parks/monumentvalley.gpx",
+    "outAndBack": true
+  },
+  {
+    "id": "bigsur",
+    "name": "Big Sur \u00b7 Bixby Bridge & Hurricane Point",
+    "park": "California Highway 1, Big Sur",
+    "km": 66.0,
+    "climbM": 707,
+    "file": "routes/parks/bigsur.gpx",
+    "outAndBack": true
+  },
+  {
+    "id": "goingtothesun",
+    "name": "Going-to-the-Sun Road",
+    "park": "Glacier National Park, Montana",
+    "km": 68.1,
+    "climbM": 1034,
+    "file": "routes/parks/goingtothesun.gpx",
+    "outAndBack": true
+  },
+  {
+    "id": "zion",
+    "name": "Zion Canyon Scenic Drive",
+    "park": "Zion National Park, Utah",
+    "km": 25.3,
+    "climbM": 188,
+    "file": "routes/parks/zion.gpx",
+    "outAndBack": true
+  },
+  {
+    "id": "sevenmile",
+    "name": "Overseas Highway \u00b7 Seven Mile Bridge",
+    "park": "Florida Keys (Marathon to Bahia Honda)",
+    "km": 41.2,
+    "climbM": 12,
+    "file": "routes/parks/sevenmile.gpx",
+    "outAndBack": true
+  },
+  {
+    "id": "route28",
+    "name": "Route 28 \u00b7 Old Forge to Eighth Lake",
+    "park": "Fulton Chain of Lakes, Adirondacks, New York",
+    "km": 57.2,
+    "climbM": 298,
+    "file": "routes/parks/route28.gpx",
+    "outAndBack": true
   }
 ]

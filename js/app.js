@@ -15,7 +15,7 @@ import { planRouteTiles, tileKeysToUrls, downloadUrls, offlineStatus, setOffline
 const $ = (id) => document.getElementById(id);
 
 // The app version, shown faintly at the bottom right of the menu. Bump with each release (see PLAN.md).
-export const VERSION = '0.10';
+export const VERSION = '0.11';
 $('ver').textContent = `bikefree v${VERSION}`;
 
 // ---------- Log (lives in Settings › Advanced) ----------
@@ -128,8 +128,22 @@ $('hrBtn').addEventListener('click', () => toggleDevice(hrStrap, () => hrStrap.c
 $('rawToggle').addEventListener('change', (e) => { ride.showRaw = e.target.checked; });
 
 // ---------- Demo mode: simulated trainer, constant 15 mph ----------
-const DEMO_MPH = 15;
-const DEMO_SPEED = DEMO_MPH * 0.44704;
+// Demo speed is adjustable (5–100 mph) so every route can be audited quickly.
+let DEMO_MPH = 15;
+let DEMO_SPEED = DEMO_MPH * 0.44704;
+function setDemoSpeed(mph) {
+  DEMO_MPH = Math.max(5, Math.min(100, Math.round(mph)));
+  DEMO_SPEED = DEMO_MPH * 0.44704;
+  if (trainer.demo) session.demoSpeedMps = DEMO_SPEED;
+  for (const r of document.querySelectorAll('.demo-range')) r.value = DEMO_MPH;
+  $('hDemoLabel').textContent = `Demo · ${DEMO_MPH} mph`;
+  $('demoNoteMph').textContent = `${DEMO_MPH} mph`;
+  if (trainer.demo) $('demoLabel').textContent = `Demo on · ${DEMO_MPH} mph`;
+}
+for (const r of document.querySelectorAll('.demo-range')) {
+  r.addEventListener('input', () => setDemoSpeed(Number(r.value)));
+  r.addEventListener('change', () => r.blur()); // hand the arrow keys back to shifting
+}
 let demoHr = 92;
 function demoData() {
   const pausedByUser = !session.running && session.movingS > 0 && !session.autoPaused;
@@ -141,7 +155,7 @@ function demoData() {
   // Cadence: what 15 mph needs in the current gear (so shifting changes it), kept in a sensible range.
   const cadence = workoutW != null ? 88 * jitter(0.03) : Math.min(125, Math.max(45, (DEMO_SPEED / (session.ratio * WHEEL_CIRC)) * 60)) * jitter(0.02);
   demoHr += (Math.min(185, 72 + power * 0.32) - demoHr) * 0.02;
-  return { powerW: Math.round(power), cadenceRpm: cadence, speedKph: speedFromCadence(cadence, 2.4) * 3.6, heartRate: Math.round(demoHr) };
+  return { powerW: Math.round(Math.min(1500, power)), cadenceRpm: cadence, speedKph: speedFromCadence(cadence, 2.4) * 3.6, heartRate: Math.round(demoHr) };
 }
 function setDemo(on) {
   if (on === !!trainer.demo) return;
@@ -207,7 +221,8 @@ function renderPreview() {
     $('pvTitle').textContent = r.name;
     $('pvSub').textContent = r.park || 'Your route';
     $('pvFacts').innerHTML = fact(`${fmtDist(r.total, 1)}`, distUnit()) + fact(fmtElev(r.ascent).toLocaleString(), `${elevUnit()} climb`) +
-      fact(`${Math.round(Math.max(...r.grade))}%`, 'max grade') + (r.closed ? '<div class="fact tag">Loop · endless laps</div>' : '');
+      fact(`${Math.round(Math.max(...r.grade))}%`, 'max grade') +
+      (r.outAndBack ? `<div class="fact tag">Out &amp; back · ${fmtDist(r.turnS, 1)} ${distUnit()} each way · endless laps</div>` : r.closed ? '<div class="fact tag">Loop · endless laps</div>' : '');
     $('pvDesc').innerHTML = r.hasElevation ? '' : '<span class="warn">No elevation in this file — it will ride flat.</span>';
     map.hidden = false; chart.hidden = false;
     drawTrace(map, r, 0);
@@ -324,6 +339,7 @@ document.addEventListener('keydown', (e) => {
   else if (k === 'l' || k === 'L') session.lap();
   else if ((k === 'n' || k === 'N') && session.mode === 'workout') session.skipSegment();
   else if ((k === 'c' || k === 'C') && onRideScreen) cycleCamera();
+  else if ((k === ',' || k === '.') && trainer.demo) setDemoSpeed(DEMO_MPH + (k === '.' ? 5 : -5));
   else if ((k === 'f' || k === 'F') && onRideScreen) toggleFullscreen();
   else return;
   e.preventDefault();
@@ -564,7 +580,7 @@ async function loadParks() {
   if (parkItems) return parkItems;
   try {
     const list = await (await fetch('routes/parks/index.json')).json();
-    parkItems = list.map((p) => ({ id: `builtin-park-${p.id}`, kind: 'route', name: p.name, url: p.file, park: p.park, group: 'National parks — 3D' }));
+    parkItems = list.map((p) => ({ id: `builtin-park-${p.id}`, kind: 'route', name: p.name, url: p.file, park: p.park, outAndBack: !!p.outAndBack, group: 'Scenic routes — 3D' }));
   } catch {
     parkItems = [];
   }
@@ -617,6 +633,12 @@ async function loadRouteItem(item) {
   const parsed = parseGpx(text);
   const route = buildRoute({ name: item.name.replace(' (built-in)', '') || parsed.name, points: parsed.points });
   route.park = item.park || null;
+  if (item.outAndBack) {
+    // There and back on the same road: the turnaround is the halfway point of the GPX.
+    route.outAndBack = true;
+    route.turnIdx = Math.floor((route.dist.length - 1) / 2);
+    route.turnS = route.dist[route.turnIdx];
+  }
   routeCache.set(item.id, route);
   return route;
 }

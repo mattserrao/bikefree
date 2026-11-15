@@ -161,6 +161,14 @@ button.start:disabled { background: var(--hover-2); border-color: transparent; c
 /* Version number: faint, bottom right of the menu (like Machine Manager's #ver) */
 .ver { position: fixed; right: 12px; bottom: 8px; font-size: 11px; letter-spacing: .02em; color: var(--muted); opacity: .55; pointer-events: none; font-variant-numeric: tabular-nums; }
 
+/* Demo speed slider (menu note + ride screen pill) */
+.demo-note { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.demo-speed { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.demo-range { width: 180px; accent-color: var(--accent); }
+.pill.demo-ctl { display: flex; align-items: center; gap: 10px; pointer-events: auto; padding: 5px 8px 5px 14px; }
+.pill.demo-ctl .demo-range { width: 150px; accent-color: var(--on-accent); }
+.pill.demo-ctl span { min-width: 7.5em; }
+
 /* ===== Profiles ===== */
 .avatar { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; flex: none; font-size: 11px; font-weight: 700;
   background: var(--accent-soft); color: var(--accent-ink); border: 1px solid var(--accent-line); letter-spacing: .3px; }

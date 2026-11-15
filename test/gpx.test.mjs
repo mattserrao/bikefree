@@ -83,14 +83,35 @@ test('small gap gets closed; open route is not a loop', () => {
   assert.equal(buildRoute(parseGpx(makeGpx())).closed, false);
 });
 
-test('park loops are closed and the right length', async () => {
+test('scenic routes are closed (lap endlessly) and the right length', async () => {
   const { readdirSync } = await import('node:fs');
   const dir = new URL('../routes/parks/', import.meta.url);
-  const expect = { yosemite: [18, 23], acadia: [30, 36], teton: [68, 75], craterlake: [49, 54] };
+  // km for the full lap (out-and-back routes: there and back)
+  const expect = {
+    yosemite: [18, 23], acadia: [30, 36], teton: [68, 75], craterlake: [49, 54],
+    monumentvalley: [48, 58], bigsur: [60, 72], goingtothesun: [62, 74], zion: [22, 30], sevenmile: [38, 46], route28: [52, 62],
+  };
   for (const f of readdirSync(dir).filter((x) => x.endsWith('.gpx'))) {
     const r = buildRoute(parseGpx(readFileSync(new URL(f, dir), 'utf8')));
     const [lo, hi] = expect[f.replace('.gpx', '')];
     assert.equal(r.closed, true, f);
     assert.ok(r.total / 1000 > lo && r.total / 1000 < hi, `${f} ${r.total}`);
+  }
+});
+
+test('out-and-back routes are symmetric and have rideable grades', async () => {
+  const index = JSON.parse(readFileSync(new URL('../routes/parks/index.json', import.meta.url), 'utf8'));
+  const oab = index.filter((r) => r.outAndBack);
+  assert.equal(oab.length, 6);
+  for (const item of oab) {
+    const r = buildRoute(parseGpx(readFileSync(new URL(`../${item.file}`, import.meta.url), 'utf8')));
+    const n = r.lat.length, half = Math.floor((n - 1) / 2);
+    // the way back retraces the way out
+    for (const k of [0, Math.floor(half / 3), half - 1]) {
+      assert.ok(Math.abs(r.lat[k] - r.lat[n - 1 - k]) < 1e-4 && Math.abs(r.lon[k] - r.lon[n - 1 - k]) < 1e-4, `${item.id} @${k}`);
+    }
+    // no bridge dips or cliff spikes left in the profile
+    const steepest = Math.max(...r.grade.map(Math.abs));
+    assert.ok(steepest < 12, `${item.id} steepest ${steepest.toFixed(1)}%`);
   }
 });

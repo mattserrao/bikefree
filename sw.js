@@ -1,5 +1,5 @@
 // bikefree service worker: keeps the app and downloaded park tiles available offline.
-const APP_CACHE = 'bikefree-app-v13';
+const APP_CACHE = 'bikefree-app-v15';
 const TILE_CACHE = 'bikefree-tiles-v1';
 const TILE_HOSTS = ['s3.amazonaws.com', 'basemap.nationalmap.gov'];
 const MAX_TILES = 40000;
@@ -12,6 +12,8 @@ const APP_FILES = [
   'vendor/three.module.min.js', 'models/rider.json',
   'routes/demo-hills.gpx', 'routes/parks/index.json', 'routes/parks/yosemite.gpx', 'routes/parks/acadia.gpx',
   'routes/parks/teton.gpx', 'routes/parks/craterlake.gpx',
+  'routes/parks/monumentvalley.gpx', 'routes/parks/bigsur.gpx', 'routes/parks/goingtothesun.gpx', 'routes/parks/zion.gpx',
+  'routes/parks/sevenmile.gpx', 'routes/parks/route28.gpx',
 ];
 
 self.addEventListener('install', (e) => {

@@ -16,7 +16,7 @@ Open http://localhost:8000 in **Chrome** (Safari doesn't support Web Bluetooth).
 The app has two screens: a **menu** to set up, and a full-window **ride screen**.
 
 1. **Devices** — tap Trainer, Handlebars and (optionally) Heart rate to pair.
-2. **Ride type** — **Free ride** (you set the grade), **Route** (pick a card: four national-park loops in 3D, or your own GPX) or **Workout** (pick from the list; .zwo/.erg/.mrc). Free rides and workouts roll a park loop behind you — pick a *Scenery* card, or *None*.
+2. **Ride type** — **Free ride** (you set the grade), **Route** (pick a card: ten scenic routes in 3D — four national-park loops plus six out-and-back classics — or your own GPX) or **Workout** (pick from the list; .zwo/.erg/.mrc). Free rides and workouts roll a park loop behind you — pick a *Scenery* card, or *None*.
 3. The preview on the right shows the map, profile or workout chart. **Start riding** opens the ride screen full screen; the ride records as soon as you pedal.
 4. On the bike: hoods **left = easier, right = harder** · ▲▼ grade or workout intensity · ▶ skip workout step · **A** pause · **Y** lap.
 5. Pause (A, Space or the pause button) for **Resume** or **Finish ride** and a list of the controls (lap: Y / L, skip a workout step: ▶ / N). **Finish ride** → summary → *Save & download .fit* → upload at strava.com/upload/select.
@@ -25,7 +25,7 @@ Ride screen: power (3-second, coloured by zone, with a Z1–Z6 badge, a zone bar
 
 Keyboard: ← → shift · ↑ ↓ grade/intensity · Space pause · L lap · N skip step · C camera · F full screen.
 
-**Demo** (top right of the menu): try everything without a bike. The rider holds a steady 15 mph; power, cadence and heart rate are simulated. Demo rides are saved as "Demo · …".
+**Demo** (top right of the menu): try everything without a bike. The rider holds a steady speed — 15 mph to start, adjustable from 5 to 100 mph with the slider (menu or ride screen) or the `,` / `.` keys; power, cadence and heart rate are simulated. Demo rides are saved as "Demo · …".
 
 **Profile** (top right): your name, height, weight and gender, plus your totals — rides, distance, riding time, climbing. Weight sets how hard climbs feel. Add riders for others in the house; each ride is saved to whoever rode it. Everything stays in this browser.
 
