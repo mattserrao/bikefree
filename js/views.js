@@ -1,6 +1,9 @@
 // Canvas views: route elevation profile, route trace, workout chart.
 import { zoneColor, segIntensity } from './workout.js';
 
+// Theme colours come from the CSS tokens, so charts follow light / dark mode.
+const tok = (name, fallback) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+
 function setup(canvas) {
   const dpr = window.devicePixelRatio || 1;
   const w = canvas.clientWidth, h = canvas.clientHeight;
@@ -35,6 +38,7 @@ export function drawProfile(canvas, route, pos, { metric = false, compact = fals
   const X = (d) => padL + (d / route.total) * pw;
   const Y = (e) => padT + ph - ((e - lo) / (hi - lo)) * ph;
 
+  const light = document.documentElement.dataset.theme === 'light';
   // Filled profile, coloured by grade, in ~100 columns
   const step = Math.max(1, Math.floor(route.dist.length / Math.max(60, pw / 3)));
   for (let i = 0; i < route.dist.length - step; i += step) {
@@ -42,8 +46,8 @@ export function drawProfile(canvas, route, pos, { metric = false, compact = fals
     const g = (route.ele[j] - route.ele[i]) / Math.max(1, route.dist[j] - route.dist[i]) * 100;
     ctx.fillStyle = gradeColor(g);
     ctx.globalAlpha = compact
-      ? (route.dist[j] <= pos ? 0.45 : route.dist[i] <= pos + ahead ? 1 : 0.3)
-      : (route.dist[j] <= pos ? 0.95 : 0.35);
+      ? (route.dist[j] <= pos ? 0.45 : route.dist[i] <= pos + ahead ? 1 : light ? 0.5 : 0.3)
+      : (route.dist[j] <= pos ? 0.95 : light ? 0.7 : 0.35);
     ctx.beginPath();
     ctx.moveTo(X(route.dist[i]), Y(lo));
     ctx.lineTo(X(route.dist[i]), Y(route.ele[i]));
@@ -56,7 +60,7 @@ export function drawProfile(canvas, route, pos, { metric = false, compact = fals
 
   if (compact) return drawMarker();
   // Axis labels
-  ctx.fillStyle = '#8a92a6';
+  ctx.fillStyle = tok('--muted', '#a8a69d');
   ctx.font = '11px -apple-system, sans-serif';
   const eu = metric ? 1 : 3.28084;
   ctx.textAlign = 'right';
@@ -77,11 +81,12 @@ export function drawProfile(canvas, route, pos, { metric = false, compact = fals
     const at = Math.min(pos, route.total);
     const i = Math.min(route.dist.length - 1, Math.round(at / 10));
     const mx = X(at), my = Y(route.ele[i]);
-    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+    const ink = tok('--ink', '#ece9e1');
+    ctx.strokeStyle = ink;
     ctx.lineWidth = compact ? 2 : 1;
     ctx.beginPath(); ctx.moveTo(mx, compact ? my : padT); ctx.lineTo(mx, Y(lo)); ctx.stroke();
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillStyle = ink;
+    ctx.strokeStyle = tok('--bg', '#262624');
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(mx, my, compact ? 7 : 5, 0, Math.PI * 2); ctx.fill();
     if (compact) ctx.stroke();
@@ -110,12 +115,10 @@ export function drawTrace(canvas, route, pos) {
     const [x, y] = P(to); ctx.lineTo(x, y);
     ctx.stroke();
   };
-  path(0, route.lat.length - 1, '#3a4152', 3);
-  if (cut > 0) path(0, cut, '#ff7a1a', 3);
-  const [sx, sy] = P(0);
-  ctx.fillStyle = '#3ccf7a'; ctx.beginPath(); ctx.arc(sx, sy, 3.5, 0, Math.PI * 2); ctx.fill();
+  path(0, route.lat.length - 1, tok('--muted', '#a8a69d'), 2.5);
+  if (cut > 0) path(0, cut, tok('--accent', '#7aa9f5'), 3);
   const [x, y] = P(cut);
-  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = tok('--accent', '#7aa9f5'); ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
 }
 
 /** Workout blocks coloured by zone, with progress. */
@@ -130,7 +133,7 @@ export function drawWorkout(canvas, workout, t, ftp, bias = 1, { compact = false
   for (const s of workout.segments) {
     const a = s.unit === 'w' ? s.from / ftp : s.from;
     const b = s.unit === 'w' ? s.to / ftp : s.to;
-    ctx.fillStyle = s.kind === 'free' ? '#3a4152' : zoneColor(segIntensity(s, ftp));
+    ctx.fillStyle = s.kind === 'free' ? tok('--line-strong', '#4a4a46') : zoneColor(segIntensity(s, ftp));
     ctx.globalAlpha = s.start + s.duration <= t ? 0.95 : 0.5;
     ctx.beginPath();
     ctx.moveTo(X(s.start) + 0.5, Y(0));
@@ -142,18 +145,20 @@ export function drawWorkout(canvas, workout, t, ftp, bias = 1, { compact = false
   }
   ctx.globalAlpha = 1;
   // FTP line
-  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.strokeStyle = tok('--muted', '#a8a69d');
+  ctx.globalAlpha = 0.5;
   ctx.setLineDash([4, 4]);
   ctx.beginPath(); ctx.moveTo(0, Y(1)); ctx.lineTo(w, Y(1)); ctx.stroke();
   ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
   if (!compact) drawLabels();
   // Progress
   const x = X(Math.min(t, workout.duration));
-  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+  ctx.strokeStyle = tok('--ink', '#ece9e1'); ctx.lineWidth = 2;
   if (t > 0 || !compact) { ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, Y(0)); ctx.stroke(); }
 
   function drawLabels() {
-    ctx.fillStyle = '#8a92a6';
+    ctx.fillStyle = tok('--muted', '#a8a69d');
     ctx.font = '11px -apple-system, sans-serif';
     ctx.fillText(`FTP ${ftp} W${bias !== 1 ? ` · ${Math.round(bias * 100)}%` : ''}`, 4, Y(1) - 4);
     // Time ticks every 10 min

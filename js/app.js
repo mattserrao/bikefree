@@ -67,6 +67,13 @@ function fmtTime(s) {
   const sec = String(s % 60).padStart(2, '0');
   return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 }
+// Zone and grade colours are tuned for dark glass; on light panels darken them so the text stays readable.
+function readable(hex) {
+  if (window.BFTheme?.mode() !== 'light') return hex;
+  const n = parseInt(hex.slice(1), 16), k = 0.62;
+  const c = (v) => Math.round(v * k).toString(16).padStart(2, '0');
+  return `#${c(n >> 16)}${c((n >> 8) & 255)}${c(n & 255)}`;
+}
 const fmtGrade = (g) => `${(Math.abs(g) < 0.05 ? 0 : g).toFixed(1)}%`;
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -429,9 +436,10 @@ function renderHud() {
   const zi = Math.max(0, ZONES.findIndex(([lo, hi]) => pct >= lo && pct < hi));
   const zc = zoneColor(ZONE_MID[zi]);
   $('hPower').textContent = Math.round(p3);
-  $('hPower').style.color = zi > 0 ? zc : '#fff';
+  $('hPower').style.color = zi > 0 ? readable(zc) : '';
   $('hZone').textContent = ZONES[zi][2];
-  $('hZone').style.background = zi > 0 ? zc : '#fff';
+  $('hZone').style.background = zi > 0 ? zc : '';
+  $('hZone').style.color = zi > 0 ? '#1d1d1c' : '';
   for (const z of zSegs) z.seg.firstChild.style.width = `${Math.max(0, Math.min(1, (p3 - z.a) / (z.b - z.a))) * 100}%`;
   const tw = session.workoutTarget;
   const tick = $('zTarget');
@@ -457,7 +465,7 @@ function renderHud() {
   if (session.mode === 'workout' && session.workout && !session.workoutDone && session.segment) {
     const w = session.workout, seg = session.segment;
     $('hGrade').textContent = fmtTime(seg.start + seg.duration - session.workoutT);
-    $('hGrade').style.color = '#fff';
+    $('hGrade').style.color = '';
     $('hGradeLabel').textContent = `${seg.label} · left`;
     const next = w.segments[session.segIndex + 1];
     showRow(1, next ? (next.kind === 'erg' ? `${targetWatts(next, next.start, settings.ftp, session.workoutBias)} W` : 'Free') : 'Finish', next ? `next · ${fmtTime(next.duration)}` : 'next');
@@ -465,7 +473,7 @@ function renderHud() {
     showRow(3, session.workoutBias !== 1 ? `${Math.round(session.workoutBias * 100)}%` : null, 'intensity');
   } else {
     $('hGrade').textContent = fmtGrade(session.gradePct);
-    $('hGrade').style.color = gradeColor(session.gradePct);
+    $('hGrade').style.color = readable(gradeColor(session.gradePct));
     $('hGradeLabel').textContent = 'grade';
     if (session.mode === 'route' && session.route) {
       const r = session.route;
@@ -922,6 +930,7 @@ const form = dlg.querySelector('form');
 function fillSettings() {
   const imp = imperial();
   const f = form.elements;
+  f.theme.value = window.BFTheme?.pref() || 'system';
   f.units.value = settings.units;
   f.rider.value = +(imp ? settings.riderKg / KG_PER_LB : settings.riderKg).toFixed(1);
   f.bike.value = +(imp ? settings.bikeKg / KG_PER_LB : settings.bikeKg).toFixed(1);
@@ -965,6 +974,7 @@ dlg.addEventListener('close', () => {
     startGear: Math.min(24, Math.max(1, Math.round(Number(f.startGear.value) || 12))),
   });
   saveSettings(settings);
+  window.BFTheme?.set(f.theme.value);
   session.settingsChanged();
   world?.setCamera(settings.worldCam);
   world?.setTimeOfDay(settings.worldTime);
@@ -978,6 +988,9 @@ window.addEventListener('resize', () => { renderPreview(); drawThumbs(); lastPro
 window.addEventListener('beforeunload', (e) => {
   if (session.hasRide) { e.preventDefault(); e.returnValue = ''; }
 });
+
+// Light / dark: charts are drawn on canvases, so redraw them when the appearance changes (incl. macOS switching).
+window.BFTheme?.onChange(() => { renderPreview(); drawThumbs(); lastProfileDraw = 0; renderHud(); });
 
 // ---------- Boot ----------
 session.autoStart = false;

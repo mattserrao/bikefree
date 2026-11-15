@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>bikefree</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ccircle cx=%2250%22 cy=%2250%22 r=%2240%22 fill=%22%23ff7a1a%22/%3E%3C/svg%3E">
+  <script src="js/theme.js"></script>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -180,12 +181,21 @@
   <dialog id="settings">
     <form method="dialog">
       <h2>Settings</h2>
-      <label>Units
-        <select name="units">
-          <option value="imperial">Imperial (mph, lb, ft)</option>
-          <option value="metric">Metric (km/h, kg, m)</option>
-        </select>
-      </label>
+      <div class="two">
+        <label>Appearance
+          <select name="theme">
+            <option value="system">System (follow macOS)</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
+        <label>Units
+          <select name="units">
+            <option value="imperial">Imperial (mph, lb, ft)</option>
+            <option value="metric">Metric (km/h, kg, m)</option>
+          </select>
+        </label>
+      </div>
       <div class="two">
         <label><span>Rider weight (<span class="u-weight">lb</span>)</span>
           <input type="number" name="rider" min="20" max="400" step="any">
