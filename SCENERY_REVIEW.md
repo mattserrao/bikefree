@@ -35,3 +35,11 @@ Retina display load and trainer/handlebar Bluetooth still require an M4 Air ride
 Balanced is the initial setting; Light lowers density and disables cast shadows.
 
 See [ROUTES.md](ROUTES.md) for the GPX-plus-configuration workflow and Blender build commands.
+
+## v0.11.2 — real horizon
+
+Beyond ~1.5 km the real elevation and USGS aerial photos now replace the stylized
+ground, colour-matched to each route's palette (needs internet; offline stays fully
+stylized). Up close nothing changes. Reviewed from the road on Monument Valley (real
+mesas south of the visitor center), Going-to-the-Sun (Glacier peaks) and Big Sur
+(coastal hills and ocean).

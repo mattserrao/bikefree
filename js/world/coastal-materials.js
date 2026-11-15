@@ -31,7 +31,7 @@ export function makeCoastalGroundMaterial(palette, config = {}, farUniform = nul
       // Approaching the hand-off, the stylized ground eases onto the real terrain's height so the two meet without a step.
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         if (bfFar.z > .5) {
-          float bfMorph = smoothstep(bfFar.x - 650., bfFar.x - bfFar.y * .5, length(position.xz - cameraPosition.xz));
+          float bfMorph = smoothstep(bfFar.x - 1000., bfFar.x - bfFar.y * .5, length(position.xz - cameraPosition.xz));
           transformed.y = mix(transformed.y, aRealH, bfMorph);
         }`)
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvBfGround = (modelMatrix * vec4(transformed, 1.)).xyz; vBfGroundNormal = normalize(mat3(modelMatrix) * objectNormal);');

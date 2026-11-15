@@ -183,7 +183,7 @@ export class StylizedTerrain {
       const y = this.heightAt(px, pz);
       positions.push(px, y, pz);
       // real ground height here: the ground morphs toward it approaching the hand-off to the far terrain
-      realH.push(real ? (this.realHeightAt(px, pz) ?? y) : y);
+      realH.push(real ? this._smoothRealHeight(px, pz, y) : y);
       const coastal = this.inlandAt(px, pz);
       const patch = .5 + Math.sin(px / 130 + Math.sin(pz / 260)) * Math.cos(pz / 190) * .5;
       c.copy(P.grass).lerp(P.meadow, smoothstep(.15, .9, patch) * .65);
@@ -360,6 +360,17 @@ export class StylizedTerrain {
       }
     }
     this.stats.ready = this.patches.size;
+  }
+
+  // Real ground height, lightly smoothed: the stylized patches are coarser than the real terrain, so blending
+  // toward a smoothed target keeps neighbouring patches from opening cracks in steep country.
+  _smoothRealHeight(x, z, fallback) {
+    let sum = 0, n = 0;
+    for (const [dx, dz] of [[0, 0], [70, 0], [-70, 0], [0, 70], [0, -70]]) {
+      const h = this.realHeightAt(x + dx, z + dz);
+      if (h != null) { sum += h; n++; }
+    }
+    return n ? sum / n : fallback;
   }
 
   /** Turn the hand-off to the real far terrain on or off (off when it can't load, e.g. offline). */
