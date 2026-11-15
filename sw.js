@@ -1,12 +1,12 @@
 // bikefree service worker: keeps the app and downloaded park tiles available offline.
-const APP_CACHE = 'bikefree-app-v11';
+const APP_CACHE = 'bikefree-app-v12';
 const TILE_CACHE = 'bikefree-tiles-v1';
 const TILE_HOSTS = ['s3.amazonaws.com', 'basemap.nationalmap.gov'];
 const MAX_TILES = 40000;
 
 const APP_FILES = [
   './', 'index.html', 'css/style.css',
-  'js/app.js', 'js/theme.js', 'js/fit.js', 'js/gpx.js', 'js/hr.js', 'js/parsers.js', 'js/physics.js', 'js/recorder.js',
+  'js/app.js', 'js/theme.js', 'js/profiles.js', 'js/fit.js', 'js/gpx.js', 'js/hr.js', 'js/parsers.js', 'js/physics.js', 'js/recorder.js',
   'js/ride.js', 'js/session.js', 'js/settings.js', 'js/store.js', 'js/trainer.js', 'js/views.js', 'js/workout.js',
   'js/offline.js', 'js/world/geo.js', 'js/world/terrain.js', 'js/world/world.js', 'js/world/rider.js',
   'vendor/three.module.min.js', 'models/rider.json',

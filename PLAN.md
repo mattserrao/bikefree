@@ -181,8 +181,16 @@ Goal: a cleaner, more modern look with information sized for reading from the bi
 - [x] Ride-screen glass follows the theme (charcoal glass / white frosted glass); power-zone and grade colours kept, darkened on light panels so they stay readable; charts read their colours from the theme
 - [ ] On-bike check
 
+### v0.10 — Profiles *(branch `v0.10`)*
+Goal: rider profiles that live in this browser and add up your riding.
+- [x] Create a profile: name, height (ft/in or cm), weight, gender — first-run "Create your profile" card, profile button in the header (initials, name, rides · distance)
+- [x] Profile weight drives the physics (rider weight moved out of Settings; bike weight stays)
+- [x] Each saved ride is tagged with its rider; totals (rides, distance, time, climbing) are computed from saved rides, so deleting a ride keeps them right. Rides from before profiles count for the first rider
+- [x] Several riders: switch, add or delete riders (not mid-ride); Rides history shows the active rider's rides with totals
+- [x] Unit tests for profiles (`test/profiles.test.mjs`)
+- [ ] On-bike check
+
 ### Later ideas
-- Direct Strava upload
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)
 - Sync your own ride video to a GPX
