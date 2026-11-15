@@ -289,7 +289,13 @@ Goal: make Big Sur the showcase course — visually stunning, the one you open t
 - Night: headlight is a flat disc; no surf glow, moon path on the sea, or distant car lights
 - Nothing moves except the rider and pacer: no traffic, birds, surf, fog or wind
 
-**Proposed passes (order to be confirmed)**
+**Decisions (15 Nov 2026)**
+- Landform: real high-resolution elevation for the route corridor, bundled for offline, stylized materials on top
+- Art style: stylized but richer — keep the low-poly look; add real light, weather and motion
+- Weather: marine layer fog, clouds with shadows, wind, and rain with a wet road
+- Traffic: light and realistic — a car every 20–40 s each way, some RVs, motorcycles and cyclists; some pull into the overlooks
+
+**Passes**
 - [ ] Real landform: bake a high-resolution real elevation corridor for the route (sea cliffs, Bixby gorge, Hurricane Point, Little Sur) into the bundle; keep the stylized look on top
 - [ ] Ocean: surf line and foam on rocks, swell, deep-to-shallow colour, sea stacks and coves where they really are
 - [ ] Weather: marine layer (fog bank on the sea, rolling in over the road), drifting clouds with shadows, wind in grass and trees; optional light rain/drizzle with wet road
