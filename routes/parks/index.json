@@ -89,8 +89,8 @@
     "id": "route28",
     "name": "Route 28 · Old Forge to Eighth Lake",
     "park": "Fulton Chain of Lakes, Adirondacks, New York",
-    "km": 57.1,
-    "climbM": 298,
+    "km": 58.4,
+    "climbM": 470,
     "file": "routes/parks/route28.gpx",
     "outAndBack": true,
     "scene": "routes/scenes/route28.json"

@@ -267,14 +267,15 @@ Goal: a repeatable check that rides every course end to end and flags discontinu
 - [ ] On-bike check, especially the five routes whose GPX changed (each 0.1–0.5 km shorter)
 
 ### Route 28 rework *(test branch `route28-test`)*
-Review and detailed plan: [docs/route28/REVIEW.md](docs/route28/REVIEW.md)
-- [ ] **Phase 0** — Decide the road: waypoint 2 snaps to South Shore Road; move it to Eagle Bay on NY-28 or rename the route. Record M4 Air baseline (fps, draw calls, triangles)
-- [ ] **Phase 1** — Real water + near terrain: OSM lake outlines and baked DEM (built on the Mac), polygon lakes with raster water mask, correct lake levels (~520 m lower chain); QC `road-in-lake`, `lake-level`, `lake-side`
-- [ ] **Phase 2** — Forest: white pine, spruce, hemlock, maple, birch, saplings, real-scale boulders; forest-edge bands; near/mid/far tiers + canopy shell; < 2M tris, < 600 draw calls, 60 fps
-- [ ] **Phase 3** — Atmosphere and lake look: per-scene fog, lake water style (no surf, tea colour, treeline reflection), morning mist
-- [ ] **Phase 4** — Towns, camps, roadside: Old Forge, Inlet, lakeside camps with docks, poles and wires, mailboxes, guardrails, DEC signs
-- [ ] **Phase 5** — Life and polish: boats, loons, fall palette, fire tower (if via Eagle Bay), traffic
-- [ ] On-bike check
+Review, plan and screenshots: [docs/route28/REVIEW.md](docs/route28/REVIEW.md)
+- [x] **Phase 0** — Rerouted on NY-28 through Eagle Bay (29.2 km each way); signs, lookout and towns re-placed
+- [x] **Phase 1** — Real terrain + lakes baked from USGS elevation (`tools/build_scene_terrain.py`, `route28.terrain.bin`); lakes at their real levels and shorelines; QC `road-in-lake`, `lake-side`, `building-on-road`, `building-in-water`, `dock-on-land`
+- [x] **Phase 2** — Procedural Adirondack kit (white pine, spruce, hemlock, maple, birch × 3 LODs); forest-edge layout ~180 trees/ha; nested tiers built a few per frame; canopy shell on far hills; smaller, local ground cover; lake view corridors
+- [x] **Phase 3** — Per-scene fog, lake water shader (no surf, treeline reflection), morning/golden-hour mist, darker far tint
+- [x] **Phase 4** — Old Forge, Eagle Bay, Inlet; ~70 lakeside camps with docks/boathouses/canoes; boats; poles + wires; mailboxes; guardrails; DEC + deer signs
+- [x] **Phase 5** — Fall palette (`season: "fall"`, preview `&season=fall`)
+- [ ] On-bike check on the M4 Air: frame rate on Balanced, tile-edge hitching, lake/horizon seams online
+- [ ] Later: Bald Mountain fire tower, Old Forge landmarks, measured performance overlay
 
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)

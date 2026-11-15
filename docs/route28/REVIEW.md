@@ -1,5 +1,54 @@
 # Route 28 · Old Forge to Eighth Lake — scenery review (v2)
 
+## Built on `route28-test` (all phases, one pass)
+
+| Old Forge (0.5 km) | Fourth Lake glimpse (10.7 km) |
+| --- | --- |
+| ![](after-oldforge.jpg) | ![](after-lake2.jpg) |
+| **Over the forest near Eagle Bay (drone, 16.2 km)** | **Seventh Lake lookout, fall palette (24.5 km)** |
+| ![](after-fourth.jpg) | ![](after-fall.jpg) |
+| **Inlet, morning (19.1 km)** | **Eighth Lake ahead at the turnaround (29.1 km)** |
+| ![](after-inlet.jpg) | ![](after-turn.jpg) |
+
+*Rendered with a software GPU in headless Chrome, so shadows and colours are close to what you'll see, but frame rate isn't.*
+
+- **Phase 0, road:** waypoint 2 moved to Eagle Bay on NY-28 and the route rebuilt. It now runs 29.2 km each way, within 20 m of Old Forge, Eagle Bay and Eighth Lake. All signs, the lookout and the towns were re-placed for the new distances.
+- **Phase 1, real water and terrain:** `tools/build_scene_terrain.py` bakes the USGS elevation on a 30 m grid. Lakes are found from the elevation itself, because hydro-flattened water is exactly flat. The results:
+  - Fourth Lake is 792 ha at 520.3 m; First to Third Lake is 401 ha at 520.4 m; Sixth and Seventh Lake together are 299 ha at 544.5 m; Eighth Lake is 124 ha at 545.3 m.
+  - Lakes are drawn on that grid as sheltered water, with no surf.
+  - Within about 2.6 km of the road, the ground follows the real hills.
+  - New QC checks: `road-in-lake`, `lake-side`, `building-on-road`, `building-in-water` and `dock-on-land`. All pass.
+  - I didn't need an OpenStreetMap download.
+- **Phase 2, forest:**
+  - A procedural kit with white pine, spruce, hemlock, maple and birch at three detail levels.
+  - Forest-edge bands: mown verge, then brush, then a dense stand of about 180 trees/ha.
+  - Nested near, mid and far tiers, so trees never jump when detail changes.
+  - Tiles are built a few per frame, nearest first.
+  - A canopy shell covers the hills beyond the last trees.
+  - Ground cover is smaller and is now grass, fern, goldenrod and blueberry.
+  - The woods thin out toward nearby shores, so you get lake glimpses.
+- **Phase 3, atmosphere:**
+  - Fog is set per scene (700 m to 9 km).
+  - The lake water is tea-coloured with wind ripples, a reflection of the treeline and sun glint.
+  - Mist lies on the lakes at morning and golden hour.
+  - The real-horizon tint is darkened to forest green.
+- **Phase 4, towns:**
+  - Old Forge, Eagle Bay and Inlet have houses, a store, a church and a motel.
+  - About 70 lakeside camps, each with a driveway and mailbox, a dock or boathouse, and canoes.
+  - Boats on the water, utility poles with sagging wires, and guardrail above water or drops.
+  - Signs: brown-and-yellow DEC, and yellow diamond deer warnings.
+- **Phase 5, polish:** `season: "fall"` (or `&season=fall` in the preview) switches maples to red and orange and birches to gold.
+- **Load (headless count, Balanced):** about 360–460 draw calls and 1.0–1.9M triangles. This still needs measuring on the M4 Air.
+
+**Not done or still open:**
+- The logarithmic depth buffer is unchanged; check frame rate on the Air before changing it.
+- Lake names come from position matching:
+  - The two upper lakes are one connected flat area, so they're labelled "Sixth and Seventh Lake".
+  - Smaller ponds are unnamed.
+- There's no Bald Mountain fire tower or Water Safari landmark yet.
+
+---
+
 Test branch: `route28-test`. Scene: `routes/scenes/route28.json`. GPX: `routes/parks/route28.gpx` (28.6 km out, then back). Routing: `routes/catalog.json` → `route28`.
 
 v2 adds an independent advisor pass. Every number was re-measured against the GPX and code. Geography from memory is marked with a confidence level and should get a quick map check on the Mac, because map data can't be reached from the cloud workspace.

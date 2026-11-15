@@ -7,140 +7,541 @@
     "models/scenery/regional.json"
   ],
   "seed": 1101,
-  "description": "An artistic landscape aligned to the real GPX, with regional landforms, vegetation and water. Not surveyed terrain.",
-  "title": "Adirondack Lakes · Route 28",
+  "description": "The real terrain and lake shorelines (USGS elevation, baked by tools/build_scene_terrain.py) under a stylized northern forest, villages and lakeside camps.",
+  "title": "Adirondack Lakes \u00b7 Route 28",
   "region": "adirondack-forest",
   "biome": "forest",
   "reliefM": 45,
   "palette": {
-    "grass": "#6e8b61",
-    "meadow": "#a3a471",
-    "rock": "#9b9d8c",
-    "cliff": "#bab9a4",
-    "water": "#3b7c89"
+    "grass": "#5b744b",
+    "meadow": "#7f8a55",
+    "rock": "#8b8a80",
+    "cliff": "#9a988c",
+    "water": "#28403f",
+    "shallowWater": "#5f6343",
+    "forestFloor": "#3d4731",
+    "canopy": "#2c4532",
+    "farTint": "#2c4532",
+    "farTintAmount": 0.3
   },
   "vegetation": {
-    "trees": [
-      "fir0",
-      "fir1",
-      "broadleaf0",
-      "broadleaf1"
+    "layout": "forest-edge",
+    "species": {
+      "maple": 0.42,
+      "spruce": 0.2,
+      "hemlock": 0.13,
+      "birch": 0.13,
+      "whitepine": 0.12
+    },
+    "edge": {
+      "mownM": 8.5,
+      "shrubM": 13
+    },
+    "canopyM": 17,
+    "treeScale": [
+      0.85,
+      1.15
     ],
-    "treeDensity": 0.38,
-    "density": 1.15,
     "cover": [
       "grass",
       "grass",
+      "grass",
       "fern",
-      "fern",
-      "lupine",
-      "alpineflowers"
+      "fern"
     ],
-    "shrubs": [
-      "shrub0",
-      "shrub1"
+    "coverScale": [
+      0.5,
+      1.0
     ],
-    "vergeDensity": 0.8
+    "density": 1,
+    "vergeDensity": 0.9
   },
-  "lakes": [
-    {
-      "name": "First Lake",
-      "lat": 43.718,
-      "lon": -74.918,
-      "radiusM": [
-        1550,
-        500
-      ],
-      "elevationM": 527
-    },
-    {
-      "name": "Second Lake",
-      "lat": 43.738,
-      "lon": -74.879,
-      "radiusM": [
-        950,
-        400
-      ],
-      "elevationM": 532
-    },
-    {
-      "name": "Fourth Lake",
-      "lat": 43.76,
-      "lon": -74.836,
-      "radiusM": [
-        1900,
-        650
-      ],
-      "elevationM": 535
-    },
-    {
-      "name": "Sixth Lake",
-      "lat": 43.75,
-      "lon": -74.78,
-      "radiusM": [
-        600,
-        500
-      ],
-      "elevationM": 540
-    },
-    {
-      "name": "Seventh Lake",
-      "lat": 43.745,
-      "lon": -74.746,
-      "radiusM": [
-        1400,
-        650
-      ],
-      "elevationM": 542
-    },
-    {
-      "name": "Eighth Lake",
-      "lat": 43.769,
-      "lon": -74.71,
-      "radiusM": [
-        700,
-        1050
-      ],
-      "elevationM": 548
-    }
-  ],
   "preview": {
-    "positionM": 21800,
+    "positionM": 10650,
     "camera": "chase"
   },
   "signs": [
     {
-      "atM": 18415,
+      "atM": 180,
+      "side": "ocean",
+      "label": "OLD FORGE",
+      "subtitle": "TOWN OF WEBB \u00b7 ROUTE 28"
+    },
+    {
+      "atM": 14520,
+      "side": "ocean",
+      "label": "EAGLE BAY",
+      "subtitle": "ROUTE 28 \u00b7 BIG MOOSE ROAD"
+    },
+    {
+      "atM": 18520,
       "side": "ocean",
       "label": "INLET",
-      "subtitle": "ADIRONDACK LAKES · ROUTE 28"
+      "subtitle": "HAMILTON COUNTY \u00b7 ROUTE 28"
     },
     {
-      "atM": 21835,
+      "atM": 22300,
       "side": "ocean",
       "label": "SEVENTH LAKE",
-      "subtitle": "ADIRONDACK LAKES · ROUTE 28"
+      "subtitle": "FULTON CHAIN OF LAKES"
     },
     {
-      "atM": 28535,
+      "atM": 28300,
       "side": "ocean",
+      "kind": "dec",
       "label": "EIGHTH LAKE",
-      "subtitle": "ADIRONDACK LAKES · ROUTE 28"
-    }
-  ],
-  "roadside": [
+      "subtitle": "CAMPGROUND \u00b7 NYS DEC"
+    },
     {
-      "fromM": 21100,
-      "toM": 23000,
-      "side": "ocean"
+      "atM": 5200,
+      "side": "ocean",
+      "kind": "diamond",
+      "symbol": "!",
+      "label": "DEER"
+    },
+    {
+      "atM": 11800,
+      "side": "ocean",
+      "kind": "diamond",
+      "symbol": "!",
+      "label": "DEER"
+    },
+    {
+      "atM": 24800,
+      "side": "ocean",
+      "kind": "diamond",
+      "symbol": "!",
+      "label": "DEER"
     }
   ],
   "lookouts": [
     {
-      "atM": 21600,
-      "side": "ocean",
+      "atM": 24450,
+      "side": "inland",
       "widthM": 8,
       "lengthM": 28
     }
-  ]
+  ],
+  "kitExtensions": [
+    "adirondack"
+  ],
+  "season": "summer",
+  "atmosphere": {
+    "fogNearM": 700,
+    "fogFarM": 9000,
+    "fogFarRealM": 15000,
+    "lakeMist": 0.4
+  },
+  "water": {
+    "style": "lake",
+    "nearRouteM": 3200
+  },
+  "towns": [
+    {
+      "name": "Old Forge",
+      "fromM": 0,
+      "toM": 1300,
+      "setbackM": [
+        13,
+        22
+      ],
+      "spacingM": [
+        20,
+        36
+      ]
+    },
+    {
+      "name": "Eagle Bay",
+      "fromM": 14650,
+      "toM": 15150,
+      "setbackM": [
+        13,
+        24
+      ],
+      "spacingM": [
+        26,
+        46
+      ],
+      "skip": [
+        "church0",
+        "motel0"
+      ]
+    },
+    {
+      "name": "Inlet",
+      "fromM": 18650,
+      "toM": 19650,
+      "setbackM": [
+        13,
+        22
+      ],
+      "spacingM": [
+        20,
+        36
+      ]
+    }
+  ],
+  "camps": [],
+  "poles": {
+    "side": "left",
+    "spacingM": 45,
+    "lateralM": 7.4
+  },
+  "terrainData": {
+    "file": "routes/scenes/route28.terrain.bin",
+    "format": "bikefree-terrain-1",
+    "north": 43.792547,
+    "south": 43.687304,
+    "west": -75.005717,
+    "east": -74.671866,
+    "width": 896,
+    "height": 392,
+    "baseM": 0,
+    "sdfMaxM": 300,
+    "lakes": [
+      {
+        "level": 520.27,
+        "areaHa": 791.5,
+        "lat": 43.75531,
+        "lon": -74.83839,
+        "name": "Fourth Lake",
+        "id": 1
+      },
+      {
+        "level": 520.36,
+        "areaHa": 400.7,
+        "lat": 43.71933,
+        "lon": -74.91668,
+        "name": "First, Second and Third Lake",
+        "id": 2
+      },
+      {
+        "level": 544.45,
+        "areaHa": 298.9,
+        "lat": 43.74514,
+        "lon": -74.74647,
+        "name": "Sixth and Seventh Lake",
+        "id": 3
+      },
+      {
+        "level": 544.96,
+        "areaHa": 277.5,
+        "lat": 43.69097,
+        "lon": -74.92193,
+        "id": 4
+      },
+      {
+        "level": 574.95,
+        "areaHa": 189.7,
+        "lat": 43.71241,
+        "lon": -74.79937,
+        "name": "Limekiln Lake",
+        "id": 5
+      },
+      {
+        "level": 545.25,
+        "areaHa": 124.1,
+        "lat": 43.77903,
+        "lon": -74.70242,
+        "name": "Eighth Lake",
+        "id": 6
+      },
+      {
+        "level": 524.18,
+        "areaHa": 63.1,
+        "lat": 43.7635,
+        "lon": -74.90615,
+        "id": 7
+      },
+      {
+        "level": 544.45,
+        "areaHa": 54.0,
+        "lat": 43.75557,
+        "lon": -74.71998,
+        "id": 8
+      },
+      {
+        "level": 535.57,
+        "areaHa": 45.9,
+        "lat": 43.78537,
+        "lon": -74.84991,
+        "id": 9
+      },
+      {
+        "level": 555.97,
+        "areaHa": 36.8,
+        "lat": 43.79102,
+        "lon": -74.80275,
+        "id": 10
+      },
+      {
+        "level": 607.45,
+        "areaHa": 34.5,
+        "lat": 43.76885,
+        "lon": -74.72976,
+        "id": 11
+      },
+      {
+        "level": 530.48,
+        "areaHa": 24.4,
+        "lat": 43.75813,
+        "lon": -74.96667,
+        "id": 12
+      },
+      {
+        "level": 543.84,
+        "areaHa": 21.8,
+        "lat": 43.79243,
+        "lon": -74.7433,
+        "id": 13
+      },
+      {
+        "level": 590.98,
+        "areaHa": 19.3,
+        "lat": 43.77268,
+        "lon": -74.97809,
+        "id": 14
+      },
+      {
+        "level": 561.95,
+        "areaHa": 18.0,
+        "lat": 43.78305,
+        "lon": -74.73301,
+        "id": 15
+      },
+      {
+        "level": 520.36,
+        "areaHa": 17.3,
+        "lat": 43.71082,
+        "lon": -74.96516,
+        "name": "Old Forge Pond",
+        "id": 16
+      },
+      {
+        "level": 538.98,
+        "areaHa": 16.4,
+        "lat": 43.7891,
+        "lon": -74.9102,
+        "id": 17
+      },
+      {
+        "level": 552.97,
+        "areaHa": 15.4,
+        "lat": 43.77172,
+        "lon": -74.85219,
+        "id": 18
+      },
+      {
+        "level": 524.18,
+        "areaHa": 15.8,
+        "lat": 43.77442,
+        "lon": -74.89167,
+        "id": 19
+      },
+      {
+        "level": 536.96,
+        "areaHa": 14.3,
+        "lat": 43.70255,
+        "lon": -74.9631,
+        "id": 20
+      },
+      {
+        "level": 528.98,
+        "areaHa": 11.8,
+        "lat": 43.75606,
+        "lon": -74.92078,
+        "id": 21
+      },
+      {
+        "level": 553.86,
+        "areaHa": 11.5,
+        "lat": 43.69459,
+        "lon": -74.89606,
+        "id": 22
+      },
+      {
+        "level": 509.96,
+        "areaHa": 11.8,
+        "lat": 43.69579,
+        "lon": -75.00471,
+        "id": 23
+      },
+      {
+        "level": 564.56,
+        "areaHa": 12.3,
+        "lat": 43.73231,
+        "lon": -75.00116,
+        "id": 24
+      },
+      {
+        "level": 516.76,
+        "areaHa": 13.8,
+        "lat": 43.73139,
+        "lon": -74.97452,
+        "id": 25
+      },
+      {
+        "level": 520.96,
+        "areaHa": 11.1,
+        "lat": 43.70827,
+        "lon": -74.94254,
+        "id": 26
+      },
+      {
+        "level": 516.76,
+        "areaHa": 11.8,
+        "lat": 43.7228,
+        "lon": -74.99019,
+        "id": 27
+      },
+      {
+        "level": 610.75,
+        "areaHa": 10.5,
+        "lat": 43.77529,
+        "lon": -74.68695,
+        "id": 28
+      },
+      {
+        "level": 573.08,
+        "areaHa": 9.6,
+        "lat": 43.77564,
+        "lon": -74.99669,
+        "id": 29
+      },
+      {
+        "level": 555.97,
+        "areaHa": 8.7,
+        "lat": 43.76899,
+        "lon": -74.86005,
+        "id": 30
+      },
+      {
+        "level": 641.84,
+        "areaHa": 8.8,
+        "lat": 43.71032,
+        "lon": -74.69507,
+        "id": 31
+      },
+      {
+        "level": 636.95,
+        "areaHa": 7.4,
+        "lat": 43.70865,
+        "lon": -74.7003,
+        "id": 32
+      },
+      {
+        "level": 532.25,
+        "areaHa": 6.5,
+        "lat": 43.68822,
+        "lon": -74.85347,
+        "id": 33
+      },
+      {
+        "level": 532.98,
+        "areaHa": 6.2,
+        "lat": 43.76669,
+        "lon": -74.95718,
+        "id": 34
+      },
+      {
+        "level": 575.88,
+        "areaHa": 6.2,
+        "lat": 43.78172,
+        "lon": -74.99132,
+        "id": 35
+      },
+      {
+        "level": 522.16,
+        "areaHa": 5.6,
+        "lat": 43.74658,
+        "lon": -74.94926,
+        "id": 36
+      },
+      {
+        "level": 610.98,
+        "areaHa": 5.7,
+        "lat": 43.75797,
+        "lon": -74.88608,
+        "id": 37
+      },
+      {
+        "level": 525.77,
+        "areaHa": 5.9,
+        "lat": 43.77795,
+        "lon": -74.80841,
+        "id": 38
+      },
+      {
+        "level": 529.95,
+        "areaHa": 5.5,
+        "lat": 43.73776,
+        "lon": -74.8711,
+        "id": 39
+      },
+      {
+        "level": 681.45,
+        "areaHa": 6.5,
+        "lat": 43.68975,
+        "lon": -74.80426,
+        "id": 40
+      },
+      {
+        "level": 520.25,
+        "areaHa": 5.5,
+        "lat": 43.74756,
+        "lon": -74.79194,
+        "name": "Fifth Lake",
+        "id": 41
+      },
+      {
+        "level": 520.96,
+        "areaHa": 5.3,
+        "lat": 43.71106,
+        "lon": -74.93783,
+        "id": 42
+      },
+      {
+        "level": 533.96,
+        "areaHa": 5.4,
+        "lat": 43.72682,
+        "lon": -74.96574,
+        "id": 43
+      },
+      {
+        "level": 586.25,
+        "areaHa": 5.0,
+        "lat": 43.76523,
+        "lon": -74.72675,
+        "id": 44
+      },
+      {
+        "level": 524.96,
+        "areaHa": 4.5,
+        "lat": 43.74178,
+        "lon": -74.96264,
+        "id": 45
+      },
+      {
+        "level": 535.96,
+        "areaHa": 4.4,
+        "lat": 43.72051,
+        "lon": -74.95741,
+        "id": 46
+      },
+      {
+        "level": 521.56,
+        "areaHa": 4.6,
+        "lat": 43.71877,
+        "lon": -74.90174,
+        "id": 47
+      },
+      {
+        "level": 520.36,
+        "areaHa": 4.3,
+        "lat": 43.71406,
+        "lon": -74.95046,
+        "id": 48
+      }
+    ]
+  }
 }

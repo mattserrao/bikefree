@@ -4,12 +4,13 @@ import { readFileSync } from 'node:fs';
 import { buildCatalogRoute } from '../js/routes.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
 import { makeRegionalLandscape } from '../js/world/regional-landscape.js';
+import { loadSceneSync } from '../tools/qc_course.mjs';
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const catalog = JSON.parse(read('routes/catalog.json'));
 for (const item of catalog.filter((r) => r.id !== 'bigsur')) {
   test(`${item.id}: regional terrain, water and bridges keep the actual GPX rideable`, () => {
-    const route = buildCatalogRoute(read(item.file), item), config = JSON.parse(read(item.scene));
+    const route = buildCatalogRoute(read(item.file), item), config = loadSceneSync(item.scene);
     const proj = makeProjection((Math.min(...route.lat) + Math.max(...route.lat)) / 2, (Math.min(...route.lon) + Math.max(...route.lon)) / 2);
     const index = makeRouteIndex(route, proj), landscape = makeRegionalLandscape(config, proj, index, route);
     for (let i = 0; i < (route.turnIdx || route.dist.length - 1); i += 12) {
