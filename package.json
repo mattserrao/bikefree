@@ -7,10 +7,12 @@
     "test": "node --test test/*.test.mjs",
     "routes:build": "node tools/build_routes.mjs",
     "routes:check": "node tools/build_routes.mjs --check",
-    "qc": "node tools/qc_course.mjs"
+    "qc": "node tools/qc_course.mjs",
+    "snap": "node tools/snap_scene.mjs"
   },
   "devDependencies": {
-    "@garmin/fitsdk": "^21.221.0"
+    "@garmin/fitsdk": "^21.221.0",
+    "playwright-core": "^1.65.1"
   },
   "version": "0.12.0"
 }
