@@ -37,7 +37,8 @@ export class CoastalDetails {
     this.route = route; this.index = index; this.landscape = landscape; this.kit = kit;
     this.uniforms = uniforms;
     this.geometries = new Set(); this.materials = new Set(); this.instances = [];
-    this._markers(); this._signs(); this._lookouts(); this._coastalRocks(); this._creeks();
+    if (!landscape.city) this._markers();
+    this._signs(); this._lookouts(); if (!landscape.city) this._coastalRocks(); this._creeks();
   }
 
   _material(color, options = {}) {

@@ -83,6 +83,7 @@
     "climbM": 12,
     "file": "routes/parks/sevenmile.gpx",
     "outAndBack": true,
+    "stage": "draft",
     "scene": "routes/scenes/sevenmile.json"
   },
   {
@@ -93,6 +94,17 @@
     "climbM": 470,
     "file": "routes/parks/route28.gpx",
     "outAndBack": true,
+    "stage": "draft",
     "scene": "routes/scenes/route28.json"
+  },
+  {
+    "id": "pittsburgh",
+    "name": "Pittsburgh · Three Rivers Loop",
+    "park": "Pittsburgh, Pennsylvania",
+    "km": 18.3,
+    "climbM": 185,
+    "file": "routes/cities/pittsburgh.gpx",
+    "stage": "draft",
+    "scene": "routes/scenes/pittsburgh.json"
   }
 ]

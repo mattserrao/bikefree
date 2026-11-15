@@ -454,7 +454,8 @@
         ]
       }
     },
-    "scene": "routes/scenes/sevenmile.json"
+    "scene": "routes/scenes/sevenmile.json",
+    "stage": "draft"
   },
   {
     "id": "route28",
@@ -517,6 +518,20 @@
         ]
       }
     },
-    "scene": "routes/scenes/route28.json"
+    "scene": "routes/scenes/route28.json",
+    "stage": "draft"
+  },
+  {
+    "id": "pittsburgh",
+    "name": "Pittsburgh \u00b7 Three Rivers Loop",
+    "park": "Pittsburgh, Pennsylvania",
+    "file": "routes/cities/pittsburgh.gpx",
+    "outAndBack": false,
+    "expectedKm": [
+      18,
+      22
+    ],
+    "scene": "routes/scenes/pittsburgh.json",
+    "stage": "draft"
   }
 ]
