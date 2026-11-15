@@ -17,7 +17,7 @@ import { buildCatalogRoute } from '../js/routes.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
 import { makeCoastLandscape } from '../js/world/coast.js';
 import { makeRegionalLandscape } from '../js/world/regional-landscape.js';
-import { makeCityLandscape } from '../js/world/city-landscape.js';
+import { makeCityLandscape, cityStreets, STREET_LIFT } from '../js/world/city-landscape.js';
 import { riderPose, routePoint, ROAD_WIDTH, ROAD_LIFT } from '../js/world/pose.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -224,6 +224,24 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
       if (water > road - LIMITS.flooded) F.add('road-flooded', 'fail', s, water - road, 'water at or over the road');
       if (s % 20 === 0) { series.cs.push(s); series.clearance.push(Math.min(clearance, 5)); }
     }
+  }
+
+  // 5. City streets drawn over the route: another carriageway, a ramp or a bridge deck above the road
+  //    would hide the road and the rider's legs (what the renderer draws, via the shared cityStreets()).
+  if (landscape?.city) {
+    F.open.clear();
+    const hits = [], end = route.turnIdx || route.dist.length - 1;
+    for (const st of cityStreets(landscape, index, route)) {
+      for (const p of st.pts) {
+        const r = index.nearest(p.x, p.z, st.width / 2 + ROAD_WIDTH / 2 + 1);
+        if (!r) continue;
+        const i = r.i > end ? Math.max(0, 2 * end - r.i) : r.i;
+        const over = p.y + STREET_LIFT - (route.ele[i] + ROAD_LIFT);
+        if (over > -.02 && over < 4) hits.push([route.dist[i], over]);
+      }
+    }
+    hits.sort((a, b) => a[0] - b[0]);
+    for (const [hs, over] of hits) F.add('street-over-road', 'fail', hs, over, 'a city street or bridge deck covers the road');
   }
 
   const list = F.list.sort((a, b) => a.from - b.from);

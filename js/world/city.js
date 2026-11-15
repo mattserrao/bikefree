@@ -3,13 +3,13 @@
 // (js/world/city-bridges.js) and everything that moves (js/world/city-life.js).
 // Data: "bikefree-city-1" from tools/build_city.py; ground from js/world/city-landscape.js.
 import * as THREE from '../../vendor/three.module.min.js';
-import { decodeCity, LAND } from './city-landscape.js';
+import { decodeCity, LAND, cityStreets, STREET_W } from './city-landscape.js';
 import { MeshBuilder, ribbon, resample, hash } from './city-geometry.js';
 import { buildBridges, buildStadiums, buildLandmarks } from './city-bridges.js';
 import { CityLife } from './city-life.js';
 import { ROAD_WIDTH } from './pose.js';
 
-export const STREET_W = [15, 7.5, 13, 11, 9.5, 7.5, 9, 5, 3.4];   // by class (see tools/build_city.py)
+export { STREET_W };
 const CHUNK = 320;
 
 const KIND_COLORS = [
@@ -53,25 +53,7 @@ export class CityScene {
   own(x) { this.disposables.add(x); return x; }
 
   // ---------------------------------------------------------------- data
-  _decodeStreets() {
-    const S = this.data.streets, D = this.D;
-    const starts = new Uint32Array(Uint8Array.from(atob(S.starts), (c) => c.charCodeAt(0)).buffer);
-    const xy = new Int16Array(Uint8Array.from(atob(S.xy), (c) => c.charCodeAt(0)).buffer);
-    const deck = new Uint16Array(Uint8Array.from(atob(S.deck), (c) => c.charCodeAt(0)).buffer);
-    this.streets = [];
-    for (let k = 0; k < S.count; k++) {
-      const cls = S.meta[k * 3], flags = S.meta[k * 3 + 1], layer = S.meta[k * 3 + 2] - 8;
-      const bridge = !!(flags & 1), oneway = (flags >> 1) - 1;
-      const raw = [];
-      for (let i = starts[k]; i < starts[k + 1]; i++) {
-        const p = D.local(xy[i * 2], xy[i * 2 + 1]);
-        p.y = bridge && deck[i] ? 150 + deck[i] / 10 : undefined;
-        raw.push(p);
-      }
-      const pts = resample(raw, bridge ? 6 : 7).map((p) => ({ x: p.x, z: p.z, y: p.y ?? this.landscape.heightAt(p.x, p.z) }));
-      this.streets.push({ cls, bridge, oneway, layer, pts, width: STREET_W[cls] });
-    }
-  }
+  _decodeStreets() { this.streets = cityStreets(this.landscape, this.index, this.route); }
 
   _decodeBuildings() {
     const B = this.data.buildings, D = this.D;
@@ -354,6 +336,8 @@ export class CityScene {
           const x = b.x - dz * off * side, z = b.z + dx * off * side;
           const c = this.landscape.landAt(x, z);
           if (c === LAND.water || c === LAND.building) continue;
+          const onRoad = this.index.nearest(x, z, 6);
+          if (onRoad && onRoad.d < ROAD_WIDTH / 2 + 1.2) continue;   // never a lamp post in the rider's road
           lamps.push({ x, z, y: st.bridge ? b.y : this.landscape.heightAt(x, z), yaw: Math.atan2(dz * side, -dx * side), bridge: st.bridge });
         }
       }

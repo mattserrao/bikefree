@@ -4,6 +4,7 @@
 // Data: "bikefree-city-1", built by tools/build_city.py.
 import { makeRouteIndex } from './geo.js';
 import { smoothstep } from './coast.js';
+import { ROAD_WIDTH } from './pose.js';
 
 export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand: 5, plaza: 6, outside: 7, yards: 8 };
 const LAND_COLORS = ['#8d8a84', '#77985a', '#4d6a3a', '#6c6a5e', '#7d786f', '#b5a684', '#b4ada0', '#6d8252', '#7c8c5f'];
@@ -138,4 +139,48 @@ export function makeCityLandscape(config, proj, index, route) {
     /** Trees and shrubs from the shared kit grow only in parks, woods and the hills beyond. */
     canPlant: (x, z) => { const c = landCell(x, z); return c === LAND.woods || c === LAND.outside || (c === LAND.grass && ((x * 13 + z * 7) & 3) === 0); },
   };
+}
+
+export const STREET_W = [15, 7.5, 13, 11, 9.5, 7.5, 9, 5, 3.4];   // street width by class (tools/build_city.py)
+export const STREET_LIFT = .16;                                     // highest a street ribbon sits above its line
+
+/**
+ * The city's streets as drawn: [{cls, bridge, oneway, layer, width, pts: [{x, y, z}]}]. Bridge decks keep their
+ * built heights; everything else follows the ground. Where another street runs over or alongside the route
+ * (the rest of a bridge's roadway, a ramp, the street the route rides on), it is kept just below the route's
+ * own road, so it can never cover the road or the rider. Shared by the renderer and the course QC sweep.
+ */
+export function cityStreets(landscape, index, route) {
+  if (landscape._streets) return landscape._streets;
+  const S = landscape.data.streets, D = landscape.decoded;
+  const u8 = (t) => Uint8Array.from(atob(t), (c) => c.charCodeAt(0)).buffer;
+  const starts = new Uint32Array(u8(S.starts)), xy = new Int16Array(u8(S.xy)), deck = new Uint16Array(u8(S.deck));
+  const end = route.turnIdx || route.dist.length - 1;
+  const streets = [];
+  for (let k = 0; k < S.count; k++) {
+    const cls = S.meta[k * 3], flags = S.meta[k * 3 + 1], layer = S.meta[k * 3 + 2] - 8;
+    const bridge = !!(flags & 1), oneway = (flags >> 1) - 1, width = STREET_W[cls];
+    const raw = [];
+    for (let i = starts[k]; i < starts[k + 1]; i++) {
+      const p = D.local(xy[i * 2], xy[i * 2 + 1]);
+      p.y = bridge && deck[i] ? 150 + deck[i] / 10 : null;
+      raw.push(p);
+    }
+    const pts = [raw[0]], step = bridge ? 6 : 7;
+    let under = false;
+    for (let j = 1; j < raw.length; j++) {
+      const a = raw[j - 1], b = raw[j], n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / step));
+      for (let m = 1; m <= n; m++) { const f = m / n; pts.push({ x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, y: a.y != null && b.y != null ? a.y + (b.y - a.y) * f : null }); }
+    }
+    for (const p of pts) {
+      if (p.y == null) p.y = landscape.heightAt(p.x, p.z);
+      const r = index.nearest(p.x, p.z, width / 2 + ROAD_WIDTH / 2 + 2);
+      if (!r || r.d > width / 2 + ROAD_WIDTH / 2 + 1.5) continue;
+      const i = r.i > end ? Math.max(0, 2 * end - r.i) : r.i, e = route.ele[i];
+      if (p.y > e - 4 && p.y < e + 4 && p.y > e - .18) { p.y = e - .12 - STREET_LIFT + .1; under = true; }
+    }
+    streets.push({ cls, bridge, oneway, layer, pts, width, underRoute: under });
+  }
+  landscape._streets = streets;
+  return streets;
 }

@@ -42,7 +42,7 @@ function deck(M, city, pts, width, opts = {}) {
   }
   // railings
   M.color(opts.rail || '#5d6166');
-  const rn = Math.max(1, Math.ceil(path.length / 12));
+  const rn = opts.noRail ? 0 : Math.max(1, Math.ceil(path.length / 12));
   for (const side of [-1, 1]) {
     for (let k = 0; k < rn; k++) {
       const a = at(k / rn * path.length), b = at((k + 1) / rn * path.length);
@@ -209,7 +209,7 @@ export function buildBridges(city) {
     if (b.style && b.style !== 'girder' && !useStreet) { superstructure(M, city, path, b.style, width, lights); routeNames.add(b.name); }
   }
   // 2. Every other bridge street (ramps, viaducts, the other river bridges): deck + piers
-  for (const st of city.streets) if (st.bridge && st.cls <= 7) deck(M, city, st.pts, st.width, { thick: st.cls <= 2 ? 2.2 : 1.6 });
+  for (const st of city.streets) if (st.bridge && st.cls <= 7) deck(M, city, st.pts, st.width, { thick: st.cls <= 2 ? 2.2 : 1.6, noRail: st.underRoute });
   // 3. The famous ones get their structure
   for (const b of city.landscape.data.bridges || []) {
     if (routeNames.has(b.name)) continue;
