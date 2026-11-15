@@ -30,6 +30,41 @@
   </div>
 
   <main>
+    <section class="world-panel" id="worldPanel" hidden>
+      <div class="world-view" id="worldView">
+        <div class="hud" id="hud">
+          <div class="hud-main">
+            <div><span id="hPower">0</span><small>W</small></div>
+            <div><span id="hCad">0</span><small>rpm</small></div>
+            <div><span id="hSpeed">0.0</span><small id="hSpeedU">mph</small></div>
+            <div><span id="hGear">12</span><small>gear</small></div>
+          </div>
+          <div class="hud-side">
+            <div><span id="hGrade">0.0%</span><small>grade</small></div>
+            <div><span id="hLap">1</span><small id="hLapLabel">lap</small></div>
+            <div><span id="hLeft">0.0</span><small id="hLeftU">mi to go</small></div>
+            <div><span id="hTime">0:00</span><small>time</small></div>
+            <div><span id="hHr">--</span><small>bpm</small></div>
+          </div>
+          <div class="hud-title" id="hTitle"></div>
+          <div class="hud-loading" id="hLoading" hidden>Loading terrain…</div>
+        </div>
+        <div class="world-credit">Imagery: USGS The National Map (NAIP) · Elevation: AWS Terrain Tiles · Roads: © OpenStreetMap contributors, routed with BRouter</div>
+      </div>
+      <div class="world-bar">
+        <div class="seg" id="camSeg">
+          <button data-cam="chase" class="on">Chase</button><button data-cam="eye">Rider's eye</button><button data-cam="drone">Drone</button>
+        </div>
+        <div class="seg" id="timeSeg">
+          <button data-time="morning">Morning</button><button data-time="midday" class="on">Midday</button><button data-time="golden">Golden hour</button>
+        </div>
+        <div class="spacer"></div>
+        <span class="muted small" id="worldNote"></span>
+        <button id="worldFull" title="Full screen (F)">Full screen</button>
+        <button id="worldClose" class="ghost" title="Hide the 3D view">Hide 3D</button>
+      </div>
+    </section>
+
     <section class="hero">
       <div class="tile big">
         <div class="label" id="powerLabel">Power</div>
@@ -92,6 +127,7 @@
           <select id="routeSelect"></select>
           <label class="filebtn">Load GPX…<input type="file" id="gpxFile" accept=".gpx,application/gpx+xml" hidden></label>
           <button id="routeGo" class="primary">Ride this route</button>
+          <button id="route3d" title="Show this route in 3D">3D view</button>
           <button id="routeRestart" class="ghost">Restart</button>
           <button id="routeDelete" class="ghost" title="Remove this route from your library">Remove</button>
         </div>
@@ -99,7 +135,8 @@
         <div class="route-stats" id="routeStats" hidden>
           <div><div class="label">Grade now</div><div class="value" id="rGrade">0.0%</div></div>
           <div><div class="label">Next <span id="rAheadLabel">½ mi</span></div><div class="value" id="rAhead">0.0%</div></div>
-          <div><div class="label">To go</div><div class="value" id="rLeft">0.0</div></div>
+          <div id="rLapBox"><div class="label">Lap</div><div class="value" id="rLap">1</div></div>
+          <div><div class="label" id="rLeftLabel">To go</div><div class="value" id="rLeft">0.0</div></div>
           <div><div class="label">Climb left</div><div class="value" id="rClimb">0</div></div>
           <div><div class="label">Done</div><div class="value" id="rPct">0%</div></div>
         </div>
@@ -139,7 +176,7 @@
 
     <p class="hints">
       Handlebars: left = easier, right = harder · ▲▼ grade (free ride) or intensity (workout) · ▶ skip step · A start/pause · Y lap.
-      Keyboard: <kbd>←</kbd><kbd>→</kbd> shift · <kbd>↑</kbd><kbd>↓</kbd> grade/intensity · <kbd>Space</kbd> start/pause · <kbd>L</kbd> lap.
+      Keyboard: <kbd>←</kbd><kbd>→</kbd> shift · <kbd>↑</kbd><kbd>↓</kbd> grade/intensity · <kbd>Space</kbd> start/pause · <kbd>L</kbd> lap · <kbd>C</kbd> camera · <kbd>F</kbd> full screen.
     </p>
 
     <details class="panel" id="diag">

@@ -60,6 +60,8 @@ function fmtTime(s) {
   return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 }
 
+const fmtGrade = (g) => `${(Math.abs(g) < 0.05 ? 0 : g).toFixed(1)}%`;
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
@@ -155,7 +157,7 @@ function renderTick() {
     ? `● Recording · ${fmtTime(session.recorder.samples.length)} · lap ${laps}`
     : 'Pedal to start. Your ride is recorded automatically.';
   $('rideStatus').classList.toggle('rec', session.hasRide && session.running);
-  $('grade').textContent = `${session.gradePct.toFixed(1)}%`;
+  $('grade').textContent = fmtGrade(session.gradePct);
 
   const t = session.target;
   $('target').textContent = !trainer.connected ? '—'
@@ -202,21 +204,45 @@ document.addEventListener('keydown', (e) => {
   else if (k === 'ArrowDown') session.upDown(-1);
   else if (k === ' ') session.toggle();
   else if (k === 'l' || k === 'L') session.lap();
+  else if ((k === 'c' || k === 'C') && worldOpen) cycleCamera();
+  else if ((k === 'f' || k === 'F') && worldOpen) toggleFullscreen();
   else return;
   e.preventDefault();
 });
 
 // ---------- Routes ----------
-const DEMO_ROUTE = { id: 'builtin-demo-hills', kind: 'route', name: 'Demo Hills (built-in)', url: 'routes/demo-hills.gpx' };
+const DEMO_ROUTE = { id: 'builtin-demo-hills', kind: 'route', name: 'Demo Hills (built-in)', url: 'routes/demo-hills.gpx', group: 'Other' };
 let routeItems = [];
+let parkItems = null;
 const routeCache = new Map();
 let previewRoute = null;
 
+async function loadParks() {
+  if (parkItems) return parkItems;
+  try {
+    const list = await (await fetch('routes/parks/index.json')).json();
+    parkItems = list.map((p) => ({ id: `builtin-park-${p.id}`, kind: 'route', name: p.name, url: p.file, park: p.park, group: 'National parks — 3D' }));
+  } catch {
+    parkItems = [];
+  }
+  return parkItems;
+}
+
 async function refreshRouteList(selectId) {
-  routeItems = [DEMO_ROUTE, ...(await store.listLibrary('route').catch(() => []))];
+  const mine = (await store.listLibrary('route').catch(() => [])).map((r) => ({ ...r, group: 'My routes' }));
+  routeItems = [...(await loadParks()), ...mine, DEMO_ROUTE];
   const sel = $('routeSelect');
   sel.innerHTML = '';
-  for (const r of routeItems) sel.add(new Option(r.name, r.id));
+  const groups = new Map();
+  for (const r of routeItems) {
+    if (!groups.has(r.group)) {
+      const og = document.createElement('optgroup');
+      og.label = r.group;
+      sel.append(og);
+      groups.set(r.group, og);
+    }
+    groups.get(r.group).append(new Option(r.name, r.id));
+  }
   sel.value = selectId || routeItems[0].id;
   await previewSelectedRoute();
 }
@@ -226,6 +252,7 @@ async function loadRouteItem(item) {
   const text = item.text ?? await (await fetch(item.url)).text();
   const parsed = parseGpx(text);
   const route = buildRoute({ name: item.name.replace(' (built-in)', '') || parsed.name, points: parsed.points });
+  route.park = item.park || null;
   routeCache.set(item.id, route);
   return route;
 }
@@ -242,6 +269,7 @@ async function previewSelectedRoute() {
     return;
   }
   renderRoutePane();
+  if (worldOpen) openWorld(currentWorldRoute());
 }
 
 const ridingPreviewedRoute = () => session.mode === 'route' && session.route && session.route === previewRoute;
@@ -250,12 +278,15 @@ function renderRoutePane() {
   if (pane !== 'route' || !previewRoute) return;
   const r = previewRoute;
   const riding = ridingPreviewedRoute();
-  $('routeInfo').innerHTML = `<b>${escapeHtml(r.name)}</b> · ${fmtDist(r.total, 1)} ${distUnit()} · ` +
+  $('routeInfo').innerHTML = `<b>${escapeHtml(r.name)}</b>${r.park ? ` · ${escapeHtml(r.park)}` : ''} · ${fmtDist(r.total, 1)} ${distUnit()}${r.closed ? ' loop' : ''} · ` +
     `${fmtElev(r.ascent)} ${elevUnit()} climbing · steepest ${Math.round(Math.max(...r.grade))}%` +
     (r.hasElevation ? '' : ' · <span class="warn">no elevation in this file — it will be flat</span>') +
+    (r.closed ? ' · <span class="muted">laps continue as long as you ride</span>' : '') +
     (riding ? (session.routeDone ? ' · <span class="ok">finished</span>' : ' · <span class="ok">riding now</span>') : '') +
     (!riding && session.mode === 'route' && session.route ? ` · <span class="muted">currently riding ${escapeHtml(session.route.name)}</span>` : '');
   $('routeStats').hidden = !riding;
+  $('rLapBox').hidden = !r.closed;
+  $('route3d').textContent = worldOpen ? 'Hide 3D' : '3D view';
   $('routeGo').hidden = riding;
   $('routeRestart').hidden = !riding;
   renderRouteLive();
@@ -271,9 +302,11 @@ function renderRouteLive() {
   if (!riding) return;
   const ahead = imperial() ? 804.672 : 500;
   $('rAheadLabel').textContent = imperial() ? '½ mi' : '500 m';
-  $('rGrade').textContent = `${session.gradePct.toFixed(1)}%`;
-  $('rAhead').textContent = `${averageGradeAhead(r, pos, ahead).toFixed(1)}%`;
+  $('rGrade').textContent = fmtGrade(session.gradePct);
+  $('rAhead').textContent = fmtGrade(averageGradeAhead(r, pos, ahead));
   $('rLeft').textContent = `${fmtDist(Math.max(0, r.total - pos), 1)} ${distUnit()}`;
+  $('rLeftLabel').textContent = r.closed ? 'Lap to go' : 'To go';
+  $('rLap').textContent = session.routeLap;
   $('rClimb').textContent = `${fmtElev(ascentRemaining(r, pos))} ${elevUnit()}`;
   $('rPct').textContent = `${Math.min(100, Math.floor((pos / r.total) * 100))}%`;
 }
@@ -282,8 +315,13 @@ $('routeSelect').addEventListener('change', previewSelectedRoute);
 $('routeGo').addEventListener('click', () => {
   if (!previewRoute) return;
   session.setRoute(previewRoute);
-  log('app', `Riding route: ${previewRoute.name} (${fmtDist(previewRoute.total, 1)} ${distUnit()})`, 'ok');
+  log('app', `Riding route: ${previewRoute.name} (${fmtDist(previewRoute.total, 1)} ${distUnit()}${previewRoute.closed ? ' loop' : ''})`, 'ok');
   showPane('route');
+  if (previewRoute.park || worldOpen) openWorld(previewRoute);
+});
+$('route3d').addEventListener('click', () => {
+  if (worldOpen) closeWorld(); else openWorld(currentWorldRoute());
+  renderRoutePane();
 });
 $('routeRestart').addEventListener('click', () => {
   if (confirm('Restart this route from the beginning? Your ride keeps recording.')) session.restartRoute();
@@ -317,6 +355,130 @@ session.addEventListener('routeFinished', () => {
   renderRoutePane();
   openSummary(`Route complete — ${session.route.name}`);
 });
+
+
+// ---------- 3D world ----------
+let world = null;
+let worldOpen = false;
+let worldRoute = null;
+let worldModule = null;
+let previewPos = 0;
+let previewLast = performance.now();
+
+function currentWorldRoute() {
+  if (session.mode === 'route' && session.route && (pane !== 'route' || previewRoute === session.route)) return session.route;
+  return previewRoute;
+}
+
+async function openWorld(route) {
+  if (!route) return;
+  worldOpen = true;
+  $('worldPanel').hidden = false;
+  if (world && worldRoute === route) { world.start(); return; }
+  try {
+    worldModule = worldModule || await import('./world/world.js');
+  } catch (err) {
+    log('3d', `Could not start the 3D view: ${err.message}`, 'error');
+    return;
+  }
+  if (world) { world.dispose(); world = null; }
+  try {
+    world = new worldModule.World($('worldView'), route, { log });
+  } catch (err) {
+    log('3d', `3D view needs WebGL: ${err.message}`, 'error');
+    $('worldPanel').hidden = true;
+    worldOpen = false;
+    return;
+  }
+  worldRoute = route;
+  previewPos = 0;
+  world.setCamera(settings.worldCam);
+  world.setTimeOfDay(settings.worldTime);
+  world.setSource(() => {
+    const now = performance.now();
+    const dt = (now - previewLast) / 1000;
+    previewLast = now;
+    if (session.mode === 'route' && session.route === route) {
+      return { pos: session.routePos, speed: session.speedMps, cadence: session.cadence, riding: true };
+    }
+    // Not riding this route yet: a gentle preview fly-along.
+    previewPos = (previewPos + 9 * dt) % route.total;
+    return { pos: previewPos, speed: 9, cadence: 80, riding: false };
+  });
+  world.start();
+  $('hTitle').textContent = route.park ? `${route.name} · ${route.park}` : route.name;
+  log('3d', `3D view: ${route.name}`);
+  renderWorldControls();
+}
+
+function closeWorld() {
+  worldOpen = false;
+  $('worldPanel').hidden = true;
+  if (document.fullscreenElement) document.exitFullscreen();
+  if (world) world.stop();
+}
+
+function renderWorldControls() {
+  for (const b of document.querySelectorAll('#camSeg button')) b.classList.toggle('on', b.dataset.cam === settings.worldCam);
+  for (const b of document.querySelectorAll('#timeSeg button')) b.classList.toggle('on', b.dataset.time === settings.worldTime);
+}
+
+function renderHud() {
+  if (!worldOpen || !world) return;
+  const riding = session.mode === 'route' && session.route === worldRoute;
+  $('hPower').textContent = Math.round(session.power);
+  $('hCad').textContent = Math.round(session.cadence);
+  const kph = session.speedMps * 3.6;
+  $('hSpeed').textContent = (imperial() ? kph * MI_PER_KM : kph).toFixed(1);
+  $('hSpeedU').textContent = imperial() ? 'mph' : 'km/h';
+  $('hGear').textContent = session.gear;
+  $('hGrade').textContent = fmtGrade(riding ? session.gradePct : 0);
+  $('hLap').textContent = riding ? session.routeLap : '–';
+  const left = riding ? Math.max(0, worldRoute.total - session.routePos) : worldRoute.total;
+  $('hLeft').textContent = fmtDist(left, 1);
+  $('hLeftU').textContent = `${distUnit()} ${worldRoute.closed ? 'lap to go' : 'to go'}`;
+  $('hTime').textContent = fmtTime(session.movingS);
+  $('hHr').textContent = session.hr ?? '--';
+  $('hLoading').hidden = world.loading < 4;
+  $('worldNote').textContent = riding ? '' : 'Preview — press "Ride this route" to ride it';
+}
+session.addEventListener('tick', renderHud);
+
+$('worldClose').addEventListener('click', () => { closeWorld(); renderRoutePane(); });
+$('worldFull').addEventListener('click', toggleFullscreen);
+function toggleFullscreen() {
+  if (!worldOpen) return;
+  if (document.fullscreenElement) document.exitFullscreen();
+  else $('worldPanel').requestFullscreen().catch((err) => log('3d', err.message, 'debug'));
+}
+$('camSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-cam]');
+  if (!b) return;
+  settings.worldCam = b.dataset.cam;
+  saveSettings(settings);
+  world?.setCamera(settings.worldCam);
+  renderWorldControls();
+});
+$('timeSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-time]');
+  if (!b) return;
+  settings.worldTime = b.dataset.time;
+  saveSettings(settings);
+  world?.setTimeOfDay(settings.worldTime);
+  renderWorldControls();
+});
+function cycleCamera() {
+  const order = ['chase', 'eye', 'drone'];
+  settings.worldCam = order[(order.indexOf(settings.worldCam) + 1) % order.length];
+  saveSettings(settings);
+  world?.setCamera(settings.worldCam);
+  renderWorldControls();
+}
+document.addEventListener('visibilitychange', () => {
+  if (!world || !worldOpen) return;
+  if (document.hidden) world.stop(); else world.start();
+});
+session.addEventListener('routeLap', renderTick);
 
 // ---------- Workouts ----------
 let workoutItems = [];
@@ -630,4 +792,4 @@ checkRecovery();
 log('app', 'Ready. Close Zwift, Zwift Companion and the Wahoo app, then connect your devices.');
 
 // For debugging in the browser console.
-window.bikefree = { session, trainer, ride, hrStrap, store };
+window.bikefree = { session, trainer, ride, hrStrap, store, get world() { return world; } };

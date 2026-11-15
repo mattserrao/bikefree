@@ -4,6 +4,7 @@ const STEP_M = 10;            // resample spacing
 const ELE_SMOOTH_M = 60;      // ± window for elevation smoothing
 const GRADE_SPAN_M = 30;      // ± span for grade calculation
 const GRADE_LIMIT = 25;
+const CLOSED_LOOP_M = 150;    // start and end this close → treat as a loop you can ride forever
 
 /** Parse GPX text into points [{lat, lon, ele}] and a name. Handles trkpt, rtept and wpt-less files. */
 export function parseGpx(text) {
@@ -48,6 +49,10 @@ export function buildRoute({ name, points }) {
   const pts = [points[0]];
   for (let i = 1; i < points.length; i++) if (haversine(pts[pts.length - 1], points[i]) > 0.5) pts.push(points[i]);
   if (pts.length < 2) throw new Error('Route is too short');
+  // Closed loop? Close any small gap so the end joins the start exactly.
+  const closed = pts.length > 10 && haversine(pts[0], pts[pts.length - 1]) < CLOSED_LOOP_M;
+  if (closed && haversine(pts[0], pts[pts.length - 1]) > 0.5) pts.push({ ...pts[0] });
+  if (closed) pts[pts.length - 1] = { ...pts[0], ele: pts[0].ele };
   const anyEle = pts.some((p) => Number.isFinite(p.ele));
   let lastEle = anyEle ? pts.find((p) => Number.isFinite(p.ele)).ele : 0;
   for (const p of pts) { if (Number.isFinite(p.ele)) lastEle = p.ele; else p.ele = lastEle; }
@@ -75,35 +80,64 @@ export function buildRoute({ name, points }) {
     lon[i] = pts[j].lon + (pts[j + 1].lon - pts[j].lon) * f;
   }
 
+  // On a loop the last sample is the start again; smoothing and grade wrap around
+  // the start/finish so there is no bump when a new lap begins.
+  const m = closed ? dist.length - 1 : dist.length; // unique samples
+  const wrap = (k) => ((k % m) + m) % m;
+
   // Smooth elevation (moving average)
   const w = Math.round(ELE_SMOOTH_M / STEP_M);
   const ele = new Float64Array(dist.length);
-  for (let i = 0; i < dist.length; i++) {
+  for (let i = 0; i < m; i++) {
     let s = 0, c = 0;
-    for (let k = Math.max(0, i - w); k <= Math.min(dist.length - 1, i + w); k++) { s += rawEle[k]; c++; }
+    if (closed) {
+      for (let k = i - w; k <= i + w; k++) { s += rawEle[wrap(k)]; c++; }
+    } else {
+      for (let k = Math.max(0, i - w); k <= Math.min(m - 1, i + w); k++) { s += rawEle[k]; c++; }
+    }
     ele[i] = s / c;
   }
+  if (closed) ele[m] = ele[0];
 
   // Grade
   const g = Math.round(GRADE_SPAN_M / STEP_M);
   const grade = new Float64Array(dist.length);
-  for (let i = 0; i < dist.length; i++) {
-    const a = Math.max(0, i - g), b = Math.min(dist.length - 1, i + g);
-    const run = dist[b] - dist[a];
-    grade[i] = run > 0 ? Math.max(-GRADE_LIMIT, Math.min(GRADE_LIMIT, ((ele[b] - ele[a]) / run) * 100)) : 0;
+  for (let i = 0; i < m; i++) {
+    let rise, run;
+    if (closed) {
+      rise = ele[wrap(i + g)] - ele[wrap(i - g)];
+      run = 2 * g * STEP_M;
+    } else {
+      const a = Math.max(0, i - g), b = Math.min(m - 1, i + g);
+      rise = ele[b] - ele[a];
+      run = dist[b] - dist[a];
+    }
+    grade[i] = run > 0 ? Math.max(-GRADE_LIMIT, Math.min(GRADE_LIMIT, (rise / run) * 100)) : 0;
   }
+  if (closed) grade[m] = grade[0];
 
   let ascent = 0, descent = 0, minEle = Infinity, maxEle = -Infinity;
   for (let i = 0; i < ele.length; i++) {
     minEle = Math.min(minEle, ele[i]); maxEle = Math.max(maxEle, ele[i]);
     if (i) { const d = ele[i] - ele[i - 1]; if (d > 0) ascent += d; else descent -= d; }
   }
-  return { name: name || 'Route', total, ascent, descent, minEle, maxEle, dist, ele, lat, lon, grade, hasElevation: anyEle };
+  return { name: name || 'Route', total, ascent, descent, minEle, maxEle, dist, ele, lat, lon, grade, hasElevation: anyEle, closed };
 }
 
-/** Interpolated route values at a distance (clamped to the route). */
+/** Position within the route: wraps around on loops, clamps otherwise. */
+export function wrapDist(route, d) {
+  if (route.closed) return ((d % route.total) + route.total) % route.total;
+  return Math.max(0, Math.min(route.total, d));
+}
+
+/** Which lap (1-based) a ridden distance is on. */
+export function lapAt(route, d) {
+  return route.closed ? Math.floor(Math.max(0, d) / route.total) + 1 : 1;
+}
+
+/** Interpolated route values at a distance (wrapped on loops, clamped otherwise). */
 export function routeAt(route, d) {
-  const x = Math.max(0, Math.min(route.total, d));
+  const x = wrapDist(route, d);
   const i = Math.min(route.dist.length - 2, Math.floor(x / STEP_M));
   const span = route.dist[i + 1] - route.dist[i] || 1;
   const f = Math.max(0, Math.min(1, (x - route.dist[i]) / span));
@@ -113,16 +147,20 @@ export function routeAt(route, d) {
 
 /** Average grade from d over the next `ahead` metres. */
 export function averageGradeAhead(route, d, ahead) {
+  if (route.closed) {
+    const a = wrapDist(route, d);
+    return ((routeAt(route, a + ahead).ele - routeAt(route, a).ele) / ahead) * 100;
+  }
   const a = Math.max(0, Math.min(route.total, d));
   const b = Math.min(route.total, a + ahead);
   if (b - a < 1) return 0;
   return ((routeAt(route, b).ele - routeAt(route, a).ele) / (b - a)) * 100;
 }
 
-/** Elevation still to climb from d to the finish. */
+/** Elevation still to climb from d to the finish (end of this lap on loops). */
 export function ascentRemaining(route, d) {
   let asc = 0;
-  const start = Math.max(1, Math.ceil(d / STEP_M));
+  const start = Math.max(1, Math.ceil(wrapDist(route, d) / STEP_M));
   for (let i = start; i < route.ele.length; i++) {
     const diff = route.ele[i] - route.ele[i - 1];
     if (diff > 0) asc += diff;

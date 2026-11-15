@@ -81,38 +81,43 @@ A free indoor biking app for Mac. Runs as a web app in Chrome and talks directly
 - [ ] On-bike check: complete a built-in workout end to end
 - **Done when:** a full workout runs cleanly and the laps show up on Strava
 
-### v0.6 — National park loops in 3D (three.js)
+### v0.6 — National park loops in 3D (three.js) *(branch `v0.6`)*
 **Goal:** ride four real national park loops in a 3D world built from real terrain and aerial photos, lapping as long as you like.
 
-**The four loops** (all closed loops, so the end joins the start)
+**The four loops** (closed loops on real roads; built by `tools/build_park_routes.py`)
 
 | Loop | Park | Distance | Climbing | Feel |
 |---|---|---|---|---|
-| Yosemite Valley Loop (Northside + Southside Drives) | Yosemite, CA | ~12–13 mi | ~200–300 ft | Easy, flat valley floor under El Capitan, Half Dome, Yosemite Falls |
-| Park Loop Road | Acadia, ME | ~27 mi | ~1,500–2,000 ft (est.) | Moderate, rolling coast: Sand Beach, Thunder Hole, Otter Cliffs, Jordan Pond |
-| Teton Park Road + US-89/191 (Moose ↔ Jackson Lake Jct) | Grand Teton, WY | ~43 mi | ~1,200 ft | Long, rolling, the Teton Range beside you the whole way |
-| Rim Drive | Crater Lake, OR | ~33 mi | ~3,800–4,000 ft | Hard, high-altitude rim around the caldera |
+| Yosemite Valley Loop (Northside + Southside Drives) | Yosemite, CA | 12.8 mi | ~500 ft | Easy, flat valley floor under El Capitan |
+| Acadia Park Loop Road (the loop itself, without the Hulls Cove access road) | Acadia, ME | 20.1 mi | ~1,650 ft | Moderate, rolling coast: Sand Beach, Thunder Hole, Jordan Pond |
+| Grand Teton Loop: US-89/191 + Teton Park Road | Grand Teton, WY | 44.6 mi | ~1,350 ft | Long, rolling, the Teton Range beside you |
+| Crater Lake Rim Drive (counterclockwise) | Crater Lake, OR | 31.9 mi | ~3,900 ft | Hard, high-altitude rim around the caldera |
 
-- Routes are drawn on real roads with BRouter, checked by hand, and stored in `routes/parks/` as GPX files (with elevation from the DEM). Acadia follows the one-way traffic direction.
+- [x] Routed on real roads with BRouter (OpenStreetMap), one-way roads respected, automatic removal of out-and-back spurs; elevation sampled from the same terrain tiles the 3D world uses
+- [x] Distances checked against published figures (e.g. Crater Lake 31.9 mi / 3,913 ft vs 31.9 mi / 3,916 ft on Komoot)
 
 **Endless laps**
-- [ ] Detect closed loops (start and end within ~100 m); close any small gap
-- [ ] Wrap-around elevation smoothing and grade, so there's no bump at the start/finish line
-- [ ] When you reach the end, continue onto lap 2, 3, …; distance and climbing keep adding up
-- [ ] Lap counter on screen; one `.fit` lap per loop lap
-- [ ] Route outline and elevation profile show the current lap position
+- [x] Detect closed loops (start and end within 150 m); close any small gap
+- [x] Wrap-around elevation smoothing and grade: no bump at the start/finish line
+- [x] Ride on into lap 2, 3, …; distance and climbing keep adding up; handlebar buzz at each new lap
+- [x] Lap counter in route stats and the 3D overlay; one `.fit` lap per loop lap
 
-**3D world (three.js)**
-- [ ] Terrain mesh from free elevation tiles (AWS Terrain Tiles / Copernicus DEM; US 3DEP data where available), detailed near the road and coarser for distant peaks
-- [ ] Ground texture from USGS National Map aerial imagery (NAIP, public domain)
-- [ ] Road ribbon from the route itself; water (Crater Lake, Jenny/Jackson Lake, the Atlantic) from OpenStreetMap
-- [ ] Instanced low-poly trees placed from land-cover / OSM forest data
-- [ ] Sky, sun and distance fog; time-of-day presets (morning, midday, golden hour)
-- [ ] Chase camera and rider's-eye camera; the camera eases around bends and tilts on climbs
-- [ ] Movement driven by the same physics speed as now; data tiles load ahead of you along the route
-- [ ] Attribution overlay for imagery/map data
-- [ ] Optional "download park for offline" (cache the tiles for a route)
+**3D world (three.js, vendored — no build step)**
+- [x] Streaming terrain quadtree from AWS Terrain Tiles; detail increases near the rider; distant mountains stay visible
+- [x] Ground texture from USGS National Map aerial imagery (NAIP); lakes and ocean show as they do from the air
+- [x] Road ribbon with lane markings; terrain levelled under the road so it always sits on the ground
+- [x] Low-poly trees placed where the aerial photo shows forest (not on the road, not in sagebrush or water)
+- [x] Sky with sun and distance haze; morning, midday and golden-hour presets
+- [x] Chase, rider's-eye and drone cameras (C to cycle); smooth movement between data updates; pedalling animated by cadence
+- [x] Stats overlay (power, cadence, speed, gear, grade, lap, lap to go, time, HR); full screen (F)
+- [x] Preview fly-along before you start riding; any GPX route can also be viewed in 3D
+- [x] Attribution for imagery, elevation and map data
+- [ ] Offline "download park" (tiles currently stream live and rely on the browser cache)
+- [ ] Water surfaces from OpenStreetMap (reflective lakes); deciduous tree models for Acadia
+- [ ] On-bike check: ride Grand Teton for an hour, lap after lap
 - **Done when:** you can ride Grand Teton for an hour, lap after lap, and it looks and feels like being there
+
+**Dev tools:** `tools/build_park_routes.py` rebuilds the park GPX files; `tools/world-preview.html?park=teton&pos=12000&cam=drone&time=golden&speed=10` previews the 3D world without a trainer.
 
 ### Later ideas
 - Direct Strava upload

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>bikefree — 3D world preview</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; color: #fff; font: 13px -apple-system, sans-serif; }
+    #view { position: fixed; inset: 0; }
+    .world-canvas { width: 100%; height: 100%; display: block; }
+    #info { position: fixed; left: 10px; top: 10px; background: rgba(0,0,0,.5); padding: 6px 10px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <div id="view"></div>
+  <div id="info">loading…</div>
+  <script type="module">
+    // Dev preview: ?park=teton&pos=12000&cam=chase&time=golden&speed=12
+    import { World } from '../js/world/world.js';
+    import { parseGpx, buildRoute } from '../js/gpx.js';
+    const q = new URLSearchParams(location.search);
+    const park = q.get('park') || 'teton';
+    const text = await (await fetch(`../routes/parks/${park}.gpx`)).text();
+    const route = buildRoute(parseGpx(text));
+    const world = new World(document.getElementById('view'), route, { log: (...a) => console.log(...a) });
+    let pos = Number(q.get('pos') || 0);
+    const speed = Number(q.get('speed') || 0);
+    world.s = pos;
+    world.setCamera(q.get('cam') || 'chase');
+    world.setTimeOfDay(q.get('time') || 'midday');
+    let last = performance.now();
+    world.setSource(() => {
+      const now = performance.now();
+      pos += speed * (now - last) / 1000; last = now;
+      return { pos: pos % route.total, speed, cadence: speed ? 88 : 0, riding: true };
+    });
+    world.start();
+    window.world = world;
+    setInterval(() => {
+      document.getElementById('info').textContent =
+        `${route.name} · ${(world.s / 1000).toFixed(2)} km · tiles loading ${world.loading} · ready ${world.terrain.stats.ready}`;
+    }, 500);
+  </script>
+</body>
+</html>

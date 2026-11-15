@@ -168,3 +168,28 @@ dialog .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .route-views { grid-template-columns: 1fr; }
   .diag-grid { grid-template-columns: 1fr 1fr; }
 }
+
+/* 3D world */
+.world-panel { background: #000; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.world-view { position: relative; height: min(62vh, 640px); background: #9fb8d6; }
+.world-canvas { width: 100%; height: 100%; display: block; }
+.world-bar { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--panel); flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; background: transparent; color: var(--muted); padding: 7px 12px; }
+.seg button.on { background: #2b3140; color: var(--text); }
+.small { font-size: 12px; }
+.hud { position: absolute; inset: 0; pointer-events: none; font-variant-numeric: tabular-nums; }
+.hud-main { position: absolute; left: 14px; top: 14px; display: flex; gap: 8px; }
+.hud-side { position: absolute; right: 14px; top: 14px; display: grid; gap: 6px; text-align: right; }
+.hud-main > div, .hud-side > div { background: rgba(10, 12, 16, 0.55); backdrop-filter: blur(6px); border-radius: 10px; padding: 6px 12px; color: #fff; }
+.hud-main span { font-size: 34px; font-weight: 700; }
+.hud-side span { font-size: 20px; font-weight: 700; }
+.hud small { display: block; font-size: 11px; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 0.5px; }
+.hud-main > div:first-child span { color: #ffb070; }
+.hud-title { position: absolute; left: 14px; bottom: 30px; color: #fff; font-weight: 600; font-size: 14px; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+.hud-loading { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); background: rgba(10,12,16,0.6); color: #fff; padding: 5px 12px; border-radius: 999px; font-size: 12px; }
+.world-credit { position: absolute; right: 8px; bottom: 6px; font-size: 10px; color: rgba(255,255,255,0.85); text-shadow: 0 1px 2px rgba(0,0,0,0.9); pointer-events: none; }
+.world-panel:fullscreen { border-radius: 0; border: 0; display: flex; flex-direction: column; }
+.world-panel:fullscreen .world-view { height: auto; flex: 1; }
+.world-panel:fullscreen .hud-main span { font-size: 54px; }
+.world-panel:fullscreen .hud-side span { font-size: 28px; }

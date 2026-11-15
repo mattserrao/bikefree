@@ -50,3 +50,47 @@ test('demo route file parses', () => {
 test('haversine 1 degree latitude', () => {
   assert.ok(Math.abs(haversine({ lat: 0, lon: 0 }, { lat: 1, lon: 0 }) - 111195) < 10);
 });
+
+// A closed 4 km loop: a circle with one hill.
+function loopGpx(gapM = 0) {
+  const pts = [];
+  const R = 4000 / (2 * Math.PI);
+  for (let i = 0; i <= 400; i++) {
+    const a = (i / 400) * 2 * Math.PI - (gapM / R);
+    const x = R * Math.sin(a), y = R * (1 - Math.cos(a));
+    const lat = 44 + y / 111195, lon = -74 + x / (111195 * Math.cos((44 * Math.PI) / 180));
+    const ele = 100 + 30 * Math.sin(a + 0.4);
+    pts.push(`<trkpt lat="${lat}" lon="${lon}"><ele>${ele}</ele></trkpt>`);
+  }
+  return `<gpx><trk><trkseg>${pts.join('')}</trkseg></trk></gpx>`;
+}
+
+test('closed loop is detected, wraps, and has no seam', () => {
+  const r = buildRoute(parseGpx(loopGpx()));
+  assert.equal(r.closed, true);
+  assert.ok(Math.abs(r.total - 4000) < 20, `total ${r.total}`);
+  const a = routeAt(r, 100), b = routeAt(r, r.total + 100), c = routeAt(r, 3 * r.total + 100);
+  assert.ok(Math.abs(a.lat - b.lat) < 1e-9 && Math.abs(a.lat - c.lat) < 1e-9);
+  // Grade and elevation continuous across the start/finish
+  const before = routeAt(r, r.total - 5), after = routeAt(r, r.total + 5);
+  assert.ok(Math.abs(before.ele - after.ele) < 0.5, `${before.ele} vs ${after.ele}`);
+  assert.ok(Math.abs(before.grade - after.grade) < 0.5, `${before.grade} vs ${after.grade}`);
+  assert.ok(ascentRemaining(r, r.total + 10) > 0);
+});
+
+test('small gap gets closed; open route is not a loop', () => {
+  assert.equal(buildRoute(parseGpx(loopGpx(60))).closed, true);
+  assert.equal(buildRoute(parseGpx(makeGpx())).closed, false);
+});
+
+test('park loops are closed and the right length', async () => {
+  const { readdirSync } = await import('node:fs');
+  const dir = new URL('../routes/parks/', import.meta.url);
+  const expect = { yosemite: [18, 23], acadia: [30, 36], teton: [68, 75], craterlake: [49, 54] };
+  for (const f of readdirSync(dir).filter((x) => x.endsWith('.gpx'))) {
+    const r = buildRoute(parseGpx(readFileSync(new URL(f, dir), 'utf8')));
+    const [lo, hi] = expect[f.replace('.gpx', '')];
+    assert.equal(r.closed, true, f);
+    assert.ok(r.total / 1000 > lo && r.total / 1000 < hi, `${f} ${r.total}`);
+  }
+});

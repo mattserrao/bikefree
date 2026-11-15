@@ -5,7 +5,7 @@ import {
 } from './physics.js';
 import { shiftDirection } from './parsers.js';
 import { Recorder } from './recorder.js';
-import { routeAt } from './gpx.js';
+import { routeAt, wrapDist, lapAt } from './gpx.js';
 import { segmentIndexAt, targetWatts } from './workout.js';
 
 const TICK_MS = 250;
@@ -58,6 +58,7 @@ export class Session extends EventTarget {
     this.target = null;
     this.routeOffset = 0;
     this.routeDone = false;
+    this._lastLap = 1;
     this.workoutT = 0;
     this.workoutDone = false;
     this.segIndex = -1;
@@ -75,7 +76,12 @@ export class Session extends EventTarget {
   }
   get avgPower() { return this._powerN ? this._powerSum / this._powerN : 0; }
   get realRatio() { return this.settings.realRatio || this.realRatioEst || DEFAULT_REAL_RATIO; }
-  get routePos() { return Math.max(0, this.distanceM - this.routeOffset); }
+  /** Distance ridden on the current route (all laps). */
+  get routeRidden() { return Math.max(0, this.distanceM - this.routeOffset); }
+  /** Position along the route (wraps around on loops). */
+  get routePos() { return this.route ? wrapDist(this.route, this.routeRidden) : 0; }
+  /** Current lap on a loop route (1-based). */
+  get routeLap() { return this.route ? lapAt(this.route, this.routeRidden) : 1; }
   get gradePct() {
     if (this.mode === 'route' && this.route) return this.routeDone ? 0 : routeAt(this.route, this.routePos).grade;
     return this._manualGrade;
@@ -141,7 +147,7 @@ export class Session extends EventTarget {
   }
 
   _lapName() {
-    if (this.mode === 'route' && this.route) return this.route.name;
+    if (this.mode === 'route' && this.route) return this.route.closed ? `${this.route.name} · lap ${this.routeLap}` : this.route.name;
     if (this.mode === 'workout' && this.segment) return this.segment.label;
     return 'Free ride';
   }
@@ -170,6 +176,7 @@ export class Session extends EventTarget {
     this.route = route;
     this.routeOffset = this.distanceM;
     this.routeDone = false;
+    this._lastLap = 1;
     this._lastSent = null;
     this._modeLap();
     this._changed();
@@ -232,6 +239,7 @@ export class Session extends EventTarget {
     const dt = TICK_MS / 1000;
     const d = this.trainer.data;
     const fresh = this.trainer.connected && nowPerf - this.trainer.lastDataAt < DATA_STALE_MS;
+    this._fresh = fresh;
     this.power = fresh ? Math.max(0, d.powerW || 0) : 0;
     this.cadence = fresh ? Math.max(0, d.cadenceRpm || 0) : 0;
     const strapFresh = this.hrStrap?.connected && nowPerf - this.hrStrap.lastAt < HR_STALE_MS;
@@ -289,7 +297,18 @@ export class Session extends EventTarget {
 
   _updateRoute() {
     if (this.mode !== 'route' || !this.route || this.routeDone) return;
-    if (this.routePos >= this.route.total) {
+    if (this.route.closed) {
+      const lap = this.routeLap;
+      if (lap !== this._lastLap) {
+        this._lastLap = lap;
+        if (this.recorder.active) this.recorder.lap(Date.now(), `${this.route.name} · lap ${lap}`);
+        if (this.settings.haptics) this.ride.vibrate();
+        this.log('app', `Lap ${lap} of ${this.route.name}`, 'ok');
+        this.dispatchEvent(new Event('routeLap'));
+      }
+      return;
+    }
+    if (this.routeRidden >= this.route.total) {
       this.routeDone = true;
       this._lastSent = null;
       this.log('app', `Route complete: ${this.route.name}`, 'ok');
@@ -341,6 +360,8 @@ export class Session extends EventTarget {
   /** Send the trainer the resistance for the current gear, cadence, grade or workout step. */
   _control(nowPerf, p, grade) {
     if (!this.trainer.connected || this.trainer.busy || this.trainer.reconnecting) return;
+    // No recent data (Bluetooth hiccup): hold the last resistance rather than guessing.
+    if (!this._fresh && this.workoutTarget == null) return;
     const diff = this.settings.difficulty / 100;
     const due = nowPerf - this._lastSentAt > 2000;
     const send = (key, fn) => {

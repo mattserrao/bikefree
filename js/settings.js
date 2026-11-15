@@ -11,6 +11,8 @@ export const DEFAULT_SETTINGS = {
   haptics: true,
   startGear: 12,
   ftp: 200,               // watts, for % FTP workouts
+  worldCam: 'chase',      // 3D camera: chase | eye | drone
+  worldTime: 'midday',    // 3D time of day: morning | midday | golden
 };
 
 export function loadSettings() {
