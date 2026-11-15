@@ -32,8 +32,13 @@ function deck(M, city, pts, width, opts = {}) {
     const { p, r } = at(k / n * path.length);
     const hw = width / 2 + .4;
     const c = [p.clone().addScaledVector(r, -hw), p.clone().addScaledVector(r, hw)];
-    const cur = [c[0].clone().setY(p.y - .05), c[1].clone().setY(p.y - .05), c[1].clone().setY(p.y - thick), c[0].clone().setY(p.y - thick)];
+    // over the route the slab gets thinner, so its underside clears the rider and the chase camera
+    let t = thick;
+    const near = L.routeDist?.(p.x, p.z);
+    if (near && near.d < hw + ROAD_WIDTH / 2 + 2 && p.y - near.y > 4) t = Math.max(.3, Math.min(thick, p.y - near.y - 4.15));
+    const cur = [c[0].clone().setY(p.y - .05), c[1].clone().setY(p.y - .05), c[1].clone().setY(p.y - t), c[0].clone().setY(p.y - t)];
     if (prev) {
+      M.quad(prev[1], prev[0], cur[0], cur[1]);           // top (the slab's edges past the roadway, where lamps stand)
       M.quad(prev[3], prev[2], cur[2], cur[3]);           // underside
       M.quad(prev[0], prev[3], cur[3], cur[0]);           // left face
       M.quad(prev[2], prev[1], cur[1], cur[2]);           // right face
@@ -58,6 +63,10 @@ function deck(M, city, pts, width, opts = {}) {
     const wet = L.waterAt(p.x, p.z) > .5;
     const ground = wet ? L.level - 6 : L.baseHeight(p.x, p.z);
     if (p.y - thick - ground < 3.5) continue;
+    // never on the route's road or in another street's carriageway
+    const half = Math.min(width * .7, 9) / 2 + 1.3, r = L.routeDist?.(p.x, p.z);
+    if (r && r.d < ROAD_WIDTH / 2 + half) continue;
+    if (L.streetAt && L.streetAt(p.x, p.z, half, opts.street ?? -1)) continue;
     M.box(p.x, ground, p.z, Math.min(width * .7, 9), p.y - thick - ground, 2.4, Math.atan2(f.x, f.z));
   }
   return path;
@@ -209,7 +218,7 @@ export function buildBridges(city) {
     if (b.style && b.style !== 'girder' && !useStreet) { superstructure(M, city, path, b.style, width, lights); routeNames.add(b.name); }
   }
   // 2. Every other bridge street (ramps, viaducts, the other river bridges): deck + piers
-  for (const st of city.streets) if (st.bridge && st.cls <= 7) deck(M, city, st.pts, st.width, { thick: st.cls <= 2 ? 2.2 : 1.6, noRail: st.underRoute });
+  city.streets.forEach((st, k) => { if (st.bridge && st.cls <= 7) deck(M, city, st.pts, st.width, { thick: st.cls <= 2 ? 2.2 : 1.6, noRail: st.underRoute, street: k }); });
   // 3. The famous ones get their structure
   for (const b of city.landscape.data.bridges || []) {
     if (routeNames.has(b.name)) continue;
@@ -219,6 +228,7 @@ export function buildBridges(city) {
     const width = b.style === 'fortpitt' || b.style === 'arch-gold' ? 17 : 12;
     superstructure(M, city, path, b.style, width, lights);
   }
+  M.keepOutOf(city.landscape.inRouteTube);   // decks, ramps and members the data puts in the rider's space
   const mesh = new THREE.Mesh(city.own(M.geometry()), city.solidMaterial);
   mesh.castShadow = mesh.receiveShadow = true; mesh.name = 'Bridges';
   city.group.add(mesh);
@@ -421,6 +431,7 @@ export function buildLandmarks(city) {
       }
     }
     if (A.count) {
+      A.keepOutOf(city.landscape.inRouteTube); S.keepOutOf(city.landscape.inRouteTube);
       const am = new THREE.Mesh(city.own(A.geometry()), city.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9, side: THREE.DoubleSide })));
       am.castShadow = am.receiveShadow = true; am.name = 'Awnings'; city.group.add(am);
       const sm = new THREE.Mesh(city.own(S.geometry()), signMat); sm.name = 'Shop signs'; city.group.add(sm);
