@@ -27,6 +27,8 @@ Keyboard: ← → shift · ↑ ↓ grade/intensity · Space pause · L lap · N 
 
 **Demo** (top right of the menu): try everything without a bike. The rider holds a steady 15 mph; power, cadence and heart rate are simulated. Demo rides are saved as "Demo · …".
 
+**Profile** (top right): your name, height, weight and gender, plus your totals — rides, distance, riding time, climbing. Weight sets how hard climbs feel. Add riders for others in the house; each ride is saved to whoever rode it. Everything stays in this browser.
+
 **Settings**: appearance (System — follows macOS — Light or Dark; colours match Machine Manager), units, weights, FTP, camera, time of day, handlebar buzz. *Advanced* holds the shifting method, difficulty, gear ratio, starting gear and the diagnostics log. A route's **⋯** menu has *Load GPX*, *Save for offline* (download the terrain to ride without internet) and *Remove*.
 
 ## Tests

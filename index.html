@@ -14,6 +14,7 @@
     <header>
       <h1>bike<span>free</span></h1>
       <div class="spacer"></div>
+      <button class="hbtn profile-btn" id="profileBtn" title="Your profile"><span class="avatar" id="pAvatar">?</span><span class="pb-text"><b id="pName">Set up profile</b><small id="pStats"></small></span></button>
       <button class="hbtn" id="historyBtn" title="Saved rides"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>Rides</span></button>
       <button class="hbtn" id="settingsBtn" title="Settings"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span>Settings</span></button>
       <button class="hbtn toggle" id="demoBtn" title="Try everything without a bike: the rider holds 15 mph"><span class="tdot"></span><span id="demoLabel">Demo</span></button>
@@ -21,6 +22,12 @@
 
     <div class="setup-grid">
       <div class="col">
+        <section class="welcome" id="welcome" hidden>
+          <span class="avatar lg">?</span>
+          <div><b>Create your profile</b><p>Your name, height and weight — weight sets how hard climbs feel. Your rides and miles add up here. Everything stays in this browser.</p></div>
+          <button class="primary" id="welcomeBtn">Create profile</button>
+        </section>
+
         <section>
           <h2>Devices</h2>
           <div class="devices">
@@ -197,16 +204,14 @@
         </label>
       </div>
       <div class="two">
-        <label><span>Rider weight (<span class="u-weight">lb</span>)</span>
-          <input type="number" name="rider" min="20" max="400" step="any">
-        </label>
         <label><span>Bike weight (<span class="u-weight">lb</span>)</span>
           <input type="number" name="bike" min="1" max="100" step="any">
         </label>
+        <label>FTP (watts) — for workouts
+          <input type="number" name="ftp" min="50" max="600" step="1">
+        </label>
       </div>
-      <label>FTP (watts) — used for workouts
-        <input type="number" name="ftp" min="50" max="600" step="1">
-      </label>
+      <p class="muted small" style="margin:-6px 0 0">Your own weight lives in your profile.</p>
       <div class="two">
         <label>Camera
           <select name="worldCam">
@@ -266,6 +271,43 @@
     </form>
   </dialog>
 
+  <!-- Profile -->
+  <dialog id="profileDlg" class="profile-dlg">
+    <form method="dialog">
+      <div class="prof-top">
+        <span class="avatar lg" id="pdAvatar">?</span>
+        <div class="prof-id"><h2 class="prof-title" id="pdTitle">Your profile</h2><div class="muted small" id="pdSince"></div></div>
+        <select id="pdSwitch" title="Switch rider"></select>
+      </div>
+      <div class="prof-stats" id="pdStats"></div>
+      <label>Name
+        <input type="text" name="pname" maxlength="40" placeholder="Your name" autocomplete="name">
+      </label>
+      <div class="two">
+        <label id="pdHeightImp">Height
+          <span class="hrow"><input type="number" name="hft" min="3" max="8" step="1" placeholder="5"><i>ft</i><input type="number" name="hin" min="0" max="11" step="1" placeholder="10"><i>in</i></span>
+        </label>
+        <label id="pdHeightMet" hidden>Height (cm)
+          <input type="number" name="hcm" min="100" max="230" step="any" placeholder="178">
+        </label>
+        <label><span>Weight (<span class="u-weight">lb</span>)</span>
+          <input type="number" name="pweight" min="20" max="400" step="any" required>
+        </label>
+      </div>
+      <label>Gender
+        <select name="pgender" id="pdGender"></select>
+      </label>
+      <p class="muted small prof-note" id="pdNote">Weight sets how hard climbs feel. Your profile and rides stay in this browser.</p>
+      <div class="dialog-actions">
+        <button value="save" class="primary">Save</button>
+        <button value="cancel" class="ghost" formnovalidate>Cancel</button>
+        <span class="spacer"></span>
+        <button type="button" id="pdNew" class="ghost">+ New rider</button>
+        <button type="button" id="pdDelete" class="ghost danger">Delete rider</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Ride summary -->
   <dialog id="summary">
     <form method="dialog">
@@ -286,7 +328,8 @@
   <!-- History -->
   <dialog id="history">
     <form method="dialog">
-      <h2>Saved rides</h2>
+      <h2 id="histTitle">Saved rides</h2>
+      <div class="hist-totals" id="histTotals"></div>
       <div class="hist-list" id="histList"></div>
       <div class="dialog-actions">
         <button value="close" class="ghost">Close</button>

@@ -9,6 +9,7 @@ import * as store from './store.js';
 import { parseGpx, buildRoute, averageGradeAhead } from './gpx.js';
 import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor } from './workout.js';
 import { drawProfile, drawWorkout, drawTrace, gradeColor } from './views.js';
+import { Profiles, GENDERS, initials, cmToFtIn, ftInToCm } from './profiles.js';
 import { planRouteTiles, tileKeysToUrls, downloadUrls, offlineStatus, setOfflineStatus, registerServiceWorker } from './offline.js';
 
 const $ = (id) => document.getElementById(id);
@@ -50,6 +51,9 @@ if (!hasBluetooth) for (const id of ['rideBtn', 'hrBtn']) $(id).disabled = true;
 
 // ---------- Core objects ----------
 const settings = loadSettings();
+// The active rider's weight drives the physics.
+const profiles = new Profiles(localStorage, settings.riderKg);
+settings.riderKg = profiles.active.weightKg;
 const trainer = new Trainer(log);
 const ride = new Ride(log);
 const hrStrap = new HeartRate(log);
@@ -850,6 +854,7 @@ function openSummary(title) {
     const finished = session.finish();
     await store.saveCurrent(null).catch(() => {});
     if (!finished || v === 'discard') { log('app', 'Ride discarded'); showSetup(); return; }
+    finished.profileId = profiles.active.id;
     try {
       await store.saveRide(finished);
       log('app', `Ride saved: ${finished.name}, ${fmtTime(finished.summary.timerS)}`, 'ok');
@@ -857,6 +862,7 @@ function openSummary(title) {
       log('app', `Could not save ride: ${err.message}`, 'error');
     }
     if (v === 'download') downloadFit(finished);
+    renderProfile();
     showSetup();
   };
   dlg.showModal();
@@ -878,7 +884,12 @@ function downloadFit(r) {
 // ---------- History ----------
 async function renderHistory() {
   const list = $('histList');
-  const rides = await store.listRides().catch(() => []);
+  const p = profiles.active;
+  const all = await store.listRides().catch(() => []);
+  const rides = all.filter((r) => profiles.ownerOf(r) === p.id);
+  $('histTitle').textContent = `${riderName(p)} — saved rides`;
+  const st = profiles.stats(p.id, all);
+  $('histTotals').innerHTML = rides.length ? statFacts(st) : '';
   if (!rides.length) { list.innerHTML = '<p class="muted">No saved rides yet.</p>'; return; }
   list.innerHTML = rides.map((r) => `
     <div class="hist-row" data-id="${r.id}">
@@ -902,6 +913,7 @@ $('histList').addEventListener('click', async (e) => {
   } else if (btn.dataset.act === 'del' && confirm('Delete this ride?')) {
     await store.deleteRide(id);
     renderHistory();
+    renderProfile();
   }
 });
 $('historyBtn').addEventListener('click', async () => { await renderHistory(); $('history').showModal(); });
@@ -918,11 +930,113 @@ async function checkRecovery() {
   if (!cur || !cur.samples?.length) return;
   const when = new Date(cur.startedAt).toLocaleString();
   if (confirm(`An unfinished ride from ${when} (${fmtTime(cur.summary.timerS)}) was found. Save it to your rides?`)) {
+    cur.profileId ??= profiles.active.id;
     await store.saveRide(cur);
     log('app', 'Recovered unfinished ride and saved it', 'ok');
   }
   await store.saveCurrent(null);
 }
+
+// ---------- Profiles ----------
+const riderName = (p) => p.name?.trim() || `Rider ${profiles.all.indexOf(p) + 1}`;
+const fmtHours = (s) => (s >= 3600 ? `${(s / 3600).toFixed(1)} h` : `${Math.round(s / 60)} min`);
+function statFacts(st) {
+  return fact(st.rides.toLocaleString(), st.rides === 1 ? 'ride' : 'rides') +
+    fact(fmtDist(st.distanceM, st.distanceM < 16000 ? 1 : 0), `${distUnit()} ridden`) +
+    fact(fmtHours(st.movingS), 'riding') +
+    fact(fmtElev(st.ascentM).toLocaleString(), `${elevUnit()} climbed`);
+}
+
+let rideCache = [];
+async function renderProfile() {
+  rideCache = await store.listRides().catch(() => []);
+  const p = profiles.active;
+  const st = profiles.stats(p.id, rideCache);
+  $('pAvatar').textContent = initials(p.name);
+  $('pName').textContent = p.name?.trim() ? p.name.trim() : 'Set up profile';
+  $('pStats').textContent = p.name?.trim() ? `${st.rides} ${st.rides === 1 ? 'ride' : 'rides'} · ${fmtDist(st.distanceM, st.distanceM < 16000 ? 1 : 0)} ${distUnit()}` : '';
+  $('welcome').hidden = !!p.name?.trim() || profiles.all.length > 1;
+  if ($('profileDlg').open) fillProfileStats();
+}
+
+const pform = $('profileDlg').querySelector('form');
+$('pdGender').innerHTML = GENDERS.map(([v, label]) => `<option value="${v}">${label}</option>`).join('');
+function fillProfileStats() {
+  const p = profiles.active;
+  $('pdStats').innerHTML = statFacts(profiles.stats(p.id, rideCache));
+}
+function fillProfile() {
+  const p = profiles.active, f = pform.elements, imp = imperial();
+  $('pdAvatar').textContent = initials(p.name);
+  $('pdTitle').textContent = p.name?.trim() ? p.name.trim() : 'Your profile';
+  $('pdSince').textContent = `Rider since ${new Date(p.createdAt).toLocaleDateString([], { month: 'long', year: 'numeric' })}`;
+  const sw = $('pdSwitch');
+  sw.innerHTML = profiles.all.map((x) => `<option value="${x.id}">${escapeHtml(riderName(x))}</option>`).join('');
+  sw.value = p.id;
+  sw.hidden = profiles.all.length < 2;
+  f.pname.value = p.name || '';
+  $('pdHeightImp').hidden = !imp;
+  $('pdHeightMet').hidden = imp;
+  if (p.heightCm) {
+    const [ft, inch] = cmToFtIn(p.heightCm);
+    f.hft.value = ft; f.hin.value = inch; f.hcm.value = Math.round(p.heightCm);
+  } else { f.hft.value = ''; f.hin.value = ''; f.hcm.value = ''; }
+  f.pweight.value = +(imp ? p.weightKg / KG_PER_LB : p.weightKg).toFixed(1);
+  f.pgender.value = p.gender || '';
+  for (const el of pform.querySelectorAll('.u-weight')) el.textContent = imp ? 'lb' : 'kg';
+  // Riders can't be switched mid-ride: the ride belongs to whoever started it.
+  const locked = session.hasRide;
+  sw.disabled = locked;
+  $('pdNew').disabled = locked;
+  $('pdDelete').hidden = profiles.all.length < 2 || locked;
+  $('pdNote').textContent = locked ? 'Finish the current ride to switch or add riders.' : 'Weight sets how hard climbs feel. Your profile and rides stay in this browser.';
+  fillProfileStats();
+  setTimeout(() => { if (!f.pname.value) f.pname.focus(); }, 0);
+}
+function openProfile() { renderProfile().then(fillProfile); fillProfile(); $('profileDlg').showModal(); }
+$('profileBtn').addEventListener('click', openProfile);
+$('welcomeBtn').addEventListener('click', openProfile);
+
+function useActiveProfile() {
+  settings.riderKg = profiles.active.weightKg;
+  saveSettings(settings);
+  session.settingsChanged();
+  renderProfile();
+}
+$('pdSwitch').addEventListener('change', (e) => {
+  profiles.setActive(e.target.value);
+  useActiveProfile();
+  fillProfile();
+});
+$('pdNew').addEventListener('click', () => {
+  profiles.create();
+  useActiveProfile();
+  fillProfile();
+  pform.elements.pname.focus();
+});
+$('pdDelete').addEventListener('click', () => {
+  const p = profiles.active;
+  if (!confirm(`Delete ${riderName(p)}? Their saved rides are kept and move to ${riderName(profiles.all.find((x) => x.id !== p.id && x.id === profiles.firstId) || profiles.all.find((x) => x.id !== p.id))}.`)) return;
+  profiles.remove(p.id);
+  useActiveProfile();
+  fillProfile();
+});
+$('profileDlg').addEventListener('close', () => {
+  if ($('profileDlg').returnValue !== 'save') return;
+  const f = pform.elements, imp = imperial();
+  const heightCm = imp
+    ? (f.hft.value || f.hin.value ? ftInToCm(f.hft.value, f.hin.value) : null)
+    : (Number(f.hcm.value) || null);
+  const kg = Number(f.pweight.value) * (imp ? KG_PER_LB : 1);
+  profiles.update(profiles.active.id, {
+    name: f.pname.value.trim(),
+    heightCm: heightCm ? Math.round(heightCm * 10) / 10 : null,
+    weightKg: kg > 20 ? Math.round(kg * 10) / 10 : profiles.active.weightKg,
+    gender: f.pgender.value,
+  });
+  useActiveProfile();
+  log('app', `Profile saved: ${riderName(profiles.active)}`, 'ok');
+});
 
 // ---------- Settings dialog ----------
 const dlg = $('settings');
@@ -932,7 +1046,6 @@ function fillSettings() {
   const f = form.elements;
   f.theme.value = window.BFTheme?.pref() || 'system';
   f.units.value = settings.units;
-  f.rider.value = +(imp ? settings.riderKg / KG_PER_LB : settings.riderKg).toFixed(1);
   f.bike.value = +(imp ? settings.bikeKg / KG_PER_LB : settings.bikeKg).toFixed(1);
   f.ftp.value = settings.ftp;
   f.worldCam.value = settings.worldCam;
@@ -948,7 +1061,7 @@ function fillSettings() {
 form.elements.difficulty.addEventListener('input', (e) => { $('diffOut').textContent = `${e.target.value}%`; });
 form.elements.units.addEventListener('change', (e) => {
   const toImp = e.target.value === 'imperial';
-  for (const name of ['rider', 'bike']) {
+  for (const name of ['bike']) {
     const el = form.elements[name];
     el.value = +(toImp ? el.value / KG_PER_LB : el.value * KG_PER_LB).toFixed(1);
   }
@@ -962,7 +1075,6 @@ dlg.addEventListener('close', () => {
   const kg = (v) => (imp ? Number(v) * KG_PER_LB : Number(v));
   Object.assign(settings, {
     units: f.units.value,
-    riderKg: kg(f.rider.value) || settings.riderKg,
     bikeKg: kg(f.bike.value) || settings.bikeKg,
     ftp: Math.round(Number(f.ftp.value)) || settings.ftp,
     worldCam: f.worldCam.value,
@@ -980,6 +1092,7 @@ dlg.addEventListener('close', () => {
   world?.setTimeOfDay(settings.worldTime);
   renderRouteCards();
   renderWorkoutList();
+  renderProfile();
   showPane(chosen);
   log('app', `Settings saved (${settings.shiftMode.toUpperCase()} shifting, difficulty ${settings.difficulty}%, FTP ${settings.ftp} W)`);
 });
@@ -993,6 +1106,7 @@ window.addEventListener('beforeunload', (e) => {
 window.BFTheme?.onChange(() => { renderPreview(); drawThumbs(); lastProfileDraw = 0; renderHud(); });
 
 // ---------- Boot ----------
+renderProfile();
 session.autoStart = false;
 deviceStatus();
 refreshRouteList();
