@@ -17,6 +17,10 @@
       <button class="chip" id="rideBtn" title="Connect or disconnect the handlebars">
         <span class="dot" id="rideDot"></span><span id="rideLabel">Connect handlebars</span>
       </button>
+      <button class="chip" id="hrBtn" title="Connect a Bluetooth heart-rate strap">
+        <span class="dot" id="hrDot"></span><span id="hrLabel">Heart rate</span>
+      </button>
+      <button class="chip" id="historyBtn" title="Saved rides">Rides</button>
       <button class="chip icon" id="settingsBtn" title="Settings">⚙</button>
     </div>
   </header>
@@ -28,7 +32,7 @@
   <main>
     <section class="hero">
       <div class="tile big">
-        <div class="label">Power</div>
+        <div class="label" id="powerLabel">Power</div>
         <div class="value" id="power">0</div>
         <div class="unit">W · 3s <b id="power3s">0</b></div>
       </div>
@@ -36,7 +40,7 @@
         <div class="label">Gear</div>
         <div class="value"><span id="gear">12</span><small>/24</small></div>
         <div class="gearbar" id="gearbar"></div>
-        <div class="gear-hint">Left = easier · Right = harder</div>
+        <div class="gear-hint" id="gearHint">Left = easier · Right = harder</div>
       </div>
       <div class="tile big">
         <div class="label">Cadence</div>
@@ -51,25 +55,91 @@
       <div class="tile"><div class="label">Distance</div><div class="value" id="distance">0.00</div><div class="unit" id="distUnit">mi</div></div>
       <div class="tile"><div class="label">Avg power</div><div class="value" id="avgPower">0</div><div class="unit">W</div></div>
       <div class="tile"><div class="label">Climbed</div><div class="value" id="elev">0</div><div class="unit" id="elevUnit">ft</div></div>
+      <div class="tile"><div class="label">Heart rate</div><div class="value" id="hr">--</div><div class="unit">bpm</div></div>
     </section>
 
-    <section class="panel terrain">
-      <div class="grade-read">
-        <div class="label">Grade</div>
-        <div class="value" id="grade">0.0%</div>
-      </div>
-      <button id="gradeDown" class="round" title="Easier (D-pad ▼ / ↓)">−</button>
-      <input type="range" id="gradeInput" min="-10" max="16" step="0.5" value="0">
-      <button id="gradeUp" class="round" title="Steeper (D-pad ▲ / ↑)">+</button>
-      <button id="flatBtn">Flat</button>
-      <div class="spacer"></div>
+    <section class="panel ridebar">
       <button id="startBtn" class="primary">Start</button>
-      <button id="resetBtn" class="ghost">Reset</button>
+      <button id="lapBtn" title="Lap (Y button)">Lap</button>
+      <button id="finishBtn" title="End the ride and save it">Finish ride</button>
+      <span class="ride-status" id="rideStatus">Pedal to start. Your ride is recorded automatically.</span>
+    </section>
+
+    <section class="panel modes">
+      <div class="tabs" role="tablist">
+        <button role="tab" data-mode="free" class="tab on">Free ride</button>
+        <button role="tab" data-mode="route" class="tab">Route</button>
+        <button role="tab" data-mode="workout" class="tab">Workout</button>
+      </div>
+
+      <!-- Free ride -->
+      <div class="mode-pane" data-pane="free">
+        <div class="terrain">
+          <div class="grade-read">
+            <div class="label">Grade</div>
+            <div class="value" id="grade">0.0%</div>
+          </div>
+          <button id="gradeDown" class="round" title="Easier (D-pad ▼ / ↓)">−</button>
+          <input type="range" id="gradeInput" min="-10" max="16" step="0.5" value="0">
+          <button id="gradeUp" class="round" title="Steeper (D-pad ▲ / ↑)">+</button>
+          <button id="flatBtn">Flat</button>
+        </div>
+      </div>
+
+      <!-- Route -->
+      <div class="mode-pane" data-pane="route" hidden>
+        <div class="pick-row">
+          <select id="routeSelect"></select>
+          <label class="filebtn">Load GPX…<input type="file" id="gpxFile" accept=".gpx,application/gpx+xml" hidden></label>
+          <button id="routeGo" class="primary">Ride this route</button>
+          <button id="routeRestart" class="ghost">Restart</button>
+          <button id="routeDelete" class="ghost" title="Remove this route from your library">Remove</button>
+        </div>
+        <div class="route-info" id="routeInfo"></div>
+        <div class="route-stats" id="routeStats" hidden>
+          <div><div class="label">Grade now</div><div class="value" id="rGrade">0.0%</div></div>
+          <div><div class="label">Next <span id="rAheadLabel">½ mi</span></div><div class="value" id="rAhead">0.0%</div></div>
+          <div><div class="label">To go</div><div class="value" id="rLeft">0.0</div></div>
+          <div><div class="label">Climb left</div><div class="value" id="rClimb">0</div></div>
+          <div><div class="label">Done</div><div class="value" id="rPct">0%</div></div>
+        </div>
+        <div class="route-views">
+          <canvas id="profile" class="profile"></canvas>
+          <canvas id="trace" class="trace"></canvas>
+        </div>
+      </div>
+
+      <!-- Workout -->
+      <div class="mode-pane" data-pane="workout" hidden>
+        <div class="pick-row">
+          <select id="workoutSelect"></select>
+          <label class="filebtn">Load .zwo / .erg / .mrc…<input type="file" id="workoutFile" accept=".zwo,.erg,.mrc,.xml" hidden></label>
+          <button id="workoutGo" class="primary">Start this workout</button>
+          <button id="workoutSkip" class="ghost" title="Skip to the next step (D-pad ▶)">Skip step</button>
+          <button id="workoutDelete" class="ghost" title="Remove this workout from your library">Remove</button>
+        </div>
+        <div class="route-info" id="workoutInfo"></div>
+        <div class="wk-now" id="wkNow" hidden>
+          <div><div class="label">Target</div><div class="value" id="wkTarget">—</div></div>
+          <div><div class="label" id="wkStepLabel">Step</div><div class="value" id="wkStepLeft">0:00</div></div>
+          <div><div class="label">Next</div><div class="value small" id="wkNext">—</div></div>
+          <div><div class="label">Workout left</div><div class="value" id="wkLeft">0:00</div></div>
+          <div class="wk-bias">
+            <div class="label">Intensity</div>
+            <div class="inline">
+              <button id="biasDown" class="round" title="Easier (D-pad ▼)">−</button>
+              <span class="value" id="wkBias">100%</span>
+              <button id="biasUp" class="round" title="Harder (D-pad ▲)">+</button>
+            </div>
+          </div>
+        </div>
+        <canvas id="workoutChart" class="wk-chart"></canvas>
+      </div>
     </section>
 
     <p class="hints">
-      Handlebars: left buttons/paddle shift easier, right shift harder · D-pad ▲▼ changes grade · A starts/pauses.
-      Keyboard: <kbd>←</kbd><kbd>→</kbd> shift · <kbd>↑</kbd><kbd>↓</kbd> grade · <kbd>Space</kbd> start/pause.
+      Handlebars: left = easier, right = harder · ▲▼ grade (free ride) or intensity (workout) · ▶ skip step · A start/pause · Y lap.
+      Keyboard: <kbd>←</kbd><kbd>→</kbd> shift · <kbd>↑</kbd><kbd>↓</kbd> grade/intensity · <kbd>Space</kbd> start/pause · <kbd>L</kbd> lap.
     </p>
 
     <details class="panel" id="diag">
@@ -95,6 +165,7 @@
     </details>
   </main>
 
+  <!-- Settings -->
   <dialog id="settings">
     <form method="dialog">
       <h2>Settings</h2>
@@ -104,11 +175,16 @@
           <option value="metric">Metric (km/h, kg, m)</option>
         </select>
       </label>
-      <label><span>Rider weight (<span class="u-weight">lb</span>)</span>
-        <input type="number" name="rider" min="20" max="400" step="any">
-      </label>
-      <label><span>Bike weight (<span class="u-weight">lb</span>)</span>
-        <input type="number" name="bike" min="1" max="100" step="any">
+      <div class="two">
+        <label><span>Rider weight (<span class="u-weight">lb</span>)</span>
+          <input type="number" name="rider" min="20" max="400" step="any">
+        </label>
+        <label><span>Bike weight (<span class="u-weight">lb</span>)</span>
+          <input type="number" name="bike" min="1" max="100" step="any">
+        </label>
+      </div>
+      <label>FTP (watts) — used for workouts
+        <input type="number" name="ftp" min="50" max="600" step="1">
       </label>
       <label>Shifting method
         <select name="shiftMode">
@@ -119,16 +195,46 @@
       <label><span>Difficulty <b id="diffOut">100%</b></span>
         <input type="range" name="difficulty" min="50" max="150" step="5">
       </label>
-      <label>Real gear ratio (SIM only, 0 = auto)
-        <input type="number" name="realRatio" min="0" max="6" step="any">
-      </label>
-      <label class="check"><input type="checkbox" name="haptics"> Buzz handlebars on shift</label>
-      <label>Starting gear
-        <input type="number" name="startGear" min="1" max="24" step="1">
-      </label>
+      <div class="two">
+        <label>Real gear ratio (SIM, 0 = auto)
+          <input type="number" name="realRatio" min="0" max="6" step="any">
+        </label>
+        <label>Starting gear
+          <input type="number" name="startGear" min="1" max="24" step="1">
+        </label>
+      </div>
+      <label class="check"><input type="checkbox" name="haptics"> Buzz handlebars on shift and workout steps</label>
       <div class="dialog-actions">
         <button value="save" class="primary">Save</button>
         <button value="cancel" class="ghost" formnovalidate>Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Ride summary -->
+  <dialog id="summary">
+    <form method="dialog">
+      <h2 id="sumTitle">Ride summary</h2>
+      <div class="sum-sub" id="sumSub"></div>
+      <div class="sum-grid" id="sumGrid"></div>
+      <div class="sum-laps" id="sumLaps"></div>
+      <p class="sum-note">Upload the .fit file at strava.com/upload/select (or Garmin Connect → Import Data).</p>
+      <div class="dialog-actions">
+        <button value="download" class="primary" id="sumDownload">Save &amp; download .fit</button>
+        <button value="save" id="sumSave">Save</button>
+        <button value="discard" class="ghost danger" id="sumDiscard" formnovalidate>Discard</button>
+        <button value="resume" class="ghost" id="sumResume" formnovalidate>Keep riding</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- History -->
+  <dialog id="history">
+    <form method="dialog">
+      <h2>Saved rides</h2>
+      <div class="hist-list" id="histList"></div>
+      <div class="dialog-actions">
+        <button value="close" class="ghost">Close</button>
       </div>
     </form>
   </dialog>

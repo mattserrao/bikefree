@@ -46,28 +46,47 @@ A free indoor biking app for Mac. Runs as a web app in Chrome and talks directly
 - [ ] On-bike check: 30-minute ride; pick ERG or SIM; tune gear ratios and difficulty
 - **Done when:** a 30-minute ride feels natural with shifting
 
-### v0.3 — Save rides
+### v0.3 — Save rides *(branch `v0.5`)*
 **Goal:** keep a record of every ride.
-- [ ] Record 1-second samples
-- [ ] Export `.fit` file (upload to Strava/Garmin manually)
-- [ ] Heart-rate strap support (direct, or via KICKR Bridge)
-- [ ] Ride summary at the end (avg/max power, time, distance, elevation)
+- [x] Record 1-second samples (power, cadence, speed, distance, altitude, HR, grade, position on routes)
+- [x] Export `.fit` file (verified with Garmin's FIT SDK decoder); upload to Strava/Garmin manually
+- [x] Heart-rate strap support (direct Bluetooth), or HR relayed by the trainer (KICKR Bridge)
+- [x] Finish ride → summary (time, distance, avg/normalized/max power, cadence, speed, climb, kJ, HR) and lap table
+- [x] Laps: Lap button, Y button or `L`; automatic laps on workout steps and ride-type changes
+- [x] Ride history (saved in the browser) with re-download and delete
+- [x] Crash recovery: in-progress ride autosaved every 15 s and offered back on reload
+- [ ] On-bike check: upload a real ride to Strava and confirm the data
 - **Done when:** a ride uploads to Strava with correct data
 
-### v1.0 — GPX routes
+### v0.4 — GPX routes *(branch `v0.5`)*
 **Goal:** ride real roads with terrain-based resistance.
-- [ ] Load a `.gpx` file; smooth elevation; calculate grade along the route
-- [ ] Distance moves you along the route; trainer resistance follows the grade
-- [ ] Elevation profile with position marker, upcoming grade, distance remaining
-- [ ] Route grade included in the `.fit` export
+- [x] Load a `.gpx` file (tracks or routes); resample every 10 m; smooth elevation; grade along the route
+- [x] Distance moves you along the route; trainer resistance follows the grade
+- [x] Elevation profile coloured by grade with position marker; route outline; grade now, next ½ mi, to go, climb left, % done
+- [x] Route position, altitude and grade in the `.fit` export (shows as a Virtual Ride with a map on Strava)
+- [x] Routes saved in your library; built-in "Demo Hills" route for testing
+- [x] Finishing a route opens the ride summary (or keep riding)
+- [ ] On-bike check: a known local climb feels right
 - **Done when:** a known local climb feels right
 
+### v0.5 — Structured workouts *(branch `v0.5`)*
+**Goal:** follow interval workouts in ERG mode.
+- [x] Import `.zwo` (Zwift), `.erg` (watts) and `.mrc` (% FTP) files; saved in your library
+- [x] Four built-in workouts (Endurance 45, Sweet Spot 3×10, VO2 Max 5×3, Quick Spin 20)
+- [x] FTP setting; trainer holds each step's target in ERG; ramps follow smoothly
+- [x] Free-ride steps (and after the workout ends) go back to virtual shifting
+- [x] Workout chart coloured by zone with progress; target, step time left, next step, time left
+- [x] Intensity −/+ 5% (D-pad ▲▼, arrow keys); skip step (D-pad ▶); handlebar buzz on each new step
+- [x] One lap per workout step in the `.fit` file
+- [ ] On-bike check: complete a built-in workout end to end
+- **Done when:** a full workout runs cleanly and the laps show up on Strava
+
 ### Later ideas
-- Structured ERG workouts (`.zwo`, `.erg`, `.mrc` import)
-- Map view of the route
+- Direct Strava upload
+- Map view of the route (real map tiles)
 - Visual scene (three.js or pixel art)
 - Native trainer virtual shifting via Zwift Protocol (most realistic, most work)
-- Direct Strava upload
+- Ramp/FTP test with automatic FTP estimate
 
 ## Running it
 

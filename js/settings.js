@@ -10,6 +10,7 @@ export const DEFAULT_SETTINGS = {
   realRatio: 0,           // 0 = auto-estimate from the trainer
   haptics: true,
   startGear: 12,
+  ftp: 200,               // watts, for % FTP workouts
 };
 
 export function loadSettings() {

@@ -44,7 +44,7 @@ button.round { width: 38px; height: 38px; padding: 0; border-radius: 50%; font-s
 
 /* Tiles */
 .hero { display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: 16px; }
-.tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+.tiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; }
 .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
 .tile .label { color: var(--muted); font-size: 13px; }
 .tile .value { font-size: 44px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; margin-top: 6px; }
@@ -63,6 +63,36 @@ button.round { width: 38px; height: 38px; padding: 0; border-radius: 50%; font-s
 .gear-hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
 
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+
+/* Ride bar */
+.ridebar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 18px; }
+.ride-status { color: var(--muted); font-size: 13px; margin-left: 8px; }
+.ride-status.rec { color: var(--err); }
+
+/* Mode tabs */
+.tabs { display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+.tab { background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: var(--muted); padding: 8px 14px; margin-bottom: -1px; }
+.tab.on { color: var(--text); border-bottom-color: var(--accent); }
+.tab.active-mode::after { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); margin-left: 7px; vertical-align: middle; }
+.pick-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.pick-row select { min-width: 260px; }
+.filebtn { font-size: 14px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; cursor: pointer; background: #222734; }
+.filebtn:hover { border-color: #3a4152; }
+.route-info { color: var(--muted); font-size: 13px; margin: 12px 0; line-height: 1.6; }
+.route-info b { color: var(--text); }
+.route-info .desc { margin-top: 2px; }
+.ok { color: var(--ok); } .warn { color: var(--warn); } .muted { color: var(--muted); }
+button.danger { color: var(--err); }
+.route-stats, .wk-now { display: flex; gap: 28px; flex-wrap: wrap; margin-bottom: 12px; }
+.route-stats .label, .wk-now .label { color: var(--muted); font-size: 12px; }
+.route-stats .value, .wk-now .value { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.wk-now .value.small { font-size: 16px; font-weight: 600; padding-top: 6px; }
+.wk-bias .inline { gap: 10px; }
+.route-views { display: grid; grid-template-columns: 1fr 180px; gap: 12px; }
+canvas.profile { width: 100%; height: 170px; display: block; }
+canvas.trace { width: 180px; height: 170px; display: block; background: #12151b; border-radius: 10px; }
+canvas.wk-chart { width: 100%; height: 150px; display: block; }
+body.erg-workout .gear-tile { opacity: 0.55; }
 
 /* Terrain / ride controls */
 .terrain { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -111,10 +141,30 @@ dialog label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
 dialog label b { color: var(--text); }
 dialog label.check { display: flex; }
 dialog input[type=number], dialog select, dialog input[type=range] { width: 100%; }
-.dialog-actions { display: flex; flex-direction: row-reverse; gap: 8px; margin-top: 6px; }
+.dialog-actions { display: flex; flex-direction: row-reverse; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+dialog .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+#summary, #history { width: min(680px, 94vw); }
+.sum-sub { color: var(--muted); font-size: 13px; margin-top: -8px; }
+.sum-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px 12px; }
+.sum-grid .label { color: var(--muted); font-size: 12px; }
+.sum-grid .value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sum-laps table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.sum-laps th, .sum-laps td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); }
+.sum-laps th { color: var(--muted); font-weight: 500; }
+.sum-laps { max-height: 220px; overflow: auto; }
+.sum-note { color: var(--muted); font-size: 12px; margin: 0; }
+.hist-list { display: grid; gap: 8px; max-height: 60vh; overflow: auto; }
+.hist-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.hist-main { flex: 1; font-size: 13px; }
+.hist-name { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
 
+@media (max-width: 1000px) {
+  .tiles { grid-template-columns: repeat(3, 1fr); }
+  .sum-grid { grid-template-columns: repeat(3, 1fr); }
+}
 @media (max-width: 900px) {
   .hero { grid-template-columns: 1fr; }
   .tiles { grid-template-columns: repeat(2, 1fr); }
+  .route-views { grid-template-columns: 1fr; }
   .diag-grid { grid-template-columns: 1fr 1fr; }
 }
