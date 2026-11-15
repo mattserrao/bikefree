@@ -110,18 +110,18 @@
     }
   ],
   "preview": {
-    "positionM": 7800,
+    "positionM": 7610.0,
     "camera": "chase"
   },
   "signs": [
     {
-      "atM": 7835,
+      "atM": 7645.0,
       "side": "ocean",
       "label": "EL CAPITAN MEADOW",
       "subtitle": "YOSEMITE VALLEY"
     },
     {
-      "atM": 12555,
+      "atM": 12365.0,
       "side": "ocean",
       "label": "BRIDALVEIL FALL",
       "subtitle": "YOSEMITE VALLEY"
@@ -129,14 +129,14 @@
   ],
   "roadside": [
     {
-      "fromM": 7100,
-      "toM": 9000,
+      "fromM": 6910.0,
+      "toM": 8810.0,
       "side": "ocean"
     }
   ],
   "lookouts": [
     {
-      "atM": 7600,
+      "atM": 7410.0,
       "side": "ocean",
       "widthM": 8,
       "lengthM": 28

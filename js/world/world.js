@@ -3,7 +3,7 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { makeProjection, makeRouteIndex } from './geo.js';
 import { Terrain } from './terrain.js';
 import { StylizedTerrain, COASTAL_QUALITY } from './stylized-terrain.js';
-import { headingSpan } from '../routes.js';
+import { riderPose, routePoint, ROAD_WIDTH } from './pose.js';
 import { loadRider } from './rider.js';
 import { wrapDist } from '../gpx.js';
 
@@ -15,7 +15,6 @@ export const TIME_PRESETS = {
 
 // Stylized foreground → real far terrain hand-off (metres from the camera)
 const FAR_INNER = 1500, FAR_BAND = 400;
-const ROAD_WIDTH = 7;
 const RIDER_LANE = 0.22;   // × road width, right of the centre line
 const PACER_LANE = 0.07;   // a bike-width further in, so you can ride alongside or pass
 
@@ -139,38 +138,15 @@ export class World {
 
   /** Point on the road at distance s, `lane` × road width right of the centre line (with the U-turn drifts). */
   _place(s, lane) {
-    const total = this.route.total;
-    const p = this.pointAt(s);
-    const turn = this.route.turnS;  // out-and-back: distance of the turnaround
-    const [behindS, aheadS] = headingSpan(this.route, s);
-    const x = wrapDist(this.route, s);
-    const ahead = this.pointAt(aheadS), behind = this.pointAt(behindS);
-    const fwd = ahead.clone().sub(behind).normalize();
-    const flat = new THREE.Vector3(fwd.x, 0, fwd.z).normalize();
-    const right = new THREE.Vector3(-flat.z, 0, flat.x);
-    let pos = p.clone().addScaledVector(right, ROAD_WIDTH * lane);
-    if (turn && Math.abs(x - turn) < 10) {
-      // U-turn at the far end: drift across from the outbound lane to the return lane over the last/first 10 m.
-      if (!this._turnRight) {
-        const a = this.pointAt(turn - 12), b = this.pointAt(turn);
-        const f = new THREE.Vector3(b.x - a.x, 0, b.z - a.z).normalize();
-        this._turnRight = new THREE.Vector3(-f.z, 0, f.x);
-      }
-      const k = Math.max(-1, Math.min(1, (turn - x) / 10));
-      pos = p.clone().addScaledVector(this._turnRight, ROAD_WIDTH * lane * k);
-    } else if (turn && (x < 10 || total - x < 10)) {
-      // …and the same at the start, where the return leg turns back onto the outbound one.
-      if (!this._startRight) {
-        const a = this.pointAt(0), b = this.pointAt(12);
-        const f = new THREE.Vector3(b.x - a.x, 0, b.z - a.z).normalize();
-        this._startRight = new THREE.Vector3(-f.z, 0, f.x);
-      }
-      const k = Math.max(-1, Math.min(1, (x < 10 ? x : x - total) / 10));
-      pos = p.clone().addScaledVector(this._startRight, ROAD_WIDTH * lane * k);
-    }
-    pos.y += 0.12; // road surface sits slightly above the route line
-    return { pos, fwd, flat };
+    // shared with the course QC sweep (js/world/pose.js)
+    const pose = riderPose(this.route, this.index, s, lane);
+    return {
+      pos: new THREE.Vector3(pose.pos.x, pose.pos.y, pose.pos.z),
+      fwd: new THREE.Vector3(pose.fwd.x, pose.fwd.y, pose.fwd.z),
+      flat: new THREE.Vector3(pose.flat.x, 0, pose.flat.z),
+    };
   }
+
 
   _updatePacer(dt) {
     const src = this.pacerSource ? this.pacerSource() : null;
@@ -258,16 +234,8 @@ export class World {
 
   /** Point on the route at distance s: local position + forward direction. */
   pointAt(s) {
-    const r = this.route, idx = this.index;
-    const x = wrapDist(r, s);
-    const i = Math.min(r.dist.length - 2, Math.floor(x / 10));
-    const span = r.dist[i + 1] - r.dist[i] || 1;
-    const f = Math.min(1, Math.max(0, (x - r.dist[i]) / span));
-    return new THREE.Vector3(
-      idx.xs[i] + (idx.xs[i + 1] - idx.xs[i]) * f,
-      r.ele[i] + (r.ele[i + 1] - r.ele[i]) * f,
-      idx.zs[i] + (idx.zs[i + 1] - idx.zs[i]) * f,
-    );
+    const p = routePoint(this.route, this.index, s);
+    return new THREE.Vector3(p.x, p.y, p.z);
   }
 
   _frame(now) {

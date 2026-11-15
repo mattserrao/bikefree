@@ -1,7 +1,7 @@
 // Regional style-C landforms. These are authored interpretations around the
 // actual GPX, with explicit lakes, rivers, peaks, cliffs and bridge ranges.
 import { makeRouteIndex } from './geo.js';
-import { smoothstep } from './coast.js';
+import { smoothstep, ROAD_CORRIDOR_M } from './coast.js';
 
 function nearestSegment(points, x, z) {
   let best = null, distance = Infinity;
@@ -133,6 +133,16 @@ export function makeRegionalLandscape(config, proj, index, route) {
     }
     return null;
   };
+  // 1 on a bridge deck, easing to 0 over its last 12 m at each end: the ground meets the road where the deck starts
+  const bridgeWeight = (x, z) => {
+    let w = 0;
+    for (const b of landmarks) {
+      if (b.lateralM) continue;
+      const along = Math.abs((x - b.x) * b.fx + (z - b.z) * b.fz), across = Math.abs((x - b.x) * -b.fz + (z - b.z) * b.fx);
+      w = Math.max(w, smoothstep(b.span / 2 + 1, b.span / 2 - 11, along) * (1 - smoothstep(26, 38, across)));
+    }
+    return w;
+  };
   const creekAt = (x, z) => rivers.find((r) => nearestSegment(r.points, x, z).d < r.width / 2 + 1);
   const waterLevelAt = (x, z) => {
     let y = hasOcean ? .05 : -Infinity;
@@ -153,13 +163,21 @@ export function makeRegionalLandscape(config, proj, index, route) {
     }
     for (const f of formations) if (f.island) h = Math.max(h, (lakes[0]?.level || floor) - 5 + formationHeight(f, x, z));
     const road = index.nearest(x, z, 110);
-    const onBridge = road && bridgeAt(index.xs[road.i], index.zs[road.i], 8);
-    if (road && !onBridge) h += (route.ele[road.i] - .65 - h) * (1 - smoothstep(22, 110, road.d));
-    if (onBridge) h = Math.min(h, route.ele[road.i] - 1.5);
-    for (const r of rivers) {
-      const hit = nearestSegment(r.points, x, z), factor = 1 - smoothstep(r.width / 2, r.width / 2 + 6, hit.d);
-      if (factor > 0 && !(road && road.d < 10 && !onBridge)) h += (Math.min(h, r.waterAt(hit.s) - .6) - h) * factor;
+    const bw = road ? bridgeWeight(index.xs[road.i], index.zs[road.i]) : 0;
+    if (road) {
+      // off a bridge: grade the verge to the road; on a bridge: only keep the ground below the deck
+      const fill = h + (route.ele[road.i] - .65 - h) * (1 - smoothstep(22, 110, road.d));
+      h = fill * (1 - bw) + Math.min(h, route.ele[road.i] - 1.5) * bw;
     }
+    // Rivers: banks wide enough for the 6 m ground mesh to follow; beside the road (off a bridge) the
+    // channel eases out over 12–30 m instead of stopping dead at 10 m, which left a cliff at the verge.
+    const nearRoad = road ? (1 - bw) * (1 - smoothstep(12, 30, road.d)) : 0;
+    for (const r of rivers) {
+      const hit = nearestSegment(r.points, x, z), factor = (1 - smoothstep(r.width / 2, r.width / 2 + 14, hit.d)) * (1 - nearRoad);
+      if (factor > 0) h += (Math.min(h, r.waterAt(hit.s) - .6) - h) * factor;
+    }
+    // Never above the road (see coast.js)
+    if (road) h = Math.min(h, route.ele[road.i] - .65 + Math.max(0, road.d - ROAD_CORRIDOR_M));
     return h;
   };
   const colorAt = (x, z) => {

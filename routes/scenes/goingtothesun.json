@@ -90,7 +90,7 @@
     }
   ],
   "preview": {
-    "positionM": 33300,
+    "positionM": 33190.0,
     "camera": "drone"
   },
   "signs": [
@@ -101,7 +101,7 @@
       "subtitle": "GOING-TO-THE-SUN ROAD"
     },
     {
-      "atM": 33975,
+      "atM": 33865.0,
       "side": "ocean",
       "label": "LOGAN PASS",
       "subtitle": "GOING-TO-THE-SUN ROAD"
@@ -109,14 +109,14 @@
   ],
   "roadside": [
     {
-      "fromM": 32600,
-      "toM": 34060,
+      "fromM": 32490.0,
+      "toM": 33950.0,
       "side": "ocean"
     }
   ],
   "lookouts": [
     {
-      "atM": 33100,
+      "atM": 32990.0,
       "side": "ocean",
       "widthM": 8,
       "lengthM": 28
