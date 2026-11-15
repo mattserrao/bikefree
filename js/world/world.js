@@ -16,6 +16,8 @@ export const TIME_PRESETS = {
 // Stylized foreground → real far terrain hand-off (metres from the camera)
 const FAR_INNER = 1500, FAR_BAND = 400;
 const ROAD_WIDTH = 7;
+const RIDER_LANE = 0.22;   // × road width, right of the centre line
+const PACER_LANE = 0.07;   // a bike-width further in, so you can ride alongside or pass
 
 export class World {
   /**
@@ -132,6 +134,72 @@ export class World {
   /** Where to draw the rider: a function returning {pos, speed (m/s), cadence (rpm), riding}. */
   setSource(fn) { this.source = fn; }
 
+  /** The virtual pacer: a function returning {pos, speed, cadence} along the route, or null when off. */
+  setPacerSource(fn) { this.pacerSource = fn; this._pacerInit = false; }
+
+  /** Point on the road at distance s, `lane` × road width right of the centre line (with the U-turn drifts). */
+  _place(s, lane) {
+    const total = this.route.total;
+    const p = this.pointAt(s);
+    const turn = this.route.turnS;  // out-and-back: distance of the turnaround
+    const [behindS, aheadS] = headingSpan(this.route, s);
+    const x = wrapDist(this.route, s);
+    const ahead = this.pointAt(aheadS), behind = this.pointAt(behindS);
+    const fwd = ahead.clone().sub(behind).normalize();
+    const flat = new THREE.Vector3(fwd.x, 0, fwd.z).normalize();
+    const right = new THREE.Vector3(-flat.z, 0, flat.x);
+    let pos = p.clone().addScaledVector(right, ROAD_WIDTH * lane);
+    if (turn && Math.abs(x - turn) < 10) {
+      // U-turn at the far end: drift across from the outbound lane to the return lane over the last/first 10 m.
+      if (!this._turnRight) {
+        const a = this.pointAt(turn - 12), b = this.pointAt(turn);
+        const f = new THREE.Vector3(b.x - a.x, 0, b.z - a.z).normalize();
+        this._turnRight = new THREE.Vector3(-f.z, 0, f.x);
+      }
+      const k = Math.max(-1, Math.min(1, (turn - x) / 10));
+      pos = p.clone().addScaledVector(this._turnRight, ROAD_WIDTH * lane * k);
+    } else if (turn && (x < 10 || total - x < 10)) {
+      // …and the same at the start, where the return leg turns back onto the outbound one.
+      if (!this._startRight) {
+        const a = this.pointAt(0), b = this.pointAt(12);
+        const f = new THREE.Vector3(b.x - a.x, 0, b.z - a.z).normalize();
+        this._startRight = new THREE.Vector3(-f.z, 0, f.x);
+      }
+      const k = Math.max(-1, Math.min(1, (x < 10 ? x : x - total) / 10));
+      pos = p.clone().addScaledVector(this._startRight, ROAD_WIDTH * lane * k);
+    }
+    pos.y += 0.12; // road surface sits slightly above the route line
+    return { pos, fwd, flat };
+  }
+
+  _updatePacer(dt) {
+    const src = this.pacerSource ? this.pacerSource() : null;
+    if (!src) { if (this.pacer) this.pacer.group.visible = false; return; }
+    if (!this.pacer) {
+      if (!this._pacerLoading) {
+        this._pacerLoading = loadRider({ jersey: 'checker' }).then((r) => {
+          if (this.disposed) return;
+          if (this.stylized) r.group.traverse((o) => { if (o.isMesh && !o.material.transparent) { o.castShadow = true; o.receiveShadow = true; } });
+          this.pacer = r;
+          this.scene.add(r.group);
+        }).catch((err) => this.log('3d', `Pacer model: ${err.message}`, 'debug'));
+      }
+      return;
+    }
+    const total = this.route.total;
+    // Same smoothing as the rider: roll at its speed, ease toward the true position.
+    if (!this._pacerInit) { this.ps = src.pos; this.pacerCrank = 0; this._pacerInit = true; }
+    this.ps += src.speed * dt;
+    let err = src.pos - wrapDist(this.route, this.ps);
+    if (this.route.closed) { if (err > total / 2) err -= total; if (err < -total / 2) err += total; }
+    if (Math.abs(err) > 60) this.ps = src.pos; else this.ps += err * Math.min(1, dt * 1.5);
+    this.ps = this.route.closed ? wrapDist(this.route, this.ps) : Math.max(0, Math.min(total, this.ps));
+    const { pos, fwd } = this._place(this.ps, PACER_LANE);
+    this.pacerCrank += (src.cadence / 60) * Math.PI * 2 * dt;
+    this.pacer.group.visible = true;
+    this.pacer.update(pos, fwd, this.pacerCrank, src.speed, Math.min(dt, 0.1));
+  }
+
   setCamera(mode) { this.cameraMode = mode; this._camInit = false; }
 
   setQuality(key) {
@@ -218,37 +286,10 @@ export class World {
     this.s = this.route.closed ? wrapDist(this.route, this.s) : Math.max(0, Math.min(total, this.s));
 
     // Rider placement: right-hand side of the road
-    const p = this.pointAt(this.s);
-    const turn = this.route.turnS;  // out-and-back: distance of the turnaround
-    const [behindS, aheadS] = headingSpan(this.route, this.s);
-    const x = wrapDist(this.route, this.s);
-    const ahead = this.pointAt(aheadS), behind = this.pointAt(behindS);
-    const fwd = ahead.clone().sub(behind).normalize();
-    const flat = new THREE.Vector3(fwd.x, 0, fwd.z).normalize();
-    const right = new THREE.Vector3(-flat.z, 0, flat.x);
-    let riderPos = p.clone().addScaledVector(right, ROAD_WIDTH * 0.22);
-    if (turn && Math.abs(x - turn) < 10) {
-      // U-turn at the far end: drift across from the outbound lane to the return lane over the last/first 10 m.
-      if (!this._turnRight) {
-        const a = this.pointAt(turn - 12), b = this.pointAt(turn);
-        const f = new THREE.Vector3(b.x - a.x, 0, b.z - a.z).normalize();
-        this._turnRight = new THREE.Vector3(-f.z, 0, f.x);
-      }
-      const k = Math.max(-1, Math.min(1, (turn - x) / 10));
-      riderPos = p.clone().addScaledVector(this._turnRight, ROAD_WIDTH * 0.22 * k);
-    } else if (turn && (x < 10 || total - x < 10)) {
-      // …and the same at the start, where the return leg turns back onto the outbound one.
-      if (!this._startRight) {
-        const a = this.pointAt(0), b = this.pointAt(12);
-        const f = new THREE.Vector3(b.x - a.x, 0, b.z - a.z).normalize();
-        this._startRight = new THREE.Vector3(-f.z, 0, f.x);
-      }
-      const k = Math.max(-1, Math.min(1, (x < 10 ? x : x - total) / 10));
-      riderPos = p.clone().addScaledVector(this._startRight, ROAD_WIDTH * 0.22 * k);
-    }
-    riderPos.y += 0.12; // road surface sits slightly above the route line
+    const { pos: riderPos, fwd, flat } = this._place(this.s, RIDER_LANE);
     this.crank += (src.cadence / 60) * Math.PI * 2 * dt;
     this.rider.update(riderPos, fwd, this.crank, src.speed, Math.min(dt, 0.1));
+    this._updatePacer(dt);
 
     this._updateCamera(riderPos, flat, fwd, dt);
     this.terrain.uniforms.uTime.value = now / 1000;

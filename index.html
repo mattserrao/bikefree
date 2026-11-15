@@ -114,6 +114,12 @@
             <button type="button" data-f="0" class="on">From the start</button><button type="button" data-f="0.3333">⅓ in</button><button type="button" data-f="0.6667">⅔ in</button>
           </div>
         </div>
+        <div class="pacer-opt" title="A virtual rider in a yellow-checkered jersey who holds this power — P on the ride screen">
+          <span class="pacer-label"><i class="chk"></i>Pacer</span>
+          <div class="seg tight" id="pacerSeg" role="group" aria-label="Pacer power (watts)">
+            <button type="button" data-w="0" class="on">Off</button><button type="button" data-w="75">75</button><button type="button" data-w="100">100</button><button type="button" data-w="125">125</button><button type="button" data-w="150">150</button><button type="button" data-w="175">175</button><button type="button" data-w="200">200 W</button>
+          </div>
+        </div>
         <canvas id="pvMap" class="pv-map"></canvas>
         <canvas id="pvChart" class="pv-chart"></canvas>
         <p class="pv-desc" id="pvDesc"></p>
@@ -143,6 +149,7 @@
         </div>
         <div class="pill warn" id="hAlert" hidden></div>
         <div class="hud-title" id="hTitle"></div>
+        <div class="pill pacer" id="hPacer" hidden><i class="chk"></i><span id="hPacerT">Pacer</span></div>
         <div class="pill big" id="hState">Pedal to start</div>
       </div>
 

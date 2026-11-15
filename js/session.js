@@ -8,7 +8,7 @@ import { Recorder } from './recorder.js';
 import { routeAt, wrapDist, lapAt } from './gpx.js';
 import { segmentIndexAt, targetWatts } from './workout.js';
 
-const TICK_MS = 250;
+export const TICK_MS = 250;
 const DATA_STALE_MS = 2500;
 const HR_STALE_MS = 5000;
 const AUTO_PAUSE_MS = 3000;
