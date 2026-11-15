@@ -69,6 +69,80 @@ export class CityScene {
       if (!this.buildingChunks.has(key)) this.buildingChunks.set(key, []);
       this.buildingChunks.get(key).push(b);
     }
+    // 40 m grid of footprints for "is something standing in (or right against) a building"
+    this.buildingGrid = new Map();
+    for (const b of this.buildings) {
+      let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+      for (const p of b.ring) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); }
+      b.bb = [x0, x1, z0, z1];
+      for (let gx = Math.floor(x0 / 40); gx <= Math.floor(x1 / 40); gx++) for (let gz = Math.floor(z0 / 40); gz <= Math.floor(z1 / 40); gz++) {
+        const k = `${gx},${gz}`; if (!this.buildingGrid.has(k)) this.buildingGrid.set(k, []); this.buildingGrid.get(k).push(b);
+      }
+    }
+  }
+
+  /** Is (x, z) inside a building footprint, or within r metres of one? */
+  buildingNear(x, z, r = 0) {
+    for (let gx = Math.floor((x - r) / 40); gx <= Math.floor((x + r) / 40); gx++) for (let gz = Math.floor((z - r) / 40); gz <= Math.floor((z + r) / 40); gz++) {
+      for (const b of this.buildingGrid.get(`${gx},${gz}`) || []) {
+        if (b.kind === 12 || x < b.bb[0] - r || x > b.bb[1] + r || z < b.bb[2] - r || z > b.bb[3] + r) continue;
+        const ring = b.ring;
+        let inside = false;
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+          const a = ring[i], c = ring[j];
+          if ((a.z > z) !== (c.z > z) && x < ((c.x - a.x) * (z - a.z)) / (c.z - a.z) + a.x) inside = !inside;
+          if (r > 0) {
+            const dx = c.x - a.x, dz = c.z - a.z, t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz || 1)));
+            if (Math.hypot(a.x + dx * t - x, a.z + dz * t - z) < r) return b;
+          }
+        }
+        if (inside) return b;
+      }
+    }
+    return null;
+  }
+
+  /** Points along every bridge deck, incline and raised railway (40 m grid), for `_crossed`. */
+  _overheadIndex() {
+    if (this._overhead) return this._overhead;
+    const grid = new Map(), add = (x, y, z) => { const k = `${Math.floor(x / 40)},${Math.floor(z / 40)}`; if (!grid.has(k)) grid.set(k, []); grid.get(k).push([x, y, z]); };
+    const line = (pts, step = 2) => { for (let i = 1; i < pts.length; i++) { const a = pts[i - 1], b = pts[i], n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / step)); for (let k = 0; k <= n; k++) add(a.x + (b.x - a.x) * k / n, a.y == null ? null : a.y + (b.y - a.y) * k / n, a.z + (b.z - a.z) * k / n); } };
+    for (const st of this.streets) if (st.bridge) line(st.pts);
+    for (const r of this.data.rails || []) if (r.kind === 'funicular' || r.bridge) line(r.path.map(([a, o]) => ({ ...this.D.local(a, o), y: null })));
+    return (this._overhead = grid);
+  }
+
+  /** Does a bridge deck, incline or raised railway pass through this building (within its height)? */
+  _crossed(b) {
+    const grid = this._overheadIndex();
+    for (let gx = Math.floor(b.bb[0] / 40); gx <= Math.floor(b.bb[1] / 40); gx++) for (let gz = Math.floor(b.bb[2] / 40); gz <= Math.floor(b.bb[3] / 40); gz++) {
+      for (const [x, y, z] of grid.get(`${gx},${gz}`) || []) {
+        if (x < b.bb[0] || x > b.bb[1] || z < b.bb[2] || z > b.bb[3] || this.buildingNear(x, z, 0) !== b) continue;
+        const ground = this.landscape.heightAt(x, z);
+        if (y == null || (y > ground - 1 && y < ground + b.h)) return true;   // inclines and rail viaducts follow the hill
+      }
+    }
+    return false;
+  }
+
+  /** Does a building footprint reach into the route's road (with a margin), where the road runs at ground level? */
+  _onRoute(b) {
+    const L = this.landscape, ring = b.ring;
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i], c = ring[(i + 1) % ring.length], n = Math.max(1, Math.ceil(Math.hypot(c.x - a.x, c.z - a.z) / 2));
+      for (let k = 0; k <= n; k++) {
+        const x = a.x + (c.x - a.x) * k / n, z = a.z + (c.z - a.z) * k / n, r = L.routeDist(x, z);
+        if (r && r.d < ROAD_WIDTH / 2 + 2 && L.heightAt(x, z) + b.h > r.y - 1) return true;
+      }
+    }
+    // the road crossing straight through a footprint
+    const e = this.route.turnIdx || this.route.dist.length - 1;
+    for (let i = 0; i <= e; i += 1) {
+      const x = this.index.xs[i], z = this.index.zs[i];
+      if (x < b.bb[0] || x > b.bb[1] || z < b.bb[2] || z > b.bb[3]) continue;
+      if (this.buildingNear(x, z, 0) === b) return true;
+    }
+    return false;
   }
 
   // ---------------------------------------------------------------- materials
@@ -242,6 +316,8 @@ export class CityScene {
     const roofTint = new THREE.Color();
     for (const b of list) {
       if (b.kind === 12) continue;   // the submarine is a landmark, not a building
+      if (b.onRoute ??= this._onRoute(b)) continue;   // OSM footprints that overlap the ride's road: not drawn
+      if (b.crossed ??= this._crossed(b)) continue;   // a ramp, incline or raised railway runs through it: not drawn
       let ring = b.ring;
       let area = 0;
       for (let i = 0; i < ring.length; i++) { const a = ring[i], c = ring[(i + 1) % ring.length]; area += a.x * c.z - c.x * a.z; }
@@ -319,9 +395,11 @@ export class CityScene {
     const roads = new Map(), walks = new Map(), paths = new Map();
     const get = (map, x, z) => { const key = `${Math.floor(x / 512)},${Math.floor(z / 512)}`; if (!map.has(key)) map.set(key, new MeshBuilder()); return map.get(key); };
     const lamps = [];
+    const slots = this.streetSlots = this._streetSlots();
     this.streets.forEach((st, k) => {
-      const p0 = st.pts[0], lift = .1 + (8 - st.cls) * .006 + (k % 3) * .002;
-      if (st.cls === 8) { ribbon(get(paths, p0.x, p0.z), st.pts, st.width, lift + .02, 8); return; }
+      // crossing ribbons each get their own height (1 cm apart), so lane paint never flickers at a junction
+      const p0 = st.pts[0], lift = .1 + slots[k] * .01;
+      if (st.cls === 8) { ribbon(get(paths, p0.x, p0.z), st.pts, st.width, lift, 8); return; }
       ribbon(get(roads, p0.x, p0.z), st.pts, st.width, lift, 24);
       if (!st.bridge && st.cls >= 2 && st.cls <= 6) ribbon(get(walks, p0.x, p0.z), st.pts, st.width + 5, .06, 8);
       // lamps every ~34 m, alternating sides
@@ -332,12 +410,10 @@ export class CityScene {
           acc += len;
           if (acc < 34) continue;
           acc = 0; side = -side;
-          const dx = (b.x - a.x) / (len || 1), dz = (b.z - a.z) / (len || 1), off = st.width / 2 + .9;
+          // on a bridge the post stands on the deck slab, just inside the railing; elsewhere on the sidewalk
+          const dx = (b.x - a.x) / (len || 1), dz = (b.z - a.z) / (len || 1), off = st.width / 2 + (st.bridge ? .05 : .9);
           const x = b.x - dz * off * side, z = b.z + dx * off * side;
-          const c = this.landscape.landAt(x, z);
-          if (c === LAND.water || c === LAND.building) continue;
-          const onRoad = this.index.nearest(x, z, 6);
-          if (onRoad && onRoad.d < ROAD_WIDTH / 2 + 1.2) continue;   // never a lamp post in the rider's road
+          if (!this._clearSpot(x, z, .35, k, ROAD_WIDTH / 2 + 1.2)) continue;
           lamps.push({ x, z, y: st.bridge ? b.y : this.landscape.heightAt(x, z), yaw: Math.atan2(dz * side, -dx * side), bridge: st.bridge });
         }
       }
@@ -349,17 +425,21 @@ export class CityScene {
       const every = kind === 'road' ? 36 : 30;
       if (Math.floor(s / every) === Math.floor(r.dist[i - 3] / every)) continue;
       const dx = this.index.xs[i + 1] - this.index.xs[i - 1], dz = this.index.zs[i + 1] - this.index.zs[i - 1], len = Math.hypot(dx, dz) || 1;
+      const deckBridge = this.landscape.routeBridges.find((b) => s > b.fromM - 6 && s < b.toM + 6);
+      if (deckBridge && deckBridge.style && deckBridge.style !== 'girder') continue;   // styled bridges carry their own lights
       for (const side of kind === 'road' ? [-1, 1] : [Math.floor(s / every) % 2 ? 1 : -1]) {
-        const off = ROAD_WIDTH / 2 + (kind === 'road' ? 2.6 : 1.6);
+        // on a girder deck: on the slab inside the railing ((ROAD_WIDTH + 3) / 2 + .25)
+        const off = deckBridge ? (ROAD_WIDTH + 3) / 2 + .05 : ROAD_WIDTH / 2 + (kind === 'road' ? 2.6 : 1.6);
         const x = this.index.xs[i] - dz / len * off * side, z = this.index.zs[i] + dx / len * off * side;
-        const c = this.landscape.landAt(x, z);
-        const onBridge = !!this.landscape.bridgeAt(x, z, 0);
-        if (!onBridge && (c === LAND.water || c === LAND.building)) continue;
-        lamps.push({ x, z, y: onBridge ? r.ele[i] : this.landscape.heightAt(x, z), yaw: Math.atan2(dz / len * side, -dx / len * side), bridge: onBridge });
+        if (!deckBridge && !this._clearSpot(x, z, .35, -1, ROAD_WIDTH / 2 + 1.2)) continue;
+        // on a deck: not in another carriageway that runs alongside at the same level (the roadway's other half)
+        if (deckBridge && this.landscape.streetsNear(x, z, .35).some((o) => this.streets[o.k].cls !== 8 && Math.abs(o.y - r.ele[i]) < 1.5)) continue;
+        lamps.push({ x, z, y: deckBridge ? r.ele[i] : this.landscape.heightAt(x, z), yaw: Math.atan2(dz / len * side, -dx / len * side), bridge: !!deckBridge });
       }
     }
     for (const [map, mat, name] of [[roads, this.streetMaterial, 'Streets'], [walks, this.sidewalkMaterial, 'Sidewalks'], [paths, this.pathMaterial, 'Paths']]) {
       for (const [key, builder] of map) {
+        builder.keepOutOf(this.landscape.inRouteTube);   // ramps and roadways the data puts in the rider's space
         const mesh = new THREE.Mesh(this.own(builder.geometry()), mat);
         mesh.receiveShadow = true; mesh.name = `${name} ${key}`; mesh.renderOrder = 1;
         this.group.add(mesh);
@@ -437,6 +517,42 @@ export class CityScene {
   }
 
   // ---------------------------------------------------------------- trees along streets
+  /**
+   * Can a post or trunk stand at (x, z)? Not in water or a building (nor within `wall` of one), not on any
+   * street's carriageway (nor within `margin` of it; `skip` = the street it belongs to, when on its own deck),
+   * and not within `routeClear` of the route's road (true distance to the road, not its 10 m sample points).
+   */
+  _clearSpot(x, z, margin, skip, routeClear, wall = margin) {
+    const L = this.landscape, c = L.landAt(x, z);
+    if (c === LAND.water && !L.bridgeAt(x, z, 0)) return false;
+    if (this.buildingNear(x, z, wall)) return false;
+    // any street's carriageway, not just the nearest; its own street too, where a bend brings the roadway back
+    // to it (a post on its own bridge deck stands on the slab's edge, so there it may touch the roadway)
+    for (const o of L.streetsNear(x, z, margin)) {
+      const st = this.streets[o.k];
+      if (st.cls === 8) continue;
+      if (o.k !== skip || o.edge < (st.bridge ? -.05 : .5)) return false;
+    }
+    const r = L.routeDist(x, z);
+    return !(r && r.d < routeClear);
+  }
+
+  /** Height slots for street ribbons: streets whose ribbons overlap (junctions, crossings) never share one. */
+  _streetSlots() {
+    const L = this.landscape, n = this.streets.length, slots = new Array(n).fill(-1);
+    const order = [...Array(n).keys()].sort((a, b) => this.streets[a].cls - this.streets[b].cls || a - b);
+    for (const k of order) {
+      const st = this.streets[k], used = new Set();
+      for (const p of st.pts) {
+        // another street's ribbon (or sidewalk) reaches this one's
+        for (const o of L.streetsNear(p.x, p.z, st.width / 2 + 5)) if (o.k !== k && slots[o.k] >= 0) used.add(slots[o.k]);
+      }
+      let slot = 0; while (used.has(slot) && slot < 5) slot++;
+      slots[k] = slot;
+    }
+    return slots;
+  }
+
   _trees() {
     const spots = [];
     this.streets.forEach((st, k) => {
@@ -472,10 +588,10 @@ export class CityScene {
     const lists = new Map();
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0);
     for (const t of spots) {
-      const c = this.landscape.landAt(t.x, t.z);
-      if (c === LAND.water || c === LAND.building) continue;
       const road = this.index.nearest(t.x, t.z, 650);
-      if (!road || road.d < ROAD_WIDTH / 2 + 1.6) continue;   // near the ride only
+      if (!road) continue;   // near the ride only
+      // trunk clear of every carriageway, the crown clear of walls, and nothing growing over the rider's road
+      if (!this._clearSpot(t.x, t.z, 1.6, -1, ROAD_WIDTH / 2 + 2.4, 1.2)) continue;
       const key = `${Math.floor(t.x / 480)},${Math.floor(t.z / 480)}`, w = .75 + t.seed * .5;
       q.setFromAxisAngle(Y, t.seed * 40);
       if (!lists.has(key)) lists.set(key, []);

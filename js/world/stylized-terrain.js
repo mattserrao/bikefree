@@ -353,7 +353,7 @@ export class StylizedTerrain {
     for (let k = 0; k < count; k++) {
       const x = cx * size + rand() * size, z = cz * size + rand() * size;
       const inland = this.inlandAt(x, z), y = this.heightAt(x, z);
-      if (inland < 10 || y < 1 || this.landscape.isWater?.(x, z, y) || this.landscape.bridgeAt(x, z, 10) || this.landscape.creekAt(x, z) || onLookout(x, z)) continue;
+      if (inland < 10 || y < 1 || this.landscape.onStreet?.(x, z, 1) || this.landscape.isWater?.(x, z, y) || this.landscape.bridgeAt(x, z, 10) || this.landscape.creekAt(x, z) || onLookout(x, z)) continue;
       if (this.landscape.canPlant && !this.landscape.canPlant(x, z)) continue;
       const road = this.index.nearest(x, z, 10);
       if (road && road.d < 7.5) continue;

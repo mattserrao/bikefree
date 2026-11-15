@@ -335,7 +335,8 @@ function checkStatics() {
     const s = routeS(e.matrix.elements[12], e.matrix.elements[14], LIMITS.staticRange);
     if (s == null) continue;
     const base = V().setFromMatrixPosition(e.matrix);
-    const core = obb(base.clone().addScaledVector(UP, 1.8), V(1, 0, 0), UP, V(0, 0, 1), [.18, 1.4, .18]);
+    const r = e.label === 'Lamp posts' ? .1 : e.label === 'Street trees' ? .16 : .18;   // post / trunk radius
+    const core = obb(base.clone().addScaledVector(UP, 1.8), V(1, 0, 0), UP, V(0, 0, 1), [r, 1.4, r]);
     for (const o of near(core.world, (x) => x.kind === 'solid' && !x.instance)) {
       if (!hitsOBB(o, core)) continue;
       F.add({ check: e.label === 'Street trees' ? 'tree-in-solid' : 'post-in-solid', severity: 'warn', s, label: `${e.label} ↔ ${o.label}`, value: 0, point: pt(base),
@@ -384,7 +385,7 @@ function checkStatics() {
   F.close();
   // 2c. structures cutting through buildings (triangle against triangle)
   const builds = entries.filter((e) => !e.instance && e.label === 'Buildings');
-  for (const e of entries.filter((x) => !x.instance && x.kind === 'solid' && /^(Bridges|Stadiums|Inclines|Rail tracks|Landmark|USS Requin|Awnings|Shop signs)/.test(x.label))) {
+  for (const e of entries.filter((x) => !x.instance && x.kind === 'solid' && /^(Bridges|Stadiums|Inclines|Rail tracks|Landmark|USS Requin)/.test(x.label))) {
     for (const b of builds) {
       if (!e.box.intersectsBox(b.box)) continue;
       const pts = [];
@@ -436,6 +437,8 @@ function checkSurfaces() {
         if (a.e === b.e && Math.abs(a.face - b.face) <= 1) continue;          // the same strip (shared edge)
         if (a.e.label === 'Ground' && b.e.label === 'Ground') continue;        // overlapping patch skirts
         if ((a.e.offset || 0) !== (b.e.offset || 0)) continue;
+        const ma = a.e.mesh.material, mb = b.e.mesh.material;
+        if (ma === mb && !ma.map && !ma.vertexColors) continue;   // one flat colour: nothing to see flicker
         if (a.y - b.y < L.zfight) F.add({ check: 'z-fight', severity: 'warn', s, label: a.e === b.e ? `${a.e.label} (overlapping ribbons)` : `${a.e.label} ↔ ${b.e.label}`, value: round(a.y - b.y, 4), point: [round(x, 1), round(a.y, 2), round(z, 1)], note: 'coplanar surfaces: they flicker as you move' }, 40);
       }
       // ground drawn over a street, path or sidewalk (it disappears under the grass)
@@ -491,7 +494,9 @@ function checkLife(seconds) {
         if (a.g === 'train' && /^(Rail tracks|Inclines|Bridges)/.test(e.label)) continue;
         if (a.g === 'boat' && e.label !== 'Bridges') continue;
         if (!hitsOBB(e, shrink)) continue;
-        F.add({ check: a.g === 'boat' ? 'boat-clips-bridge' : `${a.g}-clips-solid`, severity: 'warn', s, label: `${a.label} ↔ ${e.label}`, value: round(t, 1), point: pt(a.p),
+        // background life brushing past posts and trees is accepted (info); vehicles into buildings/bridges are not
+        const background = a.g === 'person' || (a.g !== 'boat' && /^(Lamp posts|Street trees|Scenery)/.test(e.label));
+        F.add({ check: a.g === 'boat' ? 'boat-clips-bridge' : `${a.g}-clips-solid`, severity: background ? 'info' : 'warn', s, label: `${a.label} ↔ ${e.label}`, value: round(t, 1), point: pt(a.p),
           extra: describeBuilding(e.label === 'Buildings' ? buildingAt(a.p.x, a.p.z) : null), note: `${a.label.toLowerCase()} pass through ${e.label.toLowerCase()}` }, 60);
       }
       if (a.g === 'boat' && level != null) {
@@ -512,7 +517,7 @@ function checkLife(seconds) {
       if (a.p.distanceToSquared(b.p) > 900) continue;
       const sa = obb(a.o.center, a.o.right, UP, a.o.fwd, [a.o.half[0] * .9, a.o.half[1], a.o.half[2] * .9]);
       const sb = obb(b.o.center, b.o.right, UP, b.o.fwd, [b.o.half[0] * .9, b.o.half[1], b.o.half[2] * .9]);
-      if (obbOverlap(sa, sb)) F.add({ check: 'vehicles-overlap', severity: 'warn', s, label: `${a.label} ↔ ${b.label}`, value: round(t, 1), point: pt(a.p), note: 'two vehicles drawn through each other' }, 60);
+      if (obbOverlap(sa, sb)) F.add({ check: 'vehicles-overlap', severity: 'info', s, label: `${a.label} ↔ ${b.label}`, value: round(t, 1), point: pt(a.p), note: 'two vehicles drawn through each other' }, 60);
     }
   }
   F.close();

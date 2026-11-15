@@ -479,6 +479,7 @@ export class CityLife {
       tracks.color('#2f2c29');
       for (const side of [-.72, .72]) ribbon(tracks, offsetLine(pts, side), .14, .08, 10);
     }
+    tracks.keepOutOf(L.inRouteTube);   // rail beds the data lifts into the rider's space
     if (tracks.count) { const tm = new THREE.Mesh(c.own(tracks.geometry()), c.solidMaterial); tm.receiveShadow = true; tm.name = 'Rail tracks'; c.group.add(tm); }
     // trains: two-car light-rail sets on the longest light-rail line, one long freight on the longest rail line
     const longest = (lines) => chainPolylines(lines, 2).map((l) => makePath(l)).sort((a, b) => b.length - a.length)[0];
@@ -556,6 +557,7 @@ export class CityLife {
       for (let s = 0; s < len; s += 9) for (const side of [-2.7, 2.7]) { const p = a.clone().addScaledVector(dir, s).addScaledVector(right, side); lights.push({ x: p.x, y: p.y + .6, z: p.z, size: 1.8, color: '#ffe7b0' }); }
       c.addGlows(lights, `${name} lights`);
     }
+    M.keepOutOf(c.landscape.inRouteTube);
     if (M.count) { const tm = new THREE.Mesh(c.own(M.geometry()), c.solidMaterial); tm.castShadow = tm.receiveShadow = true; tm.name = 'Inclines'; c.group.add(tm); }
     // incline cars: stepped wooden cabins, level floors on a steep track
     const car = new MeshBuilder({ aPart: 1, aMask: 3 });
