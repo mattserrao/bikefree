@@ -298,7 +298,7 @@ export class World {
     this.terrain.update(this.camera.position.x, this.camera.position.z);
     if (this.terrain.tick) {
       const turn = this.route.turnS || total, back = this.route.turnS && this.s > turn;
-      this.terrain.tick(this.camera.position, dt, { x: riderPos.x, z: riderPos.z, out: back ? total - this.s : this.s, dir: back ? -1 : 1 });
+      this.terrain.tick(this.camera.position, dt, { x: riderPos.x, z: riderPos.z, out: back ? total - this.s : this.s, dir: back ? -1 : 1, speed: src.speed });
     }
     if (this.headlight?.visible) {
       this.headlight.position.copy(riderPos).addScaledVector(flat, .6).y += 1.1;

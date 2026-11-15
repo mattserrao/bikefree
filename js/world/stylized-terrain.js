@@ -6,6 +6,7 @@ import { CoastalDetails, fitBridgeToRoad, coastalRoadFrame } from './coastal-det
 import { landscapeBuilder } from './landscapes.js';
 import { CityScene } from './city.js';
 import { CoastBridges } from './coast-bridges.js';
+import { HighwayTraffic } from './highway-traffic.js';
 
 export const COASTAL_QUALITY = {
   low: { pixelRatio: 1, shadows: false, scatterRange: 2, candidates: 150, coverCandidates: 100 },
@@ -51,6 +52,10 @@ export class StylizedTerrain {
       this.kit = kit;
       this._makeLandmarks();
       if (this.landscape.real) this.bridges = new CoastBridges(this.group, this.landscape, this.uniforms);
+      if (this.config.traffic) {
+        this.traffic = new HighwayTraffic(this.group, this.route, this.index, this.landscape, this.uniforms, this.qualityKey, this.config.traffic);
+        this.traffic.setNight(this._night || 0);
+      }
       this.details = new CoastalDetails(this.group, this.route, this.index, this.landscape, kit, this.uniforms);
       if (this.landscape.city) {
         this.city = new CityScene(this.group, this.route, this.index, this.landscape, kit, this.uniforms, this.qualityKey);
@@ -454,10 +459,13 @@ export class StylizedTerrain {
   }
 
   /** Every frame (the city's traffic, people and boats move continuously). */
-  tick(camera, dt, rider) { this.city?.tick(camera, dt, this.uniforms.uTime.value, rider); }
+  tick(camera, dt, rider) {
+    this.city?.tick(camera, dt, this.uniforms.uTime.value, rider);
+    this.traffic?.tick(dt, rider);
+  }
 
   setNight(v) {
-    this._night = v; this.city?.setNight(v);
+    this._night = v; this.city?.setNight(v); this.traffic?.setNight(v);
     const cloud = this.clouds?.children[0]?.material;
     if (cloud) cloud.color.set(v ? '#3b4157' : '#ffffff');
   }
@@ -483,7 +491,7 @@ export class StylizedTerrain {
     this.details?.dispose();
     this.city?.dispose();
     this.landmarkGeometries.forEach((g) => g.dispose()); this.landmarkGeometries.clear();
-    this.surf?.geometry.dispose(); this.surf?.material.dispose(); this.shoreTexture?.dispose(); this.bridges?.dispose();
+    this.surf?.geometry.dispose(); this.surf?.material.dispose(); this.shoreTexture?.dispose(); this.bridges?.dispose(); this.traffic?.dispose();
     this.ocean.geometry.dispose(); this.ocean.material.dispose();
     this.lakeMeshes.forEach((m) => m.geometry.dispose());
     const cloudMat = this.clouds.children[0]?.material; cloudMat?.map?.dispose(); cloudMat?.dispose();

@@ -160,5 +160,8 @@
   ],
   "vegetation": {
     "density": 1.6
+  },
+  "traffic": {
+    "perMinute": 4
   }
 }
