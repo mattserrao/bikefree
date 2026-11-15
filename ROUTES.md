@@ -186,6 +186,36 @@ This packages the actual WebGL scene, GPX and animated rider into one HTML file.
 It is a visual review artifact, not the Bluetooth trainer app. Sustained frame
 rate, thermal behaviour and Bluetooth operation still need checking on the M4 Air.
 
+## Scene snapshots: look at the 3D views
+
+`npm run snap` is the visual half of course QC. It renders route views headlessly in
+Chrome and saves them as images, with the draw calls and triangles each view costs.
+
+```sh
+npm run snap -- route28@10650 route28@19050:morning route28@16200:drone pittsburgh
+npm run snap -- --quality high bigsur@21800:golden route28@24450:fall
+```
+
+A shot is `<park>[@metres][:camera][:time][:season]`:
+- camera: `chase`, `drone`, `vista`, `side` or `eye`
+- time: `midday`, `morning`, `golden` or `night`
+- season: `summer` or `fall`
+
+Without `@metres`, it uses the scene's preview spot.
+
+Images and a `snapshots.json` summary go to `tools/snapshots/`, which is git-ignored.
+
+Options:
+- `--out <dir>`
+- `--quality low|balanced|high`
+- `--size 1280x720`
+- `--chrome <path>`, or the `CHROME` environment variable
+- `--software` (no GPU; slow but works on a server)
+
+It serves the repo itself, waits until every queued scenery tile is built, then draws a single
+frame. It exits with code 1 if the page logged an error. Needs `npm install` (playwright-core)
+and Chrome.
+
 ## Course QC: check the full length for discontinuities
 
 ```sh
