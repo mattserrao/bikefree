@@ -145,6 +145,15 @@ A free indoor biking app for Mac. Runs as a web app in Chrome and talks directly
 - [x] "Save for offline" on any route: downloads exactly the terrain/imagery tiles the 3D view uses (Yosemite ≈ 50 MB, Grand Teton ≈ 150 MB)
 - [x] Service worker serves the app and saved tiles without internet
 
+### v0.8 — Demo mode *(branch `v0.8`)*
+Goal: try every feature without connecting a bike.
+- [x] **Demo** button in the top right; banner explains it, **Exit demo** turns it off
+- [x] Simulated trainer: the rider holds a constant **15 mph** whatever the grade or gear
+- [x] Power follows the physics needed for 15 mph on the current grade (or the workout's ERG target); cadence follows the gear, so shifting is visible; heart rate drifts with effort
+- [x] Works with free ride, routes, the 3D view (DEMO badge in the HUD), workouts, laps, pause, save and .fit export; demo rides are named "Demo · …"
+- [x] Demo data is generated every session tick, so it never goes stale while the 3D view is busy
+- [ ] On-bike check: demo off → trainer connects as before
+
 ### Later ideas
 - Direct Strava upload
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)

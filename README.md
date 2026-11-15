@@ -19,6 +19,8 @@ Open http://localhost:8000 in **Chrome** (Safari doesn't support Web Bluetooth).
 4. Shift with the hoods: **left = easier, right = harder**. ▲▼ = grade or workout intensity, ▶ = skip workout step, **A** = pause, **Y** = lap.
 5. **Finish ride** → summary → *Save & download .fit* → upload at strava.com/upload/select.
 
+**Demo mode** (orange **Demo** button, top right): try everything without a bike. The rider holds a steady 15 mph; power, cadence and heart rate are simulated from the gear, grade and workout, so shifting, grade changes, routes, the 3D view, workouts, laps, saving and .fit export all behave as on a real ride. Demo rides are saved with a "Demo ·" name. Press **Exit demo** (or the trainer chip) to stop.
+
 Settings (⚙): weights, units, FTP, ERG or SIM shifting, difficulty. Past rides: **Rides**.
 
 Keyboard: ← → shift, ↑ ↓ grade/intensity, Space start/pause, L lap, C camera, F full screen (3D view).

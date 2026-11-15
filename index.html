@@ -22,8 +22,15 @@
       </button>
       <button class="chip" id="historyBtn" title="Saved rides">Rides</button>
       <button class="chip icon" id="settingsBtn" title="Settings">⚙</button>
+      <button class="chip demo" id="demoBtn" title="Try everything without a bike: the rider holds 15 mph">Demo</button>
     </div>
   </header>
+
+  <div id="demoBanner" class="banner demo-banner" hidden>
+    <span><b>Demo mode</b> — no bike needed. The rider holds a steady <b>15 mph</b>; power, cadence and heart rate are simulated.
+    Shift with <kbd>←</kbd><kbd>→</kbd>, change grade with <kbd>↑</kbd><kbd>↓</kbd>, and try a Route or Workout.</span>
+    <button id="demoOff" class="ghost">Exit demo</button>
+  </div>
 
   <div id="unsupported" class="banner" hidden>
     Web Bluetooth isn't available here. Open this page in <b>Chrome</b> on your Mac, from <b>localhost</b> or <b>https</b>.
@@ -61,6 +68,7 @@
           </div>
           <div class="hud-title" id="hTitle"></div>
           <div class="hud-loading" id="hLoading" hidden>Loading terrain…</div>
+          <div class="hud-demo" id="hDemo" hidden>Demo · 15 mph</div>
         </div>
         <div class="world-credit">Imagery: USGS The National Map (NAIP) · Elevation: AWS Terrain Tiles · Roads: © OpenStreetMap contributors, routed with BRouter</div>
       </div>

@@ -218,3 +218,13 @@ dialog .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
 .offline-status { margin-top: 8px; }
 .offline-status progress { width: 220px; vertical-align: middle; margin-right: 8px; accent-color: var(--accent); }
+
+/* Demo mode */
+.chip.demo { border-style: dashed; color: var(--muted); }
+.chip.demo.on { background: var(--accent); border: 1px solid var(--accent); color: #111; font-weight: 700; }
+.demo-banner { background: rgba(255,122,26,0.12); border-color: var(--accent); display: flex; align-items: center; gap: 12px; font-size: 13px; margin-bottom: 8px; }
+.demo-banner > span { flex: 1; line-height: 1.7; }
+.demo-banner[hidden] { display: none; }
+.demo-banner button { flex: none; }
+.hud-demo { position: absolute; top: 46px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #111; font-weight: 700;
+  font-size: 11px; letter-spacing: 1px; padding: 3px 10px; border-radius: 999px; text-transform: uppercase; }

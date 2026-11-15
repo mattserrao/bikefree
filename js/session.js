@@ -31,6 +31,7 @@ export class Session extends EventTarget {
     this.gear = settings.startGear;
     this._manualGrade = 0;
     this.workoutBias = 1;
+    this.demoSpeedMps = null;
     this._resetRideState();
 
     ride.addEventListener('press', (e) => this._onPress(e.detail));
@@ -219,7 +220,7 @@ export class Session extends EventTarget {
   rideMeta() {
     const name = this.mode === 'route' && this.route ? this.route.name
       : this.mode === 'workout' && this.workout ? this.workout.name : 'Free ride';
-    return { name, mode: this.mode, ftp: this.settings.ftp, riderKg: this.settings.riderKg };
+    return { name: this.demoSpeedMps != null ? `Demo · ${name}` : name, mode: this.mode, ftp: this.settings.ftp, riderKg: this.settings.riderKg, demo: this.demoSpeedMps != null };
   }
 
   _onPress(name) {
@@ -237,6 +238,7 @@ export class Session extends EventTarget {
     const nowPerf = performance.now();
     const now = Date.now();
     const dt = TICK_MS / 1000;
+    if (this.trainer.demo) this.trainer.pollDemo();
     const d = this.trainer.data;
     const fresh = this.trainer.connected && nowPerf - this.trainer.lastDataAt < DATA_STALE_MS;
     this._fresh = fresh;
@@ -270,6 +272,8 @@ export class Session extends EventTarget {
     const p = this.physicsParams();
     const grade = this.gradePct;
     this.speedMps = stepSpeed(this.speedMps, this.power, grade, dt, p);
+    // Demo mode holds a constant speed so every feature can be tried without a bike.
+    if (this.demoSpeedMps != null) this.speedMps = this.running ? this.demoSpeedMps : 0;
     if (this.running) {
       const ds = this.speedMps * dt;
       this.distanceM += ds;

@@ -31,7 +31,7 @@ export class Trainer extends EventTarget {
     this._userDisconnect = false;
   }
 
-  get connected() { return !!this.device?.gatt?.connected && !!this.controlPoint; }
+  get connected() { return this.demo || (!!this.device?.gatt?.connected && !!this.controlPoint); }
   /** True while a control point write is waiting for the trainer's answer. */
   get busy() { return this._inFlight > 0; }
 
@@ -45,7 +45,45 @@ export class Trainer extends EventTarget {
     await this._setup();
   }
 
+  /**
+   * Demo mode: no Bluetooth. `generate()` is called 4× a second and returns the bike data
+   * ({powerW, cadenceRpm, speedKph, heartRate}) a real trainer would send.
+   */
+  // One simulated sample. The session also calls this every tick, so demo data is never stale
+  // even when the 3D view keeps the page busy.
+  pollDemo() {
+    if (!this.demo) return;
+    Object.assign(this.data, this._demoGenerate());
+    this.lastDataAt = performance.now();
+    this.dispatchEvent(new CustomEvent('data', { detail: this.data }));
+  }
+
+  startDemo(generate) {
+    if (this.device?.gatt?.connected) this.disconnect();
+    this.demo = true;
+    this.device = { name: 'Demo trainer' };
+    this.hasControl = true;
+    this.data = {};
+    this.lastTarget = null;
+    this._demoGenerate = generate;
+    this._demoTimer = setInterval(() => this.pollDemo(), 250);
+    this.log('trainer', 'Demo mode on — simulated trainer', 'ok');
+    this.dispatchEvent(new Event('status'));
+  }
+
+  stopDemo() {
+    if (!this.demo) return;
+    clearInterval(this._demoTimer);
+    this.demo = false;
+    this.device = null;
+    this.hasControl = false;
+    this.data = {};
+    this.log('trainer', 'Demo mode off');
+    this.dispatchEvent(new Event('status'));
+  }
+
   disconnect() {
+    if (this.demo) { this.stopDemo(); return; }
     this._userDisconnect = true;
     if (this.device?.gatt?.connected) this.device.gatt.disconnect();
   }
@@ -186,12 +224,14 @@ export class Trainer extends EventTarget {
   }
 
   async setErgWatts(watts) {
+    if (this.demo) { this.lastTarget = { mode: 'ERG', value: watts }; return; }
     if (!this.hasControl) await this.takeControl();
     await this._write(encodeTargetPower(watts));
   }
 
   /** @param {number} gradePct @param {{windMps?:number, crr?:number, cw?:number}} [opts] */
   async setGrade(gradePct, opts) {
+    if (this.demo) { this.lastTarget = { mode: 'SIM', value: gradePct }; return; }
     if (!this.hasControl) await this.takeControl();
     await this._write(encodeSimParams(gradePct, opts));
   }

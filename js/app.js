@@ -2,6 +2,7 @@ import { Trainer } from './trainer.js';
 import { Ride } from './ride.js';
 import { HeartRate } from './hr.js';
 import { Session } from './session.js';
+import { powerRequired, speedFromCadence, WHEEL_CIRC } from './physics.js';
 import { loadSettings, saveSettings, KG_PER_LB, MI_PER_KM } from './settings.js';
 import { rideToFit, fitFilename, summarize } from './recorder.js';
 import * as store from './store.js';
@@ -38,7 +39,7 @@ $('copyLog').addEventListener('click', async () => {
 
 if (!navigator.bluetooth) {
   $('unsupported').hidden = false;
-  for (const id of ['trainerBtn', 'rideBtn', 'hrBtn']) $(id).disabled = true;
+  for (const id of ['rideBtn', 'hrBtn']) $(id).disabled = true;
 }
 
 // ---------- Core objects ----------
@@ -75,6 +76,7 @@ function deviceStatus() {
     $(label).textContent = on ? onText() : dev.reconnecting ? 'Reconnecting…' : offText;
   };
   chip(trainer, 'trainerDot', 'trainerLabel', () => trainer.device.name, 'Connect trainer');
+  $('trainerDot').classList.toggle('demo', !!trainer.demo);
   chip(ride, 'rideDot', 'rideLabel', () => `Zwift Ride${ride.battery != null ? ` · ${ride.battery}%` : ''}`, 'Connect handlebars');
   chip(hrStrap, 'hrDot', 'hrLabel', () => `${hrStrap.bpm ?? '--'} bpm`, 'Heart rate');
   $('rideInfo').textContent = ride.connected ? `fw ${ride.firmware ?? '?'} · battery ${ride.battery ?? '?'}%` : '—';
@@ -87,7 +89,47 @@ async function toggleDevice(dev, connectFn, name) {
   catch (err) { if (err.name !== 'NotFoundError') log(name, err.message, 'error'); }
   deviceStatus();
 }
-$('trainerBtn').addEventListener('click', () => toggleDevice(trainer, () => trainer.connect(), 'trainer'));
+$('trainerBtn').addEventListener('click', () => {
+  if (trainer.demo) { setDemo(false); return; }
+  toggleDevice(trainer, () => trainer.connect(), 'trainer');
+});
+
+// ---------- Demo mode: simulated trainer, constant 15 mph ----------
+const DEMO_MPH = 15;
+const DEMO_SPEED = DEMO_MPH * 0.44704;
+let demoHr = 92;
+function demoData() {
+  const pausedByUser = !session.running && session.movingS > 0 && !session.autoPaused;
+  if (pausedByUser) return { powerW: 0, cadenceRpm: 0, speedKph: 0, heartRate: Math.round((demoHr += (78 - demoHr) * 0.01)) };
+  const jitter = (a) => 1 + (Math.random() - 0.5) * a;
+  const workoutW = session.workoutTarget;
+  // Power: what it takes to hold 15 mph on the current grade (or the workout step's target).
+  const power = Math.max(0, workoutW != null ? workoutW * jitter(0.04) : powerRequired(DEMO_SPEED, session.gradePct, session.physicsParams()) * jitter(0.06));
+  // Cadence: what 15 mph needs in the current gear (so shifting changes it), kept in a sensible range.
+  const cadence = workoutW != null ? 88 * jitter(0.03) : Math.min(125, Math.max(45, (DEMO_SPEED / (session.ratio * WHEEL_CIRC)) * 60)) * jitter(0.02);
+  demoHr += (Math.min(185, 72 + power * 0.32) - demoHr) * 0.02;
+  return { powerW: Math.round(power), cadenceRpm: cadence, speedKph: speedFromCadence(cadence, 2.4) * 3.6, heartRate: Math.round(demoHr) };
+}
+function setDemo(on) {
+  if (on === !!trainer.demo) return;
+  if (on) {
+    trainer.startDemo(demoData);
+    session.demoSpeedMps = DEMO_SPEED;
+    log('app', `Demo mode: the rider holds ${DEMO_MPH} mph. Shift with ← →, change grade with ↑ ↓, try a Route or Workout.`, 'ok');
+  } else {
+    trainer.stopDemo();
+    session.demoSpeedMps = null;
+    if (session.running) session.pause();
+  }
+  $('demoBtn').classList.toggle('on', on);
+  $('demoBtn').textContent = on ? `Demo · ${DEMO_MPH} mph` : 'Demo';
+  $('demoBanner').hidden = !on;
+  $('hDemo').hidden = !on;
+  session.settingsChanged();
+  deviceStatus();
+}
+$('demoBtn').addEventListener('click', () => setDemo(!trainer.demo));
+$('demoOff').addEventListener('click', () => setDemo(false));
 $('rideBtn').addEventListener('click', () => toggleDevice(ride, () => ride.connect(false), 'ride'));
 $('rideAnyBtn').addEventListener('click', () => toggleDevice(ride, () => ride.connect(true), 'ride'));
 $('hrBtn').addEventListener('click', () => toggleDevice(hrStrap, () => hrStrap.connect(), 'hr'));
