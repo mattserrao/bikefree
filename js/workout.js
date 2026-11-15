@@ -110,6 +110,19 @@ export function segmentIndexAt(workout, t) {
   return lo;
 }
 
+/** FTP from a 20-minute test: 95% of the average power. */
+export const ftpFromTwentyMinutes = (avgW) => Math.round(avgW * 0.95);
+
+/** Mark the 20-minute all-out segment of an FTP test workout. */
+export function markFtpTest(workout) {
+  const seg = workout.segments.find((x) => x.kind === 'free' && Math.abs(x.duration - 1200) < 1);
+  if (!seg) return workout;
+  seg.ftpTest = true;
+  seg.label = 'FTP test · all-out';
+  workout.ftpTest = true;
+  return workout;
+}
+
 /** Target watts for a segment at time t (null for free segments). */
 export function targetWatts(seg, t, ftp, bias = 1) {
   if (!seg || seg.kind !== 'erg') return null;
@@ -136,6 +149,15 @@ export function zoneColor(pct) {
 
 // ---------- Built-in workouts ----------
 export const BUILT_IN_WORKOUTS = [
+  { id: 'builtin-ftp-test-20', ftpTest: true, text: `<workout_file><name>FTP Test · 20 minutes</name>
+<description>Warm up, three short openers, then ride 20 minutes as hard as you can hold steadily. Your new FTP is 95% of your 20-minute average power. Shift to pace yourself in the test: the trainer isn't in ERG.</description><workout>
+<Warmup Duration="600" PowerLow="0.5" PowerHigh="0.75"/>
+<SteadyState Duration="60" Power="0.95"/><SteadyState Duration="60" Power="0.5"/>
+<SteadyState Duration="60" Power="0.95"/><SteadyState Duration="60" Power="0.5"/>
+<SteadyState Duration="60" Power="0.95"/><SteadyState Duration="300" Power="0.55"/>
+<FreeRide Duration="1200"/>
+<Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.4"/>
+</workout></workout_file>` },
   { id: 'builtin-endurance-45', text: `<workout_file><name>Endurance 45</name>
 <description>Steady zone 2 riding with a gentle build.</description><workout>
 <Warmup Duration="600" PowerLow="0.45" PowerHigh="0.65"/>

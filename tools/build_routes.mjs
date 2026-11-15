@@ -23,7 +23,7 @@ for (const item of catalog) {
   for (const path of [item.file, item.scene].filter(Boolean)) {
     if (!path.startsWith('routes/') || path.includes('..') || !existsSync(resolve(root, path))) throw new Error(`${item.id}: missing or invalid path ${path}`);
   }
-  const route = buildCatalogRoute(read(item.file), item);
+  const route = buildCatalogRoute(read(item.file), { ...item, mirror: false });   // validate the route as authored (the app rides it there and back)
   if (route.lat.some((v) => !Number.isFinite(v) || Math.abs(v) > 90) || route.lon.some((v) => !Number.isFinite(v) || Math.abs(v) > 180)) throw new Error(`${item.id}: invalid GPX coordinates`);
   if (!route.closed) throw new Error(`${item.id}: scenic routes must close; add a returning leg or a closed loop`);
   if (!route.hasElevation) throw new Error(`${item.id}: elevation is required`);

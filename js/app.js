@@ -7,10 +7,10 @@ import { loadSettings, saveSettings, KG_PER_LB, MI_PER_KM } from './settings.js'
 import { rideToFit, fitFilename, summarize } from './recorder.js';
 import * as store from './store.js';
 import { parseGpx, buildRoute, averageGradeAhead } from './gpx.js';
-import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor } from './workout.js';
+import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor, markFtpTest, ftpFromTwentyMinutes } from './workout.js';
 import { drawProfile, drawWorkout, drawTrace, gradeColor } from './views.js';
 import { Profiles, GENDERS, initials, cmToFtIn, ftInToCm } from './profiles.js';
-import { buildCatalogRoute, loadRouteScene } from './routes.js';
+import { buildCatalogRoute, loadRouteScene, routeStartM } from './routes.js';
 import { VERSION } from './version.js';
 import { planRouteTiles, tileKeysToUrls, downloadUrls, offlineStatus, setOfflineStatus, registerServiceWorker } from './offline.js';
 
@@ -58,8 +58,9 @@ if (!hasBluetooth) for (const id of ['rideBtn', 'hrBtn']) $(id).disabled = true;
 // ---------- Core objects ----------
 const settings = loadSettings();
 // The active rider's weight drives the physics.
-const profiles = new Profiles(localStorage, settings.riderKg);
+const profiles = new Profiles(localStorage, settings.riderKg, settings.ftp);
 settings.riderKg = profiles.active.weightKg;
+settings.ftp = profiles.active.ftp;   // each rider has their own FTP
 const trainer = new Trainer(log);
 const ride = new Ride(log);
 const hrStrap = new HeartRate(log);
@@ -197,7 +198,7 @@ const pausedByUser = () => !session.running && session.movingS > 0 && !session.a
 function sameAsCurrent() {
   if (!session.hasRide) return false;
   if (chosen === 'free') return session.mode === 'free';
-  if (chosen === 'route') return session.mode === 'route' && session.route === previewRoute;
+  if (chosen === 'route') return session.mode === 'route' && session.route === previewRoute && session.routeStart === chosenStartM(previewRoute);
   return session.mode === 'workout' && session.workout === previewWorkout && !session.workoutDone;
 }
 function renderStart() {
@@ -212,23 +213,46 @@ function renderStart() {
   $('finishFromMenu')?.addEventListener('click', () => openSummary());
 }
 
+// ---------- Route direction and start point ----------
+// Every route rides there and back; Reverse starts at the far end, ⅓ / ⅔ start part-way in that direction.
+const routeChoice = { reverse: settings.routeReverse === true, fraction: Number(settings.routeFraction) || 0 };
+function renderRouteChoice() {
+  for (const b of $('dirSeg').children) b.classList.toggle('on', (b.dataset.dir === 'rev') === routeChoice.reverse);
+  for (const b of $('startSeg').children) b.classList.toggle('on', Math.abs(Number(b.dataset.f) - routeChoice.fraction) < 0.01);
+}
+function setRouteChoice(change) {
+  Object.assign(routeChoice, change);
+  settings.routeReverse = routeChoice.reverse;
+  settings.routeFraction = routeChoice.fraction;
+  saveSettings(settings);
+  renderRouteChoice();
+  renderPreview();
+}
+$('dirSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setRouteChoice({ reverse: b.dataset.dir === 'rev' }); });
+$('startSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setRouteChoice({ fraction: Number(b.dataset.f) }); });
+renderRouteChoice();
+const chosenStartM = (r) => routeStartM(r, routeChoice);
+
 // ---------- Preview panel (right column) ----------
 const fact = (v, label) => `<div class="fact"><b>${v}</b><small>${label}</small></div>`;
 function renderPreview() {
   const map = $('pvMap'), chart = $('pvChart');
+  $('routeOpts').hidden = true;
   $('offlineStatus').hidden = chosen !== 'route';
   if (chosen === 'route' && previewRoute) {
     const r = previewRoute;
     $('pvKicker').textContent = 'Route';
     $('pvTitle').textContent = r.name;
     $('pvSub').textContent = r.park || 'Your route';
-    $('pvFacts').innerHTML = fact(`${fmtDist(r.total, 1)}`, distUnit()) + fact(fmtElev(r.ascent).toLocaleString(), `${elevUnit()} climb`) +
+    const leg = r.turnS || r.total, startM = chosenStartM(r);
+    $('pvFacts').innerHTML = fact(`${fmtDist(leg, 1)}`, `${distUnit()} each way`) + fact(fmtElev(r.ascent).toLocaleString(), `${elevUnit()} climb / lap`) +
       fact(`${Math.round(Math.max(...r.grade))}%`, 'max grade') +
-      (r.outAndBack ? `<div class="fact tag">Out &amp; back · ${fmtDist(r.turnS, 1)} ${distUnit()} each way · endless laps</div>` : r.closed ? '<div class="fact tag">Loop · endless laps</div>' : '');
+      `<div class="fact tag">${r.oneWay?.closedLoop ? 'Loop · each lap turns and rides it back' : 'There &amp; back · turns at each end'} · endless</div>`;
     $('pvDesc').innerHTML = r.hasElevation ? '' : '<span class="warn">No elevation in this file — it will ride flat.</span>';
     map.hidden = false; chart.hidden = false;
-    drawTrace(map, r, 0);
-    drawProfile(chart, r, 0, { metric: !imperial() });
+    $('routeOpts').hidden = false;
+    drawTrace(map, r, startM, { markerOnly: true });
+    drawProfile(chart, r, startM, { metric: !imperial() });
   } else if (chosen === 'workout' && previewWorkout) {
     const w = previewWorkout, st = workoutStats(w);
     $('pvKicker').textContent = 'Workout';
@@ -289,8 +313,9 @@ async function sceneryRoute() {
 async function startRide() {
   if (chosen === 'route') {
     if (!previewRoute) return;
-    if (!(session.mode === 'route' && session.route === previewRoute)) {
-      session.setRoute(previewRoute);
+    const startM = chosenStartM(previewRoute);
+    if (!(session.mode === 'route' && session.route === previewRoute && session.routeStart === startM)) {
+      session.setRoute(previewRoute, startM);
       log('app', `Riding route: ${previewRoute.name} (${fmtDist(previewRoute.total, 1)} ${distUnit()}${previewRoute.closed ? ' loop' : ''})`, 'ok');
     }
   } else if (chosen === 'workout') {
@@ -497,6 +522,12 @@ function renderHud() {
     showRow(1, next ? (next.kind === 'erg' ? `${targetWatts(next, next.start, settings.ftp, session.workoutBias)} W` : 'Free') : 'Finish', next ? `next · ${fmtTime(next.duration)}` : 'next');
     showRow(2, fmtTime(w.duration - session.workoutT), 'workout left');
     showRow(3, session.workoutBias !== 1 ? `${Math.round(session.workoutBias * 100)}%` : null, 'intensity');
+    if (seg.ftpTest && ftpRun?.secs > 5) {
+      // during the 20-minute test: running average and the FTP it points to
+      const avg = ftpRun.sum / ftpRun.secs;
+      showRow(2, `${Math.round(avg)} W`, 'test average');
+      showRow(3, `${ftpFromTwentyMinutes(avg)} W`, 'FTP so far');
+    }
   } else {
     $('hGrade').textContent = fmtGrade(session.gradePct);
     $('hGrade').style.color = readable(gradeColor(session.gradePct));
@@ -507,7 +538,7 @@ function renderHud() {
       const g = averageGradeAhead(r, session.routePos, ahead);
       showRow(1, `${g > 0.05 ? '+' : ''}${fmtGrade(g)}`, imperial() ? 'next ½ mi' : 'next 500 m');
       showRow(2, r.closed ? String(session.routeLap) : null, 'lap');
-      showRow(3, `${fmtDist(Math.max(0, r.total - session.routePos), 1)} ${distUnit()}`, r.closed ? 'lap to go' : 'to go');
+      showRow(3, `${fmtDist(Math.max(0, session.routeLapToGo), 1)} ${distUnit()}`, 'lap to go');
     } else {
       showRow(1, session.mode === 'workout' && session.workoutDone ? 'Done' : null, 'workout');
       showRow(2, null);
@@ -548,7 +579,19 @@ function wake() {
 }
 document.addEventListener('mousemove', wake);
 
+// FTP test: average power over the 20-minute all-out segment
+let ftpRun = null, ftpLast = 0;
+function trackFtpTest() {
+  const now = performance.now(), dt = Math.min(1, (now - ftpLast) / 1000);
+  ftpLast = now;
+  const w = session.mode === 'workout' ? session.workout : null;
+  if (!w?.ftpTest) return;
+  if (!ftpRun || ftpRun.workout !== w) ftpRun = { workout: w, sum: 0, secs: 0 };
+  if (session.running && session.segment?.ftpTest) { ftpRun.sum += session.power * dt; ftpRun.secs += dt; }
+}
+
 session.addEventListener('tick', () => {
+  trackFtpTest();
   renderHud();
   renderDiag();
   if (!onRideScreen) {
@@ -603,7 +646,7 @@ async function refreshRouteList(selectId) {
 function renderRouteCards() {
   $('routeCards').innerHTML = routeItems.map((it) => {
     const r = routeCache.get(it.id);
-    const sub = r ? `${fmtDist(r.total, 1)} ${distUnit()} · ${fmtElev(r.ascent).toLocaleString()} ${elevUnit()}` : 'Could not load';
+    const sub = r ? `${fmtDist(r.turnS || r.total, 1)} ${distUnit()} each way · ${fmtElev(r.ascent).toLocaleString()} ${elevUnit()}` : 'Could not load';
     return `<button class="rcard ${it.id === selectedRouteId ? 'on' : ''}" data-id="${it.id}"><canvas></canvas>
       <div><b>${escapeHtml(it.name.replace(' (built-in)', ''))}</b><div class="rsub">${escapeHtml(it.park || it.group)} · ${sub}</div></div></button>`;
   }).join('');
@@ -745,6 +788,7 @@ function parseWorkoutItem(item) {
   if (!workoutCache.has(item.id)) {
     const w = parseWorkout(item.text, item.filename || '');
     if (!w.name || w.name === 'Workout') w.name = item.name.replace(' (built-in)', '');
+    if (item.ftpTest) markFtpTest(w);
     workoutCache.set(item.id, w);
   }
   return workoutCache.get(item.id);
@@ -854,6 +898,28 @@ function lapTable(r) {
   return `<table><thead><tr><th>#</th><th>Lap</th><th>Time</th><th>Avg</th><th>Max</th><th>HR</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
+function renderFtpResult() {
+  const box = $('sumFtp');
+  box.hidden = !(ftpRun && ftpRun.secs > 30 && session.workout === ftpRun.workout);
+  if (box.hidden) return;
+  const p = profiles.active;
+  if (ftpRun.secs < 19 * 60) {
+    box.innerHTML = `<span><b>FTP test incomplete</b> — ${fmtTime(ftpRun.secs)} of the 20-minute effort. Ride the full 20 minutes for a result.</span>`;
+    return;
+  }
+  const avg = ftpRun.sum / ftpRun.secs, ftp = ftpFromTwentyMinutes(avg);
+  box.innerHTML = `<span>FTP test<br><b class="big">${ftp} W</b></span>
+    <span class="muted small">95% of your 20-minute average (${Math.round(avg)} W). Current FTP: ${p.ftp} W.</span>
+    <button type="button" class="primary" id="ftpSave">Save ${ftp} W to ${escapeHtml(riderName(p))}'s profile</button>`;
+  $('ftpSave').addEventListener('click', () => {
+    profiles.update(p.id, { ftp });
+    useActiveProfile();
+    $('ftpSave').disabled = true;
+    $('ftpSave').textContent = `Saved — FTP is now ${ftp} W`;
+    log('app', `FTP updated to ${ftp} W from a 20-minute test`, 'ok');
+  });
+}
+
 function openSummary(title) {
   if ($('summary').open) return;
   const snap = session.recorder.snapshot(session.rideMeta());
@@ -867,6 +933,7 @@ function openSummary(title) {
   $('sumSub').textContent = `${snap.name} · ${new Date(snap.startedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`;
   $('sumGrid').innerHTML = statCells(snap.summary);
   $('sumLaps').innerHTML = lapTable(snap);
+  renderFtpResult();
   const dlg = $('summary');
   dlg.returnValue = '';
   dlg.onclose = async () => {
@@ -1011,6 +1078,7 @@ function fillProfile() {
   } else { f.hft.value = ''; f.hin.value = ''; f.hcm.value = ''; }
   f.pweight.value = +(imp ? p.weightKg / KG_PER_LB : p.weightKg).toFixed(1);
   f.pgender.value = p.gender || '';
+  f.pftp.value = p.ftp;
   for (const el of pform.querySelectorAll('.u-weight')) el.textContent = imp ? 'lb' : 'kg';
   // Riders can't be switched mid-ride: the ride belongs to whoever started it.
   const locked = session.hasRide;
@@ -1027,6 +1095,7 @@ $('welcomeBtn').addEventListener('click', openProfile);
 
 function useActiveProfile() {
   settings.riderKg = profiles.active.weightKg;
+  settings.ftp = profiles.active.ftp;
   saveSettings(settings);
   session.settingsChanged();
   renderProfile();
@@ -1061,6 +1130,7 @@ $('profileDlg').addEventListener('close', () => {
     heightCm: heightCm ? Math.round(heightCm * 10) / 10 : null,
     weightKg: kg > 20 ? Math.round(kg * 10) / 10 : profiles.active.weightKg,
     gender: f.pgender.value,
+    ftp: Math.round(Number(f.pftp.value)) || profiles.active.ftp,
   });
   useActiveProfile();
   log('app', `Profile saved: ${riderName(profiles.active)}`, 'ok');
@@ -1075,7 +1145,6 @@ function fillSettings() {
   f.theme.value = window.BFTheme?.pref() || 'system';
   f.units.value = settings.units;
   f.bike.value = +(imp ? settings.bikeKg / KG_PER_LB : settings.bikeKg).toFixed(1);
-  f.ftp.value = settings.ftp;
   f.worldCam.value = settings.worldCam;
   f.worldTime.value = settings.worldTime;
   f.worldQuality.value = settings.worldQuality;
@@ -1105,7 +1174,6 @@ dlg.addEventListener('close', () => {
   Object.assign(settings, {
     units: f.units.value,
     bikeKg: kg(f.bike.value) || settings.bikeKg,
-    ftp: Math.round(Number(f.ftp.value)) || settings.ftp,
     worldCam: f.worldCam.value,
     worldTime: f.worldTime.value,
     worldQuality: f.worldQuality.value,
@@ -1147,4 +1215,4 @@ registerServiceWorker(log);
 log('app', 'Ready. Close Zwift, Zwift Companion and the Wahoo app, then connect your devices.');
 
 // For debugging in the browser console.
-window.bikefree = { session, trainer, ride, hrStrap, store, get world() { return world; } };
+window.bikefree = { session, trainer, ride, hrStrap, store, profiles, get world() { return world; }, get ftpRun() { return ftpRun; } };

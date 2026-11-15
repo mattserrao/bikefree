@@ -169,6 +169,17 @@ button.start:disabled { background: var(--hover-2); border-color: transparent; c
 .pill.demo-ctl .demo-range { width: 150px; accent-color: var(--on-accent); }
 .pill.demo-ctl span { min-width: 7.5em; }
 
+/* Route direction / start point */
+.route-opts { display: grid; gap: 8px; }
+.seg { display: flex; padding: 3px; gap: 3px; border-radius: 10px; background: var(--hover); border: 1px solid var(--line); }
+.seg button { flex: 1; border: 0; background: transparent; padding: 7px 8px; border-radius: 7px; font-size: 13px; color: var(--muted); }
+.seg button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.15), 0 0 0 1px var(--accent-line); }
+
+/* FTP test result in the ride summary */
+.ftp-result { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 12px 14px; border-radius: 12px; background: var(--accent-soft); border: 1px solid var(--accent-line); margin-bottom: 12px; }
+.ftp-result b.big { font-size: 26px; }
+.ftp-result .muted { flex-basis: 100%; }
+
 /* ===== Profiles ===== */
 .avatar { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; flex: none; font-size: 11px; font-weight: 700;
   background: var(--accent-soft); color: var(--accent-ink); border: 1px solid var(--accent-line); letter-spacing: .3px; }

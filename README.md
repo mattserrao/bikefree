@@ -17,7 +17,7 @@ The app has two screens: a **menu** to set up, and a full-window **ride screen**
 
 1. **Devices** — tap Trainer, Handlebars and (optionally) Heart rate to pair.
 2. **Ride type** — **Free ride** (you set the grade), **Route** (pick a card: ten scenic routes in 3D — four national-park loops plus six out-and-back classics — or your own GPX) or **Workout** (pick from the list; .zwo/.erg/.mrc). Free rides and workouts roll a park loop behind you — pick a *Scenery* card, or *None*.
-3. The preview on the right shows the map, profile or workout chart. **Start riding** opens the ride screen full screen; the ride records as soon as you pedal.
+3. The preview on the right shows the map, profile or workout chart. For routes, pick **Forward** or **Reverse** (start from the far end) and where to start: the beginning, **⅓ in** or **⅔ in**. Every route turns around at each end and rides back, as long as you keep going. **Start riding** opens the ride screen full screen; the ride records as soon as you pedal.
 4. On the bike: hoods **left = easier, right = harder** · ▲▼ grade or workout intensity · ▶ skip workout step · **A** pause · **Y** lap.
 5. Pause (A, Space or the pause button) for **Resume** or **Finish ride** and a list of the controls (lap: Y / L, skip a workout step: ▶ / N). **Finish ride** → summary → *Save & download .fit* → upload at strava.com/upload/select.
 
@@ -27,9 +27,9 @@ Keyboard: ← → shift · ↑ ↓ grade/intensity · Space pause · L lap · N 
 
 **Demo** (top right of the menu): try everything without a bike. The rider holds a steady speed — 15 mph to start, adjustable from 5 to 100 mph with the slider (menu or ride screen) or the `,` / `.` keys; power, cadence and heart rate are simulated. Demo rides are saved as "Demo · …".
 
-**Profile** (top right): your name, height, weight and gender, plus your totals — rides, distance, riding time, climbing. Weight sets how hard climbs feel. Add riders for others in the house; each ride is saved to whoever rode it. Everything stays in this browser.
+**Profile** (top right): your name, height, weight, gender and **FTP** (no idea? ride the *FTP Test · 20 minutes* workout — the summary offers to save the result), plus your totals — rides, distance, riding time, climbing. Weight sets how hard climbs feel. Add riders for others in the house; each ride is saved to whoever rode it. Everything stays in this browser.
 
-**Settings**: appearance (System — follows macOS — Light or Dark; colours match Machine Manager), units, weights, FTP, camera, time of day, scenery detail (Light / Balanced / High), handlebar buzz. *Advanced* holds the shifting method, difficulty, gear ratio, starting gear and the diagnostics log. A route's **⋯** menu has *Load GPX*, *Save for offline* and *Remove*. The ten scenic routes include their scenery in the app cache after the first successful online load; with internet, the real landscape (elevation and aerial photos) fills the distance beyond ~1.5 km. Custom GPX terrain uses separate downloads.
+**Settings**: appearance (System — follows macOS — Light or Dark; colours match Machine Manager), units, bike weight, camera, time of day, scenery detail (Light / Balanced / High), handlebar buzz. *Advanced* holds the shifting method, difficulty, gear ratio, starting gear and the diagnostics log. A route's **⋯** menu has *Load GPX*, *Save for offline* and *Remove*. The ten scenic routes include their scenery in the app cache after the first successful online load; with internet, the real landscape (elevation and aerial photos) fills the distance beyond ~1.5 km. Custom GPX terrain uses separate downloads.
 
 ## Tests
 
