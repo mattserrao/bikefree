@@ -154,6 +154,19 @@ Goal: try every feature without connecting a bike.
 - [x] Demo data is generated every session tick, so it never goes stale while the 3D view is busy
 - [ ] On-bike check: demo off → trainer connects as before
 
+### v0.9 — Simplify the UI *(branch `v0.9`)*
+Goal: a calmer, two-screen app. UI audit by Claude Opus 5.5, with Claude Fable 5.2 as advisor; decisions confirmed by the owner.
+- [x] **Menu** (setup): device cards, ride type cards (Free ride / Route / Workout) with one picker each, one **Start riding** button. Load / offline / remove tucked into a **⋯** menu
+- [x] **Ride screen**: full window, 3D world behind every ride (routes ride the route; free rides and workouts roll a chosen park loop, or a plain dark background)
+- [x] Small HUD, no duplicates: power + cadence + HR + gear in one bottom strip; time / distance / speed top left; grade + lap / to go (or workout step) top right; profile or workout chart along the bottom edge
+- [x] Power dial removed → big 3-second number coloured by zone, thin zone bar, workout target marker
+- [x] Pause screen: Resume, Finish, Lap, Skip step, Back to menu, and the controls cheat-sheet (replaces the hint paragraph)
+- [x] Settings: everyday options up top (incl. camera and time of day); shifting method, difficulty, ratios, start gear and the diagnostics log under *Advanced*
+- [x] Banners removed: Bluetooth / demo notes live in the Devices card; errors show as a short toast
+- [x] Fixed: "Climbed" counted the jump to a route's starting elevation (3,600 ft in 12 s)
+- [x] Fixed: pedalling on the menu after finishing started a new ride — rides now only auto-start from the ride screen
+- [ ] On-bike check
+
 ### Later ideas
 - Direct Strava upload
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)

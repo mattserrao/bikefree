@@ -6,16 +6,23 @@ import { powerRequired, speedFromCadence, WHEEL_CIRC } from './physics.js';
 import { loadSettings, saveSettings, KG_PER_LB, MI_PER_KM } from './settings.js';
 import { rideToFit, fitFilename, summarize } from './recorder.js';
 import * as store from './store.js';
-import { parseGpx, buildRoute, averageGradeAhead, ascentRemaining } from './gpx.js';
+import { parseGpx, buildRoute } from './gpx.js';
 import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor } from './workout.js';
-import { drawProfile, drawTrace, drawWorkout } from './views.js';
+import { drawProfile, drawWorkout } from './views.js';
 import { planRouteTiles, tileKeysToUrls, downloadUrls, offlineStatus, setOfflineStatus, registerServiceWorker } from './offline.js';
 
 const $ = (id) => document.getElementById(id);
 
-// ---------- Log ----------
+// ---------- Log (lives in Settings › Advanced) ----------
 const logEl = $('log');
 const logLines = [];
+let toastTimer = 0;
+function toast(msg) {
+  $('toast').textContent = msg;
+  $('toast').hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { $('toast').hidden = true; }, 7000);
+}
 function log(source, msg, level = 'info') {
   const t = new Date().toLocaleTimeString([], { hour12: false });
   const line = `${t} [${source}] ${msg}`;
@@ -27,7 +34,7 @@ function log(source, msg, level = 'info') {
   li.textContent = line;
   logEl.prepend(li);
   while (logEl.childElementCount > 500) logEl.lastChild.remove();
-  if (level === 'error') $('diag').open = true;
+  if (level === 'error') toast(msg);
 }
 document.body.classList.add('hide-debug');
 $('debugToggle').addEventListener('change', (e) => document.body.classList.toggle('hide-debug', !e.target.checked));
@@ -36,11 +43,10 @@ $('copyLog').addEventListener('click', async () => {
   await navigator.clipboard.writeText(logLines.join('\n'));
   log('app', 'Log copied to clipboard', 'ok');
 });
+$('toast').addEventListener('click', () => { $('toast').hidden = true; });
 
-if (!navigator.bluetooth) {
-  $('unsupported').hidden = false;
-  for (const id of ['rideBtn', 'hrBtn']) $(id).disabled = true;
-}
+const hasBluetooth = !!navigator.bluetooth;
+if (!hasBluetooth) for (const id of ['rideBtn', 'hrBtn']) $(id).disabled = true;
 
 // ---------- Core objects ----------
 const settings = loadSettings();
@@ -61,25 +67,28 @@ function fmtTime(s) {
   const sec = String(s % 60).padStart(2, '0');
   return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 }
-
 const fmtGrade = (g) => `${(Math.abs(g) < 0.05 ? 0 : g).toFixed(1)}%`;
-
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
-// ---------- Device chips ----------
+// ---------- Screens: setup ↔ ride ----------
+let onRideScreen = false;
+
+// ---------- Devices ----------
 function deviceStatus() {
-  const chip = (dev, dot, label, onText, offText) => {
+  const card = (dev, dot, label, onText, offText) => {
     const on = dev.connected;
     $(dot).className = `dot ${on ? 'on' : dev.reconnecting ? 'wait' : ''}`;
     $(label).textContent = on ? onText() : dev.reconnecting ? 'Reconnecting…' : offText;
   };
-  chip(trainer, 'trainerDot', 'trainerLabel', () => trainer.device.name, 'Connect trainer');
+  card(trainer, 'trainerDot', 'trainerLabel', () => trainer.device.name, hasBluetooth ? 'Tap to connect' : 'Needs Chrome');
   $('trainerDot').classList.toggle('demo', !!trainer.demo);
-  chip(ride, 'rideDot', 'rideLabel', () => `Zwift Ride${ride.battery != null ? ` · ${ride.battery}%` : ''}`, 'Connect handlebars');
-  chip(hrStrap, 'hrDot', 'hrLabel', () => `${hrStrap.bpm ?? '--'} bpm`, 'Heart rate');
+  card(ride, 'rideDot', 'rideLabel', () => `Zwift Ride${ride.battery != null ? ` · battery ${ride.battery}%` : ''}`, hasBluetooth ? 'Tap to connect' : 'Needs Chrome');
+  card(hrStrap, 'hrDot', 'hrLabel', () => `${hrStrap.bpm ?? '--'} bpm`, 'Optional');
   $('rideInfo').textContent = ride.connected ? `fw ${ride.firmware ?? '?'} · battery ${ride.battery ?? '?'}%` : '—';
+  $('unsupported').hidden = hasBluetooth || !!trainer.demo;
+  renderStartRow();
 }
 for (const d of [trainer, ride, hrStrap]) d.addEventListener('status', deviceStatus);
 
@@ -93,6 +102,10 @@ $('trainerBtn').addEventListener('click', () => {
   if (trainer.demo) { setDemo(false); return; }
   toggleDevice(trainer, () => trainer.connect(), 'trainer');
 });
+$('rideBtn').addEventListener('click', () => toggleDevice(ride, () => ride.connect(false), 'ride'));
+$('rideAnyBtn').addEventListener('click', () => toggleDevice(ride, () => ride.connect(true), 'ride'));
+$('hrBtn').addEventListener('click', () => toggleDevice(hrStrap, () => hrStrap.connect(), 'hr'));
+$('rawToggle').addEventListener('change', (e) => { ride.showRaw = e.target.checked; });
 
 // ---------- Demo mode: simulated trainer, constant 15 mph ----------
 const DEMO_MPH = 15;
@@ -104,7 +117,7 @@ function demoData() {
   const jitter = (a) => 1 + (Math.random() - 0.5) * a;
   const workoutW = session.workoutTarget;
   // Power: what it takes to hold 15 mph on the current grade (or the workout step's target).
-  const power = Math.max(0, workoutW != null ? workoutW * jitter(0.04) : powerRequired(DEMO_SPEED, session.gradePct, session.physicsParams()) * jitter(0.06));
+  const power = Math.max(0, workoutW != null ? workoutW * jitter(0.04) : Math.max(35, powerRequired(DEMO_SPEED, session.gradePct, session.physicsParams())) * jitter(0.06));
   // Cadence: what 15 mph needs in the current gear (so shifting changes it), kept in a sensible range.
   const cadence = workoutW != null ? 88 * jitter(0.03) : Math.min(125, Math.max(45, (DEMO_SPEED / (session.ratio * WHEEL_CIRC)) * 60)) * jitter(0.02);
   demoHr += (Math.min(185, 72 + power * 0.32) - demoHr) * 0.02;
@@ -115,7 +128,7 @@ function setDemo(on) {
   if (on) {
     trainer.startDemo(demoData);
     session.demoSpeedMps = DEMO_SPEED;
-    log('app', `Demo mode: the rider holds ${DEMO_MPH} mph. Shift with ← →, change grade with ↑ ↓, try a Route or Workout.`, 'ok');
+    log('app', `Demo mode: the rider holds ${DEMO_MPH} mph.`, 'ok');
   } else {
     trainer.stopDemo();
     session.demoSpeedMps = null;
@@ -123,120 +136,112 @@ function setDemo(on) {
   }
   $('demoBtn').classList.toggle('on', on);
   $('demoBtn').textContent = on ? `Demo · ${DEMO_MPH} mph` : 'Demo';
-  $('demoBanner').hidden = !on;
+  $('demoNote').hidden = !on;
   $('hDemo').hidden = !on;
   session.settingsChanged();
   deviceStatus();
 }
 $('demoBtn').addEventListener('click', () => setDemo(!trainer.demo));
 $('demoOff').addEventListener('click', () => setDemo(false));
-$('rideBtn').addEventListener('click', () => toggleDevice(ride, () => ride.connect(false), 'ride'));
-$('rideAnyBtn').addEventListener('click', () => toggleDevice(ride, () => ride.connect(true), 'ride'));
-$('hrBtn').addEventListener('click', () => toggleDevice(hrStrap, () => hrStrap.connect(), 'hr'));
-$('rawToggle').addEventListener('change', (e) => { ride.showRaw = e.target.checked; });
 
-// ---------- Gear bar ----------
-const gearbar = $('gearbar');
-for (let i = 1; i <= session.gearCount; i++) {
-  const s = document.createElement('span');
-  s.addEventListener('click', () => session.shift(i - session.gear));
-  gearbar.append(s);
-}
-
-// ---------- Tabs ----------
-let pane = 'free';
+// ---------- Ride type picker ----------
+let chosen = 'free';
 function showPane(p) {
-  pane = p;
-  for (const t of document.querySelectorAll('.tab')) t.classList.toggle('on', t.dataset.mode === p);
+  chosen = p;
+  for (const t of document.querySelectorAll('.mode')) t.classList.toggle('on', t.dataset.mode === p);
   for (const el of document.querySelectorAll('.mode-pane')) el.hidden = el.dataset.pane !== p;
-  renderStatic();
   renderRoutePane();
   renderWorkoutPane();
+  renderStartRow();
 }
-for (const t of document.querySelectorAll('.tab')) {
-  t.addEventListener('click', () => {
-    if (t.dataset.mode === 'free' && session.mode !== 'free') {
-      session.setFree();
-      log('app', 'Switched to free ride');
-    }
-    showPane(t.dataset.mode);
-  });
-}
+for (const t of document.querySelectorAll('.mode')) t.addEventListener('click', () => showPane(t.dataset.mode));
 
-// ---------- Rendering ----------
-function renderStatic() {
-  $('gear').textContent = session.gear;
-  [...gearbar.children].forEach((el, i) => {
-    el.classList.toggle('on', i < session.gear);
-    el.classList.toggle('cur', i === session.gear - 1);
-  });
-  $('gradeInput').value = session._manualGrade;
-  $('speedUnit').textContent = imperial() ? 'mph' : 'km/h';
-  $('distUnit').textContent = distUnit();
-  $('elevUnit').textContent = elevUnit();
-  for (const t of document.querySelectorAll('.tab')) t.classList.toggle('active-mode', t.dataset.mode === session.mode);
-  const ergWorkout = session.workoutTarget != null;
-  document.body.classList.toggle('erg-workout', ergWorkout);
-  $('gearHint').textContent = ergWorkout ? 'Workout step — trainer holds the target' : 'Left = easier · Right = harder';
-  $('wkBias').textContent = `${Math.round(session.workoutBias * 100)}%`;
+const pausedByUser = () => !session.running && session.movingS > 0 && !session.autoPaused;
+
+// What the Start button would ride, and whether that's the ride already under way.
+function sameAsCurrent() {
+  if (!session.hasRide) return false;
+  if (chosen === 'free') return session.mode === 'free';
+  if (chosen === 'route') return session.mode === 'route' && session.route === previewRoute;
+  return session.mode === 'workout' && session.workout === previewWorkout && !session.workoutDone;
+}
+function renderStartRow() {
+  const inProgress = session.hasRide;
+  $('startBtn').textContent = inProgress ? (sameAsCurrent() ? 'Resume ride' : 'Switch & resume') : 'Start riding';
+  $('startNote').innerHTML = inProgress
+    ? `Ride in progress · ${fmtTime(session.movingS)} · ${fmtDist(session.distanceM)} ${distUnit()} · <button class="link" id="finishFromMenu">Finish ride</button>`
+    : trainer.connected ? 'The ride records as soon as you pedal.' : 'Connect the trainer first — or try <b>Demo</b>.';
+  $('finishFromMenu')?.addEventListener('click', () => openSummary());
 }
 
-function renderTick() {
-  $('power').textContent = Math.round(session.power);
-  $('power3s').textContent = Math.round(session.power3s);
-  $('cadence').textContent = Math.round(session.cadence);
-  const kph = session.speedMps * 3.6;
-  $('speed').textContent = (imperial() ? kph * MI_PER_KM : kph).toFixed(1);
-  $('distance').textContent = fmtDist(session.distanceM);
-  $('elev').textContent = fmtElev(session.elevGainM);
-  $('time').textContent = fmtTime(session.movingS);
-  $('timeState').textContent = session.running ? 'riding' : session.autoPaused ? 'auto-paused' : session.movingS ? 'paused' : 'ready';
-  $('avgPower').textContent = Math.round(session.avgPower);
-  $('hr').textContent = session.hr ?? '--';
-  if (hrStrap.connected) $('hrLabel').textContent = `${hrStrap.bpm ?? '--'} bpm`;
-  $('startBtn').textContent = session.running ? 'Pause' : session.movingS ? 'Resume' : 'Start';
-  const laps = session.recorder.laps.length + 1;
-  $('rideStatus').textContent = session.hasRide
-    ? `● Recording · ${fmtTime(session.recorder.samples.length)} · lap ${laps}`
-    : 'Pedal to start. Your ride is recorded automatically.';
-  $('rideStatus').classList.toggle('rec', session.hasRide && session.running);
-  $('grade').textContent = fmtGrade(session.gradePct);
-
-  const t = session.target;
-  $('target').textContent = !trainer.connected ? '—'
-    : t ? (t.mode === 'ERG' ? `ERG ${t.value} W (${t.source})` : `SIM ${t.value.toFixed(1)}%`) : '—';
-  $('realRatio').textContent = `${session.realRatio.toFixed(2)}${settings.realRatio ? ' (set)' : session.realRatioEst ? ' (auto)' : ' (default)'}`;
-  const tk = trainer.data.speedKph;
-  $('trainerSpeed').textContent = tk != null ? `${(imperial() ? tk * MI_PER_KM : tk).toFixed(1)} ${imperial() ? 'mph' : 'km/h'}` : '—';
-
-  if (pane === 'route') renderRouteLive();
-  if (pane === 'workout') renderWorkoutLive();
-}
-
-session.addEventListener('change', renderStatic);
-session.addEventListener('tick', renderTick);
-
-let lastGear = session.gear;
-session.addEventListener('change', () => {
-  if (session.gear !== lastGear) {
-    const el = $('gear');
-    el.classList.remove('flash');
-    void el.offsetWidth;
-    el.classList.add('flash');
-    lastGear = session.gear;
+// ---------- Scenery (3D loop behind free rides and workouts) ----------
+function renderScenery() {
+  for (const id of ['sceneSelect', 'sceneSelect2']) {
+    const sel = $(id);
+    sel.innerHTML = '';
+    for (const p of parkItems || []) sel.add(new Option(p.name, p.id));
+    sel.add(new Option('None — numbers only', 'none'));
+    sel.value = settings.scenery;
+    if (sel.value !== settings.scenery) sel.value = parkItems?.[0]?.id || 'none';
   }
-});
+}
+for (const id of ['sceneSelect', 'sceneSelect2']) {
+  $(id).addEventListener('change', (e) => {
+    settings.scenery = e.target.value;
+    saveSettings(settings);
+    renderScenery();
+  });
+}
+async function sceneryRoute() {
+  const item = (parkItems || []).find((p) => p.id === settings.scenery);
+  if (!item) return null;
+  try { return await loadRouteItem(item); } catch { return null; }
+}
 
-// ---------- Free ride controls ----------
-$('gradeInput').addEventListener('input', (e) => session.setGrade(Number(e.target.value)));
-$('gradeUp').addEventListener('click', () => session.setGrade(session._manualGrade + 0.5));
-$('gradeDown').addEventListener('click', () => session.setGrade(session._manualGrade - 0.5));
-$('flatBtn').addEventListener('click', () => session.setGrade(0));
+// ---------- Start / leave the ride screen ----------
+async function startRide() {
+  if (chosen === 'route') {
+    if (!previewRoute) return;
+    if (!(session.mode === 'route' && session.route === previewRoute)) {
+      session.setRoute(previewRoute);
+      log('app', `Riding route: ${previewRoute.name} (${fmtDist(previewRoute.total, 1)} ${distUnit()}${previewRoute.closed ? ' loop' : ''})`, 'ok');
+    }
+  } else if (chosen === 'workout') {
+    if (!previewWorkout) return;
+    if (!(session.mode === 'workout' && session.workout === previewWorkout && !session.workoutDone)) {
+      session.setWorkout(previewWorkout);
+      log('app', `Workout: ${previewWorkout.name} (${fmtTime(previewWorkout.duration)}, FTP ${settings.ftp} W)`, 'ok');
+    }
+  } else if (session.mode !== 'free') {
+    session.setFree();
+    log('app', 'Free ride');
+  }
+  if (pausedByUser()) session.start();
+  onRideScreen = true;
+  session.autoStart = true;
+  $('setup').hidden = true;
+  $('rideScreen').hidden = false;
+  document.documentElement.requestFullscreen?.().catch(() => {});
+  const route = session.mode === 'route' ? session.route : await sceneryRoute();
+  await openWorld(route);
+  renderHudStatic();
+  renderHud();
+}
+$('startBtn').addEventListener('click', startRide);
 
-// ---------- Ride bar ----------
-$('startBtn').addEventListener('click', () => session.toggle());
-$('lapBtn').addEventListener('click', () => session.lap());
+function showSetup() {
+  onRideScreen = false;
+  session.autoStart = false;
+  $('rideScreen').hidden = true;
+  $('setup').hidden = false;
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  world?.stop();
+  showPane(chosen);
+}
+$('pauseBtn').addEventListener('click', () => session.pause());
+$('resumeBtn').addEventListener('click', () => session.start());
 $('finishBtn').addEventListener('click', () => openSummary());
+$('camBtn').addEventListener('click', cycleCamera);
 
 document.addEventListener('keydown', (e) => {
   if (e.target.closest('input, select, textarea') || document.querySelector('dialog[open]')) return;
@@ -245,13 +250,186 @@ document.addEventListener('keydown', (e) => {
   else if (k === 'ArrowLeft' || k === '-' || k === '[') session.shift(-1);
   else if (k === 'ArrowUp') session.upDown(1);
   else if (k === 'ArrowDown') session.upDown(-1);
-  else if (k === ' ') session.toggle();
+  else if (k === ' ' && onRideScreen) session.toggle();
   else if (k === 'l' || k === 'L') session.lap();
-  else if ((k === 'c' || k === 'C') && worldOpen) cycleCamera();
-  else if ((k === 'f' || k === 'F') && worldOpen) toggleFullscreen();
+  else if ((k === 'n' || k === 'N') && session.mode === 'workout') session.skipSegment();
+  else if ((k === 'c' || k === 'C') && onRideScreen) cycleCamera();
+  else if ((k === 'f' || k === 'F') && onRideScreen) toggleFullscreen();
   else return;
   e.preventDefault();
 });
+function toggleFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen().catch((err) => log('3d', err.message, 'debug'));
+}
+
+// ---------- 3D world ----------
+let world = null;
+let worldRoute = null;
+let worldModule = null;
+
+async function openWorld(route) {
+  document.body.classList.toggle('no-world', !route);
+  if (!route) { world?.stop(); return; }
+  if (world && worldRoute === route) { world.start(); return; }
+  try {
+    worldModule = worldModule || await import('./world/world.js');
+  } catch (err) {
+    log('3d', `Could not start the 3D view: ${err.message}`, 'error');
+    document.body.classList.add('no-world');
+    return;
+  }
+  if (world) { world.dispose(); world = null; }
+  try {
+    world = new worldModule.World($('worldView'), route, { log });
+  } catch (err) {
+    log('3d', `3D view needs WebGL: ${err.message}`, 'error');
+    document.body.classList.add('no-world');
+    return;
+  }
+  worldRoute = route;
+  world.setCamera(settings.worldCam);
+  world.setTimeOfDay(settings.worldTime);
+  world.setSource(() => {
+    // On a route the rider is where the ride is; otherwise the scenery loop simply rolls by.
+    const pos = session.mode === 'route' && session.route === route ? session.routePos : session.distanceM % route.total;
+    return { pos, speed: session.speedMps, cadence: session.cadence, riding: true };
+  });
+  world.start();
+  log('3d', `3D view: ${route.name}`);
+}
+function cycleCamera() {
+  const order = ['chase', 'eye', 'side', 'drone'];
+  settings.worldCam = order[(order.indexOf(settings.worldCam) + 1) % order.length];
+  saveSettings(settings);
+  world?.setCamera(settings.worldCam);
+}
+document.addEventListener('visibilitychange', () => {
+  if (!world || !onRideScreen) return;
+  if (document.hidden) world.stop(); else world.start();
+});
+
+// ---------- Ride HUD ----------
+const ZONES = [[0, 0.55, 'Zone 1'], [0.55, 0.76, 'Zone 2'], [0.76, 0.9, 'Zone 3'], [0.9, 1.05, 'Zone 4'], [1.05, 1.19, 'Zone 5'], [1.19, 99, 'Zone 6']];
+const barMax = () => Math.max(400, Math.round((settings.ftp * 1.7) / 50) * 50);
+const showCtx = (n, value, label) => {
+  $(`hCtx${n}Box`).hidden = value == null;
+  if (value == null) return;
+  $(`hCtx${n}`).textContent = value;
+  $(`hCtx${n}L`).textContent = label;
+};
+
+let lastTitle = '', titleTimer = 0;
+function renderHudStatic() {
+  $('hTitle').textContent = session.mode === 'route' && session.route
+    ? (session.route.park ? `${session.route.name} · ${session.route.park}` : session.route.name)
+    : session.mode === 'workout' && session.workout ? session.workout.name : 'Free ride';
+  if ($('hTitle').textContent !== lastTitle) {
+    lastTitle = $('hTitle').textContent;
+    $('hTitle').classList.add('show');
+    clearTimeout(titleTimer);
+    titleTimer = setTimeout(() => $('hTitle').classList.remove('show'), 5000);
+  }
+  const p = $('hudProfile');
+  p.hidden = !(session.mode === 'route' || (session.mode === 'workout' && session.workout));
+  lastProfileDraw = 0;
+}
+
+let lastProfileDraw = 0;
+let lastGear = session.gear;
+function renderHud() {
+  if (!onRideScreen) return;
+  const kph = session.speedMps * 3.6;
+  $('hTime').textContent = fmtTime(session.movingS);
+  $('hDist').textContent = fmtDist(session.distanceM, session.distanceM < 16000 ? 2 : 1);
+  $('hDistU').textContent = distUnit();
+  $('hSpeed').textContent = (imperial() ? kph * MI_PER_KM : kph).toFixed(1);
+  $('hSpeedU').textContent = imperial() ? 'mph' : 'km/h';
+
+  // Power: 3-second power, coloured by zone, with a slim zone bar (and the workout target).
+  const p3 = session.power3s;
+  const pct = settings.ftp ? p3 / settings.ftp : 0;
+  const zone = ZONES.find(([lo, hi]) => pct >= lo && pct < hi) || ZONES[0];
+  const col = pct >= 0.55 ? zoneColor(pct) : '#fff'; // Zone 1 stays white for contrast
+  $('hPower').textContent = Math.round(p3);
+  $('hPower').style.color = col;
+  $('zFill').style.width = `${Math.min(100, (p3 / barMax()) * 100)}%`;
+  $('zFill').style.background = p3 > 1 ? zoneColor(Math.max(pct, 0.01)) : 'transparent';
+  const tw = session.workoutTarget;
+  $('zTarget').hidden = tw == null;
+  if (tw != null) $('zTarget').style.left = `${Math.min(100, (tw / barMax()) * 100)}%`;
+  $('hPowerSub').textContent = tw != null ? `target ${tw} W` : p3 > 1 ? zone[2] : ' ';
+  $('hCad').textContent = Math.round(session.cadence);
+  $('hHr').textContent = session.hr ?? '--';
+
+  // Gear (ERG workout steps ignore the gears)
+  $('hGearBox').hidden = tw != null; // the trainer holds the watts — gears don't apply
+  $('hGear').textContent = session.gear;
+  if (session.gear !== lastGear) {
+    lastGear = session.gear;
+    const el = $('hGear');
+    el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+  }
+
+  // Top right: grade + route progress, or the workout step.
+  if (session.mode === 'workout' && session.workout && !session.workoutDone && session.segment) {
+    const w = session.workout, seg = session.segment;
+    $('hGrade').textContent = fmtTime(seg.start + seg.duration - session.workoutT);
+    $('hGradeLabel').textContent = seg.label;
+    const next = w.segments[session.segIndex + 1];
+    showCtx(1, next ? (next.kind === 'erg' ? `${targetWatts(next, next.start, settings.ftp, session.workoutBias)} W` : 'Free') : 'Finish', next ? `next · ${fmtTime(next.duration)}` : 'next');
+    showCtx(2, fmtTime(w.duration - session.workoutT), session.workoutBias !== 1 ? `left · intensity ${Math.round(session.workoutBias * 100)}%` : 'workout left');
+  } else {
+    $('hGrade').textContent = fmtGrade(session.gradePct);
+    $('hGradeLabel').textContent = 'grade';
+    if (session.mode === 'route' && session.route) {
+      const r = session.route;
+      showCtx(1, r.closed ? String(session.routeLap) : null, 'lap');
+      showCtx(2, `${fmtDist(Math.max(0, r.total - session.routePos), 1)} ${distUnit()}`, r.closed ? 'lap to go' : 'to go');
+    } else {
+      showCtx(1, session.mode === 'workout' && session.workoutDone ? 'Done' : null, 'workout');
+      showCtx(2, null);
+    }
+  }
+
+  // Bottom edge: route profile or workout chart (redrawn once a second).
+  const now = performance.now();
+  if (now - lastProfileDraw > 1000 && !$('hudProfile').hidden) {
+    lastProfileDraw = now;
+    if (session.mode === 'route' && session.route) drawProfile($('hudProfile'), session.route, session.routePos, { metric: !imperial() });
+    else if (session.mode === 'workout' && session.workout) drawWorkout($('hudProfile'), session.workout, session.workoutT, settings.ftp, session.workoutBias);
+  }
+
+  // State pills and pause overlay
+  const userPaused = pausedByUser();
+  const state = session.running ? '' : session.autoPaused ? 'Paused — pedal to resume' : session.movingS ? '' : 'Pedal to start';
+  $('hState').hidden = !state;
+  $('hState').textContent = state;
+  $('hLoading').hidden = !world || document.body.classList.contains('no-world') || world.loading < 4;
+  const lost = !trainer.demo && !trainer.connected;
+  $('hAlert').hidden = !lost;
+  $('hAlert').textContent = trainer.reconnecting ? 'Trainer reconnecting…' : 'Trainer not connected';
+  $('pauseOverlay').hidden = !userPaused || $('summary').open;
+}
+
+session.addEventListener('tick', () => {
+  renderHud();
+  renderDiag();
+  if (!onRideScreen && session.hasRide) renderStartRow();
+});
+session.addEventListener('change', renderHudStatic);
+session.addEventListener('segment', renderHudStatic);
+session.addEventListener('workoutFinished', renderHudStatic);
+
+function renderDiag() {
+  if (!$('settings').open) return;
+  const t = session.target;
+  $('target').textContent = !trainer.connected ? '—'
+    : t ? (t.mode === 'ERG' ? `ERG ${t.value} W (${t.source})` : `SIM ${t.value.toFixed(1)}%`) : '—';
+  $('realRatio').textContent = `${session.realRatio.toFixed(2)}${settings.realRatio ? ' (set)' : session.realRatioEst ? ' (auto)' : ' (default)'}`;
+  const tk = trainer.data.speedKph;
+  $('trainerSpeed').textContent = tk != null ? `${(imperial() ? tk * MI_PER_KM : tk).toFixed(1)} ${imperial() ? 'mph' : 'km/h'}` : '—';
+}
 
 // ---------- Routes ----------
 const DEMO_ROUTE = { id: 'builtin-demo-hills', kind: 'route', name: 'Demo Hills (built-in)', url: 'routes/demo-hills.gpx', group: 'Other' };
@@ -274,6 +452,7 @@ async function loadParks() {
 async function refreshRouteList(selectId) {
   const mine = (await store.listLibrary('route').catch(() => [])).map((r) => ({ ...r, group: 'My routes' }));
   routeItems = [...(await loadParks()), ...mine, DEMO_ROUTE];
+  renderScenery();
   const sel = $('routeSelect');
   sel.innerHTML = '';
   const groups = new Map();
@@ -313,49 +492,21 @@ async function previewSelectedRoute() {
   }
   renderRoutePane();
   renderOffline();
-  if (worldOpen) openWorld(currentWorldRoute());
+  renderStartRow();
 }
-
-const ridingPreviewedRoute = () => session.mode === 'route' && session.route && session.route === previewRoute;
 
 function renderRoutePane() {
-  if (pane !== 'route' || !previewRoute) return;
+  if (chosen !== 'route' || !previewRoute) return;
   const r = previewRoute;
-  const riding = ridingPreviewedRoute();
-  $('routeInfo').innerHTML = `<b>${escapeHtml(r.name)}</b>${r.park ? ` · ${escapeHtml(r.park)}` : ''} · ${fmtDist(r.total, 1)} ${distUnit()}${r.closed ? ' loop' : ''} · ` +
+  $('routeInfo').innerHTML = `${r.park ? `${escapeHtml(r.park)} · ` : ''}${fmtDist(r.total, 1)} ${distUnit()}${r.closed ? ' loop — laps continue as long as you ride' : ''} · ` +
     `${fmtElev(r.ascent)} ${elevUnit()} climbing · steepest ${Math.round(Math.max(...r.grade))}%` +
-    (r.hasElevation ? '' : ' · <span class="warn">no elevation in this file — it will be flat</span>') +
-    (r.closed ? ' · <span class="muted">laps continue as long as you ride</span>' : '') +
-    (riding ? (session.routeDone ? ' · <span class="ok">finished</span>' : ' · <span class="ok">riding now</span>') : '') +
-    (!riding && session.mode === 'route' && session.route ? ` · <span class="muted">currently riding ${escapeHtml(session.route.name)}</span>` : '');
-  $('routeStats').hidden = !riding;
-  $('rLapBox').hidden = !r.closed;
-  $('route3d').textContent = worldOpen ? 'Hide 3D' : '3D view';
-  $('routeGo').hidden = riding;
-  $('routeRestart').hidden = !riding;
-  renderRouteLive();
-}
-
-function renderRouteLive() {
-  if (!previewRoute) return;
-  const riding = ridingPreviewedRoute();
-  const r = previewRoute;
-  const pos = riding ? session.routePos : 0;
-  drawProfile($('profile'), r, pos, { metric: !imperial() });
-  drawTrace($('trace'), r, pos);
-  if (!riding) return;
-  const ahead = imperial() ? 804.672 : 500;
-  $('rAheadLabel').textContent = imperial() ? '½ mi' : '500 m';
-  $('rGrade').textContent = fmtGrade(session.gradePct);
-  $('rAhead').textContent = fmtGrade(averageGradeAhead(r, pos, ahead));
-  $('rLeft').textContent = `${fmtDist(Math.max(0, r.total - pos), 1)} ${distUnit()}`;
-  $('rLeftLabel').textContent = r.closed ? 'Lap to go' : 'To go';
-  $('rLap').textContent = session.routeLap;
-  $('rClimb').textContent = `${fmtElev(ascentRemaining(r, pos))} ${elevUnit()}`;
-  $('rPct').textContent = `${Math.min(100, Math.floor((pos / r.total) * 100))}%`;
+    (r.hasElevation ? '' : ' · <span class="warn">no elevation in this file — it will be flat</span>');
+  drawProfile($('profile'), r, 0, { metric: !imperial() });
 }
 
 $('routeSelect').addEventListener('change', previewSelectedRoute);
+const closeMenus = () => { for (const d of document.querySelectorAll('details.more')) d.open = false; };
+document.addEventListener('click', (e) => { if (!e.target.closest('details.more')) closeMenus(); });
 
 // ---------- Offline park downloads ----------
 let offlineAbort = null;
@@ -400,21 +551,8 @@ $('routeOffline').addEventListener('click', async () => {
     renderOffline();
   }
 });
-$('routeGo').addEventListener('click', () => {
-  if (!previewRoute) return;
-  session.setRoute(previewRoute);
-  log('app', `Riding route: ${previewRoute.name} (${fmtDist(previewRoute.total, 1)} ${distUnit()}${previewRoute.closed ? ' loop' : ''})`, 'ok');
-  showPane('route');
-  if (previewRoute.park || worldOpen) openWorld(previewRoute);
-});
-$('route3d').addEventListener('click', () => {
-  if (worldOpen) closeWorld(); else openWorld(currentWorldRoute());
-  renderRoutePane();
-});
-$('routeRestart').addEventListener('click', () => {
-  if (confirm('Restart this route from the beginning? Your ride keeps recording.')) session.restartRoute();
-});
 $('routeDelete').addEventListener('click', async () => {
+  closeMenus();
   const id = $('routeSelect').value;
   if (id.startsWith('builtin') || !confirm('Remove this route from your library?')) return;
   await store.deleteLibraryItem(id);
@@ -422,6 +560,7 @@ $('routeDelete').addEventListener('click', async () => {
   await refreshRouteList();
 });
 $('gpxFile').addEventListener('change', async (e) => {
+  closeMenus();
   const file = e.target.files[0];
   e.target.value = '';
   if (!file) return;
@@ -436,213 +575,9 @@ $('gpxFile').addEventListener('change', async (e) => {
     await refreshRouteList(id);
   } catch (err) {
     log('app', `Could not load GPX: ${err.message}`, 'error');
-    alert(`Could not load that GPX file: ${err.message}`);
   }
 });
-session.addEventListener('routeFinished', () => {
-  renderRoutePane();
-  openSummary(`Route complete — ${session.route.name}`);
-});
-
-
-// ---------- 3D world ----------
-let world = null;
-let worldOpen = false;
-let worldRoute = null;
-let worldModule = null;
-let previewPos = 0;
-let previewLast = performance.now();
-
-function currentWorldRoute() {
-  if (session.mode === 'route' && session.route && (pane !== 'route' || previewRoute === session.route)) return session.route;
-  return previewRoute;
-}
-
-async function openWorld(route) {
-  if (!route) return;
-  worldOpen = true;
-  $('worldPanel').hidden = false;
-  if (world && worldRoute === route) { world.start(); return; }
-  try {
-    worldModule = worldModule || await import('./world/world.js');
-  } catch (err) {
-    log('3d', `Could not start the 3D view: ${err.message}`, 'error');
-    return;
-  }
-  if (world) { world.dispose(); world = null; }
-  try {
-    world = new worldModule.World($('worldView'), route, { log });
-  } catch (err) {
-    log('3d', `3D view needs WebGL: ${err.message}`, 'error');
-    $('worldPanel').hidden = true;
-    worldOpen = false;
-    return;
-  }
-  worldRoute = route;
-  previewPos = 0;
-  world.setCamera(settings.worldCam);
-  world.setTimeOfDay(settings.worldTime);
-  world.setSource(() => {
-    const now = performance.now();
-    const dt = (now - previewLast) / 1000;
-    previewLast = now;
-    if (session.mode === 'route' && session.route === route) {
-      return { pos: session.routePos, speed: session.speedMps, cadence: session.cadence, riding: true };
-    }
-    // Not riding this route yet: a gentle preview fly-along.
-    previewPos = (previewPos + 9 * dt) % route.total;
-    return { pos: previewPos, speed: 9, cadence: 80, riding: false };
-  });
-  world.start();
-  $('hTitle').textContent = route.park ? `${route.name} · ${route.park}` : route.name;
-  log('3d', `3D view: ${route.name}`);
-  renderWorldControls();
-}
-
-function closeWorld() {
-  worldOpen = false;
-  $('worldPanel').hidden = true;
-  if (document.fullscreenElement) document.exitFullscreen();
-  if (world) world.stop();
-}
-
-function renderWorldControls() {
-  for (const b of document.querySelectorAll('#camSeg button')) b.classList.toggle('on', b.dataset.cam === settings.worldCam);
-  for (const b of document.querySelectorAll('#timeSeg button')) b.classList.toggle('on', b.dataset.time === settings.worldTime);
-}
-
-// ---------- Power gauge (3D overlay) ----------
-const G = { cx: 150, cy: 140, r: 112, start: 150, sweep: 240 };
-const gPoint = (t, r = G.r) => {
-  const a = ((G.start + G.sweep * t) * Math.PI) / 180;
-  return [G.cx + r * Math.cos(a), G.cy + r * Math.sin(a)];
-};
-const gArc = (t0, t1, r = G.r) => {
-  const [x0, y0] = gPoint(t0, r), [x1, y1] = gPoint(Math.max(t0 + 0.0001, t1), r);
-  return `M${x0.toFixed(1)},${y0.toFixed(1)} A${r},${r} 0 ${(t1 - t0) * G.sweep > 180 ? 1 : 0} 1 ${x1.toFixed(1)},${y1.toFixed(1)}`;
-};
-const ZONES = [[0, 0.55, 'Z1'], [0.55, 0.76, 'Z2'], [0.76, 0.9, 'Z3'], [0.9, 1.05, 'Z4'], [1.05, 1.19, 'Z5'], [1.19, 9, 'Z6']];
-let gaugeMax = 0;
-function buildGauge() {
-  gaugeMax = Math.max(400, Math.round((settings.ftp * 1.7) / 50) * 50);
-  const zones = $('gZones');
-  zones.innerHTML = '';
-  const ns = 'http://www.w3.org/2000/svg';
-  for (const [lo, hi] of ZONES) {
-    const t0 = Math.min(1, (lo * settings.ftp) / gaugeMax), t1 = Math.min(1, (hi * settings.ftp) / gaugeMax);
-    if (t1 <= t0) continue;
-    const p = document.createElementNS(ns, 'path');
-    p.setAttribute('d', gArc(t0, t1));
-    p.setAttribute('fill', 'none');
-    p.setAttribute('stroke', zoneColor((lo + Math.min(hi, 1.4)) / 2));
-    p.setAttribute('stroke-width', '6');
-    p.setAttribute('stroke-opacity', '0.55');
-    zones.append(p);
-  }
-  const ticks = $('gTicks');
-  ticks.innerHTML = '';
-  const step = gaugeMax > 600 ? 200 : 100;
-  for (let w = 0; w <= gaugeMax; w += step) {
-    const [x, y] = gPoint(w / gaugeMax, G.r - 24);
-    const t = document.createElementNS(ns, 'text');
-    t.setAttribute('x', x.toFixed(1)); t.setAttribute('y', (y + 4).toFixed(1));
-    t.textContent = w;
-    ticks.append(t);
-  }
-  const bar = $('gGearBar');
-  if (!bar.childElementCount) for (let i = 0; i < session.gearCount; i++) bar.append(document.createElement('i'));
-}
-function renderGauge() {
-  if (!gaugeMax) buildGauge();
-  const p3 = session.power3s;
-  const t = Math.min(1, p3 / gaugeMax);
-  const pct = settings.ftp ? p3 / settings.ftp : 0;
-  const zone = ZONES.find(([lo, hi]) => pct >= lo && pct < hi) || ZONES[0];
-  const fill = $('gFill');
-  fill.setAttribute('d', gArc(0, t, G.r));
-  fill.setAttribute('stroke', zoneColor(Math.max(pct, 0.01)));
-  fill.setAttribute('stroke-opacity', p3 > 1 ? '1' : '0');
-  const tn = Math.min(1, session.power / gaugeMax);
-  const [x0, y0] = gPoint(tn, G.r - 12), [x1, y1] = gPoint(tn, G.r + 12);
-  const needle = $('gNeedle');
-  needle.setAttribute('x1', x0.toFixed(1)); needle.setAttribute('y1', y0.toFixed(1));
-  needle.setAttribute('x2', x1.toFixed(1)); needle.setAttribute('y2', y1.toFixed(1));
-  const tgt = session.target && session.target.mode === 'ERG' && trainer.connected ? session.target.value : null;
-  const tg = $('gTarget');
-  if (tgt != null) {
-    const [tx, ty] = gPoint(Math.min(1, tgt / gaugeMax), G.r + 20);
-    tg.setAttribute('transform', `translate(${tx.toFixed(1)},${ty.toFixed(1)})`);
-    tg.style.display = '';
-  } else tg.style.display = 'none';
-  $('hPower').textContent = Math.round(session.power);
-  $('gZone').textContent = zone[2];
-  $('gZone').style.color = zoneColor(Math.max(pct, 0.01));
-  $('gPct').textContent = `${Math.round(pct * 100)}%`;
-  $('gWkg').textContent = (p3 / settings.riderKg).toFixed(1);
-  $('g3s').textContent = Math.round(p3);
-  $('gAvg').textContent = Math.round(session.avgPower);
-  $('gTargetW').textContent = tgt != null ? `${tgt} W${session.target.source === 'workout' ? '' : ' (gear)'}` : '—';
-  $('hGear').textContent = session.gear;
-  [...$('gGearBar').children].forEach((el, i) => {
-    el.className = i === session.gear - 1 ? 'cur' : i < session.gear ? 'on' : '';
-  });
-}
-
-function renderHud() {
-  if (!worldOpen || !world) return;
-  renderGauge();
-  const riding = session.mode === 'route' && session.route === worldRoute;
-  $('hCad').textContent = Math.round(session.cadence);
-  const kph = session.speedMps * 3.6;
-  $('hSpeed').textContent = (imperial() ? kph * MI_PER_KM : kph).toFixed(1);
-  $('hSpeedU').textContent = imperial() ? 'mph' : 'km/h';
-  $('hGrade').textContent = fmtGrade(riding ? session.gradePct : 0);
-  $('hLap').textContent = riding ? session.routeLap : '–';
-  const left = riding ? Math.max(0, worldRoute.total - session.routePos) : worldRoute.total;
-  $('hLeft').textContent = fmtDist(left, 1);
-  $('hLeftU').textContent = `${distUnit()} ${worldRoute.closed ? 'lap to go' : 'to go'}`;
-  $('hTime').textContent = fmtTime(session.movingS);
-  $('hHr').textContent = session.hr ?? '--';
-  $('hLoading').hidden = world.loading < 4;
-  $('worldNote').textContent = riding ? '' : 'Preview — press "Ride this route" to ride it';
-}
-session.addEventListener('tick', renderHud);
-
-$('worldClose').addEventListener('click', () => { closeWorld(); renderRoutePane(); });
-$('worldFull').addEventListener('click', toggleFullscreen);
-function toggleFullscreen() {
-  if (!worldOpen) return;
-  if (document.fullscreenElement) document.exitFullscreen();
-  else $('worldPanel').requestFullscreen().catch((err) => log('3d', err.message, 'debug'));
-}
-$('camSeg').addEventListener('click', (e) => {
-  const b = e.target.closest('button[data-cam]');
-  if (!b) return;
-  settings.worldCam = b.dataset.cam;
-  saveSettings(settings);
-  world?.setCamera(settings.worldCam);
-  renderWorldControls();
-});
-$('timeSeg').addEventListener('click', (e) => {
-  const b = e.target.closest('button[data-time]');
-  if (!b) return;
-  settings.worldTime = b.dataset.time;
-  saveSettings(settings);
-  world?.setTimeOfDay(settings.worldTime);
-  renderWorldControls();
-});
-function cycleCamera() {
-  const order = ['chase', 'eye', 'side', 'drone'];
-  settings.worldCam = order[(order.indexOf(settings.worldCam) + 1) % order.length];
-  saveSettings(settings);
-  world?.setCamera(settings.worldCam);
-  renderWorldControls();
-}
-document.addEventListener('visibilitychange', () => {
-  if (!world || !worldOpen) return;
-  if (document.hidden) world.stop(); else world.start();
-});
-session.addEventListener('routeLap', renderTick);
+session.addEventListener('routeFinished', () => openSummary(`Route complete — ${session.route.name}`));
 
 // ---------- Workouts ----------
 let workoutItems = [];
@@ -676,6 +611,7 @@ function previewSelectedWorkout() {
     return;
   }
   renderWorkoutPane();
+  renderStartRow();
 }
 
 function workoutStats(w) {
@@ -688,54 +624,18 @@ function workoutStats(w) {
   return { kj: Math.round(work / 1000), maxW };
 }
 
-const ridingPreviewedWorkout = () => session.mode === 'workout' && session.workout && session.workout === previewWorkout;
-
 function renderWorkoutPane() {
-  if (pane !== 'workout' || !previewWorkout) return;
+  if (chosen !== 'workout' || !previewWorkout) return;
   const w = previewWorkout;
-  const riding = ridingPreviewedWorkout();
   const st = workoutStats(w);
-  $('workoutInfo').innerHTML = `<b>${escapeHtml(w.name)}</b> · ${fmtTime(w.duration)} · ~${st.kj} kJ · peak ${st.maxW} W at FTP ${settings.ftp} W` +
-    (riding ? (session.workoutDone ? ' · <span class="ok">complete — free ride</span>' : ' · <span class="ok">in progress</span>') : '') +
-    (!riding && session.mode === 'workout' && session.workout ? ` · <span class="muted">currently doing ${escapeHtml(session.workout.name)}</span>` : '') +
-    (w.description ? `<div class="desc">${escapeHtml(w.description)}</div>` : '');
-  $('wkNow').hidden = !riding || session.workoutDone;
-  $('workoutGo').textContent = riding ? 'Restart workout' : 'Start this workout';
-  $('workoutSkip').hidden = !riding || session.workoutDone;
-  renderWorkoutLive();
-}
-
-function renderWorkoutLive() {
-  if (!previewWorkout) return;
-  const riding = ridingPreviewedWorkout();
-  const w = previewWorkout;
-  drawWorkout($('workoutChart'), w, riding ? session.workoutT : 0, settings.ftp, riding ? session.workoutBias : 1);
-  if (!riding || session.workoutDone) return;
-  const seg = session.segment;
-  if (!seg) return;
-  const tw = session.workoutTarget;
-  $('wkTarget').textContent = tw != null ? `${tw} W` : 'Free';
-  $('wkStepLabel').textContent = seg.label;
-  $('wkStepLeft').textContent = fmtTime(seg.start + seg.duration - session.workoutT);
-  const next = w.segments[session.segIndex + 1];
-  $('wkNext').textContent = next
-    ? `${next.label} · ${next.kind === 'erg' ? `${targetWatts(next, next.start, settings.ftp, session.workoutBias)} W` : 'free'} · ${fmtTime(next.duration)}`
-    : 'Finish';
-  $('wkLeft').textContent = fmtTime(w.duration - session.workoutT);
+  $('workoutInfo').innerHTML = `${fmtTime(w.duration)} · ~${st.kj} kJ · peak ${st.maxW} W at FTP ${settings.ftp} W` +
+    (w.description ? `<br>${escapeHtml(w.description)}` : '');
+  drawWorkout($('workoutChart'), w, 0, settings.ftp, 1);
 }
 
 $('workoutSelect').addEventListener('change', previewSelectedWorkout);
-$('workoutGo').addEventListener('click', () => {
-  if (!previewWorkout) return;
-  if (ridingPreviewedWorkout() && !confirm('Restart this workout from the beginning?')) return;
-  session.setWorkout(previewWorkout);
-  log('app', `Workout: ${previewWorkout.name} (${fmtTime(previewWorkout.duration)}, FTP ${settings.ftp} W)`, 'ok');
-  showPane('workout');
-});
-$('workoutSkip').addEventListener('click', () => session.skipSegment());
-$('biasUp').addEventListener('click', () => session.setBias(session.workoutBias + 0.05));
-$('biasDown').addEventListener('click', () => session.setBias(session.workoutBias - 0.05));
 $('workoutDelete').addEventListener('click', async () => {
+  closeMenus();
   const id = $('workoutSelect').value;
   if (id.startsWith('builtin') || !confirm('Remove this workout from your library?')) return;
   await store.deleteLibraryItem(id);
@@ -743,6 +643,7 @@ $('workoutDelete').addEventListener('click', async () => {
   await refreshWorkoutList();
 });
 $('workoutFile').addEventListener('change', async (e) => {
+  closeMenus();
   const file = e.target.files[0];
   e.target.value = '';
   if (!file) return;
@@ -756,11 +657,8 @@ $('workoutFile').addEventListener('change', async (e) => {
     await refreshWorkoutList(id);
   } catch (err) {
     log('app', `Could not load workout: ${err.message}`, 'error');
-    alert(`Could not load that workout: ${err.message}`);
   }
 });
-session.addEventListener('segment', renderWorkoutPane);
-session.addEventListener('workoutFinished', renderWorkoutPane);
 
 // ---------- Ride summary / finishing ----------
 function statCells(sum) {
@@ -816,7 +714,7 @@ function openSummary(title) {
     }
     const finished = session.finish();
     await store.saveCurrent(null).catch(() => {});
-    if (!finished || v === 'discard') { log('app', 'Ride discarded'); showPane(pane); return; }
+    if (!finished || v === 'discard') { log('app', 'Ride discarded'); showSetup(); return; }
     try {
       await store.saveRide(finished);
       log('app', `Ride saved: ${finished.name}, ${fmtTime(finished.summary.timerS)}`, 'ok');
@@ -824,7 +722,7 @@ function openSummary(title) {
       log('app', `Could not save ride: ${err.message}`, 'error');
     }
     if (v === 'download') downloadFit(finished);
-    showPane(pane);
+    showSetup();
   };
   dlg.showModal();
 }
@@ -901,6 +799,8 @@ function fillSettings() {
   f.rider.value = +(imp ? settings.riderKg / KG_PER_LB : settings.riderKg).toFixed(1);
   f.bike.value = +(imp ? settings.bikeKg / KG_PER_LB : settings.bikeKg).toFixed(1);
   f.ftp.value = settings.ftp;
+  f.worldCam.value = settings.worldCam;
+  f.worldTime.value = settings.worldTime;
   f.shiftMode.value = settings.shiftMode;
   f.difficulty.value = settings.difficulty;
   $('diffOut').textContent = `${settings.difficulty}%`;
@@ -918,7 +818,7 @@ form.elements.units.addEventListener('change', (e) => {
   }
   for (const el of dlg.querySelectorAll('.u-weight')) el.textContent = toImp ? 'lb' : 'kg';
 });
-$('settingsBtn').addEventListener('click', () => { fillSettings(); dlg.showModal(); });
+$('settingsBtn').addEventListener('click', () => { fillSettings(); dlg.showModal(); renderDiag(); });
 dlg.addEventListener('close', () => {
   if (dlg.returnValue !== 'save') return;
   const f = form.elements;
@@ -929,6 +829,8 @@ dlg.addEventListener('close', () => {
     riderKg: kg(f.rider.value) || settings.riderKg,
     bikeKg: kg(f.bike.value) || settings.bikeKg,
     ftp: Math.round(Number(f.ftp.value)) || settings.ftp,
+    worldCam: f.worldCam.value,
+    worldTime: f.worldTime.value,
     shiftMode: f.shiftMode.value,
     difficulty: Number(f.difficulty.value),
     realRatio: Math.max(0, Number(f.realRatio.value) || 0),
@@ -937,19 +839,19 @@ dlg.addEventListener('close', () => {
   });
   saveSettings(settings);
   session.settingsChanged();
-  gaugeMax = 0;
-  showPane(pane);
+  world?.setCamera(settings.worldCam);
+  world?.setTimeOfDay(settings.worldTime);
+  showPane(chosen);
   log('app', `Settings saved (${settings.shiftMode.toUpperCase()} shifting, difficulty ${settings.difficulty}%, FTP ${settings.ftp} W)`);
 });
 
-window.addEventListener('resize', () => { renderRouteLive(); renderWorkoutLive(); });
+window.addEventListener('resize', () => { renderRoutePane(); renderWorkoutPane(); lastProfileDraw = 0; });
 window.addEventListener('beforeunload', (e) => {
   if (session.hasRide) { e.preventDefault(); e.returnValue = ''; }
 });
 
 // ---------- Boot ----------
-renderStatic();
-renderTick();
+session.autoStart = false;
 deviceStatus();
 refreshRouteList();
 refreshWorkoutList();

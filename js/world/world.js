@@ -196,13 +196,14 @@ export class World {
     } else if (this.cameraMode === 'side') {
       const right = new THREE.Vector3(-flat.z, 0, flat.x);
       pos = riderPos.clone().addScaledVector(right, -3.4).addScaledVector(flat, 0.6).addScaledVector(up, 1.15);
-      look = riderPos.clone().addScaledVector(up, 0.85).addScaledVector(flat, 0.15);
+      look = riderPos.clone().addScaledVector(up, 0.35).addScaledVector(flat, 0.15);
     } else if (this.cameraMode === 'drone') {
       pos = riderPos.clone().addScaledVector(flat, -45).addScaledVector(up, 26);
       look = riderPos.clone().addScaledVector(flat, 25);
     } else {
-      pos = riderPos.clone().addScaledVector(flat, -6.5).addScaledVector(up, 2.5);
-      look = riderPos.clone().addScaledVector(fwd, 9).addScaledVector(up, 1.1);
+      // Aim a little low so the rider sits above the HUD strip at the bottom of the screen.
+      pos = riderPos.clone().addScaledVector(flat, -6.5).addScaledVector(up, 2.7);
+      look = riderPos.clone().addScaledVector(fwd, 8).addScaledVector(up, -0.2);
     }
     // Keep the camera above ground
     const g = this.terrain.heightAt(pos.x, pos.z);

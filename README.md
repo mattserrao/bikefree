@@ -13,21 +13,21 @@ Open http://localhost:8000 in **Chrome** (Safari doesn't support Web Bluetooth).
 
 ## Riding
 
-1. Connect the trainer, the handlebars and (optionally) a heart-rate strap — chips in the top right.
-2. Pick a ride type: **Free ride** (set the grade yourself), **Route** (one of four national park loops in 3D, or your own GPX file) or **Workout** (.zwo/.erg/.mrc).
-3. Start pedalling — the ride starts and records automatically.
-4. Shift with the hoods: **left = easier, right = harder**. ▲▼ = grade or workout intensity, ▶ = skip workout step, **A** = pause, **Y** = lap.
-5. **Finish ride** → summary → *Save & download .fit* → upload at strava.com/upload/select.
+The app has two screens: a **menu** to set up, and a full-window **ride screen**.
 
-**Demo mode** (orange **Demo** button, top right): try everything without a bike. The rider holds a steady 15 mph; power, cadence and heart rate are simulated from the gear, grade and workout, so shifting, grade changes, routes, the 3D view, workouts, laps, saving and .fit export all behave as on a real ride. Demo rides are saved with a "Demo ·" name. Press **Exit demo** (or the trainer chip) to stop.
+1. **Devices** — tap Trainer, Handlebars and (optionally) Heart rate to connect.
+2. **Ride** — pick **Free ride** (you set the grade), **Route** (four national-park loops in 3D, or your own GPX) or **Workout** (.zwo/.erg/.mrc). Free rides and workouts roll a park loop behind you — choose it under *Scenery*, or pick *None*.
+3. **Start riding** — the ride screen opens full screen and the ride records as soon as you pedal.
+4. On the bike: hoods **left = easier, right = harder** · ▲▼ grade or workout intensity · ▶ skip workout step · **A** pause · **Y** lap.
+5. Pause (A, Space or ❚❚) for **Resume · Finish ride · Lap · Skip step · Back to menu** and a list of the controls. **Finish ride** → summary → *Save & download .fit* → upload at strava.com/upload/select.
 
-Settings (⚙): weights, units, FTP, ERG or SIM shifting, difficulty. Past rides: **Rides**.
+Ride screen: power (3-second, coloured by zone, with a zone bar and the workout target) plus cadence, heart rate and gear along the bottom; time, distance and speed top left; grade and lap / distance to go — or the workout step — top right; the route profile or workout chart along the bottom edge.
 
-Keyboard: ← → shift, ↑ ↓ grade/intensity, Space start/pause, L lap, C camera, F full screen (3D view).
+Keyboard: ← → shift · ↑ ↓ grade/intensity · Space pause · L lap · N skip step · C camera · F full screen.
 
-The 3D view streams terrain and aerial imagery while you ride. To ride without internet, pick the route and press **Save for offline** first.
+**Demo** (top right of the menu): try everything without a bike. The rider holds a steady 15 mph; power, cadence and heart rate are simulated. Demo rides are saved as "Demo · …".
 
-Keyboard in the 3D view: C cycles cameras (chase, rider's eye, side, drone), F toggles full screen.
+**Settings** (⚙): units, weights, FTP, camera, time of day, handlebar buzz. *Advanced* holds the shifting method, difficulty, gear ratio, starting gear and the diagnostics log. A route's **⋯** menu has *Load GPX*, *Save for offline* (download the terrain to ride without internet) and *Remove*.
 
 ## Tests
 

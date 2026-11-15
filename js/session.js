@@ -32,6 +32,7 @@ export class Session extends EventTarget {
     this._manualGrade = 0;
     this.workoutBias = 1;
     this.demoSpeedMps = null;
+    this.autoStart = true;      // the app turns this off while you're on the menu
     this._resetRideState();
 
     ride.addEventListener('press', (e) => this._onPress(e.detail));
@@ -259,7 +260,7 @@ export class Session extends EventTarget {
     if (pedalling) this._lastActiveAt = nowPerf;
 
     // Auto start / auto pause
-    if (!this.running && !this.autoPaused && pedalling && this.movingS === 0) this.start();
+    if (this.autoStart && !this.running && !this.autoPaused && pedalling && this.movingS === 0) this.start();
     if (this.running && !pedalling && this.speedMps < 0.5 && nowPerf - this._lastActiveAt > AUTO_PAUSE_MS) {
       this.running = false;
       this.autoPaused = true;
@@ -278,10 +279,13 @@ export class Session extends EventTarget {
       const ds = this.speedMps * dt;
       this.distanceM += ds;
       if (this.mode === 'route' && this.route) {
-        const before = this.altitudeM;
-        this.altitudeM = routeAt(this.route, this.routePos).ele;
-        if (this.altitudeM > before) this.elevGainM += this.altitudeM - before;
+        // Only count climbing along the route — not the jump to its starting elevation.
+        const ele = routeAt(this.route, this.routePos).ele;
+        if (this._eleRoute === this.route && ele > this.altitudeM) this.elevGainM += ele - this.altitudeM;
+        this._eleRoute = this.route;
+        this.altitudeM = ele;
       } else {
+        this._eleRoute = null;
         const dz = ds * Math.sin(Math.atan(grade / 100));
         this.altitudeM += dz;
         if (dz > 0) this.elevGainM += dz;

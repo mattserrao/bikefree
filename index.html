@@ -8,222 +8,162 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <header>
-    <h1>bike<span>free</span></h1>
-    <div class="chips">
-      <button class="chip" id="trainerBtn" title="Connect or disconnect the trainer">
-        <span class="dot" id="trainerDot"></span><span id="trainerLabel">Connect trainer</span>
-      </button>
-      <button class="chip" id="rideBtn" title="Connect or disconnect the handlebars">
-        <span class="dot" id="rideDot"></span><span id="rideLabel">Connect handlebars</span>
-      </button>
-      <button class="chip" id="hrBtn" title="Connect a Bluetooth heart-rate strap">
-        <span class="dot" id="hrDot"></span><span id="hrLabel">Heart rate</span>
-      </button>
+  <!-- ================= SETUP ================= -->
+  <div id="setup" class="setup">
+    <header>
+      <h1>bike<span>free</span></h1>
+      <div class="spacer"></div>
       <button class="chip" id="historyBtn" title="Saved rides">Rides</button>
       <button class="chip icon" id="settingsBtn" title="Settings">⚙</button>
       <button class="chip demo" id="demoBtn" title="Try everything without a bike: the rider holds 15 mph">Demo</button>
-    </div>
-  </header>
+    </header>
 
-  <div id="demoBanner" class="banner demo-banner" hidden>
-    <span><b>Demo mode</b> — no bike needed. The rider holds a steady <b>15 mph</b>; power, cadence and heart rate are simulated.
-    Shift with <kbd>←</kbd><kbd>→</kbd>, change grade with <kbd>↑</kbd><kbd>↓</kbd>, and try a Route or Workout.</span>
-    <button id="demoOff" class="ghost">Exit demo</button>
-  </div>
+    <main>
+      <section class="step">
+        <h2>Devices</h2>
+        <div class="devices">
+          <button class="device" id="trainerBtn" title="Connect or disconnect the trainer">
+            <span class="dot" id="trainerDot"></span>
+            <span class="dev-text"><b>Trainer</b><span id="trainerLabel">Tap to connect</span></span>
+          </button>
+          <button class="device" id="rideBtn" title="Connect or disconnect the handlebars">
+            <span class="dot" id="rideDot"></span>
+            <span class="dev-text"><b>Handlebars</b><span id="rideLabel">Tap to connect</span></span>
+          </button>
+          <button class="device" id="hrBtn" title="Connect a Bluetooth heart-rate strap">
+            <span class="dot" id="hrDot"></span>
+            <span class="dev-text"><b>Heart rate</b><span id="hrLabel">Optional</span></span>
+          </button>
+        </div>
+        <p id="unsupported" class="notice" hidden>
+          Bluetooth isn't available here — open this page in <b>Chrome</b> on your Mac, from <b>localhost</b>. You can still try <b>Demo</b>.
+        </p>
+        <p id="demoNote" class="notice demo-note" hidden>
+          Demo mode: no bike needed — the rider holds a steady <b>15 mph</b>. <button id="demoOff" class="link">Exit demo</button>
+        </p>
+      </section>
 
-  <div id="unsupported" class="banner" hidden>
-    Web Bluetooth isn't available here. Open this page in <b>Chrome</b> on your Mac, from <b>localhost</b> or <b>https</b>.
-  </div>
+      <section class="step">
+        <h2>Ride</h2>
+        <div class="modes" role="tablist">
+          <button role="tab" data-mode="free" class="mode on"><b>Free ride</b><span>You set the grade</span></button>
+          <button role="tab" data-mode="route" class="mode"><b>Route</b><span>National parks in 3D, or your GPX</span></button>
+          <button role="tab" data-mode="workout" class="mode"><b>Workout</b><span>Trainer holds the target watts</span></button>
+        </div>
 
-  <main>
-    <section class="world-panel" id="worldPanel" hidden>
-      <div class="world-view" id="worldView">
-        <div class="hud" id="hud">
-          <div class="hud-main">
-            <div><span id="hCad">0</span><small>rpm</small></div>
-            <div><span id="hSpeed">0.0</span><small id="hSpeedU">mph</small></div>
+        <div class="mode-pane" data-pane="free">
+          <div class="pick-row">
+            <label class="pick-label">Scenery <select id="sceneSelect"></select></label>
           </div>
-          <div class="hud-gauge" id="hudGauge">
-            <svg viewBox="0 0 300 215" aria-label="Power meter">
-              <g id="gZones"></g>
-              <path id="gFill" fill="none" stroke-width="16" stroke-linecap="round"></path>
-              <g id="gTarget"><circle r="7" fill="#fff" stroke="#000" stroke-opacity=".4" stroke-width="2"></circle></g>
-              <line id="gNeedle" stroke="#fff" stroke-width="3" stroke-linecap="round"></line>
-              <g id="gTicks" fill="rgba(255,255,255,.65)" font-size="11" text-anchor="middle"></g>
-            </svg>
-            <div class="g-center">
-              <div class="g-power"><span id="hPower">0</span><small>W</small></div>
-              <div class="g-sub"><span id="gZone">Z1</span> · <span id="gPct">0%</span> FTP · <span id="gWkg">0.0</span> W/kg</div>
-              <div class="g-sub2">3s <b id="g3s">0</b> · avg <b id="gAvg">0</b> · target <b id="gTargetW">—</b></div>
-            </div>
-            <div class="g-gear"><small>gear</small><b id="hGear">12</b><div class="g-gearbar" id="gGearBar"></div></div>
+          <p class="info">Change the grade with ▲▼ on the handlebars (or ↑ ↓) while you ride.</p>
+        </div>
+
+        <div class="mode-pane" data-pane="route" hidden>
+          <div class="pick-row">
+            <select id="routeSelect"></select>
+            <details class="more">
+              <summary title="More">⋯</summary>
+              <div class="menu">
+                <label class="menu-item">Load a GPX file…<input type="file" id="gpxFile" accept=".gpx,application/gpx+xml" hidden></label>
+                <button type="button" class="menu-item" id="routeOffline" title="Download this route's terrain and imagery so the 3D view works without internet">Save for offline</button>
+                <button type="button" class="menu-item danger" id="routeDelete">Remove this route</button>
+              </div>
+            </details>
           </div>
-          <div class="hud-side">
-            <div><span id="hGrade">0.0%</span><small>grade</small></div>
-            <div><span id="hLap">1</span><small id="hLapLabel">lap</small></div>
-            <div><span id="hLeft">0.0</span><small id="hLeftU">mi to go</small></div>
-            <div><span id="hTime">0:00</span><small>time</small></div>
-            <div><span id="hHr">--</span><small>bpm</small></div>
-          </div>
-          <div class="hud-title" id="hTitle"></div>
-          <div class="hud-loading" id="hLoading" hidden>Loading terrain…</div>
-          <div class="hud-demo" id="hDemo" hidden>Demo · 15 mph</div>
-        </div>
-        <div class="world-credit">Imagery: USGS The National Map (NAIP) · Elevation: AWS Terrain Tiles · Roads: © OpenStreetMap contributors, routed with BRouter</div>
-      </div>
-      <div class="world-bar">
-        <div class="seg" id="camSeg">
-          <button data-cam="chase" class="on">Chase</button><button data-cam="eye">Rider's eye</button><button data-cam="side">Side</button><button data-cam="drone">Drone</button>
-        </div>
-        <div class="seg" id="timeSeg">
-          <button data-time="morning">Morning</button><button data-time="midday" class="on">Midday</button><button data-time="golden">Golden hour</button>
-        </div>
-        <div class="spacer"></div>
-        <span class="muted small" id="worldNote"></span>
-        <button id="worldFull" title="Full screen (F)">Full screen</button>
-        <button id="worldClose" class="ghost" title="Hide the 3D view">Hide 3D</button>
-      </div>
-    </section>
-
-    <section class="hero">
-      <div class="tile big">
-        <div class="label" id="powerLabel">Power</div>
-        <div class="value" id="power">0</div>
-        <div class="unit">W · 3s <b id="power3s">0</b></div>
-      </div>
-      <div class="tile big gear-tile">
-        <div class="label">Gear</div>
-        <div class="value"><span id="gear">12</span><small>/24</small></div>
-        <div class="gearbar" id="gearbar"></div>
-        <div class="gear-hint" id="gearHint">Left = easier · Right = harder</div>
-      </div>
-      <div class="tile big">
-        <div class="label">Cadence</div>
-        <div class="value" id="cadence">0</div>
-        <div class="unit">rpm</div>
-      </div>
-    </section>
-
-    <section class="tiles">
-      <div class="tile"><div class="label">Speed</div><div class="value" id="speed">0.0</div><div class="unit" id="speedUnit">mph</div></div>
-      <div class="tile"><div class="label">Time</div><div class="value" id="time">0:00</div><div class="unit" id="timeState">ready</div></div>
-      <div class="tile"><div class="label">Distance</div><div class="value" id="distance">0.00</div><div class="unit" id="distUnit">mi</div></div>
-      <div class="tile"><div class="label">Avg power</div><div class="value" id="avgPower">0</div><div class="unit">W</div></div>
-      <div class="tile"><div class="label">Climbed</div><div class="value" id="elev">0</div><div class="unit" id="elevUnit">ft</div></div>
-      <div class="tile"><div class="label">Heart rate</div><div class="value" id="hr">--</div><div class="unit">bpm</div></div>
-    </section>
-
-    <section class="panel ridebar">
-      <button id="startBtn" class="primary">Start</button>
-      <button id="lapBtn" title="Lap (Y button)">Lap</button>
-      <button id="finishBtn" title="End the ride and save it">Finish ride</button>
-      <span class="ride-status" id="rideStatus">Pedal to start. Your ride is recorded automatically.</span>
-    </section>
-
-    <section class="panel modes">
-      <div class="tabs" role="tablist">
-        <button role="tab" data-mode="free" class="tab on">Free ride</button>
-        <button role="tab" data-mode="route" class="tab">Route</button>
-        <button role="tab" data-mode="workout" class="tab">Workout</button>
-      </div>
-
-      <!-- Free ride -->
-      <div class="mode-pane" data-pane="free">
-        <div class="terrain">
-          <div class="grade-read">
-            <div class="label">Grade</div>
-            <div class="value" id="grade">0.0%</div>
-          </div>
-          <button id="gradeDown" class="round" title="Easier (D-pad ▼ / ↓)">−</button>
-          <input type="range" id="gradeInput" min="-10" max="16" step="0.5" value="0">
-          <button id="gradeUp" class="round" title="Steeper (D-pad ▲ / ↑)">+</button>
-          <button id="flatBtn">Flat</button>
-        </div>
-      </div>
-
-      <!-- Route -->
-      <div class="mode-pane" data-pane="route" hidden>
-        <div class="pick-row">
-          <select id="routeSelect"></select>
-          <label class="filebtn">Load GPX…<input type="file" id="gpxFile" accept=".gpx,application/gpx+xml" hidden></label>
-          <button id="routeGo" class="primary">Ride this route</button>
-          <button id="route3d" title="Show this route in 3D">3D view</button>
-          <button id="routeRestart" class="ghost">Restart</button>
-          <button id="routeDelete" class="ghost" title="Remove this route from your library">Remove</button>
-          <button id="routeOffline" class="ghost" title="Download this route's terrain and imagery so the 3D view works without internet">Save for offline</button>
-        </div>
-        <div class="offline-status muted small" id="offlineStatus"></div>
-        <div class="route-info" id="routeInfo"></div>
-        <div class="route-stats" id="routeStats" hidden>
-          <div><div class="label">Grade now</div><div class="value" id="rGrade">0.0%</div></div>
-          <div><div class="label">Next <span id="rAheadLabel">½ mi</span></div><div class="value" id="rAhead">0.0%</div></div>
-          <div id="rLapBox"><div class="label">Lap</div><div class="value" id="rLap">1</div></div>
-          <div><div class="label" id="rLeftLabel">To go</div><div class="value" id="rLeft">0.0</div></div>
-          <div><div class="label">Climb left</div><div class="value" id="rClimb">0</div></div>
-          <div><div class="label">Done</div><div class="value" id="rPct">0%</div></div>
-        </div>
-        <div class="route-views">
+          <div class="info" id="routeInfo"></div>
+          <div class="offline-status info" id="offlineStatus"></div>
           <canvas id="profile" class="profile"></canvas>
-          <canvas id="trace" class="trace"></canvas>
         </div>
-      </div>
 
-      <!-- Workout -->
-      <div class="mode-pane" data-pane="workout" hidden>
-        <div class="pick-row">
-          <select id="workoutSelect"></select>
-          <label class="filebtn">Load .zwo / .erg / .mrc…<input type="file" id="workoutFile" accept=".zwo,.erg,.mrc,.xml" hidden></label>
-          <button id="workoutGo" class="primary">Start this workout</button>
-          <button id="workoutSkip" class="ghost" title="Skip to the next step (D-pad ▶)">Skip step</button>
-          <button id="workoutDelete" class="ghost" title="Remove this workout from your library">Remove</button>
-        </div>
-        <div class="route-info" id="workoutInfo"></div>
-        <div class="wk-now" id="wkNow" hidden>
-          <div><div class="label">Target</div><div class="value" id="wkTarget">—</div></div>
-          <div><div class="label" id="wkStepLabel">Step</div><div class="value" id="wkStepLeft">0:00</div></div>
-          <div><div class="label">Next</div><div class="value small" id="wkNext">—</div></div>
-          <div><div class="label">Workout left</div><div class="value" id="wkLeft">0:00</div></div>
-          <div class="wk-bias">
-            <div class="label">Intensity</div>
-            <div class="inline">
-              <button id="biasDown" class="round" title="Easier (D-pad ▼)">−</button>
-              <span class="value" id="wkBias">100%</span>
-              <button id="biasUp" class="round" title="Harder (D-pad ▲)">+</button>
-            </div>
+        <div class="mode-pane" data-pane="workout" hidden>
+          <div class="pick-row">
+            <select id="workoutSelect"></select>
+            <details class="more">
+              <summary title="More">⋯</summary>
+              <div class="menu">
+                <label class="menu-item">Load .zwo / .erg / .mrc…<input type="file" id="workoutFile" accept=".zwo,.erg,.mrc,.xml" hidden></label>
+                <button type="button" class="menu-item danger" id="workoutDelete">Remove this workout</button>
+              </div>
+            </details>
+            <label class="pick-label">Scenery <select id="sceneSelect2"></select></label>
           </div>
+          <div class="info" id="workoutInfo"></div>
+          <canvas id="workoutChart" class="wk-chart"></canvas>
         </div>
-        <canvas id="workoutChart" class="wk-chart"></canvas>
-      </div>
-    </section>
+      </section>
 
-    <p class="hints">
-      Handlebars: left = easier, right = harder · ▲▼ grade (free ride) or intensity (workout) · ▶ skip step · A start/pause · Y lap.
-      Keyboard: <kbd>←</kbd><kbd>→</kbd> shift · <kbd>↑</kbd><kbd>↓</kbd> grade/intensity · <kbd>Space</kbd> start/pause · <kbd>L</kbd> lap · <kbd>C</kbd> camera · <kbd>F</kbd> full screen.
-    </p>
+      <div class="start-row">
+        <button id="startBtn" class="primary start">Start riding</button>
+        <span class="info" id="startNote"></span>
+      </div>
+    </main>
+  </div>
 
-    <details class="panel" id="diag">
-      <summary>Diagnostics</summary>
-      <div class="diag-grid">
-        <div>Trainer target: <b id="target">—</b></div>
-        <div>Real gear ratio: <b id="realRatio">—</b></div>
-        <div>Trainer speed: <b id="trainerSpeed">—</b></div>
-        <div>Handlebars: <b id="rideInfo">—</b></div>
+  <!-- ================= RIDE ================= -->
+  <div id="rideScreen" class="ride-screen" hidden>
+    <div class="world-view" id="worldView"></div>
+    <div class="hud">
+      <div class="hud-tl">
+        <div class="stat"><b id="hTime">0:00</b><small>time</small></div>
+        <div class="stat"><b id="hDist">0.0</b><small id="hDistU">mi</small></div>
+        <div class="stat"><b id="hSpeed">0.0</b><small id="hSpeedU">mph</small></div>
       </div>
-      <div class="log-head">
-        <div class="inline">
-          <label class="check"><input type="checkbox" id="rawToggle"> Raw controller bytes</label>
-          <label class="check"><input type="checkbox" id="debugToggle"> Details</label>
-          <button id="rideAnyBtn" class="ghost" title="Connect handlebars showing every Zwift device in the picker">Pick any Zwift device</button>
-        </div>
-        <div class="inline">
-          <button id="copyLog" class="ghost">Copy log</button>
-          <button id="clearLog" class="ghost">Clear</button>
+
+      <div class="hud-top">
+        <div class="pill" id="hState">Pedal to start</div>
+        <div class="pill demo" id="hDemo" hidden>Demo · 15 mph</div>
+        <div class="pill" id="hLoading" hidden>Loading scenery…</div>
+        <div class="pill warn" id="hAlert" hidden></div>
+      </div>
+
+      <div class="hud-tr">
+        <div class="stat big"><b id="hGrade">0.0%</b><small id="hGradeLabel">grade</small></div>
+        <div class="stat" id="hCtx1Box"><b id="hCtx1">—</b><small id="hCtx1L">lap</small></div>
+        <div class="stat" id="hCtx2Box"><b id="hCtx2">—</b><small id="hCtx2L">to go</small></div>
+        <div class="hud-buttons">
+          <button id="camBtn" class="hud-btn" title="Change camera (C)" aria-label="Change camera"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-3v10l-6-3z"/></svg></button>
+          <button id="pauseBtn" class="hud-btn" title="Pause (A button / Space)" aria-label="Pause"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
         </div>
       </div>
-      <ol id="log"></ol>
-    </details>
-  </main>
+
+      <div class="hud-bottom">
+        <div class="strip">
+          <div class="side"><b id="hCad">0</b><small>rpm</small></div>
+          <div class="power">
+            <div class="pw"><b id="hPower">0</b><small>W</small></div>
+            <div class="zbar" id="zBar"><i id="zFill"></i><u id="zTarget" hidden></u></div>
+            <div class="pw-sub" id="hPowerSub">&nbsp;</div>
+          </div>
+          <div class="side"><b id="hHr">--</b><small>bpm</small></div>
+          <div class="side gear" id="hGearBox"><b id="hGear">12</b><small>gear</small></div>
+        </div>
+        <canvas id="hudProfile" class="hud-profile"></canvas>
+      </div>
+
+      <div class="hud-title" id="hTitle"></div>
+    </div>
+
+    <div class="pause-overlay" id="pauseOverlay" hidden>
+      <div class="pause-card">
+        <h2 class="pause-title">Paused</h2>
+        <div class="pause-actions">
+          <button id="resumeBtn" class="primary">Resume</button>
+          <button id="finishBtn">Finish ride</button>
+        </div>
+        <dl class="controls">
+          <dt>Shift</dt><dd>Left / right hood buttons · <kbd>←</kbd> <kbd>→</kbd></dd>
+          <dt>Grade or intensity</dt><dd>▲ ▼ · <kbd>↑</kbd> <kbd>↓</kbd></dd>
+          <dt>Pause / resume</dt><dd>A · <kbd>Space</kbd></dd>
+          <dt>Lap</dt><dd>Y · <kbd>L</kbd></dd>
+          <dt>Skip workout step</dt><dd>▶ · <kbd>N</kbd></dd>
+          <dt>Camera · full screen</dt><dd><kbd>C</kbd> · <kbd>F</kbd></dd>
+        </dl>
+        <p class="credit">3D: imagery USGS NAIP · elevation AWS Terrain Tiles · roads © OpenStreetMap contributors, routed with BRouter</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
 
   <!-- Settings -->
   <dialog id="settings">
@@ -246,24 +186,58 @@
       <label>FTP (watts) — used for workouts
         <input type="number" name="ftp" min="50" max="600" step="1">
       </label>
-      <label>Shifting method
-        <select name="shiftMode">
-          <option value="erg">ERG — trainer holds the watts for your gear and cadence</option>
-          <option value="sim">SIM — trainer gets an adjusted grade (experimental)</option>
-        </select>
-      </label>
-      <label><span>Difficulty <b id="diffOut">100%</b></span>
-        <input type="range" name="difficulty" min="50" max="150" step="5">
-      </label>
       <div class="two">
-        <label>Real gear ratio (SIM, 0 = auto)
-          <input type="number" name="realRatio" min="0" max="6" step="any">
+        <label>Camera
+          <select name="worldCam">
+            <option value="chase">Chase</option><option value="eye">Rider's eye</option>
+            <option value="side">Side</option><option value="drone">Drone</option>
+          </select>
         </label>
-        <label>Starting gear
-          <input type="number" name="startGear" min="1" max="24" step="1">
+        <label>Time of day
+          <select name="worldTime">
+            <option value="morning">Morning</option><option value="midday">Midday</option><option value="golden">Golden hour</option>
+          </select>
         </label>
       </div>
       <label class="check"><input type="checkbox" name="haptics"> Buzz handlebars on shift and workout steps</label>
+      <details class="advanced">
+        <summary>Advanced</summary>
+        <div class="adv-body">
+          <label>Shifting method
+            <select name="shiftMode">
+              <option value="erg">ERG — trainer holds the watts for your gear and cadence</option>
+              <option value="sim">SIM — trainer gets an adjusted grade (experimental)</option>
+            </select>
+          </label>
+          <label><span>Difficulty <b id="diffOut">100%</b></span>
+            <input type="range" name="difficulty" min="50" max="150" step="5">
+          </label>
+          <div class="two">
+            <label>Real gear ratio (SIM, 0 = auto)
+              <input type="number" name="realRatio" min="0" max="6" step="any">
+            </label>
+            <label>Starting gear
+              <input type="number" name="startGear" min="1" max="24" step="1">
+            </label>
+          </div>
+          <div class="diag" id="diag">
+            <div class="diag-grid">
+              <div>Trainer target <b id="target">—</b></div>
+              <div>Real gear ratio <b id="realRatio">—</b></div>
+              <div>Trainer speed <b id="trainerSpeed">—</b></div>
+              <div>Handlebars <b id="rideInfo">—</b></div>
+            </div>
+            <div class="log-head">
+              <label class="check"><input type="checkbox" id="rawToggle"> Raw bytes</label>
+              <label class="check"><input type="checkbox" id="debugToggle"> Details</label>
+              <button type="button" id="rideAnyBtn" class="ghost" title="Connect handlebars showing every Zwift device in the picker">Pick any Zwift device</button>
+              <button type="button" id="copyLog" class="ghost">Copy log</button>
+              <button type="button" id="clearLog" class="ghost">Clear</button>
+            </div>
+            <ol id="log"></ol>
+          </div>
+        </div>
+      </details>
       <div class="dialog-actions">
         <button value="save" class="primary">Save</button>
         <button value="cancel" class="ghost" formnovalidate>Cancel</button>
