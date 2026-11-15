@@ -243,6 +243,15 @@ Goal: blend the two approaches — Codex's stylized scenery up close, the real l
 - [x] Demo Hills rode through a deep trench: its invented hills (150–260 m) sit hundreds of metres below the real ground where the loop is placed (Vermont), so the real terrain was cut down to the road. It now has its own stylized scene (meadow and mixed woods) that shapes itself around the road, with the real horizon turned off (`"realHorizon": false`)
 - [ ] On-bike check
 
+### v0.11.5 — Virtual pacer *(test branch `v0.11.5`)*
+- [x] **Pacer** selector under the ride preview (Off / 75 / 100 / 125 / 150 / 175 / 200 W), remembered between rides; **P** cycles it on the ride screen.
+- [x] Works on every map: routes (follows the real grades), free ride and workouts (uses the same grade you ride, on the scenery loop).
+- [x] Same physics as you (your weight and bike), stepped on the session clock; only moves while your ride is running, so it waits when you pause.
+- [x] Starts 8 m ahead of you when the ride starts (or when you switch it on mid-ride); a resumed ride keeps its position.
+- [x] Second copy of the Blender rider in a **yellow-and-black checkered jersey** (model-space checker shader) with yellow bike accents, a bike-width inside your line so you can ride alongside or pass.
+- [x] HUD pill: "Pacer 150 W · 120 ft ahead / behind / alongside".
+- [x] `js/pacer.js` + `test/pacer.test.mjs`.
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

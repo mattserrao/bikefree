@@ -11,7 +11,7 @@ function b64(s) {
   return out.buffer;
 }
 
-function partGeometry(part, palette) {
+function partGeometry(part, palette, markIndex = -1) {
   const pos16 = new Int16Array(b64(part.pos));
   const pos = new Float32Array(pos16.length);
   for (let i = 0; i < pos.length; i++) pos[i] = pos16[i] / 4000;
@@ -26,6 +26,7 @@ function partGeometry(part, palette) {
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3, true));
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  if (markIndex >= 0) g.setAttribute('aJersey', new THREE.BufferAttribute(Float32Array.from(ci, (c) => (c === markIndex ? 1 : 0)), 1));
   g.setIndex(new THREE.BufferAttribute(new Uint16Array(b64(part.idx)), 1));
   g.computeBoundingSphere();
   return g;
@@ -50,17 +51,51 @@ function makeShadow() {
   return m;
 }
 
-/** Load the Blender model. Resolves to {group, update(pos, fwd, crank, speed, dt)}. */
-export async function loadRider() {
-  const data = await (await fetch(MODEL_URL)).json();
+let modelData = null;          // shared by the rider and the pacer
+const JERSEY = 2;              // palette index of the jersey / bike accent colour
+const PACER_YELLOW = '#ffd21f';
+const PACER_DARK = '#16181c';
+
+/** Yellow-and-black checks on the jersey, in model space so they stay put as the rider moves. */
+function checkerMaterial() {
+  const m = new THREE.MeshLambertMaterial({ vertexColors: true });
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uCheckA = { value: new THREE.Color(PACER_YELLOW) };
+    sh.uniforms.uCheckB = { value: new THREE.Color(PACER_DARK) };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aJersey;\nvarying float vJersey;\nvarying vec3 vModel;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvJersey = aJersey;\nvModel = position;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 uCheckA;\nuniform vec3 uCheckB;\nvarying float vJersey;\nvarying vec3 vModel;')
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        if (vJersey > 0.5) {
+          vec3 q = floor(vModel / 0.075);
+          diffuseColor.rgb = mod(q.x + q.y + q.z, 2.0) < 0.5 ? uCheckA : uCheckB;
+        }`);
+  };
+  m.customProgramCacheKey = () => 'pacer-checker';
+  return m;
+}
+
+/**
+ * Load the Blender model. Resolves to {group, update(pos, fwd, crank, speed, dt)}.
+ * opts.jersey = 'checker' dresses the rider as the pacer: yellow-checkered jersey, yellow bike accents.
+ */
+export async function loadRider(opts = {}) {
+  modelData = modelData || fetch(MODEL_URL).then((r) => r.json());
+  let data;
+  try { data = await modelData; } catch (err) { modelData = null; throw err; }
   if (data.format !== 'bikefree-model-1') throw new Error('Unknown rider model format');
-  const palette = data.palette.map((h) => new THREE.Color(h)); // hex is sRGB → linear
+  const checker = opts.jersey === 'checker';
+  const palette = data.palette.map((h, i) => new THREE.Color(checker && i === JERSEY ? PACER_YELLOW : h)); // hex is sRGB → linear
   const material = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const jerseyMat = checker ? checkerMaterial() : material;
   const group = new THREE.Group();
-  group.name = 'rider';
+  group.name = checker ? 'pacer' : 'rider';
   const parts = {};
   for (const [name, part] of Object.entries(data.parts)) {
-    const mesh = new THREE.Mesh(partGeometry(part, palette), material);
+    const isBody = checker && name === 'RiderBody';
+    const mesh = new THREE.Mesh(partGeometry(part, palette, isBody ? JERSEY : -1), isBody ? jerseyMat : material);
     mesh.position.fromArray(part.origin);
     mesh.name = name;
     group.add(mesh);

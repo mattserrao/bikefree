@@ -1,12 +1,13 @@
 import { Trainer } from './trainer.js';
 import { Ride } from './ride.js';
 import { HeartRate } from './hr.js';
-import { Session } from './session.js';
+import { Session, TICK_MS } from './session.js';
 import { powerRequired, speedFromCadence, WHEEL_CIRC } from './physics.js';
 import { loadSettings, saveSettings, KG_PER_LB, MI_PER_KM } from './settings.js';
 import { rideToFit, fitFilename, summarize } from './recorder.js';
 import * as store from './store.js';
-import { parseGpx, buildRoute, averageGradeAhead } from './gpx.js';
+import { parseGpx, buildRoute, averageGradeAhead, wrapDist, routeAt } from './gpx.js';
+import { Pacer, PACER_WATTS } from './pacer.js';
 import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor, markFtpTest, ftpFromTwentyMinutes } from './workout.js';
 import { drawProfile, drawWorkout, drawTrace, gradeColor } from './views.js';
 import { Profiles, GENDERS, initials, cmToFtIn, ftInToCm } from './profiles.js';
@@ -233,6 +234,50 @@ $('startSeg').addEventListener('click', (e) => { const b = e.target.closest('but
 renderRouteChoice();
 const chosenStartM = (r) => routeStartM(r, routeChoice);
 
+// ---------- Virtual pacer ----------
+// A rider in a yellow-checkered jersey who holds a set power on the same road physics as you.
+const pacer = new Pacer(PACER_WATTS.includes(Number(settings.pacerWatts)) ? Number(settings.pacerWatts) : 0);
+let pacerKey = null;
+const onRoute = () => session.mode === 'route' && session.route;
+const riderDist = () => (onRoute() ? session.routeRidden : session.distanceM);
+const rideKey = () => (onRoute() ? `r:${session.route.name}:${session.routeStart}` : session.mode === 'workout' ? `w:${session.workout?.id ?? session.workout?.name}` : 'free');
+function resetPacer() {
+  pacer.reset(riderDist());
+  pacerKey = rideKey();
+}
+function renderPacerChoice() {
+  for (const b of $('pacerSeg').children) b.classList.toggle('on', Number(b.dataset.w) === pacer.watts);
+}
+function setPacer(watts) {
+  const wasOn = pacer.on;
+  pacer.watts = watts;
+  settings.pacerWatts = watts;
+  saveSettings(settings);
+  if (watts && !wasOn) resetPacer();   // switching on: appear just ahead of you
+  renderPacerChoice();
+  if (watts) log('app', `Pacer: ${watts} W`); else log('app', 'Pacer off');
+  renderHud();
+}
+$('pacerSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setPacer(Number(b.dataset.w)); });
+renderPacerChoice();
+function stepPacer() {
+  // Same fixed step as the session, so you and the pacer share one clock.
+  const dt = TICK_MS / 1000;
+  if (!pacer.on || !session.running) return;
+  if (pacerKey !== rideKey()) resetPacer();
+  const r = onRoute() ? session.route : null;
+  const gradeAt = r ? (d) => routeAt(r, wrapDist(r, session.routeStart + d)).grade : () => session.gradePct;
+  pacer.step(dt, gradeAt, session.physicsParams());
+  if (r && !r.closed) pacer.dist = Math.min(pacer.dist, r.total);
+}
+/** Gap to the pacer in metres (+ = pacer ahead). */
+const pacerGap = () => pacer.dist - riderDist();
+function fmtGap(m) {
+  const a = Math.abs(m);
+  if (imperial()) return a < 160.9 ? `${Math.round(a * 3.28084)} ft` : `${(a / 1609.344).toFixed(2)} mi`;
+  return a < 1000 ? `${Math.round(a)} m` : `${(a / 1000).toFixed(2)} km`;
+}
+
 // ---------- Preview panel (right column) ----------
 const fact = (v, label) => `<div class="fact"><b>${v}</b><small>${label}</small></div>`;
 function renderPreview() {
@@ -328,6 +373,7 @@ async function startRide() {
     session.setFree();
     log('app', 'Free ride');
   }
+  if (!session.hasRide || pacerKey !== rideKey()) resetPacer();
   if (pausedByUser()) session.start();
   onRideScreen = true;
   session.autoStart = true;
@@ -368,6 +414,7 @@ document.addEventListener('keydown', (e) => {
   else if ((k === 'c' || k === 'C') && onRideScreen) cycleCamera();
   else if ((k === ',' || k === '.') && trainer.demo) setDemoSpeed(DEMO_MPH + (k === '.' ? 5 : -5));
   else if ((k === 'f' || k === 'F') && onRideScreen) toggleFullscreen();
+  else if (k === 'p' || k === 'P') { const opts = [0, ...PACER_WATTS]; setPacer(opts[(opts.indexOf(pacer.watts) + 1) % opts.length]); }
   else return;
   e.preventDefault();
 });
@@ -407,6 +454,14 @@ async function openWorld(route) {
     // On a route the rider is where the ride is; otherwise the scenery loop simply rolls by.
     const pos = session.mode === 'route' && session.route === route ? session.routePos : session.distanceM % route.total;
     return { pos, speed: session.speedMps, cadence: session.cadence, riding: true };
+  });
+  world.setPacerSource(() => {
+    if (!pacer.on) return null;
+    const t = route.total;
+    const pos = session.mode === 'route' && session.route === route
+      ? wrapDist(route, session.routeStart + pacer.dist)
+      : ((pacer.dist % t) + t) % t;
+    return { pos, speed: session.running ? pacer.speed : 0, cadence: session.running ? pacer.cadence : 0 };
   });
   world.start();
   log('3d', `3D view: ${route.name}`);
@@ -548,6 +603,13 @@ function renderHud() {
 
   $('hudRows').hidden = [1, 2, 3].every((n) => $(`hRow${n}Box`).hidden);
 
+  // Pacer: its power and how far ahead or behind it is.
+  $('hPacer').hidden = !pacer.on;
+  if (pacer.on) {
+    const gap = pacerGap();
+    $('hPacerT').textContent = `Pacer ${pacer.watts} W · ${Math.abs(gap) < 3 ? 'alongside' : `${fmtGap(gap)} ${gap > 0 ? 'ahead' : 'behind'}`}`;
+  }
+
   // Bottom edge: route profile or workout chart (redrawn once a second; blank on free rides).
   const now = performance.now();
   if (now - lastProfileDraw > 1000) {
@@ -592,6 +654,7 @@ function trackFtpTest() {
 
 session.addEventListener('tick', () => {
   trackFtpTest();
+  stepPacer();
   renderHud();
   renderDiag();
   if (!onRideScreen) {
@@ -1217,4 +1280,4 @@ registerServiceWorker(log);
 log('app', 'Ready. Close Zwift, Zwift Companion and the Wahoo app, then connect your devices.');
 
 // For debugging in the browser console.
-window.bikefree = { session, trainer, ride, hrStrap, store, profiles, get world() { return world; }, get ftpRun() { return ftpRun; } };
+window.bikefree = { pacer, session, trainer, ride, hrStrap, store, profiles, get world() { return world; }, get ftpRun() { return ftpRun; } };

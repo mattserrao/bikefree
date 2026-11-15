@@ -23,7 +23,9 @@ The app has two screens: a **menu** to set up, and a full-window **ride screen**
 
 Ride screen: power (3-second, coloured by zone, with a Z1–Z6 badge, a zone bar and the workout target) plus cadence, heart rate and gear along the bottom; time, distance and speed top left; grade (coloured by steepness), the next ½ mile, lap and distance to go — or the workout step — top right; the route profile or workout chart along the bottom edge.
 
-Keyboard: ← → shift · ↑ ↓ grade/intensity · Space pause · L lap · N skip step · C camera · F full screen.
+Keyboard: ← → shift · ↑ ↓ grade/intensity · Space pause · L lap · N skip step · C camera · F full screen · P pacer.
+
+**Pacer**: pick 75–200 W under the ride preview and a rider in a yellow checkered jersey starts just ahead of you, holding that power on the same road (works on any map). The HUD shows how far ahead or behind it is.
 
 **Demo** (top right of the menu): try everything without a bike. The rider holds a steady speed — 15 mph to start, adjustable from 5 to 100 mph with the slider (menu or ride screen) or the `,` / `.` keys; power, cadence and heart rate are simulated. Demo rides are saved as "Demo · …".
 
