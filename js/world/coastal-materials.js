@@ -150,6 +150,9 @@ ${shore ? `
         vec3 deep = bfWater * (.74 + waterNoise * .32);
         deep = mix(deep, deep * vec3(.62, .72, .6), smoothstep(.62, .78, bfFbm(p * .012)) * smoothstep(40., 140., offshore) * (1. - smoothstep(260., 520., offshore)) * .7);
         vec3 color = mix(bfShallow * (1.05 + waterNoise * .1), deep, smoothstep(1., 16., depth));
+        // the water's own colour follows the light (dark blue at night, not glowing turquoise)
+        float bfLight = clamp(dot(uSkyHorizon, vec3(.3, .59, .11)) * 1.35, .1, 1.);
+        color *= bfLight;
         color *= .96 + (.02 * swell + .014 * crossWave) * waveDetail;
         color = mix(color, sky, fresnel);
         float sun = pow(max(dot(reflect(-normalize(uSunDir), N), V), 0.), 160.);
@@ -158,14 +161,14 @@ ${shore ? `
         // breakers: lines of white water rolling in to the shore, broken up along their length
         float along = bfNoise(p * .021 + vec2(0., t * .05)) * 5.;
         float phase = offshore * .075 + t * (.85 + bfRough * .3) + along;
-        float crest = smoothstep(.86, .985, sin(phase)) * (1. - smoothstep(20., 150. + bfRough * 80., offshore)) * smoothstep(3., 12., offshore);
+        float crest = smoothstep(.86, .985, sin(phase)) * (1. - smoothstep(15., 60. + bfRough * 40., offshore)) * smoothstep(3., 10., offshore);
         float trail = smoothstep(.2, .95, sin(phase - .55)) * (1. - smoothstep(10., 70., offshore)) * .55;
         float lace = smoothstep(.45, .8, bfFbm(p * .16 + vec2(t * .07, -t * .05)));
         float swash = 1. - smoothstep(1.5, 9. + 4. * sin(t * .7 + along), offshore);
         float broken = smoothstep(.3, .7, bfFbm(p * .045 + vec2(t * .03, 0.)));
-        float foam = max(crest * (.35 + broken * .65), trail * lace * broken) + swash * (.55 + lace * .45);
+        float foam = max(crest * broken * broken * 1.3, trail * lace * broken) + swash * (.55 + lace * .45);
         foam *= waveDetail * .6 + .4;
-        color = mix(color, vec3(.9, .95, .93), clamp(foam, 0., .92));
+        color = mix(color, vec3(.9, .95, .93) * (.25 + .75 * bfLight), clamp(foam, 0., .92));
         // a soft wet band of spray-darkened water against the cliffs
         color *= 1. - (1. - smoothstep(0., 30., offshore)) * .08;
 ` : `

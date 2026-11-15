@@ -296,14 +296,19 @@ Goal: make Big Sur the showcase course — visually stunning, the one you open t
 - Traffic: light and realistic — a car every 20–40 s each way, some RVs, motorcycles and cyclists; some pull into the overlooks
 
 **Passes**
-- [ ] Real landform: bake a high-resolution real elevation corridor for the route (sea cliffs, Bixby gorge, Hurricane Point, Little Sur) into the bundle; keep the stylized look on top
-- [ ] Ocean: surf line and foam on rocks, swell, deep-to-shallow colour, sea stacks and coves where they really are
-- [ ] Weather: marine layer (fog bank on the sea, rolling in over the road), drifting clouds with shadows, wind in grass and trees; optional light rain/drizzle with wet road
-- [ ] Traffic on Highway 1: cars, RVs, motorcycles and other cyclists both ways, pulling into the overlooks (reuse v0.12 `city-life.js` traffic)
-- [ ] Life: pelicans and gulls, waves on the beach below Bixby, cows on the Rocky Creek grassland, condor overhead
-- [ ] Landmarks: Bixby Bridge rebuilt to scale, Rocky Creek Bridge, Point Sur lighthouse on its rock, Little Sur river mouth, Hurricane Point
-- [ ] Rendering: post-processing (tone mapping, bloom on sun glint, subtle depth haze), better shadows near the rider; keep High / Balanced / Light for the M4 Air
-- [ ] On-bike check and M4 Air smoothness
+- [x] **Real landform** — `tools/build_terrain_grid.py` bakes AWS Terrain Tiles into `routes/scenes/bigsur-terrain.json` (1.7 MB gzipped): 10 m blocks within 900 m of the road, 40 m out to 9 km. The source fills the near-shore ocean with flat 0–3 m "land"; the builder turns that into a shelving sea floor (sea = low ground connected to the open ocean). `js/world/real-coast.js` presses the GPX road in, opens the real gorges under the bridges, traces the creeks down the real valley floors (Bixby, Rocky, Garrapata, Malpaso, Little Sur) and keeps a signed distance to the shore. The real horizon is off for Big Sur (its own grid reaches the horizon; the tile horizon showed the flat fill as a sand plain)
+- [x] **Bridges** — `js/world/coast-bridges.js`: open-spandrel arches (Bixby 228 m over a 77 m gorge, Rocky Creek, Garrapata, Granite Canyon) with twin ribs, spandrel columns and great piers on the real slopes; deck bridges elsewhere; open balustrade parapets you can see the sea through
+- [x] **Vegetation from the ground** — golden grass on ridges and south faces, olive scrub on north faces, redwood / oak / pine in the canyons, cypress on the bluffs, sand by the sea
+- [x] **Ocean** — shallows from the sea floor, kelp-dark patches, broken breakers rolling in to the real shoreline, swash, rocks along the true shore; dark at night
+- [x] **Weather** (`js/world/weather.js`, all stylized routes; Settings › Weather, **W** on the ride screen): *Clear*, *Marine layer* (fog bank on the sea, upper layers stop at the shore, the lowest creep up the canyons; ride into it and the air closes in; climb Hurricane Point and you're above it), *Clouds* (shadows drifting over the hills), *Rain* (streaks, grey light, wet road that picks up the sky); wind in grass, flowers and trees in every preset; changes ease in
+- [x] **Traffic** (`js/world/highway-traffic.js`, scene option `traffic`): cars, SUVs, RVs, motorcycles and other cyclists both ways, ~4 a minute; they overtake when the other lane is clear and wait behind you when it isn't; a cyclist may sit on your wheel; some pull into the overlooks; parked cars at the overlooks; lights at night
+- [x] **Life and landmarks** (`js/world/coast-life.js`): pelicans gliding in lines along the shore, gulls over the cliffs, a condor over the ridges, cattle on the Point Sur terrace, Point Sur Lighthouse (lamp and turning beam at night); signs for Rocky Creek, Hurricane Point, Little Sur and Point Sur; a Hurricane Point overlook
+- [x] **Rendering** (`js/world/post.js`, scene option `post`): HDR render, soft bloom (sun glint, low sun, lamps), gentle grade and vignette; off on Light detail
+- [x] Fix: the ground vanished for a frame when the real horizon arrived (the sea plane showed through as white — the "white patches" in the baseline review)
+- [x] Course QC: Big Sur passes `--strict` (0 fail, 0 warn); `npm test` passes (90)
+- [ ] Known, not from this branch: on the v0.12 base, Yosemite, Acadia, Crater Lake and Going-to-the-Sun fail `npm run qc --strict` (also fail on `v0.12` itself)
+- [ ] On the Mac: frame rate on Balanced and High (post-processing, fog layers, traffic), the marine layer from the road, rain on the road
+- [ ] On-bike check
 
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)

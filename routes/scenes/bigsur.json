@@ -51,6 +51,30 @@
       "direction": "return",
       "label": "BIXBY CREEK BRIDGE",
       "subtitle": "CALIFORNIA HIGHWAY 1"
+    },
+    {
+      "atM": 14470,
+      "side": "ocean",
+      "label": "ROCKY CREEK BRIDGE",
+      "subtitle": "HIGHWAY 1 \u00b7 BIG SUR"
+    },
+    {
+      "atM": 17300,
+      "side": "ocean",
+      "label": "HURRICANE POINT",
+      "subtitle": "ELEV 550 FT \u00b7 VISTA POINT"
+    },
+    {
+      "atM": 23450,
+      "side": "ocean",
+      "label": "POINT SUR",
+      "subtitle": "STATE HISTORIC PARK \u00b7 LIGHTHOUSE"
+    },
+    {
+      "atM": 20900,
+      "side": "inland",
+      "label": "LITTLE SUR RIVER",
+      "subtitle": "CALIFORNIA HIGHWAY 1"
     }
   ],
   "lookouts": [
@@ -59,6 +83,12 @@
       "side": "ocean",
       "widthM": 10,
       "lengthM": 36
+    },
+    {
+      "atM": 17420,
+      "side": "ocean",
+      "widthM": 10,
+      "lengthM": 40
     }
   ],
   "seaStacks": [
@@ -163,5 +193,23 @@
   },
   "traffic": {
     "perMinute": 4
-  }
+  },
+  "life": {
+    "lighthouses": [
+      {
+        "name": "Point Sur Lighthouse",
+        "lat": 36.3064,
+        "lon": -121.9014
+      }
+    ],
+    "cattle": [
+      {
+        "lat": 36.315,
+        "lon": -121.886,
+        "radiusM": 700,
+        "count": 34
+      }
+    ]
+  },
+  "post": true
 }

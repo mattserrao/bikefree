@@ -7,6 +7,7 @@ import { landscapeBuilder } from './landscapes.js';
 import { CityScene } from './city.js';
 import { CoastBridges } from './coast-bridges.js';
 import { HighwayTraffic } from './highway-traffic.js';
+import { CoastLife } from './coast-life.js';
 
 export const COASTAL_QUALITY = {
   low: { pixelRatio: 1, shadows: false, scatterRange: 2, candidates: 150, coverCandidates: 100 },
@@ -19,6 +20,7 @@ export class StylizedTerrain {
   constructor(scene, proj, routeIndex, opts) {
     this.scene = scene;
     this.config = opts.route.scene;
+    this.proj = proj;
     this.route = opts.route;
     this.index = routeIndex;
     this.quality = COASTAL_QUALITY[opts.quality] || COASTAL_QUALITY.balanced;
@@ -52,6 +54,10 @@ export class StylizedTerrain {
       this.kit = kit;
       this._makeLandmarks();
       if (this.landscape.real) this.bridges = new CoastBridges(this.group, this.landscape, this.uniforms);
+      if (this.landscape.real && this.config.life) {
+        this.life = new CoastLife(this.group, this.landscape, this.proj, this.route, this.index, this.uniforms, this.config.life);
+        this.life.setNight(this._night || 0);
+      }
       if (this.config.traffic) {
         this.traffic = new HighwayTraffic(this.group, this.route, this.index, this.landscape, this.uniforms, this.qualityKey, this.config.traffic);
         this.traffic.setNight(this._night || 0);
@@ -462,10 +468,11 @@ export class StylizedTerrain {
   tick(camera, dt, rider) {
     this.city?.tick(camera, dt, this.uniforms.uTime.value, rider);
     this.traffic?.tick(dt, rider);
+    this.life?.tick(dt, camera);
   }
 
   setNight(v) {
-    this._night = v; this.city?.setNight(v); this.traffic?.setNight(v);
+    this._night = v; this.city?.setNight(v); this.traffic?.setNight(v); this.life?.setNight(v);
     const cloud = this.clouds?.children[0]?.material;
     if (cloud) cloud.color.set(v ? '#3b4157' : '#ffffff');
   }
@@ -491,7 +498,7 @@ export class StylizedTerrain {
     this.details?.dispose();
     this.city?.dispose();
     this.landmarkGeometries.forEach((g) => g.dispose()); this.landmarkGeometries.clear();
-    this.surf?.geometry.dispose(); this.surf?.material.dispose(); this.shoreTexture?.dispose(); this.bridges?.dispose(); this.traffic?.dispose();
+    this.surf?.geometry.dispose(); this.surf?.material.dispose(); this.shoreTexture?.dispose(); this.bridges?.dispose(); this.traffic?.dispose(); this.life?.dispose();
     this.ocean.geometry.dispose(); this.ocean.material.dispose();
     this.lakeMeshes.forEach((m) => m.geometry.dispose());
     const cloudMat = this.clouds.children[0]?.material; cloudMat?.map?.dispose(); cloudMat?.dispose();
