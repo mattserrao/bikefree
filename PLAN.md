@@ -27,8 +27,8 @@ A free indoor biking app for Mac. Runs as a web app in Chrome and talks directly
 **Goal:** prove Chrome on the Mac can talk to both devices.
 - [ ] Connect to KICKR CORE 2; show live power, cadence, speed
 - [ ] Take FTMS control; set ERG target watts and SIM grade from test controls
-- [ ] Connect to Zwift Ride handlebars; read firmware version; complete `RideOn` handshake
-- [ ] Log every button press (named) plus raw bytes for debugging
+- [x] Connect to Zwift Ride handlebars; read firmware version; complete `RideOn` handshake (fw 1.2.0, V1)
+- [x] Log every button press (named) plus raw bytes for debugging
 - **Done when:** you can pedal, see numbers, feel resistance change, and see button presses in the log
 
 ### v0.2 — Virtual shifting + dashboard

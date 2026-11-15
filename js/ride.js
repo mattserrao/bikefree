@@ -124,6 +124,7 @@ export class Ride extends EventTarget {
         if (key !== this._lastPressed) {
           this._lastPressed = key;
           if (pressed.length) this.log('ride', `Pressed: ${pressed.join(' + ')}`, 'button');
+          else this.log('ride', 'Released', 'debug');
           this.dispatchEvent(new CustomEvent('buttons', { detail: pressed }));
         }
       } catch (err) {

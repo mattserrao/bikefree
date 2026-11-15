@@ -77,6 +77,10 @@ export class Trainer extends EventTarget {
 
   _onBikeData(dv) {
     const d = parseIndoorBikeData(dv);
+    if (!this._sawData) {
+      this._sawData = true;
+      this.log('trainer', `Receiving bike data: ${Object.keys(d).join(', ') || '(no fields)'}`, 'ok');
+    }
     if (d.cadenceRpm != null) this._ftmsHasCadence = true;
     Object.assign(this.data, d);
     this.dispatchEvent(new CustomEvent('data', { detail: this.data }));
@@ -98,23 +102,44 @@ export class Trainer extends EventTarget {
     const r = parseControlPointResponse(dv);
     if (!r) return;
     const name = OP_NAMES[r.requestOp] || `0x${r.requestOp.toString(16)}`;
-    this.log('trainer', `${name} → ${r.text}`, r.ok ? 'debug' : 'warn');
+    this.log('trainer', `${name} → ${r.text}`, r.ok ? 'ok' : 'warn');
+    if (this._pending && this._pending.op === r.requestOp) {
+      this._pending.resolve(r);
+      this._pending = null;
+    }
     if (r.requestOp === FTMS_OP.REQUEST_CONTROL && r.ok) {
       this.hasControl = true;
       this.dispatchEvent(new Event('status'));
     }
   }
 
-  // Writes are serialized; the control point only handles one op at a time.
+  // Writes are serialized: FTMS says to wait for the control point's response
+  // indication before sending the next op, or the trainer may drop it.
   _write(bytes) {
+    const op = bytes[0];
     this._queue = this._queue.then(async () => {
       if (!this.controlPoint) throw new Error('Trainer not connected');
+      const response = new Promise((resolve) => {
+        this._pending = { op, resolve };
+        setTimeout(() => resolve(null), 3000);
+      });
       await this.controlPoint.writeValueWithResponse(bytes);
+      const r = await response;
+      if (!r) {
+        this._pending = null;
+        this.log('trainer', `No response from trainer for ${OP_NAMES[op] || op} (3 s timeout)`, 'warn');
+      }
     }).catch((err) => this.log('trainer', `Write failed: ${err.message}`, 'error'));
     return this._queue;
   }
 
   async takeControl() {
+    if (this._taking) return this._taking;
+    this._taking = this._takeControl().finally(() => { this._taking = null; });
+    return this._taking;
+  }
+
+  async _takeControl() {
     await this._write(encodeRequestControl());
     await this._write(encodeStart());
   }
