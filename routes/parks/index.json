@@ -1,0 +1,34 @@
+[
+  {
+    "id": "yosemite",
+    "name": "Yosemite Valley Loop",
+    "park": "Yosemite National Park, California",
+    "km": 20.6,
+    "climbM": 154,
+    "file": "routes/parks/yosemite.gpx"
+  },
+  {
+    "id": "acadia",
+    "name": "Acadia Park Loop Road",
+    "park": "Acadia National Park, Maine",
+    "km": 32.4,
+    "climbM": 504,
+    "file": "routes/parks/acadia.gpx"
+  },
+  {
+    "id": "teton",
+    "name": "Grand Teton Loop",
+    "park": "Grand Teton National Park, Wyoming",
+    "km": 71.8,
+    "climbM": 414,
+    "file": "routes/parks/teton.gpx"
+  },
+  {
+    "id": "craterlake",
+    "name": "Crater Lake Rim Drive",
+    "park": "Crater Lake National Park, Oregon",
+    "km": 51.4,
+    "climbM": 1193,
+    "file": "routes/parks/craterlake.gpx"
+  }
+]
