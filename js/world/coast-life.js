@@ -148,10 +148,13 @@ export class CoastLife {
     this.gullAgents.forEach((a, i) => {
       if (!a.alive || Math.hypot(a.cx - cam.x, a.cz - cam.z) > 900) {
         const ang = this.rand() * Math.PI * 2, p = this._shoreNear(cam.x + Math.cos(ang) * 300, cam.z + Math.sin(ang) * 300, -10 + this.rand() * 80);
-        Object.assign(a, { alive: true, cx: p.x, cz: p.z, r: 15 + this.rand() * 45, h: Math.max(14, (this.L.baseHeight(p.x, p.z) || 0) + 8 + this.rand() * 40), w: (.2 + this.rand() * .25) * (this.rand() < .5 ? 1 : -1), a: this.rand() * 6.28 });
+        const r = 15 + this.rand() * 45;
+        // keep clear of the bridges: no circling through a deck or an arch
+        if (this.L.bridges?.some((b) => Math.hypot(b.x - p.x, b.z - p.z) < r + b.span / 2 + 35)) { a.alive = false; return; }
+        Object.assign(a, { alive: true, cx: p.x, cz: p.z, r, h: Math.max(14, (this.L.baseHeight(p.x, p.z) || 0) + 8 + this.rand() * 40), w: (.2 + this.rand() * .25) * (this.rand() < .5 ? 1 : -1), a: this.rand() * 6.28 });
       }
+      if (!a.alive) { this.gulls.setMatrixAt(i, this.m.makeScale(0, 0, 0)); return; }
       a.a += a.w * dt;
-      a.cx += Math.cos(t * .05 + i) * dt * 1.5;
       const x = a.cx + Math.cos(a.a) * a.r, z = a.cz + Math.sin(a.a) * a.r;
       const yaw = Math.atan2(-Math.sin(a.a) * Math.sign(a.w), Math.cos(a.a) * Math.sign(a.w));
       this.e.set(0, yaw, -Math.sign(a.w) * .35); this.q.setFromEuler(this.e);

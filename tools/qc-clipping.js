@@ -53,8 +53,9 @@ class Findings {
 // ---------------------------------------------------------------- scene + index
 let world, route, city, landscape, F, entries, grid, buildingGrid, streamGrid = new Map(), streamed = new Set();
 const CELL = 64;
-const lifeNames = /^(People|Cyclists|Cars|Buses|Light rail|Locomotives|Freight cars|Incline cars|Boats · )/;
-const surfaceNames = /^(Streets|Sidewalks|Paths|Rivers|Route road|Route shoulder)/;
+// city life, plus highway traffic and birds on the real-coast scenes (Big Sur)
+const lifeNames = /^(People|Cyclists|Cars|Buses|Light rail|Locomotives|Freight cars|Incline cars|Boats · |Traffic · |Birds · )/;
+const surfaceNames = /^(Streets|Sidewalks|Paths|Rivers|Route road|Route shoulder|Sea$|Lakes?\b)|water$/;
 const skipNames = /(Glows|lights|Light$|beacons|Clouds|clouds|Sky)/i;
 
 const visible = (o) => { for (let x = o; x; x = x.parent) if (!x.visible) return false; return true; };
@@ -440,7 +441,7 @@ function checkSurfaces() {
       }
       // ground drawn over a street, path or sidewalk (it disappears under the grass)
       const gTop = hits.find((h) => h.e.label === 'Ground');
-      const covered = hits.find((h) => h.e.kind === 'surface' && !/^(Route |Rivers)/.test(h.e.label) && gTop && gTop.y - h.y > L.groundOverStreet && gTop.y - h.y < 3);
+      const covered = hits.find((h) => h.e.kind === 'surface' && !/^(Route |Rivers|Sea$)|water$/.test(h.e.label) && gTop && gTop.y - h.y > L.groundOverStreet && gTop.y - h.y < 3);
       if (gTop && covered && hits.indexOf(gTop) < hits.indexOf(covered)) F.add({ check: 'ground-over-street', severity: 'warn', s, label: covered.e.label, value: round(gTop.y - covered.y, 2), point: [round(x, 1), round(covered.y, 2), round(z, 1)], note: 'the ground covers part of a street/path beside the route' }, 40);
     }
   }
@@ -449,12 +450,12 @@ function checkSurfaces() {
 
 // ---------------------------------------------------------------- 4. a simulated ride with the city's life
 function checkLife(seconds) {
-  if (!city) return { simulated: 0 };
-  const L = LIMITS, life = city.life, dt = .1;
+  const L = LIMITS, dt = .1;
   const meshes = [];
-  city.group.traverse((o) => { if (o.isInstancedMesh && lifeNames.test(o.name)) { o.geometry.computeBoundingBox(); meshes.push(o); } });
+  (city?.group || world.terrain.group).traverse((o) => { if (o.isInstancedMesh && lifeNames.test(o.name)) { o.geometry.computeBoundingBox(); meshes.push(o); } });
+  if (!meshes.length) return { simulated: 0 };
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = V(), p = V();
-  const group = (name) => /^(Cars|Buses)/.test(name) ? 'vehicle' : /^(Light rail|Locomotives|Freight cars|Incline cars)/.test(name) ? 'train' : /^Boats/.test(name) ? 'boat' : 'person';
+  const group = (name) => /^(Cars|Buses|Traffic · )/.test(name) ? 'vehicle' : /^Birds · /.test(name) ? 'bird' : /^(Light rail|Locomotives|Freight cars|Incline cars)/.test(name) ? 'train' : /^Boats/.test(name) ? 'boat' : 'person';
   const total = Math.min(seconds ?? route.total / L.lifeSpeed, route.total / L.lifeSpeed);
   let t = 0, s = 0, next = 0;
   const level = landscape.level ?? landscape.data?.waterLevelM;
@@ -463,7 +464,7 @@ function checkLife(seconds) {
     const fwd = V(pose.flat.x, 0, pose.flat.z);
     const cam = V(pose.pos.x, pose.pos.y, pose.pos.z).addScaledVector(fwd, -6.5).addScaledVector(UP, 2.7);
     const back = route.turnS && s > route.turnS;
-    world.terrain.tick(cam, dt, { x: pose.pos.x, z: pose.pos.z, out: back ? route.total - s : s, dir: back ? -1 : 1 });
+    world.terrain.tick(cam, dt, { x: pose.pos.x, z: pose.pos.z, out: back ? route.total - s : s, dir: back ? -1 : 1, speed: L.lifeSpeed });
     world.terrain.uniforms.uTime.value += dt;
     t += dt; s = (s + L.lifeSpeed * dt) % route.total;
     if (t < next) continue;
@@ -484,7 +485,7 @@ function checkLife(seconds) {
     }
     for (const a of movers) {
       // through the rider
-      if (a.g !== 'boat' && obbOverlap(a.o, rider)) F.add({ check: a.g === 'person' ? 'person-through-rider' : 'vehicle-through-rider', severity: a.g === 'person' ? 'warn' : 'fail', s, label: a.label, value: round(t, 1), point: pt(a.p), note: `${a.label.toLowerCase()} passes through the rider` }, 30);
+      if (a.g !== 'boat' && obbOverlap(a.o, rider)) F.add({ check: `${a.g === 'train' ? 'vehicle' : a.g}-through-rider`, severity: a.g === 'vehicle' || a.g === 'train' ? 'fail' : 'warn', s, label: a.label, value: round(t, 1), point: pt(a.p), note: `${a.label.toLowerCase()} passes through the rider` }, 30);
       // through buildings and structures (lifted off the road so wheels/feet don't count)
       const shrink = obb(a.o.center.clone().addScaledVector(UP, .2), a.o.right, UP, a.o.fwd, [a.o.half[0] * .85, Math.max(.1, a.o.half[1] - .3), a.o.half[2] * .9]);
       for (const e of near(shrink.world, (x) => x.kind === 'solid')) {

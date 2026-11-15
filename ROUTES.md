@@ -196,10 +196,13 @@ npm run snap -- route28@10650 route28@19050:morning route28@16200:drone pittsbur
 npm run snap -- --quality high bigsur@21800:golden route28@24450:fall
 ```
 
-A shot is `<park>[@metres][:camera][:time][:season]`:
+A shot is `<park>[@metres][:camera][:time][:season][:weather]`:
 - camera: `chase`, `drone`, `vista`, `side` or `eye`
 - time: `midday`, `morning`, `golden` or `night`
 - season: `summer` or `fall`
+- weather: `clear`, `marine`, `clouds` or `rain`
+
+The frame is drawn the way the app draws it, including a scene's post-processing (Big Sur).
 
 Without `@metres`, it uses the scene's preview spot.
 
@@ -244,6 +247,7 @@ from–to range, its worst value and *view* / *ride* links into `tools/world-pre
 | Scenery | `road-floating`, `verge-wall`, `verge-step` | warn | shoulder > 3 m above ground off a bridge; ground > 3 m above the road 8 m out; a > 1 m ledge 6 m out |
 | Scenery | `mesh-coarse` | warn | a carve (river, channel) narrower than the 6 m ground mesh beside the road: jagged edge |
 | Camera | `camera-lift` | warn | the chase camera is pushed > 0.75 m up by the ground (visible camera hop) |
+| Overlooks | `lookout-floating`, `lookout-buried` | warn | an overlook's gravel pad sits > 0.6 m above the drawn ground, or the ground rises > 0.25 m through it |
 
 Limits are in `LIMITS` at the top of `tools/qc_course.mjs`. `test/qc.test.mjs` runs the sweep over the
 whole catalog, so `npm test` fails if a route regresses.

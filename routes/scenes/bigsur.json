@@ -63,7 +63,8 @@
       "atM": 17300,
       "side": "ocean",
       "label": "HURRICANE POINT",
-      "subtitle": "ELEV 550 FT \u00b7 VISTA POINT"
+      "subtitle": "ELEV 550 FT \u00b7 VISTA POINT",
+      "lateralM": 6.9
     },
     {
       "atM": 23450,
@@ -189,7 +190,7 @@
     "models/scenery/regional.json"
   ],
   "vegetation": {
-    "density": 1.6
+    "density": 1.3
   },
   "traffic": {
     "perMinute": 4

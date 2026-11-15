@@ -5,6 +5,8 @@
 // Pure functions — no three.js — so the QC sweep and tests can use it in Node.
 import { smoothstep } from './coast.js';
 
+const ROAD_HALF = 3.5;   // half the road width (pose.js ROAD_WIDTH / 2): overlooks start at the road edge
+
 const decodeRows = (text, rowLength) => {
   const bin = typeof atob === 'function' ? atob(text) : Buffer.from(text, 'base64').toString('binary');
   const out = new Uint16Array(bin.length / 2);
@@ -168,7 +170,15 @@ export function makeRealCoastLandscape(config, proj, index, route) {
     const rx = -low.fz, rz = low.fx, side = T.at(low.x + rx * 40, low.z + rz * 40) < T.at(low.x - rx * 40, low.z - rz * 40) ? 1 : -1;
     const down = trace(low.x, low.z, { x: rx * side, z: rz * side }, 1600, true);
     const up = trace(low.x, low.z, { x: -rx * side, z: -rz * side }, b.creek.upstreamM || 450, false);
-    const pts = [...up.reverse(), ...down.slice(1)];
+    let pts = [...up.reverse(), ...down.slice(1)];
+    // cut out loops (the up- and down-stream traces can double back over each other): overlapping
+    // water ribbons flicker
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = pts.length - 1; j > i + 2; j--) {
+        if (Math.hypot(pts[j].x - pts[i].x, pts[j].z - pts[i].z) < 14) { pts = [...pts.slice(0, i + 1), ...pts.slice(j + 1)]; break; }
+      }
+    }
+    const underIdx = pts.reduce((best, p, k) => (Math.hypot(p.x - low.x, p.z - low.z) < Math.hypot(pts[best].x - low.x, pts[best].z - low.z) ? k : best), 0);
     // smooth the path, measure it, and give it a water level that only ever falls downstream
     for (let pass = 0; pass < 3; pass++) for (let k = 1; k < pts.length - 1; k++) {
       pts[k] = { x: (pts[k - 1].x + pts[k].x * 2 + pts[k + 1].x) / 4, z: (pts[k - 1].z + pts[k].z * 2 + pts[k + 1].z) / 4 };
@@ -181,7 +191,7 @@ export function makeRealCoastLandscape(config, proj, index, route) {
     const last = mouthIdx > 0 ? mouthIdx : pts.length - 1;
     for (let k = 0; k <= last; k++) pts[k].y = Math.max(.13, levels[k] + .25);
     const ptsCut = pts.slice(0, last + 1);
-    const bridgeS = ptsCut[up.length - 1].s;
+    const bridgeS = ptsCut[Math.min(underIdx, ptsCut.length - 1)].s;
     for (const p of ptsCut) p.s -= bridgeS;   // t = 0 under the bridge, upstream negative
     const at = (t) => {
       let k = 0; while (k < ptsCut.length - 2 && ptsCut[k + 1].s < t) k++;
@@ -210,10 +220,27 @@ export function makeRealCoastLandscape(config, proj, index, route) {
   const shore = makeShoreField(T.at, Math.max(T.x0, minX - pad), Math.max(T.z0, minZ - pad), Math.min(T.x1, maxX + pad), Math.min(T.z1, maxZ + pad), config.shoreCellM ?? 16);
   const inlandAt = (x, z) => shore.sample(x, z) ?? (T.at(x, z) >= 0 ? 4000 : -4000);
 
+  // ---- Overlooks: the ground is levelled under each gravel pad (filled or cut), easing out over 12 m ----
+  const pads = (config.lookouts || []).map((l) => {
+    const side = l.side === 'inland' ? -1 : 1, w = l.widthM || 10, len = l.lengthM || 32, f = frameAt(l.atM);
+    const rx = -f.fz * side, rz = f.fx * side, off = ROAD_HALF + w / 2;
+    return { x: f.x + rx * off, z: f.z + rz * off, fx: f.fx, fz: f.fz, hw: w / 2, hl: len / 2, s: l.atM };
+  });
+  const padAt = (x, z, h) => {
+    for (const p of pads) {
+      const u = (x - p.x) * p.fx + (z - p.z) * p.fz, v = (x - p.x) * -p.fz + (z - p.z) * p.fx;
+      const d = Math.hypot(Math.max(Math.abs(u) - p.hl, 0), Math.max(Math.abs(v) - p.hw, 0));
+      // level with the road beside it (the pad follows the road's grade)
+      if (d < 12) h += (frameAt(p.s + Math.max(-p.hl, Math.min(p.hl, u))).y - .6 - h) * (1 - smoothstep(0, 12, d));
+    }
+    return h;
+  };
+
   // ---- Height ----
   const baseHeight = (x, z) => T.at(x, z);
   const heightAt = (x, z) => {
     let h = T.at(x, z);
+    if (pads.length) h = padAt(x, z, h);   // before the road is pressed in, so the road always wins beside it
     const hit = index.nearest(x, z, 34);
     if (hit) {
       const s = route.dist[outbound(hit.i)], road = roadEle(hit.i, x, z) - .65;
@@ -256,7 +283,7 @@ export function makeRealCoastLandscape(config, proj, index, route) {
     // legacy fields (the authored-coast code paths are skipped when `real` is set)
     coast: [{ x: minX - pad, z: minZ - pad }, { x: minX - pad, z: maxZ + pad }], coastX: () => -1e6,
     inlandAt, shore, terrain: T, landmarks: bridges, bridges, creeks, creekAt, heightAt, baseHeight, bridgeAt, bridgeOfS,
-    waterLevelAt, frameAt, roadEle, vegetationAt, lakes: [], waterIslands: [],
+    waterLevelAt, frameAt, roadEle, vegetationAt, nearCreek: (x, z, pad = 0) => !!creekHit(x, z, pad), lakes: [], waterIslands: [],
     isWater: (x, z, height) => height < .3 || !!creekHit(x, z, 0),
   };
 }

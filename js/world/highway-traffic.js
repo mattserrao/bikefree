@@ -127,11 +127,17 @@ export class HighwayTraffic {
     // a few cars and campers already parked at each overlook; they use the top slots of each buffer
     const top = Object.fromEntries(KINDS.map((k) => [k.kind, this.n - 1]));
     for (const t of this.turnouts) {
-      const n = 1 + Math.floor(this.rand() * 3);
+      // parking bays along the pad, 9 m apart; a few already taken
+      t.bays = Array.from({ length: Math.max(1, Math.floor((t.length - 8) / 9) + 1) }, (_, k) => ({ s: t.s - t.length / 2 + 5 + k * 9, taken: false }));
+      t.lat = t.side * (ROAD_WIDTH / 2 + t.width / 2 + .3);
+      const n = Math.min(t.bays.length - 1, 1 + Math.floor(this.rand() * 2));
       for (let k = 0; k < n; k++) {
         const kind = this.rand() < .2 ? KINDS[2] : this.rand() < .4 ? KINDS[1] : KINDS[0];
         if (top[kind.kind] < this.n / 2) continue;
-        this.parked.push({ id: top[kind.kind]--, kind, s: t.s - t.length / 2 + 6 + k * 8, lane: t.side * (ROAD_WIDTH / 2 + t.width / 2 + .3), angle: .45 * t.side });
+        // parked from the far end (for the traffic that uses this side), so arrivals take the near bays
+        const bay = t.side > 0 ? t.bays[t.bays.length - 1 - k] : t.bays[k]; if (bay.taken) continue;
+        bay.taken = true;
+        this.parked.push({ id: top[kind.kind]--, kind, s: bay.s, lane: t.lat, angle: .45 * t.side });
       }
     }
     this.top = top;   // moving agents use ids at or below these
@@ -144,7 +150,8 @@ export class HighwayTraffic {
     const ahead = dir === fwd ? -(150 + this.rand() * 300) : 450 + this.rand() * 500;
     const s = rider.out + fwd * ahead;
     if (s < 5 || s > this.turn - 5 || (k.kind === 'bike' && dir === fwd && this.rand() < .7)) { a.alive = false; return; }
-    Object.assign(a, { alive: true, k, dir, s, v: k.speed[0] + this.rand() * (k.speed[1] - k.speed[0]), lane: 0, target: 0, state: 'drive', stop: 0 });
+    if (this.agents.some((b) => b.alive && b !== a && Math.abs(b.s - s) < 40)) { a.alive = false; return; }   // room to appear
+    Object.assign(a, { alive: true, k, dir, s, v: k.speed[0] + this.rand() * (k.speed[1] - k.speed[0]), lane: 0, target: 0, state: 'drive', stop: 0, visited: false });
     a.vmax = a.v;
   }
 
@@ -168,51 +175,91 @@ export class HighwayTraffic {
       if (free) this._spawn(free, rider);
       this._next = -Math.log(1 - this.rand() * .95) * mean;   // exponential gaps: sometimes two close together
     }
-    const lane0 = ROAD_WIDTH * .25;
+    const lane0 = ROAD_WIDTH * .25, OVER = -(lane0 * 2 + .4);
+    // Everyone on the road in one frame: absolute lateral offset from the centre line (outbound frame).
+    const base = (k) => (k === 'bike' ? ROAD_WIDTH * .34 : k === 'rv' ? lane0 - .3 : lane0);   // campers hug the centre line on the bends
+    const lat = (a) => (base(a.k.kind) + a.lane) * a.dir;
+    const riderBody = { s: rider.out, v: rider.speed || 0, dir: rider.dir, lat: 1.54 * rider.dir, len: 1.8, rider: true };
+    const bodies = [riderBody];
+    for (const b of this.agents) if (b.alive) bodies.push({ a: b, s: b.s, v: b.v, dir: b.dir, lat: lat(b), len: b.k.len, bike: b.k.kind === 'bike' });
+    for (const p of this.parked) bodies.push({ s: p.s, v: 0, dir: 0, lat: p.lane, len: p.kind.len + 1, parked: true });
+    // the nearest body ahead of `a` (in its direction of travel) that it would hit at lateral `l`
+    const leader = (a, l, range) => {
+      let best = null;
+      for (const o of bodies) {
+        if (o.a === a) continue;
+        const d = (o.s - a.s) * a.dir;
+        if (d <= 0 || d > range || Math.abs(o.lat - l) > 2.3) continue;
+        if (!best || d < best.d) best = { ...o, d };
+      }
+      return best;
+    };
     for (const a of this.agents) {
       if (!a.alive) continue;
-      // car-following: the nearest vehicle ahead in the same lane, and the rider
-      let gap = Infinity, gapV = 0;
-      for (const b of this.agents) if (b !== a && b.alive && b.dir === a.dir && b.state !== 'parked') {
-        const d = (b.s - a.s) * a.dir; if (d > 0 && d < gap && Math.abs(b.lane - a.lane) < 2) { gap = d; gapV = b.v; }
-      }
-      const riderAhead = (rider.out - a.s) * a.dir;
-      const sameWay = a.dir === rider.dir;
       let want = a.vmax;
+      const myLat = lat(a);
       if (a.state === 'drive') {
-        if (sameWay && a.k.kind === 'bike' && riderAhead > 0 && riderAhead < 8) want = Math.min(want, (rider.speed || 6) * .97);   // sits on your wheel
-        if (sameWay && riderAhead > 0 && riderAhead < 45 && a.k.kind !== 'bike') {
-          // overtake if the oncoming lane is clear for a while, otherwise sit behind
-          const clear = !this.agents.some((b) => b.alive && b.dir !== a.dir && (b.s - a.s) * a.dir > -10 && (b.s - a.s) * a.dir < 260);
-          if (clear || a.target < -1) a.target = -(lane0 * 2 + .4);   // into the other lane
-          else { want = Math.min(want, Math.max(rider.speed || 6, 4)); if (riderAhead < 14) want = Math.min(want, (rider.speed || 6) * .9); }
-        } else if (a.target < -1 && (!sameWay || riderAhead < -12)) a.target = 0;   // back into lane once past
-        if (gap < 30) want = Math.min(want, gapV + (gap - 12) * .3);
-        // pull into an overlook on our side now and then
+        const ahead = leader(a, myLat, 90);
+        const slow = ahead && (ahead.rider || ahead.bike || (ahead.dir === a.dir && ahead.v < a.vmax - 3));
+        if (a.k.kind === 'bike' && ahead?.rider && ahead.dir === a.dir && ahead.d < 9) want = Math.min(want, ahead.v * .97);   // sits on your wheel
+        if (a.k.kind !== 'bike' && a.target > -1 && slow && ahead.dir === a.dir && ahead.d < 60) {
+          // overtake only if the other lane is clear well ahead (nobody coming, nobody already there)
+          const overLat = (lane0 + OVER) * a.dir, need = 280;
+          const blocked = bodies.some((o) => o.a !== a && Math.abs(o.lat - overLat) < 2.3 && (o.s - a.s) * a.dir > -12 && (o.s - a.s) * a.dir < need);
+          if (!blocked) a.target = OVER;
+        }
+        if (a.target < -1) {
+          // in the other lane: abort if something comes at us; back in once clear of what we passed
+          const coming = leader(a, myLat, 150);
+          if (coming && coming.dir !== a.dir) a.target = 0;
+          const passed = !bodies.some((o) => o.a !== a && (o.rider || o.bike || o.dir === a.dir) && Math.abs(o.lat - lane0 * a.dir) < 2.3 && (o.s - a.s) * a.dir > -14 && (o.s - a.s) * a.dir < 25);
+          if (passed) a.target = 0;
+        }
+        // pull into an overlook on our side now and then, into a free bay
         for (const t of this.turnouts) {
           const side = t.side * (a.dir > 0 ? 1 : -1);   // overlook on the vehicle's right?
-          if (a.k.kind !== 'bike' && side > 0 && !a.visited && Math.abs((t.s - a.s) * a.dir - 40) < 3 && this.rand() < .35 && t.used < 2) {
-            a.state = 'in'; a.turnout = t; a.visited = true; t.used++;
-          }
+          if (a.k.kind === 'bike' || side <= 0 || a.visited || a.target < -1 || Math.abs((t.s - a.s) * a.dir - 70) > 3) continue;
+          a.visited = true;
+          // the first bay in the direction of travel, so the car never drives across a parked one
+          const bay = [...t.bays].sort((p, q) => (p.s - q.s) * a.dir)[0];
+          if (bay.taken) continue;
+          if (bay && this.rand() < .35) { a.state = 'in'; a.turnout = t; a.bay = bay; bay.taken = true; }
         }
+        // a slower vehicle or cyclist just ahead of the rider moves over to let you by
+        const r = (rider.out - a.s) * a.dir;
+        if (a.dir === rider.dir && r < 0 && r > -35 && Math.abs(myLat - riderBody.lat) < 2.3 && a.v < riderBody.v + .5 && a.target > -1) a.target = a.k.kind === 'bike' ? .9 : 1.3;
+        else if (a.target > .5 && (a.dir !== rider.dir || r > 8 || r < -40 || a.v > riderBody.v + 1)) a.target = 0;
       }
       if (a.state === 'in') {
-        const t = a.turnout, d = (t.s - a.s) * a.dir;
-        want = Math.max(2, Math.min(a.vmax, d * .45));
-        a.target = (t.width / 2 + ROAD_WIDTH / 2 - lane0 + .3) * (d < 30 ? 1 : 0);
+        const t = a.turnout, d = (a.bay.s - a.s) * a.dir;
+        want = Math.max(1.5, Math.min(a.vmax, d * .45));
+        a.target = d < 25 ? t.lat * a.dir - lane0 : 0;
         if (d < 1) { a.state = 'parked'; a.stop = 15 + this.rand() * 30; a.v = 0; }
       } else if (a.state === 'parked') {
         want = 0; a.stop -= dt;
         if (a.stop <= 0) { a.state = 'out'; }
       } else if (a.state === 'out') {
-        want = a.vmax * .6; a.target = 0;
-        if (Math.abs(a.lane) < .3) { a.state = 'drive'; a.turnout.used--; }
+        // wait for a gap before rejoining
+        const near = bodies.some((o) => o.a !== a && Math.abs(o.lat - lane0 * a.dir) < 2.3 && (a.s - o.s) * a.dir > -10 && (a.s - o.s) * a.dir < 60);
+        want = near ? 0 : a.vmax * .6; if (!near) a.target = 0;
+        if (Math.abs(a.lane) < .3) { a.state = 'drive'; a.bay.taken = false; }
       }
-      a.v += Math.max(-6 * dt, Math.min(2.5 * dt, want - a.v));
+      // follow whatever is ahead in our path, and never closer than a car length or so
+      let lead = a.state === 'parked' ? null : leader(a, myLat, 120);
+      if (lead?.parked && a.state !== 'drive') lead = null;   // pulling into (or out of) a bay beside the parked ones
+      if (lead) {
+        const safe = 5 + (a.k.len + lead.len) / 2;
+        const closing = lead.dir === a.dir ? lead.v : -lead.v;   // oncoming in our lane: stop
+        want = Math.min(want, Math.max(0, closing + (lead.d - safe - 6) * .55));
+      }
+      a.v += Math.max(-9 * dt, Math.min(2.5 * dt, want - a.v));
       a.v = Math.max(0, a.v);
-      a.s += a.dir * a.v * dt;
+      let step = a.v * dt;
+      if (lead) step = Math.min(step, Math.max(0, lead.d - (2 + (a.k.len + lead.len) / 2)));   // hard stop: no overlap
+      a.s += a.dir * step;
       a.lane += Math.max(-1.6 * dt, Math.min(1.6 * dt, a.target - a.lane));
       if (a.s < 0 || a.s > this.turn || (a.s - rider.out) * rider.dir < -400 || (a.s - rider.out) * rider.dir > 1300) {
+        if (a.state === 'in' || a.state === 'parked' || a.state === 'out') a.bay.taken = false;
         a.alive = false;
       }
     }
@@ -231,8 +278,7 @@ export class HighwayTraffic {
       const kind = a.k.kind, id = next[kind]++;
       if (id > this.top[kind]) { a.alive = false; continue; }
       // right of the direction of travel (cyclists ride near the edge)
-      const base = kind === 'bike' ? ROAD_WIDTH * .38 : lane0;
-      put(kind, id, a.s, (base + a.lane) * a.dir, a.dir);
+      put(kind, id, a.s, lat(a), a.dir);
       assigned[kind].add(id);
     }
     for (const p of this.parked) { put(p.kind.kind, p.id, p.s, p.lane, 1, false, p.angle); assigned[p.kind.kind].add(p.id); }

@@ -195,6 +195,7 @@ export class StylizedTerrain {
     this.ocean = new THREE.Mesh(new THREE.PlaneGeometry(160000, 160000), material);
     this.ocean.rotation.x = -Math.PI / 2;
     this.ocean.position.y = .05;
+    this.ocean.name = 'Sea';
     this.ocean.visible = this.landscape.hasOcean !== false;
     this.group.add(this.ocean);
     this.lakeMeshes = [];
@@ -410,7 +411,7 @@ export class StylizedTerrain {
       }
       if (this.landscape.real) {
         const v = this.landscape.vegetationAt(x, z);
-        if (pick < v.forest * .62 && slope < 1.1) {
+        if (pick < v.forest * .5 && slope < 1.1) {
           // redwoods deep in the canyons, oaks and pines on their flanks, cypress on the sea bluffs
           const name = v.forest > .55 && v.valley > .3 ? `fir${Math.floor(rand() * 2)}` : rand() < .6 ? `broadleaf${Math.floor(rand() * 2)}` : `pine${Math.floor(rand() * 2)}`;
           const tree = !detailed && this.kit.assets[`${name}-lod`] ? `${name}-lod` : name;
@@ -420,7 +421,7 @@ export class StylizedTerrain {
         } else if (inland < 220 && inland > 25 && pick > .985) {
           const name = `cypress${Math.floor(rand() * 3)}`;
           add(!detailed && this.kit.assets[`${name}-lod`] ? `${name}-lod` : name, x, y - .15, z, .8 + rand() * .5, .8 + rand() * .4);
-        } else if (pick < .25 + v.scrub * .5) {
+        } else if (pick < .2 + v.scrub * .4) {
           const width = .6 + rand() * 1.2;
           add(rand() < .3 ? 'sage' : `shrub${Math.floor(rand() * 2)}`, x, y - .12, z, width, width * (.7 + v.scrub * .5));
           if (detailed) add('shadow', x, y + .04, z, width * 2.5);
@@ -478,7 +479,7 @@ export class StylizedTerrain {
           mesh.setColorAt(i, tint.multiplyScalar(.9 + (i % 5) * .04));
         }
       }); mesh.instanceMatrix.needsUpdate = true;
-      mesh.castShadow = /^(cypress|pine|fir|broadleaf|palm|rock|outcrop)/.test(name);
+      mesh.castShadow = /^(cypress|pine|fir|broadleaf|palm|rock|outcrop)/.test(name) && !name.endsWith('-lod');   // distant trees: no shadow pass
       mesh.receiveShadow = name !== 'shadow';
       mesh.computeBoundingSphere(); group.add(mesh);
     }
