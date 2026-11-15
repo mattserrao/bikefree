@@ -14,6 +14,10 @@ import { planRouteTiles, tileKeysToUrls, downloadUrls, offlineStatus, setOffline
 
 const $ = (id) => document.getElementById(id);
 
+// The app version, shown faintly at the bottom right of the menu. Bump with each release (see PLAN.md).
+export const VERSION = '0.10';
+$('ver').textContent = `bikefree v${VERSION}`;
+
 // ---------- Log (lives in Settings › Advanced) ----------
 const logEl = $('log');
 const logLines = [];

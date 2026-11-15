@@ -188,6 +188,7 @@ Goal: rider profiles that live in this browser and add up your riding.
 - [x] Each saved ride is tagged with its rider; totals (rides, distance, time, climbing) are computed from saved rides, so deleting a ride keeps them right. Rides from before profiles count for the first rider
 - [x] Several riders: switch, add or delete riders (not mid-ride); Rides history shows the active rider's rides with totals
 - [x] Unit tests for profiles (`test/profiles.test.mjs`)
+- [x] Version number shown faintly at the bottom right of the menu (`VERSION` in `js/app.js`)
 - [ ] On-bike check
 
 ### Later ideas
