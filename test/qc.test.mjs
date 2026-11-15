@@ -49,11 +49,19 @@ test('a missing stretch of GPX (a jump) is caught', () => {
   assert.ok(of(r, 'gpx-gap').length >= 1);
 });
 
-test('every scenic route runs through the sweep with scenery', () => {
+test('a sideways kink in the road (a cut spur, a junction step) is caught', () => {
+  // at i = 75 the loop runs east–west, so a 5 m northward bump is a sideways kink
+  const r = qcRoute({ id: 'jog', gpxText: loop((p) => p.map(([lat, lon, ele], i) => i === 75 ? [lat + 5 * M, lon, ele] : [lat, lon, ele])) });
+  assert.ok(of(r, 'path-jog').length >= 1);
+});
+
+test('every scenic route rides clean end to end: no discontinuities, no warnings', () => {
   const catalog = JSON.parse(readFileSync(new URL('../routes/parks/index.json', import.meta.url), 'utf8'));
-  for (const item of catalog.slice(0, 2)) {
+  for (const item of catalog) {
     const r = qcRoute({ id: item.id, item, gpxText: readFileSync(new URL(`../${item.file}`, import.meta.url), 'utf8'),
-      scene: JSON.parse(readFileSync(new URL(`../${item.scene}`, import.meta.url), 'utf8')), step: 2 });
+      scene: JSON.parse(readFileSync(new URL(`../${item.scene}`, import.meta.url), 'utf8')) });
     assert.ok(r.stylized && r.series.cs.length > 100, `${item.id} checked its scenery`);
+    const problems = r.findings.filter((f) => f.severity !== 'info').map((f) => `${f.check} @ ${(f.at / 1000).toFixed(2)} km`);
+    assert.deepEqual(problems, [], `${item.id}: run npm run qc for details`);
   }
 });

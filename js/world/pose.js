@@ -6,6 +6,7 @@ import { headingSpan } from '../routes.js';
 export const ROAD_WIDTH = 7;
 export const LANE_OFFSET = ROAD_WIDTH * 0.22;   // rider sits right of the centre line
 export const ROAD_LIFT = 0.12;                  // road surface above the route line
+const DRIFT_M = 10, BLEND_M = 10;               // U-turn lane change, then hand-back to the road's direction
 
 /** Point on the route centre line at distance s, in the local frame: {x, y, z}. */
 export function routePoint(route, index, s) {
@@ -40,14 +41,26 @@ export function riderPose(route, index, s, lane = LANE_OFFSET / ROAD_WIDTH) {
   let right = { x: -flat.z, y: 0, z: flat.x };
   const laneM = ROAD_WIDTH * lane;
   let lateral = laneM;
-  if (turn && Math.abs(x - turn) < 10) {
-    // U-turn at the far end: drift from the outbound lane to the return lane over the last/first 10 m.
-    right = flatRight(routePoint(route, index, turn - 12), routePoint(route, index, turn));
-    lateral = laneM * Math.max(-1, Math.min(1, (turn - x) / 10));
-  } else if (turn && (x < 10 || total - x < 10)) {
-    // …and the same at the start, where the return leg turns back onto the outbound one.
-    right = flatRight(routePoint(route, index, 0), routePoint(route, index, 12));
-    lateral = laneM * Math.max(-1, Math.min(1, (x < 10 ? x : x - total) / 10));
+  // U-turns (at the far end, and at the start where the return leg turns back onto the outbound one):
+  // over the last/first 10 m the rider drifts across from one lane to the other along a fixed sideways
+  // direction; over the 10 m beyond that, that direction blends into the road's own, so there is no hop
+  // where the drift starts even when the road bends there.
+  const reach = DRIFT_M + BLEND_M;
+  const atFar = !!turn && Math.abs(x - turn) < reach;
+  const atStart = !!turn && !atFar && (x < reach || total - x < reach);
+  if (atFar || atStart) {
+    const u = atFar ? turn - x : (x < total / 2 ? x : x - total);   // + before the U-turn, − after it
+    const fixed = atFar
+      ? flatRight(routePoint(route, index, turn - 12), routePoint(route, index, turn))
+      : flatRight(routePoint(route, index, 0), routePoint(route, index, 12));
+    const k = Math.max(-1, Math.min(1, u / DRIFT_M));
+    const w = Math.max(0, Math.min(1, (Math.abs(u) - DRIFT_M) / BLEND_M));   // 0 in the drift, 1 past the blend
+    const v = {
+      x: fixed.x * laneM * k * (1 - w) + right.x * laneM * w,
+      z: fixed.z * laneM * k * (1 - w) + right.z * laneM * w,
+    };
+    lateral = Math.hypot(v.x, v.z);
+    right = lateral > 1e-9 ? { x: v.x / lateral, y: 0, z: v.z / lateral } : right;
   }
   const pos = { x: p.x + right.x * lateral, y: p.y + ROAD_LIFT, z: p.z + right.z * lateral };
   return { pos, fwd, flat, right, lateral, centre: p };

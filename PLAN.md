@@ -257,11 +257,14 @@ Goal: a repeatable check that rides every course end to end and flags discontinu
 - [x] Checks: GPX spurs/zig-zags, gaps and elevation spikes; rider position, height and heading jumps; grade jolts, ±25 % clamps and grade/elevation mismatch; ground through the road, flooded road, floating road edges, ledges and walls beside the road, ground mesh too coarse for a carve; chase-camera hops
 - [x] Rider and pacer placement moved to `js/world/pose.js`, shared by `world.js` and the QC sweep
 - [x] Tests for the sweep on synthetic loops (clean, spur, spike, gap) and on the scenic routes
-- [ ] Fix what the first sweep found (FAIL):
-  - [ ] Yosemite 3.09 km, Acadia 5.24 km, Going-to-the-Sun 8.98 km: GPX runs ~40–50 m up a dead-end spur and doubles back (rider U-turns mid-route, jumps 1.4–2 m)
-  - [ ] Ground through the road: Acadia 5.12 km, Going-to-the-Sun 8.92 km (beside those spurs), Crater Lake 21.32 km (road carving switches to a nearby stretch of the route), Big Sur 15.78 km (edge of the bridge exclusion)
-  - [ ] Going-to-the-Sun lap seam (68.11 km): rider hops 0.7 m sideways where the start U-turn drift begins
-- [ ] Review the warnings: Snake River channel too narrow for the ground mesh (Grand Teton 31–32 km), Seven Mile Bridge road edges floating at 3.6 and 15.0 km
+- [x] Fixed everything the first sweep found; every route now passes `npm run qc --strict` (no fails, no warnings), and `npm test` runs the sweep over the whole catalog:
+  - **Spurs cut** from the GPX: Yosemite 2.99 km (190 m), Acadia 5.12 km (240 m) and 18.09 km (250 m), Crater Lake 21.13 km (200 m), Going-to-the-Sun 8.92 km (110 m, both legs). The route builder now catches short 30–400 m stubs too; `build_park_routes.py --prune-existing` applies it offline and moves signs, lookouts, roadside rails and the preview position to match
+  - **Sideways jogs smoothed** where cuts met and at BRouter junction steps (Yosemite, Acadia, Crater Lake, Monument Valley, Going-to-the-Sun, Seven Mile, Route 28); new `path-jog` QC check
+  - **Ground through the road** (Big Sur 15.78 km bridge end, and beside the old spurs): the ground now never rises above the road across an 8 m corridor, and the bridge carve-out fades over the last 12 m of deck instead of switching off
+  - **Road edges floating** at bridge ends (Seven Mile 3.6 / 15.0 km, Zion 6.9 km): the ground meets the road where the deck starts
+  - **Jagged river banks** beside the road (Snake River, Grand Teton 26–32 km and 47 km; Yosemite; Crater Lake): river channels ease out beside the road over 12–30 m with banks wide enough for the ground mesh
+  - **Rider hop** at the Going-to-the-Sun lap seam: the U-turn lane drift now hands back to the road's own direction over 10 m (rider and pacer)
+- [ ] On-bike check, especially the five routes whose GPX changed (each 0.1–0.5 km shorter)
 
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)

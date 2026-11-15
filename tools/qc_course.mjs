@@ -39,6 +39,8 @@ export const LIMITS = {
   rawSpike: 6,            // WARN: one GPX point this far off its neighbours' elevation
   rawHairpin: 150,        // WARN: GPX doubles back this sharply (°) on short segments
   rawHairpinSeg: 30,
+  // Drawn road (10 m polyline)
+  jog: 12,                // WARN: opposite turns of more than this (°) on consecutive 10 m segments (sideways zig-zag)
   // Stylized scenery around the road (outbound road, every 2 m)
   buried: 0.03,           // FAIL: rendered ground this close to (or above) the road / shoulder surface
   floating: 3,            // WARN: ground this far below the shoulder edge (not on a bridge)
@@ -149,6 +151,21 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
         const slope = ((route.ele[b] - route.ele[a]) / 60) * 100;
         if (Math.abs(slope - g) > LIMITS.gradeMismatch) F.add('grade-mismatch', 'fail', s, g - slope, 'stored grade disagrees with elevation');
       }
+    }
+  }
+  F.open.clear();
+
+  // 2b. Drawn road: sideways zig-zags in the 10 m polyline (the road ribbon kinks; heading barely notices)
+  {
+    const last = Math.round(oneWay / 10);
+    const turnAt = (i) => {
+      const t1 = Math.atan2(index.zs[i] - index.zs[i - 1], index.xs[i] - index.xs[i - 1]);
+      const t2 = Math.atan2(index.zs[i + 1] - index.zs[i], index.xs[i + 1] - index.xs[i]);
+      return ((((t2 - t1) * 180) / Math.PI + 540) % 360) - 180;
+    };
+    for (let i = 2; i < last - 2; i++) {
+      const a = turnAt(i), b = turnAt(i + 1);
+      if (a * b < 0 && Math.min(Math.abs(a), Math.abs(b)) > LIMITS.jog) F.add('path-jog', 'warn', route.dist[i], Math.min(Math.abs(a), Math.abs(b)), 'road zig-zags sideways (kink in the road)');
     }
   }
   F.open.clear();
