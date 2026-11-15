@@ -11,6 +11,15 @@ python3 -m http.server 8000
 
 Open http://localhost:8000 in **Chrome** (Safari doesn't support Web Bluetooth). Quit Zwift, Zwift Companion and the Wahoo app first so they don't hold the Bluetooth connections.
 
+## Riding (v0.2)
+
+1. Connect the trainer and the handlebars (chips in the top right).
+2. Start pedalling — the ride starts automatically.
+3. Shift with the hoods: **left = easier, right = harder**. D-pad ▲▼ changes the grade; **A** pauses.
+4. Settings (⚙): weights, units, ERG or SIM shifting, difficulty.
+
+Keyboard: ← → shift, ↑ ↓ grade, Space start/pause.
+
 ## Tests
 
 ```sh

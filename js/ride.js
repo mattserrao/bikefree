@@ -9,6 +9,8 @@ const ZWIFT_SERVICE = '00000001-19ca-4651-86e5-fa29dcdd09d1';
 const ASYNC_CHAR = '00000002-19ca-4651-86e5-fa29dcdd09d1';   // notifications (button events)
 const SYNC_RX_CHAR = '00000003-19ca-4651-86e5-fa29dcdd09d1'; // we write commands here
 const SYNC_TX_CHAR = '00000004-19ca-4651-86e5-fa29dcdd09d1'; // indications (responses)
+const VIBRATE = new Uint8Array([0x12, 0x12, 0x08, 0x0a, 0x06, 0x08, 0x02, 0x10, 0x00, 0x18, 0x20]);
+const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 15000, 30000];
 
 export class Ride extends EventTarget {
   constructor(log) {
@@ -17,11 +19,14 @@ export class Ride extends EventTarget {
     this.device = null;
     this.firmware = null;
     this.battery = null;
-    this._lastPressed = '';
+    this.reconnecting = false;
     this.showRaw = false;
+    this._syncRx = null;
+    this._pressed = new Set();
+    this._userDisconnect = false;
   }
 
-  get connected() { return !!this.device?.gatt?.connected; }
+  get connected() { return !!this.device?.gatt?.connected && !!this._syncRx; }
 
   /** @param {boolean} anyZwift  show every Zwift device instead of only the Ride's left hood */
   async connect(anyZwift = false) {
@@ -33,12 +38,20 @@ export class Ride extends EventTarget {
       filters,
       optionalServices: [RIDE_SERVICE, ZWIFT_SERVICE, 'device_information', 'battery_service'],
     });
-    this.device.addEventListener('gattserverdisconnected', () => {
-      this.log('ride', `Disconnected from ${this.device.name}`, 'warn');
-      this.dispatchEvent(new Event('status'));
-    });
+    this.device.addEventListener('gattserverdisconnected', () => this._onDisconnected());
+    this._userDisconnect = false;
+    await this._setup();
+  }
 
+  disconnect() {
+    this._userDisconnect = true;
+    if (this.device?.gatt?.connected) this.device.gatt.disconnect();
+  }
+
+  async _setup() {
     this.log('ride', `Connecting to ${this.device.name}…`);
+    this._syncRx = null;
+    this._pressed = new Set();
     const server = await this.device.gatt.connect();
 
     await this._readFirmware(server);
@@ -69,15 +82,47 @@ export class Ride extends EventTarget {
     await asyncChar.startNotifications();
     await syncTx.startNotifications();
 
-    this.log('ride', 'Sending RideOn handshake');
     await syncRx.writeValueWithoutResponse(RIDE_ON);
+    this._syncRx = syncRx;
 
-    this.log('ride', `Connected to ${this.device.name}. Press a button.`, 'ok');
+    this.log('ride', `Connected to ${this.device.name}`, 'ok');
     this.dispatchEvent(new Event('status'));
   }
 
-  disconnect() {
-    if (this.connected) this.device.gatt.disconnect();
+  async _onDisconnected() {
+    this._syncRx = null;
+    this.dispatchEvent(new Event('status'));
+    if (this._userDisconnect) {
+      this.log('ride', 'Disconnected');
+      return;
+    }
+    this.log('ride', 'Connection lost — reconnecting…', 'warn');
+    this.reconnecting = true;
+    this.dispatchEvent(new Event('status'));
+    for (const delay of RECONNECT_DELAYS) {
+      await new Promise((r) => setTimeout(r, delay));
+      if (this._userDisconnect) break;
+      try {
+        await this._setup();
+        if (this.connected) {
+          this.reconnecting = false;
+          this.dispatchEvent(new Event('status'));
+          return;
+        }
+      } catch (err) {
+        this.log('ride', `Reconnect failed: ${err.message}`, 'debug');
+      }
+    }
+    this.reconnecting = false;
+    this.log('ride', 'Could not reconnect. Press a button to wake the handlebars, then click Connect.', 'error');
+    this.dispatchEvent(new Event('status'));
+  }
+
+  /** Short buzz in the handlebars. */
+  async vibrate() {
+    if (!this._syncRx) return;
+    try { await this._syncRx.writeValueWithoutResponse(VIBRATE); }
+    catch (err) { this.log('ride', `Vibrate failed: ${err.message}`, 'debug'); }
   }
 
   async _readFirmware(server) {
@@ -88,7 +133,7 @@ export class Ride extends EventTarget {
       const m = this.firmware.match(/^(\d+)\.(\d+)/);
       const v2 = m && (+m[1] > 1 || (+m[1] === 1 && +m[2] >= 3));
       this.log('ride', `Firmware ${this.firmware} → ${v2 ? 'Ride V2 (needs daily Zwift unlock)' : 'Ride V1 (no unlock needed)'}`,
-        v2 ? 'warn' : 'ok');
+        v2 ? 'warn' : 'debug');
     } catch (err) {
       this.log('ride', `Could not read firmware version (${err.message})`, 'debug');
     }
@@ -99,7 +144,6 @@ export class Ride extends EventTarget {
       const bs = await server.getPrimaryService('battery_service');
       const lvl = await bs.getCharacteristic('battery_level');
       this.battery = (await lvl.readValue()).getUint8(0);
-      this.log('ride', `Battery ${this.battery}%`);
     } catch { /* optional */ }
   }
 
@@ -111,21 +155,17 @@ export class Ride extends EventTarget {
 
     if (this.showRaw) this.log('ride', `[${source}] ${opName}: ${toHex(bytes)}`, 'debug');
 
-    if (op === 0x52) { // "R" of RideOn — handshake reply
-      this.log('ride', 'Handshake reply received (RideOn)', 'ok');
-      return;
-    }
+    if (op === 0x52) return; // RideOn handshake reply
     if (op === 0x23) {
       try {
-        const status = decodeRideKeyPad(bytes.subarray(1));
-        const pressed = pressedButtons(status);
-        const key = pressed.join(',');
-        // The controller repeats identical frames; only report changes.
-        if (key !== this._lastPressed) {
-          this._lastPressed = key;
-          if (pressed.length) this.log('ride', `Pressed: ${pressed.join(' + ')}`, 'button');
-          else this.log('ride', 'Released', 'debug');
-          this.dispatchEvent(new CustomEvent('buttons', { detail: pressed }));
+        const now = new Set(pressedButtons(decodeRideKeyPad(bytes.subarray(1))));
+        // Only newly pressed buttons count as a press (the controller repeats frames).
+        const newly = [...now].filter((b) => !this._pressed.has(b));
+        this._pressed = now;
+        this.dispatchEvent(new CustomEvent('buttons', { detail: [...now] }));
+        for (const name of newly) {
+          this.log('ride', `Pressed: ${name}`, 'button');
+          this.dispatchEvent(new CustomEvent('press', { detail: name }));
         }
       } catch (err) {
         this.log('ride', `Could not decode buttons: ${err.message} (${toHex(bytes)})`, 'error');
@@ -139,10 +179,6 @@ export class Ride extends EventTarget {
         this.battery = bytes[idx + 1];
         this.dispatchEvent(new Event('status'));
       }
-      return;
-    }
-    if (!this.showRaw && op !== 0x15) {
-      this.log('ride', `[${source}] ${opName}: ${toHex(bytes)}`, 'debug');
     }
   }
 }

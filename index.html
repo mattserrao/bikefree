@@ -10,7 +10,15 @@
 <body>
   <header>
     <h1>bike<span>free</span></h1>
-    <span class="version">v0.1 · connection test</span>
+    <div class="chips">
+      <button class="chip" id="trainerBtn" title="Connect or disconnect the trainer">
+        <span class="dot" id="trainerDot"></span><span id="trainerLabel">Connect trainer</span>
+      </button>
+      <button class="chip" id="rideBtn" title="Connect or disconnect the handlebars">
+        <span class="dot" id="rideDot"></span><span id="rideLabel">Connect handlebars</span>
+      </button>
+      <button class="chip icon" id="settingsBtn" title="Settings">⚙</button>
+    </div>
   </header>
 
   <div id="unsupported" class="banner" hidden>
@@ -18,112 +26,112 @@
   </div>
 
   <main>
-    <section class="devices">
-      <div class="device" id="trainerCard">
-        <div class="device-head">
-          <span class="dot" id="trainerDot"></span>
-          <div>
-            <div class="device-name">Trainer</div>
-            <div class="device-sub" id="trainerSub">KICKR CORE 2 · not connected</div>
-          </div>
-        </div>
-        <button id="trainerBtn" class="primary">Connect trainer</button>
+    <section class="hero">
+      <div class="tile big">
+        <div class="label">Power</div>
+        <div class="value" id="power">0</div>
+        <div class="unit">W · 3s <b id="power3s">0</b></div>
       </div>
-
-      <div class="device" id="rideCard">
-        <div class="device-head">
-          <span class="dot" id="rideDot"></span>
-          <div>
-            <div class="device-name">Handlebars</div>
-            <div class="device-sub" id="rideSub">Zwift Ride · not connected</div>
-          </div>
-        </div>
-        <div class="btn-row">
-          <button id="rideBtn" class="primary">Connect handlebars</button>
-          <button id="rideAnyBtn" class="ghost" title="Show every Zwift device in the picker">Show all Zwift devices</button>
-        </div>
+      <div class="tile big gear-tile">
+        <div class="label">Gear</div>
+        <div class="value"><span id="gear">12</span><small>/24</small></div>
+        <div class="gearbar" id="gearbar"></div>
+        <div class="gear-hint">Left = easier · Right = harder</div>
+      </div>
+      <div class="tile big">
+        <div class="label">Cadence</div>
+        <div class="value" id="cadence">0</div>
+        <div class="unit">rpm</div>
       </div>
     </section>
 
     <section class="tiles">
-      <div class="tile"><div class="label">Power</div><div class="value" id="power">--</div><div class="unit">W</div></div>
-      <div class="tile"><div class="label">Cadence</div><div class="value" id="cadence">--</div><div class="unit">rpm</div></div>
-      <div class="tile"><div class="label">Speed (trainer)</div><div class="value" id="speed">--</div><div class="unit">mph</div></div>
-      <div class="tile"><div class="label">Resistance</div><div class="value" id="mode">--</div><div class="unit" id="modeUnit">mode</div></div>
+      <div class="tile"><div class="label">Speed</div><div class="value" id="speed">0.0</div><div class="unit" id="speedUnit">mph</div></div>
+      <div class="tile"><div class="label">Time</div><div class="value" id="time">0:00</div><div class="unit" id="timeState">ready</div></div>
+      <div class="tile"><div class="label">Distance</div><div class="value" id="distance">0.00</div><div class="unit" id="distUnit">mi</div></div>
+      <div class="tile"><div class="label">Avg power</div><div class="value" id="avgPower">0</div><div class="unit">W</div></div>
+      <div class="tile"><div class="label">Climbed</div><div class="value" id="elev">0</div><div class="unit" id="elevUnit">ft</div></div>
     </section>
 
-    <section class="panel">
-      <h2>Resistance test</h2>
-      <div class="controls">
-        <div class="control">
-          <label for="ergInput">ERG target</label>
-          <div class="inline">
-            <input type="number" id="ergInput" value="120" min="0" max="1000" step="5">
-            <span>W</span>
-            <button id="ergBtn" disabled>Set ERG</button>
-          </div>
-        </div>
-        <div class="control">
-          <label for="gradeInput">SIM grade <b id="gradeOut">0.0%</b></label>
-          <div class="inline">
-            <input type="range" id="gradeInput" min="-10" max="16" step="0.5" value="0">
-            <button id="gradeBtn" disabled>Set grade</button>
-          </div>
-        </div>
-        <div class="control">
-          <label>&nbsp;</label>
-          <button id="flatBtn" disabled>Flat road (0%)</button>
-        </div>
+    <section class="panel terrain">
+      <div class="grade-read">
+        <div class="label">Grade</div>
+        <div class="value" id="grade">0.0%</div>
       </div>
+      <button id="gradeDown" class="round" title="Easier (D-pad ▼ / ↓)">−</button>
+      <input type="range" id="gradeInput" min="-10" max="16" step="0.5" value="0">
+      <button id="gradeUp" class="round" title="Steeper (D-pad ▲ / ↑)">+</button>
+      <button id="flatBtn">Flat</button>
+      <div class="spacer"></div>
+      <button id="startBtn" class="primary">Start</button>
+      <button id="resetBtn" class="ghost">Reset</button>
     </section>
 
-    <section class="panel">
-      <h2>Handlebar buttons</h2>
-      <div class="pads">
-        <div class="pad" id="padLeft">
-          <div class="pad-title">Left</div>
-          <div class="keys">
-            <span data-btn="paddleLeft">Paddle</span>
-            <span data-btn="shiftUpLeft">Shift up</span>
-            <span data-btn="shiftDownLeft">Shift down</span>
-            <span data-btn="powerUpLeft">Power-up</span>
-            <span data-btn="navUp">▲</span>
-            <span data-btn="navLeft">◀</span>
-            <span data-btn="navRight">▶</span>
-            <span data-btn="navDown">▼</span>
-            <span data-btn="onOffLeft">On/Off</span>
-          </div>
-        </div>
-        <div class="pad" id="padRight">
-          <div class="pad-title">Right</div>
-          <div class="keys">
-            <span data-btn="paddleRight">Paddle</span>
-            <span data-btn="shiftUpRight">Shift up</span>
-            <span data-btn="shiftDownRight">Shift down</span>
-            <span data-btn="powerUpRight">Power-up</span>
-            <span data-btn="Y">Y</span>
-            <span data-btn="Z">Z</span>
-            <span data-btn="A">A</span>
-            <span data-btn="B">B</span>
-            <span data-btn="onOffRight">On/Off</span>
-          </div>
-        </div>
+    <p class="hints">
+      Handlebars: left buttons/paddle shift easier, right shift harder · D-pad ▲▼ changes grade · A starts/pauses.
+      Keyboard: <kbd>←</kbd><kbd>→</kbd> shift · <kbd>↑</kbd><kbd>↓</kbd> grade · <kbd>Space</kbd> start/pause.
+    </p>
+
+    <details class="panel" id="diag">
+      <summary>Diagnostics</summary>
+      <div class="diag-grid">
+        <div>Trainer target: <b id="target">—</b></div>
+        <div>Real gear ratio: <b id="realRatio">—</b></div>
+        <div>Trainer speed: <b id="trainerSpeed">—</b></div>
+        <div>Handlebars: <b id="rideInfo">—</b></div>
       </div>
-    </section>
-
-    <section class="panel">
       <div class="log-head">
-        <h2>Log</h2>
         <div class="inline">
           <label class="check"><input type="checkbox" id="rawToggle"> Raw controller bytes</label>
-          <label class="check"><input type="checkbox" id="debugToggle" checked> Details</label>
+          <label class="check"><input type="checkbox" id="debugToggle"> Details</label>
+          <button id="rideAnyBtn" class="ghost" title="Connect handlebars showing every Zwift device in the picker">Pick any Zwift device</button>
+        </div>
+        <div class="inline">
           <button id="copyLog" class="ghost">Copy log</button>
           <button id="clearLog" class="ghost">Clear</button>
         </div>
       </div>
       <ol id="log"></ol>
-    </section>
+    </details>
   </main>
+
+  <dialog id="settings">
+    <form method="dialog">
+      <h2>Settings</h2>
+      <label>Units
+        <select name="units">
+          <option value="imperial">Imperial (mph, lb, ft)</option>
+          <option value="metric">Metric (km/h, kg, m)</option>
+        </select>
+      </label>
+      <label><span>Rider weight (<span class="u-weight">lb</span>)</span>
+        <input type="number" name="rider" min="20" max="400" step="any">
+      </label>
+      <label><span>Bike weight (<span class="u-weight">lb</span>)</span>
+        <input type="number" name="bike" min="1" max="100" step="any">
+      </label>
+      <label>Shifting method
+        <select name="shiftMode">
+          <option value="erg">ERG — trainer holds the watts for your gear and cadence</option>
+          <option value="sim">SIM — trainer gets an adjusted grade (experimental)</option>
+        </select>
+      </label>
+      <label><span>Difficulty <b id="diffOut">100%</b></span>
+        <input type="range" name="difficulty" min="50" max="150" step="5">
+      </label>
+      <label>Real gear ratio (SIM only, 0 = auto)
+        <input type="number" name="realRatio" min="0" max="6" step="any">
+      </label>
+      <label class="check"><input type="checkbox" name="haptics"> Buzz handlebars on shift</label>
+      <label>Starting gear
+        <input type="number" name="startGear" min="1" max="24" step="1">
+      </label>
+      <div class="dialog-actions">
+        <button value="save" class="primary">Save</button>
+        <button value="cancel" class="ghost" formnovalidate>Cancel</button>
+      </div>
+    </form>
+  </dialog>
 
   <script type="module" src="js/app.js"></script>
 </body>

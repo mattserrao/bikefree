@@ -23,24 +23,27 @@ A free indoor biking app for Mac. Runs as a web app in Chrome and talks directly
 
 ## Versions
 
-### v0.1 — Connect and test *(branch `v0.1-test`)*
+### v0.1 — Connect and test *(branch `v0.1-test`)* ✅
 **Goal:** prove Chrome on the Mac can talk to both devices.
-- [ ] Connect to KICKR CORE 2; show live power, cadence, speed
-- [ ] Take FTMS control; set ERG target watts and SIM grade from test controls
+- [x] Connect to KICKR CORE 2; show live power, cadence, speed
+- [x] Take FTMS control; set ERG target watts and SIM grade from test controls
 - [x] Connect to Zwift Ride handlebars; read firmware version; complete `RideOn` handshake (fw 1.2.0, V1)
 - [x] Log every button press (named) plus raw bytes for debugging
 - **Done when:** you can pedal, see numbers, feel resistance change, and see button presses in the log
 
-### v0.2 — Virtual shifting + dashboard
+### v0.2 — Virtual shifting + dashboard *(branch `v0.2`)*
 **Goal:** a usable free ride.
-- [ ] 24 virtual gears; Ride shift buttons/paddles move up and down
-- [ ] Try two shifting methods, keep the one that feels best:
-  - SIM: gear scales the effective grade sent to the trainer
-  - ERG: target watts from a physics model (cadence × gear ratio → speed → power at current grade)
-- [ ] Big dashboard tiles: power, 3s power, cadence, speed, gear, time, distance
-- [ ] Virtual speed/distance from a rider + bike physics model (weight setting)
-- [ ] Manual grade slider to test hills
-- [ ] Auto-reconnect if a device drops
+- [x] 24 virtual gears; left hood buttons/paddle = easier, right = harder; handlebar buzz on shift
+- [x] Two shifting methods (Settings → Shifting method):
+  - ERG (default): trainer holds the watts for your cadence × gear on the current grade
+  - SIM (experimental): grade sent to the trainer is scaled by virtual ÷ real gear ratio (real ratio auto-estimated)
+- [x] Big dashboard tiles: power, 3s power, cadence, gear, speed, time, distance, avg power, climbed
+- [x] Virtual speed/distance from a rider + bike physics model (weights in Settings); coasting handled
+- [x] Grade control: slider, −/+ buttons, D-pad ▲▼, arrow keys
+- [x] Auto-start when you pedal, auto-pause when stopped; A button / Space to start or pause
+- [x] Auto-reconnect if a device drops (retries for about a minute)
+- [x] Difficulty % setting; settings saved in the browser
+- [ ] On-bike check: 30-minute ride; pick ERG or SIM; tune gear ratios and difficulty
 - **Done when:** a 30-minute ride feels natural with shifting
 
 ### v0.3 — Save rides
