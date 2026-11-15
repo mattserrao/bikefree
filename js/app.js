@@ -6,9 +6,9 @@ import { powerRequired, speedFromCadence, WHEEL_CIRC } from './physics.js';
 import { loadSettings, saveSettings, KG_PER_LB, MI_PER_KM } from './settings.js';
 import { rideToFit, fitFilename, summarize } from './recorder.js';
 import * as store from './store.js';
-import { parseGpx, buildRoute } from './gpx.js';
+import { parseGpx, buildRoute, averageGradeAhead } from './gpx.js';
 import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor } from './workout.js';
-import { drawProfile, drawWorkout } from './views.js';
+import { drawProfile, drawWorkout, drawTrace, gradeColor } from './views.js';
 import { planRouteTiles, tileKeysToUrls, downloadUrls, offlineStatus, setOfflineStatus, registerServiceWorker } from './offline.js';
 
 const $ = (id) => document.getElementById(id);
@@ -67,6 +67,13 @@ function fmtTime(s) {
   const sec = String(s % 60).padStart(2, '0');
   return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 }
+// Zone and grade colours are tuned for dark glass; on light panels darken them so the text stays readable.
+function readable(hex) {
+  if (window.BFTheme?.mode() !== 'light') return hex;
+  const n = parseInt(hex.slice(1), 16), k = 0.62;
+  const c = (v) => Math.round(v * k).toString(16).padStart(2, '0');
+  return `#${c(n >> 16)}${c((n >> 8) & 255)}${c(n & 255)}`;
+}
 const fmtGrade = (g) => `${(Math.abs(g) < 0.05 ? 0 : g).toFixed(1)}%`;
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -77,18 +84,23 @@ let onRideScreen = false;
 
 // ---------- Devices ----------
 function deviceStatus() {
-  const card = (dev, dot, label, onText, offText) => {
+  const card = (dev, key, onText, offText) => {
     const on = dev.connected;
-    $(dot).className = `dot ${on ? 'on' : dev.reconnecting ? 'wait' : ''}`;
-    $(label).textContent = on ? onText() : dev.reconnecting ? 'Reconnecting…' : offText;
+    const demo = dev === trainer && !!trainer.demo;
+    const badge = $(`${key}Dot`);
+    badge.className = `badge ${demo ? 'demo' : on ? 'on' : dev.reconnecting ? 'wait' : ''}`;
+    badge.textContent = demo ? 'Demo' : on ? 'On' : dev.reconnecting ? '…' : '';
+    badge.hidden = !(demo || on || dev.reconnecting);
+    $(`${key}Label`).textContent = on ? onText() : dev.reconnecting ? 'Reconnecting…' : offText;
+    $(`${key}Btn`).classList.toggle('connected', on && !demo);
+    $(`${key}Btn`).classList.toggle('demo', demo);
   };
-  card(trainer, 'trainerDot', 'trainerLabel', () => trainer.device.name, hasBluetooth ? 'Tap to connect' : 'Needs Chrome');
-  $('trainerDot').classList.toggle('demo', !!trainer.demo);
-  card(ride, 'rideDot', 'rideLabel', () => `Zwift Ride${ride.battery != null ? ` · battery ${ride.battery}%` : ''}`, hasBluetooth ? 'Tap to connect' : 'Needs Chrome');
-  card(hrStrap, 'hrDot', 'hrLabel', () => `${hrStrap.bpm ?? '--'} bpm`, 'Optional');
+  card(trainer, 'trainer', () => trainer.device.name, hasBluetooth ? 'Tap to pair' : 'Needs Chrome');
+  card(ride, 'ride', () => `Zwift Ride${ride.battery != null ? ` · ${ride.battery}%` : ''}`, hasBluetooth ? 'Tap to pair' : 'Needs Chrome');
+  card(hrStrap, 'hr', () => `${hrStrap.bpm ?? '--'} bpm`, 'Optional · tap to pair');
   $('rideInfo').textContent = ride.connected ? `fw ${ride.firmware ?? '?'} · battery ${ride.battery ?? '?'}%` : '—';
   $('unsupported').hidden = hasBluetooth || !!trainer.demo;
-  renderStartRow();
+  renderStart();
 }
 for (const d of [trainer, ride, hrStrap]) d.addEventListener('status', deviceStatus);
 
@@ -135,7 +147,7 @@ function setDemo(on) {
     if (session.running) session.pause();
   }
   $('demoBtn').classList.toggle('on', on);
-  $('demoBtn').textContent = on ? `Demo · ${DEMO_MPH} mph` : 'Demo';
+  $('demoLabel').textContent = on ? `Demo on · ${DEMO_MPH} mph` : 'Demo';
   $('demoNote').hidden = !on;
   $('hDemo').hidden = !on;
   session.settingsChanged();
@@ -150,9 +162,8 @@ function showPane(p) {
   chosen = p;
   for (const t of document.querySelectorAll('.mode')) t.classList.toggle('on', t.dataset.mode === p);
   for (const el of document.querySelectorAll('.mode-pane')) el.hidden = el.dataset.pane !== p;
-  renderRoutePane();
-  renderWorkoutPane();
-  renderStartRow();
+  drawThumbs();
+  renderPreview();
 }
 for (const t of document.querySelectorAll('.mode')) t.addEventListener('click', () => showPane(t.dataset.mode));
 
@@ -165,35 +176,86 @@ function sameAsCurrent() {
   if (chosen === 'route') return session.mode === 'route' && session.route === previewRoute;
   return session.mode === 'workout' && session.workout === previewWorkout && !session.workoutDone;
 }
-function renderStartRow() {
+function renderStart() {
   const inProgress = session.hasRide;
-  $('startBtn').textContent = inProgress ? (sameAsCurrent() ? 'Resume ride' : 'Switch & resume') : 'Start riding';
+  const ready = trainer.connected;
+  const btn = $('startBtn');
+  btn.disabled = !ready;
+  btn.textContent = !ready ? 'Connect the trainer to start' : inProgress ? (sameAsCurrent() ? 'Resume ride' : 'Switch & resume') : 'Start riding';
   $('startNote').innerHTML = inProgress
     ? `Ride in progress · ${fmtTime(session.movingS)} · ${fmtDist(session.distanceM)} ${distUnit()} · <button class="link" id="finishFromMenu">Finish ride</button>`
-    : trainer.connected ? 'The ride records as soon as you pedal.' : 'Connect the trainer first — or try <b>Demo</b>.';
+    : ready ? 'Recording starts when you pedal.' : 'No bike handy? Turn on <b>Demo</b> in the top right.';
   $('finishFromMenu')?.addEventListener('click', () => openSummary());
 }
 
-// ---------- Scenery (3D loop behind free rides and workouts) ----------
-function renderScenery() {
-  for (const id of ['sceneSelect', 'sceneSelect2']) {
-    const sel = $(id);
-    sel.innerHTML = '';
-    for (const p of parkItems || []) sel.add(new Option(p.name, p.id));
-    sel.add(new Option('None — numbers only', 'none'));
-    sel.value = settings.scenery;
-    if (sel.value !== settings.scenery) sel.value = parkItems?.[0]?.id || 'none';
+// ---------- Preview panel (right column) ----------
+const fact = (v, label) => `<div class="fact"><b>${v}</b><small>${label}</small></div>`;
+function renderPreview() {
+  const map = $('pvMap'), chart = $('pvChart');
+  $('offlineStatus').hidden = chosen !== 'route';
+  if (chosen === 'route' && previewRoute) {
+    const r = previewRoute;
+    $('pvKicker').textContent = 'Route';
+    $('pvTitle').textContent = r.name;
+    $('pvSub').textContent = r.park || 'Your route';
+    $('pvFacts').innerHTML = fact(`${fmtDist(r.total, 1)}`, distUnit()) + fact(fmtElev(r.ascent).toLocaleString(), `${elevUnit()} climb`) +
+      fact(`${Math.round(Math.max(...r.grade))}%`, 'max grade') + (r.closed ? '<div class="fact tag">Loop · endless laps</div>' : '');
+    $('pvDesc').innerHTML = r.hasElevation ? '' : '<span class="warn">No elevation in this file — it will ride flat.</span>';
+    map.hidden = false; chart.hidden = false;
+    drawTrace(map, r, 0);
+    drawProfile(chart, r, 0, { metric: !imperial() });
+  } else if (chosen === 'workout' && previewWorkout) {
+    const w = previewWorkout, st = workoutStats(w);
+    $('pvKicker').textContent = 'Workout';
+    $('pvTitle').textContent = w.name;
+    $('pvSub').textContent = `At FTP ${settings.ftp} W`;
+    $('pvFacts').innerHTML = fact(fmtTime(w.duration), 'time') + fact(`~${st.kj}`, 'kJ') + fact(`${st.maxW} W`, 'peak');
+    $('pvDesc').textContent = w.description || '';
+    map.hidden = true; chart.hidden = false;
+    drawWorkout(chart, w, 0, settings.ftp, 1);
+  } else {
+    const scene = sceneryItem();
+    $('pvKicker').textContent = 'Free ride';
+    $('pvTitle').textContent = scene ? scene.name : 'Numbers only';
+    $('pvSub').textContent = scene ? `Scenery · ${scene.park}` : 'No scenery — a plain dark background';
+    $('pvFacts').innerHTML = '';
+    $('pvDesc').innerHTML = 'Change the grade with ▲ ▼ on the handlebars (or <kbd>↑</kbd> <kbd>↓</kbd>) while you ride.';
+    chart.hidden = true;
+    map.hidden = !scene;
+    if (scene && routeCache.has(scene.id)) drawTrace(map, routeCache.get(scene.id), 0);
   }
+  renderStart();
 }
-for (const id of ['sceneSelect', 'sceneSelect2']) {
-  $(id).addEventListener('change', (e) => {
-    settings.scenery = e.target.value;
-    saveSettings(settings);
-    renderScenery();
-  });
+
+// ---------- Scenery (3D loop behind free rides and workouts) ----------
+const sceneryItem = () => (parkItems || []).find((p) => p.id === settings.scenery) || null;
+function setScenery(id) {
+  settings.scenery = id;
+  saveSettings(settings);
+  renderScenery();
+  renderPreview();
 }
+function renderScenery() {
+  const items = [...(parkItems || []), { id: 'none', name: 'None', park: 'Numbers only' }];
+  if (!items.some((p) => p.id === settings.scenery)) settings.scenery = items[0].id;
+  $('sceneCards').innerHTML = items.map((p) => `
+    <button class="rcard ${p.id === 'none' ? 'none' : ''} ${p.id === settings.scenery ? 'on' : ''}" data-id="${p.id}">
+      ${p.id === 'none' ? '<div class="blank">No 3D</div>' : '<canvas></canvas>'}
+      <div><b>${escapeHtml(p.name)}</b><div class="rsub">${escapeHtml(p.park || '')}</div></div>
+    </button>`).join('');
+  drawThumbs();
+  const sel = $('sceneSelect');
+  sel.innerHTML = '';
+  for (const p of items) sel.add(new Option(p.id === 'none' ? 'None — numbers only' : p.name, p.id));
+  sel.value = settings.scenery;
+}
+$('sceneCards').addEventListener('click', (e) => {
+  const card = e.target.closest('.rcard');
+  if (card) setScenery(card.dataset.id);
+});
+$('sceneSelect').addEventListener('change', (e) => setScenery(e.target.value));
 async function sceneryRoute() {
-  const item = (parkItems || []).find((p) => p.id === settings.scenery);
+  const item = sceneryItem();
   if (!item) return null;
   try { return await loadRouteItem(item); } catch { return null; }
 }
@@ -310,14 +372,37 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ---------- Ride HUD ----------
-const ZONES = [[0, 0.55, 'Zone 1'], [0.55, 0.76, 'Zone 2'], [0.76, 0.9, 'Zone 3'], [0.9, 1.05, 'Zone 4'], [1.05, 1.19, 'Zone 5'], [1.19, 99, 'Zone 6']];
+const ZONES = [[0, 0.55, 'Z1'], [0.55, 0.76, 'Z2'], [0.76, 0.9, 'Z3'], [0.9, 1.05, 'Z4'], [1.05, 1.19, 'Z5'], [1.19, 99, 'Z6']];
+const ZONE_MID = [0.4, 0.65, 0.83, 0.97, 1.12, 1.3];
 const barMax = () => Math.max(400, Math.round((settings.ftp * 1.7) / 50) * 50);
-const showCtx = (n, value, label) => {
-  $(`hCtx${n}Box`).hidden = value == null;
+const showRow = (n, value, label) => {
+  $(`hRow${n}Box`).hidden = value == null;
   if (value == null) return;
-  $(`hCtx${n}`).textContent = value;
-  $(`hCtx${n}L`).textContent = label;
+  $(`hRow${n}`).textContent = value;
+  $(`hRow${n}L`).textContent = label;
 };
+
+// Zone bar: six segments sized by their watt range, each filling in its own zone colour.
+let zSegs = [];
+function buildZoneBar() {
+  const bar = $('zBar');
+  bar.innerHTML = '';
+  const max = barMax();
+  zSegs = ZONES.map(([lo, hi], i) => {
+    const a = lo * settings.ftp, b = Math.min(hi * settings.ftp, max);
+    const seg = document.createElement('span');
+    seg.className = 'zseg';
+    seg.style.flex = `${Math.max(0, b - a)} 0 0`;
+    seg.style.setProperty('--c', zoneColor(ZONE_MID[i]));
+    seg.append(document.createElement('i'));
+    bar.append(seg);
+    return { seg, a, b };
+  }).filter((z) => z.b > z.a);
+  const tick = document.createElement('u');
+  tick.id = 'zTarget';
+  tick.hidden = true;
+  bar.append(tick);
+}
 
 let lastTitle = '', titleTimer = 0;
 function renderHudStatic() {
@@ -330,8 +415,7 @@ function renderHudStatic() {
     clearTimeout(titleTimer);
     titleTimer = setTimeout(() => $('hTitle').classList.remove('show'), 5000);
   }
-  const p = $('hudProfile');
-  p.hidden = !(session.mode === 'route' || (session.mode === 'workout' && session.workout));
+  buildZoneBar();
   lastProfileDraw = 0;
 }
 
@@ -346,24 +430,30 @@ function renderHud() {
   $('hSpeed').textContent = (imperial() ? kph * MI_PER_KM : kph).toFixed(1);
   $('hSpeedU').textContent = imperial() ? 'mph' : 'km/h';
 
-  // Power: 3-second power, coloured by zone, with a slim zone bar (and the workout target).
+  // Power: 3-second power. Zone 1 stays white for contrast; higher zones take their colour.
   const p3 = session.power3s;
   const pct = settings.ftp ? p3 / settings.ftp : 0;
-  const zone = ZONES.find(([lo, hi]) => pct >= lo && pct < hi) || ZONES[0];
-  const col = pct >= 0.55 ? zoneColor(pct) : '#fff'; // Zone 1 stays white for contrast
+  const zi = Math.max(0, ZONES.findIndex(([lo, hi]) => pct >= lo && pct < hi));
+  const zc = zoneColor(ZONE_MID[zi]);
   $('hPower').textContent = Math.round(p3);
-  $('hPower').style.color = col;
-  $('zFill').style.width = `${Math.min(100, (p3 / barMax()) * 100)}%`;
-  $('zFill').style.background = p3 > 1 ? zoneColor(Math.max(pct, 0.01)) : 'transparent';
+  $('hPower').style.color = zi > 0 ? readable(zc) : '';
+  $('hZone').textContent = ZONES[zi][2];
+  $('hZone').style.background = zi > 0 ? zc : '';
+  $('hZone').style.color = zi > 0 ? '#1d1d1c' : '';
+  for (const z of zSegs) z.seg.firstChild.style.width = `${Math.max(0, Math.min(1, (p3 - z.a) / (z.b - z.a))) * 100}%`;
   const tw = session.workoutTarget;
-  $('zTarget').hidden = tw == null;
-  if (tw != null) $('zTarget').style.left = `${Math.min(100, (tw / barMax()) * 100)}%`;
-  $('hPowerSub').textContent = tw != null ? `target ${tw} W` : p3 > 1 ? zone[2] : ' ';
+  const tick = $('zTarget');
+  if (tick) {
+    tick.hidden = tw == null;
+    if (tw != null) tick.style.left = `${Math.min(100, (tw / barMax()) * 100)}%`;
+  }
+  $('hPowerSub').hidden = tw == null;
+  if (tw != null) $('hPowerSub').textContent = `target ${tw} W`;
   $('hCad').textContent = Math.round(session.cadence);
   $('hHr').textContent = session.hr ?? '--';
 
-  // Gear (ERG workout steps ignore the gears)
-  $('hGearBox').hidden = tw != null; // the trainer holds the watts — gears don't apply
+  // Gear (hidden on ERG workout steps — the trainer holds the watts)
+  $('hGearBox').hidden = tw != null;
   $('hGear').textContent = session.gear;
   if (session.gear !== lastGear) {
     lastGear = session.gear;
@@ -371,36 +461,47 @@ function renderHud() {
     el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
   }
 
-  // Top right: grade + route progress, or the workout step.
+  // Top right: grade (coloured by steepness) and what's ahead — or the workout step.
   if (session.mode === 'workout' && session.workout && !session.workoutDone && session.segment) {
     const w = session.workout, seg = session.segment;
     $('hGrade').textContent = fmtTime(seg.start + seg.duration - session.workoutT);
-    $('hGradeLabel').textContent = seg.label;
+    $('hGrade').style.color = '';
+    $('hGradeLabel').textContent = `${seg.label} · left`;
     const next = w.segments[session.segIndex + 1];
-    showCtx(1, next ? (next.kind === 'erg' ? `${targetWatts(next, next.start, settings.ftp, session.workoutBias)} W` : 'Free') : 'Finish', next ? `next · ${fmtTime(next.duration)}` : 'next');
-    showCtx(2, fmtTime(w.duration - session.workoutT), session.workoutBias !== 1 ? `left · intensity ${Math.round(session.workoutBias * 100)}%` : 'workout left');
+    showRow(1, next ? (next.kind === 'erg' ? `${targetWatts(next, next.start, settings.ftp, session.workoutBias)} W` : 'Free') : 'Finish', next ? `next · ${fmtTime(next.duration)}` : 'next');
+    showRow(2, fmtTime(w.duration - session.workoutT), 'workout left');
+    showRow(3, session.workoutBias !== 1 ? `${Math.round(session.workoutBias * 100)}%` : null, 'intensity');
   } else {
     $('hGrade').textContent = fmtGrade(session.gradePct);
+    $('hGrade').style.color = readable(gradeColor(session.gradePct));
     $('hGradeLabel').textContent = 'grade';
     if (session.mode === 'route' && session.route) {
       const r = session.route;
-      showCtx(1, r.closed ? String(session.routeLap) : null, 'lap');
-      showCtx(2, `${fmtDist(Math.max(0, r.total - session.routePos), 1)} ${distUnit()}`, r.closed ? 'lap to go' : 'to go');
+      const ahead = imperial() ? 804.672 : 500;
+      const g = averageGradeAhead(r, session.routePos, ahead);
+      showRow(1, `${g > 0.05 ? '+' : ''}${fmtGrade(g)}`, imperial() ? 'next ½ mi' : 'next 500 m');
+      showRow(2, r.closed ? String(session.routeLap) : null, 'lap');
+      showRow(3, `${fmtDist(Math.max(0, r.total - session.routePos), 1)} ${distUnit()}`, r.closed ? 'lap to go' : 'to go');
     } else {
-      showCtx(1, session.mode === 'workout' && session.workoutDone ? 'Done' : null, 'workout');
-      showCtx(2, null);
+      showRow(1, session.mode === 'workout' && session.workoutDone ? 'Done' : null, 'workout');
+      showRow(2, null);
+      showRow(3, null);
     }
   }
 
-  // Bottom edge: route profile or workout chart (redrawn once a second).
+  $('hudRows').hidden = [1, 2, 3].every((n) => $(`hRow${n}Box`).hidden);
+
+  // Bottom edge: route profile or workout chart (redrawn once a second; blank on free rides).
   const now = performance.now();
-  if (now - lastProfileDraw > 1000 && !$('hudProfile').hidden) {
+  if (now - lastProfileDraw > 1000) {
     lastProfileDraw = now;
-    if (session.mode === 'route' && session.route) drawProfile($('hudProfile'), session.route, session.routePos, { metric: !imperial() });
-    else if (session.mode === 'workout' && session.workout) drawWorkout($('hudProfile'), session.workout, session.workoutT, settings.ftp, session.workoutBias);
+    const c = $('hudProfile');
+    if (session.mode === 'route' && session.route) drawProfile(c, session.route, session.routePos, { metric: !imperial(), compact: true });
+    else if (session.mode === 'workout' && session.workout) drawWorkout(c, session.workout, session.workoutT, settings.ftp, session.workoutBias, { compact: true });
+    else c.getContext('2d').clearRect(0, 0, c.width, c.height);
   }
 
-  // State pills and pause overlay
+  // Status and pause overlay
   const userPaused = pausedByUser();
   const state = session.running ? '' : session.autoPaused ? 'Paused — pedal to resume' : session.movingS ? '' : 'Pedal to start';
   $('hState').hidden = !state;
@@ -412,10 +513,22 @@ function renderHud() {
   $('pauseOverlay').hidden = !userPaused || $('summary').open;
 }
 
+// Hide the on-screen buttons until the mouse moves.
+let idleTimer = 0;
+function wake() {
+  document.body.classList.remove('idle');
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => document.body.classList.add('idle'), 3000);
+}
+document.addEventListener('mousemove', wake);
+
 session.addEventListener('tick', () => {
   renderHud();
   renderDiag();
-  if (!onRideScreen && session.hasRide) renderStartRow();
+  if (!onRideScreen) {
+    if (session.hasRide) renderStart();
+    if (hrStrap.connected) $('hrLabel').textContent = `${hrStrap.bpm ?? '--'} bpm`;
+  }
 });
 session.addEventListener('change', renderHudStatic);
 session.addEventListener('segment', renderHudStatic);
@@ -437,6 +550,7 @@ let routeItems = [];
 let parkItems = null;
 const routeCache = new Map();
 let previewRoute = null;
+let selectedRouteId = null;
 
 async function loadParks() {
   if (parkItems) return parkItems;
@@ -452,22 +566,42 @@ async function loadParks() {
 async function refreshRouteList(selectId) {
   const mine = (await store.listLibrary('route').catch(() => [])).map((r) => ({ ...r, group: 'My routes' }));
   routeItems = [...(await loadParks()), ...mine, DEMO_ROUTE];
+  // Load every route up front: they're small, and the cards draw their outlines.
+  await Promise.all(routeItems.map((it) => loadRouteItem(it).catch(() => null)));
+  if (selectId || !routeItems.some((r) => r.id === selectedRouteId)) selectedRouteId = selectId || routeItems[0].id;
+  renderRouteCards();
   renderScenery();
-  const sel = $('routeSelect');
-  sel.innerHTML = '';
-  const groups = new Map();
-  for (const r of routeItems) {
-    if (!groups.has(r.group)) {
-      const og = document.createElement('optgroup');
-      og.label = r.group;
-      sel.append(og);
-      groups.set(r.group, og);
-    }
-    groups.get(r.group).append(new Option(r.name, r.id));
-  }
-  sel.value = selectId || routeItems[0].id;
   await previewSelectedRoute();
 }
+
+function renderRouteCards() {
+  $('routeCards').innerHTML = routeItems.map((it) => {
+    const r = routeCache.get(it.id);
+    const sub = r ? `${fmtDist(r.total, 1)} ${distUnit()} · ${fmtElev(r.ascent).toLocaleString()} ${elevUnit()}` : 'Could not load';
+    return `<button class="rcard ${it.id === selectedRouteId ? 'on' : ''}" data-id="${it.id}"><canvas></canvas>
+      <div><b>${escapeHtml(it.name.replace(' (built-in)', ''))}</b><div class="rsub">${escapeHtml(it.park || it.group)} · ${sub}</div></div></button>`;
+  }).join('');
+  drawThumbs();
+}
+
+// Card thumbnails need a laid-out canvas, so draw them whenever their pane is visible.
+function drawThumbs() {
+  for (const c of document.querySelectorAll('#routeCards canvas, #sceneCards canvas')) {
+    const r = routeCache.get(c.closest('.rcard').dataset.id);
+    if (r && c.clientWidth) drawTrace(c, r, 0);
+  }
+  for (const c of document.querySelectorAll('#workoutList canvas')) {
+    const w = workoutCache.get(c.closest('.wrow').dataset.id);
+    if (w && c.clientWidth) drawWorkout(c, w, 0, settings.ftp, 1, { compact: true });
+  }
+}
+$('routeCards').addEventListener('click', (e) => {
+  const card = e.target.closest('.rcard');
+  if (!card) return;
+  selectedRouteId = card.dataset.id;
+  for (const c of $('routeCards').children) c.classList.toggle('on', c === card);
+  previewSelectedRoute();
+});
 
 async function loadRouteItem(item) {
   if (routeCache.has(item.id)) return routeCache.get(item.id);
@@ -480,31 +614,21 @@ async function loadRouteItem(item) {
 }
 
 async function previewSelectedRoute() {
-  const item = routeItems.find((r) => r.id === $('routeSelect').value);
+  const item = routeItems.find((r) => r.id === selectedRouteId);
   $('routeDelete').hidden = !item || item.id.startsWith('builtin');
+  $('routeOffline').hidden = !item?.park;
   if (!item) return;
   try {
     previewRoute = await loadRouteItem(item);
   } catch (err) {
     previewRoute = null;
-    $('routeInfo').textContent = `Could not load route: ${err.message}`;
+    log('app', `Could not load route: ${err.message}`, 'error');
     return;
   }
-  renderRoutePane();
   renderOffline();
-  renderStartRow();
+  renderPreview();
 }
 
-function renderRoutePane() {
-  if (chosen !== 'route' || !previewRoute) return;
-  const r = previewRoute;
-  $('routeInfo').innerHTML = `${r.park ? `${escapeHtml(r.park)} · ` : ''}${fmtDist(r.total, 1)} ${distUnit()}${r.closed ? ' loop — laps continue as long as you ride' : ''} · ` +
-    `${fmtElev(r.ascent)} ${elevUnit()} climbing · steepest ${Math.round(Math.max(...r.grade))}%` +
-    (r.hasElevation ? '' : ' · <span class="warn">no elevation in this file — it will be flat</span>');
-  drawProfile($('profile'), r, 0, { metric: !imperial() });
-}
-
-$('routeSelect').addEventListener('change', previewSelectedRoute);
 const closeMenus = () => { for (const d of document.querySelectorAll('details.more')) d.open = false; };
 document.addEventListener('click', (e) => { if (!e.target.closest('details.more')) closeMenus(); });
 
@@ -512,7 +636,7 @@ document.addEventListener('click', (e) => { if (!e.target.closest('details.more'
 let offlineAbort = null;
 function renderOffline() {
   if (offlineAbort) return;
-  const id = $('routeSelect').value;
+  const id = selectedRouteId;
   const st = offlineStatus(id);
   $('routeOffline').textContent = st ? 'Update offline copy' : 'Save for offline';
   $('offlineStatus').textContent = st
@@ -523,7 +647,7 @@ $('routeOffline').addEventListener('click', async () => {
   if (offlineAbort) { offlineAbort.abort(); return; }
   if (!previewRoute) return;
   if (!('caches' in window)) { alert('This browser can\'t store files for offline use here.'); return; }
-  const id = $('routeSelect').value;
+  const id = selectedRouteId;
   const keys = planRouteTiles(previewRoute);
   const urls = tileKeysToUrls(keys);
   const estMB = Math.round((urls.length * 35) / 1000);
@@ -553,7 +677,7 @@ $('routeOffline').addEventListener('click', async () => {
 });
 $('routeDelete').addEventListener('click', async () => {
   closeMenus();
-  const id = $('routeSelect').value;
+  const id = selectedRouteId;
   if (id.startsWith('builtin') || !confirm('Remove this route from your library?')) return;
   await store.deleteLibraryItem(id);
   routeCache.delete(id);
@@ -582,36 +706,56 @@ session.addEventListener('routeFinished', () => openSummary(`Route complete — 
 // ---------- Workouts ----------
 let workoutItems = [];
 let previewWorkout = null;
+let selectedWorkoutId = null;
 const workoutCache = new Map();
+
+function parseWorkoutItem(item) {
+  if (!workoutCache.has(item.id)) {
+    const w = parseWorkout(item.text, item.filename || '');
+    if (!w.name || w.name === 'Workout') w.name = item.name.replace(' (built-in)', '');
+    workoutCache.set(item.id, w);
+  }
+  return workoutCache.get(item.id);
+}
 
 async function refreshWorkoutList(selectId) {
   const builtins = BUILT_IN_WORKOUTS.map((b) => ({ ...b, kind: 'workout', name: `${parseWorkout(b.text).name} (built-in)` }));
   workoutItems = [...builtins, ...(await store.listLibrary('workout').catch(() => []))];
-  const sel = $('workoutSelect');
-  sel.innerHTML = '';
-  for (const w of workoutItems) sel.add(new Option(w.name, w.id));
-  sel.value = selectId || workoutItems[0].id;
+  if (selectId || !workoutItems.some((w) => w.id === selectedWorkoutId)) selectedWorkoutId = selectId || workoutItems[0].id;
+  renderWorkoutList();
   previewSelectedWorkout();
 }
 
+function renderWorkoutList() {
+  $('workoutList').innerHTML = workoutItems.map((it) => {
+    let w = null;
+    try { w = parseWorkoutItem(it); } catch { /* shown as unreadable */ }
+    return `<button class="wrow ${it.id === selectedWorkoutId ? 'on' : ''}" data-id="${it.id}">
+      <span><b>${escapeHtml(w ? w.name : it.name)}</b><span class="rsub">${w ? `${fmtTime(w.duration)}${it.id.startsWith('builtin') ? ' · built-in' : ''}` : 'Could not read this file'}</span></span>
+      <canvas></canvas></button>`;
+  }).join('');
+  drawThumbs();
+}
+$('workoutList').addEventListener('click', (e) => {
+  const row = e.target.closest('.wrow');
+  if (!row) return;
+  selectedWorkoutId = row.dataset.id;
+  for (const r of $('workoutList').children) r.classList.toggle('on', r === row);
+  previewSelectedWorkout();
+});
+
 function previewSelectedWorkout() {
-  const item = workoutItems.find((w) => w.id === $('workoutSelect').value);
+  const item = workoutItems.find((w) => w.id === selectedWorkoutId);
   $('workoutDelete').hidden = !item || item.id.startsWith('builtin');
   if (!item) return;
   try {
-    if (!workoutCache.has(item.id)) {
-      const w = parseWorkout(item.text, item.filename || '');
-      if (!w.name || w.name === 'Workout') w.name = item.name;
-      workoutCache.set(item.id, w);
-    }
-    previewWorkout = workoutCache.get(item.id);
+    previewWorkout = parseWorkoutItem(item);
   } catch (err) {
     previewWorkout = null;
-    $('workoutInfo').textContent = err.message;
+    log('app', `Could not read workout: ${err.message}`, 'error');
     return;
   }
-  renderWorkoutPane();
-  renderStartRow();
+  renderPreview();
 }
 
 function workoutStats(w) {
@@ -624,22 +768,13 @@ function workoutStats(w) {
   return { kj: Math.round(work / 1000), maxW };
 }
 
-function renderWorkoutPane() {
-  if (chosen !== 'workout' || !previewWorkout) return;
-  const w = previewWorkout;
-  const st = workoutStats(w);
-  $('workoutInfo').innerHTML = `${fmtTime(w.duration)} · ~${st.kj} kJ · peak ${st.maxW} W at FTP ${settings.ftp} W` +
-    (w.description ? `<br>${escapeHtml(w.description)}` : '');
-  drawWorkout($('workoutChart'), w, 0, settings.ftp, 1);
-}
-
-$('workoutSelect').addEventListener('change', previewSelectedWorkout);
 $('workoutDelete').addEventListener('click', async () => {
   closeMenus();
-  const id = $('workoutSelect').value;
-  if (id.startsWith('builtin') || !confirm('Remove this workout from your library?')) return;
+  const id = selectedWorkoutId;
+  if (!id || id.startsWith('builtin') || !confirm('Remove this workout from your library?')) return;
   await store.deleteLibraryItem(id);
   workoutCache.delete(id);
+  selectedWorkoutId = null;
   await refreshWorkoutList();
 });
 $('workoutFile').addEventListener('change', async (e) => {
@@ -795,6 +930,7 @@ const form = dlg.querySelector('form');
 function fillSettings() {
   const imp = imperial();
   const f = form.elements;
+  f.theme.value = window.BFTheme?.pref() || 'system';
   f.units.value = settings.units;
   f.rider.value = +(imp ? settings.riderKg / KG_PER_LB : settings.riderKg).toFixed(1);
   f.bike.value = +(imp ? settings.bikeKg / KG_PER_LB : settings.bikeKg).toFixed(1);
@@ -838,17 +974,23 @@ dlg.addEventListener('close', () => {
     startGear: Math.min(24, Math.max(1, Math.round(Number(f.startGear.value) || 12))),
   });
   saveSettings(settings);
+  window.BFTheme?.set(f.theme.value);
   session.settingsChanged();
   world?.setCamera(settings.worldCam);
   world?.setTimeOfDay(settings.worldTime);
+  renderRouteCards();
+  renderWorkoutList();
   showPane(chosen);
   log('app', `Settings saved (${settings.shiftMode.toUpperCase()} shifting, difficulty ${settings.difficulty}%, FTP ${settings.ftp} W)`);
 });
 
-window.addEventListener('resize', () => { renderRoutePane(); renderWorkoutPane(); lastProfileDraw = 0; });
+window.addEventListener('resize', () => { renderPreview(); drawThumbs(); lastProfileDraw = 0; });
 window.addEventListener('beforeunload', (e) => {
   if (session.hasRide) { e.preventDefault(); e.returnValue = ''; }
 });
+
+// Light / dark: charts are drawn on canvases, so redraw them when the appearance changes (incl. macOS switching).
+window.BFTheme?.onChange(() => { renderPreview(); drawThumbs(); lastProfileDraw = 0; renderHud(); });
 
 // ---------- Boot ----------
 session.autoStart = false;

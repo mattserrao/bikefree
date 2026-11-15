@@ -15,19 +15,19 @@ Open http://localhost:8000 in **Chrome** (Safari doesn't support Web Bluetooth).
 
 The app has two screens: a **menu** to set up, and a full-window **ride screen**.
 
-1. **Devices** — tap Trainer, Handlebars and (optionally) Heart rate to connect.
-2. **Ride** — pick **Free ride** (you set the grade), **Route** (four national-park loops in 3D, or your own GPX) or **Workout** (.zwo/.erg/.mrc). Free rides and workouts roll a park loop behind you — choose it under *Scenery*, or pick *None*.
-3. **Start riding** — the ride screen opens full screen and the ride records as soon as you pedal.
+1. **Devices** — tap Trainer, Handlebars and (optionally) Heart rate to pair.
+2. **Ride type** — **Free ride** (you set the grade), **Route** (pick a card: four national-park loops in 3D, or your own GPX) or **Workout** (pick from the list; .zwo/.erg/.mrc). Free rides and workouts roll a park loop behind you — pick a *Scenery* card, or *None*.
+3. The preview on the right shows the map, profile or workout chart. **Start riding** opens the ride screen full screen; the ride records as soon as you pedal.
 4. On the bike: hoods **left = easier, right = harder** · ▲▼ grade or workout intensity · ▶ skip workout step · **A** pause · **Y** lap.
 5. Pause (A, Space or ❚❚) for **Resume · Finish ride · Lap · Skip step · Back to menu** and a list of the controls. **Finish ride** → summary → *Save & download .fit* → upload at strava.com/upload/select.
 
-Ride screen: power (3-second, coloured by zone, with a zone bar and the workout target) plus cadence, heart rate and gear along the bottom; time, distance and speed top left; grade and lap / distance to go — or the workout step — top right; the route profile or workout chart along the bottom edge.
+Ride screen: power (3-second, coloured by zone, with a Z1–Z6 badge, a zone bar and the workout target) plus cadence, heart rate and gear along the bottom; time, distance and speed top left; grade (coloured by steepness), the next ½ mile, lap and distance to go — or the workout step — top right; the route profile or workout chart along the bottom edge.
 
 Keyboard: ← → shift · ↑ ↓ grade/intensity · Space pause · L lap · N skip step · C camera · F full screen.
 
 **Demo** (top right of the menu): try everything without a bike. The rider holds a steady 15 mph; power, cadence and heart rate are simulated. Demo rides are saved as "Demo · …".
 
-**Settings** (⚙): units, weights, FTP, camera, time of day, handlebar buzz. *Advanced* holds the shifting method, difficulty, gear ratio, starting gear and the diagnostics log. A route's **⋯** menu has *Load GPX*, *Save for offline* (download the terrain to ride without internet) and *Remove*.
+**Settings**: appearance (System — follows macOS — Light or Dark; colours match Machine Manager), units, weights, FTP, camera, time of day, handlebar buzz. *Advanced* holds the shifting method, difficulty, gear ratio, starting gear and the diagnostics log. A route's **⋯** menu has *Load GPX*, *Save for offline* (download the terrain to ride without internet) and *Remove*.
 
 ## Tests
 
