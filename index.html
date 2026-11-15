@@ -106,6 +106,14 @@
         <h3 class="pv-title" id="pvTitle">—</h3>
         <div class="pv-sub" id="pvSub"></div>
         <div class="facts" id="pvFacts"></div>
+        <div class="route-opts" id="routeOpts" hidden>
+          <div class="seg" id="dirSeg" role="group" aria-label="Direction">
+            <button type="button" data-dir="fwd" class="on">Forward</button><button type="button" data-dir="rev" title="Start from the far end">Reverse</button>
+          </div>
+          <div class="seg" id="startSeg" role="group" aria-label="Start point">
+            <button type="button" data-f="0" class="on">From the start</button><button type="button" data-f="0.3333">⅓ in</button><button type="button" data-f="0.6667">⅔ in</button>
+          </div>
+        </div>
         <canvas id="pvMap" class="pv-map"></canvas>
         <canvas id="pvChart" class="pv-chart"></canvas>
         <p class="pv-desc" id="pvDesc"></p>
@@ -215,11 +223,8 @@
         <label><span>Bike weight (<span class="u-weight">lb</span>)</span>
           <input type="number" name="bike" min="1" max="100" step="any">
         </label>
-        <label>FTP (watts) — for workouts
-          <input type="number" name="ftp" min="50" max="600" step="1">
-        </label>
       </div>
-      <p class="muted small" style="margin:-6px 0 0">Your own weight lives in your profile.</p>
+      <p class="muted small" style="margin:-6px 0 0">Your weight and FTP live in your profile.</p>
       <div class="two">
         <label>Camera
           <select name="worldCam">
@@ -309,9 +314,15 @@
           <input type="number" name="pweight" min="20" max="400" step="any" required>
         </label>
       </div>
-      <label>Gender
-        <select name="pgender" id="pdGender"></select>
-      </label>
+      <div class="two">
+        <label>Gender
+          <select name="pgender" id="pdGender"></select>
+        </label>
+        <label><span>FTP (watts)</span>
+          <input type="number" name="pftp" min="50" max="600" step="1" required>
+        </label>
+      </div>
+      <p class="muted small prof-note">Don't know your FTP? Ride the <b>FTP Test · 20 minutes</b> workout.</p>
       <p class="muted small prof-note" id="pdNote">Weight sets how hard climbs feel. Your profile and rides stay in this browser.</p>
       <div class="dialog-actions">
         <button value="save" class="primary">Save</button>
@@ -330,6 +341,7 @@
       <div class="sum-sub" id="sumSub"></div>
       <div class="sum-grid" id="sumGrid"></div>
       <div class="sum-laps" id="sumLaps"></div>
+      <div class="ftp-result" id="sumFtp" hidden></div>
       <p class="sum-note">Upload the .fit file at strava.com/upload/select (or Garmin Connect → Import Data).</p>
       <div class="dialog-actions">
         <button value="download" class="primary" id="sumDownload">Save &amp; download .fit</button>

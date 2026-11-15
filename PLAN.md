@@ -231,6 +231,14 @@ Goal: blend the two approaches — Codex's stylized scenery up close, the real l
 - [ ] Known, pre-existing: off-road vantage points on steep stylized ground show small steps between ground patches (not visible from the road)
 - [ ] On-bike check and M4 Air smoothness
 
+### v0.11.3 — FTP in profiles, FTP test, route direction *(test branch `v0.11.3`)*
+- [x] **FTP per rider**: FTP moved from Settings into each profile (existing FTP carried over); workouts use the active rider's FTP
+- [x] **FTP Test · 20 minutes** workout: warm-up, three openers, 20 minutes all-out in free mode (you pace with the gears), cool-down. The ride screen shows the running test average and the FTP it points to; the summary shows the result (95% of the 20-min average) with a one-tap *Save to my profile*
+- [x] **Every route turns around at each end** and rides back, endlessly (loops alternate direction each lap); a lap is one full there-and-back from where you started
+- [x] **Forward / Reverse** and **start / ⅓ in / ⅔ in** on the route preview (remembered); Reverse starts from the far end; the map and profile mark the start
+- [x] U-turn into the other lane at both ends; tests for mirroring, start points and the FTP maths
+- [ ] On-bike check
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

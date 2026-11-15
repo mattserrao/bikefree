@@ -15,21 +15,23 @@ export const GENDERS = [
 const newId = () => `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 export function blankProfile(fields = {}) {
-  return { id: newId(), name: '', heightCm: null, weightKg: 80, gender: '', createdAt: Date.now(), ...fields };
+  return { id: newId(), name: '', heightCm: null, weightKg: 80, gender: '', ftp: 200, createdAt: Date.now(), ...fields };
 }
 
 export class Profiles {
   /** @param {{getItem(k):string|null, setItem(k,v):void}} storage  @param {number} fallbackKg weight for the first profile */
-  constructor(storage, fallbackKg = 80) {
+  constructor(storage, fallbackKg = 80, fallbackFtp = 200) {
     this.storage = storage;
     let data = null;
     try { data = JSON.parse(storage.getItem(KEY) || 'null'); } catch { data = null; }
     if (!data || !Array.isArray(data.profiles) || !data.profiles.length) {
-      const first = blankProfile({ weightKg: fallbackKg });
+      const first = blankProfile({ weightKg: fallbackKg, ftp: fallbackFtp });
       data = { activeId: first.id, firstId: first.id, profiles: [first] };
     }
     if (!data.profiles.some((p) => p.id === data.activeId)) data.activeId = data.profiles[0].id;
     if (!data.firstId) data.firstId = data.profiles[0].id;
+    // v0.11.3: FTP lives in the profile (each rider has their own); older profiles take the old setting
+    for (const p of data.profiles) if (!Number.isFinite(p.ftp)) p.ftp = fallbackFtp;
     this.data = data;
     this._save();
   }
@@ -50,7 +52,7 @@ export class Profiles {
   }
 
   create(fields = {}) {
-    const p = blankProfile({ weightKg: this.active?.weightKg ?? 80, ...fields });
+    const p = blankProfile({ weightKg: this.active?.weightKg ?? 80, ftp: this.active?.ftp ?? 200, ...fields });
     this.data.profiles.push(p);
     this.data.activeId = p.id;
     this._save();

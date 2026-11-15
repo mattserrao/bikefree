@@ -59,6 +59,7 @@ export class Session extends EventTarget {
     this._lastSent = null;
     this.target = null;
     this.routeOffset = 0;
+    this.routeStart = 0;          // metres along the route where this ride started (Reverse / ⅓ / ⅔)
     this.routeDone = false;
     this._lastLap = 1;
     this.workoutT = 0;
@@ -81,7 +82,9 @@ export class Session extends EventTarget {
   /** Distance ridden on the current route (all laps). */
   get routeRidden() { return Math.max(0, this.distanceM - this.routeOffset); }
   /** Position along the route (wraps around on loops). */
-  get routePos() { return this.route ? wrapDist(this.route, this.routeRidden) : 0; }
+  get routePos() { return this.route ? wrapDist(this.route, this.routeRidden + this.routeStart) : 0; }
+  /** Distance left in this lap (a lap is one full there-and-back from wherever you started). */
+  get routeLapToGo() { return this.route ? this.route.total - (this.routeRidden % this.route.total) : 0; }
   /** Current lap on a loop route (1-based). */
   get routeLap() { return this.route ? lapAt(this.route, this.routeRidden) : 1; }
   get gradePct() {
@@ -173,7 +176,8 @@ export class Session extends EventTarget {
   }
 
   /** Ride a route from its start (starting from the current distance). */
-  setRoute(route) {
+  setRoute(route, startM = 0) {
+    this.routeStart = startM || 0;
     this.mode = 'route';
     this.route = route;
     this.routeOffset = this.distanceM;

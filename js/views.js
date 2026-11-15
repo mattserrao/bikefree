@@ -94,7 +94,7 @@ export function drawProfile(canvas, route, pos, { metric = false, compact = fals
 }
 
 /** Bird's-eye route outline with a position dot. */
-export function drawTrace(canvas, route, pos) {
+export function drawTrace(canvas, route, pos, { markerOnly = false } = {}) {
   const { ctx, w, h } = setup(canvas);
   if (!route) return;
   const lat0 = (Math.min(...route.lat) + Math.max(...route.lat)) / 2;
@@ -116,7 +116,7 @@ export function drawTrace(canvas, route, pos) {
     ctx.stroke();
   };
   path(0, route.lat.length - 1, tok('--muted', '#a8a69d'), 2.5);
-  if (cut > 0) path(0, cut, tok('--accent', '#7aa9f5'), 3);
+  if (cut > 0 && !markerOnly) path(0, cut, tok('--accent', '#7aa9f5'), 3);
   const [x, y] = P(cut);
   ctx.fillStyle = tok('--accent', '#7aa9f5'); ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
 }

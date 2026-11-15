@@ -228,7 +228,7 @@ export class World {
     const right = new THREE.Vector3(-flat.z, 0, flat.x);
     let riderPos = p.clone().addScaledVector(right, ROAD_WIDTH * 0.22);
     if (turn && Math.abs(x - turn) < 10) {
-      // U-turn: drift across from the outbound lane to the return lane over the last/first 10 m.
+      // U-turn at the far end: drift across from the outbound lane to the return lane over the last/first 10 m.
       if (!this._turnRight) {
         const a = this.pointAt(turn - 12), b = this.pointAt(turn);
         const f = new THREE.Vector3(b.x - a.x, 0, b.z - a.z).normalize();
@@ -236,6 +236,15 @@ export class World {
       }
       const k = Math.max(-1, Math.min(1, (turn - x) / 10));
       riderPos = p.clone().addScaledVector(this._turnRight, ROAD_WIDTH * 0.22 * k);
+    } else if (turn && (x < 10 || total - x < 10)) {
+      // …and the same at the start, where the return leg turns back onto the outbound one.
+      if (!this._startRight) {
+        const a = this.pointAt(0), b = this.pointAt(12);
+        const f = new THREE.Vector3(b.x - a.x, 0, b.z - a.z).normalize();
+        this._startRight = new THREE.Vector3(-f.z, 0, f.x);
+      }
+      const k = Math.max(-1, Math.min(1, (x < 10 ? x : x - total) / 10));
+      riderPos = p.clone().addScaledVector(this._startRight, ROAD_WIDTH * 0.22 * k);
     }
     riderPos.y += 0.12; // road surface sits slightly above the route line
     this.crank += (src.cadence / 60) * Math.PI * 2 * dt;
