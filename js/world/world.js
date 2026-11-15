@@ -2,6 +2,7 @@
 import * as THREE from '../../vendor/three.module.min.js';
 import { makeProjection, makeRouteIndex } from './geo.js';
 import { Terrain } from './terrain.js';
+import { loadRider } from './rider.js';
 import { wrapDist } from '../gpx.js';
 
 export const TIME_PRESETS = {
@@ -64,10 +65,20 @@ export class World {
       onError: (err) => this.log('3d', `Tile load problem: ${err.message}`, 'debug'),
     });
 
+    this.shoulder = makeRibbon(route, this.index, ROAD_WIDTH + 3.4, 0.05, makeGravelTexture(), 3, { polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    this.scene.add(this.shoulder);
     this.road = makeRoad(route, this.index);
     this.scene.add(this.road);
+    // Simple stand-in until the Blender model loads
     this.rider = makeRider();
     this.scene.add(this.rider.group);
+    loadRider().then((r) => {
+      if (this.disposed) return;
+      this.scene.remove(this.rider.group);
+      this.rider = r;
+      this.scene.add(r.group);
+      this.log('3d', `Rider model loaded (${r.triangles.toLocaleString()} triangles)`, 'debug');
+    }).catch((err) => this.log('3d', `Using the simple rider: ${err.message}`, 'debug'));
 
     this.setTimeOfDay('midday');
 
@@ -109,6 +120,8 @@ export class World {
     u.sunColor.value.set(t.sun);
     u.sunDir.value.copy(dir);
     this.scene.fog.color.set(t.horizon);
+    const tu = this.terrain?.uniforms;
+    if (tu) { tu.uSunDir.value.copy(dir); tu.uSkyTop.value.set(t.top); tu.uSkyHorizon.value.set(t.horizon); }
   }
 
   start() {
@@ -140,7 +153,7 @@ export class World {
   _frame(now) {
     if (!this.running) return;
     this._raf = requestAnimationFrame(this._frame);
-    const dt = Math.min(0.1, (now - this._last) / 1000);
+    const dt = Math.min(1.0, (now - this._last) / 1000); // real time (movement must not lag on slow frames)
     this._last = now;
 
     // Follow the ride position smoothly: advance at the current speed, ease toward the real value.
@@ -149,7 +162,7 @@ export class World {
     this.s += src.speed * dt;
     let err = src.pos - wrapDist(this.route, this.s);
     if (this.route.closed) { if (err > total / 2) err -= total; if (err < -total / 2) err += total; }
-    if (Math.abs(err) > 200) this.s = src.pos; else this.s += err * Math.min(1, dt * 1.5);
+    if (Math.abs(err) > 60) this.s = src.pos; else this.s += err * Math.min(1, dt * 1.5);
     this.s = this.route.closed ? wrapDist(this.route, this.s) : Math.max(0, Math.min(total, this.s));
 
     // Rider placement: right-hand side of the road
@@ -159,10 +172,12 @@ export class World {
     const flat = new THREE.Vector3(fwd.x, 0, fwd.z).normalize();
     const right = new THREE.Vector3(-flat.z, 0, flat.x);
     const riderPos = p.clone().addScaledVector(right, ROAD_WIDTH * 0.22);
+    riderPos.y += 0.12; // road surface sits slightly above the route line
     this.crank += (src.cadence / 60) * Math.PI * 2 * dt;
-    this.rider.update(riderPos, fwd, this.crank, src.speed, dt);
+    this.rider.update(riderPos, fwd, this.crank, src.speed, Math.min(dt, 0.1));
 
     this._updateCamera(riderPos, flat, fwd, dt);
+    this.terrain.uniforms.uTime.value = now / 1000;
     this.terrain.update(this.camera.position.x, this.camera.position.z);
 
     this.sky.position.copy(this.camera.position);
@@ -178,6 +193,10 @@ export class World {
       pos = riderPos.clone().addScaledVector(up, 1.55).addScaledVector(flat, 0.35);
       const far = this.pointAt(this.s + 35);
       look = far.addScaledVector(new THREE.Vector3(-flat.z, 0, flat.x), ROAD_WIDTH * 0.22).addScaledVector(up, 1.3);
+    } else if (this.cameraMode === 'side') {
+      const right = new THREE.Vector3(-flat.z, 0, flat.x);
+      pos = riderPos.clone().addScaledVector(right, -3.4).addScaledVector(flat, 0.6).addScaledVector(up, 1.15);
+      look = riderPos.clone().addScaledVector(up, 0.85).addScaledVector(flat, 0.15);
     } else if (this.cameraMode === 'drone') {
       pos = riderPos.clone().addScaledVector(flat, -45).addScaledVector(up, 26);
       look = riderPos.clone().addScaledVector(flat, 25);
@@ -194,7 +213,7 @@ export class World {
       this.camTarget.copy(look);
       this._camInit = true;
     } else {
-      const k = this.cameraMode === 'eye' ? 1 - Math.exp(-dt * 12) : 1 - Math.exp(-dt * 3.5);
+      const k = this.cameraMode === 'eye' || this.cameraMode === 'side' ? 1 - Math.exp(-dt * 12) : 1 - Math.exp(-dt * 3.5);
       this.camera.position.lerp(pos, k);
       this.camTarget.lerp(look, 1 - Math.exp(-dt * 5));
     }
@@ -207,6 +226,7 @@ export class World {
   get loading() { return this.terrain.loadingCount; }
 
   dispose() {
+    this.disposed = true;
     this.stop();
     this._ro.disconnect();
     this.terrain.dispose();
@@ -306,7 +326,57 @@ function makeRoad(route, index) {
   const mat = new THREE.MeshLambertMaterial({ map: tex, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.frustumCulled = false;
+  mesh.renderOrder = 2;
   return mesh;
+}
+
+// ---------- Shoulders ----------
+function makeRibbon(route, index, width, lift, tex, repeatM, offset) {
+  const n = route.dist.length;
+  const pos = new Float32Array(n * 2 * 3), uv = new Float32Array(n * 2 * 2);
+  for (let i = 0; i < n; i++) {
+    const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1);
+    let dx = index.xs[b] - index.xs[a], dz = index.zs[b] - index.zs[a];
+    const len = Math.hypot(dx, dz) || 1; dx /= len; dz /= len;
+    const rx = -dz, rz = dx, hw = width / 2, y = route.ele[i] + lift;
+    pos.set([index.xs[i] - rx * hw, y, index.zs[i] - rz * hw, index.xs[i] + rx * hw, y, index.zs[i] + rz * hw], i * 6);
+    const v = route.dist[i] / repeatM;
+    uv.set([0, v, 1, v], i * 4);
+  }
+  const idx = [];
+  for (let i = 0; i < n - 1; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  const mat = new THREE.MeshLambertMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, ...offset });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 1;
+  return mesh;
+}
+
+/** Gravel/dirt shoulder that fades into the ground at its outer edges. */
+function makeGravelTexture() {
+  const c = document.createElement('canvas');
+  c.width = 64; c.height = 128;
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(64, 128);
+  for (let y = 0; y < 128; y++) {
+    for (let x = 0; x < 64; x++) {
+      const k = (y * 64 + x) * 4;
+      const g = 105 + Math.random() * 60;
+      img.data[k] = g * 1.02; img.data[k + 1] = g * 0.96; img.data[k + 2] = g * 0.86;
+      const edge = Math.min(x, 63 - x) / 63;          // 0 at the outside, 0.5 at the centre
+      img.data[k + 3] = 255 * Math.min(1, Math.max(0, (edge - 0.02) / 0.14)) * (0.75 + Math.random() * 0.25);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }
 
 // ---------- Rider ----------

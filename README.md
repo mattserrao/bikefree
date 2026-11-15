@@ -23,7 +23,9 @@ Settings (⚙): weights, units, FTP, ERG or SIM shifting, difficulty. Past rides
 
 Keyboard: ← → shift, ↑ ↓ grade/intensity, Space start/pause, L lap, C camera, F full screen (3D view).
 
-The 3D view streams terrain and aerial imagery while you ride, so it needs an internet connection.
+The 3D view streams terrain and aerial imagery while you ride. To ride without internet, pick the route and press **Save for offline** first.
+
+Keyboard in the 3D view: C cycles cameras (chase, rider's eye, side, drone), F toggles full screen.
 
 ## Tests
 
@@ -31,6 +33,15 @@ The 3D view streams terrain and aerial imagery while you ride, so it needs an in
 npm install   # once, for the FIT decoder used in tests
 npm test      # Node 18+
 ```
+
+## Rebuilding the park routes and the rider
+
+```sh
+python3 tools/build_park_routes.py          # park GPX files (needs internet)
+pip install bpy==5.2.3 && python3.11 tools/build_rider.py   # rider model → models/rider.json
+```
+
+The rider can also be built inside Blender: open `tools/build_rider.py` in the Text Editor and run it.
 
 ## Credits
 

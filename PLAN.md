@@ -31,7 +31,7 @@ A free indoor biking app for Mac. Runs as a web app in Chrome and talks directly
 - [x] Log every button press (named) plus raw bytes for debugging
 - **Done when:** you can pedal, see numbers, feel resistance change, and see button presses in the log
 
-### v0.2 — Virtual shifting + dashboard *(branch `v0.2`)*
+### v0.2 — Virtual shifting + dashboard *(branch `v0.2`)* ✅
 **Goal:** a usable free ride.
 - [x] 24 virtual gears; left hood buttons/paddle = easier, right = harder; handlebar buzz on shift
 - [x] Two shifting methods (Settings → Shifting method):
@@ -43,10 +43,10 @@ A free indoor biking app for Mac. Runs as a web app in Chrome and talks directly
 - [x] Auto-start when you pedal, auto-pause when stopped; A button / Space to start or pause
 - [x] Auto-reconnect if a device drops (retries for about a minute)
 - [x] Difficulty % setting; settings saved in the browser
-- [ ] On-bike check: 30-minute ride; pick ERG or SIM; tune gear ratios and difficulty
+- [x] On-bike check: 30-minute ride; pick ERG or SIM; tune gear ratios and difficulty — confirmed working
 - **Done when:** a 30-minute ride feels natural with shifting
 
-### v0.3 — Save rides *(branch `v0.5`)*
+### v0.3 — Save rides *(branch `v0.5`)* ✅
 **Goal:** keep a record of every ride.
 - [x] Record 1-second samples (power, cadence, speed, distance, altitude, HR, grade, position on routes)
 - [x] Export `.fit` file (verified with Garmin's FIT SDK decoder); upload to Strava/Garmin manually
@@ -55,10 +55,10 @@ A free indoor biking app for Mac. Runs as a web app in Chrome and talks directly
 - [x] Laps: Lap button, Y button or `L`; automatic laps on workout steps and ride-type changes
 - [x] Ride history (saved in the browser) with re-download and delete
 - [x] Crash recovery: in-progress ride autosaved every 15 s and offered back on reload
-- [ ] On-bike check: upload a real ride to Strava and confirm the data
+- [x] On-bike check: upload a real ride to Strava and confirm the data — confirmed working
 - **Done when:** a ride uploads to Strava with correct data
 
-### v0.4 — GPX routes *(branch `v0.5`)*
+### v0.4 — GPX routes *(branch `v0.5`)* ✅
 **Goal:** ride real roads with terrain-based resistance.
 - [x] Load a `.gpx` file (tracks or routes); resample every 10 m; smooth elevation; grade along the route
 - [x] Distance moves you along the route; trainer resistance follows the grade
@@ -66,10 +66,10 @@ A free indoor biking app for Mac. Runs as a web app in Chrome and talks directly
 - [x] Route position, altitude and grade in the `.fit` export (shows as a Virtual Ride with a map on Strava)
 - [x] Routes saved in your library; built-in "Demo Hills" route for testing
 - [x] Finishing a route opens the ride summary (or keep riding)
-- [ ] On-bike check: a known local climb feels right
+- [x] On-bike check: a known local climb feels right — confirmed working
 - **Done when:** a known local climb feels right
 
-### v0.5 — Structured workouts *(branch `v0.5`)*
+### v0.5 — Structured workouts *(branch `v0.5`)* ✅
 **Goal:** follow interval workouts in ERG mode.
 - [x] Import `.zwo` (Zwift), `.erg` (watts) and `.mrc` (% FTP) files; saved in your library
 - [x] Four built-in workouts (Endurance 45, Sweet Spot 3×10, VO2 Max 5×3, Quick Spin 20)
@@ -78,10 +78,10 @@ A free indoor biking app for Mac. Runs as a web app in Chrome and talks directly
 - [x] Workout chart coloured by zone with progress; target, step time left, next step, time left
 - [x] Intensity −/+ 5% (D-pad ▲▼, arrow keys); skip step (D-pad ▶); handlebar buzz on each new step
 - [x] One lap per workout step in the `.fit` file
-- [ ] On-bike check: complete a built-in workout end to end
+- [x] On-bike check: complete a built-in workout end to end — confirmed working
 - **Done when:** a full workout runs cleanly and the laps show up on Strava
 
-### v0.6 — National park loops in 3D (three.js) *(branch `v0.6`)*
+### v0.6 — National park loops in 3D (three.js) *(branch `v0.6`)* ✅
 **Goal:** ride four real national park loops in a 3D world built from real terrain and aerial photos, lapping as long as you like.
 
 **The four loops** (closed loops on real roads; built by `tools/build_park_routes.py`)
@@ -112,12 +112,38 @@ A free indoor biking app for Mac. Runs as a web app in Chrome and talks directly
 - [x] Stats overlay (power, cadence, speed, gear, grade, lap, lap to go, time, HR); full screen (F)
 - [x] Preview fly-along before you start riding; any GPX route can also be viewed in 3D
 - [x] Attribution for imagery, elevation and map data
-- [ ] Offline "download park" (tiles currently stream live and rely on the browser cache)
-- [ ] Water surfaces from OpenStreetMap (reflective lakes); deciduous tree models for Acadia
-- [ ] On-bike check: ride Grand Teton for an hour, lap after lap
+- [x] Offline "Save for offline" per route (done in v0.7)
+- [x] Reflective lakes and sea; broadleaf trees for Acadia (done in v0.7; water detected from the elevation data + imagery rather than OpenStreetMap)
+- [x] On-bike check: ride Grand Teton for an hour, lap after lap — confirmed working
 - **Done when:** you can ride Grand Teton for an hour, lap after lap, and it looks and feels like being there
 
 **Dev tools:** `tools/build_park_routes.py` rebuilds the park GPX files; `tools/world-preview.html?park=teton&pos=12000&cam=drone&time=golden&speed=10` previews the 3D world without a trainer.
+
+### v0.7 — Polish: power meter, better ground, real rider, offline *(branch `v0.7`)*
+**Goal:** make the 3D ride look and feel finished.
+
+**Power meter (full screen and windowed 3D view)**
+- [x] Zone-coloured gauge (Z1–Z6 from your FTP) with 3 s power fill, live needle and trainer target marker
+- [x] Big watts, zone, % FTP, W/kg, 3 s / average / target; gear strip under the gauge
+- [x] Full screen hides the controls bar and scales the overlay up
+
+**Ground**
+- [x] Colour grading of the aerial photos (saturation, contrast, warmth)
+- [x] Close-up detail texture so the ground isn't a smear near the camera; rockier look on steep slopes
+- [x] Reflective water with ripples and sun glints (lakes are flat in the elevation data; the sea is 0 m)
+- [x] Gravel shoulders that fade into the ground
+- [x] Ground cover along the road from the photo: grass tufts, sagebrush/shrubs, the odd rock
+- [x] Broadleaf trees (mostly in Acadia) alongside conifers
+
+**Rider (modelled in Blender)**
+- [x] Cyclist + road bike built in Blender (`tools/build_rider.py`): forward riding position, hands on the hoods, kit, helmet, glasses, shoes; deep-rim wheels, drop bars, saddle
+- [x] Separate parts so wheels and crank spin and the legs follow the pedals (two-bone IK with ankling); soft shadow under the bike
+- [x] Side camera (C cycles chase → rider's eye → side → drone)
+- [x] Blender scene saved as `~/bikefree-export/rider.blend` for further editing; re-export with the script
+
+**Offline**
+- [x] "Save for offline" on any route: downloads exactly the terrain/imagery tiles the 3D view uses (Yosemite ≈ 50 MB, Grand Teton ≈ 150 MB)
+- [x] Service worker serves the app and saved tiles without internet
 
 ### Later ideas
 - Direct Strava upload

@@ -34,10 +34,23 @@
       <div class="world-view" id="worldView">
         <div class="hud" id="hud">
           <div class="hud-main">
-            <div><span id="hPower">0</span><small>W</small></div>
             <div><span id="hCad">0</span><small>rpm</small></div>
             <div><span id="hSpeed">0.0</span><small id="hSpeedU">mph</small></div>
-            <div><span id="hGear">12</span><small>gear</small></div>
+          </div>
+          <div class="hud-gauge" id="hudGauge">
+            <svg viewBox="0 0 300 215" aria-label="Power meter">
+              <g id="gZones"></g>
+              <path id="gFill" fill="none" stroke-width="16" stroke-linecap="round"></path>
+              <g id="gTarget"><circle r="7" fill="#fff" stroke="#000" stroke-opacity=".4" stroke-width="2"></circle></g>
+              <line id="gNeedle" stroke="#fff" stroke-width="3" stroke-linecap="round"></line>
+              <g id="gTicks" fill="rgba(255,255,255,.65)" font-size="11" text-anchor="middle"></g>
+            </svg>
+            <div class="g-center">
+              <div class="g-power"><span id="hPower">0</span><small>W</small></div>
+              <div class="g-sub"><span id="gZone">Z1</span> · <span id="gPct">0%</span> FTP · <span id="gWkg">0.0</span> W/kg</div>
+              <div class="g-sub2">3s <b id="g3s">0</b> · avg <b id="gAvg">0</b> · target <b id="gTargetW">—</b></div>
+            </div>
+            <div class="g-gear"><small>gear</small><b id="hGear">12</b><div class="g-gearbar" id="gGearBar"></div></div>
           </div>
           <div class="hud-side">
             <div><span id="hGrade">0.0%</span><small>grade</small></div>
@@ -53,7 +66,7 @@
       </div>
       <div class="world-bar">
         <div class="seg" id="camSeg">
-          <button data-cam="chase" class="on">Chase</button><button data-cam="eye">Rider's eye</button><button data-cam="drone">Drone</button>
+          <button data-cam="chase" class="on">Chase</button><button data-cam="eye">Rider's eye</button><button data-cam="side">Side</button><button data-cam="drone">Drone</button>
         </div>
         <div class="seg" id="timeSeg">
           <button data-time="morning">Morning</button><button data-time="midday" class="on">Midday</button><button data-time="golden">Golden hour</button>
@@ -130,7 +143,9 @@
           <button id="route3d" title="Show this route in 3D">3D view</button>
           <button id="routeRestart" class="ghost">Restart</button>
           <button id="routeDelete" class="ghost" title="Remove this route from your library">Remove</button>
+          <button id="routeOffline" class="ghost" title="Download this route's terrain and imagery so the 3D view works without internet">Save for offline</button>
         </div>
+        <div class="offline-status muted small" id="offlineStatus"></div>
         <div class="route-info" id="routeInfo"></div>
         <div class="route-stats" id="routeStats" hidden>
           <div><div class="label">Grade now</div><div class="value" id="rGrade">0.0%</div></div>

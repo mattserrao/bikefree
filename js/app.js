@@ -6,8 +6,9 @@ import { loadSettings, saveSettings, KG_PER_LB, MI_PER_KM } from './settings.js'
 import { rideToFit, fitFilename, summarize } from './recorder.js';
 import * as store from './store.js';
 import { parseGpx, buildRoute, averageGradeAhead, ascentRemaining } from './gpx.js';
-import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts } from './workout.js';
+import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor } from './workout.js';
 import { drawProfile, drawTrace, drawWorkout } from './views.js';
+import { planRouteTiles, tileKeysToUrls, downloadUrls, offlineStatus, setOfflineStatus, registerServiceWorker } from './offline.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -269,6 +270,7 @@ async function previewSelectedRoute() {
     return;
   }
   renderRoutePane();
+  renderOffline();
   if (worldOpen) openWorld(currentWorldRoute());
 }
 
@@ -312,6 +314,50 @@ function renderRouteLive() {
 }
 
 $('routeSelect').addEventListener('change', previewSelectedRoute);
+
+// ---------- Offline park downloads ----------
+let offlineAbort = null;
+function renderOffline() {
+  if (offlineAbort) return;
+  const id = $('routeSelect').value;
+  const st = offlineStatus(id);
+  $('routeOffline').textContent = st ? 'Update offline copy' : 'Save for offline';
+  $('offlineStatus').textContent = st
+    ? `Saved for offline · ${(st.bytes / 1e6).toFixed(0)} MB · ${new Date(st.date).toLocaleDateString()}${st.failed ? ` · ${st.failed} files missing` : ''}`
+    : '';
+}
+$('routeOffline').addEventListener('click', async () => {
+  if (offlineAbort) { offlineAbort.abort(); return; }
+  if (!previewRoute) return;
+  if (!('caches' in window)) { alert('This browser can\'t store files for offline use here.'); return; }
+  const id = $('routeSelect').value;
+  const keys = planRouteTiles(previewRoute);
+  const urls = tileKeysToUrls(keys);
+  const estMB = Math.round((urls.length * 35) / 1000);
+  if (!confirm(`Download ${urls.length.toLocaleString()} terrain and imagery files (about ${estMB} MB) for ${previewRoute.name}?`)) return;
+  offlineAbort = new AbortController();
+  $('routeOffline').textContent = 'Cancel download';
+  const status = $('offlineStatus');
+  status.innerHTML = '<progress max="1" value="0"></progress><span>Starting…</span>';
+  const t0 = performance.now();
+  try {
+    const res = await downloadUrls(urls, (p) => {
+      status.querySelector('progress').value = p.done / p.total;
+      status.querySelector('span').textContent = `${p.done.toLocaleString()} / ${p.total.toLocaleString()} files · ${(p.bytes / 1e6).toFixed(0)} MB`;
+    }, offlineAbort.signal);
+    if (offlineAbort.signal.aborted) {
+      log('app', 'Offline download cancelled');
+    } else {
+      setOfflineStatus(id, { date: Date.now(), files: res.total, bytes: res.bytes, failed: res.failed });
+      log('app', `Saved ${previewRoute.name} for offline: ${(res.bytes / 1e6).toFixed(0)} MB in ${((performance.now() - t0) / 1000).toFixed(0)} s${res.failed ? `, ${res.failed} failed` : ''}`, 'ok');
+    }
+  } catch (err) {
+    log('app', `Offline download failed: ${err.message}`, 'error');
+  } finally {
+    offlineAbort = null;
+    renderOffline();
+  }
+});
 $('routeGo').addEventListener('click', () => {
   if (!previewRoute) return;
   session.setRoute(previewRoute);
@@ -423,15 +469,91 @@ function renderWorldControls() {
   for (const b of document.querySelectorAll('#timeSeg button')) b.classList.toggle('on', b.dataset.time === settings.worldTime);
 }
 
+// ---------- Power gauge (3D overlay) ----------
+const G = { cx: 150, cy: 140, r: 112, start: 150, sweep: 240 };
+const gPoint = (t, r = G.r) => {
+  const a = ((G.start + G.sweep * t) * Math.PI) / 180;
+  return [G.cx + r * Math.cos(a), G.cy + r * Math.sin(a)];
+};
+const gArc = (t0, t1, r = G.r) => {
+  const [x0, y0] = gPoint(t0, r), [x1, y1] = gPoint(Math.max(t0 + 0.0001, t1), r);
+  return `M${x0.toFixed(1)},${y0.toFixed(1)} A${r},${r} 0 ${(t1 - t0) * G.sweep > 180 ? 1 : 0} 1 ${x1.toFixed(1)},${y1.toFixed(1)}`;
+};
+const ZONES = [[0, 0.55, 'Z1'], [0.55, 0.76, 'Z2'], [0.76, 0.9, 'Z3'], [0.9, 1.05, 'Z4'], [1.05, 1.19, 'Z5'], [1.19, 9, 'Z6']];
+let gaugeMax = 0;
+function buildGauge() {
+  gaugeMax = Math.max(400, Math.round((settings.ftp * 1.7) / 50) * 50);
+  const zones = $('gZones');
+  zones.innerHTML = '';
+  const ns = 'http://www.w3.org/2000/svg';
+  for (const [lo, hi] of ZONES) {
+    const t0 = Math.min(1, (lo * settings.ftp) / gaugeMax), t1 = Math.min(1, (hi * settings.ftp) / gaugeMax);
+    if (t1 <= t0) continue;
+    const p = document.createElementNS(ns, 'path');
+    p.setAttribute('d', gArc(t0, t1));
+    p.setAttribute('fill', 'none');
+    p.setAttribute('stroke', zoneColor((lo + Math.min(hi, 1.4)) / 2));
+    p.setAttribute('stroke-width', '6');
+    p.setAttribute('stroke-opacity', '0.55');
+    zones.append(p);
+  }
+  const ticks = $('gTicks');
+  ticks.innerHTML = '';
+  const step = gaugeMax > 600 ? 200 : 100;
+  for (let w = 0; w <= gaugeMax; w += step) {
+    const [x, y] = gPoint(w / gaugeMax, G.r - 24);
+    const t = document.createElementNS(ns, 'text');
+    t.setAttribute('x', x.toFixed(1)); t.setAttribute('y', (y + 4).toFixed(1));
+    t.textContent = w;
+    ticks.append(t);
+  }
+  const bar = $('gGearBar');
+  if (!bar.childElementCount) for (let i = 0; i < session.gearCount; i++) bar.append(document.createElement('i'));
+}
+function renderGauge() {
+  if (!gaugeMax) buildGauge();
+  const p3 = session.power3s;
+  const t = Math.min(1, p3 / gaugeMax);
+  const pct = settings.ftp ? p3 / settings.ftp : 0;
+  const zone = ZONES.find(([lo, hi]) => pct >= lo && pct < hi) || ZONES[0];
+  const fill = $('gFill');
+  fill.setAttribute('d', gArc(0, t, G.r));
+  fill.setAttribute('stroke', zoneColor(Math.max(pct, 0.01)));
+  fill.setAttribute('stroke-opacity', p3 > 1 ? '1' : '0');
+  const tn = Math.min(1, session.power / gaugeMax);
+  const [x0, y0] = gPoint(tn, G.r - 12), [x1, y1] = gPoint(tn, G.r + 12);
+  const needle = $('gNeedle');
+  needle.setAttribute('x1', x0.toFixed(1)); needle.setAttribute('y1', y0.toFixed(1));
+  needle.setAttribute('x2', x1.toFixed(1)); needle.setAttribute('y2', y1.toFixed(1));
+  const tgt = session.target && session.target.mode === 'ERG' && trainer.connected ? session.target.value : null;
+  const tg = $('gTarget');
+  if (tgt != null) {
+    const [tx, ty] = gPoint(Math.min(1, tgt / gaugeMax), G.r + 20);
+    tg.setAttribute('transform', `translate(${tx.toFixed(1)},${ty.toFixed(1)})`);
+    tg.style.display = '';
+  } else tg.style.display = 'none';
+  $('hPower').textContent = Math.round(session.power);
+  $('gZone').textContent = zone[2];
+  $('gZone').style.color = zoneColor(Math.max(pct, 0.01));
+  $('gPct').textContent = `${Math.round(pct * 100)}%`;
+  $('gWkg').textContent = (p3 / settings.riderKg).toFixed(1);
+  $('g3s').textContent = Math.round(p3);
+  $('gAvg').textContent = Math.round(session.avgPower);
+  $('gTargetW').textContent = tgt != null ? `${tgt} W${session.target.source === 'workout' ? '' : ' (gear)'}` : '—';
+  $('hGear').textContent = session.gear;
+  [...$('gGearBar').children].forEach((el, i) => {
+    el.className = i === session.gear - 1 ? 'cur' : i < session.gear ? 'on' : '';
+  });
+}
+
 function renderHud() {
   if (!worldOpen || !world) return;
+  renderGauge();
   const riding = session.mode === 'route' && session.route === worldRoute;
-  $('hPower').textContent = Math.round(session.power);
   $('hCad').textContent = Math.round(session.cadence);
   const kph = session.speedMps * 3.6;
   $('hSpeed').textContent = (imperial() ? kph * MI_PER_KM : kph).toFixed(1);
   $('hSpeedU').textContent = imperial() ? 'mph' : 'km/h';
-  $('hGear').textContent = session.gear;
   $('hGrade').textContent = fmtGrade(riding ? session.gradePct : 0);
   $('hLap').textContent = riding ? session.routeLap : '–';
   const left = riding ? Math.max(0, worldRoute.total - session.routePos) : worldRoute.total;
@@ -468,7 +590,7 @@ $('timeSeg').addEventListener('click', (e) => {
   renderWorldControls();
 });
 function cycleCamera() {
-  const order = ['chase', 'eye', 'drone'];
+  const order = ['chase', 'eye', 'side', 'drone'];
   settings.worldCam = order[(order.indexOf(settings.worldCam) + 1) % order.length];
   saveSettings(settings);
   world?.setCamera(settings.worldCam);
@@ -773,6 +895,7 @@ dlg.addEventListener('close', () => {
   });
   saveSettings(settings);
   session.settingsChanged();
+  gaugeMax = 0;
   showPane(pane);
   log('app', `Settings saved (${settings.shiftMode.toUpperCase()} shifting, difficulty ${settings.difficulty}%, FTP ${settings.ftp} W)`);
 });
@@ -789,6 +912,7 @@ deviceStatus();
 refreshRouteList();
 refreshWorkoutList();
 checkRecovery();
+registerServiceWorker(log);
 log('app', 'Ready. Close Zwift, Zwift Companion and the Wahoo app, then connect your devices.');
 
 // For debugging in the browser console.
