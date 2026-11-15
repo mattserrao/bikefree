@@ -19,7 +19,8 @@ export async function loadSceneryAssets(path, opts = {}) {
   const uniforms = opts.uniforms || { uTime: { value: 0 } };
   const materials = {};
   const materialFor = (name) => {
-    const category = ['bridge', 'viaduct'].includes(name) ? 'concrete' : ['grass', 'flowers', 'poppy', 'lupine', 'succulent', 'fern', 'sage', 'yucca', 'alpineflowers'].includes(name) ? 'groundcover' : 'solid';
+    const category = ['bridge', 'viaduct'].includes(name) ? 'concrete' : ['grass', 'flowers', 'poppy', 'lupine', 'succulent', 'fern', 'sage', 'yucca', 'alpineflowers'].includes(name) ? 'groundcover'
+      : /^(cypress|pine|fir|broadleaf|palm|shrub)/.test(name) ? 'foliage' : 'solid';
     if (!materials[category]) materials[category] = decorateSceneryMaterial(
       new THREE.MeshStandardMaterial({ vertexColors: true, roughness: category === 'concrete' ? .88 : .98,
         side: category === 'groundcover' ? THREE.DoubleSide : THREE.FrontSide }), category, uniforms);

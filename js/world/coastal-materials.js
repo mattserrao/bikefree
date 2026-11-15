@@ -18,7 +18,7 @@ const noise = /* glsl */`
   }
 `;
 
-export function makeCoastalGroundMaterial(palette, config = {}, farUniform = null) {
+export function makeCoastalGroundMaterial(palette, config = {}, farUniform = null, uniforms = {}) {
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .98, side: THREE.DoubleSide });
   material.onBeforeCompile = (shader) => {
     // v0.11.2: x inner radius, y band, z on — beyond the hand-off the real far terrain takes over
@@ -26,6 +26,9 @@ export function makeCoastalGroundMaterial(palette, config = {}, farUniform = nul
     shader.uniforms.bfRock = { value: new THREE.Color(palette.rock) };
     shader.uniforms.bfSoil = { value: new THREE.Color('#a59370') };
     shader.uniforms.bfSnowLine = { value: config.snowLineM || 1000000 };
+    shader.uniforms.uTime = uniforms.uTime || { value: 0 };
+    shader.uniforms.bfCloud = uniforms.bfCloud || { value: new THREE.Vector4(0, 0, 0, 0) };
+    shader.uniforms.bfWet = uniforms.bfWet || { value: 0 };
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vBfGround; varying vec3 vBfGroundNormal;\nattribute float aRealH; uniform vec4 bfFar;')
       // Approaching the hand-off, the stylized ground eases onto the real terrain's height so the two meet without a step.
@@ -39,6 +42,7 @@ export function makeCoastalGroundMaterial(palette, config = {}, farUniform = nul
       .replace('#include <common>', `#include <common>
         varying vec3 vBfGround; varying vec3 vBfGroundNormal;
         uniform vec3 bfRock; uniform vec3 bfSoil; uniform float bfSnowLine; uniform vec4 bfFar;
+        uniform float uTime; uniform vec4 bfCloud; uniform float bfWet;
         ${noise}`)
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
         if (bfFar.z > .5) {
@@ -68,6 +72,11 @@ export function makeCoastalGroundMaterial(palette, config = {}, farUniform = nul
         diffuseColor.rgb *= 1. + (bfFine - .5) * .12 * bfNear;
         float bfSnow = smoothstep(bfSnowLine, bfSnowLine + 240., bp.y) * smoothstep(.15, .65, abs(normalize(vBfGroundNormal).y));
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.8, .82, .78), bfSnow);
+        // weather: cloud shadows drifting over the hills, and damp ground in the rain
+        float bfCloudN = bfFbm((bp.xz - bfCloud.zw * uTime * 9.) * .0011);
+        float bfShadowC = smoothstep(.66 - bfCloud.x * .42, .74 - bfCloud.x * .42, bfCloudN) * bfCloud.y;
+        diffuseColor.rgb *= 1. - bfShadowC * .45;
+        diffuseColor.rgb *= 1. - bfWet * .2;
       `);
   };
   return material;
@@ -153,7 +162,8 @@ ${shore ? `
         float trail = smoothstep(.2, .95, sin(phase - .55)) * (1. - smoothstep(10., 70., offshore)) * .55;
         float lace = smoothstep(.45, .8, bfFbm(p * .16 + vec2(t * .07, -t * .05)));
         float swash = 1. - smoothstep(1.5, 9. + 4. * sin(t * .7 + along), offshore);
-        float foam = max(crest, trail * lace) + swash * (.55 + lace * .45);
+        float broken = smoothstep(.3, .7, bfFbm(p * .045 + vec2(t * .03, 0.)));
+        float foam = max(crest * (.35 + broken * .65), trail * lace * broken) + swash * (.55 + lace * .45);
         foam *= waveDetail * .6 + .4;
         color = mix(color, vec3(.9, .95, .93), clamp(foam, 0., .92));
         // a soft wet band of spray-darkened water against the cliffs
@@ -172,15 +182,30 @@ ${old}`}
 export function decorateSceneryMaterial(material, category, uniforms) {
   material.onBeforeCompile = (shader) => {
     if (category === 'groundcover') {
-      shader.uniforms.uTime = uniforms.uTime;
-      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;')
+      shader.uniforms.uTime = uniforms.uTime; shader.uniforms.bfWind = uniforms.bfWind || { value: .3 };
+      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; uniform float bfWind;')
         .replace('#include <begin_vertex>', `#include <begin_vertex>
           float bfPhase = 0.;
           #ifdef USE_INSTANCING
             bfPhase = instanceMatrix[3].x * .13 + instanceMatrix[3].z * .09;
           #endif
-          transformed.x += sin(uTime * 1.1 + bfPhase) * min(position.y, 1.2) * .075;
-          transformed.z += cos(uTime * .8 + bfPhase) * min(position.y, 1.2) * .035;
+          float bfW = .5 + bfWind * 2.;
+          transformed.x += sin(uTime * (1.1 + bfWind) + bfPhase) * min(position.y, 1.2) * .075 * bfW;
+          transformed.z += cos(uTime * .8 + bfPhase) * min(position.y, 1.2) * .035 * bfW;
+        `);
+    } else if (category === 'foliage') {
+      // trees and shrubs lean and sway with the wind (more at the top)
+      shader.uniforms.uTime = uniforms.uTime; shader.uniforms.bfWind = uniforms.bfWind || { value: .3 };
+      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; uniform float bfWind;')
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+          float bfPhase = 0.;
+          #ifdef USE_INSTANCING
+            bfPhase = instanceMatrix[3].x * .07 + instanceMatrix[3].z * .05;
+          #endif
+          float bfTop = max(position.y, 0.) * .12;
+          float bfGust = .55 + .45 * sin(uTime * .37 + bfPhase * .3);
+          transformed.x += (sin(uTime * 1.25 + bfPhase) * .5 + .7) * bfTop * bfTop * bfWind * bfGust * .22;
+          transformed.z += cos(uTime * .9 + bfPhase) * bfTop * bfTop * bfWind * bfGust * .08;
         `);
     } else if (category === 'concrete') {
       shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vBfConcrete;')

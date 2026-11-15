@@ -229,6 +229,23 @@ export function makeRealCoastLandscape(config, proj, index, route) {
     }
     return h;
   };
+  // ---- Vegetation: golden grass on ridges and south faces, coastal scrub on north faces,
+  //      redwood and oak in the canyons (from the shape of the real ground) ----
+  const vegetationAt = (x, z) => {
+    const h0 = T.at(x, z);
+    let ring = 0;
+    for (let k = 0; k < 8; k++) ring += T.at(x + Math.cos(k * .785) * 70, z + Math.sin(k * .785) * 70);
+    ring /= 8;
+    const gx = (T.at(x + 15, z) - T.at(x - 15, z)) / 30, gz = (T.at(x, z + 15) - T.at(x, z - 15)) / 30;
+    const valley = Math.max(0, Math.min(1, (ring - h0) / 10)), ridge = Math.max(0, Math.min(1, (h0 - ring) / 10));
+    const north = Math.max(0, Math.min(1, gz / .45));      // ground rising to the south faces north (shade, fog drip)
+    const spray = smoothstep(40, 260, shore.sample(x, z) ?? 4000);
+    const n = Math.sin(x / 97 + Math.sin(z / 131) * 2) * Math.sin(z / 83) * .15;
+    const forest = Math.max(0, Math.min(1, valley * 1.5 + north * .45 - ridge * .9 - .3 + n)) * spray;
+    const patchy = Math.sin(x / 61 + Math.sin(z / 47)) * Math.sin(z / 53 + x / 140) * .35;
+    const scrub = Math.max(0, Math.min(1, .12 + north * .8 + valley * .5 - ridge * .4 + n * 2 + patchy - Math.abs(gx) * 0));
+    return { forest, scrub, valley, ridge, north, spray };
+  };
   const waterLevelAt = (x, z) => {
     const c = creekHit(x, z, 0);
     return c ? c.creek.positionAt(c.hit.s).y : .05;
@@ -239,7 +256,7 @@ export function makeRealCoastLandscape(config, proj, index, route) {
     // legacy fields (the authored-coast code paths are skipped when `real` is set)
     coast: [{ x: minX - pad, z: minZ - pad }, { x: minX - pad, z: maxZ + pad }], coastX: () => -1e6,
     inlandAt, shore, terrain: T, landmarks: bridges, bridges, creeks, creekAt, heightAt, baseHeight, bridgeAt, bridgeOfS,
-    waterLevelAt, frameAt, roadEle, lakes: [], waterIslands: [],
+    waterLevelAt, frameAt, roadEle, vegetationAt, lakes: [], waterIslands: [],
     isWater: (x, z, height) => height < .3 || !!creekHit(x, z, 0),
   };
 }

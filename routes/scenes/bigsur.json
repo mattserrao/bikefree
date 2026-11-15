@@ -7,12 +7,13 @@
   "assets": "models/scenery/coastal.json",
   "seed": 1101,
   "palette": {
-    "grass": "#7b9868",
-    "meadow": "#c4b482",
-    "rock": "#aaa18c",
-    "cliff": "#bdb49c",
+    "grass": "#76804f",
+    "meadow": "#c9b077",
+    "rock": "#9c9482",
+    "cliff": "#b7ab92",
     "water": "#2e8395",
-    "sand": "#d8c8a2"
+    "sand": "#d8c8a2",
+    "forest": "#4a5a35"
   },
   "preview": {
     "positionM": 15420,
@@ -153,5 +154,11 @@
     "coarseM": 40,
     "fineM": 900,
     "fineCellM": 10
+  },
+  "extraAssets": [
+    "models/scenery/regional.json"
+  ],
+  "vegetation": {
+    "density": 1.6
   }
 }

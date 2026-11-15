@@ -27,7 +27,9 @@ export class StylizedTerrain {
     this.lookoutFootprints = (this.config.lookouts || []).map((l) => ({ ...l,
       ...coastalRoadFrame(this.route, routeIndex, l.atM, (l.side === 'inland' ? -1 : 1) * (3.5 + l.widthM / 2)) }));
     this.uniforms = { uTime: { value: 0 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
-      uSkyTop: { value: new THREE.Color() }, uSkyHorizon: { value: new THREE.Color() } };
+      uSkyTop: { value: new THREE.Color() }, uSkyHorizon: { value: new THREE.Color() },
+      // weather (js/world/weather.js): cloud cover/shadow/drift, wind, wet ground, sea roughness
+      bfCloud: { value: new THREE.Vector4(.12, .5, .8, .57) }, bfWind: { value: .3 }, bfWet: { value: 0 }, bfRough: { value: .7 } };
     this.group = new THREE.Group();
     this.group.name = `${this.config.title || this.route.name} · stylized scenery`;
     scene.add(this.group);
@@ -39,7 +41,7 @@ export class StylizedTerrain {
     this.palette = Object.fromEntries(Object.entries(this.config.palette).map(([k, v]) => [k, new THREE.Color(v)]));
     // Hand-off to the real far terrain (set by the world once it has loaded; off = stylized all the way out).
     this.farUniform = { value: new THREE.Vector4(opts.farInner ?? 1500, opts.farBand ?? 400, 0, 0) };
-    this.groundMaterial = makeCoastalGroundMaterial(this.config.palette, this.config, this.farUniform);
+    this.groundMaterial = makeCoastalGroundMaterial(this.config.palette, this.config, this.farUniform, this.uniforms);
     this._makeOcean();
     this._makeClouds();
     this._makeShadows();
@@ -138,7 +140,8 @@ export class StylizedTerrain {
     const texture = new THREE.DataTexture(data, S.nx, S.nz, THREE.RGFormat, THREE.HalfFloatType);
     texture.magFilter = texture.minFilter = THREE.LinearFilter; texture.needsUpdate = true;
     this.shoreTexture = texture;
-    return { texture, box: new THREE.Vector4(S.x0, S.z0, (S.nx - 1) * S.cell, (S.nz - 1) * S.cell) };
+    this.shoreBox = new THREE.Vector4(S.x0, S.z0, (S.nx - 1) * S.cell, (S.nz - 1) * S.cell);
+    return { texture, box: this.shoreBox };
   }
 
   _makeOcean() {
@@ -218,6 +221,14 @@ export class StylizedTerrain {
       c.lerp(P.rock, smoothstep(.45, 1.4, rise));
       c.lerp(P.cliff, (1 - smoothstep(20, 85, coastal)) * .65);
       if (this.landscape.real && P.sand) c.lerp(P.sand, (1 - smoothstep(2.5, 6, y)) * (1 - smoothstep(60, 140, coastal)));
+      if (this.landscape.real) {
+        // Big Sur: golden grass, olive scrub on the shaded faces, dark canyon forest
+        const v = this.landscape.vegetationAt(px, pz);
+        c.copy(P.meadow).lerp(P.grass, smoothstep(.2, .75, v.scrub) * .9).lerp(P.forest, v.forest * .9);
+        c.lerp(P.rock, smoothstep(.55, 1.3, rise) * .8);
+        c.lerp(P.cliff, (1 - smoothstep(10, 70, coastal)) * smoothstep(.35, .9, rise) * .7);
+        if (P.sand) c.lerp(P.sand, (1 - smoothstep(2.5, 6, y)) * (1 - smoothstep(60, 140, coastal)));
+      }
       const regionalColor = this.landscape.colorAt?.(px, pz);
       if (regionalColor) c.lerp(new THREE.Color(regionalColor), .8);
       c.multiplyScalar(.94 + Math.sin(px / 47 + pz / 73) * .035);
@@ -284,6 +295,26 @@ export class StylizedTerrain {
       if (coverOnly) {
         const name = vegetation.cover ? vegetation.cover[Math.floor(pick * vegetation.cover.length)] : pick < .12 ? 'poppy' : pick < .18 ? 'lupine' : pick < .33 ? 'succulent' : pick < .4 ? 'flowers' : 'grass';
         add(name, x, y - .09, z, .75 + rand() * 1.2);
+        continue;
+      }
+      if (this.landscape.real) {
+        const v = this.landscape.vegetationAt(x, z);
+        if (pick < v.forest * .62 && slope < 1.1) {
+          // redwoods deep in the canyons, oaks and pines on their flanks, cypress on the sea bluffs
+          const name = v.forest > .55 && v.valley > .3 ? `fir${Math.floor(rand() * 2)}` : rand() < .6 ? `broadleaf${Math.floor(rand() * 2)}` : `pine${Math.floor(rand() * 2)}`;
+          const tree = !detailed && this.kit.assets[`${name}-lod`] ? `${name}-lod` : name;
+          const tall = name.startsWith('fir') ? 1.3 + rand() * .7 : .8 + rand() * .45;
+          add(tree, x, y - .15, z, .75 + rand() * .55, tall);
+          if (detailed) add('shadow', x, y + .045, z, 8);
+        } else if (inland < 220 && inland > 25 && pick > .985) {
+          const name = `cypress${Math.floor(rand() * 3)}`;
+          add(!detailed && this.kit.assets[`${name}-lod`] ? `${name}-lod` : name, x, y - .15, z, .8 + rand() * .5, .8 + rand() * .4);
+        } else if (pick < .25 + v.scrub * .5) {
+          const width = .6 + rand() * 1.2;
+          add(rand() < .3 ? 'sage' : `shrub${Math.floor(rand() * 2)}`, x, y - .12, z, width, width * (.7 + v.scrub * .5));
+          if (detailed) add('shadow', x, y + .04, z, width * 2.5);
+        } else if (slope > .5 && pick < .8 && rand() < .25) add(`rock${Math.floor(rand() * 2)}`, x, y - .3, z, .5 + rand() * 1.4);
+        else if (detailed && pick < .9) add('grass', x, y - .08, z, .9 + rand());
         continue;
       }
       const grove = .5 + Math.sin(x / 125 + Math.cos(z / 260)) * .32 + Math.sin(z / 180) * .22;
