@@ -37,6 +37,7 @@ try {
  if (!response.ok) throw new Error('The route GPX could not load.');
  const route = buildCatalogRoute(await response.text(), item);
  if (q.get('style') !== 'legacy') await loadRouteScene(route);
+ if (route.scene && q.get('season')) route.scene.season = q.get('season');
  const world = new World($('view'), route, { quality: q.get('quality') || 'balanced', log: (...args) => console.log(...args) });
  let pos = Math.max(0, Math.min(route.total, Number(q.get('pos') ?? route.scene?.preview?.positionM ?? 0) || 0));
  let speed = Math.max(0, Math.min(45, Number(q.get('speed')) || 0));

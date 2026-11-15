@@ -6,6 +6,9 @@ export const smoothstep = (a, b, v) => {
   return t * t * (3 - 2 * t);
 };
 
+/** Half-width of the road corridor (road + shoulder + a little) the ground must stay below. */
+export const ROAD_CORRIDOR_M = 8;
+
 export function randomSequence(seed) {
   return () => {
     seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
@@ -41,6 +44,17 @@ export function makeCoastLandscape(config, proj, index, route) {
     return { ...landmark, x: index.xs[i], z: index.zs[i], y: route.ele[i], s: route.dist[i],
       fx: dx / len, fz: dz / len, slope: (route.ele[b] - route.ele[a]) / len };
   });
+  // 1 on a bridge, easing to 0 over the last 12 m of deck at each end (and 28–40 m to the side), so the
+  // ground meets the road right where the deck starts
+  const bridgeWeight = (x, z) => {
+    let w = 0;
+    for (const b of landmarks) {
+      if (b.asset !== 'bridge') continue;
+      const along = Math.abs((x - b.x) * b.fx + (z - b.z) * b.fz), across = Math.abs((x - b.x) * -b.fz + (z - b.z) * b.fx);
+      w = Math.max(w, smoothstep(b.span / 2 + 1, b.span / 2 - 11, along) * (1 - smoothstep(28, 40, across)));
+    }
+    return w;
+  };
   const bridgeAt = (x, z, margin = 0) => landmarks.find((b) => b.asset === 'bridge'
     && Math.abs((x - b.x) * b.fx + (z - b.z) * b.fz) < b.span / 2 + margin
     && Math.abs((x - b.x) * -b.fz + (z - b.z) * b.fx) < 28);
@@ -79,10 +93,11 @@ export function makeCoastLandscape(config, proj, index, route) {
       h += correction * (1 - smoothstep(80, 900, broad.d)) * smoothstep(0, 140, inland);
     }
     const hit = index.nearest(x, z, 110);
-    if (hit && !bridgeAt(x, z, 6)) {
+    if (hit) {
       const road = route.ele[hit.i] - .65;
-      // Wide, gently graded verge prevents triangles from crossing the narrow road.
-      h += (road - h) * (1 - smoothstep(20, 110, hit.d));
+      // Wide, gently graded verge prevents triangles from crossing the narrow road. It fades out
+      // over the bridge ends (instead of switching off) so the abutments don't leave a step.
+      h += (road - h) * (1 - smoothstep(20, 110, hit.d)) * (1 - bridgeWeight(x, z));
     }
     for (const b of landmarks) {
       if (b.asset !== 'bridge') continue;
@@ -102,6 +117,9 @@ export function makeCoastLandscape(config, proj, index, route) {
       const blend = smoothstep(creek.start - 20, creek.start + 20, t);
       h += (Math.min(h, creek.waterAt(t) - .5) - h) * channel * blend;
     }
+    // Never above the road: the ground stays under the road surface across the whole corridor and rises
+    // no steeper than 1:1 beside it (bridge abutments, canyon edges).
+    if (hit) h = Math.min(h, route.ele[hit.i] - .65 + Math.max(0, hit.d - ROAD_CORRIDOR_M));
     return Math.max(-.5, h);
   };
   return { coast, coastX, landmarks, creeks, creekAt, heightAt, baseHeight, bridgeAt };

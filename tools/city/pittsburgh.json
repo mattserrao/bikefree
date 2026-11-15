@@ -42,11 +42,33 @@
     40.43003,
     -79.98863
    ]
+  },
+  {
+   "name": "Clemente Bridge ramp to the riverfront",
+   "from": [
+    40.44424,
+    -80.00282
+   ],
+   "to": [
+    40.44401,
+    -80.00463
+   ]
+  },
+  {
+   "name": "Mon Wharf ramp",
+   "from": [
+    40.43812,
+    -80.00607
+   ],
+   "to": [
+    40.43776,
+    -80.00441
+   ]
   }
  ],
  "legs": [
   {
-   "mode": "trail",
+   "mode": "road",
    "waypoints": [
     [
      "Start: North Shore Water Steps",
@@ -54,9 +76,14 @@
      -80.00825
     ],
     [
-     "PNC Park riverwalk",
-     40.4464,
-     -80.0048
+     "General Robinson Street",
+     40.44768,
+     -80.00765
+    ],
+    [
+     "Federal & General Robinson",
+     40.44828,
+     -80.00427
     ]
    ]
   },
@@ -64,9 +91,9 @@
    "mode": "road",
    "waypoints": [
     [
-     "PNC Park riverwalk",
-     40.4464,
-     -80.0048
+     "Federal & General Robinson",
+     40.44828,
+     -80.00427
     ],
     [
      "Roberto Clemente Bridge",
@@ -78,26 +105,26 @@
      "Clemente S",
      40.44424,
      -80.00282
-    ],
-    [
-     "6th & Penn",
-     40.44273,
-     -80.00216
-    ],
-    [
-     "Penn & Stanwix",
-     40.4422,
-     -80.00411
     ]
    ]
   },
   {
-   "mode": "park",
+   "mode": "trail",
    "waypoints": [
     [
-     "Penn & Stanwix",
-     40.4422,
-     -80.00411
+     "Clemente S",
+     40.44424,
+     -80.00282
+    ],
+    [
+     "Allegheny riverfront trail",
+     40.44401,
+     -80.00463
+    ],
+    [
+     "Under the Fort Duquesne Bridge",
+     40.44296,
+     -80.00921
     ],
     [
      "Point Allegheny promenade",
@@ -110,9 +137,19 @@
      -80.01324
     ],
     [
-     "Commonwealth Pl",
-     40.43923,
-     -80.00746
+     "Point Mon promenade",
+     40.44,
+     -80.0095
+    ],
+    [
+     "Mon Wharf",
+     40.43838,
+     -80.00668
+    ],
+    [
+     "Mon Wharf ramp",
+     40.43812,
+     -80.00607
     ]
    ]
   },
@@ -120,24 +157,19 @@
    "mode": "road",
    "waypoints": [
     [
-     "Commonwealth Pl",
-     40.43923,
-     -80.00746
+     "Mon Wharf ramp",
+     40.43812,
+     -80.00607
     ],
     [
-     "Ft Pitt & Stanwix",
-     40.43856,
-     -80.00573
+     "Market & Fort Pitt",
+     40.43776,
+     -80.00441
     ],
     [
-     "Fourth & Stanwix",
-     40.44054,
-     -80.00438
-    ],
-    [
-     "PPG Place (4th & Market)",
-     40.44004,
-     -80.00305
+     "Market & Third",
+     40.43952,
+     -80.00335
     ],
     [
      "Market Square",
@@ -358,5 +390,8 @@
   "Tower at PNC Plaza": 5,
   "EQT Plaza": 5,
   "USS Requin": 12
- }
+ },
+ "cornerPasses": 3,
+ "cornerHalfWindow": 8,
+ "maxDriftM": 16
 }

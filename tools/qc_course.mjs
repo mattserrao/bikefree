@@ -15,6 +15,8 @@ import { dirname, join, relative } from 'node:path';
 import { parseGpx, haversine } from '../js/gpx.js';
 import { buildCatalogRoute } from '../js/routes.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
+import { attachTerrainBuffer } from '../js/world/terrain-data.js';
+import { planSettlement } from '../js/world/settlement.js';
 import { cityStreets, STREET_LIFT } from '../js/world/city-landscape.js';
 import { landscapeBuilder } from '../js/world/landscapes.js';
 import { riderPose, routePoint, ROAD_WIDTH, ROAD_LIFT } from '../js/world/pose.js';
@@ -39,6 +41,8 @@ export const LIMITS = {
   rawSpike: 6,            // WARN: one GPX point this far off its neighbours' elevation
   rawHairpin: 150,        // WARN: GPX doubles back this sharply (°) on short segments
   rawHairpinSeg: 30,
+  // Drawn road (10 m polyline)
+  jog: 12,                // WARN: opposite turns of more than this (°) on consecutive 10 m segments (sideways zig-zag)
   // Stylized scenery around the road (outbound road, every 2 m)
   buried: 0.03,           // FAIL: rendered ground this close to (or above) the road / shoulder surface
   floating: 3,            // WARN: ground this far below the shoulder edge (not on a bridge)
@@ -153,6 +157,21 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
   }
   F.open.clear();
 
+  // 2b. Drawn road: sideways zig-zags in the 10 m polyline (the road ribbon kinks; heading barely notices)
+  {
+    const last = Math.round(oneWay / 10);
+    const turnAt = (i) => {
+      const t1 = Math.atan2(index.zs[i] - index.zs[i - 1], index.xs[i] - index.xs[i - 1]);
+      const t2 = Math.atan2(index.zs[i + 1] - index.zs[i], index.xs[i + 1] - index.xs[i]);
+      return ((((t2 - t1) * 180) / Math.PI + 540) % 360) - 180;
+    };
+    for (let i = 2; i < last - 2; i++) {
+      const a = turnAt(i), b = turnAt(i + 1);
+      if (a * b < 0 && Math.min(Math.abs(a), Math.abs(b)) > LIMITS.jog) F.add('path-jog', 'warn', route.dist[i], Math.min(Math.abs(a), Math.abs(b)), 'road zig-zags sideways (kink in the road)');
+    }
+  }
+  F.open.clear();
+
   // 3. Ridden path: rider pose every `step` m over the whole ride, wrapping across the seam
   const stylized = route.scene?.style === 'stylized';
   const landscape = stylized ? landscapeBuilder(route.scene)(route.scene, proj, index, route) : null;
@@ -225,6 +244,34 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
     }
   }
 
+  // 5. Real shorelines and the built world (scenes with baked terrain / forest-edge layout)
+  if (landscape?.shoreAt) {
+    for (let s = 0; s <= oneWay; s += 5) {
+      const c = routePoint(route, index, s);
+      if (landscape.shoreAt(c.x, c.z) < 0 && !bridgeAt(c.x, c.z, 4)) F.add('road-in-lake', 'fail', s, -landscape.shoreAt(c.x, c.z), 'road runs through a lake');
+    }
+    F.open.clear();
+    for (const l of route.scene.lookouts || []) {
+      const side = l.side === 'inland' ? -1 : 1, water = (sg) => {
+        const a = routePoint(route, index, l.atM), b = routePoint(route, index, Math.min(oneWay, l.atM + 5));
+        let fx = b.x - a.x, fz = b.z - a.z; const n = Math.hypot(fx, fz) || 1; fx /= n; fz /= n;
+        for (let o = 20; o <= 400; o += 20) if (landscape.shoreAt(a.x - fz * o * sg, a.z + fx * o * sg) < 0) return o;
+        return Infinity;
+      };
+      if (water(side) > 400 && water(-side) <= 400) F.add('lake-side', 'warn', l.atM, water(-side), 'lookout faces away from the water');
+    }
+  }
+  if (stylized && (route.scene.towns || route.scene.vegetation?.layout === 'forest-edge')) {
+    const plan = planSettlement(route.scene, route, index, landscape);
+    for (const it of plan.items) {
+      const s = route.dist[index.nearest(it.x, it.z, 400)?.i ?? 0];
+      const road = index.nearest(it.x, it.z, 60);
+      if (!it.water && road && road.d < it.r * .7 + 5) F.add('building-on-road', 'fail', s, road.d, `${it.asset} within ${road.d.toFixed(1)} m of the road`, 1);
+      if (!it.water && landscape.shoreAt && landscape.shoreAt(it.x, it.z) < 0) F.add('building-in-water', 'fail', s, landscape.shoreAt(it.x, it.z), `${it.asset} stands in a lake`, 1);
+      if (it.water && landscape.shoreAt && landscape.shoreAt(it.x + Math.sin(it.rot) * 8, it.z + Math.cos(it.rot) * 8) > 0) F.add('dock-on-land', 'warn', s, 0, `${it.asset} does not reach the water`, 1);
+    }
+    F.open.clear();
+  }
   // 5. City streets drawn over the route: another carriageway, a ramp or a bridge deck above the road
   //    would hide the road and the rider's legs (what the renderer draws, via the shared cityStreets()).
   if (landscape?.city) {
@@ -310,13 +357,20 @@ export function htmlReport(results, { previewHref = 'world-preview.html' } = {})
   <table><tr><th>route</th><th>km one way</th><th>shape</th><th>fail</th><th>warn</th><th>sharpest turn °/m</th><th>widest GPX gap m</th></tr>${rows}</table>${sections}</body></html>`;
 }
 
+/** Scene JSON plus its baked terrain, read from disk. */
+export function loadSceneSync(path) {
+  const scene = JSON.parse(read(path));
+  if (scene.terrainData?.file) attachTerrainBuffer(scene, readFileSync(join(ROOT, scene.terrainData.file)));
+  if (scene.terrainGridFile) scene.terrainGrid = JSON.parse(read(scene.terrainGridFile));   // real-coast grid (build_terrain_grid.py)
+  return scene;
+}
+
 // ---------- CLI ----------
 async function main() {
   const args = process.argv.slice(2);
   const opt = (name, dflt) => { const i = args.indexOf(name); if (i < 0) return dflt; const v = args[i + 1]; args.splice(i, 2); return v; };
   const flag = (name) => { const i = args.indexOf(name); if (i < 0) return false; args.splice(i, 1); return true; };
-  const withCity = (scene) => ({ ...scene, ...(scene.cityData ? { city: JSON.parse(read(scene.cityData)) } : {}),
-    ...(scene.terrainData ? { terrainGrid: JSON.parse(read(scene.terrainData)) } : {}) });
+  const withCity = (scene) => (scene.cityData ? { ...scene, city: JSON.parse(read(scene.cityData)) } : scene);
   const step = Number(opt('--step', 1));
   const html = opt('--html', 'tools/qc-report.html');
   const json = opt('--json', null);
@@ -330,7 +384,7 @@ async function main() {
     const demo = { id: 'demo-hills', name: 'Demo Hills', file: 'routes/demo-hills.gpx', scene: 'routes/scenes/demo-hills.json', noPreview: true };
     for (const item of [...catalog, demo]) {
       if (args.length && !args.includes(item.id)) continue;
-      jobs.push({ id: item.id, name: item.name, gpxText: read(item.file), item, scene: item.scene ? withCity(JSON.parse(read(item.scene))) : null, preview: item.noPreview ? null : item.id });
+      jobs.push({ id: item.id, name: item.name, gpxText: read(item.file), item, scene: item.scene ? withCity(loadSceneSync(item.scene)) : null, preview: item.noPreview ? null : item.id });
     }
   }
   const results = [];

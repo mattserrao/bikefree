@@ -1,5 +1,6 @@
 // Shared route loading for the app, previews and build tools.
 import { parseGpx, buildRoute, wrapDist } from './gpx.js';
+import { attachTerrainBuffer } from './world/terrain-data.js';
 
 // Never sample across the overlapping legs at a U-turn or start/finish.
 export function headingSpan(route, distance, look = 6) {
@@ -63,6 +64,14 @@ export async function loadRouteScene(route, fetcher = fetch) {
   if (!response.ok) throw new Error(`Scenery could not load (${response.status})`);
   const scene = await response.json();
   if (scene.format !== 'bikefree-scene-1') throw new Error('Unsupported scenery format');
+  if (scene.terrainData?.file) {
+    // Baked real terrain and lakes; without it the scene falls back to its authored landforms
+    try {
+      const data = await fetcher(new URL(`../${scene.terrainData.file}`, import.meta.url));
+      if (!data.ok) throw new Error(`terrain ${data.status}`);
+      attachTerrainBuffer(scene, await data.arrayBuffer());
+    } catch (err) { console.warn('Scenery terrain data could not load', err); }
+  }
   if (scene.cityData) {
     // a city route's buildings, streets, rivers and height grid (tools/build_city.py)
     const city = await fetcher(new URL(`../${scene.cityData}`, import.meta.url));
@@ -70,12 +79,12 @@ export async function loadRouteScene(route, fetcher = fetch) {
     scene.city = await city.json();
     if (scene.city.format !== 'bikefree-city-1') throw new Error('Unsupported city scenery format');
   }
-  if (scene.terrainData) {
+  if (scene.terrainGridFile) {
     // a real height grid around the route (tools/build_terrain_grid.py)
-    const grid = await fetcher(new URL(`../${scene.terrainData}`, import.meta.url));
+    const grid = await fetcher(new URL(`../${scene.terrainGridFile}`, import.meta.url));
     if (!grid.ok) throw new Error(`Terrain could not load (${grid.status})`);
     scene.terrainGrid = await grid.json();
-    if (scene.terrainGrid.format !== 'bikefree-terrain-1') throw new Error('Unsupported terrain format');
+    if (scene.terrainGrid.format !== 'bikefree-terrain-grid-1') throw new Error('Unsupported terrain format');
   }
   route.scene = scene;
   return route;

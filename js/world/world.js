@@ -77,7 +77,9 @@ export class World {
     this.scene.add(this.hemi, this.sun, this.sun.target);
     this.sky = makeSky();
     this.scene.add(this.sky);
-    this.scene.fog = new THREE.Fog(0xc6dbef, this.stylized ? 2300 : 4000, this.stylized ? 16500 : 70000);
+    // per-scene atmosphere (e.g. humid Adirondack air separates the ridges much sooner)
+    this.atmosphere = { fogNearM: 2300, fogFarM: 16500, fogFarRealM: 30000, ...(this.stylized ? route.scene.atmosphere : {}) };
+    this.scene.fog = new THREE.Fog(0xc6dbef, this.stylized ? this.atmosphere.fogNearM : 4000, this.stylized ? this.atmosphere.fogFarM : 70000);
 
     const TerrainClass = this.stylized ? StylizedTerrain : Terrain;
     this.terrain = new TerrainClass(this.scene, this.proj, this.index, {
@@ -95,7 +97,7 @@ export class World {
       this.farTerrain = new Terrain(this.scene, this.proj, this.index, {
         bbox: { minLat, maxLat, minLon, maxLon },
         renderer: this.renderer,
-        far: { inner: FAR_INNER, band: FAR_BAND, tint: route.scene.palette?.grass, rock: route.scene.palette?.cliff || route.scene.palette?.rock, amount: 0.38, maxZ: 14 },
+        far: { inner: FAR_INNER, band: FAR_BAND, tint: route.scene.palette?.farTint || route.scene.palette?.grass, rock: route.scene.palette?.cliff || route.scene.palette?.rock, amount: route.scene.palette?.farTintAmount ?? 0.38, maxZ: 14 },
         onError: (err) => this.log('3d', `Far terrain: ${err.message}`, 'debug'),
       });
       this.farTerrain.group.visible = false;   // shown once it covers the whole area
@@ -245,6 +247,7 @@ export class World {
     u.uNight.value = t.night ? 1 : 0;
     this.scene.fog.color.set(t.horizon);
     this._fogBase = { near: this._fogBase?.near ?? this.scene.fog.near, far: this._fogBase?.far ?? this.scene.fog.far, color: new THREE.Color(t.horizon) };
+    this.terrain?.setTime?.(this.timeKey);
     this.terrain?.setNight?.(t.night ? 1 : 0);
     if (t.night && this.stylized && !this.headlight) {
       // a front light on the bike, so the road ahead reads in the dark
@@ -318,7 +321,7 @@ export class World {
         this.farTerrain.group.visible = on;
         this.terrain.setFar(on);
         // see further once the real horizon is there
-        this.scene.fog.far = on ? 30000 : 16500;
+        this.scene.fog.far = on ? this.atmosphere.fogFarRealM : this.atmosphere.fogFarM;
         if (this._fogBase) this._fogBase.far = this.scene.fog.far;
         this.log('3d', on ? 'Far terrain ready: real horizon beyond 1.5 km' : 'Far terrain off', 'debug');
       }

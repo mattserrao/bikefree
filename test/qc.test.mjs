@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { qcRoute } from '../tools/qc_course.mjs';
+import { qcRoute, loadSceneSync } from '../tools/qc_course.mjs';
 
 const gpx = (pts) => `<?xml version="1.0"?><gpx><trk><name>QC</name><trkseg>${pts.map(([lat, lon, ele]) =>
   `<trkpt lat="${lat.toFixed(7)}" lon="${lon.toFixed(7)}"><ele>${ele.toFixed(2)}</ele></trkpt>`).join('')}</trkseg></trk></gpx>`;
@@ -49,11 +49,22 @@ test('a missing stretch of GPX (a jump) is caught', () => {
   assert.ok(of(r, 'gpx-gap').length >= 1);
 });
 
-test('every scenic route runs through the sweep with scenery', () => {
+test('a sideways kink in the road (a cut spur, a junction step) is caught', () => {
+  // at i = 75 the loop runs east–west, so a 5 m northward bump is a sideways kink
+  const r = qcRoute({ id: 'jog', gpxText: loop((p) => p.map(([lat, lon, ele], i) => i === 75 ? [lat + 5 * M, lon, ele] : [lat, lon, ele])) });
+  assert.ok(of(r, 'path-jog').length >= 1);
+});
+
+// a city scene carries its bundled city data (buildings, streets, height grid), as the app loads it
+const withCity = (scene) => (scene.cityData ? { ...scene, city: JSON.parse(readFileSync(new URL(`../${scene.cityData}`, import.meta.url), 'utf8')) } : scene);
+
+test('every scenic route rides clean end to end: no discontinuities, no warnings', () => {
   const catalog = JSON.parse(readFileSync(new URL('../routes/parks/index.json', import.meta.url), 'utf8'));
-  for (const item of catalog.slice(0, 2)) {
+  for (const item of catalog) {
     const r = qcRoute({ id: item.id, item, gpxText: readFileSync(new URL(`../${item.file}`, import.meta.url), 'utf8'),
-      scene: JSON.parse(readFileSync(new URL(`../${item.scene}`, import.meta.url), 'utf8')), step: 2 });
+      scene: withCity(loadSceneSync(item.scene)) });
     assert.ok(r.stylized && r.series.cs.length > 100, `${item.id} checked its scenery`);
+    const problems = r.findings.filter((f) => f.severity !== 'info').map((f) => `${f.check} @ ${(f.at / 1000).toFixed(2)} km`);
+    assert.deepEqual(problems, [], `${item.id}: run npm run qc for details`);
   }
 });

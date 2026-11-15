@@ -335,23 +335,94 @@ def build(cid):
         if merged and (b - a < 40 or merged[-1][0] == kind): merged[-1][2] = b
         else: merged.append([kind, a, b])
     route_kinds = [{'kind': k, 'fromM': round(a), 'toM': round(b)} for k, a, b in merged]
-    # resample to 10 m
-    total = cum[-1]
-    n10 = int(total // 10)
+    # Round the corners: city streets meet at right angles and OSM paths jog sideways where they join;
+    # a rider (and the camera) needs curves. Resample every 2 m, then average positions over ±12 m twice
+    # (corner radius ≥ ~8 m, sideways jogs gone). The loop wraps, so the start/finish is smooth too.
+    raw_total = cum[-1]
+    n2 = int(raw_total // 2)
+    r2, e2, j = [], [], 0
+    for k in range(n2):
+        sd = k * 2
+        while j < len(cum) - 2 and cum[j + 1] < sd: j += 1
+        f = (sd - cum[j]) / max(1e-9, cum[j + 1] - cum[j])
+        r2.append(((P[j][1] + (P[j + 1][1] - P[j][1]) * f - P[0][1]) * 111319.49 * math.cos(math.radians(P[0][0])),
+                   (P[j][0] + (P[j + 1][0] - P[j][0]) * f - P[0][0]) * 111319.49))
+        e2.append(E[j] + (E[j + 1] - E[j]) * f)
+    # never stray more than `maxDrift` m from the mapped line: corners round inside the street, not through buildings
+    drift = cfg.get('maxDriftM', 8.0)
+    kx0, ky0 = 111319.49 * math.cos(math.radians(P[0][0])), 111319.49
+    to_xy = lambda la, lo: ((lo - P[0][1]) * kx0, (la - P[0][0]) * ky0)
+    bgrid = {}
+    for wid_, (nd, t) in ways.items():
+        if not ('building' in t or 'building:part' in t) or not nd or nd[0] != nd[-1]: continue
+        poly = [to_xy(*nodes[i]) for i in nd if i in nodes]
+        if len(poly) < 4: continue
+        xs_, ys_ = [q[0] for q in poly], [q[1] for q in poly]
+        for gx in range(int(min(xs_) // 50), int(max(xs_) // 50) + 1):
+            for gy in range(int(min(ys_) // 50), int(max(ys_) // 50) + 1):
+                bgrid.setdefault((gx, gy), []).append((wid_, poly))
+    def in_building(x, y, hit=None):
+        for a_ in (0,):
+            for b_ in (0,):
+                for wid_, poly in bgrid.get((int(x // 50) + a_, int(y // 50) + b_), []):
+                    if point_in(poly, x, y):
+                        if hit is None: return True
+                        hit.add(wid_)
+        return bool(hit)
+    def clear(x, y):   # the road (and a little sidewalk) stays out of buildings
+        return not any(in_building(x + ox, y + oy) for ox, oy in ((0, 0), (3.2, 0), (-3.2, 0), (0, 3.2), (0, -3.2), (2.3, 2.3), (-2.3, 2.3), (2.3, -2.3), (-2.3, -2.3)))
+    raw_clear = [clear(*q) for q in r2]
+    # buildings the mapped path itself runs through (a trail under a canopy, a mis-drawn footprint) are left out
+    route_buildings = set()
+    for q in r2: in_building(q[0], q[1], route_buildings)
+    print('  left out (on the route):', len(route_buildings), sorted(Counter(ways[w][1].get('building', ways[w][1].get('building:part', '')) for w in route_buildings).items()))
+    def leash(i, p_, prev=None):
+        dx, dy = p_[0] - r2[i][0], p_[1] - r2[i][1]
+        d = math.hypot(dx, dy)
+        q = p_ if d <= drift else (r2[i][0] + dx / d * drift, r2[i][1] + dy / d * drift)
+        if raw_clear[i] and not clear(*q): return prev if prev is not None else r2[i]
+        return q
+    sm = r2
+    for _ in range(cfg.get('cornerPasses', 2)):
+        w = cfg.get('cornerHalfWindow', 6)
+        sm = [(sum(sm[(i + o) % n2][0] for o in range(-w, w + 1)) / (2 * w + 1),
+               sum(sm[(i + o) % n2][1] for o in range(-w, w + 1)) / (2 * w + 1)) for i in range(n2)]
+        sm = [leash(i, p_) for i, p_ in enumerate(sm)]
+    # then ease only the remaining tight spots (park paths, hairpins) until no turn is sharper than ~7°/m
+    def turn(i):
+        a_, b_, c_ = sm[i - 1], sm[i], sm[(i + 1) % n2]
+        t1, t2 = math.atan2(b_[1] - a_[1], b_[0] - a_[0]), math.atan2(c_[1] - b_[1], c_[0] - b_[0])
+        seg = (math.hypot(b_[0] - a_[0], b_[1] - a_[1]) + math.hypot(c_[0] - b_[0], c_[1] - b_[1])) / 2
+        return abs((math.degrees(t2 - t1) + 540) % 360 - 180) / max(seg, .05)   # degrees per metre
+    for it in range(1500):
+        tight = {(i + o) % n2 for i in range(n2) if turn(i) > 4.5 for o in range(-10, 11)}
+        if not tight: break
+        old = sm
+        sm = [((sum(sm[(i + o) % n2][0] for o in range(-7, 8)) / 15, sum(sm[(i + o) % n2][1] for o in range(-7, 8)) / 15) if i in tight else sm[i])
+              for i in range(n2)]
+        sm = [leash(i, p_, old[i]) if i in tight else p_ for i, p_ in enumerate(sm)]
+    print(f'  corners eased in {it} passes, {len(tight)} points still tight')
+    sm.append(sm[0]); e2.append(e2[0])
+    scum = [0.0]
+    for a_, b_ in zip(sm, sm[1:]): scum.append(scum[-1] + math.hypot(b_[0] - a_[0], b_[1] - a_[1]))
+    to_ll = lambda x, y: (P[0][0] + y / 111319.49, P[0][1] + x / (111319.49 * math.cos(math.radians(P[0][0]))))
+    total = scum[-1]
     rs, re_, j = [], [], 0
-    for k in range(n10 + 1):
-        s = k * 10
-        while j < len(cum) - 2 and cum[j + 1] < s: j += 1
-        f = (s - cum[j]) / max(1e-9, cum[j + 1] - cum[j])
-        rs.append((P[j][0] + (P[j + 1][0] - P[j][0]) * f, P[j][1] + (P[j + 1][1] - P[j][1]) * f))
-        re_.append(E[j] + (E[j + 1] - E[j]) * f)
+    for k in range(int(total // 10) + 1):
+        sd = k * 10
+        while j < len(scum) - 2 and scum[j + 1] < sd: j += 1
+        f = (sd - scum[j]) / max(1e-9, scum[j + 1] - scum[j])
+        rs.append(to_ll(sm[j][0] + (sm[j + 1][0] - sm[j][0]) * f, sm[j][1] + (sm[j + 1][1] - sm[j][1]) * f))
+        re_.append(e2[j] + (e2[j + 1] - e2[j]) * f)
     if hv(rs[-1], rs[0]) > 1: rs.append(rs[0]); re_.append(re_[0])
-    # The app measures the route along the GPX samples (chords), a little shorter than along every OSM
-    # node: express all distances in the app's measure so bridges and signs land where they should.
+    # The app measures the route along the GPX samples (chords): express every distance (bridges, kinds,
+    # waypoints — found along the raw OSM nodes) in that measure so they land where they should.
     chord = [0.0]
-    for a, b in zip(rs, rs[1:]): chord.append(chord[-1] + hv(a, b))
+    for a_, b_ in zip(rs, rs[1:]): chord.append(chord[-1] + hv(a_, b_))
     def app_s(d):
-        k = max(0.0, min(len(chord) - 1.001, d / 10)); i = int(k)
+        k2 = max(0.0, min(len(scum) - 1.001, d / 2)); i2 = int(k2)
+        sd = scum[i2] + (scum[i2 + 1] - scum[i2]) * (k2 - i2)
+        k = max(0.0, min(len(chord) - 1.001, sd / 10)); i = int(k)
         return chord[i] + (chord[i + 1] - chord[i]) * (k - i)
     for b in route_bridges: b['fromM'], b['toM'] = round(app_s(b['fromM'])), round(app_s(b['toM']))
     for k in route_kinds: k['fromM'], k['toM'] = round(app_s(k['fromM'])), round(app_s(k['toM']))
@@ -487,7 +558,7 @@ def build(cid):
     stadiums, kept = [], []; why = []
     special = cfg.get('specialBuildings', {})
     for wid, pts, t in outlines + parts:
-        if len(pts) < 4: continue
+        if len(pts) < 4 or wid in route_buildings: continue
         is_part = 'building:part' in t and wid not in [o[0] for o in outlines[:0]]
         if not is_part and any(k for (la, lo) in [(sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))]
                                for dk in [(a, b) for a in (-1, 0, 1) for b in (-1, 0, 1)]

@@ -3,6 +3,7 @@
   "style": "stylized",
   "region": "california-coast",
   "terrain": "real-coast",
+  "terrainGridFile": "routes/scenes/bigsur-terrain.json",
   "description": "Real coastal landform (elevation around the route, bundled) with stylized materials, vegetation and life.",
   "assets": "models/scenery/coastal.json",
   "seed": 1101,
@@ -111,7 +112,6 @@
       "heightM": 15
     }
   ],
-  "terrainData": "routes/scenes/bigsur-terrain.json",
   "bridges": [
     {
       "fromM": 200,

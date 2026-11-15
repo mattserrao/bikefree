@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bake real elevation around a route into a bundled height grid ("bikefree-terrain-1").
+"""Bake real elevation around a route into a bundled height grid ("bikefree-terrain-grid-1").
 
 Used by the Big Sur hero map: the stylized renderer draws the real landform (sea cliffs,
 the Bixby Creek gorge, Hurricane Point) from this grid, offline, with no tile requests.
@@ -146,7 +146,7 @@ def main():
     print(f'  fine {len(blocks)} blocks of {B}×{B} @ {fm} m ({len(blocks) * (B * fm / 1000) ** 2:.0f} km²)')
 
     out = {
-        'format': 'bikefree-terrain-1', 'rowDelta': True,
+        'format': 'bikefree-terrain-grid-1', 'rowDelta': True,
         'attribution': 'Elevation: AWS Terrain Tiles (USGS 3DEP, NOAA and others)',
         'north': north, 'west': west, 'south': south, 'east': east,
         'base': BASE, 'scale': SCALE, 'floorM': cfg['floorM'],

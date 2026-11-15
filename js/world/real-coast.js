@@ -1,5 +1,5 @@
 // Real coastal landform for the stylized renderer (the Big Sur hero map): the ground is the real
-// elevation around the route (tools/build_terrain_grid.py → "bikefree-terrain-1"), with the GPX road
+// elevation around the route (tools/build_terrain_grid.py → "bikefree-terrain-grid-1"), with the GPX road
 // pressed into it, bridges over the real gorges, creeks traced down the real valley floors, and the
 // shoreline (a signed distance to the sea) for surf, cliffs and planting.
 // Pure functions — no three.js — so the QC sweep and tests can use it in Node.
@@ -19,7 +19,7 @@ const decodeRows = (text, rowLength) => {
 /** Decode once per data object (shared by the landscape, the renderer and the QC sweep). */
 export function decodeTerrain(data, proj) {
   if (data._decoded?.proj === proj) return data._decoded;
-  if (data.format !== 'bikefree-terrain-1') throw new Error('Unsupported terrain data');
+  if (data.format !== 'bikefree-terrain-grid-1') throw new Error('Unsupported terrain data');
   const nw = proj.toLocal(data.north, data.west), se = proj.toLocal(data.south, data.east);
   const { base, scale } = data, C = data.coarse, F = data.fine, B = F.block, R = B + 1;
   const coarse = decodeRows(C.h, C.nx);

@@ -257,27 +257,42 @@ Goal: a repeatable check that rides every course end to end and flags discontinu
 - [x] Checks: GPX spurs/zig-zags, gaps and elevation spikes; rider position, height and heading jumps; grade jolts, ±25 % clamps and grade/elevation mismatch; ground through the road, flooded road, floating road edges, ledges and walls beside the road, ground mesh too coarse for a carve; chase-camera hops
 - [x] Rider and pacer placement moved to `js/world/pose.js`, shared by `world.js` and the QC sweep
 - [x] Tests for the sweep on synthetic loops (clean, spur, spike, gap) and on the scenic routes
-- [ ] Fix what the first sweep found (FAIL):
-  - [ ] Yosemite 3.09 km, Acadia 5.24 km, Going-to-the-Sun 8.98 km: GPX runs ~40–50 m up a dead-end spur and doubles back (rider U-turns mid-route, jumps 1.4–2 m)
-  - [ ] Ground through the road: Acadia 5.12 km, Going-to-the-Sun 8.92 km (beside those spurs), Crater Lake 21.32 km (road carving switches to a nearby stretch of the route), Big Sur 15.78 km (edge of the bridge exclusion)
-  - [ ] Going-to-the-Sun lap seam (68.11 km): rider hops 0.7 m sideways where the start U-turn drift begins
-- [ ] Review the warnings: Snake River channel too narrow for the ground mesh (Grand Teton 31–32 km), Seven Mile Bridge road edges floating at 3.6 and 15.0 km
+- [x] Fixed everything the first sweep found; every route now passes `npm run qc --strict` (no fails, no warnings), and `npm test` runs the sweep over the whole catalog:
+  - **Spurs cut** from the GPX: Yosemite 2.99 km (190 m), Acadia 5.12 km (240 m) and 18.09 km (250 m), Crater Lake 21.13 km (200 m), Going-to-the-Sun 8.92 km (110 m, both legs). The route builder now catches short 30–400 m stubs too; `build_park_routes.py --prune-existing` applies it offline and moves signs, lookouts, roadside rails and the preview position to match
+  - **Sideways jogs smoothed** where cuts met and at BRouter junction steps (Yosemite, Acadia, Crater Lake, Monument Valley, Going-to-the-Sun, Seven Mile, Route 28); new `path-jog` QC check
+  - **Ground through the road** (Big Sur 15.78 km bridge end, and beside the old spurs): the ground now never rises above the road across an 8 m corridor, and the bridge carve-out fades over the last 12 m of deck instead of switching off
+  - **Road edges floating** at bridge ends (Seven Mile 3.6 / 15.0 km, Zion 6.9 km): the ground meets the road where the deck starts
+  - **Jagged river banks** beside the road (Snake River, Grand Teton 26–32 km and 47 km; Yosemite; Crater Lake): river channels ease out beside the road over 12–30 m with banks wide enough for the ground mesh
+  - **Rider hop** at the Going-to-the-Sun lap seam: the U-turn lane drift now hands back to the road's own direction over 10 m (rider and pacer)
+- [ ] On-bike check, especially the five routes whose GPX changed (each 0.1–0.5 km shorter)
 
 ### v0.12 — Pittsburgh · Three Rivers Loop, a living city *(test branch `v0.12`, on top of v0.11.6)*
 Goal: the first city course — a loop full of life: riverside trails, famous bridges, downtown, the South Side and the climb up Mount Washington.
-- [x] **The loop** (19.2 km / 11.9 mi, ~185 m / 605 ft climbing; clockwise from the North Shore Water Steps): North Shore Trail past PNC Park → **Roberto Clemente Bridge** → Penn Avenue (Cultural District) → **Point State Park** and the fountain → Fort Pitt Boulevard → Fourth Avenue (PPG Place) → **Market Square** → Forbes → Smithfield Street → **Smithfield Street Bridge** → Station Square → **East Carson Street** to SouthSide Works → South Side riverfront trail → South 10th → **P.J. McArdle Roadway** climb (~1.6 km, up to 8–11%) → **Grandview Avenue** overlooks past the Duquesne Incline → Greenleaf Street descent (to −14%) → West Carson → **West End Bridge** → North Shore Trail past the Science Center and USS Requin
+- [x] **The loop** (18.3 km / 11.4 mi, ~185 m / 610 ft climbing; clockwise from the North Shore Water Steps): General Robinson and Federal Streets → **Roberto Clemente Bridge** → the Allegheny riverfront trail under the Fort Duquesne Bridge → **Point State Park** promenades and the fountain → the Mon Wharf → Market Street past PPG Place → **Market Square** → Forbes → Smithfield Street → **Smithfield Street Bridge** → Station Square → **East Carson Street** to SouthSide Works → South Side riverfront trail → South 10th → **P.J. McArdle Roadway** climb → **Grandview Avenue** overlooks past the Duquesne Incline → Greenleaf Street descent → West Carson → **West End Bridge** → North Shore Trail past the Science Center and USS Requin
 - [x] `tools/build_city.py` + `tools/city/pittsburgh.json`: routes on our own OSM street/trail graph (legs prefer trails, roads or park paths; one ramp link where OSM has a gap), folds waypoint stubs, terrain-tile elevation with bridge decks interpolated, rideable profile; writes the GPX and `routes/scenes/pittsburgh-city.json` (height grid, land use incl. the three rivers, 12k buildings with heights, streets, bridge decks, rail lines, trees)
 - [x] New scene type `authored-city` (`js/world/city-landscape.js`, `city.js`, `city-bridges.js`, `city-life.js`): real terrain (the Mount Washington bluff), carved rivers with their own water, buildings with procedural windows, PPG Place spires, the Gulf Tower top, streets with sidewalks, lamps and street trees, shop awnings and signs on East Carson
 - [x] **Bridges in their own styles**: the Three Sisters' gold self-anchored suspension, Smithfield's blue lenticular trusses and buff portals, the gold through-arches of the West End and Fort Duquesne, Fort Pitt's double-deck tied arch, the Liberty, 10th Street, Hot Metal and Birmingham bridges
 - [x] **Life**: walkers, joggers and people gathered at Market Square, the Point, Station Square, Carson Street and the overlooks; cyclists on the trails; cars and buses on the streets (oncoming traffic on the route's own streets, kept off the rider's lane); light-rail trains and a freight train; both **inclines** running; barges, the riverboat, motorboats with wakes and kayaks; gulls over the rivers; the Point fountain's jet; PNC Park and Acrisure Stadium
 - [x] **Night** time of day (all routes): moon, stars and a city glow on the horizon; in the city the windows, street lamps, bridge lights, stadium lights, aircraft beacons, the Gulf Tower beacon, car head/tail lights, shop signs and light on the rivers; a front light on the bike
 - [x] Route surface follows the route: streets keep lane paint, trails and park paths get a plain surface; concrete sidewalks instead of gravel shoulders
+- [x] Menu: **Scenery** renamed **Routes**; route lists (free ride, Route and the workout scenery picker) split into **In Progress** and **Rough Drafts** (`"stage": "draft"` in `routes/catalog.json`) — Rough Drafts: Overseas Highway, Route 28, Pittsburgh
 - [x] Course QC (`npm run qc`) runs on the city; `test/city.test.mjs`
+- [x] Merged main (v0.11.6 QC fixes, strict whole-catalog QC test): the city builder now rounds corners (2 m resample, smoothing that never strays more than 16 m from the mapped line and keeps the road 3 m clear of buildings), and the loop avoids the Point's switchback paths and the wharf switchback (two short ramp links). Pittsburgh: 0 fail, 0 warn
 - [x] Fixed: other carriageways, ramps and bridge decks were drawn up to 4 m above the route's road (Point ramps, Smithfield, West End Bridge), hiding the rider's legs. Streets over or beside the route now stay just under it (no railings or lamp posts in the road); new QC check **street-over-road** (it found 16 spots before the fix, 0 after)
-- [x] QC: 0 fail — the North Shore Trail at 0.42 km passes under the start of the Clemente Bridge deck; the ground there now follows the trail (11 warnings: tight city corners and narrow carves beside ramps)
 - [ ] On-bike check and M4 Air smoothness (Light / Balanced / High)
 
-### Big Sur hero map *(test branch `bigsur-test`, on top of v0.12)*
+### Route 28 rework *(test branch `route28-test`)*
+Review, plan and screenshots: [docs/route28/REVIEW.md](docs/route28/REVIEW.md) · listed under **Rough Drafts** (`"stage": "draft"`)
+- [x] **Phase 0** — Rerouted on NY-28 through Eagle Bay (29.2 km each way); signs, lookout and towns re-placed
+- [x] **Phase 1** — Real terrain + lakes baked from USGS elevation (`tools/build_scene_terrain.py`, `route28.terrain.bin`); lakes at their real levels and shorelines; QC `road-in-lake`, `lake-side`, `building-on-road`, `building-in-water`, `dock-on-land`
+- [x] **Phase 2** — Procedural Adirondack kit (white pine, spruce, hemlock, maple, birch × 3 LODs); forest-edge layout ~180 trees/ha; nested tiers built a few per frame; canopy shell on far hills; smaller, local ground cover; lake view corridors
+- [x] **Phase 3** — Per-scene fog, lake water shader (no surf, treeline reflection), morning/golden-hour mist, darker far tint
+- [x] **Phase 4** — Old Forge, Eagle Bay, Inlet; ~70 lakeside camps with docks/boathouses/canoes; boats; poles + wires; mailboxes; guardrails; DEC + deer signs
+- [x] **Phase 5** — Fall palette (`season: "fall"`, preview `&season=fall`)
+- [ ] On-bike check on the M4 Air: frame rate on Balanced, tile-edge hitching, lake/horizon seams online
+- [ ] Later: Bald Mountain fire tower, Old Forge landmarks, measured performance overlay
+
+### Big Sur hero map *(test branch `bigsur-test`, on top of v0.12; main merged in, with the snapshot and clipping QC tools)*
 Goal: make Big Sur the showcase course — visually stunning, the one you open to show someone the app. A testbed for graphics, weather, traffic and realism that can later roll out to other maps.
 
 **Baseline review (15 Nov 2026, preview renders at High)**

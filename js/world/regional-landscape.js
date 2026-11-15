@@ -1,7 +1,8 @@
 // Regional style-C landforms. These are authored interpretations around the
 // actual GPX, with explicit lakes, rivers, peaks, cliffs and bridge ranges.
 import { makeRouteIndex } from './geo.js';
-import { smoothstep } from './coast.js';
+import { smoothstep, ROAD_CORRIDOR_M } from './coast.js';
+import { makeTerrainSampler } from './terrain-data.js';
 
 function nearestSegment(points, x, z) {
   let best = null, distance = Infinity;
@@ -31,7 +32,9 @@ export function makeRegionalLandscape(config, proj, index, route) {
     return a.x + (b.x - a.x) * f + (config.coastline ? Math.sin(z / 290) * 17 + Math.sin(z / 83) * 4 : 0);
   };
   const inlandAt = (x, z) => (x - coastX(z)) * coastSide;
-  const lakes = (config.lakes || []).map((l) => {
+  // Baked real terrain (tools/build_scene_terrain.py): real hills and hydro-flattened lakes with real shorelines
+  const terrain = config.terrainData?.grid ? makeTerrainSampler(config.terrainData, proj) : null;
+  const lakes = terrain ? [] : (config.lakes || []).map((l) => {
     const p = proj.toLocal(l.lat, l.lon), rx = l.radiusM[0], rz = l.radiusM[1];
     let nearbyRoad = Infinity;
     for (let i = 0; i <= end; i += 5) if (Math.hypot((index.xs[i] - p.x) / rx, (index.zs[i] - p.z) / rz) < 1.35) nearbyRoad = Math.min(nearbyRoad, route.ele[i]);
@@ -53,6 +56,7 @@ export function makeRegionalLandscape(config, proj, index, route) {
     return f.heightM * shape;
   };
   const baseHeight = (x, z) => {
+    if (terrain && terrain.inside(x, z)) return terrain.height(x, z);
     if (config.biome === 'tropical') {
       let h = -8;
       for (const l of islands) { const r = Math.hypot((x - l.x) / l.rx, (z - l.z) / l.rz); if (r < 1.15) h = Math.max(h, -8 + (l.heightM + 7) * Math.pow(Math.max(0, 1 - (r / 1.15) ** 2), .6)); }
@@ -133,9 +137,20 @@ export function makeRegionalLandscape(config, proj, index, route) {
     }
     return null;
   };
+  // 1 on a bridge deck, easing to 0 over its last 12 m at each end: the ground meets the road where the deck starts
+  const bridgeWeight = (x, z) => {
+    let w = 0;
+    for (const b of landmarks) {
+      if (b.lateralM) continue;
+      const along = Math.abs((x - b.x) * b.fx + (z - b.z) * b.fz), across = Math.abs((x - b.x) * -b.fz + (z - b.z) * b.fx);
+      w = Math.max(w, smoothstep(b.span / 2 + 1, b.span / 2 - 11, along) * (1 - smoothstep(26, 38, across)));
+    }
+    return w;
+  };
   const creekAt = (x, z) => rivers.find((r) => nearestSegment(r.points, x, z).d < r.width / 2 + 1);
   const waterLevelAt = (x, z) => {
     let y = hasOcean ? .05 : -Infinity;
+    if (terrain && terrain.inside(x, z) && terrain.shore(x, z) < 0) y = Math.max(y, terrain.lake(x, z)?.level ?? -Infinity);
     for (const l of lakes) if (Math.hypot((x - l.x) / l.rx, (z - l.z) / l.rz) < 1) y = Math.max(y, l.level);
     for (const r of rivers) { const hit = nearestSegment(r.points, x, z); if (hit.d < r.width / 2) y = Math.max(y, r.waterAt(hit.s)); }
     return y;
@@ -145,7 +160,18 @@ export function makeRegionalLandscape(config, proj, index, route) {
     const near = broad.nearest(x, z, 1400);
     if (near && config.biome !== 'tropical') {
       const i = samples[near.i], correction = route.ele[i] - 2 - baseHeight(index.xs[i], index.zs[i]);
-      h += correction * (1 - smoothstep(100, 1400, near.d));
+      h += correction * (1 - smoothstep(100, terrain ? 500 : 1400, near.d));
+    }
+    if (terrain && terrain.inside(x, z)) {
+      // lake beds: shallows near the shore, deepening to 12 m; a low lip just above the water on land
+      const shore = terrain.shore(x, z);
+      if (shore < 25) {
+        const level = terrain.lake(x, z)?.level;
+        if (level != null) {
+          if (shore < 0) h = Math.min(h, level - Math.min(12, .5 - shore * .15));
+          else h = Math.max(h, level + .3 + shore * .05);
+        }
+      }
     }
     for (const l of lakes) {
       const r = Math.hypot((x - l.x) / l.rx, (z - l.z) / l.rz);
@@ -153,20 +179,29 @@ export function makeRegionalLandscape(config, proj, index, route) {
     }
     for (const f of formations) if (f.island) h = Math.max(h, (lakes[0]?.level || floor) - 5 + formationHeight(f, x, z));
     const road = index.nearest(x, z, 110);
-    const onBridge = road && bridgeAt(index.xs[road.i], index.zs[road.i], 8);
-    if (road && !onBridge) h += (route.ele[road.i] - .65 - h) * (1 - smoothstep(22, 110, road.d));
-    if (onBridge) h = Math.min(h, route.ele[road.i] - 1.5);
-    for (const r of rivers) {
-      const hit = nearestSegment(r.points, x, z), factor = 1 - smoothstep(r.width / 2, r.width / 2 + 6, hit.d);
-      if (factor > 0 && !(road && road.d < 10 && !onBridge)) h += (Math.min(h, r.waterAt(hit.s) - .6) - h) * factor;
+    const bw = road ? bridgeWeight(index.xs[road.i], index.zs[road.i]) : 0;
+    if (road) {
+      // off a bridge: grade the verge to the road; on a bridge: only keep the ground below the deck
+      const fill = h + (route.ele[road.i] - .65 - h) * (1 - smoothstep(22, 110, road.d));
+      h = fill * (1 - bw) + Math.min(h, route.ele[road.i] - 1.5) * bw;
     }
+    // Rivers: banks wide enough for the 6 m ground mesh to follow; beside the road (off a bridge) the
+    // channel eases out over 12–30 m instead of stopping dead at 10 m, which left a cliff at the verge.
+    const nearRoad = road ? (1 - bw) * (1 - smoothstep(12, 30, road.d)) : 0;
+    for (const r of rivers) {
+      const hit = nearestSegment(r.points, x, z), factor = (1 - smoothstep(r.width / 2, r.width / 2 + 14, hit.d)) * (1 - nearRoad);
+      if (factor > 0) h += (Math.min(h, r.waterAt(hit.s) - .6) - h) * factor;
+    }
+    // Never above the road (see coast.js)
+    if (road) h = Math.min(h, route.ele[road.i] - .65 + Math.max(0, road.d - ROAD_CORRIDOR_M));
     return h;
   };
   const colorAt = (x, z) => {
     for (const f of formations) if (f.color && formationHeight(f, x, z) > f.heightM * .45) return f.color;
     return null;
   };
-  return { kind: config.biome, coastSide, hasOcean, coast, coastX, inlandAt, lakes, waterIslands: islands,
+  return { kind: config.biome, coastSide, hasOcean, coast, coastX, inlandAt, lakes, waterIslands: islands, terrain,
+    shoreAt: terrain ? (x, z) => (terrain.inside(x, z) ? terrain.shore(x, z) : Infinity) : null,
     landmarks, creeks: rivers, creekAt, heightAt, baseHeight, bridgeAt, waterLevelAt, colorAt,
     isWater: (x, z, height) => height < waterLevelAt(x, z) + .4 };
 }

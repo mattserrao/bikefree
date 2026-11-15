@@ -18,9 +18,28 @@ const noise = /* glsl */`
   }
 `;
 
-export function makeCoastalGroundMaterial(palette, config = {}, farUniform = null, uniforms = {}) {
+export function makeCoastalGroundMaterial(palette, config = {}, farUniform = null, canopyUniform = null, uniforms = {}) {
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .98, side: THREE.DoubleSide });
+  const canopy = !!canopyUniform;
   material.onBeforeCompile = (shader) => {
+    if (canopy) {
+      // Distant forest: beyond the last real trees the ground rises into a mottled canopy shell
+      shader.uniforms.bfCanopy = canopyUniform;
+      shader.uniforms.bfCanopyColor = { value: new THREE.Color(palette.canopy || '#2f4a36') };
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute float aCanopy; uniform vec4 bfCanopy; varying float vBfCanopy;')
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+          vBfCanopy = aCanopy * smoothstep(bfCanopy.x, bfCanopy.x + bfCanopy.y, length(position.xz - cameraPosition.xz));
+          transformed.y += vBfCanopy * bfCanopy.z;`);
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform vec3 bfCanopyColor; varying float vBfCanopy;')
+        .replace('#include <color_fragment>', `#include <color_fragment>
+          if (vBfCanopy > .001) {
+            float bfCrowns = bfFbm(vBfGround.xz * .09) * .65 + bfNoise(vBfGround.xz * .31) * .35;
+            vec3 bfTop = bfCanopyColor * (.62 + bfCrowns * .7);
+            diffuseColor.rgb = mix(diffuseColor.rgb, bfTop, smoothstep(0., .6, vBfCanopy));
+          }`);
+    }
     // v0.11.2: x inner radius, y band, z on — beyond the hand-off the real far terrain takes over
     shader.uniforms.bfFar = farUniform || { value: new THREE.Vector4(1500, 400, 0, 0) };
     shader.uniforms.bfRock = { value: new THREE.Color(palette.rock) };
@@ -223,4 +242,105 @@ export function decorateSceneryMaterial(material, category, uniforms) {
   };
   material.customProgramCacheKey = () => `coastal-${category}-2`;
   return material;
+}
+
+/** Sheltered lake water: tea-dark depths, soft shallows by the shore (aShore = metres to shore,
+ * negative on the water), wind ripples, sky and a dark treeline in the reflection. No surf. */
+export function makeLakeWaterMaterial(uniforms, waterColor, shallowColor, treeColor) {
+  return new THREE.ShaderMaterial({
+    uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), ...uniforms,
+      bfWater: { value: new THREE.Color(waterColor || '#2f4a4a') }, bfShallow: { value: new THREE.Color(shallowColor || '#6b6a45') },
+      bfTrees: { value: new THREE.Color(treeColor || '#1f3326') } },
+    vertexShader: /* glsl */`
+      #include <common>
+      #include <logdepthbuf_pars_vertex>
+      #include <fog_pars_vertex>
+      attribute float aShore;
+      varying vec3 vBfLake; varying float vBfShore;
+      void main() {
+        vBfLake = (modelMatrix * vec4(position, 1.)).xyz; vBfShore = aShore;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.);
+        gl_Position = projectionMatrix * mvPosition;
+        #include <logdepthbuf_vertex>
+        #include <fog_vertex>
+      }`,
+    fragmentShader: /* glsl */`
+      #include <common>
+      #include <logdepthbuf_pars_fragment>
+      #include <fog_pars_fragment>
+      varying vec3 vBfLake; varying float vBfShore;
+      uniform float uTime; uniform vec3 uSunDir; uniform vec3 uSkyTop; uniform vec3 uSkyHorizon;
+      uniform vec3 bfWater; uniform vec3 bfShallow; uniform vec3 bfTrees;
+      ${noise}
+      void main() {
+        #include <logdepthbuf_fragment>
+        vec2 p = vBfLake.xz;
+        float dist = length(cameraPosition - vBfLake);
+        float detail = 1. - smoothstep(300., 2500., dist);
+        // cat's-paw wind patches: some water ruffled, some glassy
+        float gust = smoothstep(.35, .75, bfFbm(p * .004 + vec2(uTime * .006, 0.)));
+        float r1 = bfNoise(p * .55 + vec2(uTime * .35, uTime * .21)) - .5;
+        float r2 = bfNoise(p * 1.3 - vec2(uTime * .27, -uTime * .31)) - .5;
+        float amp = (.035 + gust * .11) * detail;
+        vec3 N = normalize(vec3(r1 * amp, 1., r2 * amp));
+        vec3 V = normalize(cameraPosition - vBfLake);
+        vec3 R = reflect(-V, N);
+        float fresnel = .03 + .6 * pow(1. - max(dot(N, V), 0.), 5.);
+        // reflection: sky above, the dark far-shore treeline in a band just over the horizon
+        vec3 sky = mix(uSkyHorizon, uSkyTop, sqrt(max(R.y, 0.)));
+        float band = 1. - smoothstep(.02, .085 + bfNoise(vec2(atan(R.z, R.x) * 30., 0.)) * .05, R.y);
+        vec3 refl = mix(sky, bfTrees * (.8 + bfNoise(p * .02) * .3), band * .92);
+        float depth = smoothstep(0., 28., -vBfShore);
+        vec3 body = mix(bfShallow, bfWater * (.85 + bfFbm(p * .01) * .25), depth);
+        vec3 color = mix(body, refl, fresnel);
+        float sun = pow(max(dot(reflect(-normalize(uSunDir), N), V), 0.), 220.);
+        color += vec3(1., .93, .78) * sun * (.35 + gust * .5);
+        // a thin, soft wet edge rather than surf
+        color = mix(color, bfShallow * 1.15, (1. - smoothstep(0., 2.5, -vBfShore)) * .35);
+        gl_FragColor = vec4(color, 1.);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+        #include <fog_fragment>
+      }`,
+    fog: true,
+  });
+}
+
+/** Low mist lying on the water (morning and golden hour). */
+export function makeLakeMistMaterial(uniforms, opacity) {
+  return new THREE.ShaderMaterial({
+    uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), uTime: uniforms.uTime, uSkyHorizon: uniforms.uSkyHorizon, bfMist: opacity },
+    transparent: true, depthWrite: false,
+    vertexShader: /* glsl */`
+      #include <common>
+      #include <logdepthbuf_pars_vertex>
+      #include <fog_pars_vertex>
+      attribute float aShore; varying vec3 vBfMist; varying float vBfShore;
+      void main() {
+        vBfMist = (modelMatrix * vec4(position, 1.)).xyz; vBfShore = aShore;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.);
+        gl_Position = projectionMatrix * mvPosition;
+        #include <logdepthbuf_vertex>
+        #include <fog_vertex>
+      }`,
+    fragmentShader: /* glsl */`
+      #include <common>
+      #include <logdepthbuf_pars_fragment>
+      #include <fog_pars_fragment>
+      varying vec3 vBfMist; varying float vBfShore;
+      uniform float uTime; uniform vec3 uSkyHorizon; uniform float bfMist;
+      ${noise}
+      void main() {
+        #include <logdepthbuf_fragment>
+        float wisps = bfFbm(vBfMist.xz * .012 + vec2(uTime * .01, uTime * .004));
+        float a = bfMist * smoothstep(.3, .8, wisps) * smoothstep(0., 30., -vBfShore + 12.);
+        a *= smoothstep(25., 120., length(cameraPosition - vBfMist));
+        if (a < .01) discard;
+        gl_FragColor = vec4(mix(uSkyHorizon, vec3(1.), .45), a);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+        #include <fog_fragment>
+      }`,
+    fog: true,
+  });
 }

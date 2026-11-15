@@ -38,6 +38,7 @@ for (const item of catalog) {
   }
   const row = { id: item.id, name: item.name, park: item.park, km: Number((route.total / 1000).toFixed(1)), climbM: Math.round(route.ascent), file: item.file };
   if (item.outAndBack) row.outAndBack = true;
+  if (item.stage) row.stage = item.stage;   // 'draft': listed under Rough Drafts
   if (item.scene) {
     const scene = JSON.parse(read(item.scene));
     if (scene.format !== 'bikefree-scene-1' || !['authored-coast', 'authored-region', 'authored-city', 'real-coast'].includes(scene.terrain)) throw new Error(`${item.id}: unsupported scene format or terrain`);
@@ -51,11 +52,11 @@ for (const item of catalog) {
     }
     if (scene.terrain === 'real-coast') {
       // a real height grid around the route from tools/build_terrain_grid.py
-      if (!scene.terrainData?.startsWith('routes/scenes/') || scene.terrainData.includes('..') || !existsSync(resolve(root, scene.terrainData))) throw new Error(`${item.id}: missing terrain grid`);
-      const grid = JSON.parse(read(scene.terrainData));
-      if (grid.format !== 'bikefree-terrain-1' || !(grid.coarse?.nx > 1) || !(grid.fine?.blocks?.length > 0)) throw new Error(`${item.id}: invalid terrain grid`);
+      if (!scene.terrainGridFile?.startsWith('routes/scenes/') || scene.terrainGridFile.includes('..') || !existsSync(resolve(root, scene.terrainGridFile))) throw new Error(`${item.id}: missing terrain grid`);
+      const grid = JSON.parse(read(scene.terrainGridFile));
+      if (grid.format !== 'bikefree-terrain-grid-1' || !(grid.coarse?.nx > 1) || !(grid.fine?.blocks?.length > 0)) throw new Error(`${item.id}: invalid terrain grid`);
       for (const b of scene.bridges || []) if (!(b.fromM >= 0 && b.toM > b.fromM && b.toM <= (route.turnS || route.total))) throw new Error(`${item.id}: invalid bridge span`);
-      paths.push(scene.terrainData);
+      paths.push(scene.terrainGridFile);
     }
     if (scene.terrain === 'authored-coast' && (!Array.isArray(scene.coastline) || scene.coastline.length < 2)) throw new Error(`${item.id}: a coastline needs at least two coordinates`);
     for (const [lat, lon] of scene.coastline || []) if (!Number.isFinite(lat) || Math.abs(lat) > 90 || !Number.isFinite(lon) || Math.abs(lon) > 180) throw new Error(`${item.id}: invalid coastline coordinate`);
@@ -88,6 +89,12 @@ for (const item of catalog) {
       for (const key of ['widthM', 'heightM', 'lengthM', 'offshoreM']) {
         if (feature[key] !== undefined && !(feature[key] > 0)) throw new Error(`${item.id}: ${key} must be positive`);
       }
+    }
+    if (scene.terrainData) {
+      const t = scene.terrainData;
+      if (t.format !== 'bikefree-terrain-1' || !t.file?.startsWith('routes/scenes/') || t.file.includes('..') || !existsSync(resolve(root, t.file))) throw new Error(`${item.id}: missing or invalid terrain data`);
+      if (readFileSync(resolve(root, t.file)).length !== t.width * t.height * 5) throw new Error(`${item.id}: terrain data size does not match its grid`);
+      paths.push(t.file);
     }
     paths.push(item.scene, scene.assets);
     row.scene = item.scene;

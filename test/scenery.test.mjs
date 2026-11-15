@@ -15,7 +15,7 @@ const route = buildCatalogRoute(read(item.file), item);
 const proj = makeProjection(36.38, -121.87);
 const index = makeRouteIndex(route, proj);
 const scene = JSON.parse(read(item.scene));
-scene.terrainGrid = JSON.parse(read(scene.terrainData));
+scene.terrainGrid = JSON.parse(read(scene.terrainGridFile));
 const coast = makeRealCoastLandscape(scene, proj, index, route);
 const bixby = { ...coast.bridges.find((b) => /Bixby/.test(b.name)), span: 218 };
 

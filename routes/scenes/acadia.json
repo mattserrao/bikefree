@@ -110,18 +110,18 @@
     }
   ],
   "preview": {
-    "positionM": 8700,
+    "positionM": 8460.0,
     "camera": "chase"
   },
   "signs": [
     {
-      "atM": 5175,
+      "atM": 5120.0,
       "side": "ocean",
       "label": "SAND BEACH",
       "subtitle": "ACADIA PARK LOOP"
     },
     {
-      "atM": 18155,
+      "atM": 17850.0,
       "side": "ocean",
       "label": "JORDAN POND",
       "subtitle": "ACADIA PARK LOOP"
@@ -129,14 +129,14 @@
   ],
   "roadside": [
     {
-      "fromM": 8000,
-      "toM": 9900,
+      "fromM": 7760.0,
+      "toM": 9660.0,
       "side": "ocean"
     }
   ],
   "lookouts": [
     {
-      "atM": 8500,
+      "atM": 8260.0,
       "side": "ocean",
       "widthM": 8,
       "lengthM": 28

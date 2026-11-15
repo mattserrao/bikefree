@@ -454,7 +454,8 @@
         ]
       }
     },
-    "scene": "routes/scenes/sevenmile.json"
+    "scene": "routes/scenes/sevenmile.json",
+    "stage": "draft"
   },
   {
     "id": "route28",
@@ -478,8 +479,8 @@
           -74.9733
         ],
         [
-          43.7585,
-          -74.826
+          43.7686,
+          -74.8181
         ],
         [
           43.7475,
@@ -495,6 +496,14 @@
         ]
       ],
       "pois": {
+        "Old Forge": [
+          43.7108,
+          -74.9733
+        ],
+        "Eagle Bay": [
+          43.7686,
+          -74.8181
+        ],
         "Inlet": [
           43.7475,
           -74.7925
@@ -509,7 +518,8 @@
         ]
       }
     },
-    "scene": "routes/scenes/route28.json"
+    "scene": "routes/scenes/route28.json",
+    "stage": "draft"
   },
   {
     "id": "pittsburgh",
@@ -521,6 +531,7 @@
       18,
       22
     ],
-    "scene": "routes/scenes/pittsburgh.json"
+    "scene": "routes/scenes/pittsburgh.json",
+    "stage": "draft"
   }
 ]
