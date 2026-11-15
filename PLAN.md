@@ -191,6 +191,19 @@ Goal: rider profiles that live in this browser and add up your riding.
 - [x] Version number shown faintly at the bottom right of the menu (`VERSION` in `js/app.js`)
 - [ ] On-bike check
 
+### v0.11 — Six new scenic routes *(branch `v0.11`)*
+Goal: more places to ride, each a different kind of day.
+- [x] **Monument Valley · Forrest Gump Point** — US-163 to the Valley visitor center, 16.4 mi each way, ~1,800 ft
+- [x] **Big Sur · Bixby Bridge & Hurricane Point** — Highway 1, Carmel Highlands to Big Sur village, 20.5 mi each way, ~2,300 ft
+- [x] **Going-to-the-Sun Road** — Lake McDonald Lodge to Logan Pass, 21 mi each way, ~3,400 ft (the big climb)
+- [x] **Zion Canyon Scenic Drive** — visitor center to Temple of Sinawava, 7.9 mi each way, ~600 ft
+- [x] **Overseas Highway · Seven Mile Bridge** — Marathon to Bahia Honda, 12.8 mi each way, flat
+- [x] **Route 28 · Old Forge to Eighth Lake** — Fulton Chain of Lakes through Inlet, 17.8 mi each way, ~1,000 ft rolling
+- [x] Out-and-back routes: the builder rides A → B → A so laps still work; the road is drawn once and the rider U-turns into the other lane at the far end
+- [x] Road profiles cleaned of elevation-model artefacts: bridges filled (Bixby Creek), cliff spikes removed (Going-to-the-Sun hairpins, Zion canyon walls); sea-floor depths held above the water in the Keys
+- [x] Route list renamed *Scenic routes — 3D*; the new routes also work as Scenery behind free rides and workouts; offline download works for all of them
+- [ ] On-bike check
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

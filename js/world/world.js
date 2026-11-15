@@ -167,11 +167,29 @@ export class World {
 
     // Rider placement: right-hand side of the road
     const p = this.pointAt(this.s);
-    const ahead = this.pointAt(this.s + 6), behind = this.pointAt(this.s - 6);
+    const turn = this.route.turnS;  // out-and-back: distance of the turnaround
+    let aheadS = this.s + 6, behindS = this.s - 6;
+    const x = wrapDist(this.route, this.s);
+    if (turn) {
+      // Look along this leg only, so the heading flips cleanly at the turnaround.
+      if (x <= turn) aheadS = this.s + Math.max(0.5, Math.min(6, turn - x));
+      else behindS = this.s - Math.max(0.5, Math.min(6, x - turn));
+    }
+    const ahead = this.pointAt(aheadS), behind = this.pointAt(behindS);
     const fwd = ahead.clone().sub(behind).normalize();
     const flat = new THREE.Vector3(fwd.x, 0, fwd.z).normalize();
     const right = new THREE.Vector3(-flat.z, 0, flat.x);
-    const riderPos = p.clone().addScaledVector(right, ROAD_WIDTH * 0.22);
+    let riderPos = p.clone().addScaledVector(right, ROAD_WIDTH * 0.22);
+    if (turn && Math.abs(x - turn) < 10) {
+      // U-turn: drift across from the outbound lane to the return lane over the last/first 10 m.
+      if (!this._turnRight) {
+        const a = this.pointAt(turn - 12), b = this.pointAt(turn);
+        const f = new THREE.Vector3(b.x - a.x, 0, b.z - a.z).normalize();
+        this._turnRight = new THREE.Vector3(-f.z, 0, f.x);
+      }
+      const k = Math.max(-1, Math.min(1, (turn - x) / 10));
+      riderPos = p.clone().addScaledVector(this._turnRight, ROAD_WIDTH * 0.22 * k);
+    }
     riderPos.y += 0.12; // road surface sits slightly above the route line
     this.crank += (src.cadence / 60) * Math.PI * 2 * dt;
     this.rider.update(riderPos, fwd, this.crank, src.speed, Math.min(dt, 0.1));
@@ -280,9 +298,12 @@ function makeSky() {
   return sky;
 }
 
+// An out-and-back route rides the same road twice: draw it once (outbound half only).
+const roadPoints = (route) => (route.turnIdx ? route.turnIdx + 1 : route.dist.length);
+
 // ---------- Road ----------
 function makeRoad(route, index) {
-  const n = route.dist.length;
+  const n = roadPoints(route);
   const pos = new Float32Array(n * 2 * 3);
   const uv = new Float32Array(n * 2 * 2);
   for (let i = 0; i < n; i++) {
@@ -333,7 +354,7 @@ function makeRoad(route, index) {
 
 // ---------- Shoulders ----------
 function makeRibbon(route, index, width, lift, tex, repeatM, offset) {
-  const n = route.dist.length;
+  const n = roadPoints(route);
   const pos = new Float32Array(n * 2 * 3), uv = new Float32Array(n * 2 * 2);
   for (let i = 0; i < n; i++) {
     const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1);

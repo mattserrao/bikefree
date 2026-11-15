@@ -15,7 +15,7 @@ import { planRouteTiles, tileKeysToUrls, downloadUrls, offlineStatus, setOffline
 const $ = (id) => document.getElementById(id);
 
 // The app version, shown faintly at the bottom right of the menu. Bump with each release (see PLAN.md).
-export const VERSION = '0.10';
+export const VERSION = '0.11';
 $('ver').textContent = `bikefree v${VERSION}`;
 
 // ---------- Log (lives in Settings › Advanced) ----------
@@ -207,7 +207,8 @@ function renderPreview() {
     $('pvTitle').textContent = r.name;
     $('pvSub').textContent = r.park || 'Your route';
     $('pvFacts').innerHTML = fact(`${fmtDist(r.total, 1)}`, distUnit()) + fact(fmtElev(r.ascent).toLocaleString(), `${elevUnit()} climb`) +
-      fact(`${Math.round(Math.max(...r.grade))}%`, 'max grade') + (r.closed ? '<div class="fact tag">Loop · endless laps</div>' : '');
+      fact(`${Math.round(Math.max(...r.grade))}%`, 'max grade') +
+      (r.outAndBack ? `<div class="fact tag">Out &amp; back · ${fmtDist(r.turnS, 1)} ${distUnit()} each way · endless laps</div>` : r.closed ? '<div class="fact tag">Loop · endless laps</div>' : '');
     $('pvDesc').innerHTML = r.hasElevation ? '' : '<span class="warn">No elevation in this file — it will ride flat.</span>';
     map.hidden = false; chart.hidden = false;
     drawTrace(map, r, 0);
@@ -564,7 +565,7 @@ async function loadParks() {
   if (parkItems) return parkItems;
   try {
     const list = await (await fetch('routes/parks/index.json')).json();
-    parkItems = list.map((p) => ({ id: `builtin-park-${p.id}`, kind: 'route', name: p.name, url: p.file, park: p.park, group: 'National parks — 3D' }));
+    parkItems = list.map((p) => ({ id: `builtin-park-${p.id}`, kind: 'route', name: p.name, url: p.file, park: p.park, outAndBack: !!p.outAndBack, group: 'Scenic routes — 3D' }));
   } catch {
     parkItems = [];
   }
@@ -617,6 +618,12 @@ async function loadRouteItem(item) {
   const parsed = parseGpx(text);
   const route = buildRoute({ name: item.name.replace(' (built-in)', '') || parsed.name, points: parsed.points });
   route.park = item.park || null;
+  if (item.outAndBack) {
+    // There and back on the same road: the turnaround is the halfway point of the GPX.
+    route.outAndBack = true;
+    route.turnIdx = Math.floor((route.dist.length - 1) / 2);
+    route.turnS = route.dist[route.turnIdx];
+  }
   routeCache.set(item.id, route);
   return route;
 }
