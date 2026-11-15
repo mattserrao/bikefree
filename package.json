@@ -7,10 +7,13 @@
     "test": "node --test test/*.test.mjs",
     "routes:build": "node tools/build_routes.mjs",
     "routes:check": "node tools/build_routes.mjs --check",
-    "qc": "node tools/qc_course.mjs"
+    "qc": "node tools/qc_course.mjs",
+    "qc:clipping": "node tools/qc_clipping.mjs"
   },
   "devDependencies": {
-    "@garmin/fitsdk": "^21.221.0"
+    "@garmin/fitsdk": "^21.221.0",
+    "playwright-core": "^1.65.1",
+    "three-mesh-bvh": "^0.9.18"
   },
   "version": "0.12.0"
 }
