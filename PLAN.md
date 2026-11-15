@@ -281,6 +281,17 @@ Goal: the first city course — a loop full of life: riverside trails, famous br
 - [x] Fixed: other carriageways, ramps and bridge decks were drawn up to 4 m above the route's road (Point ramps, Smithfield, West End Bridge), hiding the rider's legs. Streets over or beside the route now stay just under it (no railings or lamp posts in the road); new QC check **street-over-road** (it found 16 spots before the fix, 0 after)
 - [ ] On-bike check and M4 Air smoothness (Light / Balanced / High)
 
+### Route 28 rework *(test branch `route28-test`)*
+Review, plan and screenshots: [docs/route28/REVIEW.md](docs/route28/REVIEW.md) · listed under **Rough Drafts** (`"stage": "draft"`)
+- [x] **Phase 0** — Rerouted on NY-28 through Eagle Bay (29.2 km each way); signs, lookout and towns re-placed
+- [x] **Phase 1** — Real terrain + lakes baked from USGS elevation (`tools/build_scene_terrain.py`, `route28.terrain.bin`); lakes at their real levels and shorelines; QC `road-in-lake`, `lake-side`, `building-on-road`, `building-in-water`, `dock-on-land`
+- [x] **Phase 2** — Procedural Adirondack kit (white pine, spruce, hemlock, maple, birch × 3 LODs); forest-edge layout ~180 trees/ha; nested tiers built a few per frame; canopy shell on far hills; smaller, local ground cover; lake view corridors
+- [x] **Phase 3** — Per-scene fog, lake water shader (no surf, treeline reflection), morning/golden-hour mist, darker far tint
+- [x] **Phase 4** — Old Forge, Eagle Bay, Inlet; ~70 lakeside camps with docks/boathouses/canoes; boats; poles + wires; mailboxes; guardrails; DEC + deer signs
+- [x] **Phase 5** — Fall palette (`season: "fall"`, preview `&season=fall`)
+- [ ] On-bike check on the M4 Air: frame rate on Balanced, tile-edge hitching, lake/horizon seams online
+- [ ] Later: Bald Mountain fire tower, Old Forge landmarks, measured performance overlay
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

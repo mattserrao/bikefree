@@ -82,6 +82,12 @@ for (const item of catalog) {
         if (feature[key] !== undefined && !(feature[key] > 0)) throw new Error(`${item.id}: ${key} must be positive`);
       }
     }
+    if (scene.terrainData) {
+      const t = scene.terrainData;
+      if (t.format !== 'bikefree-terrain-1' || !t.file?.startsWith('routes/scenes/') || t.file.includes('..') || !existsSync(resolve(root, t.file))) throw new Error(`${item.id}: missing or invalid terrain data`);
+      if (readFileSync(resolve(root, t.file)).length !== t.width * t.height * 5) throw new Error(`${item.id}: terrain data size does not match its grid`);
+      paths.push(t.file);
+    }
     paths.push(item.scene, scene.assets);
     row.scene = item.scene;
   }

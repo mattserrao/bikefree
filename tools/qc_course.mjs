@@ -17,6 +17,8 @@ import { buildCatalogRoute } from '../js/routes.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
 import { makeCoastLandscape } from '../js/world/coast.js';
 import { makeRegionalLandscape } from '../js/world/regional-landscape.js';
+import { attachTerrainBuffer } from '../js/world/terrain-data.js';
+import { planSettlement } from '../js/world/settlement.js';
 import { makeCityLandscape, cityStreets, STREET_LIFT } from '../js/world/city-landscape.js';
 import { riderPose, routePoint, ROAD_WIDTH, ROAD_LIFT } from '../js/world/pose.js';
 
@@ -243,6 +245,34 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
     }
   }
 
+  // 5. Real shorelines and the built world (scenes with baked terrain / forest-edge layout)
+  if (landscape?.shoreAt) {
+    for (let s = 0; s <= oneWay; s += 5) {
+      const c = routePoint(route, index, s);
+      if (landscape.shoreAt(c.x, c.z) < 0 && !bridgeAt(c.x, c.z, 4)) F.add('road-in-lake', 'fail', s, -landscape.shoreAt(c.x, c.z), 'road runs through a lake');
+    }
+    F.open.clear();
+    for (const l of route.scene.lookouts || []) {
+      const side = l.side === 'inland' ? -1 : 1, water = (sg) => {
+        const a = routePoint(route, index, l.atM), b = routePoint(route, index, Math.min(oneWay, l.atM + 5));
+        let fx = b.x - a.x, fz = b.z - a.z; const n = Math.hypot(fx, fz) || 1; fx /= n; fz /= n;
+        for (let o = 20; o <= 400; o += 20) if (landscape.shoreAt(a.x - fz * o * sg, a.z + fx * o * sg) < 0) return o;
+        return Infinity;
+      };
+      if (water(side) > 400 && water(-side) <= 400) F.add('lake-side', 'warn', l.atM, water(-side), 'lookout faces away from the water');
+    }
+  }
+  if (stylized && (route.scene.towns || route.scene.vegetation?.layout === 'forest-edge')) {
+    const plan = planSettlement(route.scene, route, index, landscape);
+    for (const it of plan.items) {
+      const s = route.dist[index.nearest(it.x, it.z, 400)?.i ?? 0];
+      const road = index.nearest(it.x, it.z, 60);
+      if (!it.water && road && road.d < it.r * .7 + 5) F.add('building-on-road', 'fail', s, road.d, `${it.asset} within ${road.d.toFixed(1)} m of the road`, 1);
+      if (!it.water && landscape.shoreAt && landscape.shoreAt(it.x, it.z) < 0) F.add('building-in-water', 'fail', s, landscape.shoreAt(it.x, it.z), `${it.asset} stands in a lake`, 1);
+      if (it.water && landscape.shoreAt && landscape.shoreAt(it.x + Math.sin(it.rot) * 8, it.z + Math.cos(it.rot) * 8) > 0) F.add('dock-on-land', 'warn', s, 0, `${it.asset} does not reach the water`, 1);
+    }
+    F.open.clear();
+  }
   // 5. City streets drawn over the route: another carriageway, a ramp or a bridge deck above the road
   //    would hide the road and the rider's legs (what the renderer draws, via the shared cityStreets()).
   if (landscape?.city) {
@@ -328,6 +358,13 @@ export function htmlReport(results, { previewHref = 'world-preview.html' } = {})
   <table><tr><th>route</th><th>km one way</th><th>shape</th><th>fail</th><th>warn</th><th>sharpest turn °/m</th><th>widest GPX gap m</th></tr>${rows}</table>${sections}</body></html>`;
 }
 
+/** Scene JSON plus its baked terrain, read from disk. */
+export function loadSceneSync(path) {
+  const scene = JSON.parse(read(path));
+  if (scene.terrainData?.file) attachTerrainBuffer(scene, readFileSync(join(ROOT, scene.terrainData.file)));
+  return scene;
+}
+
 // ---------- CLI ----------
 async function main() {
   const args = process.argv.slice(2);
@@ -347,7 +384,7 @@ async function main() {
     const demo = { id: 'demo-hills', name: 'Demo Hills', file: 'routes/demo-hills.gpx', scene: 'routes/scenes/demo-hills.json', noPreview: true };
     for (const item of [...catalog, demo]) {
       if (args.length && !args.includes(item.id)) continue;
-      jobs.push({ id: item.id, name: item.name, gpxText: read(item.file), item, scene: item.scene ? withCity(JSON.parse(read(item.scene))) : null, preview: item.noPreview ? null : item.id });
+      jobs.push({ id: item.id, name: item.name, gpxText: read(item.file), item, scene: item.scene ? withCity(loadSceneSync(item.scene)) : null, preview: item.noPreview ? null : item.id });
     }
   }
   const results = [];

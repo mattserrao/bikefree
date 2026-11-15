@@ -1,16 +1,20 @@
 import * as THREE from '../../vendor/three.module.min.js';
 import { makeCoastLandscape, randomSequence, smoothstep } from './coast.js';
 import { loadSceneryAssets } from './scenery-assets.js';
-import { makeCoastalGroundMaterial, makeCoastalWaterMaterial } from './coastal-materials.js';
+import { makeCoastalGroundMaterial, makeCoastalWaterMaterial, makeLakeWaterMaterial, makeLakeMistMaterial, decorateSceneryMaterial } from './coastal-materials.js';
+import { makeAdirondackKit, ADIRONDACK_CATEGORY } from './adirondack-kit.js';
+import { ForestPlanner, TILE_M } from './forest.js';
+import { planSettlement, Settlement } from './settlement.js';
 import { CoastalDetails, fitBridgeToRoad, coastalRoadFrame } from './coastal-details.js';
 import { makeRegionalLandscape } from './regional-landscape.js';
 import { makeCityLandscape } from './city-landscape.js';
 import { CityScene } from './city.js';
 
 export const COASTAL_QUALITY = {
-  low: { pixelRatio: 1, shadows: false, scatterRange: 2, candidates: 150, coverCandidates: 100 },
-  balanced: { pixelRatio: 1.5, shadows: true, scatterRange: 3, candidates: 230, coverCandidates: 320 },
-  high: { pixelRatio: 2, shadows: true, scatterRange: 4, candidates: 310, coverCandidates: 480 },
+  // forestRange: tiles of real trees in forest scenes; nearM/midM: tile-centre distances for the detail tiers
+  low: { pixelRatio: 1, shadows: false, scatterRange: 2, candidates: 150, coverCandidates: 100, forestRange: 3, nearM: 0, midM: 380, buildsPerFrame: 2 },
+  balanced: { pixelRatio: 1.5, shadows: true, scatterRange: 3, candidates: 230, coverCandidates: 320, forestRange: 4, nearM: 170, midM: 450, buildsPerFrame: 3 },
+  high: { pixelRatio: 2, shadows: true, scatterRange: 4, candidates: 310, coverCandidates: 480, forestRange: 5, nearM: 240, midM: 560, buildsPerFrame: 4 },
 };
 
 /** Bundled style-C coastal scene. No tile/imagery requests, including offline. */
@@ -40,7 +44,16 @@ export class StylizedTerrain {
     this.palette = Object.fromEntries(Object.entries(this.config.palette).map(([k, v]) => [k, new THREE.Color(v)]));
     // Hand-off to the real far terrain (set by the world once it has loaded; off = stylized all the way out).
     this.farUniform = { value: new THREE.Vector4(opts.farInner ?? 1500, opts.farBand ?? 400, 0, 0) };
-    this.groundMaterial = makeCoastalGroundMaterial(this.config.palette, this.config, this.farUniform);
+    // Northern forest scenes: a continuous canopy, villages and camps planned from the real shoreline
+    this.forestLayout = this.config.vegetation?.layout === 'forest-edge';
+    if (this.forestLayout) {
+      this.settlementPlan = planSettlement(this.config, this.route, routeIndex, this.landscape);
+      this.forest = new ForestPlanner(this.config, this.landscape, routeIndex, (x, z) => this.heightAt(x, z), this.settlementPlan.clearings);
+      this.canopyUniform = { value: new THREE.Vector4(0, 160, this.config.vegetation.canopyM ?? 16, 1) };
+      this._setCanopyStart();
+      this.forestTiles = new Map(); this.forestQueue = [];
+    }
+    this.groundMaterial = makeCoastalGroundMaterial(this.config.palette, this.config, this.farUniform, this.canopyUniform);
     this._makeOcean();
     this._makeClouds();
     this._makeShadows();
@@ -48,6 +61,8 @@ export class StylizedTerrain {
     this.ready = loadSceneryAssets(this.config.assets, { uniforms: this.uniforms, extraPaths: this.config.extraAssets }).then((kit) => {
       if (this.disposed) { kit.dispose(); return; }
       this.kit = kit;
+      if ((this.config.kitExtensions || []).includes('adirondack')) this._addAdirondackKit(kit);
+      if (this.settlementPlan) this.settlement = new Settlement(this.group, this.settlementPlan, kit, this.uniforms);
       this._makeLandmarks();
       this.details = new CoastalDetails(this.group, this.route, this.index, this.landscape, kit, this.uniforms);
       if (this.landscape.city) {
@@ -57,6 +72,25 @@ export class StylizedTerrain {
       this._lastX = Infinity;
       this.stats.loading = 0;
     }).catch((err) => { this.stats.loading = 0; this.stats.errors++; opts.onError?.(err); });
+  }
+
+  _setCanopyStart() {
+    // the canopy shell rises where the last tier of real trees ends
+    this.canopyUniform.value.x = this.quality.forestRange * TILE_M - 150;
+  }
+
+  _addAdirondackKit(kit) {
+    const geos = makeAdirondackKit({ fall: this.config.season === 'fall' });
+    const near = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 });
+    const far = new THREE.MeshLambertMaterial({ vertexColors: true });
+    const soft = decorateSceneryMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .98, side: THREE.DoubleSide }), 'groundcover', this.uniforms);
+    this.kitMaterials = [near, far, soft];
+    for (const [name, geometry] of Object.entries(geos)) {
+      const material = ADIRONDACK_CATEGORY[name] === 'groundcover' ? soft : /-(lod|far)$/.test(name) ? far : near;
+      kit.assets[name] = { geometry, material };
+    }
+    const dispose = kit.dispose;
+    kit.dispose = () => { dispose(); this.kitMaterials.forEach((m) => m.dispose()); };
   }
 
   _makeShadows() {
@@ -147,12 +181,67 @@ export class StylizedTerrain {
     this.group.add(this.surf);
     this.surf.visible = this.landscape.hasOcean !== false;
     this.lakeMeshes = [];
+    if (this.landscape.terrain) this._makeTerrainLakes();
     for (const lake of this.landscape.lakes || []) {
       const mesh = new THREE.Mesh(new THREE.CircleGeometry(1, 96), material);
       mesh.rotation.x = -Math.PI / 2; mesh.scale.set(lake.rx, lake.rz, 1);
       mesh.position.set(lake.x, lake.level, lake.z); mesh.name = lake.name;
       this.lakeMeshes.push(mesh); this.group.add(mesh);
     }
+  }
+
+  // Real lakes from the baked shoreline: water drawn on the terrain grid, in ~800 m chunks so the
+  // chunks beyond the hand-off can give way to the real horizon (whose aerial photos show the same lakes).
+  _makeTerrainLakes() {
+    const t = this.landscape.terrain, meta = this.config.terrainData, W = meta.width, H = meta.height, g = meta.grid;
+    const water = this.config.water || {};
+    const material = makeLakeWaterMaterial(this.uniforms, this.config.palette.water, water.shallowWater || this.config.palette.shallowWater, this.config.palette.canopy);
+    this.mistOpacity = { value: 0 };
+    this.mistMaterial = makeLakeMistMaterial(this.uniforms, this.mistOpacity);
+    this.lakeMaterial = material;
+    const nw = this.landscape.terrain.bounds, dx = (nw.maxX - nw.minX) / (W - 1), dz = (nw.maxZ - nw.minZ) / (H - 1);
+    const levels = new Map(t.lakes.map((l) => [l.id, l.level]));
+    const CH = 26;   // cells per chunk side (~800 m)
+    const reach = (this.config.water?.nearRouteM ?? 3000);
+    for (let cj = 0; cj < H - 1; cj += CH) for (let ci = 0; ci < W - 1; ci += CH) {
+      const pos = [], shore = [], idx = [], vid = new Map();
+      const vert = (i, j, level) => {
+        const key = j * W + i;
+        if (vid.has(key)) return vid.get(key);
+        const x = nw.minX + i * dx, z = nw.minZ + j * dz;
+        pos.push(x, level + .12, z); shore.push(g.sdf[key] / 10);
+        vid.set(key, pos.length / 3 - 1); return pos.length / 3 - 1;
+      };
+      for (let j = cj; j < Math.min(H - 1, cj + CH); j++) for (let i = ci; i < Math.min(W - 1, ci + CH); i++) {
+        const k = j * W + i, corners = [k, k + 1, k + W, k + W + 1];
+        if (!corners.some((c) => g.sdf[c] < 0)) continue;
+        const id = corners.map((c) => g.ids[c]).find((v) => v) || 0, level = levels.get(id);
+        if (level == null) continue;
+        const cx = nw.minX + (i + .5) * dx, cz = nw.minZ + (j + .5) * dz;
+        if (!this.index.nearest(cx, cz, reach)) continue;
+        const a = vert(i, j, level), b = vert(i + 1, j, level), c = vert(i, j + 1, level), d = vert(i + 1, j + 1, level);
+        idx.push(a, c, b, b, c, d);
+      }
+      if (!idx.length) continue;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('aShore', new THREE.Float32BufferAttribute(shore, 1));
+      geo.setIndex(idx); geo.computeBoundingSphere();
+      const mesh = new THREE.Mesh(geo, material); mesh.name = 'Lake'; mesh.receiveShadow = false;
+      mesh.userData.r = geo.boundingSphere.radius; mesh.userData.c = geo.boundingSphere.center;
+      this.lakeMeshes.push(mesh); this.group.add(mesh);
+      const mist = new THREE.Mesh(geo, this.mistMaterial); mist.position.y = 1.6; mist.name = 'Lake mist'; mist.renderOrder = 2;
+      mist.userData = mesh.userData; mist.visible = false;
+      (this.mistMeshes ||= []).push(mist); this.group.add(mist);
+    }
+  }
+
+  /** Morning mist on the lakes, a little at golden hour. */
+  setTime(key) {
+    if (!this.mistOpacity) return;
+    const mist = this.config.atmosphere?.lakeMist ?? 0;
+    this.mistOpacity.value = mist * ({ morning: 1, golden: .55 }[key] || 0);
+    for (const m of this.mistMeshes || []) m.visible = this.mistOpacity.value > 0;
   }
 
   _makeLandmarks() {
@@ -181,9 +270,10 @@ export class StylizedTerrain {
 
   _makePatch(x, z, size) {
     const S = 16, N = S + 1;
-    const positions = [], colors = [], indices = [], normals = [], realH = [];
+    const positions = [], colors = [], indices = [], normals = [], realH = [], canopy = [];
     const c = new THREE.Color();
     const P = this.palette;
+    const floor = this.forestLayout && P.forestFloor;
     const real = this.farOn && this.realHeightAt;
     for (let j = 0; j <= S; j++) for (let i = 0; i <= S; i++) {
       const px = x + size * i / S, pz = z + size * j / S;
@@ -199,6 +289,11 @@ export class StylizedTerrain {
       const rise = Math.hypot(hx - y, hz - y) / 4;
       c.lerp(P.rock, smoothstep(.45, 1.4, rise));
       c.lerp(P.cliff, (1 - smoothstep(20, 85, coastal)) * .65);
+      if (this.forest) {
+        const cover = this.forest.cover(px, pz);
+        canopy.push(cover);
+        if (floor) c.lerp(floor, cover * .75);
+      }
       const regionalColor = this.landscape.colorAt?.(px, pz);
       if (regionalColor) c.lerp(new THREE.Color(regionalColor), .8);
       c.multiplyScalar(.94 + Math.sin(px / 47 + pz / 73) * .035);
@@ -215,6 +310,7 @@ export class StylizedTerrain {
       for (const depth of [0, Math.max(20, size * .6)]) for (const k of edge) {
         positions.push(positions[k * 3], positions[k * 3 + 1] - depth, positions[k * 3 + 2]);
         realH.push(realH[k] - depth);
+        if (this.forest) canopy.push(canopy[k]);
         colors.push(...colors.slice(k * 3, k * 3 + 3));
       }
       for (let i = 0; i < S; i++) indices.push(base + i, base + N + i, base + i + 1, base + i + 1, base + N + i, base + N + i + 1);
@@ -223,12 +319,13 @@ export class StylizedTerrain {
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     geometry.setAttribute('aRealH', new THREE.Float32BufferAttribute(realH, 1));
+    if (this.forest) geometry.setAttribute('aCanopy', new THREE.Float32BufferAttribute(canopy, 1));
     geometry.setIndex(indices); geometry.computeVertexNormals();
     geometry.attributes.normal.array.set(normals); geometry.computeBoundingSphere();
     // the morph toward real heights moves vertices up or down: keep the culling sphere honest
     let morph = 0;
     for (let k = 0; k < realH.length; k++) morph = Math.max(morph, Math.abs(realH[k] - positions[k * 3 + 1]));
-    geometry.boundingSphere.radius += morph;
+    geometry.boundingSphere.radius += morph + (this.forest ? this.canopyUniform.value.z : 0);
     const mesh = new THREE.Mesh(geometry, this.groundMaterial);
     mesh.receiveShadow = true;
     this.group.add(mesh);
@@ -252,6 +349,7 @@ export class StylizedTerrain {
     };
     const vegetation = this.config.vegetation || {};
     const count = (coverOnly ? this.quality.coverCandidates : this.quality.candidates) * (vegetation.density || 1);
+    const coverScale = vegetation.coverScale || [.75, 1.95];
     for (let k = 0; k < count; k++) {
       const x = cx * size + rand() * size, z = cz * size + rand() * size;
       const inland = this.inlandAt(x, z), y = this.heightAt(x, z);
@@ -264,7 +362,10 @@ export class StylizedTerrain {
       const pick = rand();
       if (coverOnly) {
         const name = vegetation.cover ? vegetation.cover[Math.floor(pick * vegetation.cover.length)] : pick < .12 ? 'poppy' : pick < .18 ? 'lupine' : pick < .33 ? 'succulent' : pick < .4 ? 'flowers' : 'grass';
-        add(name, x, y - .09, z, .75 + rand() * 1.2);
+        const k = rand();
+        // under the forest canopy: sparse ferns only
+        if (this.forestLayout && !this.index.nearest(x, z, 14) && (k < .7 || name !== 'fern')) continue;
+        add(name, x, y - .09, z, coverScale[0] + k * (coverScale[1] - coverScale[0]));
         continue;
       }
       const grove = .5 + Math.sin(x / 125 + Math.cos(z / 260)) * .32 + Math.sin(z / 180) * .22;
@@ -302,7 +403,7 @@ export class StylizedTerrain {
           const y = this.heightAt(x, z), pick = rand();
           if (this.landscape.isWater?.(x, z, y)) continue;
           const name = vegetation.cover ? vegetation.cover[Math.floor(pick * vegetation.cover.length)] : pick < .2 ? 'poppy' : pick < .28 ? 'lupine' : pick < .42 ? 'succulent' : 'grass';
-          add(name, x, y - .09, z, .8 + rand() * .9);
+          add(name, x, y - .09, z, vegetation.coverScale ? coverScale[0] + rand() * (coverScale[1] - coverScale[0]) * .9 : .8 + rand() * .9);
         }
       }
     }
@@ -326,6 +427,7 @@ export class StylizedTerrain {
   }
 
   update(cx, cz) {
+    if (this.forestQueue) this._buildForestTiles(cx, cz);
     if (Math.hypot(cx - this._lastX, cz - this._lastZ) < 36) return;
     this._lastX = cx; this._lastZ = cz;
     const show = new Set();
@@ -347,13 +449,14 @@ export class StylizedTerrain {
       mesh.visible = show.has(key);
       if (!mesh.visible) { this.group.remove(mesh); mesh.geometry.dispose(); this.patches.delete(key); }
     }
+    if (this.kit && this.forestLayout) this._planForestTiles(cx, cz);
     if (this.kit) {
       const visible = new Set(), sx = Math.floor(cx / 192), sz = Math.floor(cz / 192);
       const range = this.quality.scatterRange;
       for (let x = sx - range; x <= sx + range; x++) for (let z = sz - range; z <= sz + range; z++) {
         const detailed = Math.hypot((x + .5) * 192 - cx, (z + .5) * 192 - cz) < 260;
         const key = `${x}/${z}/${detailed}`; visible.add(key);
-        if (!this.scatter.has(key)) this.scatter.set(key, this._makeScatter(x, z, detailed));
+        if (!this.scatter.has(key) && !this.forestLayout) this.scatter.set(key, this._makeScatter(x, z, detailed));
       }
       for (const [key, group] of this.scatter) if (!visible.has(key)) {
         this.group.remove(group); group.children.forEach((m) => m.dispose()); this.scatter.delete(key);
@@ -369,6 +472,51 @@ export class StylizedTerrain {
     }
     this.stats.ready = this.patches.size;
   }
+
+  // ---- Forest tiles: wanted tiers by distance, built a few per frame, nearest first ----
+  _planForestTiles(cx, cz) {
+    const range = this.quality.forestRange, sx = Math.floor(cx / TILE_M), sz = Math.floor(cz / TILE_M);
+    const want = new Map();
+    for (let x = sx - range; x <= sx + range; x++) for (let z = sz - range; z <= sz + range; z++) {
+      const d = Math.hypot((x + .5) * TILE_M - cx, (z + .5) * TILE_M - cz);
+      if (d > (range + .6) * TILE_M) continue;
+      want.set(`${x}/${z}`, { x, z, d, tier: d < this.quality.nearM ? 0 : d < this.quality.midM ? 1 : 2 });
+    }
+    this.forestWant = want;
+    // drop what is out of range; queue what is missing or at the wrong tier
+    for (const [xy, tile] of this.forestTiles) if (!want.has(xy)) { this._disposeGroup(tile.group); this.forestTiles.delete(xy); }
+    this.forestQueue = [...want.entries()].filter(([xy, w]) => this.forestTiles.get(xy)?.tier !== w.tier)
+      .sort((a, b) => a[1].d - b[1].d);
+  }
+
+  _buildForestTiles() {
+    const t0 = performance.now();
+    let built = 0;
+    while (this.forestQueue.length && built < this.quality.buildsPerFrame && performance.now() - t0 < 6) {
+      const [xy, w] = this.forestQueue.shift();
+      if (this.forestWant?.get(xy)?.tier !== w.tier) continue;
+      const lists = this.forest.tile(w.x, w.z, w.tier);
+      const group = new THREE.Group();
+      for (const [name, matrices] of Object.entries(lists)) {
+        const asset = this.kit.assets[name];
+        if (!asset || !matrices.length) continue;
+        const mesh = new THREE.InstancedMesh(asset.geometry, asset.material, matrices.length);
+        matrices.forEach((m, i) => mesh.setMatrixAt(i, m));
+        mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere();
+        mesh.castShadow = w.tier === 0 && !/^(goldenrod|blueberry)/.test(name);
+        mesh.receiveShadow = w.tier === 0;
+        group.add(mesh);
+      }
+      const old = this.forestTiles.get(xy);
+      if (old) this._disposeGroup(old.group);
+      this.forestTiles.set(xy, { tier: w.tier, group });
+      this.group.add(group);
+      built++;
+    }
+    this.stats.queued = this.forestQueue.length;
+  }
+
+  _disposeGroup(group) { this.group.remove(group); group.children.forEach((m) => m.dispose()); }
 
   // Real ground height, lightly smoothed: the stylized patches are coarser than the real terrain, so blending
   // toward a smoothed target keeps neighbouring patches from opening cracks in steep country.
@@ -397,7 +545,11 @@ export class StylizedTerrain {
   _cullFar(cx, cz) {
     const limit = this.farUniform.value.x + this.farUniform.value.y * 0.5;
     for (const m of this.landmarkMeshes || []) m.visible = !this.farOn || m.userData.road || Math.hypot(m.position.x - cx, m.position.z - cz) - (m.userData.r || 0) < limit;
-    for (const m of this.lakeMeshes || []) m.visible = !this.farOn || Math.hypot(m.position.x - cx, m.position.z - cz) - Math.max(m.scale.x, m.scale.y) < limit;
+    for (const m of this.lakeMeshes || []) {
+      const c = m.userData.c, d = c ? Math.hypot(c.x - cx, c.z - cz) - m.userData.r : Math.hypot(m.position.x - cx, m.position.z - cz) - Math.max(m.scale.x, m.scale.y);
+      m.visible = !this.farOn || d < limit;
+    }
+    if (this.mistMeshes) for (const m of this.mistMeshes) m.visible = this.mistOpacity.value > 0 && (!this.farOn || Math.hypot(m.userData.c.x - cx, m.userData.c.z - cz) - m.userData.r < limit);
   }
 
   /** Every frame (the city's traffic, people and boats move continuously). */
@@ -414,6 +566,10 @@ export class StylizedTerrain {
     this.quality = COASTAL_QUALITY[key] || COASTAL_QUALITY.balanced;
     this.qualityKey = COASTAL_QUALITY[key] ? key : 'balanced';
     this.city?.setQuality(this.qualityKey);
+    if (this.forestTiles) {
+      for (const tile of this.forestTiles.values()) this._disposeGroup(tile.group);
+      this.forestTiles.clear(); this.forestQueue = []; this._setCanopyStart();
+    }
     for (const map of [this.scatter, this.cover]) {
       for (const group of map.values()) { this.group.remove(group); group.children.forEach((m) => m.dispose()); }
       map.clear();
@@ -433,6 +589,9 @@ export class StylizedTerrain {
     this.surf.geometry.dispose(); this.surf.material.dispose();
     this.ocean.geometry.dispose(); this.ocean.material.dispose();
     this.lakeMeshes.forEach((m) => m.geometry.dispose());
+    this.lakeMaterial?.dispose(); this.mistMaterial?.dispose();
+    this.settlement?.dispose();
+    for (const tile of this.forestTiles?.values() || []) tile.group.children.forEach((m) => m.dispose());
     const cloudMat = this.clouds.children[0]?.material; cloudMat?.map?.dispose(); cloudMat?.dispose();
     this.shadowAsset.geometry.dispose(); this.shadowAsset.material.map.dispose(); this.shadowAsset.material.dispose();
     this.roadside.children.forEach((m) => { m.geometry.dispose(); m.dispose(); });

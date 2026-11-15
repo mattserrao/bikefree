@@ -56,6 +56,39 @@ npm run routes:build
 The Python router reads the same catalog. A GPX-only entry needs no `routing`
 object. Road routing and scenery authoring are separate operations.
 
+## Real terrain and northern-forest scenes (Route 28)
+
+A scene can carry baked real terrain instead of authored landforms:
+
+```sh
+python3 tools/build_scene_terrain.py route28   # needs internet once (tiles cache in tools/.cache), numpy, scipy, Pillow
+npm run routes:build
+```
+
+It writes `routes/scenes/<id>.terrain.bin` (30 m grid: elevation, signed distance to the
+nearest lake shore, lake id) and a `terrainData` block in the scene JSON. Lakes come from
+the USGS elevation itself — hydro-flattened water is exactly flat — so shorelines and lake
+levels match the aerial imagery of the real horizon. Within the grid the stylized ground
+follows the real hills; lakes are drawn on the grid with a sheltered-water shader.
+
+Scene options used by Route 28:
+
+- `kitExtensions: ["adirondack"]` — procedural northern-forest trees (white pine, spruce,
+  hemlock, maple, birch at three levels of detail), saplings, goldenrod, blueberry, boulders,
+  houses, camps, store, church, motel, boathouse, dock, canoes, motorboat, poles, mailboxes, guardrail.
+- `vegetation.layout: "forest-edge"` with `species` weights, `edge.mownM` / `edge.shrubM`,
+  `canopyM` (height of the distant canopy shell), `treeScale`, `coverScale`.
+- `season: "summer" | "fall"` (the preview also takes `&season=fall`).
+- `atmosphere`: `fogNearM`, `fogFarM`, `fogFarRealM`, `lakeMist` (morning and golden hour).
+- `towns`: `{ name, fromM, toM, setbackM, spacingM, skip }`; camps and docks are placed
+  automatically wherever a shore is within ~190 m of the road (`camps: [{fromM,toM}]` limits them).
+- `poles`: `{ side, spacingM, lateralM }` — utility poles with sagging wires.
+- `signs[].kind`: `"dec"` (brown and yellow) or `"diamond"` (yellow warning) in addition to the defaults.
+- Palette extras: `forestFloor`, `canopy`, `farTint`, `farTintAmount`, `shallowWater`.
+
+QC adds `road-in-lake`, `lake-side`, `building-on-road`, `building-in-water` and `dock-on-land`
+for these scenes.
+
 ## Style-C scenery for every scenic route
 
 Every scenic catalog entry has a `scene` path under `routes/scenes/`. Big Sur uses

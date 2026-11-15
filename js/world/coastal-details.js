@@ -80,24 +80,37 @@ export class CoastalDetails {
     for (const sign of this.route.scene.signs || []) {
       const side = sign.side === 'inland' ? -1 : 1;
       const { position, forward } = coastalRoadFrame(this.route, this.index, sign.atM, side * (sign.lateralM || 5.7));
-      const canvas = document.createElement('canvas'); canvas.width = 1024; canvas.height = 256;
+      const diamond = sign.kind === 'diamond';
+      const canvas = document.createElement('canvas'); canvas.width = diamond ? 256 : 1024; canvas.height = 256;
       const ctx = canvas.getContext('2d');
-      ctx.fillStyle = sign.kind === 'warning' ? '#d4ae54' : '#405b46'; ctx.fillRect(0, 0, 1024, 256);
-      ctx.strokeStyle = sign.kind === 'warning' ? '#463d2a' : '#eee9d5'; ctx.lineWidth = 7; ctx.strokeRect(14, 14, 996, 228);
-      ctx.fillStyle = sign.kind === 'warning' ? '#352e23' : '#f4efda'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.font = '600 61px sans-serif'; ctx.fillText(sign.label, 512, 104, 930);
-      ctx.font = '400 30px sans-serif'; ctx.fillText(sign.subtitle || 'CALIFORNIA HIGHWAY 1', 512, 183, 930);
+      // kinds: default green guide sign, 'warning', 'dec' (Adirondack brown with yellow letters), 'diamond' (yellow warning)
+      const style = { warning: ['#d4ae54', '#463d2a', '#352e23'], dec: ['#5a3e27', '#e8c25a', '#e8c25a'], diamond: ['#e8b92e', '#1f1d19', '#1f1d19'] }[sign.kind] || ['#405b46', '#eee9d5', '#f4efda'];
+      if (diamond) {
+        ctx.beginPath(); ctx.moveTo(128, 4); ctx.lineTo(252, 128); ctx.lineTo(128, 252); ctx.lineTo(4, 128); ctx.closePath();
+        ctx.fillStyle = style[0]; ctx.fill(); ctx.strokeStyle = style[1]; ctx.lineWidth = 8; ctx.stroke();
+      } else {
+        ctx.fillStyle = style[0]; ctx.fillRect(0, 0, canvas.width, 256);
+        ctx.strokeStyle = style[1]; ctx.lineWidth = 7; ctx.strokeRect(14, 14, canvas.width - 28, 228);
+      }
+      ctx.fillStyle = style[2]; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      if (diamond) {
+        ctx.font = '700 96px sans-serif'; ctx.fillText(sign.symbol || '!', 128, 118);
+        ctx.font = '700 26px sans-serif'; ctx.fillText(sign.label || '', 128, 182, 130);
+      } else {
+        ctx.font = sign.kind === 'dec' ? '700 64px Georgia, serif' : '600 61px sans-serif'; ctx.fillText(sign.label, 512, 104, 930);
+        ctx.font = sign.kind === 'dec' ? '400 32px Georgia, serif' : '400 30px sans-serif'; ctx.fillText(sign.subtitle || 'CALIFORNIA HIGHWAY 1', 512, 183, 930);
+      }
       const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
       texture.anisotropy = 4;
-      const material = this._material('#ffffff', { map: texture, side: THREE.DoubleSide });
-      const mesh = this._mesh(new THREE.BoxGeometry(3.5, .88, .07), material, sign.label);
-      mesh.position.copy(position).add(new THREE.Vector3(0, 2.3, 0));
+      const material = this._material('#ffffff', { map: texture, side: THREE.DoubleSide, ...(diamond ? { alphaTest: .5, transparent: false } : {}) });
+      const mesh = this._mesh(diamond ? new THREE.PlaneGeometry(1.25, 1.25) : new THREE.BoxGeometry(3.5, .88, .07), material, sign.label || sign.symbol);
+      mesh.position.copy(position).add(new THREE.Vector3(0, diamond ? 2.1 : 2.3, 0));
       mesh.lookAt(mesh.position.clone().addScaledVector(forward, sign.direction === 'return' ? 1 : -1));
-      const postMaterial = this._material('#9d9f89');
-      for (const offset of [-1.15, 1.15]) {
-        const pole = this._mesh(new THREE.CylinderGeometry(.045, .045, 2.4, 6), postMaterial, 'Sign support');
+      const postMaterial = this._material(sign.kind === 'dec' ? '#5a3e27' : '#9d9f89');
+      for (const offset of diamond ? [0] : [-1.15, 1.15]) {
+        const pole = this._mesh(new THREE.CylinderGeometry(.045, .045, diamond ? 1.9 : 2.4, 6), postMaterial, 'Sign support');
         const right = new THREE.Vector3(-forward.z, 0, forward.x);
-        pole.position.copy(position).addScaledVector(right, offset).y += 1.2;
+        pole.position.copy(position).addScaledVector(right, offset).y += diamond ? .95 : 1.2;
       }
     }
   }
