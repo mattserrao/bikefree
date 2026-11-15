@@ -239,6 +239,10 @@ Goal: blend the two approaches — Codex's stylized scenery up close, the real l
 - [x] U-turn into the other lane at both ends; tests for mirroring, start points and the FTP maths
 - [ ] On-bike check
 
+### v0.11.4 — Demo Hills fix *(test branch `v0.11.4`)*
+- [x] Demo Hills rode through a deep trench: its invented hills (150–260 m) sit hundreds of metres below the real ground where the loop is placed (Vermont), so the real terrain was cut down to the road. It now has its own stylized scene (meadow and mixed woods) that shapes itself around the road, with the real horizon turned off (`"realHorizon": false`)
+- [ ] On-bike check
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

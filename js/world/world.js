@@ -86,7 +86,7 @@ export class World {
     // v0.11.2 blend: real terrain and aerial photos beyond ~1.5 km behind the stylized foreground,
     // colour-matched to the route's palette. Needs internet; until its base tiles arrive (or offline)
     // the stylized scenery simply carries on to the horizon.
-    if (this.stylized) {
+    if (this.stylized && route.scene.realHorizon !== false) {
       this.farTerrain = new Terrain(this.scene, this.proj, this.index, {
         bbox: { minLat, maxLat, minLon, maxLon },
         renderer: this.renderer,
