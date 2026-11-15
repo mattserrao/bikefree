@@ -357,13 +357,40 @@ export class CityLife {
     return w;
   }
 
-  _updatePeople(cam, dt, time) {
+  /**
+   * Keep traffic, walkers and cyclists out of the rider's way. `prev` is where the agent was before this step.
+   * Anything about to step onto the route's road while the rider is within `reach` waits at the edge; anything
+   * already on it when the rider is close either hurries across (vehicles) or steps to the road's edge (people).
+   */
+  _yield(a, prev, rider, reach, person) {
+    if (!rider) return;
+    const L = this.city.landscape, edge = ROAD_WIDTH / 2 + 2, now = L.routeDist(a.x, a.z);
+    if (!now || now.d > edge) return;
+    const near = Math.hypot(a.x - rider.x, a.z - rider.z);
+    if (near > reach && !(person && a.asideUntil > this._clock)) return;
+    const before = L.routeDist(prev.x, prev.z);
+    if (!before || before.d > edge) { Object.assign(a, prev); return; }   // wait at the kerb
+    // people stay at the edge for a few seconds after the rider has gone by, so they step back out of view
+    if (near > 16 && !(person && a.asideUntil > this._clock)) return;
+    if (!person) { a.hurry = 2.5; return; }
+    if (near <= 16) a.asideUntil = this._clock + 4;
+    // a person on the road as the rider arrives: step out to the road's edge
+    const ix = this.city.index, i = now.i, dx = ix.xs[i + 1] - ix.xs[i], dz = ix.zs[i + 1] - ix.zs[i], l = Math.hypot(dx, dz) || 1;
+    let nx = -dz / l, nz = dx / l;
+    const t = Math.max(0, Math.min(1, ((a.x - ix.xs[i]) * dx + (a.z - ix.zs[i]) * dz) / (l * l)));
+    const ox = a.x - (ix.xs[i] + dx * t), oz = a.z - (ix.zs[i] + dz * t);
+    if (ox * nx + oz * nz < 0) { nx = -nx; nz = -nz; }
+    a.x = ix.xs[i] + dx * t + nx * (edge + .3); a.z = ix.zs[i] + dz * t + nz * (edge + .3);
+    a.y = L.heightAt(a.x, a.z);
+  }
+
+  _updatePeople(cam, dt, time, rider) {
     const im = this.people, L = this.city.landscape;
     for (const a of this.walkers) {
       if (!a.alive || Math.hypot(a.x - cam.x, a.z - cam.z) > 330) this._spawnWalker(a, cam, !this._started);
       if (!a.alive) { im.setMatrixAt(a.id, this.zero); continue; }
       if (a.wander) { a.yaw += (this.rand() - .5) * dt; a.x += Math.sin(a.yaw) * a.speed * dt; a.z += Math.cos(a.yaw) * a.speed * dt; a.y = L.heightAt(a.x, a.z); }
-      else if (!a.stand) this._moveOnNetwork(a, this.walk, dt);
+      else if (!a.stand) { const prev = { x: a.x, y: a.y, z: a.z, s: a.s, way: a.way, dir: a.dir, yaw: a.yaw, pitch: a.pitch }; this._moveOnNetwork(a, this.walk, dt); this._yield(a, prev, rider, 70, true); }
       this.e.set(0, a.yaw, 0); this.q.setFromEuler(this.e);
       im.setMatrixAt(a.id, this.m.compose(V(a.x, a.y, a.z), this.q, this.one));
       im.geometry.attributes.iAnim.setXY(a.id, a.id * 1.7, a.gait);
@@ -373,7 +400,8 @@ export class CityLife {
     for (const a of this.riders) {
       if (!a.alive || Math.hypot(a.x - cam.x, a.z - cam.z) > 380) this._spawnCyclist(a, cam, !this._started);
       if (!a.alive) { cy.setMatrixAt(a.id, this.zero); continue; }
-      this._moveOnNetwork(a, this.walk, dt);
+      const prev = { x: a.x, y: a.y, z: a.z, s: a.s, way: a.way, dir: a.dir, yaw: a.yaw, pitch: a.pitch };
+      this._moveOnNetwork(a, this.walk, dt); this._yield(a, prev, rider, 50, true);
       this.e.set(-a.pitch, a.yaw, 0); this.q.setFromEuler(this.e);
       cy.setMatrixAt(a.id, this.m.compose(V(a.x, a.y, a.z), this.q, this.one));
       cy.geometry.attributes.iAnim.setXY(a.id, a.id * 2.3, 3);
@@ -432,9 +460,10 @@ export class CityLife {
     for (const a of this.carAgents) {
       if (!a.alive || Math.hypot(a.x - cam.x, a.z - cam.z) > 480) this._spawnCar(a, cam, !this._started);
       if (!a.alive) { this.cars.setMatrixAt(a.id, this.zero); continue; }
-      this._moveOnNetwork(a, this.drive, dt);
       // keep clear of the rider where a street crosses or joins the route
-      if (rider && Math.hypot(a.x - rider.x, a.z - rider.z) < 9) { a.s -= a.dir * a.speed * dt; }
+      const prev = { x: a.x, y: a.y, z: a.z, s: a.s, way: a.way, dir: a.dir, yaw: a.yaw, pitch: a.pitch };
+      this._moveOnNetwork(a, this.drive, dt * (a.hurry || 1)); a.hurry = 0;
+      this._yield(a, prev, rider, 30, false);
       draw(this.cars, a);
     }
     for (const a of this.oncoming) {
@@ -455,7 +484,9 @@ export class CityLife {
     for (const a of this.busAgents) {
       if (!a.alive || Math.hypot(a.x - cam.x, a.z - cam.z) > 480) this._spawnCar(a, cam, !this._started);
       if (!a.alive) { this.buses.setMatrixAt(a.id, this.zero); continue; }
-      this._moveOnNetwork(a, this.drive, dt);
+      const prev = { x: a.x, y: a.y, z: a.z, s: a.s, way: a.way, dir: a.dir, yaw: a.yaw, pitch: a.pitch };
+      this._moveOnNetwork(a, this.drive, dt * (a.hurry || 1)); a.hurry = 0;
+      this._yield(a, prev, rider, 35, false);
       draw(this.buses, a);
     }
     this.buses.count = this.busAgents.length; this.buses.instanceMatrix.needsUpdate = true;
@@ -498,13 +529,39 @@ export class CityLife {
     }
   }
 
-  _updateTrains(dt) {
+  /** Where a train line crosses the route's road at its level: [{s0, s1, x, z, routeS}] along the line. */
+  _crossings(t) {
+    if (t.crossings) return t.crossings;
+    const L = this.city.landscape, out = [], p = {};
+    let cur = null;
+    for (let s = 0; s <= t.path.length; s += 2) {
+      t.path.at(s, p);
+      const r = L.routeDist(p.x, p.z), on = r && r.d < ROAD_WIDTH / 2 + 3 && Math.abs(p.y - r.y) < 4.5;
+      if (on && !cur) cur = { s0: s, s1: s, x: p.x, z: p.z, routeS: this.city.route.dist[r.i] };
+      else if (on) cur.s1 = s;
+      else if (cur) { out.push(cur); cur = null; }
+    }
+    if (cur) out.push(cur);
+    return (t.crossings = out);
+  }
+
+  _updateTrains(dt, rider) {
     const p = {};
     for (const t of this.trains) {
       const tail = (t.cars - 1) * t.gap;
+      // level crossings with the route: hold before one while the rider approaches it; clear it fast if already on it
+      let factor = 1;
+      for (const c of rider ? this._crossings(t) : []) {
+        const passed = (rider.out - c.routeS) * rider.dir > 15, far = Math.hypot(rider.x - c.x, rider.z - c.z) > 400;
+        if (passed || far) continue;
+        const front = t.s, back = t.s - t.dir * tail, lo = Math.min(front, back), hi = Math.max(front, back);
+        if (hi > c.s0 - 6 && lo < c.s1 + 6) { factor = Math.max(factor, 3); continue; }
+        const next = front + t.dir * t.speed * dt;
+        if ((t.dir > 0 && front < c.s0 && next > c.s0 - 20) || (t.dir < 0 && front > c.s1 && next < c.s1 + 20)) factor = 0;
+      }
       if (t.wait > 0) t.wait -= dt;
-      else {
-        t.s += t.dir * t.speed * dt;
+      else if (factor > 0) {
+        t.s += t.dir * t.speed * dt * factor;
         // at the end of the line the last car becomes the front
         if (t.dir > 0 && t.s > t.path.length - 5) { t.s -= tail; t.dir = -1; t.wait = 25; }
         else if (t.dir < 0 && t.s < 5) { t.s += tail; t.dir = 1; t.wait = 25; }
@@ -665,9 +722,10 @@ export class CityLife {
   // -------------------------------------------------------------- per frame
   tick(cam, dt, time, rider) {
     dt = Math.min(dt, .1);
-    this._updatePeople(cam, dt, time);
+    this._clock = (this._clock || 0) + dt;
+    this._updatePeople(cam, dt, time, rider);
     this._updateTraffic(cam, dt, rider);
-    this._updateTrains(dt);
+    this._updateTrains(dt, rider);
     this._updateInclines(time);
     this._updateBoats(dt, time);
     this._updateBirds(time);

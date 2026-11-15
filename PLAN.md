@@ -298,6 +298,7 @@ Goal: a second QC tool that looks for things drawn through each other, and a Pit
 - [x] Street trees, lamp posts and scattered rocks/shrubs no longer stand in streets, on sidewalks or in buildings (they were checked against the nearest route *point*, 10 m apart, and never against other streets): 266 + 303 → 0
 - [x] The ground is graded to the city's streets (they are drawn level from side to side), so hillsides no longer cover them; crossing streets get their own heights; bridge decks have a top, so lamps on the edge stand on it
 - [x] Buildings that a ramp, incline or raised railway runs through aren't drawn
+- [x] Traffic, people and trains give way to the rider: they wait at the kerb (or before a level crossing) while the rider is near, and hurry across or step aside if already on the road — nothing passes through the rider in a full simulated ride (was 11)
 - [ ] Left as accepted or for later: streets that pass under the route where it runs on an embankment disappear into it (no bridge in the data; 9 spots); flickering where some crossing streets meet (~40) and along a few river banks; lamp posts touching the Clemente Bridge's gold railing; traffic passing through traffic and people through posts (accepted as background life)
 - [ ] On-bike check
 
