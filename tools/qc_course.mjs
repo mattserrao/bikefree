@@ -17,6 +17,7 @@ import { buildCatalogRoute } from '../js/routes.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
 import { makeCoastLandscape } from '../js/world/coast.js';
 import { makeRegionalLandscape } from '../js/world/regional-landscape.js';
+import { makeCityLandscape } from '../js/world/city-landscape.js';
 import { riderPose, routePoint, ROAD_WIDTH, ROAD_LIFT } from '../js/world/pose.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -155,7 +156,7 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
 
   // 3. Ridden path: rider pose every `step` m over the whole ride, wrapping across the seam
   const stylized = route.scene?.style === 'stylized';
-  const landscape = stylized ? (route.scene.terrain === 'authored-region' ? makeRegionalLandscape : makeCoastLandscape)(route.scene, proj, index, route) : null;
+  const landscape = stylized ? (route.scene.terrain === 'authored-city' ? makeCityLandscape : route.scene.terrain === 'authored-region' ? makeRegionalLandscape : makeCoastLandscape)(route.scene, proj, index, route) : null;
   const ground = landscape ? makeMeshGround(landscape.heightAt) : null;
   const bridgeAt = (x, z, m) => !!landscape?.bridgeAt?.(x, z, m);
   let prev = riderPose(route, index, 0), maxHeading = 0, maxJump = 0;
@@ -297,6 +298,7 @@ async function main() {
   const args = process.argv.slice(2);
   const opt = (name, dflt) => { const i = args.indexOf(name); if (i < 0) return dflt; const v = args[i + 1]; args.splice(i, 2); return v; };
   const flag = (name) => { const i = args.indexOf(name); if (i < 0) return false; args.splice(i, 1); return true; };
+  const withCity = (scene) => (scene.cityData ? { ...scene, city: JSON.parse(read(scene.cityData)) } : scene);
   const step = Number(opt('--step', 1));
   const html = opt('--html', 'tools/qc-report.html');
   const json = opt('--json', null);
@@ -310,7 +312,7 @@ async function main() {
     const demo = { id: 'demo-hills', name: 'Demo Hills', file: 'routes/demo-hills.gpx', scene: 'routes/scenes/demo-hills.json', noPreview: true };
     for (const item of [...catalog, demo]) {
       if (args.length && !args.includes(item.id)) continue;
-      jobs.push({ id: item.id, name: item.name, gpxText: read(item.file), item, scene: item.scene ? JSON.parse(read(item.scene)) : null, preview: item.noPreview ? null : item.id });
+      jobs.push({ id: item.id, name: item.name, gpxText: read(item.file), item, scene: item.scene ? withCity(JSON.parse(read(item.scene))) : null, preview: item.noPreview ? null : item.id });
     }
   }
   const results = [];

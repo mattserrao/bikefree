@@ -12,7 +12,7 @@ export const DEFAULT_SETTINGS = {
   startGear: 12,
   ftp: 200,               // watts, for % FTP workouts
   worldCam: 'chase',      // 3D camera: chase | eye | drone
-  worldTime: 'midday',    // 3D time of day: morning | midday | golden
+  worldTime: 'midday',    // 3D time of day: morning | midday | golden | night
   worldQuality: 'balanced', // stylized scenery: low | balanced | high
   scenery: 'builtin-park-yosemite', // 3D loop shown behind free rides and workouts
 };

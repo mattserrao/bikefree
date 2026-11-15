@@ -40,7 +40,15 @@ for (const item of catalog) {
   if (item.outAndBack) row.outAndBack = true;
   if (item.scene) {
     const scene = JSON.parse(read(item.scene));
-    if (scene.format !== 'bikefree-scene-1' || !['authored-coast', 'authored-region'].includes(scene.terrain)) throw new Error(`${item.id}: unsupported scene format or terrain`);
+    if (scene.format !== 'bikefree-scene-1' || !['authored-coast', 'authored-region', 'authored-city'].includes(scene.terrain)) throw new Error(`${item.id}: unsupported scene format or terrain`);
+    if (scene.terrain === 'authored-city') {
+      // city data from tools/build_city.py: rivers, height grid, buildings, streets, bridges
+      if (!scene.cityData?.startsWith('routes/scenes/') || scene.cityData.includes('..') || !existsSync(resolve(root, scene.cityData))) throw new Error(`${item.id}: missing city data`);
+      const city = JSON.parse(read(scene.cityData));
+      if (city.format !== 'bikefree-city-1' || !(city.buildings?.count > 0) || !(city.grid?.nx > 1)) throw new Error(`${item.id}: invalid city data`);
+      for (const r of scene.rivers || []) if (!Array.isArray(r.path) || r.path.length < 2) throw new Error(`${item.id}: invalid river path`);
+      paths.push(scene.cityData);
+    }
     if (scene.terrain === 'authored-coast' && (!Array.isArray(scene.coastline) || scene.coastline.length < 2)) throw new Error(`${item.id}: a coastline needs at least two coordinates`);
     for (const [lat, lon] of scene.coastline || []) if (!Number.isFinite(lat) || Math.abs(lat) > 90 || !Number.isFinite(lon) || Math.abs(lon) > 180) throw new Error(`${item.id}: invalid coastline coordinate`);
     if (!scene.assets?.startsWith('models/scenery/') || scene.assets.includes('..') || !existsSync(resolve(root, scene.assets))) throw new Error(`${item.id}: missing scenery asset kit`);
@@ -56,7 +64,7 @@ for (const item of catalog) {
     const validRadius = (p) => Array.isArray(p.radiusM) && p.radiusM.length === 2 && p.radiusM.every((r) => Number.isFinite(r) && r > 0);
     for (const lake of scene.lakes || []) if (!validCoordinate(lake) || !Number.isFinite(lake.elevationM) || !validRadius(lake)) throw new Error(`${item.id}: invalid lake placement or dimensions`);
     for (const form of [...(scene.formations || []), ...(scene.islands || [])]) if (!validCoordinate(form) || !validRadius(form) || !(form.heightM > 0)) throw new Error(`${item.id}: invalid landform placement or dimensions`);
-    for (const river of scene.rivers || []) if (!(river.widthM > 0) || !Array.isArray(river.path) || river.path.length < 2 || river.path.some(([lat, lon]) => !validCoordinate({ lat, lon }))) throw new Error(`${item.id}: invalid river path or width`);
+    for (const river of scene.terrain === 'authored-city' ? [] : scene.rivers || []) if (!(river.widthM > 0) || !Array.isArray(river.path) || river.path.length < 2 || river.path.some(([lat, lon]) => !validCoordinate({ lat, lon }))) throw new Error(`${item.id}: invalid river path or width`);
     for (const name of [...(scene.vegetation?.trees || []), ...(scene.vegetation?.shrubs || []), ...(scene.vegetation?.cover || [])]) if (!kit.assets[name]) throw new Error(`${item.id}: missing vegetation model ${name}`);
     for (const range of scene.bridgeRanges || []) if (!(range.fromM >= 0 && range.toM > range.fromM && range.toM <= (route.turnS || route.total))) throw new Error(`${item.id}: invalid bridge range`);
     for (const landmark of scene.landmarks || []) {

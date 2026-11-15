@@ -263,6 +263,19 @@ Goal: a repeatable check that rides every course end to end and flags discontinu
   - [ ] Going-to-the-Sun lap seam (68.11 km): rider hops 0.7 m sideways where the start U-turn drift begins
 - [ ] Review the warnings: Snake River channel too narrow for the ground mesh (Grand Teton 31–32 km), Seven Mile Bridge road edges floating at 3.6 and 15.0 km
 
+### v0.12 — Pittsburgh · Three Rivers Loop, a living city *(test branch `v0.12`, on top of v0.11.6)*
+Goal: the first city course — a loop full of life: riverside trails, famous bridges, downtown, the South Side and the climb up Mount Washington.
+- [x] **The loop** (19.2 km / 11.9 mi, ~185 m / 605 ft climbing; clockwise from the North Shore Water Steps): North Shore Trail past PNC Park → **Roberto Clemente Bridge** → Penn Avenue (Cultural District) → **Point State Park** and the fountain → Fort Pitt Boulevard → Fourth Avenue (PPG Place) → **Market Square** → Forbes → Smithfield Street → **Smithfield Street Bridge** → Station Square → **East Carson Street** to SouthSide Works → South Side riverfront trail → South 10th → **P.J. McArdle Roadway** climb (~1.6 km, up to 8–11%) → **Grandview Avenue** overlooks past the Duquesne Incline → Greenleaf Street descent (to −14%) → West Carson → **West End Bridge** → North Shore Trail past the Science Center and USS Requin
+- [x] `tools/build_city.py` + `tools/city/pittsburgh.json`: routes on our own OSM street/trail graph (legs prefer trails, roads or park paths; one ramp link where OSM has a gap), folds waypoint stubs, terrain-tile elevation with bridge decks interpolated, rideable profile; writes the GPX and `routes/scenes/pittsburgh-city.json` (height grid, land use incl. the three rivers, 12k buildings with heights, streets, bridge decks, rail lines, trees)
+- [x] New scene type `authored-city` (`js/world/city-landscape.js`, `city.js`, `city-bridges.js`, `city-life.js`): real terrain (the Mount Washington bluff), carved rivers with their own water, buildings with procedural windows, PPG Place spires, the Gulf Tower top, streets with sidewalks, lamps and street trees, shop awnings and signs on East Carson
+- [x] **Bridges in their own styles**: the Three Sisters' gold self-anchored suspension, Smithfield's blue lenticular trusses and buff portals, the gold through-arches of the West End and Fort Duquesne, Fort Pitt's double-deck tied arch, the Liberty, 10th Street, Hot Metal and Birmingham bridges
+- [x] **Life**: walkers, joggers and people gathered at Market Square, the Point, Station Square, Carson Street and the overlooks; cyclists on the trails; cars and buses on the streets (oncoming traffic on the route's own streets, kept off the rider's lane); light-rail trains and a freight train; both **inclines** running; barges, the riverboat, motorboats with wakes and kayaks; gulls over the rivers; the Point fountain's jet; PNC Park and Acrisure Stadium
+- [x] **Night** time of day (all routes): moon, stars and a city glow on the horizon; in the city the windows, street lamps, bridge lights, stadium lights, aircraft beacons, the Gulf Tower beacon, car head/tail lights, shop signs and light on the rivers; a front light on the bike
+- [x] Route surface follows the route: streets keep lane paint, trails and park paths get a plain surface; concrete sidewalks instead of gravel shoulders
+- [x] Course QC (`npm run qc`) runs on the city; `test/city.test.mjs`
+- [ ] Known: at 0.42 km the trail passes 10 m from the Clemente Bridge ramp (5 m higher) — the ground between them steps (QC: 1 fail, cosmetic)
+- [ ] On-bike check and M4 Air smoothness (Light / Balanced / High)
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

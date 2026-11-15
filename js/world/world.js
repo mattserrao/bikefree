@@ -11,6 +11,8 @@ export const TIME_PRESETS = {
   morning: { label: 'Morning', elev: 14, az: 105, top: '#6f9fd8', horizon: '#f2d6b8', hemiSky: '#f6eedf', hemiGround: '#9a917e', sun: '#ffe2b8', sunI: 0.45, hemiI: 1.45, exposure: 1.0 },
   midday: { label: 'Midday', elev: 58, az: 180, top: '#3f7fd0', horizon: '#c6dbef', hemiSky: '#ffffff', hemiGround: '#a39b88', sun: '#ffffff', sunI: 0.55, hemiI: 1.35, exposure: 1.0 },
   golden: { label: 'Golden hour', elev: 7, az: 258, top: '#5c78b4', horizon: '#f7b77d', hemiSky: '#ffe6c8', hemiGround: '#9a8670', sun: '#ffc27a', sunI: 0.45, hemiI: 1.4, exposure: 1.05 },
+  // v0.12: moonlight, a deep blue sky with stars, and (in a city) the lights come on
+  night: { label: 'Night', elev: 40, az: 150, top: '#0a1226', horizon: '#2a3150', hemiSky: '#7d8fbf', hemiGround: '#2b2b35', sun: '#b4c6ea', sunI: 0.3, hemiI: 0.5, exposure: 1.2, night: true },
 };
 
 // Stylized foreground → real far terrain hand-off (metres from the camera)
@@ -98,7 +100,8 @@ export class World {
       this.terrain.realHeightAt = (x, z) => this.farTerrain.heightAt(x, z);
     }
 
-    this.shoulder = makeRibbon(route, this.index, ROAD_WIDTH + (this.stylized ? 1.6 : 3.4), 0.05, makeGravelTexture(this.stylized), 3, { polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    const city = route.scene?.terrain === 'authored-city';
+    this.shoulder = makeRibbon(route, this.index, ROAD_WIDTH + (city ? 4 : this.stylized ? 1.6 : 3.4), city ? .09 : 0.05, makeGravelTexture(this.stylized, city), 3, { polygonOffsetFactor: city ? -1.8 : -1, polygonOffsetUnits: city ? -1.8 : -1 });
     this.scene.add(this.shoulder);
     this.road = makeRoad(route, this.index);
     this.scene.add(this.road);
@@ -196,7 +199,8 @@ export class World {
 
   setTimeOfDay(key) {
     let t = TIME_PRESETS[key] || TIME_PRESETS.midday;
-    if (this.stylized) t = { ...t, sunI: key === 'golden' ? 2.5 : 2.1, hemiI: key === 'golden' ? .95 : 1.1,
+    if (this.stylized && key === 'night') t = { ...t, sunI: .55, hemiI: .42 };
+    else if (this.stylized) t = { ...t, sunI: key === 'golden' ? 2.5 : 2.1, hemiI: key === 'golden' ? .95 : 1.1,
       ...(key === 'midday' ? { elev: 46, az: 238, top: '#70a9d2', horizon: '#d5e2db', hemiSky: '#e8f0ed', hemiGround: '#9c9d7e', sun: '#fff2d5', exposure: 1.03 } : {}) };
     this.timeKey = key;
     const el = THREE.MathUtils.degToRad(t.elev), az = THREE.MathUtils.degToRad(t.az);
@@ -214,7 +218,15 @@ export class World {
     u.horizonColor.value.set(t.horizon);
     u.sunColor.value.set(t.sun);
     u.sunDir.value.copy(dir);
+    u.uNight.value = t.night ? 1 : 0;
     this.scene.fog.color.set(t.horizon);
+    this.terrain?.setNight?.(t.night ? 1 : 0);
+    if (t.night && this.stylized && !this.headlight) {
+      // a front light on the bike, so the road ahead reads in the dark
+      this.headlight = new THREE.SpotLight('#fff1d6', 900, 70, .42, .65, 1.6);
+      this.scene.add(this.headlight, this.headlight.target);
+    }
+    if (this.headlight) this.headlight.visible = !!t.night;
     for (const tu of [this.terrain?.uniforms, this.farTerrain?.uniforms]) {
       if (tu?.uSunDir) { tu.uSunDir.value.copy(dir); tu.uSkyTop.value.set(t.top); tu.uSkyHorizon.value.set(t.horizon); }
     }
@@ -262,6 +274,14 @@ export class World {
     this._updateCamera(riderPos, flat, fwd, dt);
     this.terrain.uniforms.uTime.value = now / 1000;
     this.terrain.update(this.camera.position.x, this.camera.position.z);
+    if (this.terrain.tick) {
+      const turn = this.route.turnS || total, back = this.route.turnS && this.s > turn;
+      this.terrain.tick(this.camera.position, dt, { x: riderPos.x, z: riderPos.z, out: back ? total - this.s : this.s, dir: back ? -1 : 1 });
+    }
+    if (this.headlight?.visible) {
+      this.headlight.position.copy(riderPos).addScaledVector(flat, .6).y += 1.1;
+      this.headlight.target.position.copy(riderPos).addScaledVector(flat, 22);
+    }
     if (this.farTerrain) {
       this.farTerrain.uniforms.uTime.value = now / 1000;
       this.farTerrain.update(this.camera.position.x, this.camera.position.z);
@@ -365,6 +385,7 @@ function makeSky() {
       horizonColor: { value: new THREE.Color('#c6dbef') },
       sunColor: { value: new THREE.Color('#ffffff') },
       sunDir: { value: new THREE.Vector3(0, 1, 0) },
+      uNight: { value: 0 },
     },
     vertexShader: /* glsl */`
       varying vec3 vDir;
@@ -374,15 +395,23 @@ function makeSky() {
         gl_Position = p.xyww;
       }`,
     fragmentShader: /* glsl */`
-      uniform vec3 topColor; uniform vec3 horizonColor; uniform vec3 sunColor; uniform vec3 sunDir;
+      uniform vec3 topColor; uniform vec3 horizonColor; uniform vec3 sunColor; uniform vec3 sunDir; uniform float uNight;
       varying vec3 vDir;
+      float skyHash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
       void main() {
         vec3 d = normalize(vDir);
         float h = max(d.y, 0.0);
         vec3 col = mix(horizonColor, topColor, pow(h, 0.45));
         if (d.y < 0.0) col = horizonColor * 0.92;
         float s = max(dot(d, normalize(sunDir)), 0.0);
-        col += sunColor * (pow(s, 900.0) * 3.0 + pow(s, 12.0) * 0.25);
+        if (uNight > 0.5) {
+          // the moon instead of the sun, stars above the haze
+          col += sunColor * (smoothstep(.99955, .99975, s) * 1.6 + pow(s, 40.0) * .08);
+          vec3 cell = floor(d * 260.);
+          float star = step(.9965, skyHash(cell)) * smoothstep(.08, .35, d.y);
+          col += vec3(.9, .93, 1.) * star * (.5 + .5 * skyHash(cell + 3.));
+          col += vec3(.35, .22, .12) * pow(1. - h, 8.) * .35;   // city glow on the horizon
+        } else col += sunColor * (pow(s, 900.0) * 3.0 + pow(s, 12.0) * 0.25);
         gl_FragColor = vec4(col, 1.0);
         #include <colorspace_fragment>
       }`,
@@ -469,7 +498,27 @@ function makeRoad(route, index) {
   mesh.frustumCulled = false;
   mesh.renderOrder = 2;
   mesh.receiveShadow = stylized;
-  return mesh;
+  const kinds = route.scene?.city?.routeKinds;
+  if (!kinds) return mesh;
+  // A city route: streets keep the lane paint; riverfront trails and park paths get a plain,
+  // lighter surface with a dashed white centre line.
+  const trail = (i) => (kinds.find((k) => route.dist[i] >= k.fromM && route.dist[i] < k.toM) || {}).kind === 'trail';
+  const roadIdx = [], trailIdx = [];
+  for (let i = 0; i < n - 1; i++) (trail(i) ? trailIdx : roadIdx).push(...idx.slice(i * 6, i * 6 + 6));
+  geo.setIndex(roadIdx);
+  const tc = document.createElement('canvas'); tc.width = 64; tc.height = 256;
+  const t = tc.getContext('2d');
+  t.fillStyle = '#6d6a64'; t.fillRect(0, 0, 64, 256);
+  for (let k = 0; k < 2200; k++) { const g = 92 + Math.random() * 30; t.fillStyle = `rgba(${g},${g - 2},${g - 6},.5)`; t.fillRect(Math.random() * 64, Math.random() * 256, 1, 1); }
+  t.fillStyle = '#e9e6da'; t.fillRect(31, 0, 2, 110);
+  const ttex = new THREE.CanvasTexture(tc); ttex.wrapT = THREE.RepeatWrapping; ttex.colorSpace = THREE.SRGBColorSpace; ttex.anisotropy = 8;
+  const tgeo = new THREE.BufferGeometry();
+  tgeo.setAttribute('position', geo.attributes.position); tgeo.setAttribute('uv', geo.attributes.uv); tgeo.setAttribute('normal', geo.attributes.normal);
+  tgeo.setIndex(trailIdx);
+  const tmesh = new THREE.Mesh(tgeo, new THREE.MeshStandardMaterial({ map: ttex, roughness: .95, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  tmesh.frustumCulled = false; tmesh.renderOrder = 2; tmesh.receiveShadow = true;
+  const group = new THREE.Group(); group.add(mesh, tmesh);
+  return group;
 }
 
 // ---------- Shoulders ----------
@@ -500,7 +549,7 @@ function makeRibbon(route, index, width, lift, tex, repeatM, offset) {
 }
 
 /** Gravel/dirt shoulder that fades into the ground at its outer edges. */
-function makeGravelTexture(stylized = false) {
+function makeGravelTexture(stylized = false, city = false) {
   const c = document.createElement('canvas');
   c.width = 64; c.height = 128;
   const ctx = c.getContext('2d');
@@ -508,10 +557,11 @@ function makeGravelTexture(stylized = false) {
   for (let y = 0; y < 128; y++) {
     for (let x = 0; x < 64; x++) {
       const k = (y * 64 + x) * 4;
-      const g = stylized ? 162 + Math.random() * 12 : 105 + Math.random() * 60;
-      img.data[k] = g * 1.02; img.data[k + 1] = g * 0.96; img.data[k + 2] = g * 0.86;
+      const g = city ? 168 + Math.random() * 8 : stylized ? 162 + Math.random() * 12 : 105 + Math.random() * 60;
+      if (city) { img.data[k] = g; img.data[k + 1] = g * .98; img.data[k + 2] = g * .94; }
+      else { img.data[k] = g * 1.02; img.data[k + 1] = g * 0.96; img.data[k + 2] = g * 0.86; }
       const edge = Math.min(x, 63 - x) / 63;          // 0 at the outside, 0.5 at the centre
-      img.data[k + 3] = 255 * Math.min(1, Math.max(0, (edge - 0.02) / 0.14)) * (0.75 + Math.random() * 0.25);
+      img.data[k + 3] = city ? 255 * Math.min(1, Math.max(0, (edge - .005) / .02)) : 255 * Math.min(1, Math.max(0, (edge - 0.02) / 0.14)) * (0.75 + Math.random() * 0.25);
     }
   }
   ctx.putImageData(img, 0, 0);

@@ -4,6 +4,8 @@ import { loadSceneryAssets } from './scenery-assets.js';
 import { makeCoastalGroundMaterial, makeCoastalWaterMaterial } from './coastal-materials.js';
 import { CoastalDetails, fitBridgeToRoad, coastalRoadFrame } from './coastal-details.js';
 import { makeRegionalLandscape } from './regional-landscape.js';
+import { makeCityLandscape } from './city-landscape.js';
+import { CityScene } from './city.js';
 
 export const COASTAL_QUALITY = {
   low: { pixelRatio: 1, shadows: false, scatterRange: 2, candidates: 150, coverCandidates: 100 },
@@ -19,7 +21,8 @@ export class StylizedTerrain {
     this.route = opts.route;
     this.index = routeIndex;
     this.quality = COASTAL_QUALITY[opts.quality] || COASTAL_QUALITY.balanced;
-    const makeLandscape = this.config.terrain === 'authored-region' ? makeRegionalLandscape : makeCoastLandscape;
+    this.qualityKey = COASTAL_QUALITY[opts.quality] ? opts.quality : 'balanced';
+    const makeLandscape = this.config.terrain === 'authored-city' ? makeCityLandscape : this.config.terrain === 'authored-region' ? makeRegionalLandscape : makeCoastLandscape;
     this.landscape = makeLandscape(this.config, proj, routeIndex, opts.route);
     this.inlandAt = this.landscape.inlandAt || ((x, z) => x - this.landscape.coastX(z));
     this.lookoutFootprints = (this.config.lookouts || []).map((l) => ({ ...l,
@@ -47,6 +50,10 @@ export class StylizedTerrain {
       this.kit = kit;
       this._makeLandmarks();
       this.details = new CoastalDetails(this.group, this.route, this.index, this.landscape, kit, this.uniforms);
+      if (this.landscape.city) {
+        this.city = new CityScene(this.group, this.route, this.index, this.landscape, kit, this.uniforms, this.qualityKey);
+        this.city.setNight(this._night || 0);
+      }
       this._lastX = Infinity;
       this.stats.loading = 0;
     }).catch((err) => { this.stats.loading = 0; this.stats.errors++; opts.onError?.(err); });
@@ -249,6 +256,7 @@ export class StylizedTerrain {
       const x = cx * size + rand() * size, z = cz * size + rand() * size;
       const inland = this.inlandAt(x, z), y = this.heightAt(x, z);
       if (inland < 10 || y < 1 || this.landscape.isWater?.(x, z, y) || this.landscape.bridgeAt(x, z, 10) || this.landscape.creekAt(x, z) || onLookout(x, z)) continue;
+      if (this.landscape.canPlant && !this.landscape.canPlant(x, z)) continue;
       const road = this.index.nearest(x, z, 10);
       if (road && road.d < 7.5) continue;
       const slope = Math.hypot(this.heightAt(x + 4, z) - y, this.heightAt(x, z + 4) - y) / 4;
@@ -279,7 +287,7 @@ export class StylizedTerrain {
       else if (pick < .69) add(`rock${Math.floor(rand() * 2)}`, x, y - .3, z, .5 + rand() * 1.4);
       else if (detailed && pick < .79) add('grass', x, y - .08, z, .9 + rand());
     }
-    if (coverOnly) {
+    if (coverOnly && !this.landscape.city) {
       // A denser verge reads from the bike without filling distant hills with
       // tiny meshes. These placements remain deterministic across quality tiers.
       for (let i = 0; i < (this.route.turnIdx || this.index.xs.length - 1); i += 2) {
@@ -392,9 +400,20 @@ export class StylizedTerrain {
     for (const m of this.lakeMeshes || []) m.visible = !this.farOn || Math.hypot(m.position.x - cx, m.position.z - cz) - Math.max(m.scale.x, m.scale.y) < limit;
   }
 
+  /** Every frame (the city's traffic, people and boats move continuously). */
+  tick(camera, dt, rider) { this.city?.tick(camera, dt, this.uniforms.uTime.value, rider); }
+
+  setNight(v) {
+    this._night = v; this.city?.setNight(v);
+    const cloud = this.clouds?.children[0]?.material;
+    if (cloud) cloud.color.set(v ? '#3b4157' : '#ffffff');
+  }
+
   heightAt(x, z) { return this.landscape.heightAt(x, z); }
   setQuality(key) {
     this.quality = COASTAL_QUALITY[key] || COASTAL_QUALITY.balanced;
+    this.qualityKey = COASTAL_QUALITY[key] ? key : 'balanced';
+    this.city?.setQuality(this.qualityKey);
     for (const map of [this.scatter, this.cover]) {
       for (const group of map.values()) { this.group.remove(group); group.children.forEach((m) => m.dispose()); }
       map.clear();
@@ -409,6 +428,7 @@ export class StylizedTerrain {
     for (const group of this.scatter.values()) group.children.forEach((m) => m.dispose());
     for (const group of this.cover.values()) group.children.forEach((m) => m.dispose());
     this.details?.dispose();
+    this.city?.dispose();
     this.landmarkGeometries.forEach((g) => g.dispose()); this.landmarkGeometries.clear();
     this.surf.geometry.dispose(); this.surf.material.dispose();
     this.ocean.geometry.dispose(); this.ocean.material.dispose();
