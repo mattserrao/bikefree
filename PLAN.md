@@ -266,6 +266,16 @@ Goal: a repeatable check that rides every course end to end and flags discontinu
   - **Rider hop** at the Going-to-the-Sun lap seam: the U-turn lane drift now hands back to the road's own direction over 10 m (rider and pacer)
 - [ ] On-bike check, especially the five routes whose GPX changed (each 0.1–0.5 km shorter)
 
+### Route 28 rework *(test branch `route28-test`)*
+Review: [docs/route28/REVIEW.md](docs/route28/REVIEW.md)
+- [ ] Confirm the GPX follows Route 28 through Eagle Bay (not South Shore Road)
+- [ ] Real lake shorelines from OSM (`lakes[].outline`) + `road-in-lake` QC check; fix Second Lake causeway and Eighth Lake turnaround
+- [ ] Adirondack forest: white pine, spruce/fir, hemlock, maple, birch; forest-edge layout; canopy on far hills
+- [ ] Forested hills as formations (Bald Mtn + fire tower, Black Bear, Seventh Lake Mtn)
+- [ ] Towns and camps: Old Forge, Inlet, lakeside camps with docks
+- [ ] Roadside props, darker lake water, morning mist / golden-hour preset
+- [ ] On-bike check
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)
