@@ -277,6 +277,28 @@ Goal: the first city course — a loop full of life: riverside trails, famous br
 - [x] QC: 0 fail — the North Shore Trail at 0.42 km passes under the start of the Clemente Bridge deck; the ground there now follows the trail (11 warnings: tight city corners and narrow carves beside ramps)
 - [ ] On-bike check and M4 Air smoothness (Light / Balanced / High)
 
+### Big Sur hero map *(test branch `bigsur-test`, on top of v0.12)*
+Goal: make Big Sur the showcase course — visually stunning, the one you open to show someone the app. A testbed for graphics, weather, traffic and realism that can later roll out to other maps.
+
+**Baseline review (15 Nov 2026, preview renders at High)**
+- Geography reads as rolling grassland beside a distant sea, not mountains dropping into the Pacific: the land is a synthetic heightfield (`js/world/coast.js`) that rises gently inland; no sea cliffs, coves or surf line
+- Bixby Creek reads as a shallow green valley with a stray lagoon; the real gorge is deep, narrow and opens onto a beach right below the bridge
+- Bridge: parapet posts and a large beige wall beside the deck look oversized; the arch is hard to see from the road
+- Bright white patches beside the road at the overlook (15.2 km) and on the bridge (15.7 km), and a hard dark seam where the sea meets land — to confirm on the Mac (renders here use a software GPU)
+- Trees and bushes floating above hillsides at golden hour and night (likely placed before the real far terrain arrives)
+- Night: headlight is a flat disc; no surf glow, moon path on the sea, or distant car lights
+- Nothing moves except the rider and pacer: no traffic, birds, surf, fog or wind
+
+**Proposed passes (order to be confirmed)**
+- [ ] Real landform: bake a high-resolution real elevation corridor for the route (sea cliffs, Bixby gorge, Hurricane Point, Little Sur) into the bundle; keep the stylized look on top
+- [ ] Ocean: surf line and foam on rocks, swell, deep-to-shallow colour, sea stacks and coves where they really are
+- [ ] Weather: marine layer (fog bank on the sea, rolling in over the road), drifting clouds with shadows, wind in grass and trees; optional light rain/drizzle with wet road
+- [ ] Traffic on Highway 1: cars, RVs, motorcycles and other cyclists both ways, pulling into the overlooks (reuse v0.12 `city-life.js` traffic)
+- [ ] Life: pelicans and gulls, waves on the beach below Bixby, cows on the Rocky Creek grassland, condor overhead
+- [ ] Landmarks: Bixby Bridge rebuilt to scale, Rocky Creek Bridge, Point Sur lighthouse on its rock, Little Sur river mouth, Hurricane Point
+- [ ] Rendering: post-processing (tone mapping, bloom on sun glint, subtle depth haze), better shadows near the rider; keep High / Balanced / Light for the M4 Air
+- [ ] On-bike check and M4 Air smoothness
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)
