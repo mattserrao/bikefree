@@ -201,6 +201,7 @@ Goal: more places to ride, each a different kind of day.
 - [x] **Route 28 · Old Forge to Eighth Lake** — Fulton Chain of Lakes through Inlet, 17.8 mi each way, ~1,000 ft rolling
 - [x] Out-and-back routes: the builder rides A → B → A so laps still work; the road is drawn once and the rider U-turns into the other lane at the far end
 - [x] Road profiles cleaned of elevation-model artefacts: bridges filled (Bixby Creek), cliff spikes removed (Going-to-the-Sun hairpins, Zion canyon walls); sea-floor depths held above the water in the Keys
+- [x] Demo speed slider, 5–100 mph (menu and ride screen; `,` / `.` keys step 5 mph) to audit routes quickly; demo power capped at 1,500 W
 - [x] Route list renamed *Scenic routes — 3D*; the new routes also work as Scenery behind free rides and workouts; offline download works for all of them
 - [ ] On-bike check
 

@@ -25,7 +25,7 @@ Ride screen: power (3-second, coloured by zone, with a Z1–Z6 badge, a zone bar
 
 Keyboard: ← → shift · ↑ ↓ grade/intensity · Space pause · L lap · N skip step · C camera · F full screen.
 
-**Demo** (top right of the menu): try everything without a bike. The rider holds a steady 15 mph; power, cadence and heart rate are simulated. Demo rides are saved as "Demo · …".
+**Demo** (top right of the menu): try everything without a bike. The rider holds a steady speed — 15 mph to start, adjustable from 5 to 100 mph with the slider (menu or ride screen) or the `,` / `.` keys; power, cadence and heart rate are simulated. Demo rides are saved as "Demo · …".
 
 **Profile** (top right): your name, height, weight and gender, plus your totals — rides, distance, riding time, climbing. Weight sets how hard climbs feel. Add riders for others in the house; each ride is saved to whoever rode it. Everything stays in this browser.
 

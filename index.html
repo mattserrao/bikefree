@@ -48,7 +48,11 @@
           </button>
           </div>
           <p id="unsupported" class="notice" hidden>Bluetooth isn't available here — open this page in <b>Chrome</b> on your Mac, from <b>localhost</b>. You can still try <b>Demo</b>.</p>
-          <p id="demoNote" class="notice" hidden>Demo mode: no bike needed — the rider holds a steady <b>15 mph</b>. <button id="demoOff" class="link">Exit demo</button></p>
+          <div id="demoNote" class="notice demo-note" hidden>
+            <span>Demo mode: no bike needed — the rider holds a steady <b id="demoNoteMph">15 mph</b>.</span>
+            <label class="demo-speed">Speed <input type="range" class="demo-range" min="5" max="100" step="1" value="15" aria-label="Demo speed (mph)"></label>
+            <button id="demoOff" class="link">Exit demo</button>
+          </div>
         </section>
 
         <section>
@@ -125,7 +129,10 @@
       </div>
 
       <div class="hud-top">
-        <div class="pill demo" id="hDemo" hidden>Demo · 15 mph</div>
+        <div class="pill demo demo-ctl" id="hDemo" hidden>
+          <span id="hDemoLabel">Demo · 15 mph</span>
+          <input type="range" class="demo-range" min="5" max="100" step="1" value="15" aria-label="Demo speed (mph)" title="Demo speed — ',' / '.' keys">
+        </div>
         <div class="pill warn" id="hAlert" hidden></div>
         <div class="hud-title" id="hTitle"></div>
         <div class="pill big" id="hState">Pedal to start</div>
