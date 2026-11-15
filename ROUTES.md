@@ -172,6 +172,7 @@ from–to range, its worst value and *view* / *ride* links into `tools/world-pre
 | --- | --- | --- | --- |
 | GPX | `gpx-hairpin` | warn | the track doubles back on itself (BRouter spurs, zig-zags); the planned end turnaround is info |
 | GPX | `gpx-gap`, `gpx-spike` | warn | points > 60 m apart (straight chord); one point > 6 m off its neighbours' elevation |
+| Road | `path-jog` | warn | the drawn road zig-zags sideways (opposite turns > 12° within 20 m), e.g. where a spur was cut |
 | Ride path | `pose-jump`, `pose-height` | fail | rider moves > 0.6 m more than the step, or rises/falls > 0.35 m per metre |
 | Ride path | `heading-snap`, `heading-sharp` | fail / warn | heading turns > 25 °/m (snap) or > 10 °/m (very tight); planned U-turns are info |
 | Profile | `grade-step`, `grade-clamp`, `grade-mismatch` | fail / warn | grade jumps between 10 m samples (resistance jolt), pinned at ±25 %, or disagrees with elevation |
@@ -181,6 +182,12 @@ from–to range, its worst value and *view* / *ride* links into `tools/world-pre
 | Scenery | `mesh-coarse` | warn | a carve (river, channel) narrower than the 6 m ground mesh beside the road: jagged edge |
 | Camera | `camera-lift` | warn | the chase camera is pushed > 0.75 m up by the ground (visible camera hop) |
 
-Limits are in `LIMITS` at the top of `tools/qc_course.mjs`. The real far terrain (internet tiles) is not
+Limits are in `LIMITS` at the top of `tools/qc_course.mjs`. `test/qc.test.mjs` runs the sweep over the
+whole catalog, so `npm test` fails if a route regresses.
+
+**Fixing GPX findings:** `python3 tools/build_park_routes.py --prune-existing [ids]` cuts spurs (including
+short 30–400 m stubs) and smooths sideways jogs in the existing GPX files, offline, and moves the scene's
+distance-based placements (signs, lookouts, roadside rails, preview position) to match. A full rebuild
+from BRouter applies the same steps. The real far terrain (internet tiles) is not
 checked; it starts 1.5 km from the road.
 

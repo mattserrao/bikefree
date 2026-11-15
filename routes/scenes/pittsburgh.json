@@ -51,8 +51,8 @@
   "mainStreets": [
     {
       "name": "East Carson Street",
-      "fromM": 5600,
-      "toM": 8600
+      "fromM": 4850,
+      "toM": 7850
     }
   ],
   "hotspots": [
@@ -465,44 +465,44 @@
   ],
   "signs": [
     {
-      "atM": 680,
+      "atM": 650,
       "side": "inland",
       "label": "ROBERTO CLEMENTE BRIDGE",
       "subtitle": "ALLEGHENY RIVER"
     },
     {
-      "atM": 2420,
+      "atM": 1700,
       "side": "inland",
       "label": "POINT STATE PARK",
       "subtitle": "WHERE THE THREE RIVERS MEET"
     },
     {
-      "atM": 5590,
+      "atM": 4850,
       "side": "inland",
       "label": "EAST CARSON STREET",
       "subtitle": "SOUTH SIDE"
     },
     {
-      "atM": 11980,
+      "atM": 10900,
       "side": "inland",
       "label": "P.J. McARDLE ROADWAY",
       "subtitle": "MOUNT WASHINGTON"
     },
     {
-      "atM": 14200,
+      "atM": 13120,
       "side": "inland",
       "label": "GRANDVIEW AVENUE",
       "subtitle": "MOUNT WASHINGTON OVERLOOKS"
     },
     {
-      "atM": 16800,
+      "atM": 15650,
       "side": "inland",
       "label": "WEST END BRIDGE",
       "subtitle": "OHIO RIVER"
     }
   ],
   "preview": {
-    "positionM": 14400,
+    "positionM": 13100,
     "camera": "drone"
   },
   "realHorizon": false
