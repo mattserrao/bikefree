@@ -4,7 +4,7 @@
     "name": "Yosemite Valley Loop",
     "park": "Yosemite National Park, California",
     "km": 20.6,
-    "climbM": 154,
+    "climbM": 138,
     "file": "routes/parks/yosemite.gpx"
   },
   {
@@ -12,7 +12,7 @@
     "name": "Acadia Park Loop Road",
     "park": "Acadia National Park, Maine",
     "km": 32.4,
-    "climbM": 504,
+    "climbM": 489,
     "file": "routes/parks/acadia.gpx"
   },
   {
@@ -20,7 +20,7 @@
     "name": "Grand Teton Loop",
     "park": "Grand Teton National Park, Wyoming",
     "km": 71.8,
-    "climbM": 414,
+    "climbM": 403,
     "file": "routes/parks/teton.gpx"
   },
   {
@@ -28,12 +28,12 @@
     "name": "Crater Lake Rim Drive",
     "park": "Crater Lake National Park, Oregon",
     "km": 51.4,
-    "climbM": 1193,
+    "climbM": 1185,
     "file": "routes/parks/craterlake.gpx"
   },
   {
     "id": "monumentvalley",
-    "name": "Monument Valley \u00b7 Forrest Gump Point",
+    "name": "Monument Valley · Forrest Gump Point",
     "park": "US-163, Monument Valley, Utah & Arizona",
     "km": 52.9,
     "climbM": 545,
@@ -42,12 +42,13 @@
   },
   {
     "id": "bigsur",
-    "name": "Big Sur \u00b7 Bixby Bridge & Hurricane Point",
+    "name": "Big Sur · Bixby Bridge & Hurricane Point",
     "park": "California Highway 1, Big Sur",
-    "km": 66.0,
+    "km": 66,
     "climbM": 707,
     "file": "routes/parks/bigsur.gpx",
-    "outAndBack": true
+    "outAndBack": true,
+    "scene": "routes/scenes/bigsur.json"
   },
   {
     "id": "goingtothesun",
@@ -69,7 +70,7 @@
   },
   {
     "id": "sevenmile",
-    "name": "Overseas Highway \u00b7 Seven Mile Bridge",
+    "name": "Overseas Highway · Seven Mile Bridge",
     "park": "Florida Keys (Marathon to Bahia Honda)",
     "km": 41.2,
     "climbM": 12,
@@ -78,7 +79,7 @@
   },
   {
     "id": "route28",
-    "name": "Route 28 \u00b7 Old Forge to Eighth Lake",
+    "name": "Route 28 · Old Forge to Eighth Lake",
     "park": "Fulton Chain of Lakes, Adirondacks, New York",
     "km": 57.2,
     "climbM": 298,

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="bikefree" xmlns="http://www.topografix.com/GPX/1/1">
-  <metadata><name>Monument Valley · Forrest Gump Point</name><desc>US-163, Monument Valley, Utah & Arizona. Out and back. Routed with BRouter on OpenStreetMap data (© OpenStreetMap contributors, ODbL); elevation from AWS Terrain Tiles.</desc></metadata>
+  <metadata><name>Monument Valley · Forrest Gump Point</name><desc>US-163, Monument Valley, Utah &amp; Arizona. Out and back. Routed with BRouter on OpenStreetMap data (© OpenStreetMap contributors, ODbL); elevation from AWS Terrain Tiles.</desc></metadata>
   <trk><name>Monument Valley · Forrest Gump Point</name><trkseg>
     <trkpt lat="37.101752" lon="-109.990378"><ele>1555.8</ele></trkpt>
     <trkpt lat="37.101694" lon="-109.990465"><ele>1555.8</ele></trkpt>

@@ -1,0 +1,33 @@
+import * as THREE from '../../vendor/three.module.min.js';
+
+const unpack = (text, Type) => {
+  const bytes = Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+  return new Type(bytes.buffer);
+};
+
+/** Load the vertex-colour Blender kit once per scene. Shared by all instances. */
+export async function loadSceneryAssets(path) {
+  const response = await fetch(new URL(`../../${path}`, import.meta.url));
+  if (!response.ok) throw new Error(`Scenery assets could not load (${response.status})`);
+  const data = await response.json();
+  if (data.format !== 'bikefree-scenery-1') throw new Error('Unsupported scenery asset format');
+  const material = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  const assets = {};
+  for (const [name, part] of Object.entries(data.assets)) {
+    const compact = unpack(part.position, Int16Array);
+    const colors = unpack(part.color, Uint8Array);
+    const linearColors = new Float32Array(colors.length);
+    const tint = new THREE.Color();
+    for (let i = 0; i < colors.length; i += 3) {
+      tint.setRGB(colors[i] / 255, colors[i + 1] / 255, colors[i + 2] / 255, THREE.SRGBColorSpace);
+      linearColors.set([tint.r, tint.g, tint.b], i);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(Float32Array.from(compact, (v) => v / data.positionScale), 3));
+    geometry.setAttribute('normal', new THREE.BufferAttribute(unpack(part.normal, Int8Array), 3, true));
+    geometry.setAttribute('color', new THREE.BufferAttribute(linearColors, 3));
+    geometry.computeBoundingSphere();
+    assets[name] = { geometry, material };
+  }
+  return { assets, dispose() { for (const a of Object.values(assets)) a.geometry.dispose(); material.dispose(); } };
+}

@@ -15,6 +15,7 @@ Two kinds:
     python3 tools/build_park_routes.py bigsur zion  # build some (index.json is merged)
 """
 import io, json, math, os, sys, urllib.request, urllib.parse
+from xml.sax.saxutils import escape
 from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,150 +24,11 @@ CACHE = os.path.join(ROOT, 'tools', '.cache')
 DEM_Z = 14
 
 # Waypoints are (lat, lon) in riding order; the loop returns to the first one.
-PARKS = {
-    'yosemite': {
-        'name': 'Yosemite Valley Loop',
-        'park': 'Yosemite National Park, California',
-        'profile': 'fastbike',
-        'expect_km': (17, 23),
-        'waypoints': [
-            (37.7432, -119.5970),  # Yosemite Valley Lodge (Northside Dr)
-            (37.7245, -119.6370),  # El Capitan Meadow (Northside Dr)
-            (37.7166, -119.6640),  # Pohono Bridge
-            (37.7172, -119.6465),  # Bridalveil Fall (Southside Dr)
-            (37.7366, -119.6029),  # Swinging Bridge (Southside Dr)
-            (37.7376, -119.5717),  # Curry Village
-        ],
-        'pois': {'El Capitan Meadow': (37.7245, -119.6370), 'Bridalveil Fall': (37.7172, -119.6465)},
-    },
-    'acadia': {
-        'name': 'Acadia Park Loop Road',
-        'park': 'Acadia National Park, Maine',
-        'profile': 'fastbike',
-        'expect_km': (30, 45),
-        'waypoints': [
-            (44.4096, -68.2470),  # Hulls Cove Visitor Center
-            (44.3620, -68.2075),  # Sieur de Monts
-            (44.3305, -68.1840),  # Sand Beach
-            (44.3210, -68.1890),  # Thunder Hole
-            (44.3107, -68.1925),  # Otter Cliffs
-            (44.3204, -68.2530),  # Jordan Pond
-            (44.3440, -68.2420),  # Bubble Pond
-        ],
-        'pois': {'Sand Beach': (44.3305, -68.1840), 'Jordan Pond': (44.3204, -68.2530)},
-    },
-    'teton': {
-        'name': 'Grand Teton Loop',
-        'park': 'Grand Teton National Park, Wyoming',
-        'profile': 'car-fast',
-        'expect_km': (62, 75),
-        'waypoints': [
-            (43.6568, -110.7130),  # Moose Junction (US-89/191 + Teton Park Rd)
-            (43.8410, -110.5100),  # Moran Junction
-            (43.8750, -110.5770),  # Jackson Lake Junction
-            (43.7900, -110.7270),  # North Jenny Lake Junction (Teton Park Rd)
-            (43.7520, -110.7240),  # South Jenny Lake
-        ],
-        'pois': {'Moran Junction': (43.8410, -110.5100), 'South Jenny Lake': (43.7520, -110.7240)},
-    },
-    'craterlake': {
-        'name': 'Crater Lake Rim Drive',
-        'park': 'Crater Lake National Park, Oregon',
-        'profile': 'car-fast',
-        'expect_km': (50, 58),
-        'waypoints': [
-            (42.9115, -122.1450),  # Rim Village
-            (42.8966, -122.1340),  # Park Headquarters / Steel Visitor Center
-            (42.9150, -122.0530),  # Kerr Notch
-            (42.9810, -122.0830),  # Cleetwood Cove
-            (42.9850, -122.1450),  # North Junction
-            (42.9470, -122.1680),  # Watchman Overlook
-            (42.9230, -122.1530),  # Discovery Point
-        ],
-        'pois': {'Cleetwood Cove': (42.9810, -122.0830), 'Watchman': (42.9470, -122.1680)},
-    },
-
-    # ---- v0.11: out-and-back scenic roads (expect_km is one way) ----
-    'monumentvalley': {
-        'name': 'Monument Valley · Forrest Gump Point',
-        'park': 'US-163, Monument Valley, Utah & Arizona',
-        'profile': 'car-fast', 'out_and_back': True,
-        'expect_km': (17, 28),
-        'waypoints': [
-            (37.1012, -109.9898),  # Forrest Gump Point (US-163)
-            (37.0010, -110.0950),  # US-163 at the Monument Valley Rd turn
-            (36.9833, -110.1120),  # Monument Valley visitor center (The View)
-        ],
-        'pois': {'Forrest Gump Point': (37.1012, -109.9898), 'Visitor center': (36.9833, -110.1120)},
-    },
-    'bigsur': {
-        'name': 'Big Sur · Bixby Bridge & Hurricane Point',
-        'park': 'California Highway 1, Big Sur',
-        'profile': 'car-fast', 'out_and_back': True,
-        'expect_km': (28, 40),
-        'waypoints': [
-            (36.4985, -121.9375),  # Carmel Highlands, just south of Point Lobos
-            (36.4400, -121.9215),  # Garrapata
-            (36.3716, -121.9019),  # Bixby Creek Bridge
-            (36.3060, -121.8800),  # Point Sur
-            (36.2700, -121.8075),  # Big Sur village
-        ],
-        'pois': {'Bixby Bridge': (36.3716, -121.9019), 'Hurricane Point': (36.3567, -121.8985), 'Big Sur village': (36.2700, -121.8075)},
-    },
-    'goingtothesun': {
-        'name': 'Going-to-the-Sun Road',
-        'park': 'Glacier National Park, Montana',
-        'profile': 'fastbike', 'out_and_back': True,
-        'expect_km': (30, 42),
-        # cliff-cut road on a 30 m DEM: sample the mountain face, so smooth harder (the real road holds ~6%)
-        'profile_opts': {'cliff_m': 800, 'bridge_m': 800, 'smooth_m': 600},
-        'waypoints': [
-            (48.6178, -113.8770),  # Lake McDonald Lodge
-            (48.6797, -113.8187),  # Avalanche Creek
-            (48.6965, -113.7180),  # Logan Pass visitor center
-        ],
-        'pois': {'Avalanche Creek': (48.6797, -113.8187), 'Logan Pass': (48.6965, -113.7180)},
-    },
-    'zion': {
-        'name': 'Zion Canyon Scenic Drive',
-        'park': 'Zion National Park, Utah',
-        'profile': 'fastbike', 'out_and_back': True,
-        'expect_km': (10, 16),
-        'waypoints': [
-            (37.2002, -112.9868),  # Zion Canyon visitor center
-            (37.2508, -112.9570),  # Zion Lodge
-            (37.2849, -112.9478),  # Temple of Sinawava
-        ],
-        'pois': {'Zion Lodge': (37.2508, -112.9570), 'Temple of Sinawava': (37.2849, -112.9478)},
-    },
-    'sevenmile': {
-        'name': 'Overseas Highway · Seven Mile Bridge',
-        'park': 'Florida Keys (Marathon to Bahia Honda)',
-        'profile': 'car-fast', 'out_and_back': True,
-        'min_ele': 3.0,  # the DEM includes the sea floor; keep bridges above the water
-        'expect_km': (18, 28),
-        'waypoints': [
-            (24.7120, -81.0880),  # Marathon
-            (24.6995, -81.1500),  # Seven Mile Bridge, east end
-            (24.6560, -81.2790),  # Bahia Honda State Park
-        ],
-        'pois': {'Seven Mile Bridge (Pigeon Key)': (24.7040, -81.1550), 'Bahia Honda': (24.6560, -81.2790)},
-    },
-    'route28': {
-        'name': 'Route 28 · Old Forge to Eighth Lake',
-        'park': 'Fulton Chain of Lakes, Adirondacks, New York',
-        'profile': 'car-fast', 'out_and_back': True,
-        'expect_km': (22, 34),
-        'waypoints': [
-            (43.7108, -74.9733),  # Old Forge
-            (43.7585, -74.8260),  # Eagle Bay
-            (43.7475, -74.7925),  # Inlet
-            (43.7400, -74.7550),  # Seventh Lake
-            (43.7690, -74.7100),  # Eighth Lake
-        ],
-        'pois': {'Inlet': (43.7475, -74.7925), 'Seventh Lake': (43.7400, -74.7550), 'Eighth Lake': (43.7690, -74.7100)},
-    },
-}
+# Routing definitions share the same catalog as GPX imports and the app.
+with open(os.path.join(ROOT, 'routes', 'catalog.json')) as catalog_file:
+    PARKS = {p['id']: {**p['routing'], 'name': p['name'], 'park': p['park'],
+                        'out_and_back': p.get('outAndBack', False)}
+             for p in json.load(catalog_file) if p.get('routing')}
 
 
 def http_get(url):
@@ -390,9 +252,9 @@ def build(key):
     with open(os.path.join(OUT, f'{key}.gpx'), 'w') as f:
         f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
         f.write('<gpx version="1.1" creator="bikefree" xmlns="http://www.topografix.com/GPX/1/1">\n')
-        f.write(f'  <metadata><name>{park["name"]}</name><desc>{park["park"]}.{" Out and back." if oab else ""} Routed with BRouter on '
+        f.write(f'  <metadata><name>{escape(park["name"])}</name><desc>{escape(park["park"])}.{" Out and back." if oab else ""} Routed with BRouter on '
                 'OpenStreetMap data (© OpenStreetMap contributors, ODbL); elevation from AWS Terrain Tiles.</desc></metadata>\n')
-        f.write(f'  <trk><name>{park["name"]}</name><trkseg>\n')
+        f.write(f'  <trk><name>{escape(park["name"])}</name><trkseg>\n')
         for (lat, lon), e in zip(pts, eles):
             f.write(f'    <trkpt lat="{lat:.6f}" lon="{lon:.6f}"><ele>{e:.1f}</ele></trkpt>\n')
         f.write('  </trkseg></trk>\n</gpx>\n')

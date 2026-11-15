@@ -2,6 +2,8 @@
 import * as THREE from '../../vendor/three.module.min.js';
 import { makeProjection, makeRouteIndex } from './geo.js';
 import { Terrain } from './terrain.js';
+import { StylizedTerrain } from './stylized-terrain.js';
+import { headingSpan } from '../routes.js';
 import { loadRider } from './rider.js';
 import { wrapDist } from '../gpx.js';
 
@@ -28,6 +30,7 @@ export class World {
     this.crank = 0;
     this.running = false;
     this.source = null;       // () => {pos, speed, cadence, riding}
+    this.stylized = route.scene?.style === 'stylized';
 
     // Projection centred on the route
     let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
@@ -40,7 +43,7 @@ export class World {
 
     // Renderer
     this.renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.stylized ? 1.5 : 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     container.prepend(this.renderer.domElement);
@@ -57,15 +60,17 @@ export class World {
     this.scene.add(this.hemi, this.sun, this.sun.target);
     this.sky = makeSky();
     this.scene.add(this.sky);
-    this.scene.fog = new THREE.Fog(0xc6dbef, 4000, 70000);
+    this.scene.fog = new THREE.Fog(0xc6dbef, this.stylized ? 2300 : 4000, this.stylized ? 16500 : 70000);
 
-    this.terrain = new Terrain(this.scene, this.proj, this.index, {
+    const TerrainClass = this.stylized ? StylizedTerrain : Terrain;
+    this.terrain = new TerrainClass(this.scene, this.proj, this.index, {
+      route,
       bbox: { minLat, maxLat, minLon, maxLon },
       renderer: this.renderer,
       onError: (err) => this.log('3d', `Tile load problem: ${err.message}`, 'debug'),
     });
 
-    this.shoulder = makeRibbon(route, this.index, ROAD_WIDTH + 3.4, 0.05, makeGravelTexture(), 3, { polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    this.shoulder = makeRibbon(route, this.index, ROAD_WIDTH + (this.stylized ? 1.6 : 3.4), 0.05, makeGravelTexture(this.stylized), 3, { polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
     this.scene.add(this.shoulder);
     this.road = makeRoad(route, this.index);
     this.scene.add(this.road);
@@ -102,7 +107,9 @@ export class World {
   setCamera(mode) { this.cameraMode = mode; this._camInit = false; }
 
   setTimeOfDay(key) {
-    const t = TIME_PRESETS[key] || TIME_PRESETS.midday;
+    let t = TIME_PRESETS[key] || TIME_PRESETS.midday;
+    if (this.stylized) t = { ...t, sunI: 1.35, hemiI: 1.45,
+      ...(key === 'midday' ? { top: '#78afd1', horizon: '#d6e3df', hemiSky: '#f4f4ee', hemiGround: '#a2a18b', sun: '#fff6e2', exposure: 1.08 } : {}) };
     this.timeKey = key;
     const el = THREE.MathUtils.degToRad(t.elev), az = THREE.MathUtils.degToRad(t.az);
     // azimuth from north, clockwise; north is −z, east is +x
@@ -168,13 +175,8 @@ export class World {
     // Rider placement: right-hand side of the road
     const p = this.pointAt(this.s);
     const turn = this.route.turnS;  // out-and-back: distance of the turnaround
-    let aheadS = this.s + 6, behindS = this.s - 6;
+    const [behindS, aheadS] = headingSpan(this.route, this.s);
     const x = wrapDist(this.route, this.s);
-    if (turn) {
-      // Look along this leg only, so the heading flips cleanly at the turnaround.
-      if (x <= turn) aheadS = this.s + Math.max(0.5, Math.min(6, turn - x));
-      else behindS = this.s - Math.max(0.5, Math.min(6, x - turn));
-    }
     const ahead = this.pointAt(aheadS), behind = this.pointAt(behindS);
     const fwd = ahead.clone().sub(behind).normalize();
     const flat = new THREE.Vector3(fwd.x, 0, fwd.z).normalize();
@@ -207,7 +209,15 @@ export class World {
   _updateCamera(riderPos, flat, fwd, dt) {
     const up = new THREE.Vector3(0, 1, 0);
     let pos, look;
-    if (this.cameraMode === 'eye') {
+    if (this.cameraMode === 'vista' && this.stylized) {
+      const b = this.terrain.landscape.landmarks[0];
+      const nearby = b && Math.abs(this.s - b.s) < 900;
+      const direction = nearby ? new THREE.Vector3(b.fx, 0, b.fz) : flat;
+      const right = new THREE.Vector3(-direction.z, 0, direction.x);
+      const target = nearby ? new THREE.Vector3(b.x, b.y, b.z) : riderPos;
+      pos = target.clone().addScaledVector(right, -245).addScaledVector(direction, -65).addScaledVector(up, 105);
+      look = target.clone().addScaledVector(up, -16);
+    } else if (this.cameraMode === 'eye') {
       pos = riderPos.clone().addScaledVector(up, 1.55).addScaledVector(flat, 0.35);
       const far = this.pointAt(this.s + 35);
       look = far.addScaledVector(new THREE.Vector3(-flat.z, 0, flat.x), ROAD_WIDTH * 0.22).addScaledVector(up, 1.3);
@@ -225,7 +235,8 @@ export class World {
     }
     // Keep the camera above ground
     const g = this.terrain.heightAt(pos.x, pos.z);
-    if (g != null && pos.y < g + 1.6) pos.y = g + 1.6;
+    const clearance = this.cameraMode === 'vista' ? 25 : 1.6;
+    if (g != null && pos.y < g + clearance) pos.y = g + clearance;
 
     if (!this._camInit) {
       this.camera.position.copy(pos);
@@ -303,6 +314,7 @@ const roadPoints = (route) => (route.turnIdx ? route.turnIdx + 1 : route.dist.le
 
 // ---------- Road ----------
 function makeRoad(route, index) {
+  const stylized = route.scene?.style === 'stylized';
   const n = roadPoints(route);
   const pos = new Float32Array(n * 2 * 3);
   const uv = new Float32Array(n * 2 * 2);
@@ -330,16 +342,22 @@ function makeRoad(route, index) {
 
   // Asphalt with edge lines and a dashed yellow centre line
   const c = document.createElement('canvas');
-  c.width = 64; c.height = 256;
+  c.width = stylized ? 256 : 64; c.height = stylized ? 512 : 256;
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#4d5054'; ctx.fillRect(0, 0, 64, 256);
+  ctx.fillStyle = stylized ? '#555c60' : '#4d5054'; ctx.fillRect(0, 0, c.width, c.height);
   for (let k = 0; k < 900; k++) { // grain
-    const g = 62 + Math.random() * 28;
+    const g = stylized ? 80 + Math.random() * 8 : 62 + Math.random() * 28;
     ctx.fillStyle = `rgb(${g},${g},${g + 2})`;
-    ctx.fillRect(Math.random() * 64, Math.random() * 256, 1, 1);
+    ctx.fillRect(Math.random() * c.width, Math.random() * c.height, 1, 1);
   }
   ctx.fillStyle = '#d9d9d2'; ctx.fillRect(2, 0, 2, 256); ctx.fillRect(60, 0, 2, 256);
   ctx.fillStyle = '#d8b23a'; ctx.fillRect(30, 0, 1.5, 150); ctx.fillRect(32.5, 0, 1.5, 150);
+  if (stylized) {
+    // Crisp, restrained paint and grain suit the sculpted scenery.
+    ctx.fillStyle = '#555c60'; ctx.fillRect(0, 0, 64, c.height);
+    ctx.fillStyle = '#e8e4d0'; ctx.fillRect(8, 0, 3, c.height); ctx.fillRect(245, 0, 3, c.height);
+    ctx.fillStyle = '#e4c36a'; ctx.fillRect(124, 0, 2, c.height); ctx.fillRect(130, 0, 2, c.height);
+  }
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = THREE.ClampToEdgeWrapping;
   tex.wrapT = THREE.RepeatWrapping;
@@ -380,7 +398,7 @@ function makeRibbon(route, index, width, lift, tex, repeatM, offset) {
 }
 
 /** Gravel/dirt shoulder that fades into the ground at its outer edges. */
-function makeGravelTexture() {
+function makeGravelTexture(stylized = false) {
   const c = document.createElement('canvas');
   c.width = 64; c.height = 128;
   const ctx = c.getContext('2d');
@@ -388,7 +406,7 @@ function makeGravelTexture() {
   for (let y = 0; y < 128; y++) {
     for (let x = 0; x < 64; x++) {
       const k = (y * 64 + x) * 4;
-      const g = 105 + Math.random() * 60;
+      const g = stylized ? 162 + Math.random() * 12 : 105 + Math.random() * 60;
       img.data[k] = g * 1.02; img.data[k + 1] = g * 0.96; img.data[k + 2] = g * 0.86;
       const edge = Math.min(x, 63 - x) / 63;          // 0 at the outside, 0.5 at the centre
       img.data[k + 3] = 255 * Math.min(1, Math.max(0, (edge - 0.02) / 0.14)) * (0.75 + Math.random() * 0.25);

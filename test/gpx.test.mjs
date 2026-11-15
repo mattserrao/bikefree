@@ -83,26 +83,22 @@ test('small gap gets closed; open route is not a loop', () => {
   assert.equal(buildRoute(parseGpx(makeGpx())).closed, false);
 });
 
-test('scenic routes are closed (lap endlessly) and the right length', async () => {
-  const { readdirSync } = await import('node:fs');
-  const dir = new URL('../routes/parks/', import.meta.url);
+test('scenic routes are closed (lap endlessly) and the right length', () => {
+  const catalog = JSON.parse(readFileSync(new URL('../routes/catalog.json', import.meta.url), 'utf8'));
   // km for the full lap (out-and-back routes: there and back)
-  const expect = {
-    yosemite: [18, 23], acadia: [30, 36], teton: [68, 75], craterlake: [49, 54],
-    monumentvalley: [48, 58], bigsur: [60, 72], goingtothesun: [62, 74], zion: [22, 30], sevenmile: [38, 46], route28: [52, 62],
-  };
-  for (const f of readdirSync(dir).filter((x) => x.endsWith('.gpx'))) {
-    const r = buildRoute(parseGpx(readFileSync(new URL(f, dir), 'utf8')));
-    const [lo, hi] = expect[f.replace('.gpx', '')];
-    assert.equal(r.closed, true, f);
-    assert.ok(r.total / 1000 > lo && r.total / 1000 < hi, `${f} ${r.total}`);
+  for (const item of catalog) {
+    const r = buildRoute(parseGpx(readFileSync(new URL(`../${item.file}`, import.meta.url), 'utf8')));
+    const [lo, hi] = item.expectedKm;
+    assert.equal(r.closed, true, item.id);
+    assert.ok(r.total / 1000 >= lo && r.total / 1000 <= hi, `${item.id} ${r.total}`);
   }
 });
 
 test('out-and-back routes are symmetric and have rideable grades', async () => {
   const index = JSON.parse(readFileSync(new URL('../routes/parks/index.json', import.meta.url), 'utf8'));
+  const catalog = JSON.parse(readFileSync(new URL('../routes/catalog.json', import.meta.url), 'utf8'));
   const oab = index.filter((r) => r.outAndBack);
-  assert.equal(oab.length, 6);
+  assert.deepEqual(oab.map((r) => r.id), catalog.filter((r) => r.outAndBack).map((r) => r.id));
   for (const item of oab) {
     const r = buildRoute(parseGpx(readFileSync(new URL(`../${item.file}`, import.meta.url), 'utf8')));
     const n = r.lat.length, half = Math.floor((n - 1) / 2);

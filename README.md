@@ -40,6 +40,11 @@ npm test      # Node 18+
 
 ## Rebuilding the park routes and the rider
 
+To add a GPX route, prepare the catalog, or rebuild the style-C Big Sur scenery,
+see [ROUTES.md](ROUTES.md). `npm run routes:build` validates every catalog route
+and generates the catalog and offline manifest; `npm run routes:check` verifies
+that those generated files are current.
+
 ```sh
 python3 tools/build_park_routes.py          # park GPX files (needs internet)
 pip install bpy==5.2.3 && python3.11 tools/build_rider.py   # rider model → models/rider.json

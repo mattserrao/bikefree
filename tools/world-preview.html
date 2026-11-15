@@ -1,44 +1,61 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>bikefree — 3D world preview</title>
-  <style>
-    html, body { margin: 0; height: 100%; background: #000; color: #fff; font: 13px -apple-system, sans-serif; }
-    #view { position: fixed; inset: 0; }
-    .world-canvas { width: 100%; height: 100%; display: block; }
-    #info { position: fixed; left: 10px; top: 10px; background: rgba(0,0,0,.5); padding: 6px 10px; border-radius: 6px; }
-  </style>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bikefree · Big Sur visual preview</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22%3E%3Ccircle cx=%2210%22 cy=%2210%22 r=%228%22 fill=%22%236c8761%22/%3E%3C/svg%3E">
+<style>
+:root{color-scheme:light;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#283b36}*{box-sizing:border-box}body{margin:0;background:#dae6df}#view{position:fixed;inset:0}.world-canvas{display:block;width:100%;height:100%}.panel{background:#fffdf0ed;border:1px solid #ffffff80;box-shadow:0 8px 40px #21392c14;backdrop-filter:blur(16px);border-radius:14px}header{position:fixed;top:24px;left:24px;padding:18px 22px;width:320px}.brand{font-size:24px;font-weight:760;letter-spacing:-1.1px;font-style:italic}.brand span{color:#6c8761}.eyebrow{text-transform:uppercase;font-size:10px;letter-spacing:1.8px;font-weight:700;color:#72826c}h1{margin:15px 0 6px;font-size:21px;letter-spacing:-.7px;font-weight:600}p{font-size:12px;line-height:1.55;margin:0;color:#6b7766}#status{position:fixed;right:24px;top:24px;padding:11px 16px;font-size:11px;max-width:320px}#error{position:fixed;left:24px;top:230px;padding:12px 18px;background:#fff0d8;max-width:400px;border-radius:10px}footer{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);width:min(780px,calc(100% - 48px));padding:17px 22px 14px}.row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.spacer{flex:1}button,select{font:inherit;font-size:11px;padding:8px 11px;border:1px solid #cdd4c3;color:#314a3b;background:#fffef7;border-radius:7px;cursor:pointer}button:hover{background:#e8eddd}button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #6c8761;outline-offset:3px}.primary{background:#355a46;border-color:#355a46;color:white;min-width:70px}.primary:hover{background:#294a38}#seek{width:100%;margin:14px 0 6px;accent-color:#597a58;cursor:pointer}.caption{display:flex;justify-content:space-between;font-size:10px;color:#7a856f}.clean header,.clean footer,.clean #status{display:none}@media(max-width:650px){header{top:12px;left:12px;width:260px;padding:14px}#status{top:auto;bottom:185px;right:12px}footer{bottom:12px;width:calc(100% - 24px);padding:14px}}
+</style>
 </head>
 <body>
-  <div id="view"></div>
-  <div id="info">loading…</div>
-  <script type="module">
-    // Dev preview: ?park=teton&pos=12000&cam=chase&time=golden&speed=12
-    import { World } from '../js/world/world.js';
-    import { parseGpx, buildRoute } from '../js/gpx.js';
-    const q = new URLSearchParams(location.search);
-    const park = q.get('park') || 'teton';
-    const text = await (await fetch(`../routes/parks/${park}.gpx`)).text();
-    const route = buildRoute(parseGpx(text));
-    const world = new World(document.getElementById('view'), route, { log: (...a) => console.log(...a) });
-    let pos = Number(q.get('pos') || 0);
-    const speed = Number(q.get('speed') || 0);
-    world.s = pos;
-    world.setCamera(q.get('cam') || 'chase');
-    world.setTimeOfDay(q.get('time') || 'midday');
-    let last = performance.now();
-    world.setSource(() => {
-      const now = performance.now();
-      pos += speed * (now - last) / 1000; last = now;
-      return { pos: pos % route.total, speed, cadence: speed ? 88 : 0, riding: true };
-    });
-    world.start();
-    window.world = world;
-    setInterval(() => {
-      document.getElementById('info').textContent =
-        `${route.name} · ${(world.s / 1000).toFixed(2)} km · tiles loading ${world.loading} · ready ${world.terrain.stats.ready}`;
-    }, 500);
-  </script>
+<main id="view" aria-label="Interactive 3D cycling scene"></main>
+<header class="panel"><div class="row"><div class="brand">bike<span>free</span></div><div class="spacer"></div><span class="eyebrow" id="version"></span></div><h1 id="name">Loading the coast…</h1><p>Style C · sculpted scenery<br>Ride the real route through an authored landscape.</p></header>
+<div id="status" class="panel" role="status" aria-live="polite">Preparing scenery…</div><div id="error" hidden role="alert"></div>
+<footer class="panel"><div class="row"><button class="primary" id="play">Ride</button><button data-pos="15420">Bridge approach</button><button data-pos="15669">Bixby Bridge</button><button data-pos="17700">Coastline</button><div class="spacer"></div><select id="camera" aria-label="Camera"><option value="chase">Chase camera</option><option value="eye">On the bike</option><option value="vista">Scenic view</option><option value="drone">Drone</option><option value="side">Side</option></select><select id="time" aria-label="Time of day"><option value="midday">Daylight</option><option value="golden">Golden hour</option><option value="morning">Morning</option></select></div><input id="seek" type="range" min="0" max="1" value="0" step="10" aria-label="Position along the route"><div class="caption"><span id="distance">0.0 km</span><span>Visual prototype · no trainer required</span><span id="total"></span></div></footer>
+<script type="module">
+import { World } from '../js/world/world.js';
+import { buildCatalogRoute, loadRouteScene } from '../js/routes.js';
+import { VERSION } from '../js/version.js';
+import { registerServiceWorker } from '../js/offline.js';
+const $ = (id) => document.getElementById(id);
+const q = new URLSearchParams(location.search);
+if (q.get('clean') === '1') document.body.classList.add('clean');
+$('version').textContent = `v${VERSION}`;
+registerServiceWorker((...args) => console.log(...args));
+try {
+ const park = q.get('park') || 'bigsur';
+ const catalogResponse = await fetch('../routes/parks/index.json');
+ if (!catalogResponse.ok) throw new Error('The route catalog could not load.');
+ const catalog = await catalogResponse.json();
+ const item = catalog.find((p) => p.id === park);
+ if (!item) throw new Error(`Unknown route: ${park}`);
+ const response = await fetch(`../${item.file}`);
+ if (!response.ok) throw new Error('The route GPX could not load.');
+ const route = buildCatalogRoute(await response.text(), item);
+ if (q.get('style') !== 'legacy') await loadRouteScene(route);
+ const world = new World($('view'), route, { log: (...args) => console.log(...args) });
+ let pos = Math.max(0, Math.min(route.total, Number(q.get('pos') ?? route.scene?.preview?.positionM ?? 0) || 0));
+ let speed = Math.max(0, Math.min(45, Number(q.get('speed')) || 0));
+ let last = performance.now();
+ function seek(value) { pos = Number(value); world.s = pos; world._camInit = false; }
+ world.s = pos;
+ $('camera').value = q.get('cam') || 'chase'; $('time').value = q.get('time') || 'midday';
+ world.setCamera($('camera').value); world.setTimeOfDay($('time').value);
+ world.setSource(() => { const now = performance.now(); pos = (pos + speed * (now - last) / 1000) % route.total; last = now; return { pos, speed, cadence: speed ? 84 : 0, riding: true }; });
+ window.world = world; window.preview = { seek, setSpeed(value) { speed = value; last = performance.now(); }, route };
+ $('name').textContent = park === 'bigsur' ? 'Big Sur, California' : route.name;
+ $('seek').max = route.total - 1; $('seek').value = pos;
+ $('total').textContent = `${(route.total / 1000).toFixed(1)} km · ${route.outAndBack ? 'out & back' : 'loop'}`;
+ $('seek').addEventListener('input', (e) => seek(e.target.value));
+ document.querySelectorAll('[data-pos]').forEach((b) => b.addEventListener('click', () => seek(b.dataset.pos)));
+ $('camera').addEventListener('change', (e) => world.setCamera(e.target.value));
+ $('time').addEventListener('change', (e) => world.setTimeOfDay(e.target.value));
+ $('play').addEventListener('click', () => { speed = speed ? 0 : 10; last = performance.now(); $('play').textContent = speed ? 'Pause' : 'Ride'; });
+ world.start();
+ setInterval(() => { $('seek').value = pos; $('distance').textContent = `${(pos / 1000).toFixed(1)} km`; const s = world.terrain.stats; $('status').textContent = s.errors ? 'Scenery unavailable · check connection and reload' : world.loading ? 'Preparing scenery…' : route.scene ? 'Bundled scenery · no map downloads' : `${s.ready} terrain tiles ready`; }, 500);
+ window.addEventListener('pagehide', () => world.dispose(), { once: true });
+} catch (err) { $('status').textContent = 'Could not open this route'; $('error').hidden = false; $('error').textContent = err.message; console.error(err); }
+</script>
 </body>
 </html>

@@ -1,0 +1,106 @@
+{
+  "format": "bikefree-scene-1",
+  "style": "stylized",
+  "region": "california-coast",
+  "terrain": "authored-coast",
+  "description": "Sculpted coastal scenery aligned to the real GPX. Landscape shapes and coastline are an artistic interpretation, not a survey or elevation raster.",
+  "assets": "models/scenery/coastal.json",
+  "seed": 1101,
+  "palette": {
+    "grass": "#879e73",
+    "meadow": "#c7bc91",
+    "rock": "#b2ada0",
+    "cliff": "#d4ccb6",
+    "water": "#388f9d"
+  },
+  "coastline": [
+    [
+      36.515,
+      -121.947
+    ],
+    [
+      36.478,
+      -121.943
+    ],
+    [
+      36.445,
+      -121.93
+    ],
+    [
+      36.42,
+      -121.922
+    ],
+    [
+      36.4,
+      -121.916
+    ],
+    [
+      36.376,
+      -121.905
+    ],
+    [
+      36.367,
+      -121.906
+    ],
+    [
+      36.357,
+      -121.91
+    ],
+    [
+      36.34,
+      -121.903
+    ],
+    [
+      36.325,
+      -121.9
+    ],
+    [
+      36.31,
+      -121.908
+    ],
+    [
+      36.297,
+      -121.892
+    ],
+    [
+      36.279,
+      -121.862
+    ],
+    [
+      36.26,
+      -121.843
+    ],
+    [
+      36.24,
+      -121.82
+    ]
+  ],
+  "landmarks": [
+    {
+      "id": "bixby",
+      "name": "Bixby Creek Bridge",
+      "asset": "bridge",
+      "lat": 36.3716,
+      "lon": -121.9019,
+      "span": 218,
+      "depth": 65
+    }
+  ],
+  "preview": {
+    "positionM": 15420,
+    "camera": "chase",
+    "time": "midday"
+  },
+  "roadside": [
+    {
+      "fromM": 14800,
+      "toM": 16600,
+      "side": "ocean"
+    },
+    {
+      "fromM": 17200,
+      "toM": 18500,
+      "side": "ocean"
+    }
+  ]
+}

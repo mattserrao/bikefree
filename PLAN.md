@@ -205,6 +205,18 @@ Goal: more places to ride, each a different kind of day.
 - [x] Route list renamed *Scenic routes — 3D*; the new routes also work as Scenery behind free rides and workouts; offline download works for all of them
 - [ ] On-bike check
 
+### v0.11.1 — Stylized scenery *(test branch `test/v0.11.1-stylized`)*
+Art direction selected: **C — Stylized 3D**. Target: M4 MacBook Air.
+- [x] Big Sur visual prototype: bundled sculpted coast, ocean, regional vegetation, road detail and a Blender-built Bixby-inspired bridge
+- [x] Reusable Blender kit and shared app/preview route loader
+- [x] GPX + catalog preparation workflow; strict XML, geometry and metadata checks; generated offline manifest
+- [x] Fix malformed GPX metadata and out-and-back heading cancellation at the lap seam
+- [x] Extend offline planning tests to every scenic route
+- [ ] Review the working Big Sur prototype with Matt before applying the visual system to other regions
+- [ ] Regional scenery for the remaining nine scenic routes
+- [ ] Adaptive graphics controls and sustained performance check on M4 Air
+- [ ] Full route visual checks, offline verification and on-bike Bluetooth validation for the completed release
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

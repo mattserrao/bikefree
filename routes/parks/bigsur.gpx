@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="bikefree" xmlns="http://www.topografix.com/GPX/1/1">
-  <metadata><name>Big Sur · Bixby Bridge & Hurricane Point</name><desc>California Highway 1, Big Sur. Out and back. Routed with BRouter on OpenStreetMap data (© OpenStreetMap contributors, ODbL); elevation from AWS Terrain Tiles.</desc></metadata>
-  <trk><name>Big Sur · Bixby Bridge & Hurricane Point</name><trkseg>
+  <metadata><name>Big Sur · Bixby Bridge &amp; Hurricane Point</name><desc>California Highway 1, Big Sur. Out and back. Routed with BRouter on OpenStreetMap data (© OpenStreetMap contributors, ODbL); elevation from AWS Terrain Tiles.</desc></metadata>
+  <trk><name>Big Sur · Bixby Bridge &amp; Hurricane Point</name><trkseg>
     <trkpt lat="36.499364" lon="-121.936528"><ele>26.3</ele></trkpt>
     <trkpt lat="36.499303" lon="-121.936445"><ele>26.3</ele></trkpt>
     <trkpt lat="36.499243" lon="-121.936362"><ele>26.3</ele></trkpt>
