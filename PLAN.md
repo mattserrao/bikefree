@@ -251,6 +251,17 @@ Goal: blend the two approaches — Codex's stylized scenery up close, the real l
 - [x] Second copy of the Blender rider in a **yellow-and-black checkered jersey** (model-space checker shader) with yellow bike accents, a bike-width inside your line so you can ride alongside or pass.
 - [x] HUD pill: "Pacer 150 W · 120 ft ahead / behind / alongside".
 - [x] `js/pacer.js` + `test/pacer.test.mjs`.
+### v0.11.6 — Course QC sweep *(test branch `v0.11.6`, on top of v0.11.5)*
+Goal: a repeatable check that rides every course end to end and flags discontinuities.
+- [x] `npm run qc` (`tools/qc_course.mjs`): rides each route every metre, out and back and across the lap seam, using the app's own route, rider-placement and scenery code; writes `tools/qc-report.html` (profile charts with flagged spans, findings table, preview links to each spot)
+- [x] Checks: GPX spurs/zig-zags, gaps and elevation spikes; rider position, height and heading jumps; grade jolts, ±25 % clamps and grade/elevation mismatch; ground through the road, flooded road, floating road edges, ledges and walls beside the road, ground mesh too coarse for a carve; chase-camera hops
+- [x] Rider and pacer placement moved to `js/world/pose.js`, shared by `world.js` and the QC sweep
+- [x] Tests for the sweep on synthetic loops (clean, spur, spike, gap) and on the scenic routes
+- [ ] Fix what the first sweep found (FAIL):
+  - [ ] Yosemite 3.09 km, Acadia 5.24 km, Going-to-the-Sun 8.98 km: GPX runs ~40–50 m up a dead-end spur and doubles back (rider U-turns mid-route, jumps 1.4–2 m)
+  - [ ] Ground through the road: Acadia 5.12 km, Going-to-the-Sun 8.92 km (beside those spurs), Crater Lake 21.32 km (road carving switches to a nearby stretch of the route), Big Sur 15.78 km (edge of the bridge exclusion)
+  - [ ] Going-to-the-Sun lap seam (68.11 km): rider hops 0.7 m sideways where the start U-turn drift begins
+- [ ] Review the warnings: Snake River channel too narrow for the ground mesh (Grand Teton 31–32 km), Seven Mile Bridge road edges floating at 3.6 and 15.0 km
 
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)

@@ -152,3 +152,35 @@ node tools/package_preview.mjs /tmp/bikefree-bigsur-v0.11.1.html
 This packages the actual WebGL scene, GPX and animated rider into one HTML file.
 It is a visual review artifact, not the Bluetooth trainer app. Sustained frame
 rate, thermal behaviour and Bluetooth operation still need checking on the M4 Air.
+
+## Course QC: check the full length for discontinuities
+
+```sh
+npm run qc                                  # every scenic route + Demo Hills → tools/qc-report.html
+node tools/qc_course.mjs teton zion         # just these routes
+node tools/qc_course.mjs --gpx ~/ride.gpx   # your own GPX (path checks only)
+node tools/qc_course.mjs --strict           # warnings fail too (exit code 1)
+```
+
+The sweep rides each course end to end the way the app does — built and mirrored with the app's own
+route code, rider placed with `js/world/pose.js` (shared with `world.js`), every metre, out and back and
+across the lap seam — and flags anything that jumps. Consecutive hits merge into one finding with a
+from–to range, its worst value and *view* / *ride* links into `tools/world-preview.html` at that spot
+(run `npm start` and open the report from `tools/`).
+
+| Layer | Check | Severity | What it catches |
+| --- | --- | --- | --- |
+| GPX | `gpx-hairpin` | warn | the track doubles back on itself (BRouter spurs, zig-zags); the planned end turnaround is info |
+| GPX | `gpx-gap`, `gpx-spike` | warn | points > 60 m apart (straight chord); one point > 6 m off its neighbours' elevation |
+| Ride path | `pose-jump`, `pose-height` | fail | rider moves > 0.6 m more than the step, or rises/falls > 0.35 m per metre |
+| Ride path | `heading-snap`, `heading-sharp` | fail / warn | heading turns > 25 °/m (snap) or > 10 °/m (very tight); planned U-turns are info |
+| Profile | `grade-step`, `grade-clamp`, `grade-mismatch` | fail / warn | grade jumps between 10 m samples (resistance jolt), pinned at ±25 %, or disagrees with elevation |
+| Scenery | `road-buried` | fail | the drawn ground (6 m patch mesh, as rendered) reaches the road or shoulder surface |
+| Scenery | `road-flooded` | fail | lake, river or sea level at the road surface |
+| Scenery | `road-floating`, `verge-wall`, `verge-step` | warn | shoulder > 3 m above ground off a bridge; ground > 3 m above the road 8 m out; a > 1 m ledge 6 m out |
+| Scenery | `mesh-coarse` | warn | a carve (river, channel) narrower than the 6 m ground mesh beside the road: jagged edge |
+| Camera | `camera-lift` | warn | the chase camera is pushed > 0.75 m up by the ground (visible camera hop) |
+
+Limits are in `LIMITS` at the top of `tools/qc_course.mjs`. The real far terrain (internet tiles) is not
+checked; it starts 1.5 km from the road.
+
