@@ -143,7 +143,39 @@ export class CoastalDetails {
     }
   }
 
+  /** Real coast: rocks scattered along the true shoreline, and the sea stacks set offshore of the road. */
+  _realCoastRocks() {
+    const S = this.landscape.shore, rand = randomSequence(7741), groups = { outcrop0: [], outcrop1: [] };
+    const matrix = new THREE.Matrix4(), rotation = new THREE.Quaternion(), position = new THREE.Vector3(), scale = new THREE.Vector3();
+    const up = new THREE.Vector3(0, 1, 0);
+    for (let j = 1; j < S.nz - 1; j++) for (let i = 1; i < S.nx - 1; i++) {
+      const v = S.field[j * S.nx + i];
+      if (v > 0 || v < -60 || rand() > (v > -14 ? .5 : .05)) continue;
+      const x = S.x0 + (i + rand() - .5) * S.cell, z = S.z0 + (j + rand() - .5) * S.cell;
+      const wide = (.3 + rand() * 1.1) * (v > -14 ? 1 : 1.6);
+      position.set(x, -1.4 - rand() * .8, z); rotation.setFromAxisAngle(up, rand() * 6.28);
+      scale.set(wide, .35 + rand() * .9, wide * (.6 + rand() * .5));
+      groups[`outcrop${rand() > .5 ? 1 : 0}`].push(matrix.compose(position, rotation, scale).clone());
+    }
+    for (const stack of this.route.scene.seaStacks || []) {
+      const frame = coastalRoadFrame(this.route, this.index, stack.atM);
+      const side = stack.side === 'inland' ? -1 : 1;
+      let off = 0;
+      for (; off < 2500; off += 4) { const p = frame.position.clone().addScaledVector(frame.right, side * off); if (this.landscape.inlandAt(p.x, p.z) < -stack.offshoreM) break; }
+      const p = frame.position.clone().addScaledVector(frame.right, side * off);
+      position.set(p.x, -2, p.z);
+      scale.set(stack.widthM / 7, stack.heightM / 5, stack.widthM / 8);
+      rotation.setFromAxisAngle(up, stack.atM * .001);
+      groups.outcrop0.push(matrix.compose(position, rotation, scale).clone());
+    }
+    for (const [name, matrices] of Object.entries(groups)) {
+      const asset = this.kit.assets[name];
+      if (asset) this._instances(asset.geometry, asset.material, matrices, 'Shoreline rocks and sea stacks', false);
+    }
+  }
+
   _coastalRocks() {
+    if (this.landscape.real) return this._realCoastRocks();
     if (this.landscape.hasOcean === false || this.landscape.kind === 'tropical') return;
     const coastSide = this.landscape.coastSide || 1;
     const rand = randomSequence(7741), groups = { outcrop0: [], outcrop1: [] };

@@ -15,9 +15,8 @@ import { dirname, join, relative } from 'node:path';
 import { parseGpx, haversine } from '../js/gpx.js';
 import { buildCatalogRoute } from '../js/routes.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
-import { makeCoastLandscape } from '../js/world/coast.js';
-import { makeRegionalLandscape } from '../js/world/regional-landscape.js';
-import { makeCityLandscape, cityStreets, STREET_LIFT } from '../js/world/city-landscape.js';
+import { cityStreets, STREET_LIFT } from '../js/world/city-landscape.js';
+import { landscapeBuilder } from '../js/world/landscapes.js';
 import { riderPose, routePoint, ROAD_WIDTH, ROAD_LIFT } from '../js/world/pose.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -156,7 +155,7 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
 
   // 3. Ridden path: rider pose every `step` m over the whole ride, wrapping across the seam
   const stylized = route.scene?.style === 'stylized';
-  const landscape = stylized ? (route.scene.terrain === 'authored-city' ? makeCityLandscape : route.scene.terrain === 'authored-region' ? makeRegionalLandscape : makeCoastLandscape)(route.scene, proj, index, route) : null;
+  const landscape = stylized ? landscapeBuilder(route.scene)(route.scene, proj, index, route) : null;
   const ground = landscape ? makeMeshGround(landscape.heightAt) : null;
   const bridgeAt = (x, z, m) => !!landscape?.bridgeAt?.(x, z, m);
   let prev = riderPose(route, index, 0), maxHeading = 0, maxJump = 0;
@@ -316,7 +315,8 @@ async function main() {
   const args = process.argv.slice(2);
   const opt = (name, dflt) => { const i = args.indexOf(name); if (i < 0) return dflt; const v = args[i + 1]; args.splice(i, 2); return v; };
   const flag = (name) => { const i = args.indexOf(name); if (i < 0) return false; args.splice(i, 1); return true; };
-  const withCity = (scene) => (scene.cityData ? { ...scene, city: JSON.parse(read(scene.cityData)) } : scene);
+  const withCity = (scene) => ({ ...scene, ...(scene.cityData ? { city: JSON.parse(read(scene.cityData)) } : {}),
+    ...(scene.terrainData ? { terrainGrid: JSON.parse(read(scene.terrainData)) } : {}) });
   const step = Number(opt('--step', 1));
   const html = opt('--html', 'tools/qc-report.html');
   const json = opt('--json', null);

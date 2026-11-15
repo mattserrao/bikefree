@@ -316,7 +316,7 @@ export class World {
     const up = new THREE.Vector3(0, 1, 0);
     let pos, look;
     if (this.cameraMode === 'vista' && this.stylized) {
-      const b = this.terrain.landscape.landmarks[0];
+      const b = this.terrain.landscape.landmarks.reduce((best, l) => (!Number.isFinite(l.s) ? best : !best || Math.abs(this.s - l.s) < Math.abs(this.s - best.s) ? l : best), null);
       const nearby = b && Math.abs(this.s - b.s) < 900;
       const direction = nearby ? new THREE.Vector3(b.fx, 0, b.fz) : flat;
       const right = new THREE.Vector3(-direction.z, 0, direction.x);

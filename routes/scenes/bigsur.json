@@ -2,8 +2,8 @@
   "format": "bikefree-scene-1",
   "style": "stylized",
   "region": "california-coast",
-  "terrain": "authored-coast",
-  "description": "Sculpted coastal scenery aligned to the real GPX. Landscape shapes and coastline are an artistic interpretation, not a survey or elevation raster.",
+  "terrain": "real-coast",
+  "description": "Real coastal landform (elevation around the route, bundled) with stylized materials, vegetation and life.",
   "assets": "models/scenery/coastal.json",
   "seed": 1101,
   "palette": {
@@ -11,82 +11,9 @@
     "meadow": "#c4b482",
     "rock": "#aaa18c",
     "cliff": "#bdb49c",
-    "water": "#2e8395"
+    "water": "#2e8395",
+    "sand": "#d8c8a2"
   },
-  "coastline": [
-    [
-      36.515,
-      -121.947
-    ],
-    [
-      36.478,
-      -121.943
-    ],
-    [
-      36.445,
-      -121.93
-    ],
-    [
-      36.42,
-      -121.922
-    ],
-    [
-      36.4,
-      -121.916
-    ],
-    [
-      36.376,
-      -121.9058
-    ],
-    [
-      36.367,
-      -121.9062
-    ],
-    [
-      36.357,
-      -121.91
-    ],
-    [
-      36.34,
-      -121.903
-    ],
-    [
-      36.325,
-      -121.9
-    ],
-    [
-      36.31,
-      -121.908
-    ],
-    [
-      36.297,
-      -121.892
-    ],
-    [
-      36.279,
-      -121.862
-    ],
-    [
-      36.26,
-      -121.843
-    ],
-    [
-      36.24,
-      -121.82
-    ]
-  ],
-  "landmarks": [
-    {
-      "id": "bixby",
-      "name": "Bixby Creek Bridge",
-      "asset": "bridge",
-      "lat": 36.3716,
-      "lon": -121.9019,
-      "span": 218,
-      "depth": 65,
-      "creekWidthM": 4
-    }
-  ],
   "preview": {
     "positionM": 15420,
     "camera": "chase",
@@ -152,5 +79,79 @@
       "widthM": 9,
       "heightM": 15
     }
-  ]
+  ],
+  "terrainData": "routes/scenes/bigsur-terrain.json",
+  "bridges": [
+    {
+      "fromM": 200,
+      "toM": 250
+    },
+    {
+      "fromM": 2020,
+      "toM": 2105,
+      "name": "Malpaso Creek Bridge",
+      "creek": {
+        "name": "Malpaso Creek",
+        "widthM": 3
+      }
+    },
+    {
+      "fromM": 5255,
+      "toM": 5310
+    },
+    {
+      "fromM": 7680,
+      "toM": 7770,
+      "name": "Garrapata Creek Bridge",
+      "creek": {
+        "name": "Garrapata Creek",
+        "widthM": 4
+      }
+    },
+    {
+      "fromM": 9905,
+      "toM": 10000
+    },
+    {
+      "fromM": 14530,
+      "toM": 14690,
+      "name": "Rocky Creek Bridge",
+      "arch": true,
+      "creek": {
+        "name": "Rocky Creek",
+        "widthM": 3
+      }
+    },
+    {
+      "fromM": 15600,
+      "toM": 15828,
+      "name": "Bixby Creek Bridge",
+      "arch": true,
+      "creek": {
+        "name": "Bixby Creek",
+        "widthM": 5,
+        "upstreamM": 700
+      }
+    },
+    {
+      "fromM": 20975,
+      "toM": 21075,
+      "name": "Little Sur River Bridge",
+      "creek": {
+        "name": "Little Sur River",
+        "widthM": 9
+      }
+    },
+    {
+      "fromM": 25440,
+      "toM": 25495
+    }
+  ],
+  "realHorizon": false,
+  "terrainBuild": {
+    "padM": 9000,
+    "coarseM": 40,
+    "fineM": 900,
+    "fineCellM": 10
+  }
 }

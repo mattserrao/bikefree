@@ -1,11 +1,11 @@
 import * as THREE from '../../vendor/three.module.min.js';
-import { makeCoastLandscape, randomSequence, smoothstep } from './coast.js';
+import { randomSequence, smoothstep } from './coast.js';
 import { loadSceneryAssets } from './scenery-assets.js';
 import { makeCoastalGroundMaterial, makeCoastalWaterMaterial } from './coastal-materials.js';
 import { CoastalDetails, fitBridgeToRoad, coastalRoadFrame } from './coastal-details.js';
-import { makeRegionalLandscape } from './regional-landscape.js';
-import { makeCityLandscape } from './city-landscape.js';
+import { landscapeBuilder } from './landscapes.js';
 import { CityScene } from './city.js';
+import { CoastBridges } from './coast-bridges.js';
 
 export const COASTAL_QUALITY = {
   low: { pixelRatio: 1, shadows: false, scatterRange: 2, candidates: 150, coverCandidates: 100 },
@@ -22,8 +22,7 @@ export class StylizedTerrain {
     this.index = routeIndex;
     this.quality = COASTAL_QUALITY[opts.quality] || COASTAL_QUALITY.balanced;
     this.qualityKey = COASTAL_QUALITY[opts.quality] ? opts.quality : 'balanced';
-    const makeLandscape = this.config.terrain === 'authored-city' ? makeCityLandscape : this.config.terrain === 'authored-region' ? makeRegionalLandscape : makeCoastLandscape;
-    this.landscape = makeLandscape(this.config, proj, routeIndex, opts.route);
+    this.landscape = landscapeBuilder(this.config)(this.config, proj, routeIndex, opts.route);
     this.inlandAt = this.landscape.inlandAt || ((x, z) => x - this.landscape.coastX(z));
     this.lookoutFootprints = (this.config.lookouts || []).map((l) => ({ ...l,
       ...coastalRoadFrame(this.route, routeIndex, l.atM, (l.side === 'inland' ? -1 : 1) * (3.5 + l.widthM / 2)) }));
@@ -49,6 +48,7 @@ export class StylizedTerrain {
       if (this.disposed) { kit.dispose(); return; }
       this.kit = kit;
       this._makeLandmarks();
+      if (this.landscape.real) this.bridges = new CoastBridges(this.group, this.landscape, this.uniforms);
       this.details = new CoastalDetails(this.group, this.route, this.index, this.landscape, kit, this.uniforms);
       if (this.landscape.city) {
         this.city = new CityScene(this.group, this.route, this.index, this.landscape, kit, this.uniforms, this.qualityKey);
@@ -126,13 +126,31 @@ export class StylizedTerrain {
     this.group.add(this.clouds);
   }
 
+  /** Real coast: the shoreline distance (R) and ground height (G) as a texture for the water shader. */
+  _makeShoreTexture() {
+    const S = this.landscape.shore, T = this.landscape.terrain;
+    const data = new Uint16Array(S.nx * S.nz * 2);
+    for (let j = 0; j < S.nz; j++) for (let i = 0; i < S.nx; i++) {
+      const k = j * S.nx + i;
+      data[k * 2] = THREE.DataUtils.toHalfFloat(S.field[k]);
+      data[k * 2 + 1] = THREE.DataUtils.toHalfFloat(T.at(S.x0 + i * S.cell, S.z0 + j * S.cell));
+    }
+    const texture = new THREE.DataTexture(data, S.nx, S.nz, THREE.RGFormat, THREE.HalfFloatType);
+    texture.magFilter = texture.minFilter = THREE.LinearFilter; texture.needsUpdate = true;
+    this.shoreTexture = texture;
+    return { texture, box: new THREE.Vector4(S.x0, S.z0, (S.nx - 1) * S.cell, (S.nz - 1) * S.cell) };
+  }
+
   _makeOcean() {
-    const material = makeCoastalWaterMaterial(this.landscape, this.uniforms, this.config.palette.water, this.config.palette.shallowWater);
+    const shore = this.landscape.real ? this._makeShoreTexture() : null;
+    const material = makeCoastalWaterMaterial(this.landscape, this.uniforms, this.config.palette.water, this.config.palette.shallowWater, shore);
     this.ocean = new THREE.Mesh(new THREE.PlaneGeometry(160000, 160000), material);
     this.ocean.rotation.x = -Math.PI / 2;
     this.ocean.position.y = .05;
     this.ocean.visible = this.landscape.hasOcean !== false;
     this.group.add(this.ocean);
+    this.lakeMeshes = [];
+    if (this.landscape.real) return;   // surf and shallows come from the shoreline texture
     // White surf follows the authored coastline rather than the road.
     const pos = [], idx = [];
     const start = this.landscape.coast[0].z - 6000, end = this.landscape.coast.at(-1).z + 6000;
@@ -199,6 +217,7 @@ export class StylizedTerrain {
       const rise = Math.hypot(hx - y, hz - y) / 4;
       c.lerp(P.rock, smoothstep(.45, 1.4, rise));
       c.lerp(P.cliff, (1 - smoothstep(20, 85, coastal)) * .65);
+      if (this.landscape.real && P.sand) c.lerp(P.sand, (1 - smoothstep(2.5, 6, y)) * (1 - smoothstep(60, 140, coastal)));
       const regionalColor = this.landscape.colorAt?.(px, pz);
       if (regionalColor) c.lerp(new THREE.Color(regionalColor), .8);
       c.multiplyScalar(.94 + Math.sin(px / 47 + pz / 73) * .035);
@@ -390,7 +409,10 @@ export class StylizedTerrain {
     // rebuild the ground so every patch knows the real height it morphs toward
     for (const mesh of this.patches.values()) { this.group.remove(mesh); mesh.geometry.dispose(); }
     this.patches.clear();
+    // rebuild now, not next frame: an empty frame would show the sea plane through the missing ground
+    const x = this._lastX, z = this._lastZ;
     this._lastX = Infinity;
+    if (Number.isFinite(x)) this.update(x, z);
   }
 
   // Beyond the hand-off, stylized stand-ins (mesas, peaks, lakes) would double up with the real ones.
@@ -430,7 +452,7 @@ export class StylizedTerrain {
     this.details?.dispose();
     this.city?.dispose();
     this.landmarkGeometries.forEach((g) => g.dispose()); this.landmarkGeometries.clear();
-    this.surf.geometry.dispose(); this.surf.material.dispose();
+    this.surf?.geometry.dispose(); this.surf?.material.dispose(); this.shoreTexture?.dispose(); this.bridges?.dispose();
     this.ocean.geometry.dispose(); this.ocean.material.dispose();
     this.lakeMeshes.forEach((m) => m.geometry.dispose());
     const cloudMat = this.clouds.children[0]?.material; cloudMat?.map?.dispose(); cloudMat?.dispose();

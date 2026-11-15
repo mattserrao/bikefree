@@ -73,14 +73,16 @@ export function makeCoastalGroundMaterial(palette, config = {}, farUniform = nul
   return material;
 }
 
-export function makeCoastalWaterMaterial(landscape, uniforms, waterColor, shallowColor) {
+export function makeCoastalWaterMaterial(landscape, uniforms, waterColor, shallowColor, shore = null) {
   const points = landscape.coast;
   const lakes = landscape.lakes || [], islands = landscape.waterIslands || [];
   return new THREE.ShaderMaterial({
     uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), ...uniforms, bfCoast: { value: points.map((p) => new THREE.Vector2(p.x, p.z)) },
       bfWater: { value: new THREE.Color(waterColor) }, bfShallow: { value: new THREE.Color(shallowColor || '#79beb1') },
       bfLakes: { value: lakes.length ? lakes.map((l) => new THREE.Vector4(l.x, l.z, l.rx, l.rz)) : [new THREE.Vector4()] },
-      bfIslands: { value: islands.length ? islands.map((l) => new THREE.Vector4(l.x, l.z, l.rx, l.rz)) : [new THREE.Vector4()] } },
+      bfIslands: { value: islands.length ? islands.map((l) => new THREE.Vector4(l.x, l.z, l.rx, l.rz)) : [new THREE.Vector4()] },
+      bfShore: { value: shore?.texture || null }, bfShoreBox: { value: shore?.box || new THREE.Vector4(0, 0, 1, 1) },
+      bfRough: uniforms.bfRough || { value: 0 } },
     vertexShader: /* glsl */`
       #include <common>
       #include <logdepthbuf_pars_vertex>
@@ -103,6 +105,7 @@ export function makeCoastalWaterMaterial(landscape, uniforms, waterColor, shallo
       uniform vec2 bfCoast[${points.length}];
       uniform vec4 bfLakes[${Math.max(1, lakes.length)}];
       uniform vec4 bfIslands[${Math.max(1, islands.length)}];
+      uniform sampler2D bfShore; uniform vec4 bfShoreBox; uniform float bfRough;
       ${noise}
       float shoreline(float z) {
         float x = bfCoast[0].x;
@@ -117,36 +120,46 @@ export function makeCoastalWaterMaterial(landscape, uniforms, waterColor, shallo
       void main() {
         #include <logdepthbuf_fragment>
         vec2 p = vBfSea.xz;
-        float offshore = ${landscape.hasOcean === false ? '-100000.' : '(shoreline(p.y) - p.x) * ' + (landscape.coastSide || 1).toFixed(1)};
-        ${islands.length ? `offshore = 100000.;
-        for (int i = 0; i < ${islands.length}; i++) {
-          vec4 l = bfIslands[i];
-          offshore = min(offshore, (length((p - l.xy) / l.zw) - 1.) * min(l.z, l.w));
-        }` : ''}
-        for (int i = 0; i < ${lakes.length}; i++) {
-          vec4 l = bfLakes[i];
-          offshore = max(offshore, (1. - length((p - l.xy) / l.zw)) * min(l.z, l.w));
-        }
-        offshore = max(0., offshore);
+${shore ? `
+        // real coast: distance to the shoreline (R) and the sea floor (G) from the baked terrain
+        vec2 bfUv = (p - bfShoreBox.xy) / bfShoreBox.zw;
+        vec2 bfSh = (bfUv.x > 0. && bfUv.y > 0. && bfUv.x < 1. && bfUv.y < 1.) ? texture2D(bfShore, bfUv).rg : vec2(-3000., -45.);
+        float offshore = max(0., -bfSh.r);
+        float depth = max(0., -bfSh.g);
         float waveDetail = 1. - smoothstep(500., 4500., length(cameraPosition - vBfSea));
-        float swell = sin(p.x * .043 + p.y * .027 + uTime * .78);
-        float crossWave = sin(p.y * .071 - p.x * .013 - uTime * .53);
-        vec3 N = normalize(vec3((swell * .025 + crossWave * .012) * waveDetail, 1., cos(p.x * .029 - p.y * .047 + uTime * .61) * .028 * waveDetail));
+        float t = uTime;
+        float swell = sin(p.x * .043 + p.y * .027 + t * .78);
+        float crossWave = sin(p.y * .071 - p.x * .013 - t * .53);
+        float chop = (bfNoise(p * .09 + t * .35) - .5) * bfRough;
+        vec3 N = normalize(vec3((swell * .03 + crossWave * .014 + chop * .08) * waveDetail, 1., (cos(p.x * .029 - p.y * .047 + t * .61) * .03 + chop * .06) * waveDetail));
         vec3 V = normalize(cameraPosition - vBfSea);
         vec3 R = reflect(-V, N);
-        float fresnel = .035 + .42 * pow(1. - max(dot(N, V), 0.), 4.);
+        float fresnel = .03 + .45 * pow(1. - max(dot(N, V), 0.), 4.);
         vec3 sky = mix(uSkyHorizon, uSkyTop, sqrt(max(R.y, 0.)));
-        float waterNoise = bfFbm(p * .008);
-        vec3 color = mix(bfShallow, bfWater * (.78 + waterNoise * .3), smoothstep(5., 240., offshore));
-        color *= .97 + (.018 * swell + .012 * crossWave) * waveDetail;
+        float waterNoise = bfFbm(p * .006 + t * .01);
+        // kelp-dark patches offshore, turquoise over the sand and rock shelf
+        vec3 deep = bfWater * (.74 + waterNoise * .32);
+        deep = mix(deep, deep * vec3(.62, .72, .6), smoothstep(.62, .78, bfFbm(p * .012)) * smoothstep(40., 140., offshore) * (1. - smoothstep(260., 520., offshore)) * .7);
+        vec3 color = mix(bfShallow * (1.05 + waterNoise * .1), deep, smoothstep(1., 16., depth));
+        color *= .96 + (.02 * swell + .014 * crossWave) * waveDetail;
         color = mix(color, sky, fresnel);
-        float sun = pow(max(dot(reflect(-normalize(uSunDir), N), V), 0.), 150.);
-        float sparkle = smoothstep(.55, .95, bfNoise(p * .7 + uTime * .1));
-        color += vec3(1., .91, .69) * sun * (.3 + sparkle * waveDetail * .55);
-        float breaker = .5 + .5 * sin(offshore * .35 - uTime * 1.3 + bfNoise(p * .027) * 4.);
-        float foam = smoothstep(.74, .96, breaker) * (1. - smoothstep(3., 48., offshore));
-        foam += (1. - smoothstep(1., 6., offshore)) * .5;
-        color = mix(color, vec3(.83, .9, .83), clamp(foam * .76, 0., .9));
+        float sun = pow(max(dot(reflect(-normalize(uSunDir), N), V), 0.), 160.);
+        float sparkle = smoothstep(.55, .95, bfNoise(p * .7 + t * .1));
+        color += vec3(1., .92, .72) * sun * (.35 + sparkle * waveDetail * .7);
+        // breakers: lines of white water rolling in to the shore, broken up along their length
+        float along = bfNoise(p * .021 + vec2(0., t * .05)) * 5.;
+        float phase = offshore * .075 + t * (.85 + bfRough * .3) + along;
+        float crest = smoothstep(.86, .985, sin(phase)) * (1. - smoothstep(20., 150. + bfRough * 80., offshore)) * smoothstep(3., 12., offshore);
+        float trail = smoothstep(.2, .95, sin(phase - .55)) * (1. - smoothstep(10., 70., offshore)) * .55;
+        float lace = smoothstep(.45, .8, bfFbm(p * .16 + vec2(t * .07, -t * .05)));
+        float swash = 1. - smoothstep(1.5, 9. + 4. * sin(t * .7 + along), offshore);
+        float foam = max(crest, trail * lace) + swash * (.55 + lace * .45);
+        foam *= waveDetail * .6 + .4;
+        color = mix(color, vec3(.9, .95, .93), clamp(foam, 0., .92));
+        // a soft wet band of spray-darkened water against the cliffs
+        color *= 1. - (1. - smoothstep(0., 30., offshore)) * .08;
+` : `
+${old}`}
         gl_FragColor = vec4(color, 1.);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
