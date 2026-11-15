@@ -1,0 +1,125 @@
+{
+  "format": "bikefree-scene-1",
+  "style": "stylized",
+  "terrain": "authored-region",
+  "assets": "models/scenery/coastal.json",
+  "extraAssets": [
+    "models/scenery/regional.json"
+  ],
+  "seed": 1101,
+  "description": "An artistic landscape aligned to the real GPX, with regional landforms, vegetation and water. Not surveyed terrain.",
+  "title": "Going-to-the-Sun Road",
+  "region": "glacier-alpine",
+  "biome": "alpine",
+  "reliefM": 100,
+  "palette": {
+    "grass": "#7c976d",
+    "meadow": "#a7aa7e",
+    "rock": "#929b98",
+    "cliff": "#b8bdb4",
+    "water": "#398697"
+  },
+  "vegetation": {
+    "trees": [
+      "fir0",
+      "fir1",
+      "pine0"
+    ],
+    "treeDensity": 0.29,
+    "density": 0.9,
+    "cover": [
+      "grass",
+      "grass",
+      "sage",
+      "alpineflowers",
+      "alpineflowers"
+    ],
+    "shrubs": [
+      "sage",
+      "shrub0"
+    ],
+    "vergeDensity": 0.7,
+    "treelineM": 1860
+  },
+  "snowLineM": 2350,
+  "formations": [
+    {
+      "name": "Heavens Peak",
+      "lat": 48.723,
+      "lon": -113.802,
+      "radiusM": [
+        2400,
+        2600
+      ],
+      "heightM": 1800,
+      "shape": "peak"
+    },
+    {
+      "name": "Mount Cannon",
+      "lat": 48.682,
+      "lon": -113.75,
+      "radiusM": [
+        2000,
+        2000
+      ],
+      "heightM": 1650,
+      "shape": "peak"
+    },
+    {
+      "name": "Logan Pass ridges",
+      "lat": 48.702,
+      "lon": -113.7,
+      "radiusM": [
+        1900,
+        2100
+      ],
+      "heightM": 1700,
+      "shape": "peak"
+    }
+  ],
+  "lakes": [
+    {
+      "name": "Lake McDonald",
+      "lat": 48.578,
+      "lon": -113.902,
+      "radiusM": [
+        1600,
+        5200
+      ],
+      "elevationM": 960
+    }
+  ],
+  "preview": {
+    "positionM": 33300,
+    "camera": "drone"
+  },
+  "signs": [
+    {
+      "atM": 8915,
+      "side": "ocean",
+      "label": "AVALANCHE CREEK",
+      "subtitle": "GOING-TO-THE-SUN ROAD"
+    },
+    {
+      "atM": 33975,
+      "side": "ocean",
+      "label": "LOGAN PASS",
+      "subtitle": "GOING-TO-THE-SUN ROAD"
+    }
+  ],
+  "roadside": [
+    {
+      "fromM": 32600,
+      "toM": 34060,
+      "side": "ocean"
+    }
+  ],
+  "lookouts": [
+    {
+      "atM": 33100,
+      "side": "ocean",
+      "widthM": 8,
+      "lengthM": 28
+    }
+  ]
+}

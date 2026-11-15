@@ -29,7 +29,7 @@ Keyboard: ← → shift · ↑ ↓ grade/intensity · Space pause · L lap · N 
 
 **Profile** (top right): your name, height, weight and gender, plus your totals — rides, distance, riding time, climbing. Weight sets how hard climbs feel. Add riders for others in the house; each ride is saved to whoever rode it. Everything stays in this browser.
 
-**Settings**: appearance (System — follows macOS — Light or Dark; colours match Machine Manager), units, weights, FTP, camera, time of day, handlebar buzz. *Advanced* holds the shifting method, difficulty, gear ratio, starting gear and the diagnostics log. A route's **⋯** menu has *Load GPX*, *Save for offline* (download the terrain to ride without internet) and *Remove*.
+**Settings**: appearance (System — follows macOS — Light or Dark; colours match Machine Manager), units, weights, FTP, camera, time of day, scenery detail (Light / Balanced / High), handlebar buzz. *Advanced* holds the shifting method, difficulty, gear ratio, starting gear and the diagnostics log. A route's **⋯** menu has *Load GPX*, *Save for offline* and *Remove*. The ten scenic routes include their scenery in the app cache after the first successful online load; with internet, the real landscape (elevation and aerial photos) fills the distance beyond ~1.5 km. Custom GPX terrain uses separate downloads.
 
 ## Tests
 
@@ -39,6 +39,12 @@ npm test      # Node 18+
 ```
 
 ## Rebuilding the park routes and the rider
+
+To add a GPX route, prepare the catalog, or rebuild the style-C regional scenery,
+see [ROUTES.md](ROUTES.md). Route-by-route visual feedback is in
+[SCENERY_REVIEW.md](SCENERY_REVIEW.md). `npm run routes:build` validates every catalog route
+and generates the catalog and offline manifest; `npm run routes:check` verifies
+that those generated files are current.
 
 ```sh
 python3 tools/build_park_routes.py          # park GPX files (needs internet)

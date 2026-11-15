@@ -1,0 +1,514 @@
+[
+  {
+    "id": "yosemite",
+    "name": "Yosemite Valley Loop",
+    "park": "Yosemite National Park, California",
+    "file": "routes/parks/yosemite.gpx",
+    "outAndBack": false,
+    "expectedKm": [
+      17,
+      23
+    ],
+    "routing": {
+      "profile": "fastbike",
+      "expect_km": [
+        17,
+        23
+      ],
+      "waypoints": [
+        [
+          37.7432,
+          -119.597
+        ],
+        [
+          37.7245,
+          -119.637
+        ],
+        [
+          37.7166,
+          -119.664
+        ],
+        [
+          37.7172,
+          -119.6465
+        ],
+        [
+          37.7366,
+          -119.6029
+        ],
+        [
+          37.7376,
+          -119.5717
+        ]
+      ],
+      "pois": {
+        "El Capitan Meadow": [
+          37.7245,
+          -119.637
+        ],
+        "Bridalveil Fall": [
+          37.7172,
+          -119.6465
+        ]
+      }
+    },
+    "scene": "routes/scenes/yosemite.json"
+  },
+  {
+    "id": "acadia",
+    "name": "Acadia Park Loop Road",
+    "park": "Acadia National Park, Maine",
+    "file": "routes/parks/acadia.gpx",
+    "outAndBack": false,
+    "expectedKm": [
+      30,
+      45
+    ],
+    "routing": {
+      "profile": "fastbike",
+      "expect_km": [
+        30,
+        45
+      ],
+      "waypoints": [
+        [
+          44.4096,
+          -68.247
+        ],
+        [
+          44.362,
+          -68.2075
+        ],
+        [
+          44.3305,
+          -68.184
+        ],
+        [
+          44.321,
+          -68.189
+        ],
+        [
+          44.3107,
+          -68.1925
+        ],
+        [
+          44.3204,
+          -68.253
+        ],
+        [
+          44.344,
+          -68.242
+        ]
+      ],
+      "pois": {
+        "Sand Beach": [
+          44.3305,
+          -68.184
+        ],
+        "Jordan Pond": [
+          44.3204,
+          -68.253
+        ]
+      }
+    },
+    "scene": "routes/scenes/acadia.json"
+  },
+  {
+    "id": "teton",
+    "name": "Grand Teton Loop",
+    "park": "Grand Teton National Park, Wyoming",
+    "file": "routes/parks/teton.gpx",
+    "outAndBack": false,
+    "expectedKm": [
+      62,
+      75
+    ],
+    "routing": {
+      "profile": "car-fast",
+      "expect_km": [
+        62,
+        75
+      ],
+      "waypoints": [
+        [
+          43.6568,
+          -110.713
+        ],
+        [
+          43.841,
+          -110.51
+        ],
+        [
+          43.875,
+          -110.577
+        ],
+        [
+          43.79,
+          -110.727
+        ],
+        [
+          43.752,
+          -110.724
+        ]
+      ],
+      "pois": {
+        "Moran Junction": [
+          43.841,
+          -110.51
+        ],
+        "South Jenny Lake": [
+          43.752,
+          -110.724
+        ]
+      }
+    },
+    "scene": "routes/scenes/teton.json"
+  },
+  {
+    "id": "craterlake",
+    "name": "Crater Lake Rim Drive",
+    "park": "Crater Lake National Park, Oregon",
+    "file": "routes/parks/craterlake.gpx",
+    "outAndBack": false,
+    "expectedKm": [
+      50,
+      58
+    ],
+    "routing": {
+      "profile": "car-fast",
+      "expect_km": [
+        50,
+        58
+      ],
+      "waypoints": [
+        [
+          42.9115,
+          -122.145
+        ],
+        [
+          42.8966,
+          -122.134
+        ],
+        [
+          42.915,
+          -122.053
+        ],
+        [
+          42.981,
+          -122.083
+        ],
+        [
+          42.985,
+          -122.145
+        ],
+        [
+          42.947,
+          -122.168
+        ],
+        [
+          42.923,
+          -122.153
+        ]
+      ],
+      "pois": {
+        "Cleetwood Cove": [
+          42.981,
+          -122.083
+        ],
+        "Watchman": [
+          42.947,
+          -122.168
+        ]
+      }
+    },
+    "scene": "routes/scenes/craterlake.json"
+  },
+  {
+    "id": "monumentvalley",
+    "name": "Monument Valley \u00b7 Forrest Gump Point",
+    "park": "US-163, Monument Valley, Utah & Arizona",
+    "file": "routes/parks/monumentvalley.gpx",
+    "outAndBack": true,
+    "expectedKm": [
+      34,
+      56
+    ],
+    "routing": {
+      "profile": "car-fast",
+      "expect_km": [
+        17,
+        28
+      ],
+      "waypoints": [
+        [
+          37.1012,
+          -109.9898
+        ],
+        [
+          37.001,
+          -110.095
+        ],
+        [
+          36.9833,
+          -110.112
+        ]
+      ],
+      "pois": {
+        "Forrest Gump Point": [
+          37.1012,
+          -109.9898
+        ],
+        "Visitor center": [
+          36.9833,
+          -110.112
+        ]
+      }
+    },
+    "scene": "routes/scenes/monumentvalley.json"
+  },
+  {
+    "id": "bigsur",
+    "name": "Big Sur \u00b7 Bixby Bridge & Hurricane Point",
+    "park": "California Highway 1, Big Sur",
+    "file": "routes/parks/bigsur.gpx",
+    "outAndBack": true,
+    "expectedKm": [
+      56,
+      80
+    ],
+    "routing": {
+      "profile": "car-fast",
+      "expect_km": [
+        28,
+        40
+      ],
+      "waypoints": [
+        [
+          36.4985,
+          -121.9375
+        ],
+        [
+          36.44,
+          -121.9215
+        ],
+        [
+          36.3716,
+          -121.9019
+        ],
+        [
+          36.306,
+          -121.88
+        ],
+        [
+          36.27,
+          -121.8075
+        ]
+      ],
+      "pois": {
+        "Bixby Bridge": [
+          36.3716,
+          -121.9019
+        ],
+        "Hurricane Point": [
+          36.3567,
+          -121.8985
+        ],
+        "Big Sur village": [
+          36.27,
+          -121.8075
+        ]
+      }
+    },
+    "scene": "routes/scenes/bigsur.json"
+  },
+  {
+    "id": "goingtothesun",
+    "name": "Going-to-the-Sun Road",
+    "park": "Glacier National Park, Montana",
+    "file": "routes/parks/goingtothesun.gpx",
+    "outAndBack": true,
+    "expectedKm": [
+      60,
+      84
+    ],
+    "routing": {
+      "profile": "fastbike",
+      "expect_km": [
+        30,
+        42
+      ],
+      "profile_opts": {
+        "cliff_m": 800,
+        "bridge_m": 800,
+        "smooth_m": 600
+      },
+      "waypoints": [
+        [
+          48.6178,
+          -113.877
+        ],
+        [
+          48.6797,
+          -113.8187
+        ],
+        [
+          48.6965,
+          -113.718
+        ]
+      ],
+      "pois": {
+        "Avalanche Creek": [
+          48.6797,
+          -113.8187
+        ],
+        "Logan Pass": [
+          48.6965,
+          -113.718
+        ]
+      }
+    },
+    "scene": "routes/scenes/goingtothesun.json"
+  },
+  {
+    "id": "zion",
+    "name": "Zion Canyon Scenic Drive",
+    "park": "Zion National Park, Utah",
+    "file": "routes/parks/zion.gpx",
+    "outAndBack": true,
+    "expectedKm": [
+      20,
+      32
+    ],
+    "routing": {
+      "profile": "fastbike",
+      "expect_km": [
+        10,
+        16
+      ],
+      "waypoints": [
+        [
+          37.2002,
+          -112.9868
+        ],
+        [
+          37.2508,
+          -112.957
+        ],
+        [
+          37.2849,
+          -112.9478
+        ]
+      ],
+      "pois": {
+        "Zion Lodge": [
+          37.2508,
+          -112.957
+        ],
+        "Temple of Sinawava": [
+          37.2849,
+          -112.9478
+        ]
+      }
+    },
+    "scene": "routes/scenes/zion.json"
+  },
+  {
+    "id": "sevenmile",
+    "name": "Overseas Highway \u00b7 Seven Mile Bridge",
+    "park": "Florida Keys (Marathon to Bahia Honda)",
+    "file": "routes/parks/sevenmile.gpx",
+    "outAndBack": true,
+    "expectedKm": [
+      36,
+      56
+    ],
+    "routing": {
+      "profile": "car-fast",
+      "min_ele": 3.0,
+      "expect_km": [
+        18,
+        28
+      ],
+      "waypoints": [
+        [
+          24.712,
+          -81.088
+        ],
+        [
+          24.6995,
+          -81.15
+        ],
+        [
+          24.656,
+          -81.279
+        ]
+      ],
+      "pois": {
+        "Seven Mile Bridge (Pigeon Key)": [
+          24.704,
+          -81.155
+        ],
+        "Bahia Honda": [
+          24.656,
+          -81.279
+        ]
+      }
+    },
+    "scene": "routes/scenes/sevenmile.json"
+  },
+  {
+    "id": "route28",
+    "name": "Route 28 \u00b7 Old Forge to Eighth Lake",
+    "park": "Fulton Chain of Lakes, Adirondacks, New York",
+    "file": "routes/parks/route28.gpx",
+    "outAndBack": true,
+    "expectedKm": [
+      44,
+      68
+    ],
+    "routing": {
+      "profile": "car-fast",
+      "expect_km": [
+        22,
+        34
+      ],
+      "waypoints": [
+        [
+          43.7108,
+          -74.9733
+        ],
+        [
+          43.7585,
+          -74.826
+        ],
+        [
+          43.7475,
+          -74.7925
+        ],
+        [
+          43.74,
+          -74.755
+        ],
+        [
+          43.769,
+          -74.71
+        ]
+      ],
+      "pois": {
+        "Inlet": [
+          43.7475,
+          -74.7925
+        ],
+        "Seventh Lake": [
+          43.74,
+          -74.755
+        ],
+        "Eighth Lake": [
+          43.769,
+          -74.71
+        ]
+      }
+    },
+    "scene": "routes/scenes/route28.json"
+  }
+]

@@ -1,0 +1,156 @@
+{
+  "format": "bikefree-scene-1",
+  "style": "stylized",
+  "region": "california-coast",
+  "terrain": "authored-coast",
+  "description": "Sculpted coastal scenery aligned to the real GPX. Landscape shapes and coastline are an artistic interpretation, not a survey or elevation raster.",
+  "assets": "models/scenery/coastal.json",
+  "seed": 1101,
+  "palette": {
+    "grass": "#7b9868",
+    "meadow": "#c4b482",
+    "rock": "#aaa18c",
+    "cliff": "#bdb49c",
+    "water": "#2e8395"
+  },
+  "coastline": [
+    [
+      36.515,
+      -121.947
+    ],
+    [
+      36.478,
+      -121.943
+    ],
+    [
+      36.445,
+      -121.93
+    ],
+    [
+      36.42,
+      -121.922
+    ],
+    [
+      36.4,
+      -121.916
+    ],
+    [
+      36.376,
+      -121.9058
+    ],
+    [
+      36.367,
+      -121.9062
+    ],
+    [
+      36.357,
+      -121.91
+    ],
+    [
+      36.34,
+      -121.903
+    ],
+    [
+      36.325,
+      -121.9
+    ],
+    [
+      36.31,
+      -121.908
+    ],
+    [
+      36.297,
+      -121.892
+    ],
+    [
+      36.279,
+      -121.862
+    ],
+    [
+      36.26,
+      -121.843
+    ],
+    [
+      36.24,
+      -121.82
+    ]
+  ],
+  "landmarks": [
+    {
+      "id": "bixby",
+      "name": "Bixby Creek Bridge",
+      "asset": "bridge",
+      "lat": 36.3716,
+      "lon": -121.9019,
+      "span": 218,
+      "depth": 65,
+      "creekWidthM": 4
+    }
+  ],
+  "preview": {
+    "positionM": 15420,
+    "camera": "chase",
+    "time": "midday"
+  },
+  "roadside": [
+    {
+      "fromM": 14800,
+      "toM": 16600,
+      "side": "ocean"
+    },
+    {
+      "fromM": 17200,
+      "toM": 18500,
+      "side": "ocean"
+    }
+  ],
+  "signs": [
+    {
+      "atM": 15445,
+      "side": "ocean",
+      "label": "BIXBY CREEK BRIDGE",
+      "subtitle": "HIGHWAY 1 \u00b7 BIG SUR"
+    },
+    {
+      "atM": 15190,
+      "side": "ocean",
+      "label": "COASTAL OVERLOOK",
+      "subtitle": "PACIFIC COAST \u00b7 BIG SUR"
+    },
+    {
+      "atM": 15870,
+      "side": "inland",
+      "direction": "return",
+      "label": "BIXBY CREEK BRIDGE",
+      "subtitle": "CALIFORNIA HIGHWAY 1"
+    }
+  ],
+  "lookouts": [
+    {
+      "atM": 15230,
+      "side": "ocean",
+      "widthM": 10,
+      "lengthM": 36
+    }
+  ],
+  "seaStacks": [
+    {
+      "atM": 15590,
+      "offshoreM": 58,
+      "widthM": 13,
+      "heightM": 23
+    },
+    {
+      "atM": 17350,
+      "offshoreM": 95,
+      "widthM": 20,
+      "heightM": 29
+    },
+    {
+      "atM": 18500,
+      "offshoreM": 55,
+      "widthM": 9,
+      "heightM": 15
+    }
+  ]
+}

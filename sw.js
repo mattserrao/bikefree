@@ -1,24 +1,14 @@
 // bikefree service worker: keeps the app and downloaded park tiles available offline.
-const APP_CACHE = 'bikefree-app-v15';
+importScripts('./sw-assets.js');
+const APP_CACHE = `bikefree-app-${self.BIKEFREE_APP_REVISION}`;
 const TILE_CACHE = 'bikefree-tiles-v1';
 const TILE_HOSTS = ['s3.amazonaws.com', 'basemap.nationalmap.gov'];
 const MAX_TILES = 40000;
 
-const APP_FILES = [
-  './', 'index.html', 'css/style.css',
-  'js/app.js', 'js/theme.js', 'js/profiles.js', 'js/fit.js', 'js/gpx.js', 'js/hr.js', 'js/parsers.js', 'js/physics.js', 'js/recorder.js',
-  'js/ride.js', 'js/session.js', 'js/settings.js', 'js/store.js', 'js/trainer.js', 'js/views.js', 'js/workout.js',
-  'js/offline.js', 'js/world/geo.js', 'js/world/terrain.js', 'js/world/world.js', 'js/world/rider.js',
-  'vendor/three.module.min.js', 'models/rider.json',
-  'routes/demo-hills.gpx', 'routes/parks/index.json', 'routes/parks/yosemite.gpx', 'routes/parks/acadia.gpx',
-  'routes/parks/teton.gpx', 'routes/parks/craterlake.gpx',
-  'routes/parks/monumentvalley.gpx', 'routes/parks/bigsur.gpx', 'routes/parks/goingtothesun.gpx', 'routes/parks/zion.gpx',
-  'routes/parks/sevenmile.gpx', 'routes/parks/route28.gpx',
-];
+const APP_FILES = self.BIKEFREE_APP_FILES;
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(APP_CACHE).then((c) => c.addAll(APP_FILES)).catch(() => {}));
-  self.skipWaiting();
+  e.waitUntil(caches.open(APP_CACHE).then((c) => c.addAll(APP_FILES)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {

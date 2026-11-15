@@ -1,0 +1,145 @@
+{
+  "format": "bikefree-scene-1",
+  "style": "stylized",
+  "terrain": "authored-region",
+  "assets": "models/scenery/coastal.json",
+  "extraAssets": [
+    "models/scenery/regional.json"
+  ],
+  "seed": 1101,
+  "description": "An artistic landscape aligned to the real GPX, with regional landforms, vegetation and water. Not surveyed terrain.",
+  "title": "Yosemite Valley",
+  "region": "sierra-granite",
+  "biome": "forest",
+  "reliefM": 10,
+  "palette": {
+    "grass": "#839764",
+    "meadow": "#b4ad7e",
+    "rock": "#b9b7a7",
+    "cliff": "#d4cebb",
+    "water": "#4e8e9d"
+  },
+  "vegetation": {
+    "trees": [
+      "fir0",
+      "fir1",
+      "broadleaf0",
+      "broadleaf1"
+    ],
+    "treeDensity": 0.34,
+    "density": 1.05,
+    "cover": [
+      "grass",
+      "grass",
+      "fern",
+      "fern",
+      "lupine",
+      "alpineflowers"
+    ],
+    "shrubs": [
+      "shrub0",
+      "shrub1"
+    ],
+    "vergeDensity": 0.8
+  },
+  "valley": {
+    "axis": [
+      [
+        37.716,
+        -119.666
+      ],
+      [
+        37.743,
+        -119.57
+      ]
+    ],
+    "widthM": 550,
+    "heightM": 700
+  },
+  "formations": [
+    {
+      "name": "El Capitan",
+      "lat": 37.735,
+      "lon": -119.638,
+      "radiusM": [
+        900,
+        650
+      ],
+      "heightM": 900,
+      "shape": "dome"
+    },
+    {
+      "name": "Half Dome",
+      "lat": 37.746,
+      "lon": -119.535,
+      "radiusM": [
+        1100,
+        1000
+      ],
+      "heightM": 1300,
+      "shape": "half-dome"
+    }
+  ],
+  "rivers": [
+    {
+      "name": "Merced River",
+      "widthM": 18,
+      "depthM": 8,
+      "path": [
+        [
+          37.716,
+          -119.669
+        ],
+        [
+          37.719,
+          -119.649
+        ],
+        [
+          37.728,
+          -119.619
+        ],
+        [
+          37.736,
+          -119.596
+        ],
+        [
+          37.741,
+          -119.57
+        ]
+      ]
+    }
+  ],
+  "preview": {
+    "positionM": 7800,
+    "camera": "chase"
+  },
+  "signs": [
+    {
+      "atM": 7835,
+      "side": "ocean",
+      "label": "EL CAPITAN MEADOW",
+      "subtitle": "YOSEMITE VALLEY"
+    },
+    {
+      "atM": 12555,
+      "side": "ocean",
+      "label": "BRIDALVEIL FALL",
+      "subtitle": "YOSEMITE VALLEY"
+    }
+  ],
+  "roadside": [
+    {
+      "fromM": 7100,
+      "toM": 9000,
+      "side": "ocean"
+    }
+  ],
+  "lookouts": [
+    {
+      "atM": 7600,
+      "side": "ocean",
+      "widthM": 8,
+      "lengthM": 28
+    }
+  ]
+}

@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs';
 import { planRouteTiles, tileKeysToUrls } from '../js/offline.js';
 import { parseGpx, buildRoute } from '../js/gpx.js';
 
-for (const park of ['yosemite', 'acadia', 'teton', 'craterlake']) {
+const catalog = JSON.parse(readFileSync(new URL('../routes/catalog.json', import.meta.url), 'utf8'));
+for (const { id: park } of catalog) {
   test(`offline plan for ${park} covers the route at full detail`, () => {
     const r = buildRoute(parseGpx(readFileSync(new URL(`../routes/parks/${park}.gpx`, import.meta.url), 'utf8')));
     const keys = planRouteTiles(r);

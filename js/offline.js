@@ -116,5 +116,5 @@ export function setOfflineStatus(id, value) {
 
 export function registerServiceWorker(log) {
   if (!('serviceWorker' in navigator)) return;
-  navigator.serviceWorker.register('sw.js').catch((err) => log?.('app', `Offline support unavailable: ${err.message}`, 'debug'));
+  navigator.serviceWorker.register(new URL('../sw.js', import.meta.url), { updateViaCache: 'none' }).catch((err) => log?.('app', `Offline support unavailable: ${err.message}`, 'debug'));
 }

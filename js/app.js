@@ -10,12 +10,14 @@ import { parseGpx, buildRoute, averageGradeAhead } from './gpx.js';
 import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor } from './workout.js';
 import { drawProfile, drawWorkout, drawTrace, gradeColor } from './views.js';
 import { Profiles, GENDERS, initials, cmToFtIn, ftInToCm } from './profiles.js';
+import { buildCatalogRoute, loadRouteScene } from './routes.js';
+import { VERSION } from './version.js';
 import { planRouteTiles, tileKeysToUrls, downloadUrls, offlineStatus, setOfflineStatus, registerServiceWorker } from './offline.js';
 
 const $ = (id) => document.getElementById(id);
 
 // The app version, shown faintly at the bottom right of the menu. Bump with each release (see PLAN.md).
-export const VERSION = '0.11';
+export { VERSION };
 $('ver').textContent = `bikefree v${VERSION}`;
 
 // ---------- Log (lives in Settings › Advanced) ----------
@@ -367,7 +369,7 @@ async function openWorld(route) {
   }
   if (world) { world.dispose(); world = null; }
   try {
-    world = new worldModule.World($('worldView'), route, { log });
+    world = new worldModule.World($('worldView'), route, { log, quality: settings.worldQuality });
   } catch (err) {
     log('3d', `3D view needs WebGL: ${err.message}`, 'error');
     document.body.classList.add('no-world');
@@ -580,7 +582,7 @@ async function loadParks() {
   if (parkItems) return parkItems;
   try {
     const list = await (await fetch('routes/parks/index.json')).json();
-    parkItems = list.map((p) => ({ id: `builtin-park-${p.id}`, kind: 'route', name: p.name, url: p.file, park: p.park, outAndBack: !!p.outAndBack, group: 'Scenic routes — 3D' }));
+    parkItems = list.map((p) => ({ ...p, routeId: p.id, id: `builtin-park-${p.id}`, kind: 'route', url: p.file, group: 'Scenic routes — 3D' }));
   } catch {
     parkItems = [];
   }
@@ -630,15 +632,8 @@ $('routeCards').addEventListener('click', (e) => {
 async function loadRouteItem(item) {
   if (routeCache.has(item.id)) return routeCache.get(item.id);
   const text = item.text ?? await (await fetch(item.url)).text();
-  const parsed = parseGpx(text);
-  const route = buildRoute({ name: item.name.replace(' (built-in)', '') || parsed.name, points: parsed.points });
-  route.park = item.park || null;
-  if (item.outAndBack) {
-    // There and back on the same road: the turnaround is the halfway point of the GPX.
-    route.outAndBack = true;
-    route.turnIdx = Math.floor((route.dist.length - 1) / 2);
-    route.turnS = route.dist[route.turnIdx];
-  }
+  const route = buildCatalogRoute(text, item);
+  await loadRouteScene(route).catch((err) => log('3d', err.message, 'error'));
   routeCache.set(item.id, route);
   return route;
 }
@@ -666,6 +661,13 @@ document.addEventListener('click', (e) => { if (!e.target.closest('details.more'
 let offlineAbort = null;
 function renderOffline() {
   if (offlineAbort) return;
+  const bundled = !!previewRoute?.scene;
+  $('routeOffline').disabled = bundled;
+  if (bundled) {
+    $('routeOffline').textContent = 'Scenery included';
+    $('offlineStatus').textContent = 'No separate scenery download needed';
+    return;
+  }
   const id = selectedRouteId;
   const st = offlineStatus(id);
   $('routeOffline').textContent = st ? 'Update offline copy' : 'Save for offline';
@@ -1076,6 +1078,7 @@ function fillSettings() {
   f.ftp.value = settings.ftp;
   f.worldCam.value = settings.worldCam;
   f.worldTime.value = settings.worldTime;
+  f.worldQuality.value = settings.worldQuality;
   f.shiftMode.value = settings.shiftMode;
   f.difficulty.value = settings.difficulty;
   $('diffOut').textContent = `${settings.difficulty}%`;
@@ -1105,6 +1108,7 @@ dlg.addEventListener('close', () => {
     ftp: Math.round(Number(f.ftp.value)) || settings.ftp,
     worldCam: f.worldCam.value,
     worldTime: f.worldTime.value,
+    worldQuality: f.worldQuality.value,
     shiftMode: f.shiftMode.value,
     difficulty: Number(f.difficulty.value),
     realRatio: Math.max(0, Number(f.realRatio.value) || 0),
@@ -1116,6 +1120,7 @@ dlg.addEventListener('close', () => {
   session.settingsChanged();
   world?.setCamera(settings.worldCam);
   world?.setTimeOfDay(settings.worldTime);
+  world?.setQuality(settings.worldQuality);
   renderRouteCards();
   renderWorkoutList();
   renderProfile();
