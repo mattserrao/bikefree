@@ -38,6 +38,7 @@ for (const item of catalog) {
   }
   const row = { id: item.id, name: item.name, park: item.park, km: Number((route.total / 1000).toFixed(1)), climbM: Math.round(route.ascent), file: item.file };
   if (item.outAndBack) row.outAndBack = true;
+  if (item.stage) row.stage = item.stage;   // 'draft': listed under Rough Drafts
   if (item.scene) {
     const scene = JSON.parse(read(item.scene));
     if (scene.format !== 'bikefree-scene-1' || !['authored-coast', 'authored-region', 'authored-city'].includes(scene.terrain)) throw new Error(`${item.id}: unsupported scene format or terrain`);

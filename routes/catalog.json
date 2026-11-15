@@ -454,7 +454,8 @@
         ]
       }
     },
-    "scene": "routes/scenes/sevenmile.json"
+    "scene": "routes/scenes/sevenmile.json",
+    "stage": "draft"
   },
   {
     "id": "route28",
@@ -509,7 +510,8 @@
         ]
       }
     },
-    "scene": "routes/scenes/route28.json"
+    "scene": "routes/scenes/route28.json",
+    "stage": "draft"
   },
   {
     "id": "pittsburgh",
@@ -521,6 +523,7 @@
       18,
       22
     ],
-    "scene": "routes/scenes/pittsburgh.json"
+    "scene": "routes/scenes/pittsburgh.json",
+    "stage": "draft"
   }
 ]

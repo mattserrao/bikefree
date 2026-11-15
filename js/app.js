@@ -329,18 +329,32 @@ function setScenery(id) {
   renderScenery();
   renderPreview();
 }
+// Routes are listed in two sections: In Progress, and Rough Drafts (catalog "stage": "draft").
+const STAGES = [['progress', 'In Progress'], ['draft', 'Rough Drafts']];
+const stageOf = (it) => (it.stage === 'draft' ? 'draft' : 'progress');
+function groupedCards(items, card) {
+  return STAGES.map(([key, label]) => {
+    const list = items.filter((it) => stageOf(it) === key);
+    return list.length ? `<h3 class="cards-group">${label}</h3>${list.map(card).join('')}` : '';
+  }).join('');
+}
+
 function renderScenery() {
   const items = [...(parkItems || []), { id: 'none', name: 'None', park: 'Numbers only' }];
   if (!items.some((p) => p.id === settings.scenery)) settings.scenery = items[0].id;
-  $('sceneCards').innerHTML = items.map((p) => `
+  $('sceneCards').innerHTML = groupedCards(items, (p) => `
     <button class="rcard ${p.id === 'none' ? 'none' : ''} ${p.id === settings.scenery ? 'on' : ''}" data-id="${p.id}">
       ${p.id === 'none' ? '<div class="blank">No 3D</div>' : '<canvas></canvas>'}
       <div><b>${escapeHtml(p.name)}</b><div class="rsub">${escapeHtml(p.park || '')}</div></div>
-    </button>`).join('');
+    </button>`);
   drawThumbs();
   const sel = $('sceneSelect');
   sel.innerHTML = '';
-  for (const p of items) sel.add(new Option(p.id === 'none' ? 'None — numbers only' : p.name, p.id));
+  for (const [key, label] of STAGES) {
+    const group = document.createElement('optgroup'); group.label = label;
+    for (const p of items.filter((it) => stageOf(it) === key)) group.append(new Option(p.id === 'none' ? 'None — numbers only' : p.name, p.id));
+    if (group.children.length) sel.append(group);
+  }
   sel.value = settings.scenery;
 }
 $('sceneCards').addEventListener('click', (e) => {
@@ -709,12 +723,12 @@ async function refreshRouteList(selectId) {
 }
 
 function renderRouteCards() {
-  $('routeCards').innerHTML = routeItems.map((it) => {
+  $('routeCards').innerHTML = groupedCards(routeItems, (it) => {
     const r = routeCache.get(it.id);
     const sub = r ? `${fmtDist(r.turnS || r.total, 1)} ${distUnit()} each way · ${fmtElev(r.ascent).toLocaleString()} ${elevUnit()}` : 'Could not load';
     return `<button class="rcard ${it.id === selectedRouteId ? 'on' : ''}" data-id="${it.id}"><canvas></canvas>
       <div><b>${escapeHtml(it.name.replace(' (built-in)', ''))}</b><div class="rsub">${escapeHtml(it.park || it.group)} · ${sub}</div></div></button>`;
-  }).join('');
+  });
   drawThumbs();
 }
 

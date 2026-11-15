@@ -83,6 +83,7 @@
     "climbM": 12,
     "file": "routes/parks/sevenmile.gpx",
     "outAndBack": true,
+    "stage": "draft",
     "scene": "routes/scenes/sevenmile.json"
   },
   {
@@ -93,6 +94,7 @@
     "climbM": 298,
     "file": "routes/parks/route28.gpx",
     "outAndBack": true,
+    "stage": "draft",
     "scene": "routes/scenes/route28.json"
   },
   {
@@ -102,6 +104,7 @@
     "km": 19.2,
     "climbM": 182,
     "file": "routes/cities/pittsburgh.gpx",
+    "stage": "draft",
     "scene": "routes/scenes/pittsburgh.json"
   }
 ]
