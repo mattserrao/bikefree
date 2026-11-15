@@ -24,10 +24,11 @@ export function gradeColor(g) {
 }
 
 /** Elevation profile with ridden part highlighted and a position marker. */
-export function drawProfile(canvas, route, pos, { metric = false } = {}) {
+export function drawProfile(canvas, route, pos, { metric = false, compact = false, ahead = 805 } = {}) {
   const { ctx, w, h } = setup(canvas);
   if (!route) return;
-  const padL = 40, padB = 18, padT = 8, padR = 8;
+  // compact: the ride-screen strip — no axis labels, the stretch just ahead is brightest.
+  const padL = compact ? 0 : 40, padB = compact ? 0 : 18, padT = compact ? 10 : 8, padR = compact ? 0 : 8;
   const pw = w - padL - padR, ph = h - padT - padB;
   const range = Math.max(20, route.maxEle - route.minEle);
   const lo = route.minEle - range * 0.08, hi = route.maxEle + range * 0.12;
@@ -40,7 +41,9 @@ export function drawProfile(canvas, route, pos, { metric = false } = {}) {
     const j = Math.min(route.dist.length - 1, i + step);
     const g = (route.ele[j] - route.ele[i]) / Math.max(1, route.dist[j] - route.dist[i]) * 100;
     ctx.fillStyle = gradeColor(g);
-    ctx.globalAlpha = route.dist[j] <= pos ? 0.95 : 0.35;
+    ctx.globalAlpha = compact
+      ? (route.dist[j] <= pos ? 0.45 : route.dist[i] <= pos + ahead ? 1 : 0.3)
+      : (route.dist[j] <= pos ? 0.95 : 0.35);
     ctx.beginPath();
     ctx.moveTo(X(route.dist[i]), Y(lo));
     ctx.lineTo(X(route.dist[i]), Y(route.ele[i]));
@@ -51,6 +54,7 @@ export function drawProfile(canvas, route, pos, { metric = false } = {}) {
   }
   ctx.globalAlpha = 1;
 
+  if (compact) return drawMarker();
   // Axis labels
   ctx.fillStyle = '#8a92a6';
   ctx.font = '11px -apple-system, sans-serif';
@@ -67,16 +71,21 @@ export function drawProfile(canvas, route, pos, { metric = false } = {}) {
     ctx.fillText(`${k}`, x - 3, h - 4);
   }
   ctx.fillText(metric ? 'km' : 'mi', padL, h - 4);
+  drawMarker();
 
-  // Marker
-  const at = Math.min(pos, route.total);
-  const i = Math.min(route.dist.length - 1, Math.round(at / 10));
-  const mx = X(at), my = Y(route.ele[i]);
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(mx, padT); ctx.lineTo(mx, Y(lo)); ctx.stroke();
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath(); ctx.arc(mx, my, 5, 0, Math.PI * 2); ctx.fill();
+  function drawMarker() {
+    const at = Math.min(pos, route.total);
+    const i = Math.min(route.dist.length - 1, Math.round(at / 10));
+    const mx = X(at), my = Y(route.ele[i]);
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+    ctx.lineWidth = compact ? 2 : 1;
+    ctx.beginPath(); ctx.moveTo(mx, compact ? my : padT); ctx.lineTo(mx, Y(lo)); ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(mx, my, compact ? 7 : 5, 0, Math.PI * 2); ctx.fill();
+    if (compact) ctx.stroke();
+  }
 }
 
 /** Bird's-eye route outline with a position dot. */
@@ -110,10 +119,10 @@ export function drawTrace(canvas, route, pos) {
 }
 
 /** Workout blocks coloured by zone, with progress. */
-export function drawWorkout(canvas, workout, t, ftp, bias = 1) {
+export function drawWorkout(canvas, workout, t, ftp, bias = 1, { compact = false } = {}) {
   const { ctx, w, h } = setup(canvas);
   if (!workout) return;
-  const padB = 16, padT = 6;
+  const padB = compact ? 0 : 16, padT = compact ? 4 : 6;
   const ph = h - padB - padT;
   const maxI = Math.max(1.3, ...workout.segments.map((s) => Math.max(s.from, s.to) * (s.unit === 'w' ? 1 / ftp : 1)));
   const X = (sec) => (sec / workout.duration) * w;
@@ -137,13 +146,17 @@ export function drawWorkout(canvas, workout, t, ftp, bias = 1) {
   ctx.setLineDash([4, 4]);
   ctx.beginPath(); ctx.moveTo(0, Y(1)); ctx.lineTo(w, Y(1)); ctx.stroke();
   ctx.setLineDash([]);
-  ctx.fillStyle = '#8a92a6';
-  ctx.font = '11px -apple-system, sans-serif';
-  ctx.fillText(`FTP ${ftp} W${bias !== 1 ? ` · ${Math.round(bias * 100)}%` : ''}`, 4, Y(1) - 4);
-  // Time ticks every 10 min
-  for (let m = 10; m * 60 < workout.duration; m += 10) ctx.fillText(`${m}′`, X(m * 60) - 6, h - 3);
+  if (!compact) drawLabels();
   // Progress
   const x = X(Math.min(t, workout.duration));
   ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, Y(0)); ctx.stroke();
+  if (t > 0 || !compact) { ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, Y(0)); ctx.stroke(); }
+
+  function drawLabels() {
+    ctx.fillStyle = '#8a92a6';
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillText(`FTP ${ftp} W${bias !== 1 ? ` · ${Math.round(bias * 100)}%` : ''}`, 4, Y(1) - 4);
+    // Time ticks every 10 min
+    for (let m = 10; m * 60 < workout.duration; m += 10) ctx.fillText(`${m}′`, X(m * 60) - 6, h - 3);
+  }
 }

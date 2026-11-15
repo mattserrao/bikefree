@@ -13,71 +13,68 @@
     <header>
       <h1>bike<span>free</span></h1>
       <div class="spacer"></div>
-      <button class="chip" id="historyBtn" title="Saved rides">Rides</button>
-      <button class="chip icon" id="settingsBtn" title="Settings">⚙</button>
-      <button class="chip demo" id="demoBtn" title="Try everything without a bike: the rider holds 15 mph">Demo</button>
+      <button class="hbtn" id="historyBtn" title="Saved rides"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>Rides</span></button>
+      <button class="hbtn" id="settingsBtn" title="Settings"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span>Settings</span></button>
+      <button class="hbtn toggle" id="demoBtn" title="Try everything without a bike: the rider holds 15 mph"><span class="tdot"></span><span id="demoLabel">Demo</span></button>
     </header>
 
-    <main>
-      <section class="step">
-        <h2>Devices</h2>
-        <div class="devices">
-          <button class="device" id="trainerBtn" title="Connect or disconnect the trainer">
-            <span class="dot" id="trainerDot"></span>
-            <span class="dev-text"><b>Trainer</b><span id="trainerLabel">Tap to connect</span></span>
+    <div class="setup-grid">
+      <div class="col">
+        <section>
+          <h2>Devices</h2>
+          <div class="devices">
+          <button class="device" id="trainerBtn">
+            <span class="dev-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17" r="3.5"/><circle cx="18.5" cy="17" r="3.5"/><path d="M5.5 17 10 8h5l3.5 9M10 8 8 5H6M15 8l-3 9h-3"/></svg></span>
+            <span class="dev-text"><b>Trainer</b><span id="trainerLabel">Tap to pair</span></span>
+            <span class="badge" id="trainerDot"></span>
           </button>
-          <button class="device" id="rideBtn" title="Connect or disconnect the handlebars">
-            <span class="dot" id="rideDot"></span>
-            <span class="dev-text"><b>Handlebars</b><span id="rideLabel">Tap to connect</span></span>
+          <button class="device" id="rideBtn">
+            <span class="dev-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9c3 0 4 2 9 2s6-2 9-2"/><path d="M3 9v4M21 9v4"/><circle cx="7.5" cy="10" r="1"/><circle cx="16.5" cy="10" r="1"/></svg></span>
+            <span class="dev-text"><b>Handlebars</b><span id="rideLabel">Tap to pair</span></span>
+            <span class="badge" id="rideDot"></span>
           </button>
-          <button class="device" id="hrBtn" title="Connect a Bluetooth heart-rate strap">
-            <span class="dot" id="hrDot"></span>
-            <span class="dev-text"><b>Heart rate</b><span id="hrLabel">Optional</span></span>
+          <button class="device" id="hrBtn">
+            <span class="dev-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/></svg></span>
+            <span class="dev-text"><b>Heart rate</b><span id="hrLabel">Optional · tap to pair</span></span>
+            <span class="badge" id="hrDot"></span>
           </button>
-        </div>
-        <p id="unsupported" class="notice" hidden>
-          Bluetooth isn't available here — open this page in <b>Chrome</b> on your Mac, from <b>localhost</b>. You can still try <b>Demo</b>.
-        </p>
-        <p id="demoNote" class="notice demo-note" hidden>
-          Demo mode: no bike needed — the rider holds a steady <b>15 mph</b>. <button id="demoOff" class="link">Exit demo</button>
-        </p>
-      </section>
-
-      <section class="step">
-        <h2>Ride</h2>
-        <div class="modes" role="tablist">
-          <button role="tab" data-mode="free" class="mode on"><b>Free ride</b><span>You set the grade</span></button>
-          <button role="tab" data-mode="route" class="mode"><b>Route</b><span>National parks in 3D, or your GPX</span></button>
-          <button role="tab" data-mode="workout" class="mode"><b>Workout</b><span>Trainer holds the target watts</span></button>
-        </div>
-
-        <div class="mode-pane" data-pane="free">
-          <div class="pick-row">
-            <label class="pick-label">Scenery <select id="sceneSelect"></select></label>
           </div>
-          <p class="info">Change the grade with ▲▼ on the handlebars (or ↑ ↓) while you ride.</p>
-        </div>
+          <p id="unsupported" class="notice" hidden>Bluetooth isn't available here — open this page in <b>Chrome</b> on your Mac, from <b>localhost</b>. You can still try <b>Demo</b>.</p>
+          <p id="demoNote" class="notice" hidden>Demo mode: no bike needed — the rider holds a steady <b>15 mph</b>. <button id="demoOff" class="link">Exit demo</button></p>
+        </section>
 
-        <div class="mode-pane" data-pane="route" hidden>
-          <div class="pick-row">
-            <select id="routeSelect"></select>
+        <section>
+          <h2>Ride type</h2>
+          <div class="modes" role="tablist">
+          <button role="tab" data-mode="free" class="mode on"><span class="mode-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19 10 10l4 4 7-8"/><path d="M3 19h18"/></svg></span><span class="mode-text"><b>Free ride</b><span>You set the grade</span></span><span class="tick"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"><path d="m5 12 5 5 9-10"/></svg></span></button>
+          <button role="tab" data-mode="route" class="mode"><span class="mode-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></svg></span><span class="mode-text"><b>Route</b><span>Parks in 3D or your GPX</span></span><span class="tick"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"><path d="m5 12 5 5 9-10"/></svg></span></button>
+          <button role="tab" data-mode="workout" class="mode"><span class="mode-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><rect x="4" y="12" width="3.5" height="6" rx="1"/><rect x="10" y="7" width="3.5" height="11" rx="1"/><rect x="16" y="10" width="3.5" height="8" rx="1"/></svg></span><span class="mode-text"><b>Workout</b><span>Trainer holds the watts</span></span><span class="tick"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"><path d="m5 12 5 5 9-10"/></svg></span></button>
+          </div>
+        </section>
+
+        <section class="mode-pane" data-pane="free">
+          <h2>Scenery</h2>
+          <div class="cards" id="sceneCards"></div>
+        </section>
+
+        <section class="mode-pane" data-pane="route" hidden>
+          <div class="h2row">
+            <h2>Routes</h2>
             <details class="more">
               <summary title="More">⋯</summary>
               <div class="menu">
                 <label class="menu-item">Load a GPX file…<input type="file" id="gpxFile" accept=".gpx,application/gpx+xml" hidden></label>
-                <button type="button" class="menu-item" id="routeOffline" title="Download this route's terrain and imagery so the 3D view works without internet">Save for offline</button>
+                <button type="button" class="menu-item" id="routeOffline">Save for offline</button>
                 <button type="button" class="menu-item danger" id="routeDelete">Remove this route</button>
               </div>
             </details>
           </div>
-          <div class="info" id="routeInfo"></div>
-          <div class="offline-status info" id="offlineStatus"></div>
-          <canvas id="profile" class="profile"></canvas>
-        </div>
+          <div class="cards" id="routeCards"></div>
+        </section>
 
-        <div class="mode-pane" data-pane="workout" hidden>
-          <div class="pick-row">
-            <select id="workoutSelect"></select>
+        <section class="mode-pane" data-pane="workout" hidden>
+          <div class="h2row">
+            <h2>Workouts</h2>
             <details class="more">
               <summary title="More">⋯</summary>
               <div class="menu">
@@ -85,62 +82,76 @@
                 <button type="button" class="menu-item danger" id="workoutDelete">Remove this workout</button>
               </div>
             </details>
-            <label class="pick-label">Scenery <select id="sceneSelect2"></select></label>
+            <div class="spacer"></div>
+            <label class="pick-label">Scenery <select id="sceneSelect"></select></label>
           </div>
-          <div class="info" id="workoutInfo"></div>
-          <canvas id="workoutChart" class="wk-chart"></canvas>
-        </div>
-      </section>
-
-      <div class="start-row">
-        <button id="startBtn" class="primary start">Start riding</button>
-        <span class="info" id="startNote"></span>
+          <div class="wlist" id="workoutList"></div>
+        </section>
       </div>
-    </main>
+
+      <aside class="preview">
+        <div class="pv-kicker" id="pvKicker">Free ride</div>
+        <h3 class="pv-title" id="pvTitle">—</h3>
+        <div class="pv-sub" id="pvSub"></div>
+        <div class="facts" id="pvFacts"></div>
+        <canvas id="pvMap" class="pv-map"></canvas>
+        <canvas id="pvChart" class="pv-chart"></canvas>
+        <p class="pv-desc" id="pvDesc"></p>
+        <div class="offline-status" id="offlineStatus"></div>
+        <button id="startBtn" class="primary start">Start riding</button>
+        <div class="start-note" id="startNote"></div>
+      </aside>
+    </div>
   </div>
 
   <!-- ================= RIDE ================= -->
   <div id="rideScreen" class="ride-screen" hidden>
     <div class="world-view" id="worldView"></div>
+    <div class="loadbar" id="hLoading" hidden></div>
     <div class="hud">
-      <div class="hud-tl">
-        <div class="stat"><b id="hTime">0:00</b><small>time</small></div>
-        <div class="stat"><b id="hDist">0.0</b><small id="hDistU">mi</small></div>
-        <div class="stat"><b id="hSpeed">0.0</b><small id="hSpeedU">mph</small></div>
+      <div class="glass hud-tl">
+        <div class="cell"><b id="hTime">0:00</b><small>time</small></div>
+        <div class="cell"><b id="hDist">0.0</b><small id="hDistU">mi</small></div>
+        <div class="cell"><b id="hSpeed">0.0</b><small id="hSpeedU">mph</small></div>
       </div>
 
       <div class="hud-top">
-        <div class="pill" id="hState">Pedal to start</div>
         <div class="pill demo" id="hDemo" hidden>Demo · 15 mph</div>
-        <div class="pill" id="hLoading" hidden>Loading scenery…</div>
         <div class="pill warn" id="hAlert" hidden></div>
+        <div class="hud-title" id="hTitle"></div>
+        <div class="pill big" id="hState">Pedal to start</div>
       </div>
 
-      <div class="hud-tr">
-        <div class="stat big"><b id="hGrade">0.0%</b><small id="hGradeLabel">grade</small></div>
-        <div class="stat" id="hCtx1Box"><b id="hCtx1">—</b><small id="hCtx1L">lap</small></div>
-        <div class="stat" id="hCtx2Box"><b id="hCtx2">—</b><small id="hCtx2L">to go</small></div>
+      <div class="hud-right">
+        <div class="glass hud-tr">
+          <div class="tr-main"><b id="hGrade">0.0%</b><small id="hGradeLabel">grade</small></div>
+          <div class="tr-rows" id="hudRows">
+            <div class="tr-row" id="hRow1Box"><small id="hRow1L">next ½ mi</small><b id="hRow1">—</b></div>
+            <div class="tr-row" id="hRow2Box"><small id="hRow2L">lap</small><b id="hRow2">—</b></div>
+            <div class="tr-row" id="hRow3Box"><small id="hRow3L">to go</small><b id="hRow3">—</b></div>
+          </div>
+        </div>
         <div class="hud-buttons">
-          <button id="camBtn" class="hud-btn" title="Change camera (C)" aria-label="Change camera"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-3v10l-6-3z"/></svg></button>
-          <button id="pauseBtn" class="hud-btn" title="Pause (A button / Space)" aria-label="Pause"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
+          <button id="camBtn" class="hud-btn" title="Change camera (C)" aria-label="Change camera"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3v10l-6-3z"/></svg></button>
+          <button id="pauseBtn" class="hud-btn" title="Pause (A button / Space)" aria-label="Pause"><svg class="ic" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
         </div>
       </div>
 
       <div class="hud-bottom">
-        <div class="strip">
-          <div class="side"><b id="hCad">0</b><small>rpm</small></div>
-          <div class="power">
-            <div class="pw"><b id="hPower">0</b><small>W</small></div>
-            <div class="zbar" id="zBar"><i id="zFill"></i><u id="zTarget" hidden></u></div>
-            <div class="pw-sub" id="hPowerSub">&nbsp;</div>
+        <div class="glass strip">
+          <div class="cells">
+            <div class="side"><b id="hCad">0</b><small>rpm</small></div>
+            <div class="power">
+              <div class="pw"><b id="hPower">0</b><span class="pw-unit">W</span><span class="zbadge" id="hZone">Z1</span></div>
+            </div>
+            <div class="side"><b id="hHr">--</b><small>bpm</small></div>
+            <div class="side gear" id="hGearBox"><b id="hGear">12</b><small>gear</small></div>
           </div>
-          <div class="side"><b id="hHr">--</b><small>bpm</small></div>
-          <div class="side gear" id="hGearBox"><b id="hGear">12</b><small>gear</small></div>
+          <div class="zbar" id="zBar"></div>
+          <div class="pw-sub" id="hPowerSub" hidden></div>
         </div>
         <canvas id="hudProfile" class="hud-profile"></canvas>
       </div>
-
-      <div class="hud-title" id="hTitle"></div>
     </div>
 
     <div class="pause-overlay" id="pauseOverlay" hidden>

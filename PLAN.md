@@ -167,6 +167,17 @@ Goal: a calmer, two-screen app. UI audit by Claude Opus 5.5, with Claude Fable 5
 - [x] Fixed: pedalling on the menu after finishing started a new ride — rides now only auto-start from the ride screen
 - [ ] On-bike check
 
+### v0.9.1 — Modern layout and sizing *(branch `v0.9.1`)*
+Goal: a cleaner, more modern look with information sized for reading from the bike.
+- [x] Ride screen: time / distance / speed in one panel; grade panel with **next ½ mi**, lap and to go (or the workout step); grade coloured by steepness
+- [x] Power 120–130 px with a bigger "W", a Z1–Z6 badge and a full-width six-segment zone bar (workout target as a tick); gear in white, hidden on ERG steps
+- [x] Strip sits at the same height in every mode; label-free elevation profile / workout chart along the bottom with the stretch ahead highlighted
+- [x] Status pills merged; loading shown as a thin bar on the top edge; route name fades in under the status pill; camera / pause buttons hide until the mouse moves
+- [x] Menu: two columns — devices, ride type and picker on the left; a preview panel (map, profile or workout chart, key facts) with a full-width **Start** on the right
+- [x] Route and scenery picture cards (route outlines) and a workout list with mini charts instead of dropdowns
+- [x] Device cards with icons and state badges; ride-type cards with icons and a check; one icon set; Demo is a quiet toggle; Start is disabled until the trainer is connected
+- [ ] On-bike check
+
 ### Later ideas
 - Direct Strava upload
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)

@@ -1,5 +1,5 @@
 // bikefree service worker: keeps the app and downloaded park tiles available offline.
-const APP_CACHE = 'bikefree-app-v9';
+const APP_CACHE = 'bikefree-app-v10';
 const TILE_CACHE = 'bikefree-tiles-v1';
 const TILE_HOSTS = ['s3.amazonaws.com', 'basemap.nationalmap.gov'];
 const MAX_TILES = 40000;
