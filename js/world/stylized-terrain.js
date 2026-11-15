@@ -35,7 +35,9 @@ export class StylizedTerrain {
     this.landmarkGeometries = new Set();
     this.stats = { ready: 0, loading: 1, queued: 0, errors: 0 };
     this.palette = Object.fromEntries(Object.entries(this.config.palette).map(([k, v]) => [k, new THREE.Color(v)]));
-    this.groundMaterial = makeCoastalGroundMaterial(this.config.palette, this.config);
+    // Hand-off to the real far terrain (set by the world once it has loaded; off = stylized all the way out).
+    this.farUniform = { value: new THREE.Vector4(opts.farInner ?? 1500, opts.farBand ?? 400, 0, 0) };
+    this.groundMaterial = makeCoastalGroundMaterial(this.config.palette, this.config, this.farUniform);
     this._makeOcean();
     this._makeClouds();
     this._makeShadows();
@@ -94,19 +96,27 @@ export class StylizedTerrain {
   }
 
   _makeClouds() {
-    const rand = randomSequence(1101);
-    const geometry = new THREE.SphereGeometry(1, 10, 6);
-    const material = new THREE.MeshLambertMaterial({ color: '#f1f0df', transparent: true, opacity: .84, depthWrite: false, fog: true });
-    const mesh = new THREE.InstancedMesh(geometry, material, 72);
-    const matrix = new THREE.Matrix4(), q = new THREE.Quaternion(), scale = new THREE.Vector3(), p = new THREE.Vector3();
-    for (let i = 0; i < 72; i++) {
-      const group = Math.floor(i / 4), angle = group * 2.399;
-      const radius = 8500 + Math.sin(group * 5) * 3000;
-      p.set(Math.cos(angle) * radius + rand() * 700, Math.max(1800, this.route.maxEle + 900) + Math.sin(group * 3) * 400 + rand() * 120, Math.sin(angle) * radius + rand() * 350);
-      scale.set(300 + rand() * 300, 65 + rand() * 75, 150 + rand() * 200);
-      mesh.setMatrixAt(i, matrix.compose(p, q, scale));
+    // Soft, unlit billboards: shaded spheres read as grey boulders hanging in the sky.
+    const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    for (const [x, y, r, a] of [[64, 36, 30, .9], [40, 40, 22, .75], [88, 40, 24, .75], [52, 28, 20, .6], [78, 27, 18, .6]]) {
+      const g = ctx.createRadialGradient(x, y, 1, x, y, r);
+      g.addColorStop(0, `rgba(255,255,255,${a})`); g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, 128, 64);
     }
-    mesh.computeBoundingSphere(); this.clouds = mesh; this.group.add(mesh);
+    const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+    const material = new THREE.SpriteMaterial({ map: texture, color: '#ffffff', transparent: true, opacity: .8, depthWrite: false, fog: false });
+    const rand = randomSequence(1101);
+    this.clouds = new THREE.Group(); this.clouds.name = 'clouds';
+    const base = Math.max(1800, this.route.maxEle + 1100);
+    for (let i = 0; i < 26; i++) {
+      const angle = i * 2.399 + rand() * .4, radius = 9000 + rand() * 7000;
+      const sprite = new THREE.Sprite(material);
+      sprite.position.set(Math.cos(angle) * radius, base + rand() * 900, Math.sin(angle) * radius);
+      const w = 2200 + rand() * 2600; sprite.scale.set(w, w * (.32 + rand() * .12), 1);
+      this.clouds.add(sprite);
+    }
+    this.group.add(this.clouds);
   }
 
   _makeOcean() {
@@ -154,19 +164,26 @@ export class StylizedTerrain {
       }
       mesh.name = landmark.name;
       mesh.castShadow = mesh.receiveShadow = true;
+      mesh.userData.road = !!fitted;
+      (fitted || asset.geometry).computeBoundingSphere?.();
+      mesh.userData.r = ((fitted || asset.geometry).boundingSphere?.radius || 0) * Math.max(mesh.scale.x, mesh.scale.z);
+      (this.landmarkMeshes ||= []).push(mesh);
       this.group.add(mesh);
     }
   }
 
   _makePatch(x, z, size) {
     const S = 16, N = S + 1;
-    const positions = [], colors = [], indices = [], normals = [];
+    const positions = [], colors = [], indices = [], normals = [], realH = [];
     const c = new THREE.Color();
     const P = this.palette;
+    const real = this.farOn && this.realHeightAt;
     for (let j = 0; j <= S; j++) for (let i = 0; i <= S; i++) {
       const px = x + size * i / S, pz = z + size * j / S;
       const y = this.heightAt(px, pz);
       positions.push(px, y, pz);
+      // real ground height here: the ground morphs toward it approaching the hand-off to the far terrain
+      realH.push(real ? (this.realHeightAt(px, pz) ?? y) : y);
       const coastal = this.inlandAt(px, pz);
       const patch = .5 + Math.sin(px / 130 + Math.sin(pz / 260)) * Math.cos(pz / 190) * .5;
       c.copy(P.grass).lerp(P.meadow, smoothstep(.15, .9, patch) * .65);
@@ -190,6 +207,7 @@ export class StylizedTerrain {
       const base = positions.length / 3;
       for (const depth of [0, Math.max(20, size * .6)]) for (const k of edge) {
         positions.push(positions[k * 3], positions[k * 3 + 1] - depth, positions[k * 3 + 2]);
+        realH.push(realH[k] - depth);
         colors.push(...colors.slice(k * 3, k * 3 + 3));
       }
       for (let i = 0; i < S; i++) indices.push(base + i, base + N + i, base + i + 1, base + i + 1, base + N + i, base + N + i + 1);
@@ -197,8 +215,13 @@ export class StylizedTerrain {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.setAttribute('aRealH', new THREE.Float32BufferAttribute(realH, 1));
     geometry.setIndex(indices); geometry.computeVertexNormals();
     geometry.attributes.normal.array.set(normals); geometry.computeBoundingSphere();
+    // the morph toward real heights moves vertices up or down: keep the culling sphere honest
+    let morph = 0;
+    for (let k = 0; k < realH.length; k++) morph = Math.max(morph, Math.abs(realH[k] - positions[k * 3 + 1]));
+    geometry.boundingSphere.radius += morph;
     const mesh = new THREE.Mesh(geometry, this.groundMaterial);
     mesh.receiveShadow = true;
     this.group.add(mesh);
@@ -308,7 +331,10 @@ export class StylizedTerrain {
       if (!this.patches.has(key)) this.patches.set(key, this._makePatch(x, z, size));
     };
     const size = 1536, ix = Math.floor(cx / size), iz = Math.floor(cz / size);
-    for (let x = ix - 5; x <= ix + 5; x++) for (let z = iz - 5; z <= iz + 5; z++) visit(x * size, z * size, size);
+    const ring = this.farOn ? 2 : 5;   // with the real far terrain on, the stylized ground only needs ~3 km
+    for (let x = ix - ring; x <= ix + ring; x++) for (let z = iz - ring; z <= iz + ring; z++) visit(x * size, z * size, size);
+    this._cullFar(cx, cz);
+    this.clouds.position.set(cx, 0, cz);   // the sky travels with you
     for (const [key, mesh] of this.patches) {
       mesh.visible = show.has(key);
       if (!mesh.visible) { this.group.remove(mesh); mesh.geometry.dispose(); this.patches.delete(key); }
@@ -336,6 +362,25 @@ export class StylizedTerrain {
     this.stats.ready = this.patches.size;
   }
 
+  /** Turn the hand-off to the real far terrain on or off (off when it can't load, e.g. offline). */
+  setFar(on) {
+    on = !!on;
+    if (on === !!this.farOn) return;
+    this.farOn = on;
+    this.farUniform.value.z = on ? 1 : 0;
+    // rebuild the ground so every patch knows the real height it morphs toward
+    for (const mesh of this.patches.values()) { this.group.remove(mesh); mesh.geometry.dispose(); }
+    this.patches.clear();
+    this._lastX = Infinity;
+  }
+
+  // Beyond the hand-off, stylized stand-ins (mesas, peaks, lakes) would double up with the real ones.
+  _cullFar(cx, cz) {
+    const limit = this.farUniform.value.x + this.farUniform.value.y * 0.5;
+    for (const m of this.landmarkMeshes || []) m.visible = !this.farOn || m.userData.road || Math.hypot(m.position.x - cx, m.position.z - cz) - (m.userData.r || 0) < limit;
+    for (const m of this.lakeMeshes || []) m.visible = !this.farOn || Math.hypot(m.position.x - cx, m.position.z - cz) - Math.max(m.scale.x, m.scale.y) < limit;
+  }
+
   heightAt(x, z) { return this.landscape.heightAt(x, z); }
   setQuality(key) {
     this.quality = COASTAL_QUALITY[key] || COASTAL_QUALITY.balanced;
@@ -357,7 +402,7 @@ export class StylizedTerrain {
     this.surf.geometry.dispose(); this.surf.material.dispose();
     this.ocean.geometry.dispose(); this.ocean.material.dispose();
     this.lakeMeshes.forEach((m) => m.geometry.dispose());
-    this.clouds.geometry.dispose(); this.clouds.material.dispose(); this.clouds.dispose();
+    const cloudMat = this.clouds.children[0]?.material; cloudMat?.map?.dispose(); cloudMat?.dispose();
     this.shadowAsset.geometry.dispose(); this.shadowAsset.material.map.dispose(); this.shadowAsset.material.dispose();
     this.roadside.children.forEach((m) => { m.geometry.dispose(); m.dispose(); });
     this.roadside.children[0]?.material.dispose();

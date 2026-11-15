@@ -18,20 +18,35 @@ const noise = /* glsl */`
   }
 `;
 
-export function makeCoastalGroundMaterial(palette, config = {}) {
+export function makeCoastalGroundMaterial(palette, config = {}, farUniform = null) {
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .98, side: THREE.DoubleSide });
   material.onBeforeCompile = (shader) => {
+    // v0.11.2: x inner radius, y band, z on — beyond the hand-off the real far terrain takes over
+    shader.uniforms.bfFar = farUniform || { value: new THREE.Vector4(1500, 400, 0, 0) };
     shader.uniforms.bfRock = { value: new THREE.Color(palette.rock) };
     shader.uniforms.bfSoil = { value: new THREE.Color('#a59370') };
     shader.uniforms.bfSnowLine = { value: config.snowLineM || 1000000 };
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vBfGround; varying vec3 vBfGroundNormal;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vBfGround; varying vec3 vBfGroundNormal;\nattribute float aRealH; uniform vec4 bfFar;')
+      // Approaching the hand-off, the stylized ground eases onto the real terrain's height so the two meet without a step.
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        if (bfFar.z > .5) {
+          float bfMorph = smoothstep(bfFar.x - 650., bfFar.x - bfFar.y * .5, length(position.xz - cameraPosition.xz));
+          transformed.y = mix(transformed.y, aRealH, bfMorph);
+        }`)
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvBfGround = (modelMatrix * vec4(transformed, 1.)).xyz; vBfGroundNormal = normalize(mat3(modelMatrix) * objectNormal);');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
         varying vec3 vBfGround; varying vec3 vBfGroundNormal;
-        uniform vec3 bfRock; uniform vec3 bfSoil; uniform float bfSnowLine;
+        uniform vec3 bfRock; uniform vec3 bfSoil; uniform float bfSnowLine; uniform vec4 bfFar;
         ${noise}`)
+      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+        if (bfFar.z > .5) {
+          // complementary dither to the far terrain: each pixel shows exactly one of the two grounds
+          float bfFarT = smoothstep(bfFar.x - bfFar.y * .5, bfFar.x + bfFar.y * .5, length(vBfGround.xz - cameraPosition.xz));
+          float bfFarH = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(.06711056, .00583715))));
+          if (bfFarH < bfFarT) discard;
+        }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         vec3 bp = vBfGround;
         float bfDistance = length(cameraPosition - bp);

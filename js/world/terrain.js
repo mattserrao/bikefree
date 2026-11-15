@@ -66,6 +66,10 @@ export class Terrain {
     this.routeIndex = routeIndex;
     this.renderer = opts.renderer;
     this.onError = opts.onError || (() => {});
+    // Far-background mode (v0.11.2): behind a stylized route, draw only beyond `inner` metres,
+    // without trees, colour-matched to the route's palette. The stylized scenery covers the near ground.
+    this.far = opts.far || null;
+    this.maxZ = this.far ? Math.min(MAX_Z, this.far.maxZ ?? 14) : MAX_Z;
     this.group = new THREE.Group();
     this.group.name = 'terrain';
     scene.add(this.group);
@@ -90,6 +94,10 @@ export class Terrain {
       uSunDir: { value: new THREE.Vector3(0, 1, 0) },
       uSkyTop: { value: new THREE.Color('#3f7fd0') },
       uSkyHorizon: { value: new THREE.Color('#c6dbef') },
+      // x inner radius (m), y blend band (m), z on (0/1), w tint amount
+      uFar: { value: new THREE.Vector4(this.far?.inner ?? 1500, this.far?.band ?? 400, 0, this.far?.tint ? (this.far.amount ?? 0.35) : 0) },
+      uFarTint: { value: new THREE.Color(this.far?.tint || '#808080') },
+      uFarRock: { value: new THREE.Color(this.far?.rock || this.far?.tint || '#8a7a6a') },
     };
     this.assets = makeScatterAssets();
     // Eastern forests (Acadia) are mostly broadleaf; the western parks are conifer country.
@@ -103,6 +111,8 @@ export class Terrain {
     const request = (n, d, penalty = 0) => {
       n.lastUsed = now;
       n.priority = d + n.size * 0.08 + penalty;
+      // far-background mode switches on only once the base tiles are in, so fetch those first
+      if (this.far && n.z === ROOT_Z) n.priority = -1e9;
       if (n.state === 'empty' || (n.state === 'error' && now > n.retryAt)) {
         n.state = 'queued';
         this.queue.push(n);
@@ -111,10 +121,12 @@ export class Terrain {
     // cover(n) → list of [tile, quadrant] pieces that together draw n's area, or null.
     // A ready tile can stand in for any child that isn't ready yet by drawing just that quadrant,
     // so new detail appears as soon as it arrives.
+    const hidden = this.far ? Math.max(0, this.far.inner - this.far.band) : 0;
     const cover = (n) => {
       n.lastUsed = now;
-      const d = n.distTo(cx, cz);
-      const split = n.z < MAX_Z && d < splitDistance(n.z, n.size);
+      // far mode: ground inside the hand-off ring is covered by stylized scenery, so treat it as ring-distance away
+      const d = Math.max(n.distTo(cx, cz), hidden);
+      const split = n.z < this.maxZ && d < splitDistance(n.z, n.size);
       if (split) {
         if (!n.children) {
           n.children = [];
@@ -371,7 +383,7 @@ export class Terrain {
     n.heights = heights;
     n.S = S;
 
-    if (n.z >= TREE_TILE_Z && gotImagery) n.trees = this._makeScatter(n, img, canvas.width);
+    if (n.z >= TREE_TILE_Z && gotImagery && !this.far) n.trees = this._makeScatter(n, img, canvas.width);
     if (n.trees) { n.trees.visible = false; this.group.add(n.trees); }
   }
 
@@ -493,6 +505,9 @@ export class Terrain {
 
   get loadingCount() { return this.active + this.queue.length; }
 
+  /** Far-background mode: true once the base tiles cover the whole area (so the blend never shows holes). */
+  get covered() { return this.roots.every((r) => r.state === 'ready'); }
+
   dispose() {
     this._forEach((n) => { if (n.state === 'ready') this._unload(n); });
     this.scene.remove(this.group);
@@ -527,12 +542,23 @@ function makeGroundMaterial(tex, uniforms) {
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float water;\nvarying float vWater;\nvarying vec3 vWorldPos;\nvarying vec3 vWorldNormal;')
+      .replace('#include <common>', '#include <common>\nattribute float water;\nvarying float vWater;\nvarying vec3 vWorldPos;\nvarying vec3 vWorldNormal;\nuniform vec4 uFar;')
+      // far background sits a touch lower so the stylized ground wins where the two coincide in the blend band
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nif (uFar.z > 0.5) transformed.y -= 3.0;')
       .replace('#include <project_vertex>', '#include <project_vertex>\nvWater = water;\nvWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWorldNormal = normalize(mat3(modelMatrix) * objectNormal);');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
         uniform sampler2D uDetail; uniform float uTime; uniform vec3 uSunDir; uniform vec3 uSkyTop; uniform vec3 uSkyHorizon;
+        uniform vec4 uFar; uniform vec3 uFarTint; uniform vec3 uFarRock;
         varying float vWater; varying vec3 vWorldPos; varying vec3 vWorldNormal;`)
+      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+        if (uFar.z > 0.5) {
+          // Far background: dithered hand-off with the stylized ground (it uses the complementary pattern).
+          float farD = length(vWorldPos.xz - cameraPosition.xz);
+          // solid from the start of the blend band: the stylized ground dithers away on top of it,
+          // so every pixel always has ground behind it (no gaps where the two heights differ)
+          if (farD < uFar.x - uFar.y * 0.5) discard;
+        }`)
       .replace('#include <map_fragment>', `#include <map_fragment>
         {
           // colour grade: aerial photos are flat and hazy
@@ -557,6 +583,18 @@ function makeGroundMaterial(tex, uniforms) {
           float steep = 1.0 - smoothstep(0.62, 0.86, vWorldNormal.y);
           float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
           c = mix(c, vec3(lum) * vec3(1.05, 1.0, 0.95) * (0.85 + 0.3 * n1), steep * 0.55 * land);
+          if (uFar.w > 0.0) {
+            // colour-match the photos to the stylized palette: keep their light and shade, borrow its hue
+            vec3 lw = vec3(0.2126, 0.7152, 0.0722);
+            float pl = dot(c, lw);
+            vec3 tinted = uFarTint * (pl / max(dot(uFarTint, lw), 0.02));
+            c = mix(c, tinted, uFar.w * land);
+            c = mix(vec3(dot(c, lw)), c, 0.82);
+            // aerial photos smear down cliff faces: paint steep real ground in the route's own rock colour
+            float farSteep = 1.0 - smoothstep(0.45, 0.8, vWorldNormal.y);
+            float strata = 0.5 + 0.5 * sin(vWorldPos.y * 0.22 + n3 * 3.0);
+            c = mix(c, uFarRock * (0.8 + 0.25 * n2 + 0.12 * strata), farSteep * 0.85 * land);
+          }
           diffuseColor.rgb = max(c, 0.0);
         }`)
       .replace('#include <opaque_fragment>', `
@@ -574,7 +612,9 @@ function makeGroundMaterial(tex, uniforms) {
           waterCol += vec3(1.0, 0.95, 0.85) * pow(max(dot(R, normalize(uSunDir)), 0.0), 220.0) * 2.5;
           outgoingLight = mix(outgoingLight, waterCol, smoothstep(0.15, 0.85, vWater));
         }
-        #include <opaque_fragment>`);
+        #include <opaque_fragment>`)
+      // far background: lift the shaded sides so real cliffs sit with the softly lit stylized foreground
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\nif (uFar.z > 0.5) totalEmissiveRadiance += diffuseColor.rgb * 0.22;');
   };
   return mat;
 }

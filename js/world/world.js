@@ -13,6 +13,8 @@ export const TIME_PRESETS = {
   golden: { label: 'Golden hour', elev: 7, az: 258, top: '#5c78b4', horizon: '#f7b77d', hemiSky: '#ffe6c8', hemiGround: '#9a8670', sun: '#ffc27a', sunI: 0.45, hemiI: 1.4, exposure: 1.05 },
 };
 
+// Stylized foreground → real far terrain hand-off (metres from the camera)
+const FAR_INNER = 1500, FAR_BAND = 400;
 const ROAD_WIDTH = 7;
 
 export class World {
@@ -60,7 +62,7 @@ export class World {
     this.sun = new THREE.DirectionalLight(0xffffff, 1.5);
     if (this.stylized) {
       this.renderer.shadowMap.enabled = COASTAL_QUALITY[this.qualityKey].shadows;
-      this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      this.renderer.shadowMap.type = THREE.PCFShadowMap;   // PCFSoftShadowMap was removed from three.js
       this.sun.castShadow = true;
       const shadowResolution = this.qualityKey === 'high' ? 2048 : 1024;
       this.sun.shadow.mapSize.set(shadowResolution, shadowResolution);
@@ -78,8 +80,22 @@ export class World {
       quality: this.qualityKey,
       bbox: { minLat, maxLat, minLon, maxLon },
       renderer: this.renderer,
+      farInner: FAR_INNER, farBand: FAR_BAND,
       onError: (err) => this.log('3d', `Tile load problem: ${err.message}`, 'debug'),
     });
+    // v0.11.2 blend: real terrain and aerial photos beyond ~1.5 km behind the stylized foreground,
+    // colour-matched to the route's palette. Needs internet; until its base tiles arrive (or offline)
+    // the stylized scenery simply carries on to the horizon.
+    if (this.stylized) {
+      this.farTerrain = new Terrain(this.scene, this.proj, this.index, {
+        bbox: { minLat, maxLat, minLon, maxLon },
+        renderer: this.renderer,
+        far: { inner: FAR_INNER, band: FAR_BAND, tint: route.scene.palette?.grass, rock: route.scene.palette?.cliff || route.scene.palette?.rock, amount: 0.38, maxZ: 14 },
+        onError: (err) => this.log('3d', `Far terrain: ${err.message}`, 'debug'),
+      });
+      this.farTerrain.group.visible = false;   // shown once it covers the whole area
+      this.terrain.realHeightAt = (x, z) => this.farTerrain.heightAt(x, z);
+    }
 
     this.shoulder = makeRibbon(route, this.index, ROAD_WIDTH + (this.stylized ? 1.6 : 3.4), 0.05, makeGravelTexture(this.stylized), 3, { polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
     this.scene.add(this.shoulder);
@@ -155,8 +171,9 @@ export class World {
     u.sunColor.value.set(t.sun);
     u.sunDir.value.copy(dir);
     this.scene.fog.color.set(t.horizon);
-    const tu = this.terrain?.uniforms;
-    if (tu) { tu.uSunDir.value.copy(dir); tu.uSkyTop.value.set(t.top); tu.uSkyHorizon.value.set(t.horizon); }
+    for (const tu of [this.terrain?.uniforms, this.farTerrain?.uniforms]) {
+      if (tu?.uSunDir) { tu.uSunDir.value.copy(dir); tu.uSkyTop.value.set(t.top); tu.uSkyHorizon.value.set(t.horizon); }
+    }
   }
 
   start() {
@@ -227,6 +244,20 @@ export class World {
     this._updateCamera(riderPos, flat, fwd, dt);
     this.terrain.uniforms.uTime.value = now / 1000;
     this.terrain.update(this.camera.position.x, this.camera.position.z);
+    if (this.farTerrain) {
+      this.farTerrain.uniforms.uTime.value = now / 1000;
+      this.farTerrain.update(this.camera.position.x, this.camera.position.z);
+      const on = this.farTerrain.covered;
+      if (on !== this._farOn) {
+        this._farOn = on;
+        this.farTerrain.uniforms.uFar.value.z = on ? 1 : 0;
+        this.farTerrain.group.visible = on;
+        this.terrain.setFar(on);
+        // see further once the real horizon is there
+        this.scene.fog.far = on ? 30000 : 16500;
+        this.log('3d', on ? 'Far terrain ready: real horizon beyond 1.5 km' : 'Far terrain off', 'debug');
+      }
+    }
 
     this.sky.position.copy(this.camera.position);
     if (this.stylized) {
@@ -297,6 +328,7 @@ export class World {
     this.stop();
     this._ro.disconnect();
     this.terrain.dispose();
+    this.farTerrain?.dispose();
     this.sun.shadow.map?.dispose(); this.sun.shadow.mapPass?.dispose();
     this.scene.traverse((o) => {
       if (o.geometry) o.geometry.dispose();
