@@ -184,11 +184,12 @@ export function planJunctions(streets, ctx, options = {}) {
       if (crossing) items.push({ nd, w, route: true, s: q.s, x: nd.x, z: nd.z });
       else if (deg >= 3 && r.d > RW / 2 + w / 2) items.push({ nd, w, route: false, x: nd.x, z: nd.z });
     } else if (deg >= 3) items.push({ nd, w, route: false, x: nd.x, z: nd.z });
+    for (let q = before; q < items.length; q++) items[q].y = Math.min(...ys);   // [w2-meets] (for clustering by level)
     if (items.length === before && deg === 2 && nd.inc.length === 2 && nd.inc[0].k !== nd.inc[1].k && !(nearRoute && r.d < RW / 2 + w / 2)) {
       // [road meets] two streets meeting end to end round a sharp bend (> 50°): a corner junction (a curb return
       // inside, the outside filled), not two ribbons with a notch between their square ends
       const out = nd.inc.map((o) => { const st = streets[o.k], acc = arcs(st), a = acc[o.i] + (o.i === 0 ? 1 : -1) * Math.min(8, acc[acc.length - 1] * .4); return norm(sub(streetPoint(st, a), nd)); });
-      if (dot(out[0], out[1]) > -Math.cos(50 * Math.PI / 180)) items.push({ nd, w, route: false, corner: true, x: nd.x, z: nd.z });
+      if (dot(out[0], out[1]) > -Math.cos(50 * Math.PI / 180)) items.push({ nd, w, route: false, corner: true, x: nd.x, z: nd.z, y: Math.min(...ys) });
     }
   }
 
@@ -203,6 +204,7 @@ export function planJunctions(streets, ctx, options = {}) {
       for (const j of grid.get(`${gx},${gz}`) || []) {
         if (j <= i) continue;
         const b = items[j], d = Math.hypot(a.x - b.x, a.z - b.z);
+        if (Math.abs((a.y ?? 0) - (b.y ?? 0)) > O.levelM) continue;   // [w2-meets] nodes at different levels never merge (a ramp over a street)
         if (a.route && b.route) { if (Math.abs(a.s - b.s) < Math.max(O.mergeM, (a.w + b.w) / 2 + 3) && d < O.maxSpanM) pairs.push([d * .5, i, j]); }
         else if (d < Math.max(O.mergeM, .7 * (a.w + b.w) / 2)) pairs.push([d, i, j]);
       }

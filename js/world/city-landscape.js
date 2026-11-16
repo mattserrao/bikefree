@@ -529,6 +529,7 @@ export function cityStreets(landscape, index, route) {
     alignAlongRoute(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] streets alongside the road: flush with it
     trimAtRoute(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] …or beside it at another level: kept off its shoulder
     resolveOverlaps(streets, landscape);   // [junctions] [w2-meets] carriageways side by side or merging: drawn as their union (gores)
+    followMovedNodes(streets);   // [w2-meets] streets joining lifted decks and flush streets follow them before junctions are planned
     landscape._junctions = planJunctions(streets, { route, index, end, routeDist: landscape.routeDist, roadWidth: ROAD_WIDTH,
       onRouteBridge: (s, m) => landscape.routeBridges.some((b) => s > b.fromM - m && s < b.toM + m), liftOf: (k) => .1 + streetSlots(landscape, streets)[k] * .02 }, landscape.junctions);
     keepUnderRoad(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] nothing over the road
