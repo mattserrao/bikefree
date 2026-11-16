@@ -5,18 +5,19 @@
 <link rel="icon" href="data:,">
 <title>bikefree · Model study</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#dce4da;color:#263f38;font:15px/1.5 system-ui,sans-serif}main{display:grid;grid-template-columns:330px 1fr;min-height:100vh}aside{background:#faf9ef;padding:28px;z-index:1;overflow:auto;max-height:100vh}h1{font-size:27px;letter-spacing:-1px;margin:12px 0}h2{font-size:18px;margin:24px 0 8px}p{font-size:13px;color:#596c60}small{font-size:10px;text-transform:uppercase;letter-spacing:2px}label{display:block;font-size:12px;margin:16px 0}select,button{font:inherit;background:#fffef8;border:1px solid #bcc9ba;border-radius:6px;color:inherit;padding:8px;width:100%}button{cursor:pointer}input{accent-color:#436950}select:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #608b64;outline-offset:3px}#stage{position:relative;height:100vh;overflow:hidden;touch-action:none}canvas{display:block}#caption{position:absolute;bottom:24px;left:24px;right:24px;padding:16px;background:#faf9efed;border-radius:8px;font-size:12px;pointer-events:none}#stats{font-variant-numeric:tabular-nums}a{color:#356c52}@media(max-width:700px){main{grid-template-columns:1fr}aside{max-height:none;padding:20px}#stage{height:65vh}h1{margin:6px 0}}
+*{box-sizing:border-box}body{margin:0;background:#dce4da;color:#263f38;font:15px/1.5 system-ui,sans-serif}main{display:grid;grid-template-columns:330px 1fr;min-height:100vh}aside{background:#faf9ef;padding:28px;z-index:1;overflow:auto;max-height:100vh}h1{font-size:27px;letter-spacing:-1px;margin:12px 0}h2{font-size:18px;margin:24px 0 8px}h3{font-size:13px;margin:18px 0 5px}#proposal section{border-top:1px solid #dce3d5;margin-top:14px}#proposal p{margin:5px 0 12px}.badge{display:inline-block;font-size:10px;letter-spacing:.7px;text-transform:uppercase;color:#436950;background:#e9efdf;padding:4px 7px;border-radius:4px}p{font-size:13px;color:#596c60}small{font-size:10px;text-transform:uppercase;letter-spacing:2px}label{display:block;font-size:12px;margin:16px 0}select,button{font:inherit;background:#fffef8;border:1px solid #bcc9ba;border-radius:6px;color:inherit;padding:8px;width:100%}button{cursor:pointer}input{accent-color:#436950}select:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #608b64;outline-offset:3px}#stage{position:relative;height:100vh;overflow:hidden;touch-action:none}canvas{display:block}#caption{position:absolute;bottom:24px;left:24px;right:24px;padding:16px;background:#faf9efed;border-radius:8px;font-size:12px;pointer-events:none}#stats{font-variant-numeric:tabular-nums}a{color:#356c52}@media(max-width:700px){main{grid-template-columns:1fr}aside{max-height:none;padding:20px}#stage{height:65vh}h1{margin:6px 0}}
 </style>
 <main>
 <aside>
 <small>bikefree / art workshop</small><h1>Familiar style.<br>More believable forms.</h1>
-<p>Working examples from the existing model kit, plus an experimental compact car. Metre-scale geometry, framed to fit each model.</p>
+<p>Inspect all 15 examples and their individual improvement proposals. Slightly smoother silhouettes, the same art style, and Chrome on the base M4 MacBook Air. Geometry is framed to fit each model.</p>
 <label>Example<select id="asset">
 <optgroup label="Bikers"><option value="rider">Road rider · current</option><option value="pacer">Checkered pacer · current</option></optgroup>
 <optgroup label="Cars"><option value="car">Compact car · current</option><option value="study">Compact car · proposed</option><option value="suv">SUV · current</option><option value="rv">Camper · current</option></optgroup>
 <optgroup label="Trees"><option value="cypress0">Cypress</option><option value="pine0">Pine</option><option value="broadleaf0">Broadleaf</option><option value="fir0">Fir</option><option value="palm0">Palm</option></optgroup>
 <optgroup label="Other scenery"><option value="bench">Bench</option><option value="outcrop0">Rock outcrop</option><option value="fern">Fern</option><option value="flowers">Flowers</option></optgroup>
 </select></label>
+<p><a href="#proposal">Review this model’s proposed improvements ↓</a></p>
 <label>Tree detail<select id="detail"><option value="near">Near mesh</option><option value="far">Distant mesh (LOD)</option></select></label>
 <label>Lighting<select id="light"><option value="day">Daylight</option><option value="golden">Warm evening</option></select></label>
 <label><input type="checkbox" id="motion" checked> Animate / turntable</label>
@@ -24,7 +25,10 @@
 <button id="reset">Reset view</button>
 <h2 id="title">Road rider</h2><p id="notes"></p><p id="stats" role="status" aria-live="polite">Loading models…</p>
 <p>Drag to orbit · scroll to zoom. Space pauses animation when the viewer is focused.</p>
-<p><a href="../docs/MODEL_STUDY.md">Read the realism and performance proposal →</a></p>
+<span class="badge">Proposed improvements · not yet applied</span>
+<div id="proposal" aria-label="Improvement proposal for selected model"></div>
+<p><a id="briefLink" href="../docs/MODEL_STUDY.md">Read this object’s full brief →</a></p>
+<p>Triangle budgets are proposed limits. Sustained 60 fps at Balanced is the goal; physical M4 Air benchmarking is still pending.</p>
 </aside>
 <section id="stage" tabindex="0" aria-label="3D model viewer: drag to orbit, scroll to zoom, Space to pause"><div id="caption">Examples only · production riding scenes keep their existing models.</div></section>
 </main>

@@ -3,6 +3,7 @@ import { loadRider } from '../js/world/rider.js';
 import { loadSceneryAssets } from '../js/world/scenery-assets.js';
 import { buildTrafficVehicle } from '../js/world/highway-traffic.js';
 import { buildStudyCar } from './model-study-assets.js';
+import { proposals } from './model-study-proposals.js';
 const $ = id => document.getElementById(id);
 const stage=$('stage'), scene=new THREE.Scene(); scene.background=new THREE.Color('#dce4da');
 const camera=new THREE.PerspectiveCamera(38,1,.01,500);
@@ -15,7 +16,6 @@ const floor=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStanda
 const pivot=new THREE.Group();scene.add(pivot);
 const clock=new THREE.Clock(), uniforms={uTime:{value:0},bfWind:{value:.15}};
 let active, radius=3, target=new THREE.Vector3(), yaw=.7, pitch=.25, zoom=1, elapsed=0;
-const notes={rider:'Existing Blender rider: articulated knees and ankles, crank and wheel rotation. Improve shoulder and elbow poses before adding surface detail.',pacer:'Existing yellow checkered pacer. Compare its readable jersey with the road rider at chase-camera distance.',car:'Current merged traffic mesh. Box wheels and a square cabin keep the cost low but are noticeable at overtaking distance.',study:'Proposed compact: round 12-sided tyres, sloped glazing, roof, mirrors and restrained paint. One merged vertex-colour mesh; no texture downloads. Static wheels in this first proposal.',suv:'Current SUV geometry. Next pass: distinguish its silhouette and wheelbase while sharing materials with the compact.',rv:'Current camper geometry. Preserve its simple palette; prioritize wheel contact and cabin silhouette.'};
 const count=g=>(g.index?.count??g.attributes.position.count)/3;
 function frame(){ pivot.rotation.y=0; pivot.updateMatrixWorld(true); const box=new THREE.Box3().setFromObject(active.group); target=box.getCenter(new THREE.Vector3()); radius=Math.max(box.getSize(new THREE.Vector3()).length()/2,.3); zoom=1; yaw=.7;pitch=.25; pivot.rotation.y=0; const d=radius*2; sun.shadow.camera.left=sun.shadow.camera.bottom=-d;sun.shadow.camera.right=sun.shadow.camera.top=d; sun.shadow.camera.updateProjectionMatrix();sun.shadow.needsUpdate=true;sun.target.position.copy(target);sun.position.copy(target).add(new THREE.Vector3(radius*2,radius*3,radius*2)); }
 function select(){
@@ -28,7 +28,16 @@ function select(){
  pivot.add(active.group);pivot.rotation.y=0;pivot.updateMatrixWorld(true);active.group.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
  $('detail').disabled=!kit.assets[id+'-lod'];
  $('title').textContent=$('asset').selectedOptions[0].textContent;
- $('notes').textContent=notes[id]||'Existing Blender scenery. Compare near and distant tree meshes for silhouette loss. Keep the faceted canopy and region-specific palette; vary branching and cluster placement first.';
+ const proposal=proposals[id];
+ $('notes').textContent=proposal.baseline;
+ $('proposal').replaceChildren(...[
+   ['Shape and smoother silhouettes', proposal.shape],
+   ['Colour and materials', proposal.finish],
+   ['Motion and placement', proposal.behavior],
+   ['M4 Air performance budget', proposal.budget],
+   ['Acceptance checks', proposal.review]
+ ].map(([label, text])=>{const section=document.createElement('section');const heading=document.createElement('h3');heading.textContent=label;const body=document.createElement('p');body.textContent=text;section.append(heading,body);return section;}));
+ $('briefLink').href=`../docs/MODEL_STUDY.md#${id}`;
  const box=new THREE.Box3().setFromObject(active.group).getSize(new THREE.Vector3());
  $('stats').textContent=`${active.triangles.toLocaleString()} triangles · ${box.x.toFixed(2)} × ${box.y.toFixed(2)} × ${box.z.toFixed(2)} m`;
  frame();wire(); window.modelStudy={ready:true,asset:id,triangles:active.triangles,renderer};
