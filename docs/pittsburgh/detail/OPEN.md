@@ -57,3 +57,6 @@ Collected from each agent's final report as it comes in. Suggestions are added o
 | 7 | **Polish** | 4 floating lamps; PPG spire shading at 3.05 km; the street under the trail at 1.50 km; repeated shop labels; blockier parked cars; tree-shadow softness; Pittsburgh's time menu (drop Morning/Daylight); fountain basin and Blockhouse. |
 
 **Order:** wave 2 = #1, #2 and #3 in parallel (three agents, they touch different code); then #4; then the Mac session (#5); then #6–#7 and the PR.
+
+## Wave 2 · #2 road meets (merged)
+Issues within 25 m of the route 82 → 19 (1,076 sites, 23 with issues overall); `road-meet` warns past 20. Still open: Point ramps 2.81–2.84 km need hand-placed deck heights; lips at deck junctions 2.51 km (0.73 m) and 15.75 km; overlaps at 1.32, 4.14/4.39, 4.87, 7.29 (junction), 11.70, 15.66, 16.52 km; small steps at 11.63 and 18.13 km; street building 1–3 s slower at load (VM).
