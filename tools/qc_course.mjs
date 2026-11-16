@@ -338,10 +338,11 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
     streetStats = { ...streetOverlaps(streets, plan || null, { routeDist: landscape.routeDist, roadWidth: ROAD_WIDTH }),
       junctions: plan?.list.length || 0, routeJunctions: plan?.list.filter((j) => j.route).length || 0 };
     // [junctions] road meets (js/world/road-meets.js): every place roadways meet near the route, measured as drawn —
-    // steps, gaps, overlaps, dangling ends, misplaced paint (warn where the scene plans junctions, info elsewhere)
+    // steps, gaps, overlaps, dangling ends, misplaced paint. Reported (info: the work list, with the counts in the
+    // summary line; test/road-meets.test.mjs bounds them), since the rest need source heights fixed (docs/pittsburgh/detail/s2.md)
     const meets = roadMeets(landscape, index, route, { roadWidth: ROAD_WIDTH });
     F.open.clear();
-    for (const site of meets.sites) for (const is of site.issues) F.add('road-meet', plan ? 'warn' : 'info', site.s, is.value, `${site.kind} ${is.check}: ${is.note}`, 0);
+    for (const site of meets.sites) for (const is of site.issues) F.add('road-meet', 'info', site.s, is.value, `${site.kind} ${is.check}: ${is.note}`, 0);
     F.open.clear();
     streetStats.meets = { sites: meets.sites.length, counts: meets.counts, issues: meets.issues };
   }

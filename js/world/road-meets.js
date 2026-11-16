@@ -31,6 +31,7 @@ export const MEET_LIMITS = {
 
 const ROAD_LIFT = .12;           // (pose.js) the route's road surface above its line
 const SLOT_LIFT = (slot) => .1 + slot * .02;   // (city.js) a street ribbon's lift by its height slot
+const JLIFT = .1;                // (junctions.js DEFAULTS.lift) a junction surface's lift
 const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
 /**
@@ -288,7 +289,7 @@ export function alignAlongRoute(streets, ctx, options = {}) {
  */
 export function clearOverpasses(streets, ctx, options = {}) {
   const { route, index } = ctx, RW = ctx.roadWidth || 7;
-  const O = { cos: .7, clearM: 4.9, below: 1.5, grade: .06, ...options };
+  const O = { cos: .7, clearM: 4.9, below: .1, grade: .06, ...options };   // (below: a deck lower than the road's surface less this passes under it)
   const RL = routeLine(route, index), end = route.turnIdx || route.dist.length - 1;
   let n = 0;
   streets.forEach((st) => {
@@ -371,22 +372,22 @@ export function trimAtRoute(streets, ctx, options = {}) {
 /**
  * Last word on the rule that nothing covers the route's road: any ground street or path whose ribbon reaches over
  * the road (its width plus `marginM`) with its top between the road's surface less `under` and 4 m above it is put
- * just under the road there (decks: clearOverpasses lifts those that cross; the rest keep their built heights).
+ * just under the road there (decks that cross over it were lifted clear by clearOverpasses first).
  */
 export function keepUnderRoad(streets, ctx, options = {}) {
-  const { route, index, landscape } = ctx, RW = ctx.roadWidth || 7, O = { under: .05, marginM: .5, ...options };
+  const { route, index, landscape } = ctx, RW = ctx.roadWidth || 7, O = { under: .05, marginM: 1, ...options };
   const RL = routeLine(route, index), end = route.turnIdx || route.dist.length - 1, slots = streetSlots(landscape, streets);
   let n = 0;
   streets.forEach((st, k) => {
-    if (st.bridge) return;
     const lift = SLOT_LIFT(slots[k]);
     for (const p of st.pts) {
       if (p.jn != null) continue;
       const r = index.nearest(p.x, p.z, RW / 2 + st.width / 2 + 6); if (!r) continue;
       const q = RL.project(p.x, p.z, route.dist[Math.min(end, r.i > end ? 2 * end - r.i : r.i)], 30);
       if (!q || q.d > RW / 2 + st.width / 2 + O.marginM) continue;
-      const road = q.y + ROAD_LIFT, top = p.y + (p.jd != null ? 0 : lift);
-      if (top > road - O.under && top < road + 4) { p.y = road - O.under - .005 - (p.jd != null ? 0 : lift); n++; }
+      const L = p.jd != null ? JLIFT + (lift - JLIFT) * smooth(p.jd / LIFT_BLEND_M) : lift;   // (near a junction the lift blends to its surface's)
+      const road = q.y + ROAD_LIFT, top = p.y + L;
+      if (top > road - O.under && top < road + 4) { p.y = road - O.under - .005 - L; n++; }
     }
   });
   return n;
@@ -496,7 +497,7 @@ export function trimOverlaps(streets, landscape, plan, options = {}) {
         if (!branch && isBranch(o.ko, k, null, p)) continue;   // the other one is the branch: it yields, this one stays whole
         const over = hA + o.hB - o.d;
         // (heights: a street flush with the route's road keeps its height; one meeting it takes that height)
-        const top = p.along ? null : o.along || branch ? o.topB : (topA + o.topB) / 2;
+        const top = p.along || p.pin ? null : o.along || branch ? o.topB : (topA + o.topB) / 2;   // (pinned under the road: stays)
         if (branch) jobs.push([k, i, o.side, Math.min(2 * hA, over), top]);   // its inner edge on the parent's edge; wholly inside: not drawn
         else jobs.push([k, i, o.side, Math.min(hA, over / 2), top]);
       }
@@ -521,7 +522,7 @@ export function trimOverlaps(streets, landscape, plan, options = {}) {
       const L = Math.max(4, Math.abs(dy) / O.grade);
       for (let i = 0; i < P.length; i++) { const d = Math.abs(A[i] - A[j]); if (d < L) { const w = t.has(i) ? (i === j ? 1 : 0) : 1 - smooth(d / L); if (w > 0 && (!best[i] || w > best[i][0])) best[i] = [w, dy]; } }
     }
-    P.forEach((p, i) => { if (best[i] && p.jn == null && !p.along) p.y = own[i] + best[i][1] * best[i][0]; });
+    P.forEach((p, i) => { if (best[i] && p.jn == null && !p.along && !p.pin) p.y = own[i] + best[i][1] * best[i][0]; });
   }
   return n;
 }

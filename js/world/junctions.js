@@ -380,7 +380,8 @@ export function planJunctions(streets, ctx, options = {}) {
       if (cr.gap < Math.PI * .95 && (swA || swB)) curbs.push({ pts: curb, wA: swA || swB, wB: swB || swA, arc: !!cr.arc });
     }
     const id = list.length;
-    const jn = { id, x: C.x, z: C.z, route: isRoute, s: rq?.s ?? null, arms: ring, extra: arms.filter((a) => a.alongRoute), poly, curbs, J, lift: O.lift };
+    const jn = { id, x: C.x, z: C.z, route: isRoute, s: rq?.s ?? null, arms: ring, extra: arms.filter((a) => a.alongRoute), poly, curbs, J, lift: O.lift,
+      deck: arms.some((a) => !a.route && streets[a.k].bridge) };   // [road meets] (a junction of decks: the ground doesn't rise to it)
     list.push(jn); clusterToJn.set(c, id);
 
     // cuts and heights for the arms
@@ -412,7 +413,11 @@ export function planJunctions(streets, ctx, options = {}) {
     const cutP = streetPoint(st, job.a0 + job.dir * job.t), cy = base[cutP.i] + (base[Math.min(base.length - 1, cutP.i + 1)] - base[cutP.i]) *
       Math.max(0, Math.min(1, (job.a0 + job.dir * job.t - acc[cutP.i]) / ((acc[Math.min(acc.length - 1, cutP.i + 1)] - acc[cutP.i]) || 1)));
     const step = Math.abs(job.J(cutP.x, cutP.z) - cy);
-    const ease = Math.min(Math.max(O.easeM, step / O.easeGrade), Math.max(2, (job.avail - job.t) * (st.nodes ? .5 : 1)));
+    // ([road meets] and long enough that the change of grade from the junction's plane to the street's own stays
+    // gentle: ~1.1 %-points per metre, so no crease on a steep street)
+    const fw = streetPoint(st, job.a0 + job.dir * (job.t + 6)), gOwn = (base[Math.min(base.length - 1, fw.i)] - cy) / 6 * job.dir;
+    const gJ = (job.J(fw.x, fw.z) - job.J(cutP.x, cutP.z)) / 6 * job.dir, dGrade = Math.abs(gOwn - gJ) * 100;
+    const ease = Math.min(Math.max(O.easeM, step / O.easeGrade, dGrade * .9), Math.max(2, (job.avail - job.t) * (st.nodes ? .6 : 1)));
     for (let i = 0; i < st.pts.length; i++) {
       const d = (acc[i] - job.a0) * job.dir;
       if (d < -1e-6 || d > job.t + ease) continue;
@@ -469,7 +474,7 @@ function surfaceTops(jn, streets, O, onRoad) {
   for (const A of jn.arms) if (!A.route) {
     const y = streetPoint(streets[A.k], A.cutS).y + O.lift;
     // (on the route's road, never above the surface's own height there: that is under the road)
-    for (const m of A.mouth) mouthTop.set(m, jn.route && onRoad(m.x, m.z) ? Math.min(y, jn.J(m.x, m.z) + jn.lift) : y);
+    for (const m of A.mouth) mouthTop.set(m, onRoad(m.x, m.z) ? Math.min(y, jn.J(m.x, m.z) + jn.lift) : y);
   }
   for (const v of jn.poly) v.y = mouthTop.has(v) ? mouthTop.get(v) : jn.J(v.x, v.z) + jn.lift;
   jn.cy = jn.J(jn.x, jn.z) + jn.lift;
@@ -626,6 +631,7 @@ export function junctionsNear(plan, x, z, reach) {
  */
 export function junctionGround(plan, x, z, h) {
   for (const { jn, d } of junctionsNear(plan, x, z, 14)) {
+    if (jn.deck) continue;   // [road meets] a junction of decks: the ground keeps its own shape (the streets' grading decides)
     const top = jn.J(x, z) - .12;
     if (d < 2.6) h = top;
     else h = Math.min(h, top + Math.max(0, d - 6.5) * .6);
