@@ -216,7 +216,7 @@ export function alignAlongRoute(streets, ctx, options = {}) {
   let moved = 0;
   const targets = streets.map(() => null);
   streets.forEach((st, k) => {
-    if (st.cls > 7 || st.pts.length < 2) return;
+    if (st.cls > 7 || st.pts.length < 2 || !nearRouteStreet(st, index, RW / 2 + st.width / 2 + 2)) return;
     const lift = SLOT_LIFT(slots[k]), P = st.pts, tg = new Array(P.length).fill(null);
     let any = false;
     for (let i = 0; i < P.length; i++) {
@@ -293,7 +293,7 @@ export function clearOverpasses(streets, ctx, options = {}) {
   const RL = routeLine(route, index), end = route.turnIdx || route.dist.length - 1;
   let n = 0;
   streets.forEach((st) => {
-    if (!st.bridge || st.cls > 7) return;
+    if (!st.bridge || st.cls > 7 || !nearRouteStreet(st, index, RW / 2 + st.width / 2 + 4)) return;
     const P = st.pts, need = P.map(() => 0);
     let crosses = false;
     const cand = [];
@@ -328,7 +328,7 @@ export function trimAtRoute(streets, ctx, options = {}) {
   const RL = routeLine(route, index), end = route.turnIdx || route.dist.length - 1, slots = streetSlots(landscape, streets);
   let n = 0;
   streets.forEach((st, k) => {
-    if (st.cls > 7) return;
+    if (st.cls > 7 || !nearRouteStreet(st, index, st.width / 2 + O.edgeM + 2)) return;
     const P = st.pts, h = st.width / 2, lift = SLOT_LIFT(slots[k]);
     for (let i = 0; i < P.length; i++) {
       const p = P[i];
@@ -379,6 +379,7 @@ export function keepUnderRoad(streets, ctx, options = {}) {
   const RL = routeLine(route, index), end = route.turnIdx || route.dist.length - 1, slots = streetSlots(landscape, streets);
   let n = 0;
   streets.forEach((st, k) => {
+    if (!nearRouteStreet(st, index, RW / 2 + st.width / 2 + O.marginM + 1)) return;
     const lift = SLOT_LIFT(slots[k]);
     for (const p of st.pts) {
       if (p.jn != null || (O.keepJunctions && p.je != null)) continue;   // (keepJunctions: their ease zones are theirs)
@@ -541,6 +542,13 @@ export function trimOverlaps(streets, landscape, plan, options = {}) {
   }
   return n;
 }
+
+/** Could any point of this street lie within `reach` of the route's line? (its bounding circle; cheap pre-check) */
+const nearRouteStreet = (st, index, reach) => {
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const p of st.pts) { if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x; if (p.z < z0) z0 = p.z; if (p.z > z1) z1 = p.z; }
+  return !!index.nearest((x0 + x1) / 2, (z0 + z1) / 2, Math.hypot(x1 - x0, z1 - z0) / 2 + reach);
+};
 
 const segDist = (x, z, a, b) => {
   const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1;
