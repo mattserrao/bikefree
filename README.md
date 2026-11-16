@@ -60,3 +60,10 @@ The rider can also be built inside Blender: open `tools/build_rider.py` in the T
 3D world: [three.js](https://threejs.org) (MIT), elevation from [AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/), aerial imagery from the USGS National Map (public domain), park routes routed with [BRouter](https://brouter.de) on OpenStreetMap data (© OpenStreetMap contributors, ODbL).
 
 Zwift Ride protocol details come from [BikeControl](https://github.com/jonasbark/swiftcontrol) (MIT) and [ajchellew/zwiftplay](https://github.com/ajchellew/zwiftplay). Not affiliated with Zwift or Wahoo.
+
+## Model realism workshop (test branch)
+
+Open [tools/model-study.html](tools/model-study.html) through the local server to
+inspect existing bikers, traffic, trees and scenery alongside a proposed compact
+car. See [the model study](docs/MODEL_STUDY.md) for art direction, optimization
+proposals and adoption checks.

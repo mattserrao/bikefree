@@ -307,3 +307,6 @@ export class HighwayTraffic {
     this.mat.dispose();
   }
 }
+
+// The study viewer uses exactly the traffic geometry shipped in riding scenes.
+export { vehicle as buildTrafficVehicle };
