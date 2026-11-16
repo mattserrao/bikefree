@@ -408,6 +408,12 @@ Goal: give Going-to-the-Sun Road the Big Sur / Pittsburgh hero treatment, over t
   - [x] `qc --strict` clean; clipping QC 0 fail (8 shoreline z-fight warnings accepted); snapshots against the baseline in REVIEW.md
   - [ ] Mac check with the `I` overlay at Light/Balanced/High, golden hour, midday and night; then move to In Progress and merge
 
+### Route list cleanup *(test branch `routes-test`, from `main`)*
+- [x] New **Deprecated** section (catalog `"stage": "deprecated"`): Grand Teton, Acadia, Seven Mile Bridge, Crater Lake, Monument Valley
+- [x] Yosemite moved to **Rough Drafts**
+- [x] New collapsible **Ideas** section at the bottom of the route list (`routes/ideas.json`): top 10 with notes, then 11–25
+- [ ] Check on the Mac
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

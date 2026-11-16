@@ -329,9 +329,10 @@ function setScenery(id) {
   renderScenery();
   renderPreview();
 }
-// Routes are listed in two sections: In Progress, and Rough Drafts (catalog "stage": "draft").
-const STAGES = [['progress', 'In Progress'], ['draft', 'Rough Drafts']];
-const stageOf = (it) => (it.stage === 'draft' ? 'draft' : 'progress');
+// Routes are listed in sections: In Progress, Rough Drafts (catalog "stage": "draft") and
+// Deprecated ("stage": "deprecated"). The route list ends with a collapsible Ideas section.
+const STAGES = [['progress', 'In Progress'], ['draft', 'Rough Drafts'], ['deprecated', 'Deprecated']];
+const stageOf = (it) => (['draft', 'deprecated'].includes(it.stage) ? it.stage : 'progress');
 function groupedCards(items, card) {
   return STAGES.map(([key, label]) => {
     const list = items.filter((it) => stageOf(it) === key);
@@ -762,6 +763,7 @@ async function loadParks() {
 async function refreshRouteList(selectId) {
   const mine = (await store.listLibrary('route').catch(() => [])).map((r) => ({ ...r, group: 'My routes' }));
   routeItems = [...(await loadParks()), ...mine, DEMO_ROUTE];
+  await loadIdeas();
   // Load every route up front: they're small, and the cards draw their outlines.
   await Promise.all(routeItems.map((it) => loadRouteItem(it).catch(() => null)));
   if (selectId || !routeItems.some((r) => r.id === selectedRouteId)) selectedRouteId = selectId || routeItems[0].id;
@@ -770,13 +772,32 @@ async function refreshRouteList(selectId) {
   await previewSelectedRoute();
 }
 
+// Route ideas (routes/ideas.json): not rideable yet, listed in a collapsible section at the bottom.
+let routeIdeas = null;
+let ideasOpen = false;
+async function loadIdeas() {
+  if (routeIdeas) return routeIdeas;
+  try { routeIdeas = await (await fetch('routes/ideas.json')).json(); } catch { routeIdeas = []; }
+  return routeIdeas;
+}
+function ideasSection() {
+  if (!routeIdeas?.length) return '';
+  const top = routeIdeas.filter((i) => i.rank <= 10);
+  const rest = routeIdeas.filter((i) => i.rank > 10);
+  const row = (i) => `<li value="${i.rank}"><b>${escapeHtml(i.name)}</b>${i.note ? `<span class="rsub"> · ${escapeHtml(i.note)}</span>` : ''}</li>`;
+  return `<details class="ideas" ${ideasOpen ? 'open' : ''}><summary class="cards-group">Ideas</summary>
+    ${top.length ? `<h4>Top 10</h4><ol>${top.map(row).join('')}</ol>` : ''}
+    ${rest.length ? `<h4>11–${rest[rest.length - 1].rank}</h4><ol>${rest.map(row).join('')}</ol>` : ''}</details>`;
+}
+
 function renderRouteCards() {
   $('routeCards').innerHTML = groupedCards(routeItems, (it) => {
     const r = routeCache.get(it.id);
     const sub = r ? `${fmtDist(r.turnS || r.total, 1)} ${distUnit()} each way · ${fmtElev(r.ascent).toLocaleString()} ${elevUnit()}` : 'Could not load';
     return `<button class="rcard ${it.id === selectedRouteId ? 'on' : ''}" data-id="${it.id}"><canvas></canvas>
       <div><b>${escapeHtml(it.name.replace(' (built-in)', ''))}</b><div class="rsub">${escapeHtml(it.park || it.group)} · ${sub}</div></div></button>`;
-  });
+  }) + ideasSection();
+  $('routeCards').querySelector('details.ideas')?.addEventListener('toggle', (e) => { ideasOpen = e.target.open; });
   drawThumbs();
 }
 
@@ -795,7 +816,7 @@ $('routeCards').addEventListener('click', (e) => {
   const card = e.target.closest('.rcard');
   if (!card) return;
   selectedRouteId = card.dataset.id;
-  for (const c of $('routeCards').children) c.classList.toggle('on', c === card);
+  for (const c of $('routeCards').querySelectorAll('.rcard')) c.classList.toggle('on', c === card);
   previewSelectedRoute();
 });
 
