@@ -2,7 +2,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { buildCatalogRoute, routeStartM } from '../js/routes.js';
-import { buildRoute, parseGpx, isPointToPoint, finishDistanceM } from '../js/gpx.js';
+import { buildRoute, parseGpx, isPointToPoint, finishDistanceM, legSpan } from '../js/gpx.js';
 import { Session } from '../js/session.js';
 
 const gpx = (id) => readFileSync(new URL(`../routes/parks/${id}.gpx`, import.meta.url), 'utf8');
@@ -51,6 +51,19 @@ test('ends at the finish: the ride finishes once, the rider stays on the line, t
   assert.equal(s.routeDone, true);
   assert.equal(s.routePos, r.turnS);   // stopped at the finish, not on the way back down
   assert.equal(s.gradePct, 0);
+});
+
+test('reverse, ending at the finish: the rider stays at the end of the way back', () => {
+  const r = buildCatalogRoute(gpx('alpedhuez'), item('alpedhuez'));
+  const s = makeSession();
+  const start = routeStartM(r, { reverse: true });
+  s.setRoute(r, start, finishDistanceM(r, start));
+  s.distanceM = r.turnS + 300;
+  s._updateRoute();
+  assert.equal(s.routeDone, true);
+  assert.ok(s.routePos > r.total - 1);   // at A, still facing the way back
+  assert.deepEqual(legSpan(r, start), [r.turnS, r.total]);
+  assert.deepEqual(legSpan(r, 0), [0, r.turnS]);
 });
 
 test('endless: rides past the finish, turns and laps as before', () => {

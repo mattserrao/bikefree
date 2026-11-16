@@ -177,6 +177,13 @@ export function isPointToPoint(route) {
   return !!(route?.mirrored && route.oneWay && !route.oneWay.closedLoop);
 }
 
+/** The leg a ride from `startM` is on: [0, turn] riding forward, [turn, total] riding the way back. */
+export function legSpan(route, startM) {
+  const turn = route.turnS || route.total;
+  const s = ((startM % route.total) + route.total) % route.total;
+  return s < turn ? [0, turn] : [turn, route.total];
+}
+
 /** Metres from a start point to the finish: the far end riding forward, back at A riding the way back. */
 export function finishDistanceM(route, startM) {
   const turn = route.turnS || route.total;

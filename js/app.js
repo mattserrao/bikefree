@@ -6,7 +6,7 @@ import { powerRequired, speedFromCadence, WHEEL_CIRC } from './physics.js';
 import { loadSettings, saveSettings, KG_PER_LB, MI_PER_KM } from './settings.js';
 import { rideToFit, fitFilename, summarize } from './recorder.js';
 import * as store from './store.js';
-import { parseGpx, buildRoute, averageGradeAhead, wrapDist, routeAt, isPointToPoint, finishDistanceM } from './gpx.js';
+import { parseGpx, buildRoute, averageGradeAhead, wrapDist, routeAt, isPointToPoint, finishDistanceM, legSpan } from './gpx.js';
 import { Pacer, PACER_WATTS } from './pacer.js';
 import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor, markFtpTest, ftpFromTwentyMinutes } from './workout.js';
 import { drawProfile, drawWorkout, drawTrace, drawMinimap, gradeColor } from './views.js';
@@ -312,7 +312,8 @@ function renderPreview() {
     map.hidden = false; chart.hidden = false;
     $('routeOpts').hidden = false;
     drawTrace(map, r, startM, { markerOnly: true });
-    drawProfile(chart, r, startM, { metric: !imperial() });
+    // ends at the finish: chart just the leg being ridden, start to finish
+    drawProfile(chart, r, startM, { metric: !imperial(), span: chosenFinishM(r) != null ? legSpan(r, startM) : null });
   } else if (chosen === 'workout' && previewWorkout) {
     const w = previewWorkout, st = workoutStats(w);
     $('pvKicker').textContent = 'Workout';
@@ -707,7 +708,8 @@ function renderHud() {
   if (now - lastProfileDraw > 1000) {
     lastProfileDraw = now;
     const c = $('hudProfile');
-    if (session.mode === 'route' && session.route) drawProfile(c, session.route, session.routePos, { metric: !imperial(), compact: true });
+    if (session.mode === 'route' && session.route) drawProfile(c, session.route, session.routePos, { metric: !imperial(), compact: true,
+      span: session.routeFinishM != null ? legSpan(session.route, session.routeStart) : null });
     else if (session.mode === 'workout' && session.workout) drawWorkout(c, session.workout, session.workoutT, settings.ftp, session.workoutBias, { compact: true });
     else c.getContext('2d').clearRect(0, 0, c.width, c.height);
   }

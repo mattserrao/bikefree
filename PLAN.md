@@ -670,6 +670,7 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [x] `isPointToPoint` / `finishDistanceM` (`js/gpx.js`); the session takes a finish distance (`setRoute(route, start, finishM)`), clamps the rider and pacer to the line, and fires *routeFinished* once
 - [x] Route options: *Ends at the finish* / *Endless* (shown only for point-to-point routes); preview facts and tag; ride screen shows *to the finish* instead of the lap
 - [x] Works with Reverse and ⅓ / ⅔ starts (Reverse finishes back at the start)
+- [x] Ends at the finish: the elevation charts (preview and ride screen) show just the leg being ridden, start to finish
 - [x] Tests (`test/endless.test.mjs`); `npm test` 109/109
 - [ ] Ride it on the Mac (githack link)
 

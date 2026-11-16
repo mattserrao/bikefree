@@ -27,7 +27,7 @@ export function gradeColor(g) {
 }
 
 /** Elevation profile with ridden part highlighted and a position marker. */
-export function drawProfile(canvas, route, pos, { metric = false, compact = false, ahead = 805 } = {}) {
+export function drawProfile(canvas, route, pos, { metric = false, compact = false, ahead = 805, span = null } = {}) {
   const { ctx, w, h } = setup(canvas);
   if (!route) return;
   // compact: the ride-screen strip — no axis labels, the stretch just ahead is brightest.
@@ -35,14 +35,17 @@ export function drawProfile(canvas, route, pos, { metric = false, compact = fals
   const pw = w - padL - padR, ph = h - padT - padB;
   const range = Math.max(20, route.maxEle - route.minEle);
   const lo = route.minEle - range * 0.08, hi = route.maxEle + range * 0.12;
-  const X = (d) => padL + (d / route.total) * pw;
+  // span [from, to]: draw just that stretch (a point-to-point ride that ends at the finish: one leg)
+  const [from, to] = span || [0, route.total];
+  const X = (d) => padL + ((d - from) / (to - from)) * pw;
   const Y = (e) => padT + ph - ((e - lo) / (hi - lo)) * ph;
 
   const light = document.documentElement.dataset.theme === 'light';
   // Filled profile, coloured by grade, in ~100 columns
-  const step = Math.max(1, Math.floor(route.dist.length / Math.max(60, pw / 3)));
-  for (let i = 0; i < route.dist.length - step; i += step) {
-    const j = Math.min(route.dist.length - 1, i + step);
+  const i0 = Math.max(0, Math.floor(from / 10)), i1 = Math.min(route.dist.length - 1, Math.ceil(to / 10));
+  const step = Math.max(1, Math.floor((i1 - i0) / Math.max(60, pw / 3)));
+  for (let i = i0; i < i1; i += step) {
+    const j = Math.min(i1, i + step);
     const g = (route.ele[j] - route.ele[i]) / Math.max(1, route.dist[j] - route.dist[i]) * 100;
     ctx.fillStyle = gradeColor(g);
     ctx.globalAlpha = compact
@@ -68,17 +71,17 @@ export function drawProfile(canvas, route, pos, { metric = false, compact = fals
   ctx.fillText(`${Math.round(route.minEle * eu)}`, padL - 6, Y(route.minEle) + 4);
   ctx.textAlign = 'left';
   const du = metric ? 1000 : 1609.344;
-  const totalU = route.total / du;
+  const totalU = (to - from) / du;
   const tick = totalU > 40 ? 10 : totalU > 15 ? 5 : totalU > 6 ? 2 : 1;
   for (let k = tick; k < totalU; k += tick) {
-    const x = X(k * du);
+    const x = X(from + k * du);
     ctx.fillText(`${k}`, x - 3, h - 4);
   }
   ctx.fillText(metric ? 'km' : 'mi', padL, h - 4);
   drawMarker();
 
   function drawMarker() {
-    const at = Math.min(pos, route.total);
+    const at = Math.max(from, Math.min(pos, to));
     const i = Math.min(route.dist.length - 1, Math.round(at / 10));
     const mx = X(at), my = Y(route.ele[i]);
     const ink = tok('--ink', '#ece9e1');

@@ -86,7 +86,13 @@ export class Session extends EventTarget {
     return this.routeFinishM == null ? d : Math.min(d, this.routeFinishM);   // the rider stays on the line
   }
   /** Position along the route (wraps around on loops). */
-  get routePos() { return this.route ? wrapDist(this.route, this.routeRidden + this.routeStart) : 0; }
+  get routePos() {
+    if (!this.route) return 0;
+    const at = this.routeRidden + this.routeStart;
+    // finishing back at the start (Reverse): stay at the end of the way back, not wrapped onto the way out
+    if (this.routeFinishM != null && at >= this.route.total) return this.route.total - 0.01;
+    return wrapDist(this.route, at);
+  }
   /** Distance left in this lap (a lap is one full there-and-back from wherever you started). */
   get routeLapToGo() {
     if (!this.route) return 0;
