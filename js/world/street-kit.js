@@ -68,7 +68,7 @@ class KitBuilder extends MeshBuilder {
 }
 import { CURB_H, ROUTE_CURB, streetKitConfig, routeCurbAt, zoneCurbAt, walkTopAt } from './street-grade.js';
 export { streetKitConfig, zoneCurbAt, walkTopAt, CURB_H, ROUTE_CURB };
-const LOD = { light: { near: 160, mid: 450 }, balanced: { near: 260, mid: 750 }, high: { near: 380, mid: 1100 } };
+const LOD = { light: { near: 160, mid: 450, carDetail: 40 }, balanced: { near: 260, mid: 750, carDetail: 90 }, high: { near: 380, mid: 1100, carDetail: 140 } };   // [w2-polish] carDetail: detailed parked cars within this of them
 
 // ---------------------------------------------------------------- catalogue: facade styles
 /**
@@ -114,6 +114,8 @@ const SHOP_LABELS = {
 const SIGN_COLORS = [['#1f3b57', '#ffd34d'], ['#7a1f24', '#fff3d6'], ['#14402e', '#9ef0c2'], ['#2a2a2a', '#ff5fa2'], ['#f2e6c9', '#7a2b16'],
   ['#0f2f4a', '#6fd3ff'], ['#3b2416', '#ffb347'], ['#262145', '#c7a0ff']];
 const ALL_LABELS = Object.values(SHOP_LABELS).flat();
+// [w2-polish] every label once, in a fixed shuffle (seeded), for shopLabel()
+const SHOP_ORDER = ALL_LABELS.map((l, k) => [hash(k * 2654435761 + 97), l]).sort((a, b) => a[0] - b[0]).map((e) => e[1]);
 
 // ---------------------------------------------------------------- the kit
 export class StreetKit {
@@ -299,7 +301,7 @@ export class StreetKit {
   shopNear(x, z, r = 9) {
     let best = null, bd = r;
     for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const s of this._shopGrid?.get(`${Math.floor(x / 40) + a},${Math.floor(z / 40) + b}`) || []) {
-      const d = Math.hypot(s.x - x, s.z - z); if (d < bd && !s.used) { bd = d; best = s; }
+      const d = Math.hypot(s.x - x, s.z - z); if (d < bd) { bd = d; best = s; }
     }
     return best;
   }
@@ -701,11 +703,8 @@ export class StreetKit {
       N.color(trim);
       for (const u of [u0 + .25, u0 + uw - .25]) { const [px, pz] = at(u, .12); N.block(px, base - .3, pz, .5, h - .55 + .3, .24, f.yaw); }
       if (uw > 3.5) { const [dx, dz] = at(u0 + (r > .5 ? .9 : uw - .9), .07); N.color('#1d2226'); face(N, V(dx - f.tx * .48, base, dz - f.tz * .48), V(dx + f.tx * .48, base, dz + f.tz * .48), V(dx + f.tx * .48, base + 2.2, dz + f.tz * .48), V(dx - f.tx * .48, base + 2.2, dz - f.tz * .48), V(f.nx, 0, f.nz)); }
-      // the shop's sign: what's mapped there (by kind of shop), else a generic name
-      const shop = this.shopNear(f.mx + f.tx * (um - f.len / 2), f.mz + f.tz * (um - f.len / 2));
-      if (shop) shop.used = true;
-      const pool = shop ? SHOP_LABELS[shop.cat] || ALL_LABELS : ALL_LABELS;
-      const label = pool[Math.floor(hash(b.k * 17 + k * 5 + f.i) * pool.length)];
+      // the shop's sign: what's mapped there (by kind of shop), else a generic name; neighbours differ
+      const label = this.shopLabel(f, um, uw);
       const sw = Math.min(uw - .8, 3.6), [sx, sz] = at(um, .21);
       this._signQuad(C.near, sx, sz, f.nx, f.nz, sw, base + h - .88, base + h - .14, label);
       // an awning over the glass, or a blade sign out over the sidewalk
@@ -719,12 +718,34 @@ export class StreetKit {
       } else if (r < style.blade && h > 3) {
         const [bx, bz] = at(u0 + .5, .1), y = base + h + .3;
         N.color('#2a2a2a').block(bx + f.nx * .45, y + 1.25, bz + f.nz * .45, .05, .05, .9, f.yaw);
-        const L2 = this.labels[Math.floor(r * 1000) % this.labels.length];
+        const L2 = label;   // the shop's own name on its blade sign
         const cx = bx + f.nx * .55, cz = bz + f.nz * .55;
         this._signQuad(C.near, cx + f.tx * .03, cz + f.tz * .03, f.tx, f.tz, .8, y, y + 1.2, L2);
         this._signQuad(C.near, cx - f.tx * .03, cz - f.tz * .03, -f.tx, -f.tz, .8, y, y + 1.2, L2);
       }
     }
+  }
+  /**
+   * The sign for a shop unit centred `um` along front `f` (unit width `uw`). Order-independent and deterministic:
+   * the label comes from the unit's position along its street line (2 m steps, from a seeded shuffle of every
+   * label), stepped by a number prime to the label count, so units side by side (2–6 steps apart, in the same or
+   * the next building) never share a sign. A shop mapped within the unit (OSM) gives its kind: the nearest
+   * label of that kind in the shuffle.
+   */
+  shopLabel(f, um, uw) {
+    const n = SHOP_ORDER.length;
+    const x = f.a.x + f.tx * um, z = f.a.z + f.tz * um;
+    const along = x * f.tx + z * f.tz, across = x * f.nx + z * f.nz;   // the street line: direction and offset
+    const line = hash(((Math.round(Math.atan2(f.tx, f.tz) * 6) + 64) * 7919) ^ Math.round(across / 12) * 104729);
+    const at = (a) => ((Math.floor(a / 2) * 7 + Math.floor(line * n)) % n + n) % n;
+    let i = at(along);
+    const shop = this.shopNear(x, z, Math.max(4, uw * .6));   // a mapped shop inside this unit
+    const pool = shop && SHOP_LABELS[shop.cat];
+    if (pool) {
+      const next = [SHOP_ORDER[at(along - uw)], SHOP_ORDER[at(along + uw)]];   // what the units either side show
+      for (let k = 0; k < n && (!pool.includes(SHOP_ORDER[i]) || (k < n - 1 && pool.length > 2 && next.includes(SHOP_ORDER[i]))); k++) i = (i + 1) % n;
+    }
+    return SHOP_ORDER[i];
   }
   /** A textured sign quad centred at (x, z), facing (nx, nz), so its text reads from that side. */
   _signQuad(S, x, z, nx, nz, w, y0, y1, label) {
@@ -887,7 +908,10 @@ export class StreetKit {
     if (!fn) return false;
     const y = opts.y ?? this.walkLevel(x, z);
     const M = opts.lod === 'mid' ? C.mid : C.near;
-    fn.call(this, M, { x, y, z, yaw, c: Math.cos(yaw), s: Math.sin(yaw) }, opts);
+    const f = { x, y, z, yaw, c: Math.cos(yaw), s: Math.sin(yaw) };
+    if (kind === 'car' && C.carsHi) {   // [w2-polish] a detailed car and a plain stand-in, each one member (kept or dropped whole)
+      for (const [B, draw] of [[C.carsHi, FURNITURE.car], [C.carsLo, carLo]]) { const t0 = B.i.length, m0 = B.members.length; draw(B, f, opts); B.members.length = m0; B.members.push([t0, B.i.length]); }
+    } else fn.call(this, M, f, opts);
     this.stats.furniture++;
     return true;
   }
@@ -948,7 +972,8 @@ export class StreetKit {
   _due() { return performance.now() - this._t0 > 1.5; }
 
   *_work(key) {
-    const C = { key, near: new KitBuilder({ aGlow: 1 }), mid: new KitBuilder({ aGlow: 1 }), walls: new KitBuilder({ aBld: 4 }), walks: new KitBuilder() };
+    const C = { key, near: new KitBuilder({ aGlow: 1 }), mid: new KitBuilder({ aGlow: 1 }), walls: new KitBuilder({ aBld: 4 }), walks: new KitBuilder(),
+      carsHi: new KitBuilder({ aGlow: 1 }), carsLo: new KitBuilder({ aGlow: 1 }) };   // [w2-polish] parked cars, two LODs
     const jobs = this.jobs.get(key) || [];
     this.jobs.delete(key);
     for (const j of jobs) { yield* this._dressBuilding(C, j); if (this._due()) yield 'building'; }
@@ -966,17 +991,25 @@ export class StreetKit {
       for (const r of P.rails) this._rail(C, r);
       if (this._due()) yield 'rails';
     }
+    // [w2-polish] parked cars join the near mesh as [plain cars | furniture | detailed cars]: one draw call, and the
+    // LOD pass draws the first two or the last two (geometry draw range) by the camera's distance to the cars
+    let carLod = null;
+    if (C.carsHi.count) {
+      for (const B of [C.near, C.carsHi, C.carsLo]) { yield* this._keepOutOfTube(B); B.tubeDone = true; }
+      if (C.carsHi.i.length) { carLod = carBand(C.carsHi); C.near = joinBuilders([C.carsLo, C.near, C.carsHi]); C.near.tubeDone = true; carLod.lo = C.carsLo.i.length; carLod.hi = C.near.i.length - C.carsHi.i.length; carLod.total = C.near.i.length; }
+    }
     const parts = [[C.walks, this.walkMaterial, 'Sidewalks · kit', 'walk', false], [C.walls, this.city.buildingMaterial, 'Street kit · bays', 'mid', true],
       [C.mid, this.material, 'Street kit · facades', 'mid', false], [C.near, this.nearMaterial, 'Street kit · furniture', 'near', false]];
     for (const [builder, material, name, lod, shadow] of parts) {
       if (!builder.count) continue;
-      if (lod !== 'walk') yield* this._keepOutOfTube(builder);
+      if (lod !== 'walk' && !builder.tubeDone) yield* this._keepOutOfTube(builder);
       if (!builder.i.length) continue;
       if (this._due()) yield 'tube';
       const mesh = new THREE.Mesh(this.city.own(builder.geometry()), material);
       mesh.name = `${name} ${key}`; mesh.receiveShadow = true; mesh.castShadow = shadow;
       mesh.userData.bake = false;   // [baked-light] kit pieces stream with the camera (LOD bands): they receive the bake but never trigger a re-bake
       mesh.userData.kitLod = lod; mesh.renderOrder = lod === 'walk' ? 1 : 0;
+      if (builder === C.near && carLod) { mesh.userData.carLod = carLod; carLod.on = false; mesh.geometry.setDrawRange(0, carLod.hi); }   // [w2-polish] plain cars until the LOD pass
       mesh.matrixAutoUpdate = false; mesh.updateMatrix();
       this.city.group.add(mesh);
       (this.city.chunks.get(key) || this._outs.get(key))?.push(mesh);
@@ -1255,7 +1288,9 @@ export class StreetKit {
         if (j.gen.next().done) this.queue.pop();
       }
     }
-    if ((this._frame = (this._frame || 0) + 1) % 10 === 0) for (const m of this.meshes) this._lodOne(m, camera);
+    // LOD every 10 frames, and at once after a jump (a tool or a seek moving the camera: [w2-polish])
+    const jump = !this._lodAt || Math.hypot(camera.x - this._lodAt.x, camera.z - this._lodAt.z) > 30;
+    if ((this._frame = (this._frame || 0) + 1) % 10 === 0 || jump) { for (const m of this.meshes) this._lodOne(m, camera); this._lodAt = { x: camera.x, z: camera.z }; }
   }
   _dist(key, cam) { const [x, z] = key.split(',').map(Number); return Math.hypot((x + .5) * this.CHUNK - cam.x, (z + .5) * this.CHUNK - cam.z); }
   _lodOne(m, cam) {
@@ -1263,6 +1298,8 @@ export class StreetKit {
     if (!sph || k === 'walk') return;
     const d = Math.hypot(sph.center.x - cam.x, sph.center.z - cam.z) - sph.radius;
     m.visible = d < (k === 'near' ? this._lod.near : this._lod.mid);
+    const cl = m.userData.carLod;   // [w2-polish] detailed cars only close to them
+    if (cl) { const hi = cl.box.distanceToPoint(cam) < this._lod.carDetail; if (hi !== cl.on) { cl.on = hi; m.geometry.setDrawRange(hi ? cl.lo : 0, hi ? cl.total - cl.lo : cl.hi); } }
   }
   _applyLod(cam) { this._cam = cam; for (const m of this.meshes) this._lodOne(m, cam); }
   setQuality(key) { this._lod = LOD[key] || LOD.balanced; if (this._cam) this._applyLod(this._cam); }
@@ -1326,11 +1363,94 @@ export const FURNITURE = {
     M.color('#2a2d30'); bx(M, f, .2, 2.7, 0, .3, .35, .25);
     M.color('#1f5a3a'); bx(M, f, 0, 6.15, arm * .7, .04, .28, 1.3);
   },
+  /**
+   * [w2-polish] A parked car: a wedge body with hood and boot, a raked glass cabin with a body-coloured roof,
+   * four wheels (hexagonal, outer face only), head- and tail-lights. Sedan, hatchback or SUV by seed. ≈ 100 triangles
+   * (the plain stand-in, carLo, is 20); local +z is the front.
+   */
   car(M, f, o = {}) {
-    const h = o.seed ?? .5, col = CAR_COLORS[Math.floor(h * 997) % CAR_COLORS.length], long = h > .8 ? 4.9 : 4.4, tall = h > .85 ? .2 : 0;
-    M.color('#1e1f21'); bx(M, f, 0, .02, 0, 1.7, .32, long * .86);
-    M.color(col); bx(M, f, 0, .3, 0, 1.8, .55 + tall * .5, long);
-    M.color(new THREE.Color(col).multiplyScalar(.8)); bx(M, f, 0, .85 + tall * .5, -.15, 1.6, .5 + tall, long * .52);
-    M.color('#2a3540'); bx(M, f, 0, .9 + tall * .5, -.15, 1.64, .36 + tall * .7, long * .46);
+    const h = o.seed ?? .5, col = new THREE.Color(CAR_COLORS[Math.floor(h * 997) % CAR_COLORS.length]);
+    const suv = h > .85, hatch = h < .2, L = suv ? 4.7 : hatch ? 4.0 : h > .7 ? 4.8 : 4.45, W = suv ? 1.86 : 1.78, H = L / 2;
+    const lift = suv ? .14 : 0, top = .86 + lift, glass = '#25313b';
+    // body: one convex side profile (z, y) extruded across the car
+    const body = [[-H, .2 + lift], [H, .2 + lift], [H, .58 + lift], [H - .32, .76 + lift], [H * .36, top], [-H + (hatch ? .1 : .3), top + .02], [-H, .7 + lift]];
+    carPrism(M, f, body, -W / 2, W / 2, () => col, col, true);
+    M.color(col.clone().multiplyScalar(.55)); carPrism(M, f, [[-H - .04, .2 + lift], [-H + .02, .2 + lift], [-H + .02, .4 + lift], [-H - .04, .4 + lift]], -W / 2 + .04, W / 2 - .04, null, null, false);   // rear bumper
+    // cabin: glass sides and screens, body-coloured roof
+    const cb = top - .04, rear = hatch ? -H + .2 : suv ? -H + .3 : -H * .7, front = H * (suv ? .3 : .22), roof = cb + (suv ? .62 : .5);
+    const cabin = [[rear, cb], [front, cb], [front - (suv ? .55 : .85), roof], [rear + (hatch || suv ? .12 : .55), roof]];
+    const cw = W * .86, roofCol = col.clone().multiplyScalar(.92);
+    carPrism(M, f, cabin, -cw / 2, cw / 2, (k) => (k === 2 ? roofCol : glass), glass, false, [0]);
+    // wheels: hexagons, outer faces only, tucked a little under the body
+    const r = suv ? .36 : .32, wb = L * .31;
+    const hex = Array.from({ length: 6 }, (_, k) => [Math.cos(k * Math.PI / 3 + Math.PI / 6) * r, Math.sin(k * Math.PI / 3 + Math.PI / 6) * r + r]);
+    for (const sz of [-1, 1]) for (const sx of [-1, 1]) {
+      const zc = sz * wb, x0 = sx * (W / 2 - .2), x1 = sx * (W / 2 + .02);
+      carPrism(M, f, hex.map(([z, y]) => [z + zc, y]), Math.min(x0, x1), Math.max(x0, x1), () => '#1c1d1f', '#1c1d1f', sx < 0 ? 'neg' : 'pos');
+      carPrism(M, f, hex.map(([z, y]) => [z * .5 + zc, (y - r) * .5 + r]), x1 - .012, x1 + .012, null, '#8d9296', sx < 0 ? 'neg' : 'pos', null, true);   // hub cap
+    }
+    // lights: pale heads at the front, red tails at the back (on the faces, just proud)
+    for (const sx of [-1, 1]) {
+      const [hx, hz] = at(f, sx * (W / 2 - .3), H + .012), [tx, tz] = at(f, sx * (W / 2 - .28), -H - .012);
+      const fwd = V(f.s, 0, f.c), side = V(f.c, 0, -f.s);
+      M.color('#ece6d2'); lamp(M, V(hx, f.y + .5 + lift, hz), side, .36, .12, fwd);
+      M.color('#a3221f'); lamp(M, V(tx, f.y + .56 + lift, tz), side, .3, .14, fwd.clone().negate());
+    }
   },
 };
+
+/** [w2-polish] The plain parked car for distance: two blocks (20 triangles). */
+function carLo(M, f, o = {}) {
+  const h = o.seed ?? .5, col = CAR_COLORS[Math.floor(h * 997) % CAR_COLORS.length], suv = h > .85, L = suv ? 4.7 : h < .2 ? 4.0 : h > .7 ? 4.8 : 4.45, lift = suv ? .14 : 0;
+  // (a few cm inside the detailed car's faces: the two are never drawn together, but tools see both)
+  M.color(col); bxBlock(M, f, 0, .12, 0, (suv ? 1.86 : 1.78) - .05, .71 + lift, L - .08);
+  M.color('#2e3a44'); bxBlock(M, f, 0, .83 + lift, -L * .08, 1.47, suv ? .58 : .46, L * (suv ? .6 : .46));
+}
+function bxBlock(M, f, dx, dy, dz, w, h, l) { const [x, z] = at(f, dx, dz); M.block(x, f.y + dy, z, w, h, l, f.yaw); }
+/**
+ * A side profile (z, y pairs, convex, counter-clockwise) extruded across the car from x0 to x1 (local metres).
+ * edgeCol(k) colours the band for edge k → k+1 (null: the current colour); sideCol the two end faces;
+ * sides: true both, 'pos' / 'neg' just the +x / −x one, false none. skip: edge indices left out (hidden).
+ */
+function carPrism(M, f, prof, x0, x1, edgeCol, sideCol, sides, skip = null, onlySides = false) {
+  const P = (dx, z, y) => { const [x, zz] = at(f, dx, z); return V(x, f.y + y, zz); };
+  let cz = 0, cy2 = 0; for (const [z, y] of prof) { cz += z; cy2 += y; } cz /= prof.length; cy2 /= prof.length;
+  if (!onlySides) for (let k = 0; k < prof.length; k++) {
+    if (skip?.includes(k)) continue;
+    const [za, ya] = prof[k], [zb, yb] = prof[(k + 1) % prof.length];
+    const mz = (za + zb) / 2 - cz, my = (ya + yb) / 2 - cy2;
+    if (edgeCol) M.color(edgeCol(k));
+    face(M, P(x0, za, ya), P(x1, za, ya), P(x1, zb, yb), P(x0, zb, yb), V(mz * f.s, my, mz * f.c));
+  }
+  if (sideCol) M.color(sideCol);
+  for (const [x, sgn] of [[x0, -1], [x1, 1]]) {
+    if (!(sides === true || (sides === 'pos' && sgn > 0) || (sides === 'neg' && sgn < 0))) continue;
+    const want = V(f.c * sgn, 0, -f.s * sgn);
+    for (let k = 1; k + 1 < prof.length; k++) {
+      const a = P(x, ...prof[0]), b = P(x, ...prof[k]), c = P(x, ...prof[k + 1]);
+      const n = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a));
+      if (n.dot(want) >= 0) M.triangle(a, b, c); else M.triangle(a, c, b);
+    }
+  }
+}
+/** A small flat lamp face centred at p, `w` wide along `side`, `h` tall, facing `want`. */
+function lamp(M, p, side, w, h, want) {
+  const a = p.clone().addScaledVector(side, -w / 2), b = p.clone().addScaledVector(side, w / 2);
+  face(M, V(a.x, p.y - h / 2, a.z), V(b.x, p.y - h / 2, b.z), V(b.x, p.y + h / 2, b.z), V(a.x, p.y + h / 2, a.z), want);
+}
+/** [w2-polish] One builder from several (same attributes), in order. */
+function joinBuilders(list) {
+  const out = new KitBuilder({ aGlow: 1 });
+  for (const B of list) {
+    const base = out.count;
+    for (const [dst, src] of [[out.p, B.p], [out.n, B.n], [out.c, B.c], [out.uv, B.uv], [out.extra.aGlow.data, B.extra.aGlow.data]]) for (let k = 0; k < src.length; k++) dst.push(src[k]);
+    for (let k = 0; k < B.i.length; k++) out.i.push(B.i[k] + base);
+  }
+  return out;
+}
+/** [w2-polish] The detailed cars' bounding box, for the LOD pass. */
+function carBand(B) {
+  const box = new THREE.Box3();
+  for (let k = 0; k < B.p.length; k += 3) box.expandByPoint(V(B.p[k], B.p[k + 1], B.p[k + 2]));
+  return { box, on: null };
+}
