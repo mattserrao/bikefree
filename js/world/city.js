@@ -21,6 +21,7 @@ const CHUNK = 320;
 // SECTOR × SECTOR chunks (960 m): a sector is one draw call per material wherever it is seen. Buildings stream in per
 // chunk (nearest first) and fold into their sector's mesh once the sector's last chunk is built.
 export const SECTOR = 3;
+const LAMP_LOD = { light: 420, balanced: 600, high: 800 };   // [w2-budget] lamp posts drawn up to this far from their sector's box (m)
 const SECTOR_M = CHUNK * SECTOR;
 const sectorOf = (key) => { const [x, z] = key.split(',').map(Number); return `${Math.floor(x / SECTOR)},${Math.floor(z / SECTOR)}`; };
 
@@ -896,6 +897,9 @@ export class CityScene {
       poles.name = 'Lamp posts'; glows.name = 'Lamp glows'; pools.name = 'Lamp pools';   // [w2-budget] named for --breakdown (the clipping QC's label)
       for (const im of [poles, glows, pools]) { im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); this.group.add(im); }
       poles.castShadow = true; poles.receiveShadow = true;
+      // [w2-budget] posts are thin (not in the bake), so they can come and go with distance without a re-bake: past
+      // LAMP_LOD of the camera they are under a pixel wide and only cost triangles. The glows and pools stay (night).
+      poles.userData.bake = false; poles.computeBoundingBox(); (this.lampPosts ||= []).push(poles);
       glows.renderOrder = 5; pools.renderOrder = 3;
       (this.nightOnly ||= []).push(glows, pools);
     }
@@ -1099,6 +1103,14 @@ export class CityScene {
     this.landmarks?.tick?.(time, dt);
     this.heroes?.tick?.(time, dt);
     this.streetKit?.tick(camera);   // [street-kit] LOD
+    if ((this._lodFrame = (this._lodFrame || 0) + 1) % 10 === 1) this._lampLod(camera);   // [w2-budget]
+  }
+
+  /** [w2-budget] Lamp posts: drawn only in sectors within LAMP_LOD of the camera. */
+  _lampLod(camera) {
+    const r = LAMP_LOD[this.qualityKey] || LAMP_LOD.balanced, p = new THREE.Vector3(camera.x, camera.y, camera.z);
+    // (by layer, not .visible: tools that index the scene, like the clipping QC, still see every post)
+    for (const m of this.lampPosts || []) { if (m.boundingBox.distanceToPoint(p) < r) m.layers.set(0); else m.layers.disableAll(); }
   }
 
   setNight(v) {
@@ -1109,7 +1121,7 @@ export class CityScene {
     for (const m of this.nightOnly || []) m.visible = v > 0.01;
   }
 
-  setQuality(key) { this.qualityKey = key; this.life.setQuality(key); this.streetKit?.setQuality(key); }   // [street-kit]
+  setQuality(key) { this.qualityKey = key; this.life.setQuality(key); this.streetKit?.setQuality(key); this._lodFrame = 0; }   // [street-kit] [w2-budget] (lamp LOD on the next tick)
 
   dispose() {
     this.life.dispose();
