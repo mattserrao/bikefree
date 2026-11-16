@@ -237,6 +237,39 @@ export function buildBridges(city) {
 }
 
 // ---------------------------------------------------------------- stadiums
+/** A quad from p0 to p1 between heights y0 and y1, wound to face `out` (xz), pushed `push` m outward. */
+function wallQuad(M, p0, p1, y0, y1, out, push = 0) {
+  const A = V(p0.x + out.x * push, y0, p0.z + out.z * push), B = V(p1.x + out.x * push, y0, p1.z + out.z * push);
+  const C = V(B.x, y1, B.z), D = V(A.x, y1, A.z);
+  const n = new THREE.Vector3().subVectors(B, A).cross(new THREE.Vector3().subVectors(D, A));
+  if (n.x * out.x + n.z * out.z >= 0) M.quad(A, B, C, D); else M.quad(B, A, D, C);
+}
+
+/** One bay of a stadium's outer wall (a → b, facing `out`), `h` tall. */
+function facade(M, a, b, out, ground, h, wall, i) {
+  const lerp = (t) => ({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t });
+  const base = wall.clone().multiplyScalar(.72), steel = new THREE.Color('#4a5560'), shade = new THREE.Color('#2e2a26'), cornice = wall.clone().lerp(new THREE.Color('#f1e6cf'), .45);
+  const lo = Math.min(3, h * .2), mid = h > 14 ? h * .58 : h, top = Math.max(lo + 1, h - 1.1);
+  M.color(base); wallQuad(M, a, b, ground, ground + lo, out);
+  M.color(wall); wallQuad(M, a, b, ground + lo, ground + mid, out);
+  if (mid < top) { M.color(steel); wallQuad(M, a, b, ground + mid, ground + top, out); }
+  M.color(cornice); wallQuad(M, a, b, ground + top, ground + h, out, .35);
+  { // the cornice's top, back to the wall
+    const y = ground + h, A = V(a.x, y, a.z), B = V(b.x, y, b.z), C = V(b.x + out.x * .35, y, b.z + out.z * .35), D = V(a.x + out.x * .35, y, a.z + out.z * .35);
+    if (new THREE.Vector3().subVectors(B, A).cross(new THREE.Vector3().subVectors(D, A)).y >= 0) M.quad(A, B, C, D); else M.quad(B, A, D, C);
+  }
+  // tall openings: a dark recess in the middle of the bay, a lit band of upper openings over it
+  if (Math.hypot(b.x - a.x, b.z - a.z) > 6 && mid - lo > 5) {
+    M.color(shade); wallQuad(M, lerp(.22), lerp(.78), ground + lo + .4, ground + lo + (mid - lo) * .62, out, .12);
+    if (mid < top - 3) { M.color(steel.clone().multiplyScalar(.6)); wallQuad(M, lerp(.12), lerp(.88), ground + mid + 1.2, ground + top - 1.4, out, .12); }
+  }
+  // a pilaster at the bay's start
+  if (i % 1 === 0 && mid - lo > 5) {
+    const t = .045, p0 = lerp(0), p1 = lerp(t * 2);
+    M.color(cornice.clone().multiplyScalar(.92)); wallQuad(M, p0, p1, ground + lo, ground + mid, out, .3);
+  }
+}
+
 export function buildStadiums(city) {
   const M = new MeshBuilder(), lights = [];
   const shapes = city.route.scene?.stadiumShapes || {}, L = city.landscape;
@@ -290,8 +323,9 @@ export function buildStadiums(city) {
         const pa = lo(ia, a), pb = lo(ib, b);
         M.color('#2b2f35'); M.quad(pa, pb, pb.clone().setY(pb.y + 2.2), pa.clone().setY(pa.y + 2.2));
       }
-      M.color(wall);
-      M.quad(V(b.x, ground, b.z), V(b.x, ground + h, b.z), V(a.x, ground + h, a.z), V(a.x, ground, a.z));
+      // the outer wall, facing out (the ring's winding varies with the data): a stone plinth, bays of tall
+      // openings between pilasters, a darker steel upper level and a pale cornice, instead of one blank face
+      facade(M, a, b, { x: mx / ml, z: mz / ml }, ground, h, wall, i);
       M.quad(V(ia.x, ground, ia.z), V(ia.x, ground + 2.5, ia.z), V(ib.x, ground + 2.5, ib.z), V(ib.x, ground, ib.z));
       if (i % Math.max(1, Math.floor(ring.length / 6)) === 0 && open < .6) {
         M.color('#55595d'); M.cylinder(a.x, ground + h, a.z, .5, 16, 6, .4);

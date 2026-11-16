@@ -9,6 +9,7 @@ import { riderPose, routePoint, ROAD_WIDTH } from './pose.js';
 import { loadRider } from './rider.js';
 import { PerfMonitor } from './perf.js';
 import { HAZE, installHaze } from './haze.js';
+import { BakedLighting } from './baked-light.js';   // [baked-light]
 
 installHaze();   // valley haze in the fog chunks: before any material compiles
 import { wrapDist } from '../gpx.js';
@@ -123,6 +124,8 @@ export class World {
     this.scene.add(this.road);
     // weather: clear / marine layer / clouds / rain (stylized scenery)
     if (this.stylized) this.weather = new Weather(this, this.terrain.uniforms);
+    // [baked-light] fixed sun, baked shadows and AO for the static scenery (scene "lighting": {"baked": "golden"})
+    if (this.stylized) this.baked = BakedLighting.create(this, route.scene.lighting, TIME_PRESETS);
     // hero scenery: HDR render with soft bloom, a gentle grade and vignette (off on Light detail)
     // every stylized scene goes through it; only hero scenes (scene.post) get the bloom, grade and vignette
     if (this.stylized) this.post = new PostFX(this.renderer, { samples: COASTAL_QUALITY[this.qualityKey].samples });
@@ -222,7 +225,7 @@ export class World {
     this.qualityKey = Object.hasOwn(COASTAL_QUALITY, key) ? key : 'balanced';
     const quality = COASTAL_QUALITY[this.qualityKey];
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.pixelRatio));
-    this.renderer.shadowMap.enabled = quality.shadows;
+    this.renderer.shadowMap.enabled = quality.shadows && !(this.baked && this._time?.night);   // [baked-light]
     const resolution = this.qualityKey === 'high' ? 2048 : 1024;
     if (this.sun.shadow.mapSize.x !== resolution) {
       this.sun.shadow.map?.dispose(); this.sun.shadow.map = null;
@@ -236,6 +239,7 @@ export class World {
 
   setTimeOfDay(key) {
     if (key === 'auto' || !key) key = this.route.scene?.timeOfDay || 'midday';   // "Route's default"
+    if (this.baked) key = this.baked.timeFor(key);   // [baked-light] the baked time, or night
     let t = TIME_PRESETS[key] || TIME_PRESETS.midday;
     if (this.stylized && key === 'night') t = { ...t, sunI: .55, hemiI: .42 };
     else if (this.stylized) t = { ...t, sunI: key === 'golden' ? 2.5 : 2.1, hemiI: key === 'golden' ? .95 : 1.1,
@@ -295,6 +299,7 @@ export class World {
     for (const tu of [this.terrain?.uniforms, this.farTerrain?.uniforms]) {
       if (tu?.uSunDir) { tu.uSunDir.value.copy(dir); tu.uSkyTop.value.set(t.top); tu.uSkyHorizon.value.set(t.horizon); }
     }
+    this.baked?.setLight(t);   // [baked-light]
   }
 
   start() {
@@ -366,6 +371,7 @@ export class World {
     }
 
     this.sky.position.copy(this.camera.position);
+    this.baked?.tick(dt);   // [baked-light]
     if (this.stylized) this._placeShadows(riderPos, flat);
     else {
       this.sun.position.copy(this.camera.position).addScaledVector(this.sunDir, 5000);
@@ -382,7 +388,7 @@ export class World {
   _placeShadows(riderPos, flat) {
     const target = _v1.copy(this.cameraMode === 'vista' ? this.camTarget : riderPos);
     if (this.cameraMode !== 'vista') target.addScaledVector(flat, 40);
-    const span = this.cameraMode === 'vista' ? 170 : 105;
+    const span = this.baked?.ready ? this.baked.dynamicSpan : this.cameraMode === 'vista' ? 170 : 105;   // [baked-light] moving things only
     const sm = this.renderer.shadowMap;
     // light-space axes, then snap the box centre to the texel grid
     const d = this.sunDir, right = _v2.set(0, 1, 0).cross(d);
@@ -486,6 +492,7 @@ export class World {
     this.stop();
     this._ro.disconnect();
     this.weather?.dispose();
+    this.baked?.dispose();   // [baked-light]
     this.post?.dispose();
     this.terrain.dispose();
     this.farTerrain?.dispose();

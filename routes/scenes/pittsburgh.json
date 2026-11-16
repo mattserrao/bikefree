@@ -509,6 +509,9 @@
   },
   "realHorizon": false,
   "timeOfDay": "golden",
+  "lighting": {
+    "baked": "golden"
+  },
   "weather": {
     "presets": [
       "clear",

@@ -28,6 +28,12 @@ const KIND_COLORS = [
   ['#c4b79c', '#b8a98d'],                                                                      // 11 civic stone
 ];
 
+/** [s1-lanes] Which third of the street texture a street uses (u range; reversed for one-ways drawn backwards). */
+export function streetPaint(st) {
+  const k = st.oneway ? (st.width >= 10 ? 1 : 2) : 0, u = [k / 3, (k + 1) / 3];
+  return st.oneway < 0 ? [u[1], u[0]] : u;
+}
+
 export class CityScene {
   constructor(parent, route, index, landscape, kit, uniforms, qualityKey = 'balanced') {
     this.group = new THREE.Group(); this.group.name = 'City'; parent.add(this.group);
@@ -219,12 +225,18 @@ export class CityScene {
     this.buildingMaterial = bm;
 
     // Streets: asphalt with lane paint; sidewalks; paths.
-    const c = document.createElement('canvas'); c.width = 64; c.height = 256;
+    // [s1-lanes] three paint styles side by side (u thirds, see streetPaint): two-way with a double yellow
+    // centre line; one-way multi-lane (divided highways, one-way pairs): yellow left edge, dashed white lanes;
+    // one-way single lane (ramps): edge lines only
+    const c = document.createElement('canvas'); c.width = 192; c.height = 256;
     const ctx = c.getContext('2d');
-    ctx.fillStyle = '#505457'; ctx.fillRect(0, 0, 64, 256);
-    for (let k = 0; k < 2500; k++) { const g = 70 + Math.random() * 26; ctx.fillStyle = `rgba(${g},${g + 2},${g + 4},.45)`; ctx.fillRect(Math.random() * 64, Math.random() * 256, 1, 1); }
+    ctx.fillStyle = '#505457'; ctx.fillRect(0, 0, 192, 256);
+    for (let k = 0; k < 7500; k++) { const g = 70 + Math.random() * 26; ctx.fillStyle = `rgba(${g},${g + 2},${g + 4},.45)`; ctx.fillRect(Math.random() * 192, Math.random() * 256, 1, 1); }
     ctx.fillStyle = '#d9d6c8'; ctx.fillRect(3, 0, 1.5, 256); ctx.fillRect(59.5, 0, 1.5, 256);
     ctx.fillStyle = '#d6b44c'; ctx.fillRect(30.5, 0, 1.4, 150); ctx.fillRect(32.6, 0, 1.4, 150);
+    ctx.fillStyle = '#d6b44c'; ctx.fillRect(64 + 4, 0, 1.6, 256); ctx.fillRect(128 + 4, 0, 1.6, 256);
+    ctx.fillStyle = '#d9d6c8'; ctx.fillRect(64 + 58.5, 0, 1.5, 256); ctx.fillRect(128 + 58.5, 0, 1.5, 256);
+    for (const x of [64 + 23, 64 + 41]) ctx.fillRect(x, 0, 1.3, 96);
     const tex = this.own(new THREE.CanvasTexture(c)); tex.wrapT = THREE.RepeatWrapping; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
     const offset = (f) => ({ polygonOffset: true, polygonOffsetFactor: f, polygonOffsetUnits: f });
     this.streetMaterial = this.own(new THREE.MeshStandardMaterial({ map: tex, roughness: .93, ...offset(-1.6) }));
@@ -671,7 +683,7 @@ export class CityScene {
       // crossing ribbons each get their own height (2 cm apart), so lane paint never flickers at a junction
       const p0 = st.pts[0], lift = .1 + slots[k] * .02;
       if (st.cls === 8) { ribbon(get(paths, p0.x, p0.z), st.pts, st.width, lift, 8); return; }
-      ribbon(get(roads, p0.x, p0.z).set({ aSlot: [slots[k]] }), st.pts, st.width, lift, 24);
+      ribbon(get(roads, p0.x, p0.z).set({ aSlot: [slots[k]] }), st.pts, st.width, lift, 24, streetPaint(st));   // [s1-lanes]
       if (!st.bridge && st.cls >= 2 && st.cls <= 6) ribbon(get(walks, p0.x, p0.z), st.pts, st.width + 5, .06, 8);
       // lamps every ~34 m, alternating sides
       if (st.cls >= 1 && st.cls <= 6) {
