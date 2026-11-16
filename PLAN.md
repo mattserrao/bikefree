@@ -518,11 +518,46 @@ in pieces other routes can reuse, and balanced against the graphics cost. Review
   - patched on the east descent
   - The rain preset's wet road now chains onto it.
 
-**Ideas for life and interest** (16 Nov 2026, not decided yet; see the session's list)
-- Rock cuts on the uphill side, roadside water (cascades, culverts, Weeping Wall spray), Red Jammer buses
-  and people at the pullouts, near-field roadside detail (snow poles, delineators, rockfall), burn-scar
-  snags with fireweed, staged wildlife moments, an ambient soundscape by zone, camera feel (sway, lean),
-  views placed at the real viewpoints, timber guardrail in the valley
+**Life and interest pass** (Matt, 16 Nov 2026)
+Matt picked rock cuts, water, buses and people, roadside detail, a burn, wildlife set pieces and the real
+viewpoints. Not picked: sound, camera feel, timber guardrail.
+
+*Decisions*
+- The road only looks narrower (no geometry change).
+- No centre line up high, faded where it returns.
+- Paved but rougher up high (gravel shoulders, loose gravel, patching).
+- No construction zone.
+- Rock cuts with debris.
+- The full water set.
+- Red Jammers plus walking people.
+- Mile markers in miles.
+- A ride-through burn plus burned slopes across the lake.
+- Animals at fixed spots, no bear jam.
+- The real overlooks plus a few random lake windows.
+- Same budget; build it all, then review.
+
+*Done*
+- [x] **Road:**
+  - paved 5.9–6.4 m from 30 to 56.5 km, with gravel shoulders and the edge lines moved in
+  - no centre line from 34.7 to 52.5 km, faded 1 km either side
+  - loose gravel in the alpine and east-descent zones (`road-surface.js`: `pavedM`, `centre`, `gravel`)
+- [x] **Rock cuts:** ground attribute `aVk` (cut depth, burn). Blasted grey faces with seeps, and the ribs calmed on the cut.
+- [x] **Verge** (`verge.js`): miles 1–46, snow poles 30.5–56.5 km, delineators in the valley and on the east side, fallen rock below the deeper cuts.
+- [x] **Water:**
+  - Weeping Wall strands arcing onto the road
+  - 31 culverts found from the terrain, with masonry headwalls, pipes and cascades in the steep gullies
+  - McDonald Creek traced 16.8–23.2 km
+  - white water on every creek where it drops
+- [x] **Traffic and people:**
+  - Red Jammers about 1 vehicle in 4, and parked at overlooks
+  - visitors at Logan Pass, Lake McDonald Lodge, Rising Sun, St. Mary, Avalanche and every overlook (`visitors.js`)
+- [x] **Burns:** a 1.8 km ride-through above Lake McDonald (14–15.6 km) and the slopes across the lake. Snags, regrowth and fireweed.
+- [x] **Wildlife:** goats above the road at 43.5 km, bighorn at Logan Pass (one on the shoulder), a marmot on the wall at about 45.5 km.
+- [x] **Views:** windows at 11 real viewpoints. Random windows toward the lake only.
+
+*Known leftovers*
+- A floating flat rock above the road just before Logan Pass (47 km). It was there before this pass.
+- The near Garden Wall vertex-colour smear.
 
 **Still to check**
 - [ ] A ride on the M4 Air with the `I` overlay: the ground shader is heavier (about 40 value-noise lookups

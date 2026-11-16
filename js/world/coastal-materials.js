@@ -19,14 +19,20 @@ const noise = /* glsl */`
   }
 `;
 
-export function makeCoastalGroundMaterial(palette, config = {}, farUniform = null, canopyUniform = null, uniforms = {}, vista = null) {
+export function makeCoastalGroundMaterial(palette, config = {}, farUniform = null, canopyUniform = null, uniforms = {}, vista = null, vkAttr = false) {
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .98, side: THREE.DoubleSide });
   const canopy = !!canopyUniform;
   // vista kit (js/world/vista.js): mountain faces, snow, meadows and canopy that hold up at a distance
-  const vk = vistaGroundGLSL(vista, palette), vkCanopy = canopy ? vistaCanopyGLSL(vista) : null;
-  if (vk || vkCanopy) material.customProgramCacheKey = () => `bf-ground-vista-${!!vk}-${!!vkCanopy}`;
+  const vk = vistaGroundGLSL(vista, palette, vkAttr), vkCanopy = canopy ? vistaCanopyGLSL(vista, vkAttr) : null;
+  if (vk || vkCanopy) material.customProgramCacheKey = () => `bf-ground-vista-${!!vk}-${!!vkCanopy}-${vkAttr}`;
   material.onBeforeCompile = (shader) => {
     if (vk) Object.assign(shader.uniforms, vk.uniforms);
+    if (vkAttr) {
+      // vista kit: road-cut depth (x) and fire scar (y) per vertex
+      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aVk; varying vec2 vVk;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvVk = aVk;');
+      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vVk;');
+    }
     if (canopy) {
       // Distant forest: beyond the last real trees the ground rises into a mottled canopy shell
       shader.uniforms.bfCanopy = canopyUniform;

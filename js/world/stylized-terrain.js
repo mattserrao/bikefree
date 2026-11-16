@@ -17,6 +17,8 @@ import { CoastLife } from './coast-life.js';
 import { GlacierLife } from './glacier-life.js';
 import { makeRouteIndex } from './geo.js';
 import { vistaConfig, makeCumulusAtlas } from './vista.js';
+import { Verge } from './verge.js';
+import { Visitors } from './visitors.js';
 
 // Tree cards stream in large tiles, at a fraction of the scatter's candidate density.
 const FAR_TREE_TILE_M = 768, FAR_TREE_DENSITY = .3;
@@ -133,7 +135,7 @@ export class StylizedTerrain {
       this.forestTiles = new Map(); this.forestQueue = [];
     }
     this.vista = vistaConfig(this.config);   // vista kit (js/world/vista.js): distance detail, haze, clouds
-    this.groundMaterial = makeCoastalGroundMaterial(this.config.palette, this.config, this.farUniform, this.canopyUniform, this.uniforms, this.vista);
+    this.groundMaterial = makeCoastalGroundMaterial(this.config.palette, this.config, this.farUniform, this.canopyUniform, this.uniforms, this.vista, this._vkAttr());
     this._makeOcean();
     this._makeClouds();
     this._makeShadows();
@@ -158,6 +160,8 @@ export class StylizedTerrain {
         this.traffic.setNight(this._night || 0);
       }
       this.details = new CoastalDetails(this.group, this.route, this.index, this.landscape, kit, this.uniforms);
+      if (this.config.verge && this.landscape.frameAt) this.verge = new Verge(this.group, this.landscape, this.route, this.config.verge);
+      if (this.config.visitors && this.landscape.frameAt) this.visitors = new Visitors(this.group, this.landscape, this.route, this.index, this.uniforms, this.config.visitors, this.qualityKey, this.config.lookouts || []);
       if (this.config.glacier) {
         this.landmarks = new GlacierLandmarks(this.group, this.landscape, this.route, this.index, this.proj, this.config, kit, this.uniforms);
         this.landmarks.setNight(this._night || 0);
@@ -170,6 +174,9 @@ export class StylizedTerrain {
       this.stats.loading = 0;
     }).catch((err) => { this.stats.loading = 0; this.stats.errors++; opts.onError?.(err); });
   }
+
+  /** Ground carries the vista kit's road-cut / fire-scar attribute (mountain scenes with rock cuts or burns). */
+  _vkAttr() { return !!(this.vista && this.landscape.mountain && (this.vista.rock?.cuts || this.landscape.burnAt)); }
 
   _setCanopyStart() {
     // the canopy shell rises where the last tier of real trees ends
@@ -571,7 +578,8 @@ export class StylizedTerrain {
   /** A ground patch, built a row at a time (yields between rows so the ride can spread it over frames). */
   *_patchJob(x, z, size) {
     const S = 16, N = S + 1;
-    const positions = [], colors = [], indices = [], normals = [], realH = [], canopy = [];
+    const positions = [], colors = [], indices = [], normals = [], realH = [], canopy = [], vk = [];
+    const vkOn = this._vkAttr();
     const c = new THREE.Color();
     const P = this.palette;
     const floor = this.forestLayout && P.forestFloor;
@@ -606,6 +614,13 @@ export class StylizedTerrain {
         c.lerp(P.cliff, (1 - smoothstep(10, 70, coastal)) * smoothstep(.35, .9, rise) * .7);
         if (P.sand) c.lerp(P.sand, (1 - smoothstep(2.5, 6, y)) * (1 - smoothstep(60, 140, coastal)));
       }
+      if (vkOn) {
+        // vista kit: how deep the road cut is here (real ground above the pressed ground), and fire scars
+        const cut = this.landscape.baseHeight ? Math.max(0, this.landscape.baseHeight(px, pz) - y) : 0;
+        const burn = this.landscape.burnAt?.(px, pz) || 0;
+        vk.push(this.index.nearest(px, pz, 40) ? cut : 0, burn);
+        if (burn) { c.lerp(P.burn || P.rock, burn * .3); }
+      }
       if (this.forest) {
         const cover = this.forest.cover(px, pz);
         canopy.push(cover);
@@ -631,6 +646,7 @@ export class StylizedTerrain {
         positions.push(positions[k * 3], positions[k * 3 + 1] - depth, positions[k * 3 + 2]);
         realH.push(realH[k] - depth);
         if (this.forest) canopy.push(canopy[k]);
+        if (vkOn) vk.push(vk[k * 2], vk[k * 2 + 1]);
         colors.push(...colors.slice(k * 3, k * 3 + 3));
       }
       for (let i = 0; i < S; i++) indices.push(base + i, base + N + i, base + i + 1, base + i + 1, base + N + i, base + N + i + 1);
@@ -640,6 +656,7 @@ export class StylizedTerrain {
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     geometry.setAttribute('aRealH', new THREE.Float32BufferAttribute(realH, 1));
     if (this.forest) geometry.setAttribute('aCanopy', new THREE.Float32BufferAttribute(canopy, 1));
+    if (vkOn) geometry.setAttribute('aVk', new THREE.Float32BufferAttribute(vk, 2));
     geometry.setIndex(indices); geometry.computeVertexNormals();
     geometry.attributes.normal.array.set(normals); geometry.computeBoundingSphere();
     // the morph toward real heights moves vertices up or down: keep the culling sphere honest
@@ -652,6 +669,7 @@ export class StylizedTerrain {
     if (!this.groundPool) {
       const attributes = { position: 3, normal: 3, color: 3, aRealH: 1 };
       if (this.forest) attributes.aCanopy = 1;
+      if (vkOn) attributes.aVk = 2;
       this.groundPool = new GroundBlocks(this.group, this.groundMaterial, { vertices: positions.length / 3, indices: Uint32Array.from(indices), attributes });
     }
     return mesh;
@@ -702,6 +720,8 @@ export class StylizedTerrain {
           // under the forest: ferns and huckleberry; in the meadows: beargrass, paintbrush, glacier lilies
           const v = this.landscape.vegetationAt(x, z), byRoad = this.index.nearest(x, z, 14);
           const cover = this.forest ? this.forest.cover(x, z) : v.forest;
+          // an old burn: fireweed in drifts, a little grass
+          if ((this.landscape.burnAt?.(x, z) || 0) > .5) { add(pick < .45 ? 'fireweed' : pick < .8 ? 'grass' : 'huckleberry', x, y - .06, z, coverScale[0] + k * (coverScale[1] - coverScale[0])); continue; }
           const plant = cover > .45 ? (k < .5 ? 'fern' : k < .62 ? 'huckleberry' : null)
             : v.east > .5 ? (pick < .55 ? 'grass' : pick < .7 ? 'huckleberry' : pick < .8 ? 'paintbrush' : 'sage')
             : v.alpine > .4 ? (pick < .14 ? 'beargrass' : pick < .38 ? 'glacierlily' : pick < .6 ? 'paintbrush' : pick < .8 ? 'alpineflowers' : 'grass')
@@ -1074,6 +1094,7 @@ export class StylizedTerrain {
   // Beyond the hand-off, stylized stand-ins (mesas, peaks, lakes) would double up with the real ones.
   _cullFar(cx, cz) {
     this.landmarks?.cullWalls?.(cx, cz);
+    this.verge?.cull(cx, cz);
     const limit = this.farUniform.value.x + this.farUniform.value.y * 0.5;
     for (const m of this.landmarkMeshes || []) m.visible = !this.farOn || m.userData.road || Math.hypot(m.position.x - cx, m.position.z - cz) - (m.userData.r || 0) < limit;
     for (const m of this.lakeMeshes || []) {
@@ -1088,6 +1109,7 @@ export class StylizedTerrain {
     this.city?.tick(camera, dt, this.uniforms.uTime.value, rider);
     this.traffic?.tick(dt, rider);
     this.life?.tick(dt, camera);
+    this.visitors?.tick(dt, camera);
   }
 
   setNight(v) {
@@ -1116,7 +1138,7 @@ export class StylizedTerrain {
     this.groundPool?.dispose();
     for (const pool of Object.values(this.pools || {})) pool.dispose();
     this.farCards?.dispose();
-    this.details?.dispose();
+    this.details?.dispose(); this.verge?.dispose(); this.visitors?.dispose();
     this.city?.dispose();
     this.landmarkGeometries.forEach((g) => g.dispose()); this.landmarkGeometries.clear();
     this.surf?.geometry.dispose(); this.surf?.material.dispose(); this.landmarks?.dispose(); this.shoreTexture?.dispose(); this.bridges?.dispose(); this.traffic?.dispose(); this.life?.dispose();

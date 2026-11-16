@@ -29,6 +29,9 @@
     "farTintAmount": 0.3,
     "ice": "#dce8ee",
     "scree": "#b4ad9f",
+    "cutRock": "#8d8579",
+    "burn": "#a6a196",
+    "fireweed": "#c4669c",
     "shrub": "#3d5a3a"
   },
   "snowLineM": 2150,
@@ -67,30 +70,55 @@
       "everyM": 850,
       "lengthM": 170,
       "reachM": 260,
-      "downhill": true,
-      "downhillM": 140,
-      "keep": 0.1
+      "downhill": false,
+      "downhillM": 150,
+      "keep": 0.1,
+      "at": [ 13300, 22312, 34640, 42120, 42200, 46393, 54880, 54960, 58180, 64990, 65080 ],
+      "atLengthM": 170
     }
   },
   "road": {
     "surface": "worn",
     "zones": [
-      { "fromM": 0, "toM": 2200, "surface": "fresh" },
-      { "fromM": 2200, "toM": 16500, "surface": "worn" },
-      { "fromM": 16500, "toM": 30000, "surface": "chipseal" },
-      { "fromM": 30000, "toM": 50200, "surface": "alpine" },
-      { "fromM": 35925, "toM": 35985, "surface": "tunnel" },
-      { "fromM": 41380, "toM": 41620, "surface": "alpine", "wet": 1 },
-      { "fromM": 49140, "toM": 49270, "surface": "tunnel" },
-      { "fromM": 50200, "toM": 56500, "surface": "patched", "runoff": 0.35 },
-      { "fromM": 56500, "toM": 75500, "surface": "fresh", "edge": 0.3 }
+      {"fromM": 0, "toM": 2200, "surface": "fresh"},
+      {"fromM": 2200, "toM": 16500, "surface": "worn"},
+      {"fromM": 16500, "toM": 30000, "surface": "chipseal"},
+      {"fromM": 30000, "toM": 33700, "surface": "alpine", "pavedM": 6.2, "gravel": 0.3},
+      {"fromM": 33700, "toM": 34700, "surface": "alpine", "pavedM": 6, "gravel": 0.4, "centre": 0.4},
+      {"fromM": 34700, "toM": 50200, "surface": "alpine", "pavedM": 5.9, "gravel": 0.5, "centre": 0},
+      {"fromM": 35925, "toM": 35985, "surface": "tunnel", "pavedM": 5.9, "centre": 0},
+      {"fromM": 41380, "toM": 41620, "surface": "alpine", "pavedM": 5.9, "gravel": 0.2, "centre": 0, "wet": 1},
+      {"fromM": 49140, "toM": 49270, "surface": "tunnel", "pavedM": 5.9, "centre": 0},
+      {"fromM": 50200, "toM": 52500, "surface": "patched", "pavedM": 6, "gravel": 0.4, "centre": 0, "runoff": 0.35},
+      {"fromM": 52500, "toM": 53500, "surface": "patched", "pavedM": 6.2, "gravel": 0.3, "centre": 0.4, "runoff": 0.3},
+      {"fromM": 53500, "toM": 56500, "surface": "patched", "pavedM": 6.4, "gravel": 0.2, "runoff": 0.3},
+      {"fromM": 56500, "toM": 75500, "surface": "fresh", "edge": 0.3}
     ]
+  },
+  "visitors": {
+    "spots": [
+      { "site": "Logan Pass parking", "count": 16 },
+      { "site": "Lake McDonald Lodge", "innerM": 6, "radiusM": 45, "count": 10 },
+      { "site": "Rising Sun", "innerM": 4, "radiusM": 30, "count": 5 },
+      { "site": "St. Mary Visitor Center", "innerM": 6, "radiusM": 35, "count": 6 },
+      { "atM": 22340, "side": -1, "lateralM": 22, "radiusM": 16, "count": 8 }
+    ],
+    "lookouts": 3,
+    "walking": 0.45
+  },
+  "verge": {
+    "markers": { "units": "mi" },
+    "poles": [ { "fromM": 30500, "toM": 56500, "spacingM": 38 } ],
+    "posts": [ { "fromM": 300, "toM": 30000, "spacingM": 52 }, { "fromM": 56500, "toM": 75300, "spacingM": 52 } ],
+    "debris": [ { "fromM": 30000, "toM": 56500, "density": 0.7 } ],
+    "reachM": 1300
   },
   "vista": {
     "rock": {
       "ribs": 0.9,
       "ledges": 0.7,
-      "scree": 0.6
+      "scree": 0.6,
+      "cuts": 0.9
     },
     "snow": {
       "gullies": 0.85,
@@ -508,6 +536,7 @@
     }
   ],
   "glacier": {
+    "culverts": { "fromM": 26000, "toM": 64000, "minDepthM": 3.5, "maxCount": 40 },
     "guardwalls": {
       "fromM": 30000,
       "toM": 62500,
@@ -535,7 +564,8 @@
         "toM": 41760,
         "heightM": 18,
         "widthM": 2.4,
-        "spacingM": 4.5
+        "spacingM": 4.5,
+        "overRoad": true
       },
       {
         "name": "Haystack Falls",
@@ -616,6 +646,13 @@
       }
     ]
   },
+  "burns": [
+    { "name": "Ride-through burn above Lake McDonald", "lat": 48.6269, "lon": -113.8654, "lengthM": 1800, "widthM": 520, "angle": -42 },
+    { "name": "Burned slopes across Lake McDonald", "lat": 48.6005, "lon": -113.9285, "lengthM": 5200, "widthM": 1500, "angle": -50 }
+  ],
+  "streams": [
+    { "name": "McDonald Creek", "fromM": 16800, "toM": 23200, "widthM": 12, "minRoadM": 20, "searchM": 170 }
+  ],
   "lakeIslands": [
     {
       "name": "Wild Goose Island",
@@ -629,9 +666,18 @@
     }
   ],
   "traffic": {
-    "perMinute": 4
+    "perMinute": 4,
+    "mix": {
+      "jammer": 0.33
+    }
   },
   "life": {
+    "moments": [
+      { "kind": "goat", "atM": 43470, "count": 3, "where": "uphill", "lateralM": [13, 26], "spacingM": 9 },
+      { "kind": "bighorn", "atM": 47060, "count": 1, "where": "shoulder" },
+      { "kind": "bighorn", "atM": 47075, "count": 2, "where": "uphill", "lateralM": [9, 16], "spacingM": 6 },
+      { "kind": "marmot", "atM": 45480, "count": 1, "where": "wall" }
+    ],
     "goats": [
       {
         "atM": 47300,

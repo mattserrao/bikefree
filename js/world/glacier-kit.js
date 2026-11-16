@@ -99,6 +99,31 @@ function krummholz(variant) {
   return b.build();
 }
 
+function snag(variant, lod) {
+  // a fire-killed conifer: a silver, bark-shed trunk, charcoal at the foot, a few broken stubs, a snapped top
+  const rand = randomSequence(1901 + variant), b = new Builder(), H = 20 + variant * 6;
+  b.add(cyl(.12, .42, H, lod ? 4 : 6), M(), variant ? '#a7a39a' : '#9c978d');
+  b.add(cyl(.38, .44, .9 + variant * .5, lod ? 4 : 6), M(), '#4a4440');            // charred base
+  if (lod === 2) return b.build();
+  const stubs = lod ? 3 : 9;
+  for (let k = 0; k < stubs; k++) {
+    const y = H * (.35 + rand() * .55), a = rand() * 6.28, len = .7 + rand() * 1.4;
+    b.add(cyl(.02, .06, len, 3), M(Math.cos(a) * .15, y, Math.sin(a) * .15, 1, 1, 1, -a, 0, 1.2 + rand() * .3), '#8f8a80');
+  }
+  return b.build();
+}
+
+function fireweed() {
+  // a clump of tall stems, pink-magenta spikes on top
+  const rand = randomSequence(2101), b = new Builder();
+  for (let k = 0; k < 5; k++) {
+    const x = (rand() - .5) * .3, z = (rand() - .5) * .3, h = .7 + rand() * .45;
+    b.add(cyl(.012, .016, h, 3), M(x, 0, z), '#5f7442');
+    b.add(cone(.07, .32, 4), M(x, h - .05, z), '#c4569a', .15, rand);
+  }
+  return b.build();
+}
+
 function beargrass() {
   // a fountain of wiry leaves with a slim stalk ending in a creamy club of tiny flowers
   const rand = randomSequence(2001), b = new Builder();
@@ -165,7 +190,9 @@ function buildGlacierKit(opts) {
   tree('lodgepole0', (l) => lodgepole(0, l)); tree('lodgepole1', (l) => lodgepole(1, l));
   tree('larch0', (l) => larch(0, l, fall));
   tree('aspen0', (l) => aspen(0, l, fall)); tree('aspen1', (l) => aspen(1, l, fall));
+  tree('snag0', (l) => snag(0, l)); tree('snag1', (l) => snag(1, l));
   Object.assign(geos, {
+    fireweed: fireweed(),
     krummholz0: krummholz(0), krummholz1: krummholz(1),
     beargrass: beargrass(), paintbrush: paintbrush(), glacierlily: glacierLily(), huckleberry: huckleberry(),
     alder0: alder(0), alder1: alder(1), talus0: talus(0), talus1: talus(1),
@@ -173,5 +200,5 @@ function buildGlacierKit(opts) {
   return geos;
 }
 
-export const GLACIER_CATEGORY = { beargrass: 'groundcover', paintbrush: 'groundcover', glacierlily: 'groundcover', huckleberry: 'groundcover' };
-export const GLACIER_VARIANTS = { cedar: 2, whemlock: 2, espruce: 2, subfir: 2, lodgepole: 2, larch: 1, aspen: 2 };
+export const GLACIER_CATEGORY = { fireweed: 'groundcover', beargrass: 'groundcover', paintbrush: 'groundcover', glacierlily: 'groundcover', huckleberry: 'groundcover' };
+export const GLACIER_VARIANTS = { cedar: 2, whemlock: 2, espruce: 2, subfir: 2, lodgepole: 2, larch: 1, aspen: 2, snag: 2 };

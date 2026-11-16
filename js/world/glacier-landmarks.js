@@ -308,15 +308,49 @@ export class GlacierLandmarks {
       }
       return pts;
     };
-    const lift = (pts, k = 1.1) => pts.map((p) => V(p.x, L.heightAt(p.x, p.z) + k, p.z));
+    const lift = (pts, k = 1.1) => pts.map((p) => Object.assign(V(p.x, L.heightAt(p.x, p.z) + k, p.z), { w: p.w }));
+    // culverts: where a gully comes down to the road, a cascade runs to it and spills out below
+    // a gully's line: straight up the steepest ground for a fixed length (gentle gullies too)
+    const climb = (x, z, len, rise) => {
+      const pts = [V(x, L.heightAt(x, z), z)];
+      for (let d = 0; d < len; d += 4) {
+        const p = pts.at(-1); let best = null;
+        for (let k = 0; k < 16; k++) { const a = k * Math.PI / 8, cx = p.x + Math.cos(a) * 4, cz = p.z + Math.sin(a) * 4, h = L.heightAt(cx, cz); if (!best || h > best.y) best = V(cx, h, cz); }
+        if (best.y <= p.y + .05) break;
+        pts.push(best);
+        if (best.y - pts[0].y > rise) break;
+      }
+      return pts;
+    };
+    for (const c of this._culverts()) {
+      const up = climb(c.inlet.x, c.inlet.z, 110, Math.max(14, c.riseM));
+      // only real gullies: steep enough to tumble (a white plank across an open meadow reads wrong)
+      const len = up.length > 1 ? Math.hypot(up.at(-1).x - up[0].x, up.at(-1).z - up[0].z) : 0;
+      const steep = len > 12 && (up.at(-1).y - up[0].y) / len > .45;
+      up.reverse().forEach((p, k) => { p.w = .45 + .55 * k / Math.max(1, up.length - 1); });   // narrower toward the top
+      if (steep && up.length > 3) ribbon(lift(up, .25), .9 + c.k * .6, 'Cascade');
+      const down = walk(c.outlet.x, c.outlet.z, -1, 22, 70);
+      if (down.length > 2) ribbon(lift(down, .25), .9 + c.k * .5, 'Culvert outfall');
+    }
     for (const f of list) {
       if (f.fromM != null) {
         // a wall of falling water beside the road (the Weeping Wall): many strands from the cut face up the cliff
         const side = f.side === 'valley' ? this._valleySide((f.fromM + f.toM) / 2) : -this._valleySide((f.fromM + f.toM) / 2);
-        for (let s = f.fromM; s <= f.toM; s += f.spacingM || 4.5) {
+        let k = 0;
+        for (let s = f.fromM; s <= f.toM; s += f.spacingM || 4.5, k++) {
           const p = this.F(s), o = ROAD_HALF + 2.4, x = p.x - p.fz * side * o, z = p.z + p.fx * side * o;
           const strand = walk(x, z, 1, f.heightM || 16, 60).reverse();
           ribbon(lift(strand, .45), (f.widthM || 2.2) * (.7 + ((s * 13.7) % 1) * .6), f.name);
+          // over the road: some strands spout from the lip of the cut and arc down into the near lane
+          if (f.overRoad && k % 2 === 0) {
+            const top = this.L.heightAt(x, z) + 3.5 + ((s * 7.1) % 1) * 2.5, reach = 1.8 + ((s * 3.7) % 1) * 1.6;
+            const arc = [];
+            for (let t = 0; t <= 1.0001; t += .125) {
+              const off = o - (o - (ROAD_HALF - reach)) * t;
+              arc.push(V(p.x - p.fz * side * off, p.y + .1 + (top - p.y - .1) * (1 - t * t), p.z + p.fx * side * off));
+            }
+            ribbon(arc, 1.1 + ((s * 5.3) % 1) * .8, f.name);
+          }
         }
         continue;
       }
@@ -367,6 +401,58 @@ export class GlacierLandmarks {
     this.waterMaterial = material;
     const mesh = new THREE.Mesh(g, material); mesh.name = 'Waterfalls'; mesh.renderOrder = 3;
     this.group.add(mesh); this.disposables.push(g, material);
+  }
+
+  /**
+   * Culverts (glacier.culverts {fromM, toM, minDepthM, maxCount}): where the ground on the uphill side dips
+   * into a gully that reaches the road. Each gets a masonry headwall with a pipe below the road on the low
+   * side; the waterfalls add a cascade down the gully and a spill from the pipe.
+   */
+  _culverts() {
+    if (this._culvertList) return this._culvertList;
+    const c = this.cfg.culverts, out = (this._culvertList = []);
+    if (!c) return out;
+    const L = this.L, T = L.terrain, prof = [];
+    for (let s = c.fromM; s < Math.min(c.toM, this.oneWay - 50); s += 10) {
+      const p = this.F(s), side = -this._valleySide(s), off = 30;
+      prof.push({ s, p, side, h: T.at(p.x - p.fz * side * off, p.z + p.fx * side * off) });
+    }
+    const minD = c.minDepthM ?? 3;
+    for (let i = 5; i < prof.length - 5; i++) {
+      const a = prof[i];
+      if (!(a.h < prof[i - 1].h && a.h <= prof[i + 1].h)) continue;
+      const rim = Math.min(Math.max(prof[i - 4].h, prof[i - 5].h), Math.max(prof[i + 4].h, prof[i + 5].h));
+      if (rim - a.h < minD || this._inTunnel(a.s, 30) || L.bridgeOfS?.(a.s, 30) || out.some((o) => Math.abs(o.s - a.s) < 150)) continue;
+      if ((this.cfg.waterfalls || []).some((f) => f.fromM != null && a.s > f.fromM - 60 && a.s < f.toM + 60)) continue;
+      const p = a.p, side = a.side;
+      const inlet = { x: p.x - p.fz * side * (ROAD_HALF + 3), z: p.z + p.fx * side * (ROAD_HALF + 3) };
+      const outlet = { x: p.x + p.fz * side * (ROAD_HALF + 2.6), z: p.z - p.fx * side * (ROAD_HALF + 2.6) };
+      out.push({ s: a.s, p, side, inlet, outlet, riseM: Math.min(40, (rim - a.h) * 3), k: ((a.s * 7.3) % 1) });
+      if (out.length >= (c.maxCount ?? 40)) break;
+    }
+    // headwalls: a masonry face with a dark pipe, below the road edge on the low side
+    if (out.length) {
+      const walls = [], pipes = [], m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = V(0, 1, 0);
+      for (const o of out) {
+        const ground = L.heightAt(o.outlet.x, o.outlet.z), y = Math.min(o.p.y - .9, ground + .9);
+        q.setFromAxisAngle(up, Math.atan2(o.p.fx, o.p.fz));
+        const off = ROAD_HALF + 2.0, x = o.p.x + o.p.fz * o.side * off, z = o.p.z - o.p.fx * o.side * off;
+        walls.push(m.compose(V(x, y - 1.1, z), q, V(.55, Math.max(1.6, o.p.y - y + 1.1), 2.6)).clone());
+        const px = o.p.x + o.p.fz * o.side * (off + .3), pz = o.p.z - o.p.fx * o.side * (off + .3);
+        q.setFromUnitVectors(V(0, 1, 0), V(o.p.fz * o.side, 0, -o.p.fx * o.side));
+        pipes.push(m.compose(V(px, y - .45, pz), q, V(1, 1, 1)).clone());
+      }
+      const material = makeMasonryMaterial({ stones: this.cfg.guardwalls?.stones || STONEWORK, mortar: '#6f6a62', courseM: .24 });
+      const wallMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1).translate(0, .5, 0), material, walls.length);
+      walls.forEach((mm, i) => { wallMesh.setMatrixAt(i, mm); wallMesh.setColorAt(i, new THREE.Color(.9, .9, .9)); });
+      wallMesh.name = 'Culvert headwalls'; wallMesh.castShadow = wallMesh.receiveShadow = true; wallMesh.computeBoundingSphere();
+      const pipeGeo = new THREE.CylinderGeometry(.42, .42, .5, 10, 1, false);
+      const pipeMesh = new THREE.InstancedMesh(pipeGeo, new THREE.MeshStandardMaterial({ color: '#1c1b19', roughness: 1 }), pipes.length);
+      pipes.forEach((mm, i) => pipeMesh.setMatrixAt(i, mm)); pipeMesh.name = 'Culvert pipes'; pipeMesh.computeBoundingSphere();
+      this.group.add(wallMesh, pipeMesh);
+      this.disposables.push(wallMesh.geometry, material, pipeGeo, pipeMesh.material);
+    }
+    return out;
   }
 
   // ---- Buildings ----

@@ -17,7 +17,7 @@
 import * as THREE from '../../vendor/three.module.min.js';
 
 const DEFAULTS = {
-  rock: { ribs: .9, ledges: .7, scree: .6, ribWidthM: 30, ribLengthM: 170, reliefM: 22, ledgeM: 30 },
+  rock: { ribs: .9, ledges: .7, scree: .6, cuts: 0, ribWidthM: 30, ribLengthM: 170, reliefM: 22, ledgeM: 30 },
   snow: { gullies: .8, ledges: .6 },
   meadow: { mottle: .5 },
   forest: { crowns: .8, boost: 1.6 },
@@ -45,7 +45,7 @@ const f = (n) => Number(n).toFixed(4);
  * the colour code (inside main, before the weather), `normal` after normal_fragment_maps. Variables the
  * colour code sets (vk*) are read again by the normal code.
  */
-export function vistaGroundGLSL(v, palette) {
+export function vistaGroundGLSL(v, palette, vkAttr = false) {
   if (!v || !(v.rock || v.snow || v.meadow || v.forest)) return null;
   const R = v.rock || { ribs: 0, ledges: 0, scree: 0, ribWidthM: 30, ribLengthM: 170, reliefM: 0, ledgeM: 32 };
   const S = v.snow || { gullies: 0, ledges: 0 };
@@ -55,9 +55,14 @@ export function vistaGroundGLSL(v, palette) {
     vkAlpine: { value: new THREE.Color(palette.meadow || '#93a566') },
     vkShrub: { value: new THREE.Color(palette.shrub || palette.forest || '#2e4635') },
     vkSnow: { value: new THREE.Color(palette.snow || '#eef2f3') },
+    vkCutCol: { value: new THREE.Color(palette.cutRock || palette.rock || '#8e877c') },
+    vkBurnCol: { value: new THREE.Color(palette.burn || '#a39d92') },
+    vkFireweed: { value: new THREE.Color(palette.fireweed || '#c2649a') },
   };
+  const cuts = vkAttr ? (R.cuts || 0) : 0;
   const pars = /* glsl */`
     uniform vec3 vkScree; uniform vec3 vkAlpine; uniform vec3 vkShrub; uniform vec3 vkSnow;
+    uniform vec3 vkCutCol; uniform vec3 vkBurnCol; uniform vec3 vkFireweed;
     // gullies and spurs on one face projection: stretched along the fall line, warped so they wander,
     // octaves that would be narrower than about two pixels fade to their mean (no shimmer far away)
     float vkRibs(vec2 q, float px) {
@@ -110,6 +115,28 @@ export function vistaGroundGLSL(v, palette) {
     diffuseColor.rgb = mix(diffuseColor.rgb, vkShrub * 1.05, vkOpen * smoothstep(.56, .6, vkPatch) * mix(.4, .8, vkPatchFade) * ${f(M.mottle)});
     float vkDrift = bfFbm(bp.xz * .0016 + 11.);
     diffuseColor.rgb *= mix(vec3(1.), mix(vec3(1.04, 1.03, .9), vec3(.92, 1., 1.04), smoothstep(.35, .65, vkDrift)), vkOpen * ${f(M.mottle)});` : ''}
+    ${cuts > 0 ? `
+    // road cuts: the blasted face above the road — half-barrel drill marks, fracture lines, seeps staining
+    // it dark and wet, a little moss at the foot
+    float vkCutK = ${f(cuts)} * smoothstep(.7, 2.4, vVk.x) * smoothstep(.12, .3, bfSlope) * (1. - smoothstep(250., 450., bfDistance));
+    // patterns sampled on each fixed face projection and blended (blending the coordinates would shear them)
+    #define VK_FACE(F) (F(bp.z) * vkW.x + F(bp.x) * vkW.y)
+    #define VK_SEEP(u) (bfNoise(vec2((u) * .18, 3.)) + bfNoise(vec2((u) * .5, bp.y * .03)) * .25)
+    #define VK_GRAIN(u) bfNoise(vec2((u) * .35, bp.y * .06))
+    float vkSeep = smoothstep(.62, .7, VK_FACE(VK_SEEP));
+    vec3 vkCutRock = vkCutCol * (.82 + VK_FACE(VK_GRAIN) * .26);
+    vkCutRock = mix(vkCutRock, vkCutRock * vec3(.55, .58, .52), vkSeep * .8);
+    diffuseColor.rgb = mix(diffuseColor.rgb, vkCutRock, vkCutK);
+    vkRock = max(vkRock, vkCutK);` : ''}
+    ${vkAttr ? `
+    // fire scars: grey ash ground, pink fireweed in drifts
+    float vkBurnK = vVk.y;
+    if (vkBurnK > .01) {
+      // mostly green-grey regrowth, pink drifts of fireweed
+      float vkFw = smoothstep(.58, .64, bfFbm(bp.xz * .09 + 7.) + (bfNoise(bp.xz * .6) - .5) * .12) * (1. - vkRock);
+      vec3 vkRegrowth = mix(diffuseColor.rgb, vkBurnCol * .8, .4);
+      diffuseColor.rgb = mix(diffuseColor.rgb, mix(vkRegrowth, mix(vkRegrowth, vkFireweed, .6), vkFw * .5), vkBurnK * .7);
+    }` : ''}
     // snow held in the gullies and on the ledges below and above the snow line (north faces keep more)
     float vkNorth = max(0., -vkN.z);
     float vkSnowLvl = smoothstep(bfSnowLine - 320., bfSnowLine + 120., bp.y + vkNorth * 160. + (bfFbm(bp.xz * .002 + 9.) - .5) * 260.);
@@ -118,7 +145,8 @@ export function vistaGroundGLSL(v, palette) {
     float vkSnowAll = max(vkGullySnow, vkLedgeSnow);
     diffuseColor.rgb = mix(diffuseColor.rgb, vkSnow * (.9 + vkRib * .1), vkSnowAll);
     float vkBump = ${f(R.reliefM * R.ribs)} * vkFace * (1. - vkSnowAll * .6);
-    float vkStep = vkLedges * vkRock * (vkTread * 2. - .6);`;
+    float vkStep = vkLedges * vkRock * (vkTread * 2. - .6);
+    ${cuts > 0 ? 'vkBump *= 1. - vkCutK * .7;' : ''}`;
   const normal = /* glsl */`
     {
       // vista kit: the gullies, spurs and ledges catch the light (the cartoon bands follow them)
@@ -138,7 +166,7 @@ export function vistaGroundGLSL(v, palette) {
  * pixels a tree, with crowns lit on the sun side that fade to their average colour once they get small.
  * Partial cover (open subalpine forest) is boosted so the far slopes read as an even, dense stand.
  */
-export function vistaCanopyGLSL(v) {
+export function vistaCanopyGLSL(v, vkAttr = false) {
   if (!v?.forest) return null;
   const F = v.forest;
   return /* glsl */`
@@ -152,7 +180,8 @@ export function vistaCanopyGLSL(v) {
       float vkTone = mix(.5, .92 + vkLit * .32, vkCrown) * (.9 + bfHash(vkI) * .2);
       vkTone = mix(vkTone, .72, smoothstep(.12, .4, vkPxC / 7.5));      // small on screen: the average
       vec3 vkTop = bfCanopyColor * (vkTone + (bfFbm(vBfGround.xz * .012) - .5) * .18);
-      float vkCover = min(1., vBfCanopy * ${f(F.boost)});
+      ${vkAttr ? 'vkTop = mix(vkTop, vec3(.36, .35, .33) * vkTone * 1.2, vVk.y);   // burned: silver snags' : ''}
+      float vkCover = min(1., vBfCanopy * ${f(F.boost)}) * (1. - (${vkAttr ? 'vVk.y' : '0.'}) * .5);
       diffuseColor.rgb = mix(diffuseColor.rgb, vkTop, smoothstep(0., .5, vkCover) * ${f(F.crowns)});
     }`;
 }

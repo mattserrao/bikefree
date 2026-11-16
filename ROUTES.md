@@ -202,6 +202,11 @@ The rock work is skipped on flat ground.
 
 The rain preset's wet road is added on top of this.
 
+**Look-only settings for a zone:** the road's geometry, lanes and traffic stay as they are.
+- `pavedM` is the paved width. The rest of the 7 m strip becomes a gravel shoulder with a ragged paving edge, and the edge lines are repainted inside it.
+- `centre` sets the centre line: 1 is painted, 0.4 is faded and broken, and 0 is none.
+- `gravel` spreads loose gravel over the lanes in patches.
+
 **Stonework** (`js/world/stonework.js`):
 - `makeMasonryMaterial({ stones, mortar, courseM, moss, mossM })` draws rubble masonry from world position: wavy courses, stones of mixed length and colour, recessed joints, weather streaks, and moss at the foot.
 - Because the pattern comes from world position, it doesn't stretch with the box it's on, and it carries on from one segment to the next.
@@ -213,6 +218,33 @@ Going-to-the-Sun's guardwalls use both:
 - A masonry footing runs down to the ground where the slope falls away.
 - They're grouped into 1.5 km stretches, and stretches past 2 km are hidden.
 - `glacier.guardwalls` takes `segmentM`, `openingM`, `stones` and `mortar`.
+
+## Life along the road (any route)
+
+- **Verge** (`js/world/verge.js`, the scene's `verge` block):
+  - mile or kilometre markers (`markers.units`)
+  - tall snow poles (`poles` ranges)
+  - white delineators (`posts` ranges)
+  - fallen rock on the shoulder and the bench below the deeper road cuts (`debris` ranges)
+  - Grouped per 1.5 km and hidden past `reachM`.
+- **Visitors** (`js/world/visitors.js`, the `visitors` block):
+  - People stand or slowly stroll at `spots`: a `site` by name, or `{ atM, side, lateralM, radiusM }`.
+  - `lookouts: n` puts n people at each overlook.
+  - `walking` is the share who stroll.
+  - One animated instanced mesh. Half as many people on Light.
+- **Traffic mix:** `traffic.mix` sets each kind's weight. It can add `jammer` (Glacier's Red Jammer tour buses). Jammers also park at overlooks.
+- **Streams** (`streams: [{ name, fromM, toM, widthM, minRoadM, searchM }]`, real-terrain scenes): a creek along a valley floor beside the road, found by taking the lowest ground to one side and registered like the bridge creeks, so it carves a channel, keeps trees out and is drawn. All creeks show white water where they drop quickly.
+- **Burns** (`burns: [{ lat, lon, lengthM, widthM, angle }]`, real-mountain): old fire scars.
+  - silver snags, young lodgepole and fireweed
+  - grey-green ground with pink drifts
+  - a thinned, silver distant canopy
+  - Needs the vista kit for the ground tint (`palette.burn`, `palette.fireweed`).
+- **Road cuts** (`vista.rock.cuts`): the blasted face above the road, found from how far the ground was cut down for the road, with seeps staining it dark (`palette.cutRock`).
+- **Glacier extras** (`glacier`):
+  - `culverts: { fromM, toM, minDepthM, maxCount }`: masonry headwalls where gullies reach the road, cascades down the steep ones and a spill below.
+  - `waterfalls[].overRoad`: Weeping Wall strands arcing onto the near lane.
+- **Wildlife set pieces** (`life.moments`): `{ kind: goat|bighorn|marmot, atM, count, where: uphill|valley|shoulder|wall, lateralM, spacingM }` puts animals where the chase camera sees them. `wall` sits them on the guardwall.
+- **View windows:** `vegetation.windows.at: [metres]` opens the trees at the real viewpoints, toward the lake and down the valley, over `atLengthM`. Random windows stay toward the lake only when `downhill` is false.
 
 ## Style-C scenery for every scenic route
 

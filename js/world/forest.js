@@ -70,7 +70,7 @@ export class ForestPlanner {
    */
   _inWindow(x, z, y, shore, roadHit, cache) {
     const W = this.windows;
-    if (!W || (shore > W.reachM && !W.downhill)) return false;
+    if (!W || (shore > W.reachM && !W.downhill && !W.at)) return false;
     let hit = roadHit;
     if (!hit) {
       const key = `${Math.floor(x / 32)},${Math.floor(z / 32)}`;
@@ -78,10 +78,13 @@ export class ForestPlanner {
       hit = cache.get(key);
     }
     if (!hit) return false;
+    const sM = this.route.dist[hit.i];
     const lake = shore + hit.d < W.reachM;
-    const low = W.downhill && hit.d < (W.downhillM ?? W.reachM * .6) && y < hit.ele - 4;
-    if (!lake && !low) return false;
-    return windowAt(this.route.dist[hit.i], W, this.seed);
+    const low = hit.d < (W.downhillM ?? W.reachM * .6) && y < hit.ele - 4;
+    // the real viewpoints: always open toward the lake and down the valley
+    if (W.at && (lake || low) && W.at.some((a) => Math.abs(sM - a) < (W.atLengthM ?? 160) / 2)) return true;
+    if (!lake && !(W.downhill && low)) return false;
+    return windowAt(sM, W, this.seed);
   }
 
   _zoneTile(cx, cz, tier) {
@@ -108,6 +111,14 @@ export class ForestPlanner {
       const v = this.landscape.vegetationAt(x, z);
       if (v.slope > 1.25) continue;   // cliffs
       const edge = smoothstep(this.edge.mown - 1, this.edge.shrub + 3, roadD) * smoothstep(3, 14, shore);
+      // an old burn: silver snags, more thinly, over fireweed and young lodgepole
+      const burn = this.landscape.burnAt?.(x, z) || 0;
+      if (burn > .5 && pick < v.forest * edge * this.density) {
+        if (extra < .36) add(`snag${size < .5 ? 0 : 1}${SUFFIX[tier]}`, x, y - .2, z, .7 + size * .45, rot);
+        else if (extra < .58) add(`lodgepole${size < .5 ? 0 : 1}${SUFFIX[tier]}`, x, y - .1, z, .18 + size * .22, rot);   // young regrowth
+        else if (tier === 0 && extra < .75) add('fireweed', x, y - .05, z, .9 + size * .4, rot);
+        continue;
+      }
       if (pick < v.forest * edge * this.density) {
         const species = this._zoneSpecies(v, y, extra);
         const variants = GLACIER_VARIANTS[species];

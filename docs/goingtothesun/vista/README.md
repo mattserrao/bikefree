@@ -41,3 +41,37 @@ The weather presets kept are clear, valley fog and clouds on the peaks:
 - **Triangles:** up to 4% more, from the denser outer forest tiers.
 - **Ground shader:** heavier, at about 40 value-noise lookups per pixel on mountain faces. The rock work is skipped on flat ground, and every detail fades to its average once it's smaller than about two pixels.
 - **Still to do:** a ride on the M4 Air with the `I` overlay. If it's over budget, drop `rock.ledges` or `meadow` first.
+
+## Life and interest pass
+
+Left to right, top to bottom.
+
+![](life-1.jpg)
+
+| Spot | What's there |
+|---|---|
+| 3.2 km | Lake McDonald with delineators |
+| 9.7 km | A lake window |
+| 14.5 km | The ride-through burn: snags, young lodgepole, fireweed |
+| 17.6 km | McDonald Creek valley |
+| 22.3 km | Avalanche Creek |
+| 38 km | Alpine road: narrower paving, gravel shoulders, no centre line |
+
+![](life-2.jpg)
+
+| Spot | What's there |
+|---|---|
+| 41.5 km | Weeping Wall spray arcing onto the road |
+| 42.2 km | Big Bend overlook with a Red Jammer and visitors |
+| 43.4 km | Mile marker and snow pole below a rock cut |
+| 47 km | Logan Pass approach |
+| 50.5 km | East-side descent with fallen rock below the cut |
+| 54.8 km | The Jackson Glacier overlook window |
+
+**Cost:** 258–385 draw calls and 1.52–1.97 M triangles headless on Balanced, with a ceiling of 450 calls. Light uses 181 calls at 42.2 km.
+
+**Checks:**
+- `npm test`: 96/96
+- `qc --strict` on every route: clean
+- `routes:check`: clean
+- clipping QC: 0 fail, and the 8 shoreline z-fight warnings are unchanged
