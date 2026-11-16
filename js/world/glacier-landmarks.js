@@ -100,7 +100,7 @@ export class GlacierLandmarks {
         const off = ROAD_HALF + 1.1;
         const a = V(p.x + rx * off, 0, p.z + rz * off), b = V(q.x - q.fz * side * off, 0, q.z + q.fx * side * off);
         const y0 = Math.min(p.y, q.y), ground = Math.min(L.heightAt(a.x, a.z), L.heightAt(b.x, b.z));
-        const top = y0 + .55 + rand() * .1, bottom = Math.max(top - 7, Math.min(ground, y0) - 1.3);
+        const top = y0 + .55 + rand() * .1, bottom = b0?.style ? y0 + .06 : Math.max(top - 7, Math.min(ground, y0) - 1.3);   // on the arches: sit on the arcade
         const f = b.clone().sub(a); const len = f.length(); if (len < .5) continue; f.normalize();
         const x = V(-f.z, 0, f.x);
         m.makeBasis(x, up, f).scale(V(.56, top - bottom, len)).setPosition((a.x + b.x) / 2, (top + bottom) / 2, (a.z + b.z) / 2);

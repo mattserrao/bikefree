@@ -13,6 +13,7 @@ import { CityScene } from './city.js';
 import { CoastBridges } from './coast-bridges.js';
 import { HighwayTraffic } from './highway-traffic.js';
 import { CoastLife } from './coast-life.js';
+import { GlacierLife } from './glacier-life.js';
 
 export const COASTAL_QUALITY = {
   // forestRange: tiles of real trees in forest scenes; nearM/midM: tile-centre distances for the detail tiers
@@ -78,7 +79,10 @@ export class StylizedTerrain {
       if (this.settlementPlan) this.settlement = new Settlement(this.group, this.settlementPlan, kit, this.uniforms);
       this._makeLandmarks();
       if (this.landscape.real) this.bridges = new CoastBridges(this.group, this.landscape, this.uniforms);
-      if (this.landscape.real && this.config.life) {
+      if (this.landscape.mountain && this.config.life) {
+        this.life = new GlacierLife(this.group, this.landscape, this.route, this.index, this.uniforms, this.config.life);
+        this.life.setNight(this._night || 0);
+      } else if (this.landscape.real && this.config.life) {
         this.life = new CoastLife(this.group, this.landscape, this.proj, this.route, this.index, this.uniforms, this.config.life);
         this.life.setNight(this._night || 0);
       }

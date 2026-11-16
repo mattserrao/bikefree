@@ -9,17 +9,19 @@ import { randomSequence } from './coast.js';
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
 // aWing: 0 body, ±1 along each wing (|x| from the body sets how far a vertex lifts)
-function birdGeometry(kind) {
+export function birdGeometry(kind) {
   const M = new MeshBuilder({ aWing: 1 });
   const W = (w) => M.set({ aWing: [w] });
-  const span = kind === 'condor' ? 2.9 : kind === 'pelican' ? 2.2 : 1.1;
-  const body = kind === 'condor' ? '#1d1d1d' : kind === 'pelican' ? '#8a7f70' : '#f1f1ee';
-  const wing = kind === 'condor' ? '#202020' : kind === 'pelican' ? '#6f6659' : '#e4e6e8';
-  const tip = kind === 'condor' ? '#e8e2d2' : kind === 'pelican' ? '#3a342c' : '#3b3f44';
+  // (Glacier: ravens and a golden eagle)
+  const span = { condor: 2.9, pelican: 2.2, eagle: 2.1, raven: 1.2 }[kind] || 1.1;
+  const body = { condor: '#1d1d1d', pelican: '#8a7f70', eagle: '#4a3524', raven: '#141416' }[kind] || '#f1f1ee';
+  const wing = { condor: '#202020', pelican: '#6f6659', eagle: '#3f2d1f', raven: '#18181b' }[kind] || '#e4e6e8';
+  const tip = { condor: '#e8e2d2', pelican: '#3a342c', eagle: '#2a1f17', raven: '#0e0e10' }[kind] || '#3b3f44';
   const L = span * .42;
   W(0); M.color(body); M.beam(V(0, 0, -L * .5), V(0, 0, L * .55), span * .09, span * .08);
   if (kind === 'pelican') { M.color('#c9a24a'); M.beam(V(0, -.02, L * .55), V(0, -.06, L * 1.05), .07, .06); }
   if (kind === 'condor') { M.color('#c46a52'); M.box(0, -.06, L * .62, .1, .1, .12); }
+  if (kind === 'eagle') { M.color('#b08a4a'); M.box(0, -.02, L * .6, .16, .14, .2); }
   // wings: inner and outer panels, flat, with darker tips
   for (const side of [-1, 1]) {
     const a = V(side * span * .04, 0, .06 * span), b = V(side * span * .04, 0, -.12 * span);
@@ -37,7 +39,7 @@ function birdGeometry(kind) {
   return M.geometry();
 }
 
-function birdMaterial(uniforms, flap) {
+export function birdMaterial(uniforms, flap) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9, side: THREE.DoubleSide });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = uniforms.uTime;

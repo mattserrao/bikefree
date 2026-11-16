@@ -30,7 +30,7 @@ function hemlock(variant, lod) {
   const layers = lod ? 3 : 7;
   for (let k = 0; k < layers; k++) {
     const t = k / layers, r = R * (1 - t * .78);
-    b.add(blob(lod ? 0 : 1), M(0, H * (.24 + t * .68), 0, r, H * .11, r, rand() * 3), ['#2b4737', '#345442', '#284332'][k % 3], .12, rand);
+    b.add(blob(0), M(0, H * (.24 + t * .68), 0, r, H * .11, r, rand() * 3), ['#2b4737', '#345442', '#284332'][k % 3], .12, rand);
   }
   b.add(cone(.7, 2.6, 5), M(.4, H * .94, 0, 1, 1, 1, 0, 0, -.45), '#345442');
   return b.build();
@@ -58,7 +58,7 @@ function lodgepole(variant, lod) {
   if (lod === 2) { b.add(blob(0), M(0, H * .8, 0, 1.9, H * .22, 1.9), '#33502f'); return b.build(); }
   for (let k = 0; k < (lod ? 2 : 5); k++) {
     const a = k * 2.2 + rand(), d = k ? .7 + rand() * .5 : 0;
-    b.add(blob(lod ? 0 : 1), M(Math.cos(a) * d, H * (.66 + k * .07), Math.sin(a) * d, 1.6 + rand() * .5, 1.5 + rand() * .6, 1.6 + rand() * .5), ['#33502f', '#3a5734', '#2e4a2c'][k % 3], .15, rand);
+    b.add(blob(0), M(Math.cos(a) * d, H * (.66 + k * .07), Math.sin(a) * d, 1.6 + rand() * .5, 1.5 + rand() * .6, 1.6 + rand() * .5), ['#33502f', '#3a5734', '#2e4a2c'][k % 3], .15, rand);
   }
   return b.build();
 }
@@ -86,7 +86,7 @@ function aspen(variant, lod, fall) {
   if (lod === 2) { b.add(blob(0), M(0, H * .74, 0, 2.2, 3.4, 2.2), leaf[0]); return b.build(); }
   for (let k = 0; k < (lod ? 2 : 4); k++) {
     const a = k * 2.1;
-    b.add(blob(lod ? 0 : 1), M(Math.cos(a) * .9, H * (.64 + k * .08), Math.sin(a) * .9, 1.7 + rand() * .5, 2, 1.7), leaf[k % 3], .15, rand);
+    b.add(blob(0), M(Math.cos(a) * .9, H * (.64 + k * .08), Math.sin(a) * .9, 1.7 + rand() * .5, 2, 1.7), leaf[k % 3], .15, rand);
   }
   return b.build();
 }

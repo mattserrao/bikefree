@@ -55,7 +55,7 @@
       1.1
     ],
     "vergeDensity": 0.8,
-    "forestDensity": 0.78
+    "forestDensity": 0.72
   },
   "terrainBuild": {
     "lakes": true,
@@ -564,5 +564,102 @@
       "angle": -35,
       "trees": 7
     }
-  ]
+  ],
+  "traffic": {
+    "perMinute": 4
+  },
+  "life": {
+    "goats": [
+      {
+        "atM": 47300,
+        "radiusM": 520,
+        "count": 9
+      },
+      {
+        "atM": 43200,
+        "radiusM": 500,
+        "count": 6,
+        "lateralM": 90,
+        "side": -1
+      },
+      {
+        "atM": 49600,
+        "radiusM": 350,
+        "count": 5,
+        "lateralM": 60,
+        "side": -1
+      },
+      {
+        "atM": 46700,
+        "radiusM": 120,
+        "count": 3
+      }
+    ],
+    "bighorn": [
+      {
+        "atM": 47900,
+        "radiusM": 450,
+        "count": 6
+      },
+      {
+        "atM": 51600,
+        "radiusM": 500,
+        "count": 6,
+        "lateralM": 120,
+        "side": -1
+      }
+    ],
+    "marmots": [
+      {
+        "atM": 47300,
+        "radiusM": 160,
+        "count": 8
+      },
+      {
+        "atM": 46450,
+        "radiusM": 120,
+        "count": 4
+      },
+      {
+        "atM": 48200,
+        "radiusM": 120,
+        "count": 4
+      }
+    ],
+    "squirrels": [
+      {
+        "atM": 47300,
+        "radiusM": 140,
+        "count": 14
+      },
+      {
+        "atM": 200,
+        "radiusM": 120,
+        "count": 6
+      }
+    ],
+    "bears": [
+      {
+        "atM": 52600,
+        "lateralM": 260,
+        "side": 1
+      }
+    ],
+    "ducks": [
+      {
+        "atM": 6000,
+        "count": 8
+      },
+      {
+        "atM": 10500,
+        "count": 6
+      },
+      {
+        "atM": 63500,
+        "count": 8
+      }
+    ],
+    "ravens": 4,
+    "eagles": 1
+  }
 }

@@ -108,15 +108,18 @@ export class CoastalDetails {
       const material = this._material('#ffffff', { map: texture, side: THREE.DoubleSide, ...(diamond ? { alphaTest: .5, transparent: false } : {}) });
       const mesh = this._mesh(diamond ? new THREE.PlaneGeometry(1.25, 1.25) : new THREE.BoxGeometry(3.5, .88, .07), material, sign.label || sign.symbol);
       mesh.position.copy(position).add(new THREE.Vector3(0, diamond ? 2.1 : 2.3, 0));
+      mesh.userData.sign = true;   // its own supports hold it up (the clipping QC knows)
       mesh.lookAt(mesh.position.clone().addScaledVector(forward, sign.direction === 'return' ? 1 : -1));
       const color = sign.kind === 'dec' || sign.kind === 'nps' ? '#5a3e27' : '#9d9f89';
       for (const offset of diamond ? [0] : [-1.15, 1.15]) {
-        const right = new THREE.Vector3(-forward.z, 0, forward.x), p = position.clone().addScaledVector(right, offset);
-        (poles[color] ||= []).push(new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y + (diamond ? .95 : 1.2), p.z), new THREE.Quaternion(), new THREE.Vector3(1, diamond ? 1.9 / 2.4 : 1, 1)));
+        // the posts stand just behind the board (not through it)
+        const right = new THREE.Vector3(-forward.z, 0, forward.x), behind = new THREE.Vector3(forward.x, 0, forward.z).normalize().multiplyScalar(sign.direction === 'return' ? -.26 : .26);
+        const p = position.clone().addScaledVector(right, offset).add(diamond ? new THREE.Vector3() : behind);
+        (poles[color] ||= []).push(new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y + (diamond ? .95 : .93), p.z), new THREE.Quaternion(), new THREE.Vector3(1, diamond ? 1.9 / 1.86 : 1, 1)));   // up to the board's lower edge
       }
     }
     // every sign's supports in one draw call per colour
-    for (const [color, matrices] of Object.entries(poles)) this._instances(new THREE.CylinderGeometry(.045, .045, 2.4, 6), this._material(color), matrices, 'Sign support');
+    for (const [color, matrices] of Object.entries(poles)) this._instances(new THREE.CylinderGeometry(.045, .045, 1.86, 6), this._material(color), matrices, 'Sign support');
   }
 
   _lookouts() {

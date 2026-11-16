@@ -58,3 +58,31 @@ Second pass (re-measured from the data, not the pictures): the baked lake list c
 - **New landscape `real-mountain`** (in `real-coast.js`): Big Sur's real-terrain pipeline without a sea — lakes from a 20 m lake-id raster with their own levels, lake beds and shallows, creeks that end in a lake, the shoreline field for lake shores.
 - **Rock:** the cliffs show the park's formations by elevation — red and green argillite, grey limestone above 1,900 m, the dark sill band at about 2,120 m — and midsummer snowfields in the cirques and on the north faces.
 - **Forest:** a new procedural **Glacier kit** (`js/world/glacier-kit.js`, three levels of detail): western red cedar, western hemlock, Engelmann spruce, subalpine fir, western larch, lodgepole pine, aspen, krummholz; beargrass, paintbrush, glacier lilies, huckleberry, Sitka alder, talus. Placed by Route 28's tiered forest planner, with species and density from the landform: cedar–hemlock in the west-side valleys, spruce–fir–larch on the slopes, krummholz at the treeline (≈1,950 m, lower on the east side), aspen and lodgepole on the dry east side; avalanche chutes and cliffs stay open.
+
+## P4–P7 · Atmosphere, landmarks, forest and life
+
+| Lake McDonald, golden hour (6 km) | Avalanche Creek (22.3 km) |
+| --- | --- |
+| ![](after-lakeshore.jpg) | ![](after-avalanche.jpg) |
+| **West Side Tunnel (35.8 km)** | **Weeping Wall and the guardwalls (41.5 km)** |
+| ![](after-westtunnel.jpg) | ![](after-weepingwall.jpg) |
+| **Logan Pass (47.3 km)** | **Logan Pass parking (drone)** |
+| ![](after-loganpass.jpg) | ![](after-loganpass-parking.jpg) |
+| **East Side Tunnel (49.1 km)** | **St. Mary Lake (63 km)** |
+| ![](after-easttunnel.jpg) | ![](after-stmary.jpg) |
+| **Wild Goose Island (65 km, vista)** | **Valley fog on Lake McDonald** |
+| ![](after-wildgoose.jpg) | ![](after-valleyfog.jpg) |
+| **Clouds on the peaks** | **Wildfire smoke** |
+| ![](after-peakclouds.jpg) | ![](after-smoke.jpg) |
+| **Night below the pass** | |
+| ![](after-night.jpg) | |
+
+- **Atmosphere:** golden hour by default, post on, distance fog 1.6–21 km; valley fog on Lake McDonald; cloud caps on the summits; rain; a new wildfire-smoke preset.
+- **Landmarks** (`js/world/glacier-landmarks.js`): rubble-masonry guardwalls, the West Side Tunnel (window galleries) and East Side Tunnel with masonry portals through a rock mass, the Triple Arches, waterfalls (Weeping Wall, Haystack, East Side Tunnel, Bird Woman, Oberlin, Piegan), Logan Pass Visitor Center with a full parking lot, Lake McDonald Lodge, Rising Sun, St. Mary, snowbanks, Wild Goose Island, seven glaciers, stone bridges at Baring and Siyeh creeks, NPS signs.
+- **Life** (`js/world/glacier-life.js`): mountain goats, bighorn sheep, marmots, ground squirrels, a grizzly, ducks, ravens and a golden eagle; light traffic (4 a minute).
+
+**Budget (Balanced, software render):** 312–496 draw calls, 1.57–1.98 M triangles across the 14 views (was 776 calls / 2.5 M before the overlook/sign instancing, lake chunking and lighter near trees).
+
+**QC:** `qc --strict` clean on every route. Clipping QC: 0 fail; 8 warnings, all `z-fight` where the ground crosses the lake surface exactly at the shoreline (accepted, like Pittsburgh's riverbanks). Life simulated for 1,200 s: clean.
+
+**Left for the Mac:** frame rate with the `I` overlay at Light/Balanced/High; the full-length life simulation (≈80 min headless).

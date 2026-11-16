@@ -306,13 +306,13 @@ export function makeRealCoastLandscape(config, proj, index, route) {
   // lake beds: shallows near the shore deepening to 14 m; a low lip just above the water on land
   const lakeBed = (x, z, h) => {
     const d = shore.sample(x, z);
-    if (d == null || d > 30) return h;
+    if (d == null || d > 40) return h;
     const lake = lakes.lakeAt(x, z) || (d > 0 ? nearLake(x, z) : null);
     if (!lake) return h;
     return d < 0 ? Math.min(h, lake.level - Math.min(14, .6 - d * .12)) : Math.max(h, lake.level + .35 + d * .04);
   };
   const nearLake = (x, z) => {
-    for (const [ox, oz] of [[24, 0], [-24, 0], [0, 24], [0, -24], [17, 17], [-17, -17], [17, -17], [-17, 17]]) { const l = lakes.lakeAt(x + ox, z + oz); if (l) return l; }
+    for (const r of [14, 26, 40]) for (let k = 0; k < 8; k++) { const l = lakes.lakeAt(x + Math.cos(k * .785) * r, z + Math.sin(k * .785) * r); if (l) return l; }
     return null;
   };
   const heightAt = (x, z) => {
