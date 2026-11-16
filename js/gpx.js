@@ -167,3 +167,19 @@ export function ascentRemaining(route, d) {
   }
   return asc;
 }
+
+/**
+ * A point-to-point route: a one-way stage (Alpe d'Huez) or your own GPX that doesn't come back to its
+ * start. The app mirrors it into A → B → A; with Endless off the ride ends at the finish instead.
+ * Built-in there-and-back routes and loops are not point to point.
+ */
+export function isPointToPoint(route) {
+  return !!(route?.mirrored && route.oneWay && !route.oneWay.closedLoop);
+}
+
+/** Metres from a start point to the finish: the far end riding forward, back at A riding the way back. */
+export function finishDistanceM(route, startM) {
+  const turn = route.turnS || route.total;
+  const s = ((startM % route.total) + route.total) % route.total;
+  return (s < turn ? turn : route.total) - s;
+}

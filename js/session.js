@@ -5,7 +5,7 @@ import {
 } from './physics.js';
 import { shiftDirection } from './parsers.js';
 import { Recorder } from './recorder.js';
-import { routeAt, wrapDist, lapAt } from './gpx.js';
+import { routeAt, wrapDist, lapAt, finishDistanceM } from './gpx.js';
 import { segmentIndexAt, targetWatts } from './workout.js';
 
 export const TICK_MS = 250;
@@ -60,6 +60,7 @@ export class Session extends EventTarget {
     this.target = null;
     this.routeOffset = 0;
     this.routeStart = 0;          // metres along the route where this ride started (Reverse / ⅓ / ⅔)
+    this.routeFinishM = null;     // point to point, not endless: metres to ride before the finish (null: endless)
     this.routeDone = false;
     this._lastLap = 1;
     this.workoutT = 0;
@@ -80,11 +81,18 @@ export class Session extends EventTarget {
   get avgPower() { return this._powerN ? this._powerSum / this._powerN : 0; }
   get realRatio() { return this.settings.realRatio || this.realRatioEst || DEFAULT_REAL_RATIO; }
   /** Distance ridden on the current route (all laps). */
-  get routeRidden() { return Math.max(0, this.distanceM - this.routeOffset); }
+  get routeRidden() {
+    const d = Math.max(0, this.distanceM - this.routeOffset);
+    return this.routeFinishM == null ? d : Math.min(d, this.routeFinishM);   // the rider stays on the line
+  }
   /** Position along the route (wraps around on loops). */
   get routePos() { return this.route ? wrapDist(this.route, this.routeRidden + this.routeStart) : 0; }
   /** Distance left in this lap (a lap is one full there-and-back from wherever you started). */
-  get routeLapToGo() { return this.route ? this.route.total - (this.routeRidden % this.route.total) : 0; }
+  get routeLapToGo() {
+    if (!this.route) return 0;
+    if (this.routeFinishM != null) return this.routeFinishM - this.routeRidden;   // distance to the finish
+    return this.route.total - (this.routeRidden % this.route.total);
+  }
   /** Current lap on a loop route (1-based). */
   get routeLap() { return this.route ? lapAt(this.route, this.routeRidden) : 1; }
   get gradePct() {
@@ -152,7 +160,7 @@ export class Session extends EventTarget {
   }
 
   _lapName() {
-    if (this.mode === 'route' && this.route) return this.route.closed ? `${this.route.name} · lap ${this.routeLap}` : this.route.name;
+    if (this.mode === 'route' && this.route) return this.route.closed && this.routeFinishM == null ? `${this.route.name} · lap ${this.routeLap}` : this.route.name;
     if (this.mode === 'workout' && this.segment) return this.segment.label;
     return 'Free ride';
   }
@@ -175,9 +183,11 @@ export class Session extends EventTarget {
     this._changed();
   }
 
-  /** Ride a route from its start (starting from the current distance). */
-  setRoute(route, startM = 0) {
+  /** Ride a route from its start (starting from the current distance). `finishM`: metres to the finish
+   *  on a point-to-point route that isn't endless (null: ride on, turning at each end). */
+  setRoute(route, startM = 0, finishM = null) {
     this.routeStart = startM || 0;
+    this.routeFinishM = finishM > 0 ? finishM : null;
     this.mode = 'route';
     this.route = route;
     this.routeOffset = this.distanceM;
@@ -188,7 +198,7 @@ export class Session extends EventTarget {
     this._changed();
   }
 
-  restartRoute() { if (this.route) this.setRoute(this.route); }
+  restartRoute() { if (this.route) this.setRoute(this.route, 0, this.routeFinishM == null ? null : finishDistanceM(this.route, 0)); }
 
   setWorkout(workout) {
     this.mode = 'workout';
@@ -309,6 +319,16 @@ export class Session extends EventTarget {
 
   _updateRoute() {
     if (this.mode !== 'route' || !this.route || this.routeDone) return;
+    if (this.routeFinishM != null) {
+      // point to point, not endless: the ride ends at the finish line
+      if (this.distanceM - this.routeOffset >= this.routeFinishM) {
+        this.routeDone = true;
+        this._lastSent = null;
+        this.log('app', `Finish: ${this.route.name}`, 'ok');
+        this.dispatchEvent(new Event('routeFinished'));
+      }
+      return;
+    }
     if (this.route.closed) {
       const lap = this.routeLap;
       if (lap !== this._lastLap) {
