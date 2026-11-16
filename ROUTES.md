@@ -42,6 +42,25 @@ catalog route and its scenery dependencies. Do not hand-edit either generated fi
 `routes:check` fails if generated files are stale; rerun `routes:build` after source
 changes before committing. The app's existing personal GPX import still works.
 
+## One-way stages and wireframe placeholders (Alpe d'Huez)
+
+A route that ends somewhere else, like a Tour stage to a summit finish, sets `"oneWay": true`
+(and `"outAndBack": false`). Its GPX stops at the finish; the catalog's `km` and `climbM` are the
+stage's, and the app shows them as "to the finish", then turns at the summit and rides back down.
+`routing.profile_opts.max_grade` (e.g. 13) eases spots where the elevation model on hairpins and
+gorge ledges reads steeper than the real road.
+
+```sh
+python3 tools/build_park_routes.py alpedhuez   # one-way routing; fills Terrain Tiles holes from the coarser zoom
+npm run routes:build
+```
+
+Before a route has scenery it can use a wireframe scene: `"style": "wireframe"`, `"terrain": "wireframe"`
+and optional `"wire": { "background", "ground", "line", "contourM", "majorContourM", "gridM" }`.
+The real ground streams from Terrain Tiles and is drawn as contour and grid lines; no scenery kit is
+needed, and "Save for offline" downloads the elevation tiles only. Course QC reports a real switchback
+(the road reverses within ±40 m) as *switchback* info rather than a "very tight turn" warning.
+
 ## Optional road routing
 
 Existing catalog entries have an optional `routing` object with waypoints, a

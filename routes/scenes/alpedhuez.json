@@ -1,0 +1,18 @@
+{
+  "format": "bikefree-scene-1",
+  "style": "wireframe",
+  "terrain": "wireframe",
+  "title": "Alpe d'Huez · Tour de France 2026 Stage 19",
+  "region": "Hautes-Alpes and Isère, French Alps",
+  "note": "Wireframe placeholder: the real road and the real ground (AWS Terrain Tiles, streamed) drawn as lines. No scenery yet.",
+  "wire": {
+    "background": "#0c1424",
+    "ground": "#111c30",
+    "line": "#3d8bfd",
+    "contourM": 50,
+    "majorContourM": 250,
+    "gridM": 100
+  },
+  "atmosphere": { "fogNearM": 6000, "fogFarM": 45000 },
+  "preview": { "positionM": 118000, "camera": "chase" }
+}

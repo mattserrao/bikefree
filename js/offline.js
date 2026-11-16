@@ -52,12 +52,13 @@ export function planRouteTiles(route, stepM = 120) {
   return [...keys];
 }
 
-/** All URLs for a list of tile keys. */
-export function tileKeysToUrls(keys) {
+/** All URLs for a list of tile keys (`imagery: false`: elevation only, for wireframe routes). */
+export function tileKeysToUrls(keys, { imagery = true } = {}) {
   const urls = [];
   for (const k of keys) {
     const [z, x, y] = k.split('/').map(Number);
-    urls.push(...tileUrls(z, x, y));
+    const all = tileUrls(z, x, y);
+    urls.push(...(imagery ? all : all.slice(0, 1)));   // the elevation tile comes first
   }
   return urls;
 }

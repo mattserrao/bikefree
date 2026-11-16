@@ -44,6 +44,8 @@ export class World {
     this.running = false;
     this.source = null;       // () => {pos, speed, cadence, riding}
     this.stylized = route.scene?.style === 'stylized';
+    // a new route's placeholder before its scenery: the real ground as contour/grid lines (scene.wire)
+    this.wireframe = route.scene?.style === 'wireframe';
     this.qualityKey = Object.hasOwn(COASTAL_QUALITY, opts.quality) ? opts.quality : 'balanced';
 
     // Projection centred on the route
@@ -90,13 +92,15 @@ export class World {
     this.sky = makeSky();
     this.scene.add(this.sky);
     // per-scene atmosphere (e.g. humid Adirondack air separates the ridges much sooner)
-    this.atmosphere = { fogNearM: 2300, fogFarM: 16500, fogFarRealM: 30000, ...(this.stylized ? route.scene.atmosphere : {}) };
-    this.scene.fog = new THREE.Fog(0xc6dbef, this.stylized ? this.atmosphere.fogNearM : 4000, this.stylized ? this.atmosphere.fogFarM : 70000);
+    this.atmosphere = { fogNearM: 2300, fogFarM: 16500, fogFarRealM: 30000, ...(this.stylized || this.wireframe ? route.scene.atmosphere : {}) };
+    const sceneFog = this.stylized || this.wireframe;
+    this.scene.fog = new THREE.Fog(0xc6dbef, sceneFog ? this.atmosphere.fogNearM : 4000, sceneFog ? this.atmosphere.fogFarM : 70000);
 
     const TerrainClass = this.stylized ? StylizedTerrain : Terrain;
     this.terrain = new TerrainClass(this.scene, this.proj, this.index, {
       route,
       quality: this.qualityKey,
+      wire: this.wireframe ? (route.scene.wire || {}) : null,
       bbox: { minLat, maxLat, minLon, maxLon },
       renderer: this.renderer,
       farInner: FAR_INNER, farBand: FAR_BAND,
@@ -118,6 +122,7 @@ export class World {
 
     const city = route.scene?.terrain === 'authored-city';
     this.shoulder = makeRibbon(route, this.index, ROAD_WIDTH + (city ? 4 : this.stylized ? 1.6 : 3.4), city ? .09 : 0.05, makeGravelTexture(this.stylized, city), 3, { polygonOffsetFactor: city ? -1.8 : -1, polygonOffsetUnits: city ? -1.8 : -1 });
+    this.shoulder.visible = !this.wireframe;   // no gravel verge on a wireframe placeholder
     this.scene.add(this.shoulder);
     this.road = makeRoad(route, this.index);
     this.scene.add(this.road);
@@ -259,6 +264,11 @@ export class World {
     if (sm > .001 && !base.night) t = { ...t, sunI: t.sunI * (1 - sm * .4), hemiI: t.hemiI * (1 + sm * .08),
       top: grey(t.top, '#a99a86', sm * .8), horizon: grey(t.horizon, '#d39a66', sm * .75), sun: grey(t.sun, '#ff7a3a', sm * .7),
       hemiSky: grey(t.hemiSky, '#e8c9a4', sm * .6), hemiGround: grey(t.hemiGround, '#8a6c52', sm * .4) };
+    // wireframe: a dark sky fading into the fog, whatever the time of day (no sun disc)
+    if (this.wireframe) {
+      const bg = this.route.scene.wire?.background || '#0c1424';
+      t = { ...t, top: bg, horizon: '#' + new THREE.Color(bg).lerp(new THREE.Color('#3d5a80'), 0.35).getHexString(), sun: bg, exposure: 1 };
+    }
     const el = THREE.MathUtils.degToRad(t.elev), az = THREE.MathUtils.degToRad(t.az);
     // azimuth from north, clockwise; north is −z, east is +x
     const dir = new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)).normalize();
