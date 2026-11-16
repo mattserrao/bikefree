@@ -337,11 +337,6 @@
         70,
         87
       ],
-      "profile_opts": {
-        "cliff_m": 800,
-        "bridge_m": 800,
-        "smooth_m": 600
-      },
       "waypoints": [
         [
           48.5297,
@@ -401,6 +396,11 @@
           48.528,
           -113.984
         ]
+      },
+      "profile_opts": {
+        "cliff_m": 200,
+        "bridge_m": 400,
+        "smooth_m": 400
       }
     },
     "scene": "routes/scenes/goingtothesun.json"

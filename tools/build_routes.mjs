@@ -41,7 +41,7 @@ for (const item of catalog) {
   if (item.stage) row.stage = item.stage;   // 'draft': listed under Rough Drafts
   if (item.scene) {
     const scene = JSON.parse(read(item.scene));
-    if (scene.format !== 'bikefree-scene-1' || !['authored-coast', 'authored-region', 'authored-city', 'real-coast'].includes(scene.terrain)) throw new Error(`${item.id}: unsupported scene format or terrain`);
+    if (scene.format !== 'bikefree-scene-1' || !['authored-coast', 'authored-region', 'authored-city', 'real-coast', 'real-mountain'].includes(scene.terrain)) throw new Error(`${item.id}: unsupported scene format or terrain`);
     if (scene.terrain === 'authored-city') {
       // city data from tools/build_city.py: rivers, height grid, buildings, streets, bridges
       if (!scene.cityData?.startsWith('routes/scenes/') || scene.cityData.includes('..') || !existsSync(resolve(root, scene.cityData))) throw new Error(`${item.id}: missing city data`);

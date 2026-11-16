@@ -105,8 +105,27 @@ function nearestOnLine(points, x, z) {
   return best;
 }
 
+/** Lakes baked by tools/build_terrain_grid.py in "lakes" mode: a 20 m raster of lake ids, each lake at its own level. */
+export function decodeLakes(data, T) {
+  const L = data.lakes;
+  if (!L) return null;
+  const ids = new Uint8Array(L.nx * L.ny);
+  for (let r = 0, k = 0; r < L.rle.length; r += 2) { ids.fill(L.rle[r], k, k + L.rle[r + 1]); k += L.rle[r + 1]; }
+  const dx = (T.x1 - T.x0) / (L.nx - 1), dz = (T.z1 - T.z0) / (L.ny - 1);
+  const list = L.list.map((l) => ({ ...l }));
+  const byId = new Map(list.map((l) => [l.id, l]));
+  const idAt = (x, z) => {
+    const i = Math.round((x - T.x0) / dx), j = Math.round((z - T.z0) / dz);
+    return i < 0 || j < 0 || i >= L.nx || j >= L.ny ? 0 : ids[j * L.nx + i];
+  };
+  return { ids, nx: L.nx, ny: L.ny, dx, dz, x0: T.x0, z0: T.z0, list, byId, idAt, lakeAt: (x, z) => byId.get(idAt(x, z)) || null };
+}
+
 export function makeRealCoastLandscape(config, proj, index, route) {
   const T = decodeTerrain(config.terrainGrid, proj);
+  // Inland mountains (Going-to-the-Sun): no sea; hydro-flattened lakes at their own levels instead
+  const mountain = config.terrain === 'real-mountain';
+  const lakes = mountain ? decodeLakes(config.terrainGrid, T) : null;
   const end = route.turnIdx || route.dist.length - 1;
   const outbound = (i) => (i > end ? Math.max(0, 2 * end - i) : i);
   // Road height at (x, z) projected onto the route segment next to sample i (not a 10 m staircase).
@@ -157,7 +176,7 @@ export function makeRealCoastLandscape(config, proj, index, route) {
       }
       ax = best.x - px; az = best.z - pz; const l = Math.hypot(ax, az); ax /= l; az /= l;
       px = best.x; pz = best.z; pts.push({ x: px, z: pz });
-      if (downhill && best.h < -.5) break;
+      if (downhill && (mountain ? !!lakes?.idAt(best.x, best.z) : best.h < -.5)) break;
     }
     return pts;
   };
@@ -187,7 +206,7 @@ export function makeRealCoastLandscape(config, proj, index, route) {
     pts.forEach((p, k) => { if (k) s += Math.hypot(p.x - pts[k - 1].x, p.z - pts[k - 1].z); p.s = s; });
     const levels = pts.map((p) => T.at(p.x, p.z));
     for (let k = 1; k < levels.length; k++) levels[k] = Math.min(levels[k], levels[k - 1] - .02);
-    const mouthIdx = levels.findIndex((h) => h < .4);
+    const mouthIdx = mountain ? pts.findIndex((p) => lakes?.idAt(p.x, p.z)) : levels.findIndex((h) => h < .4);
     const last = mouthIdx > 0 ? mouthIdx : pts.length - 1;
     for (let k = 0; k <= last; k++) pts[k].y = Math.max(.13, levels[k] + .25);
     const ptsCut = pts.slice(0, last + 1);
@@ -217,8 +236,10 @@ export function makeRealCoastLandscape(config, proj, index, route) {
   let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
   for (let i = 0; i <= end; i++) { minX = Math.min(minX, index.xs[i]); maxX = Math.max(maxX, index.xs[i]); minZ = Math.min(minZ, index.zs[i]); maxZ = Math.max(maxZ, index.zs[i]); }
   const pad = config.shorePadM ?? 3500;
-  const shore = makeShoreField(T.at, Math.max(T.x0, minX - pad), Math.max(T.z0, minZ - pad), Math.min(T.x1, maxX + pad), Math.min(T.z1, maxZ + pad), config.shoreCellM ?? 16);
-  const inlandAt = (x, z) => shore.sample(x, z) ?? (T.at(x, z) >= 0 ? 4000 : -4000);
+  // (mountain: the shore of the lakes — positive on land, negative on the water)
+  const landAt = mountain ? (x, z) => (lakes?.idAt(x, z) ? -1 : 1) : T.at;
+  const shore = makeShoreField(landAt, Math.max(T.x0, minX - pad), Math.max(T.z0, minZ - pad), Math.min(T.x1, maxX + pad), Math.min(T.z1, maxZ + pad), config.shoreCellM ?? 16);
+  const inlandAt = (x, z) => shore.sample(x, z) ?? (landAt(x, z) >= 0 ? 4000 : -4000);
 
   // ---- Overlooks: the ground is levelled under each gravel pad (filled or cut), easing out over 12 m ----
   const pads = (config.lookouts || []).map((l) => {
@@ -238,8 +259,21 @@ export function makeRealCoastLandscape(config, proj, index, route) {
 
   // ---- Height ----
   const baseHeight = (x, z) => T.at(x, z);
+  // lake beds: shallows near the shore deepening to 14 m; a low lip just above the water on land
+  const lakeBed = (x, z, h) => {
+    const d = shore.sample(x, z);
+    if (d == null || d > 30) return h;
+    const lake = lakes.lakeAt(x, z) || (d > 0 ? nearLake(x, z) : null);
+    if (!lake) return h;
+    return d < 0 ? Math.min(h, lake.level - Math.min(14, .6 - d * .12)) : Math.max(h, lake.level + .35 + d * .04);
+  };
+  const nearLake = (x, z) => {
+    for (const [ox, oz] of [[24, 0], [-24, 0], [0, 24], [0, -24], [17, 17], [-17, -17], [17, -17], [-17, 17]]) { const l = lakes.lakeAt(x + ox, z + oz); if (l) return l; }
+    return null;
+  };
   const heightAt = (x, z) => {
     let h = T.at(x, z);
+    if (lakes) h = lakeBed(x, z, h);
     if (pads.length) h = padAt(x, z, h);   // before the road is pressed in, so the road always wins beside it
     const hit = index.nearest(x, z, 34);
     if (hit) {
@@ -273,17 +307,45 @@ export function makeRealCoastLandscape(config, proj, index, route) {
     const scrub = Math.max(0, Math.min(1, .12 + north * .8 + valley * .5 - ridge * .4 + n * 2 + patchy - Math.abs(gx) * 0));
     return { forest, scrub, valley, ridge, north, spray };
   };
+  // ---- Mountains (Glacier): forest below the treeline, thinning with height; avalanche chutes and cliffs
+  //      stay open; the east side (past the divide) is drier: aspen groves and grassland ----
+  const treeline = config.treelineM ?? 1950, divideX = config.divide ? proj.toLocal(config.divide[0], config.divide[1]).x : Infinity;
+  const mountainVegetation = (x, z) => {
+    const h0 = T.at(x, z);
+    let ring = 0;
+    for (let k = 0; k < 8; k++) ring += T.at(x + Math.cos(k * .785) * 80, z + Math.sin(k * .785) * 80);
+    ring /= 8;
+    const gx = (T.at(x + 15, z) - T.at(x - 15, z)) / 30, gz = (T.at(x, z + 15) - T.at(x, z - 15)) / 30, slope = Math.hypot(gx, gz);
+    const valley = Math.max(0, Math.min(1, (ring - h0) / 12)), ridge = Math.max(0, Math.min(1, (h0 - ring) / 12));
+    const north = Math.max(0, Math.min(1, gz / .45));
+    const east = smoothstep(-2500, 2500, x - divideX);
+    const n = Math.sin(x / 97 + Math.sin(z / 131) * 2) * Math.sin(z / 83) * .15;
+    const tl = treeline - east * 120 + n * 150;
+    const alpine = smoothstep(tl - 250, tl + 60, h0);
+    // avalanche paths: long steep slopes below cliffs, bands of shrubs through the forest
+    const chute = smoothstep(.55, .85, slope) * (.5 + .5 * Math.sin(x / 61 + z / 47 + Math.sin(z / 230) * 3));
+    const dry = east * (1 - valley * .6) * (.6 + .4 * Math.sin(x / 210 + Math.sin(z / 170)));
+    let forest = (1 - smoothstep(tl - 120, tl + 80, h0)) * (.88 + valley * .3 - ridge * .35 + north * .15 + n) * (1 - smoothstep(.9, 1.4, slope)) * (1 - chute * .85) * (1 - dry * .75);
+    forest = Math.max(0, Math.min(1, forest)) + (1 - smoothstep(tl - 40, tl + 160, h0)) * alpine * .18 * (.5 + n * 3);   // krummholz islands at the treeline
+    const scrub = Math.max(0, Math.min(1, .15 + chute * .9 + valley * .3 + alpine * .25 + dry * .2 + n));
+    const moist = Math.max(0, Math.min(1, .55 + valley * .4 + north * .3 - ridge * .3 - dry * .6 - alpine * .2));
+    return { forest: Math.max(0, Math.min(1, forest)), scrub, valley, ridge, north, spray: 1, alpine, east, moist, slope };
+  };
   const waterLevelAt = (x, z) => {
     const c = creekHit(x, z, 0);
-    return c ? c.creek.positionAt(c.hit.s).y : .05;
+    if (c) return c.creek.positionAt(c.hit.s).y;
+    if (mountain) return lakes?.lakeAt(x, z)?.level ?? -Infinity;
+    return .05;
   };
 
   return {
-    kind: 'real-coast', real: true, hasOcean: true, coastSide: 1,
+    kind: mountain ? 'real-mountain' : 'real-coast', real: true, mountain, hasOcean: !mountain, coastSide: 1, gridLakes: lakes,
+    // the weather's fog bank lies on the lowest big lake (Lake McDonald), in the valleys around it
+    fogBase: mountain ? Math.min(...(lakes?.list || []).filter((l) => l.areaHa > 200).map((l) => l.level), Infinity) : 0,
     // legacy fields (the authored-coast code paths are skipped when `real` is set)
     coast: [{ x: minX - pad, z: minZ - pad }, { x: minX - pad, z: maxZ + pad }], coastX: () => -1e6,
-    inlandAt, shore, terrain: T, landmarks: bridges, bridges, creeks, creekAt, heightAt, baseHeight, bridgeAt, bridgeOfS,
-    waterLevelAt, frameAt, roadEle, vegetationAt, nearCreek: (x, z, pad = 0) => !!creekHit(x, z, pad), lakes: [], waterIslands: [],
-    isWater: (x, z, height) => height < .3 || !!creekHit(x, z, 0),
+    inlandAt, shore, shoreAt: mountain ? (x, z) => shore.sample(x, z) ?? Infinity : undefined, terrain: T, landmarks: bridges, bridges, creeks, creekAt, heightAt, baseHeight, bridgeAt, bridgeOfS,
+    waterLevelAt, frameAt, roadEle, vegetationAt: mountain ? mountainVegetation : vegetationAt, nearCreek: (x, z, pad = 0) => !!creekHit(x, z, pad), lakes: [], waterIslands: [],
+    isWater: mountain ? (x, z, height) => height < waterLevelAt(x, z) + .3 || !!creekHit(x, z, 0) : (x, z, height) => height < .3 || !!creekHit(x, z, 0),
   };
 }

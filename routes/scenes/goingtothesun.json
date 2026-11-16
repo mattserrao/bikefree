@@ -1,94 +1,161 @@
 {
   "format": "bikefree-scene-1",
   "style": "stylized",
-  "terrain": "authored-region",
+  "terrain": "real-mountain",
+  "terrainGridFile": "routes/scenes/goingtothesun-terrain.json",
+  "realHorizon": false,
   "assets": "models/scenery/coastal.json",
   "extraAssets": [
     "models/scenery/regional.json"
   ],
   "seed": 1101,
-  "description": "An artistic landscape aligned to the real GPX, with regional landforms, vegetation and water. Not surveyed terrain.",
+  "description": "Glacier National Park on its real landform (bundled 10 m elevation near the road, 40 m to 9 km) with stylized low-poly scenery.",
   "title": "Going-to-the-Sun Road",
   "region": "glacier-alpine",
   "biome": "alpine",
-  "reliefM": 100,
   "palette": {
-    "grass": "#7c976d",
-    "meadow": "#a7aa7e",
-    "rock": "#929b98",
-    "cliff": "#b8bdb4",
-    "water": "#398697"
+    "grass": "#6f8a57",
+    "meadow": "#a5a86f",
+    "rock": "#9a958a",
+    "cliff": "#8e6656",
+    "argillite": "#6e7c66",
+    "snow": "#eef2f3",
+    "water": "#2a6a78",
+    "shallowWater": "#8a7d5c",
+    "forest": "#2e4635",
+    "canopy": "#24392c",
+    "sand": "#a39a86",
+    "farTint": "#7d8c8f",
+    "farTintAmount": 0.3
   },
+  "snowLineM": 2250,
+  "treelineM": 1950,
   "vegetation": {
-    "trees": [
-      "fir0",
-      "fir1",
-      "pine0"
+    "layout": "forest-edge",
+    "canopyM": 24,
+    "edge": {
+      "mownM": 7,
+      "shrubM": 11
+    },
+    "treeScale": [
+      0.85,
+      1.15
     ],
-    "treeDensity": 0.29,
-    "density": 0.9,
     "cover": [
       "grass",
-      "grass",
-      "sage",
       "alpineflowers",
-      "alpineflowers"
+      "beargrass",
+      "paintbrush",
+      "grass",
+      "glacierlily"
     ],
-    "shrubs": [
-      "sage",
-      "shrub0"
+    "coverScale": [
+      0.6,
+      1.1
     ],
-    "vergeDensity": 0.7,
-    "treelineM": 1860
+    "vergeDensity": 0.8,
+    "forestDensity": 0.78
   },
-  "snowLineM": 2350,
-  "formations": [
-    {
-      "name": "Heavens Peak",
-      "lat": 48.723,
-      "lon": -113.802,
-      "radiusM": [
-        2400,
-        2600
+  "terrainBuild": {
+    "lakes": true,
+    "padM": 9000,
+    "coarseM": 40,
+    "fineM": 900,
+    "fineCellM": 10,
+    "minLakeHa": 3,
+    "lakeNames": [
+      [
+        "Lake McDonald",
+        48.585,
+        -113.92
       ],
-      "heightM": 1800,
-      "shape": "peak"
-    },
-    {
-      "name": "Mount Cannon",
-      "lat": 48.682,
-      "lon": -113.75,
-      "radiusM": [
-        2000,
-        2000
+      [
+        "St. Mary Lake",
+        48.69,
+        -113.52
       ],
-      "heightM": 1650,
-      "shape": "peak"
-    },
-    {
-      "name": "Logan Pass ridges",
-      "lat": 48.702,
-      "lon": -113.7,
-      "radiusM": [
-        1900,
-        2100
+      [
+        "Lower St. Mary Lake",
+        48.79,
+        -113.43
       ],
-      "heightM": 1700,
-      "shape": "peak"
-    }
-  ],
-  "lakes": [
-    {
-      "name": "Lake McDonald",
-      "lat": 48.578,
-      "lon": -113.902,
-      "radiusM": [
-        1600,
-        5200
+      [
+        "Avalanche Lake",
+        48.654,
+        -113.785
       ],
-      "elevationM": 960
-    }
-  ],
+      [
+        "Lake Ellen Wilson",
+        48.597,
+        -113.72
+      ],
+      [
+        "Gunsight Lake",
+        48.62,
+        -113.67
+      ],
+      [
+        "Hidden Lake",
+        48.682,
+        -113.745
+      ],
+      [
+        "Lake Josephine",
+        48.795,
+        -113.66
+      ],
+      [
+        "Swiftcurrent Lake",
+        48.797,
+        -113.657
+      ],
+      [
+        "Fishercap Lake",
+        48.8,
+        -113.677
+      ],
+      [
+        "Snyder Lake",
+        48.62,
+        -113.79
+      ],
+      [
+        "Trout Lake",
+        48.627,
+        -113.947
+      ],
+      [
+        "Lake Sherburne",
+        48.83,
+        -113.55
+      ],
+      [
+        "Red Eagle Lake",
+        48.63,
+        -113.51
+      ],
+      [
+        "Grinnell Lake",
+        48.773,
+        -113.703
+      ],
+      [
+        "Iceberg Lake",
+        48.81,
+        -113.72
+      ],
+      [
+        "Cracker Lake",
+        48.746,
+        -113.645
+      ],
+      [
+        "Logging Lake",
+        48.75,
+        -114.04
+      ]
+    ]
+  },
   "preview": {
     "positionM": 46593.0,
     "camera": "drone"
@@ -121,5 +188,12 @@
       "widthM": 8,
       "lengthM": 28
     }
+  ],
+  "divide": [
+    48.6965,
+    -113.718
+  ],
+  "kitExtensions": [
+    "glacier"
   ]
 }

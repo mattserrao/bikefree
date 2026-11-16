@@ -45,6 +45,14 @@ export function makeCoastalGroundMaterial(palette, config = {}, farUniform = nul
     shader.uniforms.bfRock = { value: new THREE.Color(palette.rock) };
     shader.uniforms.bfSoil = { value: new THREE.Color('#a59370') };
     shader.uniforms.bfSnowLine = { value: config.snowLineM || 1000000 };
+    // Glacier: the cliffs show the park's rock formations — red and green argillite, grey limestone above, the dark sill
+    const formations = config.terrain === 'real-mountain' && palette.argillite;
+    if (formations) {
+      shader.defines = { ...(shader.defines || {}), BF_FORMATIONS: '' };
+      shader.uniforms.bfArgRed = { value: new THREE.Color(palette.cliff) };
+      shader.uniforms.bfArgGreen = { value: new THREE.Color(palette.argillite) };
+      shader.uniforms.bfSnowColor = { value: new THREE.Color(palette.snow || '#eef2f3') };
+    }
     shader.uniforms.uTime = uniforms.uTime || { value: 0 };
     shader.uniforms.bfCloud = uniforms.bfCloud || { value: new THREE.Vector4(0, 0, 0, 0) };
     shader.uniforms.bfWet = uniforms.bfWet || { value: 0 };
@@ -62,6 +70,9 @@ export function makeCoastalGroundMaterial(palette, config = {}, farUniform = nul
         varying vec3 vBfGround; varying vec3 vBfGroundNormal;
         uniform vec3 bfRock; uniform vec3 bfSoil; uniform float bfSnowLine; uniform vec4 bfFar;
         uniform float uTime; uniform vec4 bfCloud; uniform float bfWet;
+        #ifdef BF_FORMATIONS
+        uniform vec3 bfArgRed; uniform vec3 bfArgGreen; uniform vec3 bfSnowColor;
+        #endif
         ${noise}`)
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
         if (bfFar.z > .5) {
@@ -87,10 +98,25 @@ export function makeCoastalGroundMaterial(palette, config = {}, farUniform = nul
         float bfWeather = bfFbm(vec2(bp.x + bp.z, bp.y * 1.7) * .045);
         vec3 bfStone = bfRock * (.68 + bfWeather * .49 + bfStrata * .16);
         bfStone *= 1. - bfSeams * .14;
+        #ifdef BF_FORMATIONS
+          // formation bands follow the (gently warped) elevation, like the layers along the Garden Wall
+          float bfF = bp.y + (bfFbm(bp.xz * .0011) - .5) * 160.;
+          vec3 bfForm = mix(bfArgRed, bfArgGreen, smoothstep(.3, .7, .5 + .5 * sin(bfF * .019 + 1.3)));
+          bfForm = mix(bfForm, bfRock * 1.05, smoothstep(1880., 2020., bfF));
+          bfForm = mix(bfForm, vec3(.2, .21, .2), (1. - smoothstep(6., 14., abs(bfF - 2120.))) * .85);
+          bfStone = bfForm * (.7 + bfWeather * .42 + bfStrata * .14) * (1. - bfSeams * .16);
+        #endif
         diffuseColor.rgb = mix(diffuseColor.rgb, bfStone, bfCliff * .88);
         diffuseColor.rgb *= 1. + (bfFine - .5) * .12 * bfNear;
         float bfSnow = smoothstep(bfSnowLine, bfSnowLine + 240., bp.y) * smoothstep(.15, .65, abs(normalize(vBfGroundNormal).y));
+        #ifdef BF_FORMATIONS
+          // midsummer: lingering snowfields in the cirques and on the north faces, bare rock between
+          float bfDrift = bfFbm(bp.xz * .0021 + 5.) + max(0., -normalize(vBfGroundNormal).z) * .35 - bfSlope * .25;
+          bfSnow = smoothstep(bfSnowLine - 250., bfSnowLine + 350., bp.y + bfDrift * 300.) * smoothstep(.55, .72, bfDrift) * smoothstep(.2, .55, abs(normalize(vBfGroundNormal).y));
+          diffuseColor.rgb = mix(diffuseColor.rgb, bfSnowColor * .92, bfSnow);
+        #else
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.8, .82, .78), bfSnow);
+        #endif
         // weather: cloud shadows drifting over the hills, and damp ground in the rain
         float bfCloudN = bfFbm((bp.xz - bfCloud.zw * uTime * 9.) * .0011);
         float bfShadowC = smoothstep(.66 - bfCloud.x * .42, .74 - bfCloud.x * .42, bfCloudN) * bfCloud.y;

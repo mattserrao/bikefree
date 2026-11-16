@@ -3,6 +3,7 @@ import { randomSequence, smoothstep } from './coast.js';
 import { loadSceneryAssets } from './scenery-assets.js';
 import { makeCoastalGroundMaterial, makeCoastalWaterMaterial, makeLakeWaterMaterial, makeLakeMistMaterial, decorateSceneryMaterial } from './coastal-materials.js';
 import { makeAdirondackKit, ADIRONDACK_CATEGORY } from './adirondack-kit.js';
+import { makeGlacierKit, GLACIER_CATEGORY } from './glacier-kit.js';
 import { ForestPlanner, TILE_M } from './forest.js';
 import { planSettlement, Settlement } from './settlement.js';
 import { CoastalDetails, fitBridgeToRoad, coastalRoadFrame } from './coastal-details.js';
@@ -69,6 +70,7 @@ export class StylizedTerrain {
       if (this.disposed) { kit.dispose(); return; }
       this.kit = kit;
       if ((this.config.kitExtensions || []).includes('adirondack')) this._addAdirondackKit(kit);
+      if ((this.config.kitExtensions || []).includes('glacier')) this._addAdirondackKit(kit, makeGlacierKit, GLACIER_CATEGORY);
       if (this.settlementPlan) this.settlement = new Settlement(this.group, this.settlementPlan, kit, this.uniforms);
       this._makeLandmarks();
       if (this.landscape.real) this.bridges = new CoastBridges(this.group, this.landscape, this.uniforms);
@@ -95,14 +97,14 @@ export class StylizedTerrain {
     this.canopyUniform.value.x = this.quality.forestRange * TILE_M - 150;
   }
 
-  _addAdirondackKit(kit) {
-    const geos = makeAdirondackKit({ fall: this.config.season === 'fall' });
+  _addAdirondackKit(kit, make = makeAdirondackKit, category = ADIRONDACK_CATEGORY) {
+    const geos = make({ fall: this.config.season === 'fall' });
     const near = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 });
     const far = new THREE.MeshLambertMaterial({ vertexColors: true });
     const soft = decorateSceneryMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .98, side: THREE.DoubleSide }), 'groundcover', this.uniforms);
     this.kitMaterials = [near, far, soft];
     for (const [name, geometry] of Object.entries(geos)) {
-      const material = ADIRONDACK_CATEGORY[name] === 'groundcover' ? soft : /-(lod|far)$/.test(name) ? far : near;
+      const material = category[name] === 'groundcover' ? soft : /-(lod|far)$/.test(name) ? far : near;
       kit.assets[name] = { geometry, material };
     }
     const dispose = kit.dispose;
@@ -212,6 +214,7 @@ export class StylizedTerrain {
     this.ocean.visible = this.landscape.hasOcean !== false;
     this.group.add(this.ocean);
     this.lakeMeshes = [];
+    if (this.landscape.gridLakes) this._makeGridLakes();
     if (this.landscape.real) return;   // surf and shallows come from the shoreline texture
     // White surf follows the authored coastline rather than the road.
     const pos = [], idx = [];
@@ -282,6 +285,46 @@ export class StylizedTerrain {
     }
   }
 
+  // Mountain lakes (build_terrain_grid.py "lakes" mode): water at each lake's own level on the 20 m lake
+  // raster, in ~800 m chunks so they cull; the shore distance shades shallows and the far-shore treeline.
+  _makeGridLakes() {
+    const L = this.landscape.gridLakes, shore = this.landscape.shore, water = this.config.water || {};
+    const material = makeLakeWaterMaterial(this.uniforms, this.config.palette.water, water.shallowWater || this.config.palette.shallowWater, this.config.palette.canopy || this.config.palette.forest);
+    this.mistOpacity = { value: 0 };
+    this.mistMaterial = makeLakeMistMaterial(this.uniforms, this.mistOpacity);
+    this.lakeMaterial = material;
+    const W = L.nx, H = L.ny, CH = 40;
+    const lakeOf = (k) => L.byId.get(L.ids[k]);
+    for (let cj = 0; cj < H - 1; cj += CH) for (let ci = 0; ci < W - 1; ci += CH) {
+      const pos = [], sh = [], idx = [], vid = new Map();
+      const vert = (i, j, level) => {
+        const key = j * W + i;
+        if (vid.has(key)) return vid.get(key);
+        const x = L.x0 + i * L.dx, z = L.z0 + j * L.dz;
+        pos.push(x, level + .12, z); sh.push(shore.sample(x, z) ?? -60);
+        vid.set(key, pos.length / 3 - 1); return pos.length / 3 - 1;
+      };
+      for (let j = cj; j < Math.min(H - 1, cj + CH); j++) for (let i = ci; i < Math.min(W - 1, ci + CH); i++) {
+        const k = j * W + i, corners = [k, k + 1, k + W, k + W + 1];
+        const lake = corners.map(lakeOf).find(Boolean);
+        if (!lake) continue;
+        const a = vert(i, j, lake.level), b = vert(i + 1, j, lake.level), c = vert(i, j + 1, lake.level), d = vert(i + 1, j + 1, lake.level);
+        idx.push(a, c, b, b, c, d);
+      }
+      if (!idx.length) continue;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('aShore', new THREE.Float32BufferAttribute(sh, 1));
+      geo.setIndex(idx); geo.computeBoundingSphere();
+      const mesh = new THREE.Mesh(geo, material); mesh.name = 'Lake'; mesh.receiveShadow = false;
+      mesh.userData.r = geo.boundingSphere.radius; mesh.userData.c = geo.boundingSphere.center;
+      this.lakeMeshes.push(mesh); this.group.add(mesh);
+      const mist = new THREE.Mesh(geo, this.mistMaterial); mist.position.y = 1.6; mist.name = 'Lake mist'; mist.renderOrder = 2;
+      mist.userData = mesh.userData; mist.visible = false;
+      (this.mistMeshes ||= []).push(mist); this.group.add(mist);
+    }
+  }
+
   /** Morning mist on the lakes, a little at golden hour. */
   setTime(key) {
     if (!this.mistOpacity) return;
@@ -335,7 +378,13 @@ export class StylizedTerrain {
       const rise = Math.hypot(hx - y, hz - y) / 4;
       c.lerp(P.rock, smoothstep(.45, 1.4, rise));
       c.lerp(P.cliff, (1 - smoothstep(20, 85, coastal)) * .65);
-      if (this.landscape.real) {
+      if (this.landscape.mountain) {
+        // Glacier: subalpine meadows, dark conifer forest below the treeline, talus and rock on the steep ground
+        const v = this.landscape.vegetationAt(px, pz);
+        c.copy(P.meadow).lerp(P.grass, v.moist).lerp(P.forest, v.forest * .92);
+        c.lerp(P.rock, smoothstep(.5, 1.2, rise) * .7);
+        c.lerp(P.sand, (1 - smoothstep(4, 22, coastal)) * .8);   // lake shore gravel
+      } else if (this.landscape.real) {
         // Big Sur: golden grass, olive scrub on the shaded faces, dark canyon forest
         const v = this.landscape.vegetationAt(px, pz);
         c.copy(P.meadow).lerp(P.grass, smoothstep(.2, .75, v.scrub) * .9).lerp(P.forest, v.forest * .9);
@@ -419,9 +468,39 @@ export class StylizedTerrain {
       if (coverOnly) {
         const name = vegetation.cover ? vegetation.cover[Math.floor(pick * vegetation.cover.length)] : pick < .12 ? 'poppy' : pick < .18 ? 'lupine' : pick < .33 ? 'succulent' : pick < .4 ? 'flowers' : 'grass';
         const k = rand();
+        if (this.landscape.mountain) {
+          // under the forest: ferns and huckleberry; in the meadows: beargrass, paintbrush, glacier lilies
+          const v = this.landscape.vegetationAt(x, z), byRoad = this.index.nearest(x, z, 14);
+          const cover = this.forest ? this.forest.cover(x, z) : v.forest;
+          const plant = cover > .45 ? (k < .5 ? 'fern' : k < .62 ? 'huckleberry' : null)
+            : v.east > .5 ? (pick < .55 ? 'grass' : pick < .7 ? 'huckleberry' : pick < .8 ? 'paintbrush' : 'sage')
+            : v.alpine > .4 ? (pick < .3 ? 'beargrass' : pick < .45 ? 'glacierlily' : pick < .6 ? 'paintbrush' : pick < .8 ? 'alpineflowers' : 'grass')
+            : (pick < .28 ? 'beargrass' : pick < .4 ? 'paintbrush' : pick < .58 ? 'alpineflowers' : pick < .7 ? 'huckleberry' : 'grass');
+          if (!plant || (cover > .45 && !byRoad && k > .35)) continue;
+          add(plant, x, y - .06, z, coverScale[0] + k * (coverScale[1] - coverScale[0]));
+          continue;
+        }
         // under the forest canopy: sparse ferns only
         if (this.forestLayout && !this.index.nearest(x, z, 14) && (k < .7 || name !== 'fern')) continue;
         add(name, x, y - .09, z, coverScale[0] + k * (coverScale[1] - coverScale[0]));
+        continue;
+      }
+      if (this.landscape.mountain) {
+        const v = this.landscape.vegetationAt(x, z);
+        if (pick < v.forest * .62 && slope < 1.15) {
+          // west-side cedar and hemlock in the valleys, spruce and subalpine fir up high, lodgepole and aspen on the dry east side
+          const r = rand();
+          const name = v.alpine > .5 ? `fir${r < .7 ? 1 : 0}` : v.east > .5 ? (r < .45 ? `broadleaf${Math.floor(rand() * 2)}` : `pine${Math.floor(rand() * 2)}`) : r < .75 ? `fir${Math.floor(rand() * 2)}` : `pine${Math.floor(rand() * 2)}`;
+          const tree = !detailed && this.kit.assets[`${name}-lod`] ? `${name}-lod` : name;
+          const tall = (name.startsWith('fir') ? 1.35 + rand() * .75 : .85 + rand() * .45) * (1 - v.alpine * .45);
+          add(tree, x, y - .15, z, (.7 + rand() * .5) * (1 - v.alpine * .3), tall);
+          if (detailed) add('shadow', x, y + .045, z, 8);
+        } else if (pick < .18 + v.scrub * .45) {
+          const width = .6 + rand() * 1.1;
+          add(rand() < .25 ? 'sage' : `shrub${Math.floor(rand() * 2)}`, x, y - .12, z, width, width * (.7 + v.scrub * .4));
+          if (detailed) add('shadow', x, y + .04, z, width * 2.5);
+        } else if (slope > .45 && pick < .85 && rand() < .35) add(`rock${Math.floor(rand() * 2)}`, x, y - .3, z, .5 + rand() * 1.3);
+        else if (detailed && pick < .92) add(v.alpine > .3 && rand() < .5 ? 'alpineflowers' : 'grass', x, y - .08, z, .8 + rand() * .8);
         continue;
       }
       if (this.landscape.real) {

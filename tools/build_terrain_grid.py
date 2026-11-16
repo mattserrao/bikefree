@@ -113,6 +113,11 @@ def main():
         water = rivers(H, LA, LO, scene, cfg)
         finish(rid, cfg, pts, gpx, M, H, north, west, south, east, fnx, fny, mlat, mlon, water)
         return
+    if cfg.get('lakes'):
+        del LA, LO
+        ids, lakes = find_lakes(H, cfg, north, west, mlat, mlon)
+        finish(rid, cfg, pts, gpx, M, H, north, west, south, east, fnx, fny, mlat, mlon, ids, lakes)
+        return
     low = H < cfg['seaBelowM']
     lab, _ = ndimage.label(low)
     edge = np.unique(lab[:, 0]); edge = edge[edge > 0]
@@ -169,7 +174,42 @@ def rivers(H, LA, LO, scene, cfg):
     return water
 
 
-def finish(rid, cfg, pts, gpx, M, H, north, west, south, east, fnx, fny, mlat, mlon, water):
+def find_lakes(H, cfg, north, west, mlat, mlon):
+    """Inland mountains: lakes are the hydro-flattened surfaces — connected, dead-flat areas that sit in a
+    basin (the ground rises all round). Each gets its own level. Returns a lake-id raster (0 = land) and the list."""
+    fm = cfg['fineCellM']
+    span = ndimage.maximum_filter(H, 3) - ndimage.minimum_filter(H, 3)
+    flat = ndimage.binary_opening(span < cfg.get('flatM', .08), iterations=1)
+    lab, n = ndimage.label(flat)
+    if not n: return np.zeros(H.shape, np.uint8), []
+    size = ndimage.sum(np.ones_like(H), lab, index=np.arange(1, n + 1)) * fm * fm / 1e4   # hectares
+    names = cfg.get('lakeNames', [])
+    ids, lakes = np.zeros(H.shape, np.uint8), []
+    for k in np.argsort(-size):
+        if size[k] < cfg.get('minLakeHa', 4) or len(lakes) >= 250: break
+        comp = lab == k + 1
+        ys, xs = np.nonzero(comp)
+        y0, y1, x0, x1 = max(ys.min() - 12, 0), ys.max() + 13, max(xs.min() - 12, 0), xs.max() + 13
+        sub, hs = comp[y0:y1, x0:x1], H[y0:y1, x0:x1]
+        level = float(np.median(hs[sub]))
+        sub = ndimage.binary_dilation(sub, iterations=2) & (np.abs(hs - level) < .2)
+        ring = ndimage.binary_dilation(sub, iterations=8) & ~ndimage.binary_dilation(sub, iterations=3)
+        if ring.any() and np.mean(hs[ring] > level + .25) < .6: continue   # a flat field or river, not a basin
+        sub = ndimage.binary_closing(sub, iterations=2) & (hs < level + .6)
+        ids[y0:y1, x0:x1][sub & (ids[y0:y1, x0:x1] == 0)] = len(lakes) + 1
+        lat, lon = north - ys.mean() * fm / mlat, west + xs.mean() * fm / mlon
+        lake = {'id': len(lakes) + 1, 'level': round(level, 2), 'areaHa': round(float(sub.sum() * fm * fm / 1e4), 1),
+                'lat': round(lat, 5), 'lon': round(lon, 5)}
+        for name, la, lo in names:
+            if math.hypot((la - lat) * mlat, (lo - lon) * mlon) < cfg.get('nameRadiusM', 2500) and not any(l.get('name') == name for l in lakes):
+                lake['name'] = name; break
+        lakes.append(lake)
+    print(f'  lakes: {len(lakes)} ({(ids > 0).mean() * 100:.1f}% of the box)')
+    for l in lakes[:12]: print(f"    {l.get('name', '(unnamed)'):24s} {l['areaHa']:8.1f} ha  level {l['level']:7.1f} m")
+    return ids, lakes
+
+
+def finish(rid, cfg, pts, gpx, M, H, north, west, south, east, fnx, fny, mlat, mlon, water, lakes=None):
     fm = cfg['fineCellM']
 
     # coarse grid (every k-th master sample)
@@ -203,7 +243,14 @@ def finish(rid, cfg, pts, gpx, M, H, north, west, south, east, fnx, fny, mlat, m
         'fine': {'cellM': fm, 'block': B, 'bnx': bnx, 'bny': bny, 'nx': fnx, 'ny': fny,
                  'blocks': blocks, 'h': pack(fine, cfg['floorM'])},
     }
-    if water is not None:
+    if lakes is not None:
+        # lake ids on a 20 m raster (run lengths); the lake bed is pressed down at load time
+        w = water[::2, ::2].astype(int).ravel()
+        edges = np.flatnonzero(np.diff(w)) + 1
+        starts = np.concatenate([[0], edges]); runs = np.diff(np.concatenate([starts, [len(w)]]))
+        out['lakes'] = {'cellM': fm * 2, 'nx': water[::2, ::2].shape[1], 'ny': water[::2, ::2].shape[0],
+                        'rle': [int(x) for pair in zip(w[starts], runs) for x in pair], 'list': lakes}
+    elif water is not None:
         w = water[::2, ::2].astype(int).ravel() if fm == 10 else water.astype(int).ravel()
         edges = np.flatnonzero(np.diff(w)) + 1
         starts = np.concatenate([[0], edges]); runs = np.diff(np.concatenate([starts, [len(w)]]))

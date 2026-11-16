@@ -383,12 +383,15 @@ Goal: give Going-to-the-Sun Road the Big Sur / Pittsburgh hero treatment, over t
 - Wildlife: mountain goats and bighorn sheep; marmots, pikas and ground squirrels; a distant grizzly or black bear; ravens, a golden eagle, ducks on the lakes
 
 **Phases**
-- [ ] **P1 · Road** — GPX Apgar → St. Mary on the real road; catalog length; course QC with no GPX findings
-- [ ] **P2 · Baseline** — snapshots at fixed spots, `docs/goingtothesun/REVIEW.md`, second pass
-- [ ] **P3 · Real landform and lakes** — terrain grid, both lakes, creeks, bridges
+- [x] **P1 · Road** — GPX Apgar → St. Mary on the real road (75.5 km each way), profile re-fitted to the real ground (max 8.5%); course QC clean
+- [x] **P2 · Baseline** — snapshots at fixed spots, `docs/goingtothesun/REVIEW.md`, second pass. 270–362 draw calls, 0.76–1.43 M triangles
+- [x] **P3 · Real landform and lakes** — `goingtothesun-terrain.json` (build_terrain_grid.py new "lakes" mode: 10 m near the road, 40 m to 9 km, 86 lakes each at its own level); new `real-mountain` landscape; formation-banded cliffs and midsummer snowfields
+  - [ ] creeks and bridges (Avalanche, Logan, Baring, Reynolds creeks)
 - [ ] **P4 · Atmosphere and weather** — golden-hour default, post, distance fog layers, the four weather presets
 - [ ] **P5 · Landmarks** — guardwalls, Garden Wall/Weeping Wall/Triple Arches, tunnels, the Loop, Logan Pass, Jackson Glacier, lodges, Wild Goose Island
-- [ ] **P6 · Vegetation** — cedar–hemlock west side, subalpine fir and meadows, east-side aspen and grassland
+- [ ] **P6 · Vegetation**
+  - [x] Glacier kit (`js/world/glacier-kit.js`) and zoned forest planner: cedar–hemlock west side, spruce–fir–larch slopes, treeline krummholz, aspen and lodgepole east; beargrass, paintbrush, glacier lilies, huckleberry, alder in the chutes
+  - [ ] tune density against the budget on the Air
 - [ ] **P7 · Traffic and wildlife**
 - [ ] **P8 · Check and ship** — `qc --strict`, clipping QC, snapshots against the baseline, the Mac check with the overlay, move to In Progress, PR
 

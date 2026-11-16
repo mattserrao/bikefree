@@ -286,6 +286,9 @@ function guardrail() {
   return b.build();
 }
 
+// shared with the other procedural regional kits (glacier-kit.js)
+export { Builder, M, cyl, cone, blob, box };
+
 /** Asset table. Names stay plain so the scene JSON can list them. */
 export function makeAdirondackKit(opts = {}) {
   const fall = !!opts.fall;
