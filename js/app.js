@@ -340,6 +340,26 @@ function groupedCards(items, card) {
   }).join('');
 }
 
+// Route ideas (routes/ideas.json): not rideable yet, listed in a collapsible section at the bottom.
+let routeIdeas = null;
+let ideasOpen = false;
+async function loadIdeas() {
+  if (routeIdeas) return routeIdeas;
+  try { routeIdeas = await (await fetch('routes/ideas.json')).json(); } catch { routeIdeas = []; }
+  return routeIdeas;
+}
+function ideasSection() {
+  if (!routeIdeas?.length) return '';
+  const top = routeIdeas.filter((i) => i.rank <= 10);
+  const rest = routeIdeas.filter((i) => i.rank > 10);
+  const row = (i) => `<li value="${i.rank}"><b>${escapeHtml(i.name)}</b>${i.note ? `<span class="rsub"> · ${escapeHtml(i.note)}</span>` : ''}</li>`;
+  return `<details class="ideas" ${ideasOpen ? 'open' : ''}><summary class="cards-group">Ideas</summary>
+    ${top.length ? `<h4>Top 10</h4><ol>${top.map(row).join('')}</ol>` : ''}
+    ${rest.length ? `<h4>11–${rest[rest.length - 1].rank}</h4><ol>${rest.map(row).join('')}</ol>` : ''}</details>`;
+}
+
+const watchIdeas = (list) => list.querySelector('details.ideas')?.addEventListener('toggle', (e) => { ideasOpen = e.target.open; });
+
 function renderScenery() {
   const items = [...(parkItems || []), { id: 'none', name: 'None', park: 'Numbers only' }];
   if (!items.some((p) => p.id === settings.scenery)) settings.scenery = items[0].id;
@@ -347,7 +367,8 @@ function renderScenery() {
     <button class="rcard ${p.id === 'none' ? 'none' : ''} ${p.id === settings.scenery ? 'on' : ''}" data-id="${p.id}">
       ${p.id === 'none' ? '<div class="blank">No 3D</div>' : '<canvas></canvas>'}
       <div><b>${escapeHtml(p.name)}</b><div class="rsub">${escapeHtml(p.park || '')}</div></div>
-    </button>`);
+    </button>`) + ideasSection();
+  watchIdeas($('sceneCards'));
   drawThumbs();
   const sel = $('sceneSelect');
   sel.innerHTML = '';
@@ -772,24 +793,6 @@ async function refreshRouteList(selectId) {
   await previewSelectedRoute();
 }
 
-// Route ideas (routes/ideas.json): not rideable yet, listed in a collapsible section at the bottom.
-let routeIdeas = null;
-let ideasOpen = false;
-async function loadIdeas() {
-  if (routeIdeas) return routeIdeas;
-  try { routeIdeas = await (await fetch('routes/ideas.json')).json(); } catch { routeIdeas = []; }
-  return routeIdeas;
-}
-function ideasSection() {
-  if (!routeIdeas?.length) return '';
-  const top = routeIdeas.filter((i) => i.rank <= 10);
-  const rest = routeIdeas.filter((i) => i.rank > 10);
-  const row = (i) => `<li value="${i.rank}"><b>${escapeHtml(i.name)}</b>${i.note ? `<span class="rsub"> · ${escapeHtml(i.note)}</span>` : ''}</li>`;
-  return `<details class="ideas" ${ideasOpen ? 'open' : ''}><summary class="cards-group">Ideas</summary>
-    ${top.length ? `<h4>Top 10</h4><ol>${top.map(row).join('')}</ol>` : ''}
-    ${rest.length ? `<h4>11–${rest[rest.length - 1].rank}</h4><ol>${rest.map(row).join('')}</ol>` : ''}</details>`;
-}
-
 function renderRouteCards() {
   $('routeCards').innerHTML = groupedCards(routeItems, (it) => {
     const r = routeCache.get(it.id);
@@ -797,7 +800,7 @@ function renderRouteCards() {
     return `<button class="rcard ${it.id === selectedRouteId ? 'on' : ''}" data-id="${it.id}"><canvas></canvas>
       <div><b>${escapeHtml(it.name.replace(' (built-in)', ''))}</b><div class="rsub">${escapeHtml(it.park || it.group)} · ${sub}</div></div></button>`;
   }) + ideasSection();
-  $('routeCards').querySelector('details.ideas')?.addEventListener('toggle', (e) => { ideasOpen = e.target.open; });
+  watchIdeas($('routeCards'));
   drawThumbs();
 }
 
