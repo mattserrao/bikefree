@@ -590,7 +590,7 @@ export class CityScene {
       const palette = KIND_COLORS[b.kind] || KIND_COLORS[2];
       const seed = hash(b.k * 7919 + 13);
       const base = new THREE.Color(palette[Math.floor(seed * palette.length)]).multiplyScalar(.9 + hash(b.k) * .18);
-      const kit = this.streetKit?.building(b, ring, ground, y0, y1, base, key);   // [street-kit] facade detail; window grid base, roof colour
+      const kit = this.streetKit?.building(b, ring, ground, y0, y1, base, key, B);   // [street-kit] facade detail (bays into B); window grid base, roof colour
       B.color(base).set({ aBld: [b.kind, seed * 100, kit ? kit.winBase : ground, 0] });
       const facets = b.kind === 6 && b.h > 18;   // PPG Place: glass in rows of projecting prisms
       let mx = 0, mz = 0; for (const p of ring) { mx += p.x; mz += p.z; } mx /= ring.length; mz /= ring.length;

@@ -234,18 +234,23 @@ export class StreetKit {
   // ------------------------------------------------------------ materials
   _materials() {
     const city = this.city, night = city.night;
-    // vertex colour + a per-vertex glow (shop windows, signal lenses) that lights up at night
-    const m = city.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .78, metalness: .04 }));
-    m.onBeforeCompile = (shader) => {
-      shader.uniforms.uNight = night;
-      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aGlow; varying float vGlow;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = aGlow;');
-      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight; varying float vGlow;')
-        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, .2, step(.05, vGlow));')
-        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += mix(vec3(1., .78, .5), vColor.rgb * 3., step(1.5, vGlow)) * min(vGlow, 1.) * uNight * 1.4;');
+    // vertex colour + a per-vertex glow that lights up at night (aGlow): 0 none; (0, 1] warm light (shop windows,
+    // shelters); 2 the vertex colour, bright (signal lenses, walk signals); 3 the texture's own colours (shop signs)
+    const kitMaterial = (map = null) => {
+      const m = city.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .78, metalness: .04, map }));
+      m.onBeforeCompile = (shader) => {
+        shader.uniforms.uNight = night;
+        shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aGlow; varying float vGlow;')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = aGlow;');
+        shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight; varying float vGlow;')
+          .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, .2, step(.05, vGlow) * step(vGlow, 2.5));')
+          .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n'
+            + 'totalEmissiveRadiance += (vGlow > 2.5 ? diffuseColor.rgb * .95 : mix(vec3(1., .78, .5), vColor.rgb * 3., step(1.5, vGlow))) * min(vGlow, 1.) * uNight * 1.4;');
+      };
+      m.customProgramCacheKey = () => (map ? 'street-kit-1-map' : 'street-kit-1');
+      return m;
     };
-    m.customProgramCacheKey = () => 'street-kit-1';
-    this.material = m;
+    this.material = kitMaterial();
     // sidewalks, curbs, parking lanes, car parks: ground surfaces (drawn under the furniture, over the old ribbons)
     this.walkMaterial = city.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95, polygonOffset: true, polygonOffsetFactor: -1.2, polygonOffsetUnits: -1.2 }));
     // shop signs: an atlas of generic shop names (no brands), lit at night
@@ -259,15 +264,18 @@ export class StreetKit {
       ctx.fillStyle = fg; ctx.font = `bold ${name.length > 7 ? 17 : 24}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(name, x + 64, y + 44);
     });
+    // the bottom strip stays white: everything else in the near mesh samples uv (0, 0) there (constant uv: mip 0)
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 440, 1024, 72);
     const tex = city.own(new THREE.CanvasTexture(cvs)); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
-    this.signMaterial = city.own(new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: '#ffffff', emissiveIntensity: 0, roughness: .7 }));
+    // the near mesh (furniture, storefront detail) carries the shop signs too: one material, one draw call
+    this.nearMaterial = kitMaterial(tex);
   }
   /** UV rectangle of a label in the sign atlas. */
   labelUV(name) {
     const k = Math.max(0, this.labels.indexOf(name)), u0 = (k % 8) / 8, v1 = 1 - Math.floor(k / 8) * 85 / 512;
     return [u0 + .003, v1 - 83 / 512, u0 + 1 / 8 - .003, v1 - .004];
   }
-  setNight(v) { this.signMaterial.emissiveIntensity = v * 1.3; }
+  setNight() {}   // (the kit's glow follows the city's night uniform)
 
   // ------------------------------------------------------------ OSM details (city data's streetKit block)
   _decodeData() {
@@ -342,6 +350,23 @@ export class StreetKit {
       this.bucket(this.key(x, z)).furniture.push({ kind: 'bench', x, z, yaw, trail: true });
       const x2 = x + f.tx * 1.6, z2 = z + f.tz * 1.6;
       if (Math.floor(s / 70) % 3 === 0) this.bucket(this.key(x2, z2)).furniture.push({ kind: 'waste', x: x2, z: z2, yaw, trail: true });
+    }
+    // 6. a trail's parkland: picnic tables on the landward grass every ~140 m, a marker post every 400 m
+    for (let s = s0 + 105; s <= s1; s += 140) {
+      if (L.routeKindAt(s) !== 'trail' || decks.some((b) => s > b.fromM - 10 && s < b.toM + 10)) continue;
+      const f = this.frame(s), side = L.waterAt(f.x + f.rx * 25, f.z + f.rz * 25) < L.waterAt(f.x - f.rx * 25, f.z - f.rz * 25) ? 1 : -1;
+      for (const off of [6.5, 9, 12]) {
+        const x = f.x + f.rx * side * off, z = f.z + f.rz * side * off;
+        if (L.landAt(x, z) !== LAND.grass) continue;
+        this.bucket(this.key(x, z)).furniture.push({ kind: 'picnic', x, z, yaw: Math.atan2(f.tx, f.tz) + (hash(s) - .5) * .5, trail: true, clearR: 1.3 });
+        break;
+      }
+    }
+    for (let s = Math.ceil((s0 + 1) / 400) * 400; s <= s1; s += 400) {
+      if (L.routeKindAt(s) !== 'trail' || decks.some((b) => s > b.fromM - 10 && s < b.toM + 10)) continue;
+      const f = this.frame(s), side = Math.floor(s / 400) % 2 ? 1 : -1, off = ROAD_WIDTH / 2 + 1.1;
+      const x = f.x + f.rx * side * off, z = f.z + f.rz * side * off;
+      this.bucket(this.key(x, z)).furniture.push({ kind: 'trailMarker', x, z, yaw: Math.atan2(-f.rx * side, -f.rz * side), trail: true });
     }
   }
 
@@ -535,9 +560,10 @@ export class StreetKit {
   /**
    * Called by CityScene._buildChunk for each drawn building, before its walls: decides the building's style and
    * street fronts and returns { winBase, roof } (the window grid's base height, the roof colour), or null to leave
-   * it plain. The trim itself is built later with the chunk's other kit work (finishChunk / tick).
+   * it plain. The trim itself is built later with the chunk's other kit work (finishChunk / tick). `B`: the city's
+   * building builder for the chunk (aBld), for the bay windows' walls.
    */
-  building(b, ring, ground, y0, y1, wall, key) {
+  building(b, ring, ground, y0, y1, wall, key, B = null) {
     if (!this.inArea(ring[0].x, ring[0].z)) return null;
     let cx = 0, cz = 0; for (const p of ring) { cx += p.x; cz += p.z; } cx /= ring.length; cz /= ring.length;
     const s = this.routeS(cx, cz);
@@ -555,8 +581,16 @@ export class StreetKit {
     const storeTop = shops ? Math.max(...fronts.map((f) => f.base)) + Math.min(style.storeH, H * .45) : null;
     const winBase = shops ? storeTop - fh : ground;   // upper windows start just above the shop fronts
     const roof = new THREE.Color(style.roof[Math.floor(rnd(3) * style.roof.length)]);
+    // bay windows: planned now, their walls drawn straight into the city's building mesh when it's given (B)
+    const seed = hash(b.k * 7919 + 13);
+    for (const f of fronts) {
+      if (style.bays && storeTop && y1 - storeTop > fh * 2 + 1 && f.len > 6 && rnd(10 + f.i) < style.bays) {
+        f.bay = this._bayPlan(f, storeTop + .4, Math.min(y1 - .9, storeTop + fh * 2 + .2), b);
+        if (B) this._bayWalls(B, f, f.bay, b, seed, winBase, wall);
+      }
+    }
     let list = this.jobs.get(key); if (!list) this.jobs.set(key, (list = []));
-    list.push({ b, ring, cx, cz, ground, y1, style, styleKey, fronts, fh, H, shops, storeTop, winBase, rnd, wall: wall.clone() });
+    list.push({ b, ring, cx, cz, ground, y1, style, styleKey, fronts, fh, H, shops, storeTop, winBase, rnd, wall: wall.clone(), baysDrawn: !!B });
     this.stats.buildings++;
     return { winBase, roof, style: styleKey };
   }
@@ -573,7 +607,7 @@ export class StreetKit {
       if (style.belt && storeTop && y1 - storeTop > 2) C.mid.color(trim).band(f.a.x, f.a.z, f.c.x, f.c.z, f.nx, f.nz, .22, storeTop, .28);
       if (style.baseCornice && H > style.baseCornice + 6) C.mid.color(trim).band(f.a.x, f.a.z, f.c.x, f.c.z, f.nx, f.nz, style.cornice.d, f.base + style.baseCornice, .5);
       if (style.cornice && H > 4) this._cornice(C, f, y1, style, trim);
-      if (style.bays && storeTop && y1 - storeTop > fh * 2 + 1 && f.len > 6 && rnd(10 + f.i) < style.bays) this._bay(C, f, storeTop + .4, Math.min(y1 - .9, storeTop + fh * 2 + .2), b, seed, winBase, trim, j.wall);
+      if (f.bay) { if (!j.baysDrawn) this._bayWalls(C.walls, f, f.bay, b, seed, winBase, j.wall); this._bayCaps(C, f, f.bay, trim); }
       if (style.sills && H > 5) this._sills(C, f, winBase, fh, y1, storeTop, trim);
       if (style.canopy && storeTop && rnd(6) < style.canopy) C.mid.color(frame).band(f.a.x + f.tx * f.len * .2, f.a.z + f.tz * f.len * .2, f.c.x - f.tx * f.len * .2, f.c.z - f.tz * f.len * .2, f.nx, f.nz, 2.4, storeTop - .3, .18);
     }
@@ -638,7 +672,7 @@ export class StreetKit {
       const pool = shop ? SHOP_LABELS[shop.cat] || ALL_LABELS : ALL_LABELS;
       const label = pool[Math.floor(hash(b.k * 17 + k * 5 + f.i) * pool.length)];
       const sw = Math.min(uw - .8, 3.6), [sx, sz] = at(um, .21);
-      this._signQuad(C.signs, sx, sz, f.nx, f.nz, sw, base + h - .88, base + h - .14, label);
+      this._signQuad(C.near, sx, sz, f.nx, f.nz, sw, base + h - .88, base + h - .14, label);
       // an awning over the glass, or a blade sign out over the sidewalk
       if (r > 1 - style.awning) {
         const col = new THREE.Color(SIGN_COLORS[Math.floor(r * 97) % SIGN_COLORS.length][0]).lerp(new THREE.Color('#b33a3a'), r > .9 ? .6 : 0);
@@ -652,17 +686,19 @@ export class StreetKit {
         N.color('#2a2a2a').block(bx + f.nx * .45, y + 1.25, bz + f.nz * .45, .05, .05, .9, f.yaw);
         const L2 = this.labels[Math.floor(r * 1000) % this.labels.length];
         const cx = bx + f.nx * .55, cz = bz + f.nz * .55;
-        this._signQuad(C.signs, cx + f.tx * .03, cz + f.tz * .03, f.tx, f.tz, .8, y, y + 1.2, L2);
-        this._signQuad(C.signs, cx - f.tx * .03, cz - f.tz * .03, -f.tx, -f.tz, .8, y, y + 1.2, L2);
+        this._signQuad(C.near, cx + f.tx * .03, cz + f.tz * .03, f.tx, f.tz, .8, y, y + 1.2, L2);
+        this._signQuad(C.near, cx - f.tx * .03, cz - f.tz * .03, -f.tx, -f.tz, .8, y, y + 1.2, L2);
       }
     }
   }
   /** A textured sign quad centred at (x, z), facing (nx, nz), so its text reads from that side. */
   _signQuad(S, x, z, nx, nz, w, y0, y1, label) {
     const [u0, v0, u1, v1] = this.labelUV(label);
+    S.set({ aGlow: [3] }).color('#ffffff');
     const rx = nz, rz = -nx;   // the viewer's right
     S.quad(V(x - rx * w / 2, y0, z - rz * w / 2), V(x + rx * w / 2, y0, z + rz * w / 2), V(x + rx * w / 2, y1, z + rz * w / 2), V(x - rx * w / 2, y1, z - rz * w / 2),
       [u0, v0, u1, v0, u1, v1, u0, v1]);
+    S.set({ aGlow: [0] });
   }
   /** Loading doors on industrial fronts. */
   _dock(C, f, base, frame) {
@@ -700,17 +736,27 @@ export class StreetKit {
       M.band(ax, az, cx, cz, f.nx, f.nz, .08, yH, .14);
     }
   }
-  /** A canted two-storey bay window (in the kit's wall mesh, so the building shader draws its windows), with trim caps. */
-  _bay(C, f, y0, y1, b, seed, winBase, trim, wall) {
-    const B = C.walls, w = Math.min(3.4, f.len * .45), d = .75, u = f.len / 2 + (hash(b.k * 3 + f.i) - .5) * (f.len - w - 1);
+  /** A canted two-storey bay window's plan on front f: [y0, y1], centre u along the wall, width w, depth d. */
+  _bayPlan(f, y0, y1, b) {
+    const w = Math.min(3.4, f.len * .45), d = .75, u = f.len / 2 + (hash(b.k * 3 + f.i) - .5) * (f.len - w - 1);
     const at = (uu, dd) => ({ x: f.a.x + f.tx * uu + f.nx * dd, z: f.a.z + f.tz * uu + f.nz * dd });
-    const p = [at(u - w / 2, 0), at(u - w / 2 + .6, d), at(u + w / 2 - .6, d), at(u + w / 2, 0)];
-    const mid = at(u, d * .5);
+    return { y0, y1, w, d, u, at, mid: at(u, d * .5) };
+  }
+  /**
+   * The bay's three walls, in a building-material builder (the city's own chunk mesh when CityScene passes it to
+   * building(), else the kit's): the building shader draws their windows, and they cost no draw call of their own.
+   */
+  _bayWalls(B, f, g, b, seed, winBase, wall) {
+    const { y0, y1, w, d, u, at, mid } = g, p = [at(u - w / 2, 0), at(u - w / 2 + .6, d), at(u + w / 2 - .6, d), at(u + w / 2, 0)];
     B.set({ aBld: [b.kind, seed * 100, winBase, 0] }).color(wall);
     for (let k = 0; k < 3; k++) {
       const a = p[k], c = p[k + 1];
       face(B, V(a.x, y0, a.z), V(c.x, y0, c.z), V(c.x, y1, c.z), V(a.x, y1, a.z), V((a.x + c.x) / 2 - mid.x + f.nx * .01, 0, (a.z + c.z) / 2 - mid.z + f.nz * .01));
     }
+  }
+  /** The bay's trim caps (head and sill), in the facade mesh. */
+  _bayCaps(C, f, g, trim) {
+    const { y0, y1, w, d, u, at, mid } = g;
     const M = C.mid.color(trim);
     const cap = (y, h, grow) => {
       const q = [at(u - w / 2 - grow, 0), at(u - w / 2 + .6 - grow * .5, d + grow), at(u + w / 2 - .6 + grow * .5, d + grow), at(u + w / 2 + grow, 0)];
@@ -865,7 +911,7 @@ export class StreetKit {
   flush() { for (const j of this.queue.splice(0)) while (!j.gen.next().done); }
 
   *_work(key) {
-    const C = { key, near: new KitBuilder({ aGlow: 1 }), mid: new KitBuilder({ aGlow: 1 }), walls: new KitBuilder({ aBld: 4 }), walks: new KitBuilder(), signs: new KitBuilder() };
+    const C = { key, near: new KitBuilder({ aGlow: 1 }), mid: new KitBuilder({ aGlow: 1 }), walls: new KitBuilder({ aBld: 4 }), walks: new KitBuilder() };
     const jobs = this.jobs.get(key) || [];
     this.jobs.delete(key);
     for (const j of jobs) { this._dressBuilding(C, j); yield; }
@@ -884,7 +930,7 @@ export class StreetKit {
       yield;
     }
     const parts = [[C.walks, this.walkMaterial, 'Sidewalks · kit', 'walk', false], [C.walls, this.city.buildingMaterial, 'Street kit · bays', 'mid', true],
-      [C.mid, this.material, 'Street kit · facades', 'mid', false], [C.near, this.material, 'Street kit · furniture', 'near', false], [C.signs, this.signMaterial, 'Street kit · signs', 'near', false]];
+      [C.mid, this.material, 'Street kit · facades', 'mid', false], [C.near, this.nearMaterial, 'Street kit · furniture', 'near', false]];
     for (const [builder, material, name, lod, shadow] of parts) {
       if (!builder.count) continue;
       if (lod !== 'walk') this._keepOutOfTube(builder);
@@ -951,7 +997,7 @@ export class StreetKit {
       post_box: 'postBox', drinking: 'drinking', bollard: 'bollard', shelter: 'shelter', stop_sign: 'stopSign', bike_share: 'bikeRack' };
     const kind = f.given || f.trail ? f.kind : kindMap[f.kind];
     if (!kind) return;
-    if (f.given || f.trail) { if (kind === 'signal' || kind === 'treePit' || this.clear(x, z, .3)) this.place(C, kind, x, z, yaw, f); return; }
+    if (f.given || f.trail) { if (kind === 'signal' || kind === 'treePit' || this.clear(x, z, f.clearR ?? .3)) this.place(C, kind, x, z, yaw, f); return; }
     // the street it belongs to: the route if close, else the nearest carriageway
     const r = L.routeDist(x, z);
     let tx, tz, nx, nz, curb, cxn, czn;
@@ -1205,6 +1251,8 @@ export const FURNITURE = {
     M.color('#6b5238'); for (const dx of [-.7, .7]) { bx(M, f, dx, 0, 0, .08, .72, .08); bx(M, f, dx, .38, 0, .08, .05, 1.5); }
   },
   stopSign(M, f) { M.color('#7a7f83'); bx(M, f, 0, -.05, 0, .06, 2.4, .06); M.color('#b8262b'); bx(M, f, 0, 1.9, .05, .62, .62, .04); M.color('#efe9df'); bx(M, f, 0, 2.15, .075, .4, .1, .01); },
+  /** A trail marker: a brown timber post with a sign board facing the trail. */
+  trailMarker(M, f) { M.color('#5a4330'); bx(M, f, 0, -.05, 0, .16, 1.5, .16); M.color('#3d5a3f'); bx(M, f, 0, 1.05, .1, .5, .5, .04); M.color('#e9e2cf'); bx(M, f, 0, 1.25, .125, .36, .08, .01); bx(M, f, 0, 1.1, .125, .26, .06, .01); },
   /** A pedestrian push-button post with a walk signal head. */
   pushButton(M, f) { M.color('#3f4448'); bx(M, f, 0, -.05, 0, .09, 2.9, .09); M.color('#2a2d30'); bx(M, f, 0, 2.45, .1, .32, .38, .22); M.set({ aGlow: [2] }).color('#e8e2d0'); bx(M, f, 0, 2.5, .215, .22, .26, .01); M.set({ aGlow: [0] }); M.color('#c9a52b'); bx(M, f, 0, 1.0, .07, .1, .16, .06); },
   streetSign(M, f) {

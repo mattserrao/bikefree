@@ -54,8 +54,8 @@
     "toM": 10950,
     "rangeM": 220,
     "zones": [
-      { "name": "East Carson Street", "style": "victorian", "fromM": 5250, "toM": 7860, "widthM": 90, "parking": true, "curbM": 6.4, "sidewalkM": 4, "trees": 11 },
-      { "name": "South Side Flats: S 10th & E Carson", "style": "rowhouse", "fromM": 10330, "toM": 10860, "widthM": 70, "parking": true, "curbM": 6.2, "sidewalkM": 3.2, "trees": 13 }
+      { "name": "East Carson Street", "style": "victorian", "fromM": 5250, "toM": 7860, "widthM": 90, "parking": true, "curbM": 6.4, "sidewalkM": 4, "trees": 15 },
+      { "name": "South Side Flats: S 10th & E Carson", "style": "rowhouse", "fromM": 10330, "toM": 10860, "widthM": 70, "parking": true, "curbM": 6.2, "sidewalkM": 3.2, "trees": 16 }
     ]
   },
   "mainStreets": [
