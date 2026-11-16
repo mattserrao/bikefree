@@ -650,7 +650,17 @@ def build(cid):
         anchor_h = {n: elevation(*nodes[n]) for n in anchors}
         # [road-align] straight along the deck between its ground ends (was inverse-distance: flat ends, steep middle)
         edges_ = [(a_, b_, hv(nodes[a_], nodes[b_])) for u in group for a_, b_ in zip(bridge_ways[u]['nodes'], bridge_ways[u]['nodes'][1:])]
-        for n, h_ in road_align.deck_heights(edges_, anchor_h).items(): deck.setdefault(n, h_)
+        hts = road_align.deck_heights(edges_, anchor_h)
+        # [w2-meets] deck ends at the route take its height; decks crossing over it clear the rider (re-solved twice)
+        nxy = {n_: loc(*nodes[n_]) for u in group for n_ in bridge_ways[u]['nodes']}
+        extra = road_align.deck_route_anchors(None, edges_, nxy, hts, anchor_h, rxy, e)
+        ends_ = {n_: h_ for n_, h_ in extra.items() if n_ in anchor_h}   # deck ends at the route: its height
+        if ends_:
+            anchor_h = {**anchor_h, **ends_}
+            hts = road_align.deck_heights(edges_, anchor_h)
+        needs_ = {n_: h_ for n_, h_ in road_align.deck_route_anchors(None, edges_, nxy, hts, anchor_h, rxy, e).items() if n_ not in anchor_h}
+        if needs_: hts = road_align.lift_over_route(edges_, hts, anchor_h, needs_)   # over the route: clear, smoothly
+        for n, h_ in hts.items(): deck.setdefault(n, h_)
     # pack streets: coords + optional deck heights (0 = on the ground)
     st_coords, st_starts, st_meta, st_deck = [], [], [], []
     # [road-align] ground streets: OSM jitter dropped and free corners rounded; junction nodes (shared by two or
