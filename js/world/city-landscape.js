@@ -9,7 +9,7 @@ import { smoothstep } from './coast.js';
 import { ROAD_WIDTH } from './pose.js';
 import { decodeTerrain } from './real-coast.js';
 import { planJunctions, junctionGround } from './junctions.js';   // [junctions]
-import { alignAlongRoute, followMovedNodes, trimOverlaps } from './road-meets.js';   // [junctions]
+import { densifyAlongside, alignAlongRoute, trimAtRoute, followMovedNodes, trimOverlaps, streetSlots } from './road-meets.js';   // [junctions]
 import { alignStreetProfiles, syncPinnedNodes } from './road-align.js';   // [road-align]
 
 export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand: 5, plaza: 6, outside: 7, yards: 8 };
@@ -486,10 +486,12 @@ export function cityStreets(landscape, index, route) {
   landscape._streets = streets;
   // [junctions] real intersection geometry: street heights inside junctions, trims, the junction surfaces
   if (landscape.junctions) {
+    densifyAlongside(streets);   // [junctions] (finer points where carriageways run side by side, for the trims below)
     alignAlongRoute(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] streets alongside the road: flush with it
+    trimAtRoute(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] …or beside it at another level: kept off its shoulder
     trimOverlaps(streets, landscape);   // [junctions] carriageways side by side or merging: no ribbon over another (gores)
     landscape._junctions = planJunctions(streets, { route, index, end, routeDist: landscape.routeDist, roadWidth: ROAD_WIDTH,
-      onRouteBridge: (s, m) => landscape.routeBridges.some((b) => s > b.fromM - m && s < b.toM + m) }, landscape.junctions);
+      onRouteBridge: (s, m) => landscape.routeBridges.some((b) => s > b.fromM - m && s < b.toM + m), liftOf: (k) => .1 + streetSlots(landscape, streets)[k] * .02 }, landscape.junctions);
     followMovedNodes(streets);   // [junctions] paths and side streets meet the moved ones at their height
   }
   return streets;

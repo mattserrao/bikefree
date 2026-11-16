@@ -11,6 +11,7 @@ import { CityLife } from './city-life.js';
 import { ROAD_WIDTH } from './pose.js';
 import { buildJunctionMeshes, drawnPieces } from './junction-mesh.js';   // [junctions]
 import { junctionsNear } from './junctions.js';   // [junctions]
+import { streetSlots } from './road-meets.js';   // [junctions]
 
 export { STREET_W };
 const CHUNK = 320;
@@ -892,6 +893,7 @@ export class CityScene {
 
   /** Height slots for street ribbons: streets whose ribbons overlap (junctions, crossings) never share one. */
   _streetSlots() {
+    if (this.landscape._junctions) return streetSlots(this.landscape, this.streets);   // [junctions] the same slots the plan and QC use
     const L = this.landscape, n = this.streets.length, slots = new Array(n).fill(-1);
     const order = [...Array(n).keys()].sort((a, b) => this.streets[a].cls - this.streets[b].cls || a - b);
     for (const k of order) {

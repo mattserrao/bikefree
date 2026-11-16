@@ -121,7 +121,8 @@ export function planJunctions(streets, ctx, options = {}) {
   const O = { ...DEFAULTS, ...(options === true ? {} : options) };
   const { route, index, end, routeDist } = ctx, RW = ctx.roadWidth || 7;
   const RL = routeLine(route, index);   // [road meets] the road as drawn (its curve), not the 10 m chords
-  const eligible = (st) => !st.bridge && st.cls <= 7 && st.nodes && st.nodeIdx;
+  // ([road meets] decks too: a ramp or a bridge meeting streets at their level is a junction like any other)
+  const eligible = (st) => st.cls <= 7 && st.nodes && st.nodeIdx;
 
   // 0. [road meets] a street crossing the route's road at its level with no OSM node near the crossing (a trail
   // across a street, a street across a riverfront path) gets one there, so the crossing becomes a junction
@@ -180,6 +181,12 @@ export function planJunctions(streets, ctx, options = {}) {
       if (crossing) items.push({ nd, w, route: true, s: q.s, x: nd.x, z: nd.z });
       else if (deg >= 3 && r.d > RW / 2 + w / 2) items.push({ nd, w, route: false, x: nd.x, z: nd.z });
     } else if (deg >= 3) items.push({ nd, w, route: false, x: nd.x, z: nd.z });
+    else if (deg === 2 && nd.inc.length === 2 && nd.inc[0].k !== nd.inc[1].k) {
+      // [road meets] two streets meeting end to end round a sharp bend (> 50°): a corner junction (a curb return
+      // inside, the outside filled), not two ribbons with a notch between their square ends
+      const out = nd.inc.map((o) => { const st = streets[o.k], acc = arcs(st), a = acc[o.i] + (o.i === 0 ? 1 : -1) * Math.min(8, acc[acc.length - 1] * .4); return norm(sub(streetPoint(st, a), nd)); });
+      if (dot(out[0], out[1]) > -Math.cos(50 * Math.PI / 180)) items.push({ nd, w, route: false, corner: true, x: nd.x, z: nd.z });
+    }
   }
 
   // 2. clusters (union-find; a merge that would make a cluster wider than maxSpanM is refused)
@@ -271,7 +278,8 @@ export function planJunctions(streets, ctx, options = {}) {
         arms.push({ k: -1, route: true, dir, N: C, u: norm(sub(p, C)), h: RW / 2, cls: 3, oneway: 0, avail: 60, theta: Math.atan2(p.z - C.z, p.x - C.x) });
       }
     }
-    if (arms.length < 2 || (!isRoute && arms.length < 3)) return;
+    const corner = cl.length === 1 && cl[0].corner;   // [road meets] a corner junction: two arms
+    if (arms.length < 2 || (!isRoute && !corner && arms.length < 3)) return;
     // streets running along the route inside its corridor (the rest of the street the route rides on) join its arm
     const routeArms = arms.filter((a) => a.route);
     for (const a of arms) {
@@ -280,7 +288,7 @@ export function planJunctions(streets, ctx, options = {}) {
     }
     arms.sort((a, b) => a.theta - b.theta);
     const ring = arms.filter((a) => !a.alongRoute);
-    if (ring.length < 2 || (!isRoute && ring.length < 3)) return;
+    if (ring.length < 2 || (!isRoute && !corner && ring.length < 3)) return;
 
     // 4. corners: curb returns between neighbours
     const n = ring.length, corners = [];
@@ -424,9 +432,10 @@ export function planJunctions(streets, ctx, options = {}) {
     if (r && r.d < RW / 2 + reach && y > r.y - 4) lim = Math.min(lim, r.y);
     return lim === Infinity ? y : Math.min(y, lim + ROAD_LIFT - O.routeGap - lift);
   };
-  streets.forEach((st) => {
+  streets.forEach((st, k) => {
     if (!st.nodes || st.bridge) return;
-    for (const p of st.pts) if (p.je != null) p.y = below(p.x, p.z, p.y, drawnLiftMax(p, { options: O }, .24), st.width / 2 + 1);
+    // ([road meets] each ribbon's own lift when the caller knows it: ctx.liftOf, as city.js draws it)
+    for (const p of st.pts) if (p.je != null) p.y = below(p.x, p.z, p.y, drawnLiftMax(p, { options: O }, ctx.liftOf ? ctx.liftOf(k) : .24), st.width / 2 + 1);
   });
   for (const jn of list) {
     if (jn.route || !index.nearest(jn.x, jn.z, O.maxTrimM + O.maxSpanM + RW)) continue;   // (far from the route: nothing to do)

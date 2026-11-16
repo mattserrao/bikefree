@@ -20,7 +20,8 @@ export const MEET_LIMITS = {
   reach: 150,        // m: sites within this distance of the route's line
   step: .09,         // m: surfaces meeting with a lip higher than this
   gap: .45,          // m: …or this far apart (a seam you see through to the ground)
-  overlapM: 5,       // m: ribbon drawn over another at one level (|dy| < levelM) for longer than this
+  overlapM: 5,       // m: ribbon drawn over another at one level (|dy| < levelM) for longer than this…
+  overlapDepth: .75, // m: …by more than this across (less: two ribbons sharing an edge)
   level: .6,         // m: two surfaces this close in height are meant to be one
   dangle: 1.2,       // m: a street end this far above (or below) whatever is under it hangs in the air
   touch: 1.5,        // m: a street end this close to another surface's edge meets it
@@ -31,19 +32,88 @@ const ROAD_LIFT = .12;           // (pose.js) the route's road surface above its
 const SLOT_LIFT = (slot) => .1 + slot * .02;   // (city.js) a street ribbon's lift by its height slot
 const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
-/** Height slots for street ribbons (city.js draws with these): streets whose ribbons overlap never share one. */
+/**
+ * Height slots for street ribbons (city.js draws with these when junctions are on): streets whose ribbons come
+ * within 5 m of each other never share one. Its own segment grid (city.js's _streetSlots asks the landscape's
+ * street index, which may not exist yet while the streets are being built), cached on the street list.
+ */
 export function streetSlots(landscape, streets) {
   if (streets._slots) return streets._slots;
-  const n = streets.length, slots = new Array(n).fill(-1);
+  const n = streets.length, slots = new Array(n).fill(-1), G = 24, grid = new Map();
+  streets.forEach((st, k) => {
+    for (let i = 1; i < st.pts.length; i++) {
+      const a = st.pts[i - 1], b = st.pts[i], r = st.width / 2 + 14;
+      for (let gx = Math.floor((Math.min(a.x, b.x) - r) / G); gx <= Math.floor((Math.max(a.x, b.x) + r) / G); gx++)
+        for (let gz = Math.floor((Math.min(a.z, b.z) - r) / G); gz <= Math.floor((Math.max(a.z, b.z) + r) / G); gz++) {
+          const key = `${gx},${gz}`; if (!grid.has(key)) grid.set(key, []); grid.get(key).push([k, i]);
+        }
+    }
+  });
   const order = [...Array(n).keys()].sort((a, b) => streets[a].cls - streets[b].cls || a - b);
   for (const k of order) {
     const st = streets[k], used = new Set();
-    for (const p of st.pts) for (const o of landscape.streetsNear(p.x, p.z, st.width / 2 + 5)) if (o.k !== k && slots[o.k] >= 0) used.add(slots[o.k]);
+    for (const p of st.pts) {
+      for (const [ko, i] of grid.get(`${Math.floor(p.x / G)},${Math.floor(p.z / G)}`) || []) {
+        if (ko === k || slots[ko] < 0 || used.has(slots[ko])) continue;
+        const so = streets[ko];
+        if (segDist(p.x, p.z, so.pts[i - 1], so.pts[i]).d - so.width / 2 < st.width / 2 + 5) used.add(slots[ko]);
+      }
+    }
     let slot = 0; while (used.has(slot) && slot < 7) slot++;
     slots[k] = slot;
   }
   Object.defineProperty(streets, '_slots', { value: slots, enumerable: false, configurable: true });
   return slots;
+}
+
+/**
+ * Where a ribbon runs alongside another (within both half-widths, near-parallel, at its level), its points are
+ * made at most `stepM` apart, so the trims (trimOverlaps) follow the other ribbon's edge instead of cutting
+ * across it in 7 m wedges. Keeps st.nodeIdx in step. Run before anything indexes the streets' points.
+ */
+export function densifyAlongside(streets, options = {}) {
+  const O = { cos: .85, level: .9, stepM: 2.5, ...options };
+  const G = 24, grid = new Map();
+  streets.forEach((st, k) => {
+    if (st.cls > 7) return;
+    for (let i = 1; i < st.pts.length; i++) {
+      const a = st.pts[i - 1], b = st.pts[i], r = st.width / 2;
+      for (let gx = Math.floor((Math.min(a.x, b.x) - r) / G); gx <= Math.floor((Math.max(a.x, b.x) + r) / G); gx++)
+        for (let gz = Math.floor((Math.min(a.z, b.z) - r) / G); gz <= Math.floor((Math.max(a.z, b.z) + r) / G); gz++) {
+          const key = `${gx},${gz}`; if (!grid.has(key)) grid.set(key, []); grid.get(key).push([k, i]);
+        }
+    }
+  });
+  let added = 0;
+  streets.forEach((st, k) => {
+    if (st.cls > 7 || st.pts.length < 2) return;
+    const P = st.pts, mark = new Uint8Array(P.length + 1);
+    for (let i = 0; i < P.length; i++) {
+      const p = P[i], a0 = P[Math.max(0, i - 1)], b0 = P[Math.min(P.length - 1, i + 1)], ux = b0.x - a0.x, uz = b0.z - a0.z, ul = Math.hypot(ux, uz) || 1;
+      for (const [ko, j] of grid.get(`${Math.floor(p.x / G)},${Math.floor(p.z / G)}`) || []) {
+        if (ko === k) continue;
+        const so = streets[ko], a = so.pts[j - 1], b = so.pts[j], { d, t } = segDist(p.x, p.z, a, b);
+        if (d > st.width / 2 + so.width / 2 + 3 || Math.abs(a.y + (b.y - a.y) * t - p.y) > O.level) continue;
+        const bx = b.x - a.x, bz = b.z - a.z;
+        if (Math.abs((ux * bx + uz * bz) / ul / (Math.hypot(bx, bz) || 1)) < O.cos) continue;
+        mark[i] = 1; mark[i + 1] = 1; break;
+      }
+    }
+    if (!mark.some((v) => v)) return;
+    const out = [P[0]], map = [0];
+    for (let i = 1; i < P.length; i++) {
+      const a = P[i - 1], b = P[i], len = Math.hypot(b.x - a.x, b.z - a.z);
+      if (mark[i] && len > O.stepM * 1.2) {
+        const m = Math.ceil(len / O.stepM);
+        for (let q = 1; q < m; q++) { const f = q / m; out.push({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, z: a.z + (b.z - a.z) * f, ...(a.along && b.along ? { along: true } : {}) }); added++; }
+      }
+      map.push(out.length); out.push(b);
+    }
+    if (out.length === P.length) return;
+    st.pts = out;
+    if (st.nodeIdx) st.nodeIdx = st.nodeIdx.map((i) => map[i]);
+  });
+  return added;
 }
 
 /**
@@ -147,6 +217,61 @@ export function alignAlongRoute(streets, ctx, options = {}) {
 }
 
 /**
+ * A street running beside the route at a different level (on a terrace above a riverfront trail, a ramp below a
+ * viaduct) used to hang its ribbon over the road's shoulder or under the road itself. Its side towards the route is
+ * trimmed back to the shoulder's outer edge (`edgeM` from the road's line), so the two read as two levels side by side
+ * (a wall between them), never one surface hovering over the other; a stretch lying across the road's line at a
+ * different level isn't drawn. Streets flush with the road (alignAlongRoute), crossings (cos < `cos`) and
+ * over/underpasses (more than `pass` apart) are left alone. ctx: { route, index, landscape, roadWidth }.
+ */
+export function trimAtRoute(streets, ctx, options = {}) {
+  const { route, index, landscape } = ctx, RW = ctx.roadWidth || 7;
+  const O = { cos: .5, step: .15, pass: 4.5, edgeM: RW / 2 + 2.2, stripM: 2.5, ...options };
+  const RL = routeLine(route, index), end = route.turnIdx || route.dist.length - 1, slots = streetSlots(landscape, streets);
+  let n = 0;
+  streets.forEach((st, k) => {
+    if (st.cls > 7) return;
+    const P = st.pts, h = st.width / 2, lift = SLOT_LIFT(slots[k]);
+    for (let i = 0; i < P.length; i++) {
+      const p = P[i];
+      if (p.along) {
+        // flush with the road: what shows of it is the strip beyond the shoulder on either side; a strip narrower
+        // than `stripM` (a sliver along the shoulder) goes, and so does the part under the road when only one stays
+        const r = index.nearest(p.x, p.z, h + O.edgeM + 12); if (!r) continue;
+        const q = RL.project(p.x, p.z, route.dist[Math.min(end, r.i > end ? 2 * end - r.i : r.i)], 30); if (!q) continue;
+        const t = RL.at(q.s), sd = (p.x - t.x) * t.rx + (p.z - t.z) * t.rz, E = O.edgeM;
+        const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)], dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1;
+        const leftIsPlus = (dz / l) * t.rx - (dx / l) * t.rz > 0;   // the ribbon's (dz, −dx) side is the road's +r side
+        const wPlus = sd + h - E, wMinus = -E - (sd - h), keepP = wPlus >= O.stripM, keepM = wMinus >= O.stripM;
+        let trimPlus = 0, trimMinus = 0;
+        if (!keepP && !keepM) { trimPlus = trimMinus = 2 * h; }
+        else if (keepP && !keepM) trimMinus = Math.min(2 * h, E - (sd - h));
+        else if (keepM && !keepP) trimPlus = Math.min(2 * h, sd + h + E);
+        if (trimPlus || trimMinus) {
+          const fl = leftIsPlus ? trimPlus : trimMinus, fr = leftIsPlus ? trimMinus : trimPlus;
+          p.tl = Math.max(p.tl || 0, fl); p.tr = Math.max(p.tr || 0, fr); n++;
+        }
+        continue;
+      }
+      const r = index.nearest(p.x, p.z, h + O.edgeM + 12); if (!r) continue;
+      const q = RL.project(p.x, p.z, route.dist[Math.min(end, r.i > end ? 2 * end - r.i : r.i)], 30);
+      if (!q || q.d > h + O.edgeM) continue;
+      const dy = p.y + lift - (q.y + ROAD_LIFT);
+      if (Math.abs(dy) < O.step || Math.abs(dy) > O.pass) continue;
+      const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)], t = RL.at(q.s);
+      const dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1;
+      if (Math.abs((dx * t.tx + dz * t.tz) / l) < O.cos) continue;
+      const c = { x: t.x, z: t.z }, left = (c.x - p.x) * (dz / l) - (c.z - p.z) * (dx / l) > 0;   // the road on the (dz, −dx) side?
+      const need = q.d < h * .5 ? 2 * h : Math.min(2 * h, O.edgeM - (q.d - h));
+      if (need <= 0) continue;
+      const f = left ? 'tl' : 'tr';
+      p[f] = Math.max(p[f] || 0, need); n++;
+    }
+  });
+  return n;
+}
+
+/**
  * After junctions and the along-route pass have moved street heights: a path or street that shares a node with a
  * moved point (`jn`, `je`, `along`) but wasn't moved itself takes the same height there, easing back to its own
  * profile at no more than `grade` (so footpaths and service roads don't meet a junction with a step).
@@ -237,6 +362,7 @@ export function trimOverlaps(streets, landscape, plan, options = {}) {
         const prev = best.get(ko); if (prev && prev.d <= d) continue;
         const bx = b.x - a.x, bz = b.z - a.z, bl = Math.hypot(bx, bz) || 1;
         if (Math.abs((u.x * bx + u.z * bz) / bl) < O.cos) continue;   // crossing, not running alongside
+        if (p.along && (a.along || b.along)) continue;   // both alongside the route: trimAtRoute shapes them
         const cx = a.x + bx * t, cz = a.z + bz * t, yB = a.y + (b.y - a.y) * t, topB = yB + lift(ko);
         if (Math.abs(topB - topA) > O.level) continue;
         best.set(ko, { ko, d, hB, side: (cx - p.x) * Lx + (cz - p.z) * Lz > 0 ? 'l' : 'r', topB });
@@ -539,8 +665,12 @@ export function roadMeets(landscape, index, route, options = {}) {
             const par = Math.abs(ux * rx / rl + uz * rz / rl) > .8;
             const run = runs.get(`r${k}`) || { kind: 'route', m: 0, x, z, y: top, step: 0, par: 0 };
             run.m += m; if (par) run.par += m; run.along = run.par > run.m * .6;
-            // the part of the ribbon beyond the road's edge shows: its height against the road's
-            if (r.d + st.width / 2 > RW / 2 + 2.2) run.step = Math.max(run.step, Math.abs(r.y + ROAD_LIFT - top));
+            // the part of the ribbon beyond the road's edge shows: its height against the road's, where what is drawn of
+            // it (trims taken off) still reaches over the road's shoulder from beyond it
+            const tl = (a.tl || 0) + ((b.tl || 0) - (a.tl || 0)) * f, tr = (a.tr || 0) + ((b.tr || 0) - (a.tr || 0)) * f, h = st.width / 2;
+            const c = RL.at(r.s ?? 0), left = (c.x - x) * uz - (c.z - z) * ux > 0;
+            const near = r.d - (h - (left ? tl : tr)), far = r.d + (h - (left ? tr : tl));
+            if (h * 2 - tl - tr > .3 && near < RW / 2 + 2.1 && far > RW / 2 + 2.2) run.step = Math.max(run.step, Math.abs(r.y + ROAD_LIFT - top));
             runs.set(`r${k}`, run);
           } else if (runs.has(`r${k}`)) flush(`r${k}`);
         }
@@ -560,12 +690,14 @@ export function roadMeets(landscape, index, route, options = {}) {
       const tl = (sg.a.tl || 0) + ((sg.b.tl || 0) - (sg.a.tl || 0)) * f, tr = (sg.a.tr || 0) + ((sg.b.tr || 0) - (sg.a.tr || 0)) * f;
       if (tl + tr > 2 * sg.r - .4) continue;   // (nothing drawn here)
       const off = (tr - tl) / 2, x = sg.a.x + (sg.b.x - sg.a.x) * f + uz * off, z = sg.a.z + (sg.b.z - sg.a.z) * f - ux * off;
+      { const r = roadAt(x, z); if (r && r.d < RW / 2 + 2.2 && top < r.y + ROAD_LIFT - .02) continue; }   // (hidden under the road and its shoulder)
       let hit = null;
       for (const id of grid.get(`${Math.floor(x / G)},${Math.floor(z / G)}`) || []) {
         const o = segs[id];
         if (o.k === sg.k) continue;
-        const { d, t } = segDist(x, z, o.a, o.b);
-        if (d < sideR(x, z, o, t) - .3 && Math.abs(o.a.top + (o.b.top - o.a.top) * t - top) < O.level) { hit = o; break; }
+        // (how deep the two drawn ribbons overlap here: less than `overlapDepth` is a shared edge, not one over another)
+        const { d, t } = segDist(x, z, o.a, o.b), hw = sg.r - (tl + tr) / 2;
+        if (sideR(x, z, o, t) + Math.min(hw, sideR(x, z, o, t)) - d > O.overlapDepth && d < sideR(x, z, o, t) + hw && Math.abs(o.a.top + (o.b.top - o.a.top) * t - top) < O.level) { hit = o; break; }
       }
       if (!hit) continue;
       if (O.debug) { const dx = hit.b.x - hit.a.x, dz = hit.b.z - hit.a.z; O.debug.push({ k: sg.k, ko: hit.k, cos: Math.abs((ux * dx + uz * dz) / (Math.hypot(dx, dz) || 1)), tl, tr, otl: hit.a.tl || 0, otr: hit.a.tr || 0, x, z }); }
