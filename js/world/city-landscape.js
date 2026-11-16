@@ -270,6 +270,33 @@ export function makeCityLandscape(config, proj, index, route) {
     }
     return best;
   };
+  /** [w2-align] Points along the ground streets (centre, carriageway edges, sidewalk edges every `step` m) inside a
+   *  box: the drawn ground mesh must not rise above the ground there (js/world/ground-drape.js). Not within
+   *  `clearOfRouteM` of the route's road, whose bank and verge the course QC holds to the 6 m mesh as sampled. */
+  const groundClearPoints = (x0, z0, x1, z1, step = 2, clearOfRouteM = 9) => {
+    if (!streetIndex) streetAt(x0, z0);
+    if (!streetIndex) return [];
+    const out = [], seen = new Set();
+    for (let gx = Math.floor(x0 / 24); gx <= Math.floor(x1 / 24); gx++) for (let gz = Math.floor(z0 / 24); gz <= Math.floor(z1 / 24); gz++) {
+      for (const [k, i] of streetIndex.get(`${gx},${gz}`) || []) {
+        const key = k * 1e5 + i; if (seen.has(key)) continue; seen.add(key);
+        const st = streetIndex.streets[k]; if (st.bridge) continue;
+        const a = st.pts[i - 1], b = st.pts[i], dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
+        if (len < .01) continue;
+        const nx = -dz / len, nz = dx / len, hw = st.width / 2, n = Math.max(1, Math.ceil(len / step));
+        for (let j = 0; j <= n; j++) {
+          const cx = a.x + dx * j / n, cz = a.z + dz * j / n;
+          for (const o of [-hw - 2.5, -hw, 0, hw, hw + 2.5]) {
+            const x = cx + nx * o, z = cz + nz * o;
+            if (!(x >= x0 && x <= x1 && z >= z0 && z <= z1)) continue;
+            const r = routeDist(x, z); if (r && r.d < clearOfRouteM) continue;   // the route's own bank and verge rule there
+            out.push({ x, z });
+          }
+        }
+      }
+    }
+    return out;
+  };
   /** Every street whose carriageway comes within `extra` of (x, z): [{k, edge}] (one per street). */
   const streetsNear = (x, z, extra = 0) => {
     if (!streetIndex) streetAt(x, z);
@@ -426,7 +453,9 @@ export function makeCityLandscape(config, proj, index, route) {
     colorAt: (x, z) => LAND_COLORS[landCell(x, z)] || null,
     /** Trees and shrubs from the shared kit grow only in parks, woods and the hills beyond. */
     canPlant: (x, z) => { const c = landCell(x, z); return c === LAND.woods || c === LAND.outside || (c === LAND.grass && ((x * 13 + z * 7) & 3) === 0) || (c === LAND.yards && yardTree(x, z)); },   // [s4-section] yards
-    routeDist, streetAt, streetsNear,
+    routeDist, streetAt, streetsNear, groundClearPoints,   // [w2-align] groundClearPoints, groundDrapeFixed/Last
+    groundDrapeFixed: (x, z) => { const r = routeDist(x, z); return !!r && r.d < 20; },   // the route's bank and verge
+    groundDrapeLast: (x, z) => streetsNear(x, z, 2.5).some((o) => !streetIndex.streets[o.k].bridge),   // on a street
     junctions: config.junctions || null,   // [junctions] scene key: real intersection geometry (js/world/junctions.js)
     /** For the weather: fog lies on the rivers (at the water level) and reaches inland up the valleys. */
     fogBase: level, fogField: rivers, fogInlandAt: riverDistance,

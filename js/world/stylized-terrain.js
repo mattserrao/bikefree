@@ -5,6 +5,7 @@ import { makeCoastalGroundMaterial, makeCoastalWaterMaterial, makeLakeWaterMater
 import { makeAdirondackKit, ADIRONDACK_CATEGORY } from './adirondack-kit.js';
 import { makeGlacierKit, GLACIER_CATEGORY } from './glacier-kit.js';
 import { ForestPlanner, TILE_M, makeClearings } from './forest.js';
+import { groundDrape, DRAPE_MAX_DROP, DRAPE_MAX_PATCH } from './ground-drape.js';   // [w2-align]
 import { GroundBlocks, InstancePool, packMatrices, proxyGroup } from './pools.js';
 import { GlacierLandmarks } from './glacier-landmarks.js';
 import { planSettlement, Settlement } from './settlement.js';
@@ -614,6 +615,20 @@ export class StylizedTerrain {
         indices.push(a, d, b, b, d, e);
       }
       if (i === S && j % 2) yield;
+    }
+    // [w2-align] keep the mesh off the streets: lower the bank vertices whose triangles would cover a street's
+    // uphill edge (js/world/ground-drape.js), a slice of street points at a time
+    if (size <= DRAPE_MAX_PATCH && this.landscape.groundClearPoints) {
+      const hs = new Float64Array(N * N);
+      for (let k = 0; k < N * N; k++) hs[k] = positions[k * 3 + 1];
+      const drape = groundDrape(hs, x, z, size / S, S, (px, pz) => this.heightAt(px, pz), { maxDrop: DRAPE_MAX_DROP, fixed: this.landscape.groundDrapeFixed, last: this.landscape.groundDrapeLast });
+      const points = this.landscape.groundClearPoints(x, z, x + size, z + size, Math.max(2, size / S / 3));
+      for (let k = 0; k < points.length; k += 120) { drape.add(points.slice(k, k + 120)); yield; }
+      const { drop } = drape.apply();
+      for (let k = 0; k < N * N; k++) if (drop[k] > 0) {
+        positions[k * 3 + 1] = hs[k];
+        if (!real) realH[k] = hs[k];
+      }
     }
     // Skirts close gaps between different terrain levels of detail.
     for (const edge of [Array.from({ length: N }, (_, i) => i), Array.from({ length: N }, (_, i) => S * N + i),
