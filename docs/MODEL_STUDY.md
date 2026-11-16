@@ -23,8 +23,10 @@ per-instance paint masking need integration before adopting it in traffic.
 
 ## Art direction to preserve
 
-Keep faceted forms, restrained region-specific colours, readable jersey accents,
-soft directional light and authored silhouettes. Gain realism through scale,
+Use slightly smoother silhouettes nearby while preserving restrained region-specific
+colours, readable jersey accents, soft directional light and authored silhouettes.
+Round tyre, helmet, shoulder and canopy outlines selectively; retain broad faceted
+surfaces on rocks, trunks and architecture. Avoid globally subdividing the kit. Gain realism through scale,
 pose, contact and material response before adding polygons or photographic
 textures. Inspect at the normal chase and handlebar cameras as well as close up.
 
@@ -60,11 +62,51 @@ for culling; consider chunking traffic only if profiling its current small agent
 window shows meaningful waste. Cap pixel ratio before reducing distinctive model
 silhouettes. Distant LOD should save GPU work without visible popping.
 
-## Decisions still open
+## Accepted direction and benchmark plan
 
-- Confirm Chrome on Mac/M4 Air as the main performance target, or specify others.
-- Choose the realism limit: current faceted look with better proportions, or
-  somewhat smoother silhouettes nearby.
+The user selected slightly smoother silhouettes and Chrome on the base M4
+MacBook Air (interpreting “base MB Air4” as M4, 16 GB unified memory). Record the
+actual CPU/GPU configuration, macOS and Chrome version with every hardware run.
+
+First model pass:
+
+1. Compact: retain sloped glazing; shape wheel arches and soften the hood/roof
+   outline with a few additional edge segments. Try 16-sided nearby tyres versus
+   the prototype's 12, preserving the single merged traffic mesh. Initial near-car
+   budget: 600 triangles; compare appearance before spending the full allowance.
+2. Rider: smooth helmet and shoulder contours selectively, refine elbow bends and
+   hand contact, and preserve pedal IK. Do not subdivide the entire 26,576-triangle
+   rider. Check the full crank cycle in chase and handlebar views.
+3. Tree: start with one broadleaf variant with an asymmetric crown and slightly
+   rounder outer lobes. Preserve internal faceting and the species palette.
+   Initial near-mesh budget: 1,200 triangles versus the current 960; retain a
+   distant mesh around the current 420 triangles and assess transition visibility.
+
+These are proposed geometry budgets, subject to visual and hardware comparison.
+Use Big Sur for the first passing-car trial and Route 28 for the forest trial;
+include Pittsburgh and a bridge approach in the broader regression check.
+
+Benchmark protocol on the physical Air:
+
+- Run current and candidate builds with identical route positions, motion, time,
+  weather, Chrome window size and quality. Use a fixed 1440 × 900 CSS viewport,
+  record the effective pixel ratio/render-buffer size, and also check fullscreen
+  at the laptop's normal display scaling.
+- Use Balanced as the primary case, then verify Light and High. Keep power mode,
+  charger state and browser workload consistent and record them.
+- Warm up for five minutes, then record a 20-minute ride. Capture frame-time
+  median, p95 and p99, frames exceeding 33.3 ms, draw calls and triangle counts.
+  Compare the early and final five-minute windows for thermal degradation.
+- Aim for 60 fps in Balanced, with p95 frame time at or below 20 ms and no recurring
+  stalls above 33.3 ms. Report sustained misses and candidate-versus-current
+  differences before changing defaults. These are acceptance goals, not results.
+- Separate render measurements with cached/bundled resources from online terrain
+  streaming; test offline reload and a real trainer session separately.
+
+Software-rendered Chromium checks in this workspace validate appearance and
+functionality only. No physical M4 Air benchmark has been performed here.
+
+## Decisions still open
 - Which route should be the first in-world trial, and which biker/car references
   best match the intended setting?
 - Are cyclists exclusively road riders, or should commuter, gravel and other
