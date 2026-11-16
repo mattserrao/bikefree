@@ -443,12 +443,16 @@ export function settleFreeEnds(streets, ctx, options = {}) {
  * profile at no more than `grade` (so footpaths and service roads don't meet a junction with a step).
  */
 export function followMovedNodes(streets, options = {}) {
-  const O = { grade: .08, level: 1.2, maxEaseM: 30, ...options };
-  const key = (p) => `${Math.round(p.x * 100)},${Math.round(p.z * 100)}`, lead = new Map();
-  const isLead = (p) => p.jn != null || p.je != null || p.along || p.under || p.lifted;
-  const lifted = new Set();
-  for (const st of streets) for (const p of st.pts) if (isLead(p)) { lead.set(key(p), Math.min(lead.get(key(p)) ?? Infinity, p.y)); if (p.lifted) lifted.add(key(p)); }
+  const O = { grade: .08, level: 1.2, maxEaseM: 30, rounds: 4, ...options };
+  const key = (p) => `${Math.round(p.x * 100)},${Math.round(p.z * 100)}`;
+  // ([w2-meets] in rounds: a short street that followed all the way along moves its far end too, and the street
+  // carrying on from there follows it in the next round)
+  const isLead = (p) => p.jn != null || p.je != null || p.along || p.under || p.lifted || p.followed;
   let n = 0;
+  for (let round = 0; round < O.rounds; round++) {
+  const lead = new Map(), lifted = new Set();
+  for (const st of streets) for (const p of st.pts) if (isLead(p)) { lead.set(key(p), Math.min(lead.get(key(p)) ?? Infinity, p.y)); if (p.lifted || p.followedLift) lifted.add(key(p)); }
+  let moved = 0;
   for (const st of streets) {
     // (decks too where one ends on a moved street: it follows over its last metres)
     const P = st.pts, own = P.map((p) => p.y), tg = P.map((p) => { const y = lead.get(key(p)); return y != null && !isLead(p) && Math.abs(y - p.y) > .005 && Math.abs(y - p.y) < (st.bridge || lifted.has(key(p)) ? 4.5 : O.level) ? y : null; });
@@ -460,7 +464,13 @@ export function followMovedNodes(streets, options = {}) {
       const L = Math.min(O.maxEaseM, Math.max(4, Math.abs(t - own[j]) / O.grade));
       for (let i = 0; i < P.length; i++) { const d = Math.abs(acc[i] - acc[j]); if (d < L) { const w = 1 - smooth(d / L); if (!best[i] || w > best[i][0]) best[i] = [w, t - own[j]]; } }
     });
-    P.forEach((p, i) => { if (best[i]) { p.y = own[i] + best[i][1] * best[i][0]; n++; } });
+    P.forEach((p, i) => {
+      if (!best[i]) return;
+      const dy = best[i][1] * best[i][0]; p.y = own[i] + dy; n++;
+      if (Math.abs(dy) > .005 && (i === 0 || i === P.length - 1)) { p.followed = true; moved++; if (Math.abs(dy) > O.level / 2) p.followedLift = true; }
+    });
+  }
+  if (!moved) break;
   }
   return n;
 }
