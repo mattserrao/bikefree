@@ -8,6 +8,7 @@ import { makeRouteIndex } from './geo.js';
 import { smoothstep } from './coast.js';
 import { ROAD_WIDTH } from './pose.js';
 import { decodeTerrain } from './real-coast.js';
+import { alignStreetProfiles } from './road-align.js';   // [road-align]
 
 export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand: 5, plaza: 6, outside: 7, yards: 8 };
 const LAND_COLORS = ['#8d8a84', '#77985a', '#4d6a3a', '#6c6a5e', '#7d786f', '#b5a684', '#b4ada0', '#6d8252', '#7c8c5f'];
@@ -434,6 +435,14 @@ export function cityStreets(landscape, index, route) {
   const starts = new Uint32Array(u8(S.starts)), xy = new Int16Array(u8(S.xy)), deck = new Uint16Array(u8(S.deck));
   const end = route.turnIdx || route.dist.length - 1;
   const streets = [];
+  // a street point over or beside the route's road, near its height, is kept just below the road (pinned there)
+  const lower = (p, width) => {
+    const r = index.nearest(p.x, p.z, width / 2 + ROAD_WIDTH / 2 + 2);
+    if (!r || r.d > width / 2 + ROAD_WIDTH / 2 + 1.5) return false;
+    const i = r.i > end ? Math.max(0, 2 * end - r.i) : r.i, e = route.ele[i];
+    if (p.y > e - 4 && p.y < e + 4 && p.y > e - .18) { p.y = e - .12 - STREET_LIFT + .1; p.pin = true; return true; }   // [road-align] pin
+    return false;
+  };
   for (let k = 0; k < S.count; k++) {
     const cls = S.meta[k * 3], flags = S.meta[k * 3 + 1], layer = S.meta[k * 3 + 2] - 8;
     const bridge = !!(flags & 1), oneway = (flags >> 1) - 1, width = STREET_W[cls];
@@ -451,12 +460,15 @@ export function cityStreets(landscape, index, route) {
     }
     for (const p of pts) {
       if (p.y == null) p.y = landscape.heightAt(p.x, p.z);
-      const r = index.nearest(p.x, p.z, width / 2 + ROAD_WIDTH / 2 + 2);
-      if (!r || r.d > width / 2 + ROAD_WIDTH / 2 + 1.5) continue;
-      const i = r.i > end ? Math.max(0, 2 * end - r.i) : r.i, e = route.ele[i];
-      if (p.y > e - 4 && p.y < e + 4 && p.y > e - .18) { p.y = e - .12 - STREET_LIFT + .1; under = true; }
+      if (lower(p, width)) under = true;
     }
     streets.push({ cls, bridge, oneway, layer, pts, width, underRoute: under });
+  }
+  // [road-align] smooth, grade-limited street profiles with one height per junction (js/world/road-align.js)
+  const align = route.scene?.roadAlign;
+  if (align?.streets) {
+    alignStreetProfiles(streets, align);
+    for (const st of streets) for (const p of st.pts) if (lower(p, st.width)) st.underRoute = true;
   }
   landscape._streets = streets;
   return streets;

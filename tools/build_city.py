@@ -22,6 +22,8 @@ import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 from collections import Counter
 from PIL import Image, ImageDraw
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from citylib import road_align   # [road-align]
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(ROOT, 'tools', '.cache')
@@ -369,39 +371,17 @@ def build(cid):
                         if hit is None: return True
                         hit.add(wid_)
         return bool(hit)
-    def clear(x, y):   # the road (and a little sidewalk) stays out of buildings
-        return not any(in_building(x + ox, y + oy) for ox, oy in ((0, 0), (3.2, 0), (-3.2, 0), (0, 3.2), (0, -3.2), (2.3, 2.3), (-2.3, 2.3), (2.3, -2.3), (-2.3, -2.3)))
-    raw_clear = [clear(*q) for q in r2]
     # buildings the mapped path itself runs through (a trail under a canopy, a mis-drawn footprint) are left out
     route_buildings = set()
     for q in r2: in_building(q[0], q[1], route_buildings)
     print('  left out (on the route):', len(route_buildings), sorted(Counter(ways[w][1].get('building', ways[w][1].get('building:part', '')) for w in route_buildings).items()))
-    def leash(i, p_, prev=None):
-        dx, dy = p_[0] - r2[i][0], p_[1] - r2[i][1]
-        d = math.hypot(dx, dy)
-        q = p_ if d <= drift else (r2[i][0] + dx / d * drift, r2[i][1] + dy / d * drift)
-        if raw_clear[i] and not clear(*q): return prev if prev is not None else r2[i]
-        return q
-    sm = r2
-    for _ in range(cfg.get('cornerPasses', 2)):
-        w = cfg.get('cornerHalfWindow', 6)
-        sm = [(sum(sm[(i + o) % n2][0] for o in range(-w, w + 1)) / (2 * w + 1),
-               sum(sm[(i + o) % n2][1] for o in range(-w, w + 1)) / (2 * w + 1)) for i in range(n2)]
-        sm = [leash(i, p_) for i, p_ in enumerate(sm)]
-    # then ease only the remaining tight spots (park paths, hairpins) until no turn is sharper than ~7°/m
-    def turn(i):
-        a_, b_, c_ = sm[i - 1], sm[i], sm[(i + 1) % n2]
-        t1, t2 = math.atan2(b_[1] - a_[1], b_[0] - a_[0]), math.atan2(c_[1] - b_[1], c_[0] - b_[0])
-        seg = (math.hypot(b_[0] - a_[0], b_[1] - a_[1]) + math.hypot(c_[0] - b_[0], c_[1] - b_[1])) / 2
-        return abs((math.degrees(t2 - t1) + 540) % 360 - 180) / max(seg, .05)   # degrees per metre
-    for it in range(1500):
-        tight = {(i + o) % n2 for i in range(n2) if turn(i) > 4.5 for o in range(-10, 11)}
-        if not tight: break
-        old = sm
-        sm = [((sum(sm[(i + o) % n2][0] for o in range(-7, 8)) / 15, sum(sm[(i + o) % n2][1] for o in range(-7, 8)) / 15) if i in tight else sm[i])
-              for i in range(n2)]
-        sm = [leash(i, p_, old[i]) if i in tight else p_ for i, p_ in enumerate(sm)]
-    print(f'  corners eased in {it} passes, {len(tight)} points still tight')
+    # [road-align] plan: round corners, ease tight spots and fair the line inside the mapped corridor, clear of
+    # buildings (tools/citylib/road_align.py)
+    polys = list({wid_: poly for cell_ in bgrid.values() for wid_, poly in cell_ if wid_ not in route_buildings}.values())
+    sm = [tuple(q_) for q_ in road_align.align_plan(
+        r2, clear=road_align.Clearance(polys, cfg.get('clearM', 3.2)), drift=drift, loop=True,
+        corner_passes=cfg.get('cornerPasses', 2), corner_half_window=cfg.get('cornerHalfWindow', 6),
+        fair_iters=cfg.get('fairIters', 240)).tolist()]
     sm.append(sm[0]); e2.append(e2[0])
     scum = [0.0]
     for a_, b_ in zip(sm, sm[1:]): scum.append(scum[-1] + math.hypot(b_[0] - a_[0], b_[1] - a_[1]))
@@ -427,10 +407,10 @@ def build(cid):
     for b in route_bridges: b['fromM'], b['toM'] = round(app_s(b['fromM'])), round(app_s(b['toM']))
     for k in route_kinds: k['fromM'], k['toM'] = round(app_s(k['fromM'])), round(app_s(k['toM']))
     route_kinds[-1]['toM'] = round(chord[-1]) + 10
-    # rideable profile: fill cliff-edge dips (< 160 m wide), shave spikes (< 80 m), smooth over 60 m
-    e = circular(circular(re_, 4, min), 4, max)
-    e = circular(circular(e, 8, max), 8, min)
-    e = circular(e, 3, lambda v: sum(v) / len(v))
+    # rideable profile
+    # [road-align] profile: shave spikes, fill only narrow notches (real dips and crests stay on the ground),
+    # limit grade and grade change, light averaging
+    e = road_align.align_profile(re_, step=10, loop=True, **cfg.get('profile', {})).tolist()
     asc = sum(max(0, b - a) for a, b in zip(e, e[1:]))
     grades = [(e[(k + 1) % len(e)] - e[k - 1]) / 20 * 100 for k in range(len(e))]
     total = chord[-1]

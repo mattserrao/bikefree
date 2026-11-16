@@ -6,6 +6,7 @@ import { Weather } from './weather.js';
 import { PostFX } from './post.js';
 import { StylizedTerrain, COASTAL_QUALITY } from './stylized-terrain.js';
 import { riderPose, routePoint, ROAD_WIDTH } from './pose.js';
+import { denseRoad } from './road-align.js';   // [road-align]
 import { loadRider } from './rider.js';
 import { PerfMonitor } from './perf.js';
 import { HAZE, installHaze } from './haze.js';
@@ -564,6 +565,7 @@ const roadPoints = (route) => (route.turnIdx ? route.turnIdx + 1 : route.dist.le
 
 // ---------- Road ----------
 function makeRoad(route, index) {
+  [route, index] = denseRoad(route, index);   // [road-align] the curved centre line, when the scene asks for it
   const stylized = route.scene?.style === 'stylized';
   const n = roadPoints(route);
   const pos = new Float32Array(n * 2 * 3);
@@ -656,6 +658,7 @@ function makeRoad(route, index) {
 
 // ---------- Shoulders ----------
 function makeRibbon(route, index, width, lift, tex, repeatM, offset) {
+  [route, index] = denseRoad(route, index);   // [road-align]
   const n = roadPoints(route);
   const pos = new Float32Array(n * 2 * 3), uv = new Float32Array(n * 2 * 2);
   for (let i = 0; i < n; i++) {
