@@ -975,6 +975,7 @@ export class StreetKit {
       if (this._due()) yield 'tube';
       const mesh = new THREE.Mesh(this.city.own(builder.geometry()), material);
       mesh.name = `${name} ${key}`; mesh.receiveShadow = true; mesh.castShadow = shadow;
+      mesh.userData.bake = false;   // [baked-light] kit pieces stream with the camera (LOD bands): they receive the bake but never trigger a re-bake
       mesh.userData.kitLod = lod; mesh.renderOrder = lod === 'walk' ? 1 : 0;
       mesh.matrixAutoUpdate = false; mesh.updateMatrix();
       this.city.group.add(mesh);

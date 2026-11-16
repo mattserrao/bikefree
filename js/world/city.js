@@ -5,6 +5,7 @@
 import * as THREE from '../../vendor/three.module.min.js';
 import { decodeCity, LAND, cityStreets, STREET_W } from './city-landscape.js';
 import { MeshBuilder, ribbon, resample, hash } from './city-geometry.js';
+import { buildRiverfront } from './riverfront.js';   // [s1-riverfront]
 import { buildBridges, buildStadiums, buildLandmarks } from './city-bridges.js';
 import { buildHeroes } from './city-heroes.js';
 import { CityLife } from './city-life.js';
@@ -32,6 +33,12 @@ const KIND_COLORS = [
   ['#c4b79c', '#b8a98d'],                                                                      // 11 civic stone
 ];
 
+/** [s1-lanes] Which third of the street texture a street uses (u range; reversed for one-ways drawn backwards). */
+export function streetPaint(st) {
+  const k = st.oneway ? (st.width >= 10 ? 1 : 2) : 0, u = [k / 4, (k + 1) / 4];   // (u .75–1: junction paint)
+  return st.oneway < 0 ? [u[1], u[0]] : u;
+}
+
 export class CityScene {
   constructor(parent, route, index, landscape, kit, uniforms, qualityKey = 'balanced') {
     this.group = new THREE.Group(); this.group.name = 'City'; parent.add(this.group);
@@ -45,6 +52,7 @@ export class CityScene {
     this._decodeStreets();
     this._decodeBuildings();
     this._materials();
+    this.riverfront = buildRiverfront(this);   // [s1-riverfront] promenade walls where the route runs along a river
     this._water();
     { const k = streetKitConfig(this.route.scene); if (k) this.streetKit = new StreetKit(this, k, { chunk: CHUNK }); }   // [street-kit] (before the lamps and trees: it places some of both)
     this._streetsAndLamps();
@@ -225,13 +233,20 @@ export class CityScene {
     this.buildingMaterial = bm;
 
     // Streets: asphalt with lane paint; sidewalks; paths.
-    const c = document.createElement('canvas'); c.width = 128; c.height = 256;   // [junctions] right half: road paint (junction-mesh.js)
+    // [s1-lanes] three paint styles side by side (u 0–.75 in thirds, see streetPaint): two-way with a double yellow
+    // centre line; one-way multi-lane (divided highways, one-way pairs): yellow left edge, dashed white lanes;
+    // one-way single lane (ramps): edge lines only. [junctions] u .77–.98: the white block for crosswalks and stop
+    // lines (junction-mesh.js PAINT_U); junction surfaces sample the plain asphalt of the two-way style (u .02–.11)
+    const c = document.createElement('canvas'); c.width = 256; c.height = 256;
     const ctx = c.getContext('2d');
-    ctx.fillStyle = this.landscape.junctions ? '#555c60' : '#505457'; ctx.fillRect(0, 0, 128, 256);   // [junctions] the route's road's asphalt
-    for (let k = 0; k < 5000; k++) { const g = 70 + Math.random() * 26; ctx.fillStyle = `rgba(${g},${g + 2},${g + 4},.45)`; ctx.fillRect(Math.random() * 128, Math.random() * 256, 1, 1); }
-    ctx.fillStyle = '#e4e1d6'; ctx.fillRect(76, 0, 44, 256);   // [junctions] crosswalk and stop-line white (u ≈ .6–.94)
+    ctx.fillStyle = this.landscape.junctions ? '#555c60' : '#505457'; ctx.fillRect(0, 0, 256, 256);   // [junctions] the route's road's asphalt
+    for (let k = 0; k < 10000; k++) { const g = 70 + Math.random() * 26; ctx.fillStyle = `rgba(${g},${g + 2},${g + 4},.45)`; ctx.fillRect(Math.random() * 256, Math.random() * 256, 1, 1); }
+    ctx.fillStyle = '#e4e1d6'; ctx.fillRect(196, 0, 56, 256);   // [junctions] crosswalk and stop-line white
     ctx.fillStyle = '#d9d6c8'; ctx.fillRect(3, 0, 1.5, 256); ctx.fillRect(59.5, 0, 1.5, 256);
     ctx.fillStyle = '#d6b44c'; ctx.fillRect(30.5, 0, 1.4, 150); ctx.fillRect(32.6, 0, 1.4, 150);
+    ctx.fillStyle = '#d6b44c'; ctx.fillRect(64 + 4, 0, 1.6, 256); ctx.fillRect(128 + 4, 0, 1.6, 256);
+    ctx.fillStyle = '#d9d6c8'; ctx.fillRect(64 + 58.5, 0, 1.5, 256); ctx.fillRect(128 + 58.5, 0, 1.5, 256);
+    for (const x of [64 + 23, 64 + 41]) ctx.fillRect(x, 0, 1.3, 96);
     const tex = this.own(new THREE.CanvasTexture(c)); tex.wrapT = THREE.RepeatWrapping; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
     const offset = (f) => ({ polygonOffset: true, polygonOffsetFactor: f, polygonOffsetUnits: f });
     this.streetMaterial = this.own(new THREE.MeshStandardMaterial({ map: tex, roughness: .93, ...offset(-1.6) }));
@@ -248,7 +263,7 @@ export class CityScene {
       shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vSlot;')
         .replace('#include <logdepthbuf_fragment>', '#include <logdepthbuf_fragment>\n#if defined( USE_LOGDEPTHBUF )\ngl_FragDepth -= vSlot * 2e-6;\n#endif');
     };
-    this.streetMaterial.customProgramCacheKey = () => 'city-streets-slot-2';   // [junctions]
+    this.streetMaterial.customProgramCacheKey = () => 'city-streets-slot-3';   // [junctions]
     this.sidewalkMaterial = this.own(new THREE.MeshStandardMaterial({ color: '#aca59a', roughness: .95, ...offset(-1.1) }));
     this.pathMaterial = this.own(new THREE.MeshStandardMaterial({ color: '#9d978a', roughness: .95, ...offset(-1.3) }));
     this.solidMaterial = this.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .8, metalness: .1 }));
@@ -345,6 +360,7 @@ export class CityScene {
         // where a street or a railway runs right along the shore, the bank stays natural (cars, trains, lamps)
         const cx = mx + nx * 1, cz = mz + nz * 1;
         const rt = L.routeDist(cx, cz);
+        if (this.riverfront?.covers(mx, mz)) continue;   // [s1-riverfront] the promenade has its own wall here
         if (L.streetsNear(cx, cz, 3).some((o) => this.streets[o.k].cls < 8) || railNear(cx, cz, 6) || (rt && rt.d < ROAD_WIDTH / 2 + 4)) continue;
         { const key = `${Math.floor(mx / 20)},${Math.floor(mz / 20)}`; if (!this.wallGrid.has(key)) this.wallGrid.set(key, []); this.wallGrid.get(key).push(p0.x, p0.z, p1.x, p1.z); }
         // the wall faces the water (−n): quad from p0 to p1 as seen from the river
@@ -686,7 +702,7 @@ export class CityScene {
       const p0 = st.pts[0], lift = .1 + slots[k] * .02;
       if (st.cls === 8) { ribbon(get(paths, p0.x, p0.z), st.pts, st.width, lift, 8); return; }
       for (const pc of plan ? drawnPieces(st, k, plan, lift) : [st.pts]) {   // [junctions] trimmed to each junction's edge
-        ribbon(get(roads, p0.x, p0.z).set({ aSlot: [slots[k]] }), pc, st.width, lift, 24, [0, .5], !!plan);   // [junctions] (left half of the texture; normals lean with the grade, like the road's)
+        ribbon(get(roads, p0.x, p0.z).set({ aSlot: [slots[k]] }), pc, st.width, lift, 24, streetPaint(st), !!plan);   // [s1-lanes] paint style; [junctions] normals lean with the grade
         if (!st.bridge && st.cls >= 2 && st.cls <= 6) ribbon(get(walks, p0.x, p0.z), pc, st.width + 5, .06, 8);
       }
       // lamps every ~34 m, alternating sides

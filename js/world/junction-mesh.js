@@ -13,7 +13,7 @@ export function junctionPlan(landscape, index, route) {
   return landscape._junctions || null;
 }
 
-const PAINT_U = .78;          // …and the white block in its right half: paint costs no extra draw call
+const PAINT_U = .875;   // [s1-lanes merge] street texture is 256 px: u .77–.98 white          // …and the white block in its right half: paint costs no extra draw call
 const TOP_SLOT = 8;           // above every street ribbon's height slot (city.js)
 const ROAD_LIFT = .12, PAINT_SLOT = 9;   // (city.js draws slot 9 a hair nearer the camera)
 
@@ -39,9 +39,9 @@ export function drawnPieces(st, k, plan, lift) {
   });
 }
 
-// [road meets] junction surfaces and the route's overlay take the plain asphalt of the street texture (u .05–.22: no
+// [road meets] junction surfaces and the route's overlay take the plain asphalt of the street texture (u .02–.11 of the two-way style: no
 // lane lines), mapped in world metres like the ribbons, so the grain and the shade match the streets they join
-const PLAIN = (x, jx) => .135 + .085 * Math.max(-1, Math.min(1, (x - jx) / 20));
+const PLAIN = (x, jx) => .066 + .043 * Math.max(-1, Math.min(1, (x - jx) / 20));
 const upNormal = (a, b, c) => {   // the face normal of a triangle (pointing up)
   const ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z, vx = c.x - a.x, vy = c.y - a.y, vz = c.z - a.z;
   let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; if (ny < 0) { nx = -nx; ny = -ny; nz = -nz; }

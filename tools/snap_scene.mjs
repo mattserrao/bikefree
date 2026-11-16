@@ -75,6 +75,8 @@ for (const shot of shots) {
     w.stop();
     for (let k = 0; k < 600 && (t.forestQueue?.length || k < 2); k++) { t._lastX = Infinity; t.update(c.x, c.z); }
     t.city?.streetKit?.flush();   // [street-kit] chunks whose kit work is still queued
+    window.__bake = w.baked?.bakeNow();   // [baked-light] build the static scenery and bake before the one frame
+    t.city?.streetKit?.flush();   // [street-kit] kit work queued by the chunks the bake just built
     w.renderer.info.autoReset = false; w.renderer.info.reset();
     // the app's own frame: with the post-processing chain where the scene has one (Big Sur)
     w.renderer.shadowMap.needsUpdate = true;   // the ride redraws shadows only as needed
@@ -98,11 +100,11 @@ for (const shot of shots) {
       });
       breakdown = Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 25);
     }
-    return { breakdown, url: w.renderer.domElement.toDataURL('image/jpeg', .9), calls: info.calls, triangles: info.triangles };
+    return { breakdown, url: w.renderer.domElement.toDataURL('image/jpeg', .9), calls: info.calls, triangles: info.triangles, bake: window.__bake || null };
   });
   const file = join(out, `${shot.name}.jpg`);
   await writeFile(resolve(ROOT, file), Buffer.from(r.url.split(',')[1], 'base64'));
-  rows.push({ shot: shot.spec, file, calls: r.calls, triangles: r.triangles, seconds: Math.round((Date.now() - t0) / 1000), errors: [...errors] });
+  rows.push({ shot: shot.spec, file, calls: r.calls, triangles: r.triangles, seconds: Math.round((Date.now() - t0) / 1000), errors: [...errors], ...(r.bake ? { bake: r.bake } : {}) });   // [baked-light] bake stats
   if (r.breakdown) console.log(r.breakdown.map(([k, n]) => `   ${String(n).padStart(4)}  ${k}`).join('\n'));
   console.log(`${errors.length ? 'ERR ' : 'ok  '} ${shot.spec.padEnd(34)} ${String(r.calls).padStart(5)} calls ${(r.triangles / 1e6).toFixed(2).padStart(6)} M tris  → ${file}`);
   for (const e of errors) console.log(`       ${e.slice(0, 200)}`);

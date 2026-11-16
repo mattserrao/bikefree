@@ -393,3 +393,12 @@ How the stylized scenes are drawn, for anyone adding scenery:
 - **Water**: the sea and opaque lakes draw after the land (`renderOrder = 1`), so hidden water is never
   shaded; authored coastlines are a lookup texture, not a loop per pixel.
 
+- **Baked lighting** (`js/world/baked-light.js`, scene `"lighting": { "baked": "golden" }`): the sun stays at
+  the baked time (night still works); once the static scenery has streamed in, the GPU bakes a top-down
+  sun-shadow height map and ambient occlusion for the whole route in a few slices, and the live shadow map
+  keeps only moving things in a small box round the rider. Opt-in per scene; how-to, keys and costs in
+  `docs/pittsburgh/detail/s1.md`. Streamed detail that comes and goes with the camera sets
+  `userData.bake = false`; moving meshes set `userData.dynamic = true` (or use `DynamicDrawUsage`).
+- **Riverfront promenades** (`js/world/riverfront.js`, scene `"riverfront": { "spans": [{ "fromM", "toM" }] }`):
+  where the route runs beside a river, a smoothed river wall with a walk, railing and benches replaces the
+  map's sawtooth bank (the ground past the wall goes under the water); optional `"waterSteps"`.

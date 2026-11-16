@@ -525,6 +525,17 @@
   },
   "realHorizon": false,
   "timeOfDay": "golden",
+  "lighting": {
+    "baked": "golden"
+  },
+  "riverfront": {
+    "maxGapM": 20,
+    "spans": [
+      { "fromM": 1040, "toM": 2320 },
+      { "fromM": 2360, "toM": 2800 }
+    ],
+    "waterSteps": { "top": { "lat": 40.445842, "lon": -80.008511 }, "bottom": { "lat": 40.445527, "lon": -80.008511 }, "widthM": 18, "topM": 5 }
+  },
   "weather": {
     "presets": [
       "clear",

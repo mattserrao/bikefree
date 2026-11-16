@@ -239,6 +239,7 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
         const abutment = bridgeAt(c.x, c.z, 20);
         for (const o of [-6, 6]) {
           const px = c.x + rx * o, pz = c.z + rz * o, h = ground(px, pz), k = `v${o}`, p0 = last[k];
+          if (landscape.riverfront?.covers(px, pz)) { last[k] = null; continue; }   // [s1-riverfront] the promenade's walk is drawn over the ground here
           const exact = landscape.heightAt(px, pz);
           if (abutment) { last[k] = null; continue; }
           if (Math.abs(h - exact) > LIMITS.meshAlias) { F.add('mesh-coarse', 'warn', s, h - exact, `ground mesh can’t follow a narrow carve ${Math.abs(o)} m ${o < 0 ? 'left' : 'right'} of the road (jagged edge)`, 150); last[k] = null; continue; }
