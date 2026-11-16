@@ -291,6 +291,16 @@ Review, plan and screenshots: [docs/route28/REVIEW.md](docs/route28/REVIEW.md) �
 - [x] **Phase 5** — Fall palette (`season: "fall"`, preview `&season=fall`)
 - [ ] On-bike check on the M4 Air: frame rate on Balanced, tile-edge hitching, lake/horizon seams online
 - [ ] Later: Bald Mountain fire tower, Old Forge landmarks, measured performance overlay
+### v0.12.1 — Clipping & overlap QC, Pittsburgh cleaned up *(test branch `v0.12.1`, on top of v0.12 + the Route 28 rework)*
+Goal: a second QC tool that looks for things drawn through each other, and a Pittsburgh with nothing in the rider's way.
+- [x] **`npm run qc:clipping`** (`tools/qc_clipping.mjs` + `tools/qc-clipping.js`): opens a route's real 3D scene in headless Chrome, streams in every building, indexes all geometry (three-mesh-bvh) and checks the rider's body and the chase camera along the whole ride; trees, lamp posts and scattered scenery in streets or buildings; structures through buildings; overlapping buildings; flickering coplanar surfaces and grass over streets beside the route; a simulated ride with traffic, people, trains and boats. Report with pictures: `tools/qc-clipping-report.html`
+- [x] Pittsburgh: **0 fails** (was 34). The rider and the chase camera no longer pass through overpass decks, ramps, bridge members and piers, rail beds or buildings: nothing is drawn in the space over the route's road up to 4.1 m (decks over the trail get thinner, piers stay off the route, members that pierce it are left out, buildings on the road aren't drawn)
+- [x] Street trees, lamp posts and scattered rocks/shrubs no longer stand in streets, on sidewalks or in buildings (they were checked against the nearest route *point*, 10 m apart, and never against other streets): 266 + 303 → 0
+- [x] The ground is graded to the city's streets (they are drawn level from side to side), so hillsides no longer cover them; crossing streets get their own heights; bridge decks have a top, so lamps on the edge stand on it
+- [x] Buildings that a ramp, incline or raised railway runs through aren't drawn
+- [x] Traffic, people and trains give way to the rider: they wait at the kerb (or before a level crossing) while the rider is near, and hurry across or step aside if already on the road — nothing passes through the rider in a full simulated ride (was 11)
+- [ ] Left as accepted or for later: streets that pass under the route where it runs on an embankment disappear into it (no bridge in the data; 9 spots); flickering where some crossing streets meet (~40) and along a few river banks; lamp posts touching the Clemente Bridge's gold railing; traffic passing through traffic and people through posts (accepted as background life)
+- [ ] On-bike check
 
 ### Big Sur hero map *(test branch `bigsur-test`, on top of v0.12; main merged in, with the snapshot and clipping QC tools)*
 Goal: make Big Sur the showcase course — visually stunning, the one you open to show someone the app. A testbed for graphics, weather, traffic and realism that can later roll out to other maps.

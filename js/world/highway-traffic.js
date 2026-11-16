@@ -117,6 +117,11 @@ export class HighwayTraffic {
     return out;
   }
 
+  /** Is there a guard rail on the vehicle's right-hand edge near s? (scene roadside ranges) */
+  _railAt(s, dir) {
+    return (this.route.scene?.roadside || []).some((r) => (r.side === 'inland' ? -1 : 1) === dir && s > r.fromM - 25 && s < r.toM + 25);
+  }
+
   _pick() {
     let r = this.rand() * KINDS.reduce((a, k) => a + k.w, 0);
     for (const k of KINDS) { r -= k.w; if (r <= 0) return k; }
@@ -151,7 +156,7 @@ export class HighwayTraffic {
     const s = rider.out + fwd * ahead;
     if (s < 5 || s > this.turn - 5 || (k.kind === 'bike' && dir === fwd && this.rand() < .7)) { a.alive = false; return; }
     if (this.agents.some((b) => b.alive && b !== a && Math.abs(b.s - s) < 40)) { a.alive = false; return; }   // room to appear
-    Object.assign(a, { alive: true, k, dir, s, v: k.speed[0] + this.rand() * (k.speed[1] - k.speed[0]), lane: 0, target: 0, state: 'drive', stop: 0, visited: false });
+    Object.assign(a, { alive: true, k, dir, s, v: k.speed[0] + this.rand() * (k.speed[1] - k.speed[0]), lane: 0, target: 0, state: 'drive', stop: 0, visited: false, over: false });
     a.vmax = a.v;
   }
 
@@ -175,10 +180,11 @@ export class HighwayTraffic {
       if (free) this._spawn(free, rider);
       this._next = -Math.log(1 - this.rand() * .95) * mean;   // exponential gaps: sometimes two close together
     }
-    const lane0 = ROAD_WIDTH * .25, OVER = -(lane0 * 2 + .4);
+    const lane0 = ROAD_WIDTH * .25;
     // Everyone on the road in one frame: absolute lateral offset from the centre line (outbound frame).
     const base = (k) => (k === 'bike' ? ROAD_WIDTH * .34 : k === 'rv' ? lane0 - .3 : lane0);   // campers hug the centre line on the bends
     const lat = (a) => (base(a.k.kind) + a.lane) * a.dir;
+    const OVER = (a) => -2 * base(a.k.kind);   // overtaking: the middle of the other lane (not out by its edge)
     const riderBody = { s: rider.out, v: rider.speed || 0, dir: rider.dir, lat: 1.54 * rider.dir, len: 1.8, rider: true };
     const bodies = [riderBody];
     for (const b of this.agents) if (b.alive) bodies.push({ a: b, s: b.s, v: b.v, dir: b.dir, lat: lat(b), len: b.k.len, bike: b.k.kind === 'bike' });
@@ -202,23 +208,23 @@ export class HighwayTraffic {
         const ahead = leader(a, myLat, 90);
         const slow = ahead && (ahead.rider || ahead.bike || (ahead.dir === a.dir && ahead.v < a.vmax - 3));
         if (a.k.kind === 'bike' && ahead?.rider && ahead.dir === a.dir && ahead.d < 9) want = Math.min(want, ahead.v * .97);   // sits on your wheel
-        if (a.k.kind !== 'bike' && a.target > -1 && slow && ahead.dir === a.dir && ahead.d < 60) {
+        if (a.k.kind !== 'bike' && !a.over && slow && ahead.dir === a.dir && ahead.d < 60) {
           // overtake only if the other lane is clear well ahead (nobody coming, nobody already there)
-          const overLat = (lane0 + OVER) * a.dir, need = 280;
+          const overLat = -base(a.k.kind) * a.dir, need = 280;
           const blocked = bodies.some((o) => o.a !== a && Math.abs(o.lat - overLat) < 2.3 && (o.s - a.s) * a.dir > -12 && (o.s - a.s) * a.dir < need);
-          if (!blocked) a.target = OVER;
+          if (!blocked) { a.target = OVER(a); a.over = true; }
         }
-        if (a.target < -1) {
+        if (a.over) {
           // in the other lane: abort if something comes at us; back in once clear of what we passed
           const coming = leader(a, myLat, 150);
-          if (coming && coming.dir !== a.dir) a.target = 0;
+          if (coming && coming.dir !== a.dir) { a.target = 0; a.over = false; }
           const passed = !bodies.some((o) => o.a !== a && (o.rider || o.bike || o.dir === a.dir) && Math.abs(o.lat - lane0 * a.dir) < 2.3 && (o.s - a.s) * a.dir > -14 && (o.s - a.s) * a.dir < 25);
-          if (passed) a.target = 0;
+          if (passed) { a.target = 0; a.over = false; }
         }
         // pull into an overlook on our side now and then, into a free bay
         for (const t of this.turnouts) {
           const side = t.side * (a.dir > 0 ? 1 : -1);   // overlook on the vehicle's right?
-          if (a.k.kind === 'bike' || side <= 0 || a.visited || a.target < -1 || Math.abs((t.s - a.s) * a.dir - 70) > 3) continue;
+          if (a.k.kind === 'bike' || side <= 0 || a.visited || a.target !== 0 || Math.abs((t.s - a.s) * a.dir - 70) > 3) continue;
           a.visited = true;
           // the first bay in the direction of travel, so the car never drives across a parked one
           const bay = [...t.bays].sort((p, q) => (p.s - q.s) * a.dir)[0];
@@ -227,8 +233,13 @@ export class HighwayTraffic {
         }
         // a slower vehicle or cyclist just ahead of the rider moves over to let you by
         const r = (rider.out - a.s) * a.dir;
-        if (a.dir === rider.dir && r < 0 && r > -35 && Math.abs(myLat - riderBody.lat) < 2.3 && a.v < riderBody.v + .5 && a.target > -1) a.target = a.k.kind === 'bike' ? .9 : 1.3;
-        else if (a.target > .5 && (a.dir !== rider.dir || r > 8 || r < -40 || a.v > riderBody.v + 1)) a.target = 0;
+        // (onto the shoulder; where a guard rail lines that edge, it straddles the centre line instead if
+        // nothing is coming, so you pass on its right)
+        if (a.dir === rider.dir && r < 0 && r > -35 && Math.abs(myLat - riderBody.lat) < 2.3 && a.v < riderBody.v + .5 && !a.over) {
+          if (a.k.kind === 'bike') a.target = .9;
+          else if (!this._railAt(a.s, a.dir)) a.target = 1.3;
+          else if (!bodies.some((o) => o.dir === -a.dir && (o.s - a.s) * a.dir > -10 && (o.s - a.s) * a.dir < 150)) a.target = -1.6;
+        } else if (Math.abs(a.target) > .5 && !a.over && (a.dir !== rider.dir || r > 8 || r < -40 || a.v > riderBody.v + 1)) a.target = 0;
       }
       if (a.state === 'in') {
         const t = a.turnout, d = (a.bay.s - a.s) * a.dir;

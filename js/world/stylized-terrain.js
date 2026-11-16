@@ -124,7 +124,7 @@ export class StylizedTerrain {
     for (const range of this.config.roadside || []) {
       for (let s = range.fromM; s < range.toM; s += 8) {
         const i = Math.min((route.turnIdx || route.dist.length - 1) - 2, Math.floor(s / 10)), j = i + 1;
-        if ((this.config.lookouts || []).some((l) => (l.side || 'ocean') === (range.side || 'ocean') && Math.abs(s - l.atM) < (l.lengthM || 32) / 2 + 6)) continue;
+        if ((this.config.lookouts || []).some((l) => (l.side || 'ocean') === (range.side || 'ocean') && Math.abs(s - l.atM) < (l.lengthM || 32) / 2 + 30)) continue;   // open entry and exit for traffic pulling in
         const f = (s - route.dist[i]) / (route.dist[j] - route.dist[i]);
         const x = index.xs[i] + (index.xs[j] - index.xs[i]) * f, z = index.zs[i] + (index.zs[j] - index.zs[i]) * f;
         if (this.landscape.bridgeAt(x, z, 12)) continue;
@@ -394,7 +394,7 @@ export class StylizedTerrain {
     for (let k = 0; k < count; k++) {
       const x = cx * size + rand() * size, z = cz * size + rand() * size;
       const inland = this.inlandAt(x, z), y = this.heightAt(x, z);
-      if (inland < 10 || y < 1 || this.landscape.isWater?.(x, z, y) || this.landscape.bridgeAt(x, z, 10) || this.landscape.creekAt(x, z) || onLookout(x, z)) continue;
+      if (inland < 10 || y < 1 || this.landscape.onStreet?.(x, z, 1) || this.landscape.isWater?.(x, z, y) || this.landscape.bridgeAt(x, z, 10) || this.landscape.creekAt(x, z) || onLookout(x, z)) continue;
       if (this.landscape.canPlant && !this.landscape.canPlant(x, z)) continue;
       const road = this.index.nearest(x, z, 10);
       if (road && road.d < 7.5) continue;

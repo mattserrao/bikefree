@@ -191,7 +191,36 @@ ${shore ? `
         // a soft wet band of spray-darkened water against the cliffs
         color *= 1. - (1. - smoothstep(0., 30., offshore)) * .08;
 ` : `
-${old}`}
+        float offshore = ${landscape.hasOcean === false ? '-100000.' : '(shoreline(p.y) - p.x) * ' + (landscape.coastSide || 1).toFixed(1)};
+        ${islands.length ? `offshore = 100000.;
+        for (int i = 0; i < ${islands.length}; i++) {
+          vec4 l = bfIslands[i];
+          offshore = min(offshore, (length((p - l.xy) / l.zw) - 1.) * min(l.z, l.w));
+        }` : ''}
+        for (int i = 0; i < ${lakes.length}; i++) {
+          vec4 l = bfLakes[i];
+          offshore = max(offshore, (1. - length((p - l.xy) / l.zw)) * min(l.z, l.w));
+        }
+        offshore = max(0., offshore);
+        float waveDetail = 1. - smoothstep(500., 4500., length(cameraPosition - vBfSea));
+        float swell = sin(p.x * .043 + p.y * .027 + uTime * .78);
+        float crossWave = sin(p.y * .071 - p.x * .013 - uTime * .53);
+        vec3 N = normalize(vec3((swell * .025 + crossWave * .012) * waveDetail, 1., cos(p.x * .029 - p.y * .047 + uTime * .61) * .028 * waveDetail));
+        vec3 V = normalize(cameraPosition - vBfSea);
+        vec3 R = reflect(-V, N);
+        float fresnel = .035 + .42 * pow(1. - max(dot(N, V), 0.), 4.);
+        vec3 sky = mix(uSkyHorizon, uSkyTop, sqrt(max(R.y, 0.)));
+        float waterNoise = bfFbm(p * .008);
+        vec3 color = mix(bfShallow, bfWater * (.78 + waterNoise * .3), smoothstep(5., 240., offshore));
+        color *= .97 + (.018 * swell + .012 * crossWave) * waveDetail;
+        color = mix(color, sky, fresnel);
+        float sun = pow(max(dot(reflect(-normalize(uSunDir), N), V), 0.), 150.);
+        float sparkle = smoothstep(.55, .95, bfNoise(p * .7 + uTime * .1));
+        color += vec3(1., .91, .69) * sun * (.3 + sparkle * waveDetail * .55);
+        float breaker = .5 + .5 * sin(offshore * .35 - uTime * 1.3 + bfNoise(p * .027) * 4.);
+        float foam = smoothstep(.74, .96, breaker) * (1. - smoothstep(3., 48., offshore));
+        foam += (1. - smoothstep(1., 6., offshore)) * .5;
+        color = mix(color, vec3(.83, .9, .83), clamp(foam * .76, 0., .9));`}
         gl_FragColor = vec4(color, 1.);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>

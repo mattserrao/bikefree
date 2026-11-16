@@ -258,3 +258,41 @@ distance-based placements (signs, lookouts, roadside rails, preview position) to
 from BRouter applies the same steps. The real far terrain (internet tiles) is not
 checked; it starts 1.5 km from the road.
 
+## Clipping & overlap QC: things drawn through each other
+
+```sh
+npm run qc:clipping                          # Pittsburgh (default) → tools/qc-clipping-report.html
+node tools/qc_clipping.mjs zion bigsur       # other routes
+node tools/qc_clipping.mjs --no-life         # skip the traffic simulation (~30 s instead of ~10 min)
+options: --shots 4 (pictures per check)  --json out.json  --strict  --chrome /path/to/chrome (or CHROME_PATH)
+```
+
+Needs `npm install` (three-mesh-bvh, playwright-core) and Google Chrome. It opens the route's real 3D scene in
+headless Chrome (bundled scenery only), builds every building chunk, indexes all static geometry with a BVH and
+checks what you see while riding. Each spot on a there-and-back ride is reported once, at its one-way distance.
+
+| Check | Severity | What it catches |
+| --- | --- | --- |
+| `rider-clips`, `surface-in-rider` | fail | anything solid, or another street/deck surface, inside the rider and bike (both lanes, every 2 m) |
+| `camera-inside` | fail / warn | the chase camera inside a structure (fail) or inside a building/tree that just vanishes (warn) |
+| `view-blocked` | warn | something between the chase camera and the rider |
+| `vehicle-through-rider` | fail | a car, bus or train passing through the rider (life simulation) |
+| `post-in-street`, `scenery-on-street` | warn | a street tree, lamp post or scattered rock/shrub/tree standing in a street, on a sidewalk or a path |
+| `tree-in-solid`, `post-in-solid` | warn | a trunk or post inside a building, bridge or rail bed |
+| `floating`, `sunk` | warn / info | a tree or post above (or buried in) whatever it stands on |
+| `structure-through-building` | warn | a bridge, incline, rail track or landmark cutting through a building |
+| `buildings-overlap` | warn / info | two building footprints drawn in the same place |
+| `z-fight` | warn | two surfaces near the route closer than 6 mm with the same depth offset (they flicker) |
+| `ground-over-street` | warn | the ground covering a street, sidewalk or path beside the route |
+| `vehicle-clips-solid`, `boat-*`, `*-in-water` | warn | traffic into buildings/bridges, boats on land or through piers, things in the river |
+| `vehicles-overlap`, `person-clips-solid` | info | traffic through traffic, people through posts: accepted as background life |
+
+Limits are in `LIMITS` at the top of `tools/qc-clipping.js`. Pictures: the rider's view for ride checks, a close
+camera on the spot otherwise (none for moving things). Software rendering in headless Chrome can show the ground
+washed out; that's the renderer, not the scene.
+
+**The rule behind the Pittsburgh fixes:** nothing may be drawn in the space over the route's road (its width plus
+0.6 m, from just above the surface to 4.1 m up) — `landscape.inRouteTube()`, applied to streets, decks, bridges,
+rails, inclines and shop fronts as they're built (`MeshBuilder.keepOutOf`). Objects placed beside streets go
+through `CityScene._clearSpot` (true distance to the route's road, every street's carriageway, building footprints).
+

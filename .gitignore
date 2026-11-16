@@ -2,5 +2,5 @@ node_modules/
 tools/.cache/
 __pycache__/
 tools/qc-report.html
-tools/snapshots/
 tools/qc-clipping-report.html
+tools/snapshots/

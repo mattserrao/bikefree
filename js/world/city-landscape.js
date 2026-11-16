@@ -60,6 +60,20 @@ export function makeCityLandscape(config, proj, index, route) {
     for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const i of near.get(`${cx + a},${cz + b}`) || []) out.push(i);
     return out;
   };
+  /** True distance to the route's road (its segments, not its 10 m sample points) within ~30 m: {d, i, y} or null. */
+  const routeDist = (x, z) => {
+    let best = null;
+    for (const i of nearbyRoute(x, z)) {
+      for (const j of [i - 1, i]) {
+        if (j < 0 || j >= end) continue;
+        const ax = index.xs[j], az = index.zs[j], dx = index.xs[j + 1] - ax, dz = index.zs[j + 1] - az, l2 = dx * dx + dz * dz || 1;
+        const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2));
+        const d = Math.hypot(ax + dx * t - x, az + dz * t - z);
+        if (!best || d < best.d) best = { d, i: j, y: route.ele[j] + (route.ele[j + 1] - route.ele[j]) * t };
+      }
+    }
+    return best;
+  };
   const gridH = (u, v) => {
     u = Math.max(0, Math.min(D.nx - 1.001, u)); v = Math.max(0, Math.min(D.ny - 1.001, v));
     const i = Math.floor(u), j = Math.floor(v), a = u - i, b = v - j, H = D.heights, n = D.nx;
@@ -92,7 +106,74 @@ export function makeCityLandscape(config, proj, index, route) {
     if (wet > 0) h += (Math.min(h, level - 4.5) - h) * smoothstep(.05, .7, wet);
     return h;
   };
+  // The ground follows the city's streets: under a street and its sidewalks it sits just below the ribbon
+  // (streets are drawn level from side to side), easing back to the terrain over the next ~10 m. Without this,
+  // on a hillside the uphill half of a street disappears under the grass.
+  let streetIndex = null, buildingStreets = false;
+  const streetAt = (x, z, extra = 0, skip = -1) => {
+    if (!streetIndex) {
+      if (buildingStreets) return null;
+      buildingStreets = true;
+      const streets = cityStreets(L, index, route);
+      streetIndex = new Map();
+      streets.forEach((st, k) => {
+        for (let i = 1; i < st.pts.length; i++) {
+          const a = st.pts[i - 1], b = st.pts[i], r = st.width / 2 + 14;
+          for (let gx = Math.floor((Math.min(a.x, b.x) - r) / 24); gx <= Math.floor((Math.max(a.x, b.x) + r) / 24); gx++)
+            for (let gz = Math.floor((Math.min(a.z, b.z) - r) / 24); gz <= Math.floor((Math.max(a.z, b.z) + r) / 24); gz++) {
+              const key = `${gx},${gz}`; if (!streetIndex.has(key)) streetIndex.set(key, []); streetIndex.get(key).push([k, i]);
+            }
+        }
+      });
+      streetIndex.streets = streets;
+      buildingStreets = false;
+    }
+    let best = null;
+    for (const [k, i] of streetIndex.get(`${Math.floor(x / 24)},${Math.floor(z / 24)}`) || []) {
+      if (k === skip) continue;
+      const st = streetIndex.streets[k], a = st.pts[i - 1], b = st.pts[i];
+      const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / l2));
+      const d = Math.hypot(a.x + dx * t - x, a.z + dz * t - z), edge = d - st.width / 2;
+      if (edge < extra && (!best || edge < best.edge)) best = { st, k, d, edge, y: a.y + (b.y - a.y) * t };
+    }
+    return best;
+  };
+  /** Every street whose carriageway comes within `extra` of (x, z): [{k, edge}] (one per street). */
+  const streetsNear = (x, z, extra = 0) => {
+    if (!streetIndex) streetAt(x, z);
+    const out = new Map();
+    for (const [k, i] of streetIndex?.get(`${Math.floor(x / 24)},${Math.floor(z / 24)}`) || []) {
+      const st = streetIndex.streets[k], a = st.pts[i - 1], b = st.pts[i];
+      const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / l2));
+      const edge = Math.hypot(a.x + dx * t - x, a.z + dz * t - z) - st.width / 2;
+      if (edge < extra && (!out.has(k) || edge < out.get(k).edge)) out.set(k, { k, edge, y: a.y + (b.y - a.y) * t });
+    }
+    return [...out.values()];
+  };
   const heightAt = (x, z) => {
+    let h = routeHeightAt(x, z);
+    if (buildingStreets) return h;
+    // Flat for 6.5 m past the carriageway (sidewalks reach 2.5 m; one more ground-mesh cell so the 6 m mesh
+    // can't drag a hillside over it), easing back to the terrain by 18 m. Where streets overlap at different
+    // heights (a ramp beside a street), follow the lowest, so none is buried.
+    const flat = 6.5, around = streetsNear(x, z, 18).filter((o) => !streetIndex.streets[o.k].bridge);
+    if (around.length) {
+      let target = Infinity, edge = Infinity;
+      for (const o of around) {
+        edge = Math.min(edge, o.edge);
+        if (o.edge < flat) target = Math.min(target, o.y - .1);
+      }
+      if (target === Infinity) target = around.reduce((a, b) => (a.edge < b.edge ? a : b)).y - .1;
+      // the route's own road wins: no street grading under it, easing in beyond its shoulders
+      const r = routeDist(x, z), byRoute = r ? smoothstep(ROAD_WIDTH / 2 + 2, 13, r.d) : 1;
+      h += (target - h) * (1 - smoothstep(flat, 18, edge)) * byRoute;
+      if (r && r.d < 9) h = Math.min(h, r.y - .5 + Math.max(0, r.d - 5) * .2);   // never over the route's own road
+    }
+    return h;
+  };
+  const routeHeightAt = (x, z) => {
     let h = baseHeight(x, z);
     const road = index.nearest(x, z, 60);
     if (road) {
@@ -129,7 +210,7 @@ export function makeCityLandscape(config, proj, index, route) {
     landmarks.push({ name: firstBridge.name, x: index.xs[i], y: route.ele[i], z: index.zs[i], s, fx: dx / len, fz: dz / len, slope: 0, asset: null });
   }
 
-  return {
+  const L = {
     kind: 'city', city: true, data, decoded: D, level, hasOcean: false, coastSide: 1,
     coast: [{ x: -1e5, z: 0 }, { x: -1e5, z: 1 }], coastX: () => -1e5, inlandAt: () => 1e4,
     lakes: [], waterIslands: [], creeks: [], creekAt: () => null, landmarks,
@@ -138,7 +219,22 @@ export function makeCityLandscape(config, proj, index, route) {
     colorAt: (x, z) => LAND_COLORS[landCell(x, z)] || null,
     /** Trees and shrubs from the shared kit grow only in parks, woods and the hills beyond. */
     canPlant: (x, z) => { const c = landCell(x, z); return c === LAND.woods || c === LAND.outside || (c === LAND.grass && ((x * 13 + z * 7) & 3) === 0); },
+    routeDist, streetAt, streetsNear,
+    /**
+     * The space the rider and the chase camera move through: over the route's road (and a little past its
+     * edges), from just above the road surface to 4.1 m up. Nothing else may be drawn there.
+     */
+    inRouteTube: Object.assign((x, y, z) => {
+      const r = routeDist(x, z);
+      return !!r && r.d < ROAD_WIDTH / 2 + .6 && y > r.y + .18 && y < r.y + 4.1;
+    }, {
+      /** Could anything within `reach` of (x, z) be in the tube? (fast pre-check for big meshes) */
+      near: (x, z, reach) => { const i = index.nearest(x, z, reach + ROAD_WIDTH / 2 + 12); return !!i; },
+    }),
+    /** On a street's carriageway or its sidewalks (paths: their width), for keeping scenery off them. */
+    onStreet: (x, z, margin = 0) => { const st = streetAt(x, z, 2.6 + margin); return !!st && (st.st.cls !== 8 || st.edge < margin); },
   };
+  return L;
 }
 
 export const STREET_W = [15, 7.5, 13, 11, 9.5, 7.5, 9, 5, 3.4];   // street width by class (tools/build_city.py)

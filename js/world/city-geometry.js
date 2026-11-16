@@ -67,6 +67,39 @@ export class MeshBuilder {
       if (rTop > 0) this.triangle(p(a0, rTop, y + h), new THREE.Vector3(x, y + h, z), p(a1, rTop, y + h));
     }
   }
+  /**
+   * Drop every triangle that reaches into a forbidden space — `inside(x, y, z)` tested at its corners, edge
+   * midpoints and centre. Used to keep the route's clearance (where the rider and the chase camera move) free
+   * of other streets, decks, rails and bridge members that the map data puts there.
+   */
+  keepOutOf(inside) {
+    const P = this.p, kept = [];
+    let dropped = 0;
+    const hit = (A, B, C) => {
+      // corners, then points ~0.8 m apart along the edges and across the face (long posts and big slabs
+      // can pass straight through a small space with every corner outside it)
+      const len = (u, v) => Math.hypot(u[0] - v[0], u[1] - v[1], u[2] - v[2]);
+      const n = Math.min(64, Math.max(1, Math.ceil(Math.max(len(A, B), len(B, C), len(C, A)) / .8)));
+      for (let i = 0; i <= n; i++) for (let j = 0; j <= n - i; j++) {
+        const u = i / n, v = j / n, w = 1 - u - v;
+        if (inside(A[0] * w + B[0] * u + C[0] * v, A[1] * w + B[1] * u + C[1] * v, A[2] * w + B[2] * u + C[2] * v)) return true;
+      }
+      return false;
+    };
+    for (let t = 0; t < this.i.length; t += 3) {
+      const a = this.i[t] * 3, b = this.i[t + 1] * 3, c = this.i[t + 2] * 3;
+      const A = [P[a], P[a + 1], P[a + 2]], B = [P[b], P[b + 1], P[b + 2]], C = [P[c], P[c + 1], P[c + 2]];
+      // cheap reject: nothing to test unless the triangle's middle is near enough to the space at all
+      const cx = (A[0] + B[0] + C[0]) / 3, cy = (A[1] + B[1] + C[1]) / 3, cz = (A[2] + B[2] + C[2]) / 3;
+      if (!inside.near || inside.near(cx, cz, Math.max(Math.hypot(A[0] - cx, A[2] - cz), Math.hypot(B[0] - cx, B[2] - cz), Math.hypot(C[0] - cx, C[2] - cz)))) {
+        if (hit(A, B, C)) { dropped++; continue; }
+      }
+      kept.push(this.i[t], this.i[t + 1], this.i[t + 2]);
+    }
+    this.i = kept;
+    return dropped;
+  }
+
   geometry() {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.p, 3));
