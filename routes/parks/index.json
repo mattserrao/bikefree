@@ -107,7 +107,7 @@
     "name": "Pittsburgh · Three Rivers Loop",
     "park": "Pittsburgh, Pennsylvania",
     "km": 18.3,
-    "climbM": 185,
+    "climbM": 204,
     "file": "routes/cities/pittsburgh.gpx",
     "stage": "draft",
     "scene": "routes/scenes/pittsburgh.json"

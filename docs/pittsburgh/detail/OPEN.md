@@ -60,3 +60,6 @@ Collected from each agent's final report as it comes in. Suggestions are added o
 
 ## Wave 2 · #2 road meets (merged)
 Issues within 25 m of the route 82 → 19 (1,076 sites, 23 with issues overall); `road-meet` warns past 20. Still open: Point ramps 2.81–2.84 km need hand-placed deck heights; lips at deck junctions 2.51 km (0.73 m) and 15.75 km; overlaps at 1.32, 4.14/4.39, 4.87, 7.29 (junction), 11.70, 15.66, 16.52 km; small steps at 11.63 and 18.13 km; street building 1–3 s slower at load (VM).
+
+## Wave 2 paused (16 Nov, 17:45)
+What was done and what's left per agent: `PAUSED.md`. `w2-align` is not in the PR (it conflicts with the road-meets changes; see PAUSED.md). Item #4 not started.
