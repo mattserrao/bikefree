@@ -291,3 +291,80 @@ def deck_heights(edges, anchors):
     except np.linalg.LinAlgError: sol = np.linalg.lstsq(A, rhs, rcond=None)[0]
     out.update({n: float(sol[ix[n]]) for n in free})
     return out
+
+
+# ---------------------------------------------------------------- decks meeting the route ([w2-meets])
+def _route_near(route_xy, route_e, x, y, reach):
+    """Nearest point of the route polyline within `reach`: (distance, height, tangent) or None."""
+    best = None
+    for k in range(len(route_xy) - 1):
+        (ax, ay), (bx, by) = route_xy[k], route_xy[k + 1]
+        dx, dy = bx - ax, by - ay; l2 = dx * dx + dy * dy or 1.0
+        t = max(0.0, min(1.0, ((x - ax) * dx + (y - ay) * dy) / l2))
+        d = math.hypot(ax + dx * t - x, ay + dy * t - y)
+        if d < reach and (best is None or d < best[0]):
+            l = math.sqrt(l2); best = (d, route_e[k] + (route_e[k + 1] - route_e[k]) * t, (dx / l, dy / l))
+    return best
+
+
+def deck_route_anchors(group_nodes, edges, node_xy, heights, anchors, route_xy, route_e, clear=4.9, below=1.5,
+                       end_reach=9.0, cos_cross=.7):
+    """Extra anchors for one deck chain so it meets the route properly (the builder's half of road meets):
+    - a ground end of the deck within `end_reach` of the route sits at the route's height (the route's profile is
+      smoothed, the DEM under an abutment isn't: they used to disagree by a metre or more, and the deck came in
+      with a step or a sawtooth where the run-time pins pulled it under the road);
+    - where the deck crosses over the route (not running along it) lower than `clear` above the road — but not
+      more than `below` under it (then it passes under the route) — both ends of the crossing edge are held at
+      the clearance height, so the deck rises over the rider instead of being cut open at run time.
+    Returns {node: height} to add to the anchors (re-solve with deck_heights)."""
+    out = {}
+    for n, h in anchors.items():
+        x, y = node_xy[n]
+        r = _route_near(route_xy, route_e, x, y, end_reach)
+        if r: out[n] = r[1] - .1
+    deg = {}
+    for a, b, L in edges: deg[a] = deg.get(a, 0) + 1; deg[b] = deg.get(b, 0) + 1
+    # a deck that ends at the route meets it (at its height): it doesn't cross over it
+    meets = any(deg.get(n) == 1 and _route_near(route_xy, route_e, *node_xy[n], 15.0) for n in deg)
+    if meets: return out
+    for a, b, L in edges:
+        (ax, ay), (bx, by) = node_xy[a], node_xy[b]
+        for f in (0.0, .25, .5, .75, 1.0):
+            x, y = ax + (bx - ax) * f, ay + (by - ay) * f
+            r = _route_near(route_xy, route_e, x, y, 6.0)
+            if not r: continue
+            ex, ey = (bx - ax) / (L or 1), (by - ay) / (L or 1)
+            if abs(ex * r[2][0] + ey * r[2][1]) > cos_cross: continue   # along the route: its other half, not a crossing
+            h = heights.get(a, 0) + (heights.get(b, 0) - heights.get(a, 0)) * f
+            need = r[1] + clear
+            if r[1] - below < h < need:
+                for m in (a, b): out[m] = max(out.get(m, -1e9), need)
+            break
+    return out
+
+
+def lift_over_route(edges, heights, anchors, needs, grade=.06, end_grade=.15):
+    """Raise a deck chain smoothly where it must clear the route: `needs` {node: height} (deck_route_anchors' crossing
+    holds). Every node rises by the most any crossing asks, less `grade` per metre of deck between them, and never
+    faster than `end_grade` from the deck's ground ends (they stay put). Returns new {node: height}."""
+    import heapq
+    nbr = {}
+    for a, b, L in edges: nbr.setdefault(a, []).append((b, L)); nbr.setdefault(b, []).append((a, L))
+    def dists(srcs):
+        d = {n: 0.0 for n in srcs}; q = [(0.0, n) for n in srcs]
+        while q:
+            c, n = heapq.heappop(q)
+            if c > d.get(n, 1e18): continue
+            for m, L in nbr.get(n, []):
+                if c + L < d.get(m, 1e18): d[m] = c + L; heapq.heappush(q, (c + L, m))
+        return d
+    to_end = dists([n for n in anchors if n in nbr])
+    out = dict(heights)
+    for c, need in needs.items():
+        up = need - heights.get(c, need)
+        if up <= 0: continue
+        dc = dists([c])
+        for n in nbr:
+            lift = min(up - grade * dc.get(n, 1e18), end_grade * to_end.get(n, 1e18))
+            if lift > 0 and n not in anchors: out[n] = max(out[n], heights[n] + lift)
+    return out

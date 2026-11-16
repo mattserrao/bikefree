@@ -9,7 +9,7 @@ import { smoothstep } from './coast.js';
 import { ROAD_WIDTH } from './pose.js';
 import { decodeTerrain } from './real-coast.js';
 import { planJunctions, junctionGround, junctionTops } from './junctions.js';   // [junctions]
-import { joinCrossings, densifyAlongside, clearOverpasses, alignAlongRoute, trimAtRoute, followMovedNodes, keepUnderRoad, trimOverlaps, streetSlots } from './road-meets.js';   // [junctions]
+import { joinCrossings, densifyAlongside, clearOverpasses, alignAlongRoute, trimAtRoute, followMovedNodes, keepUnderRoad, resolveOverlaps, hideCrossingsAtRoute, landFreeDeckEnds, streetSlots } from './road-meets.js';   // [junctions]
 import { alignStreetProfiles, syncPinnedNodes } from './road-align.js';   // [road-align]
 import { makeStreetGrade } from './street-grade.js';   // [street-kit]
 import { riverfrontGround } from './riverfront.js';   // [s1-riverfront]
@@ -526,14 +526,18 @@ export function cityStreets(landscape, index, route) {
     joinCrossings(streets);   // [junctions] streets crossing at one level with no shared node: give them one
     densifyAlongside(streets);   // [junctions] (finer points where carriageways run side by side, for the trims below)
     clearOverpasses(streets, { route, index, roadWidth: ROAD_WIDTH });   // [junctions] decks over the road clear the rider
+    landFreeDeckEnds(streets, { route, index, landscape });   // [w2-meets] a deck end that meets nothing lands on the ground
     alignAlongRoute(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] streets alongside the road: flush with it
     trimAtRoute(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] …or beside it at another level: kept off its shoulder
-    trimOverlaps(streets, landscape);   // [junctions] carriageways side by side or merging: no ribbon over another (gores)
+    resolveOverlaps(streets, landscape);   // [junctions] [w2-meets] carriageways side by side or merging: drawn as their union (gores)
+    followMovedNodes(streets);   // [w2-meets] streets joining lifted decks and flush streets follow them before junctions are planned
     landscape._junctions = planJunctions(streets, { route, index, end, routeDist: landscape.routeDist, roadWidth: ROAD_WIDTH,
       onRouteBridge: (s, m) => landscape.routeBridges.some((b) => s > b.fromM - m && s < b.toM + m), liftOf: (k) => .1 + streetSlots(landscape, streets)[k] * .02 }, landscape.junctions);
     keepUnderRoad(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] nothing over the road
     followMovedNodes(streets);   // [junctions] paths, side streets and decks meet the moved ones at their height
+    resolveOverlaps(streets, landscape, { final: true });   // [w2-meets] again: heights moved since (decks and their links)
     keepUnderRoad(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] (and still nothing over the road)
+    hideCrossingsAtRoute(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [w2-meets] crossings at another level: under the road's bank
     junctionTops(landscape._junctions, streets, landscape.routeDist, ROAD_WIDTH);   // [junctions] mouths at the streets' final heights
   }
   return streets;

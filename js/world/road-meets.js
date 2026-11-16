@@ -26,6 +26,7 @@ export const MEET_LIMITS = {
   dangle: 1.2,       // m: a street end this far above (or below) whatever is under it hangs in the air
   touch: 1.5,        // m: a street end this close to another surface's edge meets it
   clippedM: 2,       // m: of ribbon cut away by the route's clearance tube
+  nearBudget: 20,    // [w2-meets] sites with issues within 25 m of the route the course QC accepts before it warns
   seeM: 25,          // limits grow by their own size every this many metres from the route (×4 at 75 m, ×7 at 150 m)
 };
 
@@ -195,7 +196,7 @@ export function drawnStreet(st, k, plan, lift) {
     return pc.map((p, i) => {
       const fromCut = Math.min(pc[0].cut ? along[i] : Infinity, pc[pc.length - 1].cut ? d - along[i] : Infinity);
       const w = fromCut === Infinity ? 1 : smooth(fromCut / LIFT_BLEND_M);
-      return { x: p.x, z: p.z, y: p.y, top: p.y + lift + (JL - lift) * (1 - w), cut: p.cut, tx: p.tx, tz: p.tz, tl: p.tl || 0, tr: p.tr || 0 };
+      return { x: p.x, z: p.z, y: p.y, top: p.y + lift + (JL - lift) * (1 - w), cut: p.cut, tx: p.tx, tz: p.tz, tl: p.tl || 0, tr: p.tr || 0, along: !!p.along };
     });
   });
 }
@@ -292,8 +293,12 @@ export function clearOverpasses(streets, ctx, options = {}) {
   const O = { cos: .7, clearM: 4.9, below: .1, grade: .06, ...options };   // (below: a deck lower than the road's surface less this passes under it)
   const RL = routeLine(route, index), end = route.turnIdx || route.dist.length - 1;
   let n = 0;
+  // ([w2-meets] a deck chain that ends at the route meets it there — it isn't crossing over it)
+  const key = (p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`, ends = new Map();
+  streets.forEach((st) => { if (st.bridge) for (const p of [st.pts[0], st.pts[st.pts.length - 1]]) ends.set(key(p), (ends.get(key(p)) || 0) + 1); });
+  const chainEndAtRoute = (st) => [st.pts[0], st.pts[st.pts.length - 1]].some((p) => ends.get(key(p)) === 1 && index.nearest(p.x, p.z, 15));
   streets.forEach((st) => {
-    if (!st.bridge || st.cls > 7 || !nearRouteStreet(st, index, RW / 2 + st.width / 2 + 4)) return;
+    if (!st.bridge || st.cls > 7 || !nearRouteStreet(st, index, RW / 2 + st.width / 2 + 4) || chainEndAtRoute(st)) return;
     const P = st.pts, need = P.map(() => 0);
     let crosses = false;
     const cand = [];
@@ -303,7 +308,8 @@ export function clearOverpasses(streets, ctx, options = {}) {
       if (!q || q.d > RW / 2 + st.width / 2 + 3) continue;
       const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)], t = RL.at(q.s), dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1;
       const road = q.y + ROAD_LIFT, under = road + O.clearM - p.y;
-      if (p.y > road - O.below && under > 0) { cand.push([i, under]); if (Math.abs((dx * t.tx + dz * t.tz) / l) <= O.cos) crosses = true; }
+      // ([w2-meets] a deck point pinned just under the road — it reached the road's level — goes over it too)
+      if ((p.y > road - O.below || (p.pin && p.y > road - 1)) && under > 0) { cand.push([i, under]); if (Math.abs((dx * t.tx + dz * t.tz) / l) <= O.cos) crosses = true; }
     }
     if (!crosses) return;   // (a deck alongside the road is the road's other half: alignAlongRoute)
     for (const [i, under] of cand) need[i] = under;
@@ -437,17 +443,78 @@ export function settleFreeEnds(streets, ctx, options = {}) {
 }
 
 /**
+ * [w2-meets] A street crossing the route's road at another level with no junction there (a motorway a metre under a
+ * riverfront trail, a service road 0.5 m above it) used to show as a ledge either side of the road. Its stretch over
+ * the road and its shoulders isn't drawn: it goes in under the road's bank and comes out the other side. Junction
+ * arms and ease zones are left alone. Run after the junctions are planned. ctx: { route, index, landscape, roadWidth }.
+ */
+export function hideCrossingsAtRoute(streets, ctx, options = {}) {
+  const { route, index, landscape } = ctx, RW = ctx.roadWidth || 7;
+  const O = { cos: .5, step: .12, pass: 4.5, edgeM: RW / 2 + 2.2, ...options };
+  const RL = routeLine(route, index), end = route.turnIdx || route.dist.length - 1, slots = streetSlots(landscape, streets);
+  let n = 0;
+  streets.forEach((st, k) => {
+    if (st.cls > 7 || !nearRouteStreet(st, index, st.width / 2 + O.edgeM + 2)) return;
+    const P = st.pts, h = st.width / 2, lift = SLOT_LIFT(slots[k]);
+    for (let i = 0; i < P.length; i++) {
+      const p = P[i];
+      if (p.jn != null || p.je != null || p.along) continue;
+      const r = index.nearest(p.x, p.z, O.edgeM + h + 12); if (!r) continue;
+      const q = RL.project(p.x, p.z, route.dist[Math.min(end, r.i > end ? 2 * end - r.i : r.i)], 30);
+      if (!q || q.d > O.edgeM + 1) continue;
+      const dy = p.y + lift - (q.y + ROAD_LIFT);
+      if (Math.abs(dy) < O.step || Math.abs(dy) > O.pass) continue;
+      const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)], t = RL.at(q.s), dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1;
+      if (Math.abs((dx * t.tx + dz * t.tz) / l) >= O.cos) continue;   // alongside: trimAtRoute's
+      p.tl = p.tr = 2 * h; n++;
+    }
+  });
+  return n;
+}
+
+/**
+ * [w2-meets] A deck end that meets nothing (no street shares it: the data cut its ground path off) and isn't at the
+ * route comes down to the ground it would land on, over its last metres at no more than `grade` (at most half the
+ * deck), instead of stopping in the air. Run in cityStreets() while the ground is still the bare one.
+ */
+export function landFreeDeckEnds(streets, ctx, options = {}) {
+  const { index, landscape } = ctx, O = { tol: .3, grade: .12, routeM: 8, ...options };
+  const key = (p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`, count = new Map();
+  for (const st of streets) for (const p of st.pts) count.set(key(p), (count.get(key(p)) || 0) + 1);
+  let n = 0;
+  for (const st of streets) {
+    if (!st.bridge || st.pts.length < 2) continue;
+    const P = st.pts, acc = [0];
+    for (let i = 1; i < P.length; i++) acc.push(acc[i - 1] + Math.hypot(P[i].x - P[i - 1].x, P[i].z - P[i - 1].z));
+    for (const e of [0, P.length - 1]) {
+      const p = P[e];
+      if (count.get(key(p)) > 1 || index.nearest(p.x, p.z, O.routeM)) continue;
+      const g = landscape.heightAt(p.x, p.z), dy = g - p.y;
+      if (Math.abs(dy) < O.tol || landscape.waterAt?.(p.x, p.z) > .35) continue;
+      const L = Math.min(acc[acc.length - 1] / 2, Math.max(6, Math.abs(dy) / O.grade));
+      for (let i = 0; i < P.length; i++) { const d = Math.abs(acc[i] - acc[e]); if (d < L) P[i].y += dy * (1 - smooth(d / L)); }
+      n++;
+    }
+  }
+  return n;
+}
+
+/**
  * After junctions and the along-route pass have moved street heights: a path or street that shares a node with a
  * moved point (`jn`, `je`, `along`) but wasn't moved itself takes the same height there, easing back to its own
  * profile at no more than `grade` (so footpaths and service roads don't meet a junction with a step).
  */
 export function followMovedNodes(streets, options = {}) {
-  const O = { grade: .08, level: 1.2, maxEaseM: 30, ...options };
-  const key = (p) => `${Math.round(p.x * 100)},${Math.round(p.z * 100)}`, lead = new Map();
-  const isLead = (p) => p.jn != null || p.je != null || p.along || p.under || p.lifted;
-  const lifted = new Set();
-  for (const st of streets) for (const p of st.pts) if (isLead(p)) { lead.set(key(p), Math.min(lead.get(key(p)) ?? Infinity, p.y)); if (p.lifted) lifted.add(key(p)); }
+  const O = { grade: .08, level: 1.2, maxEaseM: 30, rounds: 4, ...options };
+  const key = (p) => `${Math.round(p.x * 100)},${Math.round(p.z * 100)}`;
+  // ([w2-meets] in rounds: a short street that followed all the way along moves its far end too, and the street
+  // carrying on from there follows it in the next round)
+  const isLead = (p) => p.jn != null || p.je != null || p.along || p.under || p.lifted || p.followed;
   let n = 0;
+  for (let round = 0; round < O.rounds; round++) {
+  const lead = new Map(), lifted = new Set();
+  for (const st of streets) for (const p of st.pts) if (isLead(p)) { lead.set(key(p), Math.min(lead.get(key(p)) ?? Infinity, p.y)); if (p.lifted || p.followedLift) lifted.add(key(p)); }
+  let moved = 0;
   for (const st of streets) {
     // (decks too where one ends on a moved street: it follows over its last metres)
     const P = st.pts, own = P.map((p) => p.y), tg = P.map((p) => { const y = lead.get(key(p)); return y != null && !isLead(p) && Math.abs(y - p.y) > .005 && Math.abs(y - p.y) < (st.bridge || lifted.has(key(p)) ? 4.5 : O.level) ? y : null; });
@@ -459,7 +526,13 @@ export function followMovedNodes(streets, options = {}) {
       const L = Math.min(O.maxEaseM, Math.max(4, Math.abs(t - own[j]) / O.grade));
       for (let i = 0; i < P.length; i++) { const d = Math.abs(acc[i] - acc[j]); if (d < L) { const w = 1 - smooth(d / L); if (!best[i] || w > best[i][0]) best[i] = [w, t - own[j]]; } }
     });
-    P.forEach((p, i) => { if (best[i]) { p.y = own[i] + best[i][1] * best[i][0]; n++; } });
+    P.forEach((p, i) => {
+      if (!best[i]) return;
+      const dy = best[i][1] * best[i][0]; p.y = own[i] + dy; n++;
+      if (Math.abs(dy) > .005 && (i === 0 || i === P.length - 1)) { p.followed = true; moved++; if (Math.abs(dy) > O.level / 2) p.followedLift = true; }
+    });
+  }
+  if (!moved) break;
   }
   return n;
 }
@@ -476,6 +549,95 @@ export function followMovedNodes(streets, options = {}) {
  * - peers (neither ends on the other) split the overlap down the middle and meet at their mean height.
  * Left = the ribbon's (dz, −dx) side for its direction (dx, dz). Run after the junctions are planned.
  */
+/**
+ * [w2] Carriageways drawn over each other at one level, resolved by priority: streets are visited most important
+ * first (lower class, then deck, then longer); at each point a street's drawn width (its interval across, trims
+ * taken off) loses whatever an already-visited near-parallel neighbour at its level covers — the end of the interval
+ * it covers is cut back to the neighbour's edge, all of it when the neighbour covers it whole; a neighbour lying wholly
+ * inside it gives way instead (that neighbour's points there are hidden), so what is drawn is the union with nothing
+ * over anything. A street that lost width takes the neighbour's height there (easing out at `grade`), so the two
+ * meet flush. Gores fill themselves: a ramp leaving a road keeps only what lies beyond the road's edge.
+ */
+export function resolveOverlaps(streets, landscape, options = {}) {
+  const O = { cos: .7, level: .6, grade: .08, ...options };
+  const slots = streetSlots(landscape, streets), lift = (k) => SLOT_LIFT(slots[k]);
+  const len = streets.map((st) => { let l = 0; for (let i = 1; i < st.pts.length; i++) l += Math.hypot(st.pts[i].x - st.pts[i - 1].x, st.pts[i].z - st.pts[i - 1].z); return l; });
+  const order = streets.map((_, k) => k).filter((k) => streets[k].cls <= 7 && streets[k].pts.length > 1)
+    .sort((a, b) => streets[a].cls - streets[b].cls || (streets[b].bridge ? 1 : 0) - (streets[a].bridge ? 1 : 0) || len[b] - len[a] || a - b);
+  const G = 24, grid = new Map(), done = new Uint8Array(streets.length);
+  streets.forEach((st, k) => {
+    if (st.cls > 7) return;
+    for (let i = 1; i < st.pts.length; i++) {
+      const a = st.pts[i - 1], b = st.pts[i], r = st.width / 2;
+      for (let gx = Math.floor((Math.min(a.x, b.x) - r) / G); gx <= Math.floor((Math.max(a.x, b.x) + r) / G); gx++)
+        for (let gz = Math.floor((Math.min(a.z, b.z) - r) / G); gz <= Math.floor((Math.max(a.z, b.z) + r) / G); gz++) {
+          const kk = `${gx},${gz}`; if (!grid.has(kk)) grid.set(kk, []); grid.get(kk).push([k, i]);
+        }
+    }
+  });
+  const dirAt = (P, i) => { const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)], dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1; return { x: dx / l, z: dz / l }; };
+  const targets = new Map();   // k → Map(i → top)
+  let n = 0;
+  for (const k of order) {
+    const st = streets[k], P = st.pts, h = st.width / 2;
+    for (let i = 0; i < P.length; i++) {
+      const p = P[i], u = dirAt(P, i), Lx = u.z, Lz = -u.x, top = p.y + lift(k);
+      if (p.jn != null) continue;   // (inside a junction: not drawn, its surface decides)
+      let lo = -(h - (p.tr || 0)), hi = h - (p.tl || 0);
+      if (hi - lo < .05) continue;
+      let flushTop = null;
+      const seen = new Set();
+      for (const [ko, j] of grid.get(`${Math.floor(p.x / G)},${Math.floor(p.z / G)}`) || []) {
+        if (ko === k || !done[ko] || seen.has(`${ko}:${j}`)) continue;
+        seen.add(`${ko}:${j}`);
+        const so = streets[ko], a = so.pts[j - 1], b = so.pts[j], { d, t } = segDist(p.x, p.z, a, b), hN = so.width / 2;
+        if (d > h + hN || a.jn != null || b.jn != null) continue;
+        // (only where we lie alongside this piece of it: past its end the ribbon stops square, and a street carrying on
+        // from it isn't under it)
+        {
+          const vx0 = b.x - a.x, vz0 = b.z - a.z, l0 = Math.hypot(vx0, vz0) || 1, tu = ((p.x - a.x) * vx0 + (p.z - a.z) * vz0) / l0;   // metres along
+          if ((j === 1 && tu < .05) || (j === so.pts.length - 1 && tu > l0 - .05) || tu < -1 || tu > l0 + 1) continue;
+        }
+        const vx = b.x - a.x, vz = b.z - a.z, vl = Math.hypot(vx, vz) || 1;
+        if (Math.abs((u.x * vx + u.z * vz) / vl) < O.cos) continue;   // crossing, not alongside (junctions' business)
+        const topN = a.y + (b.y - a.y) * t + lift(ko);
+        if (Math.abs(topN - top) > O.level) continue;
+        const cx = a.x + vx * t, cz = a.z + vz * t, e = (cx - p.x) * Lx + (cz - p.z) * Lz;
+        const same = (vz / vl) * Lx - (vx / vl) * Lz > 0;   // the neighbour's left is our left?
+        const tlN = (a.tl || 0) + ((b.tl || 0) - (a.tl || 0)) * t, trN = (a.tr || 0) + ((b.tr || 0) - (a.tr || 0)) * t;
+        const jlo = e - (hN - (same ? trN : tlN)), jhi = e + (hN - (same ? tlN : trN));
+        if (jhi - jlo < .05 || jhi <= lo + .05 || jlo >= hi - .05) continue;
+        if (jlo <= lo + .05 && jhi >= hi - .05) { lo = hi = 0; flushTop = topN; break; }            // covered whole
+        if (jlo > lo + .05 && jhi < hi - .05) {                                                  // the neighbour lies inside us
+          for (const q of [j - 1, j]) { so.pts[q].tl = so.width; so.pts[q].tr = so.width; } continue;
+        }
+        if (jhi >= hi - .05) hi = jlo; else lo = jhi;
+        flushTop = topN;
+      }
+      const ntl = Math.max(0, h - hi), ntr = Math.max(0, h + lo);
+      if (lo === 0 && hi === 0) { p.tl = p.tr = 2 * h; } else { p.tl = Math.max(p.tl || 0, ntl); p.tr = Math.max(p.tr || 0, ntr); }
+      if (flushTop != null && !p.along && !p.pin) { if (!targets.has(k)) targets.set(k, new Map()); targets.get(k).set(i, flushTop); n++; }
+    }
+    done[k] = 1;
+  }
+  // heights: flush with what it gave way to, easing out — but a node another street shares keeps its height (one
+  // height per node: the streets through it would step)
+  const shared = new Map(), nk = (p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`;
+  for (const st of streets) for (const p of st.pts) shared.set(nk(p), (shared.get(nk(p)) || 0) + 1);
+  for (const [k, t] of targets) {
+    const st = streets[k], P = st.pts, own = P.map((p) => p.y), A = [0];
+    for (let i = 1; i < P.length; i++) A.push(A[i - 1] + Math.hypot(P[i].x - P[i - 1].x, P[i].z - P[i - 1].z));
+    const best = P.map(() => null);
+    for (const [j, topN] of t) {
+      const dy = topN - lift(k) - own[j]; if (Math.abs(dy) < .003) continue;
+      const L = Math.max(4, Math.abs(dy) / O.grade);
+      for (let i = 0; i < P.length; i++) { const d = Math.abs(A[i] - A[j]); if (d < L) { const w = t.has(i) ? (i === j ? 1 : 0) : 1 - smooth(d / L); if (w > 0 && (!best[i] || w > best[i][0])) best[i] = [w, dy]; } }
+    }
+    P.forEach((p, i) => { if (best[i] && !p.along && !p.pin && p.jn == null && !(O.final && p.je != null) && shared.get(nk(p)) < 2) p.y = own[i] + best[i][1] * best[i][0]; });
+  }
+  return n;
+}
+
 export function trimOverlaps(streets, landscape, plan, options = {}) {
   const O = { cos: .85, level: .6, branchM: 90, grade: .08, ...options };
   const slots = streetSlots(landscape, streets), lift = (k) => SLOT_LIFT(slots[k]);
@@ -642,7 +804,7 @@ export function roadMeets(landscape, index, route, options = {}) {
     pcs.forEach((pc, q) => {
       for (let i = 1; i < pc.length; i++) {
         const a = pc[i - 1], b = pc[i], id = segs.length, r = st.width / 2;
-        segs.push({ k, q, i, a, b, r });
+        segs.push({ k, q, i, a, b, r, last: i === pc.length - 1 });
         for (let gx = Math.floor((Math.min(a.x, b.x) - r) / G); gx <= Math.floor((Math.max(a.x, b.x) + r) / G); gx++)
           for (let gz = Math.floor((Math.min(a.z, b.z) - r) / G); gz <= Math.floor((Math.max(a.z, b.z) + r) / G); gz++) {
             const key = `${gx},${gz}`; if (!grid.has(key)) grid.set(key, []); grid.get(key).push(id);
@@ -712,7 +874,9 @@ export function roadMeets(landscape, index, route, options = {}) {
         // junction's surface lies just beyond it
         // (or the street ends inside this junction: a stub, nothing to meet)
         const beyond = [.6, 1.5].some((dd) => { const q = { x: A.cutP.x + A.ud.x * dd, z: A.cutP.z + A.ud.z * dd }; return junctionsNear(plan, q.x, q.z, .6).some((o) => o.jn !== jn && o.d < .6); });
-        if (!beyond && A.avail > A.t + .3) gap = Math.max(gap, best ? best.dd : A.h);
+        // ([w2-meets] or what lies beyond is the route's road and its shoulder: covered, nothing to see through)
+        const q2 = { x: A.cutP.x + A.ud.x * 1.5, z: A.cutP.z + A.ud.z * 1.5 }, rq = roadAt(q2.x, q2.z), underRoad = rq && rq.d < RW / 2 + 2.2;
+        if (!beyond && !underRoad && A.avail > A.t + .3) gap = Math.max(gap, best ? best.dd : A.h);
         continue;
       }
       const { pc, e } = best, p = pc[e], nb = pc[e === 0 ? 1 : pc.length - 2];
@@ -857,6 +1021,8 @@ export function roadMeets(landscape, index, route, options = {}) {
         const ux = (b.x - a.x) / (len || 1), uz = (b.z - a.z) / (len || 1);
         for (let q = 0; q < n; q++) {
           const f = (q + .5) / n, x = a.x + (b.x - a.x) * f, z = a.z + (b.z - a.z) * f, top = a.top + (b.top - a.top) * f, m = len / n;
+          // (a stretch trimmed away to nothing isn't drawn: nothing to meet, clip or overlap)
+          if ((a.tl || 0) + ((b.tl || 0) - (a.tl || 0)) * f + (a.tr || 0) + ((b.tr || 0) - (a.tr || 0)) * f > st.width - .3) { for (const kk of [`t${k}`, `r${k}`]) if (runs.has(kk)) flush(kk); continue; }
           const r = roadAt(x, z);
           // clearance tube: the ribbon's middle or either edge
           let tube = false;
@@ -870,7 +1036,7 @@ export function roadMeets(landscape, index, route, options = {}) {
           const meets = r && r.d < RW / 2 + st.width / 2 - .5 && Math.abs(r.y + ROAD_LIFT - top) < O.level + .6 && !inJunction(x, z);
           if (meets) {
             const i0 = Math.min(end - 1, r.i), rx = index.xs[i0 + 1] - index.xs[i0], rz = index.zs[i0 + 1] - index.zs[i0], rl = Math.hypot(rx, rz) || 1;
-            const par = Math.abs(ux * rx / rl + uz * rz / rl) > .8;
+            const par = Math.abs(ux * rx / rl + uz * rz / rl) > .8 || a.along || b.along;   // ([w2-meets] flush with the road: alongside)
             const run = runs.get(`r${k}`) || { kind: 'route', m: 0, x, z, y: top, step: 0, par: 0 };
             run.m += m; if (par) run.par += m; run.along = run.par > run.m * .6;
             // the part of the ribbon beyond the road's edge shows: its height against the road's, where what is drawn of
@@ -905,6 +1071,8 @@ export function roadMeets(landscape, index, route, options = {}) {
         if (o.k === sg.k) continue;
         // (how deep the two drawn ribbons overlap here: less than `overlapDepth` is a shared edge, not one over another)
         const { d, t } = segDist(x, z, o.a, o.b), hw = sg.r - (tl + tr) / 2;
+        // (past the end of the other ribbon nothing of it is drawn: a street carrying on from it isn't under it)
+        { const ox = o.b.x - o.a.x, oz = o.b.z - o.a.z, ol = Math.hypot(ox, oz) || 1, tu = ((x - o.a.x) * ox + (z - o.a.z) * oz) / ol; if (tu < -.5 || tu > ol + .5) continue; }
         if (sideR(x, z, o, t) + Math.min(hw, sideR(x, z, o, t)) - d > O.overlapDepth && d < sideR(x, z, o, t) + hw && Math.abs(o.a.top + (o.b.top - o.a.top) * t - top) < O.level) { hit = o; break; }
       }
       if (!hit) continue;

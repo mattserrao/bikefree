@@ -21,7 +21,7 @@ import { attachTerrainBuffer } from '../js/world/terrain-data.js';
 import { planSettlement } from '../js/world/settlement.js';
 import { cityStreets, STREET_LIFT } from '../js/world/city-landscape.js';
 import { streetOverlaps, drawnLiftMax, routeLine } from '../js/world/junctions.js';   // [junctions]
-import { roadMeets, streetSlots } from '../js/world/road-meets.js';   // [junctions]
+import { roadMeets, streetSlots, MEET_LIMITS } from '../js/world/road-meets.js';   // [junctions]
 import { landscapeBuilder } from '../js/world/landscapes.js';
 import { riderPose, routePoint, ROAD_WIDTH, ROAD_LIFT } from '../js/world/pose.js';
 import { alignmentChecks } from './qc_alignment.mjs';   // [road-align]
@@ -345,9 +345,12 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
     // summary line; test/road-meets.test.mjs bounds them), since the rest need source heights fixed (docs/pittsburgh/detail/s2.md)
     const meets = roadMeets(landscape, index, route, { roadWidth: ROAD_WIDTH });
     F.open.clear();
-    for (const site of meets.sites) for (const is of site.issues) F.add('road-meet', 'info', site.s, is.value, `${site.kind} ${is.check}: ${is.note}`, 0);
+    // [w2-meets] each site's issue is listed (info, the work list); the check warns when more sites within 25 m of
+    // the route have issues than MEET_LIMITS.nearBudget allows (the junction system's regression guard)
+    const nearIssues = meets.sites.filter((st) => st.issues.length && st.d <= 25);
+    for (const site of meets.sites) for (const is of site.issues) F.add('road-meet', site.d <= 25 && nearIssues.length > MEET_LIMITS.nearBudget ? 'warn' : 'info', site.s, is.value, `${site.kind} ${is.check}: ${is.note}`, 0);
     F.open.clear();
-    streetStats.meets = { sites: meets.sites.length, counts: meets.counts, issues: meets.issues };
+    streetStats.meets = { sites: meets.sites.length, counts: meets.counts, issues: meets.issues, near: nearIssues.length };
   }
 
   // 6. Road alignment: kinks, jitter and creases in the drawn road; city streets' profiles ([road-align])
@@ -459,7 +462,7 @@ async function main() {
     const tag = r.fails ? 'FAIL' : r.warns ? 'warn' : 'ok  ';
     console.log(`${tag} ${r.name.padEnd(42)} ${km(r.oneWay).padStart(7)} km  ${String(r.fails).padStart(3)} fail ${String(r.warns).padStart(3)} warn  (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
     if (r.streets) console.log(`       streets: ${(r.streets.overlapM / 1000).toFixed(1)} km of ribbon over other streets, ${(r.streets.routeOverlapM / 1000).toFixed(1)} km under the route's road, ${r.streets.junctionOverlapM} m into other junctions; ${r.streets.junctions} junctions (${r.streets.routeJunctions} on the route)`);   // [junctions]
-    if (r.streets?.meets) console.log(`       road meets: ${r.streets.meets.sites} sites within 150 m (${Object.entries(r.streets.meets.counts).map(([k, v]) => `${k} ${v}`).join(', ')}), ${r.streets.meets.issues} with issues`);   // [junctions]
+    if (r.streets?.meets) console.log(`       road meets: ${r.streets.meets.sites} sites within 150 m (${Object.entries(r.streets.meets.counts).map(([k, v]) => `${k} ${v}`).join(', ')}), ${r.streets.meets.issues} with issues (${r.streets.meets.near ?? 0} within 25 m of the route)`);   // [junctions]
     for (const f of r.findings) if (f.severity !== 'info') console.log(`       ${f.severity.toUpperCase().padEnd(4)} ${f.check.padEnd(15)} ${km(f.from).padStart(7)}${f.to - f.from > 1 ? `–${km(f.to)}` : ''} km  worst ${f.value.toFixed(2)}  ${f.note}`);
   }
   if (html) { const out = join(ROOT, html); writeFileSync(out, htmlReport(results)); console.log(`\nReport: ${relative(process.cwd(), out)}`); }
