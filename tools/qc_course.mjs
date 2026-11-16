@@ -316,8 +316,10 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
         const r = index.nearest(p.x, p.z, st.width / 2 + ROAD_WIDTH / 2 + 1);
         if (!r) continue;
         const i = r.i > end ? Math.max(0, 2 * end - r.i) : r.i;
-        // [junctions] (with a junction plan: the ribbon's own lift, blended to the junction's; the road's surface right there)
-        const rd = plan && RLq.project(p.x, p.z, route.dist[i], 25), roadY = rd && rd.d < st.width / 2 + ROAD_WIDTH / 2 + 1 ? rd.y : route.ele[i];
+        // [road-align] the road as drawn: straight between its 10 m samples, not the nearest sample's height;
+        // [junctions] with a junction plan: its curve, and the ribbon's own lift, blended to the junction's
+        const rd0 = landscape.routeDist?.(p.x, p.z), e = rd0 && Math.abs(rd0.y - route.ele[i]) < 3 ? rd0.y : route.ele[i];
+        const rd = plan && RLq.project(p.x, p.z, route.dist[i], 25), roadY = rd && rd.d < st.width / 2 + ROAD_WIDTH / 2 + 1 ? rd.y : e;
         const over = p.y + drawnLiftMax(p, plan, slots ? .1 + slots[k] * .02 : STREET_LIFT) - (roadY + ROAD_LIFT);
         if (over > -.02 && over < 4) hits.push([route.dist[i], over]);
       }
