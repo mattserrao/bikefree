@@ -915,14 +915,22 @@ export class CityScene {
     // [{fromM, toM, spacingM = 12, offsetM = 7.5, sides: [-1, 1] (left, right of the ride)}]; spots that aren't clear are dropped
     // [s4-section] yard trees: scene `vegetation.yardTrees` = {density, spacingM = 15, boxes: [[s, w, n, e]…]} — a
     // jittered grid over the yards (land use "yards") inside the boxes (lat/lon), near the ride
-    const YT = this.route.scene?.vegetation?.yardTrees;
+    const YT = this.route.scene?.vegetation?.yardTrees, railPts = new Map();
+    if (YT) for (const r of this.data.rails || []) {   // yard trees keep 5 m off the railways (10 m grid of 3 m steps)
+      const pts = r.path.map(([qa, qo]) => this.D.local(qa, qo));
+      for (let q = 1; q < pts.length; q++) {
+        const a0 = pts[q - 1], a1 = pts[q], n = Math.max(1, Math.ceil(Math.hypot(a1.x - a0.x, a1.z - a0.z) / 3));
+        for (let t = 0; t <= n; t++) { const px = a0.x + (a1.x - a0.x) * t / n, pz = a0.z + (a1.z - a0.z) * t / n; railPts.set(`${Math.floor(px / 5)},${Math.floor(pz / 5)}`, true); }
+      }
+    }
+    const nearRail = (x, z) => { for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) if (railPts.has(`${Math.floor(x / 5) + i},${Math.floor(z / 5) + j}`)) return true; return false; };
     for (const [bs, bw, bn, be] of YT?.boxes || []) {
       const P = this.D.proj, a = P.toLocal(bs, bw), b = P.toLocal(bn, be), g = YT.spacingM || 15;
       for (let x = Math.min(a.x, b.x); x < Math.max(a.x, b.x); x += g) for (let z = Math.min(a.z, b.z); z < Math.max(a.z, b.z); z += g) {
         const seed = hash(x * .37 + z * 1.13);
         if (seed > (YT.density ?? .5)) continue;
         const px = x + (hash(x + z * 3.1) - .5) * g * .8, pz = z + (hash(x * 2.3 - z) - .5) * g * .8;
-        if (this.landscape.landAt(px, pz) !== LAND.yards || !this.index.nearest(px, pz, 650)) continue;
+        if (this.landscape.landAt(px, pz) !== LAND.yards || !this.index.nearest(px, pz, 650) || nearRail(px, pz)) continue;
         spots.push({ x: px, z: pz, seed: hash(seed * 997), wall: 3 });   // crowns clear of the houses
       }
     }
