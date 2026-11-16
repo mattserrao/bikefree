@@ -56,6 +56,55 @@ Branch `pittsburgh-test`, built on v0.12.2. The plan is in the Project doc *open
 - **Honest limits:** inside the city the change is small, because the old 24 m grid came from the same elevation source. The gain is the 10 m detail along the route and everything past the old edge. On the Mount Washington crest (13.3–14.1 km) the route's own height is 4–6 m above the bare-earth ground; the ground is raised to meet it as before.
 - **Checks:** `npm test` 96 pass; course QC `--strict` clean on every route; clipping QC 0 fail, 266 warnings (v0.12.2 baseline: 288). Draw calls and triangles unchanged within ±20.
 
+## P4 · Signature landmarks (done)
+
+| The Duquesne Incline deck: the Point, the fountain, the bridges, the skyline | A Grandview Avenue overlook, looking over the rail at downtown |
+| --- | --- |
+| ![](p4-duquesne-postcard.jpg) | ![](p4-grandview-overlook.jpg) |
+| **The Point from the Ohio** | **Downtown: U.S. Steel (dark, columns), BNY Mellon, Fifth Avenue Place's crown, PPG Place's spires** |
+| ![](p4-the-point.jpg) | ![](p4-downtown.jpg) |
+| **The Fort Pitt Blockhouse, the fort's outline in the lawn, a rebuilt bastion** | **Night: the Gulf Tower's pyramid lit as the weather beacon, Fifth Avenue Place's crown** |
+| ![](p4-blockhouse.jpg) | ![](p4-skyline-night.jpg) |
+| **PNC Park, opening to the river** | **PPG Place: faceted glass and spires** |
+| ![](p4-pnc-park.jpg) | ![](p4-ppg-place.jpg) |
+
+*Close-ups from `npm run snap:cam` (the free camera); postcards from the scenic camera (`vista`).*
+
+**Towers** (`js/world/city-heroes.js`, placed by the scene's `heroes`):
+- **U.S. Steel Tower:** a triangle with notched corners (it was a rough extruded footprint), dark Cor-Ten, six exposed columns on each face.
+- **BNY Mellon Center:** grey granite and glass with a stepped crown and a lit band. The map had it twice; the copy is gone.
+- **Fifth Avenue Place:** the map had only an unnamed body and a stray mast. Now a granite shaft with cut corners, a five-step crown lit at night, and a 33 m mast.
+- **Gulf Tower:** it was missing. Its real footprint was a 10 m building in the map, and the 187 m unnamed tower nearby is One Oxford Centre. Now it has its setbacks and the stepped pyramid, lit at night in the weather-beacon colours (blue, and orange at the lantern).
+- **Grant Building:** a mast whose red beacon spells P-I-T-T-S-B-U-R-G-H in Morse code.
+- **PPG Place:** every PPG building now has faceted glass (rows of projecting prisms) under its spires.
+
+**The Point:**
+- **The Fort Pitt Blockhouse:** brick on a stone base, two rows of musket loopholes, a hipped shingle roof and a chimney.
+- **Fort Pitt:** the Flag and Monongahela bastions rebuilt in brick with grass on top and a flag. They're fitted to the museum's position and nudged clear of today's roads, so they're a little smaller than the real ones. The Ohio and Music bastions and the curtain walls are granite lines in the lawn.
+
+**Mount Washington:**
+- **Overlooks:** four concrete half-moon decks along Grandview Avenue (12.2–13.0 km), placed where the real bluff drops hardest. Each has brackets, a railing, benches, a coin-operated viewer and a lamp.
+- **Upper incline stations:** an observation deck at each.
+- **Incline cars:** red on the Duquesne Incline, yellow on the Mon Incline.
+
+**Stadiums (shapes only, no logos):**
+- The map had lost both outlines (a single point each), so neither stadium had ever been drawn. The scene now gives their centres and sizes.
+- Each has two tiers of seats with a dark fascia band, light towers and a scoreboard at the open end facing the river.
+- No trees on the fields.
+
+**Postcard views:** the scenic camera holds a framed view near the Point (from the Ohio), at the Smithfield Street Bridge (the Golden Triangle), at the Duquesne Incline deck and at the first Grandview overlook. Set them in the scene's `views`.
+
+**Leftovers from PR #14:**
+- **C1:** bridge members in the rider's space are now removed whole, so no cut stubs.
+- **C4:** no street lamps on the styled river bridges, which carry their own lights.
+- **C8:** duplicate footprints aren't drawn (12 on this route). Buildings-overlap warnings went from 1 to 0.
+
+**Checks:**
+- `npm test`: 96 pass.
+- Course QC `--strict`: clean on every route.
+- Clipping QC: 0 fail, 262 warnings (P3: 266; v0.12.2: 288).
+- Ride-camera views: 315–545 draw calls and 0.8–1.3 M triangles. A high aerial close-up of downtown at night reaches ~700 calls, but no ride camera sees that.
+
 ## Still to check on the Mac
 - Frame rate with post and river fog on Balanced and High (**I** overlay).
 - River fog from the saddle on the bridges: you should ride out of it as you climb.

@@ -228,7 +228,7 @@ export function buildBridges(city) {
     const width = b.style === 'fortpitt' || b.style === 'arch-gold' ? 17 : 12;
     superstructure(M, city, path, b.style, width, lights);
   }
-  M.keepOutOf(city.landscape.inRouteTube);   // decks, ramps and members the data puts in the rider's space
+  M.keepOutOf(city.landscape.inRouteTube, { whole: true });   // decks, ramps and members the data puts in the rider's space (whole members: no cut stubs)
   const mesh = new THREE.Mesh(city.own(M.geometry()), city.solidMaterial);
   mesh.castShadow = mesh.receiveShadow = true; mesh.name = 'Bridges';
   city.group.add(mesh);
@@ -239,9 +239,33 @@ export function buildBridges(city) {
 // ---------------------------------------------------------------- stadiums
 export function buildStadiums(city) {
   const M = new MeshBuilder(), lights = [];
+  const shapes = city.route.scene?.stadiumShapes || {}, L = city.landscape;
   for (const st of city.landscape.data.stadiums || []) {
-    const ring = st.ring.map(([a, o]) => city.D.local(a, o));
+    let ring = st.ring.map(([a, o]) => city.D.local(a, o));
+    // the map data can lose a stadium's outline (one point): the scene then gives its centre and size, and the
+    // outline pulls in wherever it would touch the route or a street
+    const sh = shapes[st.name];
+    if (sh && (ring.length < 4 || sh.override)) {
+      const c = city.D.proj.toLocal(sh.lat, sh.lon), yaw = (sh.yawDeg || 0) * Math.PI / 180, n = 40, pw = sh.power || 2;
+      ring = Array.from({ length: n }, (_, k) => {
+        const t = k / n * Math.PI * 2, cs = Math.cos(t), sn = Math.sin(t);
+        const u = Math.sign(cs) * Math.abs(cs) ** (2 / pw) * sh.rx, v = Math.sign(sn) * Math.abs(sn) ** (2 / pw) * sh.rz;
+        return { x: c.x + u * Math.cos(yaw) - v * Math.sin(yaw), z: c.z + u * Math.sin(yaw) + v * Math.cos(yaw) };
+      });
+      for (const p of ring) {
+        for (let k = 0; k < 14; k++) {
+          const r = L.routeDist(p.x, p.z), blocked = (r && r.d < ROAD_WIDTH / 2 + 10) || L.streetsNear(p.x, p.z, 3).some((o) => city.streets[o.k].cls < 7 && !city.streets[o.k].bridge) || L.waterAt(p.x, p.z) > .1;
+          if (!blocked) break;
+          p.x += (c.x - p.x) * .06; p.z += (c.z - p.z) * .06;
+        }
+      }
+      // map footprints standing inside the bowl give way to it
+      const inside = (x, z) => { let r = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], q = ring[j]; if ((a.z > z) !== (q.z > z) && x < ((q.x - a.x) * (z - a.z)) / (q.z - a.z) + a.x) r = !r; } return r; };
+      for (const b of city.buildings) { if (Math.abs(b.bb[0] - c.x) > 300 || Math.abs(b.bb[2] - c.z) > 300) continue; const m = b.ring.reduce((acc, p) => ({ x: acc.x + p.x / b.ring.length, z: acc.z + p.z / b.ring.length }), { x: 0, z: 0 }); const inB = (x, z) => { let r = false; for (let i = 0, j = b.ring.length - 1; i < b.ring.length; j = i++) { const a = b.ring[i], q = b.ring[j]; if ((a.z > z) !== (q.z > z) && x < ((q.x - a.x) * (z - a.z)) / (q.z - a.z) + a.x) r = !r; } return r; };
+        if (inside(m.x, m.z) || b.ring.some((q) => inside(q.x, q.z)) || ring.some((q) => inB(q.x, q.z))) b.hero = true; }
+    }
     if (ring.length < 4) continue;
+    (city.stadiumRings ||= []).push({ ring, bb: [Math.min(...ring.map((p) => p.x)), Math.max(...ring.map((p) => p.x)), Math.min(...ring.map((p) => p.z)), Math.max(...ring.map((p) => p.z))] });
     let cx = 0, cz = 0; for (const p of ring) { cx += p.x; cz += p.z; } cx /= ring.length; cz /= ring.length;
     let ground = Infinity; for (const p of ring) ground = Math.min(ground, city.landscape.baseHeight(p.x, p.z));
     // which way is the river? (PNC Park opens to the skyline)
@@ -252,7 +276,7 @@ export function buildStadiums(city) {
       if (w > best) { best = w; dir = d; }
     }
     const H = st.heightM || 30, inner = ring.map((p) => ({ x: cx + (p.x - cx) * .6, z: cz + (p.z - cz) * .6 }));
-    const seats = new THREE.Color(st.seats), wall = new THREE.Color(st.name.includes('PNC') ? '#b8946a' : '#3a3a3a');
+    const seats = new THREE.Color(st.seats), wall = new THREE.Color(st.name.includes('PNC') ? '#b8946a' : '#77716a');
     for (let i = 0; i < ring.length; i++) {
       const j = (i + 1) % ring.length, a = ring[i], b = ring[j], ia = inner[i], ib = inner[j];
       const mx = (a.x + b.x) / 2 - cx, mz = (a.z + b.z) / 2 - cz, ml = Math.hypot(mx, mz) || 1;
@@ -260,6 +284,12 @@ export function buildStadiums(city) {
       const h = H * (1 - .75 * Math.pow(open, 1.5));
       M.color(seats.clone().multiplyScalar(.85 + (i % 3) * .07));
       M.quad(V(ia.x, ground + 2.5, ia.z), V(a.x, ground + h, a.z), V(b.x, ground + h, b.z), V(ib.x, ground + 2.5, ib.z));
+      // the upper deck's fascia: a dark band halfway up the bowl (two tiers of seats)
+      if (h > 12) {
+        const t = .52, lo = (P, Q) => V(P.x + (Q.x - P.x) * t, ground + 2.5 + (h - 2.5) * t, P.z + (Q.z - P.z) * t);
+        const pa = lo(ia, a), pb = lo(ib, b);
+        M.color('#2b2f35'); M.quad(pa, pb, pb.clone().setY(pb.y + 2.2), pa.clone().setY(pa.y + 2.2));
+      }
       M.color(wall);
       M.quad(V(b.x, ground, b.z), V(b.x, ground + h, b.z), V(a.x, ground + h, a.z), V(a.x, ground, a.z));
       M.quad(V(ia.x, ground, ia.z), V(ia.x, ground + 2.5, ia.z), V(ib.x, ground + 2.5, ib.z), V(ib.x, ground, ib.z));
@@ -268,6 +298,14 @@ export function buildStadiums(city) {
         M.color('#e8e8e0'); M.box(a.x, ground + h + 16, a.z, 6, 3, 1.2, Math.atan2(mx, mz));
         lights.push({ x: a.x, y: ground + h + 17.5, z: a.z, size: 22, color: '#f4f6ff' });
       }
+    }
+    // a scoreboard at the open end, facing the field
+    {
+      let reach = 0; for (const p of ring) reach = Math.max(reach, (p.x - cx) * dir.x + (p.z - cz) * dir.z);
+      const sx = cx + dir.x * reach * .92, sz = cz + dir.z * reach * .92, yaw = Math.atan2(dir.z, -dir.x);
+      M.color('#3a3f45'); for (const u of [-8, 8]) M.box(sx + dir.z * u, ground, sz - dir.x * u, .8, 14, .8);
+      M.color('#16191c'); M.box(sx, ground + 14, sz, 26, 10, 1.4, yaw);
+      for (let k = -4; k <= 4; k++) lights.push({ x: sx + dir.z * k * 2.6 - dir.x * 1, y: ground + 19, z: sz - dir.x * k * 2.6 - dir.z * 1, size: 5, color: k % 2 ? '#ffd27a' : '#bfe3ff' });
     }
     // the field
     M.color('#4f8a3c');

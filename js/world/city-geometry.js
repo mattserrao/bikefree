@@ -7,6 +7,7 @@ export class MeshBuilder {
     this.p = []; this.n = []; this.c = []; this.uv = []; this.i = [];
     this.extra = Object.fromEntries(Object.entries(extra).map(([k, size]) => [k, { size, data: [] }]));
     this.cur = { color: [1, 1, 1] };
+    this.members = [];   // [first, end) index ranges of each beam / box / pyramid / cylinder (whole-member culling)
     for (const [k, v] of Object.entries(this.extra)) this.cur[k] = new Array(v.size).fill(0);
   }
   get count() { return this.p.length / 3; }
@@ -30,7 +31,8 @@ export class MeshBuilder {
     this.tri(k[0], k[1], k[2]);
   }
   /** Box between two points with a square-ish cross-section (w across, h up). */
-  beam(a, b, w, h = w, up = null) {
+  beam(a, b, w, h = w, up = null) { const t0 = this.i.length; this._beam(a, b, w, h, up); if (this.i.length > t0) this.members.push([t0, this.i.length]); return this; }
+  _beam(a, b, w, h = w, up = null) {
     const d = new THREE.Vector3().subVectors(b, a); const len = d.length(); if (len < 1e-4) return;
     d.divideScalar(len);
     let side = new THREE.Vector3().crossVectors(d, up || new THREE.Vector3(0, 1, 0));
@@ -43,7 +45,8 @@ export class MeshBuilder {
     this.quad(A[3], A[2], A[1], A[0]); this.quad(B[0], B[1], B[2], B[3]);
   }
   /** Axis-aligned-in-yaw box: centre (x, y bottom, z), size (w across, h, l along), yaw angle. */
-  box(x, y, z, w, h, l, yaw = 0) {
+  box(x, y, z, w, h, l, yaw = 0) { const t0 = this.i.length; this._box(x, y, z, w, h, l, yaw); if (this.i.length > t0) this.members.push([t0, this.i.length]); return this; }
+  _box(x, y, z, w, h, l, yaw = 0) {
     const c = Math.cos(yaw), s = Math.sin(yaw);
     const P = (dx, dy, dz) => new THREE.Vector3(x + dx * c + dz * s, y + dy, z - dx * s + dz * c);
     const v = [P(-w / 2, 0, -l / 2), P(w / 2, 0, -l / 2), P(w / 2, 0, l / 2), P(-w / 2, 0, l / 2),
@@ -52,14 +55,16 @@ export class MeshBuilder {
     this.quad(v[0], v[4], v[5], v[1]); this.quad(v[1], v[5], v[6], v[2]); this.quad(v[2], v[6], v[7], v[3]); this.quad(v[3], v[7], v[4], v[0]);
   }
   /** Square pyramid (spires, roofs). */
-  pyramid(x, y, z, w, h, l = w, yaw = 0) {
+  pyramid(x, y, z, w, h, l = w, yaw = 0) { const t0 = this.i.length; this._pyramid(x, y, z, w, h, l, yaw); if (this.i.length > t0) this.members.push([t0, this.i.length]); return this; }
+  _pyramid(x, y, z, w, h, l = w, yaw = 0) {
     const c = Math.cos(yaw), s = Math.sin(yaw);
     const P = (dx, dz) => new THREE.Vector3(x + dx * c + dz * s, y, z - dx * s + dz * c);
     const b = [P(-w / 2, -l / 2), P(w / 2, -l / 2), P(w / 2, l / 2), P(-w / 2, l / 2)], t = new THREE.Vector3(x, y + h, z);
     for (let k = 0; k < 4; k++) this.triangle(b[k], t, b[(k + 1) % 4]);
   }
   /** Vertical cylinder (columns, tanks). */
-  cylinder(x, y, z, r, h, seg = 8, rTop = r) {
+  cylinder(x, y, z, r, h, seg = 8, rTop = r) { const t0 = this.i.length; this._cylinder(x, y, z, r, h, seg, rTop); if (this.i.length > t0) this.members.push([t0, this.i.length]); return this; }
+  _cylinder(x, y, z, r, h, seg = 8, rTop = r) {
     for (let k = 0; k < seg; k++) {
       const a0 = k / seg * Math.PI * 2, a1 = (k + 1) / seg * Math.PI * 2;
       const p = (a, rr, yy) => new THREE.Vector3(x + Math.cos(a) * rr, yy, z + Math.sin(a) * rr);
@@ -72,7 +77,7 @@ export class MeshBuilder {
    * midpoints and centre. Used to keep the route's clearance (where the rider and the chase camera move) free
    * of other streets, decks, rails and bridge members that the map data puts there.
    */
-  keepOutOf(inside) {
+  keepOutOf(inside, { whole = false } = {}) {
     const P = this.p, kept = [];
     let dropped = 0;
     const hit = (A, B, C) => {
@@ -86,17 +91,31 @@ export class MeshBuilder {
       }
       return false;
     };
-    for (let t = 0; t < this.i.length; t += 3) {
+    function hitTri(t) {
       const a = this.i[t] * 3, b = this.i[t + 1] * 3, c = this.i[t + 2] * 3;
       const A = [P[a], P[a + 1], P[a + 2]], B = [P[b], P[b + 1], P[b + 2]], C = [P[c], P[c + 1], P[c + 2]];
       // cheap reject: nothing to test unless the triangle's middle is near enough to the space at all
-      const cx = (A[0] + B[0] + C[0]) / 3, cy = (A[1] + B[1] + C[1]) / 3, cz = (A[2] + B[2] + C[2]) / 3;
-      if (!inside.near || inside.near(cx, cz, Math.max(Math.hypot(A[0] - cx, A[2] - cz), Math.hypot(B[0] - cx, B[2] - cz), Math.hypot(C[0] - cx, C[2] - cz)))) {
-        if (hit(A, B, C)) { dropped++; continue; }
+      const cx = (A[0] + B[0] + C[0]) / 3, cz = (A[2] + B[2] + C[2]) / 3;
+      if (inside.near && !inside.near(cx, cz, Math.max(Math.hypot(A[0] - cx, A[2] - cz), Math.hypot(B[0] - cx, B[2] - cz), Math.hypot(C[0] - cx, C[2] - cz)))) return false;
+      return hit(A, B, C);
+    }
+    // whole members: a beam or box with any part in the space goes entirely (no cut stubs left hanging)
+    let drop = null, member = null;
+    if (whole && this.members.length) {
+      drop = new Uint8Array(this.i.length / 3); member = new Uint8Array(this.i.length / 3);
+      for (const [t0, t1] of this.members) {
+        member.fill(1, t0 / 3, t1 / 3);
+        let any = false;
+        for (let t = t0; t < t1 && !any; t += 3) any = hitTri.call(this, t);
+        if (any) drop.fill(1, t0 / 3, t1 / 3);
       }
+    }
+    for (let t = 0; t < this.i.length; t += 3) {
+      if (member?.[t / 3] ? drop[t / 3] : hitTri.call(this, t)) { dropped++; continue; }
       kept.push(this.i[t], this.i[t + 1], this.i[t + 2]);
     }
     this.i = kept;
+    this.members = [];
     return dropped;
   }
 

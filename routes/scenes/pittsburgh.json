@@ -530,5 +530,142 @@
     "fineM": 900,
     "fineCellM": 10
   },
-  "terrainGridFile": "routes/scenes/pittsburgh-terrain.json"
+  "terrainGridFile": "routes/scenes/pittsburgh-terrain.json",
+  "heroes": [
+    {
+      "model": "ussteel",
+      "name": "U.S. Steel Tower",
+      "lat": 40.44138,
+      "lon": -79.99471,
+      "heightM": 256
+    },
+    {
+      "model": "bny",
+      "name": "BNY Mellon Center",
+      "lat": 40.43975,
+      "lon": -79.99601,
+      "heightM": 221
+    },
+    {
+      "model": "fifth",
+      "name": "Fifth Avenue Place",
+      "lat": 40.4419,
+      "lon": -80.00345,
+      "bodyM": 150
+    },
+    {
+      "model": "gulf",
+      "name": "Gulf Tower",
+      "lat": 40.4425,
+      "lon": -79.9953,
+      "heightM": 177
+    },
+    {
+      "model": "grant",
+      "name": "Grant Building",
+      "lat": 40.43765,
+      "lon": -79.99754
+    },
+    {
+      "model": "blockhouse",
+      "name": "Fort Pitt Blockhouse",
+      "lat": 40.4412,
+      "lon": -80.0098
+    },
+    {
+      "model": "fort",
+      "name": "Fort Pitt",
+      "lat": 40.44098,
+      "lon": -80.00895,
+      "radiusM": 70,
+      "rebuilt": [
+        "Flag",
+        "Monongahela"
+      ],
+      "traced": [
+        "Ohio",
+        "Music"
+      ],
+      "turnDeg": -18
+    }
+  ],
+  "overlooks": {
+    "fromM": 12150,
+    "toM": 14300,
+    "count": 4,
+    "spacingM": 200,
+    "toward": {
+      "lat": 40.4413,
+      "lon": -80.0085
+    },
+    "look": {
+      "lat": 40.441,
+      "lon": -80.0005,
+      "up": 60
+    }
+  },
+  "views": [
+    {
+      "name": "The Point",
+      "atM": 1750,
+      "rangeM": 500,
+      "cam": {
+        "lat": 40.441,
+        "lon": -80.0172,
+        "up": 22
+      },
+      "look": {
+        "lat": 40.4413,
+        "lon": -80.007,
+        "up": 35
+      }
+    },
+    {
+      "name": "The Golden Triangle from the Monongahela",
+      "atM": 4300,
+      "rangeM": 450,
+      "cam": {
+        "lat": 40.4338,
+        "lon": -79.9975,
+        "up": 30
+      },
+      "look": {
+        "lat": 40.4405,
+        "lon": -80.001,
+        "up": 70
+      }
+    },
+    {
+      "name": "Duquesne Incline",
+      "rangeM": 350,
+      "cam": {
+        "lat": 40.4387,
+        "lon": -80.0179,
+        "up": 8
+      },
+      "look": {
+        "lat": 40.44183,
+        "lon": -80.01277,
+        "up": 12
+      }
+    }
+  ],
+  "stadiumShapes": {
+    "PNC Park": {
+      "lat": 40.4469,
+      "lon": -80.0061,
+      "rx": 100,
+      "rz": 88,
+      "power": 2.4,
+      "yawDeg": 0
+    },
+    "Acrisure Stadium": {
+      "lat": 40.4467,
+      "lon": -80.0158,
+      "rx": 125,
+      "rz": 98,
+      "power": 3.5,
+      "yawDeg": -20
+    }
+  }
 }
