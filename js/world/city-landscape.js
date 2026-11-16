@@ -496,8 +496,9 @@ export function cityStreets(landscape, index, route) {
     trimOverlaps(streets, landscape);   // [junctions] carriageways side by side or merging: no ribbon over another (gores)
     landscape._junctions = planJunctions(streets, { route, index, end, routeDist: landscape.routeDist, roadWidth: ROAD_WIDTH,
       onRouteBridge: (s, m) => landscape.routeBridges.some((b) => s > b.fromM - m && s < b.toM + m), liftOf: (k) => .1 + streetSlots(landscape, streets)[k] * .02 }, landscape.junctions);
-    followMovedNodes(streets);   // [junctions] paths and side streets meet the moved ones at their height
     keepUnderRoad(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] nothing over the road
+    followMovedNodes(streets);   // [junctions] paths, side streets and decks meet the moved ones at their height
+    keepUnderRoad(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] (and still nothing over the road)
     junctionTops(landscape._junctions, streets, landscape.routeDist, ROAD_WIDTH);   // [junctions] mouths at the streets' final heights
   }
   return streets;

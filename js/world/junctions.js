@@ -168,6 +168,7 @@ export function planJunctions(streets, ctx, options = {}) {
     const r = routeDist(nd.x, nd.z);
     const nearRoute = r && r.d < RW / 2 + Math.max(O.routeReachM, w / 2 + 3) && Math.abs(Math.min(...ys) - r.y) < O.levelM &&
       !(ctx.onRouteBridge && ctx.onRouteBridge(route.dist[r.i], 4));
+    const before = items.length;
     if (nearRoute && (nd.inc.some((o) => o.end || deg >= 3) || virtual.has(nd.key))) {
       // only where a street actually leaves the route: a street running along it (the rest of the one the route
       // rides, a few metres off its smoothed line) is the route's own, not a junction
@@ -181,7 +182,7 @@ export function planJunctions(streets, ctx, options = {}) {
       if (crossing) items.push({ nd, w, route: true, s: q.s, x: nd.x, z: nd.z });
       else if (deg >= 3 && r.d > RW / 2 + w / 2) items.push({ nd, w, route: false, x: nd.x, z: nd.z });
     } else if (deg >= 3) items.push({ nd, w, route: false, x: nd.x, z: nd.z });
-    else if (deg === 2 && nd.inc.length === 2 && nd.inc[0].k !== nd.inc[1].k) {
+    if (items.length === before && deg === 2 && nd.inc.length === 2 && nd.inc[0].k !== nd.inc[1].k && !(nearRoute && r.d < RW / 2 + w / 2)) {
       // [road meets] two streets meeting end to end round a sharp bend (> 50°): a corner junction (a curb return
       // inside, the outside filled), not two ribbons with a notch between their square ends
       const out = nd.inc.map((o) => { const st = streets[o.k], acc = arcs(st), a = acc[o.i] + (o.i === 0 ? 1 : -1) * Math.min(8, acc[acc.length - 1] * .4); return norm(sub(streetPoint(st, a), nd)); });

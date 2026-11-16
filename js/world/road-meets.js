@@ -309,7 +309,7 @@ export function clearOverpasses(streets, ctx, options = {}) {
     for (const [i, under] of cand) need[i] = under;
     const acc = [0]; for (let i = 1; i < P.length; i++) acc.push(acc[i - 1] + Math.hypot(P[i].x - P[i - 1].x, P[i].z - P[i - 1].z));
     const lift = P.map((_, i) => { let m = 0; need.forEach((v, j) => { if (v > 0) m = Math.max(m, v - Math.abs(acc[i] - acc[j]) * O.grade); }); return m; });
-    P.forEach((p, i) => { if (lift[i] > 0) { p.y += lift[i]; n++; } });
+    P.forEach((p, i) => { if (lift[i] > 0) { p.y += lift[i]; p.lifted = true; n++; } });
   });
   return n;
 }
@@ -387,7 +387,7 @@ export function keepUnderRoad(streets, ctx, options = {}) {
       if (!q || q.d > RW / 2 + st.width / 2 + O.marginM) continue;
       const L = p.jd != null ? JLIFT + (lift - JLIFT) * smooth(p.jd / LIFT_BLEND_M) : lift;   // (near a junction the lift blends to its surface's)
       const road = q.y + ROAD_LIFT, top = p.y + L;
-      if (top > road - O.under && top < road + 4) { p.y = road - O.under - .005 - L; n++; }
+      if (top > road - O.under && top < road + 4) { p.y = road - O.under - .005 - L; p.under = true; n++; }
     }
   });
   return n;
@@ -401,11 +401,13 @@ export function keepUnderRoad(streets, ctx, options = {}) {
 export function followMovedNodes(streets, options = {}) {
   const O = { grade: .08, level: 1.2, maxEaseM: 30, ...options };
   const key = (p) => `${Math.round(p.x * 100)},${Math.round(p.z * 100)}`, lead = new Map();
-  for (const st of streets) for (const p of st.pts) if (p.jn != null || p.je != null || p.along) lead.set(key(p), p.y);
+  const isLead = (p) => p.jn != null || p.je != null || p.along || p.under || p.lifted;
+  const lifted = new Set();
+  for (const st of streets) for (const p of st.pts) if (isLead(p)) { lead.set(key(p), Math.min(lead.get(key(p)) ?? Infinity, p.y)); if (p.lifted) lifted.add(key(p)); }
   let n = 0;
   for (const st of streets) {
-    if (st.bridge) continue;
-    const P = st.pts, own = P.map((p) => p.y), tg = P.map((p) => { const y = lead.get(key(p)); return y != null && p.jn == null && p.je == null && !p.along && Math.abs(y - p.y) > .005 && Math.abs(y - p.y) < O.level ? y : null; });
+    // (decks too where one ends on a moved street: it follows over its last metres)
+    const P = st.pts, own = P.map((p) => p.y), tg = P.map((p) => { const y = lead.get(key(p)); return y != null && !isLead(p) && Math.abs(y - p.y) > .005 && Math.abs(y - p.y) < (st.bridge || lifted.has(key(p)) ? 4.5 : O.level) ? y : null; });
     if (!tg.some((v) => v != null)) continue;
     const acc = [0]; for (let i = 1; i < P.length; i++) acc.push(acc[i - 1] + Math.hypot(P[i].x - P[i - 1].x, P[i].z - P[i - 1].z));
     const best = P.map(() => null);
@@ -513,6 +515,19 @@ export function trimOverlaps(streets, landscape, plan, options = {}) {
     const t = targets.get(k), y = top - lift(k);
     if (!t.has(i) || Math.abs(y - p.y) > Math.abs(t.get(i) - p.y)) t.set(i, y);
     n++;
+  }
+  // trims vary smoothly along a street: a point between two trimmed ones (within 5 m) is trimmed as much as the
+  // lesser of them, so the trimmed edge never zig-zags (no sawtooth of ground showing between two ribbons)
+  for (const st of streets) {
+    const P = st.pts;
+    for (const f of ['tl', 'tr']) {
+      const v = P.map((p) => p[f] || 0);
+      for (let i = 1; i < P.length - 1; i++) {
+        if (Math.hypot(P[i + 1].x - P[i - 1].x, P[i + 1].z - P[i - 1].z) > 10) continue;
+        const m = Math.min(v[i - 1], v[i + 1]);
+        if (m > v[i]) P[i][f] = m;
+      }
+    }
   }
   for (const [k, t] of targets) {
     const st = streets[k], P = st.pts, A = acc(st), own = P.map((p) => p.y);
@@ -700,6 +715,7 @@ export function roadMeets(landscape, index, route, options = {}) {
   for (const [k, pcs] of drawn) {
     for (const pc of pcs) for (const e of [0, pc.length - 1]) {
       const p = pc[e]; if (p.cut) continue;   // (a cut end meets its junction: checked above)
+      if ((p.tl || 0) + (p.tr || 0) > streets[k].width - .3) continue;   // (trimmed away to nothing: not drawn)
       const key = keyOf(p);
       if (!ends.has(key)) ends.set(key, []);
       ends.get(key).push({ k, e, p, pc });
