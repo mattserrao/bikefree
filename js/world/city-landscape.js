@@ -9,7 +9,7 @@ import { smoothstep } from './coast.js';
 import { ROAD_WIDTH } from './pose.js';
 import { decodeTerrain } from './real-coast.js';
 import { planJunctions, junctionGround, junctionTops } from './junctions.js';   // [junctions]
-import { joinCrossings, densifyAlongside, clearOverpasses, alignAlongRoute, trimAtRoute, followMovedNodes, keepUnderRoad, resolveOverlaps, hideCrossingsAtRoute, streetSlots } from './road-meets.js';   // [junctions]
+import { joinCrossings, densifyAlongside, clearOverpasses, alignAlongRoute, trimAtRoute, followMovedNodes, keepUnderRoad, resolveOverlaps, hideCrossingsAtRoute, landFreeDeckEnds, streetSlots } from './road-meets.js';   // [junctions]
 import { alignStreetProfiles, syncPinnedNodes } from './road-align.js';   // [road-align]
 import { makeStreetGrade } from './street-grade.js';   // [street-kit]
 import { riverfrontGround } from './riverfront.js';   // [s1-riverfront]
@@ -526,6 +526,7 @@ export function cityStreets(landscape, index, route) {
     joinCrossings(streets);   // [junctions] streets crossing at one level with no shared node: give them one
     densifyAlongside(streets);   // [junctions] (finer points where carriageways run side by side, for the trims below)
     clearOverpasses(streets, { route, index, roadWidth: ROAD_WIDTH });   // [junctions] decks over the road clear the rider
+    landFreeDeckEnds(streets, { route, index, landscape });   // [w2-meets] a deck end that meets nothing lands on the ground
     alignAlongRoute(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] streets alongside the road: flush with it
     trimAtRoute(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] …or beside it at another level: kept off its shoulder
     resolveOverlaps(streets, landscape);   // [junctions] [w2-meets] carriageways side by side or merging: drawn as their union (gores)

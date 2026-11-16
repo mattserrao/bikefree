@@ -26,6 +26,7 @@ export const MEET_LIMITS = {
   dangle: 1.2,       // m: a street end this far above (or below) whatever is under it hangs in the air
   touch: 1.5,        // m: a street end this close to another surface's edge meets it
   clippedM: 2,       // m: of ribbon cut away by the route's clearance tube
+  nearBudget: 20,    // [w2-meets] sites with issues within 25 m of the route the course QC accepts before it warns
   seeM: 25,          // limits grow by their own size every this many metres from the route (×4 at 75 m, ×7 at 150 m)
 };
 
@@ -195,7 +196,7 @@ export function drawnStreet(st, k, plan, lift) {
     return pc.map((p, i) => {
       const fromCut = Math.min(pc[0].cut ? along[i] : Infinity, pc[pc.length - 1].cut ? d - along[i] : Infinity);
       const w = fromCut === Infinity ? 1 : smooth(fromCut / LIFT_BLEND_M);
-      return { x: p.x, z: p.z, y: p.y, top: p.y + lift + (JL - lift) * (1 - w), cut: p.cut, tx: p.tx, tz: p.tz, tl: p.tl || 0, tr: p.tr || 0 };
+      return { x: p.x, z: p.z, y: p.y, top: p.y + lift + (JL - lift) * (1 - w), cut: p.cut, tx: p.tx, tz: p.tz, tl: p.tl || 0, tr: p.tr || 0, along: !!p.along };
     });
   });
 }
@@ -292,8 +293,12 @@ export function clearOverpasses(streets, ctx, options = {}) {
   const O = { cos: .7, clearM: 4.9, below: .1, grade: .06, ...options };   // (below: a deck lower than the road's surface less this passes under it)
   const RL = routeLine(route, index), end = route.turnIdx || route.dist.length - 1;
   let n = 0;
+  // ([w2-meets] a deck chain that ends at the route meets it there — it isn't crossing over it)
+  const key = (p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`, ends = new Map();
+  streets.forEach((st) => { if (st.bridge) for (const p of [st.pts[0], st.pts[st.pts.length - 1]]) ends.set(key(p), (ends.get(key(p)) || 0) + 1); });
+  const chainEndAtRoute = (st) => [st.pts[0], st.pts[st.pts.length - 1]].some((p) => ends.get(key(p)) === 1 && index.nearest(p.x, p.z, 15));
   streets.forEach((st) => {
-    if (!st.bridge || st.cls > 7 || !nearRouteStreet(st, index, RW / 2 + st.width / 2 + 4)) return;
+    if (!st.bridge || st.cls > 7 || !nearRouteStreet(st, index, RW / 2 + st.width / 2 + 4) || chainEndAtRoute(st)) return;
     const P = st.pts, need = P.map(() => 0);
     let crosses = false;
     const cand = [];
@@ -464,6 +469,33 @@ export function hideCrossingsAtRoute(streets, ctx, options = {}) {
       p.tl = p.tr = 2 * h; n++;
     }
   });
+  return n;
+}
+
+/**
+ * [w2-meets] A deck end that meets nothing (no street shares it: the data cut its ground path off) and isn't at the
+ * route comes down to the ground it would land on, over its last metres at no more than `grade` (at most half the
+ * deck), instead of stopping in the air. Run in cityStreets() while the ground is still the bare one.
+ */
+export function landFreeDeckEnds(streets, ctx, options = {}) {
+  const { index, landscape } = ctx, O = { tol: .3, grade: .12, routeM: 8, ...options };
+  const key = (p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`, count = new Map();
+  for (const st of streets) for (const p of st.pts) count.set(key(p), (count.get(key(p)) || 0) + 1);
+  let n = 0;
+  for (const st of streets) {
+    if (!st.bridge || st.pts.length < 2) continue;
+    const P = st.pts, acc = [0];
+    for (let i = 1; i < P.length; i++) acc.push(acc[i - 1] + Math.hypot(P[i].x - P[i - 1].x, P[i].z - P[i - 1].z));
+    for (const e of [0, P.length - 1]) {
+      const p = P[e];
+      if (count.get(key(p)) > 1 || index.nearest(p.x, p.z, O.routeM)) continue;
+      const g = landscape.heightAt(p.x, p.z), dy = g - p.y;
+      if (Math.abs(dy) < O.tol || landscape.waterAt?.(p.x, p.z) > .35) continue;
+      const L = Math.min(acc[acc.length - 1] / 2, Math.max(6, Math.abs(dy) / O.grade));
+      for (let i = 0; i < P.length; i++) { const d = Math.abs(acc[i] - acc[e]); if (d < L) P[i].y += dy * (1 - smooth(d / L)); }
+      n++;
+    }
+  }
   return n;
 }
 
@@ -1004,7 +1036,7 @@ export function roadMeets(landscape, index, route, options = {}) {
           const meets = r && r.d < RW / 2 + st.width / 2 - .5 && Math.abs(r.y + ROAD_LIFT - top) < O.level + .6 && !inJunction(x, z);
           if (meets) {
             const i0 = Math.min(end - 1, r.i), rx = index.xs[i0 + 1] - index.xs[i0], rz = index.zs[i0 + 1] - index.zs[i0], rl = Math.hypot(rx, rz) || 1;
-            const par = Math.abs(ux * rx / rl + uz * rz / rl) > .8;
+            const par = Math.abs(ux * rx / rl + uz * rz / rl) > .8 || a.along || b.along;   // ([w2-meets] flush with the road: alongside)
             const run = runs.get(`r${k}`) || { kind: 'route', m: 0, x, z, y: top, step: 0, par: 0 };
             run.m += m; if (par) run.par += m; run.along = run.par > run.m * .6;
             // the part of the ribbon beyond the road's edge shows: its height against the road's, where what is drawn of
