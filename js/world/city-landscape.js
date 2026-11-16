@@ -289,7 +289,7 @@ export function makeCityLandscape(config, proj, index, route) {
           for (const o of [-hw - 2.5, -hw, 0, hw, hw + 2.5]) {
             const x = cx + nx * o, z = cz + nz * o;
             if (!(x >= x0 && x <= x1 && z >= z0 && z <= z1)) continue;
-            const r = routeDist(x, z); if (r && r.d < clearOfRouteM) continue;   // the route's own bank and verge rule there
+            const r = routeDist(x, z); if (r && r.d < clearOfRouteM && !onRouteBridge(route.dist[r.i], -10)) continue;   // the route's own bank and verge rule there
             out.push({ x, z });
           }
         }
@@ -454,7 +454,8 @@ export function makeCityLandscape(config, proj, index, route) {
     /** Trees and shrubs from the shared kit grow only in parks, woods and the hills beyond. */
     canPlant: (x, z) => { const c = landCell(x, z); return c === LAND.woods || c === LAND.outside || (c === LAND.grass && ((x * 13 + z * 7) & 3) === 0) || (c === LAND.yards && yardTree(x, z)); },   // [s4-section] yards
     routeDist, streetAt, streetsNear, groundClearPoints,   // [w2-align] groundClearPoints, groundDrapeFixed/Last
-    groundDrapeFixed: (x, z) => { const r = routeDist(x, z); return !!r && r.d < 20; },   // the route's bank and verge
+    // the route's bank and verge (not under its bridges and viaducts, 10 m in from their ends: the ground there is the streets' below)
+    groundDrapeFixed: (x, z) => { const r = routeDist(x, z); return !!r && r.d < 20 && !onRouteBridge(route.dist[r.i], -10); },
     groundDrapeLast: (x, z) => streetsNear(x, z, 2.5).some((o) => !streetIndex.streets[o.k].bridge),   // on a street
     junctions: config.junctions || null,   // [junctions] scene key: real intersection geometry (js/world/junctions.js)
     /** For the weather: fog lies on the rivers (at the water level) and reaches inland up the valleys. */
