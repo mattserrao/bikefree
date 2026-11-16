@@ -14,6 +14,7 @@ import { CoastBridges } from './coast-bridges.js';
 import { HighwayTraffic } from './highway-traffic.js';
 import { CoastLife } from './coast-life.js';
 import { GlacierLife } from './glacier-life.js';
+import { makeRouteIndex } from './geo.js';
 
 export const COASTAL_QUALITY = {
   // forestRange: tiles of real trees in forest scenes; nearM/midM: tile-centre distances for the detail tiers
@@ -338,7 +339,17 @@ export class StylizedTerrain {
     const levels = new Map(t.lakes.map((l) => [l.id, l.level]));
     const CH = 26;   // cells per chunk side (~800 m)
     const reach = (this.config.water?.nearRouteM ?? 3000);
+    // "Within reach of the road" uses a coarse index (the 40 m road index scans ~26,000 grid cells per
+    // query at this range, which froze the page for minutes on Route 28). Whole chunks clearly inside or
+    // outside the reach are settled from their centre; only chunks straddling the edge test each cell.
+    const coarse = makeRouteIndex(this.route, this.proj, Math.max(200, reach / 2));
+    const near = (x, z, r) => coarse.nearest(x, z, r);
+    const halfDiag = Math.hypot(CH * dx, CH * dz) / 2;
     for (let cj = 0; cj < H - 1; cj += CH) for (let ci = 0; ci < W - 1; ci += CH) {
+      const ccx = nw.minX + Math.min(ci + CH / 2, W - 1) * dx, ccz = nw.minZ + Math.min(cj + CH / 2, H - 1) * dz;
+      const hit = near(ccx, ccz, reach + halfDiag);
+      if (!hit) continue;   // the whole chunk is beyond reach
+      const allNear = hit.d + halfDiag <= reach;
       const pos = [], shore = [], idx = [], vid = new Map();
       const vert = (i, j, level) => {
         const key = j * W + i;
@@ -353,7 +364,7 @@ export class StylizedTerrain {
         const id = corners.map((c) => g.ids[c]).find((v) => v) || 0, level = levels.get(id);
         if (level == null) continue;
         const cx = nw.minX + (i + .5) * dx, cz = nw.minZ + (j + .5) * dz;
-        if (!this.index.nearest(cx, cz, reach)) continue;
+        if (!allNear && !near(cx, cz, reach)) continue;
         const a = vert(i, j, level), b = vert(i + 1, j, level), c = vert(i, j + 1, level), d = vert(i + 1, j + 1, level);
         idx.push(a, c, b, b, c, d);
       }
