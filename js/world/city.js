@@ -1041,7 +1041,11 @@ export class CityScene {
     }
     // a light street tree: trunk + two lumpy crowns (~40 triangles), coloured per instance
     const M = new MeshBuilder();
-    M.color('#5b4636'); M.cylinder(0, 0, 0, .16, 3.2, 5, .12);
+    M.color('#5b4636');   // [w2-budget] the trunk: five sides, no cap (it ends inside the crown): 10 triangles, was 15
+    for (let k = 0; k < 5; k++) {
+      const p = (a, r, y) => new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r), a0 = k / 5 * Math.PI * 2, a1 = (k + 1) / 5 * Math.PI * 2;
+      M.quad(p(a0, .16, 0), p(a0, .12, 3.2), p(a1, .12, 3.2), p(a1, .16, 0));
+    }
     const crown = new THREE.IcosahedronGeometry(1, 0).toNonIndexed(), pos = crown.attributes.position;
     for (const [ox, oy, oz, r] of [[0, 4.8, 0, 2.4]]) {
       M.color('#ffffff');
