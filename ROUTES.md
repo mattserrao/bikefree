@@ -126,7 +126,157 @@ node tools/glacier_sides.mjs 41700 44345             # which side of the road fa
 - **Life:** `life` with `goats`, `bighorn`, `marmots`, `squirrels`, `bears` (`{ atM, radiusM, count, lateralM, side }`),
   `ducks` and counts of `ravens` and `eagles` (`js/world/glacier-life.js`).
 - **Weather:** `weather.presets` can include `smoke` (wildfire smoke); mountain scenes get cloud caps on the
-  summits with `clouds` and `rain`. `signs[].kind: "nps"` is the brown park sign.
+  summits with `clouds` and `rain`. (Going-to-the-Sun now offers only clear, valley fog and clouds on the peaks.)
+- **Distance:** see *Vista kit* below (Going-to-the-Sun uses all of it). `signs[].kind: "nps"` is the brown park sign.
+
+## Vista kit: scenery that reads at a distance (any route)
+
+`js/world/vista.js` is a set of opt-in pieces that make far terrain read as mountains, forest and air
+instead of smooth colour ramps. A scene turns them on with a `vista` block; leave a part out and it's off.
+None of them adds a draw call. Going-to-the-Sun is the first route to use it:
+
+```json
+"vista": {
+  "rock":     { "ribs": 0.9, "ledges": 0.7, "scree": 0.6 },
+  "snow":     { "gullies": 0.85, "ledges": 0.6 },
+  "meadow":   { "mottle": 0.7 },
+  "forest":   { "crowns": 0.85, "boost": 1.6 },
+  "haze":     { "strength": 0.62, "rangeM": 5500, "falloffM": 900, "blue": 0.35 },
+  "ridgeInk": { "strength": 0.35, "thresh": 0.22, "startM": 450 },
+  "clouds":   { "count": 24, "minM": 6000, "maxM": 15000, "spanM": 1200 }
+}
+```
+
+- **`rock`** (ground shader): gullies and spurs running down the fall line, on two fixed world-space
+  projections so nothing swims. They bend the lighting, so the cartoon bands follow them. Also narrow,
+  broken ledges along the contours, and pale loose rock in the gullies below the faces. Optional
+  `ribWidthM`, `ribLengthM`, `reliefM` and `ledgeM` (defaults 30, 170, 22 and 30). The ground far off is
+  built coarser, so it's steepened with distance before deciding what's a face.
+- **`snow`**: snow held in the gullies and on the ledges around `snowLineM`. North faces keep more.
+- **`meadow`**: shrub patches and a slow yellow-green to blue-green drift on open slopes. Uses
+  `palette.shrub`, and `palette.scree` for the loose rock.
+- **`forest`** (forest-edge scenes): the canopy beyond the real trees is drawn as crowns lit on the sun
+  side, which fade to their average colour once they're a few pixels. `boost` makes partial cover read
+  denser.
+- **`haze`** (`haze.js`, the shared fog chunk): aerial perspective. Distance fades toward a pale sky blue
+  (the horizon colour moved `blue` of the way to the zenith), thicker in the low air than on the tops
+  (`falloffM` above `baseM`, default the route's lowest point), so each ridge separates from the one behind.
+- **`ridgeInk`** (`post.js`'s final pass): a soft line in the ridge's own colour, darker, where one ridge
+  stands in front of another, from `startM` out. Works with or without the cartoon `look`.
+- **`clouds`**: cartoon cumulus (four flat-bottomed shapes in one texture, lit tops, cool bases) in place of
+  the soft cloud ring, lower and closer so they sit among the peaks. Still one draw call.
+
+Every detail fades to its average once it's smaller than about two pixels, so nothing shimmers far off.
+The rock work is skipped on flat ground.
+
+**Forest additions** (`forest.js`, used with the vista kit but separate from it):
+- `vegetation.tierKeep: [near, mid, far]` keeps more of the stand in the outer tiers. The default is
+  `[1, .62, .4]`; Going-to-the-Sun uses `[1, .66, .5]`.
+- `vegetation.windows: { everyM, lengthM, reachM, downhill, downhillM, keep }` opens a gap in the trees
+  every `everyM` or so, each a little different. A gap clears the trees between the road and a lake
+  (`shore + road distance < reachM`). With `downhill`, it also clears the low side of the road, within
+  `downhillM`. `keep` is the share of trees left standing.
+  `windowAt(sM, windows, seed)` lists where the gaps fall.
+
+## Road surface and stonework (any route)
+
+**Road surface** (`js/world/road-surface.js`): the road changes with the place and its condition. A scene's
+`road` block names the default kind, and zones override it (later zones win, with 40 m blends at the ends):
+
+```json
+"road": {
+  "surface": "worn",
+  "zones": [
+    { "fromM": 0, "toM": 2200, "surface": "fresh" },
+    { "fromM": 41380, "toM": 41620, "surface": "alpine", "wet": 1 },
+    { "fromM": 50200, "toM": 56500, "surface": "patched", "runoff": 0.35 }
+  ]
+}
+```
+
+- **Kinds:** `fresh`, `worn`, `chipseal`, `alpine`, `patched` and `tunnel`.
+- **What the shader draws:** a darker fresh overlay or a bleached old one, polished wheel tracks, patches with sealed seams, sealed cracks (crossing and along the joints), chip-seal grain, crumbling and dusty edges, faded paint, snowmelt crossing the road, and tunnel grime.
+- **Overrides:** any of `tone`, `warm`, `wear`, `patches`, `cracks`, `edge`, `fade`, `speckle`, `runoff` and `grime` can be set in a zone.
+- **Variety:** each ~300 m also varies a little within its zone.
+- **Limits:** up to 24 zones. Distances are along the road (on an out-and-back, the outbound half).
+
+The rain preset's wet road is added on top of this.
+
+**Look-only settings for a zone:** the road's geometry, lanes and traffic stay as they are.
+- `pavedM` is the paved width. The rest of the 7 m strip becomes a gravel shoulder with a ragged paving edge, and the edge lines are repainted inside it.
+- `centre` sets the centre line: 1 is painted, 0.4 is faded and broken, and 0 is none.
+- `gravel` spreads loose gravel over the lanes in patches.
+
+**Stonework** (`js/world/stonework.js`):
+- `makeMasonryMaterial({ stones, mortar, courseM, moss, mossM })` draws rubble masonry from world position: wavy courses, stones of mixed length and colour, recessed joints, weather streaks, and moss at the foot.
+- Because the pattern comes from world position, it doesn't stretch with the box it's on, and it carries on from one segment to the next.
+- `makeParapetGeometry()` is a unit parapet with battered sides and a rounded cap.
+
+Going-to-the-Sun's guardwalls use both:
+- They're knee-high, with a rounded cap and regular openings.
+- Each one follows the road's grade.
+- A masonry footing runs down to the ground where the slope falls away.
+- They're grouped into 1.5 km stretches, and stretches past 2 km are hidden.
+- `glacier.guardwalls` takes `segmentM`, `openingM`, `stones` and `mortar`.
+
+## Life along the road (any route)
+
+- **Verge** (`js/world/verge.js`, the scene's `verge` block):
+  - mile or kilometre markers (`markers.units`)
+  - tall snow poles (`poles` ranges)
+  - white delineators (`posts` ranges)
+  - fallen rock on the shoulder and the bench below the deeper road cuts (`debris` ranges)
+  - Grouped per 1.5 km and hidden past `reachM`.
+- **Visitors** (`js/world/visitors.js`, the `visitors` block):
+  - People stand or slowly stroll at `spots`: a `site` by name, or `{ atM, side, lateralM, radiusM }`.
+  - `lookouts: n` puts n people at each overlook.
+  - `walking` is the share who stroll.
+  - One animated instanced mesh. Half as many people on Light.
+- **Traffic mix:** `traffic.mix` sets each kind's weight. It can add `jammer` (Glacier's Red Jammer tour buses). Jammers also park at overlooks.
+- **Streams** (`streams: [{ name, fromM, toM, widthM, minRoadM, searchM }]`, real-terrain scenes): a creek along a valley floor beside the road, found by taking the lowest ground to one side and registered like the bridge creeks, so it carves a channel, keeps trees out and is drawn. All creeks show white water where they drop quickly.
+- **Burns** (`burns: [{ lat, lon, lengthM, widthM, angle }]`, real-mountain): old fire scars.
+  - silver snags, young lodgepole and fireweed
+  - grey-green ground with pink drifts
+  - a thinned, silver distant canopy
+  - Needs the vista kit for the ground tint (`palette.burn`, `palette.fireweed`).
+- **Road cuts** (`vista.rock.cuts`): the blasted face above the road, found from how far the ground was cut down for the road, with seeps staining it dark (`palette.cutRock`).
+- **Glacier extras** (`glacier`):
+  - `culverts: { fromM, toM, minDepthM, maxCount }`: masonry headwalls where gullies reach the road, cascades down the steep ones and a spill below.
+  - `waterfalls[].overRoad`: Weeping Wall strands arcing onto the near lane.
+- **Wildlife set pieces** (`life.moments`): `{ kind: goat|bighorn|marmot, atM, count, where: uphill|valley|shoulder|wall, lateralM, spacingM }` puts animals where the chase camera sees them. `wall` sits them on the guardwall.
+- **View windows:** `vegetation.windows.at: [metres]` opens the trees at the real viewpoints, toward the lake and down the valley, over `atLengthM`. Random windows stay toward the lake only when `downhill` is false.
+
+## Going-to-the-Sun trees, ground cover and flowers (`vegetation.rich`)
+
+Only Going-to-the-Sun has this for now. The tools will be brought to the other routes once this route is finished.
+- **Trees** (`glacier-kit.js`):
+  - Each tree is built from tiers of branches. Every tier is a cone whose rim zigzags (tips out, notches in) and droops, with a darker underside (the shaded inside, seen from the low chase camera).
+  - Spruce, lodgepole, larch and hemlock have dead lower limbs.
+  - Fir and spruce carry old-man's-beard lichen.
+  - Cedars have flared, buttressed red trunks.
+  - Third variants give crown character: a candelabra cedar, a broken-top spruce, a forked fir and a wind-bent lodgepole.
+- **Surfaces** (`decorateTreeMaterial`, near trees only; the kit tags each surface with `aTree`):
+  - foliage in clumps with sunlit tips and dark hollows, and the cartoon bands break around them
+  - furrowed bark, stringy red cedar, plated pine and larch
+  - white aspen with black eyes and a dark foot
+  - silver deadwood
+  - moss at the foot of the trunks
+  - aspen leaves that quake and flash silver
+  - The fine detail fades past about 60 m.
+- **Planting** (`forest.js`, near tier):
+  - an age mix: saplings, plus old giants in the valleys more than 22 m from the road
+  - some trees lean
+  - big crowns stay clear of the chase camera
+  - a forest floor of down logs with root wads (kept more than 15 m from the road), stumps, moss mats, fallen branches and mossy stones
+  - shrubs by place: willow by creeks, thimbleberry and serviceberry in the moist valley, juniper on dry east-side rocks
+- **Ground cover:**
+  - grass kinds by zone (bunchgrass, sedge, meadow grass with seed heads, dry gold grass east of the divide)
+  - dense short tufts on a 0.9 m grid from the shoulder out to 12 m in the near tiles
+  - flower drifts: patches of one flower, thick in the middle and thinning at the edges, by zone (`FLOWERS` in `stylized-terrain.js`), plus a brighter verge strip
+  - Drifts use three-clump assets (`lupineD`, `arnicaD` …).
+  - New flowers: lupine, arnica, aster and monkeyflower.
+  - `vegetation.coverBoost` scales the cover candidates.
+- **`water.lakeReachM`:** don't draw lake chunks beyond this distance. Small far tarns were costing a draw call each.
 
 ## Style-C scenery for every scenic route
 
@@ -168,7 +318,10 @@ To author another region, copy the closest scene preset, set `title`, `seed`,
 - `bridgeRanges`: `fromM`, `toM`, `depthM` and optional `lateralM` for parallel bridges.
 - `vegetation`: asset names in `trees`, `shrubs` and `cover`; `treeDensity`,
   `density`, `vergeDensity` and optional `treelineM`; `snowLineM` colors high ground.
-- `preview`: `positionM` and `camera` establish a useful initial review view.
+- `preview`: `positionM` sets a useful initial review spot (the view is always the chase camera).
+- `look`: `"gentle"` or `"bold"` lays the cartoon look over the scenery (`js/world/look.js`: toon bands, colour grade,
+  smooth crowns, flat road, ink outlines drawn in `post.js`'s final pass). Route 28 uses `"gentle"` with
+  `"timeOfDay": "midday"`. Preview `?look=none|gentle|bold`, snapshot tags `:current`, `:gentle`, `:bold`.
 
 Add the scene path to the new catalog entry and run `npm run routes:build`.
 Check the full route with the preview slider and all quality settings. The builder
@@ -199,11 +352,10 @@ python3 -m http.server 8765 --bind 127.0.0.1
 ```
 
 Open `http://127.0.0.1:8765/tools/world-preview.html`. Use the position slider,
-route picker, Ride/Pause, camera and lighting controls. Useful URLs:
+route picker, Ride/Pause and lighting controls. Useful URLs:
 
-- `?park=bigsur&pos=15420&cam=chase` — bridge approach.
-- `?park=bigsur&pos=15670&cam=vista` — bridge structure and coast.
-- `?park=bigsur&pos=17700&cam=chase&time=golden` — coast in warm light.
+- `?park=bigsur&pos=15420` — bridge approach.
+- `?park=bigsur&pos=17700&time=golden` — coast in warm light.
 - `?park=bigsur&pos=15420&style=legacy` — previous renderer; needs tile services.
 
 `clean=1` hides preview controls for captures. `speed=10` rides at 10 m/s. The
@@ -231,12 +383,11 @@ rate, thermal behaviour and Bluetooth operation still need checking on the M4 Ai
 Chrome and saves them as images, with the draw calls and triangles each view costs.
 
 ```sh
-npm run snap -- route28@10650 route28@19050:morning route28@16200:drone pittsburgh
+npm run snap -- route28@10650 route28@19050:morning route28@16200 pittsburgh
 npm run snap -- --quality high bigsur@21800:golden route28@24450:fall
 ```
 
-A shot is `<park>[@metres][:camera][:time][:season][:weather]`:
-- camera: `chase`, `drone`, `vista`, `side` or `eye`
+A shot is `<park>[@metres][:time][:season][:weather]`, always from the chase camera:
 - time: `midday`, `morning`, `golden` or `night`
 - season: `summer` or `fall`
 - weather: `clear`, `marine`, `clouds` or `rain`
@@ -265,11 +416,9 @@ npm run snap:cam -- pittsburgh --shots tools/shots/pittsburgh-landmarks.json --o
 
 ### Postcard views
 
-A scene's `views` give the scenic (`vista`) camera fixed postcard positions: within `rangeM` of a view's
-distance along the route, the camera holds that view instead of orbiting the nearest landmark. Each view has
-`cam` and `look` (lat, lon, and `up` metres above the ground, or `abs` metres above sea level) and `atM`
-(or the route point nearest the camera). Pittsburgh's: the Point from the Ohio, the Golden Triangle from the
-Monongahela, the Duquesne Incline deck, and (built at run time) the first Grandview Avenue overlook.
+Retired with the scenic (`vista`) camera on 16 Nov 2026: the chase camera is now the only view.
+A scene's `views` (Pittsburgh's postcard positions) are still in its JSON but nothing reads them; use
+`snap:cam` for close-ups of landmarks.
 - `--software` (no GPU; slow but works on a server)
 
 It serves the repo itself, waits until every queued scenery tile is built, then draws a single

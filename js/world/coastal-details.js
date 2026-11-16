@@ -238,7 +238,7 @@ export class CoastalDetails {
   _creeks() {
     for (const creek of this.landscape.creeks) {
       const makeRibbon = (width, bank) => {
-        const positions = [], uv = [], indices = [];
+        const positions = [], uv = [], indices = [], foam = [];
         const offsets = bank ? [-width / 2, -creek.width / 2, creek.width / 2, width / 2] : [-width / 2, width / 2];
         const columns = offsets.length;
         for (let t = creek.start, i = 0; t <= creek.mouth; t += 6, i++) {
@@ -249,6 +249,8 @@ export class CoastalDetails {
             const x = p.x - dz / len * offset, z = p.z + dx / len * offset;
             const y = bank ? this.landscape.heightAt(x, z) + .025 : creek.waterAt(t);
             positions.push(x, y, z); uv.push(offset / width + .5, t / 16);
+            // white water where the creek drops quickly (rapids, cascades)
+            foam.push(Math.min(1, Math.max(0, (creek.waterAt(t - 8) - creek.waterAt(t + 8)) / 16 - .012) * 18));
           }
           if (i) for (const pair of bank ? [0, 2] : [0]) {
             const a = (i - 1) * columns + pair;
@@ -258,6 +260,7 @@ export class CoastalDetails {
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
         geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+        geometry.setAttribute('aFoam', new THREE.Float32BufferAttribute(foam, 1));
         geometry.setIndex(indices); geometry.computeVertexNormals();
         return geometry;
       };
@@ -265,12 +268,21 @@ export class CoastalDetails {
       const material = this._material('#67948c', { roughness: .32, metalness: .08, side: THREE.DoubleSide });
       material.onBeforeCompile = (shader) => {
         shader.uniforms.uTime = this.uniforms.uTime;
-        shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vBfCreek;')
-          .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBfCreek = uv;');
-        shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vBfCreek; uniform float uTime;')
+        shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vBfCreek; attribute float aFoam; varying float vBfFoam;')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBfCreek = uv; vBfFoam = aFoam;');
+        shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>
+            varying vec2 vBfCreek; uniform float uTime; varying float vBfFoam;
+            float bfCH(vec2 p) { vec3 q = fract(vec3(p.xyx) * .1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
+            float bfCN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
+              return mix(mix(bfCH(i), bfCH(i + vec2(1., 0.)), f.x), mix(bfCH(i + vec2(0., 1.)), bfCH(i + 1.), f.x), f.y); }`)
           .replace('#include <color_fragment>', `#include <color_fragment>
             float bfFlow = sin(vBfCreek.y * 35. - uTime * 1.6 + sin(vBfCreek.x * 18.) * 2.);
             diffuseColor.rgb *= .96 + bfFlow * .055;
+            // rapids: white water streaming downstream, thickest mid-channel and over the steepest drops
+            float bfWW = bfCN(vec2(vBfCreek.x * 9., vBfCreek.y * 12. - uTime * 3.2)) * .6 + bfCN(vec2(vBfCreek.x * 23., vBfCreek.y * 30. - uTime * 5.)) * .4;
+            float bfMid = 1. - abs(vBfCreek.x - .5) * 1.4;
+            float bfWhite = smoothstep(.55 - vBfFoam * .35, .62 - vBfFoam * .35, bfWW * bfMid + vBfFoam * .2) * smoothstep(.02, .15, vBfFoam + .03);
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.93, .96, .97), bfWhite * .85);
           `);
       };
       const name = creek.name || creek.bridge?.creekName || creek.bridge?.name.replace(/ Bridge$/, '') || 'River';

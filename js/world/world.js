@@ -4,11 +4,14 @@ import { makeProjection, makeRouteIndex } from './geo.js';
 import { Terrain } from './terrain.js';
 import { Weather } from './weather.js';
 import { PostFX } from './post.js';
+import { Look, LOOKS } from './look.js';
 import { StylizedTerrain, COASTAL_QUALITY } from './stylized-terrain.js';
 import { riderPose, routePoint, ROAD_WIDTH } from './pose.js';
 import { loadRider } from './rider.js';
 import { PerfMonitor } from './perf.js';
-import { HAZE, installHaze } from './haze.js';
+import { HAZE, AERIAL, AERIAL_COLOR, installHaze } from './haze.js';
+import { vistaConfig } from './vista.js';
+import { decorateRoad } from './road-surface.js';
 
 installHaze();   // valley haze in the fog chunks: before any material compiles
 import { wrapDist } from '../gpx.js';
@@ -16,6 +19,8 @@ import { wrapDist } from '../gpx.js';
 export const TIME_PRESETS = {
   morning: { label: 'Morning', elev: 14, az: 105, top: '#6f9fd8', horizon: '#f2d6b8', hemiSky: '#f6eedf', hemiGround: '#9a917e', sun: '#ffe2b8', sunI: 0.45, hemiI: 1.45, exposure: 1.0 },
   midday: { label: 'Midday', elev: 58, az: 180, top: '#3f7fd0', horizon: '#c6dbef', hemiSky: '#ffffff', hemiGround: '#a39b88', sun: '#ffffff', sunI: 0.55, hemiI: 1.35, exposure: 1.0 },
+  // lean cartoon pass: a candidate signature time for Route 28 (sun high enough to light the road between the trees)
+  afternoon: { label: 'Late afternoon', elev: 24, az: 248, top: '#5e93cf', horizon: '#ecd3b0', hemiSky: '#fbeedd', hemiGround: '#9a9179', sun: '#ffdcaa', sunI: 0.5, hemiI: 1.4, exposure: 1.02 },
   golden: { label: 'Golden hour', elev: 7, az: 258, top: '#5c78b4', horizon: '#f7b77d', hemiSky: '#ffe6c8', hemiGround: '#9a8670', sun: '#ffc27a', sunI: 0.45, hemiI: 1.4, exposure: 1.05 },
   // v0.12: moonlight, a deep blue sky with stars, and (in a city) the lights come on
   night: { label: 'Night', elev: 40, az: 150, top: '#0a1226', horizon: '#2a3150', hemiSky: '#7d8fbf', hemiGround: '#2b2b35', sun: '#b4c6ea', sunI: 0.3, hemiI: 0.5, exposure: 1.2, night: true },
@@ -38,7 +43,6 @@ export class World {
     this.container = container;
     this.route = route;
     this.log = opts.log || (() => {});
-    this.cameraMode = 'chase';
     this.s = 0;               // displayed position along the route (m)
     this.crank = 0;
     this.running = false;
@@ -68,6 +72,9 @@ export class World {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     container.prepend(this.renderer.domElement);
     this.renderer.domElement.className = 'world-canvas';
+    // cartoon look: the scene's "look" (Route 28: gentle), or ?look=gentle|bold|none in the preview
+    const lookKey = opts.look ?? route.scene?.look;
+    this.look = this.stylized && Object.hasOwn(LOOKS, lookKey) ? new Look(this, lookKey) : null;
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(62, 1, 0.3, 150000);
@@ -101,6 +108,7 @@ export class World {
       renderer: this.renderer,
       farInner: FAR_INNER, farBand: FAR_BAND,
       onError: (err) => this.log('3d', `Tile load problem: ${err.message}`, 'debug'),
+      look: this.look?.key,
     });
     // v0.11.2 blend: real terrain and aerial photos beyond ~1.5 km behind the stylized foreground,
     // colour-matched to the route's palette. Needs internet; until its base tiles arrive (or offline)
@@ -127,6 +135,10 @@ export class World {
     // every stylized scene goes through it; only hero scenes (scene.post) get the bloom, grade and vignette
     if (this.stylized) this.post = new PostFX(this.renderer, { samples: COASTAL_QUALITY[this.qualityKey].samples });
     this.heroPost = !!(this.stylized && route.scene.post);
+    // vista kit: faint outlines on the far ridges (with or without the cartoon look's near outlines)
+    this.vista = this.stylized ? vistaConfig(route.scene) : null;
+    const ridge = this.vista?.ridgeInk || null;
+    if (this.look || ridge) this.post.setInk({ ...(this.look?.ink || { px: 1, strength: 0, thresh: 1, fadeM: 1 }), ridge });
     // Simple stand-in until the Blender model loads
     this.rider = makeRider();
     this.scene.add(this.rider.group);
@@ -200,8 +212,6 @@ export class World {
     this.pacer.group.visible = true;
     this.pacer.update(pos, fwd, this.pacerCrank, src.speed, Math.min(dt, 0.1));
   }
-
-  setCamera(mode) { this.cameraMode = mode; this._camInit = false; }
 
   /** clear | marine | clouds | rain (eases in over a few seconds). */
   /** The weather presets this route offers (a scene can limit and rename them: Pittsburgh's "River fog"). */
@@ -283,6 +293,13 @@ export class World {
       HAZE.y = A.hazeM ?? 75;
       HAZE.z = Math.min(.85, strength * (A.haze ?? 1) * (1 + o * .4));
     } else HAZE.z = 0;
+    // aerial perspective (vista kit): ridges fade toward a pale sky blue with distance, less on the tops
+    const VH = this.vista?.haze;
+    if (VH && !t.night) {
+      const c = new THREE.Color(t.horizon).lerp(new THREE.Color(t.top), VH.blue);
+      AERIAL_COLOR.r = c.r; AERIAL_COLOR.g = c.g; AERIAL_COLOR.b = c.b;
+      Object.assign(AERIAL, { x: VH.rangeM, y: VH.strength * (1 - o * .3), z: VH.falloffM, w: VH.baseM ?? this.route.minEle });
+    } else AERIAL.y = 0;
     this._fogBase = { near: this._fogBase?.near ?? this.scene.fog.near, far: this._fogBase?.far ?? this.scene.fog.far, color: new THREE.Color(t.horizon) };
     this.terrain?.setTime?.(this.timeKey);
     this.terrain?.setNight?.(t.night ? 1 : 0);
@@ -295,6 +312,7 @@ export class World {
     for (const tu of [this.terrain?.uniforms, this.farTerrain?.uniforms]) {
       if (tu?.uSunDir) { tu.uSunDir.value.copy(dir); tu.uSkyTop.value.set(t.top); tu.uSkyHorizon.value.set(t.horizon); }
     }
+    this.look?.applyLight();
   }
 
   start() {
@@ -380,9 +398,8 @@ export class World {
    * frame for the things that move by themselves (wind, traffic, a rider standing still).
    */
   _placeShadows(riderPos, flat) {
-    const target = _v1.copy(this.cameraMode === 'vista' ? this.camTarget : riderPos);
-    if (this.cameraMode !== 'vista') target.addScaledVector(flat, 40);
-    const span = this.cameraMode === 'vista' ? 170 : 105;
+    const target = _v1.copy(riderPos).addScaledVector(flat, 40);
+    const span = 105;
     const sm = this.renderer.shadowMap;
     // light-space axes, then snap the box centre to the texel grid
     const d = this.sunDir, right = _v2.set(0, 1, 0).cross(d);
@@ -404,58 +421,31 @@ export class World {
     sm.needsUpdate = moved || this._shadowFrame % 2 === 0;
   }
 
+  // The one camera: chase, behind and above the rider (the drone, scenic, side and eye views were retired).
   _updateCamera(riderPos, flat, fwd, dt) {
     // scratch vectors (no allocations in the frame loop)
-    const C = this._cam ||= { pos: new THREE.Vector3(), look: new THREE.Vector3(), a: new THREE.Vector3(), b: new THREE.Vector3() };
+    const C = this._cam ||= { pos: new THREE.Vector3(), look: new THREE.Vector3() };
     const up = UP, pos = C.pos, look = C.look;
-    if (this.cameraMode === 'vista' && this.stylized) {
-      const b = this.terrain.landscape.landmarks.reduce((best, l) => (!Number.isFinite(l.s) ? best : !best || Math.abs(this.s - l.s) < Math.abs(this.s - best.s) ? l : best), null);
-      const nearby = b && Math.abs(this.s - b.s) < (b.range || 900);
-      if (nearby && b.view) {
-        // an authored postcard (Grandview Overlook toward the Point, the skyline from the Smithfield Street Bridge)
-        pos.copy(b.view.pos); look.copy(b.view.look); this._postcard = true;
-      } else {
-        this._postcard = false;
-        const direction = nearby ? C.a.set(b.fx, 0, b.fz) : C.a.copy(flat);
-        const right = C.b.set(-direction.z, 0, direction.x);
-        const target = nearby ? look.set(b.x, b.y, b.z) : look.copy(riderPos);
-        pos.copy(target).addScaledVector(right, -245).addScaledVector(direction, -65).addScaledVector(up, 105);
-        look.addScaledVector(up, -16);
-      }
-    } else if (this.cameraMode === 'eye') {
-      pos.copy(riderPos).addScaledVector(up, 1.55).addScaledVector(flat, 0.35);
-      const p = routePoint(this.route, this.index, this.s + 35);
-      look.set(p.x, p.y, p.z).addScaledVector(C.a.set(-flat.z, 0, flat.x), ROAD_WIDTH * 0.22).addScaledVector(up, 1.3);
-    } else if (this.cameraMode === 'side') {
-      const right = C.a.set(-flat.z, 0, flat.x);
-      pos.copy(riderPos).addScaledVector(right, -3.4).addScaledVector(flat, 0.6).addScaledVector(up, 1.15);
-      look.copy(riderPos).addScaledVector(up, 0.35).addScaledVector(flat, 0.15);
-    } else if (this.cameraMode === 'drone') {
-      pos.copy(riderPos).addScaledVector(flat, -45).addScaledVector(up, 26);
-      look.copy(riderPos).addScaledVector(flat, 25);
-    } else {
-      // Aim a little low so the rider sits above the HUD strip at the bottom of the screen.
-      pos.copy(riderPos).addScaledVector(flat, -6.5).addScaledVector(up, 2.7);
-      look.copy(riderPos).addScaledVector(fwd, 8).addScaledVector(up, -0.2);
-    }
+    // Aim a little low so the rider sits above the HUD strip at the bottom of the screen.
+    pos.copy(riderPos).addScaledVector(flat, -6.5).addScaledVector(up, 2.7);
+    look.copy(riderPos).addScaledVector(fwd, 8).addScaledVector(up, -0.2);
     // Keep the camera above ground
     const g = this.terrain.heightAt(pos.x, pos.z);
-    const clearance = this.cameraMode === 'vista' ? (this._postcard ? 1.6 : 25) : 1.6;
-    if (g != null && pos.y < g + clearance) pos.y = g + clearance;
+    if (g != null && pos.y < g + 1.6) pos.y = g + 1.6;
 
     if (!this._camInit) {
       this.camera.position.copy(pos);
       this.camTarget.copy(look);
       this._camInit = true;
     } else {
-      const k = this.cameraMode === 'eye' || this.cameraMode === 'side' ? 1 - Math.exp(-dt * 12) : 1 - Math.exp(-dt * 3.5);
-      this.camera.position.lerp(pos, k);
+      this.camera.position.lerp(pos, 1 - Math.exp(-dt * 3.5));
       this.camTarget.lerp(look, 1 - Math.exp(-dt * 5));
     }
     this.camera.lookAt(this.camTarget);
   }
 
   _render() {
+    this.look?.sweep();   // patch any material that arrived since the last frame (new tiles reuse patched ones)
     if (this.post && (!this.heroPost || this.qualityKey === 'low')) this.post.render(this.scene, this.camera, { grade: false });
     else if (this.post) {
       const k = this.timeKey, o = this._weatherLight?.overcast || 0;
@@ -470,7 +460,7 @@ export class World {
   togglePerf(on, place) {
     this.perf ||= new PerfMonitor(this.renderer, this.container, () => ({
       route: this.route.scene?.title || this.route.name, quality: this.qualityKey, time: this.timeKey,
-      weather: this.weather ? this.weatherKey : null, camera: this.cameraMode,
+      weather: this.weather ? this.weatherKey : null,
     }), place);
     return this.perf.toggle(on);
   }
@@ -620,6 +610,8 @@ function makeRoad(route, index) {
   tex.anisotropy = 8;
   const roadOptions = { map: tex, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 };
   const mat = stylized ? new THREE.MeshStandardMaterial({ ...roadOptions, roughness: .94, metalness: .015 }) : new THREE.MeshLambertMaterial(roadOptions);
+  // road surface by area and condition (js/world/road-surface.js): the scene's "road" block
+  if (stylized && route.scene.road) decorateRoad(mat, route.scene.road, { widthM: ROAD_WIDTH, repeatM: 24 });
   if (stylized) {
     const data = new Uint8Array(128 * 128 * 4);
     for (let k = 0; k < data.length; k += 4) { const v = 105 + Math.random() * 45; data.set([v, v, v, 255], k); }

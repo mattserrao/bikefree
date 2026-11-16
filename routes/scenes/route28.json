@@ -7,6 +7,8 @@
     "models/scenery/regional.json"
   ],
   "seed": 1101,
+  "look": "gentle",
+  "timeOfDay": "midday",
   "description": "The real terrain and lake shorelines (USGS elevation, baked by tools/build_scene_terrain.py) under a stylized northern forest, villages and lakeside camps.",
   "title": "Adirondack Lakes \u00b7 Route 28",
   "region": "adirondack-forest",

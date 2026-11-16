@@ -230,10 +230,71 @@ export function makeRealCoastLandscape(config, proj, index, route) {
       positionAt: (t) => at(t), waterAt: (t) => at(t).y,
       box: [Math.min(...xs) - 20, Math.min(...zs) - 20, Math.max(...xs) + 20, Math.max(...zs) + 20] });
   }
+  // ---- Streams: a creek that runs beside the road along a valley floor (McDonald Creek), found by
+  //      walking the road and taking the lowest ground to one side; registered as a creek ----
+  for (const st of config.streams || []) {
+    const raw = [];
+    let side = 0;
+    for (let s = st.toM; s >= st.fromM; s -= 25) {   // downstream: the road climbs, the water falls
+      const p = frameAt(s);
+      let best = null;
+      for (const sd of side ? [side] : [-1, 1]) for (let o = st.minRoadM ?? 18; o <= (st.searchM ?? 160); o += 6) {
+        const x = p.x - p.fz * sd * o, z = p.z + p.fx * sd * o, h = T.at(x, z) + o * .004;
+        if (!best || h < best.h) best = { x, z, h, sd };
+      }
+      side ||= best.sd;
+      raw.push({ x: best.x, z: best.z });
+    }
+    let pts = raw;
+    for (let pass = 0; pass < 4; pass++) for (let k = 1; k < pts.length - 1; k++) {
+      pts[k] = { x: (pts[k - 1].x + pts[k].x * 2 + pts[k + 1].x) / 4, z: (pts[k - 1].z + pts[k].z * 2 + pts[k + 1].z) / 4 };
+    }
+    // keep clear of the road
+    for (const p of pts) { const hit = index.nearest(p.x, p.z, (st.minRoadM ?? 18)); if (hit) { const dx = p.x - index.xs[hit.i], dz = p.z - index.zs[hit.i], d = Math.hypot(dx, dz) || 1, k = (st.minRoadM ?? 18) / d; p.x = index.xs[hit.i] + dx * k; p.z = index.zs[hit.i] + dz * k; } }
+    let sAcc = 0;
+    pts.forEach((p, k) => { if (k) sAcc += Math.hypot(p.x - pts[k - 1].x, p.z - pts[k - 1].z); p.s = sAcc; });
+    const levels = pts.map((p) => T.at(p.x, p.z));
+    for (let k = 1; k < levels.length; k++) levels[k] = Math.min(levels[k], levels[k - 1] - .02);
+    pts.forEach((p, k) => { p.y = levels[k] + .25; });
+    const at = (t) => {
+      let k = 0; while (k < pts.length - 2 && pts[k + 1].s < t) k++;
+      const a = pts[k], c = pts[k + 1], f = Math.max(0, Math.min(1, (t - a.s) / (c.s - a.s || 1)));
+      return { x: a.x + (c.x - a.x) * f, z: a.z + (c.z - a.z) * f, y: a.y + (c.y - a.y) * f };
+    };
+    const xs = pts.map((p) => p.x), zs = pts.map((p) => p.z), width = st.widthM || 10;
+    creeks.push({ name: st.name, stream: st, width, points: pts, start: 0, mouth: pts.at(-1).s,
+      positionAt: (t) => at(t), waterAt: (t) => at(t).y,
+      box: [Math.min(...xs) - 20, Math.min(...zs) - 20, Math.max(...xs) + 20, Math.max(...zs) + 20] });
+  }
+  // a coarse grid of each creek's segments, so a lookup tests a few segments instead of the whole creek
+  const CG = 48;
+  for (const c of creeks) {
+    c.grid = new Map();
+    const pad = c.width / 2 + 14;
+    for (let i = 0; i < c.points.length - 1; i++) {
+      const a = c.points[i], b = c.points[i + 1];
+      for (let gx = Math.floor((Math.min(a.x, b.x) - pad) / CG); gx <= Math.floor((Math.max(a.x, b.x) + pad) / CG); gx++)
+        for (let gz = Math.floor((Math.min(a.z, b.z) - pad) / CG); gz <= Math.floor((Math.max(a.z, b.z) + pad) / CG); gz++) {
+          const k = gx * 100003 + gz; (c.grid.get(k) || c.grid.set(k, []).get(k)).push(i);
+        }
+    }
+  }
+  const nearestInGrid = (c, x, z) => {
+    const list = c.grid.get(Math.floor(x / CG) * 100003 + Math.floor(z / CG));
+    if (!list) return null;
+    let best = null, bd = Infinity;
+    for (const i of list) {
+      const a = c.points[i], b = c.points[i + 1], dx = b.x - a.x, dz = b.z - a.z;
+      const f = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz || 1)));
+      const d = Math.hypot(x - a.x - dx * f, z - a.z - dz * f);
+      if (d < bd) { bd = d; best = { d, i, f, s: a.s + (b.s - a.s) * f }; }
+    }
+    return best;
+  };
   const creekHit = (x, z, pad) => {
     for (const c of creeks) {
       if (x < c.box[0] || z < c.box[1] || x > c.box[2] || z > c.box[3]) continue;
-      const hit = nearestOnLine(c.points, x, z);
+      const hit = nearestInGrid(c, x, z);
       if (hit && hit.d < c.width / 2 + pad) return { creek: c, hit };
     }
     return null;
@@ -303,6 +364,20 @@ export function makeRealCoastLandscape(config, proj, index, route) {
       const r = Math.hypot(u / g.radiusM, v / (g.radiusM * (g.aspect || .6))) + n;
       const h = T.at(x, z);
       k = Math.max(k, (1 - smoothstep(.75, 1, r)) * smoothstep(g.base - 20, g.base + 40, h));
+    }
+    return k;
+  };
+
+  // ---- Burns: old fire scars (silver snags, fireweed), ragged-edged ellipses ----
+  const burns = (config.burns || []).map((b) => { const p = proj.toLocal(b.lat, b.lon); return { ...b, ...p, a: (b.angle || 0) * Math.PI / 180 }; });
+  const burnAt = (x, z) => {
+    let k = 0;
+    for (const b of burns) {
+      const dx = x - b.x, dz = z - b.z, L2 = b.lengthM / 2, W2 = b.widthM / 2;
+      if (Math.abs(dx) > L2 * 1.3 + W2 && Math.abs(dz) > L2 * 1.3 + W2) continue;
+      const u = dx * Math.cos(b.a) + dz * Math.sin(b.a), v = -dx * Math.sin(b.a) + dz * Math.cos(b.a);
+      const n = Math.sin(x / 71 + Math.sin(z / 97) * 2) * .14 + Math.sin(z / 43 - x / 59) * .08;
+      k = Math.max(k, 1 - smoothstep(.8, 1, Math.hypot(u / L2, v / W2) + n));
     }
     return k;
   };
@@ -396,7 +471,7 @@ export function makeRealCoastLandscape(config, proj, index, route) {
 
   return {
     kind: mountain ? 'real-mountain' : 'real-coast', real: true, mountain, hasOcean: !mountain, coastSide: 1, gridLakes: lakes,
-    sites, islands, glacierAt: glaciers.length ? glacierAt : null, sideOf, bridgeColors: config.bridgeColors,
+    sites, islands, glacierAt: glaciers.length ? glacierAt : null, burnAt: burns.length ? burnAt : null, sideOf, bridgeColors: config.bridgeColors,
     // the weather's fog bank lies on the lowest big lake (Lake McDonald), in the valleys around it
     fogBase: mountain ? Math.min(...(lakes?.list || []).filter((l) => l.areaHa > 200).map((l) => l.level), Infinity) : 0,
     // legacy fields (the authored-coast code paths are skipped when `real` is set)

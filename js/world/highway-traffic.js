@@ -16,6 +16,11 @@ const KINDS = [
   { kind: 'bike', w: .12, speed: [6, 9.5], len: 1.8 },
 ];
 const COUNT = { low: 6, balanced: 10, high: 14 };
+// optional kinds a scene can add to the mix ("traffic": { "mix": { "jammer": 0.33 } })
+const EXTRA_KINDS = {
+  // Glacier's Red Jammers: 1930s White Motor tour buses, canvas top rolled back
+  jammer: { kind: 'jammer', w: 0, speed: [13, 18], len: 7.6, color: '#b5231c' },
+};
 
 // part: 0 body (tinted per instance), 1 glass, 2 dark trim, 10 headlight, 11 tail light
 function vehicle(kind) {
@@ -40,6 +45,22 @@ function vehicle(kind) {
     M.box(1 * (W / 2 - .1), 0, .6 * (L / 2 - 1.1), .3, .8, .8);
     G(10); M.color('#fff6dc'); for (const x of [-1, 1]) M.box(x * (W / 2 - .35), .75, L / 2 + .02, .34, .16, .05);
     G(11); M.color('#b0201a'); for (const x of [-1, 1]) M.box(x * (W / 2 - .2), .9, -L / 2 + .78, .25, .3, .05);
+  } else if (kind === 'jammer') {
+    // long hood and rounded fenders, four rows of bench seats under an open top, the canvas rolled at the back
+    const W = 2.15, L = 7.6;
+    M.color('#ffffff'); M.box(0, .5, -.9, W, 1.05, L - 2.6);            // body (red, from the instance colour)
+    M.box(0, .62, L / 2 - 1.15, 1.35, .82, 2.1);                         // the long hood
+    G(12); M.color('#e9e4d4'); M.box(0, .62, L / 2 - .08, 1.2, .78, .12);   // chrome grille
+    M.color('#1a1a1a'); for (const [x, z] of [[-1, -1], [1, -1]]) M.box(x * (W / 2 - .02), .3, z * (L / 2 - 1.25), .4, .62, 1.3);
+    for (const x of [-1, 1]) M.box(x * .78, .32, L / 2 - 1.05, .42, .6, 1.25);   // front fenders
+    M.color('#151515'); for (const [x, z] of [[-1, -1], [1, -1], [-.78, .73], [.78, .73]]) M.box(x * (z > 0 ? 1 : W / 2 - .1), 0, z * (L / 2 - 1.15), .3, .78, .78);
+    M.color('#3b2a20'); for (let r = 0; r < 4; r++) M.box(0, 1.5, 1.35 - r * 1.2, W - .2, .32, .55);   // bench backs
+    const heads = ['#e2b48a', '#c98c5e', '#8a5a3c', '#f0c9a2'];
+    for (let r = 0; r < 4; r++) for (const x of [-.6, 0, .6]) if ((r * 3 + x * 5 + 7) % 3 > .5) { M.color(heads[(r + Math.round(x * 3)) % 4]); M.box(x, 1.68, 1.15 - r * 1.2, .2, .24, .2); }
+    M.color('#cdbb8f'); M.box(0, 1.5, -L / 2 + .55, W - .1, .55, .8);   // rolled canvas
+    M.color('#e9e4d4'); M.box(0, 1.55, L / 2 - 2.25, W - .1, .5, .06);  // windscreen frame
+    G(10); M.color('#fff6dc'); for (const x of [-1, 1]) M.box(x * .78, .95, L / 2 - .5, .26, .26, .26);
+    G(11); M.color('#b0201a'); for (const x of [-1, 1]) M.box(x * (W / 2 - .2), .7, -L / 2 + .45 - .02, .2, .14, .05);
   } else if (kind === 'moto') {
     M.color('#151515'); for (const z of [-.7, .7]) M.box(0, 0, z, .14, .62, .62);
     M.color('#ffffff'); M.beam(V(0, .45, -.55), V(0, .62, .55), .3, .32);
@@ -74,9 +95,9 @@ function material(uniforms, night) {
         #endif`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         if (vGlow > 9.5 && vGlow < 10.5) totalEmissiveRadiance += vec3(1., .93, .78) * (.15 + uNight * 4.);
-        if (vGlow > 10.5) totalEmissiveRadiance += vec3(1., .1, .06) * (.25 + uNight * 2.5);`);
+        if (vGlow > 10.5 && vGlow < 11.5) totalEmissiveRadiance += vec3(1., .1, .06) * (.25 + uNight * 2.5);`);
   };
-  m.customProgramCacheKey = () => 'bf-highway-traffic-1';
+  m.customProgramCacheKey = () => 'bf-highway-traffic-2';
   return m;
 }
 
@@ -90,12 +111,18 @@ export class HighwayTraffic {
     this.seed = 9137; this.rand = () => ((this.seed = (this.seed * 16807) % 2147483647) / 2147483647);
     this.meshes = {};
     this.n = COUNT[quality] || COUNT.balanced;
-    for (const k of KINDS) {
+    // the scene's mix: extra kinds (Red Jammers) with their share, the rest keep their weights
+    this.kinds = KINDS.map((k) => ({ ...k }));
+    for (const [name, w] of Object.entries(config.mix || {})) {
+      const k = this.kinds.find((x) => x.kind === name) || (EXTRA_KINDS[name] && this.kinds.push({ ...EXTRA_KINDS[name] }) && this.kinds.at(-1));
+      if (k) k.w = w;
+    }
+    for (const k of this.kinds) {
       const geometry = vehicle(k.kind).geometry();
       const mesh = new THREE.InstancedMesh(geometry, this.mat, this.n);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       mesh.frustumCulled = false; mesh.castShadow = true; mesh.receiveShadow = true; mesh.name = `Traffic · ${k.kind}`; mesh.count = 0;
-      for (let i = 0; i < this.n; i++) mesh.setColorAt(i, new THREE.Color(k.kind === 'rv' ? '#ffffff' : PAINT[Math.floor(this.rand() * PAINT.length)]));
+      for (let i = 0; i < this.n; i++) mesh.setColorAt(i, new THREE.Color(k.color || (k.kind === 'rv' ? '#ffffff' : PAINT[Math.floor(this.rand() * PAINT.length)])));
       this.meshes[k.kind] = mesh; this.group.add(mesh);
     }
     this.agents = Array.from({ length: this.n }, (_, id) => ({ id, alive: false }));
@@ -123,21 +150,22 @@ export class HighwayTraffic {
   }
 
   _pick() {
-    let r = this.rand() * KINDS.reduce((a, k) => a + k.w, 0);
-    for (const k of KINDS) { r -= k.w; if (r <= 0) return k; }
-    return KINDS[0];
+    let r = this.rand() * this.kinds.reduce((a, k) => a + k.w, 0);
+    for (const k of this.kinds) { r -= k.w; if (r <= 0) return k; }
+    return this.kinds[0];
   }
 
   _parkAtOverlooks() {
     // a few cars and campers already parked at each overlook; they use the top slots of each buffer
-    const top = Object.fromEntries(KINDS.map((k) => [k.kind, this.n - 1]));
+    const top = Object.fromEntries(this.kinds.map((k) => [k.kind, this.n - 1]));
     for (const t of this.turnouts) {
       // parking bays along the pad, 9 m apart; a few already taken
       t.bays = Array.from({ length: Math.max(1, Math.floor((t.length - 8) / 9) + 1) }, (_, k) => ({ s: t.s - t.length / 2 + 5 + k * 9, taken: false }));
       t.lat = t.side * (ROAD_WIDTH / 2 + t.width / 2 + .3);
       const n = Math.min(t.bays.length - 1, 1 + Math.floor(this.rand() * 2));
       for (let k = 0; k < n; k++) {
-        const kind = this.rand() < .2 ? KINDS[2] : this.rand() < .4 ? KINDS[1] : KINDS[0];
+        const jam = this.kinds.find((x) => x.kind === 'jammer');
+        const kind = jam && this.rand() < .3 ? jam : this.rand() < .2 ? this.kinds[2] : this.rand() < .4 ? this.kinds[1] : this.kinds[0];
         if (top[kind.kind] < this.n / 2) continue;
         // parked from the far end (for the traffic that uses this side), so arrivals take the near bays
         const bay = t.side > 0 ? t.bays[t.bays.length - 1 - k] : t.bays[k]; if (bay.taken) continue;
@@ -283,7 +311,7 @@ export class HighwayTraffic {
       this.meshes[kind].setMatrixAt(id, this.m.compose(V(x, p.y + .12, z), this.q, this.one));
     };
     const next = {}, assigned = {};
-    for (const k of KINDS) { next[k.kind] = 0; assigned[k.kind] = new Set(); }
+    for (const k of this.kinds) { next[k.kind] = 0; assigned[k.kind] = new Set(); }
     for (const a of this.agents) {
       if (!a.alive) continue;
       const kind = a.k.kind, id = next[kind]++;
@@ -293,7 +321,7 @@ export class HighwayTraffic {
       assigned[kind].add(id);
     }
     for (const p of this.parked) { put(p.kind.kind, p.id, p.s, p.lane, 1, false, p.angle); assigned[p.kind.kind].add(p.id); }
-    for (const k of KINDS) {
+    for (const k of this.kinds) {
       const mesh = this.meshes[k.kind], ids = assigned[k.kind];
       const count = ids.size ? Math.max(...ids) + 1 : 0;
       for (let i = 0; i < count; i++) if (!ids.has(i)) mesh.setMatrixAt(i, this.zero);

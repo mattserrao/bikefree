@@ -11,7 +11,6 @@ export const DEFAULT_SETTINGS = {
   haptics: true,
   startGear: 12,
   ftp: 200,               // watts, for % FTP workouts
-  worldCam: 'chase',      // 3D camera: chase | eye | drone
   worldTime: 'auto',      // 3D time of day: auto (the route's default) | morning | midday | golden | night
   worldQuality: 'balanced', // stylized scenery: low | balanced | high
   hudSize: 'small',       // ride-screen power bar: small (default) | medium | large (the original size)

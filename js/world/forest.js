@@ -12,8 +12,14 @@ const TIER_KEEP = [1, .62, .4];         // near / mid / far share of the full st
 const SUFFIX = ['', '-lod', '-far'];
 
 export class ForestPlanner {
-  constructor(config, landscape, index, heightAt, clearings) {
+  constructor(config, landscape, index, heightAt, clearings, route = null) {
     const v = config.vegetation || {};
+    this.route = route;
+    // a scene can keep more of the stand in the outer tiers (Going-to-the-Sun: dense, even cover far off)
+    this.keep = v.tierKeep || TIER_KEEP;
+    // windows: every so often the trees between the road and a lake open up for a view across the water
+    //   { everyM, lengthM, reachM (corridor: shore + road distance), keep (share of trees left standing) }
+    this.windows = v.windows && route ? { everyM: 900, lengthM: 170, reachM: 260, keep: .1, ...v.windows } : null;
     this.species = Object.entries(v.species || { maple: .45, spruce: .2, hemlock: .12, birch: .13, whitepine: .1 });
     this.edge = { mown: v.edge?.mownM ?? 9, shrub: v.edge?.shrubM ?? 13 };
     this.landscape = landscape; this.index = index; this.heightAt = heightAt; this.clearings = clearings;
@@ -22,6 +28,7 @@ export class ForestPlanner {
     // mountains (Glacier): species and density come from the landform's vegetation zones
     this.zones = !!landscape.mountain;
     this.density = v.forestDensity ?? 1;
+    this.rich = !!v.rich;   // age mix, leaning trees, forest floor and shrubs (Going-to-the-Sun)
   }
 
   /** 0…1 forest cover at a point (used by the trees and the distant canopy). */
@@ -58,42 +65,103 @@ export class ForestPlanner {
     return r < .55 ? 'subfir' : r < .88 ? 'espruce' : 'larch';
   }
 
+  /**
+   * In a window (a gap in the trees for a view)? Between the road and a lake, or with `downhill`, on the low
+   * side of the road where the land falls away toward the valley. Road distances cached per 32 m cell.
+   */
+  _inWindow(x, z, y, shore, roadHit, cache) {
+    const W = this.windows;
+    if (!W || (shore > W.reachM && !W.downhill && !W.at)) return false;
+    let hit = roadHit;
+    if (!hit) {
+      const key = `${Math.floor(x / 32)},${Math.floor(z / 32)}`;
+      if (!cache.has(key)) cache.set(key, this.index.nearest(Math.floor(x / 32) * 32 + 16, Math.floor(z / 32) * 32 + 16, W.reachM));
+      hit = cache.get(key);
+    }
+    if (!hit) return false;
+    const sM = this.route.dist[hit.i];
+    const lake = shore + hit.d < W.reachM;
+    const low = hit.d < (W.downhillM ?? W.reachM * .6) && y < hit.ele - 4;
+    // the real viewpoints: always open toward the lake and down the valley
+    if (W.at && (lake || low) && W.at.some((a) => Math.abs(sM - a) < (W.atLengthM ?? 160) / 2)) return true;
+    if (!lake && !(W.downhill && low)) return false;
+    return windowAt(sM, W, this.seed);
+  }
+
   _zoneTile(cx, cz, tier) {
+    const windowCache = new Map();
     const rand = randomSequence((cx * 92837111 ^ cz * 689287499) + this.seed * 7 + 31);
     const lists = {};
     const matrix = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
-    const add = (name, x, y, z, k, rot, ky = k) => {
-      q.setFromAxisAngle(up, rot); p.set(x, y, z); s.set(k, ky * (.92 + (rot % 1) * .16), k);
+    const e = new THREE.Euler(0, 0, 0, 'YXZ');
+    const add = (name, x, y, z, k, rot, ky = k, tilt = 0, tiltDir = 0) => {
+      if (tilt) { e.set(Math.cos(tiltDir) * tilt, rot, Math.sin(tiltDir) * tilt); q.setFromEuler(e); } else q.setFromAxisAngle(up, rot);
+      p.set(x, y, z); s.set(k, ky * (.92 + (rot % 1) * .16), k);
       (lists[name] ||= []).push(matrix.compose(p, q, s).clone());
     };
+    const rich = this.rich;   // Glacier: age mix, leaning trees, a forest floor
     const n = Math.round(TILE_M / CELL_M);
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
       const jx = rand(), jz = rand(), rank = rand(), pick = rand(), size = rand(), rot = rand() * Math.PI * 2, extra = rand();
-      if (rank > TIER_KEEP[tier]) continue;
+      if (rank > this.keep[tier]) continue;
       const x = cx * TILE_M + (i + .15 + jx * .7) * CELL_M, z = cz * TILE_M + (j + .15 + jz * .7) * CELL_M;
       const near = this.index.nearest(x, z, 60), roadD = near ? near.d : 60;
       if (roadD < this.edge.mown) continue;
       const shore = this.landscape.shoreAt ? this.landscape.shoreAt(x, z) : Infinity;
       if (shore < 3 || (this.clearings && this.clearings.at(x, z)) || this.landscape.bridgeAt(x, z, 10) || this.landscape.creekAt(x, z)) continue;
       const y = this.heightAt(x, z);
+      if (this.windows && extra > this.windows.keep && this._inWindow(x, z, y, shore, near, windowCache)) continue;
       if (this.landscape.isWater?.(x, z, y)) continue;
       const v = this.landscape.vegetationAt(x, z);
       if (v.slope > 1.25) continue;   // cliffs
       const edge = smoothstep(this.edge.mown - 1, this.edge.shrub + 3, roadD) * smoothstep(3, 14, shore);
+      // an old burn: silver snags, more thinly, over fireweed and young lodgepole
+      const burn = this.landscape.burnAt?.(x, z) || 0;
+      if (burn > .5 && pick < v.forest * edge * this.density) {
+        if (extra < .36) add(`snag${size < .5 ? 0 : 1}${SUFFIX[tier]}`, x, y - .2, z, .7 + size * .45, rot);
+        else if (extra < .58) add(`lodgepole${size < .5 ? 0 : 1}${SUFFIX[tier]}`, x, y - .1, z, .18 + size * .22, rot);   // young regrowth
+        else if (tier === 0 && extra < .75) add('fireweed', x, y - .05, z, .9 + size * .4, rot);
+        continue;
+      }
       if (pick < v.forest * edge * this.density) {
         const species = this._zoneSpecies(v, y, extra);
         const variants = GLACIER_VARIANTS[species];
         const variant = tier ? 0 : Math.floor(size * variants) % variants;   // one variant beyond the near tier: fewer draw calls
         // trees shrink toward the treeline
-        const k = (this.scale[0] + (this.scale[1] - this.scale[0]) * ((size * 7.31) % 1)) * (1 - v.alpine * .45);
-        add(`${species}${variant}${SUFFIX[tier]}`, x, y - .2, z, k * (1 - v.alpine * .2), rot, k);
+        let k = (this.scale[0] + (this.scale[1] - this.scale[0]) * ((size * 7.31) % 1)) * (1 - v.alpine * .45);
+        let tilt = 0;
+        if (rich) {
+          // an age mix: saplings in the gaps, a few old giants in the valleys (cedar, hemlock, spruce, larch)
+          const age = ((jx + jz) * 7.13 + size * 3.7) % 1;
+          if (age < .12) k *= .3 + age * 1.8;
+          else if (age > .955 && v.valley > .25 && roadD > 22 && /cedar|whemlock|espruce|larch/.test(species)) k *= 1.32 + (age - .955) * 5;
+          // a few lean (snow creep on the slopes)
+          if (age > .2 && age < .42) tilt = (.025 + (age - .2) * .25) * (1 + v.slope * .6);
+        }
+        // broad drooping crowns keep clear of the chase camera above the road
+        if (rich && roadD < 14 && /cedar|whemlock/.test(species)) k = Math.min(k, .85);
+        add(`${species}${variant}${SUFFIX[tier]}`, x, y - .2, z, k * (1 - v.alpine * .2), rot, k, tilt, rot * 1.7);
         continue;
       }
       // open ground: avalanche-chute alder, treeline krummholz, talus on the steep, meadow flowers by the road
       if (tier === 2) continue;
+      if (rich && tier === 0) {
+        // the forest floor near the road: down logs and stumps, moss, fallen branches, mossy stones;
+        // shrubs by kind: willow by the creeks, thimbleberry in the moist valley, juniper on the dry rocks
+        const floor = v.forest > .35 || burn > .5;
+        const r2 = (extra * 7.77 + size * 3.3) % 1;
+        if (floor && r2 < .045 && roadD > 15) { add(`log${burn > .5 || r2 < .015 ? 1 : 0}`, x, y - .05, z, .8 + size * .5, rot, undefined, Math.min(.3, v.slope * .5), rot + 1.57); continue; }
+        if (floor && r2 < .07) { add('stump1', x, y - .08, z, .55 + size * .7, rot); continue; }
+        if (floor && burn < .5 && r2 < .14 && v.moist > .4) { add('mossmat0', x, y - .03, z, .7 + size * .9, rot); continue; }
+        if (floor && r2 < .18) { add('branch1', x, y, z, .6 + size * .7, rot); continue; }
+        if (r2 < .22 && v.slope > .15) { add('stone1', x, y - .06, z, .5 + size * 1.1, rot); continue; }
+        if (this.landscape.nearCreek?.(x, z, 10) && r2 < .5) { add('willow', x, y - .05, z, .8 + size * .6, rot); continue; }
+        if (v.east > .5 && v.slope > .2 && r2 > .9) { add('juniper', x, y - .05, z, .8 + size * .6, rot); continue; }
+        if (v.east < .5 && v.moist > .55 && v.alpine < .3 && r2 > .88) { add(r2 > .96 ? 'serviceberry' : 'thimbleberry', x, y - .05, z, .8 + size * .5, rot); continue; }
+      }
       if (v.alpine > .35 && v.alpine < .9 && extra < .12 * v.alpine) add(`krummholz${size < .5 ? 0 : 1}`, x, y - .1, z, .8 + size * .6, rot);
       else if (extra < v.scrub * .22 && v.slope > .3) add(`alder${size < .5 ? 0 : 1}`, x, y - .1, z, .8 + size * .7, rot);
-      else if (v.slope > .55 && extra > .78) add(`talus${size < .6 ? 0 : 1}`, x, y - .15, z, .7 + size * 1.4, rot);
+      else if (tier === 0 && v.slope > .55 && extra > .78) add(`talus${size < .6 ? 0 : 1}`, x, y - .15, z, .7 + size * 1.4, rot);
       else if (tier === 0 && extra > .5 && extra < .62) add(v.east > .5 ? 'huckleberry' : size < .55 ? 'beargrass' : 'huckleberry', x, y - .05, z, .8 + size * .5, rot);
     }
     return lists;
@@ -113,7 +181,7 @@ export class ForestPlanner {
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
       // every random draw happens for every point in the same order, whatever the tier
       const jx = rand(), jz = rand(), rank = rand(), pick = rand(), size = rand(), rot = rand() * Math.PI * 2, extra = rand();
-      if (rank > TIER_KEEP[tier]) continue;
+      if (rank > this.keep[tier]) continue;
       const x = cx * TILE_M + (i + .15 + jx * .7) * CELL_M, z = cz * TILE_M + (j + .15 + jz * .7) * CELL_M;
       const near = this.index.nearest(x, z, 60), roadD = near ? near.d : 60;
       if (roadD < this.edge.mown) {
@@ -144,6 +212,14 @@ export class ForestPlanner {
     }
     return lists;
   }
+}
+
+/** Is route distance sM inside a view window? Each window a little different in length and placement. */
+export function windowAt(sM, W, seed = 1) {
+  const k = Math.floor(sM / W.everyM);
+  const h = Math.sin(k * 12.9898 + seed) * 43758.5453, r = h - Math.floor(h);
+  const start = k * W.everyM + r * (W.everyM - W.lengthM * 1.4), len = W.lengthM * (.7 + r * .7);
+  return sM > start && sM < start + len;
 }
 
 /** Spatial lookup of cleared ground (lawns, camp lots, driveways). */
