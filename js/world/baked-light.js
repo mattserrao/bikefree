@@ -252,18 +252,25 @@ export class BakedLighting {
     const VW = vi1 - vi0, VH = vj1 - vj0, vx0 = ex0 + vi0 * cell, vz1 = EZ1 - vj0 * cell;
     const base = (w.route.minEle ?? 0) - 40;
 
-    // 1. terrain heights on a coarse grid (CPU, in slices)
+    // 1. terrain heights on a coarse grid (CPU, in ~4 ms slices; kept for re-bakes of the same area)
+    const ph = {}; let p0 = performance.now();
     const ground = this._groundSampler();
     const GN = Math.max(2, Math.ceil((EX1 - ex0) / O.groundCellM) + 1), GM = Math.max(2, Math.ceil((EZ1 - ez0) / O.groundCellM) + 1);
-    const gdata = new Float32Array(GN * GM);
+    const gkey = [ex0, EX1, ez0, EZ1, GN, GM, base].join();
+    let gdata = this._ground?.key === gkey ? this._ground.data : null;
     cpu += performance.now() - c0;
-    for (let j = 0; j < GM; j++) {
+    if (!gdata) {
+      gdata = new Float32Array(GN * GM);
       c0 = performance.now();
-      const z = EZ1 - (EZ1 - ez0) * j / (GM - 1);   // row 0 = the max-z edge, like the GPU grids (v = (z1 - z) / depth)
-      for (let i = 0; i < GN; i++) gdata[j * GN + i] = ground(ex0 + (EX1 - ex0) * i / (GN - 1), z) - O.groundDropM - base;
+      for (let j = 0; j < GM; j++) {
+        const z = EZ1 - (EZ1 - ez0) * j / (GM - 1);   // row 0 = the max-z edge, like the GPU grids (v = (z1 - z) / depth)
+        for (let i = 0; i < GN; i++) gdata[j * GN + i] = ground(ex0 + (EX1 - ex0) * i / (GN - 1), z) - O.groundDropM - base;
+        if (performance.now() - c0 > 4 && j < GM - 1) { cpu += performance.now() - c0; yield; c0 = performance.now(); }
+      }
       cpu += performance.now() - c0;
-      if (performance.now() - c0 > 3 && j % 8 === 7) yield;
+      this._ground = { key: gkey, data: gdata };
     }
+    ph.ground = performance.now() - p0;
     c0 = performance.now();
     const gtex = new THREE.DataTexture(gdata, GN, GM, THREE.RedFormat, THREE.FloatType);
     gtex.minFilter = gtex.magFilter = THREE.LinearFilter; gtex.flipY = false; gtex.needsUpdate = true;
@@ -280,7 +287,7 @@ export class BakedLighting {
     const cam = new THREE.OrthographicCamera(-(EX1 - ex0) / 2, (EX1 - ex0) / 2, (EZ1 - ez0) / 2, -(EZ1 - ez0) / 2, 1, 6000);
     cam.position.set((ex0 + EX1) / 2, base + 3000, (ez0 + EZ1) / 2); cam.up.set(0, 0, -1); cam.lookAt((ex0 + EX1) / 2, base, (ez0 + EZ1) / 2);
     cam.updateMatrixWorld(); cam.layers.set(OCC_LAYER);
-    const occMat = new THREE.ShaderMaterial({
+    const occMat = this._occMat ||= new THREE.ShaderMaterial({   // kept: re-bakes reuse its programs
       uniforms: { uBase: { value: base } },
       vertexShader: /* glsl */`
         #include <common>
@@ -302,6 +309,7 @@ export class BakedLighting {
       fragmentShader: /* glsl */`varying float vY; void main() { gl_FragColor = vec4(vY, 1., 0., 1.); }`,
       side: THREE.DoubleSide,
     });
+    occMat.uniforms.uBase.value = base;
     const occluders = (this.occluders || []).filter((o) => o.visible);
     for (const o of occluders) o.layers.enable(OCC_LAYER);
     const prev = { target: R.getRenderTarget(), override: w.scene.overrideMaterial, sm: R.shadowMap.enabled, clear: R.getClearColor(new THREE.Color()), alpha: R.getClearAlpha(), autoClear: R.autoClear, fog: w.scene.fog, bg: w.scene.background };
@@ -311,15 +319,16 @@ export class BakedLighting {
     };
     w.scene.overrideMaterial = occMat; w.scene.fog = null; w.scene.background = null;
     R.shadowMap.enabled = false; R.setClearColor(0x000000, 0); R.autoClear = true;
+    p0 = performance.now();
     R.setRenderTarget(occRT); R.render(w.scene, cam);
+    ph.occluders = performance.now() - p0;
     for (const o of occluders) o.layers.disable(OCC_LAYER);
     restore();
-    occMat.dispose();
     cpu += performance.now() - c0;
     yield;
 
     // 3. full-screen passes on the work grid
-    c0 = performance.now();
+    c0 = performance.now(); p0 = c0;
     const pass = new FullScreen(R);
     const texel = new THREE.Vector2(1 / EW, 1 / EH);
     // combine: the column top O = max(mesh top, terrain); kept for the AO and the cover height
@@ -401,6 +410,7 @@ export class BakedLighting {
       }`, { tTop: topRT.texture, uView: viewUv, uTexel: texel, uCell: cell, uStrength: O.ao });
     pass.dispose(); topRT.dispose(); A.dispose(); B.dispose();
     cpu += performance.now() - c0;
+    ph.passes = performance.now() - p0;
 
     // swap in
     const old = this._maps;
@@ -414,6 +424,7 @@ export class BakedLighting {
     this._bakedSig = sigAtStart;
     this.ready = true; this.bakes++;
     this.stats = { ms: Math.round(performance.now() - t0), cpuMs: Math.round(cpu), work: [EW, EH], view: [VW, VH], cell: +cell.toFixed(2), passes, occluders: occluders.length, groundSamples: GN * GM,
+      phases: Object.fromEntries(Object.entries(ph).map(([k, v]) => [k, Math.round(v)])),
       gpuMB: +((VW * VH * (4 + 1)) / 1048576).toFixed(1) };
     w.log('3d', `Baked lighting: ${VW}×${VH} at ${cell.toFixed(1)} m, ${occluders.length} meshes, ${this.stats.ms} ms (${this.stats.cpuMs} ms on the CPU)`, 'debug');
     // static meshes leave the live shadow map now that the bake has them
@@ -431,6 +442,7 @@ export class BakedLighting {
   dispose() {
     this._job = null;
     this._maps?.sun.dispose(); this._maps?.ao.dispose();
+    this._occMat?.dispose();
     this._empty.dispose();
   }
 }
