@@ -122,11 +122,31 @@ function finishRun(run, L, O) {
 }
 
 /**
+ * A terraced cascade down a bank to the river (Pittsburgh's North Shore Water Steps): scene
+ * "riverfront": { "waterSteps": { "top": {lat, lon}, "bottom": {lat, lon}, "widthM": 20, "tiers": 6 } }.
+ * Tier heights run from the ground at the top to the ground at the bottom (never under the water).
+ */
+export function planWaterSteps(L, spec) {
+  const proj = L.decoded?.proj;
+  if (!spec?.top || !spec?.bottom || !proj) return null;
+  const T = proj.toLocal(spec.top.lat, spec.top.lon), B = proj.toLocal(spec.bottom.lat, spec.bottom.lon);
+  const len = Math.hypot(B.x - T.x, B.z - T.z), ux = (B.x - T.x) / len, uz = (B.z - T.z) / len;
+  // the top: the plaza (or street) just behind it; the bottom: the walk at its foot
+  let yTop = -Infinity; for (let a = -8; a <= 0; a += 1) yTop = Math.max(yTop, L.heightAt(T.x + ux * a, T.z + uz * a));
+  if (spec.topM != null) yTop = L.level + spec.topM;   // or as the scene says (the map's pool sinks the ground)
+  const yBot = Math.max(L.level + .3, Math.min(yTop - .5, L.heightAt(B.x + ux * 3, B.z + uz * 3)));
+  const n = Math.max(2, spec.tiers || Math.round((yTop - yBot) / .45) + 1);
+  const tiers = [];
+  for (let k = 0; k < n; k++) tiers.push({ t0: len * k / n, t1: len * (k + 1) / n, y: yTop - (yTop - yBot) * k / (n - 1) });
+  return { T, B, len, ux, uz, vx: -uz, vz: ux, width: spec.widthM || 20, tiers };
+}
+
+/**
  * The promenades on a 2 m raster: `covers(x, z)` (on the walk or just past its wall: other walls and scattered
  * plants keep off) and `groundCap(x, z)` (past the wall the ground must lie under the water, or the drawn
  * bank shows in front of the wall; it eases back over 20 m past each end of a run).
  */
-export function riverfrontField(runs, level, { pad = 4, cutInM = 3, cutOutM = 40, taperM = 20 } = {}) {
+export function riverfrontField(runs, level, { pad = 4, cutInM = 3, cutOutM = 40, taperM = 20, steps = null } = {}) {
   const C = 2, cover = new Set(), cap = new Map();
   const key = (x, z) => (Math.floor(x / C) + 32768) * 65536 + Math.floor(z / C) + 32768;
   const mark = (q, along, lift) => {
@@ -144,6 +164,11 @@ export function riverfrontField(runs, level, { pad = 4, cutInM = 3, cutOutM = 40
     // past the ends: the cap rises back to the bank's own height
     for (const [q, dir] of [[S[0], -1], [S[S.length - 1], 1]]) for (let e = 1; e <= taperM; e += .5) mark(q, dir * e, 3 * e / taperM);
   }
+  // the water steps: the ground under each tier stays just below its tread
+  if (steps) for (const t of steps.tiers) for (let a = t.t0 - 1; a <= t.t1 + 1; a += 1) for (let o = -steps.width / 2 - 1; o <= steps.width / 2 + 1; o += 1) {
+    const k = key(steps.T.x + steps.ux * a + steps.vx * o, steps.T.z + steps.uz * a + steps.vz * o), h = t.y - .08;
+    cover.add(k); if (!(cap.get(k) <= h)) cap.set(k, h);
+  }
   return {
     covers: (x, z) => cover.has(key(x, z)),
     groundCap: (x, z) => cap.get(key(x, z)) ?? Infinity,
@@ -156,10 +181,11 @@ export function riverfrontField(runs, level, { pad = 4, cutInM = 3, cutOutM = 40
  */
 export function riverfrontGround(L, { route, index, streets, config }) {
   const runs = planRiverfront({ landscape: L, route, index, streets, config });
-  const field = riverfrontField(runs, L.level);
+  const steps = planWaterSteps(L, config.waterSteps);
+  const field = riverfrontField(runs, L.level, { steps });
   const heightAt = L.heightAt;
   L.heightAt = (x, z) => Math.min(heightAt(x, z), field.groundCap(x, z));
-  L.riverfront = { runs, ...field };
+  L.riverfront = { runs, steps, ...field };
   return L.riverfront;
 }
 
@@ -169,7 +195,7 @@ export function riverfrontGround(L, { route, index, streets, config }) {
  */
 export function buildRiverfront(city) {
   const config = city.route.scene?.riverfront;
-  if (!config?.spans?.length) return null;
+  if (!config?.spans?.length && !config?.waterSteps) return null;
   const L = city.landscape;
   // planned with the landscape (the ground past the walls is already under the water), else here
   const plan = L.riverfront || { runs: planRiverfront({ landscape: L, route: city.route, index: city.index, streets: city.streets, config }) };
@@ -247,10 +273,36 @@ export function buildRiverfront(city) {
       city.group.add(mesh); meshes.push(mesh);
     }
   }
+  const steps = plan.steps !== undefined ? plan.steps : planWaterSteps(L, config.waterSteps);
+  if (steps) { const m = waterStepsMesh(city, steps); tris += m.geometry.index.count / 3; meshes.push(m); }
   // no scattered rocks, shrubs or grass on the walk
   const plant = L.canPlant;
   if (plant) L.canPlant = (x, z) => plant(x, z) && !covers(x, z);
   return { runs, covers, meshes, tris };
+}
+
+/** The water steps: granite tiers, a sheet of water down the middle of each tread and over each riser. */
+function waterStepsMesh(city, S) {
+  const L = city.landscape, M = new MeshBuilder(), yaw = Math.atan2(S.ux, S.uz), level = L.level;
+  const granite = [new THREE.Color('#bdb5a5'), new THREE.Color('#b0a897')], sheet = new THREE.Color('#8fc3d1'), fall = new THREE.Color('#dcecef'), cheek = new THREE.Color('#a39a89');
+  const at = (a, o) => ({ x: S.T.x + S.ux * a + S.vx * o, z: S.T.z + S.uz * a + S.vz * o });
+  const V = (p, y) => new THREE.Vector3(p.x, y, p.z);
+  S.tiers.forEach((t, k) => {
+    const c = at((t.t0 + t.t1) / 2, 0), l = t.t1 - t.t0 + .04;
+    M.color(granite[k % 2]); M.box(c.x, level - 1.4, c.z, S.width, t.y - level + 1.4, l, yaw);
+    // the water: a sheet across the middle of the tread, a white fall over its front edge
+    const w = S.width * .42, y = t.y + .025;
+    M.color(sheet); M.quad(V(at(t.t1, -w / 2), y), V(at(t.t1, w / 2), y), V(at(t.t0, w / 2), y), V(at(t.t0, -w / 2), y)); orient(M);
+    const next = S.tiers[k + 1];
+    if (next) { M.color(fall); face(M, V(at(t.t1 + .03, -w / 2), next.y), V(at(t.t1 + .03, w / 2), next.y), y, y, { nx: S.ux, nz: S.uz }, 1); }
+    // granite cheek walls a step higher at the sides
+    for (const o of [-S.width / 2 - .4, S.width / 2 + .4]) { const p = at((t.t0 + t.t1) / 2, o); M.color(cheek); M.box(p.x, level - 1.4, p.z, .8, t.y - level + 1.9, l, yaw); }
+  });
+  M.keepOutOf(L.inRouteTube);
+  const mesh = new THREE.Mesh(city.own(M.geometry()), city.solidMaterial);
+  mesh.name = 'Water steps'; mesh.receiveShadow = mesh.castShadow = true;
+  city.group.add(mesh);
+  return mesh;
 }
 
 /** Flip the last quad so it faces up (the walk and the coping). */

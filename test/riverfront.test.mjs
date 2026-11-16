@@ -5,7 +5,8 @@ import { readFileSync } from 'node:fs';
 import { buildCatalogRoute } from '../js/routes.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
 import { makeCityLandscape, cityStreets } from '../js/world/city-landscape.js';
-import { planRiverfront, riverfrontField } from '../js/world/riverfront.js';
+import * as THREE from '../vendor/three.module.min.js';
+import { planRiverfront, riverfrontField, buildRiverfront } from '../js/world/riverfront.js';
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const item = JSON.parse(read('routes/catalog.json')).find((c) => c.id === 'pittsburgh');
@@ -47,4 +48,13 @@ test('riverfront: Pittsburgh walls the Allegheny and Mon banks of the Point insi
 test('riverfront: no spans, no promenades', () => {
   assert.deepEqual(planRiverfront({ landscape: L, route, index, streets, config: { spans: [] } }), []);
   assert.deepEqual(planRiverfront({ landscape: L, route, index, streets, config: undefined }), []);
+});
+
+test('riverfront: the meshes build (walls, railing, benches, the water steps) within a small budget', () => {
+  const city = { route, index, landscape: L, streets, group: new THREE.Group(), solidMaterial: new THREE.MeshStandardMaterial(), own: (x) => x };
+  const rf = buildRiverfront(city);
+  assert.ok(rf.meshes.length >= 3 && rf.meshes.length <= 20, `${rf.meshes.length} meshes`);
+  assert.ok(rf.tris > 5000 && rf.tris < 120000, `${rf.tris} triangles`);
+  assert.ok(city.group.children.some((m) => m.name === 'Water steps'), 'the North Shore Water Steps');
+  for (const m of rf.meshes) assert.ok(Number.isFinite(m.geometry.boundingSphere.radius));
 });
