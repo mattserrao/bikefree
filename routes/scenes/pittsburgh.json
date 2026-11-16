@@ -8,6 +8,7 @@
     "models/scenery/regional.json"
   ],
   "seed": 412,
+  "roadAlign": { "curve": true, "streets": true, "bankM": 30 },
   "description": "Pittsburgh as a stylized city: the real terrain, rivers, streets, bridges and buildings from OpenStreetMap and AWS Terrain Tiles, with people, traffic, trains, inclines and boats. An artistic interpretation, not a survey.",
   "title": "Pittsburgh \u00b7 Three Rivers Loop",
   "region": "pittsburgh",
@@ -39,8 +40,13 @@
       "shrub0",
       "shrub1"
     ],
-    "vergeDensity": 0
+    "vergeDensity": 0,
+    "yardTrees": { "density": 0.5, "kitDensity": 0.4, "boxes": [[40.424, -80.026, 40.4395, -80.007], [40.424, -80.007, 40.4285, -79.996], [40.433, -80.04, 40.4425, -80.024]] }
   },
+  "routeTrees": [
+    { "fromM": 16480, "toM": 18240, "spacingM": 11, "offsetM": 7.5, "sides": [-1] },
+    { "fromM": 16500, "toM": 18240, "spacingM": 16, "offsetM": 7, "sides": [1] }
+  ],
   "bridgeFrames": {
     "Smithfield Street Bridge": "street"
   },
@@ -48,6 +54,16 @@
     "lat": 40.44183,
     "lon": -80.01277,
     "radiusM": 22
+  },
+  "streetKit": {
+    "fromM": 5250,
+    "toM": 10950,
+    "rangeM": 220,
+    "parkTrees": 16,
+    "zones": [
+      { "name": "East Carson Street", "style": "victorian", "fromM": 5250, "toM": 7860, "widthM": 90, "parking": true, "curbM": 6.4, "sidewalkM": 4, "trees": 15 },
+      { "name": "South Side Flats: S 10th & E Carson", "style": "rowhouse", "fromM": 10330, "toM": 10860, "widthM": 70, "parking": true, "curbM": 6.2, "sidewalkM": 3.2, "trees": 16 }
+    ]
   },
   "mainStreets": [
     {
@@ -509,6 +525,17 @@
   },
   "realHorizon": false,
   "timeOfDay": "golden",
+  "lighting": {
+    "baked": "golden"
+  },
+  "riverfront": {
+    "maxGapM": 20,
+    "spans": [
+      { "fromM": 1040, "toM": 2320 },
+      { "fromM": 2360, "toM": 2800 }
+    ],
+    "waterSteps": { "top": { "lat": 40.445842, "lon": -80.008511 }, "bottom": { "lat": 40.445527, "lon": -80.008511 }, "widthM": 18, "topM": 5 }
+  },
   "weather": {
     "presets": [
       "clear",
@@ -522,6 +549,7 @@
     "bank": 0.45
   },
   "post": true,
+  "junctions": true,
   "terrainBuild": {
     "gpx": "routes/cities/pittsburgh.gpx",
     "rivers": true,
@@ -667,5 +695,31 @@
       "power": 3.5,
       "yawDeg": -20
     }
+  },
+  "riverFlow": {
+    "allegheny": [
+      40.4603,
+      -79.979
+    ],
+    "monongahela": [
+      40.4339,
+      -79.979
+    ],
+    "ohio": [
+      40.468,
+      -80.051
+    ],
+    "point": [
+      40.44183,
+      -80.01277
+    ],
+    "north": [
+      40.45,
+      -80.02
+    ],
+    "south": [
+      40.438,
+      -80.03
+    ]
   }
 }

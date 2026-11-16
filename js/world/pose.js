@@ -2,6 +2,7 @@
 // (tools/qc_course.mjs), so the QC checks exactly what the app renders. Plain numbers, no three.js.
 import { wrapDist } from '../gpx.js';
 import { headingSpan } from '../routes.js';
+import { curveOn, curveXZ } from './road-align.js';   // [road-align]
 
 export const ROAD_WIDTH = 7;
 export const LANE_OFFSET = ROAD_WIDTH * 0.22;   // rider sits right of the centre line
@@ -18,6 +19,7 @@ export function routePoint(route, index, s) {
   const i = Math.min(route.dist.length - 2, Math.floor(x / 10));
   const span = route.dist[i + 1] - route.dist[i] || 1;
   const f = Math.min(1, Math.max(0, (x - route.dist[i]) / span));
+  if (curveOn(route)) { const c = curveXZ(index, i, f); return { x: c.x, y: route.ele[i] + (route.ele[i + 1] - route.ele[i]) * f, z: c.z }; }   // [road-align]
   return {
     x: index.xs[i] + (index.xs[i + 1] - index.xs[i]) * f,
     y: route.ele[i] + (route.ele[i + 1] - route.ele[i]) * f,

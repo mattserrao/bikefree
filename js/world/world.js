@@ -1,4 +1,5 @@
 // The 3D ride view: real terrain + aerial imagery, the road, a pedalling rider, sky and cameras.
+import { cutRouteRibbon, junctionPlan } from './junction-mesh.js';   // [junctions] (the road's overlay: city.js)
 import * as THREE from '../../vendor/three.module.min.js';
 import { makeProjection, makeRouteIndex } from './geo.js';
 import { Terrain } from './terrain.js';
@@ -12,6 +13,8 @@ import { PerfMonitor } from './perf.js';
 import { HAZE, AERIAL, AERIAL_COLOR, installHaze } from './haze.js';
 import { vistaConfig } from './vista.js';
 import { decorateRoad } from './road-surface.js';
+import { denseRoad } from './road-align.js';   // [road-align]
+import { BakedLighting } from './baked-light.js';   // [baked-light]
 
 installHaze();   // valley haze in the fog chunks: before any material compiles
 import { wrapDist } from '../gpx.js';
@@ -132,10 +135,14 @@ export class World {
     this.shoulder = makeRibbon(route, this.index, ROAD_WIDTH + (city ? 4 : this.stylized ? 1.6 : 3.4), city ? .09 : 0.05, makeGravelTexture(this.stylized, city), 3, { polygonOffsetFactor: city ? -1.8 : -1, polygonOffsetUnits: city ? -1.8 : -1 });
     this.shoulder.visible = !this.wireframe;   // no gravel verge on a wireframe placeholder
     this.scene.add(this.shoulder);
+    const junctions = city ? junctionPlan(this.terrain.landscape, this.index, route) : null;   // [junctions]
+    if (junctions) cutRouteRibbon(this.shoulder, junctions, denseRoad(route, this.index)[0].dist);   // [junctions] no shoulder inside a junction (its stations: the drawn curve's)
     this.road = makeRoad(route, this.index);
     this.scene.add(this.road);
     // weather: clear / marine layer / clouds / rain (stylized scenery)
     if (this.stylized) this.weather = new Weather(this, this.terrain.uniforms);
+    // [baked-light] fixed sun, baked shadows and AO for the static scenery (scene "lighting": {"baked": "golden"})
+    if (this.stylized) this.baked = BakedLighting.create(this, route.scene.lighting, TIME_PRESETS);
     // hero scenery: HDR render with soft bloom, a gentle grade and vignette (off on Light detail)
     // every stylized scene goes through it; only hero scenes (scene.post) get the bloom, grade and vignette
     if (this.stylized) this.post = new PostFX(this.renderer, { samples: COASTAL_QUALITY[this.qualityKey].samples });
@@ -226,6 +233,11 @@ export class World {
     const names = { clear: 'Clear', marine: 'Marine layer', clouds: 'Clouds', rain: 'Rain', smoke: 'Wildfire smoke', ...(S.labels || {}) };
     return keys.map((key) => ({ key, label: names[key] || key }));
   }
+  /** [w2-polish] The times of day this scene really shows: a baked scene has its baked time and night only. */
+  timeOptions() {
+    const keys = this.baked ? [this.baked.time, 'night'] : ['morning', 'midday', 'golden', 'night'];
+    return keys.map((key) => ({ key, label: TIME_PRESETS[key]?.label || key }));
+  }
   setWeather(key, immediate = false) {
     const options = this.weatherOptions();
     if (options.length && !options.some((o) => o.key === key)) key = options[0].key;   // not offered here: the route's first
@@ -237,7 +249,7 @@ export class World {
     this.qualityKey = Object.hasOwn(COASTAL_QUALITY, key) ? key : 'balanced';
     const quality = COASTAL_QUALITY[this.qualityKey];
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.pixelRatio));
-    this.renderer.shadowMap.enabled = quality.shadows;
+    this.renderer.shadowMap.enabled = quality.shadows && !(this.baked && this._time?.night);   // [baked-light]
     const resolution = this.qualityKey === 'high' ? 2048 : 1024;
     if (this.sun.shadow.mapSize.x !== resolution) {
       this.sun.shadow.map?.dispose(); this.sun.shadow.map = null;
@@ -251,6 +263,7 @@ export class World {
 
   setTimeOfDay(key) {
     if (key === 'auto' || !key) key = this.route.scene?.timeOfDay || 'midday';   // "Route's default"
+    if (this.baked) key = this.baked.timeFor(key);   // [baked-light] the baked time, or night
     let t = TIME_PRESETS[key] || TIME_PRESETS.midday;
     if (this.stylized && key === 'night') t = { ...t, sunI: .55, hemiI: .42 };
     else if (this.stylized) t = { ...t, sunI: key === 'golden' ? 2.5 : 2.1, hemiI: key === 'golden' ? .95 : 1.1,
@@ -322,12 +335,14 @@ export class World {
     for (const tu of [this.terrain?.uniforms, this.farTerrain?.uniforms]) {
       if (tu?.uSunDir) { tu.uSunDir.value.copy(dir); tu.uSkyTop.value.set(t.top); tu.uSkyHorizon.value.set(t.horizon); }
     }
+    this.baked?.setLight(t);   // [baked-light]
     this.look?.applyLight();
   }
 
   start() {
     if (this.running) return;
     this.running = true;
+    this.baked?.prepare();   // [w2-bake] the first bake behind the loader, before the ride
     this._last = performance.now();
     this._raf = requestAnimationFrame(this._frame);
   }
@@ -394,6 +409,9 @@ export class World {
     }
 
     this.sky.position.copy(this.camera.position);
+    this.baked?.tick(dt);   // [baked-light]
+    if (this.baked) { this._bakeLoader(); if (this.baked.frame.kind && !this.baked.preparing) this.perf?.flag(); }   // [w2-bake] loader; frames with bake work
+    if (this.baked?.preparing) return;   // [w2-bake] nothing drawn behind the loader (the bake has the GPU)
     if (this.stylized) this._placeShadows(riderPos, flat);
     else {
       this.sun.position.copy(this.camera.position).addScaledVector(this.sunDir, 5000);
@@ -409,7 +427,7 @@ export class World {
    */
   _placeShadows(riderPos, flat) {
     const target = _v1.copy(riderPos).addScaledVector(flat, 40);
-    const span = 105;
+    const span = this.baked?.ready ? this.baked.dynamicSpan : 105;   // [baked-light] moving things only
     const sm = this.renderer.shadowMap;
     // light-space axes, then snap the box centre to the texel grid
     const d = this.sunDir, right = _v2.set(0, 1, 0).cross(d);
@@ -472,6 +490,7 @@ export class World {
     this.perf ||= new PerfMonitor(this.renderer, this.container, () => ({
       route: this.route.scene?.title || this.route.name, quality: this.qualityKey, time: this.timeKey,
       weather: this.weather ? this.weatherKey : null,
+      bake: this.baked?.costLine(),   // [w2-bake]
     }), place);
     return this.perf.toggle(on);
   }
@@ -479,7 +498,22 @@ export class World {
   /** Render one frame without the animation loop (used for previews/tests). */
   renderOnce() { const r = this.running; this.running = true; this._frame(performance.now()); this.running = r; cancelAnimationFrame(this._raf); }
 
-  get loading() { return this.terrain.loadingCount; }
+  get loading() { return this.terrain.loadingCount + (this.baked?.preparing ? 4 : 0); }   // [w2-bake] (4: the app's loading bar shows from 4)
+
+  /** [w2-bake] "Preparing scenery" over the view while the first bake runs behind it. */
+  _bakeLoader() {
+    const on = this.baked.preparing;
+    if (!on && !this._bakeEl) return;
+    if (!this._bakeEl) {
+      this._bakeEl = document.createElement('div');
+      this._bakeEl.className = 'bake-loader';
+      Object.assign(this._bakeEl.style, { position: 'absolute', inset: '0', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 5,
+        font: '600 15px/1.4 system-ui, sans-serif', color: '#e8eef6', background: 'linear-gradient(#24323f, #3c4a52)', pointerEvents: 'none', letterSpacing: '.02em' });
+      this.container.appendChild(this._bakeEl);
+    }
+    this._bakeEl.style.display = on ? 'flex' : 'none';
+    if (on) this._bakeEl.textContent = `Preparing scenery… ${Math.round(this.baked.progress * 100)}%`;
+  }
 
   dispose() {
     this.perf?.dispose();
@@ -487,6 +521,8 @@ export class World {
     this.stop();
     this._ro.disconnect();
     this.weather?.dispose();
+    this.baked?.dispose();   // [baked-light]
+    this._bakeEl?.remove();   // [w2-bake]
     this.post?.dispose();
     this.terrain.dispose();
     this.farTerrain?.dispose();
@@ -565,6 +601,7 @@ const roadPoints = (route) => (route.turnIdx ? route.turnIdx + 1 : route.dist.le
 
 // ---------- Road ----------
 function makeRoad(route, index) {
+  [route, index] = denseRoad(route, index);   // [road-align] the curved centre line, when the scene asks for it
   const stylized = route.scene?.style === 'stylized';
   const n = roadPoints(route);
   const pos = new Float32Array(n * 2 * 3);
@@ -659,6 +696,7 @@ function makeRoad(route, index) {
 
 // ---------- Shoulders ----------
 function makeRibbon(route, index, width, lift, tex, repeatM, offset) {
+  [route, index] = denseRoad(route, index);   // [road-align]
   const n = roadPoints(route);
   const pos = new Float32Array(n * 2 * 3), uv = new Float32Array(n * 2 * 2);
   for (let i = 0; i < n; i++) {

@@ -671,6 +671,22 @@ export class CityLife {
         setColor(this.boatMeshes[type], 'iA', i, type === 'kayak' ? ['#e74c3c', '#f1c40f', '#27ae60', '#3498db', '#e67e22'][i % 5] : type === 'motor' ? ['#ffffff', '#f2f2f2', '#1f3a5f', '#c0392b'][i % 4] : '#ffffff');
       }
     }
+    for (const b of this.boats) b.latNow = null;   // (set from the lane on the first frame: never spawned in a pier)
+    // whatever of the bridges stands in the river (piers, towers, arch feet), as obstacles on an 8 m grid
+    const L = c.landscape, obs = new Map();
+    c.group.traverse((m) => {
+      if (!m.isMesh || m.isInstancedMesh || !/Bridge/i.test(m.name)) return;
+      const P = m.geometry.attributes.position;
+      for (let i = 0; i < P.count; i++) {
+        const y = P.getY(i);
+        if (y > L.level + 14) continue;   // piers, towers, arch feet, and decks too low for the riverboat to pass under
+        const x = P.getX(i), z = P.getZ(i);
+        if (L.waterAt(x, z) < .5) continue;
+        const k = `${Math.round(x / 8)},${Math.round(z / 8)}`;
+        if (!obs.has(k)) obs.set(k, { x: Math.round(x / 8) * 8, z: Math.round(z / 8) * 8 });
+      }
+    });
+    this.riverObstacles = [...obs.values()];
     // wakes behind moving boats
     const cvs = document.createElement('canvas'); cvs.width = 64; cvs.height = 128; const g = cvs.getContext('2d');
     const grd = g.createLinearGradient(0, 0, 0, 128); grd.addColorStop(0, 'rgba(255,255,255,.85)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
@@ -678,6 +694,26 @@ export class CityLife {
     const wakeGeo = c.own(new THREE.PlaneGeometry(1, 1)); wakeGeo.rotateX(-Math.PI / 2); wakeGeo.translate(0, 0, -.5);
     this.wakes = new THREE.InstancedMesh(wakeGeo, c.own(new THREE.MeshBasicMaterial({ map: c.own(new THREE.CanvasTexture(cvs)), transparent: true, depthWrite: false, opacity: .55 })), this.boats.length);
     this.wakes.frustumCulled = false; this.wakes.renderOrder = 2; c.group.add(this.wakes);
+  }
+
+  /**
+   * Where a boat should be across the river right now: its own lane, moved toward the middle while any part of
+   * its hull would be over land, and round any pier or tower ahead of it with room to spare.
+   */
+  _boatLane(b, p, side) {
+    const L = this.city.landscape, len = { tow: 70, clipper: 46, motor: 9, kayak: 4 }[b.type], beam = { tow: 22, clipper: 12, motor: 3.5, kayak: 1.2 }[b.type];
+    const fx = p.dx * b.dir, fz = p.dz * b.dir, nx = -p.dz * side, nz = p.dx * side;
+    const wet = (lat) => [[0, 0], [len / 2, 0], [-len / 2, 0], [0, beam / 2 + 1.5], [0, -beam / 2 - 1.5], [len / 2, beam / 2], [-len / 2, -beam / 2]]
+      .every(([u, v]) => L.heightAt(p.x + nx * lat + fx * u + nx * v, p.z + nz * lat + fz * u + nz * v) < L.level - .3);   // (the ground itself: a riverside trail's bank can reach out over the mapped water)
+    let lat = b.lat;
+    for (const o of this.riverObstacles || []) {
+      const dx = o.x - p.x, dz = o.z - p.z, along = dx * fx + dz * fz;
+      if (along < -len / 2 - 8 || along > len / 2 + 130) continue;
+      const across = dx * nx + dz * nz, clear = beam / 2 + 9;
+      if (Math.abs(across - lat) < clear) lat = across + (lat >= across ? clear : -clear);
+    }
+    for (let k = 0; k < 12 && !wet(lat); k++) lat *= .8;
+    return lat;
   }
 
   _updateBoats(dt, time) {
@@ -690,7 +726,10 @@ export class CityLife {
       if (b.s > b.river.path.length) { b.s = b.river.path.length; b.dir = -1; }
       if (b.s < 0) { b.s = 0; b.dir = 1; }
       b.river.path.at(b.s, p);
-      const side = b.dir > 0 ? 1 : -1, x = p.x - p.dz * b.lat * side, z = p.z + p.dx * b.lat * side;
+      const side = b.dir > 0 ? 1 : -1;
+      const lane = this._boatLane(b, p, side);
+      b.latNow = b.latNow == null ? lane : b.latNow + Math.max(-5 * dt, Math.min(5 * dt, lane - b.latNow));   // ease sideways, ≤ 5 m/s
+      const x = p.x - p.dz * b.latNow * side, z = p.z + p.dx * b.latNow * side;
       const yaw = Math.atan2(p.dx * b.dir, p.dz * b.dir), bob = Math.sin(time * 1.3 + b.i * 2) * (b.type === 'kayak' ? .06 : .12);
       this.e.set(Math.sin(time * .9 + b.i) * .01, yaw, Math.sin(time * 1.1 + b.i) * (b.type === 'motor' ? .03 : .015)); this.q.setFromEuler(this.e);
       const im = this.boatMeshes[b.type], k = counts[b.type] = (counts[b.type] || 0);

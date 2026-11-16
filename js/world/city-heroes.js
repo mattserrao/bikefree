@@ -208,33 +208,67 @@ export function buildHeroes(city) {
       out.morse = { x: c.x, y: g + b.h + 14.5, z: c.z };
     },
 
-    // Fort Pitt Blockhouse (1764): brick on a stone base, two rows of musket loopholes, a hipped roof
+    // Fort Pitt Blockhouse (1764): [w2-polish] a five-sided redoubt: a dressed-stone footing, brick walls laid in
+    // courses with a stone band at the floor line, two rows of gun loops (dark slots with stone sills and lintels)
+    // on every face, a plank door, a timber plate at the eaves and a five-sided hipped roof of shingle courses
+    // rising to a short finial, with a brick chimney through it. All in the solid-detail builder.
     blockhouse(p) {
       const found = claim(p, 6), b = found.find((q) => q.h < 16);
-      let ring = b ? b.ring : Array.from({ length: 5 }, (_, k) => ({ x: p.x + Math.cos(k * TAU / 5) * 5.5, z: p.z + Math.sin(k * TAU / 5) * 5.5 }));
-      const c = centroid(ring), g = ground(ring);
-      S.color('#8e8678'); block(S, scaleRing(ring, 1.04, c), g - .5, g + 1.1);
-      S.color('#8b4b36'); prism(S, ring, g + 1.1, g + 6.4);
-      S.color('#6f5a45'); block(S, scaleRing(ring, 1.06, c), g + 6.4, g + 6.7);   // wooden plate at the eaves
-      // loopholes: dark horizontal slots on every face, two rows
-      S.color('#1f1a17');
-      const o = orient(ring);
-      for (let i = 0; i < o.length; i++) {
-        const a = o[i], q = o[(i + 1) % o.length], len = Math.hypot(q.x - a.x, q.z - a.z), nx = (q.z - a.z) / len, nz = -(q.x - a.x) / len;
-        const sgn = ((a.x + q.x) / 2 - c.x) * nx + ((a.z + q.z) / 2 - c.z) * nz > 0 ? 1 : -1;
-        const yaw = Math.atan2(q.x - a.x, q.z - a.z);
-        for (const y of [2.5, 4.9]) for (const t of [.3, .7]) {
+      // always five sides: the map's footprint gives the size, centre and turn (its longest edge)
+      let c = p, R = 5.2, turn = 0;
+      if (b) {
+        c = centroid(b.ring);
+        R = Math.max(3.5, Math.min(8, Math.sqrt(Math.abs(area2(b.ring)) / 2 / (2.5 * Math.sin(TAU / 5)))));
+        let best = 0;
+        b.ring.forEach((a, i) => { const q = b.ring[(i + 1) % b.ring.length], len = Math.hypot(q.x - a.x, q.z - a.z); if (len > best) { best = len; turn = Math.atan2(q.z - a.z, q.x - a.x) - TAU / 10 - TAU / 4; } });
+      }
+      const ring = orient(Array.from({ length: 5 }, (_, k) => ({ x: c.x + Math.cos(turn + k * TAU / 5) * R, z: c.z + Math.sin(turn + k * TAU / 5) * R })));
+      const g = ground(ring), floor = g + 3.1, eaves = g + 6.2;
+      const faceOut = (A, B, C2, D2, want) => { const n = new THREE.Vector3().subVectors(B, A).cross(new THREE.Vector3().subVectors(D2, A)); if (n.dot(want) >= 0) S.quad(A, B, C2, D2); else S.quad(A, D2, C2, B); };
+      S.color('#8e8678'); block(S, scaleRing(ring, 1.05, c), g - .6, g + .7);                       // stone footing
+      S.color('#9a9286'); block(S, scaleRing(ring, 1.065, c), g + .7, g + .82);                      // its weathered cap
+      const courses = 7;
+      for (let k = 0; k < courses; k++) {                                                           // brick, in courses
+        const y0 = g + .82 + (eaves - g - .82) * k / courses, y1 = g + .82 + (eaves - g - .82) * (k + 1) / courses;
+        S.color(k % 2 ? '#8b4b36' : '#83452f'); prism(S, ring, y0, y1);
+      }
+      S.color('#b2a691'); prism(S, scaleRing(ring, 1.018, c), floor - .12, floor + .12);            // stone band at the floor line
+      S.color('#6f5a45'); block(S, scaleRing(ring, 1.08, c), eaves, eaves + .32);                    // timber plate at the eaves
+      // gun loops: two rows, three per face (the door face: the upper row and two below)
+      for (let i = 0; i < ring.length; i++) {
+        const a = ring[i], q = ring[(i + 1) % ring.length], len = Math.hypot(q.x - a.x, q.z - a.z);
+        const tx = (q.x - a.x) / len, tz = (q.z - a.z) / len;
+        let nx = tz, nz = -tx; const m0 = lerp2(a, q, .5); if ((m0.x - c.x) * nx + (m0.z - c.z) * nz < 0) { nx = -nx; nz = -nz; }
+        const yaw = Math.atan2(nx, nz);
+        for (const [y, ts] of [[g + 1.9, i === 0 ? [.18, .82] : [.22, .5, .78]], [g + 4.5, [.22, .5, .78]]]) for (const t of ts) {
           const m = lerp2(a, q, t);
-          S.box(m.x + nx * sgn * .05, g + y, m.z + nz * sgn * .05, .16, .22, 1.1, yaw);
+          S.color('#17120f'); S.box(m.x + nx * .02, y, m.z + nz * .02, .62, .2, .06, yaw);           // the slot
+          S.color('#b2a691'); S.box(m.x + nx * .04, y - .09, m.z + nz * .04, .82, .09, .1, yaw);     // sill
+          S.box(m.x + nx * .04, y + .2, m.z + nz * .04, .82, .1, .1, yaw);                           // lintel
+        }
+        if (i === 0) {   // a plank door with a stone surround, on the first face
+          S.color('#b2a691'); S.box(m0.x + nx * .03, g + .8, m0.z + nz * .03, 1.5, 2.45, .1, yaw);
+          S.color('#3d2b1f'); S.box(m0.x + nx * .07, g + .82, m0.z + nz * .07, 1.1, 2.2, .06, yaw);
         }
       }
-      // door on the face nearest the park path (any face: a dark plank door)
-      { const a = o[0], q = o[1], m = lerp2(a, q, .5); S.color('#3d2b1f'); S.box(m.x, g + 1.1, m.z, .2, 2.1, 1.2, Math.atan2(q.x - a.x, q.z - a.z)); }
-      // hipped roof of grey shingles rising to a short ridge, and a chimney
-      S.color('#4c4540');
-      const eave = scaleRing(ring, 1.1, c), apex = V(c.x, g + 9.6, c.z), eo = orient(eave);
-      for (let i = 0; i < eo.length; i++) { const a = eo[i], q = eo[(i + 1) % eo.length]; S.triangle(V(a.x, g + 6.7, a.z), apex, V(q.x, g + 6.7, q.z)); }
-      S.color('#7b4a37'); S.box(c.x + 1.2, g + 7.2, c.z + .6, .8, 3.4, .8);
+      // five-sided hipped roof in shingle courses: each course a little proud of the one above (a dark drip line)
+      const apexY = eaves + 3.4, n = 7, eave = scaleRing(ring, 1.14, c);
+      const at = (f, k) => ({ x: c.x + (eave[k].x - c.x) * (1 - f), z: c.z + (eave[k].z - c.z) * (1 - f) });
+      for (let j = 0; j < n; j++) {
+        const f0 = j / n, f1 = (j + 1) / n, y0 = eaves + .32 + (apexY - eaves - .32) * f0, y1 = eaves + .32 + (apexY - eaves - .32) * f1;
+        for (let k = 0; k < 5; k++) {
+          const k2 = (k + 1) % 5, a0 = at(f0, k), b0 = at(f0, k2), a1 = at(f1 - .02, k), b1 = at(f1 - .02, k2);
+          const mx = (a0.x + b0.x) / 2 - c.x, mz = (a0.z + b0.z) / 2 - c.z;
+          S.color(j % 2 ? '#4f4741' : ((k + j) % 3 ? '#574e46' : '#5c534a'));
+          faceOut(V(a0.x, y0, a0.z), V(b0.x, y0, b0.z), V(b1.x, y1 + .04, b1.z), V(a1.x, y1 + .04, a1.z), V(mx, 1, mz));
+          S.color('#2f2a26'); faceOut(V(a0.x, y0 - .07, a0.z), V(b0.x, y0 - .07, b0.z), V(b0.x, y0, b0.z), V(a0.x, y0, a0.z), V(mx, 0, mz));   // the course's edge
+        }
+      }
+      S.color('#3e3833'); S.cylinder(c.x, apexY - .05, c.z, .22, .7, 6, .05);                       // finial
+      // brick chimney rising through the roof
+      const ch = lerp2(c, ring[2], .38);
+      S.color('#7b4a37'); S.box(ch.x, eaves, ch.z, .8, apexY - eaves + .6, .8);
+      S.color('#8e8678'); S.box(ch.x, apexY + .6, ch.z, .95, .18, .95);
     },
 
     // Fort Pitt (1759-61): a five-bastioned pentagon. The Flag and Monongahela bastions are rebuilt in brick

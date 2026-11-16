@@ -8,6 +8,11 @@ import { makeRouteIndex } from './geo.js';
 import { smoothstep } from './coast.js';
 import { ROAD_WIDTH } from './pose.js';
 import { decodeTerrain } from './real-coast.js';
+import { planJunctions, junctionGround, junctionTops } from './junctions.js';   // [junctions]
+import { joinCrossings, densifyAlongside, clearOverpasses, alignAlongRoute, trimAtRoute, followMovedNodes, keepUnderRoad, resolveOverlaps, hideCrossingsAtRoute, landFreeDeckEnds, streetSlots } from './road-meets.js';   // [junctions]
+import { alignStreetProfiles, syncPinnedNodes } from './road-align.js';   // [road-align]
+import { makeStreetGrade } from './street-grade.js';   // [street-kit]
+import { riverfrontGround } from './riverfront.js';   // [s1-riverfront]
 
 export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand: 5, plaza: 6, outside: 7, yards: 8 };
 const LAND_COLORS = ['#8d8a84', '#77985a', '#4d6a3a', '#6c6a5e', '#7d786f', '#b5a684', '#b4ada0', '#6d8252', '#7c8c5f'];
@@ -98,6 +103,27 @@ export function makeCityLandscape(config, proj, index, route) {
     const i = Math.floor(u), j = Math.floor(v), a = u - i, b = v - j, M = OW.m, n = OW.nx;
     return (M[j * n + i] * (1 - a) + M[j * n + i + 1] * a) * (1 - b) + (M[(j + 1) * n + i] * (1 - a) + M[(j + 1) * n + i + 1] * a) * b;
   };
+  // The map draws bridge decks over the rivers as paved land, so the rivers were cut into pieces at every bridge
+  // (and the ground under each bridge sat at the water's level). Close the water across those gaps: dilate it by
+  // three cells (~36 m) and erode it back, so deck-wide breaks fill and real shorelines stay where they were.
+  {
+    const nx = D.lx, ny = D.ly, Lg = D.land, R = 3, wet = new Uint8Array(nx * ny), grow = new Uint8Array(nx * ny);
+    for (let k = 0; k < wet.length; k++) wet[k] = Lg[k] === LAND.water ? 1 : 0;
+    const sweep = (src, dst, want) => {   // separable square max (want 1) / min (want 0) filter
+      const tmp = new Uint8Array(src.length);
+      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+        let v = 1 - want; for (let u = Math.max(0, i - R); u <= Math.min(nx - 1, i + R); u++) if (src[j * nx + u] === want) { v = want; break; }
+        tmp[j * nx + i] = v;
+      }
+      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+        let v = 1 - want; for (let w = Math.max(0, j - R); w <= Math.min(ny - 1, j + R); w++) if (tmp[w * nx + i] === want) { v = want; break; }
+        dst[j * nx + i] = v;
+      }
+    };
+    sweep(wet, grow, 1);
+    const closed = new Uint8Array(nx * ny); sweep(grow, closed, 0);
+    for (let k = 0; k < closed.length; k++) if (closed[k] && !wet[k] && Lg[k] !== LAND.building) Lg[k] = LAND.water;
+  }
   const landCell = (x, z) => {
     const u = Math.round((x - D.x0) / (D.x1 - D.x0) * (D.lx - 1)), v = Math.round((z - D.z0) / (D.z1 - D.z0) * (D.ly - 1));
     if (u < 0 || v < 0 || u >= D.lx || v >= D.ly) return outerWater(x, z) > .5 ? LAND.water : LAND.outside;
@@ -169,10 +195,46 @@ export function makeCityLandscape(config, proj, index, route) {
   const routeKinds = data.routeKinds || [];
   const routeKindAt = (s) => (routeKinds.find((k) => s >= k.fromM && s < k.toM) || { kind: 'road' }).kind;
 
+  // Walled shores: where an urban bank (streets, plazas, buildings, lawns) stands well above the water, the shore
+  // is a river wall (drawn by the city), so the ground steps down at the waterline instead of sloping in.
+  let walled = null;
+  const URBAN = new Set([LAND.paved, LAND.grass, LAND.building, LAND.plaza]);
+  const shoreWalls = () => {
+    if (walled) return walled;
+    const nx = D.lx, ny = D.ly, L = D.land, dx = (D.x1 - D.x0) / (nx - 1), dz = (D.z1 - D.z0) / (ny - 1);
+    walled = new Uint8Array(nx * ny);
+    for (let j = 1; j < ny - 1; j++) for (let i = 1; i < nx - 1; i++) {
+      const k = j * nx + i;
+      if (L[k] === LAND.water || !URBAN.has(L[k])) continue;
+      let shore = false;
+      for (let v = -1; v <= 1 && !shore; v++) for (let u = -1; u <= 1; u++) if (L[k + v * nx + u] === LAND.water) { shore = true; break; }
+      if (!shore) continue;
+      // the bank ~2 cells inland must stand 1.5 m over the water
+      let top = -Infinity;
+      for (let v = -2; v <= 2; v++) for (let u = -2; u <= 2; u++) { const q = (j + v) * nx + i + u; if (q >= 0 && q < L.length && L[q] !== LAND.water) top = Math.max(top, terrainAt(D.x0 + (i + u) * dx, D.z0 + (j + v) * dz)); }
+      if (top > level + 1.5) walled[k] = 1;
+    }
+    return walled;
+  };
+  const wallAt = (x, z) => {
+    const W = shoreWalls(), u = Math.round((x - D.x0) / (D.x1 - D.x0) * (D.lx - 1)), v = Math.round((z - D.z0) / (D.z1 - D.z0) * (D.ly - 1));
+    if (u < 1 || v < 1 || u >= D.lx - 1 || v >= D.ly - 1) return false;
+    for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) if (W[(v + b) * D.lx + u + a]) return true;
+    return false;
+  };
   const baseHeight = (x, z) => {
     let h = terrainAt(x, z);
     const wet = waterAt(x, z);
-    if (wet > 0) h += (Math.min(h, level - 4.5) - h) * smoothstep(.05, .7, wet);
+    if (wet > 0) {
+      const walledHere = wallAt(x, z);
+      // behind a wall the bank keeps its height right to the waterline (and at least 1 m over the water)
+      if (walledHere && wet < .5) h = Math.max(h, level + 1);
+      h += (Math.min(h, level - 4.5) - h) * (walledHere ? smoothstep(.42, .58, wet) : smoothstep(.05, .7, wet));
+    }
+    // never level with the water (the rivers are hydro-flattened in the elevation, so the banks run out flat
+    // at exactly the water level): kept 35 cm above or 60 cm below, so the shoreline is a steep crossing rather
+    // than ground lying a few centimetres from the water across a whole cell (that flickers)
+    if (h > level - .6 && h < level + .35) h = h >= level - .1 ? level + .35 : level - .6;
     return h;
   };
   // The ground follows the city's streets: under a street and its sidewalks it sits just below the ribbon
@@ -221,6 +283,7 @@ export function makeCityLandscape(config, proj, index, route) {
     }
     return [...out.values()];
   };
+  const grade = makeStreetGrade(config, { data, decoded: D, route, index, outbound, routeKindAt, onRouteBridge, routeDist });   // [street-kit] main-street cross-section
   const heightAt = (x, z) => {
     let h = routeHeightAt(x, z);
     if (buildingStreets) return h;
@@ -229,32 +292,48 @@ export function makeCityLandscape(config, proj, index, route) {
     // heights (a ramp beside a street), follow the lowest, so none is buried.
     const flat = 6.5, around = streetsNear(x, z, 18).filter((o) => !streetIndex.streets[o.k].bridge);
     if (around.length) {
-      let target = Infinity, edge = Infinity;
+      let target = Infinity, edge = Infinity, ride = Infinity;
       for (const o of around) {
         edge = Math.min(edge, o.edge);
         if (o.edge < flat) target = Math.min(target, o.y - .1);
+        if (o.edge < 2.5 && streetIndex.streets[o.k].rides) ride = Math.min(ride, o.y - .1);   // [road-align] rides
       }
       if (target === Infinity) target = around.reduce((a, b) => (a.edge < b.edge ? a : b)).y - .1;
-      // the route's own road wins: no street grading under it, easing in beyond its shoulders
+      // the route's own road wins: no street grading under it, easing in beyond its shoulders — except under the
+      // street the route rides on, which lies just under the road and is wider than it ([road-align] rides)
       const r = routeDist(x, z), byRoute = r ? smoothstep(ROAD_WIDTH / 2 + 2, 13, r.d) : 1;
       h += (target - h) * (1 - smoothstep(flat, 18, edge)) * byRoute;
+      if (ride < Infinity) h += (ride - h) * (1 - byRoute);
       if (r && r.d < 9) h = Math.min(h, r.y - .5 + Math.max(0, r.d - 5) * .2);   // never over the route's own road
     }
+    // [junctions] round a junction: just under its surface and corner sidewalks (but still never over the route's road)
+    if (L._junctions) {
+      const r = routeDist(x, z);
+      const w = r ? smoothstep(ROAD_WIDTH / 2 + 1, ROAD_WIDTH / 2 + 7, r.d) : 1;   // (under the road and its shoulder: the road's bank)
+      if (w > 0) h += (junctionGround(L._junctions, x, z, h) - h) * w;
+      if (r && r.d < 9) h = Math.min(h, r.y - .5 + Math.max(0, r.d - 5) * .2);
+    }
+    if (grade) h = grade(x, z, h, routeDist(x, z));   // [street-kit] (after [junctions]: it fades out near other streets, so junctions keep their grading) sidewalk-level ground beside a kit zone's curbs
     // nor over a low ramp or viaduct deck (they're left out of the grading above, but one running close to the
     // ground beside the route would otherwise be buried by the bank the route's road raises)
     const own = routeDist(x, z);
     if (!own || own.d > 9) {   // (near the route's own road its bank wins: the ground mesh can't step that fast)
       for (const o of streetsNear(x, z, 1.5)) if (streetIndex.streets[o.k].bridge && h > o.y - .35) h = Math.min(h, o.y - .35);
     }
+    // nor, after all that grading, near the water's level (the route's riverside trail around the Point presses
+    // the ground to exactly the water's level)
+    if (h > level - .6 && h < level + .35) h = h >= level - .1 ? level + .35 : level - .6;
     return h;
   };
+  // [road-align] how far the ground eases towards the route's road (a route that follows its own ground needs less)
+  const bankM = config.roadAlign?.bankM ?? 60;
   const routeHeightAt = (x, z) => {
     let h = baseHeight(x, z);
     const road = index.nearest(x, z, 60);
     if (road) {
       const i = outbound(road.i), s = route.dist[i];
       const bridge = onRouteBridge(s, 6);
-      if (!bridge) h += (roadEle(i, x, z) - .5 - h) * (1 - smoothstep(13, 60, road.d));
+      if (!bridge) h += (roadEle(i, x, z) - .5 - h) * (1 - smoothstep(13, bankM, road.d));   // [road-align] bankM
       else {
         if (road.d < 14) h = Math.min(h, route.ele[i] - 2.5);   // keep the ground under a deck
         // a stretch of the route that passes under this deck (the North Shore Trail under the Clemente ramp)
@@ -329,16 +408,26 @@ export function makeCityLandscape(config, proj, index, route) {
     return (F[j * n + i] * (1 - a) + F[j * n + i + 1] * a) * (1 - b) + (F[(j + 1) * n + i] * (1 - a) + F[(j + 1) * n + i + 1] * a) * b;
   };
 
+  // [s4-section] yard trees in hillside neighbourhoods: scene `vegetation.yardTrees` = {kitDensity, boxes: [[s, w, n, e]…]}
+  // (lat/lon; no boxes: every yard): the share of yard spots that take the shared kit's trees (in its grove patches);
+  // the city keeps them clear of its buildings and adds its own light trees on a grid (city.js `_trees`).
+  const YT = config.vegetation?.yardTrees, ytBoxes = (YT?.boxes || []).map(([s, w, n, e]) => {
+    const a = proj.toLocal(s, w), b = proj.toLocal(n, e);
+    return [Math.min(a.x, b.x), Math.max(a.x, b.x), Math.min(a.z, b.z), Math.max(a.z, b.z)];
+  });
+  const yardTree = (x, z) => !!YT && (!ytBoxes.length || ytBoxes.some((b) => x > b[0] && x < b[1] && z > b[2] && z < b[3]))
+    && ((h) => h - Math.floor(h))(Math.sin(x * 4.1414 + z * 91.7171) * 24634.6345) < (YT.kitDensity ?? .5);
   const L = {
-    kind: 'city', city: true, data, decoded: D, level, outer: OW && { x0: T.x0, z0: T.z0, x1: T.x1, z1: T.z1, water: outerWater, mask: OW }, hasOcean: false, coastSide: 1,
+    kind: 'city', city: true, data, decoded: D, level, wallAt, shoreWalls, outer: OW && { x0: T.x0, z0: T.z0, x1: T.x1, z1: T.z1, water: outerWater, mask: OW }, hasOcean: false, coastSide: 1,
     coast: [{ x: -1e5, z: 0 }, { x: -1e5, z: 1 }], coastX: () => -1e5, inlandAt: () => 1e4,
     lakes: [], waterIslands: [], creeks: [], creekAt: () => null, landmarks,
     heightAt, baseHeight, terrainAt, bridgeAt, waterLevelAt, landAt: landCell, waterAt, routeKindAt, routeBridges, broad,
     isWater: (x, z, height) => waterAt(x, z) > .35 && height < level + .6,
     colorAt: (x, z) => LAND_COLORS[landCell(x, z)] || null,
     /** Trees and shrubs from the shared kit grow only in parks, woods and the hills beyond. */
-    canPlant: (x, z) => { const c = landCell(x, z); return c === LAND.woods || c === LAND.outside || (c === LAND.grass && ((x * 13 + z * 7) & 3) === 0); },
+    canPlant: (x, z) => { const c = landCell(x, z); return c === LAND.woods || c === LAND.outside || (c === LAND.grass && ((x * 13 + z * 7) & 3) === 0) || (c === LAND.yards && yardTree(x, z)); },   // [s4-section] yards
     routeDist, streetAt, streetsNear,
+    junctions: config.junctions || null,   // [junctions] scene key: real intersection geometry (js/world/junctions.js)
     /** For the weather: fog lies on the rivers (at the water level) and reaches inland up the valleys. */
     fogBase: level, fogField: rivers, fogInlandAt: riverDistance,
     /**
@@ -355,11 +444,13 @@ export function makeCityLandscape(config, proj, index, route) {
     /** On a street's carriageway or its sidewalks (paths: their width), for keeping scenery off them. */
     onStreet: (x, z, margin = 0) => { const st = streetAt(x, z, 2.6 + margin); return !!st && (st.st.cls !== 8 || st.edge < margin); },
   };
+  // [s1-riverfront] promenade walls along the route (scene "riverfront"): the ground past them under the water
+  if (config.riverfront) riverfrontGround(L, { route, index, config: config.riverfront, streets: () => (streetAt(0, 0), streetIndex.streets) });
   return L;
 }
 
 export const STREET_W = [15, 7.5, 13, 11, 9.5, 7.5, 9, 5, 3.4];   // street width by class (tools/build_city.py)
-export const STREET_LIFT = .16;                                     // highest a street ribbon sits above its line
+export const STREET_LIFT = .24;                                     // highest a street ribbon sits above its line
 
 /**
  * The city's streets as drawn: [{cls, bridge, oneway, layer, width, pts: [{x, y, z}]}]. Bridge decks keep their
@@ -373,7 +464,32 @@ export function cityStreets(landscape, index, route) {
   const u8 = (t) => Uint8Array.from(atob(t), (c) => c.charCodeAt(0)).buffer;
   const starts = new Uint32Array(u8(S.starts)), xy = new Int16Array(u8(S.xy)), deck = new Uint16Array(u8(S.deck));
   const end = route.turnIdx || route.dist.length - 1;
-  const streets = [];
+  const streets = [], align = route.scene?.roadAlign;
+  // a street point over or beside the route's road, near its height, is kept just below the road (pinned there)
+  // [road-align] `along`: the street runs along the route there and the route's centre line lies inside its
+  // carriageway — it is the street the route rides on (the other half of a mapped dual carriageway, or a way
+  // mapped a few metres off), so it is pinned even when the ground left it lower: drawn 0.3–2 m below the road
+  // and offset sideways, its outer half showed beside the road and z-fought the route's bank (McArdle, 12.1 km)
+  const lower = (p, width, along = false) => {
+    const r = index.nearest(p.x, p.z, width / 2 + ROAD_WIDTH / 2 + 2);
+    if (!r || r.d > width / 2 + ROAD_WIDTH / 2 + 1.5) return false;
+    const i = r.i > end ? Math.max(0, 2 * end - r.i) : r.i;
+    // [road-align] the road's height interpolated along the route (the nearest 10 m sample's left steps of up to
+    // 0.8 m in streets pinned along the route)
+    const rd = align && landscape.routeDist?.(p.x, p.z), e = rd && Math.abs(rd.y - route.ele[i]) < 3 ? rd.y : route.ele[i];
+    const low = along && r.d < width / 2 ? e - 2.5 : e - .18;
+    if (p.y > e - 4 && p.y < e + 4 && p.y > low) { p.y = e - .12 - STREET_LIFT + .1; p.pin = true; if (along && r.d < width / 2) p.along = true; return true; }   // [road-align] pin
+    return false;
+  };
+  // [road-align] is this street running along the route at point j (within ~20°)?
+  const alongRoute = (pts, j) => {
+    if (!align?.streets) return false;
+    const a = pts[Math.max(0, j - 1)], b = pts[Math.min(pts.length - 1, j + 1)], r = index.nearest(pts[j].x, pts[j].z, 12);
+    if (!r) return false;
+    const i = Math.min(index.xs.length - 2, r.i), dx = index.xs[i + 1] - index.xs[i], dz = index.zs[i + 1] - index.zs[i];
+    const sx = b.x - a.x, sz = b.z - a.z, l = Math.hypot(dx, dz) * Math.hypot(sx, sz);
+    return l > 0 && Math.abs(dx * sx + dz * sz) / l > .94;
+  };
   for (let k = 0; k < S.count; k++) {
     const cls = S.meta[k * 3], flags = S.meta[k * 3 + 1], layer = S.meta[k * 3 + 2] - 8;
     const bridge = !!(flags & 1), oneway = (flags >> 1) - 1, width = STREET_W[cls];
@@ -383,21 +499,46 @@ export function cityStreets(landscape, index, route) {
       p.y = bridge && deck[i] ? 150 + deck[i] / 10 : null;
       raw.push(p);
     }
-    const pts = [raw[0]], step = bridge ? 6 : 7;
+    const pts = [raw[0]], step = bridge ? 6 : 7, nodeIdx = [0];
     let under = false;
     for (let j = 1; j < raw.length; j++) {
       const a = raw[j - 1], b = raw[j], n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / step));
       for (let m = 1; m <= n; m++) { const f = m / n; pts.push({ x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, y: a.y != null && b.y != null ? a.y + (b.y - a.y) * f : null }); }
+      nodeIdx.push(pts.length - 1);   // [junctions]
     }
-    for (const p of pts) {
+    pts.forEach((p, j) => {
       if (p.y == null) p.y = landscape.heightAt(p.x, p.z);
-      const r = index.nearest(p.x, p.z, width / 2 + ROAD_WIDTH / 2 + 2);
-      if (!r || r.d > width / 2 + ROAD_WIDTH / 2 + 1.5) continue;
-      const i = r.i > end ? Math.max(0, 2 * end - r.i) : r.i, e = route.ele[i];
-      if (p.y > e - 4 && p.y < e + 4 && p.y > e - .18) { p.y = e - .12 - STREET_LIFT + .1; under = true; }
-    }
-    streets.push({ cls, bridge, oneway, layer, pts, width, underRoute: under });
+      if (lower(p, width, !bridge && alongRoute(pts, j))) under = true;   // [road-align] along
+    });
+    streets.push({ cls, bridge, oneway, layer, pts, width, underRoute: under, rides: width > ROAD_WIDTH + 1 && pts.some((p) => p.along),   // [road-align] rides (wider than the road: sticks out)
+      nodes: raw, nodeIdx });   // [junctions] OSM nodes → pts index
+  }
+  // [road-align] smooth, grade-limited street profiles with one height per junction (js/world/road-align.js)
+  if (align?.streets) {
+    const nearRoute = (x, z) => { const r = index.nearest(x, z, 24); return r ? 1 - smoothstep(12, 22, r.d) : 0; };
+    alignStreetProfiles(streets, { ...align, ground: landscape.baseHeight, nearRoute, floor: landscape.level + .6 });
+    for (const st of streets) st.pts.forEach((p, j) => { if (lower(p, st.width, !st.bridge && alongRoute(st.pts, j))) st.underRoute = true; });
+    syncPinnedNodes(streets);
   }
   landscape._streets = streets;
+  // [junctions] real intersection geometry: street heights inside junctions, trims, the junction surfaces
+  if (landscape.junctions) {
+    joinCrossings(streets);   // [junctions] streets crossing at one level with no shared node: give them one
+    densifyAlongside(streets);   // [junctions] (finer points where carriageways run side by side, for the trims below)
+    clearOverpasses(streets, { route, index, roadWidth: ROAD_WIDTH });   // [junctions] decks over the road clear the rider
+    landFreeDeckEnds(streets, { route, index, landscape });   // [w2-meets] a deck end that meets nothing lands on the ground
+    alignAlongRoute(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] streets alongside the road: flush with it
+    trimAtRoute(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] …or beside it at another level: kept off its shoulder
+    resolveOverlaps(streets, landscape);   // [junctions] [w2-meets] carriageways side by side or merging: drawn as their union (gores)
+    followMovedNodes(streets);   // [w2-meets] streets joining lifted decks and flush streets follow them before junctions are planned
+    landscape._junctions = planJunctions(streets, { route, index, end, routeDist: landscape.routeDist, roadWidth: ROAD_WIDTH,
+      onRouteBridge: (s, m) => landscape.routeBridges.some((b) => s > b.fromM - m && s < b.toM + m), liftOf: (k) => .1 + streetSlots(landscape, streets)[k] * .02 }, landscape.junctions);
+    keepUnderRoad(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] nothing over the road
+    followMovedNodes(streets);   // [junctions] paths, side streets and decks meet the moved ones at their height
+    resolveOverlaps(streets, landscape, { final: true });   // [w2-meets] again: heights moved since (decks and their links)
+    keepUnderRoad(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] (and still nothing over the road)
+    hideCrossingsAtRoute(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [w2-meets] crossings at another level: under the road's bank
+    junctionTops(landscape._junctions, streets, landscape.routeDist, ROAD_WIDTH);   // [junctions] mouths at the streets' final heights
+  }
   return streets;
 }

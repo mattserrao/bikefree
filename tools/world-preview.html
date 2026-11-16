@@ -46,7 +46,8 @@ try {
  world.s = pos;
  $('play').textContent = speed ? 'Pause' : 'Ride';
  $('time').value = q.get('time') || route.scene?.timeOfDay || 'midday';
- world.setTimeOfDay($('time').value);
+ for (const o of $('time').options) o.hidden = o.disabled = !world.timeOptions().some((t) => t.key === o.value);   // [w2-polish] baked: golden + night
+ world.setTimeOfDay($('time').value); $('time').value = world.timeKey;
  $('weather').value = q.get('weather') || 'clear'; world.setWeather($('weather').value, true);
  $('weather').addEventListener('change', (e) => world.setWeather(e.target.value)); $('quality').value = world.qualityKey;
  world.setSource(() => { const now = performance.now(); pos = (pos + speed * (now - last) / 1000) % route.total; last = now; return { pos, speed, cadence: speed ? 84 : 0, riding: true }; });

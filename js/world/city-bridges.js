@@ -6,6 +6,40 @@ import { MeshBuilder, resample, makePath, hash } from './city-geometry.js';
 import { ROAD_WIDTH } from './pose.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
+
+/**
+ * [w2-polish] A round granite fountain basin centred at (x, y ground, z), radius r (to the rim's middle): a paved
+ * apron ring, the basin wall (outer face, coping that overhangs both sides, a darker inner face down to the water at
+ * y + .35), and in the middle a three-tier granite pedestal with the nozzle and the jet's solid white core (the spray
+ * is drawn as points on top). Granite blocks vary a little in tone. ≈ 1,000 triangles, one merged builder.
+ */
+export function fountainBasin(M, x, y, z, r, { seg = 64, jetM = 18, footY = y - .1 } = {}) {
+  const ring = (rr, k) => { const a = k / seg * Math.PI * 2; return [x + Math.cos(a) * rr, z + Math.sin(a) * rr]; };
+  const quadR = (r0, y0, r1, y1, k, outward) => {   // a band between (r0, y0) and (r1, y1) for segment k
+    const [ax, az] = ring(r0, k), [bx, bz] = ring(r0, k + 1), [cx, cz] = ring(r1, k + 1), [dx, dz] = ring(r1, k);
+    const A = V(ax, y0, az), B = V(bx, y0, bz), C = V(cx, y1, cz), D = V(dx, y1, dz);
+    const n = new THREE.Vector3().subVectors(B, A).cross(new THREE.Vector3().subVectors(D, A));
+    const mid = (k + .5) / seg * Math.PI * 2, want = V(Math.cos(mid) * outward[0], outward[1], Math.sin(mid) * outward[0]);
+    if (n.dot(want) >= 0) M.quad(A, B, C, D); else M.quad(A, D, C, B);
+  };
+  const granite = ['#b3aca1', '#a9a297', '#bbb4a8', '#a49d93'], tone = (k, f = 1) => new THREE.Color(granite[Math.floor(hash(k * 31 + 7) * granite.length)]).multiplyScalar(f);
+  const wallOut = r + .55, wallIn = r - .45, top = y + .95, cope = .3;
+  for (let k = 0; k < seg; k++) {
+    if (footY > y - .5) { M.color(tone(k, .82)); quadR(wallOut + 1.6, y + .04, wallOut + .02, y + .06, k, [0, 1]); }   // the apron (paving round the basin), on level ground
+    M.color(tone(k, .95)); quadR(wallOut, Math.min(footY, y - .1), wallOut, top - .12, k, [1, 0]);        // outer face
+    M.color(tone(k + 3, 1.06)); quadR(wallOut + cope * .5, top - .12, wallOut + cope * .5, top, k, [1, 0]);   // coping: outer lip,
+    quadR(wallOut + cope * .5, top, wallIn - cope * .5, top, k, [0, 1]);                                    // top,
+    quadR(wallIn - cope * .5, top, wallIn - cope * .5, top - .12, k, [-1, 0]);                              // inner lip
+    M.color(tone(k, .72)); quadR(wallIn, top - .12, wallIn, y + .2, k, [-1, 0]);                         // inner face, down to the water
+    M.color(tone(k + 3, .9)); quadR(wallOut, top - .12, wallOut + cope * .5, top - .12, k, [0, -1]); quadR(wallIn - cope * .5, top - .12, wallIn, top - .12, k, [0, -1]);   // coping soffits
+  }
+  // the centre: three granite tiers rising out of the water, the bronze nozzle and the jet's core
+  const tiers = [[3.2, .9], [2.1, 1.35], [1.1, 1.7]];
+  let base = y + .2;
+  tiers.forEach(([tr, th], i) => { M.color(tone(i + 11, 1 - i * .04)); M.cylinder(x, base, z, tr, th - (base - y - .2), 24, tr * .96); base = y + .2 + th; });
+  M.color('#6d5a3e'); M.cylinder(x, base, z, .45, .5, 12, .3);
+  M.color('#eef5f8'); M.cylinder(x, base + .5, z, .32, jetM, 8, .06);   // the jet's solid core (the spray points do the rest)
+}
 const GOLD = '#d4a22c', CONCRETE = '#a49e93';
 const STYLE = {
   sister: { color: GOLD }, 'arch-gold': { color: GOLD }, fortpitt: { color: GOLD }, lenticular: { color: '#3f6f9c', accent: '#9a5b3a' },
@@ -237,6 +271,39 @@ export function buildBridges(city) {
 }
 
 // ---------------------------------------------------------------- stadiums
+/** A quad from p0 to p1 between heights y0 and y1, wound to face `out` (xz), pushed `push` m outward. */
+function wallQuad(M, p0, p1, y0, y1, out, push = 0) {
+  const A = V(p0.x + out.x * push, y0, p0.z + out.z * push), B = V(p1.x + out.x * push, y0, p1.z + out.z * push);
+  const C = V(B.x, y1, B.z), D = V(A.x, y1, A.z);
+  const n = new THREE.Vector3().subVectors(B, A).cross(new THREE.Vector3().subVectors(D, A));
+  if (n.x * out.x + n.z * out.z >= 0) M.quad(A, B, C, D); else M.quad(B, A, D, C);
+}
+
+/** [s1-stadium] One bay of a stadium's outer wall (a → b, facing `out`), `h` tall. */
+function facade(M, a, b, out, ground, h, wall, i) {
+  const lerp = (t) => ({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t });
+  const base = wall.clone().multiplyScalar(.72), steel = new THREE.Color('#4a5560'), shade = new THREE.Color('#2e2a26'), cornice = wall.clone().lerp(new THREE.Color('#f1e6cf'), .45);
+  const lo = Math.min(3, h * .2), mid = h > 14 ? h * .58 : h, top = Math.max(lo + 1, h - 1.1);
+  M.color(base); wallQuad(M, a, b, ground, ground + lo, out);
+  M.color(wall); wallQuad(M, a, b, ground + lo, ground + mid, out);
+  if (mid < top) { M.color(steel); wallQuad(M, a, b, ground + mid, ground + top, out); }
+  M.color(cornice); wallQuad(M, a, b, ground + top, ground + h, out, .35);
+  { // the cornice's top, back to the wall
+    const y = ground + h, A = V(a.x, y, a.z), B = V(b.x, y, b.z), C = V(b.x + out.x * .35, y, b.z + out.z * .35), D = V(a.x + out.x * .35, y, a.z + out.z * .35);
+    if (new THREE.Vector3().subVectors(B, A).cross(new THREE.Vector3().subVectors(D, A)).y >= 0) M.quad(A, B, C, D); else M.quad(B, A, D, C);
+  }
+  // tall openings: a dark recess in the middle of the bay, a lit band of upper openings over it
+  if (Math.hypot(b.x - a.x, b.z - a.z) > 6 && mid - lo > 5) {
+    M.color(shade); wallQuad(M, lerp(.22), lerp(.78), ground + lo + .4, ground + lo + (mid - lo) * .62, out, .12);
+    if (mid < top - 3) { M.color(steel.clone().multiplyScalar(.6)); wallQuad(M, lerp(.12), lerp(.88), ground + mid + 1.2, ground + top - 1.4, out, .12); }
+  }
+  // a pilaster at the bay's start
+  if (mid - lo > 5) {
+    const t = .045, p0 = lerp(0), p1 = lerp(t * 2);
+    M.color(cornice.clone().multiplyScalar(.92)); wallQuad(M, p0, p1, ground + lo, ground + mid, out, .3);
+  }
+}
+
 export function buildStadiums(city) {
   const M = new MeshBuilder(), lights = [];
   const shapes = city.route.scene?.stadiumShapes || {}, L = city.landscape;
@@ -290,8 +357,9 @@ export function buildStadiums(city) {
         const pa = lo(ia, a), pb = lo(ib, b);
         M.color('#2b2f35'); M.quad(pa, pb, pb.clone().setY(pb.y + 2.2), pa.clone().setY(pa.y + 2.2));
       }
-      M.color(wall);
-      M.quad(V(b.x, ground, b.z), V(b.x, ground + h, b.z), V(a.x, ground + h, a.z), V(a.x, ground, a.z));
+      // the outer wall, facing out (the ring's winding varies with the data): a stone plinth, bays of tall
+      // openings between pilasters, a darker steel upper level and a pale cornice, instead of one blank face
+      facade(M, a, b, { x: mx / ml, z: mz / ml }, ground, h, wall, i);   // [s1-stadium]
       M.quad(V(ia.x, ground, ia.z), V(ia.x, ground + 2.5, ia.z), V(ib.x, ground + 2.5, ib.z), V(ib.x, ground, ib.z));
       if (i % Math.max(1, Math.floor(ring.length / 6)) === 0 && open < .6) {
         M.color('#55595d'); M.cylinder(a.x, ground + h, a.z, .5, 16, 6, .4);
@@ -359,9 +427,13 @@ export function buildLandmarks(city) {
 
   // Point State Park fountain: a basin and a 30 m jet.
   if (scene.fountain) {
-    const p = D.proj.toLocal(scene.fountain.lat, scene.fountain.lon), y = L.heightAt(p.x, p.z);
-    const M = new MeshBuilder(), r = scene.fountain.radiusM || 22;
-    M.color('#c8c1b2'); for (let k = 0; k < 40; k++) { const a0 = k / 40 * Math.PI * 2, a1 = (k + 1) / 40 * Math.PI * 2; M.beam(V(p.x + Math.cos(a0) * r, y + .25, p.z + Math.sin(a0) * r), V(p.x + Math.cos(a1) * r, y + .25, p.z + Math.sin(a1) * r), 1.2, .7); }
+    const p = D.proj.toLocal(scene.fountain.lat, scene.fountain.lon), r = scene.fountain.radiusM || 22;
+    // [w2-polish] the basin sits level on its highest ground (water and coping clear the ground mesh inside and
+    // round it); its outer wall reaches down to the lowest
+    let y = -Infinity, low = Infinity;
+    for (let k = 0; k < 48; k++) for (const f of [0, .35, .7, 1, 1.12]) { const a = k / 48 * Math.PI * 2, g = L.heightAt(p.x + Math.cos(a) * r * f, p.z + Math.sin(a) * r * f); y = Math.max(y, g); low = Math.min(low, g); }
+    const M = new MeshBuilder();
+    fountainBasin(M, p.x, y, p.z, r, { footY: low - .3 });   // [w2-polish] granite basin, coping, apron, centre pedestal and the jet's core
     const rim = new THREE.Mesh(city.own(M.geometry()), city.solidMaterial); rim.receiveShadow = true; city.group.add(rim);
     const pool = new THREE.Mesh(city.own(new THREE.CircleGeometry(r - .5, 48)), city.own(new THREE.MeshStandardMaterial({ color: '#4f8fa0', roughness: .15, metalness: .1, emissive: '#1b4f6e', emissiveIntensity: 0 })));
     pool.rotation.x = -Math.PI / 2; pool.position.set(p.x, y + .35, p.z); city.group.add(pool);
@@ -373,7 +445,7 @@ export function buildLandmarks(city) {
     g.setAttribute('aSeed', new THREE.Float32BufferAttribute(seeds, 4));
     g.boundingSphere = new THREE.Sphere(V(p.x, y + 15, p.z), 40);
     const mat = city.own(new THREE.ShaderMaterial({
-      uniforms: { uTime: city.uniforms.uTime, uNight: city.night, uBase: { value: V(p.x, y, p.z) } },
+      uniforms: { uTime: city.uniforms.uTime, uNight: city.night, uBase: { value: V(p.x, y + 1.9, p.z) } },   // [w2-polish] from the pedestal
       vertexShader: /* glsl */`
         attribute vec4 aSeed; uniform float uTime; uniform vec3 uBase; varying float vA;
         #include <common>
@@ -424,7 +496,7 @@ export function buildLandmarks(city) {
   }
 
   // Storefront awnings and shop signs along the main street(s).
-  const streets = scene.mainStreets || [];
+  const streets = scene.streetKit ? [] : scene.mainStreets || [];   // [street-kit] the kit dresses the shop fronts
   if (streets.length) {
     const cvs = document.createElement('canvas'); cvs.width = 1024; cvs.height = 512;
     const ctx = cvs.getContext('2d');

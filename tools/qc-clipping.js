@@ -24,8 +24,10 @@ export const LIMITS = {
   body: { half: [0.32, 0.8, 0.9], lift: 1.1 },   // rider + bike envelope: half width/height/length; centre above the road
   cameraRadius: 0.35,      // ≈ near plane: geometry this close to the camera fills the screen
   zfight: 0.006,           // two surfaces with the same depth offset closer than this flicker
+  zfightSpan: 0.6,         // … over a band at least this wide (surfaces crossing at a steeper angle meet in a line)
   groundOverStreet: 0.03,  // drawn ground this far above a street/path/sidewalk hides it
   corridor: 24,            // half-width of the strip beside the route checked for surface problems
+  seenBack: [0, 12, 25, 45, 70],   // ground-over-street counts only if the chase camera sees it from this far back
   overlapM2: 4,            // building footprints overlapping by more than this
   lifeSeconds: 0.5,        // life sample interval (simulated)
   lifeSpeed: 9,            // simulated riding speed m/s
@@ -265,6 +267,7 @@ export async function load(park, quality = 'balanced') {
   city = world.terrain.city || null;
   landscape = world.terrain.landscape;
   if (city) while (city._pending.length) city._buildChunk(city._pending.pop());   // every building, not just nearby
+  city?.streetKit?.flush();   // [street-kit] its chunk work is deferred while the app streams
   if (world.road) world.road.name ||= 'Route road';
   if (world.shoulder) world.shoulder.name ||= 'Route shoulder';
   world.rider?.group?.traverse((o) => { o.userData.qcRider = true; });
@@ -407,6 +410,34 @@ function checkStatics() {
 }
 
 // ---------------------------------------------------------------- 3. surfaces beside the route
+/** Is the point in plain view of the chase camera somewhere on the approach (either way on a there-and-back)? */
+function seenFromRide(s, target, ground) {
+  const L = LIMITS, turn = route.turnS, views = [];
+  for (const d of L.seenBack) {
+    views.push(s - d);
+    if (turn) views.push(route.total - s - d);   // the return ride passes the same spot
+  }
+  for (const v of views) {
+    if (v < 0 || v > route.total) continue;
+    const pose = riderPose(route, world.index, v);
+    const fwd = V(pose.flat.x, 0, pose.flat.z);
+    const cam = V(pose.pos.x, pose.pos.y, pose.pos.z).addScaledVector(fwd, -6.5).addScaledVector(UP, 2.7);
+    const g = world.terrain.heightAt(cam.x, cam.z); if (g != null && cam.y < g + 1.6) cam.y = g + 1.6;
+    const dir = target.clone().sub(cam), len = dir.length() - .4; dir.normalize();
+    if (len > L.staticRange) continue;
+    if (dir.dot(fwd) < .2) continue;   // behind the camera, or far off to the side: out of the frame
+    const box = new THREE.Box3().setFromPoints([cam, target]).expandByScalar(.2);
+    let blocked = false;
+    for (const e of [...near(box, (q) => !q.instance && (q.kind === 'solid' || q.kind === 'surface')), ...ground.filter((q) => q.box.intersectsBox(box))]) {
+      _ray.set(cam.clone().applyMatrix4(e.inv), dir.clone().transformDirection(e.inv));
+      const scale = V().setFromMatrixScale(e.inv).x || 1;
+      if (e.bvh.raycastFirst(_ray, THREE.DoubleSide, 0, len * scale)) { blocked = true; break; }
+    }
+    if (!blocked) return true;
+  }
+  return false;
+}
+
 function checkSurfaces() {
   const L = LIMITS, end = route.turnS || route.total;
   const groundBVH = new Map();
@@ -429,7 +460,7 @@ function checkSurfaces() {
       const hits = [];
       for (const e of [...near(box, (q) => q.kind === 'surface'), ...ground.filter((q) => q.box.intersectsBox(box))]) {
         _ray.set(V(x, top, z).applyMatrix4(e.inv), V(0, -1, 0).transformDirection(e.inv));
-        for (const h of e.bvh.raycast(_ray, THREE.DoubleSide)) hits.push({ y: h.point.clone().applyMatrix4(e.matrix).y, e, face: h.faceIndex });
+        for (const h of e.bvh.raycast(_ray, THREE.DoubleSide)) hits.push({ y: h.point.clone().applyMatrix4(e.matrix).y, e, face: h.faceIndex, n: h.face.normal.clone().transformDirection(e.matrix) });
       }
       hits.sort((a, b) => b.y - a.y);
       // z-fighting: two different surfaces (or two ribbons of one mesh) almost coplanar with the same depth offset
@@ -438,15 +469,29 @@ function checkSurfaces() {
         if (a.e === b.e && Math.abs(a.face - b.face) <= 1) continue;          // the same strip (shared edge)
         if (a.e.label === 'Ground' && b.e.label === 'Ground') continue;        // overlapping patch skirts
         if ((a.e.offset || 0) !== (b.e.offset || 0)) continue;
+        // streets settle overlaps in the depth test by their height slot (aSlot): different slots never flicker
+        const slotOf = (h) => { const g = h.e.mesh.geometry, at = g.attributes.aSlot; return at && h.e.mesh.material.userData?.slotDepthBias ? at.getX(g.index ? g.index.getX(h.face * 3) : h.face * 3) : null; };
+        { const sa = slotOf(a), sb = slotOf(b); if (sa != null && sb != null && sa !== sb) continue; }
         const ma = a.e.mesh.material, mb = b.e.mesh.material;
         if (ma === mb && !ma.map && !ma.vertexColors) continue;   // one flat colour: nothing to see flicker
+        // two surfaces that cross (a bank running down into the water, a ramp through a flat deck) meet in a crisp
+        // line, not a flicker: they stay within `zfight` of each other only for a few centimetres. Coplanar means
+        // near-parallel too: within `zfight` of each other across a band at least `zfightSpan` wide.
+        if (a.n.clone().cross(b.n).length() > 2 * L.zfight / L.zfightSpan) continue;
         if (a.y - b.y < L.zfight) F.add({ check: 'z-fight', severity: 'warn', s, label: a.e === b.e ? `${a.e.label} (overlapping ribbons)` : `${a.e.label} ↔ ${b.e.label}`, value: round(a.y - b.y, 4), point: [round(x, 1), round(a.y, 2), round(z, 1)], note: 'coplanar surfaces: they flicker as you move' }, 40);
       }
       // ground drawn over a street, path or sidewalk (it disappears under the grass); a lake's water running on
       // under its shore is hidden by design
       const gTop = hits.find((h) => h.e.label === 'Ground');
       const covered = hits.find((h) => h.e.kind === 'surface' && !/^(Route |Rivers|Sea$|Lake$)|water$/.test(h.e.label) && gTop && gTop.y - h.y > L.groundOverStreet && gTop.y - h.y < 3);
-      if (gTop && covered && hits.indexOf(gTop) < hits.indexOf(covered)) F.add({ check: 'ground-over-street', severity: 'warn', s, label: covered.e.label, value: round(gTop.y - covered.y, 2), point: [round(x, 1), round(covered.y, 2), round(z, 1)], note: 'the ground covers part of a street/path beside the route' }, 40);
+      const hidden = gTop && hits.slice(0, hits.indexOf(gTop)).some((h) => h.e.kind === 'surface' && h.y - gTop.y < 1.5);   // [street-kit] the ground is itself under a slab or the road here: nothing it covers can show
+      if (gTop && covered && !hidden && hits.indexOf(gTop) < hits.indexOf(covered)) {
+        // can the ride see it? Under the route's own deck, beneath an overpass or behind a wall the covered strip
+        // never shows: reported as info only
+        const seen = seenFromRide(s, V(x, gTop.y + .05, z), ground);
+        F.add({ check: seen ? 'ground-over-street' : 'ground-over-street-hidden', severity: seen ? 'warn' : 'info', s, label: covered.e.label, value: round(gTop.y - covered.y, 2), point: [round(x, 1), round(covered.y, 2), round(z, 1)],
+          note: seen ? 'the ground covers part of a street/path beside the route' : 'the ground covers part of a street/path, out of sight of the ride (under a deck or behind something solid)' }, 40);
+      }
     }
   }
   F.close();
@@ -589,3 +634,5 @@ export async function shot(f, w = 640, h = 384) {
 }
 
 window.qc = { load, run, shot, LIMITS };
+// internals, for poking at one finding from a devtools console or a driver script
+window.qcDebug = () => ({ world, route, city, landscape, entries, grid, near, surfaceUnder, routeS, riderPose, THREE, ensureBVH, F });

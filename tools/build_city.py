@@ -22,6 +22,9 @@ import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 from collections import Counter
 from PIL import Image, ImageDraw
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from citylib import road_align   # [road-align]
+from citylib import street_kit   # [street-kit]
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(ROOT, 'tools', '.cache')
@@ -369,39 +372,17 @@ def build(cid):
                         if hit is None: return True
                         hit.add(wid_)
         return bool(hit)
-    def clear(x, y):   # the road (and a little sidewalk) stays out of buildings
-        return not any(in_building(x + ox, y + oy) for ox, oy in ((0, 0), (3.2, 0), (-3.2, 0), (0, 3.2), (0, -3.2), (2.3, 2.3), (-2.3, 2.3), (2.3, -2.3), (-2.3, -2.3)))
-    raw_clear = [clear(*q) for q in r2]
     # buildings the mapped path itself runs through (a trail under a canopy, a mis-drawn footprint) are left out
     route_buildings = set()
     for q in r2: in_building(q[0], q[1], route_buildings)
     print('  left out (on the route):', len(route_buildings), sorted(Counter(ways[w][1].get('building', ways[w][1].get('building:part', '')) for w in route_buildings).items()))
-    def leash(i, p_, prev=None):
-        dx, dy = p_[0] - r2[i][0], p_[1] - r2[i][1]
-        d = math.hypot(dx, dy)
-        q = p_ if d <= drift else (r2[i][0] + dx / d * drift, r2[i][1] + dy / d * drift)
-        if raw_clear[i] and not clear(*q): return prev if prev is not None else r2[i]
-        return q
-    sm = r2
-    for _ in range(cfg.get('cornerPasses', 2)):
-        w = cfg.get('cornerHalfWindow', 6)
-        sm = [(sum(sm[(i + o) % n2][0] for o in range(-w, w + 1)) / (2 * w + 1),
-               sum(sm[(i + o) % n2][1] for o in range(-w, w + 1)) / (2 * w + 1)) for i in range(n2)]
-        sm = [leash(i, p_) for i, p_ in enumerate(sm)]
-    # then ease only the remaining tight spots (park paths, hairpins) until no turn is sharper than ~7°/m
-    def turn(i):
-        a_, b_, c_ = sm[i - 1], sm[i], sm[(i + 1) % n2]
-        t1, t2 = math.atan2(b_[1] - a_[1], b_[0] - a_[0]), math.atan2(c_[1] - b_[1], c_[0] - b_[0])
-        seg = (math.hypot(b_[0] - a_[0], b_[1] - a_[1]) + math.hypot(c_[0] - b_[0], c_[1] - b_[1])) / 2
-        return abs((math.degrees(t2 - t1) + 540) % 360 - 180) / max(seg, .05)   # degrees per metre
-    for it in range(1500):
-        tight = {(i + o) % n2 for i in range(n2) if turn(i) > 4.5 for o in range(-10, 11)}
-        if not tight: break
-        old = sm
-        sm = [((sum(sm[(i + o) % n2][0] for o in range(-7, 8)) / 15, sum(sm[(i + o) % n2][1] for o in range(-7, 8)) / 15) if i in tight else sm[i])
-              for i in range(n2)]
-        sm = [leash(i, p_, old[i]) if i in tight else p_ for i, p_ in enumerate(sm)]
-    print(f'  corners eased in {it} passes, {len(tight)} points still tight')
+    # [road-align] plan: round corners, ease tight spots and fair the line inside the mapped corridor, clear of
+    # buildings (tools/citylib/road_align.py)
+    polys = list({wid_: poly for cell_ in bgrid.values() for wid_, poly in cell_ if wid_ not in route_buildings}.values())
+    sm = [tuple(q_) for q_ in road_align.align_plan(
+        r2, clear=road_align.Clearance(polys, cfg.get('clearM', 3.2)), drift=drift, loop=True,
+        corner_passes=cfg.get('cornerPasses', 2), corner_half_window=cfg.get('cornerHalfWindow', 6),
+        fair_iters=cfg.get('fairIters', 240)).tolist()]
     sm.append(sm[0]); e2.append(e2[0])
     scum = [0.0]
     for a_, b_ in zip(sm, sm[1:]): scum.append(scum[-1] + math.hypot(b_[0] - a_[0], b_[1] - a_[1]))
@@ -427,10 +408,10 @@ def build(cid):
     for b in route_bridges: b['fromM'], b['toM'] = round(app_s(b['fromM'])), round(app_s(b['toM']))
     for k in route_kinds: k['fromM'], k['toM'] = round(app_s(k['fromM'])), round(app_s(k['toM']))
     route_kinds[-1]['toM'] = round(chord[-1]) + 10
-    # rideable profile: fill cliff-edge dips (< 160 m wide), shave spikes (< 80 m), smooth over 60 m
-    e = circular(circular(re_, 4, min), 4, max)
-    e = circular(circular(e, 8, max), 8, min)
-    e = circular(e, 3, lambda v: sum(v) / len(v))
+    # rideable profile
+    # [road-align] profile: shave spikes, fill only narrow notches (real dips and crests stay on the ground),
+    # limit grade and grade change, light averaging
+    e = road_align.align_profile(re_, step=10, loop=True, **cfg.get('profile', {})).tolist()
     asc = sum(max(0, b - a) for a, b in zip(e, e[1:]))
     grades = [(e[(k + 1) % len(e)] - e[k - 1]) / 20 * 100 for k in range(len(e))]
     total = chord[-1]
@@ -485,6 +466,9 @@ def build(cid):
     pix = lambda lat, lon: ((lon - gw) / (ge - gw) * (lx - 1), (gn - lat) / (gn - gs) * (ly - 1))
     ow, os_, oe, on = cfg['osmBbox']
     dr.rectangle([pix(on, ow), pix(os_, oe)], fill=0)
+    # [s4-section] hillside neighbourhoods the map leaves without land use: yards (and small untagged footprints
+    # there become houses and rowhouses, not shop blocks with water tanks)
+    for bs, bw, bn, be in cfg.get('residentialBoxes', []): dr.rectangle([pix(bn, bw), pix(bs, be)], fill=8)
 
     def poly(pts, code):
         if len(pts) > 2: dr.polygon([pix(*p) for p in pts], fill=code)
@@ -664,19 +648,41 @@ def build(cid):
         count = Counter(n for u in group for n in (bridge_ways[u]['nodes'][0], bridge_ways[u]['nodes'][-1]))
         anchors = [n for n, c in count.items() if c == 1] or [bridge_ways[group[0]]['nodes'][0]]
         anchor_h = {n: elevation(*nodes[n]) for n in anchors}
-        for u in group:
-            for n in bridge_ways[u]['nodes']:
-                if n in deck: continue
-                ws = [(1 / max(1.0, hv(nodes[n], nodes[a])) ** 2, anchor_h[a]) for a in anchors]
-                deck[n] = sum(w * h for w, h in ws) / sum(w for w, _ in ws)
+        # [road-align] straight along the deck between its ground ends (was inverse-distance: flat ends, steep middle)
+        edges_ = [(a_, b_, hv(nodes[a_], nodes[b_])) for u in group for a_, b_ in zip(bridge_ways[u]['nodes'], bridge_ways[u]['nodes'][1:])]
+        hts = road_align.deck_heights(edges_, anchor_h)
+        # [w2-meets] deck ends at the route take its height; decks crossing over it clear the rider (re-solved twice)
+        nxy = {n_: loc(*nodes[n_]) for u in group for n_ in bridge_ways[u]['nodes']}
+        extra = road_align.deck_route_anchors(None, edges_, nxy, hts, anchor_h, rxy, e)
+        ends_ = {n_: h_ for n_, h_ in extra.items() if n_ in anchor_h}   # deck ends at the route: its height
+        if ends_:
+            anchor_h = {**anchor_h, **ends_}
+            hts = road_align.deck_heights(edges_, anchor_h)
+        needs_ = {n_: h_ for n_, h_ in road_align.deck_route_anchors(None, edges_, nxy, hts, anchor_h, rxy, e).items() if n_ not in anchor_h}
+        if needs_: hts = road_align.lift_over_route(edges_, hts, anchor_h, needs_)   # over the route: clear, smoothly
+        for n, h_ in hts.items(): deck.setdefault(n, h_)
     # pack streets: coords + optional deck heights (0 = on the ground)
     st_coords, st_starts, st_meta, st_deck = [], [], [], []
+    # [road-align] ground streets: OSM jitter dropped and free corners rounded; junction nodes (shared by two or
+    # more ways, or by the route) and the ends never move, so the street graph stays connected
+    used = Counter(n for rec in streets for n in rec['nodes']); used.update(set(pts))
+    to_q = lambda x, y: (round(y / ky / UNIT), round(x / kx / UNIT))
     for rec in streets:
         st_starts.append(len(st_coords) // 2)
-        simp = rec['nodes'] if rec['bridge'] else [rec['nodes'][0]] + [n for k, n in enumerate(rec['nodes'][1:-1], 1)] + [rec['nodes'][-1]]
-        for n in simp:
-            st_coords += q(*nodes[n])
-            st_deck.append(round((deck[n] - 150) * 10) if rec['bridge'] and n in deck else 0)
+        nd = rec['nodes']
+        if rec['bridge'] or not cfg.get('roundStreets', True) or len(nd) < 3:
+            for n in nd:
+                st_coords += q(*nodes[n])
+                st_deck.append(round((deck[n] - 150) * 10) if rec['bridge'] and n in deck else 0)
+        else:
+            fixed = [k in (0, len(nd) - 1) or used[n] > 1 for k, n in enumerate(nd)]
+            locs = [loc(*nodes[n]) for n in nd]
+            src = {id(t): n for t, n in zip(locs, nd)}
+            xy, _ = road_align.round_street(locs, fixed, max_shift=cfg.get('streetShiftM', 1.5))
+            for t in xy:
+                # kept vertices (junctions, ends) are stored exactly as before: identical across streets
+                st_coords += q(*nodes[src[id(t)]]) if id(t) in src else to_q(*t)
+                st_deck.append(0)
         st_meta += [rec['cls'], (1 if rec['bridge'] else 0) | ((rec['oneway'] + 1) << 1), rec['layer'] + 8]
     st_starts.append(len(st_coords) // 2)
     named_bridges = {}
@@ -725,6 +731,7 @@ def build(cid):
         'rails': rails,
         'trees': pack_int16(trees),
     }
+    out['streetKit'] = street_kit.extract(nodes, ntags, ways, q, route_dist)   # [street-kit]
     path = os.path.join(ROOT, cfg['data'])
     json.dump(out, open(path, 'w'), separators=(',', ':'))
     print(f'  wrote {cfg["data"]} ({os.path.getsize(path) / 1e6:.2f} MB): {len(streets)} streets, {len(bridges)} styled bridges, '

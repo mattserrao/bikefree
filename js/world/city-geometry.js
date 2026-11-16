@@ -133,18 +133,34 @@ export class MeshBuilder {
 }
 
 /** Ribbon along a 3D polyline: points [{x, y, z}], width (or per-point widths), v = distance / repeat. */
-export function ribbon(builder, pts, width, lift = 0, repeat = 10, uRange = [0, 1]) {
+export function ribbon(builder, pts, width, lift = 0, repeat = 10, uRange = [0, 1], slopeNormals = false) {
   if (pts.length < 2) return;
   let dist = 0, prev = null;
   for (let k = 0; k < pts.length; k++) {
     const a = pts[Math.max(0, k - 1)], b = pts[Math.min(pts.length - 1, k + 1)];
     let dx = b.x - a.x, dz = b.z - a.z; const len = Math.hypot(dx, dz) || 1; dx /= len; dz /= len;
+    const grade = slopeNormals ? (b.y - a.y) / len : 0;
+    // [junctions] an end that meets a junction's mouth or another street's end is square to the direction given
+    if (pts[k].tx != null && (k === 0 || k === pts.length - 1)) { dx = pts[k].tx; dz = pts[k].tz; }
     const w = (typeof width === 'function' ? width(k) : width) / 2, p = pts[k];
     if (k) dist += Math.hypot(p.x - pts[k - 1].x, p.z - pts[k - 1].z);
-    const l = builder.vertex(p.x + dz * w, p.y + lift, p.z - dx * w, 0, 1, 0, uRange[0], dist / repeat);
-    const r = builder.vertex(p.x - dz * w, p.y + lift, p.z + dx * w, 0, 1, 0, uRange[1], dist / repeat);
+    // [junctions] a ribbon trimmed where it runs into another (road-meets.js trimOverlaps): `tl` / `tr` metres off
+    // its (dz, −dx) / other half; the texture keeps its scale (the trimmed edge's u moves in with it)
+    const wl = Math.max(0, w - (p.tl || 0)), wr = Math.max(0, w - (p.tr || 0)), um = (uRange[0] + uRange[1]) / 2;
+    let lx = p.x + dz * wl, lz = p.z - dx * wl, rx = p.x - dz * wr, rz = p.z + dx * wr;
+    // on the inside of a tight bend an edge would step backwards and the ribbon fold over itself (two layers of
+    // road at one height: flicker); hold that edge where it was instead
+    if (prev) {
+      const sx = p.x - pts[k - 1].x, sz = p.z - pts[k - 1].z;
+      if ((lx - prev[2]) * sx + (lz - prev[3]) * sz < 0) { lx = prev[2]; lz = prev[3]; }
+      if ((rx - prev[4]) * sx + (rz - prev[5]) * sz < 0) { rx = prev[4]; rz = prev[5]; }
+    }
+    // (slopeNormals: the normal leans with the street's grade, as the route's road's does, so both shade alike)
+    const ny = 1 / Math.hypot(1, grade), nx = -dx * grade * ny, nz = -dz * grade * ny;
+    const l = builder.vertex(lx, p.y + lift, lz, nx, ny, nz, um + (uRange[0] - um) * (wl / w), dist / repeat);
+    const r = builder.vertex(rx, p.y + lift, rz, nx, ny, nz, um + (uRange[1] - um) * (wr / w), dist / repeat);
     if (prev) { builder.tri(prev[0], prev[1], l); builder.tri(prev[1], r, l); }
-    prev = [l, r];
+    prev = [l, r, lx, lz, rx, rz];
   }
 }
 
