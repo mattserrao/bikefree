@@ -74,7 +74,10 @@ export function streetPoint(st, s) {
   let lo = 0, hi = n - 1;
   while (hi - lo > 1) { const m = (lo + hi) >> 1; if (acc[m] <= s) lo = m; else hi = m; }
   const a = P[lo], b = P[hi], f = (s - acc[lo]) / ((acc[hi] - acc[lo]) || 1), len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
-  return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, z: a.z + (b.z - a.z) * f, i: lo, dx: (b.x - a.x) / len, dz: (b.z - a.z) / len };
+  const out = { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, z: a.z + (b.z - a.z) * f, i: lo, dx: (b.x - a.x) / len, dz: (b.z - a.z) / len };
+  if (a.tl || b.tl) out.tl = (a.tl || 0) + ((b.tl || 0) - (a.tl || 0)) * f;   // [road meets] trimmed ribbon edges (road-meets.js)
+  if (a.tr || b.tr) out.tr = (a.tr || 0) + ((b.tr || 0) - (a.tr || 0)) * f;
+  return out;
 }
 
 /**
@@ -443,7 +446,8 @@ export function planJunctions(streets, ctx, options = {}) {
   }
   // 10. [road meets] the surface as drawn: each street's mouth at the height its ribbon arrives at (ribbons are level
   // across, the junction's plane need not be), the rest on the plane; jn.top(x, z) is that surface's height
-  for (const jn of list) surfaceTops(jn, streets, O);
+  const onRoad = (x, z) => { const r = routeDist(x, z); return !!r && r.d < RW / 2 + .8; };
+  for (const jn of list) surfaceTops(jn, streets, O, onRoad);
   // 11. [road meets] two streets meeting end to end outside any junction (a street carrying on as another, a street
   // onto a bridge deck): both ribbons end square to the bend's bisector, so no notch opens on its outside
   mitreLinks(streets);
@@ -451,12 +455,12 @@ export function planJunctions(streets, ctx, options = {}) {
 }
 
 /** Vertex heights of a junction's surface (`poly[i].y`, `cy` at the centre) and `jn.top(x, z)`. */
-function surfaceTops(jn, streets, O) {
+function surfaceTops(jn, streets, O, onRoad) {
   const mouthTop = new Map();
   for (const A of jn.arms) if (!A.route) {
     const y = streetPoint(streets[A.k], A.cutS).y + O.lift;
-    // (on a junction the route passes through, never above the surface's own height: that is under the road)
-    for (const m of A.mouth) mouthTop.set(m, jn.route ? Math.min(y, jn.J(m.x, m.z) + jn.lift) : y);
+    // (on the route's road, never above the surface's own height there: that is under the road)
+    for (const m of A.mouth) mouthTop.set(m, jn.route && onRoad(m.x, m.z) ? Math.min(y, jn.J(m.x, m.z) + jn.lift) : y);
   }
   for (const v of jn.poly) v.y = mouthTop.has(v) ? mouthTop.get(v) : jn.J(v.x, v.z) + jn.lift;
   jn.cy = jn.J(jn.x, jn.z) + jn.lift;

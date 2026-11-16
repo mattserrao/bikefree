@@ -34,7 +34,7 @@ export function drawnPieces(st, k, plan, lift) {
     return pc.map((p, i) => {
       const fromCut = Math.min(pc[0].cut ? along[i] : Infinity, pc[pc.length - 1].cut ? d - along[i] : Infinity);
       const w = fromCut === Infinity ? 1 : smooth(fromCut / LIFT_BLEND_M);
-      return { x: p.x, z: p.z, y: p.y + (JL - lift) * (1 - w), tx: p.tx, tz: p.tz };
+      return { x: p.x, z: p.z, y: p.y + (JL - lift) * (1 - w), tx: p.tx, tz: p.tz, tl: p.tl, tr: p.tr };
     });
   });
 }

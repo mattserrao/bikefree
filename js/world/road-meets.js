@@ -60,7 +60,7 @@ export function drawnStreet(st, k, plan, lift) {
     return pc.map((p, i) => {
       const fromCut = Math.min(pc[0].cut ? along[i] : Infinity, pc[pc.length - 1].cut ? d - along[i] : Infinity);
       const w = fromCut === Infinity ? 1 : smooth(fromCut / LIFT_BLEND_M);
-      return { x: p.x, z: p.z, y: p.y, top: p.y + lift + (JL - lift) * (1 - w), cut: p.cut, tx: p.tx, tz: p.tz };
+      return { x: p.x, z: p.z, y: p.y, top: p.y + lift + (JL - lift) * (1 - w), cut: p.cut, tx: p.tx, tz: p.tz, tl: p.tl || 0, tr: p.tr || 0 };
     });
   });
 }
@@ -172,10 +172,125 @@ export function followMovedNodes(streets, options = {}) {
   return n;
 }
 
+/**
+ * Carriageways that run side by side or merge (ramps leaving or joining a road, the two halves of a dual
+ * carriageway, a street splitting in two) used to be drawn as two full ribbons over each other: doubled lane paint
+ * and a ramp's ribbon lying across its parent's lanes. Here every street point whose ribbon overlaps a near-parallel
+ * one at its level gets trimmed on that side (`tl` / `tr`: metres taken off its left / right half, city-geometry.js
+ * ribbon), and levelled with it:
+ * - a branch (a street that ends on the other, within `branchM` of the overlap: a ramp, a slip road) yields: its
+ *   inner edge runs along the parent's edge, so it widens the parent into a proper gore and fills it, and where it
+ *   lies wholly inside the parent it isn't drawn at all; its surface eases to the parent's height;
+ * - peers (neither ends on the other) split the overlap down the middle and meet at their mean height.
+ * Left = the ribbon's (dz, −dx) side for its direction (dx, dz). Run after the junctions are planned.
+ */
+export function trimOverlaps(streets, landscape, plan, options = {}) {
+  const O = { cos: .85, level: .6, branchM: 90, grade: .08, ...options };
+  const slots = streetSlots(landscape, streets), lift = (k) => SLOT_LIFT(slots[k]);
+  const key = (p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`;
+  const at = new Map();   // node key → streets through it
+  streets.forEach((st, k) => { if (st.cls <= 7) for (const p of st.pts) { const kk = key(p); if (!at.has(kk)) at.set(kk, new Set()); at.get(kk).add(k); } });
+  const acc = (st) => { const a = [0]; for (let i = 1; i < st.pts.length; i++) a.push(a[i - 1] + Math.hypot(st.pts[i].x - st.pts[i - 1].x, st.pts[i].z - st.pts[i - 1].z)); return a; };
+  const dirAt = (P, i) => { const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)], dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1; return { x: dx / l, z: dz / l }; };
+  const drawnPt = (p) => p.jn == null;
+  // a segment grid of every drawn ribbon
+  const G = 24, grid = new Map();
+  streets.forEach((st, k) => {
+    if (st.cls > 7) return;
+    for (let i = 1; i < st.pts.length; i++) {
+      const a = st.pts[i - 1], b = st.pts[i], r = st.width / 2;
+      for (let gx = Math.floor((Math.min(a.x, b.x) - r) / G); gx <= Math.floor((Math.max(a.x, b.x) + r) / G); gx++)
+        for (let gz = Math.floor((Math.min(a.z, b.z) - r) / G); gz <= Math.floor((Math.max(a.z, b.z) + r) / G); gz++) {
+          const kk = `${gx},${gz}`; if (!grid.has(kk)) grid.set(kk, []); grid.get(kk).push([k, i]);
+        }
+    }
+  });
+  const endKeys = streets.map((st) => (st.pts.length ? [key(st.pts[0]), key(st.pts[st.pts.length - 1])] : []));
+  const lens = streets.map((st) => { let l = 0; for (let i = 1; i < st.pts.length; i++) l += Math.hypot(st.pts[i].x - st.pts[i - 1].x, st.pts[i].z - st.pts[i - 1].z); return l; });
+  /** Is street k a branch of street ko near arc length s along k (or near point p, measured straight)? */
+  const isBranch = (k, ko, s, p) => {
+    const st = streets[k], so = streets[ko];
+    for (const [e, kk] of endKeys[k].entries()) {
+      if (!at.get(kk)?.has(ko)) continue;
+      const E = st.pts[e === 0 ? 0 : st.pts.length - 1];
+      const d = s != null ? Math.abs(s - (e === 0 ? 0 : lens[k])) : Math.hypot(p.x - E.x, p.z - E.z);
+      if (d < O.branchM && (!endKeys[ko].includes(kk) || st.cls > so.cls)) return true;
+    }
+    return false;
+  };
+  const jobs = [];   // [k, i, side ('l' | 'r'), trim, targetTop]
+  let n = 0;
+  streets.forEach((st, k) => {
+    if (st.cls > 7 || st.pts.length < 2) return;
+    const P = st.pts, A = acc(st), hA = st.width / 2, ends = [key(P[0]), key(P[P.length - 1])];
+    for (let i = 0; i < P.length; i++) {
+      const p = P[i];
+      if (!drawnPt(p)) continue;
+      const u = dirAt(P, i), Lx = u.z, Lz = -u.x, topA = p.y + lift(k);
+      const best = new Map();
+      for (const [ko, j] of grid.get(`${Math.floor(p.x / G)},${Math.floor(p.z / G)}`) || []) {
+        if (ko === k) continue;
+        const so = streets[ko], a = so.pts[j - 1], b = so.pts[j];
+        if (!drawnPt(a) || !drawnPt(b)) continue;
+        const { d, t } = segDist(p.x, p.z, a, b), hB = so.width / 2;
+        if (d >= hA + hB - .05) continue;
+        const prev = best.get(ko); if (prev && prev.d <= d) continue;
+        const bx = b.x - a.x, bz = b.z - a.z, bl = Math.hypot(bx, bz) || 1;
+        if (Math.abs((u.x * bx + u.z * bz) / bl) < O.cos) continue;   // crossing, not running alongside
+        const cx = a.x + bx * t, cz = a.z + bz * t, yB = a.y + (b.y - a.y) * t, topB = yB + lift(ko);
+        if (Math.abs(topB - topA) > O.level) continue;
+        best.set(ko, { ko, d, hB, side: (cx - p.x) * Lx + (cz - p.z) * Lz > 0 ? 'l' : 'r', topB });
+      }
+      for (const o of best.values()) {
+        const so = streets[o.ko];
+        // is this street a branch of the other (it ends on it, close by)?
+        // (it ends on the other where that one carries on through, or where both end and it is the lesser road)
+        const branch = isBranch(k, o.ko, A[i]);
+        if (!branch && isBranch(o.ko, k, null, p)) continue;   // the other one is the branch: it yields, this one stays whole
+        const over = hA + o.hB - o.d;
+        if (branch) {
+          // the inner edge on the parent's edge; wholly inside: nothing left to draw
+          jobs.push([k, i, o.side, Math.min(2 * hA, over), o.topB]);
+        } else {
+          jobs.push([k, i, o.side, Math.min(hA, over / 2), (topA + o.topB) / 2]);
+        }
+      }
+    }
+  });
+  // apply: trims (the largest per side), heights (the overlap's target, easing out along the street)
+  const targets = new Map();
+  for (const [k, i, side, trim, top] of jobs) {
+    const p = streets[k].pts[i], f = side === 'l' ? 'tl' : 'tr';
+    p[f] = Math.max(p[f] || 0, trim);
+    if (!targets.has(k)) targets.set(k, new Map());
+    const t = targets.get(k), y = top - lift(k);
+    if (!t.has(i) || Math.abs(y - p.y) > Math.abs(t.get(i) - p.y)) t.set(i, y);
+    n++;
+  }
+  for (const [k, t] of targets) {
+    const st = streets[k], P = st.pts, A = acc(st), own = P.map((p) => p.y);
+    const best = P.map(() => null);
+    for (const [j, y] of t) {
+      const dy = y - own[j]; if (Math.abs(dy) < .003) continue;
+      const L = Math.max(4, Math.abs(dy) / O.grade);
+      for (let i = 0; i < P.length; i++) { const d = Math.abs(A[i] - A[j]); if (d < L) { const w = t.has(i) ? (i === j ? 1 : 0) : 1 - smooth(d / L); if (w > 0 && (!best[i] || w > best[i][0])) best[i] = [w, dy]; } }
+    }
+    P.forEach((p, i) => { if (best[i] && p.jn == null) p.y = own[i] + best[i][1] * best[i][0]; });
+  }
+  return n;
+}
+
 const segDist = (x, z, a, b) => {
   const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1;
   const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / l2));
   return { d: Math.hypot(a.x + dx * t - x, a.z + dz * t - z), t };
+};
+/** A drawn ribbon segment's half-width on the side of (x, z) (its trims: `tl` on its (dz, −dx) side, `tr` the other). */
+const sideR = (x, z, sg, t) => {
+  const dx = sg.b.x - sg.a.x, dz = sg.b.z - sg.a.z, px = sg.a.x + dx * t, pz = sg.a.z + dz * t;
+  const left = (x - px) * dz - (z - pz) * dx > 0;
+  const trim = left ? (sg.a.tl || 0) + ((sg.b.tl || 0) - (sg.a.tl || 0)) * t : (sg.a.tr || 0) + ((sg.b.tr || 0) - (sg.a.tr || 0)) * t;
+  return Math.max(0, sg.r - trim);
 };
 const inPoly = (ring, x, z) => { let r = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], c = ring[j]; if ((a.z > z) !== (c.z > z) && x < ((c.x - a.x) * (z - a.z)) / (c.z - a.z) + a.x) r = !r; } return r; };
 
@@ -197,6 +312,13 @@ export function roadMeets(landscape, index, route, options = {}) {
   };
   const slots = streetSlots(landscape, streets);
   const drawnK = (st) => st.cls <= 7;
+  // the route's road as drawn (its curve): {d, y (line height), i} like landscape.routeDist
+  const RL = routeLine(route, index);
+  const roadAt = (x, z) => {
+    const r = landscape.routeDist(x, z); if (!r) return null;
+    const q = RL.project(x, z, route.dist[Math.min(end, r.i)], 25);
+    return q ? { d: q.d, y: q.y, i: r.i, s: q.s } : r;
+  };
   // drawn ribbons, on a 24 m grid of segments
   const G = 24, grid = new Map(), segs = [], drawn = new Map();
   streets.forEach((st, k) => {
@@ -222,7 +344,7 @@ export function roadMeets(landscape, index, route, options = {}) {
     for (const id of grid.get(`${Math.floor(x / G)},${Math.floor(z / G)}`) || []) {
       const sg = segs[id];
       if (sg.k === skipK) continue;
-      const { d, t } = segDist(x, z, sg.a, sg.b), edge = d - sg.r;
+      const { d, t } = segDist(x, z, sg.a, sg.b), edge = d - sideR(x, z, sg, t);
       if (edge > pad) continue;
       const prev = seen.get(sg.k);
       if (prev && prev.edge <= edge) continue;
@@ -231,7 +353,7 @@ export function roadMeets(landscape, index, route, options = {}) {
       seen.set(sg.k, o);
     }
     for (const { jn, d } of plan ? junctionsNear(plan, x, z, pad) : []) out.push({ kind: 'junction', jn: jn.id, top: jn.top(x, z), edge: d });
-    const r = landscape.routeDist(x, z);
+    const r = roadAt(x, z);
     if (r && r.d - RW / 2 < pad) out.push({ kind: 'route', top: r.y + ROAD_LIFT, edge: r.d - RW / 2 });
     return out;
   };
@@ -256,7 +378,7 @@ export function roadMeets(landscape, index, route, options = {}) {
     let step = 0, gap = 0;
     for (const A of jn.arms) {
       if (A.route) {   // the route's road at the mouth vs the surface
-        for (const c of A.mouth) { const r = landscape.routeDist(c.x, c.z); if (r) step = Math.max(step, Math.abs(r.y + ROAD_LIFT - jn.top(c.x, c.z))); }
+        for (const c of A.mouth) { const r = roadAt(c.x, c.z); if (r) step = Math.max(step, Math.abs(r.y + ROAD_LIFT - jn.top(c.x, c.z))); }
         continue;
       }
       const pcs = drawn.get(A.k); if (!pcs) continue;
@@ -309,7 +431,7 @@ export function roadMeets(landscape, index, route, options = {}) {
     for (const q of paint.byJn.get(jn.id) || []) {
       const c = { x: (q.pts[0].x + q.pts[2].x) / 2, z: (q.pts[0].z + q.pts[2].z) / 2 };
       if (q.kind === 'route-crosswalk') { if (plan.list.some((o) => o.bb && c.x > o.bb[0] && c.x < o.bb[1] && c.z > o.bb[2] && c.z < o.bb[3] && inPoly(o.poly, c.x, c.z))) { wrong++; why = 'a route crosswalk inside a junction'; } continue; }
-      const onRoad = q.pts.some((p) => { const r = landscape.routeDist(p.x, p.z); return r && r.d < RW / 2 && Math.abs(r.y + ROAD_LIFT - p.y) < 1.5; });
+      const onRoad = q.pts.some((p) => { const r = roadAt(p.x, p.z); return r && r.d < RW / 2 && Math.abs(r.y + ROAD_LIFT - p.y) < 1.5; });
       if (onRoad) { wrong++; why = 'a street crosswalk or stop line on the route’s road'; }
       else if (junctionsNear(plan, c.x, c.z, 0).some((o) => o.d < 0)) { wrong++; why = 'paint inside a junction'; }
     }
@@ -401,7 +523,7 @@ export function roadMeets(landscape, index, route, options = {}) {
         const ux = (b.x - a.x) / (len || 1), uz = (b.z - a.z) / (len || 1);
         for (let q = 0; q < n; q++) {
           const f = (q + .5) / n, x = a.x + (b.x - a.x) * f, z = a.z + (b.z - a.z) * f, top = a.top + (b.top - a.top) * f, m = len / n;
-          const r = landscape.routeDist(x, z);
+          const r = roadAt(x, z);
           // clearance tube: the ribbon's middle or either edge
           let tube = false;
           if (r && r.d < RW / 2 + st.width / 2 + 1 && landscape.inRouteTube) {
@@ -431,16 +553,22 @@ export function roadMeets(landscape, index, route, options = {}) {
   const clusters = new Map();
   for (const sg of segs) {
     const len = Math.hypot(sg.b.x - sg.a.x, sg.b.z - sg.a.z), n = Math.max(1, Math.round(len / 2));
+    const ux = (sg.b.x - sg.a.x) / (len || 1), uz = (sg.b.z - sg.a.z) / (len || 1);
     for (let q = 0; q < n; q++) {
-      const f = (q + .5) / n, x = sg.a.x + (sg.b.x - sg.a.x) * f, z = sg.a.z + (sg.b.z - sg.a.z) * f, top = sg.a.top + (sg.b.top - sg.a.top) * f;
+      const f = (q + .5) / n, top = sg.a.top + (sg.b.top - sg.a.top) * f;
+      // the middle of what is drawn of this ribbon here (trimmed ribbons: off its line)
+      const tl = (sg.a.tl || 0) + ((sg.b.tl || 0) - (sg.a.tl || 0)) * f, tr = (sg.a.tr || 0) + ((sg.b.tr || 0) - (sg.a.tr || 0)) * f;
+      if (tl + tr > 2 * sg.r - .4) continue;   // (nothing drawn here)
+      const off = (tr - tl) / 2, x = sg.a.x + (sg.b.x - sg.a.x) * f + uz * off, z = sg.a.z + (sg.b.z - sg.a.z) * f - ux * off;
       let hit = null;
       for (const id of grid.get(`${Math.floor(x / G)},${Math.floor(z / G)}`) || []) {
         const o = segs[id];
         if (o.k === sg.k) continue;
         const { d, t } = segDist(x, z, o.a, o.b);
-        if (d < o.r - .3 && Math.abs(o.a.top + (o.b.top - o.a.top) * t - top) < O.level) { hit = o; break; }
+        if (d < sideR(x, z, o, t) - .3 && Math.abs(o.a.top + (o.b.top - o.a.top) * t - top) < O.level) { hit = o; break; }
       }
       if (!hit) continue;
+      if (O.debug) { const dx = hit.b.x - hit.a.x, dz = hit.b.z - hit.a.z; O.debug.push({ k: sg.k, ko: hit.k, cos: Math.abs((ux * dx + uz * dz) / (Math.hypot(dx, dz) || 1)), tl, tr, otl: hit.a.tl || 0, otr: hit.a.tr || 0, x, z }); }
       const key = `${Math.floor(x / 40)},${Math.floor(z / 40)}`, c = clusters.get(key) || { x, z, y: top, m: 0, ks: new Set() };
       c.m += len / n; c.ks.add(sg.k); c.ks.add(hit.k); clusters.set(key, c);
     }
