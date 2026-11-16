@@ -2,91 +2,20 @@
   "format": "bikefree-scene-1",
   "style": "stylized",
   "region": "california-coast",
-  "terrain": "authored-coast",
-  "description": "Sculpted coastal scenery aligned to the real GPX. Landscape shapes and coastline are an artistic interpretation, not a survey or elevation raster.",
+  "terrain": "real-coast",
+  "terrainGridFile": "routes/scenes/bigsur-terrain.json",
+  "description": "Real coastal landform (elevation around the route, bundled) with stylized materials, vegetation and life.",
   "assets": "models/scenery/coastal.json",
   "seed": 1101,
   "palette": {
-    "grass": "#7b9868",
-    "meadow": "#c4b482",
-    "rock": "#aaa18c",
-    "cliff": "#bdb49c",
-    "water": "#2e8395"
+    "grass": "#76804f",
+    "meadow": "#c9b077",
+    "rock": "#9c9482",
+    "cliff": "#b7ab92",
+    "water": "#2e8395",
+    "sand": "#d8c8a2",
+    "forest": "#4a5a35"
   },
-  "coastline": [
-    [
-      36.515,
-      -121.947
-    ],
-    [
-      36.478,
-      -121.943
-    ],
-    [
-      36.445,
-      -121.93
-    ],
-    [
-      36.42,
-      -121.922
-    ],
-    [
-      36.4,
-      -121.916
-    ],
-    [
-      36.376,
-      -121.9058
-    ],
-    [
-      36.367,
-      -121.9062
-    ],
-    [
-      36.357,
-      -121.91
-    ],
-    [
-      36.34,
-      -121.903
-    ],
-    [
-      36.325,
-      -121.9
-    ],
-    [
-      36.31,
-      -121.908
-    ],
-    [
-      36.297,
-      -121.892
-    ],
-    [
-      36.279,
-      -121.862
-    ],
-    [
-      36.26,
-      -121.843
-    ],
-    [
-      36.24,
-      -121.82
-    ]
-  ],
-  "landmarks": [
-    {
-      "id": "bixby",
-      "name": "Bixby Creek Bridge",
-      "asset": "bridge",
-      "lat": 36.3716,
-      "lon": -121.9019,
-      "span": 218,
-      "depth": 65,
-      "creekWidthM": 4
-    }
-  ],
   "preview": {
     "positionM": 15420,
     "camera": "chase",
@@ -123,6 +52,31 @@
       "direction": "return",
       "label": "BIXBY CREEK BRIDGE",
       "subtitle": "CALIFORNIA HIGHWAY 1"
+    },
+    {
+      "atM": 14470,
+      "side": "ocean",
+      "label": "ROCKY CREEK BRIDGE",
+      "subtitle": "HIGHWAY 1 \u00b7 BIG SUR"
+    },
+    {
+      "atM": 17300,
+      "side": "ocean",
+      "label": "HURRICANE POINT",
+      "subtitle": "ELEV 550 FT \u00b7 VISTA POINT",
+      "lateralM": 6.9
+    },
+    {
+      "atM": 23450,
+      "side": "ocean",
+      "label": "POINT SUR",
+      "subtitle": "STATE HISTORIC PARK \u00b7 LIGHTHOUSE"
+    },
+    {
+      "atM": 20900,
+      "side": "inland",
+      "label": "LITTLE SUR RIVER",
+      "subtitle": "CALIFORNIA HIGHWAY 1"
     }
   ],
   "lookouts": [
@@ -131,6 +85,12 @@
       "side": "ocean",
       "widthM": 10,
       "lengthM": 36
+    },
+    {
+      "atM": 17420,
+      "side": "ocean",
+      "widthM": 10,
+      "lengthM": 40
     }
   ],
   "seaStacks": [
@@ -152,5 +112,105 @@
       "widthM": 9,
       "heightM": 15
     }
-  ]
+  ],
+  "bridges": [
+    {
+      "fromM": 200,
+      "toM": 250
+    },
+    {
+      "fromM": 2020,
+      "toM": 2105,
+      "name": "Malpaso Creek Bridge",
+      "creek": {
+        "name": "Malpaso Creek",
+        "widthM": 3
+      }
+    },
+    {
+      "fromM": 5255,
+      "toM": 5310
+    },
+    {
+      "fromM": 7680,
+      "toM": 7770,
+      "name": "Garrapata Creek Bridge",
+      "creek": {
+        "name": "Garrapata Creek",
+        "widthM": 4
+      }
+    },
+    {
+      "fromM": 9905,
+      "toM": 10000
+    },
+    {
+      "fromM": 14530,
+      "toM": 14690,
+      "name": "Rocky Creek Bridge",
+      "arch": true,
+      "creek": {
+        "name": "Rocky Creek",
+        "widthM": 3
+      }
+    },
+    {
+      "fromM": 15600,
+      "toM": 15828,
+      "name": "Bixby Creek Bridge",
+      "arch": true,
+      "creek": {
+        "name": "Bixby Creek",
+        "widthM": 5,
+        "upstreamM": 700
+      }
+    },
+    {
+      "fromM": 20975,
+      "toM": 21075,
+      "name": "Little Sur River Bridge",
+      "creek": {
+        "name": "Little Sur River",
+        "widthM": 9
+      }
+    },
+    {
+      "fromM": 25440,
+      "toM": 25495
+    }
+  ],
+  "realHorizon": false,
+  "terrainBuild": {
+    "padM": 9000,
+    "coarseM": 40,
+    "fineM": 900,
+    "fineCellM": 10
+  },
+  "extraAssets": [
+    "models/scenery/regional.json"
+  ],
+  "vegetation": {
+    "density": 1.3
+  },
+  "traffic": {
+    "perMinute": 4
+  },
+  "life": {
+    "lighthouses": [
+      {
+        "name": "Point Sur Lighthouse",
+        "lat": 36.3064,
+        "lon": -121.9014
+      }
+    ],
+    "cattle": [
+      {
+        "lat": 36.315,
+        "lon": -121.886,
+        "radiusM": 700,
+        "count": 34
+      }
+    ]
+  },
+  "post": true
 }

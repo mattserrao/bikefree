@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { qcRoute } from '../tools/qc_course.mjs';
+import { qcRoute, loadSceneSync } from '../tools/qc_course.mjs';
 
 const gpx = (pts) => `<?xml version="1.0"?><gpx><trk><name>QC</name><trkseg>${pts.map(([lat, lon, ele]) =>
   `<trkpt lat="${lat.toFixed(7)}" lon="${lon.toFixed(7)}"><ele>${ele.toFixed(2)}</ele></trkpt>`).join('')}</trkseg></trk></gpx>`;
@@ -62,7 +62,7 @@ test('every scenic route rides clean end to end: no discontinuities, no warnings
   const catalog = JSON.parse(readFileSync(new URL('../routes/parks/index.json', import.meta.url), 'utf8'));
   for (const item of catalog) {
     const r = qcRoute({ id: item.id, item, gpxText: readFileSync(new URL(`../${item.file}`, import.meta.url), 'utf8'),
-      scene: withCity(JSON.parse(readFileSync(new URL(`../${item.scene}`, import.meta.url), 'utf8'))) });
+      scene: withCity(loadSceneSync(item.scene)) });
     assert.ok(r.stylized && r.series.cs.length > 100, `${item.id} checked its scenery`);
     const problems = r.findings.filter((f) => f.severity !== 'info').map((f) => `${f.check} @ ${(f.at / 1000).toFixed(2)} km`);
     assert.deepEqual(problems, [], `${item.id}: run npm run qc for details`);

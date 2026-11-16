@@ -66,6 +66,8 @@ export class CoastalDetails {
     for (let s = 40; s < (this.route.turnS || this.route.total); s += 90) {
       const { position, forward } = coastalRoadFrame(this.route, this.index, s, 4.75);
       if (this.landscape.bridgeAt(position.x, position.z, 16)) continue;
+      // no posts across an overlook's entrance (traffic pulls in there)
+      if ((this.route.scene.lookouts || []).some((l) => Math.abs(s - l.atM) < (l.lengthM || 32) / 2 + 30)) continue;
       q.setFromUnitVectors(new THREE.Vector3(0, 0, 1), forward);
       posts.push(matrix.compose(position.clone().add(new THREE.Vector3(0, .6, 0)), q, unit).clone());
       bands.push(matrix.compose(position.clone().add(new THREE.Vector3(0, .88, 0)), q, unit).clone());
@@ -132,8 +134,21 @@ export class CoastalDetails {
       }
       const texture = new THREE.CanvasTexture(gravel); texture.colorSpace = THREE.SRGBColorSpace;
       texture.wrapS = texture.wrapT = THREE.RepeatWrapping; texture.repeat.set(4, 10);
-      const pad = this._mesh(new THREE.BoxGeometry(width, .9, length), this._material('#ffffff', { map: texture }), 'Coastal overlook gravel');
-      pad.position.copy(position); pad.position.y -= .35; pad.quaternion.copy(rotation);
+      // the pad follows the road's own curve and grade in 4 m pieces (a rigid slab floats or sinks at its ends)
+      const padMaterial = this._material('#ffffff', { map: texture });
+      const pieceGeometry = new THREE.BoxGeometry(width, .9, 4.15);
+      this.geometries.add(pieceGeometry);
+      for (let d = -length / 2; d < length / 2 - .01; d += 4) {
+        const a = coastalRoadFrame(this.route, this.index, lookout.atM + d, side * (3.5 + width / 2));
+        const b = coastalRoadFrame(this.route, this.index, lookout.atM + Math.min(length / 2, d + 4), side * (3.5 + width / 2));
+        // right-handed frame: z along the road (with its grade), x level across it, y = z × x
+        const zA = b.position.clone().sub(a.position).normalize();
+        const xA = new THREE.Vector3(0, 1, 0).cross(zA).normalize(), yA = zA.clone().cross(xA).normalize();
+        const piece = new THREE.Mesh(pieceGeometry, padMaterial); piece.name = 'Coastal overlook gravel';
+        piece.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xA, yA, zA));
+        piece.position.copy(a.position).lerp(b.position, .5); piece.position.y -= .35;
+        piece.receiveShadow = true; this.group.add(piece);
+      }
       const wood = this._material('#918568');
       for (let d = -length / 2; d <= length / 2; d += 4) {
         const p = position.clone().addScaledVector(forward, d).addScaledVector(right, side * (width / 2 - .3));
@@ -156,7 +171,40 @@ export class CoastalDetails {
     }
   }
 
+  /** Real coast: rocks scattered along the true shoreline, and the sea stacks set offshore of the road. */
+  _realCoastRocks() {
+    const S = this.landscape.shore, rand = randomSequence(7741), groups = { outcrop0: [], outcrop1: [] };
+    const matrix = new THREE.Matrix4(), rotation = new THREE.Quaternion(), position = new THREE.Vector3(), scale = new THREE.Vector3();
+    const up = new THREE.Vector3(0, 1, 0);
+    for (let j = 1; j < S.nz - 1; j++) for (let i = 1; i < S.nx - 1; i++) {
+      const v = S.field[j * S.nx + i];
+      if (v > 0 || v < -60 || rand() > (v > -14 ? .28 : .025)) continue;
+      const x = S.x0 + (i + rand() - .5) * S.cell, z = S.z0 + (j + rand() - .5) * S.cell;
+      if (this.landscape.nearCreek(x, z, 10)) continue;   // not in a creek mouth
+      const wide = (.3 + rand() * 1.1) * (v > -14 ? 1 : 1.6);
+      position.set(x, -1.4 - rand() * .8, z); rotation.setFromAxisAngle(up, rand() * 6.28);
+      scale.set(wide, .35 + rand() * .9, wide * (.6 + rand() * .5));
+      groups[`outcrop${rand() > .5 ? 1 : 0}`].push(matrix.compose(position, rotation, scale).clone());
+    }
+    for (const stack of this.route.scene.seaStacks || []) {
+      const frame = coastalRoadFrame(this.route, this.index, stack.atM);
+      const side = stack.side === 'inland' ? -1 : 1;
+      let off = 0;
+      for (; off < 2500; off += 4) { const p = frame.position.clone().addScaledVector(frame.right, side * off); if (this.landscape.inlandAt(p.x, p.z) < -stack.offshoreM) break; }
+      const p = frame.position.clone().addScaledVector(frame.right, side * off);
+      position.set(p.x, -2, p.z);
+      scale.set(stack.widthM / 7, stack.heightM / 5, stack.widthM / 8);
+      rotation.setFromAxisAngle(up, stack.atM * .001);
+      groups.outcrop0.push(matrix.compose(position, rotation, scale).clone());
+    }
+    for (const [name, matrices] of Object.entries(groups)) {
+      const asset = this.kit.assets[name];
+      if (asset) this._instances(asset.geometry, asset.material, matrices, 'Shoreline rocks and sea stacks', false);
+    }
+  }
+
   _coastalRocks() {
+    if (this.landscape.real) return this._realCoastRocks();
     if (this.landscape.hasOcean === false || this.landscape.kind === 'tropical') return;
     const coastSide = this.landscape.coastSide || 1;
     const rand = randomSequence(7741), groups = { outcrop0: [], outcrop1: [] };

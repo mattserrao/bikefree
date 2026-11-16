@@ -18,7 +18,7 @@ const noise = /* glsl */`
   }
 `;
 
-export function makeCoastalGroundMaterial(palette, config = {}, farUniform = null, canopyUniform = null) {
+export function makeCoastalGroundMaterial(palette, config = {}, farUniform = null, canopyUniform = null, uniforms = {}) {
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .98, side: THREE.DoubleSide });
   const canopy = !!canopyUniform;
   material.onBeforeCompile = (shader) => {
@@ -45,6 +45,9 @@ export function makeCoastalGroundMaterial(palette, config = {}, farUniform = nul
     shader.uniforms.bfRock = { value: new THREE.Color(palette.rock) };
     shader.uniforms.bfSoil = { value: new THREE.Color('#a59370') };
     shader.uniforms.bfSnowLine = { value: config.snowLineM || 1000000 };
+    shader.uniforms.uTime = uniforms.uTime || { value: 0 };
+    shader.uniforms.bfCloud = uniforms.bfCloud || { value: new THREE.Vector4(0, 0, 0, 0) };
+    shader.uniforms.bfWet = uniforms.bfWet || { value: 0 };
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vBfGround; varying vec3 vBfGroundNormal;\nattribute float aRealH; uniform vec4 bfFar;')
       // Approaching the hand-off, the stylized ground eases onto the real terrain's height so the two meet without a step.
@@ -58,6 +61,7 @@ export function makeCoastalGroundMaterial(palette, config = {}, farUniform = nul
       .replace('#include <common>', `#include <common>
         varying vec3 vBfGround; varying vec3 vBfGroundNormal;
         uniform vec3 bfRock; uniform vec3 bfSoil; uniform float bfSnowLine; uniform vec4 bfFar;
+        uniform float uTime; uniform vec4 bfCloud; uniform float bfWet;
         ${noise}`)
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
         if (bfFar.z > .5) {
@@ -87,19 +91,26 @@ export function makeCoastalGroundMaterial(palette, config = {}, farUniform = nul
         diffuseColor.rgb *= 1. + (bfFine - .5) * .12 * bfNear;
         float bfSnow = smoothstep(bfSnowLine, bfSnowLine + 240., bp.y) * smoothstep(.15, .65, abs(normalize(vBfGroundNormal).y));
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.8, .82, .78), bfSnow);
+        // weather: cloud shadows drifting over the hills, and damp ground in the rain
+        float bfCloudN = bfFbm((bp.xz - bfCloud.zw * uTime * 9.) * .0011);
+        float bfShadowC = smoothstep(.66 - bfCloud.x * .42, .74 - bfCloud.x * .42, bfCloudN) * bfCloud.y;
+        diffuseColor.rgb *= 1. - bfShadowC * .45;
+        diffuseColor.rgb *= 1. - bfWet * .2;
       `);
   };
   return material;
 }
 
-export function makeCoastalWaterMaterial(landscape, uniforms, waterColor, shallowColor) {
+export function makeCoastalWaterMaterial(landscape, uniforms, waterColor, shallowColor, shore = null) {
   const points = landscape.coast;
   const lakes = landscape.lakes || [], islands = landscape.waterIslands || [];
   return new THREE.ShaderMaterial({
     uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), ...uniforms, bfCoast: { value: points.map((p) => new THREE.Vector2(p.x, p.z)) },
       bfWater: { value: new THREE.Color(waterColor) }, bfShallow: { value: new THREE.Color(shallowColor || '#79beb1') },
       bfLakes: { value: lakes.length ? lakes.map((l) => new THREE.Vector4(l.x, l.z, l.rx, l.rz)) : [new THREE.Vector4()] },
-      bfIslands: { value: islands.length ? islands.map((l) => new THREE.Vector4(l.x, l.z, l.rx, l.rz)) : [new THREE.Vector4()] } },
+      bfIslands: { value: islands.length ? islands.map((l) => new THREE.Vector4(l.x, l.z, l.rx, l.rz)) : [new THREE.Vector4()] },
+      bfShore: { value: shore?.texture || null }, bfShoreBox: { value: shore?.box || new THREE.Vector4(0, 0, 1, 1) },
+      bfRough: uniforms.bfRough || { value: 0 } },
     vertexShader: /* glsl */`
       #include <common>
       #include <logdepthbuf_pars_vertex>
@@ -122,6 +133,7 @@ export function makeCoastalWaterMaterial(landscape, uniforms, waterColor, shallo
       uniform vec2 bfCoast[${points.length}];
       uniform vec4 bfLakes[${Math.max(1, lakes.length)}];
       uniform vec4 bfIslands[${Math.max(1, islands.length)}];
+      uniform sampler2D bfShore; uniform vec4 bfShoreBox; uniform float bfRough;
       ${noise}
       float shoreline(float z) {
         float x = bfCoast[0].x;
@@ -136,6 +148,49 @@ export function makeCoastalWaterMaterial(landscape, uniforms, waterColor, shallo
       void main() {
         #include <logdepthbuf_fragment>
         vec2 p = vBfSea.xz;
+${shore ? `
+        // real coast: distance to the shoreline (R) and the sea floor (G) from the baked terrain
+        vec2 bfUv = (p - bfShoreBox.xy) / bfShoreBox.zw;
+        vec2 bfSh = (bfUv.x > 0. && bfUv.y > 0. && bfUv.x < 1. && bfUv.y < 1.) ? texture2D(bfShore, bfUv).rg : vec2(-3000., -45.);
+        float offshore = max(0., -bfSh.r);
+        float depth = max(0., -bfSh.g);
+        float waveDetail = 1. - smoothstep(500., 4500., length(cameraPosition - vBfSea));
+        float t = uTime;
+        float swell = sin(p.x * .043 + p.y * .027 + t * .78);
+        float crossWave = sin(p.y * .071 - p.x * .013 - t * .53);
+        float chop = (bfNoise(p * .09 + t * .35) - .5) * bfRough;
+        vec3 N = normalize(vec3((swell * .03 + crossWave * .014 + chop * .08) * waveDetail, 1., (cos(p.x * .029 - p.y * .047 + t * .61) * .03 + chop * .06) * waveDetail));
+        vec3 V = normalize(cameraPosition - vBfSea);
+        vec3 R = reflect(-V, N);
+        float fresnel = .03 + .45 * pow(1. - max(dot(N, V), 0.), 4.);
+        vec3 sky = mix(uSkyHorizon, uSkyTop, sqrt(max(R.y, 0.)));
+        float waterNoise = bfFbm(p * .006 + t * .01);
+        // kelp-dark patches offshore, turquoise over the sand and rock shelf
+        vec3 deep = bfWater * (.74 + waterNoise * .32);
+        deep = mix(deep, deep * vec3(.62, .72, .6), smoothstep(.62, .78, bfFbm(p * .012)) * smoothstep(40., 140., offshore) * (1. - smoothstep(260., 520., offshore)) * .7);
+        vec3 color = mix(bfShallow * (1.05 + waterNoise * .1), deep, smoothstep(1., 16., depth));
+        // the water's own colour follows the light (dark blue at night, not glowing turquoise)
+        float bfLight = clamp(dot(uSkyHorizon, vec3(.3, .59, .11)) * 1.35, .1, 1.);
+        color *= bfLight;
+        color *= .96 + (.02 * swell + .014 * crossWave) * waveDetail;
+        color = mix(color, sky, fresnel);
+        float sun = pow(max(dot(reflect(-normalize(uSunDir), N), V), 0.), 160.);
+        float sparkle = smoothstep(.55, .95, bfNoise(p * .7 + t * .1));
+        color += vec3(1., .92, .72) * sun * (.35 + sparkle * waveDetail * .7);
+        // breakers: lines of white water rolling in to the shore, broken up along their length
+        float along = bfNoise(p * .021 + vec2(0., t * .05)) * 5.;
+        float phase = offshore * .075 + t * (.85 + bfRough * .3) + along;
+        float crest = smoothstep(.86, .985, sin(phase)) * (1. - smoothstep(15., 60. + bfRough * 40., offshore)) * smoothstep(3., 10., offshore);
+        float trail = smoothstep(.2, .95, sin(phase - .55)) * (1. - smoothstep(10., 70., offshore)) * .55;
+        float lace = smoothstep(.45, .8, bfFbm(p * .16 + vec2(t * .07, -t * .05)));
+        float swash = 1. - smoothstep(1.5, 9. + 4. * sin(t * .7 + along), offshore);
+        float broken = smoothstep(.3, .7, bfFbm(p * .045 + vec2(t * .03, 0.)));
+        float foam = max(crest * broken * broken * 1.3, trail * lace * broken) + swash * (.55 + lace * .45);
+        foam *= waveDetail * .6 + .4;
+        color = mix(color, vec3(.9, .95, .93) * (.25 + .75 * bfLight), clamp(foam, 0., .92));
+        // a soft wet band of spray-darkened water against the cliffs
+        color *= 1. - (1. - smoothstep(0., 30., offshore)) * .08;
+` : `
         float offshore = ${landscape.hasOcean === false ? '-100000.' : '(shoreline(p.y) - p.x) * ' + (landscape.coastSide || 1).toFixed(1)};
         ${islands.length ? `offshore = 100000.;
         for (int i = 0; i < ${islands.length}; i++) {
@@ -165,7 +220,7 @@ export function makeCoastalWaterMaterial(landscape, uniforms, waterColor, shallo
         float breaker = .5 + .5 * sin(offshore * .35 - uTime * 1.3 + bfNoise(p * .027) * 4.);
         float foam = smoothstep(.74, .96, breaker) * (1. - smoothstep(3., 48., offshore));
         foam += (1. - smoothstep(1., 6., offshore)) * .5;
-        color = mix(color, vec3(.83, .9, .83), clamp(foam * .76, 0., .9));
+        color = mix(color, vec3(.83, .9, .83), clamp(foam * .76, 0., .9));`}
         gl_FragColor = vec4(color, 1.);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -178,15 +233,30 @@ export function makeCoastalWaterMaterial(landscape, uniforms, waterColor, shallo
 export function decorateSceneryMaterial(material, category, uniforms) {
   material.onBeforeCompile = (shader) => {
     if (category === 'groundcover') {
-      shader.uniforms.uTime = uniforms.uTime;
-      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;')
+      shader.uniforms.uTime = uniforms.uTime; shader.uniforms.bfWind = uniforms.bfWind || { value: .3 };
+      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; uniform float bfWind;')
         .replace('#include <begin_vertex>', `#include <begin_vertex>
           float bfPhase = 0.;
           #ifdef USE_INSTANCING
             bfPhase = instanceMatrix[3].x * .13 + instanceMatrix[3].z * .09;
           #endif
-          transformed.x += sin(uTime * 1.1 + bfPhase) * min(position.y, 1.2) * .075;
-          transformed.z += cos(uTime * .8 + bfPhase) * min(position.y, 1.2) * .035;
+          float bfW = .5 + bfWind * 2.;
+          transformed.x += sin(uTime * (1.1 + bfWind) + bfPhase) * min(position.y, 1.2) * .075 * bfW;
+          transformed.z += cos(uTime * .8 + bfPhase) * min(position.y, 1.2) * .035 * bfW;
+        `);
+    } else if (category === 'foliage') {
+      // trees and shrubs lean and sway with the wind (more at the top)
+      shader.uniforms.uTime = uniforms.uTime; shader.uniforms.bfWind = uniforms.bfWind || { value: .3 };
+      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; uniform float bfWind;')
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+          float bfPhase = 0.;
+          #ifdef USE_INSTANCING
+            bfPhase = instanceMatrix[3].x * .07 + instanceMatrix[3].z * .05;
+          #endif
+          float bfTop = max(position.y, 0.) * .12;
+          float bfGust = .55 + .45 * sin(uTime * .37 + bfPhase * .3);
+          transformed.x += (sin(uTime * 1.25 + bfPhase) * .5 + .7) * bfTop * bfTop * bfWind * bfGust * .22;
+          transformed.z += cos(uTime * .9 + bfPhase) * bfTop * bfTop * bfWind * bfGust * .08;
         `);
     } else if (category === 'concrete') {
       shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vBfConcrete;')

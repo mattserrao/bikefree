@@ -2,6 +2,8 @@
 import * as THREE from '../../vendor/three.module.min.js';
 import { makeProjection, makeRouteIndex } from './geo.js';
 import { Terrain } from './terrain.js';
+import { Weather } from './weather.js';
+import { PostFX } from './post.js';
 import { StylizedTerrain, COASTAL_QUALITY } from './stylized-terrain.js';
 import { riderPose, routePoint, ROAD_WIDTH } from './pose.js';
 import { loadRider } from './rider.js';
@@ -107,6 +109,10 @@ export class World {
     this.scene.add(this.shoulder);
     this.road = makeRoad(route, this.index);
     this.scene.add(this.road);
+    // weather: clear / marine layer / clouds / rain (stylized scenery)
+    if (this.stylized) this.weather = new Weather(this, this.terrain.uniforms);
+    // hero scenery: HDR render with soft bloom, a gentle grade and vignette (off on Light detail)
+    if (this.stylized && route.scene.post) this.post = new PostFX(this.renderer);
     // Simple stand-in until the Blender model loads
     this.rider = makeRider();
     this.scene.add(this.rider.group);
@@ -124,6 +130,7 @@ export class World {
     this._resize = () => {
       const w = container.clientWidth || 1, h = container.clientHeight || 1;
       this.renderer.setSize(w, h, false);
+      this.post?.setSize(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
       this.camera.aspect = w / h;
       this.camera.updateProjectionMatrix();
     };
@@ -183,6 +190,9 @@ export class World {
 
   setCamera(mode) { this.cameraMode = mode; this._camInit = false; }
 
+  /** clear | marine | clouds | rain (eases in over a few seconds). */
+  setWeather(key, immediate = false) { this.weatherKey = key; this.weather?.set(key, immediate); }
+
   setQuality(key) {
     if (!this.stylized) return;
     this.qualityKey = Object.hasOwn(COASTAL_QUALITY, key) ? key : 'balanced';
@@ -205,6 +215,20 @@ export class World {
     else if (this.stylized) t = { ...t, sunI: key === 'golden' ? 2.5 : 2.1, hemiI: key === 'golden' ? .95 : 1.1,
       ...(key === 'midday' ? { elev: 46, az: 238, top: '#70a9d2', horizon: '#d5e2db', hemiSky: '#e8f0ed', hemiGround: '#9c9d7e', sun: '#fff2d5', exposure: 1.03 } : {}) };
     this.timeKey = key;
+    this._time = t;
+    this._applyLight();
+  }
+
+  /** Time-of-day light, dimmed and greyed by the weather (overcast, rain). */
+  _applyLight() {
+    const base = this._time;
+    if (!base) return;
+    const w = this._weatherLight || { overcast: 0, rain: 0 }, o = w.overcast;
+    const grey = (c, to, k) => '#' + new THREE.Color(c).lerp(new THREE.Color(to), k).getHexString();
+    const t = o > 0.001 && !base.night ? { ...base,
+      sunI: base.sunI * (1 - o * .78), hemiI: base.hemiI * (1 + o * .18), exposure: base.exposure * (1 - o * .06),
+      top: grey(base.top, '#8b959c', o * .85), horizon: grey(base.horizon, '#b9c0c3', o * .8), sun: grey(base.sun, '#dfe3e6', o * .6),
+      hemiSky: grey(base.hemiSky, '#d4d9dc', o * .7) } : base;
     const el = THREE.MathUtils.degToRad(t.elev), az = THREE.MathUtils.degToRad(t.az);
     // azimuth from north, clockwise; north is −z, east is +x
     const dir = new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)).normalize();
@@ -222,11 +246,12 @@ export class World {
     u.sunDir.value.copy(dir);
     u.uNight.value = t.night ? 1 : 0;
     this.scene.fog.color.set(t.horizon);
-    this.terrain?.setTime?.(key);
+    this._fogBase = { near: this._fogBase?.near ?? this.scene.fog.near, far: this._fogBase?.far ?? this.scene.fog.far, color: new THREE.Color(t.horizon) };
+    this.terrain?.setTime?.(this.timeKey);
     this.terrain?.setNight?.(t.night ? 1 : 0);
     if (t.night && this.stylized && !this.headlight) {
       // a front light on the bike, so the road ahead reads in the dark
-      this.headlight = new THREE.SpotLight('#fff1d6', 900, 70, .42, .65, 1.6);
+      this.headlight = new THREE.SpotLight('#fff1d6', 650, 85, .58, 1, 1.5);
       this.scene.add(this.headlight, this.headlight.target);
     }
     if (this.headlight) this.headlight.visible = !!t.night;
@@ -276,10 +301,11 @@ export class World {
 
     this._updateCamera(riderPos, flat, fwd, dt);
     this.terrain.uniforms.uTime.value = now / 1000;
+    this.weather?.tick(dt);
     this.terrain.update(this.camera.position.x, this.camera.position.z);
     if (this.terrain.tick) {
       const turn = this.route.turnS || total, back = this.route.turnS && this.s > turn;
-      this.terrain.tick(this.camera.position, dt, { x: riderPos.x, z: riderPos.z, out: back ? total - this.s : this.s, dir: back ? -1 : 1 });
+      this.terrain.tick(this.camera.position, dt, { x: riderPos.x, z: riderPos.z, out: back ? total - this.s : this.s, dir: back ? -1 : 1, speed: src.speed });
     }
     if (this.headlight?.visible) {
       this.headlight.position.copy(riderPos).addScaledVector(flat, .6).y += 1.1;
@@ -296,6 +322,7 @@ export class World {
         this.terrain.setFar(on);
         // see further once the real horizon is there
         this.scene.fog.far = on ? this.atmosphere.fogFarRealM : this.atmosphere.fogFarM;
+        if (this._fogBase) this._fogBase.far = this.scene.fog.far;
         this.log('3d', on ? 'Far terrain ready: real horizon beyond 1.5 km' : 'Far terrain off', 'debug');
       }
     }
@@ -312,14 +339,14 @@ export class World {
       this.sun.position.copy(this.camera.position).addScaledVector(this.sunDir, 5000);
       this.sun.target.position.copy(this.camera.position);
     }
-    this.renderer.render(this.scene, this.camera);
+    this._render();
   }
 
   _updateCamera(riderPos, flat, fwd, dt) {
     const up = new THREE.Vector3(0, 1, 0);
     let pos, look;
     if (this.cameraMode === 'vista' && this.stylized) {
-      const b = this.terrain.landscape.landmarks[0];
+      const b = this.terrain.landscape.landmarks.reduce((best, l) => (!Number.isFinite(l.s) ? best : !best || Math.abs(this.s - l.s) < Math.abs(this.s - best.s) ? l : best), null);
       const nearby = b && Math.abs(this.s - b.s) < 900;
       const direction = nearby ? new THREE.Vector3(b.fx, 0, b.fz) : flat;
       const right = new THREE.Vector3(-direction.z, 0, direction.x);
@@ -359,6 +386,15 @@ export class World {
     this.camera.lookAt(this.camTarget);
   }
 
+  _render() {
+    if (this.post && this.qualityKey !== 'low') {
+      const k = this.timeKey, o = this._weatherLight?.overcast || 0;
+      this.post.render(this.scene, this.camera, {
+        bloom: (k === 'night' ? .38 : k === 'golden' ? .42 : .26) * (1 - o * .5),
+        threshold: k === 'night' ? .7 : 1.15, warm: k === 'golden' || k === 'morning' ? 1 - o : 0 });
+    } else this.renderer.render(this.scene, this.camera);
+  }
+
   /** Render one frame without the animation loop (used for previews/tests). */
   renderOnce() { const r = this.running; this.running = true; this._frame(performance.now()); this.running = r; cancelAnimationFrame(this._raf); }
 
@@ -368,6 +404,8 @@ export class World {
     this.disposed = true;
     this.stop();
     this._ro.disconnect();
+    this.weather?.dispose();
+    this.post?.dispose();
     this.terrain.dispose();
     this.farTerrain?.dispose();
     this.sun.shadow.map?.dispose(); this.sun.shadow.mapPass?.dispose();

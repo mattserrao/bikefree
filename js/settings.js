@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS = {
   worldQuality: 'balanced', // stylized scenery: low | balanced | high
   hudSize: 'small',       // ride-screen power bar: small (default) | medium | large (the original size)
   minimap: 'course',      // ride-screen minimap: course (whole route) | follow (zoomed in) | off
+  worldWeather: 'clear',  // 3D weather: clear | marine | clouds | rain
   scenery: 'builtin-park-yosemite', // 3D loop shown behind free rides and workouts
 };
 

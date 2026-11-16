@@ -79,6 +79,13 @@ export async function loadRouteScene(route, fetcher = fetch) {
     scene.city = await city.json();
     if (scene.city.format !== 'bikefree-city-1') throw new Error('Unsupported city scenery format');
   }
+  if (scene.terrainGridFile) {
+    // a real height grid around the route (tools/build_terrain_grid.py)
+    const grid = await fetcher(new URL(`../${scene.terrainGridFile}`, import.meta.url));
+    if (!grid.ok) throw new Error(`Terrain could not load (${grid.status})`);
+    scene.terrainGrid = await grid.json();
+    if (scene.terrainGrid.format !== 'bikefree-terrain-grid-1') throw new Error('Unsupported terrain format');
+  }
   route.scene = scene;
   return route;
 }

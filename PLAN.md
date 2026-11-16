@@ -302,6 +302,42 @@ Goal: a second QC tool that looks for things drawn through each other, and a Pit
 - [ ] Left as accepted or for later: streets that pass under the route where it runs on an embankment disappear into it (no bridge in the data; 9 spots); flickering where some crossing streets meet (~40) and along a few river banks; lamp posts touching the Clemente Bridge's gold railing; traffic passing through traffic and people through posts (accepted as background life)
 - [ ] On-bike check
 
+### Big Sur hero map *(test branch `bigsur-test`, on top of v0.12; main merged in, with the snapshot and clipping QC tools)*
+Goal: make Big Sur the showcase course — visually stunning, the one you open to show someone the app. A testbed for graphics, weather, traffic and realism that can later roll out to other maps.
+
+**Baseline review (15 Nov 2026, preview renders at High)**
+- Geography reads as rolling grassland beside a distant sea, not mountains dropping into the Pacific: the land is a synthetic heightfield (`js/world/coast.js`) that rises gently inland; no sea cliffs, coves or surf line
+- Bixby Creek reads as a shallow green valley with a stray lagoon; the real gorge is deep, narrow and opens onto a beach right below the bridge
+- Bridge: parapet posts and a large beige wall beside the deck look oversized; the arch is hard to see from the road
+- Bright white patches beside the road at the overlook (15.2 km) and on the bridge (15.7 km), and a hard dark seam where the sea meets land — to confirm on the Mac (renders here use a software GPU)
+- Trees and bushes floating above hillsides at golden hour and night (likely placed before the real far terrain arrives)
+- Night: headlight is a flat disc; no surf glow, moon path on the sea, or distant car lights
+- Nothing moves except the rider and pacer: no traffic, birds, surf, fog or wind
+
+**Decisions (15 Nov 2026)**
+- Landform: real high-resolution elevation for the route corridor, bundled for offline, stylized materials on top
+- Art style: stylized but richer — keep the low-poly look; add real light, weather and motion
+- Weather: marine layer fog, clouds with shadows, wind, and rain with a wet road
+- Traffic: light and realistic — a car every 20–40 s each way, some RVs, motorcycles and cyclists; some pull into the overlooks
+
+**Passes**
+- [x] **Real landform** — `tools/build_terrain_grid.py` bakes AWS Terrain Tiles into `routes/scenes/bigsur-terrain.json` (1.7 MB gzipped): 10 m blocks within 900 m of the road, 40 m out to 9 km. The source fills the near-shore ocean with flat 0–3 m "land"; the builder turns that into a shelving sea floor (sea = low ground connected to the open ocean). `js/world/real-coast.js` presses the GPX road in, opens the real gorges under the bridges, traces the creeks down the real valley floors (Bixby, Rocky, Garrapata, Malpaso, Little Sur) and keeps a signed distance to the shore. The real horizon is off for Big Sur (its own grid reaches the horizon; the tile horizon showed the flat fill as a sand plain)
+- [x] **Bridges** — `js/world/coast-bridges.js`: open-spandrel arches (Bixby 228 m over a 77 m gorge, Rocky Creek, Garrapata, and the canyon at 9.9 km) with twin ribs, spandrel columns and great piers on the real slopes; deck bridges elsewhere; open balustrade parapets you can see the sea through
+- [x] **Vegetation from the ground** — golden grass on ridges and south faces, olive scrub on north faces, redwood / oak / pine in the canyons, cypress on the bluffs, sand by the sea
+- [x] **Ocean** — shallows from the sea floor, kelp-dark patches, broken breakers rolling in to the real shoreline, swash, rocks along the true shore; dark at night
+- [x] **Weather** (`js/world/weather.js`, all stylized routes; Settings › Weather, **W** on the ride screen): *Clear*, *Marine layer* (fog bank on the sea, upper layers stop at the shore, the lowest creep up the canyons; ride into it and the air closes in; climb Hurricane Point and you're above it), *Clouds* (shadows drifting over the hills), *Rain* (streaks, grey light, wet road that picks up the sky); wind in grass, flowers and trees in every preset; changes ease in
+- [x] **Traffic** (`js/world/highway-traffic.js`, scene option `traffic`): cars, SUVs, RVs, motorcycles and other cyclists both ways, ~4 a minute; they overtake when the other lane is clear and wait behind you when it isn't; a cyclist may sit on your wheel; some pull into the overlooks; parked cars at the overlooks; lights at night
+- [x] **Life and landmarks** (`js/world/coast-life.js`): pelicans gliding in lines along the shore, gulls over the cliffs, a condor over the ridges, cattle on the Point Sur terrace, Point Sur Lighthouse (lamp and turning beam at night); signs for Rocky Creek, Hurricane Point, Little Sur and Point Sur; a Hurricane Point overlook
+- [x] **Rendering** (`js/world/post.js`, scene option `post`): HDR render, soft bloom (sun glint, low sun, lamps), gentle grade and vignette; off on Light detail
+- [x] Fix: the ground vanished for a frame when the real horizon arrived (the sea plane showed through as white — the "white patches" in the baseline review)
+- [x] Course QC: Big Sur passes `--strict` (0 fail, 0 warn); `npm test` passes (96)
+- [x] **QC pass (15 Nov 2026)** — merged main (Route 28, v0.12) plus the snapshot tool (`npm run snap`, from `route28-test`) and the clipping tool (`npm run qc:clipping`, from `v0.12.1`); ran all three on Big Sur and fixed every finding:
+  - **Course QC** (`npm run qc -- --strict`): every route clean, including the four that failed on the v0.12 base (main already had their fixes). New checks `lookout-floating` / `lookout-buried` found the Bixby overlook pad 2.2 m above the ground at one corner and Going-to-the-Sun's Logan Pass pad tilting off the road's grade: overlook pads now follow the road in 4 m pieces, and Big Sur levels the ground under them
+  - **Clipping QC** (`npm run qc:clipping -- bigsur`): it now simulates highway traffic and birds (not just city life) and treats the sea and creeks as water. It found cars and RVs overlapping each other, a camper passing through you, a car through the reflector posts at the Hurricane Point turnout, a gull through the Garrapata bridge, a rock in the Malpaso creek mouth and Rocky Creek's water ribbon folding over itself. Fixed: traffic keeps a hard gap to whatever is ahead in its path (you, cyclists, other cars, parked cars), overtakes abort for oncoming traffic, slower vehicles ahead of you move over to let you by, cars pull into free bays only, campers hug the centre line; no reflector posts across overlook entrances; gulls keep clear of bridges; no shore rocks in creek mouths; creek traces drop their loops. Now 0 fail, 0 warn
+  - **Snapshots** (`npm run snap`, now with a weather tag and the app's post-processing): 12 fixed views (overlook, Bixby vista golden and marine layer, Hurricane Point, rain, clouds, Point Sur, night, Little Sur, Malpaso, Garrapata). The first run was over the triangle budget (up to 3.0 M at the Bixby vista, 2.2 M riding at Little Sur); Big Sur's vegetation is now 1.3× (was 1.6×) with fewer redwoods, shrubs and shore rocks, and distant (LOD) trees no longer cast shadows on any route. Now 250–450 draw calls and 0.8–1.9 M triangles per view
+- [ ] On the Mac: frame rate on Balanced and High (post-processing, fog layers, traffic), the marine layer from the road, rain on the road
+- [ ] On-bike check
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

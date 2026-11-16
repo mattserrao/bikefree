@@ -15,11 +15,10 @@ import { dirname, join, relative } from 'node:path';
 import { parseGpx, haversine } from '../js/gpx.js';
 import { buildCatalogRoute } from '../js/routes.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
-import { makeCoastLandscape } from '../js/world/coast.js';
-import { makeRegionalLandscape } from '../js/world/regional-landscape.js';
 import { attachTerrainBuffer } from '../js/world/terrain-data.js';
 import { planSettlement } from '../js/world/settlement.js';
-import { makeCityLandscape, cityStreets, STREET_LIFT } from '../js/world/city-landscape.js';
+import { cityStreets, STREET_LIFT } from '../js/world/city-landscape.js';
+import { landscapeBuilder } from '../js/world/landscapes.js';
 import { riderPose, routePoint, ROAD_WIDTH, ROAD_LIFT } from '../js/world/pose.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -51,7 +50,9 @@ export const LIMITS = {
   vergeStep: 1.0,         // WARN: ground 6 m out jumps this much between 2 m samples
   meshAlias: 1.0,         // WARN: drawn ground (6 m mesh) differs this much from the scenery's true height 6 m out
   flooded: 0.2,           // FAIL: water within this of the road surface
-  cameraLift: 0.75,       // WARN: chase camera pushed up this far by the ground (visible camera jump)
+  cameraLift: 0.75,
+  padGap: 0.6,            // WARN: an overlook pad's underside this far above the drawn ground
+  padBuried: 0.25,        // WARN: the drawn ground this far above an overlook pad's surface       // WARN: chase camera pushed up this far by the ground (visible camera jump)
 };
 
 const SHOULDER_HALF = (ROAD_WIDTH + 1.6) / 2;   // stylized shoulder ribbon (world.js)
@@ -175,7 +176,7 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
 
   // 3. Ridden path: rider pose every `step` m over the whole ride, wrapping across the seam
   const stylized = route.scene?.style === 'stylized';
-  const landscape = stylized ? (route.scene.terrain === 'authored-city' ? makeCityLandscape : route.scene.terrain === 'authored-region' ? makeRegionalLandscape : makeCoastLandscape)(route.scene, proj, index, route) : null;
+  const landscape = stylized ? landscapeBuilder(route.scene)(route.scene, proj, index, route) : null;
   const ground = landscape ? makeMeshGround(landscape.heightAt) : null;
   const bridgeAt = (x, z, m) => !!landscape?.bridgeAt?.(x, z, m);
   let prev = riderPose(route, index, 0), maxHeading = 0, maxJump = 0;
@@ -273,6 +274,25 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
     }
     F.open.clear();
   }
+  // 4b. Overlooks: the gravel pad should sit on the drawn ground — not float over a drop, not sink into a bank
+  if (ground) {
+    for (const l of route.scene.lookouts || []) {
+      const side = l.side === 'inland' ? -1 : 1, w = l.widthM || 10, len = l.lengthM || 32;
+      let gap = 0, buried = 0;
+      for (const along of [-len / 2, -len / 4, 0, len / 4, len / 2]) for (const out of [ROAD_WIDTH / 2 + .5, ROAD_WIDTH / 2 + w / 2, ROAD_WIDTH / 2 + w - .5]) {
+        const c = routePoint(route, index, Math.max(0, Math.min(oneWay, l.atM + along)));
+        const n = routePoint(route, index, Math.min(oneWay, l.atM + along + 2)), p = routePoint(route, index, Math.max(0, l.atM + along - 2));
+        let fx = n.x - p.x, fz = n.z - p.z; const fl = Math.hypot(fx, fz) || 1; fx /= fl; fz /= fl;
+        const padTop = c.y - .35 + .45, padBottom = padTop - .9;   // the pad follows the road's grade
+        const g = ground(c.x - fz * side * out, c.z + fx * side * out);
+        gap = Math.max(gap, padBottom - g); buried = Math.max(buried, g - padTop);
+      }
+      if (gap > LIMITS.padGap) F.add('lookout-floating', 'warn', l.atM, gap, 'overlook pad floats above the ground');
+      if (buried > LIMITS.padBuried) F.add('lookout-buried', 'warn', l.atM, buried, 'ground rises through the overlook pad');
+    }
+    F.open.clear();
+  }
+
   // 5. City streets drawn over the route: another carriageway, a ramp or a bridge deck above the road
   //    would hide the road and the rider's legs (what the renderer draws, via the shared cityStreets()).
   if (landscape?.city) {
@@ -362,6 +382,7 @@ export function htmlReport(results, { previewHref = 'world-preview.html' } = {})
 export function loadSceneSync(path) {
   const scene = JSON.parse(read(path));
   if (scene.terrainData?.file) attachTerrainBuffer(scene, readFileSync(join(ROOT, scene.terrainData.file)));
+  if (scene.terrainGridFile) scene.terrainGrid = JSON.parse(read(scene.terrainGridFile));   // real-coast grid (build_terrain_grid.py)
   return scene;
 }
 
