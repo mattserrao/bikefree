@@ -225,7 +225,7 @@
   },
   {
     "id": "monumentvalley",
-    "name": "Monument Valley \u00b7 Forrest Gump Point",
+    "name": "Monument Valley · Forrest Gump Point",
     "park": "US-163, Monument Valley, Utah & Arizona",
     "file": "routes/parks/monumentvalley.gpx",
     "outAndBack": true,
@@ -268,7 +268,7 @@
   },
   {
     "id": "bigsur",
-    "name": "Big Sur \u00b7 Bixby Bridge & Hurricane Point",
+    "name": "Big Sur · Bixby Bridge & Hurricane Point",
     "park": "California Highway 1, Big Sur",
     "file": "routes/parks/bigsur.gpx",
     "outAndBack": true,
@@ -328,14 +328,14 @@
     "file": "routes/parks/goingtothesun.gpx",
     "outAndBack": true,
     "expectedKm": [
-      60,
-      84
+      140,
+      175
     ],
     "routing": {
       "profile": "fastbike",
       "expect_km": [
-        30,
-        42
+        70,
+        87
       ],
       "profile_opts": {
         "cliff_m": 800,
@@ -343,6 +343,10 @@
         "smooth_m": 600
       },
       "waypoints": [
+        [
+          48.5297,
+          -113.98
+        ],
         [
           48.6178,
           -113.877
@@ -354,6 +358,14 @@
         [
           48.6965,
           -113.718
+        ],
+        [
+          48.6773,
+          -113.6529
+        ],
+        [
+          48.7449,
+          -113.4418
         ]
       ],
       "pois": {
@@ -364,6 +376,30 @@
         "Logan Pass": [
           48.6965,
           -113.718
+        ],
+        "Jackson Glacier Overlook": [
+          48.6773,
+          -113.6529
+        ],
+        "Sun Point": [
+          48.6765,
+          -113.611
+        ],
+        "Rising Sun": [
+          48.6946,
+          -113.519
+        ],
+        "St. Mary": [
+          48.7472,
+          -113.4389
+        ],
+        "Lake McDonald Lodge": [
+          48.617,
+          -113.878
+        ],
+        "Apgar": [
+          48.528,
+          -113.984
         ]
       }
     },
@@ -414,7 +450,7 @@
   },
   {
     "id": "sevenmile",
-    "name": "Overseas Highway \u00b7 Seven Mile Bridge",
+    "name": "Overseas Highway · Seven Mile Bridge",
     "park": "Florida Keys (Marathon to Bahia Honda)",
     "file": "routes/parks/sevenmile.gpx",
     "outAndBack": true,
@@ -459,7 +495,7 @@
   },
   {
     "id": "route28",
-    "name": "Route 28 \u00b7 Old Forge to Eighth Lake",
+    "name": "Route 28 · Old Forge to Eighth Lake",
     "park": "Fulton Chain of Lakes, Adirondacks, New York",
     "file": "routes/parks/route28.gpx",
     "outAndBack": true,
@@ -523,7 +559,7 @@
   },
   {
     "id": "pittsburgh",
-    "name": "Pittsburgh \u00b7 Three Rivers Loop",
+    "name": "Pittsburgh · Three Rivers Loop",
     "park": "Pittsburgh, Pennsylvania",
     "file": "routes/cities/pittsburgh.gpx",
     "outAndBack": false,

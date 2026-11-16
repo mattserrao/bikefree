@@ -90,18 +90,18 @@
     }
   ],
   "preview": {
-    "positionM": 33190.0,
+    "positionM": 46593.0,
     "camera": "drone"
   },
   "signs": [
     {
-      "atM": 8915,
+      "atM": 22312.4,
       "side": "ocean",
       "label": "AVALANCHE CREEK",
       "subtitle": "GOING-TO-THE-SUN ROAD"
     },
     {
-      "atM": 33865.0,
+      "atM": 47262.5,
       "side": "ocean",
       "label": "LOGAN PASS",
       "subtitle": "GOING-TO-THE-SUN ROAD"
@@ -109,14 +109,14 @@
   ],
   "roadside": [
     {
-      "fromM": 32490.0,
-      "toM": 33950.0,
+      "fromM": 45893.2,
+      "toM": 47312.5,
       "side": "ocean"
     }
   ],
   "lookouts": [
     {
-      "atM": 32990.0,
+      "atM": 46393.0,
       "side": "ocean",
       "widthM": 8,
       "lengthM": 28
