@@ -105,6 +105,35 @@ Branch `pittsburgh-test`, built on v0.12.2. The plan is in the Project doc *open
 - Clipping QC: 0 fail, 262 warnings (P3: 266; v0.12.2: 288).
 - Ride-camera views: 315–545 draw calls and 0.8–1.3 M triangles. A high aerial close-up of downtown at night reaches ~700 calls, but no ride camera sees that.
 
+## P5 · Rivers (done)
+
+| Where the rivers meet: the Allegheny's green and the Mon's brown run side by side down the Ohio | Golden hour on the Allegheny: glint and sparkles, the current's slick lines |
+| --- | --- |
+| ![](p5-confluence.jpg) | ![](p5-golden-glint.jpg) |
+| **Night: bank lights stretched across the water toward you** | **The river field (red: Allegheny water, blue: Mon water, green: blending)** |
+| ![](p5-night-reflections.jpg) | ![](p5-river-field.png) |
+
+- **The current:** each river now flows. Along-river distances are worked out once from the water mask, and the ripples are carried downstream along them, with long slick lines moving with the water.
+- **The confluence:** the Allegheny runs green and the Monongahela brown. Below the Point their waters run side by side down the Ohio (the Allegheny's along the north bank, the Mon's along the south) and blend slowly over the next several kilometres, as they really do.
+- **Light:** the low sun gives a broad warm sheen, a tight highlight and sparkles (strongest at golden hour). At night the lights along the banks stretch across the water toward you.
+- **River walls:** where an urban bank stands well above the water (downtown, the North Shore, Station Square), the shore is a stone wall with a dark wet band and a pale coping, and the ground steps down at the waterline. Where a street, the route or a railway runs right along the shore, the bank stays natural. Wooded banks keep their slope.
+- **Fixed on the way:**
+  - The map drew every bridge deck over the rivers as paved land, which cut the rivers into pieces at each bridge and put ground at the water's level under every one. The water is now closed across those gaps.
+  - A precision bug in the distance computation (32-bit storage) had stopped the fields a few hundred metres from each seed.
+- **C3 (flicker):**
+  - **Junctions:** they are now level, and each road ribbon carries its height slot into the depth test, so where streets meet the higher slot always wins, at any distance. The clipping QC knows this.
+  - **Shorelines:** the ground never lies near the water's level (it's kept 35 cm above or 60 cm below), so the shoreline is a steep crossing.
+  - **Result:** z-fight went from 45 to 11 (streets from 33 to 1; the rest are shoreline crossings).
+- **C6 (boats):**
+  - Boats keep their whole hull over real water, judged by the ground itself, since a riverside trail's bank can reach out over the mapped water.
+  - They steer round anything of a bridge standing in the river, or too low to pass under, from 130 m ahead.
+  - Each starts in its lane.
+  - Boats on land went from 5 to 1; the riverboat still brushes a pier now and then.
+- **Checks:**
+  - `npm test`: 96 pass.
+  - Course QC `--strict`: clean on all 11 routes.
+  - Clipping QC: 0 fail, 235 warnings (P4: 262; baseline 288). The riverboat still brushes a bridge support in 2 places.
+
 ## Still to check on the Mac
 - Frame rate with post and river fog on Balanced and High (**I** overlay).
 - River fog from the saddle on the bridges: you should ride out of it as you climb.

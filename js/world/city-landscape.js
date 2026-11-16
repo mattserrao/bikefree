@@ -98,6 +98,27 @@ export function makeCityLandscape(config, proj, index, route) {
     const i = Math.floor(u), j = Math.floor(v), a = u - i, b = v - j, M = OW.m, n = OW.nx;
     return (M[j * n + i] * (1 - a) + M[j * n + i + 1] * a) * (1 - b) + (M[(j + 1) * n + i] * (1 - a) + M[(j + 1) * n + i + 1] * a) * b;
   };
+  // The map draws bridge decks over the rivers as paved land, so the rivers were cut into pieces at every bridge
+  // (and the ground under each bridge sat at the water's level). Close the water across those gaps: dilate it by
+  // three cells (~36 m) and erode it back, so deck-wide breaks fill and real shorelines stay where they were.
+  {
+    const nx = D.lx, ny = D.ly, Lg = D.land, R = 3, wet = new Uint8Array(nx * ny), grow = new Uint8Array(nx * ny);
+    for (let k = 0; k < wet.length; k++) wet[k] = Lg[k] === LAND.water ? 1 : 0;
+    const sweep = (src, dst, want) => {   // separable square max (want 1) / min (want 0) filter
+      const tmp = new Uint8Array(src.length);
+      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+        let v = 1 - want; for (let u = Math.max(0, i - R); u <= Math.min(nx - 1, i + R); u++) if (src[j * nx + u] === want) { v = want; break; }
+        tmp[j * nx + i] = v;
+      }
+      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+        let v = 1 - want; for (let w = Math.max(0, j - R); w <= Math.min(ny - 1, j + R); w++) if (tmp[w * nx + i] === want) { v = want; break; }
+        dst[j * nx + i] = v;
+      }
+    };
+    sweep(wet, grow, 1);
+    const closed = new Uint8Array(nx * ny); sweep(grow, closed, 0);
+    for (let k = 0; k < closed.length; k++) if (closed[k] && !wet[k] && Lg[k] !== LAND.building) Lg[k] = LAND.water;
+  }
   const landCell = (x, z) => {
     const u = Math.round((x - D.x0) / (D.x1 - D.x0) * (D.lx - 1)), v = Math.round((z - D.z0) / (D.z1 - D.z0) * (D.ly - 1));
     if (u < 0 || v < 0 || u >= D.lx || v >= D.ly) return outerWater(x, z) > .5 ? LAND.water : LAND.outside;
@@ -169,10 +190,46 @@ export function makeCityLandscape(config, proj, index, route) {
   const routeKinds = data.routeKinds || [];
   const routeKindAt = (s) => (routeKinds.find((k) => s >= k.fromM && s < k.toM) || { kind: 'road' }).kind;
 
+  // Walled shores: where an urban bank (streets, plazas, buildings, lawns) stands well above the water, the shore
+  // is a river wall (drawn by the city), so the ground steps down at the waterline instead of sloping in.
+  let walled = null;
+  const URBAN = new Set([LAND.paved, LAND.grass, LAND.building, LAND.plaza]);
+  const shoreWalls = () => {
+    if (walled) return walled;
+    const nx = D.lx, ny = D.ly, L = D.land, dx = (D.x1 - D.x0) / (nx - 1), dz = (D.z1 - D.z0) / (ny - 1);
+    walled = new Uint8Array(nx * ny);
+    for (let j = 1; j < ny - 1; j++) for (let i = 1; i < nx - 1; i++) {
+      const k = j * nx + i;
+      if (L[k] === LAND.water || !URBAN.has(L[k])) continue;
+      let shore = false;
+      for (let v = -1; v <= 1 && !shore; v++) for (let u = -1; u <= 1; u++) if (L[k + v * nx + u] === LAND.water) { shore = true; break; }
+      if (!shore) continue;
+      // the bank ~2 cells inland must stand 1.5 m over the water
+      let top = -Infinity;
+      for (let v = -2; v <= 2; v++) for (let u = -2; u <= 2; u++) { const q = (j + v) * nx + i + u; if (q >= 0 && q < L.length && L[q] !== LAND.water) top = Math.max(top, terrainAt(D.x0 + (i + u) * dx, D.z0 + (j + v) * dz)); }
+      if (top > level + 1.5) walled[k] = 1;
+    }
+    return walled;
+  };
+  const wallAt = (x, z) => {
+    const W = shoreWalls(), u = Math.round((x - D.x0) / (D.x1 - D.x0) * (D.lx - 1)), v = Math.round((z - D.z0) / (D.z1 - D.z0) * (D.ly - 1));
+    if (u < 1 || v < 1 || u >= D.lx - 1 || v >= D.ly - 1) return false;
+    for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) if (W[(v + b) * D.lx + u + a]) return true;
+    return false;
+  };
   const baseHeight = (x, z) => {
     let h = terrainAt(x, z);
     const wet = waterAt(x, z);
-    if (wet > 0) h += (Math.min(h, level - 4.5) - h) * smoothstep(.05, .7, wet);
+    if (wet > 0) {
+      const walledHere = wallAt(x, z);
+      // behind a wall the bank keeps its height right to the waterline (and at least 1 m over the water)
+      if (walledHere && wet < .5) h = Math.max(h, level + 1);
+      h += (Math.min(h, level - 4.5) - h) * (walledHere ? smoothstep(.42, .58, wet) : smoothstep(.05, .7, wet));
+    }
+    // never level with the water (the rivers are hydro-flattened in the elevation, so the banks run out flat
+    // at exactly the water level): kept 35 cm above or 60 cm below, so the shoreline is a steep crossing rather
+    // than ground lying a few centimetres from the water across a whole cell (that flickers)
+    if (h > level - .6 && h < level + .35) h = h >= level - .1 ? level + .35 : level - .6;
     return h;
   };
   // The ground follows the city's streets: under a street and its sidewalks it sits just below the ribbon
@@ -246,6 +303,9 @@ export function makeCityLandscape(config, proj, index, route) {
     if (!own || own.d > 9) {   // (near the route's own road its bank wins: the ground mesh can't step that fast)
       for (const o of streetsNear(x, z, 1.5)) if (streetIndex.streets[o.k].bridge && h > o.y - .35) h = Math.min(h, o.y - .35);
     }
+    // nor, after all that grading, near the water's level (the route's riverside trail around the Point presses
+    // the ground to exactly the water's level)
+    if (h > level - .6 && h < level + .35) h = h >= level - .1 ? level + .35 : level - .6;
     return h;
   };
   const routeHeightAt = (x, z) => {
@@ -330,7 +390,7 @@ export function makeCityLandscape(config, proj, index, route) {
   };
 
   const L = {
-    kind: 'city', city: true, data, decoded: D, level, outer: OW && { x0: T.x0, z0: T.z0, x1: T.x1, z1: T.z1, water: outerWater, mask: OW }, hasOcean: false, coastSide: 1,
+    kind: 'city', city: true, data, decoded: D, level, wallAt, shoreWalls, outer: OW && { x0: T.x0, z0: T.z0, x1: T.x1, z1: T.z1, water: outerWater, mask: OW }, hasOcean: false, coastSide: 1,
     coast: [{ x: -1e5, z: 0 }, { x: -1e5, z: 1 }], coastX: () => -1e5, inlandAt: () => 1e4,
     lakes: [], waterIslands: [], creeks: [], creekAt: () => null, landmarks,
     heightAt, baseHeight, terrainAt, bridgeAt, waterLevelAt, landAt: landCell, waterAt, routeKindAt, routeBridges, broad,
@@ -359,7 +419,7 @@ export function makeCityLandscape(config, proj, index, route) {
 }
 
 export const STREET_W = [15, 7.5, 13, 11, 9.5, 7.5, 9, 5, 3.4];   // street width by class (tools/build_city.py)
-export const STREET_LIFT = .16;                                     // highest a street ribbon sits above its line
+export const STREET_LIFT = .24;                                     // highest a street ribbon sits above its line
 
 /**
  * The city's streets as drawn: [{cls, bridge, oneway, layer, width, pts: [{x, y, z}]}]. Bridge decks keep their

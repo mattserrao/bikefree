@@ -228,6 +228,17 @@ export class CityScene {
     const tex = this.own(new THREE.CanvasTexture(c)); tex.wrapT = THREE.RepeatWrapping; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
     const offset = (f) => ({ polygonOffset: true, polygonOffsetFactor: f, polygonOffsetUnits: f });
     this.streetMaterial = this.own(new THREE.MeshStandardMaterial({ map: tex, roughness: .93, ...offset(-1.6) }));
+    // Each road ribbon carries its height slot (aSlot), and the depth test settles overlaps by it: where two
+    // streets meet at one height, the higher slot always wins, at any distance (their surfaces drift a few cm
+    // relative to each other inside a junction, which a 2 cm lift alone can't outweigh).
+    this.streetMaterial.userData.slotDepthBias = true;
+    this.streetMaterial.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aSlot; varying float vSlot;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSlot = aSlot;');
+      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vSlot;')
+        .replace('#include <logdepthbuf_fragment>', '#include <logdepthbuf_fragment>\n#if defined( USE_LOGDEPTHBUF )\ngl_FragDepth -= vSlot * 2e-6;\n#endif');
+    };
+    this.streetMaterial.customProgramCacheKey = () => 'city-streets-slot-1';
     this.sidewalkMaterial = this.own(new THREE.MeshStandardMaterial({ color: '#aca59a', roughness: .95, ...offset(-1.1) }));
     this.pathMaterial = this.own(new THREE.MeshStandardMaterial({ color: '#9d978a', roughness: .95, ...offset(-1.3) }));
     this.solidMaterial = this.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .8, metalness: .1 }));
@@ -269,7 +280,8 @@ export class CityScene {
   _water() {
     const D = this.D, mask = new Float32Array(D.lx * D.ly);
     for (let i = 0; i < mask.length; i++) mask[i] = D.land[i] === LAND.water ? 1 : 0;
-    this.water = this._waterMesh(mask, D.lx, D.ly, D.x0, D.z0, D.x1, D.z1, 'Rivers');
+    this.water = this._waterMesh(mask, D.lx, D.ly, D.x0, D.z0, D.x1, D.z1, 'Rivers', null, this._riverFields(mask, D.lx, D.ly));
+    this._riverWalls(mask);
     // the rivers beyond the city's box, from the real height grid's river mask (drawn only outside the box)
     const O = this.landscape.outer;
     if (O) {
@@ -278,7 +290,176 @@ export class CityScene {
     }
   }
 
-  _waterMesh(mask, W, H, x0, z0, x1, z1, name, hole = null) {
+  /**
+   * River walls along the urban banks (downtown, the North Shore, Station Square): stone walls traced along the
+   * shoreline (marching squares on the water mask) wherever the landscape marks the shore as walled, from below
+   * the waterline to the bank, with a dark wet band and a pale coping.
+   */
+  _riverWalls(mask) {
+    const D = this.D, L = this.landscape, W = D.lx, H = D.ly, level = L.level, dx = (D.x1 - D.x0) / (W - 1), dz = (D.z1 - D.z0) / (H - 1);
+    const walls = L.shoreWalls?.();
+    this.wallGrid = new Map();
+    if (!walls) return;
+    const B = new MeshBuilder(), X = (i) => D.x0 + i * dx, Z = (j) => D.z0 + j * dz;
+    // the railways, on a 20 m grid
+    const rails = new Map();
+    for (const r of this.data.rails || []) {
+      const pts = r.path.map(([qa, qo]) => D.local(qa, qo));
+      for (let q = 1; q < pts.length; q++) {
+        const a0 = pts[q - 1], a1 = pts[q], n = Math.max(1, Math.ceil(Math.hypot(a1.x - a0.x, a1.z - a0.z) / 3));
+        for (let t = 0; t <= n; t++) { const px = a0.x + (a1.x - a0.x) * t / n, pz = a0.z + (a1.z - a0.z) * t / n, key = `${Math.floor(px / 20)},${Math.floor(pz / 20)}`; if (!rails.has(key)) rails.set(key, []); rails.get(key).push(px, pz); }
+      }
+    }
+    const railNear = (x, z, r) => {
+      for (let gx = Math.floor((x - r) / 20); gx <= Math.floor((x + r) / 20); gx++) for (let gz = Math.floor((z - r) / 20); gz <= Math.floor((z + r) / 20); gz++) {
+        const a = rails.get(`${gx},${gz}`); if (!a) continue;
+        for (let q = 0; q < a.length; q += 2) if (Math.hypot(a[q] - x, a[q + 1] - z) < r) return true;
+      }
+      return false;
+    };
+    let n = 0;
+    for (let j = 0; j < H - 1; j++) for (let i = 0; i < W - 1; i++) {
+      const k = j * W + i, a = mask[k], b = mask[k + 1], c = mask[k + W + 1], d = mask[k + W];
+      const code = (a > .5 ? 1 : 0) | (b > .5 ? 2 : 0) | (c > .5 ? 4 : 0) | (d > .5 ? 8 : 0);
+      if (code === 0 || code === 15) continue;
+      if (!(walls[k] || walls[k + 1] || walls[k + W] || walls[k + W + 1])) continue;
+      // edge midpoints: top (a-b), right (b-c), bottom (d-c), left (a-d)
+      const E = [{ x: X(i + .5), z: Z(j) }, { x: X(i + 1), z: Z(j + .5) }, { x: X(i + .5), z: Z(j + 1) }, { x: X(i), z: Z(j + .5) }];
+      const segs = { 1: [[3, 0]], 2: [[0, 1]], 3: [[3, 1]], 4: [[1, 2]], 5: [[3, 0], [1, 2]], 6: [[0, 2]], 7: [[3, 2]], 8: [[2, 3]], 9: [[2, 0]], 10: [[0, 1], [2, 3]], 11: [[2, 1]], 12: [[1, 3]], 13: [[1, 0]], 14: [[0, 3]] }[code];
+      for (const [e0, e1] of segs) {
+        let p0 = E[e0], p1 = E[e1];
+        // which side is land: step off the segment's middle both ways
+        const mx = (p0.x + p1.x) / 2, mz = (p0.z + p1.z) / 2, tx = p1.x - p0.x, tz = p1.z - p0.z, tl = Math.hypot(tx, tz) || 1;
+        let nx = -tz / tl, nz = tx / tl;
+        if (L.waterAt(mx + nx * 4, mz + nz * 4) > L.waterAt(mx - nx * 4, mz - nz * 4)) { nx = -nx; nz = -nz; [p0, p1] = [p1, p0]; }
+        // where a street or a railway runs right along the shore, the bank stays natural (cars, trains, lamps)
+        const cx = mx + nx * 1, cz = mz + nz * 1;
+        const rt = L.routeDist(cx, cz);
+        if (L.streetsNear(cx, cz, 3).some((o) => this.streets[o.k].cls < 8) || railNear(cx, cz, 6) || (rt && rt.d < ROAD_WIDTH / 2 + 4)) continue;
+        { const key = `${Math.floor(mx / 20)},${Math.floor(mz / 20)}`; if (!this.wallGrid.has(key)) this.wallGrid.set(key, []); this.wallGrid.get(key).push(p0.x, p0.z, p1.x, p1.z); }
+        // the wall faces the water (−n): quad from p0 to p1 as seen from the river
+        const top0 = Math.max(level + 1, L.baseHeight(p0.x + nx * 1.5, p0.z + nz * 1.5)), top1 = Math.max(level + 1, L.baseHeight(p1.x + nx * 1.5, p1.z + nz * 1.5));
+        const V3 = (p, y) => new THREE.Vector3(p.x, y, p.z);
+        B.color('#4c4a42'); B.quad(V3(p1, level - 1.2), V3(p0, level - 1.2), V3(p0, level + .7), V3(p1, level + .7));
+        B.color('#8e897e'); B.quad(V3(p1, level + .7), V3(p0, level + .7), V3(p0, top0), V3(p1, top1));
+        const q0 = { x: p0.x + nx * .9, z: p0.z + nz * .9 }, q1 = { x: p1.x + nx * .9, z: p1.z + nz * .9 };
+        B.color('#bdb6a6'); B.quad(V3(p1, top1 + .12), V3(p0, top0 + .12), V3(q0, top0 + .12), V3(q1, top1 + .12));
+        B.quad(V3(p1, top1), V3(p0, top0), V3(p0, top0 + .12), V3(p1, top1 + .12));
+        n++;
+      }
+    }
+    if (!n) return;
+    B.keepOutOf(L.inRouteTube);
+    const m = new THREE.Mesh(this.own(B.geometry()), this.solidMaterial);
+    m.name = 'River walls'; m.receiveShadow = true; this.group.add(m);
+  }
+
+  /**
+   * The rivers' character, from the water mask on the land grid (the scene's `riverFlow` seeds: the Allegheny and
+   * Monongahela upstream, the Ohio downstream, and the Point): along-river distances by Dijkstra; the current
+   * runs down the distance to the Ohio's outlet; each cell takes the colour of whichever river reaches it first
+   * along the water, so below the Point the Allegheny's green and the Mon's brown run side by side down the Ohio,
+   * blending over the next few kilometres. Returns { tex: RG flow direction, B Allegheny-ness, A blend }.
+   */
+  _riverFields(mask, W, H) {
+    const F = this.route.scene?.riverFlow;
+    if (!F) return null;
+    const D = this.D, dx = (D.x1 - D.x0) / (W - 1), dz = (D.z1 - D.z0) / (H - 1);
+    const cellOf = ([lat, lon]) => {
+      const p = D.proj.toLocal(lat, lon), u = Math.round((p.x - D.x0) / dx), v = Math.round((p.z - D.z0) / dz);
+      let best = -1, bd = Infinity;   // the nearest water cell within ~400 m
+      for (let j = Math.max(0, v - 35); j <= Math.min(H - 1, v + 35); j++) for (let i = Math.max(0, u - 35); i <= Math.min(W - 1, u + 35); i++) {
+        if (mask[j * W + i] < .5) continue;
+        const d = (i - u) ** 2 + (j - v) ** 2; if (d < bd) { bd = d; best = j * W + i; }
+      }
+      return best;
+    };
+    const dijkstra = (seed) => {
+      const dist = new Float64Array(W * H).fill(Infinity);   // (64-bit: a float32 rounds below its queued value and the cell is never expanded)
+      const seeds = Array.isArray(seed) ? seed : seed >= 0 ? [seed] : [];
+      if (!seeds.length) return dist;
+      // binary heap of [d, i]
+      const hd = [], hi = [];
+      const push = (d, i) => { hd.push(d); hi.push(i); let c = hd.length - 1; while (c) { const p = (c - 1) >> 1; if (hd[p] <= hd[c]) break; [hd[p], hd[c]] = [hd[c], hd[p]]; [hi[p], hi[c]] = [hi[c], hi[p]]; c = p; } };
+      const pop = () => { const d = hd[0], i = hi[0], ld = hd.pop(), li = hi.pop(); if (hd.length) { hd[0] = ld; hi[0] = li; let c = 0; for (;;) { const l = 2 * c + 1, r = l + 1; let m = c; if (l < hd.length && hd[l] < hd[m]) m = l; if (r < hd.length && hd[r] < hd[m]) m = r; if (m === c) break; [hd[m], hd[c]] = [hd[c], hd[m]]; [hi[m], hi[c]] = [hi[c], hi[m]]; c = m; } } return [d, i]; };
+      for (const q of seeds) { dist[q] = 0; push(0, q); }
+      const nb = [[1, 0, dx], [-1, 0, dx], [0, 1, dz], [0, -1, dz], [1, 1, Math.hypot(dx, dz)], [-1, 1, Math.hypot(dx, dz)], [1, -1, Math.hypot(dx, dz)], [-1, -1, Math.hypot(dx, dz)]];
+      while (hd.length) {
+        const [d, i] = pop();
+        if (d > dist[i]) continue;
+        const x = i % W, y = (i / W) | 0;
+        for (const [ox, oy, w] of nb) {
+          const nx = x + ox, ny = y + oy; if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+          const j = ny * W + nx; if (mask[j] < .5) continue;
+          const nd = d + w; if (nd < dist[j]) { dist[j] = nd; push(nd, j); }
+        }
+      }
+      return dist;
+    };
+    const dA = dijkstra(cellOf(F.allegheny)), dM = dijkstra(cellOf(F.monongahela)), dO = dijkstra(cellOf(F.ohio));
+    const point = cellOf(F.point), dOPoint = point >= 0 ? dO[point] : Infinity, pP = D.proj.toLocal(...F.point);
+    // the confluence: on the shortest water path from the Allegheny's seed to the Mon's (every cell on it has the
+    // least dA + dM), the cell nearest the outlet — the tip of the Point. Offsetting the Mon's distances so both
+    // rivers arrive there together leaves only the position across the Ohio to decide whose water a cell is.
+    let best = Infinity, tip = -1;
+    for (let k = 0; k < W * H; k++) {
+      if (!isFinite(dA[k]) || !isFinite(dM[k])) continue;
+      const sum = dA[k] + dM[k];
+      if (sum < best - 1e-6 || (Math.abs(sum - best) < 1e-6 && dO[k] < dO[tip])) { best = sum; tip = k; }
+    }
+    for (let k = 0; k < W * H; k++) {   // ties along the path: the one furthest downstream (within a cell's rounding)
+      if (isFinite(dA[k]) && isFinite(dM[k]) && dA[k] + dM[k] < best + Math.hypot(dx, dz) && dO[k] < dO[tip]) tip = k;
+    }
+    const off = tip >= 0 ? dA[tip] - dM[tip] : 0;
+    // In the Ohio the two rivers' waters run side by side: the Allegheny's along the north bank, the Mon's along
+    // the south. Distance through the water to each shore decides it there (comparing distances back to the
+    // sources drifts over kilometres). The shores are the land masses holding the scene's `north` and `south` points.
+    let dN = null, dS = null;
+    if (F.north && F.south) {
+      const land = new Int32Array(W * H);
+      const fill = (start, id) => {
+        if (start < 0 || mask[start] >= .5) return;
+        const st = [start]; land[start] = id;
+        while (st.length) { const q = st.pop(), x = q % W, y = (q / W) | 0; for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + a, Y = y + b; if (X < 0 || Y < 0 || X >= W || Y >= H) continue; const j = Y * W + X; if (!land[j] && mask[j] < .5) { land[j] = id; st.push(j); } } }
+      };
+      const landCellOf = ([lat, lon]) => { const p = D.proj.toLocal(lat, lon); return Math.round((p.z - D.z0) / dz) * W + Math.round((p.x - D.x0) / dx); };
+      fill(landCellOf(F.north), 1); fill(landCellOf(F.south), 2);
+      const shore = (id) => { const out = []; for (let k = W; k < W * H - W; k++) { if (mask[k] < .5) continue; if (land[k - 1] === id || land[k + 1] === id || land[k - W] === id || land[k + W] === id) out.push(k); } return out; };
+      dN = dijkstra(shore(1)); dS = dijkstra(shore(2));
+    }
+    const tex = new Uint8Array(W * H * 4);
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+      const k = j * W + i;
+      if (mask[k] < .5 || !isFinite(dO[k])) { tex[k * 4] = tex[k * 4 + 1] = 128; tex[k * 4 + 2] = 128; continue; }
+      // the current: down the gradient of the distance to the outlet
+      const at = (u, v) => { const q = Math.max(0, Math.min(H - 1, v)) * W + Math.max(0, Math.min(W - 1, u)); return isFinite(dO[q]) ? dO[q] : dO[k]; };
+      let gx = (at(i + 1, j) - at(i - 1, j)) / (2 * dx), gz = (at(i, j + 1) - at(i, j - 1)) / (2 * dz);
+      const g = Math.hypot(gx, gz) || 1; gx /= -g; gz /= -g;
+      tex[k * 4] = (gx * .5 + .5) * 255; tex[k * 4 + 1] = (gz * .5 + .5) * 255;
+      // Allegheny-ness: which river reaches this cell first along the water (a band ~120 m wide where they meet)
+      const a = isFinite(dA[k]) ? dA[k] : 1e9, m = isFinite(dM[k]) ? dM[k] + off : 1e9;
+      let alle = Math.max(0, Math.min(1, .5 + (m - a) / 120));
+      if (dN && dO[k] < dOPoint - 60 && isFinite(dN[k]) && isFinite(dS[k])) {
+        const t = dS[k] / (dN[k] + dS[k] || 1);   // 1 at the north bank, 0 at the south
+        alle = Math.max(0, Math.min(1, (t - .42) / .16));
+      }
+      tex[k * 4 + 2] = alle * 255;
+      // below the Point, the two colours blend slowly into the Ohio's
+      const downstream = dO[k] < dOPoint - 30;
+      const far = Math.hypot(D.x0 + i * dx - pP.x, D.z0 + j * dz - pP.z);
+      tex[k * 4 + 3] = (downstream ? Math.max(0, Math.min(.85, (far - 1500) / 6000)) : 0) * 255;   // (the line between them is still there miles down)
+    }
+    // soften the band and the current
+    const out = new Uint8Array(tex);
+    for (let j = 1; j < H - 1; j++) for (let i = 1; i < W - 1; i++) {
+      const k = j * W + i; if (mask[k] < .5) continue;
+      for (let c = 0; c < 4; c++) { let sum = 0, n = 0; for (let v = -1; v <= 1; v++) for (let u = -1; u <= 1; u++) { const q = (j + v) * W + i + u; if (mask[q] >= .5) { sum += tex[q * 4 + c]; n++; } } out[k * 4 + c] = sum / n; }
+    }
+    const t = this.own(new THREE.DataTexture(out, W, H)); t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true;
+    return t;
+  }
+
+  _waterMesh(mask, W, H, x0, z0, x1, z1, name, hole = null, fields = null) {
     const level = this.landscape.level;
     // Water mask → soft distance-to-bank texture (blurred), for shallow colour and bank foam.
     const blur = (src, r) => {
@@ -295,7 +476,11 @@ export class CityScene {
     const mat = this.own(new THREE.ShaderMaterial({
       uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), uTime: U.uTime, uSunDir: U.uSunDir, uSkyTop: U.uSkyTop, uSkyHorizon: U.uSkyHorizon,
         uNight: this.night, uMask: { value: dt }, uBox: { value: new THREE.Vector4(x0, z0, x1 - x0, z1 - z0) }, uHole: { value: new THREE.Vector4(...(hole || [1, 1, -1, -1])) },
-        uDeep: { value: new THREE.Color('#2f5a5c') }, uShallow: { value: new THREE.Color('#5d7f6a') } },
+        uDeep: { value: new THREE.Color('#2f5a5c') }, uShallow: { value: new THREE.Color('#5d7f6a') },
+        uFlow: { value: fields || dt }, uHasFlow: { value: fields ? 1 : 0 },
+        // the Allegheny runs green and clear, the Monongahela browner; the Ohio is their blend
+        uAlleDeep: { value: new THREE.Color('#284a42') }, uAlleShallow: { value: new THREE.Color('#4c7563') },
+        uMonDeep: { value: new THREE.Color('#584f34') }, uMonShallow: { value: new THREE.Color('#7f744e') } },
       vertexShader: /* glsl */`
         #include <common>
         #include <logdepthbuf_pars_vertex>
@@ -309,7 +494,8 @@ export class CityScene {
         #include <common>
         #include <logdepthbuf_pars_fragment>
         #include <fog_pars_fragment>
-        uniform float uTime, uNight; uniform vec3 uSunDir, uSkyTop, uSkyHorizon, uDeep, uShallow; uniform sampler2D uMask; uniform vec4 uBox, uHole;
+        uniform float uTime, uNight, uHasFlow; uniform vec3 uSunDir, uSkyTop, uSkyHorizon, uDeep, uShallow, uAlleDeep, uAlleShallow, uMonDeep, uMonShallow;
+        uniform sampler2D uMask, uFlow; uniform vec4 uBox, uHole;
         varying vec3 vW;
         float n2(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
           float a = fract(sin(dot(i, vec2(12.9, 78.2))) * 43758.5), b = fract(sin(dot(i + vec2(1, 0), vec2(12.9, 78.2))) * 43758.5),
@@ -323,20 +509,39 @@ export class CityScene {
           if (m.r < .02) discard;
           vec2 p = vW.xz;
           float near = 1. - smoothstep(300., 2600., length(cameraPosition.xz - p));
-          float r1 = n2(p * .09 + vec2(uTime * .35, uTime * .12)), r2 = n2(p * .23 - vec2(uTime * .2, -uTime * .41));
+          vec4 fl = texture2D(uFlow, uv);
+          vec2 dir = uHasFlow > .5 ? fl.rg * 2. - 1. : vec2(0.);
+          float flowing = clamp(length(dir) * 1.4, 0., 1.); dir = flowing > .01 ? normalize(dir) : vec2(1., 0.);
+          // the current: ripples carried downstream (flow-mapped: two phases, cross-faded), plus long slick lines
+          float ph = fract(uTime * .04), w0 = abs(ph - .5) * 2.;
+          vec2 o0 = dir * ph * 46. * flowing, o1 = dir * fract(ph + .5) * 46. * flowing;
+          float r1 = mix(n2((p - o1) * .09 + vec2(uTime * .05)), n2((p - o0) * .09 + vec2(7.3, 1.1) + vec2(uTime * .05)), w0);
+          float r2 = mix(n2((p - o1) * .23 + 3.1), n2((p - o0) * .23 + 9.4), w0);
+          vec2 q = vec2(dot(p, dir), dot(p, vec2(-dir.y, dir.x)));
+          float slick = smoothstep(.55, .9, n2(vec2((q.x - uTime * 1.1) * .012, q.y * .11))) * flowing;
           vec3 N = normalize(vec3((r1 - .5) * .09 * near, 1., (r2 - .5) * .09 * near));
           vec3 V = normalize(cameraPosition - vW);
           float fres = .04 + .5 * pow(1. - max(dot(N, V), 0.), 4.);
           vec3 R = reflect(-V, N);
           vec3 sky = mix(uSkyHorizon, uSkyTop, sqrt(max(R.y, 0.)));
-          vec3 col = mix(uShallow, uDeep, smoothstep(.15, .85, m.g)) * (.92 + n2(p * .01) * .16);
-          col = mix(col, sky, fres);
-          float sun = pow(max(dot(reflect(-normalize(uSunDir), N), V), 0.), 120.);
-          col += vec3(1., .92, .72) * sun * .7 * (1. - uNight);
+          float alle = uHasFlow > .5 ? fl.b : .5, blend = uHasFlow > .5 ? fl.a : 1.;
+          vec3 deepC = mix(mix(uMonDeep, uAlleDeep, alle), uDeep, blend), shallowC = mix(mix(uMonShallow, uAlleShallow, alle), uShallow, blend);
+          vec3 col = mix(shallowC, deepC, smoothstep(.15, .85, m.g)) * (.92 + n2(p * .01) * .16);
+          col *= 1. + slick * .07;
+          col = mix(col, sky, fres * (1. - slick * .5) * .8);
+          // the sun on the water: a broad warm sheen, a tight highlight, and sparkles that glitter in it
+          vec3 Ls = normalize(uSunDir);
+          float spec = max(dot(reflect(-Ls, N), V), 0.);
+          float low = 1. - smoothstep(.15, .6, Ls.y);   // strongest with the sun low (golden hour)
+          float sparkle = step(.93, n2(p * 1.7 + vec2(uTime * 2.3, -uTime * 1.9))) * pow(spec, 12.) * near;
+          col += vec3(1., .86, .6) * (pow(spec, 140.) * .8 + pow(spec, 22.) * .18 * (.4 + low) + sparkle * 1.4 * (.5 + low)) * (1. - uNight);
           col *= mix(1., .16, uNight);
-          // city lights on the water at night: warm streaks near the banks
-          float streak = smoothstep(.62, .95, n2(vec2(p.x * .06, p.y * .6) + uTime * .05)) * (1. - smoothstep(.2, .8, m.g));
-          col += vec3(1., .72, .38) * streak * uNight * .55;
+          // city lights on the water at night: streaks stretched toward the viewer, strongest near the banks
+          vec2 toCam = normalize(cameraPosition.xz - p + 1e-3);
+          vec2 sq = vec2(dot(p, vec2(-toCam.y, toCam.x)), dot(p, toCam));
+          float lights = smoothstep(.7, .95, n2(vec2(sq.x * .45, sq.y * .018 + uTime * .02))) * (1. - smoothstep(.15, .75, m.g));
+          float wob = .75 + .25 * sin(sq.y * .5 + uTime * 2. + sq.x);
+          col += mix(vec3(1., .74, .4), vec3(.85, .9, 1.), step(.6, n2(vec2(sq.x * .2, 3.)))) * lights * wob * uNight * .7;
           col = mix(col, vec3(.78, .82, .76), (1. - smoothstep(.0, .14, m.g)) * .35 * (1. - uNight * .7));
           gl_FragColor = vec4(col, 1.);
           #include <tonemapping_fragment>
@@ -458,14 +663,15 @@ export class CityScene {
   // ---------------------------------------------------------------- streets, sidewalks and lamps
   _streetsAndLamps() {
     const roads = new Map(), walks = new Map(), paths = new Map();
-    const get = (map, x, z) => { const key = `${Math.floor(x / 512)},${Math.floor(z / 512)}`; if (!map.has(key)) map.set(key, new MeshBuilder()); return map.get(key); };
+    const get = (map, x, z) => { const key = `${Math.floor(x / 512)},${Math.floor(z / 512)}`; if (!map.has(key)) map.set(key, new MeshBuilder(map === roads ? { aSlot: 1 } : {})); return map.get(key); };
     const lamps = [];
+    this._levelJunctions();
     const slots = this.streetSlots = this._streetSlots();
     this.streets.forEach((st, k) => {
-      // crossing ribbons each get their own height (1 cm apart), so lane paint never flickers at a junction
-      const p0 = st.pts[0], lift = .1 + slots[k] * .01;
+      // crossing ribbons each get their own height (2 cm apart), so lane paint never flickers at a junction
+      const p0 = st.pts[0], lift = .1 + slots[k] * .02;
       if (st.cls === 8) { ribbon(get(paths, p0.x, p0.z), st.pts, st.width, lift, 8); return; }
-      ribbon(get(roads, p0.x, p0.z), st.pts, st.width, lift, 24);
+      ribbon(get(roads, p0.x, p0.z).set({ aSlot: [slots[k]] }), st.pts, st.width, lift, 24);
       if (!st.bridge && st.cls >= 2 && st.cls <= 6) ribbon(get(walks, p0.x, p0.z), st.pts, st.width + 5, .06, 8);
       // lamps every ~34 m, alternating sides
       if (st.cls >= 1 && st.cls <= 6) {
@@ -513,6 +719,19 @@ export class CityScene {
     }
     this.lamps = lamps;
     this._lampMeshes(lamps);
+  }
+
+  /** Within r metres of a river wall's line? */
+  nearWall(x, z, r) {
+    for (let gx = Math.floor((x - r) / 20); gx <= Math.floor((x + r) / 20); gx++) for (let gz = Math.floor((z - r) / 20); gz <= Math.floor((z + r) / 20); gz++) {
+      const a = this.wallGrid?.get(`${gx},${gz}`); if (!a) continue;
+      for (let q = 0; q < a.length; q += 4) {
+        const ax = a[q], az = a[q + 1], bx = a[q + 2], bz = a[q + 3], dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1;
+        const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2));
+        if (Math.hypot(ax + dx * t - x, az + dz * t - z) < r) return true;
+      }
+    }
+    return false;
   }
 
   /** Inside a stadium bowl (or within `pad` of its outline)? */
@@ -622,7 +841,7 @@ export class CityScene {
     const L = this.landscape, c = L.landAt(x, z);
     if (c === LAND.water && !L.bridgeAt(x, z, 0)) return false;
     if (this.buildingNear(x, z, wall)) return false;
-    if (this.inStadium(x, z, 4)) return false;
+    if (this.inStadium(x, z, 4) || this.nearWall(x, z, Math.max(1.2, margin + .6))) return false;
     // any street's carriageway, not just the nearest; its own street too, where a bend brings the roadway back
     // to it (a post on its own bridge deck stands on the slab's edge, so there it may touch the roadway)
     for (const o of L.streetsNear(x, z, margin)) {
@@ -632,6 +851,30 @@ export class CityScene {
     }
     const r = L.routeDist(x, z);
     return !(r && r.d < routeClear);
+  }
+
+  /**
+   * Junctions are level: wherever ground-level streets meet, every point of each within 6 m of the other's
+   * carriageway takes the highest of their heights, so the 2 cm height slots below decide which is on top.
+   * (Each street is tilted along its own grade, so two that merely share a height at one point still cross
+   * along a line, and the lane paint flickers there.) Ramps and decks keep their own heights; streets more
+   * than 0.8 m apart in height are crossing, not joining.
+   */
+  _levelJunctions() {
+    const L = this.landscape, reach = 6;
+    // each junction (a cluster of street points within `reach` of another street's carriageway, at nearly the
+    // same height) becomes a level plateau at the highest of its heights
+    for (let pass = 0; pass < 3; pass++) {
+      this.streets.forEach((st, k) => {
+        if (st.bridge) return;
+        for (const p of st.pts) {
+          for (const o of L.streetsNear(p.x, p.z, reach)) {
+            if (o.k === k || this.streets[o.k].bridge || Math.abs(o.y - p.y) > .8) continue;
+            if (o.y > p.y) p.y = o.y;
+          }
+        }
+      });
+    }
   }
 
   /** Height slots for street ribbons: streets whose ribbons overlap (junctions, crossings) never share one. */
@@ -644,7 +887,7 @@ export class CityScene {
         // another street's ribbon (or sidewalk) reaches this one's
         for (const o of L.streetsNear(p.x, p.z, st.width / 2 + 5)) if (o.k !== k && slots[o.k] >= 0) used.add(slots[o.k]);
       }
-      let slot = 0; while (used.has(slot) && slot < 5) slot++;
+      let slot = 0; while (used.has(slot) && slot < 7) slot++;
       slots[k] = slot;
     }
     return slots;

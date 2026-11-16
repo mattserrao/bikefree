@@ -141,10 +141,18 @@ export function ribbon(builder, pts, width, lift = 0, repeat = 10, uRange = [0, 
     let dx = b.x - a.x, dz = b.z - a.z; const len = Math.hypot(dx, dz) || 1; dx /= len; dz /= len;
     const w = (typeof width === 'function' ? width(k) : width) / 2, p = pts[k];
     if (k) dist += Math.hypot(p.x - pts[k - 1].x, p.z - pts[k - 1].z);
-    const l = builder.vertex(p.x + dz * w, p.y + lift, p.z - dx * w, 0, 1, 0, uRange[0], dist / repeat);
-    const r = builder.vertex(p.x - dz * w, p.y + lift, p.z + dx * w, 0, 1, 0, uRange[1], dist / repeat);
+    let lx = p.x + dz * w, lz = p.z - dx * w, rx = p.x - dz * w, rz = p.z + dx * w;
+    // on the inside of a tight bend an edge would step backwards and the ribbon fold over itself (two layers of
+    // road at one height: flicker); hold that edge where it was instead
+    if (prev) {
+      const sx = p.x - pts[k - 1].x, sz = p.z - pts[k - 1].z;
+      if ((lx - prev[2]) * sx + (lz - prev[3]) * sz < 0) { lx = prev[2]; lz = prev[3]; }
+      if ((rx - prev[4]) * sx + (rz - prev[5]) * sz < 0) { rx = prev[4]; rz = prev[5]; }
+    }
+    const l = builder.vertex(lx, p.y + lift, lz, 0, 1, 0, uRange[0], dist / repeat);
+    const r = builder.vertex(rx, p.y + lift, rz, 0, 1, 0, uRange[1], dist / repeat);
     if (prev) { builder.tri(prev[0], prev[1], l); builder.tri(prev[1], r, l); }
-    prev = [l, r];
+    prev = [l, r, lx, lz, rx, rz];
   }
 }
 

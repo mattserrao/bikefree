@@ -438,6 +438,9 @@ function checkSurfaces() {
         if (a.e === b.e && Math.abs(a.face - b.face) <= 1) continue;          // the same strip (shared edge)
         if (a.e.label === 'Ground' && b.e.label === 'Ground') continue;        // overlapping patch skirts
         if ((a.e.offset || 0) !== (b.e.offset || 0)) continue;
+        // streets settle overlaps in the depth test by their height slot (aSlot): different slots never flicker
+        const slotOf = (h) => { const g = h.e.mesh.geometry, at = g.attributes.aSlot; return at && h.e.mesh.material.userData?.slotDepthBias ? at.getX(g.index ? g.index.getX(h.face * 3) : h.face * 3) : null; };
+        { const sa = slotOf(a), sb = slotOf(b); if (sa != null && sb != null && sa !== sb) continue; }
         const ma = a.e.mesh.material, mb = b.e.mesh.material;
         if (ma === mb && !ma.map && !ma.vertexColors) continue;   // one flat colour: nothing to see flicker
         if (a.y - b.y < L.zfight) F.add({ check: 'z-fight', severity: 'warn', s, label: a.e === b.e ? `${a.e.label} (overlapping ribbons)` : `${a.e.label} ↔ ${b.e.label}`, value: round(a.y - b.y, 4), point: [round(x, 1), round(a.y, 2), round(z, 1)], note: 'coplanar surfaces: they flicker as you move' }, 40);
