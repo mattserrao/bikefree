@@ -370,6 +370,10 @@ Goal: give Pittsburgh the Big Sur treatment. The full plan is in the Project doc
 - [ ] **P7 · Traffic and life** (route traffic that overtakes and waits, buses, rowers; C5, C7)
 - [ ] **P8 · Check and ship** (both QCs strict, snapshots against the baseline, the Mac check, move to In Progress, PR)
 
+### v0.13.2 — Route 28 opens again *(test branch `v0.13.2`, on top of main / v0.13.1)*
+- [x] Route 28 froze the browser for ~100 s after Start (looked like a hang). Building the lake water asked "is the road within 3.2 km?" for every lake cell using the 40 m road index (~26,000 grid lookups each). Now a coarse road index, with whole ~800 m chunks settled at once when clearly near or far. Same lakes (139 meshes, identical geometry); lake build 102.6 s → 0.06 s headless, Start → 3D view 103 s → 0.8 s
+- [ ] On the Mac: Route 28 opens promptly
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)
