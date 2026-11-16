@@ -32,10 +32,10 @@ export function mirrorRoute(r) {
     dist[i] = i * 10; lat[i] = r.lat[src]; lon[i] = r.lon[src]; ele[i] = r.ele[src];
     grade[i] = i <= K ? r.grade[src] : -r.grade[src];
   }
-  let ascent = 0, descent = 0;
-  for (let i = 1; i < N; i++) { const d = ele[i] - ele[i - 1]; if (d > 0) ascent += d; else descent -= d; }
+  let ascent = 0, descent = 0, legAscent = 0;
+  for (let i = 1; i < N; i++) { const d = ele[i] - ele[i - 1]; if (d > 0) ascent += d; else descent -= d; if (i === K) legAscent = ascent; }
   return { ...r, dist, lat, lon, ele, grade, total: dist[N - 1], ascent, descent, closed: true,
-    outAndBack: true, turnIdx: K, turnS: K * 10, mirrored: true, oneWay: { total: K * 10, closedLoop: !!r.closed } };
+    outAndBack: true, turnIdx: K, turnS: K * 10, mirrored: true, oneWay: { total: K * 10, ascent: legAscent, closedLoop: !!r.closed } };
 }
 
 /** Where a ride starts along a there-and-back route: Forward from the start, or Reverse from the far end,
@@ -51,6 +51,7 @@ export function buildCatalogRoute(text, item = {}) {
   route.id = item.routeId || item.id || null;
   route.park = item.park || null;
   route.sceneUrl = item.scene || null;
+  route.stageRoute = !!item.oneWay;   // a one-way catalog route (a Tour stage): the outbound leg is the stage
   if (item.outAndBack) {
     route.outAndBack = true;
     route.turnIdx = Math.floor((route.dist.length - 1) / 2);

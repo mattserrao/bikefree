@@ -1,0 +1,87 @@
+{
+  "quality": "balanced",
+  "size": "1280x720",
+  "software": true,
+  "rows": [
+    {
+      "shot": "route28@19050:golden",
+      "file": "docs/route28/look-test/route28-19050-golden.jpg",
+      "calls": 419,
+      "triangles": 1400857,
+      "seconds": 46,
+      "errors": []
+    },
+    {
+      "shot": "route28@19050:golden:gentle",
+      "file": "docs/route28/look-test/route28-19050-golden-gentle.jpg",
+      "calls": 420,
+      "triangles": 1400858,
+      "seconds": 42,
+      "errors": []
+    },
+    {
+      "shot": "route28@19050:golden:bold",
+      "file": "docs/route28/look-test/route28-19050-golden-bold.jpg",
+      "calls": 420,
+      "triangles": 1400858,
+      "seconds": 54,
+      "errors": []
+    },
+    {
+      "shot": "route28@19050:afternoon",
+      "file": "docs/route28/look-test/route28-19050-afternoon.jpg",
+      "calls": 400,
+      "triangles": 1391961,
+      "seconds": 42,
+      "errors": []
+    },
+    {
+      "shot": "route28@19050:afternoon:gentle",
+      "file": "docs/route28/look-test/route28-19050-afternoon-gentle.jpg",
+      "calls": 401,
+      "triangles": 1391962,
+      "seconds": 51,
+      "errors": []
+    },
+    {
+      "shot": "route28@19050:afternoon:bold",
+      "file": "docs/route28/look-test/route28-19050-afternoon-bold.jpg",
+      "calls": 401,
+      "triangles": 1391962,
+      "seconds": 41,
+      "errors": []
+    },
+    {
+      "shot": "route28@600:gentle",
+      "file": "docs/route28/look-test/route28-600-gentle.jpg",
+      "calls": 490,
+      "triangles": 1450823,
+      "seconds": 46,
+      "errors": []
+    },
+    {
+      "shot": "route28@600:bold",
+      "file": "docs/route28/look-test/route28-600-bold.jpg",
+      "calls": 490,
+      "triangles": 1450823,
+      "seconds": 40,
+      "errors": []
+    },
+    {
+      "shot": "route28@10650:gentle",
+      "file": "docs/route28/look-test/route28-10650-gentle.jpg",
+      "calls": 397,
+      "triangles": 938739,
+      "seconds": 41,
+      "errors": []
+    },
+    {
+      "shot": "route28@10650:bold",
+      "file": "docs/route28/look-test/route28-10650-bold.jpg",
+      "calls": 397,
+      "triangles": 938739,
+      "seconds": 45,
+      "errors": []
+    }
+  ]
+}

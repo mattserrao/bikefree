@@ -89,7 +89,7 @@ test('scenic routes are closed (lap endlessly) and the right length', () => {
   for (const item of catalog) {
     const r = buildRoute(parseGpx(readFileSync(new URL(`../${item.file}`, import.meta.url), 'utf8')));
     const [lo, hi] = item.expectedKm;
-    assert.equal(r.closed, true, item.id);
+    assert.equal(r.closed, !item.oneWay, item.id);   // a oneWay route (a Tour stage) stops at its finish
     assert.ok(r.total / 1000 >= lo && r.total / 1000 <= hi, `${item.id} ${r.total}`);
   }
 });

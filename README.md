@@ -23,7 +23,7 @@ The app has two screens: a **menu** to set up, and a full-window **ride screen**
 
 Ride screen: power (3-second, coloured by zone, with a Z1–Z6 badge, a zone bar and the workout target) plus cadence, heart rate and gear along the bottom; time, distance and speed top left; grade (coloured by steepness), the next ½ mile, lap and distance to go — or the workout step — top right; the route profile or workout chart along the bottom edge.
 
-Keyboard: ← → shift · ↑ ↓ grade/intensity · Space pause · L lap · N skip step · C camera · F full screen · P pacer · W weather · I performance overlay (fps, frame time, draw calls; closing it writes a summary line to the log).
+Keyboard: ← → shift · ↑ ↓ grade/intensity · Space pause · L lap · N skip step · F full screen · P pacer · W weather · I performance overlay (fps, frame time, draw calls; closing it writes a summary line to the log).
 
 **Pacer**: pick 75–200 W under the ride preview and a rider in a yellow checkered jersey starts just ahead of you, holding that power on the same road (works on any map). The HUD shows how far ahead or behind it is.
 
@@ -31,7 +31,7 @@ Keyboard: ← → shift · ↑ ↓ grade/intensity · Space pause · L lap · N 
 
 **Profile** (top right): your name, height, weight, gender and **FTP** (no idea? ride the *FTP Test · 20 minutes* workout — the summary offers to save the result), plus your totals — rides, distance, riding time, climbing. Weight sets how hard climbs feel. Add riders for others in the house; each ride is saved to whoever rode it. Everything stays in this browser.
 
-**Settings**: appearance (System — follows macOS — Light or Dark; colours match Machine Manager), units, bike weight, camera, time of day, scenery detail (Light / Balanced / High), handlebar buzz. *Advanced* holds the shifting method, difficulty, gear ratio, starting gear and the diagnostics log. A route's **⋯** menu has *Load GPX*, *Save for offline* and *Remove*. The ten scenic routes include their scenery in the app cache after the first successful online load; with internet, the real landscape (elevation and aerial photos) fills the distance beyond ~1.5 km. Custom GPX terrain uses separate downloads.
+**Settings**: appearance (System — follows macOS — Light or Dark; colours match Machine Manager), units, bike weight, time of day, scenery detail (Light / Balanced / High), handlebar buzz. *Advanced* holds the shifting method, difficulty, gear ratio, starting gear and the diagnostics log. A route's **⋯** menu has *Load GPX*, *Save for offline* and *Remove*. The ten scenic routes include their scenery in the app cache after the first successful online load; with internet, the real landscape (elevation and aerial photos) fills the distance beyond ~1.5 km. Custom GPX terrain uses separate downloads.
 
 ## Tests
 

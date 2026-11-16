@@ -113,6 +113,9 @@
           <div class="seg" id="startSeg" role="group" aria-label="Start point">
             <button type="button" data-f="0" class="on">From the start</button><button type="button" data-f="0.3333">⅓ in</button><button type="button" data-f="0.6667">⅔ in</button>
           </div>
+          <div class="seg" id="endlessSeg" role="group" aria-label="At the finish" hidden>
+            <button type="button" data-endless="0" class="on" title="The ride ends at the finish line">Ends at the finish</button><button type="button" data-endless="1" title="Turn at the finish and ride it back, endlessly">Endless</button>
+          </div>
         </div>
         <div class="pacer-opt" title="A virtual rider in a yellow-checkered jersey who holds this power — P on the ride screen">
           <span class="pacer-label"><i class="chk"></i>Pacer</span>
@@ -163,7 +166,6 @@
           </div>
         </div>
         <div class="hud-buttons">
-          <button id="camBtn" class="hud-btn" title="Change camera (C)" aria-label="Change camera"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3v10l-6-3z"/></svg></button>
           <button id="pauseBtn" class="hud-btn" title="Pause (A button / Space)" aria-label="Pause"><svg class="ic" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
         </div>
       </div>
@@ -200,7 +202,7 @@
           <dt>Pause / resume</dt><dd>A · <kbd>Space</kbd></dd>
           <dt>Lap</dt><dd>Y · <kbd>L</kbd></dd>
           <dt>Skip workout step</dt><dd>▶ · <kbd>N</kbd></dd>
-          <dt>Camera · full screen</dt><dd><kbd>C</kbd> · <kbd>F</kbd></dd>
+          <dt>Full screen</dt><dd><kbd>F</kbd></dd>
           <dt>Minimap</dt><dd><kbd>M</kbd></dd>
           <dt>Weather</dt><dd><kbd>W</kbd></dd>
           <dt>Performance overlay</dt><dd><kbd>I</kbd></dd>
@@ -238,12 +240,6 @@
       </div>
       <p class="muted small" style="margin:-6px 0 0">Your weight and FTP live in your profile.</p>
       <div class="two">
-        <label>Camera
-          <select name="worldCam">
-            <option value="chase">Chase</option><option value="eye">Rider's eye</option>
-            <option value="side">Side</option><option value="drone">Drone</option>
-          </select>
-        </label>
         <label>Time of day
           <select name="worldTime">
             <option value="auto">Route's default</option><option value="morning">Morning</option><option value="midday">Midday</option><option value="golden">Golden hour</option><option value="night">Night</option>

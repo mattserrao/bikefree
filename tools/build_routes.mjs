@@ -28,10 +28,13 @@ for (const item of catalog) {
   }
   const route = buildCatalogRoute(read(item.file), { ...item, mirror: false });   // validate the route as authored (the app rides it there and back)
   if (route.lat.some((v) => !Number.isFinite(v) || Math.abs(v) > 90) || route.lon.some((v) => !Number.isFinite(v) || Math.abs(v) > 180)) throw new Error(`${item.id}: invalid GPX coordinates`);
-  if (!route.closed) throw new Error(`${item.id}: scenic routes must close; add a returning leg or a closed loop`);
+  // a one-way route (a Tour stage to a summit finish) stops at B; the app mirrors it into A → B → A
+  if (!route.closed && !item.oneWay) throw new Error(`${item.id}: scenic routes must close; add a returning leg or a closed loop (or set "oneWay": true)`);
+  if (item.oneWay && (item.outAndBack || route.closed)) throw new Error(`${item.id}: a oneWay route must not be closed or outAndBack`);
   if (!route.hasElevation) throw new Error(`${item.id}: elevation is required`);
   if (!Array.isArray(item.expectedKm) || item.expectedKm.length !== 2) throw new Error(`${item.id}: expectedKm needs [min, max]`);
   if (route.total / 1000 < item.expectedKm[0] || route.total / 1000 > item.expectedKm[1]) throw new Error(`${item.id}: route length outside expectedKm`);
+  if (item.oneWay && Math.max(...route.grade.map(Math.abs)) > 15) throw new Error(`${item.id}: grade exceeds 15%; inspect elevation before publishing`);
   if (item.outAndBack) {
     for (let i = 0; i < route.turnIdx; i += 10) {
       const j = route.lat.length - 1 - i;
@@ -41,10 +44,14 @@ for (const item of catalog) {
   }
   const row = { id: item.id, name: item.name, park: item.park, km: Number((route.total / 1000).toFixed(1)), climbM: Math.round(route.ascent), file: item.file };
   if (item.outAndBack) row.outAndBack = true;
+  if (item.oneWay) row.oneWay = true;
   if (item.stage) row.stage = item.stage;   // 'draft': Rough Drafts · 'deprecated': Deprecated
   if (item.scene) {
     const scene = JSON.parse(read(item.scene));
-    if (scene.format !== 'bikefree-scene-1' || !['authored-coast', 'authored-region', 'authored-city', 'real-coast', 'real-mountain'].includes(scene.terrain)) throw new Error(`${item.id}: unsupported scene format or terrain`);
+    if (scene.format !== 'bikefree-scene-1' || !['authored-coast', 'authored-region', 'authored-city', 'real-coast', 'real-mountain', 'wireframe'].includes(scene.terrain)) throw new Error(`${item.id}: unsupported scene format or terrain`);
+    // a wireframe placeholder (new routes, before scenery): real terrain drawn as lines, no scenery kit
+    const wireframe = scene.terrain === 'wireframe';
+    if (wireframe !== (scene.style === 'wireframe')) throw new Error(`${item.id}: a wireframe scene needs both "style" and "terrain": "wireframe"`);
     if (scene.terrain === 'authored-city') {
       // city data from tools/build_city.py: rivers, height grid, buildings, streets, bridges
       if (!scene.cityData?.startsWith('routes/scenes/') || scene.cityData.includes('..') || !existsSync(resolve(root, scene.cityData))) throw new Error(`${item.id}: missing city data`);
@@ -63,8 +70,8 @@ for (const item of catalog) {
     }
     if (scene.terrain === 'authored-coast' && (!Array.isArray(scene.coastline) || scene.coastline.length < 2)) throw new Error(`${item.id}: a coastline needs at least two coordinates`);
     for (const [lat, lon] of scene.coastline || []) if (!Number.isFinite(lat) || Math.abs(lat) > 90 || !Number.isFinite(lon) || Math.abs(lon) > 180) throw new Error(`${item.id}: invalid coastline coordinate`);
-    if (!scene.assets?.startsWith('models/scenery/') || scene.assets.includes('..') || !existsSync(resolve(root, scene.assets))) throw new Error(`${item.id}: missing scenery asset kit`);
-    const kit = JSON.parse(read(scene.assets));
+    if (!wireframe && (!scene.assets?.startsWith('models/scenery/') || scene.assets.includes('..') || !existsSync(resolve(root, scene.assets)))) throw new Error(`${item.id}: missing scenery asset kit`);
+    const kit = wireframe ? { format: 'bikefree-scenery-1', assets: {} } : JSON.parse(read(scene.assets));
     if (kit.format !== 'bikefree-scenery-1') throw new Error(`${item.id}: invalid scenery asset kit`);
     for (const extra of scene.extraAssets || []) {
       if (!extra.startsWith('models/scenery/') || extra.includes('..')) throw new Error(`${item.id}: invalid extra scenery path`);
@@ -101,8 +108,9 @@ for (const item of catalog) {
       if (readFileSync(resolve(root, t.file)).length !== t.width * t.height * 5) throw new Error(`${item.id}: terrain data size does not match its grid`);
       paths.push(t.file);
     }
-    paths.push(item.scene, scene.assets);
+    paths.push(...[item.scene, scene.assets].filter(Boolean));
     row.scene = item.scene;
+    if (wireframe) row.wireframe = true;
   }
   paths.push(item.file);
   output.push(row);
@@ -117,7 +125,7 @@ if (xml.status !== 0) throw new Error(`GPX XML validation failed:\n${xml.stderr 
 const index = JSON.stringify(output, null, 2) + '\n';
 const walk = (dir) => readdirSync(resolve(root, dir), { withFileTypes: true }).flatMap((p) => p.isDirectory() ? walk(`${dir}/${p.name}`) : [`${dir}/${p.name}`]);
 const files = [...new Set(['./', 'index.html', 'css/style.css', 'sw-assets.js',
-  ...walk('js').filter((p) => p.endsWith('.js')), 'vendor/three.module.min.js', 'models/rider.json',
+  ...walk('js').filter((p) => p.endsWith('.js')), 'vendor/three.module.min.js', 'models/rider.json', 'models/rider-atlas.png', 'models/pacer-atlas.png',
   'routes/demo-hills.gpx', 'routes/scenes/demo-hills.json', 'routes/parks/index.json', 'routes/ideas.json', 'tools/world-preview.html', ...paths])].sort();
 const hash = createHash('sha256');
 for (const file of files.filter((p) => !['./', 'sw-assets.js'].includes(p))) hash.update(file).update(file === 'routes/parks/index.json' ? index : readFileSync(resolve(root, file)));

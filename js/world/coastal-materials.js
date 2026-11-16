@@ -1,6 +1,7 @@
 // World-space surfaces keep the style-C palette while adding detail at both
 // riding and scenic camera distances. Everything is procedural and offline.
 import * as THREE from '../../vendor/three.module.min.js';
+import { vistaGroundGLSL, vistaCanopyGLSL } from './vista.js';
 
 const noise = /* glsl */`
   float bfHash(vec2 p) {
@@ -18,10 +19,20 @@ const noise = /* glsl */`
   }
 `;
 
-export function makeCoastalGroundMaterial(palette, config = {}, farUniform = null, canopyUniform = null, uniforms = {}) {
+export function makeCoastalGroundMaterial(palette, config = {}, farUniform = null, canopyUniform = null, uniforms = {}, vista = null, vkAttr = false) {
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .98, side: THREE.DoubleSide });
   const canopy = !!canopyUniform;
+  // vista kit (js/world/vista.js): mountain faces, snow, meadows and canopy that hold up at a distance
+  const vk = vistaGroundGLSL(vista, palette, vkAttr), vkCanopy = canopy ? vistaCanopyGLSL(vista, vkAttr) : null;
+  if (vk || vkCanopy) material.customProgramCacheKey = () => `bf-ground-vista-${!!vk}-${!!vkCanopy}-${vkAttr}`;
   material.onBeforeCompile = (shader) => {
+    if (vk) Object.assign(shader.uniforms, vk.uniforms);
+    if (vkAttr) {
+      // vista kit: road-cut depth (x) and fire scar (y) per vertex
+      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aVk; varying vec2 vVk;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvVk = aVk;');
+      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vVk;');
+    }
     if (canopy) {
       // Distant forest: beyond the last real trees the ground rises into a mottled canopy shell
       shader.uniforms.bfCanopy = canopyUniform;
@@ -33,7 +44,8 @@ export function makeCoastalGroundMaterial(palette, config = {}, farUniform = nul
           transformed.y += vBfCanopy * bfCanopy.z;`);
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', '#include <common>\nuniform vec3 bfCanopyColor; varying float vBfCanopy;')
-        .replace('#include <color_fragment>', `#include <color_fragment>
+        .replace('#include <color_fragment>', vkCanopy ? `#include <color_fragment>
+          if (vBfCanopy > .001) ${vkCanopy}` : `#include <color_fragment>
           if (vBfCanopy > .001) {
             float bfCrowns = bfFbm(vBfGround.xz * .09) * .65 + bfNoise(vBfGround.xz * .31) * .35;
             vec3 bfTop = bfCanopyColor * (.62 + bfCrowns * .7);
@@ -73,7 +85,8 @@ export function makeCoastalGroundMaterial(palette, config = {}, farUniform = nul
         #ifdef BF_FORMATIONS
         uniform vec3 bfArgRed; uniform vec3 bfArgGreen; uniform vec3 bfSnowColor;
         #endif
-        ${noise}`)
+        ${noise}
+        ${vk ? vk.pars : ''}`)
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
         if (bfFar.z > .5) {
           // complementary dither to the far terrain: each pixel shows exactly one of the two grounds
@@ -117,12 +130,22 @@ export function makeCoastalGroundMaterial(palette, config = {}, farUniform = nul
         #else
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.8, .82, .78), bfSnow);
         #endif
+        ${vk ? vk.color : ''}
         // weather: cloud shadows drifting over the hills, and damp ground in the rain
         float bfCloudN = bfFbm((bp.xz - bfCloud.zw * uTime * 9.) * .0011);
         float bfShadowC = smoothstep(.66 - bfCloud.x * .42, .74 - bfCloud.x * .42, bfCloudN) * bfCloud.y;
         diffuseColor.rgb *= 1. - bfShadowC * .45;
         diffuseColor.rgb *= 1. - bfWet * .2;
       `);
+    if (vk) shader.fragmentShader = shader.fragmentShader.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+      ${vk.normal}`);
+    if (vk) {
+      // vista kit: object shadows fade on steep faces (vkShadowK, set with the colour)
+      const line = 'directLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;';
+      const chunk = THREE.ShaderChunk.lights_fragment_begin;
+      if (chunk.includes(line)) shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_begin>',
+        chunk.replace(line, line.replace('? getShadow(', '? mix( 1.0, getShadow(').replace(') : 1.0;', '), vkShadowK ) : 1.0;')));
+    }
   };
   return material;
 }

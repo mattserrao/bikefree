@@ -3,7 +3,7 @@ import { randomSequence, smoothstep } from './coast.js';
 import { loadSceneryAssets } from './scenery-assets.js';
 import { makeCoastalGroundMaterial, makeCoastalWaterMaterial, makeLakeWaterMaterial, makeLakeMistMaterial, decorateSceneryMaterial } from './coastal-materials.js';
 import { makeAdirondackKit, ADIRONDACK_CATEGORY } from './adirondack-kit.js';
-import { makeGlacierKit, GLACIER_CATEGORY } from './glacier-kit.js';
+import { makeGlacierKit, GLACIER_CATEGORY, decorateTreeMaterial } from './glacier-kit.js';
 import { ForestPlanner, TILE_M, makeClearings } from './forest.js';
 import { GroundBlocks, InstancePool, packMatrices, proxyGroup } from './pools.js';
 import { GlacierLandmarks } from './glacier-landmarks.js';
@@ -16,6 +16,9 @@ import { HighwayTraffic } from './highway-traffic.js';
 import { CoastLife } from './coast-life.js';
 import { GlacierLife } from './glacier-life.js';
 import { makeRouteIndex } from './geo.js';
+import { vistaConfig, makeCumulusAtlas } from './vista.js';
+import { Verge } from './verge.js';
+import { Visitors } from './visitors.js';
 
 // Tree cards stream in large tiles, at a fraction of the scatter's candidate density.
 const FAR_TREE_TILE_M = 768, FAR_TREE_DENSITY = .3;
@@ -69,6 +72,21 @@ function makeTreeCards(uniforms) {
   return cards;
 }
 
+// smooth value noise for planting patterns (flower drifts, grass kinds)
+const vhash = (i, j) => { const h = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return h - Math.floor(h); };
+function vnoise(x, z) {
+  const i = Math.floor(x), j = Math.floor(z), fx = x - i, fz = z - j, u = fx * fx * (3 - 2 * fx), w = fz * fz * (3 - 2 * fz);
+  return (vhash(i, j) * (1 - u) + vhash(i + 1, j) * u) * (1 - w) + (vhash(i, j + 1) * (1 - u) + vhash(i + 1, j + 1) * u) * w;
+}
+// Going-to-the-Sun flowers by zone (vegetation.rich)
+const FLOWERS = {
+  valley: ['arnica', 'aster', 'arnica', 'fireweed', 'paintbrush'],
+  subalpine: ['beargrass', 'lupine', 'paintbrush', 'arnica', 'alpineflowers', 'beargrass'],
+  alpine: ['glacierlily', 'paintbrush', 'alpineflowers', 'glacierlily'],
+  east: ['aster', 'lupine', 'paintbrush', 'arnica'],
+  creek: ['monkeyflower', 'monkeyflower', 'arnica'],
+};
+
 // Ground cover streams in small tiles: full density within COVER_FULL_M of the camera, half out to COVER_RANGE_M.
 const COVER_TILE_M = 96, COVER_FULL_M = 110, COVER_RANGE_M = 220;
 const fract = (v) => v - Math.floor(v);
@@ -95,6 +113,7 @@ export class StylizedTerrain {
     this.index = routeIndex;
     this.quality = COASTAL_QUALITY[opts.quality] || COASTAL_QUALITY.balanced;
     this.qualityKey = COASTAL_QUALITY[opts.quality] ? opts.quality : 'balanced';
+    this.lookKey = opts.look || null;   // cartoon look test: the kit is built with smooth shading
     this.landscape = landscapeBuilder(this.config)(this.config, proj, routeIndex, opts.route);
     // fog (the weather's fog bank) lies on this level: the sea, or a city's rivers
     this.fogBase = this.landscape.fogBase ?? 0;
@@ -125,12 +144,13 @@ export class StylizedTerrain {
       // built sites (lodges, visitor centres, parking) are cleared of trees too
       const sites = (this.landscape.sites || []).map((t) => ({ x: t.x, z: t.z, r: Math.hypot(t.hw, t.hl) + 6 }));
       const clearings = sites.length ? makeClearings([...this.settlementPlan.clearings.items, ...sites]) : this.settlementPlan.clearings;
-      this.forest = new ForestPlanner(this.config, this.landscape, routeIndex, (x, z) => this.heightAt(x, z), clearings);
+      this.forest = new ForestPlanner(this.config, this.landscape, routeIndex, (x, z) => this.heightAt(x, z), clearings, this.route);
       this.canopyUniform = { value: new THREE.Vector4(0, 160, this.config.vegetation.canopyM ?? 16, 1) };
       this._setCanopyStart();
       this.forestTiles = new Map(); this.forestQueue = [];
     }
-    this.groundMaterial = makeCoastalGroundMaterial(this.config.palette, this.config, this.farUniform, this.canopyUniform, this.uniforms);
+    this.vista = vistaConfig(this.config);   // vista kit (js/world/vista.js): distance detail, haze, clouds
+    this.groundMaterial = makeCoastalGroundMaterial(this.config.palette, this.config, this.farUniform, this.canopyUniform, this.uniforms, this.vista, this._vkAttr());
     this._makeOcean();
     this._makeClouds();
     this._makeShadows();
@@ -155,6 +175,8 @@ export class StylizedTerrain {
         this.traffic.setNight(this._night || 0);
       }
       this.details = new CoastalDetails(this.group, this.route, this.index, this.landscape, kit, this.uniforms);
+      if (this.config.verge && this.landscape.frameAt) this.verge = new Verge(this.group, this.landscape, this.route, this.config.verge);
+      if (this.config.visitors && this.landscape.frameAt) this.visitors = new Visitors(this.group, this.landscape, this.route, this.index, this.uniforms, this.config.visitors, this.qualityKey, this.config.lookouts || []);
       if (this.config.glacier) {
         this.landmarks = new GlacierLandmarks(this.group, this.landscape, this.route, this.index, this.proj, this.config, kit, this.uniforms);
         this.landmarks.setNight(this._night || 0);
@@ -168,14 +190,19 @@ export class StylizedTerrain {
     }).catch((err) => { this.stats.loading = 0; this.stats.errors++; opts.onError?.(err); });
   }
 
+  /** Ground carries the vista kit's road-cut / fire-scar attribute (mountain scenes with rock cuts or burns). */
+  _vkAttr() { return !!(this.vista && this.landscape.mountain && (this.vista.rock?.cuts || this.landscape.burnAt)); }
+
   _setCanopyStart() {
     // the canopy shell rises where the last tier of real trees ends
     this.canopyUniform.value.x = this.quality.forestRange * TILE_M - 150;
   }
 
   _addAdirondackKit(kit, make = makeAdirondackKit, category = ADIRONDACK_CATEGORY) {
-    const geos = make({ fall: this.config.season === 'fall' });
+    const geos = make({ fall: this.config.season === 'fall', smooth: !!this.lookKey });
     const near = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 });
+    // Glacier: bark, foliage clumps, aspen flutter, moss and lichen on the near trees (the kit tags each surface)
+    if (make === makeGlacierKit) decorateTreeMaterial(near, this.uniforms);
     const far = new THREE.MeshLambertMaterial({ vertexColors: true });
     const soft = decorateSceneryMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .98, side: THREE.DoubleSide }), 'groundcover', this.uniforms);
     this.kitMaterials = [near, far, soft];
@@ -241,30 +268,35 @@ export class StylizedTerrain {
     }
     const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
     // one draw call for the whole ring: camera-facing quads drawn by a small shader (was a Sprite each)
+    // vista kit: cartoon cumulus (four shapes in one texture), lower and closer, so they sit among the peaks
+    const C = this.vista?.clouds, atlas = C ? makeCumulusAtlas() : null;
     const rand = randomSequence(1101);
-    const base = Math.max(1800, this.route.maxEle + 1100);
-    const centers = [], corners = [], sizes = [], idx = [];
-    for (let i = 0; i < 26; i++) {
-      const angle = i * 2.399 + rand() * .4, radius = 9000 + rand() * 7000;
-      const c = [Math.cos(angle) * radius, base + rand() * 900, Math.sin(angle) * radius];
-      const w = 2200 + rand() * 2600, h = w * (.32 + rand() * .12), k = centers.length / 3;
-      for (const [u, v] of [[-.5, -.5], [.5, -.5], [.5, .5], [-.5, .5]]) { centers.push(...c); corners.push(u, v); sizes.push(w, h); }
+    const base = C ? (C.baseM ?? this.route.maxEle + 900) : Math.max(1800, this.route.maxEle + 1100);
+    const centers = [], corners = [], sizes = [], cells = [], idx = [];
+    for (let i = 0, n = C ? C.count : 26; i < n; i++) {
+      const angle = i * 2.399 + rand() * .4, radius = C ? C.minM + rand() * (C.maxM - C.minM) : 9000 + rand() * 7000;
+      const c = [Math.cos(angle) * radius, base + rand() * (C ? C.spanM : 900), Math.sin(angle) * radius];
+      const w = C ? (900 + rand() * 1400) * radius / 10000 : 2200 + rand() * 2600, h = w * (C ? .5 : .32 + rand() * .12), k = centers.length / 3;
+      const cell = atlas ? atlas.cells[Math.floor(rand() * 4)] : [0, 0];
+      for (const [u, v] of [[-.5, -.5], [.5, -.5], [.5, .5], [-.5, .5]]) { centers.push(...c); corners.push(u, v); sizes.push(w, h); cells.push(...cell); }
       idx.push(k, k + 1, k + 2, k, k + 2, k + 3);
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(centers, 3));
     geo.setAttribute('aCorner', new THREE.Float32BufferAttribute(corners, 2));
     geo.setAttribute('aSize', new THREE.Float32BufferAttribute(sizes, 2));
+    geo.setAttribute('aCell', new THREE.Float32BufferAttribute(cells, 2));
     geo.setIndex(idx);
     const material = new THREE.ShaderMaterial({
-      uniforms: { map: { value: texture }, color: { value: new THREE.Color('#ffffff') }, opacity: { value: .8 } },
+      uniforms: { map: { value: atlas ? atlas.texture : texture }, color: { value: new THREE.Color('#ffffff') }, opacity: { value: atlas ? .97 : .8 },
+        uCellSize: { value: new THREE.Vector2(...(atlas ? atlas.cellSize : [1, 1])) } },
       transparent: true, depthWrite: false, fog: false,
       vertexShader: `
         #include <common>
         #include <logdepthbuf_pars_vertex>
-        attribute vec2 aCorner; attribute vec2 aSize; varying vec2 vUv;
+        attribute vec2 aCorner; attribute vec2 aSize; attribute vec2 aCell; uniform vec2 uCellSize; varying vec2 vUv;
         void main() {
-          vUv = aCorner + .5;
+          vUv = aCell + (aCorner + .5) * uCellSize;
           vec4 mvPosition = modelViewMatrix * vec4(position, 1.);
           mvPosition.xy += aCorner * aSize;
           gl_Position = projectionMatrix * mvPosition;
@@ -563,7 +595,8 @@ export class StylizedTerrain {
   /** A ground patch, built a row at a time (yields between rows so the ride can spread it over frames). */
   *_patchJob(x, z, size) {
     const S = 16, N = S + 1;
-    const positions = [], colors = [], indices = [], normals = [], realH = [], canopy = [];
+    const positions = [], colors = [], indices = [], normals = [], realH = [], canopy = [], vk = [];
+    const vkOn = this._vkAttr();
     const c = new THREE.Color();
     const P = this.palette;
     const floor = this.forestLayout && P.forestFloor;
@@ -598,6 +631,13 @@ export class StylizedTerrain {
         c.lerp(P.cliff, (1 - smoothstep(10, 70, coastal)) * smoothstep(.35, .9, rise) * .7);
         if (P.sand) c.lerp(P.sand, (1 - smoothstep(2.5, 6, y)) * (1 - smoothstep(60, 140, coastal)));
       }
+      if (vkOn) {
+        // vista kit: how deep the road cut is here (real ground above the pressed ground), and fire scars
+        const cut = this.landscape.baseHeight ? Math.max(0, this.landscape.baseHeight(px, pz) - y) : 0;
+        const burn = this.landscape.burnAt?.(px, pz) || 0;
+        vk.push(this.index.nearest(px, pz, 40) ? cut : 0, burn);
+        if (burn) { c.lerp(P.burn || P.rock, burn * .3); }
+      }
       if (this.forest) {
         const cover = this.forest.cover(px, pz);
         canopy.push(cover);
@@ -623,6 +663,7 @@ export class StylizedTerrain {
         positions.push(positions[k * 3], positions[k * 3 + 1] - depth, positions[k * 3 + 2]);
         realH.push(realH[k] - depth);
         if (this.forest) canopy.push(canopy[k]);
+        if (vkOn) vk.push(vk[k * 2], vk[k * 2 + 1]);
         colors.push(...colors.slice(k * 3, k * 3 + 3));
       }
       for (let i = 0; i < S; i++) indices.push(base + i, base + N + i, base + i + 1, base + i + 1, base + N + i, base + N + i + 1);
@@ -632,6 +673,7 @@ export class StylizedTerrain {
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     geometry.setAttribute('aRealH', new THREE.Float32BufferAttribute(realH, 1));
     if (this.forest) geometry.setAttribute('aCanopy', new THREE.Float32BufferAttribute(canopy, 1));
+    if (vkOn) geometry.setAttribute('aVk', new THREE.Float32BufferAttribute(vk, 2));
     geometry.setIndex(indices); geometry.computeVertexNormals();
     geometry.attributes.normal.array.set(normals); geometry.computeBoundingSphere();
     // the morph toward real heights moves vertices up or down: keep the culling sphere honest
@@ -644,6 +686,7 @@ export class StylizedTerrain {
     if (!this.groundPool) {
       const attributes = { position: 3, normal: 3, color: 3, aRealH: 1 };
       if (this.forest) attributes.aCanopy = 1;
+      if (vkOn) attributes.aVk = 2;
       this.groundPool = new GroundBlocks(this.group, this.groundMaterial, { vertices: positions.length / 3, indices: Uint32Array.from(indices), attributes });
     }
     return mesh;
@@ -674,7 +717,7 @@ export class StylizedTerrain {
       (lists[name] ||= []).push(matrix.compose(p, q, scale).clone());
     };
     const vegetation = this.config.vegetation || {};
-    const count = (coverOnly ? this.quality.coverCandidates * (size / 192) ** 2 : this.quality.candidates) * (vegetation.density || 1);
+    const count = (coverOnly ? this.quality.coverCandidates * (size / 192) ** 2 * (vegetation.coverBoost || 1) : this.quality.candidates) * (vegetation.density || 1);
     const coverScale = vegetation.coverScale || [.75, 1.95];
     for (let k = 0; k < count; k++) {
       if (k % 24 === 23) yield;
@@ -694,6 +737,26 @@ export class StylizedTerrain {
           // under the forest: ferns and huckleberry; in the meadows: beargrass, paintbrush, glacier lilies
           const v = this.landscape.vegetationAt(x, z), byRoad = this.index.nearest(x, z, 14);
           const cover = this.forest ? this.forest.cover(x, z) : v.forest;
+          // an old burn: fireweed in drifts, a little grass
+          if ((this.landscape.burnAt?.(x, z) || 0) > .5) { add(pick < .45 ? 'fireweed' : pick < .8 ? 'grass' : 'huckleberry', x, y - .06, z, coverScale[0] + k * (coverScale[1] - coverScale[0])); continue; }
+          if (vegetation.rich) {
+            // drifts of one flower, grass kinds by zone, a brighter strip along the verge
+            if (cover > .45) { if (k < .45 || byRoad) add(k < .5 ? 'fern' : k < .62 ? 'huckleberry' : k < .8 ? 'sedge' : 'mossmat0', x, y - .05, z, coverScale[0] + k * (coverScale[1] - coverScale[0])); continue; }
+            const zone = this.landscape.nearCreek?.(x, z, 14) ? 'creek' : v.east > .5 ? 'east' : v.alpine > .45 ? 'alpine' : v.alpine > .1 || v.moist < .55 ? 'subalpine' : 'valley';
+            const drift = vnoise(x / 16, z / 16) * .7 + vnoise(x / 5, z / 5) * .3;
+            const verge = byRoad && byRoad.d < 11.5 ? .3 : 0;
+            if (drift + verge > .6) {
+              const list = FLOWERS[zone], cell = vhash(Math.floor(x / 28), Math.floor(z / 28));
+              const flower = list[Math.floor(cell * list.length) % list.length];
+              add(flower, x, y - .05, z, coverScale[0] + k * (coverScale[1] - coverScale[0]) * .8);
+              continue;
+            }
+            const kind = vnoise(x / 9 + 50, z / 9);
+            const grass = zone === 'east' ? (kind < .55 ? 'drygrass' : 'bunchgrass') : zone === 'alpine' ? (kind < .6 ? 'sedge' : 'grass')
+              : zone === 'subalpine' ? (kind < .4 ? 'meadowgrass' : kind < .7 ? 'bunchgrass' : 'grass') : (kind < .45 ? 'meadowgrass' : kind < .75 ? 'sedge' : 'grass');
+            add(grass, x, y - .05, z, .8 + k * .6);
+            continue;
+          }
           const plant = cover > .45 ? (k < .5 ? 'fern' : k < .62 ? 'huckleberry' : null)
             : v.east > .5 ? (pick < .55 ? 'grass' : pick < .7 ? 'huckleberry' : pick < .8 ? 'paintbrush' : 'sage')
             : v.alpine > .4 ? (pick < .14 ? 'beargrass' : pick < .38 ? 'glacierlily' : pick < .6 ? 'paintbrush' : pick < .8 ? 'alpineflowers' : 'grass')
@@ -782,6 +845,46 @@ export class StylizedTerrain {
           if (this.landscape.isWater?.(x, z, y)) continue;
           const name = vegetation.cover ? vegetation.cover[Math.floor(pick * vegetation.cover.length)] : pick < .2 ? 'poppy' : pick < .28 ? 'lupine' : pick < .42 ? 'succulent' : 'grass';
           add(name, x, y - .09, z, vegetation.coverScale ? coverScale[0] + rand() * (coverScale[1] - coverScale[0]) * .9 : .8 + rand() * .9);
+        }
+      }
+    }
+    // Going-to-the-Sun: dense short grass right beside the road in the near cover tiles (the chase camera
+    // looks along the verge), on a jittered ~0.9 m grid from the shoulder out to 12 m
+    if (coverOnly && !thin && vegetation.rich && this.landscape.mountain && this.kit.assets.tuft0) {
+      const g = .9;
+      for (let gx = 0; gx < size / g; gx++) {
+        if (gx % 8 === 7) yield;
+        for (let gz = 0; gz < size / g; gz++) {
+          const x = cx * size + (gx + rand()) * g, z = cz * size + (gz + rand()) * g;
+          const road = this.index.nearest(x, z, 12);
+          if (!road || road.d < 4.9) { rand(); continue; }
+          const y = this.heightAt(x, z);
+          if (this.landscape.isWater?.(x, z, y) || this.landscape.creekAt(x, z) || onLookout(x, z) || Math.abs(y - road.ele) > 3.5) { rand(); continue; }
+          if ((this.landscape.burnAt?.(x, z) || 0) > .5 && rand() < .5) continue;
+          rand(); add('tuft0', x, y - .03, z, .7 + vnoise(x / 4, z / 4) * .8);
+        }
+      }
+    }
+    // Going-to-the-Sun: flower drifts in the meadows near the road — patches of one flower, thick in the
+    // middle and thinning to the edges, by zone (valley, subalpine, alpine, the dry east side, creeks)
+    if (coverOnly && !thin && vegetation.rich && this.landscape.mountain) {
+      const g = 1.6;
+      for (let gx = 0; gx < size / g; gx++) {
+        if (gx % 6 === 5) yield;
+        for (let gz = 0; gz < size / g; gz++) {
+          const x = cx * size + (gx + rand()) * g, z = cz * size + (gz + rand()) * g, r = rand();
+          const drift = vnoise(x / 16, z / 16) * .7 + vnoise(x / 5, z / 5) * .3;
+          if (drift < .6 || r > (drift - .6) * 4) continue;
+          const road = this.index.nearest(x, z, 45);
+          if (!road || road.d < 5.2) continue;
+          const v = this.landscape.vegetationAt(x, z);
+          if (v.slope > .9 || (this.forest && this.forest.cover(x, z) > .45)) continue;
+          const y = this.heightAt(x, z);
+          if (this.landscape.isWater?.(x, z, y) || this.landscape.creekAt(x, z) || onLookout(x, z)) continue;
+          const zone = (this.landscape.burnAt?.(x, z) || 0) > .5 ? null : this.landscape.nearCreek?.(x, z, 14) ? 'creek' : v.east > .5 ? 'east' : v.alpine > .45 ? 'alpine' : v.alpine > .1 || v.moist < .55 ? 'subalpine' : 'valley';
+          const list = zone ? FLOWERS[zone] : ['fireweed'];
+          const flower = list[Math.floor(vhash(Math.floor(x / 28), Math.floor(z / 28)) * list.length) % list.length];
+          add(this.kit.assets[`${flower}D`] ? `${flower}D` : flower, x, y - .05, z, .85 + r * .5);
         }
       }
     }
@@ -923,7 +1026,7 @@ export class StylizedTerrain {
     }
     if (!this.pools[layer]) {
       const flags = layer === 'forest'
-        ? (name, tile) => ({ cast: tile.tier === 0 && !/^(goldenrod|blueberry)/.test(name), receive: tile.tier === 0 })
+        ? (name, tile) => ({ cast: tile.tier === 0 && !/^(goldenrod|blueberry|mossmat|branch|stone|juniper|fireweed|beargrass|huckleberry|talus)/.test(name), receive: tile.tier === 0 })
         : (name, tile) => this._scatterFlags(name, tile);
       this.pools[layer] = new InstancePool(this.group, layer === 'cover' ? 'Ground cover' : layer === 'forest' ? 'Forest' : 'Scenery', (n) => this._asset(n), flags);
     }
@@ -1065,11 +1168,15 @@ export class StylizedTerrain {
 
   // Beyond the hand-off, stylized stand-ins (mesas, peaks, lakes) would double up with the real ones.
   _cullFar(cx, cz) {
+    this.landmarks?.cullWalls?.(cx, cz);
+    this.verge?.cull(cx, cz);
     const limit = this.farUniform.value.x + this.farUniform.value.y * 0.5;
     for (const m of this.landmarkMeshes || []) m.visible = !this.farOn || m.userData.road || Math.hypot(m.position.x - cx, m.position.z - cz) - (m.userData.r || 0) < limit;
+    // a scene can stop drawing lakes beyond a distance (lakeReachM: small far tarns cost a call each)
+    const lakeReach = this.config.water?.lakeReachM ?? Infinity;
     for (const m of this.lakeMeshes || []) {
       const c = m.userData.c, d = c ? Math.hypot(c.x - cx, c.z - cz) - m.userData.r : Math.hypot(m.position.x - cx, m.position.z - cz) - Math.max(m.scale.x, m.scale.y);
-      m.visible = !this.farOn || d < limit;
+      m.visible = (!this.farOn || d < limit) && d < lakeReach;
     }
     if (this.mistMeshes) for (const m of this.mistMeshes) m.visible = this.mistOpacity.value > 0 && (!this.farOn || Math.hypot(m.userData.c.x - cx, m.userData.c.z - cz) - m.userData.r < limit);
   }
@@ -1079,6 +1186,7 @@ export class StylizedTerrain {
     this.city?.tick(camera, dt, this.uniforms.uTime.value, rider);
     this.traffic?.tick(dt, rider);
     this.life?.tick(dt, camera);
+    this.visitors?.tick(dt, camera);
   }
 
   setNight(v) {
@@ -1107,7 +1215,7 @@ export class StylizedTerrain {
     this.groundPool?.dispose();
     for (const pool of Object.values(this.pools || {})) pool.dispose();
     this.farCards?.dispose();
-    this.details?.dispose();
+    this.details?.dispose(); this.verge?.dispose(); this.visitors?.dispose();
     this.city?.dispose();
     this.landmarkGeometries.forEach((g) => g.dispose()); this.landmarkGeometries.clear();
     this.surf?.geometry.dispose(); this.surf?.material.dispose(); this.landmarks?.dispose(); this.shoreTexture?.dispose(); this.bridges?.dispose(); this.traffic?.dispose(); this.life?.dispose();

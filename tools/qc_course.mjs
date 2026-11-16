@@ -23,7 +23,7 @@ import { cityStreets, STREET_LIFT } from '../js/world/city-landscape.js';
 import { streetOverlaps, drawnLiftMax, routeLine } from '../js/world/junctions.js';   // [junctions]
 import { roadMeets, streetSlots, MEET_LIMITS } from '../js/world/road-meets.js';   // [junctions]
 import { landscapeBuilder } from '../js/world/landscapes.js';
-import { riderPose, routePoint, ROAD_WIDTH, ROAD_LIFT } from '../js/world/pose.js';
+import { riderPose, routePoint, ROAD_WIDTH, ROAD_LIFT, CHASE } from '../js/world/pose.js';
 import { alignmentChecks } from './qc_alignment.mjs';   // [road-align]
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -185,6 +185,10 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
   const ground = landscape ? makeMeshGround(landscape.heightAt) : null;
   const bridgeAt = (x, z, m) => !!landscape?.bridgeAt?.(x, z, m);
   let prev = riderPose(route, index, 0), maxHeading = 0, maxJump = 0;
+  // A real switchback (Alpe d'Huez's 21 hairpins): the road reverses within ±40 m. Its tight turn is the
+  // road itself, not a GPX fault, so it is reported as info; a sharp turn that doesn't reverse still warns.
+  const flatDir = (a, b) => { const p = routePoint(route, index, a), q = routePoint(route, index, b), l = Math.hypot(q.x - p.x, q.z - p.z) || 1; return { x: (q.x - p.x) / l, z: (q.z - p.z) / l }; };
+  const switchback = (s) => s > 40 && s < total - 40 && angleBetween(flatDir(s - 40, s - 20), flatDir(s + 20, s + 40)) > 120;
   for (let s = step; s <= total + 1e-6; s += step) {
     const cur = riderPose(route, index, s);
     const at = s - step / 2;
@@ -198,12 +202,15 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
     else {
       maxHeading = Math.max(maxHeading, turnRate);
       if (turnRate > LIMITS.headingFail) F.add('heading-snap', 'fail', at, turnRate, 'heading snaps');
-      else if (turnRate > LIMITS.headingWarn) F.add('heading-sharp', 'warn', at, turnRate, 'very tight turn');
+      else if (turnRate > LIMITS.headingWarn) {
+        if (switchback(at)) F.add('switchback', 'info', at, turnRate, 'hairpin bend (the road doubles back)');
+        else F.add('heading-sharp', 'warn', at, turnRate, 'very tight turn');
+      }
     }
     if (ground && Math.round(s) % 2 === 0) {
-      // chase camera: 6.5 m behind, 2.7 m up, pushed to 1.6 m above the ground (world.js)
-      const cx = cur.pos.x - cur.flat.x * 6.5, cz = cur.pos.z - cur.flat.z * 6.5, cy = cur.pos.y + 2.7;
-      const lift = landscape.heightAt(cx, cz) + 1.6 - cy;
+      // chase camera: CHASE.back behind, CHASE.up up, pushed CHASE.ground above the ground (world.js, pose.js)
+      const cx = cur.pos.x - cur.flat.x * CHASE.back, cz = cur.pos.z - cur.flat.z * CHASE.back, cy = cur.pos.y + CHASE.up;
+      const lift = landscape.heightAt(cx, cz) + CHASE.ground - cy;
       if (lift > LIMITS.cameraLift) F.add('camera-lift', 'warn', s, lift, 'chase camera pushed up by the ground');
     }
     if (Math.round(s) % 10 === 0) { series.s.push(s); series.heading.push(turnRate); }
@@ -395,7 +402,7 @@ export function htmlReport(results, { previewHref = 'world-preview.html' } = {})
     <td class="${r.warns ? 'warn' : ''}">${r.warns}</td><td>${r.maxHeading.toFixed(1)}</td><td>${r.rawGapMax.toFixed(0)}</td></tr>`).join('');
   const sections = results.map((r) => {
     const items = r.findings.map((f) => {
-      const link = r.preview ? `<a href="${previewHref}?park=${r.preview}&pos=${Math.round(f.at)}&cam=drone">view</a> · <a href="${previewHref}?park=${r.preview}&pos=${Math.round(f.at)}&cam=chase">ride</a>` : '';
+      const link = r.preview ? `<a href="${previewHref}?park=${r.preview}&pos=${Math.round(f.at)}">ride</a>` : '';
       return `<tr class="${f.severity}"><td>${f.severity.toUpperCase()}</td><td>${esc(f.check)}</td><td>${km(f.from)}${f.to - f.from > 1 ? `–${km(f.to)}` : ''}</td>
         <td>${f.value.toFixed(2)}</td><td>${f.count}</td><td>${esc(f.note)}</td><td>${link}</td></tr>`;
     }).join('');

@@ -111,5 +111,17 @@
     "file": "routes/cities/pittsburgh.gpx",
     "stage": "draft",
     "scene": "routes/scenes/pittsburgh.json"
+  },
+  {
+    "id": "alpedhuez",
+    "name": "Alpe d'Huez · Tour Stage 19",
+    "park": "Gap → Alpe d'Huez, French Alps (Tour de France 2026)",
+    "km": 127,
+    "climbM": 3358,
+    "file": "routes/parks/alpedhuez.gpx",
+    "oneWay": true,
+    "stage": "draft",
+    "scene": "routes/scenes/alpedhuez.json",
+    "wireframe": true
   }
 ]

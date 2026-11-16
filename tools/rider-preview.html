@@ -1,0 +1,144 @@
+<!doctype html>
+<!-- Rider workshop: the skinned rider on its own, with posture, grade/effort and camera controls.
+     Open with `npm start` → http://localhost:8000/tools/rider-preview.html
+     Query: ?posture=seated|standing|tuck|auto &cam=chase|side|front|back|top|quarter &crank=<rad> &cadence=<rpm>
+            &speed=<m/s> &grade=<%> &power=<W> &ftp=<W> &kit=rider|pacer &still=1 (no animation; for snapshots) -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>bikefree · rider workshop</title>
+<link rel="icon" href="data:,">
+<style>
+  html, body { margin: 0; height: 100%; background: #9fc3e6; font: 13px/1.3 -apple-system, system-ui, sans-serif; }
+  canvas { display: block; width: 100%; height: 100%; }
+  #ui { position: fixed; top: 10px; left: 10px; background: rgba(255,255,255,.88); padding: 10px 12px; border-radius: 10px; width: 250px; }
+  #ui label { display: flex; justify-content: space-between; gap: 6px; margin: 4px 0; align-items: center; }
+  #ui input[type=range] { width: 130px; }
+  #ui .row { display: flex; gap: 4px; flex-wrap: wrap; margin: 4px 0; }
+  #ui button { border: 1px solid #2f6fd6; background: #fff; color: #2f6fd6; border-radius: 6px; padding: 2px 7px; cursor: pointer; }
+  #ui button.on { background: #2f6fd6; color: #fff; }
+  #stat { margin-top: 6px; color: #333; font-variant-numeric: tabular-nums; }
+  body.still #ui { display: none; }
+</style>
+</head>
+<body>
+<div id="ui">
+  <b>Rider workshop</b>
+  <div class="row" id="postures"></div>
+  <div class="row" id="cams"></div>
+  <label>Grade <input id="grade" type="range" min="-12" max="14" step="0.5" value="0"><span id="gradeV"></span></label>
+  <label>Power <input id="power" type="range" min="0" max="500" step="5" value="200"><span id="powerV"></span></label>
+  <label>FTP <input id="ftp" type="range" min="100" max="400" step="5" value="250"><span id="ftpV"></span></label>
+  <label>Cadence <input id="cadence" type="range" min="0" max="120" step="1" value="85"><span id="cadenceV"></span></label>
+  <label>Speed <input id="speed" type="range" min="0" max="20" step="0.5" value="9"><span id="speedV"></span></label>
+  <div class="row"><button id="kit">Pacer kit</button></div>
+  <div id="stat"></div>
+</div>
+<script type="module">
+import * as THREE from '../vendor/three.module.min.js';
+import { loadRider } from '../js/world/rider.js';
+import { CHASE } from '../js/world/pose.js';
+
+const q = new URLSearchParams(location.search);
+const still = q.has('still');
+if (still) document.body.classList.add('still');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.shadowMap.enabled = true;
+document.body.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#9fc3e6');
+scene.fog = new THREE.Fog('#9fc3e6', 40, 140);
+const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 500);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1));
+const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+sun.position.set(-4, 9, 3); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -4, right: 4, top: 4, bottom: -4, near: 1, far: 30 });
+scene.add(sun, sun.target);
+const road = new THREE.Mesh(new THREE.PlaneGeometry(7, 400), new THREE.MeshLambertMaterial({ color: '#5d6166' }));
+road.rotation.x = -Math.PI / 2; road.receiveShadow = true; scene.add(road);
+const verge = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshLambertMaterial({ color: '#6f9a4e' }));
+verge.rotation.x = -Math.PI / 2; verge.position.y = -0.01; scene.add(verge);
+for (let z = -200; z < 200; z += 6) {   // centre line dashes, so motion reads
+  const d = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 3), new THREE.MeshBasicMaterial({ color: '#e7bf55' }));
+  d.rotation.x = -Math.PI / 2; d.position.set(1.5, 0.005, z); scene.add(d);
+}
+
+const S = {
+  posture: q.get('posture') || 'auto', cam: q.get('cam') || 'chase', kit: q.get('kit') || 'rider',
+  grade: +(q.get('grade') ?? 0), power: +(q.get('power') ?? 200), ftp: +(q.get('ftp') ?? 250),
+  cadence: +(q.get('cadence') ?? 85), speed: +(q.get('speed') ?? 9), crank: +(q.get('crank') ?? 0.6),
+};
+const riders = {};
+let rider = null;
+async function useKit(kit) {
+  riders[kit] ||= await loadRider(kit === 'pacer' ? { jersey: 'checker' } : {});
+  if (rider) scene.remove(rider.group);
+  rider = riders[kit];
+  rider.group.traverse((o) => { if (o.isMesh && !o.material.transparent) { o.castShadow = true; o.receiveShadow = true; } });
+  scene.add(rider.group);
+  rider.setPosture(S.posture === 'auto' ? null : S.posture);
+  document.getElementById('kit').classList.toggle('on', kit === 'pacer');
+}
+
+const CAMS = {
+  chase: () => [new THREE.Vector3(0, CHASE.up, -CHASE.back), new THREE.Vector3(0, CHASE.lookUp, CHASE.ahead)],
+  side: () => [new THREE.Vector3(-3.2, 1.0, 0.1), new THREE.Vector3(0, 0.75, 0.1)],
+  front: () => [new THREE.Vector3(0.4, 1.3, 3.4), new THREE.Vector3(0, 0.9, 0)],
+  back: () => [new THREE.Vector3(0, 1.25, -2.6), new THREE.Vector3(0, 0.9, 0)],
+  quarter: () => [new THREE.Vector3(-1.9, 1.5, 2.0), new THREE.Vector3(0, 0.85, 0.05)],
+  top: () => [new THREE.Vector3(-0.01, 4.2, 0.1), new THREE.Vector3(0, 0, 0.1)],
+};
+const mkButtons = (id, list, key, after) => {
+  const el = document.getElementById(id);
+  for (const name of list) {
+    const b = document.createElement('button'); b.textContent = name; b.dataset.v = name;
+    b.onclick = () => { S[key] = name; after(); paint(); }; el.append(b);
+  }
+};
+const paint = () => {
+  for (const b of document.querySelectorAll('#postures button')) b.classList.toggle('on', b.dataset.v === S.posture);
+  for (const b of document.querySelectorAll('#cams button')) b.classList.toggle('on', b.dataset.v === S.cam);
+};
+mkButtons('postures', ['auto', 'seated', 'standing', 'tuck'], 'posture', () => rider?.setPosture(S.posture === 'auto' ? null : S.posture));
+mkButtons('cams', Object.keys(CAMS), 'cam', () => {});
+for (const k of ['grade', 'power', 'ftp', 'cadence', 'speed']) {
+  const el = document.getElementById(k), out = document.getElementById(k + 'V');
+  el.value = S[k];
+  const show = () => { S[k] = +el.value; out.textContent = el.value; };
+  el.oninput = show; show();
+}
+document.getElementById('kit').onclick = () => { S.kit = S.kit === 'pacer' ? 'rider' : 'pacer'; useKit(S.kit); };
+paint();
+
+const resize = () => { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); };
+addEventListener('resize', resize); resize();
+
+await useKit(S.kit);
+const pos = new THREE.Vector3(), fwd = new THREE.Vector3(0, 0, 1);
+let s = 0, last = performance.now();
+function frame(now) {
+  const dt = still ? 0 : Math.min(0.1, (now - last) / 1000); last = now;
+  if (!still) { S.crank += (S.cadence / 60) * Math.PI * 2 * dt; s += S.speed * dt; }
+  pos.set(0, 0, s);
+  // grade tilts the road and the rider with it
+  const g = Math.atan(S.grade / 100);
+  fwd.set(0, Math.sin(g), Math.cos(g));
+  road.position.z = s; verge.position.z = s;
+  rider.update(pos, fwd, S.crank, S.speed, still ? 0.016 : dt, { grade: S.grade, power: S.power, ftp: S.ftp, cadence: S.cadence });
+  if (still) for (let i = 0; i < 120; i++) rider.update(pos, fwd, S.crank, S.speed, 0.05, { grade: S.grade, power: S.power, ftp: S.ftp, cadence: S.cadence });
+  const [c, l] = CAMS[S.cam]();
+  camera.position.copy(c).add(pos); camera.lookAt(l.add(pos));
+  sun.position.set(-4, 9, 3 + s); sun.target.position.copy(pos);
+  renderer.render(scene, camera);
+  const info = renderer.info.render;
+  document.getElementById('stat').textContent = `${rider.posture} · ${rider.triangles.toLocaleString()} tris · ${info.calls} calls`;
+  window.__ready = true;
+  if (!still) requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
