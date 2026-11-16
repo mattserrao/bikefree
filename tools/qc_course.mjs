@@ -310,7 +310,9 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
         const r = index.nearest(p.x, p.z, st.width / 2 + ROAD_WIDTH / 2 + 1);
         if (!r) continue;
         const i = r.i > end ? Math.max(0, 2 * end - r.i) : r.i;
-        const over = p.y + STREET_LIFT - (route.ele[i] + ROAD_LIFT);
+        // [road-align] the road as drawn: straight between its 10 m samples, not the nearest sample's height
+        const rd = landscape.routeDist?.(p.x, p.z), e = rd && Math.abs(rd.y - route.ele[i]) < 3 ? rd.y : route.ele[i];
+        const over = p.y + STREET_LIFT - (e + ROAD_LIFT);
         if (over > -.02 && over < 4) hits.push([route.dist[i], over]);
       }
     }

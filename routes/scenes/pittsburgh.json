@@ -40,8 +40,13 @@
       "shrub0",
       "shrub1"
     ],
-    "vergeDensity": 0
+    "vergeDensity": 0,
+    "yardTrees": { "density": 1, "boxes": [[40.424, -80.026, 40.4395, -79.996], [40.433, -80.04, 40.4425, -80.024]] }
   },
+  "routeTrees": [
+    { "fromM": 16480, "toM": 18240, "spacingM": 11, "offsetM": 7.5, "sides": [-1] },
+    { "fromM": 16500, "toM": 18240, "spacingM": 16, "offsetM": 7, "sides": [1] }
+  ],
   "bridgeFrames": {
     "Smithfield Street Bridge": "street"
   },

@@ -45,7 +45,8 @@ export class CityScene {
     this._streetsAndLamps();
     this.bridges = buildBridges(this);
     this.stadiums = buildStadiums(this);
-    { const plant = this.landscape.canPlant; if (plant) this.landscape.canPlant = (x, z) => plant(x, z) && !this.inStadium(x, z, 2); }   // no trees on the field
+    { const plant = this.landscape.canPlant; if (plant) this.landscape.canPlant = (x, z) => plant(x, z) && !this.inStadium(x, z, 2)
+      && (this.landscape.landAt(x, z) !== LAND.yards || !this.buildingNear(x, z, 3.5)); }   // no trees on the field; [s4-section] yard trees clear of houses
     this.landmarks = buildLandmarks(this);
     this.heroes = buildHeroes(this);
     this.landscape.landmarks.push(...this.heroes.landmarks);   // postcard views for the scenic camera
@@ -910,6 +911,20 @@ export class CityScene {
     });
     const T = this.data.trees ? new Int16Array(Uint8Array.from(atob(this.data.trees), (c) => c.charCodeAt(0)).buffer) : [];
     for (let i = 0; i < T.length; i += 2) { const p = this.D.local(T[i], T[i + 1]); spots.push({ ...p, seed: hash(i) }); }
+    // [s4-section] tree rows along the route (a riverfront park, an avenue): scene `routeTrees` =
+    // [{fromM, toM, spacingM = 12, offsetM = 7.5, sides: [-1, 1] (left, right of the ride)}]; spots that aren't clear are dropped
+    for (const row of this.route.scene?.routeTrees || []) {
+      const R = this.route, I = this.index, last = (R.turnIdx || R.dist.length - 1) - 1;
+      for (let s = row.fromM, n = 0; s < row.toM; s += row.spacingM || 12, n++) {
+        const i = Math.max(0, Math.min(last - 1, Math.floor(s / 10))), f = Math.min(1, (s - R.dist[i]) / 10);
+        const x = I.xs[i] + (I.xs[i + 1] - I.xs[i]) * f, z = I.zs[i] + (I.zs[i + 1] - I.zs[i]) * f;
+        const dx = I.xs[i + 1] - I.xs[i], dz = I.zs[i + 1] - I.zs[i], l = Math.hypot(dx, dz) || 1;
+        for (const side of row.sides || [-1, 1]) {
+          const seed = hash(s * 7 + side * 3), off = (row.offsetM ?? 7.5) + (seed - .5) * 1.5;
+          spots.push({ x: x - (dz / l) * off * side, z: z + (dx / l) * off * side, seed });
+        }
+      }
+    }
     // a light street tree: trunk + two lumpy crowns (~40 triangles), coloured per instance
     const M = new MeshBuilder();
     M.color('#5b4636'); M.cylinder(0, 0, 0, .16, 3.2, 5, .12);
