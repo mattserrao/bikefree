@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { buildCatalogRoute } from '../js/routes.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
 import { makeCityLandscape, cityStreets } from '../js/world/city-landscape.js';
-import { planRiverfront, riverfrontCover } from '../js/world/riverfront.js';
+import { planRiverfront, riverfrontField } from '../js/world/riverfront.js';
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const item = JSON.parse(read('routes/catalog.json')).find((c) => c.id === 'pittsburgh');
@@ -37,9 +37,11 @@ test('riverfront: Pittsburgh walls the Allegheny and Mon banks of the Point insi
     }
   }
   // the cover lookup: on the walk yes, the route's own centre no
-  const covers = riverfrontCover(runs), q = runs[0].samples[10];
+  const { covers, groundCap } = riverfrontField(runs, L.level), q = runs[0].samples[10];
   assert.equal(covers(q.x + q.nx * (q.outer - 1), q.z + q.nz * (q.outer - 1)), true);
   assert.equal(covers(q.x, q.z), false);
+  assert.ok(groundCap(q.x + q.nx * (q.outer + 5), q.z + q.nz * (q.outer + 5)) < L.level, 'past the wall: under the water');
+  assert.equal(groundCap(q.x, q.z), Infinity);
 });
 
 test('riverfront: no spans, no promenades', () => {

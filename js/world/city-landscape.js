@@ -8,6 +8,7 @@ import { makeRouteIndex } from './geo.js';
 import { smoothstep } from './coast.js';
 import { ROAD_WIDTH } from './pose.js';
 import { decodeTerrain } from './real-coast.js';
+import { riverfrontGround } from './riverfront.js';   // [s1-riverfront]
 
 export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand: 5, plaza: 6, outside: 7, yards: 8 };
 const LAND_COLORS = ['#8d8a84', '#77985a', '#4d6a3a', '#6c6a5e', '#7d786f', '#b5a684', '#b4ada0', '#6d8252', '#7c8c5f'];
@@ -415,6 +416,8 @@ export function makeCityLandscape(config, proj, index, route) {
     /** On a street's carriageway or its sidewalks (paths: their width), for keeping scenery off them. */
     onStreet: (x, z, margin = 0) => { const st = streetAt(x, z, 2.6 + margin); return !!st && (st.st.cls !== 8 || st.edge < margin); },
   };
+  // [s1-riverfront] promenade walls along the route (scene "riverfront"): the ground past them under the water
+  if (config.riverfront) riverfrontGround(L, { route, index, config: config.riverfront, streets: () => (streetAt(0, 0), streetIndex.streets) });
   return L;
 }
 

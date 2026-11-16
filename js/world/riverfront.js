@@ -49,6 +49,7 @@ const smoothAvg = (a, r) => a.map((_, i) => { let s = 0, n = 0; for (let k = Mat
  * @param {object} ctx { landscape, route, index, streets, config }
  */
 export function planRiverfront({ landscape: L, route, index, streets = [], config }) {
+  if (typeof streets === 'function') streets = streets();
   const O = { ...RIVERFRONT_DEFAULTS, ...config };
   const runs = [], ground = meshGround(L.heightAt, O.meshCellM);
   for (const span of config?.spans || []) {
@@ -120,26 +121,46 @@ function finishRun(run, L, O) {
   return { samples: run.map((q, k) => ({ s: q.s, x: q.x, z: q.z, y: q.y, nx: q.nx, nz: q.nz, tx: q.tx, tz: q.tz, outer: outer[k], deck: Math.max(deckS[k], q.y + .06) })), opts: O };
 }
 
-/** A lookup: is (x, z) on (or just past) a planned promenade? Used to keep other walls and plants off it. */
-export function riverfrontCover(runs, pad = 4) {
-  const grid = new Map(), C = 20;
-  for (const run of runs) for (const q of run.samples) {
-    const key = `${Math.floor(q.x / C)},${Math.floor(q.z / C)}`;
-    if (!grid.has(key)) grid.set(key, []);
-    grid.get(key).push(q, run.opts);
-  }
-  return (x, z, extra = 0) => {
-    const reach = 45;
-    for (let gx = Math.floor((x - reach) / C); gx <= Math.floor((x + reach) / C); gx++) for (let gz = Math.floor((z - reach) / C); gz <= Math.floor((z + reach) / C); gz++) {
-      const a = grid.get(`${gx},${gz}`); if (!a) continue;
-      for (let k = 0; k < a.length; k += 2) {
-        const q = a[k], O = a[k + 1], vx = x - q.x, vz = z - q.z;
-        const along = vx * q.tx + vz * q.tz, across = vx * q.nx + vz * q.nz;
-        if (Math.abs(along) <= O.stepM * .75 && across >= O.innerM - 1 - extra && across <= q.outer + pad + extra) return true;
-      }
+/**
+ * The promenades on a 2 m raster: `covers(x, z)` (on the walk or just past its wall: other walls and scattered
+ * plants keep off) and `groundCap(x, z)` (past the wall the ground must lie under the water, or the drawn
+ * bank shows in front of the wall; it eases back over 20 m past each end of a run).
+ */
+export function riverfrontField(runs, level, { pad = 4, cutInM = 3, cutOutM = 40, taperM = 20 } = {}) {
+  const C = 2, cover = new Set(), cap = new Map();
+  const key = (x, z) => (Math.floor(x / C) + 32768) * 65536 + Math.floor(z / C) + 32768;
+  const mark = (q, along, lift) => {
+    const bx = q.x + q.tx * along, bz = q.z + q.tz * along;
+    for (let o = q.innerM - 1; o <= q.outer + cutOutM; o += 1) {
+      const k = key(bx + q.nx * o, bz + q.nz * o);
+      if (lift === 0 && o <= q.outer + pad) cover.add(k);
+      // (past the ends the cut also recedes outward)
+      if (o >= (lift ? q.outer + 2 + lift * 4 : Math.max(q.outer - cutInM, q.innerM + 1))) { const h = level - 1.5 + lift; if (!(cap.get(k) <= h)) cap.set(k, h); }
     }
-    return false;
   };
+  for (const run of runs) {
+    const S = run.samples, O = run.opts;
+    for (const q of S) { q.innerM ??= O.innerM; for (let a = -O.stepM * .75; a <= O.stepM * .75; a += .5) mark(q, a, 0); }
+    // past the ends: the cap rises back to the bank's own height
+    for (const [q, dir] of [[S[0], -1], [S[S.length - 1], 1]]) for (let e = 1; e <= taperM; e += .5) mark(q, dir * e, 3 * e / taperM);
+  }
+  return {
+    covers: (x, z) => cover.has(key(x, z)),
+    groundCap: (x, z) => cap.get(key(x, z)) ?? Infinity,
+  };
+}
+
+/**
+ * Plan the scene's promenades on a city landscape and push the ground past their walls under the water.
+ * Called once by the landscape (city-landscape.js) so the ground mesh, the city and the QC tools agree.
+ */
+export function riverfrontGround(L, { route, index, streets, config }) {
+  const runs = planRiverfront({ landscape: L, route, index, streets, config });
+  const field = riverfrontField(runs, L.level);
+  const heightAt = L.heightAt;
+  L.heightAt = (x, z) => Math.min(heightAt(x, z), field.groundCap(x, z));
+  L.riverfront = { runs, ...field };
+  return L.riverfront;
 }
 
 /**
@@ -150,8 +171,9 @@ export function buildRiverfront(city) {
   const config = city.route.scene?.riverfront;
   if (!config?.spans?.length) return null;
   const L = city.landscape;
-  const runs = planRiverfront({ landscape: L, route: city.route, index: city.index, streets: city.streets, config });
-  const covers = riverfrontCover(runs);
+  // planned with the landscape (the ground past the walls is already under the water), else here
+  const plan = L.riverfront || { runs: planRiverfront({ landscape: L, route: city.route, index: city.index, streets: city.streets, config }) };
+  const runs = plan.runs, covers = plan.covers || riverfrontField(runs, L.level).covers;
   const level = L.level, V = (x, y, z) => new THREE.Vector3(x, y, z);
   const stone = new THREE.Color('#9b9486'), wet = new THREE.Color('#4a4840'), coping = new THREE.Color('#c9c1ae');
   const lawn = new THREE.Color(city.route.scene?.palette?.grass || '#7a9a55').multiplyScalar(.82);
@@ -227,7 +249,7 @@ export function buildRiverfront(city) {
   }
   // no scattered rocks, shrubs or grass on the walk
   const plant = L.canPlant;
-  if (plant) L.canPlant = (x, z) => plant(x, z) && !covers(x, z, 0);
+  if (plant) L.canPlant = (x, z) => plant(x, z) && !covers(x, z);
   return { runs, covers, meshes, tris };
 }
 
