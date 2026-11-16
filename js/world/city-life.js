@@ -590,6 +590,7 @@ export class CityLife {
       let lo = pts[0], hi = pts[0];
       for (const p of pts) { p.g = L.baseHeight(p.x, p.z); if (p.g < lo.g) lo = p; if (p.g > hi.g) hi = p; }
       if (hi.g - lo.g < 30) continue;
+      const lights = [];
       const a = V(lo.x, lo.g + 1.5, lo.z), b = V(hi.x, hi.g + 1.5, hi.z);
       const dir = b.clone().sub(a), len = dir.length(); dir.normalize();
       const right = V(-dir.z, 0, dir.x).normalize();
@@ -609,8 +610,18 @@ export class CityLife {
       M.color('#6b3d26'); M.pyramid(a.x - dir.x * 7, a.y + 4.5, a.z - dir.z * 7, 10, 2.5, 11, Math.atan2(dir.x, dir.z));
       M.color('#8a5a3c'); M.box(b.x + dir.x * 6, b.y - 1.5, b.z + dir.z * 6, 10, 7, 11, Math.atan2(dir.x, dir.z));
       M.color('#6b3d26'); M.pyramid(b.x + dir.x * 6, b.y + 5.5, b.z + dir.z * 6, 11, 2.5, 12, Math.atan2(dir.x, dir.z));
+      // the upper station's observation deck: out over the slope beside the track, facing the city
+      {
+        const yaw = Math.atan2(dir.x, dir.z), dk = b.clone().addScaledVector(right, 7.5).addScaledVector(dir, -3), y = b.y - .2;
+        M.color('#b5ab98'); M.box(dk.x, y - .45, dk.z, 7, .45, 9, yaw);
+        M.color('#2f3438');
+        for (const [u, w] of [[-3.4, 0], [3.4, 0]]) M.box(dk.x + right.x * u, y, dk.z + right.z * u, .08, 1.1, 9, yaw);
+        M.box(dk.x - dir.x * 4.4, y, dk.z - dir.z * 4.4, 7, 1.1, .08, yaw);
+        M.color('#7d776b');
+        for (const u of [-3, 3]) { const q = dk.clone().addScaledVector(right, u).addScaledVector(dir, -4), g = L.baseHeight(q.x, q.z); if (y - g > 1) M.beam(V(q.x, g - .5, q.z), V(q.x, y - .5, q.z), .5, .5); }
+        lights.push({ x: dk.x, y: y + 3, z: dk.z, size: 6, color: '#ffe0a8' });
+      }
       this.inclines.push({ name, a, b, dir, right, len, period: 190 + this.inclines.length * 23 });
-      const lights = [];
       for (let s = 0; s < len; s += 9) for (const side of [-2.7, 2.7]) { const p = a.clone().addScaledVector(dir, s).addScaledVector(right, side); lights.push({ x: p.x, y: p.y + .6, z: p.z, size: 1.8, color: '#ffe7b0' }); }
       c.addGlows(lights, `${name} lights`);
     }
@@ -624,7 +635,8 @@ export class CityLife {
     for (let k = 0; k < 3; k++) car.box(0, k * 1.6 + 1.2, -3 + k * 3, 3.25, .9, 2.4);
     car.set({ aPart: [0], aMask: [0, 0, 0] }); car.color('#e9dcc0'); for (let k = 0; k < 3; k++) car.box(0, k * 1.6 + 2.6, -3 + k * 3, 3.3, .3, 3.1);
     this.inclineCars = this.inclines.length ? instanced(this, car, this.vehicleMat, this.inclines.length * 2, 'Incline cars') : null;
-    if (this.inclineCars) for (let i = 0; i < this.inclines.length * 2; i++) setColor(this.inclineCars, 'iA', i, i < 2 ? '#7c2d1d' : '#a33b25');
+    // the Duquesne Incline's cars are varnished red wood; the Mon Incline's are yellow
+    if (this.inclineCars) this.inclines.forEach((inc, k) => { for (const j of [0, 1]) setColor(this.inclineCars, 'iA', k * 2 + j, /Monongahela/.test(inc.name) ? '#e2ad1f' : '#8a2a17'); });
   }
 
   _updateInclines(time) {

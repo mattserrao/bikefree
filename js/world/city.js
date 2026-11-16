@@ -6,6 +6,7 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { decodeCity, LAND, cityStreets, STREET_W } from './city-landscape.js';
 import { MeshBuilder, ribbon, resample, hash } from './city-geometry.js';
 import { buildBridges, buildStadiums, buildLandmarks } from './city-bridges.js';
+import { buildHeroes } from './city-heroes.js';
 import { CityLife } from './city-life.js';
 import { ROAD_WIDTH } from './pose.js';
 
@@ -44,7 +45,10 @@ export class CityScene {
     this._streetsAndLamps();
     this.bridges = buildBridges(this);
     this.stadiums = buildStadiums(this);
+    { const plant = this.landscape.canPlant; if (plant) this.landscape.canPlant = (x, z) => plant(x, z) && !this.inStadium(x, z, 2); }   // no trees on the field
     this.landmarks = buildLandmarks(this);
+    this.heroes = buildHeroes(this);
+    this.landscape.landmarks.push(...this.heroes.landmarks);   // postcard views for the scenic camera
     this._trees();
     this.life = new CityLife(this);
     this._pending = [...this.buildingChunks.keys()];
@@ -77,6 +81,35 @@ export class CityScene {
       b.bb = [x0, x1, z0, z1];
       for (let gx = Math.floor(x0 / 40); gx <= Math.floor(x1 / 40); gx++) for (let gz = Math.floor(z0 / 40); gz <= Math.floor(z1 / 40); gz++) {
         const k = `${gx},${gz}`; if (!this.buildingGrid.has(k)) this.buildingGrid.set(k, []); this.buildingGrid.get(k).push(b);
+      }
+    }
+    this._hideDuplicates();
+  }
+
+  /**
+   * Duplicate footprints (the map has some buildings twice, or a part drawn over its whole): a building whose
+   * footprint lies more than 60% inside another standing on the same ground (25% when their roofs are level),
+   * and that is no taller, isn't drawn.
+   */
+  _hideDuplicates() {
+    const inside = (ring, x, z) => { let r = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], c = ring[j]; if ((a.z > z) !== (c.z > z) && x < ((c.x - a.x) * (z - a.z)) / (c.z - a.z) + a.x) r = !r; } return r; };
+    for (const b of this.buildings) {
+      const pts = [];
+      for (let u = 1; u < 6; u++) for (let v = 1; v < 6; v++) {
+        const x = b.bb[0] + (b.bb[1] - b.bb[0]) * u / 6, z = b.bb[2] + (b.bb[3] - b.bb[2]) * v / 6;
+        if (inside(b.ring, x, z)) pts.push([x, z]);
+      }
+      if (pts.length < 3) continue;
+      const seen = new Set();
+      for (let gx = Math.floor(b.bb[0] / 40); gx <= Math.floor(b.bb[1] / 40); gx++) for (let gz = Math.floor(b.bb[2] / 40); gz <= Math.floor(b.bb[3] / 40); gz++) {
+        for (const o of this.buildingGrid.get(`${gx},${gz}`) || []) {
+          if (o === b || seen.has(o) || o.hidden || Math.abs(o.mh - b.mh) > 3 || o.h < b.h || (o.h === b.h && o.k > b.k)) continue;
+          seen.add(o);
+          if (o.bb[0] > b.bb[1] || o.bb[1] < b.bb[0] || o.bb[2] > b.bb[3] || o.bb[3] < b.bb[2]) continue;
+          let n = 0; for (const [x, z] of pts) if (inside(o.ring, x, z)) n++;
+          if (n / pts.length > (Math.abs(o.h - b.h) < .5 ? .25 : .6)) { b.hidden = true; break; }   // equal roofs flicker even when only partly stacked
+        }
+        if (b.hidden) break;
       }
     }
   }
@@ -336,7 +369,7 @@ export class CityScene {
     const extras = new MeshBuilder();   // spires, rooftop details (plain vertex colour)
     const roofTint = new THREE.Color();
     for (const b of list) {
-      if (b.kind === 12) continue;   // the submarine is a landmark, not a building
+      if (b.kind === 12 || b.hero || b.hidden) continue;   // the submarine and the hero landmarks are drawn on their own; duplicates not at all
       if (b.onRoute ??= this._onRoute(b)) continue;   // OSM footprints that overlap the ride's road: not drawn
       if (b.crossed ??= this._crossed(b)) continue;   // a ramp, incline or raised railway runs through it: not drawn
       let ring = b.ring;
@@ -351,9 +384,20 @@ export class CityScene {
       const seed = hash(b.k * 7919 + 13);
       const base = new THREE.Color(palette[Math.floor(seed * palette.length)]).multiplyScalar(.9 + hash(b.k) * .18);
       B.color(base).set({ aBld: [b.kind, seed * 100, ground, 0] });
+      const facets = b.kind === 6 && b.h > 18;   // PPG Place: glass in rows of projecting prisms
+      let mx = 0, mz = 0; for (const p of ring) { mx += p.x; mz += p.z; } mx /= ring.length; mz /= ring.length;
       for (let i = 0; i < ring.length; i++) {
         const a = ring[i], c = ring[(i + 1) % ring.length];
-        B.quad(new THREE.Vector3(a.x, y0, a.z), new THREE.Vector3(c.x, y0, c.z), new THREE.Vector3(c.x, y1, c.z), new THREE.Vector3(a.x, y1, a.z));
+        const len = Math.hypot(c.x - a.x, c.z - a.z), bays = facets ? Math.floor(len / 5.5) : 0;
+        if (!bays) { B.quad(new THREE.Vector3(a.x, y0, a.z), new THREE.Vector3(c.x, y0, c.z), new THREE.Vector3(c.x, y1, c.z), new THREE.Vector3(a.x, y1, a.z)); continue; }
+        let nx = (c.z - a.z) / len, nz = -(c.x - a.x) / len;
+        if (((a.x + c.x) / 2 - mx) * nx + ((a.z + c.z) / 2 - mz) * nz < 0) { nx = -nx; nz = -nz; }
+        for (let k = 0; k < bays; k++) {
+          const p0 = { x: a.x + (c.x - a.x) * k / bays, z: a.z + (c.z - a.z) * k / bays }, p1 = { x: a.x + (c.x - a.x) * (k + 1) / bays, z: a.z + (c.z - a.z) * (k + 1) / bays };
+          const m = { x: (p0.x + p1.x) / 2 + nx * 1.3, z: (p0.z + p1.z) / 2 + nz * 1.3 };
+          for (const [u, v] of [[p0, m], [m, p1]]) B.quad(new THREE.Vector3(u.x, y0, u.z), new THREE.Vector3(v.x, y0, v.z), new THREE.Vector3(v.x, y1, v.z), new THREE.Vector3(u.x, y1, u.z));
+          B.triangle(new THREE.Vector3(p0.x, y1, p0.z), new THREE.Vector3(p1.x, y1, p1.z), new THREE.Vector3(m.x, y1, m.z));
+        }
       }
       // flat roof, a little darker (tar and gravel), with a parapet colour band from the walls
       roofTint.copy(base).lerp(new THREE.Color(b.kind === 6 ? '#2f3a40' : '#6a6762'), .65);
@@ -435,6 +479,7 @@ export class CityScene {
           const dx = (b.x - a.x) / (len || 1), dz = (b.z - a.z) / (len || 1), off = st.width / 2 + (st.bridge ? .05 : .9);
           const x = b.x - dz * off * side, z = b.z + dx * off * side;
           if (!this._clearSpot(x, z, .35, k, ROAD_WIDTH / 2 + 1.2)) continue;
+          if (st.bridge && this._onStyledBridge(x, z)) continue;   // the famous bridges carry their own lights (and railings)
           lamps.push({ x, z, y: st.bridge ? b.y : this.landscape.heightAt(x, z), yaw: Math.atan2(dz * side, -dx * side), bridge: st.bridge });
         }
       }
@@ -468,6 +513,36 @@ export class CityScene {
     }
     this.lamps = lamps;
     this._lampMeshes(lamps);
+  }
+
+  /** Inside a stadium bowl (or within `pad` of its outline)? */
+  inStadium(x, z, pad = 0) {
+    for (const r of this.stadiumRings || []) {
+      if (x < r.bb[0] - pad || x > r.bb[1] + pad || z < r.bb[2] - pad || z > r.bb[3] + pad) continue;
+      let inside = false;
+      for (let i = 0, j = r.ring.length - 1; i < r.ring.length; j = i++) { const a = r.ring[i], c = r.ring[j]; if ((a.z > z) !== (c.z > z) && x < ((c.x - a.x) * (z - a.z)) / (c.z - a.z) + a.x) inside = !inside; }
+      if (inside) return true;
+      if (pad) for (const p of r.ring) if (Math.hypot(p.x - x, p.z - z) < pad + 8) return true;
+    }
+    return false;
+  }
+
+  /** Within 14 m of one of the styled river bridges' structure lines (data.bridges)? */
+  _onStyledBridge(x, z) {
+    if (!this._styled) {
+      this._styled = new Map();
+      for (const br of this.data.bridges || []) {
+        const pts = br.path.map(([qa, qo]) => this.D.local(qa, qo));
+        for (let i = 1; i < pts.length; i++) {
+          const a = pts[i - 1], c = pts[i], n = Math.max(1, Math.ceil(Math.hypot(c.x - a.x, c.z - a.z) / 4));
+          for (let k = 0; k <= n; k++) { const px = a.x + (c.x - a.x) * k / n, pz = a.z + (c.z - a.z) * k / n, key = `${Math.floor(px / 20)},${Math.floor(pz / 20)}`; if (!this._styled.has(key)) this._styled.set(key, []); this._styled.get(key).push([px, pz]); }
+        }
+      }
+    }
+    for (let gx = Math.floor(x / 20) - 1; gx <= Math.floor(x / 20) + 1; gx++) for (let gz = Math.floor(z / 20) - 1; gz <= Math.floor(z / 20) + 1; gz++) {
+      for (const [px, pz] of this._styled.get(`${gx},${gz}`) || []) if (Math.hypot(px - x, pz - z) < 14) return true;
+    }
+    return false;
   }
 
   _lampMeshes(lamps) {
@@ -547,6 +622,7 @@ export class CityScene {
     const L = this.landscape, c = L.landAt(x, z);
     if (c === LAND.water && !L.bridgeAt(x, z, 0)) return false;
     if (this.buildingNear(x, z, wall)) return false;
+    if (this.inStadium(x, z, 4)) return false;
     // any street's carriageway, not just the nearest; its own street too, where a bend brings the roadway back
     // to it (a post on its own bridge deck stands on the slab's edge, so there it may touch the roadway)
     for (const o of L.streetsNear(x, z, margin)) {
@@ -644,6 +720,7 @@ export class CityScene {
     this._stream(camera.x, camera.z);
     this.life.tick(camera, dt, time, rider);
     this.landmarks?.tick?.(time, dt);
+    this.heroes?.tick?.(time, dt);
   }
 
   setNight(v) {

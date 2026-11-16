@@ -361,12 +361,18 @@ export class World {
     let pos, look;
     if (this.cameraMode === 'vista' && this.stylized) {
       const b = this.terrain.landscape.landmarks.reduce((best, l) => (!Number.isFinite(l.s) ? best : !best || Math.abs(this.s - l.s) < Math.abs(this.s - best.s) ? l : best), null);
-      const nearby = b && Math.abs(this.s - b.s) < 900;
-      const direction = nearby ? new THREE.Vector3(b.fx, 0, b.fz) : flat;
-      const right = new THREE.Vector3(-direction.z, 0, direction.x);
-      const target = nearby ? new THREE.Vector3(b.x, b.y, b.z) : riderPos;
-      pos = target.clone().addScaledVector(right, -245).addScaledVector(direction, -65).addScaledVector(up, 105);
-      look = target.clone().addScaledVector(up, -16);
+      const nearby = b && Math.abs(this.s - b.s) < (b.range || 900);
+      if (nearby && b.view) {
+        // an authored postcard (Grandview Overlook toward the Point, the skyline from the Smithfield Street Bridge)
+        pos = b.view.pos.clone(); look = b.view.look.clone(); this._postcard = true;
+      } else {
+        this._postcard = false;
+        const direction = nearby ? new THREE.Vector3(b.fx, 0, b.fz) : flat;
+        const right = new THREE.Vector3(-direction.z, 0, direction.x);
+        const target = nearby ? new THREE.Vector3(b.x, b.y, b.z) : riderPos;
+        pos = target.clone().addScaledVector(right, -245).addScaledVector(direction, -65).addScaledVector(up, 105);
+        look = target.clone().addScaledVector(up, -16);
+      }
     } else if (this.cameraMode === 'eye') {
       pos = riderPos.clone().addScaledVector(up, 1.55).addScaledVector(flat, 0.35);
       const far = this.pointAt(this.s + 35);
@@ -385,7 +391,7 @@ export class World {
     }
     // Keep the camera above ground
     const g = this.terrain.heightAt(pos.x, pos.z);
-    const clearance = this.cameraMode === 'vista' ? 25 : 1.6;
+    const clearance = this.cameraMode === 'vista' ? (this._postcard ? 1.6 : 25) : 1.6;
     if (g != null && pos.y < g + clearance) pos.y = g + clearance;
 
     if (!this._camInit) {

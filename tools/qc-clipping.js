@@ -168,7 +168,7 @@ function indexBuildings() {
   for (const b of city.buildings) {
     let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
     for (const p of b.ring) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); }
-    b.bb = { x0, x1, z0, z1 };
+    b.qbb = { x0, x1, z0, z1 };
     for (let x = Math.floor(x0 / CELL); x <= Math.floor(x1 / CELL); x++) for (let z = Math.floor(z0 / CELL); z <= Math.floor(z1 / CELL); z++) {
       const k = `${x},${z}`; if (!buildingGrid.has(k)) buildingGrid.set(k, []); buildingGrid.get(k).push(b);
     }
@@ -185,7 +185,7 @@ function inRing(ring, x, z) {
 function buildingAt(x, z, pad = 2) {
   let best = null, bd = Infinity;
   for (const b of buildingGrid.get(`${Math.floor(x / CELL)},${Math.floor(z / CELL)}`) || []) {
-    if (x < b.bb.x0 - pad || x > b.bb.x1 + pad || z < b.bb.z0 - pad || z > b.bb.z1 + pad) continue;
+    if (x < b.qbb.x0 - pad || x > b.qbb.x1 + pad || z < b.qbb.z0 - pad || z > b.qbb.z1 + pad) continue;
     if (inRing(b.ring, x, z)) return b;
     for (let i = 0; i < b.ring.length; i++) {
       const a = b.ring[i], c = b.ring[(i + 1) % b.ring.length], dx = c.x - a.x, dz = c.z - a.z;
@@ -364,10 +364,10 @@ function checkStatics() {
   // 2b. overlapping building footprints (OSM outlines + parts drawn twice → walls and roofs fight)
   const owner = new Map(), pairs = new Map(), A = 1;   // 1 m raster
   for (const b of city.buildings) {
-    if (b.kind === 12) continue;
-    const r = world.index.nearest((b.bb.x0 + b.bb.x1) / 2, (b.bb.z0 + b.bb.z1) / 2, LIMITS.staticRange);
+    if (b.kind === 12 || b.hidden || b.hero || b.onRoute || b.crossed) continue;   // only what's drawn
+    const r = world.index.nearest((b.qbb.x0 + b.qbb.x1) / 2, (b.qbb.z0 + b.qbb.z1) / 2, LIMITS.staticRange);
     if (!r) continue;                                   // only what you can see from the ride
-    for (let x = Math.floor(b.bb.x0) + .5; x < b.bb.x1; x += A) for (let z = Math.floor(b.bb.z0) + .5; z < b.bb.z1; z += A) {
+    for (let x = Math.floor(b.qbb.x0) + .5; x < b.qbb.x1; x += A) for (let z = Math.floor(b.qbb.z0) + .5; z < b.qbb.z1; z += A) {
       if (!inRing(b.ring, x, z)) continue;
       const k = `${Math.floor(x)},${Math.floor(z)}`, o = owner.get(k);
       if (o === undefined) { owner.set(k, b.k); continue; }

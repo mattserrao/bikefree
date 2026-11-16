@@ -213,6 +213,24 @@ Options:
 - `--quality low|balanced|high`
 - `--size 1280x720`
 - `--chrome <path>`, or the `CHROME` environment variable
+
+### Free-camera close-ups
+
+`npm run snap:cam` puts the camera anywhere, for landmarks the ride cameras never frame (towers, the
+fort, the stadiums). Each shot gives a camera and a target as latitude, longitude and altitude (metres),
+and optionally a time of day:
+
+```sh
+npm run snap:cam -- pittsburgh --shots tools/shots/pittsburgh-landmarks.json --out /tmp/landmarks
+```
+
+### Postcard views
+
+A scene's `views` give the scenic (`vista`) camera fixed postcard positions: within `rangeM` of a view's
+distance along the route, the camera holds that view instead of orbiting the nearest landmark. Each view has
+`cam` and `look` (lat, lon, and `up` metres above the ground, or `abs` metres above sea level) and `atM`
+(or the route point nearest the camera). Pittsburgh's: the Point from the Ohio, the Golden Triangle from the
+Monongahela, the Duquesne Incline deck, and (built at run time) the first Grandview Avenue overlook.
 - `--software` (no GPU; slow but works on a server)
 
 It serves the repo itself, waits until every queued scenery tile is built, then draws a single
