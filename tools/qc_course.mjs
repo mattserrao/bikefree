@@ -21,7 +21,7 @@ import { attachTerrainBuffer } from '../js/world/terrain-data.js';
 import { planSettlement } from '../js/world/settlement.js';
 import { cityStreets, STREET_LIFT } from '../js/world/city-landscape.js';
 import { landscapeBuilder } from '../js/world/landscapes.js';
-import { riderPose, routePoint, ROAD_WIDTH, ROAD_LIFT } from '../js/world/pose.js';
+import { riderPose, routePoint, ROAD_WIDTH, ROAD_LIFT, CHASE } from '../js/world/pose.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(join(ROOT, p), 'utf8');
@@ -205,9 +205,9 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
       }
     }
     if (ground && Math.round(s) % 2 === 0) {
-      // chase camera: 6.5 m behind, 2.7 m up, pushed to 1.6 m above the ground (world.js)
-      const cx = cur.pos.x - cur.flat.x * 6.5, cz = cur.pos.z - cur.flat.z * 6.5, cy = cur.pos.y + 2.7;
-      const lift = landscape.heightAt(cx, cz) + 1.6 - cy;
+      // chase camera: CHASE.back behind, CHASE.up up, pushed CHASE.ground above the ground (world.js, pose.js)
+      const cx = cur.pos.x - cur.flat.x * CHASE.back, cz = cur.pos.z - cur.flat.z * CHASE.back, cy = cur.pos.y + CHASE.up;
+      const lift = landscape.heightAt(cx, cz) + CHASE.ground - cy;
       if (lift > LIMITS.cameraLift) F.add('camera-lift', 'warn', s, lift, 'chase camera pushed up by the ground');
     }
     if (Math.round(s) % 10 === 0) { series.s.push(s); series.heading.push(turnRate); }

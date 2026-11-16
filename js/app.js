@@ -531,10 +531,12 @@ async function openWorld(route) {
   worldRoute = route;
   world.setTimeOfDay(settings.worldTime);
   world.setWeather(settings.worldWeather || 'clear', true);
-  world.setSource(() => ({ pos: riderPosOn(route), speed: session.speedMps, cadence: session.cadence, riding: true }));
+  world.setSource(() => ({ pos: riderPosOn(route), speed: session.speedMps, cadence: session.cadence, riding: true,
+    grade: session.gradePct, power: session.power3s, ftp: settings.ftp }));
   world.setPacerSource(() => {
     if (!pacer.on) return null;
-    return { pos: pacerPosOn(route), speed: session.running ? pacer.speed : 0, cadence: session.running ? pacer.cadence : 0 };
+    return { pos: pacerPosOn(route), speed: session.running ? pacer.speed : 0, cadence: session.running ? pacer.cadence : 0,
+      grade: pacer.grade, power: session.running ? pacer.watts : 0, ftp: settings.ftp };
   });
   world.start();
   log('3d', `3D view: ${route.name}`);

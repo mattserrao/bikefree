@@ -73,7 +73,7 @@ for (const shot of shots) {
   const q = new URLSearchParams({ park: shot.park, clean: '1', quality, ...(shot.pos ? { pos: shot.pos } : {}), ...(shot.time ? { time: shot.time } : {}), ...(shot.season ? { season: shot.season } : {}), ...(shot.weather ? { weather: shot.weather } : {}), ...(shot.look ? { look: shot.look === 'current' ? 'none' : shot.look } : {}) });
   await page.goto(`${base}/tools/world-preview.html?${q}`);
   if (breakdown) await page.evaluate(() => { window.__breakdown = true; });
-  await page.waitForFunction(() => window.world?.terrain && (window.world.terrain.kit || !window.world.stylized) && window.world._camInit, null, { timeout: 180000, polling: 500 });
+  await page.waitForFunction(() => window.world?.terrain && (window.world.terrain.kit || !window.world.stylized) && window.world._camInit && window.world.rider?.triangles, null, { timeout: 180000, polling: 500 });
   // streamed terrain (non-stylized and wireframe scenes): wait until the visible tiles are in
   await page.waitForFunction(() => { const w = window.world; if (w.stylized) return true; const c = w.camera.position; w.terrain.update(c.x, c.z); return w.terrain.loadingCount === 0 && w.terrain.stats.ready > 4; }, null, { timeout: 180000, polling: 1000 });
   // stop the loop, let every queued scenery tile build, then draw one frame and read it back

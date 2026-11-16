@@ -11,6 +11,7 @@ export class Pacer {
     this.watts = watts;
     this.dist = 0;
     this.speed = 0;
+    this.grade = 0;   // % grade where the pacer is (for its posture)
   }
   get on() { return this.watts > 0; }
 
@@ -27,7 +28,8 @@ export class Pacer {
     let left = Math.min(dt, 2);
     while (left > 0) {
       const h = Math.min(0.25, left);
-      this.speed = stepSpeed(this.speed, this.watts, gradeAt(this.dist), h, params);
+      this.grade = gradeAt(this.dist);
+      this.speed = stepSpeed(this.speed, this.watts, this.grade, h, params);
       this.dist += this.speed * h;
       left -= h;
     }
