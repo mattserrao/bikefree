@@ -8,7 +8,7 @@ import { makeRouteIndex } from './geo.js';
 import { smoothstep } from './coast.js';
 import { ROAD_WIDTH } from './pose.js';
 import { decodeTerrain } from './real-coast.js';
-import { alignStreetProfiles } from './road-align.js';   // [road-align]
+import { alignStreetProfiles, syncPinnedNodes } from './road-align.js';   // [road-align]
 
 export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand: 5, plaza: 6, outside: 7, yards: 8 };
 const LAND_COLORS = ['#8d8a84', '#77985a', '#4d6a3a', '#6c6a5e', '#7d786f', '#b5a684', '#b4ada0', '#6d8252', '#7c8c5f'];
@@ -309,13 +309,15 @@ export function makeCityLandscape(config, proj, index, route) {
     if (h > level - .6 && h < level + .35) h = h >= level - .1 ? level + .35 : level - .6;
     return h;
   };
+  // [road-align] how far the ground eases towards the route's road (a route that follows its own ground needs less)
+  const bankM = config.roadAlign?.bankM ?? 60;
   const routeHeightAt = (x, z) => {
     let h = baseHeight(x, z);
     const road = index.nearest(x, z, 60);
     if (road) {
       const i = outbound(road.i), s = route.dist[i];
       const bridge = onRouteBridge(s, 6);
-      if (!bridge) h += (roadEle(i, x, z) - .5 - h) * (1 - smoothstep(13, 60, road.d));
+      if (!bridge) h += (roadEle(i, x, z) - .5 - h) * (1 - smoothstep(13, bankM, road.d));   // [road-align] bankM
       else {
         if (road.d < 14) h = Math.min(h, route.ele[i] - 2.5);   // keep the ground under a deck
         // a stretch of the route that passes under this deck (the North Shore Trail under the Clemente ramp)
@@ -467,8 +469,10 @@ export function cityStreets(landscape, index, route) {
   // [road-align] smooth, grade-limited street profiles with one height per junction (js/world/road-align.js)
   const align = route.scene?.roadAlign;
   if (align?.streets) {
-    alignStreetProfiles(streets, align);
+    const nearRoute = (x, z) => { const r = index.nearest(x, z, 24); return r ? 1 - smoothstep(12, 22, r.d) : 0; };
+    alignStreetProfiles(streets, { ...align, ground: landscape.baseHeight, nearRoute, floor: landscape.level + .6 });
     for (const st of streets) for (const p of st.pts) if (lower(p, st.width)) st.underRoute = true;
+    syncPinnedNodes(streets);
   }
   landscape._streets = streets;
   return streets;

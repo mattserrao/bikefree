@@ -644,11 +644,9 @@ def build(cid):
         count = Counter(n for u in group for n in (bridge_ways[u]['nodes'][0], bridge_ways[u]['nodes'][-1]))
         anchors = [n for n, c in count.items() if c == 1] or [bridge_ways[group[0]]['nodes'][0]]
         anchor_h = {n: elevation(*nodes[n]) for n in anchors}
-        for u in group:
-            for n in bridge_ways[u]['nodes']:
-                if n in deck: continue
-                ws = [(1 / max(1.0, hv(nodes[n], nodes[a])) ** 2, anchor_h[a]) for a in anchors]
-                deck[n] = sum(w * h for w, h in ws) / sum(w for w, _ in ws)
+        # [road-align] straight along the deck between its ground ends (was inverse-distance: flat ends, steep middle)
+        edges_ = [(a_, b_, hv(nodes[a_], nodes[b_])) for u in group for a_, b_ in zip(bridge_ways[u]['nodes'], bridge_ways[u]['nodes'][1:])]
+        for n, h_ in road_align.deck_heights(edges_, anchor_h).items(): deck.setdefault(n, h_)
     # pack streets: coords + optional deck heights (0 = on the ground)
     st_coords, st_starts, st_meta, st_deck = [], [], [], []
     for rec in streets:

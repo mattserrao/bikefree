@@ -260,3 +260,34 @@ def round_street(pts, fixed, max_shift=1.5, min_turn=12.0, tol=.25):
             of.append(False)
     out.append(P[-1]); of.append(F[-1])
     return out, of
+
+
+# ---------------------------------------------------------------- bridge decks
+def deck_heights(edges, anchors):
+    """Deck heights over a chain of bridge ways: linear along the deck between its ground ends.
+
+    edges: [(a, b, length_m)] between consecutive deck nodes; anchors: {node: height} (the deck's ground ends).
+    Solves the graph Laplace equation (weights 1/length) with the anchors fixed, so a two-ended deck is a
+    straight ramp by distance along it and a forked one blends smoothly — unlike inverse-distance weights,
+    which leave a deck flat at both ends and twice as steep in the middle. Returns {node: height}.
+    """
+    nbr = {}
+    for a, b, L in edges:
+        w = 1.0 / max(.5, L)
+        nbr.setdefault(a, []).append((b, w)); nbr.setdefault(b, []).append((a, w))
+    if not anchors: return {}
+    free = [n for n in nbr if n not in anchors]
+    out = {n: anchors[n] for n in nbr if n in anchors}
+    if not free: return out
+    ix = {n: k for k, n in enumerate(free)}
+    A = np.zeros((len(free), len(free))); rhs = np.zeros(len(free))
+    for n in free:
+        k = ix[n]
+        for m, w in nbr[n]:
+            A[k, k] += w
+            if m in ix: A[ix[m], k] -= w
+            else: rhs[k] += w * anchors[m]
+    try: sol = np.linalg.solve(A, rhs)
+    except np.linalg.LinAlgError: sol = np.linalg.lstsq(A, rhs, rcond=None)[0]
+    out.update({n: float(sol[ix[n]]) for n in free})
+    return out

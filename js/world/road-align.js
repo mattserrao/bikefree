@@ -68,7 +68,8 @@ export const STREET_DEFAULTS = {
  * Align the heights of city streets in place.
  * streets: [{bridge, width, pts: [{x, y, z, pin?}]}] — bridge decks keep their heights; points with `pin` (e.g.
  * where a street meets the route) keep theirs. Junction nodes are the points shared exactly by two or more
- * streets (OSM node positions). Returns the junction list (also stored as streets.junctions).
+ * streets (OSM node positions). `options.ground(x, z)`: the bare ground under a street (default: the heights
+ * given); `options.floor`: lowest height of a ground street (e.g. just over the water); `options.nearRoute(x, z)`: 1 where the route's own bank decides the ground, falling to 0 away from it. Returns the junction list (also stored as streets.junctions).
  */
 export function alignStreetProfiles(streets, options = {}) {
   const o = { ...STREET_DEFAULTS, ...options };
@@ -84,13 +85,22 @@ export function alignStreetProfiles(streets, options = {}) {
     if (new Set(refs.map((r) => r[0])).size < 2 && refs.length < 2) continue;
     junctions.push({ refs, x: streets[refs[0][0]].pts[refs[0][1]].x, z: streets[refs[0][0]].pts[refs[0][1]].z });
   }
-  const y0 = streets.map((st) => st.pts.map((p) => p.y));
+  // the reference profile: the heights given (the ground, raised towards the route's road near it), except that
+  // a street mapped below another level (layer < 0: under a deck or the route) that never meets the route follows
+  // its own bare ground (o.ground) instead of riding up the route's bank
+  const y0 = streets.map((st) => {
+    const own = o.ground && st.layer < 0 && !st.bridge && !st.pts.some((p) => p.pin);
+    // a ground street never runs below the water's surface (riverside streets mapped on the water's edge cells)
+    if (!own) return st.pts.map((p) => (st.bridge || p.pin || o.floor == null ? p.y : Math.max(p.y, o.floor)));
+    // (within ~16 m of the route the route's bank still decides: the 6 m ground mesh can't drop faster)
+    return st.pts.map((p) => { const w = o.nearRoute ? o.nearRoute(p.x, p.z) : 0; return Math.max(o.floor ?? -Infinity, p.y * w + o.ground(p.x, p.z) * (1 - w)); });
+  });
   // along-street distance
   const S = streets.map((st) => { let a = 0; return st.pts.map((p, i) => (i ? (a += Math.hypot(p.x - st.pts[i - 1].x, p.z - st.pts[i - 1].z)) : 0)); });
   // 1. smooth each ground street along its length (Gaussian in metres, ends held by reflection)
   const smooth = streets.map((st, k) => {
     const P = st.pts, s = S[k], n = P.length, out = new Float64Array(n);
-    if (st.bridge || n < 3) { P.forEach((p, i) => { out[i] = p.y; }); return out; }
+    if (st.bridge || n < 3) { P.forEach((p, i) => { out[i] = y0[k][i]; }); return out; }
     const sg = o.smoothM, span = 2.5 * sg;
     for (let i = 0; i < n; i++) {
       if (P[i].pin) { out[i] = P[i].y; continue; }
@@ -114,8 +124,37 @@ export function alignStreetProfiles(streets, options = {}) {
         w += st.width; v += st.width * cur[k][i];
       }
       // streets that merely cross at different levels (a deck over a street) aren't one junction
-      j.y = y ?? v / w; j.deck = deck; j.route = route;
-      for (const [k, i] of j.refs) if (!streets[k].bridge && Math.abs(cur[k][i] - j.y) < 4) target.set(`${k},${i}`, j.y);
+      j.y = y ?? v / w; j.deck = deck; j.route = route; j.hard = y != null;
+    }
+    relaxJunctions(cur);
+    // (a deck or the route only joins the streets that reach it within 4 m; the rest pass under or over)
+    for (const j of junctions) for (const [k, i] of j.refs) if (!streets[k].bridge && (!j.hard || Math.abs(cur[k][i] - j.y) < 4)) target.set(`${k},${i}`, j.y);
+  };
+  // Junctions joined by a street must not be steeper apart than the street may be: soft junctions (no deck, no
+  // route) give way, pulled towards each other along every street between consecutive fixed points.
+  const jAt = new Map();
+  junctions.forEach((j, n) => j.refs.forEach(([k, i]) => jAt.set(`${k},${i}`, n)));
+  const links = [];
+  streets.forEach((st, k) => {
+    if (st.bridge) return;
+    let prev = null;
+    st.pts.forEach((p, i) => {
+      const n = jAt.get(`${k},${i}`) ?? (p.pin ? -1 : undefined);
+      if (n === undefined) return;
+      if (prev && n >= 0 && prev.n >= 0 && n !== prev.n) links.push([prev.n, n, S[k][i] - prev.s]);
+      prev = { n, s: S[k][i] };
+    });
+  });
+  const relaxJunctions = (cur) => {
+    for (let it = 0; it < 60; it++) {
+      let moved = false;
+      for (const [a, b, len] of links) {
+        const A = junctions[a], B = junctions[b], d = B.y - A.y, over = Math.abs(d) - o.maxGrade * Math.max(1, len);
+        if (over <= 1e-3 || (A.hard && B.hard)) continue;
+        const fa = A.hard ? 0 : B.hard ? 1 : .5, fb = 1 - fa;
+        A.y += Math.sign(d) * over * fa; B.y -= Math.sign(d) * over * fb; moved = true;
+      }
+      if (!moved) break;
     }
   };
   const solve = (cur) => streets.map((st, k) => {
@@ -123,7 +162,7 @@ export function alignStreetProfiles(streets, options = {}) {
     if (st.bridge) return y;
     const fixed = new Uint8Array(n), corr = [];
     for (let i = 0; i < n; i++) {
-      const t = target.get(`${k},${i}`) ?? (P[i].pin ? P[i].y : null);
+      const t = target.get(`${k},${i}`) ?? (P[i].pin ? y0[k][i] : null);
       if (t != null) { fixed[i] = 1; corr.push([s[i], t - y[i]]); }
     }
     // spread the corrections linearly between fixed points, fading out past the last one
@@ -136,7 +175,7 @@ export function alignStreetProfiles(streets, options = {}) {
         else { const f = (s[i] - corr[c][0]) / Math.max(1e-6, corr[c + 1][0] - corr[c][0]); d = corr[c][1] + (corr[c + 1][1] - corr[c][1]) * f; }
         y[i] += d;
       }
-      for (let i = 0; i < n; i++) if (fixed[i]) y[i] = target.get(`${k},${i}`) ?? P[i].y;
+      for (let i = 0; i < n; i++) if (fixed[i]) y[i] = target.get(`${k},${i}`) ?? y0[k][i];
     }
     limitProfile(y, s, fixed, y0[k], o);
     return y;
@@ -147,6 +186,14 @@ export function alignStreetProfiles(streets, options = {}) {
   const out = junctions.map((j) => ({ x: j.x, z: j.z, y: j.y, deck: j.deck, route: j.route, streets: [...new Set(j.refs.map((r) => r[0]))] }));
   Object.defineProperty(streets, 'junctions', { value: out, enumerable: false, configurable: true });
   return out;
+}
+
+/** After a later pass pins some street points (e.g. kept under the route's road), give every other ground street
+ *  through the same junction node the same height, so a junction never splits into two levels. */
+export function syncPinnedNodes(streets) {
+  const key = (p) => `${Math.round(p.x * 100)},${Math.round(p.z * 100)}`, pinned = new Map();
+  for (const st of streets) if (!st.bridge) for (const p of st.pts) if (p.pin) pinned.set(key(p), Math.min(pinned.get(key(p)) ?? Infinity, p.y));
+  for (const st of streets) if (!st.bridge) for (const p of st.pts) { const y = pinned.get(key(p)); if (y != null && Math.abs(p.y - y) < 4) { p.y = y; p.pin = true; } }
 }
 
 /** Grade, grade-change and deviation limits on one profile (in place; `fixed` samples never move). */
@@ -175,6 +222,26 @@ export function limitProfile(y, s, fixed, ground, o = STREET_DEFAULTS) {
       const line = y[i - 1] + (y[i + 1] - y[i - 1]) * d1 / (d1 + d2);
       const k = 1 - lim / Math.abs(g2 - g1);
       y[i] += (line - y[i]) * k * .7; moved = true;
+    }
+    if (!moved) break;
+  }
+  // the grade limit has the last word (a street may leave its ground by more than maxDeviation rather than drop
+  // like a ramp where its ground is carved away)
+  for (let it = 0; it < 40; it++) {
+    let moved = false;
+    for (let i = 0; i + 1 < n; i++) {
+      const ds = Math.max(.5, s[i + 1] - s[i]), d = y[i + 1] - y[i], over = Math.abs(d) - o.maxGrade * ds;
+      if (over <= 1e-4 || (fixed[i] && fixed[i + 1])) continue;
+      const a = fixed[i] ? 0 : fixed[i + 1] ? 1 : .5;
+      y[i] += Math.sign(d) * over * a; y[i + 1] -= Math.sign(d) * over * (1 - a); moved = true;
+    }
+    for (let i = 1; i + 1 < n; i++) {
+      if (fixed[i]) continue;
+      const d1 = Math.max(.5, s[i] - s[i - 1]), d2 = Math.max(.5, s[i + 1] - s[i]);
+      const g1 = (y[i] - y[i - 1]) / d1, g2 = (y[i + 1] - y[i]) / d2, lim = o.maxGradeChange * (d1 + d2) / 2;
+      if (Math.abs(g2 - g1) <= lim + 1e-6) continue;
+      const line = y[i - 1] + (y[i + 1] - y[i - 1]) * d1 / (d1 + d2);
+      y[i] += (line - y[i]) * (1 - lim / Math.abs(g2 - g1)) * .7; moved = true;
     }
     if (!moved) break;
   }
