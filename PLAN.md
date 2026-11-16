@@ -454,6 +454,154 @@ Goal: the 3D view was unoptimized. Cut GPU and CPU cost on every route, then spe
 Worst scenery-streaming frame over 600 m of riding (headless CPU, slower than the M4): Yosemite 409 → 17 ms, Acadia 291 → 12 ms, Route 28 272 → 19 ms, Going-to-the-Sun 153 → 25 ms, Pittsburgh 141 → 8 ms, Big Sur 67 → 15 ms. Triangles rise a little on most routes (tree cards; pooled plants cull by sector, not tile); they are off-screen vertices, cheap next to the draw calls saved. `npm test` 96/96, routes:check clean; Pittsburgh clipping QC 0 fail (127 warnings, was 128).
 
 - [ ] **Mac check**: the `I` overlay at Light / Balanced / High on a few routes; GPU frame time can only be measured there (Balanced now renders at 2×: if it is over budget, set `balanced.pixelRatio` back to 1.5 in COASTAL_QUALITY)
+### Route 28 lean cartoon *(test branch `route28-cartoon`, from `main`)*
+Goal: cut graphical demand as far as possible while improving the feel. Style guide, Route 28 measurements and plan: the "bikefree style guide: lean cartoon (Route 28 pass)" doc (project doc `claude/lean-cartoon-style.md`). Baseline before perf-test: about 430 draw calls on Balanced (ground 87, far trees 69, lakes 67, mid trees 54); only 11–18% of the trees built are ever seen. After perf-test (#23): 275 at the preview spot, 354 in Old Forge.
+
+**Decisions (16 Nov 2026)**
+- One pre-rendered time of day per route (two may come later, not now)
+- Side-by-side look test first (gentle vs bold) before rebuilding anything → **chosen: cartoon gentle at midday** (Route 28's one time of day)
+- Outlines: a full-screen edge pass (the one post pass allowed)
+- Rider: cartoon treatment, but with more triangles and better texturing than first proposed
+- Chase camera only: drone, scenic, side and eye retired
+
+**Passes**
+- [x] Chase camera only: app, settings, HUD button, <kbd>C</kbd>, preview and snapshot tool
+- [x] Look test: `?look=gentle|bold` in the preview, `:gentle` / `:bold` in `npm run snap` (`js/world/look.js`: toon bands from direct sun with cool shadows, colour grade, smooth crowns, flat road, depth-edge outlines). New `afternoon` time (sun 24°) as a candidate signature time. Results: [docs/route28/look-test/](docs/route28/look-test/README.md)
+- [x] Look chosen: gentle at midday. Route 28's scene has `"look": "gentle"` and `"timeOfDay": "midday"`; `?look=none` (preview) or `:current` (snap) shows the old look
+- [x] Merged perf-test (#23): outlines moved into `post.js`'s final pass (reads the scene target's depth, reversed or logarithmic; no extra full-screen pass); the chase-only camera kept through its allocation-free camera and texel-snapped shadows
+- [ ] 1. Tools and baseline: `perf:calls` (exact draw calls) and `qc:visibility` (ID-buffer test)
+- [ ] 3. Quick wins: 2.4 km lake chunks with mist in the lake shader, far plane at the fog, single-sided ground, rider blob shadow (perf-test already did one cloud mesh, pooled ground per 4.6 km block, near-only shadow casters, water after land)
+- [ ] 4. Trees in one `BatchedMesh`
+- [ ] 5. Visibility bake: build only trees seen from the chase camera
+- [ ] 6. Fixed light: toon material, pre-rendered tile shadows, baked AO, no shadow map
+- [ ] 7. Cartoon kit, towns merged, sign atlas, ground rings, cartoon rider
+- [ ] 8. Check and ship: under 80 calls on Balanced, M4 Air ride
+
+### Going-to-the-Sun visual pass: vista kit *(test branch `goingtothesun-visual-test`, from `main` + `route28-cartoon`)*
+Goal: at a distance the map looked flat and uninteresting, with mountain faces as smooth colour ramps and
+bare peaks, evenly spread trees, and little depth. Make it immersive without making it more photorealistic,
+in pieces other routes can reuse, and balanced against the graphics cost. Review with pictures:
+[docs/goingtothesun/vista/](docs/goingtothesun/vista/README.md).
+
+**Decisions (Matt, 16 Nov 2026)**
+- Cartoon look, as on Route 28 (gentle), at **midday** (golden hour is gone as the default)
+- Distance priorities: rock detail on the faces, snowfields, stronger depth haze, better sky and clouds
+- Forest far off: denser, even cover. The valley gets occasional views to Lake McDonald and the peaks
+- Believable but generic (not mapped rock bands and named snowfields)
+- Portable: one kit, switched on per scene (`"vista"`)
+- Budget: up to 450 draw calls on this hero route
+- Fewer weather presets: kept clear, valley fog and clouds on the peaks; dropped rain and wildfire smoke
+- No look test: build it directly
+
+**Done**
+- [x] Merged `route28-cartoon` (cartoon look, chase camera only). Going-to-the-Sun: `"look": "gentle"`,
+  `"timeOfDay": "midday"`. The Glacier kit is built with smooth crowns in the cartoon look (`withSmooth`).
+- [x] `js/world/vista.js`, the vista kit: ground-shader rock (gullies and spurs, ledges, loose rock), snow
+  in the gullies and on the ledges, meadow patches, the distant canopy as crowns, cartoon cumulus. Aerial
+  perspective in the shared fog chunk (`haze.js`: `AERIAL`), ridge ink in `post.js`. ROUTES.md → *Vista kit*.
+- [x] `forest.js`: `tierKeep` (denser outer tiers) and `windows` (gaps toward the lake and down the valley)
+- [x] Going-to-the-Sun scene: `vista` block, `palette.scree` / `palette.shrub`, slightly muted grass and
+  meadow, `forestDensity` 0.82, `tierKeep [1, .66, .5]`, windows every ~850 m
+- [x] Checks: `npm test` 96/96; `qc --strict` clean; `routes:check` clean; clipping QC 0 fail, 8 shoreline
+  z-fight warnings (unchanged); 231–353 draw calls and 1.59–2.09 M triangles headless (main: 230–357 and
+  1.59–2.02 M)
+
+- [x] Guardwalls reworked: rubble-masonry parapets (`js/world/stonework.js`), knee-high with a rounded cap
+  and regular openings. They follow the grade, sit on masonry footings and are culled by stretch. Triangles
+  went down: 1.48–1.90 M at the checked spots.
+- [x] Road surface by area and condition (`js/world/road-surface.js`, the scene's `road` zones):
+  - fresh at Apgar and on the east side
+  - worn along Lake McDonald
+  - chip seal up McDonald Creek
+  - alpine (bleached, frost cracks, patches, snowmelt) from the Loop to Logan Pass, wet at the Weeping Wall
+  - tunnel grime
+  - patched on the east descent
+  - The rain preset's wet road now chains onto it.
+
+**Life and interest pass** (Matt, 16 Nov 2026)
+Matt picked rock cuts, water, buses and people, roadside detail, a burn, wildlife set pieces and the real
+viewpoints. Not picked: sound, camera feel, timber guardrail.
+
+*Decisions*
+- The road only looks narrower (no geometry change).
+- No centre line up high, faded where it returns.
+- Paved but rougher up high (gravel shoulders, loose gravel, patching).
+- No construction zone.
+- Rock cuts with debris.
+- The full water set.
+- Red Jammers plus walking people.
+- Mile markers in miles.
+- A ride-through burn plus burned slopes across the lake.
+- Animals at fixed spots, no bear jam.
+- The real overlooks plus a few random lake windows.
+- Same budget; build it all, then review.
+
+*Done*
+- [x] **Road:**
+  - paved 5.9–6.4 m from 30 to 56.5 km, with gravel shoulders and the edge lines moved in
+  - no centre line from 34.7 to 52.5 km, faded 1 km either side
+  - loose gravel in the alpine and east-descent zones (`road-surface.js`: `pavedM`, `centre`, `gravel`)
+- [x] **Rock cuts:** ground attribute `aVk` (cut depth, burn). Blasted grey faces with seeps, and the ribs calmed on the cut.
+- [x] **Verge** (`verge.js`): miles 1–46, snow poles 30.5–56.5 km, delineators in the valley and on the east side, fallen rock below the deeper cuts.
+- [x] **Water:**
+  - Weeping Wall strands arcing onto the road
+  - 31 culverts found from the terrain, with masonry headwalls, pipes and cascades in the steep gullies
+  - McDonald Creek traced 16.8–23.2 km
+  - white water on every creek where it drops
+- [x] **Traffic and people:**
+  - Red Jammers about 1 vehicle in 4, and parked at overlooks
+  - visitors at Logan Pass, Lake McDonald Lodge, Rising Sun, St. Mary, Avalanche and every overlook (`visitors.js`)
+- [x] **Burns:** a 1.8 km ride-through above Lake McDonald (14–15.6 km) and the slopes across the lake. Snags, regrowth and fireweed.
+- [x] **Wildlife:** goats above the road at 43.5 km, bighorn at Logan Pass (one on the shoulder), a marmot on the wall at about 45.5 km.
+- [x] **Views:** windows at 11 real viewpoints. Random windows toward the lake only.
+
+*Leftovers fixed (16 Nov 2026)*
+- The "floating rock" before Logan Pass was a snowbank lying flat on a steep slope. Snowbanks now skip slopes over 0.45, tilt with the ground and sink by the slope.
+- **Garden Wall smear:** near the camera, steepness is judged per triangle, so the grass and rock edges are crisp. Tile skirts are left out of this. Rock covers 93%.
+- **Tree-shadow blotches on steep faces:** object shadows on the ground fade on steep slopes (`vkShadowK`, patched into three's directional shadow line).
+
+**Trees, grass and flowers pass** (Matt, 16 Nov 2026)
+
+*Decisions*
+- All of it:
+  - real heights with an age mix
+  - layered limbs
+  - crown character
+  - logs and stumps
+  - bark by species
+  - foliage clumps
+  - aspen flutter
+  - lichen and moss
+  - grass in shades
+  - more shrubs
+  - grass close to the rider
+  - moss, rocks and deadfall
+  - flower drifts with more species, by zone, plus a roadside strip
+- Detail goes in the near band.
+- Going-to-the-Sun only for now.
+- A little more budget (up to about 2.5 M triangles).
+- Build it, then review.
+
+*Done*
+- [x] Glacier kit trees, floor items, grasses, shrubs and flowers.
+- [x] `decorateTreeMaterial`.
+- [x] Planting in `forest.js` (`vegetation.rich`).
+- [x] Cover by zone, near-road tufts and flower drifts.
+- [x] **Draw calls:**
+  - lakes beyond 7.5 km aren't drawn (`water.lakeReachM`)
+  - talus is in the near tier only
+  - small floor items cast no shadows
+  - one variant each for the floor items
+- [x] **Results:** 217–355 calls and 1.67–2.28 M triangles headless on Balanced. Clipping QC: 0 fail, 4 shoreline z-fight warnings. A camera-inside warning from a big cedar crown by the road was fixed: crowns near the road are capped, and giants stay more than 22 m away.
+
+*Known leftovers*
+- The Garden Wall's base reads as low-poly facets (crisp) rather than a smear.
+
+**Still to check**
+- [ ] A ride on the M4 Air with the `I` overlay: the ground shader is heavier (about 40 value-noise lookups
+  per pixel on mountain faces, fewer on flat ground). If it's over budget, drop `rock.ledges` or `meadow`
+  first.
+- [ ] Roll the kit out: Big Sur (haze, clouds, rock), Route 28 (haze, clouds, forest crowns)
 
 ### Alpe d'Huez — Tour de France 2026 Stage 19 *(test branch `alpedhuez-test`, from `main`)*
 **Goal:** a new route that matches the real Tour stage's distance and elevation, as a wireframe first (scenery comes later). In **Rough Drafts**.

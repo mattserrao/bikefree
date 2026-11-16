@@ -183,7 +183,10 @@ export class Weather {
     this.roadMaterials = meshes.map((m) => m.material).filter((m) => m.isMeshStandardMaterial);
     for (const material of this.roadMaterials) {
       material.userData.dry = { roughness: material.roughness, color: material.color.clone() };
-      material.onBeforeCompile = (shader) => {
+      // keep whatever the road already adds (the road surface, road-surface.js)
+      const prev = material.onBeforeCompile, prevKey = material.customProgramCacheKey();
+      material.onBeforeCompile = (shader, renderer) => {
+        prev.call(material, shader, renderer);
         shader.uniforms.bfWet = this.u.bfWet;
         shader.uniforms.bfSkyH = this.u.uSkyHorizon || { value: new THREE.Color('#c6d2d8') };
         shader.fragmentShader = shader.fragmentShader
@@ -198,7 +201,7 @@ export class Weather {
             gl_FragColor.rgb = mix(gl_FragColor.rgb, bfSkyH * .8, bfWet * clamp(fr * .75 + puddle * .45, 0., .8));
             #include <fog_fragment>`);
       };
-      material.customProgramCacheKey = () => 'bf-wet-road';
+      material.customProgramCacheKey = () => `${prevKey}|bf-wet-road`;
       material.needsUpdate = true;
     }
   }

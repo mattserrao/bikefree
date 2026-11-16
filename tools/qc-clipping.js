@@ -569,7 +569,7 @@ export async function shot(f, w = 640, h = 384) {
   world.renderer.setPixelRatio(1); world.renderer.setSize(w, h, false); world.camera.aspect = w / h; world.camera.updateProjectionMatrix();
   const riderView = /^(rider-clips|surface-in-rider|camera-inside|view-blocked|vehicle-through-rider|person-through-rider)$/.test(f.check);
   const s = f.atRide ?? f.at ?? 0;
-  world.s = s; world._camInit = false; world.setCamera('chase');
+  world.s = s; world._camInit = false;
   for (let k = 0; k < 4; k++) world.renderOnce();
   if (!riderView && f.point) {
     const [x, y0, z] = f.point, y = y0 ?? (world.terrain.heightAt(x, z) ?? 0);

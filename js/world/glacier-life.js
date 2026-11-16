@@ -68,17 +68,20 @@ export class GlacierLife {
     this.rand = randomSequence(5521); this.disposables = [];
     this.material = this._own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 }));
     this.m = new THREE.Matrix4(); this.q = new THREE.Quaternion(); this.e = new THREE.Euler(0, 0, 0, 'YXZ');
-    const herds = (list, geometry, name, opts) => {
-      const matrices = [];
+    // set pieces at fixed spots, placed so the chase camera sees them (life.moments)
+    const moments = {};
+    for (const mo of config.moments || []) (moments[mo.kind] ||= []).push(...this._moment(mo));
+    const herds = (list, geometry, name, opts, kind) => {
+      const matrices = [...(moments[kind] || [])];
       for (const h of list || []) matrices.push(...this._herd(h, opts));
       if (!matrices.length) return null;
       const mesh = new THREE.InstancedMesh(this._own(geometry), this.material, matrices.length);
       matrices.forEach((mm, i) => mesh.setMatrixAt(i, mm)); mesh.castShadow = mesh.receiveShadow = true;
       mesh.name = name; mesh.computeBoundingSphere(); this.group.add(mesh); return mesh;
     };
-    herds(config.goats, goat(), 'Mountain goats', { maxSlope: 1.25, minRoad: 14 });
-    herds(config.bighorn, bighorn(), 'Bighorn sheep', { maxSlope: .8, minRoad: 18 });
-    herds(config.marmots, marmot(), 'Hoary marmots', { maxSlope: .9, minRoad: 9 });
+    herds(config.goats, goat(), 'Mountain goats', { maxSlope: 1.25, minRoad: 14 }, 'goat');
+    herds(config.bighorn, bighorn(), 'Bighorn sheep', { maxSlope: .8, minRoad: 18 }, 'bighorn');
+    herds(config.marmots, marmot(), 'Hoary marmots', { maxSlope: .9, minRoad: 9 }, 'marmot');
     herds(config.squirrels, squirrel(), 'Ground squirrels', { maxSlope: .5, minRoad: 7 });
     // the bear walks slowly back and forth across its meadow
     this.bears = (config.bears || []).map((b) => this._herd({ ...b, count: 1 }, { maxSlope: .6, minRoad: b.lateralM || 150 })[0]).filter(Boolean)
@@ -114,6 +117,40 @@ export class GlacierLife {
 
   _own(x) { this.disposables.push(x); return x; }
   _frame(s) { return this.L.frameAt(Math.max(0, Math.min((this.route.turnS || this.route.total) - 1, s))); }
+
+  /**
+   * A set piece: animals at fixed places beside the road.
+   *   { kind, atM, count, where: "uphill" | "valley" | "shoulder" | "wall", lateralM: [min, max], spacingM }
+   * "wall" sits them on top of the guardwall (the first stretch of wall from atM on), "shoulder" just off the
+   * travelled lane, facing across the road.
+   */
+  _moment(mo) {
+    const out = [], rand = randomSequence(Math.floor(mo.atM * 3) + 11), up = V(0, 1, 0);
+    const F = (s) => this._frame(s);
+    const valleySide = (p) => (this.L.baseHeight(p.x - p.fz * 16, p.z + p.fx * 16) < this.L.baseHeight(p.x + p.fz * 16, p.z - p.fx * 16) ? 1 : -1);
+    for (let k = 0; k < (mo.count || 1); k++) {
+      let s = mo.atM + k * (mo.spacingM ?? 4) + (rand() - .5) * 2, p = F(s), vs = valleySide(p), side, off, y, yaw;
+      if (mo.where === 'wall') {
+        // walk on to where the ground falls away under the wall
+        for (let t = 0; t < 400 && p.y - this.L.heightAt(p.x - p.fz * vs * 18, p.z + p.fx * vs * 18) < 4; t += 3) { s += 3; p = F(s); vs = valleySide(p); }
+        side = vs; off = 3.5 + 1.1; y = p.y + .66;
+        yaw = Math.atan2(p.fz * side, -p.fx * side);   // facing the road
+      } else if (mo.where === 'shoulder') {
+        side = mo.side ?? -vs; off = 3.5 + .7 + rand() * .8;
+        yaw = Math.atan2(p.fz * side, -p.fx * side) + (rand() - .5) * .8;   // looking across the road
+      } else {
+        side = mo.where === 'valley' ? vs : -vs;
+        const [a, b] = mo.lateralM || [14, 30]; off = a + rand() * (b - a);
+        yaw = Math.atan2(p.fz * side, -p.fx * side) + (rand() - .5) * 1.4;   // roughly toward the road
+      }
+      const x = p.x - p.fz * side * off, z = p.z + p.fx * side * off;
+      y ??= this.L.heightAt(x, z) - .04;
+      this.q.setFromAxisAngle(up, yaw);
+      const sc = (mo.scale ?? 1) * (.92 + rand() * .16);
+      out.push(this.m.compose(V(x, y, z), this.q, V(sc, sc, sc)).clone());
+    }
+    return out;
+  }
 
   /** Matrices for a group of animals around a point on the road (or beside it). */
   _herd(h, { maxSlope, minRoad }) {

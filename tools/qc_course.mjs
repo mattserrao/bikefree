@@ -359,7 +359,7 @@ export function htmlReport(results, { previewHref = 'world-preview.html' } = {})
     <td class="${r.warns ? 'warn' : ''}">${r.warns}</td><td>${r.maxHeading.toFixed(1)}</td><td>${r.rawGapMax.toFixed(0)}</td></tr>`).join('');
   const sections = results.map((r) => {
     const items = r.findings.map((f) => {
-      const link = r.preview ? `<a href="${previewHref}?park=${r.preview}&pos=${Math.round(f.at)}&cam=drone">view</a> · <a href="${previewHref}?park=${r.preview}&pos=${Math.round(f.at)}&cam=chase">ride</a>` : '';
+      const link = r.preview ? `<a href="${previewHref}?park=${r.preview}&pos=${Math.round(f.at)}">ride</a>` : '';
       return `<tr class="${f.severity}"><td>${f.severity.toUpperCase()}</td><td>${esc(f.check)}</td><td>${km(f.from)}${f.to - f.from > 1 ? `–${km(f.to)}` : ''}</td>
         <td>${f.value.toFixed(2)}</td><td>${f.count}</td><td>${esc(f.note)}</td><td>${link}</td></tr>`;
     }).join('');

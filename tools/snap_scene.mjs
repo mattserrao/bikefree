@@ -2,11 +2,12 @@
 // Scene snapshots: render 3D route views headlessly and save them as images, with the
 // draw calls and triangles each view costs. The visual half of course QC.
 //
-//   npm run snap -- route28@10650 route28@19050:morning route28@16200:drone pittsburgh
+//   npm run snap -- route28@10650 route28@19050:morning route28@16200 pittsburgh
 //   node tools/snap_scene.mjs --out tools/snapshots --quality high bigsur@21800:golden:fall
 //
-// A shot is  <park>[@metres][:camera][:time][:season][:weather]  — camera chase|drone|vista|side|eye,
-// time midday|morning|golden|night, season summer|fall, weather clear|marine|clouds|rain|smoke.
+// A shot is  <park>[@metres][:time][:season][:weather], always from the chase camera (the only one):
+// time midday|morning|afternoon|golden|night, season summer|fall, weather clear|marine|clouds|rain|smoke,
+// look gentle|bold|current (default: the scene's own look; current = no cartoon).
 // No @metres = the scene's preview spot.
 // Options: --out <dir> (default tools/snapshots), --quality low|balanced|high, --size 1280x720,
 // --chrome <path> (default: CHROME env, else the usual Mac/Linux locations), --software (no GPU).
@@ -29,14 +30,17 @@ const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chro
   '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync));
 if (!args.length) { console.log('usage: npm run snap -- <park>[@metres][:camera][:time][:season][:weather] …'); process.exit(1); }
 
-const CAMERAS = ['chase', 'drone', 'vista', 'side', 'eye'];
-const TIMES = ['midday', 'morning', 'golden', 'night'];
+const LOOKS = ['gentle', 'bold', 'current'];   // current = no cartoon look, whatever the scene says
+const OLD_CAMERAS = ['chase', 'drone', 'vista', 'side', 'eye'];   // retired: ignored with a warning
+const TIMES = ['midday', 'morning', 'afternoon', 'golden', 'night'];
 const WEATHERS = ['clear', 'marine', 'clouds', 'rain', 'smoke'];
 const shots = args.map((spec) => {
   const [where, ...tags] = spec.split(':');
   const [park, pos] = where.split('@');
-  const shot = { spec, park, pos, cam: tags.find((t) => CAMERAS.includes(t)), time: tags.find((t) => TIMES.includes(t)), season: tags.find((t) => ['summer', 'fall'].includes(t)), weather: tags.find((t) => WEATHERS.includes(t)) };
-  shot.name = [park, pos, shot.cam, shot.time, shot.season, shot.weather].filter(Boolean).join('-');
+  const old = tags.find((t) => OLD_CAMERAS.includes(t) && t !== 'chase');
+  if (old) console.warn(`${spec}: the ${old} camera was retired; using the chase camera`);
+  const shot = { spec, park, pos, time: tags.find((t) => TIMES.includes(t)), season: tags.find((t) => ['summer', 'fall'].includes(t)), weather: tags.find((t) => WEATHERS.includes(t)), look: tags.find((t) => LOOKS.includes(t)) };
+  shot.name = [park, pos, shot.time, shot.season, shot.weather, shot.look].filter(Boolean).join('-');
   return shot;
 });
 
@@ -66,7 +70,7 @@ await mkdir(resolve(ROOT, out), { recursive: true });
 const rows = [];
 for (const shot of shots) {
   const t0 = Date.now(); errors.length = 0;
-  const q = new URLSearchParams({ park: shot.park, clean: '1', quality, ...(shot.pos ? { pos: shot.pos } : {}), ...(shot.cam ? { cam: shot.cam } : {}), ...(shot.time ? { time: shot.time } : {}), ...(shot.season ? { season: shot.season } : {}), ...(shot.weather ? { weather: shot.weather } : {}) });
+  const q = new URLSearchParams({ park: shot.park, clean: '1', quality, ...(shot.pos ? { pos: shot.pos } : {}), ...(shot.time ? { time: shot.time } : {}), ...(shot.season ? { season: shot.season } : {}), ...(shot.weather ? { weather: shot.weather } : {}), ...(shot.look ? { look: shot.look === 'current' ? 'none' : shot.look } : {}) });
   await page.goto(`${base}/tools/world-preview.html?${q}`);
   if (breakdown) await page.evaluate(() => { window.__breakdown = true; });
   await page.waitForFunction(() => window.world?.terrain && (window.world.terrain.kit || !window.world.stylized) && window.world._camInit, null, { timeout: 180000, polling: 500 });

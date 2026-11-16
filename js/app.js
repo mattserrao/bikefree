@@ -439,7 +439,6 @@ function showSetup() {
 $('pauseBtn').addEventListener('click', () => session.pause());
 $('resumeBtn').addEventListener('click', () => session.start());
 $('finishBtn').addEventListener('click', () => openSummary());
-$('camBtn').addEventListener('click', cycleCamera);
 
 document.addEventListener('keydown', (e) => {
   if (e.target.closest('input, select, textarea') || document.querySelector('dialog[open]')) return;
@@ -451,7 +450,6 @@ document.addEventListener('keydown', (e) => {
   else if (k === ' ' && onRideScreen) session.toggle();
   else if (k === 'l' || k === 'L') session.lap();
   else if ((k === 'n' || k === 'N') && session.mode === 'workout') session.skipSegment();
-  else if ((k === 'c' || k === 'C') && onRideScreen) cycleCamera();
   else if ((k === 'm' || k === 'M') && onRideScreen) cycleMinimap();
   else if ((k === ',' || k === '.') && trainer.demo) setDemoSpeed(DEMO_MPH + (k === '.' ? 5 : -5));
   else if ((k === 'f' || k === 'F') && onRideScreen) toggleFullscreen();
@@ -531,7 +529,6 @@ async function openWorld(route) {
     return;
   }
   worldRoute = route;
-  world.setCamera(settings.worldCam);
   world.setTimeOfDay(settings.worldTime);
   world.setWeather(settings.worldWeather || 'clear', true);
   world.setSource(() => ({ pos: riderPosOn(route), speed: session.speedMps, cadence: session.cadence, riding: true }));
@@ -552,12 +549,6 @@ function cycleWeather() {
   saveSettings(settings);
   world?.setWeather(next.key);
   toast(`Weather: ${next.label}`);
-}
-function cycleCamera() {
-  const order = ['chase', 'eye', 'side', 'drone'];
-  settings.worldCam = order[(order.indexOf(settings.worldCam) + 1) % order.length];
-  saveSettings(settings);
-  world?.setCamera(settings.worldCam);
 }
 document.addEventListener('visibilitychange', () => {
   if (!world || !onRideScreen) return;
@@ -1304,7 +1295,6 @@ function fillSettings() {
   f.theme.value = window.BFTheme?.pref() || 'system';
   f.units.value = settings.units;
   f.bike.value = +(imp ? settings.bikeKg / KG_PER_LB : settings.bikeKg).toFixed(1);
-  f.worldCam.value = settings.worldCam;
   f.worldTime.value = settings.worldTime;
   f.worldQuality.value = settings.worldQuality;
   f.worldWeather.value = settings.worldWeather || 'clear';
@@ -1336,7 +1326,6 @@ dlg.addEventListener('close', () => {
   Object.assign(settings, {
     units: f.units.value,
     bikeKg: kg(f.bike.value) || settings.bikeKg,
-    worldCam: f.worldCam.value,
     worldTime: f.worldTime.value,
     worldQuality: f.worldQuality.value,
     worldWeather: f.worldWeather.value,
@@ -1351,7 +1340,6 @@ dlg.addEventListener('close', () => {
   saveSettings(settings);
   window.BFTheme?.set(f.theme.value);
   session.settingsChanged();
-  world?.setCamera(settings.worldCam);
   world?.setTimeOfDay(settings.worldTime);
   world?.setQuality(settings.worldQuality);
   world?.setWeather(settings.worldWeather);
