@@ -424,7 +424,7 @@ export function buildLandmarks(city) {
   }
 
   // Storefront awnings and shop signs along the main street(s).
-  const streets = scene.mainStreets || [];
+  const streets = scene.streetKit ? [] : scene.mainStreets || [];   // [street-kit] the kit dresses the shop fronts
   if (streets.length) {
     const cvs = document.createElement('canvas'); cvs.width = 1024; cvs.height = 512;
     const ctx = cvs.getContext('2d');

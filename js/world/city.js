@@ -8,6 +8,7 @@ import { MeshBuilder, ribbon, resample, hash } from './city-geometry.js';
 import { buildBridges, buildStadiums, buildLandmarks } from './city-bridges.js';
 import { buildHeroes } from './city-heroes.js';
 import { CityLife } from './city-life.js';
+import { StreetKit, streetKitConfig } from './street-kit.js';   // [street-kit]
 import { ROAD_WIDTH } from './pose.js';
 
 export { STREET_W };
@@ -42,6 +43,7 @@ export class CityScene {
     this._decodeBuildings();
     this._materials();
     this._water();
+    { const k = streetKitConfig(this.route.scene); if (k) this.streetKit = new StreetKit(this, k, { chunk: CHUNK }); }   // [street-kit] (before the lamps and trees: it places some of both)
     this._streetsAndLamps();
     this.bridges = buildBridges(this);
     this.stadiums = buildStadiums(this);
@@ -52,7 +54,7 @@ export class CityScene {
     this.landscape.landmarks.push(...this.heroes.landmarks);   // postcard views for the scenic camera
     this._trees();
     this.life = new CityLife(this);
-    this._pending = [...this.buildingChunks.keys()];
+    this._pending = [...new Set([...this.buildingChunks.keys(), ...(this.streetKit?.keys() || [])])];   // [street-kit] (+ chunks with only kit content)
   }
 
   own(x) { this.disposables.add(x); return x; }
@@ -570,7 +572,7 @@ export class CityScene {
 
   // ---------------------------------------------------------------- buildings
   _buildChunk(key) {
-    const list = this.buildingChunks.get(key);
+    const list = this.buildingChunks.get(key) || [];   // [street-kit] (a chunk can hold only street-kit content)
     const B = new MeshBuilder({ aBld: 4 });
     const extras = new MeshBuilder();   // spires, rooftop details (plain vertex colour)
     const roofTint = new THREE.Color();
@@ -589,7 +591,8 @@ export class CityScene {
       const palette = KIND_COLORS[b.kind] || KIND_COLORS[2];
       const seed = hash(b.k * 7919 + 13);
       const base = new THREE.Color(palette[Math.floor(seed * palette.length)]).multiplyScalar(.9 + hash(b.k) * .18);
-      B.color(base).set({ aBld: [b.kind, seed * 100, ground, 0] });
+      const kit = this.streetKit?.building(b, ring, ground, y0, y1, base, key, B);   // [street-kit] facade detail (bays into B); window grid base, roof colour
+      B.color(base).set({ aBld: [b.kind, seed * 100, kit ? kit.winBase : ground, 0] });
       const facets = b.kind === 6 && b.h > 18;   // PPG Place: glass in rows of projecting prisms
       let mx = 0, mz = 0; for (const p of ring) { mx += p.x; mz += p.z; } mx /= ring.length; mz /= ring.length;
       for (let i = 0; i < ring.length; i++) {
@@ -606,7 +609,7 @@ export class CityScene {
         }
       }
       // flat roof, a little darker (tar and gravel), with a parapet colour band from the walls
-      roofTint.copy(base).lerp(new THREE.Color(b.kind === 6 ? '#2f3a40' : '#6a6762'), .65);
+      roofTint.copy(base).lerp(kit?.roof || new THREE.Color(b.kind === 6 ? '#2f3a40' : '#6a6762'), kit ? .9 : .65);   // [street-kit]
       B.color(roofTint).set({ aBld: [b.kind, seed * 100, ground, 1] });
       const contour = ring.map((p) => new THREE.Vector2(p.x, p.z));
       let tris;
@@ -617,7 +620,7 @@ export class CityScene {
         const ax = ring[j].x - ring[i].x, az = ring[j].z - ring[i].z, bx = ring[k].x - ring[i].x, bz = ring[k].z - ring[i].z;
         if (az * bx - ax * bz > 0) B.tri(first + i, first + j, first + k); else B.tri(first + i, first + k, first + j);
       }
-      this._rooftop(extras, b, ring, y1, seed);
+      this._rooftop(extras, b, ring, y1, seed, !!kit);
     }
     const mesh = new THREE.Mesh(this.own(B.geometry()), this.buildingMaterial);
     mesh.castShadow = mesh.receiveShadow = true; mesh.name = `Buildings ${key}`;
@@ -627,11 +630,12 @@ export class CityScene {
       const em = new THREE.Mesh(this.own(extras.geometry()), this.solidMaterial);
       em.castShadow = em.receiveShadow = true; this.group.add(em); out.push(em);
     }
+    this.streetKit?.finishChunk(key, out);   // [street-kit] sidewalks, furniture, trim
     this.chunks.set(key, out);
   }
 
   /** Rooftops that make the skyline: PPG Place's glass spires, the Gulf Tower's stepped pyramid, masts, water tanks. */
-  _rooftop(M, b, ring, y1, seed) {
+  _rooftop(M, b, ring, y1, seed, kit = false) {
     let cx = 0, cz = 0; for (const p of ring) { cx += p.x; cz += p.z; } cx /= ring.length; cz /= ring.length;
     if (b.kind === 6 && b.h > 18) {
       M.color('#2e3a42');
@@ -652,12 +656,13 @@ export class CityScene {
       M.color('#8d9aa3'); M.cylinder(cx, y1, cz, .5, 30, 6, .15);
     } else if (b.h > 60) {
       M.color('#7b7f82'); M.box(cx, y1, cz, 9, 4.5, 9);
+    } else if (kit) {   // [street-kit] the kit dresses ordinary roofs
     } else if (b.kind === 0 && seed > .8 && b.h < 14) {
       M.color('#5a524b'); M.box(cx, y1, cz, 1.2, 1.4, 1.2);   // chimney
-    } else if ((b.kind === 2 || b.kind === 3) && seed > .86) {
-      M.color('#7d6b58'); M.cylinder(cx, y1 + 3.5, cz, 2.2, 3.5, 10, 2.2);   // water tank
-      M.color('#5d5650'); M.pyramid(cx, y1 + 7, cz, 4.6, 1.8);
-      for (const [dx, dz] of [[-1.5, -1.5], [1.5, -1.5], [1.5, 1.5], [-1.5, 1.5]]) M.box(cx + dx, y1, cz + dz, .25, 3.5, .25);
+    } else if ((b.kind === 2 || b.kind === 3) && seed > .86 && b.h > 13) {   // [street-kit] a timber water tank at its real size (≈ 3 m across, 2.6 m tall on 1.8 m legs; was 4.4 m on 3.5 m)
+      M.color('#7d6b58'); M.cylinder(cx, y1 + 1.8, cz, 1.45, 2.6, 10, 1.45);
+      M.color('#5d5650'); M.pyramid(cx, y1 + 4.4, cz, 3.1, 1.0);
+      for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) M.box(cx + dx, y1, cz + dz, .18, 1.8, .18);
     }
   }
 
@@ -702,12 +707,14 @@ export class CityScene {
       if (deckBridge && deckBridge.style && deckBridge.style !== 'girder') continue;   // styled bridges carry their own lights
       for (const side of kind === 'road' ? [-1, 1] : [Math.floor(s / every) % 2 ? 1 : -1]) {
         // on a girder deck: on the slab inside the railing ((ROAD_WIDTH + 3) / 2 + .25)
+        const kitLamp = !deckBridge && kind === 'road' ? this.streetKit?.routeLamp(s, side) : undefined;   // [street-kit] in a kit zone: at the curb, on its sidewalk
+        if (kitLamp === null) continue;   // [street-kit] (no sidewalk there: a junction)
         const off = deckBridge ? (ROAD_WIDTH + 3) / 2 + .05 : ROAD_WIDTH / 2 + (kind === 'road' ? 2.6 : 1.6);
-        const x = this.index.xs[i] - dz / len * off * side, z = this.index.zs[i] + dx / len * off * side;
+        const x = kitLamp ? kitLamp.x : this.index.xs[i] - dz / len * off * side, z = kitLamp ? kitLamp.z : this.index.zs[i] + dx / len * off * side;
         if (!deckBridge && !this._clearSpot(x, z, .35, -1, ROAD_WIDTH / 2 + 1.2)) continue;
         // on a deck: not in another carriageway that runs alongside at the same level (the roadway's other half)
         if (deckBridge && this.landscape.streetsNear(x, z, .35).some((o) => this.streets[o.k].cls !== 8 && Math.abs(o.y - r.ele[i]) < 1.5)) continue;
-        lamps.push({ x, z, y: deckBridge ? r.ele[i] : this.landscape.heightAt(x, z), yaw: Math.atan2(dz / len * side, -dx / len * side), bridge: !!deckBridge });
+        lamps.push({ x, z, y: deckBridge ? r.ele[i] : kitLamp ? kitLamp.y : this.landscape.heightAt(x, z), yaw: Math.atan2(dz / len * side, -dx / len * side), bridge: !!deckBridge });   // [street-kit] (kitLamp.y)
       }
     }
     for (const [map, mat, name] of [[roads, this.streetMaterial, 'Streets'], [walks, this.sidewalkMaterial, 'Sidewalks'], [paths, this.pathMaterial, 'Paths']]) {
@@ -909,6 +916,8 @@ export class CityScene {
         }
       }
     });
+    const kitTrees = this.streetKit?.treeSpots() || [];   // [street-kit] street trees in the kit's tree pits (placed and checked by the kit)
+    spots.push(...kitTrees);
     const T = this.data.trees ? new Int16Array(Uint8Array.from(atob(this.data.trees), (c) => c.charCodeAt(0)).buffer) : [];
     for (let i = 0; i < T.length; i += 2) { const p = this.D.local(T[i], T[i + 1]); spots.push({ ...p, seed: hash(i) }); }
     // [s4-section] tree rows along the route (a riverfront park, an avenue): scene `routeTrees` =
@@ -967,11 +976,11 @@ export class CityScene {
       const road = this.index.nearest(t.x, t.z, 650);
       if (!road) continue;   // near the ride only
       // trunk clear of every carriageway, the crown clear of walls, and nothing growing over the rider's road
-      if (!this._clearSpot(t.x, t.z, 1.6, -1, ROAD_WIDTH / 2 + 2.4, t.wall ?? 1.2)) continue;   // [s4-section] t.wall
+      if (!t.kit && !this._clearSpot(t.x, t.z, 1.6, -1, ROAD_WIDTH / 2 + 2.4, t.wall ?? 1.2)) continue;   // [s4-section] t.wall, [street-kit] kit trees: checked
       const key = `${Math.floor(t.x / 480)},${Math.floor(t.z / 480)}`, w = .75 + t.seed * .5;
       q.setFromAxisAngle(Y, t.seed * 40);
       if (!lists.has(key)) lists.set(key, []);
-      lists.get(key).push({ m: m.compose(new THREE.Vector3(t.x, this.landscape.heightAt(t.x, t.z) - .1, t.z), q, new THREE.Vector3(w, w * (.85 + t.seed * .3), w)).clone(), seed: t.seed });
+      lists.get(key).push({ m: m.compose(new THREE.Vector3(t.x, t.y ?? this.landscape.heightAt(t.x, t.z) - .1, t.z), q, new THREE.Vector3(w, w * (.85 + t.seed * .3) * (t.sy || 1), w)).clone(), seed: t.seed });   // [street-kit] (sy: kit street trees stand taller)
     }
     for (const list of lists.values()) {
       const im = new THREE.InstancedMesh(geo, mat, list.length);
@@ -991,6 +1000,7 @@ export class CityScene {
       const [ax, az] = a.split(',').map(Number), [bx, bz] = b.split(',').map(Number);
       return Math.hypot((bx + .5) * CHUNK - cx, (bz + .5) * CHUNK - cz) - Math.hypot((ax + .5) * CHUNK - cx, (az + .5) * CHUNK - cz);
     });
+    if (this.streetKit) this.streetKit.deferred = !!this._warm;   // [street-kit] while riding, its chunk work runs in its own frame budget
     while (this._pending.length && performance.now() - t0 < (this._warm ? 7 : 400)) this._buildChunk(this._pending.pop());
     this._warm = true;
   }
@@ -1000,16 +1010,18 @@ export class CityScene {
     this.life.tick(camera, dt, time, rider);
     this.landmarks?.tick?.(time, dt);
     this.heroes?.tick?.(time, dt);
+    this.streetKit?.tick(camera);   // [street-kit] LOD
   }
 
   setNight(v) {
     this.night.value = v;
     this.landmarks?.setNight?.(v);
     if (this.poolMaterial) this.poolMaterial.opacity = v;
+    this.streetKit?.setNight(v);   // [street-kit]
     for (const m of this.nightOnly || []) m.visible = v > 0.01;
   }
 
-  setQuality(key) { this.qualityKey = key; this.life.setQuality(key); }
+  setQuality(key) { this.qualityKey = key; this.life.setQuality(key); this.streetKit?.setQuality(key); }   // [street-kit]
 
   dispose() {
     this.life.dispose();
