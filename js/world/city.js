@@ -913,6 +913,19 @@ export class CityScene {
     for (let i = 0; i < T.length; i += 2) { const p = this.D.local(T[i], T[i + 1]); spots.push({ ...p, seed: hash(i) }); }
     // [s4-section] tree rows along the route (a riverfront park, an avenue): scene `routeTrees` =
     // [{fromM, toM, spacingM = 12, offsetM = 7.5, sides: [-1, 1] (left, right of the ride)}]; spots that aren't clear are dropped
+    // [s4-section] yard trees: scene `vegetation.yardTrees` = {density, spacingM = 15, boxes: [[s, w, n, e]…]} — a
+    // jittered grid over the yards (land use "yards") inside the boxes (lat/lon), near the ride
+    const YT = this.route.scene?.vegetation?.yardTrees;
+    for (const [bs, bw, bn, be] of YT?.boxes || []) {
+      const P = this.D.proj, a = P.toLocal(bs, bw), b = P.toLocal(bn, be), g = YT.spacingM || 15;
+      for (let x = Math.min(a.x, b.x); x < Math.max(a.x, b.x); x += g) for (let z = Math.min(a.z, b.z); z < Math.max(a.z, b.z); z += g) {
+        const seed = hash(x * .37 + z * 1.13);
+        if (seed > (YT.density ?? .5)) continue;
+        const px = x + (hash(x + z * 3.1) - .5) * g * .8, pz = z + (hash(x * 2.3 - z) - .5) * g * .8;
+        if (this.landscape.landAt(px, pz) !== LAND.yards || !this.index.nearest(px, pz, 650)) continue;
+        spots.push({ x: px, z: pz, seed: hash(seed * 997), wall: 3 });   // crowns clear of the houses
+      }
+    }
     for (const row of this.route.scene?.routeTrees || []) {
       const R = this.route, I = this.index, last = (R.turnIdx || R.dist.length - 1) - 1;
       for (let s = row.fromM, n = 0; s < row.toM; s += row.spacingM || 12, n++) {
@@ -946,7 +959,7 @@ export class CityScene {
       const road = this.index.nearest(t.x, t.z, 650);
       if (!road) continue;   // near the ride only
       // trunk clear of every carriageway, the crown clear of walls, and nothing growing over the rider's road
-      if (!this._clearSpot(t.x, t.z, 1.6, -1, ROAD_WIDTH / 2 + 2.4, 1.2)) continue;
+      if (!this._clearSpot(t.x, t.z, 1.6, -1, ROAD_WIDTH / 2 + 2.4, t.wall ?? 1.2)) continue;   // [s4-section] t.wall
       const key = `${Math.floor(t.x / 480)},${Math.floor(t.z / 480)}`, w = .75 + t.seed * .5;
       q.setFromAxisAngle(Y, t.seed * 40);
       if (!lists.has(key)) lists.set(key, []);

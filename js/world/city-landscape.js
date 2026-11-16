@@ -395,14 +395,15 @@ export function makeCityLandscape(config, proj, index, route) {
     return (F[j * n + i] * (1 - a) + F[j * n + i + 1] * a) * (1 - b) + (F[(j + 1) * n + i] * (1 - a) + F[(j + 1) * n + i + 1] * a) * b;
   };
 
-  // [s4-section] yard trees in hillside neighbourhoods: scene `vegetation.yardTrees` = {density, boxes: [[s, w, n, e]…]}
-  // (lat/lon; no boxes: every yard). The city keeps them clear of its buildings.
+  // [s4-section] yard trees in hillside neighbourhoods: scene `vegetation.yardTrees` = {kitDensity, boxes: [[s, w, n, e]…]}
+  // (lat/lon; no boxes: every yard): the share of yard spots that take the shared kit's trees (in its grove patches);
+  // the city keeps them clear of its buildings and adds its own light trees on a grid (city.js `_trees`).
   const YT = config.vegetation?.yardTrees, ytBoxes = (YT?.boxes || []).map(([s, w, n, e]) => {
     const a = proj.toLocal(s, w), b = proj.toLocal(n, e);
     return [Math.min(a.x, b.x), Math.max(a.x, b.x), Math.min(a.z, b.z), Math.max(a.z, b.z)];
   });
   const yardTree = (x, z) => !!YT && (!ytBoxes.length || ytBoxes.some((b) => x > b[0] && x < b[1] && z > b[2] && z < b[3]))
-    && ((h) => h - Math.floor(h))(Math.sin(x * 4.1414 + z * 91.7171) * 24634.6345) < (YT.density ?? .5);
+    && ((h) => h - Math.floor(h))(Math.sin(x * 4.1414 + z * 91.7171) * 24634.6345) < (YT.kitDensity ?? .5);
   const L = {
     kind: 'city', city: true, data, decoded: D, level, wallAt, shoreWalls, outer: OW && { x0: T.x0, z0: T.z0, x1: T.x1, z1: T.z1, water: outerWater, mask: OW }, hasOcean: false, coastSide: 1,
     coast: [{ x: -1e5, z: 0 }, { x: -1e5, z: 1 }], coastX: () => -1e5, inlandAt: () => 1e4,
