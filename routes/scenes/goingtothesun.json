@@ -2,7 +2,7 @@
   "format": "bikefree-scene-1",
   "style": "stylized",
   "terrain": "real-mountain",
-  "terrainGridFile": "routes/scenes/goingtothesun-terrain.json",
+  "terrainGridFile": "routes/scenes/goingtothesun-terrain.grid.bin.gz",
   "realHorizon": false,
   "assets": "models/scenery/coastal.json",
   "extraAssets": [

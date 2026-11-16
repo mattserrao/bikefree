@@ -14,6 +14,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
 import { parseGpx, haversine } from '../js/gpx.js';
 import { buildCatalogRoute } from '../js/routes.js';
+import { parseTerrainGrid } from '../js/terrain-grid.js';
+import { gunzipSync } from 'node:zlib';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
 import { attachTerrainBuffer } from '../js/world/terrain-data.js';
 import { planSettlement } from '../js/world/settlement.js';
@@ -382,7 +384,7 @@ export function htmlReport(results, { previewHref = 'world-preview.html' } = {})
 export function loadSceneSync(path) {
   const scene = JSON.parse(read(path));
   if (scene.terrainData?.file) attachTerrainBuffer(scene, readFileSync(join(ROOT, scene.terrainData.file)));
-  if (scene.terrainGridFile) scene.terrainGrid = JSON.parse(read(scene.terrainGridFile));   // real-coast grid (build_terrain_grid.py)
+  if (scene.terrainGridFile) scene.terrainGrid = scene.terrainGridFile.endsWith('.json') ? JSON.parse(read(scene.terrainGridFile)) : parseTerrainGrid(gunzipSync(readFileSync(join(ROOT, scene.terrainGridFile))));   // real-coast grid (build_terrain_grid.py)
   return scene;
 }
 
