@@ -66,8 +66,8 @@ class KitBuilder extends MeshBuilder {
     return this;
   }
 }
-import { CURB_H, ROUTE_CURB, streetKitConfig, routeCurbAt, zoneCurbAt } from './street-grade.js';
-export { streetKitConfig, zoneCurbAt, CURB_H, ROUTE_CURB };
+import { CURB_H, ROUTE_CURB, streetKitConfig, routeCurbAt, zoneCurbAt, walkTopAt } from './street-grade.js';
+export { streetKitConfig, zoneCurbAt, walkTopAt, CURB_H, ROUTE_CURB };
 const LOD = { light: { near: 160, mid: 450 }, balanced: { near: 260, mid: 750 }, high: { near: 380, mid: 1100 } };
 
 // ---------------------------------------------------------------- catalogue: facade styles
@@ -395,12 +395,13 @@ export class StreetKit {
           const px = x + f.tx * u, pz = z + f.tz * u;
           if (this.crossing(px, pz, -1, f.tx, f.tz) || this.crossing(ix + f.tx * u, iz + f.tz * u, -1, f.tx, f.tz) || L.landAt(px, pz) === LAND.water) { bad = true; break; }
         }
+        if (!bad) for (const o of this.streetsAt(x, z, 1.2)) if (o.st.cls < 8 && !this.routeStreet(o, f.tx, f.tz)) { bad = true; break; }
         if (bad || this.lampNear(x, z, 3)) continue;
         // crown radius 2.4 × scale (city tree: scale .75 + seed × .5): clear of the tube (ROAD_WIDTH / 2 + .6) and the walls
         const wmax = Math.min(1.25, (curb + 1.1 - ROAD_WIDTH / 2 - .9) / 2.4, (Math.min(line, 8) - 1.1 + .4) / 2.4);
         if (wmax < .78) continue;
         const seed = Math.min(hash(Math.round(s) * 31 + side * 7), (wmax - .75) / .5);
-        out.push({ x, z, seed, kit: true, sy: 1.35 });   // taller: crowns over the shop signs (≈ 5–8 m)
+        out.push({ x, z, seed, kit: true, sy: 1.35, y: walkTopAt(f.y) - .05 });   // taller: crowns over the shop signs (≈ 5–8 m)
         this._treeCells.add(`${side}:${Math.floor(s / 3)}`);
         this.bucket(this.key(x, z)).furniture.push({ kind: 'treePit', x, z, yaw: Math.atan2(-nx, -nz), given: true, y: f.y + ROAD_LIFT + CURB_H });
       }
@@ -449,11 +450,13 @@ export class StreetKit {
   crossing(x, z, own = -1, tx = 0, tz = 0) {
     for (const o of this.streetsAt(x, z, .4)) {
       if (o.k === own || o.st.cls === 8) continue;
-      if (own < 0 && Math.abs(o.tx * tx + o.tz * tz) > .8 && (o.st.underRoute || this.L.routeDist(o.px, o.pz)?.d < 3)) continue;   // the route's own street, drawn under it
+      if (own < 0 && this.routeStreet(o, tx, tz)) continue;   // the route's own street, drawn under it
       return true;
     }
     return false;
   }
+  /** Is a streetsAt() hit the route's own street (runs along it, centreline within 3 m of the route's line)? */
+  routeStreet(o, tx, tz) { return Math.abs(o.tx * tx + o.tz * tz) > .8 && this.L.routeDist(o.px, o.pz)?.d < 3; }
   /** How far out from (x, z) along (nx, nz) the first building wall is (up to max), or Infinity. */
   buildingLine(x, z, nx, nz, max) {
     if (this.city.buildingNear(x, z, 0)) return 0;
@@ -517,7 +520,7 @@ export class StreetKit {
       const S = city.streets[st.k], a = S.pts[st.i - 1], b = S.pts[st.i];
       x = a.x + (b.x - a.x) * st.t; z = a.z + (b.z - a.z) * st.t; y = a.y + (b.y - a.y) * st.t + this.lift(st.k);
       const l = Math.hypot(b.x - a.x, b.z - a.z) || 1; tx = (b.x - a.x) / l; tz = (b.z - a.z) / l; curb = S.width / 2; own = st.k;
-      width = S.cls <= 3 ? 3.2 : 2.6;
+      width = S.cls <= 3 ? 2.5 : 2.2;   // (the city's own sidewalk band: scenery keeps 2.6 m off a carriageway)
     }
     const nx = -tz * st.side, nz = tx * st.side;
     const ix = x + nx * curb, iz = z + nz * curb;

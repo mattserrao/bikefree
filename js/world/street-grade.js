@@ -10,7 +10,7 @@
 //   ramp         curb + 0.6 … +2.5    ground eases up from the old bank (a 6 m ground mesh can't step at the curb)
 //   beyond       +14 … +32            eases back to the terrain
 //
-// Other streets (cross streets, alleys) keep their own grading: within 3–7 m of their carriageways the
+// Other streets (cross streets, alleys) keep their own grading: within 4–10 m of their carriageways the
 // sidewalk grade fades out, so no street is buried. Their ends inside a junction belong to the junctions module.
 // Pure functions (no three.js): the city landscape, the QC sweep and the renderer all see the same ground.
 import { ROAD_WIDTH, ROAD_LIFT } from './pose.js';
@@ -39,6 +39,8 @@ export function zoneCurbAt(cfg, s) {
   const z = cfg?.zones.find((q) => s >= q.fromM && s <= q.toM);
   return z ? z.curbM : null;
 }
+/** The kit's sidewalk top beside the route where the route line is at height y. */
+export const walkTopAt = (y) => y + ROAD_LIFT + CURB_H;
 /** The route's curb line at outbound distance s: the zone's, else ROUTE_CURB. */
 export function routeCurbAt(cfg, s) { return zoneCurbAt(cfg, s) ?? ROUTE_CURB; }
 
@@ -67,7 +69,7 @@ export function makeStreetGrade(scene, deps) {
       let p = D.local(xy[starts[k] * 2], xy[starts[k] * 2 + 1]);
       for (let i = starts[k] + 1; i < starts[k + 1]; i++) {
         const q = D.local(xy[i * 2], xy[i * 2 + 1]), seg = { ax: p.x, az: p.z, bx: q.x, bz: q.z, w, own: null };
-        const r = w + 8;
+        const r = w + 11;
         for (let gx = Math.floor((Math.min(p.x, q.x) - r) / 24); gx <= Math.floor((Math.max(p.x, q.x) + r) / 24); gx++)
           for (let gz = Math.floor((Math.min(p.z, q.z) - r) / 24); gz <= Math.floor((Math.max(p.z, q.z) + r) / 24); gz++) {
             const key = gx * 65536 + gz; if (!grid.has(key)) grid.set(key, []); grid.get(key).push(seg);
@@ -99,8 +101,8 @@ export function makeStreetGrade(scene, deps) {
     for (const g of segs().get(Math.floor(x / 24) * 65536 + Math.floor(z / 24)) || []) {
       const dx = g.bx - g.ax, dz = g.bz - g.az, l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - g.ax) * dx + (z - g.az) * dz) / l2));
       const edge = Math.hypot(g.ax + dx * t - x, g.az + dz * t - z) - g.w;
-      if (edge > 7 || own(g)) continue;
-      w *= ss(3, 7, edge);
+      if (edge > 10 || own(g)) continue;
+      w *= ss(4, 10, edge);
       if (w <= 0) return h;
     }
     const target = r.y + ROAD_LIFT + CURB_H - .06;

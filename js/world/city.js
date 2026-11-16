@@ -8,7 +8,7 @@ import { MeshBuilder, ribbon, resample, hash } from './city-geometry.js';
 import { buildBridges, buildStadiums, buildLandmarks } from './city-bridges.js';
 import { buildHeroes } from './city-heroes.js';
 import { CityLife } from './city-life.js';
-import { StreetKit, streetKitConfig, zoneCurbAt } from './street-kit.js';   // [street-kit]
+import { StreetKit, streetKitConfig, zoneCurbAt, walkTopAt } from './street-kit.js';   // [street-kit]
 import { ROAD_WIDTH } from './pose.js';
 
 export { STREET_W };
@@ -712,7 +712,8 @@ export class CityScene {
         if (!deckBridge && !this._clearSpot(x, z, .35, -1, ROAD_WIDTH / 2 + 1.2)) continue;
         // on a deck: not in another carriageway that runs alongside at the same level (the roadway's other half)
         if (deckBridge && this.landscape.streetsNear(x, z, .35).some((o) => this.streets[o.k].cls !== 8 && Math.abs(o.y - r.ele[i]) < 1.5)) continue;
-        lamps.push({ x, z, y: deckBridge ? r.ele[i] : this.landscape.heightAt(x, z), yaw: Math.atan2(dz / len * side, -dx / len * side), bridge: !!deckBridge });
+        lamps.push({ x, z, y: deckBridge ? r.ele[i] : kitCurb ? walkTopAt(r.ele[i]) : this.landscape.heightAt(x, z), yaw:   // [street-kit] (on the kit's sidewalk)
+           Math.atan2(dz / len * side, -dx / len * side), bridge: !!deckBridge });
       }
     }
     for (const [map, mat, name] of [[roads, this.streetMaterial, 'Streets'], [walks, this.sidewalkMaterial, 'Sidewalks'], [paths, this.pathMaterial, 'Paths']]) {
@@ -943,7 +944,7 @@ export class CityScene {
       const key = `${Math.floor(t.x / 480)},${Math.floor(t.z / 480)}`, w = .75 + t.seed * .5;
       q.setFromAxisAngle(Y, t.seed * 40);
       if (!lists.has(key)) lists.set(key, []);
-      lists.get(key).push({ m: m.compose(new THREE.Vector3(t.x, this.landscape.heightAt(t.x, t.z) - .1, t.z), q, new THREE.Vector3(w, w * (.85 + t.seed * .3) * (t.sy || 1), w)).clone(), seed: t.seed });   // [street-kit] (sy: kit street trees stand taller)
+      lists.get(key).push({ m: m.compose(new THREE.Vector3(t.x, t.y ?? this.landscape.heightAt(t.x, t.z) - .1, t.z), q, new THREE.Vector3(w, w * (.85 + t.seed * .3) * (t.sy || 1), w)).clone(), seed: t.seed });   // [street-kit] (sy: kit street trees stand taller)
     }
     for (const list of lists.values()) {
       const im = new THREE.InstancedMesh(geo, mat, list.length);
