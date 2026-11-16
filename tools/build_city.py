@@ -409,6 +409,17 @@ def build(cid):
     for k in route_kinds: k['fromM'], k['toM'] = round(app_s(k['fromM'])), round(app_s(k['toM']))
     route_kinds[-1]['toM'] = round(chord[-1]) + 10
     # rideable profile
+    # [w2-align] the ground under the line as drawn: the elevation at each 10 m sample of the aligned line (the same
+    # z14 terrain the app's ground grid comes from), not the mapped nodes' heights interpolated along the way (nodes
+    # are 30–80 m apart on a straight street, so a crest or a dip between them was cut or filled by up to 2 m).
+    # Bridge decks (+20 m) keep their straight interpolation and trails (riverfront walks on walls and ramps, where
+    # the line drifts towards the water) their nodes' heights, easing to the ground over 30 m beyond.
+    # `profileFromLine`: true (default) everywhere but the decks, "roads" also keeps the trails, false: off.
+    from_line = cfg.get('profileFromLine', True)
+    if from_line:
+        keep = [{**b, 'padM': 20} for b in route_bridges] + [k for k in route_kinds if from_line == 'roads' and k['kind'] == 'trail']
+        keep += [{'fromM': a_, 'toM': b_} for a_, b_ in cfg.get('profileKeep', [])]   # ramps and walls the ground grid can't see
+        re_ = road_align.line_elevation(re_, [elevation(a_, b_) for a_, b_ in rs], keep, step=10)
     # [road-align] profile: shave spikes, fill only narrow notches (real dips and crests stay on the ground),
     # limit grade and grade change, light averaging
     e = road_align.align_profile(re_, step=10, loop=True, **cfg.get('profile', {})).tolist()

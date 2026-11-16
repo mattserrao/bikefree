@@ -573,6 +573,7 @@
       22
     ],
     "scene": "routes/scenes/pittsburgh.json",
+    "eleSmoothM": 10,
     "stage": "draft"
   }
 ]

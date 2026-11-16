@@ -42,6 +42,10 @@ for (const item of catalog) {
   const row = { id: item.id, name: item.name, park: item.park, km: Number((route.total / 1000).toFixed(1)), climbM: Math.round(route.ascent), file: item.file };
   if (item.outAndBack) row.outAndBack = true;
   if (item.stage) row.stage = item.stage;   // 'draft': Rough Drafts · 'deprecated': Deprecated
+  if (item.eleSmoothM != null) {   // [w2-align] the route's elevation smoothing (± m; the app's default is 60)
+    if (!(item.eleSmoothM >= 0 && item.eleSmoothM <= 200)) throw new Error(`${item.id}: eleSmoothM must be 0–200 m`);
+    row.eleSmoothM = item.eleSmoothM;
+  }
   if (item.scene) {
     const scene = JSON.parse(read(item.scene));
     if (scene.format !== 'bikefree-scene-1' || !['authored-coast', 'authored-region', 'authored-city', 'real-coast', 'real-mountain'].includes(scene.terrain)) throw new Error(`${item.id}: unsupported scene format or terrain`);
