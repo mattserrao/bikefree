@@ -432,7 +432,8 @@ export class StreetKit {
   routeLamp(s, side) {
     if (!this.zoneAt(s)) return undefined;
     const P = this._station({ route: true, s, side });
-    return P ? { x: P.ix + P.nx * .45, z: P.iz + P.nz * .45, y: P.top } : null;
+    if (!P || !this._station({ route: true, s: s - 3, side }) || !this._station({ route: true, s: s + 3, side })) return null;   // on a run of slabs, not at its end
+    return { x: P.ix + P.nx * .45, z: P.iz + P.nz * .45, y: P.top };
   }
   treeAt(side, s) { return this._treeCells?.has(`${side}:${Math.floor(s / 3)}`) || this._treeCells?.has(`${side}:${Math.floor(s / 3) - 1}`) || this._treeCells?.has(`${side}:${Math.floor(s / 3) + 1}`); }
   /** A street lamp (CityScene.lamps) within r of (x, z)? */
