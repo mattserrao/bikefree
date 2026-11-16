@@ -4,7 +4,7 @@
 // beargrass, Indian paintbrush, glacier lilies, huckleberry and Sitka alder in the avalanche chutes.
 // Low-poly, vertex-coloured, built once per scene — no extra downloads. Unit height scale is metres.
 import { randomSequence } from './coast.js';
-import { Builder, M, cyl, cone, blob } from './adirondack-kit.js';
+import { Builder, M, cyl, cone, blob, withSmooth } from './adirondack-kit.js';
 
 // lod 0 near, 1 mid, 2 far (one or two primitives)
 function cedar(variant, lod) {
@@ -151,6 +151,11 @@ function talus(variant) {
 }
 
 export function makeGlacierKit(opts = {}) {
+  // cartoon look: crowns built with smooth shading, like the Adirondack kit
+  return withSmooth(opts.smooth, () => buildGlacierKit(opts));
+}
+
+function buildGlacierKit(opts) {
   const fall = !!opts.fall, geos = {};
   const tree = (name, make) => { for (const lod of [0, 1, 2]) geos[`${name}${['', '-lod', '-far'][lod]}`] = make(lod); };
   tree('cedar0', (l) => cedar(0, l)); tree('cedar1', (l) => cedar(1, l));

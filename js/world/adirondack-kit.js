@@ -8,6 +8,8 @@ const linear = (hex) => new THREE.Color(hex);   // THREE.Color(hex) converts sRG
 // Cartoon look test (16 Nov 2026): smooth shading instead of flat facets. Set for the length of one
 // makeAdirondackKit({ smooth: true }) call; off by default, so today's faceted look is unchanged.
 let SMOOTH = false;
+/** Build with smooth shading on for the length of fn() (other kits built on this Builder: Glacier). */
+export function withSmooth(on, fn) { const was = SMOOTH; SMOOTH = !!on; try { return fn(); } finally { SMOOTH = was; } }
 
 class Builder {
   constructor() { this.pos = []; this.nor = []; this.col = []; }

@@ -12,8 +12,14 @@ const TIER_KEEP = [1, .62, .4];         // near / mid / far share of the full st
 const SUFFIX = ['', '-lod', '-far'];
 
 export class ForestPlanner {
-  constructor(config, landscape, index, heightAt, clearings) {
+  constructor(config, landscape, index, heightAt, clearings, route = null) {
     const v = config.vegetation || {};
+    this.route = route;
+    // a scene can keep more of the stand in the outer tiers (Going-to-the-Sun: dense, even cover far off)
+    this.keep = v.tierKeep || TIER_KEEP;
+    // windows: every so often the trees between the road and a lake open up for a view across the water
+    //   { everyM, lengthM, reachM (corridor: shore + road distance), keep (share of trees left standing) }
+    this.windows = v.windows && route ? { everyM: 900, lengthM: 170, reachM: 260, keep: .1, ...v.windows } : null;
     this.species = Object.entries(v.species || { maple: .45, spruce: .2, hemlock: .12, birch: .13, whitepine: .1 });
     this.edge = { mown: v.edge?.mownM ?? 9, shrub: v.edge?.shrubM ?? 13 };
     this.landscape = landscape; this.index = index; this.heightAt = heightAt; this.clearings = clearings;
@@ -58,7 +64,28 @@ export class ForestPlanner {
     return r < .55 ? 'subfir' : r < .88 ? 'espruce' : 'larch';
   }
 
+  /**
+   * In a window (a gap in the trees for a view)? Between the road and a lake, or with `downhill`, on the low
+   * side of the road where the land falls away toward the valley. Road distances cached per 32 m cell.
+   */
+  _inWindow(x, z, y, shore, roadHit, cache) {
+    const W = this.windows;
+    if (!W || (shore > W.reachM && !W.downhill)) return false;
+    let hit = roadHit;
+    if (!hit) {
+      const key = `${Math.floor(x / 32)},${Math.floor(z / 32)}`;
+      if (!cache.has(key)) cache.set(key, this.index.nearest(Math.floor(x / 32) * 32 + 16, Math.floor(z / 32) * 32 + 16, W.reachM));
+      hit = cache.get(key);
+    }
+    if (!hit) return false;
+    const lake = shore + hit.d < W.reachM;
+    const low = W.downhill && hit.d < (W.downhillM ?? W.reachM * .6) && y < hit.ele - 4;
+    if (!lake && !low) return false;
+    return windowAt(this.route.dist[hit.i], W, this.seed);
+  }
+
   _zoneTile(cx, cz, tier) {
+    const windowCache = new Map();
     const rand = randomSequence((cx * 92837111 ^ cz * 689287499) + this.seed * 7 + 31);
     const lists = {};
     const matrix = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
@@ -69,13 +96,14 @@ export class ForestPlanner {
     const n = Math.round(TILE_M / CELL_M);
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
       const jx = rand(), jz = rand(), rank = rand(), pick = rand(), size = rand(), rot = rand() * Math.PI * 2, extra = rand();
-      if (rank > TIER_KEEP[tier]) continue;
+      if (rank > this.keep[tier]) continue;
       const x = cx * TILE_M + (i + .15 + jx * .7) * CELL_M, z = cz * TILE_M + (j + .15 + jz * .7) * CELL_M;
       const near = this.index.nearest(x, z, 60), roadD = near ? near.d : 60;
       if (roadD < this.edge.mown) continue;
       const shore = this.landscape.shoreAt ? this.landscape.shoreAt(x, z) : Infinity;
       if (shore < 3 || (this.clearings && this.clearings.at(x, z)) || this.landscape.bridgeAt(x, z, 10) || this.landscape.creekAt(x, z)) continue;
       const y = this.heightAt(x, z);
+      if (this.windows && extra > this.windows.keep && this._inWindow(x, z, y, shore, near, windowCache)) continue;
       if (this.landscape.isWater?.(x, z, y)) continue;
       const v = this.landscape.vegetationAt(x, z);
       if (v.slope > 1.25) continue;   // cliffs
@@ -113,7 +141,7 @@ export class ForestPlanner {
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
       // every random draw happens for every point in the same order, whatever the tier
       const jx = rand(), jz = rand(), rank = rand(), pick = rand(), size = rand(), rot = rand() * Math.PI * 2, extra = rand();
-      if (rank > TIER_KEEP[tier]) continue;
+      if (rank > this.keep[tier]) continue;
       const x = cx * TILE_M + (i + .15 + jx * .7) * CELL_M, z = cz * TILE_M + (j + .15 + jz * .7) * CELL_M;
       const near = this.index.nearest(x, z, 60), roadD = near ? near.d : 60;
       if (roadD < this.edge.mown) {
@@ -144,6 +172,14 @@ export class ForestPlanner {
     }
     return lists;
   }
+}
+
+/** Is route distance sM inside a view window? Each window a little different in length and placement. */
+export function windowAt(sM, W, seed = 1) {
+  const k = Math.floor(sM / W.everyM);
+  const h = Math.sin(k * 12.9898 + seed) * 43758.5453, r = h - Math.floor(h);
+  const start = k * W.everyM + r * (W.everyM - W.lengthM * 1.4), len = W.lengthM * (.7 + r * .7);
+  return sM > start && sM < start + len;
 }
 
 /** Spatial lookup of cleared ground (lawns, camp lots, driveways). */

@@ -9,7 +9,8 @@ import { StylizedTerrain, COASTAL_QUALITY } from './stylized-terrain.js';
 import { riderPose, routePoint, ROAD_WIDTH } from './pose.js';
 import { loadRider } from './rider.js';
 import { PerfMonitor } from './perf.js';
-import { HAZE, installHaze } from './haze.js';
+import { HAZE, AERIAL, AERIAL_COLOR, installHaze } from './haze.js';
+import { vistaConfig } from './vista.js';
 
 installHaze();   // valley haze in the fog chunks: before any material compiles
 import { wrapDist } from '../gpx.js';
@@ -133,7 +134,10 @@ export class World {
     // every stylized scene goes through it; only hero scenes (scene.post) get the bloom, grade and vignette
     if (this.stylized) this.post = new PostFX(this.renderer, { samples: COASTAL_QUALITY[this.qualityKey].samples });
     this.heroPost = !!(this.stylized && route.scene.post);
-    if (this.look) this.post.setInk(this.look.ink);
+    // vista kit: faint outlines on the far ridges (with or without the cartoon look's near outlines)
+    this.vista = this.stylized ? vistaConfig(route.scene) : null;
+    const ridge = this.vista?.ridgeInk || null;
+    if (this.look || ridge) this.post.setInk({ ...(this.look?.ink || { px: 1, strength: 0, thresh: 1, fadeM: 1 }), ridge });
     // Simple stand-in until the Blender model loads
     this.rider = makeRider();
     this.scene.add(this.rider.group);
@@ -288,6 +292,13 @@ export class World {
       HAZE.y = A.hazeM ?? 75;
       HAZE.z = Math.min(.85, strength * (A.haze ?? 1) * (1 + o * .4));
     } else HAZE.z = 0;
+    // aerial perspective (vista kit): ridges fade toward a pale sky blue with distance, less on the tops
+    const VH = this.vista?.haze;
+    if (VH && !t.night) {
+      const c = new THREE.Color(t.horizon).lerp(new THREE.Color(t.top), VH.blue);
+      AERIAL_COLOR.r = c.r; AERIAL_COLOR.g = c.g; AERIAL_COLOR.b = c.b;
+      Object.assign(AERIAL, { x: VH.rangeM, y: VH.strength * (1 - o * .3), z: VH.falloffM, w: VH.baseM ?? this.route.minEle });
+    } else AERIAL.y = 0;
     this._fogBase = { near: this._fogBase?.near ?? this.scene.fog.near, far: this._fogBase?.far ?? this.scene.fog.far, color: new THREE.Color(t.horizon) };
     this.terrain?.setTime?.(this.timeKey);
     this.terrain?.setNight?.(t.night ? 1 : 0);

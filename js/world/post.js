@@ -9,6 +9,7 @@ import * as THREE from '../../vendor/three.module.min.js';
 // Read in the final pass from the scene target's depth, so outlines add no full-screen pass of their own.
 const inkChunk = /* glsl */`
   uniform sampler2D tDepth; uniform vec2 uInkTexel; uniform vec4 uInk;   // px, strength, threshold, fade (m)
+  uniform vec3 uInkFar;   // vista kit ridge ink: strength, threshold, start (m)
   uniform vec2 uNearFar;
   float inkZ(vec2 uv) {
     float d = texture2D(tDepth, uv).x;
@@ -19,7 +20,7 @@ const inkChunk = /* glsl */`
     #endif
   }
   vec3 applyInk(vec3 col, vec2 uv) {
-    if (uInk.y <= 0.) return col;
+    if (uInk.y <= 0. && uInkFar.x <= 0.) return col;
     vec2 o = uInkTexel * uInk.x;
     float z = inkZ(uv), zl = inkZ(uv - vec2(o.x, 0.)), zr = inkZ(uv + vec2(o.x, 0.)), zd = inkZ(uv - vec2(0., o.y)), zu = inkZ(uv + vec2(0., o.y));
     float zMin = min(z, min(min(zl, zr), min(zd, zu)));
@@ -27,9 +28,12 @@ const inkChunk = /* glsl */`
     float jump = max(max(abs(z - zl), abs(z - zr)), max(abs(z - zd), abs(z - zu))) / max(zMin, .5);
     float edge = smoothstep(uInk.z, uInk.z * 2.2, jump) * (1. - smoothstep(uInk.w * .55, uInk.w, zMin));
     vec3 ink = mix(vec3(.035, .04, .06), col * .3, .4);
-    return mix(col, ink, edge * uInk.y);
+    col = mix(col, ink, edge * max(uInk.y, 0.));
+    // far ridges: a soft line in the ridge's own colour, darker, where one ridge stands in front of another
+    float ridge = smoothstep(uInkFar.y, uInkFar.y * 1.8, jump) * smoothstep(uInkFar.z * .6, uInkFar.z, zMin);
+    return mix(col, col * .62, ridge * uInkFar.x);
   }`;
-const inkUniforms = () => ({ tDepth: { value: null }, uInkTexel: { value: new THREE.Vector2() }, uInk: { value: new THREE.Vector4() }, uNearFar: { value: new THREE.Vector2() } });
+const inkUniforms = () => ({ tDepth: { value: null }, uInkTexel: { value: new THREE.Vector2() }, uInk: { value: new THREE.Vector4() }, uInkFar: { value: new THREE.Vector3() }, uNearFar: { value: new THREE.Vector2() } });
 
 const quadVertex = /* glsl */`
   varying vec2 vUv;
@@ -144,11 +148,12 @@ export class PostFX {
 
   _inkUniforms(material, target, camera) {
     const u = material.uniforms, ink = this.ink;
-    if (!ink) { u.uInk.value.set(0, 0, 1, 1); return; }
+    if (!ink) { u.uInk.value.set(0, 0, 1, 1); u.uInkFar.value.set(0, 1, 1); return; }
     const ratio = this.renderer.getPixelRatio();
     u.tDepth.value = target.depthTexture;
     u.uInkTexel.value.set(1 / this._size[0], 1 / this._size[1]);
     u.uInk.value.set(ink.px * ratio, ink.strength, ink.thresh, ink.fadeM);
+    if (ink.ridge) u.uInkFar.value.set(ink.ridge.strength, ink.ridge.thresh, ink.ridge.startM); else u.uInkFar.value.set(0, 1, 1);
     u.uNearFar.value.set(camera.near, camera.far);
   }
 

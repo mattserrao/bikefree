@@ -14,8 +14,8 @@
   "region": "glacier-alpine",
   "biome": "alpine",
   "palette": {
-    "grass": "#6f8a57",
-    "meadow": "#93a566",
+    "grass": "#68834f",
+    "meadow": "#8c9b5f",
     "rock": "#9a958a",
     "cliff": "#88675a",
     "argillite": "#6e7c66",
@@ -27,7 +27,9 @@
     "sand": "#a39a86",
     "farTint": "#7d8c8f",
     "farTintAmount": 0.3,
-    "ice": "#dce8ee"
+    "ice": "#dce8ee",
+    "scree": "#b4ad9f",
+    "shrub": "#3d5a3a"
   },
   "snowLineM": 2150,
   "treelineM": 1950,
@@ -55,7 +57,55 @@
       1.1
     ],
     "vergeDensity": 0.8,
-    "forestDensity": 0.72
+    "forestDensity": 0.82,
+    "tierKeep": [
+      1,
+      0.66,
+      0.5
+    ],
+    "windows": {
+      "everyM": 850,
+      "lengthM": 170,
+      "reachM": 260,
+      "downhill": true,
+      "downhillM": 140,
+      "keep": 0.1
+    }
+  },
+  "vista": {
+    "rock": {
+      "ribs": 0.9,
+      "ledges": 0.7,
+      "scree": 0.6
+    },
+    "snow": {
+      "gullies": 0.85,
+      "ledges": 0.6
+    },
+    "meadow": {
+      "mottle": 0.7
+    },
+    "forest": {
+      "crowns": 0.85,
+      "boost": 1.6
+    },
+    "haze": {
+      "strength": 0.62,
+      "rangeM": 5500,
+      "falloffM": 900,
+      "blue": 0.35
+    },
+    "ridgeInk": {
+      "strength": 0.35,
+      "thresh": 0.22,
+      "startM": 450
+    },
+    "clouds": {
+      "count": 24,
+      "minM": 6000,
+      "maxM": 15000,
+      "spanM": 1200
+    }
   },
   "terrainBuild": {
     "lakes": true,
@@ -300,15 +350,14 @@
   "kitExtensions": [
     "glacier"
   ],
-  "timeOfDay": "golden",
+  "timeOfDay": "midday",
+  "look": "gentle",
   "post": true,
   "weather": {
     "presets": [
       "clear",
       "marine",
-      "clouds",
-      "rain",
-      "smoke"
+      "clouds"
     ],
     "labels": {
       "marine": "Valley fog",

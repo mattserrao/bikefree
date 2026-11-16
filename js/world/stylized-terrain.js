@@ -16,6 +16,7 @@ import { HighwayTraffic } from './highway-traffic.js';
 import { CoastLife } from './coast-life.js';
 import { GlacierLife } from './glacier-life.js';
 import { makeRouteIndex } from './geo.js';
+import { vistaConfig, makeCumulusAtlas } from './vista.js';
 
 // Tree cards stream in large tiles, at a fraction of the scatter's candidate density.
 const FAR_TREE_TILE_M = 768, FAR_TREE_DENSITY = .3;
@@ -126,12 +127,13 @@ export class StylizedTerrain {
       // built sites (lodges, visitor centres, parking) are cleared of trees too
       const sites = (this.landscape.sites || []).map((t) => ({ x: t.x, z: t.z, r: Math.hypot(t.hw, t.hl) + 6 }));
       const clearings = sites.length ? makeClearings([...this.settlementPlan.clearings.items, ...sites]) : this.settlementPlan.clearings;
-      this.forest = new ForestPlanner(this.config, this.landscape, routeIndex, (x, z) => this.heightAt(x, z), clearings);
+      this.forest = new ForestPlanner(this.config, this.landscape, routeIndex, (x, z) => this.heightAt(x, z), clearings, this.route);
       this.canopyUniform = { value: new THREE.Vector4(0, 160, this.config.vegetation.canopyM ?? 16, 1) };
       this._setCanopyStart();
       this.forestTiles = new Map(); this.forestQueue = [];
     }
-    this.groundMaterial = makeCoastalGroundMaterial(this.config.palette, this.config, this.farUniform, this.canopyUniform, this.uniforms);
+    this.vista = vistaConfig(this.config);   // vista kit (js/world/vista.js): distance detail, haze, clouds
+    this.groundMaterial = makeCoastalGroundMaterial(this.config.palette, this.config, this.farUniform, this.canopyUniform, this.uniforms, this.vista);
     this._makeOcean();
     this._makeClouds();
     this._makeShadows();
@@ -242,30 +244,35 @@ export class StylizedTerrain {
     }
     const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
     // one draw call for the whole ring: camera-facing quads drawn by a small shader (was a Sprite each)
+    // vista kit: cartoon cumulus (four shapes in one texture), lower and closer, so they sit among the peaks
+    const C = this.vista?.clouds, atlas = C ? makeCumulusAtlas() : null;
     const rand = randomSequence(1101);
-    const base = Math.max(1800, this.route.maxEle + 1100);
-    const centers = [], corners = [], sizes = [], idx = [];
-    for (let i = 0; i < 26; i++) {
-      const angle = i * 2.399 + rand() * .4, radius = 9000 + rand() * 7000;
-      const c = [Math.cos(angle) * radius, base + rand() * 900, Math.sin(angle) * radius];
-      const w = 2200 + rand() * 2600, h = w * (.32 + rand() * .12), k = centers.length / 3;
-      for (const [u, v] of [[-.5, -.5], [.5, -.5], [.5, .5], [-.5, .5]]) { centers.push(...c); corners.push(u, v); sizes.push(w, h); }
+    const base = C ? (C.baseM ?? this.route.maxEle + 900) : Math.max(1800, this.route.maxEle + 1100);
+    const centers = [], corners = [], sizes = [], cells = [], idx = [];
+    for (let i = 0, n = C ? C.count : 26; i < n; i++) {
+      const angle = i * 2.399 + rand() * .4, radius = C ? C.minM + rand() * (C.maxM - C.minM) : 9000 + rand() * 7000;
+      const c = [Math.cos(angle) * radius, base + rand() * (C ? C.spanM : 900), Math.sin(angle) * radius];
+      const w = C ? (900 + rand() * 1400) * radius / 10000 : 2200 + rand() * 2600, h = w * (C ? .5 : .32 + rand() * .12), k = centers.length / 3;
+      const cell = atlas ? atlas.cells[Math.floor(rand() * 4)] : [0, 0];
+      for (const [u, v] of [[-.5, -.5], [.5, -.5], [.5, .5], [-.5, .5]]) { centers.push(...c); corners.push(u, v); sizes.push(w, h); cells.push(...cell); }
       idx.push(k, k + 1, k + 2, k, k + 2, k + 3);
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(centers, 3));
     geo.setAttribute('aCorner', new THREE.Float32BufferAttribute(corners, 2));
     geo.setAttribute('aSize', new THREE.Float32BufferAttribute(sizes, 2));
+    geo.setAttribute('aCell', new THREE.Float32BufferAttribute(cells, 2));
     geo.setIndex(idx);
     const material = new THREE.ShaderMaterial({
-      uniforms: { map: { value: texture }, color: { value: new THREE.Color('#ffffff') }, opacity: { value: .8 } },
+      uniforms: { map: { value: atlas ? atlas.texture : texture }, color: { value: new THREE.Color('#ffffff') }, opacity: { value: atlas ? .97 : .8 },
+        uCellSize: { value: new THREE.Vector2(...(atlas ? atlas.cellSize : [1, 1])) } },
       transparent: true, depthWrite: false, fog: false,
       vertexShader: `
         #include <common>
         #include <logdepthbuf_pars_vertex>
-        attribute vec2 aCorner; attribute vec2 aSize; varying vec2 vUv;
+        attribute vec2 aCorner; attribute vec2 aSize; attribute vec2 aCell; uniform vec2 uCellSize; varying vec2 vUv;
         void main() {
-          vUv = aCorner + .5;
+          vUv = aCell + (aCorner + .5) * uCellSize;
           vec4 mvPosition = modelViewMatrix * vec4(position, 1.);
           mvPosition.xy += aCorner * aSize;
           gl_Position = projectionMatrix * mvPosition;

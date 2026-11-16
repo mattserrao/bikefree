@@ -477,6 +477,41 @@ Goal: cut graphical demand as far as possible while improving the feel. Style gu
 - [ ] 7. Cartoon kit, towns merged, sign atlas, ground rings, cartoon rider
 - [ ] 8. Check and ship: under 80 calls on Balanced, M4 Air ride
 
+### Going-to-the-Sun visual pass: vista kit *(test branch `goingtothesun-visual-test`, from `main` + `route28-cartoon`)*
+Goal: at a distance the map looked flat and uninteresting, with mountain faces as smooth colour ramps and
+bare peaks, evenly spread trees, and little depth. Make it immersive without making it more photorealistic,
+in pieces other routes can reuse, and balanced against the graphics cost. Review with pictures:
+[docs/goingtothesun/vista/](docs/goingtothesun/vista/README.md).
+
+**Decisions (Matt, 16 Nov 2026)**
+- Cartoon look, as on Route 28 (gentle), at **midday** (golden hour is gone as the default)
+- Distance priorities: rock detail on the faces, snowfields, stronger depth haze, better sky and clouds
+- Forest far off: denser, even cover. The valley gets occasional views to Lake McDonald and the peaks
+- Believable but generic (not mapped rock bands and named snowfields)
+- Portable: one kit, switched on per scene (`"vista"`)
+- Budget: up to 450 draw calls on this hero route
+- Fewer weather presets: kept clear, valley fog and clouds on the peaks; dropped rain and wildfire smoke
+- No look test: build it directly
+
+**Done**
+- [x] Merged `route28-cartoon` (cartoon look, chase camera only). Going-to-the-Sun: `"look": "gentle"`,
+  `"timeOfDay": "midday"`. The Glacier kit is built with smooth crowns in the cartoon look (`withSmooth`).
+- [x] `js/world/vista.js`, the vista kit: ground-shader rock (gullies and spurs, ledges, loose rock), snow
+  in the gullies and on the ledges, meadow patches, the distant canopy as crowns, cartoon cumulus. Aerial
+  perspective in the shared fog chunk (`haze.js`: `AERIAL`), ridge ink in `post.js`. ROUTES.md → *Vista kit*.
+- [x] `forest.js`: `tierKeep` (denser outer tiers) and `windows` (gaps toward the lake and down the valley)
+- [x] Going-to-the-Sun scene: `vista` block, `palette.scree` / `palette.shrub`, slightly muted grass and
+  meadow, `forestDensity` 0.82, `tierKeep [1, .66, .5]`, windows every ~850 m
+- [x] Checks: `npm test` 96/96; `qc --strict` clean; `routes:check` clean; clipping QC 0 fail, 8 shoreline
+  z-fight warnings (unchanged); 231–353 draw calls and 1.59–2.09 M triangles headless (main: 230–357 and
+  1.59–2.02 M)
+
+**Still to check**
+- [ ] A ride on the M4 Air with the `I` overlay: the ground shader is heavier (about 40 value-noise lookups
+  per pixel on mountain faces, fewer on flat ground). If it's over budget, drop `rock.ledges` or `meadow`
+  first.
+- [ ] Roll the kit out: Big Sur (haze, clouds, rock), Route 28 (haze, clouds, forest crowns)
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

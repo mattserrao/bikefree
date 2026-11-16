@@ -126,7 +126,57 @@ node tools/glacier_sides.mjs 41700 44345             # which side of the road fa
 - **Life:** `life` with `goats`, `bighorn`, `marmots`, `squirrels`, `bears` (`{ atM, radiusM, count, lateralM, side }`),
   `ducks` and counts of `ravens` and `eagles` (`js/world/glacier-life.js`).
 - **Weather:** `weather.presets` can include `smoke` (wildfire smoke); mountain scenes get cloud caps on the
-  summits with `clouds` and `rain`. `signs[].kind: "nps"` is the brown park sign.
+  summits with `clouds` and `rain`. (Going-to-the-Sun now offers only clear, valley fog and clouds on the peaks.)
+- **Distance:** see *Vista kit* below (Going-to-the-Sun uses all of it). `signs[].kind: "nps"` is the brown park sign.
+
+## Vista kit: scenery that reads at a distance (any route)
+
+`js/world/vista.js` is a set of opt-in pieces that make far terrain read as mountains, forest and air
+instead of smooth colour ramps. A scene turns them on with a `vista` block; leave a part out and it's off.
+None of them adds a draw call. Going-to-the-Sun is the first route to use it:
+
+```json
+"vista": {
+  "rock":     { "ribs": 0.9, "ledges": 0.7, "scree": 0.6 },
+  "snow":     { "gullies": 0.85, "ledges": 0.6 },
+  "meadow":   { "mottle": 0.7 },
+  "forest":   { "crowns": 0.85, "boost": 1.6 },
+  "haze":     { "strength": 0.62, "rangeM": 5500, "falloffM": 900, "blue": 0.35 },
+  "ridgeInk": { "strength": 0.35, "thresh": 0.22, "startM": 450 },
+  "clouds":   { "count": 24, "minM": 6000, "maxM": 15000, "spanM": 1200 }
+}
+```
+
+- **`rock`** (ground shader): gullies and spurs running down the fall line, on two fixed world-space
+  projections so nothing swims. They bend the lighting, so the cartoon bands follow them. Also narrow,
+  broken ledges along the contours, and pale loose rock in the gullies below the faces. Optional
+  `ribWidthM`, `ribLengthM`, `reliefM` and `ledgeM` (defaults 30, 170, 22 and 30). The ground far off is
+  built coarser, so it's steepened with distance before deciding what's a face.
+- **`snow`**: snow held in the gullies and on the ledges around `snowLineM`. North faces keep more.
+- **`meadow`**: shrub patches and a slow yellow-green to blue-green drift on open slopes. Uses
+  `palette.shrub`, and `palette.scree` for the loose rock.
+- **`forest`** (forest-edge scenes): the canopy beyond the real trees is drawn as crowns lit on the sun
+  side, which fade to their average colour once they're a few pixels. `boost` makes partial cover read
+  denser.
+- **`haze`** (`haze.js`, the shared fog chunk): aerial perspective. Distance fades toward a pale sky blue
+  (the horizon colour moved `blue` of the way to the zenith), thicker in the low air than on the tops
+  (`falloffM` above `baseM`, default the route's lowest point), so each ridge separates from the one behind.
+- **`ridgeInk`** (`post.js`'s final pass): a soft line in the ridge's own colour, darker, where one ridge
+  stands in front of another, from `startM` out. Works with or without the cartoon `look`.
+- **`clouds`**: cartoon cumulus (four flat-bottomed shapes in one texture, lit tops, cool bases) in place of
+  the soft cloud ring, lower and closer so they sit among the peaks. Still one draw call.
+
+Every detail fades to its average once it's smaller than about two pixels, so nothing shimmers far off.
+The rock work is skipped on flat ground.
+
+**Forest additions** (`forest.js`, used with the vista kit but separate from it):
+- `vegetation.tierKeep: [near, mid, far]` keeps more of the stand in the outer tiers. The default is
+  `[1, .62, .4]`; Going-to-the-Sun uses `[1, .66, .5]`.
+- `vegetation.windows: { everyM, lengthM, reachM, downhill, downhillM, keep }` opens a gap in the trees
+  every `everyM` or so, each a little different. A gap clears the trees between the road and a lake
+  (`shore + road distance < reachM`). With `downhill`, it also clears the low side of the road, within
+  `downhillM`. `keep` is the share of trees left standing.
+  `windowAt(sM, windows, seed)` lists where the gaps fall.
 
 ## Style-C scenery for every scenic route
 
