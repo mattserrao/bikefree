@@ -6,6 +6,7 @@
     "km": 20.4,
     "climbM": 134,
     "file": "routes/parks/yosemite.gpx",
+    "stage": "draft",
     "scene": "routes/scenes/yosemite.json"
   },
   {
@@ -15,6 +16,7 @@
     "km": 31.9,
     "climbM": 482,
     "file": "routes/parks/acadia.gpx",
+    "stage": "deprecated",
     "scene": "routes/scenes/acadia.json"
   },
   {
@@ -24,6 +26,7 @@
     "km": 71.8,
     "climbM": 403,
     "file": "routes/parks/teton.gpx",
+    "stage": "deprecated",
     "scene": "routes/scenes/teton.json"
   },
   {
@@ -33,6 +36,7 @@
     "km": 51.1,
     "climbM": 1185,
     "file": "routes/parks/craterlake.gpx",
+    "stage": "deprecated",
     "scene": "routes/scenes/craterlake.json"
   },
   {
@@ -43,6 +47,7 @@
     "climbM": 545,
     "file": "routes/parks/monumentvalley.gpx",
     "outAndBack": true,
+    "stage": "deprecated",
     "scene": "routes/scenes/monumentvalley.json"
   },
   {
@@ -83,7 +88,7 @@
     "climbM": 12,
     "file": "routes/parks/sevenmile.gpx",
     "outAndBack": true,
-    "stage": "draft",
+    "stage": "deprecated",
     "scene": "routes/scenes/sevenmile.json"
   },
   {

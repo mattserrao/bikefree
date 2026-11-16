@@ -408,7 +408,13 @@ Goal: give Going-to-the-Sun Road the Big Sur / Pittsburgh hero treatment, over t
   - [x] `qc --strict` clean; clipping QC 0 fail (8 shoreline z-fight warnings accepted); snapshots against the baseline in REVIEW.md
   - [ ] Mac check with the `I` overlay at Light/Balanced/High, golden hour, midday and night; then move to In Progress and merge
 
-### perf-test — Graphics performance and fidelity pass *(test branch `perf-test`, from `main` after PR #20)*
+### Route list cleanup *(test branch `routes-test`, from `main`)*
+- [x] New **Deprecated** section (catalog `"stage": "deprecated"`): Grand Teton, Acadia, Seven Mile Bridge, Crater Lake, Monument Valley
+- [x] Yosemite moved to **Rough Drafts**
+- [x] New collapsible **Ideas** section at the bottom of the route list (`routes/ideas.json`): top 10 with notes, then 11–25
+- [ ] Check on the Mac
+
+### perf-test — Graphics performance and fidelity pass *(test branch `perf-test`, from `main` after PR #20; main merged in after #22)*
 Goal: the 3D view was unoptimized. Cut GPU and CPU cost on every route, then spend some of the savings on looks. How it works: ROUTES.md → *Rendering performance*.
 
 **Performance**
