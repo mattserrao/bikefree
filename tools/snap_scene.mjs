@@ -58,7 +58,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
 let chromium;
 try { ({ chromium } = await import('playwright-core')); }
 catch { console.error('Needs playwright-core: npm install'); server.close(); process.exit(1); }
-const browser = await chromium.launch({ executablePath: chrome,
+const proxy = process.env.HTTPS_PROXY ? { server: process.env.HTTPS_PROXY, bypass: '127.0.0.1,localhost' } : undefined;   // tile downloads behind a proxy
+const browser = await chromium.launch({ executablePath: chrome, proxy,
   args: software ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : ['--ignore-gpu-blocklist', '--enable-gpu'] });
 const page = await browser.newPage({ viewport: { width, height } });
 page.setDefaultTimeout(0);
@@ -73,6 +74,8 @@ for (const shot of shots) {
   await page.goto(`${base}/tools/world-preview.html?${q}`);
   if (breakdown) await page.evaluate(() => { window.__breakdown = true; });
   await page.waitForFunction(() => window.world?.terrain && (window.world.terrain.kit || !window.world.stylized) && window.world._camInit, null, { timeout: 180000, polling: 500 });
+  // streamed terrain (non-stylized and wireframe scenes): wait until the visible tiles are in
+  await page.waitForFunction(() => { const w = window.world; if (w.stylized) return true; const c = w.camera.position; w.terrain.update(c.x, c.z); return w.terrain.loadingCount === 0 && w.terrain.stats.ready > 4; }, null, { timeout: 180000, polling: 1000 });
   // stop the loop, let every queued scenery tile build, then draw one frame and read it back
   const r = await page.evaluate(async () => {
     const w = window.world, t = w.terrain, c = w.camera.position;

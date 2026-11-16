@@ -290,9 +290,13 @@ function renderPreview() {
     $('pvTitle').textContent = r.name;
     $('pvSub').textContent = r.park || 'Your route';
     const leg = r.turnS || r.total, startM = chosenStartM(r);
-    $('pvFacts').innerHTML = fact(`${fmtDist(leg, 1)}`, `${distUnit()} each way`) + fact(fmtElev(r.ascent).toLocaleString(), `${elevUnit()} climb / lap`) +
+    // a one-way stage (Alpe d'Huez): its distance and climbing are the stage's, start to finish
+    const stage = r.stageRoute && r.oneWay;
+    $('pvFacts').innerHTML = (stage
+      ? fact(`${fmtDist(leg, 1)}`, `${distUnit()} to the finish`) + fact(fmtElev(r.oneWay.ascent).toLocaleString(), `${elevUnit()} climb to the finish`)
+      : fact(`${fmtDist(leg, 1)}`, `${distUnit()} each way`) + fact(fmtElev(r.ascent).toLocaleString(), `${elevUnit()} climb / lap`)) +
       fact(`${Math.round(Math.max(...r.grade))}%`, 'max grade') +
-      `<div class="fact tag">${r.oneWay?.closedLoop ? 'Loop · each lap turns and rides it back' : 'There &amp; back · turns at each end'} · endless</div>`;
+      `<div class="fact tag">${stage ? 'One way to the finish · then turns and rides it back' : r.oneWay?.closedLoop ? 'Loop · each lap turns and rides it back' : 'There &amp; back · turns at each end'} · endless</div>`;
     $('pvDesc').innerHTML = r.hasElevation ? '' : '<span class="warn">No elevation in this file — it will ride flat.</span>';
     map.hidden = false; chart.hidden = false;
     $('routeOpts').hidden = false;
@@ -787,7 +791,9 @@ async function refreshRouteList(selectId) {
 function renderRouteCards() {
   $('routeCards').innerHTML = groupedCards(routeItems, (it) => {
     const r = routeCache.get(it.id);
-    const sub = r ? `${fmtDist(r.turnS || r.total, 1)} ${distUnit()} each way · ${fmtElev(r.ascent).toLocaleString()} ${elevUnit()}` : 'Could not load';
+    const sub = !r ? 'Could not load' : r.stageRoute && r.oneWay
+      ? `${fmtDist(r.turnS, 1)} ${distUnit()} to the finish · ${fmtElev(r.oneWay.ascent).toLocaleString()} ${elevUnit()}`
+      : `${fmtDist(r.turnS || r.total, 1)} ${distUnit()} each way · ${fmtElev(r.ascent).toLocaleString()} ${elevUnit()}`;
     return `<button class="rcard ${it.id === selectedRouteId ? 'on' : ''}" data-id="${it.id}"><canvas></canvas>
       <div><b>${escapeHtml(it.name.replace(' (built-in)', ''))}</b><div class="rsub">${escapeHtml(it.park || it.group)} · ${sub}</div></div></button>`;
   }) + ideasSection();
@@ -866,7 +872,9 @@ $('routeOffline').addEventListener('click', async () => {
   if (!('caches' in window)) { alert('This browser can\'t store files for offline use here.'); return; }
   const id = selectedRouteId;
   const keys = planRouteTiles(previewRoute);
-  const urls = tileKeysToUrls(keys);
+  // a wireframe placeholder draws only the elevation tiles (no aerial photos)
+  const wire = routeItems.find((it) => it.id === id)?.wireframe;
+  const urls = tileKeysToUrls(keys, { imagery: !wire });
   const estMB = Math.round((urls.length * 35) / 1000);
   if (!confirm(`Download ${urls.length.toLocaleString()} terrain and imagery files (about ${estMB} MB) for ${previewRoute.name}?`)) return;
   offlineAbort = new AbortController();

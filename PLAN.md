@@ -603,6 +603,36 @@ viewpoints. Not picked: sound, camera feel, timber guardrail.
   first.
 - [ ] Roll the kit out: Big Sur (haze, clouds, rock), Route 28 (haze, clouds, forest crowns)
 
+### Alpe d'Huez — Tour de France 2026 Stage 19 *(test branch `alpedhuez-test`, from `main`)*
+**Goal:** a new route that matches the real Tour stage's distance and elevation, as a wireframe first (scenery comes later). In **Rough Drafts**.
+
+**Decisions (16 Nov 2026)**
+- Stage: **2026 Stage 19, Gap → Alpe d'Huez** (official 127.9 km, about 3,500 m climbing; Col Bayard, Col du Noyer, Col d'Ornon, then the 21 hairpins)
+- Look for now: **road + wire terrain**: the real road on the real ground, drawn as contour and grid lines on a dark fill; no scenery
+- **One way** like the real stage (catalog `"oneWay": true`); the app still turns at the summit and rides back down, like every route
+
+**Passes**
+- [x] **P1 · Road** — routed on the official roads (N85, D17, D817, D117, D937, D537, D1085, D212B, D26A, D526, D1091, D211) with waypoints at every point of the ASO *itinéraire horaire*; checked against a published stage GPX (no point more than 60 m off)
+- [x] **P2 · Profile** — elevation from AWS Terrain Tiles, filled from z13 where z14 has holes (near Valbonnais); grades over 13 % eased (`profile_opts.max_grade`), smoothing 200 m, ends held level
+- [x] **P3 · Wireframe** — scene `"style": "wireframe"` (`js/world/terrain.js`, `scene.wire`): streamed real terrain, contours every 10/50/250 m, 25/100 m grid, dark sky; offline download is elevation only
+- [x] **P4 · Check** — `qc --strict` clean (hairpins now reported as *switchback* info), `npm test` 98/98, `routes:check` clean
+- [ ] Ride it on the Mac (githack link)
+- [ ] Next: baked terrain, then scenery (hairpin numbers, villages, crowds)
+
+**Measured against the official stage**
+
+| | Official | bikefree |
+|---|---|---|
+| Distance | 127.9 km | 127.0 km |
+| Climbing | ~3,500 m | 3,358 m |
+| Start / finish | 905 m / 1,850 m (profile 1,835 m) | 902 m / 1,834 m |
+| Col Bayard (km 4.8) | 1,246 m | km 4.8, 1,246 m |
+| Col du Noyer (km 25.2) | 1,664 m | km 25.0, 1,660 m |
+| Col d'Ornon (km 99.2) | 1,371 m | km 98.7, 1,366 m |
+| Alpe d'Huez climb | 13.8 km at 8.1 % | 13.8 km at 8.1 % |
+
+The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the road, the map line cuts corners. Every checkpoint is within 1 km of its official distance.
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)
