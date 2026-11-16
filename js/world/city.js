@@ -8,7 +8,7 @@ import { MeshBuilder, ribbon, resample, hash } from './city-geometry.js';
 import { buildBridges, buildStadiums, buildLandmarks } from './city-bridges.js';
 import { buildHeroes } from './city-heroes.js';
 import { CityLife } from './city-life.js';
-import { StreetKit, streetKitConfig, zoneCurbAt, walkTopAt } from './street-kit.js';   // [street-kit]
+import { StreetKit, streetKitConfig } from './street-kit.js';   // [street-kit]
 import { ROAD_WIDTH } from './pose.js';
 
 export { STREET_W };
@@ -43,6 +43,7 @@ export class CityScene {
     this._decodeBuildings();
     this._materials();
     this._water();
+    { const k = streetKitConfig(this.route.scene); if (k) this.streetKit = new StreetKit(this, k, { chunk: CHUNK }); }   // [street-kit] (before the lamps and trees: it places some of both)
     this._streetsAndLamps();
     this.bridges = buildBridges(this);
     this.stadiums = buildStadiums(this);
@@ -50,7 +51,6 @@ export class CityScene {
     this.landmarks = buildLandmarks(this);
     this.heroes = buildHeroes(this);
     this.landscape.landmarks.push(...this.heroes.landmarks);   // postcard views for the scenic camera
-    { const k = streetKitConfig(this.route.scene); if (k) this.streetKit = new StreetKit(this, k, { chunk: CHUNK }); }   // [street-kit] (before the trees: it adds street trees)
     this._trees();
     this.life = new CityLife(this);
     this._pending = [...new Set([...this.buildingChunks.keys(), ...(this.streetKit?.keys() || [])])];   // [street-kit] (+ chunks with only kit content)
@@ -706,14 +706,14 @@ export class CityScene {
       if (deckBridge && deckBridge.style && deckBridge.style !== 'girder') continue;   // styled bridges carry their own lights
       for (const side of kind === 'road' ? [-1, 1] : [Math.floor(s / every) % 2 ? 1 : -1]) {
         // on a girder deck: on the slab inside the railing ((ROAD_WIDTH + 3) / 2 + .25)
-        const kitCurb = kind === 'road' && zoneCurbAt(streetKitConfig(this.route.scene), s);   // [street-kit] lamps at a kit zone's curb
-        const off = deckBridge ? (ROAD_WIDTH + 3) / 2 + .05 : kitCurb ? kitCurb + .45 : ROAD_WIDTH / 2 + (kind === 'road' ? 2.6 : 1.6);
-        const x = this.index.xs[i] - dz / len * off * side, z = this.index.zs[i] + dx / len * off * side;
+        const kitLamp = !deckBridge && kind === 'road' ? this.streetKit?.routeLamp(s, side) : undefined;   // [street-kit] in a kit zone: at the curb, on its sidewalk
+        if (kitLamp === null) continue;   // [street-kit] (no sidewalk there: a junction)
+        const off = deckBridge ? (ROAD_WIDTH + 3) / 2 + .05 : ROAD_WIDTH / 2 + (kind === 'road' ? 2.6 : 1.6);
+        const x = kitLamp ? kitLamp.x : this.index.xs[i] - dz / len * off * side, z = kitLamp ? kitLamp.z : this.index.zs[i] + dx / len * off * side;
         if (!deckBridge && !this._clearSpot(x, z, .35, -1, ROAD_WIDTH / 2 + 1.2)) continue;
         // on a deck: not in another carriageway that runs alongside at the same level (the roadway's other half)
         if (deckBridge && this.landscape.streetsNear(x, z, .35).some((o) => this.streets[o.k].cls !== 8 && Math.abs(o.y - r.ele[i]) < 1.5)) continue;
-        lamps.push({ x, z, y: deckBridge ? r.ele[i] : kitCurb ? walkTopAt(r.ele[i]) : this.landscape.heightAt(x, z), yaw:   // [street-kit] (on the kit's sidewalk)
-           Math.atan2(dz / len * side, -dx / len * side), bridge: !!deckBridge });
+        lamps.push({ x, z, y: deckBridge ? r.ele[i] : kitLamp ? kitLamp.y : this.landscape.heightAt(x, z), yaw: Math.atan2(dz / len * side, -dx / len * side), bridge: !!deckBridge });   // [street-kit] (kitLamp.y)
       }
     }
     for (const [map, mat, name] of [[roads, this.streetMaterial, 'Streets'], [walks, this.sidewalkMaterial, 'Sidewalks'], [paths, this.pathMaterial, 'Paths']]) {

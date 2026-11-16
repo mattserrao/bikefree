@@ -395,7 +395,8 @@ export class StreetKit {
           const px = x + f.tx * u, pz = z + f.tz * u;
           if (this.crossing(px, pz, -1, f.tx, f.tz) || this.crossing(ix + f.tx * u, iz + f.tz * u, -1, f.tx, f.tz) || L.landAt(px, pz) === LAND.water) { bad = true; break; }
         }
-        if (!bad) for (const o of this.streetsAt(x, z, 1.2)) if (o.st.cls < 8 && !this.routeStreet(o, f.tx, f.tz)) { bad = true; break; }
+        if (!bad) for (const o of this.streetsAt(x, z, 1.2)) if (o.st.cls < 8 && (o.edge < .5 || !this.routeStreet(o, f.tx, f.tz))) { bad = true; break; }
+        if (!bad && !this._station({ route: true, s, side })) bad = true;   // no sidewalk here
         if (bad || this.lampNear(x, z, 3)) continue;
         // crown radius 2.4 × scale (city tree: scale .75 + seed × .5): clear of the tube (ROAD_WIDTH / 2 + .6) and the walls
         const wmax = Math.min(1.25, (curb + 1.1 - ROAD_WIDTH / 2 - .9) / 2.4, (Math.min(line, 8) - 1.1 + .4) / 2.4);
@@ -423,6 +424,15 @@ export class StreetKit {
       }
     }
     return out;
+  }
+  /**
+   * Where the city's route lamp at outbound distance s, on `side`, stands in a kit zone: { x, z, y } on the sidewalk
+   * at the curb; null where the zone has no sidewalk there (a junction); undefined outside the zones.
+   */
+  routeLamp(s, side) {
+    if (!this.zoneAt(s)) return undefined;
+    const P = this._station({ route: true, s, side });
+    return P ? { x: P.ix + P.nx * .45, z: P.iz + P.nz * .45, y: P.top } : null;
   }
   treeAt(side, s) { return this._treeCells?.has(`${side}:${Math.floor(s / 3)}`) || this._treeCells?.has(`${side}:${Math.floor(s / 3) - 1}`) || this._treeCells?.has(`${side}:${Math.floor(s / 3) + 1}`); }
   /** A street lamp (CityScene.lamps) within r of (x, z)? */
@@ -526,7 +536,8 @@ export class StreetKit {
     const ix = x + nx * curb, iz = z + nz * curb;
     // up to the building line (a sidewalk runs to the walls), at least 1.6 m
     const line = this.buildingLine(ix, iz, nx, nz, width + 4);
-    const w = line < Infinity ? Math.max(1.4, line + .4) : width;
+    // to the building line (a sidewalk runs to the walls) along the route; along other streets no wider than their band
+    const w = line < Infinity ? (st.route ? Math.max(1.4, line + .4) : Math.max(1.4, Math.min(line + .4, width))) : width;
     const ox = ix + nx * w, oz = iz + nz * w;
     // not across another street, the water, a deck, or into the route's road
     for (const f of [0, .5, 1]) {

@@ -450,7 +450,8 @@ function checkSurfaces() {
       // under its shore is hidden by design
       const gTop = hits.find((h) => h.e.label === 'Ground');
       const covered = hits.find((h) => h.e.kind === 'surface' && !/^(Route |Rivers|Sea$|Lake$)|water$/.test(h.e.label) && gTop && gTop.y - h.y > L.groundOverStreet && gTop.y - h.y < 3);
-      if (gTop && covered && hits.indexOf(gTop) < hits.indexOf(covered)) F.add({ check: 'ground-over-street', severity: 'warn', s, label: covered.e.label, value: round(gTop.y - covered.y, 2), point: [round(x, 1), round(covered.y, 2), round(z, 1)], note: 'the ground covers part of a street/path beside the route' }, 40);
+      const hidden = gTop && hits.slice(0, hits.indexOf(gTop)).some((h) => h.e.kind === 'surface' && h.y - gTop.y < 1.5);   // [street-kit] the ground is itself under a slab or the road here: nothing it covers can show
+      if (gTop && covered && !hidden && hits.indexOf(gTop) < hits.indexOf(covered)) F.add({ check: 'ground-over-street', severity: 'warn', s, label: covered.e.label, value: round(gTop.y - covered.y, 2), point: [round(x, 1), round(covered.y, 2), round(z, 1)], note: 'the ground covers part of a street/path beside the route' }, 40);
     }
   }
   F.close();
