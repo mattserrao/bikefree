@@ -218,6 +218,11 @@ export class World {
     const names = { clear: 'Clear', marine: 'Marine layer', clouds: 'Clouds', rain: 'Rain', smoke: 'Wildfire smoke', ...(S.labels || {}) };
     return keys.map((key) => ({ key, label: names[key] || key }));
   }
+  /** [w2-polish] The times of day this scene really shows: a baked scene has its baked time and night only. */
+  timeOptions() {
+    const keys = this.baked ? [this.baked.time, 'night'] : ['morning', 'midday', 'golden', 'night'];
+    return keys.map((key) => ({ key, label: TIME_PRESETS[key]?.label || key }));
+  }
   setWeather(key, immediate = false) {
     const options = this.weatherOptions();
     if (options.length && !options.some((o) => o.key === key)) key = options[0].key;   // not offered here: the route's first

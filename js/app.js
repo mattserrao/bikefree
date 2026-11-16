@@ -1290,6 +1290,18 @@ $('profileDlg').addEventListener('close', () => {
 // ---------- Settings dialog ----------
 const dlg = $('settings');
 const form = dlg.querySelector('form');
+/**
+ * [w2-polish] Show only the times of day the open route really has (a baked scene: its baked time and night),
+ * and pick the one it shows for the saved choice. The saved choice is kept unless the rider changes the menu.
+ */
+let shownTime = null;
+function timeMenu(select) {
+  const offered = onRideScreen ? world?.timeOptions?.().map((o) => o.key) : null;   // the route being ridden
+  for (const opt of select.options) { const off = offered && opt.value !== 'auto' && !offered.includes(opt.value); opt.hidden = off; opt.disabled = off; }
+  let key = settings.worldTime;
+  if (offered && key !== 'auto' && !offered.includes(key)) key = offered.includes(world.timeKey) ? world.timeKey : 'auto';
+  return (shownTime = key);
+}
 function fillSettings() {
   const imp = imperial();
   const f = form.elements;
@@ -1297,7 +1309,7 @@ function fillSettings() {
   f.units.value = settings.units;
   f.bike.value = +(imp ? settings.bikeKg / KG_PER_LB : settings.bikeKg).toFixed(1);
   f.worldCam.value = settings.worldCam;
-  f.worldTime.value = settings.worldTime;
+  f.worldTime.value = timeMenu(f.worldTime);   // [w2-polish] only the times this route shows
   f.worldQuality.value = settings.worldQuality;
   f.worldWeather.value = settings.worldWeather || 'clear';
   f.shiftMode.value = settings.shiftMode;
@@ -1329,7 +1341,7 @@ dlg.addEventListener('close', () => {
     units: f.units.value,
     bikeKg: kg(f.bike.value) || settings.bikeKg,
     worldCam: f.worldCam.value,
-    worldTime: f.worldTime.value,
+    worldTime: f.worldTime.value === shownTime ? settings.worldTime : f.worldTime.value,   // [w2-polish]
     worldQuality: f.worldQuality.value,
     worldWeather: f.worldWeather.value,
     shiftMode: f.shiftMode.value,
