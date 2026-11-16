@@ -17,6 +17,38 @@ import { streetSlots } from './road-meets.js';   // [junctions]
 
 export { STREET_W };
 const CHUNK = 320;
+// [w2-budget] Static city meshes (buildings, streets, sidewalks, paths, lamps, street trees) are merged per sector of
+// SECTOR × SECTOR chunks (960 m): a sector is one draw call per material wherever it is seen. Buildings stream in per
+// chunk (nearest first) and fold into their sector's mesh once the sector's last chunk is built.
+export const SECTOR = 3;
+const SECTOR_M = CHUNK * SECTOR;
+const sectorOf = (key) => { const [x, z] = key.split(',').map(Number); return `${Math.floor(x / SECTOR)},${Math.floor(z / SECTOR)}`; };
+
+/** [w2-budget] One geometry from several with the same attributes (indexed; 32-bit index when it needs one). */
+export function mergeGeometries(list) {
+  list = list.filter((g) => g.attributes.position?.count);
+  const out = new THREE.BufferGeometry();
+  if (!list.length) return out;
+  const names = Object.keys(list[0].attributes);
+  let nv = 0, ni = 0;
+  for (const g of list) { nv += g.attributes.position.count; ni += g.index ? g.index.count : g.attributes.position.count; }
+  for (const name of names) {
+    const size = list[0].attributes[name].itemSize, arr = new Float32Array(nv * size);
+    let o = 0; for (const g of list) { arr.set(g.attributes[name].array, o); o += g.attributes[name].count * size; }
+    out.setAttribute(name, new THREE.BufferAttribute(arr, size));
+  }
+  const idx = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni);
+  let o = 0, base = 0;
+  for (const g of list) {
+    const n = g.attributes.position.count;
+    if (g.index) { const a = g.index.array; for (let k = 0; k < a.length; k++) idx[o + k] = a[k] + base; o += a.length; }
+    else { for (let k = 0; k < n; k++) idx[o + k] = base + k; o += n; }
+    base += n;
+  }
+  out.setIndex(new THREE.BufferAttribute(idx, 1));
+  out.computeBoundingSphere();
+  return out;
+}
 
 const KIND_COLORS = [
   ['#8c4a37', '#9a5a41', '#7b3f30', '#a46a4f', '#6e4a3a', '#b08a6a', '#94503c', '#c2b49a'],   // 0 brick rowhouses
@@ -66,6 +98,9 @@ export class CityScene {
     this._trees();
     this.life = new CityLife(this);
     this._pending = [...new Set([...this.buildingChunks.keys(), ...(this.streetKit?.keys() || [])])];   // [street-kit] (+ chunks with only kit content)
+    // [w2-budget] each sector: the chunks still to build, and the built chunks' building meshes waiting to be merged
+    this.sectors = new Map();
+    for (const key of this._pending) { const sk = sectorOf(key); if (!this.sectors.has(sk)) this.sectors.set(sk, { left: new Set(), parts: [], mesh: null }); this.sectors.get(sk).left.add(key); }
   }
 
   own(x) { this.disposables.add(x); return x; }
@@ -596,8 +631,7 @@ export class CityScene {
   // ---------------------------------------------------------------- buildings
   _buildChunk(key) {
     const list = this.buildingChunks.get(key) || [];   // [street-kit] (a chunk can hold only street-kit content)
-    const B = new MeshBuilder({ aBld: 4 });
-    const extras = new MeshBuilder();   // spires, rooftop details (plain vertex colour)
+    const B = new MeshBuilder({ aBld: 4 });   // [w2-budget] walls, roofs and the rooftop details (aBld.w = 1: no windows), one mesh
     const roofTint = new THREE.Color();
     for (const b of list) {
       if (b.kind === 12 || b.hero || b.hidden) continue;   // the submarine and the hero landmarks are drawn on their own; duplicates not at all
@@ -643,18 +677,35 @@ export class CityScene {
         const ax = ring[j].x - ring[i].x, az = ring[j].z - ring[i].z, bx = ring[k].x - ring[i].x, bz = ring[k].z - ring[i].z;
         if (az * bx - ax * bz > 0) B.tri(first + i, first + j, first + k); else B.tri(first + i, first + k, first + j);
       }
-      this._rooftop(extras, b, ring, y1, seed, !!kit);
+      this._rooftop(B, b, ring, y1, seed, !!kit);   // [w2-budget] (was its own mesh in the solid material)
     }
     const mesh = new THREE.Mesh(this.own(B.geometry()), this.buildingMaterial);
     mesh.castShadow = mesh.receiveShadow = true; mesh.name = `Buildings ${key}`;
     this.group.add(mesh);
-    const out = [mesh];
-    if (extras.count) {
-      const em = new THREE.Mesh(this.own(extras.geometry()), this.solidMaterial);
-      em.castShadow = em.receiveShadow = true; this.group.add(em); out.push(em);
-    }
+    const out = [];
     this.streetKit?.finishChunk(key, out);   // [street-kit] sidewalks, furniture, trim
     this.chunks.set(key, out);
+    this._sectorChunk(key, mesh);   // [w2-budget]
+  }
+
+  /**
+   * [w2-budget] A chunk's building mesh is built: keep it until its sector's last chunk is in, then merge them all into
+   * the sector's one mesh (the static set changes then anyway, so the bake re-runs once, not twice).
+   */
+  _sectorChunk(key, mesh) {
+    const S = this.sectors.get(sectorOf(key));
+    if (!S) { this.chunks.get(key).push(mesh); return; }
+    S.left.delete(key); S.parts.push(mesh);
+    if (S.left.size) return;
+    const geo = this.own(mergeGeometries(S.parts.map((m) => m.geometry)));
+    for (const m of S.parts) { this.group.remove(m); m.geometry.dispose(); this.disposables.delete(m.geometry); }
+    S.parts = [];
+    if (!geo.attributes.position?.count) return;
+    const sm = new THREE.Mesh(geo, this.buildingMaterial);
+    sm.castShadow = sm.receiveShadow = true; sm.name = `Buildings ${sectorOf(key)}`;
+    sm.matrixAutoUpdate = false; sm.updateMatrix();
+    this.group.add(sm);
+    S.mesh = sm;
   }
 
   /** Rooftops that make the skyline: PPG Place's glass spires, the Gulf Tower's stepped pyramid, masts, water tanks. */
@@ -692,7 +743,7 @@ export class CityScene {
   // ---------------------------------------------------------------- streets, sidewalks and lamps
   _streetsAndLamps() {
     const roads = new Map(), walks = new Map(), paths = new Map();
-    const get = (map, x, z) => { const key = `${Math.floor(x / 512)},${Math.floor(z / 512)}`; if (!map.has(key)) map.set(key, new MeshBuilder(map === roads ? { aSlot: 1 } : {})); return map.get(key); };
+    const get = (map, x, z) => { const key = `${Math.floor(x / SECTOR_M)},${Math.floor(z / SECTOR_M)}`; if (!map.has(key)) map.set(key, new MeshBuilder(map === roads ? { aSlot: 1 } : {})); return map.get(key); };   // [w2-budget] per sector (was 512 m)
     const lamps = [];
     const plan = this.junctions = this.landscape._junctions || null;   // [junctions] real intersections (js/world/junctions.js)
     this._levelJunctions();
@@ -822,7 +873,8 @@ export class CityScene {
     this.poolMaterial = poolMat;
     const poolGeo = this.own(new THREE.PlaneGeometry(1, 1)); poolGeo.rotateX(-Math.PI / 2);
     const byChunk = new Map();
-    for (const l of lamps) { const key = `${Math.floor(l.x / 640)},${Math.floor(l.z / 640)}`; if (!byChunk.has(key)) byChunk.set(key, []); byChunk.get(key).push(l); }
+    for (const l of lamps) { const key = `${Math.floor(l.x / SECTOR_M)},${Math.floor(l.z / SECTOR_M)}`;   // [w2-budget] per sector (was 640 m)
+      if (!byChunk.has(key)) byChunk.set(key, []); byChunk.get(key).push(l); }
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
     for (const list of byChunk.values()) {
       const poles = new THREE.InstancedMesh(poleGeo, poleMat, list.length);
@@ -841,6 +893,7 @@ export class CityScene {
         const ground = l.bridge ? l.y + .2 : this.landscape.heightAt(head.x, head.z) + .2;
         pools.setMatrixAt(i, m.compose(new THREE.Vector3(head.x, ground, head.z), new THREE.Quaternion(), new THREE.Vector3(17, 1, 17)));
       });
+      poles.name = 'Lamp posts'; glows.name = 'Lamp glows'; pools.name = 'Lamp pools';   // [w2-budget] named for --breakdown (the clipping QC's label)
       for (const im of [poles, glows, pools]) { im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); this.group.add(im); }
       poles.castShadow = true; poles.receiveShadow = true;
       glows.renderOrder = 5; pools.renderOrder = 3;
@@ -1008,7 +1061,7 @@ export class CityScene {
       if (!road) continue;   // near the ride only
       // trunk clear of every carriageway, the crown clear of walls, and nothing growing over the rider's road
       if (!t.kit && !this._clearSpot(t.x, t.z, 1.6, -1, ROAD_WIDTH / 2 + 2.4, t.wall ?? 1.2)) continue;   // [s4-section] t.wall, [street-kit] kit trees: checked
-      const key = `${Math.floor(t.x / 480)},${Math.floor(t.z / 480)}`, w = .75 + t.seed * .5;
+      const key = `${Math.floor(t.x / SECTOR_M)},${Math.floor(t.z / SECTOR_M)}`, w = .75 + t.seed * .5;   // [w2-budget] per sector (was 480 m)
       q.setFromAxisAngle(Y, t.seed * 40);
       if (!lists.has(key)) lists.set(key, []);
       lists.get(key).push({ m: m.compose(new THREE.Vector3(t.x, t.y ?? this.landscape.heightAt(t.x, t.z) - .1, t.z), q, new THREE.Vector3(w, w * (.85 + t.seed * .3) * (t.sy || 1), w)).clone(), seed: t.seed });   // [street-kit] (sy: kit street trees stand taller)
