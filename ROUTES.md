@@ -79,7 +79,9 @@ Scene options used by Route 28:
 - `vegetation.layout: "forest-edge"` with `species` weights, `edge.mownM` / `edge.shrubM`,
   `canopyM` (height of the distant canopy shell), `treeScale`, `coverScale`.
 - `season: "summer" | "fall"` (the preview also takes `&season=fall`).
-- `atmosphere`: `fogNearM`, `fogFarM`, `fogFarRealM`, `lakeMist` (morning and golden hour).
+- `atmosphere`: `fogNearM`, `fogFarM`, `fogFarRealM`, `lakeMist` (morning and golden hour);
+  valley haze (`js/world/haze.js`, every stylized scene): `haze` (strength ×, default 1), `hazeM` (how deep
+  the low air is, default 75 m), `hazeBaseM` (its floor, default the route's lowest point).
 - `towns`: `{ name, fromM, toM, setbackM, spacingM, skip }`; camps and docks are placed
   automatically wherever a shore is within ~190 m of the road (`camps: [{fromM,toM}]` limits them).
 - `poles`: `{ side, spacingM, lateralM }` — utility poles with sagging wires.
@@ -99,7 +101,10 @@ npm run routes:build
 node tools/glacier_sides.mjs 41700 44345             # which side of the road falls away at those metres (+1 = right)
 ```
 
-- **Terrain:** `terrainGridFile` (10 m within `fineM` of the road, 40 m out to `padM`). In `lakes` mode the
+- **Terrain:** `terrainGridFile` (10 m within `fineM` of the road, 40 m out to `padM`), shipped as
+  `<id>-terrain.grid.bin.gz`: the grid's JSON header plus the height rows as raw bytes, gzipped
+  (`js/terrain-grid.js`; GitHub Pages compresses JSON but not binary, so the app inflates it itself).
+  `node tools/pack_terrain_grid.mjs <old>-terrain.json` converts an older JSON grid. In `lakes` mode the
   baker finds the hydro-flattened lakes (dead-flat basins of at least `minLakeHa`), each with its own level,
   and writes a 20 m lake-id raster; `lakeNames: [[name, lat, lon]]` names them. The lake beds are pressed
   down and the lakes drawn at their levels; the weather's fog bank lies on the lowest big lake.
@@ -347,4 +352,32 @@ washed out; that's the renderer, not the scene.
 0.6 m, from just above the surface to 4.1 m up) — `landscape.inRouteTube()`, applied to streets, decks, bridges,
 rails, inclines and shop fronts as they're built (`MeshBuilder.keepOutOf`). Objects placed beside streets go
 through `CityScene._clearSpot` (true distance to the route's road, every street's carriageway, building footprints).
+
+## Rendering performance (perf-test)
+
+How the stylized scenes are drawn, for anyone adding scenery:
+
+- **Frame pipeline** (`js/world/post.js`): every stylized scene renders into an offscreen target with its own
+  MSAA (`samples` per detail level) and a 32-bit float depth buffer, so the renderer uses a **reversed depth
+  buffer** (EXT_clip_control) instead of the logarithmic one. The logarithmic buffer wrote depth per pixel,
+  which stopped the GPU skipping hidden pixels. Non-hero scenes draw exactly as before (8-bit, tone-mapped by
+  the materials); hero scenes (`post: true`) keep the HDR target, bloom, grade and vignette. Custom shaders
+  keep their `logdepthbuf` includes: they do nothing unless the fallback is in use.
+- **Pooled scenery** (`js/world/pools.js`): ground patches share one mesh per 4.6 km block, and plants
+  share one `InstancedMesh` per kind and 30° sector around the camera (split again at 400 m), instead of a
+  mesh per tile. Tiles still exist as unrendered stand-ins (`terrain.patches`, `terrain.streamedGroups()`)
+  for the QC tools. Pooled meshes are tagged `userData.pooled`.
+- **Streaming in a time budget**: ground, plants, ground cover, forest and tree-card tiles are built as
+  resumable jobs, nearest first, within `buildMs` per frame (COASTAL_QUALITY), and each layer swaps in only
+  once all its wanted tiles are ready (no gaps). Calling `terrain.update(x, z)` without a budget builds
+  everything at once (the tools do this).
+- **Ground cover** streams in 96 m tiles within 220 m of the camera: full density to 110 m, half beyond
+  (the same half at any time).
+- **Tree cards**: beyond the real trees (outside forest-canopy and city scenes), each tree is one
+  camera-facing silhouette, out to `farTreeM` (or to the real-horizon hand-off).
+- **Shadows**: the shadow box moves in whole texels (no shimmer) and the map is redrawn when it moves, or
+  every other frame. Only trees and rocks within ~260 m cast. Tools that render a single frame set
+  `renderer.shadowMap.needsUpdate = true` first.
+- **Water**: the sea and opaque lakes draw after the land (`renderOrder = 1`), so hidden water is never
+  shaded; authored coastlines are a lookup texture, not a loop per pixel.
 

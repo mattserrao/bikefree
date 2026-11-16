@@ -1,4 +1,5 @@
 // Shared route loading for the app, previews and build tools.
+import { loadTerrainGrid } from './terrain-grid.js';
 import { parseGpx, buildRoute, wrapDist } from './gpx.js';
 import { attachTerrainBuffer } from './world/terrain-data.js';
 
@@ -83,7 +84,8 @@ export async function loadRouteScene(route, fetcher = fetch) {
     // a real height grid around the route (tools/build_terrain_grid.py)
     const grid = await fetcher(new URL(`../${scene.terrainGridFile}`, import.meta.url));
     if (!grid.ok) throw new Error(`Terrain could not load (${grid.status})`);
-    scene.terrainGrid = await grid.json();
+    // the binary container (js/terrain-grid.js), or the older JSON with base64 rows
+    scene.terrainGrid = scene.terrainGridFile.endsWith('.json') ? await grid.json() : await loadTerrainGrid(await grid.arrayBuffer());
     if (scene.terrainGrid.format !== 'bikefree-terrain-grid-1') throw new Error('Unsupported terrain format');
   }
   route.scene = scene;

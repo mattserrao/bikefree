@@ -76,6 +76,7 @@ for (const shot of shots) {
     for (let k = 0; k < 600 && (t.forestQueue?.length || k < 2); k++) { t._lastX = Infinity; t.update(c.x, c.z); }
     w.renderer.info.autoReset = false; w.renderer.info.reset();
     // the app's own frame: with the post-processing chain where the scene has one (Big Sur)
+    w.renderer.shadowMap.needsUpdate = true;   // the ride redraws shadows only as needed
     if (w._render) w._render(); else w.renderer.render(w.scene, w.camera);
     const info = w.renderer.info.render;
     let breakdown = null;

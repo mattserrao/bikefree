@@ -6,12 +6,15 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { buildCatalogRoute } from '../js/routes.js';
+import { parseTerrainGrid } from '../js/terrain-grid.js';
+import { gunzipSync } from 'node:zlib';
 import { haversine } from '../js/gpx.js';
 import { VERSION } from '../js/version.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const check = process.argv.includes('--check');
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
+const readGrid = (path) => (path.endsWith('.json') ? JSON.parse(read(path)) : parseTerrainGrid(gunzipSync(readFileSync(resolve(root, path)))));
 const catalog = JSON.parse(read('routes/catalog.json'));
 const seen = new Set();
 const paths = [];
@@ -53,7 +56,7 @@ for (const item of catalog) {
     if (scene.terrain === 'real-coast' || scene.terrainGridFile) {
       // a real height grid around the route from tools/build_terrain_grid.py
       if (!scene.terrainGridFile?.startsWith('routes/scenes/') || scene.terrainGridFile.includes('..') || !existsSync(resolve(root, scene.terrainGridFile))) throw new Error(`${item.id}: missing terrain grid`);
-      const grid = JSON.parse(read(scene.terrainGridFile));
+      const grid = readGrid(scene.terrainGridFile);
       if (grid.format !== 'bikefree-terrain-grid-1' || !(grid.coarse?.nx > 1) || !(grid.fine?.blocks?.length > 0)) throw new Error(`${item.id}: invalid terrain grid`);
       for (const b of scene.bridges || []) if (!(b.fromM >= 0 && b.toM > b.fromM && b.toM <= (route.turnS || route.total))) throw new Error(`${item.id}: invalid bridge span`);
       paths.push(scene.terrainGridFile);

@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { buildCatalogRoute, headingSpan, loadRouteScene } from '../js/routes.js';
+import { parseTerrainGrid } from '../js/terrain-grid.js';
+import { gunzipSync } from 'node:zlib';
 import { routeAt, haversine } from '../js/gpx.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
 import { makeRealCoastLandscape } from '../js/world/real-coast.js';
@@ -15,7 +17,7 @@ const route = buildCatalogRoute(read(item.file), item);
 const proj = makeProjection(36.38, -121.87);
 const index = makeRouteIndex(route, proj);
 const scene = JSON.parse(read(item.scene));
-scene.terrainGrid = JSON.parse(read(scene.terrainGridFile));
+scene.terrainGrid = parseTerrainGrid(gunzipSync(readFileSync(new URL(`../${scene.terrainGridFile}`, import.meta.url))));
 const coast = makeRealCoastLandscape(scene, proj, index, route);
 const bixby = { ...coast.bridges.find((b) => /Bixby/.test(b.name)), span: 218 };
 

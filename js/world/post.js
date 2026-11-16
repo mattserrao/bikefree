@@ -1,6 +1,8 @@
-// A small post-processing chain for the hero scenery: the scene renders into an HDR target, the
-// brightest light (sun glint on the sea, the low sun, lamps at night) blooms softly, and the final
-// pass tone-maps with a gentle grade and vignette. About three cheap passes; off on Light detail.
+// The frame pipeline for the stylized scenery: the scene renders into an HDR target with its own
+// multisampling and a 32-bit float depth buffer (so the renderer can use a reversed depth buffer
+// instead of the logarithmic one, which stopped the GPU skipping hidden pixels). The final pass
+// tone-maps to the screen. Hero scenery adds a soft bloom on the brightest light (sun glint on the
+// sea, the low sun, lamps at night), a gentle grade and a vignette; off on Light detail.
 import * as THREE from '../../vendor/three.module.min.js';
 
 const quadVertex = /* glsl */`
@@ -8,10 +10,16 @@ const quadVertex = /* glsl */`
   void main() { vUv = position.xy * .5 + .5; gl_Position = vec4(position.xy, 0., 1.); }`;
 
 export class PostFX {
-  constructor(renderer) {
+  constructor(renderer, { samples = 4 } = {}) {
     this.renderer = renderer;
-    const hdr = { type: THREE.HalfFloatType, depthBuffer: true };
-    this.scene = new THREE.WebGLRenderTarget(2, 2, { ...hdr, samples: 4 });
+    this.samples = samples;
+    // hero scenery: linear HDR, tone-mapped by the composite pass
+    this.scene = null;
+    // everything else (and Light detail): 8-bit, with the materials tone-mapping and encoding sRGB
+    // themselves exactly as they would drawing straight to the canvas (three does that for an XR target),
+    // so the look is unchanged and the copy to the screen is a plain blit
+    this.plain = null;
+    this._size = [2, 2];
     this.a = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, depthBuffer: false });
     this.b = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, depthBuffer: false });
     const tri = new THREE.BufferGeometry();
@@ -65,14 +73,47 @@ export class PostFX {
         }`,
       depthTest: false, depthWrite: false, toneMapped: true,
     });
+    this.copy = new THREE.ShaderMaterial({
+      uniforms: { tSrc: { value: null } },
+      vertexShader: quadVertex,
+      fragmentShader: /* glsl */`
+        uniform sampler2D tSrc; varying vec2 vUv;
+        void main() { gl_FragColor = texture2D(tSrc, vUv); }`,
+      depthTest: false, depthWrite: false, toneMapped: false,
+    });
     this.quad = new THREE.Mesh(tri, this.bright);
     this.quad.frustumCulled = false;
     this.quadScene = new THREE.Scene(); this.quadScene.add(this.quad);
   }
 
+  _target(hdr) {
+    const key = hdr ? 'scene' : 'plain';
+    if (!this[key]) {
+      const t = new THREE.WebGLRenderTarget(this._size[0], this._size[1], {
+        type: hdr ? THREE.HalfFloatType : THREE.UnsignedByteType, depthBuffer: true, samples: this.samples,
+        // 32-bit float depth: what makes the reversed depth buffer precise out to the horizon
+        depthTexture: new THREE.DepthTexture(this._size[0], this._size[1], THREE.FloatType) });
+      t.resolveDepthBuffer = false;   // the depth is only for this pass, never read back
+      if (!hdr) {
+        t.isXRRenderTarget = true; t.texture.colorSpace = THREE.SRGBColorSpace;
+        t.texture.internalFormat = 'RGBA8';   // holds the already-encoded values as they are: no decode on the blit
+      }
+      this[key] = t;
+    }
+    return this[key];
+  }
+
+  /** MSAA samples for the scene pass (by detail level). */
+  setSamples(samples) {
+    if (this.samples === samples) return;
+    this.samples = samples;
+    for (const key of ['scene', 'plain']) if (this[key]) { this[key].depthTexture?.dispose(); this[key].dispose(); this[key] = null; }
+  }
+
   setSize(width, height) {
     width = Math.max(2, Math.floor(width)); height = Math.max(2, Math.floor(height));
-    this.scene.setSize(width, height);
+    this._size = [width, height];
+    this.scene?.setSize(width, height); this.plain?.setSize(width, height);
     const w = Math.max(2, Math.floor(width / 4)), h = Math.max(2, Math.floor(height / 4));
     this.a.setSize(w, h); this.b.setSize(w, h);
     this.bright.uniforms.uTexel.value.set(1 / width, 1 / height);
@@ -85,18 +126,24 @@ export class PostFX {
     this.renderer.render(this.quadScene, this.camera);
   }
 
+  /** opts.grade false: just the scene, exactly as drawn to the canvas (no bloom, grade or vignette). */
   render(scene, camera, opts = {}) {
-    const r = this.renderer;
-    r.setRenderTarget(this.scene);
+    const r = this.renderer, plain = opts.grade === false, target = this._target(!plain);
+    r.setRenderTarget(target);
     r.render(scene, camera);
-    this.bright.uniforms.tSrc.value = this.scene.texture;
+    if (plain) {
+      this.copy.uniforms.tSrc.value = target.texture;
+      this._pass(this.copy, null);
+      return;
+    }
+    this.bright.uniforms.tSrc.value = target.texture;
     this.bright.uniforms.uThreshold.value = opts.threshold ?? 1.1;
     this._pass(this.bright, this.a);
     for (let k = 0; k < 2; k++) {
       this.blur.uniforms.tSrc.value = this.a.texture; this.blur.uniforms.uDir.value.set((1 + k) / this._w, 0); this._pass(this.blur, this.b);
       this.blur.uniforms.tSrc.value = this.b.texture; this.blur.uniforms.uDir.value.set(0, (1 + k) / this._h); this._pass(this.blur, this.a);
     }
-    this.composite.uniforms.tScene.value = this.scene.texture;
+    this.composite.uniforms.tScene.value = target.texture;
     this.composite.uniforms.tBloom.value = this.a.texture;
     this.composite.uniforms.uBloom.value = opts.bloom ?? .32;
     this.composite.uniforms.uWarm.value = opts.warm ?? 0;
@@ -104,8 +151,9 @@ export class PostFX {
   }
 
   dispose() {
-    for (const t of [this.scene, this.a, this.b]) t.dispose();
-    for (const m of [this.bright, this.blur, this.composite]) m.dispose();
+    for (const t of [this.scene, this.plain]) if (t) { t.depthTexture?.dispose(); t.dispose(); }
+    for (const t of [this.a, this.b]) t.dispose();
+    for (const m of [this.bright, this.blur, this.composite, this.copy]) m.dispose();
     this.geometry.dispose();
   }
 }

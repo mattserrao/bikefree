@@ -67,7 +67,7 @@ function classify(o) {
   const mats = Array.isArray(o.material) ? o.material : [o.material];
   if (mats.every((m) => m.transparent && !m.depthWrite)) return null;          // glows, pools, wakes, decals
   if (skipNames.test(o.name)) return null;
-  if (o.userData.qcRider) return null;
+  if (o.userData.qcRider || o.userData.pooled) return null;   // pooled ground/plants: QC reads their tile stand-ins
   if (o.isInstancedMesh) return lifeNames.test(o.name) ? 'life' : 'instances';
   if (o.material === world.terrain.groundMaterial) return 'ground';
   if (surfaceNames.test(named(o))) return 'surface';
@@ -108,7 +108,7 @@ function streamAt(x, z) {
   world.terrain.update(x, z);
   world.terrain.group.updateMatrixWorld(true);
   const now = new Set();
-  for (const map of [world.terrain.scatter, world.terrain.cover]) for (const g of map?.values() || []) g.traverse((o) => { if (o.isInstancedMesh) now.add(o); });
+  for (const g of world.terrain.streamedGroups?.() || []) g.traverse((o) => { if (o.isInstancedMesh) now.add(o); });
   if ([...now].every((o) => streamed.has(o)) && now.size === streamed.size) return;
   const fresh = [...now].filter((o) => !streamed.has(o));
   streamed = now; streamGrid = new Map();
@@ -142,7 +142,6 @@ function indexScene() {
     if (!o.visible && o !== world.scene) return;
     const kind = classify(o);
     if (!kind || kind === 'ground' || kind === 'life') return;
-    for (const map of [world.terrain.scatter, world.terrain.cover]) for (const g of map?.values() || []) { let x = o; while (x && x !== g) x = x.parent; if (x === g) return; }
     const geo = o.geometry; if (!geo.attributes.position?.count) return;
     if (!geo.boundingBox) geo.computeBoundingBox();
     const bvh = ensureBVH(geo);

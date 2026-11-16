@@ -63,6 +63,7 @@ for (const sh of SHOTS) {
     for (let k = 0; k < 400 && (t.forestQueue?.length || k < 2); k++) { t._lastX = Infinity; t.update(a.x, a.z); }
     city?.tick(w.camera.position, .016, 12.3, null);
     w.renderer.info.autoReset = false; w.renderer.info.reset();
+    w.renderer.shadowMap.needsUpdate = true;   // the ride redraws shadows only as needed
     if (w._render) w._render(); else w.renderer.render(w.scene, w.camera);
     return { url: w.renderer.domElement.toDataURL('image/jpeg', .9), calls: w.renderer.info.render.calls };
   }, sh);
