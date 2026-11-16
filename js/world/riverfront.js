@@ -199,7 +199,7 @@ export function buildRiverfront(city) {
   const L = city.landscape;
   // planned with the landscape (the ground past the walls is already under the water), else here
   const plan = L.riverfront || { runs: planRiverfront({ landscape: L, route: city.route, index: city.index, streets: city.streets, config }) };
-  const runs = plan.runs, covers = plan.covers || riverfrontField(runs, L.level).covers;
+  const runs = plan.runs, field = plan.covers ? plan : riverfrontField(runs, L.level), covers = field.covers;
   const level = L.level, V = (x, y, z) => new THREE.Vector3(x, y, z);
   const stone = new THREE.Color('#9b9486'), wet = new THREE.Color('#4a4840'), coping = new THREE.Color('#c9c1ae');
   const lawn = new THREE.Color(city.route.scene?.palette?.grass || '#7a9a55').multiplyScalar(.82);
@@ -275,6 +275,8 @@ export function buildRiverfront(city) {
   }
   const steps = plan.steps !== undefined ? plan.steps : planWaterSteps(L, config.waterSteps);
   if (steps) { const m = waterStepsMesh(city, steps); tris += m.geometry.index.count / 3; meshes.push(m); }
+  // no street trees at the wall or past it (in the river)
+  if (city._clearSpot) { const clear = city._clearSpot; city._clearSpot = function (x, z, ...rest) { return clear.call(this, x, z, ...rest) && !(covers(x, z) && field.groundCap(x, z) < Infinity); }; }
   // no scattered rocks, shrubs or grass on the walk
   const plant = L.canPlant;
   if (plant) L.canPlant = (x, z) => plant(x, z) && !covers(x, z);
