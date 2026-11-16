@@ -8,7 +8,7 @@ import { MeshBuilder, ribbon, resample, hash } from './city-geometry.js';
 import { buildBridges, buildStadiums, buildLandmarks } from './city-bridges.js';
 import { buildHeroes } from './city-heroes.js';
 import { CityLife } from './city-life.js';
-import { StreetKit, streetKitConfig } from './street-kit.js';   // [street-kit]
+import { StreetKit, streetKitConfig, zoneCurbAt } from './street-kit.js';   // [street-kit]
 import { ROAD_WIDTH } from './pose.js';
 
 export { STREET_W };
@@ -50,8 +50,8 @@ export class CityScene {
     this.landmarks = buildLandmarks(this);
     this.heroes = buildHeroes(this);
     this.landscape.landmarks.push(...this.heroes.landmarks);   // postcard views for the scenic camera
+    { const k = streetKitConfig(this.route.scene); if (k) this.streetKit = new StreetKit(this, k, { chunk: CHUNK }); }   // [street-kit] (before the trees: it adds street trees)
     this._trees();
-    { const k = streetKitConfig(this.route.scene); if (k) this.streetKit = new StreetKit(this, k, { chunk: CHUNK }); }   // [street-kit]
     this.life = new CityLife(this);
     this._pending = [...new Set([...this.buildingChunks.keys(), ...(this.streetKit?.keys() || [])])];   // [street-kit] (+ chunks with only kit content)
   }
@@ -706,7 +706,8 @@ export class CityScene {
       if (deckBridge && deckBridge.style && deckBridge.style !== 'girder') continue;   // styled bridges carry their own lights
       for (const side of kind === 'road' ? [-1, 1] : [Math.floor(s / every) % 2 ? 1 : -1]) {
         // on a girder deck: on the slab inside the railing ((ROAD_WIDTH + 3) / 2 + .25)
-        const off = deckBridge ? (ROAD_WIDTH + 3) / 2 + .05 : ROAD_WIDTH / 2 + (kind === 'road' ? 2.6 : 1.6);
+        const kitCurb = kind === 'road' && zoneCurbAt(streetKitConfig(this.route.scene), s);   // [street-kit] lamps at a kit zone's curb
+        const off = deckBridge ? (ROAD_WIDTH + 3) / 2 + .05 : kitCurb ? kitCurb + .45 : ROAD_WIDTH / 2 + (kind === 'road' ? 2.6 : 1.6);
         const x = this.index.xs[i] - dz / len * off * side, z = this.index.zs[i] + dx / len * off * side;
         if (!deckBridge && !this._clearSpot(x, z, .35, -1, ROAD_WIDTH / 2 + 1.2)) continue;
         // on a deck: not in another carriageway that runs alongside at the same level (the roadway's other half)
@@ -913,6 +914,8 @@ export class CityScene {
         }
       }
     });
+    const kitTrees = this.streetKit?.treeSpots() || [];   // [street-kit] street trees in the kit's tree pits (placed and checked by the kit)
+    spots.push(...kitTrees);
     const T = this.data.trees ? new Int16Array(Uint8Array.from(atob(this.data.trees), (c) => c.charCodeAt(0)).buffer) : [];
     for (let i = 0; i < T.length; i += 2) { const p = this.D.local(T[i], T[i + 1]); spots.push({ ...p, seed: hash(i) }); }
     // a light street tree: trunk + two lumpy crowns (~40 triangles), coloured per instance
@@ -936,7 +939,7 @@ export class CityScene {
       const road = this.index.nearest(t.x, t.z, 650);
       if (!road) continue;   // near the ride only
       // trunk clear of every carriageway, the crown clear of walls, and nothing growing over the rider's road
-      if (!this._clearSpot(t.x, t.z, 1.6, -1, ROAD_WIDTH / 2 + 2.4, 1.2)) continue;
+      if (!t.kit && !this._clearSpot(t.x, t.z, 1.6, -1, ROAD_WIDTH / 2 + 2.4, 1.2)) continue;   // [street-kit] (kit trees: checked)
       const key = `${Math.floor(t.x / 480)},${Math.floor(t.z / 480)}`, w = .75 + t.seed * .5;
       q.setFromAxisAngle(Y, t.seed * 40);
       if (!lists.has(key)) lists.set(key, []);

@@ -66,8 +66,8 @@ class KitBuilder extends MeshBuilder {
     return this;
   }
 }
-const CURB_H = .15;                         // sidewalk above the carriageway
-const ROUTE_CURB = ROAD_WIDTH / 2 + 2.4;   // the route's curb line from its centre (lanes 3.5 m + parking 2.4 m)
+import { CURB_H, ROUTE_CURB, streetKitConfig, routeCurbAt, zoneCurbAt } from './street-grade.js';
+export { streetKitConfig, zoneCurbAt, CURB_H, ROUTE_CURB };
 const LOD = { light: { near: 160, mid: 450 }, balanced: { near: 260, mid: 750 }, high: { near: 380, mid: 1100 } };
 
 // ---------------------------------------------------------------- catalogue: facade styles
@@ -115,15 +115,6 @@ const SIGN_COLORS = [['#1f3b57', '#ffd34d'], ['#7a1f24', '#fff3d6'], ['#14402e',
   ['#0f2f4a', '#6fd3ff'], ['#3b2416', '#ffb347'], ['#262145', '#c7a0ff']];
 const ALL_LABELS = Object.values(SHOP_LABELS).flat();
 
-/** The scene's kit settings, normalised; null when the scene doesn't use the kit. */
-export function streetKitConfig(scene) {
-  const k = scene?.streetKit;
-  if (!k) return null;
-  const zones = (k.zones || (scene.mainStreets || []).map((m) => ({ ...m, style: 'victorian', parking: true })))
-    .map((z) => ({ widthM: 80, parking: false, ...z }));
-  return { fromM: 0, toM: Infinity, rangeM: 220, ...k, zones };
-}
-
 // ---------------------------------------------------------------- the kit
 export class StreetKit {
   /**
@@ -142,8 +133,12 @@ export class StreetKit {
     this.deferred = false;     // true while the app streams (CityScene._stream): dress chunks a few ms per frame
     this.budgetMs = 3;
     this._outs = new Map();    // chunk key → the city's mesh list for it
+    this._started = new Set(); // chunk keys whose kit work has begun (their bucket is taken)
+    this._late = new Set();    // chunk keys given furniture after that (built on the next tick)
+    this.junctionsExternal = false;
     this.stats = { buildings: 0, triangles: 0, meshes: 0, furniture: 0, cars: 0 };
     this._lod = LOD[city.qualityKey] || LOD.balanced;
+    this.maxCurb = Math.max(ROUTE_CURB, ...config.zones.map((z) => z.curbM));
     this._materials();
     this._area();
     this._streetGrid();
@@ -157,6 +152,10 @@ export class StreetKit {
   /** Chunk keys with kit content but maybe no buildings (the city streams them too). */
   keys() { return [...this.pending.keys()]; }
   outbound(i) { return i > this.end ? Math.max(0, 2 * this.end - i) : i; }
+  /** The route's curb line (metres from its centre) at outbound distance s: the zone's curbM, else ROUTE_CURB. */
+  curbAt(s) { return routeCurbAt(this.cfg, s); }
+  /** Outbound route distance of a routeDist() hit. */
+  sOf(r) { return this.route.dist[this.outbound(r.i)]; }
 
   /** Route frame at distance s (outbound): position, height, tangent and right vectors. */
   frame(s) {
@@ -306,7 +305,7 @@ export class StreetKit {
       if (L.routeKindAt(s) !== 'road' || decks.some((b) => s > b.fromM - 8 && s < b.toM + 8)) continue;
       const f = this.frame(s);
       for (const side of [-1, 1]) {
-        const cx = f.x + f.rx * side * ROUTE_CURB, cz = f.z + f.rz * side * ROUTE_CURB;
+        const c = this.curbAt(s), cx = f.x + f.rx * side * c, cz = f.z + f.rz * side * c;
         this.bucket(this.key(cx, cz)).stations.push({ s, side, route: true });
       }
     }
@@ -321,7 +320,7 @@ export class StreetKit {
           acc += len / n;
           if (!this.inArea(x, z) || this.routeS(x, z) == null) continue;
           const rd = L.routeDist(x, z);
-          if (rd && rd.d < ROUTE_CURB + 4) continue;   // the route's own street: done above
+          if (rd && rd.d < this.curbAt(this.sOf(rd)) + 4) continue;   // the route's own street: done above
           for (const side of [-1, 1]) this.bucket(this.key(x, z)).stations.push({ k, i, t, side, acc });
         }
       }
@@ -346,12 +345,58 @@ export class StreetKit {
     }
   }
 
+  // ------------------------------------------------------------ street trees
+  /**
+   * Street trees along the route in zones with `trees` (spacing, metres): in tree pits 1.1 m in from the curb, where
+   * the sidewalk is at least 3.4 m deep, sized so the crown stays clear of the rider's space and the walls. Returns
+   * spots for CityScene._trees ({x, z, seed, kit: true}: drawn with the city's instanced street trees, no extra
+   * draw call); the pits (grates) are queued as furniture. Called once, by the city, before it plants its trees.
+   */
+  treeSpots() {
+    if (this._treeSpots) return this._treeSpots;
+    const out = (this._treeSpots = []), L = this.L, decks = L.routeBridges || [];
+    this._treeCells = new Set();
+    for (const zone of this.cfg.zones) {
+      if (!(zone.trees > 0)) continue;
+      for (const side of [-1, 1]) for (let s = zone.fromM + (side > 0 ? zone.trees / 2 : 0) + 4; s <= zone.toM - 4; s += zone.trees) {
+        if (L.routeKindAt(s) !== 'road' || decks.some((b) => s > b.fromM - 12 && s < b.toM + 12)) continue;
+        const f = this.frame(s), curb = this.curbAt(s), nx = f.rx * side, nz = f.rz * side;
+        const ix = f.x + nx * curb, iz = f.z + nz * curb, x = ix + nx * 1.1, z = iz + nz * 1.1;
+        const line = this.buildingLine(ix, iz, nx, nz, 8);
+        if (line < 3.4) continue;
+        let bad = false;
+        for (const u of [-2.6, 0, 2.6]) {
+          const px = x + f.tx * u, pz = z + f.tz * u;
+          if (this.crossing(px, pz, -1, f.tx, f.tz) || this.crossing(ix + f.tx * u, iz + f.tz * u, -1, f.tx, f.tz) || L.landAt(px, pz) === LAND.water) { bad = true; break; }
+        }
+        if (bad || this.lampNear(x, z, 3)) continue;
+        // crown radius 2.4 × scale (city tree: scale .75 + seed × .5): clear of the tube (ROAD_WIDTH / 2 + .6) and the walls
+        const wmax = Math.min(1.25, (curb + 1.1 - ROAD_WIDTH / 2 - .9) / 2.4, (Math.min(line, 8) - 1.1 + .4) / 2.4);
+        if (wmax < .78) continue;
+        const seed = Math.min(hash(Math.round(s) * 31 + side * 7), (wmax - .75) / .5);
+        out.push({ x, z, seed, kit: true });
+        this._treeCells.add(`${side}:${Math.floor(s / 3)}`);
+        this.bucket(this.key(x, z)).furniture.push({ kind: 'treePit', x, z, yaw: Math.atan2(-nx, -nz), given: true, y: f.y + ROAD_LIFT + CURB_H });
+      }
+    }
+    return out;
+  }
+  treeAt(side, s) { return this._treeCells?.has(`${side}:${Math.floor(s / 3)}`) || this._treeCells?.has(`${side}:${Math.floor(s / 3) - 1}`) || this._treeCells?.has(`${side}:${Math.floor(s / 3) + 1}`); }
+  /** A street lamp (CityScene.lamps) within r of (x, z)? */
+  lampNear(x, z, r = .6) {
+    if (!this._lamps) {
+      this._lamps = new Map();
+      for (const l of this.city.lamps || []) { const k = `${Math.floor(l.x / 20)},${Math.floor(l.z / 20)}`; if (!this._lamps.has(k)) this._lamps.set(k, []); this._lamps.get(k).push(l); }
+    }
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const l of this._lamps.get(`${Math.floor(x / 20) + a},${Math.floor(z / 20) + b}`) || []) if (Math.hypot(l.x - x, l.z - z) < r) return true;
+    return false;
+  }
+
   // ------------------------------------------------------------ sidewalks
   /** Sidewalk top at (x, z) if a kit sidewalk covers it (for standing things on it), else the ground. */
   walkLevel(x, z) {
-    const r = this.L.routeDist(x, z);
-    if (r && r.d > ROUTE_CURB - .2 && r.d < ROUTE_CURB + 9) {
-      const s = this.route.dist[this.outbound(r.i)];
+    const r = this.L.routeDist(x, z), s = r && this.sOf(r), c = r && this.curbAt(s);
+    if (r && r.d > c - .2 && r.d < c + 9) {
       if (s >= this.cfg.fromM && s <= this.cfg.toM && this.L.routeKindAt(s) === 'road') return r.y + ROAD_LIFT + CURB_H;
     }
     for (const o of this.streetsAt(x, z, 7)) if (!o.st.bridge && o.st.cls >= 2 && o.st.cls <= 6 && o.edge > -.2) return o.y + this.lift(o.k) + CURB_H;
@@ -422,8 +467,8 @@ export class StreetKit {
     const L = this.L, city = this.city;
     let x, z, y, tx, tz, curb, width = 3, zone = null, own = -1;
     if (st.route) {
-      const f = this.frame(st.s); x = f.x; z = f.z; y = f.y + ROAD_LIFT; tx = f.tx; tz = f.tz; curb = ROUTE_CURB;
-      zone = this.zoneAt(st.s); if (zone) width = zone.sidewalkM || 4.5;
+      const f = this.frame(st.s); x = f.x; z = f.z; y = f.y + ROAD_LIFT; tx = f.tx; tz = f.tz; curb = this.curbAt(st.s);
+      zone = this.zoneAt(st.s); if (zone) width = zone.sidewalkM;
     } else {
       const S = city.streets[st.k], a = S.pts[st.i - 1], b = S.pts[st.i];
       x = a.x + (b.x - a.x) * st.t; z = a.z + (b.z - a.z) * st.t; y = a.y + (b.y - a.y) * st.t + this.lift(st.k);
@@ -441,11 +486,11 @@ export class StreetKit {
       const px = ix + nx * w * f, pz = iz + nz * w * f;
       if (this.crossing(px, pz, own, tx, tz)) return null;
       if (L.landAt(px, pz) === LAND.water || L.bridgeAt(px, pz, 0)) return null;
-      if (!st.route) { const r = L.routeDist(px, pz); if (r && r.d < ROUTE_CURB + .3) return null; }
+      if (!st.route) { const r = L.routeDist(px, pz); if (r && r.d < this.curbAt(this.sOf(r)) + .3) return null; }
     }
     if (line < 1.2) return null;   // a building right at the curb: no room
     const top = y + CURB_H;
-    return { ix, iz, ox, oz, nx, nz, tx, tz, y, top, w, yaw: Math.atan2(-nx, -nz), route: !!st.route, zone, line, ground: y - 1.2 };
+    return { ix, iz, ox, oz, nx, nz, tx, tz, y, top, w, curb, yaw: Math.atan2(-nx, -nz), route: !!st.route, zone, line, ground: y - 1.2 };
   }
 
   _slab(W, a, b, n) {
@@ -467,16 +512,22 @@ export class StreetKit {
   _startCap(W, P) { this._cap(W, P, -1); }
   _endCap(W, P) { this._cap(W, P, 1); }
 
-  /** The route's parking lane in a zone: a darker asphalt strip between the lanes and the curb. */
+  /**
+   * The route's asphalt between its lanes and the curb (the road ribbon is ROAD_WIDTH wide): a parking lane in zones
+   * with parking (a white line 2.4 m out from the curb, and a tick at each 6 m stall), else plain asphalt.
+   */
   _parkingLane(W, list) {
-    const pts = list.filter((P) => P.route && P.zone?.parking);
-    const inA = ROUTE_CURB - (ROAD_WIDTH / 2 + .15);
-    W.color('#4b4f52');
+    const pts = list.filter((P) => P.route);
     for (let j = 1; j < pts.length; j++) {
       const a = pts[j - 1], b = pts[j];
       if (Math.hypot(b.ix - a.ix, b.iz - a.iz) > 5.5 || a.st.side !== b.st.side) continue;
-      const P = (p, d) => V(p.ix - p.nx * d, p.y - .015, p.iz - p.nz * d);
-      face(W, P(a, 0), P(b, 0), P(b, inA), P(a, inA), UP);
+      const inA = a.curb - (ROAD_WIDTH / 2 - .05), inB = b.curb - (ROAD_WIDTH / 2 - .05);
+      const P = (p, d) => V(p.ix - p.nx * d, p.y - .012, p.iz - p.nz * d), Q = (p, d) => V(p.ix - p.nx * d, p.y - .004, p.iz - p.nz * d);
+      W.color('#50565a'); face(W, P(a, 0), P(b, 0), P(b, inB), P(a, inA), UP);
+      if (!a.zone?.parking || a.curb - ROAD_WIDTH / 2 < 2.2) continue;
+      const line = Math.min(2.4, a.curb - ROAD_WIDTH / 2 - .1);
+      W.color('#d9d6cc'); face(W, Q(a, line - .06), Q(b, line - .06), Q(b, line + .06), Q(a, line + .06), UP);
+      if (Math.floor(a.st.s / 6) !== Math.floor(b.st.s / 6)) face(W, Q(a, .3), Q(a, line), V(a.ix - a.nx * line + a.tx * .1, a.y - .004, a.iz - a.nz * line + a.tz * .1), V(a.ix - a.nx * .3 + a.tx * .1, a.y - .004, a.iz - a.nz * .3 + a.tz * .1), UP);
     }
   }
 
@@ -542,8 +593,8 @@ export class StreetKit {
       if ((mx - cx) * nx + (mz - cz) * nz < 0) { nx = -nx; nz = -nz; }
       const ox = mx + nx * 3, oz = mz + nz * 3;
       let facing = false;
-      const r = this.routeNear(ox, oz) < ROUTE_CURB + 10 ? L.routeDist(ox, oz) : null;
-      if (r && r.d < ROUTE_CURB + 10 && L.routeKindAt(this.route.dist[this.outbound(r.i)]) === 'road') {
+      const r = this.routeNear(ox, oz) < this.maxCurb + 10 ? L.routeDist(ox, oz) : null;
+      if (r && r.d < this.curbAt(this.sOf(r)) + 10 && L.routeKindAt(this.route.dist[this.outbound(r.i)]) === 'road') {
         const back = L.routeDist(mx - nx * 3, mz - nz * 3);
         facing = !back || back.d > r.d;
       }
@@ -759,13 +810,44 @@ export class StreetKit {
     this.stats.furniture++;
     return true;
   }
-  /** Queue a piece for when its chunk is built (for other modules: junction corners, hand-placed scene data). */
-  addFurniture(kind, x, z, yaw, opts = {}) { this.bucket(this.key(x, z)).furniture.push({ kind, x, z, yaw, ...opts, given: true }); }
-  /** A signal pole at a junction corner, its mast arm reaching `arm` metres towards (sin yaw, cos yaw). */
-  addSignal(x, z, yaw, arm = 5) { this.addFurniture('signal', x, z, yaw, { arm }); }
+  /**
+   * Queue a piece for its chunk (for other modules: junction corners, hand-placed scene data). Best called before
+   * the chunk streams in (from a module built in CityScene's constructor); a piece added to a chunk that is already
+   * dressed is built on the next tick into a small mesh of its own (one more draw call for that chunk).
+   * opts: { y } (default: the sidewalk or ground level there), { arm } for signals, { lod: 'mid' } to keep it to 750 m.
+   */
+  addFurniture(kind, x, z, yaw, opts = {}) {
+    const key = this.key(x, z);
+    this.bucket(key).furniture.push({ kind, x, z, yaw, ...opts, given: true });
+    if (this._started.has(key)) this._late.add(key);
+  }
+  /** A signal mast at a junction corner, its arm reaching `arm` metres towards (sin yaw, cos yaw) over the lanes. */
+  addSignal(x, z, yaw, arm = 5, opts = {}) { this.addFurniture('signal', x, z, yaw, { arm, ...opts }); }
+  /**
+   * One junction corner's furniture (the junctions module's entry point):
+   *   corner = { x, z, yaw, arm = 5, signal = true, sign = true, button = signal, bollards = 0, y }
+   *   (x, z)    the corner's pole spot on the sidewalk, ~0.7 m in from the curb return
+   *   yaw       the direction the mast arm reaches (over the approach lanes it controls): (sin yaw, cos yaw)
+   *   bollards  posts along the curb return, 1.3 m apart, starting 1.2 m from (x, z) to the mast's right
+   */
+  addCorner(c) {
+    const { x, z, yaw, arm = 5, signal = true, sign = true, button = signal, bollards = 0 } = c, y = c.y != null ? { y: c.y } : {};
+    const sx = Math.sin(yaw), cz = Math.cos(yaw), rx = cz, rz = -sx;   // (rx, rz): the mast's right
+    if (signal) this.addSignal(x, z, yaw, arm, y);
+    if (sign) this.addFurniture('streetSign', x - sx * .45 + rx * .45, z - cz * .45 + rz * .45, yaw, y);
+    if (button) this.addFurniture('pushButton', x - rx * 1.1, z - rz * 1.1, yaw, y);
+    for (let k = 0; k < bollards; k++) this.addFurniture('bollard', x + rx * (1.2 + k * 1.3), z + rz * (1.2 + k * 1.3), yaw, y);
+  }
+  /**
+   * Hand junction furniture to another module: the kit stops placing its own signal masts (from OSM's mapped
+   * signals) and corner street signs. The junctions module calls this, then addCorner() for every corner it builds.
+   */
+  externalJunctions(on = true) { this.junctionsExternal = on; }
+  /** Sidewalk (or ground) level at (x, z): what the junctions module should build its corner pads to. */
+  sidewalkTop(x, z) { return this.walkLevel(x, z); }
 
   /** Is a post-sized thing at (x, z) clear of buildings, carriageways and the route's road? */
-  clear(x, z, r = .4) { return this.city._clearSpot(x, z, r, -1, ROAD_WIDTH / 2 + 1.2, r); }
+  clear(x, z, r = .4) { return !this.lampNear(x, z, r + .3) && this.city._clearSpot(x, z, r, -1, ROAD_WIDTH / 2 + 1.2, r); }
 
   // ------------------------------------------------------------ chunk assembly
   /**
@@ -788,7 +870,7 @@ export class StreetKit {
     this.jobs.delete(key);
     for (const j of jobs) { this._dressBuilding(C, j); yield; }
     const P = this.pending.get(key);
-    this.pending.delete(key);
+    this.pending.delete(key); this._started.add(key);
     if (P) {
       const sections = this._walks(C.walks, P.stations, []);
       yield;
@@ -832,8 +914,10 @@ export class StreetKit {
         const h = hash(cell * 7919 + (st.route ? 17 : st.k * 31) + st.side * 3);
         const room = P.w;
         // parked cars along the route's parking lane (zones with parking), with gaps
-        if (zone?.parking && st.route && cell % 2 === 0 && h < .72) {
-          const off = ROUTE_CURB - 1.15, [x, z] = [P.ix - P.nx * 1.15, P.iz - P.nz * 1.15];
+        // (cars stay out of the rider's space: centred at least ROAD_WIDTH / 2 + 1.55 m out)
+        const back = Math.min(1.15, P.curb - ROAD_WIDTH / 2 - 1.55);
+        if (zone?.parking && st.route && cell % 2 === 0 && h < .72 && back > .95) {
+          const off = back, [x, z] = [P.ix - P.nx * back, P.iz - P.nz * back];
           const yaw = Math.atan2(P.tx * st.side, P.tz * st.side);
           if (!this.crossing(x, z, -1, P.tx, P.tz) && !this.crossing(x + P.tx * 2.4, z + P.tz * 2.4, -1, P.tx, P.tz) && !this.crossing(x - P.tx * 2.4, z - P.tz * 2.4, -1, P.tx, P.tz)) {
             this.place(C, 'car', x, z, yaw, { y: P.y - .015, seed: h }); this.stats.cars++;
@@ -841,17 +925,18 @@ export class StreetKit {
           void off;
         }
         if (room < 1.6) continue;
-        if (zone) {
-          if (st.route && cell % 4 === 1 && h < .8) { const [x, z] = along(.45); this.place(C, 'meter', x, z, P.yaw, { y: P.top }); }
+        const busy = st.route && this.treeAt(st.side, pos);
+        if (zone && !busy) {
+          if (st.route && cell % 4 === 1 && h < .8) { const [x, z] = along(.45); if (!this.lampNear(x, z, .9)) this.place(C, 'meter', x, z, P.yaw, { y: P.top }); }
           const m = cell % 8;
-          if (m === 3 && room > 2.4) { const [x, z] = along(1.1); const kind = ['bench', 'waste', 'bikeRack', 'planter', 'waste', 'bench'][Math.floor(h * 6)]; this.place(C, kind, x, z, P.yaw, { y: P.top }); }
+          if (m === 3 && room > 2.4) { const [x, z] = along(1.1); const kind = ['bench', 'waste', 'bikeRack', 'planter', 'waste', 'bench'][Math.floor(h * 6)]; if (!this.lampNear(x, z, 1.4)) this.place(C, kind, x, z, P.yaw, { y: P.top }); }
         }
         // a hydrant every ~90 m, a street-name sign at each run's start (a corner)
         if (Math.floor(pos / 90) !== Math.floor((pos - 3) / 90) && h < .85) { const [x, z] = along(.55); this.place(C, 'hydrant', x, z, P.yaw, { y: P.top }); }
       }
       // corners: a street sign and two bollards at the first station of each run
       const first = list[0];
-      if (first && first.zone) {
+      if (first && first.zone && !this.junctionsExternal) {
         const [x, z] = [first.ix + first.nx * .5, first.iz + first.nz * .5];
         this.place(C, 'streetSign', x + first.tx * .8, z + first.tz * .8, first.yaw, { y: first.top });
       }
@@ -866,14 +951,14 @@ export class StreetKit {
       post_box: 'postBox', drinking: 'drinking', bollard: 'bollard', shelter: 'shelter', stop_sign: 'stopSign', bike_share: 'bikeRack' };
     const kind = f.given || f.trail ? f.kind : kindMap[f.kind];
     if (!kind) return;
-    if (f.given || f.trail) { if (kind === 'signal' || this.clear(x, z, .3)) this.place(C, kind, x, z, yaw, f); return; }
+    if (f.given || f.trail) { if (kind === 'signal' || kind === 'treePit' || this.clear(x, z, .3)) this.place(C, kind, x, z, yaw, f); return; }
     // the street it belongs to: the route if close, else the nearest carriageway
     const r = L.routeDist(x, z);
     let tx, tz, nx, nz, curb, cxn, czn;
     if (r && r.d < 16 && L.routeKindAt(this.route.dist[this.outbound(r.i)]) === 'road') {
       const F = this.frame(this.route.dist[this.outbound(r.i)]);
       const side = (x - F.x) * F.rx + (z - F.z) * F.rz > 0 ? 1 : -1;
-      tx = F.tx; tz = F.tz; nx = F.rx * side; nz = F.rz * side; curb = ROUTE_CURB; cxn = F.x; czn = F.z;
+      tx = F.tx; tz = F.tz; nx = F.rx * side; nz = F.rz * side; curb = this.curbAt(F.s); cxn = F.x; czn = F.z;
     } else {
       const o = this.streetsAt(x, z, 12).filter((q) => !q.st.bridge && q.st.cls < 8).sort((a, b) => a.edge - b.edge)[0];
       if (!o) { if (this.clear(x, z, .4)) this.place(C, kind, x, z, yaw); return; }
@@ -889,7 +974,7 @@ export class StreetKit {
       nx = -tz * side; nz = tx * side; curb = S.width / 2;
     }
     const face = Math.atan2(-nx, -nz);   // towards the street
-    if (kind === 'signal') return this._signals(C, cxn, czn, tx, tz, curb);
+    if (kind === 'signal') return this.junctionsExternal ? undefined : this._signals(C, cxn, czn, tx, tz, curb);
     if (kind === 'stopSign') { const px = cxn + nx * (curb + .5), pz = czn + nz * (curb + .5); if (this.clear(px, pz, .2)) this.place(C, kind, px, pz, face); return; }
     if (kind === 'busStop') {
       const line = this.buildingLine(cxn + nx * curb, czn + nz * curb, nx, nz, 6);
@@ -1068,6 +1153,7 @@ export class StreetKit {
   // ------------------------------------------------------------ per frame: dressing queued chunks, LOD
   tick(camera) {
     this._cam = camera;
+    if (this._late.size) { for (const key of this._late) this.finishChunk(key, this._outs.get(key) || []); this._late.clear(); }
     if (this.queue.length) {
       const t0 = performance.now();
       this.queue.sort((a, b) => this._dist(b.key, camera) - this._dist(a.key, camera));
@@ -1097,6 +1183,8 @@ function cy(M, f, dx, dy, dz, r, h, seg = 6, rTop = r) { const [x, z] = at(f, dx
 function bm(M, f, a, b, w, h = w) { const [ax, az] = at(f, a[0], a[2]), [bx2, bz] = at(f, b[0], b[2]); M.beam(V(ax, f.y + a[1], az), V(bx2, f.y + b[1], bz), w, h); }
 
 export const FURNITURE = {
+  /** A tree pit: a dark iron grate flush with the sidewalk, a stone edge (street trees: CityScene's instanced trees). */
+  treePit(M, f) { M.color('#8f897d'); bx(M, f, 0, -.02, 0, 1.5, .03, 1.5); M.color('#2e2b27'); bx(M, f, 0, -.01, 0, 1.25, .03, 1.25); },
   hydrant(M, f) { M.color('#cfa62b'); cy(M, f, 0, -.05, 0, .13, .62, 6); M.color('#b58f22'); cy(M, f, 0, .57, 0, .16, .14, 6, .06); bx(M, f, 0, .32, 0, .44, .1, .1); bx(M, f, 0, .3, .12, .1, .1, .1); },
   bench(M, f) {
     M.color('#3d4a3c'); bx(M, f, -.7, -.05, 0, .07, .5, .45); bx(M, f, .7, -.05, 0, .07, .5, .45);
@@ -1117,6 +1205,8 @@ export const FURNITURE = {
     M.color('#6b5238'); for (const dx of [-.7, .7]) { bx(M, f, dx, 0, 0, .08, .72, .08); bx(M, f, dx, .38, 0, .08, .05, 1.5); }
   },
   stopSign(M, f) { M.color('#7a7f83'); bx(M, f, 0, -.05, 0, .06, 2.4, .06); M.color('#b8262b'); bx(M, f, 0, 1.9, .05, .62, .62, .04); M.color('#efe9df'); bx(M, f, 0, 2.15, .075, .4, .1, .01); },
+  /** A pedestrian push-button post with a walk signal head. */
+  pushButton(M, f) { M.color('#3f4448'); bx(M, f, 0, -.05, 0, .09, 2.9, .09); M.color('#2a2d30'); bx(M, f, 0, 2.45, .1, .32, .38, .22); M.set({ aGlow: [2] }).color('#e8e2d0'); bx(M, f, 0, 2.5, .215, .22, .26, .01); M.set({ aGlow: [0] }); M.color('#c9a52b'); bx(M, f, 0, 1.0, .07, .1, .16, .06); },
   streetSign(M, f) {
     M.color('#7a7f83'); bx(M, f, 0, -.05, 0, .07, 3.2, .07);
     M.color('#1f5a3a'); bx(M, f, 0, 2.9, 0, .04, .2, 1.0); bx(M, f, 0, 3.12, 0, 1.0, .2, .04);

@@ -8,6 +8,7 @@ import { makeRouteIndex } from './geo.js';
 import { smoothstep } from './coast.js';
 import { ROAD_WIDTH } from './pose.js';
 import { decodeTerrain } from './real-coast.js';
+import { makeStreetGrade } from './street-grade.js';   // [street-kit]
 
 export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand: 5, plaza: 6, outside: 7, yards: 8 };
 const LAND_COLORS = ['#8d8a84', '#77985a', '#4d6a3a', '#6c6a5e', '#7d786f', '#b5a684', '#b4ada0', '#6d8252', '#7c8c5f'];
@@ -278,6 +279,7 @@ export function makeCityLandscape(config, proj, index, route) {
     }
     return [...out.values()];
   };
+  const grade = makeStreetGrade(config, { data, decoded: D, route, index, outbound, routeKindAt, onRouteBridge, routeDist });   // [street-kit] main-street cross-section
   const heightAt = (x, z) => {
     let h = routeHeightAt(x, z);
     if (buildingStreets) return h;
@@ -297,6 +299,7 @@ export function makeCityLandscape(config, proj, index, route) {
       h += (target - h) * (1 - smoothstep(flat, 18, edge)) * byRoute;
       if (r && r.d < 9) h = Math.min(h, r.y - .5 + Math.max(0, r.d - 5) * .2);   // never over the route's own road
     }
+    if (grade) h = grade(x, z, h, routeDist(x, z));   // [street-kit] sidewalk-level ground beside a kit zone's curbs
     // nor over a low ramp or viaduct deck (they're left out of the grading above, but one running close to the
     // ground beside the route would otherwise be buried by the bank the route's road raises)
     const own = routeDist(x, z);
