@@ -8,7 +8,7 @@ export function landscapeBuilder(scene) {
   switch (scene?.terrain) {
     case 'authored-city': return makeCityLandscape;
     case 'authored-region': return makeRegionalLandscape;
-    case 'real-coast': return makeRealCoastLandscape;
+    case 'real-coast': case 'real-mountain': return makeRealCoastLandscape;
     default: return makeCoastLandscape;
   }
 }

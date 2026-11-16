@@ -6,7 +6,7 @@
 //   node tools/snap_scene.mjs --out tools/snapshots --quality high bigsur@21800:golden:fall
 //
 // A shot is  <park>[@metres][:camera][:time][:season][:weather]  — camera chase|drone|vista|side|eye,
-// time midday|morning|golden|night, season summer|fall, weather clear|marine|clouds|rain.
+// time midday|morning|golden|night, season summer|fall, weather clear|marine|clouds|rain|smoke.
 // No @metres = the scene's preview spot.
 // Options: --out <dir> (default tools/snapshots), --quality low|balanced|high, --size 1280x720,
 // --chrome <path> (default: CHROME env, else the usual Mac/Linux locations), --software (no GPU).
@@ -24,13 +24,14 @@ const out = opt('--out', 'tools/snapshots');   // relative to the repo, or an ab
 const quality = opt('--quality', 'balanced');
 const [width, height] = opt('--size', '1280x720').split('x').map(Number);
 const software = flag('--software');
+const breakdown = flag('--breakdown');   // list draw calls by object
 const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync));
 if (!args.length) { console.log('usage: npm run snap -- <park>[@metres][:camera][:time][:season][:weather] …'); process.exit(1); }
 
 const CAMERAS = ['chase', 'drone', 'vista', 'side', 'eye'];
 const TIMES = ['midday', 'morning', 'golden', 'night'];
-const WEATHERS = ['clear', 'marine', 'clouds', 'rain'];
+const WEATHERS = ['clear', 'marine', 'clouds', 'rain', 'smoke'];
 const shots = args.map((spec) => {
   const [where, ...tags] = spec.split(':');
   const [park, pos] = where.split('@');
@@ -66,6 +67,7 @@ for (const shot of shots) {
   const t0 = Date.now(); errors.length = 0;
   const q = new URLSearchParams({ park: shot.park, clean: '1', quality, ...(shot.pos ? { pos: shot.pos } : {}), ...(shot.cam ? { cam: shot.cam } : {}), ...(shot.time ? { time: shot.time } : {}), ...(shot.season ? { season: shot.season } : {}), ...(shot.weather ? { weather: shot.weather } : {}) });
   await page.goto(`${base}/tools/world-preview.html?${q}`);
+  if (breakdown) await page.evaluate(() => { window.__breakdown = true; });
   await page.waitForFunction(() => window.world?.terrain && (window.world.terrain.kit || !window.world.stylized) && window.world._camInit, null, { timeout: 180000, polling: 500 });
   // stop the loop, let every queued scenery tile build, then draw one frame and read it back
   const r = await page.evaluate(async () => {
@@ -76,11 +78,30 @@ for (const shot of shots) {
     // the app's own frame: with the post-processing chain where the scene has one (Big Sur)
     if (w._render) w._render(); else w.renderer.render(w.scene, w.camera);
     const info = w.renderer.info.render;
-    return { url: w.renderer.domElement.toDataURL('image/jpeg', .9), calls: info.calls, triangles: info.triangles };
+    let breakdown = null;
+    if (window.__breakdown) {
+      // draw calls by object (frustum-visible meshes; ×2 for the ones that cast shadows)
+      const cam = w.camera, vp = cam.projectionMatrix.clone().multiply(cam.matrixWorldInverse);
+      const by = {};
+      w.scene.traverseVisible((o) => {
+        if (!(o.isMesh || o.isLine || o.isPoints || o.isSprite)) return;
+        if (o.frustumCulled !== false && o.geometry?.boundingSphere) {
+          // the sphere's centre in clip space, with its radius as slack: a rough frustum test
+          const sph = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld), c = sph.center.clone().applyMatrix4(vp);
+          const d = sph.center.distanceTo(cam.position);
+          if (d > sph.radius && (Math.abs(c.x) > 1 + sph.radius / d * 2.5 || Math.abs(c.y) > 1 + sph.radius / d * 2.5)) return;
+        }
+        const key = (o.name || o.parent?.name || o.type).replace(/[0-9]+/g, '#').slice(0, 40);
+        by[key] = (by[key] || 0) + 1 + (o.castShadow ? 1 : 0);
+      });
+      breakdown = Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 25);
+    }
+    return { breakdown, url: w.renderer.domElement.toDataURL('image/jpeg', .9), calls: info.calls, triangles: info.triangles };
   });
   const file = join(out, `${shot.name}.jpg`);
   await writeFile(resolve(ROOT, file), Buffer.from(r.url.split(',')[1], 'base64'));
   rows.push({ shot: shot.spec, file, calls: r.calls, triangles: r.triangles, seconds: Math.round((Date.now() - t0) / 1000), errors: [...errors] });
+  if (r.breakdown) console.log(r.breakdown.map(([k, n]) => `   ${String(n).padStart(4)}  ${k}`).join('\n'));
   console.log(`${errors.length ? 'ERR ' : 'ok  '} ${shot.spec.padEnd(34)} ${String(r.calls).padStart(5)} calls ${(r.triangles / 1e6).toFixed(2).padStart(6)} M tris  → ${file}`);
   for (const e of errors) console.log(`       ${e.slice(0, 200)}`);
 }

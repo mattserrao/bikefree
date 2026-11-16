@@ -15,11 +15,13 @@ export class CoastBridges {
     this.L = landscape;
     this.boxes = [];       // [matrix] concrete
     this.rails = [];       // [matrix] parapet
-    for (const b of landscape.bridges) this._bridge(b);
+    for (const b of landscape.bridges) if (!b.style) this._bridge(b);   // styled ones (the Triple Arches) are built elsewhere
     const unit = new THREE.BoxGeometry(1, 1, 1);
     this.geometry = unit;
-    this.concrete = decorateSceneryMaterial(new THREE.MeshStandardMaterial({ color: '#d6d0c1', roughness: .93 }), 'concrete', uniforms);
-    this.railMaterial = decorateSceneryMaterial(new THREE.MeshStandardMaterial({ color: '#e3ddce', roughness: .9 }), 'concrete', uniforms);
+    // a scene can dress them in its own stone (Glacier: rubble masonry)
+    const colors = landscape.bridgeColors || {};
+    this.concrete = decorateSceneryMaterial(new THREE.MeshStandardMaterial({ color: colors.structure || '#d6d0c1', roughness: .93 }), 'concrete', uniforms);
+    this.railMaterial = decorateSceneryMaterial(new THREE.MeshStandardMaterial({ color: colors.rail || '#e3ddce', roughness: .9 }), 'concrete', uniforms);
     for (const [list, material, name] of [[this.boxes, this.concrete, 'Bridge structure'], [this.rails, this.railMaterial, 'Bridge parapets']]) {
       const mesh = new THREE.InstancedMesh(unit, material, list.length);
       list.forEach((m, i) => mesh.setMatrixAt(i, m));

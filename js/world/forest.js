@@ -4,6 +4,7 @@
 import * as THREE from '../../vendor/three.module.min.js';
 import { randomSequence, smoothstep } from './coast.js';
 import { SPECIES_VARIANTS } from './adirondack-kit.js';
+import { GLACIER_VARIANTS } from './glacier-kit.js';
 
 export const TILE_M = 192;
 const CELL_M = 7.5;                     // jittered grid → ~178 candidates per hectare
@@ -18,6 +19,9 @@ export class ForestPlanner {
     this.landscape = landscape; this.index = index; this.heightAt = heightAt; this.clearings = clearings;
     this.seed = config.seed || 1;
     this.scale = v.treeScale || [.85, 1.15];
+    // mountains (Glacier): species and density come from the landform's vegetation zones
+    this.zones = !!landscape.mountain;
+    this.density = v.forestDensity ?? 1;
   }
 
   /** 0…1 forest cover at a point (used by the trees and the distant canopy). */
@@ -26,6 +30,7 @@ export class ForestPlanner {
     const shore = this.landscape.shoreAt ? this.landscape.shoreAt(x, z) : Infinity;
     if (shore < 3 || this.landscape.isWater?.(x, z, this.heightAt(x, z))) return 0;
     if (this.clearings?.at(x, z)) return 0;
+    if (this.zones) return this.landscape.vegetationAt(x, z).forest * smoothstep(this.edge.mown - 1, this.edge.shrub + 3, d) * smoothstep(3, 14, shore);
     // lake glimpses: the woods thin out between the road and a nearby shore
     return smoothstep(this.edge.mown - 1, this.edge.shrub + 3, d) * smoothstep(3, 14, shore) * (.35 + .65 * smoothstep(150, 230, shore + d));
   }
@@ -44,8 +49,59 @@ export class ForestPlanner {
     return weights.at(-1)[0];
   }
 
+  /** Mountain species by zone: west-side cedar–hemlock valleys, spruce–fir–larch slopes, the dry east side. */
+  _zoneSpecies(v, y, r) {
+    if (v.alpine > .45) return r < .8 ? 'subfir' : 'espruce';
+    if (v.east > .5) return v.valley > .35 && r < .3 ? 'espruce' : r < .45 ? 'aspen' : r < .82 ? 'lodgepole' : r < .92 ? 'subfir' : 'espruce';
+    if (y < 1250) return v.valley + v.north > .5 ? (r < .45 ? 'cedar' : r < .8 ? 'whemlock' : r < .9 ? 'larch' : 'espruce') : (r < .25 ? 'cedar' : r < .5 ? 'whemlock' : r < .7 ? 'larch' : r < .85 ? 'lodgepole' : 'espruce');
+    if (y < 1650) return r < .35 ? 'espruce' : r < .55 ? 'subfir' : r < .72 ? 'larch' : r < .9 ? 'lodgepole' : 'whemlock';
+    return r < .55 ? 'subfir' : r < .88 ? 'espruce' : 'larch';
+  }
+
+  _zoneTile(cx, cz, tier) {
+    const rand = randomSequence((cx * 92837111 ^ cz * 689287499) + this.seed * 7 + 31);
+    const lists = {};
+    const matrix = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+    const add = (name, x, y, z, k, rot, ky = k) => {
+      q.setFromAxisAngle(up, rot); p.set(x, y, z); s.set(k, ky * (.92 + (rot % 1) * .16), k);
+      (lists[name] ||= []).push(matrix.compose(p, q, s).clone());
+    };
+    const n = Math.round(TILE_M / CELL_M);
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      const jx = rand(), jz = rand(), rank = rand(), pick = rand(), size = rand(), rot = rand() * Math.PI * 2, extra = rand();
+      if (rank > TIER_KEEP[tier]) continue;
+      const x = cx * TILE_M + (i + .15 + jx * .7) * CELL_M, z = cz * TILE_M + (j + .15 + jz * .7) * CELL_M;
+      const near = this.index.nearest(x, z, 60), roadD = near ? near.d : 60;
+      if (roadD < this.edge.mown) continue;
+      const shore = this.landscape.shoreAt ? this.landscape.shoreAt(x, z) : Infinity;
+      if (shore < 3 || (this.clearings && this.clearings.at(x, z)) || this.landscape.bridgeAt(x, z, 10) || this.landscape.creekAt(x, z)) continue;
+      const y = this.heightAt(x, z);
+      if (this.landscape.isWater?.(x, z, y)) continue;
+      const v = this.landscape.vegetationAt(x, z);
+      if (v.slope > 1.25) continue;   // cliffs
+      const edge = smoothstep(this.edge.mown - 1, this.edge.shrub + 3, roadD) * smoothstep(3, 14, shore);
+      if (pick < v.forest * edge * this.density) {
+        const species = this._zoneSpecies(v, y, extra);
+        const variants = GLACIER_VARIANTS[species];
+        const variant = tier ? 0 : Math.floor(size * variants) % variants;   // one variant beyond the near tier: fewer draw calls
+        // trees shrink toward the treeline
+        const k = (this.scale[0] + (this.scale[1] - this.scale[0]) * ((size * 7.31) % 1)) * (1 - v.alpine * .45);
+        add(`${species}${variant}${SUFFIX[tier]}`, x, y - .2, z, k * (1 - v.alpine * .2), rot, k);
+        continue;
+      }
+      // open ground: avalanche-chute alder, treeline krummholz, talus on the steep, meadow flowers by the road
+      if (tier === 2) continue;
+      if (v.alpine > .35 && v.alpine < .9 && extra < .12 * v.alpine) add(`krummholz${size < .5 ? 0 : 1}`, x, y - .1, z, .8 + size * .6, rot);
+      else if (extra < v.scrub * .22 && v.slope > .3) add(`alder${size < .5 ? 0 : 1}`, x, y - .1, z, .8 + size * .7, rot);
+      else if (v.slope > .55 && extra > .78) add(`talus${size < .6 ? 0 : 1}`, x, y - .15, z, .7 + size * 1.4, rot);
+      else if (tier === 0 && extra > .5 && extra < .62) add(v.east > .5 ? 'huckleberry' : size < .55 ? 'beargrass' : 'huckleberry', x, y - .05, z, .8 + size * .5, rot);
+    }
+    return lists;
+  }
+
   /** Instance lists for one tile at a tier (0 near, 1 mid, 2 far). */
   tile(cx, cz, tier) {
+    if (this.zones) return this._zoneTile(cx, cz, tier);
     const rand = randomSequence((cx * 92837111 ^ cz * 689287499) + this.seed * 7 + 31);
     const lists = {};
     const matrix = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);

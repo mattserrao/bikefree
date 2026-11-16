@@ -79,6 +79,7 @@ export class CoastalDetails {
   }
 
   _signs() {
+    const poles = {};
     for (const sign of this.route.scene.signs || []) {
       const side = sign.side === 'inland' ? -1 : 1;
       const { position, forward } = coastalRoadFrame(this.route, this.index, sign.atM, side * (sign.lateralM || 5.7));
@@ -86,7 +87,7 @@ export class CoastalDetails {
       const canvas = document.createElement('canvas'); canvas.width = diamond ? 256 : 1024; canvas.height = 256;
       const ctx = canvas.getContext('2d');
       // kinds: default green guide sign, 'warning', 'dec' (Adirondack brown with yellow letters), 'diamond' (yellow warning)
-      const style = { warning: ['#d4ae54', '#463d2a', '#352e23'], dec: ['#5a3e27', '#e8c25a', '#e8c25a'], diamond: ['#e8b92e', '#1f1d19', '#1f1d19'] }[sign.kind] || ['#405b46', '#eee9d5', '#f4efda'];
+      const style = { warning: ['#d4ae54', '#463d2a', '#352e23'], dec: ['#5a3e27', '#e8c25a', '#e8c25a'], nps: ['#4a3324', '#efe4cc', '#f2e9d4'], diamond: ['#e8b92e', '#1f1d19', '#1f1d19'] }[sign.kind] || ['#405b46', '#eee9d5', '#f4efda'];
       if (diamond) {
         ctx.beginPath(); ctx.moveTo(128, 4); ctx.lineTo(252, 128); ctx.lineTo(128, 252); ctx.lineTo(4, 128); ctx.closePath();
         ctx.fillStyle = style[0]; ctx.fill(); ctx.strokeStyle = style[1]; ctx.lineWidth = 8; ctx.stroke();
@@ -99,22 +100,26 @@ export class CoastalDetails {
         ctx.font = '700 96px sans-serif'; ctx.fillText(sign.symbol || '!', 128, 118);
         ctx.font = '700 26px sans-serif'; ctx.fillText(sign.label || '', 128, 182, 130);
       } else {
-        ctx.font = sign.kind === 'dec' ? '700 64px Georgia, serif' : '600 61px sans-serif'; ctx.fillText(sign.label, 512, 104, 930);
-        ctx.font = sign.kind === 'dec' ? '400 32px Georgia, serif' : '400 30px sans-serif'; ctx.fillText(sign.subtitle || 'CALIFORNIA HIGHWAY 1', 512, 183, 930);
+        ctx.font = sign.kind === 'dec' || sign.kind === 'nps' ? '700 64px Georgia, serif' : '600 61px sans-serif'; ctx.fillText(sign.label, 512, 104, 930);
+        ctx.font = sign.kind === 'dec' || sign.kind === 'nps' ? '400 32px Georgia, serif' : '400 30px sans-serif'; ctx.fillText(sign.subtitle || 'CALIFORNIA HIGHWAY 1', 512, 183, 930);
       }
       const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
       texture.anisotropy = 4;
       const material = this._material('#ffffff', { map: texture, side: THREE.DoubleSide, ...(diamond ? { alphaTest: .5, transparent: false } : {}) });
       const mesh = this._mesh(diamond ? new THREE.PlaneGeometry(1.25, 1.25) : new THREE.BoxGeometry(3.5, .88, .07), material, sign.label || sign.symbol);
       mesh.position.copy(position).add(new THREE.Vector3(0, diamond ? 2.1 : 2.3, 0));
+      mesh.userData.sign = true;   // its own supports hold it up (the clipping QC knows)
       mesh.lookAt(mesh.position.clone().addScaledVector(forward, sign.direction === 'return' ? 1 : -1));
-      const postMaterial = this._material(sign.kind === 'dec' ? '#5a3e27' : '#9d9f89');
+      const color = sign.kind === 'dec' || sign.kind === 'nps' ? '#5a3e27' : '#9d9f89';
       for (const offset of diamond ? [0] : [-1.15, 1.15]) {
-        const pole = this._mesh(new THREE.CylinderGeometry(.045, .045, diamond ? 1.9 : 2.4, 6), postMaterial, 'Sign support');
-        const right = new THREE.Vector3(-forward.z, 0, forward.x);
-        pole.position.copy(position).addScaledVector(right, offset).y += diamond ? .95 : 1.2;
+        // the posts stand just behind the board (not through it)
+        const right = new THREE.Vector3(-forward.z, 0, forward.x), behind = new THREE.Vector3(forward.x, 0, forward.z).normalize().multiplyScalar(sign.direction === 'return' ? -.26 : .26);
+        const p = position.clone().addScaledVector(right, offset).add(diamond ? new THREE.Vector3() : behind);
+        (poles[color] ||= []).push(new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y + (diamond ? .95 : .93), p.z), new THREE.Quaternion(), new THREE.Vector3(1, diamond ? 1.9 / 1.86 : 1, 1)));   // up to the board's lower edge
       }
     }
+    // every sign's supports in one draw call per colour
+    for (const [color, matrices] of Object.entries(poles)) this._instances(new THREE.CylinderGeometry(.045, .045, 1.86, 6), this._material(color), matrices, 'Sign support');
   }
 
   _lookouts() {
@@ -136,7 +141,7 @@ export class CoastalDetails {
       texture.wrapS = texture.wrapT = THREE.RepeatWrapping; texture.repeat.set(4, 10);
       // the pad follows the road's own curve and grade in 4 m pieces (a rigid slab floats or sinks at its ends)
       const padMaterial = this._material('#ffffff', { map: texture });
-      const pieceGeometry = new THREE.BoxGeometry(width, .9, 4.15);
+      const pieceGeometry = new THREE.BoxGeometry(width, .9, 4.15), pieces = [];
       this.geometries.add(pieceGeometry);
       for (let d = -length / 2; d < length / 2 - .01; d += 4) {
         const a = coastalRoadFrame(this.route, this.index, lookout.atM + d, side * (3.5 + width / 2));
@@ -144,21 +149,20 @@ export class CoastalDetails {
         // right-handed frame: z along the road (with its grade), x level across it, y = z × x
         const zA = b.position.clone().sub(a.position).normalize();
         const xA = new THREE.Vector3(0, 1, 0).cross(zA).normalize(), yA = zA.clone().cross(xA).normalize();
-        const piece = new THREE.Mesh(pieceGeometry, padMaterial); piece.name = 'Coastal overlook gravel';
-        piece.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xA, yA, zA));
-        piece.position.copy(a.position).lerp(b.position, .5); piece.position.y -= .35;
-        piece.receiveShadow = true; this.group.add(piece);
+        const centre = a.position.clone().lerp(b.position, .5); centre.y -= .35;
+        pieces.push(new THREE.Matrix4().makeBasis(xA, yA, zA).setPosition(centre));
       }
-      const wood = this._material('#918568');
+      // one draw call each for the pad, the posts and the rails (they were a mesh apiece)
+      const gravelMesh = this._instances(pieceGeometry, padMaterial, pieces, 'Coastal overlook gravel', false);
+      gravelMesh.castShadow = false;
+      const wood = this._material('#918568'), posts = [], rails = [];
       for (let d = -length / 2; d <= length / 2; d += 4) {
         const p = position.clone().addScaledVector(forward, d).addScaledVector(right, side * (width / 2 - .3));
-        const post = this._mesh(new THREE.BoxGeometry(.14, 1.1, .14), wood, 'Overlook timber');
-        post.position.copy(p).y += .53;
-        if (d + 4 <= length / 2) {
-          const rail = this._mesh(new THREE.BoxGeometry(.1, .13, 4.1), wood, 'Overlook rail');
-          rail.position.copy(p).addScaledVector(forward, 2).y += .85; rail.quaternion.copy(rotation);
-        }
+        posts.push(new THREE.Matrix4().setPosition(p.x, p.y + .53, p.z));
+        if (d + 4 <= length / 2) rails.push(new THREE.Matrix4().makeRotationFromQuaternion(rotation).setPosition(p.clone().addScaledVector(forward, 2).add(new THREE.Vector3(0, .85, 0))));
       }
+      this._instances(new THREE.BoxGeometry(.14, 1.1, .14), wood, posts, 'Overlook timber');
+      if (rails.length) this._instances(new THREE.BoxGeometry(.1, .13, 4.1), wood, rails, 'Overlook rail');
       if (this.kit.assets.bench) {
         const asset = this.kit.assets.bench;
         for (const along of [-7, 7]) {

@@ -196,7 +196,7 @@ export class World {
   weatherOptions() {
     if (!this.weather) return [];
     const S = this.route.scene?.weather || {}, keys = S.presets || ['clear', 'marine', 'clouds', 'rain'];
-    const names = { clear: 'Clear', marine: 'Marine layer', clouds: 'Clouds', rain: 'Rain', ...(S.labels || {}) };
+    const names = { clear: 'Clear', marine: 'Marine layer', clouds: 'Clouds', rain: 'Rain', smoke: 'Wildfire smoke', ...(S.labels || {}) };
     return keys.map((key) => ({ key, label: names[key] || key }));
   }
   setWeather(key, immediate = false) {
@@ -236,12 +236,16 @@ export class World {
   _applyLight() {
     const base = this._time;
     if (!base) return;
-    const w = this._weatherLight || { overcast: 0, rain: 0 }, o = w.overcast;
+    const w = this._weatherLight || { overcast: 0, rain: 0, smoke: 0 }, o = w.overcast, sm = w.smoke || 0;
     const grey = (c, to, k) => '#' + new THREE.Color(c).lerp(new THREE.Color(to), k).getHexString();
-    const t = o > 0.001 && !base.night ? { ...base,
+    let t = o > 0.001 && !base.night ? { ...base,
       sunI: base.sunI * (1 - o * .78), hemiI: base.hemiI * (1 + o * .18), exposure: base.exposure * (1 - o * .06),
       top: grey(base.top, '#8b959c', o * .85), horizon: grey(base.horizon, '#b9c0c3', o * .8), sun: grey(base.sun, '#dfe3e6', o * .6),
       hemiSky: grey(base.hemiSky, '#d4d9dc', o * .7) } : base;
+    // wildfire smoke: a red-orange sun, a brown-orange sky, softer light
+    if (sm > .001 && !base.night) t = { ...t, sunI: t.sunI * (1 - sm * .4), hemiI: t.hemiI * (1 + sm * .08),
+      top: grey(t.top, '#a99a86', sm * .8), horizon: grey(t.horizon, '#d39a66', sm * .75), sun: grey(t.sun, '#ff7a3a', sm * .7),
+      hemiSky: grey(t.hemiSky, '#e8c9a4', sm * .6), hemiGround: grey(t.hemiGround, '#8a6c52', sm * .4) };
     const el = THREE.MathUtils.degToRad(t.elev), az = THREE.MathUtils.degToRad(t.az);
     // azimuth from north, clockwise; north is −z, east is +x
     const dir = new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)).normalize();

@@ -10,8 +10,13 @@ export const WEATHER = {
   marine: { label: 'Marine layer', cloud: .1, shadow: .4, wind: .22, bank: 1, rain: 0, overcast: .12, bankTop: 150 },
   clouds: { label: 'Clouds', cloud: .62, shadow: 1, wind: .6, bank: 0, rain: 0, overcast: .3, bankTop: 140 },
   rain: { label: 'Rain', cloud: 1, shadow: .25, wind: .9, bank: .55, rain: 1, overcast: 1, bankTop: 320 },
+  // late-summer wildfire smoke (Glacier): an orange-brown haze that swallows the far ridges, a red sun
+  smoke: { label: 'Wildfire smoke', cloud: .04, shadow: .25, wind: .15, bank: 0, rain: 0, overcast: .15, bankTop: 140, smoke: 1 },
 };
-const KEYS = ['cloud', 'shadow', 'wind', 'bank', 'rain', 'overcast', 'bankTop'];
+const KEYS = ['cloud', 'shadow', 'wind', 'bank', 'rain', 'overcast', 'bankTop', 'smoke', 'peaks'];
+for (const w of Object.values(WEATHER)) { w.smoke ??= 0; w.peaks ??= 0; }
+// clouds hanging on the summits (mountain scenes): with broken cloud, and low and thick in the rain
+WEATHER.clouds.peaks = 1; WEATHER.rain.peaks = 1.3;
 
 const noise = /* glsl */`
   float wHash(vec2 p) { vec3 q = fract(vec3(p.xyx) * .1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
@@ -19,6 +24,8 @@ const noise = /* glsl */`
     return mix(mix(wHash(i), wHash(i + vec2(1., 0.)), f.x), mix(wHash(i + vec2(0., 1.)), wHash(i + 1.), f.x), f.y); }
   float wFbm(vec2 p) { return wNoise(p) * .5 + wNoise(p * 2.03 + 7.) * .27 + wNoise(p * 4.1 - 3.) * .15 + wNoise(p * 8.3 + 1.) * .08; }
 `;
+
+const SMOKE = new THREE.Color('#b7987a');
 
 export class Weather {
   /**
@@ -198,7 +205,8 @@ export class Weather {
   _apply() {
     const w = this.world, s = this.state;
     // light: the sun dims and the sky greys under cloud; the world re-applies its time-of-day light
-    w._weatherLight = { overcast: s.overcast, rain: s.rain };
+    w._weatherLight = { overcast: s.overcast, rain: s.rain, smoke: s.smoke };
+    w.terrain?.setPeakClouds?.(s.peaks, s.rain);
     w._applyLight?.();
     this.u.bfCloud.value.set(s.cloud, s.shadow * (1 - s.overcast * .7), this.windDir.x * (1 + s.wind * 3), this.windDir.y * (1 + s.wind * 3));
     this.u.bfWind.value = s.wind;
@@ -246,6 +254,12 @@ export class Weather {
       const close = inside > s.rain * .55 ? 650 : 2600 * (1 - s.rain * .4);
       fog.far = base.far + (Math.max(450, close) - base.far) * Math.max(thick, s.overcast * .25);
       fog.color.copy(base.color).lerp(this.bankUniforms.bfShade.value, Math.max(inside * .85, s.overcast * .6));
+      if (s.smoke > .001) {
+        // smoke: the near ridges go brown-grey, the far ones disappear
+        fog.near += (60 - fog.near) * s.smoke;
+        fog.far += (5200 - fog.far) * s.smoke;
+        fog.color.lerp(SMOKE, s.smoke * .85);
+      }
     }
   }
 
