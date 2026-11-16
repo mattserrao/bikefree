@@ -75,3 +75,16 @@ Left to right, top to bottom.
 - `qc --strict` on every route: clean
 - `routes:check`: clean
 - clipping QC: 0 fail, and the 8 shoreline z-fight warnings are unchanged
+
+## Trees, grass and flowers pass
+
+Before is the life pass and after is this one.
+
+![](vegetation-before-after.jpg)
+
+- **Trees:** tiers of drooping, zigzag branches with dark undersides, dead lower limbs, lichen, flared cedar trunks, crowns with character, and an age mix with some trees leaning.
+- **Bark and foliage** come from the shader.
+- **Forest floor:** logs, stumps, moss and branches.
+- **Ground cover:** grass kinds by zone, dense tufts along the verge, and flower drifts (lupine, arnica, aster, fireweed, paintbrush and others).
+
+**Cost:** 217–355 draw calls and 1.67–2.28 M triangles on Balanced.

@@ -139,6 +139,13 @@ export function makeCoastalGroundMaterial(palette, config = {}, farUniform = nul
       `);
     if (vk) shader.fragmentShader = shader.fragmentShader.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       ${vk.normal}`);
+    if (vk) {
+      // vista kit: object shadows fade on steep faces (vkShadowK, set with the colour)
+      const line = 'directLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;';
+      const chunk = THREE.ShaderChunk.lights_fragment_begin;
+      if (chunk.includes(line)) shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_begin>',
+        chunk.replace(line, line.replace('? getShadow(', '? mix( 1.0, getShadow(').replace(') : 1.0;', '), vkShadowK ) : 1.0;')));
+    }
   };
   return material;
 }

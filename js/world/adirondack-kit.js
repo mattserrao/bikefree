@@ -12,7 +12,9 @@ let SMOOTH = false;
 export function withSmooth(on, fn) { const was = SMOOTH; SMOOTH = !!on; try { return fn(); } finally { SMOOTH = was; } }
 
 class Builder {
-  constructor() { this.pos = []; this.nor = []; this.col = []; }
+  constructor() { this.pos = []; this.nor = []; this.col = []; this.prt = []; this.part = 0; this.anyPart = false; }
+  /** Tag what follows as a surface kind (aTree attribute: bark, leaves …) for kits with a surface shader. */
+  as(part) { this.part = part; if (part) this.anyPart = true; return this; }
   /** Add a geometry, transformed, flat-coloured (with optional per-vertex jitter). */
   add(geometry, matrix, color, jitter = 0, rand = Math.random) {
     // smooth: crowns and rocks (icosahedra) take unit-sphere normals, cylinders and cones keep their own
@@ -32,6 +34,7 @@ class Builder {
         this.pos.push(p[i + v * 3], p[i + v * 3 + 1], p[i + v * 3 + 2]);
         this.nor.push(n[i + v * 3], n[i + v * 3 + 1], n[i + v * 3 + 2]);
         this.col.push(c.r * k, c.g * k, c.b * k);
+        this.prt.push(this.part);
       }
     }
     g.dispose(); if (g !== geometry) geometry.dispose();
@@ -42,6 +45,7 @@ class Builder {
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
     g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
+    if (this.anyPart) g.setAttribute('aTree', new THREE.Float32BufferAttribute(this.prt, 1));
     g.computeBoundingSphere(); g.computeBoundingBox();
     return g;
   }

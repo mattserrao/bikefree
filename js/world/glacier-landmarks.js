@@ -544,9 +544,14 @@ export class GlacierLandmarks {
       for (let k = 0; k < (n.count || 20); k++) {
         const r = Math.sqrt(rand()) * n.radiusM, a = rand() * Math.PI * 2, x = c.x + Math.cos(a) * r, z = c.z + Math.sin(a) * r;
         if (this.index.nearest(x, z, 11) || this.L.sites?.some((t) => Math.hypot(x - t.x, z - t.z) < Math.hypot(t.hw, t.hl) + 4)) continue;
-        const w = 4 + rand() * 9, y = this.L.heightAt(x, z);
+        const w = 4 + rand() * 9, y = this.L.heightAt(x, z), h = .7 + rand() * 1.1, d = w * (.5 + rand() * .4), yaw = rand() * 6;
+        // lie on the ground: skip steep slopes, tilt with the slope and sink by how much it falls away
+        // under the bank (a flat bank on a slope floats on its downhill side)
+        const gx = (this.L.heightAt(x + 3, z) - this.L.heightAt(x - 3, z)) / 6, gz = (this.L.heightAt(x, z + 3) - this.L.heightAt(x, z - 3)) / 6;
+        const slope = Math.hypot(gx, gz);
+        if (slope > .45) continue;
         const g = blob(1);
-        B.add(g, M(x, y - .3, z, w, .7 + rand() * 1.1, w * (.5 + rand() * .4), rand() * 6), '#eef1f2', .04, rand);
+        B.add(g, M(x, y - .3 - slope * w * .5, z, w, h, d, yaw, -Math.atan(gz), Math.atan(gx)), '#eef1f2', .04, rand);
       }
     }
   }

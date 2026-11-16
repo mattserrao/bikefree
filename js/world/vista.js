@@ -79,8 +79,16 @@ export function vistaGroundGLSL(v, palette, vkAttr = false) {
     vec3 vkN = normalize(vBfGroundNormal);
     float vkPx = bfDistance * .0017 + .02;                       // about a pixel, in metres, at this distance
     vec2 vkW = abs(vkN.xz) + 1e-3; vkW /= vkW.x + vkW.y;          // which face projection (facing ±x or ±z)
+    // near the camera, judge steepness per triangle (crisp grass/rock edges, no smear across the cut);
     // the ground far off is built coarser and reads gentler than it is: steepen it with distance
-    float vkSl = bfSlope * (1. + smoothstep(250., 2500., bfDistance) * .7);
+    vec3 vkFN = normalize(cross(dFdx(bp), dFdy(bp)));
+    float vkFacet = 1. - abs(vkFN.y);
+    // (only where the ground is already sloping: the vertical skirts between ground tiles keep the ground's look)
+    float vkSharp = max(vkFacet, bfSlope * .85);
+    vkSharp = mix(bfSlope, vkSharp, smoothstep(.06, .14, bfSlope) * step(vkFacet, .97));
+    float vkSl = mix(vkSharp, bfSlope, smoothstep(120., 320., bfDistance)) * (1. + smoothstep(250., 2500., bfDistance) * .7);
+    // object shadows (trees by the road) stretch into blotches on steep faces: let them fade there
+    float vkShadowK = 1. - smoothstep(.22, .5, vkSl) * .8;
     float vkFace = smoothstep(.07, .3, vkSl);                     // a mountain face, not a meadow
     float vkRib = .5, vkDx = 0., vkDz = 0.;                       // 0 gully … 1 spur
     if (vkSl > .07) {   // only on slopes: the meadows and valley floors skip the ribs
@@ -101,7 +109,7 @@ export function vistaGroundGLSL(v, palette, vkAttr = false) {
     float vkLedges = ${f(R.ledges)} * smoothstep(.14, .3, vkSl) * (1. - smoothstep(.82, .95, bfSlope));
     // rock on the spurs and the steep, the gullies stay green (or hold snow, or loose rock) a little longer
     float vkRock = smoothstep(.13, .3, vkSl + (vkRib - .5) * .35 * ${f(R.ribs)}) * vkFace;
-    diffuseColor.rgb = mix(diffuseColor.rgb, bfStone * (.74 + vkRib * .42), vkRock * .85);
+    diffuseColor.rgb = mix(diffuseColor.rgb, bfStone * (.74 + vkRib * .42), vkRock * .93);
     diffuseColor.rgb = mix(diffuseColor.rgb, vkAlpine * (.82 + bfFine * .2), vkRock * vkTread * vkLedges * .55 * (1. - smoothstep(bfSnowLine - 150., bfSnowLine + 200., bp.y)));
     // loose rock: pale aprons in the gullies and on the moderate slopes below the faces, streaked downhill
     float vkScreeMask = ${f(R.scree)} * smoothstep(.1, .2, vkSl) * (1. - smoothstep(.36, .5, vkSl)) * (1. - smoothstep(.36, .5, vkRib))

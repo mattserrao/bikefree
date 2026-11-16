@@ -28,6 +28,7 @@ export class ForestPlanner {
     // mountains (Glacier): species and density come from the landform's vegetation zones
     this.zones = !!landscape.mountain;
     this.density = v.forestDensity ?? 1;
+    this.rich = !!v.rich;   // age mix, leaning trees, forest floor and shrubs (Going-to-the-Sun)
   }
 
   /** 0…1 forest cover at a point (used by the trees and the distant canopy). */
@@ -92,10 +93,13 @@ export class ForestPlanner {
     const rand = randomSequence((cx * 92837111 ^ cz * 689287499) + this.seed * 7 + 31);
     const lists = {};
     const matrix = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
-    const add = (name, x, y, z, k, rot, ky = k) => {
-      q.setFromAxisAngle(up, rot); p.set(x, y, z); s.set(k, ky * (.92 + (rot % 1) * .16), k);
+    const e = new THREE.Euler(0, 0, 0, 'YXZ');
+    const add = (name, x, y, z, k, rot, ky = k, tilt = 0, tiltDir = 0) => {
+      if (tilt) { e.set(Math.cos(tiltDir) * tilt, rot, Math.sin(tiltDir) * tilt); q.setFromEuler(e); } else q.setFromAxisAngle(up, rot);
+      p.set(x, y, z); s.set(k, ky * (.92 + (rot % 1) * .16), k);
       (lists[name] ||= []).push(matrix.compose(p, q, s).clone());
     };
+    const rich = this.rich;   // Glacier: age mix, leaning trees, a forest floor
     const n = Math.round(TILE_M / CELL_M);
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
       const jx = rand(), jz = rand(), rank = rand(), pick = rand(), size = rand(), rot = rand() * Math.PI * 2, extra = rand();
@@ -124,15 +128,40 @@ export class ForestPlanner {
         const variants = GLACIER_VARIANTS[species];
         const variant = tier ? 0 : Math.floor(size * variants) % variants;   // one variant beyond the near tier: fewer draw calls
         // trees shrink toward the treeline
-        const k = (this.scale[0] + (this.scale[1] - this.scale[0]) * ((size * 7.31) % 1)) * (1 - v.alpine * .45);
-        add(`${species}${variant}${SUFFIX[tier]}`, x, y - .2, z, k * (1 - v.alpine * .2), rot, k);
+        let k = (this.scale[0] + (this.scale[1] - this.scale[0]) * ((size * 7.31) % 1)) * (1 - v.alpine * .45);
+        let tilt = 0;
+        if (rich) {
+          // an age mix: saplings in the gaps, a few old giants in the valleys (cedar, hemlock, spruce, larch)
+          const age = ((jx + jz) * 7.13 + size * 3.7) % 1;
+          if (age < .12) k *= .3 + age * 1.8;
+          else if (age > .955 && v.valley > .25 && roadD > 22 && /cedar|whemlock|espruce|larch/.test(species)) k *= 1.32 + (age - .955) * 5;
+          // a few lean (snow creep on the slopes)
+          if (age > .2 && age < .42) tilt = (.025 + (age - .2) * .25) * (1 + v.slope * .6);
+        }
+        // broad drooping crowns keep clear of the chase camera above the road
+        if (rich && roadD < 14 && /cedar|whemlock/.test(species)) k = Math.min(k, .85);
+        add(`${species}${variant}${SUFFIX[tier]}`, x, y - .2, z, k * (1 - v.alpine * .2), rot, k, tilt, rot * 1.7);
         continue;
       }
       // open ground: avalanche-chute alder, treeline krummholz, talus on the steep, meadow flowers by the road
       if (tier === 2) continue;
+      if (rich && tier === 0) {
+        // the forest floor near the road: down logs and stumps, moss, fallen branches, mossy stones;
+        // shrubs by kind: willow by the creeks, thimbleberry in the moist valley, juniper on the dry rocks
+        const floor = v.forest > .35 || burn > .5;
+        const r2 = (extra * 7.77 + size * 3.3) % 1;
+        if (floor && r2 < .045 && roadD > 15) { add(`log${burn > .5 || r2 < .015 ? 1 : 0}`, x, y - .05, z, .8 + size * .5, rot, undefined, Math.min(.3, v.slope * .5), rot + 1.57); continue; }
+        if (floor && r2 < .07) { add('stump1', x, y - .08, z, .55 + size * .7, rot); continue; }
+        if (floor && burn < .5 && r2 < .14 && v.moist > .4) { add('mossmat0', x, y - .03, z, .7 + size * .9, rot); continue; }
+        if (floor && r2 < .18) { add('branch1', x, y, z, .6 + size * .7, rot); continue; }
+        if (r2 < .22 && v.slope > .15) { add('stone1', x, y - .06, z, .5 + size * 1.1, rot); continue; }
+        if (this.landscape.nearCreek?.(x, z, 10) && r2 < .5) { add('willow', x, y - .05, z, .8 + size * .6, rot); continue; }
+        if (v.east > .5 && v.slope > .2 && r2 > .9) { add('juniper', x, y - .05, z, .8 + size * .6, rot); continue; }
+        if (v.east < .5 && v.moist > .55 && v.alpine < .3 && r2 > .88) { add(r2 > .96 ? 'serviceberry' : 'thimbleberry', x, y - .05, z, .8 + size * .5, rot); continue; }
+      }
       if (v.alpine > .35 && v.alpine < .9 && extra < .12 * v.alpine) add(`krummholz${size < .5 ? 0 : 1}`, x, y - .1, z, .8 + size * .6, rot);
       else if (extra < v.scrub * .22 && v.slope > .3) add(`alder${size < .5 ? 0 : 1}`, x, y - .1, z, .8 + size * .7, rot);
-      else if (v.slope > .55 && extra > .78) add(`talus${size < .6 ? 0 : 1}`, x, y - .15, z, .7 + size * 1.4, rot);
+      else if (tier === 0 && v.slope > .55 && extra > .78) add(`talus${size < .6 ? 0 : 1}`, x, y - .15, z, .7 + size * 1.4, rot);
       else if (tier === 0 && extra > .5 && extra < .62) add(v.east > .5 ? 'huckleberry' : size < .55 ? 'beargrass' : 'huckleberry', x, y - .05, z, .8 + size * .5, rot);
     }
     return lists;

@@ -61,6 +61,8 @@
     ],
     "vergeDensity": 0.8,
     "forestDensity": 0.82,
+    "rich": true,
+    "coverBoost": 2.2,
     "tierKeep": [
       1,
       0.66,
@@ -650,6 +652,7 @@
     { "name": "Ride-through burn above Lake McDonald", "lat": 48.6269, "lon": -113.8654, "lengthM": 1800, "widthM": 520, "angle": -42 },
     { "name": "Burned slopes across Lake McDonald", "lat": 48.6005, "lon": -113.9285, "lengthM": 5200, "widthM": 1500, "angle": -50 }
   ],
+  "water": { "lakeReachM": 7500 },
   "streams": [
     { "name": "McDonald Creek", "fromM": 16800, "toM": 23200, "widthM": 12, "minRoadM": 20, "searchM": 170 }
   ],

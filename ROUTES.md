@@ -246,6 +246,38 @@ Going-to-the-Sun's guardwalls use both:
 - **Wildlife set pieces** (`life.moments`): `{ kind: goat|bighorn|marmot, atM, count, where: uphill|valley|shoulder|wall, lateralM, spacingM }` puts animals where the chase camera sees them. `wall` sits them on the guardwall.
 - **View windows:** `vegetation.windows.at: [metres]` opens the trees at the real viewpoints, toward the lake and down the valley, over `atLengthM`. Random windows stay toward the lake only when `downhill` is false.
 
+## Going-to-the-Sun trees, ground cover and flowers (`vegetation.rich`)
+
+Only Going-to-the-Sun has this for now. The tools will be brought to the other routes once this route is finished.
+- **Trees** (`glacier-kit.js`):
+  - Each tree is built from tiers of branches. Every tier is a cone whose rim zigzags (tips out, notches in) and droops, with a darker underside (the shaded inside, seen from the low chase camera).
+  - Spruce, lodgepole, larch and hemlock have dead lower limbs.
+  - Fir and spruce carry old-man's-beard lichen.
+  - Cedars have flared, buttressed red trunks.
+  - Third variants give crown character: a candelabra cedar, a broken-top spruce, a forked fir and a wind-bent lodgepole.
+- **Surfaces** (`decorateTreeMaterial`, near trees only; the kit tags each surface with `aTree`):
+  - foliage in clumps with sunlit tips and dark hollows, and the cartoon bands break around them
+  - furrowed bark, stringy red cedar, plated pine and larch
+  - white aspen with black eyes and a dark foot
+  - silver deadwood
+  - moss at the foot of the trunks
+  - aspen leaves that quake and flash silver
+  - The fine detail fades past about 60 m.
+- **Planting** (`forest.js`, near tier):
+  - an age mix: saplings, plus old giants in the valleys more than 22 m from the road
+  - some trees lean
+  - big crowns stay clear of the chase camera
+  - a forest floor of down logs with root wads (kept more than 15 m from the road), stumps, moss mats, fallen branches and mossy stones
+  - shrubs by place: willow by creeks, thimbleberry and serviceberry in the moist valley, juniper on dry east-side rocks
+- **Ground cover:**
+  - grass kinds by zone (bunchgrass, sedge, meadow grass with seed heads, dry gold grass east of the divide)
+  - dense short tufts on a 0.9 m grid from the shoulder out to 12 m in the near tiles
+  - flower drifts: patches of one flower, thick in the middle and thinning at the edges, by zone (`FLOWERS` in `stylized-terrain.js`), plus a brighter verge strip
+  - Drifts use three-clump assets (`lupineD`, `arnicaD` …).
+  - New flowers: lupine, arnica, aster and monkeyflower.
+  - `vegetation.coverBoost` scales the cover candidates.
+- **`water.lakeReachM`:** don't draw lake chunks beyond this distance. Small far tarns were costing a draw call each.
+
 ## Style-C scenery for every scenic route
 
 Every scenic catalog entry has a `scene` path under `routes/scenes/`. Big Sur uses

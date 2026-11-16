@@ -555,9 +555,47 @@ viewpoints. Not picked: sound, camera feel, timber guardrail.
 - [x] **Wildlife:** goats above the road at 43.5 km, bighorn at Logan Pass (one on the shoulder), a marmot on the wall at about 45.5 km.
 - [x] **Views:** windows at 11 real viewpoints. Random windows toward the lake only.
 
+*Leftovers fixed (16 Nov 2026)*
+- The "floating rock" before Logan Pass was a snowbank lying flat on a steep slope. Snowbanks now skip slopes over 0.45, tilt with the ground and sink by the slope.
+- **Garden Wall smear:** near the camera, steepness is judged per triangle, so the grass and rock edges are crisp. Tile skirts are left out of this. Rock covers 93%.
+- **Tree-shadow blotches on steep faces:** object shadows on the ground fade on steep slopes (`vkShadowK`, patched into three's directional shadow line).
+
+**Trees, grass and flowers pass** (Matt, 16 Nov 2026)
+
+*Decisions*
+- All of it:
+  - real heights with an age mix
+  - layered limbs
+  - crown character
+  - logs and stumps
+  - bark by species
+  - foliage clumps
+  - aspen flutter
+  - lichen and moss
+  - grass in shades
+  - more shrubs
+  - grass close to the rider
+  - moss, rocks and deadfall
+  - flower drifts with more species, by zone, plus a roadside strip
+- Detail goes in the near band.
+- Going-to-the-Sun only for now.
+- A little more budget (up to about 2.5 M triangles).
+- Build it, then review.
+
+*Done*
+- [x] Glacier kit trees, floor items, grasses, shrubs and flowers.
+- [x] `decorateTreeMaterial`.
+- [x] Planting in `forest.js` (`vegetation.rich`).
+- [x] Cover by zone, near-road tufts and flower drifts.
+- [x] **Draw calls:**
+  - lakes beyond 7.5 km aren't drawn (`water.lakeReachM`)
+  - talus is in the near tier only
+  - small floor items cast no shadows
+  - one variant each for the floor items
+- [x] **Results:** 217–355 calls and 1.67–2.28 M triangles headless on Balanced. Clipping QC: 0 fail, 4 shoreline z-fight warnings. A camera-inside warning from a big cedar crown by the road was fixed: crowns near the road are capped, and giants stay more than 22 m away.
+
 *Known leftovers*
-- A floating flat rock above the road just before Logan Pass (47 km). It was there before this pass.
-- The near Garden Wall vertex-colour smear.
+- The Garden Wall's base reads as low-poly facets (crisp) rather than a smear.
 
 **Still to check**
 - [ ] A ride on the M4 Air with the `I` overlay: the ground shader is heavier (about 40 value-noise lookups
