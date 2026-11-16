@@ -72,10 +72,12 @@ function deck(M, city, pts, width, opts = {}) {
     if (near && near.d < hw + ROAD_WIDTH / 2 + 2 && p.y - near.y > 4) t = Math.max(.3, Math.min(thick, p.y - near.y - 4.15));
     const cur = [c[0].clone().setY(p.y - .05), c[1].clone().setY(p.y - .05), c[1].clone().setY(p.y - t), c[0].clone().setY(p.y - t)];
     if (prev) {
-      M.quad(prev[1], prev[0], cur[0], cur[1]);           // top (the slab's edges past the roadway, where lamps stand)
-      M.quad(prev[3], prev[2], cur[2], cur[3]);           // underside
-      M.quad(prev[0], prev[3], cur[3], cur[0]);           // left face
-      M.quad(prev[2], prev[1], cur[1], cur[2]);           // right face
+      // [w2-polish] wound to face outwards (all four faced inwards: from above the slab showed its underside,
+      // up to 2.2 m below the roadway, and the lamps on its edges stood on nothing)
+      M.quad(prev[1], cur[1], cur[0], prev[0]);           // top (the slab's edges past the roadway, where lamps stand)
+      M.quad(prev[3], cur[3], cur[2], prev[2]);           // underside
+      M.quad(prev[0], cur[0], cur[3], prev[3]);           // left face
+      M.quad(prev[2], cur[2], cur[1], prev[1]);           // right face
     }
     prev = cur;
   }
