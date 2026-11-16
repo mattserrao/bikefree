@@ -1073,6 +1073,7 @@ export class StylizedTerrain {
 
   // Beyond the hand-off, stylized stand-ins (mesas, peaks, lakes) would double up with the real ones.
   _cullFar(cx, cz) {
+    this.landmarks?.cullWalls?.(cx, cz);
     const limit = this.farUniform.value.x + this.farUniform.value.y * 0.5;
     for (const m of this.landmarkMeshes || []) m.visible = !this.farOn || m.userData.road || Math.hypot(m.position.x - cx, m.position.z - cz) - (m.userData.r || 0) < limit;
     for (const m of this.lakeMeshes || []) {

@@ -72,6 +72,20 @@
       "keep": 0.1
     }
   },
+  "road": {
+    "surface": "worn",
+    "zones": [
+      { "fromM": 0, "toM": 2200, "surface": "fresh" },
+      { "fromM": 2200, "toM": 16500, "surface": "worn" },
+      { "fromM": 16500, "toM": 30000, "surface": "chipseal" },
+      { "fromM": 30000, "toM": 50200, "surface": "alpine" },
+      { "fromM": 35925, "toM": 35985, "surface": "tunnel" },
+      { "fromM": 41380, "toM": 41620, "surface": "alpine", "wet": 1 },
+      { "fromM": 49140, "toM": 49270, "surface": "tunnel" },
+      { "fromM": 50200, "toM": 56500, "surface": "patched", "runoff": 0.35 },
+      { "fromM": 56500, "toM": 75500, "surface": "fresh", "edge": 0.3 }
+    ]
+  },
   "vista": {
     "rock": {
       "ribs": 0.9,

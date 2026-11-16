@@ -16,6 +16,10 @@ All pictures are headless snapshots (`npm run snap`) on Balanced from the chase 
 
 ![](view-windows.jpg)
 
+Guardwalls reworked as rubble-masonry parapets, and the road changes by area: chip seal at 20 km, alpine with patches and cracks at 38–44 km. Spots shown: 20, 38, 41.3 and 44 km.
+
+![](walls-and-road.jpg)
+
 The weather presets kept are clear, valley fog and clouds on the peaks:
 
 ![](weather.jpg)

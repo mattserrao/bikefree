@@ -178,6 +178,42 @@ The rock work is skipped on flat ground.
   `downhillM`. `keep` is the share of trees left standing.
   `windowAt(sM, windows, seed)` lists where the gaps fall.
 
+## Road surface and stonework (any route)
+
+**Road surface** (`js/world/road-surface.js`): the road changes with the place and its condition. A scene's
+`road` block names the default kind, and zones override it (later zones win, with 40 m blends at the ends):
+
+```json
+"road": {
+  "surface": "worn",
+  "zones": [
+    { "fromM": 0, "toM": 2200, "surface": "fresh" },
+    { "fromM": 41380, "toM": 41620, "surface": "alpine", "wet": 1 },
+    { "fromM": 50200, "toM": 56500, "surface": "patched", "runoff": 0.35 }
+  ]
+}
+```
+
+- **Kinds:** `fresh`, `worn`, `chipseal`, `alpine`, `patched` and `tunnel`.
+- **What the shader draws:** a darker fresh overlay or a bleached old one, polished wheel tracks, patches with sealed seams, sealed cracks (crossing and along the joints), chip-seal grain, crumbling and dusty edges, faded paint, snowmelt crossing the road, and tunnel grime.
+- **Overrides:** any of `tone`, `warm`, `wear`, `patches`, `cracks`, `edge`, `fade`, `speckle`, `runoff` and `grime` can be set in a zone.
+- **Variety:** each ~300 m also varies a little within its zone.
+- **Limits:** up to 24 zones. Distances are along the road (on an out-and-back, the outbound half).
+
+The rain preset's wet road is added on top of this.
+
+**Stonework** (`js/world/stonework.js`):
+- `makeMasonryMaterial({ stones, mortar, courseM, moss, mossM })` draws rubble masonry from world position: wavy courses, stones of mixed length and colour, recessed joints, weather streaks, and moss at the foot.
+- Because the pattern comes from world position, it doesn't stretch with the box it's on, and it carries on from one segment to the next.
+- `makeParapetGeometry()` is a unit parapet with battered sides and a rounded cap.
+
+Going-to-the-Sun's guardwalls use both:
+- They're knee-high, with a rounded cap and regular openings.
+- Each one follows the road's grade.
+- A masonry footing runs down to the ground where the slope falls away.
+- They're grouped into 1.5 km stretches, and stretches past 2 km are hidden.
+- `glacier.guardwalls` takes `segmentM`, `openingM`, `stones` and `mortar`.
+
 ## Style-C scenery for every scenic route
 
 Every scenic catalog entry has a `scene` path under `routes/scenes/`. Big Sur uses

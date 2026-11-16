@@ -11,9 +11,12 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { randomSequence, smoothstep } from './coast.js';
 import { Builder, M, blob, box } from './adirondack-kit.js';
 import { decorateSceneryMaterial } from './coastal-materials.js';
+import { makeMasonryMaterial, makeParapetGeometry } from './stonework.js';
 
 const ROAD_HALF = 3.5;
 const STONE = ['#837d72', '#77716a', '#8c857a', '#6f6a63', '#7f786c', '#8a8174'];
+// the guardwalls' rubble: local grey limestone with red and green argillite and a buff sandstone
+const STONEWORK = ['#8a8276', '#7b746a', '#958c7f', '#86716a', '#7a7f70', '#9b907c'];
 const PAINT = ['#b23a2e', '#1f3a5f', '#e9ecee', '#2b2b2b', '#7f8c8d', '#c5c9cc', '#28543c', '#d9c38a', '#4f6475', '#9db4c8'];
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -80,17 +83,20 @@ export class GlacierLandmarks {
     return mesh;
   }
 
-  // ---- Guardwalls: low rubble-masonry parapets with gaps, wherever the ground drops away beside the road ----
+  // ---- Guardwalls: the 1930s rubble-masonry parapets, knee-high with a rounded cap and regular openings,
+  //      on a masonry footing wherever the ground falls away below the road edge ----
   _guardwalls(c) {
     if (!c) return;
-    const rand = randomSequence(77), L = this.L, matrices = [], colors = [];
+    const rand = randomSequence(77), L = this.L, walls = [], feet = [], tints = [], footTints = [];
     const lookouts = this.config.lookouts || [], gaps = c.gaps || [];
+    const segM = c.segmentM ?? 2.35, gapM = c.openingM ?? .75, step = segM + gapM;
     const m = new THREE.Matrix4(), up = V(0, 1, 0);
-    for (let s = c.fromM; s < Math.min(c.toM, this.oneWay) - 3; s += 2.6) {
+    for (let s = c.fromM; s < Math.min(c.toM, this.oneWay) - 3; s += step) {
       if (this._inTunnel(s, 4)) continue;
       const b0 = L.bridgeOfS?.(s, 4);
       if (b0 && !b0.style) continue;   // bridges carry their own parapets
-      const p = this.F(s), q = this.F(s + 2.05);
+      const len = segM * (.92 + rand() * .16);
+      const p = this.F(s), q = this.F(s + len);
       for (const side of [-1, 1]) {
         if (lookouts.some((l) => (l.side === 'inland' ? -1 : 1) === side && Math.abs(s - l.atM) < (l.lengthM || 32) / 2 + 9)) continue;
         if (gaps.some((g) => s > g.fromM && s < g.toM && (!g.side || g.side === side))) continue;
@@ -98,24 +104,50 @@ export class GlacierLandmarks {
         const drop = p.y - L.heightAt(p.x + rx * 18, p.z + rz * 18);   // beyond the flat bench the road is pressed into
         if (drop < (c.dropM ?? 2.4)) continue;
         const off = ROAD_HALF + 1.1;
-        const a = V(p.x + rx * off, 0, p.z + rz * off), b = V(q.x - q.fz * side * off, 0, q.z + q.fx * side * off);
-        const y0 = Math.min(p.y, q.y), ground = Math.min(L.heightAt(a.x, a.z), L.heightAt(b.x, b.z));
-        const top = y0 + .55 + rand() * .1, bottom = b0?.style ? y0 + .06 : Math.max(top - 7, Math.min(ground, y0) - 1.3);   // on the arches: sit on the arcade
-        const f = b.clone().sub(a); const len = f.length(); if (len < .5) continue; f.normalize();
-        const x = V(-f.z, 0, f.x);
-        m.makeBasis(x, up, f).scale(V(.56, top - bottom, len)).setPosition((a.x + b.x) / 2, (top + bottom) / 2, (a.z + b.z) / 2);
-        matrices.push(m.clone()); colors.push(new THREE.Color(STONE[Math.floor(rand() * STONE.length)]).multiplyScalar(.92 + rand() * .14));
+        // the wall follows the road's grade (a sheared box), so it never steps
+        const a = V(p.x + rx * off, p.y - .08, p.z + rz * off), b = V(q.x - q.fz * side * off, q.y - .08, q.z + q.fx * side * off);
+        const f = b.clone().sub(a); if (Math.hypot(f.x, f.z) < .5) continue;
+        const x = V(f.z, 0, -f.x).normalize();   // right-handed with (up, along): no mirrored faces
+        const height = .62 + rand() * .08, width = .52;
+        m.makeBasis(x.clone().multiplyScalar(width), up.clone().multiplyScalar(height), f).setPosition(a);
+        walls.push(m.clone()); tints.push(.93 + rand() * .12);
+        // footing: down to the ground where it falls away under the wall (on the arches the arcade carries it)
+        if (b0?.style) continue;
+        const ground = Math.min(L.heightAt(a.x, a.z), L.heightAt(b.x, b.z));
+        const depth = Math.min(7, Math.min(a.y, b.y) - ground + 1.3);
+        if (depth < .2) continue;
+        const fa = a.clone().addScaledVector(up, -depth + .06);
+        m.makeBasis(x.clone().multiplyScalar(width + .14), up.clone().multiplyScalar(depth), f).setPosition(fa);
+        feet.push(m.clone()); footTints.push(.82 + rand() * .1);
       }
     }
-    if (!matrices.length) return;
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = decorateSceneryMaterial(new THREE.MeshStandardMaterial({ roughness: .96 }), 'concrete', this.u);
-    const mesh = new THREE.InstancedMesh(geometry, material, matrices.length);
-    matrices.forEach((mm, i) => { mesh.setMatrixAt(i, mm); mesh.setColorAt(i, colors[i]); });
-    mesh.instanceMatrix.needsUpdate = true; mesh.castShadow = mesh.receiveShadow = true; mesh.name = 'Stone guardwalls';
-    mesh.computeBoundingSphere(); this.group.add(mesh);
-    this.disposables.push(geometry, material);
-    this.guardwallCount = matrices.length;
+    if (!walls.length) return;
+    const material = makeMasonryMaterial({ stones: c.stones || STONEWORK, mortar: c.mortar || '#6f6a62', courseM: .27 });
+    // one mesh per ~1.5 km of road, so the walls out of view are culled (a call or two per visible stretch)
+    const build = (geometry, list, tint, name) => {
+      const chunks = new Map(), col = new THREE.Color(), p3 = V(0, 0, 0);
+      list.forEach((mm, i) => { p3.setFromMatrixPosition(mm); const k = `${Math.floor(p3.x / 1500)},${Math.floor(p3.z / 1500)}`; (chunks.get(k) || chunks.set(k, []).get(k)).push(i); });
+      for (const ids of chunks.values()) {
+        const mesh = new THREE.InstancedMesh(geometry, material, ids.length);
+        ids.forEach((i, j) => { mesh.setMatrixAt(j, list[i]); mesh.setColorAt(j, col.setScalar(tint[i])); });
+        mesh.instanceMatrix.needsUpdate = true; mesh.castShadow = mesh.receiveShadow = true; mesh.name = name;
+        mesh.computeBoundingSphere(); this.group.add(mesh);
+        (this.wallChunks ||= []).push(mesh);
+      }
+      this.disposables.push(geometry);
+    };
+    build(makeParapetGeometry(), walls, tints, 'Stone guardwalls');
+    if (feet.length) build(new THREE.BoxGeometry(1, 1, 1).translate(0, .5, .5), feet, footTints, 'Guardwall footings');
+    this.disposables.push(material);
+    this.guardwallCount = walls.length;
+  }
+
+  /** Knee-high walls are a pixel tall past ~2 km: hide those stretches (called as the camera moves). */
+  cullWalls(cx, cz, reachM = 2000) {
+    for (const m of this.wallChunks || []) {
+      const b = m.boundingSphere;
+      m.visible = Math.hypot(b.center.x - cx, b.center.z - cz) - b.radius < reachM;
+    }
   }
 
   // ---- Tunnels: an arched tube through a rock mass that restores the spur, with masonry portals ----

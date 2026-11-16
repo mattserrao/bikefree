@@ -506,6 +506,24 @@ in pieces other routes can reuse, and balanced against the graphics cost. Review
   z-fight warnings (unchanged); 231–353 draw calls and 1.59–2.09 M triangles headless (main: 230–357 and
   1.59–2.02 M)
 
+- [x] Guardwalls reworked: rubble-masonry parapets (`js/world/stonework.js`), knee-high with a rounded cap
+  and regular openings. They follow the grade, sit on masonry footings and are culled by stretch. Triangles
+  went down: 1.48–1.90 M at the checked spots.
+- [x] Road surface by area and condition (`js/world/road-surface.js`, the scene's `road` zones):
+  - fresh at Apgar and on the east side
+  - worn along Lake McDonald
+  - chip seal up McDonald Creek
+  - alpine (bleached, frost cracks, patches, snowmelt) from the Loop to Logan Pass, wet at the Weeping Wall
+  - tunnel grime
+  - patched on the east descent
+  - The rain preset's wet road now chains onto it.
+
+**Ideas for life and interest** (16 Nov 2026, not decided yet; see the session's list)
+- Rock cuts on the uphill side, roadside water (cascades, culverts, Weeping Wall spray), Red Jammer buses
+  and people at the pullouts, near-field roadside detail (snow poles, delineators, rockfall), burn-scar
+  snags with fireweed, staged wildlife moments, an ambient soundscape by zone, camera feel (sway, lean),
+  views placed at the real viewpoints, timber guardrail in the valley
+
 **Still to check**
 - [ ] A ride on the M4 Air with the `I` overlay: the ground shader is heavier (about 40 value-noise lookups
   per pixel on mountain faces, fewer on flat ground). If it's over budget, drop `rock.ledges` or `meadow`

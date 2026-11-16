@@ -11,6 +11,7 @@ import { loadRider } from './rider.js';
 import { PerfMonitor } from './perf.js';
 import { HAZE, AERIAL, AERIAL_COLOR, installHaze } from './haze.js';
 import { vistaConfig } from './vista.js';
+import { decorateRoad } from './road-surface.js';
 
 installHaze();   // valley haze in the fog chunks: before any material compiles
 import { wrapDist } from '../gpx.js';
@@ -609,6 +610,8 @@ function makeRoad(route, index) {
   tex.anisotropy = 8;
   const roadOptions = { map: tex, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 };
   const mat = stylized ? new THREE.MeshStandardMaterial({ ...roadOptions, roughness: .94, metalness: .015 }) : new THREE.MeshLambertMaterial(roadOptions);
+  // road surface by area and condition (js/world/road-surface.js): the scene's "road" block
+  if (stylized && route.scene.road) decorateRoad(mat, route.scene.road, { widthM: ROAD_WIDTH, repeatM: 24 });
   if (stylized) {
     const data = new Uint8Array(128 * 128 * 4);
     for (let k = 0; k < data.length; k += 4) { const v = 105 + Math.random() * 45; data.set([v, v, v, 255], k); }
