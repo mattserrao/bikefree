@@ -1,11 +1,19 @@
 import * as THREE from '../../vendor/three.module.min.js';
 import { randomSequence } from './coast.js';
+import { curveOn, curveXZ } from './road-align.js';   // [w2-align]
 
 /** The same outbound-road frame is used for signs, markers and turnouts. */
 export function coastalRoadFrame(route, index, distance, lateral = 0) {
   const s = Math.max(0, Math.min(route.turnS || route.total, distance));
   const i = Math.min((route.turnIdx || route.dist.length - 1) - 1, Math.floor(s / 10));
   const j = i + 1, f = Math.min(1, (s - route.dist[i]) / (route.dist[j] - route.dist[i] || 1));
+  if (curveOn(route)) {
+    // [w2-align] on the curved centre line (js/world/road-align.js), so decks, rails and pads follow the drawn road
+    const p = curveXZ(index, i, f), a = curveXZ(index, i, Math.max(0, f - .05)), b = curveXZ(index, i, Math.min(1, f + .05));
+    const forward = new THREE.Vector3(b.x - a.x, (route.ele[j] - route.ele[i]) * (Math.min(1, f + .05) - Math.max(0, f - .05)), b.z - a.z).normalize();
+    const right = new THREE.Vector3(-forward.z, 0, forward.x).normalize();
+    return { position: new THREE.Vector3(p.x, route.ele[i] + (route.ele[j] - route.ele[i]) * f, p.z).addScaledVector(right, lateral), forward, right };
+  }
   const forward = new THREE.Vector3(index.xs[j] - index.xs[i], route.ele[j] - route.ele[i], index.zs[j] - index.zs[i]).normalize();
   const right = new THREE.Vector3(-forward.z, 0, forward.x).normalize();
   const position = new THREE.Vector3(index.xs[i] + (index.xs[j] - index.xs[i]) * f,
