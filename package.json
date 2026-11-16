@@ -17,5 +17,5 @@
     "playwright-core": "^1.65.1",
     "three-mesh-bvh": "^0.9.18"
   },
-  "version": "0.13.2"
+  "version": "0.13.3"
 }
