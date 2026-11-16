@@ -339,6 +339,7 @@ function checkStatics() {
     const r = e.label === 'Lamp posts' ? .1 : e.label === 'Street trees' ? .16 : .18;   // post / trunk radius
     const core = obb(base.clone().addScaledVector(UP, 1.8), V(1, 0, 0), UP, V(0, 0, 1), [r, 1.4, r]);
     for (const o of near(core.world, (x) => x.kind === 'solid' && !x.instance)) {
+      if (e.label === 'Sign support' && o.mesh?.userData.sign) continue;   // a sign on its own posts
       if (!hitsOBB(o, core)) continue;
       F.add({ check: e.label === 'Street trees' ? 'tree-in-solid' : 'post-in-solid', severity: 'warn', s, label: `${e.label} ↔ ${o.label}`, value: 0, point: pt(base),
         extra: describeBuilding(o.label === 'Buildings' ? buildingAt(base.x, base.z) : null), note: `${e.label.toLowerCase()} standing inside ${o.label.toLowerCase()}` }, 0);
@@ -442,9 +443,10 @@ function checkSurfaces() {
         if (ma === mb && !ma.map && !ma.vertexColors) continue;   // one flat colour: nothing to see flicker
         if (a.y - b.y < L.zfight) F.add({ check: 'z-fight', severity: 'warn', s, label: a.e === b.e ? `${a.e.label} (overlapping ribbons)` : `${a.e.label} ↔ ${b.e.label}`, value: round(a.y - b.y, 4), point: [round(x, 1), round(a.y, 2), round(z, 1)], note: 'coplanar surfaces: they flicker as you move' }, 40);
       }
-      // ground drawn over a street, path or sidewalk (it disappears under the grass)
+      // ground drawn over a street, path or sidewalk (it disappears under the grass); a lake's water running on
+      // under its shore is hidden by design
       const gTop = hits.find((h) => h.e.label === 'Ground');
-      const covered = hits.find((h) => h.e.kind === 'surface' && !/^(Route |Rivers|Sea$)|water$/.test(h.e.label) && gTop && gTop.y - h.y > L.groundOverStreet && gTop.y - h.y < 3);
+      const covered = hits.find((h) => h.e.kind === 'surface' && !/^(Route |Rivers|Sea$|Lake$)|water$/.test(h.e.label) && gTop && gTop.y - h.y > L.groundOverStreet && gTop.y - h.y < 3);
       if (gTop && covered && hits.indexOf(gTop) < hits.indexOf(covered)) F.add({ check: 'ground-over-street', severity: 'warn', s, label: covered.e.label, value: round(gTop.y - covered.y, 2), point: [round(x, 1), round(covered.y, 2), round(z, 1)], note: 'the ground covers part of a street/path beside the route' }, 40);
     }
   }

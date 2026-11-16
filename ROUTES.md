@@ -89,6 +89,40 @@ Scene options used by Route 28:
 QC adds `road-in-lake`, `lake-side`, `building-on-road`, `building-in-water` and `dock-on-land`
 for these scenes.
 
+## Real mountains with lakes (Going-to-the-Sun Road)
+
+`terrain: "real-mountain"` is Big Sur's real-terrain pipeline (`real-coast.js`) without a sea:
+
+```sh
+python3 tools/build_terrain_grid.py goingtothesun   # "lakes" mode: terrainBuild.lakes = true
+npm run routes:build
+node tools/glacier_sides.mjs 41700 44345             # which side of the road falls away at those metres (+1 = right)
+```
+
+- **Terrain:** `terrainGridFile` (10 m within `fineM` of the road, 40 m out to `padM`). In `lakes` mode the
+  baker finds the hydro-flattened lakes (dead-flat basins of at least `minLakeHa`), each with its own level,
+  and writes a 20 m lake-id raster; `lakeNames: [[name, lat, lon]]` names them. The lake beds are pressed
+  down and the lakes drawn at their levels; the weather's fog bank lies on the lowest big lake.
+- **Vegetation:** `kitExtensions: ["glacier"]` (cedar, western hemlock, Engelmann spruce, subalpine fir,
+  western larch, lodgepole, aspen, krummholz; beargrass, paintbrush, glacier lilies, huckleberry, alder,
+  talus) with `vegetation.layout: "forest-edge"`. Species and density come from the landform: `treelineM`,
+  `divide: [lat, lon]` (east of it is drier: aspen, lodgepole, grassland), avalanche chutes and cliffs stay
+  open. `vegetation.forestDensity` scales the stand.
+- **Rock and snow:** with `palette.argillite` the cliffs show formation bands (red argillite = `cliff`, green =
+  `argillite`, grey limestone above 1,900 m, the dark sill at about 2,120 m); `snowLineM` sets midsummer
+  snowfields in the cirques; `glaciers: [{ name, lat, lon, radiusM, aspect, angle, dropM }]` paint ice.
+- **Built features:** `sites` (levelled, tree-free pads: `{ name, lat, lon, widthM, lengthM, angle, atRoad }`),
+  `lakeIslands` (`{ lat, lon, lengthM, widthM, heightM, angle, trees }`), `bridges` with `style: "arches"` and
+  `side` (built by the landmarks module; only that side is carved), `bridgeColors`, and a `glacier` block for
+  `js/world/glacier-landmarks.js`: `guardwalls`, `tunnels` (`{ fromM, toM, windows, valleySide }`),
+  `waterfalls` (along the road `{ fromM, toM, heightM }` or at a point `{ lat, lon, upM, downM }`),
+  `buildings` (`logan-pass-visitor-center`, `lake-mcdonald-lodge`, `rising-sun`, `st-mary-visitor-center`),
+  `parking` and `snowbanks`.
+- **Life:** `life` with `goats`, `bighorn`, `marmots`, `squirrels`, `bears` (`{ atM, radiusM, count, lateralM, side }`),
+  `ducks` and counts of `ravens` and `eagles` (`js/world/glacier-life.js`).
+- **Weather:** `weather.presets` can include `smoke` (wildfire smoke); mountain scenes get cloud caps on the
+  summits with `clouds` and `rain`. `signs[].kind: "nps"` is the brown park sign.
+
 ## Style-C scenery for every scenic route
 
 Every scenic catalog entry has a `scene` path under `routes/scenes/`. Big Sur uses
