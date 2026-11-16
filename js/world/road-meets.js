@@ -476,6 +476,92 @@ export function followMovedNodes(streets, options = {}) {
  * - peers (neither ends on the other) split the overlap down the middle and meet at their mean height.
  * Left = the ribbon's (dz, −dx) side for its direction (dx, dz). Run after the junctions are planned.
  */
+/**
+ * [w2] Carriageways drawn over each other at one level, resolved by priority: streets are visited most important
+ * first (lower class, then deck, then longer); at each point a street's drawn width (its interval across, trims
+ * taken off) loses whatever an already-visited near-parallel neighbour at its level covers — the end of the interval
+ * it covers is cut back to the neighbour's edge, all of it when the neighbour covers it whole; a neighbour lying wholly
+ * inside it gives way instead (that neighbour's points there are hidden), so what is drawn is the union with nothing
+ * over anything. A street that lost width takes the neighbour's height there (easing out at `grade`), so the two
+ * meet flush. Gores fill themselves: a ramp leaving a road keeps only what lies beyond the road's edge.
+ */
+export function resolveOverlaps(streets, landscape, options = {}) {
+  const O = { cos: .7, level: .6, grade: .08, ...options };
+  const slots = streetSlots(landscape, streets), lift = (k) => SLOT_LIFT(slots[k]);
+  const len = streets.map((st) => { let l = 0; for (let i = 1; i < st.pts.length; i++) l += Math.hypot(st.pts[i].x - st.pts[i - 1].x, st.pts[i].z - st.pts[i - 1].z); return l; });
+  const order = streets.map((_, k) => k).filter((k) => streets[k].cls <= 7 && streets[k].pts.length > 1)
+    .sort((a, b) => streets[a].cls - streets[b].cls || (streets[b].bridge ? 1 : 0) - (streets[a].bridge ? 1 : 0) || len[b] - len[a] || a - b);
+  const G = 24, grid = new Map(), done = new Uint8Array(streets.length);
+  streets.forEach((st, k) => {
+    if (st.cls > 7) return;
+    for (let i = 1; i < st.pts.length; i++) {
+      const a = st.pts[i - 1], b = st.pts[i], r = st.width / 2;
+      for (let gx = Math.floor((Math.min(a.x, b.x) - r) / G); gx <= Math.floor((Math.max(a.x, b.x) + r) / G); gx++)
+        for (let gz = Math.floor((Math.min(a.z, b.z) - r) / G); gz <= Math.floor((Math.max(a.z, b.z) + r) / G); gz++) {
+          const kk = `${gx},${gz}`; if (!grid.has(kk)) grid.set(kk, []); grid.get(kk).push([k, i]);
+        }
+    }
+  });
+  const dirAt = (P, i) => { const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)], dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1; return { x: dx / l, z: dz / l }; };
+  const targets = new Map();   // k → Map(i → top)
+  let n = 0;
+  for (const k of order) {
+    const st = streets[k], P = st.pts, h = st.width / 2;
+    for (let i = 0; i < P.length; i++) {
+      const p = P[i], u = dirAt(P, i), Lx = u.z, Lz = -u.x, top = p.y + lift(k);
+      if (p.jn != null) continue;   // (inside a junction: not drawn, its surface decides)
+      let lo = -(h - (p.tr || 0)), hi = h - (p.tl || 0);
+      if (hi - lo < .05) continue;
+      let flushTop = null;
+      const seen = new Set();
+      for (const [ko, j] of grid.get(`${Math.floor(p.x / G)},${Math.floor(p.z / G)}`) || []) {
+        if (ko === k || !done[ko] || seen.has(`${ko}:${j}`)) continue;
+        seen.add(`${ko}:${j}`);
+        const so = streets[ko], a = so.pts[j - 1], b = so.pts[j], { d, t } = segDist(p.x, p.z, a, b), hN = so.width / 2;
+        if (d > h + hN || a.jn != null || b.jn != null) continue;
+        // (only where we lie alongside this piece of it: past its end the ribbon stops square, and a street carrying on
+        // from it isn't under it)
+        {
+          const vx0 = b.x - a.x, vz0 = b.z - a.z, l0 = Math.hypot(vx0, vz0) || 1, tu = ((p.x - a.x) * vx0 + (p.z - a.z) * vz0) / l0;   // metres along
+          if ((j === 1 && tu < .05) || (j === so.pts.length - 1 && tu > l0 - .05) || tu < -1 || tu > l0 + 1) continue;
+        }
+        const vx = b.x - a.x, vz = b.z - a.z, vl = Math.hypot(vx, vz) || 1;
+        if (Math.abs((u.x * vx + u.z * vz) / vl) < O.cos) continue;   // crossing, not alongside (junctions' business)
+        const topN = a.y + (b.y - a.y) * t + lift(ko);
+        if (Math.abs(topN - top) > O.level) continue;
+        const cx = a.x + vx * t, cz = a.z + vz * t, e = (cx - p.x) * Lx + (cz - p.z) * Lz;
+        const same = (vz / vl) * Lx - (vx / vl) * Lz > 0;   // the neighbour's left is our left?
+        const tlN = (a.tl || 0) + ((b.tl || 0) - (a.tl || 0)) * t, trN = (a.tr || 0) + ((b.tr || 0) - (a.tr || 0)) * t;
+        const jlo = e - (hN - (same ? trN : tlN)), jhi = e + (hN - (same ? tlN : trN));
+        if (jhi - jlo < .05 || jhi <= lo + .05 || jlo >= hi - .05) continue;
+        if (jlo <= lo + .05 && jhi >= hi - .05) { lo = hi = 0; flushTop = topN; break; }            // covered whole
+        if (jlo > lo + .05 && jhi < hi - .05) {                                                  // the neighbour lies inside us
+          for (const q of [j - 1, j]) { so.pts[q].tl = so.width; so.pts[q].tr = so.width; } continue;
+        }
+        if (jhi >= hi - .05) hi = jlo; else lo = jhi;
+        flushTop = topN;
+      }
+      const ntl = Math.max(0, h - hi), ntr = Math.max(0, h + lo);
+      if (lo === 0 && hi === 0) { p.tl = p.tr = 2 * h; } else { p.tl = Math.max(p.tl || 0, ntl); p.tr = Math.max(p.tr || 0, ntr); }
+      if (flushTop != null && !p.along && !p.pin) { if (!targets.has(k)) targets.set(k, new Map()); targets.get(k).set(i, flushTop); n++; }
+    }
+    done[k] = 1;
+  }
+  // heights: flush with what it gave way to, easing out
+  for (const [k, t] of targets) {
+    const st = streets[k], P = st.pts, own = P.map((p) => p.y), A = [0];
+    for (let i = 1; i < P.length; i++) A.push(A[i - 1] + Math.hypot(P[i].x - P[i - 1].x, P[i].z - P[i - 1].z));
+    const best = P.map(() => null);
+    for (const [j, topN] of t) {
+      const dy = topN - lift(k) - own[j]; if (Math.abs(dy) < .003) continue;
+      const L = Math.max(4, Math.abs(dy) / O.grade);
+      for (let i = 0; i < P.length; i++) { const d = Math.abs(A[i] - A[j]); if (d < L) { const w = t.has(i) ? (i === j ? 1 : 0) : 1 - smooth(d / L); if (w > 0 && (!best[i] || w > best[i][0])) best[i] = [w, dy]; } }
+    }
+    P.forEach((p, i) => { if (best[i] && !p.along && !p.pin && p.jn == null && !(O.final && p.je != null)) p.y = own[i] + best[i][1] * best[i][0]; });
+  }
+  return n;
+}
+
 export function trimOverlaps(streets, landscape, plan, options = {}) {
   const O = { cos: .85, level: .6, branchM: 90, grade: .08, ...options };
   const slots = streetSlots(landscape, streets), lift = (k) => SLOT_LIFT(slots[k]);
@@ -642,7 +728,7 @@ export function roadMeets(landscape, index, route, options = {}) {
     pcs.forEach((pc, q) => {
       for (let i = 1; i < pc.length; i++) {
         const a = pc[i - 1], b = pc[i], id = segs.length, r = st.width / 2;
-        segs.push({ k, q, i, a, b, r });
+        segs.push({ k, q, i, a, b, r, last: i === pc.length - 1 });
         for (let gx = Math.floor((Math.min(a.x, b.x) - r) / G); gx <= Math.floor((Math.max(a.x, b.x) + r) / G); gx++)
           for (let gz = Math.floor((Math.min(a.z, b.z) - r) / G); gz <= Math.floor((Math.max(a.z, b.z) + r) / G); gz++) {
             const key = `${gx},${gz}`; if (!grid.has(key)) grid.set(key, []); grid.get(key).push(id);
@@ -905,6 +991,8 @@ export function roadMeets(landscape, index, route, options = {}) {
         if (o.k === sg.k) continue;
         // (how deep the two drawn ribbons overlap here: less than `overlapDepth` is a shared edge, not one over another)
         const { d, t } = segDist(x, z, o.a, o.b), hw = sg.r - (tl + tr) / 2;
+        // (past the end of the other ribbon nothing of it is drawn: a street carrying on from it isn't under it)
+        { const ox = o.b.x - o.a.x, oz = o.b.z - o.a.z, ol = Math.hypot(ox, oz) || 1, tu = ((x - o.a.x) * ox + (z - o.a.z) * oz) / ol; if (tu < -.5 || tu > ol + .5) continue; }
         if (sideR(x, z, o, t) + Math.min(hw, sideR(x, z, o, t)) - d > O.overlapDepth && d < sideR(x, z, o, t) + hw && Math.abs(o.a.top + (o.b.top - o.a.top) * t - top) < O.level) { hit = o; break; }
       }
       if (!hit) continue;
