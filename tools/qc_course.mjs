@@ -20,7 +20,7 @@ import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
 import { attachTerrainBuffer } from '../js/world/terrain-data.js';
 import { planSettlement } from '../js/world/settlement.js';
 import { cityStreets, STREET_LIFT } from '../js/world/city-landscape.js';
-import { streetOverlaps, drawnLiftMax } from '../js/world/junctions.js';   // [junctions]
+import { streetOverlaps, drawnLiftMax, routeLine } from '../js/world/junctions.js';   // [junctions]
 import { roadMeets, streetSlots } from '../js/world/road-meets.js';   // [junctions]
 import { landscapeBuilder } from '../js/world/landscapes.js';
 import { riderPose, routePoint, ROAD_WIDTH, ROAD_LIFT } from '../js/world/pose.js';
@@ -309,7 +309,7 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
     F.open.clear();
     const hits = [], end = route.turnIdx || route.dist.length - 1;
     const streets = cityStreets(landscape, index, route), plan = landscape._junctions;   // [junctions]
-    const slots = plan ? streetSlots(landscape, streets) : null;   // [junctions] each ribbon's own lift, as city.js draws it
+    const slots = plan ? streetSlots(landscape, streets) : null, RLq = plan && routeLine(route, index);   // [junctions] each ribbon's own lift, the road's drawn curve
     streets.forEach((st, k) => {
       for (const p of st.pts) {
         if (p.jn != null) continue;   // [junctions] inside a junction: not drawn (its surface is checked below)
@@ -317,7 +317,7 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
         if (!r) continue;
         const i = r.i > end ? Math.max(0, 2 * end - r.i) : r.i;
         // [junctions] (with a junction plan: the ribbon's own lift, blended to the junction's; the road's surface right there)
-        const rd = plan && landscape.routeDist(p.x, p.z), roadY = rd && rd.d < st.width / 2 + ROAD_WIDTH / 2 + 1 ? rd.y : route.ele[i];
+        const rd = plan && RLq.project(p.x, p.z, route.dist[i], 25), roadY = rd && rd.d < st.width / 2 + ROAD_WIDTH / 2 + 1 ? rd.y : route.ele[i];
         const over = p.y + drawnLiftMax(p, plan, slots ? .1 + slots[k] * .02 : STREET_LIFT) - (roadY + ROAD_LIFT);
         if (over > -.02 && over < 4) hits.push([route.dist[i], over]);
       }

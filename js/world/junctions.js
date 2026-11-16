@@ -529,7 +529,11 @@ export function junctionPaint(plan, streets, ctx) {
   const quads = [], bad = [];
   junctionsNear(plan, 0, 0, 0);   // (the lookup grid)
   const inJunction = (self, p, pad) => junctionsNear(plan, p.x, p.z, pad).some(({ jn, d }) => jn !== self && d < pad);
-  const onRoad = (p) => { const r = ctx.routeDist(p.x, p.z); return !!r && r.d < RW / 2 + .3 && Math.abs(r.y + ROAD_LIFT - p.y) < 1.5; };
+  const onRoad = (p) => {   // (on or under the road as drawn: its curve)
+    const r = ctx.routeDist(p.x, p.z); if (!r) return false;
+    const q = RL.project(p.x, p.z, ctx.route.dist[Math.min(RL.n, r.i)], 25) || r;
+    return q.d < RW / 2 + .5 && Math.abs(q.y + ROAD_LIFT - p.y) < 4;
+  };
   for (const jn of plan.list) {
     const busy = jn.arms.length >= 3;
     for (const A of jn.arms) {
@@ -542,7 +546,10 @@ export function junctionPaint(plan, streets, ctx) {
       const d0 = A.t + .5, d1 = d0 + O.crosswalkW, h = A.h - .5;
       if (A.shared ? d1 + 1 > A.avail * .5 : d1 + 1 > A.avail) continue;   // the block is too short for one
       const box = [at(d0, -A.h), at(d0, A.h), at(d1 + 1.6, A.h), at(d1 + 1.6, -A.h)];
-      if (box.some((p) => onRoad(p))) { bad.push({ jn: jn.id, kind: 'crosswalk', why: 'would lie on the route’s road' }); continue; }
+      // (the box's corners, edges and middle, every metre: the road may cross it between its corners)
+      const probe = [];
+      for (let dd = d0; dd <= d1 + 1.6 + 1e-6; dd += Math.max(.5, (d1 + 1.6 - d0) / 4)) for (let sd = -A.h; sd <= A.h + 1e-6; sd += Math.max(.5, A.h / 4)) probe.push(at(dd, sd));
+      if (probe.some((p) => onRoad(p))) { bad.push({ jn: jn.id, kind: 'crosswalk', why: 'would lie on the route’s road' }); continue; }
       if (box.some((p) => inJunction(jn, p, 1.5))) { bad.push({ jn: jn.id, kind: 'crosswalk', why: 'would lie in another junction' }); continue; }
       const bars = Math.max(2, Math.floor((2 * h) / 1.1));
       for (let q = 0; q < bars; q++) {

@@ -26,6 +26,7 @@ export const MEET_LIMITS = {
   dangle: 1.2,       // m: a street end this far above (or below) whatever is under it hangs in the air
   touch: 1.5,        // m: a street end this close to another surface's edge meets it
   clippedM: 2,       // m: of ribbon cut away by the route's clearance tube
+  seeM: 25,          // limits grow by their own size every this many metres from the route (×4 at 75 m, ×7 at 150 m)
 };
 
 const ROAD_LIFT = .12;           // (pose.js) the route's road surface above its line
@@ -64,6 +65,69 @@ export function streetSlots(landscape, streets) {
   }
   Object.defineProperty(streets, '_slots', { value: slots, enumerable: false, configurable: true });
   return slots;
+}
+
+/**
+ * Streets that cross at one level without sharing an OSM node (a service road over a street, two streets the data
+ * left unconnected) were drawn as two ribbons through each other. Each such crossing gets a node shared by both
+ * (same coordinates, at their mean height), so the junction planner turns it into a junction. Crossings within
+ * `nearM` of a node the two already share, at shallow angles (< `minDeg`) or at different levels are left alone.
+ * Keeps st.nodes / st.nodeIdx in step. Run before anything indexes the streets' points.
+ */
+export function joinCrossings(streets, options = {}) {
+  const O = { level: .6, minDeg: 25, nearM: 12, ...options };
+  const G = 32, grid = new Map(), key = (p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`;
+  streets.forEach((st, k) => {
+    if (st.cls > 7 || !st.nodeIdx) return;
+    for (let i = 1; i < st.pts.length; i++) {
+      const a = st.pts[i - 1], b = st.pts[i];
+      for (let gx = Math.floor(Math.min(a.x, b.x) / G); gx <= Math.floor(Math.max(a.x, b.x) / G); gx++)
+        for (let gz = Math.floor(Math.min(a.z, b.z) / G); gz <= Math.floor(Math.max(a.z, b.z) / G); gz++) {
+          const kk = `${gx},${gz}`; if (!grid.has(kk)) grid.set(kk, []); grid.get(kk).push([k, i]);
+        }
+    }
+  });
+  const shared = (k, ko, p) => streets[k].nodes.some((n) => Math.hypot(n.x - p.x, n.z - p.z) < O.nearM && streets[ko].nodes.some((m) => key(m) === key(n)));
+  const ins = new Map(), seen = new Set();   // k → [{i, f, x, z, y}]
+  for (const list of grid.values()) {
+    for (let u = 0; u < list.length; u++) for (let v = u + 1; v < list.length; v++) {
+      const [k, i] = list[u], [ko, j] = list[v];
+      if (k === ko) continue;
+      const pair = k < ko ? `${k}:${i}:${ko}:${j}` : `${ko}:${j}:${k}:${i}`;
+      if (seen.has(pair)) continue; seen.add(pair);
+      const A = streets[k], B = streets[ko], a = A.pts[i - 1], b = A.pts[i], c = B.pts[j - 1], d = B.pts[j];
+      const rx = b.x - a.x, rz = b.z - a.z, sx = d.x - c.x, sz = d.z - c.z, den = rx * sz - rz * sx;
+      if (Math.abs(den) < 1e-9) continue;
+      const t = ((c.x - a.x) * sz - (c.z - a.z) * sx) / den, w = ((c.x - a.x) * rz - (c.z - a.z) * rx) / den;
+      if (t <= .02 || t >= .98 || w <= .02 || w >= .98) continue;
+      const ang = Math.acos(Math.min(1, Math.abs(rx * sx + rz * sz) / (Math.hypot(rx, rz) * Math.hypot(sx, sz) || 1))) * 180 / Math.PI;
+      if (ang < O.minDeg) continue;
+      const ya = a.y + (b.y - a.y) * t, yb = c.y + (d.y - c.y) * w;
+      if (Math.abs(ya - yb) > O.level) continue;
+      const P = { x: a.x + rx * t, z: a.z + rz * t };
+      if (shared(k, ko, P)) continue;
+      const y = (ya + yb) / 2;
+      (ins.get(k) || ins.set(k, []).get(k)).push({ i, f: t, ...P, y });
+      (ins.get(ko) || ins.set(ko, []).get(ko)).push({ i: j, f: w, ...P, y });
+    }
+  }
+  let n = 0;
+  for (const [k, list] of ins) {
+    const st = streets[k], P = st.pts, out = [], map = [];
+    list.sort((p, q) => p.i - q.i || p.f - q.f);
+    let q = 0;
+    const added = [];
+    for (let i = 0; i < P.length; i++) {
+      while (q < list.length && list[q].i === i) { const e = list[q++]; added.push(out.length); out.push({ x: e.x, y: e.y, z: e.z }); n++; }
+      map.push(out.length); out.push(P[i]);
+    }
+    st.pts = out;
+    const nodeIdx = st.nodeIdx.map((i) => map[i]), nodes = [...st.nodes];
+    for (const ai of added) { nodeIdx.push(ai); nodes.push(out[ai]); }
+    const order = nodeIdx.map((_, m) => m).sort((x, y) => nodeIdx[x] - nodeIdx[y]);
+    st.nodeIdx = order.map((m) => nodeIdx[m]); st.nodes = order.map((m) => nodes[m]);
+  }
+  return n;
 }
 
 /**
@@ -217,6 +281,39 @@ export function alignAlongRoute(streets, ctx, options = {}) {
 }
 
 /**
+ * A deck or ramp crossing over the route's road lower than the rider's clearance (the builder interpolates deck
+ * heights between their ground ends, so a flyover can come down onto a trail beneath it) was cut open by the
+ * clearance tube, leaving its two halves hanging. It is lifted to `clearM` over the road where it crosses, easing
+ * back along the deck at no more than `grade`, so it passes over in one piece. ctx: { route, index, roadWidth }.
+ */
+export function clearOverpasses(streets, ctx, options = {}) {
+  const { route, index } = ctx, RW = ctx.roadWidth || 7;
+  const O = { cos: .7, clearM: 4.9, below: 1.5, grade: .06, ...options };
+  const RL = routeLine(route, index), end = route.turnIdx || route.dist.length - 1;
+  let n = 0;
+  streets.forEach((st) => {
+    if (!st.bridge || st.cls > 7) return;
+    const P = st.pts, need = P.map(() => 0);
+    let crosses = false;
+    const cand = [];
+    for (let i = 0; i < P.length; i++) {
+      const p = P[i], r = index.nearest(p.x, p.z, RW / 2 + st.width / 2 + 8); if (!r) continue;
+      const q = RL.project(p.x, p.z, route.dist[Math.min(end, r.i > end ? 2 * end - r.i : r.i)], 30);
+      if (!q || q.d > RW / 2 + st.width / 2 + 3) continue;
+      const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)], t = RL.at(q.s), dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1;
+      const road = q.y + ROAD_LIFT, under = road + O.clearM - p.y;
+      if (p.y > road - O.below && under > 0) { cand.push([i, under]); if (Math.abs((dx * t.tx + dz * t.tz) / l) <= O.cos) crosses = true; }
+    }
+    if (!crosses) return;   // (a deck alongside the road is the road's other half: alignAlongRoute)
+    for (const [i, under] of cand) need[i] = under;
+    const acc = [0]; for (let i = 1; i < P.length; i++) acc.push(acc[i - 1] + Math.hypot(P[i].x - P[i - 1].x, P[i].z - P[i - 1].z));
+    const lift = P.map((_, i) => { let m = 0; need.forEach((v, j) => { if (v > 0) m = Math.max(m, v - Math.abs(acc[i] - acc[j]) * O.grade); }); return m; });
+    P.forEach((p, i) => { if (lift[i] > 0) { p.y += lift[i]; n++; } });
+  });
+  return n;
+}
+
+/**
  * A street running beside the route at a different level (on a terrace above a riverfront trail, a ramp below a
  * viaduct) used to hang its ribbon over the road's shoulder or under the road itself. Its side towards the route is
  * trimmed back to the shoulder's outer edge (`edgeM` from the road's line), so the two read as two levels side by side
@@ -266,6 +363,30 @@ export function trimAtRoute(streets, ctx, options = {}) {
       if (need <= 0) continue;
       const f = left ? 'tl' : 'tr';
       p[f] = Math.max(p[f] || 0, need); n++;
+    }
+  });
+  return n;
+}
+
+/**
+ * Last word on the rule that nothing covers the route's road: any ground street or path whose ribbon reaches over
+ * the road (its width plus `marginM`) with its top between the road's surface less `under` and 4 m above it is put
+ * just under the road there (decks: clearOverpasses lifts those that cross; the rest keep their built heights).
+ */
+export function keepUnderRoad(streets, ctx, options = {}) {
+  const { route, index, landscape } = ctx, RW = ctx.roadWidth || 7, O = { under: .05, marginM: .5, ...options };
+  const RL = routeLine(route, index), end = route.turnIdx || route.dist.length - 1, slots = streetSlots(landscape, streets);
+  let n = 0;
+  streets.forEach((st, k) => {
+    if (st.bridge) return;
+    const lift = SLOT_LIFT(slots[k]);
+    for (const p of st.pts) {
+      if (p.jn != null) continue;
+      const r = index.nearest(p.x, p.z, RW / 2 + st.width / 2 + 6); if (!r) continue;
+      const q = RL.project(p.x, p.z, route.dist[Math.min(end, r.i > end ? 2 * end - r.i : r.i)], 30);
+      if (!q || q.d > RW / 2 + st.width / 2 + O.marginM) continue;
+      const road = q.y + ROAD_LIFT, top = p.y + (p.jd != null ? 0 : lift);
+      if (top > road - O.under && top < road + 4) { p.y = road - O.under - .005 - (p.jd != null ? 0 : lift); n++; }
     }
   });
   return n;
@@ -365,7 +486,7 @@ export function trimOverlaps(streets, landscape, plan, options = {}) {
         if (p.along && (a.along || b.along)) continue;   // both alongside the route: trimAtRoute shapes them
         const cx = a.x + bx * t, cz = a.z + bz * t, yB = a.y + (b.y - a.y) * t, topB = yB + lift(ko);
         if (Math.abs(topB - topA) > O.level) continue;
-        best.set(ko, { ko, d, hB, side: (cx - p.x) * Lx + (cz - p.z) * Lz > 0 ? 'l' : 'r', topB });
+        best.set(ko, { ko, d, hB, side: (cx - p.x) * Lx + (cz - p.z) * Lz > 0 ? 'l' : 'r', topB, along: !!(a.along || b.along) });
       }
       for (const o of best.values()) {
         const so = streets[o.ko];
@@ -374,12 +495,10 @@ export function trimOverlaps(streets, landscape, plan, options = {}) {
         const branch = isBranch(k, o.ko, A[i]);
         if (!branch && isBranch(o.ko, k, null, p)) continue;   // the other one is the branch: it yields, this one stays whole
         const over = hA + o.hB - o.d;
-        if (branch) {
-          // the inner edge on the parent's edge; wholly inside: nothing left to draw
-          jobs.push([k, i, o.side, Math.min(2 * hA, over), o.topB]);
-        } else {
-          jobs.push([k, i, o.side, Math.min(hA, over / 2), (topA + o.topB) / 2]);
-        }
+        // (heights: a street flush with the route's road keeps its height; one meeting it takes that height)
+        const top = p.along ? null : o.along || branch ? o.topB : (topA + o.topB) / 2;
+        if (branch) jobs.push([k, i, o.side, Math.min(2 * hA, over), top]);   // its inner edge on the parent's edge; wholly inside: not drawn
+        else jobs.push([k, i, o.side, Math.min(hA, over / 2), top]);
       }
     }
   });
@@ -388,6 +507,7 @@ export function trimOverlaps(streets, landscape, plan, options = {}) {
   for (const [k, i, side, trim, top] of jobs) {
     const p = streets[k].pts[i], f = side === 'l' ? 'tl' : 'tr';
     p[f] = Math.max(p[f] || 0, trim);
+    if (top == null) continue;
     if (!targets.has(k)) targets.set(k, new Map());
     const t = targets.get(k), y = top - lift(k);
     if (!t.has(i) || Math.abs(y - p.y) > Math.abs(t.get(i) - p.y)) t.set(i, y);
@@ -401,7 +521,7 @@ export function trimOverlaps(streets, landscape, plan, options = {}) {
       const L = Math.max(4, Math.abs(dy) / O.grade);
       for (let i = 0; i < P.length; i++) { const d = Math.abs(A[i] - A[j]); if (d < L) { const w = t.has(i) ? (i === j ? 1 : 0) : 1 - smooth(d / L); if (w > 0 && (!best[i] || w > best[i][0])) best[i] = [w, dy]; } }
     }
-    P.forEach((p, i) => { if (best[i] && p.jn == null) p.y = own[i] + best[i][1] * best[i][0]; });
+    P.forEach((p, i) => { if (best[i] && p.jn == null && !p.along) p.y = own[i] + best[i][1] * best[i][0]; });
   }
   return n;
 }
@@ -492,7 +612,12 @@ export function roadMeets(landscape, index, route, options = {}) {
     site.id = sites.length; sites.push(site);
     return site;
   };
-  const issue = (site, check, value, note) => { if (site) site.issues.push({ check, value: Math.round(value * 100) / 100, note }); };
+  // an issue counts when it is bigger than its limit, scaled with the site's distance from the route (what a rider can
+  // see: a 9 cm lip at the roadside, 35 cm 75 m away); `scaled` false: the limit holds everywhere (paint, clipping)
+  const issue = (site, check, value, note, limit = 0, scaled = true) => {
+    if (!site || !(Math.abs(value) > limit * (scaled ? 1 + site.d / O.seeM : 1))) return;
+    site.issues.push({ check, value: Math.round(value * 100) / 100, note });
+  };
 
   // 1. planned junctions: each arm's ribbon meets the surface at its mouth (no step, no gap), nothing else drawn
   // inside, paint only where it belongs
@@ -519,8 +644,9 @@ export function roadMeets(landscape, index, route, options = {}) {
       if (!best || best.dd > .5) {
         // no ribbon arrives at this mouth (its street is cut further on, e.g. by the next junction): fine if another
         // junction's surface lies just beyond it
-        const q = { x: A.cutP.x + A.ud.x * 1.2, z: A.cutP.z + A.ud.z * 1.2 };
-        if (!junctionsNear(plan, q.x, q.z, .3).some((o) => o.jn !== jn && o.d < .3)) gap = Math.max(gap, best ? best.dd : A.h);
+        // (or the street ends inside this junction: a stub, nothing to meet)
+        const beyond = [.6, 1.5].some((dd) => { const q = { x: A.cutP.x + A.ud.x * dd, z: A.cutP.z + A.ud.z * dd }; return junctionsNear(plan, q.x, q.z, .6).some((o) => o.jn !== jn && o.d < .6); });
+        if (!beyond && A.avail > A.t + .3) gap = Math.max(gap, best ? best.dd : A.h);
         continue;
       }
       const { pc, e } = best, p = pc[e], nb = pc[e === 0 ? 1 : pc.length - 2];
@@ -534,8 +660,8 @@ export function roadMeets(landscape, index, route, options = {}) {
         step = Math.max(step, Math.abs(p.top - jn.top(m.x, m.z)));
       }
     }
-    if (step > O.step) issue(site, 'step', step, 'a street meets the junction surface with a lip');
-    if (gap > O.gap) issue(site, 'gap', gap, 'a street’s end and the junction’s mouth don’t line up');
+    issue(site, 'step', step, 'a street meets the junction surface with a lip', O.step);
+    issue(site, 'gap', gap, 'a street’s end and the junction’s mouth don’t line up', O.gap);
     // other ribbons drawn inside at its level
     let over = 0;
     const own = new Set(site.streets);
@@ -550,18 +676,18 @@ export function roadMeets(landscape, index, route, options = {}) {
         }
       }
     }
-    if (over > O.overlapM) issue(site, 'overlap', over, 'another street’s ribbon is drawn inside the junction');
+    issue(site, 'overlap', over, 'another street’s ribbon is drawn inside the junction', O.overlapM);
     // paint as drawn: a street's crosswalk or stop line never on the route's road, the route's own never inside a
     // junction (nor across the road mid-junction), every quad square (a parallelogram along its street)
     let wrong = 0, why = '';
     for (const q of paint.byJn.get(jn.id) || []) {
       const c = { x: (q.pts[0].x + q.pts[2].x) / 2, z: (q.pts[0].z + q.pts[2].z) / 2 };
       if (q.kind === 'route-crosswalk') { if (plan.list.some((o) => o.bb && c.x > o.bb[0] && c.x < o.bb[1] && c.z > o.bb[2] && c.z < o.bb[3] && inPoly(o.poly, c.x, c.z))) { wrong++; why = 'a route crosswalk inside a junction'; } continue; }
-      const onRoad = q.pts.some((p) => { const r = roadAt(p.x, p.z); return r && r.d < RW / 2 && Math.abs(r.y + ROAD_LIFT - p.y) < 1.5; });
+      const onRoad = q.pts.some((p) => { const r = roadAt(p.x, p.z); return r && r.d < RW / 2 && Math.abs(r.y + ROAD_LIFT - p.y) < 4; });
       if (onRoad) { wrong++; why = 'a street crosswalk or stop line on the route’s road'; }
       else if (junctionsNear(plan, c.x, c.z, 0).some((o) => o.d < 0)) { wrong++; why = 'paint inside a junction'; }
     }
-    if (wrong) issue(site, 'paint', wrong, why);
+    if (wrong) issue(site, 'paint', wrong, why, 0, false);
   }
 
   // 2. street ends and shared nodes outside junctions
@@ -592,7 +718,7 @@ export function roadMeets(landscape, index, route, options = {}) {
       const kind = list.length === 2 && !thru.length ? 'link' : 'node';
       const site = add({ kind, x: p.x, z: p.z, y: p.y, streets: ks, bridge: ks.some((k) => streets[k].bridge) });
       if (!site) continue;
-      if (hi - lo > O.step) issue(site, 'step', hi - lo, kind === 'link' ? 'a street carries on as another at a different height' : 'streets share a node at different heights');
+      issue(site, 'step', hi - lo, kind === 'link' ? 'a street carries on as another at a different height' : 'streets share a node at different heights', O.step);
       if (kind === 'link') {   // the two ribbons' end edges: each square to its own direction → a wedge on the outside of the bend
         const dirOf = (o) => { const nb = o.pc[o.e === 0 ? 1 : o.pc.length - 2]; const dx = nb.x - o.p.x, dz = nb.z - o.p.z, l = Math.hypot(dx, dz) || 1; return { x: dx / l, z: dz / l }; };
         const a = dirOf(list[0]), b = dirOf(list[1]);
@@ -600,7 +726,7 @@ export function roadMeets(landscape, index, route, options = {}) {
         const w = Math.min(streets[list[0].k].width, streets[list[1].k].width);
         const miter = list[0].p.tx != null && list[1].p.tx != null;
         const wedge = miter ? 0 : w * Math.sin(th / 2);
-        if (wedge > O.gap) issue(site, 'gap', wedge, 'two ribbons meet at an angle with a notch between their ends');
+        issue(site, 'gap', wedge, 'two ribbons meet at an angle with a notch between their ends', O.gap);
       }
       continue;
     }
@@ -616,15 +742,15 @@ export function roadMeets(landscape, index, route, options = {}) {
       const site = add({ kind: touch.kind === 'route' ? 'route' : 'end', x: p.x, z: p.z, y: p.y, streets: touch.k != null ? [o.k, touch.k] : [o.k], meets: touch.kind, bridge: st.bridge });
       if (!site) continue;
       const step = Math.abs(touch.top - p.top);
-      if (step > 4) { if (Math.abs(p.y - landscape.heightAt(p.x, p.z)) > O.dangle) issue(site, 'dangling', p.y - landscape.heightAt(p.x, p.z), 'a roadway ends in the air beside another at a different level'); }
-      else if (step > O.step) issue(site, 'step', step, `a street ends against ${touch.kind === 'route' ? 'the route’s road' : touch.kind === 'junction' ? 'a junction' : 'another street'} at a different height`);
+      if (step > 4) issue(site, 'dangling', p.y - landscape.heightAt(p.x, p.z), 'a roadway ends in the air beside another at a different level', O.dangle);
+      else issue(site, 'step', step, `a street ends against ${touch.kind === 'route' ? 'the route’s road' : touch.kind === 'junction' ? 'a junction' : 'another street'} at a different height`, O.step);
       continue;
     }
     // free end: on the ground, or hanging?
     const g = landscape.heightAt(p.x, p.z), off = p.top - .1 - g;
     if (Math.abs(off) > O.dangle) {
       const site = add({ kind: 'end', x: p.x, z: p.z, y: p.y, streets: [o.k], meets: 'nothing', bridge: st.bridge });
-      issue(site, 'dangling', off, off > 0 ? 'a roadway ends in the air' : 'a roadway ends below the ground');
+      issue(site, 'dangling', off, off > 0 ? 'a roadway ends in the air' : 'a roadway ends below the ground', O.dangle);
     }
   }
 
@@ -637,9 +763,9 @@ export function roadMeets(landscape, index, route, options = {}) {
     if (!run || run.m < 1.5) return;
     const site = add({ kind: run.kind, x: run.x, z: run.z, y: run.y, streets: [+key.slice(1)], along: run.along });
     if (!site) return;
-    if (run.kind === 'clipped') { if (run.m > O.clippedM) issue(site, 'clipped', run.m, 'the route’s clearance cuts a hole in a street (ends left hanging)'); return; }
-    if (run.step > O.step + .1) issue(site, 'step', run.step, run.along ? 'a street runs beside the route’s road at a different height' : 'a street meets the route’s road at a different height');
-    if (!run.along && run.m > 3) issue(site, 'overlap', run.m, 'a street crosses the route’s road with no junction');
+    if (run.kind === 'clipped') { issue(site, 'clipped', run.m, 'the route’s clearance cuts a hole in a street (ends left hanging)', O.clippedM, false); return; }
+    issue(site, 'step', run.step, run.along ? 'a street runs beside the route’s road at a different height' : 'a street meets the route’s road at a different height', O.step + .1);
+    if (!run.along) issue(site, 'overlap', run.m, 'a street crosses the route’s road with no junction', 3);
   };
   for (const [k, pcs] of drawn) {
     const st = streets[k];
@@ -707,7 +833,7 @@ export function roadMeets(landscape, index, route, options = {}) {
   }
   for (const c of clusters.values()) {
     const site = add({ kind: 'overlap', x: c.x, z: c.z, y: c.y, streets: [...c.ks] });
-    if (site && c.m > O.overlapM) issue(site, 'overlap', c.m, 'street ribbons drawn over each other at one level (no junction)');
+    if (site) issue(site, 'overlap', c.m, 'street ribbons drawn over each other at one level (no junction)', O.overlapM);
   }
 
   sites.sort((a, b) => a.s - b.s || a.kind.localeCompare(b.kind));
