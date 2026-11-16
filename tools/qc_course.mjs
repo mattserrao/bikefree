@@ -182,6 +182,10 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
   const ground = landscape ? makeMeshGround(landscape.heightAt) : null;
   const bridgeAt = (x, z, m) => !!landscape?.bridgeAt?.(x, z, m);
   let prev = riderPose(route, index, 0), maxHeading = 0, maxJump = 0;
+  // A real switchback (Alpe d'Huez's 21 hairpins): the road reverses within ±40 m. Its tight turn is the
+  // road itself, not a GPX fault, so it is reported as info; a sharp turn that doesn't reverse still warns.
+  const flatDir = (a, b) => { const p = routePoint(route, index, a), q = routePoint(route, index, b), l = Math.hypot(q.x - p.x, q.z - p.z) || 1; return { x: (q.x - p.x) / l, z: (q.z - p.z) / l }; };
+  const switchback = (s) => s > 40 && s < total - 40 && angleBetween(flatDir(s - 40, s - 20), flatDir(s + 20, s + 40)) > 120;
   for (let s = step; s <= total + 1e-6; s += step) {
     const cur = riderPose(route, index, s);
     const at = s - step / 2;
@@ -195,7 +199,10 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
     else {
       maxHeading = Math.max(maxHeading, turnRate);
       if (turnRate > LIMITS.headingFail) F.add('heading-snap', 'fail', at, turnRate, 'heading snaps');
-      else if (turnRate > LIMITS.headingWarn) F.add('heading-sharp', 'warn', at, turnRate, 'very tight turn');
+      else if (turnRate > LIMITS.headingWarn) {
+        if (switchback(at)) F.add('switchback', 'info', at, turnRate, 'hairpin bend (the road doubles back)');
+        else F.add('heading-sharp', 'warn', at, turnRate, 'very tight turn');
+      }
     }
     if (ground && Math.round(s) % 2 === 0) {
       // chase camera: CHASE.back behind, CHASE.up up, pushed CHASE.ground above the ground (world.js, pose.js)

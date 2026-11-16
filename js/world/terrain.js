@@ -12,6 +12,7 @@ const KEEP_MS = 30000;        // unload tiles unused for this long
 const ROAD_FLAT_M = 5.5;      // terrain is levelled to the road within this distance…
 const ROAD_BLEND_M = 24;      // …and blended back to natural ground by this distance
 const TREE_TILE_Z = 15;
+const NODATA_M = -1000;       // Terrain Tiles "no data" is −32768 m
 
 const smoothstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
@@ -69,6 +70,9 @@ export class Terrain {
     // Far-background mode (v0.11.2): behind a stylized route, draw only beyond `inner` metres,
     // without trees, colour-matched to the route's palette. The stylized scenery covers the near ground.
     this.far = opts.far || null;
+    // Wireframe mode (new routes before scenery): no aerial photos, no trees or water; the real ground
+    // as a dark fill with contour and grid lines (scene.wire: colours and spacings)
+    this.wire = opts.wire || null;
     this.maxZ = this.far ? Math.min(MAX_Z, this.far.maxZ ?? 14) : MAX_Z;
     this.group = new THREE.Group();
     this.group.name = 'terrain';
@@ -99,7 +103,8 @@ export class Terrain {
       uFarTint: { value: new THREE.Color(this.far?.tint || '#808080') },
       uFarRock: { value: new THREE.Color(this.far?.rock || this.far?.tint || '#8a7a6a') },
     };
-    this.assets = makeScatterAssets();
+    this.assets = this.wire ? {} : makeScatterAssets();
+    if (this.wire) this.wireMaterial = makeWireMaterial(this.wire);
     // Eastern forests (Acadia) are mostly broadleaf; the western parks are conifer country.
     this.broadleafShare = proj.lon0 > -95 ? 0.6 : 0.06;
   }
@@ -184,8 +189,10 @@ export class Terrain {
   _unload(n) {
     if (n.meshes) {
       for (const m of n.meshes) { this.group.remove(m); m.geometry.dispose(); }
-      n.meshes[0].material.map?.dispose();
-      n.meshes[0].material.dispose();
+      if (n.meshes[0].material !== this.wireMaterial) {   // the wireframe material is shared by every tile
+        n.meshes[0].material.map?.dispose();
+        n.meshes[0].material.dispose();
+      }
       n.meshes = null;
     }
     if (n.trees) { this.group.remove(n.trees); n.trees.dispose(); n.trees = null; }
@@ -225,31 +232,49 @@ export class Terrain {
 
     const [dem, imgs] = await Promise.all([
       loadBitmap(DEM_URL(demZ, n.x, n.y)),
-      Promise.all(imgTiles.map(([x, y]) => loadBitmap(IMG_URL(imgZ, x, y)).catch(() => null))),
+      this.wire ? [] : Promise.all(imgTiles.map(([x, y]) => loadBitmap(IMG_URL(imgZ, x, y)).catch(() => null))),
     ]);
 
     // Elevation pixels
     const px = bitmapPixels(dem, 256, 256);
+    // Terrain Tiles has holes: whole tiles of "no data" (−32768 m), e.g. z14 near Valbonnais (Alpe d'Huez
+    // stage). Fill them from the coarser parent tile, which has the ground.
+    let parent = null;
+    for (let o = 0; o < px.length; o += 4) {
+      if (terrarium(px[o], px[o + 1], px[o + 2]) > NODATA_M) continue;
+      if (demZ > ROOT_Z) {
+        try { parent = bitmapPixels(await loadBitmap(DEM_URL(demZ - 1, n.x >> 1, n.y >> 1)), 256, 256); } catch { parent = null; }
+      }
+      break;
+    }
+    const ox = (n.x & 1) * 128, oy = (n.y & 1) * 128;
     const demAt = (u, v) => { // u,v in pixel space (0..256), bilinear
       const fx = Math.min(255, Math.max(0, u - 0.5)), fy = Math.min(255, Math.max(0, v - 0.5));
       const x0 = Math.floor(fx), y0 = Math.floor(fy), x1 = Math.min(255, x0 + 1), y1 = Math.min(255, y0 + 1);
       const ax = fx - x0, ay = fy - y0;
-      const h = (x, y) => { const o = (y * 256 + x) * 4; return terrarium(px[o], px[o + 1], px[o + 2]); };
+      const h = (x, y) => {
+        const o = (y * 256 + x) * 4, e = terrarium(px[o], px[o + 1], px[o + 2]);
+        if (e > NODATA_M || !parent) return e;
+        const q = (Math.min(255, oy + (y >> 1)) * 256 + Math.min(255, ox + (x >> 1))) * 4;
+        return terrarium(parent[q], parent[q + 1], parent[q + 2]);
+      };
       return h(x0, y0) * (1 - ax) * (1 - ay) + h(x1, y0) * ax * (1 - ay) + h(x0, y1) * (1 - ax) * ay + h(x1, y1) * ax * ay;
     };
 
-    // Imagery canvas
+    // Imagery canvas (none in wireframe mode)
     const ts = 256;
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = ts * f;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    ctx.fillStyle = '#6f7a58';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    let gotImagery = false;
-    for (let k = 0; k < imgTiles.length; k++) {
-      if (imgs[k]) { ctx.drawImage(imgs[k], imgTiles[k][2] * ts, imgTiles[k][3] * ts); gotImagery = true; }
+    const canvas = this.wire ? null : document.createElement('canvas');
+    let gotImagery = false, ctx = null;
+    if (canvas) {
+      canvas.width = canvas.height = ts * f;
+      ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.fillStyle = '#6f7a58';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      for (let k = 0; k < imgTiles.length; k++) {
+        if (imgs[k]) { ctx.drawImage(imgs[k], imgTiles[k][2] * ts, imgTiles[k][3] * ts); gotImagery = true; }
+      }
+      if (!gotImagery && this._imgErrors++ < 3) this.onError(new Error('Aerial imagery unavailable for some tiles'));
     }
-    if (!gotImagery && this._imgErrors++ < 3) this.onError(new Error('Aerial imagery unavailable for some tiles'));
 
     // Geometry
     const S = n.z >= 15 ? 128 : n.z >= 11 ? 64 : 48;
@@ -257,7 +282,7 @@ export class Terrain {
     const heights = new Float32Array(N * N);
     const raw = new Float32Array(N * N);
     const water = new Float32Array(N * N + 4 * N);
-    const W = canvas.width;
+    const W = canvas ? canvas.width : 0;
     const img = gotImagery && n.z >= 11 ? ctx.getImageData(0, 0, W, W).data : null;
     const positions = new Float32Array((N * N + 4 * N) * 3);
     const uvs = new Float32Array((N * N + 4 * N) * 2);
@@ -362,12 +387,15 @@ export class Terrain {
     });
     geo.computeBoundingSphere();
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = this.maxAniso;
-    tex.generateMipmaps = true;
-    tex.minFilter = THREE.LinearMipmapLinearFilter;
-    const mat = makeGroundMaterial(tex, this.uniforms);
+    let mat = this.wireMaterial;
+    if (!mat) {
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = this.maxAniso;
+      tex.generateMipmaps = true;
+      tex.minFilter = THREE.LinearMipmapLinearFilter;
+      mat = makeGroundMaterial(tex, this.uniforms);
+    }
     n.meshes = quad.map((ix) => {
       const g = new THREE.BufferGeometry();
       for (const name of ['position', 'uv', 'normal', 'water']) g.setAttribute(name, geo.attributes[name]);
@@ -513,6 +541,7 @@ export class Terrain {
     this.scene.remove(this.group);
     for (const a of Object.values(this.assets)) { a.geometry.dispose(); a.material.map?.dispose(); a.material.dispose(); }
     this.uniforms.uDetail.value.dispose();
+    this.wireMaterial?.dispose();
     this.queue = [];
   }
 }
@@ -537,6 +566,52 @@ function mulberry32(a) {
 }
 
 /** Ground material: aerial photo + colour grading + close-up detail + water. */
+/**
+ * Wireframe ground (scene.wire): a dark fill with contour lines (every `contourM`, brighter every
+ * `majorContourM`) and a map grid (every `gridM`) drawn in the shader, so the lines are the same on every
+ * tile and detail level. Lines thinner than a pixel fade out instead of shimmering. Fog still applies.
+ */
+function makeWireMaterial(wire) {
+  const mat = new THREE.MeshBasicMaterial({ color: wire.ground || '#111c30', side: THREE.DoubleSide, toneMapped: false });
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uLine = { value: new THREE.Color(wire.line || '#3d8bfd') };
+    shader.uniforms.uWire = { value: new THREE.Vector3(wire.contourM || 50, wire.majorContourM || 250, wire.gridM || 100) };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWirePos;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvWirePos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+        uniform vec3 uLine; uniform vec3 uWire; varying vec3 vWirePos;
+        // anti-aliased line every 1 unit of f, about px pixels wide; faded where lines crowd under ~3 px apart
+        float wireLine(float f, float px) {
+          float w = fwidth(f);
+          float d = abs(fract(f - 0.5) - 0.5) / max(w, 1e-5);
+          return (1.0 - smoothstep(px * 0.5, px * 0.5 + 1.0, d)) * (1.0 - smoothstep(0.12, 0.35, w));
+        }`)
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        {
+          // relief: light the fill from the north-west so the landform reads between the lines
+          vec3 nrm = normalize(cross(dFdx(vWirePos), dFdy(vWirePos)));
+          if (nrm.y < 0.0) nrm = -nrm;
+          float shade = 0.55 + 0.45 * max(dot(nrm, normalize(vec3(-0.5, 0.8, -0.35))), 0.0);
+          vec3 c = diffuseColor.rgb * shade;
+          // fine lines (a fifth of the contour interval, a quarter of the grid) show close up and
+          // fade out by themselves with distance, so the mesh stays even from the bike to the far ridges
+          float fine = wireLine(vWirePos.y / (uWire.x * 0.2), 1.0);
+          float minor = wireLine(vWirePos.y / uWire.x, 1.2);
+          float major = wireLine(vWirePos.y / uWire.y, 1.8);
+          float gridFine = max(wireLine(vWirePos.x / (uWire.z * 0.25), 1.0), wireLine(vWirePos.z / (uWire.z * 0.25), 1.0));
+          float grid = max(wireLine(vWirePos.x / uWire.z, 1.0), wireLine(vWirePos.z / uWire.z, 1.0));
+          c = mix(c, uLine * 0.45, gridFine * 0.3);
+          c = mix(c, uLine * 0.55, max(grid * 0.5, fine * 0.35));
+          c = mix(c, uLine * 0.85, minor * 0.8);
+          c = mix(c, uLine * 1.25, major);
+          diffuseColor.rgb = c;
+        }`);
+  };
+  return mat;
+}
+
 function makeGroundMaterial(tex, uniforms) {
   const mat = new THREE.MeshLambertMaterial({ map: tex, side: THREE.DoubleSide, toneMapped: false });
   mat.onBeforeCompile = (shader) => {

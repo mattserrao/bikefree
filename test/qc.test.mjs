@@ -63,7 +63,8 @@ test('every scenic route rides clean end to end: no discontinuities, no warnings
   for (const item of catalog) {
     const r = qcRoute({ id: item.id, item, gpxText: readFileSync(new URL(`../${item.file}`, import.meta.url), 'utf8'),
       scene: withCity(loadSceneSync(item.scene)) });
-    assert.ok(r.stylized && r.series.cs.length > 100, `${item.id} checked its scenery`);
+    // a wireframe placeholder (a new route before its scenery) has only the road and path checks
+    if (!item.wireframe) assert.ok(r.stylized && r.series.cs.length > 100, `${item.id} checked its scenery`);
     const problems = r.findings.filter((f) => f.severity !== 'info').map((f) => `${f.check} @ ${(f.at / 1000).toFixed(2)} km`);
     assert.deepEqual(problems, [], `${item.id}: run npm run qc for details`);
   }

@@ -5,11 +5,13 @@ Each route is routed on real roads with BRouter (OpenStreetMap data), then its
 elevation is re-sampled from the same AWS Terrain Tiles the 3D world uses, so the
 road sits exactly on the rendered terrain.
 
-Two kinds:
+Three kinds:
   loop          waypoints go round and return to the first one
   out-and-back  waypoints run A -> B; the GPX rides there and back (A -> B -> A),
                 so it still laps endlessly. The app draws the road once and the
                 rider U-turns into the other lane at B.
+  one-way       waypoints run A -> B and the GPX stops at B (catalog "oneWay": true), e.g. a
+                Tour stage to a summit finish. The app mirrors it into A -> B -> A when ridden.
 
     python3 tools/build_park_routes.py              # build all
     python3 tools/build_park_routes.py bigsur zion  # build some (index.json is merged)
@@ -28,7 +30,8 @@ DEM_Z = 14
 # Routing definitions share the same catalog as GPX imports and the app.
 with open(os.path.join(ROOT, 'routes', 'catalog.json')) as catalog_file:
     PARKS = {p['id']: {**p['routing'], 'name': p['name'], 'park': p['park'],
-                        'out_and_back': p.get('outAndBack', False)}
+                        'out_and_back': p.get('outAndBack', False),
+                        'one_way': p.get('oneWay', False)}
              for p in json.load(catalog_file) if p.get('routing')}
 
 
@@ -50,38 +53,44 @@ def haversine(a, b):
 _tiles = {}
 
 
-def dem_tile(x, y):
-    key = (x, y)
+def dem_tile(x, y, z=DEM_Z):
+    key = (z, x, y)
     if key not in _tiles:
         os.makedirs(CACHE, exist_ok=True)
-        path = os.path.join(CACHE, f'dem-{DEM_Z}-{x}-{y}.png')
+        path = os.path.join(CACHE, f'dem-{z}-{x}-{y}.png')
         if not os.path.exists(path):
-            data = http_get(f'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{DEM_Z}/{x}/{y}.png')
+            data = http_get(f'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png')
             open(path, 'wb').write(data)
         _tiles[key] = Image.open(path).convert('RGB').load()
     return _tiles[key]
 
 
-def elevation(lat, lon):
-    n = 2 ** DEM_Z
+NODATA_M = -1000   # Terrain Tiles has holes (whole z14 tiles of -32768 near Valbonnais, France)
+
+
+def elevation(lat, lon, z=DEM_Z):
+    n = 2 ** z
     fx = (lon + 180) / 360 * n * 256
     lr = math.radians(lat)
     fy = (1 - math.log(math.tan(lr) + 1 / math.cos(lr)) / math.pi) / 2 * n * 256
 
     def px(gx, gy):
         tx, ty = int(gx // 256), int(gy // 256)
-        r, g, b = dem_tile(tx, ty)[int(gx % 256), int(gy % 256)]
+        r, g, b = dem_tile(tx, ty, z)[int(gx % 256), int(gy % 256)]
         return r * 256 + g + b / 256 - 32768
 
     x0, y0 = math.floor(fx - 0.5), math.floor(fy - 0.5)
     ax, ay = fx - 0.5 - x0, fy - 0.5 - y0
-    return (px(x0, y0) * (1 - ax) * (1 - ay) + px(x0 + 1, y0) * ax * (1 - ay)
-            + px(x0, y0 + 1) * (1 - ax) * ay + px(x0 + 1, y0 + 1) * ax * ay)
+    h = [px(x0, y0), px(x0 + 1, y0), px(x0, y0 + 1), px(x0 + 1, y0 + 1)]
+    if min(h) < NODATA_M and z > 10:
+        return elevation(lat, lon, z - 1)   # a hole in this zoom: the coarser tile has the ground
+    return (h[0] * (1 - ax) * (1 - ay) + h[1] * ax * (1 - ay)
+            + h[2] * (1 - ax) * ay + h[3] * ax * ay)
 
 
 def route(key, park):
     os.makedirs(CACHE, exist_ok=True)
-    pts = park['waypoints'] + ([] if park.get('out_and_back') else [park['waypoints'][0]])
+    pts = park['waypoints'] + ([] if park.get('out_and_back') or park.get('one_way') else [park['waypoints'][0]])
     lonlats = '|'.join(f'{lon:.5f},{lat:.5f}' for lat, lon in pts)
     url = 'https://brouter.de/brouter?' + urllib.parse.urlencode(
         {'lonlats': lonlats, 'profile': park['profile'], 'alternativeidx': 0, 'format': 'geojson'}, safe='|,')
@@ -233,7 +242,28 @@ def _window(vals, w, fn):
     return [fn(vals[max(0, i - w):min(n, i + w + 1)]) for i in range(n)]
 
 
-def road_profile(eles, bridge_m=400, cliff_m=200, smooth_m=60, step=10):
+def limit_grade(eles, max_pct, span_m=50, step=10, rounds=600):
+    """Ease any stretch steeper than max_pct over span_m: a z14 elevation model on a road cut into a
+    mountainside (hairpins, gorge ledges) reads 20–25 % in places where the real road is 10–12 %.
+    Only the over-steep stretches are averaged, a little each round, so the rest of the profile
+    (and the summits) stay where the terrain puts them."""
+    e = list(eles)
+    k = max(1, span_m // step)
+    lim = max_pct / 100 * span_m
+    for _ in range(rounds):
+        hot = [i for i in range(len(e) - k) if abs(e[i + k] - e[i]) > lim]
+        if not hot:
+            break
+        touch = set()
+        for i in hot:
+            touch.update(range(max(1, i - k), min(len(e) - 1, i + 2 * k + 1)))
+        prev = e[:]
+        for j in touch:
+            e[j] = (prev[j - 1] + prev[j] + prev[j + 1]) / 3
+    return e
+
+
+def road_profile(eles, bridge_m=400, cliff_m=200, smooth_m=60, step=10, max_grade=None):
     """Turn raw terrain samples into a rideable road profile.
 
     A 30 m elevation model doesn't know about bridges or cliff-cut roads: at Bixby Bridge it
@@ -241,11 +271,16 @@ def road_profile(eles, bridge_m=400, cliff_m=200, smooth_m=60, step=10):
     An 'opening' (min then max) shaves spikes narrower than cliff_m; a 'closing' (max then min)
     fills dips narrower than bridge_m — exactly where bridges are. Then a light smoothing."""
     c = cliff_m // step // 2
-    e = _window(_window(eles, c, min), c, max)
     b = bridge_m // step // 2
+    # hold the ends level beyond the track, so the start of a climb isn't read as a dip to fill
+    # (nor a summit finish as a spike to shave)
+    pad = 2 * (b + c) + 1
+    eles = [eles[0]] * pad + list(eles) + [eles[-1]] * pad
+    e = _window(_window(eles, c, min), c, max)
     e = _window(_window(e, b, max), b, min)
     s = max(1, smooth_m // step // 2)
-    return _window(e, s, lambda v: sum(v) / len(v))
+    e = _window(e, s, lambda v: sum(v) / len(v))[pad:-pad]
+    return limit_grade(e, max_grade, step=step) if max_grade else e
 
 
 def write_gpx(key, park, pts, eles, oab):
@@ -326,9 +361,15 @@ def prune_existing(key):
 def build(key):
     park = PARKS[key]
     oab = park.get('out_and_back', False)
+    one = park.get('one_way', False)
     raw = route(key, park)
     pts = resample(raw, 10.0)
-    if oab:
+    if one:
+        pts, removed = prune_spurs_linear(pts)
+        pts, _ = fair_jogs(pts)
+        pts = resample(pts, 10.0)
+        print(f'{key}: pruned {removed/1000:.1f} km of spurs')
+    elif oab:
         pts, removed = prune_spurs_linear(pts)
         pts, _ = fair_jogs(pts)
         # a waypoint that snapped onto a parking loop at either end leaves a dead-end stub: trim back to the road
@@ -346,7 +387,9 @@ def build(key):
         print(f'{key}: pruned {removed/1000:.1f} km of spurs')
     total = sum(haversine(a, b) for a, b in zip(pts, pts[1:]))
     gap = haversine(pts[0], pts[-1])
-    if oab:
+    if one:
+        eles = road_profile([max(park.get('min_ele', -1e9), elevation(lat, lon)) for lat, lon in pts], **park.get('profile_opts', {}))
+    elif oab:
         # road profile on the outbound leg, mirrored for the way back (both legs identical)
         half = (len(pts) + 1) // 2
         out = road_profile([max(park.get('min_ele', -1e9), elevation(lat, lon)) for lat, lon in pts[:half]], **park.get('profile_opts', {}))
@@ -377,7 +420,7 @@ def build(key):
                     if sep > 400 and haversine(pts[i], pts[j]) < 12:
                         spurs += 1
     lo, hi = park['expect_km']
-    ok = lo <= (one_way if oab else total) / 1000 <= hi and gap < 150 and spurs == 0
+    ok = lo <= (one_way if oab else total) / 1000 <= hi and (one or gap < 150) and spurs == 0
     if oab:
         print(f'{key}: out and back, {one_way/1000:.1f} km ({one_way/1609.344:.1f} mi) each way')
     print(f'{key:11s} {total/1000:6.1f} km ({total/1609.344:5.1f} mi)  climb {ascent:6.0f} m ({ascent*3.28084:5.0f} ft)  '
@@ -390,6 +433,8 @@ def build(key):
            'climbM': round(ascent), 'file': f'routes/parks/{key}.gpx', 'ok': ok}
     if oab:
         out['outAndBack'] = True
+    if one:
+        out['oneWay'] = True
     return out
 
 
