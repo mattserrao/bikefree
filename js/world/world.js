@@ -1,5 +1,5 @@
 // The 3D ride view: real terrain + aerial imagery, the road, a pedalling rider, sky and cameras.
-import { cutRouteRibbon, routeJunctionOverlay, junctionPlan } from './junction-mesh.js';   // [junctions]
+import { cutRouteRibbon, junctionPlan } from './junction-mesh.js';   // [junctions] (the road's overlay: city.js)
 import * as THREE from '../../vendor/three.module.min.js';
 import { makeProjection, makeRouteIndex } from './geo.js';
 import { Terrain } from './terrain.js';
@@ -122,10 +122,9 @@ export class World {
     this.shoulder = makeRibbon(route, this.index, ROAD_WIDTH + (city ? 4 : this.stylized ? 1.6 : 3.4), city ? .09 : 0.05, makeGravelTexture(this.stylized, city), 3, { polygonOffsetFactor: city ? -1.8 : -1, polygonOffsetUnits: city ? -1.8 : -1 });
     this.scene.add(this.shoulder);
     const junctions = city ? junctionPlan(this.terrain.landscape, this.index, route) : null;   // [junctions]
-    if (junctions) cutRouteRibbon(this.shoulder, junctions, route.dist);   // [junctions] no shoulder inside a junction
+    if (junctions) cutRouteRibbon(this.shoulder, junctions, denseRoad(route, this.index)[0].dist);   // [junctions] no shoulder inside a junction (its stations: the drawn curve's)
     this.road = makeRoad(route, this.index);
     this.scene.add(this.road);
-    if (junctions) this.scene.add(routeJunctionOverlay(route, this.index, junctions));   // [junctions] plain asphalt + crosswalks on the road
     // weather: clear / marine layer / clouds / rain (stylized scenery)
     if (this.stylized) this.weather = new Weather(this, this.terrain.uniforms);
     // hero scenery: HDR render with soft bloom, a gentle grade and vignette (off on Light detail)

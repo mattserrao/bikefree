@@ -2,7 +2,8 @@
 // route's road inside a junction go into the city's street builders (no extra draw calls), the corner sidewalks
 // into the sidewalk builders, and the paint — crosswalks, stop lines, curb edges — into one merged mesh per chunk.
 import * as THREE from '../../vendor/three.module.min.js';
-import { streetPieces, streetPoint, LIFT_BLEND_M } from './junctions.js';
+import { streetPieces, LIFT_BLEND_M, junctionPaint, routeLine } from './junctions.js';
+import { ROAD_WIDTH } from './pose.js';
 import { cityStreets } from './city-landscape.js';
 
 /** A city landscape's junction plan (planned with its streets on first use; null when the scene doesn't opt in). */
@@ -12,16 +13,15 @@ export function junctionPlan(landscape, index, route) {
   return landscape._junctions || null;
 }
 
-const PLAIN_U = .125;         // a column of the street texture with no lane paint (city.js: the left half is the lanes)
 const PAINT_U = .78;          // …and the white block in its right half: paint costs no extra draw call
 const TOP_SLOT = 8;           // above every street ribbon's height slot (city.js)
-const ROAD_LIFT = .12, ERASE = .012, PAINT_SLOT = 9;   // (city.js draws slot 9 a hair nearer the camera)
+const ROAD_LIFT = .12, PAINT_SLOT = 9;   // (city.js draws slot 9 a hair nearer the camera)
 
 const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
 /**
  * A street's drawn pieces with their ribbon heights blended to the junction surface's lift at each cut, so the
- * ribbon (drawn at `lift` above its points) meets the junction surface exactly. → [[{x, y, z}…]…]
+ * ribbon (drawn at `lift` above its points) meets the junction surface exactly. → [[{x, y, z, tx?, tz?}…]…]
  */
 export function drawnPieces(st, k, plan, lift) {
   const pieces = streetPieces(st, plan.cuts.get(k));
@@ -34,66 +34,51 @@ export function drawnPieces(st, k, plan, lift) {
     return pc.map((p, i) => {
       const fromCut = Math.min(pc[0].cut ? along[i] : Infinity, pc[pc.length - 1].cut ? d - along[i] : Infinity);
       const w = fromCut === Infinity ? 1 : smooth(fromCut / LIFT_BLEND_M);
-      return { x: p.x, z: p.z, y: p.y + (JL - lift) * (1 - w) };
+      return { x: p.x, z: p.z, y: p.y + (JL - lift) * (1 - w), tx: p.tx, tz: p.tz };
     });
   });
 }
 
+// [road meets] junction surfaces and the route's overlay take the plain asphalt of the street texture (u .05–.22: no
+// lane lines), mapped in world metres like the ribbons, so the grain and the shade match the streets they join
+const PLAIN = (x, jx) => .135 + .085 * Math.max(-1, Math.min(1, (x - jx) / 20));
+const upNormal = (a, b, c) => {   // the face normal of a triangle (pointing up)
+  const ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z, vx = c.x - a.x, vy = c.y - a.y, vz = c.z - a.z;
+  let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; if (ny < 0) { nx = -nx; ny = -ny; nz = -nz; }
+  const l = Math.hypot(nx, ny, nz) || 1; return [nx / l, ny / l, nz / l];
+};
+
 /**
  * Build everything for a plan. `city`: the CityScene; `get(map, x, z)`: its per-chunk builder lookup; `roads`,
- * `walks`: its street and sidewalk builder maps; `liftOf(k)`: a street's ribbon lift. Returns the paint meshes.
+ * `walks`: its street and sidewalk builder maps; `liftOf(k)`: a street's ribbon lift. Junction surfaces, paint and
+ * corner sidewalks join the street and sidewalk chunks (no extra draw calls); the route's overlay is one mesh.
  */
 export function buildJunctionMeshes(city, plan, { get, roads, walks, liftOf }) {
-  const L = city.landscape, streets = city.streets, O = plan.options, JL = O.lift;
-  const route = city.route, index = city.index, end = route.turnIdx || route.dist.length - 1;
-  // paint goes into the street builders too (white block of the street texture, the topmost height slot)
+  const streets = city.streets, O = plan.options;
+  const route = city.route, index = city.index;
   const paintAt = (x, z) => get(roads, x, z).set({ aSlot: [PAINT_SLOT] });
-  const flatQuad = (B, p, u = PAINT_U) => {   // p: 4 corners {x, y, z} (any order round the quad: the face points up)
-    const k = p.map((q) => B.vertex(q.x, q.y, q.z, 0, 1, 0, u, .5));
-    // wind so the face points up
+  const flatQuad = (B, p, u = PAINT_U) => {   // p: 4 corners {x, y, z} round the quad; the face points up
+    const n = upNormal(p[0], p[1], p[2]);
+    const k = p.map((q) => B.vertex(q.x, q.y, q.z, n[0], n[1], n[2], u, .5));
     const ax = p[1].x - p[0].x, az = p[1].z - p[0].z, bx = p[2].x - p[0].x, bz = p[2].z - p[0].z;
     if (az * bx - ax * bz > 0) { B.tri(k[0], k[1], k[2]); B.tri(k[0], k[2], k[3]); } else { B.tri(k[0], k[2], k[1]); B.tri(k[0], k[3], k[2]); }
   };
-  // the route's road: centre, right vector and surface height at distance s (as world.js draws it)
-  const roadAt = (s) => {
-    let j = Math.max(0, Math.min(end - 1, Math.floor(s / 10)));
-    while (j > 0 && route.dist[j] > s) j--; while (j < end - 1 && route.dist[j + 1] < s) j++;
-    const f = Math.max(0, Math.min(1, (s - route.dist[j]) / ((route.dist[j + 1] - route.dist[j]) || 1)));
-    const dir = (i) => { const a = Math.max(0, i - 1), b = Math.min(end, i + 1); const dx = index.xs[b] - index.xs[a], dz = index.zs[b] - index.zs[a], l = Math.hypot(dx, dz) || 1; return { x: -dz / l, z: dx / l }; };
-    const r0 = dir(j), r1 = dir(j + 1);
-    return { x: index.xs[j] + (index.xs[j + 1] - index.xs[j]) * f, z: index.zs[j] + (index.zs[j + 1] - index.zs[j]) * f,
-      y: route.ele[j] + (route.ele[j + 1] - route.ele[j]) * f + ROAD_LIFT, rx: r0.x + (r1.x - r0.x) * f, rz: r0.z + (r1.z - r0.z) * f, j, f };
-  };
   let surfaces = 0, paintTris = 0;
-  // junction polygons on a 32 m grid: paint never lands inside another junction
-  const jgrid = new Map();
-  for (const jn of plan.list) {
-    const key = `${Math.floor(jn.x / 32)},${Math.floor(jn.z / 32)}`; if (!jgrid.has(key)) jgrid.set(key, []); jgrid.get(key).push(jn);
-  }
-  const inPoly = (ring, x, z) => { let r = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], c = ring[j]; if ((a.z > z) !== (c.z > z) && x < ((c.x - a.x) * (z - a.z)) / (c.z - a.z) + a.x) r = !r; } return r; };
-  const inOther = (self, p, pad = 1.5) => {
-    for (let gx = Math.floor(p.x / 32) - 1; gx <= Math.floor(p.x / 32) + 1; gx++) for (let gz = Math.floor(p.z / 32) - 1; gz <= Math.floor(p.z / 32) + 1; gz++) {
-      for (const o of jgrid.get(`${gx},${gz}`) || []) {
-        if (o === self) continue;
-        if (inPoly(o.poly, p.x, p.z)) return true;
-        for (const q of o.poly) if (Math.hypot(q.x - p.x, q.z - p.z) < pad) return true;
-      }
-    }
-    return false;
-  };
-  const spanNear = (self, s0, s1) => plan.spans.some((sp) => sp.jn !== self.id && sp.s0 - 2 < Math.max(s0, s1) && sp.s1 + 2 > Math.min(s0, s1));
-
   // each junction's geometry joins the chunk of one of its streets (no chunks of its own: no extra draw calls)
   const home = (jn) => { const a = jn.arms.find((o) => !o.route) || jn.extra[0]; const p = a ? streets[a.k].pts[0] : jn; return p; };
   for (const jn of plan.list) {
     const H = home(jn);
-    // 1. the surface: a fan from the centre (the polygon is star-shaped about it)
+    // 1. the surface: a fan from the centre (the polygon is star-shaped about it), each vertex at its drawn height
     const B = get(roads, H.x, H.z).set({ aSlot: [TOP_SLOT] });
     const poly = jn.poly.filter((p, i) => { const q = jn.poly[(i + 1) % jn.poly.length]; return Math.hypot(p.x - q.x, p.z - q.z) > .02; });
     const star = poly.every((a, i) => { const b = poly[(i + 1) % poly.length]; return (a.x - jn.x) * (b.z - jn.z) - (a.z - jn.z) * (b.x - jn.x) > 1e-6; });
-    const ring = poly.map((p) => B.vertex(p.x, jn.J(p.x, p.z) + jn.lift, p.z, 0, 1, 0, PLAIN_U, 0));
+    const C = { x: jn.x, y: jn.cy, z: jn.z };
+    // one normal for the whole surface (its plane: the route's grade, or the street plane), so it shades evenly
+    const g = .5, nJ = upNormal({ x: jn.x - g, y: jn.J(jn.x - g, jn.z), z: jn.z }, { x: jn.x + g, y: jn.J(jn.x + g, jn.z), z: jn.z }, { x: jn.x, y: jn.J(jn.x, jn.z + g), z: jn.z + g });
+    const vert = (p) => B.vertex(p.x, p.y, p.z, nJ[0], nJ[1], nJ[2], PLAIN(p.x, jn.x), p.z / 24);
+    const ring = poly.map(vert);
     if (star) {
-      const c = B.vertex(jn.x, jn.J(jn.x, jn.z) + jn.lift, jn.z, 0, 1, 0, PLAIN_U, 0);
+      const c = vert(C);
       for (let i = 0; i < ring.length; i++) B.tri(c, ring[(i + 1) % ring.length], ring[i]);
     } else {   // (where the centre sits off to one side: ear clipping)
       let tris = [];
@@ -104,7 +89,7 @@ export function buildJunctionMeshes(city, plan, { get, roads, walks, liftOf }) {
       }
     }
     surfaces++;
-    // 2. corner sidewalks round each curb return (outward from the junction), with a pale curb edge
+    // 2. corner sidewalks round each curb return (outward from the junction)
     for (const cb of jn.curbs) {
       const W = get(walks, H.x, H.z), n = cb.pts.length;
       const outer = [];
@@ -115,48 +100,26 @@ export function buildJunctionMeshes(city, plan, { get, roads, walks, liftOf }) {
         const w = cb.wA + (cb.wB - cb.wA) * (i / (n - 1));
         outer.push({ x: p.x + nx * w, z: p.z + nz * w });
       }
-      const y = (p) => jn.J(p.x, p.z);
+      // (at the curb's ends, the street's own sidewalk height: its line + .06, like city.js draws it)
+      const y = (p, i) => (p.y != null ? p.y - jn.lift : jn.J(p.x, p.z)) + O.sidewalkLift + (i == null ? 0 : 0);
+      const sy = cb.pts.map((p) => y(p));
       for (let i = 1; i < n; i++) {
         const a = cb.pts[i - 1], b = cb.pts[i];
-        const sl = O.sidewalkLift;
-        flatQuad(W, [{ ...a, y: y(a) + sl }, { ...b, y: y(b) + sl }, { ...outer[i], y: y(outer[i]) + sl }, { ...outer[i - 1], y: y(outer[i - 1]) + sl }], 0);
-      }
-    }
-    // 3. paint at each arm's mouth: a crosswalk across it, a stop line across the lanes coming in
-    const busy = jn.arms.length >= 3;
-    for (const A of jn.arms) {
-      if (A.route || !busy || !(A.cls >= 2 && A.cls <= 6)) continue;   // (the route's own arms: routeJunctionOverlay)
-      let height;
-      if (A.route) {
-        const s0 = jn.s + A.dir * A.t;
-        height = (d) => roadAt(jn.s + A.dir * d).y + .014;
-        if (s0 < 5 || s0 > route.dist[end] - 5) continue;
-      } else {
-        const st = streets[A.k], lift = liftOf(A.k);
-        height = (d) => { const p = streetPoint(st, A.a0 + A.dir * d); return p.y + JL + (lift - JL) * smooth((d - A.t) / LIFT_BLEND_M) + .014; };
-      }
-      const P = paintAt(H.x, H.z);
-      const at = (d, side) => {   // a point on the arm d from its node, `side` metres to the left
-        if (A.route) { const r = roadAt(jn.s + A.dir * d), sg = A.dir; return { x: r.x + r.rx * side * sg, z: r.z + r.rz * side * sg, y: r.y + .014 }; }
-        const p = streetPoint(streets[A.k], A.a0 + A.dir * d), nx = -p.dz * A.dir, nz = p.dx * A.dir;
-        return { x: p.x + nx * side, z: p.z + nz * side, y: height(d) };
-      };
-      const d0 = A.t + .5, d1 = d0 + O.crosswalkW, h = A.h - .5;
-      // not where the block is too short for it, nor into the next junction
-      if (A.route ? spanNear(jn, jn.s + A.dir * d0, jn.s + A.dir * (d1 + 2)) : (A.shared ? d1 + 1 > A.avail * .5 : d1 + 1 > A.avail)) continue;
-      if ([at(d0, -h), at(d0, h), at(d1, -h), at(d1, h)].some((p) => inOther(jn, p))) continue;
-      const bars = Math.max(2, Math.floor((2 * h) / 1.1));
-      for (let q = 0; q < bars; q++) {
-        const s0 = -h + (2 * h) * (q + .25) / bars, s1 = -h + (2 * h) * (q + .75) / bars;
-        flatQuad(P, [at(d0, s0), at(d0, s1), at(d1, s1), at(d1, s0)]); paintTris += 2;
-      }
-      if (!A.route) {
-        const inbound = A.oneway === 0 ? [-A.h + .3, -.15] : A.oneway * A.dir < 0 ? [-A.h + .3, A.h - .3] : null;
-        if (inbound) { const ds = d1 + 1.1; flatQuad(P, [at(ds, inbound[0]), at(ds, inbound[1]), at(ds + .45, inbound[1]), at(ds + .45, inbound[0])]); paintTris += 2; }
+        flatQuad(W, [{ ...a, y: sy[i - 1] }, { ...b, y: sy[i] }, { ...outer[i], y: sy[i] }, { ...outer[i - 1], y: sy[i - 1] }], 0);
       }
     }
   }
-  return { surfaces, paintTris };
+  // 3. paint (js/world/junctions.js junctionPaint: the same quads the course QC checks)
+  const paint = junctionPaint(plan, streets, { route, index, routeDist: city.landscape.routeDist, roadWidth: ROAD_WIDTH, liftOf, routeKindAt: city.landscape.routeKindAt });
+  for (const q of paint.quads) {
+    if (q.kind === 'route-crosswalk') continue;   // (on the route's overlay below)
+    const jn = plan.list[q.jn], H = home(jn);
+    flatQuad(paintAt(H.x, H.z), q.pts); paintTris += 2;
+  }
+  // 4. the route's road inside each junction it passes through: plain asphalt (no lane lines), and its crosswalks
+  const overlay = routeJunctionOverlay(route, index, plan, paint, city.streetMaterial);
+  if (overlay) city.group.add(overlay);
+  return { surfaces, paintTris, paintLeftOut: paint.bad.length };
 }
 
 /**
@@ -198,52 +161,51 @@ export function cutRouteRibbon(mesh, plan, dist) {
 
 /**
  * The route's own road inside and at the mouths of junctions: one mesh over the road (one draw call for the whole
- * route, like the road itself) with plain asphalt through each junction (no edge or centre lines across it) and a
- * crosswalk across the road at each mouth where a street with sidewalks comes in. Drawn with a stronger depth
- * offset than the road so it always lies on top. `plan`: the city's junctions (null: nothing).
+ * route, like the road itself) with the streets' plain asphalt through each junction (no edge or centre lines across
+ * it; the same texture, shade and normals as the junction surface around it) and the route's crosswalks. Drawn with
+ * a stronger depth offset than the road so it always lies on top. Follows the road's curve (routeLine).
  */
-export function routeJunctionOverlay(route, index, plan) {
-  if (!plan?.spans.length) return null;
-  const end = route.turnIdx || route.dist.length - 1, total = route.dist[end];
-  const pos = [], col = [], idx = [];
-  const ASPHALT = new THREE.Color('#53595d'), PAINT = new THREE.Color('#e6e2d4');
-  const dir = (i) => { const a = Math.max(0, i - 1), b = Math.min(end, i + 1); const dx = index.xs[b] - index.xs[a], dz = index.zs[b] - index.zs[a], l = Math.hypot(dx, dz) || 1; return [-dz / l, dx / l]; };
-  const roadAt = (s) => {   // centre, right vector and surface height at s (exactly as world.js builds the road)
-    let j = Math.max(0, Math.min(end - 1, Math.floor(s / 10)));
-    while (j > 0 && route.dist[j] > s) j--; while (j < end - 1 && route.dist[j + 1] < s) j++;
-    const f = Math.max(0, Math.min(1, (s - route.dist[j]) / ((route.dist[j + 1] - route.dist[j]) || 1))), r0 = dir(j), r1 = dir(j + 1);
-    return { x: index.xs[j] + (index.xs[j + 1] - index.xs[j]) * f, z: index.zs[j] + (index.zs[j + 1] - index.zs[j]) * f,
-      y: route.ele[j] + (route.ele[j + 1] - route.ele[j]) * f + ROAD_LIFT, rx: r0[0] + (r1[0] - r0[0]) * f, rz: r0[1] + (r1[1] - r0[1]) * f };
+export function routeJunctionOverlay(route, index, plan, paint, streetMaterial) {
+  if (!plan?.spans.length || !streetMaterial) return null;
+  const RL = routeLine(route, index), D = RL.route.dist, total = RL.length;
+  const pos = [], nor = [], uv = [], idx = [];
+  const v = (x, y, z, n, u, w) => { pos.push(x, y, z); nor.push(...n); uv.push(u, w); return pos.length / 3 - 1; };
+  const P = (i) => ({ x: pos[i * 3], z: pos[i * 3 + 2] });
+  const quad = (k) => {   // 4 vertex indices round a quad: wound so the face points up
+    const p = k.map(P), ax = p[1].x - p[0].x, az = p[1].z - p[0].z, bx = p[2].x - p[0].x, bz = p[2].z - p[0].z;
+    if (az * bx - ax * bz > 0) idx.push(k[0], k[1], k[2], k[0], k[2], k[3]); else idx.push(k[0], k[2], k[1], k[0], k[3], k[2]);
   };
-  const v = (x, y, z, c) => { pos.push(x, y, z); col.push(c.r, c.g, c.b); return pos.length / 3 - 1; };
-  // a strip between distances s0 and s1 (stations at the road's own samples), from `a` to `b` metres across
-  const strip = (s0, s1, a, b, lift, c) => {
-    const st = [s0]; for (let i = 0; i <= end; i++) if (route.dist[i] > s0 + .05 && route.dist[i] < s1 - .05) st.push(route.dist[i]); st.push(s1);
+  const normalAt = (s) => { const a = RL.at(s - 1.5), b = RL.at(s + 1.5), g = (b.y - a.y) / 3; const l = Math.hypot(1, g); return [-a.tx * g / l, 1 / l, -a.tz * g / l]; };
+  const half = ROAD_WIDTH / 2 + .02;
+  for (const sp of plan.spans) {
+    const s0 = Math.max(0, sp.s0), s1 = Math.min(total, sp.s1);
+    if (s1 - s0 < 1) continue;
+    const st = [s0]; for (let i = 0; i <= RL.n; i++) if (D[i] > s0 + .05 && D[i] < s1 - .05) st.push(D[i]); st.push(s1);
     let prev = null;
     for (const s of st) {
-      const r = roadAt(s), L = v(r.x + r.rx * a, r.y + lift, r.z + r.rz * a, c), R = v(r.x + r.rx * b, r.y + lift, r.z + r.rz * b, c);
-      if (prev) idx.push(prev[0], prev[1], L, prev[1], R, L);
+      const r = RL.at(s), y = r.y + ROAD_LIFT + .004, n = normalAt(s);
+      const L = v(r.x - r.rx * half, y, r.z - r.rz * half, n, .05, s / 24), R = v(r.x + r.rx * half, y, r.z + r.rz * half, n, .22, s / 24);
+      if (prev) quad([prev[0], prev[1], R, L]);
       prev = [L, R];
     }
-  };
-  const spans = plan.spans.map((sp) => ({ ...sp, s0: Math.max(0, sp.s0), s1: Math.min(total, sp.s1) })).filter((sp) => sp.s1 - sp.s0 > 1);
-  for (const sp of spans) strip(sp.s0, sp.s1, -3.52, 3.52, .004, ASPHALT);
-  const W = plan.options.crosswalkW;
-  for (const sp of spans) {
-    const jn = plan.list[sp.jn];
-    if (jn.arms.length < 3 || !jn.arms.some((o) => !o.route && o.cls >= 2 && o.cls <= 6)) continue;
-    for (const [d0, sgn] of [[sp.s0 - .5, -1], [sp.s1 + .5, 1]]) {
-      const a0 = sgn > 0 ? d0 : d0 - W, a1 = sgn > 0 ? d0 + W : d0;
-      if (a0 < 5 || a1 > total - 5 || spans.some((o) => o !== sp && o.s0 - 2 < a1 && o.s1 + 2 > a0)) continue;   // no room before the next junction
-      for (let q = 0; q < 6; q++) strip(a0, a1, -3 + 6 * (q + .2) / 6, -3 + 6 * (q + .8) / 6, .008, PAINT);
-    }
   }
+  for (const q of paint?.quads || []) {
+    if (q.kind !== 'route-crosswalk') continue;
+    const s = RL.project(q.pts[0].x, q.pts[0].z, plan.list[q.jn].s, 60)?.s ?? 0, n = normalAt(s);
+    quad(q.pts.map((p) => v(p.x, p.y, p.z, n, PAINT_U, .5)));
+  }
+  if (!idx.length) return null;
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('normal', new THREE.Float32BufferAttribute(pos.map((_, i) => (i % 3 === 1 ? 1 : 0)), 3));
-  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('aSlot', new THREE.Float32BufferAttribute(new Float32Array(pos.length / 3).fill(TOP_SLOT), 1));
   g.setIndex(idx);
-  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .93, metalness: .015, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }));
-  m.name = 'Route road junctions';   // (a road surface for the clipping QC) m.frustumCulled = false; m.renderOrder = 3; m.receiveShadow = true;
+  const mat = streetMaterial.clone();
+  mat.polygonOffset = true; mat.polygonOffsetFactor = -3; mat.polygonOffsetUnits = -3;
+  mat.onBeforeCompile = streetMaterial.onBeforeCompile; mat.customProgramCacheKey = streetMaterial.customProgramCacheKey;
+  const m = new THREE.Mesh(g, mat);
+  m.name = 'Route road junctions';   // (a road surface for the clipping QC)
+  m.frustumCulled = false; m.renderOrder = 3; m.receiveShadow = true;
   return m;
 }

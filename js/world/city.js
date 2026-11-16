@@ -223,7 +223,7 @@ export class CityScene {
     // Streets: asphalt with lane paint; sidewalks; paths.
     const c = document.createElement('canvas'); c.width = 128; c.height = 256;   // [junctions] right half: road paint (junction-mesh.js)
     const ctx = c.getContext('2d');
-    ctx.fillStyle = '#505457'; ctx.fillRect(0, 0, 128, 256);
+    ctx.fillStyle = this.landscape.junctions ? '#555c60' : '#505457'; ctx.fillRect(0, 0, 128, 256);   // [junctions] the route's road's asphalt
     for (let k = 0; k < 5000; k++) { const g = 70 + Math.random() * 26; ctx.fillStyle = `rgba(${g},${g + 2},${g + 4},.45)`; ctx.fillRect(Math.random() * 128, Math.random() * 256, 1, 1); }
     ctx.fillStyle = '#e4e1d6'; ctx.fillRect(76, 0, 44, 256);   // [junctions] crosswalk and stop-line white (u ≈ .6–.94)
     ctx.fillStyle = '#d9d6c8'; ctx.fillRect(3, 0, 1.5, 256); ctx.fillRect(59.5, 0, 1.5, 256);
@@ -679,7 +679,7 @@ export class CityScene {
       const p0 = st.pts[0], lift = .1 + slots[k] * .02;
       if (st.cls === 8) { ribbon(get(paths, p0.x, p0.z), st.pts, st.width, lift, 8); return; }
       for (const pc of plan ? drawnPieces(st, k, plan, lift) : [st.pts]) {   // [junctions] trimmed to each junction's edge
-        ribbon(get(roads, p0.x, p0.z).set({ aSlot: [slots[k]] }), pc, st.width, lift, 24, [0, .5]);   // [junctions] (left half of the texture)
+        ribbon(get(roads, p0.x, p0.z).set({ aSlot: [slots[k]] }), pc, st.width, lift, 24, [0, .5], !!plan);   // [junctions] (left half of the texture; normals lean with the grade, like the road's)
         if (!st.bridge && st.cls >= 2 && st.cls <= 6) ribbon(get(walks, p0.x, p0.z), pc, st.width + 5, .06, 8);
       }
       // lamps every ~34 m, alternating sides
@@ -872,6 +872,7 @@ export class CityScene {
    * than 0.8 m apart in height are crossing, not joining.
    */
   _levelJunctions() {
+    if (this.landscape._junctions) return;   // [junctions] the junction plan owns street heights where streets meet
     const L = this.landscape, reach = 6;
     // each junction (a cluster of street points within `reach` of another street's carriageway, at nearly the
     // same height) becomes a level plateau at the highest of its heights
