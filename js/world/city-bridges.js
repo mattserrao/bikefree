@@ -245,7 +245,7 @@ function wallQuad(M, p0, p1, y0, y1, out, push = 0) {
   if (n.x * out.x + n.z * out.z >= 0) M.quad(A, B, C, D); else M.quad(B, A, D, C);
 }
 
-/** One bay of a stadium's outer wall (a → b, facing `out`), `h` tall. */
+/** [s1-stadium] One bay of a stadium's outer wall (a → b, facing `out`), `h` tall. */
 function facade(M, a, b, out, ground, h, wall, i) {
   const lerp = (t) => ({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t });
   const base = wall.clone().multiplyScalar(.72), steel = new THREE.Color('#4a5560'), shade = new THREE.Color('#2e2a26'), cornice = wall.clone().lerp(new THREE.Color('#f1e6cf'), .45);
@@ -264,7 +264,7 @@ function facade(M, a, b, out, ground, h, wall, i) {
     if (mid < top - 3) { M.color(steel.clone().multiplyScalar(.6)); wallQuad(M, lerp(.12), lerp(.88), ground + mid + 1.2, ground + top - 1.4, out, .12); }
   }
   // a pilaster at the bay's start
-  if (i % 1 === 0 && mid - lo > 5) {
+  if (mid - lo > 5) {
     const t = .045, p0 = lerp(0), p1 = lerp(t * 2);
     M.color(cornice.clone().multiplyScalar(.92)); wallQuad(M, p0, p1, ground + lo, ground + mid, out, .3);
   }
@@ -325,7 +325,7 @@ export function buildStadiums(city) {
       }
       // the outer wall, facing out (the ring's winding varies with the data): a stone plinth, bays of tall
       // openings between pilasters, a darker steel upper level and a pale cornice, instead of one blank face
-      facade(M, a, b, { x: mx / ml, z: mz / ml }, ground, h, wall, i);
+      facade(M, a, b, { x: mx / ml, z: mz / ml }, ground, h, wall, i);   // [s1-stadium]
       M.quad(V(ia.x, ground, ia.z), V(ia.x, ground + 2.5, ia.z), V(ib.x, ground + 2.5, ib.z), V(ib.x, ground, ib.z));
       if (i % Math.max(1, Math.floor(ring.length / 6)) === 0 && open < .6) {
         M.color('#55595d'); M.cylinder(a.x, ground + h, a.z, .5, 16, 6, .4);
