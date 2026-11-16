@@ -38,3 +38,22 @@ Collected from each agent's final report as it comes in. Suggestions are added o
 - **Not handed over yet:** General Robinson and Federal St are still bare (kit not on there); the class-1 street mapped under the trail at 1.50–1.52 km splits the promenade; the Fort Duquesne ramps at about 1.0 km.
 - **Dynamic flag:** anything new that moves must set `userData.dynamic`, or it loses its shadow once the bake is in.
 - **Polish:** tree shadows are soft (2.5 m texels); the time-of-day menu still lists Morning and Daylight for Pittsburgh (both show golden); the fountain basin and the Blockhouse are unchanged.
+
+## Integrated branch check (coordinator, 16 Nov, after all four merges)
+- `npm test` 106/106 · course QC `--strict` all 12 routes 0 fail 0 warn · road meets 138 of 1,370 sites with issues (baseline 816 of 2,077).
+- Clipping `--no-life`: 0 fail, 85 warn (baseline 91): ground-over-street 58 → 44, post-in-solid 18 → 9, **z-fight 11 → 22**, scenery-on-street 0 → 6, floating 3, structure-through-building 1.
+- Draw calls at the 18 spots (Balanced, every chunk built for the bake): **8.8 km 695, 17.3 km 683** over the 600 budget; 650 m 544, 11.3 km 543, 2.5 km 530; the rest 215–485. Triangles max 1.86 M (8.8 km). Pictures: `integrated/before-after-1…3.jpg`.
+- New: at 3.05 km, the PPG Place spires near the camera render as large black triangles (in the baseline too).
+
+## Suggested plan
+| # | Item | How to tackle it |
+| --- | --- | --- |
+| 1 | **Budget** (8.8, 17.3, 2.0 km over 600 draw calls) | `npm run snap -- --breakdown` at those spots; merge city chunks beyond ~1 km into one far-city mesh per sector (windows as texture, no rooftops), and fold per-chunk lamps/trees/walks into fewer meshes. Must land before the kit goes route-wide. |
+| 2 | **Road meets left** (138 sites; Mon Wharf + Smithfield ramp sawtooth, hole at 6.02 km, lips at 2.51/2.81 km, deck end 16.41 km, interchange overlaps) | Resume the intersections agent. Do S4's builder items first (deck clearance over the route, deck ends at their ground street's height, route height at 4.07 km), then the sites. When under ~20 near the route, make `road-meet` a warning. Re-render the contact sheet. |
+| 3 | **Clipping warnings** (z-fight doubled, 44 ground-over-street, 6 scenery-on-street) | Triage each finding from the report; make the ground-over-street check sample trimmed ribbon widths, not full widths. Target ≤ baseline per category. |
+| 4 | **Kit route-wide + junction corners** | Wire S3's `addCorner` API into the junction planner; turn the kit on for General Robinson/Federal (masonry), downtown (tower/masonry), the West End (rowhouse) and the Science Center lot; fold the sidewalk cross-section (`street-grade.js`) into road alignment. After #1. |
+| 5 | **Baked lighting on the M4** (first-bake hitch 3–9 s, re-bakes ~100 ms) | Compile the bake shaders ahead (`compileAsync`) and bake behind the loader; time-slice re-bakes or bake ahead along the route. Needs your Mac session with the **I** overlay (also measures High, never measured). |
+| 6 | **Alignment leftovers** (crest +3.1 m, jagged road at 12.07 km, curve Pittsburgh-only) | Narrow the app's ±60 m elevation smoothing for city routes; finer far ground near steep streets; trial the curved centre line on Route 28 and Going-to-the-Sun. |
+| 7 | **Polish** | 4 floating lamps; PPG spire shading at 3.05 km; the street under the trail at 1.50 km; repeated shop labels; blockier parked cars; tree-shadow softness; Pittsburgh's time menu (drop Morning/Daylight); fountain basin and Blockhouse. |
+
+**Order:** wave 2 = #1, #2 and #3 in parallel (three agents, they touch different code); then #4; then the Mac session (#5); then #6–#7 and the PR.
