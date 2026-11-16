@@ -370,6 +370,28 @@ Goal: give Pittsburgh the Big Sur treatment. The full plan is in the Project doc
 - [ ] **P7 · Traffic and life** (route traffic that overtakes and waits, buses, rowers; C5, C7)
 - [ ] **P8 · Check and ship** (both QCs strict, snapshots against the baseline, the Mac check, move to In Progress, PR)
 
+### Going-to-the-Sun hero map *(test branch `goingtothesun-test`, from `main` after PR #17)*
+Goal: give Going-to-the-Sun Road the Big Sur / Pittsburgh hero treatment, over the whole road. Review with pictures: `docs/goingtothesun/REVIEW.md`. Listed under **Rough Drafts** until P8.
+
+**Decisions (15 Nov 2026)**
+- Route: the full road, **Apgar → St. Mary** and back (about 80 km each way; was Apgar → Logan Pass)
+- Real landform: bundled real elevation (10 m near the road, 40 m to 9 km), real Lake McDonald and St. Mary Lake
+- Default: **midsummer, golden hour** (snowbanks and waterfalls at the pass, beargrass and wildflowers); fall as an option
+- Weather presets: **valley fog** on Lake McDonald, **clouds on the peaks** (with shadows), **rain and wet road**, **wildfire smoke haze**
+- Landmarks, hand-built: Garden Wall, Weeping Wall and Triple Arches; West Side Tunnel (window galleries), East Side Tunnel and the Loop; Logan Pass (visitor center, snowfields) and the Jackson Glacier overlook; Lake McDonald Lodge, Sun Point, Rising Sun and Wild Goose Island. The 1930s stone guardwalls along the whole road
+- Traffic: light (about 4 a minute), generic vehicles, like Big Sur
+- Wildlife: mountain goats and bighorn sheep; marmots, pikas and ground squirrels; a distant grizzly or black bear; ravens, a golden eagle, ducks on the lakes
+
+**Phases**
+- [ ] **P1 · Road** — GPX Apgar → St. Mary on the real road; catalog length; course QC with no GPX findings
+- [ ] **P2 · Baseline** — snapshots at fixed spots, `docs/goingtothesun/REVIEW.md`, second pass
+- [ ] **P3 · Real landform and lakes** — terrain grid, both lakes, creeks, bridges
+- [ ] **P4 · Atmosphere and weather** — golden-hour default, post, distance fog layers, the four weather presets
+- [ ] **P5 · Landmarks** — guardwalls, Garden Wall/Weeping Wall/Triple Arches, tunnels, the Loop, Logan Pass, Jackson Glacier, lodges, Wild Goose Island
+- [ ] **P6 · Vegetation** — cedar–hemlock west side, subalpine fir and meadows, east-side aspen and grassland
+- [ ] **P7 · Traffic and wildlife**
+- [ ] **P8 · Check and ship** — `qc --strict`, clipping QC, snapshots against the baseline, the Mac check with the overlay, move to In Progress, PR
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)
