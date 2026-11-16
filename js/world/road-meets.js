@@ -303,7 +303,8 @@ export function clearOverpasses(streets, ctx, options = {}) {
       if (!q || q.d > RW / 2 + st.width / 2 + 3) continue;
       const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)], t = RL.at(q.s), dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1;
       const road = q.y + ROAD_LIFT, under = road + O.clearM - p.y;
-      if (p.y > road - O.below && under > 0) { cand.push([i, under]); if (Math.abs((dx * t.tx + dz * t.tz) / l) <= O.cos) crosses = true; }
+      // ([w2-meets] a deck point pinned just under the road — it reached the road's level — goes over it too)
+      if ((p.y > road - O.below || (p.pin && p.y > road - 1)) && under > 0) { cand.push([i, under]); if (Math.abs((dx * t.tx + dz * t.tz) / l) <= O.cos) crosses = true; }
     }
     if (!crosses) return;   // (a deck alongside the road is the road's other half: alignAlongRoute)
     for (const [i, under] of cand) need[i] = under;
@@ -943,6 +944,8 @@ export function roadMeets(landscape, index, route, options = {}) {
         const ux = (b.x - a.x) / (len || 1), uz = (b.z - a.z) / (len || 1);
         for (let q = 0; q < n; q++) {
           const f = (q + .5) / n, x = a.x + (b.x - a.x) * f, z = a.z + (b.z - a.z) * f, top = a.top + (b.top - a.top) * f, m = len / n;
+          // (a stretch trimmed away to nothing isn't drawn: nothing to meet, clip or overlap)
+          if ((a.tl || 0) + ((b.tl || 0) - (a.tl || 0)) * f + (a.tr || 0) + ((b.tr || 0) - (a.tr || 0)) * f > st.width - .3) { for (const kk of [`t${k}`, `r${k}`]) if (runs.has(kk)) flush(kk); continue; }
           const r = roadAt(x, z);
           // clearance tube: the ribbon's middle or either edge
           let tube = false;

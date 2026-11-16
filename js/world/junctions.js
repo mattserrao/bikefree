@@ -136,7 +136,9 @@ export function planJunctions(streets, ctx, options = {}) {
       const q = RL.project(P[i].x, P[i].z, route.dist[r.i], 30), t = RL.at(q.s);
       const dx = P[i + 1].x - P[i - 1].x, dz = P[i + 1].z - P[i - 1].z, l = Math.hypot(dx, dz) || 1;
       if (Math.abs((dx * t.tx + dz * t.tz) / l) > .82) continue;   // running along the road, not across it
-      if (st.nodes.some((nd) => Math.hypot(nd.x - P[i].x, nd.z - P[i].z) < 10)) continue;   // a node close by will do
+      // a node close by will do — marked, so it becomes this crossing's junction even where it's a plain bend ([w2-meets])
+      const close = st.nodes.find((nd) => Math.hypot(nd.x - P[i].x, nd.z - P[i].z) < 10);
+      if (close) { virtual.add(`${close.x.toFixed(2)},${close.z.toFixed(2)}`); continue; }
       // the point nearest the road's line in this stretch
       let best = i;
       for (let j = i + 1; j < P.length - 1; j++) { const rj = routeDist(P[j].x, P[j].z); if (!rj || rj.d > RW / 2) break; if (rj.d < routeDist(P[best].x, P[best].z).d) best = j; }
