@@ -594,3 +594,5 @@ export async function shot(f, w = 640, h = 384) {
 }
 
 window.qc = { load, run, shot, LIMITS };
+// internals, for poking at one finding from a devtools console or a driver script
+window.qcDebug = () => ({ world, route, city, landscape, entries, grid, near, surfaceUnder, routeS, riderPose, THREE, ensureBVH, F });
