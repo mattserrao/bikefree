@@ -192,7 +192,18 @@ export class World {
   setCamera(mode) { this.cameraMode = mode; this._camInit = false; }
 
   /** clear | marine | clouds | rain (eases in over a few seconds). */
-  setWeather(key, immediate = false) { this.weatherKey = key; this.weather?.set(key, immediate); }
+  /** The weather presets this route offers (a scene can limit and rename them: Pittsburgh's "River fog"). */
+  weatherOptions() {
+    if (!this.weather) return [];
+    const S = this.route.scene?.weather || {}, keys = S.presets || ['clear', 'marine', 'clouds', 'rain'];
+    const names = { clear: 'Clear', marine: 'Marine layer', clouds: 'Clouds', rain: 'Rain', ...(S.labels || {}) };
+    return keys.map((key) => ({ key, label: names[key] || key }));
+  }
+  setWeather(key, immediate = false) {
+    const options = this.weatherOptions();
+    if (options.length && !options.some((o) => o.key === key)) key = options[0].key;   // not offered here: the route's first
+    this.weatherKey = key; this.weather?.set(key, immediate);
+  }
 
   setQuality(key) {
     if (!this.stylized) return;
@@ -211,6 +222,7 @@ export class World {
   }
 
   setTimeOfDay(key) {
+    if (key === 'auto' || !key) key = this.route.scene?.timeOfDay || 'midday';   // "Route's default"
     let t = TIME_PRESETS[key] || TIME_PRESETS.midday;
     if (this.stylized && key === 'night') t = { ...t, sunI: .55, hemiI: .42 };
     else if (this.stylized) t = { ...t, sunI: key === 'golden' ? 2.5 : 2.1, hemiI: key === 'golden' ? .95 : 1.1,

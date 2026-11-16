@@ -503,7 +503,22 @@
   ],
   "preview": {
     "positionM": 13100,
-    "camera": "drone"
+    "camera": "drone",
+    "time": "golden"
   },
-  "realHorizon": false
+  "realHorizon": false,
+  "timeOfDay": "golden",
+  "weather": {
+    "presets": [
+      "clear",
+      "marine",
+      "clouds"
+    ],
+    "labels": {
+      "marine": "River fog"
+    },
+    "bankTop": 30,
+    "bank": 0.45
+  },
+  "post": true
 }

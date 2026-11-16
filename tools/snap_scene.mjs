@@ -13,14 +13,14 @@
 import { createServer } from 'node:http';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { extname, join, dirname, normalize } from 'node:path';
+import { extname, join, dirname, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 const opt = (name, dflt) => { const i = args.indexOf(name); if (i < 0) return dflt; const v = args[i + 1]; args.splice(i, 2); return v; };
 const flag = (name) => { const i = args.indexOf(name); if (i < 0) return false; args.splice(i, 1); return true; };
-const out = opt('--out', 'tools/snapshots');
+const out = opt('--out', 'tools/snapshots');   // relative to the repo, or an absolute path
 const quality = opt('--quality', 'balanced');
 const [width, height] = opt('--size', '1280x720').split('x').map(Number);
 const software = flag('--software');
@@ -60,7 +60,7 @@ page.setDefaultTimeout(0);
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-await mkdir(join(ROOT, out), { recursive: true });
+await mkdir(resolve(ROOT, out), { recursive: true });
 const rows = [];
 for (const shot of shots) {
   const t0 = Date.now(); errors.length = 0;
@@ -79,11 +79,11 @@ for (const shot of shots) {
     return { url: w.renderer.domElement.toDataURL('image/jpeg', .9), calls: info.calls, triangles: info.triangles };
   });
   const file = join(out, `${shot.name}.jpg`);
-  await writeFile(join(ROOT, file), Buffer.from(r.url.split(',')[1], 'base64'));
+  await writeFile(resolve(ROOT, file), Buffer.from(r.url.split(',')[1], 'base64'));
   rows.push({ shot: shot.spec, file, calls: r.calls, triangles: r.triangles, seconds: Math.round((Date.now() - t0) / 1000), errors: [...errors] });
   console.log(`${errors.length ? 'ERR ' : 'ok  '} ${shot.spec.padEnd(34)} ${String(r.calls).padStart(5)} calls ${(r.triangles / 1e6).toFixed(2).padStart(6)} M tris  → ${file}`);
   for (const e of errors) console.log(`       ${e.slice(0, 200)}`);
 }
-await writeFile(join(ROOT, out, 'snapshots.json'), JSON.stringify({ quality, size: `${width}x${height}`, software, rows }, null, 2));
+await writeFile(resolve(ROOT, out, 'snapshots.json'), JSON.stringify({ quality, size: `${width}x${height}`, software, rows }, null, 2));
 await browser.close(); server.close();
 process.exitCode = rows.some((r) => r.errors.length) ? 1 : 0;

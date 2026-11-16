@@ -30,6 +30,9 @@ export class StylizedTerrain {
     this.quality = COASTAL_QUALITY[opts.quality] || COASTAL_QUALITY.balanced;
     this.qualityKey = COASTAL_QUALITY[opts.quality] ? opts.quality : 'balanced';
     this.landscape = landscapeBuilder(this.config)(this.config, proj, routeIndex, opts.route);
+    // fog (the weather's fog bank) lies on this level: the sea, or a city's rivers
+    this.fogBase = this.landscape.fogBase ?? 0;
+    if (this.landscape.fogField) this._makeRiverMask();
     this.inlandAt = this.landscape.inlandAt || ((x, z) => x - this.landscape.coastX(z));
     this.lookoutFootprints = (this.config.lookouts || []).map((l) => ({ ...l,
       ...coastalRoadFrame(this.route, routeIndex, l.atM, (l.side === 'inland' ? -1 : 1) * (3.5 + l.widthM / 2)) }));
@@ -171,6 +174,16 @@ export class StylizedTerrain {
       this.clouds.add(sprite);
     }
     this.group.add(this.clouds);
+  }
+
+  /** A city's rivers as the fog bank's "shore": distance to the water (R) and ground height (G). */
+  _makeRiverMask() {
+    const R = this.landscape.fogField(), data = new Uint16Array(R.nx * R.nz * 2);
+    for (let k = 0; k < R.field.length; k++) { data[k * 2] = THREE.DataUtils.toHalfFloat(R.field[k]); data[k * 2 + 1] = THREE.DataUtils.toHalfFloat(R.ground[k]); }
+    const texture = new THREE.DataTexture(data, R.nx, R.nz, THREE.RGFormat, THREE.HalfFloatType);
+    texture.magFilter = texture.minFilter = THREE.LinearFilter; texture.needsUpdate = true;
+    this.shoreTexture = texture;
+    this.shoreBox = new THREE.Vector4(R.x0, R.z0, (R.nx - 1) * R.dx, (R.nz - 1) * R.dz);
   }
 
   /** Real coast: the shoreline distance (R) and ground height (G) as a texture for the water shader. */

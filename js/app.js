@@ -484,11 +484,15 @@ async function openWorld(route) {
   log('3d', `3D view: ${route.name}`);
 }
 function cycleWeather() {
-  const order = ['clear', 'marine', 'clouds', 'rain'];
-  settings.worldWeather = order[(order.indexOf(settings.worldWeather) + 1) % order.length];
+  // The route decides which presets it offers and what they're called (Pittsburgh: Clear, River fog, Clouds).
+  const options = world?.weatherOptions?.().length ? world.weatherOptions()
+    : ['clear', 'marine', 'clouds', 'rain'].map((key) => ({ key, label: key }));
+  const now = options.findIndex((o) => o.key === (world?.weatherKey ?? settings.worldWeather));
+  const next = options[(now + 1) % options.length];
+  settings.worldWeather = next.key;
   saveSettings(settings);
-  world?.setWeather(settings.worldWeather);
-  toast(`Weather: ${({ clear: 'Clear', marine: 'Marine layer', clouds: 'Clouds', rain: 'Rain' })[settings.worldWeather]}`);
+  world?.setWeather(next.key);
+  toast(`Weather: ${next.label}`);
 }
 function cycleCamera() {
   const order = ['chase', 'eye', 'side', 'drone'];

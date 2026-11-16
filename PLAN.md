@@ -345,6 +345,30 @@ Goal: make the M4 Air checks measurable before the Pittsburgh hero work.
 - [x] Offline manifest regenerated (it was stale on `main` after the Big Sur merge)
 - [ ] **Mac test session** with the overlay, one checklist for every open on-bike item: trainer + handlebars with demo off (v0.8), virtual shifting and the FTP test (v0.11.3); one stylized route at Light/Balanced/High (v0.11.1–2); Route 28 on Balanced (tile edges, lake and horizon seams); Big Sur (marine layer, rain, traffic, post); Pittsburgh at Light/Balanced/High, day and night (v0.12–v0.12.1); Demo Hills (v0.11.4); one route whose GPX changed in v0.11.6. Paste the summary lines into this section
 
+### Pittsburgh hero map *(test branch `pittsburgh-test`, from v0.12.2)*
+Goal: give Pittsburgh the Big Sur treatment. The full plan is in the Project doc *open-items-and-pittsburgh-hero-plan*; the review with pictures is in `docs/pittsburgh/REVIEW.md`.
+
+**Decisions (15 Nov 2026)**
+- Default time: golden hour. Weather: river fog and clouds only (no rain or snow). Season: summer by default, fall as an option
+- Route traffic: light, like Big Sur (about 4 a minute)
+- Landmarks: the downtown towers, the Point (fountain, Blockhouse, confluence), the inclines and Grandview overlooks, and the stadiums as shapes only, with no logos
+- The PR #14 leftovers fold into the phases: C2 → P3; C1, C4, C8 → P4; C3, C6 → P5; C5, C7 → P7
+
+**Phases**
+- [x] **P1 · Baseline** — 13 snapshots at golden hour, midday and night (`docs/pittsburgh/REVIEW.md`). 315–578 draw calls and 0.8–1.6 M triangles on Balanced; the hillside at 11.5 km is closest to the 600-call budget
+- [ ] **P2 · Atmosphere and post**
+  - [x] *Route's default* time of day (new default in Settings); Pittsburgh opens at golden hour, other routes at midday; a saved *Midday* moves to *Route's default* once
+  - [x] River fog: the fog bank uses a distance-to-river field and the river level, about 30 m deep and thinner than Big Sur's, so the bridges and the city rise out of it. **W** and the scene only offer *Clear*, *River fog* and *Clouds*
+  - [x] Post-processing on (bloom, grade, vignette; off on Light)
+  - [ ] Per-scene distance fog so the skyline separates from the hills; night river reflections; Big Sur's moon path and headlight (D3)
+  - [ ] Measure on the Mac with the **I** overlay (post + fog on Balanced and High)
+- [ ] **P3 · Real landform** (10 m near the route, 40 m to 9 km; the bluff; C2 overpasses)
+- [ ] **P4 · Signature landmarks** and the Grandview postcard view (C1, C4, C8)
+- [ ] **P5 · Rivers** (current, confluence, glint, banks; C3, C6)
+- [ ] **P6 · Vegetation** (wooded slopes, park lawns, street trees)
+- [ ] **P7 · Traffic and life** (route traffic that overtakes and waits, buses, rowers; C5, C7)
+- [ ] **P8 · Check and ship** (both QCs strict, snapshots against the baseline, the Mac check, move to In Progress, PR)
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

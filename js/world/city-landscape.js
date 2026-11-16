@@ -210,6 +210,48 @@ export function makeCityLandscape(config, proj, index, route) {
     landmarks.push({ name: firstBridge.name, x: index.xs[i], y: route.ele[i], z: index.zs[i], s, fx: dx / len, fz: dz / len, slope: 0, asset: null });
   }
 
+  // Distance to the rivers (negative over the water) on the 24 m height grid, plus the ground height there:
+  // what the weather's fog bank needs to lie on the rivers and reach up the valleys (the "river fog").
+  let riverField = null;
+  const rivers = () => {
+    if (riverField) return riverField;
+    const nx = D.nx, nz = D.ny, dx = (D.x1 - D.x0) / (nx - 1), dz = (D.z1 - D.z0) / (nz - 1), cell = (dx + dz) / 2;
+    const wet = new Uint8Array(nx * nz), far = 1e9;
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) wet[j * nx + i] = waterAt(D.x0 + i * dx, D.z0 + j * dz) > .5 ? 1 : 0;
+    // two-pass chamfer distance, once to the water (for land) and once to the land (for water)
+    const chamfer = (src) => {
+      const d = new Float32Array(nx * nz);
+      for (let k = 0; k < d.length; k++) d[k] = src[k] ? 0 : far;
+      const a = cell, b = cell * Math.SQRT2;
+      for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+        const k = j * nx + i; let v = d[k];
+        if (i > 0) v = Math.min(v, d[k - 1] + a);
+        if (j > 0) { v = Math.min(v, d[k - nx] + a); if (i > 0) v = Math.min(v, d[k - nx - 1] + b); if (i < nx - 1) v = Math.min(v, d[k - nx + 1] + b); }
+        d[k] = v;
+      }
+      for (let j = nz - 1; j >= 0; j--) for (let i = nx - 1; i >= 0; i--) {
+        const k = j * nx + i; let v = d[k];
+        if (i < nx - 1) v = Math.min(v, d[k + 1] + a);
+        if (j < nz - 1) { v = Math.min(v, d[k + nx] + a); if (i < nx - 1) v = Math.min(v, d[k + nx + 1] + b); if (i > 0) v = Math.min(v, d[k + nx - 1] + b); }
+        d[k] = v;
+      }
+      return d;
+    };
+    const toWater = chamfer(wet), toLand = chamfer(wet.map((w) => 1 - w));
+    const field = new Float32Array(nx * nz), ground = new Float32Array(nx * nz);
+    for (let k = 0; k < field.length; k++) {
+      field[k] = wet[k] ? -toLand[k] : toWater[k];
+      ground[k] = baseHeight(D.x0 + (k % nx) * dx, D.z0 + Math.floor(k / nx) * dz);
+    }
+    return (riverField = { nx, nz, x0: D.x0, z0: D.z0, dx, dz, field, ground });
+  };
+  const riverDistance = (x, z) => {
+    const R = rivers(), u = (x - R.x0) / R.dx, v = (z - R.z0) / R.dz;
+    if (u < 0 || v < 0 || u > R.nx - 1 || v > R.nz - 1) return 1e4;
+    const i = Math.min(R.nx - 2, Math.floor(u)), j = Math.min(R.nz - 2, Math.floor(v)), a = u - i, b = v - j, F = R.field, n = R.nx;
+    return (F[j * n + i] * (1 - a) + F[j * n + i + 1] * a) * (1 - b) + (F[(j + 1) * n + i] * (1 - a) + F[(j + 1) * n + i + 1] * a) * b;
+  };
+
   const L = {
     kind: 'city', city: true, data, decoded: D, level, hasOcean: false, coastSide: 1,
     coast: [{ x: -1e5, z: 0 }, { x: -1e5, z: 1 }], coastX: () => -1e5, inlandAt: () => 1e4,
@@ -220,6 +262,8 @@ export function makeCityLandscape(config, proj, index, route) {
     /** Trees and shrubs from the shared kit grow only in parks, woods and the hills beyond. */
     canPlant: (x, z) => { const c = landCell(x, z); return c === LAND.woods || c === LAND.outside || (c === LAND.grass && ((x * 13 + z * 7) & 3) === 0); },
     routeDist, streetAt, streetsNear,
+    /** For the weather: fog lies on the rivers (at the water level) and reaches inland up the valleys. */
+    fogBase: level, fogField: rivers, fogInlandAt: riverDistance,
     /**
      * The space the rider and the chase camera move through: over the route's road (and a little past its
      * edges), from just above the road surface to 4.1 m up. Nothing else may be drawn there.
