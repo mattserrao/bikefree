@@ -414,6 +414,28 @@ Goal: give Going-to-the-Sun Road the Big Sur / Pittsburgh hero treatment, over t
 - [x] New collapsible **Ideas** section at the bottom of the route list (`routes/ideas.json`): top 10 with notes, then 11–25
 - [ ] Check on the Mac
 
+### Route 28 lean cartoon *(test branch `route28-cartoon`, from `main`)*
+Goal: cut graphical demand as far as possible while improving the feel. Style guide, Route 28 measurements and plan: the "bikefree style guide: lean cartoon (Route 28 pass)" doc (project doc `claude/lean-cartoon-style.md`). Baseline: about 430 draw calls on Balanced (ground 87, far trees 69, lakes 67, mid trees 54); only 11–18% of the trees built are ever seen.
+
+**Decisions (16 Nov 2026)**
+- One pre-rendered time of day per route (two may come later, not now)
+- Side-by-side look test first (gentle vs bold) before rebuilding anything
+- Outlines: a full-screen edge pass (the one post pass allowed)
+- Rider: cartoon treatment, but with more triangles and better texturing than first proposed
+- Chase camera only: drone, scenic, side and eye retired
+
+**Passes**
+- [x] Chase camera only: app, settings, HUD button, <kbd>C</kbd>, preview and snapshot tool
+- [x] Look test: `?look=gentle|bold` in the preview, `:gentle` / `:bold` in `npm run snap` (`js/world/look.js`: toon bands from direct sun with cool shadows, colour grade, smooth crowns, flat road, depth-edge outlines). New `afternoon` time (sun 24°) as a candidate signature time. Results: [docs/route28/look-test/](docs/route28/look-test/README.md)
+- [ ] Choose the look and Route 28's signature time from the contact sheet
+- [ ] 1. Tools and baseline: `perf:calls` (exact draw calls) and `qc:visibility` (ID-buffer test)
+- [ ] 3. Quick wins: 2.4 km lake chunks with mist in the lake shader, one cloud mesh, far plane at the fog, single-sided ground, rider blob shadow
+- [ ] 4. Trees in one `BatchedMesh`
+- [ ] 5. Visibility bake: build only trees seen from the chase camera
+- [ ] 6. Fixed light: toon material, pre-rendered tile shadows, baked AO, no shadow map
+- [ ] 7. Cartoon kit, towns merged, sign atlas, ground rings, cartoon rider
+- [ ] 8. Check and ship: under 80 calls on Balanced, M4 Air ride
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

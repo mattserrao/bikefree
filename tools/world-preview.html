@@ -12,7 +12,7 @@
 <main id="view" aria-label="Interactive 3D cycling scene"></main>
 <header class="panel"><div class="row"><div class="brand">bike<span>free</span></div><div class="spacer"></div><span class="eyebrow" id="version"></span></div><h1 id="name">Loading scenery…</h1><select id="routePicker" aria-label="Scenic route" style="width:100%;margin:8px 0"></select><p>Style C · detailed regional scenery<br>Ride the real route through an authored landscape.</p></header>
 <div id="status" class="panel" role="status" aria-live="polite">Preparing scenery…</div><div id="error" hidden role="alert"></div>
-<footer class="panel"><div class="row"><button class="primary" id="play">Ride</button><button data-pos="15230">Overlook</button><button data-pos="15420">Bridge approach</button><button data-pos="15669">Bixby Bridge</button><button data-pos="17700">Coastline</button><div class="spacer"></div><select id="time" aria-label="Time of day"><option value="midday">Daylight</option><option value="golden">Golden hour</option><option value="morning">Morning</option><option value="night">Night</option></select><select id="weather" aria-label="Weather"><option value="clear">Clear</option><option value="marine">Marine layer</option><option value="clouds">Clouds</option><option value="rain">Rain</option><option value="smoke">Wildfire smoke</option></select><select id="quality" aria-label="Graphics quality"><option value="low">Light detail</option><option value="balanced" selected>Balanced detail</option><option value="high">High detail</option></select></div><input id="seek" type="range" min="0" max="1" value="0" step="10" aria-label="Position along the route"><div class="caption"><span id="distance">0.0 km</span><span>Visual prototype · no trainer required</span><span id="total"></span></div></footer>
+<footer class="panel"><div class="row"><button class="primary" id="play">Ride</button><button data-pos="15230">Overlook</button><button data-pos="15420">Bridge approach</button><button data-pos="15669">Bixby Bridge</button><button data-pos="17700">Coastline</button><div class="spacer"></div><select id="look" aria-label="Look"><option value="">Current look</option><option value="gentle">Cartoon · gentle</option><option value="bold">Cartoon · bold</option></select><select id="time" aria-label="Time of day"><option value="midday">Daylight</option><option value="afternoon">Late afternoon</option><option value="golden">Golden hour</option><option value="morning">Morning</option><option value="night">Night</option></select><select id="weather" aria-label="Weather"><option value="clear">Clear</option><option value="marine">Marine layer</option><option value="clouds">Clouds</option><option value="rain">Rain</option><option value="smoke">Wildfire smoke</option></select><select id="quality" aria-label="Graphics quality"><option value="low">Light detail</option><option value="balanced" selected>Balanced detail</option><option value="high">High detail</option></select></div><input id="seek" type="range" min="0" max="1" value="0" step="10" aria-label="Position along the route"><div class="caption"><span id="distance">0.0 km</span><span>Visual prototype · no trainer required</span><span id="total"></span></div></footer>
 <script type="module">
 import { World } from '../js/world/world.js';
 import { buildCatalogRoute, loadRouteScene } from '../js/routes.js';
@@ -38,7 +38,7 @@ try {
  const route = buildCatalogRoute(await response.text(), item);
  if (q.get('style') !== 'legacy') await loadRouteScene(route);
  if (route.scene && q.get('season')) route.scene.season = q.get('season');
- const world = new World($('view'), route, { quality: q.get('quality') || 'balanced', log: (...args) => console.log(...args) });
+ const world = new World($('view'), route, { quality: q.get('quality') || 'balanced', look: q.get('look'), log: (...args) => console.log(...args) });
  let pos = Math.max(0, Math.min(route.total, Number(q.get('pos') ?? route.scene?.preview?.positionM ?? 0) || 0));
  let speed = Math.max(0, Math.min(45, Number(q.get('speed')) || 0));
  let last = performance.now();
@@ -65,6 +65,8 @@ try {
    b.addEventListener('click', () => seek(b.dataset.pos));
  });
  $('time').addEventListener('change', (e) => world.setTimeOfDay(e.target.value));
+ $('look').value = q.get('look') || '';
+ $('look').addEventListener('change', (e) => { const url = new URL(location.href); if (e.target.value) url.searchParams.set('look', e.target.value); else url.searchParams.delete('look'); url.searchParams.set('pos', Math.round(pos)); location.assign(url.href); });
  $('quality').addEventListener('change', (e) => world.setQuality(e.target.value));
  $('play').addEventListener('click', () => { speed = speed ? 0 : 10; last = performance.now(); $('play').textContent = speed ? 'Pause' : 'Ride'; });
  world.start();

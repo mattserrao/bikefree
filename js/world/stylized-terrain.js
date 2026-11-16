@@ -33,6 +33,7 @@ export class StylizedTerrain {
     this.index = routeIndex;
     this.quality = COASTAL_QUALITY[opts.quality] || COASTAL_QUALITY.balanced;
     this.qualityKey = COASTAL_QUALITY[opts.quality] ? opts.quality : 'balanced';
+    this.lookKey = opts.look || null;   // cartoon look test: the kit is built with smooth shading
     this.landscape = landscapeBuilder(this.config)(this.config, proj, routeIndex, opts.route);
     // fog (the weather's fog bank) lies on this level: the sea, or a city's rivers
     this.fogBase = this.landscape.fogBase ?? 0;
@@ -111,7 +112,7 @@ export class StylizedTerrain {
   }
 
   _addAdirondackKit(kit, make = makeAdirondackKit, category = ADIRONDACK_CATEGORY) {
-    const geos = make({ fall: this.config.season === 'fall' });
+    const geos = make({ fall: this.config.season === 'fall', smooth: !!this.lookKey });
     const near = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 });
     const far = new THREE.MeshLambertMaterial({ vertexColors: true });
     const soft = decorateSceneryMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .98, side: THREE.DoubleSide }), 'groundcover', this.uniforms);

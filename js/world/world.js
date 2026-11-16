@@ -4,6 +4,7 @@ import { makeProjection, makeRouteIndex } from './geo.js';
 import { Terrain } from './terrain.js';
 import { Weather } from './weather.js';
 import { PostFX } from './post.js';
+import { Look, LOOKS } from './look.js';
 import { StylizedTerrain, COASTAL_QUALITY } from './stylized-terrain.js';
 import { riderPose, routePoint, ROAD_WIDTH } from './pose.js';
 import { loadRider } from './rider.js';
@@ -13,6 +14,8 @@ import { wrapDist } from '../gpx.js';
 export const TIME_PRESETS = {
   morning: { label: 'Morning', elev: 14, az: 105, top: '#6f9fd8', horizon: '#f2d6b8', hemiSky: '#f6eedf', hemiGround: '#9a917e', sun: '#ffe2b8', sunI: 0.45, hemiI: 1.45, exposure: 1.0 },
   midday: { label: 'Midday', elev: 58, az: 180, top: '#3f7fd0', horizon: '#c6dbef', hemiSky: '#ffffff', hemiGround: '#a39b88', sun: '#ffffff', sunI: 0.55, hemiI: 1.35, exposure: 1.0 },
+  // lean cartoon pass: a candidate signature time for Route 28 (sun high enough to light the road between the trees)
+  afternoon: { label: 'Late afternoon', elev: 24, az: 248, top: '#5e93cf', horizon: '#ecd3b0', hemiSky: '#fbeedd', hemiGround: '#9a9179', sun: '#ffdcaa', sunI: 0.5, hemiI: 1.4, exposure: 1.02 },
   golden: { label: 'Golden hour', elev: 7, az: 258, top: '#5c78b4', horizon: '#f7b77d', hemiSky: '#ffe6c8', hemiGround: '#9a8670', sun: '#ffc27a', sunI: 0.45, hemiI: 1.4, exposure: 1.05 },
   // v0.12: moonlight, a deep blue sky with stars, and (in a city) the lights come on
   night: { label: 'Night', elev: 40, az: 150, top: '#0a1226', horizon: '#2a3150', hemiSky: '#7d8fbf', hemiGround: '#2b2b35', sun: '#b4c6ea', sunI: 0.3, hemiI: 0.5, exposure: 1.2, night: true },
@@ -56,6 +59,8 @@ export class World {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     container.prepend(this.renderer.domElement);
     this.renderer.domElement.className = 'world-canvas';
+    // cartoon look test (?look=gentle|bold): toon bands, grade, smooth crowns, flat road, ink outlines
+    this.look = this.stylized && Object.hasOwn(LOOKS, opts.look) ? new Look(this, opts.look) : null;
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(62, 1, 0.3, 150000);
@@ -89,6 +94,7 @@ export class World {
       renderer: this.renderer,
       farInner: FAR_INNER, farBand: FAR_BAND,
       onError: (err) => this.log('3d', `Tile load problem: ${err.message}`, 'debug'),
+      look: this.look?.key,
     });
     // v0.11.2 blend: real terrain and aerial photos beyond ~1.5 km behind the stylized foreground,
     // colour-matched to the route's palette. Needs internet; until its base tiles arrive (or offline)
@@ -272,6 +278,7 @@ export class World {
     for (const tu of [this.terrain?.uniforms, this.farTerrain?.uniforms]) {
       if (tu?.uSunDir) { tu.uSunDir.value.copy(dir); tu.uSkyTop.value.set(t.top); tu.uSkyHorizon.value.set(t.horizon); }
     }
+    this.look?.applyLight();
   }
 
   start() {
@@ -378,6 +385,7 @@ export class World {
   }
 
   _render() {
+    if (this.look) { this.look.sweep(); this.look.render(this.renderer, this.scene, this.camera); return; }
     if (this.post && this.qualityKey !== 'low') {
       const k = this.timeKey, o = this._weatherLight?.overcast || 0;
       this.post.render(this.scene, this.camera, {
@@ -408,6 +416,7 @@ export class World {
     this._ro.disconnect();
     this.weather?.dispose();
     this.post?.dispose();
+    this.look?.dispose();
     this.terrain.dispose();
     this.farTerrain?.dispose();
     this.sun.shadow.map?.dispose(); this.sun.shadow.mapPass?.dispose();
