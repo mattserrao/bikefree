@@ -12,7 +12,7 @@ export const DEFAULT_SETTINGS = {
   startGear: 12,
   ftp: 200,               // watts, for % FTP workouts
   worldCam: 'chase',      // 3D camera: chase | eye | drone
-  worldTime: 'midday',    // 3D time of day: morning | midday | golden | night
+  worldTime: 'auto',      // 3D time of day: auto (the route's default) | morning | midday | golden | night
   worldQuality: 'balanced', // stylized scenery: low | balanced | high
   hudSize: 'small',       // ride-screen power bar: small (default) | medium | large (the original size)
   minimap: 'course',      // ride-screen minimap: course (whole route) | follow (zoomed in) | off
@@ -23,7 +23,10 @@ export const DEFAULT_SETTINGS = {
 export function loadSettings() {
   try {
     const raw = localStorage.getItem(KEY);
-    return { ...DEFAULT_SETTINGS, ...(raw ? JSON.parse(raw) : {}) };
+    const s = { ...DEFAULT_SETTINGS, ...(raw ? JSON.parse(raw) : {}) };
+    // v0.13: 'midday' was the old default, so a saved 'midday' becomes "Route's default" once.
+    if (!s.timeAuto) { if (s.worldTime === 'midday') s.worldTime = 'auto'; s.timeAuto = true; }
+    return s;
   } catch {
     return { ...DEFAULT_SETTINGS };
   }

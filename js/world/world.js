@@ -7,6 +7,7 @@ import { PostFX } from './post.js';
 import { StylizedTerrain, COASTAL_QUALITY } from './stylized-terrain.js';
 import { riderPose, routePoint, ROAD_WIDTH } from './pose.js';
 import { loadRider } from './rider.js';
+import { PerfMonitor } from './perf.js';
 import { wrapDist } from '../gpx.js';
 
 export const TIME_PRESETS = {
@@ -191,7 +192,18 @@ export class World {
   setCamera(mode) { this.cameraMode = mode; this._camInit = false; }
 
   /** clear | marine | clouds | rain (eases in over a few seconds). */
-  setWeather(key, immediate = false) { this.weatherKey = key; this.weather?.set(key, immediate); }
+  /** The weather presets this route offers (a scene can limit and rename them: Pittsburgh's "River fog"). */
+  weatherOptions() {
+    if (!this.weather) return [];
+    const S = this.route.scene?.weather || {}, keys = S.presets || ['clear', 'marine', 'clouds', 'rain'];
+    const names = { clear: 'Clear', marine: 'Marine layer', clouds: 'Clouds', rain: 'Rain', ...(S.labels || {}) };
+    return keys.map((key) => ({ key, label: names[key] || key }));
+  }
+  setWeather(key, immediate = false) {
+    const options = this.weatherOptions();
+    if (options.length && !options.some((o) => o.key === key)) key = options[0].key;   // not offered here: the route's first
+    this.weatherKey = key; this.weather?.set(key, immediate);
+  }
 
   setQuality(key) {
     if (!this.stylized) return;
@@ -210,6 +222,7 @@ export class World {
   }
 
   setTimeOfDay(key) {
+    if (key === 'auto' || !key) key = this.route.scene?.timeOfDay || 'midday';   // "Route's default"
     let t = TIME_PRESETS[key] || TIME_PRESETS.midday;
     if (this.stylized && key === 'night') t = { ...t, sunI: .55, hemiI: .42 };
     else if (this.stylized) t = { ...t, sunI: key === 'golden' ? 2.5 : 2.1, hemiI: key === 'golden' ? .95 : 1.1,
@@ -281,6 +294,7 @@ export class World {
   _frame(now) {
     if (!this.running) return;
     this._raf = requestAnimationFrame(this._frame);
+    this.perf?.begin(now);
     const dt = Math.min(1.0, (now - this._last) / 1000); // real time (movement must not lag on slow frames)
     this._last = now;
 
@@ -393,6 +407,16 @@ export class World {
         bloom: (k === 'night' ? .38 : k === 'golden' ? .42 : .26) * (1 - o * .5),
         threshold: k === 'night' ? .7 : 1.15, warm: k === 'golden' || k === 'morning' ? 1 - o : 0 });
     } else this.renderer.render(this.scene, this.camera);
+    this.perf?.end(performance.now());
+  }
+
+  /** Performance overlay (fps, frame time, draw calls, triangles). Returns a summary line when switched off. */
+  togglePerf(on, place) {
+    this.perf ||= new PerfMonitor(this.renderer, this.container, () => ({
+      route: this.route.scene?.title || this.route.name, quality: this.qualityKey, time: this.timeKey,
+      weather: this.weather ? this.weatherKey : null, camera: this.cameraMode,
+    }), place);
+    return this.perf.toggle(on);
   }
 
   /** Render one frame without the animation loop (used for previews/tests). */
@@ -401,6 +425,7 @@ export class World {
   get loading() { return this.terrain.loadingCount; }
 
   dispose() {
+    this.perf?.dispose();
     this.disposed = true;
     this.stop();
     this._ro.disconnect();

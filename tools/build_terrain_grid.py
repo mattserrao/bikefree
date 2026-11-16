@@ -3,8 +3,10 @@
 
 Used by the Big Sur hero map: the stylized renderer draws the real landform (sea cliffs,
 the Bixby Creek gorge, Hurricane Point) from this grid, offline, with no tile requests.
+Pittsburgh uses it too (inland: "rivers" mode), for Mount Washington's bluff and the hills to the horizon.
 
   python3 tools/build_terrain_grid.py bigsur
+  python3 tools/build_terrain_grid.py pittsburgh
 
 Reads   routes/parks/<id>.gpx, routes/scenes/<id>.json ("terrainBuild": settings)
 Writes  routes/scenes/<id>-terrain.json
@@ -15,6 +17,9 @@ Layout
   fine    10 m blocks of 64×64 cells, only where a block lies within `fineM` of the road
   heights uint16 (h - base) / scale, stored as wrapping differences along each row, base64;
           ocean floor clamped to `floorM`
+  water   (inland "rivers" mode) a 20 m river mask over the whole box, as run lengths [value, run, …]:
+          the hydro-flattened river surfaces (dead flat, near the city's water level) connected to the
+          rivers the city's own data maps. The city's land grid covers only the middle of the box.
 """
 import base64, io, json, math, os, re, sys, urllib.request
 from pathlib import Path
@@ -86,7 +91,7 @@ def main():
     rid = sys.argv[1] if len(sys.argv) > 1 else 'bigsur'
     scene = json.loads((ROOT / f'routes/scenes/{rid}.json').read_text())
     cfg = {'padM': 6000, 'coarseM': 40, 'fineM': 900, 'fineCellM': 10, 'floorM': -45, 'seaBelowM': 3.0, **scene.get('terrainBuild', {})}
-    gpx = (ROOT / f'routes/parks/{rid}.gpx').read_text()
+    gpx = (ROOT / scene.get('terrainBuild', {}).get('gpx', f'routes/parks/{rid}.gpx')).read_text()
     pts = np.array([(float(a), float(b)) for a, b in re.findall(r'lat="([\d.-]+)" lon="([\d.-]+)"', gpx)])
     lat0 = pts[:, 0].mean()
     mlat, mlon = 111320.0, 111320.0 * math.cos(math.radians(lat0))
@@ -104,6 +109,10 @@ def main():
     east, south = west + (fnx - 1) * fm / mlon, north - (fny - 1) * fm / mlat
     LO, LA = np.meshgrid(west + np.arange(fnx) * fm / mlon, north - np.arange(fny) * fm / mlat)
     H = M.sample(LA, LO)
+    if cfg.get('rivers'):
+        water = rivers(H, LA, LO, scene, cfg)
+        finish(rid, cfg, pts, gpx, M, H, north, west, south, east, fnx, fny, mlat, mlon, water)
+        return
     low = H < cfg['seaBelowM']
     lab, _ = ndimage.label(low)
     edge = np.unique(lab[:, 0]); edge = edge[edge > 0]
@@ -122,6 +131,46 @@ def main():
     floor = -(1.2 + np.minimum(offshore * .055 + np.maximum(noise, -1), -cfg['floorM'] - 1.2))
     H = np.where(sea, np.minimum(floor, -0.6), np.maximum(H, 0.4))
     print(f'  master {fnx}×{fny} @ {fm} m; sea {sea.mean() * 100:.0f}% of the box')
+    finish(rid, cfg, pts, gpx, M, H, north, west, south, east, fnx, fny, mlat, mlon, None)
+
+
+def rivers(H, LA, LO, scene, cfg):
+    """Inland: rivers are the dead-flat surfaces near the city's water level that touch its mapped rivers."""
+    city = json.loads((ROOT / scene['cityData']).read_text())
+    level = city['waterLevelM']
+    g, L = city['grid'], city['land']
+    land = np.zeros(L['nx'] * L['ny'], np.uint8)
+    k = 0
+    for v, n in zip(L['rle'][0::2], L['rle'][1::2]): land[k:k + n] = v; k += n
+    land = land.reshape(L['ny'], L['nx'])
+    # city land cell under each master cell (or -1 outside the city's box)
+    u = np.round((LO - g['west']) / (g['east'] - g['west']) * (L['nx'] - 1)).astype(int)
+    v = np.round((g['north'] - LA) / (g['north'] - g['south']) * (L['ny'] - 1)).astype(int)
+    inside = (u >= 0) & (v >= 0) & (u < L['nx']) & (v < L['ny'])
+    mapped = np.zeros(H.shape, bool)
+    mapped[inside] = land[v[inside], u[inside]] == 3
+    span = ndimage.maximum_filter(H, 5) - ndimage.minimum_filter(H, 5)
+    flat = (span < cfg.get('flatM', .35)) & (np.abs(H - level) < cfg.get('poolsM', 5))
+    flat = ndimage.binary_opening(flat, iterations=2) | mapped
+    lab, _ = ndimage.label(flat)
+    keep = np.unique(lab[mapped]); keep = keep[keep > 0]
+    water = np.isin(lab, keep)
+    # the next pools up and down the rivers (beyond the locks) aren't connected: any large surface that is
+    # dead flat (hydro-flattened water) within a few metres of the city's level is river too
+    pool = (span < .12) & (np.abs(H - level) < cfg.get('otherPoolsM', 9))
+    plab, n = ndimage.label(ndimage.binary_opening(pool, iterations=2))
+    if n:
+        size = ndimage.sum(np.ones_like(H), plab, index=np.arange(1, n + 1))
+        big = np.flatnonzero(size >= cfg.get('poolCells', 2000)) + 1
+        water |= np.isin(plab, big)
+    water = ndimage.binary_closing(water, iterations=3)
+    water[inside] = mapped[inside]   # inside the city's box its own (OSM) rivers are the truth
+    print(f'  rivers: {water.mean() * 100:.1f}% of the box is water (level {level} m)')
+    return water
+
+
+def finish(rid, cfg, pts, gpx, M, H, north, west, south, east, fnx, fny, mlat, mlon, water):
+    fm = cfg['fineCellM']
 
     # coarse grid (every k-th master sample)
     k = max(1, round(cfg['coarseM'] / fm))
@@ -154,6 +203,13 @@ def main():
         'fine': {'cellM': fm, 'block': B, 'bnx': bnx, 'bny': bny, 'nx': fnx, 'ny': fny,
                  'blocks': blocks, 'h': pack(fine, cfg['floorM'])},
     }
+    if water is not None:
+        w = water[::2, ::2].astype(int).ravel() if fm == 10 else water.astype(int).ravel()
+        edges = np.flatnonzero(np.diff(w)) + 1
+        starts = np.concatenate([[0], edges]); runs = np.diff(np.concatenate([starts, [len(w)]]))
+        out['water'] = {'cellM': fm * 2 if fm == 10 else fm, 'nx': water[::2, ::2].shape[1] if fm == 10 else fnx,
+                        'ny': water[::2, ::2].shape[0] if fm == 10 else fny,
+                        'rle': [int(x) for pair in zip(w[starts], runs) for x in pair]}
     path = ROOT / f'routes/scenes/{rid}-terrain.json'
     path.write_text(json.dumps(out, separators=(',', ':')))
     print(f'  wrote {path.relative_to(ROOT)} ({path.stat().st_size / 1e6:.1f} MB)')

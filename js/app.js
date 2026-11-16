@@ -430,6 +430,7 @@ document.addEventListener('keydown', (e) => {
   else if ((k === ',' || k === '.') && trainer.demo) setDemoSpeed(DEMO_MPH + (k === '.' ? 5 : -5));
   else if ((k === 'f' || k === 'F') && onRideScreen) toggleFullscreen();
   else if ((k === 'w' || k === 'W') && onRideScreen) cycleWeather();
+  else if ((k === 'i' || k === 'I') && onRideScreen && world) { const summary = world.togglePerf(); if (summary) log('perf', summary, 'info'); }
   else if (k === 'p' || k === 'P') { const opts = [0, ...PACER_WATTS]; setPacer(opts[(opts.indexOf(pacer.watts) + 1) % opts.length]); }
   else return;
   e.preventDefault();
@@ -516,11 +517,15 @@ async function openWorld(route) {
   log('3d', `3D view: ${route.name}`);
 }
 function cycleWeather() {
-  const order = ['clear', 'marine', 'clouds', 'rain'];
-  settings.worldWeather = order[(order.indexOf(settings.worldWeather) + 1) % order.length];
+  // The route decides which presets it offers and what they're called (Pittsburgh: Clear, River fog, Clouds).
+  const options = world?.weatherOptions?.().length ? world.weatherOptions()
+    : ['clear', 'marine', 'clouds', 'rain'].map((key) => ({ key, label: key }));
+  const now = options.findIndex((o) => o.key === (world?.weatherKey ?? settings.worldWeather));
+  const next = options[(now + 1) % options.length];
+  settings.worldWeather = next.key;
   saveSettings(settings);
-  world?.setWeather(settings.worldWeather);
-  toast(`Weather: ${({ clear: 'Clear', marine: 'Marine layer', clouds: 'Clouds', rain: 'Rain' })[settings.worldWeather]}`);
+  world?.setWeather(next.key);
+  toast(`Weather: ${next.label}`);
 }
 function cycleCamera() {
   const order = ['chase', 'eye', 'side', 'drone'];

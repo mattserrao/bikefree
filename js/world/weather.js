@@ -29,6 +29,8 @@ export class Weather {
   constructor(world, uniforms) {
     this.world = world; this.u = uniforms;
     this.key = 'clear';
+    this.options = world.route.scene?.weather || {};   // per scene: presets offered, their labels, the fog's thickness
+    this.base = world.terrain.fogBase || 0;              // the fog lies on the sea (0) or a city's rivers
     this.state = { ...WEATHER.clear };
     this.target = { ...WEATHER.clear };
     this.windDir = new THREE.Vector2(.82, .57).normalize();   // onshore northwesterly
@@ -41,6 +43,9 @@ export class Weather {
   set(key, immediate = false) {
     this.key = WEATHER[key] ? key : 'clear';
     this.target = { ...WEATHER[this.key] };
+    // a scene can make the bank lower and thinner (Pittsburgh: river fog the bridges stand above)
+    if (this.target.bank && this.options.bankTop) this.target.bankTop = this.options.bankTop;
+    if (this.target.bank && this.options.bank) this.target.bank *= this.options.bank;
     if (immediate) this.state = { ...this.target };
     this._apply();
   }
@@ -223,7 +228,7 @@ export class Weather {
     if (s.bank > .01) {
       const n = this.bankLayers.length;
       this.bankLayers.forEach((l, i) => {
-        l.position.set(Math.round(cam.x / 500) * 500, 6 + (s.bankTop - 6) * Math.pow(i / (n - 1), .9), Math.round(cam.z / 500) * 500);
+        l.position.set(Math.round(cam.x / 500) * 500, this.base + 6 + (s.bankTop - 6) * Math.pow(i / (n - 1), .9), Math.round(cam.z / 500) * 500);
       });
       const sun = this.world.sun;
       this.bankUniforms.bfLit.value.copy(sun.color).multiplyScalar(.85 + .15 * (1 - s.overcast)).lerp(new THREE.Color('#ffffff'), .5);
@@ -231,9 +236,9 @@ export class Weather {
     }
     // inside the bank (or in rain) the air closes in
     const L = this.world.terrain?.landscape;
-    const inland = L?.inlandAt ? L.inlandAt(cam.x, cam.z) : -1000;
+    const inland = L?.fogInlandAt ? L.fogInlandAt(cam.x, cam.z) : L?.inlandAt ? L.inlandAt(cam.x, cam.z) : -1000;
     const reach = 1 - Math.min(1, Math.max(0, (inland - 300) / 900));
-    const inside = s.bank * reach * Math.min(1, Math.max(0, (s.bankTop - cam.y) / 35));
+    const inside = s.bank * reach * Math.min(1, Math.max(0, (this.base + s.bankTop - cam.y) / 35));
     const fog = this.world.scene.fog, base = this.world._fogBase;
     if (fog && base) {
       const thick = Math.max(inside, s.rain * .55);

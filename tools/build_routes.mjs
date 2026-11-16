@@ -50,7 +50,7 @@ for (const item of catalog) {
       for (const r of scene.rivers || []) if (!Array.isArray(r.path) || r.path.length < 2) throw new Error(`${item.id}: invalid river path`);
       paths.push(scene.cityData);
     }
-    if (scene.terrain === 'real-coast') {
+    if (scene.terrain === 'real-coast' || scene.terrainGridFile) {
       // a real height grid around the route from tools/build_terrain_grid.py
       if (!scene.terrainGridFile?.startsWith('routes/scenes/') || scene.terrainGridFile.includes('..') || !existsSync(resolve(root, scene.terrainGridFile))) throw new Error(`${item.id}: missing terrain grid`);
       const grid = JSON.parse(read(scene.terrainGridFile));
