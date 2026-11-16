@@ -8,7 +8,7 @@ import { makeRouteIndex } from './geo.js';
 import { smoothstep } from './coast.js';
 import { ROAD_WIDTH } from './pose.js';
 import { decodeTerrain } from './real-coast.js';
-import { planJunctions, junctionGround } from './junctions.js';   // [junctions]
+import { planJunctions, junctionGround, junctionTops } from './junctions.js';   // [junctions]
 import { joinCrossings, densifyAlongside, clearOverpasses, alignAlongRoute, trimAtRoute, followMovedNodes, keepUnderRoad, trimOverlaps, streetSlots } from './road-meets.js';   // [junctions]
 import { alignStreetProfiles, syncPinnedNodes } from './road-align.js';   // [road-align]
 
@@ -302,8 +302,10 @@ export function makeCityLandscape(config, proj, index, route) {
     }
     // [junctions] round a junction: just under its surface and corner sidewalks (but still never over the route's road)
     if (L._junctions) {
-      h = junctionGround(L._junctions, x, z, h);
-      const r = routeDist(x, z); if (r && r.d < 9) h = Math.min(h, r.y - .5 + Math.max(0, r.d - 5) * .2);
+      const r = routeDist(x, z);
+      const w = r ? smoothstep(ROAD_WIDTH / 2 + 1, ROAD_WIDTH / 2 + 7, r.d) : 1;   // (under the road and its shoulder: the road's bank)
+      if (w > 0) h += (junctionGround(L._junctions, x, z, h) - h) * w;
+      if (r && r.d < 9) h = Math.min(h, r.y - .5 + Math.max(0, r.d - 5) * .2);
     }
     // nor over a low ramp or viaduct deck (they're left out of the grading above, but one running close to the
     // ground beside the route would otherwise be buried by the bank the route's road raises)
@@ -496,6 +498,7 @@ export function cityStreets(landscape, index, route) {
       onRouteBridge: (s, m) => landscape.routeBridges.some((b) => s > b.fromM - m && s < b.toM + m), liftOf: (k) => .1 + streetSlots(landscape, streets)[k] * .02 }, landscape.junctions);
     followMovedNodes(streets);   // [junctions] paths and side streets meet the moved ones at their height
     keepUnderRoad(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] nothing over the road
+    junctionTops(landscape._junctions, streets, landscape.routeDist, ROAD_WIDTH);   // [junctions] mouths at the streets' final heights
   }
   return streets;
 }

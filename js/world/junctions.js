@@ -468,6 +468,12 @@ export function planJunctions(streets, ctx, options = {}) {
   return plan;
 }
 
+/** Recompute every junction's drawn surface heights after later passes moved street heights (cityStreets). */
+export function junctionTops(plan, streets, routeDist, roadWidth = 7) {
+  const onRoad = (x, z) => { const r = routeDist(x, z); return !!r && r.d < roadWidth / 2 + .8; };
+  for (const jn of plan.list) surfaceTops(jn, streets, plan.options, onRoad);
+}
+
 /** Vertex heights of a junction's surface (`poly[i].y`, `cy` at the centre) and `jn.top(x, z)`. */
 function surfaceTops(jn, streets, O, onRoad) {
   const mouthTop = new Map();

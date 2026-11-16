@@ -381,7 +381,7 @@ export function keepUnderRoad(streets, ctx, options = {}) {
   streets.forEach((st, k) => {
     const lift = SLOT_LIFT(slots[k]);
     for (const p of st.pts) {
-      if (p.jn != null) continue;
+      if (p.jn != null || (O.keepJunctions && p.je != null)) continue;   // (keepJunctions: their ease zones are theirs)
       const r = index.nearest(p.x, p.z, RW / 2 + st.width / 2 + 6); if (!r) continue;
       const q = RL.project(p.x, p.z, route.dist[Math.min(end, r.i > end ? 2 * end - r.i : r.i)], 30);
       if (!q || q.d > RW / 2 + st.width / 2 + O.marginM) continue;
@@ -658,7 +658,10 @@ export function roadMeets(landscape, index, route, options = {}) {
       for (const c of [L, R]) {
         const m = A.mouth.reduce((a, b) => (Math.hypot(a.x - c.x, a.z - c.z) < Math.hypot(b.x - c.x, b.z - c.z) ? a : b));
         gap = Math.max(gap, Math.hypot(m.x - c.x, m.z - c.z));
-        step = Math.max(step, Math.abs(p.top - jn.top(m.x, m.z)));
+        // (a corner under the route's road — or under its shoulder, which a junction it doesn't pass through leaves
+        // in place — is hidden by it: no lip shows there)
+        const r = roadAt(m.x, m.z), hidden = r && r.d < RW / 2 + (jn.route ? .3 : 2) && Math.max(p.top, jn.top(m.x, m.z)) < r.y + ROAD_LIFT - .03;
+        if (!hidden) step = Math.max(step, Math.abs(p.top - jn.top(m.x, m.z)));
       }
     }
     issue(site, 'step', step, 'a street meets the junction surface with a lip', O.step);
