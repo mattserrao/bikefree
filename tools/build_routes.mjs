@@ -117,7 +117,7 @@ if (xml.status !== 0) throw new Error(`GPX XML validation failed:\n${xml.stderr 
 const index = JSON.stringify(output, null, 2) + '\n';
 const walk = (dir) => readdirSync(resolve(root, dir), { withFileTypes: true }).flatMap((p) => p.isDirectory() ? walk(`${dir}/${p.name}`) : [`${dir}/${p.name}`]);
 const files = [...new Set(['./', 'index.html', 'css/style.css', 'sw-assets.js',
-  ...walk('js').filter((p) => p.endsWith('.js')), 'vendor/three.module.min.js', 'models/rider.json',
+  ...walk('js').filter((p) => p.endsWith('.js')), 'vendor/three.module.min.js', 'models/rider.json', 'models/rider-atlas.png', 'models/pacer-atlas.png',
   'routes/demo-hills.gpx', 'routes/scenes/demo-hills.json', 'routes/parks/index.json', 'routes/ideas.json', 'tools/world-preview.html', ...paths])].sort();
 const hash = createHash('sha256');
 for (const file of files.filter((p) => !['./', 'sw-assets.js'].includes(p))) hash.update(file).update(file === 'routes/parks/index.json' ? index : readFileSync(resolve(root, file)));

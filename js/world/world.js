@@ -6,7 +6,7 @@ import { Weather } from './weather.js';
 import { PostFX } from './post.js';
 import { Look, LOOKS } from './look.js';
 import { StylizedTerrain, COASTAL_QUALITY } from './stylized-terrain.js';
-import { riderPose, routePoint, ROAD_WIDTH } from './pose.js';
+import { riderPose, routePoint, ROAD_WIDTH, CHASE } from './pose.js';
 import { loadRider } from './rider.js';
 import { PerfMonitor } from './perf.js';
 import { HAZE, AERIAL, AERIAL_COLOR, installHaze } from './haze.js';
@@ -46,7 +46,7 @@ export class World {
     this.s = 0;               // displayed position along the route (m)
     this.crank = 0;
     this.running = false;
-    this.source = null;       // () => {pos, speed, cadence, riding}
+    this.source = null;       // () => {pos, speed, cadence, riding, grade, power, ftp} (grade/power/ftp pick the rider's posture)
     this.stylized = route.scene?.style === 'stylized';
     this.qualityKey = Object.hasOwn(COASTAL_QUALITY, opts.quality) ? opts.quality : 'balanced';
 
@@ -210,7 +210,7 @@ export class World {
     const { pos, fwd } = this._place(this.ps, PACER_LANE, this._pacerPose ||= { pos: new THREE.Vector3(), fwd: new THREE.Vector3(), flat: new THREE.Vector3() });
     this.pacerCrank += (src.cadence / 60) * Math.PI * 2 * dt;
     this.pacer.group.visible = true;
-    this.pacer.update(pos, fwd, this.pacerCrank, src.speed, Math.min(dt, 0.1));
+    this.pacer.update(pos, fwd, this.pacerCrank, src.speed, Math.min(dt, 0.1), src);
   }
 
   /** clear | marine | clouds | rain (eases in over a few seconds). */
@@ -352,7 +352,7 @@ export class World {
     // Rider placement: right-hand side of the road
     const { pos: riderPos, fwd, flat } = this._place(this.s, RIDER_LANE, this._riderPose ||= { pos: new THREE.Vector3(), fwd: new THREE.Vector3(), flat: new THREE.Vector3() });
     this.crank += (src.cadence / 60) * Math.PI * 2 * dt;
-    this.rider.update(riderPos, fwd, this.crank, src.speed, Math.min(dt, 0.1));
+    this.rider.update(riderPos, fwd, this.crank, src.speed, Math.min(dt, 0.1), src);
     this._updatePacer(dt);
 
     this._updateCamera(riderPos, flat, fwd, dt);
@@ -427,11 +427,12 @@ export class World {
     const C = this._cam ||= { pos: new THREE.Vector3(), look: new THREE.Vector3() };
     const up = UP, pos = C.pos, look = C.look;
     // Aim a little low so the rider sits above the HUD strip at the bottom of the screen.
-    pos.copy(riderPos).addScaledVector(flat, -6.5).addScaledVector(up, 2.7);
-    look.copy(riderPos).addScaledVector(fwd, 8).addScaledVector(up, -0.2);
+    // 4.5 m back (was 6.5 m): the life-size rider fills about 1.4× more of the screen.
+    pos.copy(riderPos).addScaledVector(flat, -CHASE.back).addScaledVector(up, CHASE.up);
+    look.copy(riderPos).addScaledVector(fwd, CHASE.ahead).addScaledVector(up, CHASE.lookUp);
     // Keep the camera above ground
     const g = this.terrain.heightAt(pos.x, pos.z);
-    if (g != null && pos.y < g + 1.6) pos.y = g + 1.6;
+    if (g != null && pos.y < g + CHASE.ground) pos.y = g + CHASE.ground;
 
     if (!this._camInit) {
       this.camera.position.copy(pos);

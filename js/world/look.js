@@ -81,6 +81,7 @@ export class Look {
     this.patched.add(m);
     if (!(m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshPhongMaterial)) return;
     if (m.transparent && m.opacity < .99) return;
+    if (m.userData.keepShading) return;   // the semi-realistic rider keeps its own shading
     const prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey();
     const u = this.uniforms;
     m.onBeforeCompile = (shader, renderer) => {

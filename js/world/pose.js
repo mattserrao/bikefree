@@ -6,6 +6,10 @@ import { headingSpan } from '../routes.js';
 export const ROAD_WIDTH = 7;
 export const LANE_OFFSET = ROAD_WIDTH * 0.22;   // rider sits right of the centre line
 export const ROAD_LIFT = 0.12;                  // road surface above the route line
+// The chase camera (world._updateCamera): metres behind and above the rider, and the point it aims at
+// (ahead along the road, a little low so the rider sits above the HUD strip). It is kept CHASE.ground m
+// above the ground. Shared with the QC tools so they check the camera the app uses.
+export const CHASE = { back: 4.5, up: 2.1, ahead: 8, lookUp: -0.6, ground: 1.6 };
 const DRIFT_M = 10, BLEND_M = 10;               // U-turn lane change, then hand-back to the road's direction
 
 /** Point on the route centre line at distance s, in the local frame: {x, y, z}. */

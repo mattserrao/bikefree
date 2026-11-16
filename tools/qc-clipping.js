@@ -13,7 +13,7 @@ import * as THREE from 'three';
 import { MeshBVH } from 'three-mesh-bvh';
 import { World } from '../js/world/world.js';
 import { buildCatalogRoute, loadRouteScene } from '../js/routes.js';
-import { riderPose } from '../js/world/pose.js';
+import { riderPose, CHASE } from '../js/world/pose.js';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const UP = V(0, 1, 0);
@@ -297,9 +297,9 @@ function checkRide() {
         value: c ? round(Math.max(0, L.body.half[0] + .3 - c.distance), 2) : 0, point: pt(c?.point || body.center), extra: describeBuilding(b),
         note: e.kind === 'surface' ? 'another street/path surface cuts through the rider' : `the rider rides through ${e.label.toLowerCase()}` });
     }
-    // chase camera (world._updateCamera): 6.5 m behind, 2.7 m up, kept 1.6 m above the ground
-    const cam = pos.clone().addScaledVector(fwd, -6.5).addScaledVector(UP, 2.7);
-    const g = world.terrain.heightAt(cam.x, cam.z); if (g != null && cam.y < g + 1.6) cam.y = g + 1.6;
+    // chase camera (world._updateCamera, CHASE in pose.js): behind and up, kept above the ground
+    const cam = pos.clone().addScaledVector(fwd, -CHASE.back).addScaledVector(UP, CHASE.up);
+    const g = world.terrain.heightAt(cam.x, cam.z); if (g != null && cam.y < g + CHASE.ground) cam.y = g + CHASE.ground;
     _sphere.set(cam, L.cameraRadius);
     let camInside = false;
     const camBox = new THREE.Box3().setFromCenterAndSize(cam, V(1, 1, 1));
@@ -466,7 +466,7 @@ function checkLife(seconds) {
   while (t < total) {
     const pose = riderPose(route, world.index, s);
     const fwd = V(pose.flat.x, 0, pose.flat.z);
-    const cam = V(pose.pos.x, pose.pos.y, pose.pos.z).addScaledVector(fwd, -6.5).addScaledVector(UP, 2.7);
+    const cam = V(pose.pos.x, pose.pos.y, pose.pos.z).addScaledVector(fwd, -CHASE.back).addScaledVector(UP, CHASE.up);
     const back = route.turnS && s > route.turnS;
     world.terrain.tick(cam, dt, { x: pose.pos.x, z: pose.pos.z, out: back ? route.total - s : s, dir: back ? -1 : 1, speed: L.lifeSpeed });
     world.terrain.uniforms.uTime.value += dt;

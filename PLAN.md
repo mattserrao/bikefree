@@ -603,6 +603,31 @@ viewpoints. Not picked: sound, camera feel, timber guardrail.
   first.
 - [ ] Roll the kit out: Big Sur (haze, clouds, rock), Route 28 (haze, clouds, forest crowns)
 
+### Rider improvements *(test branch `rider-test`, from `main` after PR #24)*
+Goal: a bigger, better rider: closer camera, a semi-realistic model with more triangles and real textures, and riding postures that follow the road.
+
+**Decisions (16 Nov 2026)**
+- Size: the rider stays life-size (it still matches cars, people and doorways); the chase camera comes in instead
+- Camera: 4.5 m back (was 6.5 m), 2.1 m up, aimed a little lower → the rider is about 1.4× bigger on screen
+- Model: semi-realistic, ~60k triangles (this overrides the Route 28 pass's "cartoon rider"; the cartoon look leaves the rider's shading alone)
+- Animation triggers: grade + effort. Stand and pump on climbs of 7 % or more at 90 % of FTP or more; tuck on descents of 4 % or more when coasting or soft-pedalling
+
+**Passes**
+- [x] Chase camera at 4.5 m (`CHASE` in `js/world/pose.js`, shared by the app, the course QC and the clipping QC)
+- [x] New rider + bike (`tools/build_rider.py`, run with the `bpy` module: `pip install bpy pillow numpy`, then `python tools/build_rider.py`): **one skinned mesh, one draw call** (was 11 meshes, 12 calls plus 12 in the shadow pass), 64.9k triangles (was 26.6k)
+  - body: metaball trunk, legs, head and gloved hands with smooth skin weights between neighbouring bones (19 bones: bike, wheels, crank, pelvis, chest, head, arms, legs)
+  - bike: aero frame with dropped seatstays, aero fork, integrated cockpit with taped drop bars and hoods, head unit, two bottles in cages, 50 mm carbon rims with bladed spokes, disc rotors, 2× chainrings with teeth, 11-speed cassette, derailleurs and chain
+  - texture atlas painted from code (`models/rider-atlas.png`, 2048×1536): kit with side panels, pockets and back print, bib shorts with grippers, socks, shoes, helmet with vents, frame and rim decals, bar tape, chain, bottle label, screen. Baked ambient occlusion and a specular strength per vertex
+  - the pacer shares the mesh and has its own atlas (`models/pacer-atlas.png`: yellow-and-black checks, black bike with yellow accents)
+- [x] Postures (`js/world/rider.js`): seated; standing and pumping (hips forward over the bottom bracket, bob and sway over the pushing pedal, heel lifts through the bottom of the stroke, bike rocks about 7° under the rider); the tuck (flat back, hands in the drops, knees in, pedals level when coasting). Blended over about half a second; minimum 1.2 s in a posture; looser limits to stay in one; standing comes in bouts (sit after ~25 s, stand again after 8 s). Rules: `POSTURE_RULES`, tested in `test/rider.test.mjs`
+- [x] The app feeds the rider grade, 3 s power and FTP; the pacer gets its grade, its set power and your FTP
+- [x] Rider workshop: `tools/rider-preview.html` (postures, grade/power/FTP/cadence/speed sliders, cameras, pacer kit) and `npm run snap:rider -- seated:chase standing:side@1.57 tuck:quarter pacer/standing:back` (PNGs in `tools/snapshots/rider/`)
+- [x] `npm run snap` waits for the rider model before the shot
+
+**Measured (headless, software GL)**: Route 28 at 10.65 km: 207 draw calls, 1.05M triangles with the new rider. Going-to-the-Sun at 3 km: 332 calls, 2.03M triangles. Download: `rider.json` 1.9 MB (was 0.4 MB) + 0.5 MB atlas (pacer atlas 0.46 MB, only when the pacer is on).
+
+**To check on the Mac**: the look in motion (standing rock and bob, tuck in/out), frame time on the Air, and whether 4.5 m is the right distance.
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)
