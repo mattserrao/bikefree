@@ -163,7 +163,7 @@ To author another region, copy the closest scene preset, set `title`, `seed`,
 - `bridgeRanges`: `fromM`, `toM`, `depthM` and optional `lateralM` for parallel bridges.
 - `vegetation`: asset names in `trees`, `shrubs` and `cover`; `treeDensity`,
   `density`, `vergeDensity` and optional `treelineM`; `snowLineM` colors high ground.
-- `preview`: `positionM` and `camera` establish a useful initial review view.
+- `preview`: `positionM` sets a useful initial review spot (the view is always the chase camera).
 
 Add the scene path to the new catalog entry and run `npm run routes:build`.
 Check the full route with the preview slider and all quality settings. The builder
@@ -194,11 +194,10 @@ python3 -m http.server 8765 --bind 127.0.0.1
 ```
 
 Open `http://127.0.0.1:8765/tools/world-preview.html`. Use the position slider,
-route picker, Ride/Pause, camera and lighting controls. Useful URLs:
+route picker, Ride/Pause and lighting controls. Useful URLs:
 
-- `?park=bigsur&pos=15420&cam=chase` — bridge approach.
-- `?park=bigsur&pos=15670&cam=vista` — bridge structure and coast.
-- `?park=bigsur&pos=17700&cam=chase&time=golden` — coast in warm light.
+- `?park=bigsur&pos=15420` — bridge approach.
+- `?park=bigsur&pos=17700&time=golden` — coast in warm light.
 - `?park=bigsur&pos=15420&style=legacy` — previous renderer; needs tile services.
 
 `clean=1` hides preview controls for captures. `speed=10` rides at 10 m/s. The
@@ -226,12 +225,11 @@ rate, thermal behaviour and Bluetooth operation still need checking on the M4 Ai
 Chrome and saves them as images, with the draw calls and triangles each view costs.
 
 ```sh
-npm run snap -- route28@10650 route28@19050:morning route28@16200:drone pittsburgh
+npm run snap -- route28@10650 route28@19050:morning route28@16200 pittsburgh
 npm run snap -- --quality high bigsur@21800:golden route28@24450:fall
 ```
 
-A shot is `<park>[@metres][:camera][:time][:season][:weather]`:
-- camera: `chase`, `drone`, `vista`, `side` or `eye`
+A shot is `<park>[@metres][:time][:season][:weather]`, always from the chase camera:
 - time: `midday`, `morning`, `golden` or `night`
 - season: `summer` or `fall`
 - weather: `clear`, `marine`, `clouds` or `rain`
@@ -260,11 +258,9 @@ npm run snap:cam -- pittsburgh --shots tools/shots/pittsburgh-landmarks.json --o
 
 ### Postcard views
 
-A scene's `views` give the scenic (`vista`) camera fixed postcard positions: within `rangeM` of a view's
-distance along the route, the camera holds that view instead of orbiting the nearest landmark. Each view has
-`cam` and `look` (lat, lon, and `up` metres above the ground, or `abs` metres above sea level) and `atM`
-(or the route point nearest the camera). Pittsburgh's: the Point from the Ohio, the Golden Triangle from the
-Monongahela, the Duquesne Incline deck, and (built at run time) the first Grandview Avenue overlook.
+Retired with the scenic (`vista`) camera on 16 Nov 2026: the chase camera is now the only view.
+A scene's `views` (Pittsburgh's postcard positions) are still in its JSON but nothing reads them; use
+`snap:cam` for close-ups of landmarks.
 - `--software` (no GPU; slow but works on a server)
 
 It serves the repo itself, waits until every queued scenery tile is built, then draws a single

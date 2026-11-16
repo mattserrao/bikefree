@@ -33,7 +33,6 @@ export class World {
     this.container = container;
     this.route = route;
     this.log = opts.log || (() => {});
-    this.cameraMode = 'chase';
     this.s = 0;               // displayed position along the route (m)
     this.crank = 0;
     this.running = false;
@@ -188,8 +187,6 @@ export class World {
     this.pacer.group.visible = true;
     this.pacer.update(pos, fwd, this.pacerCrank, src.speed, Math.min(dt, 0.1));
   }
-
-  setCamera(mode) { this.cameraMode = mode; this._camInit = false; }
 
   /** clear | marine | clouds | rain (eases in over a few seconds). */
   /** The weather presets this route offers (a scene can limit and rename them: Pittsburgh's "River fog"). */
@@ -347,11 +344,10 @@ export class World {
 
     this.sky.position.copy(this.camera.position);
     if (this.stylized) {
-      const target = this.cameraMode === 'vista' ? this.camTarget.clone() : riderPos.clone().addScaledVector(flat, 40);
+      const target = riderPos.clone().addScaledVector(flat, 40);
       this.sun.position.copy(target).addScaledVector(this.sunDir, 350);
       this.sun.target.position.copy(target);
-      const span = this.cameraMode === 'vista' ? 170 : 105;
-      Object.assign(this.sun.shadow.camera, { left: -span, right: span, top: span, bottom: -span });
+      Object.assign(this.sun.shadow.camera, { left: -105, right: 105, top: 105, bottom: -105 });
       this.sun.shadow.camera.updateProjectionMatrix();
     } else {
       this.sun.position.copy(this.camera.position).addScaledVector(this.sunDir, 5000);
@@ -360,51 +356,22 @@ export class World {
     this._render();
   }
 
+  // The one camera: chase, behind and above the rider (the drone, scenic, side and eye views were retired).
   _updateCamera(riderPos, flat, fwd, dt) {
     const up = new THREE.Vector3(0, 1, 0);
-    let pos, look;
-    if (this.cameraMode === 'vista' && this.stylized) {
-      const b = this.terrain.landscape.landmarks.reduce((best, l) => (!Number.isFinite(l.s) ? best : !best || Math.abs(this.s - l.s) < Math.abs(this.s - best.s) ? l : best), null);
-      const nearby = b && Math.abs(this.s - b.s) < (b.range || 900);
-      if (nearby && b.view) {
-        // an authored postcard (Grandview Overlook toward the Point, the skyline from the Smithfield Street Bridge)
-        pos = b.view.pos.clone(); look = b.view.look.clone(); this._postcard = true;
-      } else {
-        this._postcard = false;
-        const direction = nearby ? new THREE.Vector3(b.fx, 0, b.fz) : flat;
-        const right = new THREE.Vector3(-direction.z, 0, direction.x);
-        const target = nearby ? new THREE.Vector3(b.x, b.y, b.z) : riderPos;
-        pos = target.clone().addScaledVector(right, -245).addScaledVector(direction, -65).addScaledVector(up, 105);
-        look = target.clone().addScaledVector(up, -16);
-      }
-    } else if (this.cameraMode === 'eye') {
-      pos = riderPos.clone().addScaledVector(up, 1.55).addScaledVector(flat, 0.35);
-      const far = this.pointAt(this.s + 35);
-      look = far.addScaledVector(new THREE.Vector3(-flat.z, 0, flat.x), ROAD_WIDTH * 0.22).addScaledVector(up, 1.3);
-    } else if (this.cameraMode === 'side') {
-      const right = new THREE.Vector3(-flat.z, 0, flat.x);
-      pos = riderPos.clone().addScaledVector(right, -3.4).addScaledVector(flat, 0.6).addScaledVector(up, 1.15);
-      look = riderPos.clone().addScaledVector(up, 0.35).addScaledVector(flat, 0.15);
-    } else if (this.cameraMode === 'drone') {
-      pos = riderPos.clone().addScaledVector(flat, -45).addScaledVector(up, 26);
-      look = riderPos.clone().addScaledVector(flat, 25);
-    } else {
-      // Aim a little low so the rider sits above the HUD strip at the bottom of the screen.
-      pos = riderPos.clone().addScaledVector(flat, -6.5).addScaledVector(up, 2.7);
-      look = riderPos.clone().addScaledVector(fwd, 8).addScaledVector(up, -0.2);
-    }
+    // Aim a little low so the rider sits above the HUD strip at the bottom of the screen.
+    const pos = riderPos.clone().addScaledVector(flat, -6.5).addScaledVector(up, 2.7);
+    const look = riderPos.clone().addScaledVector(fwd, 8).addScaledVector(up, -0.2);
     // Keep the camera above ground
     const g = this.terrain.heightAt(pos.x, pos.z);
-    const clearance = this.cameraMode === 'vista' ? (this._postcard ? 1.6 : 25) : 1.6;
-    if (g != null && pos.y < g + clearance) pos.y = g + clearance;
+    if (g != null && pos.y < g + 1.6) pos.y = g + 1.6;
 
     if (!this._camInit) {
       this.camera.position.copy(pos);
       this.camTarget.copy(look);
       this._camInit = true;
     } else {
-      const k = this.cameraMode === 'eye' || this.cameraMode === 'side' ? 1 - Math.exp(-dt * 12) : 1 - Math.exp(-dt * 3.5);
-      this.camera.position.lerp(pos, k);
+      this.camera.position.lerp(pos, 1 - Math.exp(-dt * 3.5));
       this.camTarget.lerp(look, 1 - Math.exp(-dt * 5));
     }
     this.camera.lookAt(this.camTarget);
@@ -424,7 +391,7 @@ export class World {
   togglePerf(on, place) {
     this.perf ||= new PerfMonitor(this.renderer, this.container, () => ({
       route: this.route.scene?.title || this.route.name, quality: this.qualityKey, time: this.timeKey,
-      weather: this.weather ? this.weatherKey : null, camera: this.cameraMode,
+      weather: this.weather ? this.weatherKey : null,
     }), place);
     return this.perf.toggle(on);
   }
