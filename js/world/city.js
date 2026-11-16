@@ -658,10 +658,10 @@ export class CityScene {
     } else if (kit) {   // [street-kit] the kit dresses ordinary roofs
     } else if (b.kind === 0 && seed > .8 && b.h < 14) {
       M.color('#5a524b'); M.box(cx, y1, cz, 1.2, 1.4, 1.2);   // chimney
-    } else if ((b.kind === 2 || b.kind === 3) && seed > .86) {
-      M.color('#7d6b58'); M.cylinder(cx, y1 + 3.5, cz, 2.2, 3.5, 10, 2.2);   // water tank
-      M.color('#5d5650'); M.pyramid(cx, y1 + 7, cz, 4.6, 1.8);
-      for (const [dx, dz] of [[-1.5, -1.5], [1.5, -1.5], [1.5, 1.5], [-1.5, 1.5]]) M.box(cx + dx, y1, cz + dz, .25, 3.5, .25);
+    } else if ((b.kind === 2 || b.kind === 3) && seed > .86 && b.h > 13) {   // [street-kit] a timber water tank at its real size (≈ 3 m across, 2.6 m tall on 1.8 m legs; was 4.4 m on 3.5 m)
+      M.color('#7d6b58'); M.cylinder(cx, y1 + 1.8, cz, 1.45, 2.6, 10, 1.45);
+      M.color('#5d5650'); M.pyramid(cx, y1 + 4.4, cz, 3.1, 1.0);
+      for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) M.box(cx + dx, y1, cz + dz, .18, 1.8, .18);
     }
   }
 
