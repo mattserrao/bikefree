@@ -428,6 +428,7 @@ document.addEventListener('keydown', (e) => {
   else if ((k === 'c' || k === 'C') && onRideScreen) cycleCamera();
   else if ((k === ',' || k === '.') && trainer.demo) setDemoSpeed(DEMO_MPH + (k === '.' ? 5 : -5));
   else if ((k === 'f' || k === 'F') && onRideScreen) toggleFullscreen();
+  else if ((k === 'w' || k === 'W') && onRideScreen) cycleWeather();
   else if (k === 'p' || k === 'P') { const opts = [0, ...PACER_WATTS]; setPacer(opts[(opts.indexOf(pacer.watts) + 1) % opts.length]); }
   else return;
   e.preventDefault();
@@ -464,6 +465,7 @@ async function openWorld(route) {
   worldRoute = route;
   world.setCamera(settings.worldCam);
   world.setTimeOfDay(settings.worldTime);
+  world.setWeather(settings.worldWeather || 'clear', true);
   world.setSource(() => {
     // On a route the rider is where the ride is; otherwise the scenery loop simply rolls by.
     const pos = session.mode === 'route' && session.route === route ? session.routePos : session.distanceM % route.total;
@@ -479,6 +481,13 @@ async function openWorld(route) {
   });
   world.start();
   log('3d', `3D view: ${route.name}`);
+}
+function cycleWeather() {
+  const order = ['clear', 'marine', 'clouds', 'rain'];
+  settings.worldWeather = order[(order.indexOf(settings.worldWeather) + 1) % order.length];
+  saveSettings(settings);
+  world?.setWeather(settings.worldWeather);
+  toast(`Weather: ${({ clear: 'Clear', marine: 'Marine layer', clouds: 'Clouds', rain: 'Rain' })[settings.worldWeather]}`);
 }
 function cycleCamera() {
   const order = ['chase', 'eye', 'side', 'drone'];
@@ -1227,6 +1236,7 @@ function fillSettings() {
   f.worldCam.value = settings.worldCam;
   f.worldTime.value = settings.worldTime;
   f.worldQuality.value = settings.worldQuality;
+  f.worldWeather.value = settings.worldWeather || 'clear';
   f.shiftMode.value = settings.shiftMode;
   f.difficulty.value = settings.difficulty;
   $('diffOut').textContent = `${settings.difficulty}%`;
@@ -1256,6 +1266,7 @@ dlg.addEventListener('close', () => {
     worldCam: f.worldCam.value,
     worldTime: f.worldTime.value,
     worldQuality: f.worldQuality.value,
+    worldWeather: f.worldWeather.value,
     shiftMode: f.shiftMode.value,
     difficulty: Number(f.difficulty.value),
     realRatio: Math.max(0, Number(f.realRatio.value) || 0),
@@ -1268,6 +1279,7 @@ dlg.addEventListener('close', () => {
   world?.setCamera(settings.worldCam);
   world?.setTimeOfDay(settings.worldTime);
   world?.setQuality(settings.worldQuality);
+  world?.setWeather(settings.worldWeather);
   renderRouteCards();
   renderWorkoutList();
   renderProfile();

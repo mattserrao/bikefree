@@ -41,7 +41,7 @@ for (const item of catalog) {
   if (item.stage) row.stage = item.stage;   // 'draft': listed under Rough Drafts
   if (item.scene) {
     const scene = JSON.parse(read(item.scene));
-    if (scene.format !== 'bikefree-scene-1' || !['authored-coast', 'authored-region', 'authored-city'].includes(scene.terrain)) throw new Error(`${item.id}: unsupported scene format or terrain`);
+    if (scene.format !== 'bikefree-scene-1' || !['authored-coast', 'authored-region', 'authored-city', 'real-coast'].includes(scene.terrain)) throw new Error(`${item.id}: unsupported scene format or terrain`);
     if (scene.terrain === 'authored-city') {
       // city data from tools/build_city.py: rivers, height grid, buildings, streets, bridges
       if (!scene.cityData?.startsWith('routes/scenes/') || scene.cityData.includes('..') || !existsSync(resolve(root, scene.cityData))) throw new Error(`${item.id}: missing city data`);
@@ -49,6 +49,14 @@ for (const item of catalog) {
       if (city.format !== 'bikefree-city-1' || !(city.buildings?.count > 0) || !(city.grid?.nx > 1)) throw new Error(`${item.id}: invalid city data`);
       for (const r of scene.rivers || []) if (!Array.isArray(r.path) || r.path.length < 2) throw new Error(`${item.id}: invalid river path`);
       paths.push(scene.cityData);
+    }
+    if (scene.terrain === 'real-coast') {
+      // a real height grid around the route from tools/build_terrain_grid.py
+      if (!scene.terrainGridFile?.startsWith('routes/scenes/') || scene.terrainGridFile.includes('..') || !existsSync(resolve(root, scene.terrainGridFile))) throw new Error(`${item.id}: missing terrain grid`);
+      const grid = JSON.parse(read(scene.terrainGridFile));
+      if (grid.format !== 'bikefree-terrain-grid-1' || !(grid.coarse?.nx > 1) || !(grid.fine?.blocks?.length > 0)) throw new Error(`${item.id}: invalid terrain grid`);
+      for (const b of scene.bridges || []) if (!(b.fromM >= 0 && b.toM > b.fromM && b.toM <= (route.turnS || route.total))) throw new Error(`${item.id}: invalid bridge span`);
+      paths.push(scene.terrainGridFile);
     }
     if (scene.terrain === 'authored-coast' && (!Array.isArray(scene.coastline) || scene.coastline.length < 2)) throw new Error(`${item.id}: a coastline needs at least two coordinates`);
     for (const [lat, lon] of scene.coastline || []) if (!Number.isFinite(lat) || Math.abs(lat) > 90 || !Number.isFinite(lon) || Math.abs(lon) > 180) throw new Error(`${item.id}: invalid coastline coordinate`);

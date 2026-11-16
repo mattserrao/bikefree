@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { buildCatalogRoute, headingSpan, loadRouteScene } from '../js/routes.js';
 import { routeAt, haversine } from '../js/gpx.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
-import { makeCoastLandscape } from '../js/world/coast.js';
+import { makeRealCoastLandscape } from '../js/world/real-coast.js';
 import { coastalRoadFrame, fitBridgeToRoad } from '../js/world/coastal-details.js';
 import * as THREE from '../vendor/three.module.min.js';
 
@@ -15,7 +15,9 @@ const route = buildCatalogRoute(read(item.file), item);
 const proj = makeProjection(36.38, -121.87);
 const index = makeRouteIndex(route, proj);
 const scene = JSON.parse(read(item.scene));
-const coast = makeCoastLandscape(scene, proj, index, route);
+scene.terrainGrid = JSON.parse(read(scene.terrainGridFile));
+const coast = makeRealCoastLandscape(scene, proj, index, route);
+const bixby = { ...coast.bridges.find((b) => /Bixby/.test(b.name)), span: 218 };
 
 test('shared catalog loader carries scene and turnaround metadata', () => {
   assert.equal(route.name, 'Big Sur · Bixby Bridge & Hurricane Point');
@@ -33,21 +35,26 @@ test('heading stays on its own leg at start, turnaround and lap seam', () => {
   }
 });
 
-test('authored coast stays below the road and leaves the bridge canyon open', () => {
+test('real coast stays below the road, opens the Bixby gorge and puts the sea below sea level', () => {
   for (let i = 0; i <= route.turnIdx; i += 8) {
     const x = index.xs[i], z = index.zs[i];
     const height = coast.heightAt(x, z);
     assert.ok(Number.isFinite(height), `finite terrain at ${i}`);
     assert.ok(height < route.ele[i] - .1, `road clearance at ${i}`);
   }
-  const bridge = coast.landmarks[0];
-  assert.ok(coast.heightAt(bridge.x, bridge.z) < bridge.y - 40);
-  assert.ok(coast.heightAt(coast.coastX(bridge.z) - 100, bridge.z) < 0, 'ocean floor lies below the sea');
+  assert.ok(bixby.depth > 60 && bixby.depth < 95, `Bixby gorge is about 80 m deep (${bixby.depth.toFixed(0)} m)`);
+  assert.ok(coast.heightAt(bixby.x, bixby.z) < bixby.y - 40);
+  // 1 km out to sea from the bridge (west) is ocean
+  assert.ok(coast.heightAt(bixby.x - 1000, bixby.z) < 0, 'ocean floor lies below the sea');
+  assert.ok(coast.inlandAt(bixby.x - 1000, bixby.z) < -300, 'shore distance is negative at sea');
+  assert.ok(coast.inlandAt(bixby.x + 800, bixby.z) > 300, 'and positive inland');
   for (const creek of coast.creeks) for (let t = creek.start + 25; t < creek.mouth - 10; t += 25) {
     const p = creek.positionAt(t);
-    assert.ok(coast.creekAt(p.x, p.z));
-    assert.ok(coast.heightAt(p.x, p.z) < creek.waterAt(t) - .1, 'creek water remains above its carved bed');
+    assert.ok(coast.creekAt(p.x, p.z), `${creek.name} at ${t}`);
+    assert.ok(coast.heightAt(p.x, p.z) < creek.waterAt(t) - .1, `${creek.name}: water stays above its carved bed`);
+    assert.ok(creek.waterAt(t + 25) <= creek.waterAt(t) + 1e-6, `${creek.name}: water only flows downhill`);
   }
+  assert.ok(coast.creeks.some((c) => /Bixby/.test(c.name) && c.mouth > 40), 'Bixby Creek reaches the sea');
 });
 
 test('scene fetch failure is explicit rather than silently accepting bad scenery', async () => {
@@ -76,7 +83,7 @@ test('bridge model follows the curved GPX and preserves deck-to-road clearance',
   for (let i = 0; i < position.length; i++) position[i] = packed.readInt16LE(i * 2) / kit.positionScale;
   const original = new THREE.BufferGeometry();
   original.setAttribute('position', new THREE.BufferAttribute(position, 3));
-  const landmark = coast.landmarks[0], fitted = fitBridgeToRoad(original, route, index, landmark);
+  const landmark = { ...bixby, depth: 65 }, fitted = fitBridgeToRoad(original, route, index, landmark);
   const vertices = fitted.attributes.position;
   for (let i = 0; i < vertices.count; i += 19) {
     const x = position[i * 3], y = position[i * 3 + 1], z = position[i * 3 + 2];

@@ -14,6 +14,7 @@ export const DEFAULT_SETTINGS = {
   worldCam: 'chase',      // 3D camera: chase | eye | drone
   worldTime: 'midday',    // 3D time of day: morning | midday | golden | night
   worldQuality: 'balanced', // stylized scenery: low | balanced | high
+  worldWeather: 'clear',  // 3D weather: clear | marine | clouds | rain
   scenery: 'builtin-park-yosemite', // 3D loop shown behind free rides and workouts
 };
 

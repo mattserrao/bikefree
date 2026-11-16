@@ -186,6 +186,39 @@ This packages the actual WebGL scene, GPX and animated rider into one HTML file.
 It is a visual review artifact, not the Bluetooth trainer app. Sustained frame
 rate, thermal behaviour and Bluetooth operation still need checking on the M4 Air.
 
+## Scene snapshots: look at the 3D views
+
+`npm run snap` is the visual half of course QC. It renders route views headlessly in
+Chrome and saves them as images, with the draw calls and triangles each view costs.
+
+```sh
+npm run snap -- route28@10650 route28@19050:morning route28@16200:drone pittsburgh
+npm run snap -- --quality high bigsur@21800:golden route28@24450:fall
+```
+
+A shot is `<park>[@metres][:camera][:time][:season][:weather]`:
+- camera: `chase`, `drone`, `vista`, `side` or `eye`
+- time: `midday`, `morning`, `golden` or `night`
+- season: `summer` or `fall`
+- weather: `clear`, `marine`, `clouds` or `rain`
+
+The frame is drawn the way the app draws it, including a scene's post-processing (Big Sur).
+
+Without `@metres`, it uses the scene's preview spot.
+
+Images and a `snapshots.json` summary go to `tools/snapshots/`, which is git-ignored.
+
+Options:
+- `--out <dir>`
+- `--quality low|balanced|high`
+- `--size 1280x720`
+- `--chrome <path>`, or the `CHROME` environment variable
+- `--software` (no GPU; slow but works on a server)
+
+It serves the repo itself, waits until every queued scenery tile is built, then draws a single
+frame. It exits with code 1 if the page logged an error. Needs `npm install` (playwright-core)
+and Chrome.
+
 ## Course QC: check the full length for discontinuities
 
 ```sh
@@ -214,6 +247,7 @@ from–to range, its worst value and *view* / *ride* links into `tools/world-pre
 | Scenery | `road-floating`, `verge-wall`, `verge-step` | warn | shoulder > 3 m above ground off a bridge; ground > 3 m above the road 8 m out; a > 1 m ledge 6 m out |
 | Scenery | `mesh-coarse` | warn | a carve (river, channel) narrower than the 6 m ground mesh beside the road: jagged edge |
 | Camera | `camera-lift` | warn | the chase camera is pushed > 0.75 m up by the ground (visible camera hop) |
+| Overlooks | `lookout-floating`, `lookout-buried` | warn | an overlook's gravel pad sits > 0.6 m above the drawn ground, or the ground rises > 0.25 m through it |
 
 Limits are in `LIMITS` at the top of `tools/qc_course.mjs`. `test/qc.test.mjs` runs the sweep over the
 whole catalog, so `npm test` fails if a route regresses.
