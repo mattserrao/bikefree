@@ -8,6 +8,7 @@ import { makeRouteIndex } from './geo.js';
 import { smoothstep } from './coast.js';
 import { ROAD_WIDTH } from './pose.js';
 import { decodeTerrain } from './real-coast.js';
+import { planJunctions } from './junctions.js';   // [junctions]
 
 export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand: 5, plaza: 6, outside: 7, yards: 8 };
 const LAND_COLORS = ['#8d8a84', '#77985a', '#4d6a3a', '#6c6a5e', '#7d786f', '#b5a684', '#b4ada0', '#6d8252', '#7c8c5f'];
@@ -399,6 +400,7 @@ export function makeCityLandscape(config, proj, index, route) {
     /** Trees and shrubs from the shared kit grow only in parks, woods and the hills beyond. */
     canPlant: (x, z) => { const c = landCell(x, z); return c === LAND.woods || c === LAND.outside || (c === LAND.grass && ((x * 13 + z * 7) & 3) === 0); },
     routeDist, streetAt, streetsNear,
+    junctions: config.junctions || null,   // [junctions] scene key: real intersection geometry (js/world/junctions.js)
     /** For the weather: fog lies on the rivers (at the water level) and reaches inland up the valleys. */
     fogBase: level, fogField: rivers, fogInlandAt: riverDistance,
     /**
@@ -443,11 +445,12 @@ export function cityStreets(landscape, index, route) {
       p.y = bridge && deck[i] ? 150 + deck[i] / 10 : null;
       raw.push(p);
     }
-    const pts = [raw[0]], step = bridge ? 6 : 7;
+    const pts = [raw[0]], step = bridge ? 6 : 7, nodeIdx = [0];
     let under = false;
     for (let j = 1; j < raw.length; j++) {
       const a = raw[j - 1], b = raw[j], n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / step));
       for (let m = 1; m <= n; m++) { const f = m / n; pts.push({ x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, y: a.y != null && b.y != null ? a.y + (b.y - a.y) * f : null }); }
+      nodeIdx.push(pts.length - 1);   // [junctions]
     }
     for (const p of pts) {
       if (p.y == null) p.y = landscape.heightAt(p.x, p.z);
@@ -456,8 +459,13 @@ export function cityStreets(landscape, index, route) {
       const i = r.i > end ? Math.max(0, 2 * end - r.i) : r.i, e = route.ele[i];
       if (p.y > e - 4 && p.y < e + 4 && p.y > e - .18) { p.y = e - .12 - STREET_LIFT + .1; under = true; }
     }
-    streets.push({ cls, bridge, oneway, layer, pts, width, underRoute: under });
+    streets.push({ cls, bridge, oneway, layer, pts, width, underRoute: under, nodes: raw, nodeIdx });   // [junctions] OSM nodes → pts index
   }
   landscape._streets = streets;
+  // [junctions] real intersection geometry: street heights inside junctions, trims, the junction surfaces
+  if (landscape.junctions) {
+    landscape._junctions = planJunctions(streets, { route, index, end, routeDist: landscape.routeDist, roadWidth: ROAD_WIDTH,
+      onRouteBridge: (s, m) => landscape.routeBridges.some((b) => s > b.fromM - m && s < b.toM + m) }, landscape.junctions);
+  }
   return streets;
 }
