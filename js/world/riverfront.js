@@ -275,8 +275,8 @@ export function buildRiverfront(city) {
   }
   const steps = plan.steps !== undefined ? plan.steps : planWaterSteps(L, config.waterSteps);
   if (steps) { const m = waterStepsMesh(city, steps); tris += m.geometry.index.count / 3; meshes.push(m); }
-  // no street trees at the wall or past it (in the river)
-  if (city._clearSpot) { const clear = city._clearSpot; city._clearSpot = function (x, z, ...rest) { return clear.call(this, x, z, ...rest) && !(covers(x, z) && field.groundCap(x, z) < Infinity); }; }
+  // no street trees on the walk, at the wall or past it (the trail's own lamps, inside the shoulder, stay)
+  if (city._clearSpot) { const clear = city._clearSpot; city._clearSpot = function (x, z, ...rest) { return clear.call(this, x, z, ...rest) && !(covers(x, z) && (field.groundCap(x, z) < Infinity || (L.routeDist(x, z)?.d ?? 99) > RIVERFRONT_DEFAULTS.innerM)); }; }
   // no scattered rocks, shrubs or grass on the walk
   const plant = L.canPlant;
   if (plant) L.canPlant = (x, z) => plant(x, z) && !covers(x, z);
