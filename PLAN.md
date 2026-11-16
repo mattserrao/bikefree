@@ -356,3 +356,8 @@ python3 -m http.server 8000
 ```
 
 Close Zwift, Zwift Companion and the Wahoo app before connecting — they can hold the Bluetooth connections.
+
+### hud-test — Minimap and power bar size *(test branch `hud-test`, on top of v0.12.1)*
+- [x] Ride-screen minimap (bottom-left): route outline, this leg's progress, rider arrow, pacer dot; on routes and scenery loops
+- [x] Settings → Minimap: Whole course (default) · Zoomed in, follows you · Off; <kbd>M</kbd> cycles it on the ride screen
+- [x] Settings → Power bar size: Small (default, ~50% of the old size) · Medium · Large (original); labels keep a readable minimum
