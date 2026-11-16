@@ -111,3 +111,18 @@ test('out-and-back routes are symmetric and have rideable grades', async () => {
     assert.ok(steepest < 12, `${item.id} steepest ${steepest.toFixed(1)}%`);
   }
 });
+
+// [w2-align] a route can narrow the elevation smoothing (catalog `eleSmoothM`): crests stay put, grades stay smooth
+test('eleSmoothM: a narrow window keeps a crest; the default rounds it', () => {
+  const pts = [];
+  for (let i = 0; i <= 200; i++) {
+    const d = i * 10, lat = 44 + d / 111195;
+    const ele = 100 + 8 * Math.max(0, 1 - Math.abs(d - 1000) / 100);   // an 8 m crest, 200 m wide
+    pts.push({ lat, lon: -74, ele });
+  }
+  const wide = buildRoute({ points: pts }), narrow = buildRoute({ points: pts, eleSmoothM: 10 });
+  const top = (r) => Math.max(...r.ele) - 100;
+  assert.ok(top(wide) < 6.5, `default ±60 m rounds the crest (${top(wide).toFixed(2)} m)`);
+  assert.ok(top(narrow) > 7.3, `±10 m keeps it (${top(narrow).toFixed(2)} m)`);
+  for (let i = 1; i < narrow.grade.length; i++) assert.ok(Math.abs(narrow.grade[i] - narrow.grade[i - 1]) < 3, 'no grade jolt');
+});

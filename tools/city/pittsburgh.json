@@ -394,6 +394,12 @@
  "cornerPasses": 3,
  "cornerHalfWindow": 8,
  "maxDriftM": 16,
+ "profileKeep": [
+  [
+   2440,
+   2620
+  ]
+ ],
  "residentialBoxes": [
   [
    40.424,
