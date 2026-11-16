@@ -22,6 +22,7 @@ import { planSettlement } from '../js/world/settlement.js';
 import { cityStreets, STREET_LIFT } from '../js/world/city-landscape.js';
 import { landscapeBuilder } from '../js/world/landscapes.js';
 import { riderPose, routePoint, ROAD_WIDTH, ROAD_LIFT } from '../js/world/pose.js';
+import { alignmentChecks } from './qc_alignment.mjs';   // [road-align]
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(join(ROOT, p), 'utf8');
@@ -231,9 +232,13 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
         if (wall > LIMITS.wall) F.add('verge-wall', 'warn', s, wall, 'ground rises steeply right at the road edge');
         // ledge right beside the shoulder: compare the same spot 6 m out between 2 m samples
         // (skipped on tight bends, where the 6 m point itself sweeps sideways)
+        // [road-align] up to 20 m past a bridge's end the ground beside the road may drop like a cliff (an
+        // abutment over a street or a bank): no ledge/mesh checks there (walls are the detail kit's)
+        const abutment = bridgeAt(c.x, c.z, 20);
         for (const o of [-6, 6]) {
           const px = c.x + rx * o, pz = c.z + rz * o, h = ground(px, pz), k = `v${o}`, p0 = last[k];
           const exact = landscape.heightAt(px, pz);
+          if (abutment) { last[k] = null; continue; }
           if (Math.abs(h - exact) > LIMITS.meshAlias) { F.add('mesh-coarse', 'warn', s, h - exact, `ground mesh can’t follow a narrow carve ${Math.abs(o)} m ${o < 0 ? 'left' : 'right'} of the road (jagged edge)`, 150); last[k] = null; continue; }
           if (p0 && Math.hypot(px - p0.x, pz - p0.z) < 4 && Math.abs(h - p0.h - (c.y - last.y)) > LIMITS.vergeStep)
             F.add('verge-step', 'warn', s, h - p0.h - (c.y - last.y), `ground ${Math.abs(o)} m ${o < 0 ? 'left' : 'right'} of the road steps`);
@@ -305,13 +310,18 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
         const r = index.nearest(p.x, p.z, st.width / 2 + ROAD_WIDTH / 2 + 1);
         if (!r) continue;
         const i = r.i > end ? Math.max(0, 2 * end - r.i) : r.i;
-        const over = p.y + STREET_LIFT - (route.ele[i] + ROAD_LIFT);
+        // [road-align] the road as drawn: straight between its 10 m samples, not the nearest sample's height
+        const rd = landscape.routeDist?.(p.x, p.z), e = rd && Math.abs(rd.y - route.ele[i]) < 3 ? rd.y : route.ele[i];
+        const over = p.y + STREET_LIFT - (e + ROAD_LIFT);
         if (over > -.02 && over < 4) hits.push([route.dist[i], over]);
       }
     }
     hits.sort((a, b) => a[0] - b[0]);
     for (const [hs, over] of hits) F.add('street-over-road', 'fail', hs, over, 'a city street or bridge deck covers the road');
   }
+
+  // 6. Road alignment: kinks, jitter and creases in the drawn road; city streets' profiles ([road-align])
+  alignmentChecks({ route, index, landscape, F, nearUturn, oneWay });
 
   const list = F.list.sort((a, b) => a.from - b.from);
   const count = (sev) => list.filter((f) => f.severity === sev).length;

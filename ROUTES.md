@@ -315,6 +315,18 @@ distance-based placements (signs, lookouts, roadside rails, preview position) to
 from BRouter applies the same steps. The real far terrain (internet tiles) is not
 checked; it starts 1.5 km from the road.
 
+### Road alignment checks and the `roadAlign` scene key
+
+`tools/qc_alignment.mjs` (run by the sweep) checks the road as drawn: `lateral-jump` (one 10 m sample pushed
+sideways), `heading-jitter` (the drawn centre line's turn rate jumps: a kink you see), `grade-crease` (the road's
+grade changes sharply between 10 m pieces) and, on city scenes, `route-off-ground`, `street-steep`,
+`street-crease`, `street-step` (streets meet a junction at different heights) and `street-bank` (a street on an
+embankment or in a trench). They warn on scenes with `"roadAlign"` and are info elsewhere. Limits:
+`ALIGN_LIMITS` in that file. The scene key `"roadAlign": { "curve": true, "streets": true, "bankM": 30 }` turns on
+the curved route centre line (ribbons, rider and camera follow a Catmull-Rom curve through the 10 m samples),
+the street profile solver (`js/world/road-align.js`) and a narrower ground bank beside the route; the builder
+half is `tools/citylib/road_align.py`. How-to and numbers: `docs/pittsburgh/detail/s4.md`.
+
 ## Clipping & overlap QC: things drawn through each other
 
 ```sh

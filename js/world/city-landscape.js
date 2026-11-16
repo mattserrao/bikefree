@@ -8,6 +8,7 @@ import { makeRouteIndex } from './geo.js';
 import { smoothstep } from './coast.js';
 import { ROAD_WIDTH } from './pose.js';
 import { decodeTerrain } from './real-coast.js';
+import { alignStreetProfiles, syncPinnedNodes } from './road-align.js';   // [road-align]
 
 export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand: 5, plaza: 6, outside: 7, yards: 8 };
 const LAND_COLORS = ['#8d8a84', '#77985a', '#4d6a3a', '#6c6a5e', '#7d786f', '#b5a684', '#b4ada0', '#6d8252', '#7c8c5f'];
@@ -286,15 +287,18 @@ export function makeCityLandscape(config, proj, index, route) {
     // heights (a ramp beside a street), follow the lowest, so none is buried.
     const flat = 6.5, around = streetsNear(x, z, 18).filter((o) => !streetIndex.streets[o.k].bridge);
     if (around.length) {
-      let target = Infinity, edge = Infinity;
+      let target = Infinity, edge = Infinity, ride = Infinity;
       for (const o of around) {
         edge = Math.min(edge, o.edge);
         if (o.edge < flat) target = Math.min(target, o.y - .1);
+        if (o.edge < 2.5 && streetIndex.streets[o.k].rides) ride = Math.min(ride, o.y - .1);   // [road-align] rides
       }
       if (target === Infinity) target = around.reduce((a, b) => (a.edge < b.edge ? a : b)).y - .1;
-      // the route's own road wins: no street grading under it, easing in beyond its shoulders
+      // the route's own road wins: no street grading under it, easing in beyond its shoulders — except under the
+      // street the route rides on, which lies just under the road and is wider than it ([road-align] rides)
       const r = routeDist(x, z), byRoute = r ? smoothstep(ROAD_WIDTH / 2 + 2, 13, r.d) : 1;
       h += (target - h) * (1 - smoothstep(flat, 18, edge)) * byRoute;
+      if (ride < Infinity) h += (ride - h) * (1 - byRoute);
       if (r && r.d < 9) h = Math.min(h, r.y - .5 + Math.max(0, r.d - 5) * .2);   // never over the route's own road
     }
     // nor over a low ramp or viaduct deck (they're left out of the grading above, but one running close to the
@@ -308,13 +312,15 @@ export function makeCityLandscape(config, proj, index, route) {
     if (h > level - .6 && h < level + .35) h = h >= level - .1 ? level + .35 : level - .6;
     return h;
   };
+  // [road-align] how far the ground eases towards the route's road (a route that follows its own ground needs less)
+  const bankM = config.roadAlign?.bankM ?? 60;
   const routeHeightAt = (x, z) => {
     let h = baseHeight(x, z);
     const road = index.nearest(x, z, 60);
     if (road) {
       const i = outbound(road.i), s = route.dist[i];
       const bridge = onRouteBridge(s, 6);
-      if (!bridge) h += (roadEle(i, x, z) - .5 - h) * (1 - smoothstep(13, 60, road.d));
+      if (!bridge) h += (roadEle(i, x, z) - .5 - h) * (1 - smoothstep(13, bankM, road.d));   // [road-align] bankM
       else {
         if (road.d < 14) h = Math.min(h, route.ele[i] - 2.5);   // keep the ground under a deck
         // a stretch of the route that passes under this deck (the North Shore Trail under the Clemente ramp)
@@ -389,6 +395,15 @@ export function makeCityLandscape(config, proj, index, route) {
     return (F[j * n + i] * (1 - a) + F[j * n + i + 1] * a) * (1 - b) + (F[(j + 1) * n + i] * (1 - a) + F[(j + 1) * n + i + 1] * a) * b;
   };
 
+  // [s4-section] yard trees in hillside neighbourhoods: scene `vegetation.yardTrees` = {kitDensity, boxes: [[s, w, n, e]…]}
+  // (lat/lon; no boxes: every yard): the share of yard spots that take the shared kit's trees (in its grove patches);
+  // the city keeps them clear of its buildings and adds its own light trees on a grid (city.js `_trees`).
+  const YT = config.vegetation?.yardTrees, ytBoxes = (YT?.boxes || []).map(([s, w, n, e]) => {
+    const a = proj.toLocal(s, w), b = proj.toLocal(n, e);
+    return [Math.min(a.x, b.x), Math.max(a.x, b.x), Math.min(a.z, b.z), Math.max(a.z, b.z)];
+  });
+  const yardTree = (x, z) => !!YT && (!ytBoxes.length || ytBoxes.some((b) => x > b[0] && x < b[1] && z > b[2] && z < b[3]))
+    && ((h) => h - Math.floor(h))(Math.sin(x * 4.1414 + z * 91.7171) * 24634.6345) < (YT.kitDensity ?? .5);
   const L = {
     kind: 'city', city: true, data, decoded: D, level, wallAt, shoreWalls, outer: OW && { x0: T.x0, z0: T.z0, x1: T.x1, z1: T.z1, water: outerWater, mask: OW }, hasOcean: false, coastSide: 1,
     coast: [{ x: -1e5, z: 0 }, { x: -1e5, z: 1 }], coastX: () => -1e5, inlandAt: () => 1e4,
@@ -397,7 +412,7 @@ export function makeCityLandscape(config, proj, index, route) {
     isWater: (x, z, height) => waterAt(x, z) > .35 && height < level + .6,
     colorAt: (x, z) => LAND_COLORS[landCell(x, z)] || null,
     /** Trees and shrubs from the shared kit grow only in parks, woods and the hills beyond. */
-    canPlant: (x, z) => { const c = landCell(x, z); return c === LAND.woods || c === LAND.outside || (c === LAND.grass && ((x * 13 + z * 7) & 3) === 0); },
+    canPlant: (x, z) => { const c = landCell(x, z); return c === LAND.woods || c === LAND.outside || (c === LAND.grass && ((x * 13 + z * 7) & 3) === 0) || (c === LAND.yards && yardTree(x, z)); },   // [s4-section] yards
     routeDist, streetAt, streetsNear,
     /** For the weather: fog lies on the rivers (at the water level) and reaches inland up the valleys. */
     fogBase: level, fogField: rivers, fogInlandAt: riverDistance,
@@ -433,7 +448,32 @@ export function cityStreets(landscape, index, route) {
   const u8 = (t) => Uint8Array.from(atob(t), (c) => c.charCodeAt(0)).buffer;
   const starts = new Uint32Array(u8(S.starts)), xy = new Int16Array(u8(S.xy)), deck = new Uint16Array(u8(S.deck));
   const end = route.turnIdx || route.dist.length - 1;
-  const streets = [];
+  const streets = [], align = route.scene?.roadAlign;
+  // a street point over or beside the route's road, near its height, is kept just below the road (pinned there)
+  // [road-align] `along`: the street runs along the route there and the route's centre line lies inside its
+  // carriageway — it is the street the route rides on (the other half of a mapped dual carriageway, or a way
+  // mapped a few metres off), so it is pinned even when the ground left it lower: drawn 0.3–2 m below the road
+  // and offset sideways, its outer half showed beside the road and z-fought the route's bank (McArdle, 12.1 km)
+  const lower = (p, width, along = false) => {
+    const r = index.nearest(p.x, p.z, width / 2 + ROAD_WIDTH / 2 + 2);
+    if (!r || r.d > width / 2 + ROAD_WIDTH / 2 + 1.5) return false;
+    const i = r.i > end ? Math.max(0, 2 * end - r.i) : r.i;
+    // [road-align] the road's height interpolated along the route (the nearest 10 m sample's left steps of up to
+    // 0.8 m in streets pinned along the route)
+    const rd = align && landscape.routeDist?.(p.x, p.z), e = rd && Math.abs(rd.y - route.ele[i]) < 3 ? rd.y : route.ele[i];
+    const low = along && r.d < width / 2 ? e - 2.5 : e - .18;
+    if (p.y > e - 4 && p.y < e + 4 && p.y > low) { p.y = e - .12 - STREET_LIFT + .1; p.pin = true; if (along && r.d < width / 2) p.along = true; return true; }   // [road-align] pin
+    return false;
+  };
+  // [road-align] is this street running along the route at point j (within ~20°)?
+  const alongRoute = (pts, j) => {
+    if (!align?.streets) return false;
+    const a = pts[Math.max(0, j - 1)], b = pts[Math.min(pts.length - 1, j + 1)], r = index.nearest(pts[j].x, pts[j].z, 12);
+    if (!r) return false;
+    const i = Math.min(index.xs.length - 2, r.i), dx = index.xs[i + 1] - index.xs[i], dz = index.zs[i + 1] - index.zs[i];
+    const sx = b.x - a.x, sz = b.z - a.z, l = Math.hypot(dx, dz) * Math.hypot(sx, sz);
+    return l > 0 && Math.abs(dx * sx + dz * sz) / l > .94;
+  };
   for (let k = 0; k < S.count; k++) {
     const cls = S.meta[k * 3], flags = S.meta[k * 3 + 1], layer = S.meta[k * 3 + 2] - 8;
     const bridge = !!(flags & 1), oneway = (flags >> 1) - 1, width = STREET_W[cls];
@@ -449,14 +489,18 @@ export function cityStreets(landscape, index, route) {
       const a = raw[j - 1], b = raw[j], n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / step));
       for (let m = 1; m <= n; m++) { const f = m / n; pts.push({ x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, y: a.y != null && b.y != null ? a.y + (b.y - a.y) * f : null }); }
     }
-    for (const p of pts) {
+    pts.forEach((p, j) => {
       if (p.y == null) p.y = landscape.heightAt(p.x, p.z);
-      const r = index.nearest(p.x, p.z, width / 2 + ROAD_WIDTH / 2 + 2);
-      if (!r || r.d > width / 2 + ROAD_WIDTH / 2 + 1.5) continue;
-      const i = r.i > end ? Math.max(0, 2 * end - r.i) : r.i, e = route.ele[i];
-      if (p.y > e - 4 && p.y < e + 4 && p.y > e - .18) { p.y = e - .12 - STREET_LIFT + .1; under = true; }
-    }
-    streets.push({ cls, bridge, oneway, layer, pts, width, underRoute: under });
+      if (lower(p, width, !bridge && alongRoute(pts, j))) under = true;   // [road-align] along
+    });
+    streets.push({ cls, bridge, oneway, layer, pts, width, underRoute: under, rides: width > ROAD_WIDTH + 1 && pts.some((p) => p.along) });   // [road-align] rides (wider than the road: sticks out)
+  }
+  // [road-align] smooth, grade-limited street profiles with one height per junction (js/world/road-align.js)
+  if (align?.streets) {
+    const nearRoute = (x, z) => { const r = index.nearest(x, z, 24); return r ? 1 - smoothstep(12, 22, r.d) : 0; };
+    alignStreetProfiles(streets, { ...align, ground: landscape.baseHeight, nearRoute, floor: landscape.level + .6 });
+    for (const st of streets) st.pts.forEach((p, j) => { if (lower(p, st.width, !st.bridge && alongRoute(st.pts, j))) st.underRoute = true; });
+    syncPinnedNodes(streets);
   }
   landscape._streets = streets;
   return streets;

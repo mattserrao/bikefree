@@ -45,7 +45,8 @@ export class CityScene {
     this._streetsAndLamps();
     this.bridges = buildBridges(this);
     this.stadiums = buildStadiums(this);
-    { const plant = this.landscape.canPlant; if (plant) this.landscape.canPlant = (x, z) => plant(x, z) && !this.inStadium(x, z, 2); }   // no trees on the field
+    { const plant = this.landscape.canPlant; if (plant) this.landscape.canPlant = (x, z) => plant(x, z) && !this.inStadium(x, z, 2)
+      && (this.landscape.landAt(x, z) !== LAND.yards || !this.buildingNear(x, z, 3.5)); }   // no trees on the field; [s4-section] yard trees clear of houses
     this.landmarks = buildLandmarks(this);
     this.heroes = buildHeroes(this);
     this.landscape.landmarks.push(...this.heroes.landmarks);   // postcard views for the scenic camera
@@ -910,6 +911,41 @@ export class CityScene {
     });
     const T = this.data.trees ? new Int16Array(Uint8Array.from(atob(this.data.trees), (c) => c.charCodeAt(0)).buffer) : [];
     for (let i = 0; i < T.length; i += 2) { const p = this.D.local(T[i], T[i + 1]); spots.push({ ...p, seed: hash(i) }); }
+    // [s4-section] tree rows along the route (a riverfront park, an avenue): scene `routeTrees` =
+    // [{fromM, toM, spacingM = 12, offsetM = 7.5, sides: [-1, 1] (left, right of the ride)}]; spots that aren't clear are dropped
+    // [s4-section] yard trees: scene `vegetation.yardTrees` = {density, spacingM = 15, boxes: [[s, w, n, e]…]} — a
+    // jittered grid over the yards (land use "yards") inside the boxes (lat/lon), near the ride
+    const YT = this.route.scene?.vegetation?.yardTrees, railPts = new Map();
+    if (YT) for (const r of this.data.rails || []) {   // yard trees keep 5 m off the railways (10 m grid of 3 m steps)
+      const pts = r.path.map(([qa, qo]) => this.D.local(qa, qo));
+      for (let q = 1; q < pts.length; q++) {
+        const a0 = pts[q - 1], a1 = pts[q], n = Math.max(1, Math.ceil(Math.hypot(a1.x - a0.x, a1.z - a0.z) / 3));
+        for (let t = 0; t <= n; t++) { const px = a0.x + (a1.x - a0.x) * t / n, pz = a0.z + (a1.z - a0.z) * t / n; railPts.set(`${Math.floor(px / 5)},${Math.floor(pz / 5)}`, true); }
+      }
+    }
+    const nearRail = (x, z) => { for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) if (railPts.has(`${Math.floor(x / 5) + i},${Math.floor(z / 5) + j}`)) return true; return false; };
+    for (const [bs, bw, bn, be] of YT?.boxes || []) {
+      const P = this.D.proj, a = P.toLocal(bs, bw), b = P.toLocal(bn, be), g = YT.spacingM || 15;
+      for (let x = Math.min(a.x, b.x); x < Math.max(a.x, b.x); x += g) for (let z = Math.min(a.z, b.z); z < Math.max(a.z, b.z); z += g) {
+        const seed = hash(x * .37 + z * 1.13);
+        if (seed > (YT.density ?? .5)) continue;
+        const px = x + (hash(x + z * 3.1) - .5) * g * .8, pz = z + (hash(x * 2.3 - z) - .5) * g * .8;
+        if (this.landscape.landAt(px, pz) !== LAND.yards || !this.index.nearest(px, pz, 650) || nearRail(px, pz)) continue;
+        spots.push({ x: px, z: pz, seed: hash(seed * 997), wall: 3 });   // crowns clear of the houses
+      }
+    }
+    for (const row of this.route.scene?.routeTrees || []) {
+      const R = this.route, I = this.index, last = (R.turnIdx || R.dist.length - 1) - 1;
+      for (let s = row.fromM, n = 0; s < row.toM; s += row.spacingM || 12, n++) {
+        const i = Math.max(0, Math.min(last - 1, Math.floor(s / 10))), f = Math.min(1, (s - R.dist[i]) / 10);
+        const x = I.xs[i] + (I.xs[i + 1] - I.xs[i]) * f, z = I.zs[i] + (I.zs[i + 1] - I.zs[i]) * f;
+        const dx = I.xs[i + 1] - I.xs[i], dz = I.zs[i + 1] - I.zs[i], l = Math.hypot(dx, dz) || 1;
+        for (const side of row.sides || [-1, 1]) {
+          const seed = hash(s * 7 + side * 3), off = (row.offsetM ?? 7.5) + (seed - .5) * 1.5;
+          spots.push({ x: x - (dz / l) * off * side, z: z + (dx / l) * off * side, seed });
+        }
+      }
+    }
     // a light street tree: trunk + two lumpy crowns (~40 triangles), coloured per instance
     const M = new MeshBuilder();
     M.color('#5b4636'); M.cylinder(0, 0, 0, .16, 3.2, 5, .12);
@@ -931,7 +967,7 @@ export class CityScene {
       const road = this.index.nearest(t.x, t.z, 650);
       if (!road) continue;   // near the ride only
       // trunk clear of every carriageway, the crown clear of walls, and nothing growing over the rider's road
-      if (!this._clearSpot(t.x, t.z, 1.6, -1, ROAD_WIDTH / 2 + 2.4, 1.2)) continue;
+      if (!this._clearSpot(t.x, t.z, 1.6, -1, ROAD_WIDTH / 2 + 2.4, t.wall ?? 1.2)) continue;   // [s4-section] t.wall
       const key = `${Math.floor(t.x / 480)},${Math.floor(t.z / 480)}`, w = .75 + t.seed * .5;
       q.setFromAxisAngle(Y, t.seed * 40);
       if (!lists.has(key)) lists.set(key, []);

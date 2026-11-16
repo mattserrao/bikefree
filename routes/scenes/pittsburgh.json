@@ -8,6 +8,7 @@
     "models/scenery/regional.json"
   ],
   "seed": 412,
+  "roadAlign": { "curve": true, "streets": true, "bankM": 30 },
   "description": "Pittsburgh as a stylized city: the real terrain, rivers, streets, bridges and buildings from OpenStreetMap and AWS Terrain Tiles, with people, traffic, trains, inclines and boats. An artistic interpretation, not a survey.",
   "title": "Pittsburgh \u00b7 Three Rivers Loop",
   "region": "pittsburgh",
@@ -39,8 +40,13 @@
       "shrub0",
       "shrub1"
     ],
-    "vergeDensity": 0
+    "vergeDensity": 0,
+    "yardTrees": { "density": 0.5, "kitDensity": 0.4, "boxes": [[40.424, -80.026, 40.4395, -80.007], [40.424, -80.007, 40.4285, -79.996], [40.433, -80.04, 40.4425, -80.024]] }
   },
+  "routeTrees": [
+    { "fromM": 16480, "toM": 18240, "spacingM": 11, "offsetM": 7.5, "sides": [-1] },
+    { "fromM": 16500, "toM": 18240, "spacingM": 16, "offsetM": 7, "sides": [1] }
+  ],
   "bridgeFrames": {
     "Smithfield Street Bridge": "street"
   },
