@@ -370,7 +370,66 @@ export function planJunctions(streets, ctx, options = {}) {
     const J0 = jn.J;
     jn.J = (x, z) => below(x, z, J0(x, z), O.lift, 1);
   }
-  return { list, cuts, spans, options: O };
+  // 9. junctions whose surfaces overlap at one height (two close junctions on the route, both at its height) would
+  // flicker: the later one sits 12 mm higher (still under the route's road)
+  const plan = { list, cuts, spans, options: O };
+  for (const jn of list) {
+    for (const { jn: o } of junctionsNear(plan, jn.x, jn.z, 40)) {
+      if (o.id >= jn.id || o.lift !== jn.lift) continue;
+      const hit = jn.poly.find((p) => inside(o.poly, p.x, p.z)) || o.poly.find((p) => inside(jn.poly, p.x, p.z));
+      if (hit && Math.abs(jn.J(hit.x, hit.z) - o.J(hit.x, hit.z)) < .02) { jn.lift += .012; break; }
+    }
+  }
+  return plan;
+}
+
+const inside = (ring, x, z) => { let r = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], c = ring[j]; if ((a.z > z) !== (c.z > z) && x < ((c.x - a.x) * (z - a.z)) / (c.z - a.z) + a.x) r = !r; } return r; };
+
+/** Junctions within `reach` of (x, z): [{jn, d}] (d: distance to the surface's outline, negative inside). */
+export function junctionsNear(plan, x, z, reach) {
+  if (!plan) return [];
+  const G = 32;
+  if (!plan._grid) {
+    const grid = new Map();
+    for (const jn of plan.list) {
+      let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+      for (const p of jn.poly) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); }
+      jn.bb = [x0, x1, z0, z1];
+      for (let gx = Math.floor(x0 / G); gx <= Math.floor(x1 / G); gx++) for (let gz = Math.floor(z0 / G); gz <= Math.floor(z1 / G); gz++) {
+        const key = `${gx},${gz}`; if (!grid.has(key)) grid.set(key, []); grid.get(key).push(jn);
+      }
+    }
+    Object.defineProperty(plan, '_grid', { value: grid, enumerable: false });
+  }
+  const out = [], seen = new Set();
+  for (let gx = Math.floor((x - reach) / G); gx <= Math.floor((x + reach) / G); gx++) for (let gz = Math.floor((z - reach) / G); gz <= Math.floor((z + reach) / G); gz++) {
+    for (const jn of plan._grid.get(`${gx},${gz}`) || []) {
+      if (seen.has(jn) || x < jn.bb[0] - reach || x > jn.bb[1] + reach || z < jn.bb[2] - reach || z > jn.bb[3] + reach) continue;
+      seen.add(jn);
+      let d = Infinity;
+      for (let i = 0, j = jn.poly.length - 1; i < jn.poly.length; j = i++) {
+        const a = jn.poly[j], b = jn.poly[i], dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1;
+        const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / l2));
+        d = Math.min(d, Math.hypot(a.x + dx * t - x, a.z + dz * t - z));
+      }
+      if (inside(jn.poly, x, z)) d = -d;
+      if (d < reach) out.push({ jn, d });
+    }
+  }
+  return out;
+}
+
+/**
+ * The ground round a junction (city-landscape.js heightAt): under the surface and its corner sidewalks just below
+ * them; never above them for 6.5 m more (like the streets' own flat verges), easing out by 14 m. → height
+ */
+export function junctionGround(plan, x, z, h) {
+  for (const { jn, d } of junctionsNear(plan, x, z, 14)) {
+    const top = jn.J(x, z) - .12;
+    if (d < 2.6) h = top;
+    else h = Math.min(h, top + Math.max(0, d - 6.5) * .6);
+  }
+  return h;
 }
 
 /**

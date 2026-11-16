@@ -10,6 +10,7 @@ import { buildHeroes } from './city-heroes.js';
 import { CityLife } from './city-life.js';
 import { ROAD_WIDTH } from './pose.js';
 import { buildJunctionMeshes, drawnPieces } from './junction-mesh.js';   // [junctions]
+import { junctionsNear } from './junctions.js';   // [junctions]
 
 export { STREET_W };
 const CHUNK = 320;
@@ -858,6 +859,7 @@ export class CityScene {
       if (st.cls === 8) continue;
       if (o.k !== skip || o.edge < (st.bridge ? -.05 : .5)) return false;
     }
+    if (junctionsNear(L._junctions, x, z, margin).length) return false;   // [junctions] nor on a junction's surface
     const r = L.routeDist(x, z);
     return !(r && r.d < routeClear);
   }

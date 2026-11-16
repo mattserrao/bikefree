@@ -91,9 +91,9 @@ export function buildJunctionMeshes(city, plan, { get, roads, walks, liftOf }) {
     const B = get(roads, H.x, H.z).set({ aSlot: [TOP_SLOT] });
     const poly = jn.poly.filter((p, i) => { const q = jn.poly[(i + 1) % jn.poly.length]; return Math.hypot(p.x - q.x, p.z - q.z) > .02; });
     const star = poly.every((a, i) => { const b = poly[(i + 1) % poly.length]; return (a.x - jn.x) * (b.z - jn.z) - (a.z - jn.z) * (b.x - jn.x) > 1e-6; });
-    const ring = poly.map((p) => B.vertex(p.x, jn.J(p.x, p.z) + JL, p.z, 0, 1, 0, PLAIN_U, 0));
+    const ring = poly.map((p) => B.vertex(p.x, jn.J(p.x, p.z) + jn.lift, p.z, 0, 1, 0, PLAIN_U, 0));
     if (star) {
-      const c = B.vertex(jn.x, jn.J(jn.x, jn.z) + JL, jn.z, 0, 1, 0, PLAIN_U, 0);
+      const c = B.vertex(jn.x, jn.J(jn.x, jn.z) + jn.lift, jn.z, 0, 1, 0, PLAIN_U, 0);
       for (let i = 0; i < ring.length; i++) B.tri(c, ring[(i + 1) % ring.length], ring[i]);
     } else {   // (where the centre sits off to one side: ear clipping)
       let tris = [];
@@ -244,6 +244,6 @@ export function routeJunctionOverlay(route, index, plan) {
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   g.setIndex(idx);
   const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .93, metalness: .015, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }));
-  m.name = 'Route junctions'; m.frustumCulled = false; m.renderOrder = 3; m.receiveShadow = true;
+  m.name = 'Route road junctions';   // (a road surface for the clipping QC) m.frustumCulled = false; m.renderOrder = 3; m.receiveShadow = true;
   return m;
 }

@@ -8,7 +8,7 @@ import { makeRouteIndex } from './geo.js';
 import { smoothstep } from './coast.js';
 import { ROAD_WIDTH } from './pose.js';
 import { decodeTerrain } from './real-coast.js';
-import { planJunctions } from './junctions.js';   // [junctions]
+import { planJunctions, junctionGround } from './junctions.js';   // [junctions]
 
 export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand: 5, plaza: 6, outside: 7, yards: 8 };
 const LAND_COLORS = ['#8d8a84', '#77985a', '#4d6a3a', '#6c6a5e', '#7d786f', '#b5a684', '#b4ada0', '#6d8252', '#7c8c5f'];
@@ -297,6 +297,11 @@ export function makeCityLandscape(config, proj, index, route) {
       const r = routeDist(x, z), byRoute = r ? smoothstep(ROAD_WIDTH / 2 + 2, 13, r.d) : 1;
       h += (target - h) * (1 - smoothstep(flat, 18, edge)) * byRoute;
       if (r && r.d < 9) h = Math.min(h, r.y - .5 + Math.max(0, r.d - 5) * .2);   // never over the route's own road
+    }
+    // [junctions] round a junction: just under its surface and corner sidewalks (but still never over the route's road)
+    if (L._junctions) {
+      h = junctionGround(L._junctions, x, z, h);
+      const r = routeDist(x, z); if (r && r.d < 9) h = Math.min(h, r.y - .5 + Math.max(0, r.d - 5) * .2);
     }
     // nor over a low ramp or viaduct deck (they're left out of the grading above, but one running close to the
     // ground beside the route would otherwise be buried by the bank the route's road raises)
