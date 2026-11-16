@@ -66,6 +66,7 @@ class KitBuilder extends MeshBuilder {
     return this;
   }
 }
+const GROUND_CELL = 6;   // [w2-clip] the near ground's grid (stylized-terrain.js: 96 m patches, 16 cells a side)
 import { CURB_H, ROUTE_CURB, streetKitConfig, routeCurbAt, zoneCurbAt, walkTopAt } from './street-grade.js';
 export { streetKitConfig, zoneCurbAt, walkTopAt, CURB_H, ROUTE_CURB };
 const LOD = { light: { near: 160, mid: 450 }, balanced: { near: 260, mid: 750 }, high: { near: 380, mid: 1100 } };
@@ -537,9 +538,12 @@ export class StreetKit {
         if (this._due()) yield 'walks';
         const P = this._station(st);
         if (!P) { prev = null; continue; }
-        // [w2-clip] on the inside of a tight bend the curb line steps backwards: skip that station, or the next slab
-        // folds back over the last one (two shades of paving at one height: they flicker)
-        if (prev && ((P.ix - prev.ix) * P.tx + (P.iz - prev.iz) * P.tz < .3 || (P.ox - prev.ox) * P.tx + (P.oz - prev.oz) * P.tz < 0)) continue;
+        // [w2-clip] on the inside of a tight bend (or where the building line jumps) an edge steps backwards and the
+        // slab would fold back over the last one (two shades of paving at one height: they flicker): hold that edge
+        if (prev && Math.hypot(P.ix - prev.ix, P.iz - prev.iz) < 5.5) {
+          if ((P.ix - prev.ix) * P.tx + (P.iz - prev.iz) * P.tz < 0) { P.ix = prev.ix; P.iz = prev.iz; }
+          if ((P.ox - prev.ox) * P.tx + (P.oz - prev.oz) * P.tz < 0) { P.ox = prev.ox; P.oz = prev.oz; }
+        }
         if (prev && Math.hypot(P.ix - prev.ix, P.iz - prev.iz) < 5.5) this._slab(W, prev, P, n++);
         else if (prev) this._endCap(W, prev), this._startCap(W, P);
         else this._startCap(W, P);
@@ -1137,17 +1141,7 @@ export class StreetKit {
       if (r && r.d < ROAD_WIDTH / 2 + 2.2) return null;
       return L.heightAt(x, z) + .07;
     };
-    // subdivide long triangles so the asphalt follows the ground
-    const out = [];
-    const split = (a, b, c, depth) => {
-      const ab = Math.hypot(a.x - b.x, a.y - b.y), bc = Math.hypot(b.x - c.x, b.y - c.y), ca = Math.hypot(c.x - a.x, c.y - a.y), m = Math.max(ab, bc, ca);
-      if (m < 7 || depth > 8) { out.push([a, b, c]); return; }
-      const mid = (p, q) => new THREE.Vector2((p.x + q.x) / 2, (p.y + q.y) / 2);
-      if (m === ab) { const d = mid(a, b); split(a, d, c, depth + 1); split(d, b, c, depth + 1); }
-      else if (m === bc) { const d = mid(b, c); split(a, b, d, depth + 1); split(a, d, c, depth + 1); }
-      else { const d = mid(c, a); split(a, b, d, depth + 1); split(d, b, c, depth + 1); }
-    };
-    for (const [i, j, k] of tris) split(contour[i], contour[j], contour[k], 0);
+    const out = tris.map(([i, j, k]) => [contour[i], contour[j], contour[k]]);   // [w2-clip] (cut along the ground's grid below)
     W.color('#5a5d5f');
     this.stats.lots = (this.stats.lots || 0) + 1;
     // [w2-clip] the asphalt's own height at a point (its triangles, not the ground's): the painted stalls lie on it
@@ -1161,17 +1155,53 @@ export class StreetKit {
       }
       return null;
     };
+    // [w2-clip] the asphalt lies on the ground as drawn: the near ground is a 6 m grid of flat triangles (heights
+    // at the grid points, split corner (i+1, j) to (i, j+1)), and between its points it can stand above the true
+    // height. Each lot triangle is cut along that grid, so every piece sits 7 cm over one flat ground triangle.
+    const G = GROUND_CELL, gh = new Map();
+    const gridY = (i, j) => { const k = i * 1e6 + j; let y = gh.get(k); if (y === undefined) gh.set(k, (y = L.heightAt(i * G, j * G))); return y; };
+    const meshAt = (x, z) => {
+      const i = Math.floor(x / G), j = Math.floor(z / G), fx = x / G - i, fz = z / G - j;
+      if (fx + fz <= 1) { const a = gridY(i, j); return a + (gridY(i + 1, j) - a) * fx + (gridY(i, j + 1) - a) * fz; }
+      const e = gridY(i + 1, j + 1); return e + (gridY(i, j + 1) - e) * (1 - fx) + (gridY(i + 1, j) - e) * (1 - fz);
+    };
+    // keep the part of polygon `poly` ([x, z] pairs) on the left of a → b
+    const clip = (poly, ax, az, bx, bz) => {
+      const o = [], side = (p) => (bx - ax) * (p[1] - az) - (bz - az) * (p[0] - ax);
+      for (let q = 0; q < poly.length; q++) {
+        const P = poly[q], Q = poly[(q + 1) % poly.length], sp = side(P), sq = side(Q);
+        if (sp >= 0) o.push(P);
+        if ((sp >= 0) !== (sq >= 0)) { const t = sp / (sp - sq); o.push([P[0] + (Q[0] - P[0]) * t, P[1] + (Q[1] - P[1]) * t]); }
+      }
+      return o;
+    };
+    const ccw = (pts) => { let s2 = 0; for (let q = 0; q < pts.length; q++) { const P = pts[q], Q = pts[(q + 1) % pts.length]; s2 += P[0] * Q[1] - Q[0] * P[1]; } return s2 > 0 ? pts : pts.slice().reverse(); };
     for (const [a, b, c] of out) {
       if (this._due()) yield 'lot';
-      const ys = [a, b, c].map((p) => level(p.x, p.y));
-      if (ys.some((y) => y == null)) { this.stats.lotSkip = (this.stats.lotSkip || 0) + 1; continue; }
-      this.stats.lotTris = (this.stats.lotTris || 0) + 1;
-      for (let gx = Math.floor(Math.min(a.x, b.x, c.x) / 4); gx <= Math.floor(Math.max(a.x, b.x, c.x) / 4); gx++) for (let gz = Math.floor(Math.min(a.y, b.y, c.y) / 4); gz <= Math.floor(Math.max(a.y, b.y, c.y) / 4); gz++) {
-        const k = `${gx},${gz}`; if (!drawn.has(k)) drawn.set(k, []); drawn.get(k).push([a, b, c, ys]);
+      const tri = ccw([[a.x, a.y], [b.x, b.y], [c.x, c.y]]);
+      for (let i = Math.floor(Math.min(a.x, b.x, c.x) / G); i <= Math.floor(Math.max(a.x, b.x, c.x) / G); i++) for (let j = Math.floor(Math.min(a.y, b.y, c.y) / G); j <= Math.floor(Math.max(a.y, b.y, c.y) / G); j++) {
+        const x0 = i * G, z0 = j * G, x1 = x0 + G, z1 = z0 + G;
+        // the cell's two ground triangles, counter-clockwise in (x, z): (x0,z0)(x1,z0)(x0,z1) and (x1,z0)(x1,z1)(x0,z1)
+        for (const g of [[[x0, z0], [x1, z0], [x0, z1]], [[x1, z0], [x1, z1], [x0, z1]]]) {
+          let poly = tri;
+          for (let q = 0; q < 3 && poly.length >= 3; q++) { const A = g[q], B = g[(q + 1) % 3]; poly = clip(poly, A[0], A[1], B[0], B[1]); }
+          if (poly.length < 3) continue;
+          let cx = 0, cz = 0; for (const [x, z] of poly) { cx += x / poly.length; cz += z / poly.length; }
+          if (level(cx, cz) == null || poly.some(([x, z]) => level(x, z) == null)) { this.stats.lotSkip = (this.stats.lotSkip || 0) + 1; continue; }
+          const ys = poly.map(([x, z]) => meshAt(x, z) + .07);
+          const ks = poly.map(([x, z], q) => W.vertex(x, ys[q], z, 0, 1, 0));
+          for (let q = 1; q + 1 < poly.length; q++) {
+            const pa = poly[0], pb = poly[q], pc = poly[q + 1];
+            if (Math.abs((pb[0] - pa[0]) * (pc[1] - pa[1]) - (pc[0] - pa[0]) * (pb[1] - pa[1])) < 1e-6) continue;
+            W.tri(ks[0], ks[q + 1], ks[q]);   // (counter-clockwise in x, z is clockwise seen from above: face up)
+            const A = { x: pa[0], y: pa[1] }, B = { x: pb[0], y: pb[1] }, C2 = { x: pc[0], y: pc[1] }, yy = [ys[0], ys[q], ys[q + 1]];
+            this.stats.lotTris = (this.stats.lotTris || 0) + 1;
+            for (let gx = Math.floor(Math.min(A.x, B.x, C2.x) / 4); gx <= Math.floor(Math.max(A.x, B.x, C2.x) / 4); gx++) for (let gz = Math.floor(Math.min(A.y, B.y, C2.y) / 4); gz <= Math.floor(Math.max(A.y, B.y, C2.y) / 4); gz++) {
+              const k = `${gx},${gz}`; if (!drawn.has(k)) drawn.set(k, []); drawn.get(k).push([A, B, C2, yy]);
+            }
+          }
+        }
       }
-      const ny = (b.y - a.y) * (c.x - a.x) - (b.x - a.x) * (c.y - a.y);   // (2D y is world z)
-      const k = [a, b, c].map((p, q) => W.vertex(p.x, ys[q], p.y, 0, 1, 0));
-      if (ny > 0) W.tri(k[0], k[1], k[2]); else W.tri(k[0], k[2], k[1]);
     }
     yield 'lot';
     // stalls: rows along the lot's longest edge
