@@ -136,6 +136,7 @@ export class StreetKit {
     this._started = new Set(); // chunk keys whose kit work has begun (their bucket is taken)
     this._late = new Set();    // chunk keys given furniture after that (built on the next tick)
     this.junctionsExternal = false;
+    this._t0 = 0;              // start of the current slice of chunk work (see _due)
     this.stats = { buildings: 0, triangles: 0, meshes: 0, furniture: 0, cars: 0 };
     this._lod = LOD[city.qualityKey] || LOD.balanced;
     this.maxCurb = Math.max(ROUTE_CURB, ...config.zones.map((z) => z.curbM));
@@ -404,6 +405,22 @@ export class StreetKit {
         this.bucket(this.key(x, z)).furniture.push({ kind: 'treePit', x, z, yaw: Math.atan2(-nx, -nz), given: true, y: f.y + ROAD_LIFT + CURB_H });
       }
     }
+    // trail parkland (`parkTrees`: spacing, metres): loose groups on the grass beside the route's trails, more on
+    // the landward side; checked by the city like its other trees
+    const every = this.cfg.parkTrees || 0, r = this.route;
+    if (every > 0) for (let s = Math.max(0, this.cfg.fromM); s <= Math.min(r.dist[this.end] - 1, this.cfg.toM); s += every) {
+      if (L.routeKindAt(s) !== 'trail' || decks.some((b) => s > b.fromM - 15 && s < b.toM + 15)) continue;
+      const f = this.frame(s), land = L.waterAt(f.x + f.rx * 25, f.z + f.rz * 25) < L.waterAt(f.x - f.rx * 25, f.z - f.rz * 25) ? 1 : -1;
+      for (const side of [land, -land]) for (let k = 0; k < 2; k++) {
+        const h = hash(Math.round(s) * 13 + side * 5 + k * 71);
+        if (h > (side === land ? .6 : .3)) continue;
+        const off = 8.5 + hash(Math.round(s) * 7 + side + k * 3) * 16, along = (hash(Math.round(s) * 3 + k) - .5) * every;
+        const x = f.x + f.rx * side * off + f.tx * along, z = f.z + f.rz * side * off + f.tz * along;
+        const c = L.landAt(x, z);
+        if (c !== LAND.grass && c !== LAND.woods) continue;
+        out.push({ x, z, seed: hash(Math.round(x * 3) + Math.round(z * 7) * 17) });
+      }
+    }
     return out;
   }
   treeAt(side, s) { return this._treeCells?.has(`${side}:${Math.floor(s / 3)}`) || this._treeCells?.has(`${side}:${Math.floor(s / 3) - 1}`) || this._treeCells?.has(`${side}:${Math.floor(s / 3) + 1}`); }
@@ -459,8 +476,8 @@ export class StreetKit {
     return best <= max ? best : Infinity;
   }
 
-  /** Sidewalks of one chunk → the walks builder; returns furniture spots found along them. */
-  _walks(W, stations, spots) {
+  /** Sidewalks of one chunk → the walks builder (a generator: yields every 32 stations); returns the cross-sections. */
+  *_walks(W, stations, spots) {
     const L = this.L, city = this.city, out = [];
     // group consecutive stations into strips
     const strips = new Map();
@@ -472,7 +489,9 @@ export class StreetKit {
     for (const [key, list] of strips) {
       list.sort((a, b) => (a.route ? a.s - b.s : a.acc - b.acc));
       let prev = null, n = 0;
-      for (const st of list) {
+      for (let q = 0; q < list.length; q++) {
+        const st = list[q];
+        if (this._due()) yield 'walks';
         const P = this._station(st);
         if (!P) { prev = null; continue; }
         if (prev && Math.hypot(P.ix - prev.ix, P.iz - prev.iz) < 5.5) this._slab(W, prev, P, n++);
@@ -596,12 +615,13 @@ export class StreetKit {
   }
 
   /** The trim of one building: shop fronts, cornices, sills, bays, parapet, rooftop clutter. */
-  _dressBuilding(C, j) {
+  *_dressBuilding(C, j) {
     const { b, ring, cx, cz, ground, y1, style, fronts, fh, H, shops, storeTop, winBase, rnd } = j;
     const seed = hash(b.k * 7919 + 13);
     const trim = new THREE.Color(style.trim[Math.floor(rnd(1) * style.trim.length)]);
     const frame = new THREE.Color(style.frame[Math.floor(rnd(2) * style.frame.length)]);
     for (const f of fronts) {
+      if (this._due()) yield 'building';
       if (shops) this._storefront(C, f, f.base, storeTop, style, frame, trim, b, rnd);
       else if (style.docks && rnd(5) < style.docks && f.len > 8) this._dock(C, f, f.base, frame);
       if (style.belt && storeTop && y1 - storeTop > 2) C.mid.color(trim).band(f.a.x, f.a.z, f.c.x, f.c.z, f.nx, f.nz, .22, storeTop, .28);
@@ -904,37 +924,40 @@ export class StreetKit {
   finishChunk(key, out) {
     this._outs.set(key, out);
     const job = { key, out, gen: this._work(key) };
-    if (!this.deferred) { while (!job.gen.next().done); return; }
+    if (!this.deferred) { this._t0 = Infinity; while (!job.gen.next().done); return; }   // (all at once: no slices)
     this.queue.push(job);
   }
   /** Finish every queued chunk now (tools that render one frame or inspect the scene). */
-  flush() { for (const j of this.queue.splice(0)) while (!j.gen.next().done); }
+  flush() { this._t0 = Infinity; for (const j of this.queue.splice(0)) while (!j.gen.next().done); }
+  /** Has the current step of chunk work used its slice (1.5 ms)? The generators yield when it has. */
+  _due() { return performance.now() - this._t0 > 1.5; }
 
   *_work(key) {
     const C = { key, near: new KitBuilder({ aGlow: 1 }), mid: new KitBuilder({ aGlow: 1 }), walls: new KitBuilder({ aBld: 4 }), walks: new KitBuilder() };
     const jobs = this.jobs.get(key) || [];
     this.jobs.delete(key);
-    for (const j of jobs) { this._dressBuilding(C, j); yield; }
+    for (const j of jobs) { yield* this._dressBuilding(C, j); if (this._due()) yield 'building'; }
     const P = this.pending.get(key);
     this.pending.delete(key); this._started.add(key);
     if (P) {
-      const sections = this._walks(C.walks, P.stations, []);
-      yield;
+      const sections = yield* this._walks(C.walks, P.stations, []);
+      if (this._due()) yield 'walks';
       this._parkingLane(C.walks, sections);
-      this._dress(C, sections);
-      yield;
-      for (let q = 0; q < P.furniture.length; q++) { this._osmPiece(C, P.furniture[q]); if (q % 8 === 7) yield; }
-      for (const ring of P.lots) { this._lot(C, ring); yield; }
-      for (const l of P.lines) { this._line(C, l); if (l.pts.length > 6) yield; }
+      yield* this._dress(C, sections);
+      if (this._due()) yield 'dress';
+      for (let q = 0; q < P.furniture.length; q++) { this._osmPiece(C, P.furniture[q]); if (this._due()) yield 'furniture'; }
+      for (const ring of P.lots) { yield* this._lot(C, ring); if (this._due()) yield 'lot'; }
+      for (const l of P.lines) { this._line(C, l); if (this._due()) yield 'line'; }
       for (const r of P.rails) this._rail(C, r);
-      yield;
+      if (this._due()) yield 'rails';
     }
     const parts = [[C.walks, this.walkMaterial, 'Sidewalks · kit', 'walk', false], [C.walls, this.city.buildingMaterial, 'Street kit · bays', 'mid', true],
       [C.mid, this.material, 'Street kit · facades', 'mid', false], [C.near, this.nearMaterial, 'Street kit · furniture', 'near', false]];
     for (const [builder, material, name, lod, shadow] of parts) {
       if (!builder.count) continue;
-      if (lod !== 'walk') this._keepOutOfTube(builder);
+      if (lod !== 'walk') yield* this._keepOutOfTube(builder);
       if (!builder.i.length) continue;
+      if (this._due()) yield 'tube';
       const mesh = new THREE.Mesh(this.city.own(builder.geometry()), material);
       mesh.name = `${name} ${key}`; mesh.receiveShadow = true; mesh.castShadow = shadow;
       mesh.userData.kitLod = lod; mesh.renderOrder = lod === 'walk' ? 1 : 0;
@@ -944,16 +967,17 @@ export class StreetKit {
       this.meshes.push(mesh);
       this.stats.meshes++; this.stats.triangles += builder.i.length / 3;
       if (this._cam) this._lodOne(mesh, this._cam);
-      yield;
+      yield 'mesh';
     }
   }
 
   /** Rule-based furniture along this chunk's sidewalks: hydrants, meters, benches, bins, racks, planters, cars. */
-  _dress(C, sections) {
+  *_dress(C, sections) {
     const byStrip = new Map();
     for (const P of sections) { const k = P.st.route ? `r${P.st.side}` : `${P.st.k}:${P.st.side}`; if (!byStrip.has(k)) byStrip.set(k, []); byStrip.get(k).push(P); }
     for (const list of byStrip.values()) {
       for (let j = 0; j < list.length; j++) {
+        if (this._due()) yield 'dress';
         const P = list[j], st = P.st, pos = st.route ? st.s : st.acc, zone = P.zone;
         const along = (d) => [P.ix + P.nx * d, P.iz + P.nz * d];
         const cell = Math.floor(pos / 3);   // one decision per 3 m station
@@ -1053,7 +1077,7 @@ export class StreetKit {
 
   // ------------------------------------------------------------ car parks, fences, railings
   /** A surface car park: asphalt draped over the ground, painted stalls, and some parked cars. */
-  _lot(C, ring) {
+  *_lot(C, ring) {
     const L = this.L, W = C.walks;
     let area = 0; for (let i = 0; i < ring.length; i++) { const a = ring[i], c = ring[(i + 1) % ring.length]; area += a.x * c.z - c.x * a.z; }
     if (Math.abs(area) / 2 < 60 || Math.abs(area) / 2 > 40000) return;
@@ -1077,13 +1101,17 @@ export class StreetKit {
     };
     for (const [i, j, k] of tris) split(contour[i], contour[j], contour[k], 0);
     W.color('#5a5d5f');
+    this.stats.lots = (this.stats.lots || 0) + 1;
     for (const [a, b, c] of out) {
+      if (this._due()) yield 'lot';
       const ys = [a, b, c].map((p) => level(p.x, p.y));
-      if (ys.some((y) => y == null)) continue;
+      if (ys.some((y) => y == null)) { this.stats.lotSkip = (this.stats.lotSkip || 0) + 1; continue; }
+      this.stats.lotTris = (this.stats.lotTris || 0) + 1;
       const ny = (b.y - a.y) * (c.x - a.x) - (b.x - a.x) * (c.y - a.y);   // (2D y is world z)
       const k = [a, b, c].map((p, q) => W.vertex(p.x, ys[q], p.y, 0, 1, 0));
       if (ny > 0) W.tri(k[0], k[1], k[2]); else W.tri(k[0], k[2], k[1]);
     }
+    yield 'lot';
     // stalls: rows along the lot's longest edge
     let best = 0, ax = 1, az = 0;
     for (let i = 0; i < ring.length; i++) { const a = ring[i], c = ring[(i + 1) % ring.length], l = Math.hypot(c.x - a.x, c.z - a.z); if (l > best) { best = l; ax = (c.x - a.x) / l; az = (c.z - a.z) / l; } }
@@ -1094,6 +1122,7 @@ export class StreetKit {
     const P = (u, v) => ({ x: ax * u + bx * v, z: az * u + bz * v });
     let cars = 0;
     for (let v = v0 + 1; v + 5 < v1; v += 17) {   // a double row of stalls (2 × 5 m) and a 7 m aisle
+      if (this._due()) yield 'lot';
       for (const [vs, dir] of [[v, 1], [v + 10, -1]]) {
         for (let u = u0 + 1.5; u + 2.6 < u1; u += 2.7) {
           const p0 = P(u, vs), p1 = P(u, vs + 5), m = P(u + 1.35, vs + 2.5);
@@ -1158,7 +1187,7 @@ export class StreetKit {
    * Nothing may stand in the rider's space (landscape.inRouteTube): every piece (a builder member, or a lone
    * triangle) that reaches into it is left out whole. Bounding boxes settle almost all pieces without sampling.
    */
-  _keepOutOfTube(B) {
+  *_keepOutOfTube(B) {
     const L = this.L, P = B.p, I = B.i, nt = I.length / 3, owner = new Int32Array(nt).fill(-1), R = ROAD_WIDTH / 2 + .6;
     B.members.forEach(([t0, t1], m) => owner.fill(m, t0 / 3, t1 / 3));
     const drop = new Uint8Array(nt);
@@ -1184,7 +1213,8 @@ export class StreetKit {
       }
       return false;
     };
-    for (let t = 0; t < nt;) {
+    for (let t = 0, n = 0; t < nt; n++) {
+      if (this._due()) yield 'tube';
       const m = owner[t];
       if (m < 0) { if (hits(t, t + 1)) drop[t] = 1; t++; continue; }
       const [t0, t1] = B.members[m];
@@ -1205,6 +1235,7 @@ export class StreetKit {
       this.queue.sort((a, b) => this._dist(b.key, camera) - this._dist(a.key, camera));
       while (this.queue.length && performance.now() - t0 < this.budgetMs) {
         const j = this.queue[this.queue.length - 1];
+        this._t0 = performance.now();
         if (j.gen.next().done) this.queue.pop();
       }
     }

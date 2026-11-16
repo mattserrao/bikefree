@@ -74,6 +74,7 @@ for (const shot of shots) {
     const w = window.world, t = w.terrain, c = w.camera.position;
     w.stop();
     for (let k = 0; k < 600 && (t.forestQueue?.length || k < 2); k++) { t._lastX = Infinity; t.update(c.x, c.z); }
+    t.city?.streetKit?.flush();   // [street-kit] chunks whose kit work is still queued
     w.renderer.info.autoReset = false; w.renderer.info.reset();
     // the app's own frame: with the post-processing chain where the scene has one (Big Sur)
     w.renderer.shadowMap.needsUpdate = true;   // the ride redraws shadows only as needed
