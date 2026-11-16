@@ -7,7 +7,7 @@
 //
 // A shot is  <park>[@metres][:time][:season][:weather], always from the chase camera (the only one):
 // time midday|morning|afternoon|golden|night, season summer|fall, weather clear|marine|clouds|rain|smoke,
-// look gentle|bold (the cartoon look test; none = today's look).
+// look gentle|bold|current (default: the scene's own look; current = no cartoon).
 // No @metres = the scene's preview spot.
 // Options: --out <dir> (default tools/snapshots), --quality low|balanced|high, --size 1280x720,
 // --chrome <path> (default: CHROME env, else the usual Mac/Linux locations), --software (no GPU).
@@ -30,7 +30,7 @@ const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chro
   '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync));
 if (!args.length) { console.log('usage: npm run snap -- <park>[@metres][:camera][:time][:season][:weather] …'); process.exit(1); }
 
-const LOOKS = ['gentle', 'bold'];
+const LOOKS = ['gentle', 'bold', 'current'];   // current = no cartoon look, whatever the scene says
 const OLD_CAMERAS = ['chase', 'drone', 'vista', 'side', 'eye'];   // retired: ignored with a warning
 const TIMES = ['midday', 'morning', 'afternoon', 'golden', 'night'];
 const WEATHERS = ['clear', 'marine', 'clouds', 'rain', 'smoke'];
@@ -69,7 +69,7 @@ await mkdir(resolve(ROOT, out), { recursive: true });
 const rows = [];
 for (const shot of shots) {
   const t0 = Date.now(); errors.length = 0;
-  const q = new URLSearchParams({ park: shot.park, clean: '1', quality, ...(shot.pos ? { pos: shot.pos } : {}), ...(shot.time ? { time: shot.time } : {}), ...(shot.season ? { season: shot.season } : {}), ...(shot.weather ? { weather: shot.weather } : {}), ...(shot.look ? { look: shot.look } : {}) });
+  const q = new URLSearchParams({ park: shot.park, clean: '1', quality, ...(shot.pos ? { pos: shot.pos } : {}), ...(shot.time ? { time: shot.time } : {}), ...(shot.season ? { season: shot.season } : {}), ...(shot.weather ? { weather: shot.weather } : {}), ...(shot.look ? { look: shot.look === 'current' ? 'none' : shot.look } : {}) });
   await page.goto(`${base}/tools/world-preview.html?${q}`);
   if (breakdown) await page.evaluate(() => { window.__breakdown = true; });
   await page.waitForFunction(() => window.world?.terrain && (window.world.terrain.kit || !window.world.stylized) && window.world._camInit, null, { timeout: 180000, polling: 500 });
@@ -80,6 +80,7 @@ for (const shot of shots) {
     for (let k = 0; k < 600 && (t.forestQueue?.length || k < 2); k++) { t._lastX = Infinity; t.update(c.x, c.z); }
     w.renderer.info.autoReset = false; w.renderer.info.reset();
     // the app's own frame: with the post-processing chain where the scene has one (Big Sur)
+    w.renderer.shadowMap.needsUpdate = true;   // the ride redraws shadows only as needed
     if (w._render) w._render(); else w.renderer.render(w.scene, w.camera);
     const info = w.renderer.info.render;
     let breakdown = null;

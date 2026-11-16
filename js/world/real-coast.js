@@ -7,12 +7,18 @@ import { smoothstep } from './coast.js';
 
 const ROAD_HALF = 3.5;   // half the road width (pose.js ROAD_WIDTH / 2): overlooks start at the road edge
 
-const decodeRows = (text, rowLength) => {
-  const bin = typeof atob === 'function' ? atob(text) : Buffer.from(text, 'base64').toString('binary');
-  const out = new Uint16Array(bin.length / 2);
+// rows of little-endian uint16 deltas: raw bytes (the binary grid, js/terrain-grid.js) or a base64 string
+const decodeRows = (rows, rowLength) => {
+  let bytes = rows;
+  if (typeof rows === 'string') {
+    const bin = typeof atob === 'function' ? atob(rows) : Buffer.from(rows, 'base64').toString('binary');
+    bytes = new Uint8Array(bin.length);
+    for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+  }
+  const out = new Uint16Array(bytes.length / 2);
   for (let k = 0, acc = 0; k < out.length; k++) {
     if (k % rowLength === 0) acc = 0;
-    acc = (acc + (bin.charCodeAt(2 * k) | (bin.charCodeAt(2 * k + 1) << 8))) & 0xffff;
+    acc = (acc + (bytes[2 * k] | (bytes[2 * k + 1] << 8))) & 0xffff;
     out[k] = acc;
   }
   return out;

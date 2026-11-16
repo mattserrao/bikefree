@@ -13,6 +13,7 @@ export const WEATHER = {
   // late-summer wildfire smoke (Glacier): an orange-brown haze that swallows the far ridges, a red sun
   smoke: { label: 'Wildfire smoke', cloud: .04, shadow: .25, wind: .15, bank: 0, rain: 0, overcast: .15, bankTop: 140, smoke: 1 },
 };
+const WHITE = new THREE.Color('#ffffff'), BANK_SHADE = new THREE.Color('#8f9aa6');
 const KEYS = ['cloud', 'shadow', 'wind', 'bank', 'rain', 'overcast', 'bankTop', 'smoke', 'peaks'];
 for (const w of Object.values(WEATHER)) { w.smoke ??= 0; w.peaks ??= 0; }
 // clouds hanging on the summits (mountain scenes): with broken cloud, and low and thick in the rain
@@ -239,8 +240,8 @@ export class Weather {
         l.position.set(Math.round(cam.x / 500) * 500, this.base + 6 + (s.bankTop - 6) * Math.pow(i / (n - 1), .9), Math.round(cam.z / 500) * 500);
       });
       const sun = this.world.sun;
-      this.bankUniforms.bfLit.value.copy(sun.color).multiplyScalar(.85 + .15 * (1 - s.overcast)).lerp(new THREE.Color('#ffffff'), .5);
-      this.bankUniforms.bfShade.value.copy(this.world.hemi.color).multiplyScalar(.72).lerp(new THREE.Color('#8f9aa6'), .5);
+      this.bankUniforms.bfLit.value.copy(sun.color).multiplyScalar(.85 + .15 * (1 - s.overcast)).lerp(WHITE, .5);
+      this.bankUniforms.bfShade.value.copy(this.world.hemi.color).multiplyScalar(.72).lerp(BANK_SHADE, .5);
     }
     // inside the bank (or in rain) the air closes in
     const L = this.world.terrain?.landscape;

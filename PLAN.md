@@ -414,12 +414,52 @@ Goal: give Going-to-the-Sun Road the Big Sur / Pittsburgh hero treatment, over t
 - [x] New collapsible **Ideas** section at the bottom of the route list (`routes/ideas.json`): top 10 with notes, then 11–25
 - [ ] Check on the Mac
 
+### perf-test — Graphics performance and fidelity pass *(test branch `perf-test`, from `main` after PR #20; main merged in after #22)*
+Goal: the 3D view was unoptimized. Cut GPU and CPU cost on every route, then spend some of the savings on looks. How it works: ROUTES.md → *Rendering performance*.
+
+**Performance**
+- [x] **P1 · Reversed depth buffer** instead of the logarithmic one (it wrote depth per pixel, so the GPU shaded every hidden pixel); every stylized scene renders through `post.js` into a target with a 32-bit float depth buffer. Non-hero scenes look exactly as before (pixel-compared)
+- [x] **P2 · One anti-aliasing, not two**: no canvas MSAA when the scene has its own; samples per detail level
+- [x] **P3 · No hitches at tile edges**: ground, plants, ground cover and forest tiles are resumable jobs built within `buildMs` a frame and swapped in whole
+- [x] **P4 · Pooled scenery** (`pools.js`): ground patches share a mesh per 4.6 km block; plants an InstancedMesh per kind and sector around the camera (was a mesh per tile per kind)
+- [x] **P5 · Shadows**: box moved in whole texels; map redrawn when it moves or every other frame; only trees and rocks within ~260 m cast
+- [x] **P6 · Water**: sea and lakes drawn after the land (hidden water skipped); authored coastline as a lookup texture
+- [x] **P7 · Acadia under budget**: ground cover in 96 m tiles within 220 m, half density past 110 m
+- [x] **P8 · Clouds**: the 26 cloud sprites are one mesh
+- [x] **P9 · Smaller terrain downloads**: `<id>-terrain.grid.bin.gz` (binary rows, gzipped) for Going-to-the-Sun 3.86 → 3.40 MB, Big Sur 1.67 → 1.43 MB, Pittsburgh 0.71 → 0.62 MB (gzipped sizes), no base64/JSON parse
+- [x] **P10 · No per-frame allocations** in the camera, rider placement and fog bank
+
+**Fidelity**
+- [x] **F1 · Sharper Balanced**: 2× pixel ratio (was 1.5×), 2× MSAA
+- [x] **F2 · Steady shadows** (P5's texel snapping)
+- [x] **F3 · Tree cards**: beyond the real trees, one camera-facing silhouette per tree out to 1.6 km (Balanced) / 2.2 km (High); not in forest-canopy or city scenes
+- [x] **F4 · Valley haze**: the fog thickens low in the valleys (strongest in the morning); `atmosphere.haze`, `hazeM`, `hazeBaseM`
+
+**Measured** (headless software GPU, Balanced, each route's preview spot; draw calls · triangles, before → after)
+
+| Route | Draw calls | Triangles |
+|---|---|---|
+| Yosemite | 337 → 214 | 1.46 → 1.68 M |
+| Acadia | 360 → 202 | 2.10 → 1.78 M |
+| Teton | 289 → 186 | 1.10 → 1.20 M |
+| Crater Lake | 318 → 209 | 1.05 → 1.08 M |
+| Monument Valley | 218 → 115 | 0.37 → 0.41 M |
+| Zion | 248 → 158 | 0.38 → 0.46 M |
+| Seven Mile Bridge | 200 → 107 | 0.20 → 0.24 M |
+| Big Sur | 345 → 245 | 1.19 → 1.38 M |
+| Going-to-the-Sun | 325 → 244 | 1.58 → 1.59 M |
+| Route 28 | 396 → 275 | 0.94 → 1.01 M |
+| Pittsburgh | 393 → 297 | 1.11 → 1.16 M |
+
+Worst scenery-streaming frame over 600 m of riding (headless CPU, slower than the M4): Yosemite 409 → 17 ms, Acadia 291 → 12 ms, Route 28 272 → 19 ms, Going-to-the-Sun 153 → 25 ms, Pittsburgh 141 → 8 ms, Big Sur 67 → 15 ms. Triangles rise a little on most routes (tree cards; pooled plants cull by sector, not tile); they are off-screen vertices, cheap next to the draw calls saved. `npm test` 96/96, routes:check clean; Pittsburgh clipping QC 0 fail (127 warnings, was 128).
+
+- [ ] **Mac check**: the `I` overlay at Light / Balanced / High on a few routes; GPU frame time can only be measured there (Balanced now renders at 2×: if it is over budget, set `balanced.pixelRatio` back to 1.5 in COASTAL_QUALITY)
 ### Route 28 lean cartoon *(test branch `route28-cartoon`, from `main`)*
-Goal: cut graphical demand as far as possible while improving the feel. Style guide, Route 28 measurements and plan: the "bikefree style guide: lean cartoon (Route 28 pass)" doc (project doc `claude/lean-cartoon-style.md`). Baseline: about 430 draw calls on Balanced (ground 87, far trees 69, lakes 67, mid trees 54); only 11–18% of the trees built are ever seen.
+Goal: cut graphical demand as far as possible while improving the feel. Style guide, Route 28 measurements and plan: the "bikefree style guide: lean cartoon (Route 28 pass)" doc (project doc `claude/lean-cartoon-style.md`). Baseline before perf-test: about 430 draw calls on Balanced (ground 87, far trees 69, lakes 67, mid trees 54); only 11–18% of the trees built are ever seen. After perf-test (#23): 275 at the preview spot, 354 in Old Forge.
 
 **Decisions (16 Nov 2026)**
 - One pre-rendered time of day per route (two may come later, not now)
-- Side-by-side look test first (gentle vs bold) before rebuilding anything
+- Side-by-side look test first (gentle vs bold) before rebuilding anything → **chosen: cartoon gentle at midday** (Route 28's one time of day)
 - Outlines: a full-screen edge pass (the one post pass allowed)
 - Rider: cartoon treatment, but with more triangles and better texturing than first proposed
 - Chase camera only: drone, scenic, side and eye retired
@@ -427,9 +467,10 @@ Goal: cut graphical demand as far as possible while improving the feel. Style gu
 **Passes**
 - [x] Chase camera only: app, settings, HUD button, <kbd>C</kbd>, preview and snapshot tool
 - [x] Look test: `?look=gentle|bold` in the preview, `:gentle` / `:bold` in `npm run snap` (`js/world/look.js`: toon bands from direct sun with cool shadows, colour grade, smooth crowns, flat road, depth-edge outlines). New `afternoon` time (sun 24°) as a candidate signature time. Results: [docs/route28/look-test/](docs/route28/look-test/README.md)
-- [ ] Choose the look and Route 28's signature time from the contact sheet
+- [x] Look chosen: gentle at midday. Route 28's scene has `"look": "gentle"` and `"timeOfDay": "midday"`; `?look=none` (preview) or `:current` (snap) shows the old look
+- [x] Merged perf-test (#23): outlines moved into `post.js`'s final pass (reads the scene target's depth, reversed or logarithmic; no extra full-screen pass); the chase-only camera kept through its allocation-free camera and texel-snapped shadows
 - [ ] 1. Tools and baseline: `perf:calls` (exact draw calls) and `qc:visibility` (ID-buffer test)
-- [ ] 3. Quick wins: 2.4 km lake chunks with mist in the lake shader, one cloud mesh, far plane at the fog, single-sided ground, rider blob shadow
+- [ ] 3. Quick wins: 2.4 km lake chunks with mist in the lake shader, far plane at the fog, single-sided ground, rider blob shadow (perf-test already did one cloud mesh, pooled ground per 4.6 km block, near-only shadow casters, water after land)
 - [ ] 4. Trees in one `BatchedMesh`
 - [ ] 5. Visibility bake: build only trees seen from the chase camera
 - [ ] 6. Fixed light: toon material, pre-rendered tile shadows, baked AO, no shadow map

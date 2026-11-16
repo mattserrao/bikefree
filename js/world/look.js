@@ -1,14 +1,13 @@
-// Cartoon look test (lean cartoon style guide, 16 Nov 2026).
-// Lays the "gentle" or "bold" cartoon look over today's scenery at run time, so it can be compared
-// side by side with the current look (?look=gentle|bold in the preview, :gentle / :bold in snap).
-// It answers "how far cartoon?" only: no batching or baked light yet, and the live sun and shadow map
-// still drive which band a surface falls in.
+// Cartoon look (lean cartoon style guide, 16 Nov 2026; direction chosen: gentle, midday).
+// Lays the cartoon look over the scenery at run time. A scene opts in with "look": "gentle" (Route 28);
+// ?look=gentle|bold|none in the preview and :gentle / :bold / :current in snap override it. No batching
+// or baked light yet: the live sun and shadow map still decide which band a surface falls in.
 //   - toon shading: three colour bands (lit, mid, shadow) on every lit scenery material, with cool
 //     shadows and warm light, in place of smooth PBR shading
 //   - a colour grade (saturation, value) on the albedo
 //   - smooth crowns and rocks (the kit is built with { smooth: true })
 //   - a flat road: clean grey, crisp paint, no grain or bump
-//   - a full-screen outline pass: ink edges where depth jumps, fading with distance
+//   - ink outlines where depth jumps, fading with distance (drawn in post.js's final pass)
 import * as THREE from '../../vendor/three.module.min.js';
 
 export const LOOKS = {
@@ -50,7 +49,6 @@ export class Look {
       uToonShade: { value: new THREE.Color() },
     };
     this.patched = new WeakSet();
-    this.outline = new OutlinePass(world.renderer, d.outline);
     world.renderer.toneMapping = THREE.NeutralToneMapping;
   }
 
@@ -130,71 +128,6 @@ export class Look {
     }
   }
 
-  render(renderer, scene, camera) { this.outline.render(renderer, scene, camera); }
-
-  dispose() { this.outline.dispose(); }
-}
-
-/** Full-screen ink outlines from depth: one extra pass over a multisampled scene target. */
-class OutlinePass {
-  constructor(renderer, opts) {
-    this.opts = opts;
-    this.target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
-    this.target.depthTexture = new THREE.DepthTexture(1, 1);
-    this.target.depthTexture.type = THREE.FloatType;
-    this.material = new THREE.ShaderMaterial({
-      uniforms: {
-        tColor: { value: this.target.texture }, tDepth: { value: this.target.depthTexture },
-        uTexel: { value: new THREE.Vector2() }, uLogFar: { value: 1 },
-        uPx: { value: opts.px }, uStrength: { value: opts.strength }, uThresh: { value: opts.thresh }, uFade: { value: opts.fadeM },
-      },
-      vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }',
-      fragmentShader: `
-        uniform sampler2D tColor; uniform sampler2D tDepth; uniform vec2 uTexel;
-        uniform float uLogFar, uPx, uStrength, uThresh, uFade;
-        varying vec2 vUv;
-        // the scene uses a logarithmic depth buffer: depth = log2(1 + w) / log2(far + 1)
-        float viewZ(vec2 uv) { return exp2(texture2D(tDepth, uv).x * uLogFar) - 1.; }
-        void main() {
-          vec3 col = texture2D(tColor, vUv).rgb;
-          float z = viewZ(vUv);
-          vec2 o = uTexel * uPx;
-          float zl = viewZ(vUv - vec2(o.x, 0.)), zr = viewZ(vUv + vec2(o.x, 0.));
-          float zd = viewZ(vUv - vec2(0., o.y)), zu = viewZ(vUv + vec2(0., o.y));
-          float zMin = min(z, min(min(zl, zr), min(zd, zu)));
-          // a silhouette: a neighbour at a very different distance, relative to the nearer one
-          // (both sides of the edge, so the line is about two samples wide)
-          float jump = max(max(abs(z - zl), abs(z - zr)), max(abs(z - zd), abs(z - zu))) / max(zMin, .5);
-          float edge = smoothstep(uThresh, uThresh * 2.2, jump);
-          edge *= 1. - smoothstep(uFade * .55, uFade, zMin);       // ink only near the rider
-          vec3 ink = mix(vec3(.035, .04, .06), col * .3, .4);   // near-black, a little of the local colour
-          gl_FragColor = vec4(mix(col, ink, edge * uStrength), 1.);
-          #include <tonemapping_fragment>
-          #include <colorspace_fragment>
-        }`,
-      depthTest: false, depthWrite: false,
-    });
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
-    g.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 2, 0, 0, 2], 2));
-    this.quad = new THREE.Mesh(g, this.material);
-    this.quad.frustumCulled = false;
-    this.quadScene = new THREE.Scene(); this.quadScene.add(this.quad);
-    this.quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    this.size = new THREE.Vector2();
-  }
-
-  render(renderer, scene, camera) {
-    renderer.getDrawingBufferSize(this.size);
-    if (this.target.width !== this.size.x || this.target.height !== this.size.y) this.target.setSize(this.size.x, this.size.y);
-    const u = this.material.uniforms;
-    u.uTexel.value.set(1 / this.size.x, 1 / this.size.y);
-    u.uLogFar.value = Math.log2(camera.far + 1);
-    renderer.setRenderTarget(this.target);
-    renderer.render(scene, camera);
-    renderer.setRenderTarget(null);
-    renderer.render(this.quadScene, this.quadCam);
-  }
-
-  dispose() { this.target.dispose(); this.target.depthTexture.dispose(); this.material.dispose(); this.quad.geometry.dispose(); }
+  /** Outline settings for post.js (setInk). */
+  get ink() { return this.def.outline; }
 }

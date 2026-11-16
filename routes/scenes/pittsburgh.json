@@ -530,7 +530,7 @@
     "fineM": 900,
     "fineCellM": 10
   },
-  "terrainGridFile": "routes/scenes/pittsburgh-terrain.json",
+  "terrainGridFile": "routes/scenes/pittsburgh-terrain.grid.bin.gz",
   "heroes": [
     {
       "model": "ussteel",

@@ -9,6 +9,9 @@ import { StylizedTerrain, COASTAL_QUALITY } from './stylized-terrain.js';
 import { riderPose, routePoint, ROAD_WIDTH } from './pose.js';
 import { loadRider } from './rider.js';
 import { PerfMonitor } from './perf.js';
+import { HAZE, installHaze } from './haze.js';
+
+installHaze();   // valley haze in the fog chunks: before any material compiles
 import { wrapDist } from '../gpx.js';
 
 export const TIME_PRESETS = {
@@ -20,6 +23,8 @@ export const TIME_PRESETS = {
   // v0.12: moonlight, a deep blue sky with stars, and (in a city) the lights come on
   night: { label: 'Night', elev: 40, az: 150, top: '#0a1226', horizon: '#2a3150', hemiSky: '#7d8fbf', hemiGround: '#2b2b35', sun: '#b4c6ea', sunI: 0.3, hemiI: 0.5, exposure: 1.2, night: true },
 };
+
+const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
 
 // Stylized foreground → real far terrain hand-off (metres from the camera)
 const FAR_INNER = 1500, FAR_BAND = 400;
@@ -53,14 +58,21 @@ export class World {
     this.index = makeRouteIndex(route, this.proj);
 
     // Renderer
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance' });
+    // Stylized scenery renders through the frame pipeline (post.js): an offscreen HDR target with its own
+    // MSAA and a float depth buffer, so the canvas needs no antialiasing of its own, and the renderer can
+    // use a reversed depth buffer (the logarithmic one writes depth per pixel, which stops the GPU
+    // skipping hidden pixels; it stays only as the fallback without EXT_clip_control).
+    const reversed = this.stylized && hasClipControl();
+    this.renderer = new THREE.WebGLRenderer({ antialias: !this.stylized, logarithmicDepthBuffer: !reversed,
+      reversedDepthBuffer: reversed, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.stylized ? COASTAL_QUALITY[this.qualityKey].pixelRatio : 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     container.prepend(this.renderer.domElement);
     this.renderer.domElement.className = 'world-canvas';
-    // cartoon look test (?look=gentle|bold): toon bands, grade, smooth crowns, flat road, ink outlines
-    this.look = this.stylized && Object.hasOwn(LOOKS, opts.look) ? new Look(this, opts.look) : null;
+    // cartoon look: the scene's "look" (Route 28: gentle), or ?look=gentle|bold|none in the preview
+    const lookKey = opts.look ?? route.scene?.look;
+    this.look = this.stylized && Object.hasOwn(LOOKS, lookKey) ? new Look(this, lookKey) : null;
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(62, 1, 0.3, 150000);
@@ -118,7 +130,10 @@ export class World {
     // weather: clear / marine layer / clouds / rain (stylized scenery)
     if (this.stylized) this.weather = new Weather(this, this.terrain.uniforms);
     // hero scenery: HDR render with soft bloom, a gentle grade and vignette (off on Light detail)
-    if (this.stylized && route.scene.post) this.post = new PostFX(this.renderer);
+    // every stylized scene goes through it; only hero scenes (scene.post) get the bloom, grade and vignette
+    if (this.stylized) this.post = new PostFX(this.renderer, { samples: COASTAL_QUALITY[this.qualityKey].samples });
+    this.heroPost = !!(this.stylized && route.scene.post);
+    if (this.look) this.post.setInk(this.look.ink);
     // Simple stand-in until the Blender model loads
     this.rider = makeRider();
     this.scene.add(this.rider.group);
@@ -155,14 +170,13 @@ export class World {
   setPacerSource(fn) { this.pacerSource = fn; this._pacerInit = false; }
 
   /** Point on the road at distance s, `lane` × road width right of the centre line (with the U-turn drifts). */
-  _place(s, lane) {
-    // shared with the course QC sweep (js/world/pose.js)
+  _place(s, lane, out = { pos: new THREE.Vector3(), fwd: new THREE.Vector3(), flat: new THREE.Vector3() }) {
+    // shared with the course QC sweep (js/world/pose.js); `out` lets the frame loop reuse its vectors
     const pose = riderPose(this.route, this.index, s, lane);
-    return {
-      pos: new THREE.Vector3(pose.pos.x, pose.pos.y, pose.pos.z),
-      fwd: new THREE.Vector3(pose.fwd.x, pose.fwd.y, pose.fwd.z),
-      flat: new THREE.Vector3(pose.flat.x, 0, pose.flat.z),
-    };
+    out.pos.set(pose.pos.x, pose.pos.y, pose.pos.z);
+    out.fwd.set(pose.fwd.x, pose.fwd.y, pose.fwd.z);
+    out.flat.set(pose.flat.x, 0, pose.flat.z);
+    return out;
   }
 
 
@@ -188,7 +202,7 @@ export class World {
     if (this.route.closed) { if (err > total / 2) err -= total; if (err < -total / 2) err += total; }
     if (Math.abs(err) > 60) this.ps = src.pos; else this.ps += err * Math.min(1, dt * 1.5);
     this.ps = this.route.closed ? wrapDist(this.route, this.ps) : Math.max(0, Math.min(total, this.ps));
-    const { pos, fwd } = this._place(this.ps, PACER_LANE);
+    const { pos, fwd } = this._place(this.ps, PACER_LANE, this._pacerPose ||= { pos: new THREE.Vector3(), fwd: new THREE.Vector3(), flat: new THREE.Vector3() });
     this.pacerCrank += (src.cadence / 60) * Math.PI * 2 * dt;
     this.pacer.group.visible = true;
     this.pacer.update(pos, fwd, this.pacerCrank, src.speed, Math.min(dt, 0.1));
@@ -219,6 +233,7 @@ export class World {
       this.sun.shadow.map?.dispose(); this.sun.shadow.map = null;
       this.sun.shadow.mapSize.set(resolution, resolution);
     }
+    this.post?.setSamples(quality.samples);
     this.terrain.setQuality(this.qualityKey);
     this.scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => { m.needsUpdate = true; }); });
     this._resize?.();
@@ -266,6 +281,13 @@ export class World {
     u.sunDir.value.copy(dir);
     u.uNight.value = t.night ? 1 : 0;
     this.scene.fog.color.set(t.horizon);
+    // valley haze (haze.js): low air thickens in the morning, thins at midday; a scene can scale or deepen it
+    if (this.stylized) {
+      const A = this.atmosphere, strength = { morning: .5, golden: .32, midday: .2, night: .14 }[this.timeKey] ?? .25;
+      HAZE.x = (A.hazeBaseM ?? this.route.minEle) - 10;
+      HAZE.y = A.hazeM ?? 75;
+      HAZE.z = Math.min(.85, strength * (A.haze ?? 1) * (1 + o * .4));
+    } else HAZE.z = 0;
     this._fogBase = { near: this._fogBase?.near ?? this.scene.fog.near, far: this._fogBase?.far ?? this.scene.fog.far, color: new THREE.Color(t.horizon) };
     this.terrain?.setTime?.(this.timeKey);
     this.terrain?.setNight?.(t.night ? 1 : 0);
@@ -316,7 +338,7 @@ export class World {
     this.s = this.route.closed ? wrapDist(this.route, this.s) : Math.max(0, Math.min(total, this.s));
 
     // Rider placement: right-hand side of the road
-    const { pos: riderPos, fwd, flat } = this._place(this.s, RIDER_LANE);
+    const { pos: riderPos, fwd, flat } = this._place(this.s, RIDER_LANE, this._riderPose ||= { pos: new THREE.Vector3(), fwd: new THREE.Vector3(), flat: new THREE.Vector3() });
     this.crank += (src.cadence / 60) * Math.PI * 2 * dt;
     this.rider.update(riderPos, fwd, this.crank, src.speed, Math.min(dt, 0.1));
     this._updatePacer(dt);
@@ -324,7 +346,7 @@ export class World {
     this._updateCamera(riderPos, flat, fwd, dt);
     this.terrain.uniforms.uTime.value = now / 1000;
     this.weather?.tick(dt);
-    this.terrain.update(this.camera.position.x, this.camera.position.z);
+    this.terrain.update(this.camera.position.x, this.camera.position.z, this.terrain.quality?.buildMs);
     if (this.terrain.tick) {
       const turn = this.route.turnS || total, back = this.route.turnS && this.s > turn;
       this.terrain.tick(this.camera.position, dt, { x: riderPos.x, z: riderPos.z, out: back ? total - this.s : this.s, dir: back ? -1 : 1, speed: src.speed });
@@ -350,25 +372,51 @@ export class World {
     }
 
     this.sky.position.copy(this.camera.position);
-    if (this.stylized) {
-      const target = riderPos.clone().addScaledVector(flat, 40);
-      this.sun.position.copy(target).addScaledVector(this.sunDir, 350);
-      this.sun.target.position.copy(target);
-      Object.assign(this.sun.shadow.camera, { left: -105, right: 105, top: 105, bottom: -105 });
-      this.sun.shadow.camera.updateProjectionMatrix();
-    } else {
+    if (this.stylized) this._placeShadows(riderPos, flat);
+    else {
       this.sun.position.copy(this.camera.position).addScaledVector(this.sunDir, 5000);
       this.sun.target.position.copy(this.camera.position);
     }
     this._render();
   }
 
+  /**
+   * The sun's shadow box follows the rider, moved only in whole shadow-map texels (so shadow edges stay
+   * still instead of shimmering), and the shadow map is redrawn only when that box moved, or every other
+   * frame for the things that move by themselves (wind, traffic, a rider standing still).
+   */
+  _placeShadows(riderPos, flat) {
+    const target = _v1.copy(riderPos).addScaledVector(flat, 40);
+    const span = 105;
+    const sm = this.renderer.shadowMap;
+    // light-space axes, then snap the box centre to the texel grid
+    const d = this.sunDir, right = _v2.set(0, 1, 0).cross(d);
+    if (right.lengthSq() < 1e-6) right.set(1, 0, 0);
+    right.normalize();
+    const up = _v3.copy(d).cross(right).normalize();
+    const texel = (2 * span) / this.sun.shadow.mapSize.x;
+    const a = Math.round(target.dot(right) / texel) * texel, b = Math.round(target.dot(up) / texel) * texel, c = target.dot(d);
+    target.copy(right).multiplyScalar(a).addScaledVector(up, b).addScaledVector(d, c);
+    const cam = this.sun.shadow.camera;
+    const moved = !this._shadowAt || this._shadowAt.distanceToSquared(target) > 1e-6 || cam.right !== span;
+    this.sun.position.copy(target).addScaledVector(d, 350);
+    this.sun.target.position.copy(target);
+    if (cam.right !== span) { Object.assign(cam, { left: -span, right: span, top: span, bottom: -span }); cam.updateProjectionMatrix(); }
+    (this._shadowAt ||= new THREE.Vector3()).copy(target);
+    this._shadowFrame = (this._shadowFrame || 0) + 1;
+    if (!sm.enabled) return;
+    sm.autoUpdate = false;
+    sm.needsUpdate = moved || this._shadowFrame % 2 === 0;
+  }
+
   // The one camera: chase, behind and above the rider (the drone, scenic, side and eye views were retired).
   _updateCamera(riderPos, flat, fwd, dt) {
-    const up = new THREE.Vector3(0, 1, 0);
+    // scratch vectors (no allocations in the frame loop)
+    const C = this._cam ||= { pos: new THREE.Vector3(), look: new THREE.Vector3() };
+    const up = UP, pos = C.pos, look = C.look;
     // Aim a little low so the rider sits above the HUD strip at the bottom of the screen.
-    const pos = riderPos.clone().addScaledVector(flat, -6.5).addScaledVector(up, 2.7);
-    const look = riderPos.clone().addScaledVector(fwd, 8).addScaledVector(up, -0.2);
+    pos.copy(riderPos).addScaledVector(flat, -6.5).addScaledVector(up, 2.7);
+    look.copy(riderPos).addScaledVector(fwd, 8).addScaledVector(up, -0.2);
     // Keep the camera above ground
     const g = this.terrain.heightAt(pos.x, pos.z);
     if (g != null && pos.y < g + 1.6) pos.y = g + 1.6;
@@ -385,8 +433,9 @@ export class World {
   }
 
   _render() {
-    if (this.look) { this.look.sweep(); this.look.render(this.renderer, this.scene, this.camera); return; }
-    if (this.post && this.qualityKey !== 'low') {
+    this.look?.sweep();   // patch any material that arrived since the last frame (new tiles reuse patched ones)
+    if (this.post && (!this.heroPost || this.qualityKey === 'low')) this.post.render(this.scene, this.camera, { grade: false });
+    else if (this.post) {
       const k = this.timeKey, o = this._weatherLight?.overcast || 0;
       this.post.render(this.scene, this.camera, {
         bloom: (k === 'night' ? .38 : k === 'golden' ? .42 : .26) * (1 - o * .5),
@@ -416,7 +465,6 @@ export class World {
     this._ro.disconnect();
     this.weather?.dispose();
     this.post?.dispose();
-    this.look?.dispose();
     this.terrain.dispose();
     this.farTerrain?.dispose();
     this.sun.shadow.map?.dispose(); this.sun.shadow.mapPass?.dispose();
@@ -427,6 +475,17 @@ export class World {
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
+}
+
+/** EXT_clip_control (needed for the reversed depth buffer); checked once on a throwaway context. */
+let clipControl = null;
+function hasClipControl() {
+  if (clipControl === null) {
+    const gl = document.createElement('canvas').getContext('webgl2');
+    clipControl = !!gl?.getExtension('EXT_clip_control');
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+  }
+  return clipControl;
 }
 
 // ---------- Sky ----------

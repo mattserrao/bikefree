@@ -1,5 +1,7 @@
 # Route 28 look test: current vs cartoon gentle vs cartoon bold
 
+**Chosen (16 Nov 2026): cartoon gentle at midday.** Route 28 now opens in this look (`"look": "gentle"`, `"timeOfDay": "midday"` in its scene).
+
 16 Nov 2026, branch `route28-cartoon`. Rendered headlessly with `npm run snap` (software GPU, Balanced detail, chase camera).
 
 ![Contact sheet](contact-sheet.jpg)
@@ -32,5 +34,5 @@ Both looks also have:
 - The rider is unchanged apart from the toon bands. The cartoon rider comes later.
 
 ## Try it live
-- Preview page: `tools/world-preview.html?park=route28&look=bold`. The Look menu in the panel switches between the looks.
-- Snapshots: `npm run snap -- route28@10650:bold route28@19050:afternoon:gentle`
+- Preview page: `tools/world-preview.html?park=route28` (gentle). The Look menu in the panel switches looks: `?look=none` for the old one, `?look=bold`.
+- Snapshots: `npm run snap -- route28@10650 route28@10650:current route28@10650:bold`

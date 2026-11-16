@@ -127,11 +127,30 @@ export function makeCoastalGroundMaterial(palette, config = {}, farUniform = nul
   return material;
 }
 
+/**
+ * The authored shoreline as a lookup texture: x of the coast at each z (the polyline with clamped ends),
+ * sampled finely, so the water shader reads two texels instead of looping over every coast point.
+ */
+const COAST_SAMPLES = 2048;
+function makeCoastTexture(points) {
+  const z0 = points[0].z, z1 = points.at(-1).z, data = new Float32Array(COAST_SAMPLES);
+  for (let k = 0, i = 0; k < COAST_SAMPLES; k++) {
+    const z = z0 + (z1 - z0) * k / (COAST_SAMPLES - 1);
+    while (i < points.length - 2 && points[i + 1].z <= z) i++;
+    const a = points[i], b = points[i + 1] || a, f = b.z > a.z ? Math.min(1, Math.max(0, (z - a.z) / (b.z - a.z))) : 0;
+    data[k] = a.x + (b.x - a.x) * f;
+  }
+  const texture = new THREE.DataTexture(data, COAST_SAMPLES, 1, THREE.RedFormat, THREE.FloatType);
+  texture.minFilter = texture.magFilter = THREE.NearestFilter; texture.needsUpdate = true;
+  return { texture, range: new THREE.Vector2(z0, Math.max(z1, z0 + 1)) };
+}
+
 export function makeCoastalWaterMaterial(landscape, uniforms, waterColor, shallowColor, shore = null) {
   const points = landscape.coast;
   const lakes = landscape.lakes || [], islands = landscape.waterIslands || [];
-  return new THREE.ShaderMaterial({
-    uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), ...uniforms, bfCoast: { value: points.map((p) => new THREE.Vector2(p.x, p.z)) },
+  const coast = makeCoastTexture(points);
+  const material = new THREE.ShaderMaterial({
+    uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), ...uniforms, bfCoastTex: { value: coast.texture }, bfCoastRange: { value: coast.range },
       bfWater: { value: new THREE.Color(waterColor) }, bfShallow: { value: new THREE.Color(shallowColor || '#79beb1') },
       bfLakes: { value: lakes.length ? lakes.map((l) => new THREE.Vector4(l.x, l.z, l.rx, l.rz)) : [new THREE.Vector4()] },
       bfIslands: { value: islands.length ? islands.map((l) => new THREE.Vector4(l.x, l.z, l.rx, l.rz)) : [new THREE.Vector4()] },
@@ -156,20 +175,17 @@ export function makeCoastalWaterMaterial(landscape, uniforms, waterColor, shallo
       varying vec3 vBfSea;
       uniform float uTime; uniform vec3 uSunDir; uniform vec3 uSkyTop; uniform vec3 uSkyHorizon;
       uniform vec3 bfWater; uniform vec3 bfShallow;
-      uniform vec2 bfCoast[${points.length}];
+      uniform sampler2D bfCoastTex; uniform vec2 bfCoastRange;
       uniform vec4 bfLakes[${Math.max(1, lakes.length)}];
       uniform vec4 bfIslands[${Math.max(1, islands.length)}];
       uniform sampler2D bfShore; uniform vec4 bfShoreBox; uniform float bfRough;
       ${noise}
       float shoreline(float z) {
-        float x = bfCoast[0].x;
-        for (int i = 0; i < ${points.length - 1}; i++) {
-          if (z >= bfCoast[i].y) {
-            float f = clamp((z - bfCoast[i].y) / (bfCoast[i + 1].y - bfCoast[i].y), 0., 1.);
-            x = mix(bfCoast[i].x, bfCoast[i + 1].x, f);
-          }
-        }
-        return x + sin(z / 290.) * 17. + sin(z / 83.) * 4.;
+        float u = clamp((z - bfCoastRange.x) / (bfCoastRange.y - bfCoastRange.x), 0., 1.) * ${(COAST_SAMPLES - 1).toFixed(1)};
+        float i0 = min(floor(u), ${(COAST_SAMPLES - 2).toFixed(1)});
+        float a = texture2D(bfCoastTex, vec2((i0 + .5) / ${COAST_SAMPLES.toFixed(1)}, .5)).r;
+        float b = texture2D(bfCoastTex, vec2((i0 + 1.5) / ${COAST_SAMPLES.toFixed(1)}, .5)).r;
+        return mix(a, b, u - i0) + sin(z / 290.) * 17. + sin(z / 83.) * 4.;
       }
       void main() {
         #include <logdepthbuf_fragment>
@@ -254,6 +270,9 @@ ${shore ? `
       }`,
     fog: true,
   });
+  const dispose = material.dispose.bind(material);
+  material.dispose = () => { coast.texture.dispose(); dispose(); };
+  return material;
 }
 
 export function decorateSceneryMaterial(material, category, uniforms) {

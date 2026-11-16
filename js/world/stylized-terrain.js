@@ -5,6 +5,7 @@ import { makeCoastalGroundMaterial, makeCoastalWaterMaterial, makeLakeWaterMater
 import { makeAdirondackKit, ADIRONDACK_CATEGORY } from './adirondack-kit.js';
 import { makeGlacierKit, GLACIER_CATEGORY } from './glacier-kit.js';
 import { ForestPlanner, TILE_M, makeClearings } from './forest.js';
+import { GroundBlocks, InstancePool, packMatrices, proxyGroup } from './pools.js';
 import { GlacierLandmarks } from './glacier-landmarks.js';
 import { planSettlement, Settlement } from './settlement.js';
 import { CoastalDetails, fitBridgeToRoad, coastalRoadFrame } from './coastal-details.js';
@@ -16,11 +17,72 @@ import { CoastLife } from './coast-life.js';
 import { GlacierLife } from './glacier-life.js';
 import { makeRouteIndex } from './geo.js';
 
+// Tree cards stream in large tiles, at a fraction of the scatter's candidate density.
+const FAR_TREE_TILE_M = 768, FAR_TREE_DENSITY = .3;
+
+/**
+ * The tree-card materials: an alpha-tested silhouette (conifer or broadleaf) on a quad that turns about
+ * its vertical axis to face the camera, lit from above like the canopy, with the scene's fog and wind.
+ * `hide` (minX, minZ, maxX, maxZ) is the square where the real trees stand: cards there are dropped.
+ */
+function makeTreeCards(uniforms) {
+  const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  const shade = (x0, x1) => { const g = ctx.createLinearGradient(x0, 0, x1, 0); g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#b8b8b8'); return g; };
+  // left half: conifer (tiers of a narrow cone); right half: broadleaf (a rounded crown on a short trunk)
+  ctx.fillStyle = '#5a4a3c'; ctx.fillRect(29, 108, 6, 20); ctx.fillRect(93, 92, 6, 36);
+  ctx.fillStyle = shade(6, 58);
+  for (let k = 0; k < 5; k++) {
+    const top = 2 + k * 20, half = 13 + k * 4.4;
+    ctx.beginPath(); ctx.moveTo(32, top); ctx.lineTo(32 + half, top + 30); ctx.lineTo(32 - half, top + 30); ctx.closePath(); ctx.fill();
+  }
+  ctx.fillStyle = shade(66, 126);
+  for (const [x, y, r] of [[96, 48, 26], [80, 62, 18], [112, 62, 17], [96, 30, 18], [96, 72, 20]]) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+  const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+  const geometry = new THREE.PlaneGeometry(1, 1); geometry.translate(0, .5, 0);
+  const hide = { value: new THREE.Vector4(0, 0, 0, 0) }, reach = { value: 1e9 };
+  const make = (u0) => {
+    const material = new THREE.MeshLambertMaterial({ map: texture, alphaTest: .3, alphaToCoverage: true, side: THREE.DoubleSide });
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.bfHide = hide; shader.uniforms.bfReach = reach; shader.uniforms.uTime = uniforms.uTime; shader.uniforms.bfWind = uniforms.bfWind || { value: .3 };
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nuniform vec4 bfHide; uniform float bfReach; uniform float uTime; uniform float bfWind;')
+        .replace('#include <uv_vertex>', `#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = vec2(${u0.toFixed(2)} + uv.x * .5, uv.y);\n#endif`)
+        .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = vec3(0., 1., 0.);')
+        .replace('#include <project_vertex>', `
+          vec4 bfC = modelMatrix * instanceMatrix * vec4(0., 0., 0., 1.);
+          vec3 bfR = normalize(vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]));
+          float bfW = length(instanceMatrix[0].xyz), bfH = length(instanceMatrix[1].xyz);
+          float bfSway = sin(uTime * 1.1 + bfC.x * .07 + bfC.z * .05) * bfWind * .04 * position.y * bfH;
+          vec3 bfP = bfC.xyz + bfR * (position.x * bfW + bfSway) + vec3(0., position.y * bfH, 0.);
+          vec4 mvPosition = viewMatrix * vec4(bfP, 1.);
+          gl_Position = projectionMatrix * mvPosition;
+          // where the real trees stand: off screen
+          // and beyond the reach (where the ground starts to morph toward the real horizon)
+          if ((bfC.x > bfHide.x && bfC.z > bfHide.y && bfC.x < bfHide.z && bfC.z < bfHide.w) || length(bfC.xz - cameraPosition.xz) > bfReach) gl_Position = vec4(2., 2., 2., 1.);`);
+    };
+    material.customProgramCacheKey = () => `bf-tree-card-${u0}`;
+    return { geometry, material };
+  };
+  const cards = { conifer: make(0), broadleaf: make(.5), hide, reach };
+  cards.dispose = () => { texture.dispose(); geometry.dispose(); cards.conifer.material.dispose(); cards.broadleaf.material.dispose(); };
+  return cards;
+}
+
+// Ground cover streams in small tiles: full density within COVER_FULL_M of the camera, half out to COVER_RANGE_M.
+const COVER_TILE_M = 96, COVER_FULL_M = 110, COVER_RANGE_M = 220;
+const fract = (v) => v - Math.floor(v);
+
+/** Run a build job (generator) to the end at once. */
+function runJob(job) { for (;;) { const r = job.next(); if (r.done) return r.value; } }
+
 export const COASTAL_QUALITY = {
-  // forestRange: tiles of real trees in forest scenes; nearM/midM: tile-centre distances for the detail tiers
-  low: { pixelRatio: 1, shadows: false, scatterRange: 2, candidates: 150, coverCandidates: 100, forestRange: 3, nearM: 0, midM: 380, buildsPerFrame: 2 },
-  balanced: { pixelRatio: 1.5, shadows: true, scatterRange: 3, candidates: 230, coverCandidates: 320, forestRange: 4, nearM: 170, midM: 450, buildsPerFrame: 3 },
-  high: { pixelRatio: 2, shadows: true, scatterRange: 4, candidates: 310, coverCandidates: 480, forestRange: 5, nearM: 240, midM: 560, buildsPerFrame: 4 },
+  // forestRange: tiles of real trees in forest scenes; nearM/midM: tile-centre distances for the detail tiers;
+  // buildMs: time per frame for building streamed tiles (ground, plants, forest) while riding;
+  // farTreeM: how far the flat tree cards reach beyond the real trees (0 = none)
+  low: { pixelRatio: 1, samples: 2, shadows: false, scatterRange: 2, candidates: 150, coverCandidates: 100, forestRange: 3, nearM: 0, midM: 380, buildMs: 3, farTreeM: 0 },
+  balanced: { pixelRatio: 2, samples: 2, shadows: true, scatterRange: 3, candidates: 230, coverCandidates: 320, forestRange: 4, nearM: 170, midM: 450, buildMs: 4, farTreeM: 1600 },
+  high: { pixelRatio: 2, samples: 4, shadows: true, scatterRange: 4, candidates: 310, coverCandidates: 480, forestRange: 5, nearM: 240, midM: 560, buildMs: 5, farTreeM: 2200 },
 };
 
 /** Bundled style-C coastal scene. No tile/imagery requests, including offline. */
@@ -49,6 +111,7 @@ export class StylizedTerrain {
     this.group.name = `${this.config.title || this.route.name} · stylized scenery`;
     scene.add(this.group);
     this.patches = new Map();
+    this.farTrees = new Map();
     this.scatter = new Map();
     this.cover = new Map();
     this.landmarkGeometries = new Set();
@@ -178,17 +241,53 @@ export class StylizedTerrain {
       ctx.fillStyle = g; ctx.fillRect(0, 0, 128, 64);
     }
     const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
-    const material = new THREE.SpriteMaterial({ map: texture, color: '#ffffff', transparent: true, opacity: .8, depthWrite: false, fog: false });
+    // one draw call for the whole ring: camera-facing quads drawn by a small shader (was a Sprite each)
     const rand = randomSequence(1101);
-    this.clouds = new THREE.Group(); this.clouds.name = 'clouds';
     const base = Math.max(1800, this.route.maxEle + 1100);
+    const centers = [], corners = [], sizes = [], idx = [];
     for (let i = 0; i < 26; i++) {
       const angle = i * 2.399 + rand() * .4, radius = 9000 + rand() * 7000;
-      const sprite = new THREE.Sprite(material);
-      sprite.position.set(Math.cos(angle) * radius, base + rand() * 900, Math.sin(angle) * radius);
-      const w = 2200 + rand() * 2600; sprite.scale.set(w, w * (.32 + rand() * .12), 1);
-      this.clouds.add(sprite);
+      const c = [Math.cos(angle) * radius, base + rand() * 900, Math.sin(angle) * radius];
+      const w = 2200 + rand() * 2600, h = w * (.32 + rand() * .12), k = centers.length / 3;
+      for (const [u, v] of [[-.5, -.5], [.5, -.5], [.5, .5], [-.5, .5]]) { centers.push(...c); corners.push(u, v); sizes.push(w, h); }
+      idx.push(k, k + 1, k + 2, k, k + 2, k + 3);
     }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(centers, 3));
+    geo.setAttribute('aCorner', new THREE.Float32BufferAttribute(corners, 2));
+    geo.setAttribute('aSize', new THREE.Float32BufferAttribute(sizes, 2));
+    geo.setIndex(idx);
+    const material = new THREE.ShaderMaterial({
+      uniforms: { map: { value: texture }, color: { value: new THREE.Color('#ffffff') }, opacity: { value: .8 } },
+      transparent: true, depthWrite: false, fog: false,
+      vertexShader: `
+        #include <common>
+        #include <logdepthbuf_pars_vertex>
+        attribute vec2 aCorner; attribute vec2 aSize; varying vec2 vUv;
+        void main() {
+          vUv = aCorner + .5;
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.);
+          mvPosition.xy += aCorner * aSize;
+          gl_Position = projectionMatrix * mvPosition;
+          #include <logdepthbuf_vertex>
+        }`,
+      fragmentShader: `
+        #include <common>
+        #include <logdepthbuf_pars_fragment>
+        uniform sampler2D map; uniform vec3 color; uniform float opacity; varying vec2 vUv;
+        void main() {
+          #include <logdepthbuf_fragment>
+          vec4 t = texture2D(map, vUv);
+          gl_FragColor = vec4(color * t.rgb, t.a * opacity);
+          if (gl_FragColor.a < .005) discard;
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+    });
+    // `color` mirrors SpriteMaterial's, so night can tint it
+    Object.defineProperty(material, 'color', { get: () => material.uniforms.color.value });
+    this.clouds = new THREE.Mesh(geo, material); this.clouds.name = 'clouds';
+    this.clouds.frustumCulled = false; this.clouds.renderOrder = -1;
     this.group.add(this.clouds);
     if (this.landscape.mountain) this._makePeakClouds(texture);
   }
@@ -300,6 +399,8 @@ export class StylizedTerrain {
     this.ocean.position.y = .05;
     this.ocean.name = 'Sea';
     this.ocean.visible = this.landscape.hasOcean !== false;
+    // drawn after the land: with a normal depth buffer the GPU then skips the (costly) water under hills
+    this.ocean.renderOrder = 1;
     this.group.add(this.ocean);
     this.lakeMeshes = [];
     if (this.landscape.gridLakes) this._makeGridLakes();
@@ -323,6 +424,7 @@ export class StylizedTerrain {
       const mesh = new THREE.Mesh(new THREE.CircleGeometry(1, 96), material);
       mesh.rotation.x = -Math.PI / 2; mesh.scale.set(lake.rx, lake.rz, 1);
       mesh.position.set(lake.x, lake.level, lake.z); mesh.name = lake.name;
+      if (!mesh.material.transparent) mesh.renderOrder = 1;   // after the land (see the sea)
       this.lakeMeshes.push(mesh); this.group.add(mesh);
     }
   }
@@ -376,6 +478,7 @@ export class StylizedTerrain {
       geo.setIndex(idx); geo.computeBoundingSphere();
       const mesh = new THREE.Mesh(geo, material); mesh.name = 'Lake'; mesh.receiveShadow = false;
       mesh.userData.r = geo.boundingSphere.radius; mesh.userData.c = geo.boundingSphere.center;
+      if (!mesh.material.transparent) mesh.renderOrder = 1;   // after the land (see the sea)
       this.lakeMeshes.push(mesh); this.group.add(mesh);
       const mist = new THREE.Mesh(geo, this.mistMaterial); mist.position.y = 1.6; mist.name = 'Lake mist'; mist.renderOrder = 2;
       mist.userData = mesh.userData; mist.visible = false;
@@ -416,6 +519,7 @@ export class StylizedTerrain {
       geo.setIndex(idx); geo.computeBoundingSphere();
       const mesh = new THREE.Mesh(geo, material); mesh.name = 'Lake'; mesh.receiveShadow = false;
       mesh.userData.r = geo.boundingSphere.radius; mesh.userData.c = geo.boundingSphere.center;
+      if (!mesh.material.transparent) mesh.renderOrder = 1;   // after the land (see the sea)
       this.lakeMeshes.push(mesh); this.group.add(mesh);
       const mist = new THREE.Mesh(geo, this.mistMaterial); mist.position.y = 1.6; mist.name = 'Lake mist'; mist.renderOrder = 2;
       mist.userData = mesh.userData; mist.visible = false;
@@ -455,7 +559,10 @@ export class StylizedTerrain {
     }
   }
 
-  _makePatch(x, z, size) {
+  _makePatch(x, z, size) { return runJob(this._patchJob(x, z, size)); }
+
+  /** A ground patch, built a row at a time (yields between rows so the ride can spread it over frames). */
+  *_patchJob(x, z, size) {
     const S = 16, N = S + 1;
     const positions = [], colors = [], indices = [], normals = [], realH = [], canopy = [];
     const c = new THREE.Color();
@@ -507,6 +614,7 @@ export class StylizedTerrain {
         const a = j * N + i, b = a + 1, d = a + N, e = d + 1;
         indices.push(a, d, b, b, d, e);
       }
+      if (i === S && j % 2) yield;
     }
     // Skirts close gaps between different terrain levels of detail.
     for (const edge of [Array.from({ length: N }, (_, i) => i), Array.from({ length: N }, (_, i) => S * N + i),
@@ -531,14 +639,26 @@ export class StylizedTerrain {
     let morph = 0;
     for (let k = 0; k < realH.length; k++) morph = Math.max(morph, Math.abs(realH[k] - positions[k * 3 + 1]));
     geometry.boundingSphere.radius += morph + (this.forest ? this.canopyUniform.value.z : 0);
+    // an unrendered stand-in (the ground pool draws every patch in one call); QC tools inspect these
     const mesh = new THREE.Mesh(geometry, this.groundMaterial);
-    mesh.receiveShadow = true;
-    this.group.add(mesh);
+    mesh.userData.patch = { x, z, size };
+    if (!this.groundPool) {
+      const attributes = { position: 3, normal: 3, color: 3, aRealH: 1 };
+      if (this.forest) attributes.aCanopy = 1;
+      this.groundPool = new GroundBlocks(this.group, this.groundMaterial, { vertices: positions.length / 3, indices: Uint32Array.from(indices), attributes });
+    }
     return mesh;
   }
 
-  _makeScatter(cx, cz, detailed = false, coverOnly = false) {
-    const size = 192, rand = randomSequence((cx * 73856093 ^ cz * 19349663) + this.config.seed + (coverOnly ? 7711 : 0));
+  _makeScatter(cx, cz, detailed = false, coverOnly = false, thin = false) { return runJob(this._scatterJob(cx, cz, detailed, coverOnly, thin)); }
+
+  /**
+   * A tile of plants and rocks, built a few dozen candidates at a time. Ground cover uses smaller tiles
+   * (COVER_TILE_M) kept within COVER_RANGE_M of the camera; `thin` keeps half of it (the same half at
+   * any time, picked by position) for the outer ring, where knee-high plants are a few pixels tall.
+   */
+  *_scatterJob(cx, cz, detailed = false, coverOnly = false, thin = false) {
+    const size = coverOnly ? COVER_TILE_M : 192, rand = randomSequence((cx * 73856093 ^ cz * 19349663) + this.config.seed + (coverOnly ? 7711 : 0));
     const lists = {};
     const onLookout = (x, z) => this.lookoutFootprints.some((l) => {
       const dx = x - l.position.x, dz = z - l.position.z;
@@ -548,14 +668,17 @@ export class StylizedTerrain {
     const matrix = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), scale = new THREE.Vector3();
     const add = (name, x, y, z, width, height = width) => {
       if (!this.kit.assets[name] && name !== 'shadow') return;
-      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * Math.PI * 2);
+      const turn = rand() * Math.PI * 2;
+      if (thin && fract(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) < .5) return;
+      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), turn);
       p.set(x, y, z); scale.set(width, height, width);
       (lists[name] ||= []).push(matrix.compose(p, q, scale).clone());
     };
     const vegetation = this.config.vegetation || {};
-    const count = (coverOnly ? this.quality.coverCandidates : this.quality.candidates) * (vegetation.density || 1);
+    const count = (coverOnly ? this.quality.coverCandidates * (size / 192) ** 2 : this.quality.candidates) * (vegetation.density || 1);
     const coverScale = vegetation.coverScale || [.75, 1.95];
     for (let k = 0; k < count; k++) {
+      if (k % 24 === 23) yield;
       const x = cx * size + rand() * size, z = cz * size + rand() * size;
       const inland = this.inlandAt(x, z), y = this.heightAt(x, z);
       if (inland < 10 || y < 1 || this.landscape.onStreet?.(x, z, 1) || this.landscape.isWater?.(x, z, y) || this.landscape.bridgeAt(x, z, 10) || this.landscape.creekAt(x, z) || onLookout(x, z)) continue;
@@ -649,6 +772,7 @@ export class StylizedTerrain {
       for (let i = 0; i < (this.route.turnIdx || this.index.xs.length - 1); i += 2) {
         const x0 = this.index.xs[i], z0 = this.index.zs[i];
         if (x0 < cx * size || x0 >= (cx + 1) * size || z0 < cz * size || z0 >= (cz + 1) * size) continue;
+        yield;
         const dx = this.index.xs[i + 1] - x0, dz = this.index.zs[i + 1] - z0, len = Math.hypot(dx, dz) || 1;
         const vergeCount = (this.quality === COASTAL_QUALITY.low ? 28 : this.quality === COASTAL_QUALITY.high ? 132 : 96) * (vegetation.vergeDensity || 1);
         for (let k = 0; k < vergeCount; k++) {
@@ -662,73 +786,240 @@ export class StylizedTerrain {
         }
       }
     }
-    const group = new THREE.Group();
+    const packed = {};
     for (const [name, matrices] of Object.entries(lists)) {
-      const asset = name === 'shadow' ? this.shadowAsset : this.kit.assets[name];
-      const mesh = new THREE.InstancedMesh(asset.geometry, asset.material, matrices.length);
-      matrices.forEach((m, i) => {
-        mesh.setMatrixAt(i, m);
-        if (name !== 'shadow') {
-          const tint = this.config.biome === 'desert' && /^(rock|outcrop)/.test(name) ? new THREE.Color(this.config.palette.rock) : new THREE.Color();
-          mesh.setColorAt(i, tint.multiplyScalar(.9 + (i % 5) * .04));
-        }
-      }); mesh.instanceMatrix.needsUpdate = true;
-      mesh.castShadow = /^(cypress|pine|fir|broadleaf|palm|rock|outcrop)/.test(name) && !name.endsWith('-lod');   // distant trees: no shadow pass
-      mesh.receiveShadow = name !== 'shadow';
-      mesh.computeBoundingSphere(); group.add(mesh);
+      let colors = null;
+      if (name !== 'shadow') {
+        const tint = this.config.biome === 'desert' && /^(rock|outcrop)/.test(name) ? new THREE.Color(this.config.palette.rock) : new THREE.Color(1, 1, 1);
+        colors = new Float32Array(matrices.length * 3);
+        for (let i = 0; i < matrices.length; i++) { const k = .9 + (i % 5) * .04; colors.set([tint.r * k, tint.g * k, tint.b * k], i * 3); }
+      }
+      packed[name] = { matrices: packMatrices(matrices), colors };
     }
-    this.group.add(group);
-    return group;
+    // drawn by the instance pools; the group is an unrendered stand-in for QC tools
+    return { x: cx * size, z: cz * size, size, detailed, lists: packed, group: proxyGroup(packed, (n) => this._asset(n)) };
   }
 
-  update(cx, cz) {
-    if (this.forestQueue) this._buildForestTiles(cx, cz);
-    if (Math.hypot(cx - this._lastX, cz - this._lastZ) < 36) return;
+  _asset(name) { return name === 'shadow' ? this.shadowAsset : this.kit.assets[name]; }
+
+  /** Shadow flags for a pooled plant: near trees and rocks cast (see the shadow range in COASTAL_QUALITY). */
+  _scatterFlags(name, tile) {
+    return { cast: !!tile.detailed && /^(cypress|pine|fir|broadleaf|palm|rock|outcrop)/.test(name) && !name.endsWith('-lod'), receive: name !== 'shadow' };
+  }
+
+  /**
+   * Stream the ground and scenery around (cx, cz). Missing tiles are built nearest first within
+   * `budgetMs` (the ride passes a few ms a frame; tools call it without one and get everything at once).
+   * Each layer swaps in only once all of its wanted tiles are built, so nothing opens a gap meanwhile.
+   */
+  update(cx, cz, budgetMs = Infinity) {
+    if (!this.groundPool) budgetMs = Infinity;   // nothing on screen yet: build it all now
+    const deadline = performance.now() + budgetMs;
+    if (Math.hypot(cx - this._lastX, cz - this._lastZ) >= 36) this._plan(cx, cz);
+    if (this._want) this._build(deadline);
+    this.stats.ready = this.patches.size;
+  }
+
+  /** What should be shown around (cx, cz): ground patches (quadtree), scatter, cover and forest tiles. */
+  _plan(cx, cz) {
     this._lastX = cx; this._lastZ = cz;
-    const show = new Set();
+    const want = { at: [cx, cz], patches: new Map(), scatter: new Map(), cover: new Map(), forest: null };
     const visit = (x, z, size) => {
       const d = Math.hypot(Math.max(x - cx, 0, cx - x - size), Math.max(z - cz, 0, cz - z - size));
       if (size > 96 && d < size * 1.15) {
         for (const [dx, dz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) visit(x + dx * size / 2, z + dz * size / 2, size / 2);
         return;
       }
-      const key = `${x}/${z}/${size}`; show.add(key);
-      if (!this.patches.has(key)) this.patches.set(key, this._makePatch(x, z, size));
+      want.patches.set(`${x}/${z}/${size}`, { x, z, size, d });
     };
     const size = 1536, ix = Math.floor(cx / size), iz = Math.floor(cz / size);
     const ring = this.farOn ? 2 : 5;   // with the real far terrain on, the stylized ground only needs ~3 km
     for (let x = ix - ring; x <= ix + ring; x++) for (let z = iz - ring; z <= iz + ring; z++) visit(x * size, z * size, size);
     this._cullFar(cx, cz);
     this.clouds.position.set(cx, 0, cz);   // the sky travels with you
-    for (const [key, mesh] of this.patches) {
-      mesh.visible = show.has(key);
-      if (!mesh.visible) { this.group.remove(mesh); mesh.geometry.dispose(); this.patches.delete(key); }
-    }
-    if (this.kit && this.forestLayout) this._planForestTiles(cx, cz);
     if (this.kit) {
-      const visible = new Set(), sx = Math.floor(cx / 192), sz = Math.floor(cz / 192);
-      const range = this.quality.scatterRange;
-      for (let x = sx - range; x <= sx + range; x++) for (let z = sz - range; z <= sz + range; z++) {
-        const detailed = Math.hypot((x + .5) * 192 - cx, (z + .5) * 192 - cz) < 260;
-        const key = `${x}/${z}/${detailed}`; visible.add(key);
-        if (!this.scatter.has(key) && !this.forestLayout) this.scatter.set(key, this._makeScatter(x, z, detailed));
+      const sx = Math.floor(cx / 192), sz = Math.floor(cz / 192), range = this.quality.scatterRange;
+      want.scatterSquare = [sx, sz, range];
+      if (!this.forestLayout) for (let x = sx - range; x <= sx + range; x++) for (let z = sz - range; z <= sz + range; z++) {
+        const d = Math.hypot((x + .5) * 192 - cx, (z + .5) * 192 - cz), detailed = d < 260;
+        want.scatter.set(`${x}/${z}/${detailed}`, { x, z, detailed, d });
       }
-      for (const [key, group] of this.scatter) if (!visible.has(key)) {
-        this.group.remove(group); group.children.forEach((m) => m.dispose()); this.scatter.delete(key);
+      // ground cover: a circle of small tiles around the camera, full near, thinned in the outer ring
+      const T = COVER_TILE_M, tx = Math.floor(cx / T), tz = Math.floor(cz / T), r = Math.ceil(COVER_RANGE_M / T);
+      for (let x = tx - r; x <= tx + r; x++) for (let z = tz - r; z <= tz + r; z++) {
+        const d = Math.hypot(Math.max(x * T - cx, 0, cx - (x + 1) * T), Math.max(z * T - cz, 0, cz - (z + 1) * T));
+        if (d > COVER_RANGE_M) continue;
+        const thin = d > COVER_FULL_M;
+        want.cover.set(`${x}/${z}/${thin}`, { x, z, d, thin });
       }
-      const near = new Set();
-      for (let x = sx - 1; x <= sx + 1; x++) for (let z = sz - 1; z <= sz + 1; z++) {
-        const key = `${x}/${z}`; near.add(key);
-        if (!this.cover.has(key)) this.cover.set(key, this._makeScatter(x, z, true, true));
-      }
-      for (const [key, group] of this.cover) if (!near.has(key)) {
-        this.group.remove(group); group.children.forEach((m) => m.dispose()); this.cover.delete(key);
-      }
+      if (this.forestLayout) want.forest = this._planForestTiles(cx, cz);
+      want.far = this._planFarTrees(cx, cz);
     }
-    this.stats.ready = this.patches.size;
+    want.queue = [];
+    for (const layer of ['patches', 'cover', 'scatter', 'forest', 'far']) for (const [key, w] of want[layer] || []) {
+      if (!this._built(layer, key, w)) want.queue.push([layer, key, w]);
+    }
+    want.queue.sort((a, b) => a[2].d - b[2].d);
+    want.dirty = new Set(['patches', 'cover', 'scatter', 'forest', 'far']);
+    this._want = want;
+    this.forestQueue = want.queue.filter((q) => q[0] === 'forest');   // tools wait on this
   }
 
-  // ---- Forest tiles: wanted tiers by distance, built a few per frame, nearest first ----
+  _built(layer, key, w) {
+    if (layer === 'patches') return this.patches.has(key);
+    if (layer === 'scatter') return this.scatter.has(key);
+    if (layer === 'cover') return this.cover.has(key);
+    if (layer === 'far') return this.farTrees.has(key);
+    return this.forestTiles.get(key)?.tier === w.tier;
+  }
+
+  _build(deadline) {
+    const want = this._want;
+    let steps = 0;
+    // at least one step a frame, then as many as fit in the budget; a tile can take several frames
+    while (want.queue.length && (steps === 0 || performance.now() < deadline)) {
+      const item = want.queue[0], [layer, key, w] = item;
+      if (this._built(layer, key, w)) { want.queue.shift(); continue; }
+      item.job ||= layer === 'patches' ? this._patchJob(w.x, w.z, w.size)
+        : layer === 'scatter' ? this._scatterJob(w.x, w.z, w.detailed)
+        : layer === 'cover' ? this._scatterJob(w.x, w.z, true, true, w.thin)
+        : layer === 'far' ? this._farTreeJob(w.x, w.z)
+        : (function* (t) { return t._makeForestTile(w); })(this);
+      const step = item.job.next();
+      steps++;
+      if (!step.done) continue;
+      want.queue.shift();
+      (layer === 'patches' ? this.patches : layer === 'scatter' ? this.scatter : layer === 'cover' ? this.cover : layer === 'far' ? this.farTrees : this.forestTiles).set(key, step.value);
+    }
+    if (this.forestQueue) this.forestQueue = want.queue.filter((q) => q[0] === 'forest');
+    this.stats.queued = want.queue.length;
+    // swap in every layer whose wanted tiles are all built (and drop what is no longer wanted)
+    const [cx, cz] = want.at;
+    for (const layer of [...want.dirty]) {
+      const wanted = want[layer];
+      if (!wanted) { want.dirty.delete(layer); continue; }
+      if (want.queue.some((q) => q[0] === layer)) continue;
+      want.dirty.delete(layer);
+      if (layer === 'patches') {
+        for (const key of [...this.patches.keys()]) if (!wanted.has(key)) { this.patches.get(key).geometry.dispose(); this.patches.delete(key); }
+        if (this.groundPool) this.groundPool.set(new Map([...this.patches].map(([k, m]) => [k, { ...m.userData.patch, geometry: m.geometry }])));
+      } else {
+        const map = layer === 'forest' ? this.forestTiles : layer === 'far' ? this.farTrees : this[layer];
+        for (const key of [...map.keys()]) if (!wanted.has(key)) map.delete(key);
+        this._pool(layer).set(map.values(), cx, cz);
+        // the tree cards step aside where the real trees are (the scatter square around the camera)
+        if (layer === 'far' && this.farCards) this.farCards.reach.value = this.farOn ? this.farUniform.value.x - this.farUniform.value.y * .5 - 60 : 1e9;
+        if (layer === 'scatter' && this.farCards) {
+          const [sx, sz, r] = want.scatterSquare;
+          this.farCards.hide.value.set((sx - r) * 192, (sz - r) * 192, (sx + r + 1) * 192, (sz + r + 1) * 192);
+        }
+      }
+    }
+  }
+
+  _pool(layer) {
+    this.pools ||= {};
+    if (!this.pools[layer] && layer === 'far') {
+      this.pools.far = new InstancePool(this.group, 'Tree cards', (n) => this._farCardAsset(n), () => ({ cast: false, receive: false }));
+    }
+    if (!this.pools[layer]) {
+      const flags = layer === 'forest'
+        ? (name, tile) => ({ cast: tile.tier === 0 && !/^(goldenrod|blueberry)/.test(name), receive: tile.tier === 0 })
+        : (name, tile) => this._scatterFlags(name, tile);
+      this.pools[layer] = new InstancePool(this.group, layer === 'cover' ? 'Ground cover' : layer === 'forest' ? 'Forest' : 'Scenery', (n) => this._asset(n), flags);
+    }
+    return this.pools[layer];
+  }
+
+  // ---- Tree cards: one camera-facing silhouette per tree beyond the real trees (not in forest-canopy scenes) ----
+  _planFarTrees(cx, cz) {
+    const want = new Map();
+    if (this.forestLayout || this.landscape.city || !this.quality.farTreeM) return want;
+    // with the real horizon on, stop short of where the ground starts to morph toward it
+    const reach = this.farOn ? this.farUniform.value.x - this.farUniform.value.y * .5 - 100 : this.quality.farTreeM;
+    const inner = (this.quality.scatterRange + .5) * 192, T = FAR_TREE_TILE_M;
+    const tx = Math.floor(cx / T), tz = Math.floor(cz / T), r = Math.ceil(reach / T);
+    for (let x = tx - r; x <= tx + r; x++) for (let z = tz - r; z <= tz + r; z++) {
+      const near = Math.hypot(Math.max(x * T - cx, 0, cx - (x + 1) * T), Math.max(z * T - cz, 0, cz - (z + 1) * T));
+      const far = Math.hypot(Math.max(Math.abs(x * T - cx), Math.abs((x + 1) * T - cx)), Math.max(Math.abs(z * T - cz), Math.abs((z + 1) * T - cz)));
+      if (near > reach || far < inner) continue;   // out of reach, or wholly inside the real trees
+      want.set(`${x}/${z}/${this.farOn ? 1 : 0}`, { x, z, d: near });
+    }
+    return want;
+  }
+
+  /** A tile of tree cards: the same planting rules as the scatter's trees, at a lower density. */
+  *_farTreeJob(tx, tz) {
+    const T = FAR_TREE_TILE_M, rand = randomSequence((tx * 19349663 ^ tz * 83492791) + this.config.seed + 4409);
+    const vegetation = this.config.vegetation || {}, L = this.landscape;
+    const lists = { conifer: [], broadleaf: [] }, colors = { conifer: [], broadleaf: [] };
+    const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
+    const count = this.quality.candidates * (T / 192) ** 2 * FAR_TREE_DENSITY * (vegetation.density || 1);
+    const add = (name, x, y, z, width, tall) => {
+      const kind = /^(broadleaf|palm)/.test(name) ? 'broadleaf' : 'conifer', size = this._farCardSize(name);
+      if (!size) return;
+      p.set(x, y - .3, z); sc.set(size.w * width * 1.1, size.h * width * tall, 1);
+      lists[kind].push(m.compose(p, q, sc).clone());
+      const c = size.color, k = 1.05 + rand() * .3;   // a touch lighter: flat cards read darker than the lit models
+      colors[kind].push(c.r * k, c.g * k, c.b * k);
+    };
+    for (let k = 0; k < count; k++) {
+      if (k % 24 === 23) yield;
+      const x = tx * T + rand() * T, z = tz * T + rand() * T, pick = rand(), r1 = rand(), r2 = rand(), r3 = rand();
+      const inland = this.inlandAt(x, z), y = this.heightAt(x, z);
+      if (inland < 10 || y < 1 || L.isWater?.(x, z, y) || L.creekAt(x, z)) continue;
+      if (L.canPlant && !L.canPlant(x, z)) continue;
+      const slope = Math.hypot(this.heightAt(x + 6, z) - y, this.heightAt(x, z + 6) - y) / 6;
+      if (L.mountain || L.real) {
+        const v = L.vegetationAt(x, z);
+        if (pick >= v.forest * (L.mountain ? .62 : .5) || slope > 1.1) continue;
+        const name = L.mountain ? (v.east > .5 && r1 < .45 ? 'broadleaf0' : 'fir0') : (v.forest > .55 && v.valley > .3 ? 'fir0' : r1 < .6 ? 'broadleaf0' : 'pine0');
+        add(name, x, y, z, .75 + r2 * .5, (name.startsWith('fir') ? 1.3 + r3 * .7 : .85 + r3 * .45) * (1 - (v.alpine || 0) * .45));
+        continue;
+      }
+      const grove = .5 + Math.sin(x / 125 + Math.cos(z / 260)) * .32 + Math.sin(z / 180) * .22;
+      if (!(grove > (this.config.biome === 'forest' ? .18 : .5) && pick < (vegetation.treeDensity ?? .14) * Math.max(this.config.biome === 'forest' ? .5 : 0, grove)
+        && inland > 65 && slope < .8 && y < (vegetation.treelineM || Infinity))) continue;
+      const name = vegetation.trees ? vegetation.trees[Math.floor(r1 * vegetation.trees.length)] : inland > 350 && grove > .7 ? 'pine0' : 'cypress0';
+      if (name) add(name, x, y, z, .7 + r2 * .55, .8 + r3 * .45);
+    }
+    const packed = {};
+    for (const kind of ['conifer', 'broadleaf']) if (lists[kind].length) packed[kind] = { matrices: packMatrices(lists[kind]), colors: Float32Array.from(colors[kind]) };
+    return { x: tx * T, z: tz * T, size: T, lists: packed };
+  }
+
+  /** Card width, height and colour for a tree model (from the model's own size and mean vertex colour). */
+  _farCardSize(name) {
+    this._cardSizes ||= {};
+    if (name in this._cardSizes) return this._cardSizes[name];
+    const asset = this.kit.assets[`${name}-lod`] || this.kit.assets[name];
+    let out = null;
+    if (asset) {
+      const g = asset.geometry; if (!g.boundingBox) g.computeBoundingBox();
+      const b = g.boundingBox, color = new THREE.Color(.2, .3, .2), c = g.attributes.color;
+      if (c) {
+        // the foliage's colour: the mean of the upper two thirds (leaves, not trunk)
+        let r = 0, gg = 0, bb = 0, n = 0;
+        const pos = g.attributes.position, cut = b.min.y + (b.max.y - b.min.y) / 3;
+        for (let i = 0; i < c.count; i++) if (pos.getY(i) > cut) { r += c.getX(i); gg += c.getY(i); bb += c.getZ(i); n++; }
+        if (n) color.setRGB(r / n, gg / n, bb / n);
+      }
+      out = { w: Math.max(b.max.x - b.min.x, b.max.z - b.min.z), h: b.max.y - Math.max(0, b.min.y), color };
+    }
+    return (this._cardSizes[name] = out);
+  }
+
+  _farCardAsset(kind) {
+    if (!this.farCards) this.farCards = makeTreeCards(this.uniforms);
+    return this.farCards[kind];
+  }
+
+  /** Every streamed tile's stand-in group (for QC tools): scatter, ground cover and forest. */
+  streamedGroups() {
+    return [...this.scatter.values(), ...this.cover.values(), ...(this.forestTiles?.values() || [])].map((t) => t.group);
+  }
+
+  // ---- Forest tiles: wanted tiers by distance ----
   _planForestTiles(cx, cz) {
     const range = this.quality.forestRange, sx = Math.floor(cx / TILE_M), sz = Math.floor(cz / TILE_M);
     const want = new Map();
@@ -737,41 +1028,14 @@ export class StylizedTerrain {
       if (d > (range + .6) * TILE_M) continue;
       want.set(`${x}/${z}`, { x, z, d, tier: d < this.quality.nearM ? 0 : d < this.quality.midM ? 1 : 2 });
     }
-    this.forestWant = want;
-    // drop what is out of range; queue what is missing or at the wrong tier
-    for (const [xy, tile] of this.forestTiles) if (!want.has(xy)) { this._disposeGroup(tile.group); this.forestTiles.delete(xy); }
-    this.forestQueue = [...want.entries()].filter(([xy, w]) => this.forestTiles.get(xy)?.tier !== w.tier)
-      .sort((a, b) => a[1].d - b[1].d);
+    return want;
   }
 
-  _buildForestTiles() {
-    const t0 = performance.now();
-    let built = 0;
-    while (this.forestQueue.length && built < this.quality.buildsPerFrame && performance.now() - t0 < 6) {
-      const [xy, w] = this.forestQueue.shift();
-      if (this.forestWant?.get(xy)?.tier !== w.tier) continue;
-      const lists = this.forest.tile(w.x, w.z, w.tier);
-      const group = new THREE.Group();
-      for (const [name, matrices] of Object.entries(lists)) {
-        const asset = this.kit.assets[name];
-        if (!asset || !matrices.length) continue;
-        const mesh = new THREE.InstancedMesh(asset.geometry, asset.material, matrices.length);
-        matrices.forEach((m, i) => mesh.setMatrixAt(i, m));
-        mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere();
-        mesh.castShadow = w.tier === 0 && !/^(goldenrod|blueberry)/.test(name);
-        mesh.receiveShadow = w.tier === 0;
-        group.add(mesh);
-      }
-      const old = this.forestTiles.get(xy);
-      if (old) this._disposeGroup(old.group);
-      this.forestTiles.set(xy, { tier: w.tier, group });
-      this.group.add(group);
-      built++;
-    }
-    this.stats.queued = this.forestQueue.length;
+  _makeForestTile(w) {
+    const lists = this.forest.tile(w.x, w.z, w.tier), packed = {};
+    for (const [name, matrices] of Object.entries(lists)) if (this.kit.assets[name] && matrices.length) packed[name] = { matrices: packMatrices(matrices), colors: null };
+    return { x: w.x * TILE_M, z: w.z * TILE_M, size: TILE_M, tier: w.tier, lists: packed, group: proxyGroup(packed, (n) => this._asset(n)) };
   }
-
-  _disposeGroup(group) { this.group.remove(group); group.children.forEach((m) => m.dispose()); }
 
   // Real ground height, lightly smoothed: the stylized patches are coarser than the real terrain, so blending
   // toward a smoothed target keeps neighbouring patches from opening cracks in steep country.
@@ -791,8 +1055,9 @@ export class StylizedTerrain {
     this.farOn = on;
     this.farUniform.value.z = on ? 1 : 0;
     // rebuild the ground so every patch knows the real height it morphs toward
-    for (const mesh of this.patches.values()) { this.group.remove(mesh); mesh.geometry.dispose(); }
+    for (const mesh of this.patches.values()) mesh.geometry.dispose();
     this.patches.clear();
+    this.groundPool?.clear();
     // rebuild now, not next frame: an empty frame would show the sea plane through the missing ground
     const x = this._lastX, z = this._lastZ;
     this._lastX = Infinity;
@@ -819,8 +1084,7 @@ export class StylizedTerrain {
 
   setNight(v) {
     this._night = v; this.city?.setNight(v); this.landmarks?.setNight(v); this.traffic?.setNight(v); this.life?.setNight(v);
-    const cloud = this.clouds?.children[0]?.material;
-    if (cloud) cloud.color.set(v ? '#3b4157' : '#ffffff');
+    this.clouds?.material.color.set(v ? '#3b4157' : '#ffffff');
   }
 
   heightAt(x, z) { return this.landscape.heightAt(x, z); }
@@ -828,23 +1092,22 @@ export class StylizedTerrain {
     this.quality = COASTAL_QUALITY[key] || COASTAL_QUALITY.balanced;
     this.qualityKey = COASTAL_QUALITY[key] ? key : 'balanced';
     this.city?.setQuality(this.qualityKey);
-    if (this.forestTiles) {
-      for (const tile of this.forestTiles.values()) this._disposeGroup(tile.group);
-      this.forestTiles.clear(); this.forestQueue = []; this._setCanopyStart();
-    }
-    for (const map of [this.scatter, this.cover]) {
-      for (const group of map.values()) { this.group.remove(group); group.children.forEach((m) => m.dispose()); }
-      map.clear();
-    }
+    if (this.forestTiles) { this.forestTiles.clear(); this.forestQueue = []; this._setCanopyStart(); }
+    this.scatter.clear(); this.cover.clear(); this.farTrees.clear();
+    for (const pool of Object.values(this.pools || {})) pool.clear();
+    // rebuild at once at the new detail (no budget), so the scenery doesn't vanish for a few frames
+    const x = this._lastX, z = this._lastZ;
     this._lastX = Infinity;
+    if (Number.isFinite(x)) this.update(x, z);
   }
   get loadingCount() { return this.stats.loading; }
   dispose() {
     this.disposed = true;
     this.scene.remove(this.group);
     for (const mesh of this.patches.values()) mesh.geometry.dispose();
-    for (const group of this.scatter.values()) group.children.forEach((m) => m.dispose());
-    for (const group of this.cover.values()) group.children.forEach((m) => m.dispose());
+    this.groundPool?.dispose();
+    for (const pool of Object.values(this.pools || {})) pool.dispose();
+    this.farCards?.dispose();
     this.details?.dispose();
     this.city?.dispose();
     this.landmarkGeometries.forEach((g) => g.dispose()); this.landmarkGeometries.clear();
@@ -853,8 +1116,7 @@ export class StylizedTerrain {
     this.lakeMeshes.forEach((m) => m.geometry.dispose());
     this.lakeMaterial?.dispose(); this.mistMaterial?.dispose();
     this.settlement?.dispose();
-    for (const tile of this.forestTiles?.values() || []) tile.group.children.forEach((m) => m.dispose());
-    const cloudMat = this.clouds.children[0]?.material; cloudMat?.map?.dispose(); cloudMat?.dispose(); this.peakMaterial?.dispose(); this.peakClouds?.geometry.dispose();
+    this.clouds.material.uniforms.map.value.dispose(); this.clouds.material.dispose(); this.clouds.geometry.dispose(); this.peakMaterial?.dispose(); this.peakClouds?.geometry.dispose();
     this.shadowAsset.geometry.dispose(); this.shadowAsset.material.map.dispose(); this.shadowAsset.material.dispose();
     this.roadside.children.forEach((m) => { m.geometry.dispose(); m.dispose(); });
     this.roadside.children[0]?.material.dispose();

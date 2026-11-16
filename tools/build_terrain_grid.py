@@ -9,7 +9,8 @@ Pittsburgh uses it too (inland: "rivers" mode), for Mount Washington's bluff and
   python3 tools/build_terrain_grid.py pittsburgh
 
 Reads   routes/parks/<id>.gpx, routes/scenes/<id>.json ("terrainBuild": settings)
-Writes  routes/scenes/<id>-terrain.json
+Writes  routes/scenes/<id>-terrain.grid.bin.gz (the binary container in js/terrain-grid.js, gzipped;
+        the same JSON header, with the height rows as raw bytes)
 Source  AWS Terrain Tiles (terrarium, z14 ≈ 8 m), cached in ~/.cache/bikefree-dem
 
 Layout
@@ -85,6 +86,22 @@ def pack(h, floor):
     q = np.clip(np.round((np.maximum(h, floor) - BASE) / SCALE), 0, 65535).astype(np.int64)
     d = np.diff(q, axis=-1, prepend=0)
     return base64.b64encode((d & 0xFFFF).astype('<u2').tobytes()).decode()
+
+
+def pack_terrain_grid(grid):
+    """The binary container (js/terrain-grid.js), gzipped: "BFTG", uint32 header length, header JSON,
+    padding to 4 bytes, then the coarse/fine height rows as raw bytes (each `h` → {"$bin": [offset, length]})."""
+    import copy, gzip, struct
+    header, blobs, offset = copy.deepcopy(grid), [], 0
+    for key in ('coarse', 'fine'):
+        h = header.get(key, {}).get('h')
+        if isinstance(h, str):
+            raw = base64.b64decode(h)
+            header[key]['h'] = {'$bin': [offset, len(raw)]}
+            blobs.append(raw); offset += len(raw)
+    js = json.dumps(header, separators=(',', ':')).encode()
+    pad = (4 - (8 + len(js)) % 4) % 4
+    return gzip.compress(b'BFTG' + struct.pack('<I', len(js)) + js + b'\0' * pad + b''.join(blobs), 9)
 
 
 def main():
@@ -257,8 +274,8 @@ def finish(rid, cfg, pts, gpx, M, H, north, west, south, east, fnx, fny, mlat, m
         out['water'] = {'cellM': fm * 2 if fm == 10 else fm, 'nx': water[::2, ::2].shape[1] if fm == 10 else fnx,
                         'ny': water[::2, ::2].shape[0] if fm == 10 else fny,
                         'rle': [int(x) for pair in zip(w[starts], runs) for x in pair]}
-    path = ROOT / f'routes/scenes/{rid}-terrain.json'
-    path.write_text(json.dumps(out, separators=(',', ':')))
+    path = ROOT / f'routes/scenes/{rid}-terrain.grid.bin.gz'
+    path.write_bytes(pack_terrain_grid(out))
     print(f'  wrote {path.relative_to(ROOT)} ({path.stat().st_size / 1e6:.1f} MB)')
 
     # Report spans where the real ground drops well below the road: bridges to add to the scene.
