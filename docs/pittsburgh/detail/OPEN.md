@@ -30,3 +30,11 @@ Collected from each agent's final report as it comes in. Suggestions are added o
 - **For road alignment (builder):** set deck clearance over the route in the builder; give a deck's end its ground street's height; the route height at 4.07 km.
 - **S3's corner API not wired in** (`addCorner`, corner pads to `sidewalkTop()`/`curbAt(s)`, cross-street ends at road level).
 - **Street-building time:** the new passes add about 1.5–3.5 s at load on this VM.
+
+## From S1 · baked lighting, North Shore → Point (reported 16 Nov, merged `06b5e85`)
+- **First bake may hitch:** on the software GPU the first bake's occluder step took 3–9 s in one frame (mostly shader compiling). Measure on the M4; fixes: `compileAsync` ahead, or bake behind the loader.
+- **Re-bakes while riding:** a warm re-bake costs 92–104 ms here (worst step 36 ms) each time a streamed city chunk changes the static set. Measure on the M4; spread it over frames or bake ahead along the route if it hitches. (Coordinator: kit meshes now opt out with `userData.bake = false`.)
+- **2.0 km is over budget:** 611 draw calls with the chase camera (about 640 with live shadows), before any S1 work — the downtown chunks in view.
+- **Not handed over yet:** General Robinson and Federal St are still bare (kit not on there); the class-1 street mapped under the trail at 1.50–1.52 km splits the promenade; the Fort Duquesne ramps at about 1.0 km.
+- **Dynamic flag:** anything new that moves must set `userData.dynamic`, or it loses its shadow once the bake is in.
+- **Polish:** tree shadows are soft (2.5 m texels); the time-of-day menu still lists Morning and Daylight for Pittsburgh (both show golden); the fountain basin and the Blockhouse are unchanged.
