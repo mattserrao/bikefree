@@ -176,6 +176,80 @@ export class StylizedTerrain {
       this.clouds.add(sprite);
     }
     this.group.add(this.clouds);
+    if (this.landscape.mountain) this._makePeakClouds(texture);
+  }
+
+  // Mountains: cloud caps that hang on the summits and drift through the cirques (weather "clouds" and "rain")
+  _makePeakClouds(texture) {
+    const T = this.landscape.terrain, rand = randomSequence(2207);
+    const end = this.route.turnIdx || this.index.xs.length - 1;
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (let i = 0; i <= end; i += 20) { minX = Math.min(minX, this.index.xs[i]); maxX = Math.max(maxX, this.index.xs[i]); minZ = Math.min(minZ, this.index.zs[i]); maxZ = Math.max(maxZ, this.index.zs[i]); }
+    const peaks = [];
+    for (let x = minX - 7000; x <= maxX + 7000; x += 450) for (let z = minZ - 7000; z <= maxZ + 7000; z += 450) {
+      const h = T.at(x, z);
+      if (h < (this.config.snowLineM || 2250) + 50) continue;
+      let top = true;
+      for (let k = 0; k < 8 && top; k++) if (T.at(x + Math.cos(k * .785) * 700, z + Math.sin(k * .785) * 700) > h) top = false;
+      if (top) peaks.push({ x, z, h });
+    }
+    // one draw call: camera-facing quads drawn by a small shader (a Sprite per cloud would be one call each)
+    const centers = [], corners = [], sizes = [], phases = [], idx = [];
+    for (const p of peaks) for (let k = 0; k < 3; k++) {
+      const w = 700 + rand() * 900, h = w * (.34 + rand() * .14), cx = p.x + (rand() - .5) * 600, cy = p.h - 120 + rand() * 260, cz = p.z + (rand() - .5) * 600, ph = rand() * 6.28;
+      const base = centers.length / 3;
+      for (const [u, v] of [[-.5, -.5], [.5, -.5], [.5, .5], [-.5, .5]]) { centers.push(cx, cy, cz); corners.push(u, v); sizes.push(w, h); phases.push(ph); }
+      idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(centers, 3));
+    geo.setAttribute('aCorner', new THREE.Float32BufferAttribute(corners, 2));
+    geo.setAttribute('aSize', new THREE.Float32BufferAttribute(sizes, 2));
+    geo.setAttribute('aPhase', new THREE.Float32BufferAttribute(phases, 1));
+    geo.setIndex(idx); geo.computeBoundingSphere(); geo.boundingSphere.radius += 1500;
+    this.peakUniforms = { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), map: { value: texture }, uTime: this.uniforms.uTime,
+      bfOpacity: { value: 0 }, bfColor: { value: new THREE.Color('#f4f5f6') }, bfDrop: { value: 0 } };
+    this.peakMaterial = new THREE.ShaderMaterial({
+      uniforms: this.peakUniforms, transparent: true, depthWrite: false, fog: true,
+      vertexShader: `
+        #include <common>
+        #include <logdepthbuf_pars_vertex>
+        #include <fog_pars_vertex>
+        attribute vec2 aCorner; attribute vec2 aSize; attribute float aPhase; uniform float uTime; uniform float bfDrop; varying vec2 vUv;
+        void main() {
+          vUv = aCorner + .5;
+          vec3 c = position + vec3(sin(uTime * .02 + aPhase) * 120., -bfDrop, cos(uTime * .017 + aPhase) * 90.);
+          vec4 mvPosition = modelViewMatrix * vec4(c, 1.);
+          mvPosition.xy += aCorner * aSize;
+          gl_Position = projectionMatrix * mvPosition;
+          #include <logdepthbuf_vertex>
+          #include <fog_vertex>
+        }`,
+      fragmentShader: `
+        #include <common>
+        #include <logdepthbuf_pars_fragment>
+        #include <fog_pars_fragment>
+        uniform sampler2D map; uniform float bfOpacity; uniform vec3 bfColor; varying vec2 vUv;
+        void main() {
+          #include <logdepthbuf_fragment>
+          vec4 t = texture2D(map, vUv);
+          gl_FragColor = vec4(bfColor * t.rgb, t.a * bfOpacity);
+          if (gl_FragColor.a < .01) discard;
+          #include <colorspace_fragment>
+          #include <fog_fragment>
+        }`,
+    });
+    this.peakClouds = new THREE.Mesh(geo, this.peakMaterial); this.peakClouds.name = 'peak clouds'; this.peakClouds.visible = false; this.peakClouds.renderOrder = 4;
+    this.group.add(this.peakClouds);
+  }
+
+  /** Weather: how much cloud hangs on the peaks (0 none, 1 broken caps, >1 low and heavy in the rain). */
+  setPeakClouds(amount, rain = 0) {
+    if (!this.peakClouds) return;
+    this.peakUniforms.bfOpacity.value = Math.min(.92, amount * .75);
+    this.peakUniforms.bfColor.value.set(rain > .3 ? '#c9ced2' : '#f4f5f6');
+    this.peakClouds.visible = amount > .02;
+    this.peakUniforms.bfDrop.value = rain * 160;
   }
 
   /** A city's rivers as the fog bank's "shore": distance to the water (R) and ground height (G). */
@@ -754,7 +828,7 @@ export class StylizedTerrain {
     this.lakeMaterial?.dispose(); this.mistMaterial?.dispose();
     this.settlement?.dispose();
     for (const tile of this.forestTiles?.values() || []) tile.group.children.forEach((m) => m.dispose());
-    const cloudMat = this.clouds.children[0]?.material; cloudMat?.map?.dispose(); cloudMat?.dispose();
+    const cloudMat = this.clouds.children[0]?.material; cloudMat?.map?.dispose(); cloudMat?.dispose(); this.peakMaterial?.dispose(); this.peakClouds?.geometry.dispose();
     this.shadowAsset.geometry.dispose(); this.shadowAsset.material.map.dispose(); this.shadowAsset.material.dispose();
     this.roadside.children.forEach((m) => { m.geometry.dispose(); m.dispose(); });
     this.roadside.children[0]?.material.dispose();

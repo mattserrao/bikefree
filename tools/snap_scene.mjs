@@ -6,7 +6,7 @@
 //   node tools/snap_scene.mjs --out tools/snapshots --quality high bigsur@21800:golden:fall
 //
 // A shot is  <park>[@metres][:camera][:time][:season][:weather]  — camera chase|drone|vista|side|eye,
-// time midday|morning|golden|night, season summer|fall, weather clear|marine|clouds|rain.
+// time midday|morning|golden|night, season summer|fall, weather clear|marine|clouds|rain|smoke.
 // No @metres = the scene's preview spot.
 // Options: --out <dir> (default tools/snapshots), --quality low|balanced|high, --size 1280x720,
 // --chrome <path> (default: CHROME env, else the usual Mac/Linux locations), --software (no GPU).
@@ -30,7 +30,7 @@ if (!args.length) { console.log('usage: npm run snap -- <park>[@metres][:camera]
 
 const CAMERAS = ['chase', 'drone', 'vista', 'side', 'eye'];
 const TIMES = ['midday', 'morning', 'golden', 'night'];
-const WEATHERS = ['clear', 'marine', 'clouds', 'rain'];
+const WEATHERS = ['clear', 'marine', 'clouds', 'rain', 'smoke'];
 const shots = args.map((spec) => {
   const [where, ...tags] = spec.split(':');
   const [park, pos] = where.split('@');

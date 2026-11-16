@@ -387,7 +387,13 @@ Goal: give Going-to-the-Sun Road the Big Sur / Pittsburgh hero treatment, over t
 - [x] **P2 · Baseline** — snapshots at fixed spots, `docs/goingtothesun/REVIEW.md`, second pass. 270–362 draw calls, 0.76–1.43 M triangles
 - [x] **P3 · Real landform and lakes** — `goingtothesun-terrain.json` (build_terrain_grid.py new "lakes" mode: 10 m near the road, 40 m to 9 km, 86 lakes each at its own level); new `real-mountain` landscape; formation-banded cliffs and midsummer snowfields
   - [ ] creeks and bridges (Avalanche, Logan, Baring, Reynolds creeks)
-- [ ] **P4 · Atmosphere and weather** — golden-hour default, post, distance fog layers, the four weather presets
+- [ ] **P4 · Atmosphere and weather**
+  - [x] Golden hour by default (*Route's default*), post-processing on, distance fog 1.6–21 km
+  - [x] **Valley fog**: the fog bank lies on Lake McDonald (962 m), 45 m deep, treetops and the road above it
+  - [x] **Clouds on the peaks**: cloud caps on every summit above 2,200 m within 7 km (one draw call), drifting; low and grey in the rain; plus Big Sur's cloud shadows
+  - [x] **Rain and wet road** (shared)
+  - [x] **Wildfire smoke**: new preset (`smoke`): a red-orange sun, a brown sky, the far ridges gone in a 5 km haze; offered in `W`, the preview and `npm run snap` (`:smoke`)
+  - [ ] Night: a moon and the headlight; measure post + fog on the Air
 - [ ] **P5 · Landmarks** — guardwalls, Garden Wall/Weeping Wall/Triple Arches, tunnels, the Loop, Logan Pass, Jackson Glacier, lodges, Wild Goose Island
 - [ ] **P6 · Vegetation**
   - [x] Glacier kit (`js/world/glacier-kit.js`) and zoned forest planner: cedar–hemlock west side, spruce–fir–larch slopes, treeline krummholz, aspen and lodgepole east; beargrass, paintbrush, glacier lilies, huckleberry, alder in the chutes

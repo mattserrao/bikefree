@@ -80,7 +80,7 @@ function larch(variant, lod, fall) {
 function aspen(variant, lod, fall) {
   // quaking aspen: a slim white trunk with dark eyes, a small round crown (gold in fall)
   const rand = randomSequence(1801 + variant), b = new Builder(), H = 14 + variant * 3;
-  const leaf = fall ? ['#e4c047', '#ecd062', '#d9a936'] : ['#7fa055', '#8cad5e', '#719450'];
+  const leaf = fall ? ['#e4c047', '#ecd062', '#d9a936'] : ['#62844a', '#6b8c4f', '#587a43'];
   const segs = lod ? 1 : 4;
   for (let k = 0; k < segs; k++) b.add(cyl(.1, .14, H * .7 / segs, lod ? 4 : 6), M(0, k * H * .7 / segs), k % 2 ? '#e8e6da' : '#d9d6c6');
   if (lod === 2) { b.add(blob(0), M(0, H * .74, 0, 2.2, 3.4, 2.2), leaf[0]); return b.build(); }
@@ -139,10 +139,9 @@ function huckleberry() {
 }
 
 function alder(variant) {
-  // Sitka alder: the dense, springy thickets of the avalanche chutes, bent downhill
+  // Sitka alder: low, dense, springy thickets in the avalanche chutes, bent downhill
   const rand = randomSequence(2041 + variant), b = new Builder();
-  for (let k = 0; k < 4; k++) b.add(cyl(.04, .07, 2.2, 3), M((rand() - .5) * .6, 0, (rand() - .5) * .6, 1, 1, 1, rand() * 6, 0, .5 + rand() * .3), '#5d5a4c');
-  for (let k = 0; k < 5; k++) b.add(blob(0), M((rand() - .2) * 2, 1.2 + rand() * .7, (rand() - .5) * 1.6, 1.1 + rand() * .4, .8, 1 + rand() * .3), ['#56783f', '#628447', '#4c6c3a'][k % 3], .15, rand);
+  for (let k = 0; k < 6; k++) b.add(blob(0), M((rand() - .3) * 2.4, .5 + rand() * .5, (rand() - .5) * 1.8, 1.1 + rand() * .5, .6 + rand() * .25, .9 + rand() * .3), ['#56783f', '#628447', '#4c6c3a'][k % 3], .15, rand);
   return b.build();
 }
 

@@ -15,9 +15,9 @@
   "biome": "alpine",
   "palette": {
     "grass": "#6f8a57",
-    "meadow": "#a5a86f",
+    "meadow": "#93a566",
     "rock": "#9a958a",
-    "cliff": "#8e6656",
+    "cliff": "#88675a",
     "argillite": "#6e7c66",
     "snow": "#eef2f3",
     "water": "#2a6a78",
@@ -28,7 +28,7 @@
     "farTint": "#7d8c8f",
     "farTintAmount": 0.3
   },
-  "snowLineM": 2250,
+  "snowLineM": 2150,
   "treelineM": 1950,
   "vegetation": {
     "layout": "forest-edge",
@@ -195,5 +195,26 @@
   ],
   "kitExtensions": [
     "glacier"
-  ]
+  ],
+  "timeOfDay": "golden",
+  "post": true,
+  "weather": {
+    "presets": [
+      "clear",
+      "marine",
+      "clouds",
+      "rain",
+      "smoke"
+    ],
+    "labels": {
+      "marine": "Valley fog",
+      "clouds": "Clouds on the peaks"
+    },
+    "bankTop": 45,
+    "bank": 0.6
+  },
+  "atmosphere": {
+    "fogNearM": 1600,
+    "fogFarM": 21000
+  }
 }
