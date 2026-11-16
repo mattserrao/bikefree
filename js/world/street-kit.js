@@ -400,7 +400,7 @@ export class StreetKit {
         const wmax = Math.min(1.25, (curb + 1.1 - ROAD_WIDTH / 2 - .9) / 2.4, (Math.min(line, 8) - 1.1 + .4) / 2.4);
         if (wmax < .78) continue;
         const seed = Math.min(hash(Math.round(s) * 31 + side * 7), (wmax - .75) / .5);
-        out.push({ x, z, seed, kit: true });
+        out.push({ x, z, seed, kit: true, sy: 1.35 });   // taller: crowns over the shop signs (≈ 5–8 m)
         this._treeCells.add(`${side}:${Math.floor(s / 3)}`);
         this.bucket(this.key(x, z)).furniture.push({ kind: 'treePit', x, z, yaw: Math.atan2(-nx, -nz), given: true, y: f.y + ROAD_LIFT + CURB_H });
       }

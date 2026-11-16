@@ -943,7 +943,7 @@ export class CityScene {
       const key = `${Math.floor(t.x / 480)},${Math.floor(t.z / 480)}`, w = .75 + t.seed * .5;
       q.setFromAxisAngle(Y, t.seed * 40);
       if (!lists.has(key)) lists.set(key, []);
-      lists.get(key).push({ m: m.compose(new THREE.Vector3(t.x, this.landscape.heightAt(t.x, t.z) - .1, t.z), q, new THREE.Vector3(w, w * (.85 + t.seed * .3), w)).clone(), seed: t.seed });
+      lists.get(key).push({ m: m.compose(new THREE.Vector3(t.x, this.landscape.heightAt(t.x, t.z) - .1, t.z), q, new THREE.Vector3(w, w * (.85 + t.seed * .3) * (t.sy || 1), w)).clone(), seed: t.seed });   // [street-kit] (sy: kit street trees stand taller)
     }
     for (const list of lists.values()) {
       const im = new THREE.InstancedMesh(geo, mat, list.length);
