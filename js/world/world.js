@@ -309,6 +309,7 @@ export class World {
   start() {
     if (this.running) return;
     this.running = true;
+    this.baked?.prepare();   // [w2-bake] the first bake behind the loader, before the ride
     this._last = performance.now();
     this._raf = requestAnimationFrame(this._frame);
   }
@@ -376,6 +377,8 @@ export class World {
 
     this.sky.position.copy(this.camera.position);
     this.baked?.tick(dt);   // [baked-light]
+    if (this.baked) { this._bakeLoader(); if (this.baked.frame.kind && !this.baked.preparing) this.perf?.flag(); }   // [w2-bake] loader; frames with bake work
+    if (this.baked?.preparing) return;   // [w2-bake] nothing drawn behind the loader (the bake has the GPU)
     if (this.stylized) this._placeShadows(riderPos, flat);
     else {
       this.sun.position.copy(this.camera.position).addScaledVector(this.sunDir, 5000);
@@ -481,6 +484,7 @@ export class World {
     this.perf ||= new PerfMonitor(this.renderer, this.container, () => ({
       route: this.route.scene?.title || this.route.name, quality: this.qualityKey, time: this.timeKey,
       weather: this.weather ? this.weatherKey : null, camera: this.cameraMode,
+      bake: this.baked?.costLine(),   // [w2-bake]
     }), place);
     return this.perf.toggle(on);
   }
@@ -488,7 +492,22 @@ export class World {
   /** Render one frame without the animation loop (used for previews/tests). */
   renderOnce() { const r = this.running; this.running = true; this._frame(performance.now()); this.running = r; cancelAnimationFrame(this._raf); }
 
-  get loading() { return this.terrain.loadingCount; }
+  get loading() { return this.terrain.loadingCount + (this.baked?.preparing ? 4 : 0); }   // [w2-bake] (4: the app's loading bar shows from 4)
+
+  /** [w2-bake] "Preparing scenery" over the view while the first bake runs behind it. */
+  _bakeLoader() {
+    const on = this.baked.preparing;
+    if (!on && !this._bakeEl) return;
+    if (!this._bakeEl) {
+      this._bakeEl = document.createElement('div');
+      this._bakeEl.className = 'bake-loader';
+      Object.assign(this._bakeEl.style, { position: 'absolute', inset: '0', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 5,
+        font: '600 15px/1.4 system-ui, sans-serif', color: '#e8eef6', background: 'linear-gradient(#24323f, #3c4a52)', pointerEvents: 'none', letterSpacing: '.02em' });
+      this.container.appendChild(this._bakeEl);
+    }
+    this._bakeEl.style.display = on ? 'flex' : 'none';
+    if (on) this._bakeEl.textContent = `Preparing scenery… ${Math.round(this.baked.progress * 100)}%`;
+  }
 
   dispose() {
     this.perf?.dispose();
@@ -497,6 +516,7 @@ export class World {
     this._ro.disconnect();
     this.weather?.dispose();
     this.baked?.dispose();   // [baked-light]
+    this._bakeEl?.remove();   // [w2-bake]
     this.post?.dispose();
     this.terrain.dispose();
     this.farTerrain?.dispose();

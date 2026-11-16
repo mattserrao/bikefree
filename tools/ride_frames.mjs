@@ -13,7 +13,8 @@
 // Prints, per stretch: the load (time, frames, worst frame) and the ride (frames, median / p95 / worst
 // frame, frames over 25 ms, and the bake's ms per frame: frames with bake work, worst, p95, total).
 // Options: --quality low|balanced|high, --size WxH (default 960x540), --chrome <path>, --out <file.json>,
-// --time golden|… (default: the scene's), --cam chase|…
+// --time golden|… (default: the scene's), --cam chase|…, --rebake <m,m,…> (force a re-bake there, as a
+// streamed chunk changing the static set would)
 import { createServer } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -28,6 +29,7 @@ const [width, height] = opt('--size', '960x540').split('x').map(Number);
 const mpf = Number(opt('--mpf', '1.5')), dtRide = Number(opt('--dt', '0.1'));
 const outFile = opt('--out', null);
 const time = opt('--time', null), cam = opt('--cam', null);
+const rebake = (opt('--rebake', '') || '').split(',').filter(Boolean).map(Number);   // force a re-bake at these metres (as a streamed chunk would)
 const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync));
 const park = args.shift();
@@ -45,20 +47,22 @@ await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
 const base = `http://127.0.0.1:${server.address().port}`;
 const { chromium } = await import('playwright-core');
 const browser = await chromium.launch({ executablePath: chrome, args: ['--ignore-gpu-blocklist', '--enable-gpu'] });
+const context = await browser.newContext({ viewport: { width, height }, serviceWorkers: 'block' });   // no offline caching in the background
 
 const pct = (list, p) => { const s = [...list].sort((a, b) => a - b); return s.length ? s[Math.min(s.length - 1, Math.floor(p * s.length))] : 0; };
 const r1 = (v) => Math.round(v * 10) / 10;
 const results = [];
 for (const [from, to] of stretches) {
-  const page = await browser.newPage({ viewport: { width, height } });
+  const page = await context.newPage();
   page.setDefaultTimeout(0);
   const errors = [], logs = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); else if (/bak/i.test(m.text())) logs.push(m.text()); });
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); else if (m.text().startsWith('progress')) console.error(`  ${from}-${to} ${m.text()}`); else if (/bak/i.test(m.text())) logs.push(m.text()); });
   const q = new URLSearchParams({ park, clean: '1', quality, pos: String(from), ...(time ? { time } : {}), ...(cam ? { cam } : {}) });
   await page.goto(`${base}/tools/world-preview.html?${q}`);
   await page.waitForFunction(() => window.world, null, { polling: 50 });
-  const run = await page.evaluate(async ({ from, to, mpf, dtRide }) => {
+  const run = await page.evaluate(async ({ from, to, mpf, dtRide, rebake }) => {
+    const forced = new Set();
     const w = window.world, gl = w.renderer.getContext();
     w.stop();
     let pos = from;
@@ -80,27 +84,31 @@ for (const [from, to] of stretches) {
       };
     };
     const t0 = performance.now();
-    let now = performance.now(), riding = false, loadMs = 0;
+    let now = performance.now(), riding = false, loadMs = 0, lastEnd = 0;
     const tick = () => new Promise((ok) => setTimeout(ok, 0));
     for (let i = 0; i < 40000; i++) {
       hook();
-      const loaded = !!(w.terrain?.kit || !w.stylized) && !w.preparing && !(w.loading > 0 && !w.terrain?.kit);
+      const loaded = !!(w.terrain?.kit || !w.stylized) && !w.baked?.preparing && !(w.loading > 0 && !w.terrain?.kit);
       if (!riding && loaded) { riding = true; loadMs = performance.now() - t0; }
       if (riding) pos += mpf;
+      for (const m of rebake) if (riding && pos >= m && !forced.has(m) && w.baked) { forced.add(m); w.baked._bakedSig = null; w.baked._settled = 99; }
       if (pos > to) break;
       bakeMs = 0; bakeWork = false;
       now += dtRide * 1000;
+      const tg = performance.now();
       gl.finish();
-      const t = performance.now();
+      const t = performance.now(), pre = t - tg, gap = tg - (lastEnd || tg);
       w.running = true; w._frame(now); cancelAnimationFrame(w._raf); w.running = false;
       gl.finish();
       const ms = performance.now() - t;
-      frames.push({ i, pos: Math.round(pos), ms: Math.round(ms * 10) / 10, bake: Math.round(bakeMs * 10) / 10, baking: bakeWork, ride: riding, prep: !!w.preparing, bakes: w.baked?.bakes || 0 });
+      lastEnd = performance.now();
+      frames.push({ i, pos: Math.round(pos), ms: Math.round(ms * 10) / 10, gap: Math.round(gap), pre: Math.round(pre), bake: Math.round(bakeMs * 10) / 10, baking: bakeWork, ride: riding, prep: !!w.baked?.preparing, bakes: w.baked?.bakes || 0 });
+      if (i % 100 === 0) console.log(`progress frame ${i} at ${Math.round(pos)} m: ${ms.toFixed(0)} ms, bakes ${w.baked?.bakes || 0}${w.baked?.preparing ? ', preparing' : ''} (${((performance.now() - t0) / 1000).toFixed(0)} s)`);
       await tick();
       if (!riding && performance.now() - t0 > 600000) break;
     }
     return { frames, loadMs, stats: w.baked?.stats || null, bakes: w.baked?.bakes || 0, history: w.baked?.history || null };
-  }, { from, to, mpf, dtRide });
+  }, { from, to, mpf, dtRide, rebake });
   await page.close();
   const load = run.frames.filter((f) => !f.ride), ride = run.frames.filter((f) => f.ride);
   const bk = ride.filter((f) => f.baking);
