@@ -658,6 +658,22 @@ Goal: a bigger, better rider: closer camera, a semi-realistic model with more tr
 
 The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the road, the map line cuts corners. Every checkpoint is within 1 km of its official distance.
 
+### Endless option for point-to-point routes *(test branch `endless-test`, from `main` after PR #26)*
+**Goal:** a point-to-point route can end at the finish, or ride on endlessly (turn at the finish and ride back). **Off by default.**
+
+**Decisions (16 Nov 2026)**
+- Applies to point-to-point routes: one-way stages (Alpe d'Huez) and your own GPX files that don't come back to their start. Built-in there-and-back routes and loops stay endless
+- With Endless off, the ride ends at the finish: the rider stops on the line, resistance goes flat, and the ride summary opens (as if you pressed Finish)
+- The switch sits in the route options (*Ends at the finish* / *Endless*), next to Forward/Reverse and the start point, and is remembered like them
+
+**Passes**
+- [x] `isPointToPoint` / `finishDistanceM` (`js/gpx.js`); the session takes a finish distance (`setRoute(route, start, finishM)`), clamps the rider and pacer to the line, and fires *routeFinished* once
+- [x] Route options: *Ends at the finish* / *Endless* (shown only for point-to-point routes); preview facts and tag; ride screen shows *to the finish* instead of the lap
+- [x] Works with Reverse and ⅓ / ⅔ starts (Reverse finishes back at the start)
+- [x] Ends at the finish: the elevation charts (preview and ride screen) show just the leg being ridden, start to finish
+- [x] Tests (`test/endless.test.mjs`); `npm test` 109/109
+- [ ] Ride it on the Mac (githack link)
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

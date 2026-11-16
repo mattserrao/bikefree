@@ -6,7 +6,7 @@ import { powerRequired, speedFromCadence, WHEEL_CIRC } from './physics.js';
 import { loadSettings, saveSettings, KG_PER_LB, MI_PER_KM } from './settings.js';
 import { rideToFit, fitFilename, summarize } from './recorder.js';
 import * as store from './store.js';
-import { parseGpx, buildRoute, averageGradeAhead, wrapDist, routeAt } from './gpx.js';
+import { parseGpx, buildRoute, averageGradeAhead, wrapDist, routeAt, isPointToPoint, finishDistanceM, legSpan } from './gpx.js';
 import { Pacer, PACER_WATTS } from './pacer.js';
 import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor, markFtpTest, ftpFromTwentyMinutes } from './workout.js';
 import { drawProfile, drawWorkout, drawTrace, drawMinimap, gradeColor } from './views.js';
@@ -199,7 +199,8 @@ const pausedByUser = () => !session.running && session.movingS > 0 && !session.a
 function sameAsCurrent() {
   if (!session.hasRide) return false;
   if (chosen === 'free') return session.mode === 'free';
-  if (chosen === 'route') return session.mode === 'route' && session.route === previewRoute && session.routeStart === chosenStartM(previewRoute);
+  if (chosen === 'route') return session.mode === 'route' && session.route === previewRoute && session.routeStart === chosenStartM(previewRoute)
+    && session.routeFinishM === chosenFinishM(previewRoute);
   return session.mode === 'workout' && session.workout === previewWorkout && !session.workoutDone;
 }
 function renderStart() {
@@ -216,23 +217,30 @@ function renderStart() {
 
 // ---------- Route direction and start point ----------
 // Every route rides there and back; Reverse starts at the far end, ⅓ / ⅔ start part-way in that direction.
-const routeChoice = { reverse: settings.routeReverse === true, fraction: Number(settings.routeFraction) || 0 };
+// A point-to-point route (a one-way stage, or your own GPX that doesn't loop) ends at the finish unless
+// Endless is on (off by default): then it turns at the finish and rides back, like the others.
+const routeChoice = { reverse: settings.routeReverse === true, fraction: Number(settings.routeFraction) || 0, endless: settings.routeEndless === true };
 function renderRouteChoice() {
   for (const b of $('dirSeg').children) b.classList.toggle('on', (b.dataset.dir === 'rev') === routeChoice.reverse);
   for (const b of $('startSeg').children) b.classList.toggle('on', Math.abs(Number(b.dataset.f) - routeChoice.fraction) < 0.01);
+  for (const b of $('endlessSeg').children) b.classList.toggle('on', (b.dataset.endless === '1') === routeChoice.endless);
 }
 function setRouteChoice(change) {
   Object.assign(routeChoice, change);
   settings.routeReverse = routeChoice.reverse;
   settings.routeFraction = routeChoice.fraction;
+  settings.routeEndless = routeChoice.endless;
   saveSettings(settings);
   renderRouteChoice();
   renderPreview();
 }
 $('dirSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setRouteChoice({ reverse: b.dataset.dir === 'rev' }); });
 $('startSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setRouteChoice({ fraction: Number(b.dataset.f) }); });
+$('endlessSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setRouteChoice({ endless: b.dataset.endless === '1' }); });
 renderRouteChoice();
 const chosenStartM = (r) => routeStartM(r, routeChoice);
+/** Metres to the finish for the chosen start, or null to ride on endlessly. */
+const chosenFinishM = (r) => (isPointToPoint(r) && !routeChoice.endless ? finishDistanceM(r, chosenStartM(r)) : null);
 
 // ---------- Virtual pacer ----------
 // A rider in a yellow-checkered jersey who holds a set power on the same road physics as you.
@@ -240,7 +248,7 @@ const pacer = new Pacer(PACER_WATTS.includes(Number(settings.pacerWatts)) ? Numb
 let pacerKey = null;
 const onRoute = () => session.mode === 'route' && session.route;
 const riderDist = () => (onRoute() ? session.routeRidden : session.distanceM);
-const rideKey = () => (onRoute() ? `r:${session.route.name}:${session.routeStart}` : session.mode === 'workout' ? `w:${session.workout?.id ?? session.workout?.name}` : 'free');
+const rideKey = () => (onRoute() ? `r:${session.route.name}:${session.routeStart}:${session.routeFinishM ?? 'endless'}` : session.mode === 'workout' ? `w:${session.workout?.id ?? session.workout?.name}` : 'free');
 function resetPacer() {
   pacer.reset(riderDist());
   pacerKey = rideKey();
@@ -269,6 +277,7 @@ function stepPacer() {
   const gradeAt = r ? (d) => routeAt(r, wrapDist(r, session.routeStart + d)).grade : () => session.gradePct;
   pacer.step(dt, gradeAt, session.physicsParams());
   if (r && !r.closed) pacer.dist = Math.min(pacer.dist, r.total);
+  if (r && session.routeFinishM != null) pacer.dist = Math.min(pacer.dist, session.routeFinishM);   // the pacer stops at the finish too
 }
 /** Gap to the pacer in metres (+ = pacer ahead). */
 const pacerGap = () => pacer.dist - riderDist();
@@ -290,18 +299,21 @@ function renderPreview() {
     $('pvTitle').textContent = r.name;
     $('pvSub').textContent = r.park || 'Your route';
     const leg = r.turnS || r.total, startM = chosenStartM(r);
-    // a one-way stage (Alpe d'Huez): its distance and climbing are the stage's, start to finish
-    const stage = r.stageRoute && r.oneWay;
-    $('pvFacts').innerHTML = (stage
+    // point to point (a one-way stage like Alpe d'Huez, or your own GPX): distance and climbing start to finish
+    const p2p = isPointToPoint(r);
+    $('pvFacts').innerHTML = (p2p
       ? fact(`${fmtDist(leg, 1)}`, `${distUnit()} to the finish`) + fact(fmtElev(r.oneWay.ascent).toLocaleString(), `${elevUnit()} climb to the finish`)
       : fact(`${fmtDist(leg, 1)}`, `${distUnit()} each way`) + fact(fmtElev(r.ascent).toLocaleString(), `${elevUnit()} climb / lap`)) +
       fact(`${Math.round(Math.max(...r.grade))}%`, 'max grade') +
-      `<div class="fact tag">${stage ? 'One way to the finish · then turns and rides it back' : r.oneWay?.closedLoop ? 'Loop · each lap turns and rides it back' : 'There &amp; back · turns at each end'} · endless</div>`;
+      `<div class="fact tag">${p2p ? (routeChoice.endless ? 'Point to point · turns at the finish and rides it back · endless' : 'Point to point · ends at the finish')
+        : `${r.oneWay?.closedLoop ? 'Loop · each lap turns and rides it back' : 'There &amp; back · turns at each end'} · endless`}</div>`;
+    $('endlessSeg').hidden = !p2p;
     $('pvDesc').innerHTML = r.hasElevation ? '' : '<span class="warn">No elevation in this file — it will ride flat.</span>';
     map.hidden = false; chart.hidden = false;
     $('routeOpts').hidden = false;
     drawTrace(map, r, startM, { markerOnly: true });
-    drawProfile(chart, r, startM, { metric: !imperial() });
+    // ends at the finish: chart just the leg being ridden, start to finish
+    drawProfile(chart, r, startM, { metric: !imperial(), span: chosenFinishM(r) != null ? legSpan(r, startM) : null });
   } else if (chosen === 'workout' && previewWorkout) {
     const w = previewWorkout, st = workoutStats(w);
     $('pvKicker').textContent = 'Workout';
@@ -398,10 +410,10 @@ async function sceneryRoute() {
 async function startRide() {
   if (chosen === 'route') {
     if (!previewRoute) return;
-    const startM = chosenStartM(previewRoute);
-    if (!(session.mode === 'route' && session.route === previewRoute && session.routeStart === startM)) {
-      session.setRoute(previewRoute, startM);
-      log('app', `Riding route: ${previewRoute.name} (${fmtDist(previewRoute.total, 1)} ${distUnit()}${previewRoute.closed ? ' loop' : ''})`, 'ok');
+    const startM = chosenStartM(previewRoute), finishM = chosenFinishM(previewRoute);
+    if (!(session.mode === 'route' && session.route === previewRoute && session.routeStart === startM && session.routeFinishM === finishM)) {
+      session.setRoute(previewRoute, startM, finishM);
+      log('app', `Riding route: ${previewRoute.name} (${finishM != null ? `${fmtDist(finishM, 1)} ${distUnit()} to the finish` : `${fmtDist(previewRoute.total, 1)} ${distUnit()}${previewRoute.closed ? ' loop' : ''}`})`, 'ok');
     }
   } else if (chosen === 'workout') {
     if (!previewWorkout) return;
@@ -672,8 +684,9 @@ function renderHud() {
       const ahead = imperial() ? 804.672 : 500;
       const g = averageGradeAhead(r, session.routePos, ahead);
       showRow(1, `${g > 0.05 ? '+' : ''}${fmtGrade(g)}`, imperial() ? 'next ½ mi' : 'next 500 m');
-      showRow(2, r.closed ? String(session.routeLap) : null, 'lap');
-      showRow(3, `${fmtDist(Math.max(0, session.routeLapToGo), 1)} ${distUnit()}`, 'lap to go');
+      const toFinish = session.routeFinishM != null;
+      showRow(2, r.closed && !toFinish ? String(session.routeLap) : null, 'lap');
+      showRow(3, `${fmtDist(Math.max(0, session.routeLapToGo), 1)} ${distUnit()}`, toFinish ? 'to the finish' : 'lap to go');
     } else {
       showRow(1, session.mode === 'workout' && session.workoutDone ? 'Done' : null, 'workout');
       showRow(2, null);
@@ -695,7 +708,8 @@ function renderHud() {
   if (now - lastProfileDraw > 1000) {
     lastProfileDraw = now;
     const c = $('hudProfile');
-    if (session.mode === 'route' && session.route) drawProfile(c, session.route, session.routePos, { metric: !imperial(), compact: true });
+    if (session.mode === 'route' && session.route) drawProfile(c, session.route, session.routePos, { metric: !imperial(), compact: true,
+      span: session.routeFinishM != null ? legSpan(session.route, session.routeStart) : null });
     else if (session.mode === 'workout' && session.workout) drawWorkout(c, session.workout, session.workoutT, settings.ftp, session.workoutBias, { compact: true });
     else c.getContext('2d').clearRect(0, 0, c.width, c.height);
   }
