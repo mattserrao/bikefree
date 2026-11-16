@@ -438,6 +438,36 @@ export function settleFreeEnds(streets, ctx, options = {}) {
 }
 
 /**
+ * [w2-meets] A street crossing the route's road at another level with no junction there (a motorway a metre under a
+ * riverfront trail, a service road 0.5 m above it) used to show as a ledge either side of the road. Its stretch over
+ * the road and its shoulders isn't drawn: it goes in under the road's bank and comes out the other side. Junction
+ * arms and ease zones are left alone. Run after the junctions are planned. ctx: { route, index, landscape, roadWidth }.
+ */
+export function hideCrossingsAtRoute(streets, ctx, options = {}) {
+  const { route, index, landscape } = ctx, RW = ctx.roadWidth || 7;
+  const O = { cos: .5, step: .12, pass: 4.5, edgeM: RW / 2 + 2.2, ...options };
+  const RL = routeLine(route, index), end = route.turnIdx || route.dist.length - 1, slots = streetSlots(landscape, streets);
+  let n = 0;
+  streets.forEach((st, k) => {
+    if (st.cls > 7 || !nearRouteStreet(st, index, st.width / 2 + O.edgeM + 2)) return;
+    const P = st.pts, h = st.width / 2, lift = SLOT_LIFT(slots[k]);
+    for (let i = 0; i < P.length; i++) {
+      const p = P[i];
+      if (p.jn != null || p.je != null || p.along) continue;
+      const r = index.nearest(p.x, p.z, O.edgeM + h + 12); if (!r) continue;
+      const q = RL.project(p.x, p.z, route.dist[Math.min(end, r.i > end ? 2 * end - r.i : r.i)], 30);
+      if (!q || q.d > O.edgeM + 1) continue;
+      const dy = p.y + lift - (q.y + ROAD_LIFT);
+      if (Math.abs(dy) < O.step || Math.abs(dy) > O.pass) continue;
+      const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)], t = RL.at(q.s), dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1;
+      if (Math.abs((dx * t.tx + dz * t.tz) / l) >= O.cos) continue;   // alongside: trimAtRoute's
+      p.tl = p.tr = 2 * h; n++;
+    }
+  });
+  return n;
+}
+
+/**
  * After junctions and the along-route pass have moved street heights: a path or street that shares a node with a
  * moved point (`jn`, `je`, `along`) but wasn't moved itself takes the same height there, easing back to its own
  * profile at no more than `grade` (so footpaths and service roads don't meet a junction with a step).

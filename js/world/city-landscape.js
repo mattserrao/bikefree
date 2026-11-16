@@ -9,7 +9,7 @@ import { smoothstep } from './coast.js';
 import { ROAD_WIDTH } from './pose.js';
 import { decodeTerrain } from './real-coast.js';
 import { planJunctions, junctionGround, junctionTops } from './junctions.js';   // [junctions]
-import { joinCrossings, densifyAlongside, clearOverpasses, alignAlongRoute, trimAtRoute, followMovedNodes, keepUnderRoad, resolveOverlaps, streetSlots } from './road-meets.js';   // [junctions]
+import { joinCrossings, densifyAlongside, clearOverpasses, alignAlongRoute, trimAtRoute, followMovedNodes, keepUnderRoad, resolveOverlaps, hideCrossingsAtRoute, streetSlots } from './road-meets.js';   // [junctions]
 import { alignStreetProfiles, syncPinnedNodes } from './road-align.js';   // [road-align]
 import { makeStreetGrade } from './street-grade.js';   // [street-kit]
 import { riverfrontGround } from './riverfront.js';   // [s1-riverfront]
@@ -536,6 +536,7 @@ export function cityStreets(landscape, index, route) {
     followMovedNodes(streets);   // [junctions] paths, side streets and decks meet the moved ones at their height
     resolveOverlaps(streets, landscape, { final: true });   // [w2-meets] again: heights moved since (decks and their links)
     keepUnderRoad(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] (and still nothing over the road)
+    hideCrossingsAtRoute(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [w2-meets] crossings at another level: under the road's bank
     junctionTops(landscape._junctions, streets, landscape.routeDist, ROAD_WIDTH);   // [junctions] mouths at the streets' final heights
   }
   return streets;

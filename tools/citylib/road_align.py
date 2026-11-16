@@ -322,6 +322,11 @@ def deck_route_anchors(group_nodes, edges, node_xy, heights, anchors, route_xy, 
         x, y = node_xy[n]
         r = _route_near(route_xy, route_e, x, y, end_reach)
         if r: out[n] = r[1] - .1
+    deg = {}
+    for a, b, L in edges: deg[a] = deg.get(a, 0) + 1; deg[b] = deg.get(b, 0) + 1
+    # a deck that ends at the route meets it (at its height): it doesn't cross over it
+    meets = any(deg.get(n) == 1 and _route_near(route_xy, route_e, *node_xy[n], 15.0) for n in deg)
+    if meets: return out
     for a, b, L in edges:
         (ax, ay), (bx, by) = node_xy[a], node_xy[b]
         for f in (0.0, .25, .5, .75, 1.0):
