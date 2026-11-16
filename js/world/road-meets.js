@@ -395,6 +395,48 @@ export function keepUnderRoad(streets, ctx, options = {}) {
 }
 
 /**
+ * A street, path or deck end that meets nothing (no other street shares it, it isn't on the route's road) yet
+ * hangs above the ground or is buried in it (a footpath stub on a bluff, a deck whose ground street the data cut
+ * off) comes down to the ground: its end sits `onM` over the bare ground and the last stretch eases there at no more
+ * than `grade` (at most half the street). ctx: { route, index, landscape, roadWidth }.
+ */
+export function settleFreeEnds(streets, ctx, options = {}) {
+  const { index, landscape } = ctx, RW = ctx.roadWidth || 7, O = { tol: .3, onM: .05, grade: .12, ...options };
+  const key = (p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`, count = new Map();
+  for (const st of streets) for (const p of st.pts) count.set(key(p), (count.get(key(p)) || 0) + 1);
+  const G = 24, grid = new Map();
+  streets.forEach((st, k) => { for (let i = 1; i < st.pts.length; i++) { const a = st.pts[i - 1], b = st.pts[i]; for (const q of [a, b]) { const kk = `${Math.floor(q.x / G)},${Math.floor(q.z / G)}`; if (!grid.has(kk)) grid.set(kk, []); grid.get(kk).push([k, i]); } } });
+  const touches = (st, p) => {
+    for (let gx = -1; gx <= 1; gx++) for (let gz = -1; gz <= 1; gz++) for (const [k, i] of grid.get(`${Math.floor(p.x / G) + gx},${Math.floor(p.z / G) + gz}`) || []) {
+      const o = streets[k]; if (o === st) continue;
+      if (segDist(p.x, p.z, o.pts[i - 1], o.pts[i]).d < o.width / 2 + st.width / 2 + 1) return true;
+    }
+    return false;
+  };
+  let n = 0;
+  for (const st of streets) {
+    const P = st.pts; if (P.length < 2) continue;
+    const acc = [0]; for (let i = 1; i < P.length; i++) acc.push(acc[i - 1] + Math.hypot(P[i].x - P[i - 1].x, P[i].z - P[i - 1].z));
+    for (const e of [0, P.length - 1]) {
+      const p = P[e];
+      if (count.get(key(p)) > 1 || p.jn != null || p.je != null || p.along || p.under) continue;
+      const r = index.nearest(p.x, p.z, RW / 2 + st.width / 2 + 4); if (r) continue;   // (at the route: its own rules)
+      // (nor where it ends against another street's ribbon: that is a meet, not a free end)
+      if (touches(st, p)) continue;
+      const g = landscape.baseHeight(p.x, p.z) + O.onM, dy = g - p.y;
+      if (Math.abs(dy) < O.tol) continue;
+      const L = Math.min(acc[acc.length - 1] / 2, Math.max(6, Math.abs(dy) / O.grade));
+      for (let i = 0; i < P.length; i++) {
+        const d = Math.abs(acc[i] - acc[e]); if (d >= L) continue;
+        P[i].y += dy * (1 - smooth(d / L));
+      }
+      n++;
+    }
+  }
+  return n;
+}
+
+/**
  * After junctions and the along-route pass have moved street heights: a path or street that shares a node with a
  * moved point (`jn`, `je`, `along`) but wasn't moved itself takes the same height there, easing back to its own
  * profile at no more than `grade` (so footpaths and service roads don't meet a junction with a step).
@@ -781,6 +823,18 @@ export function roadMeets(landscape, index, route, options = {}) {
       issue(site, 'dangling', off, off > 0 ? 'a roadway ends in the air' : 'a roadway ends below the ground', O.dangle);
     }
   }
+
+  // 2b. paths (cls 8: footpaths, cycleways) are drawn too: a path end that meets nothing must sit on the ground
+  streets.forEach((st, k) => {
+    if (st.cls !== 8 || st.pts.length < 2) return;
+    for (const p of [st.pts[0], st.pts[st.pts.length - 1]]) {
+      if ((ends.get(keyOf(p)) || []).length || through.has(keyOf(p))) continue;
+      if (streets.some((o, j) => j !== k && o.pts.length && [o.pts[0], o.pts[o.pts.length - 1]].some((q) => keyOf(q) === keyOf(p)))) continue;
+      if (surfacesAt(p.x, p.z, 1).length) continue;
+      const off = p.y - landscape.heightAt(p.x, p.z);   // (the ground as drawn)
+      if (Math.abs(off) > O.dangle) issue(add({ kind: 'end', x: p.x, z: p.z, y: p.y, streets: [k], meets: 'nothing', path: true }), 'dangling', off, off > 0 ? 'a path ends in the air' : 'a path ends below the ground', O.dangle);
+    }
+  });
 
   // 3. the route's road: streets that cross it or run along it at its level outside the junctions, and ribbons its
   // clearance tube cuts
