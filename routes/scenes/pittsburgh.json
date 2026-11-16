@@ -18,7 +18,8 @@
     "rock": "#8a8478",
     "cliff": "#9a8f7c",
     "water": "#2f5a5c",
-    "shallowWater": "#5d7f6a"
+    "shallowWater": "#5d7f6a",
+    "bluff": "#8f7a60"
   },
   "vegetation": {
     "trees": [
@@ -520,5 +521,14 @@
     "bankTop": 30,
     "bank": 0.45
   },
-  "post": true
+  "post": true,
+  "terrainBuild": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "rivers": true,
+    "padM": 9000,
+    "coarseM": 40,
+    "fineM": 900,
+    "fineCellM": 10
+  },
+  "terrainGridFile": "routes/scenes/pittsburgh-terrain.json"
 }

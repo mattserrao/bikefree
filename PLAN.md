@@ -362,7 +362,8 @@ Goal: give Pittsburgh the Big Sur treatment. The full plan is in the Project doc
   - [x] Post-processing on (bloom, grade, vignette; off on Light)
   - [ ] Per-scene distance fog so the skyline separates from the hills; night river reflections; Big Sur's moon path and headlight (D3)
   - [ ] Measure on the Mac with the **I** overlay (post + fog on Balanced and High)
-- [ ] **P3 · Real landform** (10 m near the route, 40 m to 9 km; the bluff; C2 overpasses)
+- [x] **P3 · Real landform** (v0.13.1) — `routes/scenes/pittsburgh-terrain.json` from `tools/build_terrain_grid.py` (new inland "rivers" mode): 10 m near the route, 40 m to 9 km; the three rivers traced from the elevation to the edge of the world (second water surface beyond the city's box; the river fog follows them); banded sandstone on steep city ground. C2: the "buried streets" were low ramp decks beside the route — the ground no longer rises over a ramp deck; a guard adds girder spans for real underpasses (none on this route). Clipping QC 266 warnings (baseline 288), 0 fail; course QC clean
+  - [ ] Left: the route's height on the Mount Washington crest (13.3–14.1 km) is 4–6 m above the bare ground
 - [ ] **P4 · Signature landmarks** and the Grandview postcard view (C1, C4, C8)
 - [ ] **P5 · Rivers** (current, confluence, glint, banks; C3, C6)
 - [ ] **P6 · Vegetation** (wooded slopes, park lawns, street trees)

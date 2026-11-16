@@ -350,6 +350,8 @@ export class StylizedTerrain {
       }
       const regionalColor = this.landscape.colorAt?.(px, pz);
       if (regionalColor) c.lerp(new THREE.Color(regionalColor), .8);
+      // City bluffs (Mount Washington): the real slope shows through the land-use colour as banded sandstone
+      if (regionalColor && P.bluff) c.lerp(P.bluff, smoothstep(.8, 1.6, rise) * (.55 + .3 * Math.sin(y * .9 + px * .01)));
       c.multiplyScalar(.94 + Math.sin(px / 47 + pz / 73) * .035);
       colors.push(c.r, c.g, c.b);
       if (i < S && j < S) {

@@ -43,6 +43,19 @@ Branch `pittsburgh-test`, built on v0.12.2. The plan is in the Project doc *open
 - **How it works:** the city now builds a distance-to-river field on its height grid. The fog uses that field (in place of Big Sur's distance to the shore) and is measured from the river level, not from sea level. Scenes can set `weather.presets`, `weather.labels`, `weather.bankTop` and `weather.bank` (fog thickness), plus `timeOfDay`.
 - Draw calls and triangles are unchanged within ±10 (fog layers and post add a few passes).
 
+## P3 · Real landform (done)
+
+| The bundled ground and rivers (hillshade, rivers in blue) | Riverfront, golden hour: the Ohio and the hills now run to the horizon |
+| --- | --- |
+| ![](p3-terrain-rivers.png) | ![](after-p3-riverfront.jpg) |
+
+- **Real ground to the horizon:** `tools/build_terrain_grid.py pittsburgh` bakes `routes/scenes/pittsburgh-terrain.json` (1.6 MB): 10 m elevation within 900 m of the route (70 blocks, 29 km²) and 40 m out to 9 km. Before, the city's 24 m grid ended about 3–6 km out and its edge was stretched to the horizon.
+- **Rivers beyond the city:** new "rivers" mode in the builder. It finds the river surfaces in the elevation itself (hydro-flattened water is dead flat): the surfaces near the city's water level connected to the mapped rivers, plus the next pools past the locks. All three rivers now run to the edge of the world, drawn as a second water surface framed around the city's own. The river fog follows them too.
+- **Bluffs:** steep ground in the city now shows banded sandstone through the land-use colour (Mount Washington, the slopes above the rivers). The wooded slopes come in P6.
+- **C2 (streets lost in the route's embankment):** on inspection these were low ramp decks beside the route (I-279 and North Shore ramps), buried by the bank the route's road raises. The ground now never rises over a ramp deck (beyond 9 m from the route). The worst spot went from 2.2 m to 1.6 m of ground over the street, and the other three from 1.3–2.1 m to 1.1–1.3 m. A guard for real underpasses was added too (a street passing under an embankment, or a ramp 2.5 m or more under the road, gets a short girder span); it finds none on this route.
+- **Honest limits:** inside the city the change is small, because the old 24 m grid came from the same elevation source. The gain is the 10 m detail along the route and everything past the old edge. On the Mount Washington crest (13.3–14.1 km) the route's own height is 4–6 m above the bare-earth ground; the ground is raised to meet it as before.
+- **Checks:** `npm test` 96 pass; course QC `--strict` clean on every route; clipping QC 0 fail, 266 warnings (v0.12.2 baseline: 288). Draw calls and triangles unchanged within ±20.
+
 ## Still to check on the Mac
 - Frame rate with post and river fog on Balanced and High (**I** overlay).
 - River fog from the saddle on the bridges: you should ride out of it as you climb.

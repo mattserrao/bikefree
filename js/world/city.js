@@ -234,10 +234,20 @@ export class CityScene {
 
   // ---------------------------------------------------------------- rivers
   _water() {
-    const D = this.D, level = this.landscape.level;
-    // Water mask → soft distance-to-bank texture (blurred), for shallow colour and bank foam.
-    const W = D.lx, H = D.ly, mask = new Float32Array(W * H);
+    const D = this.D, mask = new Float32Array(D.lx * D.ly);
     for (let i = 0; i < mask.length; i++) mask[i] = D.land[i] === LAND.water ? 1 : 0;
+    this.water = this._waterMesh(mask, D.lx, D.ly, D.x0, D.z0, D.x1, D.z1, 'Rivers');
+    // the rivers beyond the city's box, from the real height grid's river mask (drawn only outside the box)
+    const O = this.landscape.outer;
+    if (O) {
+      const om = Float32Array.from(O.mask.m);
+      this.outerWater = this._waterMesh(om, O.mask.nx, O.mask.ny, O.x0, O.z0, O.x1, O.z1, 'Rivers beyond', [D.x0, D.z0, D.x1, D.z1]);
+    }
+  }
+
+  _waterMesh(mask, W, H, x0, z0, x1, z1, name, hole = null) {
+    const level = this.landscape.level;
+    // Water mask → soft distance-to-bank texture (blurred), for shallow colour and bank foam.
     const blur = (src, r) => {
       const tmp = new Float32Array(src.length), out = new Float32Array(src.length);
       for (let y = 0; y < H; y++) { let acc = 0; for (let x = -r; x < W + r; x++) { if (x + r < W) acc += src[y * W + Math.min(W - 1, x + r)]; if (x - r - 1 >= 0) acc -= src[y * W + x - r - 1]; if (x >= 0 && x < W) tmp[y * W + x] = acc / (2 * r + 1); } }
@@ -251,7 +261,7 @@ export class CityScene {
     const U = this.uniforms;
     const mat = this.own(new THREE.ShaderMaterial({
       uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), uTime: U.uTime, uSunDir: U.uSunDir, uSkyTop: U.uSkyTop, uSkyHorizon: U.uSkyHorizon,
-        uNight: this.night, uMask: { value: dt }, uBox: { value: new THREE.Vector4(D.x0, D.z0, D.x1 - D.x0, D.z1 - D.z0) },
+        uNight: this.night, uMask: { value: dt }, uBox: { value: new THREE.Vector4(x0, z0, x1 - x0, z1 - z0) }, uHole: { value: new THREE.Vector4(...(hole || [1, 1, -1, -1])) },
         uDeep: { value: new THREE.Color('#2f5a5c') }, uShallow: { value: new THREE.Color('#5d7f6a') } },
       vertexShader: /* glsl */`
         #include <common>
@@ -266,7 +276,7 @@ export class CityScene {
         #include <common>
         #include <logdepthbuf_pars_fragment>
         #include <fog_pars_fragment>
-        uniform float uTime, uNight; uniform vec3 uSunDir, uSkyTop, uSkyHorizon, uDeep, uShallow; uniform sampler2D uMask; uniform vec4 uBox;
+        uniform float uTime, uNight; uniform vec3 uSunDir, uSkyTop, uSkyHorizon, uDeep, uShallow; uniform sampler2D uMask; uniform vec4 uBox, uHole;
         varying vec3 vW;
         float n2(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
           float a = fract(sin(dot(i, vec2(12.9, 78.2))) * 43758.5), b = fract(sin(dot(i + vec2(1, 0), vec2(12.9, 78.2))) * 43758.5),
@@ -274,6 +284,7 @@ export class CityScene {
           return mix(mix(a, b, f.x), mix(c, d, f.x), f.y); }
         void main() {
           #include <logdepthbuf_fragment>
+          if (vW.x > uHole.x && vW.z > uHole.y && vW.x < uHole.z && vW.z < uHole.w) discard;
           vec2 uv = (vW.xz - uBox.xy) / uBox.zw;
           vec4 m = texture2D(uMask, uv);
           if (m.r < .02) discard;
@@ -301,11 +312,21 @@ export class CityScene {
         }`,
       fog: true,
     }));
-    const geo = this.own(new THREE.PlaneGeometry(D.x1 - D.x0, D.z1 - D.z0, 1, 1)); geo.rotateX(-Math.PI / 2);
-    this.water = new THREE.Mesh(geo, mat);
-    this.water.position.set((D.x0 + D.x1) / 2, level, (D.z0 + D.z1) / 2);
-    this.water.name = 'Rivers'; this.water.renderOrder = 0;
-    this.group.add(this.water);
+    // a plain rectangle, or (beyond the city) a frame around the city's box, so the two never overlap
+    const quads = hole ? [[x0, z0, x1, hole[1]], [x0, hole[3], x1, z1], [x0, hole[1], hole[0], hole[3]], [hole[2], hole[1], x1, hole[3]]] : [[x0, z0, x1, z1]];
+    const pos = [], idx = [];
+    for (const [a0, b0, a1, b1] of quads) {
+      if (a1 <= a0 || b1 <= b0) continue;
+      const n = pos.length / 3;
+      pos.push(a0, 0, b0, a1, 0, b0, a0, 0, b1, a1, 0, b1); idx.push(n, n + 2, n + 1, n + 1, n + 2, n + 3);
+    }
+    const geo = this.own(new THREE.BufferGeometry());
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); geo.computeVertexNormals();
+    const water = new THREE.Mesh(geo, mat);
+    water.position.set(0, level, 0);
+    water.name = name; water.renderOrder = 0;
+    this.group.add(water);
+    return water;
   }
 
   // ---------------------------------------------------------------- buildings
