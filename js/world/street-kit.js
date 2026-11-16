@@ -145,6 +145,35 @@ export class StreetKit {
     this._streetGrid();
     this._decodeData();
     this._plan();
+    // [w2-clip] the terrain's scattered trees, shrubs and rocks stay off the kit's sidewalks and car parks
+    { const plant = this.L.canPlant; this.L.canPlant = (x, z) => (!plant || plant(x, z)) && !this.onWalk(x, z); }
+  }
+
+  /** [w2-clip] Is (x, z) on (or within `margin` of) a kit sidewalk or car park? Conservative: the widest a walk can be. */
+  onWalk(x, z, margin = .5) {
+    if (!this.inArea(x, z)) return false;
+    const r = this.L.routeDist(x, z), s = r && this.sOf(r);
+    if (r && s >= this.cfg.fromM && s <= this.cfg.toM && this.L.routeKindAt(s) === 'road') {
+      const c = this.curbAt(s), w = (this.zoneAt(s)?.sidewalkM ?? 3) + 4.4;   // (_station: to the building line, at most width + 4 + .4)
+      if (r.d > c - .2 && r.d < c + w + margin) return true;
+    }
+    for (const o of this.streetsAt(x, z, 2.5 + margin)) if (!o.st.bridge && o.st.cls >= 2 && o.st.cls <= 6) return true;
+    if (!this._lotGrid) {
+      this._lotGrid = new Map();
+      for (const ring of this.osm.lots) {
+        let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+        for (const p of ring) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); }
+        for (let gx = Math.floor((x0 - 1) / 40); gx <= Math.floor((x1 + 1) / 40); gx++) for (let gz = Math.floor((z0 - 1) / 40); gz <= Math.floor((z1 + 1) / 40); gz++) {
+          const k = `${gx},${gz}`; if (!this._lotGrid.has(k)) this._lotGrid.set(k, []); this._lotGrid.get(k).push(ring);
+        }
+      }
+    }
+    for (const ring of this._lotGrid.get(`${Math.floor(x / 40)},${Math.floor(z / 40)}`) || []) {
+      let inside = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], c = ring[j]; if ((a.z > z) !== (c.z > z) && x < ((c.x - a.x) * (z - a.z)) / (c.z - a.z) + a.x) inside = !inside; }
+      if (inside) return true;
+    }
+    return false;
   }
 
   // ------------------------------------------------------------ helpers
@@ -508,6 +537,9 @@ export class StreetKit {
         if (this._due()) yield 'walks';
         const P = this._station(st);
         if (!P) { prev = null; continue; }
+        // [w2-clip] on the inside of a tight bend the curb line steps backwards: skip that station, or the next slab
+        // folds back over the last one (two shades of paving at one height: they flicker)
+        if (prev && ((P.ix - prev.ix) * P.tx + (P.iz - prev.iz) * P.tz < .3 || (P.ox - prev.ox) * P.tx + (P.oz - prev.oz) * P.tz < 0)) continue;
         if (prev && Math.hypot(P.ix - prev.ix, P.iz - prev.iz) < 5.5) this._slab(W, prev, P, n++);
         else if (prev) this._endCap(W, prev), this._startCap(W, P);
         else this._startCap(W, P);
@@ -1118,11 +1150,25 @@ export class StreetKit {
     for (const [i, j, k] of tris) split(contour[i], contour[j], contour[k], 0);
     W.color('#5a5d5f');
     this.stats.lots = (this.stats.lots || 0) + 1;
+    // [w2-clip] the asphalt's own height at a point (its triangles, not the ground's): the painted stalls lie on it
+    // exactly, instead of on a straight line between their ends that dips into the asphalt where the ground bends
+    const drawn = new Map(), cellOf = (x, z) => `${Math.floor(x / 4)},${Math.floor(z / 4)}`;
+    const asphaltAt = (x, z) => {
+      for (const [a, b, c, ys] of drawn.get(cellOf(x, z)) || []) {
+        const d = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y); if (Math.abs(d) < 1e-9) continue;
+        const u = ((b.y - c.y) * (x - c.x) + (c.x - b.x) * (z - c.y)) / d, v = ((c.y - a.y) * (x - c.x) + (a.x - c.x) * (z - c.y)) / d, w = 1 - u - v;
+        if (u >= -1e-4 && v >= -1e-4 && w >= -1e-4) return u * ys[0] + v * ys[1] + w * ys[2];
+      }
+      return null;
+    };
     for (const [a, b, c] of out) {
       if (this._due()) yield 'lot';
       const ys = [a, b, c].map((p) => level(p.x, p.y));
       if (ys.some((y) => y == null)) { this.stats.lotSkip = (this.stats.lotSkip || 0) + 1; continue; }
       this.stats.lotTris = (this.stats.lotTris || 0) + 1;
+      for (let gx = Math.floor(Math.min(a.x, b.x, c.x) / 4); gx <= Math.floor(Math.max(a.x, b.x, c.x) / 4); gx++) for (let gz = Math.floor(Math.min(a.y, b.y, c.y) / 4); gz <= Math.floor(Math.max(a.y, b.y, c.y) / 4); gz++) {
+        const k = `${gx},${gz}`; if (!drawn.has(k)) drawn.set(k, []); drawn.get(k).push([a, b, c, ys]);
+      }
       const ny = (b.y - a.y) * (c.x - a.x) - (b.x - a.x) * (c.y - a.y);   // (2D y is world z)
       const k = [a, b, c].map((p, q) => W.vertex(p.x, ys[q], p.y, 0, 1, 0));
       if (ny > 0) W.tri(k[0], k[1], k[2]); else W.tri(k[0], k[2], k[1]);
@@ -1147,7 +1193,11 @@ export class StreetKit {
           if (y0 == null || y1 == null || ym == null) continue;
           W.color('#e8e4d8');
           const w = .06;
-          face(W, V(p0.x - ax * w, y0 + .012, p0.z - az * w), V(p0.x + ax * w, y0 + .012, p0.z + az * w), V(p1.x + ax * w, y1 + .012, p1.z + az * w), V(p1.x - ax * w, y1 + .012, p1.z - az * w), UP);
+          for (let q = 0; q < 5; q++) {   // [w2-clip] in 1 m pieces, each end on the asphalt
+            const f0 = q / 5, f1 = (q + 1) / 5, x0 = p0.x + (p1.x - p0.x) * f0, z0 = p0.z + (p1.z - p0.z) * f0, x1 = p0.x + (p1.x - p0.x) * f1, z1 = p0.z + (p1.z - p0.z) * f1;
+            const h0 = (asphaltAt(x0, z0) ?? y0 + (y1 - y0) * f0) + .012, h1 = (asphaltAt(x1, z1) ?? y0 + (y1 - y0) * f1) + .012;
+            face(W, V(x0 - ax * w, h0, z0 - az * w), V(x0 + ax * w, h0, z0 + az * w), V(x1 + ax * w, h1, z1 + az * w), V(x1 - ax * w, h1, z1 - az * w), UP);
+          }
           const h = hash(Math.round(m.x * 7) * 31 + Math.round(m.z * 7) * 17);
           if (h < .55 && cars < 60) { this.place(C, 'car', m.x, m.z, Math.atan2(bx * dir, bz * dir), { y: ym, seed: h }); cars++; }
         }

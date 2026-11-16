@@ -13,7 +13,7 @@
 import { createServer } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { extname, join, normalize, dirname, relative } from 'node:path';
+import { extname, join, normalize, dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -106,8 +106,8 @@ async function main() {
       await page.close();
     }
   } finally { await browser.close(); server.close(); }
-  if (html) { const out = join(ROOT, html); await writeFile(out, report(runs)); console.log(`\nReport: ${relative(process.cwd(), out)}`); }
   if (json) await writeFile(json, JSON.stringify(runs.map(({ park, info, result }) => ({ park, info, ...result })), null, 2));
+  if (html) { const out = resolve(ROOT, html); await writeFile(out, report(runs)); console.log(`\nReport: ${relative(process.cwd(), out)}`); }
   process.exitCode = bad ? 1 : 0;
 }
 
