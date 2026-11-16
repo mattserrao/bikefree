@@ -57,7 +57,11 @@ sites), re-rendered: before = `eba1746`, after = this branch's final commit (gol
 
 ## Clipping
 
-CLIP_W2
+`npm run qc:clipping -- --no-life`: **0 fail**, 88 warn, 72 info, against 85 warn and 66 info on the integrated
+branch (`/home/claude/after-clipping.json`). Changes: floating 3 → 4, ground-over-street 44 → 45, z-fight 22 → 23,
+sunk (info) 58 → 64. post-in-solid (9), scenery-on-street (6) and structure-through-building (1) are unchanged. The
+lifted decks and the trims move street surfaces, so posts, trees and ground near them shift. Not triaged one by one:
+left for the clip agent (#3).
 
 ## What's left (19 sites within 25 m)
 
