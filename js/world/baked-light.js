@@ -164,6 +164,31 @@ const AO = /* glsl */`
 // texture reads per texel (the cost unit of a full-screen pass)
 const TAPS = new Map([[COMBINE, 2], [ERODE, 4], [DILATE, 4], [SWEEP, 2], [SUN, 2], [AO, 33]]);
 
+/**
+ * Wait until the GPU has done everything issued so far, and return how long that took (ms). (gl.finish()
+ * doesn't wait in Chrome: it only flushes.) A 1-pixel read from a tiny target of our own does: the
+ * read can't return before the work queued ahead of it. Only the read binding is touched, and restored.
+ */
+export function gpuSync(renderer) {
+  const gl = renderer.getContext(), t = performance.now();
+  let s = gpuSync.cache.get(gl);
+  if (!s) {
+    const tex = gl.createTexture(), fb = gl.createFramebuffer(), prevTex = gl.getParameter(gl.TEXTURE_BINDING_2D);
+    gl.bindTexture(gl.TEXTURE_2D, tex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.bindTexture(gl.TEXTURE_2D, prevTex);
+    const prevRead = gl.getParameter(gl.READ_FRAMEBUFFER_BINDING);
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, prevRead);
+    gpuSync.cache.set(gl, s = { fb, px: new Uint8Array(4) });
+  }
+  const prevRead = gl.getParameter(gl.READ_FRAMEBUFFER_BINDING);
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, s.fb);
+  gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, s.px);
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, prevRead);
+  return performance.now() - t;
+}
+gpuSync.cache = new WeakMap();
+
 const meshTris = (o) => {
   const g = o.geometry, n = g.index ? g.index.count : (g.attributes.position?.count || 0);
   return Math.ceil(n / 3) * (o.isInstancedMesh ? o.count : 1) + 64;   // + a little per draw
@@ -366,7 +391,7 @@ export class BakedLighting {
 
   /** Behind the loader: steps until prepSliceMs, the GPU synced after each one (and timed: the calibration). */
   _prepTick() {
-    const O = this.opts, gl = this.world.renderer.getContext(), end = performance.now() + O.prepSliceMs, f = this.frame;
+    const O = this.opts, R = this.world.renderer, end = performance.now() + O.prepSliceMs, f = this.frame;
     this._budget = (kind) => this._units(kind, O.prepSliceMs / 2);
     const cal = this._cal ||= { taps: [0, 0, 0], tris: [0, 0, 0] };   // units, ms, steps
     if (performance.now() - this._prepT0 > O.prepTimeoutS * 1000) {
@@ -376,9 +401,11 @@ export class BakedLighting {
       return;
     }
     if (this._jobInfo) this._jobInfo.frames++;
+    this._synced = false;
     do {
+      if (!this._synced) { gpuSync(R); this._synced = true; }   // start each slice with nothing in flight
       const t = performance.now(), r = this._prep.next();
-      if (r.value?.kind) gl.finish();
+      if (r.value?.kind) gpuSync(R);
       const ms = performance.now() - t;
       if (this._jobInfo) { this._jobInfo.steps++; this._jobInfo.worstSyncMs = Math.max(this._jobInfo.worstSyncMs, ms); }
       if (r.done) { this._endPrep(); break; }

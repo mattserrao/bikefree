@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Headless ride frame times: ride a stretch of a route in headless Chrome, a frame at a time, and record
 // what each frame costs (the whole frame, and the baked-lighting work in it), from the moment the world
-// opens. The GPU is synced (gl.finish) around the frame and around the bake's share of it, so the times
+// opens. The GPU is synced (a 1-pixel read: gl.finish only flushes in Chrome) around the frame and around the bake's share of it, so the times
 // include the GPU work, not just the JavaScript.
 //
 //   node tools/ride_frames.mjs pittsburgh 0-3000 8000-10000
@@ -14,7 +14,8 @@
 // frame, frames over 25 ms, and the bake's ms per frame: frames with bake work, worst, p95, total).
 // Options: --quality low|balanced|high, --size WxH (default 960x540), --chrome <path>, --out <file.json>,
 // --time golden|… (default: the scene's), --cam chase|…, --rebake <m,m,…> (force a re-bake there, as a
-// streamed chunk changing the static set would)
+// streamed chunk changing the static set would), --no-draw (everything but drawing the view: on a software
+// GPU the draw takes seconds and drowns the rest; the bake's own GPU work still runs and is timed)
 import { createServer } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -29,6 +30,7 @@ const [width, height] = opt('--size', '960x540').split('x').map(Number);
 const mpf = Number(opt('--mpf', '1.5')), dtRide = Number(opt('--dt', '0.1'));
 const outFile = opt('--out', null);
 const time = opt('--time', null), cam = opt('--cam', null);
+const noDraw = (() => { const i = args.indexOf('--no-draw'); if (i < 0) return false; args.splice(i, 1); return true; })();   // skip drawing the scene (a software GPU takes seconds a frame)
 const rebake = (opt('--rebake', '') || '').split(',').filter(Boolean).map(Number);   // force a re-bake at these metres (as a streamed chunk would)
 const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync));
@@ -61,10 +63,17 @@ for (const [from, to] of stretches) {
   const q = new URLSearchParams({ park, clean: '1', quality, pos: String(from), ...(time ? { time } : {}), ...(cam ? { cam } : {}) });
   await page.goto(`${base}/tools/world-preview.html?${q}`);
   await page.waitForFunction(() => window.world, null, { polling: 50 });
-  const run = await page.evaluate(async ({ from, to, mpf, dtRide, rebake }) => {
+  const run = await page.evaluate(async ({ from, to, mpf, dtRide, rebake, noDraw }) => {
     const forced = new Set();
     const w = window.world, gl = w.renderer.getContext();
+    // wait for the GPU (gl.finish only flushes in Chrome): a 1-pixel read from a tiny target of our own
+    const tex = gl.createTexture(), fb = gl.createFramebuffer(), px = new Uint8Array(4);
+    { const pt = gl.getParameter(gl.TEXTURE_BINDING_2D), pr = gl.getParameter(gl.READ_FRAMEBUFFER_BINDING);
+      gl.bindTexture(gl.TEXTURE_2D, tex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null); gl.bindTexture(gl.TEXTURE_2D, pt);
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0); gl.bindFramebuffer(gl.READ_FRAMEBUFFER, pr); }
+    const sync = () => { const pr = gl.getParameter(gl.READ_FRAMEBUFFER_BINDING); gl.bindFramebuffer(gl.READ_FRAMEBUFFER, fb); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); gl.bindFramebuffer(gl.READ_FRAMEBUFFER, pr); };
     w.stop();
+    if (noDraw) w._render = () => { w.perf?.end(performance.now()); };
     let pos = from;
     w.setSource(() => ({ pos, speed: mpf / dtRide, cadence: 84, riding: true }));
     const frames = [];
@@ -75,10 +84,10 @@ for (const [from, to] of stretches) {
       b.__hooked = true;
       const tick = b.tick.bind(b);
       b.tick = (dt) => {
-        gl.finish();
+        sync();
         const t = performance.now(), before = b._job || b.preparing;
         const r = tick(dt);
-        gl.finish();
+        sync();
         bakeMs = performance.now() - t; bakeWork = !!(before || b._job);
         return r;
       };
@@ -89,26 +98,28 @@ for (const [from, to] of stretches) {
     for (let i = 0; i < 40000; i++) {
       hook();
       const loaded = !!(w.terrain?.kit || !w.stylized) && !w.baked?.preparing && !(w.loading > 0 && !w.terrain?.kit);
-      if (!riding && loaded) { riding = true; loadMs = performance.now() - t0; }
+      if (!riding && loaded) { riding = true; loadMs = performance.now() - t0; w.renderer.domElement.style.display = 'none'; }
       if (riding) pos += mpf;
       for (const m of rebake) if (riding && pos >= m && !forced.has(m) && w.baked) { forced.add(m); w.baked._bakedSig = null; w.baked._settled = 99; }
       if (pos > to) break;
       bakeMs = 0; bakeWork = false;
       now += dtRide * 1000;
       const tg = performance.now();
-      gl.finish();
+      sync();
       const t = performance.now(), pre = t - tg, gap = tg - (lastEnd || tg);
       w.running = true; w._frame(now); cancelAnimationFrame(w._raf); w.running = false;
-      gl.finish();
+      sync();
       const ms = performance.now() - t;
       lastEnd = performance.now();
       frames.push({ i, pos: Math.round(pos), ms: Math.round(ms * 10) / 10, gap: Math.round(gap), pre: Math.round(pre), bake: Math.round(bakeMs * 10) / 10, baking: bakeWork, ride: riding, prep: !!w.baked?.preparing, bakes: w.baked?.bakes || 0 });
       if (i % 100 === 0) console.log(`progress frame ${i} at ${Math.round(pos)} m: ${ms.toFixed(0)} ms, bakes ${w.baked?.bakes || 0}${w.baked?.preparing ? ', preparing' : ''} (${((performance.now() - t0) / 1000).toFixed(0)} s)`);
-      await tick();
+      // yield to the page while it loads (assets, compiling); while riding only now and then: compositing the
+      // canvas between frames costs seconds on a software GPU (and isn't the app's frame cost)
+      if (!riding || i % 50 === 0) await tick();
       if (!riding && performance.now() - t0 > 600000) break;
     }
     return { frames, loadMs, stats: w.baked?.stats || null, bakes: w.baked?.bakes || 0, history: w.baked?.history || null };
-  }, { from, to, mpf, dtRide, rebake });
+  }, { from, to, mpf, dtRide, rebake, noDraw });
   await page.close();
   const load = run.frames.filter((f) => !f.ride), ride = run.frames.filter((f) => f.ride);
   const bk = ride.filter((f) => f.baking);
