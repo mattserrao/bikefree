@@ -59,8 +59,8 @@
     "id": "goingtothesun",
     "name": "Going-to-the-Sun Road",
     "park": "Glacier National Park, Montana",
-    "km": 67.8,
-    "climbM": 1034,
+    "km": 150.9,
+    "climbM": 1882,
     "file": "routes/parks/goingtothesun.gpx",
     "outAndBack": true,
     "scene": "routes/scenes/goingtothesun.json"

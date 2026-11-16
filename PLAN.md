@@ -375,6 +375,39 @@ Goal: give Pittsburgh the Big Sur treatment. The full plan is in the Project doc
 - [x] Route 28 froze the browser for ~100 s after Start (looked like a hang). Building the lake water asked "is the road within 3.2 km?" for every lake cell using the 40 m road index (~26,000 grid lookups each). Now a coarse road index, with whole ~800 m chunks settled at once when clearly near or far. Same lakes (139 meshes, identical geometry); lake build 102.6 s → 0.06 s headless, Start → 3D view 103 s → 0.8 s
 - [ ] On the Mac: Route 28 opens promptly
 
+### Going-to-the-Sun hero map *(test branch `goingtothesun-test`, from `main` after PR #17)*
+Goal: give Going-to-the-Sun Road the Big Sur / Pittsburgh hero treatment, over the whole road. Review with pictures: `docs/goingtothesun/REVIEW.md`. Listed under **Rough Drafts** until P8.
+
+**Decisions (15 Nov 2026)**
+- Route: the full road, **Apgar → St. Mary** and back (about 80 km each way; was Apgar → Logan Pass)
+- Real landform: bundled real elevation (10 m near the road, 40 m to 9 km), real Lake McDonald and St. Mary Lake
+- Default: **midsummer, golden hour** (snowbanks and waterfalls at the pass, beargrass and wildflowers); fall as an option
+- Weather presets: **valley fog** on Lake McDonald, **clouds on the peaks** (with shadows), **rain and wet road**, **wildfire smoke haze**
+- Landmarks, hand-built: Garden Wall, Weeping Wall and Triple Arches; West Side Tunnel (window galleries), East Side Tunnel and the Loop; Logan Pass (visitor center, snowfields) and the Jackson Glacier overlook; Lake McDonald Lodge, Sun Point, Rising Sun and Wild Goose Island. The 1930s stone guardwalls along the whole road
+- Traffic: light (about 4 a minute), generic vehicles, like Big Sur
+- Wildlife: mountain goats and bighorn sheep; marmots, pikas and ground squirrels; a distant grizzly or black bear; ravens, a golden eagle, ducks on the lakes
+
+**Phases**
+- [x] **P1 · Road** — GPX Apgar → St. Mary on the real road (75.5 km each way), profile re-fitted to the real ground (max 8.5%); course QC clean
+- [x] **P2 · Baseline** — snapshots at fixed spots, `docs/goingtothesun/REVIEW.md`, second pass. 270–362 draw calls, 0.76–1.43 M triangles
+- [x] **P3 · Real landform and lakes** — `goingtothesun-terrain.json` (build_terrain_grid.py new "lakes" mode: 10 m near the road, 40 m to 9 km, 86 lakes each at its own level); new `real-mountain` landscape; formation-banded cliffs and midsummer snowfields
+  - [x] stone bridges at Baring Creek and Siyeh Creek; the Triple Arches
+- [ ] **P4 · Atmosphere and weather**
+  - [x] Golden hour by default (*Route's default*), post-processing on, distance fog 1.6–21 km
+  - [x] **Valley fog**: the fog bank lies on Lake McDonald (962 m), 45 m deep, treetops and the road above it
+  - [x] **Clouds on the peaks**: cloud caps on every summit above 2,200 m within 7 km (one draw call), drifting; low and grey in the rain; plus Big Sur's cloud shadows
+  - [x] **Rain and wet road** (shared)
+  - [x] **Wildfire smoke**: new preset (`smoke`): a red-orange sun, a brown sky, the far ridges gone in a 5 km haze; offered in `W`, the preview and `npm run snap` (`:smoke`)
+  - [ ] Measure post + fog on the Air with the overlay
+- [x] **P5 · Landmarks** (`js/world/glacier-landmarks.js`): guardwalls, both tunnels, the Triple Arches, six waterfalls, Logan Pass Visitor Center and parking, Lake McDonald Lodge, Rising Sun, St. Mary, snowbanks, seven glaciers, Wild Goose Island, NPS signs and five overlooks
+- [ ] **P6 · Vegetation**
+  - [x] Glacier kit (`js/world/glacier-kit.js`) and zoned forest planner: cedar–hemlock west side, spruce–fir–larch slopes, treeline krummholz, aspen and lodgepole east; beargrass, paintbrush, glacier lilies, huckleberry, alder in the chutes
+  - [x] tuned to the budget: 312–496 draw calls, 1.57–1.98 M triangles (overlook pads/rails/posts and sign supports now instanced, lakes in 2.4 km chunks, lighter near trees)
+- [x] **P7 · Traffic and wildlife** (`js/world/glacier-life.js`): light traffic; goats, bighorn, marmots, ground squirrels, a grizzly, ducks, ravens, a golden eagle
+- [ ] **P8 · Check and ship**
+  - [x] `qc --strict` clean; clipping QC 0 fail (8 shoreline z-fight warnings accepted); snapshots against the baseline in REVIEW.md
+  - [ ] Mac check with the `I` overlay at Light/Balanced/High, golden hour, midday and night; then move to In Progress and merge
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)
