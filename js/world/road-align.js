@@ -73,7 +73,7 @@ export const STREET_DEFAULTS = {
  */
 export function alignStreetProfiles(streets, options = {}) {
   const o = { ...STREET_DEFAULTS, ...options };
-  const key = (p) => `${Math.round(p.x * 100)},${Math.round(p.z * 100)}`;
+  const key = (p) => Math.round(p.x * 100) * 4194304 + Math.round(p.z * 100);   // cm grid (±20 km)
   const nodes = new Map();
   streets.forEach((st, k) => st.pts.forEach((p, i) => {
     const id = key(p);
@@ -112,7 +112,7 @@ export function alignStreetProfiles(streets, options = {}) {
     return out;
   });
   // 2. one height per junction: a deck's, else a pinned point's, else the width-weighted mean of its streets
-  const target = new Map();   // `${k},${i}` → height
+  const target = new Map();   // (k * 65536 + i) → height
   const settle = (cur) => {
     target.clear();
     for (const j of junctions) {
@@ -128,18 +128,18 @@ export function alignStreetProfiles(streets, options = {}) {
     }
     relaxJunctions(cur);
     // (a deck or the route only joins the streets that reach it within 4 m; the rest pass under or over)
-    for (const j of junctions) for (const [k, i] of j.refs) if (!streets[k].bridge && (!j.hard || Math.abs(cur[k][i] - j.y) < 4)) target.set(`${k},${i}`, j.y);
+    for (const j of junctions) for (const [k, i] of j.refs) if (!streets[k].bridge && (!j.hard || Math.abs(cur[k][i] - j.y) < 4)) target.set((k * 65536 + i), j.y);
   };
   // Junctions joined by a street must not be steeper apart than the street may be: soft junctions (no deck, no
   // route) give way, pulled towards each other along every street between consecutive fixed points.
   const jAt = new Map();
-  junctions.forEach((j, n) => j.refs.forEach(([k, i]) => jAt.set(`${k},${i}`, n)));
+  junctions.forEach((j, n) => j.refs.forEach(([k, i]) => jAt.set((k * 65536 + i), n)));
   const links = [];
   streets.forEach((st, k) => {
     if (st.bridge) return;
     let prev = null;
     st.pts.forEach((p, i) => {
-      const n = jAt.get(`${k},${i}`) ?? (p.pin ? -1 : undefined);
+      const n = jAt.get((k * 65536 + i)) ?? (p.pin ? -1 : undefined);
       if (n === undefined) return;
       if (prev && n >= 0 && prev.n >= 0 && n !== prev.n) links.push([prev.n, n, S[k][i] - prev.s]);
       prev = { n, s: S[k][i] };
@@ -162,7 +162,7 @@ export function alignStreetProfiles(streets, options = {}) {
     if (st.bridge) return y;
     const fixed = new Uint8Array(n), corr = [];
     for (let i = 0; i < n; i++) {
-      const t = target.get(`${k},${i}`) ?? (P[i].pin ? y0[k][i] : null);
+      const t = target.get((k * 65536 + i)) ?? (P[i].pin ? y0[k][i] : null);
       if (t != null) { fixed[i] = 1; corr.push([s[i], t - y[i]]); }
     }
     // spread the corrections linearly between fixed points, fading out past the last one
@@ -175,7 +175,7 @@ export function alignStreetProfiles(streets, options = {}) {
         else { const f = (s[i] - corr[c][0]) / Math.max(1e-6, corr[c + 1][0] - corr[c][0]); d = corr[c][1] + (corr[c + 1][1] - corr[c][1]) * f; }
         y[i] += d;
       }
-      for (let i = 0; i < n; i++) if (fixed[i]) y[i] = target.get(`${k},${i}`) ?? y0[k][i];
+      for (let i = 0; i < n; i++) if (fixed[i]) y[i] = target.get((k * 65536 + i)) ?? y0[k][i];
     }
     limitProfile(y, s, fixed, y0[k], o);
     return y;

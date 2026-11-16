@@ -465,6 +465,9 @@ def build(cid):
     pix = lambda lat, lon: ((lon - gw) / (ge - gw) * (lx - 1), (gn - lat) / (gn - gs) * (ly - 1))
     ow, os_, oe, on = cfg['osmBbox']
     dr.rectangle([pix(on, ow), pix(os_, oe)], fill=0)
+    # [s4-section] hillside neighbourhoods the map leaves without land use: yards (and small untagged footprints
+    # there become houses and rowhouses, not shop blocks with water tanks)
+    for bs, bw, bn, be in cfg.get('residentialBoxes', []): dr.rectangle([pix(bn, bw), pix(bs, be)], fill=8)
 
     def poly(pts, code):
         if len(pts) > 2: dr.polygon([pix(*p) for p in pts], fill=code)
@@ -649,12 +652,26 @@ def build(cid):
         for n, h_ in road_align.deck_heights(edges_, anchor_h).items(): deck.setdefault(n, h_)
     # pack streets: coords + optional deck heights (0 = on the ground)
     st_coords, st_starts, st_meta, st_deck = [], [], [], []
+    # [road-align] ground streets: OSM jitter dropped and free corners rounded; junction nodes (shared by two or
+    # more ways, or by the route) and the ends never move, so the street graph stays connected
+    used = Counter(n for rec in streets for n in rec['nodes']); used.update(set(pts))
+    to_q = lambda x, y: (round(y / ky / UNIT), round(x / kx / UNIT))
     for rec in streets:
         st_starts.append(len(st_coords) // 2)
-        simp = rec['nodes'] if rec['bridge'] else [rec['nodes'][0]] + [n for k, n in enumerate(rec['nodes'][1:-1], 1)] + [rec['nodes'][-1]]
-        for n in simp:
-            st_coords += q(*nodes[n])
-            st_deck.append(round((deck[n] - 150) * 10) if rec['bridge'] and n in deck else 0)
+        nd = rec['nodes']
+        if rec['bridge'] or not cfg.get('roundStreets', True) or len(nd) < 3:
+            for n in nd:
+                st_coords += q(*nodes[n])
+                st_deck.append(round((deck[n] - 150) * 10) if rec['bridge'] and n in deck else 0)
+        else:
+            fixed = [k in (0, len(nd) - 1) or used[n] > 1 for k, n in enumerate(nd)]
+            locs = [loc(*nodes[n]) for n in nd]
+            src = {id(t): n for t, n in zip(locs, nd)}
+            xy, _ = road_align.round_street(locs, fixed, max_shift=cfg.get('streetShiftM', 1.5))
+            for t in xy:
+                # kept vertices (junctions, ends) are stored exactly as before: identical across streets
+                st_coords += q(*nodes[src[id(t)]]) if id(t) in src else to_q(*t)
+                st_deck.append(0)
         st_meta += [rec['cls'], (1 if rec['bridge'] else 0) | ((rec['oneway'] + 1) << 1), rec['layer'] + 8]
     st_starts.append(len(st_coords) // 2)
     named_bridges = {}

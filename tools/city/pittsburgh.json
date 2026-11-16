@@ -393,5 +393,19 @@
  },
  "cornerPasses": 3,
  "cornerHalfWindow": 8,
- "maxDriftM": 16
+ "maxDriftM": 16,
+ "residentialBoxes": [
+  [
+   40.424,
+   -80.026,
+   40.4395,
+   -79.996
+  ],
+  [
+   40.433,
+   -80.04,
+   40.4425,
+   -80.024
+  ]
+ ]
 }
