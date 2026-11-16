@@ -449,6 +449,10 @@ export class BakedLighting {
       yield r.value;
     }
     this._finishJob();
+    // 4. one frame drawn under the loader: the first frame's own uploads (textures, street kit, shadow map) go here
+    w.renderer.shadowMap.needsUpdate = true;
+    if (w._render) w._render(); else R.render(w.scene, w.camera);
+    yield { wait: true };
   }
 
   _occMaterial() {
