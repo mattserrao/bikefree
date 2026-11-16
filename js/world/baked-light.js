@@ -45,6 +45,7 @@ const OCC_LAYER = 30;
 const STEP_FRAMES = 1;   // GPU passes per frame while baking
 const SETTLE_SWEEPS = 2; // the static set must be unchanged this many sweeps before a (re)bake
 const SWEEP_EVERY = 20;  // frames between material/caster sweeps
+const OCC_BATCH = 48;    // occluder meshes drawn per bake step
 
 const quadVertex = /* glsl */`
   varying vec2 vUv;
@@ -220,8 +221,10 @@ export class BakedLighting {
     if (c?._pending) while (c._pending.length) c._buildChunk(c._pending.pop());
     this.sweep();
     const job = this._bake();
-    while (!job.next().done);
+    let worst = 0;
+    for (;;) { const t = performance.now(), r = job.next(); worst = Math.max(worst, performance.now() - t); if (r.done) break; }
     this._job = null;
+    if (this.stats) this.stats.worstStepMs = Math.round(worst);   // the longest step: what one ride frame would carry
     const on = this.uniforms.bfBakeOn.value; on.x = this.target.sun; on.y = this.target.ao;
     return this.stats;
   }
@@ -311,21 +314,22 @@ export class BakedLighting {
     });
     occMat.uniforms.uBase.value = base;
     const occluders = (this.occluders || []).filter((o) => o.visible);
-    for (const o of occluders) o.layers.enable(OCC_LAYER);
-    const prev = { target: R.getRenderTarget(), override: w.scene.overrideMaterial, sm: R.shadowMap.enabled, clear: R.getClearColor(new THREE.Color()), alpha: R.getClearAlpha(), autoClear: R.autoClear, fog: w.scene.fog, bg: w.scene.background };
-    const restore = () => {
+    // in batches, a frame apart: the first bake also uploads every static mesh of the route to the GPU
+    ph.occluders = 0;
+    for (let k0 = 0; k0 < Math.max(1, occluders.length); k0 += OCC_BATCH) {
+      c0 = performance.now();
+      const batch = occluders.slice(k0, k0 + OCC_BATCH);
+      for (const o of batch) o.layers.enable(OCC_LAYER);
+      const prev = { target: R.getRenderTarget(), override: w.scene.overrideMaterial, sm: R.shadowMap.enabled, clear: R.getClearColor(new THREE.Color()), alpha: R.getClearAlpha(), autoClear: R.autoClear, fog: w.scene.fog, bg: w.scene.background };
+      w.scene.overrideMaterial = occMat; w.scene.fog = null; w.scene.background = null;
+      R.shadowMap.enabled = false; R.setClearColor(0x000000, 0); R.autoClear = k0 === 0;   // depth kept: the highest top wins
+      R.setRenderTarget(occRT); R.render(w.scene, cam);
+      for (const o of batch) o.layers.disable(OCC_LAYER);
       w.scene.overrideMaterial = prev.override; w.scene.fog = prev.fog; w.scene.background = prev.bg;
       R.shadowMap.enabled = prev.sm; R.setClearColor(prev.clear, prev.alpha); R.autoClear = prev.autoClear; R.setRenderTarget(prev.target);
-    };
-    w.scene.overrideMaterial = occMat; w.scene.fog = null; w.scene.background = null;
-    R.shadowMap.enabled = false; R.setClearColor(0x000000, 0); R.autoClear = true;
-    p0 = performance.now();
-    R.setRenderTarget(occRT); R.render(w.scene, cam);
-    ph.occluders = performance.now() - p0;
-    for (const o of occluders) o.layers.disable(OCC_LAYER);
-    restore();
-    cpu += performance.now() - c0;
-    yield;
+      cpu += performance.now() - c0; ph.occluders += performance.now() - c0;
+      yield;
+    }
 
     // 3. full-screen passes on the work grid
     c0 = performance.now(); p0 = c0;
