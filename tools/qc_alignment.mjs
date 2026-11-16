@@ -94,7 +94,9 @@ export function alignmentChecks({ route, index, landscape, F, nearUturn, oneWay 
       else { if (run >= 10) hits.push(['street-steep', runAt, runMax, 'a street steeper than any real one']); run = 0; runMax = 0; }
       if (i + 1 < P.length) {
         const c = P[i + 1], l2 = Math.hypot(c.x - b.x, c.z - b.z);
-        if (l >= 3 && l2 >= 3 && !a.pin && !b.pin && !c.pin) {
+        // [junctions] (inside a junction a street isn't drawn: its surface is; in a junction's ease zone the junction
+        // shapes the grade change on purpose — js/world/junctions.js, step 7)
+        if (l >= 3 && l2 >= 3 && !a.pin && !b.pin && !c.pin && a.jn == null && b.jn == null && c.jn == null && b.je == null) {
           const dg = (c.y - b.y) / l2 * 100 - g;
           if (Math.abs(dg) > L.streetCrease) hits.push(['street-crease', b, dg, 'a street’s grade changes abruptly (step or hump)']);
         }
@@ -112,7 +114,7 @@ export function alignmentChecks({ route, index, landscape, F, nearUturn, oneWay 
   // junction nodes: every street through a shared node at one height (decks and the route's crossings aside)
   const nodes = new Map();
   streets.forEach((st, k) => st.pts.forEach((p) => {
-    if (st.bridge || p.pin) return;
+    if (st.bridge || p.pin || p.jn != null) return;   // [junctions] (a junction's own surface decides there)
     const key = `${Math.round(p.x * 100)},${Math.round(p.z * 100)}`;
     if (!nodes.has(key)) nodes.set(key, []);
     nodes.get(key).push([k, p]);

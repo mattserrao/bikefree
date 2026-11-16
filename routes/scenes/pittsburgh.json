@@ -538,6 +538,7 @@
     "bank": 0.45
   },
   "post": true,
+  "junctions": true,
   "terrainBuild": {
     "gpx": "routes/cities/pittsburgh.gpx",
     "rivers": true,

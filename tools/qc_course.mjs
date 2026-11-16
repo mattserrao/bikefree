@@ -20,6 +20,8 @@ import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
 import { attachTerrainBuffer } from '../js/world/terrain-data.js';
 import { planSettlement } from '../js/world/settlement.js';
 import { cityStreets, STREET_LIFT } from '../js/world/city-landscape.js';
+import { streetOverlaps, drawnLiftMax, routeLine } from '../js/world/junctions.js';   // [junctions]
+import { roadMeets, streetSlots } from '../js/world/road-meets.js';   // [junctions]
 import { landscapeBuilder } from '../js/world/landscapes.js';
 import { riderPose, routePoint, ROAD_WIDTH, ROAD_LIFT } from '../js/world/pose.js';
 import { alignmentChecks } from './qc_alignment.mjs';   // [road-align]
@@ -300,24 +302,51 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
     F.open.clear();
   }
 
+  let streetStats = null;   // [junctions]
   // 5. City streets drawn over the route: another carriageway, a ramp or a bridge deck above the road
   //    would hide the road and the rider's legs (what the renderer draws, via the shared cityStreets()).
   if (landscape?.city) {
     F.open.clear();
     const hits = [], end = route.turnIdx || route.dist.length - 1;
-    for (const st of cityStreets(landscape, index, route)) {
+    const streets = cityStreets(landscape, index, route), plan = landscape._junctions;   // [junctions]
+    const slots = plan ? streetSlots(landscape, streets) : null, RLq = plan && routeLine(route, index);   // [junctions] each ribbon's own lift, the road's drawn curve
+    streets.forEach((st, k) => {
       for (const p of st.pts) {
+        if (p.jn != null) continue;   // [junctions] inside a junction: not drawn (its surface is checked below)
         const r = index.nearest(p.x, p.z, st.width / 2 + ROAD_WIDTH / 2 + 1);
         if (!r) continue;
         const i = r.i > end ? Math.max(0, 2 * end - r.i) : r.i;
-        // [road-align] the road as drawn: straight between its 10 m samples, not the nearest sample's height
-        const rd = landscape.routeDist?.(p.x, p.z), e = rd && Math.abs(rd.y - route.ele[i]) < 3 ? rd.y : route.ele[i];
-        const over = p.y + STREET_LIFT - (e + ROAD_LIFT);
+        // [road-align] the road as drawn: straight between its 10 m samples, not the nearest sample's height;
+        // [junctions] with a junction plan: its curve, and the ribbon's own lift, blended to the junction's
+        const rd0 = landscape.routeDist?.(p.x, p.z), e = rd0 && Math.abs(rd0.y - route.ele[i]) < 3 ? rd0.y : route.ele[i];
+        const rd = plan && RLq.project(p.x, p.z, route.dist[i], 25), roadY = rd && rd.d < st.width / 2 + ROAD_WIDTH / 2 + 1 ? rd.y : e;
+        const over = p.y + drawnLiftMax(p, plan, slots ? .1 + slots[k] * .02 : STREET_LIFT) - (roadY + ROAD_LIFT);
         if (over > -.02 && over < 4) hits.push([route.dist[i], over]);
       }
-    }
+    });
     hits.sort((a, b) => a[0] - b[0]);
     for (const [hs, over] of hits) F.add('street-over-road', 'fail', hs, over, 'a city street or bridge deck covers the road');
+    // [junctions] a junction the route passes through must stay under the road's surface (its corners, every vertex)
+    F.open.clear();
+    for (const jn of plan?.list || []) {
+      for (const p of [jn, ...jn.poly]) {
+        const r = landscape.routeDist(p.x, p.z);
+        if (!r || r.d > ROAD_WIDTH / 2 + .6) continue;
+        const over = (p === jn ? jn.cy : p.y ?? jn.top(p.x, p.z)) - (r.y + ROAD_LIFT);   // [junctions] (the surface as drawn)
+        if (over > -.005) F.add('junction-over-road', 'fail', route.dist[r.i], over, 'a junction surface covers the road');
+      }
+    }
+    // [junctions] how much street surface is still drawn over other street surface (overlapping ribbons)
+    streetStats = { ...streetOverlaps(streets, plan || null, { routeDist: landscape.routeDist, roadWidth: ROAD_WIDTH }),
+      junctions: plan?.list.length || 0, routeJunctions: plan?.list.filter((j) => j.route).length || 0 };
+    // [junctions] road meets (js/world/road-meets.js): every place roadways meet near the route, measured as drawn —
+    // steps, gaps, overlaps, dangling ends, misplaced paint. Reported (info: the work list, with the counts in the
+    // summary line; test/road-meets.test.mjs bounds them), since the rest need source heights fixed (docs/pittsburgh/detail/s2.md)
+    const meets = roadMeets(landscape, index, route, { roadWidth: ROAD_WIDTH });
+    F.open.clear();
+    for (const site of meets.sites) for (const is of site.issues) F.add('road-meet', 'info', site.s, is.value, `${site.kind} ${is.check}: ${is.note}`, 0);
+    F.open.clear();
+    streetStats.meets = { sites: meets.sites.length, counts: meets.counts, issues: meets.issues };
   }
 
   // 6. Road alignment: kinks, jitter and creases in the drawn road; city streets' profiles ([road-align])
@@ -327,7 +356,7 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
   const count = (sev) => list.filter((f) => f.severity === sev).length;
   return {
     id, name: name || route.name, total, oneWay, outAndBack: !!route.outAndBack, closedLoop: !!(route.oneWay?.closedLoop ?? route.closed),
-    stylized, rawPoints: raw.length, rawGapMax, closureGap, maxHeading, maxJump,
+    stylized, rawPoints: raw.length, rawGapMax, closureGap, maxHeading, maxJump, streets: streetStats,   // [junctions]
     ascent: route.ascent, minEle: route.minEle, maxEle: route.maxEle,
     fails: count('fail'), warns: count('warn'), infos: count('info'), findings: list, series,
   };
@@ -428,6 +457,8 @@ async function main() {
     results.push(r);
     const tag = r.fails ? 'FAIL' : r.warns ? 'warn' : 'ok  ';
     console.log(`${tag} ${r.name.padEnd(42)} ${km(r.oneWay).padStart(7)} km  ${String(r.fails).padStart(3)} fail ${String(r.warns).padStart(3)} warn  (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+    if (r.streets) console.log(`       streets: ${(r.streets.overlapM / 1000).toFixed(1)} km of ribbon over other streets, ${(r.streets.routeOverlapM / 1000).toFixed(1)} km under the route's road, ${r.streets.junctionOverlapM} m into other junctions; ${r.streets.junctions} junctions (${r.streets.routeJunctions} on the route)`);   // [junctions]
+    if (r.streets?.meets) console.log(`       road meets: ${r.streets.meets.sites} sites within 150 m (${Object.entries(r.streets.meets.counts).map(([k, v]) => `${k} ${v}`).join(', ')}), ${r.streets.meets.issues} with issues`);   // [junctions]
     for (const f of r.findings) if (f.severity !== 'info') console.log(`       ${f.severity.toUpperCase().padEnd(4)} ${f.check.padEnd(15)} ${km(f.from).padStart(7)}${f.to - f.from > 1 ? `–${km(f.to)}` : ''} km  worst ${f.value.toFixed(2)}  ${f.note}`);
   }
   if (html) { const out = join(ROOT, html); writeFileSync(out, htmlReport(results)); console.log(`\nReport: ${relative(process.cwd(), out)}`); }

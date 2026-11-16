@@ -1,4 +1,5 @@
 // The 3D ride view: real terrain + aerial imagery, the road, a pedalling rider, sky and cameras.
+import { cutRouteRibbon, junctionPlan } from './junction-mesh.js';   // [junctions] (the road's overlay: city.js)
 import * as THREE from '../../vendor/three.module.min.js';
 import { makeProjection, makeRouteIndex } from './geo.js';
 import { Terrain } from './terrain.js';
@@ -120,6 +121,8 @@ export class World {
     const city = route.scene?.terrain === 'authored-city';
     this.shoulder = makeRibbon(route, this.index, ROAD_WIDTH + (city ? 4 : this.stylized ? 1.6 : 3.4), city ? .09 : 0.05, makeGravelTexture(this.stylized, city), 3, { polygonOffsetFactor: city ? -1.8 : -1, polygonOffsetUnits: city ? -1.8 : -1 });
     this.scene.add(this.shoulder);
+    const junctions = city ? junctionPlan(this.terrain.landscape, this.index, route) : null;   // [junctions]
+    if (junctions) cutRouteRibbon(this.shoulder, junctions, denseRoad(route, this.index)[0].dist);   // [junctions] no shoulder inside a junction (its stations: the drawn curve's)
     this.road = makeRoad(route, this.index);
     this.scene.add(this.road);
     // weather: clear / marine layer / clouds / rain (stylized scenery)

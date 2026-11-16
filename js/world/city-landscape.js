@@ -8,6 +8,8 @@ import { makeRouteIndex } from './geo.js';
 import { smoothstep } from './coast.js';
 import { ROAD_WIDTH } from './pose.js';
 import { decodeTerrain } from './real-coast.js';
+import { planJunctions, junctionGround, junctionTops } from './junctions.js';   // [junctions]
+import { joinCrossings, densifyAlongside, clearOverpasses, alignAlongRoute, trimAtRoute, followMovedNodes, keepUnderRoad, trimOverlaps, streetSlots } from './road-meets.js';   // [junctions]
 import { alignStreetProfiles, syncPinnedNodes } from './road-align.js';   // [road-align]
 import { makeStreetGrade } from './street-grade.js';   // [street-kit]
 
@@ -303,7 +305,14 @@ export function makeCityLandscape(config, proj, index, route) {
       if (ride < Infinity) h += (ride - h) * (1 - byRoute);
       if (r && r.d < 9) h = Math.min(h, r.y - .5 + Math.max(0, r.d - 5) * .2);   // never over the route's own road
     }
-    if (grade) h = grade(x, z, h, routeDist(x, z));   // [street-kit] sidewalk-level ground beside a kit zone's curbs
+    // [junctions] round a junction: just under its surface and corner sidewalks (but still never over the route's road)
+    if (L._junctions) {
+      const r = routeDist(x, z);
+      const w = r ? smoothstep(ROAD_WIDTH / 2 + 1, ROAD_WIDTH / 2 + 7, r.d) : 1;   // (under the road and its shoulder: the road's bank)
+      if (w > 0) h += (junctionGround(L._junctions, x, z, h) - h) * w;
+      if (r && r.d < 9) h = Math.min(h, r.y - .5 + Math.max(0, r.d - 5) * .2);
+    }
+    if (grade) h = grade(x, z, h, routeDist(x, z));   // [street-kit] (after [junctions]: it fades out near other streets, so junctions keep their grading) sidewalk-level ground beside a kit zone's curbs
     // nor over a low ramp or viaduct deck (they're left out of the grading above, but one running close to the
     // ground beside the route would otherwise be buried by the bank the route's road raises)
     const own = routeDist(x, z);
@@ -417,6 +426,7 @@ export function makeCityLandscape(config, proj, index, route) {
     /** Trees and shrubs from the shared kit grow only in parks, woods and the hills beyond. */
     canPlant: (x, z) => { const c = landCell(x, z); return c === LAND.woods || c === LAND.outside || (c === LAND.grass && ((x * 13 + z * 7) & 3) === 0) || (c === LAND.yards && yardTree(x, z)); },   // [s4-section] yards
     routeDist, streetAt, streetsNear,
+    junctions: config.junctions || null,   // [junctions] scene key: real intersection geometry (js/world/junctions.js)
     /** For the weather: fog lies on the rivers (at the water level) and reaches inland up the valleys. */
     fogBase: level, fogField: rivers, fogInlandAt: riverDistance,
     /**
@@ -486,17 +496,19 @@ export function cityStreets(landscape, index, route) {
       p.y = bridge && deck[i] ? 150 + deck[i] / 10 : null;
       raw.push(p);
     }
-    const pts = [raw[0]], step = bridge ? 6 : 7;
+    const pts = [raw[0]], step = bridge ? 6 : 7, nodeIdx = [0];
     let under = false;
     for (let j = 1; j < raw.length; j++) {
       const a = raw[j - 1], b = raw[j], n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / step));
       for (let m = 1; m <= n; m++) { const f = m / n; pts.push({ x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, y: a.y != null && b.y != null ? a.y + (b.y - a.y) * f : null }); }
+      nodeIdx.push(pts.length - 1);   // [junctions]
     }
     pts.forEach((p, j) => {
       if (p.y == null) p.y = landscape.heightAt(p.x, p.z);
       if (lower(p, width, !bridge && alongRoute(pts, j))) under = true;   // [road-align] along
     });
-    streets.push({ cls, bridge, oneway, layer, pts, width, underRoute: under, rides: width > ROAD_WIDTH + 1 && pts.some((p) => p.along) });   // [road-align] rides (wider than the road: sticks out)
+    streets.push({ cls, bridge, oneway, layer, pts, width, underRoute: under, rides: width > ROAD_WIDTH + 1 && pts.some((p) => p.along),   // [road-align] rides (wider than the road: sticks out)
+      nodes: raw, nodeIdx });   // [junctions] OSM nodes → pts index
   }
   // [road-align] smooth, grade-limited street profiles with one height per junction (js/world/road-align.js)
   if (align?.streets) {
@@ -506,5 +518,20 @@ export function cityStreets(landscape, index, route) {
     syncPinnedNodes(streets);
   }
   landscape._streets = streets;
+  // [junctions] real intersection geometry: street heights inside junctions, trims, the junction surfaces
+  if (landscape.junctions) {
+    joinCrossings(streets);   // [junctions] streets crossing at one level with no shared node: give them one
+    densifyAlongside(streets);   // [junctions] (finer points where carriageways run side by side, for the trims below)
+    clearOverpasses(streets, { route, index, roadWidth: ROAD_WIDTH });   // [junctions] decks over the road clear the rider
+    alignAlongRoute(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] streets alongside the road: flush with it
+    trimAtRoute(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] …or beside it at another level: kept off its shoulder
+    trimOverlaps(streets, landscape);   // [junctions] carriageways side by side or merging: no ribbon over another (gores)
+    landscape._junctions = planJunctions(streets, { route, index, end, routeDist: landscape.routeDist, roadWidth: ROAD_WIDTH,
+      onRouteBridge: (s, m) => landscape.routeBridges.some((b) => s > b.fromM - m && s < b.toM + m), liftOf: (k) => .1 + streetSlots(landscape, streets)[k] * .02 }, landscape.junctions);
+    keepUnderRoad(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] nothing over the road
+    followMovedNodes(streets);   // [junctions] paths, side streets and decks meet the moved ones at their height
+    keepUnderRoad(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] (and still nothing over the road)
+    junctionTops(landscape._junctions, streets, landscape.routeDist, ROAD_WIDTH);   // [junctions] mouths at the streets' final heights
+  }
   return streets;
 }

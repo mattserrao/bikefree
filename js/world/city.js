@@ -10,6 +10,9 @@ import { buildHeroes } from './city-heroes.js';
 import { CityLife } from './city-life.js';
 import { StreetKit, streetKitConfig } from './street-kit.js';   // [street-kit]
 import { ROAD_WIDTH } from './pose.js';
+import { buildJunctionMeshes, drawnPieces } from './junction-mesh.js';   // [junctions]
+import { junctionsNear } from './junctions.js';   // [junctions]
+import { streetSlots } from './road-meets.js';   // [junctions]
 
 export { STREET_W };
 const CHUNK = 320;
@@ -222,10 +225,11 @@ export class CityScene {
     this.buildingMaterial = bm;
 
     // Streets: asphalt with lane paint; sidewalks; paths.
-    const c = document.createElement('canvas'); c.width = 64; c.height = 256;
+    const c = document.createElement('canvas'); c.width = 128; c.height = 256;   // [junctions] right half: road paint (junction-mesh.js)
     const ctx = c.getContext('2d');
-    ctx.fillStyle = '#505457'; ctx.fillRect(0, 0, 64, 256);
-    for (let k = 0; k < 2500; k++) { const g = 70 + Math.random() * 26; ctx.fillStyle = `rgba(${g},${g + 2},${g + 4},.45)`; ctx.fillRect(Math.random() * 64, Math.random() * 256, 1, 1); }
+    ctx.fillStyle = this.landscape.junctions ? '#555c60' : '#505457'; ctx.fillRect(0, 0, 128, 256);   // [junctions] the route's road's asphalt
+    for (let k = 0; k < 5000; k++) { const g = 70 + Math.random() * 26; ctx.fillStyle = `rgba(${g},${g + 2},${g + 4},.45)`; ctx.fillRect(Math.random() * 128, Math.random() * 256, 1, 1); }
+    ctx.fillStyle = '#e4e1d6'; ctx.fillRect(76, 0, 44, 256);   // [junctions] crosswalk and stop-line white (u ≈ .6–.94)
     ctx.fillStyle = '#d9d6c8'; ctx.fillRect(3, 0, 1.5, 256); ctx.fillRect(59.5, 0, 1.5, 256);
     ctx.fillStyle = '#d6b44c'; ctx.fillRect(30.5, 0, 1.4, 150); ctx.fillRect(32.6, 0, 1.4, 150);
     const tex = this.own(new THREE.CanvasTexture(c)); tex.wrapT = THREE.RepeatWrapping; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
@@ -237,11 +241,14 @@ export class CityScene {
     this.streetMaterial.userData.slotDepthBias = true;
     this.streetMaterial.onBeforeCompile = (shader) => {
       shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aSlot; varying float vSlot;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSlot = aSlot;');
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSlot = aSlot;')
+        // [junctions] road paint (slot 9: crosswalks, stop lines, the plain asphalt over the route's road in a junction) is
+        // drawn a hair nearer along the view ray (same pixel, nearer depth), so it always wins over the road it lies on
+        .replace('#include <project_vertex>', '#include <project_vertex>\nif (aSlot > 8.5) { mvPosition.xyz *= .9994; gl_Position = projectionMatrix * mvPosition; }');
       shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vSlot;')
         .replace('#include <logdepthbuf_fragment>', '#include <logdepthbuf_fragment>\n#if defined( USE_LOGDEPTHBUF )\ngl_FragDepth -= vSlot * 2e-6;\n#endif');
     };
-    this.streetMaterial.customProgramCacheKey = () => 'city-streets-slot-1';
+    this.streetMaterial.customProgramCacheKey = () => 'city-streets-slot-2';   // [junctions]
     this.sidewalkMaterial = this.own(new THREE.MeshStandardMaterial({ color: '#aca59a', roughness: .95, ...offset(-1.1) }));
     this.pathMaterial = this.own(new THREE.MeshStandardMaterial({ color: '#9d978a', roughness: .95, ...offset(-1.3) }));
     this.solidMaterial = this.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .8, metalness: .1 }));
@@ -671,14 +678,17 @@ export class CityScene {
     const roads = new Map(), walks = new Map(), paths = new Map();
     const get = (map, x, z) => { const key = `${Math.floor(x / 512)},${Math.floor(z / 512)}`; if (!map.has(key)) map.set(key, new MeshBuilder(map === roads ? { aSlot: 1 } : {})); return map.get(key); };
     const lamps = [];
+    const plan = this.junctions = this.landscape._junctions || null;   // [junctions] real intersections (js/world/junctions.js)
     this._levelJunctions();
     const slots = this.streetSlots = this._streetSlots();
     this.streets.forEach((st, k) => {
       // crossing ribbons each get their own height (2 cm apart), so lane paint never flickers at a junction
       const p0 = st.pts[0], lift = .1 + slots[k] * .02;
       if (st.cls === 8) { ribbon(get(paths, p0.x, p0.z), st.pts, st.width, lift, 8); return; }
-      ribbon(get(roads, p0.x, p0.z).set({ aSlot: [slots[k]] }), st.pts, st.width, lift, 24);
-      if (!st.bridge && st.cls >= 2 && st.cls <= 6) ribbon(get(walks, p0.x, p0.z), st.pts, st.width + 5, .06, 8);
+      for (const pc of plan ? drawnPieces(st, k, plan, lift) : [st.pts]) {   // [junctions] trimmed to each junction's edge
+        ribbon(get(roads, p0.x, p0.z).set({ aSlot: [slots[k]] }), pc, st.width, lift, 24, [0, .5], !!plan);   // [junctions] (left half of the texture; normals lean with the grade, like the road's)
+        if (!st.bridge && st.cls >= 2 && st.cls <= 6) ribbon(get(walks, p0.x, p0.z), pc, st.width + 5, .06, 8);
+      }
       // lamps every ~34 m, alternating sides
       if (st.cls >= 1 && st.cls <= 6) {
         let acc = hash(k) * 30, side = k % 2 ? 1 : -1;
@@ -717,6 +727,7 @@ export class CityScene {
         lamps.push({ x, z, y: deckBridge ? r.ele[i] : kitLamp ? kitLamp.y : this.landscape.heightAt(x, z), yaw: Math.atan2(dz / len * side, -dx / len * side), bridge: !!deckBridge });   // [street-kit] (kitLamp.y)
       }
     }
+    if (plan) this.junctionMeshes = buildJunctionMeshes(this, plan, { get, roads, walks, liftOf: (k) => .1 + slots[k] * .02 });   // [junctions]
     for (const [map, mat, name] of [[roads, this.streetMaterial, 'Streets'], [walks, this.sidewalkMaterial, 'Sidewalks'], [paths, this.pathMaterial, 'Paths']]) {
       for (const [key, builder] of map) {
         builder.keepOutOf(this.landscape.inRouteTube);   // ramps and roadways the data puts in the rider's space
@@ -857,6 +868,7 @@ export class CityScene {
       if (st.cls === 8) continue;
       if (o.k !== skip || o.edge < (st.bridge ? -.05 : .5)) return false;
     }
+    if (junctionsNear(L._junctions, x, z, margin).length) return false;   // [junctions] nor on a junction's surface
     const r = L.routeDist(x, z);
     return !(r && r.d < routeClear);
   }
@@ -869,6 +881,7 @@ export class CityScene {
    * than 0.8 m apart in height are crossing, not joining.
    */
   _levelJunctions() {
+    if (this.landscape._junctions) return;   // [junctions] the junction plan owns street heights where streets meet
     const L = this.landscape, reach = 6;
     // each junction (a cluster of street points within `reach` of another street's carriageway, at nearly the
     // same height) becomes a level plateau at the highest of its heights
@@ -876,6 +889,7 @@ export class CityScene {
       this.streets.forEach((st, k) => {
         if (st.bridge) return;
         for (const p of st.pts) {
+          if (p.jn != null) continue;   // [junctions] inside a junction its surface owns the height
           for (const o of L.streetsNear(p.x, p.z, reach)) {
             if (o.k === k || this.streets[o.k].bridge || Math.abs(o.y - p.y) > .8) continue;
             if (o.y > p.y) p.y = o.y;
@@ -887,6 +901,7 @@ export class CityScene {
 
   /** Height slots for street ribbons: streets whose ribbons overlap (junctions, crossings) never share one. */
   _streetSlots() {
+    if (this.landscape._junctions) return streetSlots(this.landscape, this.streets);   // [junctions] the same slots the plan and QC use
     const L = this.landscape, n = this.streets.length, slots = new Array(n).fill(-1);
     const order = [...Array(n).keys()].sort((a, b) => this.streets[a].cls - this.streets[b].cls || a - b);
     for (const k of order) {
