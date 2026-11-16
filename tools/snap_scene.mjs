@@ -78,34 +78,30 @@ for (const shot of shots) {
     window.__bake = w.baked?.bakeNow();   // [baked-light] build the static scenery and bake before the one frame
     t.city?.streetKit?.flush();   // [street-kit] kit work queued by the chunks the bake just built
     w.renderer.info.autoReset = false; w.renderer.info.reset();
+    // [w2-budget] --breakdown: the frame's real draw calls by object name (wraps renderBufferDirect for the one frame;
+    // the shadow pass calls it with no scene)
+    const exact = {}, rbd = w.renderer.renderBufferDirect;
+    if (window.__breakdown) w.renderer.renderBufferDirect = function (cam, scene, geo, mat, obj, group) {
+      const key = (scene ? '' : 'shadow: ') + (obj.name || obj.parent?.name || mat?.name || obj.type).replace(/-?[0-9]+/g, '#').slice(0, 44);
+      const n = (group ? group.count : geo.index ? geo.index.count : geo.attributes.position?.count || 0) / 3 * (obj.isInstancedMesh ? obj.count : 1);
+      const e = (exact[key] ||= [0, 0]); e[0]++; e[1] += n;
+      return rbd.apply(this, arguments);
+    };
     // the app's own frame: with the post-processing chain where the scene has one (Big Sur)
     w.renderer.shadowMap.needsUpdate = true;   // the ride redraws shadows only as needed
     if (w._render) w._render(); else w.renderer.render(w.scene, w.camera);
     const info = w.renderer.info.render;
+    w.renderer.renderBufferDirect = rbd;   // [w2-budget]
     let breakdown = null;
     if (window.__breakdown) {
-      // draw calls by object (frustum-visible meshes; ×2 for the ones that cast shadows)
-      const cam = w.camera, vp = cam.projectionMatrix.clone().multiply(cam.matrixWorldInverse);
-      const by = {};
-      w.scene.traverseVisible((o) => {
-        if (!(o.isMesh || o.isLine || o.isPoints || o.isSprite)) return;
-        if (o.frustumCulled !== false && o.geometry?.boundingSphere) {
-          // the sphere's centre in clip space, with its radius as slack: a rough frustum test
-          const sph = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld), c = sph.center.clone().applyMatrix4(vp);
-          const d = sph.center.distanceTo(cam.position);
-          if (d > sph.radius && (Math.abs(c.x) > 1 + sph.radius / d * 2.5 || Math.abs(c.y) > 1 + sph.radius / d * 2.5)) return;
-        }
-        const key = (o.name || o.parent?.name || o.type).replace(/[0-9]+/g, '#').slice(0, 40);
-        by[key] = (by[key] || 0) + 1 + (o.castShadow ? 1 : 0);
-      });
-      breakdown = Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 25);
+      breakdown = Object.entries(exact).sort((a, b) => b[1][0] - a[1][0]).slice(0, 40).map(([k, [n, t]]) => [k, n, t]);   // [w2-budget]
     }
     return { breakdown, url: w.renderer.domElement.toDataURL('image/jpeg', .9), calls: info.calls, triangles: info.triangles, bake: window.__bake || null };
   });
   const file = join(out, `${shot.name}.jpg`);
   await writeFile(resolve(ROOT, file), Buffer.from(r.url.split(',')[1], 'base64'));
   rows.push({ shot: shot.spec, file, calls: r.calls, triangles: r.triangles, seconds: Math.round((Date.now() - t0) / 1000), errors: [...errors], ...(r.bake ? { bake: r.bake } : {}) });   // [baked-light] bake stats
-  if (r.breakdown) console.log(r.breakdown.map(([k, n]) => `   ${String(n).padStart(4)}  ${k}`).join('\n'));
+  if (r.breakdown) console.log(r.breakdown.map(([k, n, t]) => `   ${String(n).padStart(4)}  ${String(Math.round(t / 1000)).padStart(5)} k  ${k}`).join('\n'));   // [w2-budget] calls, triangles
   console.log(`${errors.length ? 'ERR ' : 'ok  '} ${shot.spec.padEnd(34)} ${String(r.calls).padStart(5)} calls ${(r.triangles / 1e6).toFixed(2).padStart(6)} M tris  → ${file}`);
   for (const e of errors) console.log(`       ${e.slice(0, 200)}`);
 }
