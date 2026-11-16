@@ -338,6 +338,13 @@ Goal: make Big Sur the showcase course — visually stunning, the one you open t
 - [ ] On the Mac: frame rate on Balanced and High (post-processing, fog layers, traffic), the marine layer from the road, rain on the road
 - [ ] On-bike check
 
+### v0.12.2 — Performance overlay *(test branch `v0.12.2`)*
+Goal: make the M4 Air checks measurable before the Pittsburgh hero work.
+- [x] **I** on the ride screen (or `?perf=1` / **I** in the preview): fps, frame time (median, 95th percentile, worst in the last 10 s), draw calls and triangles summed over every render pass (post-processing included), drawing-buffer size and pixel ratio, detail level, time, weather and camera. Amber over budget, red at 1.5× over (budget: 600 draw calls, 2M triangles, 60 fps, no frame over 25 ms)
+- [x] Closing it writes a one-line summary of the stretch to the log (average fps, frames over 25 ms, worst frame, peak draw calls and triangles), so a test ride leaves numbers behind
+- [x] Offline manifest regenerated (it was stale on `main` after the Big Sur merge)
+- [ ] **Mac test session** with the overlay, one checklist for every open on-bike item: trainer + handlebars with demo off (v0.8), virtual shifting and the FTP test (v0.11.3); one stylized route at Light/Balanced/High (v0.11.1–2); Route 28 on Balanced (tile edges, lake and horizon seams); Big Sur (marine layer, rain, traffic, post); Pittsburgh at Light/Balanced/High, day and night (v0.12–v0.12.1); Demo Hills (v0.11.4); one route whose GPX changed in v0.11.6. Paste the summary lines into this section
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

@@ -50,7 +50,11 @@ try {
  $('weather').value = q.get('weather') || 'clear'; world.setWeather($('weather').value, true);
  $('weather').addEventListener('change', (e) => world.setWeather(e.target.value)); $('quality').value = world.qualityKey;
  world.setSource(() => { const now = performance.now(); pos = (pos + speed * (now - last) / 1000) % route.total; last = now; return { pos, speed, cadence: speed ? 84 : 0, riding: true }; });
- window.world = world; window.preview = { seek, setSpeed(value) { speed = value; last = performance.now(); }, route };
+ window.world = world;
+ const perfPlace = { bottom: '160px' };   // above the controls
+ if (q.get('perf') === '1') world.togglePerf(true, perfPlace);
+ document.addEventListener('keydown', (e) => { if (e.key === 'i' || e.key === 'I') { const line = world.togglePerf(undefined, perfPlace); if (line) console.log('perf', line); } });
+ window.preview = { seek, setSpeed(value) { speed = value; last = performance.now(); }, route };
  $('name').textContent = route.scene?.title || (park === 'bigsur' ? 'Big Sur, California' : route.name);
  $('seek').max = route.total - 1; $('seek').value = pos;
  $('total').textContent = `${(route.total / 1000).toFixed(1)} km · ${route.outAndBack ? 'out & back' : 'loop'}`;

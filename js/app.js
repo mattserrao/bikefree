@@ -429,6 +429,7 @@ document.addEventListener('keydown', (e) => {
   else if ((k === ',' || k === '.') && trainer.demo) setDemoSpeed(DEMO_MPH + (k === '.' ? 5 : -5));
   else if ((k === 'f' || k === 'F') && onRideScreen) toggleFullscreen();
   else if ((k === 'w' || k === 'W') && onRideScreen) cycleWeather();
+  else if ((k === 'i' || k === 'I') && onRideScreen && world) { const summary = world.togglePerf(); if (summary) log('perf', summary, 'info'); }
   else if (k === 'p' || k === 'P') { const opts = [0, ...PACER_WATTS]; setPacer(opts[(opts.indexOf(pacer.watts) + 1) % opts.length]); }
   else return;
   e.preventDefault();

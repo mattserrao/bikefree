@@ -7,6 +7,7 @@ import { PostFX } from './post.js';
 import { StylizedTerrain, COASTAL_QUALITY } from './stylized-terrain.js';
 import { riderPose, routePoint, ROAD_WIDTH } from './pose.js';
 import { loadRider } from './rider.js';
+import { PerfMonitor } from './perf.js';
 import { wrapDist } from '../gpx.js';
 
 export const TIME_PRESETS = {
@@ -281,6 +282,7 @@ export class World {
   _frame(now) {
     if (!this.running) return;
     this._raf = requestAnimationFrame(this._frame);
+    this.perf?.begin(now);
     const dt = Math.min(1.0, (now - this._last) / 1000); // real time (movement must not lag on slow frames)
     this._last = now;
 
@@ -393,6 +395,16 @@ export class World {
         bloom: (k === 'night' ? .38 : k === 'golden' ? .42 : .26) * (1 - o * .5),
         threshold: k === 'night' ? .7 : 1.15, warm: k === 'golden' || k === 'morning' ? 1 - o : 0 });
     } else this.renderer.render(this.scene, this.camera);
+    this.perf?.end(performance.now());
+  }
+
+  /** Performance overlay (fps, frame time, draw calls, triangles). Returns a summary line when switched off. */
+  togglePerf(on, place) {
+    this.perf ||= new PerfMonitor(this.renderer, this.container, () => ({
+      route: this.route.scene?.title || this.route.name, quality: this.qualityKey, time: this.timeKey,
+      weather: this.weather ? this.weatherKey : null, camera: this.cameraMode,
+    }), place);
+    return this.perf.toggle(on);
   }
 
   /** Render one frame without the animation loop (used for previews/tests). */
@@ -401,6 +413,7 @@ export class World {
   get loading() { return this.terrain.loadingCount; }
 
   dispose() {
+    this.perf?.dispose();
     this.disposed = true;
     this.stop();
     this._ro.disconnect();
