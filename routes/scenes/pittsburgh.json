@@ -512,6 +512,13 @@
   "lighting": {
     "baked": "golden"
   },
+  "riverfront": {
+    "maxGapM": 20,
+    "spans": [
+      { "fromM": 1040, "toM": 2320 },
+      { "fromM": 2360, "toM": 2800 }
+    ]
+  },
   "weather": {
     "presets": [
       "clear",

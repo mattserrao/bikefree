@@ -5,6 +5,7 @@
 import * as THREE from '../../vendor/three.module.min.js';
 import { decodeCity, LAND, cityStreets, STREET_W } from './city-landscape.js';
 import { MeshBuilder, ribbon, resample, hash } from './city-geometry.js';
+import { buildRiverfront } from './riverfront.js';   // [s1-riverfront]
 import { buildBridges, buildStadiums, buildLandmarks } from './city-bridges.js';
 import { buildHeroes } from './city-heroes.js';
 import { CityLife } from './city-life.js';
@@ -47,6 +48,7 @@ export class CityScene {
     this._decodeStreets();
     this._decodeBuildings();
     this._materials();
+    this.riverfront = buildRiverfront(this);   // [s1-riverfront] promenade walls where the route runs along a river
     this._water();
     this._streetsAndLamps();
     this.bridges = buildBridges(this);
@@ -347,6 +349,7 @@ export class CityScene {
         // where a street or a railway runs right along the shore, the bank stays natural (cars, trains, lamps)
         const cx = mx + nx * 1, cz = mz + nz * 1;
         const rt = L.routeDist(cx, cz);
+        if (this.riverfront?.covers(mx, mz)) continue;   // [s1-riverfront] the promenade has its own wall here
         if (L.streetsNear(cx, cz, 3).some((o) => this.streets[o.k].cls < 8) || railNear(cx, cz, 6) || (rt && rt.d < ROAD_WIDTH / 2 + 4)) continue;
         { const key = `${Math.floor(mx / 20)},${Math.floor(mz / 20)}`; if (!this.wallGrid.has(key)) this.wallGrid.set(key, []); this.wallGrid.get(key).push(p0.x, p0.z, p1.x, p1.z); }
         // the wall faces the water (−n): quad from p0 to p1 as seen from the river
