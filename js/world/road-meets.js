@@ -558,7 +558,10 @@ export function resolveOverlaps(streets, landscape, options = {}) {
     }
     done[k] = 1;
   }
-  // heights: flush with what it gave way to, easing out
+  // heights: flush with what it gave way to, easing out — but a node another street shares keeps its height (one
+  // height per node: the streets through it would step)
+  const shared = new Map(), nk = (p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`;
+  for (const st of streets) for (const p of st.pts) shared.set(nk(p), (shared.get(nk(p)) || 0) + 1);
   for (const [k, t] of targets) {
     const st = streets[k], P = st.pts, own = P.map((p) => p.y), A = [0];
     for (let i = 1; i < P.length; i++) A.push(A[i - 1] + Math.hypot(P[i].x - P[i - 1].x, P[i].z - P[i - 1].z));
@@ -568,7 +571,7 @@ export function resolveOverlaps(streets, landscape, options = {}) {
       const L = Math.max(4, Math.abs(dy) / O.grade);
       for (let i = 0; i < P.length; i++) { const d = Math.abs(A[i] - A[j]); if (d < L) { const w = t.has(i) ? (i === j ? 1 : 0) : 1 - smooth(d / L); if (w > 0 && (!best[i] || w > best[i][0])) best[i] = [w, dy]; } }
     }
-    P.forEach((p, i) => { if (best[i] && !p.along && !p.pin && p.jn == null && !(O.final && p.je != null)) p.y = own[i] + best[i][1] * best[i][0]; });
+    P.forEach((p, i) => { if (best[i] && !p.along && !p.pin && p.jn == null && !(O.final && p.je != null) && shared.get(nk(p)) < 2) p.y = own[i] + best[i][1] * best[i][0]; });
   }
   return n;
 }
@@ -809,7 +812,9 @@ export function roadMeets(landscape, index, route, options = {}) {
         // junction's surface lies just beyond it
         // (or the street ends inside this junction: a stub, nothing to meet)
         const beyond = [.6, 1.5].some((dd) => { const q = { x: A.cutP.x + A.ud.x * dd, z: A.cutP.z + A.ud.z * dd }; return junctionsNear(plan, q.x, q.z, .6).some((o) => o.jn !== jn && o.d < .6); });
-        if (!beyond && A.avail > A.t + .3) gap = Math.max(gap, best ? best.dd : A.h);
+        // ([w2-meets] or what lies beyond is the route's road and its shoulder: covered, nothing to see through)
+        const q2 = { x: A.cutP.x + A.ud.x * 1.5, z: A.cutP.z + A.ud.z * 1.5 }, rq = roadAt(q2.x, q2.z), underRoad = rq && rq.d < RW / 2 + 2.2;
+        if (!beyond && !underRoad && A.avail > A.t + .3) gap = Math.max(gap, best ? best.dd : A.h);
         continue;
       }
       const { pc, e } = best, p = pc[e], nb = pc[e === 0 ? 1 : pc.length - 2];
