@@ -158,6 +158,8 @@ export function makeRealCoastLandscape(config, proj, index, route) {
     return w;
   };
   const bridgeOfS = (s, margin = 0) => bridges.find((b) => s > b.fromM - margin && s < b.toM + margin);
+  // a structure that only stands on one side (the Triple Arches carry the valley half of the road): carve that side only
+  const sideOf = (i, x, z) => { i = outbound(i); const j = Math.min(end, i + 1), k = Math.max(0, j - 1); const fx = index.xs[j] - index.xs[k], fz = index.zs[j] - index.zs[k]; return Math.sign((x - index.xs[i]) * -fz + (z - index.zs[i]) * fx) || 1; };
   const bridgeAt = (x, z, margin = 0) => {
     const hit = index.nearest(x, z, 30);
     return hit ? bridgeOfS(route.dist[outbound(hit.i)], margin) || null : null;
@@ -257,6 +259,48 @@ export function makeRealCoastLandscape(config, proj, index, route) {
     return h;
   };
 
+  // ---- Built sites (lodges, visitor centres, parking): level pads easing out over 14 m ----
+  const sites = (config.sites || []).map((t) => {
+    const p = proj.toLocal(t.lat, t.lon), a = (t.angle ?? 0) * Math.PI / 180;
+    const hit = index.nearest(p.x, p.z, 600);
+    return { ...t, ...p, ca: Math.cos(a), sa: Math.sin(a), hw: t.widthM / 2, hl: t.lengthM / 2,
+      level: t.levelM ?? (t.atRoad && hit ? route.ele[outbound(hit.i)] - .25 : T.at(p.x, p.z)) };
+  });
+  const siteAt = (x, z, h) => {
+    for (const t of sites) {
+      const u = (x - t.x) * t.ca + (z - t.z) * t.sa, v = -(x - t.x) * t.sa + (z - t.z) * t.ca;
+      const d = Math.hypot(Math.max(Math.abs(u) - t.hl, 0), Math.max(Math.abs(v) - t.hw, 0));
+      if (d < 14) h += (t.level - h) * (1 - smoothstep(0, 14, d));
+    }
+    return h;
+  };
+  // ---- Islands in the lakes (Wild Goose Island): a low rocky mound ----
+  const islands = (config.lakeIslands || []).map((l) => ({ ...l, ...proj.toLocal(l.lat, l.lon), a: (l.angle || 0) * Math.PI / 180 }));
+  const islandAt = (x, z, h) => {
+    for (const l of islands) {
+      const dx = x - l.x, dz = z - l.z, u = dx * Math.cos(l.a) + dz * Math.sin(l.a), v = -dx * Math.sin(l.a) + dz * Math.cos(l.a);
+      const r = Math.hypot(u / (l.lengthM / 2), v / (l.widthM / 2));
+      if (r < 1.6) h = Math.max(h, (lakes?.lakeAt(l.x, l.z)?.level ?? h) - 3 + (l.heightM + 3) * Math.pow(Math.max(0, 1 - (r / 1.6) ** 2), .55));
+    }
+    return h;
+  };
+  const islandHit = (x, z) => islands.some((l) => { const dx = x - l.x, dz = z - l.z; const u = dx * Math.cos(l.a) + dz * Math.sin(l.a), v = -dx * Math.sin(l.a) + dz * Math.cos(l.a); return Math.hypot(u / (l.lengthM / 2), v / (l.widthM / 2)) < 1.25; });
+  // ---- Glaciers: ice in the cirques, ragged at the edges and only above its terminus ----
+  const glaciers = (config.glaciers || []).map((g) => { const p = proj.toLocal(g.lat, g.lon); return { ...g, ...p, base: T.at(p.x, p.z) - (g.dropM ?? 120), a: (g.angle || 0) * Math.PI / 180 }; });
+  const glacierAt = (x, z) => {
+    let k = 0;
+    for (const g of glaciers) {
+      const dx = x - g.x, dz = z - g.z;
+      if (Math.abs(dx) > g.radiusM * 2 || Math.abs(dz) > g.radiusM * 2) continue;
+      const u = dx * Math.cos(g.a) + dz * Math.sin(g.a), v = -dx * Math.sin(g.a) + dz * Math.cos(g.a);
+      const n = Math.sin(x / 53 + Math.sin(z / 71) * 2) * .12 + Math.sin(z / 37 - x / 91) * .08;
+      const r = Math.hypot(u / g.radiusM, v / (g.radiusM * (g.aspect || .6))) + n;
+      const h = T.at(x, z);
+      k = Math.max(k, (1 - smoothstep(.75, 1, r)) * smoothstep(g.base - 20, g.base + 40, h));
+    }
+    return k;
+  };
+
   // ---- Height ----
   const baseHeight = (x, z) => T.at(x, z);
   // lake beds: shallows near the shore deepening to 14 m; a low lip just above the water on land
@@ -274,12 +318,17 @@ export function makeRealCoastLandscape(config, proj, index, route) {
   const heightAt = (x, z) => {
     let h = T.at(x, z);
     if (lakes) h = lakeBed(x, z, h);
+    if (islands.length) h = islandAt(x, z, h);
+    if (sites.length) h = siteAt(x, z, h);
     if (pads.length) h = padAt(x, z, h);   // before the road is pressed in, so the road always wins beside it
     const hit = index.nearest(x, z, 34);
     if (hit) {
       const s = route.dist[outbound(hit.i)], road = roadEle(hit.i, x, z) - .65;
-      const pressed = h + (road - h) * (1 - smoothstep(8, 32, hit.d));
-      const w = spanWeight(s) * (1 - smoothstep(14, 34, hit.d));
+      // a cliff road (Glacier) is cut into the slope in a narrow, steep cut: Big Sur's wide easing reads as a ramp
+      const pressed = h + (road - h) * (1 - (mountain ? smoothstep(11, 24, hit.d) : smoothstep(8, 32, hit.d)));
+      const b1 = bridges.length ? bridgeOfS(s, 14) : null;
+      const sided = b1?.side && sideOf(hit.i, x, z) !== b1.side && hit.d > 4.5;
+      const w = sided ? 0 : spanWeight(s) * (1 - smoothstep(14, 34, hit.d));
       h = pressed + (Math.min(h, road - 1.5) - pressed) * w;
     }
     const c = creekHit(x, z, 9);
@@ -329,17 +378,19 @@ export function makeRealCoastLandscape(config, proj, index, route) {
     forest = Math.max(0, Math.min(1, forest)) + (1 - smoothstep(tl - 40, tl + 160, h0)) * alpine * .18 * (.5 + n * 3);   // krummholz islands at the treeline
     const scrub = Math.max(0, Math.min(1, .15 + chute * .9 + valley * .3 + alpine * .25 + dry * .2 + n));
     const moist = Math.max(0, Math.min(1, .55 + valley * .4 + north * .3 - ridge * .3 - dry * .6 - alpine * .2));
-    return { forest: Math.max(0, Math.min(1, forest)), scrub, valley, ridge, north, spray: 1, alpine, east, moist, slope };
+    const ice = glaciers.length ? glacierAt(x, z) : 0;
+    return { forest: Math.max(0, Math.min(1, forest)) * (1 - ice), scrub: scrub * (1 - ice), valley, ridge, north, spray: 1, alpine, east, moist, slope, ice };
   };
   const waterLevelAt = (x, z) => {
     const c = creekHit(x, z, 0);
     if (c) return c.creek.positionAt(c.hit.s).y;
-    if (mountain) return lakes?.lakeAt(x, z)?.level ?? -Infinity;
+    if (mountain) return islands.length && islandHit(x, z) ? -Infinity : lakes?.lakeAt(x, z)?.level ?? -Infinity;
     return .05;
   };
 
   return {
     kind: mountain ? 'real-mountain' : 'real-coast', real: true, mountain, hasOcean: !mountain, coastSide: 1, gridLakes: lakes,
+    sites, islands, glacierAt: glaciers.length ? glacierAt : null, sideOf, bridgeColors: config.bridgeColors,
     // the weather's fog bank lies on the lowest big lake (Lake McDonald), in the valleys around it
     fogBase: mountain ? Math.min(...(lakes?.list || []).filter((l) => l.areaHa > 200).map((l) => l.level), Infinity) : 0,
     // legacy fields (the authored-coast code paths are skipped when `real` is set)

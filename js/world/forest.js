@@ -83,7 +83,7 @@ export class ForestPlanner {
       if (pick < v.forest * edge * this.density) {
         const species = this._zoneSpecies(v, y, extra);
         const variants = GLACIER_VARIANTS[species];
-        const variant = tier === 2 ? 0 : Math.floor(size * variants) % variants;
+        const variant = tier ? 0 : Math.floor(size * variants) % variants;   // one variant beyond the near tier: fewer draw calls
         // trees shrink toward the treeline
         const k = (this.scale[0] + (this.scale[1] - this.scale[0]) * ((size * 7.31) % 1)) * (1 - v.alpine * .45);
         add(`${species}${variant}${SUFFIX[tier]}`, x, y - .2, z, k * (1 - v.alpine * .2), rot, k);

@@ -74,7 +74,9 @@ for (const item of catalog) {
     for (const lake of scene.lakes || []) if (!validCoordinate(lake) || !Number.isFinite(lake.elevationM) || !validRadius(lake)) throw new Error(`${item.id}: invalid lake placement or dimensions`);
     for (const form of [...(scene.formations || []), ...(scene.islands || [])]) if (!validCoordinate(form) || !validRadius(form) || !(form.heightM > 0)) throw new Error(`${item.id}: invalid landform placement or dimensions`);
     for (const river of scene.terrain === 'authored-city' ? [] : scene.rivers || []) if (!(river.widthM > 0) || !Array.isArray(river.path) || river.path.length < 2 || river.path.some(([lat, lon]) => !validCoordinate({ lat, lon }))) throw new Error(`${item.id}: invalid river path or width`);
-    for (const name of [...(scene.vegetation?.trees || []), ...(scene.vegetation?.shrubs || []), ...(scene.vegetation?.cover || [])]) if (!kit.assets[name]) throw new Error(`${item.id}: missing vegetation model ${name}`);
+    // plants from a procedural kit (js/world/glacier-kit.js) are built at load, not bundled
+    const procedural = new Set((scene.kitExtensions || []).includes('glacier') ? ['beargrass', 'paintbrush', 'glacierlily', 'huckleberry'] : []);
+    for (const name of [...(scene.vegetation?.trees || []), ...(scene.vegetation?.shrubs || []), ...(scene.vegetation?.cover || [])]) if (!kit.assets[name] && !procedural.has(name)) throw new Error(`${item.id}: missing vegetation model ${name}`);
     for (const range of scene.bridgeRanges || []) if (!(range.fromM >= 0 && range.toM > range.fromM && range.toM <= (route.turnS || route.total))) throw new Error(`${item.id}: invalid bridge range`);
     for (const landmark of scene.landmarks || []) {
       if (!kit.assets[landmark.asset]) throw new Error(`${item.id}: missing landmark model ${landmark.asset}`);

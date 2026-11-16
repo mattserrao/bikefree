@@ -4,7 +4,8 @@ import { loadSceneryAssets } from './scenery-assets.js';
 import { makeCoastalGroundMaterial, makeCoastalWaterMaterial, makeLakeWaterMaterial, makeLakeMistMaterial, decorateSceneryMaterial } from './coastal-materials.js';
 import { makeAdirondackKit, ADIRONDACK_CATEGORY } from './adirondack-kit.js';
 import { makeGlacierKit, GLACIER_CATEGORY } from './glacier-kit.js';
-import { ForestPlanner, TILE_M } from './forest.js';
+import { ForestPlanner, TILE_M, makeClearings } from './forest.js';
+import { GlacierLandmarks } from './glacier-landmarks.js';
 import { planSettlement, Settlement } from './settlement.js';
 import { CoastalDetails, fitBridgeToRoad, coastalRoadFrame } from './coastal-details.js';
 import { landscapeBuilder } from './landscapes.js';
@@ -56,7 +57,10 @@ export class StylizedTerrain {
     this.forestLayout = this.config.vegetation?.layout === 'forest-edge';
     if (this.forestLayout) {
       this.settlementPlan = planSettlement(this.config, this.route, routeIndex, this.landscape);
-      this.forest = new ForestPlanner(this.config, this.landscape, routeIndex, (x, z) => this.heightAt(x, z), this.settlementPlan.clearings);
+      // built sites (lodges, visitor centres, parking) are cleared of trees too
+      const sites = (this.landscape.sites || []).map((t) => ({ x: t.x, z: t.z, r: Math.hypot(t.hw, t.hl) + 6 }));
+      const clearings = sites.length ? makeClearings([...this.settlementPlan.clearings.items, ...sites]) : this.settlementPlan.clearings;
+      this.forest = new ForestPlanner(this.config, this.landscape, routeIndex, (x, z) => this.heightAt(x, z), clearings);
       this.canopyUniform = { value: new THREE.Vector4(0, 160, this.config.vegetation.canopyM ?? 16, 1) };
       this._setCanopyStart();
       this.forestTiles = new Map(); this.forestQueue = [];
@@ -83,6 +87,10 @@ export class StylizedTerrain {
         this.traffic.setNight(this._night || 0);
       }
       this.details = new CoastalDetails(this.group, this.route, this.index, this.landscape, kit, this.uniforms);
+      if (this.config.glacier) {
+        this.landmarks = new GlacierLandmarks(this.group, this.landscape, this.route, this.index, this.proj, this.config, kit, this.uniforms);
+        this.landmarks.setNight(this._night || 0);
+      }
       if (this.landscape.city) {
         this.city = new CityScene(this.group, this.route, this.index, this.landscape, kit, this.uniforms, this.qualityKey);
         this.city.setNight(this._night || 0);
@@ -367,7 +375,7 @@ export class StylizedTerrain {
     this.mistOpacity = { value: 0 };
     this.mistMaterial = makeLakeMistMaterial(this.uniforms, this.mistOpacity);
     this.lakeMaterial = material;
-    const W = L.nx, H = L.ny, CH = 40;
+    const W = L.nx, H = L.ny, CH = 120;   // ~2.4 km chunks: the lakes are big and flat, few draw calls
     const lakeOf = (k) => L.byId.get(L.ids[k]);
     for (let cj = 0; cj < H - 1; cj += CH) for (let ci = 0; ci < W - 1; ci += CH) {
       const pos = [], sh = [], idx = [], vid = new Map();
@@ -458,6 +466,8 @@ export class StylizedTerrain {
         c.copy(P.meadow).lerp(P.grass, v.moist).lerp(P.forest, v.forest * .92);
         c.lerp(P.rock, smoothstep(.5, 1.2, rise) * .7);
         c.lerp(P.sand, (1 - smoothstep(4, 22, coastal)) * .8);   // lake shore gravel
+        const ice = this.landscape.glacierAt?.(px, pz) || 0;
+        if (ice) c.lerp(P.ice || P.snow, ice);
       } else if (this.landscape.real) {
         // Big Sur: golden grass, olive scrub on the shaded faces, dark canyon forest
         const v = this.landscape.vegetationAt(px, pz);
@@ -548,8 +558,8 @@ export class StylizedTerrain {
           const cover = this.forest ? this.forest.cover(x, z) : v.forest;
           const plant = cover > .45 ? (k < .5 ? 'fern' : k < .62 ? 'huckleberry' : null)
             : v.east > .5 ? (pick < .55 ? 'grass' : pick < .7 ? 'huckleberry' : pick < .8 ? 'paintbrush' : 'sage')
-            : v.alpine > .4 ? (pick < .3 ? 'beargrass' : pick < .45 ? 'glacierlily' : pick < .6 ? 'paintbrush' : pick < .8 ? 'alpineflowers' : 'grass')
-            : (pick < .28 ? 'beargrass' : pick < .4 ? 'paintbrush' : pick < .58 ? 'alpineflowers' : pick < .7 ? 'huckleberry' : 'grass');
+            : v.alpine > .4 ? (pick < .14 ? 'beargrass' : pick < .38 ? 'glacierlily' : pick < .6 ? 'paintbrush' : pick < .8 ? 'alpineflowers' : 'grass')
+            : (pick < .12 ? 'beargrass' : pick < .3 ? 'paintbrush' : pick < .52 ? 'alpineflowers' : pick < .7 ? 'huckleberry' : 'grass');
           if (!plant || (cover > .45 && !byRoad && k > .35)) continue;
           add(plant, x, y - .06, z, coverScale[0] + k * (coverScale[1] - coverScale[0]));
           continue;
@@ -792,7 +802,7 @@ export class StylizedTerrain {
   }
 
   setNight(v) {
-    this._night = v; this.city?.setNight(v); this.traffic?.setNight(v); this.life?.setNight(v);
+    this._night = v; this.city?.setNight(v); this.landmarks?.setNight(v); this.traffic?.setNight(v); this.life?.setNight(v);
     const cloud = this.clouds?.children[0]?.material;
     if (cloud) cloud.color.set(v ? '#3b4157' : '#ffffff');
   }
@@ -822,7 +832,7 @@ export class StylizedTerrain {
     this.details?.dispose();
     this.city?.dispose();
     this.landmarkGeometries.forEach((g) => g.dispose()); this.landmarkGeometries.clear();
-    this.surf?.geometry.dispose(); this.surf?.material.dispose(); this.shoreTexture?.dispose(); this.bridges?.dispose(); this.traffic?.dispose(); this.life?.dispose();
+    this.surf?.geometry.dispose(); this.surf?.material.dispose(); this.landmarks?.dispose(); this.shoreTexture?.dispose(); this.bridges?.dispose(); this.traffic?.dispose(); this.life?.dispose();
     this.ocean.geometry.dispose(); this.ocean.material.dispose();
     this.lakeMeshes.forEach((m) => m.geometry.dispose());
     this.lakeMaterial?.dispose(); this.mistMaterial?.dispose();

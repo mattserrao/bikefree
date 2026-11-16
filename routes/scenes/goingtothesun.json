@@ -26,7 +26,8 @@
     "canopy": "#24392c",
     "sand": "#a39a86",
     "farTint": "#7d8c8f",
-    "farTintAmount": 0.3
+    "farTintAmount": 0.3,
+    "ice": "#dce8ee"
   },
   "snowLineM": 2150,
   "treelineM": 1950,
@@ -157,36 +158,139 @@
     ]
   },
   "preview": {
-    "positionM": 46593.0,
-    "camera": "drone"
+    "positionM": 47200,
+    "camera": "chase"
   },
   "signs": [
     {
-      "atM": 22312.4,
+      "atM": 120,
       "side": "ocean",
-      "label": "AVALANCHE CREEK",
-      "subtitle": "GOING-TO-THE-SUN ROAD"
+      "label": "GOING-TO-THE-SUN ROAD",
+      "subtitle": "GLACIER NATIONAL PARK",
+      "kind": "nps"
     },
     {
-      "atM": 47262.5,
+      "atM": 13300,
       "side": "ocean",
-      "label": "LOGAN PASS",
-      "subtitle": "GOING-TO-THE-SUN ROAD"
-    }
-  ],
-  "roadside": [
+      "label": "LAKE McDONALD LODGE",
+      "subtitle": "GOING-TO-THE-SUN ROAD",
+      "kind": "nps"
+    },
     {
-      "fromM": 45893.2,
-      "toM": 47312.5,
-      "side": "ocean"
+      "atM": 22312,
+      "side": "ocean",
+      "label": "AVALANCHE CREEK",
+      "subtitle": "GOING-TO-THE-SUN ROAD",
+      "kind": "nps"
+    },
+    {
+      "atM": 34760,
+      "side": "ocean",
+      "label": "THE LOOP",
+      "subtitle": "GOING-TO-THE-SUN ROAD",
+      "kind": "nps"
+    },
+    {
+      "atM": 41480,
+      "side": "inland",
+      "label": "WEEPING WALL",
+      "subtitle": "GOING-TO-THE-SUN ROAD",
+      "kind": "nps"
+    },
+    {
+      "atM": 42120,
+      "side": "inland",
+      "label": "BIG BEND",
+      "subtitle": "GOING-TO-THE-SUN ROAD",
+      "kind": "nps"
+    },
+    {
+      "atM": 44270,
+      "side": "inland",
+      "label": "TRIPLE ARCHES",
+      "subtitle": "GOING-TO-THE-SUN ROAD",
+      "kind": "nps"
+    },
+    {
+      "atM": 47150,
+      "side": "inland",
+      "label": "LOGAN PASS",
+      "subtitle": "ELEVATION 6646 FT · CONTINENTAL DIVIDE",
+      "kind": "nps"
+    },
+    {
+      "atM": 51200,
+      "side": "inland",
+      "label": "SIYEH BEND",
+      "subtitle": "GOING-TO-THE-SUN ROAD",
+      "kind": "nps"
+    },
+    {
+      "atM": 54880,
+      "side": "inland",
+      "label": "JACKSON GLACIER OVERLOOK",
+      "subtitle": "GOING-TO-THE-SUN ROAD",
+      "kind": "nps"
+    },
+    {
+      "atM": 58180,
+      "side": "inland",
+      "label": "SUN POINT",
+      "subtitle": "GOING-TO-THE-SUN ROAD",
+      "kind": "nps"
+    },
+    {
+      "atM": 64990,
+      "side": "inland",
+      "label": "WILD GOOSE ISLAND",
+      "subtitle": "GOING-TO-THE-SUN ROAD",
+      "kind": "nps"
+    },
+    {
+      "atM": 66330,
+      "side": "inland",
+      "label": "RISING SUN",
+      "subtitle": "GOING-TO-THE-SUN ROAD",
+      "kind": "nps"
+    },
+    {
+      "atM": 75250,
+      "side": "ocean",
+      "label": "ST. MARY",
+      "subtitle": "GLACIER NATIONAL PARK",
+      "kind": "nps"
     }
   ],
   "lookouts": [
     {
-      "atM": 46393.0,
+      "atM": 34640,
+      "side": "inland",
+      "widthM": 9,
+      "lengthM": 34
+    },
+    {
+      "atM": 42200,
+      "side": "ocean",
+      "widthM": 9,
+      "lengthM": 40
+    },
+    {
+      "atM": 46393,
       "side": "ocean",
       "widthM": 8,
       "lengthM": 28
+    },
+    {
+      "atM": 54960,
+      "side": "ocean",
+      "widthM": 10,
+      "lengthM": 46
+    },
+    {
+      "atM": 65080,
+      "side": "ocean",
+      "widthM": 12,
+      "lengthM": 60
     }
   ],
   "divide": [
@@ -216,5 +320,249 @@
   "atmosphere": {
     "fogNearM": 1600,
     "fogFarM": 21000
-  }
+  },
+  "bridgeColors": {
+    "structure": "#8f8573",
+    "rail": "#9d927e"
+  },
+  "bridges": [
+    {
+      "fromM": 44322,
+      "toM": 44368,
+      "name": "Triple Arches",
+      "style": "arches",
+      "side": 1
+    },
+    {
+      "fromM": 53300,
+      "toM": 53362,
+      "name": "Siyeh Creek bridge",
+      "creek": {
+        "name": "Siyeh Creek",
+        "widthM": 5
+      }
+    },
+    {
+      "fromM": 59405,
+      "toM": 59482,
+      "name": "Baring Creek Bridge",
+      "arch": true,
+      "creek": {
+        "name": "Baring Creek",
+        "widthM": 7
+      }
+    }
+  ],
+  "sites": [
+    {
+      "name": "Logan Pass parking",
+      "lat": 48.69625,
+      "lon": -113.718464,
+      "widthM": 50,
+      "lengthM": 110,
+      "angle": 23.5,
+      "atRoad": true
+    },
+    {
+      "name": "Logan Pass Visitor Center",
+      "lat": 48.695772,
+      "lon": -113.71878,
+      "widthM": 22,
+      "lengthM": 40,
+      "angle": 23.5,
+      "atRoad": true
+    },
+    {
+      "name": "Lake McDonald Lodge",
+      "lat": 48.617247,
+      "lon": -113.877958,
+      "widthM": 30,
+      "lengthM": 80,
+      "angle": -101.1
+    },
+    {
+      "name": "Rising Sun",
+      "lat": 48.694624,
+      "lon": -113.518749,
+      "widthM": 70,
+      "lengthM": 110,
+      "angle": -29.4
+    },
+    {
+      "name": "St. Mary Visitor Center",
+      "lat": 48.7474,
+      "lon": -113.441747,
+      "widthM": 24,
+      "lengthM": 54,
+      "angle": 40.1
+    }
+  ],
+  "glaciers": [
+    {
+      "name": "Jackson Glacier",
+      "lat": 48.59861,
+      "lon": -113.70111,
+      "radiusM": 650,
+      "aspect": 0.7
+    },
+    {
+      "name": "Blackfoot Glacier",
+      "lat": 48.59024,
+      "lon": -113.66512,
+      "radiusM": 850,
+      "aspect": 0.6
+    },
+    {
+      "name": "Pumpelly Glacier",
+      "lat": 48.58333,
+      "lon": -113.65917,
+      "radiusM": 500
+    },
+    {
+      "name": "Logan Glacier",
+      "lat": 48.60193,
+      "lon": -113.63314,
+      "radiusM": 450
+    },
+    {
+      "name": "Sexton Glacier",
+      "lat": 48.70167,
+      "lon": -113.635,
+      "radiusM": 320
+    },
+    {
+      "name": "Piegan Glacier",
+      "lat": 48.70806,
+      "lon": -113.68389,
+      "radiusM": 280
+    },
+    {
+      "name": "Gem Glacier",
+      "lat": 48.746643,
+      "lon": -113.727894,
+      "radiusM": 130,
+      "dropM": 60
+    }
+  ],
+  "glacier": {
+    "guardwalls": {
+      "fromM": 30000,
+      "toM": 62500,
+      "dropM": 4
+    },
+    "tunnels": [
+      {
+        "name": "West Side Tunnel",
+        "fromM": 35925,
+        "toM": 35985,
+        "windows": true,
+        "valleySide": 1
+      },
+      {
+        "name": "East Side Tunnel",
+        "fromM": 49143,
+        "toM": 49267,
+        "valleySide": 1
+      }
+    ],
+    "waterfalls": [
+      {
+        "name": "Weeping Wall",
+        "fromM": 41560,
+        "toM": 41760,
+        "heightM": 18,
+        "widthM": 2.4,
+        "spacingM": 4.5
+      },
+      {
+        "name": "Haystack Falls",
+        "fromM": 40528,
+        "toM": 40552,
+        "heightM": 45,
+        "widthM": 4.5,
+        "spacingM": 6
+      },
+      {
+        "name": "East Side Tunnel falls",
+        "fromM": 49278,
+        "toM": 49298,
+        "heightM": 24,
+        "widthM": 3,
+        "spacingM": 7
+      },
+      {
+        "name": "Bird Woman Falls",
+        "lat": 48.70803,
+        "lon": -113.74762,
+        "upM": 190,
+        "downM": 70,
+        "widthM": 9
+      },
+      {
+        "name": "Oberlin Falls",
+        "lat": 48.6997,
+        "lon": -113.7234,
+        "upM": 90,
+        "downM": 40,
+        "widthM": 5,
+        "liftM": 3
+      },
+      {
+        "name": "Piegan Falls",
+        "lat": 48.71,
+        "lon": -113.6781,
+        "upM": 120,
+        "downM": 40,
+        "widthM": 6
+      }
+    ],
+    "buildings": [
+      {
+        "kind": "logan-pass-visitor-center",
+        "lat": 48.695772,
+        "lon": -113.71878
+      },
+      {
+        "kind": "lake-mcdonald-lodge",
+        "lat": 48.617247,
+        "lon": -113.877958
+      },
+      {
+        "kind": "rising-sun",
+        "lat": 48.694624,
+        "lon": -113.518749
+      },
+      {
+        "kind": "st-mary-visitor-center",
+        "lat": 48.7474,
+        "lon": -113.441747
+      }
+    ],
+    "parking": [
+      {
+        "site": "Logan Pass parking",
+        "fill": 0.75
+      }
+    ],
+    "snowbanks": [
+      {
+        "lat": 48.695,
+        "lon": -113.7215,
+        "radiusM": 520,
+        "count": 46
+      }
+    ]
+  },
+  "lakeIslands": [
+    {
+      "name": "Wild Goose Island",
+      "lat": 48.68886,
+      "lon": -113.53983,
+      "lengthM": 70,
+      "widthM": 24,
+      "heightM": 4.3,
+      "angle": -35,
+      "trees": 7
+    }
+  ]
 }

@@ -100,15 +100,14 @@ function krummholz(variant) {
 }
 
 function beargrass() {
-  // a fountain of wiry leaves with a tall stalk ending in a creamy club of flowers
+  // a fountain of wiry leaves with a slim stalk ending in a creamy club of tiny flowers
   const rand = randomSequence(2001), b = new Builder();
   for (let k = 0; k < 9; k++) {
-    const a = k * 2.4, tilt = .5 + rand() * .4;
-    b.add(cone(.05, .7, 3), M(Math.cos(a) * .08, 0, Math.sin(a) * .08, 1, 1, 1, -a, 0, tilt), '#6c7f45', .15, rand);
+    const a = k * 2.4, tilt = .55 + rand() * .4;
+    b.add(cone(.04, .55, 3), M(Math.cos(a) * .07, 0, Math.sin(a) * .07, 1, 1, 1, -a, 0, tilt), '#6c7f45', .15, rand);
   }
-  b.add(cyl(.018, .025, 1.15, 3), M(), '#7f8b55');
-  b.add(cone(.16, .5, 6), M(0, 1.05, 0, 1, 1, 1, 0, Math.PI), '#ede6c8');
-  b.add(blob(0), M(0, 1.1, 0, .17, .2, .17), '#f2ecd3', .08, rand);
+  b.add(cyl(.012, .018, .95, 3), M(), '#7f8b55');
+  b.add(blob(0), M(0, 1.0, 0, .08, .17, .08), '#e9e1c4', .08, rand);
   return b.build();
 }
 
