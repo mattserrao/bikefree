@@ -9,7 +9,7 @@ import * as store from './store.js';
 import { parseGpx, buildRoute, averageGradeAhead, wrapDist, routeAt } from './gpx.js';
 import { Pacer, PACER_WATTS } from './pacer.js';
 import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor, markFtpTest, ftpFromTwentyMinutes } from './workout.js';
-import { drawProfile, drawWorkout, drawTrace, gradeColor } from './views.js';
+import { drawProfile, drawWorkout, drawTrace, drawMinimap, gradeColor } from './views.js';
 import { Profiles, GENDERS, initials, cmToFtIn, ftInToCm } from './profiles.js';
 import { buildCatalogRoute, loadRouteScene, routeStartM } from './routes.js';
 import { VERSION } from './version.js';
@@ -426,6 +426,7 @@ document.addEventListener('keydown', (e) => {
   else if (k === 'l' || k === 'L') session.lap();
   else if ((k === 'n' || k === 'N') && session.mode === 'workout') session.skipSegment();
   else if ((k === 'c' || k === 'C') && onRideScreen) cycleCamera();
+  else if ((k === 'm' || k === 'M') && onRideScreen) cycleMinimap();
   else if ((k === ',' || k === '.') && trainer.demo) setDemoSpeed(DEMO_MPH + (k === '.' ? 5 : -5));
   else if ((k === 'f' || k === 'F') && onRideScreen) toggleFullscreen();
   else if (k === 'p' || k === 'P') { const opts = [0, ...PACER_WATTS]; setPacer(opts[(opts.indexOf(pacer.watts) + 1) % opts.length]); }
@@ -438,6 +439,46 @@ function toggleFullscreen() {
 }
 
 // ---------- 3D world ----------
+// On a route the rider is where the ride is; otherwise the scenery loop simply rolls by.
+function riderPosOn(route) {
+  return session.mode === 'route' && session.route === route ? session.routePos : session.distanceM % route.total;
+}
+function pacerPosOn(route) {
+  const t = route.total;
+  return session.mode === 'route' && session.route === route
+    ? wrapDist(route, session.routeStart + pacer.dist)
+    : ((pacer.dist % t) + t) % t;
+}
+
+// ---------- Minimap (ride screen, bottom-left) ----------
+let lastMapDraw = 0;
+function minimapRoute() {
+  if (session.mode === 'route' && session.route) return session.route;
+  return worldRoute && !document.body.classList.contains('no-world') ? worldRoute : null;
+}
+function renderMinimap(now = performance.now(), force = false) {
+  const box = $('hMap'), route = settings.minimap !== 'off' ? minimapRoute() : null;
+  box.hidden = !route;
+  if (!route || (!force && now - lastMapDraw < 200)) return;
+  lastMapDraw = now;
+  drawMinimap($('hMapCanvas'), route, riderPosOn(route), {
+    mode: settings.minimap === 'follow' ? 'follow' : 'course',
+    pacerPos: pacer.on ? pacerPosOn(route) : null,
+    spanM: imperial() ? 1609.344 : 1500,
+  });
+}
+function applyHudPrefs() {
+  document.body.dataset.hudSize = settings.hudSize;
+  if (onRideScreen) renderMinimap(performance.now(), true);
+}
+function cycleMinimap() {
+  const order = ['course', 'follow', 'off'];
+  settings.minimap = order[(order.indexOf(settings.minimap) + 1) % order.length];
+  saveSettings(settings);
+  renderMinimap(performance.now(), true);
+  toast(settings.minimap === 'off' ? 'Minimap off' : settings.minimap === 'follow' ? 'Minimap: zoomed in' : 'Minimap: whole course');
+}
+
 let world = null;
 let worldRoute = null;
 let worldModule = null;
@@ -464,18 +505,10 @@ async function openWorld(route) {
   worldRoute = route;
   world.setCamera(settings.worldCam);
   world.setTimeOfDay(settings.worldTime);
-  world.setSource(() => {
-    // On a route the rider is where the ride is; otherwise the scenery loop simply rolls by.
-    const pos = session.mode === 'route' && session.route === route ? session.routePos : session.distanceM % route.total;
-    return { pos, speed: session.speedMps, cadence: session.cadence, riding: true };
-  });
+  world.setSource(() => ({ pos: riderPosOn(route), speed: session.speedMps, cadence: session.cadence, riding: true }));
   world.setPacerSource(() => {
     if (!pacer.on) return null;
-    const t = route.total;
-    const pos = session.mode === 'route' && session.route === route
-      ? wrapDist(route, session.routeStart + pacer.dist)
-      : ((pacer.dist % t) + t) % t;
-    return { pos, speed: session.running ? pacer.speed : 0, cadence: session.running ? pacer.cadence : 0 };
+    return { pos: pacerPosOn(route), speed: session.running ? pacer.speed : 0, cadence: session.running ? pacer.cadence : 0 };
   });
   world.start();
   log('3d', `3D view: ${route.name}`);
@@ -633,6 +666,7 @@ function renderHud() {
     else if (session.mode === 'workout' && session.workout) drawWorkout(c, session.workout, session.workoutT, settings.ftp, session.workoutBias, { compact: true });
     else c.getContext('2d').clearRect(0, 0, c.width, c.height);
   }
+  renderMinimap(now);
 
   // Status and pause overlay
   const userPaused = pausedByUser();
@@ -1232,6 +1266,8 @@ function fillSettings() {
   $('diffOut').textContent = `${settings.difficulty}%`;
   f.realRatio.value = settings.realRatio;
   f.haptics.checked = settings.haptics;
+  f.hudSize.value = settings.hudSize;
+  f.minimap.value = settings.minimap;
   f.startGear.value = settings.startGear;
   for (const el of dlg.querySelectorAll('.u-weight')) el.textContent = imp ? 'lb' : 'kg';
 }
@@ -1260,6 +1296,8 @@ dlg.addEventListener('close', () => {
     difficulty: Number(f.difficulty.value),
     realRatio: Math.max(0, Number(f.realRatio.value) || 0),
     haptics: f.haptics.checked,
+    hudSize: f.hudSize.value,
+    minimap: f.minimap.value,
     startGear: Math.min(24, Math.max(1, Math.round(Number(f.startGear.value) || 12))),
   });
   saveSettings(settings);
@@ -1268,6 +1306,7 @@ dlg.addEventListener('close', () => {
   world?.setCamera(settings.worldCam);
   world?.setTimeOfDay(settings.worldTime);
   world?.setQuality(settings.worldQuality);
+  applyHudPrefs();
   renderRouteCards();
   renderWorkoutList();
   renderProfile();
@@ -1275,15 +1314,16 @@ dlg.addEventListener('close', () => {
   log('app', `Settings saved (${settings.shiftMode.toUpperCase()} shifting, difficulty ${settings.difficulty}%, FTP ${settings.ftp} W)`);
 });
 
-window.addEventListener('resize', () => { renderPreview(); drawThumbs(); lastProfileDraw = 0; });
+window.addEventListener('resize', () => { renderPreview(); drawThumbs(); lastProfileDraw = 0; lastMapDraw = 0; });
 window.addEventListener('beforeunload', (e) => {
   if (session.hasRide) { e.preventDefault(); e.returnValue = ''; }
 });
 
 // Light / dark: charts are drawn on canvases, so redraw them when the appearance changes (incl. macOS switching).
-window.BFTheme?.onChange(() => { renderPreview(); drawThumbs(); lastProfileDraw = 0; renderHud(); });
+window.BFTheme?.onChange(() => { renderPreview(); drawThumbs(); lastProfileDraw = 0; lastMapDraw = 0; renderHud(); });
 
 // ---------- Boot ----------
+applyHudPrefs();
 renderProfile();
 session.autoStart = false;
 deviceStatus();

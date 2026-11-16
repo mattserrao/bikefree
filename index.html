@@ -183,6 +183,8 @@
         </div>
         <canvas id="hudProfile" class="hud-profile"></canvas>
       </div>
+
+      <div class="glass minimap" id="hMap" hidden><canvas id="hMapCanvas"></canvas></div>
     </div>
 
     <div class="pause-overlay" id="pauseOverlay" hidden>
@@ -199,6 +201,7 @@
           <dt>Lap</dt><dd>Y · <kbd>L</kbd></dd>
           <dt>Skip workout step</dt><dd>▶ · <kbd>N</kbd></dd>
           <dt>Camera · full screen</dt><dd><kbd>C</kbd> · <kbd>F</kbd></dd>
+          <dt>Minimap</dt><dd><kbd>M</kbd></dd>
         </dl>
         <p class="credit">3D: imagery USGS NAIP · elevation AWS Terrain Tiles · roads © OpenStreetMap contributors, routed with BRouter</p>
       </div>
@@ -252,6 +255,22 @@
           <option value="high">High — denser scenery and sharper shadows</option>
         </select>
       </label>
+      <div class="two">
+        <label>Power bar size
+          <select name="hudSize">
+            <option value="small">Small</option>
+            <option value="medium">Medium</option>
+            <option value="large">Large (original)</option>
+          </select>
+        </label>
+        <label>Minimap
+          <select name="minimap">
+            <option value="course">Whole course</option>
+            <option value="follow">Zoomed in — follows you</option>
+            <option value="off">Off</option>
+          </select>
+        </label>
+      </div>
       <label class="check"><input type="checkbox" name="haptics"> Buzz handlebars on shift and workout steps</label>
       <details class="advanced">
         <summary>Advanced</summary>

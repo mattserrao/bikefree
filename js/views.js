@@ -121,6 +121,95 @@ export function drawTrace(canvas, route, pos, { markerOnly = false } = {}) {
   ctx.fillStyle = tok('--accent', '#7aa9f5'); ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
 }
 
+/**
+ * Ride-screen minimap: north-up route outline with the current leg's progress, the rider (an arrow
+ * pointing the way they're riding) and the pacer. mode 'course' fits the whole route; 'follow' keeps
+ * the rider centred with about `spanM` metres across.
+ */
+const mapCache = new WeakMap();
+function mapPoints(route) {
+  let m = mapCache.get(route);
+  if (m) return m;
+  let lat0 = 0;
+  for (let i = 0; i < route.lat.length; i++) lat0 += route.lat[i];
+  lat0 /= route.lat.length;
+  const kx = Math.cos((lat0 * Math.PI) / 180) * 111320, ky = 110540;   // metres per degree
+  const n = route.lat.length, x = new Float64Array(n), y = new Float64Array(n);
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (let i = 0; i < n; i++) {
+    x[i] = route.lon[i] * kx; y[i] = route.lat[i] * ky;
+    minX = Math.min(minX, x[i]); maxX = Math.max(maxX, x[i]); minY = Math.min(minY, y[i]); maxY = Math.max(maxY, y[i]);
+  }
+  // On a mirrored there-and-back route the return leg retraces the outbound one, so only one leg is outlined.
+  const outlineEnd = route.mirrored && route.turnIdx ? route.turnIdx : n - 1;
+  m = { x, y, minX, maxX, minY, maxY, outlineEnd };
+  mapCache.set(route, m);
+  return m;
+}
+
+export function drawMinimap(canvas, route, pos, { mode = 'course', pacerPos = null, spanM = 1600 } = {}) {
+  const { ctx, w, h } = setup(canvas);
+  if (!route || !route.lat?.length) return;
+  const m = mapPoints(route), n = m.x.length;
+  const idx = (d) => Math.max(0, Math.min(n - 1, Math.round(d / 10)));
+  const cut = idx(pos);
+  const pad = 14;
+  let s, cx, cy;
+  if (mode === 'follow') {
+    s = Math.min(w, h) / spanM;
+    cx = m.x[cut]; cy = m.y[cut];
+  } else {
+    s = Math.min((w - pad * 2) / (m.maxX - m.minX || 1), (h - pad * 2) / (m.maxY - m.minY || 1));
+    cx = (m.minX + m.maxX) / 2; cy = (m.minY + m.maxY) / 2;
+  }
+  const PX = (i) => w / 2 + (m.x[i] - cx) * s, PY = (i) => h / 2 - (m.y[i] - cy) * s;
+  // Fewer vertices when zoomed out; a vertex every ~1.5 px is plenty.
+  const step = Math.max(1, Math.floor(1.5 / (10 * s)));
+  const line = (from, to, color, width) => {
+    if (to <= from) return;
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(PX(from), PY(from));
+    for (let i = from + step; i < to; i += step) ctx.lineTo(PX(i), PY(i));
+    ctx.lineTo(PX(to), PY(to));
+    ctx.stroke();
+  };
+  const ink = tok('--ink', '#ece9e1'), bg = tok('--bg', '#262624'), accent = tok('--accent', '#7aa9f5');
+  const light = document.documentElement.dataset.theme === 'light';
+
+  // Outline (with a soft casing so it reads over the glass), then this leg's ridden part.
+  line(0, m.outlineEnd, light ? 'rgba(255,255,255,.75)' : 'rgba(0,0,0,.35)', 6);
+  line(0, m.outlineEnd, tok('--hud-muted', '#a8a69d'), 3);
+  const turn = route.turnIdx || 0;
+  const legStart = turn && cut > turn ? turn : 0;
+  line(legStart, cut, accent, 4);
+
+  // Start / turnaround marks
+  const mark = (i, fill) => {
+    ctx.fillStyle = fill; ctx.strokeStyle = bg; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.rect(PX(i) - 3.5, PY(i) - 3.5, 7, 7); ctx.fill(); ctx.stroke();
+  };
+  mark(0, ink);
+  if (turn && route.mirrored) mark(turn, tok('--hud-muted', '#a8a69d'));
+
+  // Pacer: a yellow dot
+  if (pacerPos != null) {
+    const j = idx(pacerPos);
+    ctx.fillStyle = '#f5c400'; ctx.strokeStyle = '#1d1d1c'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(PX(j), PY(j), 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+
+  // Rider: an arrow along the direction of travel (sampled within the current leg so the U-turn doesn't flip it).
+  const legEnd = turn && cut <= turn ? turn : n - 1;
+  const a = Math.max(legStart, cut - 2), b = Math.min(legEnd, cut + 2);
+  const ang = b > a ? Math.atan2(-(m.y[b] - m.y[a]), m.x[b] - m.x[a]) : -Math.PI / 2;
+  ctx.save();
+  ctx.translate(PX(cut), PY(cut)); ctx.rotate(ang);
+  ctx.fillStyle = accent; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(-7, 8); ctx.lineTo(-3, 0); ctx.lineTo(-7, -8); ctx.closePath();
+  ctx.stroke(); ctx.fill();
+  ctx.restore();
+}
+
 /** Workout blocks coloured by zone, with progress. */
 export function drawWorkout(canvas, workout, t, ftp, bias = 1, { compact = false } = {}) {
   const { ctx, w, h } = setup(canvas);
