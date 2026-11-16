@@ -49,6 +49,14 @@
     "lon": -80.01277,
     "radiusM": 22
   },
+  "streetKit": {
+    "fromM": 5250,
+    "toM": 10950,
+    "rangeM": 220,
+    "zones": [
+      { "name": "East Carson Street", "style": "victorian", "fromM": 5250, "toM": 7850, "widthM": 90, "parking": true, "sidewalkM": 4.5 }
+    ]
+  },
   "mainStreets": [
     {
       "name": "East Carson Street",

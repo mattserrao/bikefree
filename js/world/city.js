@@ -8,6 +8,7 @@ import { MeshBuilder, ribbon, resample, hash } from './city-geometry.js';
 import { buildBridges, buildStadiums, buildLandmarks } from './city-bridges.js';
 import { buildHeroes } from './city-heroes.js';
 import { CityLife } from './city-life.js';
+import { StreetKit, streetKitConfig } from './street-kit.js';   // [street-kit]
 import { ROAD_WIDTH } from './pose.js';
 
 export { STREET_W };
@@ -50,8 +51,9 @@ export class CityScene {
     this.heroes = buildHeroes(this);
     this.landscape.landmarks.push(...this.heroes.landmarks);   // postcard views for the scenic camera
     this._trees();
+    { const k = streetKitConfig(this.route.scene); if (k) this.streetKit = new StreetKit(this, k, { chunk: CHUNK }); }   // [street-kit]
     this.life = new CityLife(this);
-    this._pending = [...this.buildingChunks.keys()];
+    this._pending = [...new Set([...this.buildingChunks.keys(), ...(this.streetKit?.keys() || [])])];   // [street-kit] (+ chunks with only kit content)
   }
 
   own(x) { this.disposables.add(x); return x; }
@@ -569,7 +571,7 @@ export class CityScene {
 
   // ---------------------------------------------------------------- buildings
   _buildChunk(key) {
-    const list = this.buildingChunks.get(key);
+    const list = this.buildingChunks.get(key) || [];   // [street-kit] (a chunk can hold only street-kit content)
     const B = new MeshBuilder({ aBld: 4 });
     const extras = new MeshBuilder();   // spires, rooftop details (plain vertex colour)
     const roofTint = new THREE.Color();
@@ -588,7 +590,8 @@ export class CityScene {
       const palette = KIND_COLORS[b.kind] || KIND_COLORS[2];
       const seed = hash(b.k * 7919 + 13);
       const base = new THREE.Color(palette[Math.floor(seed * palette.length)]).multiplyScalar(.9 + hash(b.k) * .18);
-      B.color(base).set({ aBld: [b.kind, seed * 100, ground, 0] });
+      const kit = this.streetKit?.building(b, ring, ground, y0, y1, base, key);   // [street-kit] facade detail; window grid base, roof colour
+      B.color(base).set({ aBld: [b.kind, seed * 100, kit ? kit.winBase : ground, 0] });
       const facets = b.kind === 6 && b.h > 18;   // PPG Place: glass in rows of projecting prisms
       let mx = 0, mz = 0; for (const p of ring) { mx += p.x; mz += p.z; } mx /= ring.length; mz /= ring.length;
       for (let i = 0; i < ring.length; i++) {
@@ -605,7 +608,7 @@ export class CityScene {
         }
       }
       // flat roof, a little darker (tar and gravel), with a parapet colour band from the walls
-      roofTint.copy(base).lerp(new THREE.Color(b.kind === 6 ? '#2f3a40' : '#6a6762'), .65);
+      roofTint.copy(base).lerp(kit?.roof || new THREE.Color(b.kind === 6 ? '#2f3a40' : '#6a6762'), kit ? .9 : .65);   // [street-kit]
       B.color(roofTint).set({ aBld: [b.kind, seed * 100, ground, 1] });
       const contour = ring.map((p) => new THREE.Vector2(p.x, p.z));
       let tris;
@@ -616,7 +619,7 @@ export class CityScene {
         const ax = ring[j].x - ring[i].x, az = ring[j].z - ring[i].z, bx = ring[k].x - ring[i].x, bz = ring[k].z - ring[i].z;
         if (az * bx - ax * bz > 0) B.tri(first + i, first + j, first + k); else B.tri(first + i, first + k, first + j);
       }
-      this._rooftop(extras, b, ring, y1, seed);
+      this._rooftop(extras, b, ring, y1, seed, !!kit);
     }
     const mesh = new THREE.Mesh(this.own(B.geometry()), this.buildingMaterial);
     mesh.castShadow = mesh.receiveShadow = true; mesh.name = `Buildings ${key}`;
@@ -626,11 +629,12 @@ export class CityScene {
       const em = new THREE.Mesh(this.own(extras.geometry()), this.solidMaterial);
       em.castShadow = em.receiveShadow = true; this.group.add(em); out.push(em);
     }
+    this.streetKit?.finishChunk(key, out);   // [street-kit] sidewalks, furniture, trim
     this.chunks.set(key, out);
   }
 
   /** Rooftops that make the skyline: PPG Place's glass spires, the Gulf Tower's stepped pyramid, masts, water tanks. */
-  _rooftop(M, b, ring, y1, seed) {
+  _rooftop(M, b, ring, y1, seed, kit = false) {
     let cx = 0, cz = 0; for (const p of ring) { cx += p.x; cz += p.z; } cx /= ring.length; cz /= ring.length;
     if (b.kind === 6 && b.h > 18) {
       M.color('#2e3a42');
@@ -651,6 +655,7 @@ export class CityScene {
       M.color('#8d9aa3'); M.cylinder(cx, y1, cz, .5, 30, 6, .15);
     } else if (b.h > 60) {
       M.color('#7b7f82'); M.box(cx, y1, cz, 9, 4.5, 9);
+    } else if (kit) {   // [street-kit] the kit dresses ordinary roofs
     } else if (b.kind === 0 && seed > .8 && b.h < 14) {
       M.color('#5a524b'); M.box(cx, y1, cz, 1.2, 1.4, 1.2);   // chimney
     } else if ((b.kind === 2 || b.kind === 3) && seed > .86) {
@@ -955,6 +960,7 @@ export class CityScene {
       const [ax, az] = a.split(',').map(Number), [bx, bz] = b.split(',').map(Number);
       return Math.hypot((bx + .5) * CHUNK - cx, (bz + .5) * CHUNK - cz) - Math.hypot((ax + .5) * CHUNK - cx, (az + .5) * CHUNK - cz);
     });
+    if (this.streetKit) this.streetKit.deferred = !!this._warm;   // [street-kit] while riding, its chunk work runs in its own frame budget
     while (this._pending.length && performance.now() - t0 < (this._warm ? 7 : 400)) this._buildChunk(this._pending.pop());
     this._warm = true;
   }
@@ -964,16 +970,18 @@ export class CityScene {
     this.life.tick(camera, dt, time, rider);
     this.landmarks?.tick?.(time, dt);
     this.heroes?.tick?.(time, dt);
+    this.streetKit?.tick(camera);   // [street-kit] LOD
   }
 
   setNight(v) {
     this.night.value = v;
     this.landmarks?.setNight?.(v);
     if (this.poolMaterial) this.poolMaterial.opacity = v;
+    this.streetKit?.setNight(v);   // [street-kit]
     for (const m of this.nightOnly || []) m.visible = v > 0.01;
   }
 
-  setQuality(key) { this.qualityKey = key; this.life.setQuality(key); }
+  setQuality(key) { this.qualityKey = key; this.life.setQuality(key); this.streetKit?.setQuality(key); }   // [street-kit]
 
   dispose() {
     this.life.dispose();
