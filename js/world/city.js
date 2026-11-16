@@ -72,6 +72,9 @@ export function streetPaint(st) {
   return st.oneway < 0 ? [u[1], u[0]] : u;
 }
 
+// [w2-polish] PPG Place's spire glass: two tones of pale blue-grey glass (sRGB hex; vertex colours are linear)
+const PPG_GLASS = [new THREE.Color('#7f97a6'), new THREE.Color('#a9bcc6')];
+
 export class CityScene {
   constructor(parent, route, index, landscape, kit, uniforms, qualityKey = 'balanced') {
     this.group = new THREE.Group(); this.group.name = 'City'; parent.add(this.group);
@@ -713,14 +716,20 @@ export class CityScene {
   _rooftop(M, b, ring, y1, seed, kit = false) {
     let cx = 0, cz = 0; for (const p of ring) { cx += p.x; cz += p.z; } cx /= ring.length; cz /= ring.length;
     if (b.kind === 6 && b.h > 18) {
-      M.color('#2e3a42');
+      // [w2-polish] glass spires: pale reflective glass, the four faces in two tones so they read as faceted glass
+      // (they were #2e3a42, near black in linear light: huge black triangles close to the camera); the low
+      // buildings' spires at their real, smaller size
+      const tall = b.h > 100, spire = (x, z, w, h, yaw) => {
+        const c0 = M.c.length; M.pyramid(x, y1, z, w, h, w, yaw);
+        for (let v = c0, t = 0; v < M.c.length; v += 9, t++) { const col = t % 2 ? PPG_GLASS[0] : PPG_GLASS[1]; for (let q = 0; q < 9; q += 3) { M.c[v + q] = col.r; M.c[v + q + 1] = col.g; M.c[v + q + 2] = col.b; } }
+      };
       for (let i = 0; i < ring.length; i++) {
         const a = ring[i], c = ring[(i + 1) % ring.length], len = Math.hypot(c.x - a.x, c.z - a.z), n = Math.floor(len / 6);
         const yaw = Math.atan2(c.x - a.x, c.z - a.z);
-        M.pyramid(a.x, y1, a.z, 2.6, b.h > 100 ? 11 : 6, 2.6, yaw);
-        for (let k = 1; k < n; k++) { const f = k / n; M.pyramid(a.x + (c.x - a.x) * f, y1, a.z + (c.z - a.z) * f, 1.8, b.h > 100 ? 6 : 3.6, 1.8, yaw); }
+        spire(a.x, a.z, tall ? 2.6 : 1.5, tall ? 11 : 3.8, yaw);
+        for (let k = 1; k < n; k++) { const f = k / n; spire(a.x + (c.x - a.x) * f, a.z + (c.z - a.z) * f, tall ? 1.8 : 1.0, tall ? 6 : 2.4, yaw); }
       }
-      if (b.h > 100) M.pyramid(cx, y1, cz, 9, 26, 9);
+      if (tall) spire(cx, cz, 9, 26, 0);
     } else if (b.kind === 10) {
       M.color('#c9bba1');
       let r = 0; for (const p of ring) r = Math.min(r || Infinity, Math.hypot(p.x - cx, p.z - cz));
