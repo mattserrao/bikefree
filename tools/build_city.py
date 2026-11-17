@@ -105,6 +105,7 @@ def rings_of(rel, ways, nodes, role='outer'):
 
 
 # ---------------------------------------------------------------- routing
+BRICK_SURFACES = {'brick', 'bricks', 'sett', 'paving_stones', 'cobblestone', 'unhewn_cobblestone'}   # [finish]
 BAN = {'motorway', 'motorway_link', 'proposed', 'construction', 'steps', 'elevator', 'platform', 'bus_stop', 'corridor', 'raceway', 'abandoned'}
 MODES = {
     'road': {'primary': 1, 'secondary': 1, 'tertiary': 1, 'trunk': 1.2, 'unclassified': 1.1, 'residential': 1.3, 'primary_link': 1.5,
@@ -632,6 +633,7 @@ def build(cid):
                 rec = {'cls': CLS[h], 'nodes': run[:], 'bridge': bridge, 'layer': int(parse_m(t.get('layer')) or 0),
                        'oneway': 1 if t.get('oneway') in ('yes', '1') or h in ('motorway', 'motorway_link') else -1 if t.get('oneway') == '-1' else 0,
                        'name': t.get('bridge:name') or t.get('name', '')}
+                if t.get('surface') in BRICK_SURFACES and CLS[h] <= 6: rec['surface'] = 'brick'   # [finish] brick / sett streets (OSM)
                 streets.append(rec)
                 if bridge: bridge_ways.append(rec)
         for a, b in zip(nd, nd[1:]):
@@ -694,7 +696,7 @@ def build(cid):
                 # kept vertices (junctions, ends) are stored exactly as before: identical across streets
                 st_coords += q(*nodes[src[id(t)]]) if id(t) in src else to_q(*t)
                 st_deck.append(0)
-        st_meta += [rec['cls'], (1 if rec['bridge'] else 0) | ((rec['oneway'] + 1) << 1), rec['layer'] + 8]
+        st_meta += [rec['cls'], (1 if rec['bridge'] else 0) | ((rec['oneway'] + 1) << 1) | (8 if rec.get('surface') == 'brick' else 0), rec['layer'] + 8]   # [finish] bit 3: brick
     st_starts.append(len(st_coords) // 2)
     named_bridges = {}
     for rec in bridge_ways:

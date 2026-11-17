@@ -522,7 +522,7 @@ export function cityStreets(landscape, index, route) {
   };
   for (let k = 0; k < S.count; k++) {
     const cls = S.meta[k * 3], flags = S.meta[k * 3 + 1], layer = S.meta[k * 3 + 2] - 8;
-    const bridge = !!(flags & 1), oneway = (flags >> 1) - 1, width = STREET_W[cls];
+    const bridge = !!(flags & 1), oneway = ((flags >> 1) & 3) - 1, width = STREET_W[cls], brick = !!(flags & 8);   // [finish] bit 3: brick or sett (OSM surface)
     const raw = [];
     for (let i = starts[k]; i < starts[k + 1]; i++) {
       const p = D.local(xy[i * 2], xy[i * 2 + 1]);
@@ -540,7 +540,7 @@ export function cityStreets(landscape, index, route) {
       if (p.y == null) p.y = landscape.heightAt(p.x, p.z);
       if (lower(p, width, !bridge && alongRoute(pts, j))) under = true;   // [road-align] along
     });
-    streets.push({ cls, bridge, oneway, layer, pts, width, underRoute: under, rides: width > ROAD_WIDTH + 1 && pts.some((p) => p.along),   // [road-align] rides (wider than the road: sticks out)
+    streets.push({ cls, bridge, oneway, layer, pts, width, ...(brick ? { brick } : {}), underRoute: under, rides: width > ROAD_WIDTH + 1 && pts.some((p) => p.along),   // [road-align] rides (wider than the road: sticks out)
       nodes: raw, nodeIdx });   // [junctions] OSM nodes → pts index
   }
   // [road-align] smooth, grade-limited street profiles with one height per junction (js/world/road-align.js)

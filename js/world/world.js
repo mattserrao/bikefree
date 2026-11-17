@@ -698,7 +698,10 @@ function makeRoad(route, index) {
   const tgeo = new THREE.BufferGeometry();
   tgeo.setAttribute('position', geo.attributes.position); tgeo.setAttribute('uv', geo.attributes.uv); tgeo.setAttribute('normal', geo.attributes.normal);
   tgeo.setIndex(trailIdx);
-  const tmesh = new THREE.Mesh(tgeo, new THREE.MeshStandardMaterial({ map: ttex, roughness: .95, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  const tmat = new THREE.MeshStandardMaterial({ map: ttex, roughness: .95, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  // [finish] the trails' own surface by stretch (road-surface.js): the scene's "road": { "trail": { surface, zones } }
+  if (stylized && route.scene.road?.trail) decorateRoad(tmat, route.scene.road.trail, { widthM: ROAD_WIDTH, repeatM: 24 });
+  const tmesh = new THREE.Mesh(tgeo, tmat);
   tmesh.frustumCulled = false; tmesh.renderOrder = 2; tmesh.receiveShadow = true;
   const group = new THREE.Group(); group.add(mesh, tmesh);
   return group;
