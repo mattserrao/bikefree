@@ -81,3 +81,29 @@ export function estimateRealRatio(trainerSpeedKph, cadenceRpm) {
   if (!(cadenceRpm > 50) || !(trainerSpeedKph > 5)) return null;
   return (trainerSpeedKph / 3.6) / ((cadenceRpm / 60) * WHEEL_CIRC);
 }
+
+// ---------- Ride feel (ride-feel-test) ----------
+
+/** Hill feel choices (%): how much of the road grade the trainer passes on, like Zwift's "trainer difficulty". */
+export const HILL_FEEL_OPTIONS = [25, 50, 75, 100];
+export const HILL_FEEL_DEFAULT = 50;   // Zwift's default
+
+/**
+ * The grade the trainer should feel: the road grade scaled by Hill feel (flat riding is untouched, and the
+ * on-screen speed still uses the real grade, as in Zwift).
+ */
+export function feltGrade(gradePct, hillFeelPct = HILL_FEEL_DEFAULT) {
+  return gradePct * clamp(hillFeelPct, 0, 100) / 100;
+}
+
+/**
+ * Seconds for the trainer's grade to catch up with the road. A real bike carries its momentum into a hill and
+ * slows over several seconds; without this, ERG jumped to the full hill wattage the instant the grade changed.
+ */
+export const MOMENTUM_TAU_S = 3;
+
+/** One step of the momentum lag: move `cur` toward `target` with time constant `tau` over `dt` seconds. */
+export function easeGrade(cur, target, dt, tau = MOMENTUM_TAU_S) {
+  if (cur == null || !Number.isFinite(cur)) return target;
+  return cur + (target - cur) * (1 - Math.exp(-dt / Math.max(0.01, tau)));
+}
