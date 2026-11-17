@@ -371,6 +371,29 @@ export class NetRide extends EventTarget {
     return { pos, fwd, flat, right, lateral, centre };
   }
 
+  /** Every edge as a lat/lon line (for the minimap), built once per network. */
+  edgeLines() {
+    const net = this.net, base = net.base;
+    if (!net._lines) {
+      net._lines = [...net.edges.values()].map((e) => {
+        const n = e.len / STEP + 1, lat = new Float64Array(n), lon = new Float64Array(n);
+        for (let k = 0; k < n; k++) { const i = e.s0 / STEP + k; lat[k] = base.lat[i]; lon[k] = base.lon[i]; }
+        return { id: e.id, lat, lon };
+      });
+    }
+    return net._lines;
+  }
+
+  /** The first `len` metres of a way on (an option at a junction) as a lat/lon line. */
+  stub(t, len = 200) {
+    const base = this.net.base, out = { lat: [], lon: [] };
+    for (let u = 0; u <= Math.min(len, t.e.len); u += STEP) {
+      const i = Math.round(worldS(this.net, t, u) / STEP) % (base.dist.length - 1);
+      out.lat.push(base.lat[i]); out.lon.push(base.lon[i]);
+    }
+    return out;
+  }
+
   /** Junction passes along the path between path metres a and b (for start chips and arches). */
   nodesBetween(a, b) {
     const out = [];

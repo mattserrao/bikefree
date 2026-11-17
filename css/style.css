@@ -113,6 +113,10 @@ h2 { margin: 0 0 12px; font-size: 12px; text-transform: uppercase; letter-spacin
 .mode.on .mode-icon { background: var(--accent-soft); color: var(--accent); }
 
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.goal-seg { margin: 0 0 12px; flex-wrap: wrap; }
+.goal-seg button { flex: 1 0 auto; }
+.rtags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.rtags span { font-size: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; padding: 1px 6px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink); }
 .cards-group { grid-column: 1 / -1; margin: 6px 0 -2px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .cards-group:first-child { margin-top: 0; }
 .ideas { grid-column: 1 / -1; margin-top: 6px; }

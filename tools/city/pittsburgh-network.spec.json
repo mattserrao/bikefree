@@ -4,16 +4,129 @@
   "catalogId": "pittsburgh",
   "out": "routes/cities/pittsburgh-network.json",
   "nodes": [
-    { "id": "A", "name": "North Shore Water Steps", "lat": 40.44548, "lon": -80.00825 },
-    { "id": "G", "name": "East Carson & 10th", "lat": 40.42871, "lon": -79.98858 }
+    {
+      "id": "A",
+      "name": "North Shore Water Steps",
+      "lat": 40.44548,
+      "lon": -80.00825
+    },
+    {
+      "id": "G",
+      "name": "East Carson & 10th",
+      "lat": 40.42871,
+      "lon": -79.98858
+    }
   ],
   "edges": {
-    "A>G": { "name": "North Shore, the Point & downtown", "fwd": "the Clemente Bridge, the Point and downtown", "rev": "Smithfield Bridge, downtown and the Point" },
-    "G>G": { "name": "South Side loop", "fwd": "East Carson to SouthSide Works, back on the river trail", "rev": "up 10th to the river trail, back on East Carson" },
-    "G>A": { "name": "Mount Washington", "fwd": "the McArdle climb, Grandview and the West End Bridge", "rev": "the West End Bridge, Grandview and down McArdle" }
+    "A>G": {
+      "name": "North Shore, the Point & downtown",
+      "fwd": "the Clemente Bridge, the Point and downtown",
+      "rev": "Smithfield Bridge, downtown and the Point"
+    },
+    "G>G": {
+      "name": "South Side loop",
+      "fwd": "East Carson to SouthSide Works, back on the river trail",
+      "rev": "up 10th to the river trail, back on East Carson"
+    },
+    "G>A": {
+      "name": "Mount Washington",
+      "fwd": "the McArdle climb, Grandview and the West End Bridge",
+      "rev": "the West End Bridge, Grandview and down McArdle"
+    }
   },
   "presets": [
-    { "id": "pgh-three-rivers", "name": "Three Rivers Loop · choose your turns", "path": ["A>G+", "G>G+", "G>A+"], "tags": ["varied", "long"] },
-    { "id": "pgh-short-loop", "name": "South Side Short Loop", "path": ["A>G+", "G>A+"], "tags": ["short", "hilly"] }
+    {
+      "id": "pgh-three-rivers",
+      "name": "Three Rivers Loop",
+      "path": [
+        "A>G+",
+        "G>G+",
+        "G>A+"
+      ],
+      "tags": [
+        "varied"
+      ],
+      "note": "The whole loop: the Point, downtown, the South Side and the McArdle climb to Grandview"
+    },
+    {
+      "id": "pgh-three-rivers-rev",
+      "name": "Three Rivers Loop \u00b7 reverse",
+      "path": [
+        "G>A-",
+        "G>G-",
+        "A>G-"
+      ],
+      "tags": [
+        "varied"
+      ],
+      "note": "The loop the other way: over the West End Bridge, Grandview and down McArdle first"
+    },
+    {
+      "id": "pgh-short-loop",
+      "name": "South Side Short Loop",
+      "path": [
+        "A>G+",
+        "G>A+"
+      ],
+      "tags": [
+        "short",
+        "hilly"
+      ],
+      "note": "Skips the South Side riverfront: right at East Carson & 10th, straight up McArdle"
+    },
+    {
+      "id": "pgh-short-loop-rev",
+      "name": "South Side Short Loop \u00b7 reverse",
+      "path": [
+        "G>A-",
+        "A>G-"
+      ],
+      "tags": [
+        "short",
+        "hilly"
+      ],
+      "note": "Grandview and down McArdle, then left at East Carson & 10th back to downtown"
+    },
+    {
+      "id": "pgh-south-side",
+      "name": "South Side Flat Loop",
+      "path": [
+        "G>G+"
+      ],
+      "tags": [
+        "flat",
+        "short"
+      ],
+      "note": "East Carson Street and the river trail, round and round from East Carson & 10th"
+    },
+    {
+      "id": "pgh-mt-washington",
+      "name": "Mount Washington There & Back",
+      "path": [
+        "G>A+",
+        "G>A-"
+      ],
+      "tags": [
+        "hilly"
+      ],
+      "note": "Up McArdle, along Grandview to the Water Steps, then back over the top"
+    },
+    {
+      "id": "pgh-long",
+      "name": "Three Rivers There & Back",
+      "path": [
+        "A>G+",
+        "G>G+",
+        "G>A+",
+        "G>A-",
+        "G>G-",
+        "A>G-"
+      ],
+      "tags": [
+        "long",
+        "varied"
+      ],
+      "note": "The whole loop, then the whole loop backwards"
+    }
   ]
 }

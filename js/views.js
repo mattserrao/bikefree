@@ -271,6 +271,77 @@ export function drawMinimap(canvas, route, pos, { mode = 'course', pacerPos = nu
   ctx.restore();
 }
 
+/**
+ * Ride-screen minimap for a network route (js/network.js): every rideable segment faint, the path ahead
+ * bold, the next junction's ways on (when `up` is given: NetRide.upcoming) with the chosen one bright,
+ * the rider's arrow and the pacer. mode 'course' fits the whole network; 'follow' centres on the rider.
+ */
+export function drawNetworkMinimap(canvas, ride, p, { mode = 'course', pacerPos = null, spanM = 1600, up = null, aheadTo = null } = {}) {
+  const { ctx, w, h } = setup(canvas);
+  const r = ride.route, lines = ride.edgeLines();
+  let lat0 = 0, nn = 0;
+  for (const L of lines) for (let i = 0; i < L.lat.length; i += 5) { lat0 += L.lat[i]; nn++; }
+  lat0 /= nn || 1;
+  const kx = Math.cos((lat0 * Math.PI) / 180) * 111320, ky = 110540;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const L of lines) for (let i = 0; i < L.lat.length; i++) {
+    const x = L.lon[i] * kx, y = L.lat[i] * ky;
+    minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+  }
+  const ci = Math.max(0, Math.min(r.lat.length - 1, Math.round(p / 10)));
+  const pad = 14;
+  let sc, cx, cy;
+  if (mode === 'follow') { sc = Math.min(w, h) / spanM; cx = r.lon[ci] * kx; cy = r.lat[ci] * ky; }
+  else { sc = Math.min((w - pad * 2) / (maxX - minX || 1), (h - pad * 2) / (maxY - minY || 1)); cx = (minX + maxX) / 2; cy = (minY + maxY) / 2; }
+  const X = (lon) => w / 2 + (lon * kx - cx) * sc, Y = (lat) => h / 2 - (lat * ky - cy) * sc;
+  const step = Math.max(1, Math.floor(1.5 / (10 * sc)));
+  const poly = (lat, lon, from, to, color, width, dash = null) => {
+    if (to <= from) return;
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.setLineDash(dash || []);
+    ctx.beginPath(); ctx.moveTo(X(lon[from]), Y(lat[from]));
+    for (let i = from + step; i < to; i += step) ctx.lineTo(X(lon[i]), Y(lat[i]));
+    ctx.lineTo(X(lon[to]), Y(lat[to]));
+    ctx.stroke();
+    ctx.setLineDash([]);
+  };
+  const accent = tok('--accent', '#7aa9f5'), ink = tok('--ink', '#ece9e1'), bg = tok('--bg', '#262624');
+  const light = document.documentElement.dataset.theme === 'light';
+  const casing = light ? 'rgba(255,255,255,.75)' : 'rgba(0,0,0,.35)';
+  // the network, faint
+  for (const L of lines) { poly(L.lat, L.lon, 0, L.lat.length - 1, casing, 5); poly(L.lat, L.lon, 0, L.lat.length - 1, tok('--hud-muted', '#a8a69d'), 2.5); }
+  // the path ahead, bold
+  const end = Math.max(ci, Math.min(r.lat.length - 1, Math.round((aheadTo ?? p + 3000) / 10)));
+  poly(r.lat, r.lon, ci, end, casing, 7);
+  poly(r.lat, r.lon, ci, end, accent, 4);
+  // the next junction: each way on, the chosen one bright
+  if (up) {
+    up.options.forEach((o, j) => {
+      const st = ride.stub(o.t, 220), n = st.lat.length - 1;
+      if (j === up.selected) poly(st.lat, st.lon, 0, n, ink, 5);
+      else poly(st.lat, st.lon, 0, n, ink, 2.5, [3, 3]);
+    });
+    const x = X(up.node.lon), y = Y(up.node.lat);
+    ctx.fillStyle = ink; ctx.strokeStyle = bg; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  // pacer
+  if (pacerPos != null) {
+    const j = Math.max(0, Math.min(r.lat.length - 1, Math.round(pacerPos / 10)));
+    ctx.fillStyle = '#f5c400'; ctx.strokeStyle = '#1d1d1c'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(X(r.lon[j]), Y(r.lat[j]), 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  // rider arrow along the path
+  const a = Math.max(0, ci - 2), b = Math.min(r.lat.length - 1, ci + 2);
+  const ang = Math.atan2(-(r.lat[b] - r.lat[a]) * ky, (r.lon[b] - r.lon[a]) * kx);
+  ctx.save();
+  ctx.translate(X(r.lon[ci]), Y(r.lat[ci])); ctx.rotate(ang);
+  ctx.fillStyle = accent; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(-7, 8); ctx.lineTo(-3, 0); ctx.lineTo(-7, -8); ctx.closePath();
+  ctx.stroke(); ctx.fill();
+  ctx.restore();
+}
+
 /** Workout blocks coloured by zone, with progress. */
 export function drawWorkout(canvas, workout, t, ftp, bias = 1, { compact = false } = {}) {
   const { ctx, w, h } = setup(canvas);

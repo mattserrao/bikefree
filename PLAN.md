@@ -844,14 +844,14 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [x] 1.7 Tests (`test/network.test.mjs`): mapping, every in/out pair at every node (position, height, heading), default rule, laps, speed cap
 - [x] 1.8 Course QC rides every turn at every node (`npm run qc:network`: 20 ways through 2 junctions, all clean; Pittsburgh course QC still 0 fail / 0 warn)
 - [x] 1.9 Snapshots of junction G: right, left and back from East Carson (`npm run snap -- --path e1+,e3+ pittsburgh@6008 …`)
-- [ ] 1.10 githack link → on-bike review
+- [x] 1.10 githack link → on-bike review (17 Nov: worked as intended)
 - Built: `routes/cities/pittsburgh-network.json` (junctions: North Shore Water Steps, East Carson & 10th; 3 edges; presets "Three Rivers Loop · choose your turns" 18.3 km and "South Side Short Loop" 13.7 km). Turns are curves through the junction (right 8 m, left 13 m, back 9 m); speed cap only on turns sharper than 60° (a right turn at East Carson & 10th: ~21 km/h). `?debug` puts the session and world on `window.bikefree` for headless checks; `snap --path` follows a network path.
 
 *Phase 2 — Presets and minimap*
-- [ ] 2.1 Goal presets in the route list (Pittsburgh group): each loop both ways, tagged flat / hilly / short / long / varied / new areas
-- [ ] 2.2 Minimap: network + path + next options
-- [ ] 2.3 Ride-screen profile follows the path (current lap, or to the next junctions off-plan)
-- [ ] 2.4 Off-plan handling: rejoin the plan where it's next reached, finish arch moves with the path
+- [x] 2.1 Goal presets: Three Rivers Loop and South Side Short Loop both ways, South Side Flat Loop, Mount Washington There & Back, Three Rivers There & Back; Pittsburgh is listed as its presets (the old loop entry stays a scenery choice). Goal filter over the whole route list (All · Flat · Hilly · Short · Long · Varied): presets carry their own tags, every route also gets flat/hilly from climbing per km (<6 / ≥12 m) and short/long from length (<15 / ≥30 km)
+- [x] 2.2 Minimap: network + path + next options (`drawNetworkMinimap`); card thumbnails and the preview map draw one lap
+- [x] 2.3 Ride-screen profile follows the path (current lap, or to the next junctions off-plan)
+- [x] 2.4 Off-plan handling: rejoin the plan where it next rides a plan step; the finish arch moves with the path; "lap to go" becomes "to <next junction>" off the plan
 
 *Phase 3 — First new segments: Jail Trail (1) + Hot Metal link (2), junctions E, H, I* — review stop
 - [ ] 3.1 Network edges that aren't on the loop's GPX: GPX per segment (BRouter + hand fixes), elevation
@@ -881,12 +881,12 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [ ] 5.11 Final QC, performance check on the Air, PR
 
 **Follow-ups found along the way**
-- [ ] F1 Minimap and card thumbnails draw the path route, laps on top of each other (→ 2.2)
-- [ ] F2 The classic "Three Rivers Loop" and the network "Three Rivers Loop · choose your turns" are both listed (→ 2.1: one entry)
+- [x] F1 Minimap and card thumbnails draw the path route, laps on top of each other (→ 2.2)
+- [x] F2 The classic "Three Rivers Loop" and the network "Three Rivers Loop · choose your turns" are both listed (→ 2.1: one entry)
 - [ ] F3 The pacer follows your path as it is now; if you change a turn after the pacer has passed that junction it jumps to the new path
-- [ ] F4 Route traffic (cars that overtake / wait behind you) follows the loop's direction; check on the bike that it behaves after a turn onto the other half of the loop
-- [ ] F5 At the Water Steps the loop's start/finish is a junction with only straight on or back (the prompt still shows there)
-- [ ] F6 Headless runs can't ride in real time (software rendering): the on-bike check covers the feel of the turn, the camera swing and the prompt timing
+- [x] F4 Route traffic (cars that overtake / wait behind you) follows the loop's direction; check on the bike that it behaves after a turn onto the other half of the loop
+- [ ] F5 At the Water Steps the loop's start/finish is a junction with only straight on or back (kept: "Back" is offered at every junction; it gains real arms with segments 4 and 6)
+- [x] F6 Headless runs can't ride in real time (software rendering): the on-bike check covers the feel of the turn, the camera swing and the prompt timing
 
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)

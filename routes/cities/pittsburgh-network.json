@@ -91,18 +91,33 @@
  "presets": [
   {
    "id": "pgh-three-rivers",
-   "name": "Three Rivers Loop · choose your turns",
+   "name": "Three Rivers Loop",
    "path": [
     "e1+",
     "e2+",
     "e3+"
    ],
    "tags": [
-    "varied",
-    "long"
+    "varied"
    ],
+   "note": "The whole loop: the Point, downtown, the South Side and the McArdle climb to Grandview",
    "lengthM": 18310,
    "climbM": 223
+  },
+  {
+   "id": "pgh-three-rivers-rev",
+   "name": "Three Rivers Loop · reverse",
+   "path": [
+    "e3-",
+    "e2-",
+    "e1-"
+   ],
+   "tags": [
+    "varied"
+   ],
+   "note": "The loop the other way: over the West End Bridge, Grandview and down McArdle first",
+   "lengthM": 18310,
+   "climbM": 224
   },
   {
    "id": "pgh-short-loop",
@@ -115,8 +130,71 @@
     "short",
     "hilly"
    ],
+   "note": "Skips the South Side riverfront: right at East Carson & 10th, straight up McArdle",
    "lengthM": 13720,
    "climbM": 206
+  },
+  {
+   "id": "pgh-short-loop-rev",
+   "name": "South Side Short Loop · reverse",
+   "path": [
+    "e3-",
+    "e1-"
+   ],
+   "tags": [
+    "short",
+    "hilly"
+   ],
+   "note": "Grandview and down McArdle, then left at East Carson & 10th back to downtown",
+   "lengthM": 13720,
+   "climbM": 206
+  },
+  {
+   "id": "pgh-south-side",
+   "name": "South Side Flat Loop",
+   "path": [
+    "e2+"
+   ],
+   "tags": [
+    "flat",
+    "short"
+   ],
+   "note": "East Carson Street and the river trail, round and round from East Carson & 10th",
+   "lengthM": 4590,
+   "climbM": 17
+  },
+  {
+   "id": "pgh-mt-washington",
+   "name": "Mount Washington There & Back",
+   "path": [
+    "e3+",
+    "e3-"
+   ],
+   "tags": [
+    "hilly"
+   ],
+   "note": "Up McArdle, along Grandview to the Water Steps, then back over the top",
+   "lengthM": 15400,
+   "climbM": 336
+  },
+  {
+   "id": "pgh-long",
+   "name": "Three Rivers There & Back",
+   "path": [
+    "e1+",
+    "e2+",
+    "e3+",
+    "e3-",
+    "e2-",
+    "e1-"
+   ],
+   "tags": [
+    "long",
+    "varied"
+   ],
+   "note": "The whole loop, then the whole loop backwards",
+   "lengthM": 36620,
+   "climbM": 447
   }
  ]
 }
