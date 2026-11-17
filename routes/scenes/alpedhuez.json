@@ -343,42 +343,55 @@
     "rail": "#9d927e"
   },
   "road": {
-    "markings": "eu",
+    "markings": "fr",
     "surface": "worn",
     "zones": [
       {
         "fromM": 0,
         "toM": 4800,
-        "surface": "fresh"
+        "surface": "fresh",
+        "tone": 1.18,
+        "warm": 0.15
       },
       {
         "fromM": 4800,
         "toM": 13400,
-        "surface": "worn"
+        "surface": "worn",
+        "tone": 1.35,
+        "warm": 0.25
       },
       {
         "fromM": 13400,
         "toM": 19000,
         "surface": "worn",
-        "patches": 0.6
+        "patches": 0.6,
+        "tone": 1.35,
+        "warm": 0.25,
+        "pavedM": 6.2
       },
       {
         "fromM": 19000,
         "toM": 25200,
         "surface": "alpine",
         "pavedM": 5.8,
-        "centre": 0.4,
-        "gravel": 0.15
+        "centre": 0,
+        "gravel": 0.15,
+        "tone": 1.4,
+        "warm": 0.3
       },
       {
         "fromM": 25200,
         "toM": 37000,
-        "surface": "chipseal"
+        "surface": "chipseal",
+        "tone": 1.4,
+        "warm": 0.3
       },
       {
         "fromM": 37000,
         "toM": 46000,
-        "surface": "patched"
+        "surface": "patched",
+        "tone": 1.3,
+        "warm": 0.22
       },
       {
         "fromM": 41549,
@@ -388,39 +401,53 @@
       {
         "fromM": 46000,
         "toM": 55400,
-        "surface": "worn"
+        "surface": "worn",
+        "tone": 1.35,
+        "warm": 0.25
       },
       {
         "fromM": 55400,
         "toM": 71800,
-        "surface": "fresh"
+        "surface": "fresh",
+        "tone": 1.18,
+        "warm": 0.15
       },
       {
         "fromM": 71800,
         "toM": 76100,
         "surface": "chipseal",
         "pavedM": 5.6,
-        "centre": 0
+        "centre": 0,
+        "tone": 1.4,
+        "warm": 0.3
       },
       {
         "fromM": 76100,
         "toM": 89400,
-        "surface": "worn"
+        "surface": "worn",
+        "tone": 1.35,
+        "warm": 0.25
       },
       {
         "fromM": 89400,
         "toM": 99200,
-        "surface": "fresh"
+        "surface": "fresh",
+        "tone": 1.18,
+        "warm": 0.15
       },
       {
         "fromM": 99200,
         "toM": 111600,
-        "surface": "patched"
+        "surface": "patched",
+        "tone": 1.3,
+        "warm": 0.22
       },
       {
         "fromM": 111600,
         "toM": 127100,
-        "surface": "fresh"
+        "surface": "fresh",
+        "tone": 1.25,
+        "warm": 0.15
       },
       {
         "fromM": 123425,

@@ -116,7 +116,9 @@ export class Look {
     const c = document.createElement('canvas'); c.width = 256; c.height = 512;
     const ctx = c.getContext('2d');
     ctx.fillStyle = r.base; ctx.fillRect(0, 0, 256, 512);
-    if (this.world.route.scene?.road?.markings === 'eu') {
+    if (this.world.route.scene?.road?.markings === 'fr') {
+      // French roads: the paint is drawn by road-surface.js
+    } else if (this.world.route.scene?.road?.markings === 'eu') {
       // European roads: a white dashed centre line (3 m on, 9 m off) and dashed white edges (3 m / 3 m)
       ctx.fillStyle = r.edge;
       for (let y = 0; y < 512; y += 256) ctx.fillRect(126, y, 4, 64);

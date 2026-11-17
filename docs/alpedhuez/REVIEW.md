@@ -66,3 +66,14 @@ Branch `alpedhuez-hero-test`. Plan: `docs/alpedhuez/HERO_PLAN.md`. The whole sta
 ## Still to do
 - A githack ride on the Mac and the M4 Air (frame times while crowd stretches stream in)
 - Not built: runners beside the rider, podium and team buses, a sheepdog, griffon vultures, visitors at overlooks
+
+## Road surface from reference photos (17 Nov 2026)
+
+`road.markings: "fr"` (toolbox: `materials/road-surface.js`, `frenchMarkings`), Alpe d'Huez only, other routes unchanged (guard).
+
+- **Paint by the French rules, in metres:** white T1 centre line (3 m on, 10 m off), T2 edge lines (3 m on, 3.5 m off) set 0.35 m in from the paving edge; short dashes and no edge lines between town boards; a solid centre line on bends you can't see through and on every hairpin, with T3 warning dashes (3 m on, 1.33 m off) before it; no edge lines under 6.6 m of paving, no centre line under 5.2 m. The Col du Noyer has no paint at all, as in the photos.
+- **Asphalt:** lighter, slightly warm grey (the photos' sunlit road is far lighter than the old dark grey), light aggregate in a darker binder near the rider, bleached and oily mottling, a faint paving seam down the middle, darker repair strips along the edges, fewer and fainter sealed cracks. The old double crack line down the middle is gone.
+- **Hairpins:** the gravel shoulder no longer sweeps a light sliver across the road at the apex.
+- Before and after: `docs/alpedhuez/road-before-after.jpg`.
+
+**References** (Wikimedia Commons): Col du Noyer road at the summit (Col Noyer 2017 2, 3 and 7; Col du Noyer06, 66), the D211 bends from above (TDFF24 virages Alpe d'Huez), Route d'Huez in Villard-Reculas and near Pas de la Confession (2026). French marking rules: the *Instruction interministérielle sur la signalisation routière*, 7th part (lines T1, T2, T3; widths in units u; no centre line under 5.2 m, no edge lines under 6.6 m).

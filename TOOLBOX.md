@@ -108,7 +108,7 @@ js/world/toolbox/
 | Module | Scene field | What it does |
 | --- | --- | --- |
 | `materials/surfaces.js` | `palette`, `water`, `vista` | Ground shader: palette by slope, height, shore and canopy, with vista detail far off. Also sea, lake water, lake mist, and scenery decorations (wind on soft plants, foliage, concrete). |
-| `materials/road-surface.js` | `road` | Road kind by stretch: fresh, worn, patched, chip seal, alpine, frost-heaved, tunnel, wet. Costs no draw calls. |
+| `materials/road-surface.js` | `road` | Road kind by stretch: fresh, worn, patched, chip seal, alpine, frost-heaved, tunnel, wet. Costs no draw calls. `markings: "fr"` draws the paint in metres by the French rules (T1 centre 3/10 m, T2 edges 3/3.5 m, short dashes and no edges in villages, solid centre on blind bends with T3 warning dashes, no paint on narrow roads) and adds aggregate, mottling, the paving seam and edge repair strips. |
 | `materials/stonework.js` | (used by structures) | `makeMasonryMaterial({ stones })`: rubble masonry in world space for walls, parapets and portals. |
 
 ### Packs: regional models (`"packs"`)
