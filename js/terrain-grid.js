@@ -12,7 +12,7 @@
 // Pure JS (no three.js, no DOM): used by the app, the QC tools and the tests.
 
 const MAGIC = 'BFTG';
-const BINARY_FIELDS = ['coarse', 'fine'];   // their `h` rows
+const BINARY_FIELDS = ['coarse', 'fine', 'landcover'];   // their `h` rows (landcover: the places container, tools/build_places.py)
 
 const isGzip = (b) => b[0] === 0x1f && b[1] === 0x8b;
 

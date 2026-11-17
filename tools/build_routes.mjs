@@ -70,6 +70,13 @@ for (const item of catalog) {
       for (const b of scene.bridges || []) if (!(b.fromM >= 0 && b.toM > b.fromM && b.toM <= (route.turnS || route.total))) throw new Error(`${item.id}: invalid bridge span`);
       paths.push(scene.terrainGridFile);
     }
+    if (scene.placesFile) {
+      // real places from OpenStreetMap (tools/build_places.py)
+      if (!scene.placesFile.startsWith('routes/scenes/') || scene.placesFile.includes('..') || !existsSync(resolve(root, scene.placesFile))) throw new Error(`${item.id}: missing places file`);
+      const places = readGrid(scene.placesFile);
+      if (places.format !== 'bikefree-places-1' || !(places.landcover?.nx > 1)) throw new Error(`${item.id}: invalid places file`);
+      paths.push(scene.placesFile);
+    }
     if (scene.terrain === 'authored-coast' && (!Array.isArray(scene.coastline) || scene.coastline.length < 2)) throw new Error(`${item.id}: a coastline needs at least two coordinates`);
     for (const [lat, lon] of scene.coastline || []) if (!Number.isFinite(lat) || Math.abs(lat) > 90 || !Number.isFinite(lon) || Math.abs(lon) > 180) throw new Error(`${item.id}: invalid coastline coordinate`);
     if (!wireframe && (!scene.assets?.startsWith('models/scenery/') || scene.assets.includes('..') || !existsSync(resolve(root, scene.assets)))) throw new Error(`${item.id}: missing scenery asset kit`);

@@ -49,6 +49,28 @@ function markerGeometry() {
   return M.geometry();
 }
 
+/** French "borne": a white post with a coloured cap (red on national roads, yellow on departmental ones). */
+function borneGeometry() {
+  const M = new MeshBuilder();
+  M.color('#f1efe8'); M.box(0, 0, 0, .26, .72, .16);
+  return M.geometry();
+}
+function capGeometry() { const M = new MeshBuilder(); M.color('#ffffff'); M.box(0, .72, 0, .265, .2, .165); return M.geometry(); }
+
+/** Numbers 0–127 in one texture: black on white (the French kilometre "bornes"). */
+function frenchAtlas() {
+  const S = 64, c = document.createElement('canvas'); c.width = S * 16; c.height = S * 8;
+  const ctx = c.getContext('2d');
+  for (let n = 0; n < 128; n++) {
+    const x = (n % 16) * S, y = Math.floor(n / 16) * S;
+    ctx.fillStyle = '#f4f2ec'; ctx.fillRect(x, y, S, S);
+    ctx.fillStyle = '#1e1e1e'; ctx.font = 'bold 30px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(n), x + S / 2, y + S / 2 + 2);
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  return t;
+}
+
 /** Numbers 0–63 in one texture: white on park brown. */
 function numberAtlas() {
   const S = 64, c = document.createElement('canvas'); c.width = c.height = S * 8;
@@ -74,7 +96,8 @@ export class Verge {
     this.material = this._own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9 }));
     this.rockMaterial = this._own(new THREE.MeshStandardMaterial({ color: config.rockColor || '#8a8277', vertexColors: true, roughness: .95 }));
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = V(0, 1, 0), rand = randomSequence(4711);
-    const lists = { rocks: [], poles: [], posts: [], markers: [], plates: [] }, plateNums = [];
+    const lists = { rocks: [], poles: [], posts: [], markers: [], plates: [], caps: {} }, plateNums = [];
+    const fr = config.markers?.style === 'fr';
     const F = (s) => this.L.frameAt(Math.max(0, Math.min(this.oneWay - .5, s)));
     // +1 / −1: the side of the road (right / left of the outbound direction) where the ground rises
     const uphill = (p) => (this.L.baseHeight(p.x - p.fz * 16, p.z + p.fx * 16) > this.L.baseHeight(p.x + p.fz * 16, p.z - p.fx * 16) ? 1 : -1);
@@ -82,6 +105,7 @@ export class Verge {
     const bridge = (s) => this.L.bridgeOfS?.(s, 6);
     const place = (list, s, side, off, scale = 1, yaw = null, lift = 0) => {
       const p = F(s), w = at(p, side, off), y = this.L.heightAt(w.x, w.z) + lift;
+      if (this.L.onRoadAt?.(w.x, w.z)) return { p, w, y, skipped: true };   // the inside of a hairpin: another part of the road
       q.setFromAxisAngle(up, yaw ?? Math.atan2(p.fx, p.fz));
       list.push(m.compose(V(w.x, y, w.z), q, V(scale, scale, scale)).clone());
       return { p, w, y };
@@ -89,14 +113,21 @@ export class Verge {
     // mile (or kilometre) markers, on the uphill side, facing the outbound rider
     if (config.markers) {
       const unit = config.markers.units === 'km' ? 1000 : 1609.344;
-      for (let k = 1; k * unit < this.oneWay - 20 && k < 64; k++) {
+      for (let k = 1; k * unit < this.oneWay - 20 && k < (fr ? 128 : 64); k++) {
         const s = k * unit;
         if (bridge(s) || config.skip?.(s)) continue;
-        const side = config.markers.side ?? uphill(F(s)), off = ROAD_HALF + .9;
-        const { p, w, y } = place(lists.markers, s, side, off);
+        // French bornes stand on the right, the plate facing the oncoming traffic
+        const side = config.markers.side ?? (fr ? 1 : uphill(F(s))), off = ROAD_HALF + .9;
+        const { p, w, y, skipped } = place(lists.markers, s, side, off);
+        if (skipped) continue;
+        if (fr) {
+          // the cap's colour by stretch (national road red, departmental yellow)
+          const cap = (config.markers.caps || []).find((c) => s >= (c.fromM ?? 0) && s < (c.toM ?? Infinity))?.color || '#d9342b';
+          place(lists.caps[cap] ||= [], s, side, off);
+        }
         // the plate: a quad on the post's road-facing side, turned to face the oncoming outbound rider
         q.setFromAxisAngle(up, Math.atan2(-p.fx, -p.fz));
-        lists.plates.push(m.compose(V(w.x - p.fx * .06, y + .72, w.z - p.fz * .06), q, V(.36, .36, 1)).clone());
+        lists.plates.push(m.compose(V(w.x - p.fx * (fr ? .085 : .06), y + (fr ? .46 : .72), w.z - p.fz * (fr ? .085 : .06)), q, V(fr ? .24 : .36, fr ? .24 : .36, 1)).clone());
         plateNums.push(k);
       }
     }
@@ -132,18 +163,20 @@ export class Verge {
     this._build(rockGeometry(), this.rockMaterial, lists.rocks, 'Fallen rock', true);
     this._build(poleGeometry(), this.material, lists.poles, 'Snow poles', false);
     this._build(postGeometry(), this.material, lists.posts, 'Delineators', false);
-    this._build(markerGeometry(), this.material, lists.markers, 'Mile marker posts', false);
+    this._build(fr ? borneGeometry() : markerGeometry(), this.material, lists.markers, fr ? 'Kilometre bornes' : 'Mile marker posts', false);
+    for (const [color, list] of Object.entries(lists.caps)) this._build(capGeometry(), this._own(new THREE.MeshStandardMaterial({ color, roughness: .7 })), list, 'Borne caps', false);
     if (lists.plates.length) {
-      const atlas = this._own(numberAtlas());
+      const atlas = this._own(fr ? frenchAtlas() : numberAtlas());
+      const cols = fr ? 16 : 8;
       const plate = new THREE.PlaneGeometry(1, 1);
       const cells = new Float32Array(lists.plates.length * 2);
-      plateNums.forEach((n, i) => cells.set([(n % 8) / 8, 1 - (Math.floor(n / 8) + 1) / 8], i * 2));
+      plateNums.forEach((n, i) => cells.set([(n % cols) / cols, 1 - (Math.floor(n / cols) + 1) / 8], i * 2));
       const mat = this._own(new THREE.MeshStandardMaterial({ map: atlas, roughness: .8 }));
       mat.onBeforeCompile = (shader) => {
         shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aCell;')
-          .replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = aCell + uv / 8.;\n#endif');
+          .replace('#include <uv_vertex>', cols === 8 ? '#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = aCell + uv / 8.;\n#endif' : `#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = aCell + uv / vec2(${cols}., 8.);\n#endif`);
       };
-      mat.customProgramCacheKey = () => 'bf-verge-plates';
+      mat.customProgramCacheKey = () => (cols === 8 ? 'bf-verge-plates' : `bf-verge-plates-${cols}`);
       this._build(plate, mat, lists.plates, 'Mile marker plates', false, (geo, ids) => {
         geo.setAttribute('aCell', new THREE.InstancedBufferAttribute(Float32Array.from(ids.flatMap((i) => [cells[i * 2], cells[i * 2 + 1]])), 2));
       });

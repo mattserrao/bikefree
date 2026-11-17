@@ -12,7 +12,7 @@ import { loadRider } from './rider.js';
 import { PerfMonitor } from './perf.js';
 import { HAZE, AERIAL, AERIAL_COLOR, installHaze } from './toolbox/atmosphere/haze.js';
 import { vistaConfig } from './toolbox/atmosphere/vista.js';
-import { decorateRoad } from './toolbox/materials/road-surface.js';
+import { decorateRoad, frenchMarkings } from './toolbox/materials/road-surface.js';
 import { denseRoad } from './road-align.js';   // [road-align]
 import { BakedLighting } from './toolbox/atmosphere/baked-light.js';   // [baked-light]
 
@@ -648,8 +648,17 @@ function makeRoad(route, index) {
       ctx.fillStyle = `rgba(${g},${g + 3},${g + 5},.3)`;
       ctx.fillRect(Math.random() * c.width, Math.random() * c.height, .6, 1);
     }
-    ctx.fillStyle = '#e8e4d0'; ctx.fillRect(8, 0, 3, c.height); ctx.fillRect(245, 0, 3, c.height);
-    ctx.fillStyle = '#e4c36a'; ctx.fillRect(124, 0, 2, c.height); ctx.fillRect(130, 0, 2, c.height);
+    if (route.scene?.road?.markings === 'fr') {
+      // French roads: no paint in the texture; road-surface.js draws it in metres by the French rules
+    } else if (route.scene?.road?.markings === 'eu') {
+      // European roads (Alpe d'Huez): a white dashed centre line (3 m on, 9 m off) and dashed white edges (3 m / 3 m)
+      ctx.fillStyle = '#ece9de';
+      for (let y = 0; y < c.height; y += 256) ctx.fillRect(126, y, 4, 64);
+      for (let y = 0; y < c.height; y += 128) { ctx.fillRect(8, y, 3, 64); ctx.fillRect(245, y, 3, 64); }
+    } else {
+      ctx.fillStyle = '#e8e4d0'; ctx.fillRect(8, 0, 3, c.height); ctx.fillRect(245, 0, 3, c.height);
+      ctx.fillStyle = '#e4c36a'; ctx.fillRect(124, 0, 2, c.height); ctx.fillRect(130, 0, 2, c.height);
+    }
   }
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = THREE.ClampToEdgeWrapping;
@@ -659,7 +668,8 @@ function makeRoad(route, index) {
   const roadOptions = { map: tex, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 };
   const mat = stylized ? new THREE.MeshStandardMaterial({ ...roadOptions, roughness: .94, metalness: .015 }) : new THREE.MeshLambertMaterial(roadOptions);
   // road surface by area and condition (js/world/toolbox/materials/road-surface.js): the scene's "road" block
-  if (stylized && route.scene.road) decorateRoad(mat, route.scene.road, { widthM: ROAD_WIDTH, repeatM: 24 });
+  const marks = stylized && route.scene.road?.markings === 'fr' ? frenchMarkings(route.scene.road, route, index, { widthM: ROAD_WIDTH, boards: route.scene.boards || [] }) : null;
+  if (stylized && route.scene.road) decorateRoad(mat, route.scene.road, { widthM: ROAD_WIDTH, repeatM: 24, marks });
   if (stylized) {
     const data = new Uint8Array(128 * 128 * 4);
     for (let k = 0; k < data.length; k += 4) { const v = 105 + Math.random() * 45; data.set([v, v, v, 255], k); }
@@ -708,8 +718,15 @@ function makeRibbon(route, index, width, lift, tex, repeatM, offset) {
     const v = route.dist[i] / repeatM;
     uv.set([0, v, 1, v], i * 4);
   }
+  // a hairpin's apex: the ribbon's cross-sections swing round faster than it can follow, so its quads there
+  // would sweep a sliver across the road; leave them out (the road itself covers the apex)
+  const sharp = (i) => {
+    const h = (k) => Math.atan2(index.zs[Math.min(n - 1, k + 1)] - index.zs[Math.max(0, k - 1)], index.xs[Math.min(n - 1, k + 1)] - index.xs[Math.max(0, k - 1)]);
+    let d = Math.abs(h(i + 1) - h(i)); if (d > Math.PI) d = 2 * Math.PI - d;
+    return d > .6;
+  };
   const idx = [];
-  for (let i = 0; i < n - 1; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  for (let i = 0; i < n - 1; i++) { if (route.scene?.switchbacks && sharp(i)) continue; const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));

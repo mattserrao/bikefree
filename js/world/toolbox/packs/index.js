@@ -3,6 +3,7 @@
 // register it here. Any route can then list it in "packs".
 import { makeNortheastPack } from './northeast.js';
 import { makeNorthernRockiesPack, decorateTreeMaterial } from './northern-rockies.js';
+import { makeAlpsPack } from './alps.js';
 import { PACK_META, packId } from './meta.js';
 
 const categories = (id) => Object.fromEntries(PACK_META[id].groundcover.map((n) => [n, 'groundcover']));
@@ -11,6 +12,7 @@ export const PACKS = {
   northeast: { make: makeNortheastPack, category: categories('northeast') },
   // near trees get the bark / foliage / moss surface shader (the pack tags each surface in its aTree attribute)
   'northern-rockies': { make: makeNorthernRockiesPack, category: categories('northern-rockies'), decorateNear: decorateTreeMaterial },
+  alps: { make: makeAlpsPack, category: categories('alps'), decorateNear: decorateTreeMaterial },
 };
 
 /** The packs a scene asks for, in the order it lists them (old names accepted). */

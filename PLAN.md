@@ -699,6 +699,29 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [ ] Ride a route on the Mac (githack link) to confirm nothing moved
 - [ ] Later (visual changes): merge the duplicates listed in INVENTORY.md, an `alps` pack, and the standard look on Big Sur, Zion and Pittsburgh
 
+### Alpe d'Huez hero — race day, the whole stage *(test branch `alpedhuez-hero-test`, from `main` after the toolbox)*
+**Goal:** fill in the Alpe d'Huez wireframe at hero detail with the toolbox: all 127 km of Stage 19, on race day, at real places drawn in the cartoon style. Full plan: `docs/alpedhuez/HERO_PLAN.md`.
+
+**Decisions (16 Nov 2026)**
+- Hero detail everywhere (not just the final climb)
+- Race day always: crowds, Dutch Corner, road paint, barriers, camper vans, banners, finish arch; roads closed (no traffic)
+- Real places, stylized: villages, churches, the Sautet dam, the Beaume tunnel and the resort from OpenStreetMap; bend signs 21 → 1 at the real bends
+- Claude builds it alone, in phases, with snapshots after each
+- Toolbox standard (gentle look, baked midday, chase camera, vista); 2.5M triangles allowed on the Alpe with crowds; under 600 draw calls
+
+**Passes**
+- [x] P0 · Scene onto the mountain preset; OSM corridor fetch (`tools/fetch_osm_corridor.py`, OSM API tiles) + census (`docs/alpedhuez/osm-census.md`)
+- [x] P1 · Terrain bake: Terrain Tiles holes filled from z13; lakes checked against the map (Sautet, Laffrey, Saint-Pierre-Cognet, Lac Blanc…); tunnels (Beaume, Huez galleries); baked light in a 6 km window that follows the rider
+- [x] P2 · Map land cover, buildings, lifts, power lines and dams baked into `alpedhuez-places.bin.gz` (`tools/build_places.py`); real-terrain uses the land cover
+- [x] P3 · `alps` pack (106 models) + data-driven `vegetation.zones` (Going-to-the-Sun keeps its defaults)
+- [x] P4 · Palette and planting by elevation band, aspect and land cover
+- [x] P5 · Atmosphere: vista, haze, clear and cloud presets, midday bake
+- [x] P6 · 7,300 buildings from map footprints in six regional styles, the tent church, 78 lifts, 71 power lines, 5 dams
+- [x] P7 · Bend boards 21 → 1 at the mapped *virages* (number, altitude, winners), town and col boards, French bornes, EU road markings
+- [x] P8 · Race day (`raceDay`): crowds by stretch, Dutch Corner, flags, vans and tents, road paint, barriers, KOM banners, km-to-go, flamme rouge, finish gantry, helicopter. Not built: runners beside the rider, podium and team buses
+- [x] P9 · Cows, sheep, marmots, ravens and an eagle (no dog, no vultures yet); the ride ends at the line (Endless off)
+- [x] P10 · Strict QC clean (switchback banks, 3 m ground on hairpins, retaining walls); guard on the other routes; snapshots; moved to In Progress. Still to do on your side: a githack ride on the Mac and the Air
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

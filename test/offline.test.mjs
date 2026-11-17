@@ -14,7 +14,8 @@ for (const { id: park, file, scene } of catalog) {
     const z15 = keys.filter((k) => k.startsWith('15/'));
     const urls = tileKeysToUrls(keys, { imagery: !wire });
     assert.ok(z15.length > 20, `${park}: ${z15.length} z15 tiles`);
-    assert.ok(urls.length < 6000, `${park}: ${urls.length} urls`);
+    // about 6,000 files for a 100 km route; long Tour stages scale with their length
+    assert.ok(urls.length < 6000 * Math.max(1, r.total / 100000), `${park}: ${urls.length} urls`);
     assert.equal(new Set(urls).size, urls.length);
     console.log(`  ${park}: ${keys.length} tiles (${z15.length} detailed), ${urls.length} files`);
   });

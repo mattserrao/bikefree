@@ -43,6 +43,9 @@ def tile_xy(lat, lon, z):
     return x, y
 
 
+NODATA_M = -1000   # Terrain Tiles has holes: whole z14 tiles of -32768 m (near Valbonnais, France)
+
+
 def fetch(z, x, y):
     path = CACHE / f'{z}-{x}-{y}.png'
     if not path.exists():
@@ -50,7 +53,16 @@ def fetch(z, x, y):
         url = f'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'
         with urllib.request.urlopen(url, timeout=60) as r: path.write_bytes(r.read())
     a = np.asarray(Image.open(path).convert('RGB'), dtype=np.float64)
-    return a[..., 0] * 256 + a[..., 1] + a[..., 2] / 256 - 32768
+    h = a[..., 0] * 256 + a[..., 1] + a[..., 2] / 256 - 32768
+    bad = h < NODATA_M
+    if bad.any() and z > 10:
+        # fill the hole from the coarser parent tile (its quadrant, upsampled ×2)
+        parent = fetch(z - 1, x >> 1, y >> 1)
+        q = parent[(y & 1) * 128:(y & 1) * 128 + 128, (x & 1) * 128:(x & 1) * 128 + 128]
+        up = ndimage.zoom(q, 2, order=1)
+        h[bad] = up[bad]
+        print(f'  z{z} {x}/{y}: filled {bad.mean() * 100:.0f}% no-data from z{z - 1}')
+    return h
 
 
 class Mosaic:
@@ -132,7 +144,8 @@ def main():
         return
     if cfg.get('lakes'):
         del LA, LO
-        ids, lakes = find_lakes(H, cfg, north, west, mlat, mlon)
+        osm = osm_water(rid, cfg, H.shape, north, west, mlat, mlon, pts) if cfg.get('osmWater') else None
+        ids, lakes = find_lakes(H, cfg, north, west, mlat, mlon, osm)
         finish(rid, cfg, pts, gpx, M, H, north, west, south, east, fnx, fny, mlat, mlon, ids, lakes)
         return
     low = H < cfg['seaBelowM']
@@ -191,7 +204,38 @@ def rivers(H, LA, LO, scene, cfg):
     return water
 
 
-def find_lakes(H, cfg, north, west, mlat, mlon):
+def osm_water(rid, cfg, shape, north, west, mlat, mlon, pts):
+    """Mapped water (tools/fetch_osm_corridor.py) on the master grid, and where the map was fetched (the
+    corridor): inside it a flat basin is a lake only if the map has water there, and takes the map's name."""
+    from PIL import ImageDraw
+    path = ROOT / 'tools' / '.cache' / f'osm-{rid}' / 'features.json'
+    if not path.exists():
+        print('  (no OSM features: run tools/fetch_osm_corridor.py first; lakes unchecked)')
+        return None
+    feat = json.loads(path.read_text())
+    fm = cfg['fineCellM']
+    to_px = lambda la, lo: ((lo - west) * mlon / fm, (north - la) * mlat / fm)
+    img = Image.new('I', (shape[1], shape[0]), 0)
+    draw = ImageDraw.Draw(img)
+    names = {}
+    for a in feat['areas']:
+        t = a['tags']
+        if t.get('natural') == 'water' or t.get('water') in ('lake', 'reservoir', 'pond', 'basin'):
+            k = len(names) + 1
+            names[k] = t.get('name')
+            draw.polygon([to_px(la, lo) for la, lo in a['ring']], fill=k)
+    water = np.asarray(img)
+    covered = np.zeros(shape, bool)
+    for la, lo in pts[::10]:
+        x, y = to_px(la, lo)
+        if 0 <= int(y) < shape[0] and 0 <= int(x) < shape[1]: covered[int(y), int(x)] = True
+    corridor = (cfg.get('osmCorridorM') or 1500) - 300
+    covered = ndimage.distance_transform_edt(~covered) * fm < corridor
+    print(f'  OSM water: {len(names)} mapped water areas')
+    return water, names, covered
+
+
+def find_lakes(H, cfg, north, west, mlat, mlon, osm=None):
     """Inland mountains: lakes are the hydro-flattened surfaces — connected, dead-flat areas that sit in a
     basin (the ground rises all round). Each gets its own level. Returns a lake-id raster (0 = land) and the list."""
     fm = cfg['fineCellM']
@@ -213,11 +257,18 @@ def find_lakes(H, cfg, north, west, mlat, mlon):
         ring = ndimage.binary_dilation(sub, iterations=8) & ~ndimage.binary_dilation(sub, iterations=3)
         if ring.any() and np.mean(hs[ring] > level + .25) < .6: continue   # a flat field or river, not a basin
         sub = ndimage.binary_closing(sub, iterations=2) & (hs < level + .6)
+        osm_name = None
+        if osm is not None:
+            water, wnames, covered = osm
+            ow, oc = water[y0:y1, x0:x1][sub], covered[y0:y1, x0:x1][sub]
+            if oc.mean() > .5 and (ow > 0).mean() < .3: continue   # inside the mapped corridor, but the map has no water here
+            if (ow > 0).any(): osm_name = wnames.get(int(np.bincount(ow[ow > 0]).argmax()))
         ids[y0:y1, x0:x1][sub & (ids[y0:y1, x0:x1] == 0)] = len(lakes) + 1
         lat, lon = north - ys.mean() * fm / mlat, west + xs.mean() * fm / mlon
         lake = {'id': len(lakes) + 1, 'level': round(level, 2), 'areaHa': round(float(sub.sum() * fm * fm / 1e4), 1),
                 'lat': round(lat, 5), 'lon': round(lon, 5)}
-        for name, la, lo in names:
+        if osm_name: lake['name'] = osm_name
+        for name, la, lo in ([] if osm_name else names):
             if math.hypot((la - lat) * mlat, (lo - lon) * mlon) < cfg.get('nameRadiusM', 2500) and not any(l.get('name') == name for l in lakes):
                 lake['name'] = name; break
         lakes.append(lake)
