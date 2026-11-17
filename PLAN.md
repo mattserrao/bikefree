@@ -816,6 +816,72 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [ ] Ride Pittsburgh on the Mac (githack link)
 
 
+### Pittsburgh network: choose your turns *(test branch `pittsburgh-network-test`, from `main` after PR #35; one PR at the end)*
+**Goal:** a more explorable Pittsburgh. Rides are built from segments joined at junctions where you choose left / straight / right / back, so routes can be grouped by goal (flat, hilly, short, long, varied, new areas). Plans: Project docs `claude/pittsburgh-expansion-routes.md` (the 11 suggested segments) and `claude/pittsburgh-connections-plan.md` (junctions A–Q).
+
+**Decisions (17 Nov 2026)**
+- No choice made at a junction: follow the planned route; with no plan (or once off it), go straight (the main arm at a T)
+- Choose with the handlebar ◀ ▶ buttons and keyboard <kbd>A</kbd> / <kbd>D</kbd> (no on-screen buttons); arrows stay on shifting and grade
+- Sharp turns (over ~60°): gentle speed cap through the corner, then pedal back up
+- U-turns: "Back" is an option at every junction; dead-end segments end in a turnaround
+- Turn prompt ~15 s ahead (never under 120 m), locks 30 m out; each option shows where it goes, distance and climb to the next junction
+- Free ride: no set end (ride until you stop)
+- Planning: goal presets first; tap-the-map planner in phase 4
+- Turns not taken: route quality for ~150 m, then the normal city street
+- Every segment rideable both ways (real one-way streets ignored; traffic keeps its real direction)
+- Minimap: the whole network faint, your path bold, the next junction's options highlighted
+- One branch, one PR at the end; on-bike review stops after phase 1 and phase 3
+
+**Action items, in order**
+
+*Phase 1 — Turns on the current loop (junction G, East Carson & 10th)* — review stop
+- [ ] 1.1 Network data: nodes, edges (intervals of the loop's GPX), presets; `tools/build_network.mjs` finds the nodes on the GPX → `routes/cities/pittsburgh-network.json`
+- [ ] 1.2 `js/network.js` (pure): arms and bearings, path made of edge traversals, options at a node (left/straight/right/back), default rule, a rolling linear "path route" the session rides, path → loop position mapping, smooth turn pose, turn ahead (for the speed cap), laps on the plan
+- [ ] 1.3 Session: network routes, corner speed cap, laps, choice API; handlebar ◀ ▶ and <kbd>A</kbd>/<kbd>D</kbd>
+- [ ] 1.4 World: built from the loop as today; rider, pacer, arches and route traffic follow the path
+- [ ] 1.5 Turn prompt on the ride screen
+- [ ] 1.6 Route list: test entries for the 18.3 km loop and the 13.7 km South Side short loop; route selector fits network routes (no Reverse, starts at named junctions, ride length on the path)
+- [ ] 1.7 Tests (`test/network.test.mjs`): mapping, every in/out pair at every node (position, height, heading), default rule, laps, speed cap
+- [ ] 1.8 Course QC rides every turn at every node
+- [ ] 1.9 Snapshots of junction G from all four arms
+- [ ] 1.10 githack link → on-bike review
+
+*Phase 2 — Presets and minimap*
+- [ ] 2.1 Goal presets in the route list (Pittsburgh group): each loop both ways, tagged flat / hilly / short / long / varied / new areas
+- [ ] 2.2 Minimap: network + path + next options
+- [ ] 2.3 Ride-screen profile follows the path (current lap, or to the next junctions off-plan)
+- [ ] 2.4 Off-plan handling: rejoin the plan where it's next reached, finish arch moves with the path
+
+*Phase 3 — First new segments: Jail Trail (1) + Hot Metal link (2), junctions E, H, I* — review stop
+- [ ] 3.1 Network edges that aren't on the loop's GPX: GPX per segment (BRouter + hand fixes), elevation
+- [ ] 3.2 City data for the new corridor (OSM streets/buildings, terrain grid check) in `build_city.py`
+- [ ] 3.3 World builds route-quality roads for every network edge (ribbons, bridges, junction arms; untaken arms ~150 m then street)
+- [ ] 3.4 Junctions with route arms on both sides; ramps where levels differ (Mon Wharf, Hot Metal ramp)
+- [ ] 3.5 Hot Metal Bridge rideable deck; parkway-side trail scenery for the Jail Trail
+- [ ] 3.6 Flat short loop preset (Point → Jail Trail → Hot Metal → South Side trail → Smithfield)
+- [ ] 3.7 QC (course, clipping, snapshots) → githack link → on-bike review
+
+*Phase 4 — Free ride and the map planner*
+- [ ] 4.1 Free ride: no plan, choose at every junction, no set end
+- [ ] 4.2 Map planner: tap segments on a network map; running distance / climb / time; save your own routes
+- [ ] 4.3 Recording, laps and the summary for unplanned rides
+
+*Phase 5 — Remaining segments, in build order*
+- [ ] 5.1 West End Overlook spur (9)
+- [ ] 5.2 Oakland & Schenley Park (3)
+- [ ] 5.3 Troy Hill & Rialto (7) + close gap P
+- [ ] 5.4 Area loading (the city built by area instead of around one line) — needed before 10, 6, 8, 5
+- [ ] 5.5 Great Allegheny Passage to Homestead (10)
+- [ ] 5.6 Allegheny loop (4)
+- [ ] 5.7 Polish Hill & Bloomfield (11) + close gap L
+- [ ] 5.8 North Side (6)
+- [ ] 5.9 Dirty Dozen south (8) + close gap Q; cobblestone surface for Canton Ave
+- [ ] 5.10 East End (5)
+- [ ] 5.11 Final QC, performance check on the Air, PR
+
+**Follow-ups found along the way**
+- (none yet)
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)
