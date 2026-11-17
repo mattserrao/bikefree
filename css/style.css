@@ -281,6 +281,22 @@ body.idle .hud-buttons { opacity: 0; }
 .pill.demo { background: var(--accent); color: var(--on-accent); font-weight: 700; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
 .pill.pacer { display: flex; align-items: center; gap: 8px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .pill.warn { background: var(--attn); color: #1d1d1c; font-weight: 600; }
+/* Turn prompt (network routes): the next junction's ways on */
+.turn-prompt { padding: 10px 12px 8px; border-radius: 16px; display: grid; gap: 8px; min-width: 300px; max-width: min(92vw, 760px); }
+.turn-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 0 4px; }
+.turn-head b { font-size: 16px; }
+.turn-head span { font-size: 14px; opacity: .8; font-variant-numeric: tabular-nums; }
+.turn-opts { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
+.turn-opt { display: grid; justify-items: center; text-align: center; gap: 2px; padding: 6px 8px 7px; border-radius: 12px; border: 1px solid transparent; opacity: .62; }
+.turn-opt i { font-style: normal; font-size: 26px; line-height: 1; }
+.turn-opt b { font-size: 14px; }
+.turn-opt b em { font-style: normal; font-size: 10px; letter-spacing: .8px; text-transform: uppercase; color: var(--accent-ink); margin-left: 4px; }
+.turn-opt small { font-size: 11px; line-height: 1.25; opacity: .85; white-space: normal; }
+.turn-opt .turn-num { font-variant-numeric: tabular-nums; opacity: .7; }
+.turn-opt.on { opacity: 1; border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent) inset; }
+.turn-prompt.locked .turn-opt:not(.on) { opacity: .3; }
+.turn-hint { font-size: 11px; text-align: center; opacity: .7; }
+.turn-hint kbd { font-size: 10px; }
 .hud-title { font-weight: 700; font-size: clamp(18px, 2.6vh, 26px); text-shadow: var(--title-shadow); opacity: 0; transition: opacity 1.2s; white-space: nowrap; }
 .hud-title.show { opacity: 1; }
 

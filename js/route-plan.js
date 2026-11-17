@@ -10,7 +10,7 @@ import { stepSpeed, DEFAULTS } from './physics.js';
 const STEP_M = 10;
 
 /** Length of one leg (the way out). */
-export const legLength = (route) => route.turnS || route.total;
+export const legLength = (route) => route.lapM || route.turnS || route.total;   // a network route: one lap of its plan
 
 /** Route position of a start: the way out (or the way back if reverse), offsetM along it. */
 export function startPosition(route, { reverse = false, offsetM = 0 } = {}) {
@@ -52,7 +52,7 @@ export function stopsForDirection(route, stops, reverse) {
 export function stopNear(route, stops, posM, maxM = 600) {
   const leg = legLength(route);
   const x = wrapDist(route, posM);
-  const out = x <= leg ? x : route.total - x;   // the way back retraces the way out
+  const out = route.lapM ? x % route.lapM : x <= leg ? x : route.total - x;   // the way back retraces the way out (a network route: laps)
   let best = null;
   for (const s of stops || []) {
     const d = Math.abs(s.atM - out);

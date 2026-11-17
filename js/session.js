@@ -102,7 +102,15 @@ export class Session extends EventTarget {
     return this.route.total - (this.routeRidden % this.route.total);
   }
   /** Current lap on a loop route (1-based). */
-  get routeLap() { return this.route ? lapAt(this.route, this.routeRidden) : 1; }
+  get routeLap() { return !this.route ? 1 : this.route.netRide ? this.route.netRide.lapAt(this.routePos) : lapAt(this.route, this.routeRidden); }
+  /** On a network route: change the way you'll go at the next junction (−1 left, +1 right). */
+  turn(dir) {
+    const net = this.mode === 'route' ? this.route?.netRide : null;
+    if (!net || !net.choose(dir, this.routePos)) return false;
+    if (this.settings.haptics) this.ride.vibrate();
+    this._changed();
+    return true;
+  }
   get gradePct() {
     if (this.mode === 'route' && this.route) return this.routeDone ? 0 : routeAt(this.route, this.routePos).grade;
     return this._manualGrade;
@@ -201,6 +209,7 @@ export class Session extends EventTarget {
     this.routeGoalHit = false;
     this.mode = 'route';
     this.route = route;
+    route.netRide?.reset();   // a network route (js/network.js): the plan again, nothing chosen yet
     this.routeOffset = this.distanceM;
     this.routeDone = false;
     this._lastLap = 1;
@@ -257,6 +266,7 @@ export class Session extends EventTarget {
     if (name === 'A') return this.toggle();
     if (name === 'Y') return this.lap();
     if (name === 'navRight' && this.mode === 'workout') return this.skipSegment();
+    if ((name === 'navLeft' || name === 'navRight') && this.mode === 'route' && this.route?.netRide) return this.turn(name === 'navLeft' ? -1 : 1);
   }
 
   // ---------- Loop ----------
@@ -300,6 +310,9 @@ export class Session extends EventTarget {
     this.speedMps = stepSpeed(this.speedMps, this.power, grade, dt, p);
     // Demo mode holds a constant speed so every feature can be tried without a bike.
     if (this.demoSpeedMps != null) this.speedMps = this.running ? this.demoSpeedMps : 0;
+    // A network route slows you through sharp turns at junctions (then you pedal back up).
+    const net = this.mode === 'route' ? this.route?.netRide : null;
+    if (net && !this.routeDone) { const cap = net.speedCap(this.routePos); if (cap != null && this.speedMps > cap) this.speedMps = cap; }
     if (this.running) {
       const ds = this.speedMps * dt;
       this.distanceM += ds;
@@ -343,6 +356,19 @@ export class Session extends EventTarget {
         this._lastSent = null;
         this.log('app', `Finish: ${this.route.name}`, 'ok');
         this.dispatchEvent(new Event('routeFinished'));
+      }
+      return;
+    }
+    if (this.route.netRide) {
+      // a network route: the path follows the plan (or your turns); a lap each time the plan comes round
+      this.route.netRide.update(this.routePos);
+      const lap = this.route.netRide.lapAt(this.routePos);
+      if (lap !== this._lastLap) {
+        this._lastLap = lap;
+        if (this.recorder.active) this.recorder.lap(Date.now(), `${this.route.name} · lap ${lap}`);
+        if (this.settings.haptics) this.ride.vibrate();
+        this.log('app', `Lap ${lap} of ${this.route.name}`, 'ok');
+        this.dispatchEvent(new Event('routeLap'));
       }
       return;
     }

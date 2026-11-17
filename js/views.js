@@ -190,7 +190,7 @@ export function drawTrace(canvas, route, pos, { markerOnly = false, section = nu
 const mapCache = new WeakMap();
 function mapPoints(route) {
   let m = mapCache.get(route);
-  if (m) return m;
+  if (m && m.ver === route.netRide?.version) return m;   // a network route's path changes as you choose turns
   let lat0 = 0;
   for (let i = 0; i < route.lat.length; i++) lat0 += route.lat[i];
   lat0 /= route.lat.length;
@@ -203,7 +203,7 @@ function mapPoints(route) {
   }
   // On a mirrored there-and-back route the return leg retraces the outbound one, so only one leg is outlined.
   const outlineEnd = route.mirrored && route.turnIdx ? route.turnIdx : n - 1;
-  m = { x, y, minX, maxX, minY, maxY, outlineEnd };
+  m = { x, y, minX, maxX, minY, maxY, outlineEnd, ver: route.netRide?.version };
   mapCache.set(route, m);
   return m;
 }

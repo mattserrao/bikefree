@@ -1,0 +1,19 @@
+{
+  "id": "pittsburgh",
+  "base": "routes/cities/pittsburgh.gpx",
+  "catalogId": "pittsburgh",
+  "out": "routes/cities/pittsburgh-network.json",
+  "nodes": [
+    { "id": "A", "name": "North Shore Water Steps", "lat": 40.44548, "lon": -80.00825 },
+    { "id": "G", "name": "East Carson & 10th", "lat": 40.42871, "lon": -79.98858 }
+  ],
+  "edges": {
+    "A>G": { "name": "North Shore, the Point & downtown", "fwd": "the Clemente Bridge, the Point and downtown", "rev": "Smithfield Bridge, downtown and the Point" },
+    "G>G": { "name": "South Side loop", "fwd": "East Carson to SouthSide Works, back on the river trail", "rev": "up 10th to the river trail, back on East Carson" },
+    "G>A": { "name": "Mount Washington", "fwd": "the McArdle climb, Grandview and the West End Bridge", "rev": "the West End Bridge, Grandview and down McArdle" }
+  },
+  "presets": [
+    { "id": "pgh-three-rivers", "name": "Three Rivers Loop · choose your turns", "path": ["A>G+", "G>G+", "G>A+"], "tags": ["varied", "long"] },
+    { "id": "pgh-short-loop", "name": "South Side Short Loop", "path": ["A>G+", "G>A+"], "tags": ["short", "hilly"] }
+  ]
+}

@@ -48,6 +48,10 @@ export class World {
     this.route = route;
     this.log = opts.log || (() => {});
     this.s = 0;               // displayed position along the route (m)
+    // a ride network (js/network.js): the ride's own position is in path metres; the world maps it onto
+    // this route (built as usual around the city loop) and follows the path's curves through junctions
+    this.path = opts.path || null;
+    this.p = 0;               // displayed position along the path (m), with a path
     this.crank = 0;
     this.running = false;
     this.source = null;       // () => {pos, speed, cadence, riding, grade, power, ftp} (grade/power/ftp pick the rider's posture)
@@ -183,6 +187,8 @@ export class World {
 
   /** Where to draw the rider: a function returning {pos, speed (m/s), cadence (rpm), riding}. */
   setSource(fn) { this.source = fn; }
+  /** Follow a network ride's path (js/network.js NetRide), or null for the route itself. */
+  setPath(path) { this.path = path || null; this._pacerInit = false; }
 
   /**
    * The start and finish arches for the ride that's planned (js/world/toolbox/roadside/course-arches.js):
@@ -194,6 +200,11 @@ export class World {
     if (marks?.finish && race != null) {
       const x = wrapDist(r, marks.finish.atM), out = r.turnS && x > r.turnS ? r.total - x : x;
       if (Math.abs(out - race) < 60) marks = { ...marks, finish: null };
+    }
+    if (this.path) {
+      // network ride: the marks are path metres; the arches stand where that is on the city loop
+      const at = (m) => (m && Number.isFinite(m.atM) ? { ...m, atM: this.path.worldS(m.atM) } : m);
+      marks = marks && { start: at(marks.start), finish: at(marks.finish) };
     }
     if (!marks?.start && !marks?.finish && !this.courseArches) return;
     (this.courseArches ||= new CourseArches(this)).set(marks || {});
@@ -210,6 +221,21 @@ export class World {
     out.fwd.set(pose.fwd.x, pose.fwd.y, pose.fwd.z);
     out.flat.set(pose.flat.x, 0, pose.flat.z);
     return out;
+  }
+  /** The same at path metre p on a network ride (the curves through junctions included). */
+  _placePath(p, lane, out) {
+    const pose = this.path.pose(p, this.index, lane);
+    out.pos.set(pose.pos.x, pose.pos.y, pose.pos.z);
+    out.fwd.set(pose.fwd.x, pose.fwd.y, pose.fwd.z);
+    out.flat.set(pose.flat.x, 0, pose.flat.z);
+    return out;
+  }
+  /** Ease a displayed path position toward the ride's (no wrapping: a path runs on). */
+  _followPath(cur, target, speed, dt) {
+    let x = cur + speed * dt;
+    const err = target - x;
+    if (Math.abs(err) > 60) x = target; else x += err * Math.min(1, dt * 1.5);
+    return Math.max(0, x);
   }
 
 
@@ -230,6 +256,14 @@ export class World {
     const total = this.route.total;
     // Same smoothing as the rider: roll at its speed, ease toward the true position.
     if (!this._pacerInit) { this.ps = src.pos; this.pacerCrank = 0; this._pacerInit = true; }
+    if (this.path) {
+      this.ps = this._followPath(this.ps, src.pos, src.speed, dt);
+      const { pos, fwd } = this._placePath(this.ps, PACER_LANE, this._pacerPose ||= { pos: new THREE.Vector3(), fwd: new THREE.Vector3(), flat: new THREE.Vector3() });
+      this.pacerCrank += (src.cadence / 60) * Math.PI * 2 * dt;
+      this.pacer.group.visible = true;
+      this.pacer.update(pos, fwd, this.pacerCrank, src.speed, Math.min(dt, 0.1), src);
+      return;
+    }
     this.ps += src.speed * dt;
     let err = src.pos - wrapDist(this.route, this.ps);
     if (this.route.closed) { if (err > total / 2) err -= total; if (err < -total / 2) err += total; }
@@ -384,14 +418,23 @@ export class World {
     // Follow the ride position smoothly: advance at the current speed, ease toward the real value.
     const src = this.source ? this.source() : { pos: 0, speed: 0, cadence: 0, riding: false };
     const total = this.route.total;
-    this.s += src.speed * dt;
-    let err = src.pos - wrapDist(this.route, this.s);
-    if (this.route.closed) { if (err > total / 2) err -= total; if (err < -total / 2) err += total; }
-    if (Math.abs(err) > 60) this.s = src.pos; else this.s += err * Math.min(1, dt * 1.5);
-    this.s = this.route.closed ? wrapDist(this.route, this.s) : Math.max(0, Math.min(total, this.s));
-
-    // Rider placement: right-hand side of the road
-    const { pos: riderPos, fwd, flat } = this._place(this.s, RIDER_LANE, this._riderPose ||= { pos: new THREE.Vector3(), fwd: new THREE.Vector3(), flat: new THREE.Vector3() });
+    const riderOut = this._riderPose ||= { pos: new THREE.Vector3(), fwd: new THREE.Vector3(), flat: new THREE.Vector3() };
+    let placed;
+    if (this.path) {
+      // network ride: follow the path, and stand on the city loop where that is
+      this.p = this._followPath(this.p, src.pos, src.speed, dt);
+      this.s = this.path.worldS(this.p);
+      placed = this._placePath(this.p, RIDER_LANE, riderOut);
+    } else {
+      this.s += src.speed * dt;
+      let err = src.pos - wrapDist(this.route, this.s);
+      if (this.route.closed) { if (err > total / 2) err -= total; if (err < -total / 2) err += total; }
+      if (Math.abs(err) > 60) this.s = src.pos; else this.s += err * Math.min(1, dt * 1.5);
+      this.s = this.route.closed ? wrapDist(this.route, this.s) : Math.max(0, Math.min(total, this.s));
+      // Rider placement: right-hand side of the road
+      placed = this._place(this.s, RIDER_LANE, riderOut);
+    }
+    const { pos: riderPos, fwd, flat } = placed;
     this.crank += (src.cadence / 60) * Math.PI * 2 * dt;
     this.rider.update(riderPos, fwd, this.crank, src.speed, Math.min(dt, 0.1), src);
     this._updatePacer(dt);

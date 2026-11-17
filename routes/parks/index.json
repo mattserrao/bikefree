@@ -243,6 +243,7 @@
     "file": "routes/cities/pittsburgh.gpx",
     "stage": "draft",
     "eleSmoothM": 10,
+    "network": "routes/cities/pittsburgh-network.json",
     "scene": "routes/scenes/pittsburgh.json"
   },
   {

@@ -12,6 +12,7 @@ import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor, markFtpTest, f
 import { drawProfile, drawWorkout, drawTrace, drawMinimap, gradeColor, profileDistAt } from './views.js';
 import { Profiles, GENDERS, initials, cmToFtIn, ftInToCm } from './profiles.js';
 import { buildCatalogRoute, loadRouteScene } from './routes.js';
+import { loadNetwork, makePathRoute } from './network.js';
 import { legLength, startPosition, stopsForDirection, stopNear, planRide, startArchM } from './route-plan.js';
 import { VERSION } from './version.js';
 import { planRouteTiles, tileKeysToUrls, downloadUrls, offlineStatus, setOfflineStatus, registerServiceWorker } from './offline.js';
@@ -310,6 +311,7 @@ function renderRouteSelector(r, cp) {
   const { st, startM, p2p, plan, len } = cp;
   const leg = legLength(r);
   for (const b of $('dirSeg').children) b.classList.toggle('on', (b.dataset.dir === 'rev') === st.reverse);
+  $('dirSeg').hidden = !!r.netRide;   // a network preset has its own direction (and turns of your choosing)
   // start chips: the beginning of the leg, then the named stops in riding order
   const list = stopsForDirection(r, r.stops, st.reverse);
   const chips = [];
@@ -339,13 +341,15 @@ function renderRouteSelector(r, cp) {
     const legEnd = startM < leg ? leg : r.total;
     const back = plan.endM - legEnd;
     note = `<b>${fmtDist(plan.distM, 1)} ${distUnit()}</b> · <b>${fmtElev(plan.climbM).toLocaleString()} ${elevUnit()}</b> climb · <b>~${fmtPlanTime(plan.timeS)}</b> at ${planWatts()} W`;
-    if (back > 50 && plan.endM <= r.total + leg) note += ` · turns at the ${startM < leg ? 'far end' : 'start'} and comes back ${fmtDist(back, 1)} ${distUnit()}`;
+    if (r.netRide) { if (plan.distM > leg + 50) note += ` · about ${(plan.distM / leg).toFixed(1)} laps`; }
+    else if (back > 50 && plan.endM <= r.total + leg) note += ` · turns at the ${startM < leg ? 'far end' : 'start'} and comes back ${fmtDist(back, 1)} ${distUnit()}`;
     else if (back > 50) note += ' · more than there and back';
-    if (end && back <= 50) note += ` · ends ${end.d < 150 ? 'at' : 'near'} ${esc(end.name)}`;
+    if (end && (back <= 50 || r.netRide)) note += ` · ends ${end.d < 150 ? 'at' : 'near'} ${esc(end.name)}`;
     if (plan.capped) note += ` <span class="warn">· the stage finishes first</span>`;
     if (cp.goalM != null) note += ' · goal only, the ride keeps going';
   } else {
-    note = p2p ? 'Turns at the finish and rides it back, endlessly.' : 'Rides on until you stop, turning at each end.';
+    note = r.netRide ? 'Rides on until you stop, lap after lap — or wherever your turns take you.'
+      : p2p ? 'Turns at the finish and rides it back, endlessly.' : 'Rides on until you stop, turning at each end.';
   }
   $('planNote').innerHTML = note;
 }
@@ -437,15 +441,20 @@ function renderPreview() {
     $('pvKicker').textContent = 'Route';
     $('pvTitle').textContent = r.name;
     $('pvSub').textContent = r.park || 'Your route';
-    const leg = r.turnS || r.total, cp = chosenPlan(r), startM = cp.startM;
+    const leg = legLength(r), cp = chosenPlan(r), startM = cp.startM;
     // point to point (a one-way stage like Alpe d'Huez, or your own GPX): distance and climbing start to finish
     const p2p = cp.p2p;
-    $('pvFacts').innerHTML = (p2p
+    $('pvFacts').innerHTML = r.netRide
+      ? fact(`${fmtDist(leg, 1)}`, `${distUnit()} lap`) + fact(fmtElev(r.lapClimbM).toLocaleString(), `${elevUnit()} climb / lap`) +
+        fact(`${Math.round(Math.max(...r.grade.subarray(0, Math.round(leg / 10) + 1)))}%`, 'max grade') +
+        '<div class="fact tag">Loop · choose your turns at junctions</div>'
+      : ((p2p
       ? fact(`${fmtDist(leg, 1)}`, `${distUnit()} start to finish`) + fact(fmtElev(r.oneWay.ascent).toLocaleString(), `${elevUnit()} climb to the finish`)
       : fact(`${fmtDist(leg, 1)}`, `${distUnit()} each way`) + fact(fmtElev(r.ascent).toLocaleString(), `${elevUnit()} climb / lap`)) +
       fact(`${Math.round(Math.max(...r.grade))}%`, 'max grade') +
-      `<div class="fact tag">${p2p ? 'Point to point' : r.oneWay?.closedLoop ? 'Loop · each lap turns and rides it back' : 'There &amp; back · turns at each end'}</div>`;
-    $('pvDesc').innerHTML = r.hasElevation ? '' : '<span class="warn">No elevation in this file — it will ride flat.</span>';
+      `<div class="fact tag">${p2p ? 'Point to point' : r.oneWay?.closedLoop ? 'Loop · each lap turns and rides it back' : 'There &amp; back · turns at each end'}</div>`);
+    if (r.netRide) $('pvDesc').innerHTML = 'Rides the loop round and round. At each junction choose left, straight, right or back with ◀ ▶ on the handlebars (or <kbd>A</kbd> <kbd>D</kbd>) — or follow the plan.';
+    if (!r.netRide) $('pvDesc').innerHTML = r.hasElevation ? '' : '<span class="warn">No elevation in this file — it will ride flat.</span>';
     map.hidden = false; chart.hidden = false;
     $('routeOpts').hidden = false;
     renderRouteSelector(r, cp);
@@ -454,7 +463,7 @@ function renderPreview() {
     const endM = cp.plan.endM;
     const selEnd = endM == null ? span[1] : Math.min(span[1], endM);
     const end = endM != null ? stopNear(r, r.stops, endM) : null;
-    const ticks = (r.stops || []).map((st) => (span[0] === 0 ? st.atM : r.total - st.atM));
+    const ticks = (r.stops || []).map((st) => (r.netRide || span[0] === 0 ? st.atM : r.total - st.atM));
     drawTrace(map, r, startM, { markerOnly: true, section: endM != null ? [startM, endM] : null });
     pvLayout = drawProfile(chart, r, startM, { metric: !imperial(), span, selection: [startM, selEnd], ticks,
       finishAt: endM != null && endM <= span[1] + 1 ? Math.min(endM, span[1]) : null,
@@ -629,6 +638,7 @@ document.addEventListener('keydown', (e) => {
   else if (k === 'l' || k === 'L') session.lap();
   else if ((k === 'n' || k === 'N') && session.mode === 'workout') session.skipSegment();
   else if ((k === 'm' || k === 'M') && onRideScreen) cycleMinimap();
+  else if ((k === 'a' || k === 'A' || k === 'd' || k === 'D') && onRideScreen && session.route?.netRide) { if (session.turn(k === 'a' || k === 'A' ? -1 : 1)) renderTurnPrompt(true); }
   else if ((k === ',' || k === '.') && trainer.demo) setDemoSpeed(DEMO_MPH + (k === '.' ? 5 : -5));
   else if ((k === 'f' || k === 'F') && onRideScreen) toggleFullscreen();
   else if ((k === 'w' || k === 'W') && onRideScreen) cycleWeather();
@@ -685,12 +695,22 @@ function cycleMinimap() {
 
 let world = null;
 let worldRoute = null;
+let worldBase = null;   // the route the world is built around (a network route rides its city loop's world)
 let worldModule = null;
 
 async function openWorld(route) {
   document.body.classList.toggle('no-world', !route);
   if (!route) { world?.stop(); return; }
   if (world && worldRoute === route) { world.start(); return; }
+  const base = route.base || route;
+  if (world && worldBase === base) {
+    // the same city: just follow this ride's path (or none)
+    worldRoute = route;
+    world.setPath(route.netRide || null);
+    wireWorld(route);
+    world.start();
+    return;
+  }
   try {
     worldModule = worldModule || await import('./world/world.js');
   } catch (err) {
@@ -700,15 +720,21 @@ async function openWorld(route) {
   }
   if (world) { world.dispose(); world = null; }
   try {
-    world = new worldModule.World($('worldView'), route, { log, quality: settings.worldQuality });
+    world = new worldModule.World($('worldView'), base, { log, quality: settings.worldQuality, path: route.netRide || null });
   } catch (err) {
     log('3d', `3D view needs WebGL: ${err.message}`, 'error');
     document.body.classList.add('no-world');
     return;
   }
   worldRoute = route;
+  worldBase = base;
   world.setTimeOfDay(settings.worldTime);
   world.setWeather(settings.worldWeather || 'clear', true);
+  wireWorld(route);
+  world.start();
+  log('3d', `3D view: ${route.name}`);
+}
+function wireWorld(route) {
   world.setSource(() => ({ pos: riderPosOn(route), speed: session.speedMps, cadence: session.cadence, riding: true,
     grade: session.gradePct, power: session.power3s, ftp: settings.ftp }));
   world.setPacerSource(() => {
@@ -716,8 +742,6 @@ async function openWorld(route) {
     return { pos: pacerPosOn(route), speed: session.running ? pacer.speed : 0, cadence: session.running ? pacer.cadence : 0,
       grade: pacer.grade, power: session.running ? pacer.watts : 0, ftp: settings.ftp };
   });
-  world.start();
-  log('3d', `3D view: ${route.name}`);
 }
 function cycleWeather() {
   // The route decides which presets it offers and what they're called (Pittsburgh: Clear, River fog, Clouds).
@@ -851,9 +875,14 @@ function renderHud() {
       const g = averageGradeAhead(r, session.routePos, ahead);
       showRow(1, `${g > 0.05 ? '+' : ''}${fmtGrade(g)}`, imperial() ? 'next ½ mi' : 'next 500 m');
       const toFinish = session.routeFinishM != null;
-      showRow(2, r.closed && !toFinish ? String(session.routeLap) : null, 'lap');
+      showRow(2, (r.closed || r.netRide) && !toFinish ? String(session.routeLap) : null, 'lap');
       const toGoal = !toFinish && session.routeGoalM != null && !session.routeGoalHit;
-      showRow(3, `${fmtDist(Math.max(0, toGoal ? session.routeGoalM - session.routeRidden : session.routeLapToGo), 1)} ${distUnit()}`,
+      if (r.netRide && !toFinish && !toGoal) {
+        // a network route: the rest of this lap on the plan, else the way to the next junction
+        const up = r.netRide.upcoming(session.routePos), onPlan = r.netRide.entries[up.i].planStep != null;
+        const toGo = onPlan ? r.netRide.profileSpan(session.routePos)[1] - session.routePos : up.distTo;
+        showRow(3, `${fmtDist(Math.max(0, toGo), 1)} ${distUnit()}`, onPlan ? 'lap to go' : `to ${up.node.name}`);
+      } else showRow(3, `${fmtDist(Math.max(0, toGoal ? session.routeGoalM - session.routeRidden : session.routeLapToGo), 1)} ${distUnit()}`,
         toFinish ? 'to the finish' : toGoal ? 'to your goal' : 'lap to go');
     } else {
       showRow(1, session.mode === 'workout' && session.workoutDone ? 'Done' : null, 'workout');
@@ -877,12 +906,14 @@ function renderHud() {
     lastProfileDraw = now;
     const c = $('hudProfile');
     if (session.mode === 'route' && session.route) drawProfile(c, session.route, session.routePos, { metric: !imperial(), compact: true,
-      span: session.routeFinishM != null ? legSpan(session.route, session.routeStart) : null,
+      span: session.route.netRide ? (session.routeFinishM != null ? [session.routeStart, session.routeStart + session.routeFinishM] : session.route.netRide.profileSpan(session.routePos))
+        : session.routeFinishM != null ? legSpan(session.route, session.routeStart) : null,
       finishAt: session.routeFinishM != null ? session.routeStart + session.routeFinishM : null });
     else if (session.mode === 'workout' && session.workout) drawWorkout(c, session.workout, session.workoutT, settings.ftp, session.workoutBias, { compact: true });
     else c.getContext('2d').clearRect(0, 0, c.width, c.height);
   }
   renderMinimap(now);
+  renderTurnPrompt();
 
   // Status and pause overlay
   const userPaused = pausedByUser();
@@ -894,6 +925,25 @@ function renderHud() {
   $('hAlert').hidden = !lost;
   $('hAlert').textContent = trainer.reconnecting ? 'Trainer reconnecting…' : 'Trainer not connected';
   $('pauseOverlay').hidden = !userPaused || $('summary').open;
+}
+
+// Turn prompt (network routes): the next junction's ways on, about 15 s before it; ◀ ▶ / A D to choose.
+let turnKey = '';
+function renderTurnPrompt(force = false) {
+  const box = $('hTurn'), net = session.mode === 'route' ? session.route?.netRide : null;
+  const up = net && !session.routeDone ? net.prompt(session.routePos, session.speedMps) : null;
+  if (!up) { if (!box.hidden) { box.hidden = true; turnKey = ''; } return; }
+  const key = `${up.node.id}:${up.i}:${up.selected}:${up.locked}:${Math.round(up.distTo / 10)}:${settings.units}`;
+  if (!force && key === turnKey) return;
+  turnKey = key;
+  const fmtLen = (m) => `${fmtDist(m, 1)} ${distUnit()}`;
+  box.hidden = false;
+  box.classList.toggle('locked', up.locked);
+  box.innerHTML = `<div class="turn-head"><b>${escapeHtml(up.node.name)}</b><span>${up.distTo > 5 ? `in ${Math.round(imperial() ? up.distTo * 3.28084 / 10 : up.distTo / 5) * (imperial() ? 10 : 5)} ${imperial() ? 'ft' : 'm'}` : 'now'}</span></div>
+    <div class="turn-opts">${up.options.map((o, j) => `<div class="turn-opt ${j === up.selected ? 'on' : ''} ${o.back ? 'back' : ''}">
+      <i>${o.glyph}</i><b>${o.label}${j === up.selected && up.onPlan ? ' <em>plan</em>' : ''}</b><small>${escapeHtml(o.toward)}</small>
+      <small class="turn-num">${fmtLen(o.lengthM)} · ${fmtElev(o.climbM)} ${elevUnit()} up</small></div>`).join('')}</div>
+    <div class="turn-hint">${up.locked ? 'Locked in' : '◀ ▶ on the handlebars · <kbd>A</kbd> <kbd>D</kbd>'}</div>`;
 }
 
 // Hide the on-screen buttons until the mouse moves.
@@ -946,7 +996,9 @@ function renderDiag() {
 const DEMO_ROUTE = { id: 'builtin-demo-hills', kind: 'route', name: 'Demo Hills (built-in)', url: 'routes/demo-hills.gpx', scene: 'routes/scenes/demo-hills.json', group: 'Other' };
 let routeItems = [];
 let parkItems = null;
+let netItems = [];          // network presets (choose your turns): listed as routes, not as scenery
 const routeCache = new Map();
+const netCache = new Map();   // network JSON by URL
 let previewRoute = null;
 let selectedRouteId = null;
 
@@ -958,12 +1010,27 @@ async function loadParks() {
   } catch {
     parkItems = [];
   }
+  // a city loop with a ride network: one route per preset, on the same world (js/network.js)
+  netItems = [];
+  for (const p of parkItems.filter((x) => x.network)) {
+    try {
+      if (!netCache.has(p.network)) netCache.set(p.network, await (await fetch(p.network)).json());
+      const city = p.name.split(' · ')[0];
+      for (const pr of netCache.get(p.network).presets || []) {
+        netItems.push({ id: `builtin-net-${pr.id}`, routeId: pr.id, kind: 'route', name: `${city} · ${pr.name}`, park: p.park,
+          stage: p.stage, group: 'Scenic routes — 3D', baseId: p.id, network: p.network, preset: pr.id,
+          km: +(pr.lengthM / 1000).toFixed(1), climbM: pr.climbM, tags: pr.tags || [] });
+      }
+    } catch (err) { log('app', `Could not load the ${p.name} network: ${err.message}`, 'error'); }
+  }
   return parkItems;
 }
 
 async function refreshRouteList(selectId) {
   const mine = (await store.listLibrary('route').catch(() => [])).map((r) => ({ ...r, group: 'My routes' }));
-  routeItems = [...(await loadParks()), ...mine, DEMO_ROUTE];
+  const parks = await loadParks();
+  // network presets sit right after their city loop
+  routeItems = [...parks.flatMap((p) => [p, ...netItems.filter((n) => n.baseId === p.id)]), ...mine, DEMO_ROUTE];
   await loadIdeas();
   // Load every route up front: they're small, and the cards draw their outlines.
   await Promise.all(routeItems.map((it) => loadRouteItem(it).catch(() => null)));
@@ -978,6 +1045,7 @@ function renderRouteCards() {
     const r = routeCache.get(it.id);
     const sub = !r ? 'Could not load' : r.stageRoute && r.oneWay
       ? `${fmtDist(r.turnS, 1)} ${distUnit()} to the finish · ${fmtElev(r.oneWay.ascent).toLocaleString()} ${elevUnit()}`
+      : r.netRide ? `${fmtDist(r.lapM, 1)} ${distUnit()} loop · ${fmtElev(r.lapClimbM).toLocaleString()} ${elevUnit()} · choose your turns`
       : `${fmtDist(r.turnS || r.total, 1)} ${distUnit()} each way · ${fmtElev(r.ascent).toLocaleString()} ${elevUnit()}`;
     return `<button class="rcard ${it.id === selectedRouteId ? 'on' : ''}" data-id="${it.id}"><canvas></canvas>
       <div><b>${escapeHtml(it.name.replace(' (built-in)', ''))}</b><div class="rsub">${escapeHtml(it.park || it.group)} · ${sub}</div></div></button>`;
@@ -1007,6 +1075,19 @@ $('routeCards').addEventListener('click', (e) => {
 
 async function loadRouteItem(item) {
   if (routeCache.has(item.id)) return routeCache.get(item.id);
+  if (item.preset) {
+    // a network preset: the path route over the city loop's own route and world (js/network.js)
+    const base = await loadRouteItem(parkItems.find((p) => p.id === item.baseId));
+    base.networks ||= new Map();
+    if (!base.networks.has(item.network)) base.networks.set(item.network, loadNetwork(netCache.get(item.network), base));
+    const net = base.networks.get(item.network);
+    const route = makePathRoute(net, net.presets.find((x) => x.id === item.preset), { id: item.routeId, name: item.name, park: item.park });
+    route.scene = base.scene;
+    // the path ahead changed (a turn chosen, or the path refilled): the arches follow it
+    route.netRide.addEventListener('change', () => { if (session.route === route && world?.path === route.netRide) world.setCourseMarks(courseMarks()); });
+    routeCache.set(item.id, route);
+    return route;
+  }
   const text = item.text ?? await (await fetch(item.url)).text();
   const route = buildCatalogRoute(text, item);
   await loadRouteScene(route).catch((err) => log('3d', err.message, 'error'));
@@ -1021,6 +1102,8 @@ async function previewSelectedRoute() {
   if (!item) return;
   try {
     previewRoute = await loadRouteItem(item);
+    // a network route not being ridden: show its plan, not the turns chosen on the last ride
+    if (previewRoute.netRide && session.route !== previewRoute) previewRoute.netRide.reset();
   } catch (err) {
     previewRoute = null;
     log('app', `Could not load route: ${err.message}`, 'error');

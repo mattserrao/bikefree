@@ -191,6 +191,7 @@ export function isPointToPoint(route) {
 
 /** The leg a ride from `startM` is on: [0, turn] riding forward, [turn, total] riding the way back. */
 export function legSpan(route, startM) {
+  if (route.lapM) return [0, route.lapM];   // a network route (js/network.js): its first lap
   const turn = route.turnS || route.total;
   const s = ((startM % route.total) + route.total) % route.total;
   return s < turn ? [0, turn] : [turn, route.total];

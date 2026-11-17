@@ -53,6 +53,15 @@ for (const item of catalog) {
     if (!(item.eleSmoothM >= 0 && item.eleSmoothM <= 200)) throw new Error(`${item.id}: eleSmoothM must be 0–200 m`);
     row.eleSmoothM = item.eleSmoothM;
   }
+  if (item.network) {
+    // a ride network over this loop (choose your turns: tools/build_network.mjs, js/network.js)
+    if (!item.network.startsWith('routes/') || item.network.includes('..') || !existsSync(resolve(root, item.network))) throw new Error(`${item.id}: missing network ${item.network}`);
+    const net = JSON.parse(read(item.network));
+    if (net.format !== 'bikefree-network-1' || net.base !== item.file) throw new Error(`${item.id}: the network must be built on ${item.file}`);
+    if (!(net.legM > 0 && net.legM <= route.total && net.edges?.length && net.presets?.length)) throw new Error(`${item.id}: invalid network (rebuild it with tools/build_network.mjs)`);
+    row.network = item.network;
+    paths.push(item.network);
+  }
   // named start points for the route selector: the routing POIs, placed on the way out
   const stops = findStops(route, item.routing?.pois);
   if (stops.length) row.stops = stops;
