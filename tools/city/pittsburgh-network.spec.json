@@ -210,5 +210,10 @@
       ],
       "note": "The whole loop, then the whole loop backwards"
     }
-  ]
+  ],
+  "freeRide": {
+    "name": "Free Ride \u00b7 choose every turn",
+    "first": "A>E+",
+    "note": "No plan: from the Water Steps, straight on at every junction unless you choose a turn. Ride until you stop"
+  }
 }

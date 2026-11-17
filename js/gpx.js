@@ -199,6 +199,7 @@ export function legSpan(route, startM) {
 
 /** Metres from a start point to the finish: the far end riding forward, back at A riding the way back. */
 export function finishDistanceM(route, startM) {
+  if (route.netOpen) return Math.max(0, route.lapM - startM);   // your own one-way network route: its end
   const turn = route.turnS || route.total;
   const s = ((startM % route.total) + route.total) % route.total;
   return (s < turn ? turn : route.total) - s;

@@ -145,6 +145,7 @@
         <canvas id="pvChart" class="pv-chart"></canvas>
         <div class="pv-hint" id="pvHint" hidden></div>
         <p class="pv-desc" id="pvDesc"></p>
+        <button type="button" class="link plan-open" id="planOpen" hidden>Plan your own route on the map…</button>
         <div class="offline-status" id="offlineStatus"></div>
         <button id="startBtn" class="primary start">Start riding</button>
         <div class="start-note" id="startNote"></div>
@@ -397,6 +398,24 @@
         <button value="save" id="sumSave">Save</button>
         <button value="discard" class="ghost danger" id="sumDiscard" formnovalidate>Discard</button>
         <button value="resume" class="ghost" id="sumResume" formnovalidate>Keep riding</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Map planner (ride networks): tap a junction, then the segments to ride -->
+  <dialog id="planDlg" class="plan-dlg">
+    <form method="dialog">
+      <h2 id="planTitle">Plan your own route</h2>
+      <div class="sum-sub" id="planSub">Tap a junction to start, then each segment to ride.</div>
+      <canvas id="planMap" class="plan-map"></canvas>
+      <div class="plan-facts" id="planFacts"></div>
+      <ol class="plan-steps" id="planSteps"></ol>
+      <label><b>Name</b><input type="text" id="planName" maxlength="40" placeholder="My route"></label>
+      <div class="dialog-actions">
+        <button value="save" class="primary" id="planSave" disabled>Save route</button>
+        <button type="button" id="planUndo">Undo</button>
+        <button type="button" class="ghost" id="planClear">Clear</button>
+        <button value="cancel" class="ghost" formnovalidate>Cancel</button>
       </div>
     </form>
   </dialog>

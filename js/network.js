@@ -448,17 +448,54 @@ export class NetRide extends EventTarget {
 export function makePathRoute(net, preset, { id, name, park } = {}) {
   const route = { name: name || preset.name, id: id || preset.id, park: park || net.base.park, closed: false,
     hasElevation: net.base.hasElevation, network: net, base: net.base, preset: preset.id, tags: preset.tags || [] };
-  route.netRide = new NetRide(net, route, { plan: preset.path });
+  // a preset rides its plan round and round; a free ride (no plan) starts on `first` and goes where you turn;
+  // a one-way plan (your own route that ends somewhere else) finishes at its end
+  route.netRide = new NetRide(net, route, preset.path ? { plan: preset.path } : { first: preset.first });
+  route.free = !preset.path;
+  route.netOpen = !!preset.path && !planCloses(net, preset.path);
   route.lapM = route.netRide.lapM;
   route.lapClimbM = route.netRide.lapClimbM;
-  // named start points: the junctions along the first lap, then the base route's own stops where the
-  // plan rides them forward
-  const stops = route.netRide.nodesBetween(0, route.lapM - 1);
+  // named start points: the junctions along the first lap (a free ride: its first 25 km), then the base route's
+  // own stops where the plan rides them forward
+  const span = route.lapM || 25000;
+  const stops = route.netRide.nodesBetween(0, span - 1);
   for (const x of route.netRide.entries) {
-    if (x.p0 >= route.lapM) break;
+    if (x.p0 >= span) break;
     if (x.t.dir < 0) continue;
     for (const s of net.base.stops || []) if (s.atM > x.t.e.s0 && s.atM < x.t.e.s1) stops.push({ name: s.name, atM: x.p0 + s.atM - x.t.e.s0 });
   }
   route.stops = stops.sort((a, b) => a.atM - b.atM);
+  if (route.free) route.stops = route.stops.filter((st, i, all) => all.findIndex((o) => o.name === st.name) === i);   // each junction once
   return route;
 }
+
+/** Does a plan (traversal keys) end where it starts, so it can be ridden round and round? */
+export function planCloses(net, keys) {
+  if (!keys?.length) return false;
+  const t = (k) => { const m = /^(.+)([+-])$/.exec(k); return { e: net.edges.get(m[1]), dir: m[2] === '+' ? 1 : -1 }; };
+  return endNode(t(keys[keys.length - 1])) === startNode(t(keys[0]));
+}
+
+/**
+ * The map planner (js/app.js): the ways on from where a plan has got to — from a junction (no steps yet) every
+ * arm, after a step every way out of the junction it arrives at (back included). [{key, t, toward, lengthM, climbM}]
+ */
+export function planNext(net, keys, startId = null) {
+  const node = keys.length ? (() => { const m = /^(.+)([+-])$/.exec(keys[keys.length - 1]); const e = net.edges.get(m[1]); return m[2] === '+' ? e.to : e.from; })() : startId;
+  const n = net.nodes.get(node);
+  if (!n) return [];
+  return n.arms.map((a) => { const t = { e: a.e, dir: a.dir }; return { key: travKey(t), t, toward: towardOf(t), lengthM: a.e.len, climbM: climbOf(t), to: net.nodes.get(endNode(t)).name }; });
+}
+
+/** Edge ids from spec keys ("E>H+") and back, for routes saved in settings (ids can change when the network grows). */
+export function keysToIds(net, specKeys) {
+  const out = [];
+  for (const k of specKeys) {
+    const m = /^(.+)([+-])$/.exec(k);
+    const e = m && [...net.edges.values()].find((x) => x.key === m[1]);
+    if (!e) return null;
+    out.push(`${e.id}${m[2]}`);
+  }
+  return out;
+}
+export const idsToKeys = (net, ids) => ids.map((k) => { const m = /^(.+)([+-])$/.exec(k); return `${net.edges.get(m[1]).key}${m[2]}`; });

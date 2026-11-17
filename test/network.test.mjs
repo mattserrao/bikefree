@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { makePathRoute, optionsAt, straightOn, cornerSpeed, LOCK_M, NetRide } from '../js/network.js';
 import { Session } from '../js/session.js';
+import * as netMod from '../js/network.js';
+import * as gpxMod from '../js/gpx.js';
 import { loadCatalogNetwork, sweepTurns, checkPathRoutes } from '../tools/qc_network.mjs';
 
 const index = JSON.parse(readFileSync(new URL('../routes/parks/index.json', import.meta.url), 'utf8'));
@@ -140,4 +142,36 @@ test('the session rides a network route: handlebar ◀ ▶ choose, laps, a fresh
   assert.equal(laps, 1);
   s.setRoute(r, 0, null);   // a new ride: the plan again
   assert.equal(third().e.key, 'G>H');
+});
+
+test('free ride: no plan, straight on at every junction, no laps, a far-reaching path', () => {
+  const json = JSON.parse(readFileSync(new URL('../routes/cities/pittsburgh-network.json', import.meta.url), 'utf8'));
+  const r = makePathRoute(net, { id: 'free', name: 'Free', path: null, first: json.freeRide.first });
+  assert.equal(r.free, true);
+  assert.equal(r.lapM, null);
+  assert.equal(r.netRide.lapAt(50000), 1);
+  assert.ok(r.total > 140000);
+  for (const x of r.netRide.entries.slice(1, 6)) assert.equal(x.planStep, null);
+  // at East Carson & 10th (from Smithfield) straight on is East Carson; a right takes you up McArdle
+  assert.equal(r.netRide.entries[1].t.e.key, 'E>G');
+  assert.equal(r.netRide.entries[2].t.e.key, 'G>H');
+  assert.ok(r.stops.length >= 3);
+});
+
+test('your own routes: the planner offers the ways on, a loop laps, a one-way route finishes at its end', () => {
+  const { planNext, planCloses, keysToIds, idsToKeys } = netMod;
+  const fromE = planNext(net, [], 'E');
+  assert.deepEqual(fromE.map((o) => o.t.e.key).sort(), ['A>E', 'E>G', 'E>H']);
+  const loop = keysToIds(net, ['E>H+', 'H>G+', 'E>G-']);
+  assert.equal(planCloses(net, loop), true);
+  assert.deepEqual(idsToKeys(net, loop), ['E>H+', 'H>G+', 'E>G-']);
+  const after = planNext(net, loop.slice(0, 1));   // at SouthSide Works: the three ways on (back included)
+  assert.equal(after.length, 3);
+  const oneWay = keysToIds(net, ['E>H+', 'H>G+', 'G>A+']);
+  const r = makePathRoute(net, { id: 'mine', name: 'Mine', path: oneWay });
+  assert.equal(r.netOpen, true);
+  assert.equal(r.lapM, len('E>H', 'H>G', 'G>A'));
+  const { finishDistanceM } = gpxMod;
+  assert.equal(finishDistanceM(r, 0), r.lapM);
+  assert.equal(keysToIds(net, ['X>Y+']), null);   // a segment that's gone: plan it again
 });

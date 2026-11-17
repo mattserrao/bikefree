@@ -12,7 +12,7 @@ import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor, markFtpTest, f
 import { drawProfile, drawWorkout, drawTrace, drawMinimap, drawNetworkMinimap, gradeColor, profileDistAt } from './views.js';
 import { Profiles, GENDERS, initials, cmToFtIn, ftInToCm } from './profiles.js';
 import { buildCatalogRoute, loadRouteScene } from './routes.js';
-import { loadNetwork, makePathRoute } from './network.js';
+import { loadNetwork, makePathRoute, planNext, planCloses, keysToIds, idsToKeys, travKey } from './network.js';
 import { legLength, startPosition, stopsForDirection, stopNear, planRide, startArchM } from './route-plan.js';
 import { VERSION } from './version.js';
 import { planRouteTiles, tileKeysToUrls, downloadUrls, offlineStatus, setOfflineStatus, registerServiceWorker } from './offline.js';
@@ -68,8 +68,6 @@ const trainer = new Trainer(log);
 const ride = new Ride(log);
 const hrStrap = new HeartRate(log);
 const session = new Session({ trainer, ride, hr: hrStrap, log, settings });
-// ?debug: the session and the 3D world on window.bikefree, for headless checks (tools, test scripts)
-if (new URLSearchParams(location.search).has('debug')) window.bikefree = { session, get world() { return world; } };
 const imperial = () => settings.units === 'imperial';
 const fmtDist = (m, dp = 2) => (imperial() ? (m / 1609.344).toFixed(dp) : (m / 1000).toFixed(dp));
 const distUnit = () => (imperial() ? 'mi' : 'km');
@@ -265,7 +263,7 @@ const planWatts = () => (Number(settings.planWatts) > 0 ? Number(settings.planWa
 const lengthGoal = () => ({ mode: rideLength.mode, value: rideLength.mode === 'open' ? 0 : rideLength[rideLength.mode] });
 /** Everything the Start button would ride on a route: start, the planned ride, its finish or goal. */
 function chosenPlan(r) {
-  const st = startOf(r), startM = startPosition(r, st), p2p = isPointToPoint(r), keep = routeChoice.endless;
+  const st = startOf(r), startM = startPosition(r, st), p2p = isPointToPoint(r) || !!r.netOpen, keep = routeChoice.endless;
   const len = lengthGoal();
   const plan = planRide(r, startM, len, { watts: planWatts(), params: session.physicsParams(), pointToPoint: p2p, stopAtEnd: !keep });
   const distM = plan.distM == null ? null : Math.max(10, Math.round(plan.distM));
@@ -392,6 +390,137 @@ function lapView(r) {
   return { lat: r.lat.subarray(0, n), lon: r.lon.subarray(0, n), dist: r.dist.subarray(0, n), total: r.lapM };
 }
 
+// ---------- Map planner (ride networks) ----------
+// Tap a junction to start, then each segment to ride (only the ways on from where you've got to light up);
+// tapping the segment you just rode turns back along it. A route that ends where it started laps; one that
+// ends elsewhere finishes there. Saved in settings by segment names (they survive a rebuilt network).
+const plan = { net: null, item: null, start: null, keys: [], layout: null };
+function openPlanner() {
+  const r = previewRoute, item = routeItems.find((it) => it.id === selectedRouteId);
+  if (!r?.netRide || !item) return;
+  plan.net = r.network; plan.item = item; plan.start = null; plan.keys = [];
+  $('planTitle').textContent = `Plan your own route · ${(item.name || '').split(' · ')[0]}`;
+  $('planName').value = '';
+  $('planDlg').showModal();
+  renderPlanner();
+}
+$('planOpen').addEventListener('click', openPlanner);
+$('planUndo').addEventListener('click', () => { if (plan.keys.length) plan.keys.pop(); else plan.start = null; renderPlanner(); });
+$('planClear').addEventListener('click', () => { plan.keys = []; plan.start = null; renderPlanner(); });
+$('planName').addEventListener('input', () => renderPlanFacts());
+$('planDlg').addEventListener('close', () => { if ($('planDlg').returnValue === 'save') savePlan(); });
+
+function planLayout(canvas) {
+  const net = plan.net, lines = [...net.edges.values()].map((e) => ({ e, lat: [], lon: [] }));
+  for (const L of lines) for (let s = L.e.s0; s <= L.e.s1; s += 10) { const i = s / 10; L.lat.push(net.base.lat[i]); L.lon.push(net.base.lon[i]); }
+  const rect = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr);
+  let lat0 = 0, n = 0, minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const L of lines) for (const v of L.lat) { lat0 += v; n++; }
+  lat0 /= n;
+  const kx = Math.cos((lat0 * Math.PI) / 180) * 111320, ky = 110540;
+  for (const L of lines) for (let i = 0; i < L.lat.length; i++) {
+    const x = L.lon[i] * kx, y = L.lat[i] * ky;
+    minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+  }
+  const pad = 34 * dpr, w = canvas.width, h = canvas.height;
+  const sc = Math.min((w - pad * 2) / (maxX - minX), (h - pad * 2) / (maxY - minY));
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  const X = (lon) => w / 2 + (lon * kx - cx) * sc, Y = (lat) => h / 2 - (lat * ky - cy) * sc;
+  for (const L of lines) L.pts = L.lat.map((la, i) => [X(L.lon[i]), Y(la)]);
+  const nodes = [...net.nodes.values()].map((nd) => ({ nd, x: X(nd.lon), y: Y(nd.lat) }));
+  return { lines, nodes, dpr, w, h };
+}
+const segDist = (pts, x, y) => {
+  let best = Infinity;
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, ay] = pts[i - 1], [bx, by] = pts[i], dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy || 1;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / l2));
+    best = Math.min(best, Math.hypot(ax + dx * t - x, ay + dy * t - y));
+  }
+  return best;
+};
+function renderPlanner() {
+  const c = $('planMap');
+  plan.layout = planLayout(c);
+  const { lines, nodes, dpr, w, h } = plan.layout, ctx = c.getContext('2d');
+  const css = (v, d) => getComputedStyle(document.documentElement).getPropertyValue(v).trim() || d;
+  const accent = css('--accent', '#7aa9f5'), ink = css('--ink', '#ece9e1'), muted = css('--muted', '#a8a69d'), bg = css('--panel', '#262624');
+  ctx.clearRect(0, 0, w, h);
+  const stroke = (pts, color, width, dash = []) => {
+    ctx.strokeStyle = color; ctx.lineWidth = width * dpr; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.setLineDash(dash.map((d) => d * dpr));
+    ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); ctx.setLineDash([]);
+  };
+  for (const L of lines) stroke(L.pts, muted, 3);
+  const next = plan.start ? planNext(plan.net, plan.keys, plan.start) : [];
+  for (const o of next) stroke(lines.find((L) => L.e === o.t.e).pts, ink, 4, [6, 5]);
+  // the route so far, with an arrow on each step
+  plan.keys.forEach((k, j) => {
+    const L = lines.find((x) => x.e.id === k.slice(0, -1)), pts = k.endsWith('+') ? L.pts : [...L.pts].reverse();
+    stroke(pts, accent, 6);
+    const m = Math.floor(pts.length / 2), [ax, ay] = pts[Math.max(0, m - 1)], [bx, by] = pts[Math.min(pts.length - 1, m + 1)];
+    const ang = Math.atan2(by - ay, bx - ax);
+    ctx.save(); ctx.translate(pts[m][0], pts[m][1]); ctx.rotate(ang);
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(7 * dpr, 0); ctx.lineTo(-5 * dpr, 5 * dpr); ctx.lineTo(-5 * dpr, -5 * dpr); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = ink; ctx.font = `600 ${11 * dpr}px system-ui`; ctx.fillText(String(j + 1), pts[m][0] + 8 * dpr, pts[m][1] - 8 * dpr);
+  });
+  for (const { nd, x, y } of nodes) {
+    const isStart = nd.id === plan.start;
+    ctx.fillStyle = isStart ? accent : ink; ctx.strokeStyle = bg; ctx.lineWidth = 2 * dpr;
+    ctx.beginPath(); ctx.arc(x, y, (isStart ? 8 : 6) * dpr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = ink; ctx.font = `${12 * dpr}px system-ui`;
+    const tw = ctx.measureText(nd.name).width;
+    ctx.fillText(nd.name, Math.min(w - tw - 4 * dpr, x + 10 * dpr), y - 10 * dpr);
+  }
+  $('planSub').textContent = !plan.start ? 'Tap a junction to start.' : next.length ? 'Tap the next segment (dashed) — the one you just rode turns back.' : '';
+  $('planSteps').innerHTML = plan.keys.map((k) => {
+    const e = plan.net.edges.get(k.slice(0, -1)), fwd = k.endsWith('+');
+    return `<li>${escapeHtml((e.toward?.[fwd ? 0 : 1] || e.name).replace(/^./, (ch) => ch.toUpperCase()))}</li>`;
+  }).join('');
+  renderPlanFacts();
+}
+function renderPlanFacts() {
+  const keys = plan.keys;
+  if (!keys.length) { $('planFacts').innerHTML = ''; $('planSave').disabled = true; return; }
+  const r = makePathRoute(plan.net, { id: 'plan', name: 'plan', path: keys });
+  const sim = planRide(r, 0, { mode: 'dist', value: r.lapM }, { watts: planWatts(), params: session.physicsParams(), pointToPoint: false, stopAtEnd: false });
+  const loop = planCloses(plan.net, keys);
+  const endName = plan.net.nodes.get(keys.at(-1).endsWith('+') ? plan.net.edges.get(keys.at(-1).slice(0, -1)).to : plan.net.edges.get(keys.at(-1).slice(0, -1)).from).name;
+  $('planFacts').innerHTML = `<span><b>${fmtDist(r.lapM, 1)}</b> ${distUnit()}</span><span><b>${fmtElev(r.lapClimbM).toLocaleString()}</b> ${elevUnit()} climb</span>` +
+    `<span><b>~${fmtPlanTime(sim.timeS)}</b> at ${planWatts()} W</span><span>${loop ? 'Loop — rides round and round' : `One way — finishes at ${escapeHtml(endName)}`}</span>`;
+  $('planSave').disabled = false;
+}
+$('planMap').addEventListener('click', (e) => {
+  if (!plan.layout) return;
+  const rect = e.currentTarget.getBoundingClientRect(), d = plan.layout.dpr;
+  const x = (e.clientX - rect.left) * d, y = (e.clientY - rect.top) * d;
+  if (!plan.start) {
+    let best = null;
+    for (const n of plan.layout.nodes) { const dd = Math.hypot(n.x - x, n.y - y); if (dd < 26 * d && (!best || dd < best.d)) best = { n, d: dd }; }
+    if (best) { plan.start = best.n.nd.id; renderPlanner(); }
+    return;
+  }
+  // the nearest of the ways on (by the segment's line); a segment both ways on from here (a loop edge): the closer end
+  let best = null;
+  for (const o of planNext(plan.net, plan.keys, plan.start)) {
+    const L = plan.layout.lines.find((l) => l.e === o.t.e), dd = segDist(L.pts, x, y);
+    if (dd < 22 * d && (!best || dd < best.d - .5)) best = { o, d: dd };
+  }
+  if (best) { plan.keys.push(best.o.key); renderPlanner(); }
+});
+async function savePlan() {
+  if (!plan.keys.length) return;
+  const city = (plan.item.name || '').split(' · ')[0];
+  const name = $('planName').value.trim() || `My route ${(settings.netRoutes || []).length + 1}`;
+  const id = `mynet-${Date.now().toString(36)}`;
+  settings.netRoutes = [...(settings.netRoutes || []), { id, network: plan.item.network, name, keys: idsToKeys(plan.net, plan.keys), created: Date.now() }];
+  saveSettings(settings);
+  log('app', `Saved your route: ${city} · ${name}`, 'ok');
+  parkItems = null;   // rebuild the list with it
+  await refreshRouteList(id);
+}
+
 // ---------- Virtual pacer ----------
 // A rider in a yellow-checkered jersey who holds a set power on the same road physics as you.
 const pacer = new Pacer(PACER_WATTS.includes(Number(settings.pacerWatts)) ? Number(settings.pacerWatts) : 0);
@@ -453,15 +582,20 @@ function renderPreview() {
     const leg = legLength(r), cp = chosenPlan(r), startM = cp.startM;
     // point to point (a one-way stage like Alpe d'Huez, or your own GPX): distance and climbing start to finish
     const p2p = cp.p2p;
-    $('pvFacts').innerHTML = r.netRide
-      ? fact(`${fmtDist(leg, 1)}`, `${distUnit()} lap`) + fact(fmtElev(r.lapClimbM).toLocaleString(), `${elevUnit()} climb / lap`) +
+    const netKm = r.netRide ? [...r.network.edges.values()].reduce((t, e) => t + e.len, 0) : 0;
+    $('pvFacts').innerHTML = r.free
+      ? fact(`${fmtDist(netKm, 1)}`, `${distUnit()} of streets & trails`) + fact(String(r.network.nodes.size), 'junctions') +
+        '<div class="fact tag">Free ride · choose every turn</div>'
+      : r.netRide
+      ? fact(`${fmtDist(leg, 1)}`, `${distUnit()} ${r.netOpen ? 'start to finish' : 'lap'}`) + fact(fmtElev(r.lapClimbM).toLocaleString(), `${elevUnit()} climb / lap`) +
         fact(`${Math.round(Math.max(...r.grade.subarray(0, Math.round(leg / 10) + 1)))}%`, 'max grade') +
-        '<div class="fact tag">Loop · choose your turns at junctions</div>'
+        `<div class="fact tag">${r.netOpen ? 'One way · finishes at the end' : 'Loop · choose your turns at junctions'}</div>`
       : ((p2p
       ? fact(`${fmtDist(leg, 1)}`, `${distUnit()} start to finish`) + fact(fmtElev(r.oneWay.ascent).toLocaleString(), `${elevUnit()} climb to the finish`)
       : fact(`${fmtDist(leg, 1)}`, `${distUnit()} each way`) + fact(fmtElev(r.ascent).toLocaleString(), `${elevUnit()} climb / lap`)) +
       fact(`${Math.round(Math.max(...r.grade))}%`, 'max grade') +
       `<div class="fact tag">${p2p ? 'Point to point' : r.oneWay?.closedLoop ? 'Loop · each lap turns and rides it back' : 'There &amp; back · turns at each end'}</div>`);
+    $('planOpen').hidden = !r.netRide;
     if (r.netRide) $('pvDesc').innerHTML = `${r.note ? `${escapeHtml(r.note)}. ` : ''}At each junction choose left, straight, right or back with ◀ ▶ on the handlebars (or <kbd>A</kbd> <kbd>D</kbd>) — or follow the plan.`;
     if (!r.netRide) $('pvDesc').innerHTML = r.hasElevation ? '' : '<span class="warn">No elevation in this file — it will ride flat.</span>';
     map.hidden = false; chart.hidden = false;
@@ -482,6 +616,7 @@ function renderPreview() {
     $('pvHint').hidden = false;
     $('pvHint').textContent = `Drag on the profile to move the start · starting ${fmtDist(cp.st.offsetM, 1)} ${distUnit()} in at ${fmtElev(at.ele).toLocaleString()} ${elevUnit()}`;
   } else if (chosen === 'workout' && previewWorkout) {
+    $('planOpen').hidden = true;
     const w = previewWorkout, st = workoutStats(w);
     $('pvKicker').textContent = 'Workout';
     $('pvTitle').textContent = w.name;
@@ -894,7 +1029,7 @@ function renderHud() {
       const g = averageGradeAhead(r, session.routePos, ahead);
       showRow(1, `${g > 0.05 ? '+' : ''}${fmtGrade(g)}`, imperial() ? 'next ½ mi' : 'next 500 m');
       const toFinish = session.routeFinishM != null;
-      showRow(2, (r.closed || r.netRide) && !toFinish ? String(session.routeLap) : null, 'lap');
+      showRow(2, (r.closed || (r.netRide && !r.free && !r.netOpen)) && !toFinish ? String(session.routeLap) : null, 'lap');
       const toGoal = !toFinish && session.routeGoalM != null && !session.routeGoalHit;
       if (r.netRide && !toFinish && !toGoal) {
         // a network route: the rest of this lap on the plan, else the way to the next junction
@@ -1040,6 +1175,14 @@ async function loadParks() {
           stage: p.stage, group: 'Scenic routes — 3D', baseId: p.id, network: p.network, preset: pr.id,
           km: +(pr.lengthM / 1000).toFixed(1), climbM: pr.climbM, tags: pr.tags || [], note: pr.note || '' });
       }
+      const json = netCache.get(p.network);
+      const base = { kind: 'route', park: p.park, stage: p.stage, group: 'Scenic routes — 3D', baseId: p.id, network: p.network };
+      if (json.freeRide) netItems.push({ ...base, id: `builtin-netfree-${json.id}`, routeId: `${json.id}-free`, name: `${city} · ${json.freeRide.name}`,
+        free: true, tags: ['varied'], note: json.freeRide.note || '' });
+      // your own routes from the map planner (kept in settings, by segment names so they survive a rebuilt network)
+      for (const m of (settings.netRoutes || []).filter((x) => x.network === p.network)) {
+        netItems.push({ ...base, id: m.id, routeId: m.id, name: `${city} · ${m.name}`, custom: true, keys: m.keys, tags: [], note: 'Your own route' });
+      }
     } catch (err) { log('app', `Could not load the ${p.name} network: ${err.message}`, 'error'); }
   }
   return parkItems;
@@ -1067,6 +1210,7 @@ function goalTags(it) {
   const km = r ? (r.lapM || (r.stageRoute ? r.turnS : r.turnS || r.total)) / 1000 : it.km;
   const climb = r ? (r.lapClimbM ?? (r.oneWay?.ascent ?? r.ascent)) : it.climbM;
   const tags = new Set(it.tags || []);
+  if (it.free) return GOALS.map(([k]) => k).filter((k) => tags.has(k));   // a free ride is what you make it
   if (km > 0 && climb != null) {
     const perKm = climb / km;
     if (!tags.has('hilly') && perKm < 6) tags.add('flat');
@@ -1097,7 +1241,8 @@ function renderRouteCards() {
     const r = routeCache.get(it.id);
     const sub = !r ? 'Could not load' : r.stageRoute && r.oneWay
       ? `${fmtDist(r.turnS, 1)} ${distUnit()} to the finish · ${fmtElev(r.oneWay.ascent).toLocaleString()} ${elevUnit()}`
-      : r.netRide ? `${fmtDist(r.lapM, 1)} ${distUnit()} loop · ${fmtElev(r.lapClimbM).toLocaleString()} ${elevUnit()} · choose your turns`
+      : r.free ? `${r.network.nodes.size} junctions · choose every turn`
+      : r.netRide ? `${fmtDist(r.lapM, 1)} ${distUnit()} ${r.netOpen ? 'one way' : 'loop'} · ${fmtElev(r.lapClimbM).toLocaleString()} ${elevUnit()} · choose your turns`
       : `${fmtDist(r.turnS || r.total, 1)} ${distUnit()} each way · ${fmtElev(r.ascent).toLocaleString()} ${elevUnit()}`;
     const tags = goalTags(it);
     return `<button class="rcard ${it.id === selectedRouteId ? 'on' : ''}" data-id="${it.id}"><canvas></canvas>
@@ -1128,13 +1273,20 @@ $('routeCards').addEventListener('click', (e) => {
 
 async function loadRouteItem(item) {
   if (routeCache.has(item.id)) return routeCache.get(item.id);
-  if (item.preset) {
+  if (item.preset || item.free || item.custom) {
     // a network preset: the path route over the city loop's own route and world (js/network.js)
     const base = await loadRouteItem(parkItems.find((p) => p.id === item.baseId));
     base.networks ||= new Map();
     if (!base.networks.has(item.network)) base.networks.set(item.network, loadNetwork(netCache.get(item.network), base));
     const net = base.networks.get(item.network);
-    const route = makePathRoute(net, net.presets.find((x) => x.id === item.preset), { id: item.routeId, name: item.name, park: item.park });
+    let preset;
+    if (item.free) preset = { id: item.routeId, name: item.name, path: null, first: net.json.freeRide.first };
+    else if (item.custom) {
+      const path = keysToIds(net, item.keys);
+      if (!path) throw new Error(`${item.name} uses segments the network no longer has — plan it again`);
+      preset = { id: item.routeId, name: item.name, path };
+    } else preset = net.presets.find((x) => x.id === item.preset);
+    const route = makePathRoute(net, preset, { id: item.routeId, name: item.name, park: item.park });
     route.note = item.note || '';
     route.scene = base.scene;
     // the path ahead changed (a turn chosen, or the path refilled): the arches follow it
@@ -1226,6 +1378,15 @@ $('routeDelete').addEventListener('click', async () => {
   closeMenus();
   const id = selectedRouteId;
   if (id.startsWith('builtin') || !confirm('Remove this route from your library?')) return;
+  if (id.startsWith('mynet-')) {
+    // your own network route (the map planner): kept in settings
+    settings.netRoutes = (settings.netRoutes || []).filter((m) => m.id !== id);
+    saveSettings(settings);
+    routeCache.delete(id);
+    netItems = []; parkItems = null;
+    await refreshRouteList();
+    return;
+  }
   await store.deleteLibraryItem(id);
   routeCache.delete(id);
   await refreshRouteList();
@@ -1706,4 +1867,4 @@ registerServiceWorker(log);
 log('app', 'Ready. Close Zwift, Zwift Companion and the Wahoo app, then connect your devices.');
 
 // For debugging in the browser console.
-window.bikefree = { pacer, session, trainer, ride, hrStrap, store, profiles, get world() { return world; }, get ftpRun() { return ftpRun; } };
+window.bikefree = { pacer, session, trainer, ride, hrStrap, store, profiles, get world() { return world; }, get ftpRun() { return ftpRun; }, get plan() { return plan; } };

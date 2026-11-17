@@ -845,7 +845,7 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [x] 1.8 Course QC rides every turn at every node (`npm run qc:network`: 20 ways through 2 junctions, all clean; Pittsburgh course QC still 0 fail / 0 warn)
 - [x] 1.9 Snapshots of junction G: right, left and back from East Carson (`npm run snap -- --path e1+,e3+ pittsburgh@6008 …`)
 - [x] 1.10 githack link → on-bike review (17 Nov: worked as intended)
-- Built: `routes/cities/pittsburgh-network.json` (junctions: North Shore Water Steps, East Carson & 10th; 3 edges; presets "Three Rivers Loop · choose your turns" 18.3 km and "South Side Short Loop" 13.7 km). Turns are curves through the junction (right 8 m, left 13 m, back 9 m); speed cap only on turns sharper than 60° (a right turn at East Carson & 10th: ~21 km/h). `?debug` puts the session and world on `window.bikefree` for headless checks; `snap --path` follows a network path.
+- Built: `routes/cities/pittsburgh-network.json` (junctions: North Shore Water Steps, East Carson & 10th; 3 edges; presets "Three Rivers Loop · choose your turns" 18.3 km and "South Side Short Loop" 13.7 km). Turns are curves through the junction (right 8 m, left 13 m, back 9 m); speed cap only on turns sharper than 60° (a right turn at East Carson & 10th: ~21 km/h). `window.bikefree` (session, world) serves headless checks; `snap --path` follows a network path.
 
 *Phase 2 — Presets and minimap*
 - [x] 2.1 Goal presets: Three Rivers Loop and South Side Short Loop both ways, South Side Flat Loop, Mount Washington There & Back, Three Rivers There & Back; Pittsburgh is listed as its presets (the old loop entry stays a scenery choice). Goal filter over the whole route list (All · Flat · Hilly · Short · Long · Varied): presets carry their own tags, every route also gets flat/hilly from climbing per km (<6 / ≥12 m) and short/long from length (<15 / ≥30 km)
@@ -861,12 +861,12 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [x] 3.5 Hot Metal Bridge rideable (dark truss); the Jail Trail runs under the parkway walls; the ground keeps under a gentle bank beside trails on a ledge
 - [x] 3.6 New presets: Jail Trail & South Side Loop (9.2 km), Point & Jail Trail Loop (17.4 km), Jail Trail & Mount Washington Loop (19.1 km); "New areas" goal
 - [x] 3.7 QC: `qc --strict` clean (8 reviewed corridor warnings accepted, F8), `qc:network` 38 ways through 4 junctions clean, clipping 0 fail (F11), life sim clean; 194–307 draw calls, 1.1–2.1 M triangles in snapshots; tests 165 pass
-- [ ] 3.8 githack link → on-bike review
+- [x] 3.8 githack link → on-bike review (17 Nov: on to phase 4)
 
 *Phase 4 — Free ride and the map planner*
-- [ ] 4.1 Free ride: no plan, choose at every junction, no set end
-- [ ] 4.2 Map planner: tap segments on a network map; running distance / climb / time; save your own routes
-- [ ] 4.3 Recording, laps and the summary for unplanned rides
+- [x] 4.1 Free ride: "Free Ride · choose every turn" per network (spec `freeRide`): no plan, straight on unless you turn, no laps, no set end; start at any junction (start chips); a ride length still sets a finish that moves with your turns
+- [x] 4.2 Map planner ("Plan your own route on the map…" under a network route's preview): tap a junction, then each segment (the ways on are dashed; the one you just rode turns back); distance, climb, time at your plan power, loop or one way; saved in settings by segment names (`settings.netRoutes`), listed with the presets, removable. A loop laps; a one-way route finishes at its end (Keep riding turns it into a free ride)
+- [x] 4.3 Recording follows the path (the .fit track is where you rode); laps only on a plan; the summary as for any route
 
 *Phase 5 — Remaining segments, in build order*
 - [ ] 5.1 West End Overlook spur (9)
@@ -893,6 +893,7 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [ ] F9 Fort Pitt Blvd's first 100 m from Smithfield are mapped as a bridge (a girder deck is drawn): check it looks right
 - [ ] F11 Clipping QC: 0 fail, 551 warnings (main 420 on an 18.3 km loop; the tour is 23.2 km): mostly vehicles clipping solids (416), streets under ground (63), trees in solids (33) — review the corridor's share
 - [ ] F12 Where the Jail Trail leaves Smithfield St the two route ribbons overlap and show a dark V-shaped seam for a few metres
+- [ ] F13 A saved route whose segments disappear in a rebuilt network (a segment split by a new junction) shows "plan it again"; map the old segment onto its new pieces instead
 - [ ] F10 The tour's Water Steps start is no longer the route's start: Pittsburgh as free-ride scenery now rolls along the tour from Smithfield & Fort Pitt
 
 ### Later ideas

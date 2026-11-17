@@ -93,6 +93,8 @@ const out = {
   nodes: spec.nodes.map(({ id, name, lat, lon, ele, passes }) => ({ id, name, lat, lon, ele, passes })),
   edges, presets,
 };
+// a free ride: no plan, starting on one traversal
+if (spec.freeRide) out.freeRide = { ...spec.freeRide, first: trav(spec.freeRide.first) };
 const text = `${JSON.stringify(out, null, 1)}\n`;
 if (check) {
   if (read(spec.out) !== text) { console.error(`${spec.out} is out of date: run node tools/build_network.mjs ${specPath}`); process.exit(1); }

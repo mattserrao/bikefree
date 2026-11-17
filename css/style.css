@@ -405,6 +405,12 @@ dialog input[type=number], dialog input[type=text], dialog select, dialog input[
 .dialog-actions { display: flex; flex-direction: row-reverse; gap: 8px; margin-top: 6px; flex-wrap: wrap; position: sticky; bottom: -22px; padding: 12px 0 22px; margin-bottom: -22px; background: var(--panel); border-top: 1px solid var(--line); }
 dialog .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 #summary, #history { width: min(680px, 94vw); }
+#planDlg { width: min(760px, 96vw); }
+.plan-map { width: 100%; aspect-ratio: 4 / 3; max-height: 52vh; border-radius: 12px; background: var(--hover); border: 1px solid var(--line); cursor: pointer; touch-action: manipulation; }
+.plan-facts { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+.plan-facts b { color: var(--text); font-size: 15px; }
+.plan-steps { margin: 0; padding-left: 20px; font-size: 12px; color: var(--muted); max-height: 9em; overflow: auto; }
+.plan-open { margin-top: 6px; font-size: 13px; }
 .sum-sub { color: var(--muted); font-size: 13px; margin-top: -8px; }
 .sum-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px 12px; }
 .sum-grid .label { color: var(--muted); font-size: 12px; }
