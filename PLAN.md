@@ -699,7 +699,7 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [ ] Ride a route on the Mac (githack link) to confirm nothing moved
 - [ ] Later (visual changes): merge the duplicates listed in INVENTORY.md, an `alps` pack, and the standard look on Big Sur, Zion and Pittsburgh
 
-### Alpe d'Huez hero — race day, the whole stage *(test branch `alpedhuez-hero-test`, from `main` after the toolbox)*
+### v0.14.0 — Alpe d'Huez hero: race day, the whole stage *(test branch `alpedhuez-hero-test`, from `main` after the toolbox)*
 **Goal:** fill in the Alpe d'Huez wireframe at hero detail with the toolbox: all 127 km of Stage 19, on race day, at real places drawn in the cartoon style. Full plan: `docs/alpedhuez/HERO_PLAN.md`.
 
 **Decisions (16 Nov 2026)**
@@ -721,6 +721,8 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [x] P8 · Race day (`raceDay`): crowds by stretch, Dutch Corner, flags, vans and tents, road paint, barriers, KOM banners, km-to-go, flamme rouge, finish gantry, helicopter. Not built: runners beside the rider, podium and team buses
 - [x] P9 · Cows, sheep, marmots, ravens and an eagle (no dog, no vultures yet); the ride ends at the line (Endless off)
 - [x] P10 · Strict QC clean (switchback banks, 3 m ground on hairpins, retaining walls); guard on the other routes; snapshots; moved to In Progress. Still to do on your side: a githack ride on the Mac and the Air
+- [x] Road surface from reference photos: French markings in metres (`road.markings: "fr"`), asphalt detail
+- [x] v0.14.0; Pittsburgh moved to In Progress, Zion and Demo Hills to Rough Drafts
 
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)

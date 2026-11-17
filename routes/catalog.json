@@ -412,6 +412,7 @@
   },
   {
     "id": "zion",
+    "stage": "draft",
     "name": "Zion Canyon Scenic Drive",
     "park": "Zion National Park, Utah",
     "file": "routes/parks/zion.gpx",
@@ -572,8 +573,7 @@
       18,
       22
     ],
-    "scene": "routes/scenes/pittsburgh.json",
-    "stage": "draft"
+    "scene": "routes/scenes/pittsburgh.json"
   },
   {
     "id": "alpedhuez",

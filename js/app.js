@@ -774,7 +774,7 @@ function renderDiag() {
 // ---------- Routes ----------
 // Demo Hills is an invented test loop: its hills don't exist in the real terrain where it's placed,
 // so it gets stylized scenery that shapes itself around the road (and no real horizon).
-const DEMO_ROUTE = { id: 'builtin-demo-hills', kind: 'route', name: 'Demo Hills (built-in)', url: 'routes/demo-hills.gpx', scene: 'routes/scenes/demo-hills.json', group: 'Other' };
+const DEMO_ROUTE = { id: 'builtin-demo-hills', kind: 'route', name: 'Demo Hills (built-in)', url: 'routes/demo-hills.gpx', scene: 'routes/scenes/demo-hills.json', group: 'Other', stage: 'draft' };
 let routeItems = [];
 let parkItems = null;
 const routeCache = new Map();

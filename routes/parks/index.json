@@ -78,6 +78,7 @@
     "climbM": 188,
     "file": "routes/parks/zion.gpx",
     "outAndBack": true,
+    "stage": "draft",
     "scene": "routes/scenes/zion.json"
   },
   {
@@ -109,7 +110,6 @@
     "km": 18.3,
     "climbM": 204,
     "file": "routes/cities/pittsburgh.gpx",
-    "stage": "draft",
     "scene": "routes/scenes/pittsburgh.json"
   },
   {
