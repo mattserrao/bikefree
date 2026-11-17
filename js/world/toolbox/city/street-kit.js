@@ -957,7 +957,8 @@ export class StreetKit {
   place(C, kind, x, z, yaw, opts = {}) {
     const fn = FURNITURE[kind];
     if (!fn) return false;
-    if (kind !== 'treePit' && kind !== 'car' && this.treeNear(x, z, kind === 'signal' ? 1.2 : .9)) return false;   // [finish] not in a street tree's trunk
+    if (kind !== 'treePit' && kind !== 'car' && this.treeNear(x, z, Math.max(.9, LAMP_CLEAR[kind] ?? 0))) return false;   // [finish] not in a street tree's trunk
+    if (kind !== 'car' && this.lampNear(x, z, LAMP_CLEAR[kind] ?? .7)) return false;   // [finish] …nor in a lamp post (hydrants every 90 m, pits, masts)
     const y = opts.y ?? this.walkLevel(x, z);
     const M = opts.lod === 'mid' ? C.mid : C.near;
     const f = { x, y, z, yaw, c: Math.cos(yaw), s: Math.sin(yaw) };
@@ -1408,6 +1409,9 @@ const at = (f, dx, dz) => [f.x + dx * f.c + dz * f.s, f.z - dx * f.s + dz * f.c]
 function bx(M, f, dx, dy, dz, w, h, l) { const [x, z] = at(f, dx, dz); M.box(x, f.y + dy, z, w, h, l, f.yaw); }
 function cy(M, f, dx, dy, dz, r, h, seg = 6, rTop = r) { const [x, z] = at(f, dx, dz); M.cylinder(x, f.y + dy, z, r, h, seg, rTop); }
 function bm(M, f, a, b, w, h = w) { const [ax, az] = at(f, a[0], a[2]), [bx2, bz] = at(f, b[0], b[2]); M.beam(V(ax, f.y + a[1], az), V(bx2, f.y + b[1], bz), w, h); }
+
+/** [finish] How far furniture keeps from a street lamp's post (m), by kind; others .7. */
+const LAMP_CLEAR = { treePit: 1.1, shelter: 2, bench: 1.2, signal: 1, bikeRack: 1, planter: .9 };
 
 export const FURNITURE = {
   /** A tree pit: a dark iron grate flush with the sidewalk, a stone edge (street trees: CityScene's instanced trees). */

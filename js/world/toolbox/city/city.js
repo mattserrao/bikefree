@@ -777,7 +777,7 @@ export class CityScene {
           // on a bridge the post stands on the deck slab, just inside the railing; elsewhere on the sidewalk
           const dx = (b.x - a.x) / (len || 1), dz = (b.z - a.z) / (len || 1), off = st.width / 2 + (st.bridge ? .05 : .9);
           const x = b.x - dz * off * side, z = b.z + dx * off * side;
-          if (!this._clearSpot(x, z, .35, k, ROAD_WIDTH / 2 + 1.2)) continue;
+          if (!this._clearSpot(x, z, .35, k, ROAD_WIDTH / 2 + 1.2, this.streetKit ? .95 : .35)) continue;   // [finish] (kit facades stand ~.25–.9 m proud of the walls)
           if (st.bridge && this._onStyledBridge(x, z)) continue;   // the famous bridges carry their own lights (and railings)
           lamps.push({ x, z, y: st.bridge ? b.y : this.landscape.heightAt(x, z), yaw: Math.atan2(dz * side, -dx * side), bridge: st.bridge });
         }
@@ -798,7 +798,7 @@ export class CityScene {
         if (kitLamp === null) continue;   // [street-kit] (no sidewalk there: a junction)
         const off = deckBridge ? (ROAD_WIDTH + 3) / 2 + .05 : ROAD_WIDTH / 2 + (kind === 'road' ? 2.6 : 1.6);
         const x = kitLamp ? kitLamp.x : this.index.xs[i] - dz / len * off * side, z = kitLamp ? kitLamp.z : this.index.zs[i] + dx / len * off * side;
-        if (!deckBridge && !this._clearSpot(x, z, .35, -1, ROAD_WIDTH / 2 + 1.2)) continue;
+        if (!deckBridge && !this._clearSpot(x, z, .35, -1, ROAD_WIDTH / 2 + 1.2, this.streetKit ? .95 : .35)) continue;   // [finish] (kit facades)
         // on a deck: not in another carriageway that runs alongside at the same level (the roadway's other half)
         if (deckBridge && this.landscape.streetsNear(x, z, .35).some((o) => this.streets[o.k].cls !== 8 && Math.abs(o.y - r.ele[i]) < 1.5)) continue;
         lamps.push({ x, z, y: deckBridge ? r.ele[i] : kitLamp ? kitLamp.y : this.landscape.heightAt(x, z), yaw: Math.atan2(dz / len * side, -dx / len * side), bridge: !!deckBridge });   // [street-kit] (kitLamp.y)
@@ -1105,7 +1105,7 @@ export class CityScene {
       const road = this.index.nearest(t.x, t.z, 650);
       if (!road) continue;   // near the ride only
       // trunk clear of every carriageway, the crown clear of walls, and nothing growing over the rider's road
-      if (!t.kit && !this._clearSpot(t.x, t.z, 1.6, -1, ROAD_WIDTH / 2 + 2.4, t.wall ?? 1.2)) continue;   // [s4-section] t.wall, [street-kit] kit trees: checked
+      if (!t.kit && !this._clearSpot(t.x, t.z, 1.6, -1, ROAD_WIDTH / 2 + 2.4, t.wall ?? (this.streetKit ? 1.7 : 1.2))) continue;   // [finish] (kit awnings reach 1.3 m out)   // [s4-section] t.wall, [street-kit] kit trees: checked
       const key = `${Math.floor(t.x / SECTOR_M)},${Math.floor(t.z / SECTOR_M)}`, w = .75 + t.seed * .5;   // [w2-budget] per sector (was 480 m)
       q.setFromAxisAngle(Y, t.seed * 40);
       if (!lists.has(key)) lists.set(key, []);
