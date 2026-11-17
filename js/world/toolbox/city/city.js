@@ -805,7 +805,6 @@ export class CityScene {
       }
     }
     if (plan) this.junctionMeshes = buildJunctionMeshes(this, plan, { get, roads, walks, liftOf: (k) => .1 + slots[k] * .02 });   // [junctions]
-    if (plan && this.streetKit) this._junctionCorners(plan);   // [finish] the kit's signals and corner signs at the junctions' corners
     for (const [map, mat, name] of [[roads, this.streetMaterial, 'Streets'], [walks, this.sidewalkMaterial, 'Sidewalks'], [paths, this.pathMaterial, 'Paths']]) {
       for (const [key, builder] of map) {
         builder.keepOutOf(this.landscape.inRouteTube);   // ramps and roadways the data puts in the rider's space
@@ -815,6 +814,7 @@ export class CityScene {
       }
     }
     this.lamps = lamps;
+    if (plan && this.streetKit) this._junctionCorners(plan);   // [finish] the kit's signals and corner signs at the junctions' corners (after the lamps: it keeps clear of them)
     this._lampMeshes(lamps);
   }
 
@@ -1100,6 +1100,7 @@ export class CityScene {
     const greens = ['#5f8a3e', '#6f9a45', '#557d38', '#7a9b4a', '#4f7434', '#8aa452'].map((c) => new THREE.Color(c));
     const lists = new Map();
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0);
+    this.treeTrunks = [];
     for (const t of spots) {
       const road = this.index.nearest(t.x, t.z, 650);
       if (!road) continue;   // near the ride only
@@ -1108,6 +1109,7 @@ export class CityScene {
       const key = `${Math.floor(t.x / SECTOR_M)},${Math.floor(t.z / SECTOR_M)}`, w = .75 + t.seed * .5;   // [w2-budget] per sector (was 480 m)
       q.setFromAxisAngle(Y, t.seed * 40);
       if (!lists.has(key)) lists.set(key, []);
+      (this.treeTrunks ||= []).push(t.x, t.z);   // [finish] for the street kit: furniture keeps clear of the trunks
       lists.get(key).push({ m: m.compose(new THREE.Vector3(t.x, t.y ?? this.landscape.heightAt(t.x, t.z) - .1, t.z), q, new THREE.Vector3(w, w * (.85 + t.seed * .3) * (t.sy || 1), w)).clone(), seed: t.seed });   // [street-kit] (sy: kit street trees stand taller)
     }
     for (const list of lists.values()) {
