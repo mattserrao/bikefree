@@ -11,6 +11,7 @@
 // No @metres = the scene's preview spot.
 // Options: --out <dir> (default tools/snapshots), --quality low|balanced|high, --size 1280x720,
 // --arches 22350:START:Avalanche Creek,47310:FINISH:Logan Pass (the start / finish arches),
+// --path e1+,e3+ (a route with a ride network: follow that path through its junctions; @metres along the path),
 // --chrome <path> (default: CHROME env, else the usual Mac/Linux locations), --software (no GPU).
 // --png (lossless), --fingerprint (hash of every object for refactor checks, with a frozen clock, seeded
 // random and no streamed real horizon, so runs repeat exactly; see tools/toolbox_guard.mjs).
@@ -27,6 +28,7 @@ const flag = (name) => { const i = args.indexOf(name); if (i < 0) return false; 
 const out = opt('--out', 'tools/snapshots');   // relative to the repo, or an absolute path
 const quality = opt('--quality', 'balanced');
 const arches = opt('--arches', null);   // course arches: <startM>[:TITLE[:sub]][,<finishM>[:TITLE[:sub]]] (js/world/toolbox/roadside/course-arches.js)
+const pathKeys = opt('--path', null);   // a ride network's path (e1+,e3+): @metres are then path metres (js/network.js)
 const [width, height] = opt('--size', '1280x720').split('x').map(Number);
 const software = flag('--software');
 const breakdown = flag('--breakdown');   // list draw calls by object
@@ -84,7 +86,7 @@ await mkdir(resolve(ROOT, out), { recursive: true });
 const rows = [];
 for (const shot of shots) {
   const t0 = Date.now(); errors.length = 0;
-  const q = new URLSearchParams({ park: shot.park, clean: '1', quality, ...(shot.pos ? { pos: shot.pos } : {}), ...(shot.time ? { time: shot.time } : {}), ...(shot.season ? { season: shot.season } : {}), ...(shot.weather ? { weather: shot.weather } : {}), ...(shot.look === 'standard' ? { standard: '1' } : shot.look ? { look: shot.look === 'current' ? 'none' : shot.look } : {}), ...(fingerprint ? { horizon: '0' } : {}), ...(arches ? { arches } : {}) });
+  const q = new URLSearchParams({ park: shot.park, clean: '1', quality, ...(shot.pos ? { pos: shot.pos } : {}), ...(pathKeys ? { path: pathKeys } : {}), ...(shot.time ? { time: shot.time } : {}), ...(shot.season ? { season: shot.season } : {}), ...(shot.weather ? { weather: shot.weather } : {}), ...(shot.look === 'standard' ? { standard: '1' } : shot.look ? { look: shot.look === 'current' ? 'none' : shot.look } : {}), ...(fingerprint ? { horizon: '0' } : {}), ...(arches ? { arches } : {}) });
   await page.goto(`${base}/tools/world-preview.html?${q}`);
   if (breakdown) await page.evaluate(() => { window.__breakdown = true; });
   await page.evaluate(([p, f]) => { window.__png = p; window.__fingerprint = f; }, [png, fingerprint]);   // [toolbox]

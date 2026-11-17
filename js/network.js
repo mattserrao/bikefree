@@ -20,7 +20,8 @@ const STEP = 10;
 export const PROMPT_S = 15;        // the turn prompt shows about this many seconds before a junction…
 export const PROMPT_MIN_M = 120;   // …and never later than this many metres before it
 export const LOCK_M = 30;          // the choice locks this close to the junction
-export const TURN_R = 12;          // a turn's curve starts this far before the junction and ends this far after
+export const TURN_R = 13;          // a left turn's curve starts this far before the junction and ends this far after
+export const RIGHT_R = 8;          // a right turn's (it stays in the near lane and hugs the kerb: a tighter turn)
 export const UTURN_R = 9;          // the same for a U-turn ("back")
 export const PASS_R = 6;           // passing straight through where the base route has a seam (the loop's start)
 const AHEAD_M = 150000;            // the path route always reaches this far beyond the rider (and the planner)
@@ -306,7 +307,7 @@ export class NetRide extends EventTarget {
     if (seamless) return null;
     const o = optionsAt(this.net, a.t).find((x) => same(x.t, b.t));
     const angle = o ? o.angle : 0;
-    const R = o?.back ? UTURN_R : Math.abs(angle) < 25 ? PASS_R : TURN_R;
+    const R = o?.back ? UTURN_R : Math.abs(angle) < 25 ? PASS_R : angle > 0 ? RIGHT_R : TURN_R;
     return { P: b.p0, R, angle, back: !!o?.back };
   }
 
@@ -316,7 +317,8 @@ export class NetRide extends EventTarget {
     let cap = null;
     for (const j of [i, i + 1]) {
       const J = this._junction(j);
-      const v = J && cornerSpeed(J.angle);
+      // tighter curves slow you more: the angle's speed, scaled for the curve's size
+      const v = J && cornerSpeed(J.angle) && cornerSpeed(J.angle) * Math.sqrt(Math.min(1, J.R / TURN_R));
       if (v == null) continue;
       const d = J.P - p;   // + before the junction
       if (d < -J.R) continue;

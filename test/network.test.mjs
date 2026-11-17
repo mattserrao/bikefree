@@ -87,7 +87,7 @@ test('corner speeds: none under 60°, slower the sharper', () => {
   assert.ok(cornerSpeed(180) < cornerSpeed(135));
   const r = makePathRoute(net, preset('pgh-short-loop'));   // right at East Carson & 10th: 91°
   assert.equal(r.netRide.speedCap(4000), null);
-  assert.ok(Math.abs(r.netRide.speedCap(6020) - cornerSpeed(91)) < 0.05);
+  assert.ok(r.netRide.speedCap(6020) < cornerSpeed(91) && r.netRide.speedCap(6020) > 5);   // a right turn: tighter, a little slower
   assert.ok(r.netRide.speedCap(5950) > r.netRide.speedCap(6000));   // easing down into it
   assert.equal(r.netRide.speedCap(6100), null);                      // pedal back up after
 });

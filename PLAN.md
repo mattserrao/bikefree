@@ -835,16 +835,17 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 **Action items, in order**
 
 *Phase 1 — Turns on the current loop (junction G, East Carson & 10th)* — review stop
-- [ ] 1.1 Network data: nodes, edges (intervals of the loop's GPX), presets; `tools/build_network.mjs` finds the nodes on the GPX → `routes/cities/pittsburgh-network.json`
-- [ ] 1.2 `js/network.js` (pure): arms and bearings, path made of edge traversals, options at a node (left/straight/right/back), default rule, a rolling linear "path route" the session rides, path → loop position mapping, smooth turn pose, turn ahead (for the speed cap), laps on the plan
-- [ ] 1.3 Session: network routes, corner speed cap, laps, choice API; handlebar ◀ ▶ and <kbd>A</kbd>/<kbd>D</kbd>
-- [ ] 1.4 World: built from the loop as today; rider, pacer, arches and route traffic follow the path
-- [ ] 1.5 Turn prompt on the ride screen
-- [ ] 1.6 Route list: test entries for the 18.3 km loop and the 13.7 km South Side short loop; route selector fits network routes (no Reverse, starts at named junctions, ride length on the path)
-- [ ] 1.7 Tests (`test/network.test.mjs`): mapping, every in/out pair at every node (position, height, heading), default rule, laps, speed cap
-- [ ] 1.8 Course QC rides every turn at every node
-- [ ] 1.9 Snapshots of junction G from all four arms
+- [x] 1.1 Network data: nodes, edges (intervals of the loop's GPX), presets; `tools/build_network.mjs` finds the nodes on the GPX → `routes/cities/pittsburgh-network.json`
+- [x] 1.2 `js/network.js` (pure): arms and bearings, path made of edge traversals, options at a node (left/straight/right/back), default rule, a rolling linear "path route" the session rides, path → loop position mapping, smooth turn pose, turn ahead (for the speed cap), laps on the plan
+- [x] 1.3 Session: network routes, corner speed cap, laps, choice API; handlebar ◀ ▶ and <kbd>A</kbd>/<kbd>D</kbd>
+- [x] 1.4 World: built from the loop as today; rider, pacer, arches and route traffic follow the path
+- [x] 1.5 Turn prompt on the ride screen
+- [x] 1.6 Route list: test entries for the 18.3 km loop and the 13.7 km South Side short loop; route selector fits network routes (no Reverse, starts at named junctions, ride length on the path)
+- [x] 1.7 Tests (`test/network.test.mjs`): mapping, every in/out pair at every node (position, height, heading), default rule, laps, speed cap
+- [x] 1.8 Course QC rides every turn at every node (`npm run qc:network`: 20 ways through 2 junctions, all clean; Pittsburgh course QC still 0 fail / 0 warn)
+- [x] 1.9 Snapshots of junction G: right, left and back from East Carson (`npm run snap -- --path e1+,e3+ pittsburgh@6008 …`)
 - [ ] 1.10 githack link → on-bike review
+- Built: `routes/cities/pittsburgh-network.json` (junctions: North Shore Water Steps, East Carson & 10th; 3 edges; presets "Three Rivers Loop · choose your turns" 18.3 km and "South Side Short Loop" 13.7 km). Turns are curves through the junction (right 8 m, left 13 m, back 9 m); speed cap only on turns sharper than 60° (a right turn at East Carson & 10th: ~21 km/h). `?debug` puts the session and world on `window.bikefree` for headless checks; `snap --path` follows a network path.
 
 *Phase 2 — Presets and minimap*
 - [ ] 2.1 Goal presets in the route list (Pittsburgh group): each loop both ways, tagged flat / hilly / short / long / varied / new areas
@@ -880,7 +881,12 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [ ] 5.11 Final QC, performance check on the Air, PR
 
 **Follow-ups found along the way**
-- (none yet)
+- [ ] F1 Minimap and card thumbnails draw the path route, laps on top of each other (→ 2.2)
+- [ ] F2 The classic "Three Rivers Loop" and the network "Three Rivers Loop · choose your turns" are both listed (→ 2.1: one entry)
+- [ ] F3 The pacer follows your path as it is now; if you change a turn after the pacer has passed that junction it jumps to the new path
+- [ ] F4 Route traffic (cars that overtake / wait behind you) follows the loop's direction; check on the bike that it behaves after a turn onto the other half of the loop
+- [ ] F5 At the Water Steps the loop's start/finish is a junction with only straight on or back (the prompt still shows there)
+- [ ] F6 Headless runs can't ride in real time (software rendering): the on-bike check covers the feel of the turn, the camera swing and the prompt timing
 
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)

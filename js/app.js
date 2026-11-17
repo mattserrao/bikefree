@@ -68,6 +68,8 @@ const trainer = new Trainer(log);
 const ride = new Ride(log);
 const hrStrap = new HeartRate(log);
 const session = new Session({ trainer, ride, hr: hrStrap, log, settings });
+// ?debug: the session and the 3D world on window.bikefree, for headless checks (tools, test scripts)
+if (new URLSearchParams(location.search).has('debug')) window.bikefree = { session, get world() { return world; } };
 const imperial = () => settings.units === 'imperial';
 const fmtDist = (m, dp = 2) => (imperial() ? (m / 1609.344).toFixed(dp) : (m / 1000).toFixed(dp));
 const distUnit = () => (imperial() ? 'mi' : 'km');
@@ -939,10 +941,10 @@ function renderTurnPrompt(force = false) {
   const fmtLen = (m) => `${fmtDist(m, 1)} ${distUnit()}`;
   box.hidden = false;
   box.classList.toggle('locked', up.locked);
+  const sel = up.options[up.selected];
   box.innerHTML = `<div class="turn-head"><b>${escapeHtml(up.node.name)}</b><span>${up.distTo > 5 ? `in ${Math.round(imperial() ? up.distTo * 3.28084 / 10 : up.distTo / 5) * (imperial() ? 10 : 5)} ${imperial() ? 'ft' : 'm'}` : 'now'}</span></div>
-    <div class="turn-opts">${up.options.map((o, j) => `<div class="turn-opt ${j === up.selected ? 'on' : ''} ${o.back ? 'back' : ''}">
-      <i>${o.glyph}</i><b>${o.label}${j === up.selected && up.onPlan ? ' <em>plan</em>' : ''}</b><small>${escapeHtml(o.toward)}</small>
-      <small class="turn-num">${fmtLen(o.lengthM)} · ${fmtElev(o.climbM)} ${elevUnit()} up</small></div>`).join('')}</div>
+    <div class="turn-opts">${up.options.map((o, j) => `<div class="turn-opt ${j === up.selected ? 'on' : ''} ${o.back ? 'back' : ''}"><i>${o.glyph}</i><b>${o.label}</b></div>`).join('')}</div>
+    <div class="turn-sel">${up.onPlan ? '<em>Plan</em> ' : ''}${escapeHtml(sel.toward.charAt(0).toUpperCase() + sel.toward.slice(1))} · ${fmtLen(sel.lengthM)} · ${fmtElev(sel.climbM).toLocaleString()} ${elevUnit()} up</div>
     <div class="turn-hint">${up.locked ? 'Locked in' : '◀ ▶ on the handlebars · <kbd>A</kbd> <kbd>D</kbd>'}</div>`;
 }
 

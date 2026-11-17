@@ -42,18 +42,28 @@ try {
  // [toolbox] ?standard=1: the route with the toolbox standard look (gentle cartoon, baked light at its time of day)
  if (route.scene && q.get('standard') === '1') { route.scene.look ||= 'gentle'; route.scene.lighting = { ...route.scene.lighting, baked: q.get('time') || route.scene.timeOfDay || 'midday' }; }   // [toolbox] no streamed real horizon (deterministic guard renders)
  const world = new World($('view'), route, { quality: q.get('quality') || 'balanced', look: q.get('look'), log: (...args) => console.log(...args) });
- let pos = Math.max(0, Math.min(route.total, Number(q.get('pos') ?? route.scene?.preview?.positionM ?? 0) || 0));
+ // ?path=e1+,e3+ (a route with a ride network): follow that path — traversal keys, repeated — and read pos in path
+ // metres (js/network.js), so junction turns can be previewed and snapped (snap --path)
+ let ride = null;
+ if (q.get('path') && item.network) {
+   const { loadNetwork, NetRide } = await import('../js/network.js');
+   const net = loadNetwork(await (await fetch(`../${item.network}`)).json(), route);
+   ride = new NetRide(net, {}, { plan: q.get('path').split(',') });
+   world.setPath(ride);
+ }
+ const span = ride ? ride.route.total : route.total;
+ let pos = Math.max(0, Math.min(span, Number(q.get('pos') ?? route.scene?.preview?.positionM ?? 0) || 0));
  let speed = Math.max(0, Math.min(45, Number(q.get('speed')) || 0));
  let last = performance.now();
- function seek(value) { pos = Number(value); world.s = pos; world._camInit = false; }
- world.s = pos;
+ function seek(value) { pos = Number(value); world.s = ride ? ride.worldS(pos) : pos; world.p = pos; world._camInit = false; }
+ world.s = ride ? ride.worldS(pos) : pos; world.p = pos;
  $('play').textContent = speed ? 'Pause' : 'Ride';
  $('time').value = q.get('time') || route.scene?.timeOfDay || 'midday';
  for (const o of $('time').options) o.hidden = o.disabled = !world.timeOptions().some((t) => t.key === o.value);   // [w2-polish] baked: golden + night
  world.setTimeOfDay($('time').value); $('time').value = world.timeKey;
  $('weather').value = q.get('weather') || 'clear'; world.setWeather($('weather').value, true);
  $('weather').addEventListener('change', (e) => world.setWeather(e.target.value)); $('quality').value = world.qualityKey;
- world.setSource(() => { const now = performance.now(); pos = (pos + speed * (now - last) / 1000) % route.total; last = now; return { pos, speed, cadence: speed ? 84 : 0, riding: true }; });
+ world.setSource(() => { const now = performance.now(); pos = (pos + speed * (now - last) / 1000) % span; last = now; return { pos, speed, cadence: speed ? 84 : 0, riding: true }; });
  window.world = world;
  // course arches (the app's start / finish): ?arches=<m>[:TITLE[:sub]],<m>[:TITLE[:sub]] — start, then finish (snap --arches)
  if (q.get('arches')) {
