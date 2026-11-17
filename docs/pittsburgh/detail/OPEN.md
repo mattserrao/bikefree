@@ -66,3 +66,6 @@ What was done and what's left per agent: `PAUSED.md`. `w2-align` is not in the P
 
 ## Finishing pass (17 Nov, `pittsburgh-finish-test`)
 Everything above was worked through without agents; what was done and what is still open is in `FINISH.md`. Still open: 20 road-meet sites near the route (the Point ramps the worst), lamps on girder decks touching trusses, lamps over water on mapped decks without a slab, kit facade/fence and furniture collisions with lamps and trees (32), three z-fighting route junctions, and the M4 check with the **I** overlay.
+
+## Second round (17 Nov, later)
+Road texture, brick and foliage passes done, lamp/kit collisions and route-junction z-fight fixed, High back under 2 M triangles: see the second half of `FINISH.md`. Still open: 20 road-meet sites (the Point ramps), 24 trees against kit facades and furniture, 10 lamps against bridge members, two spots with lamps over water, brick checked at night, and the M4 check.
