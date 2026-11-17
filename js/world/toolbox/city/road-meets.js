@@ -458,10 +458,11 @@ export function hideCrossingsAtRoute(streets, ctx, options = {}) {
     const P = st.pts, h = st.width / 2, lift = SLOT_LIFT(slots[k]);
     for (let i = 0; i < P.length; i++) {
       const p = P[i];
-      if (p.jn != null || p.je != null || p.along) continue;
+      if (p.jn != null || p.along) continue;
       const r = index.nearest(p.x, p.z, O.edgeM + h + 12); if (!r) continue;
       const q = RL.project(p.x, p.z, route.dist[Math.min(end, r.i > end ? 2 * end - r.i : r.i)], 30);
       if (!q || q.d > O.edgeM + 1) continue;
+      if (p.je != null && q.d > RW / 2 + .5) continue;   // [finish] (a junction's ease zone, unless it lies on the road itself)
       const dy = p.y + lift - (q.y + ROAD_LIFT);
       if (Math.abs(dy) > O.pass) continue;   // [finish] (at one level too: no junction here, so the road's surface carries across)
       const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)], t = RL.at(q.s), dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1;
@@ -469,6 +470,23 @@ export function hideCrossingsAtRoute(streets, ctx, options = {}) {
       p.tl = p.tr = 2 * h; n++;
     }
   });
+  return n;
+}
+
+/**
+ * [finish] A stub (a few metres of street, e.g. the mapped mouth of a driveway) that the passes above have already cut
+ * away at one end is not drawn at all: what is left is a wedge that meets nothing at its height.
+ */
+export function dropCutStubs(streets, options = {}) {
+  const O = { maxM: 8, ...options };
+  let n = 0;
+  for (const st of streets) {
+    if (st.cls > 7 || st.pts.length < 2) continue;
+    let len = 0; for (let i = 1; i < st.pts.length; i++) len += Math.hypot(st.pts[i].x - st.pts[i - 1].x, st.pts[i].z - st.pts[i - 1].z);
+    const h = st.width / 2;
+    if (len > O.maxM || !st.pts.some((p) => (p.tl || 0) >= 2 * h - .01 && (p.tr || 0) >= 2 * h - .01)) continue;
+    for (const p of st.pts) { p.tl = p.tr = 2 * h; } n++;
+  }
   return n;
 }
 
@@ -636,37 +654,6 @@ export function resolveOverlaps(streets, landscape, options = {}) {
     P.forEach((p, i) => { if (best[i] && !p.along && !p.pin && p.jn == null && !(O.final && p.je != null) && shared.get(nk(p)) < 2) p.y = own[i] + best[i][1] * best[i][0]; });
   }
   return n;
-}
-
-/**
- * [finish] Where a ribbon's trim changes a lot between two nodes (a gore's start, a carriageway giving way), the trim is
- * interpolated across the whole segment and leaves a wedge drawn over its neighbour. Split such segments every
- * `stepM` so resolveOverlaps() can trim the new points exactly. Returns how many points were added.
- */
-export function refineTrimEdges(streets, options = {}) {
-  const O = { jump: .8, stepM: 1.2, maxM: 30, ...options };
-  let added = 0;
-  streets.forEach((st) => {
-    if (st.cls > 7 || st.pts.length < 2) return;
-    const P = st.pts, out = [P[0]], map = [0];
-    for (let i = 1; i < P.length; i++) {
-      const a = P[i - 1], b = P[i], len = Math.hypot(b.x - a.x, b.z - a.z);
-      const jump = Math.max(Math.abs((a.tl || 0) - (b.tl || 0)), Math.abs((a.tr || 0) - (b.tr || 0)));
-      if (jump > O.jump && len > O.stepM * 1.5 && len < O.maxM && a.jn == null && b.jn == null) {
-        const m = Math.ceil(len / O.stepM);
-        for (let q = 1; q < m; q++) {
-          const f = q / m, n = { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, z: a.z + (b.z - a.z) * f };
-          for (const key of ['along', 'pin', 'under']) if (a[key] && b[key]) n[key] = a[key];
-          out.push(n); added++;
-        }
-      }
-      map.push(out.length); out.push(b);
-    }
-    if (out.length === P.length) return;
-    st.pts = out;
-    if (st.nodeIdx) st.nodeIdx = st.nodeIdx.map((i) => map[i]);
-  });
-  return added;
 }
 
 export function trimOverlaps(streets, landscape, plan, options = {}) {

@@ -60,11 +60,13 @@ export const LIFT_BLEND_M = 6;   // a trimmed ribbon's lift blends to the juncti
 export const drawnLiftMax = (p, plan, maxLift) => (p.jd != null && plan ? plan.options.lift + (maxLift - plan.options.lift) * smooth(p.jd / LIFT_BLEND_M) : maxLift);
 
 /** Cumulative arc length along a street's points (cached). */
+const ARCS = new WeakMap();   // [finish] keyed by the points array: a pass that replaces st.pts (refineTrimEdges) gets fresh arcs
 function arcs(st) {
-  if (st._acc) return st._acc;
-  const a = new Float64Array(st.pts.length);
+  let a = ARCS.get(st.pts);
+  if (a) return a;
+  a = new Float64Array(st.pts.length);
   for (let i = 1; i < st.pts.length; i++) a[i] = a[i - 1] + Math.hypot(st.pts[i].x - st.pts[i - 1].x, st.pts[i].z - st.pts[i - 1].z);
-  Object.defineProperty(st, '_acc', { value: a, enumerable: false });
+  ARCS.set(st.pts, a);
   return a;
 }
 /** Point on a street at arc length s: {x, y, z, i (segment), dx, dz}. */
@@ -338,7 +340,7 @@ export function planJunctions(streets, ctx, options = {}) {
       const rd = routeDist;
       J = (x, z) => {
         const y = RL.project(x, z, rq.s, 45).y + ROAD_LIFT - O.routeGap - O.lift, r = rd && rd(x, z);
-        return r && r.d < RW / 2 + 1 ? Math.min(y, r.y + ROAD_LIFT - O.routeGap - O.lift) : y;
+        return r && r.d < RW / 2 + 1 && Number.isFinite(r.y) ? Math.min(y, r.y + ROAD_LIFT - O.routeGap - O.lift) : y;
       };
     } else {
       const P = ring.map((a) => { const sp = streetPoint(streets[a.k], a.a0 + a.dir * a.t); return { x: sp.x - C.x, z: sp.z - C.z, y: sp.y }; });
