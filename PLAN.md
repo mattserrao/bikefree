@@ -699,6 +699,29 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [ ] Ride a route on the Mac (githack link) to confirm nothing moved
 - [ ] Later (visual changes): merge the duplicates listed in INVENTORY.md, an `alps` pack, and the standard look on Big Sur, Zion and Pittsburgh
 
+### Alpe d'Huez hero — race day, the whole stage *(test branch `alpedhuez-hero-test`, from `main` after the toolbox)*
+**Goal:** fill in the Alpe d'Huez wireframe at hero detail with the toolbox: all 127 km of Stage 19, on race day, at real places drawn in the cartoon style. Full plan: `docs/alpedhuez/HERO_PLAN.md`.
+
+**Decisions (16 Nov 2026)**
+- Hero detail everywhere (not just the final climb)
+- Race day always: crowds, Dutch Corner, road paint, barriers, camper vans, banners, finish arch; roads closed (no traffic)
+- Real places, stylized: villages, churches, the Sautet dam, the Beaume tunnel and the resort from OpenStreetMap; bend signs 21 → 1 at the real bends
+- Claude builds it alone, in phases, with snapshots after each
+- Toolbox standard (gentle look, baked midday, chase camera, vista); 2.5M triangles allowed on the Alpe with crowds; under 600 draw calls
+
+**Passes**
+- [ ] P0 · Scene onto the mountain preset; OSM corridor fetch + census; baseline snapshots
+- [ ] P1 · Terrain bake (z13 hole fill, lakes, rivers, Beaume tunnel, glaciers); baked light over 127 km
+- [ ] P2 · OSM land cover baked into the terrain (`landcover`)
+- [ ] P3 · `alps` pack + data-driven `vegetation.zones` (Going-to-the-Sun moved to data, guard unchanged)
+- [ ] P4 · Palette and planting by stretch; view windows
+- [ ] P5 · Atmosphere: limestone vs gneiss vista, haze, clouds, bake time
+- [ ] P6 · Villages from footprints (`buildings`), resort and lifts, churches, Sautet dam, Bayard, Noyer chalet, French poles
+- [ ] P7 · Bend signs 21 → 1, road surface by stretch, French roadside and signs
+- [ ] P8 · Race day (`raceDay`): crowds, flags, vans, road paint, barriers, KOM banners, flamme rouge, finish arch, helicopter
+- [ ] P9 · Animals (cows, sheep, marmots, choughs, vultures), finish at the line
+- [ ] P10 · Strict QC, clipping QC, guard, snapshots at 15 fixed spots, Light/Balanced/High, ride on the Air, PR
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)
