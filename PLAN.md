@@ -800,6 +800,21 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [ ] Ride Pittsburgh on the Mac and the Air
 
 
+### Smooth sharp turns *(test branch `smooth-turns-test`, from `main` after PR #34)*
+**Goal:** roads and their paint did not look smooth through sharp turns on Pittsburgh and Alpe d'Huez: the road was faceted, the lines kinked and the rider and camera swung round the corner. Fix it for those two routes only, at the root, without changing ride distance or the profile.
+
+**Causes**
+- The route is kept as samples exactly 10 m apart. The Alpe's hairpins put up to 133° into one sample (Pittsburgh's corners up to 53°), so the road drawn through them (straight 10 m pieces on the Alpe; a Catmull-Rom curve through the samples on Pittsburgh) turned on a 0.5 m (Alpe) / 5 m (Pittsburgh) radius, with 85° / 19° between consecutive cross-sections.
+- The paint is drawn in road coordinates on the ribbon, so it kinked wherever the ribbon did.
+- The rider's heading is the chord over ±6 m of the same line, so on the Alpe it turned up to 22°/m and jumped by 24°/m per metre at the hairpins.
+
+**Passes**
+- [x] `roadAlign.turns` (`js/world/road-align.js`, run by `makeRouteIndex`): every stretch tighter than `minRadiusM` (8 m) is redrawn with its heading eased (curvature built up over a few metres, total turn and end headings kept), the end offset taken out smoothly, and the line spaced evenly; less radius where the road would move more than `maxShiftM` (6 m). The 10 m samples inside move onto it, so the ground, rails and walls follow the same road
+- [x] The drawn road (`denseRoad`): a cross-section every 3° where a 10 m piece would step more than 6°; the curve's own tangents for the cross-sections; ribbon edges clamped so they never run backwards (`ribbonSections`). Everything else keeps its old cut
+- [x] Gated: only Pittsburgh and Alpe d'Huez have `turns`; the city preset leaves it out; the refactor guard shows the other routes unchanged
+- [x] `test/smooth-turns.test.mjs` (fails on main): cross-section steps, folds, tightest radius, rider turn rate and its change, ride distance / elevation / drawn length, rider on the drawn road
+- [ ] Ride the Alpe's hairpins and Pittsburgh's corners on the Mac and the Air (githack link)
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)
