@@ -759,6 +759,23 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [x] `npm run snap:figures` (gallery views), `test/figures.test.mjs` (clips up to date, triangle budgets, feet on the ground)
 - [ ] Ride Pittsburgh, Big Sur, Going-to-the-Sun and the Alpe on the Mac and the Air (githack link)
 
+### Building kit *(test branch `buildings-test`, from `main` after PR #33)*
+**Goal:** buildings are the weakest part of the scenery: one flat colour, windows on a grid, plain roofs, one box per building, nothing at the base. Build a generic kit that recombines automatically, on top of the map-footprint buildings, and try it on Alpe d'Huez only. Proposals: the Project doc `claude/building-kit-proposals.md`.
+
+**Decisions (17 Nov 2026)**
+- Alpe d'Huez only for now; the kit is added on top (`footprints.js` stays as it is for scenes without `buildingKit`)
+- All six layers: wall surfaces and weathering, windows and doors, roofs, massing modules, ground dressing, the recombination engine; plus the gallery and checks
+
+**Passes**
+- [x] Facade shader: 13 wall surfaces, 9 roof surfaces, 7 window sets with shutters, curtains, sills, surrounds, flower boxes; doors, barn doors, shopfronts, quoins, ivy, sundials; weathering by age and upkeep; fade-to-average far off
+- [x] Recipes: archetypes from footprint size and density, regional presets (Provence, Hautes-Alpes, Dauphiné, Oisans, ski resort), colour schemes that never repeat next door, age / upkeep / wealth
+- [x] Massing: L/T/U footprints cut into rectangles with cross gables; gable, half-hip, hip, shed, flat and crow-stepped roofs; farmhouses with barn ends; balconies, galleries, dormers, chimneys, lean-tos, garages, outside stairs, génoise, bell towers, solar panels, the tent church
+- [x] Ground dressing near the road, kept off the road and out of buildings; near detail built lazily per stretch
+- [x] Duplicate map footprints dropped (they z-fought once each copy had its own windows)
+- [x] `npm run gallery:buildings`, `test/building-kit.test.mjs`, snapshots before/after at 8 spots (`docs/buildings/`)
+- [ ] Ride the Alpe on the Mac and the Air (githack link); check load time on the Air
+- [ ] Later: bring the kit to Route 28's villages and Pittsburgh's city blocks
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

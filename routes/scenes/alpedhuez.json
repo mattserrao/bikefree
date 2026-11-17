@@ -751,6 +751,18 @@
       }
     ]
   },
+  "buildingKit": {
+    "detailM": 120,
+    "dressingM": 70,
+    "styles": [
+      { "fromM": 0, "toM": 4800, "preset": "provence", "stone": "#c9b89a" },
+      { "fromM": 4800, "toM": 46000, "preset": "hautes-alpes", "stone": "#b9b2a3" },
+      { "fromM": 46000, "toM": 76000, "preset": "dauphine", "stone": "#a9a395" },
+      { "fromM": 76000, "toM": 89000, "preset": "dauphine", "stone": "#a39e94", "forms": { "gable": 0.55, "halfHip": 0.35, "stepped": 0.1 } },
+      { "fromM": 89000, "toM": 125200, "preset": "oisans", "stone": "#95918a" },
+      { "fromM": 125200, "preset": "ski-resort", "stone": "#a9a49a" }
+    ]
+  },
   "cables": {
     "lifts": true,
     "power": true,

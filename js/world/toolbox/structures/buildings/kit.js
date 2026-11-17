@@ -1,0 +1,250 @@
+// The building kit (scene field "buildingKit"): map footprints turned into varied, textured buildings.
+// It sits on top of structures/footprints.js — the same footprint plan (planFootprints: what is kept off the
+// road, the tree clearings) — and replaces only how the buildings are drawn, when a scene opts in.
+//
+//   "buildingKit": {
+//     "detailM": 120,          full outline (wings, balconies, dormers, lean-tos…) within this of the road
+//     "dressingM": 70,         ground dressing for buildings within this of the road
+//     "chunkM": 1000,          one draw per stretch of road (main), one more for the near detail
+//     "reachM": 9000,          main meshes hidden past this
+//     "detailReachM": 650,     near detail (canopies, steps, gutters, dressing) hidden past this, built as it nears
+//     "detailBudgetMs": 3,     time per frame for building the near detail
+//     "styles": [ { "fromM": 0, "toM": 4800, "preset": "provence", …overrides } ]   (presets.js)
+//   }
+//
+// Cost: one draw call per stretch for the buildings, one per stretch for the near detail (Balanced: about
+// 10 + 2 in view). Everything uses the one facade material (facade-material.js).
+import * as THREE from '../../../../../vendor/three.module.min.js';
+import { planBuildings } from './recipe.js';
+import { assemble, Writer, NullWriter } from './assemble.js';
+import { planDressing } from './dressing.js';
+import { makeFacadeMaterial } from './facade-material.js';
+import { S } from './presets.js';
+
+// colours stay in sRGB here (the shader linearises them): no colour-space conversion
+const SRGB = new Map();
+const srgb = (hex) => { let c = SRGB.get(hex); if (!c) SRGB.set(hex, c = new THREE.Color().setStyle(hex, THREE.LinearSRGBColorSpace)); return c.clone(); };
+const u8 = (c) => [Math.round(Math.min(1, c.r) * 255), Math.round(Math.min(1, c.g) * 255), Math.round(Math.min(1, c.b) * 255)];
+
+/** Plan the kit (pure): recipes and dressing for every footprint. Used by BuildingKit and the tests. */
+export function planBuildingKit(footprintPlan, config, index) {
+  const plan = planBuildings(footprintPlan, config, index, config.buildingKit || {});
+  // a 20 m grid of footprints for "is this spot inside a building"
+  const G = 20, grid = new Map();
+  for (const R of plan.buildings) {
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (const [x, z] of R.pts) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+    R.bb = [x0, x1, z0, z1];
+    for (let i = Math.floor(x0 / G); i <= Math.floor(x1 / G); i++) for (let j = Math.floor(z0 / G); j <= Math.floor(z1 / G); j++) {
+      const k = `${i},${j}`; if (!grid.has(k)) grid.set(k, []); grid.get(k).push(R);
+    }
+  }
+  const pip = (x, z, pts) => { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, zi] = pts[i], [xj, zj] = pts[j]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) c = !c; } return c; };
+  const blocked = (x, z, rr, self) => {
+    for (let i = Math.floor((x - rr - 2) / G); i <= Math.floor((x + rr + 2) / G); i++) for (let j = Math.floor((z - rr - 2) / G); j <= Math.floor((z + rr + 2) / G); j++) {
+      for (const R of grid.get(`${i},${j}`) || []) {
+        if (x < R.bb[0] - rr - .5 || x > R.bb[1] + rr + .5 || z < R.bb[2] - rr - .5 || z > R.bb[3] + rr + .5) continue;
+        // inside (or within rr of) another footprint; one's own: inside only
+        if (pip(x, z, R.pts)) return true;
+        if (R !== self) for (const [dx, dz] of [[rr, 0], [-rr, 0], [0, rr], [0, -rr]]) if (pip(x + dx, z + dz, R.pts)) return true;
+      }
+    }
+    return false;
+  };
+  const troughs = [];
+  const claimTrough = (x, z) => { if (troughs.some((t) => Math.hypot(t[0] - x, t[1] - z) < 90)) return false; troughs.push([x, z]); return true; };
+  const ctx = { index, blocked, claimTrough };
+  for (const R of plan.buildings) R.dressing = planDressing(R, ctx);
+  return plan;
+}
+
+export class BuildingKit {
+  constructor(parent, footprintPlan, landscape, config, uniforms, index) {
+    const t0 = performance.now();
+    this.group = new THREE.Group(); this.group.name = 'Buildings (building kit)'; parent.add(this.group);
+    const opts = { chunkM: 1000, reachM: 9000, detailReachM: 650, ...(config.buildingKit || {}) };
+    this.reach = opts.reachM; this.detailReach = opts.detailReachM;
+    this.L = landscape;
+    this.material = makeFacadeMaterial(uniforms);
+    this.plan = planBuildingKit(footprintPlan, config, index);
+    const tPlan = performance.now() - t0;
+    // main meshes now (they go into the baked shadows); the near detail per stretch later, as the rider nears it
+    const chunks = new Map();
+    const nul = new NullWriter();
+    for (const R of this.plan.buildings) {
+      const key = Math.floor(R.s / opts.chunkM);
+      if (!chunks.has(key)) chunks.set(key, { key, w: new Writer(8192), list: [], box: { x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity }, n: 0 });
+      const ch = chunks.get(key);
+      assemble(R, ch.w, nul, landscape);
+      ch.list.push(R);
+      const b = ch.box; b.x0 = Math.min(b.x0, R.x - R.r - 6); b.x1 = Math.max(b.x1, R.x + R.r + 6); b.z0 = Math.min(b.z0, R.z - R.r - 6); b.z1 = Math.max(b.z1, R.z + R.r + 6); ch.n++;
+    }
+    this.chunks = [...chunks.values()];
+    this.meshes = []; this.details = [];
+    let tris = 0;
+    for (const ch of this.chunks) {
+      ch.km = `${(ch.key * opts.chunkM / 1000).toFixed(0)}–${((ch.key + 1) * opts.chunkM / 1000).toFixed(0)} km`;
+      const mesh = new THREE.Mesh(ch.w.geometry(), this.material);
+      mesh.name = `Buildings ${ch.km} (${ch.n})`;
+      mesh.castShadow = true; mesh.receiveShadow = true; mesh.userData.box = ch.box;
+      this.group.add(mesh); this.meshes.push(mesh); tris += ch.w.triangles;
+      ch.w = null; ch.detail = null;
+    }
+    this.count = this.plan.buildings.length;
+    this.stats = { buildings: this.count, chunks: this.chunks.length, tris, detailTris: 0, ms: Math.round(performance.now() - t0), planMs: Math.round(tPlan),
+      duplicates: this.plan.duplicates, archetypes: countBy(this.plan.buildings, (R) => R.archetype), dressing: countBy(this.plan.buildings.flatMap((R) => R.dressing || []), (d) => d.kind) };
+    this._job = null;
+    this.budgetMs = opts.detailBudgetMs ?? 3;
+  }
+
+  /** Build one stretch's near detail (canopies, steps, gutters, ridge caps, dressing), in slices: a generator. */
+  *_detail(ch) {
+    const d = new Writer(4096), nul = new NullWriter();
+    for (const R of ch.list) {
+      const res = assemble(R, nul, d, this.L);
+      if (R.dressing?.length) for (const it of R.dressing) dress(d, it, R, this.L, res);
+      yield;
+    }
+    if (d.n) {
+      const dm = new THREE.Mesh(d.geometry(), this.material);
+      dm.name = `Building detail ${ch.km}`;
+      dm.castShadow = false; dm.receiveShadow = true;
+      dm.userData.box = ch.box; dm.userData.bake = false;   // small things: not in the baked shadows
+      this.group.add(dm); this.details.push(dm); ch.detail = dm;
+      this.stats.detailTris += d.triangles;
+    } else ch.detail = true;
+  }
+
+  /** Show the stretches within reach of the camera; build the near detail of the ones coming into reach. */
+  cull(cx, cz) {
+    const dist = (b) => Math.hypot(Math.max(b.x0 - cx, 0, cx - b.x1), Math.max(b.z0 - cz, 0, cz - b.z1));
+    for (const m of this.meshes) m.visible = dist(m.userData.box) < this.reach;
+    for (const m of this.details) m.visible = dist(m.userData.box) < this.detailReach;
+    // the first time: everything in reach at once (the first frame and headless snapshots see it all)
+    const want = this.chunks.filter((ch) => !ch.detail && dist(ch.box) < this.detailReach + 250).sort((a, b) => dist(a.box) - dist(b.box));
+    if (!this._warm) { this._warm = true; for (const ch of want) { const g = this._detail(ch); while (!g.next().done); } this.cull(cx, cz); return; }
+    if (!this._job && want.length) { this._jobCh = want[0]; this._job = this._detail(want[0]); }
+    if (this._job) {
+      const t0 = performance.now();
+      while (performance.now() - t0 < this.budgetMs) if (this._job.next().done) { this._job = null; break; }
+    }
+  }
+
+  dispose() { this._job?.return(); for (const m of [...this.meshes, ...this.details]) m.geometry.dispose(); this.material.dispose(); this.group.removeFromParent(); }
+}
+
+const countBy = (arr, f) => { const o = {}; for (const a of arr) { const k = f(a); o[k] = (o[k] || 0) + 1; } return o; };
+
+// -------------------------------------------------------------------------------------------------
+// dressing geometry
+const ICO = (() => {
+  const t = (1 + Math.sqrt(5)) / 2;
+  const v = [[-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0], [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t], [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]].map((p) => { const L = Math.hypot(...p); return p.map((c) => c / L); });
+  const f = [[0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8], [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]];
+  return { v, f };
+})();
+function blob(d, x, y, z, rx, ry, rz) {
+  for (const [a, b, c] of ICO.f) {
+    const P = [a, b, c].map((i) => [x + ICO.v[i][0] * rx, y + ICO.v[i][1] * ry, z + ICO.v[i][2] * rz]);
+    d.poly(P, P.map((p) => [p[0] + p[2], p[1]]));
+  }
+}
+function cylinder(d, f, a0, a1, r, yc, seg = 8) {
+  // lying along a (the frame's u), centred at b = 0, axis height yc
+  const ring = (a) => { const o = []; for (let k = 0; k < seg; k++) { const t = k / seg * Math.PI * 2; const b = Math.cos(t) * r, y = yc + Math.sin(t) * r; o.push([f.cx + f.ux * a + f.vx * b, y, f.cz + f.uz * a + f.vz * b]); } return o; };
+  const A = ring(a0), B = ring(a1);
+  for (let k = 0; k < seg; k++) {
+    const q = [A[k], A[(k + 1) % seg], B[(k + 1) % seg], B[k]];
+    const n = cr(q); const mid = [(q[0][0] + q[2][0]) / 2, (q[0][1] + q[2][1]) / 2, (q[0][2] + q[2][2]) / 2];
+    const ax = [f.cx + f.ux * (a0 + a1) / 2, yc, f.cz + f.uz * (a0 + a1) / 2];
+    if (n[0] * (mid[0] - ax[0]) + n[1] * (mid[1] - ax[1]) + n[2] * (mid[2] - ax[2]) < 0) q.reverse();
+    d.poly(q, q.map((p, j) => [k * .4 + (j === 1 || j === 2 ? .4 : 0), j > 1 ? Math.abs(a1 - a0) : 0]));
+  }
+  for (const [R, s] of [[A, -1], [B, 1]]) {
+    const P = R.slice(); const n = cr(P); if ((n[0] * f.ux + n[2] * f.uz) * s < 0) P.reverse();
+    d.poly(P, P.map((p) => [p[0] * f.vx + p[2] * f.vz, p[1]]));
+  }
+}
+const cr = (t) => { const [a, b, c] = t; return [(b[1] - a[1]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[1] - a[1]), (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]), (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])]; };
+
+function dress(d, it, R, L, res) {
+  const g = L.heightAt(it.x, it.z);
+  const f = { cx: it.x, cz: it.z, ux: Math.cos(it.yaw), uz: Math.sin(it.yaw), vx: -Math.sin(it.yaw), vz: Math.cos(it.yaw) };
+  const [len, dep, hgt] = it.size;
+  const none = [0, 0, 0, 0];
+  const set = (code, hex, extra = {}) => d.set({ code, col: u8(typeof hex === 'string' ? srgb(hex) : hex), win: none, ...extra });
+  switch (it.kind) {
+    case 'pot': {
+      set(S.POT, it.tone > .5 ? '#b0623e' : '#9a8f80'); d.box(f, -len / 2, len / 2, -dep / 2, dep / 2, g - .1, g + hgt);
+      set(S.LEAF, it.tone > .3 ? '#3f6a2c' : '#4f7a35', { b: [it.tone, 0] }); blob(d, it.x, g + hgt + .18, it.z, .3, .26, .3);
+      break;
+    }
+    case 'bench': {
+      set(S.BENCH, '#7a5838');
+      d.box(f, -len / 2, len / 2, -dep / 2, dep / 2, g + .42, g + .48);
+      d.box(f, -len / 2, len / 2, dep / 2 - .05, dep / 2, g + .48, g + .9);
+      for (const a of [-len / 2 + .1, len / 2 - .15]) d.box(f, a, a + .06, -dep / 2 + .05, dep / 2 - .05, g - .05, g + .42);
+      break;
+    }
+    case 'bins': {
+      const cols = ['#3f6b3e', '#4c4f53', '#c9a227', '#3f5f7a'];
+      for (const [k, a] of [[0, -.33], [1, .33]]) {
+        set(S.PLAIN, cols[(Math.floor(it.tone * 4) + k) % 4]);
+        d.box(f, a - .28, a + .28, -.3, .3, g - .05, g + .95);
+        set(S.PLAIN, '#2b2d30'); d.box(f, a - .3, a + .3, -.33, .32, g + .95, g + 1.02);
+      }
+      break;
+    }
+    case 'shrub': {
+      const greens = ['#3d6a2e', '#4f7d38', '#2f5a2c', '#5d7a3a'];
+      set(S.LEAF, greens[Math.floor(it.tone * 4)], { b: [it.tone, 0] });
+      blob(d, it.x, g + hgt * .45, it.z, len / 2, hgt * .55, dep / 2);
+      break;
+    }
+    case 'woodpile': {
+      set(S.LOGEND, '#b08a5e'); d.box(f, -len / 2, len / 2, -dep / 2, dep / 2, g - .1, g + hgt, { topState: { code: S.WOOD, col: u8(srgb('#6b5038')) } });
+      break;
+    }
+    case 'hay': {
+      set(S.PLAIN, '#c9ad62'); cylinder(d, f, -len / 2, len / 2, .62, g + .55);
+      break;
+    }
+    case 'garden': {
+      set(S.SOIL, '#5a4532'); d.box(f, -len / 2, len / 2, -dep / 2, dep / 2, g - .1, g + .14, { topState: { code: S.SOIL, col: u8(srgb('#5a4532')) } });
+      set(S.WOOD, '#7a5c3c');
+      for (const b of [-dep / 2, dep / 2]) d.box(f, -len / 2, len / 2, b - .04, b + .04, g - .1, g + .22);
+      if (it.fence) {
+        for (let a = -len / 2; a <= len / 2 + .01; a += len / Math.ceil(len / 1.2)) for (const b of [-dep / 2 - .3, dep / 2 + .3]) d.box(f, a - .04, a + .04, b - .04, b + .04, g - .1, g + .85);
+        for (const b of [-dep / 2 - .3, dep / 2 + .3]) d.box(f, -len / 2, len / 2, b - .02, b + .02, g + .55, g + .65);
+      }
+      break;
+    }
+    case 'laundry': {
+      set(S.STEEL, '#8a8d90');
+      for (const a of [-len / 2, len / 2]) d.box(f, a - .04, a + .04, -.04, .04, g - .1, g + 1.85);
+      d.box(f, -len / 2, len / 2, -.01, .01, g + 1.78, g + 1.8);
+      const cl = ['#e8e4dc', '#c0392b', '#3a6ea5', '#f1c40f', '#8e9aa6', '#e8a0b4'];
+      for (let k = 0; k < 4; k++) {
+        const a = -len / 2 + .4 + k * (len - .8) / 3.5, w = .45 + (k % 2) * .25, h = .5 + (k % 3) * .15;
+        set(S.PLAIN, cl[(Math.floor(it.tone * 6) + k) % 6]);
+        const P = [[a, 0, 1.78 - h], [a + w, 0, 1.78 - h], [a + w, 0, 1.78], [a, 0, 1.78]].map(([aa, bb, y]) => [f.cx + f.ux * aa + f.vx * bb, g + y, f.cz + f.uz * aa + f.vz * bb]);
+        d.poly(P, P.map(() => [0, 0])); d.poly(P.slice().reverse(), P.map(() => [0, 0]));
+      }
+      break;
+    }
+    case 'dish': {
+      const y = (res?.gv ?? g) + (it.y || 4);
+      set(S.PLAIN, '#e4e2dc'); d.box(f, -.05, .05, -.3, .3, y - .3, y + .3, { bottom: true });
+      set(S.STEEL, '#777a7d'); d.box(f, -.03, .03, -.03, .03, y - .5, y);
+      break;
+    }
+    case 'trough': {
+      set(S.ASHLAR, '#b9b2a4'); d.box(f, -len / 2, len / 2, -dep / 2, dep / 2, g - .1, g + hgt, { topState: { code: S.ASHLAR, col: u8(srgb('#c6bfb1')) } });
+      set(S.PLAIN, '#4d7f93'); d.box(f, -len / 2 + .1, len / 2 - .1, -dep / 2 + .1, dep / 2 - .1, g + hgt - .01, g + hgt + .005);
+      set(S.ASHLAR, '#a8a192'); d.box(f, -len / 2 - .05, -len / 2 + .25, -.15, .15, g - .1, g + hgt + .9);
+      set(S.STEEL, '#5a5c5e'); d.box(f, -len / 2 + .2, -len / 2 + .5, -.03, .03, g + hgt + .55, g + hgt + .6);
+      break;
+    }
+    default: break;
+  }
+}

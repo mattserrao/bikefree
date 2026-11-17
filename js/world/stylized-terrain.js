@@ -22,6 +22,7 @@ import { Verge } from './toolbox/roadside/verge.js';
 import { buildGuardrail } from './toolbox/roadside/guardrail.js';
 import { Visitors } from './toolbox/life/visitors.js';
 import { planFootprints, Footprints } from './toolbox/structures/footprints.js';
+import { BuildingKit } from './toolbox/structures/buildings/kit.js';
 import { Cables } from './toolbox/structures/cables.js';
 import { Dams } from './toolbox/structures/dam.js';
 import { RaceDay } from './toolbox/life/race-day.js';
@@ -126,7 +127,10 @@ export class StylizedTerrain {
       this.kit = kit;
       for (const pack of scenePacks(this.config)) this._addPack(kit, pack);   // regional packs (toolbox/packs)
       if (this.settlementPlan) this.settlement = new Settlement(this.group, this.settlementPlan, kit, this.uniforms);
-      if (this.footprintPlan) this.footprints = new Footprints(this.group, this.footprintPlan, this.landscape, this.config, this.uniforms);
+      // map footprints: the building kit when the scene asks for it (toolbox/structures/buildings), else the plain extrusions
+      if (this.footprintPlan) this.footprints = this.config.buildingKit
+        ? new BuildingKit(this.group, this.footprintPlan, this.landscape, this.config, this.uniforms, this.index)
+        : new Footprints(this.group, this.footprintPlan, this.landscape, this.config, this.uniforms);
       // lifts and power lines, dams (toolbox/structures): from the map, when the scene has a places file
       if (this.config.places && this.config.cables) this.cables = new Cables(this.group, this.config.places, this.landscape, this.proj, this.index, this.config.cables);
       if (this.config.places?.dams?.length && this.config.dams) this.dams = new Dams(this.group, this.config.places, this.landscape, this.proj, this.config.dams);

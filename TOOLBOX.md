@@ -143,6 +143,7 @@ js/world/toolbox/
 | `structures/settlement.js` | `towns`, `camps`, `poles` | Villages facing the road, lakeside camps with docks and boats, poles with wires, mailboxes. Planned from the real shoreline (forest-edge layout). |
 | `structures/mountain-road.js` | `mountainRoad` (was `glacier`) | Masonry guardwalls on the drops, tunnels with window galleries, arch viaducts, waterfalls (onto the road or in the cliffs), culverts, snowbanks, parking. `buildings` are named models (the Going-to-the-Sun lodges for now). |
 | `structures/footprints.js` | `buildings`, `buildingStyles` | Real buildings from map footprints (`placesFile`): walls from the footprint, gabled or hipped roofs on its oriented box, flat roofs on blocks; churches with towers, a tent church, barns, chalets with balconies. Styles by stretch of road; merged per 3 km, hidden past a reach. |
+| `structures/buildings/` | `buildingKit` | The building kit, on top of the footprint plan: each map footprint becomes a recipe (regional style × archetype × seed) with textured walls and roofs, real windows and doors, wings, roof shapes, balconies, dormers, chimneys, lean-tos and ground dressing. See *The building kit* below. |
 | `structures/cables.js` | `cables` | Ski lifts (pylons, stations, chairs and cabins) and power lines (poles, lattice towers) from the map, with sagging wires. |
 | `structures/dam.js` | `dams` | A concrete dam wall along a mapped crest. |
 | `structures/hairpin-walls.js` | `hairpinWalls` | Dry-stone retaining walls under the upper leg where two legs of a switchback climb close together. |
@@ -193,6 +194,38 @@ js/world/toolbox/
 | `city/life.js` | People, cars, buses (from the figures kit), trains, inclines and boats |
 
 Some Pittsburgh content is still in code: stadiums, the fountain, USS Requin and the hero models.
+
+---
+
+## The building kit (`"buildingKit"`)
+
+Added 17 Nov 2026 (branch `buildings-test`), first on Alpe d'Huez. It sits on top of `structures/footprints.js`: the same footprint plan (what is kept off the road, the tree clearings), drawn by the kit when a scene has `buildingKit`. Without it, `footprints.js` draws the plain extrusions as before.
+
+| Module | What it does |
+| --- | --- |
+| `buildings/presets.js` | Surface codes, window sets and the regional style presets: `provence`, `hautes-alpes`, `dauphine`, `oisans`, `ski-resort`. A style lists archetype weights, colour schemes (wall, shutters, frames, accent, roof together), wall, upper-storey, gable and barn materials, roof materials and shapes, pitch and eaves, and how often each extra and dressing item turns up. |
+| `buildings/recipe.js` | Pure planning: drops duplicate map footprints, cuts L/T/U outlines into rectangles (cross gables), picks the archetype from size and density (cottage, village house, farmhouse with a barn end, chalet, mazot, block, shed, church…), floors, materials, roof, windows, the front (the wall facing the road) and the extras. Age, upkeep and wealth per building drive weathering and ornament together. Neighbours within 30 m never share a colour scheme; nothing that sticks out may reach the road or another building. |
+| `buildings/assemble.js` | Geometry: walls in zones (stone plinth, body, timber upper storey, gable), thick roof slabs (gable, half-hip, hip, shed, flat with parapet, crow-stepped), wings, balconies and galleries, dormers, chimneys and stove pipes, lean-tos (open woodsheds), garages, outside stairs, génoise, bell towers, solar panels, painted sundials, a tent church. Near detail (door steps and canopies, gutters and downpipes, ridge caps, shop awnings) goes to a second mesh. |
+| `buildings/facade-material.js` | One material for everything, so a stretch of village is one draw call. Walls: render, rough render with stone showing through, rubble, ashlar, brick, lap and vertical boards, logs, shingles, half-timber, metal, concrete, glass. Roofs: canal and flat tiles, fish-scale tiles, slate, lauze, standing-seam metal, corrugated, wood shingles, gravel. Windows by set (French casement, farm, chalet, resort, church, barn, sash) with frames, muntins, curtains, reflections, shutters open/closed/missing, sills, painted surrounds and flower boxes; doors, barn doors, shopfronts with sign bands, quoins, ivy, damp at the foot, drips, moss on shady roofs. Every detail fades to its average under ~2 px. |
+| `buildings/dressing.js` | Ground dressing near the road, placed clear of the road and other buildings: pots and a bench by the door, bins, shrubs, a woodpile, hay bales by barns, a vegetable garden with a fence, a washing line, a satellite dish, a trough in village squares. |
+| `buildings/kit.js` | `BuildingKit`: main meshes per 1 km stretch (in the bake), near detail per stretch built as the rider nears it (time-sliced, nearest first, not in the bake), culling. |
+
+```json
+"buildingKit": {
+  "detailM": 120, "dressingM": 70,
+  "styles": [
+    { "fromM": 0, "toM": 4800, "preset": "provence", "stone": "#c9b89a" },
+    { "fromM": 4800, "toM": 46000, "preset": "hautes-alpes", "stone": "#b9b2a3" },
+    { "fromM": 125200, "preset": "ski-resort", "schemes": [ { "wall": "#ece6da", "trim": "#7a4f2e", "frame": "#6a4428", "accent": "#d8cdb8" } ] }
+  ]
+}
+```
+
+Any style key can be overridden per stretch (`schemes`, `walls`, `roofs`, `forms`, `pitch`, `balconies`, `dressing: { … }`…). A new region is a new preset in `presets.js` (data only).
+
+**Look at it:** `npm run gallery:buildings` renders a street of every preset (`street`, `aerial`, `close`, `roofs` views) to `tools/snapshots/buildings-<style>-<view>.jpg`; live at `localhost:8000/tools/buildings-gallery.html`. **Checks:** `test/building-kit.test.mjs` (determinism, regional mix, neighbour variety, dressing and annexes off the road and out of buildings, L/T cutting, presets, finite geometry).
+
+**Cost on the Alpe (Balanced):** +1 to +13 draw calls and +0.02 to +0.15 M triangles at the fixed spots; about 1 s more at load (headless) for 7,000 buildings.
 
 ---
 
