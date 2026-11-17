@@ -68,6 +68,197 @@
  ],
  "legs": [
   {
+   "mode": "trail",
+   "waypoints": [
+    [
+     "Smithfield & Fort Pitt (junction)",
+     40.43653,
+     -80.00101
+    ],
+    [
+     "Mon Wharf trail",
+     40.436008,
+     -79.999971
+    ],
+    [
+     "Eliza Furnace Trail: Liberty Bridge",
+     40.434745,
+     -79.996915
+    ],
+    [
+     "Eliza Furnace Trail: Jail",
+     40.434168,
+     -79.993673
+    ],
+    [
+     "Eliza Furnace Trail: 10th St Bridge",
+     40.43389,
+     -79.989883
+    ],
+    [
+     "Eliza Furnace Trail: Brady St",
+     40.434946,
+     -79.98319
+    ],
+    [
+     "Eliza Furnace Trail: Birmingham Bridge",
+     40.435737,
+     -79.978418
+    ],
+    [
+     "Eliza Furnace Trail: Bates St",
+     40.436182,
+     -79.972727
+    ],
+    [
+     "Eliza Furnace Trail",
+     40.434506,
+     -79.965866
+    ],
+    [
+     "Eliza Furnace Trail: Hot Metal ramp",
+     40.431796,
+     -79.95978
+    ],
+    [
+     "Hot Metal Bridge",
+     40.4285217,
+     -79.9602715
+    ],
+    [
+     "SouthSide Works riverfront",
+     40.430042,
+     -79.967068
+    ]
+   ]
+  },
+  {
+   "mode": "trail",
+   "waypoints": [
+    [
+     "SouthSide Works riverfront",
+     40.430042,
+     -79.967068
+    ],
+    [
+     "South Side Riverfront Park",
+     40.4322,
+     -79.98018
+    ],
+    [
+     "South Side Trail mid",
+     40.4318,
+     -79.985,
+     "South Side Trail"
+    ],
+    [
+     "South Side Trail ramp",
+     40.43129,
+     -79.99002
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "South Side Trail ramp",
+     40.43129,
+     -79.99002
+    ],
+    [
+     "Muriel & S 10th",
+     40.43003,
+     -79.98863
+    ],
+    [
+     "E Carson & 10th",
+     40.42871,
+     -79.98858
+    ],
+    [
+     "McArdle Roadway foot",
+     40.4272,
+     -79.98975,
+     "P J McArdle Roadway"
+    ],
+    [
+     "McArdle viaduct",
+     40.4287,
+     -79.99678,
+     "P J McArdle Roadway"
+    ],
+    [
+     "McArdle",
+     40.4307,
+     -80.0031,
+     "P J McArdle Roadway"
+    ],
+    [
+     "McArdle top",
+     40.43171,
+     -80.00557,
+     "P J McArdle Roadway"
+    ],
+    [
+     "Grandview Overlook",
+     40.43537,
+     -80.0129
+    ],
+    [
+     "Duquesne Incline top",
+     40.43782,
+     -80.01832
+    ],
+    [
+     "Grandview W",
+     40.44035,
+     -80.02309
+    ],
+    [
+     "West End Bridge S",
+     40.44418,
+     -80.02819
+    ],
+    [
+     "West End Bridge",
+     40.448,
+     -80.02608,
+     "West End Bridge"
+    ],
+    [
+     "West End Bridge N",
+     40.44964,
+     -80.02517
+    ]
+   ]
+  },
+  {
+   "mode": "trail",
+   "waypoints": [
+    [
+     "West End Bridge N",
+     40.44964,
+     -80.02517
+    ],
+    [
+     "Carnegie Science Center",
+     40.44536,
+     -80.01847
+    ],
+    [
+     "USS Requin",
+     40.44477,
+     -80.01508
+    ],
+    [
+     "Finish: Water Steps",
+     40.44548,
+     -80.00825
+    ]
+   ]
+  },
+  {
    "mode": "road",
    "waypoints": [
     [
@@ -223,124 +414,8 @@
     ],
     [
      "SouthSide Works riverfront",
-     40.42986,
-     -79.966
-    ],
-    [
-     "South Side Riverfront Park",
-     40.4322,
-     -79.98018
-    ],
-    [
-     "South Side Trail mid",
-     40.4318,
-     -79.985,
-     "South Side Trail"
-    ],
-    [
-     "South Side Trail ramp",
-     40.43129,
-     -79.99002
-    ]
-   ]
-  },
-  {
-   "mode": "road",
-   "waypoints": [
-    [
-     "South Side Trail ramp",
-     40.43129,
-     -79.99002
-    ],
-    [
-     "Muriel & S 10th",
-     40.43003,
-     -79.98863
-    ],
-    [
-     "E Carson & 10th",
-     40.42871,
-     -79.98858
-    ],
-    [
-     "McArdle Roadway foot",
-     40.4272,
-     -79.98975,
-     "P J McArdle Roadway"
-    ],
-    [
-     "McArdle viaduct",
-     40.4287,
-     -79.99678,
-     "P J McArdle Roadway"
-    ],
-    [
-     "McArdle",
-     40.4307,
-     -80.0031,
-     "P J McArdle Roadway"
-    ],
-    [
-     "McArdle top",
-     40.43171,
-     -80.00557,
-     "P J McArdle Roadway"
-    ],
-    [
-     "Grandview Overlook",
-     40.43537,
-     -80.0129
-    ],
-    [
-     "Duquesne Incline top",
-     40.43782,
-     -80.01832
-    ],
-    [
-     "Grandview W",
-     40.44035,
-     -80.02309
-    ],
-    [
-     "West End Bridge S",
-     40.44418,
-     -80.02819
-    ],
-    [
-     "West End Bridge",
-     40.448,
-     -80.02608,
-     "West End Bridge"
-    ],
-    [
-     "West End Bridge N",
-     40.44964,
-     -80.02517
-    ]
-   ]
-  },
-  {
-   "mode": "trail",
-   "waypoints": [
-    [
-     "West End Bridge N",
-     40.44964,
-     -80.02517
-    ],
-    [
-     "Carnegie Science Center",
-     40.44536,
-     -80.01847
-    ],
-    [
-     "USS Requin",
-     40.44477,
-     -80.01508
-    ],
-    [
-     "Finish: Water Steps",
-     40.44548,
-     -80.00825
+     40.430042,
+     -79.967068
     ]
    ]
   }
@@ -396,8 +471,8 @@
  "maxDriftM": 16,
  "profileKeep": [
   [
-   2440,
-   2620
+   17420,
+   17600
   ]
  ],
  "residentialBoxes": [
@@ -419,5 +494,6 @@
    40.4425,
    -80.024
   ]
- ]
+ ],
+ "open": true
 }

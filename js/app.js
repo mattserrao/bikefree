@@ -1061,7 +1061,7 @@ async function refreshRouteList(selectId) {
 
 // Ride goals: a filter over the route list. A network preset says its own (varied, new areas…); every route
 // also gets flat / hilly from its climbing per km and short / long from its length (one lap or one way).
-const GOALS = [['all', 'All'], ['flat', 'Flat'], ['hilly', 'Hilly'], ['short', 'Short'], ['long', 'Long'], ['varied', 'Varied']];
+const GOALS = [['all', 'All'], ['flat', 'Flat'], ['hilly', 'Hilly'], ['short', 'Short'], ['long', 'Long'], ['varied', 'Varied'], ['new', 'New areas']];
 function goalTags(it) {
   const r = routeCache.get(it.id);
   const km = r ? (r.lapM || (r.stageRoute ? r.turnS : r.turnS || r.total)) / 1000 : it.km;

@@ -344,6 +344,12 @@ export function makeCityLandscape(config, proj, index, route) {
     // nor over a low ramp or viaduct deck (they're left out of the grading above, but one running close to the
     // ground beside the route would otherwise be buried by the bank the route's road raises)
     const own = routeDist(x, z);
+    // [network] a trail on a ledge (the Jail Trail under the parkway): the ground's 6 m mesh must not reach over
+    // the shoulders from the embankment beside it, so out to 14 m it stays under a gentle bank — where no
+    // street lies (a street keeps its own grading)
+    if (own && own.d < 14 && own.d >= 9 && routeKindAt(route.dist[outbound(own.i)]) === 'trail' && !streetsNear(x, z, 2).some((o) => o.y < own.y + 1)) {
+      h = Math.min(h, own.y - .5 + (own.d - 5) * .12);
+    }
     if (!own || own.d > 9) {   // (near the route's own road its bank wins: the ground mesh can't step that fast)
       for (const o of streetsNear(x, z, 1.5)) if (streetIndex.streets[o.k].bridge && h > o.y - .35) h = Math.min(h, o.y - .35);
     }

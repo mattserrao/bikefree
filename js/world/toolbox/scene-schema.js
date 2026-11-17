@@ -111,6 +111,7 @@ export const SCENE_FIELDS = {
   junctions: { type: 'any', tool: T + 'city/junctions.js', doc: 'junction planning' },
   riverfront: { type: 'object', tool: T + 'city/riverfront.js', keys: ['maxGapM', 'spans', 'waterSteps'], doc: 'river walls, steps, trails' },
   riverFlow: { type: 'object', doc: 'river flow directions' },
+  qcAccept: { type: 'array', doc: 'course QC warnings reviewed and accepted: [{check, fromM, toM, why}] (reported as info)' },
   routeTrees: { type: 'array', keys: ['fromM', 'toM', 'spacingM', 'offsetM', 'sides'], doc: 'street trees along the route' },
   bridgeFrames: { type: 'object', tool: T + 'city/bridges.js', doc: 'city bridge frames by name' },
   heroes: { type: 'array', tool: T + 'city/heroes.js', keys: ['model', 'name', 'lat', 'lon', 'heightM', 'bodyM', 'radiusM', 'rebuilt', 'traced', 'turnDeg'], doc: 'landmark buildings' },

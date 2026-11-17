@@ -259,10 +259,25 @@ export class CityLife {
     });
     // the route's trails: people out on the riverfront with you
     const r = c.route, end = r.turnIdx || r.dist.length - 1, L = c.landscape;
+    // [network] (not where the route passes itself: a ride network's junction, where a walker beside one pass
+    // would be on the other's carriageway — the trail walk breaks there)
+    const otherPass = (i) => {
+      const x = c.index.xs[i], z = c.index.zs[i];
+      for (let j = 0; j <= end; j += 1) {
+        if (Math.abs(j - i) < 4) continue;
+        const dx = c.index.xs[j] - x, dz = c.index.zs[j] - z;
+        if (dx * dx + dz * dz < 30 * 30) return true;
+      }
+      return false;
+    };
     for (const k of (L.data.routeKinds || []).filter((k) => k.kind === 'trail')) {
-      const pts = [];
-      for (let i = Math.ceil(k.fromM / 10) + 1; i <= Math.min(end, Math.floor(k.toM / 10) - 1); i++) pts.push({ x: c.index.xs[i], y: r.ele[i], z: c.index.zs[i] });
-      if (pts.length > 3) walk.push({ path: makePath(pts), side: 4.7, allow: () => true, cls: 9, trail: true });
+      let pts = [];
+      const flush = () => { if (pts.length > 3) walk.push({ path: makePath(pts), side: 4.7, allow: () => true, cls: 9, trail: true }); pts = []; };
+      for (let i = Math.ceil(k.fromM / 10) + 1; i <= Math.min(end, Math.floor(k.toM / 10) - 1); i++) {
+        if (this._passCache?.[i] ?? ((this._passCache ||= [])[i] = otherPass(i))) { flush(); continue; }
+        pts.push({ x: c.index.xs[i], y: r.ele[i], z: c.index.zs[i] });
+      }
+      flush();
     }
     // off the route's road: sidewalks across its carriageway become crossings (with a kerb to wait at); sidewalks
     // and lanes that run along it, or that end on it with nowhere to go, are cut out here
@@ -295,7 +310,10 @@ export class CityLife {
         if (r && r.d < HALF + margin && Math.abs(p.y - r.y) < 3.5) { hit = r; break; }
       }
       if (!hit) { close(); continue; }
+      // [network] where the route passes the same spot twice (a ride network's junction), each pass is its own band
+      if (cur && Math.abs(dist[hit.i] - cur.at) > 60) close();
       if (!cur) cur = { s0: s, s1: s, lo: Infinity, hi: -Infinity, rx: 0, rz: 0, n: 0 };
+      cur.at = dist[hit.i];
       cur.s1 = s; cur.lo = Math.min(cur.lo, dist[hit.i]); cur.hi = Math.max(cur.hi, dist[hit.i + 1] ?? dist[hit.i]);
       cur.rx += ix.xs[hit.i]; cur.rz += ix.zs[hit.i]; cur.n++;
     }

@@ -398,6 +398,13 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
   // 6. Road alignment: kinks, jitter and creases in the drawn road; city streets' profiles ([road-align])
   alignmentChecks({ route, index, landscape, F, nearUturn, oneWay });
 
+  // a scene's accepted warnings ("qcAccept": [{check, fromM, toM, why}]): known, reviewed spots listed with the
+  // reason, reported as info. Never fails — a FAIL always stands.
+  for (const f of F.list) {
+    if (f.severity !== 'warn') continue;
+    const a = (scene?.qcAccept || []).find((q) => q.check === f.check && f.from >= q.fromM && f.to <= q.toM);
+    if (a) { f.severity = 'info'; f.note = `${f.note} (accepted: ${a.why})`; }
+  }
   const list = F.list.sort((a, b) => a.from - b.from);
   const count = (sev) => list.filter((f) => f.severity === sev).length;
   return {

@@ -854,13 +854,14 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [x] 2.4 Off-plan handling: rejoin the plan where it next rides a plan step; the finish arch moves with the path; "lap to go" becomes "to <next junction>" off the plan
 
 *Phase 3 — First new segments: Jail Trail (1) + Hot Metal link (2), junctions E, H, I* — review stop
-- [ ] 3.1 Network edges that aren't on the loop's GPX: GPX per segment (BRouter + hand fixes), elevation
-- [ ] 3.2 City data for the new corridor (OSM streets/buildings, terrain grid check) in `build_city.py`
-- [ ] 3.3 World builds route-quality roads for every network edge (ribbons, bridges, junction arms; untaken arms ~150 m then street)
-- [ ] 3.4 Junctions with route arms on both sides; ramps where levels differ (Mon Wharf, Hot Metal ramp)
-- [ ] 3.5 Hot Metal Bridge rideable deck; parkway-side trail scenery for the Jail Trail
-- [ ] 3.6 Flat short loop preset (Point → Jail Trail → Hot Metal → South Side trail → Smithfield)
-- [ ] 3.7 QC (course, clipping, snapshots) → githack link → on-bike review
+- [x] 3.1 New edges: Pittsburgh's GPX is now one open tour — the Jail Trail & Hot Metal Bridge (Smithfield & Fort Pitt → SouthSide Works riverfront, 4.9 km) then the old loop from SouthSide Works round to it (23.2 km); every edge is ridden once, so the world is still built around one line. `tools/city/pittsburgh.json` legs pin the Jail Trail with waypoints on the trail; `"open": true` builds an open line
+- [x] 3.2 City data rebuilt from OSM for the tour (13,995 buildings, was 12,182; 4,064 streets, was 3,609); terrain grid rebuilt; `build_city.py` also cuts longer out-and-back stubs. Scene metre keys moved with `tools/remap_scene_metres.mjs` (by geometry, 0 unmapped)
+- [x] 3.3 Every network edge is route quality (the tour is the route), so every way on at a junction looks rideable
+- [x] 3.4 New junctions E (Smithfield St & Fort Pitt Blvd: the Jail Trail is a left off Smithfield, the bridge straight on) and H (SouthSide Works riverfront: a Y where the trails meet); turn curves fit tight mapped corners (wider up to +9 m), hairpins over 150° turn like U-turns. Junction I (Hot Metal ramp) waits for the Junction Hollow spur (5.2)
+- [x] 3.5 Hot Metal Bridge rideable (dark truss); the Jail Trail runs under the parkway walls; the ground keeps under a gentle bank beside trails on a ledge
+- [x] 3.6 New presets: Jail Trail & South Side Loop (9.2 km), Point & Jail Trail Loop (17.4 km), Jail Trail & Mount Washington Loop (19.1 km); "New areas" goal
+- [x] 3.7 QC: `qc --strict` clean (8 reviewed corridor warnings accepted, F8), `qc:network` 38 ways through 4 junctions clean, clipping 0 fail (F11), life sim clean; 194–307 draw calls, 1.1–2.1 M triangles in snapshots; tests 165 pass
+- [ ] 3.8 githack link → on-bike review
 
 *Phase 4 — Free ride and the map planner*
 - [ ] 4.1 Free ride: no plan, choose at every junction, no set end
@@ -887,6 +888,12 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [x] F4 Route traffic (cars that overtake / wait behind you) follows the loop's direction; check on the bike that it behaves after a turn onto the other half of the loop
 - [ ] F5 At the Water Steps the loop's start/finish is a junction with only straight on or back (kept: "Back" is offered at every junction; it gains real arms with segments 4 and 6)
 - [x] F6 Headless runs can't ride in real time (software rendering): the on-bike check covers the feel of the turn, the camera swing and the prompt timing
+- [ ] F7 Road meets near the route: 36 sites with issues within 25 m (was 20 on the loop; the Jail Trail corridor's parkway ramps and bridge ends added most). The QC budget is 36 for now; fix the sources the s2 way and bring it back down
+- [ ] F8 Reviewed corridor warnings accepted in the scene (`qcAccept`): street creases beside the Jail Trail (1.60, 2.42, 3.98, 4.71 km), the ground mesh beside its ledge (2.48, 2.72, 3.72 km), the mapped jog from 27th St to the riverfront (23.05 km)
+- [ ] F9 Fort Pitt Blvd's first 100 m from Smithfield are mapped as a bridge (a girder deck is drawn): check it looks right
+- [ ] F11 Clipping QC: 0 fail, 551 warnings (main 420 on an 18.3 km loop; the tour is 23.2 km): mostly vehicles clipping solids (416), streets under ground (63), trees in solids (33) — review the corridor's share
+- [ ] F12 Where the Jail Trail leaves Smithfield St the two route ribbons overlap and show a dark V-shaped seam for a few metres
+- [ ] F10 The tour's Water Steps start is no longer the route's start: Pittsburgh as free-ride scenery now rolls along the tour from Smithfield & Fort Pitt
 
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)

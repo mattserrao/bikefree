@@ -23,7 +23,7 @@ export const NET_LIMITS = {
   heightStep: 0.35,    // m of height per m along
   heading: 25,         // °/m through a turn
   headingUturn: 70,    // °/m through a U-turn ("back": a tight turn at walking pace)
-  sampleGap: 15,       // path route: neighbouring 10 m samples this far apart on the ground (a junction's passes
+  sampleGap: 20,       // path route: neighbouring 10 m samples this far apart on the ground (a junction's passes
                        // can sit a few metres apart: the recorded track hops that much there)
 };
 
@@ -64,7 +64,7 @@ export function sweepTurns(net, index, { step = 0.25, reach = 40, lane = 0.22 } 
           }
           prev = q;
         }
-        const ok = jump <= NET_LIMITS.posJump && height <= NET_LIMITS.heightStep && head <= (o.back ? NET_LIMITS.headingUturn : NET_LIMITS.heading);
+        const ok = jump <= NET_LIMITS.posJump && height <= NET_LIMITS.heightStep && head <= (o.back || Math.abs(o.angle) > 150 ? NET_LIMITS.headingUturn : NET_LIMITS.heading);
         out.push({ node: node.id, name: node.name, from: travKey(arrive), to: o.key, label: o.label, angle: Math.round(o.angle), jump, head, height, ok });
       }
     }

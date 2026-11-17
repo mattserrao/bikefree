@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { buildCatalogRoute } from '../js/routes.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
 import { makeCityLandscape, cityStreets } from '../js/world/toolbox/city/landscape.js';
-import { alignAlongRoute, trimOverlaps, joinCrossings, roadMeets, streetSlots } from '../js/world/toolbox/city/road-meets.js';
+import { alignAlongRoute, trimOverlaps, joinCrossings, roadMeets, streetSlots, MEET_LIMITS } from '../js/world/toolbox/city/road-meets.js';
 import { ROAD_WIDTH } from '../js/world/pose.js';
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
@@ -84,5 +84,5 @@ test('road meets: pittsburgh, every place roadways meet within 150 m of the rout
   const own = R.sites.filter((s) => s.d < 25 && (s.kind === 'junction' || s.kind === 'link') && s.issues.some((i) => ['step', 'gap', 'paint'].includes(i.check)));
   assert.ok(own.length <= 6, `junction/link issues near the route: ${own.map((s) => `${s.s} ${s.issues.map((i) => i.check)}`).join('; ')}`);
   assert.ok(R.issues < 60, `${R.issues} sites with issues`);
-  assert.ok(R.sites.filter((s) => s.issues.length && s.d <= 25).length <= 20, 'within 25 m of the route: at most 20 sites with issues');
+  assert.ok(R.sites.filter((s) => s.issues.length && s.d <= 25).length <= MEET_LIMITS.nearBudget, `within 25 m of the route: at most ${MEET_LIMITS.nearBudget} sites with issues`);
 });

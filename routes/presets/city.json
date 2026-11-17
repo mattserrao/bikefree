@@ -95,12 +95,12 @@
       "maxGapM": 20,
       "spans": [
         {
-          "fromM": 1040,
-          "toM": 2320
+          "fromM": 16020,
+          "toM": 17300
         },
         {
-          "fromM": 2360,
-          "toM": 2800
+          "fromM": 17340,
+          "toM": 17780
         }
       ],
       "waterSteps": {

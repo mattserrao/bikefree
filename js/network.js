@@ -67,8 +67,8 @@ function headingAlong(net, t, u0, u1) {
   return unit2({ x: (b.lon - a.lon) * k * Math.cos((a.lat * Math.PI) / 180), z: -(b.lat - a.lat) * k });
 }
 
-const GLYPH = (o) => (o.back ? '↶' : Math.abs(o.angle) < 25 ? '↑' : o.angle < 0 ? (o.angle > -65 ? '↖' : '←') : (o.angle < 65 ? '↗' : '→'));
-const LABEL = (o) => (o.back ? 'Back' : Math.abs(o.angle) < 25 ? 'Straight' : o.angle < 0 ? (o.angle > -65 ? 'Bear left' : 'Left') : (o.angle < 65 ? 'Bear right' : 'Right'));
+const GLYPH = (o) => (o.back ? '↶' : Math.abs(o.angle) < 25 ? '↑' : o.angle < 0 ? (o.angle > -65 ? '↖' : o.angle > -135 ? '←' : '↙') : (o.angle < 65 ? '↗' : o.angle < 135 ? '→' : '↘'));
+const LABEL = (o) => (o.back ? 'Back' : Math.abs(o.angle) < 25 ? 'Straight' : o.angle < 0 ? (o.angle > -65 ? 'Bear left' : o.angle > -135 ? 'Left' : 'Sharp left') : (o.angle < 65 ? 'Bear right' : o.angle < 135 ? 'Right' : 'Sharp right'));
 
 /**
  * The ways on from the end of traversal `t`: every arm of the junction it arrives at, each with its turn
@@ -307,7 +307,7 @@ export class NetRide extends EventTarget {
     if (seamless) return null;
     const o = optionsAt(this.net, a.t).find((x) => same(x.t, b.t));
     const angle = o ? o.angle : 0;
-    const R = o?.back ? UTURN_R : Math.abs(angle) < 25 ? PASS_R : angle > 0 ? RIGHT_R : TURN_R;
+    const R = o?.back || Math.abs(angle) > 150 ? UTURN_R : Math.abs(angle) < 25 ? PASS_R : angle > 0 ? RIGHT_R : TURN_R;   // (a hairpin turns like a U-turn)
     return { P: b.p0, R, angle, back: !!o?.back };
   }
 
@@ -316,7 +316,8 @@ export class NetRide extends EventTarget {
     const i = this.entryAt(p);
     let cap = null;
     for (const j of [i, i + 1]) {
-      const J = this._junction(j);
+      const J0 = this._junction(j);
+      const J = J0 && { ...J0, R: this.net._fits?.get(`${travKey(this.entries[j - 1].t)}>${travKey(this.entries[j].t)}`) ?? J0.R };
       // tighter curves slow you more: the angle's speed, scaled for the curve's size
       const v = J && cornerSpeed(J.angle) && cornerSpeed(J.angle) * Math.sqrt(Math.min(1, J.R / TURN_R));
       if (v == null) continue;
@@ -335,10 +336,44 @@ export class NetRide extends EventTarget {
    */
   pose(p, index, lane) {
     const i = this.entryAt(p), x = this.entries[i], u = p - x.p0;
-    const here = this._junction(i), next = this._junction(i + 1);
+    const here = this._fit(i, index), next = this._fit(i + 1, index);
     if (here && u < here.R) return this._curve(i, here, p, index, lane);
     if (next && x.t.e.len - u < next.R) return this._curve(i + 1, next, p, index, lane);
     return this._basePose(x, u, index, lane);
+  }
+  /**
+   * The junction with its curve fitted to the real streets: the turn's own radius, or wider (up to +9 m) where
+   * the mapped corner is so tight the curve would swing faster than 20°/m. Cached per pair of ways.
+   */
+  _fit(i, index) {
+    const J = this._junction(i);
+    if (!J) return null;
+    const a = this.entries[i - 1], b = this.entries[i];
+    const key = `${travKey(a.t)}>${travKey(b.t)}`;
+    const cache = (this.net._fits ||= new Map());
+    if (!cache.has(key)) {
+      let R = J.R;
+      for (const r of [J.R, J.R + 3, J.R + 6, J.R + 9]) {
+        R = r;
+        if (r > Math.min(a.t.e.len, b.t.e.len) / 2) break;
+        if (this._turnRate(i, { ...J, R: r }, index) <= 20) break;
+      }
+      cache.set(key, R);
+    }
+    return { ...J, R: cache.get(key) };
+  }
+  _turnRate(i, J, index) {
+    let prev = null, worst = 0;
+    for (let p = J.P - J.R; p <= J.P + J.R; p += 0.5) {
+      const q = this._curve(i, J, p, index, 0.22);
+      if (prev) {
+        const c = Math.max(-1, Math.min(1, q.flat.x * prev.flat.x + q.flat.z * prev.flat.z));
+        const d = Math.hypot(q.pos.x - prev.pos.x, q.pos.z - prev.pos.z) || 0.5;
+        worst = Math.max(worst, (Math.acos(c) * 180) / Math.PI / d);
+      }
+      prev = q;
+    }
+    return worst;
   }
   _basePose(x, u, index, lane) {
     return riderPose(this.net.base, index, worldS(this.net, x.t, Math.max(0, Math.min(x.t.e.len, u))), lane, { uturns: false });

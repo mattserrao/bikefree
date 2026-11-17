@@ -307,6 +307,27 @@ def build(cid):
                 del pts[i:i + 2]; del wl[i:i + 2]
                 marks = [(n, k if k < i else max(i - 1, k - 2)) for n, k in marks]
                 changed = True; break
+    # longer out-and-back stubs (A … X … A: a waypoint that snapped onto a side path a few nodes off the line):
+    # cut any return to a node within 150 m of path (real revisits — a loop's junctions — are kilometres apart)
+    changed = True
+    while changed:
+        changed = False
+        seen = {}
+        run = [0.0]
+        for a_, b_ in zip(pts, pts[1:]): run.append(run[-1] + hv(nodes[a_], nodes[b_]))
+        for i, n in enumerate(pts):
+            j = seen.get(n)
+            if j is None:
+                # …or comes back within 15 m of a point on a parallel way (a pair of one-way paths)
+                for jj in range(max(0, i - 40), i - 2):
+                    if run[i] - run[jj] < 150 and run[i] - run[jj] > 25 and hv(nodes[pts[jj]], nodes[n]) < 15:
+                        j = jj; break
+            if j is not None and i - j > 2 and run[i] - run[j] < 150:
+                # keep pts[i] (where the line carries on from), drop the stub between
+                del pts[j + 1:i]; del wl[j + 1:i]
+                marks = [(m, k if k <= j else (j if k < i else k - (i - j - 1))) for m, k in marks]
+                changed = True; break
+            seen[n] = i
     P = [nodes[n] for n in pts]
     cum = [0.0]
     for a, b in zip(P, P[1:]): cum.append(cum[-1] + hv(a, b))
@@ -381,10 +402,10 @@ def build(cid):
     # buildings (tools/citylib/road_align.py)
     polys = list({wid_: poly for cell_ in bgrid.values() for wid_, poly in cell_ if wid_ not in route_buildings}.values())
     sm = [tuple(q_) for q_ in road_align.align_plan(
-        r2, clear=road_align.Clearance(polys, cfg.get('clearM', 3.2)), drift=drift, loop=True,
+        r2, clear=road_align.Clearance(polys, cfg.get('clearM', 3.2)), drift=drift, loop=not cfg.get('open'),
         corner_passes=cfg.get('cornerPasses', 2), corner_half_window=cfg.get('cornerHalfWindow', 6),
         fair_iters=cfg.get('fairIters', 240)).tolist()]
-    sm.append(sm[0]); e2.append(e2[0])
+    if not cfg.get('open'): sm.append(sm[0]); e2.append(e2[0])   # an open tour (a ride network's base) doesn't close
     scum = [0.0]
     for a_, b_ in zip(sm, sm[1:]): scum.append(scum[-1] + math.hypot(b_[0] - a_[0], b_[1] - a_[1]))
     to_ll = lambda x, y: (P[0][0] + y / 111319.49, P[0][1] + x / (111319.49 * math.cos(math.radians(P[0][0]))))
@@ -396,7 +417,7 @@ def build(cid):
         f = (sd - scum[j]) / max(1e-9, scum[j + 1] - scum[j])
         rs.append(to_ll(sm[j][0] + (sm[j + 1][0] - sm[j][0]) * f, sm[j][1] + (sm[j + 1][1] - sm[j][1]) * f))
         re_.append(e2[j] + (e2[j + 1] - e2[j]) * f)
-    if hv(rs[-1], rs[0]) > 1: rs.append(rs[0]); re_.append(re_[0])
+    if not cfg.get('open') and hv(rs[-1], rs[0]) > 1: rs.append(rs[0]); re_.append(re_[0])
     # The app measures the route along the GPX samples (chords): express every distance (bridges, kinds,
     # waypoints — found along the raw OSM nodes) in that measure so they land where they should.
     chord = [0.0]
@@ -423,7 +444,7 @@ def build(cid):
         re_ = road_align.line_elevation(re_, [elevation(a_, b_) for a_, b_ in rs], keep, step=10)
     # [road-align] profile: shave spikes, fill only narrow notches (real dips and crests stay on the ground),
     # limit grade and grade change, light averaging
-    e = road_align.align_profile(re_, step=10, loop=True, **cfg.get('profile', {})).tolist()
+    e = road_align.align_profile(re_, step=10, loop=not cfg.get('open'), **cfg.get('profile', {})).tolist()
     asc = sum(max(0, b - a) for a, b in zip(e, e[1:]))
     grades = [(e[(k + 1) % len(e)] - e[k - 1]) / 20 * 100 for k in range(len(e))]
     total = chord[-1]

@@ -32,7 +32,7 @@ for (const item of catalog) {
   const route = buildCatalogRoute(read(item.file), { ...item, mirror: false });   // validate the route as authored (the app rides it there and back)
   if (route.lat.some((v) => !Number.isFinite(v) || Math.abs(v) > 90) || route.lon.some((v) => !Number.isFinite(v) || Math.abs(v) > 180)) throw new Error(`${item.id}: invalid GPX coordinates`);
   // a one-way route (a Tour stage to a summit finish) stops at B; the app mirrors it into A → B → A
-  if (!route.closed && !item.oneWay) throw new Error(`${item.id}: scenic routes must close; add a returning leg or a closed loop (or set "oneWay": true)`);
+  if (!route.closed && !item.oneWay && !item.network) throw new Error(`${item.id}: scenic routes must close; add a returning leg or a closed loop (or set "oneWay": true)`);
   if (item.oneWay && (item.outAndBack || route.closed)) throw new Error(`${item.id}: a oneWay route must not be closed or outAndBack`);
   if (!route.hasElevation) throw new Error(`${item.id}: elevation is required`);
   if (!Array.isArray(item.expectedKm) || item.expectedKm.length !== 2) throw new Error(`${item.id}: expectedKm needs [min, max]`);

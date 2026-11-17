@@ -25,12 +25,15 @@ if (!item || item.file !== spec.base) throw new Error(`catalog entry ${spec.cata
 const route = buildCatalogRoute(read(spec.base), { ...item, routeId: item.id });
 const L = route.turnS || route.total;
 const K = Math.round(L / 10);
+const closed = !!route.oneWay?.closedLoop || !route.mirrored;
 const REACH = 30;   // a pass is where the loop comes within this many metres of the node
 
 // every pass of the loop through each node: the nearest sample of each run within REACH
 const at = (i) => ({ lat: route.lat[i], lon: route.lon[i] });
 const splits = [];
 for (const n of spec.nodes) {
+  // "at": "start" / "end": the route's own first / last point (an open tour's ends are junctions)
+  if (n.at === 'start' || n.at === 'end') Object.assign(n, at(n.at === 'start' ? 0 : K));
   let run = null;
   const passes = [];
   for (let i = 0; i <= K; i++) {
@@ -39,14 +42,16 @@ for (const n of spec.nodes) {
     else if (run) { passes.push(run.i); run = null; }
   }
   if (run) passes.push(run.i);
-  // the loop's start and end are one point: a node there splits at 0 (and the loop closes at L)
-  const list = [...new Set(passes.map((i) => (i === K ? 0 : i)))];
+  // a closed loop's start and end are one point: a node there splits at 0 (and the loop closes at L);
+  // an open tour (Pittsburgh's: the loop and the Jail Trail in one line) has a node at each end
+  const list = [...new Set(passes.map((i) => (closed && i === K ? 0 : i)))];
   if (!list.length) throw new Error(`node ${n.id}: the loop doesn't pass within ${REACH} m`);
   n.passes = list.map((i) => i * 10);
   for (const s of n.passes) splits.push({ s, node: n.id });
 }
 splits.sort((a, b) => a.s - b.s);
-if (splits[0].s !== 0) throw new Error('the loop\'s start must be a node (the edges are split from it)');
+if (splits[0].s !== 0) throw new Error('the route\'s start must be a node (the edges are split from it)');
+if (!closed && splits[splits.length - 1].s !== L) throw new Error('an open route\'s end must be a node too');
 // passes that are really one junction crossed twice must sit at the same height
 for (const n of spec.nodes) {
   const ele = n.passes.map((s) => route.ele[s / 10]);
@@ -57,6 +62,7 @@ for (const n of spec.nodes) {
 }
 const edges = [];
 for (let k = 0; k < splits.length; k++) {
+  if (!closed && k === splits.length - 1) break;   // the end node of an open route
   const a = splits[k], b = splits[k + 1] || { s: L, node: splits[0].node };
   const key = `${a.node}>${b.node}`;
   const names = spec.edges[key];

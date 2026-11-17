@@ -8,9 +8,13 @@
     "models/scenery/regional.json"
   ],
   "seed": 412,
-  "roadAlign": { "curve": true, "streets": true, "bankM": 30 },
+  "roadAlign": {
+    "curve": true,
+    "streets": true,
+    "bankM": 30
+  },
   "description": "Pittsburgh as a stylized city: the real terrain, rivers, streets, bridges and buildings from OpenStreetMap and AWS Terrain Tiles, with people, traffic, trains, inclines and boats. An artistic interpretation, not a survey.",
-  "title": "Pittsburgh \u00b7 Three Rivers Loop",
+  "title": "Pittsburgh · Three Rivers Loop",
   "region": "pittsburgh",
   "biome": "city",
   "palette": {
@@ -22,7 +26,9 @@
     "shallowWater": "#5d7f6a",
     "bluff": "#8f7a60"
   },
-  "packs": ["alps"],
+  "packs": [
+    "alps"
+  ],
   "vegetation": {
     "trees": [
       "beech0",
@@ -33,7 +39,7 @@
       "fir0"
     ],
     "treeDensity": 0.6,
-    "density": 1.0,
+    "density": 1,
     "cover": [
       "grass",
       "grass",
@@ -44,11 +50,50 @@
       "shrub1"
     ],
     "vergeDensity": 0,
-    "yardTrees": { "density": 0.5, "kitDensity": 0.4, "boxes": [[40.424, -80.026, 40.4395, -80.007], [40.424, -80.007, 40.4285, -79.996], [40.433, -80.04, 40.4425, -80.024]] }
+    "yardTrees": {
+      "density": 0.5,
+      "kitDensity": 0.4,
+      "boxes": [
+        [
+          40.424,
+          -80.026,
+          40.4395,
+          -80.007
+        ],
+        [
+          40.424,
+          -80.007,
+          40.4285,
+          -79.996
+        ],
+        [
+          40.433,
+          -80.04,
+          40.4425,
+          -80.024
+        ]
+      ]
+    }
   },
   "routeTrees": [
-    { "fromM": 16480, "toM": 18240, "spacingM": 11, "offsetM": 7.5, "sides": [-1] },
-    { "fromM": 16500, "toM": 18240, "spacingM": 16, "offsetM": 7, "sides": [1] }
+    {
+      "fromM": 13150,
+      "toM": 14910,
+      "spacingM": 11,
+      "offsetM": 7.5,
+      "sides": [
+        -1
+      ]
+    },
+    {
+      "fromM": 13170,
+      "toM": 14910,
+      "spacingM": 16,
+      "offsetM": 7,
+      "sides": [
+        1
+      ]
+    }
   ],
   "bridgeFrames": {
     "Smithfield Street Bridge": "street"
@@ -61,58 +106,246 @@
   "road": {
     "surface": "worn",
     "zones": [
-      { "fromM": 158, "toM": 713, "surface": "worn", "patches": 0.55, "tone": 0.96 },
-      { "fromM": 713, "toM": 1011, "surface": "fresh", "tone": 0.9, "cracks": 0.1 },
-      { "fromM": 2819, "toM": 4077, "surface": "patched", "patches": 0.85, "cracks": 0.5, "wear": 0.7, "tone": 0.94 },
-      { "fromM": 4077, "toM": 4579, "surface": "worn", "tone": 0.86, "wear": 0.75, "patches": 0.15, "cracks": 0.3 },
-      { "fromM": 4640, "toM": 6020, "surface": "worn", "patches": 0.5 },
-      { "fromM": 6020, "toM": 7852, "surface": "patched", "patches": 0.7, "cracks": 0.45, "warm": 0.15 },
-      { "fromM": 10463, "toM": 11011, "surface": "worn", "patches": 0.5 },
-      { "fromM": 11011, "toM": 12331, "surface": "worn", "cracks": 0.6, "edge": 0.7, "patches": 0.55 },
-      { "fromM": 12331, "toM": 14129, "surface": "fresh", "tone": 0.84, "patches": 0.12 },
-      { "fromM": 14129, "toM": 14450, "surface": "patched", "patches": 0.8, "cracks": 0.6, "edge": 0.6 },
-      { "fromM": 14450, "toM": 15620, "surface": "brick", "centre": 0, "patches": 0.3 },
-      { "fromM": 15700, "toM": 16409, "surface": "fresh", "tone": 0.88, "cracks": 0.12 },
-      { "fromM": 16409, "toM": 16587, "surface": "worn" }
+      {
+        "fromM": 15140,
+        "toM": 15690,
+        "surface": "worn",
+        "patches": 0.55,
+        "tone": 0.96
+      },
+      {
+        "fromM": 15690,
+        "toM": 15980,
+        "surface": "fresh",
+        "tone": 0.9,
+        "cracks": 0.1
+      },
+      {
+        "fromM": 17800,
+        "toM": 19050,
+        "surface": "patched",
+        "patches": 0.85,
+        "cracks": 0.5,
+        "wear": 0.7,
+        "tone": 0.94
+      },
+      {
+        "fromM": 19060,
+        "toM": 19560,
+        "surface": "worn",
+        "tone": 0.86,
+        "wear": 0.75,
+        "patches": 0.15,
+        "cracks": 0.3
+      },
+      {
+        "fromM": 19620,
+        "toM": 21000,
+        "surface": "worn",
+        "patches": 0.5
+      },
+      {
+        "fromM": 21000,
+        "toM": 22830,
+        "surface": "patched",
+        "patches": 0.7,
+        "cracks": 0.45,
+        "warm": 0.15
+      },
+      {
+        "fromM": 7130,
+        "toM": 7670,
+        "surface": "worn",
+        "patches": 0.5
+      },
+      {
+        "fromM": 7680,
+        "toM": 9000,
+        "surface": "worn",
+        "cracks": 0.6,
+        "edge": 0.7,
+        "patches": 0.55
+      },
+      {
+        "fromM": 9000,
+        "toM": 10790,
+        "surface": "fresh",
+        "tone": 0.84,
+        "patches": 0.12
+      },
+      {
+        "fromM": 10800,
+        "toM": 11120,
+        "surface": "patched",
+        "patches": 0.8,
+        "cracks": 0.6,
+        "edge": 0.6
+      },
+      {
+        "fromM": 11120,
+        "toM": 12290,
+        "surface": "brick",
+        "centre": 0,
+        "patches": 0.3
+      },
+      {
+        "fromM": 12370,
+        "toM": 13070,
+        "surface": "fresh",
+        "tone": 0.88,
+        "cracks": 0.12
+      },
+      {
+        "fromM": 13080,
+        "toM": 13250,
+        "surface": "worn"
+      }
     ],
     "trail": {
       "surface": "fresh",
       "tone": 1.05,
       "zones": [
-        { "fromM": 3363, "toM": 3457, "surface": "brick", "centre": 0, "patches": 0, "tone": 1.05 },
-        { "fromM": 7852, "toM": 10463, "surface": "worn", "patches": 0.3, "cracks": 0.35, "edge": 0.55, "tone": 1.05 },
-        { "fromM": 16587, "toM": 18321, "surface": "worn", "patches": 0.25, "tone": 1.04 }
+        {
+          "fromM": 18340,
+          "toM": 18430,
+          "surface": "brick",
+          "centre": 0,
+          "patches": 0,
+          "tone": 1.05
+        },
+        {
+          "fromM": 22830,
+          "toM": 23230,
+          "surface": "worn",
+          "patches": 0.3,
+          "cracks": 0.35,
+          "edge": 0.55,
+          "tone": 1.05
+        },
+        {
+          "fromM": 4930,
+          "toM": 7130,
+          "surface": "worn",
+          "patches": 0.3,
+          "cracks": 0.35,
+          "edge": 0.55,
+          "tone": 1.05
+        },
+        {
+          "fromM": 13260,
+          "toM": 14980,
+          "surface": "worn",
+          "patches": 0.25,
+          "tone": 1.04
+        }
       ]
     }
   },
-  "brickStreets": { "osm": true, "minGrade": 0.07, "classes": [5], "minLengthM": 25 },
+  "brickStreets": {
+    "osm": true,
+    "minGrade": 0.07,
+    "classes": [
+      5
+    ],
+    "minLengthM": 25
+  },
   "buildingKit": {
     "detailM": 150,
     "dressingM": 80,
     "styles": [
-      { "preset": "pittsburgh-rowhouse", "kinds": ["rowhouse"] },
-      { "preset": "pittsburgh-frame", "kinds": ["house"] }
+      {
+        "preset": "pittsburgh-rowhouse",
+        "kinds": [
+          "rowhouse"
+        ]
+      },
+      {
+        "preset": "pittsburgh-frame",
+        "kinds": [
+          "house"
+        ]
+      }
     ]
   },
   "streetKit": {
     "fromM": 0,
-    "toM": 18400,
+    "toM": 23390,
     "rangeM": 220,
     "parkTrees": 16,
     "zones": [
-      { "name": "North Shore: General Robinson & Federal", "style": "masonry", "fromM": 150, "toM": 760, "widthM": 60, "parking": false, "curbM": 5.8, "sidewalkM": 3.6, "trees": 18 },
-      { "name": "Downtown: Market, Forbes & Smithfield", "style": "masonry", "fromM": 2830, "toM": 4250, "widthM": 55, "parking": false, "curbM": 5.6, "sidewalkM": 3.4, "trees": 20 },
-      { "name": "East Carson Street", "style": "victorian", "fromM": 5250, "toM": 7860, "widthM": 90, "parking": true, "curbM": 6.4, "sidewalkM": 4, "trees": 15 },
-      { "name": "South Side Flats: S 10th & E Carson", "style": "rowhouse", "fromM": 10330, "toM": 10860, "widthM": 70, "parking": true, "curbM": 6.2, "sidewalkM": 3.2, "trees": 16 },
-      { "name": "West End: Grandview W hillside", "style": "rowhouse", "fromM": 14150, "toM": 15600, "widthM": 60, "parking": true, "curbM": 5.8, "sidewalkM": 2.6, "trees": 20 },
-      { "name": "North Shore: Carnegie Science Center", "style": "industrial", "fromM": 17000, "toM": 17550, "widthM": 120, "parking": false, "curbM": 5.8, "sidewalkM": 3.2, "trees": 16 }
+      {
+        "name": "North Shore: General Robinson & Federal",
+        "style": "masonry",
+        "fromM": 15130,
+        "toM": 15740,
+        "widthM": 60,
+        "parking": false,
+        "curbM": 5.8,
+        "sidewalkM": 3.6,
+        "trees": 18
+      },
+      {
+        "name": "Downtown: Market, Forbes & Smithfield",
+        "style": "masonry",
+        "fromM": 17810,
+        "toM": 19230,
+        "widthM": 55,
+        "parking": false,
+        "curbM": 5.6,
+        "sidewalkM": 3.4,
+        "trees": 20
+      },
+      {
+        "name": "East Carson Street",
+        "style": "victorian",
+        "fromM": 20230,
+        "toM": 22840,
+        "widthM": 90,
+        "parking": true,
+        "curbM": 6.4,
+        "sidewalkM": 4,
+        "trees": 15
+      },
+      {
+        "name": "South Side Flats: S 10th & E Carson",
+        "style": "rowhouse",
+        "fromM": 7000,
+        "toM": 7530,
+        "widthM": 70,
+        "parking": true,
+        "curbM": 6.2,
+        "sidewalkM": 3.2,
+        "trees": 16
+      },
+      {
+        "name": "West End: Grandview W hillside",
+        "style": "rowhouse",
+        "fromM": 10820,
+        "toM": 12270,
+        "widthM": 60,
+        "parking": true,
+        "curbM": 5.8,
+        "sidewalkM": 2.6,
+        "trees": 20
+      },
+      {
+        "name": "North Shore: Carnegie Science Center",
+        "style": "industrial",
+        "fromM": 13670,
+        "toM": 14220,
+        "widthM": 120,
+        "parking": false,
+        "curbM": 5.8,
+        "sidewalkM": 3.2,
+        "trees": 16
+      }
     ]
   },
   "mainStreets": [
     {
       "name": "East Carson Street",
-      "fromM": 4850,
-      "toM": 7850
+      "fromM": 19830,
+      "toM": 22830
     }
   ],
   "hotspots": [
@@ -525,44 +758,44 @@
   ],
   "signs": [
     {
-      "atM": 650,
+      "atM": 15630,
       "side": "inland",
       "label": "ROBERTO CLEMENTE BRIDGE",
       "subtitle": "ALLEGHENY RIVER"
     },
     {
-      "atM": 1700,
+      "atM": 16680,
       "side": "inland",
       "label": "POINT STATE PARK",
       "subtitle": "WHERE THE THREE RIVERS MEET"
     },
     {
-      "atM": 4850,
+      "atM": 19830,
       "side": "inland",
       "label": "EAST CARSON STREET",
       "subtitle": "SOUTH SIDE"
     },
     {
-      "atM": 10900,
+      "atM": 7570,
       "side": "inland",
       "label": "P.J. McARDLE ROADWAY",
       "subtitle": "MOUNT WASHINGTON"
     },
     {
-      "atM": 13120,
+      "atM": 9790,
       "side": "inland",
       "label": "GRANDVIEW AVENUE",
       "subtitle": "MOUNT WASHINGTON OVERLOOKS"
     },
     {
-      "atM": 15650,
+      "atM": 12320,
       "side": "inland",
       "label": "WEST END BRIDGE",
       "subtitle": "OHIO RIVER"
     }
   ],
   "preview": {
-    "positionM": 13100,
+    "positionM": 9770,
     "camera": "drone",
     "time": "golden"
   },
@@ -574,10 +807,27 @@
   "riverfront": {
     "maxGapM": 20,
     "spans": [
-      { "fromM": 1040, "toM": 2320 },
-      { "fromM": 2360, "toM": 2800 }
+      {
+        "fromM": 16020,
+        "toM": 17300
+      },
+      {
+        "fromM": 17340,
+        "toM": 17780
+      }
     ],
-    "waterSteps": { "top": { "lat": 40.445842, "lon": -80.008511 }, "bottom": { "lat": 40.445527, "lon": -80.008511 }, "widthM": 18, "topM": 5 }
+    "waterSteps": {
+      "top": {
+        "lat": 40.445842,
+        "lon": -80.008511
+      },
+      "bottom": {
+        "lat": 40.445527,
+        "lon": -80.008511
+      },
+      "widthM": 18,
+      "topM": 5
+    }
   },
   "weather": {
     "presets": [
@@ -661,8 +911,8 @@
     }
   ],
   "overlooks": {
-    "fromM": 12150,
-    "toM": 14300,
+    "fromM": 8820,
+    "toM": 10970,
     "count": 4,
     "spacingM": 200,
     "toward": {
@@ -678,7 +928,7 @@
   "views": [
     {
       "name": "The Point",
-      "atM": 1750,
+      "atM": 16730,
       "rangeM": 500,
       "cam": {
         "lat": 40.441,
@@ -693,7 +943,7 @@
     },
     {
       "name": "The Golden Triangle from the Monongahela",
-      "atM": 4300,
+      "atM": 19280,
       "rangeM": 450,
       "cam": {
         "lat": 40.4338,
@@ -764,5 +1014,55 @@
       40.438,
       -80.03
     ]
-  }
+  },
+  "qcAccept": [
+    {
+      "check": "street-crease",
+      "fromM": 1580,
+      "toM": 1620,
+      "why": "a street beside the Jail Trail (parkway ramps, Bates St) whose mapped heights crease; not the route"
+    },
+    {
+      "check": "street-crease",
+      "fromM": 2400,
+      "toM": 2440,
+      "why": "a street beside the Jail Trail (parkway ramps, Bates St) whose mapped heights crease; not the route"
+    },
+    {
+      "check": "mesh-coarse",
+      "fromM": 2456,
+      "toM": 2516,
+      "why": "the Jail Trail on a narrow ledge under the parkway: the 6 m ground mesh steps beside it"
+    },
+    {
+      "check": "mesh-coarse",
+      "fromM": 2700,
+      "toM": 2740,
+      "why": "the Jail Trail on a narrow ledge under the parkway: the 6 m ground mesh steps beside it"
+    },
+    {
+      "check": "mesh-coarse",
+      "fromM": 3696,
+      "toM": 3736,
+      "why": "the Jail Trail on a narrow ledge under the parkway: the 6 m ground mesh steps beside it"
+    },
+    {
+      "check": "street-crease",
+      "fromM": 3960,
+      "toM": 4000,
+      "why": "a street beside the Jail Trail (parkway ramps, Bates St) whose mapped heights crease; not the route"
+    },
+    {
+      "check": "street-crease",
+      "fromM": 4690,
+      "toM": 4730,
+      "why": "a street beside the Jail Trail (parkway ramps, Bates St) whose mapped heights crease; not the route"
+    },
+    {
+      "check": "lateral-jump",
+      "fromM": 23030,
+      "toM": 23070,
+      "why": "the mapped path from 27th St to the riverfront jogs where it meets the trail"
+    }
+  ]
 }

@@ -5,33 +5,58 @@
   "out": "routes/cities/pittsburgh-network.json",
   "nodes": [
     {
-      "id": "A",
-      "name": "North Shore Water Steps",
-      "lat": 40.44548,
-      "lon": -80.00825
+      "id": "E",
+      "name": "Smithfield St & Fort Pitt Blvd",
+      "at": "start"
+    },
+    {
+      "id": "H",
+      "name": "SouthSide Works riverfront",
+      "at": "end"
     },
     {
       "id": "G",
       "name": "East Carson & 10th",
       "lat": 40.42871,
       "lon": -79.98858
+    },
+    {
+      "id": "A",
+      "name": "North Shore Water Steps",
+      "lat": 40.44548,
+      "lon": -80.00825
     }
   ],
   "edges": {
-    "A>G": {
-      "name": "North Shore, the Point & downtown",
-      "fwd": "the Clemente Bridge, the Point and downtown",
-      "rev": "Smithfield Bridge, downtown and the Point"
+    "E>H": {
+      "name": "Jail Trail & Hot Metal Bridge",
+      "fwd": "the Jail Trail along the Mon, over the Hot Metal Bridge",
+      "rev": "over the Hot Metal Bridge, the Jail Trail back to downtown"
     },
-    "G>G": {
-      "name": "South Side loop",
-      "fwd": "East Carson to SouthSide Works, back on the river trail",
-      "rev": "up 10th to the river trail, back on East Carson"
+    "H>G": {
+      "name": "South Side river trail",
+      "fwd": "the river trail to South Side Riverfront Park and 10th",
+      "rev": "the river trail east to SouthSide Works"
     },
     "G>A": {
       "name": "Mount Washington",
       "fwd": "the McArdle climb, Grandview and the West End Bridge",
       "rev": "the West End Bridge, Grandview and down McArdle"
+    },
+    "A>E": {
+      "name": "North Shore, the Point & downtown",
+      "fwd": "the Clemente Bridge, the Point and Market Square",
+      "rev": "Market Square, the Point and the Clemente Bridge"
+    },
+    "E>G": {
+      "name": "Smithfield Street Bridge",
+      "fwd": "the Smithfield Street Bridge, Station Square and East Carson",
+      "rev": "East Carson, Station Square and the Smithfield Street Bridge"
+    },
+    "G>H": {
+      "name": "East Carson Street",
+      "fwd": "East Carson Street to SouthSide Works",
+      "rev": "East Carson Street to 10th"
     }
   },
   "presets": [
@@ -39,8 +64,10 @@
       "id": "pgh-three-rivers",
       "name": "Three Rivers Loop",
       "path": [
-        "A>G+",
-        "G>G+",
+        "A>E+",
+        "E>G+",
+        "G>H+",
+        "H>G+",
         "G>A+"
       ],
       "tags": [
@@ -53,8 +80,10 @@
       "name": "Three Rivers Loop \u00b7 reverse",
       "path": [
         "G>A-",
-        "G>G-",
-        "A>G-"
+        "H>G-",
+        "G>H-",
+        "E>G-",
+        "A>E-"
       ],
       "tags": [
         "varied"
@@ -65,7 +94,8 @@
       "id": "pgh-short-loop",
       "name": "South Side Short Loop",
       "path": [
-        "A>G+",
+        "A>E+",
+        "E>G+",
         "G>A+"
       ],
       "tags": [
@@ -79,7 +109,8 @@
       "name": "South Side Short Loop \u00b7 reverse",
       "path": [
         "G>A-",
-        "A>G-"
+        "E>G-",
+        "A>E-"
       ],
       "tags": [
         "short",
@@ -91,13 +122,60 @@
       "id": "pgh-south-side",
       "name": "South Side Flat Loop",
       "path": [
-        "G>G+"
+        "G>H+",
+        "H>G+"
       ],
       "tags": [
         "flat",
         "short"
       ],
       "note": "East Carson Street and the river trail, round and round from East Carson & 10th"
+    },
+    {
+      "id": "pgh-jail-trail",
+      "name": "Jail Trail & South Side Loop",
+      "path": [
+        "E>H+",
+        "H>G+",
+        "E>G-"
+      ],
+      "tags": [
+        "flat",
+        "short",
+        "new"
+      ],
+      "note": "From downtown along the Jail Trail, over the Hot Metal Bridge and back on the South Side river trail"
+    },
+    {
+      "id": "pgh-point-jail",
+      "name": "Point & Jail Trail Loop",
+      "path": [
+        "A>E+",
+        "E>H+",
+        "H>G+",
+        "E>G-",
+        "A>E-"
+      ],
+      "tags": [
+        "flat",
+        "new"
+      ],
+      "note": "The Point and downtown, the Jail Trail, the Hot Metal Bridge and the river trail, back by the Smithfield Street Bridge"
+    },
+    {
+      "id": "pgh-jail-mt-washington",
+      "name": "Jail Trail & Mount Washington Loop",
+      "path": [
+        "A>E+",
+        "E>H+",
+        "H>G+",
+        "G>A+"
+      ],
+      "tags": [
+        "varied",
+        "new"
+      ],
+      "note": "The flat Jail Trail out, the river trail, then the McArdle climb and Grandview home"
     },
     {
       "id": "pgh-mt-washington",
@@ -115,12 +193,16 @@
       "id": "pgh-long",
       "name": "Three Rivers There & Back",
       "path": [
-        "A>G+",
-        "G>G+",
+        "A>E+",
+        "E>G+",
+        "G>H+",
+        "H>G+",
         "G>A+",
         "G>A-",
-        "G>G-",
-        "A>G-"
+        "H>G-",
+        "G>H-",
+        "E>G-",
+        "A>E-"
       ],
       "tags": [
         "long",
