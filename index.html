@@ -110,12 +110,29 @@
           <div class="seg" id="dirSeg" role="group" aria-label="Direction">
             <button type="button" data-dir="fwd" class="on">Forward</button><button type="button" data-dir="rev" title="Start from the far end">Reverse</button>
           </div>
-          <div class="seg" id="startSeg" role="group" aria-label="Start point">
-            <button type="button" data-f="0" class="on">From the start</button><button type="button" data-f="0.3333">⅓ in</button><button type="button" data-f="0.6667">⅔ in</button>
+          <div class="opt-row">
+            <span class="opt-label">Start</span>
+            <div class="stops" id="startStops" role="group" aria-label="Start at"></div>
           </div>
-          <div class="seg" id="endlessSeg" role="group" aria-label="At the finish" hidden>
-            <button type="button" data-endless="0" class="on" title="The ride ends at the finish line">Ends at the finish</button><button type="button" data-endless="1" title="Turn at the finish and ride it back, endlessly">Endless</button>
+          <div class="opt-row">
+            <span class="opt-label">Length</span>
+            <div class="seg" id="lengthSeg" role="group" aria-label="Ride length">
+              <button type="button" data-len="open" class="on" id="lenOpen">Open</button><button type="button" data-len="time">Time</button><button type="button" data-len="dist">Distance</button><button type="button" data-len="climb">Climb</button>
+            </div>
           </div>
+          <div class="len-ctl" id="lengthCtl" hidden>
+            <div class="stepper">
+              <button type="button" id="lenMinus" aria-label="Less">−</button>
+              <input type="number" id="lenValue" inputmode="decimal" min="0" aria-label="Ride length">
+              <span id="lenUnit">min</span>
+              <button type="button" id="lenPlus" aria-label="More">+</button>
+            </div>
+            <label class="len-watts" title="The steady power the estimate assumes">at <input type="number" id="planWatts" min="40" max="600" step="5" inputmode="numeric"> W</label>
+          </div>
+          <div class="seg" id="endlessSeg" role="group" aria-label="At the end" hidden>
+            <button type="button" data-endless="0" class="on" title="The ride ends at the finish line and the summary opens">Stop at the finish</button><button type="button" data-endless="1" title="Keep riding past it (a point-to-point route turns and rides back, endlessly)">Keep riding</button>
+          </div>
+          <div class="plan-note" id="planNote"></div>
         </div>
         <div class="pacer-opt" title="A virtual rider in a yellow-checkered jersey who holds this power — P on the ride screen">
           <span class="pacer-label"><i class="chk"></i>Pacer</span>
@@ -125,6 +142,7 @@
         </div>
         <canvas id="pvMap" class="pv-map"></canvas>
         <canvas id="pvChart" class="pv-chart"></canvas>
+        <div class="pv-hint" id="pvHint" hidden></div>
         <p class="pv-desc" id="pvDesc"></p>
         <div class="offline-status" id="offlineStatus"></div>
         <button id="startBtn" class="primary start">Start riding</button>

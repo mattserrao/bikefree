@@ -26,10 +26,15 @@ export function gradeColor(g) {
   return '#ff4d4d';
 }
 
-/** Elevation profile with ridden part highlighted and a position marker. */
-export function drawProfile(canvas, route, pos, { metric = false, compact = false, ahead = 805, span = null } = {}) {
+/**
+ * Elevation profile with ridden part highlighted and a position marker.
+ * selection [a, b] (route metres): the stretch a ride covers — bright, the rest dimmed (the route
+ * selector). finishAt: route metres of a chequered finish line, labelled endLabel. ticks: route metres of named stops. Returns the layout, so a pointer
+ * x can be turned back into route metres (profileDistAt).
+ */
+export function drawProfile(canvas, route, pos, { metric = false, compact = false, ahead = 805, span = null, selection = null, finishAt = null, ticks = null, endLabel = null } = {}) {
   const { ctx, w, h } = setup(canvas);
-  if (!route) return;
+  if (!route) return null;
   // compact: the ride-screen strip — no axis labels, the stretch just ahead is brightest.
   const padL = compact ? 0 : 40, padB = compact ? 0 : 18, padT = compact ? 10 : 8, padR = compact ? 0 : 8;
   const pw = w - padL - padR, ph = h - padT - padB;
@@ -48,7 +53,9 @@ export function drawProfile(canvas, route, pos, { metric = false, compact = fals
     const j = Math.min(i1, i + step);
     const g = (route.ele[j] - route.ele[i]) / Math.max(1, route.dist[j] - route.dist[i]) * 100;
     ctx.fillStyle = gradeColor(g);
-    ctx.globalAlpha = compact
+    ctx.globalAlpha = selection
+      ? (route.dist[j] > selection[0] && route.dist[i] < selection[1] ? 0.95 : light ? 0.28 : 0.18)
+      : compact
       ? (route.dist[j] <= pos ? 0.45 : route.dist[i] <= pos + ahead ? 1 : light ? 0.5 : 0.3)
       : (route.dist[j] <= pos ? 0.95 : light ? 0.7 : 0.35);
     ctx.beginPath();
@@ -60,8 +67,34 @@ export function drawProfile(canvas, route, pos, { metric = false, compact = fals
     ctx.fill();
   }
   ctx.globalAlpha = 1;
+  const layout = { from, to, padL, pw, w, h };
 
-  if (compact) return drawMarker();
+  // named stops: small ticks on the baseline
+  if (ticks?.length) {
+    ctx.fillStyle = tok('--ink-2', '#c2c0b6');
+    for (const t of ticks) if (t >= from && t <= to) ctx.fillRect(Math.round(X(t)) - 1, Y(lo) - 5, 2, 5);
+  }
+  // the end of the planned ride: a chequered finish line
+  if (finishAt != null && finishAt > from && finishAt <= to) {
+    const ex = X(finishAt);
+    const top = padT, bot = Y(lo);
+    ctx.strokeStyle = tok('--ink', '#ece9e1'); ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(ex, top + 12); ctx.lineTo(ex, bot); ctx.stroke(); ctx.setLineDash([]);
+    for (let r = 0; r < 2; r++) for (let c = 0; c < 4; c++) {
+      ctx.fillStyle = (r + c) % 2 ? '#16181c' : '#f4f4f0';
+      ctx.fillRect(ex + c * 3, top + r * 3 + 2, 3, 3);
+    }
+    if (endLabel && !compact) {
+      ctx.font = '600 11px -apple-system, sans-serif';
+      ctx.fillStyle = tok('--ink', '#ece9e1');
+      const tw = ctx.measureText(endLabel).width;
+      ctx.textAlign = ex + 16 + tw > w ? 'right' : 'left';
+      ctx.fillText(endLabel, ctx.textAlign === 'right' ? ex - 4 : ex + 16, top + 9);
+      ctx.textAlign = 'left';
+    }
+  }
+
+  if (compact) { drawMarker(); return layout; }
   // Axis labels
   ctx.fillStyle = tok('--muted', '#a8a69d');
   ctx.font = '11px -apple-system, sans-serif';
@@ -79,6 +112,7 @@ export function drawProfile(canvas, route, pos, { metric = false, compact = fals
   }
   ctx.fillText(metric ? 'km' : 'mi', padL, h - 4);
   drawMarker();
+  return layout;
 
   function drawMarker() {
     const at = Math.max(from, Math.min(pos, to));
@@ -96,8 +130,16 @@ export function drawProfile(canvas, route, pos, { metric = false, compact = fals
   }
 }
 
-/** Bird's-eye route outline with a position dot. */
-export function drawTrace(canvas, route, pos, { markerOnly = false } = {}) {
+/** Route metres under a pointer x (CSS px) on a profile drawn with this layout. */
+export function profileDistAt(layout, x) {
+  if (!layout) return 0;
+  const f = Math.max(0, Math.min(1, (x - layout.padL) / layout.pw));
+  return layout.from + f * (layout.to - layout.from);
+}
+
+/** Bird's-eye route outline with a position dot. section [a, b] (route metres, may run past the end
+ *  and wrap): the stretch a planned ride covers, drawn in the accent, with a finish dot at b. */
+export function drawTrace(canvas, route, pos, { markerOnly = false, section = null } = {}) {
   const { ctx, w, h } = setup(canvas);
   if (!route) return;
   const lat0 = (Math.min(...route.lat) + Math.max(...route.lat)) / 2;
@@ -120,6 +162,22 @@ export function drawTrace(canvas, route, pos, { markerOnly = false } = {}) {
   };
   path(0, route.lat.length - 1, tok('--muted', '#a8a69d'), 2.5);
   if (cut > 0 && !markerOnly) path(0, cut, tok('--accent', '#7aa9f5'), 3);
+  const last = route.lat.length - 1;
+  if (section) {
+    // a long ride can turn and come back, or lap: draw each pass (the way back retraces the way out)
+    const total = route.total || last * 10;
+    let a = section[0], left = Math.min(section[1] - section[0], total * 3);
+    while (left > 0) {
+      const x0 = ((a % total) + total) % total, run = Math.min(left, total - x0);
+      const i0 = Math.round(x0 / 10), i1 = Math.min(last, Math.round((x0 + run) / 10));
+      if (i1 > i0) path(i0, i1, tok('--accent', '#7aa9f5'), 3.5);
+      a += run; left -= run;
+    }
+    const e = Math.min(last, Math.round((((section[1] % total) + total) % total) / 10));
+    const [ex, ey] = P(e);
+    ctx.fillStyle = tok('--ink', '#ece9e1'); ctx.strokeStyle = tok('--inset', '#20201f'); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.rect(ex - 4, ey - 4, 8, 8); ctx.fill(); ctx.stroke();
+  }
   const [x, y] = P(cut);
   ctx.fillStyle = tok('--accent', '#7aa9f5'); ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
 }

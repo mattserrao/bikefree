@@ -9,9 +9,10 @@ import * as store from './store.js';
 import { parseGpx, buildRoute, averageGradeAhead, wrapDist, routeAt, isPointToPoint, finishDistanceM, legSpan } from './gpx.js';
 import { Pacer, PACER_WATTS } from './pacer.js';
 import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor, markFtpTest, ftpFromTwentyMinutes } from './workout.js';
-import { drawProfile, drawWorkout, drawTrace, drawMinimap, gradeColor } from './views.js';
+import { drawProfile, drawWorkout, drawTrace, drawMinimap, gradeColor, profileDistAt } from './views.js';
 import { Profiles, GENDERS, initials, cmToFtIn, ftInToCm } from './profiles.js';
-import { buildCatalogRoute, loadRouteScene, routeStartM } from './routes.js';
+import { buildCatalogRoute, loadRouteScene } from './routes.js';
+import { legLength, startPosition, stopsForDirection, stopNear, planRide } from './route-plan.js';
 import { VERSION } from './version.js';
 import { planRouteTiles, tileKeysToUrls, downloadUrls, offlineStatus, setOfflineStatus, registerServiceWorker } from './offline.js';
 
@@ -199,8 +200,11 @@ const pausedByUser = () => !session.running && session.movingS > 0 && !session.a
 function sameAsCurrent() {
   if (!session.hasRide) return false;
   if (chosen === 'free') return session.mode === 'free';
-  if (chosen === 'route') return session.mode === 'route' && session.route === previewRoute && session.routeStart === chosenStartM(previewRoute)
-    && session.routeFinishM === chosenFinishM(previewRoute);
+  if (chosen === 'route') {
+    const cp = chosenPlan(previewRoute);
+    return session.mode === 'route' && session.route === previewRoute && session.routeStart === cp.startM
+      && session.routeFinishM === cp.finishM && session.routeGoalM === cp.goalM;
+  }
   return session.mode === 'workout' && session.workout === previewWorkout && !session.workoutDone;
 }
 function renderStart() {
@@ -215,32 +219,165 @@ function renderStart() {
   $('finishFromMenu')?.addEventListener('click', () => openSummary());
 }
 
-// ---------- Route direction and start point ----------
-// Every route rides there and back; Reverse starts at the far end, ⅓ / ⅔ start part-way in that direction.
-// A point-to-point route (a one-way stage, or your own GPX that doesn't loop) ends at the finish unless
-// Endless is on (off by default): then it turns at the finish and rides back, like the others.
-const routeChoice = { reverse: settings.routeReverse === true, fraction: Number(settings.routeFraction) || 0, endless: settings.routeEndless === true };
-function renderRouteChoice() {
-  for (const b of $('dirSeg').children) b.classList.toggle('on', (b.dataset.dir === 'rev') === routeChoice.reverse);
-  for (const b of $('startSeg').children) b.classList.toggle('on', Math.abs(Number(b.dataset.f) - routeChoice.fraction) < 0.01);
-  for (const b of $('endlessSeg').children) b.classList.toggle('on', (b.dataset.endless === '1') === routeChoice.endless);
+// ---------- Route selector: direction, start point and length ----------
+// Every route rides there and back; Reverse starts at the far end. The start is any point along the leg
+// (a named stop, or dragged on the profile), remembered per route. The length is open, or a goal by time,
+// distance or climbing — turned into a finish line by riding the road at a steady power (js/route-plan.js).
+// At the end the ride stops (the summary opens) or keeps going; a point-to-point route (a one-way stage,
+// or your own GPX that doesn't loop) stops at its finish unless Keep riding is on, then turns and rides back.
+const routeChoice = { endless: settings.routeEndless === true };
+const routeStarts = settings.routeStarts && typeof settings.routeStarts === 'object' ? settings.routeStarts : {};
+const LENGTH_STEPS = { time: 5, dist: 1, climb: 50 };
+const rideLength = { mode: 'open', time: 45, dist: 20000, climb: 500, ...(settings.rideLength || {}) };
+const routeKeyOf = (r) => r?.id || r?.name || 'route';
+function startOf(r) {
+  const s = routeStarts[routeKeyOf(r)];
+  return { reverse: s ? !!s.reverse : settings.routeReverse === true, offsetM: Number(s?.offsetM) || 0 };
+}
+function saveRouteChoice() {
+  settings.routeEndless = routeChoice.endless;
+  settings.routeStarts = routeStarts;
+  settings.rideLength = { ...rideLength };
+  saveSettings(settings);
+}
+function setStart(r, change, { save = true } = {}) {
+  if (!r) return;
+  routeStarts[routeKeyOf(r)] = { ...startOf(r), ...change };
+  if (save) saveRouteChoice();
+  renderPreview();
 }
 function setRouteChoice(change) {
   Object.assign(routeChoice, change);
-  settings.routeReverse = routeChoice.reverse;
-  settings.routeFraction = routeChoice.fraction;
-  settings.routeEndless = routeChoice.endless;
-  saveSettings(settings);
-  renderRouteChoice();
+  saveRouteChoice();
   renderPreview();
 }
-$('dirSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setRouteChoice({ reverse: b.dataset.dir === 'rev' }); });
-$('startSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setRouteChoice({ fraction: Number(b.dataset.f) }); });
+/** An estimated time, rounded: "45 min", "1 h 20 min". */
+function fmtPlanTime(sec) {
+  const m = Math.max(1, Math.round(sec / 60));
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}`;
+}
+/** The steady power the length estimate assumes: your setting, else the pacer's, else 65% of FTP. */
+const planWatts = () => (Number(settings.planWatts) > 0 ? Number(settings.planWatts)
+  : pacer.on ? pacer.watts : Math.max(60, Math.round((settings.ftp * 0.65) / 5) * 5));
+const lengthGoal = () => ({ mode: rideLength.mode, value: rideLength.mode === 'open' ? 0 : rideLength[rideLength.mode] });
+/** Everything the Start button would ride on a route: start, the planned ride, its finish or goal. */
+function chosenPlan(r) {
+  const st = startOf(r), startM = startPosition(r, st), p2p = isPointToPoint(r), keep = routeChoice.endless;
+  const len = lengthGoal();
+  const plan = planRide(r, startM, len, { watts: planWatts(), params: session.physicsParams(), pointToPoint: p2p, stopAtEnd: !keep });
+  const distM = plan.distM == null ? null : Math.max(10, Math.round(plan.distM));
+  return { st, startM, p2p, len, plan, finishM: distM != null && !keep ? distM : null,
+    goalM: distM != null && keep && len.mode !== 'open' ? distM : null };
+}
+
+// Length: mode buttons and the stepper (shown in your units; stored as minutes / metres)
+const lenUnits = {
+  time: { unit: () => 'min', toShow: (v) => v, fromShow: (v) => v, step: () => 5, min: 5 },
+  dist: { unit: distUnit, toShow: (m) => +(m / (imperial() ? 1609.344 : 1000)).toFixed(1), fromShow: (v) => v * (imperial() ? 1609.344 : 1000), step: () => 1, min: 0.5 },
+  climb: { unit: elevUnit, toShow: (m) => Math.round(imperial() ? m * 3.28084 : m), fromShow: (v) => (imperial() ? v / 3.28084 : v), step: () => (imperial() ? 100 : 50), min: 10 },
+};
+function setLength(mode, value) {
+  if (mode) rideLength.mode = mode;
+  if (value != null && rideLength.mode !== 'open') {
+    const u = lenUnits[rideLength.mode];
+    rideLength[rideLength.mode] = u.fromShow(Math.max(u.min, value));
+  }
+  saveRouteChoice();
+  renderPreview();
+}
+function stepLength(dir) {
+  const u = lenUnits[rideLength.mode];
+  if (!u) return;
+  const st = u.step(), cur = u.toShow(rideLength[rideLength.mode]);
+  setLength(null, Math.max(u.min, (dir > 0 ? Math.floor(cur / st) + 1 : Math.ceil(cur / st) - 1) * st));
+}
+$('lengthSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setLength(b.dataset.len); });
+$('lenMinus').addEventListener('click', () => stepLength(-1));
+$('lenPlus').addEventListener('click', () => stepLength(1));
+$('lenValue').addEventListener('change', (e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) setLength(null, v); else renderPreview(); });
+$('planWatts').addEventListener('change', (e) => {
+  const w = parseFloat(e.target.value);
+  settings.planWatts = Number.isFinite(w) && w > 0 ? Math.max(40, Math.min(600, Math.round(w))) : null;
+  saveSettings(settings);
+  renderPreview();
+});
+$('dirSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setStart(previewRoute, { reverse: b.dataset.dir === 'rev', offsetM: 0 }); });
+$('startStops').addEventListener('click', (e) => { const b = e.target.closest('button[data-off]'); if (b) setStart(previewRoute, { offsetM: Number(b.dataset.off) }); });
 $('endlessSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setRouteChoice({ endless: b.dataset.endless === '1' }); });
-renderRouteChoice();
-const chosenStartM = (r) => routeStartM(r, routeChoice);
-/** Metres to the finish for the chosen start, or null to ride on endlessly. */
-const chosenFinishM = (r) => (isPointToPoint(r) && !routeChoice.endless ? finishDistanceM(r, chosenStartM(r)) : null);
+
+/** The route-selector controls for a route: direction, start chips, length, and the plan's estimate. */
+function renderRouteSelector(r, cp) {
+  const { st, startM, p2p, plan, len } = cp;
+  const leg = legLength(r);
+  for (const b of $('dirSeg').children) b.classList.toggle('on', (b.dataset.dir === 'rev') === st.reverse);
+  // start chips: the beginning of the leg, then the named stops in riding order
+  const list = stopsForDirection(r, r.stops, st.reverse);
+  const chips = [];
+  if (!list.length || list[0].offsetM > 150) chips.push({ name: st.reverse ? 'Far end' : 'Beginning', offsetM: 0 });
+  chips.push(...list);
+  const onChip = chips.find((c) => Math.abs(c.offsetM - st.offsetM) <= 60);
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  $('startStops').innerHTML = chips.map((c) => `<button type="button" data-off="${c.offsetM}" class="${c === onChip ? 'on' : ''}">${esc(c.name)}</button>`).join('')
+    + (onChip ? '' : `<button type="button" class="on custom" disabled>${fmtDist(st.offsetM, 1)} ${distUnit()} in</button>`);
+  // length
+  $('lenOpen').textContent = p2p ? 'Full' : 'Open';
+  for (const b of $('lengthSeg').children) b.classList.toggle('on', b.dataset.len === len.mode);
+  $('lengthCtl').hidden = len.mode === 'open';
+  if (len.mode !== 'open') {
+    const u = lenUnits[len.mode];
+    if (document.activeElement !== $('lenValue')) $('lenValue').value = u.toShow(rideLength[len.mode]);
+    $('lenValue').step = u.step();
+    $('lenUnit').textContent = u.unit();
+  }
+  if (document.activeElement !== $('planWatts')) $('planWatts').value = planWatts();
+  $('endlessSeg').hidden = !p2p && len.mode === 'open';
+  for (const b of $('endlessSeg').children) b.classList.toggle('on', (b.dataset.endless === '1') === routeChoice.endless);
+  // the estimate
+  let note = '';
+  if (plan.distM != null) {
+    const end = stopNear(r, r.stops, plan.endM);
+    const legEnd = startM < leg ? leg : r.total;
+    const back = plan.endM - legEnd;
+    note = `<b>${fmtDist(plan.distM, 1)} ${distUnit()}</b> · <b>${fmtElev(plan.climbM).toLocaleString()} ${elevUnit()}</b> climb · <b>~${fmtPlanTime(plan.timeS)}</b> at ${planWatts()} W`;
+    if (back > 50 && plan.endM <= r.total + leg) note += ` · turns at the ${startM < leg ? 'far end' : 'start'} and comes back ${fmtDist(back, 1)} ${distUnit()}`;
+    else if (back > 50) note += ' · more than there and back';
+    if (end && back <= 50) note += ` · ends ${end.d < 150 ? 'at' : 'near'} ${esc(end.name)}`;
+    if (plan.capped) note += ` <span class="warn">· the stage finishes first</span>`;
+    if (cp.goalM != null) note += ' · goal only, the ride keeps going';
+  } else {
+    note = p2p ? 'Turns at the finish and rides it back, endlessly.' : 'Rides on until you stop, turning at each end.';
+  }
+  $('planNote').innerHTML = note;
+}
+
+// Drag the start along the profile (snaps to a named stop when you're close)
+let pvLayout = null, pvDragging = false, pvDragRaf = 0, pvDragX = 0;
+function dragStartTo(clientX) {
+  const r = previewRoute;
+  if (!r || !pvLayout) return;
+  const chart = $('pvChart');
+  const x = clientX - chart.getBoundingClientRect().left;
+  const st = startOf(r), leg = legLength(r);
+  let off = profileDistAt(pvLayout, x) - (st.reverse ? leg : 0);
+  const pxPerM = pvLayout.pw / (pvLayout.to - pvLayout.from);
+  for (const s of stopsForDirection(r, r.stops, st.reverse)) if (Math.abs(s.offsetM - off) * pxPerM < 7) off = s.offsetM;
+  if (Math.abs(off) * pxPerM < 7) off = 0;
+  setStart(r, { offsetM: Math.max(0, Math.min(leg - 100, Math.round(off / 10) * 10)) }, { save: false });
+}
+$('pvChart').addEventListener('pointerdown', (e) => {
+  if (chosen !== 'route' || !previewRoute) return;
+  pvDragging = true;
+  $('pvChart').setPointerCapture(e.pointerId);
+  dragStartTo(e.clientX);
+});
+$('pvChart').addEventListener('pointermove', (e) => {
+  if (!pvDragging) return;
+  pvDragX = e.clientX;
+  if (!pvDragRaf) pvDragRaf = requestAnimationFrame(() => { pvDragRaf = 0; dragStartTo(pvDragX); });
+});
+const endDrag = () => { if (pvDragging) { pvDragging = false; saveRouteChoice(); } };
+$('pvChart').addEventListener('pointerup', endDrag);
+$('pvChart').addEventListener('pointercancel', endDrag);
 
 // ---------- Virtual pacer ----------
 // A rider in a yellow-checkered jersey who holds a set power on the same road physics as you.
@@ -292,28 +429,40 @@ const fact = (v, label) => `<div class="fact"><b>${v}</b><small>${label}</small>
 function renderPreview() {
   const map = $('pvMap'), chart = $('pvChart');
   $('routeOpts').hidden = true;
+  $('pvHint').hidden = true;
+  chart.classList.remove('pickable');
   $('offlineStatus').hidden = chosen !== 'route';
   if (chosen === 'route' && previewRoute) {
     const r = previewRoute;
     $('pvKicker').textContent = 'Route';
     $('pvTitle').textContent = r.name;
     $('pvSub').textContent = r.park || 'Your route';
-    const leg = r.turnS || r.total, startM = chosenStartM(r);
+    const leg = r.turnS || r.total, cp = chosenPlan(r), startM = cp.startM;
     // point to point (a one-way stage like Alpe d'Huez, or your own GPX): distance and climbing start to finish
-    const p2p = isPointToPoint(r);
+    const p2p = cp.p2p;
     $('pvFacts').innerHTML = (p2p
-      ? fact(`${fmtDist(leg, 1)}`, `${distUnit()} to the finish`) + fact(fmtElev(r.oneWay.ascent).toLocaleString(), `${elevUnit()} climb to the finish`)
+      ? fact(`${fmtDist(leg, 1)}`, `${distUnit()} start to finish`) + fact(fmtElev(r.oneWay.ascent).toLocaleString(), `${elevUnit()} climb to the finish`)
       : fact(`${fmtDist(leg, 1)}`, `${distUnit()} each way`) + fact(fmtElev(r.ascent).toLocaleString(), `${elevUnit()} climb / lap`)) +
       fact(`${Math.round(Math.max(...r.grade))}%`, 'max grade') +
-      `<div class="fact tag">${p2p ? (routeChoice.endless ? 'Point to point · turns at the finish and rides it back · endless' : 'Point to point · ends at the finish')
-        : `${r.oneWay?.closedLoop ? 'Loop · each lap turns and rides it back' : 'There &amp; back · turns at each end'} · endless`}</div>`;
-    $('endlessSeg').hidden = !p2p;
+      `<div class="fact tag">${p2p ? 'Point to point' : r.oneWay?.closedLoop ? 'Loop · each lap turns and rides it back' : 'There &amp; back · turns at each end'}</div>`;
     $('pvDesc').innerHTML = r.hasElevation ? '' : '<span class="warn">No elevation in this file — it will ride flat.</span>';
     map.hidden = false; chart.hidden = false;
     $('routeOpts').hidden = false;
-    drawTrace(map, r, startM, { markerOnly: true });
-    // ends at the finish: chart just the leg being ridden, start to finish
-    drawProfile(chart, r, startM, { metric: !imperial(), span: chosenFinishM(r) != null ? legSpan(r, startM) : null });
+    renderRouteSelector(r, cp);
+    // the leg being ridden, in riding order, with the planned stretch bright and its finish line
+    const span = legSpan(r, startM);
+    const endM = cp.plan.endM;
+    const selEnd = endM == null ? span[1] : Math.min(span[1], endM);
+    const end = endM != null ? stopNear(r, r.stops, endM) : null;
+    const ticks = (r.stops || []).map((st) => (span[0] === 0 ? st.atM : r.total - st.atM));
+    drawTrace(map, r, startM, { markerOnly: true, section: endM != null ? [startM, endM] : null });
+    pvLayout = drawProfile(chart, r, startM, { metric: !imperial(), span, selection: [startM, selEnd], ticks,
+      finishAt: endM != null && endM <= span[1] + 1 ? Math.min(endM, span[1]) : null,
+      endLabel: endM == null ? null : end && end.d < 600 ? end.name : `~${fmtPlanTime(cp.plan.timeS)}` });
+    chart.classList.add('pickable');
+    const at = routeAt(r, startM);
+    $('pvHint').hidden = false;
+    $('pvHint').textContent = `Drag on the profile to move the start · starting ${fmtDist(cp.st.offsetM, 1)} ${distUnit()} in at ${fmtElev(at.ele).toLocaleString()} ${elevUnit()}`;
   } else if (chosen === 'workout' && previewWorkout) {
     const w = previewWorkout, st = workoutStats(w);
     $('pvKicker').textContent = 'Workout';
@@ -410,10 +559,11 @@ async function sceneryRoute() {
 async function startRide() {
   if (chosen === 'route') {
     if (!previewRoute) return;
-    const startM = chosenStartM(previewRoute), finishM = chosenFinishM(previewRoute);
-    if (!(session.mode === 'route' && session.route === previewRoute && session.routeStart === startM && session.routeFinishM === finishM)) {
-      session.setRoute(previewRoute, startM, finishM);
-      log('app', `Riding route: ${previewRoute.name} (${finishM != null ? `${fmtDist(finishM, 1)} ${distUnit()} to the finish` : `${fmtDist(previewRoute.total, 1)} ${distUnit()}${previewRoute.closed ? ' loop' : ''}`})`, 'ok');
+    const { startM, finishM, goalM } = chosenPlan(previewRoute);
+    if (!sameAsCurrent() || session.mode !== 'route') {
+      session.setRoute(previewRoute, startM, finishM, goalM);
+      log('app', `Riding route: ${previewRoute.name} (${finishM != null ? `${fmtDist(finishM, 1)} ${distUnit()} to the finish`
+        : goalM != null ? `goal in ${fmtDist(goalM, 1)} ${distUnit()}, then keep riding` : `${fmtDist(previewRoute.total, 1)} ${distUnit()}${previewRoute.closed ? ' loop' : ''}`})`, 'ok');
     }
   } else if (chosen === 'workout') {
     if (!previewWorkout) return;
@@ -686,7 +836,9 @@ function renderHud() {
       showRow(1, `${g > 0.05 ? '+' : ''}${fmtGrade(g)}`, imperial() ? 'next ½ mi' : 'next 500 m');
       const toFinish = session.routeFinishM != null;
       showRow(2, r.closed && !toFinish ? String(session.routeLap) : null, 'lap');
-      showRow(3, `${fmtDist(Math.max(0, session.routeLapToGo), 1)} ${distUnit()}`, toFinish ? 'to the finish' : 'lap to go');
+      const toGoal = !toFinish && session.routeGoalM != null && !session.routeGoalHit;
+      showRow(3, `${fmtDist(Math.max(0, toGoal ? session.routeGoalM - session.routeRidden : session.routeLapToGo), 1)} ${distUnit()}`,
+        toFinish ? 'to the finish' : toGoal ? 'to your goal' : 'lap to go');
     } else {
       showRow(1, session.mode === 'workout' && session.workoutDone ? 'Done' : null, 'workout');
       showRow(2, null);
@@ -709,7 +861,8 @@ function renderHud() {
     lastProfileDraw = now;
     const c = $('hudProfile');
     if (session.mode === 'route' && session.route) drawProfile(c, session.route, session.routePos, { metric: !imperial(), compact: true,
-      span: session.routeFinishM != null ? legSpan(session.route, session.routeStart) : null });
+      span: session.routeFinishM != null ? legSpan(session.route, session.routeStart) : null,
+      finishAt: session.routeFinishM != null ? session.routeStart + session.routeFinishM : null });
     else if (session.mode === 'workout' && session.workout) drawWorkout(c, session.workout, session.workoutT, settings.ftp, session.workoutBias, { compact: true });
     else c.getContext('2d').clearRect(0, 0, c.width, c.height);
   }
@@ -943,6 +1096,7 @@ $('gpxFile').addEventListener('change', async (e) => {
   }
 });
 session.addEventListener('routeFinished', () => openSummary(`Route complete — ${session.route.name}`));
+session.addEventListener('routeGoal', () => toast('Goal reached — keep riding, or finish when you like'));
 
 // ---------- Workouts ----------
 let workoutItems = [];
