@@ -212,7 +212,11 @@ Some Pittsburgh content is still in code: stadiums, the fountain, USS Requin and
 | `npm run guard -- record <dir>` then `npm run guard -- compare <a> <b>` | The refactor guard: renders fixed shots on every route with a frozen clock and seeded random, then compares PNGs pixel for pixel and every object's geometry, transforms and material. Run it before and after moving shared code |
 | `npm run snap`, `npm run qc`, `npm run qc:clipping` | As before (see `claude/scene-snapshots.md` and `claude/course-qc.md`) |
 
-`npm run snap` also takes `--png` and `--fingerprint`.
+`npm run snap` also takes:
+- `--png` and `--fingerprint`
+- the shot tag `:standard`, which renders any route with the toolbox standard look (gentle look and baked light). The preview's `?standard=1` does the same.
+
+`docs/toolbox/standard-look-check.jpg` shows four routes as they are now beside the standard.
 
 ---
 

@@ -263,14 +263,19 @@ export class BakedLighting {
     m.onBeforeCompile = (shader, renderer) => {
       prev.call(m, shader, renderer);
       Object.assign(shader.uniforms, u);
-      shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', `#include <common>\n${BAKE_PARS}`)
-        .replace('#include <lights_fragment_begin>', `
+      const decl = `
           mat3 bfVT = transpose(mat3(viewMatrix));
-          vec2 bfBaked = bfBakedLight(bfVT * (-vViewPosition - viewMatrix[3].xyz), normalize(bfVT * normal));
-          ${THREE.ShaderChunk.lights_fragment_begin.replace('getDirectionalLightInfo( directionalLight, directLight );',
-            'getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.color *= bfBaked.x;')}`)
-        .replace('#include <aomap_fragment>', `reflectedLight.indirectDiffuse *= bfBaked.y; reflectedLight.indirectSpecular *= bfBaked.y;
+          vec2 bfBaked = bfBakedLight(bfVT * (-vViewPosition - viewMatrix[3].xyz), normalize(bfVT * normal));`;
+      const sunLine = 'getDirectionalLightInfo( directionalLight, directLight );', scaled = `${sunLine}\n\t\tdirectLight.color *= bfBaked.x;`;
+      let fs = shader.fragmentShader.replace('#include <common>', `#include <common>\n${BAKE_PARS}`);
+      if (fs.includes('#include <lights_fragment_begin>')) fs = fs.replace('#include <lights_fragment_begin>', `${decl}\n          ${THREE.ShaderChunk.lights_fragment_begin.replace(sunLine, scaled)}`);
+      else {
+        // [toolbox] another patch already inlined the light chunk (the vista kit's ground: shadows fade on steep
+        // faces): declare the bake where the chunk starts and scale the sun where it's read
+        const start = 'vec3 geometryPosition = - vViewPosition;';
+        fs = fs.replace(start, `${decl}\n${start}`).replace(sunLine, scaled);
+      }
+      shader.fragmentShader = fs.replace('#include <aomap_fragment>', `reflectedLight.indirectDiffuse *= bfBaked.y; reflectedLight.indirectSpecular *= bfBaked.y;
           #include <aomap_fragment>`);
     };
     m.customProgramCacheKey = () => `${prevKey}|bf-baked-1`;

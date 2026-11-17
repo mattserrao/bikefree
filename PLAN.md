@@ -674,6 +674,31 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [x] Tests (`test/endless.test.mjs`); `npm test` 109/109
 - [ ] Ride it on the Mac (githack link)
 
+### Toolbox: shared kits for every route *(test branch `toolbox-test`, from `main` after PR #28)*
+**Goal:** review every route's tools, textures and methods, and centralize them into one toolbox that every route (and every future map) builds from, to cut rework and improve what riders see. See TOOLBOX.md and docs/toolbox/INVENTORY.md.
+
+**Decisions (16 Nov 2026)**
+- Active routes move onto the toolbox: Route 28, Big Sur, Going-to-the-Sun, Pittsburgh, Zion and Alpe d'Huez. Deprecated and rough-draft routes keep working but aren't migrated
+- Refactor only: no visual change on any route. Upgrades come later, route by route
+- The default for new routes is the gentle cartoon look with baked light (one time of day, midday), the chase camera, the vista kit where there's distance, and a regional pack
+- Extras: an asset gallery, a scene linter, a new-route scaffold and biome presets
+
+**Passes**
+- [x] Inventory of every module against every route; duplicates and gaps (docs/toolbox/INVENTORY.md)
+- [x] Refactor guard: `snap --png --fingerprint` (frozen clock, seeded random, no streamed horizon) and `npm run guard`
+- [x] Kits moved into `js/world/toolbox/` by category, with generic names. The model builder, random, tree cards and guardrail split out of route kits and the scene builder
+- [x] Pack registry: `packs: ["northeast" | "northern-rockies"]`, replacing `kitExtensions: ["adirondack" | "glacier"]`
+- [x] Scene schema and `normalizeScene`: `glacier` → `mountainRoad`, `life.kit`
+- [x] Scene linter (`npm run lint:scenes`, in `npm test`)
+- [x] Five biome presets (`routes/presets`, `npm run presets`)
+- [x] `npm run new-route`
+- [x] Toolbox gallery (`tools/toolbox-gallery.html`, `npm run gallery`)
+- [x] `snap … :standard` and `?standard=1`: any route with the toolbox standard look
+- [x] Fix: baked light works with the vista kit's ground material (found by trying the standard on Going-to-the-Sun)
+- [x] Guard: identical pixels and objects on every route (Pittsburgh: fountain spray seeds differ run to run on the old code too); `npm test` and `routes:check` clean
+- [ ] Ride a route on the Mac (githack link) to confirm nothing moved
+- [ ] Later (visual changes): merge the duplicates listed in INVENTORY.md, an `alps` pack, and the standard look on Big Sur, Zion and Pittsburgh
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

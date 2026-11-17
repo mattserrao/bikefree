@@ -119,12 +119,27 @@ for (const shot of shots) {
     // [toolbox] --fingerprint: one hash per object of its geometry, transforms and material settings, so a refactor
     // can prove the scene is built identically (pixels alone miss off-screen changes)
     let fp = null;
+    const THREE = window.__fingerprint ? await import('/vendor/three.module.min.js') : null;
     if (window.__fingerprint) {
       const H = (h, bytes) => { for (let i = 0; i < bytes.length; i++) h = Math.imul(h ^ bytes[i], 16777619) >>> 0; return h; };
       const num = (h, v) => H(h, new Uint8Array(new Float64Array([Math.round(v * 1e4) / 1e4]).buffer));
       const str = (h, s) => H(h, new TextEncoder().encode(String(s)));
       const arr = (h, a) => { if (!a) return h; const f = a instanceof Float32Array ? a.map((v) => Math.round(v * 1e3) / 1e3) : a; return H(h, new Uint8Array(f.buffer, f.byteOffset, f.byteLength)); };
-      const mat = (h, m) => { if (!m) return h; for (const k of ['type', 'name', 'side', 'transparent', 'opacity', 'vertexColors', 'flatShading', 'depthWrite', 'alphaTest', 'fog', 'wireframe']) h = str(h, m[k]); if (m.color) h = str(h, m.color.getHexString()); if (m.emissive) h = str(h, m.emissive.getHexString()); if (m.map) h = str(h, m.map.image ? (m.map.image.width + 'x' + m.map.image.height) : 'map'); h = str(h, m.onBeforeCompile ? m.onBeforeCompile.toString().length : 0); if (m.defines) h = str(h, JSON.stringify(m.defines)); if (m.uniforms) for (const [k, u] of Object.entries(m.uniforms)) { const v = u?.value; h = str(h, k); if (typeof v === 'number') h = num(h, v); else if (v?.isColor) h = str(h, v.getHexString()); else if (v?.isVector3 || v?.isVector2) h = str(h, v.toArray().map((x) => x.toFixed(3)).join()); } if (m.vertexShader) h = str(h, m.vertexShader); if (m.fragmentShader) h = str(h, m.fragmentShader); return h; };
+      const mat = (h, m) => { if (!m) return h; for (const k of ['type', 'name', 'side', 'transparent', 'opacity', 'vertexColors', 'flatShading', 'depthWrite', 'alphaTest', 'fog', 'wireframe']) h = str(h, m[k]); if (m.color) h = str(h, m.color.getHexString()); if (m.emissive) h = str(h, m.emissive.getHexString()); if (m.map) h = str(h, m.map.image ? (m.map.image.width + 'x' + m.map.image.height) : 'map'); h = str(h, patched(m)); if (m.defines) h = str(h, JSON.stringify(m.defines)); if (m.uniforms) for (const [k, u] of Object.entries(m.uniforms)) { const v = u?.value; h = str(h, k); if (typeof v === 'number') h = num(h, v); else if (v?.isColor) h = str(h, v.getHexString()); else if (v?.isVector3 || v?.isVector2) h = str(h, v.toArray().map((x) => x.toFixed(3)).join()); } if (m.vertexShader) h = str(h, m.vertexShader); if (m.fragmentShader) h = str(h, m.fragmentShader); return h; };
+      // a material's shader patches, by what they produce: run its onBeforeCompile on the stock shader for its
+      // type and hash the result (so moving or reformatting the patch code doesn't count as a change)
+      const LIB = { MeshStandardMaterial: 'standard', MeshPhysicalMaterial: 'physical', MeshLambertMaterial: 'lambert', MeshPhongMaterial: 'phong', MeshBasicMaterial: 'basic', MeshToonMaterial: 'toon', PointsMaterial: 'points', LineBasicMaterial: 'basic', MeshDepthMaterial: 'depth', MeshDistanceMaterial: 'distanceRGBA', SpriteMaterial: 'sprite' };
+      const sources = new Map();
+      const patched = (m) => {
+        if (!m.onBeforeCompile || m.onBeforeCompile === THREE.Material.prototype.onBeforeCompile) return '';
+        if (sources.has(m)) return sources.get(m);
+        const lib = THREE.ShaderLib[LIB[m.type]] || { vertexShader: m.vertexShader || '', fragmentShader: m.fragmentShader || '' };
+        const shader = { uniforms: {}, vertexShader: lib.vertexShader, fragmentShader: lib.fragmentShader, defines: {} };
+        let out;
+        try { m.onBeforeCompile(shader, w.renderer); out = shader.vertexShader + '\n' + shader.fragmentShader + '\n' + Object.keys(shader.uniforms).sort().join(); } catch (e) { out = 'error:' + e.message; }
+        out = out.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '').replace(/\s+/g, ' ');   // comments and spacing don't change a shader
+        sources.set(m, out); return out;
+      };
       const per = {}; let all = 2166136261, n = 0;
       w.scene.updateMatrixWorld(true);
       w.scene.traverse((o) => {
