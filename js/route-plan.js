@@ -64,20 +64,21 @@ export function stopNear(route, stops, posM, maxM = 600) {
 /**
  * Ride the route from startM at a steady power on the same road physics as the session, until one of
  * the limits is reached. Returns the distance, moving time and climbing.
- * limits: { distM, timeS, climbM } (any of them), maxM caps the distance (e.g. the finish line).
+ * limits: { distM, timeS, climbM } (any of them), maxM caps the distance (e.g. the finish line); v0 the
+ * speed at the start (m/s; 0 from a standstill).
  */
-export function simulateRide(route, startM, { watts = 150, params = DEFAULTS, distM = Infinity, timeS = Infinity, climbM = Infinity, maxM = Infinity } = {}) {
+export function simulateRide(route, startM, { watts = 150, params = DEFAULTS, distM = Infinity, timeS = Infinity, climbM = Infinity, maxM = Infinity, v0 = 4 } = {}) {
   const cap = Math.min(distM, maxM, route.closed ? 500000 : route.total - startM);   // 500 km is plenty
   const W = Math.max(30, watts);
-  let d = 0, t = 0, climb = 0, v = 4;
+  let d = 0, t = 0, climb = 0, v = v0;
   let lastEle = routeAt(route, startM).ele;
   const dt = 0.5;
   while (d < cap && t < timeS && climb < climbM && t < 48 * 3600) {
     const grade = routeAt(route, startM + d).grade;
-    v = stepSpeed(v, W, grade, dt, params);
-    const step = Math.min(v * dt, cap - d);
+    v = stepSpeed(v, W, grade, Math.min(dt, timeS - t), params);
+    const step = Math.min(v * Math.min(dt, timeS - t), cap - d);
     d += step;
-    t += step / Math.max(v, 0.1);
+    t += v > 0.05 ? step / v : Math.min(dt, timeS - t);
     const ele = routeAt(route, startM + d).ele;
     if (ele > lastEle) climb += ele - lastEle;
     lastEle = ele;
@@ -100,4 +101,13 @@ export function planRide(route, startM, length, { watts, params, pointToPoint = 
   const sim = simulateRide(route, startM, { watts, params, ...limits, maxM: toFinish });
   const capped = mode !== 'open' && Number.isFinite(toFinish) && sim.distM >= toFinish - 1;
   return { ...sim, endM: startM + sim.distM, capped };
+}
+
+/** Where the START arch stands: about ten seconds of easy pedalling from a standstill (on the road's own
+ *  grades), kept between 15 and 60 m and short of a finish that's closer than that. */
+export function startArchM(route, startM, { params = DEFAULTS, finishM = null, seconds = 10, watts = 90 } = {}) {
+  const roll = simulateRide(route, startM, { watts, params, timeS: seconds, v0: 0 }).distM;
+  let d = Math.max(15, Math.min(60, roll));
+  if (finishM != null) d = Math.min(d, finishM * 0.5);
+  return startM + d;
 }

@@ -55,6 +55,12 @@ try {
  $('weather').addEventListener('change', (e) => world.setWeather(e.target.value)); $('quality').value = world.qualityKey;
  world.setSource(() => { const now = performance.now(); pos = (pos + speed * (now - last) / 1000) % route.total; last = now; return { pos, speed, cadence: speed ? 84 : 0, riding: true }; });
  window.world = world;
+ // course arches (the app's start / finish): ?arches=<m>[:TITLE[:sub]],<m>[:TITLE[:sub]] — start, then finish (snap --arches)
+ if (q.get('arches')) {
+   const [a, b] = q.get('arches').split(',');
+   const mark = (t, title) => { if (!t) return null; const [m, ti, sub] = t.split(':'); return { atM: Number(m), title: ti || title, sub: sub || '' }; };
+   world.setCourseMarks({ start: mark(a, 'START'), finish: mark(b, 'FINISH') });
+ }
  const perfPlace = { bottom: '160px' };   // above the controls
  if (q.get('perf') === '1') world.togglePerf(true, perfPlace);
  document.addEventListener('keydown', (e) => { if (e.key === 'i' || e.key === 'I') { const line = world.togglePerf(undefined, perfPlace); if (line) console.log('perf', line); } });

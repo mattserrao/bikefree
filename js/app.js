@@ -12,7 +12,7 @@ import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor, markFtpTest, f
 import { drawProfile, drawWorkout, drawTrace, drawMinimap, gradeColor, profileDistAt } from './views.js';
 import { Profiles, GENDERS, initials, cmToFtIn, ftInToCm } from './profiles.js';
 import { buildCatalogRoute, loadRouteScene } from './routes.js';
-import { legLength, startPosition, stopsForDirection, stopNear, planRide } from './route-plan.js';
+import { legLength, startPosition, stopsForDirection, stopNear, planRide, startArchM } from './route-plan.js';
 import { VERSION } from './version.js';
 import { planRouteTiles, tileKeysToUrls, downloadUrls, offlineStatus, setOfflineStatus, registerServiceWorker } from './offline.js';
 
@@ -555,6 +555,21 @@ async function sceneryRoute() {
   try { return await loadRouteItem(item); } catch { return null; }
 }
 
+// ---------- Start and finish arches in the 3D world ----------
+// START about ten seconds of easy pedalling in, named for where you are; FINISH (or GOAL, when you keep
+// riding) over the planned finish line, named for the place it's at, else how far it is.
+function courseMarks() {
+  if (session.mode !== 'route' || !session.route) return {};
+  const r = session.route, startM = session.routeStart, endRidden = session.routeFinishM ?? session.routeGoalM;
+  const placeAt = (m, reach) => stopNear(r, r.stops, m, reach)?.name || null;
+  const shortName = (r.name || '').split(' · ')[0];
+  const start = { atM: startArchM(r, startM, { params: session.physicsParams(), finishM: endRidden }), title: 'START' };
+  start.sub = placeAt(start.atM, 400) || shortName;
+  const finish = endRidden == null ? null : { atM: startM + endRidden, title: session.routeFinishM != null ? 'FINISH' : 'GOAL' };
+  if (finish) finish.sub = placeAt(finish.atM, 600) || `${fmtDist(endRidden, 1)} ${distUnit()} from the start`;
+  return { start, finish };
+}
+
 // ---------- Start / leave the ride screen ----------
 async function startRide() {
   if (chosen === 'route') {
@@ -584,6 +599,7 @@ async function startRide() {
   document.documentElement.requestFullscreen?.().catch(() => {});
   const route = session.mode === 'route' ? session.route : await sceneryRoute();
   await openWorld(route);
+  world?.setCourseMarks(courseMarks());
   renderHudStatic();
   renderHud();
 }

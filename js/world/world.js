@@ -15,6 +15,7 @@ import { vistaConfig } from './toolbox/atmosphere/vista.js';
 import { decorateRoad, frenchMarkings } from './toolbox/materials/road-surface.js';
 import { denseRoad } from './road-align.js';   // [road-align]
 import { BakedLighting } from './toolbox/atmosphere/baked-light.js';   // [baked-light]
+import { CourseArches } from './toolbox/roadside/course-arches.js';
 
 installHaze();   // valley haze in the fog chunks: before any material compiles
 import { wrapDist } from '../gpx.js';
@@ -182,6 +183,21 @@ export class World {
 
   /** Where to draw the rider: a function returning {pos, speed (m/s), cadence (rpm), riding}. */
   setSource(fn) { this.source = fn; }
+
+  /**
+   * The start and finish arches for the ride that's planned (js/world/toolbox/roadside/course-arches.js):
+   * { start: {atM, title, sub} | null, finish: {atM, title, sub} | null }, route metres. Moves them, any time.
+   */
+  setCourseMarks(marks) {
+    // a race-day scene has its own finish gantry (Alpe d'Huez): no second arch on its line
+    const race = this.route.scene?.raceDay?.finishM, r = this.route;
+    if (marks?.finish && race != null) {
+      const x = wrapDist(r, marks.finish.atM), out = r.turnS && x > r.turnS ? r.total - x : x;
+      if (Math.abs(out - race) < 60) marks = { ...marks, finish: null };
+    }
+    if (!marks?.start && !marks?.finish && !this.courseArches) return;
+    (this.courseArches ||= new CourseArches(this)).set(marks || {});
+  }
 
   /** The virtual pacer: a function returning {pos, speed, cadence} along the route, or null when off. */
   setPacerSource(fn) { this.pacerSource = fn; this._pacerInit = false; }
@@ -524,6 +540,7 @@ export class World {
     this.baked?.dispose();   // [baked-light]
     this._bakeEl?.remove();   // [w2-bake]
     this.post?.dispose();
+    this.courseArches?.dispose();
     this.terrain.dispose();
     this.farTerrain?.dispose();
     this.sun.shadow.map?.dispose(); this.sun.shadow.mapPass?.dispose();

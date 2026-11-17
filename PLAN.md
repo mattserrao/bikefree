@@ -687,7 +687,9 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [x] Preview profile: the leg being ridden in riding order, the planned stretch bright, a chequered finish line, stop ticks; drag (or tap) to move the start, snapping to stops. Map: the planned stretch and its end
 - [x] *Stop at the finish* ends the ride on the line (summary opens); *Keep riding* turns the goal into a toast and the ride goes on (a stage then turns and rides back, like Endless before). Ride screen: *to the finish* / *to your goal*, and the finish line on the profile strip
 - [x] Start is remembered per route; the length, end choice and power are remembered globally
-- [x] Tests (`test/route-plan.test.mjs`); `npm test` 135/135
+- [x] Tests (`test/route-plan.test.mjs`); `npm test` 136/136
+- [x] Start and finish arches (`js/world/toolbox/roadside/course-arches.js`, `world.setCourseMarks`): an inflatable START arch about 10 s of easy pedalling from a standstill (90 W on the road's own grades, 15–60 m) after you load in, named for the nearest stop (else the route); a FINISH arch over the planned finish line (GOAL with *Keep riding*), named for the stop there, else the distance. Painted line under each (white / chequered). Legs reach the ground beside the road; on a bridge or drop-off the arch slides a few metres or stands narrower on the shoulders. No second arch on a race-day finish (Alpe d'Huez has its own gantry). ~5k triangles and 3 draw calls per arch
+- [x] Design renders: `node tools/snap_arches.mjs` (plain road, `tools/arch-preview.html`); in scenes `npm run snap -- --arches "22350:START:Avalanche Creek,47310:FINISH:Logan Pass" goingtothesun@22330`
 - [ ] Ride it on the Mac (githack link)
 
 ### Toolbox: shared kits for every route *(test branch `toolbox-test`, from `main` after PR #28)*

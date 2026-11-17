@@ -78,3 +78,16 @@ test('plan by time, distance or climbing; a stage stops at its finish', () => {
   const z = buildCatalogRoute(gpx('zion'), item('zion'));
   assert.equal(planRide(z, 0, { mode: 'open' }, { watts: 150 }).distM, null);
 });
+
+test('the START arch: about ten seconds of easy pedalling in, shorter up a steep climb', async () => {
+  const { startArchM } = await import('../js/route-plan.js');
+  const flat = buildCatalogRoute(gpx('route28'), item('route28'));
+  const d = startArchM(flat, 0, { params: DEFAULTS });
+  assert.ok(d >= 25 && d <= 60, `flat: ${d} m`);
+  const alpe = buildCatalogRoute(gpx('alpedhuez'), item('alpedhuez'));
+  const climbStart = startPosition(alpe, { offsetM: 113000 });
+  const up = startArchM(alpe, climbStart, { params: DEFAULTS }) - climbStart;
+  assert.ok(up >= 15 && up < d, `climb: ${up} m`);
+  // never past half of a very short ride
+  assert.equal(startArchM(flat, 0, { params: DEFAULTS, finishM: 40 }), 20);
+});
