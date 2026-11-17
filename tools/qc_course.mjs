@@ -26,7 +26,7 @@ import { normalizeScene } from '../js/world/toolbox/scene-schema.js';
 import { landscapeBuilder } from '../js/world/toolbox/landscape/index.js';
 import { riderPose, routePoint, ROAD_WIDTH, ROAD_LIFT, CHASE } from '../js/world/pose.js';
 import { alignmentChecks } from './qc_alignment.mjs';   // [road-align]
-import { groundDrape, DRAPE_MAX_DROP } from '../js/world/ground-drape.js';   // [w2-align]
+import { groundDrape, DRAPE_MAX_DROP } from '../js/world/toolbox/landscape/ground-drape.js';   // [w2-align]
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(join(ROOT, p), 'utf8');
@@ -73,7 +73,7 @@ const angleBetween = (a, b) => deg(Math.acos(Math.max(-1, Math.min(1, a.x * b.x 
 /** Ground as the stylized patch mesh draws it: 6 m grid, triangles (a,d,b) and (b,d,e). */
 function makeMeshGround(heightAt, landscape = null) {
   const cell = PATCH / PATCH_CELLS, cache = new Map();
-  // [w2-align] city patches are draped off the streets (js/world/ground-drape.js): model each 96 m patch the same way
+  // [w2-align] city patches are draped off the streets (js/world/toolbox/landscape/ground-drape.js): model each 96 m patch the same way
   if (landscape?.groundClearPoints) {
     const patches = new Map(), N = PATCH_CELLS + 1;
     const patch = (pi, pj) => {
