@@ -22,7 +22,16 @@ export function parseGpx(text) {
     if (Number.isFinite(lat) && Number.isFinite(lon)) points.push({ lat, lon, ele });
   }
   if (points.length < 2) throw new Error('No track points found in this GPX file');
-  return { name, points };
+  // named waypoints (<wpt>): offered as start points in the route selector
+  const waypoints = {};
+  const wre = /<wpt\b([^>]*?)>([\s\S]*?)<\/wpt>/g;
+  while ((m = wre.exec(text))) {
+    const lat = parseFloat((m[1].match(/lat\s*=\s*["']([^"']+)["']/) || [])[1]);
+    const lon = parseFloat((m[1].match(/lon\s*=\s*["']([^"']+)["']/) || [])[1]);
+    const wName = (m[2].match(/<name>([\s\S]*?)<\/name>/) || [])[1];
+    if (Number.isFinite(lat) && Number.isFinite(lon) && wName?.trim()) waypoints[decodeXml(wName.trim())] = [lat, lon];
+  }
+  return { name, points, waypoints };
 }
 
 function decodeXml(s) {

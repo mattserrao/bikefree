@@ -7,6 +7,12 @@
     "climbM": 134,
     "file": "routes/parks/yosemite.gpx",
     "stage": "draft",
+    "stops": [
+      {
+        "name": "El Capitan Meadow",
+        "atM": 7690
+      }
+    ],
     "scene": "routes/scenes/yosemite.json"
   },
   {
@@ -17,6 +23,16 @@
     "climbM": 482,
     "file": "routes/parks/acadia.gpx",
     "stage": "deprecated",
+    "stops": [
+      {
+        "name": "Sand Beach",
+        "atM": 5180
+      },
+      {
+        "name": "Jordan Pond",
+        "atM": 17880
+      }
+    ],
     "scene": "routes/scenes/acadia.json"
   },
   {
@@ -27,6 +43,12 @@
     "climbM": 403,
     "file": "routes/parks/teton.gpx",
     "stage": "deprecated",
+    "stops": [
+      {
+        "name": "Moran Junction",
+        "atM": 46870
+      }
+    ],
     "scene": "routes/scenes/teton.json"
   },
   {
@@ -37,6 +59,16 @@
     "climbM": 1185,
     "file": "routes/parks/craterlake.gpx",
     "stage": "deprecated",
+    "stops": [
+      {
+        "name": "Watchman",
+        "atM": 10630
+      },
+      {
+        "name": "Cleetwood Cove",
+        "atM": 51050
+      }
+    ],
     "scene": "routes/scenes/craterlake.json"
   },
   {
@@ -48,6 +80,16 @@
     "file": "routes/parks/monumentvalley.gpx",
     "outAndBack": true,
     "stage": "deprecated",
+    "stops": [
+      {
+        "name": "Forrest Gump Point",
+        "atM": 0
+      },
+      {
+        "name": "Visitor center",
+        "atM": 26410
+      }
+    ],
     "scene": "routes/scenes/monumentvalley.json"
   },
   {
@@ -58,6 +100,20 @@
     "climbM": 707,
     "file": "routes/parks/bigsur.gpx",
     "outAndBack": true,
+    "stops": [
+      {
+        "name": "Bixby Bridge",
+        "atM": 15670
+      },
+      {
+        "name": "Hurricane Point",
+        "atM": 17260
+      },
+      {
+        "name": "Big Sur village",
+        "atM": 32990
+      }
+    ],
     "scene": "routes/scenes/bigsur.json"
   },
   {
@@ -68,6 +124,40 @@
     "climbM": 1882,
     "file": "routes/parks/goingtothesun.gpx",
     "outAndBack": true,
+    "stops": [
+      {
+        "name": "Apgar",
+        "atM": 0
+      },
+      {
+        "name": "Lake McDonald Lodge",
+        "atM": 13340
+      },
+      {
+        "name": "Avalanche Creek",
+        "atM": 22320
+      },
+      {
+        "name": "Logan Pass",
+        "atM": 47310
+      },
+      {
+        "name": "Jackson Glacier Overlook",
+        "atM": 54940
+      },
+      {
+        "name": "Sun Point",
+        "atM": 58210
+      },
+      {
+        "name": "Rising Sun",
+        "atM": 66400
+      },
+      {
+        "name": "St. Mary",
+        "atM": 75460
+      }
+    ],
     "scene": "routes/scenes/goingtothesun.json"
   },
   {
@@ -78,6 +168,16 @@
     "climbM": 188,
     "file": "routes/parks/zion.gpx",
     "outAndBack": true,
+    "stops": [
+      {
+        "name": "Zion Lodge",
+        "atM": 6830
+      },
+      {
+        "name": "Temple of Sinawava",
+        "atM": 12640
+      }
+    ],
     "scene": "routes/scenes/zion.json"
   },
   {
@@ -89,6 +189,16 @@
     "file": "routes/parks/sevenmile.gpx",
     "outAndBack": true,
     "stage": "deprecated",
+    "stops": [
+      {
+        "name": "Seven Mile Bridge (Pigeon Key)",
+        "atM": 6890
+      },
+      {
+        "name": "Bahia Honda",
+        "atM": 20530
+      }
+    ],
     "scene": "routes/scenes/sevenmile.json"
   },
   {
@@ -100,6 +210,28 @@
     "file": "routes/parks/route28.gpx",
     "outAndBack": true,
     "stage": "draft",
+    "stops": [
+      {
+        "name": "Old Forge",
+        "atM": 0
+      },
+      {
+        "name": "Eagle Bay",
+        "atM": 14870
+      },
+      {
+        "name": "Inlet",
+        "atM": 19080
+      },
+      {
+        "name": "Seventh Lake",
+        "atM": 22490
+      },
+      {
+        "name": "Eighth Lake",
+        "atM": 29200
+      }
+    ],
     "scene": "routes/scenes/route28.json"
   },
   {
@@ -121,6 +253,32 @@
     "climbM": 3358,
     "file": "routes/parks/alpedhuez.gpx",
     "oneWay": true,
+    "stops": [
+      {
+        "name": "Col Bayard",
+        "atM": 4800
+      },
+      {
+        "name": "Col du Noyer",
+        "atM": 24970
+      },
+      {
+        "name": "Le Périer",
+        "atM": 88920
+      },
+      {
+        "name": "Col d'Ornon",
+        "atM": 98730
+      },
+      {
+        "name": "Le Bourg-d'Oisans",
+        "atM": 111020
+      },
+      {
+        "name": "Alpe d'Huez finish",
+        "atM": 126960
+      }
+    ],
     "scene": "routes/scenes/alpedhuez.json"
   }
 ]

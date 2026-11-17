@@ -3,6 +3,7 @@ import { loadTerrainGrid } from './terrain-grid.js';
 import { parseGpx, buildRoute, wrapDist } from './gpx.js';
 import { attachTerrainBuffer } from './world/terrain-data.js';
 import { normalizeScene } from './world/toolbox/scene-schema.js';
+import { findStops, startPosition } from './route-plan.js';
 
 // Never sample across the overlapping legs at a U-turn or start/finish.
 export function headingSpan(route, distance, look = 6) {
@@ -40,9 +41,10 @@ export function mirrorRoute(r) {
 }
 
 /** Where a ride starts along a there-and-back route: Forward from the start, or Reverse from the far end,
- *  then a fraction (0, ⅓, ⅔) of the way along in that direction. */
-export function routeStartM(route, { reverse = false, fraction = 0 } = {}) {
+ *  then offsetM metres along in that direction (the route selector) — or, older, a fraction of the leg. */
+export function routeStartM(route, { reverse = false, offsetM = null, fraction = 0 } = {}) {
   const leg = route.turnS || route.total;
+  if (offsetM != null) return startPosition(route, { reverse, offsetM });
   return ((reverse ? leg : 0) + Math.max(0, Math.min(1, fraction)) * leg) % route.total;
 }
 
@@ -58,6 +60,8 @@ export function buildCatalogRoute(text, item = {}) {
     route.turnIdx = Math.floor((route.dist.length - 1) / 2);
     route.turnS = route.dist[route.turnIdx];
   }
+  // named places along the way out (start points in the route selector): the catalog's, or the GPX's <wpt>s
+  route.stops = Array.isArray(item.stops) ? item.stops : findStops(route, item.routing?.pois || parsed.waypoints);
   return item.mirror === false ? route : mirrorRoute(route);
 }
 

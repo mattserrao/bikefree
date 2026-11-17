@@ -76,7 +76,7 @@ js/world/toolbox/
   packs/                     regional model packs, plus the bundled Blender kits
   vegetation/                planting
   structures/                built things
-  roadside/                  things beside the road
+  roadside/                  things beside the road (and the start / finish arches the app places per ride: course-arches.js)
   atmosphere/                look, light, weather, distance
   life/                      things that move
   city/                      the city kit

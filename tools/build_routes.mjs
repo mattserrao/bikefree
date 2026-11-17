@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { buildCatalogRoute } from '../js/routes.js';
+import { findStops } from '../js/route-plan.js';
 import { parseTerrainGrid } from '../js/terrain-grid.js';
 import { gunzipSync } from 'node:zlib';
 import { haversine } from '../js/gpx.js';
@@ -52,6 +53,9 @@ for (const item of catalog) {
     if (!(item.eleSmoothM >= 0 && item.eleSmoothM <= 200)) throw new Error(`${item.id}: eleSmoothM must be 0–200 m`);
     row.eleSmoothM = item.eleSmoothM;
   }
+  // named start points for the route selector: the routing POIs, placed on the way out
+  const stops = findStops(route, item.routing?.pois);
+  if (stops.length) row.stops = stops;
   if (item.scene) {
     const scene = normalizeScene(JSON.parse(read(item.scene)));
     if (scene.format !== 'bikefree-scene-1' || !['authored-coast', 'authored-region', 'authored-city', 'real-coast', 'real-mountain', 'wireframe'].includes(scene.terrain)) throw new Error(`${item.id}: unsupported scene format or terrain`);
