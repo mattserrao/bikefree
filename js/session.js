@@ -61,6 +61,8 @@ export class Session extends EventTarget {
     this.routeOffset = 0;
     this.routeStart = 0;          // metres along the route where this ride started (Reverse / ⅓ / ⅔)
     this.routeFinishM = null;     // point to point, not endless: metres to ride before the finish (null: endless)
+    this.routeGoalM = null;       // route selector, "Keep riding": metres to the planned goal (a toast, the ride goes on)
+    this.routeGoalHit = false;
     this.routeDone = false;
     this._lastLap = 1;
     this.workoutT = 0;
@@ -190,10 +192,13 @@ export class Session extends EventTarget {
   }
 
   /** Ride a route from its start (starting from the current distance). `finishM`: metres to the finish
-   *  on a point-to-point route that isn't endless (null: ride on, turning at each end). */
-  setRoute(route, startM = 0, finishM = null) {
+   *  (the end of a point-to-point stage, or the route selector's planned length; null: ride on, turning at
+   *  each end). `goalM`: metres to a goal that's only announced — the ride keeps going. */
+  setRoute(route, startM = 0, finishM = null, goalM = null) {
     this.routeStart = startM || 0;
     this.routeFinishM = finishM > 0 ? finishM : null;
+    this.routeGoalM = this.routeFinishM == null && goalM > 0 ? goalM : null;
+    this.routeGoalHit = false;
     this.mode = 'route';
     this.route = route;
     this.routeOffset = this.distanceM;
@@ -325,6 +330,12 @@ export class Session extends EventTarget {
 
   _updateRoute() {
     if (this.mode !== 'route' || !this.route || this.routeDone) return;
+    if (this.routeGoalM != null && !this.routeGoalHit && this.distanceM - this.routeOffset >= this.routeGoalM) {
+      this.routeGoalHit = true;
+      if (this.settings.haptics) this.ride.vibrate();
+      this.log('app', `Goal reached: ${this.route.name}`, 'ok');
+      this.dispatchEvent(new Event('routeGoal'));
+    }
     if (this.routeFinishM != null) {
       // point to point, not endless: the ride ends at the finish line
       if (this.distanceM - this.routeOffset >= this.routeFinishM) {

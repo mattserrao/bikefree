@@ -674,6 +674,24 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [x] Tests (`test/endless.test.mjs`); `npm test` 109/109
 - [ ] Ride it on the Mac (githack link)
 
+### Route selector *(test branch `route-selector-test`, from `main` after PR #30)*
+**Goal:** replace the *From the start / ⅓ in / ⅔ in* start options with a real choice of where a ride starts along a route and how long it lasts.
+
+**Decisions (17 Nov 2026)**
+- Build: drag the start on the elevation profile, tap a named place to start there, and set the length by time, distance or climbing (with *Stop at the finish* / *Keep riding*)
+- Later, maybe: auto-detected climbs as start points, a second handle for the end, saved favourite sections, *turn around halfway so you finish where you started*
+
+**Passes**
+- [x] `js/route-plan.js`: start = direction + metres along the leg; named stops (catalog `routing.pois`, or `<wpt>`s in your own GPX) placed on the way out by `routes:build`; a ride simulated at a steady power on the session's physics turns a time / distance / climbing goal into a finish line
+- [x] Route options: start chips (Beginning / Far end + named stops, and an "x mi in" chip after a drag); length *Open (Full on a stage) · Time · Distance · Climb* with a stepper and the power the estimate assumes (your setting, else the pacer's, else 65% of FTP); the estimate (distance, climbing, time, where it ends)
+- [x] Preview profile: the leg being ridden in riding order, the planned stretch bright, a chequered finish line, stop ticks; drag (or tap) to move the start, snapping to stops. Map: the planned stretch and its end
+- [x] *Stop at the finish* ends the ride on the line (summary opens); *Keep riding* turns the goal into a toast and the ride goes on (a stage then turns and rides back, like Endless before). Ride screen: *to the finish* / *to your goal*, and the finish line on the profile strip
+- [x] Start is remembered per route; the length, end choice and power are remembered globally
+- [x] Tests (`test/route-plan.test.mjs`); `npm test` 136/136
+- [x] Start and finish arches (`js/world/toolbox/roadside/course-arches.js`, `world.setCourseMarks`): an inflatable START arch about 10 s of easy pedalling from a standstill (90 W on the road's own grades, 15–60 m) after you load in, named for the nearest stop (else the route); a FINISH arch over the planned finish line (GOAL with *Keep riding*), named for the stop there, else the distance. Painted line under each (white / chequered). Legs reach the ground beside the road; on a bridge or drop-off the arch slides a few metres or stands narrower on the shoulders. No second arch on a race-day finish (Alpe d'Huez has its own gantry). ~5k triangles and 3 draw calls per arch
+- [x] Design renders: `node tools/snap_arches.mjs` (plain road, `tools/arch-preview.html`); in scenes `npm run snap -- --arches "22350:START:Avalanche Creek,47310:FINISH:Logan Pass" goingtothesun@22330`
+- [ ] Ride it on the Mac (githack link)
+
 ### Toolbox: shared kits for every route *(test branch `toolbox-test`, from `main` after PR #28)*
 **Goal:** review every route's tools, textures and methods, and centralize them into one toolbox that every route (and every future map) builds from, to cut rework and improve what riders see. See TOOLBOX.md and docs/toolbox/INVENTORY.md.
 
