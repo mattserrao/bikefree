@@ -39,7 +39,7 @@ export class RoadsideDetails {
     this.route = route; this.index = index; this.landscape = landscape; this.kit = kit;
     this.uniforms = uniforms;
     this.geometries = new Set(); this.materials = new Set(); this.instances = [];
-    if (!landscape.city) this._markers();
+    if (!landscape.city && this.route.scene?.reflectorPosts !== false) this._markers();   // "reflectorPosts": false where the verge kit has the road's own posts
     this._signs(); this._lookouts(); if (!landscape.city) this._coastalRocks(); this._creeks();
   }
 

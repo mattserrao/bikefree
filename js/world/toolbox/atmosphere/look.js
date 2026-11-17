@@ -116,8 +116,15 @@ export class Look {
     const c = document.createElement('canvas'); c.width = 256; c.height = 512;
     const ctx = c.getContext('2d');
     ctx.fillStyle = r.base; ctx.fillRect(0, 0, 256, 512);
-    ctx.fillStyle = r.edge; ctx.fillRect(8, 0, 4, 512); ctx.fillRect(244, 0, 4, 512);
-    ctx.fillStyle = r.centre; ctx.fillRect(123, 0, 3, 512); ctx.fillRect(130, 0, 3, 512);
+    if (this.world.route.scene?.road?.markings === 'eu') {
+      // European roads: a white dashed centre line (3 m on, 9 m off) and dashed white edges (3 m / 3 m)
+      ctx.fillStyle = r.edge;
+      for (let y = 0; y < 512; y += 256) ctx.fillRect(126, y, 4, 64);
+      for (let y = 0; y < 512; y += 128) { ctx.fillRect(8, y, 4, 64); ctx.fillRect(244, y, 4, 64); }
+    } else {
+      ctx.fillStyle = r.edge; ctx.fillRect(8, 0, 4, 512); ctx.fillRect(244, 0, 4, 512);
+      ctx.fillStyle = r.centre; ctx.fillRect(123, 0, 3, 512); ctx.fillRect(130, 0, 3, 512);
+    }
     for (const mesh of road.isMesh ? [road] : road.children) {
       const m = mesh.material;
       if (!m?.map) continue;

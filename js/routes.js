@@ -91,6 +91,15 @@ export async function loadRouteScene(route, fetcher = fetch) {
     scene.terrainGrid = scene.terrainGridFile.endsWith('.json') ? await grid.json() : await loadTerrainGrid(await grid.arrayBuffer());
     if (scene.terrainGrid.format !== 'bikefree-terrain-grid-1') throw new Error('Unsupported terrain format');
   }
+  if (scene.placesFile) {
+    // real places along the route from OpenStreetMap (tools/build_places.py): land cover, buildings, lifts, power
+    try {
+      const data = await fetcher(new URL(`../${scene.placesFile}`, import.meta.url));
+      if (!data.ok) throw new Error(`places ${data.status}`);
+      scene.places = await loadTerrainGrid(await data.arrayBuffer());
+      if (scene.places.format !== 'bikefree-places-1') throw new Error('Unsupported places format');
+    } catch (err) { console.warn('Places could not load', err); scene.places = null; }
+  }
   route.scene = scene;
   return route;
 }

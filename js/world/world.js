@@ -648,8 +648,15 @@ function makeRoad(route, index) {
       ctx.fillStyle = `rgba(${g},${g + 3},${g + 5},.3)`;
       ctx.fillRect(Math.random() * c.width, Math.random() * c.height, .6, 1);
     }
-    ctx.fillStyle = '#e8e4d0'; ctx.fillRect(8, 0, 3, c.height); ctx.fillRect(245, 0, 3, c.height);
-    ctx.fillStyle = '#e4c36a'; ctx.fillRect(124, 0, 2, c.height); ctx.fillRect(130, 0, 2, c.height);
+    if (route.scene?.road?.markings === 'eu') {
+      // European roads (Alpe d'Huez): a white dashed centre line (3 m on, 9 m off) and dashed white edges (3 m / 3 m)
+      ctx.fillStyle = '#ece9de';
+      for (let y = 0; y < c.height; y += 256) ctx.fillRect(126, y, 4, 64);
+      for (let y = 0; y < c.height; y += 128) { ctx.fillRect(8, y, 3, 64); ctx.fillRect(245, y, 3, 64); }
+    } else {
+      ctx.fillStyle = '#e8e4d0'; ctx.fillRect(8, 0, 3, c.height); ctx.fillRect(245, 0, 3, c.height);
+      ctx.fillStyle = '#e4c36a'; ctx.fillRect(124, 0, 2, c.height); ctx.fillRect(130, 0, 2, c.height);
+    }
   }
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = THREE.ClampToEdgeWrapping;

@@ -57,6 +57,36 @@ export const PACK_META = {
     },
     options: { fall: 'season "fall": larch and aspen turn', decorate: 'near trees get the bark/foliage surface shader' },
   },
+  alps: {
+    aliases: ['western-alps', 'french-alps'],
+    name: 'Western Alps forest, meadow and farm edge',
+    region: 'French Alps (Hautes-Alpes, Isère, Savoie)',
+    firstUsedBy: 'alpedhuez',
+    description: 'Alpine forest by elevation and aspect (walnut, ash, field maple and downy oak in the valleys; beech and silver fir on the shady side; Scots and Austrian black pine on the dry sunny slopes; Norway spruce and European larch higher; Swiss stone pine and dwarf mountain pine at the treeline), hazel, green alder, juniper, alpine rose, broom and lavender; hay meadows and alpine flowers (gentian, arnica, campanula, ox-eye daisy, martagon lily, umbellifers, willowherb) in clumps and drifts; pale limestone and dark gneiss boulders and scree; the farm edge: round hay bales (straw and wrapped), post-and-rail fence, dry-stone wall, wayside cross, fountain trough.',
+    variants: { aspruce: 3, afir: 2, alarch: 2, scots: 2, blackpine: 2, arolle: 2, beech: 2, ash: 2, walnut: 1, fieldmaple: 1, oak: 1 },
+    flowerZones: {
+      valley: ['marguerite', 'umbels', 'campanula', 'marguerite', 'aarnica'],
+      subalpine: ['aarnica', 'campanula', 'martagon', 'marguerite', 'umbels', 'gentian'],
+      alpine: ['gentian', 'aarnica', 'alpenrose', 'gentian', 'campanula'],
+      east: ['lavender', 'broom', 'marguerite', 'campanula'],
+      creek: ['willowherb', 'umbels', 'willowherb'],
+    },
+    drifts: ['gentian', 'aarnica', 'campanula', 'marguerite', 'willowherb', 'umbels', 'martagon', 'lavender'],
+    groundcover: ['gentianD', 'aarnicaD', 'campanulaD', 'margueriteD', 'willowherbD', 'umbelsD', 'martagonD', 'lavenderD',
+      'haygrass', 'shortgrass', 'adrygrass', 'gentian', 'aarnica', 'campanula', 'marguerite', 'willowherb', 'martagon', 'umbels', 'lavender', 'alpenrose'],
+    models: {
+      trees: lods(['aspruce0', 'aspruce1', 'aspruce2', 'afir0', 'afir1', 'alarch0', 'alarch1', 'scots0', 'scots1', 'blackpine0', 'blackpine1',
+        'arolle0', 'arolle1', 'beech0', 'beech1', 'ash0', 'ash1', 'walnut0', 'fieldmaple0', 'oak0']),
+      shrubs: ['hazel', 'alpenrose', 'broom', 'lavender', 'pinmugo0', 'pinmugo1', 'greenalder0', 'greenalder1', 'ajuniper', 'awillow'],
+      grasses: ['haygrass', 'shortgrass', 'adrygrass'],
+      flowers: ['gentian', 'aarnica', 'campanula', 'marguerite', 'willowherb', 'martagon', 'umbels',
+        'gentianD', 'aarnicaD', 'campanulaD', 'margueriteD', 'willowherbD', 'umbelsD', 'martagonD', 'lavenderD'],
+      rocks: ['limestone0', 'limestone1', 'gneiss0', 'gneiss1', 'ascree0', 'ascree1'],
+      floor: ['alog0', 'alog1', 'astump', 'amoss', 'abranch', 'astone'],
+      farm: ['haybale0', 'haybale1', 'fence0', 'stonewall0', 'cross0', 'trough0'],
+    },
+    options: { fall: 'season "fall": larch, beech, ash, maple, walnut and oak turn', decorate: 'near trees get the bark/foliage surface shader' },
+  },
 };
 
 /** Every model name a pack builds. */

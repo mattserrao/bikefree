@@ -1,18 +1,2081 @@
 {
   "format": "bikefree-scene-1",
-  "style": "wireframe",
-  "terrain": "wireframe",
+  "style": "stylized",
   "title": "Alpe d'Huez · Tour de France 2026 Stage 19",
   "region": "Hautes-Alpes and Isère, French Alps",
-  "note": "Wireframe placeholder: the real road and the real ground (AWS Terrain Tiles, streamed) drawn as lines. No scenery yet.",
-  "wire": {
-    "background": "#0c1424",
-    "ground": "#111c30",
-    "line": "#3d8bfd",
-    "contourM": 50,
-    "majorContourM": 250,
-    "gridM": 100
+  "description": "Stage 19 on race day: Gap over Col Bayard, Col du Noyer and Col d'Ornon to the 21 hairpins of Alpe d'Huez. Real ground and real villages, drawn in the gentle cartoon look.",
+  "seed": 1924,
+  "terrain": "real-mountain",
+  "realHorizon": false,
+  "assets": "models/scenery/coastal.json",
+  "extraAssets": [
+    "models/scenery/regional.json"
+  ],
+  "biome": "alpine",
+  "palette": {
+    "grass": "#6a8a48",
+    "meadow": "#93a35c",
+    "rock": "#9d978b",
+    "cliff": "#a59d8d",
+    "argillite": "#8c8679",
+    "snow": "#f1f4f5",
+    "water": "#3a8a96",
+    "shallowWater": "#7fa69b",
+    "forest": "#2f4a33",
+    "canopy": "#28402d",
+    "sand": "#b3aa95",
+    "farTint": "#8a98a5",
+    "farTintAmount": 0.3,
+    "ice": "#dfe9ef",
+    "scree": "#bdb6a6",
+    "cutRock": "#a49d90",
+    "burn": "#a6a196",
+    "fireweed": "#c4669c",
+    "shrub": "#46613d",
+    "hay": "#a3ad63",
+    "farmland": "#ab9c62",
+    "village": "#9b9387"
   },
-  "atmosphere": { "fogNearM": 6000, "fogFarM": 45000 },
-  "preview": { "positionM": 118000, "camera": "chase" }
+  "snowLineM": 2750,
+  "treelineM": 2150,
+  "vegetation": {
+    "layout": "forest-edge",
+    "canopyM": 24,
+    "edge": {
+      "mownM": 7,
+      "shrubM": 11
+    },
+    "treeScale": [
+      0.85,
+      1.15
+    ],
+    "cover": [
+      "shortgrass",
+      "haygrass",
+      "marguerite",
+      "gentian",
+      "shortgrass",
+      "campanula"
+    ],
+    "coverScale": [
+      0.6,
+      1.1
+    ],
+    "vergeDensity": 0.8,
+    "forestDensity": 0.82,
+    "rich": true,
+    "coverBoost": 2.2,
+    "tierKeep": [
+      1,
+      0.66,
+      0.5
+    ],
+    "windows": {
+      "everyM": 850,
+      "lengthM": 170,
+      "reachM": 260,
+      "downhill": false,
+      "downhillM": 150,
+      "keep": 0.1,
+      "atLengthM": 170
+    },
+    "zones": {
+      "pack": "alps",
+      "dryBelowM": 1300,
+      "bands": [
+        {
+          "maxM": 950,
+          "mix": {
+            "walnut": 0.12,
+            "ash": 0.22,
+            "fieldmaple": 0.12,
+            "oak": 0.18,
+            "scots": 0.16,
+            "beech": 0.1,
+            "aspruce": 0.1
+          },
+          "sunny": {
+            "oak": 0.35,
+            "scots": 0.35,
+            "blackpine": 0.15,
+            "fieldmaple": 0.15
+          },
+          "shady": {
+            "beech": 0.35,
+            "ash": 0.25,
+            "afir": 0.15,
+            "aspruce": 0.25
+          },
+          "wet": {
+            "ash": 0.6,
+            "walnut": 0.2,
+            "fieldmaple": 0.2
+          }
+        },
+        {
+          "maxM": 1350,
+          "mix": {
+            "scots": 0.3,
+            "beech": 0.18,
+            "aspruce": 0.25,
+            "alarch": 0.12,
+            "afir": 0.1,
+            "blackpine": 0.05
+          },
+          "sunny": {
+            "scots": 0.45,
+            "blackpine": 0.25,
+            "oak": 0.15,
+            "alarch": 0.15
+          },
+          "shady": {
+            "afir": 0.35,
+            "aspruce": 0.4,
+            "beech": 0.25
+          }
+        },
+        {
+          "maxM": 1750,
+          "mix": {
+            "aspruce": 0.45,
+            "alarch": 0.35,
+            "scots": 0.1,
+            "afir": 0.1
+          },
+          "sunny": {
+            "alarch": 0.5,
+            "scots": 0.3,
+            "aspruce": 0.2
+          },
+          "shady": {
+            "aspruce": 0.65,
+            "afir": 0.2,
+            "alarch": 0.15
+          }
+        },
+        {
+          "mix": {
+            "alarch": 0.55,
+            "arolle": 0.3,
+            "aspruce": 0.15
+          }
+        }
+      ],
+      "alpine": {
+        "arolle": 0.6,
+        "alarch": 0.4
+      },
+      "broadleaf": {
+        "beech": 0.3,
+        "ash": 0.3,
+        "fieldmaple": 0.15,
+        "oak": 0.15,
+        "walnut": 0.1
+      },
+      "conifer": {
+        "aspruce": 0.45,
+        "scots": 0.2,
+        "alarch": 0.2,
+        "afir": 0.15
+      },
+      "roles": {
+        "snag": [
+          "alarch0",
+          "alarch1"
+        ],
+        "regrowth": [
+          "scots0",
+          "scots1"
+        ],
+        "fireweed": "willowherb",
+        "log": [
+          "alog0",
+          "alog1"
+        ],
+        "stump": "astump",
+        "moss": "amoss",
+        "branch": "abranch",
+        "stone": "astone",
+        "creekShrub": "awillow",
+        "dryShrub": "ajuniper",
+        "moistShrub": [
+          "hazel",
+          "hazel"
+        ],
+        "krummholz": [
+          "pinmugo0",
+          "pinmugo1"
+        ],
+        "chute": [
+          "greenalder0",
+          "greenalder1"
+        ],
+        "talus": [
+          "ascree0",
+          "ascree1"
+        ],
+        "openPlant": [
+          "alpenrose",
+          "broom"
+        ],
+        "dryPlant": "lavender",
+        "giants": "aspruce|afir|alarch|beech|walnut",
+        "broadCrowns": "beech|walnut|afir"
+      },
+      "grasses": {
+        "east": [
+          [
+            "adrygrass",
+            0.6
+          ],
+          [
+            "shortgrass",
+            1
+          ]
+        ],
+        "alpine": [
+          [
+            "shortgrass",
+            0.7
+          ],
+          [
+            "grass",
+            1
+          ]
+        ],
+        "subalpine": [
+          [
+            "haygrass",
+            0.45
+          ],
+          [
+            "shortgrass",
+            0.8
+          ],
+          [
+            "grass",
+            1
+          ]
+        ],
+        "valley": [
+          [
+            "haygrass",
+            0.6
+          ],
+          [
+            "shortgrass",
+            0.85
+          ],
+          [
+            "grass",
+            1
+          ]
+        ]
+      },
+      "under": [
+        "fern",
+        "amoss",
+        "shortgrass",
+        "amoss"
+      ]
+    }
+  },
+  "vista": {
+    "rock": {
+      "ribs": 0.9,
+      "ledges": 0.7,
+      "scree": 0.6,
+      "cuts": 0.9
+    },
+    "snow": {
+      "gullies": 0.85,
+      "ledges": 0.6
+    },
+    "meadow": {
+      "mottle": 0.7
+    },
+    "forest": {
+      "crowns": 0.85,
+      "boost": 1.6
+    },
+    "haze": {
+      "strength": 0.62,
+      "rangeM": 5500,
+      "falloffM": 900,
+      "blue": 0.35
+    },
+    "ridgeInk": {
+      "strength": 0.35,
+      "thresh": 0.22,
+      "startM": 450
+    },
+    "clouds": {
+      "count": 24,
+      "minM": 6000,
+      "maxM": 15000,
+      "spanM": 1200
+    }
+  },
+  "atmosphere": {
+    "fogNearM": 1600,
+    "fogFarM": 21000
+  },
+  "weather": {
+    "presets": [
+      "clear",
+      "clouds"
+    ],
+    "labels": {
+      "clouds": "Clouds on the peaks"
+    },
+    "bankTop": 45,
+    "bank": 0.6
+  },
+  "water": {
+    "lakeReachM": 7500
+  },
+  "packs": [
+    "alps"
+  ],
+  "post": true,
+  "bridgeColors": {
+    "structure": "#8f8573",
+    "rail": "#9d927e"
+  },
+  "road": {
+    "markings": "eu",
+    "surface": "worn",
+    "zones": [
+      {
+        "fromM": 0,
+        "toM": 4800,
+        "surface": "fresh"
+      },
+      {
+        "fromM": 4800,
+        "toM": 13400,
+        "surface": "worn"
+      },
+      {
+        "fromM": 13400,
+        "toM": 19000,
+        "surface": "worn",
+        "patches": 0.6
+      },
+      {
+        "fromM": 19000,
+        "toM": 25200,
+        "surface": "alpine",
+        "pavedM": 5.8,
+        "centre": 0.4,
+        "gravel": 0.15
+      },
+      {
+        "fromM": 25200,
+        "toM": 37000,
+        "surface": "chipseal"
+      },
+      {
+        "fromM": 37000,
+        "toM": 46000,
+        "surface": "patched"
+      },
+      {
+        "fromM": 41549,
+        "toM": 41609,
+        "surface": "tunnel"
+      },
+      {
+        "fromM": 46000,
+        "toM": 55400,
+        "surface": "worn"
+      },
+      {
+        "fromM": 55400,
+        "toM": 71800,
+        "surface": "fresh"
+      },
+      {
+        "fromM": 71800,
+        "toM": 76100,
+        "surface": "chipseal",
+        "pavedM": 5.6,
+        "centre": 0
+      },
+      {
+        "fromM": 76100,
+        "toM": 89400,
+        "surface": "worn"
+      },
+      {
+        "fromM": 89400,
+        "toM": 99200,
+        "surface": "fresh"
+      },
+      {
+        "fromM": 99200,
+        "toM": 111600,
+        "surface": "patched"
+      },
+      {
+        "fromM": 111600,
+        "toM": 127100,
+        "surface": "fresh"
+      },
+      {
+        "fromM": 123425,
+        "toM": 123455,
+        "surface": "tunnel"
+      },
+      {
+        "fromM": 125438,
+        "toM": 125488,
+        "surface": "tunnel"
+      }
+    ]
+  },
+  "verge": {
+    "markers": {
+      "units": "km",
+      "style": "fr",
+      "caps": [
+        {
+          "fromM": 0,
+          "toM": 13400,
+          "color": "#d9342b"
+        },
+        {
+          "fromM": 13400,
+          "toM": 55400,
+          "color": "#e8c21e"
+        },
+        {
+          "fromM": 55400,
+          "toM": 71800,
+          "color": "#e8c21e"
+        },
+        {
+          "fromM": 71800,
+          "color": "#e8c21e"
+        }
+      ]
+    },
+    "poles": [
+      {
+        "fromM": 19000,
+        "toM": 25200,
+        "spacingM": 45
+      },
+      {
+        "fromM": 93000,
+        "toM": 99200,
+        "spacingM": 45
+      }
+    ],
+    "posts": [
+      {
+        "fromM": 0,
+        "toM": 127000,
+        "spacingM": 50
+      }
+    ],
+    "debris": [
+      {
+        "fromM": 37000,
+        "toM": 46000,
+        "density": 0.6
+      },
+      {
+        "fromM": 99200,
+        "toM": 108000,
+        "density": 0.6
+      }
+    ],
+    "reachM": 1300
+  },
+  "terrainBuild": {
+    "lakes": true,
+    "padM": 9000,
+    "coarseM": 40,
+    "fineM": 900,
+    "fineCellM": 10,
+    "minLakeHa": 3,
+    "lakeNames": [
+      [
+        "Lac du Sautet",
+        44.803,
+        5.9308
+      ],
+      [
+        "Lac Besson",
+        45.1184,
+        6.0874
+      ],
+      [
+        "Lac Blanc",
+        45.1145,
+        6.1064
+      ]
+    ],
+    "osmWater": true
+  },
+  "look": "gentle",
+  "timeOfDay": "midday",
+  "lighting": {
+    "baked": "midday",
+    "windowM": 6000
+  },
+  "mountainRoad": {
+    "tunnels": [
+      {
+        "name": "Tunnel de la Beaume",
+        "fromM": 41549,
+        "toM": 41609,
+        "valleySide": 1
+      },
+      {
+        "name": "Galerie de Huez",
+        "fromM": 123430,
+        "toM": 123452,
+        "valleySide": 1
+      },
+      {
+        "name": "Tunnel du Signal",
+        "fromM": 125438,
+        "toM": 125488
+      }
+    ],
+    "waterfalls": [],
+    "guardwalls": {
+      "fromM": 37000,
+      "toM": 125200,
+      "dropM": 4
+    },
+    "culverts": {
+      "fromM": 0,
+      "toM": 127000,
+      "minDepthM": 3.5,
+      "maxCount": 60
+    }
+  },
+  "bridges": [],
+  "signs": [],
+  "lookouts": [],
+  "preview": {
+    "positionM": 121900,
+    "camera": "chase"
+  },
+  "terrainGridFile": "routes/scenes/alpedhuez-terrain.grid.bin.gz",
+  "osm": {
+    "corridorM": 1500,
+    "tileDeg": 0.02
+  },
+  "placesFile": "routes/scenes/alpedhuez-places.bin.gz",
+  "places": {
+    "buildingsM": 400,
+    "liftsM": 3000,
+    "powerM": 300,
+    "landcoverCellM": 20
+  },
+  "buildingStyles": [
+    {
+      "fromM": 0,
+      "toM": 4800,
+      "walls": [
+        "#e6d2ae",
+        "#dcc199",
+        "#efe2c8",
+        "#d9c3a2"
+      ],
+      "roofs": [
+        "#b3593c",
+        "#a24f36",
+        "#c06a48"
+      ],
+      "trim": [
+        "#5b7f8a",
+        "#8a5a3a",
+        "#6f8a6a"
+      ],
+      "stone": 0.2,
+      "pitch": 24
+    },
+    {
+      "fromM": 4800,
+      "toM": 37000,
+      "walls": [
+        "#c4b8a4",
+        "#b3a895",
+        "#cfc2ab",
+        "#a99f8e",
+        "#d6cab3"
+      ],
+      "roofs": [
+        "#5f5b57",
+        "#6b6560",
+        "#7a5f50",
+        "#545250"
+      ],
+      "trim": [
+        "#6b4a35",
+        "#4f5f5a",
+        "#7a6a5a"
+      ],
+      "stone": 0.7,
+      "pitch": 33
+    },
+    {
+      "fromM": 37000,
+      "toM": 76000,
+      "walls": [
+        "#d4c4a6",
+        "#c7b594",
+        "#ddd0b6",
+        "#bfae92"
+      ],
+      "roofs": [
+        "#8b5a44",
+        "#76655a",
+        "#9a4e38",
+        "#6a625c"
+      ],
+      "trim": [
+        "#6b4a35",
+        "#557060",
+        "#8a6040"
+      ],
+      "stone": 0.5,
+      "pitch": 35
+    },
+    {
+      "fromM": 76000,
+      "toM": 111600,
+      "walls": [
+        "#d6c8ad",
+        "#c6b597",
+        "#e0d2b6",
+        "#b8a98f"
+      ],
+      "roofs": [
+        "#6f5e52",
+        "#5f5a56",
+        "#8a5240"
+      ],
+      "trim": [
+        "#6b4a35",
+        "#4f6b52",
+        "#7a5a3a"
+      ],
+      "stone": 0.6,
+      "pitch": 34,
+      "balconies": 0.25
+    },
+    {
+      "fromM": 111600,
+      "toM": 125200,
+      "walls": [
+        "#cbbda3",
+        "#b9aa90",
+        "#d6c8ab"
+      ],
+      "roofs": [
+        "#5e5852",
+        "#6c5b4e",
+        "#4f4b47"
+      ],
+      "trim": [
+        "#6b4a30",
+        "#5a4632"
+      ],
+      "stone": 0.75,
+      "pitch": 30,
+      "balconies": 0.4
+    },
+    {
+      "fromM": 125200,
+      "walls": [
+        "#e6dccb",
+        "#d7c9b1",
+        "#cbb99c",
+        "#efe5d3"
+      ],
+      "roofs": [
+        "#5c5650",
+        "#6a5f55",
+        "#4f4a46"
+      ],
+      "trim": [
+        "#7a4f2e",
+        "#6a4428"
+      ],
+      "stone": 0.3,
+      "pitch": 24,
+      "blockAreaM2": 220,
+      "balconies": 0.7
+    }
+  ],
+  "buildings": {
+    "reachM": 9000,
+    "chunkM": 3000,
+    "landmarks": [
+      {
+        "name": "Notre-Dame des Neiges",
+        "shape": "tent"
+      }
+    ]
+  },
+  "cables": {
+    "lifts": true,
+    "power": true,
+    "reachM": 7000
+  },
+  "dams": {
+    "crestM": {}
+  },
+  "boards": [
+    {
+      "atM": 1312,
+      "kind": "town",
+      "title": "Les Gondoins",
+      "auto": true
+    },
+    {
+      "atM": 2020,
+      "kind": "townEnd",
+      "title": "Les Gondoins",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 3836,
+      "kind": "town",
+      "title": "Chauvet",
+      "auto": true
+    },
+    {
+      "atM": 4416,
+      "kind": "townEnd",
+      "title": "Chauvet",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 5061,
+      "kind": "col",
+      "title": "Col Bayard",
+      "alt": 1246,
+      "auto": true
+    },
+    {
+      "atM": 7746,
+      "kind": "town",
+      "title": "Laye",
+      "auto": true
+    },
+    {
+      "atM": 8186,
+      "kind": "townEnd",
+      "title": "Laye",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 10206,
+      "kind": "town",
+      "title": "Brutinel",
+      "auto": true
+    },
+    {
+      "atM": 10756,
+      "kind": "townEnd",
+      "title": "Brutinel",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 10906,
+      "kind": "town",
+      "title": "Bonnette",
+      "auto": true
+    },
+    {
+      "atM": 11306,
+      "kind": "townEnd",
+      "title": "Bonnette",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 11916,
+      "kind": "town",
+      "title": "La Fare-en-Champsaur",
+      "auto": true
+    },
+    {
+      "atM": 13386,
+      "kind": "townEnd",
+      "title": "La Fare-en-Champsaur",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 14575,
+      "kind": "town",
+      "title": "Poligny",
+      "auto": true
+    },
+    {
+      "atM": 15595,
+      "kind": "townEnd",
+      "title": "Poligny",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 18220,
+      "kind": "town",
+      "title": "Le Noyer",
+      "auto": true
+    },
+    {
+      "atM": 18380,
+      "kind": "townEnd",
+      "title": "Le Noyer",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 24901,
+      "kind": "col",
+      "title": "Col du Noyer",
+      "alt": 1664,
+      "auto": true
+    },
+    {
+      "atM": 29779,
+      "kind": "town",
+      "title": "Truziaud",
+      "auto": true
+    },
+    {
+      "atM": 30016,
+      "kind": "townEnd",
+      "title": "Truziaud",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 31755,
+      "kind": "town",
+      "title": "Saint-Étienne-en-Dévoluy",
+      "auto": true
+    },
+    {
+      "atM": 33544,
+      "kind": "townEnd",
+      "title": "Saint-Étienne-en-Dévoluy",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 35003,
+      "kind": "town",
+      "title": "Le Courtil",
+      "auto": true
+    },
+    {
+      "atM": 35523,
+      "kind": "townEnd",
+      "title": "Le Courtil",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 39058,
+      "kind": "town",
+      "title": "Saint-Disdier",
+      "auto": true
+    },
+    {
+      "atM": 40046,
+      "kind": "townEnd",
+      "title": "Saint-Disdier",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 45729,
+      "kind": "town",
+      "title": "La Posterle",
+      "auto": true
+    },
+    {
+      "atM": 46229,
+      "kind": "townEnd",
+      "title": "La Posterle",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 48688,
+      "kind": "town",
+      "title": "Les Payas",
+      "auto": true
+    },
+    {
+      "atM": 49078,
+      "kind": "townEnd",
+      "title": "Les Payas",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 51386,
+      "kind": "town",
+      "title": "Le Coin",
+      "auto": true
+    },
+    {
+      "atM": 51873,
+      "kind": "townEnd",
+      "title": "Le Coin",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 53740,
+      "kind": "town",
+      "title": "Corps",
+      "auto": true
+    },
+    {
+      "atM": 55699,
+      "kind": "townEnd",
+      "title": "Corps",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 59068,
+      "kind": "town",
+      "title": "Les Côtes-de-Corps",
+      "auto": true
+    },
+    {
+      "atM": 59308,
+      "kind": "town",
+      "title": "Pâques",
+      "auto": true
+    },
+    {
+      "atM": 59548,
+      "kind": "townEnd",
+      "title": "Pâques",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 63715,
+      "kind": "town",
+      "title": "Haut-Quet",
+      "auto": true
+    },
+    {
+      "atM": 64005,
+      "kind": "townEnd",
+      "title": "Haut-Quet",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 65854,
+      "kind": "town",
+      "title": "Les Marcoux",
+      "auto": true
+    },
+    {
+      "atM": 66354,
+      "kind": "townEnd",
+      "title": "Les Marcoux",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 67694,
+      "kind": "town",
+      "title": "La Salle-en-Beaumont",
+      "auto": true
+    },
+    {
+      "atM": 69373,
+      "kind": "townEnd",
+      "title": "La Salle-en-Beaumont",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 70313,
+      "kind": "town",
+      "title": "Les Égâts",
+      "auto": true
+    },
+    {
+      "atM": 71073,
+      "kind": "townEnd",
+      "title": "Les Égâts",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 79220,
+      "kind": "town",
+      "title": "Valbonnais",
+      "auto": true
+    },
+    {
+      "atM": 80760,
+      "kind": "townEnd",
+      "title": "Valbonnais",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 82267,
+      "kind": "town",
+      "title": "La Roche",
+      "auto": true
+    },
+    {
+      "atM": 82507,
+      "kind": "townEnd",
+      "title": "La Roche",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 83467,
+      "kind": "town",
+      "title": "Entraigues",
+      "auto": true
+    },
+    {
+      "atM": 84674,
+      "kind": "townEnd",
+      "title": "Entraigues",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 87124,
+      "kind": "town",
+      "title": "Les Doras",
+      "auto": true
+    },
+    {
+      "atM": 87774,
+      "kind": "townEnd",
+      "title": "Les Doras",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 91273,
+      "kind": "town",
+      "title": "Les Daurens",
+      "auto": true
+    },
+    {
+      "atM": 91533,
+      "kind": "townEnd",
+      "title": "Les Daurens",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 92972,
+      "kind": "town",
+      "title": "La Chalp",
+      "auto": true
+    },
+    {
+      "atM": 93222,
+      "kind": "townEnd",
+      "title": "La Chalp",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 98593,
+      "kind": "col",
+      "title": "Col d'Ornon",
+      "alt": 1371,
+      "auto": true
+    },
+    {
+      "atM": 99638,
+      "kind": "town",
+      "title": "Le Plan du Col",
+      "auto": true
+    },
+    {
+      "atM": 99778,
+      "kind": "townEnd",
+      "title": "Le Plan du Col",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 101543,
+      "kind": "town",
+      "title": "Le Rivier",
+      "auto": true
+    },
+    {
+      "atM": 101981,
+      "kind": "townEnd",
+      "title": "Le Rivier",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 103178,
+      "kind": "town",
+      "title": "La Pouthuire",
+      "auto": true
+    },
+    {
+      "atM": 103338,
+      "kind": "townEnd",
+      "title": "La Pouthuire",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 103644,
+      "kind": "town",
+      "title": "Ornon",
+      "auto": true
+    },
+    {
+      "atM": 103964,
+      "kind": "townEnd",
+      "title": "Ornon",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 105053,
+      "kind": "town",
+      "title": "Palud",
+      "auto": true
+    },
+    {
+      "atM": 105691,
+      "kind": "townEnd",
+      "title": "Palud",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 108948,
+      "kind": "town",
+      "title": "La Paute",
+      "auto": true
+    },
+    {
+      "atM": 109638,
+      "kind": "townEnd",
+      "title": "La Paute",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 109757,
+      "kind": "town",
+      "title": "Le Rat",
+      "auto": true
+    },
+    {
+      "atM": 110527,
+      "kind": "townEnd",
+      "title": "Le Rat",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 110917,
+      "kind": "town",
+      "title": "Le Bourg-d'Oisans",
+      "auto": true
+    },
+    {
+      "atM": 113654,
+      "kind": "townEnd",
+      "title": "Le Bourg-d'Oisans",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 114287,
+      "kind": "bend",
+      "number": 21,
+      "alt": 806,
+      "title": "Virage de la Savoyâte",
+      "lines": [
+        "Fausto Coppi 1952"
+      ],
+      "side": "left"
+    },
+    {
+      "atM": 114956,
+      "kind": "bend",
+      "number": 20,
+      "alt": 880,
+      "title": "Virage du Gène Vignon",
+      "lines": [
+        "Joop Zoetemelk 1976",
+        "Iban Mayo 2003"
+      ],
+      "side": "right"
+    },
+    {
+      "atM": 115144,
+      "kind": "bend",
+      "number": 19,
+      "alt": 900,
+      "title": "Virage des Grangettes",
+      "lines": [
+        "Hennie Kuiper 1977"
+      ],
+      "side": "left"
+    },
+    {
+      "atM": 115401,
+      "kind": "bend",
+      "number": 18,
+      "alt": 922,
+      "title": "Virage du Gué",
+      "lines": [
+        "Hennie Kuiper 1978",
+        "Fränk Schleck 2006"
+      ],
+      "side": "right"
+    },
+    {
+      "atM": 115739,
+      "kind": "bend",
+      "number": 17,
+      "alt": 965,
+      "title": "Virage de la Coute",
+      "lines": [
+        "Joaquim Agostinho 1979",
+        "Carlos Sastre 2008"
+      ],
+      "side": "left"
+    },
+    {
+      "atM": 115945,
+      "kind": "town",
+      "title": "La Garde",
+      "auto": true
+    },
+    {
+      "atM": 115948,
+      "kind": "bend",
+      "number": 16,
+      "alt": 980,
+      "title": "Virage de la Meule",
+      "lines": [
+        "Joop Zoetemelk 1979",
+        "Pierre Rolland 2011"
+      ],
+      "side": "right"
+    },
+    {
+      "atM": 116545,
+      "kind": "townEnd",
+      "title": "La Garde",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 116597,
+      "kind": "bend",
+      "number": 15,
+      "alt": 1025,
+      "title": "Virage de la Citerna",
+      "lines": [
+        "Peter Winnen 1981",
+        "Christophe Riblon 2013"
+      ],
+      "side": "right"
+    },
+    {
+      "atM": 116944,
+      "kind": "bend",
+      "number": 14,
+      "alt": 1055,
+      "title": "Virage du Chateau",
+      "lines": [
+        "Beat Breu 1982",
+        "Thibaut Pinot 2015"
+      ],
+      "side": "left"
+    },
+    {
+      "atM": 117681,
+      "kind": "bend",
+      "number": 13,
+      "alt": 1120,
+      "title": "Virage du Charretier",
+      "lines": [
+        "Peter Winnen 1983",
+        "Geraint Thomas 2018"
+      ],
+      "side": "right"
+    },
+    {
+      "atM": 118130,
+      "kind": "bend",
+      "number": 12,
+      "alt": 1161,
+      "title": "Virage du Ribot d'en Haut",
+      "lines": [
+        "Luis Herrera 1984",
+        "Tom Pidcock 2022"
+      ],
+      "side": "left"
+    },
+    {
+      "atM": 118598,
+      "kind": "bend",
+      "number": 11,
+      "alt": 1195,
+      "title": "Virage du Pertu",
+      "lines": [
+        "Bernard Hinault 1986"
+      ],
+      "side": "right"
+    },
+    {
+      "atM": 119185,
+      "kind": "bend",
+      "number": 10,
+      "alt": 1245,
+      "title": "Virage des Goutards",
+      "lines": [
+        "Federico Echave 1987"
+      ],
+      "side": "left"
+    },
+    {
+      "atM": 119693,
+      "kind": "bend",
+      "number": 9,
+      "alt": 1295,
+      "title": "Virage Celeste",
+      "lines": [
+        "Steven Rooks 1988"
+      ],
+      "side": "right"
+    },
+    {
+      "atM": 120281,
+      "kind": "bend",
+      "number": 8,
+      "alt": 1345,
+      "title": "Virage des Serres",
+      "lines": [
+        "Gert-Jan Theunisse 1989"
+      ],
+      "side": "left"
+    },
+    {
+      "atM": 120769,
+      "kind": "bend",
+      "number": 7,
+      "alt": 1390,
+      "title": "Virage de Saint-Ferréol",
+      "lines": [
+        "Gianni Bugno 1990"
+      ],
+      "side": "right"
+    },
+    {
+      "atM": 121235,
+      "kind": "town",
+      "title": "Huez",
+      "auto": true
+    },
+    {
+      "atM": 121887,
+      "kind": "bend",
+      "number": 6,
+      "alt": 1480,
+      "title": "Virage de Saint-Claude",
+      "lines": [
+        "Gianni Bugno 1991"
+      ],
+      "side": "right"
+    },
+    {
+      "atM": 122405,
+      "kind": "bend",
+      "number": 5,
+      "alt": 1512,
+      "title": "Virage du Pied des Chanses",
+      "lines": [
+        "Andy Hampsten 1992"
+      ],
+      "side": "left"
+    },
+    {
+      "atM": 122834,
+      "kind": "bend",
+      "number": 4,
+      "alt": 1553,
+      "title": "Virage des Fontaines",
+      "lines": [
+        "Roberto Conti 1994"
+      ],
+      "side": "right"
+    },
+    {
+      "atM": 122852,
+      "kind": "townEnd",
+      "title": "Huez",
+      "side": "left",
+      "auto": true
+    },
+    {
+      "atM": 123660,
+      "kind": "bend",
+      "number": 3,
+      "alt": 1626,
+      "title": "Virage des Eymarans",
+      "lines": [
+        "Marco Pantani 1995"
+      ],
+      "side": "left"
+    },
+    {
+      "atM": 124079,
+      "kind": "bend",
+      "number": 2,
+      "alt": 1669,
+      "title": "Virage des Jardins",
+      "lines": [
+        "Marco Pantani 1997"
+      ],
+      "side": "right"
+    },
+    {
+      "atM": 124627,
+      "kind": "bend",
+      "number": 1,
+      "alt": 1713,
+      "title": "Virage des Combes",
+      "lines": [
+        "Giuseppe Guerini 1999"
+      ],
+      "side": "left"
+    },
+    {
+      "atM": 124814,
+      "kind": "town",
+      "title": "L'Alpe d'Huez",
+      "auto": true
+    }
+  ],
+  "raceDay": {
+    "crowd": [
+      {
+        "fromM": 0,
+        "toM": 126960,
+        "perM": 0.04,
+        "rows": 1,
+        "cheer": 0.4
+      },
+      {
+        "fromM": 1312,
+        "toM": 2020,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Les Gondoins"
+      },
+      {
+        "fromM": 3836,
+        "toM": 4416,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Chauvet"
+      },
+      {
+        "fromM": 7746,
+        "toM": 8186,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Laye"
+      },
+      {
+        "fromM": 10206,
+        "toM": 10756,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Brutinel"
+      },
+      {
+        "fromM": 10906,
+        "toM": 11306,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Bonnette"
+      },
+      {
+        "fromM": 11916,
+        "toM": 13386,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "La Fare-en-Champsaur"
+      },
+      {
+        "fromM": 14575,
+        "toM": 15595,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Poligny"
+      },
+      {
+        "fromM": 18220,
+        "toM": 18380,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Le Noyer"
+      },
+      {
+        "fromM": 29779,
+        "toM": 30016,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Truziaud"
+      },
+      {
+        "fromM": 31755,
+        "toM": 33544,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Saint-Étienne-en-Dévoluy"
+      },
+      {
+        "fromM": 35003,
+        "toM": 35523,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Le Courtil"
+      },
+      {
+        "fromM": 39058,
+        "toM": 40046,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Saint-Disdier"
+      },
+      {
+        "fromM": 45729,
+        "toM": 46229,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "La Posterle"
+      },
+      {
+        "fromM": 48688,
+        "toM": 49078,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Les Payas"
+      },
+      {
+        "fromM": 51386,
+        "toM": 51873,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Le Coin"
+      },
+      {
+        "fromM": 53740,
+        "toM": 55699,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Corps"
+      },
+      {
+        "fromM": 59068,
+        "toM": 59668,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Les Côtes-de-Corps"
+      },
+      {
+        "fromM": 59308,
+        "toM": 59548,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Pâques"
+      },
+      {
+        "fromM": 63715,
+        "toM": 64005,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Haut-Quet"
+      },
+      {
+        "fromM": 65854,
+        "toM": 66354,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Les Marcoux"
+      },
+      {
+        "fromM": 67694,
+        "toM": 69373,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "La Salle-en-Beaumont"
+      },
+      {
+        "fromM": 70313,
+        "toM": 71073,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Les Égâts"
+      },
+      {
+        "fromM": 79220,
+        "toM": 80760,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Valbonnais"
+      },
+      {
+        "fromM": 82267,
+        "toM": 82507,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "La Roche"
+      },
+      {
+        "fromM": 83467,
+        "toM": 84674,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Entraigues"
+      },
+      {
+        "fromM": 87124,
+        "toM": 87774,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Les Doras"
+      },
+      {
+        "fromM": 91273,
+        "toM": 91533,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Les Daurens"
+      },
+      {
+        "fromM": 92972,
+        "toM": 93222,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "La Chalp"
+      },
+      {
+        "fromM": 99638,
+        "toM": 99778,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Le Plan du Col"
+      },
+      {
+        "fromM": 101543,
+        "toM": 101981,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Le Rivier"
+      },
+      {
+        "fromM": 103178,
+        "toM": 103338,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "La Pouthuire"
+      },
+      {
+        "fromM": 103644,
+        "toM": 103964,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Ornon"
+      },
+      {
+        "fromM": 105053,
+        "toM": 105691,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Palud"
+      },
+      {
+        "fromM": 108948,
+        "toM": 109638,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "La Paute"
+      },
+      {
+        "fromM": 109757,
+        "toM": 110527,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Le Rat"
+      },
+      {
+        "fromM": 110917,
+        "toM": 113654,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Le Bourg-d'Oisans"
+      },
+      {
+        "fromM": 115945,
+        "toM": 116545,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "La Garde"
+      },
+      {
+        "fromM": 121235,
+        "toM": 122852,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "Huez"
+      },
+      {
+        "fromM": 124814,
+        "toM": 125414,
+        "perM": 0.3,
+        "rows": 2,
+        "flags": 0.1,
+        "name": "L'Alpe d'Huez"
+      },
+      {
+        "fromM": 0,
+        "toM": 1400,
+        "perM": 0.8,
+        "rows": 3,
+        "flags": 0.15,
+        "name": "Gap, the start"
+      },
+      {
+        "fromM": 3000,
+        "toM": 5100,
+        "perM": 0.45,
+        "rows": 2,
+        "flags": 0.12,
+        "name": "Col Bayard"
+      },
+      {
+        "fromM": 22900,
+        "toM": 24950,
+        "perM": 0.45,
+        "rows": 2,
+        "flags": 0.12,
+        "name": "Col du Noyer"
+      },
+      {
+        "fromM": 96600,
+        "toM": 98650,
+        "perM": 0.45,
+        "rows": 2,
+        "flags": 0.12,
+        "name": "Col d'Ornon"
+      },
+      {
+        "fromM": 110900,
+        "toM": 114200,
+        "perM": 0.5,
+        "rows": 2,
+        "flags": 0.15,
+        "orange": 0.08,
+        "name": "Le Bourg-d'Oisans"
+      },
+      {
+        "fromM": 114200,
+        "toM": 124900,
+        "perM": 0.7,
+        "rows": 3,
+        "flags": 0.14,
+        "orange": 0.12,
+        "name": "The 21 bends"
+      },
+      {
+        "fromM": 120550,
+        "toM": 121150,
+        "perM": 1.15,
+        "rows": 3,
+        "flags": 0.3,
+        "orange": 0.88,
+        "cheer": 0.85,
+        "name": "Dutch Corner (bend 7)"
+      },
+      {
+        "fromM": 124900,
+        "toM": 127000,
+        "perM": 1.1,
+        "rows": 3,
+        "flags": 0.2,
+        "orange": 0.12,
+        "cheer": 0.8,
+        "name": "The last 2 km"
+      }
+    ],
+    "noCrowd": [
+      {
+        "fromM": 41530,
+        "toM": 41630
+      },
+      {
+        "fromM": 123410,
+        "toM": 123470
+      },
+      {
+        "fromM": 125420,
+        "toM": 125505
+      }
+    ],
+    "camps": [
+      {
+        "fromM": 2500,
+        "toM": 5000,
+        "perKm": 12
+      },
+      {
+        "fromM": 21500,
+        "toM": 24900,
+        "perKm": 14
+      },
+      {
+        "fromM": 95500,
+        "toM": 98600,
+        "perKm": 14
+      },
+      {
+        "fromM": 114300,
+        "toM": 124800,
+        "perKm": 32
+      }
+    ],
+    "barriers": [
+      {
+        "fromM": 0,
+        "toM": 600
+      },
+      {
+        "fromM": 112300,
+        "toM": 113600
+      },
+      {
+        "fromM": 123960,
+        "toM": 127020
+      }
+    ],
+    "kom": [
+      {
+        "atM": 5060,
+        "title": "Col Bayard"
+      },
+      {
+        "atM": 24900,
+        "title": "Col du Noyer"
+      },
+      {
+        "atM": 98590,
+        "title": "Col d'Ornon"
+      }
+    ],
+    "kmToGo": [
+      10,
+      5,
+      4,
+      3,
+      2
+    ],
+    "flammeRouge": true,
+    "finishM": 126960,
+    "helicopter": true,
+    "paint": [
+      {
+        "fromM": 3500,
+        "toM": 5060,
+        "perKm": 8
+      },
+      {
+        "fromM": 23400,
+        "toM": 24900,
+        "perKm": 8
+      },
+      {
+        "fromM": 97100,
+        "toM": 98590,
+        "perKm": 8
+      },
+      {
+        "fromM": 114200,
+        "toM": 126800,
+        "perKm": 40
+      }
+    ]
+  },
+  "life": {
+    "kit": "wildlife",
+    "name": "Alpine wildlife",
+    "moments": [
+      {
+        "kind": "marmot",
+        "atM": 24700,
+        "count": 2,
+        "where": "uphill",
+        "lateralM": [
+          10,
+          22
+        ],
+        "spacingM": 7
+      },
+      {
+        "kind": "cow",
+        "atM": 13830,
+        "count": 3,
+        "where": "valley",
+        "lateralM": [
+          12,
+          26
+        ],
+        "spacingM": 12
+      },
+      {
+        "kind": "marmot",
+        "atM": 98300,
+        "count": 1,
+        "where": "uphill",
+        "lateralM": [
+          9,
+          16
+        ]
+      }
+    ],
+    "cows": [
+      {
+        "atM": 11500,
+        "radiusM": 300,
+        "count": 8,
+        "lateralM": 120
+      },
+      {
+        "atM": 31000,
+        "radiusM": 350,
+        "count": 10,
+        "lateralM": 150
+      },
+      {
+        "atM": 63000,
+        "radiusM": 300,
+        "count": 7,
+        "lateralM": 120
+      },
+      {
+        "atM": 93500,
+        "radiusM": 350,
+        "count": 8,
+        "lateralM": 160
+      }
+    ],
+    "sheep": [
+      {
+        "atM": 24200,
+        "radiusM": 450,
+        "count": 22,
+        "lateralM": 260
+      },
+      {
+        "atM": 97800,
+        "radiusM": 350,
+        "count": 16,
+        "lateralM": 220
+      }
+    ],
+    "marmots": [
+      {
+        "atM": 24850,
+        "radiusM": 200,
+        "count": 5
+      },
+      {
+        "atM": 98500,
+        "radiusM": 160,
+        "count": 3
+      }
+    ],
+    "ravens": 5,
+    "eagles": 1
+  },
+  "groundMesh": {
+    "fineCells": 32
+  },
+  "hairpinWalls": {
+    "minDropM": 1,
+    "parapetM": 0.55,
+    "color": "#a29a8c"
+  },
+  "switchbacks": true,
+  "reflectorPosts": false
 }

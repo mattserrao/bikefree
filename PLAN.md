@@ -710,17 +710,17 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - Toolbox standard (gentle look, baked midday, chase camera, vista); 2.5M triangles allowed on the Alpe with crowds; under 600 draw calls
 
 **Passes**
-- [ ] P0 · Scene onto the mountain preset; OSM corridor fetch + census; baseline snapshots
-- [ ] P1 · Terrain bake (z13 hole fill, lakes, rivers, Beaume tunnel, glaciers); baked light over 127 km
-- [ ] P2 · OSM land cover baked into the terrain (`landcover`)
-- [ ] P3 · `alps` pack + data-driven `vegetation.zones` (Going-to-the-Sun moved to data, guard unchanged)
-- [ ] P4 · Palette and planting by stretch; view windows
-- [ ] P5 · Atmosphere: limestone vs gneiss vista, haze, clouds, bake time
-- [ ] P6 · Villages from footprints (`buildings`), resort and lifts, churches, Sautet dam, Bayard, Noyer chalet, French poles
-- [ ] P7 · Bend signs 21 → 1, road surface by stretch, French roadside and signs
-- [ ] P8 · Race day (`raceDay`): crowds, flags, vans, road paint, barriers, KOM banners, flamme rouge, finish arch, helicopter
-- [ ] P9 · Animals (cows, sheep, marmots, choughs, vultures), finish at the line
-- [ ] P10 · Strict QC, clipping QC, guard, snapshots at 15 fixed spots, Light/Balanced/High, ride on the Air, PR
+- [x] P0 · Scene onto the mountain preset; OSM corridor fetch (`tools/fetch_osm_corridor.py`, OSM API tiles) + census (`docs/alpedhuez/osm-census.md`)
+- [x] P1 · Terrain bake: Terrain Tiles holes filled from z13; lakes checked against the map (Sautet, Laffrey, Saint-Pierre-Cognet, Lac Blanc…); tunnels (Beaume, Huez galleries); baked light in a 6 km window that follows the rider
+- [x] P2 · Map land cover, buildings, lifts, power lines and dams baked into `alpedhuez-places.bin.gz` (`tools/build_places.py`); real-terrain uses the land cover
+- [x] P3 · `alps` pack (106 models) + data-driven `vegetation.zones` (Going-to-the-Sun keeps its defaults)
+- [x] P4 · Palette and planting by elevation band, aspect and land cover
+- [x] P5 · Atmosphere: vista, haze, clear and cloud presets, midday bake
+- [x] P6 · 7,300 buildings from map footprints in six regional styles, the tent church, 78 lifts, 71 power lines, 5 dams
+- [x] P7 · Bend boards 21 → 1 at the mapped *virages* (number, altitude, winners), town and col boards, French bornes, EU road markings
+- [x] P8 · Race day (`raceDay`): crowds by stretch, Dutch Corner, flags, vans and tents, road paint, barriers, KOM banners, km-to-go, flamme rouge, finish gantry, helicopter. Not built: runners beside the rider, podium and team buses
+- [x] P9 · Cows, sheep, marmots, ravens and an eagle (no dog, no vultures yet); the ride ends at the line (Endless off)
+- [x] P10 · Strict QC clean (switchback banks, 3 m ground on hairpins, retaining walls); guard on the other routes; snapshots; moved to In Progress. Still to do on your side: a githack ride on the Mac and the Air
 
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)

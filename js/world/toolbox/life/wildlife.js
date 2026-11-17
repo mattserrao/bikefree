@@ -57,6 +57,25 @@ function squirrel() {
   M.color('#8a6f4e'); M.box(0, 0, -.08, .05, .04, .1);
   return M.geometry();
 }
+function alpineCow() {
+  // a fawn Tarentaise-style cow: dark muzzle, lyre horns, a bell on a leather collar
+  const M = new MeshBuilder();
+  M.color('#b98a5a'); M.box(0, .75, 0, .6, .62, 1.45); M.box(0, .82, .82, .3, .32, .42);
+  M.color('#3a2a20'); M.box(0, .74, 1.05, .22, .18, .1);
+  M.color('#d9cdb4'); for (const x of [-1, 1]) M.box(x * .15, 1.02, .8, .22, .05, .05);
+  M.color('#2a2522'); M.box(0, .58, .66, .34, .08, .08); M.color('#c9a43a'); M.box(0, .44, .7, .12, .16, .1);
+  legs(M, '#9c7448', .2, .52, .78, .13);
+  M.color('#7a5a3a'); M.box(0, .8, -.74, .05, .5, .05);
+  return M.geometry();
+}
+function sheep() {
+  // a woolly ewe from the summer flocks: cream fleece, dark face and legs
+  const M = new MeshBuilder();
+  M.color('#e8e1d0'); M.box(0, .48, 0, .44, .42, .8); M.box(0, .52, .05, .5, .32, .6);
+  M.color('#3b342e'); M.box(0, .62, .48, .18, .2, .22);
+  legs(M, '#3b342e', .13, .28, .42, .07);
+  return M.geometry();
+}
 function duck() {
   const M = new MeshBuilder();
   M.color('#5a5148'); M.box(0, 0, 0, .22, .14, .42); M.color('#2b3b33'); M.box(0, .12, .17, .1, .14, .12);
@@ -67,7 +86,7 @@ function duck() {
 export class Wildlife {
   constructor(parent, landscape, route, index, uniforms, config = {}) {
     this.L = landscape; this.route = route; this.index = index; this.u = uniforms; this.cfg = config;
-    this.group = new THREE.Group(); this.group.name = 'Glacier wildlife'; parent.add(this.group);
+    this.group = new THREE.Group(); this.group.name = config.name || 'Glacier wildlife'; parent.add(this.group);
     this.rand = randomSequence(5521); this.disposables = [];
     this.material = this._own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 }));
     this.m = new THREE.Matrix4(); this.q = new THREE.Quaternion(); this.e = new THREE.Euler(0, 0, 0, 'YXZ');
@@ -86,6 +105,8 @@ export class Wildlife {
     herds(config.bighorn, bighorn(), 'Bighorn sheep', { maxSlope: .8, minRoad: 18 }, 'bighorn');
     herds(config.marmots, marmot(), 'Hoary marmots', { maxSlope: .9, minRoad: 9 }, 'marmot');
     herds(config.squirrels, squirrel(), 'Ground squirrels', { maxSlope: .5, minRoad: 7 });
+    herds(config.cows, alpineCow(), 'Cows', { maxSlope: .55, minRoad: 12 }, 'cow');
+    herds(config.sheep, sheep(), 'Sheep', { maxSlope: .7, minRoad: 14 }, 'sheep');
     // the bear walks slowly back and forth across its meadow
     this.bears = (config.bears || []).map((b) => this._herd({ ...b, count: 1 }, { maxSlope: .6, minRoad: b.lateralM || 150 })[0]).filter(Boolean)
       .map((m) => { const p = V().setFromMatrixPosition(m); return { x: p.x, z: p.z, a: this.rand() * 6.28, t: this.rand() * 100 }; });

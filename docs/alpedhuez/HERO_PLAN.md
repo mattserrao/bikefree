@@ -82,6 +82,16 @@ Gaps in this census are filled in P0. The OpenStreetMap API and an Overpass mirr
 
 ---
 
+## Status (16 Nov 2026)
+
+All phases built on `alpedhuez-hero-test`. Notes in `docs/alpedhuez/REVIEW.md`. Where the build went differently from the plan below:
+
+- **Land cover and buildings** come from one file, `routes/scenes/alpedhuez-places.bin.gz` (`tools/build_places.py`, scene field `placesFile`), not `build_landcover.py` + `build_settlements.py`.
+- **Bend signs** are a new roadside kit, `roadside/boards.js` (`boards`), which also draws town and col boards; `tools/place_boards.py` places those from the map.
+- **Race dressing** lives in `life/race-day.js` with the crowds. Road paint is one decal mesh drawn over the road, not a road-shader change, so other routes' road shader is untouched.
+- **Switchbacks** needed a landscape change: the ground between two close legs is one bank, the inside of a tight turn sits at the lower side's level, patches with a hairpin are drawn at 3 m (`groundMesh.fineCells`), and the upper leg stands on a retaining wall (`hairpinWalls`). Opt-in by `switchbacks`, so other routes are unchanged.
+- **Not built yet:** runners beside the rider, podium and team buses, a sheepdog, griffon vultures (an eagle stands in), visitors at overlooks.
+
 ## Phases
 
 Each phase ends with snapshots at the fixed spots (below), strict QC and a short note in `docs/alpedhuez/REVIEW.md`. I send you the pictures before starting the next phase.
