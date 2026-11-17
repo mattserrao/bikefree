@@ -63,3 +63,6 @@ Issues within 25 m of the route 82 → 19 (1,076 sites, 23 with issues overall);
 
 ## Wave 2 paused (16 Nov, 17:45)
 What was done and what's left per agent: `PAUSED.md`. `w2-align` is not in the PR (it conflicts with the road-meets changes; see PAUSED.md). Item #4 not started.
+
+## Finishing pass (17 Nov, `pittsburgh-finish-test`)
+Everything above was worked through without agents; what was done and what is still open is in `FINISH.md`. Still open: 20 road-meet sites near the route (the Point ramps the worst), lamps on girder decks touching trusses, lamps over water on mapped decks without a slab, kit facade/fence and furniture collisions with lamps and trees (32), three z-fighting route junctions, and the M4 check with the **I** overlay.

@@ -1,5 +1,7 @@
 # Wave 2: paused 16 Nov 2026, 17:45, and how to resume
 
+> **Closed 17 Nov 2026.** Every row below was finished without agents on `pittsburgh-finish-test`; see `FINISH.md`. Nothing here needs resuming. The table is kept as the record of where each agent stopped.
+
 All five running wave-2 agents were stopped by request so a PR could go up. Each agent's branch is pushed to `origin`. "In PR" below means the PR includes that branch's verified commits; WIP commits stay on the branch only.
 
 | # | Agent / branch | Head | In PR | Done | Left (to resume) |
