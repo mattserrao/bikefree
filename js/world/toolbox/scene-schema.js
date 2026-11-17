@@ -100,7 +100,7 @@ export const SCENE_FIELDS = {
   hairpinWalls: { type: 'object', tool: T + 'structures/hairpin-walls.js', keys: ['minDropM', 'parapetM', 'color'], doc: 'dry-stone retaining walls under the upper leg of close switchbacks' },
   groundMesh: { type: 'object', tool: 'js/world/stylized-terrain.js', keys: ['fineCells'], doc: 'cells across the finest 96 m ground patch (16 = 6 m; 32 = 3 m for hairpin roads)' },
   raceDay: { type: 'object', tool: T + 'life/race-day.js', keys: ['crowd', 'camps', 'barriers', 'kom', 'kmToGo', 'flammeRouge', 'finishM', 'helicopter', 'noCrowd', 'paint', 'paintWords', 'peopleReachM', 'cardReachM', 'campReachM'], doc: 'race day: crowds, flags, camper vans, barriers, banners, finish gantry, TV helicopter (no traffic)' },
-  visitors: { type: 'object', tool: T + 'life/visitors.js', keys: ['spots', 'lookouts', 'walking'], doc: 'people at overlooks and sites' },
+  visitors: { type: 'object', tool: T + 'life/visitors.js', keys: ['spots', 'lookouts', 'walking', 'kids', 'dogs', 'strollers'], doc: 'people at overlooks and sites' },
 
   // city kit (authored-city)
   cityData: { type: 'string', tool: T + 'city/city.js', doc: 'city data (tools/build_city.py)' },

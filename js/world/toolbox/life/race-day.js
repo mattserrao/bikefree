@@ -6,8 +6,9 @@
 //
 // Cheap by construction: everything is static and merged or instanced per stretch of road (one draw per kind per
 // stretch, hidden past a reach); the crowd's cheering, the flags and the rotor move in the vertex shaders. Near
-// the rider the crowd is people (box figures); further off it is crowd cards (a strip of heads and shirts drawn
-// by the shader). Portable: a scene's "raceDay" block.
+// the rider the crowd is people from the figures kit — detailed within a few tens of metres of the camera, light
+// beyond — and further off it is crowd cards (a strip of heads and shirts drawn by the shader); some sit on chairs
+// at the camps. Portable: a scene's "raceDay" block.
 //
 //   "raceDay": {
 //     "crowd": [ { "fromM": 111600, "toM": 126900, "perM": 0.9, "rows": 3, "orange": 0.15 },
@@ -21,59 +22,17 @@ import * as THREE from '../../../../vendor/three.module.min.js';
 import { randomSequence } from '../core/random.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { Builder, M, box, cyl, cone } from '../core/model-builder.js';
+import { Crowd, CLIP, FIT, randomLook, clipRate, figureMaterial, staticCrowdMesh, posedFigure } from './figures/people.js';
+import { staticVehicle, appendToBuilder, PAINTS } from './figures/vehicles.js';
 
 const ROAD_HALF = 3.5;
-const CHUNK_M = 200;          // crowd people per 200 m of road
+const CHUNK_M = 100;          // crowd people per 100 m of road (each chunk draws its people at one detail level)
 const CARD_CHUNK_M = 2000;    // crowd cards and camps per 2 km
-const SHIRTS = ['#c0392b', '#2e86c1', '#f1c40f', '#27ae60', '#ecf0f1', '#34495e', '#8e44ad', '#d35400', '#e84393', '#16a085', '#f5f5f0', '#1f3a5f', '#e74c3c', '#2c3e50'];
 const ORANGE = ['#ff7a00', '#ff8c1a', '#f26a00', '#ffa033'];
-const PANTS = ['#2c3e50', '#4a4a4a', '#6b5b45', '#1f3a5f', '#3b3b3b', '#7a6a55', '#d9cfb8'];
-const SKIN = ['#f1c27d', '#e0ac69', '#c68642', '#8d5524', '#ffdbac'];
 // generic flags: [stripes direction, colours] (national tricolours and plain fan flags)
 const FLAGS = [['v', '#0055a4', '#ffffff', '#ef4135'], ['h', '#ae1c28', '#ffffff', '#21468b'], ['v', '#000000', '#fdda24', '#ef3340'], ['d', '#c8102e', '#ffffff'],
   ['h', '#ffffff', '#005da4', '#ed1c24'], ['h', '#fcd116', '#003893', '#ce1126'], ['h', '#ff7a00', '#ff7a00', '#ff7a00'], ['h', '#d52b1e', '#ffffff', '#d52b1e'],
   ['c', '#d50000', '#009b3a', '#ffffff'], ['h', '#ffffff', '#d52b1e', '#ffffff']];
-
-function crowdMaterial(uTime) {
-  // box people (the visitors' figure) cheering: arms up and waving, a bounce, some clapping
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .85 });
-  m.onBeforeCompile = (shader) => {
-    shader.uniforms.uTime = uTime;
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>
-        uniform float uTime; attribute float aPart; attribute vec3 aMask; attribute vec3 iA; attribute vec3 iB; attribute vec3 iC; attribute vec2 iAnim;`)
-      .replace('#include <begin_vertex>', `
-        vec3 transformed = vec3(position);
-        float ph = iAnim.x, mood = iAnim.y;                     // 0 standing, 1 arms up waving, 2 clapping
-        float t = uTime * (5.5 + fract(ph * 3.1) * 2.5) + ph;
-        if (aPart > 2.5) {
-          float side = aPart > 3.5 ? 1. : -1.;
-          float ang = mood > 1.5 ? -1.2 + sin(t * 1.6) * .25 : mood > .5 ? -2.7 + sin(t + side) * .35 : -.15;
-          float y = transformed.y - 1.45, z = transformed.z, c = cos(ang), s = sin(ang);
-          transformed.y = 1.45 + y * c - z * s; transformed.z = y * s + z * c;
-          if (mood > 1.5) transformed.x -= side * (.12 + sin(t * 3.2) * .07);
-        }
-        transformed.y += mood > .5 ? max(0., sin(t * .9)) * .06 : 0.;`)
-      .replace('#include <color_vertex>', `#include <color_vertex>
-        vColor.rgb = vColor.rgb * clamp(1. - aMask.x - aMask.y - aMask.z, 0., 1.) + iA * aMask.x + iB * aMask.y + iC * aMask.z;`);
-  };
-  m.customProgramCacheKey = () => 'bf-raceday-crowd-1';
-  return m;
-}
-
-function personGeo() {
-  // the visitors' figure without a day pack: 1 left leg, 2 right leg, 3 left arm, 4 right arm (they move)
-  const B = new MeshBuilder({ aPart: 1, aMask: 3 });
-  const P = (part, mask) => B.set({ aPart: [part], aMask: mask });
-  P(1, [0, 1, 0]); B.box(-.1, 0, 0, .15, .94, .17); P(2, [0, 1, 0]); B.box(.1, 0, 0, .15, .94, .17);
-  // (no shoes: at crowd scale they are never seen, and they are 12 triangles a person)
-  B.color('#fff'); P(0, [1, 0, 0]); B.box(0, .9, 0, .44, .62, .25);
-  P(3, [1, 0, 0]); B.box(-.28, .92, 0, .11, .56, .13); P(4, [1, 0, 0]); B.box(.28, .92, 0, .11, .56, .13);
-  P(3, [0, 0, 1]); B.box(-.28, .8, 0, .09, .12, .1); P(4, [0, 0, 1]); B.box(.28, .8, 0, .09, .12, .1);
-  P(0, [0, 0, 1]); B.box(0, 1.52, 0, .22, .27, .24);
-  B.color('#3a2e22'); P(0, [0, 0, 0]); B.box(0, 1.74, -.01, .24, .08, .26);
-  return B.geometry();
-}
 
 function flagAtlas() {
   const c = document.createElement('canvas'); c.width = 64 * FLAGS.length; c.height = 48;
@@ -98,7 +57,7 @@ function flagMaterial(uTime, map) {
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         // the cloth flaps out from the pole (u = 0) and the pole sways as it is waved
         float wave = sin(uTime * 7. + uv.x * 5. + iPhase) * .12 * uv.x;
-        transformed.z += wave; transformed.x += sin(uTime * 2.2 + iPhase) * .25 * (position.y - 1.2) * step(1.2, position.y);`)
+        transformed.z += wave; transformed.x += sin(uTime * 2.2 + iPhase) * .25 * (position.y - 1.72);`)
       .replace('#include <uv_vertex>', `#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = vec2((iFlag + uv.x) / ${FLAGS.length}., uv.y);\n#endif`);
   };
   m.customProgramCacheKey = () => 'bf-raceday-flags-1';
@@ -233,29 +192,40 @@ export class RaceDay {
     }
 
     // ---- build: people (instanced per chunk), flags, cards and camps (merged per chunk)
-    const geo = personGeo(), crowdMat = this._own(crowdMaterial(uniforms.uTime));
+    // the near band (detailed figures, refilled as the camera moves) and the far chunks share this sphere
+    // three bands around the camera: detailed figures within nearR (a Crowd refilled as the camera moves; the chunks
+    // hide those in their shader), the light figures in chunks closer than midR, the lightest ones beyond
+    const nearR = { low: 14, balanced: 20, high: 34 }[quality] ?? 20;
+    this.midR = { low: 45, balanced: 70, high: 110 }[quality] ?? 70;
+    this.near = { value: new THREE.Vector4(0, -1e5, 0, nearR) };
+    const midMat = this._own(figureMaterial(uniforms.uTime, { near: this.near, nearMode: 1 }));
+    const farMat = this._own(figureMaterial(uniforms.uTime));
+    this._own(midMat.userData.depth); this._own(farMat.userData.depth);
+    this.nearCrowd = new Crowd(this.group, { uTime: uniforms.uTime, name: 'Crowd (near)', capacity: { low: 160, balanced: 420, high: 800 }[quality] ?? 420, nearM: Infinity });
+    this.nearLists = [];
     const flagMat = this._own(flagMaterial(uniforms.uTime, this._own(flagAtlas())));
-    const flagGeo = new THREE.PlaneGeometry(.9, .6, 4, 1).translate(.45, 2.45, 0);
-    const poleGeo = new THREE.CylinderGeometry(.015, .015, 1.6, 4).translate(0, 1.95, 0);
+    const flagGeo = new THREE.PlaneGeometry(.9, .6, 4, 1).translate(.45 - .27, 2.45, .12);
+    const poleGeo = new THREE.CylinderGeometry(.015, .015, 1.6, 4).translate(-.27, 1.95, .12);
+    const MOODS = [[CLIP.idle, CLIP.look, CLIP.photo, CLIP.idle], [CLIP.cheer, CLIP.cheer, CLIP.wave], [CLIP.clap]];
     const col = new THREE.Color(), mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1), pos = new THREE.Vector3();
     let total = 0;
     for (const [key, list] of people) {
-      const g = geo.clone(), n = list.length;
-      const A = new Float32Array(n * 3), Bc = new Float32Array(n * 3), C = new Float32Array(n * 3), An = new Float32Array(n * 2);
-      const mesh = new THREE.InstancedMesh(g, crowdMat, n);
+      const n = list.length;
       const flags = list.filter((p) => p.flag);
       list.forEach((p, i) => {
-        q.setFromAxisAngle(up, p.yaw); mesh.setMatrixAt(i, mtx.compose(pos.set(p.x, p.y, p.z), q, one));
-        col.set(p.orange ? ORANGE[i % ORANGE.length] : SHIRTS[Math.floor(rand() * SHIRTS.length)]); A.set([col.r, col.g, col.b], i * 3);
-        col.set(p.orange ? (rand() < .5 ? '#ff8c1a' : '#2c3e50') : PANTS[Math.floor(rand() * PANTS.length)]); Bc.set([col.r, col.g, col.b], i * 3);
-        col.set(SKIN[Math.floor(rand() * SKIN.length)]); C.set([col.r, col.g, col.b], i * 3);
-        An.set([p.phase, p.flag ? 0 : p.mood], i * 2);
+        const look = randomLook(rand, { kids: .1, caps: .25, packs: .12, skirts: .1, ...(p.orange ? { shirt: ORANGE[i % ORANGE.length] } : {}) });
+        if (p.orange && rand() < .5) look.pants = col.set('#ff8c1a').clone();
+        const table = MOODS[p.mood] || MOODS[0];
+        p.look = look; p.clip = p.flag ? CLIP.flag : table[Math.floor(rand() * table.length)];
+        if (p.clip === CLIP.photo) look.bits |= FIT.PROP;
+        if (p.flag) { look.h = 1; look.g = 1; look.kid = false; }   // the flag's pole is built for an adult's raised hand
+        p.phase = rand(); p.rate = clipRate(p.clip) * (.85 + rand() * .3);
       });
-      g.setAttribute('iA', new THREE.InstancedBufferAttribute(A, 3)); g.setAttribute('iB', new THREE.InstancedBufferAttribute(Bc, 3));
-      g.setAttribute('iC', new THREE.InstancedBufferAttribute(C, 3)); g.setAttribute('iAnim', new THREE.InstancedBufferAttribute(An, 2));
-      mesh.instanceMatrix.needsUpdate = true; mesh.castShadow = true; mesh.receiveShadow = true; mesh.name = `Crowd ${(key * CHUNK_M / 1000).toFixed(1)} km`;
-      mesh.userData.dynamic = true;   // animated: keep it out of the bake
-      mesh.computeBoundingSphere(); this._chunk(mesh, 'people', g);
+      const name = `Crowd ${(key * CHUNK_M / 1000).toFixed(1)} km`;
+      const mesh = this._own(staticCrowdMesh(list, midMat, name, 'lo')), farMesh = this._own(staticCrowdMesh(list, farMat, `${name} (far)`, 'far'));
+      for (const m of [mesh, farMesh]) { m.castShadow = true; m.customDepthMaterial = m.material.userData.depth; this._chunk(m, 'people', m.geometry); }
+      mesh.userData.band = 'mid'; farMesh.userData.band = 'far';
+      this.nearLists.push({ mesh, farMesh, list });
       total += n;
       if (flags.length) {
         const fg = flagGeo.clone(), fm = new THREE.InstancedMesh(fg, flagMat, flags.length), pm = new THREE.InstancedMesh(poleGeo, this._own(new THREE.MeshStandardMaterial({ color: '#8c8c88' })), flags.length);
@@ -290,33 +260,38 @@ export class RaceDay {
       const mesh = new THREE.Mesh(g, cardMat); mesh.name = `Crowd cards ${(key * CARD_CHUNK_M / 1000).toFixed(0)} km`; mesh.userData.bake = false; mesh.userData.standIn = true;   // the far stand-in for the people
       this._chunk(mesh, 'cards', g);
     }
-    // camps: vans, tents, cars, chairs, parasols — merged per 2 km
+    // camps: motorhomes, camper vans, tents, cars, chairs (some with people in them), parasols — merged per 2 km
+    let rvGeo = null; const vanGeo = [], carGeo = {};
     for (const [key, list] of camps) {
       const b = new Builder();
       for (const c of list) {
         const m = (x, y, z, ry = 0) => M(c.x + Math.cos(c.yaw) * x + Math.sin(c.yaw) * z, c.y + y, c.z - Math.sin(c.yaw) * x + Math.cos(c.yaw) * z, 1, 1, 1, c.yaw + ry);
         if (c.kind < .45) {
-          // a camper van: white body, the cab, dark windows, an awning and a couple of chairs
-          b.add(box(2.3, 2.6, 6.2), m(0, .35, 0), c.c < .5 ? '#f2efe6' : '#e8e2d2');
-          b.add(box(2.25, .9, 1.4), m(0, .35, 3.6), '#dcd8cf');
-          b.add(box(2.35, .7, 2.6), m(0, 1.5, .5), '#2d3640');
-          b.add(box(2.31, .25, 6.21), m(0, 1.05, 0), ['#c0392b', '#2e86c1', '#e67e22'][Math.floor(c.c * 3)]);
-          for (const z of [-1.8, 2.2]) for (const x of [-1.05, 1.05]) b.add(cyl(.38, .38, .3, 8), M(c.x + Math.cos(c.yaw) * x + Math.sin(c.yaw) * z, c.y + .38, c.z - Math.sin(c.yaw) * x + Math.cos(c.yaw) * z, 1, 1, 1, c.yaw, 0, Math.PI / 2), '#1d1d1d');
-          b.add(box(2.6, .08, 2.2), m(2.4, 2.4, 0), c.c < .5 ? '#2e86c1' : '#27ae60');
-          b.add(box(.5, .5, .5), m(2.5, .35, -.5), '#3b5ba5'); b.add(box(.5, .5, .5), m(2.6, .35, .6), '#c0392b');
+          // a motorhome or a camper van, an awning, and people in folding chairs beside it
+          const rv = c.c < .6;
+          appendToBuilder(b, rv ? (rvGeo ||= staticVehicle('rv')) : (vanGeo[Math.floor(c.c * 10) % 3] ||= staticVehicle('camper', ['#2e86c1', '#e07a2f', '#3a7ca5'][Math.floor(c.c * 10) % 3])), m(0, 0, 0));
+          b.add(box(2.6, .08, 2.2), m(2.45, 2.4, rv ? -.5 : 0), c.c < .5 ? '#2e86c1' : '#27ae60');
+          for (const [x, z, ry] of [[2.3, -.6, -.4], [2.6, .7, .3]]) {
+            b.add(box(.5, .06, .5), m(x, .44, z), '#3b5ba5'); b.add(box(.5, .5, .06), m(x, .44, z - .24), '#3b5ba5');
+            for (const lx of [-.22, .22]) b.add(box(.03, .44, .03), m(x + lx, 0, z), '#666');
+            if (rand() < .75) appendToBuilder(b, posedFigure(randomLook(rand, { kids: .15, caps: .35 }), CLIP.sit, { frame: Math.floor(rand() * 24) }), m(x, 0, z + .1, ry));
+          }
         } else if (c.kind < .7) {
           // a tent and a table
           b.add(cone(1.7, 1.7, 4), m(0, 0, 0, Math.PI / 4), ['#f39c12', '#2980b9', '#27ae60', '#c0392b'][Math.floor(c.c * 4)]);
           b.add(box(1.2, .75, .8), m(2.2, 0, 0), '#d8d3c6');
         } else if (c.kind < .9) {
           // a parked car
-          b.add(box(1.8, .75, 4.2), m(0, .3, 0), ['#bfc3c7', '#2c3e50', '#7f8c8d', '#c0392b', '#ecf0f1'][Math.floor(c.c * 5)]);
-          b.add(box(1.6, .6, 2.2), m(0, 1.05, -.2), '#2b333b');
+          const kind = ['sedan', 'hatch', 'suv', 'van'][Math.floor(c.c * 4)], paint = PAINTS[Math.floor(c.c * 97) % PAINTS.length];
+          appendToBuilder(b, (carGeo[kind + paint] ||= staticVehicle(kind, paint)), m(0, 0, 0));
         } else {
           // a parasol and two chairs
           b.add(cyl(.03, .03, 2.2, 4), m(0, 0, 0), '#777');
           b.add(cone(1.4, .45, 8), m(0, 1.9, 0), ['#e74c3c', '#f1c40f', '#3498db'][Math.floor(c.c * 3)]);
-          b.add(box(.5, .5, .5), m(.7, 0, 0), '#3b5ba5'); b.add(box(.5, .5, .5), m(-.7, 0, 0), '#3b5ba5');
+          for (const x of [.7, -.7]) {
+            b.add(box(.5, .06, .5), m(x, .44, 0), '#3b5ba5'); b.add(box(.5, .5, .06), m(x, .44, -.24), '#3b5ba5');
+            if (rand() < .6) appendToBuilder(b, posedFigure(randomLook(rand, { kids: .15, caps: .35 }), CLIP.sit, { frame: Math.floor(rand() * 24) }), m(x, 0, .1));
+          }
         }
       }
       const mesh = new THREE.Mesh(b.build(), this._own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .75 })));
@@ -460,15 +435,26 @@ export class RaceDay {
     this.group.add(this.heli);
   }
 
-  /** Every frame: show the stretches near the camera, fly the helicopter. */
+  /** Every frame: show the stretches near the camera, hand the nearest spectators to the detailed figures, fly the helicopter. */
   tick(dt, camera, riderS = null) {
     const cam = camera.position || camera, cx = cam.x, cz = cam.z;
     for (const m of this.chunks) {
       const b = m.isInstancedMesh ? m.boundingSphere : m.geometry.boundingSphere;
       if (!b) continue;
       const d = Math.hypot(b.center.x - cx, b.center.z - cz) - b.radius;
-      m.visible = d < this.reach[m.userData.kind];
+      m.visible = d < this.reach[m.userData.kind] && (!m.userData.band || (m.userData.band === 'mid') === (d < this.midR));
     }
+    // the near band: within near.w of the camera the far chunks hide their people (in the shader) and the
+    // detailed crowd draws the same people, same clip and phase
+    const R = this.near.value.w;
+    this.near.value.set(cam.x, cam.y, cam.z, R);
+    this.nearCrowd.begin(cam);
+    for (const { mesh, list } of this.nearLists) {
+      const b = mesh.boundingSphere;
+      if (!mesh.visible || Math.hypot(b.center.x - cam.x, b.center.y - cam.y, b.center.z - cam.z) - b.radius > R) continue;
+      for (const p of list) if (Math.hypot(p.x - cam.x, p.y - cam.y, p.z - cam.z) < R) this.nearCrowd.add(p.look, p.x, p.y, p.z, p.yaw, p.clip, p.phase, p.rate);
+    }
+    this.nearCrowd.end();
     if (this.heli) {
       this._t = (this._t || 0) + dt;
       const t = this._t;
@@ -481,6 +467,7 @@ export class RaceDay {
   }
 
   dispose() {
+    this.nearCrowd.dispose();
     for (const m of this.chunks) m.dispose?.();
     this.dispose_.forEach((x) => x.dispose?.());
     this.group.removeFromParent();
