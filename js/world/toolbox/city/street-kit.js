@@ -70,7 +70,7 @@ class KitBuilder extends MeshBuilder {
 const GROUND_CELL = 6;   // [w2-clip] the near ground's grid (stylized-terrain.js: 96 m patches, 16 cells a side)
 import { CURB_H, ROUTE_CURB, streetKitConfig, routeCurbAt, zoneCurbAt, walkTopAt } from './street-grade.js';
 export { streetKitConfig, zoneCurbAt, walkTopAt, CURB_H, ROUTE_CURB };
-const LOD = { light: { near: 160, mid: 450, carDetail: 40 }, balanced: { near: 260, mid: 750, carDetail: 90 }, high: { near: 380, mid: 1100, carDetail: 140 } };   // [w2-polish] carDetail: detailed parked cars within this of them
+const LOD = { light: { near: 160, mid: 450, carDetail: 40 }, balanced: { near: 260, mid: 750, carDetail: 90 }, high: { near: 320, mid: 900, carDetail: 90 } };   // [finish] High: near 380 → 320, mid 1100 → 900, detailed cars 140 → 90 m (the 2 M triangle budget)   // [w2-polish] carDetail: detailed parked cars within this of them
 
 // ---------------------------------------------------------------- catalogue: facade styles
 /**
@@ -1280,7 +1280,7 @@ export class StreetKit {
             face(W, V(x0 - ax * w, h0, z0 - az * w), V(x0 + ax * w, h0, z0 + az * w), V(x1 + ax * w, h1, z1 + az * w), V(x1 - ax * w, h1, z1 - az * w), UP);
           }
           const h = hash(Math.round(m.x * 7) * 31 + Math.round(m.z * 7) * 17);
-          if (h < .55 && cars < 60) { this.place(C, 'car', m.x, m.z, Math.atan2(bx * dir, bz * dir), { y: ym, seed: h }); cars++; }
+          if (h < .55 && cars < 45) { this.place(C, 'car', m.x, m.z, Math.atan2(bx * dir, bz * dir), { y: ym, seed: h }); cars++; }   // [finish] at most 45 a lot (was 60: big lots cost a lot of triangles on High)
         }
       }
     }

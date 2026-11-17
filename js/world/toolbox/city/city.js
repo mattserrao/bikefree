@@ -1120,9 +1120,9 @@ export class CityScene {
     }
     // a light street tree: trunk + two lumpy crowns (~40 triangles), coloured per instance
     const M = new MeshBuilder();
-    M.color('#5b4636');   // [w2-budget] the trunk: five sides, no cap (it ends inside the crown): 10 triangles, was 15
-    for (let k = 0; k < 5; k++) {
-      const p = (a, r, y) => new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r), a0 = k / 5 * Math.PI * 2, a1 = (k + 1) / 5 * Math.PI * 2;
+    M.color('#5b4636');   // [w2-budget] the trunk: no cap (it ends inside the crown); [finish] four sides: 8 triangles (was 10, then 15)
+    for (let k = 0; k < 4; k++) {
+      const p = (a, r, y) => new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r), a0 = k / 4 * Math.PI * 2 + .4, a1 = (k + 1) / 4 * Math.PI * 2 + .4;
       M.quad(p(a0, .16, 0), p(a0, .12, 3.2), p(a1, .12, 3.2), p(a1, .16, 0));
     }
     const trunkVerts = M.count;   // [finish] (the trunk's vertices come first: bark; the crown's after: foliage)
@@ -1145,8 +1145,8 @@ export class CityScene {
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0);
     this.treeTrunks = [];
     for (const t of spots) {
-      const road = this.index.nearest(t.x, t.z, 650);
-      if (!road) continue;   // near the ride only
+      const road = this.index.nearest(t.x, t.z, 520);
+      if (!road) continue;   // near the ride only ([finish] 520 m, was 650: the hillside woods carry the distance)
       // trunk clear of every carriageway, the crown clear of walls, and nothing growing over the rider's road
       if (!t.kit && !this._clearSpot(t.x, t.z, 1.6, -1, ROAD_WIDTH / 2 + 2.4, t.wall ?? (this.streetKit ? 1.7 : 1.2))) continue;   // [finish] (kit awnings reach 1.3 m out)   // [s4-section] t.wall, [street-kit] kit trees: checked
       const key = `${Math.floor(t.x / SECTOR_M)},${Math.floor(t.z / SECTOR_M)}`, w = .75 + t.seed * .5;   // [w2-budget] per sector (was 480 m)
