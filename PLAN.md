@@ -774,7 +774,31 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [x] Duplicate map footprints dropped (they z-fought once each copy had its own windows)
 - [x] `npm run gallery:buildings`, `test/building-kit.test.mjs`, snapshots before/after at 8 spots (`docs/buildings/`)
 - [ ] Ride the Alpe on the Mac and the Air (githack link); check load time on the Air
-- [ ] Later: bring the kit to Route 28's villages and Pittsburgh's city blocks
+- [ ] Later: bring the kit to Route 28's villages
+
+**Pittsburgh pass (17 Nov 2026, same branch)**
+- Decisions:
+  - Homes get the full kit and everything else gets textures only; towers and heroes are untouched.
+  - The street kit's storefronts, cornices and bays stay.
+  - Pittsburgh may use 2.5 M triangles.
+  - The work goes into PR #34.
+- [x] Presets `pittsburgh-rowhouse` and `pittsburgh-frame`, styles picked by map kind. Also added: asphalt shingles, front porches, party walls with ridges along the street, stone lintels, a cornice on flat-roofed rows, a spindle railing.
+- [x] `CityBuildingKit`:
+  - homes from the city's streaming, folded into its sectors
+  - fronts toward the nearest street; clearances from street edges and sidewalks
+  - detail tiers by distance to the route
+  - lamps and trees keep clear of eaves, porches and dressing
+- [x] City facades through `FACADE_GLSL`:
+  - brick, stone, painted brick, concrete and metal by kind, plus weathering
+  - windows with frames, sashes, blinds and curtains, lintels and sills, on the street kit's grid
+- [x] Budget:
+  - far homes skip soffits, fascias and chimneys
+  - near detail per sector, shown within 550 m
+  - High busiest spots are now 2.24 M and 2.16 M
+- [x] Tests: row houses get party walls; fronts face streets; porches and dressing stay off streets and out of buildings
+- [x] Clipping QC: the same findings as main
+- [ ] Ride Pittsburgh on the Mac and the Air
+
 
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)

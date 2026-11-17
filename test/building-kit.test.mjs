@@ -119,3 +119,56 @@ test('building kit: presets name only known materials, and every building assemb
   for (let i = 0; i < w.ni; i++) assert.ok(w.idx[i] < w.n);
   assert.ok(w.triangles / 1500 < 200, `${(w.triangles / 1500).toFixed(0)} triangles a building`);
 });
+
+// ------------------------------------------------------------------------------------------------- Pittsburgh
+import { makeCityLandscape, cityStreets } from '../js/world/toolbox/city/landscape.js';
+import { planCityHomes } from '../js/world/toolbox/structures/buildings/kit.js';
+
+const pit = (() => {
+  const it = JSON.parse(read('routes/catalog.json')).find((x) => x.id === 'pittsburgh');
+  const rt = buildCatalogRoute(read(it.file).toString(), it);
+  const sc = JSON.parse(read(it.scene)); sc.city = JSON.parse(read(sc.cityData)); rt.scene = sc;
+  let a2 = Infinity, b2 = -Infinity, c2 = Infinity, d2 = -Infinity;
+  for (let i = 0; i < rt.lat.length; i++) { a2 = Math.min(a2, rt.lat[i]); b2 = Math.max(b2, rt.lat[i]); c2 = Math.min(c2, rt.lon[i]); d2 = Math.max(d2, rt.lon[i]); }
+  const pr = makeProjection((a2 + b2) / 2, (c2 + d2) / 2), ix = makeRouteIndex(rt, pr);
+  const L = makeCityLandscape(sc, pr, ix, rt);
+  const B = sc.city.buildings, D = L.decoded;
+  const u8 = (t) => Uint8Array.from(Buffer.from(t, 'base64')).buffer;
+  const h = new Uint16Array(u8(B.h)), starts = new Uint32Array(u8(B.starts)), xy = new Int16Array(u8(B.xy));
+  const buildings = [];
+  for (let k = 0; k < B.count; k++) buildings.push({ k, ring: D.points(xy, starts[k], starts[k + 1]), h: h[k] / 10, kind: B.kind[k], name: B.names[k] || '' });
+  const city = { buildings, streets: cityStreets(L, ix, rt), index: ix, route: rt };
+  return { ...planCityHomes(city, sc.buildingKit), city, ix };
+})();
+
+test('building kit, Pittsburgh: homes become row houses and frame houses, rows get party walls along the street', () => {
+  const P = pit.plan.buildings;
+  assert.ok(P.length > 7500, `${P.length} homes`);
+  const rows = P.filter((R) => R.kind === 'rowhouse'), frames = P.filter((R) => R.kind === 'house');
+  assert.ok(rows.filter((R) => R.attached).length / rows.length > .2, 'row houses stand against their neighbours (many rows are mapped as one outline)');
+  for (const R of rows.filter((x) => x.attached)) assert.ok(!R.party[R.front], 'a front is never a party wall');
+  assert.ok(rows.filter((R) => R.style.preset === 'pittsburgh-rowhouse').length === rows.length);
+  assert.ok(frames.every((R) => R.style.preset === 'pittsburgh-frame'));
+  assert.ok(P.filter((R) => R.archetype === 'block').length < P.length * .02, 'rows are not blocks');
+  const near = frames.filter((R) => R.full && R.rects.length);
+  assert.ok(near.filter((R) => R.parts.frontPorch).length / near.length > .2, 'front porches near the route');
+});
+
+test('building kit, Pittsburgh: fronts face a street; porches and dressing stay off streets and out of buildings', () => {
+  const P = pit.plan.buildings, S = pit.streets;
+  let facing = 0, n = 0;
+  for (const R of P) {
+    const r = R.rects[0]; if (!r || R.d > 40) continue;
+    const nrm = R.front === 0 ? [-r.vx, -r.vz] : R.front === 2 ? [r.vx, r.vz] : R.front === 1 ? [r.ux, r.uz] : [-r.ux, -r.uz];
+    n++; if (nrm[0] * R.toRoad.x + nrm[1] * R.toRoad.z > .3) facing++;
+  }
+  assert.ok(facing / n > .8, `${facing} of ${n} fronts face their street`);
+  const all = pit.city.buildings;
+  for (const R of P) for (const it of R.dressing) {
+    assert.equal(S.nearest(it.x, it.z, ROAD_HALF + 1.2), null, `${it.kind} on a street or sidewalk`);
+    for (const O of all) {
+      if (Math.abs(O.ring[0].x - it.x) > 80 || Math.abs(O.ring[0].z - it.z) > 80) continue;
+      assert.ok(!pip(it.x, it.z, O.ring.map((p) => [p.x, p.z])), `${it.kind} inside a building`);
+    }
+  }
+});

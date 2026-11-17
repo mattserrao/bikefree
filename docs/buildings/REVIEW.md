@@ -41,3 +41,40 @@ Top left to bottom: `provence`, `hautes-alpes`, `dauphine`, `oisans`, `ski-resor
 
 - Load: about 1 s more than the plain extrusions (headless, 7,000 buildings). Check on the Air.
 - The kit isn't on Route 28's villages or Pittsburgh's city blocks yet.
+
+---
+
+# Pittsburgh pass (17 Nov 2026, same branch)
+
+**Decisions:**
+- Homes get the full kit; commercial and industrial buildings get textures only; towers and heroes are untouched.
+- The street kit's storefronts, cornices and bays stay.
+- Pittsburgh may use 2.5 M triangles.
+
+**What changed:**
+- 8,238 homes are planned by the kit: 4,649 row houses (`pittsburgh-rowhouse`) and 3,589 frame houses (`pittsburgh-frame`).
+  - 1,225 rows stand against a neighbour. Their party walls are blank and their ridges run along the street.
+  - 374 of the frame houses near the route have front porches.
+- Row houses that the street kit already dresses keep the city geometry. So do commercial blocks, works and the rest.
+- Every city facade now gets brick, stone or metal, weathering, and real windows (frames, sashes, blinds, lintels, sills).
+
+![East Carson Street, before and after](pittsburgh-facade-close.jpg)
+![East Carson, South Side Flats](pittsburgh-before-after-1.jpg)
+![South Side Flats, the West End](pittsburgh-before-after-2.jpg)
+![The two Pittsburgh presets (npm run gallery:buildings)](styles-pittsburgh.jpg)
+
+| Spot | Balanced before | Balanced after | High before | High after |
+| --- | --- | --- | --- | --- |
+| 6.5 km | 165 / 1.29 M | 176 / 1.48 M | 180 / 1.51 M | 198 / 1.81 M |
+| 7.0 km | 154 / 1.19 M | 164 / 1.37 M | | |
+| 8.8 km | 267 / 1.79 M | 290 / 2.06 M | 284 / 1.98 M | 307 / 2.24 M |
+| 10.45 km | 188 / 1.30 M | 196 / 1.49 M | 197 / 1.54 M | 207 / 1.82 M* |
+| 13.7 km | 214 / 1.23 M | 222 / 1.31 M | | |
+| 14.3 km | 224 / 1.05 M | 229 / 1.09 M | | |
+| 17.3 km | 287 / 1.65 M | 308 / 1.86 M | 322 / 1.95 M | 343 / 2.16 M |
+
+\* measured before the far-tier trims (soffits, fascias and chimneys only near the route), so it is now lower.
+
+**Clipping QC:** 0 fail, 70 warn, the same findings as main. Lamps and street trees keep clear of the kit's eaves, porches and dressing.
+
+**Open:** ride on the Mac and the Air; load is about 1 s slower (headless) while 8,200 homes are planned.

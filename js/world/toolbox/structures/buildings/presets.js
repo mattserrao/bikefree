@@ -17,13 +17,13 @@ export const S = {
   DOOR: 18, GARAGE: 19, BARNDOOR: 20, AWNING: 21, LOGEND: 22, LEAF: 23, STEEL: 24, SOLAR: 25, GRAVEL: 26,
   SOIL: 27, SOFFIT: 28, POT: 29, RAILING: 30, BENCH: 31,
   // roofs
-  R_CANAL: 40, R_TILE: 41, R_SCALE: 42, R_SLATE: 43, R_LAUZE: 44, R_SEAM: 45, R_CORR: 46, R_SHINGLE: 47, R_FLAT: 48,
+  R_CANAL: 40, R_TILE: 41, R_SCALE: 42, R_SLATE: 43, R_LAUZE: 44, R_SEAM: 45, R_CORR: 46, R_SHINGLE: 47, R_FLAT: 48, R_ASPHALT: 49,
 };
 /** Wall materials by name (style keys) → code. */
 export const WALLS = { render: S.RENDER, rough: S.ROUGH, rubble: S.RUBBLE, ashlar: S.ASHLAR, brick: S.BRICK, lap: S.LAP,
   boards: S.BOARDS, logs: S.LOGS, shingle: S.WSHINGLE, timber: S.TIMBER, metal: S.METAL, concrete: S.CONCRETE, glass: S.GLASS };
 export const ROOFS = { canal: S.R_CANAL, tile: S.R_TILE, scale: S.R_SCALE, slate: S.R_SLATE, lauze: S.R_LAUZE, seam: S.R_SEAM,
-  corrugated: S.R_CORR, shingle: S.R_SHINGLE, flat: S.R_FLAT };
+  corrugated: S.R_CORR, shingle: S.R_SHINGLE, flat: S.R_FLAT, asphalt: S.R_ASPHALT };
 /** Window sets (the shader draws the window, frame, muntins, shutters, sill and surround). */
 export const W = { NONE: 0, FRENCH: 1, FARM: 2, CHALET: 3, RESORT: 4, CHURCH: 5, BARN: 6, SASH: 7, SHOP: 8 };
 export const WINDOW_SETS = { french: W.FRENCH, farm: W.FARM, chalet: W.CHALET, resort: W.RESORT, church: W.CHURCH, barn: W.BARN, sash: W.SASH };
@@ -42,6 +42,7 @@ export const ROOF_COLORS = {
   corrugated: ['#8a8d8f', '#7a6250', '#6e7476'],
   shingle: ['#7d7266', '#8a7c6a', '#6c645a'],
   flat: ['#8f8b84', '#7f7c76'],
+  asphalt: ['#4b4d50', '#5c5752', '#3f4244', '#6a5f55', '#4d5547', '#5a4640'],
 };
 
 /** Every key a style can have, with generic defaults (a plain rendered village, pitched tile roofs). */
@@ -62,8 +63,8 @@ export const DEFAULT_STYLE = {
   roofs: { tile: .6, slate: .2, seam: .2 },
   forms: { gable: .7, halfHip: .15, hip: .15, stepped: 0 },
   pitch: 32, pitchJitter: 4, eaveM: .55, rakeM: .4,
-  windows: 'french', shutters: .85, surrounds: .4, quoins: .25, flowerBoxes: .25, genoise: 0,
-  balconies: .15, galleries: 0, dormers: .2, chimneys: .7, solar: .06, leanTo: .25, garage: .15, porch: .3,
+  windows: 'french', shutters: .85, surrounds: .4, lintels: 0, quoins: .25, flowerBoxes: .25, genoise: 0,
+  balconies: .15, galleries: 0, dormers: .2, chimneys: .7, solar: .06, leanTo: .25, garage: .15, porch: .3, frontPorch: 0,
   stair: .1, woodpile: .25, sundial: .02, shops: .5, ivy: .12,
   age: [.3, 1], upkeep: [.35, .95],
   stone: "#b3ab9c",                                    // stone colour (plinths, rubble walls, sills, steps)
@@ -143,6 +144,45 @@ export const STYLE_PRESETS = {
     balconies: .85, galleries: .5, dormers: .1, chimneys: .4, solar: .12, leanTo: .05, garage: .2, woodpile: .15, sundial: 0, shops: .7,
     age: [0, .35], upkeep: [.75, 1], ivy: 0,
     dressing: { steps: .9, shrubs: .35, bins: .5, bench: .35, pots: .55, garden: 0, fence: .1, laundry: 0, dish: .2, hay: 0, bikes: .2, trough: .2 },
+  },
+  // Pittsburgh row houses (South Side, Lawrenceville-style rows): brick, two or three storeys, attached, stone lintels and
+  // sills, a stoop, a side-gabled roof along the street (slate or asphalt) or a flat roof behind a cornice, front dormers
+  'pittsburgh-rowhouse': {
+    archetypes: { village: 1, cottage: .35, shed: .4, farmhouse: 0, chalet: 0, mazot: 0, block: 0 },
+    schemes: [
+      { wall: '#9a5a44', trim: '#2f3a33', frame: '#efebe2', accent: '#d8cfbd' },
+      { wall: '#8a4c3a', trim: '#3a2c26', frame: '#e4dac4', accent: '#cfc4ae' },
+      { wall: '#a8664c', trim: '#24313d', frame: '#efebe2', accent: '#e2d8c4' },
+      { wall: '#7f4a3b', trim: '#4a3a2e', frame: '#efebe2', accent: '#c9bfaa' },
+      { wall: '#b07a5c', trim: '#2b3540', frame: '#efebe2', accent: '#ddd3bf' },
+      { wall: '#c9bda4', trim: '#5a2e2a', frame: '#efebe2', accent: '#efe7d8' },
+    ],
+    walls: { brick: .82, lap: .12, render: .06 }, plinth: .55, gable: {}, barn: { boards: 1 },
+    roofs: { asphalt: .5, slate: .35, flat: .15 }, forms: { gable: .62, flat: .38 }, pitch: 30, pitchJitter: 6, eaveM: .3, rakeM: 0,
+    windows: 'sash', shutters: .06, surrounds: 0, lintels: .85, quoins: 0, flowerBoxes: .05, genoise: 0, attached: true,
+    balconies: 0, galleries: 0, dormers: .35, chimneys: .55, solar: .03, leanTo: 0, garage: 0, porch: .35, frontPorch: .12, stair: 0, woodpile: 0,
+    sundial: 0, shops: .35, ivy: .08, age: [.45, 1], upkeep: [.25, .9], stone: '#bdb3a0',
+    dressing: { steps: 1, shrubs: .25, bins: .55, bench: .05, pots: .35, garden: 0, fence: .1, laundry: 0, dish: .25, hay: 0, bikes: .1, trough: 0 },
+  },
+  // Pittsburgh frame houses (Mount Washington, the West End, the South Side Slopes): two or three storeys of painted
+  // siding or brick, steep front gables, a deep front porch on posts, asphalt or slate roofs, dormers
+  'pittsburgh-frame': {
+    archetypes: { cottage: 1, chalet: 0, village: .25, shed: .6, farmhouse: 0, mazot: 0, block: 0 },
+    schemes: [
+      { wall: '#e8e4da', trim: '#2f3d4a', frame: '#f4f2ec', accent: '#f4f2ec' },
+      { wall: '#d9cfa6', trim: '#4a5a44', frame: '#f4f2ec', accent: '#f4f2ec' },
+      { wall: '#a9b7b9', trim: '#2f3540', frame: '#f4f2ec', accent: '#f1efe8' },
+      { wall: '#c7d0bb', trim: '#5a3a2e', frame: '#f4f2ec', accent: '#f4f2ec' },
+      { wall: '#8d9aa6', trim: '#ece8de', frame: '#f4f2ec', accent: '#ece8de' },
+      { wall: '#e2cfb0', trim: '#6a2e2a', frame: '#f4f2ec', accent: '#f4f2ec' },
+      { wall: '#b5644e', trim: '#2e2e2e', frame: '#efebe2', accent: '#d8cfbd' },
+    ],
+    walls: { lap: .62, brick: .22, shingle: .1, render: .06 }, plinth: .7, gable: { lap: .3, shingle: .15 }, barn: { boards: 1 },
+    roofs: { asphalt: .7, slate: .22, seam: .08 }, forms: { gable: .72, hip: .2, halfHip: .08 }, pitch: 38, pitchJitter: 6, eaveM: .35, rakeM: .25,
+    windows: 'sash', shutters: .22, surrounds: 0, lintels: .3, quoins: 0, flowerBoxes: .04, genoise: 0, frontEnd: .55,
+    balconies: 0, galleries: 0, dormers: .3, chimneys: .55, solar: .04, leanTo: .06, garage: .05, porch: .2, frontPorch: .7, stair: 0, woodpile: 0,
+    sundial: 0, shops: 0, ivy: .06, age: [.3, 1], upkeep: [.3, .95], stone: '#a9a294',
+    dressing: { steps: 1, shrubs: .5, bins: .55, bench: .15, pots: .4, garden: .08, fence: .3, laundry: .03, dish: .25, hay: 0, bikes: .12, trough: 0 },
   },
 };
 

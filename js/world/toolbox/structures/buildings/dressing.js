@@ -19,12 +19,13 @@ export function planDressing(R, ctx) {
   const ok = (x, z, rr) => !ctx.index.nearest(x, z, ROAD_HALF + 1.2 + rr) && !ctx.blocked(x, z, rr, R);
   const add = (kind, x, z, yaw, size, rr, extra = {}) => { if (ok(x, z, rr)) { items.push({ kind, x, z, yaw, size, ...extra }); return true; } return false; };
   const door = R.parts.stair ? null : (doorU(R, f));
+  const po = R.parts.frontPorch ? R.parts.frontPorch.depth + .15 : 0;   // in front of a porch
   // by the door
-  if (door != null && rand() < D.pots) for (const s of [-1, 1]) { const [x, z] = at(door + s * .95, .45); add('pot', x, z, yawT, [.38, .38, .42], .3, { tone: rand() }); }
-  if (door != null && rand() < D.bench) { const s = rand() < .5 ? -1 : 1; const [x, z] = at(door + s * 2.1, .5); add('bench', x, z, yawT, [1.4, .45, .9], .8); }
+  if (door != null && rand() < D.pots) for (const s of [-1, 1]) { const [x, z] = at(door + s * .95, po + .45); add('pot', x, z, yawT, [.38, .38, .42], .3, { tone: rand() }); }
+  if (door != null && rand() < D.bench) { const s = rand() < .5 ? -1 : 1; const [x, z] = at(door + s * 2.1, po ? po * .45 : .5); const extra = po ? { porch: true } : {}; if (po) { if (!ctx.blocked(x, z, .5, R)) items.push({ kind: 'bench', x, z, yaw: yawT, size: [1.4, .45, .9], ...extra }); } else add('bench', x, z, yawT, [1.4, .45, .9], .8); }
   // bins at a front corner
   if (rand() < D.bins) {
-    const end = rand() < .5 ? .7 : f.len - .7, [x, z] = at(end, 1.0);
+    const end = rand() < .5 ? .7 : f.len - .7, [x, z] = at(end, po + 1.0);
     add('bins', x, z, yawT, [1.3, .65, 1.05], .8, { tone: rand() });
   }
   // shrubs along the front, away from the door
@@ -33,7 +34,7 @@ export function planDressing(R, ctx) {
     for (let k = 0; k < n; k++) {
       const u = rand() * f.len;
       if (door != null && Math.abs(u - door) < 1.6) continue;
-      const [x, z] = at(u, .8 + rand() * .5);
+      const [x, z] = at(u, po + .8 + rand() * .5);
       add('shrub', x, z, rand() * 6.28, [.7 + rand() * .7, .7 + rand() * .7, .6 + rand() * .7], .7, { tone: rand() });
     }
   }

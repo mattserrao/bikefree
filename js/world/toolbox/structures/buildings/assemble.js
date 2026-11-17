@@ -149,7 +149,8 @@ export function assemble(R, w, d, L) {
     trim: [...trim, frameIndex(sc.frame || '#efebe2')], acc: [...acc, 0], b: [R.seed, R.wear],
   };
   const C = (c) => toU8(c);
-  const codeColor = (code) => code === S.RUBBLE || code === S.ASHLAR ? stone : code === S.BOARDS || code === S.LOGS || code === S.WSHINGLE || code === S.LAP ? wood
+  // painted siding (lap, shingles) takes the scheme's wall colour; bare boards and logs are wood
+  const codeColor = (code) => code === S.RUBBLE || code === S.ASHLAR ? stone : code === S.BOARDS || code === S.LOGS ? wood
     : code === S.METAL ? srgb('#8f9294') : code === S.CONCRETE ? srgb('#bdb8ae') : wall;
   w.set({ ...st }); d.set({ ...st });
 
@@ -215,7 +216,10 @@ function body(ctx, r, k) {
       if (R.ivy && (R.seed * 13.7 % 1) < .5 + (i === 2 ? .3 : 0) && i === Math.floor(R.seed * 4)) flags |= F.IVY;
       if ((R.plinth > 1 && R.archetype !== 'chalet') || R.archetype === 'mazot') flags |= F.NOGROUND;
       if (R.parts.stair && isFront && !barn) flags |= F.UPPERDOOR;
-      const winOn = !(R.archetype === 'works' && !isFront) && R.archetype !== 'ruin';
+      if (R.lintels && !barn) flags |= F.LINTELS;
+      const party = k === 0 && R.party?.[i];   // against a neighbour: a blank wall
+      if (party) flags &= ~(F.QUOINS | F.IVY);
+      const winOn = !party && !(R.archetype === 'works' && !isFront) && R.archetype !== 'ruin';
       const packed = ws + 16 * (R.parts.stair && isFront && !barn ? bb.n - 1 : doorBay) + 256 * flags;
       const win = winOn ? [fh, bb.w, gv - lo, packed] : [0, 0, gv - lo, 0];
       w.set({ win, L: sl });
@@ -301,7 +305,8 @@ function gable(ctx, r, p, q, len, k, i) {
   const barnEnd = code === R.barnWall && R.barnEnd && k === 0;
   const flags = F.GABLE | (barnEnd || R.archetype === 'barn' ? F.BARN : 0) | (R.shutters ? F.SHUTTERS : 0);
   const ws = barnEnd || R.archetype === 'barn' || R.archetype === 'shed' ? W.BARN : R.archetype === 'church' ? W.CHURCH : W.FARM;
-  w.set({ code, col: C(codeColor(code)), win: [0, 0, top - lo, ws + 16 * 15 + 256 * (rise > 2.2 && R.form !== 'stepped' ? flags : 0)], L: len });
+  const blank = k === 0 && R.party?.[i];
+  w.set({ code, col: C(codeColor(code)), win: [0, 0, top - lo, ws + 16 * 15 + 256 * (rise > 2.2 && R.form !== 'stepped' && !blank ? flags : 0)], L: len });
   const mid = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
   if (R.form === 'halfHip' && r.halfHipOk) {
     const yk = top + (r.hv - r.wk) * tan;
@@ -328,7 +333,8 @@ function slab(ctx, polys, edges, th = .17, centre = null) {
     w.set({ L: 10 });
     w.poly(pl.P, uv);
   }
-  // the underside (soffit) and the edges (fascia boards)
+  // the underside (soffit) and the edges (fascia boards): near the ride only (far off the slab reads the same)
+  if (!R.full) return;
   const soff = ctx.wood.clone().multiplyScalar(.75);
   w.set({ code: S.SOFFIT, col: C(soff) });
   for (const pl of polys) {
@@ -387,7 +393,7 @@ function roof(ctx, r, k) {
     const a = P3(-A, -r.hv - e, y0), b = P3(A, -r.hv - e, y0), c = P3(A, r.hv + .2, y1), dd = P3(-A, r.hv + .2, y1);
     go([{ P: [a, b, c, dd], eave: eaveU, y0 }], [[a, b], [b, c], [c, dd], [dd, a]]);
   } else {
-    flat(ctx, r);
+    flat(ctx, r, k);
   }
 }
 
@@ -408,7 +414,7 @@ function ridge(ctx, a, b) {
   d.box(f, -len / 2, len / 2, -.14, .14, a[1] - .05, a[1] + .11);
 }
 
-function flat(ctx, r) {
+function flat(ctx, r, k = 0) {
   const { w, d, R, top, corner, C, wall } = ctx;
   const K = [corner(r, -r.hu, -r.hv), corner(r, r.hu, -r.hv), corner(r, r.hu, r.hv), corner(r, -r.hu, r.hv)].map((p) => [p[0], top, p[1]]);
   if (!ccwUp(K)) K.reverse();
@@ -419,6 +425,14 @@ function flat(ctx, r) {
   w.set({ code: R.wall, col: C(wall.clone().multiplyScalar(.95)), win: [0, 0, 0, 0] });
   for (const [a0, a1, b0, b1] of [[-r.hu, r.hu, -r.hv, -r.hv + .25], [-r.hu, r.hu, r.hv - .25, r.hv], [-r.hu, -r.hu + .25, -r.hv, r.hv], [r.hu - .25, r.hu, -r.hv, r.hv]])
     w.box(f, a0, a1, b0, b1, top - .05, top + .7);
+  // a bracketed cornice along the front of a flat-roofed row house (Pittsburgh Italianate)
+  if (k === 0 && (R.attached || R.lintels) && R.front % 2 === 0) {
+    const s2 = R.front === 0 ? -1 : 1, trimC = srgb(R.scheme.trim);
+    w.set({ code: S.WOOD, col: C(trimC.clone().lerp(srgb('#e8e2d4'), R.seed > .5 ? .6 : 0)) });
+    w.box(f, -r.hu - .05, r.hu + .05, Math.min(s2 * r.hv, s2 * (r.hv + .5)), Math.max(s2 * r.hv, s2 * (r.hv + .5)), top - .15, top + .55, { bottom: true });
+    w.set({ code: S.PLAIN, col: C(trimC.clone().multiplyScalar(.8)) });
+    for (let a = -r.hu + .4; a < r.hu - .2; a += 1.1) w.box(f, a - .08, a + .08, Math.min(s2 * r.hv, s2 * (r.hv + .4)), Math.max(s2 * r.hv, s2 * (r.hv + .4)), top - .55, top - .15, { bottom: true });
+  }
   // rooftop: a plant box or two on the big ones
   if (r.hu * r.hv > 60) { d.set({ code: S.METAL, col: C(srgb('#9a9c9e')) }); d.box(f, -r.hu * .3, -r.hu * .3 + 1.6, -.8, .8, top, top + 1.2); }
 }
@@ -545,8 +559,8 @@ function parts(ctx) {
       w.poly(tri, [[0, 0], [wD, 0], [wD / 2, rise]]);
     }
   }
-  // chimneys
-  if (P.chimneys) {
+  // chimneys (near the ride; far off they are a few pixels)
+  if (P.chimneys && R.full) {
     for (let k = 0; k < P.chimneys.n; k++) {
       const a = (k === 0 ? .45 : -.5) * r.hu * (R.seed > .5 ? 1 : -1), b = (R.seed * 7 % 1 - .5) * r.hv * .6;
       const yr = R.form === 'hip' || R.form === 'flat' ? top + 2.2 : top + (r.hv - Math.abs(b)) * tan;
@@ -576,6 +590,39 @@ function parts(ctx) {
     const s = { P: Pp }; fixWinding(s);
     w.set({ code: S.SOLAR, col: C(srgb('#202a40')), win: [0, 0, 0, 0], L: len });
     w.poly(s.P, s.P.map((p) => [p[0] * r.ux + p[2] * r.uz, p[1] / Math.sin(R.pitch)]));
+  }
+  // a front porch: a deck on posts across the front, a shed roof, a railing (Pittsburgh frame houses, US farmhouses)
+  if (P.frontPorch) {
+    const dp = doorPoint(R, gv);
+    const fs = frontSegment(R);
+    if (dp && fs) {
+      const depth = P.frontPorch.depth, len = Math.min(fs.len - .3, Math.max(3.2, fs.len * .92));
+      const mid = (fs.len - len) / 2;
+      const f = { cx: fs.p[0] + fs.t[0] * (mid + len / 2), cz: fs.p[1] + fs.t[1] * (mid + len / 2), ux: fs.t[0], uz: fs.t[1], vx: fs.n[0], vz: fs.n[1] };
+      const gnd = Math.min(L.heightAt(f.cx + f.vx * depth, f.cz + f.vz * depth), gv - .2);
+      const deck = gv - .08, hl = len / 2;
+      const woodC = srgb(R.scheme.accent || '#efebe2'), trimC = srgb(R.scheme.trim);
+      // deck and its skirt (lattice look: boards), posts, railing, roof
+      w.set({ code: S.WOOD, col: C(srgb('#8a7f72')), win: [0, 0, 0, 0] });
+      w.box(f, -hl, hl, 0, depth, deck - .12, deck, { bottom: true });
+      w.set({ code: S.BOARDS, col: C(trimC.clone().lerp(srgb('#5a5048'), .5)) });
+      w.box(f, -hl, hl, depth - .06, depth, gnd - .2, deck - .12, { top: false });
+      const roofY = gv + Math.min(2.85, R.floorH - .15);
+      w.set({ code: S.PLAIN, col: C(woodC) });
+      const posts = Math.max(2, Math.round(len / 2.6) + 1);
+      for (let k = 0; k < posts; k++) { const a = -hl + .15 + k * (len - .3) / (posts - 1); w.box(f, a - .09, a + .09, depth - .25, depth - .07, deck, roofY); }
+      w.set({ code: S.RAILING, col: C(woodC) });
+      const doorU = (dp.x - f.cx) * f.ux + (dp.z - f.cz) * f.uz;
+      for (const [a0, a1] of [[-hl + .1, doorU - .8], [doorU + .8, hl - .1]]) if (a1 - a0 > .5) w.box(f, a0, a1, depth - .2, depth - .14, deck, deck + .9, { bottom: false });
+      if (P.frontPorch.roof) {
+        const ov = .25, y0 = roofY + .05, y1 = roofY + .05 - (depth + ov) * .28;
+        const pts = [[-hl - .1, .02, y0 + .2], [hl + .1, .02, y0 + .2], [hl + .1, depth + ov, y1], [-hl - .1, depth + ov, y1]].map(([a, b, y]) => [f.cx + f.ux * a + f.vx * b, y, f.cz + f.uz * a + f.vz * b]);
+        const sl = { P: pts, eave: [f.ux, f.uz], y0: y1 };
+        fixWinding(sl);
+        slab(ctx, [sl], [[pts[2], pts[3]], [pts[1], pts[2]], [pts[3], pts[0]]], .14, [ctx.main.cx, ctx.main.cz]);
+      }
+      ctx.porch = { f, depth, gnd, deck };
+    }
   }
   // lean-to or garage against an end wall
   for (const kind of ['leanTo', 'garage']) {
@@ -670,8 +717,9 @@ function door(ctx) {
   const dp = doorPoint(R, gv); if (!dp || R.archetype === 'church' || R.archetype === 'works') return;
   ctx.door = dp;
   if (R.parts.stair) return;
-  const f = { cx: dp.x, cz: dp.z, ux: dp.t[0], uz: dp.t[1], vx: dp.n[0], vz: dp.n[1] };
-  const g = L.heightAt(dp.x + dp.n[0] * .8, dp.z + dp.n[1] * .8);
+  const pd = R.parts.frontPorch ? R.parts.frontPorch.depth : 0;
+  const f = { cx: dp.x + dp.n[0] * pd, cz: dp.z + dp.n[1] * pd, ux: dp.t[0], uz: dp.t[1], vx: dp.n[0], vz: dp.n[1] };
+  const g = L.heightAt(f.cx + dp.n[0] * .8, f.cz + dp.n[1] * .8);
   // steps from the ground up to the door
   const rise = gv - g;
   if (rise > .12) {
@@ -680,7 +728,7 @@ function door(ctx) {
     for (let k = 0; k < n; k++) d.box(f, -.75, .75, 0, .32 * (n - k), g - .3, g + (k + 1) * rise / n);
   }
   // a canopy (marquise) over the door
-  if (R.parts.porch && !R.shop) {
+  if (R.parts.porch && !R.shop && !pd) {
     const y = gv + 2.55;
     d.set({ code: R.roof, col: C(ctx.roofC), win: [0, 0, 0, 0] });
     const pts = [[-1, .02, y + .3], [1, .02, y + .3], [1, 1.05, y], [-1, 1.05, y]].map(([a, b, yy]) => [f.cx + f.ux * a + f.vx * b, yy, f.cz + f.uz * a + f.vz * b]);

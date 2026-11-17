@@ -18,7 +18,7 @@ import * as THREE from '../../../../../vendor/three.module.min.js';
 
 export const FRAMES = ['#efebe2', '#e4dac4', '#6b4a32', '#3b3d3f', '#9ea4a8'];
 /** Flags (aWin.w / 256). */
-export const F = { SHUTTERS: 1, SURROUNDS: 2, QUOINS: 4, FLOWERS: 8, SHOP: 16, GABLE: 32, SPARSE: 64, BARN: 128, IVY: 256, NOGROUND: 512, UPPERDOOR: 1024 };
+export const F = { SHUTTERS: 1, SURROUNDS: 2, QUOINS: 4, FLOWERS: 8, SHOP: 16, GABLE: 32, SPARSE: 64, BARN: 128, IVY: 256, NOGROUND: 512, UPPERDOOR: 1024, LINTELS: 2048 };
 
 const GLSL_COMMON = /* glsl */`
   attribute vec4 aSurf; attribute vec4 aWin; attribute vec2 aB; attribute vec4 aTrim; attribute vec4 aAcc;
@@ -26,10 +26,9 @@ const GLSL_COMMON = /* glsl */`
   varying vec3 vWN; varying vec3 vWP;
 `;
 
-const GLSL_FRAG = /* glsl */`
-  uniform vec3 uSunDir;
-  varying vec4 vSurf; flat varying vec4 vWin; flat varying vec2 vB; flat varying vec3 vTrim; flat varying float vFrame; flat varying vec3 vAcc;
-  varying vec3 vWN; varying vec3 vWP;
+/** Pure helpers (no varyings): value noise, lines and boxes, masonry, boards and roof surfaces. Shared with the city's
+ *  building material (city.js), which draws its facades with them when the scene has a buildingKit. */
+export const FACADE_GLSL = /* glsl */`
   vec3 bkLin(vec3 c) { return pow(c, vec3(2.2)); }
   float bkH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float bkN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
@@ -76,7 +75,7 @@ const GLSL_FRAG = /* glsl */`
   }
 
   // ---- roofs: u along the eaves, v up the slope (m)
-  vec3 bkRoof(int code, vec3 base, float u, float v, float det, float seed, float wear) {
+  vec3 bkRoof(int code, vec3 base, float u, float v, float det, float seed, float wear, float shady) {
     vec3 c = base;
     if (code == 40) {          // canal tiles: rounded channels down the slope
       float col = floor(u / .21), row = floor(v / .42);
@@ -128,19 +127,31 @@ const GLSL_FRAG = /* glsl */`
       float h = bkH(vec2(floor(x), row) + seed);
       c = base * (.8 + .34 * h);
       c *= 1. - (1. - smoothstep(0., .14, fract(v / .14))) * .45;
+    } else if (code == 49) {   // asphalt shingles: three-tab strips, blended granules, the odd replaced patch
+      float row = floor(v / .145); float x = u / .33 + mod(row, 2.) * .5 + bkH(vec2(row, seed)) * .2;
+      float h = bkH(vec2(floor(x), row) + seed);
+      c = base * (.88 + .2 * h) * (.94 + .12 * bkH(floor(vec2(u, v) * 40.)));
+      c *= 1. - (1. - smoothstep(0., .12, fract(v / .145))) * .42;
+      c *= 1. - bkLine(x, 1., .012 / .33, .01) * .35;
+      c = mix(c, base * vec3(.9, .95, 1.05) * 1.1, step(.93, bkH(vec2(floor(x / 6.), floor(row / 5.)) + seed * 3.)) * .6);
     } else if (code == 48) {   // flat: gravel and patched membrane
       c = base * (.9 + .2 * bkH(floor(vec2(u, v) * 18.)));
       c *= .92 + .14 * smoothstep(.4, .7, bkN(vec2(u, v) * .4 + seed));
     }
     c = mix(base * .97, c, det);
     // moss and dark weather on the shady slope, near the eaves
-    float shade = smoothstep(.1, -.6, vWN.z) * .7 + .3;
-    float moss = wear * shade * smoothstep(.5, .78, bkF(vec2(u, v) * .55 + seed * 7.)) * (1. - smoothstep(0., 4.5, v) * .5);
-    if (code != 45 && code != 46 && code != 48) c = mix(c, bkLin(vec3(.42, .46, .24)), moss * .7);
+    float moss = wear * shady * smoothstep(.5, .78, bkF(vec2(u, v) * .55 + seed * 7.)) * (1. - smoothstep(0., 4.5, v) * .5);
+    if (code != 45 && code != 46 && code != 48 && code != 49) c = mix(c, bkLin(vec3(.42, .46, .24)), moss * .7);
     c *= 1. - wear * .12 * bkF(vec2(u * .3, v * .7) + seed);
     return c;
   }
 
+`;
+
+const GLSL_FRAG = /* glsl */`
+  uniform vec3 uSunDir;
+  varying vec4 vSurf; flat varying vec4 vWin; flat varying vec2 vB; flat varying vec3 vTrim; flat varying float vFrame; flat varying vec3 vAcc;
+  varying vec3 vWN; varying vec3 vWP;
   // ---- windows: returns the window's colour over 'wall' (a = coverage)
   vec3 bkGlass(vec2 q, vec2 hw, float h, float px) {
     vec3 g = bkLin(vec3(.2, .25, .3));
@@ -156,6 +167,7 @@ const GLSL_FRAG = /* glsl */`
     bool shutters = mod(flags, 2.) > .5, surrounds = mod(floor(flags / 2.), 2.) > .5, flowers = mod(floor(flags / 8.), 2.) > .5;
     bool shop = mod(floor(flags / 16.), 2.) > .5, gable = mod(floor(flags / 32.), 2.) > .5, sparse = mod(floor(flags / 64.), 2.) > .5;
     bool barn = mod(floor(flags / 128.), 2.) > .5, noGround = mod(floor(flags / 512.), 2.) > .5, upperDoor = mod(floor(flags / 1024.), 2.) > .5;
+    bool lintels = mod(floor(flags / 2048.), 2.) > .5;
     float vv = v - gv;
     if (vv < 0. || fh <= 0.) return vec4(wall, 0.);
     float bi = floor(u / bw), fi = floor(vv / fh);
@@ -226,6 +238,9 @@ const GLSL_FRAG = /* glsl */`
     float inF = bkBox(q, -hw - frameW, hw + frameW, px);
     // surround and sill
     if (surrounds) c = mix(c, acc, bkBox(q, -hw - .19, hw + vec2(.19, .22), px) * .92);
+    // stone lintels over brick windows (a flat arch with a keystone hint) and a deeper stone sill
+    if (lintels) { c = mix(c, acc, bkBox(q, vec2(-hw.x - .14, hw.y + frameW), vec2(hw.x + .14, hw.y + frameW + .24), px));
+      c = mix(c, acc * .9, bkBox(q, vec2(-.09, hw.y + frameW), vec2(.09, hw.y + frameW + .27), px) * .6); }
     float sill = bkBox(q, vec2(-hw.x - .1, -hw.y - .11), vec2(hw.x + .1, -hw.y - frameW + .01), px);
     c = mix(c, ws == 3 ? frameC * .85 : bkLin(vec3(.83, .81, .77)), sill);
     // drips under the sill
@@ -363,7 +378,7 @@ const GLSL_MAIN = /* glsl */`
         c = mix(avg, w.rgb, detW);
       }
     } else if (code >= 40) {
-      c = bkRoof(code, base, u, v, det, seed, wear);
+      c = bkRoof(code, base, u, v, det, seed, wear, smoothstep(.1, -.6, vWN.z) * .7 + .3);
     } else if (code == 14) {   // balcony balustrade: planks with cut-outs
       float k = floor(u / .14), f = fract(u / .14);
       c = base * (.86 + .26 * bkH(vec2(k, seed)));
@@ -378,6 +393,11 @@ const GLSL_MAIN = /* glsl */`
       c = mix(base * .9, base * .3, arc * step(.1, q.y) * det);
       c = mix(base * .85, c, detW);
     } else if (code == 16) { c = mix(base, bkSundial(base, u, v, L, vWin.x, px), detW); }
+    else if (code == 30) {   // porch railing: spindles between a top and bottom rail (the gaps show the shade behind)
+      float sp = 1. - bkLine(u, .13, .05, px);
+      float rails = max(1. - smoothstep(.07, .07 + px, v), smoothstep(.8, .8 + px, v));
+      c = mix(base, base * .22, sp * (1. - rails) * detW);
+    }
     else if (code == 17 || code == 31) c = bkBoards(base, u, v, det, seed, .16, true);
     else if (code == 19) c = base * (1. - bkLine(v, .5, .05, px) * .35 * detW);
     else if (code == 20) c = bkBoards(base, u, v, det, seed, .2, false);
@@ -421,7 +441,7 @@ export function makeFacadeMaterial(uniforms = {}) {
       .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
         vWP = (modelMatrix * vec4(transformed, 1.)).xyz; vWN = normalize(mat3(modelMatrix) * objectNormal);`);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\n${GLSL_FRAG}`)
+      .replace('#include <common>', `#include <common>\n${FACADE_GLSL}\n${GLSL_FRAG}`)
       .replace('#include <color_fragment>', `#include <color_fragment>\n${GLSL_MAIN}`);
   };
   m.customProgramCacheKey = () => 'bf-building-kit-1';

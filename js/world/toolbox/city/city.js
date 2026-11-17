@@ -15,6 +15,8 @@ import { buildJunctionMeshes, drawnPieces } from './junction-mesh.js';   // [jun
 import { junctionsNear } from './junctions.js';   // [junctions]
 import { streetSlots } from './road-meets.js';   // [junctions]
 import { decorateTreeMaterial } from '../packs/northern-rockies.js';   // [finish] foliage shader on the street trees
+import { FACADE_GLSL } from '../structures/buildings/facade-material.js';   // [buildings] brick, stone, metal and window detail
+import { CityBuildingKit } from '../structures/buildings/kit.js';   // [buildings] homes drawn by the building kit
 
 export { STREET_W };
 const CHUNK = 320;
@@ -76,6 +78,99 @@ export function streetPaint(st) {
 // [w2-polish] PPG Place's spire glass: two tones of pale blue-grey glass (sRGB hex; vertex colours are linear)
 const PPG_GLASS = [new THREE.Color('#7f97a6'), new THREE.Color('#a9bcc6')];
 
+
+/**
+ * [buildings] The city's facades drawn with the building kit's surfaces (when the scene has a buildingKit): brick for
+ * rowhouses, commercial blocks and works, stone for towers and civic buildings, metal sheds; weather streaks; and the
+ * windows (on the same grid as before, so the street kit's sills and storefronts still line up) with frames, sashes,
+ * blinds and curtains, a sky streak, stone lintels and sills. Sets bfWin / bfLit like the plain version.
+ */
+const CITY_FACADE_GLSL = /* glsl */`
+  if (abs(vWNorm.y) < .5) {
+    vec2 t = normalize(vec2(-vWNorm.z, vWNorm.x));
+    float along = dot(vWPos.xz, t), up = vWPos.y - vBld.z;
+    float px = max(length(vec2(dFdx(along), dFdy(along))), length(vec2(dFdx(vWPos.y), dFdy(vWPos.y)))) + 1e-5;
+    float det = 1. - smoothstep(.025, .08, px), detW = 1. - smoothstep(.1, .3, px);
+    float sd = fract(vBld.y * .0137 + .21), wear = .25 + .5 * fract(vBld.y * .071);
+    bool glass = bfKind == 5 || bfKind == 6;
+    // the wall: brick (rowhouses, most commercial blocks, works), stone (towers, civic, churches, a share of
+    // commercial), painted brick, concrete (garages), corrugated metal (some works)
+    vec3 base = diffuseColor.rgb, c = base;
+    if (!glass && bfKind != 9 && bfKind != 10) {
+      bool stone = bfKind == 4 || bfKind == 11 || bfKind == 7 || (bfKind == 2 && sd > .62);
+      bool painted = (bfKind == 0 || bfKind == 2) && sd < .1;
+      if (bfKind == 8) c = bkCourses(base, along, vWPos.y, detW, sd, 2.9, 3.2, .015, .06);
+      else if (bfKind == 3 && sd > .6) c = base * (.88 + .16 * sin(6.2832 * along / .076) * det);
+      else if (stone) c = bfKind == 7 ? bkRubble(base, along, vWPos.y, det, sd) : bkCourses(base, along, vWPos.y, det, sd, .42, .9, .01, .12);
+      else c = bkCourses(base, along, vWPos.y, det, sd, .075, .23, .006, painted ? .05 : .22);
+      if (painted) c = mix(c, base * 1.12, .55);
+      // weather: long streaks from the parapet, soot low down, big soft patches
+      c *= .95 + .1 * bkF(vec2(along, vWPos.y) * .15 + sd * 9.);
+      c *= 1. - wear * .16 * smoothstep(.55, 1., bkN(vec2(along * 1.6, vWPos.y * .08) + sd * 5.));
+      c *= 1. - wear * .12 * (1. - smoothstep(0., 1.4, up + 3.));
+      diffuseColor.rgb = c;
+    }
+    if (vBld.w < .5) {
+      bool small = bfKind == 0 || bfKind == 1;
+      float fh = small ? 3.1 : glass ? 3.9 : 3.6;
+      float cw = small ? 2.3 : glass ? 1.55 : bfKind == 9 ? 1.9 : 2.6;
+      vec2 cell = vec2(along / cw, up / fh), id = floor(cell), f = fract(cell);
+      vec2 lo = glass ? vec2(.05, .1) : vec2(.24, .28), hi = glass ? vec2(.95, .94) : vec2(.76, .86);
+      bool shopRow = false;
+      bfWin = step(lo.x, f.x) * step(f.x, hi.x) * step(lo.y, f.y) * step(f.y, hi.y);
+      if (id.y < 1.) {
+        shopRow = bfKind == 2 || (bfKind == 0 && bfH(id + vBld.y) > .45);
+        if (shopRow) { lo = vec2(.07, .12); hi = vec2(.93, .78); bfWin = step(lo.x, f.x) * step(f.x, hi.x) * step(lo.y, f.y) * step(f.y, hi.y); }
+        else bfWin *= step(.5, bfH(id.xx + vBld.y));
+      }
+      if (bfKind == 3 || bfKind == 8 || bfKind == 7) bfWin *= step(.55, bfH(vec2(id.y, vBld.y)));
+      vec3 glassCol = (bfKind == 6 ? vec3(.07, .09, .11) : vec3(.13, .16, .2)) + uSkyTop * (glass ? .22 : .12) * (1. - uNight);
+      if (glass) diffuseColor.rgb = mix(diffuseColor.rgb, glassCol, bfWin * .93);
+      else {
+        // the window in metres, centred
+        vec2 hw = vec2((hi.x - lo.x) * .5 * cw, (hi.y - lo.y) * .5 * fh);
+        vec2 q = vec2((f.x - (lo.x + hi.x) * .5) * cw, (f.y - (lo.y + hi.y) * .5) * fh);
+        float h = bfH(id * 1.91 + vBld.y), h2 = bfH(id.yx * 2.7 + vBld.y * 3.1);
+        bool brick = bfKind == 0 || bfKind == 2 || bfKind == 3;
+        vec3 frameC = bfKind == 3 || bfKind == 8 ? vec3(.06, .065, .07) : mix(vec3(.82, .8, .76), vec3(.08, .07, .065), step(.82, fract(vBld.y * .37)));
+        vec3 stoneC = bkLin(vec3(.78, .75, .69));
+        float inWin = bfWin;
+        // lintel and sill (only round real windows)
+        if (inWin > .5 || bkBox(q, -hw - vec2(.2, .3), hw + vec2(.2, .35), px) > 0.) {
+          bool has = id.y < 1. ? (shopRow || bfH(id.xx + vBld.y) > .5) : true;
+          if (bfKind == 3 || bfKind == 8 || bfKind == 7) has = has && bfH(vec2(id.y, vBld.y)) > .55;
+          if (has && !shopRow && brick) {
+            vec3 lin = fract(vBld.y * .53) > .4 ? stoneC : diffuseColor.rgb * .8;
+            diffuseColor.rgb = mix(diffuseColor.rgb, lin, bkBox(q, vec2(-hw.x - .12, hw.y + .02), vec2(hw.x + .12, hw.y + .26), px) * detW);
+            diffuseColor.rgb = mix(diffuseColor.rgb, stoneC, bkBox(q, vec2(-hw.x - .08, -hw.y - .11), vec2(hw.x + .08, -hw.y - .01), px) * detW);
+            // a dark drip below the sill
+            diffuseColor.rgb *= 1. - wear * .3 * detW * step(abs(q.x), hw.x) * (1. - smoothstep(0., 1.1, -q.y - hw.y)) * step(hw.y, -q.y) * bkN(vec2(along * 9., vWPos.y * .4));
+          }
+        }
+        // glass: a sky streak, blinds or curtains, the sash's meeting rail and frame
+        vec3 g = glassCol;
+        float streak = smoothstep(.15, .5, fract((q.x + q.y * .7) * .5 + h * 3.)) * (1. - smoothstep(.5, .85, fract((q.x + q.y * .7) * .5 + h * 3.)));
+        g = mix(g, bkLin(vec3(.6, .7, .82)), (streak * .3 + .05) * (1. - uNight));
+        if (!shopRow) {
+          float blind = hw.y - (.15 + h2 * 1.2) * hw.y;
+          if (h2 > .35) g = mix(g, mix(bkLin(vec3(.86, .84, .78)), bkLin(vec3(.74, .7, .62)), step(.7, h2)), step(blind, q.y) * .85 * (1. - uNight * .6));
+          else if (h2 > .18) g = mix(g, bkLin(vec3(.82, .8, .76)), smoothstep(.55, .85, abs(q.x) / hw.x) * .6);
+          float m = max(1. - smoothstep(.025, .025 + px, abs(q.y)), small ? 1. - smoothstep(.02, .02 + px, abs(q.x)) : 0.);
+          g = mix(g, frameC, m * detW);
+        }
+        float fr = 1. - bkBox(q, -hw + .06, hw - .06, px);
+        g = mix(g, frameC, fr * detW);
+        diffuseColor.rgb = mix(diffuseColor.rgb, mix(glassCol, g, detW), bfWin * .95);
+      }
+      bfLit = bfWin * step(glass ? .5 : .58, bfH(id * 1.37 + vBld.y * 17.));
+    }
+  } else if (vBld.w > .5 && vWNorm.y > .5) {
+    // flat roofs: gravel and patched membrane
+    vec2 rp = vWPos.xz;
+    diffuseColor.rgb *= (.9 + .2 * bfH(floor(rp * 18.))) * (.92 + .14 * smoothstep(.4, .7, bkN(rp * .35 + vBld.y)));
+  }
+`;
+
 export class CityScene {
   constructor(parent, route, index, landscape, kit, uniforms, qualityKey = 'balanced') {
     this.group = new THREE.Group(); this.group.name = 'City'; parent.add(this.group);
@@ -92,6 +187,7 @@ export class CityScene {
     this.riverfront = buildRiverfront(this);   // [s1-riverfront] promenade walls where the route runs along a river
     this._water();
     { const k = streetKitConfig(this.route.scene); if (k) this.streetKit = new StreetKit(this, k, { chunk: CHUNK }); }   // [street-kit] (before the lamps and trees: it places some of both)
+    { const bk = this.route.scene?.buildingKit; if (bk) this.buildingKit = new CityBuildingKit(this, bk); }   // [buildings] homes the kit draws (before the lamps and trees: they keep clear of its porches and eaves)
     this._streetsAndLamps();
     this.bridges = buildBridges(this);
     this.stadiums = buildStadiums(this);
@@ -235,7 +331,10 @@ export class CityScene {
   // ---------------------------------------------------------------- materials
   _materials() {
     const U = this.uniforms, night = this.night;
-    // Buildings: vertex colour + procedural windows (glass by day, some lit warm at night).
+    // Buildings: vertex colour + procedural windows (glass by day, some lit warm at night). [buildings] With a buildingKit
+    // in the scene, the walls also get the kit's brick, stone, render and metal, and the windows frames, sashes, blinds,
+    // lintels and sills (CITY_FACADE_GLSL).
+    const facades = !!this.route.scene?.buildingKit && this.route.scene.buildingKit.cityFacades !== false;
     const bm = this.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .86, metalness: .02 }));
     bm.onBeforeCompile = (shader) => {
       shader.uniforms.uNight = night; shader.uniforms.uSkyTop = U.uSkyTop;
@@ -245,11 +344,13 @@ export class CityScene {
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', `#include <common>
           uniform float uNight; uniform vec3 uSkyTop; varying vec4 vBld; varying vec3 vWPos; varying vec3 vWNorm;
-          float bfH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }`)
+          float bfH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+          ${facades ? FACADE_GLSL : ''}`)
         .replace('#include <color_fragment>', `#include <color_fragment>
           float bfWin = 0., bfLit = 0.;
           int bfKind = int(vBld.x + .5);
-          if (vBld.w < .5 && abs(vWNorm.y) < .5) {
+          ${facades ? CITY_FACADE_GLSL : ''}
+          if (!${facades ? 'true' : 'false'} && vBld.w < .5 && abs(vWNorm.y) < .5) {
             vec2 t = normalize(vec2(-vWNorm.z, vWNorm.x));
             float along = dot(vWPos.xz, t), up = vWPos.y - vBld.z;
             bool glass = bfKind == 5 || bfKind == 6;
@@ -269,7 +370,7 @@ export class CityScene {
         .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
           totalEmissiveRadiance += mix(vec3(1., .74, .42), vec3(.85, .9, 1.), step(.8, bfH(vWPos.xz * .01 + vBld.y))) * bfLit * uNight * 1.25;`);
     };
-    bm.customProgramCacheKey = () => 'city-buildings-1';
+    bm.customProgramCacheKey = () => facades ? 'city-buildings-facades-1' : 'city-buildings-1';
     this.buildingMaterial = bm;
 
     // Streets: asphalt with lane paint; sidewalks; paths.
@@ -673,6 +774,7 @@ export class CityScene {
       const seed = hash(b.k * 7919 + 13);
       const base = new THREE.Color(palette[Math.floor(seed * palette.length)]).multiplyScalar(.9 + hash(b.k) * .18);
       const kit = this.streetKit?.building(b, ring, ground, y0, y1, base, key, B);   // [street-kit] facade detail (bays into B); window grid base, roof colour
+      if (!kit && this.buildingKit?.take(b, key)) continue;   // [buildings] a home the building kit draws
       B.color(base).set({ aBld: [b.kind, seed * 100, kit ? kit.winBase : ground, 0] });
       const facets = b.kind === 6 && b.h > 18;   // PPG Place: glass in rows of projecting prisms
       let mx = 0, mz = 0; for (const p of ring) { mx += p.x; mz += p.z; } mx /= ring.length; mz /= ring.length;
@@ -710,6 +812,7 @@ export class CityScene {
     this.streetKit?.finishChunk(key, out);   // [street-kit] sidewalks, furniture, trim
     this.chunks.set(key, out);
     this._sectorChunk(key, mesh);   // [w2-budget]
+    this.buildingKit?.chunkBuilt(key, sectorOf(key), this.sectors.get(sectorOf(key)));   // [buildings]
   }
 
   /**
@@ -1008,6 +1111,7 @@ export class CityScene {
     const L = this.landscape, c = L.landAt(x, z);
     if (c === LAND.water && !L.bridgeAt(x, z, 0)) return false;
     if (this.buildingNear(x, z, wall)) return false;
+    if (this.buildingKit?.occupied(x, z, wall)) return false;   // [buildings] the kit's eaves, porches, steps and dressing
     if (this.inStadium(x, z, 4) || this.nearWall(x, z, Math.max(1.2, margin + .6))) return false;
     // any street's carriageway, not just the nearest; its own street too, where a bend brings the roadway back
     // to it (a post on its own bridge deck stands on the slab's edge, so there it may touch the roadway)
@@ -1184,6 +1288,7 @@ export class CityScene {
     this.landmarks?.tick?.(time, dt);
     this.heroes?.tick?.(time, dt);
     this.streetKit?.tick(camera);   // [street-kit] LOD
+    this.buildingKit?.tick(camera);   // [buildings] near detail
     if ((this._lodFrame = (this._lodFrame || 0) + 1) % 10 === 1) this._lampLod(camera);   // [w2-budget]
   }
 

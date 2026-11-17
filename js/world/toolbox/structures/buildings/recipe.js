@@ -118,7 +118,9 @@ function archetypeOf(b, area, aspect, dens, style, r) {
     if (k === 'cottage' && dens > 7) f *= .6;
     w[k] = f;
   }
-  return pick(w, r) || (area > 200 ? 'block' : 'cottage');
+  // nothing fits the size: the style's own main kind (a long mapped row stays a row), else a block or a cottage
+  const main = Object.entries(style.archetypes).filter(([k, v]) => v > 0 && k !== 'shed').sort((a, b) => b[1] - a[1])[0]?.[0];
+  return pick(w, r) || (main && (main !== 'block' || area > 200) ? main : area > 200 ? 'block' : 'cottage');
 }
 
 const FLOORS = {
@@ -132,18 +134,31 @@ const FLOORS = {
  * Plan every building: footprint plan (planFootprints) + the scene → recipes, sorted along the road.
  * `index` is the route index (road clearance and which way each house faces), `opts` the scene's buildingKit.
  */
-export function planBuildings(plan, config, index, opts = {}) {
+export function planBuildings(plan, config, index, opts = {}, tierIndex = null) {
   const kit = { detailM: 120, dressingM: 70, ...opts };
   const styles = (kit.styles?.length ? kit.styles : [{}]).map(resolveStyle);
-  const styleAt = (s) => styles.find((st) => s >= st.fromM && s < st.toM) || styles[0];
+  // a style can be limited to some kinds of map building ("kinds": ["rowhouse"]): cities pick by kind, routes by stretch
+  const fits = (st, kind) => !st.kinds || st.kinds.includes(kind);
+  const styleAt = (s, kind) => styles.find((st) => fits(st, kind) && s >= st.fromM && s < st.toM) || styles.find((st) => fits(st, kind)) || styles[0];
   const seed0 = ((config.seed || 1) * 7919 + 31) | 0;
   // neighbour grid (35 m density, 30 m scheme rule)
   const G = 40, grid = new Map(), key = (x, z) => `${Math.floor(x / G)},${Math.floor(z / G)}`;
-  for (const b of plan.buildings) { const k = key(b.x, b.z); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(b); }
+  // every footprint is a neighbour (density, party walls, clearances); only plan.buildings are planned
+  for (const b of [...plan.buildings, ...(plan.neighbours || [])]) { const k = key(b.x, b.z); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(b); }
   const around = (x, z, r, fn) => {
     const i0 = Math.floor((x - r) / G), i1 = Math.floor((x + r) / G), j0 = Math.floor((z - r) / G), j1 = Math.floor((z + r) / G);
     for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) for (const o of grid.get(`${i},${j}`) || []) if (Math.hypot(o.x - x, o.z - z) < r) fn(o);
   };
+  // detail tiers (a city): 40 m cells within reach of the route, so far buildings skip the nearest-point search
+  const tierR = Math.max(kit.detailM, kit.dressingM) + 10, tierCells = new Set();
+  if (tierIndex) {
+    const c = 40, r = Math.ceil((tierR + c) / c);
+    for (let i = 0; i < tierIndex.xs.length; i += 4) {
+      const cx = Math.floor(tierIndex.xs[i] / c), cz = Math.floor(tierIndex.zs[i] / c);
+      for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) tierCells.add((cx + dx) * 100003 + (cz + dz));
+    }
+  }
+  const nearTier = (x, z) => tierCells.has(Math.floor(x / 40) * 100003 + Math.floor(z / 40));
   // the map has some buildings twice (or a part drawn over its whole): keep the bigger, drop what overlaps it
   const dup = new Set();
   const bySize = plan.buildings.slice().sort((a, b) => Math.abs(polyArea(b.pts)) - Math.abs(polyArea(a.pts)));
@@ -165,7 +180,7 @@ export function planBuildings(plan, config, index, opts = {}) {
   for (let n = 0; n < sorted.length; n++) {
     const b = sorted[n];
     const rand = randomSequence(seed0 ^ Math.imul(Math.round(b.x * 10) | 0, 73856093) ^ Math.imul(Math.round(b.z * 10) | 0, 19349663));
-    const style = styleAt(b.s);
+    const style = styleAt(b.s, b.kind);
     const area = Math.abs(polyArea(b.pts));
     const dec = decompose(b.pts);
     if (!dec) continue;
@@ -177,11 +192,39 @@ export function planBuildings(plan, config, index, opts = {}) {
     const aspect = main.hu / Math.max(.5, main.hv);
     const landmark = (config.buildings?.landmarks || []).find((l) => l.name && b.name && b.name.includes(l.name));
     const archetype = landmark?.shape === 'tent' ? 'tent' : archetypeOf(b, area, aspect, dens, style, rand());
-    const full = d < kit.detailM;
+    // detail tiers by distance to the ride (a city: the route, while fronts and clearances use every street)
+    const tn = tierIndex ? (nearTier(b.x, b.z) ? tierIndex.nearest(b.x, b.z, tierR) : null) : near;
+    const dTier = tierIndex ? (tn ? tn.d : 1e4) : d;
+    const full = dTier < kit.detailM;
     const R = {
-      id: n, x: b.x, z: b.z, s: b.s, d, r: b.r, pts: b.pts, area, dens, toRoad, archetype, kind: b.kind, name: b.name, full,
+      id: n, x: b.x, z: b.z, s: b.s, d, dTier, r: b.r, pts: b.pts, area, dens, toRoad, archetype, kind: b.kind, name: b.name, full, key: b.key,
       rects: dec.cover >= .74 ? dec.rects : [], outline: dec.cover < .74, seed: rand(),
     };
+    // rows: which walls of the main block stand against a neighbour (no windows there); the ridge runs along the street
+    R.party = [false, false, false, false];
+    if (style.attached && R.rects.length) {
+      const partyOf = (r) => [0, 1, 2, 3].map((i) => {
+        const n2 = i === 0 ? [-r.vx, -r.vz] : i === 2 ? [r.vx, r.vz] : i === 1 ? [r.ux, r.uz] : [-r.ux, -r.uz];
+        const t = [n2[1], -n2[0]], out = (i % 2 === 0 ? r.hv : r.hu) + .7, along = i % 2 === 0 ? r.hu : r.hv;
+        let hits = 0;
+        for (const f of [-.5, 0, .5]) {
+          const x = r.cx + n2[0] * out + t[0] * f * along, z = r.cz + n2[1] * out + t[1] * f * along;
+          let hit = false; around(x, z, 40, (o) => { if (!hit && o !== b && Math.hypot(o.x - x, o.z - z) <= o.r + 1 && inside(x, z, o.pts)) hit = true; });
+          if (hit) hits++;
+        }
+        return hits >= 2;
+      });
+      let P0 = partyOf(R.rects[0]);
+      if ((P0[0] || P0[2]) && !(P0[1] && P0[3])) {
+        // party walls along the long sides: turn the block so the ridge runs between them, along the street
+        const r = R.rects[0];
+        R.rects[0] = { cx: r.cx, cz: r.cz, ux: r.vx, uz: r.vz, vx: -r.ux, vz: -r.uz, hu: r.hv, hv: r.hu };
+        P0 = partyOf(R.rects[0]);
+      }
+      R.party = P0;
+      R.attached = P0.some(Boolean);
+    }
+    const m0 = R.rects[0] || main;   // the main block (turned for rows)
     // the three knobs
     R.age = lerp(style.age[0], style.age[1], rand());
     R.upkeep = archetype === 'ruin' ? 0 : lerp(style.upkeep[0], style.upkeep[1], rand());
@@ -227,7 +270,7 @@ export function planBuildings(plan, config, index, opts = {}) {
     R.roofColor = R.scheme.roof || pickArr(ROOF_COLORS[roofName] || ROOF_COLORS.tile, rand());
     let form = archetype === 'shed' ? (rand() < .55 ? 'shed' : 'gable') : archetype === 'works' || roofName === 'flat' ? 'flat'
       : archetype === 'church' || archetype === 'chapel' ? 'gable' : archetype === 'block' ? (rand() < .6 ? 'hip' : 'gable') : pick(style.forms, rand()) || 'gable';
-    if (form === 'stepped' && (main.hv < 3 || archetype === 'chalet')) form = 'gable';
+    if (form === 'stepped' && (m0.hv < 3 || archetype === 'chalet')) form = 'gable';
     R.form = form;
     const pitchDeg = archetype === 'block' && form !== 'flat' ? Math.min(style.pitch, 24) : archetype === 'church' ? Math.max(style.pitch, 42)
       : archetype === 'shed' && form === 'shed' ? 14 : style.pitch + (rand() - .5) * 2 * style.pitchJitter;
@@ -246,7 +289,9 @@ export function planBuildings(plan, config, index, opts = {}) {
     R.genoise = R.rendered && form !== 'flat' && rand() < style.genoise;
     R.ivy = rand() < style.ivy * (.3 + R.age);
     // front: the wall facing the road (chalets: a gable end); the door goes there
-    R.front = frontWall(main, toRoad, archetype === 'chalet');
+    R.front = frontWall(m0, toRoad, archetype === 'chalet' || (!R.attached && rand() < (style.frontEnd || 0)), R.party);
+    R.lintels = (R.wall === S.BRICK || R.wall === S.RENDER) && rand() < style.lintels;
+    if (R.party[1] || R.party[3]) R.rake = 0;
     R.shop = archetype === 'village' && d < 18 && rand() < style.shops && R.front % 2 === 0;
     // extras (the silhouette: only buildings near the road get them)
     const P = R.parts = {};
@@ -257,40 +302,43 @@ export function planBuildings(plan, config, index, opts = {}) {
       if (rand() < pb) P.balcony = { side: archetype === 'chalet' ? (R.front % 2 ? R.front : 3) : R.front, full: archetype === 'block' || rand() < .45, wrap: archetype === 'chalet' && rand() < .4 };
       if (archetype === 'chalet' || archetype === 'farmhouse' || archetype === 'cottage') if (rand() < style.galleries) P.gallery = { end: rand() < .5 ? 1 : 3 };
     }
-    if (can && form !== 'flat' && form !== 'shed' && main.hv > 3.5 && pitchDeg > 28 && archetype !== 'block' && rand() < style.dormers * (archetype === 'village' ? 1.4 : 1))
-      P.dormers = 1 + Math.floor(rand() * Math.min(3, main.hu / 3));
+    if (can && form !== 'flat' && form !== 'shed' && m0.hv > 3.5 && pitchDeg > 28 && archetype !== 'block' && rand() < style.dormers * (archetype === 'village' ? 1.4 : 1))
+      P.dormers = 1 + Math.floor(rand() * Math.min(3, m0.hu / 3));
     if (form !== 'flat' && !['shed', 'barn', 'works', 'mazot', 'church', 'chapel'].includes(archetype) && rand() < style.chimneys)
-      P.chimneys = { n: main.hu > 6 && rand() < .35 ? 2 : 1, kind: archetype === 'chalet' && rand() < .5 ? 'pipe' : R.wall === S.RUBBLE || rand() < .4 ? 'stone' : 'render' };
+      P.chimneys = { n: m0.hu > 6 && rand() < .35 ? 2 : 1, kind: archetype === 'chalet' && rand() < .5 ? 'pipe' : R.wall === S.RUBBLE || rand() < .4 ? 'stone' : 'render' };
     if (can && form !== 'flat' && rand() < style.solar * (1.4 - R.age)) P.solar = true;
     if (can && ['cottage', 'farmhouse', 'village', 'chalet'].includes(archetype) && rand() < style.leanTo) P.leanTo = { end: rand() < .5 ? 1 : 3, open: rand() < .5 };
     if (can && ['cottage', 'chalet'].includes(archetype) && !P.leanTo && rand() < style.garage) P.garage = { end: rand() < .5 ? 1 : 3 };
-    if (can && archetype !== 'block' && archetype !== 'works' && rand() < style.porch) P.porch = true;
+    if (can && R.floors <= 3 && ['cottage', 'village', 'farmhouse', 'chalet'].includes(archetype) && rand() < style.frontPorch) P.frontPorch = { depth: 2.1 + rand() * .7, roof: rand() < .7 };
+    if (can && !P.frontPorch && archetype !== 'block' && archetype !== 'works' && rand() < style.porch) P.porch = true;
     if (can && archetype === 'farmhouse' && rand() < style.stair * 2) P.stair = true;
     if (can && R.rendered && ['cottage', 'village', 'farmhouse', 'public'].includes(archetype) && rand() < style.sundial * (R.hero ? 5 : 1)) P.sundial = true;
     if (archetype === 'church') P.tower = { end: rand() < .5 ? 1 : 3 };
     // nothing that sticks out may reach the road or another building: try the other end, else leave it off
-    const clear = (pts) => pts.every(([x, z]) => !index.nearest(x, z, ROAD_HALF + 1.5) && !insideOther(x, z, b));
+    const clear = (pts, margin = 1.5) => pts.every(([x, z]) => !index.nearest(x, z, ROAD_HALF + margin) && !insideOther(x, z, b));
     const insideOther = (x, z, self) => { let hit = false; around(x, z, 40, (o) => { if (!hit && o !== self && Math.hypot(o.x - x, o.z - z) <= o.r && inside(x, z, o.pts)) hit = true; }); return hit; };
-    const endBox = (end, depth, half) => { const sgn = end === 1 ? 1 : -1; return [[0, -half], [0, half], [1, -half], [1, half], [.5, 0]].map(([t, bb]) => [main.cx + main.ux * sgn * (main.hu + t * depth) + main.vx * bb, main.cz + main.uz * sgn * (main.hu + t * depth) + main.vz * bb]); };
+    const endBox = (end, depth, half) => { const sgn = end === 1 ? 1 : -1; return [[0, -half], [0, half], [1, -half], [1, half], [.5, 0]].map(([t, bb]) => [m0.cx + m0.ux * sgn * (m0.hu + t * depth) + m0.vx * bb, m0.cz + m0.uz * sgn * (m0.hu + t * depth) + m0.vz * bb]); };
     for (const k of ['leanTo', 'garage', 'gallery', 'tower']) {
       const o = P[k]; if (!o) continue;
-      const depth = k === 'tower' ? 6 : 3.6, half = k === 'gallery' ? main.hv : 3.3;
+      const depth = k === 'tower' ? 6 : 3.6, half = k === 'gallery' ? m0.hv : 3.3;
       const key = k === 'gallery' || k === 'tower' || k === 'leanTo' || k === 'garage' ? 'end' : 'end';
       if (clear(endBox(o[key], depth, half))) continue;
       o[key] = o[key] === 1 ? 3 : 1;
       if (!clear(endBox(o[key], depth, half))) delete P[k];
     }
     const sideBox = (i, depth) => {
-      const n = i === 0 ? [-main.vx, -main.vz] : i === 2 ? [main.vx, main.vz] : i === 1 ? [main.ux, main.uz] : [-main.ux, -main.uz];
-      const out = i % 2 === 0 ? main.hv : main.hu, along = i % 2 === 0 ? main.hu : main.hv, t = [n[1], -n[0]];
-      return [-1, 0, 1].map((f) => [main.cx + n[0] * (out + depth) + t[0] * f * along, main.cz + n[1] * (out + depth) + t[1] * f * along]);
+      const n = i === 0 ? [-m0.vx, -m0.vz] : i === 2 ? [m0.vx, m0.vz] : i === 1 ? [m0.ux, m0.uz] : [-m0.ux, -m0.uz];
+      const out = i % 2 === 0 ? m0.hv : m0.hu, along = i % 2 === 0 ? m0.hu : m0.hv, t = [n[1], -n[0]];
+      return [-.8, 0, .8].map((f) => [m0.cx + n[0] * (out + depth) + t[0] * f * along, m0.cz + n[1] * (out + depth) + t[1] * f * along]);
     };
     if (P.balcony && !clear(sideBox(P.balcony.side, 1.5))) {
       const alt = (P.balcony.side + 2) % 4;
       if (clear(sideBox(alt, 1.5))) P.balcony.side = alt; else delete P.balcony;
     }
     if (P.stair && !clear(sideBox(R.front, 1.4))) delete P.stair;
-    R.dress = d < kit.dressingM && !['works', 'ruin'].includes(archetype);
+    // a porch may come up to the sidewalk
+    if (P.frontPorch && !clear(sideBox(R.front, P.frontPorch.depth + .3), .3)) { delete P.frontPorch; if (can && rand() < style.porch) P.porch = true; }
+    R.dress = dTier < kit.dressingM && !['works', 'ruin'].includes(archetype);
     out.push(R);
     done.set(b, R);
   }
@@ -298,9 +346,10 @@ export function planBuildings(plan, config, index, opts = {}) {
 }
 
 /** Which wall of the main block faces the road: 0 (−v long side), 1 (+u end), 2 (+v long side), 3 (−u end). */
-export function frontWall(r, to, preferEnd = false) {
+export function frontWall(r, to, preferEnd = false, party = null) {
   const dots = [-(r.vx * to.x + r.vz * to.z), r.ux * to.x + r.uz * to.z, r.vx * to.x + r.vz * to.z, -(r.ux * to.x + r.uz * to.z)];
-  if (preferEnd) return dots[1] > dots[3] ? 1 : 3;
+  if (party) for (let i = 0; i < 4; i++) if (party[i]) dots[i] = -9;   // never against a neighbour
+  if (preferEnd && !(party && (party[1] || party[3]))) return dots[1] > dots[3] ? 1 : 3;
   let best = 0;
   for (let i = 1; i < 4; i++) if (dots[i] > dots[best] + (i % 2 ? .25 : 0)) best = i;   // long sides first
   return best;

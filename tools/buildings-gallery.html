@@ -28,7 +28,7 @@
 //   ?style=<preset>&view=street|aerial|close|roofs&seed=1&clean=1
 import * as THREE from '../vendor/three.module.min.js';
 import { BuildingKit } from '../js/world/toolbox/structures/buildings/kit.js';
-import { STYLE_PRESETS } from '../js/world/toolbox/structures/buildings/presets.js';
+import { STYLE_PRESETS, resolveStyle } from '../js/world/toolbox/structures/buildings/presets.js';
 import { Look } from '../js/world/toolbox/atmosphere/look.js';
 import { randomSequence } from '../js/world/toolbox/core/random.js';
 
@@ -65,10 +65,19 @@ const pts = (cx, cz, w, d, yaw, shape) => {
   return P.map(([x, z]) => [cx + x * c - z * s, cz + x * s + z * c]);
 };
 const buildings = [];
-const resort = styleName === 'ski-resort';
+const resort = styleName === 'ski-resort', rows = resolveStyle({ preset: styleName }).attached;
 for (const side of [-1, 1]) {
-  let x = -150;
-  while (x < 150) {
+  let x = -150, inRow = 0;
+  while (rows && x < 150) {
+    // row houses: narrow deep lots wall to wall, an alley every few houses
+    const w = 5 + rand() * 1.8, d = 11 + rand() * 4, setback = 4 + d / 2;
+    const cx = x + w / 2, cz = side * setback;
+    const P = pts(cx, cz, w, d, 0, 'rect');
+    buildings.push({ x: cx, z: cz, pts: P, levels: 0, kind: 'rowhouse', roof: -1, height: rand() < .3 ? 12 : 9, s: cx + 1000, r: Math.hypot(w, d) / 2, name: '' });
+    x += w; inRow++;
+    if (inRow > 5 + rand() * 5) { x += 3 + rand() * 3; inRow = 0; }
+  }
+  while (!rows && x < 150) {
     const r = rand();
     // a mix of sizes: sheds, houses, big farms, the odd block
     const area = r < .14 ? 14 + rand() * 12 : r < .62 ? 55 + rand() * 90 : r < .88 ? 140 + rand() * 200 : resort ? 300 + rand() * 400 : 180 + rand() * 260;

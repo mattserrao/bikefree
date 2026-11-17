@@ -223,9 +223,28 @@ Added 17 Nov 2026 (branch `buildings-test`), first on Alpe d'Huez. It sits on to
 
 Any style key can be overridden per stretch (`schemes`, `walls`, `roofs`, `forms`, `pitch`, `balconies`, `dressing: { … }`…). A new region is a new preset in `presets.js` (data only).
 
-**Look at it:** `npm run gallery:buildings` renders a street of every preset (`street`, `aerial`, `close`, `roofs` views) to `tools/snapshots/buildings-<style>-<view>.jpg`; live at `localhost:8000/tools/buildings-gallery.html`. **Checks:** `test/building-kit.test.mjs` (determinism, regional mix, neighbour variety, dressing and annexes off the road and out of buildings, L/T cutting, presets, finite geometry).
+**In a city** (`authored-city`, Pittsburgh first): with `buildingKit` in the scene, `city/city.js` hands its homes to `CityBuildingKit` (`buildings/kit.js`). Row houses (city kind 0) and houses (kind 1) that the street kit doesn't dress are drawn by the kit, and their main meshes fold into the city's 960 m sectors. Fronts face the nearest street (`makeStreetIndex`: every street plus the route, with clearances measured from the street's edge and sidewalk). Full shapes and dressing are tiered by distance to the route, and lamps and street trees keep clear of the kit's eaves, porches and dressing (`occupied()`). Every other city building keeps its own geometry and street-kit trim, but its facade gets the kit's surfaces through `FACADE_GLSL`: brick, stone, painted brick, concrete or metal by kind, weathering, and windows on the same grid as before with frames, sashes, blinds, curtains, lintels and sills (`cityFacades: false` turns that off).
+
+```json
+"buildingKit": { "detailM": 150, "dressingM": 80,
+  "styles": [ { "preset": "pittsburgh-rowhouse", "kinds": ["rowhouse"] }, { "preset": "pittsburgh-frame", "kinds": ["house"] } ] }
+```
+
+Styles can be picked by map kind (`kinds`) instead of by stretch. **Added for cities:**
+- **Presets:** `pittsburgh-rowhouse` (brick rows, stone lintels, stoops, side-gabled or flat with a bracketed cornice, front dormers) and `pittsburgh-frame` (painted siding, steep front gables, deep front porches).
+- **Rows:** `attached` styles find party walls (blank, no eaves past them) and turn the ridge to run along the street.
+- **Front porches** on posts with a railing and a shed roof.
+- **Asphalt-shingle roofs.**
+- **The `lintels` window flag.**
+
+**Look at it:** renders a street of every preset (`street`, `aerial`, `close`, `roofs` views) to `tools/snapshots/buildings-<style>-<view>.jpg`; live at `localhost:8000/tools/buildings-gallery.html`. **Checks:** `test/building-kit.test.mjs` (determinism, regional mix, neighbour variety, dressing and annexes off the road and out of buildings, L/T cutting, presets, finite geometry).
 
 **Cost on the Alpe (Balanced):** +1 to +13 draw calls and +0.02 to +0.15 M triangles at the fixed spots; about 1 s more at load (headless) for 7,000 buildings.
+
+**Cost on Pittsburgh:**
+- **High, busiest spots:** 8.8 km 307 calls / 2.24 M triangles (was 284 / 1.98 M); 17.3 km 343 / 2.16 M (was 322 / 1.95 M). The allowance is 2.5 M.
+- **Load:** planning 8,200 homes adds about 1 s (headless).
+- **Clipping QC:** the same findings as before.
 
 ---
 
