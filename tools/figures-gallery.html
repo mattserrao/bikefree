@@ -1,0 +1,126 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>bikefree · figures</title>
+<style>body{margin:0;background:#cfe0ea;font:13px system-ui;color:#223}#hud{position:fixed;left:8px;top:6px;background:#fffc;padding:4px 8px;border-radius:6px}
+#hud select,#hud button{font:inherit}</style></head>
+<body><div id="hud"><b>Figures</b> · <select id="view"><option>people</option><option>clips</option><option>clips2</option><option>variety</option><option>vehicles</option><option>cars</option><option>parked</option><option>close</option><option>street</option><option>crowd</option></select>
+<label><input type="checkbox" id="lo"> far detail</label> <button id="pause">pause</button> <span id="stat"></span></div>
+<script type="module">
+// The figures kit (js/world/toolbox/life/figures): every clip, outfits and body types, dogs, strollers, cyclists and
+// every vehicle kind. ?view=people|variety|vehicles|close|street|crowd&t=<seconds>&lo=1 — tools/snap_figures.mjs renders it.
+import * as THREE from '../vendor/three.module.min.js';
+import { Crowd, CLIP, CLIP_META, randomLook, dogLook, clipRate, FIT, figureStats, PALETTES } from '../js/world/toolbox/life/figures/people.js';
+import { vehicleMesh, vehicleMaterial, setPaint, setMove, VEHICLE_KINDS, VEHICLE_INFO, vehicleStats, PAINTS, staticVehicle } from '../js/world/toolbox/life/figures/vehicles.js';
+
+const q = new URLSearchParams(location.search);
+const W = +(q.get('w') || innerWidth), H = +(q.get('h') || innerHeight);
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setPixelRatio(q.get('w') ? 1 : devicePixelRatio); r.setSize(W, H);
+r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#cfe0ea'); scene.fog = new THREE.Fog('#cfe0ea', 60, 220);
+scene.add(new THREE.HemisphereLight('#eef6ff', '#7b8463', 1.5));
+const sun = new THREE.DirectionalLight('#fff3df', 2.6); sun.position.set(-12, 20, 14); sun.castShadow = q.get('shadows') !== '0';
+sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.0004; sun.shadow.normalBias = .03; Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, far: 80 }); scene.add(sun);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: '#9aa08e', roughness: 1 }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+const road = new THREE.Mesh(new THREE.PlaneGeometry(7, 400), new THREE.MeshStandardMaterial({ color: '#6c7075', roughness: .95 }));
+road.rotation.x = -Math.PI / 2; road.position.set(0, .01, -14); road.rotation.z = Math.PI / 2; road.receiveShadow = true; scene.add(road);
+
+const uTime = { value: +(q.get('t') || 0) };
+let seed = 77; const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+const lo = q.get('lo') === '1';
+const crowd = new Crowd(scene, { uTime, name: 'People', capacity: 400, nearM: lo ? 0 : Infinity, dogs: 20, strollers: 20 });
+const cyclists = new Crowd(scene, { uTime, name: 'Cyclists', capacity: 20, nearM: lo ? 0 : Infinity, kind: 'cyclist' });
+const vmat = vehicleMaterial(); const fleet = {};
+for (const k of VEHICLE_KINDS) { fleet[k] = vehicleMesh(k, vmat, 4, `Vehicle · ${k}`); scene.add(fleet[k]); }
+
+const ROW = ['idle', 'look', 'stroll', 'walk', 'jog', 'cheer', 'clap', 'wave', 'photo', 'phone', 'push', 'leash', 'flag', 'sit'];
+const people = [];
+// row 1: one adult per clip, labelled
+ROW.forEach((name, i) => {
+  const look = randomLook(rand, { kids: 0 });
+  if (name === 'photo' || name === 'phone') look.bits |= FIT.PROP;
+  if (name === 'push') look.stroller = new THREE.Color(PALETTES.strollers[i % 6]);
+  if (name === 'leash') { look.dog = dogLook(rand); look.h = 1; }
+  people.push({ look, x: (i - ROW.length / 2) * 1.6, z: 0, yaw: 0, clip: CLIP[name], phase: rand() });
+});
+// rows 2–4: variety (outfits, kids, bodies) walking and standing
+for (let k = 0; k < 36; k++) {
+  const look = randomLook(rand, { kids: .2, packs: .2 });
+  const clip = [CLIP.walk, CLIP.idle, CLIP.stroll, CLIP.look, CLIP.phone][k % 5];
+  if (clip === CLIP.phone) look.bits |= FIT.PROP;
+  people.push({ look, x: (k % 12 - 6) * 1.25, z: -4 - Math.floor(k / 12) * 1.8, yaw: k % 2 ? .4 : -.3, clip, phase: rand() });
+}
+// a spectator crowd
+for (let k = 0; k < 120; k++) {
+  const look = randomLook(rand, { kids: .1 });
+  const clip = [CLIP.cheer, CLIP.clap, CLIP.idle, CLIP.wave, CLIP.flag, CLIP.photo][Math.floor(rand() * 6)];
+  if (clip === CLIP.photo) look.bits |= FIT.PROP;
+  people.push({ look, x: 40 + (k % 20) * .75 + rand() * .3, z: -10 - Math.floor(k / 20) * .8, yaw: Math.PI + (rand() - .5) * .6, clip, phase: rand() });
+}
+const riders = [0, 1, 2].map((k) => ({ look: randomLook(rand, { kids: 0, helmet: true }), x: -4 + k * 2.4, z: -13, yaw: Math.PI / 2, clip: CLIP.cycle, phase: rand() }));
+
+// the light (parked) versions in a row behind
+const parkedMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .5 });
+VEHICLE_KINDS.forEach((k, i) => { const m = new THREE.Mesh(staticVehicle(k, PAINTS[(i + 3) % PAINTS.length]), parkedMat); m.position.set(-26 + i * 5.2 + (k === 'bus' ? 4 : 0) + (k === 'jammer' || k === 'rv' ? 1.5 : 0), 0, -23); m.castShadow = true; scene.add(m); });
+// vehicles: a parade on the road, and the street view
+const cars = [];
+VEHICLE_KINDS.forEach((k, i) => cars.push({ k, x: -26 + i * 5.2 + (k === 'bus' ? 4 : 0) + (k === 'jammer' || k === 'rv' ? 1.5 : 0), z: -16, yaw: Math.PI / 2 * 0, paint: PAINTS[i % PAINTS.length], speed: 0 }));
+// street scene: a moving line of traffic
+for (let k = 0; k < 6; k++) cars.push({ k: ['sedan', 'suv', 'hatch', 'taxi', 'van', 'pickup'][k], x: 70 + k * 7.5, z: -1.75, yaw: Math.PI / 2, paint: PAINTS[(k * 5) % PAINTS.length], speed: 9 });
+for (let k = 0; k < 18; k++) {
+  const look = randomLook(rand, { kids: .15 }), clip = rand() < .7 ? CLIP.walk : CLIP.stroll;
+  if (rand() < .15 && !look.kid) { look.dog = dogLook(rand); look.h = 1; }
+  people.push({ look, x: 64 + rand() * 50, z: 4 + rand() * 2.5, yaw: rand() < .5 ? Math.PI / 2 : -Math.PI / 2, clip: look.dog ? CLIP.leash : clip, phase: rand(), walker: true });
+}
+
+const views = {
+  people: { pos: [0, 2.6, 9.5], at: [0, 1, 0], fov: 50 },
+  clips: { pos: [-5.6, 1.5, 5.2], at: [-5.6, .95, 0], fov: 50 },
+  clips2: { pos: [5.6, 1.5, 5.2], at: [5.6, .95, 0], fov: 50 },
+  variety: { pos: [0, 3.2, 6], at: [0, .9, -6.5], fov: 55 },
+  vehicles: { pos: [3, 6, 4], at: [3, 1, -16], fov: 50 },
+  cars: { pos: [-15, 2.6, -8.5], at: [-15, .9, -18], fov: 50 },
+  parked: { pos: [-15, 2.6, -15.5], at: [-15, .9, -25], fov: 50 },
+  close: { pos: [-5.2, 1.6, 2.6], at: [-7.5, 1.0, 0], fov: 40 },
+  street: { pos: [86, 2.4, 12], at: [92, 1, 0], fov: 50 },
+  crowd: { pos: [47.5, 2.2, -2], at: [47.5, 1.2, -12], fov: 55 },
+};
+const cam = new THREE.PerspectiveCamera(50, W / H, .1, 600);
+const sel = document.getElementById('view'); sel.value = q.get('view') || 'people';
+const setView = () => { const v = views[sel.value]; cam.fov = v.fov; cam.position.set(...v.pos); cam.lookAt(...v.at); cam.updateProjectionMatrix(); };
+sel.onchange = setView; setView();
+document.getElementById('lo').checked = lo; document.getElementById('lo').onchange = (e) => { q.set('lo', e.target.checked ? 1 : 0); location.search = q; };
+let paused = q.has('t'); document.getElementById('pause').onclick = () => { paused = !paused; };
+const fs = figureStats(), vs = vehicleStats();
+document.getElementById('stat').textContent = `person ${fs.personHi}/${fs.personLo} tris · cyclist ${fs.cyclistHi} · dog ${fs.dog} · stroller ${fs.stroller} · ` + Object.entries(vs).map(([k, n]) => `${k} ${n}`).join(' · ');
+window.stats = { figures: fs, vehicles: vs };
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (!paused) uTime.value += dt;
+  const t = uTime.value;
+  crowd.begin(cam.position);
+  for (const p of people) {
+    let x = p.x;
+    const speed = { [CLIP.walk]: 1.35, [CLIP.stroll]: .9, [CLIP.jog]: 2.9, [CLIP.push]: 1.1, [CLIP.leash]: 1.2 }[p.clip] || 0;
+    if (p.walker) x = 64 + ((p.x - 64 + Math.sign(p.yaw) * speed * t) % 50 + 50) % 50;
+    crowd.add(p.look, x, 0, p.z, p.yaw, p.clip, p.phase, clipRate(p.clip, speed, p.look));
+  }
+  crowd.end();
+  cyclists.begin(cam.position); for (const p of riders) cyclists.add(p.look, p.x, 0, p.z, p.yaw, p.clip, p.phase, clipRate(p.clip, 7)); cyclists.end();
+  const n = {}; const m = new THREE.Matrix4(), qq = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1);
+  for (const c of cars) {
+    const im = fleet[c.k], i = (n[c.k] = (n[c.k] ?? -1) + 1);
+    const x = c.speed ? 60 + ((c.x - 60 + c.speed * t) % 60) : c.x;
+    qq.setFromAxisAngle(up, c.yaw); im.setMatrixAt(i, m.compose(new THREE.Vector3(x, 0, c.z), qq, one));
+    if (!VEHICLE_INFO[c.k].paint) setPaint(im, i, c.paint);
+    setMove(im, i, c.speed ? c.speed * t : t * 2, 0);
+  }
+  for (const [k, im] of Object.entries(fleet)) { im.count = (n[k] ?? -1) + 1; im.instanceMatrix.needsUpdate = true; im.geometry.attributes.iMove.needsUpdate = true; }
+  r.render(scene, cam);
+  window.ready = true;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script></body></html>

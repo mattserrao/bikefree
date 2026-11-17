@@ -56,7 +56,7 @@ class Findings {
 let world, route, city, landscape, F, entries, grid, buildingGrid, streamGrid = new Map(), streamed = new Set();
 const CELL = 64;
 // city life, plus highway traffic and birds on the real-coast scenes (Big Sur)
-const lifeNames = /^(People|Cyclists|Cars|Buses|Light rail|Locomotives|Freight cars|Incline cars|Boats · |Traffic · |Birds · )/;
+const lifeNames = /^(People|Cyclists|Dogs|Strollers|Cars|Buses|Light rail|Locomotives|Freight cars|Incline cars|Boats · |Traffic · |Birds · )/;
 const surfaceNames = /^(Streets|Sidewalks|Paths|Rivers|Route road|Route shoulder|Sea$|Lakes?\b)|water$/;
 const skipNames = /(Glows|lights|Light$|beacons|Clouds|clouds|Sky)/i;
 
