@@ -172,10 +172,11 @@ js/world/toolbox/
 
 | Module | Scene field | What it does |
 | --- | --- | --- |
-| `life/traffic.js` | `traffic` | Two-lane traffic both ways: overtaking, waiting, pulling into overlooks. `mix` adds kinds such as `jammer`. |
+| `life/figures/` | (used by the kits below) | The figures kit: soft cartoon people, cyclists, dogs, strollers and vehicles. `people.js`: skinned people in three detail levels with outfits, kids and props, animated by baked clips (`rig.js` → `npm run figures` → `clips.js`) in the vertex shader; `Crowd` places them around the camera in one draw per level. `vehicles.js`: 11 vehicle kinds, wheels that turn, brake lights, and a light parked version. Look at it with `npm run snap:figures` or `tools/figures-gallery.html`. |
+| `life/traffic.js` | `traffic` | Two-lane traffic both ways: overtaking, waiting, pulling into overlooks. Cars, hatchbacks, SUVs, pickups, camper vans, motorhomes, motorbikes and road cyclists from the figures kit. `mix` adds kinds such as `jammer`. |
 | `life/wildlife.js` | `life` (kit `wildlife`, the default on real mountains) | Goats, bighorn, marmots, squirrels, a bear, ducks, ravens, an eagle, alpine cows and sheep at `moments` or in zones. |
 | `life/coast-life.js` | `life` (kit `coast`, the default on a real coast) | Pelicans, gulls, a condor, grazing cattle, lighthouses. Its bird geometry is shared with wildlife. |
-| `life/visitors.js` | `visitors` | People at overlooks and sites, standing or wandering. |
+| `life/visitors.js` | `visitors` | People at overlooks and sites: looking, taking photos, on the phone or strolling, some with a dog or a stroller (`kids`, `dogs`, `strollers` shares). |
 | `life/race-day.js` | `raceDay` | Race day: crowds by stretch (cheering people near, crowd cards far, an orange corner), fan flags, camper vans, tents and cars, crowd barriers, painted words on the road, polka-dot summit banners, km-to-go banners, the red flame, the finish gantry and a TV helicopter. Generic colours and words, no brands. |
 
 ### city (`authored-city`)
@@ -189,7 +190,7 @@ js/world/toolbox/
 | `city/riverfront.js` | Walls, steps and trails along the rivers |
 | `city/bridges.js` | Bridges, stadiums and landmarks |
 | `city/heroes.js` | Hero towers |
-| `city/life.js` | People, cars, buses, trains, inclines and boats |
+| `city/life.js` | People, cars, buses (from the figures kit), trains, inclines and boats |
 
 Some Pittsburgh content is still in code: stadiums, the fountain, USS Requin and the hero models.
 
@@ -218,6 +219,8 @@ Some Pittsburgh content is still in code: stadiums, the fountain, USS Requin and
 | `npm run lint:scenes` | Checks every scene against the schema: unknown or misspelled fields (with "did you mean"), wrong types, unknown packs, fields on the wrong terrain, old names, and routes missing the standard look. Errors fail `npm test` |
 | `npm run gallery` | Renders `tools/toolbox-gallery.html` to `tools/snapshots/toolbox-gallery.png`. The page shows every model with triangles, size and a 1.8 m person for scale, plus surfaces, every palette and every scene field with the routes that use it. Open it live at `localhost:8000/tools/toolbox-gallery.html` after `npm start` |
 | `npm run presets` | Rebuilds `routes/presets/` from the source routes |
+| `npm run figures` | Bakes the figures' motion clips (`life/figures/rig.js`) into `life/figures/clips.js`. `npm test` fails if they're stale |
+| `npm run snap:figures` | Renders the figures gallery (every clip, outfits, dogs, strollers, cyclists, every vehicle) to `tools/snapshots/figures-<view>.png` |
 | `npm run guard -- record <dir>` then `npm run guard -- compare <a> <b>` | The refactor guard: renders fixed shots on every route with a frozen clock and seeded random, then compares PNGs pixel for pixel and every object's geometry, transforms and material. Run it before and after moving shared code |
 | `python3 tools/fetch_osm_corridor.py <id>` then `python3 tools/build_places.py <id>` and `python3 tools/place_boards.py <id>` | Real places: fetches the map in a corridor along the route (OSM API tiles, cached), bakes land cover, buildings, lifts, power lines and dams into `routes/scenes/<id>-places.bin.gz`, and places town and col boards |
 | `npm run snap`, `npm run qc`, `npm run qc:clipping` | As before (see `claude/scene-snapshots.md` and `claude/course-qc.md`) |

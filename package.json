@@ -16,7 +16,9 @@
     "new-route": "node tools/new_route.mjs",
     "presets": "node tools/build_presets.mjs",
     "guard": "node tools/toolbox_guard.mjs",
-    "gallery": "node tools/snap_gallery.mjs"
+    "gallery": "node tools/snap_gallery.mjs",
+    "figures": "node tools/build_figures.mjs",
+    "snap:figures": "node tools/snap_figures.mjs"
   },
   "devDependencies": {
     "@garmin/fitsdk": "^21.221.0",

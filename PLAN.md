@@ -740,6 +740,25 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [x] P9 · Cows, sheep, marmots, ravens and an eagle (no dog, no vultures yet); the ride ends at the line (Endless off)
 - [x] P10 · Strict QC clean (switchback banks, 3 m ground on hairpins, retaining walls); guard on the other routes; snapshots; moved to In Progress. Still to do on your side: a githack ride on the Mac and the Air
 
+### Figures: people and cars *(test branch `figures-test`, from `main` after PR #30)*
+**Goal:** replace the blocky box people and box cars with models that look better, and keep them cheap to draw and animate. One shared kit (`js/world/toolbox/life/figures/`) for every route that shows people or vehicles.
+
+**Decisions (17 Nov 2026)**
+- Soft cartoon style: rounded limbs, round heads with a simple face, toy-like cars with round wheels, to match the gentle look
+- Baked motion clips: walk cycles and poses authored in `rig.js`, baked by `npm run figures` into `clips.js`, played in the vertex shader from a float texture
+- Variety: clothing (sleeves, shorts, skirts, caps, packs), body types and kids, and extras (dogs on leads, strollers, people holding phones and cameras)
+- All vehicles, one shared kit, on this test branch
+
+**Passes**
+- [x] Rig (person + bike bones, dog) and 19 clips: idle, look, stroll, walk, jog, cheer, clap, wave, photo, phone, push (stroller), leash (dog), flag, sit, cycle, moto, ride, dog-walk, dog-idle. Two-bone IK keeps feet planted and hands on bars and handles; playback rate = speed / stride, so feet don't slide
+- [x] People: three detail levels (near ≈ 600 triangles as seen, mid ≈ 170, far ≈ 60), outfits and kids per instance, all in one draw call per level; shadows use the same skinning
+- [x] Vehicles: sedan, hatchback, SUV, pickup, van, taxi, city bus, motorhome, camper van, motorbike (with rider) and the Red Jammer (with passengers). Round wheels that turn with the distance driven, glass on every side, brake lights. A light version (under 200 triangles) for parked cars
+- [x] City life (Pittsburgh), visitors (Going-to-the-Sun), highway traffic (Big Sur, Going-to-the-Sun), race-day crowds and camps (Alpe d'Huez), the Pittsburgh street kit's parked cars and the Logan Pass car park all use the kit
+- [x] Race-day crowds drawn in three bands around the camera (detailed within 20 m, light chunks to 70 m, lightest beyond) to stay inside the Alpe's budget
+- [x] Fix: a city walker, cyclist or car spawned at the route's edge could get a NaN position while waiting at the kerb (QC showed it passing through the rider)
+- [x] `npm run snap:figures` (gallery views), `test/figures.test.mjs` (clips up to date, triangle budgets, feet on the ground)
+- [ ] Ride Pittsburgh, Big Sur, Going-to-the-Sun and the Alpe on the Mac and the Air (githack link)
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

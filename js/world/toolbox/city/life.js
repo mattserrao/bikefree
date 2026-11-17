@@ -1,17 +1,19 @@
 // Everything that moves in the city: people walking, jogging, cycling and standing around,
 // cars and buses (oncoming traffic on the route's streets too), light-rail and freight trains,
 // the two inclines up Mount Washington, barges, the riverboat, motorboats and kayaks, and birds.
-// Agents live near the camera and are recycled as you ride; all draw calls are instanced.
+// Agents live near the camera and are recycled as you ride; all draw calls are instanced. People, cyclists, dogs,
+// strollers, cars and buses come from the figures kit (life/figures): soft cartoon models, baked walk cycles.
 import * as THREE from '../../../../vendor/three.module.min.js';
+import { Crowd, CLIP, FIT, randomLook, dogLook, clipRate, PALETTES } from '../life/figures/people.js';
+import { vehicleMesh, vehicleMaterial, setPaint, setMove } from '../life/figures/vehicles.js';
 import { MeshBuilder, makePath, hash, ribbon } from '../core/mesh-builder.js';
 import { LAND } from './landscape.js';
 import { ROAD_WIDTH } from '../../pose.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
+// car models by share (the city's mix)
+const CAR_MIX = [['sedan', .34], ['hatch', .2], ['suv', .22], ['pickup', .07], ['van', .09], ['taxi', .08]];
 const COUNTS = { low: { people: 70, cars: 40, cyclists: 6 }, balanced: { people: 160, cars: 85, cyclists: 12 }, high: { people: 260, cars: 140, cyclists: 18 } };
-const SHIRTS = ['#c0392b', '#2e86c1', '#f1c40f', '#27ae60', '#ecf0f1', '#34495e', '#8e44ad', '#e67e22', '#16a085', '#d35400', '#1b1b1b', '#f5b7b1', '#5d6d7e', '#ffcc00'];
-const PANTS = ['#2c3e50', '#1c2833', '#5d4e37', '#34495e', '#7f8c8d', '#283747', '#b9a27e'];
-const SKIN = ['#f1c27d', '#e0ac69', '#c68642', '#8d5524', '#ffdbac', '#a0673a'];
 const CARS = ['#c0392b', '#1f3a5f', '#ecf0f1', '#2c2c2c', '#7f8c8d', '#bdc3c7', '#1e8449', '#f4d03f', '#5b2c6f', '#a04000', '#ffffff', '#566573'];
 
 // ---------------------------------------------------------------- shared animated material
@@ -23,27 +25,14 @@ function animatedMaterial(life, kind) {
       .replace('#include <common>', `#include <common>
         uniform float uTime; attribute float aPart; attribute vec3 aMask; attribute vec3 iA; attribute vec3 iB; attribute vec3 iC; attribute vec2 iAnim;
         varying float vLight;`)
-      .replace('#include <begin_vertex>', kind === 'people' ? `
-        vec3 transformed = vec3(position);
-        float gait = iAnim.y;
-        float freq = gait > 2.5 ? 7.5 : gait > 1.5 ? 9.5 : 6.2;
-        float amp = gait > 2.5 ? .9 : gait > 1.5 ? .75 : gait > .5 ? .42 : 0.;
-        float sw = sin(uTime * freq + iAnim.x) * amp;
-        float ang = 0.;
-        if (aPart > .5 && aPart < 1.5) ang = sw; else if (aPart > 1.5 && aPart < 2.5) ang = gait > 2.5 ? sin(uTime * freq + iAnim.x + 3.1416) * amp : -sw;
-        else if (aPart > 2.5 && aPart < 3.5) ang = -sw * .8 * step(gait, 2.5); else if (aPart > 3.5) ang = sw * .8 * step(gait, 2.5);
-        float pivot = aPart < 2.5 ? (gait > 2.5 ? .95 : .92) : 1.45;
-        if (aPart > .5) { float y = transformed.y - pivot, z = transformed.z - (gait > 2.5 && aPart < 2.5 ? -.12 : 0.); float c = cos(ang), s = sin(ang);
-          transformed.y = pivot + y * c - z * s; transformed.z = y * s + z * c + (gait > 2.5 && aPart < 2.5 ? -.12 : 0.); }
-        if (gait < .5) transformed.x += sin(uTime * .8 + iAnim.x) * .025 * transformed.y;
-        transformed.y += abs(sw) * .035 * step(gait, 2.5);` : `
+      .replace('#include <begin_vertex>', `
         vec3 transformed = vec3(position);`)
       .replace('#include <color_vertex>', `#include <color_vertex>
         vColor.rgb = vColor.rgb * clamp(1. - aMask.x - aMask.y - aMask.z, 0., 1.) + iA * aMask.x + iB * aMask.y + iC * aMask.z;
         vLight = aPart;`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform float uNight; varying float vLight;')
-      .replace('#include <emissivemap_fragment>', kind === 'people' ? '#include <emissivemap_fragment>' : `#include <emissivemap_fragment>
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         if (vLight > 9.5 && vLight < 10.5) totalEmissiveRadiance += vec3(1., .93, .78) * uNight * 4.;
         if (vLight > 10.5 && vLight < 11.5) totalEmissiveRadiance += vec3(1., .08, .05) * uNight * 2.5;
         if (vLight > 11.5 && vLight < 12.5) totalEmissiveRadiance += vec3(1., .82, .55) * uNight * .9;`);
@@ -66,48 +55,6 @@ function instanced(life, builder, material, count, name, shadow = true) {
 const setColor = (im, attr, i, hex) => { const c = new THREE.Color(hex); im.geometry.attributes[attr].setXYZ(i, c.r, c.g, c.b); };
 
 // ---------------------------------------------------------------- geometry
-function personGeometry() {
-  const M = new MeshBuilder({ aPart: 1, aMask: 3 });
-  const P = (part, mask) => M.set({ aPart: [part], aMask: mask });
-  P(1, [0, 1, 0]); M.box(-.1, .1, 0, .15, .84, .17); P(2, [0, 1, 0]); M.box(.1, .1, 0, .15, .84, .17);
-  M.color('#222'); P(1, [0, 0, 0]); M.box(-.1, 0, .03, .15, .1, .27); P(2, [0, 0, 0]); M.box(.1, 0, .03, .15, .1, .27);
-  M.color('#fff'); P(0, [1, 0, 0]); M.box(0, .9, 0, .44, .62, .25);
-  P(3, [1, 0, 0]); M.box(-.28, .92, 0, .11, .56, .13); P(4, [1, 0, 0]); M.box(.28, .92, 0, .11, .56, .13);
-  P(3, [0, 0, 1]); M.box(-.28, .8, 0, .09, .12, .1); P(4, [0, 0, 1]); M.box(.28, .8, 0, .09, .12, .1);
-  P(0, [0, 0, 1]); M.box(0, 1.52, 0, .22, .27, .24); M.box(0, 1.48, 0, .1, .06, .1);
-  M.color('#2b2018'); P(0, [0, 0, 0]); M.box(0, 1.74, -.01, .24, .08, .26);
-  return M;
-}
-
-function cyclistGeometry() {
-  const M = new MeshBuilder({ aPart: 1, aMask: 3 });
-  const P = (part, mask) => M.set({ aPart: [part], aMask: mask });
-  M.color('#1b1b1b'); P(0, [0, 0, 0]);
-  for (const z of [-.52, .52]) { M.cylinder(0, .02, z, .02, .01); M.beam(V(0, .34, z - .33), V(0, .34, z + .33), .04, .66); }
-  M.color('#888'); M.beam(V(0, .34, -.52), V(0, .95, -.15), .05, .05); M.beam(V(0, .95, -.15), V(0, .95, .42), .05, .05); M.beam(V(0, .95, .42), V(0, .34, .52), .05, .05); M.beam(V(0, .34, -.1), V(0, .95, .42), .05, .05);
-  M.color('#fff'); P(1, [0, 1, 0]); M.box(-.1, .45, -.1, .13, .52, .15); P(2, [0, 1, 0]); M.box(.1, .45, -.1, .13, .52, .15);
-  P(0, [1, 0, 0]); M.beam(V(0, 1.0, -.12), V(0, 1.42, .25), .38, .24);
-  M.beam(V(-.2, 1.36, .2), V(-.2, 1.0, .45), .09, .09); M.beam(V(.2, 1.36, .2), V(.2, 1.0, .45), .09, .09);
-  P(0, [0, 0, 1]); M.box(0, 1.45, .3, .2, .24, .22);
-  M.color('#e8e8e8'); P(0, [0, 0, 0]); M.box(0, 1.66, .28, .26, .1, .3);
-  return M;
-}
-
-function carGeometry(bus = false) {
-  const M = new MeshBuilder({ aPart: 1, aMask: 3 });
-  const P = (part, mask) => M.set({ aPart: [part], aMask: mask });
-  const L = bus ? 12 : 4.4, W = bus ? 2.55 : 1.82, H = bus ? 2.9 : 1.45;
-  M.color('#fff'); P(0, [1, 0, 0]);
-  M.box(0, .32, 0, W, bus ? H - .32 : .62, L);
-  if (!bus) { M.box(0, .94, -.25, W * .9, .5, L * .5); M.color('#1d2329'); P(12, [0, 0, 0]); M.box(0, .96, -.25, W * .92, .42, L * .46); }
-  else { M.color('#1d2329'); P(12, [0, 0, 0]); M.box(0, 1.35, 0, W + .02, .9, L - .8); M.color('#2a5aa5'); P(0, [0, 0, 0]); M.box(0, .5, 0, W + .03, .25, L - .3); }
-  M.color('#111'); P(0, [0, 0, 0]);
-  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) M.box(x * (W / 2 - .05), 0, z * (L / 2 - (bus ? 2 : .8)), .26, .64, .64);
-  M.color('#fff8e0'); P(10, [0, 0, 0]); for (const x of [-1, 1]) M.box(x * (W / 2 - .3), .58, L / 2, .32, .16, .05);
-  M.color('#c0392b'); P(11, [0, 0, 0]); for (const x of [-1, 1]) M.box(x * (W / 2 - .25), .62, -L / 2 - .02, .3, .14, .05);
-  return M;
-}
-
 function boatGeometry(type) {
   const M = new MeshBuilder({ aPart: 1, aMask: 3 });
   const P = (part) => M.set({ aPart: [part], aMask: [0, 0, 0] });
@@ -244,8 +191,8 @@ export class CityLife {
     this.rand = (() => { let s = 1234567; return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; }; })();
     this.counts = COUNTS[city.qualityKey] || COUNTS.balanced;
     this.m = new THREE.Matrix4(); this.q = new THREE.Quaternion(); this.e = new THREE.Euler(0, 0, 0, 'YXZ'); this.one = V(1, 1, 1);
-    this.peopleMat = animatedMaterial(this, 'people');
     this.vehicleMat = animatedMaterial(this, 'vehicles');
+    this.carMat = vehicleMaterial(city.night);
     this._networks();
     this._people();
     this._traffic();
@@ -284,24 +231,44 @@ export class CityLife {
   // -------------------------------------------------------------- people
   _people() {
     const n = this.counts.people, scene = this.city.route.scene || {};
-    this.people = instanced(this, personGeometry(), this.peopleMat, n, 'People');
-    this.cyclists = instanced(this, cyclistGeometry(), this.peopleMat, this.counts.cyclists, 'Cyclists');
+    const uTime = this.city.uniforms.uTime, nearM = { low: 25, balanced: 45, high: 70 }[this.city.qualityKey] ?? 45;
+    const farM = { low: 70, balanced: 110, high: 160 }[this.city.qualityKey] ?? 110;
+    this.crowd = new Crowd(this.city.group, { uTime, name: 'People', capacity: n, nearM, farM, dogs: Math.ceil(n * .08), strollers: Math.ceil(n * .05) });
+    this.cyclistCrowd = new Crowd(this.city.group, { uTime, name: 'Cyclists', capacity: this.counts.cyclists, nearM: Infinity, kind: 'cyclist' });
     this.walkers = [];
     for (let i = 0; i < n; i++) this.walkers.push({ id: i, alive: false });
     this.riders = [];
-    for (let i = 0; i < this.counts.cyclists; i++) this.riders.push({ id: i, alive: false, bike: true });
-    for (const im of [this.people, this.cyclists]) {
-      for (let i = 0; i < im.geometry.attributes.iA.count; i++) {
-        setColor(im, 'iA', i, SHIRTS[Math.floor(this.rand() * SHIRTS.length)]);
-        setColor(im, 'iB', i, PANTS[Math.floor(this.rand() * PANTS.length)]);
-        setColor(im, 'iC', i, SKIN[Math.floor(this.rand() * SKIN.length)]);
-      }
-    }
+    for (let i = 0; i < this.counts.cyclists; i++) this.riders.push({ id: i, alive: false, bike: true, look: randomLook(this.rand, { kids: 0, helmet: true }), phase: this.rand() });
     // gathering spots (squares, overlooks, the stadium plaza): people standing about
     this.hotspots = (scene.hotspots || []).map((h) => ({ ...h, ...this.city.D.proj.toLocal(h.lat, h.lon) }));
   }
 
   _spawnWalker(a, cam, initial) {
+    a.x = null; a.lx = null;   // a new life: no old position to fall back to
+    this._placeWalker(a, cam, initial);
+    if (a.alive) this._dress(a);
+  }
+
+  /** A new look and what they're doing: standing about, strolling, walking (some with a dog or a stroller), jogging. */
+  _dress(a) {
+    const r = this.rand;
+    let look, clip;
+    if (a.stand) {
+      look = randomLook(r, { kids: .12 });
+      const k = r(); clip = k < .35 ? CLIP.idle : k < .6 ? CLIP.look : k < .82 ? CLIP.phone : CLIP.photo;
+      if (clip === CLIP.phone || clip === CLIP.photo) look.bits |= FIT.PROP;
+    } else if (a.gait === 2) { look = randomLook(r, { kids: 0, sporty: true }); clip = CLIP.jog; }
+    else {
+      look = randomLook(r, { kids: .12, packs: .14 });
+      clip = a.wander ? CLIP.stroll : CLIP.walk;
+      if (!a.wander && !look.kid && r() < .08) { look.dog = dogLook(r); look.h = .97 + r() * .05; clip = CLIP.leash; a.speed = Math.min(a.speed, 1.3); }
+      else if (!a.wander && !look.kid && r() < .05) { look.stroller = new THREE.Color(PALETTES.strollers[Math.floor(r() * PALETTES.strollers.length)]); clip = CLIP.push; a.speed = Math.min(a.speed, 1.15); }
+      else if (look.kid) a.speed = Math.min(a.speed, 1.05);
+    }
+    a.look = look; a.clip = clip; a.phase = r(); a.rate = clipRate(clip, a.stand ? 0 : a.speed, look);
+  }
+
+  _placeWalker(a, cam, initial) {
     const R = 260, net = this.walk;
     // a third of the crowd gathers at the nearest hotspots
     const spot = this.hotspots.length && this.rand() < .35 ? this.hotspots[Math.floor(this.rand() * this.hotspots.length)] : null;
@@ -325,6 +292,7 @@ export class CityLife {
   }
 
   _spawnCyclist(a, cam, initial) {
+    a.x = null;
     const hit = this.walk.near(cam.x, cam.z, 300, this.rand, initial ? 0 : 160);
     if (!hit) { a.alive = false; return; }
     const w = this.walk.ways[hit[0]];
@@ -385,43 +353,55 @@ export class CityLife {
   }
 
   _updatePeople(cam, dt, time, rider) {
-    const im = this.people, L = this.city.landscape;
+    const L = this.city.landscape;
+    this.crowd.begin(cam);
     for (const a of this.walkers) {
       if (!a.alive || Math.hypot(a.x - cam.x, a.z - cam.z) > 330) this._spawnWalker(a, cam, !this._started);
-      if (!a.alive) { im.setMatrixAt(a.id, this.zero); continue; }
+      if (!a.alive) continue;
       if (a.wander) { a.yaw += (this.rand() - .5) * dt; a.x += Math.sin(a.yaw) * a.speed * dt; a.z += Math.cos(a.yaw) * a.speed * dt; a.y = L.heightAt(a.x, a.z); }
-      else if (!a.stand) { const prev = { x: a.x, y: a.y, z: a.z, s: a.s, way: a.way, dir: a.dir, yaw: a.yaw, pitch: a.pitch }; this._moveOnNetwork(a, this.walk, dt); this._yield(a, prev, rider, 70, true); }
-      this.e.set(0, a.yaw, 0); this.q.setFromEuler(this.e);
-      im.setMatrixAt(a.id, this.m.compose(V(a.x, a.y, a.z), this.q, this.one));
-      im.geometry.attributes.iAnim.setXY(a.id, a.id * 1.7, a.gait);
+      else if (!a.stand) { if (a.x == null) this._moveOnNetwork(a, this.walk, 0);   // a first position, so waiting at the kerb has one to keep
+        const prev = { x: a.x, y: a.y, z: a.z, s: a.s, way: a.way, dir: a.dir, yaw: a.yaw, pitch: a.pitch }; this._moveOnNetwork(a, this.walk, dt); this._yield(a, prev, rider, 70, true); }
+      // waiting at the kerb (or stepped aside for the rider): stand still until moving again
+      const moved = a.stand ? 0 : Math.hypot(a.x - (a.lx ?? a.x), a.z - (a.lz ?? a.z)) / Math.max(dt, 1e-3);
+      a.lx = a.x; a.lz = a.z;
+      const still = !a.stand && dt > 0 && moved < .15;
+      this.crowd.add(a.look, a.x, a.y, a.z, a.yaw, still ? (a.clip === CLIP.push || a.clip === CLIP.leash ? a.clip : CLIP.idle) : a.clip, a.phase, still ? (a.clip === CLIP.push || a.clip === CLIP.leash ? 0 : clipRate(CLIP.idle)) : a.rate);
     }
-    im.count = this.walkers.length; im.instanceMatrix.needsUpdate = true; im.geometry.attributes.iAnim.needsUpdate = true;
-    const cy = this.cyclists;
+    this.crowd.end();
+    this.cyclistCrowd.begin(cam);
     for (const a of this.riders) {
       if (!a.alive || Math.hypot(a.x - cam.x, a.z - cam.z) > 380) this._spawnCyclist(a, cam, !this._started);
-      if (!a.alive) { cy.setMatrixAt(a.id, this.zero); continue; }
+      if (!a.alive) continue;
+      if (a.x == null) this._moveOnNetwork(a, this.walk, 0);
       const prev = { x: a.x, y: a.y, z: a.z, s: a.s, way: a.way, dir: a.dir, yaw: a.yaw, pitch: a.pitch };
       this._moveOnNetwork(a, this.walk, dt); this._yield(a, prev, rider, 50, true);
-      this.e.set(-a.pitch, a.yaw, 0); this.q.setFromEuler(this.e);
-      cy.setMatrixAt(a.id, this.m.compose(V(a.x, a.y, a.z), this.q, this.one));
-      cy.geometry.attributes.iAnim.setXY(a.id, a.id * 2.3, 3);
+      const v = Math.hypot(a.x - prev.x, a.z - prev.z) / Math.max(dt, 1e-3);
+      this.cyclistCrowd.add(a.look, a.x, a.y, a.z, a.yaw, CLIP.cycle, a.phase, v > .3 ? clipRate(CLIP.cycle, v) : 0);
     }
-    cy.count = this.riders.length; cy.instanceMatrix.needsUpdate = true; cy.geometry.attributes.iAnim.needsUpdate = true;
+    this.cyclistCrowd.end();
   }
 
   // -------------------------------------------------------------- cars and buses
   _traffic() {
     const n = this.counts.cars, buses = Math.max(4, Math.round(n / 12));
-    this.cars = instanced(this, carGeometry(false), this.vehicleMat, n + 4, 'Cars');
-    this.buses = instanced(this, carGeometry(true), this.vehicleMat, buses, 'Buses');
-    for (let i = 0; i < n + 4; i++) setColor(this.cars, 'iA', i, CARS[Math.floor(this.rand() * CARS.length)]);
-    for (let i = 0; i < buses; i++) setColor(this.buses, 'iA', i, '#f2f2f2');
-    this.carAgents = Array.from({ length: n }, (_, id) => ({ id, alive: false }));
-    this.busAgents = Array.from({ length: buses }, (_, id) => ({ id, alive: false, bus: true }));
-    this.oncoming = Array.from({ length: 4 }, (_, id) => ({ id: n + id, alive: false }));   // oncoming traffic on the route's streets
+    // every car keeps its model and paint for good (one instanced mesh per model)
+    const pickModel = () => { let r = this.rand(); for (const [k, w] of CAR_MIX) { r -= w; if (r <= 0) return k; } return 'sedan'; };
+    this.carAgents = Array.from({ length: n }, (_, id) => ({ id, alive: false, model: pickModel(), dist: 0 }));
+    this.busAgents = Array.from({ length: buses }, (_, id) => ({ id, alive: false, bus: true, model: 'bus', dist: 0 }));
+    this.oncoming = Array.from({ length: 4 }, (_, id) => ({ id: n + id, alive: false, model: ['sedan', 'suv', 'hatch', 'van'][id], dist: 0 }));   // oncoming traffic on the route's streets
+    this.carMeshes = {};
+    for (const a of [...this.carAgents, ...this.oncoming, ...this.busAgents]) {
+      const m = (this.carMeshes[a.model] ||= { list: [] }); a.slot = m.list.length; m.list.push(a);
+    }
+    for (const [model, m] of Object.entries(this.carMeshes)) {
+      m.im = vehicleMesh(model, this.carMat, m.list.length, model === 'bus' ? 'Buses' : `Cars · ${model}`);
+      if (model !== 'bus' && model !== 'taxi') m.list.forEach((a) => setPaint(m.im, a.slot, CARS[Math.floor(this.rand() * CARS.length)]));
+      this.city.group.add(m.im);
+    }
   }
 
   _spawnCar(a, cam, initial) {
+    a.x = null; a.lx = null;
     const R = 420, net = this.drive;
     for (let t = 0; t < 4; t++) {
       const hit = net.near(cam.x, cam.z, R, this.rand, initial ? 0 : R * .55);
@@ -453,43 +433,49 @@ export class CityLife {
   }
 
   _updateTraffic(cam, dt, rider) {
-    const draw = (im, a) => {
+    for (const m of Object.values(this.carMeshes)) m.n = 0;
+    const draw = (a) => {
+      const m = this.carMeshes[a.model], i = m.n++;
       this.e.set(-(a.pitch || 0), a.yaw, 0); this.q.setFromEuler(this.e);
-      im.setMatrixAt(a.id, this.m.compose(V(a.x, a.y + .02, a.z), this.q, this.one));
+      m.im.setMatrixAt(i, this.m.compose(V(a.x, a.y + .02, a.z), this.q, this.one));
+      if (a.lx != null) a.dist += Math.hypot(a.x - a.lx, a.z - a.lz);
+      a.lx = a.x; a.lz = a.z;
+      setMove(m.im, i, a.dist, 0);
     };
     for (const a of this.carAgents) {
       if (!a.alive || Math.hypot(a.x - cam.x, a.z - cam.z) > 480) this._spawnCar(a, cam, !this._started);
-      if (!a.alive) { this.cars.setMatrixAt(a.id, this.zero); continue; }
+      if (!a.alive) { a.lx = null; continue; }
       // keep clear of the rider where a street crosses or joins the route
+      if (a.x == null) this._moveOnNetwork(a, this.drive, 0);
       const prev = { x: a.x, y: a.y, z: a.z, s: a.s, way: a.way, dir: a.dir, yaw: a.yaw, pitch: a.pitch };
       this._moveOnNetwork(a, this.drive, dt * (a.hurry || 1)); a.hurry = 0;
       this._yield(a, prev, rider, 30, false);
-      draw(this.cars, a);
+      draw(a);
     }
     for (const a of this.oncoming) {
       if (rider && !a.alive) { a.wait = (a.wait || 0) - dt; if (a.wait <= 0) this._spawnOncoming(a, rider); }
-      if (!rider || !a.alive) { this.cars.setMatrixAt(a.id, this.zero); continue; }
+      if (!rider || !a.alive) { a.lx = null; continue; }
       {
         a.s += a.dir * a.speed * dt;
         const behind = (rider.out - a.s) * rider.dir;
-        if (behind > 80 || a.s < 0 || a.s > (this.city.route.turnS || this.city.route.total) || this.city.landscape.routeKindAt(a.s) !== 'road') { a.alive = false; a.wait = 2 + this.rand() * 6; this.cars.setMatrixAt(a.id, this.zero); continue; }
+        if (behind > 80 || a.s < 0 || a.s > (this.city.route.turnS || this.city.route.total) || this.city.landscape.routeKindAt(a.s) !== 'road') { a.alive = false; a.wait = 2 + this.rand() * 6; a.lx = null; continue; }
         const p = this._routeAt(a.s, this._tmpR || (this._tmpR = {}));
         const lane = ROAD_WIDTH * .26 * (a.dir > 0 ? 1 : -1);
         a.x = p.x - p.dz * lane; a.z = p.z + p.dx * lane; a.y = p.y + .1;
         a.yaw = Math.atan2(p.dx * a.dir, p.dz * a.dir); a.pitch = Math.atan(p.dy) * a.dir;
-        draw(this.cars, a);
+        draw(a);
       }
     }
-    this.cars.count = this.carAgents.length + this.oncoming.length; this.cars.instanceMatrix.needsUpdate = true;
     for (const a of this.busAgents) {
       if (!a.alive || Math.hypot(a.x - cam.x, a.z - cam.z) > 480) this._spawnCar(a, cam, !this._started);
-      if (!a.alive) { this.buses.setMatrixAt(a.id, this.zero); continue; }
+      if (!a.alive) { a.lx = null; continue; }
+      if (a.x == null) this._moveOnNetwork(a, this.drive, 0);
       const prev = { x: a.x, y: a.y, z: a.z, s: a.s, way: a.way, dir: a.dir, yaw: a.yaw, pitch: a.pitch };
       this._moveOnNetwork(a, this.drive, dt * (a.hurry || 1)); a.hurry = 0;
       this._yield(a, prev, rider, 35, false);
-      draw(this.buses, a);
+      draw(a);
     }
-    this.buses.count = this.busAgents.length; this.buses.instanceMatrix.needsUpdate = true;
+    for (const m of Object.values(this.carMeshes)) { m.im.count = m.n; m.im.instanceMatrix.needsUpdate = true; m.im.geometry.attributes.iMove.needsUpdate = true; }
   }
 
   // -------------------------------------------------------------- trains
@@ -786,6 +772,8 @@ export class CityLife {
   setQuality(key) { this.counts = COUNTS[key] || COUNTS.balanced; }
 
   dispose() {
-    for (const im of [this.people, this.cyclists, this.cars, this.buses, this.inclineCars, this.wakes, this.birds, ...Object.values(this.boatMeshes || {}), ...this.trains.flatMap((t) => [t.im, t.carIm])]) im?.dispose?.();
+    this.crowd.dispose(); this.cyclistCrowd.dispose(); this.carMat.dispose();
+    for (const m of Object.values(this.carMeshes)) { m.im.geometry.dispose(); m.im.dispose(); }
+    for (const im of [this.inclineCars, this.wakes, this.birds, ...Object.values(this.boatMeshes || {}), ...this.trains.flatMap((t) => [t.im, t.carIm])]) im?.dispose?.();
   }
 }

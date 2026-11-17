@@ -1,18 +1,23 @@
 // Toolbox: traffic kit, any stylized scene with a "traffic" block. First built for Big Sur:
 //
-// Light, realistic traffic on a two-lane highway (Big Sur's Highway 1): cars, pickups and SUVs,
-// rental RVs and campervans, motorcycles and other cyclists, both ways. Traffic overtakes the rider
+// Light, realistic traffic on a two-lane highway (Big Sur's Highway 1): cars, hatchbacks, pickups and SUVs,
+// rental RVs and campervans, motorcycles and other cyclists, both ways. Models from the figures kit (wheels
+// turn with the distance driven, brake lights come on when slowing). Traffic overtakes the rider
 // when the oncoming lane is clear (and waits behind when it isn't), and some vehicles pull into the
 // overlooks for a while. Agents live in a window around the rider and are recycled; instanced draws.
 import * as THREE from '../../../../vendor/three.module.min.js';
-import { MeshBuilder } from '../core/mesh-builder.js';
 import { ROAD_WIDTH } from '../../pose.js';
+import { vehicleMesh, vehicleMaterial, setPaint, setMove, PAINTS } from './figures/vehicles.js';
+import { Crowd, CLIP, randomLook, clipRate } from './figures/people.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
-const PAINT = ['#b23a2e', '#1f3a5f', '#e9ecee', '#2b2b2b', '#7f8c8d', '#c5c9cc', '#28543c', '#d9c38a', '#5b2c6f', '#8a3c12', '#ffffff', '#4f6475', '#9db4c8', '#c9c2b0'];
+// kind (the scene's "mix" names) → model in the figures kit; bikes are cyclists from the people kit
 const KINDS = [
-  { kind: 'car', w: .46, speed: [19, 25], len: 4.5 },
-  { kind: 'suv', w: .22, speed: [18, 24], len: 5.0 },
+  { kind: 'car', model: 'sedan', w: .3, speed: [19, 25], len: 4.5 },
+  { kind: 'hatch', model: 'hatch', w: .12, speed: [18, 24], len: 4.0 },
+  { kind: 'suv', w: .2, speed: [18, 24], len: 4.8 },
+  { kind: 'pickup', w: .08, speed: [18, 24], len: 5.3 },
+  { kind: 'camper', w: .05, speed: [15, 20], len: 4.7 },
   { kind: 'rv', w: .1, speed: [15, 19], len: 8.5 },
   { kind: 'moto', w: .1, speed: [20, 27], len: 2.2 },
   { kind: 'bike', w: .12, speed: [6, 9.5], len: 1.8 },
@@ -24,91 +29,12 @@ const EXTRA_KINDS = {
   jammer: { kind: 'jammer', w: 0, speed: [13, 18], len: 7.6, color: '#b5231c' },
 };
 
-// part: 0 body (tinted per instance), 1 glass, 2 dark trim, 10 headlight, 11 tail light
-function vehicle(kind) {
-  const M = new MeshBuilder({ aGlow: 1 });
-  const G = (g) => M.set({ aGlow: [g] });
-  G(0);
-  if (kind === 'car' || kind === 'suv') {
-    const W = kind === 'suv' ? 1.9 : 1.8, L = kind === 'suv' ? 4.9 : 4.5, H = kind === 'suv' ? .82 : .62;
-    M.color('#ffffff'); M.box(0, .3, 0, W, H, L);
-    M.box(0, .3 + H, kind === 'suv' ? -.35 : -.2, W * .92, kind === 'suv' ? .72 : .5, L * (kind === 'suv' ? .62 : .5));
-    M.color('#25303a'); M.box(0, .36 + H, kind === 'suv' ? -.35 : -.2, W * .94, kind === 'suv' ? .56 : .38, L * (kind === 'suv' ? .6 : .46));
-    M.color('#151515'); for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) M.box(x * (W / 2 - .08), 0, z * (L / 2 - .85), .28, .66, .66);
-    G(10); M.color('#fff6dc'); for (const x of [-1, 1]) M.box(x * (W / 2 - .3), .62, L / 2, .34, .14, .05);
-    G(11); M.color('#b0201a'); for (const x of [-1, 1]) M.box(x * (W / 2 - .25), .66, -L / 2 - .02, .3, .14, .05);
-  } else if (kind === 'rv') {
-    const W = 2.4, L = 8.4;
-    M.color('#f1ede4'); M.box(0, .45, -.6, W, 2.7, L - 1.6);
-    M.color('#ffffff'); M.box(0, .45, L / 2 - 1.2, W * .96, 1.3, 2.2);
-    M.color('#2a3540'); M.box(0, 1.2, L / 2 - .6, W * .9, .6, 1.2); M.box(0, 2.05, -.6, W + .02, .55, L - 3);
-    M.color('#7a5a3a'); M.box(0, 1.25, -.6, W + .03, .16, L - 1.8);
-    M.color('#151515'); for (const [x, z] of [[-1, -1], [1, -1], [-1, .6]]) M.box(x * (W / 2 - .1), 0, z * (L / 2 - 1.1), .3, .8, .8);
-    M.box(1 * (W / 2 - .1), 0, .6 * (L / 2 - 1.1), .3, .8, .8);
-    G(10); M.color('#fff6dc'); for (const x of [-1, 1]) M.box(x * (W / 2 - .35), .75, L / 2 + .02, .34, .16, .05);
-    G(11); M.color('#b0201a'); for (const x of [-1, 1]) M.box(x * (W / 2 - .2), .9, -L / 2 + .78, .25, .3, .05);
-  } else if (kind === 'jammer') {
-    // long hood and rounded fenders, four rows of bench seats under an open top, the canvas rolled at the back
-    const W = 2.15, L = 7.6;
-    M.color('#ffffff'); M.box(0, .5, -.9, W, 1.05, L - 2.6);            // body (red, from the instance colour)
-    M.box(0, .62, L / 2 - 1.15, 1.35, .82, 2.1);                         // the long hood
-    G(12); M.color('#e9e4d4'); M.box(0, .62, L / 2 - .08, 1.2, .78, .12);   // chrome grille
-    M.color('#1a1a1a'); for (const [x, z] of [[-1, -1], [1, -1]]) M.box(x * (W / 2 - .02), .3, z * (L / 2 - 1.25), .4, .62, 1.3);
-    for (const x of [-1, 1]) M.box(x * .78, .32, L / 2 - 1.05, .42, .6, 1.25);   // front fenders
-    M.color('#151515'); for (const [x, z] of [[-1, -1], [1, -1], [-.78, .73], [.78, .73]]) M.box(x * (z > 0 ? 1 : W / 2 - .1), 0, z * (L / 2 - 1.15), .3, .78, .78);
-    M.color('#3b2a20'); for (let r = 0; r < 4; r++) M.box(0, 1.5, 1.35 - r * 1.2, W - .2, .32, .55);   // bench backs
-    const heads = ['#e2b48a', '#c98c5e', '#8a5a3c', '#f0c9a2'];
-    for (let r = 0; r < 4; r++) for (const x of [-.6, 0, .6]) if ((r * 3 + x * 5 + 7) % 3 > .5) { M.color(heads[(r + Math.round(x * 3)) % 4]); M.box(x, 1.68, 1.15 - r * 1.2, .2, .24, .2); }
-    M.color('#cdbb8f'); M.box(0, 1.5, -L / 2 + .55, W - .1, .55, .8);   // rolled canvas
-    M.color('#e9e4d4'); M.box(0, 1.55, L / 2 - 2.25, W - .1, .5, .06);  // windscreen frame
-    G(10); M.color('#fff6dc'); for (const x of [-1, 1]) M.box(x * .78, .95, L / 2 - .5, .26, .26, .26);
-    G(11); M.color('#b0201a'); for (const x of [-1, 1]) M.box(x * (W / 2 - .2), .7, -L / 2 + .45 - .02, .2, .14, .05);
-  } else if (kind === 'moto') {
-    M.color('#151515'); for (const z of [-.7, .7]) M.box(0, 0, z, .14, .62, .62);
-    M.color('#ffffff'); M.beam(V(0, .45, -.55), V(0, .62, .55), .3, .32);
-    M.color('#2b2b2b'); M.box(0, .6, -.2, .34, .42, .45);         // rider legs and body
-    M.beam(V(0, .95, -.25), V(0, 1.45, .05), .38, .3);
-    M.color('#d8d8d8'); M.box(0, 1.45, .02, .3, .3, .32);           // helmet
-    G(10); M.color('#fff6dc'); M.box(0, .75, .95, .16, .14, .05);
-    G(11); M.color('#b0201a'); M.box(0, .7, -.98, .14, .1, .04);
-  } else {
-    // another road cyclist: wheels, frame, rider in a bright kit
-    M.color('#151515'); for (const z of [-.52, .52]) M.box(0, 0, z, .05, .68, .68);
-    M.color('#9a9a9a'); M.beam(V(0, .34, -.52), V(0, .95, -.12), .05, .05); M.beam(V(0, .95, -.12), V(0, .95, .42), .05, .05); M.beam(V(0, .95, .42), V(0, .34, .52), .05, .05);
-    M.color('#ffffff'); M.beam(V(0, 1.0, -.15), V(0, 1.38, .3), .36, .24);   // jersey (tinted)
-    M.color('#1f1f1f'); M.box(-.1, .45, -.12, .13, .55, .15); M.box(.1, .45, -.12, .13, .55, .15);
-    M.color('#f0f0f0'); M.box(0, 1.42, .34, .24, .16, .3);
-    G(11); M.color('#e0281a'); M.box(0, .9, -.6, .06, .08, .03);
-  }
-  return M;
-}
-
-function material(uniforms, night) {
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .55, metalness: .1 });
-  m.onBeforeCompile = (shader) => {
-    shader.uniforms.uNight = night;
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aGlow; varying float vGlow;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = aGlow;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight; varying float vGlow;')
-      .replace('#include <color_fragment>', `#include <color_fragment>
-        // lights and glass keep their own colour (not the paint tint)
-        #ifdef USE_INSTANCING_COLOR
-          if (vGlow > 9.5) diffuseColor.rgb = vColor.rgb / max(vInstanceColor.rgb, vec3(.05));
-        #endif`)
-      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-        if (vGlow > 9.5 && vGlow < 10.5) totalEmissiveRadiance += vec3(1., .93, .78) * (.15 + uNight * 4.);
-        if (vGlow > 10.5 && vGlow < 11.5) totalEmissiveRadiance += vec3(1., .1, .06) * (.25 + uNight * 2.5);`);
-  };
-  m.customProgramCacheKey = () => 'bf-highway-traffic-2';
-  return m;
-}
-
 export class HighwayTraffic {
   constructor(parent, route, index, landscape, uniforms, quality = 'balanced', config = {}) {
     this.route = route; this.index = index; this.L = landscape; this.config = config;
     this.group = new THREE.Group(); this.group.name = 'Highway traffic'; parent.add(this.group);
     this.night = { value: 0 };
-    this.mat = material(uniforms, this.night);
+    this.mat = vehicleMaterial(this.night);
     this.turn = route.turnS || route.total;
     this.seed = 9137; this.rand = () => ((this.seed = (this.seed * 16807) % 2147483647) / 2147483647);
     this.meshes = {};
@@ -120,11 +46,14 @@ export class HighwayTraffic {
       if (k) k.w = w;
     }
     for (const k of this.kinds) {
-      const geometry = vehicle(k.kind).geometry();
-      const mesh = new THREE.InstancedMesh(geometry, this.mat, this.n);
-      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      mesh.frustumCulled = false; mesh.castShadow = true; mesh.receiveShadow = true; mesh.name = `Traffic · ${k.kind}`; mesh.count = 0;
-      for (let i = 0; i < this.n; i++) mesh.setColorAt(i, new THREE.Color(k.color || (k.kind === 'rv' ? '#ffffff' : PAINT[Math.floor(this.rand() * PAINT.length)])));
+      if (k.kind === 'bike') {
+        // other road cyclists: pedalling figures (people kit), one draw
+        this.bikes = new Crowd(this.group, { uTime: uniforms.uTime, name: 'Traffic · bike', capacity: this.n, nearM: Infinity, kind: 'cyclist' });
+        this.bikeLooks = Array.from({ length: this.n }, () => randomLook(this.rand, { kids: 0, helmet: true }));
+        continue;
+      }
+      const mesh = vehicleMesh(k.model || k.kind, this.mat, this.n, `Traffic · ${k.kind}`);
+      for (let i = 0; i < this.n; i++) if (k.color || k.kind !== 'rv') setPaint(mesh, i, k.color || PAINTS[Math.floor(this.rand() * PAINTS.length)]);
       this.meshes[k.kind] = mesh; this.group.add(mesh);
     }
     this.agents = Array.from({ length: this.n }, (_, id) => ({ id, alive: false }));
@@ -167,7 +96,8 @@ export class HighwayTraffic {
       const n = Math.min(t.bays.length - 1, 1 + Math.floor(this.rand() * 2));
       for (let k = 0; k < n; k++) {
         const jam = this.kinds.find((x) => x.kind === 'jammer');
-        const kind = jam && this.rand() < .3 ? jam : this.rand() < .2 ? this.kinds[2] : this.rand() < .4 ? this.kinds[1] : this.kinds[0];
+        const by = (n) => this.kinds.find((x) => x.kind === n) || this.kinds[0], r = this.rand();
+        const kind = jam && this.rand() < .3 ? jam : r < .15 ? by('rv') : r < .25 ? by('camper') : r < .5 ? by('suv') : r < .62 ? by('pickup') : r < .75 ? by('hatch') : by('car');
         if (top[kind.kind] < this.n / 2) continue;
         // parked from the far end (for the traffic that uses this side), so arrivals take the near bays
         const bay = t.side > 0 ? t.bays[t.bays.length - 1 - k] : t.bays[k]; if (bay.taken) continue;
@@ -186,7 +116,7 @@ export class HighwayTraffic {
     const s = rider.out + fwd * ahead;
     if (s < 5 || s > this.turn - 5 || (k.kind === 'bike' && dir === fwd && this.rand() < .7)) { a.alive = false; return; }
     if (this.agents.some((b) => b.alive && b !== a && Math.abs(b.s - s) < 40)) { a.alive = false; return; }   // room to appear
-    Object.assign(a, { alive: true, k, dir, s, v: k.speed[0] + this.rand() * (k.speed[1] - k.speed[0]), lane: 0, target: 0, state: 'drive', stop: 0, visited: false, over: false });
+    Object.assign(a, { alive: true, k, dir, s, v: k.speed[0] + this.rand() * (k.speed[1] - k.speed[0]), lane: 0, target: 0, state: 'drive', stop: 0, visited: false, over: false, dist: this.rand() * 50, brake: 0 });
     a.vmax = a.v;
   }
 
@@ -293,11 +223,12 @@ export class HighwayTraffic {
         const closing = lead.dir === a.dir ? lead.v : -lead.v;   // oncoming in our lane: stop
         want = Math.min(want, Math.max(0, closing + (lead.d - safe - 6) * .55));
       }
+      a.brake = want < a.v - .6 ? 1 : 0;   // brake lights
       a.v += Math.max(-9 * dt, Math.min(2.5 * dt, want - a.v));
       a.v = Math.max(0, a.v);
       let step = a.v * dt;
       if (lead) step = Math.min(step, Math.max(0, lead.d - (2 + (a.k.len + lead.len) / 2)));   // hard stop: no overlap
-      a.s += a.dir * step;
+      a.s += a.dir * step; a.dist += step;
       a.lane += Math.max(-1.6 * dt, Math.min(1.6 * dt, a.target - a.lane));
       if (a.s < 0 || a.s > this.turn || (a.s - rider.out) * rider.dir < -400 || (a.s - rider.out) * rider.dir > 1300) {
         if (a.state === 'in' || a.state === 'parked' || a.state === 'out') a.bay.taken = false;
@@ -305,12 +236,15 @@ export class HighwayTraffic {
       }
     }
     // draw
-    const put = (kind, id, s, lateral, dir, pitchOn = true, yawExtra = 0) => {
+    this.bikes?.begin({ x: 0, y: 0, z: 0 });
+    const put = (kind, id, s, lateral, dir, pitchOn = true, yawExtra = 0, a = null) => {
       const p = this._at(s, this.tmp);
-      const x = p.x - p.dz * lateral, z = p.z + p.dx * lateral;
-      this.e.set(pitchOn ? -Math.atan(p.dy) * dir : 0, Math.atan2(p.dx * dir, p.dz * dir) + yawExtra, 0);
+      const x = p.x - p.dz * lateral, z = p.z + p.dx * lateral, yaw = Math.atan2(p.dx * dir, p.dz * dir) + yawExtra;
+      if (kind === 'bike') { this.bikes.add(this.bikeLooks[id], x, p.y + .12, z, yaw, CLIP.cycle, (id * .37) % 1, a && a.v > .3 ? clipRate(CLIP.cycle, a.v) : 0); return; }
+      this.e.set(pitchOn ? -Math.atan(p.dy) * dir : 0, yaw, 0);
       this.q.setFromEuler(this.e);
       this.meshes[kind].setMatrixAt(id, this.m.compose(V(x, p.y + .12, z), this.q, this.one));
+      setMove(this.meshes[kind], id, a ? a.dist : 0, a ? a.brake : 0);
     };
     const next = {}, assigned = {};
     for (const k of this.kinds) { next[k.kind] = 0; assigned[k.kind] = new Set(); }
@@ -319,21 +253,24 @@ export class HighwayTraffic {
       const kind = a.k.kind, id = next[kind]++;
       if (id > this.top[kind]) { a.alive = false; continue; }
       // right of the direction of travel (cyclists ride near the edge)
-      put(kind, id, a.s, lat(a), a.dir);
+      put(kind, id, a.s, lat(a), a.dir, true, 0, a);
       assigned[kind].add(id);
     }
     for (const p of this.parked) { put(p.kind.kind, p.id, p.s, p.lane, 1, false, p.angle); assigned[p.kind.kind].add(p.id); }
+    this.bikes?.end();
     for (const k of this.kinds) {
       const mesh = this.meshes[k.kind], ids = assigned[k.kind];
+      if (!mesh) continue;
       const count = ids.size ? Math.max(...ids) + 1 : 0;
       for (let i = 0; i < count; i++) if (!ids.has(i)) mesh.setMatrixAt(i, this.zero);
-      mesh.count = count; mesh.instanceMatrix.needsUpdate = true;
+      mesh.count = count; mesh.instanceMatrix.needsUpdate = true; mesh.geometry.attributes.iMove.needsUpdate = true;
     }
   }
 
   dispose() {
     this.group.removeFromParent();
     for (const m of Object.values(this.meshes)) { m.geometry.dispose(); m.dispose(); }
+    this.bikes?.dispose();
     this.mat.dispose();
   }
 }
