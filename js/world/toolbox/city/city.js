@@ -796,7 +796,7 @@ export class CityScene {
           if (acc < 34) continue;
           acc = 0; side = -side;
           // on a bridge the post stands on the deck slab, just inside the railing; elsewhere on the sidewalk
-          const dx = (b.x - a.x) / (len || 1), dz = (b.z - a.z) / (len || 1), off = st.width / 2 + (st.bridge ? .15 : .9);   // [finish] (.05: posts touched the deck railing)
+          const dx = (b.x - a.x) / (len || 1), dz = (b.z - a.z) / (len || 1), off = st.width / 2 + (st.bridge ? .05 : .9);
           const x = b.x - dz * off * side, z = b.z + dx * off * side;
           if (!this._clearSpot(x, z, .35, k, ROAD_WIDTH / 2 + 1.2, this.streetKit ? .95 : .35)) continue;   // [finish] (kit facades stand ~.25–.9 m proud of the walls)
           if (this._onStyledBridge(x, z)) continue;   // the famous bridges carry their own lights (and railings); [finish] and no post among their members
