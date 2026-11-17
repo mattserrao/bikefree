@@ -18,7 +18,8 @@
     "guard": "node tools/toolbox_guard.mjs",
     "gallery": "node tools/snap_gallery.mjs",
     "figures": "node tools/build_figures.mjs",
-    "snap:figures": "node tools/snap_figures.mjs"
+    "snap:figures": "node tools/snap_figures.mjs",
+    "gallery:buildings": "node tools/snap_buildings.mjs"
   },
   "devDependencies": {
     "@garmin/fitsdk": "^21.221.0",

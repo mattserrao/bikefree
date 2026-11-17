@@ -86,6 +86,14 @@
     }
   },
   "brickStreets": { "osm": true, "minGrade": 0.07, "classes": [5], "minLengthM": 25 },
+  "buildingKit": {
+    "detailM": 150,
+    "dressingM": 80,
+    "styles": [
+      { "preset": "pittsburgh-rowhouse", "kinds": ["rowhouse"] },
+      { "preset": "pittsburgh-frame", "kinds": ["house"] }
+    ]
+  },
   "streetKit": {
     "fromM": 0,
     "toM": 18400,
