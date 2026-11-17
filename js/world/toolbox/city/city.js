@@ -796,10 +796,10 @@ export class CityScene {
           if (acc < 34) continue;
           acc = 0; side = -side;
           // on a bridge the post stands on the deck slab, just inside the railing; elsewhere on the sidewalk
-          const dx = (b.x - a.x) / (len || 1), dz = (b.z - a.z) / (len || 1), off = st.width / 2 + (st.bridge ? .05 : .9);
+          const dx = (b.x - a.x) / (len || 1), dz = (b.z - a.z) / (len || 1), off = st.width / 2 + (st.bridge ? .15 : .9);   // [finish] (.05: posts touched the deck railing)
           const x = b.x - dz * off * side, z = b.z + dx * off * side;
           if (!this._clearSpot(x, z, .35, k, ROAD_WIDTH / 2 + 1.2, this.streetKit ? .95 : .35)) continue;   // [finish] (kit facades stand ~.25–.9 m proud of the walls)
-          if (st.bridge && this._onStyledBridge(x, z)) continue;   // the famous bridges carry their own lights (and railings)
+          if (this._onStyledBridge(x, z)) continue;   // the famous bridges carry their own lights (and railings); [finish] and no post among their members
           lamps.push({ x, z, y: st.bridge ? b.y : this.landscape.heightAt(x, z), yaw: Math.atan2(dz * side, -dx * side), bridge: st.bridge });
         }
       }
@@ -877,7 +877,7 @@ export class CityScene {
       }
     }
     for (let gx = Math.floor(x / 20) - 1; gx <= Math.floor(x / 20) + 1; gx++) for (let gz = Math.floor(z / 20) - 1; gz <= Math.floor(z / 20) + 1; gz++) {
-      for (const [px, pz] of this._styled.get(`${gx},${gz}`) || []) if (Math.hypot(px - x, pz - z) < 14) return true;
+      for (const [px, pz] of this._styled.get(`${gx},${gz}`) || []) if (Math.hypot(px - x, pz - z) < 20) return true;   // [finish] (was 14: posts stood in the arches' and trusses' members)
     }
     return false;
   }

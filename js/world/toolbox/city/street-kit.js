@@ -1299,6 +1299,7 @@ export class StreetKit {
         if (!this.inArea(mx, mz) || L.landAt(mx, mz) === LAND.water || this.streetsAt(mx, mz, .2).some((o) => o.st.cls < 8)) continue;
         const rd = L.routeDist(mx, mz); if (rd && rd.d < ROAD_WIDTH / 2 + 1.5) continue;
         if (this.city.buildingNear(mx, mz, 0)) continue;
+        if (this.lampNear(mx, mz, Math.hypot(q.x - p.x, q.z - p.z) / 2 + .4)) continue;   // [finish] a gap where a lamp post stands
         const yp = L.heightAt(p.x, p.z), yq = L.heightAt(q.x, q.z), sl = len / n;
         const yaw = Math.atan2(q.x - p.x, q.z - p.z);
         if (l.kind === 'fence' || l.kind === 'guard_rail') {
@@ -1321,6 +1322,7 @@ export class StreetKit {
     const tx = (bx - ax) / len, tz = (bz - az) / len;
     let nx = -tz, nz = tx;
     const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+    if (this.lampNear(mx, mz, len / 2 + .5)) return;   // [finish] not through a lamp post
     if (L.waterAt(mx + nx * 3, mz + nz * 3) > L.waterAt(mx - nx * 3, mz - nz * 3)) { nx = -nx; nz = -nz; }   // n: inland
     const top = (x, z) => Math.max(L.level + 1, L.baseHeight(x + nx * 1.5, z + nz * 1.5)) + .12;
     const p = { x: ax + nx * .35, z: az + nz * .35 }, q = { x: bx + nx * .35, z: bz + nz * .35 };
