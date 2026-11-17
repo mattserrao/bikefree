@@ -799,6 +799,22 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [x] Clipping QC: the same findings as main
 - [ ] Ride Pittsburgh on the Mac and the Air
 
+### Pittsburgh life: keep people and traffic off the route *(test branch `pittsburgh-life-test`, from `main` after PR #34)*
+**Goal:** pedestrians and cars visibly jumped out of the way as the rider came up. Decision: keep them off the route (people on sidewalks, cars in their own lane), so no sudden avoidance is ever needed. Nothing snaps, teleports or lurches sideways in view.
+
+**Why they jumped (main):** `_yield` in `city/life.js` stepped people on the road out to its edge in one frame, held anything entering it at its previous spot, and sped vehicles on it up 2.5×; a "step aside" rule moved walkers within 4.6 m of a route point out to 4.8 m; trail walkers sat inside `_yield`'s 5.5 m edge (stepped out at 16 m); oncoming trail cyclists rode in the rider's half; sidewalk offsets came from each 7 m segment's own direction (a step at every bend, a 9 m hop round corners, a hop across the street at a dead end); people and cars were respawned inside the view (a 120 m spawn cell can sit next to the camera; hotspot people anywhere in the square).
+
+- [x] Load time: walk and drive ways that run along the route's road, or end on it with nowhere to go, are cut out; where one crosses it, the crossing is kept with its route distance
+- [x] Crossings: people, cyclists, cars and buses decide ahead (9 / 25 / 55 m) and stop smoothly at the kerb or the stop line until the rider is 70 m past or far enough off to need its crossing time + 5 s (+ 40 m) to arrive; cars queue 7.5 m apart; once committed they carry on at their own pace
+- [x] Continuous moves: speeds ease (no hurry), sideways offsets use a smoothed heading, and the drawn position follows the agent's place on its way at no more than 1.25 × its speed + a little (corners, turning round); headings turn at a set rate
+- [x] Trails: walkers keep a side of their own 4.3–5.3 m off the centre line (outside the ribbon); cyclists ride the half away from the rider
+- [x] Oncoming cars only appear 260–640 m ahead (and 220 m off in a straight line) where the street runs on unbroken to the rider; their lane is square to the smoothed heading
+- [x] New people, cyclists and cars appear 165 m (people) / 231 m (cars) off or behind the camera; hotspot people (standing or strolling) keep off the route's road
+- [x] `test/city-life.test.mjs`: a whole ride Forward and Reverse. main: 4977 / 5151 jumps (worst 19.9 m in a 0.1 s step), 85 / 59 people in the carriageway, 24 / 25 vehicles in the rider's lane, 388 / 420 pop-ins in view; this branch: 0 of each, with about as much life near the rider
+- [x] Clipping QC with life: main 3 fail (vehicle-through-rider) · 445 warn; this branch 0 fail · 420 warn (person-in-water 17 → 0, vehicle-clips-solid 356 → 350)
+- [x] Only Pittsburgh uses `city/life.js` (the `authored-city` terrain), so no other route changes
+- [ ] Ride Pittsburgh on the Mac (githack link)
+
 
 ### Smooth sharp turns *(test branch `smooth-turns-test`, from `main` after PR #34)*
 **Goal:** roads and their paint did not look smooth through sharp turns on Pittsburgh and Alpe d'Huez: the road was faceted, the lines kinked and the rider and camera swung round the corner. Fix it for those two routes only, at the root, without changing ride distance or the profile.

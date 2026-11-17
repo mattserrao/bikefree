@@ -191,7 +191,7 @@ js/world/toolbox/
 | `city/riverfront.js` | Walls, steps and trails along the rivers |
 | `city/bridges.js` | Bridges, stadiums and landmarks |
 | `city/heroes.js` | Hero towers |
-| `city/life.js` | People, cars, buses (from the figures kit), trains, inclines and boats |
+| `city/life.js` | People, cars, buses (from the figures kit), trains, inclines and boats. People and traffic keep off the route's road: walk and drive ways along it are cut out at load, crossings wait at the kerb or stop line while the rider is near, moves are eased (no snapping), and new agents appear out of sight. Checked by `test/city-life.test.mjs` |
 
 Some Pittsburgh content is still in code: stadiums, the fountain, USS Requin and the hero models.
 

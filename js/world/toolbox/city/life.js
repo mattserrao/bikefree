@@ -149,6 +149,46 @@ function chainPolylines(lines, tol = 1.5) {
   return out;
 }
 
+// Keeping clear of the rider. Nothing dodges: people and traffic are kept off the route's road by their networks
+// (walk and drive ways that run along it are cut out when the city loads), and where a way crosses it they stop
+// at the kerb or the stop line, ahead of time, until the rider is well clear. Every move is continuous: speeds
+// ease up and down, and what is drawn follows the agent's place on its way at no more than its own pace (corners,
+// the far sidewalk after a turn round), so nothing snaps sideways in view.
+const HALF = ROAD_WIDTH / 2;
+const MOVE = {
+  //      look: m ahead to decide · acc/dec: m/s² · kerb: stop this far before the route's road · catch: m/s
+  //      drawn place may close on the agent's place beyond its pace · turn: rad/s · body: length to clear
+  walk: { look: 9, acc: 1.2, dec: 1.6, kerb: .4, catch: .8, turn: 4, body: 1, chord: 2, margin: .9, longM: 30 },
+  bike: { look: 25, acc: 1.5, dec: 2.2, kerb: 1.4, catch: 1.5, turn: 2.5, body: 2, chord: 3 },
+  car: { look: 55, acc: 2.2, dec: 3.2, kerb: 3.6, catch: 2, turn: 1.6, body: 5, chord: 4, margin: 1.2, longM: 40 },
+};
+const _pa = {}, _pb = {};
+/** Point on a path at s (binary search: agents share paths, so makePath's walking hint would thrash). */
+function pathAt(path, s, out) {
+  const d = path.d, pts = path.pts;
+  s = Math.max(0, Math.min(path.length, s));
+  let lo = 0, hi = d.length - 2;
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (d[m] <= s) lo = m; else hi = m - 1; }
+  const a = pts[lo], b = pts[lo + 1], f = (s - d[lo]) / ((d[lo + 1] - d[lo]) || 1);
+  out.x = a.x + (b.x - a.x) * f; out.y = a.y + (b.y - a.y) * f; out.z = a.z + (b.z - a.z) * f;
+  return out;
+}
+/** Point and a smoothed heading (the chord over ±`chord` m): a sideways offset from it bends round a polyline's corners. */
+function poseOn(path, s, chord, out) {
+  pathAt(path, s, out); pathAt(path, s - chord, _pa); pathAt(path, s + chord, _pb);
+  let tx = _pb.x - _pa.x, tz = _pb.z - _pa.z, l = Math.hypot(tx, tz);
+  if (l < 1e-3) { pathAt(path, Math.min(path.length, s + .5), _pb); pathAt(path, Math.max(0, s - .5), _pa); tx = _pb.x - _pa.x; tz = _pb.z - _pa.z; l = Math.hypot(tx, tz) || 1; }
+  out.tx = tx / l; out.tz = tz / l; out.dy = (_pb.y - _pa.y) / l;
+  return out;
+}
+/** The stretch [s0, s1] of a path (its end points interpolated). */
+function subPath(path, s0, s1) {
+  const pts = [pathAt(path, s0, {})];
+  for (let k = 0; k < path.pts.length; k++) if (path.d[k] > s0 + .05 && path.d[k] < s1 - .05) pts.push({ ...path.pts[k] });
+  pts.push(pathAt(path, s1, {}));
+  return makePath(pts);
+}
+
 class Network {
   /** ways: [{path, lateral(), speed}] — joins ends so agents carry on round corners. */
   constructor(ways) {
@@ -221,11 +261,73 @@ export class CityLife {
     const r = c.route, end = r.turnIdx || r.dist.length - 1, L = c.landscape;
     for (const k of (L.data.routeKinds || []).filter((k) => k.kind === 'trail')) {
       const pts = [];
-      for (let i = Math.floor(k.fromM / 10); i <= Math.min(end, Math.ceil(k.toM / 10)); i++) pts.push({ x: c.index.xs[i], y: r.ele[i], z: c.index.zs[i] });
+      for (let i = Math.ceil(k.fromM / 10) + 1; i <= Math.min(end, Math.floor(k.toM / 10) - 1); i++) pts.push({ x: c.index.xs[i], y: r.ele[i], z: c.index.zs[i] });
       if (pts.length > 3) walk.push({ path: makePath(pts), side: 4.7, allow: () => true, cls: 9, trail: true });
     }
-    this.walk = new Network(walk);
-    this.drive = new Network(drive);
+    // off the route's road: sidewalks across its carriageway become crossings (with a kerb to wait at); sidewalks
+    // and lanes that run along it, or that end on it with nowhere to go, are cut out here
+    this.walk = this._offRoute(walk, (w) => (w.side ? w.side + .9 : 1.4), MOVE.walk);
+    this.drive = this._offRoute(drive, (w) => (w.oneway ? 1.5 : w.lane) + 1.1, MOVE.car);
+  }
+
+  /**
+   * Where a way runs over the route's road (at its level): [{s0, s1, lo, hi, rx, rz, half}] — s along the way;
+   * lo/hi the route's distances there; rx, rz the middle of it on the route. `hw`: half the width the way's
+   * agents use (both sidewalks, both lanes); `margin`: room kept beyond the route's carriageway.
+   */
+  _bandOf(path, hw, margin) {
+    const L = this.city.landscape, ix = this.city.index, dist = this.city.route.dist, step = 1.5, p = {}, out = [];
+    let cur = null;
+    const close = () => { if (cur) out.push(cur); cur = null; };
+    // (a coarse pass first: most ways never come near the route)
+    const coarse = [], cs = 8, reach = hw + HALF + margin + 8 + cs;
+    for (let k = 0; k <= Math.ceil(path.length / cs); k++) { pathAt(path, Math.min(path.length, k * cs), p); coarse.push(!!ix.nearest(p.x, p.z, reach)); }
+    if (!coarse.includes(true)) return out;
+    const n = Math.ceil(path.length / step);
+    for (let k = 0; k <= n; k++) {
+      const s = Math.min(path.length, k * step), j = Math.floor(s / cs);
+      if (!coarse[j] && !coarse[j + 1]) { close(); continue; }
+      poseOn(path, s, 1, p);
+      if (!ix.nearest(p.x, p.z, hw + HALF + margin + 8)) { close(); continue; }
+      let hit = null;
+      for (const f of [0, -1, 1, -.5, .5]) {
+        const r = L.routeDist(p.x - p.tz * hw * f, p.z + p.tx * hw * f);
+        if (r && r.d < HALF + margin && Math.abs(p.y - r.y) < 3.5) { hit = r; break; }
+      }
+      if (!hit) { close(); continue; }
+      if (!cur) cur = { s0: s, s1: s, lo: Infinity, hi: -Infinity, rx: 0, rz: 0, n: 0 };
+      cur.s1 = s; cur.lo = Math.min(cur.lo, dist[hit.i]); cur.hi = Math.max(cur.hi, dist[hit.i + 1] ?? dist[hit.i]);
+      cur.rx += ix.xs[hit.i]; cur.rz += ix.zs[hit.i]; cur.n++;
+    }
+    close();
+    return out.map((c) => ({ s0: Math.max(0, c.s0 - step), s1: Math.min(path.length, c.s1 + step), lo: c.lo, hi: c.hi,
+      rx: c.rx / c.n, rz: c.rz / c.n, half: (c.s1 - c.s0) / 2 + step }));
+  }
+
+  _offRoute(ways, hwOf, K) {
+    const pieces = (list, cut) => {
+      const out = [];
+      for (const w of list) {
+        if (w.trail) { out.push(w); continue; }
+        const band = w.band || this._bandOf(w.path, hwOf(w), K.margin), len = w.path.length, gaps = [];
+        for (const c of band) if (cut(w, c, len)) gaps.push([c.s0 - 1, c.s1 + 1]);
+        if (!gaps.length) { out.push(Object.assign(w, { band })); continue; }
+        let from = 0;
+        for (const [a, b] of [...gaps, [len + 1, len + 1]]) {
+          if (a - from >= 8) { const path = subPath(w.path, from, Math.min(len, a)); out.push({ ...w, path, band: this._bandOf(path, hwOf(w), K.margin) }); }
+          from = Math.max(from, b);
+        }
+      }
+      return out;
+    };
+    // 1. along the route's road (more than a crossing's length on it): cut out
+    let list = pieces(ways, (w, c) => c.s1 - c.s0 > K.longM);
+    // 2. ends on the route's road where no other way carries on (that may be entered there): cut back to the kerb
+    const key = (p) => `${Math.round(p.x)},${Math.round(p.z)}`, ends = new Map();   // (as Network joins them)
+    for (const w of list) for (const [end, p] of [[0, w.path.pts[0]], [1, w.path.pts.at(-1)]]) { const k = key(p); if (!ends.has(k)) ends.set(k, []); ends.get(k).push({ w, end }); }
+    const others = (w, end) => (ends.get(key(end ? w.path.pts.at(-1) : w.path.pts[0])) || []).filter((o) => o.w !== w && o.w.allow(o.end === 0 ? 1 : -1)).length;
+    list = pieces(list, (w, c, len) => (c.s0 <= .01 && !others(w, false)) || (c.s1 >= len - .01 && !others(w, true)));
+    return new Network(list);
   }
 
   // -------------------------------------------------------------- people
@@ -246,7 +348,7 @@ export class CityLife {
   _spawnWalker(a, cam, initial) {
     a.x = null; a.lx = null;   // a new life: no old position to fall back to
     this._placeWalker(a, cam, initial);
-    if (a.alive) this._dress(a);
+    if (a.alive) { this._dress(a); a.v = a.speed; }
   }
 
   /** A new look and what they're doing: standing about, strolling, walking (some with a dog or a stroller), jogging. */
@@ -268,88 +370,163 @@ export class CityLife {
     a.look = look; a.clip = clip; a.phase = r(); a.rate = clipRate(clip, a.stand ? 0 : a.speed, look);
   }
 
+  /** Somewhere new for an agent: out of the rider's sight (far off, or behind the camera) unless the ride is just starting. */
+  _outOfView(x, z, cam, minR, initial) {
+    if (initial) return true;
+    const dx = x - cam.x, dz = z - cam.z, d = Math.hypot(dx, dz);
+    if (d >= minR) return true;
+    const r = this._rider;
+    if (!r) return false;
+    const fx = r.x - cam.x, fz = r.z - cam.z, fl = Math.hypot(fx, fz) || 1;
+    return (dx * fx + dz * fz) / fl < -.2 * d;
+  }
+
+  /** A spot on a network to start from, [way, s], clear of the route's road. */
+  _spotOn(net, cam, R, minR, initial) {
+    const p = this._tmpS || (this._tmpS = {});
+    for (let t = 0; t < 6; t++) {
+      const hit = net.near(cam.x, cam.z, R, this.rand, initial ? 0 : minR);
+      if (!hit) return null;
+      const w = net.ways[hit[0]];
+      if ((w.band || []).some((c) => hit[1] > c.s0 - 4 && hit[1] < c.s1 + 4)) continue;
+      pathAt(w.path, hit[1], p);   // (near() picks a 120 m cell: check the spot itself)
+      if (!this._outOfView(p.x, p.z, cam, minR + 10, initial)) continue;
+      return hit;
+    }
+    return null;
+  }
+
   _placeWalker(a, cam, initial) {
-    const R = 260, net = this.walk;
+    const R = 260, net = this.walk, L = this.city.landscape;
     // a third of the crowd gathers at the nearest hotspots
     const spot = this.hotspots.length && this.rand() < .35 ? this.hotspots[Math.floor(this.rand() * this.hotspots.length)] : null;
     if (spot && Math.hypot(spot.x - cam.x, spot.z - cam.z) < R + 100) {
       const ang = this.rand() * Math.PI * 2, d = Math.sqrt(this.rand()) * (spot.radiusM || 25);
       const x = spot.x + Math.cos(ang) * d, z = spot.z + Math.sin(ang) * d;
-      const c = this.city.landscape.landAt(x, z);
-      if (c !== LAND.water && c !== LAND.building) {
-        Object.assign(a, { alive: true, stand: true, x, z, y: this.city.landscape.heightAt(x, z), yaw: this.rand() * 6.28, gait: this.rand() < .8 ? 0 : 1, speed: 0, way: -1 });
-        if (a.gait === 1) Object.assign(a, { stand: false, speed: .6, wander: true });
+      const c = L.landAt(x, z), road = L.routeDist(x, z);
+      if (c !== LAND.water && c !== LAND.building && !(road && road.d < HALF + 1.5) && this._outOfView(x, z, cam, 165, initial)) {
+        Object.assign(a, { alive: true, stand: true, x, z, y: L.heightAt(x, z), yaw: this.rand() * 6.28, gait: this.rand() < .8 ? 0 : 1, speed: 0, v: 0, way: -1 });
+        if (a.gait === 1) Object.assign(a, { stand: false, speed: .6, v: .6, wander: true });
         return;
       }
     }
-    const hit = net.near(cam.x, cam.z, R, this.rand, initial ? 0 : R * .55);
+    const hit = this._spotOn(net, cam, R, 165, initial);
     if (!hit) { a.alive = false; return; }
     const w = net.ways[hit[0]], jog = w.trail || w.cls === 8 ? this.rand() < .35 : this.rand() < .06;
     Object.assign(a, { alive: true, stand: false, wander: false, way: hit[0], s: hit[1], dir: this.rand() < .5 ? 1 : -1,
-      speed: jog ? 2.6 + this.rand() * .8 : 1.1 + this.rand() * .5, gait: jog ? 2 : 1,
+      speed: jog ? 2.6 + this.rand() * .8 : 1.1 + this.rand() * .5, gait: jog ? 2 : 1, nx: undefined, go: null, kerbJ: this.rand() * 1.2,
       lat: (w.side ? (this.rand() < .5 ? -1 : 1) * (w.side + (this.rand() - .5) * 1.2) : (this.rand() - .5) * 2.2) });
-    if (w.trail) a.lat = -Math.abs(a.lat);   // keep to the left of the route's centre line: the rider's lane is clear
+    // on a shared trail: a side of their own, off the rider's road (4.3–5.3 m from its centre line; the rider rides 1.5 m out)
+    if (w.trail) { a.lat = 4.3 + this.rand(); a.wside = this.rand() < .5 ? -1 : 1; }
+    a.v = a.speed;
   }
 
   _spawnCyclist(a, cam, initial) {
     a.x = null;
-    const hit = this.walk.near(cam.x, cam.z, 300, this.rand, initial ? 0 : 160);
+    const hit = this._spotOn(this.walk, cam, 300, 165, initial);
     if (!hit) { a.alive = false; return; }
     const w = this.walk.ways[hit[0]];
     if (!(w.trail || w.cls === 8 || w.cls <= 5)) { a.alive = false; return; }
-    Object.assign(a, { alive: true, way: hit[0], s: hit[1], dir: this.rand() < .5 ? 1 : -1, speed: 4.5 + this.rand() * 2.5, gait: 3,
-      lat: w.trail ? -2.2 : w.side ? (w.side - 1.2) : 0 });
+    Object.assign(a, { alive: true, way: hit[0], s: hit[1], dir: this.rand() < .5 ? 1 : -1, speed: 4.5 + this.rand() * 2.5, gait: 3, nx: undefined, go: null,
+      lat: w.trail ? 2.3 : w.side ? (w.side - 1.2) : 0, wside: -1 });
     if (w.cls <= 5) a.lat = w.side - 2.4;
-  }
-
-  _moveOnNetwork(a, net, dt) {
-    let w = net.ways[a.way];
-    a.s += a.dir * a.speed * dt;
-    if (a.s < 0 || a.s > w.path.length) {
-      const nx = net.next(a.way, a.s > w.path.length, this.rand);
-      if (nx) { a.way = nx.i; a.s = nx.s; a.dir = nx.dir; w = net.ways[a.way]; }
-      else { a.dir = -a.dir; a.s = Math.max(0, Math.min(w.path.length, a.s)); }
-    }
-    const p = w.path.at(a.s, this._tmp || (this._tmp = {}));
-    const side = a.dir > 0 ? 1 : -1;
-    a.x = p.x - p.dz * a.lat * side; a.z = p.z + p.dx * a.lat * side;
-    a.y = p.y; a.yaw = Math.atan2(p.dx * a.dir, p.dz * a.dir); a.pitch = Math.atan(p.dy || 0) * a.dir;
-    if (!w.trail) {
-      // never stand in the rider's road: step aside where a street crosses the route
-      const r = this.city.index.nearest(a.x, a.z, 5);
-      if (r && r.d < 4.6) {
-        const ox = a.x - this.city.index.xs[r.i], oz = a.z - this.city.index.zs[r.i], d = Math.hypot(ox, oz) || 1;
-        if (net === this.walk) { a.x = this.city.index.xs[r.i] + ox / d * 4.8; a.z = this.city.index.zs[r.i] + oz / d * 4.8; }
-      }
-    }
-    return w;
+    a.v = a.speed;
   }
 
   /**
-   * Keep traffic, walkers and cyclists out of the rider's way. `prev` is where the agent was before this step.
-   * Anything about to step onto the route's road while the rider is within `reach` waits at the edge; anything
-   * already on it when the rider is close either hurries across (vehicles) or steps to the road's edge (people).
+   * The next stretch of the route's road on the agent's way ahead (or just round the corner on the way it will
+   * take next): {c, dist, cross, inside, wall} or null. `wall`: the way ends on the road with nowhere to go.
    */
-  _yield(a, prev, rider, reach, person) {
-    if (!rider) return;
-    const L = this.city.landscape, edge = ROAD_WIDTH / 2 + 2, now = L.routeDist(a.x, a.z);
-    if (!now || now.d > edge) return;
-    const near = Math.hypot(a.x - rider.x, a.z - rider.z);
-    if (near > reach && !(person && a.asideUntil > this._clock)) return;
-    const before = L.routeDist(prev.x, prev.z);
-    if (!before || before.d > edge) { Object.assign(a, prev); return; }   // wait at the kerb
-    // people stay at the edge for a few seconds after the rider has gone by, so they step back out of view
-    if (near > 16 && !(person && a.asideUntil > this._clock)) return;
-    if (!person) { a.hurry = 2.5; return; }
-    if (near <= 16) a.asideUntil = this._clock + 4;
-    // a person on the road as the rider arrives: step out to the road's edge
-    const ix = this.city.index, i = now.i, dx = ix.xs[i + 1] - ix.xs[i], dz = ix.zs[i + 1] - ix.zs[i], l = Math.hypot(dx, dz) || 1;
-    let nx = -dz / l, nz = dx / l;
-    const t = Math.max(0, Math.min(1, ((a.x - ix.xs[i]) * dx + (a.z - ix.zs[i]) * dz) / (l * l)));
-    const ox = a.x - (ix.xs[i] + dx * t), oz = a.z - (ix.zs[i] + dz * t);
-    if (ox * nx + oz * nz < 0) { nx = -nx; nz = -nz; }
-    a.x = ix.xs[i] + dx * t + nx * (edge + .3); a.z = ix.zs[i] + dz * t + nz * (edge + .3);
-    a.y = L.heightAt(a.x, a.z);
+  _ahead(a, net, look) {
+    const w = net.ways[a.way], len = w.path.length, fwd = a.dir > 0, rem = fwd ? len - a.s : a.s;
+    const first = (way, s, dir) => {
+      let best = null;
+      for (const c of way.band || []) {
+        if (dir > 0 ? c.s1 <= s : c.s0 >= s) continue;
+        const d = dir > 0 ? c.s0 - s : s - c.s1;
+        if (!best || d < best.d) best = { c, d };
+      }
+      return best;
+    };
+    const here = first(w, a.s, a.dir);
+    const next = a.nx ? net.ways[a.nx.i] : null;
+    if (here) {
+      if (here.d > look) return null;
+      let cross = here.c.s1 - here.c.s0, wall = false;
+      if (fwd ? here.c.s1 >= len - .01 : here.c.s0 <= .01) {
+        // runs on into the next way: across the junction
+        if (!next) wall = a.nx === null;
+        else { const on = first(next, a.nx.s - a.nx.dir * .01, a.nx.dir); if (on && on.d <= .05) cross += on.c.s1 - on.c.s0; }
+      }
+      return { c: here.c, dist: here.d, cross, inside: here.d <= 0, wall };
+    }
+    if (!next || rem > look) return null;
+    const on = first(next, a.nx.s - a.nx.dir * .01, a.nx.dir);
+    if (!on || rem + on.d > look) return null;
+    return { c: on.c, dist: rem + Math.max(0, on.d), cross: on.c.s1 - on.c.s0, inside: false, wall: false };
+  }
+
+  /** Clear to cross here: the rider is well past (70 m), or far enough off to need longer than `t` s (+ 5 s) to arrive. */
+  _clear(c, rider, t) {
+    if (!rider) return true;
+    const past = rider.dir > 0 ? rider.out - c.hi : c.lo - rider.out;
+    if (past > 70 && past < 400) return true;
+    return Math.hypot(rider.x - c.rx, rider.z - c.rz) - c.half > Math.max(rider.speed || 0, 3) * (t + 5) + 40;
+  }
+
+  /**
+   * One step along a network: ease the speed (to a stop at the kerb or stop line while the rider is near a
+   * crossing, and at the end of a dead end), move on, and draw it where it is, following no faster than its pace.
+   */
+  _advance(a, net, dt, rider, kind) {
+    const K = MOVE[kind];
+    let w = net.ways[a.way];
+    const len = w.path.length, rem = a.dir > 0 ? len - a.s : a.s;
+    if (a.nx === undefined && rem < K.look + 30) a.nx = net.next(a.way, a.dir > 0, this.rand);
+    let stopAt = null, turn = false;
+    const x = this._ahead(a, net, K.look);
+    if (!x || x.c !== a.go) a.go = x && x.inside ? x.c : null;
+    if (x && !x.inside) {
+      const kerb = (a.bus ? K.kerb + 4 : K.kerb) + (a.kerbJ || 0) + (a.slot || 0) * 7.5, stopD = x.dist - kerb;
+      if (x.wall) { stopAt = stopD; turn = true; }
+      else if (a.go !== x.c) {
+        const t = (x.dist + x.cross + K.body) / Math.max(a.v, a.speed * .6);
+        if (this._clear(x.c, rider, t)) { if (stopD < a.v * a.v / (2 * K.dec) + 1) { a.go = x.c; a.slot = 0; } }
+        else {
+          stopAt = stopD;
+          if (kind === 'car' && a.queue !== x.c) { a.queue = x.c; a.slot = (x.c.waiting = (x.c.waiting || 0) + 1) - 1; }
+        }
+      }
+    }
+    if (a.queue && stopAt == null) { a.queue.waiting = Math.max(0, (a.queue.waiting || 1) - 1); a.queue = null; a.slot = 0; }
+    if (stopAt == null && a.nx === null && rem < K.look && kind === 'car') { stopAt = rem; turn = true; }   // a dead end: slow down to turn round
+    let target = a.speed;
+    if (stopAt != null) target = stopAt < .05 ? 0 : Math.min(target, Math.sqrt(2 * K.dec * stopAt));
+    a.v = Math.max(0, a.v + Math.max(-2 * K.dec * dt, Math.min(K.acc * dt, target - a.v)));
+    if (turn && a.v < .05 && stopAt < .3) { a.dir = -a.dir; a.nx = undefined; a.go = null; }   // nowhere to go but back
+    a.s += a.dir * a.v * dt;
+    if (a.s < 0 || a.s > len) {
+      const over = a.s < 0 ? -a.s : a.s - len;
+      const nx = a.nx !== undefined ? a.nx : net.next(a.way, a.s > len, this.rand);
+      a.nx = undefined;
+      if (nx) { a.way = nx.i; a.s = nx.s + nx.dir * over; a.dir = nx.dir; w = net.ways[a.way]; a.s = Math.max(0, Math.min(w.path.length, a.s)); }
+      else { a.dir = -a.dir; a.s = Math.max(0, Math.min(len, a.s)); }
+    }
+    // where it is on its way: its own side (on a shared trail a side of its own; cyclists keep the far half from the rider)
+    const p = poseOn(w.path, a.s, K.chord, this._tmp || (this._tmp = {}));
+    let wl = a.lat * (a.dir > 0 ? 1 : -1);
+    if (w.trail) wl = (kind === 'bike' && rider ? -rider.dir : a.wside || -1) * Math.abs(a.lat);
+    const tx = p.x - p.tz * wl, tz = p.z + p.tx * wl;
+    a.pitch = Math.atan(p.dy || 0) * a.dir;
+    if (a.x == null) { a.x = tx; a.z = tz; a.y = p.y; a.yaw = Math.atan2(p.tx * a.dir, p.tz * a.dir); return w; }
+    const dx = tx - a.x, dz = tz - a.z, d = Math.hypot(dx, dz), max = (a.v * 1.25 + K.catch) * dt, f = d > max ? max / d : 1;
+    a.x += dx * f; a.z += dz * f; a.y = p.y;
+    if (d * f > .002) {
+      let dy = Math.atan2(dx, dz) - a.yaw;
+      dy -= Math.round(dy / (Math.PI * 2)) * Math.PI * 2;
+      a.yaw += Math.max(-K.turn * dt, Math.min(K.turn * dt, dy));
+    }
+    return w;
   }
 
   _updatePeople(cam, dt, time, rider) {
@@ -358,13 +535,15 @@ export class CityLife {
     for (const a of this.walkers) {
       if (!a.alive || Math.hypot(a.x - cam.x, a.z - cam.z) > 330) this._spawnWalker(a, cam, !this._started);
       if (!a.alive) continue;
-      if (a.wander) { a.yaw += (this.rand() - .5) * dt; a.x += Math.sin(a.yaw) * a.speed * dt; a.z += Math.cos(a.yaw) * a.speed * dt; a.y = L.heightAt(a.x, a.z); }
-      else if (!a.stand) { if (a.x == null) this._moveOnNetwork(a, this.walk, 0);   // a first position, so waiting at the kerb has one to keep
-        const prev = { x: a.x, y: a.y, z: a.z, s: a.s, way: a.way, dir: a.dir, yaw: a.yaw, pitch: a.pitch }; this._moveOnNetwork(a, this.walk, dt); this._yield(a, prev, rider, 70, true); }
-      // waiting at the kerb (or stepped aside for the rider): stand still until moving again
-      const moved = a.stand ? 0 : Math.hypot(a.x - (a.lx ?? a.x), a.z - (a.lz ?? a.z)) / Math.max(dt, 1e-3);
-      a.lx = a.x; a.lz = a.z;
-      const still = !a.stand && dt > 0 && moved < .15;
+      if (a.wander) {
+        // strolling about a square: turn away (gently) rather than wander onto the rider's road
+        const nx = a.x + Math.sin(a.yaw) * a.speed * dt, nz = a.z + Math.cos(a.yaw) * a.speed * dt, r = L.routeDist(nx, nz);
+        if (r && r.d < HALF + 1.5) a.yaw += 2 * dt;
+        else { a.yaw += (this.rand() - .5) * dt; a.x = nx; a.z = nz; a.y = L.heightAt(a.x, a.z); }
+        a.v = r && r.d < HALF + 1.5 ? 0 : a.speed;
+      } else if (!a.stand) this._advance(a, this.walk, dt, rider, 'walk');
+      // waiting at the kerb: stand still until moving again
+      const still = !a.stand && dt > 0 && a.v < .15;
       this.crowd.add(a.look, a.x, a.y, a.z, a.yaw, still ? (a.clip === CLIP.push || a.clip === CLIP.leash ? a.clip : CLIP.idle) : a.clip, a.phase, still ? (a.clip === CLIP.push || a.clip === CLIP.leash ? 0 : clipRate(CLIP.idle)) : a.rate);
     }
     this.crowd.end();
@@ -372,11 +551,8 @@ export class CityLife {
     for (const a of this.riders) {
       if (!a.alive || Math.hypot(a.x - cam.x, a.z - cam.z) > 380) this._spawnCyclist(a, cam, !this._started);
       if (!a.alive) continue;
-      if (a.x == null) this._moveOnNetwork(a, this.walk, 0);
-      const prev = { x: a.x, y: a.y, z: a.z, s: a.s, way: a.way, dir: a.dir, yaw: a.yaw, pitch: a.pitch };
-      this._moveOnNetwork(a, this.walk, dt); this._yield(a, prev, rider, 50, true);
-      const v = Math.hypot(a.x - prev.x, a.z - prev.z) / Math.max(dt, 1e-3);
-      this.cyclistCrowd.add(a.look, a.x, a.y, a.z, a.yaw, CLIP.cycle, a.phase, v > .3 ? clipRate(CLIP.cycle, v) : 0);
+      this._advance(a, this.walk, dt, rider, 'bike');
+      this.cyclistCrowd.add(a.look, a.x, a.y, a.z, a.yaw, CLIP.cycle, a.phase, a.v > .3 ? clipRate(CLIP.cycle, a.v) : 0);
     }
     this.cyclistCrowd.end();
   }
@@ -402,24 +578,36 @@ export class CityLife {
 
   _spawnCar(a, cam, initial) {
     a.x = null; a.lx = null;
+    if (a.queue) { a.queue.waiting = Math.max(0, (a.queue.waiting || 1) - 1); a.queue = null; }
     const R = 420, net = this.drive;
     for (let t = 0; t < 4; t++) {
-      const hit = net.near(cam.x, cam.z, R, this.rand, initial ? 0 : R * .55);
+      const hit = this._spotOn(net, cam, R, R * .55, initial);
       if (!hit) break;
       const w = net.ways[hit[0]];
       if (a.bus && !w.bus) continue;
       const dir = w.oneway ? w.oneway : (this.rand() < .5 ? 1 : -1);
-      Object.assign(a, { alive: true, way: hit[0], s: hit[1], dir, speed: w.speed * (.8 + this.rand() * .35), lat: w.lane || (this.rand() - .5) * 3, gait: 0 });
+      Object.assign(a, { alive: true, way: hit[0], s: hit[1], dir, speed: w.speed * (.8 + this.rand() * .35), lat: w.lane || (this.rand() - .5) * 3, gait: 0, nx: undefined, go: null, slot: 0 });
+      a.v = a.speed;
       return;
     }
     a.alive = false;
   }
 
+  /** The route's own streets from the rider out to s are all street (no trail, no lenticular bridge): oncoming traffic can meet the rider there. */
+  _roadTo(from, s) {
+    const L = this.city.landscape, lo = Math.min(from, s), hi = Math.max(from, s);
+    if (L.routeBridges.some((b) => b.style === 'lenticular' && b.toM + 30 > lo && b.fromM - 30 < hi)) return false;
+    for (let q = lo; q <= hi; q += 10) if (L.routeKindAt(q) !== 'road') return false;
+    return L.routeKindAt(hi) === 'road';
+  }
+
   _spawnOncoming(a, rider) {
-    // oncoming traffic on the route's own streets, in the far lane
-    const r = this.city.route, L = this.city.landscape, turn = r.turnS || r.total;
-    const ahead = 220 + this.rand() * 420, s = rider.out + rider.dir * ahead;
-    if (s < 0 || s > turn || L.routeKindAt(s) !== 'road' || L.routeBridges.some((b) => s > b.fromM - 30 && s < b.toM + 30 && b.style === 'lenticular')) { a.alive = false; a.wait = 1 + this.rand() * 3; return; }
+    // oncoming traffic on the route's own streets, in the far lane: it appears far ahead, round a bend or past the
+    // view, only where the street runs on unbroken to the rider, so it never has to vanish in front of them
+    const r = this.city.route, turn = r.turnS || r.total, p = this._tmpR || (this._tmpR = {});
+    const ahead = 260 + this.rand() * 380, s = rider.out + rider.dir * ahead;
+    const far = s >= 0 && s <= turn && Math.hypot(this._routeAt(s, p).x - rider.x, p.z - rider.z) > 220;
+    if (!far || !this._roadTo(rider.out, s)) { a.alive = false; a.wait = 1 + this.rand() * 3; return; }
     Object.assign(a, { alive: true, onRoute: true, s, dir: -rider.dir, speed: 8 + this.rand() * 4 });
   }
 
@@ -442,37 +630,30 @@ export class CityLife {
       a.lx = a.x; a.lz = a.z;
       setMove(m.im, i, a.dist, 0);
     };
-    for (const a of this.carAgents) {
+    // cars and buses on the city's streets: they keep their lane, and stop at the stop line before the route's
+    // road while the rider is near (_advance)
+    for (const a of [...this.carAgents, ...this.busAgents]) {
       if (!a.alive || Math.hypot(a.x - cam.x, a.z - cam.z) > 480) this._spawnCar(a, cam, !this._started);
       if (!a.alive) { a.lx = null; continue; }
-      // keep clear of the rider where a street crosses or joins the route
-      if (a.x == null) this._moveOnNetwork(a, this.drive, 0);
-      const prev = { x: a.x, y: a.y, z: a.z, s: a.s, way: a.way, dir: a.dir, yaw: a.yaw, pitch: a.pitch };
-      this._moveOnNetwork(a, this.drive, dt * (a.hurry || 1)); a.hurry = 0;
-      this._yield(a, prev, rider, 30, false);
+      this._advance(a, this.drive, dt, rider, 'car');
       draw(a);
     }
+    const p = this._tmpR || (this._tmpR = {}), q = this._tmpQ || (this._tmpQ = {});
     for (const a of this.oncoming) {
       if (rider && !a.alive) { a.wait = (a.wait || 0) - dt; if (a.wait <= 0) this._spawnOncoming(a, rider); }
       if (!rider || !a.alive) { a.lx = null; continue; }
-      {
-        a.s += a.dir * a.speed * dt;
-        const behind = (rider.out - a.s) * rider.dir;
-        if (behind > 80 || a.s < 0 || a.s > (this.city.route.turnS || this.city.route.total) || this.city.landscape.routeKindAt(a.s) !== 'road') { a.alive = false; a.wait = 2 + this.rand() * 6; a.lx = null; continue; }
-        const p = this._routeAt(a.s, this._tmpR || (this._tmpR = {}));
-        const lane = ROAD_WIDTH * .26 * (a.dir > 0 ? 1 : -1);
-        a.x = p.x - p.dz * lane; a.z = p.z + p.dx * lane; a.y = p.y + .1;
-        a.yaw = Math.atan2(p.dx * a.dir, p.dz * a.dir); a.pitch = Math.atan(p.dy) * a.dir;
-        draw(a);
-      }
-    }
-    for (const a of this.busAgents) {
-      if (!a.alive || Math.hypot(a.x - cam.x, a.z - cam.z) > 480) this._spawnCar(a, cam, !this._started);
-      if (!a.alive) { a.lx = null; continue; }
-      if (a.x == null) this._moveOnNetwork(a, this.drive, 0);
-      const prev = { x: a.x, y: a.y, z: a.z, s: a.s, way: a.way, dir: a.dir, yaw: a.yaw, pitch: a.pitch };
-      this._moveOnNetwork(a, this.drive, dt * (a.hurry || 1)); a.hurry = 0;
-      this._yield(a, prev, rider, 35, false);
+      a.s += a.dir * a.speed * dt;
+      // gone once well behind the rider (behind the camera); the street ahead of it was checked when it appeared
+      const behind = (rider.out - a.s) * rider.dir, turn = this.city.route.turnS || this.city.route.total;
+      if (behind > 80 || a.s < 0 || a.s > turn || (behind > 10 && this.city.landscape.routeKindAt(a.s) !== 'road')) { a.alive = false; a.wait = 2 + this.rand() * 6; a.lx = null; continue; }
+      // its lane: a fixed offset from the centre line, square to the street's smoothed heading (no step at the GPS points)
+      this._routeAt(a.s + 5, q); this._routeAt(a.s - 5, p);
+      let hx = q.x - p.x, hz = q.z - p.z; const hl = Math.hypot(hx, hz) || 1; hx /= hl; hz /= hl;
+      const dy = (q.y - p.y) / hl;
+      this._routeAt(a.s, p);
+      const lane = ROAD_WIDTH * .26 * (a.dir > 0 ? 1 : -1);
+      a.x = p.x - hz * lane; a.z = p.z + hx * lane; a.y = p.y + .1;
+      a.yaw = Math.atan2(hx * a.dir, hz * a.dir); a.pitch = Math.atan(dy) * a.dir;
       draw(a);
     }
     for (const m of Object.values(this.carMeshes)) { m.im.count = m.n; m.im.instanceMatrix.needsUpdate = true; m.im.geometry.attributes.iMove.needsUpdate = true; }
@@ -760,6 +941,7 @@ export class CityLife {
   tick(cam, dt, time, rider) {
     dt = Math.min(dt, .1);
     this._clock = (this._clock || 0) + dt;
+    this._rider = rider;   // (new agents appear out of the rider's sight)
     this._updatePeople(cam, dt, time, rider);
     this._updateTraffic(cam, dt, rider);
     this._updateTrains(dt, rider);
