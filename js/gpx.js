@@ -1,7 +1,7 @@
 // GPX → a smoothed, evenly spaced route with grade. Pure functions (tested in Node).
 
 const STEP_M = 10;            // resample spacing
-const ELE_SMOOTH_M = 60;      // ± window for elevation smoothing
+const ELE_SMOOTH_M = 60;      // ± window for elevation smoothing (a route may ask for its own: `eleSmoothM`)
 const GRADE_SPAN_M = 30;      // ± span for grade calculation
 const GRADE_LIMIT = 25;
 const CLOSED_LOOP_M = 150;    // start and end this close → treat as a loop you can ride forever
@@ -50,10 +50,13 @@ export function haversine(a, b) {
 
 /**
  * Build a route: resampled every 10 m with smoothed elevation and grade.
+ * `eleSmoothM` (± m, default 60): the moving-average window for elevation. [w2-align] A GPX whose profile is
+ * already rideable (a city route from tools/build_city.py: grade and grade change limited, spikes shaved) asks
+ * for a narrow one in its catalog entry, so crests and dips stay on the ground; recorded GPX keeps ±60 m.
  * @returns {{name, total, ascent, descent, minEle, maxEle, dist:Float64Array, ele:Float64Array,
  *            lat:Float64Array, lon:Float64Array, grade:Float64Array}}
  */
-export function buildRoute({ name, points }) {
+export function buildRoute({ name, points, eleSmoothM = ELE_SMOOTH_M }) {
   // Drop duplicate points; fill missing elevation.
   const pts = [points[0]];
   for (let i = 1; i < points.length; i++) if (haversine(pts[pts.length - 1], points[i]) > 0.5) pts.push(points[i]);
@@ -95,7 +98,7 @@ export function buildRoute({ name, points }) {
   const wrap = (k) => ((k % m) + m) % m;
 
   // Smooth elevation (moving average)
-  const w = Math.round(ELE_SMOOTH_M / STEP_M);
+  const w = Math.max(0, Math.round((Number.isFinite(eleSmoothM) ? eleSmoothM : ELE_SMOOTH_M) / STEP_M));
   const ele = new Float64Array(dist.length);
   for (let i = 0; i < m; i++) {
     let s = 0, c = 0;

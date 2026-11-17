@@ -177,7 +177,14 @@ export function routeJunctionOverlay(route, index, plan, paint, streetMaterial) 
   };
   const normalAt = (s) => { const a = RL.at(s - 1.5), b = RL.at(s + 1.5), g = (b.y - a.y) / 3; const l = Math.hypot(1, g); return [-a.tx * g / l, 1 / l, -a.tz * g / l]; };
   const half = ROAD_WIDTH / 2 + .02;
-  for (const sp of plan.spans) {
+  // [finish] overlapping spans (junctions close together along the route) merged first: two strips at one height
+  // flicker against each other
+  const spans = [...plan.spans].map((sp) => ({ s0: sp.s0, s1: sp.s1 })).sort((a, b) => a.s0 - b.s0).reduce((out, sp) => {
+    const last = out[out.length - 1];
+    if (last && sp.s0 <= last.s1 + .5) last.s1 = Math.max(last.s1, sp.s1); else out.push({ ...sp });
+    return out;
+  }, []);
+  for (const sp of spans) {
     const s0 = Math.max(0, sp.s0), s1 = Math.min(total, sp.s1);
     if (s1 - s0 < 1) continue;
     const st = [s0]; for (let i = 0; i <= RL.n; i++) if (D[i] > s0 + .05 && D[i] < s1 - .05) st.push(D[i]); st.push(s1);

@@ -361,7 +361,7 @@ export function trimAtRoute(streets, ctx, options = {}) {
       const q = RL.project(p.x, p.z, route.dist[Math.min(end, r.i > end ? 2 * end - r.i : r.i)], 30);
       if (!q || q.d > h + O.edgeM) continue;
       const dy = p.y + lift - (q.y + ROAD_LIFT);
-      if (Math.abs(dy) < O.step || Math.abs(dy) > O.pass) continue;
+      if (Math.abs(dy) > O.pass) continue;   // [finish] (at one level too: no junction here, so the road's surface carries across)
       const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)], t = RL.at(q.s);
       const dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1;
       if (Math.abs((dx * t.tx + dz * t.tz) / l) < O.cos) continue;
@@ -458,17 +458,35 @@ export function hideCrossingsAtRoute(streets, ctx, options = {}) {
     const P = st.pts, h = st.width / 2, lift = SLOT_LIFT(slots[k]);
     for (let i = 0; i < P.length; i++) {
       const p = P[i];
-      if (p.jn != null || p.je != null || p.along) continue;
+      if (p.jn != null || p.along) continue;
       const r = index.nearest(p.x, p.z, O.edgeM + h + 12); if (!r) continue;
       const q = RL.project(p.x, p.z, route.dist[Math.min(end, r.i > end ? 2 * end - r.i : r.i)], 30);
       if (!q || q.d > O.edgeM + 1) continue;
+      if (p.je != null && q.d > RW / 2 + .5) continue;   // [finish] (a junction's ease zone, unless it lies on the road itself)
       const dy = p.y + lift - (q.y + ROAD_LIFT);
-      if (Math.abs(dy) < O.step || Math.abs(dy) > O.pass) continue;
+      if (Math.abs(dy) > O.pass) continue;   // [finish] (at one level too: no junction here, so the road's surface carries across)
       const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)], t = RL.at(q.s), dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1;
       if (Math.abs((dx * t.tx + dz * t.tz) / l) >= O.cos) continue;   // alongside: trimAtRoute's
       p.tl = p.tr = 2 * h; n++;
     }
   });
+  return n;
+}
+
+/**
+ * [finish] A stub (a few metres of street, e.g. the mapped mouth of a driveway) that the passes above have already cut
+ * away at one end is not drawn at all: what is left is a wedge that meets nothing at its height.
+ */
+export function dropCutStubs(streets, options = {}) {
+  const O = { maxM: 8, ...options };
+  let n = 0;
+  for (const st of streets) {
+    if (st.cls > 7 || st.pts.length < 2) continue;
+    let len = 0; for (let i = 1; i < st.pts.length; i++) len += Math.hypot(st.pts[i].x - st.pts[i - 1].x, st.pts[i].z - st.pts[i - 1].z);
+    const h = st.width / 2;
+    if (len > O.maxM || !st.pts.some((p) => (p.tl || 0) >= 2 * h - .01 && (p.tr || 0) >= 2 * h - .01)) continue;
+    for (const p of st.pts) { p.tl = p.tr = 2 * h; } n++;
+  }
   return n;
 }
 

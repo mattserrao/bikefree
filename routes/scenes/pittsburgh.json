@@ -22,11 +22,14 @@
     "shallowWater": "#5d7f6a",
     "bluff": "#8f7a60"
   },
+  "packs": ["alps"],
   "vegetation": {
     "trees": [
-      "broadleaf0",
-      "broadleaf1",
-      "broadleaf0",
+      "beech0",
+      "oak0",
+      "fieldmaple0",
+      "ash0",
+      "beech1",
       "fir0"
     ],
     "treeDensity": 0.6,
@@ -55,14 +58,46 @@
     "lon": -80.01277,
     "radiusM": 22
   },
+  "road": {
+    "surface": "worn",
+    "zones": [
+      { "fromM": 158, "toM": 713, "surface": "worn", "patches": 0.55, "tone": 0.96 },
+      { "fromM": 713, "toM": 1011, "surface": "fresh", "tone": 0.9, "cracks": 0.1 },
+      { "fromM": 2819, "toM": 4077, "surface": "patched", "patches": 0.85, "cracks": 0.5, "wear": 0.7, "tone": 0.94 },
+      { "fromM": 4077, "toM": 4579, "surface": "worn", "tone": 0.86, "wear": 0.75, "patches": 0.15, "cracks": 0.3 },
+      { "fromM": 4640, "toM": 6020, "surface": "worn", "patches": 0.5 },
+      { "fromM": 6020, "toM": 7852, "surface": "patched", "patches": 0.7, "cracks": 0.45, "warm": 0.15 },
+      { "fromM": 10463, "toM": 11011, "surface": "worn", "patches": 0.5 },
+      { "fromM": 11011, "toM": 12331, "surface": "worn", "cracks": 0.6, "edge": 0.7, "patches": 0.55 },
+      { "fromM": 12331, "toM": 14129, "surface": "fresh", "tone": 0.84, "patches": 0.12 },
+      { "fromM": 14129, "toM": 14450, "surface": "patched", "patches": 0.8, "cracks": 0.6, "edge": 0.6 },
+      { "fromM": 14450, "toM": 15620, "surface": "brick", "centre": 0, "patches": 0.3 },
+      { "fromM": 15700, "toM": 16409, "surface": "fresh", "tone": 0.88, "cracks": 0.12 },
+      { "fromM": 16409, "toM": 16587, "surface": "worn" }
+    ],
+    "trail": {
+      "surface": "fresh",
+      "tone": 1.05,
+      "zones": [
+        { "fromM": 3363, "toM": 3457, "surface": "brick", "centre": 0, "patches": 0, "tone": 1.05 },
+        { "fromM": 7852, "toM": 10463, "surface": "worn", "patches": 0.3, "cracks": 0.35, "edge": 0.55, "tone": 1.05 },
+        { "fromM": 16587, "toM": 18321, "surface": "worn", "patches": 0.25, "tone": 1.04 }
+      ]
+    }
+  },
+  "brickStreets": { "osm": true, "minGrade": 0.07, "classes": [5], "minLengthM": 25 },
   "streetKit": {
-    "fromM": 5250,
-    "toM": 10950,
+    "fromM": 0,
+    "toM": 18400,
     "rangeM": 220,
     "parkTrees": 16,
     "zones": [
+      { "name": "North Shore: General Robinson & Federal", "style": "masonry", "fromM": 150, "toM": 760, "widthM": 60, "parking": false, "curbM": 5.8, "sidewalkM": 3.6, "trees": 18 },
+      { "name": "Downtown: Market, Forbes & Smithfield", "style": "masonry", "fromM": 2830, "toM": 4250, "widthM": 55, "parking": false, "curbM": 5.6, "sidewalkM": 3.4, "trees": 20 },
       { "name": "East Carson Street", "style": "victorian", "fromM": 5250, "toM": 7860, "widthM": 90, "parking": true, "curbM": 6.4, "sidewalkM": 4, "trees": 15 },
-      { "name": "South Side Flats: S 10th & E Carson", "style": "rowhouse", "fromM": 10330, "toM": 10860, "widthM": 70, "parking": true, "curbM": 6.2, "sidewalkM": 3.2, "trees": 16 }
+      { "name": "South Side Flats: S 10th & E Carson", "style": "rowhouse", "fromM": 10330, "toM": 10860, "widthM": 70, "parking": true, "curbM": 6.2, "sidewalkM": 3.2, "trees": 16 },
+      { "name": "West End: Grandview W hillside", "style": "rowhouse", "fromM": 14150, "toM": 15600, "widthM": 60, "parking": true, "curbM": 5.8, "sidewalkM": 2.6, "trees": 20 },
+      { "name": "North Shore: Carnegie Science Center", "style": "industrial", "fromM": 17000, "toM": 17550, "widthM": 120, "parking": false, "curbM": 5.8, "sidewalkM": 3.2, "trees": 16 }
     ]
   },
   "mainStreets": [

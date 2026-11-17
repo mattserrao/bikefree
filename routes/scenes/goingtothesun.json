@@ -9,6 +9,9 @@
     "models/scenery/regional.json"
   ],
   "seed": 1101,
+  "roadAlign": {
+    "curve": true
+  },
   "description": "Glacier National Park on its real landform (bundled 10 m elevation near the road, 40 m to 9 km) with stylized low-poly scenery.",
   "title": "Going-to-the-Sun Road",
   "region": "glacier-alpine",

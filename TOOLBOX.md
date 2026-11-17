@@ -108,7 +108,7 @@ js/world/toolbox/
 | Module | Scene field | What it does |
 | --- | --- | --- |
 | `materials/surfaces.js` | `palette`, `water`, `vista` | Ground shader: palette by slope, height, shore and canopy, with vista detail far off. Also sea, lake water, lake mist, and scenery decorations (wind on soft plants, foliage, concrete). |
-| `materials/road-surface.js` | `road` | Road kind by stretch: fresh, worn, patched, chip seal, alpine, frost-heaved, tunnel, wet. Costs no draw calls. `markings: "fr"` draws the paint in metres by the French rules (T1 centre 3/10 m, T2 edges 3/3.5 m, short dashes and no edges in villages, solid centre on blind bends with T3 warning dashes, no paint on narrow roads) and adds aggregate, mottling, the paving seam and edge repair strips. |
+| `materials/road-surface.js` | `road` | Road kind by stretch: fresh, worn, patched, chip seal, alpine, frost-heaved, tunnel, brick (running bond across the road), wet. Costs no draw calls. `markings: "fr"` draws the paint in metres by the French rules (T1 centre 3/10 m, T2 edges 3/3.5 m, short dashes and no edges in villages, solid centre on blind bends with T3 warning dashes, no paint on narrow roads) and adds aggregate, mottling, the paving seam and edge repair strips. A city route's trail stretches take their own `road.trail: { surface, zones }`. |
 | `materials/stonework.js` | (used by structures) | `makeMasonryMaterial({ stones })`: rubble masonry in world space for walls, parapets and portals. |
 
 ### Packs: regional models (`"packs"`)
@@ -183,7 +183,7 @@ js/world/toolbox/
 
 | Module | What it does |
 | --- | --- |
-| `city/city.js` | The city scene |
+| `city/city.js` | The city scene (`brickStreets`: brick and sett streets from OSM, and steep residential streets, in brick) |
 | `city/street-kit.js` | Facades and furniture |
 | `city/junctions.js`, `junction-mesh.js`, `road-meets.js` | Junctions and where roads meet |
 | `city/street-grade.js` | Curbs and sidewalks |
@@ -243,7 +243,7 @@ Some Pittsburgh content is still in code: stadiums, the fountain, USS Requin and
 | Settlement (towns, camps, poles) | ✓ | – | – | – | – | footprints, lifts, power lines, dam |
 | Mountain-road structures | – | – | ✓ | – | – | ✓ + hairpin walls |
 | Arch bridges | – | ✓ | ✓ (masonry) | city bridges | – | ✓ |
-| Road surface / verge | – | – | ✓ / ✓ | – | – | ✓ / ✓ (French) |
+| Road surface / verge | – | – | ✓ / ✓ | ✓ (streets + trails) / – | – | ✓ / ✓ (French) |
 | Guardrail (`roadside`) | – | ✓ | – | – | ✓ | – |
 | Look | gentle | – | gentle | – | – | gentle |
 | Baked light | – | – | – | golden | – | midday (windowed) |

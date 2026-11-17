@@ -26,6 +26,7 @@ import { normalizeScene } from '../js/world/toolbox/scene-schema.js';
 import { landscapeBuilder } from '../js/world/toolbox/landscape/index.js';
 import { riderPose, routePoint, ROAD_WIDTH, ROAD_LIFT, CHASE } from '../js/world/pose.js';
 import { alignmentChecks } from './qc_alignment.mjs';   // [road-align]
+import { groundDrape, DRAPE_MAX_DROP } from '../js/world/toolbox/landscape/ground-drape.js';   // [w2-align]
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(join(ROOT, p), 'utf8');
@@ -70,7 +71,32 @@ const deg = (r) => (r * 180) / Math.PI;
 const angleBetween = (a, b) => deg(Math.acos(Math.max(-1, Math.min(1, a.x * b.x + a.z * b.z))));
 
 /** Ground as the stylized patch mesh draws it: 6 m grid, triangles (a,d,b) and (b,d,e). */
-function makeMeshGround(heightAt, fineCells = PATCH_CELLS, fineAt = null) {
+function makeMeshGround(heightAt, fineCells = PATCH_CELLS, fineAt = null, landscape = null) {
+  // [w2-align] city patches are draped off the streets (js/world/toolbox/landscape/ground-drape.js): model each 96 m patch the same way
+  if (landscape?.groundClearPoints) {
+    const cell = PATCH / PATCH_CELLS;
+    const patches = new Map(), N = PATCH_CELLS + 1;
+    const patch = (pi, pj) => {
+      const key = pi * 1e7 + pj;
+      let h = patches.get(key);
+      if (!h) {
+        const x0 = pi * PATCH, z0 = pj * PATCH;
+        h = new Float64Array(N * N);
+        for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) h[j * N + i] = heightAt(x0 + i * cell, z0 + j * cell);
+        const d = groundDrape(h, x0, z0, cell, PATCH_CELLS, heightAt, { maxDrop: DRAPE_MAX_DROP, fixed: landscape.groundDrapeFixed, last: landscape.groundDrapeLast });
+        d.add(landscape.groundClearPoints(x0, z0, x0 + PATCH, z0 + PATCH, 2)); d.apply();
+        patches.set(key, h);
+      }
+      return h;
+    };
+    return (x, z) => {
+      const pi = Math.floor(x / PATCH), pj = Math.floor(z / PATCH), h = patch(pi, pj);
+      const u = (x - pi * PATCH) / cell, w = (z - pj * PATCH) / cell;
+      const i = Math.min(PATCH_CELLS - 1, Math.floor(u)), j = Math.min(PATCH_CELLS - 1, Math.floor(w)), fu = u - i, fw = w - j;
+      const a = h[j * N + i], b = h[j * N + i + 1], d = h[(j + 1) * N + i], e = h[(j + 1) * N + i + 1];
+      return fu + fw <= 1 ? a + (b - a) * fu + (d - a) * fw : e + (d - e) * (1 - fu) + (b - e) * (1 - fw);
+    };
+  }
   const caches = new Map();
   const v = (cell, i, j) => {
     const cache = caches.get(cell) || caches.set(cell, new Map()).get(cell), key = i * 1e7 + j;
@@ -186,7 +212,7 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
   // 3. Ridden path: rider pose every `step` m over the whole ride, wrapping across the seam
   const stylized = route.scene?.style === 'stylized';
   const landscape = stylized ? landscapeBuilder(route.scene)(route.scene, proj, index, route) : null;
-  const ground = landscape ? makeMeshGround(landscape.heightAt, route.scene?.groundMesh?.fineCells, route.scene?.groundMesh?.fineCells ? landscape.fineGroundAt : null) : null;   // a scene may ask for finer ground by the road (groundMesh.fineCells)
+  const ground = landscape ? makeMeshGround(landscape.heightAt, route.scene?.groundMesh?.fineCells, route.scene?.groundMesh?.fineCells ? landscape.fineGroundAt : null, landscape) : null;   // a scene may ask for finer ground (hairpins); [w2-align] landscape: draped city patches
   const bridgeAt = (x, z, m) => !!landscape?.bridgeAt?.(x, z, m);
   let prev = riderPose(route, index, 0), maxHeading = 0, maxJump = 0;
   // A real switchback (Alpe d'Huez's 21 hairpins): the road reverses within ±40 m. Its tight turn is the

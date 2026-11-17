@@ -67,9 +67,10 @@ class KitBuilder extends MeshBuilder {
     return this;
   }
 }
+const GROUND_CELL = 6;   // [w2-clip] the near ground's grid (stylized-terrain.js: 96 m patches, 16 cells a side)
 import { CURB_H, ROUTE_CURB, streetKitConfig, routeCurbAt, zoneCurbAt, walkTopAt } from './street-grade.js';
 export { streetKitConfig, zoneCurbAt, walkTopAt, CURB_H, ROUTE_CURB };
-const LOD = { light: { near: 160, mid: 450, carDetail: 40 }, balanced: { near: 260, mid: 750, carDetail: 90 }, high: { near: 380, mid: 1100, carDetail: 140 } };   // [w2-polish] carDetail: detailed parked cars within this of them
+const LOD = { light: { near: 160, mid: 450, carDetail: 40 }, balanced: { near: 260, mid: 750, carDetail: 90 }, high: { near: 320, mid: 900, carDetail: 90 } };   // [finish] High: near 380 → 320, mid 1100 → 900, detailed cars 140 → 90 m (the 2 M triangle budget)   // [w2-polish] carDetail: detailed parked cars within this of them
 
 // ---------------------------------------------------------------- catalogue: facade styles
 /**
@@ -468,6 +469,19 @@ export class StreetKit {
     return { x: P.ix + P.nx * .45, z: P.iz + P.nz * .45, y: P.top };
   }
   treeAt(side, s) { return this._treeCells?.has(`${side}:${Math.floor(s / 3)}`) || this._treeCells?.has(`${side}:${Math.floor(s / 3) - 1}`) || this._treeCells?.has(`${side}:${Math.floor(s / 3) + 1}`); }
+  /** [finish] Is a street tree's trunk (CityScene._trees, kit pits included) within r of (x, z)? */
+  treeNear(x, z, r = .9) {
+    const T = this.city.treeTrunks; if (!T) return false;
+    if (!this._trees || this._treesN !== T.length) {
+      this._trees = new Map(); this._treesN = T.length;
+      for (let i = 0; i < T.length; i += 2) { const k = `${Math.floor(T[i] / 20)},${Math.floor(T[i + 1] / 20)}`; if (!this._trees.has(k)) this._trees.set(k, []); this._trees.get(k).push(T[i], T[i + 1]); }
+    }
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+      const L = this._trees.get(`${Math.floor(x / 20) + a},${Math.floor(z / 20) + b}`); if (!L) continue;
+      for (let i = 0; i < L.length; i += 2) if (Math.hypot(L[i] - x, L[i + 1] - z) < r) return true;
+    }
+    return false;
+  }
   /** A street lamp (CityScene.lamps) within r of (x, z)? */
   lampNear(x, z, r = .6) {
     if (!this._lamps) {
@@ -540,9 +554,12 @@ export class StreetKit {
         if (this._due()) yield 'walks';
         const P = this._station(st);
         if (!P) { prev = null; continue; }
-        // [w2-clip] on the inside of a tight bend the curb line steps backwards: skip that station, or the next slab
-        // folds back over the last one (two shades of paving at one height: they flicker)
-        if (prev && ((P.ix - prev.ix) * P.tx + (P.iz - prev.iz) * P.tz < .3 || (P.ox - prev.ox) * P.tx + (P.oz - prev.oz) * P.tz < 0)) continue;
+        // [w2-clip] on the inside of a tight bend (or where the building line jumps) an edge steps backwards and the
+        // slab would fold back over the last one (two shades of paving at one height: they flicker): hold that edge
+        if (prev && Math.hypot(P.ix - prev.ix, P.iz - prev.iz) < 5.5) {
+          if ((P.ix - prev.ix) * P.tx + (P.iz - prev.iz) * P.tz < 0) { P.ix = prev.ix; P.iz = prev.iz; }
+          if ((P.ox - prev.ox) * P.tx + (P.oz - prev.oz) * P.tz < 0) { P.ox = prev.ox; P.oz = prev.oz; }
+        }
         if (prev && Math.hypot(P.ix - prev.ix, P.iz - prev.iz) < 5.5) this._slab(W, prev, P, n++);
         else if (prev) this._endCap(W, prev), this._startCap(W, P);
         else this._startCap(W, P);
@@ -741,14 +758,16 @@ export class StreetKit {
       const sw = Math.min(uw - .8, 3.6), [sx, sz] = at(um, .21);
       this._signQuad(C.near, sx, sz, f.nx, f.nz, sw, base + h - .88, base + h - .14, label);
       // an awning over the glass, or a blade sign out over the sidewalk
-      if (r > 1 - style.awning) {
+      // [finish] (not where a lamp post stands under it: the awning or the blade sign would hang through the post)
+      const [ax, az] = at(um, .9), lampHere = this.lampNear(ax, az, Math.max(1.4, uw / 2));
+      if (r > 1 - style.awning && !lampHere) {
         const col = new THREE.Color(SIGN_COLORS[Math.floor(r * 97) % SIGN_COLORS.length][0]).lerp(new THREE.Color('#b33a3a'), r > .9 ? .6 : 0);
         N.color(col);
         const [a0x, a0z] = at(u0 + .35, .1), [a1x, a1z] = at(u0 + uw - .35, .1), yA = base + h - 1.05;
         const p0 = V(a0x, yA, a0z), p1 = V(a1x, yA, a1z), p2 = V(a1x + f.nx * 1.3, yA - .65, a1z + f.nz * 1.3), p3 = V(a0x + f.nx * 1.3, yA - .65, a0z + f.nz * 1.3);
         face(N, p0, p1, p2, p3, UP); face(N, p0, p1, p2, p3, V(0, -1, 0));
         face(N, p3, p2, V(p2.x, p2.y - .25, p2.z), V(p3.x, p3.y - .25, p3.z), V(f.nx, 0, f.nz));
-      } else if (r < style.blade && h > 3) {
+      } else if (r < style.blade && h > 3 && !this.lampNear(...at(u0 + .5, .6), 1.2)) {
         const [bx, bz] = at(u0 + .5, .1), y = base + h + .3;
         N.color('#2a2a2a').block(bx + f.nx * .45, y + 1.25, bz + f.nz * .45, .05, .05, .9, f.yaw);
         const L2 = label;   // the shop's own name on its blade sign
@@ -939,6 +958,8 @@ export class StreetKit {
   place(C, kind, x, z, yaw, opts = {}) {
     const fn = FURNITURE[kind];
     if (!fn) return false;
+    if (kind !== 'treePit' && kind !== 'car' && this.treeNear(x, z, Math.max(.9, LAMP_CLEAR[kind] ?? 0))) return false;   // [finish] not in a street tree's trunk
+    if (kind !== 'car' && this.lampNear(x, z, LAMP_CLEAR[kind] ?? .7)) return false;   // [finish] …nor in a lamp post (hydrants every 90 m, pits, masts)
     const y = opts.y ?? this.walkLevel(x, z);
     const M = opts.lod === 'mid' ? C.mid : C.near;
     const f = { x, y, z, yaw, c: Math.cos(yaw), s: Math.sin(yaw) };
@@ -1171,17 +1192,7 @@ export class StreetKit {
       if (r && r.d < ROAD_WIDTH / 2 + 2.2) return null;
       return L.heightAt(x, z) + .07;
     };
-    // subdivide long triangles so the asphalt follows the ground
-    const out = [];
-    const split = (a, b, c, depth) => {
-      const ab = Math.hypot(a.x - b.x, a.y - b.y), bc = Math.hypot(b.x - c.x, b.y - c.y), ca = Math.hypot(c.x - a.x, c.y - a.y), m = Math.max(ab, bc, ca);
-      if (m < 7 || depth > 8) { out.push([a, b, c]); return; }
-      const mid = (p, q) => new THREE.Vector2((p.x + q.x) / 2, (p.y + q.y) / 2);
-      if (m === ab) { const d = mid(a, b); split(a, d, c, depth + 1); split(d, b, c, depth + 1); }
-      else if (m === bc) { const d = mid(b, c); split(a, b, d, depth + 1); split(a, d, c, depth + 1); }
-      else { const d = mid(c, a); split(a, b, d, depth + 1); split(d, b, c, depth + 1); }
-    };
-    for (const [i, j, k] of tris) split(contour[i], contour[j], contour[k], 0);
+    const out = tris.map(([i, j, k]) => [contour[i], contour[j], contour[k]]);   // [w2-clip] (cut along the ground's grid below)
     W.color('#5a5d5f');
     this.stats.lots = (this.stats.lots || 0) + 1;
     // [w2-clip] the asphalt's own height at a point (its triangles, not the ground's): the painted stalls lie on it
@@ -1195,17 +1206,53 @@ export class StreetKit {
       }
       return null;
     };
+    // [w2-clip] the asphalt lies on the ground as drawn: the near ground is a 6 m grid of flat triangles (heights
+    // at the grid points, split corner (i+1, j) to (i, j+1)), and between its points it can stand above the true
+    // height. Each lot triangle is cut along that grid, so every piece sits 7 cm over one flat ground triangle.
+    const G = GROUND_CELL, gh = new Map();
+    const gridY = (i, j) => { const k = i * 1e6 + j; let y = gh.get(k); if (y === undefined) gh.set(k, (y = L.heightAt(i * G, j * G))); return y; };
+    const meshAt = (x, z) => {
+      const i = Math.floor(x / G), j = Math.floor(z / G), fx = x / G - i, fz = z / G - j;
+      if (fx + fz <= 1) { const a = gridY(i, j); return a + (gridY(i + 1, j) - a) * fx + (gridY(i, j + 1) - a) * fz; }
+      const e = gridY(i + 1, j + 1); return e + (gridY(i, j + 1) - e) * (1 - fx) + (gridY(i + 1, j) - e) * (1 - fz);
+    };
+    // keep the part of polygon `poly` ([x, z] pairs) on the left of a → b
+    const clip = (poly, ax, az, bx, bz) => {
+      const o = [], side = (p) => (bx - ax) * (p[1] - az) - (bz - az) * (p[0] - ax);
+      for (let q = 0; q < poly.length; q++) {
+        const P = poly[q], Q = poly[(q + 1) % poly.length], sp = side(P), sq = side(Q);
+        if (sp >= 0) o.push(P);
+        if ((sp >= 0) !== (sq >= 0)) { const t = sp / (sp - sq); o.push([P[0] + (Q[0] - P[0]) * t, P[1] + (Q[1] - P[1]) * t]); }
+      }
+      return o;
+    };
+    const ccw = (pts) => { let s2 = 0; for (let q = 0; q < pts.length; q++) { const P = pts[q], Q = pts[(q + 1) % pts.length]; s2 += P[0] * Q[1] - Q[0] * P[1]; } return s2 > 0 ? pts : pts.slice().reverse(); };
     for (const [a, b, c] of out) {
       if (this._due()) yield 'lot';
-      const ys = [a, b, c].map((p) => level(p.x, p.y));
-      if (ys.some((y) => y == null)) { this.stats.lotSkip = (this.stats.lotSkip || 0) + 1; continue; }
-      this.stats.lotTris = (this.stats.lotTris || 0) + 1;
-      for (let gx = Math.floor(Math.min(a.x, b.x, c.x) / 4); gx <= Math.floor(Math.max(a.x, b.x, c.x) / 4); gx++) for (let gz = Math.floor(Math.min(a.y, b.y, c.y) / 4); gz <= Math.floor(Math.max(a.y, b.y, c.y) / 4); gz++) {
-        const k = `${gx},${gz}`; if (!drawn.has(k)) drawn.set(k, []); drawn.get(k).push([a, b, c, ys]);
+      const tri = ccw([[a.x, a.y], [b.x, b.y], [c.x, c.y]]);
+      for (let i = Math.floor(Math.min(a.x, b.x, c.x) / G); i <= Math.floor(Math.max(a.x, b.x, c.x) / G); i++) for (let j = Math.floor(Math.min(a.y, b.y, c.y) / G); j <= Math.floor(Math.max(a.y, b.y, c.y) / G); j++) {
+        const x0 = i * G, z0 = j * G, x1 = x0 + G, z1 = z0 + G;
+        // the cell's two ground triangles, counter-clockwise in (x, z): (x0,z0)(x1,z0)(x0,z1) and (x1,z0)(x1,z1)(x0,z1)
+        for (const g of [[[x0, z0], [x1, z0], [x0, z1]], [[x1, z0], [x1, z1], [x0, z1]]]) {
+          let poly = tri;
+          for (let q = 0; q < 3 && poly.length >= 3; q++) { const A = g[q], B = g[(q + 1) % 3]; poly = clip(poly, A[0], A[1], B[0], B[1]); }
+          if (poly.length < 3) continue;
+          let cx = 0, cz = 0; for (const [x, z] of poly) { cx += x / poly.length; cz += z / poly.length; }
+          if (level(cx, cz) == null || poly.some(([x, z]) => level(x, z) == null)) { this.stats.lotSkip = (this.stats.lotSkip || 0) + 1; continue; }
+          const ys = poly.map(([x, z]) => meshAt(x, z) + .07);
+          const ks = poly.map(([x, z], q) => W.vertex(x, ys[q], z, 0, 1, 0));
+          for (let q = 1; q + 1 < poly.length; q++) {
+            const pa = poly[0], pb = poly[q], pc = poly[q + 1];
+            if (Math.abs((pb[0] - pa[0]) * (pc[1] - pa[1]) - (pc[0] - pa[0]) * (pb[1] - pa[1])) < 1e-6) continue;
+            W.tri(ks[0], ks[q + 1], ks[q]);   // (counter-clockwise in x, z is clockwise seen from above: face up)
+            const A = { x: pa[0], y: pa[1] }, B = { x: pb[0], y: pb[1] }, C2 = { x: pc[0], y: pc[1] }, yy = [ys[0], ys[q], ys[q + 1]];
+            this.stats.lotTris = (this.stats.lotTris || 0) + 1;
+            for (let gx = Math.floor(Math.min(A.x, B.x, C2.x) / 4); gx <= Math.floor(Math.max(A.x, B.x, C2.x) / 4); gx++) for (let gz = Math.floor(Math.min(A.y, B.y, C2.y) / 4); gz <= Math.floor(Math.max(A.y, B.y, C2.y) / 4); gz++) {
+              const k = `${gx},${gz}`; if (!drawn.has(k)) drawn.set(k, []); drawn.get(k).push([A, B, C2, yy]);
+            }
+          }
+        }
       }
-      const ny = (b.y - a.y) * (c.x - a.x) - (b.x - a.x) * (c.y - a.y);   // (2D y is world z)
-      const k = [a, b, c].map((p, q) => W.vertex(p.x, ys[q], p.y, 0, 1, 0));
-      if (ny > 0) W.tri(k[0], k[1], k[2]); else W.tri(k[0], k[2], k[1]);
     }
     yield 'lot';
     // stalls: rows along the lot's longest edge
@@ -1233,7 +1280,7 @@ export class StreetKit {
             face(W, V(x0 - ax * w, h0, z0 - az * w), V(x0 + ax * w, h0, z0 + az * w), V(x1 + ax * w, h1, z1 + az * w), V(x1 - ax * w, h1, z1 - az * w), UP);
           }
           const h = hash(Math.round(m.x * 7) * 31 + Math.round(m.z * 7) * 17);
-          if (h < .55 && cars < 60) { this.place(C, 'car', m.x, m.z, Math.atan2(bx * dir, bz * dir), { y: ym, seed: h }); cars++; }
+          if (h < .55 && cars < 45) { this.place(C, 'car', m.x, m.z, Math.atan2(bx * dir, bz * dir), { y: ym, seed: h }); cars++; }   // [finish] at most 45 a lot (was 60: big lots cost a lot of triangles on High)
         }
       }
     }
@@ -1252,6 +1299,7 @@ export class StreetKit {
         if (!this.inArea(mx, mz) || L.landAt(mx, mz) === LAND.water || this.streetsAt(mx, mz, .2).some((o) => o.st.cls < 8)) continue;
         const rd = L.routeDist(mx, mz); if (rd && rd.d < ROAD_WIDTH / 2 + 1.5) continue;
         if (this.city.buildingNear(mx, mz, 0)) continue;
+        if (this.lampNear(mx, mz, Math.hypot(q.x - p.x, q.z - p.z) / 2 + .4)) continue;   // [finish] a gap where a lamp post stands
         const yp = L.heightAt(p.x, p.z), yq = L.heightAt(q.x, q.z), sl = len / n;
         const yaw = Math.atan2(q.x - p.x, q.z - p.z);
         if (l.kind === 'fence' || l.kind === 'guard_rail') {
@@ -1274,6 +1322,7 @@ export class StreetKit {
     const tx = (bx - ax) / len, tz = (bz - az) / len;
     let nx = -tz, nz = tx;
     const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+    if (this.lampNear(mx, mz, len / 2 + .5)) return;   // [finish] not through a lamp post
     if (L.waterAt(mx + nx * 3, mz + nz * 3) > L.waterAt(mx - nx * 3, mz - nz * 3)) { nx = -nx; nz = -nz; }   // n: inland
     const top = (x, z) => Math.max(L.level + 1, L.baseHeight(x + nx * 1.5, z + nz * 1.5)) + .12;
     const p = { x: ax + nx * .35, z: az + nz * .35 }, q = { x: bx + nx * .35, z: bz + nz * .35 };
@@ -1346,9 +1395,10 @@ export class StreetKit {
   _dist(key, cam) { const [x, z] = key.split(',').map(Number); return Math.hypot((x + .5) * this.CHUNK - cam.x, (z + .5) * this.CHUNK - cam.z); }
   _lodOne(m, cam) {
     const sph = m.geometry.boundingSphere, k = m.userData.kitLod;
-    if (!sph || k === 'walk') return;
+    if (!sph) return;
     const d = Math.hypot(sph.center.x - cam.x, sph.center.z - cam.z) - sph.radius;
-    m.visible = d < (k === 'near' ? this._lod.near : this._lod.mid);
+    // [finish] sidewalks and car parks too, beyond the mid band (the city's own sidewalk ribbons are under them)
+    m.visible = d < (k === 'near' ? this._lod.near : k === 'walk' ? this._lod.mid * 1.2 : this._lod.mid);
     const cl = m.userData.carLod;   // [w2-polish] detailed cars only close to them
     if (cl) { const hi = cl.box.distanceToPoint(cam) < this._lod.carDetail; if (hi !== cl.on) { cl.on = hi; m.geometry.setDrawRange(hi ? cl.lo : 0, hi ? cl.total - cl.lo : cl.hi); } }
   }
@@ -1362,6 +1412,9 @@ const at = (f, dx, dz) => [f.x + dx * f.c + dz * f.s, f.z - dx * f.s + dz * f.c]
 function bx(M, f, dx, dy, dz, w, h, l) { const [x, z] = at(f, dx, dz); M.box(x, f.y + dy, z, w, h, l, f.yaw); }
 function cy(M, f, dx, dy, dz, r, h, seg = 6, rTop = r) { const [x, z] = at(f, dx, dz); M.cylinder(x, f.y + dy, z, r, h, seg, rTop); }
 function bm(M, f, a, b, w, h = w) { const [ax, az] = at(f, a[0], a[2]), [bx2, bz] = at(f, b[0], b[2]); M.beam(V(ax, f.y + a[1], az), V(bx2, f.y + b[1], bz), w, h); }
+
+/** [finish] How far furniture keeps from a street lamp's post (m), by kind; others .7. */
+const LAMP_CLEAR = { treePit: 1.1, shelter: 2, bench: 1.2, signal: 1, bikeRack: 1, planter: .9 };
 
 export const FURNITURE = {
   /** A tree pit: a dark iron grate flush with the sidewalk, a stone edge (street trees: CityScene's instanced trees). */
