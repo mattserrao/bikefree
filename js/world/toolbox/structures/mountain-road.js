@@ -15,6 +15,7 @@ import * as THREE from '../../../../vendor/three.module.min.js';
 import { randomSequence, smoothstep } from '../core/random.js';
 import { Builder, M, blob, box } from '../core/model-builder.js';
 import { decorateSceneryMaterial } from '../materials/surfaces.js';
+import { appendToBuilder, parkedVehicle } from '../life/figures/vehicles.js';
 import { makeMasonryMaterial, makeParapetGeometry } from '../materials/stonework.js';
 
 const ROAD_HALF = 3.5;
@@ -533,10 +534,11 @@ export class MountainRoad {
       const v = -site.widthM / 2 + 7 + r * 14, line = at(u - 1.5, v);
       B.add(box(.12, .02, 5), M(line.x, site.level + .11, line.z, 1, 1, 1, -a), '#e8e6dc', 0, rand);
       if (rand() < (p.fill ?? .7)) {
-        const q = at(u, v + (rand() - .5) * .3), color = PAINT[Math.floor(rand() * PAINT.length)], tall = rand() < .35;
+        // parked cars from the figures kit (the same models as the traffic), paint baked in
+        const q = at(u, v + (rand() - .5) * .3), color = PAINT[Math.floor(rand() * PAINT.length)], k = rand();
+        const kind = k < .3 ? 'suv' : k < .42 ? 'pickup' : k < .52 ? 'van' : k < .6 ? 'camper' : k < .75 ? 'hatch' : 'sedan';
         const ry = -a + (r % 2 ? 0 : Math.PI) + (rand() - .5) * .08;
-        B.add(box(1.8, tall ? .95 : .7, 4.5), M(q.x, site.level + .35, q.z, 1, 1, 1, ry), color, .05, rand);
-        B.add(box(1.65, tall ? .7 : .55, tall ? 3 : 2.3), M(q.x, site.level + (tall ? 1.3 : 1.05), q.z, 1, 1, 1, ry), '#2a333b', .05, rand);
+        appendToBuilder(B, parkedVehicle(kind, color), new THREE.Matrix4().makeRotationY(ry).setPosition(q.x, site.level + .1, q.z));
       }
     }
   }

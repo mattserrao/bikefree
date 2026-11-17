@@ -23,6 +23,7 @@ import * as THREE from '../../../../vendor/three.module.min.js';
 import { MeshBuilder, hash } from '../core/mesh-builder.js';
 import { ROAD_WIDTH, ROAD_LIFT } from '../../pose.js';
 import { LAND } from './landscape.js';
+import { appendToMeshBuilder, parkedVehicle } from '../life/figures/vehicles.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 /** Quad a-b-c-d wound so its face points along `want` (any vector with the right sign). */
@@ -1414,38 +1415,12 @@ export const FURNITURE = {
     M.color('#1f5a3a'); bx(M, f, 0, 6.15, arm * .7, .04, .28, 1.3);
   },
   /**
-   * [w2-polish] A parked car: a wedge body with hood and boot, a raked glass cabin with a body-coloured roof,
-   * four wheels (hexagonal, outer face only), head- and tail-lights. Sedan, hatchback or SUV by seed. ≈ 100 triangles
-   * (the plain stand-in, carLo, is 20); local +z is the front.
+   * A parked car from the figures kit (life/figures/vehicles.js): sedan, hatchback or SUV by seed, paint baked in,
+   * the same soft cartoon models as the moving traffic (the plain stand-in, carLo, is 20 triangles); local +z is the front.
    */
   car(M, f, o = {}) {
-    const h = o.seed ?? .5, col = new THREE.Color(CAR_COLORS[Math.floor(h * 997) % CAR_COLORS.length]);
-    const suv = h > .85, hatch = h < .2, L = suv ? 4.7 : hatch ? 4.0 : h > .7 ? 4.8 : 4.45, W = suv ? 1.86 : 1.78, H = L / 2;
-    const lift = suv ? .14 : 0, top = .86 + lift, glass = '#25313b';
-    // body: one convex side profile (z, y) extruded across the car
-    const body = [[-H, .2 + lift], [H, .2 + lift], [H, .58 + lift], [H - .32, .76 + lift], [H * .36, top], [-H + (hatch ? .1 : .3), top + .02], [-H, .7 + lift]];
-    carPrism(M, f, body, -W / 2, W / 2, () => col, col, true);
-    M.color(col.clone().multiplyScalar(.55)); carPrism(M, f, [[-H - .04, .2 + lift], [-H + .02, .2 + lift], [-H + .02, .4 + lift], [-H - .04, .4 + lift]], -W / 2 + .04, W / 2 - .04, null, null, false);   // rear bumper
-    // cabin: glass sides and screens, body-coloured roof
-    const cb = top - .04, rear = hatch ? -H + .2 : suv ? -H + .3 : -H * .7, front = H * (suv ? .3 : .22), roof = cb + (suv ? .62 : .5);
-    const cabin = [[rear, cb], [front, cb], [front - (suv ? .55 : .85), roof], [rear + (hatch || suv ? .12 : .55), roof]];
-    const cw = W * .86, roofCol = col.clone().multiplyScalar(.92);
-    carPrism(M, f, cabin, -cw / 2, cw / 2, (k) => (k === 2 ? roofCol : glass), glass, false, [0]);
-    // wheels: hexagons, outer faces only, tucked a little under the body
-    const r = suv ? .36 : .32, wb = L * .31;
-    const hex = Array.from({ length: 6 }, (_, k) => [Math.cos(k * Math.PI / 3 + Math.PI / 6) * r, Math.sin(k * Math.PI / 3 + Math.PI / 6) * r + r]);
-    for (const sz of [-1, 1]) for (const sx of [-1, 1]) {
-      const zc = sz * wb, x0 = sx * (W / 2 - .2), x1 = sx * (W / 2 + .02);
-      carPrism(M, f, hex.map(([z, y]) => [z + zc, y]), Math.min(x0, x1), Math.max(x0, x1), () => '#1c1d1f', '#1c1d1f', sx < 0 ? 'neg' : 'pos');
-      carPrism(M, f, hex.map(([z, y]) => [z * .5 + zc, (y - r) * .5 + r]), x1 - .012, x1 + .012, null, '#8d9296', sx < 0 ? 'neg' : 'pos', null, true);   // hub cap
-    }
-    // lights: pale heads at the front, red tails at the back (on the faces, just proud)
-    for (const sx of [-1, 1]) {
-      const [hx, hz] = at(f, sx * (W / 2 - .3), H + .012), [tx, tz] = at(f, sx * (W / 2 - .28), -H - .012);
-      const fwd = V(f.s, 0, f.c), side = V(f.c, 0, -f.s);
-      M.color('#ece6d2'); lamp(M, V(hx, f.y + .5 + lift, hz), side, .36, .12, fwd);
-      M.color('#a3221f'); lamp(M, V(tx, f.y + .56 + lift, tz), side, .3, .14, fwd.clone().negate());
-    }
+    const h = o.seed ?? .5, kind = h > .85 ? 'suv' : h < .2 ? 'hatch' : 'sedan';
+    appendToMeshBuilder(M, parkedVehicle(kind, CAR_COLORS[Math.floor(h * 997) % CAR_COLORS.length]), new THREE.Matrix4().makeRotationY(f.yaw).setPosition(f.x, f.y, f.z));
   },
 };
 
@@ -1457,37 +1432,6 @@ function carLo(M, f, o = {}) {
   M.color('#2e3a44'); bxBlock(M, f, 0, .83 + lift, -L * .08, 1.47, suv ? .58 : .46, L * (suv ? .6 : .46));
 }
 function bxBlock(M, f, dx, dy, dz, w, h, l) { const [x, z] = at(f, dx, dz); M.block(x, f.y + dy, z, w, h, l, f.yaw); }
-/**
- * A side profile (z, y pairs, convex, counter-clockwise) extruded across the car from x0 to x1 (local metres).
- * edgeCol(k) colours the band for edge k → k+1 (null: the current colour); sideCol the two end faces;
- * sides: true both, 'pos' / 'neg' just the +x / −x one, false none. skip: edge indices left out (hidden).
- */
-function carPrism(M, f, prof, x0, x1, edgeCol, sideCol, sides, skip = null, onlySides = false) {
-  const P = (dx, z, y) => { const [x, zz] = at(f, dx, z); return V(x, f.y + y, zz); };
-  let cz = 0, cy2 = 0; for (const [z, y] of prof) { cz += z; cy2 += y; } cz /= prof.length; cy2 /= prof.length;
-  if (!onlySides) for (let k = 0; k < prof.length; k++) {
-    if (skip?.includes(k)) continue;
-    const [za, ya] = prof[k], [zb, yb] = prof[(k + 1) % prof.length];
-    const mz = (za + zb) / 2 - cz, my = (ya + yb) / 2 - cy2;
-    if (edgeCol) M.color(edgeCol(k));
-    face(M, P(x0, za, ya), P(x1, za, ya), P(x1, zb, yb), P(x0, zb, yb), V(mz * f.s, my, mz * f.c));
-  }
-  if (sideCol) M.color(sideCol);
-  for (const [x, sgn] of [[x0, -1], [x1, 1]]) {
-    if (!(sides === true || (sides === 'pos' && sgn > 0) || (sides === 'neg' && sgn < 0))) continue;
-    const want = V(f.c * sgn, 0, -f.s * sgn);
-    for (let k = 1; k + 1 < prof.length; k++) {
-      const a = P(x, ...prof[0]), b = P(x, ...prof[k]), c = P(x, ...prof[k + 1]);
-      const n = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a));
-      if (n.dot(want) >= 0) M.triangle(a, b, c); else M.triangle(a, c, b);
-    }
-  }
-}
-/** A small flat lamp face centred at p, `w` wide along `side`, `h` tall, facing `want`. */
-function lamp(M, p, side, w, h, want) {
-  const a = p.clone().addScaledVector(side, -w / 2), b = p.clone().addScaledVector(side, w / 2);
-  face(M, V(a.x, p.y - h / 2, a.z), V(b.x, p.y - h / 2, b.z), V(b.x, p.y + h / 2, b.z), V(a.x, p.y + h / 2, a.z), want);
-}
 /** [w2-polish] One builder from several (same attributes), in order. */
 function joinBuilders(list) {
   const out = new KitBuilder({ aGlow: 1 });
