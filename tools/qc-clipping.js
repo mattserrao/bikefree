@@ -70,6 +70,7 @@ function classify(o) {
   if (mats.every((m) => m.transparent && !m.depthWrite)) return null;          // glows, pools, wakes, decals
   if (skipNames.test(o.name)) return null;
   if (o.userData.qcRider || o.userData.pooled) return null;   // pooled ground/plants: QC reads their tile stand-ins
+  if (o.userData.standIn) return null;   // a far stand-in for objects QC checks themselves (crowd cards for the crowd)
   if (o.isInstancedMesh) return lifeNames.test(o.name) ? 'life' : 'instances';
   if (o.material === world.terrain.groundMaterial) return 'ground';
   if (surfaceNames.test(named(o))) return 'surface';

@@ -890,7 +890,6 @@
         "max_grade": 13
       }
     },
-    "scene": "routes/scenes/alpedhuez.json",
-    "stage": "draft"
+    "scene": "routes/scenes/alpedhuez.json"
   }
 ]

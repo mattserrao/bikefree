@@ -71,10 +71,10 @@ const deg = (r) => (r * 180) / Math.PI;
 const angleBetween = (a, b) => deg(Math.acos(Math.max(-1, Math.min(1, a.x * b.x + a.z * b.z))));
 
 /** Ground as the stylized patch mesh draws it: 6 m grid, triangles (a,d,b) and (b,d,e). */
-function makeMeshGround(heightAt, landscape = null) {
-  const cell = PATCH / PATCH_CELLS, cache = new Map();
+function makeMeshGround(heightAt, fineCells = PATCH_CELLS, fineAt = null, landscape = null) {
   // [w2-align] city patches are draped off the streets (js/world/toolbox/landscape/ground-drape.js): model each 96 m patch the same way
   if (landscape?.groundClearPoints) {
+    const cell = PATCH / PATCH_CELLS;
     const patches = new Map(), N = PATCH_CELLS + 1;
     const patch = (pi, pj) => {
       const key = pi * 1e7 + pj;
@@ -97,16 +97,20 @@ function makeMeshGround(heightAt, landscape = null) {
       return fu + fw <= 1 ? a + (b - a) * fu + (d - a) * fw : e + (d - e) * (1 - fu) + (b - e) * (1 - fw);
     };
   }
-  const v = (i, j) => {
-    const key = i * 1e7 + j;
+  const caches = new Map();
+  const v = (cell, i, j) => {
+    const cache = caches.get(cell) || caches.set(cell, new Map()).get(cell), key = i * 1e7 + j;
     let h = cache.get(key);
     if (h === undefined) { h = heightAt(i * cell, j * cell); cache.set(key, h); }
     return h;
   };
   return (x, z) => {
+    // the patch's own cell size: finer where the landscape asks for it (hairpins)
+    const fine = fineAt && fineAt(Math.floor(x / PATCH) * PATCH + 1, Math.floor(z / PATCH) * PATCH + 1);
+    const cell = PATCH / (fine ? fineCells : PATCH_CELLS);
     const gi = Math.floor(x / cell), gj = Math.floor(z / cell);
     const u = x / cell - gi, w = z / cell - gj;
-    const a = v(gi, gj), b = v(gi + 1, gj), d = v(gi, gj + 1), e = v(gi + 1, gj + 1);
+    const a = v(cell, gi, gj), b = v(cell, gi + 1, gj), d = v(cell, gi, gj + 1), e = v(cell, gi + 1, gj + 1);
     return u + w <= 1 ? a + (b - a) * u + (d - a) * w : e + (d - e) * (1 - u) + (b - e) * (1 - w);
   };
 }
@@ -208,7 +212,7 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
   // 3. Ridden path: rider pose every `step` m over the whole ride, wrapping across the seam
   const stylized = route.scene?.style === 'stylized';
   const landscape = stylized ? landscapeBuilder(route.scene)(route.scene, proj, index, route) : null;
-  const ground = landscape ? makeMeshGround(landscape.heightAt, landscape) : null;   // [w2-align] landscape: draped city patches
+  const ground = landscape ? makeMeshGround(landscape.heightAt, route.scene?.groundMesh?.fineCells, route.scene?.groundMesh?.fineCells ? landscape.fineGroundAt : null, landscape) : null;   // a scene may ask for finer ground (hairpins); [w2-align] landscape: draped city patches
   const bridgeAt = (x, z, m) => !!landscape?.bridgeAt?.(x, z, m);
   let prev = riderPose(route, index, 0), maxHeading = 0, maxJump = 0;
   // A real switchback (Alpe d'Huez's 21 hairpins): the road reverses within ±40 m. Its tight turn is the
@@ -260,7 +264,12 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
       for (const o of [0, -ROAD_WIDTH / 2, ROAD_WIDTH / 2]) clearance = Math.min(clearance, road - g(o));
       for (const o of [-SHOULDER_HALF, SHOULDER_HALF]) clearance = Math.min(clearance, shoulder - g(o));
       if (clearance < LIMITS.buried) F.add('road-buried', 'fail', s, clearance, 'ground shows through the road');
-      if (!onBridge) {
+      // On a hairpin the probes square to the road cross the inside of the turn into the other leg: the ground
+      // there is the landscape's bank between the legs (real-terrain.js), so only the road surface is checked.
+      // Where another leg of a switchback runs within 40 m, the ground between the legs is the same bank, and the
+      // upper road stands on its retaining wall (structures/hairpin-walls.js).
+      const hairpin = switchback(s) || switchback(s - 30) || switchback(s + 30) || !!landscape.otherLegNear?.(c.x, c.z);
+      if (!onBridge && !hairpin) {
         const drop = Math.max(shoulder - g(-SHOULDER_HALF), shoulder - g(SHOULDER_HALF));
         if (drop > LIMITS.floating) F.add('road-floating', 'warn', s, drop, 'road edge floats above the ground');
         const wall = Math.max(g(-8), g(8)) - road;
@@ -461,6 +470,7 @@ export function loadSceneSync(path) {
   const scene = normalizeScene(JSON.parse(read(path)));
   if (scene.terrainData?.file) attachTerrainBuffer(scene, readFileSync(join(ROOT, scene.terrainData.file)));
   if (scene.terrainGridFile) scene.terrainGrid = scene.terrainGridFile.endsWith('.json') ? JSON.parse(read(scene.terrainGridFile)) : parseTerrainGrid(gunzipSync(readFileSync(join(ROOT, scene.terrainGridFile))));   // real-coast grid (build_terrain_grid.py)
+  if (scene.placesFile) scene.places = parseTerrainGrid(gunzipSync(readFileSync(join(ROOT, scene.placesFile))));   // OSM places (build_places.py)
   return scene;
 }
 

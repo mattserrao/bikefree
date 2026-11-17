@@ -27,7 +27,15 @@ export const SCENE_FIELDS = {
   terrain: { type: 'string', required: true, tool: T + 'landscape/index.js', doc: 'authored-coast (default) | authored-region | real-coast | real-mountain | authored-city | wireframe' },
   terrainData: { type: 'object', tool: T + 'landscape/authored-region.js', keys: ['file', 'format', 'north', 'south', 'west', 'east', 'width', 'height', 'baseM', 'sdfMaxM', 'lakes'], doc: 'baked USGS grid + lakes (tools/build_scene_terrain.py)' },
   terrainGridFile: { type: 'string', tool: T + 'landscape/real-terrain.js', doc: 'real height grid (tools/build_terrain_grid.py)' },
-  terrainBuild: { type: 'object', keys: ['padM', 'coarseM', 'fineM', 'fineCellM', 'lakes', 'minLakeHa', 'lakeNames', 'gpx', 'rivers'], doc: 'settings for the terrain bake tools' },
+  terrainBuild: { type: 'object', keys: ['padM', 'coarseM', 'fineM', 'fineCellM', 'lakes', 'minLakeHa', 'lakeNames', 'gpx', 'rivers', 'osmWater', 'osmCorridorM'], doc: 'settings for the terrain bake tools' },
+  buildingStyles: { type: 'array', tool: T + 'structures/footprints.js', keys: ['fromM', 'toM', 'walls', 'roofs', 'trim', 'stone', 'pitch', 'eaveM', 'blockAreaM2', 'balconies'], doc: 'map-footprint buildings: wall, roof and shutter colours, stone plinths and roof pitch by stretch' },
+  buildings: { type: 'object', tool: T + 'structures/footprints.js', keys: ['reachM', 'chunkM', 'landmarks'], doc: 'map-footprint buildings: draw reach, stretch size, landmark shapes by name ("tent")' },
+  cables: { type: 'object', tool: T + 'structures/cables.js', keys: ['lifts', 'power', 'reachM'], doc: 'ski lifts and power lines from the map (places file): pylons, stations, chairs, poles, wires' },
+  dams: { type: 'object', tool: T + 'structures/dam.js', keys: ['crestM'], doc: 'dams from the map (places file): concrete walls along the mapped crest; crestM by name' },
+  boards: { type: 'array', tool: T + 'roadside/boards.js', keys: ['atM', 'kind', 'side', 'lateralM', 'number', 'alt', 'title', 'lines', 'auto'], doc: 'roadside boards in one atlas: bend (numbered hairpins), town / townEnd, col, info (tools/place_boards.py writes towns and cols)' },
+  placesFile: { type: 'string', tool: T + 'landscape/real-terrain.js', doc: 'real places from OpenStreetMap: land cover, buildings, lifts, power (tools/build_places.py)' },
+  places: { type: 'object', keys: ['buildingsM', 'liftsM', 'powerM', 'landcoverCellM'], doc: 'settings for tools/build_places.py' },
+  osm: { type: 'object', keys: ['corridorM', 'tileDeg'], doc: 'OpenStreetMap corridor for the real-place tools (tools/fetch_osm_corridor.py)' },
   realHorizon: { type: 'boolean', doc: 'false: the stylized ground reaches the horizon (no streamed real terrain)' },
   reliefM: { type: 'number', doc: 'authored relief height' },
   baseElevationM: { type: 'number', doc: 'authored base elevation' },
@@ -48,10 +56,10 @@ export const SCENE_FIELDS = {
   sites: { type: 'array', keys: ['name', 'lat', 'lon', 'widthM', 'lengthM', 'angle', 'atRoad'], doc: 'flat built pads (lodges, car parks, visitor centres): cleared of trees' },
 
   // look
-  palette: { type: 'object', required: true, tool: T + 'materials/surfaces.js', keys: ['grass', 'meadow', 'rock', 'cliff', 'water', 'shallowWater', 'sand', 'forest', 'forestFloor', 'canopy', 'snow', 'ice', 'scree', 'cutRock', 'burn', 'fireweed', 'shrub', 'bluff', 'argillite', 'farTint', 'farTintAmount'], doc: '6–10 muted colours' },
+  palette: { type: 'object', required: true, tool: T + 'materials/surfaces.js', keys: ['grass', 'meadow', 'rock', 'cliff', 'water', 'shallowWater', 'sand', 'forest', 'forestFloor', 'canopy', 'snow', 'ice', 'scree', 'cutRock', 'burn', 'fireweed', 'shrub', 'bluff', 'argillite', 'farTint', 'farTintAmount', 'hay', 'farmland', 'village'], doc: '6–10 muted colours (hay, farmland, village: mapped land cover)' },
   look: { type: 'string', tool: T + 'atmosphere/look.js', doc: 'cartoon look: "gentle" (the standard) | "bold"' },
   timeOfDay: { type: 'string', doc: 'default time: midday | morning | afternoon | golden | night' },
-  lighting: { type: 'object', tool: T + 'atmosphere/baked-light.js', keys: ['baked'], doc: 'fixed sun with baked shadows/AO: { "baked": "midday" }' },
+  lighting: { type: 'object', tool: T + 'atmosphere/baked-light.js', keys: ['baked', 'sun', 'cellM', 'marginM', 'reachM', 'maxTexels', 'windowM', 'windowMoveM'], doc: 'fixed sun with baked shadows/AO: { "baked": "midday" }' },
   post: { type: 'any', tool: T + 'atmosphere/post.js', doc: 'hero post chain: bloom, grade, vignette' },
   atmosphere: { type: 'object', keys: ['fogNearM', 'fogFarM', 'fogFarRealM', 'lakeMist'], doc: 'fog distances and lake mist' },
   vista: { type: 'object', tool: T + 'atmosphere/vista.js', keys: ['rock', 'snow', 'meadow', 'forest', 'haze', 'ridgeInk', 'clouds'], doc: 'distance detail, aerial haze, ridge ink, cartoon cumulus' },
@@ -63,11 +71,11 @@ export const SCENE_FIELDS = {
   assets: { type: 'string', tool: T + 'packs/blender-kits.js', doc: 'Blender kit: models/scenery/regional.json or coastal.json' },
   extraAssets: { type: 'array', tool: T + 'packs/blender-kits.js', doc: 'more Blender kits merged in' },
   packs: { type: 'array', tool: T + 'packs/index.js', doc: 'procedural regional packs: northeast | northern-rockies' },
-  vegetation: { type: 'object', tool: T + 'vegetation/forest.js', keys: ['layout', 'species', 'trees', 'shrubs', 'cover', 'edge', 'canopyM', 'treeScale', 'coverScale', 'density', 'treeDensity', 'forestDensity', 'vergeDensity', 'treelineM', 'rich', 'coverBoost', 'tierKeep', 'windows', 'yardTrees'], doc: 'planting: layout "forest-edge" for continuous forest' },
+  vegetation: { type: 'object', tool: T + 'vegetation/forest.js', keys: ['layout', 'species', 'trees', 'shrubs', 'cover', 'edge', 'canopyM', 'treeScale', 'coverScale', 'density', 'treeDensity', 'forestDensity', 'vergeDensity', 'treelineM', 'rich', 'coverBoost', 'tierKeep', 'windows', 'yardTrees', 'zones'], doc: 'planting: layout "forest-edge" for continuous forest; "zones": species by elevation band and aspect from a pack (data-driven mountain planting)' },
   water: { type: 'object', tool: T + 'materials/surfaces.js', keys: ['style', 'lakeReachM', 'nearRouteM'], doc: '"lake" style: ripples and treeline reflection, no surf' },
 
   // road and roadside
-  road: { type: 'object', tool: T + 'materials/road-surface.js', keys: ['surface', 'zones'], doc: 'road surface by stretch: fresh, worn, patched, chip seal, frost-heaved …' },
+  road: { type: 'object', tool: T + 'materials/road-surface.js', keys: ['surface', 'zones', 'markings'], doc: 'road surface by stretch: fresh, worn, patched, chip seal, frost-heaved …; markings "eu": white dashed centre and edges; "fr": French rules in metres (T1 centre, T2 edges, solid on blind bends, villages)' },
   roadAlign: { type: 'object', keys: ['curve', 'streets', 'bankM'], doc: 'city: smooth the route and street profiles' },
   roadside: { type: 'array', tool: T + 'roadside/guardrail.js', keys: ['fromM', 'toM', 'side'], doc: 'post-and-rail guardrail stretches' },
   verge: { type: 'object', tool: T + 'roadside/verge.js', keys: ['markers', 'poles', 'posts', 'debris', 'reachM'], doc: 'mile markers, snow poles, delineators, rockfall' },
@@ -86,7 +94,12 @@ export const SCENE_FIELDS = {
 
   // life
   traffic: { type: 'object', tool: T + 'life/traffic.js', keys: ['perMinute', 'mix'], doc: 'two-lane traffic; 4/min is light' },
-  life: { type: 'object', tool: T + 'life/', keys: ['kit', 'lighthouses', 'cattle', 'moments', 'goats', 'bighorn', 'marmots', 'squirrels', 'bears', 'ducks', 'ravens', 'eagles'], doc: 'wildlife (mountains) or coast life (birds, cattle, lighthouse); "kit" picks one explicitly' },
+  life: { type: 'object', tool: T + 'life/', keys: ['kit', 'lighthouses', 'cattle', 'moments', 'goats', 'bighorn', 'marmots', 'squirrels', 'bears', 'ducks', 'ravens', 'eagles', 'cows', 'sheep', 'name'], doc: 'wildlife (mountains) or coast life (birds, cattle, lighthouse); "kit" picks one explicitly' },
+  reflectorPosts: { type: 'boolean', tool: T + 'roadside/details.js', doc: 'false: no white reflector posts every 90 m (the verge kit has the road\'s own delineators)' },
+  switchbacks: { type: 'boolean', tool: T + 'landscape/real-terrain.js', doc: 'real terrain: one bank between close legs of a switchback, the inside of tight turns at the lower level (Alpe d\'Huez)' },
+  hairpinWalls: { type: 'object', tool: T + 'structures/hairpin-walls.js', keys: ['minDropM', 'parapetM', 'color'], doc: 'dry-stone retaining walls under the upper leg of close switchbacks' },
+  groundMesh: { type: 'object', tool: 'js/world/stylized-terrain.js', keys: ['fineCells'], doc: 'cells across the finest 96 m ground patch (16 = 6 m; 32 = 3 m for hairpin roads)' },
+  raceDay: { type: 'object', tool: T + 'life/race-day.js', keys: ['crowd', 'camps', 'barriers', 'kom', 'kmToGo', 'flammeRouge', 'finishM', 'helicopter', 'noCrowd', 'paint', 'paintWords', 'peopleReachM', 'cardReachM', 'campReachM'], doc: 'race day: crowds, flags, camper vans, barriers, banners, finish gantry, TV helicopter (no traffic)' },
   visitors: { type: 'object', tool: T + 'life/visitors.js', keys: ['spots', 'lookouts', 'walking'], doc: 'people at overlooks and sites' },
 
   // city kit (authored-city)

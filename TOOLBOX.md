@@ -19,7 +19,7 @@ Decided 16 Nov 2026. Every biome preset already has it:
 
 | | Standard |
 | --- | --- |
-| Look | `"look": "gentle"`: the lean cartoon style, with toon bands, cool shadows, warm light and ink outlines near the rider |
+| Look | gentle |
 | Light | `"lighting": { "baked": "midday" }`: a fixed sun with baked shadows and AO. One time of day per route, `"timeOfDay": "midday"` |
 | Camera | Chase only |
 | Distance | Vista kit (`"vista"`) wherever there are mountains or long views |
@@ -95,18 +95,20 @@ js/world/toolbox/
 
 | Value | Module | Use for |
 | --- | --- | --- |
-| `real-mountain`, `real-coast` | `landscape/real-terrain.js` | Real elevation grid with the road pressed in, gorges bridged, creeks traced. The coast adds the sea and the shoreline. `glaciers`, `burns`, `streams`, `lakeIslands`, `sites`. |
+| `real-mountain`, `real-coast` | `landscape/real-terrain.js` | Real elevation grid with the road pressed in, gorges bridged, creeks traced. The coast adds the sea and the shoreline. `glaciers`, `burns`, `streams`, `lakeIslands`, `sites`. Mapped land cover (`placesFile`) decides forest, meadow, farmland, rock and village ground where the map has it. On switchbacks the ground between two legs is one bank from road edge to road edge, and the inside of a tight turn sits at the lower side's level. |
 | `authored-region` | `landscape/authored-region.js` | Baked USGS grid + lakes (`terrainData`) or authored `formations`, `lakes`, `rivers`, `valley`. |
 | `authored-coast` (default) | `landscape/authored-coast.js` | An authored `coastline`. |
 | `authored-city` | `city/landscape.js` | City data from `build_city.py`. |
-| `wireframe` | `terrain.js` | Road and wire terrain only (Alpe d'Huez, 2b in the workflow). |
+| `wireframe` | `terrain.js` | Road and wire terrain only (a new route before its scenery, 2b in the workflow). |
+
+`groundMesh: { "fineCells": 32 }` draws the ground patches that hold a switchback at 3 m instead of 6 m, so tight hairpins keep the road clear of the ground (QC checks the same mesh).
 
 ### materials
 
 | Module | Scene field | What it does |
 | --- | --- | --- |
 | `materials/surfaces.js` | `palette`, `water`, `vista` | Ground shader: palette by slope, height, shore and canopy, with vista detail far off. Also sea, lake water, lake mist, and scenery decorations (wind on soft plants, foliage, concrete). |
-| `materials/road-surface.js` | `road` | Road kind by stretch: fresh, worn, patched, chip seal, alpine, frost-heaved, tunnel, wet. Costs no draw calls. |
+| `materials/road-surface.js` | `road` | Road kind by stretch: fresh, worn, patched, chip seal, alpine, frost-heaved, tunnel, wet. Costs no draw calls. `markings: "fr"` draws the paint in metres by the French rules (T1 centre 3/10 m, T2 edges 3/3.5 m, short dashes and no edges in villages, solid centre on blind bends with T3 warning dashes, no paint on narrow roads) and adds aggregate, mottling, the paving seam and edge repair strips. |
 | `materials/stonework.js` | (used by structures) | `makeMasonryMaterial({ stones })`: rubble masonry in world space for walls, parapets and portals. |
 
 ### Packs: regional models (`"packs"`)
@@ -114,6 +116,7 @@ js/world/toolbox/
 | Pack | Was | Region | Contents |
 | --- | --- | --- | --- |
 | `northeast` | `adirondack` | Adirondacks / northern New England | white pine, red spruce, hemlock, maple, birch (×3 LOD, fall colour); saplings, goldenrod, blueberry, boulders; houses, camps, store, church, motel, boathouse, dock, canoes, motorboat, poles, mailbox, guardrail |
+| `alps` | – | Western Alps (Alpe d'Huez first) | Norway spruce, silver fir, larch, Scots pine, black pine, arolle, beech, ash, walnut, field maple, downy oak (×3 LOD); hazel, alpenrose, broom, lavender, mountain pine, green alder, juniper, willow; hay and alpine grasses; gentian, arnica, campanula, marguerite, willowherb, martagon, umbels (+ drifts); limestone, gneiss and scree; logs, stumps, moss; hay bales, fences, stone walls, a wayside cross, a trough |
 | `northern-rockies` | `glacier` | Glacier NP / northern Rockies | cedar, hemlock, spruce, subalpine fir, lodgepole, larch, aspen, snags (×3 LOD), krummholz; logs, stumps, moss, stones; grasses, shrubs, alder; 8 wildflowers + drifts; talus. Near trees get the bark/foliage surface shader |
 | Blender `coastal.json` | `"assets"` | Big Sur first | cypress, pine, shrubs, rocks, outcrops, grass, flowers, succulent, poppy, lupine, bench, bridge |
 | Blender `regional.json` | `"extraAssets"` | all early routes | broadleaf, fir, palm, yucca, sage, fern, alpine flowers, viaduct |
@@ -129,7 +132,7 @@ js/world/toolbox/
 
 | Module | What it does |
 | --- | --- |
-| `vegetation/forest.js` | The `forest-edge` layout: a continuous canopy past a mown verge, in nested near ⊃ mid ⊃ far tiers so trees never jump. View windows (`windows`), clearings for sites and villages. It has two species planners for now: northeast lake forest (`species` weights) and mountain zones (`treelineM`, `divide`, `rich`). |
+| `vegetation/forest.js` | The `forest-edge` layout: a continuous canopy past a mown verge, in nested near ⊃ mid ⊃ far tiers so trees never jump. View windows (`windows`), clearings for sites and villages. It has two species planners: northeast lake forest (`species` weights) and mountain zones (`treelineM`, `divide`, `rich`). Mountain species come from data, `vegetation.zones`: bands by elevation with shady, sunny and wet mixes, alpine and broadleaf lists, and roles mapping the planner's needs (snag, log, krummholz…) to the pack's models. Without `zones` the Glacier defaults apply. |
 | `vegetation/tree-cards.js` | Far tree cards: camera-facing silhouettes that carry the forest past the real trees (Balanced and High). |
 | `stylized-terrain.js` (scatter) | Other layouts: plants scattered per tile from `trees`, `shrubs` and `cover`, with ground-cover tiles near the camera. |
 
@@ -139,6 +142,10 @@ js/world/toolbox/
 | --- | --- | --- |
 | `structures/settlement.js` | `towns`, `camps`, `poles` | Villages facing the road, lakeside camps with docks and boats, poles with wires, mailboxes. Planned from the real shoreline (forest-edge layout). |
 | `structures/mountain-road.js` | `mountainRoad` (was `glacier`) | Masonry guardwalls on the drops, tunnels with window galleries, arch viaducts, waterfalls (onto the road or in the cliffs), culverts, snowbanks, parking. `buildings` are named models (the Going-to-the-Sun lodges for now). |
+| `structures/footprints.js` | `buildings`, `buildingStyles` | Real buildings from map footprints (`placesFile`): walls from the footprint, gabled or hipped roofs on its oriented box, flat roofs on blocks; churches with towers, a tent church, barns, chalets with balconies. Styles by stretch of road; merged per 3 km, hidden past a reach. |
+| `structures/cables.js` | `cables` | Ski lifts (pylons, stations, chairs and cabins) and power lines (poles, lattice towers) from the map, with sagging wires. |
+| `structures/dam.js` | `dams` | A concrete dam wall along a mapped crest. |
+| `structures/hairpin-walls.js` | `hairpinWalls` | Dry-stone retaining walls under the upper leg where two legs of a switchback climb close together. |
 | `structures/arch-bridges.js` | (real terrain) | A deck and parapets over every gorge, and open-spandrel concrete arches on the deep ones. `bridgeColors` restyles them, for example as masonry. |
 
 ### roadside
@@ -146,7 +153,8 @@ js/world/toolbox/
 | Module | Scene field | What it does |
 | --- | --- | --- |
 | `roadside/details.js` | `signs`, `lookouts`, `bridges` | Guide, warning, DEC and diamond signs; turnouts; bridge decks bent to the GPX. Also `roadFrame()`, the outbound-road frame every kit uses to place things by distance and side. |
-| `roadside/verge.js` | `verge` | Mile or km markers, snow poles, delineator posts, rockfall on the shoulder, by stretch. |
+| `roadside/verge.js` | `verge` | Mile or km markers, snow poles, delineator posts, rockfall on the shoulder, by stretch. `markers.style: "fr"` draws French *bornes* with coloured caps by stretch. |
+| `roadside/boards.js` | `boards` | Boards beside the road: hairpin bend signs (number, altitude, winners), town entry and exit, col summits, info. `tools/place_boards.py` places towns and cols from the map. |
 | `roadside/guardrail.js` | `roadside` | Post-and-rail guardrail by stretch, with gaps at overlooks and on bridges. |
 
 ### Atmosphere
@@ -154,7 +162,7 @@ js/world/toolbox/
 | Module | Scene field | What it does |
 | --- | --- | --- |
 | `atmosphere/look.js` | `look` | The cartoon look: three toon bands, cool shadows and warm light, ink outlines near the rider. `gentle` is the standard. |
-| `atmosphere/baked-light.js` | `lighting` | A fixed sun with a baked shadow-height map and AO. Only moving things cast live shadows. |
+| `atmosphere/baked-light.js` | `lighting` | A fixed sun with a baked shadow-height map and AO. Only moving things cast live shadows. On long routes `windowM` bakes a window around the rider and re-bakes as it moves. |
 | `atmosphere/vista.js` | `vista` | Rock ribs, ledges and scree, snow in gullies, meadow mottle, forest crowns far off, aerial haze, ridge ink, cartoon cumulus. Costs no extra draw calls. |
 | `atmosphere/haze.js` | (with vista) | Height fog: thick in the valleys, thin on the ridges. |
 | `atmosphere/weather.js` | `weather` | Clear, marine layer or valley fog, clouds with sweeping shadows, rain on a wet road, wildfire smoke, wind. |
@@ -165,9 +173,10 @@ js/world/toolbox/
 | Module | Scene field | What it does |
 | --- | --- | --- |
 | `life/traffic.js` | `traffic` | Two-lane traffic both ways: overtaking, waiting, pulling into overlooks. `mix` adds kinds such as `jammer`. |
-| `life/wildlife.js` | `life` (kit `wildlife`, the default on real mountains) | Goats, bighorn, marmots, squirrels, a bear, ducks, ravens and an eagle at `moments` or in zones. |
+| `life/wildlife.js` | `life` (kit `wildlife`, the default on real mountains) | Goats, bighorn, marmots, squirrels, a bear, ducks, ravens, an eagle, alpine cows and sheep at `moments` or in zones. |
 | `life/coast-life.js` | `life` (kit `coast`, the default on a real coast) | Pelicans, gulls, a condor, grazing cattle, lighthouses. Its bird geometry is shared with wildlife. |
 | `life/visitors.js` | `visitors` | People at overlooks and sites, standing or wandering. |
+| `life/race-day.js` | `raceDay` | Race day: crowds by stretch (cheering people near, crowd cards far, an orange corner), fan flags, camper vans, tents and cars, crowd barriers, painted words on the road, polka-dot summit banners, km-to-go banners, the red flame, the finish gantry and a TV helicopter. Generic colours and words, no brands. |
 
 ### city (`authored-city`)
 
@@ -210,6 +219,7 @@ Some Pittsburgh content is still in code: stadiums, the fountain, USS Requin and
 | `npm run gallery` | Renders `tools/toolbox-gallery.html` to `tools/snapshots/toolbox-gallery.png`. The page shows every model with triangles, size and a 1.8 m person for scale, plus surfaces, every palette and every scene field with the routes that use it. Open it live at `localhost:8000/tools/toolbox-gallery.html` after `npm start` |
 | `npm run presets` | Rebuilds `routes/presets/` from the source routes |
 | `npm run guard -- record <dir>` then `npm run guard -- compare <a> <b>` | The refactor guard: renders fixed shots on every route with a frozen clock and seeded random, then compares PNGs pixel for pixel and every object's geometry, transforms and material. Run it before and after moving shared code |
+| `python3 tools/fetch_osm_corridor.py <id>` then `python3 tools/build_places.py <id>` and `python3 tools/place_boards.py <id>` | Real places: fetches the map in a corridor along the route (OSM API tiles, cached), bakes land cover, buildings, lifts, power lines and dams into `routes/scenes/<id>-places.bin.gz`, and places town and col boards |
 | `npm run snap`, `npm run qc`, `npm run qc:clipping` | As before (see `claude/scene-snapshots.md` and `claude/course-qc.md`) |
 
 `npm run snap` also takes:
@@ -224,19 +234,19 @@ Some Pittsburgh content is still in code: stadiums, the fountain, USS Requin and
 
 | Toolbox part | Route 28 | Big Sur | Going-to-the-Sun | Pittsburgh | Zion | Alpe d'Huez |
 | --- | --- | --- | --- | --- | --- | --- |
-| Terrain | authored-region (USGS bake) | real-coast | real-mountain | authored-city | authored-region | wireframe |
-| Packs | northeast | Blender coastal | northern-rockies + Blender | Blender | Blender regional | – |
-| Forest-edge planting | ✓ | – | ✓ (rich) | – | – | – |
-| Settlement (towns, camps, poles) | ✓ | – | – | – | – | – |
-| Mountain-road structures | – | – | ✓ | – | – | – |
-| Arch bridges | – | ✓ | ✓ (masonry) | city bridges | – | – |
-| Road surface / verge | – | – | ✓ / ✓ | – | – | – |
+| Terrain | authored-region (USGS bake) | real-coast | real-mountain | authored-city | authored-region | real-mountain + map land cover |
+| Packs | northeast | Blender coastal | northern-rockies + Blender | Blender | Blender regional | alps |
+| Forest-edge planting | ✓ | – | ✓ (rich) | – | – | ✓ (zones) |
+| Settlement (towns, camps, poles) | ✓ | – | – | – | – | footprints, lifts, power lines, dam |
+| Mountain-road structures | – | – | ✓ | – | – | ✓ + hairpin walls |
+| Arch bridges | – | ✓ | ✓ (masonry) | city bridges | – | ✓ |
+| Road surface / verge | – | – | ✓ / ✓ | – | – | ✓ / ✓ (French) |
 | Guardrail (`roadside`) | – | ✓ | – | – | ✓ | – |
-| Look | gentle | – | gentle | – | – | – |
-| Baked light | – | – | – | golden | – | – |
-| Vista kit | – | – | ✓ | – | – | – |
-| Weather (presets offered) | all four | all four | valley fog, peak clouds | river fog, clouds | all four | – |
-| Traffic / life / visitors | – | ✓ / coast / – | ✓ / wildlife / ✓ | city life | – | – |
-| Post (bloom, grade) | – | ✓ | ✓ | ✓ | – | – |
+| Look | gentle | – | gentle | – | – | gentle |
+| Baked light | – | – | – | golden | – | midday (windowed) |
+| Vista kit | – | – | ✓ | – | – | ✓ |
+| Weather (presets offered) | all four | all four | valley fog, peak clouds | river fog, clouds | all four | clear, clouds |
+| Traffic / life / visitors | – | ✓ / coast / – | ✓ / wildlife / ✓ | city life | – | race day / wildlife / – |
+| Post (bloom, grade) | – | ✓ | ✓ | ✓ | – | ✓ |
 
 The full review, with duplicates and follow-ups, is in `docs/toolbox/INVENTORY.md`.

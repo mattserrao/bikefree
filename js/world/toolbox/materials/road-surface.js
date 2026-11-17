@@ -16,6 +16,14 @@
 //   "pavedM": 6      the paved width (the rest of the 7 m strip becomes a gravel shoulder; edge lines move in)
 //   "centre": 0      the centre line (1 painted, .4 faded and broken, 0 none)
 //   "gravel": .6     loose gravel spread over the lanes in patches
+//
+// French roads ("markings": "fr"): the paint is drawn here in metres by the French rules instead of coming from
+// the road's texture — a white T1 centre line (3 m on, 10 m off), T2 edge lines (3 m on, 3.5 m off) set in from
+// the paving edge, short dashes and no edge lines through villages (town boards), a solid centre line round
+// bends you can't see through and on hairpins, with the T3 warning dashes (3 m on, 1.33 m off) before it, no
+// edge lines under 6.6 m of paving and no centre line under 5.2 m (or where a zone says "centre": 0). The
+// asphalt gets the detail of the Alpine reference photos: light aggregate in a darker binder, bleached and oily
+// mottling, the paving seam down the middle, and repair strips along the edges.
 import * as THREE from '../../../../vendor/three.module.min.js';
 
 // tone (×brightness), warm (toward brown), wear (polished wheel tracks), patches, cracks, edge (crumbling
@@ -32,9 +40,51 @@ const KEYS = ['tone', 'warm', 'wear', 'patches', 'cracks', 'edge', 'fade', 'spec
 const LOOK = { pavedM: null, centre: 1, gravel: 0 };   // defaults for the look-only settings (pavedM: full width)
 const MAX_ZONES = 24;
 
+const MARK_BIN = 2, MARK_W = 4096;
+const CENTRE = { none: 0, t1: 1, town: 2, t3: 3, solid: 4 };
+
+/** French markings along the road, one texel per 2 m: R = centre line kind, G = edge lines (dashed / solid). */
+export function frenchMarkings(road, route, index, { widthM = 7, boards = [] } = {}) {
+  const total = route.dist[route.dist.length - 1], n = Math.ceil(total / MARK_BIN) + 1;
+  const H = Math.ceil(n / MARK_W), data = new Uint8Array(MARK_W * H * 4);
+  const zones = road.zones || [];
+  const zoneAt = (s) => { const z = { pavedM: road.pavedM ?? widthM, centre: road.centre ?? 1, edges: road.edges ?? true, tunnel: false }; for (const q of zones) if (s >= q.fromM && s < q.toM) { if (q.pavedM != null) z.pavedM = q.pavedM; if (q.centre != null) z.centre = q.centre; if (q.edges != null) z.edges = q.edges; if (q.surface === 'tunnel') z.tunnel = true; } return z; };
+  // villages: between a town board and its end board
+  const towns = [];
+  boards.forEach((b, i) => { if (b.kind !== 'town') return; const e = boards.slice(i + 1).find((x) => x.kind === 'townEnd' && x.title === b.title); towns.push([b.atM, e ? e.atM : b.atM + 500]); });
+  const inTown = (s) => towns.some(([a, b]) => s >= a && s <= b);
+  // bends you can't see through: the heading turns more than 40° within 25 m either side
+  let j = 0;
+  const at = (s) => { while (j > 0 && route.dist[j] > s) j--; while (j < route.dist.length - 2 && route.dist[j + 1] < s) j++; return j; };
+  const heading = (s) => { const a = at(Math.max(0, s - 4)), b = at(Math.min(total, s + 4)) + 1; return Math.atan2(index.zs[b] - index.zs[a], index.xs[b] - index.xs[a]); };
+  const turn = new Uint8Array(n);
+  for (let k = 0; k < n; k++) {
+    const s = k * MARK_BIN;
+    let d = Math.abs(heading(Math.min(total, s + 25)) - heading(Math.max(0, s - 25))); if (d > Math.PI) d = 2 * Math.PI - d;
+    turn[k] = d > .7 ? 1 : 0;
+  }
+  // solid round the bend and 20 m beyond it, the warning dashes for 40 m before and after that
+  const solid = new Uint8Array(n), warn = new Uint8Array(n);
+  for (let k = 0; k < n; k++) if (turn[k]) for (let q = Math.max(0, k - 10); q <= Math.min(n - 1, k + 10); q++) solid[q] = 1;
+  for (let k = 0; k < n; k++) if (solid[k]) for (let q = Math.max(0, k - 20); q <= Math.min(n - 1, k + 20); q++) warn[q] = 1;
+  for (let k = 0; k < n; k++) {
+    const s = k * MARK_BIN, z = zoneAt(s), town = inTown(s);
+    let c = z.centre > 0 && z.pavedM >= 5.2 ? CENTRE.t1 : CENTRE.none;
+    if (c && town) c = CENTRE.town;
+    if (c && warn[k]) c = CENTRE.t3;
+    if (c && (solid[k] || z.tunnel)) c = CENTRE.solid;
+    const edge = z.edges !== false && z.pavedM >= 6.6 && !town ? (z.tunnel ? 2 : 1) : 0;
+    data.set([c * 50, edge * 100, 0, 255], k * 4);
+  }
+  const tex = new THREE.DataTexture(data, MARK_W, H);
+  tex.magFilter = tex.minFilter = THREE.NearestFilter; tex.generateMipmaps = false; tex.needsUpdate = true;
+  return { texture: tex, dims: new THREE.Vector3(MARK_W, H, MARK_BIN) };
+}
+
 /** Add the surface to a road material (u across the road 0…1, v = metres / repeatM along it). */
-export function decorateRoad(material, road, { widthM = 7, repeatM = 24 } = {}) {
+export function decorateRoad(material, road, { widthM = 7, repeatM = 24, marks = null } = {}) {
   if (!road) return material;
+  const fr = !!marks;
   const params = (z) => { const k = { ...LOOK, ...(SURFACES[z.surface] || SURFACES.worn) }; for (const key of KEYS) if (z[key] != null) k[key] = z[key]; k.pavedM ??= widthM; return k; };
   const base = params({ surface: road.surface || 'worn' });
   const zones = (road.zones || []).slice(0, MAX_ZONES).map((z) => ({ ...z, p: params(z) }));
@@ -51,12 +101,14 @@ export function decorateRoad(material, road, { widthM = 7, repeatM = 24 } = {}) 
     rsD: { value: pack((z) => new THREE.Vector4(z.p.gravel, 0, 0, 0)) },
     rsDims: { value: new THREE.Vector2(widthM, repeatM) },
   };
+  if (fr) { uniforms.rsMarks = { value: marks.texture }; uniforms.rsMarksDims = { value: marks.dims }; }
   const prev = material.onBeforeCompile, prevKey = material.customProgramCacheKey();
   material.onBeforeCompile = (shader, renderer) => {
     prev.call(material, shader, renderer);
     Object.assign(shader.uniforms, uniforms);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
+        ${fr ? '#define RS_FR\n        uniform sampler2D rsMarks; uniform vec3 rsMarksDims;' : ''}
         uniform vec4 rsBaseA; uniform vec4 rsBaseB; uniform vec4 rsBaseC; uniform vec4 rsBaseD;
         uniform vec4 rsSpan[${MAX_ZONES}]; uniform vec4 rsA[${MAX_ZONES}]; uniform vec4 rsB[${MAX_ZONES}]; uniform vec4 rsC[${MAX_ZONES}]; uniform vec4 rsD[${MAX_ZONES}];
         uniform vec2 rsDims;
@@ -83,7 +135,7 @@ export function decorateRoad(material, road, { widthM = 7, repeatM = 24 } = {}) 
           float vary = rsNoise(vec2(s / 310., 4.2));
           float tone = A.x * (.95 + vary * .1), warm = A.y, wearK = A.z, patchK = A.w * (.6 + vary * .8);
           float crackK = B.x * (.7 + vary * .6), edgeK = B.y, fadeK = B.z, speckK = B.w, runK = C.x, grime = C.y;
-          vec3 col = diffuseColor.rgb;
+          vec3 col = diffuseColor.rgb;${fr ? ' vec3 paintCol = col;' : ''}
           float lum = dot(col, vec3(.2126, .7152, .0722));
           float paintRaw = smoothstep(.16, .3, lum);                           // the lines (bright on dark asphalt)
           float paint = paintRaw;
@@ -95,6 +147,22 @@ export function decorateRoad(material, road, { widthM = 7, repeatM = 24 } = {}) 
           float paved = C.z * .5;                                              // paved half-width (m)
           float narrowed = smoothstep(.05, .2, W0 * .5 - paved);
           paint *= mix(1., keepCentre, centreLine) * (1. - edgeLine * narrowed);
+          ${fr ? `          {
+            // the French markings, in metres (frenchMarkings): white paint on a plain road texture
+            float bin = floor(max(s, 0.) / rsMarksDims.z);
+            vec4 mk = texture2D(rsMarks, vec2((mod(bin, rsMarksDims.x) + .5) / rsMarksDims.x, (floor(bin / rsMarksDims.x) + .5) / rsMarksDims.y));
+            float ck = floor(mk.r * 255. / 50. + .5), ek = floor(mk.g * 255. / 100. + .5);
+            float pxs = max(rsPx2.y, 1e-4);
+            // a dash of length on in every period, antialiased at its ends
+            #define RS_DASH(per, on) (smoothstep(0., pxs, mod(s, per)) * (1. - smoothstep(on - pxs, on, mod(s, per))))
+            float cOn = ck > 3.5 ? 1. : ck > 2.5 ? RS_DASH(4.33, 3.) : ck > 1.5 ? RS_DASH(6.5, 1.5) : ck > .5 ? RS_DASH(13., 3.) : 0.;
+            float centreP = rsLine(xc, .12, px) * cOn * keepCentre;   // a zone's faded centre still breaks up
+            float eOn = ek > 1.5 ? 1. : ek > .5 ? RS_DASH(6.5, 3.) : 0.;
+            float edgeP = rsLine(abs(xc) - (C.z * .5 - .35), .18, px) * eOn;
+            paintRaw = 0.; paint = max(centreP, edgeP);
+            // road paint: a little off-white, dirtier toward the shoulder
+            paintCol = vec3(.80, .79, .74) * (1. - edgeP * .06);
+          }` : ''}
           vec3 bare = texture2D(map, vec2(.3, vMapUv.y)).rgb;                   // the asphalt between the lines
           vec3 asphalt = vec3(dot(mix(col, bare, paintRaw), vec3(.2126, .7152, .0722))) * tone;      // the surface under the paint
           asphalt = mix(asphalt, asphalt * vec3(1.08, 1.0, .88), warm);
@@ -123,12 +191,32 @@ export function decorateRoad(material, road, { widthM = 7, repeatM = 24 } = {}) 
           float tcD = (tc - tcI) * (6. + 14. * (1. - crackK * .7)) + (rsNoise(vec2(x * .8, tcI)) - .5) * 1.1;
           float trans = rsLine(tcD, .05, px) * step(rsHash(vec2(tcI, 9.1)), crackK) * smoothstep(.2, .45, rsNoise(vec2(x * .5, tcI + 3.)));
           float longi = rsLine(x - lane + (rsNoise(vec2(s * .09, 1.)) - .5) * .5, .05, px) * smoothstep(.45, .6, rsNoise(vec2(s * .05, 2.))) * crackK * .7;
+          ${fr ? `          longi = 0.;   // French roads: the centre joint is the paving seam below, not a crack
+          trans *= .55; // and sealed cracks are fewer and fainter (the reference roads are well kept)` : ''}
           longi = max(longi, rsLine(x - W * .1 + (rsNoise(vec2(s * .11, 5.)) - .5) * .6, .04, px) * smoothstep(.4, .6, rsNoise(vec2(s * .04, 6.))) * crackK);
           asphalt *= 1. - max(trans, longi) * .55;
           // chip seal: a speckle of light and dark stones (fades to its average far off)
           float sp = rsNoise(vec2(x, s) * 16.) * .6 + rsNoise(vec2(x, s) * 37.) * .4;
           float spSmall = 1. - smoothstep(.015, .05, px);
           asphalt *= 1. + (mix(.5, sp, spSmall) - .5) * .22 * speckK;
+          ${fr ? `          {
+            // aggregate: light grey stones a centimetre or two across in a darker binder (fades to its mean far off)
+            float near = 1. - smoothstep(.006, .04, px);
+            float ag = rsNoise(vec2(x, s) * 55.) * .55 + rsNoise(vec2(x, s) * 131.) * .45;
+            float stones = smoothstep(.6, .78, ag);
+            asphalt *= 1. + (mix(.2, stones, near) - .2) * .3;
+            // bleached and oily mottling, a metre to a few metres across
+            float mot = rsNoise(vec2(x * .33, s * .16)) * .6 + rsNoise(vec2(x * .9, s * .45)) * .4;
+            asphalt *= .93 + mot * .14;
+            // the seam down the middle where the two passes of the paver meet: a slightly darker, straighter line
+            asphalt *= 1. - rsLine(xc - .03, .04, px) * .1 * (.4 + crackK);
+            // repair strips along the edges: newer, darker asphalt a metre or so wide, tens of metres long
+            float rs = floor(s / 61.), rside = step(.5, rsHash(vec2(rs, 4.4))) * 2. - 1.;
+            float rIn = step(rsHash(vec2(rs, 2.2)), patchK * .45) * step(mod(s, 61.), 18. + rsHash(vec2(rs, 3.3)) * 40.);
+            float rw = .9 + rsHash(vec2(rs, 5.5)) * .7, rEdge = C.z * .5 - rw + (rsNoise(vec2(s * .3, rs)) - .5) * .12;
+            float strip = rIn * smoothstep(rEdge - px, rEdge + px, xc * rside);
+            asphalt = mix(asphalt, asphalt * vec3(.78, .79, .82), strip);
+          }` : ''}
           // the edges: dust and grit along the shoulders, crumbling in bites where the frost gets in
           float e = min(x, W - x);
           float bite = rsNoise(vec2(s * .35, x < lane ? 1. : 7.)) * .55 * edgeK;
@@ -159,11 +247,12 @@ export function decorateRoad(material, road, { widthM = 7, repeatM = 24 } = {}) 
           // the edge lines, repainted just inside the narrower paving
           float newEdge = rsLine(abs(xc) - (paved - .22), .11, px) * narrowed;
           vec3 edgePaint = vec3(.82, .79, .68) * (1. - damp * .25);
-          diffuseColor.rgb = mix(mix(asphalt, col * (1. - damp * .25), paintLeft), edgePaint, newEdge * (1. - fadeK * .5 * rsNoise(vec2(x * 3., s * .4))));
+          ${fr ? `          newEdge = 0.;   // the French edge lines are drawn above, by the rules` : ''}
+          diffuseColor.rgb = mix(mix(asphalt, ${fr ? 'paintCol' : 'col'} * (1. - damp * .25), paintLeft), edgePaint, newEdge * (1. - fadeK * .5 * rsNoise(vec2(x * 3., s * .4))));
         }
         #endif`);
   };
-  material.customProgramCacheKey = () => `${prevKey}|road-surface`;
+  material.customProgramCacheKey = () => `${prevKey}|road-surface${fr ? '-fr' : ''}`;
   material.needsUpdate = true;
   return material;
 }

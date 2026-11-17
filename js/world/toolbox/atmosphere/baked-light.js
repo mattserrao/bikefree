@@ -54,6 +54,8 @@ export const BAKE_DEFAULTS = {
   stepMs: 2,            // re-bakes while riding: GPU work per frame (ms, from the calibration behind the loader)
   prepSliceMs: 40,      // behind the loader: work per frame
   prepTimeoutS: 120,    // behind the loader at most this long; then the ride starts and the bake goes on in slices
+  windowM: 0,           // long routes (Alpe d'Huez, 127 km): bake only this square round the rider, re-bake as it moves
+  windowMoveM: 0,       //   re-bake once the rider is this far from the baked centre (default: a quarter of the window)
 };
 
 const OCC_LAYER = 30;
@@ -349,6 +351,11 @@ export class BakedLighting {
     else {
       if (!this._job && this._frame % SWEEP_EVERY === 1) {
         this.sweep();
+        // a window bake follows the rider: once it has moved far enough, the window is stale
+        if (this.opts.windowM && this._bakedCentre) {
+          const c = this.world.camera.position, move = this.opts.windowMoveM || this.opts.windowM / 4;
+          if (Math.hypot(c.x - this._bakedCentre.x, c.z - this._bakedCentre.z) > move) this._bakedSig = null;
+        }
         if (!this._busy() && this._settled >= SETTLE_SWEEPS && this._sig !== this._bakedSig) this._startJob('ride');
       }
       if (this._job) this._rideStep();
@@ -572,6 +579,13 @@ export class BakedLighting {
     let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
     for (let i = 0; i < ix.length; i++) { x0 = Math.min(x0, ix[i]); x1 = Math.max(x1, ix[i]); z0 = Math.min(z0, iz[i]); z1 = Math.max(z1, iz[i]); }
     x0 -= O.marginM; x1 += O.marginM; z0 -= O.marginM; z1 += O.marginM;
+    // a long route bakes a window round the rider (the rest is unshadowed and far off, under the haze)
+    let centre = null;
+    if (O.windowM) {
+      const c = w.camera.position, h = O.windowM / 2;
+      centre = { x: c.x, z: c.z };
+      x0 = Math.max(x0, c.x - h); x1 = Math.min(x1, c.x + h); z0 = Math.max(z0, c.z - h); z1 = Math.min(z1, c.z + h);
+    }
     const reach = O.reachM;
     const ex0 = Math.min(x0, x0 + ux * reach), ex1 = Math.max(x1, x1 + ux * reach), ez0 = Math.min(z0, z0 + uz * reach), ez1 = Math.max(z1, z1 + uz * reach);
     let cell = O.cellM;
@@ -715,6 +729,7 @@ export class BakedLighting {
       this.uniforms.bfBakeK.value.set(base, O.soft, O.bias, O.normalOffset * cell);
       old?.sun.dispose(); old?.ao.dispose();
       this._bakedSig = sigAtStart;
+      this._bakedCentre = centre;
       this.ready = true; this.bakes++; this.progress = 1;
       cpu += performance.now() - c0;
       this.stats = { ms: Math.round(performance.now() - t0), cpuMs: Math.round(cpu), work: [EW, EH], view: [VW, VH], cell: +cell.toFixed(2), passes, occluders: occluders.length, groundSamples: GN * GM,

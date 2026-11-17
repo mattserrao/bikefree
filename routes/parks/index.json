@@ -121,8 +121,6 @@
     "climbM": 3358,
     "file": "routes/parks/alpedhuez.gpx",
     "oneWay": true,
-    "stage": "draft",
-    "scene": "routes/scenes/alpedhuez.json",
-    "wireframe": true
+    "scene": "routes/scenes/alpedhuez.json"
   }
 ]

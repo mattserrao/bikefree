@@ -29,6 +29,7 @@ export const GUARD_SHOTS = {
   craterlake: ['craterlake@10500'],
   monumentvalley: ['monumentvalley@250'],
   sevenmile: ['sevenmile@7000'],
+  alpedhuez: ['alpedhuez@24480', 'alpedhuez@98300', 'alpedhuez@120800', 'alpedhuez@126700'],
 };
 
 // Objects seeded from Math.random in async load order (they differ run to run on the same code): reported,
@@ -37,7 +38,7 @@ export const NOISY = ['Point State Park fountain', 'Buses', 'Cars', 'People', 'C
 
 // Streamed real terrain (wireframe routes) needs the network and a running clock, so these are only checked
 // to render without errors (no pixel or fingerprint comparison).
-export const LIVE_SHOTS = { alpedhuez: ['alpedhuez@118000'] };
+export const LIVE_SHOTS = {};
 
 const [cmd, ...rest] = process.argv.slice(2);
 if (cmd === 'record') {

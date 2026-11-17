@@ -497,3 +497,7 @@ export function decorateTreeMaterial(material, uniforms) {
   material.customProgramCacheKey = () => `${prevKey}|bf-glacier-trees-1`;
   return material;
 }
+
+// Shared builders for other mountain packs (alps): the same shapes, other species and colours.
+export const MOUNTAIN_BUILDERS = { conifer, whorl, underside, stubs, blades, spikes, daisies, drift, log, stump, mossMat, deadBranch, stone, talus, alder, willow, juniper, krummholz };
+export const SURFACE = { BARK, CEDAR, PINE, ASPEN, ASPENLEAF, LICHEN, DEAD, LEAF };

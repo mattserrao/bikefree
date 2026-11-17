@@ -22,12 +22,29 @@ import { vistaConfig, makeCumulusAtlas } from './toolbox/atmosphere/vista.js';
 import { Verge } from './toolbox/roadside/verge.js';
 import { buildGuardrail } from './toolbox/roadside/guardrail.js';
 import { Visitors } from './toolbox/life/visitors.js';
+import { planFootprints, Footprints } from './toolbox/structures/footprints.js';
+import { Cables } from './toolbox/structures/cables.js';
+import { Dams } from './toolbox/structures/dam.js';
+import { RaceDay } from './toolbox/life/race-day.js';
+import { HairpinWalls } from './toolbox/structures/hairpin-walls.js';
+import { Boards } from './toolbox/roadside/boards.js';
 
 // Tree cards stream in large tiles, at a fraction of the scatter's candidate density.
 const FAR_TREE_TILE_M = 768, FAR_TREE_DENSITY = .3;
 
 // flowers by zone (vegetation.rich): the northern-rockies pack's drifts (toolbox/packs/meta.js)
 const FLOWERS = PACK_META['northern-rockies'].flowerZones;
+// Ground cover by zone for mountain scenes: Going-to-the-Sun's by default, or a pack's from "vegetation.zones"
+// (flowers: the pack's flowerZones; grasses: [name, cutoff] by zone; under: four plants under the trees).
+const GRASSES = {
+  east: [['drygrass', .55], ['bunchgrass', 1]], alpine: [['sedge', .6], ['grass', 1]],
+  subalpine: [['meadowgrass', .4], ['bunchgrass', .7], ['grass', 1]], valley: [['meadowgrass', .45], ['sedge', .75], ['grass', 1]],
+};
+function coverZones(Z) {
+  return { flowers: Z?.pack ? PACK_META[Z.pack].flowerZones : FLOWERS, grasses: { ...GRASSES, ...(Z?.grasses || {}) },
+    under: Z?.under || ['fern', 'huckleberry', 'sedge', 'mossmat0'], dryBelowM: Z?.dryBelowM || 0 };
+}
+const pickGrass = (list, k) => { for (const [n, c] of list) if (k < c) return n; return list.at(-1)[0]; };
 
 // Ground cover streams in small tiles: full density within COVER_FULL_M of the camera, half out to COVER_RANGE_M.
 const COVER_TILE_M = 96, COVER_FULL_M = 110, COVER_RANGE_M = 220;
@@ -81,11 +98,19 @@ export class StylizedTerrain {
     this.farUniform = { value: new THREE.Vector4(opts.farInner ?? 1500, opts.farBand ?? 400, 0, 0) };
     // Northern forest scenes: a continuous canopy, villages and camps planned from the real shoreline
     this.forestLayout = this.config.vegetation?.layout === 'forest-edge';
+    // real buildings from the map (toolbox/structures/footprints.js): planned now so the trees keep clear of them
+    this.footprintPlan = this.landscape.real && this.config.places?.buildings ? planFootprints(this.config, this.proj, routeIndex) : null;
+    if (this.footprintPlan) {
+      const yards = makeClearings(this.footprintPlan.clearings);
+      const prev = this.landscape.canPlant;
+      this.landscape.canPlant = (x, z) => !yards.at(x, z) && (!prev || prev(x, z));
+    }
     if (this.forestLayout) {
       this.settlementPlan = planSettlement(this.config, this.route, routeIndex, this.landscape);
       // built sites (lodges, visitor centres, parking) are cleared of trees too
       const sites = (this.landscape.sites || []).map((t) => ({ x: t.x, z: t.z, r: Math.hypot(t.hw, t.hl) + 6 }));
-      const clearings = sites.length ? makeClearings([...this.settlementPlan.clearings.items, ...sites]) : this.settlementPlan.clearings;
+      const yards = this.footprintPlan?.clearings || [];
+      const clearings = sites.length || yards.length ? makeClearings([...this.settlementPlan.clearings.items, ...sites, ...yards]) : this.settlementPlan.clearings;
       this.forest = new ForestPlanner(this.config, this.landscape, routeIndex, (x, z) => this.heightAt(x, z), clearings, this.route);
       this.canopyUniform = { value: new THREE.Vector4(0, 160, this.config.vegetation.canopyM ?? 16, 1) };
       this._setCanopyStart();
@@ -102,6 +127,11 @@ export class StylizedTerrain {
       this.kit = kit;
       for (const pack of scenePacks(this.config)) this._addPack(kit, pack);   // regional packs (toolbox/packs)
       if (this.settlementPlan) this.settlement = new Settlement(this.group, this.settlementPlan, kit, this.uniforms);
+      if (this.footprintPlan) this.footprints = new Footprints(this.group, this.footprintPlan, this.landscape, this.config, this.uniforms);
+      // lifts and power lines, dams (toolbox/structures): from the map, when the scene has a places file
+      if (this.config.places && this.config.cables) this.cables = new Cables(this.group, this.config.places, this.landscape, this.proj, this.index, this.config.cables);
+      if (this.config.places?.dams?.length && this.config.dams) this.dams = new Dams(this.group, this.config.places, this.landscape, this.proj, this.config.dams);
+      if (this.config.boards?.length) this.boards = new Boards(this.group, this.route, this.index, this.config.boards);   // bend, town and col boards (toolbox/roadside)
       this._makeLandmarks();
       if (this.landscape.real) this.bridges = new ArchBridges(this.group, this.landscape, this.uniforms);
       // life kit (toolbox/life): wildlife or coast life, by "life.kit" or the landform
@@ -115,6 +145,8 @@ export class StylizedTerrain {
       }
       this.details = new RoadsideDetails(this.group, this.route, this.index, this.landscape, kit, this.uniforms);
       if (this.config.verge && this.landscape.frameAt) this.verge = new Verge(this.group, this.landscape, this.route, this.config.verge);
+      if (this.config.hairpinWalls) this.hairpinWalls = new HairpinWalls(this.group, this.landscape, this.route, this.config.hairpinWalls);   // retaining walls on switchbacks (toolbox/structures)
+      if (this.config.raceDay && this.landscape.frameAt) this.raceDay = new RaceDay(this.group, this.landscape, this.route, this.index, this.uniforms, this.config.raceDay, this.qualityKey);   // race day (toolbox/life)
       if (this.config.visitors && this.landscape.frameAt) this.visitors = new Visitors(this.group, this.landscape, this.route, this.index, this.uniforms, this.config.visitors, this.qualityKey, this.config.lookouts || []);
       if (this.config.mountainRoad) {   // tunnels, masonry guardwalls, arches, waterfalls (toolbox/structures)
         this.landmarks = new MountainRoad(this.group, this.landscape, this.route, this.index, this.proj, this.config, kit, this.uniforms);
@@ -509,7 +541,9 @@ export class StylizedTerrain {
 
   /** A ground patch, built a row at a time (yields between rows so the ride can spread it over frames). */
   *_patchJob(x, z, size) {
-    const S = 16, N = S + 1;
+    // the finest (96 m) patches: 16 cells (6 m); the scene can ask for finer ground where the road turns back on itself
+    const fine = size <= 96 && this.config.groundMesh?.fineCells && this.landscape.fineGroundAt?.(x + 1, z + 1);
+    const S = fine ? this.config.groundMesh.fineCells : 16, N = S + 1;
     const positions = [], colors = [], indices = [], normals = [], realH = [], canopy = [], vk = [];
     const vkOn = this._vkAttr();
     const c = new THREE.Color();
@@ -534,6 +568,12 @@ export class StylizedTerrain {
         // Glacier: subalpine meadows, dark conifer forest below the treeline, talus and rock on the steep ground
         const v = this.landscape.vegetationAt(px, pz);
         c.copy(P.meadow).lerp(P.grass, v.moist).lerp(P.forest, v.forest * .92);
+        // mapped land cover: hay meadows, ploughed and mown fields, villages, scree (palette keys are optional)
+        if (v.lc === 5 && P.farmland) c.lerp(P.farmland, .55 + .3 * vnoise(px / 60, pz / 60));
+        else if ((v.lc === 4 || v.lc === 13) && P.hay) c.lerp(P.hay, .45 + .35 * vnoise(px / 45, pz / 45));
+        else if (v.lc === 10 && P.village) c.lerp(P.village, .35);
+        else if (v.lc === 8 && P.scree) c.lerp(P.scree, .7);
+        else if (v.lc === 7 && P.rock) c.lerp(P.rock, .55);
         c.lerp(P.rock, smoothstep(.5, 1.2, rise) * .7);
         c.lerp(P.sand, (1 - smoothstep(4, 22, coastal)) * .8);   // lake shore gravel
         const ice = this.landscape.glacierAt?.(px, pz) || 0;
@@ -611,12 +651,14 @@ export class StylizedTerrain {
     geometry.boundingSphere.radius += morph + (this.forest ? this.canopyUniform.value.z : 0);
     // an unrendered stand-in (the ground pool draws every patch in one call); QC tools inspect these
     const mesh = new THREE.Mesh(geometry, this.groundMaterial);
-    mesh.userData.patch = { x, z, size };
-    if (!this.groundPool) {
+    mesh.userData.patch = fine ? { x, z, size, fine } : { x, z, size };
+    // the pool's blocks share one vertex layout: finer patches (groundMesh.fineCells) have a pool of their own
+    const poolKey = fine ? 'groundPoolFine' : 'groundPool';
+    if (!this[poolKey]) {
       const attributes = { position: 3, normal: 3, color: 3, aRealH: 1 };
       if (this.forest) attributes.aCanopy = 1;
       if (vkOn) attributes.aVk = 2;
-      this.groundPool = new GroundBlocks(this.group, this.groundMaterial, { vertices: positions.length / 3, indices: Uint32Array.from(indices), attributes });
+      this[poolKey] = new GroundBlocks(this.group, this.groundMaterial, { vertices: positions.length / 3, indices: Uint32Array.from(indices), attributes });
     }
     return mesh;
   }
@@ -670,19 +712,19 @@ export class StylizedTerrain {
           if ((this.landscape.burnAt?.(x, z) || 0) > .5) { add(pick < .45 ? 'fireweed' : pick < .8 ? 'grass' : 'huckleberry', x, y - .06, z, coverScale[0] + k * (coverScale[1] - coverScale[0])); continue; }
           if (vegetation.rich) {
             // drifts of one flower, grass kinds by zone, a brighter strip along the verge
-            if (cover > .45) { if (k < .45 || byRoad) add(k < .5 ? 'fern' : k < .62 ? 'huckleberry' : k < .8 ? 'sedge' : 'mossmat0', x, y - .05, z, coverScale[0] + k * (coverScale[1] - coverScale[0])); continue; }
-            const zone = this.landscape.nearCreek?.(x, z, 14) ? 'creek' : v.east > .5 ? 'east' : v.alpine > .45 ? 'alpine' : v.alpine > .1 || v.moist < .55 ? 'subalpine' : 'valley';
+            const Z = this._coverZones ||= coverZones(vegetation.zones);
+            if (cover > .45) { if (k < .45 || byRoad) add(Z.under[k < .5 ? 0 : k < .62 ? 1 : k < .8 ? 2 : 3], x, y - .05, z, coverScale[0] + k * (coverScale[1] - coverScale[0])); continue; }
+            const zone = this.landscape.nearCreek?.(x, z, 14) ? 'creek' : v.east > .5 || (Z.dryBelowM && (v.south ?? 0) > .45 && y < Z.dryBelowM) ? 'east' : v.alpine > .45 ? 'alpine' : v.alpine > .1 || v.moist < .55 ? 'subalpine' : 'valley';
             const drift = vnoise(x / 16, z / 16) * .7 + vnoise(x / 5, z / 5) * .3;
             const verge = byRoad && byRoad.d < 11.5 ? .3 : 0;
             if (drift + verge > .6) {
-              const list = FLOWERS[zone], cell = vhash(Math.floor(x / 28), Math.floor(z / 28));
+              const list = Z.flowers[zone], cell = vhash(Math.floor(x / 28), Math.floor(z / 28));
               const flower = list[Math.floor(cell * list.length) % list.length];
               add(flower, x, y - .05, z, coverScale[0] + k * (coverScale[1] - coverScale[0]) * .8);
               continue;
             }
             const kind = vnoise(x / 9 + 50, z / 9);
-            const grass = zone === 'east' ? (kind < .55 ? 'drygrass' : 'bunchgrass') : zone === 'alpine' ? (kind < .6 ? 'sedge' : 'grass')
-              : zone === 'subalpine' ? (kind < .4 ? 'meadowgrass' : kind < .7 ? 'bunchgrass' : 'grass') : (kind < .45 ? 'meadowgrass' : kind < .75 ? 'sedge' : 'grass');
+            const grass = pickGrass(Z.grasses[zone === 'creek' ? 'valley' : zone], kind);
             add(grass, x, y - .05, z, .8 + k * .6);
             continue;
           }
@@ -933,7 +975,9 @@ export class StylizedTerrain {
       want.dirty.delete(layer);
       if (layer === 'patches') {
         for (const key of [...this.patches.keys()]) if (!wanted.has(key)) { this.patches.get(key).geometry.dispose(); this.patches.delete(key); }
-        if (this.groundPool) this.groundPool.set(new Map([...this.patches].map(([k, m]) => [k, { ...m.userData.patch, geometry: m.geometry }])));
+        const all = [...this.patches].map(([k, m]) => [k, { ...m.userData.patch, geometry: m.geometry }]);
+        if (this.groundPool) this.groundPool.set(new Map(all.filter(([, p]) => !p.fine)));
+        if (this.groundPoolFine) this.groundPoolFine.set(new Map(all.filter(([, p]) => p.fine)));
       } else {
         const map = layer === 'forest' ? this.forestTiles : layer === 'far' ? this.farTrees : this[layer];
         for (const key of [...map.keys()]) if (!wanted.has(key)) map.delete(key);
@@ -955,7 +999,7 @@ export class StylizedTerrain {
     }
     if (!this.pools[layer]) {
       const flags = layer === 'forest'
-        ? (name, tile) => ({ cast: tile.tier === 0 && !/^(goldenrod|blueberry|mossmat|branch|stone|juniper|fireweed|beargrass|huckleberry|talus)/.test(name), receive: tile.tier === 0 })
+        ? (name, tile) => ({ cast: tile.tier === 0 && !/^(goldenrod|blueberry|mossmat|branch|stone|juniper|fireweed|beargrass|huckleberry|talus|amoss|abranch|astone|ajuniper|alpenrose|lavender|ascree)/.test(name), receive: tile.tier === 0 })
         : (name, tile) => this._scatterFlags(name, tile);
       this.pools[layer] = new InstancePool(this.group, layer === 'cover' ? 'Ground cover' : layer === 'forest' ? 'Forest' : 'Scenery', (n) => this._asset(n), flags);
     }
@@ -1088,7 +1132,7 @@ export class StylizedTerrain {
     // rebuild the ground so every patch knows the real height it morphs toward
     for (const mesh of this.patches.values()) mesh.geometry.dispose();
     this.patches.clear();
-    this.groundPool?.clear();
+    this.groundPool?.clear(); this.groundPoolFine?.clear();
     // rebuild now, not next frame: an empty frame would show the sea plane through the missing ground
     const x = this._lastX, z = this._lastZ;
     this._lastX = Infinity;
@@ -1098,6 +1142,7 @@ export class StylizedTerrain {
   // Beyond the hand-off, stylized stand-ins (mesas, peaks, lakes) would double up with the real ones.
   _cullFar(cx, cz) {
     this.landmarks?.cullWalls?.(cx, cz);
+    this.footprints?.cull(cx, cz);
     this.verge?.cull(cx, cz);
     const limit = this.farUniform.value.x + this.farUniform.value.y * 0.5;
     for (const m of this.landmarkMeshes || []) m.visible = !this.farOn || m.userData.road || Math.hypot(m.position.x - cx, m.position.z - cz) - (m.userData.r || 0) < limit;
@@ -1116,6 +1161,7 @@ export class StylizedTerrain {
     this.traffic?.tick(dt, rider);
     this.life?.tick(dt, camera);
     this.visitors?.tick(dt, camera);
+    this.raceDay?.tick(dt, camera);
   }
 
   setNight(v) {
@@ -1141,7 +1187,7 @@ export class StylizedTerrain {
     this.disposed = true;
     this.scene.remove(this.group);
     for (const mesh of this.patches.values()) mesh.geometry.dispose();
-    this.groundPool?.dispose();
+    this.groundPool?.dispose(); this.groundPoolFine?.dispose();
     for (const pool of Object.values(this.pools || {})) pool.dispose();
     this.farCards?.dispose();
     this.details?.dispose(); this.verge?.dispose(); this.visitors?.dispose();
@@ -1151,7 +1197,7 @@ export class StylizedTerrain {
     this.ocean.geometry.dispose(); this.ocean.material.dispose();
     this.lakeMeshes.forEach((m) => m.geometry.dispose());
     this.lakeMaterial?.dispose(); this.mistMaterial?.dispose();
-    this.settlement?.dispose();
+    this.settlement?.dispose(); this.footprints?.dispose(); this.cables?.dispose(); this.dams?.dispose(); this.boards?.dispose(); this.raceDay?.dispose(); this.hairpinWalls?.dispose();
     this.clouds.material.uniforms.map.value.dispose(); this.clouds.material.dispose(); this.clouds.geometry.dispose(); this.peakMaterial?.dispose(); this.peakClouds?.geometry.dispose();
     this.shadowAsset.geometry.dispose(); this.shadowAsset.material.map.dispose(); this.shadowAsset.material.dispose();
     this.roadside.children.forEach((m) => { m.geometry.dispose(); m.dispose(); });

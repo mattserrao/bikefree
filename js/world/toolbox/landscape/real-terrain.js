@@ -396,6 +396,83 @@ export function makeRealCoastLandscape(config, proj, index, route) {
     for (const r of [14, 26, 40]) for (let k = 0; k < 8; k++) { const l = lakes.lakeAt(x + Math.cos(k * .785) * r, z + Math.sin(k * .785) * r); if (l) return l; }
     return null;
   };
+  // Hairpins (Alpe d'Huez, Col du Noyer): where another leg of the road passes within reach, the ground between
+  // the two legs is a straight bank from one road's edge to the other's, not two carves fighting over the slope.
+  // partners[i]: samples of the other legs (more than 80 m further along the road) within 40 m of sample i.
+  // Opt-in by the scene field "switchbacks" (routes built before it keep their ground exactly).
+  const partners = mountain && config.switchbacks ? (() => {
+    const CELL = 40, grid = new Map(), out = new Array(end + 1);
+    for (let i = 0; i <= end; i++) { const k = `${Math.floor(index.xs[i] / CELL)},${Math.floor(index.zs[i] / CELL)}`; (grid.get(k) || grid.set(k, []).get(k)).push(i); }
+    let any = false;
+    for (let i = 0; i <= end; i++) {
+      const cx = Math.floor(index.xs[i] / CELL), cz = Math.floor(index.zs[i] / CELL);
+      let list = null;
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) for (const j of grid.get(`${cx + dx},${cz + dz}`) || []) {
+        if (Math.abs(route.dist[j] - route.dist[i]) < 80) continue;
+        if (Math.hypot(index.xs[j] - index.xs[i], index.zs[j] - index.zs[i]) < 40) (list ||= []).push(j);
+      }
+      if (list) { out[i] = list; any = true; }
+    }
+    return any ? out : null;
+  })() : null;
+  // On a tight bend the inside of the turn is near both sides of it, one higher than the other: the ground
+  // there sits at the lower side's level (a 6 m ground mesh would otherwise lift through the lower road's edge).
+  const sampleGrid = partners ? (() => {
+    const g = new Map();
+    for (let i = 0; i <= end; i++) { const k = `${Math.floor(index.xs[i] / 20)},${Math.floor(index.zs[i] / 20)}`; (g.get(k) || g.set(k, []).get(k)).push(i); }
+    return g;
+  })() : null;
+  // where it matters: samples on a tight turn (the road reverses within ±40 m) or with another leg near
+  const bendy = partners ? (() => {
+    const out = new Uint8Array(end + 1), dir = (a, b) => Math.atan2(index.zs[b] - index.zs[a], index.xs[b] - index.xs[a]);
+    for (let i = 4; i <= end - 4; i++) {
+      let t = Math.abs(dir(i - 4, i - 2) - dir(i + 2, i + 4)); if (t > Math.PI) t = 2 * Math.PI - t;
+      if (t > 1.6 || partners[i]) for (let k = Math.max(0, i - 3); k <= Math.min(end, i + 3); k++) out[k] = 1;
+    }
+    return out;
+  })() : null;
+  // ground patches that hold such a stretch are drawn finer (stylized-terrain.js, groundMesh.fineCells)
+  const fineCells = bendy ? (() => {
+    const set = new Set();
+    for (let i = 0; i <= end; i++) if (bendy[i]) for (const dx of [-30, 0, 30]) for (const dz of [-30, 0, 30]) set.add(`${Math.floor((index.xs[i] + dx) / 96)},${Math.floor((index.zs[i] + dz) / 96)}`);
+    return set;
+  })() : null;
+  const lowestRoad = (x, z, hit) => {
+    let low = roadEle(hit.i, x, z);
+    const cx = Math.floor(x / 20), cz = Math.floor(z / 20);
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) for (const j of sampleGrid.get(`${cx + dx},${cz + dz}`) || []) {
+      if (Math.abs(index.xs[j] - x) > LOW_REACH + 6 || Math.abs(index.zs[j] - z) > LOW_REACH + 6) continue;
+      if (segDist(j, x, z) < LOW_REACH) low = Math.min(low, roadEle(j, x, z));
+    }
+    return low;
+  };
+  // distance from (x, z) to the drawn road beside sample j (its two segments), not to the 10 m sample itself
+  const segDist = (j, x, z) => {
+    let best = Infinity;
+    for (const k of [j - 1, j]) {
+      if (k < 0 || k >= end) continue;
+      const ax = index.xs[k], az = index.zs[k], dx = index.xs[k + 1] - ax, dz = index.zs[k + 1] - az, l2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2));
+      best = Math.min(best, Math.hypot(ax + dx * t - x, az + dz * t - z));
+    }
+    return best;
+  };
+  const HAIRPIN_CORE = 9.5, LOW_REACH = 8;   // LOW_REACH: road edge (3.5 m) + a 3 m mesh cell's diagonal   // a 6 m ground mesh needs the road's level held this far out (a cell's diagonal past the edge)
+  const hairpinBank = (x, z, hit, h, roadA) => {
+    const P = partners[outbound(hit.i)];
+    if (!P) return h;
+    let bj = -1, bd = 34 * 34;
+    for (const j of P) { const dx = index.xs[j] - x, dz = index.zs[j] - z, d2 = dx * dx + dz * dz; if (d2 < bd) { bd = d2; bj = j; } }
+    if (bj < 0) return h;
+    const dA = segDist(outbound(hit.i), x, z), dB = segDist(bj, x, z);
+    const rA = roadA, rB = roadEle(bj, x, z) - .65;
+    const a = Math.max(0, dA - HAIRPIN_CORE), b = Math.max(0, dB - HAIRPIN_CORE);
+    // legs closer than two cores: the lower road's level wins within a mesh triangle of its edge (the upper road
+    // stands on a retaining wall there), the nearer road's beyond
+    const bank = a + b > 0 ? rA + (rB - rA) * a / (a + b)
+      : (rA < rB ? (dA <= LOW_REACH ? rA : rB) : (dB <= LOW_REACH ? rB : rA));
+    return h + (bank - h) * (1 - smoothstep(26, 34, Math.max(dA, dB)));
+  };
   const heightAt = (x, z) => {
     let h = T.at(x, z);
     if (lakes) h = lakeBed(x, z, h);
@@ -404,13 +481,14 @@ export function makeRealCoastLandscape(config, proj, index, route) {
     if (pads.length) h = padAt(x, z, h);   // before the road is pressed in, so the road always wins beside it
     const hit = index.nearest(x, z, 34);
     if (hit) {
-      const s = route.dist[outbound(hit.i)], road = roadEle(hit.i, x, z) - .65;
+      const s = route.dist[outbound(hit.i)], road = (sampleGrid && hit.d < 16 && bendy[outbound(hit.i)] ? lowestRoad(x, z, hit) : roadEle(hit.i, x, z)) - .65;
       // a cliff road (Glacier) is cut into the slope in a narrow, steep cut: Big Sur's wide easing reads as a ramp
       const pressed = h + (road - h) * (1 - (mountain ? smoothstep(11, 24, hit.d) : smoothstep(8, 32, hit.d)));
       const b1 = bridges.length ? bridgeOfS(s, 14) : null;
       const sided = b1?.side && sideOf(hit.i, x, z) !== b1.side && hit.d > 4.5;
       const w = sided ? 0 : spanWeight(s) * (1 - smoothstep(14, 34, hit.d));
       h = pressed + (Math.min(h, road - 1.5) - pressed) * w;
+      if (partners && w < .5) h = hairpinBank(x, z, hit, h, road);
     }
     const c = creekHit(x, z, 9);
     if (c) {
@@ -439,6 +517,15 @@ export function makeRealCoastLandscape(config, proj, index, route) {
   };
   // ---- Mountains (Glacier): forest below the treeline, thinning with height; avalanche chutes and cliffs
   //      stay open; the east side (past the divide) is drier: aspen groves and grassland ----
+  // mapped land cover (tools/build_places.py): woods, meadows, farmland, rock — where the map has it, it decides
+  //   0 unknown · 1 broadleaf · 2 conifer · 3 mixed · 4 meadow · 5 farmland · 6 scrub · 7 rock · 8 scree · 9 glacier
+  //   10 built-up · 11 water · 12 orchard · 13 pasture
+  const LC = config.places?.landcover?.h ? config.places.landcover : null;
+  const landcoverAt = LC ? (x, z) => {
+    const { lat, lon } = proj.toLatLon(x, z);
+    const i = Math.floor((lon - LC.west) * LC.mlon / LC.cellM), j = Math.floor((LC.north - lat) * LC.mlat / LC.cellM);
+    return i < 0 || j < 0 || i >= LC.nx || j >= LC.ny ? 0 : LC.h[j * LC.nx + i];
+  } : null;
   const treeline = config.treelineM ?? 1950, divideX = config.divide ? proj.toLocal(config.divide[0], config.divide[1]).x : Infinity;
   const mountainVegetation = (x, z) => {
     const h0 = T.at(x, z);
@@ -459,8 +546,20 @@ export function makeRealCoastLandscape(config, proj, index, route) {
     forest = Math.max(0, Math.min(1, forest)) + (1 - smoothstep(tl - 40, tl + 160, h0)) * alpine * .18 * (.5 + n * 3);   // krummholz islands at the treeline
     const scrub = Math.max(0, Math.min(1, .15 + chute * .9 + valley * .3 + alpine * .25 + dry * .2 + n));
     const moist = Math.max(0, Math.min(1, .55 + valley * .4 + north * .3 - ridge * .3 - dry * .6 - alpine * .2));
-    const ice = glaciers.length ? glacierAt(x, z) : 0;
-    return { forest: Math.max(0, Math.min(1, forest)) * (1 - ice), scrub: scrub * (1 - ice), valley, ridge, north, spray: 1, alpine, east, moist, slope, ice };
+    let ice = glaciers.length ? glacierAt(x, z) : 0;
+    const south = Math.max(0, Math.min(1, -gz / .45));
+    let leaf = 0, lc = 0, sc = scrub;
+    if (landcoverAt) {
+      lc = landcoverAt(x, z);
+      if (lc >= 1 && lc <= 3) { forest = Math.max(forest, .92 * (1 - smoothstep(1.05, 1.5, slope))); leaf = lc === 3 ? 0 : lc; }
+      else if (lc === 4 || lc === 5 || lc === 13) { forest *= .05; sc *= .25; }
+      else if (lc === 12) { forest = .22; leaf = 1; }
+      else if (lc === 6) { forest *= .3; sc = Math.max(sc, .8); }
+      else if (lc === 7 || lc === 8 || lc === 11) { forest = 0; sc *= .15; }
+      else if (lc === 9) { forest = 0; ice = 1; }
+      else if (lc === 10) { forest *= .12; sc *= .3; }
+    }
+    return { forest: Math.max(0, Math.min(1, forest)) * (1 - ice), scrub: sc * (1 - ice), valley, ridge, north, south, spray: 1, alpine, east, moist, slope, ice, leaf, lc };
   };
   const waterLevelAt = (x, z) => {
     const c = creekHit(x, z, 0);
@@ -471,13 +570,13 @@ export function makeRealCoastLandscape(config, proj, index, route) {
 
   return {
     kind: mountain ? 'real-mountain' : 'real-coast', real: true, mountain, hasOcean: !mountain, coastSide: 1, gridLakes: lakes,
-    sites, islands, glacierAt: glaciers.length ? glacierAt : null, burnAt: burns.length ? burnAt : null, sideOf, bridgeColors: config.bridgeColors,
+    landcoverAt, sites, islands, glacierAt: glaciers.length ? glacierAt : null, burnAt: burns.length ? burnAt : null, sideOf, bridgeColors: config.bridgeColors,
     // the weather's fog bank lies on the lowest big lake (Lake McDonald), in the valleys around it
     fogBase: mountain ? Math.min(...(lakes?.list || []).filter((l) => l.areaHa > 200).map((l) => l.level), Infinity) : 0,
     // legacy fields (the authored-coast code paths are skipped when `real` is set)
     coast: [{ x: minX - pad, z: minZ - pad }, { x: minX - pad, z: maxZ + pad }], coastX: () => -1e6,
     inlandAt, shore, shoreAt: mountain ? (x, z) => shore.sample(x, z) ?? Infinity : undefined, terrain: T, landmarks: bridges, bridges, creeks, creekAt, heightAt, baseHeight, bridgeAt, bridgeOfS,
-    waterLevelAt, frameAt, roadEle, vegetationAt: mountain ? mountainVegetation : vegetationAt, nearCreek: (x, z, pad = 0) => !!creekHit(x, z, pad), lakes: [], waterIslands: [],
+    waterLevelAt, frameAt, roadEle, onRoadAt: partners ? (x, z) => { const hit = index.nearest(x, z, 12); return !!hit && segDist(outbound(hit.i), x, z) < 3.9; } : null, fineGroundAt: fineCells ? (x, z) => fineCells.has(`${Math.floor(x / 96)},${Math.floor(z / 96)}`) : null, otherLegNear: (x, z) => { if (!partners) return false; const hit = index.nearest(x, z, 24); return !!(hit && partners[outbound(hit.i)]); }, vegetationAt: mountain ? mountainVegetation : vegetationAt, nearCreek: (x, z, pad = 0) => !!creekHit(x, z, pad), lakes: [], waterIslands: [],
     isWater: mountain ? (x, z, height) => height < waterLevelAt(x, z) + .3 || !!creekHit(x, z, 0) : (x, z, height) => height < .3 || !!creekHit(x, z, 0),
   };
 }

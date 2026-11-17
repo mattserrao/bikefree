@@ -18,7 +18,7 @@ const SHIRTS = ['#c0392b', '#2e86c1', '#f1c40f', '#27ae60', '#8e44ad', '#e67e22'
 const PANTS = ['#2c3e50', '#4a4a4a', '#6b5b45', '#1f3a5f', '#7a6a55', '#3b3b3b'];
 const SKIN = ['#f1c27d', '#e0ac69', '#c68642', '#8d5524', '#ffdbac'];
 
-function personGeometry() {
+export function personGeometry() {
   // parts: 1 left leg, 2 right leg, 3 left arm, 4 right arm (they swing); masks pick shirt / pants / skin
   const M = new MeshBuilder({ aPart: 1, aMask: 3 });
   const P = (part, mask) => M.set({ aPart: [part], aMask: mask });

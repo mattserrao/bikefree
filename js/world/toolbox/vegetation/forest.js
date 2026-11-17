@@ -10,6 +10,20 @@ const CELL_M = 7.5;                     // jittered grid → ~178 candidates per
 const TIER_KEEP = [1, .62, .4];         // near / mid / far share of the full stand
 const SUFFIX = ['', '-lod', '-far'];
 
+// Mountain planting by data ("vegetation.zones"): which pack's species grow in which elevation band, on the shady
+// and sunny sides, above the treeline; and which pack models play each part of the forest floor and the open
+// ground. Without "zones" the planner keeps Going-to-the-Sun's Glacier planting (these defaults).
+const DEFAULT_ROLES = {
+  snag: ['snag0', 'snag1'], regrowth: ['lodgepole0', 'lodgepole1'], fireweed: 'fireweed',
+  log: ['log0', 'log1'], stump: 'stump1', moss: 'mossmat0', branch: 'branch1', stone: 'stone1',
+  creekShrub: 'willow', dryShrub: 'juniper', moistShrub: ['thimbleberry', 'serviceberry'],
+  krummholz: ['krummholz0', 'krummholz1'], chute: ['alder0', 'alder1'], talus: ['talus0', 'talus1'],
+  openPlant: ['beargrass', 'huckleberry'], dryPlant: 'huckleberry',
+  giants: 'cedar|whemlock|espruce|larch', broadCrowns: 'cedar|whemlock',
+};
+const weighted = (mix) => { const e = Object.entries(mix), t = e.reduce((a, [, w]) => a + w, 0); let c = 0; return e.map(([n, w]) => [n, (c += w / t)]); };
+const pickFrom = (table, r) => { for (const [n, c] of table) if (r <= c) return n; return table.at(-1)[0]; };
+
 export class ForestPlanner {
   constructor(config, landscape, index, heightAt, clearings, route = null) {
     const v = config.vegetation || {};
@@ -26,6 +40,15 @@ export class ForestPlanner {
     this.scale = v.treeScale || [.85, 1.15];
     // mountains (Glacier): species and density come from the landform's vegetation zones
     this.zones = !!landscape.mountain;
+    // data-driven zones (Alpe d'Huez and later routes): bands of species mixes from the scene
+    const Z = v.zones;
+    this.pack = Z?.pack || 'northern-rockies';
+    this.roles = { ...DEFAULT_ROLES, ...(Z?.roles || {}) };
+    this.giants = new RegExp(this.roles.giants); this.broadCrowns = new RegExp(this.roles.broadCrowns);
+    this.zoneData = Z?.bands ? {
+      bands: Z.bands.map((b) => ({ maxM: b.maxM ?? Infinity, mix: weighted(b.mix), shady: b.shady && weighted(b.shady), sunny: b.sunny && weighted(b.sunny), wet: b.wet && weighted(b.wet) })),
+      alpine: Z.alpine && weighted(Z.alpine), broadleaf: Z.broadleaf && weighted(Z.broadleaf), conifer: Z.conifer && weighted(Z.conifer),
+    } : null;
     this.density = v.forestDensity ?? 1;
     this.rich = !!v.rich;   // age mix, leaning trees, forest floor and shrubs (Going-to-the-Sun)
   }
@@ -57,6 +80,18 @@ export class ForestPlanner {
 
   /** Mountain species by zone: west-side cedar–hemlock valleys, spruce–fir–larch slopes, the dry east side. */
   _zoneSpecies(v, y, r) {
+    const Z = this.zoneData;
+    if (Z) {
+      if (v.alpine > .45 && Z.alpine) return pickFrom(Z.alpine, r);
+      // mapped woods (land cover) say broadleaf or conifer
+      if (v.leaf === 1 && Z.broadleaf) return pickFrom(Z.broadleaf, r);
+      if (v.leaf === 2 && Z.conifer && y > 900) return pickFrom(Z.conifer, r);
+      const b = Z.bands.find((band) => y < band.maxM) || Z.bands.at(-1);
+      if (b.wet && v.valley > .45 && v.moist > .6) return pickFrom(b.wet, r);
+      if (b.shady && v.north > .5) return pickFrom(b.shady, r);
+      if (b.sunny && (v.south ?? 0) > .45) return pickFrom(b.sunny, r);
+      return pickFrom(b.mix, r);
+    }
     if (v.alpine > .45) return r < .8 ? 'subfir' : 'espruce';
     if (v.east > .5) return v.valley > .35 && r < .3 ? 'espruce' : r < .45 ? 'aspen' : r < .82 ? 'lodgepole' : r < .92 ? 'subfir' : 'espruce';
     if (y < 1250) return v.valley + v.north > .5 ? (r < .45 ? 'cedar' : r < .8 ? 'whemlock' : r < .9 ? 'larch' : 'espruce') : (r < .25 ? 'cedar' : r < .5 ? 'whemlock' : r < .7 ? 'larch' : r < .85 ? 'lodgepole' : 'espruce');
@@ -116,15 +151,16 @@ export class ForestPlanner {
       const edge = smoothstep(this.edge.mown - 1, this.edge.shrub + 3, roadD) * smoothstep(3, 14, shore);
       // an old burn: silver snags, more thinly, over fireweed and young lodgepole
       const burn = this.landscape.burnAt?.(x, z) || 0;
+      const R = this.roles;
       if (burn > .5 && pick < v.forest * edge * this.density) {
-        if (extra < .36) add(`snag${size < .5 ? 0 : 1}${SUFFIX[tier]}`, x, y - .2, z, .7 + size * .45, rot);
-        else if (extra < .58) add(`lodgepole${size < .5 ? 0 : 1}${SUFFIX[tier]}`, x, y - .1, z, .18 + size * .22, rot);   // young regrowth
-        else if (tier === 0 && extra < .75) add('fireweed', x, y - .05, z, .9 + size * .4, rot);
+        if (extra < .36) add(`${R.snag[size < .5 ? 0 : 1]}${SUFFIX[tier]}`, x, y - .2, z, .7 + size * .45, rot);
+        else if (extra < .58) add(`${R.regrowth[size < .5 ? 0 : 1]}${SUFFIX[tier]}`, x, y - .1, z, .18 + size * .22, rot);   // young regrowth
+        else if (tier === 0 && extra < .75) add(R.fireweed, x, y - .05, z, .9 + size * .4, rot);
         continue;
       }
       if (pick < v.forest * edge * this.density) {
         const species = this._zoneSpecies(v, y, extra);
-        const variants = PACK_META['northern-rockies'].variants[species];
+        const variants = PACK_META[this.pack].variants[species];
         const variant = tier ? 0 : Math.floor(size * variants) % variants;   // one variant beyond the near tier: fewer draw calls
         // trees shrink toward the treeline
         let k = (this.scale[0] + (this.scale[1] - this.scale[0]) * ((size * 7.31) % 1)) * (1 - v.alpine * .45);
@@ -133,12 +169,12 @@ export class ForestPlanner {
           // an age mix: saplings in the gaps, a few old giants in the valleys (cedar, hemlock, spruce, larch)
           const age = ((jx + jz) * 7.13 + size * 3.7) % 1;
           if (age < .12) k *= .3 + age * 1.8;
-          else if (age > .955 && v.valley > .25 && roadD > 22 && /cedar|whemlock|espruce|larch/.test(species)) k *= 1.32 + (age - .955) * 5;
+          else if (age > .955 && v.valley > .25 && roadD > 22 && this.giants.test(species)) k *= 1.32 + (age - .955) * 5;
           // a few lean (snow creep on the slopes)
           if (age > .2 && age < .42) tilt = (.025 + (age - .2) * .25) * (1 + v.slope * .6);
         }
         // broad drooping crowns keep clear of the chase camera above the road
-        if (rich && roadD < 14 && /cedar|whemlock/.test(species)) k = Math.min(k, .85);
+        if (rich && roadD < 14 && this.broadCrowns.test(species)) k = Math.min(k, .85);
         add(`${species}${variant}${SUFFIX[tier]}`, x, y - .2, z, k * (1 - v.alpine * .2), rot, k, tilt, rot * 1.7);
         continue;
       }
@@ -149,19 +185,19 @@ export class ForestPlanner {
         // shrubs by kind: willow by the creeks, thimbleberry in the moist valley, juniper on the dry rocks
         const floor = v.forest > .35 || burn > .5;
         const r2 = (extra * 7.77 + size * 3.3) % 1;
-        if (floor && r2 < .045 && roadD > 15) { add(`log${burn > .5 || r2 < .015 ? 1 : 0}`, x, y - .05, z, .8 + size * .5, rot, undefined, Math.min(.3, v.slope * .5), rot + 1.57); continue; }
-        if (floor && r2 < .07) { add('stump1', x, y - .08, z, .55 + size * .7, rot); continue; }
-        if (floor && burn < .5 && r2 < .14 && v.moist > .4) { add('mossmat0', x, y - .03, z, .7 + size * .9, rot); continue; }
-        if (floor && r2 < .18) { add('branch1', x, y, z, .6 + size * .7, rot); continue; }
-        if (r2 < .22 && v.slope > .15) { add('stone1', x, y - .06, z, .5 + size * 1.1, rot); continue; }
-        if (this.landscape.nearCreek?.(x, z, 10) && r2 < .5) { add('willow', x, y - .05, z, .8 + size * .6, rot); continue; }
-        if (v.east > .5 && v.slope > .2 && r2 > .9) { add('juniper', x, y - .05, z, .8 + size * .6, rot); continue; }
-        if (v.east < .5 && v.moist > .55 && v.alpine < .3 && r2 > .88) { add(r2 > .96 ? 'serviceberry' : 'thimbleberry', x, y - .05, z, .8 + size * .5, rot); continue; }
+        if (floor && r2 < .045 && roadD > 15) { add(R.log[burn > .5 || r2 < .015 ? 1 : 0], x, y - .05, z, .8 + size * .5, rot, undefined, Math.min(.3, v.slope * .5), rot + 1.57); continue; }
+        if (floor && r2 < .07) { add(R.stump, x, y - .08, z, .55 + size * .7, rot); continue; }
+        if (floor && burn < .5 && r2 < .14 && v.moist > .4) { add(R.moss, x, y - .03, z, .7 + size * .9, rot); continue; }
+        if (floor && r2 < .18) { add(R.branch, x, y, z, .6 + size * .7, rot); continue; }
+        if (r2 < .22 && v.slope > .15) { add(R.stone, x, y - .06, z, .5 + size * 1.1, rot); continue; }
+        if (this.landscape.nearCreek?.(x, z, 10) && r2 < .5) { add(R.creekShrub, x, y - .05, z, .8 + size * .6, rot); continue; }
+        if (v.east > .5 && v.slope > .2 && r2 > .9) { add(R.dryShrub, x, y - .05, z, .8 + size * .6, rot); continue; }
+        if (v.east < .5 && v.moist > .55 && v.alpine < .3 && r2 > .88) { add(R.moistShrub[r2 > .96 ? 1 : 0], x, y - .05, z, .8 + size * .5, rot); continue; }
       }
-      if (v.alpine > .35 && v.alpine < .9 && extra < .12 * v.alpine) add(`krummholz${size < .5 ? 0 : 1}`, x, y - .1, z, .8 + size * .6, rot);
-      else if (extra < v.scrub * .22 && v.slope > .3) add(`alder${size < .5 ? 0 : 1}`, x, y - .1, z, .8 + size * .7, rot);
-      else if (tier === 0 && v.slope > .55 && extra > .78) add(`talus${size < .6 ? 0 : 1}`, x, y - .15, z, .7 + size * 1.4, rot);
-      else if (tier === 0 && extra > .5 && extra < .62) add(v.east > .5 ? 'huckleberry' : size < .55 ? 'beargrass' : 'huckleberry', x, y - .05, z, .8 + size * .5, rot);
+      if (v.alpine > .35 && v.alpine < .9 && extra < .12 * v.alpine) add(R.krummholz[size < .5 ? 0 : 1], x, y - .1, z, .8 + size * .6, rot);
+      else if (extra < v.scrub * .22 && v.slope > .3) add(R.chute[size < .5 ? 0 : 1], x, y - .1, z, .8 + size * .7, rot);
+      else if (tier === 0 && v.slope > .55 && extra > .78) add(R.talus[size < .6 ? 0 : 1], x, y - .15, z, .7 + size * 1.4, rot);
+      else if (tier === 0 && extra > .5 && extra < .62) add(v.east > .5 ? R.dryPlant : R.openPlant[size < .55 ? 0 : 1], x, y - .05, z, .8 + size * .5, rot);
     }
     return lists;
   }
