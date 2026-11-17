@@ -6,7 +6,8 @@
 // | heading-jitter   | warn     | the drawn centre line's turn rate changes abruptly (a kink you see); info where the
 // |                  |          | scene draws straight 10 m pieces (no `roadAlign.curve`): those facets are expected |
 //
-// Severity: warn on routes whose scene has `roadAlign` (street checks: `roadAlign.streets`); info elsewhere, so
+// Severity: warn on routes whose scene has `roadAlign.curve` or `.streets` (street checks: `roadAlign.streets`; heading-jitter:
+// any `roadAlign`, `turns` included); info elsewhere, so
 // the report shows them without failing routes that don't use the alignment system yet.
 // | grade-crease     | warn     | the drawn road's grade changes sharply between 10 m pieces (a crease in the surface) |
 // | route-off-ground | warn     | (city) the road runs well above or below its own bare ground, off bridges |
@@ -37,7 +38,9 @@ const turnDeg = (ax, az, bx, bz, cx, cz) => ((((Math.atan2(cz - bz, cx - bx) - M
 export function alignmentChecks({ route, index, landscape, F, nearUturn, oneWay }) {
   const L = ALIGN_LIMITS, end = route.turnIdx || route.dist.length - 1, last = Math.round(oneWay / 10);
   // enforced (warn) on routes whose scene uses the alignment system; reported (info) on the others
-  const align = route.scene?.roadAlign, sev = align ? 'warn' : 'info', streetSev = align?.streets ? 'warn' : 'info';
+  // ([smooth-turns] a scene with only roadAlign.turns enforces the drawn curve's smoothness, heading-jitter, alone)
+  const align = route.scene?.roadAlign, sev = align && (align.curve || align.streets) ? 'warn' : 'info', streetSev = align?.streets ? 'warn' : 'info';
+  const jitterSev = align ? 'warn' : 'info';
   // plan: one 10 m sample pushed sideways (off the cubic through its neighbours, turning against both)
   const t = (i) => turnDeg(index.xs[i - 1], index.zs[i - 1], index.xs[i], index.zs[i], index.xs[i + 1], index.zs[i + 1]);
   for (let i = 3; i < last - 3; i++) {
@@ -58,7 +61,7 @@ export function alignmentChecks({ route, index, landscape, F, nearUturn, oneWay 
     const a = routePoint(route, index, s - 1), b = routePoint(route, index, s), c = routePoint(route, index, s + 1);
     const rate = turnDeg(a.x, a.z, b.x, b.z, c.x, c.z);
     if (prevRate != null && Math.abs(rate - prevRate) > L.jitter)
-      F.add('heading-jitter', curved && sev === 'warn' ? 'warn' : 'info', s, rate - prevRate, curved ? 'the road’s curve kinks' : 'straight 10 m pieces (turn on the scene’s roadAlign.curve)');
+      F.add('heading-jitter', curved && jitterSev === 'warn' ? 'warn' : 'info', s, rate - prevRate, curved ? 'the road’s curve kinks' : 'straight 10 m pieces (turn on the scene’s roadAlign.curve)');
     prevRate = rate;
   }
   F.open.clear();

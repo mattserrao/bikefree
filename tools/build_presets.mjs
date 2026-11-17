@@ -59,7 +59,8 @@ const PRESETS = {
     description: 'City streets from OpenStreetMap: buildings, facades and street furniture (street kit), junctions, rivers and riverfront, bridges, hero landmarks, people and traffic, baked lighting.',
     terrainTool: 'python3 tools/build_city.py <id>  (city data) and python3 tools/build_terrain_grid.py <id>',
     keys: ['terrain', 'realHorizon', 'assets', 'extraAssets', 'biome', 'palette', 'vegetation', 'weather', 'post', 'roadAlign', 'riverfront', 'packs', 'brickStreets'],
-    tidy: (s) => { s.weather = { presets: ['clear', 'marine', 'clouds'], labels: { marine: 'River fog' } }; },
+    // (roadAlign.turns is tuned to the route's own corners: a new city route switches it on once it has its road)
+    tidy: (s) => { s.weather = { presets: ['clear', 'marine', 'clouds'], labels: { marine: 'River fog' } }; if (s.roadAlign?.turns) { s.roadAlign = { ...s.roadAlign }; delete s.roadAlign.turns; } },
     add: { streetKit: { zones: [] }, mainStreets: [], heroes: [], signs: [] },
   },
   'desert-canyon': {
