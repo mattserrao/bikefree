@@ -179,8 +179,23 @@ def _filt(v, w, fn, loop):
     return fn(stack, axis=0)
 
 
+def line_elevation(ele, ground, keep, step=10.0, ease_m=30.0):
+    """[w2-align] Profile source: the ground sampled along the drawn line (`ground`, one value per `step` m),
+    except on the stretches in `keep` ([{fromM, toM, padM}]: bridge decks, riverfront trails on walls and ramps)
+    where the mapped profile `ele` (node heights; a straight interpolation along a deck) is kept; the two blend
+    over `ease_m` beyond each kept stretch."""
+    e, g = np.asarray(ele, dtype=float), np.asarray(ground, dtype=float)
+    s = np.arange(len(e)) * step
+    w = np.ones(len(e))
+    for b in keep:
+        pad = b.get('padM', 0.0)
+        d = np.maximum(b['fromM'] - pad - s, s - b['toM'] - pad)    # metres outside the padded stretch (< 0 inside)
+        w = np.minimum(w, np.clip(d / ease_m, 0, 1))
+    return e + (g - e) * w
+
+
 def align_profile(ele, fixed=None, step=10.0, loop=True, spike_m=20.0, notch_m=20.0, max_grade=.2,
-                  max_grade_change=.03, mean_m=30.0, iters=60):
+                  max_grade_change=.03, mean_m=20.0, iters=60):
     """Rideable profile from elevation sampled every `step` m along the mapped line.
 
     `fixed`: optional bool mask of samples that must not move (none by default; bridge decks are already

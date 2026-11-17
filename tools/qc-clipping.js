@@ -269,6 +269,7 @@ export async function load(park, quality = 'balanced') {
   landscape = world.terrain.landscape;
   if (city) while (city._pending.length) city._buildChunk(city._pending.pop());   // every building, not just nearby
   city?.streetKit?.flush();   // [street-kit] its chunk work is deferred while the app streams
+  city?.streetKit?.meshes.forEach((m) => { m.visible = true; });   // [finish] every kit mesh, whatever its LOD band from where the camera starts
   if (world.road) world.road.name ||= 'Route road';
   if (world.shoulder) world.shoulder.name ||= 'Route shoulder';
   world.rider?.group?.traverse((o) => { o.userData.qcRider = true; });

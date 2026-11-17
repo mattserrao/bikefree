@@ -31,26 +31,35 @@ export function curveXZ(index, i, f) {
 }
 
 /**
- * The route subdivided along the curve (`per` points per 10 m sample): [route-like, index-like] with dist, ele,
- * turnIdx and xs, zs, so ribbon builders written for the 10 m samples draw the curve unchanged. Heights stay
+ * The route subdivided along the curve (up to `per` points per 10 m sample): [route-like, index-like] with dist,
+ * ele, turnIdx and xs, zs, so ribbon builders written for the 10 m samples draw the curve unchanged. Heights stay
  * straight between samples (as the rider's). Without the curve it returns its inputs.
+ * [w2-align] Adaptive: a piece whose curve bows less than 2 cm from its chord stays one piece, less than 12 cm two,
+ * else `per` — the drawn line stays within ~3 cm of the curve, and long straight roads (Going-to-the-Sun: 75 km
+ * of ribbons, drawn whole) don't pay four times the triangles.
  */
 export function denseRoad(route, index, per = 4) {
   if (!curveOn(route)) return [route, index];
   const key = `_dense${per}`;
   if (route[key]?.index === index) return route[key].pair;
-  const n = route.dist.length, m = (n - 1) * per + 1;
-  const xs = new Float64Array(m), zs = new Float64Array(m), ele = new Float64Array(m), dist = new Float64Array(m);
+  const n = route.dist.length, xs = [], zs = [], ele = [], dist = [];
+  let turnIdx = route.turnIdx;
   for (let i = 0; i < n - 1; i++) {
-    for (let k = 0; k < per; k++) {
-      const f = k / per, j = i * per + k, p = curveXZ(index, i, f);
-      xs[j] = p.x; zs[j] = p.z;
-      ele[j] = route.ele[i] + (route.ele[i + 1] - route.ele[i]) * f;
-      dist[j] = route.dist[i] + (route.dist[i + 1] - route.dist[i]) * f;
+    if (i === route.turnIdx) turnIdx = xs.length;
+    const mid = curveXZ(index, i, .5);
+    const bow = Math.hypot(mid.x - (index.xs[i] + index.xs[i + 1]) / 2, mid.z - (index.zs[i] + index.zs[i + 1]) / 2);
+    const k = bow < .02 ? 1 : bow < .12 ? Math.min(2, per) : per;
+    for (let q = 0; q < k; q++) {
+      const f = q / k, p = q ? curveXZ(index, i, f) : { x: index.xs[i], z: index.zs[i] };
+      xs.push(p.x); zs.push(p.z);
+      ele.push(route.ele[i] + (route.ele[i + 1] - route.ele[i]) * f);
+      dist.push(route.dist[i] + (route.dist[i + 1] - route.dist[i]) * f);
     }
   }
-  xs[m - 1] = index.xs[n - 1]; zs[m - 1] = index.zs[n - 1]; ele[m - 1] = route.ele[n - 1]; dist[m - 1] = route.dist[n - 1];
-  const pair = [{ ...route, dist, ele, turnIdx: route.turnIdx ? route.turnIdx * per : route.turnIdx, [key]: undefined }, { xs, zs }];
+  if (n - 1 === route.turnIdx) turnIdx = xs.length;
+  xs.push(index.xs[n - 1]); zs.push(index.zs[n - 1]); ele.push(route.ele[n - 1]); dist.push(route.dist[n - 1]);
+  const F = (a) => Float64Array.from(a);
+  const pair = [{ ...route, dist: F(dist), ele: F(ele), turnIdx, [key]: undefined }, { xs: F(xs), zs: F(zs) }];
   Object.defineProperty(route, key, { value: { index, pair }, enumerable: false, configurable: true, writable: true });
   return pair;
 }

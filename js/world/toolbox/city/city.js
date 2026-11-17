@@ -14,6 +14,7 @@ import { ROAD_WIDTH } from '../../pose.js';
 import { buildJunctionMeshes, drawnPieces } from './junction-mesh.js';   // [junctions]
 import { junctionsNear } from './junctions.js';   // [junctions]
 import { streetSlots } from './road-meets.js';   // [junctions]
+import { decorateTreeMaterial } from '../packs/northern-rockies.js';   // [finish] foliage shader on the street trees
 
 export { STREET_W };
 const CHUNK = 320;
@@ -303,6 +304,25 @@ export class CityScene {
         .replace('#include <logdepthbuf_fragment>', '#include <logdepthbuf_fragment>\n#if defined( USE_LOGDEPTHBUF )\ngl_FragDepth -= vSlot * 2e-6;\n#endif');
     };
     this.streetMaterial.customProgramCacheKey = () => 'city-streets-slot-3';   // [junctions]
+    // [finish] brick streets (scene "brickStreets"): Pittsburgh's red paving brick in running bond, laid across the street,
+    // worn darker in the wheel tracks, with the odd asphalt patch. One 256 px tile is the street's width × 4 m.
+    {
+      const b = document.createElement('canvas'); b.width = b.height = 256;
+      const g = b.getContext('2d'), rnd = (() => { let t = 7; return () => ((t = (t * 16807) % 2147483647) / 2147483647); })();
+      g.fillStyle = '#2e2926'; g.fillRect(0, 0, 256, 256);   // mortar / sand joints
+      const rows = 32, rh = 256 / rows, bw = 5.6;
+      const reds = ['#6e3a2e', '#623326', '#774032', '#5a2f26', '#6c3d31', '#653a2f', '#7a4536'];
+      for (let r = 0; r < rows; r++) for (let x = -(r % 2) * bw / 2; x < 256; x += bw) {
+        g.fillStyle = reds[Math.floor(rnd() * reds.length)]; g.fillRect(x + .45, r * rh + .45, bw - .9, rh - .9);
+      }
+      for (const cx of [64, 192]) { const gr = g.createLinearGradient(cx - 34, 0, cx + 34, 0); gr.addColorStop(0, 'rgba(25,20,18,0)'); gr.addColorStop(.5, 'rgba(25,20,18,.28)'); gr.addColorStop(1, 'rgba(25,20,18,0)'); g.fillStyle = gr; g.fillRect(cx - 34, 0, 68, 256); }   // wheel tracks
+      g.fillStyle = 'rgba(70,72,74,.85)'; g.fillRect(150, 40, 60, 34); g.fillRect(20, 180, 44, 26);   // asphalt patches
+      const bt = this.own(new THREE.CanvasTexture(b)); bt.wrapT = THREE.RepeatWrapping; bt.repeat.set(1, 6); bt.colorSpace = THREE.SRGBColorSpace; bt.anisotropy = 8;
+      this.brickMaterial = this.own(new THREE.MeshStandardMaterial({ map: bt, roughness: .9, ...offset(-1.6) }));
+      this.brickMaterial.userData.slotDepthBias = true;
+      this.brickMaterial.onBeforeCompile = this.streetMaterial.onBeforeCompile;   // the same height-slot depth rule as the streets
+      this.brickMaterial.customProgramCacheKey = () => 'city-streets-slot-3-brick';
+    }
     this.sidewalkMaterial = this.own(new THREE.MeshStandardMaterial({ color: '#aca59a', roughness: .95, ...offset(-1.1) }));
     this.pathMaterial = this.own(new THREE.MeshStandardMaterial({ color: '#9d978a', roughness: .95, ...offset(-1.3) }));
     this.solidMaterial = this.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .8, metalness: .1 }));
@@ -752,8 +772,8 @@ export class CityScene {
 
   // ---------------------------------------------------------------- streets, sidewalks and lamps
   _streetsAndLamps() {
-    const roads = new Map(), walks = new Map(), paths = new Map();
-    const get = (map, x, z) => { const key = `${Math.floor(x / SECTOR_M)},${Math.floor(z / SECTOR_M)}`; if (!map.has(key)) map.set(key, new MeshBuilder(map === roads ? { aSlot: 1 } : {})); return map.get(key); };   // [w2-budget] per sector (was 512 m)
+    const roads = new Map(), walks = new Map(), paths = new Map(), bricks = new Map();   // [finish] bricks: brick streets
+    const get = (map, x, z) => { const key = `${Math.floor(x / SECTOR_M)},${Math.floor(z / SECTOR_M)}`; if (!map.has(key)) map.set(key, new MeshBuilder(map === roads || map === bricks ? { aSlot: 1 } : {})); return map.get(key); };   // [w2-budget] per sector (was 512 m)
     const lamps = [];
     const plan = this.junctions = this.landscape._junctions || null;   // [junctions] real intersections (js/world/toolbox/city/junctions.js)
     this._levelJunctions();
@@ -763,7 +783,8 @@ export class CityScene {
       const p0 = st.pts[0], lift = .1 + slots[k] * .02;
       if (st.cls === 8) { ribbon(get(paths, p0.x, p0.z), st.pts, st.width, lift, 8); return; }
       for (const pc of plan ? drawnPieces(st, k, plan, lift) : [st.pts]) {   // [junctions] trimmed to each junction's edge
-        ribbon(get(roads, p0.x, p0.z).set({ aSlot: [slots[k]] }), pc, st.width, lift, 24, streetPaint(st), !!plan);   // [s1-lanes] paint style; [junctions] normals lean with the grade
+        const brick = this._brickStreet(st);   // [finish]
+        ribbon(get(brick ? bricks : roads, p0.x, p0.z).set({ aSlot: [slots[k]] }), pc, st.width, lift, 24, brick ? [0, 1] : streetPaint(st), !!plan);   // [s1-lanes] paint style; [junctions] normals lean with the grade
         if (!st.bridge && st.cls >= 2 && st.cls <= 6) ribbon(get(walks, p0.x, p0.z), pc, st.width + 5, .06, 8);
       }
       // lamps every ~34 m, alternating sides
@@ -777,8 +798,8 @@ export class CityScene {
           // on a bridge the post stands on the deck slab, just inside the railing; elsewhere on the sidewalk
           const dx = (b.x - a.x) / (len || 1), dz = (b.z - a.z) / (len || 1), off = st.width / 2 + (st.bridge ? .05 : .9);
           const x = b.x - dz * off * side, z = b.z + dx * off * side;
-          if (!this._clearSpot(x, z, .35, k, ROAD_WIDTH / 2 + 1.2)) continue;
-          if (st.bridge && this._onStyledBridge(x, z)) continue;   // the famous bridges carry their own lights (and railings)
+          if (!this._clearSpot(x, z, .35, k, ROAD_WIDTH / 2 + 1.2, this.streetKit ? .95 : .35)) continue;   // [finish] (kit facades stand ~.25–.9 m proud of the walls)
+          if (this._onStyledBridge(x, z)) continue;   // the famous bridges carry their own lights (and railings); [finish] and no post among their members
           lamps.push({ x, z, y: st.bridge ? b.y : this.landscape.heightAt(x, z), yaw: Math.atan2(dz * side, -dx * side), bridge: st.bridge });
         }
       }
@@ -798,14 +819,14 @@ export class CityScene {
         if (kitLamp === null) continue;   // [street-kit] (no sidewalk there: a junction)
         const off = deckBridge ? (ROAD_WIDTH + 3) / 2 + .05 : ROAD_WIDTH / 2 + (kind === 'road' ? 2.6 : 1.6);
         const x = kitLamp ? kitLamp.x : this.index.xs[i] - dz / len * off * side, z = kitLamp ? kitLamp.z : this.index.zs[i] + dx / len * off * side;
-        if (!deckBridge && !this._clearSpot(x, z, .35, -1, ROAD_WIDTH / 2 + 1.2)) continue;
+        if (!deckBridge && !this._clearSpot(x, z, .35, -1, ROAD_WIDTH / 2 + 1.2, this.streetKit ? .95 : .35)) continue;   // [finish] (kit facades)
         // on a deck: not in another carriageway that runs alongside at the same level (the roadway's other half)
         if (deckBridge && this.landscape.streetsNear(x, z, .35).some((o) => this.streets[o.k].cls !== 8 && Math.abs(o.y - r.ele[i]) < 1.5)) continue;
         lamps.push({ x, z, y: deckBridge ? r.ele[i] : kitLamp ? kitLamp.y : this.landscape.heightAt(x, z), yaw: Math.atan2(dz / len * side, -dx / len * side), bridge: !!deckBridge });   // [street-kit] (kitLamp.y)
       }
     }
     if (plan) this.junctionMeshes = buildJunctionMeshes(this, plan, { get, roads, walks, liftOf: (k) => .1 + slots[k] * .02 });   // [junctions]
-    for (const [map, mat, name] of [[roads, this.streetMaterial, 'Streets'], [walks, this.sidewalkMaterial, 'Sidewalks'], [paths, this.pathMaterial, 'Paths']]) {
+    for (const [map, mat, name] of [[roads, this.streetMaterial, 'Streets'], [bricks, this.brickMaterial, 'Streets'], [walks, this.sidewalkMaterial, 'Sidewalks'], [paths, this.pathMaterial, 'Paths']]) {
       for (const [key, builder] of map) {
         builder.keepOutOf(this.landscape.inRouteTube);   // ramps and roadways the data puts in the rider's space
         const mesh = new THREE.Mesh(this.own(builder.geometry()), mat);
@@ -814,6 +835,7 @@ export class CityScene {
       }
     }
     this.lamps = lamps;
+    if (plan && this.streetKit) this._junctionCorners(plan);   // [finish] the kit's signals and corner signs at the junctions' corners (after the lamps: it keeps clear of them)
     this._lampMeshes(lamps);
   }
 
@@ -855,9 +877,53 @@ export class CityScene {
       }
     }
     for (let gx = Math.floor(x / 20) - 1; gx <= Math.floor(x / 20) + 1; gx++) for (let gz = Math.floor(z / 20) - 1; gz <= Math.floor(z / 20) + 1; gz++) {
-      for (const [px, pz] of this._styled.get(`${gx},${gz}`) || []) if (Math.hypot(px - x, pz - z) < 14) return true;
+      for (const [px, pz] of this._styled.get(`${gx},${gz}`) || []) if (Math.hypot(px - x, pz - z) < 20) return true;   // [finish] (was 14: posts stood in the arches' and trusses' members)
     }
     return false;
+  }
+
+  /**
+   * [finish] Is this street paved in brick? Scene "brickStreets": { osm: true (streets the map tags brick, sett or
+   * paving stones), minGrade: .07 and classes: [5] (Pittsburgh's steep residential streets, mostly still brick) }.
+   */
+  _brickStreet(st) {
+    const cfg = this.route.scene?.brickStreets;
+    if (!cfg || st.bridge || st.cls > 6) return false;
+    if (st._brick !== undefined) return st._brick;
+    let b = !!(cfg.osm !== false && st.brick);
+    if (!b && cfg.minGrade && (cfg.classes || [5]).includes(st.cls) && st.pts.length > 1) {
+      let len = 0, rise = 0;
+      for (let i = 1; i < st.pts.length; i++) { len += Math.hypot(st.pts[i].x - st.pts[i - 1].x, st.pts[i].z - st.pts[i - 1].z); rise += Math.abs(st.pts[i].y - st.pts[i - 1].y); }
+      b = len > (cfg.minLengthM ?? 25) && rise / len >= cfg.minGrade;
+    }
+    Object.defineProperty(st, '_brick', { value: b, enumerable: false });
+    return b;
+  }
+
+  /**
+   * [finish] Junction corners → street-kit corner furniture (signal masts at busy junctions, corner street signs, push
+   * buttons), in the kit's zones. The kit stops placing its own mapped signals and signs (externalJunctions).
+   */
+  _junctionCorners(plan) {
+    const kit = this.streetKit, L = this.landscape;
+    kit.externalJunctions(true);
+    let n = 0;
+    for (const jn of plan.list) {
+      const r = L.routeDist(jn.x, jn.z); if (!r) continue;
+      const zone = kit.zoneAt(kit.sOf(r), r.d); if (!zone) continue;
+      const big = jn.arms.filter((a) => a.route || a.cls <= 4);
+      const busy = big.length >= 3 || (jn.route && jn.arms.length >= 3);
+      for (const cb of jn.curbs) {
+        if (!cb.arc || cb.pts.length < 3) continue;
+        const m = cb.pts[cb.pts.length >> 1], ox = m.x - jn.x, oz = m.z - jn.z, ol = Math.hypot(ox, oz) || 1;
+        const x = m.x + ox / ol * .7, z = m.z + oz / ol * .7;
+        if (!kit.clear(x, z, .3)) continue;
+        const yaw = Math.atan2(-ox, -oz), arm = Math.max(2.5, Math.min(5.5, ol * .55));
+        kit.addCorner({ x, z, yaw, arm, signal: busy, sign: true, button: busy, y: kit.sidewalkTop(x, z) });
+        n++;
+      }
+    }
+    this.junctionCorners = n;
   }
 
   _lampMeshes(lamps) {
@@ -1054,11 +1120,12 @@ export class CityScene {
     }
     // a light street tree: trunk + two lumpy crowns (~40 triangles), coloured per instance
     const M = new MeshBuilder();
-    M.color('#5b4636');   // [w2-budget] the trunk: five sides, no cap (it ends inside the crown): 10 triangles, was 15
-    for (let k = 0; k < 5; k++) {
-      const p = (a, r, y) => new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r), a0 = k / 5 * Math.PI * 2, a1 = (k + 1) / 5 * Math.PI * 2;
+    M.color('#5b4636');   // [w2-budget] the trunk: no cap (it ends inside the crown); [finish] four sides: 8 triangles (was 10, then 15)
+    for (let k = 0; k < 4; k++) {
+      const p = (a, r, y) => new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r), a0 = k / 4 * Math.PI * 2 + .4, a1 = (k + 1) / 4 * Math.PI * 2 + .4;
       M.quad(p(a0, .16, 0), p(a0, .12, 3.2), p(a1, .12, 3.2), p(a1, .16, 0));
     }
+    const trunkVerts = M.count;   // [finish] (the trunk's vertices come first: bark; the crown's after: foliage)
     const crown = new THREE.IcosahedronGeometry(1, 0).toNonIndexed(), pos = crown.attributes.position;
     for (const [ox, oy, oz, r] of [[0, 4.8, 0, 2.4]]) {
       M.color('#ffffff');
@@ -1069,18 +1136,23 @@ export class CityScene {
     }
     crown.dispose();
     const geo = this.own(M.geometry());
-    const mat = this.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95, flatShading: true }));
+    // [finish] the toolbox foliage shader (packs/northern-rockies.js decorateTreeMaterial): leafy clumps with sunlit
+    // tips and dark hollows on the crowns, bark on the trunks. aTree: 0 foliage, 1 bark.
+    geo.setAttribute('aTree', new THREE.Float32BufferAttribute(Array.from({ length: M.count }, (_, k) => (k < trunkVerts ? 1 : 0)), 1));
+    const mat = this.own(decorateTreeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95, flatShading: true }), { uTime: this.treeTime ||= { value: 0 } }));
     const greens = ['#5f8a3e', '#6f9a45', '#557d38', '#7a9b4a', '#4f7434', '#8aa452'].map((c) => new THREE.Color(c));
     const lists = new Map();
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0);
+    this.treeTrunks = [];
     for (const t of spots) {
-      const road = this.index.nearest(t.x, t.z, 650);
-      if (!road) continue;   // near the ride only
+      const road = this.index.nearest(t.x, t.z, 520);
+      if (!road) continue;   // near the ride only ([finish] 520 m, was 650: the hillside woods carry the distance)
       // trunk clear of every carriageway, the crown clear of walls, and nothing growing over the rider's road
-      if (!t.kit && !this._clearSpot(t.x, t.z, 1.6, -1, ROAD_WIDTH / 2 + 2.4, t.wall ?? 1.2)) continue;   // [s4-section] t.wall, [street-kit] kit trees: checked
+      if (!t.kit && !this._clearSpot(t.x, t.z, 1.6, -1, ROAD_WIDTH / 2 + 2.4, t.wall ?? (this.streetKit ? 1.7 : 1.2))) continue;   // [finish] (kit awnings reach 1.3 m out)   // [s4-section] t.wall, [street-kit] kit trees: checked
       const key = `${Math.floor(t.x / SECTOR_M)},${Math.floor(t.z / SECTOR_M)}`, w = .75 + t.seed * .5;   // [w2-budget] per sector (was 480 m)
       q.setFromAxisAngle(Y, t.seed * 40);
       if (!lists.has(key)) lists.set(key, []);
+      (this.treeTrunks ||= []).push(t.x, t.z);   // [finish] for the street kit: furniture keeps clear of the trunks
       lists.get(key).push({ m: m.compose(new THREE.Vector3(t.x, t.y ?? this.landscape.heightAt(t.x, t.z) - .1, t.z), q, new THREE.Vector3(w, w * (.85 + t.seed * .3) * (t.sy || 1), w)).clone(), seed: t.seed });   // [street-kit] (sy: kit street trees stand taller)
     }
     for (const list of lists.values()) {

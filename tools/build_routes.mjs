@@ -49,6 +49,10 @@ for (const item of catalog) {
   if (item.outAndBack) row.outAndBack = true;
   if (item.oneWay) row.oneWay = true;
   if (item.stage) row.stage = item.stage;   // 'draft': Rough Drafts · 'deprecated': Deprecated
+  if (item.eleSmoothM != null) {   // [w2-align] the route's elevation smoothing (± m; the app's default is 60)
+    if (!(item.eleSmoothM >= 0 && item.eleSmoothM <= 200)) throw new Error(`${item.id}: eleSmoothM must be 0–200 m`);
+    row.eleSmoothM = item.eleSmoothM;
+  }
   // named start points for the route selector: the routing POIs, placed on the way out
   const stops = findStops(route, item.routing?.pois);
   if (stops.length) row.stops = stops;

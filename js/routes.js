@@ -50,7 +50,7 @@ export function routeStartM(route, { reverse = false, offsetM = null, fraction =
 
 export function buildCatalogRoute(text, item = {}) {
   const parsed = parseGpx(text);
-  const route = buildRoute({ ...parsed, name: item.name?.replace(' (built-in)', '') || parsed.name });
+  const route = buildRoute({ ...parsed, name: item.name?.replace(' (built-in)', '') || parsed.name, eleSmoothM: item.eleSmoothM });
   route.id = item.routeId || item.id || null;
   route.park = item.park || null;
   route.sceneUrl = item.scene || null;
