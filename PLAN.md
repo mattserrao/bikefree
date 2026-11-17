@@ -270,7 +270,7 @@ Goal: a repeatable check that rides every course end to end and flags discontinu
 Goal: the first city course — a loop full of life: riverside trails, famous bridges, downtown, the South Side and the climb up Mount Washington.
 - [x] **The loop** (18.3 km / 11.4 mi, ~185 m / 610 ft climbing; clockwise from the North Shore Water Steps): General Robinson and Federal Streets → **Roberto Clemente Bridge** → the Allegheny riverfront trail under the Fort Duquesne Bridge → **Point State Park** promenades and the fountain → the Mon Wharf → Market Street past PPG Place → **Market Square** → Forbes → Smithfield Street → **Smithfield Street Bridge** → Station Square → **East Carson Street** to SouthSide Works → South Side riverfront trail → South 10th → **P.J. McArdle Roadway** climb → **Grandview Avenue** overlooks past the Duquesne Incline → Greenleaf Street descent → West Carson → **West End Bridge** → North Shore Trail past the Science Center and USS Requin
 - [x] `tools/build_city.py` + `tools/city/pittsburgh.json`: routes on our own OSM street/trail graph (legs prefer trails, roads or park paths; one ramp link where OSM has a gap), folds waypoint stubs, terrain-tile elevation with bridge decks interpolated, rideable profile; writes the GPX and `routes/scenes/pittsburgh-city.json` (height grid, land use incl. the three rivers, 12k buildings with heights, streets, bridge decks, rail lines, trees)
-- [x] New scene type `authored-city` (`js/world/city-landscape.js`, `city.js`, `city-bridges.js`, `city-life.js`): real terrain (the Mount Washington bluff), carved rivers with their own water, buildings with procedural windows, PPG Place spires, the Gulf Tower top, streets with sidewalks, lamps and street trees, shop awnings and signs on East Carson
+- [x] New scene type `authored-city` (`js/world/toolbox/city/landscape.js`, `city.js`, `city-bridges.js`, `city-life.js`): real terrain (the Mount Washington bluff), carved rivers with their own water, buildings with procedural windows, PPG Place spires, the Gulf Tower top, streets with sidewalks, lamps and street trees, shop awnings and signs on East Carson
 - [x] **Bridges in their own styles**: the Three Sisters' gold self-anchored suspension, Smithfield's blue lenticular trusses and buff portals, the gold through-arches of the West End and Fort Duquesne, Fort Pitt's double-deck tied arch, the Liberty, 10th Street, Hot Metal and Birmingham bridges
 - [x] **Life**: walkers, joggers and people gathered at Market Square, the Point, Station Square, Carson Street and the overlooks; cyclists on the trails; cars and buses on the streets (oncoming traffic on the route's own streets, kept off the rider's lane); light-rail trains and a freight train; both **inclines** running; barges, the riverboat, motorboats with wakes and kayaks; gulls over the rivers; the Point fountain's jet; PNC Park and Acrisure Stadium
 - [x] **Night** time of day (all routes): moon, stars and a city glow on the horizon; in the city the windows, street lamps, bridge lights, stadium lights, aircraft beacons, the Gulf Tower beacon, car head/tail lights, shop signs and light on the rivers; a front light on the bike
@@ -306,7 +306,7 @@ Goal: a second QC tool that looks for things drawn through each other, and a Pit
 Goal: make Big Sur the showcase course — visually stunning, the one you open to show someone the app. A testbed for graphics, weather, traffic and realism that can later roll out to other maps.
 
 **Baseline review (15 Nov 2026, preview renders at High)**
-- Geography reads as rolling grassland beside a distant sea, not mountains dropping into the Pacific: the land is a synthetic heightfield (`js/world/coast.js`) that rises gently inland; no sea cliffs, coves or surf line
+- Geography reads as rolling grassland beside a distant sea, not mountains dropping into the Pacific: the land is a synthetic heightfield (`js/world/toolbox/core/random.js`) that rises gently inland; no sea cliffs, coves or surf line
 - Bixby Creek reads as a shallow green valley with a stray lagoon; the real gorge is deep, narrow and opens onto a beach right below the bridge
 - Bridge: parapet posts and a large beige wall beside the deck look oversized; the arch is hard to see from the road
 - Bright white patches beside the road at the overlook (15.2 km) and on the bridge (15.7 km), and a hard dark seam where the sea meets land — to confirm on the Mac (renders here use a software GPU)
@@ -321,14 +321,14 @@ Goal: make Big Sur the showcase course — visually stunning, the one you open t
 - Traffic: light and realistic — a car every 20–40 s each way, some RVs, motorcycles and cyclists; some pull into the overlooks
 
 **Passes**
-- [x] **Real landform** — `tools/build_terrain_grid.py` bakes AWS Terrain Tiles into `routes/scenes/bigsur-terrain.json` (1.7 MB gzipped): 10 m blocks within 900 m of the road, 40 m out to 9 km. The source fills the near-shore ocean with flat 0–3 m "land"; the builder turns that into a shelving sea floor (sea = low ground connected to the open ocean). `js/world/real-coast.js` presses the GPX road in, opens the real gorges under the bridges, traces the creeks down the real valley floors (Bixby, Rocky, Garrapata, Malpaso, Little Sur) and keeps a signed distance to the shore. The real horizon is off for Big Sur (its own grid reaches the horizon; the tile horizon showed the flat fill as a sand plain)
-- [x] **Bridges** — `js/world/coast-bridges.js`: open-spandrel arches (Bixby 228 m over a 77 m gorge, Rocky Creek, Garrapata, and the canyon at 9.9 km) with twin ribs, spandrel columns and great piers on the real slopes; deck bridges elsewhere; open balustrade parapets you can see the sea through
+- [x] **Real landform** — `tools/build_terrain_grid.py` bakes AWS Terrain Tiles into `routes/scenes/bigsur-terrain.json` (1.7 MB gzipped): 10 m blocks within 900 m of the road, 40 m out to 9 km. The source fills the near-shore ocean with flat 0–3 m "land"; the builder turns that into a shelving sea floor (sea = low ground connected to the open ocean). `js/world/toolbox/landscape/real-terrain.js` presses the GPX road in, opens the real gorges under the bridges, traces the creeks down the real valley floors (Bixby, Rocky, Garrapata, Malpaso, Little Sur) and keeps a signed distance to the shore. The real horizon is off for Big Sur (its own grid reaches the horizon; the tile horizon showed the flat fill as a sand plain)
+- [x] **Bridges** — `js/world/toolbox/structures/arch-bridges.js`: open-spandrel arches (Bixby 228 m over a 77 m gorge, Rocky Creek, Garrapata, and the canyon at 9.9 km) with twin ribs, spandrel columns and great piers on the real slopes; deck bridges elsewhere; open balustrade parapets you can see the sea through
 - [x] **Vegetation from the ground** — golden grass on ridges and south faces, olive scrub on north faces, redwood / oak / pine in the canyons, cypress on the bluffs, sand by the sea
 - [x] **Ocean** — shallows from the sea floor, kelp-dark patches, broken breakers rolling in to the real shoreline, swash, rocks along the true shore; dark at night
-- [x] **Weather** (`js/world/weather.js`, all stylized routes; Settings › Weather, **W** on the ride screen): *Clear*, *Marine layer* (fog bank on the sea, upper layers stop at the shore, the lowest creep up the canyons; ride into it and the air closes in; climb Hurricane Point and you're above it), *Clouds* (shadows drifting over the hills), *Rain* (streaks, grey light, wet road that picks up the sky); wind in grass, flowers and trees in every preset; changes ease in
-- [x] **Traffic** (`js/world/highway-traffic.js`, scene option `traffic`): cars, SUVs, RVs, motorcycles and other cyclists both ways, ~4 a minute; they overtake when the other lane is clear and wait behind you when it isn't; a cyclist may sit on your wheel; some pull into the overlooks; parked cars at the overlooks; lights at night
-- [x] **Life and landmarks** (`js/world/coast-life.js`): pelicans gliding in lines along the shore, gulls over the cliffs, a condor over the ridges, cattle on the Point Sur terrace, Point Sur Lighthouse (lamp and turning beam at night); signs for Rocky Creek, Hurricane Point, Little Sur and Point Sur; a Hurricane Point overlook
-- [x] **Rendering** (`js/world/post.js`, scene option `post`): HDR render, soft bloom (sun glint, low sun, lamps), gentle grade and vignette; off on Light detail
+- [x] **Weather** (`js/world/toolbox/atmosphere/weather.js`, all stylized routes; Settings › Weather, **W** on the ride screen): *Clear*, *Marine layer* (fog bank on the sea, upper layers stop at the shore, the lowest creep up the canyons; ride into it and the air closes in; climb Hurricane Point and you're above it), *Clouds* (shadows drifting over the hills), *Rain* (streaks, grey light, wet road that picks up the sky); wind in grass, flowers and trees in every preset; changes ease in
+- [x] **Traffic** (`js/world/toolbox/life/traffic.js`, scene option `traffic`): cars, SUVs, RVs, motorcycles and other cyclists both ways, ~4 a minute; they overtake when the other lane is clear and wait behind you when it isn't; a cyclist may sit on your wheel; some pull into the overlooks; parked cars at the overlooks; lights at night
+- [x] **Life and landmarks** (`js/world/toolbox/life/coast-life.js`): pelicans gliding in lines along the shore, gulls over the cliffs, a condor over the ridges, cattle on the Point Sur terrace, Point Sur Lighthouse (lamp and turning beam at night); signs for Rocky Creek, Hurricane Point, Little Sur and Point Sur; a Hurricane Point overlook
+- [x] **Rendering** (`js/world/toolbox/atmosphere/post.js`, scene option `post`): HDR render, soft bloom (sun glint, low sun, lamps), gentle grade and vignette; off on Light detail
 - [x] Fix: the ground vanished for a frame when the real horizon arrived (the sea plane showed through as white — the "white patches" in the baseline review)
 - [x] Course QC: Big Sur passes `--strict` (0 fail, 0 warn); `npm test` passes (96)
 - [x] **QC pass (15 Nov 2026)** — merged main (Route 28, v0.12) plus the snapshot tool (`npm run snap`, from `route28-test`) and the clipping tool (`npm run qc:clipping`, from `v0.12.1`); ran all three on Big Sur and fixed every finding:
@@ -364,7 +364,7 @@ Goal: give Pittsburgh the Big Sur treatment. The full plan is in the Project doc
   - [ ] Measure on the Mac with the **I** overlay (post + fog on Balanced and High)
 - [x] **P3 · Real landform** (v0.13.1) — `routes/scenes/pittsburgh-terrain.json` from `tools/build_terrain_grid.py` (new inland "rivers" mode): 10 m near the route, 40 m to 9 km; the three rivers traced from the elevation to the edge of the world (second water surface beyond the city's box; the river fog follows them); banded sandstone on steep city ground. C2: the "buried streets" were low ramp decks beside the route — the ground no longer rises over a ramp deck; a guard adds girder spans for real underpasses (none on this route). Clipping QC 266 warnings (baseline 288), 0 fail; course QC clean
   - [ ] Left: the route's height on the Mount Washington crest (13.3–14.1 km) is 4–6 m above the bare ground
-- [x] **P4 · Signature landmarks** (v0.13.3) — `js/world/city-heroes.js`: U.S. Steel (triangle, Cor-Ten columns), BNY Mellon (crown, de-duplicated), Fifth Avenue Place (stepped lit crown, mast), the Gulf Tower (was missing; stepped pyramid lit as the weather beacon), the Grant Building's Morse beacon, faceted PPG Place; the Blockhouse, the Flag and Monongahela bastions in brick and the others traced in granite; four Grandview Avenue overlook decks; incline station decks and car colours; both stadiums (their outlines were lost in the data: now from the scene, with tiers, scoreboards and no trees on the field); postcard views for the scenic camera (scene `views`). C1 whole-member culling, C4 no street lamps on styled bridges, C8 duplicate footprints hidden. New `npm run snap:cam` (free-camera close-ups). Clipping QC 0 fail, 262 warnings
+- [x] **P4 · Signature landmarks** (v0.13.3) — `js/world/toolbox/city/heroes.js`: U.S. Steel (triangle, Cor-Ten columns), BNY Mellon (crown, de-duplicated), Fifth Avenue Place (stepped lit crown, mast), the Gulf Tower (was missing; stepped pyramid lit as the weather beacon), the Grant Building's Morse beacon, faceted PPG Place; the Blockhouse, the Flag and Monongahela bastions in brick and the others traced in granite; four Grandview Avenue overlook decks; incline station decks and car colours; both stadiums (their outlines were lost in the data: now from the scene, with tiers, scoreboards and no trees on the field); postcard views for the scenic camera (scene `views`). C1 whole-member culling, C4 no street lamps on styled bridges, C8 duplicate footprints hidden. New `npm run snap:cam` (free-camera close-ups). Clipping QC 0 fail, 262 warnings
   - [ ] Left: the stadium outlines and the bastions are fitted, not surveyed (the OSM source isn't reachable from the build machine); rebuild the city data with real stadium outlines when it is
 - [x] **P5 · Rivers** (v0.13.4) — the rivers flow (along-river distance fields, flow-mapped ripples and slick lines); the Allegheny green and the Mon brown, running side by side down the Ohio below the Point and blending slowly; golden-hour glint and sparkles; bank lights stretched across the water at night; river walls on the urban banks (ground steps down at the waterline). The map's bridge decks had cut the rivers at every bridge: water now closed across them. C3: level junctions + each road ribbon's height slot settles overlaps in the depth test; ground kept off the water's level — z-fight 45 → 11. C6: boats keep the whole hull over real water and steer round piers and low decks — boats on land 5 → 1. Clipping QC 0 fail, 235 warnings (baseline 288)
 - [ ] **P6 · Vegetation** (wooded slopes, park lawns, street trees)
@@ -399,11 +399,11 @@ Goal: give Going-to-the-Sun Road the Big Sur / Pittsburgh hero treatment, over t
   - [x] **Rain and wet road** (shared)
   - [x] **Wildfire smoke**: new preset (`smoke`): a red-orange sun, a brown sky, the far ridges gone in a 5 km haze; offered in `W`, the preview and `npm run snap` (`:smoke`)
   - [ ] Measure post + fog on the Air with the overlay
-- [x] **P5 · Landmarks** (`js/world/glacier-landmarks.js`): guardwalls, both tunnels, the Triple Arches, six waterfalls, Logan Pass Visitor Center and parking, Lake McDonald Lodge, Rising Sun, St. Mary, snowbanks, seven glaciers, Wild Goose Island, NPS signs and five overlooks
+- [x] **P5 · Landmarks** (`js/world/toolbox/structures/mountain-road.js`): guardwalls, both tunnels, the Triple Arches, six waterfalls, Logan Pass Visitor Center and parking, Lake McDonald Lodge, Rising Sun, St. Mary, snowbanks, seven glaciers, Wild Goose Island, NPS signs and five overlooks
 - [ ] **P6 · Vegetation**
-  - [x] Glacier kit (`js/world/glacier-kit.js`) and zoned forest planner: cedar–hemlock west side, spruce–fir–larch slopes, treeline krummholz, aspen and lodgepole east; beargrass, paintbrush, glacier lilies, huckleberry, alder in the chutes
+  - [x] Glacier kit (`js/world/toolbox/packs/northern-rockies.js`) and zoned forest planner: cedar–hemlock west side, spruce–fir–larch slopes, treeline krummholz, aspen and lodgepole east; beargrass, paintbrush, glacier lilies, huckleberry, alder in the chutes
   - [x] tuned to the budget: 312–496 draw calls, 1.57–1.98 M triangles (overlook pads/rails/posts and sign supports now instanced, lakes in 2.4 km chunks, lighter near trees)
-- [x] **P7 · Traffic and wildlife** (`js/world/glacier-life.js`): light traffic; goats, bighorn, marmots, ground squirrels, a grizzly, ducks, ravens, a golden eagle
+- [x] **P7 · Traffic and wildlife** (`js/world/toolbox/life/wildlife.js`): light traffic; goats, bighorn, marmots, ground squirrels, a grizzly, ducks, ravens, a golden eagle
 - [ ] **P8 · Check and ship**
   - [x] `qc --strict` clean; clipping QC 0 fail (8 shoreline z-fight warnings accepted); snapshots against the baseline in REVIEW.md
   - [ ] Mac check with the `I` overlay at Light/Balanced/High, golden hour, midday and night; then move to In Progress and merge
@@ -466,7 +466,7 @@ Goal: cut graphical demand as far as possible while improving the feel. Style gu
 
 **Passes**
 - [x] Chase camera only: app, settings, HUD button, <kbd>C</kbd>, preview and snapshot tool
-- [x] Look test: `?look=gentle|bold` in the preview, `:gentle` / `:bold` in `npm run snap` (`js/world/look.js`: toon bands from direct sun with cool shadows, colour grade, smooth crowns, flat road, depth-edge outlines). New `afternoon` time (sun 24°) as a candidate signature time. Results: [docs/route28/look-test/](docs/route28/look-test/README.md)
+- [x] Look test: `?look=gentle|bold` in the preview, `:gentle` / `:bold` in `npm run snap` (`js/world/toolbox/atmosphere/look.js`: toon bands from direct sun with cool shadows, colour grade, smooth crowns, flat road, depth-edge outlines). New `afternoon` time (sun 24°) as a candidate signature time. Results: [docs/route28/look-test/](docs/route28/look-test/README.md)
 - [x] Look chosen: gentle at midday. Route 28's scene has `"look": "gentle"` and `"timeOfDay": "midday"`; `?look=none` (preview) or `:current` (snap) shows the old look
 - [x] Merged perf-test (#23): outlines moved into `post.js`'s final pass (reads the scene target's depth, reversed or logarithmic; no extra full-screen pass); the chase-only camera kept through its allocation-free camera and texel-snapped shadows
 - [ ] 1. Tools and baseline: `perf:calls` (exact draw calls) and `qc:visibility` (ID-buffer test)
@@ -496,7 +496,7 @@ in pieces other routes can reuse, and balanced against the graphics cost. Review
 **Done**
 - [x] Merged `route28-cartoon` (cartoon look, chase camera only). Going-to-the-Sun: `"look": "gentle"`,
   `"timeOfDay": "midday"`. The Glacier kit is built with smooth crowns in the cartoon look (`withSmooth`).
-- [x] `js/world/vista.js`, the vista kit: ground-shader rock (gullies and spurs, ledges, loose rock), snow
+- [x] `js/world/toolbox/atmosphere/vista.js`, the vista kit: ground-shader rock (gullies and spurs, ledges, loose rock), snow
   in the gullies and on the ledges, meadow patches, the distant canopy as crowns, cartoon cumulus. Aerial
   perspective in the shared fog chunk (`haze.js`: `AERIAL`), ridge ink in `post.js`. ROUTES.md → *Vista kit*.
 - [x] `forest.js`: `tierKeep` (denser outer tiers) and `windows` (gaps toward the lake and down the valley)
@@ -506,10 +506,10 @@ in pieces other routes can reuse, and balanced against the graphics cost. Review
   z-fight warnings (unchanged); 231–353 draw calls and 1.59–2.09 M triangles headless (main: 230–357 and
   1.59–2.02 M)
 
-- [x] Guardwalls reworked: rubble-masonry parapets (`js/world/stonework.js`), knee-high with a rounded cap
+- [x] Guardwalls reworked: rubble-masonry parapets (`js/world/toolbox/materials/stonework.js`), knee-high with a rounded cap
   and regular openings. They follow the grade, sit on masonry footings and are culled by stretch. Triangles
   went down: 1.48–1.90 M at the checked spots.
-- [x] Road surface by area and condition (`js/world/road-surface.js`, the scene's `road` zones):
+- [x] Road surface by area and condition (`js/world/toolbox/materials/road-surface.js`, the scene's `road` zones):
   - fresh at Apgar and on the east side
   - worn along Lake McDonald
   - chip seal up McDonald Creek
@@ -673,6 +673,31 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [x] Ends at the finish: the elevation charts (preview and ride screen) show just the leg being ridden, start to finish
 - [x] Tests (`test/endless.test.mjs`); `npm test` 109/109
 - [ ] Ride it on the Mac (githack link)
+
+### Toolbox: shared kits for every route *(test branch `toolbox-test`, from `main` after PR #28)*
+**Goal:** review every route's tools, textures and methods, and centralize them into one toolbox that every route (and every future map) builds from, to cut rework and improve what riders see. See TOOLBOX.md and docs/toolbox/INVENTORY.md.
+
+**Decisions (16 Nov 2026)**
+- Active routes move onto the toolbox: Route 28, Big Sur, Going-to-the-Sun, Pittsburgh, Zion and Alpe d'Huez. Deprecated and rough-draft routes keep working but aren't migrated
+- Refactor only: no visual change on any route. Upgrades come later, route by route
+- The default for new routes is the gentle cartoon look with baked light (one time of day, midday), the chase camera, the vista kit where there's distance, and a regional pack
+- Extras: an asset gallery, a scene linter, a new-route scaffold and biome presets
+
+**Passes**
+- [x] Inventory of every module against every route; duplicates and gaps (docs/toolbox/INVENTORY.md)
+- [x] Refactor guard: `snap --png --fingerprint` (frozen clock, seeded random, no streamed horizon) and `npm run guard`
+- [x] Kits moved into `js/world/toolbox/` by category, with generic names. The model builder, random, tree cards and guardrail split out of route kits and the scene builder
+- [x] Pack registry: `packs: ["northeast" | "northern-rockies"]`, replacing `kitExtensions: ["adirondack" | "glacier"]`
+- [x] Scene schema and `normalizeScene`: `glacier` → `mountainRoad`, `life.kit`
+- [x] Scene linter (`npm run lint:scenes`, in `npm test`)
+- [x] Five biome presets (`routes/presets`, `npm run presets`)
+- [x] `npm run new-route`
+- [x] Toolbox gallery (`tools/toolbox-gallery.html`, `npm run gallery`)
+- [x] `snap … :standard` and `?standard=1`: any route with the toolbox standard look
+- [x] Fix: baked light works with the vista kit's ground material (found by trying the standard on Going-to-the-Sun)
+- [x] Guard: identical pixels and objects on every route (Pittsburgh: fountain spray seeds differ run to run on the old code too); `npm test` and `routes:check` clean
+- [ ] Ride a route on the Mac (githack link) to confirm nothing moved
+- [ ] Later (visual changes): merge the duplicates listed in INVENTORY.md, an `alps` pack, and the standard look on Big Sur, Zion and Pittsburgh
 
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)

@@ -391,8 +391,8 @@
     48.6965,
     -113.718
   ],
-  "kitExtensions": [
-    "glacier"
+  "packs": [
+    "northern-rockies"
   ],
   "timeOfDay": "midday",
   "look": "gentle",
@@ -537,7 +537,7 @@
       "dropM": 60
     }
   ],
-  "glacier": {
+  "mountainRoad": {
     "culverts": { "fromM": 26000, "toM": 64000, "minDepthM": 3.5, "maxCount": 40 },
     "guardwalls": {
       "fromM": 30000,

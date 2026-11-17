@@ -124,8 +124,8 @@
       "lengthM": 28
     }
   ],
-  "kitExtensions": [
-    "adirondack"
+  "packs": [
+    "northeast"
   ],
   "season": "summer",
   "atmosphere": {

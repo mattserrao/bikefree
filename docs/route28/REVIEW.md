@@ -291,7 +291,7 @@ Also needed: a box-beam `guardrail` to replace the current boxes, plus `sign-cur
 (The `atM`, `fromM` and `toM` values are for the current GPX and change after Phase 0.)
 
 **Placement**
-- New `js/world/settlement.js` module, modelled on `CoastalDetails`: instanced and built once per route.
+- New `js/world/toolbox/structures/settlement.js` module, modelled on `CoastalDetails`: instanced and built once per route.
 - `forestMask` is 0 inside towns out to the setback plus 40 m. Lawns use `palette.meadow`.
 - Camps go only where the shore is within 120 m on the lake side. Each gets a driveway gap in the tree wall and a mailbox at the road.
 

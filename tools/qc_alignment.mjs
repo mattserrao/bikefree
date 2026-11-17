@@ -14,7 +14,7 @@
 // | street-crease    | warn     | (city) a street's grade changes abruptly (a step or a hump in the ribbon) |
 // | street-step      | warn     | (city) streets meeting at a junction node arrive at different heights |
 // | street-bank      | warn     | (city) a street on an embankment or in a trench: its ground lies well below/above on both sides |
-import { cityStreets } from '../js/world/city-landscape.js';
+import { cityStreets } from '../js/world/toolbox/city/landscape.js';
 import { routePoint } from '../js/world/pose.js';
 import { curveOn } from '../js/world/road-align.js';
 
@@ -95,7 +95,7 @@ export function alignmentChecks({ route, index, landscape, F, nearUturn, oneWay 
       if (i + 1 < P.length) {
         const c = P[i + 1], l2 = Math.hypot(c.x - b.x, c.z - b.z);
         // [junctions] (inside a junction a street isn't drawn: its surface is; in a junction's ease zone the junction
-        // shapes the grade change on purpose — js/world/junctions.js, step 7)
+        // shapes the grade change on purpose — js/world/toolbox/city/junctions.js, step 7)
         if (l >= 3 && l2 >= 3 && !a.pin && !b.pin && !c.pin && a.jn == null && b.jn == null && c.jn == null && b.je == null) {
           const dg = (c.y - b.y) / l2 * 100 - g;
           if (Math.abs(dg) > L.streetCrease) hits.push(['street-crease', b, dg, 'a street’s grade changes abruptly (step or hump)']);

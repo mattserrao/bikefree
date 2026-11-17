@@ -1,0 +1,194 @@
+{
+  "preset": {
+    "id": "mountain",
+    "name": "Mountain pass",
+    "description": "Real-elevation mountain road: forest by elevation zone up to treeline and snow, rock faces with ribs and ledges, aerial haze, ridge ink and cartoon cumulus (vista kit), roadside verge, worn alpine road surface, light traffic.",
+    "from": "goingtothesun",
+    "terrainTool": "python3 tools/build_terrain_grid.py <id>  (AWS Terrain Tiles: 10 m near the road, 40 m out to the horizon)"
+  },
+  "scene": {
+    "format": "bikefree-scene-1",
+    "style": "stylized",
+    "title": "",
+    "region": "",
+    "description": "Real-elevation mountain road: forest by elevation zone up to treeline and snow, rock faces with ribs and ledges, aerial haze, ridge ink and cartoon cumulus (vista kit), roadside verge, worn alpine road surface, light traffic.",
+    "seed": 1101,
+    "terrain": "real-mountain",
+    "realHorizon": false,
+    "assets": "models/scenery/coastal.json",
+    "extraAssets": [
+      "models/scenery/regional.json"
+    ],
+    "biome": "alpine",
+    "palette": {
+      "grass": "#68834f",
+      "meadow": "#8c9b5f",
+      "rock": "#9a958a",
+      "cliff": "#88675a",
+      "argillite": "#6e7c66",
+      "snow": "#eef2f3",
+      "water": "#2a6a78",
+      "shallowWater": "#8a7d5c",
+      "forest": "#2e4635",
+      "canopy": "#24392c",
+      "sand": "#a39a86",
+      "farTint": "#7d8c8f",
+      "farTintAmount": 0.3,
+      "ice": "#dce8ee",
+      "scree": "#b4ad9f",
+      "cutRock": "#8d8579",
+      "burn": "#a6a196",
+      "fireweed": "#c4669c",
+      "shrub": "#3d5a3a"
+    },
+    "snowLineM": 2150,
+    "treelineM": 1950,
+    "vegetation": {
+      "layout": "forest-edge",
+      "canopyM": 24,
+      "edge": {
+        "mownM": 7,
+        "shrubM": 11
+      },
+      "treeScale": [
+        0.85,
+        1.15
+      ],
+      "cover": [
+        "grass",
+        "alpineflowers",
+        "beargrass",
+        "paintbrush",
+        "grass",
+        "glacierlily"
+      ],
+      "coverScale": [
+        0.6,
+        1.1
+      ],
+      "vergeDensity": 0.8,
+      "forestDensity": 0.82,
+      "rich": true,
+      "coverBoost": 2.2,
+      "tierKeep": [
+        1,
+        0.66,
+        0.5
+      ],
+      "windows": {
+        "everyM": 850,
+        "lengthM": 170,
+        "reachM": 260,
+        "downhill": false,
+        "downhillM": 150,
+        "keep": 0.1,
+        "atLengthM": 170
+      }
+    },
+    "vista": {
+      "rock": {
+        "ribs": 0.9,
+        "ledges": 0.7,
+        "scree": 0.6,
+        "cuts": 0.9
+      },
+      "snow": {
+        "gullies": 0.85,
+        "ledges": 0.6
+      },
+      "meadow": {
+        "mottle": 0.7
+      },
+      "forest": {
+        "crowns": 0.85,
+        "boost": 1.6
+      },
+      "haze": {
+        "strength": 0.62,
+        "rangeM": 5500,
+        "falloffM": 900,
+        "blue": 0.35
+      },
+      "ridgeInk": {
+        "strength": 0.35,
+        "thresh": 0.22,
+        "startM": 450
+      },
+      "clouds": {
+        "count": 24,
+        "minM": 6000,
+        "maxM": 15000,
+        "spanM": 1200
+      }
+    },
+    "atmosphere": {
+      "fogNearM": 1600,
+      "fogFarM": 21000
+    },
+    "weather": {
+      "presets": [
+        "clear",
+        "marine",
+        "clouds"
+      ],
+      "labels": {
+        "marine": "Valley fog",
+        "clouds": "Clouds on the peaks"
+      },
+      "bankTop": 45,
+      "bank": 0.6
+    },
+    "water": {
+      "lakeReachM": 7500
+    },
+    "packs": [
+      "northern-rockies"
+    ],
+    "post": true,
+    "bridgeColors": {
+      "structure": "#8f8573",
+      "rail": "#9d927e"
+    },
+    "road": {
+      "surface": "worn",
+      "zones": []
+    },
+    "verge": {
+      "markers": {
+        "units": "km"
+      },
+      "poles": [],
+      "posts": [],
+      "debris": [],
+      "reachM": 1300
+    },
+    "traffic": {
+      "perMinute": 3
+    },
+    "terrainBuild": {
+      "lakes": true,
+      "padM": 9000,
+      "coarseM": 40,
+      "fineM": 900,
+      "fineCellM": 10,
+      "minLakeHa": 3,
+      "lakeNames": []
+    },
+    "look": "gentle",
+    "timeOfDay": "midday",
+    "lighting": {
+      "baked": "midday"
+    },
+    "mountainRoad": {
+      "tunnels": [],
+      "waterfalls": []
+    },
+    "bridges": [],
+    "signs": [],
+    "lookouts": [],
+    "preview": {
+      "positionM": 0,
+      "camera": "chase"
+    }
+  }
+}

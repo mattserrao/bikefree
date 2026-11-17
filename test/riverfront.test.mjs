@@ -1,12 +1,12 @@
-// Riverfront promenades (js/world/riverfront.js): the planner on Pittsburgh's riverfront trail.
+// Riverfront promenades (js/world/toolbox/city/riverfront.js): the planner on Pittsburgh's riverfront trail.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { buildCatalogRoute } from '../js/routes.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
-import { makeCityLandscape, cityStreets } from '../js/world/city-landscape.js';
+import { makeCityLandscape, cityStreets } from '../js/world/toolbox/city/landscape.js';
 import * as THREE from '../vendor/three.module.min.js';
-import { planRiverfront, riverfrontField, buildRiverfront } from '../js/world/riverfront.js';
+import { planRiverfront, riverfrontField, buildRiverfront } from '../js/world/toolbox/city/riverfront.js';
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const item = JSON.parse(read('routes/catalog.json')).find((c) => c.id === 'pittsburgh');

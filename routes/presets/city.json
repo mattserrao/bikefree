@@ -1,0 +1,133 @@
+{
+  "preset": {
+    "id": "city",
+    "name": "City",
+    "description": "City streets from OpenStreetMap: buildings, facades and street furniture (street kit), junctions, rivers and riverfront, bridges, hero landmarks, people and traffic, baked lighting.",
+    "from": "pittsburgh",
+    "terrainTool": "python3 tools/build_city.py <id>  (city data) and python3 tools/build_terrain_grid.py <id>"
+  },
+  "scene": {
+    "format": "bikefree-scene-1",
+    "style": "stylized",
+    "title": "",
+    "region": "",
+    "description": "City streets from OpenStreetMap: buildings, facades and street furniture (street kit), junctions, rivers and riverfront, bridges, hero landmarks, people and traffic, baked lighting.",
+    "seed": 1101,
+    "terrain": "authored-city",
+    "realHorizon": false,
+    "assets": "models/scenery/coastal.json",
+    "extraAssets": [
+      "models/scenery/regional.json"
+    ],
+    "biome": "city",
+    "palette": {
+      "grass": "#7a9a55",
+      "meadow": "#93a26b",
+      "rock": "#8a8478",
+      "cliff": "#9a8f7c",
+      "water": "#2f5a5c",
+      "shallowWater": "#5d7f6a",
+      "bluff": "#8f7a60"
+    },
+    "vegetation": {
+      "trees": [
+        "broadleaf0",
+        "broadleaf1",
+        "broadleaf0",
+        "fir0"
+      ],
+      "treeDensity": 0.6,
+      "density": 1,
+      "cover": [
+        "grass",
+        "grass",
+        "fern"
+      ],
+      "shrubs": [
+        "shrub0",
+        "shrub1"
+      ],
+      "vergeDensity": 0,
+      "yardTrees": {
+        "density": 0.5,
+        "kitDensity": 0.4,
+        "boxes": [
+          [
+            40.424,
+            -80.026,
+            40.4395,
+            -80.007
+          ],
+          [
+            40.424,
+            -80.007,
+            40.4285,
+            -79.996
+          ],
+          [
+            40.433,
+            -80.04,
+            40.4425,
+            -80.024
+          ]
+        ]
+      }
+    },
+    "weather": {
+      "presets": [
+        "clear",
+        "marine",
+        "clouds"
+      ],
+      "labels": {
+        "marine": "River fog"
+      }
+    },
+    "post": true,
+    "roadAlign": {
+      "curve": true,
+      "streets": true,
+      "bankM": 30
+    },
+    "riverfront": {
+      "maxGapM": 20,
+      "spans": [
+        {
+          "fromM": 1040,
+          "toM": 2320
+        },
+        {
+          "fromM": 2360,
+          "toM": 2800
+        }
+      ],
+      "waterSteps": {
+        "top": {
+          "lat": 40.445842,
+          "lon": -80.008511
+        },
+        "bottom": {
+          "lat": 40.445527,
+          "lon": -80.008511
+        },
+        "widthM": 18,
+        "topM": 5
+      }
+    },
+    "look": "gentle",
+    "timeOfDay": "midday",
+    "lighting": {
+      "baked": "midday"
+    },
+    "streetKit": {
+      "zones": []
+    },
+    "mainStreets": [],
+    "heroes": [],
+    "signs": [],
+    "preview": {
+      "positionM": 0,
+      "camera": "chase"
+    }
+  }
+}

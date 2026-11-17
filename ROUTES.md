@@ -1,5 +1,7 @@
 # Adding scenic routes
 
+> **Start with [TOOLBOX.md](TOOLBOX.md):** the shared kits, packs and presets every route is built from, the scene linter, the refactor guard and `npm run new-route`.
+
 Routes are defined in `routes/catalog.json`. Add a GPX and one catalog entry;
 the preparation command validates them and generates the app catalog and offline
 file list. It does not download maps or modify existing GPX tracks.
@@ -92,14 +94,14 @@ follows the real hills; lakes are drawn on the grid with a sheltered-water shade
 
 Scene options used by Route 28:
 
-- `kitExtensions: ["adirondack"]` — procedural northern-forest trees (white pine, spruce,
+- `packs: ["northeast"]` (was `kitExtensions: ["adirondack"]`; see TOOLBOX.md) — procedural northern-forest trees (white pine, spruce,
   hemlock, maple, birch at three levels of detail), saplings, goldenrod, blueberry, boulders,
   houses, camps, store, church, motel, boathouse, dock, canoes, motorboat, poles, mailboxes, guardrail.
 - `vegetation.layout: "forest-edge"` with `species` weights, `edge.mownM` / `edge.shrubM`,
   `canopyM` (height of the distant canopy shell), `treeScale`, `coverScale`.
 - `season: "summer" | "fall"` (the preview also takes `&season=fall`).
 - `atmosphere`: `fogNearM`, `fogFarM`, `fogFarRealM`, `lakeMist` (morning and golden hour);
-  valley haze (`js/world/haze.js`, every stylized scene): `haze` (strength ×, default 1), `hazeM` (how deep
+  valley haze (`js/world/toolbox/atmosphere/haze.js`, every stylized scene): `haze` (strength ×, default 1), `hazeM` (how deep
   the low air is, default 75 m), `hazeBaseM` (its floor, default the route's lowest point).
 - `towns`: `{ name, fromM, toM, setbackM, spacingM, skip }`; camps and docks are placed
   automatically wherever a shore is within ~190 m of the road (`camps: [{fromM,toM}]` limits them).
@@ -127,7 +129,7 @@ node tools/glacier_sides.mjs 41700 44345             # which side of the road fa
   baker finds the hydro-flattened lakes (dead-flat basins of at least `minLakeHa`), each with its own level,
   and writes a 20 m lake-id raster; `lakeNames: [[name, lat, lon]]` names them. The lake beds are pressed
   down and the lakes drawn at their levels; the weather's fog bank lies on the lowest big lake.
-- **Vegetation:** `kitExtensions: ["glacier"]` (cedar, western hemlock, Engelmann spruce, subalpine fir,
+- **Vegetation:** `packs: ["northern-rockies"]` (was `kitExtensions: ["glacier"]`) (cedar, western hemlock, Engelmann spruce, subalpine fir,
   western larch, lodgepole, aspen, krummholz; beargrass, paintbrush, glacier lilies, huckleberry, alder,
   talus) with `vegetation.layout: "forest-edge"`. Species and density come from the landform: `treelineM`,
   `divide: [lat, lon]` (east of it is drier: aspen, lodgepole, grassland), avalanche chutes and cliffs stay
@@ -137,20 +139,20 @@ node tools/glacier_sides.mjs 41700 44345             # which side of the road fa
   snowfields in the cirques; `glaciers: [{ name, lat, lon, radiusM, aspect, angle, dropM }]` paint ice.
 - **Built features:** `sites` (levelled, tree-free pads: `{ name, lat, lon, widthM, lengthM, angle, atRoad }`),
   `lakeIslands` (`{ lat, lon, lengthM, widthM, heightM, angle, trees }`), `bridges` with `style: "arches"` and
-  `side` (built by the landmarks module; only that side is carved), `bridgeColors`, and a `glacier` block for
-  `js/world/glacier-landmarks.js`: `guardwalls`, `tunnels` (`{ fromM, toM, windows, valleySide }`),
+  `side` (built by the mountain-road module; only that side is carved), `bridgeColors`, and a `mountainRoad` block (was `glacier`) for
+  `js/world/toolbox/structures/mountain-road.js`: `guardwalls`, `tunnels` (`{ fromM, toM, windows, valleySide }`),
   `waterfalls` (along the road `{ fromM, toM, heightM }` or at a point `{ lat, lon, upM, downM }`),
   `buildings` (`logan-pass-visitor-center`, `lake-mcdonald-lodge`, `rising-sun`, `st-mary-visitor-center`),
   `parking` and `snowbanks`.
 - **Life:** `life` with `goats`, `bighorn`, `marmots`, `squirrels`, `bears` (`{ atM, radiusM, count, lateralM, side }`),
-  `ducks` and counts of `ravens` and `eagles` (`js/world/glacier-life.js`).
+  `ducks` and counts of `ravens` and `eagles` (`js/world/toolbox/life/wildlife.js`).
 - **Weather:** `weather.presets` can include `smoke` (wildfire smoke); mountain scenes get cloud caps on the
   summits with `clouds` and `rain`. (Going-to-the-Sun now offers only clear, valley fog and clouds on the peaks.)
 - **Distance:** see *Vista kit* below (Going-to-the-Sun uses all of it). `signs[].kind: "nps"` is the brown park sign.
 
 ## Vista kit: scenery that reads at a distance (any route)
 
-`js/world/vista.js` is a set of opt-in pieces that make far terrain read as mountains, forest and air
+`js/world/toolbox/atmosphere/vista.js` is a set of opt-in pieces that make far terrain read as mountains, forest and air
 instead of smooth colour ramps. A scene turns them on with a `vista` block; leave a part out and it's off.
 None of them adds a draw call. Going-to-the-Sun is the first route to use it:
 
@@ -199,7 +201,7 @@ The rock work is skipped on flat ground.
 
 ## Road surface and stonework (any route)
 
-**Road surface** (`js/world/road-surface.js`): the road changes with the place and its condition. A scene's
+**Road surface** (`js/world/toolbox/materials/road-surface.js`): the road changes with the place and its condition. A scene's
 `road` block names the default kind, and zones override it (later zones win, with 40 m blends at the ends):
 
 ```json
@@ -226,7 +228,7 @@ The rain preset's wet road is added on top of this.
 - `centre` sets the centre line: 1 is painted, 0.4 is faded and broken, and 0 is none.
 - `gravel` spreads loose gravel over the lanes in patches.
 
-**Stonework** (`js/world/stonework.js`):
+**Stonework** (`js/world/toolbox/materials/stonework.js`):
 - `makeMasonryMaterial({ stones, mortar, courseM, moss, mossM })` draws rubble masonry from world position: wavy courses, stones of mixed length and colour, recessed joints, weather streaks, and moss at the foot.
 - Because the pattern comes from world position, it doesn't stretch with the box it's on, and it carries on from one segment to the next.
 - `makeParapetGeometry()` is a unit parapet with battered sides and a rounded cap.
@@ -240,13 +242,13 @@ Going-to-the-Sun's guardwalls use both:
 
 ## Life along the road (any route)
 
-- **Verge** (`js/world/verge.js`, the scene's `verge` block):
+- **Verge** (`js/world/toolbox/roadside/verge.js`, the scene's `verge` block):
   - mile or kilometre markers (`markers.units`)
   - tall snow poles (`poles` ranges)
   - white delineators (`posts` ranges)
   - fallen rock on the shoulder and the bench below the deeper road cuts (`debris` ranges)
   - Grouped per 1.5 km and hidden past `reachM`.
-- **Visitors** (`js/world/visitors.js`, the `visitors` block):
+- **Visitors** (`js/world/toolbox/life/visitors.js`, the `visitors` block):
   - People stand or slowly stroll at `spots`: a `site` by name, or `{ atM, side, lateralM, radiusM }`.
   - `lookouts: n` puts n people at each overlook.
   - `walking` is the share who stroll.
@@ -268,7 +270,7 @@ Going-to-the-Sun's guardwalls use both:
 ## Going-to-the-Sun trees, ground cover and flowers (`vegetation.rich`)
 
 Only Going-to-the-Sun has this for now. The tools will be brought to the other routes once this route is finished.
-- **Trees** (`glacier-kit.js`):
+- **Trees** (`js/world/toolbox/packs/northern-rockies.js`):
   - Each tree is built from tiers of branches. Every tier is a cone whose rim zigzags (tips out, notches in) and droops, with a darker underside (the shaded inside, seen from the low chase camera).
   - Spruce, lodgepole, larch and hemlock have dead lower limbs.
   - Fir and spruce carry old-man's-beard lichen.
@@ -338,7 +340,7 @@ To author another region, copy the closest scene preset, set `title`, `seed`,
 - `vegetation`: asset names in `trees`, `shrubs` and `cover`; `treeDensity`,
   `density`, `vergeDensity` and optional `treelineM`; `snowLineM` colors high ground.
 - `preview`: `positionM` sets a useful initial review spot (the view is always the chase camera).
-- `look`: `"gentle"` or `"bold"` lays the cartoon look over the scenery (`js/world/look.js`: toon bands, colour grade,
+- `look`: `"gentle"` or `"bold"` lays the cartoon look over the scenery (`js/world/toolbox/atmosphere/look.js`: toon bands, colour grade,
   smooth crowns, flat road, ink outlines drawn in `post.js`'s final pass). Route 28 uses `"gentle"` with
   `"timeOfDay": "midday"`. Preview `?look=none|gentle|bold`, snapshot tags `:current`, `:gentle`, `:bold`.
 
@@ -537,13 +539,13 @@ through `CityScene._clearSpot` (true distance to the route's road, every street'
 
 How the stylized scenes are drawn, for anyone adding scenery:
 
-- **Frame pipeline** (`js/world/post.js`): every stylized scene renders into an offscreen target with its own
+- **Frame pipeline** (`js/world/toolbox/atmosphere/post.js`): every stylized scene renders into an offscreen target with its own
   MSAA (`samples` per detail level) and a 32-bit float depth buffer, so the renderer uses a **reversed depth
   buffer** (EXT_clip_control) instead of the logarithmic one. The logarithmic buffer wrote depth per pixel,
   which stopped the GPU skipping hidden pixels. Non-hero scenes draw exactly as before (8-bit, tone-mapped by
   the materials); hero scenes (`post: true`) keep the HDR target, bloom, grade and vignette. Custom shaders
   keep their `logdepthbuf` includes: they do nothing unless the fallback is in use.
-- **Pooled scenery** (`js/world/pools.js`): ground patches share one mesh per 4.6 km block, and plants
+- **Pooled scenery** (`js/world/toolbox/core/pools.js`): ground patches share one mesh per 4.6 km block, and plants
   share one `InstancedMesh` per kind and 30° sector around the camera (split again at 400 m), instead of a
   mesh per tile. Tiles still exist as unrendered stand-ins (`terrain.patches`, `terrain.streamedGroups()`)
   for the QC tools. Pooled meshes are tagged `userData.pooled`.
@@ -561,12 +563,12 @@ How the stylized scenes are drawn, for anyone adding scenery:
 - **Water**: the sea and opaque lakes draw after the land (`renderOrder = 1`), so hidden water is never
   shaded; authored coastlines are a lookup texture, not a loop per pixel.
 
-- **Baked lighting** (`js/world/baked-light.js`, scene `"lighting": { "baked": "golden" }`): the sun stays at
+- **Baked lighting** (`js/world/toolbox/atmosphere/baked-light.js`, scene `"lighting": { "baked": "golden" }`): the sun stays at
   the baked time (night still works); once the static scenery has streamed in, the GPU bakes a top-down
   sun-shadow height map and ambient occlusion for the whole route in a few slices, and the live shadow map
   keeps only moving things in a small box round the rider. Opt-in per scene; how-to, keys and costs in
   `docs/pittsburgh/detail/s1.md`. Streamed detail that comes and goes with the camera sets
   `userData.bake = false`; moving meshes set `userData.dynamic = true` (or use `DynamicDrawUsage`).
-- **Riverfront promenades** (`js/world/riverfront.js`, scene `"riverfront": { "spans": [{ "fromM", "toM" }] }`):
+- **Riverfront promenades** (`js/world/toolbox/city/riverfront.js`, scene `"riverfront": { "spans": [{ "fromM", "toM" }] }`):
   where the route runs beside a river, a smoothed river wall with a walk, railing and benches replaces the
   map's sawtooth bank (the ground past the wall goes under the water); optional `"waterSteps"`.

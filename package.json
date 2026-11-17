@@ -11,7 +11,12 @@
     "qc:clipping": "node tools/qc_clipping.mjs",
     "snap": "node tools/snap_scene.mjs",
     "snap:cam": "node tools/snap_cam.mjs",
-    "snap:rider": "node tools/snap_rider.mjs"
+    "snap:rider": "node tools/snap_rider.mjs",
+    "lint:scenes": "node tools/lint_scene.mjs",
+    "new-route": "node tools/new_route.mjs",
+    "presets": "node tools/build_presets.mjs",
+    "guard": "node tools/toolbox_guard.mjs",
+    "gallery": "node tools/snap_gallery.mjs"
   },
   "devDependencies": {
     "@garmin/fitsdk": "^21.221.0",

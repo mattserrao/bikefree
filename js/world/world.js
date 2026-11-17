@@ -1,20 +1,20 @@
 // The 3D ride view: real terrain + aerial imagery, the road, a pedalling rider, sky and cameras.
-import { cutRouteRibbon, junctionPlan } from './junction-mesh.js';   // [junctions] (the road's overlay: city.js)
+import { cutRouteRibbon, junctionPlan } from './toolbox/city/junction-mesh.js';   // [junctions] (the road's overlay: city.js)
 import * as THREE from '../../vendor/three.module.min.js';
 import { makeProjection, makeRouteIndex } from './geo.js';
 import { Terrain } from './terrain.js';
-import { Weather } from './weather.js';
-import { PostFX } from './post.js';
-import { Look, LOOKS } from './look.js';
-import { StylizedTerrain, COASTAL_QUALITY } from './stylized-terrain.js';
+import { Weather } from './toolbox/atmosphere/weather.js';
+import { PostFX } from './toolbox/atmosphere/post.js';
+import { Look, LOOKS } from './toolbox/atmosphere/look.js';
+import { StylizedTerrain, SCENERY_QUALITY } from './stylized-terrain.js';
 import { riderPose, routePoint, ROAD_WIDTH, CHASE } from './pose.js';
 import { loadRider } from './rider.js';
 import { PerfMonitor } from './perf.js';
-import { HAZE, AERIAL, AERIAL_COLOR, installHaze } from './haze.js';
-import { vistaConfig } from './vista.js';
-import { decorateRoad } from './road-surface.js';
+import { HAZE, AERIAL, AERIAL_COLOR, installHaze } from './toolbox/atmosphere/haze.js';
+import { vistaConfig } from './toolbox/atmosphere/vista.js';
+import { decorateRoad } from './toolbox/materials/road-surface.js';
 import { denseRoad } from './road-align.js';   // [road-align]
-import { BakedLighting } from './baked-light.js';   // [baked-light]
+import { BakedLighting } from './toolbox/atmosphere/baked-light.js';   // [baked-light]
 
 installHaze();   // valley haze in the fog chunks: before any material compiles
 import { wrapDist } from '../gpx.js';
@@ -53,7 +53,7 @@ export class World {
     this.stylized = route.scene?.style === 'stylized';
     // a new route's placeholder before its scenery: the real ground as contour/grid lines (scene.wire)
     this.wireframe = route.scene?.style === 'wireframe';
-    this.qualityKey = Object.hasOwn(COASTAL_QUALITY, opts.quality) ? opts.quality : 'balanced';
+    this.qualityKey = Object.hasOwn(SCENERY_QUALITY, opts.quality) ? opts.quality : 'balanced';
 
     // Projection centred on the route
     let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
@@ -72,7 +72,7 @@ export class World {
     const reversed = this.stylized && hasClipControl();
     this.renderer = new THREE.WebGLRenderer({ antialias: !this.stylized, logarithmicDepthBuffer: !reversed,
       reversedDepthBuffer: reversed, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.stylized ? COASTAL_QUALITY[this.qualityKey].pixelRatio : 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.stylized ? SCENERY_QUALITY[this.qualityKey].pixelRatio : 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     container.prepend(this.renderer.domElement);
@@ -90,7 +90,7 @@ export class World {
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
     this.sun = new THREE.DirectionalLight(0xffffff, 1.5);
     if (this.stylized) {
-      this.renderer.shadowMap.enabled = COASTAL_QUALITY[this.qualityKey].shadows;
+      this.renderer.shadowMap.enabled = SCENERY_QUALITY[this.qualityKey].shadows;
       this.renderer.shadowMap.type = THREE.PCFShadowMap;   // PCFSoftShadowMap was removed from three.js
       this.sun.castShadow = true;
       const shadowResolution = this.qualityKey === 'high' ? 2048 : 1024;
@@ -145,7 +145,7 @@ export class World {
     if (this.stylized) this.baked = BakedLighting.create(this, route.scene.lighting, TIME_PRESETS);
     // hero scenery: HDR render with soft bloom, a gentle grade and vignette (off on Light detail)
     // every stylized scene goes through it; only hero scenes (scene.post) get the bloom, grade and vignette
-    if (this.stylized) this.post = new PostFX(this.renderer, { samples: COASTAL_QUALITY[this.qualityKey].samples });
+    if (this.stylized) this.post = new PostFX(this.renderer, { samples: SCENERY_QUALITY[this.qualityKey].samples });
     this.heroPost = !!(this.stylized && route.scene.post);
     // vista kit: faint outlines on the far ridges (with or without the cartoon look's near outlines)
     this.vista = this.stylized ? vistaConfig(route.scene) : null;
@@ -246,8 +246,8 @@ export class World {
 
   setQuality(key) {
     if (!this.stylized) return;
-    this.qualityKey = Object.hasOwn(COASTAL_QUALITY, key) ? key : 'balanced';
-    const quality = COASTAL_QUALITY[this.qualityKey];
+    this.qualityKey = Object.hasOwn(SCENERY_QUALITY, key) ? key : 'balanced';
+    const quality = SCENERY_QUALITY[this.qualityKey];
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.pixelRatio));
     this.renderer.shadowMap.enabled = quality.shadows && !(this.baked && this._time?.night);   // [baked-light]
     const resolution = this.qualityKey === 'high' ? 2048 : 1024;
@@ -658,7 +658,7 @@ function makeRoad(route, index) {
   tex.anisotropy = 8;
   const roadOptions = { map: tex, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 };
   const mat = stylized ? new THREE.MeshStandardMaterial({ ...roadOptions, roughness: .94, metalness: .015 }) : new THREE.MeshLambertMaterial(roadOptions);
-  // road surface by area and condition (js/world/road-surface.js): the scene's "road" block
+  // road surface by area and condition (js/world/toolbox/materials/road-surface.js): the scene's "road" block
   if (stylized && route.scene.road) decorateRoad(mat, route.scene.road, { widthM: ROAD_WIDTH, repeatM: 24 });
   if (stylized) {
     const data = new Uint8Array(128 * 128 * 4);

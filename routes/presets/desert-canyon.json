@@ -1,0 +1,67 @@
+{
+  "preset": {
+    "id": "desert-canyon",
+    "name": "Desert canyon",
+    "description": "Authored canyon landforms around the GPX: sandstone formations and walls, a river in the valley floor, desert planting. The oldest kit (Blender regional models); no regional pack yet.",
+    "from": "zion",
+    "terrainTool": "authored: place \"formations\" and the \"valley\" by hand (or bake real terrain with build_terrain_grid.py and use \"real-mountain\")"
+  },
+  "scene": {
+    "format": "bikefree-scene-1",
+    "style": "stylized",
+    "title": "",
+    "region": "",
+    "description": "Authored canyon landforms around the GPX: sandstone formations and walls, a river in the valley floor, desert planting. The oldest kit (Blender regional models); no regional pack yet.",
+    "seed": 1101,
+    "terrain": "authored-region",
+    "assets": "models/scenery/coastal.json",
+    "extraAssets": [
+      "models/scenery/regional.json"
+    ],
+    "biome": "desert",
+    "reliefM": 16,
+    "palette": {
+      "grass": "#a39165",
+      "meadow": "#c4a678",
+      "rock": "#ae765b",
+      "cliff": "#cc9a76",
+      "water": "#729889"
+    },
+    "vegetation": {
+      "trees": [
+        "broadleaf0",
+        "broadleaf1"
+      ],
+      "treeDensity": 0.08,
+      "density": 0.7,
+      "cover": [
+        "grass",
+        "sage",
+        "yucca",
+        "grass"
+      ],
+      "shrubs": [
+        "sage"
+      ],
+      "vergeDensity": 0.35
+    },
+    "valley": {
+      "widthM": 330,
+      "heightM": 650
+    },
+    "look": "gentle",
+    "timeOfDay": "midday",
+    "lighting": {
+      "baked": "midday"
+    },
+    "formations": [],
+    "rivers": [],
+    "roadside": [],
+    "signs": [],
+    "lookouts": [],
+    "preview": {
+      "positionM": 0,
+      "camera": "chase"
+    }
+  }
+}

@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { buildCatalogRoute } from '../js/routes.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
-import { makeRegionalLandscape } from '../js/world/regional-landscape.js';
+import { makeRegionalLandscape } from '../js/world/toolbox/landscape/authored-region.js';
 import { attachTerrainBuffer, makeTerrainSampler } from '../js/world/terrain-data.js';
-import { planSettlement } from '../js/world/settlement.js';
-import { ForestPlanner, TILE_M } from '../js/world/forest.js';
+import { planSettlement } from '../js/world/toolbox/structures/settlement.js';
+import { ForestPlanner, TILE_M } from '../js/world/toolbox/vegetation/forest.js';
 import { loadSceneSync } from '../tools/qc_course.mjs';
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');

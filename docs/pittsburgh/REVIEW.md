@@ -70,7 +70,7 @@ Branch `pittsburgh-test`, built on v0.12.2. The plan is in the Project doc *open
 
 *Close-ups from `npm run snap:cam` (the free camera); postcards from the scenic camera (`vista`).*
 
-**Towers** (`js/world/city-heroes.js`, placed by the scene's `heroes`):
+**Towers** (`js/world/toolbox/city/heroes.js`, placed by the scene's `heroes`):
 - **U.S. Steel Tower:** a triangle with notched corners (it was a rough extruded footprint), dark Cor-Ten, six exposed columns on each face.
 - **BNY Mellon Center:** grey granite and glass with a stepped crown and a lit band. The map had it twice; the copy is gone.
 - **Fifth Avenue Place:** the map had only an unnamed body and a stray mast. Now a granite shaft with cut corners, a five-step crown lit at night, and a 33 m mast.

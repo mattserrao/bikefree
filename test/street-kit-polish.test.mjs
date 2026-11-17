@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { StreetKit, FURNITURE } from '../js/world/street-kit.js';
-import { MeshBuilder } from '../js/world/city-geometry.js';
+import { StreetKit, FURNITURE } from '../js/world/toolbox/city/street-kit.js';
+import { MeshBuilder } from '../js/world/toolbox/core/mesh-builder.js';
 
 // [w2-polish] shop signs: deterministic, and units side by side along a street never repeat a sign
 test('shop labels differ between neighbouring units and are deterministic', () => {

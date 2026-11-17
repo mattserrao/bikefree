@@ -2,6 +2,7 @@
 import { loadTerrainGrid } from './terrain-grid.js';
 import { parseGpx, buildRoute, wrapDist } from './gpx.js';
 import { attachTerrainBuffer } from './world/terrain-data.js';
+import { normalizeScene } from './world/toolbox/scene-schema.js';
 
 // Never sample across the overlapping legs at a U-turn or start/finish.
 export function headingSpan(route, distance, look = 6) {
@@ -66,6 +67,7 @@ export async function loadRouteScene(route, fetcher = fetch) {
   if (!response.ok) throw new Error(`Scenery could not load (${response.status})`);
   const scene = await response.json();
   if (scene.format !== 'bikefree-scene-1') throw new Error('Unsupported scenery format');
+  normalizeScene(scene);   // old field names → the toolbox's (js/world/toolbox/scene-schema.js)
   if (scene.terrainData?.file) {
     // Baked real terrain and lakes; without it the scene falls back to its authored landforms
     try {

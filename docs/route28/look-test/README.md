@@ -14,7 +14,7 @@
 | 4 | 19.05 km, Inlet | golden hour, with the sun at 7° |
 
 ## What the two looks change
-Both looks are layered over today's scenery by `js/world/look.js`. Nothing is rebuilt or batched yet, so draw calls are unchanged.
+Both looks are layered over today's scenery by `js/world/toolbox/atmosphere/look.js`. Nothing is rebuilt or batched yet, so draw calls are unchanged.
 
 | | Gentle | Bold |
 | --- | --- | --- |

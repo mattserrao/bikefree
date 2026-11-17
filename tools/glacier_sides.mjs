@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { buildCatalogRoute } from '../js/routes.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
-import { landscapeBuilder } from '../js/world/landscapes.js';
+import { landscapeBuilder } from '../js/world/toolbox/landscape/index.js';
 import { loadSceneSync } from './qc_course.mjs';
 
 const catalog = JSON.parse(readFileSync('routes/catalog.json', 'utf8'));
