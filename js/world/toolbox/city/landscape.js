@@ -9,7 +9,7 @@ import { smoothstep } from '../core/random.js';
 import { ROAD_WIDTH } from '../../pose.js';
 import { decodeTerrain } from '../landscape/real-terrain.js';
 import { planJunctions, junctionGround, junctionTops } from './junctions.js';   // [junctions]
-import { joinCrossings, densifyAlongside, clearOverpasses, alignAlongRoute, trimAtRoute, followMovedNodes, keepUnderRoad, resolveOverlaps, hideCrossingsAtRoute, landFreeDeckEnds, streetSlots } from './road-meets.js';   // [junctions]
+import { joinCrossings, densifyAlongside, clearOverpasses, alignAlongRoute, trimAtRoute, followMovedNodes, keepUnderRoad, resolveOverlaps, hideCrossingsAtRoute, landFreeDeckEnds, streetSlots, refineTrimEdges } from './road-meets.js';   // [junctions]
 import { alignStreetProfiles, syncPinnedNodes } from '../../road-align.js';   // [road-align]
 import { makeStreetGrade } from './street-grade.js';   // [street-kit]
 import { riverfrontGround } from './riverfront.js';   // [s1-riverfront]
@@ -271,7 +271,7 @@ export function makeCityLandscape(config, proj, index, route) {
     return best;
   };
   /** [w2-align] Points along the ground streets (centre, carriageway edges, sidewalk edges every `step` m) inside a
-   *  box: the drawn ground mesh must not rise above the ground there (js/world/ground-drape.js). Not within
+   *  box: the drawn ground mesh must not rise above the ground there (js/world/toolbox/landscape/ground-drape.js). Not within
    *  `clearOfRouteM` of the route's road, whose bank and verge the course QC holds to the 6 m mesh as sampled. */
   const groundClearPoints = (x0, z0, x1, z1, step = 2, clearOfRouteM = 9) => {
     if (!streetIndex) streetAt(x0, z0);
@@ -565,6 +565,7 @@ export function cityStreets(landscape, index, route) {
       onRouteBridge: (s, m) => landscape.routeBridges.some((b) => s > b.fromM - m && s < b.toM + m), liftOf: (k) => .1 + streetSlots(landscape, streets)[k] * .02 }, landscape.junctions);
     keepUnderRoad(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] nothing over the road
     followMovedNodes(streets);   // [junctions] paths, side streets and decks meet the moved ones at their height
+    refineTrimEdges(streets);   // [finish] finer points where a trim jumps, so no wedge is left over the neighbour
     resolveOverlaps(streets, landscape, { final: true });   // [w2-meets] again: heights moved since (decks and their links)
     keepUnderRoad(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] (and still nothing over the road)
     hideCrossingsAtRoute(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [w2-meets] crossings at another level: under the road's bank

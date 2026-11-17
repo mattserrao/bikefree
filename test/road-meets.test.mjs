@@ -78,7 +78,7 @@ test('road meets: pittsburgh, every place roadways meet within 150 m of the rout
   const L = makeCityLandscape(scene, proj, index, route);
   cityStreets(L, index, route);
   const R = roadMeets(L, index, route, { roadWidth: ROAD_WIDTH });
-  assert.ok(R.sites.length > 1000, `${R.sites.length} sites`);
+  assert.ok(R.sites.length > 900, `${R.sites.length} sites`);   // (fewer once overlapping carriageways are drawn as one)
   for (const kind of ['junction', 'link', 'route', 'overlap']) assert.ok(R.counts[kind] > 10, `${kind}: ${R.counts[kind]}`);
   // the junction system's own geometry: no step, gap or misplaced paint at any junction or link near the route
   const own = R.sites.filter((s) => s.d < 25 && (s.kind === 'junction' || s.kind === 'link') && s.issues.some((i) => ['step', 'gap', 'paint'].includes(i.check)));

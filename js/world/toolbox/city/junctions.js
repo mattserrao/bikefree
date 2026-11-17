@@ -333,7 +333,13 @@ export function planJunctions(streets, ctx, options = {}) {
     // 5. the surface's height (line height; drawn at +lift)
     let J;
     if (isRoute) {
-      J = (x, z) => RL.project(x, z, rq.s, 45).y + ROAD_LIFT - O.routeGap - O.lift;
+      // [finish] (and never above the road as landscape.routeDist() sees it: the two lines can differ by millimetres
+      // where the profile bends hard, e.g. on ramps)
+      const rd = routeDist;
+      J = (x, z) => {
+        const y = RL.project(x, z, rq.s, 45).y + ROAD_LIFT - O.routeGap - O.lift, r = rd && rd(x, z);
+        return r && r.d < RW / 2 + 1 ? Math.min(y, r.y + ROAD_LIFT - O.routeGap - O.lift) : y;
+      };
     } else {
       const P = ring.map((a) => { const sp = streetPoint(streets[a.k], a.a0 + a.dir * a.t); return { x: sp.x - C.x, z: sp.z - C.z, y: sp.y }; });
       // least squares plane y = c + gx·x + gz·z

@@ -571,7 +571,7 @@ export class StylizedTerrain {
       if (i === S && j % 2) yield;
     }
     // [w2-align] keep the mesh off the streets: lower the bank vertices whose triangles would cover a street's
-    // uphill edge (js/world/ground-drape.js), a slice of street points at a time
+    // uphill edge (js/world/toolbox/landscape/ground-drape.js), a slice of street points at a time
     if (size <= DRAPE_MAX_PATCH && this.landscape.groundClearPoints) {
       const hs = new Float64Array(N * N);
       for (let k = 0; k < N * N; k++) hs[k] = positions[k * 3 + 1];
