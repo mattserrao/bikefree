@@ -6,6 +6,11 @@
   "description": "Stage 19 on race day: Gap over Col Bayard, Col du Noyer and Col d'Ornon to the 21 hairpins of Alpe d'Huez. Real ground and real villages, drawn in the gentle cartoon look.",
   "seed": 1924,
   "terrain": "real-mountain",
+  "roadAlign": {
+    "turns": {
+      "minRadiusM": 8
+    }
+  },
   "realHorizon": false,
   "assets": "models/scenery/coastal.json",
   "extraAssets": [

@@ -13,7 +13,7 @@ import { PerfMonitor } from './perf.js';
 import { HAZE, AERIAL, AERIAL_COLOR, installHaze } from './toolbox/atmosphere/haze.js';
 import { vistaConfig } from './toolbox/atmosphere/vista.js';
 import { decorateRoad, frenchMarkings } from './toolbox/materials/road-surface.js';
-import { denseRoad } from './road-align.js';   // [road-align]
+import { denseRoad, ribbonSections } from './road-align.js';   // [road-align] [smooth-turns]
 import { BakedLighting } from './toolbox/atmosphere/baked-light.js';   // [baked-light]
 import { CourseArches } from './toolbox/roadside/course-arches.js';
 
@@ -623,14 +623,10 @@ function makeRoad(route, index) {
   const n = roadPoints(route);
   const pos = new Float32Array(n * 2 * 3);
   const uv = new Float32Array(n * 2 * 2);
+  const E = ribbonSections(index, n, ROAD_WIDTH / 2);   // [smooth-turns] left/right edges (no folds with roadAlign.turns)
   for (let i = 0; i < n; i++) {
-    const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1);
-    let dx = index.xs[b] - index.xs[a], dz = index.zs[b] - index.zs[a];
-    const len = Math.hypot(dx, dz) || 1; dx /= len; dz /= len;
-    const rx = -dz, rz = dx; // right
     const y = route.ele[i] + 0.12;
-    const hw = ROAD_WIDTH / 2;
-    pos.set([index.xs[i] - rx * hw, y, index.zs[i] - rz * hw, index.xs[i] + rx * hw, y, index.zs[i] + rz * hw], i * 6);
+    pos.set([E[i * 4], y, E[i * 4 + 1], E[i * 4 + 2], y, E[i * 4 + 3]], i * 6);
     const v = route.dist[i] / 24;
     uv.set([0, v, 1, v], i * 4);
   }
@@ -729,12 +725,10 @@ function makeRibbon(route, index, width, lift, tex, repeatM, offset) {
   [route, index] = denseRoad(route, index);   // [road-align]
   const n = roadPoints(route);
   const pos = new Float32Array(n * 2 * 3), uv = new Float32Array(n * 2 * 2);
+  const E = ribbonSections(index, n, width / 2);   // [smooth-turns]
   for (let i = 0; i < n; i++) {
-    const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1);
-    let dx = index.xs[b] - index.xs[a], dz = index.zs[b] - index.zs[a];
-    const len = Math.hypot(dx, dz) || 1; dx /= len; dz /= len;
-    const rx = -dz, rz = dx, hw = width / 2, y = route.ele[i] + lift;
-    pos.set([index.xs[i] - rx * hw, y, index.zs[i] - rz * hw, index.xs[i] + rx * hw, y, index.zs[i] + rz * hw], i * 6);
+    const y = route.ele[i] + lift;
+    pos.set([E[i * 4], y, E[i * 4 + 1], E[i * 4 + 2], y, E[i * 4 + 3]], i * 6);
     const v = route.dist[i] / repeatM;
     uv.set([0, v, 1, v], i * 4);
   }
