@@ -805,6 +805,7 @@ export class CityScene {
       }
     }
     if (plan) this.junctionMeshes = buildJunctionMeshes(this, plan, { get, roads, walks, liftOf: (k) => .1 + slots[k] * .02 });   // [junctions]
+    if (plan && this.streetKit) this._junctionCorners(plan);   // [finish] the kit's signals and corner signs at the junctions' corners
     for (const [map, mat, name] of [[roads, this.streetMaterial, 'Streets'], [walks, this.sidewalkMaterial, 'Sidewalks'], [paths, this.pathMaterial, 'Paths']]) {
       for (const [key, builder] of map) {
         builder.keepOutOf(this.landscape.inRouteTube);   // ramps and roadways the data puts in the rider's space
@@ -858,6 +859,32 @@ export class CityScene {
       for (const [px, pz] of this._styled.get(`${gx},${gz}`) || []) if (Math.hypot(px - x, pz - z) < 14) return true;
     }
     return false;
+  }
+
+  /**
+   * [finish] Junction corners → street-kit corner furniture (signal masts at busy junctions, corner street signs, push
+   * buttons), in the kit's zones. The kit stops placing its own mapped signals and signs (externalJunctions).
+   */
+  _junctionCorners(plan) {
+    const kit = this.streetKit, L = this.landscape;
+    kit.externalJunctions(true);
+    let n = 0;
+    for (const jn of plan.list) {
+      const r = L.routeDist(jn.x, jn.z); if (!r) continue;
+      const zone = kit.zoneAt(kit.sOf(r), r.d); if (!zone) continue;
+      const big = jn.arms.filter((a) => a.route || a.cls <= 4);
+      const busy = big.length >= 3 || (jn.route && jn.arms.length >= 3);
+      for (const cb of jn.curbs) {
+        if (!cb.arc || cb.pts.length < 3) continue;
+        const m = cb.pts[cb.pts.length >> 1], ox = m.x - jn.x, oz = m.z - jn.z, ol = Math.hypot(ox, oz) || 1;
+        const x = m.x + ox / ol * .7, z = m.z + oz / ol * .7;
+        if (!kit.clear(x, z, .3)) continue;
+        const yaw = Math.atan2(-ox, -oz), arm = Math.max(2.5, Math.min(5.5, ol * .55));
+        kit.addCorner({ x, z, yaw, arm, signal: busy, sign: true, button: busy, y: kit.sidewalkTop(x, z) });
+        n++;
+      }
+    }
+    this.junctionCorners = n;
   }
 
   _lampMeshes(lamps) {
