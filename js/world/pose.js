@@ -10,7 +10,13 @@ export const ROAD_LIFT = 0.12;                  // road surface above the route 
 // The chase camera (world._updateCamera): metres behind and above the rider, and the point it aims at
 // (ahead along the road, a little low so the rider sits above the HUD strip). It is kept CHASE.ground m
 // above the ground. Shared with the QC tools so they check the camera the app uses.
-export const CHASE = { back: 4.5, up: 2.1, ahead: 8, lookUp: -0.6, ground: 1.6 };
+// Two choices (Settings → Camera). CHASE is the default ("close", ride-feel-test): 3.3 m back and lower, so the
+// rider is ~1.3× bigger and the road rushes past closer to the lens; world.js adds a speed-widened field of view
+// and a little lag on acceleration. CHASE_CLASSIC is the earlier fixed 4.5 m camera.
+export const CHASE_CLASSIC = { back: 4.5, up: 2.1, ahead: 8, lookUp: -0.6, ground: 1.6, fov: 62, speedFov: 0, pull: 0, buzz: 0 };
+export const CHASE_CLOSE = { back: 3.3, up: 1.8, ahead: 7, lookUp: -0.4, ground: 1.6, fov: 58, speedFov: 10, pull: 0.25, buzz: 0.01 };
+export const CAMERAS = { close: CHASE_CLOSE, classic: CHASE_CLASSIC };
+export const CHASE = CHASE_CLOSE;
 const DRIFT_M = 10, BLEND_M = 10;               // U-turn lane change, then hand-back to the road's direction
 
 /** Point on the route centre line at distance s, in the local frame: {x, y, z}. */

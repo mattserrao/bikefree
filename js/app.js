@@ -14,6 +14,7 @@ import { Profiles, GENDERS, initials, cmToFtIn, ftInToCm } from './profiles.js';
 import { buildCatalogRoute, loadRouteScene } from './routes.js';
 import { legLength, startPosition, stopsForDirection, stopNear, planRide, startArchM } from './route-plan.js';
 import { VERSION } from './version.js';
+import { ScreenAwake } from './wakelock.js';
 import { planRouteTiles, tileKeysToUrls, downloadUrls, offlineStatus, setOfflineStatus, registerServiceWorker } from './offline.js';
 
 const $ = (id) => document.getElementById(id);
@@ -709,6 +710,7 @@ async function openWorld(route) {
   worldRoute = route;
   world.setTimeOfDay(settings.worldTime);
   world.setWeather(settings.worldWeather || 'clear', true);
+  world.setCamera(settings.camera);
   world.setSource(() => ({ pos: riderPosOn(route), speed: session.speedMps, cadence: session.cadence, riding: true,
     grade: session.gradePct, power: session.power3s, ftp: settings.ftp }));
   world.setPacerSource(() => {
@@ -916,6 +918,11 @@ function trackFtpTest() {
   if (session.running && session.segment?.ftpTest) { ftpRun.sum += session.power * dt; ftpRun.secs += dt; }
 }
 
+// Keep the Mac's screen from sleeping while a trainer is connected or a ride is going (ride-feel-test).
+const screenAwake = new ScreenAwake(log);
+session.addEventListener('tick', () => {
+  screenAwake.want(trainer.connected || session.running || session.hasRide);
+});
 session.addEventListener('tick', () => {
   trackFtpTest();
   stepPacer();
@@ -935,6 +942,8 @@ function renderDiag() {
   const t = session.target;
   $('target').textContent = !trainer.connected ? '—'
     : t ? (t.mode === 'ERG' ? `ERG ${t.value} W (${t.source})` : `SIM ${t.value.toFixed(1)}%`) : '—';
+  $('feltGrade').textContent = session.trainerGrade == null ? '—'
+    : `${session.trainerGrade.toFixed(1)}% (road ${session.gradePct.toFixed(1)}%, hill feel ${settings.hillFeel ?? 50}%)`;
   $('realRatio').textContent = `${session.realRatio.toFixed(2)}${settings.realRatio ? ' (set)' : session.realRatioEst ? ' (auto)' : ' (default)'}`;
   const tk = trainer.data.speedKph;
   $('trainerSpeed').textContent = tk != null ? `${(imperial() ? tk * MI_PER_KM : tk).toFixed(1)} ${imperial() ? 'mph' : 'km/h'}` : '—';
@@ -1502,6 +1511,8 @@ function fillSettings() {
   f.realRatio.value = settings.realRatio;
   f.haptics.checked = settings.haptics;
   f.hudSize.value = settings.hudSize;
+  f.hillFeel.value = String(settings.hillFeel ?? 50);
+  f.camera.value = settings.camera || 'close';
   f.minimap.value = settings.minimap;
   f.startGear.value = settings.startGear;
   for (const el of dlg.querySelectorAll('.u-weight')) el.textContent = imp ? 'lb' : 'kg';
@@ -1532,6 +1543,8 @@ dlg.addEventListener('close', () => {
     realRatio: Math.max(0, Number(f.realRatio.value) || 0),
     haptics: f.haptics.checked,
     hudSize: f.hudSize.value,
+    hillFeel: Number(f.hillFeel.value) || 50,
+    camera: f.camera.value,
     minimap: f.minimap.value,
     startGear: Math.min(24, Math.max(1, Math.round(Number(f.startGear.value) || 12))),
   });
@@ -1541,12 +1554,13 @@ dlg.addEventListener('close', () => {
   world?.setTimeOfDay(settings.worldTime);
   world?.setQuality(settings.worldQuality);
   world?.setWeather(settings.worldWeather);
+  world?.setCamera?.(settings.camera);
   applyHudPrefs();
   renderRouteCards();
   renderWorkoutList();
   renderProfile();
   showPane(chosen);
-  log('app', `Settings saved (${settings.shiftMode.toUpperCase()} shifting, difficulty ${settings.difficulty}%, FTP ${settings.ftp} W)`);
+  log('app', `Settings saved (${settings.shiftMode.toUpperCase()} shifting, difficulty ${settings.difficulty}%, hill feel ${settings.hillFeel}%, FTP ${settings.ftp} W)`);
 });
 
 window.addEventListener('resize', () => { renderPreview(); drawThumbs(); lastProfileDraw = 0; lastMapDraw = 0; });

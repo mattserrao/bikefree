@@ -854,3 +854,13 @@ Close Zwift, Zwift Companion and the Wahoo app before connecting — they can ho
 - [x] Ride-screen minimap (bottom-left): route outline, this leg's progress, rider arrow, pacer dot; on routes and scenery loops
 - [x] Settings → Minimap: Whole course (default) · Zoomed in, follows you · Off; <kbd>M</kbd> cycles it on the ride screen
 - [x] Settings → Power bar size: Small (default, ~50% of the old size) · Medium · Large (original); labels keep a readable minimum
+
+### ride-feel-test — riders' feel notes *(branch `ride-feel-test`)*
+From the group ride: screen sleeps, a 1% hill "felt like a truck", shifts feel small, bike too far away.
+- [x] Keep the screen awake while a trainer is connected or a ride is going (Screen Wake Lock, `js/wakelock.js`)
+- [x] Power check: watts come straight from the KICKR; physics (CdA 0.32, Crr 0.004, profile weight + bike) gives real-world numbers — accurate, but full-strength hills with no momentum felt harsh in ERG (gear 12 @ 85 rpm: 0→1% was 98→163 W at once)
+- [x] Hill feel setting 25/50/75/100%, default 50% like Zwift's trainer difficulty — scales the grade sent to the trainer only (flat and on-screen speed unchanged)
+- [x] Momentum: the trainer's grade eases toward the road's over ~3 s (time constant) instead of jumping; shifts still act at once
+- [x] Camera setting: Close (default, 3.3 m back and lower, ~1.3× bigger rider, FOV widens with speed, slight pull-back on acceleration, faint road buzz) or Classic (old fixed 4.5 m)
+- [x] Diagnostics show "Trainer feels X% (road Y%, hill feel Z%)"
+- [ ] Gear spacing: no change for now (revisit after riders try Hill feel + momentum)

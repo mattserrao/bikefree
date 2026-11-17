@@ -2,6 +2,7 @@
 // speed/distance physics, timer and 1 Hz recording.
 import {
   GEAR_RATIOS, clamp, stepSpeed, ergTargetForGear, simGradeForGear, estimateRealRatio, DEFAULTS,
+  feltGrade, easeGrade, HILL_FEEL_DEFAULT,
 } from './physics.js';
 import { shiftDirection } from './parsers.js';
 import { Recorder } from './recorder.js';
@@ -58,6 +59,7 @@ export class Session extends EventTarget {
     this._lastSentAt = 0;
     this._lastSent = null;
     this.target = null;
+    this.trainerGrade = null;    // the grade the trainer feels: Hill feel × road grade, eased for momentum
     this.routeOffset = 0;
     this.routeStart = 0;          // metres along the route where this ride started (Reverse / ⅓ / ⅔)
     this.routeFinishM = null;     // point to point, not endless: metres to ride before the finish (null: endless)
@@ -324,7 +326,7 @@ export class Session extends EventTarget {
     this._updateRoute();
     this._updateWorkout(now);
     this._record(now, grade);
-    this._control(nowPerf, p, grade);
+    this._control(nowPerf, p, grade, dt);
     this.dispatchEvent(new Event('tick'));
   }
 
@@ -407,7 +409,11 @@ export class Session extends EventTarget {
   }
 
   /** Send the trainer the resistance for the current gear, cadence, grade or workout step. */
-  _control(nowPerf, p, grade) {
+  _control(nowPerf, p, grade, dt = TICK_MS / 1000) {
+    // Ride feel: the trainer gets Hill feel × grade (like Zwift's trainer difficulty), eased in over a few
+    // seconds the way momentum carries a real bike into a hill. Shifts still change resistance at once.
+    this.trainerGrade = easeGrade(this.trainerGrade, feltGrade(grade, this.settings.hillFeel ?? HILL_FEEL_DEFAULT), dt);
+    grade = this.trainerGrade;
     if (!this.trainer.connected || this.trainer.busy || this.trainer.reconnecting) return;
     // No recent data (Bluetooth hiccup): hold the last resistance rather than guessing.
     if (!this._fresh && this.workoutTarget == null) return;

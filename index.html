@@ -292,6 +292,22 @@
           </select>
         </label>
       </div>
+      <div class="two">
+        <label>Hill feel
+          <select name="hillFeel">
+            <option value="25">25% — gentle</option>
+            <option value="50">50% — like Zwift (default)</option>
+            <option value="75">75%</option>
+            <option value="100">100% — real hills</option>
+          </select>
+        </label>
+        <label>Camera
+          <select name="camera">
+            <option value="close">Close — speed feel (default)</option>
+            <option value="classic">Classic — 4.5 m back</option>
+          </select>
+        </label>
+      </div>
       <label class="check"><input type="checkbox" name="haptics"> Buzz handlebars on shift and workout steps</label>
       <details class="advanced">
         <summary>Advanced</summary>
@@ -316,6 +332,7 @@
           <div class="diag" id="diag">
             <div class="diag-grid">
               <div>Trainer target <b id="target">—</b></div>
+              <div>Trainer feels <b id="feltGrade">—</b></div>
               <div>Real gear ratio <b id="realRatio">—</b></div>
               <div>Trainer speed <b id="trainerSpeed">—</b></div>
               <div>Handlebars <b id="rideInfo">—</b></div>
