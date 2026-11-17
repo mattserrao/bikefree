@@ -12,7 +12,7 @@ Reads tools/city/<id>.json and writes two files:
   <data>  "bikefree-city-1": a height grid, a land-use grid (water, park, woods,
           paved, buildings), building footprints with heights, nearby streets,
           bridges, rail lines (inclines, light rail) and trees, for
-          js/world/city-landscape.js and js/world/city.js.
+          js/world/toolbox/city/landscape.js and js/world/toolbox/city/city.js.
 
 OSM tiles are cached in tools/.cache/osm-<id>/ (the OSM API is used politely,
 one small area at a time). Data © OpenStreetMap contributors, ODbL.

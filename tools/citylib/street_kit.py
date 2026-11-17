@@ -1,4 +1,4 @@
-"""Street & facade detail kit: the OpenStreetMap details the kit places (js/world/street-kit.js).
+"""Street & facade detail kit: the OpenStreetMap details the kit places (js/world/toolbox/city/street-kit.js).
 
     data['streetKit'] = extract(nodes, ntags, ways, q, route_dist)
 

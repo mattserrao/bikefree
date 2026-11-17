@@ -11,7 +11,8 @@
 // No @metres = the scene's preview spot.
 // Options: --out <dir> (default tools/snapshots), --quality low|balanced|high, --size 1280x720,
 // --chrome <path> (default: CHROME env, else the usual Mac/Linux locations), --software (no GPU).
-// --png (lossless), --fingerprint (hash of every object for refactor checks; see tools/toolbox_guard.mjs).
+// --png (lossless), --fingerprint (hash of every object for refactor checks, with a frozen clock, seeded
+// random and no streamed real horizon, so runs repeat exactly; see tools/toolbox_guard.mjs).
 import { createServer } from 'node:http';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -31,9 +32,9 @@ const png = flag('--png');   // [toolbox] lossless PNG instead of JPEG (pixel-ex
 const fingerprint = flag('--fingerprint');   // [toolbox] hash of every mesh, matrix, attribute and material in the scene
 const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync));
-if (!args.length) { console.log('usage: npm run snap -- <park>[@metres][:camera][:time][:season][:weather] …'); process.exit(1); }
+if (!args.length) { console.log('usage: npm run snap -- <park>[@metres][:camera][:time][:season][:weather][:gentle|bold|current|standard] …'); process.exit(1); }
 
-const LOOKS = ['gentle', 'bold', 'current'];   // current = no cartoon look, whatever the scene says
+const LOOKS = ['gentle', 'bold', 'current', 'standard'];   // current = no cartoon look, whatever the scene says; standard = the toolbox standard (gentle + baked light)
 const OLD_CAMERAS = ['chase', 'drone', 'vista', 'side', 'eye'];   // retired: ignored with a warning
 const TIMES = ['midday', 'morning', 'afternoon', 'golden', 'night'];
 const WEATHERS = ['clear', 'marine', 'clouds', 'rain', 'smoke'];
@@ -81,7 +82,7 @@ await mkdir(resolve(ROOT, out), { recursive: true });
 const rows = [];
 for (const shot of shots) {
   const t0 = Date.now(); errors.length = 0;
-  const q = new URLSearchParams({ park: shot.park, clean: '1', quality, ...(shot.pos ? { pos: shot.pos } : {}), ...(shot.time ? { time: shot.time } : {}), ...(shot.season ? { season: shot.season } : {}), ...(shot.weather ? { weather: shot.weather } : {}), ...(shot.look ? { look: shot.look === 'current' ? 'none' : shot.look } : {}) });
+  const q = new URLSearchParams({ park: shot.park, clean: '1', quality, ...(shot.pos ? { pos: shot.pos } : {}), ...(shot.time ? { time: shot.time } : {}), ...(shot.season ? { season: shot.season } : {}), ...(shot.weather ? { weather: shot.weather } : {}), ...(shot.look === 'standard' ? { standard: '1' } : shot.look ? { look: shot.look === 'current' ? 'none' : shot.look } : {}), ...(fingerprint ? { horizon: '0' } : {}) });
   await page.goto(`${base}/tools/world-preview.html?${q}`);
   if (breakdown) await page.evaluate(() => { window.__breakdown = true; });
   await page.evaluate(([p, f]) => { window.__png = p; window.__fingerprint = f; }, [png, fingerprint]);   // [toolbox]

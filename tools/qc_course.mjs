@@ -18,11 +18,12 @@ import { parseTerrainGrid } from '../js/terrain-grid.js';
 import { gunzipSync } from 'node:zlib';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
 import { attachTerrainBuffer } from '../js/world/terrain-data.js';
-import { planSettlement } from '../js/world/settlement.js';
-import { cityStreets, STREET_LIFT } from '../js/world/city-landscape.js';
-import { streetOverlaps, drawnLiftMax, routeLine } from '../js/world/junctions.js';   // [junctions]
-import { roadMeets, streetSlots, MEET_LIMITS } from '../js/world/road-meets.js';   // [junctions]
-import { landscapeBuilder } from '../js/world/landscapes.js';
+import { planSettlement } from '../js/world/toolbox/structures/settlement.js';
+import { cityStreets, STREET_LIFT } from '../js/world/toolbox/city/landscape.js';
+import { streetOverlaps, drawnLiftMax, routeLine } from '../js/world/toolbox/city/junctions.js';   // [junctions]
+import { roadMeets, streetSlots, MEET_LIMITS } from '../js/world/toolbox/city/road-meets.js';   // [junctions]
+import { normalizeScene } from '../js/world/toolbox/scene-schema.js';
+import { landscapeBuilder } from '../js/world/toolbox/landscape/index.js';
 import { riderPose, routePoint, ROAD_WIDTH, ROAD_LIFT, CHASE } from '../js/world/pose.js';
 import { alignmentChecks } from './qc_alignment.mjs';   // [road-align]
 
@@ -347,7 +348,7 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
     // [junctions] how much street surface is still drawn over other street surface (overlapping ribbons)
     streetStats = { ...streetOverlaps(streets, plan || null, { routeDist: landscape.routeDist, roadWidth: ROAD_WIDTH }),
       junctions: plan?.list.length || 0, routeJunctions: plan?.list.filter((j) => j.route).length || 0 };
-    // [junctions] road meets (js/world/road-meets.js): every place roadways meet near the route, measured as drawn —
+    // [junctions] road meets (js/world/toolbox/city/road-meets.js): every place roadways meet near the route, measured as drawn —
     // steps, gaps, overlaps, dangling ends, misplaced paint. Reported (info: the work list, with the counts in the
     // summary line; test/road-meets.test.mjs bounds them), since the rest need source heights fixed (docs/pittsburgh/detail/s2.md)
     const meets = roadMeets(landscape, index, route, { roadWidth: ROAD_WIDTH });
@@ -432,7 +433,7 @@ export function htmlReport(results, { previewHref = 'world-preview.html' } = {})
 
 /** Scene JSON plus its baked terrain, read from disk. */
 export function loadSceneSync(path) {
-  const scene = JSON.parse(read(path));
+  const scene = normalizeScene(JSON.parse(read(path)));
   if (scene.terrainData?.file) attachTerrainBuffer(scene, readFileSync(join(ROOT, scene.terrainData.file)));
   if (scene.terrainGridFile) scene.terrainGrid = scene.terrainGridFile.endsWith('.json') ? JSON.parse(read(scene.terrainGridFile)) : parseTerrainGrid(gunzipSync(readFileSync(join(ROOT, scene.terrainGridFile))));   // real-coast grid (build_terrain_grid.py)
   return scene;

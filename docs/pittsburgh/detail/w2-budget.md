@@ -23,7 +23,7 @@ High, with headroom (≤ 520) for the street & facade kit to go route-wide.
 Every chunk of the city is built for the bake, and the camera sees kilometres of it, so the per-tile meshes
 added up: 535 of the 695 calls were city tiles, most of them more than a kilometre away.
 
-## What changed (`js/world/city.js`, tag `[w2-budget]`)
+## What changed (`js/world/toolbox/city/city.js`, tag `[w2-budget]`)
 
 | | was | now |
 | --- | --- | --- |

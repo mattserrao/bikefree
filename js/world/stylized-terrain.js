@@ -1,91 +1,32 @@
 import * as THREE from '../../vendor/three.module.min.js';
-import { randomSequence, smoothstep } from './coast.js';
-import { loadSceneryAssets } from './scenery-assets.js';
-import { makeCoastalGroundMaterial, makeCoastalWaterMaterial, makeLakeWaterMaterial, makeLakeMistMaterial, decorateSceneryMaterial } from './coastal-materials.js';
-import { makeAdirondackKit, ADIRONDACK_CATEGORY } from './adirondack-kit.js';
-import { makeGlacierKit, GLACIER_CATEGORY, decorateTreeMaterial } from './glacier-kit.js';
-import { ForestPlanner, TILE_M, makeClearings } from './forest.js';
-import { GroundBlocks, InstancePool, packMatrices, proxyGroup } from './pools.js';
-import { GlacierLandmarks } from './glacier-landmarks.js';
-import { planSettlement, Settlement } from './settlement.js';
-import { CoastalDetails, fitBridgeToRoad, coastalRoadFrame } from './coastal-details.js';
-import { landscapeBuilder } from './landscapes.js';
-import { CityScene } from './city.js';
-import { CoastBridges } from './coast-bridges.js';
-import { HighwayTraffic } from './highway-traffic.js';
-import { CoastLife } from './coast-life.js';
-import { GlacierLife } from './glacier-life.js';
+import { randomSequence, smoothstep, vhash, vnoise } from './toolbox/core/random.js';
+import { makeTreeCards } from './toolbox/vegetation/tree-cards.js';
+import { loadSceneryAssets } from './toolbox/packs/blender-kits.js';
+import { makeGroundMaterial, makeSeaMaterial, makeLakeWaterMaterial, makeLakeMistMaterial, decorateSceneryMaterial } from './toolbox/materials/surfaces.js';
+import { scenePacks, PACK_META } from './toolbox/packs/index.js';
+import { normalizeScene, lifeKit } from './toolbox/scene-schema.js';
+import { ForestPlanner, TILE_M, makeClearings } from './toolbox/vegetation/forest.js';
+import { GroundBlocks, InstancePool, packMatrices, proxyGroup } from './toolbox/core/pools.js';
+import { MountainRoad } from './toolbox/structures/mountain-road.js';
+import { planSettlement, Settlement } from './toolbox/structures/settlement.js';
+import { RoadsideDetails, fitBridgeToRoad, roadFrame } from './toolbox/roadside/details.js';
+import { landscapeBuilder } from './toolbox/landscape/index.js';
+import { CityScene } from './toolbox/city/city.js';
+import { ArchBridges } from './toolbox/structures/arch-bridges.js';
+import { HighwayTraffic } from './toolbox/life/traffic.js';
+import { CoastLife } from './toolbox/life/coast-life.js';
+import { Wildlife } from './toolbox/life/wildlife.js';
 import { makeRouteIndex } from './geo.js';
-import { vistaConfig, makeCumulusAtlas } from './vista.js';
-import { Verge } from './verge.js';
-import { Visitors } from './visitors.js';
+import { vistaConfig, makeCumulusAtlas } from './toolbox/atmosphere/vista.js';
+import { Verge } from './toolbox/roadside/verge.js';
+import { buildGuardrail } from './toolbox/roadside/guardrail.js';
+import { Visitors } from './toolbox/life/visitors.js';
 
 // Tree cards stream in large tiles, at a fraction of the scatter's candidate density.
 const FAR_TREE_TILE_M = 768, FAR_TREE_DENSITY = .3;
 
-/**
- * The tree-card materials: an alpha-tested silhouette (conifer or broadleaf) on a quad that turns about
- * its vertical axis to face the camera, lit from above like the canopy, with the scene's fog and wind.
- * `hide` (minX, minZ, maxX, maxZ) is the square where the real trees stand: cards there are dropped.
- */
-function makeTreeCards(uniforms) {
-  const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
-  const ctx = canvas.getContext('2d');
-  const shade = (x0, x1) => { const g = ctx.createLinearGradient(x0, 0, x1, 0); g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#b8b8b8'); return g; };
-  // left half: conifer (tiers of a narrow cone); right half: broadleaf (a rounded crown on a short trunk)
-  ctx.fillStyle = '#5a4a3c'; ctx.fillRect(29, 108, 6, 20); ctx.fillRect(93, 92, 6, 36);
-  ctx.fillStyle = shade(6, 58);
-  for (let k = 0; k < 5; k++) {
-    const top = 2 + k * 20, half = 13 + k * 4.4;
-    ctx.beginPath(); ctx.moveTo(32, top); ctx.lineTo(32 + half, top + 30); ctx.lineTo(32 - half, top + 30); ctx.closePath(); ctx.fill();
-  }
-  ctx.fillStyle = shade(66, 126);
-  for (const [x, y, r] of [[96, 48, 26], [80, 62, 18], [112, 62, 17], [96, 30, 18], [96, 72, 20]]) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
-  const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
-  const geometry = new THREE.PlaneGeometry(1, 1); geometry.translate(0, .5, 0);
-  const hide = { value: new THREE.Vector4(0, 0, 0, 0) }, reach = { value: 1e9 };
-  const make = (u0) => {
-    const material = new THREE.MeshLambertMaterial({ map: texture, alphaTest: .3, alphaToCoverage: true, side: THREE.DoubleSide });
-    material.onBeforeCompile = (shader) => {
-      shader.uniforms.bfHide = hide; shader.uniforms.bfReach = reach; shader.uniforms.uTime = uniforms.uTime; shader.uniforms.bfWind = uniforms.bfWind || { value: .3 };
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nuniform vec4 bfHide; uniform float bfReach; uniform float uTime; uniform float bfWind;')
-        .replace('#include <uv_vertex>', `#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = vec2(${u0.toFixed(2)} + uv.x * .5, uv.y);\n#endif`)
-        .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = vec3(0., 1., 0.);')
-        .replace('#include <project_vertex>', `
-          vec4 bfC = modelMatrix * instanceMatrix * vec4(0., 0., 0., 1.);
-          vec3 bfR = normalize(vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]));
-          float bfW = length(instanceMatrix[0].xyz), bfH = length(instanceMatrix[1].xyz);
-          float bfSway = sin(uTime * 1.1 + bfC.x * .07 + bfC.z * .05) * bfWind * .04 * position.y * bfH;
-          vec3 bfP = bfC.xyz + bfR * (position.x * bfW + bfSway) + vec3(0., position.y * bfH, 0.);
-          vec4 mvPosition = viewMatrix * vec4(bfP, 1.);
-          gl_Position = projectionMatrix * mvPosition;
-          // where the real trees stand: off screen
-          // and beyond the reach (where the ground starts to morph toward the real horizon)
-          if ((bfC.x > bfHide.x && bfC.z > bfHide.y && bfC.x < bfHide.z && bfC.z < bfHide.w) || length(bfC.xz - cameraPosition.xz) > bfReach) gl_Position = vec4(2., 2., 2., 1.);`);
-    };
-    material.customProgramCacheKey = () => `bf-tree-card-${u0}`;
-    return { geometry, material };
-  };
-  const cards = { conifer: make(0), broadleaf: make(.5), hide, reach };
-  cards.dispose = () => { texture.dispose(); geometry.dispose(); cards.conifer.material.dispose(); cards.broadleaf.material.dispose(); };
-  return cards;
-}
-
-// smooth value noise for planting patterns (flower drifts, grass kinds)
-const vhash = (i, j) => { const h = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return h - Math.floor(h); };
-function vnoise(x, z) {
-  const i = Math.floor(x), j = Math.floor(z), fx = x - i, fz = z - j, u = fx * fx * (3 - 2 * fx), w = fz * fz * (3 - 2 * fz);
-  return (vhash(i, j) * (1 - u) + vhash(i + 1, j) * u) * (1 - w) + (vhash(i, j + 1) * (1 - u) + vhash(i + 1, j + 1) * u) * w;
-}
-// Going-to-the-Sun flowers by zone (vegetation.rich)
-const FLOWERS = {
-  valley: ['arnica', 'aster', 'arnica', 'fireweed', 'paintbrush'],
-  subalpine: ['beargrass', 'lupine', 'paintbrush', 'arnica', 'alpineflowers', 'beargrass'],
-  alpine: ['glacierlily', 'paintbrush', 'alpineflowers', 'glacierlily'],
-  east: ['aster', 'lupine', 'paintbrush', 'arnica'],
-  creek: ['monkeyflower', 'monkeyflower', 'arnica'],
-};
+// flowers by zone (vegetation.rich): the northern-rockies pack's drifts (toolbox/packs/meta.js)
+const FLOWERS = PACK_META['northern-rockies'].flowerZones;
 
 // Ground cover streams in small tiles: full density within COVER_FULL_M of the camera, half out to COVER_RANGE_M.
 const COVER_TILE_M = 96, COVER_FULL_M = 110, COVER_RANGE_M = 220;
@@ -94,7 +35,7 @@ const fract = (v) => v - Math.floor(v);
 /** Run a build job (generator) to the end at once. */
 function runJob(job) { for (;;) { const r = job.next(); if (r.done) return r.value; } }
 
-export const COASTAL_QUALITY = {
+export const SCENERY_QUALITY = {
   // forestRange: tiles of real trees in forest scenes; nearM/midM: tile-centre distances for the detail tiers;
   // buildMs: time per frame for building streamed tiles (ground, plants, forest) while riding;
   // farTreeM: how far the flat tree cards reach beyond the real trees (0 = none)
@@ -107,12 +48,12 @@ export const COASTAL_QUALITY = {
 export class StylizedTerrain {
   constructor(scene, proj, routeIndex, opts) {
     this.scene = scene;
-    this.config = opts.route.scene;
+    this.config = normalizeScene(opts.route.scene);   // old field names → the toolbox's
     this.proj = proj;
     this.route = opts.route;
     this.index = routeIndex;
-    this.quality = COASTAL_QUALITY[opts.quality] || COASTAL_QUALITY.balanced;
-    this.qualityKey = COASTAL_QUALITY[opts.quality] ? opts.quality : 'balanced';
+    this.quality = SCENERY_QUALITY[opts.quality] || SCENERY_QUALITY.balanced;
+    this.qualityKey = SCENERY_QUALITY[opts.quality] ? opts.quality : 'balanced';
     this.lookKey = opts.look || null;   // cartoon look test: the kit is built with smooth shading
     this.landscape = landscapeBuilder(this.config)(this.config, proj, routeIndex, opts.route);
     // fog (the weather's fog bank) lies on this level: the sea, or a city's rivers
@@ -120,10 +61,10 @@ export class StylizedTerrain {
     if (this.landscape.fogField) this._makeRiverMask();
     this.inlandAt = this.landscape.inlandAt || ((x, z) => x - this.landscape.coastX(z));
     this.lookoutFootprints = (this.config.lookouts || []).map((l) => ({ ...l,
-      ...coastalRoadFrame(this.route, routeIndex, l.atM, (l.side === 'inland' ? -1 : 1) * (3.5 + l.widthM / 2)) }));
+      ...roadFrame(this.route, routeIndex, l.atM, (l.side === 'inland' ? -1 : 1) * (3.5 + l.widthM / 2)) }));
     this.uniforms = { uTime: { value: 0 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
       uSkyTop: { value: new THREE.Color() }, uSkyHorizon: { value: new THREE.Color() },
-      // weather (js/world/weather.js): cloud cover/shadow/drift, wind, wet ground, sea roughness
+      // weather (js/world/toolbox/atmosphere/weather.js): cloud cover/shadow/drift, wind, wet ground, sea roughness
       bfCloud: { value: new THREE.Vector4(.12, .5, .8, .57) }, bfWind: { value: .3 }, bfWet: { value: 0 }, bfRough: { value: .7 } };
     this.group = new THREE.Group();
     this.group.name = `${this.config.title || this.route.name} · stylized scenery`;
@@ -149,8 +90,8 @@ export class StylizedTerrain {
       this._setCanopyStart();
       this.forestTiles = new Map(); this.forestQueue = [];
     }
-    this.vista = vistaConfig(this.config);   // vista kit (js/world/vista.js): distance detail, haze, clouds
-    this.groundMaterial = makeCoastalGroundMaterial(this.config.palette, this.config, this.farUniform, this.canopyUniform, this.uniforms, this.vista, this._vkAttr());
+    this.vista = vistaConfig(this.config);   // vista kit (js/world/toolbox/atmosphere/vista.js): distance detail, haze, clouds
+    this.groundMaterial = makeGroundMaterial(this.config.palette, this.config, this.farUniform, this.canopyUniform, this.uniforms, this.vista, this._vkAttr());
     this._makeOcean();
     this._makeClouds();
     this._makeShadows();
@@ -158,27 +99,24 @@ export class StylizedTerrain {
     this.ready = loadSceneryAssets(this.config.assets, { uniforms: this.uniforms, extraPaths: this.config.extraAssets }).then((kit) => {
       if (this.disposed) { kit.dispose(); return; }
       this.kit = kit;
-      if ((this.config.kitExtensions || []).includes('adirondack')) this._addAdirondackKit(kit);
-      if ((this.config.kitExtensions || []).includes('glacier')) this._addAdirondackKit(kit, makeGlacierKit, GLACIER_CATEGORY);
+      for (const pack of scenePacks(this.config)) this._addPack(kit, pack);   // regional packs (toolbox/packs)
       if (this.settlementPlan) this.settlement = new Settlement(this.group, this.settlementPlan, kit, this.uniforms);
       this._makeLandmarks();
-      if (this.landscape.real) this.bridges = new CoastBridges(this.group, this.landscape, this.uniforms);
-      if (this.landscape.mountain && this.config.life) {
-        this.life = new GlacierLife(this.group, this.landscape, this.route, this.index, this.uniforms, this.config.life);
-        this.life.setNight(this._night || 0);
-      } else if (this.landscape.real && this.config.life) {
-        this.life = new CoastLife(this.group, this.landscape, this.proj, this.route, this.index, this.uniforms, this.config.life);
-        this.life.setNight(this._night || 0);
-      }
+      if (this.landscape.real) this.bridges = new ArchBridges(this.group, this.landscape, this.uniforms);
+      // life kit (toolbox/life): wildlife or coast life, by "life.kit" or the landform
+      const life = lifeKit(this.config, this.landscape);
+      if (life === 'wildlife') this.life = new Wildlife(this.group, this.landscape, this.route, this.index, this.uniforms, this.config.life);
+      else if (life === 'coast') this.life = new CoastLife(this.group, this.landscape, this.proj, this.route, this.index, this.uniforms, this.config.life);
+      this.life?.setNight(this._night || 0);
       if (this.config.traffic) {
         this.traffic = new HighwayTraffic(this.group, this.route, this.index, this.landscape, this.uniforms, this.qualityKey, this.config.traffic);
         this.traffic.setNight(this._night || 0);
       }
-      this.details = new CoastalDetails(this.group, this.route, this.index, this.landscape, kit, this.uniforms);
+      this.details = new RoadsideDetails(this.group, this.route, this.index, this.landscape, kit, this.uniforms);
       if (this.config.verge && this.landscape.frameAt) this.verge = new Verge(this.group, this.landscape, this.route, this.config.verge);
       if (this.config.visitors && this.landscape.frameAt) this.visitors = new Visitors(this.group, this.landscape, this.route, this.index, this.uniforms, this.config.visitors, this.qualityKey, this.config.lookouts || []);
-      if (this.config.glacier) {
-        this.landmarks = new GlacierLandmarks(this.group, this.landscape, this.route, this.index, this.proj, this.config, kit, this.uniforms);
+      if (this.config.mountainRoad) {   // tunnels, masonry guardwalls, arches, waterfalls (toolbox/structures)
+        this.landmarks = new MountainRoad(this.group, this.landscape, this.route, this.index, this.proj, this.config, kit, this.uniforms);
         this.landmarks.setNight(this._night || 0);
       }
       if (this.landscape.city) {
@@ -198,18 +136,21 @@ export class StylizedTerrain {
     this.canopyUniform.value.x = this.quality.forestRange * TILE_M - 150;
   }
 
-  _addAdirondackKit(kit, make = makeAdirondackKit, category = ADIRONDACK_CATEGORY) {
+  /** A regional pack's models join the kit: near, far (-lod/-far) and soft ground-cover materials shared by all. */
+  _addPack(kit, { make, category, decorateNear }) {
     const geos = make({ fall: this.config.season === 'fall', smooth: !!this.lookKey });
     const near = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 });
-    // Glacier: bark, foliage clumps, aspen flutter, moss and lichen on the near trees (the kit tags each surface)
-    if (make === makeGlacierKit) decorateTreeMaterial(near, this.uniforms);
+    // a pack can give its near trees a surface shader (northern-rockies: bark, foliage clumps, aspen flutter, moss)
+    if (decorateNear) decorateNear(near, this.uniforms);
     const far = new THREE.MeshLambertMaterial({ vertexColors: true });
     const soft = decorateSceneryMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .98, side: THREE.DoubleSide }), 'groundcover', this.uniforms);
-    this.kitMaterials = [near, far, soft];
+    const first = !this.kitMaterials;
+    (this.kitMaterials ||= []).push(near, far, soft);
     for (const [name, geometry] of Object.entries(geos)) {
       const material = category[name] === 'groundcover' ? soft : /-(lod|far)$/.test(name) ? far : near;
       kit.assets[name] = { geometry, material };
     }
+    if (!first) return;   // several packs: one dispose for all their materials
     const dispose = kit.dispose;
     kit.dispose = () => { dispose(); this.kitMaterials.forEach((m) => m.dispose()); };
   }
@@ -226,34 +167,7 @@ export class StylizedTerrain {
   }
 
   _makeRoadside() {
-    const posts = [], rails = [];
-    const matrix = new THREE.Matrix4(), position = new THREE.Vector3(), scale = new THREE.Vector3();
-    const route = this.route, index = this.index;
-    for (const range of this.config.roadside || []) {
-      for (let s = range.fromM; s < range.toM; s += 8) {
-        const i = Math.min((route.turnIdx || route.dist.length - 1) - 2, Math.floor(s / 10)), j = i + 1;
-        if ((this.config.lookouts || []).some((l) => (l.side || 'ocean') === (range.side || 'ocean') && Math.abs(s - l.atM) < (l.lengthM || 32) / 2 + 30)) continue;   // open entry and exit for traffic pulling in
-        const f = (s - route.dist[i]) / (route.dist[j] - route.dist[i]);
-        const x = index.xs[i] + (index.xs[j] - index.xs[i]) * f, z = index.zs[i] + (index.zs[j] - index.zs[i]) * f;
-        if (this.landscape.bridgeAt(x, z, 12)) continue;
-        const direction = new THREE.Vector3(index.xs[j] - index.xs[i], route.ele[j] - route.ele[i], index.zs[j] - index.zs[i]).normalize();
-        const right = new THREE.Vector3(-direction.z, 0, direction.x).normalize();
-        const side = range.side === 'inland' ? -1 : 1;
-        position.set(x, route.ele[i] + (route.ele[j] - route.ele[i]) * f, z).addScaledVector(right, side * 4.1);
-        const q = new THREE.Quaternion();
-        scale.set(1, 1, 1);
-        posts.push(matrix.compose(position.clone().add(new THREE.Vector3(0, .55, 0)), q, scale).clone());
-        q.setFromUnitVectors(new THREE.Vector3(0, 0, 1), direction);
-        scale.set(1, 1, 8.15);
-        rails.push(matrix.compose(position.clone().add(new THREE.Vector3(0, .95, 0)).addScaledVector(direction, 4), q, scale).clone());
-      }
-    }
-    this.roadside = new THREE.Group();
-    const material = new THREE.MeshLambertMaterial({ color: '#b7b5a1' });
-    for (const [geometry, matrices] of [[new THREE.BoxGeometry(.16, 1.1, .16), posts], [new THREE.BoxGeometry(.16, .23, 1), rails]]) {
-      const mesh = new THREE.InstancedMesh(geometry, material, matrices.length);
-      matrices.forEach((m, i) => mesh.setMatrixAt(i, m)); mesh.castShadow = mesh.receiveShadow = true; mesh.computeBoundingSphere(); this.roadside.add(mesh);
-    }
+    this.roadside = buildGuardrail(this.config, this.route, this.index, this.landscape);   // toolbox/roadside/guardrail.js
     this.group.add(this.roadside);
   }
 
@@ -424,7 +338,7 @@ export class StylizedTerrain {
 
   _makeOcean() {
     const shore = this.landscape.real ? this._makeShoreTexture() : null;
-    const material = makeCoastalWaterMaterial(this.landscape, this.uniforms, this.config.palette.water, this.config.palette.shallowWater, shore);
+    const material = makeSeaMaterial(this.landscape, this.uniforms, this.config.palette.water, this.config.palette.shallowWater, shore);
     this.ocean = new THREE.Mesh(new THREE.PlaneGeometry(160000, 160000), material);
     this.ocean.rotation.x = -Math.PI / 2;
     this.ocean.position.y = .05;
@@ -836,7 +750,7 @@ export class StylizedTerrain {
         if (x0 < cx * size || x0 >= (cx + 1) * size || z0 < cz * size || z0 >= (cz + 1) * size) continue;
         yield;
         const dx = this.index.xs[i + 1] - x0, dz = this.index.zs[i + 1] - z0, len = Math.hypot(dx, dz) || 1;
-        const vergeCount = (this.quality === COASTAL_QUALITY.low ? 28 : this.quality === COASTAL_QUALITY.high ? 132 : 96) * (vegetation.vergeDensity || 1);
+        const vergeCount = (this.quality === SCENERY_QUALITY.low ? 28 : this.quality === SCENERY_QUALITY.high ? 132 : 96) * (vegetation.vergeDensity || 1);
         for (let k = 0; k < vergeCount; k++) {
           const off = (k % 2 ? -1 : 1) * (5.4 + rand() * 11), along = (rand() - .5) * 18;
           const x = x0 - dz / len * off + dx / len * along, z = z0 + dx / len * off + dz / len * along;
@@ -904,7 +818,7 @@ export class StylizedTerrain {
 
   _asset(name) { return name === 'shadow' ? this.shadowAsset : this.kit.assets[name]; }
 
-  /** Shadow flags for a pooled plant: near trees and rocks cast (see the shadow range in COASTAL_QUALITY). */
+  /** Shadow flags for a pooled plant: near trees and rocks cast (see the shadow range in SCENERY_QUALITY). */
   _scatterFlags(name, tile) {
     return { cast: !!tile.detailed && /^(cypress|pine|fir|broadleaf|palm|rock|outcrop)/.test(name) && !name.endsWith('-lod'), receive: name !== 'shadow' };
   }
@@ -1196,8 +1110,8 @@ export class StylizedTerrain {
 
   heightAt(x, z) { return this.landscape.heightAt(x, z); }
   setQuality(key) {
-    this.quality = COASTAL_QUALITY[key] || COASTAL_QUALITY.balanced;
-    this.qualityKey = COASTAL_QUALITY[key] ? key : 'balanced';
+    this.quality = SCENERY_QUALITY[key] || SCENERY_QUALITY.balanced;
+    this.qualityKey = SCENERY_QUALITY[key] ? key : 'balanced';
     this.city?.setQuality(this.qualityKey);
     if (this.forestTiles) { this.forestTiles.clear(); this.forestQueue = []; this._setCanopyStart(); }
     this.scatter.clear(); this.cover.clear(); this.farTrees.clear();

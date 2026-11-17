@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { buildCatalogRoute } from '../js/routes.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
-import { makeRegionalLandscape } from '../js/world/regional-landscape.js';
+import { makeRegionalLandscape } from '../js/world/toolbox/landscape/authored-region.js';
 import { loadSceneSync } from '../tools/qc_course.mjs';
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');

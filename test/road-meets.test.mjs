@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { buildCatalogRoute } from '../js/routes.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
-import { makeCityLandscape, cityStreets } from '../js/world/city-landscape.js';
-import { alignAlongRoute, trimOverlaps, joinCrossings, roadMeets, streetSlots } from '../js/world/road-meets.js';
+import { makeCityLandscape, cityStreets } from '../js/world/toolbox/city/landscape.js';
+import { alignAlongRoute, trimOverlaps, joinCrossings, roadMeets, streetSlots } from '../js/world/toolbox/city/road-meets.js';
 import { ROAD_WIDTH } from '../js/world/pose.js';
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');

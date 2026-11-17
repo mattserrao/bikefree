@@ -38,6 +38,9 @@ try {
  const route = buildCatalogRoute(await response.text(), item);
  if (q.get('style') !== 'legacy') await loadRouteScene(route);
  if (route.scene && q.get('season')) route.scene.season = q.get('season');
+ if (route.scene && q.get('horizon') === '0') route.scene.realHorizon = false;
+ // [toolbox] ?standard=1: the route with the toolbox standard look (gentle cartoon, baked light at its time of day)
+ if (route.scene && q.get('standard') === '1') { route.scene.look ||= 'gentle'; route.scene.lighting = { ...route.scene.lighting, baked: q.get('time') || route.scene.timeOfDay || 'midday' }; }   // [toolbox] no streamed real horizon (deterministic guard renders)
  const world = new World($('view'), route, { quality: q.get('quality') || 'balanced', look: q.get('look'), log: (...args) => console.log(...args) });
  let pos = Math.max(0, Math.min(route.total, Number(q.get('pos') ?? route.scene?.preview?.positionM ?? 0) || 0));
  let speed = Math.max(0, Math.min(45, Number(q.get('speed')) || 0));

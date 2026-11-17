@@ -1,0 +1,65 @@
+{
+  "preset": {
+    "id": "coast",
+    "name": "Coast highway",
+    "description": "Real coast: surf on the real shoreline, shallows from the sea floor, cliffs and golden grass, arch bridges over the gorges, marine-layer weather, sea birds, light highway traffic.",
+    "from": "bigsur",
+    "terrainTool": "python3 tools/build_terrain_grid.py <id>  (real ground and sea floor out to the horizon)"
+  },
+  "scene": {
+    "format": "bikefree-scene-1",
+    "style": "stylized",
+    "title": "",
+    "region": "",
+    "description": "Real coast: surf on the real shoreline, shallows from the sea floor, cliffs and golden grass, arch bridges over the gorges, marine-layer weather, sea birds, light highway traffic.",
+    "seed": 1101,
+    "terrain": "real-coast",
+    "realHorizon": false,
+    "assets": "models/scenery/coastal.json",
+    "extraAssets": [
+      "models/scenery/regional.json"
+    ],
+    "palette": {
+      "grass": "#76804f",
+      "meadow": "#c9b077",
+      "rock": "#9c9482",
+      "cliff": "#b7ab92",
+      "water": "#2e8395",
+      "sand": "#d8c8a2",
+      "forest": "#4a5a35"
+    },
+    "vegetation": {
+      "density": 1.3
+    },
+    "post": true,
+    "biome": "coast",
+    "traffic": {
+      "perMinute": 4
+    },
+    "life": {
+      "kit": "coast"
+    },
+    "weather": {
+      "presets": [
+        "clear",
+        "marine",
+        "clouds",
+        "rain"
+      ]
+    },
+    "look": "gentle",
+    "timeOfDay": "midday",
+    "lighting": {
+      "baked": "midday"
+    },
+    "roadside": [],
+    "bridges": [],
+    "seaStacks": [],
+    "signs": [],
+    "lookouts": [],
+    "preview": {
+      "positionM": 0,
+      "camera": "chase"
+    }
+  }
+}

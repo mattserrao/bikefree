@@ -6,8 +6,8 @@ import { parseTerrainGrid } from '../js/terrain-grid.js';
 import { gunzipSync } from 'node:zlib';
 import { routeAt, haversine } from '../js/gpx.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
-import { makeRealCoastLandscape } from '../js/world/real-coast.js';
-import { coastalRoadFrame, fitBridgeToRoad } from '../js/world/coastal-details.js';
+import { makeRealCoastLandscape } from '../js/world/toolbox/landscape/real-terrain.js';
+import { roadFrame, fitBridgeToRoad } from '../js/world/toolbox/roadside/details.js';
 import * as THREE from '../vendor/three.module.min.js';
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
@@ -113,7 +113,7 @@ test('tree detail levels preserve the silhouette height while distant geometry i
     assert.ok(Math.abs(peak(kit.assets[`${name}-lod`]) - peak(kit.assets[name])) < .9, name);
   }
   for (const sign of scene.signs) {
-    const frame = coastalRoadFrame(route, index, sign.atM, sign.side === 'inland' ? -5.7 : 5.7);
+    const frame = roadFrame(route, index, sign.atM, sign.side === 'inland' ? -5.7 : 5.7);
     assert.ok(Number.isFinite(frame.position.y));
     assert.ok(Math.abs(frame.forward.dot(frame.right)) < 1e-9);
   }

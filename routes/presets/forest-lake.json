@@ -1,0 +1,99 @@
+{
+  "preset": {
+    "id": "forest-lake",
+    "name": "Forest and lakes",
+    "description": "Northern forest road past lakes and villages: continuous canopy, mown verge, lake water with treeline reflections, villages and camps from the real shoreline.",
+    "from": "route28",
+    "terrainTool": "python3 tools/build_scene_terrain.py <id>  (USGS 30 m grid + lakes → <id>.terrain.bin; add \"terrainData\" from its output)"
+  },
+  "scene": {
+    "format": "bikefree-scene-1",
+    "style": "stylized",
+    "title": "",
+    "region": "",
+    "description": "Northern forest road past lakes and villages: continuous canopy, mown verge, lake water with treeline reflections, villages and camps from the real shoreline.",
+    "seed": 1101,
+    "terrain": "authored-region",
+    "assets": "models/scenery/coastal.json",
+    "extraAssets": [
+      "models/scenery/regional.json"
+    ],
+    "biome": "forest",
+    "reliefM": 45,
+    "palette": {
+      "grass": "#5b744b",
+      "meadow": "#7f8a55",
+      "rock": "#8b8a80",
+      "cliff": "#9a988c",
+      "water": "#28403f",
+      "shallowWater": "#5f6343",
+      "forestFloor": "#3d4731",
+      "canopy": "#2c4532",
+      "farTint": "#2c4532",
+      "farTintAmount": 0.3
+    },
+    "vegetation": {
+      "layout": "forest-edge",
+      "species": {
+        "maple": 0.42,
+        "spruce": 0.2,
+        "hemlock": 0.13,
+        "birch": 0.13,
+        "whitepine": 0.12
+      },
+      "edge": {
+        "mownM": 8.5,
+        "shrubM": 13
+      },
+      "canopyM": 17,
+      "treeScale": [
+        0.85,
+        1.15
+      ],
+      "cover": [
+        "grass",
+        "grass",
+        "grass",
+        "fern",
+        "fern"
+      ],
+      "coverScale": [
+        0.5,
+        1
+      ],
+      "density": 1,
+      "vergeDensity": 0.9
+    },
+    "season": "summer",
+    "atmosphere": {
+      "fogNearM": 700,
+      "fogFarM": 9000,
+      "fogFarRealM": 15000,
+      "lakeMist": 0.4
+    },
+    "water": {
+      "style": "lake",
+      "nearRouteM": 3200
+    },
+    "packs": [
+      "northeast"
+    ],
+    "poles": {
+      "side": "left",
+      "spacingM": 45,
+      "lateralM": 7.4
+    },
+    "look": "gentle",
+    "timeOfDay": "midday",
+    "lighting": {
+      "baked": "midday"
+    },
+    "towns": [],
+    "signs": [],
+    "lookouts": [],
+    "preview": {
+      "positionM": 0,
+      "camera": "chase"
+    }
+  }
+}
