@@ -683,6 +683,21 @@
   "area": "pittsburgh"
  },
  {
+  "id": "pittsburgh-slopes",
+  "name": "Pittsburgh \u00b7 The South Side Slopes, Mount Washington & the Dirty Dozen south",
+  "park": "Pittsburgh, Pennsylvania",
+  "file": "routes/cities/pittsburgh-slopes.gpx",
+  "outAndBack": false,
+  "expectedKm": [
+   22,
+   27
+  ],
+  "scene": "routes/scenes/pittsburgh-slopes.json",
+  "eleSmoothM": 10,
+  "stage": "draft",
+  "area": "pittsburgh"
+ },
+ {
   "id": "alpedhuez",
   "name": "Alpe d'Huez \u00b7 Tour Stage 19",
   "park": "Gap \u2192 Alpe d'Huez, French Alps (Tour de France 2026)",

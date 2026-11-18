@@ -331,6 +331,18 @@
     "scene": "routes/scenes/pittsburgh-eastend.json"
   },
   {
+    "id": "pittsburgh-slopes",
+    "name": "Pittsburgh · The South Side Slopes, Mount Washington & the Dirty Dozen south",
+    "park": "Pittsburgh, Pennsylvania",
+    "km": 24.1,
+    "climbM": 664,
+    "file": "routes/cities/pittsburgh-slopes.gpx",
+    "stage": "draft",
+    "area": "pittsburgh",
+    "eleSmoothM": 10,
+    "scene": "routes/scenes/pittsburgh-slopes.json"
+  },
+  {
     "id": "alpedhuez",
     "name": "Alpe d'Huez · Tour Stage 19",
     "park": "Gap → Alpe d'Huez, French Alps (Tour de France 2026)",

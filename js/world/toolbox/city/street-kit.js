@@ -579,6 +579,9 @@ export class StreetKit {
     let x, z, y, tx, tz, curb, width = 3, zone = null, own = -1;
     if (st.route) {
       const f = this.frame(st.s); x = f.x; z = f.z; y = f.y + ROAD_LIFT; tx = f.tx; tz = f.tz; curb = this.curbAt(st.s);
+      // (`clearRouteCrossings`, PLAN 5.9: no sidewalk round the apex of a hairpin — the slabs between stations fan
+      // across the road there; Broadway Ave to Coast Ave in Beechview)
+      if (this.cfg.clearRouteCrossings) { const a = this.frame(st.s - 14), b = this.frame(st.s + 14); if (a.tx * b.tx + a.tz * b.tz < .2) return null; }
       zone = this.zoneAt(st.s); if (zone) width = zone.sidewalkM;
     } else {
       const S = city.streets[st.k], a = S.pts[st.i - 1], b = S.pts[st.i];

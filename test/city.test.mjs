@@ -20,10 +20,10 @@ const L = makeCityLandscape(scene, proj, index, route);
 const at = (lat, lon) => proj.toLocal(lat, lon);
 
 test('pittsburgh: the core area\'s line (downtown, the South Side, the Jail Trail, the bridges) with the Mount Washington climb', () => {
-  // (a city of areas, PLAN 5.4: Allegheny & Troy Hill, Oakland & Schenley, the West End, Polish Hill & Bloomfield, the GAP & Homestead, the North Side and the East End are areas of their own)
+  // (a city of areas, PLAN 5.4: Allegheny & Troy Hill, Oakland & Schenley, the West End, Polish Hill & Bloomfield, the GAP & Homestead, the North Side, the East End and the South Side Slopes are areas of their own)
   assert.ok(route.turnS > 26000 && route.turnS < 32000, `${route.turnS} m`);
   const net = JSON.parse(read(item.network));
-  assert.deepEqual(net.areas.map((x) => x.catalogId), ['pittsburgh', 'pittsburgh-allegheny', 'pittsburgh-westend', 'pittsburgh-oakland', 'pittsburgh-polish', 'pittsburgh-homestead', 'pittsburgh-northside', 'pittsburgh-eastend']);
+  assert.deepEqual(net.areas.map((x) => x.catalogId), ['pittsburgh', 'pittsburgh-allegheny', 'pittsburgh-westend', 'pittsburgh-oakland', 'pittsburgh-polish', 'pittsburgh-homestead', 'pittsburgh-northside', 'pittsburgh-eastend', 'pittsburgh-slopes']);
   assert.equal(net.areas[0].legM, route.turnS);
   const top = Math.max(...route.ele), bottom = Math.min(...route.ele);
   assert.ok(top - bottom > 110, `climb ${top - bottom} m`);
