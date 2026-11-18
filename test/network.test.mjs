@@ -189,6 +189,52 @@ test('free ride: no plan, straight on at every junction, no laps, a far-reaching
   assert.ok(r.stops.length >= 3);
 });
 
+test('network scenery (F37): a free ride or workout rides the city\'s free ride, turns and all, on its own grade', () => {
+  const json = JSON.parse(readFileSync(new URL('../routes/cities/pittsburgh-network.json', import.meta.url), 'utf8'));
+  const scene = makePathRoute(net, { id: 'scenery-free', name: 'Free', path: null, first: json.freeRide.first });
+  const s = makeSession();
+  s.distanceM = 5000;   // set part way into a ride: the path starts where it was set
+  s.setFree();
+  s.setScenery(scene);
+  assert.equal(s.turnRide, scene.netRide);
+  assert.equal(s.sceneryPos, 0);
+  s._manualGrade = 2;
+  const atLB = scene.netRide.entries[3].p0;   // 40th & Butler: the free ride's way is the 40th Street Bridge
+  s.distanceM = 5000 + atLB - 120;
+  s._updateRoute();
+  assert.equal(s.gradePct, 2, 'a free ride keeps its own grade');
+  assert.equal(s.mode, 'free');
+  s._onPress('navRight');   // right of the bridge: straight on up Butler St
+  assert.equal(scene.netRide.entries[3].t.e.key, 'LB>HE', 'a turn chosen on the scenery');
+  s.setScenery(scene);   // the same scenery again (resume): the path and the turn are kept
+  assert.equal(scene.netRide.entries[3].t.e.key, 'LB>HE');
+  // the path refills as it is ridden (a long way: no end)
+  s.distanceM = 5000 + 120000;
+  s._updateRoute();
+  assert.ok(scene.netRide.endOf(scene.netRide.entries.length - 1) > 120000 + 10000);
+  // a workout: ▶ skips the step, except while a junction's prompt is up; its targets don't follow the scenery
+  const w = { name: 'W', duration: 600, segments: [{ kind: 'steady', start: 0, duration: 300, power: 0.6, label: 'a' }, { kind: 'steady', start: 300, duration: 300, power: 0.8, label: 'b' }] };
+  s.setWorkout(w);
+  s.setScenery(null);
+  s.setScenery(scene);
+  s.speedMps = 8;
+  const far = scene.netRide.entries[1].p0 - 1500;   // well before the next junction: no prompt
+  s.distanceM = s.sceneryOffset + far;
+  s._updateRoute();
+  s._onPress('navRight');
+  assert.equal(s.workoutT, 300, '▶ skipped the step');
+  const near = scene.netRide.entries[1].p0 - 60;   // the Clemente Bridge's end: the prompt is up
+  const before = scene.netRide.entries[1].t;
+  s.distanceM = s.sceneryOffset + near;
+  s._updateRoute();
+  s._onPress('navRight');
+  assert.equal(s.workoutT, 300, '▶ turned, not skipped');
+  assert.notEqual(scene.netRide.entries[1].t, before);
+  // a route ride has no scenery path to turn on
+  s.setRoute(makePathRoute(net, preset('pgh-three-rivers')), 0, null);
+  assert.notEqual(s.turnRide, scene.netRide);
+});
+
 test('your own routes: the planner offers the ways on, a loop laps, a one-way route finishes at its end', () => {
   const { planNext, planCloses, keysToIds, idsToKeys } = netMod;
   const fromE = planNext(net, [], 'E');

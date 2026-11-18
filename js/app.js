@@ -529,16 +529,20 @@ let pacerKey = null;
 let pacerTrack = null;   // on a network ride: the pacer's own copy of the path (js/network.js PathFollower)
 const onRoute = () => session.mode === 'route' && session.route;
 const riderDist = () => (onRoute() ? session.routeRidden : session.distanceM);
-const rideKey = () => (onRoute() ? `r:${session.route.name}:${session.routeStart}:${session.routeFinishM ?? 'endless'}` : session.mode === 'workout' ? `w:${session.workout?.id ?? session.workout?.name}` : 'free');
+const rideKey = () => (onRoute() ? `r:${session.route.name}:${session.routeStart}:${session.routeFinishM ?? 'endless'}`
+  : `${session.mode === 'workout' ? `w:${session.workout?.id ?? session.workout?.name}` : 'free'}${session.sceneryRoute ? `:s:${session.sceneryRoute.id}` : ''}`);
+/** A network path the ride follows (a network route's, or a free ride's / workout's network scenery: F37), and the pacer's metre on it. */
+const turnPath = () => session.turnRide;
+const pacerPathPos = () => (onRoute() ? session.routeStart + pacer.dist : Math.max(0, pacer.dist - session.sceneryOffset));
 function resetPacer() {
   pacer.reset(riderDist());
   pacerKey = rideKey();
-  pacerTrack = onRoute() && session.route.netRide ? new PathFollower(session.route.netRide) : null;
+  pacerTrack = turnPath() ? new PathFollower(turnPath()) : null;
 }
-/** The pacer's own way on a network ride, kept up to date (null elsewhere). */
+/** The pacer's own way on a network ride (or network scenery), kept up to date (null elsewhere). */
 function pacerPath(route) {
-  if (!pacerTrack || pacerTrack.ride !== route?.netRide || session.route !== route) return null;
-  return pacerTrack.update(session.routeStart + pacer.dist);
+  if (!pacerTrack || pacerTrack.ride !== route?.netRide || pacerTrack.ride !== turnPath()) return null;
+  return pacerTrack.update(pacerPathPos());
 }
 function renderPacerChoice() {
   for (const b of $('pacerSeg').children) b.classList.toggle('on', Number(b.dataset.w) === pacer.watts);
@@ -640,7 +644,8 @@ function renderPreview() {
     $('pvTitle').textContent = scene ? scene.name : 'Numbers only';
     $('pvSub').textContent = scene ? `Scenery · ${scene.park}` : 'No scenery — a plain dark background';
     $('pvFacts').innerHTML = '';
-    $('pvDesc').innerHTML = 'Change the grade with ▲ ▼ on the handlebars (or <kbd>↑</kbd> <kbd>↓</kbd>) while you ride.';
+    $('pvDesc').innerHTML = 'Change the grade with ▲ ▼ on the handlebars (or <kbd>↑</kbd> <kbd>↓</kbd>) while you ride.' +
+      (sceneryFreeItem(scene) ? ` The scenery is ${escapeHtml(scene.name.split(' · ')[0])}'s free ride: straight on at each junction, or turn with ◀ ▶ (<kbd>A</kbd> <kbd>D</kbd>) into any part of the city.` : '');
     chart.hidden = true;
     map.hidden = !scene;
     if (scene && routeCache.has(scene.id)) drawTrace(map, routeCache.get(scene.id), 0);
@@ -711,9 +716,16 @@ $('sceneCards').addEventListener('click', (e) => {
   if (card) setScenery(card.dataset.id);
 });
 $('sceneSelect').addEventListener('change', (e) => setScenery(e.target.value));
+/** A city with a ride network as scenery (F37): its free ride over the whole network (its own copy, not the route list's). */
+const sceneryFreeItem = (item) => {
+  const free = item?.network && netItems.find((n) => n.baseId === item.id && n.free);
+  return free ? { ...free, id: `scenery-${free.id}` } : null;
+};
 async function sceneryRoute() {
   const item = sceneryItem();
   if (!item) return null;
+  const free = sceneryFreeItem(item);
+  if (free) { try { return await loadRouteItem(free); } catch (err) { log('app', `Scenery: ${err.message} — riding the ${item.name} loop`, 'error'); } }
   try { return await loadRouteItem(item); } catch { return null; }
 }
 
@@ -752,6 +764,9 @@ async function startRide() {
     session.setFree();
     log('app', 'Free ride');
   }
+  // the 3D world: the route, else the scenery — a city with a ride network rides its free ride (F37)
+  const route = session.mode === 'route' ? session.route : await sceneryRoute();
+  session.setScenery(session.mode === 'route' ? null : route);
   if (!session.hasRide || pacerKey !== rideKey()) resetPacer();
   if (pausedByUser()) session.start();
   onRideScreen = true;
@@ -759,7 +774,6 @@ async function startRide() {
   $('setup').hidden = true;
   $('rideScreen').hidden = false;
   document.documentElement.requestFullscreen?.().catch(() => {});
-  const route = session.mode === 'route' ? session.route : await sceneryRoute();
   await openWorld(route);
   world?.setCourseMarks(courseMarks());
   renderHudStatic();
@@ -791,7 +805,7 @@ document.addEventListener('keydown', (e) => {
   else if (k === 'l' || k === 'L') session.lap();
   else if ((k === 'n' || k === 'N') && session.mode === 'workout') session.skipSegment();
   else if ((k === 'm' || k === 'M') && onRideScreen) cycleMinimap();
-  else if ((k === 'a' || k === 'A' || k === 'd' || k === 'D') && onRideScreen && session.route?.netRide) { if (session.turn(k === 'a' || k === 'A' ? -1 : 1)) renderTurnPrompt(true); }
+  else if ((k === 'a' || k === 'A' || k === 'd' || k === 'D') && onRideScreen && session.turnRide) { if (session.turn(k === 'a' || k === 'A' ? -1 : 1)) renderTurnPrompt(true); }
   else if ((k === ',' || k === '.') && trainer.demo) setDemoSpeed(DEMO_MPH + (k === '.' ? 5 : -5));
   else if ((k === 'f' || k === 'F') && onRideScreen) toggleFullscreen();
   else if ((k === 'w' || k === 'W') && onRideScreen) cycleWeather();
@@ -807,14 +821,17 @@ function toggleFullscreen() {
 
 // ---------- 3D world ----------
 // On a route the rider is where the ride is; otherwise the scenery loop simply rolls by.
+// A free ride's or workout's network scenery (F37) is a path the rider rides along, turns and all.
 function riderPosOn(route) {
-  return session.mode === 'route' && session.route === route ? session.routePos : session.distanceM % route.total;
+  if (session.mode === 'route' && session.route === route) return session.routePos;
+  if (session.mode !== 'route' && route.netRide && session.sceneryRoute === route) return session.sceneryPos;
+  return session.distanceM % route.total;
 }
 function pacerPosOn(route) {
   const t = route.total;
-  return session.mode === 'route' && session.route === route
-    ? wrapDist(route, session.routeStart + pacer.dist)
-    : ((pacer.dist % t) + t) % t;
+  if (session.mode === 'route' && session.route === route) return wrapDist(route, session.routeStart + pacer.dist);
+  if (session.mode !== 'route' && route.netRide && session.sceneryRoute === route) return pacerPathPos();
+  return ((pacer.dist % t) + t) % t;
 }
 
 // ---------- Minimap (ride screen, bottom-left) ----------
@@ -1106,8 +1123,8 @@ function renderHud() {
 // Turn prompt (network routes): the next junction's ways on, about 15 s before it; ◀ ▶ / A D to choose.
 let turnKey = '';
 function renderTurnPrompt(force = false) {
-  const box = $('hTurn'), net = session.mode === 'route' ? session.route?.netRide : null;
-  const up = net && !session.routeDone ? net.prompt(session.routePos, session.speedMps) : null;
+  const box = $('hTurn'), net = session.turnRide;   // a network route's, or a free ride's / workout's network scenery (F37)
+  const up = net && !(session.mode === 'route' && session.routeDone) ? net.prompt(session.turnPos, session.speedMps) : null;
   if (!up) { if (!box.hidden) { box.hidden = true; turnKey = ''; } return; }
   const key = `${up.node.id}:${up.i}:${up.selected}:${up.locked}:${Math.round(up.distTo / 10)}:${settings.units}`;
   if (!force && key === turnKey) return;

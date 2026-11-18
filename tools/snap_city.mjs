@@ -3,7 +3,8 @@
 // headless Chrome at desktop and phone sizes. Screenshots: the main page, the panel opened, a route picked in
 // the list, a line tapped on the map (and tapped again: the next route on it), a goal chip, and back; Options
 // (the menu with the route's start options), Ride with no trainer (the route chosen), and Ride with the Demo
-// trainer on (F104: the ride starts at once on the route).
+// trainer on (F104: the ride starts at once on the route); then Pittsburgh as a free ride's scenery (F37: its free
+// ride over the network, with the turn prompt; --no-scenery skips it).
 //
 //   node tools/snap_city.mjs                     → tools/snapshots/card/*.png
 //   options: --out <dir>  --sizes 1440x900,390x844  --theme dark|light  --chrome <path> (or CHROME)
@@ -143,6 +144,43 @@ try {
     if (rode.mode !== 'route' || !rode.plan || !wantName) { console.error(`${tag}: Ride did not start the route at once: ${JSON.stringify(rode)}`); failed = true; }
     else console.log(`${tag}: Ride started ${rode.name} at ${rode.start} m`);
     if (errors.length) { console.error(`${tag}: page errors:\n  ${errors.join('\n  ')}`); failed = true; }
+    await page.close();
+  }
+  // Pittsburgh as scenery (F37): a free ride with no route rides the city's free ride over the network, its turn
+  // prompts included (desktop size only: one 3D start)
+  if (!args.includes('--no-scenery')) {
+    const [w, h] = sizes[0], tag = `${w}x${h}`;
+    const page = await browser.newPage({ viewport: { width: w, height: h } });
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+    await page.addInitScript((t) => { localStorage.setItem('bikefree.theme', t); }, theme);
+    await page.goto(`${base}/index.html`);
+    await page.waitForSelector('#sceneCards .rcard[data-id="builtin-park-pittsburgh"]', { timeout: 120000 });
+    await page.click('#sceneCards .rcard[data-id="builtin-park-pittsburgh"]');
+    await page.waitForTimeout(300);
+    const f0 = join(out, `${tag}-11-scenery-menu.png`); await page.screenshot({ path: f0 }); saved.push(f0);
+    if (!/free ride/.test(await page.textContent('#pvDesc'))) { console.error(`${tag}: the scenery preview doesn't say it rides the free ride`); failed = true; }
+    await page.click('#demoBtn');
+    await page.click('#startBtn');
+    await page.waitForFunction(() => !document.getElementById('rideScreen').hidden && window.bikefree?.world && document.getElementById('hLoading').hidden, null, { timeout: 240000 });
+    await page.waitForTimeout(1500);
+    // just before the first junction (the Clemente Bridge's south end): the turn prompt is up
+    const st = await page.evaluate(async () => {
+      const { session, world } = window.bikefree, r = session.sceneryRoute;
+      if (!r) return { ok: false, why: 'no scenery path' };
+      session.distanceM = session.sceneryOffset + r.netRide.entries[1].p0 - 80;
+      session._updateRoute();
+      await new Promise((ok) => setTimeout(ok, 1200));
+      return { ok: session.mode === 'free' && r.free && world.path === r.netRide && !document.getElementById('hTurn').hidden,
+        name: r.name, prompt: document.getElementById('hTurn').textContent.replace(/\s+/g, ' ').trim().slice(0, 120) };
+    });
+    const f = join(out, `${tag}-12-scenery-ride.png`);
+    await page.evaluate(() => { const w = window.bikefree.world; w?.stop(); if (w?._render) w._render(); else w?.renderer.render(w.scene, w.camera); });
+    await page.screenshot({ path: f, timeout: 120000 }); saved.push(f);
+    if (!st.ok) { console.error(`${tag}: Pittsburgh scenery is not the free ride with prompts: ${JSON.stringify(st)}`); failed = true; }
+    else console.log(`${tag}: scenery rides ${st.name} · prompt: ${st.prompt}`);
+    if (errors.length) { console.error(`${tag}: page errors (scenery):\n  ${errors.join('\n  ')}`); failed = true; }
     await page.close();
   }
 } finally {
