@@ -1,6 +1,7 @@
 // Small mesh-building helpers for the city: one merged buffer per material and chunk,
 // so thousands of buildings, beams and lamp posts stay a handful of draw calls.
 import * as THREE from '../../../../vendor/three.module.min.js';
+import { drain, due } from './jobs.js';   // [F30] keepOutOf as a job
 
 export class MeshBuilder {
   constructor(extra = {}) {
@@ -77,7 +78,9 @@ export class MeshBuilder {
    * midpoints and centre. Used to keep the route's clearance (where the rider and the chase camera move) free
    * of other streets, decks, rails and bridge members that the map data puts there.
    */
-  keepOutOf(inside, { whole = false } = {}) {
+  keepOutOf(inside, opts = {}) { return drain(this.keepOutOfJob(inside, opts)); }
+  /** keepOutOf as a job ([F30]: js/world/toolbox/core/jobs.js): pauses every few hundred triangles when its slice is used up. */
+  *keepOutOfJob(inside, { whole = false } = {}) {
     const P = this.p, kept = [];
     let dropped = 0;
     const hit = (A, B, C) => {
@@ -104,6 +107,7 @@ export class MeshBuilder {
     if (whole && this.members.length) {
       drop = new Uint8Array(this.i.length / 3); member = new Uint8Array(this.i.length / 3);
       for (const [t0, t1] of this.members) {
+        if (due()) yield;
         member.fill(1, t0 / 3, t1 / 3);
         let any = false;
         for (let t = t0; t < t1 && !any; t += 3) any = hitTri.call(this, t);
@@ -111,6 +115,7 @@ export class MeshBuilder {
       }
     }
     for (let t = 0; t < this.i.length; t += 3) {
+      if (t % 96 === 93 && due()) yield;
       if (member?.[t / 3] ? drop[t / 3] : hitTri.call(this, t)) { dropped++; continue; }
       kept.push(this.i[t], this.i[t + 1], this.i[t + 2]);
     }

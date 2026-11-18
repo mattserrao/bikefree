@@ -15,6 +15,7 @@
 // `overlap` (drawn over each other at one level: flicker, doubled paint), `dangling` (a roadway ends in the air or
 // stops short), `paint` (crosswalk or stop line across the route's road or inside another junction), `clipped`.
 import { streetPieces, junctionsNear, LIFT_BLEND_M, junctionPaint, routeLine } from './junctions.js';
+import { drain, each, due } from '../core/jobs.js';   // [F30] the street passes run as jobs (in frame slices on the ride)
 
 export const MEET_LIMITS = {
   reach: 150,        // m: sites within this distance of the route's line
@@ -41,10 +42,12 @@ const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
  * within 5 m of each other never share one. Its own segment grid (city.js's _streetSlots asks the landscape's
  * street index, which may not exist yet while the streets are being built), cached on the street list.
  */
-export function streetSlots(landscape, streets) {
+export function streetSlots(...args) { return drain(streetSlotsJob(...args)); }
+/** streetSlots as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
+export function* streetSlotsJob(landscape, streets) {
   if (streets._slots) return streets._slots;
   const n = streets.length, slots = new Array(n).fill(-1), G = 24, grid = new Map();
-  streets.forEach((st, k) => {
+  yield* each(streets, (st, k) => {
     for (let i = 1; i < st.pts.length; i++) {
       const a = st.pts[i - 1], b = st.pts[i], r = st.width / 2 + 14;
       for (let gx = Math.floor((Math.min(a.x, b.x) - r) / G); gx <= Math.floor((Math.max(a.x, b.x) + r) / G); gx++)
@@ -55,6 +58,7 @@ export function streetSlots(landscape, streets) {
   });
   const order = [...Array(n).keys()].sort((a, b) => streets[a].cls - streets[b].cls || a - b);
   for (const k of order) {
+    if (due()) yield;
     const st = streets[k], used = new Set();
     for (const p of st.pts) {
       for (const [ko, i] of grid.get(`${Math.floor(p.x / G)},${Math.floor(p.z / G)}`) || []) {
@@ -77,10 +81,12 @@ export function streetSlots(landscape, streets) {
  * `nearM` of a node the two already share, at shallow angles (< `minDeg`) or at different levels are left alone.
  * Keeps st.nodes / st.nodeIdx in step. Run before anything indexes the streets' points.
  */
-export function joinCrossings(streets, options = {}) {
+export function joinCrossings(...args) { return drain(joinCrossingsJob(...args)); }
+/** joinCrossings as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
+export function* joinCrossingsJob(streets, options = {}) {
   const O = { level: .6, minDeg: 25, nearM: 12, ...options };
   const G = 32, grid = new Map(), key = (p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`;
-  streets.forEach((st, k) => {
+  yield* each(streets, (st, k) => {
     if (st.cls > 7 || !st.nodeIdx) return;
     for (let i = 1; i < st.pts.length; i++) {
       const a = st.pts[i - 1], b = st.pts[i];
@@ -93,6 +99,7 @@ export function joinCrossings(streets, options = {}) {
   const shared = (k, ko, p) => streets[k].nodes.some((n) => Math.hypot(n.x - p.x, n.z - p.z) < O.nearM && streets[ko].nodes.some((m) => key(m) === key(n)));
   const ins = new Map(), seen = new Set();   // k → [{i, f, x, z, y}]
   for (const list of grid.values()) {
+    if (due()) yield;
     for (let u = 0; u < list.length; u++) for (let v = u + 1; v < list.length; v++) {
       const [k, i] = list[u], [ko, j] = list[v];
       if (k === ko) continue;
@@ -116,6 +123,7 @@ export function joinCrossings(streets, options = {}) {
   }
   let n = 0;
   for (const [k, list] of ins) {
+    if (due()) yield;
     const st = streets[k], P = st.pts, out = [], map = [];
     list.sort((p, q) => p.i - q.i || p.f - q.f);
     let q = 0;
@@ -138,10 +146,12 @@ export function joinCrossings(streets, options = {}) {
  * made at most `stepM` apart, so the trims (trimOverlaps) follow the other ribbon's edge instead of cutting
  * across it in 7 m wedges. Keeps st.nodeIdx in step. Run before anything indexes the streets' points.
  */
-export function densifyAlongside(streets, options = {}) {
+export function densifyAlongside(...args) { return drain(densifyAlongsideJob(...args)); }
+/** densifyAlongside as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
+export function* densifyAlongsideJob(streets, options = {}) {
   const O = { cos: .85, level: .9, stepM: 2.5, ...options };
   const G = 24, grid = new Map();
-  streets.forEach((st, k) => {
+  yield* each(streets, (st, k) => {
     if (st.cls > 7) return;
     for (let i = 1; i < st.pts.length; i++) {
       const a = st.pts[i - 1], b = st.pts[i], r = st.width / 2;
@@ -152,7 +162,7 @@ export function densifyAlongside(streets, options = {}) {
     }
   });
   let added = 0;
-  streets.forEach((st, k) => {
+  yield* each(streets, (st, k) => {
     if (st.cls > 7 || st.pts.length < 2) return;
     const P = st.pts, mark = new Uint8Array(P.length + 1);
     for (let i = 0; i < P.length; i++) {
@@ -211,13 +221,15 @@ export function drawnStreet(st, k, plan, lift) {
  * point follow it. Runs in cityStreets() before the junctions are planned (they own heights inside junctions).
  * ctx: { route, index, landscape, roadWidth, slots }.
  */
-export function alignAlongRoute(streets, ctx, options = {}) {
+export function alignAlongRoute(...args) { return drain(alignAlongRouteJob(...args)); }
+/** alignAlongRoute as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
+export function* alignAlongRouteJob(streets, ctx, options = {}) {
   const O = { cos: .8, minRunM: 6, under: .08, level: 2.5, deckLevel: 4.5, grade: .06, maxEaseM: 60, ...options };
   const { route, index, landscape } = ctx, RW = ctx.roadWidth || 7, RL = routeLine(route, index), end = route.turnIdx || route.dist.length - 1;
-  const slots = ctx.slots || streetSlots(landscape, streets);
+  const slots = ctx.slots || (yield* streetSlotsJob(landscape, streets));
   let moved = 0;
   const targets = streets.map(() => null);
-  streets.forEach((st, k) => {
+  yield* each(streets, (st, k) => {
     if (st.cls > 7 || st.pts.length < 2 || !nearRouteStreet(st, index, RW / 2 + st.width / 2 + 2)) return;
     const lift = SLOT_LIFT(slots[k]), P = st.pts, tg = new Array(P.length).fill(null);
     let any = false;
@@ -248,8 +260,8 @@ export function alignAlongRoute(streets, ctx, options = {}) {
   });
   // shared nodes of moved points: the other streets through them take the same height there
   const key = (p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`, at = new Map();
-  streets.forEach((st, k) => { const tg = targets[k]; if (tg) st.pts.forEach((p, i) => { if (tg[i] != null) at.set(key(p), tg[i] + SLOT_LIFT(slots[k])); }); });
-  streets.forEach((st, k) => {
+  yield* each(streets, (st, k) => { const tg = targets[k]; if (tg) st.pts.forEach((p, i) => { if (tg[i] != null) at.set(key(p), tg[i] + SLOT_LIFT(slots[k])); }); });
+  yield* each(streets, (st, k) => {
     if (st.cls > 7) return;
     st.pts.forEach((p, i) => {
       const top = at.get(key(p));
@@ -258,7 +270,7 @@ export function alignAlongRoute(streets, ctx, options = {}) {
     });
   });
   // apply, easing outside each run (both ways along the street)
-  streets.forEach((st, k) => {
+  yield* each(streets, (st, k) => {
     const tg = targets[k]; if (!tg) return;
     const P = st.pts, own = P.map((p) => p.y), n = P.length;
     const acc = [0]; for (let i = 1; i < n; i++) acc.push(acc[i - 1] + Math.hypot(P[i].x - P[i - 1].x, P[i].z - P[i - 1].z));
@@ -294,16 +306,18 @@ export function alignAlongRoute(streets, ctx, options = {}) {
  * clearance tube, leaving its two halves hanging. It is lifted to `clearM` over the road where it crosses, easing
  * back along the deck at no more than `grade`, so it passes over in one piece. ctx: { route, index, roadWidth }.
  */
-export function clearOverpasses(streets, ctx, options = {}) {
+export function clearOverpasses(...args) { return drain(clearOverpassesJob(...args)); }
+/** clearOverpasses as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
+export function* clearOverpassesJob(streets, ctx, options = {}) {
   const { route, index } = ctx, RW = ctx.roadWidth || 7;
   const O = { cos: .7, clearM: 4.9, below: .1, grade: .06, ...options };   // (below: a deck lower than the road's surface less this passes under it)
   const RL = routeLine(route, index), end = route.turnIdx || route.dist.length - 1;
   let n = 0;
   // ([w2-meets] a deck chain that ends at the route meets it there — it isn't crossing over it)
   const key = (p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`, ends = new Map();
-  streets.forEach((st) => { if (st.bridge) for (const p of [st.pts[0], st.pts[st.pts.length - 1]]) ends.set(key(p), (ends.get(key(p)) || 0) + 1); });
+  yield* each(streets, (st) => { if (st.bridge) for (const p of [st.pts[0], st.pts[st.pts.length - 1]]) ends.set(key(p), (ends.get(key(p)) || 0) + 1); });
   const chainEndAtRoute = (st) => [st.pts[0], st.pts[st.pts.length - 1]].some((p) => ends.get(key(p)) === 1 && index.nearest(p.x, p.z, 15));
-  streets.forEach((st) => {
+  yield* each(streets, (st) => {
     if (!st.bridge || st.cls > 7 || !nearRouteStreet(st, index, RW / 2 + st.width / 2 + 4) || chainEndAtRoute(st)) return;
     const P = st.pts, need = P.map(() => 0);
     let crosses = false;
@@ -334,12 +348,14 @@ export function clearOverpasses(streets, ctx, options = {}) {
  * different level isn't drawn. Streets flush with the road (alignAlongRoute), crossings (cos < `cos`) and
  * over/underpasses (more than `pass` apart) are left alone. ctx: { route, index, landscape, roadWidth }.
  */
-export function trimAtRoute(streets, ctx, options = {}) {
+export function trimAtRoute(...args) { return drain(trimAtRouteJob(...args)); }
+/** trimAtRoute as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
+export function* trimAtRouteJob(streets, ctx, options = {}) {
   const { route, index, landscape } = ctx, RW = ctx.roadWidth || 7;
   const O = { cos: .5, step: .15, pass: 4.5, edgeM: RW / 2 + 2.2, stripM: 2.5, ...options };
   const RL = routeLine(route, index), end = route.turnIdx || route.dist.length - 1, slots = streetSlots(landscape, streets);
   let n = 0;
-  streets.forEach((st, k) => {
+  yield* each(streets, (st, k) => {
     if (st.cls > 7 || !nearRouteStreet(st, index, st.width / 2 + O.edgeM + 2)) return;
     const P = st.pts, h = st.width / 2, lift = SLOT_LIFT(slots[k]);
     for (let i = 0; i < P.length; i++) {
@@ -386,11 +402,13 @@ export function trimAtRoute(streets, ctx, options = {}) {
  * the road (its width plus `marginM`) with its top between the road's surface less `under` and 4 m above it is put
  * just under the road there (decks that cross over it were lifted clear by clearOverpasses first).
  */
-export function keepUnderRoad(streets, ctx, options = {}) {
+export function keepUnderRoad(...args) { return drain(keepUnderRoadJob(...args)); }
+/** keepUnderRoad as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
+export function* keepUnderRoadJob(streets, ctx, options = {}) {
   const { route, index, landscape } = ctx, RW = ctx.roadWidth || 7, O = { under: .05, marginM: 1, ...options };
   const RL = routeLine(route, index), end = route.turnIdx || route.dist.length - 1, slots = streetSlots(landscape, streets);
   let n = 0;
-  streets.forEach((st, k) => {
+  yield* each(streets, (st, k) => {
     if (!nearRouteStreet(st, index, RW / 2 + st.width / 2 + O.marginM + 1)) return;
     const lift = SLOT_LIFT(slots[k]);
     for (const p of st.pts) {
@@ -454,12 +472,14 @@ export function settleFreeEnds(streets, ctx, options = {}) {
  * the road and its shoulders isn't drawn: it goes in under the road's bank and comes out the other side. Junction
  * arms and ease zones are left alone. Run after the junctions are planned. ctx: { route, index, landscape, roadWidth }.
  */
-export function hideCrossingsAtRoute(streets, ctx, options = {}) {
+export function hideCrossingsAtRoute(...args) { return drain(hideCrossingsAtRouteJob(...args)); }
+/** hideCrossingsAtRoute as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
+export function* hideCrossingsAtRouteJob(streets, ctx, options = {}) {
   const { route, index, landscape } = ctx, RW = ctx.roadWidth || 7;
   const O = { cos: .5, step: .12, pass: 4.5, edgeM: RW / 2 + 2.2, ...options };
   const RL = routeLine(route, index), end = route.turnIdx || route.dist.length - 1, slots = streetSlots(landscape, streets);
   let n = 0;
-  streets.forEach((st, k) => {
+  yield* each(streets, (st, k) => {
     if (st.cls > 7 || !nearRouteStreet(st, index, st.width / 2 + O.edgeM + 2)) return;
     const P = st.pts, h = st.width / 2, lift = SLOT_LIFT(slots[k]);
     for (let i = 0; i < P.length; i++) {
@@ -483,10 +503,13 @@ export function hideCrossingsAtRoute(streets, ctx, options = {}) {
  * [finish] A stub (a few metres of street, e.g. the mapped mouth of a driveway) that the passes above have already cut
  * away at one end is not drawn at all: what is left is a wedge that meets nothing at its height.
  */
-export function dropCutStubs(streets, options = {}) {
+export function dropCutStubs(...args) { return drain(dropCutStubsJob(...args)); }
+/** dropCutStubs as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
+export function* dropCutStubsJob(streets, options = {}) {
   const O = { maxM: 8, ...options };
   let n = 0;
   for (const st of streets) {
+    if (due()) yield;
     if (st.cls > 7 || st.pts.length < 2) continue;
     let len = 0; for (let i = 1; i < st.pts.length; i++) len += Math.hypot(st.pts[i].x - st.pts[i - 1].x, st.pts[i].z - st.pts[i - 1].z);
     const h = st.width / 2;
@@ -501,12 +524,15 @@ export function dropCutStubs(streets, options = {}) {
  * route comes down to the ground it would land on, over its last metres at no more than `grade` (at most half the
  * deck), instead of stopping in the air. Run in cityStreets() while the ground is still the bare one.
  */
-export function landFreeDeckEnds(streets, ctx, options = {}) {
+export function landFreeDeckEnds(...args) { return drain(landFreeDeckEndsJob(...args)); }
+/** landFreeDeckEnds as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
+export function* landFreeDeckEndsJob(streets, ctx, options = {}) {
   const { index, landscape } = ctx, O = { tol: .3, grade: .12, routeM: 8, ...options };
   const key = (p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`, count = new Map();
-  for (const st of streets) for (const p of st.pts) count.set(key(p), (count.get(key(p)) || 0) + 1);
+  for (const st of streets) { for (const p of st.pts) count.set(key(p), (count.get(key(p)) || 0) + 1); if (due()) yield; }
   let n = 0;
   for (const st of streets) {
+    if (due()) yield;
     if (!st.bridge || st.pts.length < 2) continue;
     const P = st.pts, acc = [0];
     for (let i = 1; i < P.length; i++) acc.push(acc[i - 1] + Math.hypot(P[i].x - P[i - 1].x, P[i].z - P[i - 1].z));
@@ -528,7 +554,9 @@ export function landFreeDeckEnds(streets, ctx, options = {}) {
  * moved point (`jn`, `je`, `along`) but wasn't moved itself takes the same height there, easing back to its own
  * profile at no more than `grade` (so footpaths and service roads don't meet a junction with a step).
  */
-export function followMovedNodes(streets, options = {}) {
+export function followMovedNodes(...args) { return drain(followMovedNodesJob(...args)); }
+/** followMovedNodes as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
+export function* followMovedNodesJob(streets, options = {}) {
   const O = { grade: .08, level: 1.2, maxEaseM: 30, rounds: 4, ...options };
   const key = (p) => `${Math.round(p.x * 100)},${Math.round(p.z * 100)}`;
   // ([w2-meets] in rounds: a short street that followed all the way along moves its far end too, and the street
@@ -536,10 +564,12 @@ export function followMovedNodes(streets, options = {}) {
   const isLead = (p) => p.jn != null || p.je != null || p.along || p.under || p.lifted || p.followed;
   let n = 0;
   for (let round = 0; round < O.rounds; round++) {
+    if (due()) yield;
   const lead = new Map(), lifted = new Set();
-  for (const st of streets) for (const p of st.pts) if (isLead(p)) { lead.set(key(p), Math.min(lead.get(key(p)) ?? Infinity, p.y)); if (p.lifted || p.followedLift) lifted.add(key(p)); }
+  for (const st of streets) { for (const p of st.pts) if (isLead(p)) { lead.set(key(p), Math.min(lead.get(key(p)) ?? Infinity, p.y)); if (p.lifted || p.followedLift) lifted.add(key(p)); } if (due()) yield; }
   let moved = 0;
   for (const st of streets) {
+    if (due()) yield;
     // (decks too where one ends on a moved street: it follows over its last metres)
     const P = st.pts, own = P.map((p) => p.y), tg = P.map((p) => { const y = lead.get(key(p)); return y != null && !isLead(p) && Math.abs(y - p.y) > .005 && Math.abs(y - p.y) < (st.bridge || lifted.has(key(p)) ? 4.5 : O.level) ? y : null; });
     if (!tg.some((v) => v != null)) continue;
@@ -582,14 +612,16 @@ export function followMovedNodes(streets, options = {}) {
  * over anything. A street that lost width takes the neighbour's height there (easing out at `grade`), so the two
  * meet flush. Gores fill themselves: a ramp leaving a road keeps only what lies beyond the road's edge.
  */
-export function resolveOverlaps(streets, landscape, options = {}) {
+export function resolveOverlaps(...args) { return drain(resolveOverlapsJob(...args)); }
+/** resolveOverlaps as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
+export function* resolveOverlapsJob(streets, landscape, options = {}) {
   const O = { cos: .7, level: .6, grade: .08, ...options };
   const slots = streetSlots(landscape, streets), lift = (k) => SLOT_LIFT(slots[k]);
   const len = streets.map((st) => { let l = 0; for (let i = 1; i < st.pts.length; i++) l += Math.hypot(st.pts[i].x - st.pts[i - 1].x, st.pts[i].z - st.pts[i - 1].z); return l; });
   const order = streets.map((_, k) => k).filter((k) => streets[k].cls <= 7 && streets[k].pts.length > 1)
     .sort((a, b) => streets[a].cls - streets[b].cls || (streets[b].bridge ? 1 : 0) - (streets[a].bridge ? 1 : 0) || len[b] - len[a] || a - b);
   const G = 24, grid = new Map(), done = new Uint8Array(streets.length);
-  streets.forEach((st, k) => {
+  yield* each(streets, (st, k) => {
     if (st.cls > 7) return;
     for (let i = 1; i < st.pts.length; i++) {
       const a = st.pts[i - 1], b = st.pts[i], r = st.width / 2;
@@ -603,8 +635,10 @@ export function resolveOverlaps(streets, landscape, options = {}) {
   const targets = new Map();   // k → Map(i → top)
   let n = 0;
   for (const k of order) {
+    if (due()) yield;
     const st = streets[k], P = st.pts, h = st.width / 2;
     for (let i = 0; i < P.length; i++) {
+      if (i % 32 === 31 && due()) yield;
       const p = P[i], u = dirAt(P, i), Lx = u.z, Lz = -u.x, top = p.y + lift(k);
       if (p.jn != null) continue;   // (inside a junction: not drawn, its surface decides)
       let lo = -(h - (p.tr || 0)), hi = h - (p.tl || 0);
@@ -647,8 +681,9 @@ export function resolveOverlaps(streets, landscape, options = {}) {
   // heights: flush with what it gave way to, easing out — but a node another street shares keeps its height (one
   // height per node: the streets through it would step)
   const shared = new Map(), nk = (p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`;
-  for (const st of streets) for (const p of st.pts) shared.set(nk(p), (shared.get(nk(p)) || 0) + 1);
+  for (const st of streets) { for (const p of st.pts) shared.set(nk(p), (shared.get(nk(p)) || 0) + 1); if (due()) yield; }
   for (const [k, t] of targets) {
+    if (due()) yield;
     const st = streets[k], P = st.pts, own = P.map((p) => p.y), A = [0];
     for (let i = 1; i < P.length; i++) A.push(A[i - 1] + Math.hypot(P[i].x - P[i - 1].x, P[i].z - P[i - 1].z));
     const best = P.map(() => null);

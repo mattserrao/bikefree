@@ -47,7 +47,8 @@ try {
  let ride = null, areas = null, start = route;
  const tweak = (r) => { if (r.scene && q.get('season')) r.scene.season = q.get('season'); if (r.scene && q.get('horizon') === '0') r.scene.realHorizon = false;
    if (r.scene && q.get('standard') === '1') { r.scene.look ||= 'gentle'; r.scene.lighting = { ...r.scene.lighting, baked: q.get('time') || r.scene.timeOfDay || 'midday' }; } return r; };
- if (q.get('path') && item.network) {
+ // ?free=e2+ : a free ride (no plan) from that edge, straight on at every junction (F30: tools/ride_area_load.mjs)
+ if ((q.get('path') || q.get('free')) && item.network) {
    const { loadNetwork, NetRide } = await import('../js/network.js');
    const json = await (await fetch(`../${item.network}`)).json();
    let bases = route;
@@ -59,7 +60,7 @@ try {
      }
    }
    const net = loadNetwork(json, bases);
-   ride = new NetRide(net, {}, { plan: q.get('path').split(',') });
+   ride = new NetRide(net, {}, q.get('path') ? { plan: q.get('path').split(',') } : { first: q.get('free') });
    if (net.multi) {
      const p0 = Math.max(0, Number(q.get('pos')) || 0), id = q.get('area') && net.areas.has(q.get('area')) ? q.get('area') : ride.areaFor(p0, null);   // (?area=: draw that area while it covers pos)
      start = net.areas.get(id).base;

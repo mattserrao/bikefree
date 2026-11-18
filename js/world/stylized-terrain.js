@@ -10,7 +10,8 @@ import { GroundBlocks, InstancePool, packMatrices, proxyGroup } from './toolbox/
 import { MountainRoad } from './toolbox/structures/mountain-road.js';
 import { planSettlement, Settlement } from './toolbox/structures/settlement.js';
 import { RoadsideDetails, fitBridgeToRoad, roadFrame } from './toolbox/roadside/details.js';
-import { landscapeBuilder } from './toolbox/landscape/index.js';
+import { landscapeJobBuilder } from './toolbox/landscape/index.js';
+import { drain, due } from './toolbox/core/jobs.js';   // [F30] built as a job: at once, or in frame slices (an area built on the ride)
 import { CityScene } from './toolbox/city/city.js';
 import { ArchBridges } from './toolbox/structures/arch-bridges.js';
 import { HighwayTraffic } from './toolbox/life/traffic.js';
@@ -74,10 +75,24 @@ export class StylizedTerrain {
     this.quality = SCENERY_QUALITY[opts.quality] || SCENERY_QUALITY.balanced;
     this.qualityKey = SCENERY_QUALITY[opts.quality] ? opts.quality : 'balanced';
     this.lookKey = opts.look || null;   // cartoon look test: the kit is built with smooth shading
-    this.landscape = landscapeBuilder(this.config)(this.config, proj, routeIndex, opts.route);
+    // [F30] the build is a job (js/world/toolbox/core/jobs.js): run at once here, or — opts.deferred, an area the world
+    // builds on the ride — handed to the caller as `this.job` to run in frame slices (same steps, same order, same result)
+    const job = this._initJob(scene, proj, routeIndex, opts);
+    if (opts.deferred) {
+      this.ready = new Promise((ok) => { this._built = ok; });
+      this.job = job;
+      return;
+    }
+    drain(job);
+  }
+
+  /** [F30] The build: the landscape, ground, water, clouds and roadside now; then (once the kit's assets are in) the rest. */
+  *_initJob(scene, proj, routeIndex, opts) {
+    this.landscape = yield* landscapeJobBuilder(this.config)(this.config, proj, routeIndex, opts.route);
     // fog (the weather's fog bank) lies on this level: the sea, or a city's rivers
     this.fogBase = this.landscape.fogBase ?? 0;
-    if (this.landscape.fogField) this._makeRiverMask();
+    if (this.landscape.fogField) { if (this.landscape.fogFieldJob) yield* this.landscape.fogFieldJob(); this._makeRiverMask(); }
+    if (due()) yield;
     this.inlandAt = this.landscape.inlandAt || ((x, z) => x - this.landscape.coastX(z));
     this.lookoutFootprints = (this.config.lookouts || []).map((l) => ({ ...l,
       ...roadFrame(this.route, routeIndex, l.atM, (l.side === 'inland' ? -1 : 1) * (3.5 + l.widthM / 2)) }));
@@ -88,6 +103,7 @@ export class StylizedTerrain {
       bfCloud: { value: new THREE.Vector4(.12, .5, .8, .57) }, bfWind: { value: .3 }, bfWet: { value: 0 }, bfRough: { value: .7 } };
     this.group = new THREE.Group();
     this.group.name = `${this.config.title || this.route.name} · stylized scenery`;
+    if (opts.hidden) this.group.visible = false;   // [F30] (an area built on the ride: hidden until the world draws it)
     scene.add(this.group);
     this.patches = new Map();
     this.farTrees = new Map();
@@ -121,51 +137,74 @@ export class StylizedTerrain {
     this.vista = vistaConfig(this.config);   // vista kit (js/world/toolbox/atmosphere/vista.js): distance detail, haze, clouds
     this.groundMaterial = makeGroundMaterial(this.config.palette, this.config, this.farUniform, this.canopyUniform, this.uniforms, this.vista, this._vkAttr());
     this._makeOcean();
+    if (due()) yield;
     this._makeClouds();
     this._makeShadows();
     this._makeRoadside();
-    this.ready = loadSceneryAssets(this.config.assets, { uniforms: this.uniforms, extraPaths: this.config.extraAssets }).then((kit) => {
+    const assets = loadSceneryAssets(this.config.assets, { uniforms: this.uniforms, extraPaths: this.config.extraAssets });
+    const failed = (err) => { this.stats.loading = 0; this.stats.errors++; opts.onError?.(err); };
+    if (!opts.deferred) {
+      this.ready = assets.then((kit) => { if (this.disposed) { kit.dispose(); return; } drain(this._kitJob(kit)); }).catch(failed);
+      return;
+    }
+    this._assets = { assets, failed };   // [F30] deferred: the caller runs kitJob() next (after the road, as the world did)
+  }
+
+  /** [F30] Deferred build, second half: wait for the kit's assets, then build with them (the city too) a slice at a time. */
+  *kitJob() {
+    const { assets, failed } = this._assets;
+    let kit = null, error = null;
+    yield { wait: assets.then((k) => { kit = k; }, (err) => { error = err; }) };
+    try {
+      if (error) throw error;
       if (this.disposed) { kit.dispose(); return; }
-      this.kit = kit;
-      for (const pack of scenePacks(this.config)) this._addPack(kit, pack);   // regional packs (toolbox/packs)
-      if (this.settlementPlan) this.settlement = new Settlement(this.group, this.settlementPlan, kit, this.uniforms);
-      // map footprints: the building kit when the scene asks for it (toolbox/structures/buildings), else the plain extrusions
-      if (this.footprintPlan) this.footprints = this.config.buildingKit
-        ? new BuildingKit(this.group, this.footprintPlan, this.landscape, this.config, this.uniforms, this.index)
-        : new Footprints(this.group, this.footprintPlan, this.landscape, this.config, this.uniforms);
-      // lifts and power lines, dams (toolbox/structures): from the map, when the scene has a places file
-      if (this.config.places && this.config.cables) this.cables = new Cables(this.group, this.config.places, this.landscape, this.proj, this.index, this.config.cables);
-      if (this.config.places?.dams?.length && this.config.dams) this.dams = new Dams(this.group, this.config.places, this.landscape, this.proj, this.config.dams);
-      if (this.config.boards?.length) this.boards = new Boards(this.group, this.route, this.index, this.config.boards);   // bend, town and col boards (toolbox/roadside)
-      this._makeLandmarks();
-      if (this.landscape.real) this.bridges = new ArchBridges(this.group, this.landscape, this.uniforms);
-      // life kit (toolbox/life): wildlife or coast life, by "life.kit" or the landform
-      const life = lifeKit(this.config, this.landscape);
-      if (life === 'wildlife') this.life = new Wildlife(this.group, this.landscape, this.route, this.index, this.uniforms, this.config.life);
-      else if (life === 'coast') this.life = new CoastLife(this.group, this.landscape, this.proj, this.route, this.index, this.uniforms, this.config.life);
-      this.life?.setNight(this._night || 0);
-      if (this.config.traffic) {
-        this.traffic = new HighwayTraffic(this.group, this.route, this.index, this.landscape, this.uniforms, this.qualityKey, this.config.traffic);
-        this.traffic.setNight(this._night || 0);
-      }
-      this.details = new RoadsideDetails(this.group, this.route, this.index, this.landscape, kit, this.uniforms);
-      if (this.config.verge && this.landscape.frameAt) this.verge = new Verge(this.group, this.landscape, this.route, this.config.verge);
-      if (this.config.hairpinWalls) this.hairpinWalls = new HairpinWalls(this.group, this.landscape, this.route, this.config.hairpinWalls);   // retaining walls on switchbacks (toolbox/structures)
-      if (this.config.raceDay && this.landscape.frameAt) this.raceDay = new RaceDay(this.group, this.landscape, this.route, this.index, this.uniforms, this.config.raceDay, this.qualityKey);   // race day (toolbox/life)
-      if (this.config.visitors && this.landscape.frameAt) this.visitors = new Visitors(this.group, this.landscape, this.route, this.index, this.uniforms, this.config.visitors, this.qualityKey, this.config.lookouts || []);
-      if (this.config.mountainRoad) {   // tunnels, masonry guardwalls, arches, waterfalls (toolbox/structures)
-        this.landmarks = new MountainRoad(this.group, this.landscape, this.route, this.index, this.proj, this.config, kit, this.uniforms);
-        this.landmarks.setNight(this._night || 0);
-      }
-      if (this.landscape.city) {
-        const t0 = performance.now();
-        this.city = new CityScene(this.group, this.route, this.index, this.landscape, kit, this.uniforms, this.qualityKey);
-        this.cityMs = Math.round(performance.now() - t0);   // (areas, PLAN 5.4: what building an area costs)
-        this.city.setNight(this._night || 0);
-      }
-      this._lastX = Infinity;
-      this.stats.loading = 0;
-    }).catch((err) => { this.stats.loading = 0; this.stats.errors++; opts.onError?.(err); });
+      yield* this._kitJob(kit, true);
+    } catch (err) { failed(err); } finally { this._built(); }
+  }
+
+  /** [F30] What is built with the kit's assets (as a job; `sliced`: the city too, in slices). */
+  *_kitJob(kit, sliced = false) {
+    this.kit = kit;
+    for (const pack of scenePacks(this.config)) this._addPack(kit, pack);   // regional packs (toolbox/packs)
+    if (this.settlementPlan) this.settlement = new Settlement(this.group, this.settlementPlan, kit, this.uniforms);
+    // map footprints: the building kit when the scene asks for it (toolbox/structures/buildings), else the plain extrusions
+    if (this.footprintPlan) this.footprints = this.config.buildingKit
+      ? new BuildingKit(this.group, this.footprintPlan, this.landscape, this.config, this.uniforms, this.index)
+      : new Footprints(this.group, this.footprintPlan, this.landscape, this.config, this.uniforms);
+    // lifts and power lines, dams (toolbox/structures): from the map, when the scene has a places file
+    if (this.config.places && this.config.cables) this.cables = new Cables(this.group, this.config.places, this.landscape, this.proj, this.index, this.config.cables);
+    if (this.config.places?.dams?.length && this.config.dams) this.dams = new Dams(this.group, this.config.places, this.landscape, this.proj, this.config.dams);
+    if (this.config.boards?.length) this.boards = new Boards(this.group, this.route, this.index, this.config.boards);   // bend, town and col boards (toolbox/roadside)
+    this._makeLandmarks();
+    if (this.landscape.real) this.bridges = new ArchBridges(this.group, this.landscape, this.uniforms);
+    // life kit (toolbox/life): wildlife or coast life, by "life.kit" or the landform
+    const life = lifeKit(this.config, this.landscape);
+    if (life === 'wildlife') this.life = new Wildlife(this.group, this.landscape, this.route, this.index, this.uniforms, this.config.life);
+    else if (life === 'coast') this.life = new CoastLife(this.group, this.landscape, this.proj, this.route, this.index, this.uniforms, this.config.life);
+    this.life?.setNight(this._night || 0);
+    if (this.config.traffic) {
+      this.traffic = new HighwayTraffic(this.group, this.route, this.index, this.landscape, this.uniforms, this.qualityKey, this.config.traffic);
+      this.traffic.setNight(this._night || 0);
+    }
+    this.details = new RoadsideDetails(this.group, this.route, this.index, this.landscape, kit, this.uniforms);
+    if (this.config.verge && this.landscape.frameAt) this.verge = new Verge(this.group, this.landscape, this.route, this.config.verge);
+    if (this.config.hairpinWalls) this.hairpinWalls = new HairpinWalls(this.group, this.landscape, this.route, this.config.hairpinWalls);   // retaining walls on switchbacks (toolbox/structures)
+    if (this.config.raceDay && this.landscape.frameAt) this.raceDay = new RaceDay(this.group, this.landscape, this.route, this.index, this.uniforms, this.config.raceDay, this.qualityKey);   // race day (toolbox/life)
+    if (this.config.visitors && this.landscape.frameAt) this.visitors = new Visitors(this.group, this.landscape, this.route, this.index, this.uniforms, this.config.visitors, this.qualityKey, this.config.lookouts || []);
+    if (this.config.mountainRoad) {   // tunnels, masonry guardwalls, arches, waterfalls (toolbox/structures)
+      this.landmarks = new MountainRoad(this.group, this.landscape, this.route, this.index, this.proj, this.config, kit, this.uniforms);
+      this.landmarks.setNight(this._night || 0);
+    }
+    if (this.landscape.city) {
+      if (due()) yield;
+      const t0 = performance.now();
+      this.city = new CityScene(this.group, this.route, this.index, this.landscape, kit, this.uniforms, this.qualityKey, sliced);
+      if (sliced) yield* this.city.job;   // [F30] (its steps in slices)
+      else this.cityMs = Math.round(performance.now() - t0);   // (areas, PLAN 5.4: what building an area costs)
+      this.city.setNight(this._night || 0);
+    }
+    this._lastX = Infinity;
+    this.stats.loading = 0;
   }
 
   /** Ground carries the vista kit's road-cut / fire-scar attribute (mountain scenes with rock cuts or burns). */
@@ -1204,6 +1243,7 @@ export class StylizedTerrain {
   get loadingCount() { return this.stats.loading; }
   dispose() {
     this.disposed = true;
+    if (!this.group) return;   // [F30] (a build released before it began)
     this.scene.remove(this.group);
     for (const mesh of this.patches.values()) mesh.geometry.dispose();
     this.groundPool?.dispose(); this.groundPoolFine?.dispose();
@@ -1213,15 +1253,16 @@ export class StylizedTerrain {
     this.city?.dispose();
     this.landmarkGeometries.forEach((g) => g.dispose()); this.landmarkGeometries.clear();
     this.surf?.geometry.dispose(); this.surf?.material.dispose(); this.landmarks?.dispose(); this.shoreTexture?.dispose(); this.bridges?.dispose(); this.traffic?.dispose(); this.life?.dispose();
-    this.ocean.geometry.dispose(); this.ocean.material.dispose();
-    this.lakeMeshes.forEach((m) => m.geometry.dispose());
+    this.ocean?.geometry.dispose(); this.ocean?.material.dispose();   // ([F30] ?.: a build released half way)
+    this.lakeMeshes?.forEach((m) => m.geometry.dispose());
     this.lakeMaterial?.dispose(); this.mistMaterial?.dispose();
     this.settlement?.dispose(); this.footprints?.dispose(); this.cables?.dispose(); this.dams?.dispose(); this.boards?.dispose(); this.raceDay?.dispose(); this.hairpinWalls?.dispose();
-    this.clouds.material.uniforms.map.value.dispose(); this.clouds.material.dispose(); this.clouds.geometry.dispose(); this.peakMaterial?.dispose(); this.peakClouds?.geometry.dispose();
-    this.shadowAsset.geometry.dispose(); this.shadowAsset.material.map.dispose(); this.shadowAsset.material.dispose();
-    this.roadside.children.forEach((m) => { m.geometry.dispose(); m.dispose(); });
-    this.roadside.children[0]?.material.dispose();
-    this.groundMaterial.dispose(); this.kit?.dispose();
+    if (this.clouds) { this.clouds.material.uniforms.map.value.dispose(); this.clouds.material.dispose(); this.clouds.geometry.dispose(); }
+    this.peakMaterial?.dispose(); this.peakClouds?.geometry.dispose();
+    if (this.shadowAsset) { this.shadowAsset.geometry.dispose(); this.shadowAsset.material.map.dispose(); this.shadowAsset.material.dispose(); }
+    this.roadside?.children.forEach((m) => { m.geometry.dispose(); m.dispose(); });
+    this.roadside?.children[0]?.material.dispose();
+    this.groundMaterial?.dispose(); this.kit?.dispose();
     this.patches.clear(); this.scatter.clear(); this.cover.clear();
   }
 }
