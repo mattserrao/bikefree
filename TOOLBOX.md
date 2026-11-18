@@ -9,6 +9,7 @@ feature goes into the toolbox behind a scene field, so the next route can use it
 - **Models:** `tools/toolbox-gallery.html`, rendered headlessly by `npm run gallery`
 - **New route:** `npm run new-route -- <id> --preset <biome>`, starting from `routes/presets/`
 - **Refactor safety:** `npm run guard`, which checks that every route still builds identically
+- **Texture expansion proposal:** [docs/toolbox/TEXTURE_EXPANSION.md](docs/toolbox/TEXTURE_EXPANSION.md) (design only; existing options stay available)
 - **Step by step:** the new-route guide (the Project doc `claude/new_route.md`), then `ROUTES.md` for the full field reference
 
 ---
