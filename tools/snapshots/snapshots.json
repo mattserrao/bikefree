@@ -4,65 +4,34 @@
   "software": false,
   "rows": [
     {
-      "shot": "pittsburgh@12410",
-      "file": "tools/snapshots/pittsburgh-12410.jpg",
-      "calls": 215,
-      "triangles": 1113155,
-      "seconds": 44,
+      "shot": "pittsburgh@6460:midday:current",
+      "file": "tools/snapshots/pittsburgh-6460-midday-current.jpg",
+      "calls": 219,
+      "triangles": 1219146,
+      "seconds": 49,
       "errors": [],
       "bake": {
-        "ms": 181,
-        "cpuMs": 179,
+        "ms": 221,
+        "cpuMs": 219,
         "work": [
-          4145,
-          1650
+          4972,
+          1747
         ],
         "view": [
-          3167,
-          1442
+          3994,
+          1539
         ],
         "cell": 2.5,
         "passes": 11,
-        "occluders": 266,
-        "groundSamples": 168091,
+        "occluders": 326,
+        "groundSamples": 213172,
         "phases": {
-          "ground": 11,
-          "occluders": 114,
-          "passes": 51
+          "ground": 23,
+          "occluders": 133,
+          "passes": 60
         },
-        "gpuMB": 21.8,
-        "worstStepMs": 114
-      }
-    },
-    {
-      "shot": "pittsburgh@12440",
-      "file": "tools/snapshots/pittsburgh-12440.jpg",
-      "calls": 213,
-      "triangles": 1095697,
-      "seconds": 44,
-      "errors": [],
-      "bake": {
-        "ms": 196,
-        "cpuMs": 195,
-        "work": [
-          4145,
-          1650
-        ],
-        "view": [
-          3167,
-          1442
-        ],
-        "cell": 2.5,
-        "passes": 11,
-        "occluders": 266,
-        "groundSamples": 168091,
-        "phases": {
-          "ground": 14,
-          "occluders": 122,
-          "passes": 57
-        },
-        "gpuMB": 21.8,
-        "worstStepMs": 122
+        "gpuMB": 29.3,
+        "worstStepMs": 133
       }
     }
   ]

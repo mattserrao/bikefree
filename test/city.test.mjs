@@ -19,7 +19,7 @@ const L = makeCityLandscape(scene, proj, index, route);
 const at = (lat, lon) => proj.toLocal(lat, lon);
 
 test('pittsburgh: the network tour (the loop, the Jail Trail and its spurs) with the Mount Washington climb', () => {
-  assert.ok(route.turnS > 22000 && route.turnS < 32000, `${route.turnS} m`);
+  assert.ok(route.turnS > 36000 && route.turnS < 46000, `${route.turnS} m`);
   const top = Math.max(...route.ele), bottom = Math.min(...route.ele);
   assert.ok(top - bottom > 110, `climb ${top - bottom} m`);
   assert.ok(Math.max(...route.grade.map(Math.abs)) < 25);

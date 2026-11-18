@@ -345,7 +345,7 @@ export class StreetKit {
     const s0 = Math.max(0, this.cfg.fromM), s1 = Math.min(r.dist[this.end] - 1, this.cfg.toM);
     const decks = L.routeBridges || [];
     for (let s = s0; s <= s1; s += 3) {
-      if (L.routeKindAt(s) !== 'road' || decks.some((b) => s > b.fromM - 8 && s < b.toM + 8)) continue;
+      if (L.routeKindAt(s) !== 'road' || decks.some((b) => s > b.fromM - 8 && s < b.toM + 8) || ghostAt(r, s)) continue;   // (a ghost: the real pass has its sidewalks)
       const f = this.frame(s);
       for (const side of [-1, 1]) {
         const c = this.curbAt(s), cx = f.x + f.rx * side * c, cz = f.z + f.rz * side * c;
@@ -379,7 +379,7 @@ export class StreetKit {
     }
     // 5. along the route's trails: benches and bins every ~70 m, alternating sides
     for (let s = s0 + 35; s <= s1; s += 70) {
-      if (L.routeKindAt(s) !== 'trail' || decks.some((b) => s > b.fromM - 10 && s < b.toM + 10)) continue;
+      if (L.routeKindAt(s) !== 'trail' || decks.some((b) => s > b.fromM - 10 && s < b.toM + 10) || ghostAt(this.route, s)) continue;
       const f = this.frame(s), side = Math.floor(s / 70) % 2 ? 1 : -1, off = ROAD_WIDTH / 2 + 1.7;
       const x = f.x + f.rx * side * off, z = f.z + f.rz * side * off, yaw = Math.atan2(-f.rx * side, -f.rz * side);
       this.bucket(this.key(x, z)).furniture.push({ kind: 'bench', x, z, yaw, trail: true });
@@ -388,7 +388,7 @@ export class StreetKit {
     }
     // 6. a trail's parkland: picnic tables on the landward grass every ~140 m, a marker post every 400 m
     for (let s = s0 + 105; s <= s1; s += 140) {
-      if (L.routeKindAt(s) !== 'trail' || decks.some((b) => s > b.fromM - 10 && s < b.toM + 10)) continue;
+      if (L.routeKindAt(s) !== 'trail' || decks.some((b) => s > b.fromM - 10 && s < b.toM + 10) || ghostAt(this.route, s)) continue;
       const f = this.frame(s), side = L.waterAt(f.x + f.rx * 25, f.z + f.rz * 25) < L.waterAt(f.x - f.rx * 25, f.z - f.rz * 25) ? 1 : -1;
       for (const off of [6.5, 9, 12]) {
         const x = f.x + f.rx * side * off, z = f.z + f.rz * side * off;
@@ -398,7 +398,7 @@ export class StreetKit {
       }
     }
     for (let s = Math.ceil((s0 + 1) / 400) * 400; s <= s1; s += 400) {
-      if (L.routeKindAt(s) !== 'trail' || decks.some((b) => s > b.fromM - 10 && s < b.toM + 10)) continue;
+      if (L.routeKindAt(s) !== 'trail' || decks.some((b) => s > b.fromM - 10 && s < b.toM + 10) || ghostAt(this.route, s)) continue;
       const f = this.frame(s), side = Math.floor(s / 400) % 2 ? 1 : -1, off = ROAD_WIDTH / 2 + 1.1;
       const x = f.x + f.rx * side * off, z = f.z + f.rz * side * off;
       this.bucket(this.key(x, z)).furniture.push({ kind: 'trailMarker', x, z, yaw: Math.atan2(-f.rx * side, -f.rz * side), trail: true });
@@ -419,7 +419,7 @@ export class StreetKit {
     for (const zone of this.cfg.zones) {
       if (!(zone.trees > 0)) continue;
       for (const side of [-1, 1]) for (let s = zone.fromM + (side > 0 ? zone.trees / 2 : 0) + 4; s <= zone.toM - 4; s += zone.trees) {
-        if (L.routeKindAt(s) !== 'road' || decks.some((b) => s > b.fromM - 12 && s < b.toM + 12)) continue;
+        if (L.routeKindAt(s) !== 'road' || decks.some((b) => s > b.fromM - 12 && s < b.toM + 12) || ghostAt(this.route, s)) continue;
         const f = this.frame(s), curb = this.curbAt(s), nx = f.rx * side, nz = f.rz * side;
         const ix = f.x + nx * curb, iz = f.z + nz * curb, x = ix + nx * 1.1, z = iz + nz * 1.1;
         const line = this.buildingLine(ix, iz, nx, nz, 8);
@@ -445,7 +445,7 @@ export class StreetKit {
     // the landward side; checked by the city like its other trees
     const every = this.cfg.parkTrees || 0, r = this.route;
     if (every > 0) for (let s = Math.max(0, this.cfg.fromM); s <= Math.min(r.dist[this.end] - 1, this.cfg.toM); s += every) {
-      if (L.routeKindAt(s) !== 'trail' || decks.some((b) => s > b.fromM - 15 && s < b.toM + 15)) continue;
+      if (L.routeKindAt(s) !== 'trail' || decks.some((b) => s > b.fromM - 15 && s < b.toM + 15) || ghostAt(this.route, s)) continue;
       const f = this.frame(s), land = L.waterAt(f.x + f.rx * 25, f.z + f.rz * 25) < L.waterAt(f.x - f.rx * 25, f.z - f.rz * 25) ? 1 : -1;
       for (const side of [land, -land]) for (let k = 0; k < 2; k++) {
         const h = hash(Math.round(s) * 13 + side * 5 + k * 71);

@@ -1216,6 +1216,7 @@ export class CityScene {
     for (const row of this.route.scene?.routeTrees || []) {
       const R = this.route, I = this.index, last = (R.turnIdx || R.dist.length - 1) - 1;
       for (let s = row.fromM, n = 0; s < row.toM; s += row.spacingM || 12, n++) {
+        if (ghostAt(R, s)) continue;   // (a ghost: the real pass has its trees)
         const i = Math.max(0, Math.min(last - 1, Math.floor(s / 10))), f = Math.min(1, (s - R.dist[i]) / 10);
         const x = I.xs[i] + (I.xs[i + 1] - I.xs[i]) * f, z = I.zs[i] + (I.zs[i + 1] - I.zs[i]) * f;
         const dx = I.xs[i + 1] - I.xs[i], dz = I.zs[i + 1] - I.zs[i], l = Math.hypot(dx, dz) || 1;

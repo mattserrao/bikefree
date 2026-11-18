@@ -329,7 +329,7 @@ def build(cid):
                 for jj in range(max(0, i - 40), i - 2):
                     if run[i] - run[jj] < 150 and run[i] - run[jj] > 25 and hv(nodes[pts[jj]], nodes[n]) < 15:
                         j = jj; break
-            if j is not None and i - j > 2 and run[i] - run[j] < 150 and not any(j < k_ <= i for k_ in protect()):
+            if j is not None and i - j >= 2 and run[i] - run[j] < 150 and not any(j < k_ <= i for k_ in protect()):
                 # keep pts[i] (where the line carries on from), drop the stub between
                 del pts[j + 1:i]; del wl[j + 1:i]
                 marks = [(m, k if k <= j else (j if k < i else k - (i - j - 1))) for m, k in marks]
@@ -437,6 +437,17 @@ def build(cid):
     ghost_idx = {n_: k for n_, k in marks if n_.startswith('__ghost')}
     marks = [(n_, k) for n_, k in marks if not n_.startswith('__ghost')]
     route_ghosts = [{'fromM': round(app_s(cum[ghost_idx['__ghost%d_a' % k]])), 'toM': round(app_s(cum[ghost_idx['__ghost%d_b' % k]]))} for k in range(len(router.ghost_legs))]
+    # a ghost's ends are where the line turns round (a spur's tip, the junction it comes back to): rounding the
+    # corners moves that turn a little along the line, so snap each end to the sharpest turn within 80 m
+    def _hd(a_, b_): return math.atan2((b_[1] - a_[1]) * math.cos(math.radians(a_[0])), b_[0] - a_[0])
+    def _turn(k):
+        if k < 2 or k > len(rs) - 3: return 0.0
+        d_ = _hd(rs[k], rs[k + 2]) - _hd(rs[k - 2], rs[k])
+        return abs((d_ + math.pi) % (2 * math.pi) - math.pi)
+    def _snap(m):
+        k0 = int(round(m / 10)); best = max(range(max(2, k0 - 8), min(len(rs) - 3, k0 + 8) + 1), key=_turn, default=k0)
+        return round(chord[best]) if _turn(best) > math.radians(120) else m
+    for g in route_ghosts: g['fromM'], g['toM'] = _snap(g['fromM']), _snap(g['toM'])
     # bridges on a ghost stretch are the real pass's bridges again: built once
     route_bridges = [b for b in route_bridges if not any(g['fromM'] - 5 <= app_s(b['fromM']) and app_s(b['toM']) <= g['toM'] + 5 for g in route_ghosts)]
     for b in route_bridges: b['fromM'], b['toM'] = round(app_s(b['fromM'])), round(app_s(b['toM']))

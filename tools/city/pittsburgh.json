@@ -7,7 +7,7 @@
  "osmBbox": [
   -80.045,
   40.422,
-  -79.952,
+  -79.925,
   40.454
  ],
  "osmTile": [
@@ -64,6 +64,17 @@
     40.43776,
     -80.00441
    ]
+  },
+  {
+   "name": "Eliza Furnace Trail to the Second Ave path",
+   "from": [
+    40.425863,
+    -79.953476
+   ],
+   "to": [
+    40.42565,
+    -79.9534704
+   ]
   }
  ],
  "legs": [
@@ -119,6 +130,320 @@
      "Eliza Furnace Trail: Hot Metal ramp",
      40.431796,
      -79.95978
+    ],
+    [
+     "Hot Metal Bridge north (junction)",
+     40.429959,
+     -79.957579
+    ]
+   ]
+  },
+  {
+   "mode": "trail",
+   "waypoints": [
+    [
+     "Hot Metal Bridge north (junction)",
+     40.429959,
+     -79.957579
+    ],
+    [
+     "Second Ave path",
+     40.42565,
+     -79.9534704
+    ],
+    [
+     "Boundary St foot",
+     40.428221,
+     -79.949252
+    ],
+    [
+     "Junction Hollow Trail foot",
+     40.429287,
+     -79.949714
+    ],
+    [
+     "Junction Hollow Trail",
+     40.431723,
+     -79.950519,
+     "Junction Hollow Trail"
+    ],
+    [
+     "Junction Hollow Trail top",
+     40.436686,
+     -79.950007
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Junction Hollow Trail top",
+     40.436686,
+     -79.950007
+    ],
+    [
+     "Boundary St",
+     40.438304,
+     -79.950071
+    ],
+    [
+     "Boundary & Joncaire",
+     40.440402,
+     -79.950166
+    ],
+    [
+     "Joncaire St",
+     40.440424,
+     -79.953672
+    ],
+    [
+     "Forbes Ave: Oakland",
+     40.441958,
+     -79.956436
+    ],
+    [
+     "Forbes Ave: Schenley Plaza",
+     40.443548,
+     -79.952158
+    ],
+    [
+     "Schenley Drive Extension",
+     40.442381,
+     -79.951688
+    ],
+    [
+     "Schenley Drive: museum",
+     40.441365,
+     -79.949239
+    ],
+    [
+     "Schenley Drive: Phipps",
+     40.439613,
+     -79.946775
+    ],
+    [
+     "Schenley Drive & Panther Hollow Rd (junction)",
+     40.438693,
+     -79.946459
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Schenley Drive & Panther Hollow Rd (junction)",
+     40.438693,
+     -79.946459
+    ],
+    [
+     "Schenley Drive: park",
+     40.439688,
+     -79.943512
+    ],
+    [
+     "Schenley Drive east",
+     40.440148,
+     -79.942254
+    ],
+    [
+     "Schenley Drive: golf course",
+     40.438698,
+     -79.939721
+    ],
+    [
+     "Schenley Drive: Bob O'Connor course",
+     40.437606,
+     -79.93618
+    ],
+    [
+     "Schenley Drive & Forbes (junction)",
+     40.4377,
+     -79.934079
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Schenley Drive & Forbes (junction)",
+     40.4377,
+     -79.934079
+    ],
+    [
+     "Serpentine Drive",
+     40.435074,
+     -79.935174
+    ],
+    [
+     "Bartlett St",
+     40.434273,
+     -79.933685
+    ],
+    [
+     "Bartlett & Panther Hollow",
+     40.432849,
+     -79.93655
+    ],
+    [
+     "Overlook Drive",
+     40.432754,
+     -79.937477
+    ],
+    [
+     "Overlook Drive: Schenley Oval",
+     40.433167,
+     -79.939439
+    ],
+    [
+     "Overlook Drive: Oval south",
+     40.432153,
+     -79.941931
+    ],
+    [
+     "Overlook Drive west",
+     40.430346,
+     -79.945216
+    ],
+    [
+     "Overlook Drive: hairpin",
+     40.430384,
+     -79.947127
+    ],
+    [
+     "Overlook Drive climb",
+     40.431905,
+     -79.947288
+    ],
+    [
+     "Overlook Drive north",
+     40.434713,
+     -79.945746
+    ],
+    [
+     "Panther Hollow Rd link",
+     40.434986,
+     -79.944938
+    ],
+    [
+     "Panther Hollow Rd",
+     40.436042,
+     -79.946202
+    ],
+    [
+     "Panther Hollow Rd top",
+     40.437859,
+     -79.947071
+    ],
+    [
+     "Schenley Drive & Panther Hollow Rd (junction)",
+     40.438693,
+     -79.946459
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "waypoints": [
+    [
+     "Schenley Drive & Panther Hollow Rd (junction) (back)",
+     40.438693,
+     -79.946459
+    ],
+    [
+     "Schenley Drive: Phipps (back)",
+     40.439613,
+     -79.946775
+    ],
+    [
+     "Schenley Drive: museum (back)",
+     40.441365,
+     -79.949239
+    ],
+    [
+     "Schenley Drive Extension (back)",
+     40.442381,
+     -79.951688
+    ],
+    [
+     "Forbes Ave: Schenley Plaza (back)",
+     40.443548,
+     -79.952158
+    ],
+    [
+     "Forbes Ave: Oakland (back)",
+     40.441958,
+     -79.956436
+    ],
+    [
+     "Joncaire St (back)",
+     40.440424,
+     -79.953672
+    ],
+    [
+     "Boundary & Joncaire (back)",
+     40.440402,
+     -79.950166
+    ],
+    [
+     "Boundary St (back)",
+     40.438304,
+     -79.950071
+    ],
+    [
+     "Junction Hollow Trail top (back)",
+     40.436686,
+     -79.950007
+    ]
+   ]
+  },
+  {
+   "mode": "trail",
+   "ghost": true,
+   "waypoints": [
+    [
+     "Junction Hollow Trail top (back)",
+     40.436686,
+     -79.950007
+    ],
+    [
+     "Junction Hollow Trail (back)",
+     40.431723,
+     -79.950519,
+     "Junction Hollow Trail"
+    ],
+    [
+     "Junction Hollow Trail foot (back)",
+     40.429287,
+     -79.949714
+    ],
+    [
+     "Boundary St foot (back)",
+     40.428221,
+     -79.949252
+    ],
+    [
+     "Second Ave path (back)",
+     40.42565,
+     -79.9534704
+    ],
+    [
+     "Hot Metal Bridge north (junction) (back)",
+     40.429959,
+     -79.957579
+    ]
+   ]
+  },
+  {
+   "mode": "trail",
+   "waypoints": [
+    [
+     "Hot Metal Bridge north (junction)",
+     40.429959,
+     -79.957579
     ],
     [
      "Hot Metal Bridge",
@@ -562,8 +887,8 @@
  "maxDriftM": 16,
  "profileKeep": [
   [
-   20920,
-   21100
+   34170,
+   34350
   ]
  ],
  "residentialBoxes": [

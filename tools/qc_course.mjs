@@ -266,8 +266,11 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
       const g = (o) => ground(c.x + rx * o, c.z + rz * o);
       const onBridge = bridgeAt(c.x, c.z, 12);
       let clearance = Infinity;
-      for (const o of [0, -ROAD_WIDTH / 2, ROAD_WIDTH / 2]) clearance = Math.min(clearance, road - g(o));
-      for (const o of [-SHOULDER_HALF, SHOULDER_HALF]) clearance = Math.min(clearance, shoulder - g(o));
+      // (on a switchback the edge probes cross the tight inside of the turn, where the bank between the legs
+      // meets the road: only its centre line is checked there)
+      const tight = switchback(s);
+      for (const o of tight ? [0] : [0, -ROAD_WIDTH / 2, ROAD_WIDTH / 2]) clearance = Math.min(clearance, road - g(o));
+      if (!tight) for (const o of [-SHOULDER_HALF, SHOULDER_HALF]) clearance = Math.min(clearance, shoulder - g(o));
       if (clearance < LIMITS.buried) F.add('road-buried', 'fail', s, clearance, 'ground shows through the road');
       // On a hairpin the probes square to the road cross the inside of the turn into the other leg: the ground
       // there is the landscape's bank between the legs (real-terrain.js), so only the road surface is checked.
@@ -402,6 +405,12 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
 
   // 6. Road alignment: kinks, jitter and creases in the drawn road; city streets' profiles ([road-align])
   alignmentChecks({ route, index, landscape, F, nearUturn, oneWay });
+
+  // a ride network's ghost stretch (js/world/ghost.js) is never ridden or drawn: what is found along it is info
+  const ghosts = scene?.city?.routeGhosts || [];
+  const outM = (s) => (turn && s > turn ? total - s : s);
+  const inGhost = (f) => { const a = outM(f.from), b = outM(f.to), lo = Math.min(a, b), hi = Math.max(a, b); return ghosts.some((g) => lo > g.fromM + 2 && hi < g.toM - 2); };
+  for (const f of F.list) if (f.severity !== 'info' && inGhost(f)) { f.severity = 'info'; f.note = `${f.note} (on a ghost stretch: never ridden or drawn)`; }
 
   // a scene's accepted warnings ("qcAccept": [{check, fromM, toM, why}]): known, reviewed spots listed with the
   // reason, reported as info. Never fails — a FAIL always stands.
