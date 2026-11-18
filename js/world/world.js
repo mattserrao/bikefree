@@ -838,11 +838,12 @@ function makeRoad(route, index) {
     const v = route.dist[i] / 24;
     uv.set([0, v, 1, v], i * 4);
   }
-  const idx = [];
+  const idx = [], quadAt = [];   // quadAt: the sample each quad starts at (ghost quads are left out, so idx isn't 6 per sample)
   for (let i = 0; i < n - 1; i++) {
     if (ghostAt(route, (route.dist[i] + route.dist[i + 1]) / 2)) continue;   // a network tour's repeat: drawn once, on its real pass
     const a = i * 2, b = a + 1, c = a + 2, d = a + 3; // a,c = left edge; b,d = right edge
     idx.push(a, b, c, b, d, c);
+    quadAt.push(i);
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
@@ -909,7 +910,9 @@ function makeRoad(route, index) {
   // lighter surface with a dashed white centre line.
   const trail = (i) => (kinds.find((k) => route.dist[i] >= k.fromM && route.dist[i] < k.toM) || {}).kind === 'trail';
   const roadIdx = [], trailIdx = [];
-  for (let i = 0; i < n - 1; i++) (trail(i) ? trailIdx : roadIdx).push(...idx.slice(i * 6, i * 6 + 6));
+  // (by the quad's own sample: after a ghost stretch, slicing idx by sample shifted every later stretch's paint
+  // by the ghost's length — F45: road paint on the South Side Trail at S, the Homestead riverfront)
+  quadAt.forEach((i, q) => (trail(i) ? trailIdx : roadIdx).push(...idx.slice(q * 6, q * 6 + 6)));
   geo.setIndex(roadIdx);
   const tc = document.createElement('canvas'); tc.width = 64; tc.height = 256;
   const t = tc.getContext('2d');
