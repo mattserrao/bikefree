@@ -1,6 +1,6 @@
 {
   "area": "allegheny",
-  "note": "The North Shore Trail, Troy Hill and Rialto, Millvale, Lawrenceville and the Strip. Portals: A, B.",
+  "note": "The North Shore Trail, Troy Hill and Rialto, Millvale, Lawrenceville and the Strip. Portals: A, B, LB (the East End).",
   "nodes": [
     {
       "id": "A",
@@ -19,6 +19,12 @@
       "name": "31st Street Bridge north end",
       "lat": 40.462143,
       "lon": -79.980815
+    },
+    {
+      "id": "LB",
+      "name": "Butler St & 40th St, Lawrenceville",
+      "lat": 40.468713,
+      "lon": -79.962418
     },
     {
       "id": "M",
@@ -49,10 +55,15 @@
       "fwd": "up Rialto Street (Pig Hill, about 24 %), along Lowrie St through Troy Hill, down Troy Hill Rd and over to the 16th Street Bridge",
       "rev": "from the 16th Street Bridge up Troy Hill Rd, along Lowrie St and down Rialto Street"
     },
-    "N>M": {
-      "name": "Millvale & Lawrenceville",
-      "fwd": "the trail to Millvale, over the 40th Street Bridge and down Butler Street",
-      "rev": "up Butler Street, over the 40th Street Bridge and the trail from Millvale"
+    "N>LB": {
+      "name": "Millvale & the 40th Street Bridge",
+      "fwd": "the trail to Millvale and over the 40th Street Bridge to Butler Street",
+      "rev": "over the 40th Street Bridge and the trail from Millvale to the 31st Street Bridge"
+    },
+    "LB>M": {
+      "name": "Butler Street, Lawrenceville",
+      "fwd": "down Butler Street through Lawrenceville and Penn Ave to the Strip",
+      "rev": "Penn Ave and up Butler Street through Lawrenceville to 40th St"
     },
     "M>B": {
       "name": "Strip District & Penn Avenue",

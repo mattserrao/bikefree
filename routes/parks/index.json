@@ -319,6 +319,18 @@
     "scene": "routes/scenes/pittsburgh-northside.json"
   },
   {
+    "id": "pittsburgh-eastend",
+    "name": "Pittsburgh · The East End: Highland Park, East Liberty & Squirrel Hill",
+    "park": "Pittsburgh, Pennsylvania",
+    "km": 27.1,
+    "climbM": 421,
+    "file": "routes/cities/pittsburgh-eastend.gpx",
+    "stage": "draft",
+    "area": "pittsburgh",
+    "eleSmoothM": 10,
+    "scene": "routes/scenes/pittsburgh-eastend.json"
+  },
+  {
     "id": "pittsburgh-slopes",
     "name": "Pittsburgh · The South Side Slopes, Mount Washington & the Dirty Dozen south",
     "park": "Pittsburgh, Pennsylvania",

@@ -30,8 +30,8 @@ test('the network sits on its areas\' lines: edges on their 10 m samples, preset
     const apron = A.aprons.reduce((t, ap) => t + ap.s1 - ap.s0, 0);
     assert.ok(Math.abs(sum + ghost + apron - A.L) < 30, `${A.id}: ${sum} + ${ghost} ghost + ${apron} apron vs ${A.L}`);
   }
-  assert.equal([...net.edges.values()].reduce((t, e) => t + e.len, 0), 103050);   // the whole network: the one 58 km tour's 47.67 km, Polish Hill & Bloomfield's 7.16 km (PLAN 5.7), the GAP & Homestead's 14.48 km (PLAN 5.5), the North Side's 15.78 km (PLAN 5.8) and the South Side Slopes & the Dirty Dozen south's 17.96 km (PLAN 5.9)
-  assert.deepEqual([...net.nodes.keys()].sort(), ['A', 'AL', 'B', 'C', 'D', 'E', 'F', 'G', 'GV', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'SY', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']);
+  assert.equal([...net.edges.values()].reduce((t, e) => t + e.len, 0), 122510);   // the whole network: the one 58 km tour's 47.67 km, Polish Hill & Bloomfield's 7.16 km (PLAN 5.7), the GAP & Homestead's 14.48 km (PLAN 5.5), the North Side's 15.78 km (PLAN 5.8), the East End's 19.46 km (PLAN 5.10) and the South Side Slopes & the Dirty Dozen south's 17.96 km (PLAN 5.9)
+  assert.deepEqual([...net.nodes.keys()].sort(), ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'AL', 'EL', 'GV', 'HE', 'HP', 'LB', 'SQ', 'SY'].sort());
   const three = makePathRoute(net, preset('pgh-three-rivers'));
   const short = makePathRoute(net, preset('pgh-short-loop'));
   const jail = makePathRoute(net, preset('pgh-jail-trail'));
@@ -163,7 +163,9 @@ test('free ride: no plan, straight on at every junction, no laps, a far-reaching
   // off the Clemente Bridge straight on is 6th St and Penn Avenue into the Strip, then Smallman St to Lawrenceville
   assert.equal(r.netRide.entries[1].t.e.key, 'M>B');
   assert.equal(r.netRide.entries[1].t.dir, -1);
-  assert.equal(r.netRide.entries[2].t.e.key, 'N>M');
+  // up Butler St to 40th St (LB, PLAN 5.10), where straight on is Butler St on to Stanton Ave and the East End
+  assert.equal(r.netRide.entries[2].t.e.key, 'LB>M');
+  assert.equal(r.netRide.entries[3].t.e.key, 'LB>HE');
   assert.ok(r.stops.length >= 3);
 });
 
@@ -189,6 +191,12 @@ test('your own routes: the planner offers the ways on, a loop laps, a one-way ro
   // …and one saved before junction B (the Clemente Bridge, where the Allegheny Loop comes in) split A>E
   assert.deepEqual(idsToKeys(net, keysToIds(net, ['A>E+', 'E>G+'])), ['A>B+', 'B>E+', 'E>F+', 'F>G+']);
   assert.deepEqual(idsToKeys(net, keysToIds(net, ['E>G-', 'A>E-'])), ['F>G-', 'E>F-', 'B>E-', 'A>B-']);
+  // …and one saved before junction LB (40th & Butler, where the East End leaves the Allegheny Loop) split N>M;
+  // junction ids of two letters ("LB>HE") parse like one-letter ones
+  assert.deepEqual(idsToKeys(net, keysToIds(net, ['P>N+', 'N>M+', 'M>B+'])), ['P>N+', 'N>LB+', 'LB>M+', 'M>B+']);
+  assert.deepEqual(idsToKeys(net, keysToIds(net, ['M>B-', 'N>M-'])), ['M>B-', 'LB>M-', 'N>LB-']);
+  assert.deepEqual(idsToKeys(net, keysToIds(net, ['LB>HE+', 'HE>HP+', 'HP>EL+'])), ['LB>HE+', 'HE>HP+', 'HP>EL+']);
+  assert.deepEqual(planNext(net, [], 'HP').map((o) => o.t.e.key).sort(), ['HE>HP', 'HP>EL', 'HP>HE']);
   const r = makePathRoute(net, { id: 'mine', name: 'Mine', path: oneWay });
   assert.equal(r.netOpen, true);
   assert.equal(r.lapM, len('E>I', 'I>S', 'S>H', 'H>G', 'G>GV', 'GV>D', 'D>C', 'C>R', 'R>A'));

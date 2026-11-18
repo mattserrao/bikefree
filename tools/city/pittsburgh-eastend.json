@@ -1,0 +1,793 @@
+{
+ "id": "pittsburgh-eastend",
+ "name": "Pittsburgh \u00b7 the East End: Highland Park, East Liberty & Squirrel Hill",
+ "park": "Pittsburgh, Pennsylvania",
+ "gpx": "routes/cities/pittsburgh-eastend.gpx",
+ "data": "routes/scenes/pittsburgh-eastend-city.json",
+ "osmBbox": [
+  -79.985,
+  40.422,
+  -79.895,
+  40.494
+ ],
+ "osmTile": [
+  0.01,
+  0.008
+ ],
+ "gridBbox": [
+  -79.985,
+  40.426,
+  -79.895,
+  40.492
+ ],
+ "gridM": 24,
+ "landM": 12,
+ "lattice": "pittsburgh",
+ "osmCache": "pittsburgh",
+ "open": true,
+ "waterRelations": [
+  1080,
+  2097217,
+  7937544
+ ],
+ "waterLevelM": 216.6,
+ "inlandWaterAboveM": 10,
+ "buildingRadiusM": 1100,
+ "tallBuildingM": 40,
+ "streetRadiusM": 900,
+ "cornerPasses": 3,
+ "cornerHalfWindow": 8,
+ "maxDriftM": 8,
+ "legs": [
+  {
+   "mode": "road",
+   "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh-allegheny.gpx",
+    "fromM": 9800,
+    "toM": 10800
+   },
+   "waypoints": [
+    [
+     "40th Street Bridge: north end (apron)",
+     40.474582,
+     -79.971191
+    ],
+    [
+     "40th Street Bridge (apron)",
+     40.471136,
+     -79.965855
+    ],
+    [
+     "40th Street Bridge: south end",
+     40.470024,
+     -79.963996,
+     "40th Street Bridge"
+    ],
+    [
+     "Butler St & 40th St (junction)",
+     40.46873,
+     -79.9623,
+     "Butler Street"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh-allegheny.gpx",
+    "fromM": 10800,
+    "toM": 11200
+   },
+   "waypoints": [
+    [
+     "Butler St & 40th St (junction)",
+     40.46873,
+     -79.9623,
+     "Butler Street"
+    ],
+    [
+     "Butler St: Lawrenceville",
+     40.467339,
+     -79.963921,
+     "Butler Street"
+    ],
+    [
+     "Butler St (apron end)",
+     40.465758,
+     -79.965047,
+     "Butler Street"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh-allegheny.gpx",
+    "fromM": 11200,
+    "toM": 10800
+   },
+   "waypoints": [
+    [
+     "Butler St (apron end) (back)",
+     40.465758,
+     -79.965047,
+     "Butler Street"
+    ],
+    [
+     "Butler St: Lawrenceville (back)",
+     40.467339,
+     -79.963921,
+     "Butler Street"
+    ],
+    [
+     "Butler St & 40th St (junction) (back)",
+     40.46873,
+     -79.9623,
+     "Butler Street"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Butler St & 40th St (junction)",
+     40.46873,
+     -79.9623,
+     "Butler Street"
+    ],
+    [
+     "Butler St: Upper Lawrenceville",
+     40.47215,
+     -79.95928,
+     "Butler Street"
+    ],
+    [
+     "Butler St & Stanton Ave",
+     40.47834,
+     -79.95567,
+     "Stanton Avenue"
+    ],
+    [
+     "Stanton Ave: the climb",
+     40.47799,
+     -79.94957,
+     "Stanton Avenue"
+    ],
+    [
+     "Stanton Ave",
+     40.47865,
+     -79.94439,
+     "Stanton Avenue"
+    ],
+    [
+     "Stanton Heights",
+     40.48165,
+     -79.93899,
+     "Stanton Avenue"
+    ],
+    [
+     "Stanton Ave: over the top",
+     40.47997,
+     -79.93341,
+     "Stanton Avenue"
+    ],
+    [
+     "Stanton Ave: down to Morningside",
+     40.4752,
+     -79.93191,
+     "Stanton Avenue"
+    ],
+    [
+     "Stanton Ave",
+     40.47326,
+     -79.93073,
+     "Stanton Avenue"
+    ],
+    [
+     "Stanton Ave & N Negley Ave",
+     40.47154,
+     -79.92627,
+     "North Negley Avenue"
+    ],
+    [
+     "N Negley Ave",
+     40.47724,
+     -79.92374,
+     "North Negley Avenue"
+    ],
+    [
+     "N Negley Ave & Mellon Terrace",
+     40.47942,
+     -79.92241,
+     "Mellon Terrace"
+    ],
+    [
+     "Mellon Terrace",
+     40.47895,
+     -79.92089,
+     "Mellon Terrace"
+    ],
+    [
+     "Highland Park: Bunkerhill St & One Wild Place (junction)",
+     40.47983,
+     -79.91964,
+     "One Wild Place"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "waypoints": [
+    [
+     "Highland Park: Bunkerhill St & One Wild Place (junction) (again)",
+     40.47983,
+     -79.91964,
+     "One Wild Place"
+    ],
+    [
+     "Bunkerhill St (again)",
+     40.47911,
+     -79.91777,
+     "Bunkerhill Street"
+    ],
+    [
+     "Highland Park entrance (again)",
+     40.47849,
+     -79.91617,
+     "Bunkerhill Street"
+    ],
+    [
+     "N Highland Ave (again)",
+     40.47519,
+     -79.91836,
+     "North Highland Avenue"
+    ],
+    [
+     "N Highland Ave & Stanton Ave (junction) (again)",
+     40.46969,
+     -79.92103,
+     "North Highland Avenue"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "N Highland Ave & Stanton Ave (junction)",
+     40.46969,
+     -79.92103,
+     "North Highland Avenue"
+    ],
+    [
+     "Stanton Ave",
+     40.46882,
+     -79.91782,
+     "Stanton Avenue"
+    ],
+    [
+     "Stanton Ave",
+     40.46859,
+     -79.91624,
+     "Stanton Avenue"
+    ],
+    [
+     "Stanton Ave: along the park",
+     40.4701,
+     -79.91165,
+     "Stanton Avenue"
+    ],
+    [
+     "Lake Drive & Stanton Ave",
+     40.47513,
+     -79.91081,
+     "Stanton Avenue"
+    ],
+    [
+     "Lake Drive: Lake Carnegie",
+     40.47941,
+     -79.91125,
+     "Lake Drive"
+    ],
+    [
+     "Lake Drive: by the reservoir",
+     40.48298,
+     -79.91096,
+     "Lake Drive"
+    ],
+    [
+     "Lake Drive: north",
+     40.48543,
+     -79.91568,
+     "Lake Drive"
+    ],
+    [
+     "Lake Drive",
+     40.48252,
+     -79.9171,
+     "Lake Drive"
+    ],
+    [
+     "One Wild Place & Lake Drive",
+     40.48151,
+     -79.91885,
+     "Lake Drive"
+    ],
+    [
+     "One Wild Place",
+     40.48072,
+     -79.91935,
+     "One Wild Place"
+    ],
+    [
+     "Highland Park: Bunkerhill St & One Wild Place (junction)",
+     40.47983,
+     -79.91964,
+     "One Wild Place"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Highland Park: Bunkerhill St & One Wild Place (junction)",
+     40.47983,
+     -79.91964,
+     "One Wild Place"
+    ],
+    [
+     "Bunkerhill St",
+     40.47911,
+     -79.91777,
+     "Bunkerhill Street"
+    ],
+    [
+     "Highland Park entrance",
+     40.47849,
+     -79.91617,
+     "Bunkerhill Street"
+    ],
+    [
+     "N Highland Ave",
+     40.47519,
+     -79.91836,
+     "North Highland Avenue"
+    ],
+    [
+     "N Highland Ave & Stanton Ave (junction)",
+     40.46969,
+     -79.92103,
+     "North Highland Avenue"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "N Highland Ave & Stanton Ave (junction)",
+     40.46969,
+     -79.92103,
+     "North Highland Avenue"
+    ],
+    [
+     "N Highland Ave",
+     40.466,
+     -79.92273,
+     "North Highland Avenue"
+    ],
+    [
+     "N Highland Ave & Penn Ave",
+     40.46141,
+     -79.92482,
+     "Penn Avenue"
+    ],
+    [
+     "Penn Ave: East Liberty",
+     40.46068,
+     -79.92275,
+     "Penn Avenue"
+    ],
+    [
+     "Penn Ave & Shady Ave, East Liberty (junction)",
+     40.45982,
+     -79.92081,
+     "Shady Avenue"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Penn Ave & Shady Ave, East Liberty (junction)",
+     40.45982,
+     -79.92081,
+     "Shady Avenue"
+    ],
+    [
+     "Penn Ave",
+     40.45913,
+     -79.9198,
+     "Penn Avenue"
+    ],
+    [
+     "Penn Ave: Bakery Square",
+     40.45748,
+     -79.91741,
+     "Penn Avenue"
+    ],
+    [
+     "Penn Ave: Bakery Square",
+     40.45494,
+     -79.91374,
+     "Penn Avenue"
+    ],
+    [
+     "Fifth Ave & Penn Ave",
+     40.45403,
+     -79.9124,
+     "Penn Avenue"
+    ],
+    [
+     "Fifth Ave",
+     40.45395,
+     -79.91297,
+     "Fifth Avenue"
+    ],
+    [
+     "Beechwood Blvd & Fifth Ave",
+     40.45362,
+     -79.91533,
+     "Fifth Avenue"
+    ],
+    [
+     "Beechwood Blvd: Mellon Park",
+     40.4522,
+     -79.91592,
+     "Beechwood Boulevard"
+    ],
+    [
+     "Beechwood Blvd",
+     40.44433,
+     -79.91779,
+     "Beechwood Boulevard"
+    ],
+    [
+     "Beechwood Blvd",
+     40.44227,
+     -79.91716,
+     "Beechwood Boulevard"
+    ],
+    [
+     "Forbes Ave & Beechwood Blvd",
+     40.43804,
+     -79.91614,
+     "Beechwood Boulevard"
+    ],
+    [
+     "Forbes Ave & Shady Ave, Squirrel Hill (junction)",
+     40.43804,
+     -79.91935,
+     "Forbes Avenue"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Forbes Ave & Shady Ave, Squirrel Hill (junction)",
+     40.43804,
+     -79.91935,
+     "Forbes Avenue"
+    ],
+    [
+     "Shady Ave",
+     40.44386,
+     -79.92051,
+     "Shady Avenue"
+    ],
+    [
+     "Shady Ave & Fifth Ave",
+     40.45289,
+     -79.92072,
+     "Shady Avenue"
+    ],
+    [
+     "Shady Ave",
+     40.45679,
+     -79.92245,
+     "Shady Avenue"
+    ],
+    [
+     "Penn Ave & Shady Ave, East Liberty (junction)",
+     40.45982,
+     -79.92081,
+     "Shady Avenue"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "waypoints": [
+    [
+     "Penn Ave & Shady Ave, East Liberty (junction) (again)",
+     40.45982,
+     -79.92081,
+     "Shady Avenue"
+    ],
+    [
+     "Penn Ave (again)",
+     40.45913,
+     -79.9198,
+     "Penn Avenue"
+    ],
+    [
+     "Penn Ave: Bakery Square (again)",
+     40.45748,
+     -79.91741,
+     "Penn Avenue"
+    ],
+    [
+     "Penn Ave: Bakery Square (again)",
+     40.45494,
+     -79.91374,
+     "Penn Avenue"
+    ],
+    [
+     "Fifth Ave & Penn Ave (again)",
+     40.45403,
+     -79.9124,
+     "Penn Avenue"
+    ],
+    [
+     "Fifth Ave (again)",
+     40.45395,
+     -79.91297,
+     "Fifth Avenue"
+    ],
+    [
+     "Beechwood Blvd & Fifth Ave (again)",
+     40.45362,
+     -79.91533,
+     "Fifth Avenue"
+    ],
+    [
+     "Beechwood Blvd: Mellon Park (again)",
+     40.4522,
+     -79.91592,
+     "Beechwood Boulevard"
+    ],
+    [
+     "Beechwood Blvd (again)",
+     40.44433,
+     -79.91779,
+     "Beechwood Boulevard"
+    ],
+    [
+     "Beechwood Blvd (again)",
+     40.44227,
+     -79.91716,
+     "Beechwood Boulevard"
+    ],
+    [
+     "Forbes Ave & Beechwood Blvd (again)",
+     40.43804,
+     -79.91614,
+     "Beechwood Boulevard"
+    ],
+    [
+     "Forbes Ave & Shady Ave, Squirrel Hill (junction) (again)",
+     40.43804,
+     -79.91935,
+     "Forbes Avenue"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Forbes Ave & Shady Ave, Squirrel Hill (junction)",
+     40.43804,
+     -79.91935,
+     "Forbes Avenue"
+    ],
+    [
+     "Forbes Ave & Murray Ave",
+     40.43807,
+     -79.92299,
+     "Murray Avenue"
+    ],
+    [
+     "Forbes Ave",
+     40.43804,
+     -79.9277,
+     "Forbes Avenue"
+    ],
+    [
+     "Forbes Ave",
+     40.43785,
+     -79.93073,
+     "Forbes Avenue"
+    ],
+    [
+     "Forbes Ave & Schenley Drive",
+     40.43776,
+     -79.93292,
+     "Schenley Drive"
+    ],
+    [
+     "Schenley Drive & Forbes Ave (junction)",
+     40.437654,
+     -79.934186,
+     "Schenley Drive"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh-oakland.gpx",
+    "fromM": 5890,
+    "toM": 5490
+   },
+   "waypoints": [
+    [
+     "Schenley Drive & Forbes Ave (junction)",
+     40.437654,
+     -79.934186,
+     "Schenley Drive"
+    ],
+    [
+     "Schenley Drive (apron)",
+     40.437701,
+     -79.936502,
+     "Schenley Drive"
+    ],
+    [
+     "Schenley Drive (apron end)",
+     40.438449,
+     -79.93865,
+     "Schenley Drive"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh-oakland.gpx",
+    "fromM": 5490,
+    "toM": 5890
+   },
+   "waypoints": [
+    [
+     "Schenley Drive (apron end) (back)",
+     40.438449,
+     -79.93865,
+     "Schenley Drive"
+    ],
+    [
+     "Schenley Drive (back)",
+     40.437701,
+     -79.936502,
+     "Schenley Drive"
+    ],
+    [
+     "Schenley Drive & Forbes Ave (junction) (back)",
+     40.437654,
+     -79.934186,
+     "Schenley Drive"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh-oakland.gpx",
+    "fromM": 5890,
+    "toM": 6290
+   },
+   "waypoints": [
+    [
+     "Schenley Drive & Forbes Ave (junction)",
+     40.437654,
+     -79.934186,
+     "Schenley Drive"
+    ],
+    [
+     "Schenley Park (apron)",
+     40.435928,
+     -79.933636
+    ],
+    [
+     "Schenley Park (apron end)",
+     40.435042,
+     -79.935323
+    ]
+   ]
+  }
+ ],
+ "bridgeStyles": {
+  "Roberto Clemente Bridge": "sister",
+  "Andy Warhol Bridge": "sister",
+  "Rachel Carson Bridge": "sister",
+  "Fort Duquesne Bridge": "arch-gold",
+  "Fort Pitt Bridge": "fortpitt",
+  "West End Bridge": "arch-gold",
+  "Smithfield Street Bridge": "lenticular",
+  "Liberty Bridge": "truss",
+  "South 10th Street Bridge": "suspension",
+  "Hot Metal Bridge": "truss-dark",
+  "Birmingham Bridge": "arch",
+  "David McCullough Bridge": "arch",
+  "Veterans Bridge": "girder",
+  "Washington Crossing Bridge;40th Street Bridge": "arch"
+ },
+ "stadiums": {
+  "PNC Park": {
+   "seats": "#2a5596",
+   "open": "river",
+   "heightM": 28
+  },
+  "Acrisure Stadium": {
+   "seats": "#e7b416",
+   "open": "river",
+   "heightM": 40
+  }
+ },
+ "specialBuildings": {
+  "One PPG Place": 6,
+  "Two PPG Place": 6,
+  "Three PPG Place": 6,
+  "Four PPG Place": 6,
+  "Five PPG Place": 6,
+  "Six PPG Place": 6,
+  "PPG Place Wintergarden": 6,
+  "U.S. Steel Tower": 9,
+  "Gulf Tower": 10,
+  "Grant Building": 11,
+  "Union Trust Building": 11,
+  "Koppers Tower": 11,
+  "BNY Mellon Center": 5,
+  "Fifth Avenue Place": 5,
+  "Tower at PNC Plaza": 5,
+  "EQT Plaza": 5,
+  "USS Requin": 12
+ },
+ "residentialBoxes": [
+  [
+   40.424,
+   -80.026,
+   40.4395,
+   -80.007
+  ],
+  [
+   40.424,
+   -80.007,
+   40.4285,
+   -79.996
+  ],
+  [
+   40.433,
+   -80.04,
+   40.4425,
+   -80.024
+  ]
+ ],
+ "osmOrigin": [
+  -80.045,
+  40.422
+ ]
+}

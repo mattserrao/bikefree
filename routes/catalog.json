@@ -668,6 +668,21 @@
   "area": "pittsburgh"
  },
  {
+  "id": "pittsburgh-eastend",
+  "name": "Pittsburgh \u00b7 The East End: Highland Park, East Liberty & Squirrel Hill",
+  "park": "Pittsburgh, Pennsylvania",
+  "file": "routes/cities/pittsburgh-eastend.gpx",
+  "outAndBack": false,
+  "expectedKm": [
+   24,
+   28
+  ],
+  "scene": "routes/scenes/pittsburgh-eastend.json",
+  "eleSmoothM": 10,
+  "stage": "draft",
+  "area": "pittsburgh"
+ },
+ {
   "id": "pittsburgh-slopes",
   "name": "Pittsburgh \u00b7 The South Side Slopes, Mount Washington & the Dirty Dozen south",
   "park": "Pittsburgh, Pennsylvania",

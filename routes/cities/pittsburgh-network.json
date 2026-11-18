@@ -35,7 +35,7 @@
    ],
    "aprons": [
     {
-     "edge": "e20",
+     "edge": "e21",
      "dir": 1,
      "s": [
       0,
@@ -44,7 +44,7 @@
      "u0": 2730
     },
     {
-     "edge": "e22",
+     "edge": "e23",
      "dir": 1,
      "s": [
       7470,
@@ -53,7 +53,7 @@
      "u0": 0
     },
     {
-     "edge": "e21",
+     "edge": "e22",
      "dir": 1,
      "s": [
       16790,
@@ -193,16 +193,16 @@
    ],
    "aprons": [
     {
-     "edge": "e19",
+     "edge": "e20",
      "dir": 1,
      "s": [
       0,
       400
      ],
-     "u0": 4550
+     "u0": 1270
     },
     {
-     "edge": "e20",
+     "edge": "e21",
      "dir": 1,
      "s": [
       400,
@@ -211,7 +211,7 @@
      "u0": 0
     },
     {
-     "edge": "e22",
+     "edge": "e23",
      "dir": -1,
      "s": [
       9500,
@@ -220,7 +220,7 @@
      "u0": 3430
     },
     {
-     "edge": "e23",
+     "edge": "e24",
      "dir": 1,
      "s": [
       10300,
@@ -310,6 +310,68 @@
      "s": [
       710,
       1170
+     ],
+     "u0": 0
+    }
+   ]
+  },
+  {
+   "id": "eastend",
+   "catalogId": "pittsburgh-eastend",
+   "base": "routes/cities/pittsburgh-eastend.gpx",
+   "legM": 27130,
+   "ghosts": [
+    {
+     "fromM": 1400,
+     "toM": 1800
+    },
+    {
+     "fromM": 7686,
+     "toM": 9053
+    },
+    {
+     "fromM": 21372,
+     "toM": 24670
+    },
+    {
+     "fromM": 26330,
+     "toM": 26730
+    }
+   ],
+   "aprons": [
+    {
+     "edge": "e19",
+     "dir": 1,
+     "s": [
+      0,
+      1000
+     ],
+     "u0": 2280
+    },
+    {
+     "edge": "e20",
+     "dir": 1,
+     "s": [
+      1000,
+      1400
+     ],
+     "u0": 0
+    },
+    {
+     "edge": "e25",
+     "dir": -1,
+     "s": [
+      25930,
+      26330
+     ],
+     "u0": 1190
+    },
+    {
+     "edge": "e26",
+     "dir": 1,
+     "s": [
+      26730,
+      27130
      ],
      "u0": 0
     }
@@ -644,6 +706,23 @@
    }
   },
   {
+   "id": "LB",
+   "name": "Butler St & 40th St, Lawrenceville",
+   "lat": 40.468713,
+   "lon": -79.962418,
+   "ele": 232.69,
+   "passes": {
+    "allegheny": [
+     10800
+    ],
+    "eastend": [
+     1000,
+     1800
+    ]
+   },
+   "portal": true
+  },
+  {
    "id": "M",
    "name": "Smallman & 29th, Strip District",
    "lat": 40.458505,
@@ -708,12 +787,17 @@
    "name": "Schenley Drive & Forbes Ave",
    "lat": 40.437654,
    "lon": -79.934186,
-   "ele": 329.71,
+   "ele": 329.68,
    "passes": {
     "oakland": [
      5890
+    ],
+    "eastend": [
+     25930,
+     26730
     ]
-   }
+   },
+   "portal": true
   },
   {
    "id": "X",
@@ -804,6 +888,58 @@
      5790,
      6360,
      8470
+    ]
+   }
+  },
+  {
+   "id": "HE",
+   "name": "Highland Park: Bunkerhill St & One Wild Place",
+   "lat": 40.479745,
+   "lon": -79.91958,
+   "ele": 297.47,
+   "passes": {
+    "eastend": [
+     7690,
+     12810
+    ]
+   }
+  },
+  {
+   "id": "HP",
+   "name": "N Highland Ave & Stanton Ave, Highland Park",
+   "lat": 40.469705,
+   "lon": -79.920896,
+   "ele": 288.11,
+   "passes": {
+    "eastend": [
+     9060,
+     14190
+    ]
+   }
+  },
+  {
+   "id": "EL",
+   "name": "Penn Ave & Shady Ave, East Liberty",
+   "lat": 40.459807,
+   "lon": -79.920784,
+   "ele": 282.33,
+   "passes": {
+    "eastend": [
+     15540,
+     21370
+    ]
+   }
+  },
+  {
+   "id": "SQ",
+   "name": "Forbes Ave & Shady Ave, Squirrel Hill",
+   "lat": 40.43809,
+   "lon": -79.919236,
+   "ele": 342.81,
+   "passes": {
+    "eastend": [
+     18830,
+     24670
     ]
    }
   },
@@ -1216,27 +1352,48 @@
   },
   {
    "id": "e19",
-   "key": "N>M",
+   "key": "N>LB",
    "area": "allegheny",
    "from": "N",
-   "to": "M",
+   "to": "LB",
    "s": [
     7520,
-    12470
+    10800
    ],
-   "lengthM": 4950,
+   "lengthM": 3280,
    "climbM": [
-    27,
-    24
+    25,
+    13
    ],
-   "name": "Millvale & Lawrenceville",
+   "name": "Millvale & the 40th Street Bridge",
    "toward": [
-    "the trail to Millvale, over the 40th Street Bridge and down Butler Street",
-    "up Butler Street, over the 40th Street Bridge and the trail from Millvale"
+    "the trail to Millvale and over the 40th Street Bridge to Butler Street",
+    "over the 40th Street Bridge and the trail from Millvale to the 31st Street Bridge"
    ]
   },
   {
    "id": "e20",
+   "key": "LB>M",
+   "area": "allegheny",
+   "from": "LB",
+   "to": "M",
+   "s": [
+    10800,
+    12470
+   ],
+   "lengthM": 1670,
+   "climbM": [
+    2,
+    11
+   ],
+   "name": "Butler Street, Lawrenceville",
+   "toward": [
+    "down Butler Street through Lawrenceville and Penn Ave to the Strip",
+    "Penn Ave and up Butler Street through Lawrenceville to 40th St"
+   ]
+  },
+  {
+   "id": "e21",
    "key": "M>B",
    "area": "allegheny",
    "from": "M",
@@ -1257,7 +1414,7 @@
    ]
   },
   {
-   "id": "e21",
+   "id": "e22",
    "key": "D>O",
    "area": "westend",
    "from": "D",
@@ -1278,7 +1435,7 @@
    ]
   },
   {
-   "id": "e22",
+   "id": "e23",
    "key": "I>L",
    "area": "oakland",
    "from": "I",
@@ -1299,7 +1456,7 @@
    ]
   },
   {
-   "id": "e23",
+   "id": "e24",
    "key": "L>J",
    "area": "oakland",
    "from": "L",
@@ -1320,7 +1477,7 @@
    ]
   },
   {
-   "id": "e24",
+   "id": "e25",
    "key": "J>K",
    "area": "oakland",
    "from": "J",
@@ -1341,7 +1498,7 @@
    ]
   },
   {
-   "id": "e25",
+   "id": "e26",
    "key": "K>J",
    "area": "oakland",
    "from": "K",
@@ -1362,7 +1519,7 @@
    ]
   },
   {
-   "id": "e26",
+   "id": "e27",
    "key": "M>X",
    "area": "polish",
    "from": "M",
@@ -1383,7 +1540,7 @@
    ]
   },
   {
-   "id": "e27",
+   "id": "e28",
    "key": "X>T",
    "area": "polish",
    "from": "X",
@@ -1404,7 +1561,7 @@
    ]
   },
   {
-   "id": "e28",
+   "id": "e29",
    "key": "T>X",
    "area": "polish",
    "from": "T",
@@ -1425,7 +1582,7 @@
    ]
   },
   {
-   "id": "e29",
+   "id": "e30",
    "key": "T>L",
    "area": "polish",
    "from": "T",
@@ -1446,7 +1603,7 @@
    ]
   },
   {
-   "id": "e30",
+   "id": "e31",
    "key": "S>W",
    "area": "homestead",
    "from": "S",
@@ -1467,7 +1624,7 @@
    ]
   },
   {
-   "id": "e31",
+   "id": "e32",
    "key": "W>V",
    "area": "homestead",
    "from": "W",
@@ -1488,7 +1645,7 @@
    ]
   },
   {
-   "id": "e32",
+   "id": "e33",
    "key": "V>U",
    "area": "homestead",
    "from": "V",
@@ -1509,7 +1666,7 @@
    ]
   },
   {
-   "id": "e33",
+   "id": "e34",
    "key": "U>V",
    "area": "homestead",
    "from": "U",
@@ -1530,7 +1687,7 @@
    ]
   },
   {
-   "id": "e34",
+   "id": "e35",
    "key": "W>U",
    "area": "homestead",
    "from": "W",
@@ -1551,7 +1708,7 @@
    ]
   },
   {
-   "id": "e35",
+   "id": "e36",
    "key": "R>Y",
    "area": "northside",
    "from": "R",
@@ -1572,7 +1729,7 @@
    ]
   },
   {
-   "id": "e36",
+   "id": "e37",
    "key": "Y>Z",
    "area": "northside",
    "from": "Y",
@@ -1593,7 +1750,7 @@
    ]
   },
   {
-   "id": "e37",
+   "id": "e38",
    "key": "Z>Y",
    "area": "northside",
    "from": "Z",
@@ -1614,7 +1771,7 @@
    ]
   },
   {
-   "id": "e38",
+   "id": "e39",
    "key": "Z>C",
    "area": "northside",
    "from": "Z",
@@ -1635,7 +1792,154 @@
    ]
   },
   {
-   "id": "e39",
+   "id": "e40",
+   "key": "LB>HE",
+   "area": "eastend",
+   "from": "LB",
+   "to": "HE",
+   "s": [
+    1800,
+    7690
+   ],
+   "lengthM": 5890,
+   "climbM": [
+    136,
+    71
+   ],
+   "name": "Stanton Avenue & N Negley Avenue",
+   "toward": [
+    "up Butler Street to Stanton Ave, the long climb over Stanton Heights, down to N Negley Ave and up Mellon Terrace to the Highland Park gates",
+    "Mellon Terrace and down N Negley Ave, Stanton Ave up over Stanton Heights and the long descent to Butler Street"
+   ]
+  },
+  {
+   "id": "e41",
+   "key": "HP>HE",
+   "area": "eastend",
+   "from": "HP",
+   "to": "HE",
+   "s": [
+    9060,
+    12810
+   ],
+   "lengthM": 3750,
+   "climbM": [
+    48,
+    39
+   ],
+   "name": "Highland Park Reservoir & Lake Drive",
+   "toward": [
+    "Stanton Ave along the park, Lake Drive past Lake Carnegie and round the reservoir to the zoo gates",
+    "past the zoo gates, Lake Drive round the reservoir and Lake Carnegie, down Stanton Ave to N Highland"
+   ]
+  },
+  {
+   "id": "e42",
+   "key": "HE>HP",
+   "area": "eastend",
+   "from": "HE",
+   "to": "HP",
+   "s": [
+    12810,
+    14190
+   ],
+   "lengthM": 1380,
+   "climbM": [
+    19,
+    28
+   ],
+   "name": "N Highland Avenue: the park entrance",
+   "toward": [
+    "Bunkerhill St past the Highland Park entrance garden and down N Highland Ave to Stanton",
+    "up N Highland Ave to the Highland Park entrance garden and Bunkerhill St to the zoo gates"
+   ]
+  },
+  {
+   "id": "e43",
+   "key": "HP>EL",
+   "area": "eastend",
+   "from": "HP",
+   "to": "EL",
+   "s": [
+    14190,
+    15540
+   ],
+   "lengthM": 1350,
+   "climbM": [
+    7,
+    13
+   ],
+   "name": "N Highland Avenue: East Liberty",
+   "toward": [
+    "down N Highland Ave into East Liberty and Penn Ave to Shady",
+    "Penn Ave and up N Highland Ave to Stanton"
+   ]
+  },
+  {
+   "id": "e44",
+   "key": "EL>SQ",
+   "area": "eastend",
+   "from": "EL",
+   "to": "SQ",
+   "s": [
+    15540,
+    18830
+   ],
+   "lengthM": 3290,
+   "climbM": [
+    72,
+    10
+   ],
+   "name": "Bakery Square & Beechwood Boulevard",
+   "toward": [
+    "Penn Ave past Bakery Square, Fifth to Beechwood Blvd and up past Mellon Park to Forbes",
+    "Forbes Ave to Beechwood Blvd, down past Mellon Park to Fifth, Penn Ave past Bakery Square to Shady"
+   ]
+  },
+  {
+   "id": "e45",
+   "key": "SQ>EL",
+   "area": "eastend",
+   "from": "SQ",
+   "to": "EL",
+   "s": [
+    18830,
+    21370
+   ],
+   "lengthM": 2540,
+   "climbM": [
+    8,
+    69
+   ],
+   "name": "Shady Avenue",
+   "toward": [
+    "down Shady Ave past Mellon Park, over Fifth to Penn Ave in East Liberty",
+    "Shady Ave over Fifth past Mellon Park and up into Squirrel Hill to Forbes"
+   ]
+  },
+  {
+   "id": "e46",
+   "key": "SQ>K",
+   "area": "eastend",
+   "from": "SQ",
+   "to": "K",
+   "s": [
+    24670,
+    25930
+   ],
+   "lengthM": 1260,
+   "climbM": [
+    11,
+    24
+   ],
+   "name": "Forbes Avenue: Squirrel Hill",
+   "toward": [
+    "Forbes Ave through Squirrel Hill past Murray Ave to Schenley Park",
+    "Forbes Ave out of Schenley Park through Squirrel Hill past Murray Ave to Shady"
+   ]
+  },
+  {
+   "id": "e47",
    "key": "F>SY",
    "area": "slopes",
    "from": "F",
@@ -1656,7 +1960,7 @@
    ]
   },
   {
-   "id": "e40",
+   "id": "e48",
    "key": "SY>AL",
    "area": "slopes",
    "from": "SY",
@@ -1677,7 +1981,7 @@
    ]
   },
   {
-   "id": "e41",
+   "id": "e49",
    "key": "AL>SY",
    "area": "slopes",
    "from": "AL",
@@ -1698,7 +2002,7 @@
    ]
   },
   {
-   "id": "e42",
+   "id": "e50",
    "key": "GV>SY",
    "area": "slopes",
    "from": "GV",
@@ -1719,7 +2023,7 @@
    ]
   },
   {
-   "id": "e43",
+   "id": "e51",
    "key": "AL>Q",
    "area": "slopes",
    "from": "AL",
@@ -1745,9 +2049,9 @@
    "id": "pgh-homestead-loop",
    "name": "Homestead Loop",
    "path": [
+    "e35+",
     "e34+",
-    "e33+",
-    "e31-"
+    "e32-"
    ],
    "tags": [
     "flat",
@@ -1762,9 +2066,9 @@
    "id": "pgh-waterfront-loop",
    "name": "Waterfront Loop",
    "path": [
-    "e34+",
-    "e32-",
-    "e31-"
+    "e35+",
+    "e33-",
+    "e32-"
    ],
    "tags": [
     "flat",
@@ -1774,6 +2078,78 @@
    "note": "The riverfront trail to the Pump House and back along East Waterfront Drive past the shops",
    "lengthM": 3600,
    "climbM": 10
+  },
+  {
+   "id": "pgh-east-end",
+   "name": "East End Loop",
+   "path": [
+    "e46-",
+    "e44-",
+    "e43-",
+    "e41+",
+    "e42+",
+    "e43+",
+    "e45-",
+    "e46+"
+   ],
+   "tags": [
+    "varied",
+    "new"
+   ],
+   "note": "From Schenley Park along Forbes into Squirrel Hill, Beechwood Blvd past Mellon Park and Penn Ave past Bakery Square to East Liberty, up N Highland and Stanton Ave to Highland Park, round Lake Carnegie and the reservoir on Lake Drive, down N Highland and back over Shady Ave",
+   "lengthM": 16180,
+   "climbM": 201
+  },
+  {
+   "id": "pgh-squirrel-hill",
+   "name": "Squirrel Hill & Bakery Square Loop",
+   "path": [
+    "e46-",
+    "e44-",
+    "e45-",
+    "e46+"
+   ],
+   "tags": [
+    "short",
+    "hilly",
+    "new"
+   ],
+   "note": "From Schenley Park along Forbes to Squirrel Hill, down Beechwood Blvd past Mellon Park, Penn Ave past Bakery Square, and the long pull back up Shady Ave",
+   "lengthM": 8350,
+   "climbM": 114
+  },
+  {
+   "id": "pgh-highland-park",
+   "name": "Highland Park Reservoir Loop",
+   "path": [
+    "e41+",
+    "e42+"
+   ],
+   "tags": [
+    "short",
+    "hilly",
+    "new"
+   ],
+   "note": "Stanton Ave along the park, Lake Drive past Lake Carnegie and round the reservoir to the zoo gates, past the entrance garden and down N Highland Ave",
+   "lengthM": 5130,
+   "climbM": 67
+  },
+  {
+   "id": "pgh-stanton-heights",
+   "name": "Stanton Heights & Highland Park Climb",
+   "path": [
+    "e40+",
+    "e42+",
+    "e41+",
+    "e40-"
+   ],
+   "tags": [
+    "hilly",
+    "new"
+   ],
+   "note": "From Lawrenceville the long steady climb up Stanton Ave over Stanton Heights and N Negley to Highland Park, a lap of the reservoir, and back over the top to Butler Street",
+   "lengthM": 16910,
+   "climbM": 274
   },
   {
    "id": "pgh-three-rivers",
@@ -1896,8 +2272,8 @@
     "e5+",
     "e6+",
     "e7+",
-    "e21+",
-    "e21-",
+    "e22+",
+    "e22-",
     "e8+",
     "e9+",
     "e10+"
@@ -2040,8 +2416,8 @@
    "id": "pgh-schenley",
    "name": "Schenley Park Loop",
    "path": [
-    "e24+",
-    "e25+"
+    "e25+",
+    "e26+"
    ],
    "tags": [
     "short",
@@ -2057,12 +2433,12 @@
    "name": "Jail Trail, Oakland & Schenley",
    "path": [
     "e2+",
-    "e22+",
     "e23+",
     "e24+",
     "e25+",
+    "e26+",
+    "e24-",
     "e23-",
-    "e22-",
     "e2-"
    ],
    "tags": [
@@ -2080,12 +2456,12 @@
     "e11+",
     "e1+",
     "e2+",
-    "e22+",
     "e23+",
     "e24+",
     "e25+",
+    "e26+",
+    "e24-",
     "e23-",
-    "e22-",
     "e3+",
     "e4+",
     "e5+",
@@ -2111,6 +2487,7 @@
     "e17+",
     "e19+",
     "e20+",
+    "e21+",
     "e11-"
    ],
    "tags": [
@@ -2126,6 +2503,7 @@
    "name": "Allegheny Loop · reverse",
    "path": [
     "e11+",
+    "e21-",
     "e20-",
     "e19-",
     "e17-",
@@ -2147,6 +2525,7 @@
     "e17+",
     "e19+",
     "e20+",
+    "e21+",
     "e1+",
     "e2+",
     "e3+",
@@ -2209,6 +2588,7 @@
     "e17+",
     "e19+",
     "e20+",
+    "e21+",
     "e11-"
    ],
    "tags": [
@@ -2224,8 +2604,8 @@
    "id": "pgh-polish-hill",
    "name": "Polish Hill Climb Loop",
    "path": [
-    "e27+",
-    "e28+"
+    "e28+",
+    "e29+"
    ],
    "tags": [
     "short",
@@ -2240,13 +2620,13 @@
    "id": "pgh-polish-crosstown",
    "name": "Polish Hill, Bloomfield & Oakland Loop",
    "path": [
-    "e26+",
     "e27+",
-    "e29+",
-    "e22-",
+    "e28+",
+    "e30+",
+    "e23-",
     "e2-",
     "e1-",
-    "e20-"
+    "e21-"
    ],
    "tags": [
     "varied",
@@ -2263,10 +2643,11 @@
     "e16+",
     "e17+",
     "e19+",
-    "e26+",
+    "e20+",
     "e27+",
-    "e29+",
-    "e22-",
+    "e28+",
+    "e30+",
+    "e23-",
     "e2-",
     "e1-",
     "e11-"
@@ -2285,11 +2666,11 @@
    "name": "Great Allegheny Passage to Homestead",
    "path": [
     "e4-",
-    "e30+",
+    "e31+",
+    "e35+",
     "e34+",
-    "e33+",
+    "e32-",
     "e31-",
-    "e30-",
     "e4+"
    ],
    "tags": [
@@ -2307,11 +2688,11 @@
     "e1+",
     "e2+",
     "e3+",
-    "e30+",
+    "e31+",
+    "e35+",
     "e34+",
-    "e33+",
+    "e32-",
     "e31-",
-    "e30-",
     "e4+",
     "e5+",
     "e13-",
@@ -2332,9 +2713,9 @@
    "name": "North Side Hills Loop",
    "path": [
     "e10-",
-    "e35+",
     "e36+",
-    "e38+",
+    "e37+",
+    "e39+",
     "e9+",
     "e10+"
    ],
@@ -2352,9 +2733,9 @@
    "path": [
     "e10-",
     "e9-",
-    "e38-",
+    "e39-",
+    "e37-",
     "e36-",
-    "e35-",
     "e10+"
    ],
    "tags": [
@@ -2370,10 +2751,10 @@
    "name": "Fineview Climb Loop",
    "path": [
     "e10-",
-    "e35+",
     "e36+",
     "e37+",
-    "e35-",
+    "e38+",
+    "e36-",
     "e10+"
    ],
    "tags": [
@@ -2399,9 +2780,9 @@
     "e6+",
     "e7+",
     "e8+",
-    "e38-",
+    "e39-",
+    "e37-",
     "e36-",
-    "e35-",
     "e10+"
    ],
    "tags": [
@@ -2414,11 +2795,39 @@
    "climbM": 476
   },
   {
+   "id": "pgh-allegheny-east-end",
+   "name": "Allegheny, East End & Oakland Loop",
+   "path": [
+    "e16+",
+    "e17+",
+    "e19+",
+    "e40+",
+    "e41-",
+    "e43+",
+    "e45-",
+    "e46+",
+    "e26+",
+    "e24-",
+    "e23-",
+    "e2-",
+    "e1-",
+    "e11-"
+   ],
+   "tags": [
+    "long",
+    "varied",
+    "new"
+   ],
+   "note": "The North Shore Trail to Millvale and over the 40th Street Bridge, up Stanton Ave to Highland Park and round the reservoir, East Liberty and Shady Ave to Squirrel Hill, Forbes to Schenley Park, round the Oval and down through Oakland, Junction Hollow and the Jail Trail, home over the Clemente Bridge",
+   "lengthM": 36890,
+   "climbM": 377
+  },
+  {
    "id": "pgh-sycamore",
    "name": "Sycamore Street & Grandview",
    "path": [
-    "e39+",
-    "e42-",
+    "e47+",
+    "e50-",
     "e6-",
     "e13-"
    ],
@@ -2435,9 +2844,9 @@
    "id": "pgh-slopes",
    "name": "South Side Slopes Climb Loop",
    "path": [
-    "e43-",
-    "e41+",
-    "e39-",
+    "e51-",
+    "e49+",
+    "e47-",
     "e13+",
     "e14+"
    ],
@@ -2453,9 +2862,9 @@
    "id": "pgh-dirty-dozen",
    "name": "Dirty Dozen South Loop",
    "path": [
-    "e39+",
-    "e40+",
-    "e43+",
+    "e47+",
+    "e48+",
+    "e51+",
     "e14-",
     "e13-"
    ],
@@ -2472,10 +2881,10 @@
    "id": "pgh-dirty-dozen-slopes",
    "name": "Dirty Dozen South from the Slopes",
    "path": [
-    "e43-",
-    "e41+",
-    "e40+",
-    "e43+"
+    "e51-",
+    "e49+",
+    "e48+",
+    "e51+"
    ],
    "tags": [
     "hilly",
