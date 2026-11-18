@@ -29,6 +29,12 @@
       "catalogId": "pittsburgh-oakland",
       "base": "routes/cities/pittsburgh-oakland.gpx",
       "spec": "tools/city/pittsburgh-oakland.network.json"
+    },
+    {
+      "id": "polish",
+      "catalogId": "pittsburgh-polish",
+      "base": "routes/cities/pittsburgh-polish.gpx",
+      "spec": "tools/city/pittsburgh-polish.network.json"
     }
   ],
   "presets": [
@@ -242,10 +248,12 @@
       "name": "Jail Trail, Oakland & Schenley",
       "path": [
         "E>I+",
-        "I>J+",
+        "I>L+",
+        "L>J+",
         "J>K+",
         "K>J+",
-        "I>J-",
+        "L>J-",
+        "I>L-",
         "E>I-"
       ],
       "tags": [
@@ -261,10 +269,12 @@
         "A>B+",
         "B>E+",
         "E>I+",
-        "I>J+",
+        "I>L+",
+        "L>J+",
         "J>K+",
         "K>J+",
-        "I>J-",
+        "L>J-",
+        "I>L-",
         "I>H+",
         "H>G+",
         "E>G-",
@@ -380,6 +390,60 @@
         "new"
       ],
       "note": "The Allegheny Loop with a lap of Troy Hill: up Rialto Street at the 31st Street Bridge, down Troy Hill Road, then on to Millvale, Lawrenceville and the Strip"
+    },
+    {
+      "id": "pgh-polish-hill",
+      "name": "Polish Hill Climb Loop",
+      "path": [
+        "X>T+",
+        "T>X+"
+      ],
+      "tags": [
+        "short",
+        "hilly",
+        "new"
+      ],
+      "note": "From Liberty Ave over the 28th Street Bridge, up Brereton St past Immaculate Heart of Mary and Dobson St, down Herron Avenue's hairpin and back along Liberty"
+    },
+    {
+      "id": "pgh-polish-crosstown",
+      "name": "Polish Hill, Bloomfield & Oakland Loop",
+      "path": [
+        "M>X+",
+        "X>T+",
+        "T>L+",
+        "I>L-",
+        "E>I-",
+        "B>E-",
+        "M>B-"
+      ],
+      "tags": [
+        "varied",
+        "new"
+      ],
+      "note": "From the Strip up through Polish Hill, over the Bloomfield Bridge, through Bloomfield and across to Schenley Plaza; down Junction Hollow, the Jail Trail into downtown and Penn Avenue back to the Strip"
+    },
+    {
+      "id": "pgh-polish-rivers",
+      "name": "Allegheny, Polish Hill & Oakland Loop",
+      "path": [
+        "A>P+",
+        "P>N+",
+        "N>M+",
+        "M>X+",
+        "X>T+",
+        "T>L+",
+        "I>L-",
+        "E>I-",
+        "B>E-",
+        "A>B-"
+      ],
+      "tags": [
+        "long",
+        "varied",
+        "new"
+      ],
+      "note": "The North Shore Trail to Millvale and Lawrenceville, up through Polish Hill and Bloomfield to Oakland, down Junction Hollow and the Jail Trail, home over the Clemente Bridge"
     }
   ],
   "freeRide": {

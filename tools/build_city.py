@@ -187,6 +187,7 @@ class Router:
         pts, wl, marks = [], [], []
         self.ghost_legs = []   # [(first, last) point index] of legs marked "ghost": a network tour's repeat
         self.apron_legs = []   # …and "apron": another area's segment, drawn here (PLAN 5.4)
+        self.copy_legs = []    # …and "samplesOf": a stretch replaced by another area's own samples (PLAN 5.7)
         for leg in legs:
             first = max(0, len(pts) - 1)
             snapped = []
@@ -201,6 +202,7 @@ class Router:
                 marks.append((leg['waypoints'][i][0], len(pts) - 1))
             if leg.get('ghost'): self.ghost_legs.append([first, len(pts) - 1])
             if leg.get('apron'): self.apron_legs.append([first, len(pts) - 1])
+            if leg.get('samplesOf'): self.copy_legs.append([first, len(pts) - 1])   # [areas] see splice_samples
         return pts, wl, marks
 
 
@@ -325,6 +327,7 @@ def build(cid):
     # a ghost leg's ends (a spur's turnaround among them) must survive the stub folding below
     gmarks = [('__ghost%d_%s' % (k, w), idx) for k, g in enumerate(router.ghost_legs) for w, idx in (('a', g[0]), ('b', g[1]))]
     gmarks += [('__ghostapron%d_%s' % (k, w), idx) for k, g in enumerate(router.apron_legs) for w, idx in (('a', g[0]), ('b', g[1]))]
+    gmarks += [('__ghostcopy%d_%s' % (k, w), idx) for k, g in enumerate(router.copy_legs) for w, idx in (('a', g[0]), ('b', g[1]))]
     protect = lambda: {k for n_, k in marks if n_.startswith('__ghost')}
     marks = marks + gmarks
     # waypoints that sit just off the line leave tiny out-and-back stubs (A B C B A): fold them away
@@ -533,6 +536,30 @@ def build(cid):
           f'ele {min(e):.0f}–{max(e):.0f} m, grade {min(grades):.1f}…{max(grades):.1f} %')
     for name, idx in marks: print(f'    {app_s(cum[idx]) / 1000:6.2f} km  {name}')
     for b in route_bridges: print(f'    bridge {b["fromM"] / 1000:.2f}–{b["toM"] / 1000:.2f} km  {b["name"]}')
+    if router.copy_legs:
+        # [areas] stretches replaced by a neighbour area's own samples (PLAN 5.7: aprons that match sample for sample)
+        copy_m = [(app_s(cum[ghost_idx['__ghostcopy%d_a' % k]]), app_s(cum[ghost_idx['__ghostcopy%d_b' % k]])) for k in range(len(router.copy_legs))]
+        rs, e, route_kinds, route_bridges, route_ghosts, route_aprons = splice_samples(
+            cfg, rs, e, copy_m, route_kinds, route_bridges, route_ghosts, route_aprons)
+        # a pinned junction ("everyPass": true) where steep streets meet: each pass's nearest sample (the line rounds
+        # the corner ~10 m off the node, on a different side for each turn) takes the pin's height, eased over 40 m
+        mc_ = [0.0]
+        for p_, q_ in zip(rs, rs[1:]): mc_.append(mc_[-1] + hv(p_, q_))
+        for pin in [p_ for p_ in cfg.get('heightPins', []) if p_.get('everyPass')]:
+            runs, cur = [], None
+            for k, p_ in enumerate(rs):
+                d_ = hv(p_, (pin['lat'], pin['lon']))
+                if d_ < 30 and not any(g['fromM'] + 5 < mc_[k] < g['toM'] - 5 for g in route_ghosts):
+                    if cur is None or d_ < cur[0]: cur = (d_, k)
+                elif cur is not None: runs.append(cur[1]); cur = None
+            if cur is not None: runs.append(cur[1])
+            for k in runs:
+                off = pin['eleM'] - e[k]
+                for i in range(len(e)):
+                    w = max(0.0, 1 - abs(mc_[i] - mc_[k]) / 40)
+                    if w: e[i] += off * w
+        total = sum(hv(a_, b_) for a_, b_ in zip(rs, rs[1:]))
+        print(f'{cid}: {total / 1000:.2f} km with the neighbours\' samples spliced in, ghosts {route_ghosts}, aprons {route_aprons}')
     if area_cfg:
         # [areas] the area's line: pieces of the master's samples (PLAN 5.4)
         node_m = [app_s(cum[k]) for k in range(len(pts))]
@@ -884,6 +911,168 @@ def grid_lattice(cfg):
     # part of a cell off where the two grids' spacings don't divide — land kinds, not heights)
     return {'dlon': dlon, 'dlat': dlat, 'ldlon': (e_ - w) / (lx - 1), 'ldlat': (n - s_) / (ly - 1),
             'box': lambda gw, gs, ge, gn: (snap(gw, w, dlon, False), snap(gs, n, dlat, False), snap(ge, w, dlon, True), snap(gn, n, dlat, True))}
+
+
+def splice_samples(cfg, rs, e, copy_m, kinds, bridges, ghosts, aprons):
+    """[areas] Legs with "samplesOf": {"gpx": <a neighbour area's line>, "fromM": a, "toM": b} (its app metres, on its
+    10 m samples; b < a runs it backward) are routed like any leg (the streets they ride are this area's route too),
+    then replaced by the neighbour's own points between those metres, so the app's 10 m samples there are the
+    neighbour's samples: an apron matches its segment sample for sample and a portal on it is the same place and
+    height on both lines. Copies may follow one another (a portal's two aprons and the ghost back between them).
+    The routed stretches between copies keep their own points, eased onto the copies' ends over 60 m (heights over
+    80 m); a routed stretch that leads into a copy must hold a ghost, where a sideways zig (never drawn) makes up the
+    length so the copy starts on a whole 10 m step. Returns the line and its kinds, bridges, ghosts and aprons."""
+    import re as _re
+    R6 = lambda p: (round(p[0], 6), round(p[1], 6))
+    rs = [R6(p) for p in rs]
+    mc = [0.0]
+    for p_, q_ in zip(rs, rs[1:]): mc.append(mc[-1] + hv(p_, q_))
+    def interp_on(ch, ll, el, m):
+        k = max(0, min(len(ch) - 2, bisect.bisect_right(ch, m) - 1))
+        f = max(0.0, min(1.0, (m - ch[k]) / max(1e-9, ch[k + 1] - ch[k])))
+        return (ll[k][0] + (ll[k + 1][0] - ll[k][0]) * f, ll[k][1] + (ll[k + 1][1] - ll[k][1]) * f), el[k] + (el[k + 1] - el[k]) * f
+    srcs = {}
+    def source(path):
+        if path not in srcs:
+            ll, el = [], []
+            for la, lo, z in _re.findall(r'lat="([\d.-]+)" lon="([\d.-]+)"><ele>([\d.-]+)', open(os.path.join(ROOT, path)).read()):
+                p_ = (float(la), float(lo))
+                if ll and hv(ll[-1], p_) <= 0.5: continue   # (the app drops points this close)
+                ll.append(p_); el.append(float(z))
+            ch = [0.0]
+            for p_, q_ in zip(ll, ll[1:]): ch.append(ch[-1] + hv(p_, q_))
+            srcs[path] = (ch, ll, el)
+        return srcs[path]
+    def copy_pts(sp):
+        a, b = sp['fromM'], sp['toM']
+        if a % 10 or b % 10 or a == b: raise SystemExit(f'samplesOf {a}–{b}: on the neighbour\'s 10 m samples')
+        ch, ll, el = source(sp['gpx'])
+        lo_, hi_ = min(a, b), max(a, b)
+        p0, e0 = interp_on(ch, ll, el, lo_); p1, e1 = interp_on(ch, ll, el, hi_)
+        cl, ce = [R6(p0)], [e0]
+        for i in range(len(ch)):
+            if lo_ + 0.6 < ch[i] < hi_ - 0.6: cl.append(ll[i]); ce.append(el[i])
+        cl.append(R6(p1)); ce.append(e1)
+        return (cl, ce) if b > a else (cl[::-1], ce[::-1])
+    copy_legs = [leg for leg in cfg['legs'] if leg.get('samplesOf')]
+    order = sorted(range(len(copy_m)), key=lambda k: copy_m[k][0])
+    out, oe, seg_map = [], [], []   # seg_map: (my from, my to, out from, out to) linear pieces
+    olen = lambda: sum(hv(p_, q_) for p_, q_ in zip(out, out[1:]))
+    def routed(m0, m1):
+        p0, e0 = interp_on(mc, rs, e, m0); p1, e1 = interp_on(mc, rs, e, m1)
+        ll, el, ml = [p0], [e0], [m0]
+        for i in range(len(mc)):
+            if m0 + 0.6 < mc[i] < m1 - 0.6: ll.append(rs[i]); el.append(e[i]); ml.append(mc[i])
+        ll.append(p1); el.append(e1); ml.append(m1)
+        return ll, el, ml
+    def ease(ll, el, ml, k_ref, to_p, to_e):
+        dla, dlo, dz = to_p[0] - ll[k_ref][0], to_p[1] - ll[k_ref][1], to_e - el[k_ref]
+        for i in range(len(ll)):
+            d_ = abs(ml[i] - ml[k_ref])
+            w, wz = max(0.0, 1 - d_ / 60), max(0.0, 1 - d_ / 80)
+            if w: ll[i] = (ll[i][0] + dla * w, ll[i][1] + dlo * w)
+            if wz: el[i] += dz * wz
+    cursor, prev_end = 0.0, None
+    for n_, k in enumerate(order):
+        f, t = copy_m[k]
+        sp = copy_legs[k]['samplesOf']
+        cl, ce = copy_pts(sp)
+        if f - cursor > 1.0:
+            ll, el, ml = routed(cursor, f)
+            if prev_end: ease(ll, el, ml, 0, prev_end[0], prev_end[1])
+            ease(ll, el, ml, len(ll) - 1, cl[0], ce[0])
+            ll = [R6(p_) for p_ in ll]
+            o0 = olen() if out else 0.0
+            # the length up to the copy's start: a whole number of 10 m steps (a zig in this stretch's ghost)
+            body = (out[-1:] if out else []) + ll[1:] if out else ll
+            run = o0 + sum(hv(p_, q_) for p_, q_ in zip(body, body[1:]))
+            need = (-run) % 10.0
+            zig_at = None
+            if need > 0.05 and need < 9.95:
+                gh = [g for g in ghosts if g['fromM'] >= cursor - 1 and g['toM'] <= f + 1]
+                if not gh: raise SystemExit(f'samplesOf at {f:.0f} m: the routed stretch before it holds no ghost to make up {need:.2f} m')
+                gm = (gh[-1]['fromM'] + gh[-1]['toM']) / 2
+                i = max(1, min(len(ll) - 1, min(range(1, len(ll)), key=lambda i: abs(ml[i] - gm))))
+                p_, q_ = ll[i - 1], ll[i]
+                d_ = hv(p_, q_)
+                h = math.sqrt(max(0.0, ((d_ + need) / 2) ** 2 - (d_ / 2) ** 2))
+                kx_ = 6371008.8 * math.pi / 180 * math.cos(math.radians(p_[0])); ky_ = 6371008.8 * math.pi / 180
+                ux, uy = (q_[1] - p_[1]) * kx_ / d_, (q_[0] - p_[0]) * ky_ / d_
+                mx, my = (p_[1] + q_[1]) / 2, (p_[0] + q_[0]) / 2
+                z = R6((my + ux * h / ky_, mx - uy * h / kx_))
+                ll.insert(i, z); el.insert(i, (el[i - 1] + el[i]) / 2); ml.insert(i, (ml[i - 1] + ml[i]) / 2)
+                zig_at = ml[i]
+                body = (out[-1:] if out else []) + ll[1:] if out else ll
+                run = o0 + sum(hv(p_, q_) for p_, q_ in zip(body, body[1:]))
+                if abs((run + 5) % 10 - 5) > 0.3: raise SystemExit(f'samplesOf at {f:.0f} m: the zig left {run % 10:.2f} m')
+            # metres: this stretch maps on with the zig's extra length after it
+            extra = (run - o0) - (f - cursor)
+            if zig_at is None: seg_map.append((cursor, f, o0, run))
+            else:
+                z_out = o0 + (zig_at - cursor) + 0.0
+                seg_map.append((cursor, zig_at, o0, z_out)); seg_map.append((zig_at, f, z_out + extra, run))
+            if out: out += ll[1:]; oe += el[1:]
+            else: out, oe = ll, el
+            # the copy's first point is the routed stretch's last (eased onto it): use the copy's own
+            out[-1], oe[-1] = cl[0], ce[0]
+        else:
+            if out and hv(out[-1], cl[0]) > 0.6: raise SystemExit(f'samplesOf at {f:.0f} m: follows the last copy but doesn\'t start where it ended')
+            run = olen() if out else 0.0
+            if not out: out, oe = [cl[0]], [ce[0]]
+        o_start = run
+        out += cl[1:]; oe += ce[1:]
+        L_ = abs(sp['toM'] - sp['fromM'])
+        seg_map.append((f, t, o_start, o_start + L_))
+        cursor, prev_end = t, (cl[-1], ce[-1])
+    if mc[-1] - cursor > 1.0:
+        ll, el, ml = routed(cursor, mc[-1])
+        if prev_end: ease(ll, el, ml, 0, prev_end[0], prev_end[1])
+        o0 = olen()
+        out += [R6(p_) for p_ in ll[1:]]; oe += el[1:]
+        seg_map.append((cursor, mc[-1], o0, olen()))
+    def mp(m):
+        for a_, b_, c_, d_ in seg_map:
+            if a_ - 1e-6 <= m <= b_ + 1e-6: return c_ + (d_ - c_) * (m - a_) / max(1e-9, b_ - a_)
+        return seg_map[-1][3] if m > seg_map[-1][1] else 0.0
+    out_rng = {k: (seg_map_k[2], seg_map_k[3]) for k, seg_map_k in zip(order, [s for s in seg_map if any(abs(s[0] - copy_m[k_][0]) < 1e-6 and abs(s[1] - copy_m[k_][1]) < 1e-6 for k_ in range(len(copy_m)))])}
+    # ghosts and aprons in leg order: a copied one takes its copy's exact range
+    gi = ai = ci = 0
+    g_out, a_out = [], []
+    for leg in cfg['legs']:
+        cr = None
+        if leg.get('samplesOf'): cr = out_rng[ci]; ci += 1
+        if leg.get('ghost'):
+            g_out.append({'fromM': round(cr[0]), 'toM': round(cr[1])} if cr else {'fromM': round(mp(ghosts[gi]['fromM'])), 'toM': round(mp(ghosts[gi]['toM']))}); gi += 1
+        if leg.get('apron'):
+            a_out.append({'fromM': round(cr[0]), 'toM': round(cr[1])} if cr else {'fromM': round(mp(aprons[ai]['fromM'])), 'toM': round(mp(aprons[ai]['toM']))}); ai += 1
+    # a routed ghost's ends on the line's point nearest its leg's first and last waypoints (its junctions): the
+    # metres carried from the mapped nodes drift ~15 m where the line rounds the junction's corner
+    oc = [0.0]
+    for p_, q_ in zip(out, out[1:]): oc.append(oc[-1] + hv(p_, q_))
+    gk = 0
+    for leg in cfg['legs']:
+        if not leg.get('ghost'): continue
+        g = g_out[gk]; gk += 1
+        if leg.get('samplesOf'): continue
+        for key, wp in (('fromM', leg['waypoints'][0]), ('toM', leg['waypoints'][-1])):
+            near = [(hv(out[i], (wp[1], wp[2])), i) for i in range(len(out)) if abs(oc[i] - g[key]) < 100]
+            if near and min(near)[0] < 25: g[key] = round(oc[min(near)[1]])
+    # ghosts that meet are one
+    g_out.sort(key=lambda r: r['fromM'])
+    merged = []
+    for r in g_out:
+        if merged and r['fromM'] - merged[-1]['toM'] <= 1: merged[-1]['toM'] = max(merged[-1]['toM'], r['toM'])
+        else: merged.append(dict(r))
+    total = olen()
+    k_out = []
+    for r in kinds:
+        f_, t_ = round(mp(r['fromM'])), round(mp(r['toM']))
+        if k_out and k_out[-1]['kind'] == r['kind']: k_out[-1]['toM'] = t_
+        else: k_out.append({'kind': r['kind'], 'fromM': f_, 'toM': t_})
+    k_out[0]['fromM'] = 0; k_out[-1]['toM'] = round(total) + 10
+    for p_, q_ in zip(k_out, k_out[1:]): q_['fromM'] = p_['toM']
+    b_out = [{**b, 'fromM': round(mp(b['fromM'])), 'toM': round(mp(b['toM']))} for b in bridges]
+    return out, oe, k_out, b_out, merged, a_out
 
 
 def slice_tour(sl, rs, e, chord, kinds, bridges, ghosts, pts, node_m):

@@ -171,6 +171,64 @@
      "u0": 0
     }
    ]
+  },
+  {
+   "id": "polish",
+   "catalogId": "pittsburgh-polish",
+   "base": "routes/cities/pittsburgh-polish.gpx",
+   "legM": 10700,
+   "ghosts": [
+    {
+     "fromM": 800,
+     "toM": 1200
+    },
+    {
+     "fromM": 3740,
+     "toM": 4879
+    },
+    {
+     "fromM": 9900,
+     "toM": 10300
+    }
+   ],
+   "aprons": [
+    {
+     "edge": "e13",
+     "dir": 1,
+     "s": [
+      0,
+      400
+     ],
+     "u0": 4550
+    },
+    {
+     "edge": "e14",
+     "dir": 1,
+     "s": [
+      400,
+      800
+     ],
+     "u0": 0
+    },
+    {
+     "edge": "e16",
+     "dir": -1,
+     "s": [
+      9500,
+      9900
+     ],
+     "u0": 3430
+    },
+    {
+     "edge": "e17",
+     "dir": 1,
+     "s": [
+      10300,
+      10700
+     ],
+     "u0": 0
+    }
+   ]
   }
  ],
  "nodes": [
@@ -316,12 +374,17 @@
    "name": "Smallman & 29th, Strip District",
    "lat": 40.458505,
    "lon": -79.975036,
-   "ele": 223.9,
+   "ele": 223.89,
    "passes": {
     "allegheny": [
      12470
+    ],
+    "polish": [
+     400,
+     1200
     ]
-   }
+   },
+   "portal": true
   },
   {
    "id": "O",
@@ -350,6 +413,23 @@
    }
   },
   {
+   "id": "L",
+   "name": "Forbes & Bigelow, Schenley Plaza",
+   "lat": 40.443194,
+   "lon": -79.953526,
+   "ele": 274.49,
+   "passes": {
+    "oakland": [
+     3830
+    ],
+    "polish": [
+     9500,
+     10300
+    ]
+   },
+   "portal": true
+  },
+  {
    "id": "K",
    "name": "Schenley Drive & Forbes Ave",
    "lat": 40.437654,
@@ -358,6 +438,32 @@
    "passes": {
     "oakland": [
      5890
+    ]
+   }
+  },
+  {
+   "id": "X",
+   "name": "Liberty Ave & 29th St",
+   "lat": 40.457305,
+   "lon": -79.973639,
+   "ele": 225.19,
+   "passes": {
+    "polish": [
+     1380,
+     3740
+    ]
+   }
+  },
+  {
+   "id": "T",
+   "name": "Dobson St & Herron Ave, Polish Hill",
+   "lat": 40.45833,
+   "lon": -79.964311,
+   "ele": 267.15,
+   "passes": {
+    "polish": [
+     2510,
+     4880
     ]
    }
   }
@@ -680,27 +786,48 @@
   },
   {
    "id": "e16",
-   "key": "I>J",
+   "key": "I>L",
    "area": "oakland",
    "from": "I",
-   "to": "J",
+   "to": "L",
    "s": [
     400,
-    4700
+    3830
    ],
-   "lengthM": 4300,
+   "lengthM": 3430,
    "climbM": [
-    79,
-    23
+    64,
+    17
    ],
    "name": "Junction Hollow & Oakland",
    "toward": [
-    "along Second Ave, up Junction Hollow, through Oakland past the Cathedral of Learning to Phipps",
-    "past the Cathedral of Learning, down Junction Hollow and along Second Ave to the Hot Metal Bridge"
+    "along Second Ave, up Junction Hollow, through Oakland to Forbes and Schenley Plaza",
+    "along Forbes, down through Oakland and Junction Hollow, along Second Ave to the Hot Metal Bridge"
    ]
   },
   {
    "id": "e17",
+   "key": "L>J",
+   "area": "oakland",
+   "from": "L",
+   "to": "J",
+   "s": [
+    3830,
+    4700
+   ],
+   "lengthM": 870,
+   "climbM": [
+    15,
+    5
+   ],
+   "name": "Schenley Plaza",
+   "toward": [
+    "past the Cathedral of Learning and Schenley Plaza to Phipps",
+    "past Schenley Plaza and the Cathedral of Learning to Forbes & Bigelow"
+   ]
+  },
+  {
+   "id": "e18",
    "key": "J>K",
    "area": "oakland",
    "from": "J",
@@ -721,7 +848,7 @@
    ]
   },
   {
-   "id": "e18",
+   "id": "e19",
    "key": "K>J",
    "area": "oakland",
    "from": "K",
@@ -739,6 +866,90 @@
    "toward": [
     "Serpentine Drive, round the Schenley Oval and up Panther Hollow",
     "down Panther Hollow, round the Schenley Oval and up Serpentine Drive"
+   ]
+  },
+  {
+   "id": "e20",
+   "key": "M>X",
+   "area": "polish",
+   "from": "M",
+   "to": "X",
+   "s": [
+    1200,
+    1380
+   ],
+   "lengthM": 180,
+   "climbM": [
+    2,
+    1
+   ],
+   "name": "29th Street",
+   "toward": [
+    "29th Street from Smallman to Liberty Avenue",
+    "29th Street from Liberty Avenue to Smallman"
+   ]
+  },
+  {
+   "id": "e21",
+   "key": "X>T",
+   "area": "polish",
+   "from": "X",
+   "to": "T",
+   "s": [
+    1380,
+    2510
+   ],
+   "lengthM": 1130,
+   "climbM": [
+    49,
+    8
+   ],
+   "name": "Polish Hill: Brereton Street",
+   "toward": [
+    "Liberty Ave, over the 28th Street Bridge and up Brereton St past Immaculate Heart of Mary, Dobson St to Herron",
+    "down Dobson St and Brereton St past Immaculate Heart of Mary, over the 28th Street Bridge to Liberty Ave"
+   ]
+  },
+  {
+   "id": "e22",
+   "key": "T>X",
+   "area": "polish",
+   "from": "T",
+   "to": "X",
+   "s": [
+    2510,
+    3740
+   ],
+   "lengthM": 1230,
+   "climbM": [
+    1,
+    43
+   ],
+   "name": "Herron Avenue",
+   "toward": [
+    "down Herron Avenue's hairpin and along Liberty Avenue to 29th",
+    "along Liberty Avenue and up Herron Avenue's hairpin to Polish Hill"
+   ]
+  },
+  {
+   "id": "e23",
+   "key": "T>L",
+   "area": "polish",
+   "from": "T",
+   "to": "L",
+   "s": [
+    4880,
+    9500
+   ],
+   "lengthM": 4620,
+   "climbM": [
+    65,
+    58
+   ],
+   "name": "Bloomfield & the Oakland crosstown",
+   "toward": [
+    "Bethoven St and the Bloomfield Bridge, Liberty Ave through Bloomfield, S Millvale, Craig St and Fifth Ave to Schenley Plaza",
+    "Fifth Ave, Craig St and S Millvale to Bloomfield, Liberty Ave, the Bloomfield Bridge and Bethoven St to Polish Hill"
    ]
   }
  ],
@@ -960,8 +1171,8 @@
    "id": "pgh-schenley",
    "name": "Schenley Park Loop",
    "path": [
-    "e17+",
-    "e18+"
+    "e18+",
+    "e19+"
    ],
    "tags": [
     "short",
@@ -980,6 +1191,8 @@
     "e16+",
     "e17+",
     "e18+",
+    "e19+",
+    "e17-",
     "e16-",
     "e2-"
    ],
@@ -989,7 +1202,7 @@
    ],
    "note": "The Jail Trail, up Junction Hollow to Oakland and the Cathedral of Learning, round Schenley Park and back down to downtown",
    "lengthM": 21150,
-   "climbM": 202
+   "climbM": 201
   },
   {
    "id": "pgh-oakland-south",
@@ -1001,6 +1214,8 @@
     "e16+",
     "e17+",
     "e18+",
+    "e19+",
+    "e17-",
     "e16-",
     "e3+",
     "e4+",
@@ -1015,7 +1230,7 @@
    ],
    "note": "The Point, the Jail Trail, Oakland and Schenley Park, then over the Hot Metal Bridge and home on the river trail",
    "lengthM": 30630,
-   "climbM": 269
+   "climbM": 268
   },
   {
    "id": "pgh-allegheny",
@@ -1131,6 +1346,66 @@
    "note": "The Allegheny Loop with a lap of Troy Hill: up Rialto Street at the 31st Street Bridge, down Troy Hill Road, then on to Millvale, Lawrenceville and the Strip",
    "lengthM": 16160,
    "climbM": 105
+  },
+  {
+   "id": "pgh-polish-hill",
+   "name": "Polish Hill Climb Loop",
+   "path": [
+    "e21+",
+    "e22+"
+   ],
+   "tags": [
+    "short",
+    "hilly",
+    "new"
+   ],
+   "note": "From Liberty Ave over the 28th Street Bridge, up Brereton St past Immaculate Heart of Mary and Dobson St, down Herron Avenue's hairpin and back along Liberty",
+   "lengthM": 2360,
+   "climbM": 50
+  },
+  {
+   "id": "pgh-polish-crosstown",
+   "name": "Polish Hill, Bloomfield & Oakland Loop",
+   "path": [
+    "e20+",
+    "e21+",
+    "e23+",
+    "e16-",
+    "e2-",
+    "e1-",
+    "e14-"
+   ],
+   "tags": [
+    "varied",
+    "new"
+   ],
+   "note": "From the Strip up through Polish Hill, over the Bloomfield Bridge, through Bloomfield and across to Schenley Plaza; down Junction Hollow, the Jail Trail into downtown and Penn Avenue back to the Strip",
+   "lengthM": 19560,
+   "climbM": 173
+  },
+  {
+   "id": "pgh-polish-rivers",
+   "name": "Allegheny, Polish Hill & Oakland Loop",
+   "path": [
+    "e10+",
+    "e11+",
+    "e13+",
+    "e20+",
+    "e21+",
+    "e23+",
+    "e16-",
+    "e2-",
+    "e1-",
+    "e7-"
+   ],
+   "tags": [
+    "long",
+    "varied",
+    "new"
+   ],
+   "note": "The North Shore Trail to Millvale and Lawrenceville, up through Polish Hill and Bloomfield to Oakland, down Junction Hollow and the Jail Trail, home over the Clemente Bridge",
+   "lengthM": 25430,
+   "climbM": 202
   }
  ],
  "freeRide": {

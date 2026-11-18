@@ -1,0 +1,52 @@
+{
+  "area": "polish",
+  "note": "Polish Hill, Bloomfield and the Oakland crosstown: from the Strip (M) up through Polish Hill and over the Bloomfield Bridge, through Bloomfield and down to Schenley Plaza (L). Portals: M (the Allegheny & Troy Hill), L (Oakland & Schenley).",
+  "nodes": [
+    {
+      "id": "M",
+      "name": "Smallman & 29th, Strip District",
+      "lat": 40.458531,
+      "lon": -79.974998
+    },
+    {
+      "id": "X",
+      "name": "Liberty Ave & 29th St",
+      "lat": 40.45728,
+      "lon": -79.973536
+    },
+    {
+      "id": "T",
+      "name": "Dobson St & Herron Ave, Polish Hill",
+      "lat": 40.458317,
+      "lon": -79.964191
+    },
+    {
+      "id": "L",
+      "name": "Forbes & Bigelow, Schenley Plaza",
+      "lat": 40.443191,
+      "lon": -79.953547
+    }
+  ],
+  "edges": {
+    "M>X": {
+      "name": "29th Street",
+      "fwd": "29th Street from Smallman to Liberty Avenue",
+      "rev": "29th Street from Liberty Avenue to Smallman"
+    },
+    "X>T": {
+      "name": "Polish Hill: Brereton Street",
+      "fwd": "Liberty Ave, over the 28th Street Bridge and up Brereton St past Immaculate Heart of Mary, Dobson St to Herron",
+      "rev": "down Dobson St and Brereton St past Immaculate Heart of Mary, over the 28th Street Bridge to Liberty Ave"
+    },
+    "T>X": {
+      "name": "Herron Avenue",
+      "fwd": "down Herron Avenue's hairpin and along Liberty Avenue to 29th",
+      "rev": "along Liberty Avenue and up Herron Avenue's hairpin to Polish Hill"
+    },
+    "T>L": {
+      "name": "Bloomfield & the Oakland crosstown",
+      "fwd": "Bethoven St and the Bloomfield Bridge, Liberty Ave through Bloomfield, S Millvale, Craig St and Fifth Ave to Schenley Plaza",
+      "rev": "Fifth Ave, Craig St and S Millvale to Bloomfield, Liberty Ave, the Bloomfield Bridge and Bethoven St to Polish Hill"
+    }
+  }
+}

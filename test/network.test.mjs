@@ -30,8 +30,8 @@ test('the network sits on its areas\' lines: edges on their 10 m samples, preset
     const apron = A.aprons.reduce((t, ap) => t + ap.s1 - ap.s0, 0);
     assert.ok(Math.abs(sum + ghost + apron - A.L) < 30, `${A.id}: ${sum} + ${ghost} ghost + ${apron} apron vs ${A.L}`);
   }
-  assert.equal([...net.edges.values()].reduce((t, e) => t + e.len, 0), 47670);   // the whole network, as on the one 58 km tour
-  assert.deepEqual([...net.nodes.keys()].sort(), ['A', 'B', 'D', 'E', 'G', 'H', 'I', 'J', 'K', 'M', 'N', 'O', 'P']);
+  assert.equal([...net.edges.values()].reduce((t, e) => t + e.len, 0), 54830);   // the whole network: the one 58 km tour's 47.67 km and Polish Hill & Bloomfield's 7.16 km (PLAN 5.7)
+  assert.deepEqual([...net.nodes.keys()].sort(), ['A', 'B', 'D', 'E', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'T', 'X']);
   const three = makePathRoute(net, preset('pgh-three-rivers'));
   const short = makePathRoute(net, preset('pgh-short-loop'));
   const jail = makePathRoute(net, preset('pgh-jail-trail'));
@@ -60,7 +60,7 @@ test('Smithfield & Fort Pitt and SouthSide Works: the Jail Trail joins the loop'
   const jail = new NetRide(net, {}, { plan: preset('pgh-jail-trail').path });
   assert.equal(net.nodes.get(jail.upcoming(10).node.id).id, 'I');
   assert.equal(jail.upcoming(10).options[jail.upcoming(10).selected].t.e.key, 'I>H');   // the plan: over the Hot Metal Bridge
-  assert.ok(jail.upcoming(10).options.some((o) => o.t.e.key === 'I>J'), 'Junction Hollow and Oakland offered at the bridge');
+  assert.ok(jail.upcoming(10).options.some((o) => o.t.e.key === 'I>L'), 'Junction Hollow and Oakland offered at the bridge');
 });
 
 test('the path follows the plan, takes your turn, then rejoins the plan', () => {

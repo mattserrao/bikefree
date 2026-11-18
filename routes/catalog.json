@@ -623,6 +623,21 @@
   "area": "pittsburgh"
  },
  {
+  "id": "pittsburgh-polish",
+  "name": "Pittsburgh \u00b7 Polish Hill, Bloomfield & the Oakland crosstown",
+  "park": "Pittsburgh, Pennsylvania",
+  "file": "routes/cities/pittsburgh-polish.gpx",
+  "outAndBack": false,
+  "expectedKm": [
+   9,
+   13
+  ],
+  "scene": "routes/scenes/pittsburgh-polish.json",
+  "eleSmoothM": 10,
+  "stage": "draft",
+  "area": "pittsburgh"
+ },
+ {
   "id": "alpedhuez",
   "name": "Alpe d'Huez \u00b7 Tour Stage 19",
   "park": "Gap \u2192 Alpe d'Huez, French Alps (Tour de France 2026)",
