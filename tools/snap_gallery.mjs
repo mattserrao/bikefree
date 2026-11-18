@@ -33,7 +33,7 @@ page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => { if (m.type() === 'error' && !m.text().startsWith('Failed to load resource')) errors.push(m.text()); });
 page.on('response', (r) => { if (r.status() >= 400 && !r.url().endsWith('/favicon.ico')) errors.push(`${r.status()} ${r.url()}`); });
 try {
-await page.goto(`http://127.0.0.1:${server.address().port}/tools/${gallery}-gallery.html?${new URLSearchParams({ condition: opt('--condition', 'midday'), library: opt('--library', 'roads'),family:opt('--family',''),selection:opt('--selection','representatives'),limit:opt('--limit','24'),page:opt('--offset-page','0'),q:opt('--query','') })}`);
+await page.goto(`http://127.0.0.1:${server.address().port}/tools/${gallery}-gallery.html?${new URLSearchParams({ condition: opt('--condition', 'midday'), library: opt('--library', 'roads'),family:opt('--family',''),selection:opt('--selection','representatives'),limit:opt('--limit','24'),page:opt('--offset-page','0'),q:opt('--query',''),look:opt('--look',''),view:opt('--view','') })}`);
 await page.waitForFunction(() => window.galleryReady || null, null, { timeout: 300000, polling: 500 });
 for (const [sel, name] of [['#shade', '--shade'], ['#season', '--season']]) {
   const v = opt(name, null);

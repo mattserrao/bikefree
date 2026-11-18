@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync}from'node:fs';
 import { TEXTURE_CATALOG,TEXTURE_RECIPES,TEXTURE_FAMILIES,findTextures,getTexture } from '../js/world/toolbox/materials/texture-catalog.js';
-import { CATALOG_PATTERNS } from '../js/world/toolbox/materials/catalog-patterns.js';
+import { CATALOG_GLSL,CATALOG_PATTERNS } from '../js/world/toolbox/materials/catalog-patterns.js';
 import { makeCatalogMaterial,catalogMaterialSpec } from '../js/world/toolbox/materials/catalog-material.js';
 
 test('750+ additional presets represent distinct material settings, with no seed counting',()=>{
-  const all=Object.values(TEXTURE_CATALOG);assert.equal(all.length,768);assert.equal(TEXTURE_RECIPES.length,96);
+  const all=Object.values(TEXTURE_CATALOG);assert.equal(all.length,TEXTURE_RECIPES.length*8);assert.ok(TEXTURE_RECIPES.length>=96);
   const signatures=new Set();
   for(const p of all){
     assert.ok(CATALOG_PATTERNS[p.pattern],`${p.id}: missing kernel`);
@@ -46,6 +46,24 @@ test('moving objects use local coordinates and cutouts require UV projection',()
 });
 test('machine-readable catalog mirrors runtime IDs and counts',()=>{
   const manifest=JSON.parse(readFileSync(new URL('../docs/toolbox/texture-catalog.json',import.meta.url)));
-  assert.equal(manifest.entries,768);assert.equal(manifest.totalAdditions,788);assert.equal(manifest.seedCounted,false);
+  assert.equal(manifest.entries,Object.keys(TEXTURE_CATALOG).length);assert.equal(manifest.totalAdditions,manifest.entries+20);assert.equal(manifest.seedCounted,false);
   assert.deepEqual(manifest.textures,Object.values(TEXTURE_CATALOG));
+});
+
+test('every preset ID from the first catalog (v1, 768 IDs) still resolves',()=>{
+  const v1=JSON.parse(readFileSync(new URL('./texture-catalog-v1-ids.json',import.meta.url)));
+  assert.equal(v1.length,768);for(const id of v1)assert.ok(Object.hasOwn(TEXTURE_CATALOG,id),`${id} was removed`);
+});
+test('catalog GLSL never uses GLSL ES 3 reserved words as identifiers',()=>{
+  const reserved=['patch','flat','smooth','sample','centroid','input','output','filter','active','common','partition','noperspective','superp','union','half','fixed','cast','namespace','using','subroutine','resource','attribute','varying','buffer','shared','coherent','volatile','restrict','readonly','writeonly','long','short','unsigned','enum','class','external','interface','goto','inline','noinline','public','static','extern','this','packed','sizeof','typedef','template','asm','dvec2','dvec3','dvec4','hvec2','hvec3','hvec4','fvec2','fvec3','fvec4'];
+  const strip=(src)=>src.replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
+  const sources=[CATALOG_GLSL,...Object.values(CATALOG_PATTERNS)].map(strip).join('\n');
+  for(const word of reserved)assert.doesNotMatch(sources,new RegExp(`(?<![\\w.])${word}(?![\\w])`),`reserved word "${word}" in catalog GLSL`);
+});
+test('every family has at least 8 recipes and overlays layer onto a base without throwing',()=>{
+  for(const family of Object.keys(TEXTURE_FAMILIES))assert.ok(findTextures({family,limit:10000}).length>=64,`${family} has fewer than 8 recipes`);
+  const overlay=findTextures({family:'overlays',limit:1})[0];
+  const material=makeCatalogMaterial('walls/limestone-ashlar/clean',{overlay:{id:overlay.id,amount:.7}});
+  assert.equal(material.userData.textureCatalog.overlay,overlay.id);material.dispose();
+  assert.throws(()=>makeCatalogMaterial('walls/limestone-ashlar/clean',{overlay:{id:overlay.id,amount:2}}),RangeError);
 });

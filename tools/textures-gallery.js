@@ -3,6 +3,7 @@ import { decorateRoad } from '../js/world/toolbox/materials/road-surface.js';
 import { ROAD_TEXTURES } from '../js/world/toolbox/materials/road-textures.js';
 import { SURFACE_LIBRARY, makeToolboxSurface } from '../js/world/toolbox/materials/surface-library.js';
 import { randomSequence } from '../js/world/toolbox/core/random.js';
+import { Look, LOOKS } from '../js/world/toolbox/atmosphere/look.js';
 
 const query = new URLSearchParams(location.search);
 const standalone = query.get('library') === 'surfaces';
@@ -25,9 +26,12 @@ renderer.setPixelRatio(1.5); renderer.setSize(440, 235);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.1;
 const scene = new THREE.Scene(); scene.background = new THREE.Color('#23333d');
-scene.add(new THREE.HemisphereLight('#e9f1fa', '#6b6656', 2.1));
+const hemi = new THREE.HemisphereLight('#e9f1fa', '#6b6656', 2.1); scene.add(hemi);
 const sun = new THREE.DirectionalLight(condition === 'golden' ? '#ffdaa5' : '#fff6df', 2.3);
 sun.position.set(-3, condition === 'golden' ? 1.2 : 6, 4); scene.add(sun);
+// Optional ?look=gentle|bold: the app's toon bands (atmosphere/look.js) over every sample; default unchanged.
+const look = LOOKS[query.get('look')] ? new Look({ renderer, scene, sun, hemi, sunDir: sun.position.clone().normalize(), route: {} }, query.get('look')) : null;
+look?.applyLight();
 const camera = new THREE.PerspectiveCamera(37, 440 / 235, .01, 100);
 const tile = new THREE.Mesh(new THREE.PlaneGeometry(4, 5), new THREE.MeshStandardMaterial());
 tile.rotation.x = -Math.PI / 2;
@@ -64,7 +68,7 @@ for (const [id, name, description] of materials) {
   const material = standalone ? makeToolboxSurface(id, { seed: 17 }) : decorateRoad(new THREE.MeshStandardMaterial({ map, roughness: condition === 'wet' ? .76 : .94 }), road, { widthM: 4 });
   // The standalone library does not implement water or dampness; only road studies offer that condition.
   if (standalone) document.querySelector('#condition option[value="wet"]').disabled = true;
-  tile.material = material;
+  tile.material = material; look?._patch(material);
   camera.position.set(5, 6.5, 7.5); camera.lookAt(0, 0, 0);
   renderer.setSize(440, 235); camera.aspect = 440 / 235; camera.updateProjectionMatrix();
   renderer.render(scene, camera);

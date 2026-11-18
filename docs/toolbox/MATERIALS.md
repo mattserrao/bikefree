@@ -99,11 +99,20 @@ npm start
 # http://localhost:8000/tools/textures-gallery.html
 # http://localhost:8000/tools/textures-gallery.html?library=surfaces
 
-npm run gallery:textures -- --out docs/toolbox/road-textures.png --verify
-npm run gallery:textures -- --library surfaces --out docs/toolbox/kit-surfaces.png
+npm run gallery:textures -- --out /tmp/road-textures.png --verify
+npm run gallery:textures -- --library surfaces --out /tmp/kit-surfaces.png
 npm run gallery:textures -- --condition golden --out /tmp/roads-golden.png
 npm run gallery:textures -- --condition wet --out /tmp/roads-wet.png
 ```
+
+Relief: the eight new road surfaces and the twelve standalone surfaces now write a height that becomes a
+bump normal from screen derivatives. They need no textures, and the tilt is clamped to about 30°. Examples:
+crowned setts with recessed joints, proud aggregate in asphalt and gravel, sawn slab joints with worn arrises,
+broom ridges, faint wheel ruts in packed earth, board gaps, sand ripples, oak fissures, and paint chips. Water
+in a damp zone halves the joint depth. `granite-blocks` is now a rock-faced ashlar variant (kind 11: random
+course lengths, domed faces, flecks), distinct from `sandstone-courses` (recessed pale mortar, baked arris
+light). Existing worn/fresh/brick roads are unchanged. `?look=gentle` (`--look gentle`) previews any study
+under the app's toon bands.
 
 The gallery uses the production factories on metre-scaled sample panels, plus a 75 cm close-up.
 Road maps use the engine's base colour/paint conventions with deterministic grain, not a full route.

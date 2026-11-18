@@ -4,3 +4,5 @@ __pycache__/
 tools/qc-report.html
 tools/qc-clipping-report.html
 tools/snapshots/
+docs/toolbox/catalog/
+docs/toolbox/*.png

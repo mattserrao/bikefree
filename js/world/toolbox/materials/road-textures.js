@@ -36,8 +36,11 @@ export function roadTextureSpec(surface, controls = {}) {
 }
 
 // Uses rsNoise/rsHash from road-surface.js. The alpha channel controls whether lane paint is retained.
+// rtH/rtRelief: height (0 joint … 1 proud) and its depth in metres, read by the bump in normal_fragment_maps.
 const GLSL = /* glsl */`
+  float rtH = .5, rtRelief = 0.;
   vec4 rtSurface(vec3 original, vec2 metres, float pixelM, vec4 settings, vec4 tint, float damp) {
+    rtH = .5; rtRelief = 0.;
     if (settings.x < .5) return vec4(original, 1.);
     float kind = settings.x, scale = settings.y, seed = settings.z, variation = settings.w;
     vec2 p = metres / scale, offset = vec2(mod(seed, 251.), floor(seed / 251.)) * 7.13;
@@ -60,6 +63,10 @@ const GLSL = /* glsl */`
       float stone = 1. - smoothstep(.25, .51, nearest);
       float value = kind < 1.5 ? (stone * (.65 + id * .7) - .65) * .36 : (id - .5) * .6 + (stone - .5) * .16;
       c *= 1. + value * detail * (.45 + variation * .55);
+      // Stones stand proud of the binder/fines: rounded tops (lit) over darker interstices.
+      float dome = 1. - smoothstep(.0, .55, nearest);
+      c *= 1. + (dome - .45) * .14 * detail;
+      rtH = .25 + dome * .75; rtRelief = grain * (kind < 1.5 ? .22 : .3) * detail;
       if (kind > 3.5) {
         float compaction = exp(-pow((metres.x - rsDims.x * .5) / (rsDims.x * .27), 2.));
         c *= 1. - compaction * .07;
@@ -69,6 +76,7 @@ const GLSL = /* glsl */`
       float detail = 1. - smoothstep(.003, .025, px);
       float brush = sin(p.y * 620. + rsNoise(vec2(q.x * .8, floor(q.y * 15.))) * 2.);
       c *= 1. + brush * .035 * detail + (rsNoise(q * 3.) - .5) * .07 * variation;
+      rtH = .5 + brush * .5; rtRelief = .0008 * detail;
       if (kind > 2.5) {
         vec2 panel = vec2(p.x / 3., p.y / 3.);
         float tone = rsHash(floor(panel) + offset);
@@ -76,6 +84,10 @@ const GLSL = /* glsl */`
         float gap = 1. - smoothstep(.009, .018 + px, min(edge.x, edge.y));
         float visible = 1. - smoothstep(.05, .25, px);
         c *= (1. + (tone - .5) * .12 * variation) * (1. - gap * .48 * visible);
+        // Slightly worn, chipped joint arrises with a sawn expansion joint between panels.
+        float arris = 1. - smoothstep(.018, .05 + px, min(edge.x, edge.y) - (rsNoise(q * 9.) - .5) * .02);
+        c *= 1. - arris * .08 * visible;
+        rtH = smoothstep(.009, .03 + px * 2.5, min(edge.x, edge.y)); rtRelief = .006 * visible;
       }
     } else if (kind < 5.5) {
       float fine = 1. - smoothstep(.005, .04, px);
@@ -83,6 +95,10 @@ const GLSL = /* glsl */`
       c *= 1. + (rsNoise(q * vec2(3., .15)) - .5) * .18 * variation;
       float pebble = smoothstep(.75, .86, rsNoise(q * 26.));
       c = mix(c, tint.rgb * 1.3, pebble * fine * .35);
+      // Packed earth: shallow wheel-polished ruts along the path and loose grit standing proud.
+      float rut = exp(-pow((abs(metres.x - rsDims.x * .5) - rsDims.x * .22) / (rsDims.x * .08), 2.));
+      c *= 1. - rut * .06 * variation; c *= 1. + rut * (rsNoise(q * vec2(40., 2.)) - .5) * .05 * fine;
+      rtH = .5 - rut * .3 + pebble * .4 * fine + (rsNoise(q * 6.) - .5) * .2; rtRelief = .004;
     } else {
       // 24 × 17 cm staggered setts; seeded course offsets avoid a machine-perfect brick grid.
       float row = floor(p.y / .17), fy = fract(p.y / .17);
@@ -94,11 +110,17 @@ const GLSL = /* glsl */`
       float joint = 1. - smoothstep(.006, .013 + px * .5, edge);
       vec3 block = c * (1. + (stone - .5) * .48 * variation);
       block *= .87 + .13 * smoothstep(.006, .035, edge);
+      // Crowned, rounded setts: a lit crown, darker worn arrises, wheel-polished tops.
+      vec2 sc = vec2(fx - .5, fy - .5) * 2.; float crown = 1. - dot(sc * sc, vec2(.5));
+      block *= 1. + (crown - .55) * .18 * detail;
+      block = mix(block, block * 1.08 + .015, smoothstep(.7, .95, crown) * smoothstep(.55, .8, rsNoise(q * 2.)) * .5 * detail);
+      rtH = smoothstep(.006, .03 + px * 1.25, edge) * (.55 + crown * .45); rtRelief = .014 * detail;
       block *= 1. + (rsNoise(q * 55.) - .5) * .14 * (1. - smoothstep(.005, .03, px));
       block = mix(block, tint.rgb * .35, joint * .9);
       c = mix(c * .91, block, detail);
     }
     c *= 1. - damp * .36;
+    rtRelief *= 1. - damp * .5; // water fills the joints
     return vec4(c, kind < 3.5 ? 1. : 0.);
   }
 `;
@@ -131,13 +153,27 @@ export function decorateRoadTextures(material, road, maxZones = 24) {
         for (int i = 0; i < ${maxZones}; i++) {
           vec4 z = rsSpan[i]; if (z.w < .5) break;
           float k = smoothstep(z.x - 20., z.x + 20., s) * (1. - smoothstep(z.y - 20., z.y + 20., s));
-          if (k > 0.) rt = mix(rt, rtSurface(asphalt, vec2(x, s), px, rtZones[i], rtTints[i], damp), k);
+          if (k > 0.) {
+            float hb = rtH, rb = rtRelief;
+            rt = mix(rt, rtSurface(asphalt, vec2(x, s), px, rtZones[i], rtTints[i], damp), k);
+            rtH = mix(hb, rtH, k); rtRelief = mix(rb, rtRelief, k);
+          }
         }
         asphalt = rt.rgb; paint *= rt.a;
         // a narrower paved road:`)
-      .replace('vec3 edgePaint =', 'newEdge *= rt.a;\n          vec3 edgePaint =');
+      .replace('vec3 edgePaint =', 'newEdge *= rt.a;\n          vec3 edgePaint =')
+      // Height → bump normal from screen derivatives (no textures), tilt clamped to ~30°.
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        {
+          float rtHm = (rtH - .5) * rtRelief;
+          vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition);
+          vec3 r1 = cross(sy, normal), r2 = cross(normal, sx); float det = dot(sx, r1) * faceDirection;
+          vec3 grad = sign(det) * (dFdx(rtHm) * r1 + dFdy(rtHm) * r2);
+          grad *= min(1., .6 * abs(det) / max(length(grad), 1e-6));
+          normal = normalize(abs(det) * normal - grad);
+        }`);
   };
-  material.customProgramCacheKey = () => `${key}|road-textures-1`;
+  material.customProgramCacheKey = () => `${key}|road-textures-2`;
   material.needsUpdate = true;
   return material;
 }
