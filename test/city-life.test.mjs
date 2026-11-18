@@ -76,6 +76,7 @@ function lateral(x, z, i) {
 function localRoute(x, z, i0) {
   let best = null;
   for (let i = Math.max(0, i0 - 10); i < Math.min(route.turnIdx - 1, i0 + 10); i++) {
+    if (ghostAt(route, (route.dist[i] + route.dist[i + 1]) / 2)) continue;   // (a ghost stretch is never drawn: no lane there)
     const ax = index.xs[i], az = index.zs[i], dx = index.xs[i + 1] - ax, dz = index.zs[i + 1] - az, l2 = dx * dx + dz * dz || 1;
     const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), d = Math.hypot(ax + dx * t - x, az + dz * t - z);
     if (!best || d < best.d) best = { d, i, y: route.ele[i] };
@@ -163,6 +164,9 @@ export function simulate(reverse, { span = null, watch = null, plan = null, spee
     const fwd = { x: pose.flat.x, z: pose.flat.z };
     const cam = { x: pose.pos.x - fwd.x * CHASE.back, y: pose.pos.y + CHASE.up, z: pose.pos.z - fwd.z * CHASE.back };
     const back = ws > turn, rider = { x: pose.pos.x, z: pose.pos.z, out: back ? total - ws : ws, dir: back ? -1 : 1, speed };
+    // (a U-turn ahead on the path, as js/world/world.js tells the life)
+    const U = ride?.uturnAhead(s);
+    if (U != null) { const w = ride.worldAt(Math.max(0, U - 1), area); if (w.area === area) rider.uturn = w.s > turn ? total - w.s : w.s; }
     const riderBox = { x: pose.pos.x, z: pose.pos.z, hx: fwd.x, hz: fwd.z, ...RIDER_BODY };
     if (lastDir != null && rider.dir !== lastDir) flipT = t;
     lastDir = rider.dir;

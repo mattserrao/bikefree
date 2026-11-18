@@ -600,7 +600,11 @@ export class World {
     this.terrain.update(this.camera.position.x, this.camera.position.z, this.terrain.quality?.buildMs);
     if (this.terrain.tick) {
       const turn = this.route.turnS || total, back = this.route.turnS && this.s > turn;
-      this.terrain.tick(this.camera.position, dt, { x: riderPos.x, z: riderPos.z, out: back ? total - this.s : this.s, dir: back ? -1 : 1, speed: src.speed });
+      const rider = { x: riderPos.x, z: riderPos.z, out: back ? total - this.s : this.s, dir: back ? -1 : 1, speed: src.speed };
+      // [network] a U-turn ahead on the path, in the same frame (out metres): oncoming traffic doesn't pass you just before it
+      const U = this.path?.uturnAhead?.(this.p);
+      if (U != null) { const w = this.path.worldAt(Math.max(0, U - 1), this.area?.id ?? null); if (w.area === (this.area?.id ?? w.area)) rider.uturn = w.s > turn ? total - w.s : w.s; }
+      this.terrain.tick(this.camera.position, dt, rider);
     }
     if (this.headlight?.visible) {
       this.headlight.position.copy(riderPos).addScaledVector(flat, .6).y += 1.1;

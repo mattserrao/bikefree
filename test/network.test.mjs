@@ -245,3 +245,11 @@ test('the pacer keeps its way: a turn changed behind it moves it not at all, one
   assert.ok(!f2.update(gAt + 27).diverged);
   assert.equal(f2.worldS(gAt + 900), r2.worldS(gAt + 900));
 });
+
+test('a U-turn ahead on the path: "Back" at the end of the way out (the city life keeps oncoming traffic from passing just before it)', () => {
+  const ride = new NetRide(net, {}, { plan: preset('pgh-mt-washington').path });   // G>D, D>A, back D>A, back G>D
+  const back = ride.entries[1].p0 + ride.entries[1].t.e.len;   // the Water Steps' "Back"
+  assert.equal(ride.uturnAhead(back - 300), back);
+  assert.equal(ride.uturnAhead(back - 900), null);   // (beyond its reach)
+  assert.equal(ride.uturnAhead(10, 3000), null);     // (up McArdle: no junction in the first 3 km)
+});

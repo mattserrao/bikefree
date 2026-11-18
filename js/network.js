@@ -356,6 +356,19 @@ export class NetRide extends EventTarget {
     if (area != null && area !== x.t.e.area) { const s = areaS(this.net, area, x.t, u); if (s != null) return { area, s }; }
     return { area: x.t.e.area, s: worldS(this.net, x.t, u) };
   }
+  /**
+   * The next U-turn on the path within `reach` metres of path metre p ("Back" at a junction, or a hairpin that
+   * turns like one): its path metre, or null. The city's oncoming traffic keeps from passing you just before it
+   * (after the turn it would be ahead of you in your own lane).
+   */
+  uturnAhead(p, reach = 800) {
+    for (let j = this.entryAt(p) + 1; j < this.entries.length && this.entries[j].p0 - p <= reach; j++) {
+      const J = this._junction(j);
+      if (J && (J.back || Math.abs(J.angle) > 150)) return J.P;
+    }
+    return null;
+  }
+
   /** Does area `area`'s line cover path metre p? */
   covers(area, p) {
     const x = this.entries[this.entryAt(p)];

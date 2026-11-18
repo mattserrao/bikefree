@@ -517,6 +517,29 @@ export class CityLife {
     return (cache[key] = at);
   }
 
+  /**
+   * [F38] The nearest stretch of the route's road beyond the far end of way i (driven `dir`), on any way that carries
+   * on from there (within 160 m): {d: metres from that end to its kerb side, c: the band} or null. Cached.
+   */
+  _roadAhead(net, i, dir, car, left = 160, depth = 0) {
+    const top = depth === 0, key = `${dir > 0 ? 'f' : 'b'}${car ? 'c' : 'w'}`, w = net.ways[i];
+    if (top && (w.roadAhead ||= {})[key] !== undefined) return w.roadAhead[key];
+    const endP = dir > 0 ? w.path.pts.at(-1) : w.path.pts[0];
+    let best = null;
+    for (const o of net.ends.get(net.key(endP)) || []) {
+      if (o.i === i) continue;
+      const od = o.end === 0 ? 1 : -1, ow = net.ways[o.i];
+      if (!ow.allow(od) || (car && !this._turnOk(ow, od, false))) continue;
+      const len = ow.path.length;
+      let hit = null;
+      for (const c of ow.band || []) { const d = od > 0 ? c.s0 : len - c.s1; if (!hit || d < hit.d) hit = { d: Math.max(0, d), c }; }
+      if (!hit && len < left && depth < 6) { const r = this._roadAhead(net, o.i, od, car, left - len, depth + 1); if (r) hit = { d: len + r.d, c: r.c }; }
+      if (hit && hit.d < left && (!best || hit.d < best.d)) best = hit;
+    }
+    if (top) w.roadAhead[key] = best;
+    return best;
+  }
+
   /** Can a vehicle drive way w in direction dir: no dead end at its far end, or room to turn round before it (and to brake for that). */
   _turnOk(w, dir, bus) {
     const net = this.drive, i = net.ways.indexOf(w), endP = dir > 0 ? w.path.pts.at(-1) : w.path.pts[0];
@@ -566,6 +589,15 @@ export class CityLife {
     }
     let target = a.speed;
     if (stopAt != null) target = stopAt < .05 ? 0 : Math.min(target, Math.sqrt(2 * K.dec * stopAt));
+    // [F38] a crossing beyond what _ahead sees (past the next way, or further than `look`: a fast street, short ways
+    // in a junction) may not be clear when it comes into view: no faster than it could still stop at its kerb
+    else if (!x && rider) {
+      const far = this._roadAhead(net, a.way, a.dir, kind === 'car');
+      if (far && rem + far.d < 160 && !this._clear(far.c, rider, (rem + far.d) / Math.max(a.v, 1) + 2)) {
+        const kerb = (a.bus ? K.kerb + 4 : K.kerb) + 1.2;
+        target = Math.min(target, Math.sqrt(2 * K.dec * Math.max(0, rem + far.d - kerb)));
+      }
+    }
     a.v = Math.max(0, a.v + Math.max(-2 * K.dec * dt, Math.min(K.acc * dt, target - a.v)));
     if (turn && a.v < .05 && stopAt < .3) { a.dir = -a.dir; a.nx = undefined; a.go = null; }   // nowhere to go but back
     a.s += a.dir * a.v * dt;
@@ -655,6 +687,10 @@ export class CityLife {
       if (a.bus && !w.bus) continue;
       const dir = w.oneway ? w.oneway : (this.rand() < .5 ? 1 : -1);
       if (!this._turnOk(w, dir, a.bus)) continue;
+      // [F38] not so close before the route's road that it could not stop at the kerb for it (the first frame)
+      const room = (w.speed * 1.15) ** 2 / (4 * MOVE.car.dec) + MOVE.car.kerb + 10, rem = dir > 0 ? w.path.length - hit[1] : hit[1];
+      if ((w.band || []).some((c) => { const d = dir > 0 ? c.s0 - hit[1] : hit[1] - c.s1; return d > -4 && d < room; })) continue;
+      if (rem < room) { const far = this._roadAhead(this.drive, hit[0], dir, true); if (far && rem + far.d < room) continue; }
       Object.assign(a, { alive: true, way: hit[0], s: hit[1], dir, speed: w.speed * (.8 + this.rand() * .35), lat: w.lane || (this.rand() - .5) * 3, gait: 0, nx: undefined, go: null, slot: 0 });
       a.v = a.speed;
       return;
@@ -715,8 +751,13 @@ export class CityLife {
     const r = this.city.route, turn = r.turnS || r.total, p = this._tmpR || (this._tmpR = {});
     const ahead = 260 + this.rand() * 380, s = rider.out + rider.dir * ahead;
     const far = s >= 0 && s <= turn && Math.hypot(this._routeAt(s, p).x - rider.x, p.z - rider.z) > 220;
-    if (!far || !this._roadTo(rider.out, s)) { a.alive = false; a.wait = 1 + this.rand() * 3; return; }
-    Object.assign(a, { alive: true, onRoute: true, s, dir: -rider.dir, speed: 8 + this.rand() * 4 });
+    const speed = 8 + this.rand() * 4;
+    // [network] not to pass the rider just before a U-turn on their path (rider.uturn, out metres): after it, it would be
+    // ahead of them in their own lane
+    const meet = rider.out + rider.dir * ahead * Math.max(rider.speed || 0, 1) / (Math.max(rider.speed || 0, 1) + speed);
+    const uturn = rider.uturn != null && (rider.uturn - meet) * rider.dir < 80;
+    if (!far || uturn || !this._roadTo(rider.out, s)) { a.alive = false; a.wait = 1 + this.rand() * 3; return; }
+    Object.assign(a, { alive: true, onRoute: true, s, dir: -rider.dir, speed });
   }
 
   _routeAt(s, out) {
