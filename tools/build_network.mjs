@@ -127,6 +127,21 @@ const trav = (edges) => (t) => {
   return `${e.id}${m[2]}`;
 };
 
+// the free ride (no plan): where it starts, and (F25, F80) the way it prefers at a junction over the street's
+// straight on — "prefer": {junction: traversal key}, e.g. {"LB": "N>LB-"}: from 40th & Butler over the 40th
+// Street Bridge to Millvale; the way must leave that junction
+const freeRideOut = (fr, edges) => {
+  const out = { ...fr, first: trav(edges)(fr.first) };
+  if (fr.prefer) {
+    out.prefer = {};
+    for (const [node, key] of Object.entries(fr.prefer)) {
+      const t = trav(edges)(key), e = edges.find((x) => x.id === t.slice(0, -1));
+      if ((t.endsWith('+') ? e.from : e.to) !== node) throw new Error(`freeRide.prefer ${node}: ${key} doesn't leave ${node}`);
+      out.prefer[node] = t;
+    }
+  }
+  return out;
+};
 let out;
 if (!spec.areas) {
   // one base line (format 1)
@@ -138,7 +153,7 @@ if (!spec.areas) {
     ...(A.ghosts.length ? { ghosts: A.ghosts } : {}),
     edges, presets: buildPresets(spec.presets, edges),
   };
-  if (spec.freeRide) out.freeRide = { ...spec.freeRide, first: trav(edges)(spec.freeRide.first) };
+  if (spec.freeRide) out.freeRide = freeRideOut(spec.freeRide, edges);
 } else {
   // a network of areas (format 2)
   if (!spec.origin || !Number.isFinite(spec.origin.lat) || !Number.isFinite(spec.origin.lon)) throw new Error('a network of areas needs its city\'s "origin" (lat, lon)');
@@ -193,7 +208,7 @@ if (!spec.areas) {
     edges: edges.map(({ id, key, area, from, to, s, lengthM, climbM, name, toward }) => ({ id, key, area, from, to, s, lengthM, climbM, name, toward })),
     presets: buildPresets([...built.flatMap((A) => A.presets), ...(spec.presets || [])], edges),
   };
-  if (spec.freeRide) out.freeRide = { ...spec.freeRide, first: trav(edges)(spec.freeRide.first) };
+  if (spec.freeRide) out.freeRide = freeRideOut(spec.freeRide, edges);
 }
 // the key history (F40): every segment a new junction split, old key → its pieces in its own forward order, so a
 // route saved before the split maps onto the way it rode (js/network.js keysToIds); a piece may itself have split later

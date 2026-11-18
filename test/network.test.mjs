@@ -163,9 +163,29 @@ test('free ride: no plan, straight on at every junction, no laps, a far-reaching
   // off the Clemente Bridge straight on is 6th St and Penn Avenue into the Strip, then Smallman St to Lawrenceville
   assert.equal(r.netRide.entries[1].t.e.key, 'M>B');
   assert.equal(r.netRide.entries[1].t.dir, -1);
-  // up Butler St to 40th St (LB, PLAN 5.10), where straight on is Butler St on to Stanton Ave and the East End
+  // up Butler St to 40th St (LB, PLAN 5.10): the street's straight on is Butler St on to Stanton Ave and the East
+  // End, but the free ride prefers (freeRide.prefer, F25/F80) the 40th Street Bridge to Millvale, then the
+  // trail back along the North Shore, the West End Bridge, Grandview and down into Station Square
   assert.equal(r.netRide.entries[2].t.e.key, 'LB>M');
-  assert.equal(r.netRide.entries[3].t.e.key, 'LB>HE');
+  const lb = optionsAt(net, r.netRide.entries[2].t);
+  assert.equal(straightOn(lb).t.e.key, 'LB>HE', 'the label stays the street\'s');
+  assert.equal(r.netRide.entries[3].t.e.key, 'N>LB');
+  assert.equal(r.netRide.entries[3].t.dir, -1);
+  const tour = r.netRide.entries.slice(4, 16).map((x) => `${x.t.e.key}${x.t.dir > 0 ? '+' : '-'}`);
+  assert.deepEqual(tour.slice(0, 6), ['P>N-', 'A>P-', 'R>A-', 'C>R-', 'D>C-', 'GV>D-']);
+  assert.ok(tour.includes('E>F-') && tour.includes('B>E-'), `${tour}`);   // back through downtown: a loop of the city
+  // no hint: the street's straight on (the East End, round Highland Park)
+  const plain = makePathRoute(net, { id: 'free', name: 'Free', path: null, first: json.freeRide.first, prefer: null });
+  assert.equal(plain.netRide.entries[3].t.e.key, 'LB>HE');
+  // the rider's turn still wins: up Butler St at LB, as chosen
+  const ride = r.netRide;
+  ride.p = ride.entries[3].p0 - 300;
+  const east = optionsAt(net, ride.entries[2].t).find((o) => o.t.e.key === 'LB>HE');
+  assert.equal(ride.pick(east.key), true);
+  assert.equal(ride.entries[3].t.e.key, 'LB>HE');
+  // a hint is a free ride's only: a preset through LB keeps its plan (the Allegheny Loop: down Butler St)
+  const loop = makePathRoute(net, preset('pgh-allegheny'));
+  assert.equal(loop.netRide.prefer, null);
   assert.ok(r.stops.length >= 3);
 });
 
