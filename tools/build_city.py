@@ -733,9 +733,18 @@ def build(cid):
         if not rel: continue
         for pts in rings_of(rel, ways, nodes, 'outer'): poly(pts, 3)
         for pts in rings_of(rel, ways, nodes, 'inner'): poly(pts, 1)
+    # "inlandWaterAboveM" (PLAN 5.10): the city has one water level (its rivers'), and water is drawn by pressing the
+    # ground under it to that level — so a reservoir or a pond up on a hill (Highland Park's, ~100 m above the rivers)
+    # became a pit down to the rivers. Water polygons whose ground lies more than this above the water level are
+    # left out (drawn as the park around them); off by default
+    inland = cfg.get('inlandWaterAboveM')
     for nd, t in ways.values():
         if (t.get('natural') == 'water' or t.get('waterway') == 'riverbank') and nd and nd[0] == nd[-1]:
-            poly([nodes[i] for i in nd if i in nodes], 3)
+            pts = [nodes[i] for i in nd if i in nodes]
+            if inland is not None and pts:
+                ground = sorted(elevation(*p_) for p_ in pts[::max(1, len(pts) // 12)])
+                if ground[len(ground) // 2] > cfg['waterLevelM'] + inland: poly(pts, 1); continue
+            poly(pts, 3)
 
     # 3. Buildings --------------------------------------------------------------
     brad, tall = cfg['buildingRadiusM'], cfg['tallBuildingM']

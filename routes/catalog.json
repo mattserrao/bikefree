@@ -668,6 +668,21 @@
   "area": "pittsburgh"
  },
  {
+  "id": "pittsburgh-eastend",
+  "name": "Pittsburgh \u00b7 The East End: Highland Park, East Liberty & Squirrel Hill",
+  "park": "Pittsburgh, Pennsylvania",
+  "file": "routes/cities/pittsburgh-eastend.gpx",
+  "outAndBack": false,
+  "expectedKm": [
+   24,
+   28
+  ],
+  "scene": "routes/scenes/pittsburgh-eastend.json",
+  "eleSmoothM": 10,
+  "stage": "draft",
+  "area": "pittsburgh"
+ },
+ {
   "id": "alpedhuez",
   "name": "Alpe d'Huez \u00b7 Tour Stage 19",
   "park": "Gap \u2192 Alpe d'Huez, French Alps (Tour de France 2026)",

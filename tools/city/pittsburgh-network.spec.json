@@ -47,6 +47,12 @@
       "catalogId": "pittsburgh-northside",
       "base": "routes/cities/pittsburgh-northside.gpx",
       "spec": "tools/city/pittsburgh-northside.network.json"
+    },
+    {
+      "id": "eastend",
+      "catalogId": "pittsburgh-eastend",
+      "base": "routes/cities/pittsburgh-eastend.gpx",
+      "spec": "tools/city/pittsburgh-eastend.network.json"
     }
   ],
   "presets": [
@@ -330,7 +336,8 @@
       "path": [
         "A>P+",
         "P>N+",
-        "N>M+",
+        "N>LB+",
+        "LB>M+",
         "M>B+",
         "A>B-"
       ],
@@ -346,7 +353,8 @@
       "path": [
         "A>B+",
         "M>B-",
-        "N>M-",
+        "LB>M-",
+        "N>LB-",
         "P>N-",
         "A>P-"
       ],
@@ -362,7 +370,8 @@
       "path": [
         "A>P+",
         "P>N+",
-        "N>M+",
+        "N>LB+",
+        "LB>M+",
         "M>B+",
         "B>E+",
         "E>I+",
@@ -417,7 +426,8 @@
         "P>N+",
         "N>P+",
         "P>N+",
-        "N>M+",
+        "N>LB+",
+        "LB>M+",
         "M>B+",
         "A>B-"
       ],
@@ -466,7 +476,8 @@
       "path": [
         "A>P+",
         "P>N+",
-        "N>M+",
+        "N>LB+",
+        "LB>M+",
         "M>X+",
         "X>T+",
         "T>L+",
@@ -598,6 +609,32 @@
         "new"
       ],
       "note": "The Three Rivers Loop with McArdle and Grandview, over the West End Bridge, up Brighton Road to Riverview Park, down through Fineview, Randyland and the Aviary to the Water Steps"
+    },
+    {
+      "id": "pgh-allegheny-east-end",
+      "name": "Allegheny, East End & Oakland Loop",
+      "path": [
+        "A>P+",
+        "P>N+",
+        "N>LB+",
+        "LB>HE+",
+        "HP>HE-",
+        "HP>EL+",
+        "SQ>EL-",
+        "SQ>K+",
+        "K>J+",
+        "L>J-",
+        "I>L-",
+        "E>I-",
+        "B>E-",
+        "A>B-"
+      ],
+      "tags": [
+        "long",
+        "varied",
+        "new"
+      ],
+      "note": "The North Shore Trail to Millvale and over the 40th Street Bridge, up Stanton Ave to Highland Park and round the reservoir, East Liberty and Shady Ave to Squirrel Hill, Forbes to Schenley Park, round the Oval and down through Oakland, Junction Hollow and the Jail Trail, home over the Clemente Bridge"
     }
   ],
   "freeRide": {
