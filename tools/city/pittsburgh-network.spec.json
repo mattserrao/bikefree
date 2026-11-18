@@ -35,6 +35,12 @@
       "catalogId": "pittsburgh-polish",
       "base": "routes/cities/pittsburgh-polish.gpx",
       "spec": "tools/city/pittsburgh-polish.network.json"
+    },
+    {
+      "id": "homestead",
+      "catalogId": "pittsburgh-homestead",
+      "base": "routes/cities/pittsburgh-homestead.gpx",
+      "spec": "tools/city/pittsburgh-homestead.network.json"
     }
   ],
   "presets": [
@@ -142,7 +148,8 @@
       "name": "Jail Trail & South Side Loop",
       "path": [
         "E>I+",
-        "I>H+",
+        "I>S+",
+        "S>H+",
         "H>G+",
         "E>G-"
       ],
@@ -160,7 +167,8 @@
         "A>B+",
         "B>E+",
         "E>I+",
-        "I>H+",
+        "I>S+",
+        "S>H+",
         "H>G+",
         "E>G-",
         "B>E-",
@@ -179,7 +187,8 @@
         "A>B+",
         "B>E+",
         "E>I+",
-        "I>H+",
+        "I>S+",
+        "S>H+",
         "H>G+",
         "G>D+",
         "D>A+"
@@ -275,7 +284,8 @@
         "K>J+",
         "L>J-",
         "I>L-",
-        "I>H+",
+        "I>S+",
+        "S>H+",
         "H>G+",
         "E>G-",
         "B>E-",
@@ -330,7 +340,8 @@
         "M>B+",
         "B>E+",
         "E>I+",
-        "I>H+",
+        "I>S+",
+        "S>H+",
         "H>G+",
         "E>G-",
         "B>E-",
@@ -444,6 +455,48 @@
         "new"
       ],
       "note": "The North Shore Trail to Millvale and Lawrenceville, up through Polish Hill and Bloomfield to Oakland, down Junction Hollow and the Jail Trail, home over the Clemente Bridge"
+    },
+    {
+      "id": "pgh-gap-homestead",
+      "name": "Great Allegheny Passage to Homestead",
+      "path": [
+        "S>H-",
+        "S>W+",
+        "W>U+",
+        "U>V+",
+        "W>V-",
+        "S>W-",
+        "S>H+"
+      ],
+      "tags": [
+        "flat",
+        "new"
+      ],
+      "note": "From SouthSide Works out the GAP along the Mon to the Waterfront, a lap of Homestead past the Pump House and Eighth Avenue, and back"
+    },
+    {
+      "id": "pgh-jail-gap",
+      "name": "Jail Trail & the GAP to Homestead",
+      "path": [
+        "B>E+",
+        "E>I+",
+        "I>S+",
+        "S>W+",
+        "W>U+",
+        "U>V+",
+        "W>V-",
+        "S>W-",
+        "S>H+",
+        "H>G+",
+        "E>G-",
+        "B>E-"
+      ],
+      "tags": [
+        "long",
+        "flat",
+        "new"
+      ],
+      "note": "The Point, the Jail Trail and the Hot Metal Bridge, the GAP to Homestead and a lap past the Pump House, home on the South Side river trail"
     }
   ],
   "freeRide": {

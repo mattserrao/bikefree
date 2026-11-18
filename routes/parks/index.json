@@ -295,6 +295,18 @@
     "scene": "routes/scenes/pittsburgh-polish.json"
   },
   {
+    "id": "pittsburgh-homestead",
+    "name": "Pittsburgh · The Great Allegheny Passage & Homestead",
+    "park": "Pittsburgh, Pennsylvania",
+    "km": 16,
+    "climbM": 56,
+    "file": "routes/cities/pittsburgh-homestead.gpx",
+    "stage": "draft",
+    "area": "pittsburgh",
+    "eleSmoothM": 10,
+    "scene": "routes/scenes/pittsburgh-homestead.json"
+  },
+  {
     "id": "alpedhuez",
     "name": "Alpe d'Huez · Tour Stage 19",
     "park": "Gap → Alpe d'Huez, French Alps (Tour de France 2026)",

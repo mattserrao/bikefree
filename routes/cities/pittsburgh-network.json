@@ -35,7 +35,7 @@
    ],
    "aprons": [
     {
-     "edge": "e14",
+     "edge": "e15",
      "dir": 1,
      "s": [
       0,
@@ -44,7 +44,7 @@
      "u0": 2730
     },
     {
-     "edge": "e16",
+     "edge": "e17",
      "dir": 1,
      "s": [
       7470,
@@ -53,7 +53,7 @@
      "u0": 0
     },
     {
-     "edge": "e15",
+     "edge": "e16",
      "dir": 1,
      "s": [
       16790,
@@ -62,7 +62,7 @@
      "u0": 0
     },
     {
-     "edge": "e10",
+     "edge": "e11",
      "dir": 1,
      "s": [
       20210,
@@ -89,7 +89,7 @@
    ],
    "aprons": [
     {
-     "edge": "e6",
+     "edge": "e7",
      "dir": 1,
      "s": [
       0,
@@ -121,7 +121,7 @@
    ],
    "aprons": [
     {
-     "edge": "e5",
+     "edge": "e6",
      "dir": 1,
      "s": [
       0,
@@ -130,7 +130,7 @@
      "u0": 4750
     },
     {
-     "edge": "e6",
+     "edge": "e7",
      "dir": 1,
      "s": [
       3900,
@@ -193,7 +193,7 @@
    ],
    "aprons": [
     {
-     "edge": "e13",
+     "edge": "e14",
      "dir": 1,
      "s": [
       0,
@@ -202,7 +202,7 @@
      "u0": 4550
     },
     {
-     "edge": "e14",
+     "edge": "e15",
      "dir": 1,
      "s": [
       400,
@@ -211,7 +211,7 @@
      "u0": 0
     },
     {
-     "edge": "e16",
+     "edge": "e17",
      "dir": -1,
      "s": [
       9500,
@@ -220,11 +220,47 @@
      "u0": 3430
     },
     {
-     "edge": "e17",
+     "edge": "e18",
      "dir": 1,
      "s": [
       10300,
       10700
+     ],
+     "u0": 0
+    }
+   ]
+  },
+  {
+   "id": "homestead",
+   "catalogId": "pittsburgh-homestead",
+   "base": "routes/cities/pittsburgh-homestead.gpx",
+   "legM": 15960,
+   "ghosts": [
+    {
+     "fromM": 689,
+     "toM": 976
+    },
+    {
+     "fromM": 13601,
+     "toM": 14105
+    }
+   ],
+   "aprons": [
+    {
+     "edge": "e3",
+     "dir": 1,
+     "s": [
+      0,
+      400
+     ],
+     "u0": 120
+    },
+    {
+     "edge": "e4",
+     "dir": 1,
+     "s": [
+      400,
+      690
      ],
      "u0": 0
     }
@@ -276,6 +312,23 @@
     "oakland": [
      400,
      13590
+    ]
+   },
+   "portal": true
+  },
+  {
+   "id": "S",
+   "name": "Hot Metal Bridge south end",
+   "lat": 40.427301,
+   "lon": -79.962453,
+   "ele": 229.45,
+   "passes": {
+    "core": [
+     8800
+    ],
+    "homestead": [
+     400,
+     980
     ]
    },
    "portal": true
@@ -466,6 +519,45 @@
      4880
     ]
    }
+  },
+  {
+   "id": "W",
+   "name": "The Waterfront by the AMC",
+   "lat": 40.408479,
+   "lon": -79.918026,
+   "ele": 227.14,
+   "passes": {
+    "homestead": [
+     8110,
+     14100
+    ]
+   }
+  },
+  {
+   "id": "U",
+   "name": "East Waterfront Drive by the Pump House",
+   "lat": 40.414277,
+   "lon": -79.899565,
+   "ele": 228.72,
+   "passes": {
+    "homestead": [
+     9850,
+     15960
+    ]
+   }
+  },
+  {
+   "id": "V",
+   "name": "Amity St & Waterfront Drive",
+   "lat": 40.411296,
+   "lon": -79.913381,
+   "ele": 227.4,
+   "passes": {
+    "homestead": [
+     8620,
+     13600
+    ]
+   }
   }
  ],
  "edges": [
@@ -513,27 +605,48 @@
   },
   {
    "id": "e3",
-   "key": "I>H",
+   "key": "I>S",
    "area": "core",
    "from": "I",
-   "to": "H",
+   "to": "S",
    "s": [
     8280,
-    9110
+    8800
    ],
-   "lengthM": 830,
+   "lengthM": 520,
    "climbM": [
-    6,
-    5
+    5,
+    4
    ],
    "name": "Hot Metal Bridge",
    "toward": [
-    "over the Hot Metal Bridge to SouthSide Works",
+    "over the Hot Metal Bridge to the South Side",
     "over the Hot Metal Bridge to the Jail Trail"
    ]
   },
   {
    "id": "e4",
+   "key": "S>H",
+   "area": "core",
+   "from": "S",
+   "to": "H",
+   "s": [
+    8800,
+    9110
+   ],
+   "lengthM": 310,
+   "climbM": [
+    0,
+    1
+   ],
+   "name": "SouthSide Works riverfront",
+   "toward": [
+    "the riverfront path to SouthSide Works",
+    "to the Hot Metal Bridge and the Great Allegheny Passage"
+   ]
+  },
+  {
+   "id": "e5",
    "key": "H>G",
    "area": "core",
    "from": "H",
@@ -554,7 +667,7 @@
    ]
   },
   {
-   "id": "e5",
+   "id": "e6",
    "key": "G>D",
    "area": "core",
    "from": "G",
@@ -575,7 +688,7 @@
    ]
   },
   {
-   "id": "e6",
+   "id": "e7",
    "key": "D>A",
    "area": "core",
    "from": "D",
@@ -596,7 +709,7 @@
    ]
   },
   {
-   "id": "e7",
+   "id": "e8",
    "key": "A>B",
    "area": "core",
    "from": "A",
@@ -617,7 +730,7 @@
    ]
   },
   {
-   "id": "e8",
+   "id": "e9",
    "key": "E>G",
    "area": "core",
    "from": "E",
@@ -638,7 +751,7 @@
    ]
   },
   {
-   "id": "e9",
+   "id": "e10",
    "key": "G>H",
    "area": "core",
    "from": "G",
@@ -659,7 +772,7 @@
    ]
   },
   {
-   "id": "e10",
+   "id": "e11",
    "key": "A>P",
    "area": "allegheny",
    "from": "A",
@@ -680,7 +793,7 @@
    ]
   },
   {
-   "id": "e11",
+   "id": "e12",
    "key": "P>N",
    "area": "allegheny",
    "from": "P",
@@ -701,7 +814,7 @@
    ]
   },
   {
-   "id": "e12",
+   "id": "e13",
    "key": "N>P",
    "area": "allegheny",
    "from": "N",
@@ -722,7 +835,7 @@
    ]
   },
   {
-   "id": "e13",
+   "id": "e14",
    "key": "N>M",
    "area": "allegheny",
    "from": "N",
@@ -743,7 +856,7 @@
    ]
   },
   {
-   "id": "e14",
+   "id": "e15",
    "key": "M>B",
    "area": "allegheny",
    "from": "M",
@@ -764,7 +877,7 @@
    ]
   },
   {
-   "id": "e15",
+   "id": "e16",
    "key": "D>O",
    "area": "westend",
    "from": "D",
@@ -785,7 +898,7 @@
    ]
   },
   {
-   "id": "e16",
+   "id": "e17",
    "key": "I>L",
    "area": "oakland",
    "from": "I",
@@ -806,7 +919,7 @@
    ]
   },
   {
-   "id": "e17",
+   "id": "e18",
    "key": "L>J",
    "area": "oakland",
    "from": "L",
@@ -827,7 +940,7 @@
    ]
   },
   {
-   "id": "e18",
+   "id": "e19",
    "key": "J>K",
    "area": "oakland",
    "from": "J",
@@ -848,7 +961,7 @@
    ]
   },
   {
-   "id": "e19",
+   "id": "e20",
    "key": "K>J",
    "area": "oakland",
    "from": "K",
@@ -869,7 +982,7 @@
    ]
   },
   {
-   "id": "e20",
+   "id": "e21",
    "key": "M>X",
    "area": "polish",
    "from": "M",
@@ -890,7 +1003,7 @@
    ]
   },
   {
-   "id": "e21",
+   "id": "e22",
    "key": "X>T",
    "area": "polish",
    "from": "X",
@@ -911,7 +1024,7 @@
    ]
   },
   {
-   "id": "e22",
+   "id": "e23",
    "key": "T>X",
    "area": "polish",
    "from": "T",
@@ -932,7 +1045,7 @@
    ]
   },
   {
-   "id": "e23",
+   "id": "e24",
    "key": "T>L",
    "area": "polish",
    "from": "T",
@@ -951,20 +1064,159 @@
     "Bethoven St and the Bloomfield Bridge, Liberty Ave through Bloomfield, S Millvale, Craig St and Fifth Ave to Schenley Plaza",
     "Fifth Ave, Craig St and S Millvale to Bloomfield, Liberty Ave, the Bloomfield Bridge and Bethoven St to Polish Hill"
    ]
+  },
+  {
+   "id": "e25",
+   "key": "S>W",
+   "area": "homestead",
+   "from": "S",
+   "to": "W",
+   "s": [
+    980,
+    8110
+   ],
+   "lengthM": 7130,
+   "climbM": [
+    16,
+    18
+   ],
+   "name": "Great Allegheny Passage",
+   "toward": [
+    "the GAP along the Mon past Hazelwood Green and under the Glenwood Bridge to the Waterfront",
+    "the GAP back along the Mon to the Hot Metal Bridge"
+   ]
+  },
+  {
+   "id": "e26",
+   "key": "W>V",
+   "area": "homestead",
+   "from": "W",
+   "to": "V",
+   "s": [
+    8110,
+    8620
+   ],
+   "lengthM": 510,
+   "climbM": [
+    1,
+    1
+   ],
+   "name": "Waterfront Drive",
+   "toward": [
+    "Waterfront Drive to Amity St",
+    "Waterfront Drive back to the trail"
+   ]
+  },
+  {
+   "id": "e27",
+   "key": "V>U",
+   "area": "homestead",
+   "from": "V",
+   "to": "U",
+   "s": [
+    8620,
+    9850
+   ],
+   "lengthM": 1230,
+   "climbM": [
+    4,
+    2
+   ],
+   "name": "East Waterfront Drive",
+   "toward": [
+    "East Waterfront Drive past the shops to the Pump House",
+    "East Waterfront Drive back to Amity St"
+   ]
+  },
+  {
+   "id": "e28",
+   "key": "U>V",
+   "area": "homestead",
+   "from": "U",
+   "to": "V",
+   "s": [
+    9850,
+    13600
+   ],
+   "lengthM": 3750,
+   "climbM": [
+    22,
+    23
+   ],
+   "name": "Eighth Avenue, Homestead",
+   "toward": [
+    "past the Pump House, down River Road and along Eighth Avenue through Homestead to Amity St",
+    "Amity St, Eighth Avenue through Homestead and River Road to the Pump House"
+   ]
+  },
+  {
+   "id": "e29",
+   "key": "W>U",
+   "area": "homestead",
+   "from": "W",
+   "to": "U",
+   "s": [
+    14100,
+    15960
+   ],
+   "lengthM": 1860,
+   "climbM": [
+    7,
+    5
+   ],
+   "name": "Homestead riverfront",
+   "toward": [
+    "the riverfront trail under the Homestead Grays Bridge to the Pump House",
+    "the riverfront trail back to the Waterfront"
+   ]
   }
  ],
  "presets": [
   {
+   "id": "pgh-homestead-loop",
+   "name": "Homestead Loop",
+   "path": [
+    "e29+",
+    "e28+",
+    "e26-"
+   ],
+   "tags": [
+    "flat",
+    "short",
+    "new"
+   ],
+   "note": "From the Waterfront along the river to the Pump House, then Eighth Avenue through Homestead and back by Amity St",
+   "lengthM": 6120,
+   "climbM": 30
+  },
+  {
+   "id": "pgh-waterfront-loop",
+   "name": "Waterfront Loop",
+   "path": [
+    "e29+",
+    "e27-",
+    "e26-"
+   ],
+   "tags": [
+    "flat",
+    "short",
+    "new"
+   ],
+   "note": "The riverfront trail to the Pump House and back along East Waterfront Drive past the shops",
+   "lengthM": 3600,
+   "climbM": 10
+  },
+  {
    "id": "pgh-three-rivers",
    "name": "Three Rivers Loop",
    "path": [
-    "e7+",
-    "e1+",
     "e8+",
+    "e1+",
     "e9+",
-    "e4+",
+    "e10+",
     "e5+",
-    "e6+"
+    "e6+",
+    "e7+"
    ],
    "tags": [
     "varied"
@@ -977,13 +1229,13 @@
    "id": "pgh-three-rivers-rev",
    "name": "Three Rivers Loop · reverse",
    "path": [
+    "e7-",
     "e6-",
     "e5-",
-    "e4-",
+    "e10-",
     "e9-",
-    "e8-",
     "e1-",
-    "e7-"
+    "e8-"
    ],
    "tags": [
     "varied"
@@ -996,11 +1248,11 @@
    "id": "pgh-short-loop",
    "name": "South Side Short Loop",
    "path": [
-    "e7+",
-    "e1+",
     "e8+",
-    "e5+",
-    "e6+"
+    "e1+",
+    "e9+",
+    "e6+",
+    "e7+"
    ],
    "tags": [
     "short",
@@ -1014,11 +1266,11 @@
    "id": "pgh-short-loop-rev",
    "name": "South Side Short Loop · reverse",
    "path": [
+    "e7-",
     "e6-",
-    "e5-",
-    "e8-",
+    "e9-",
     "e1-",
-    "e7-"
+    "e8-"
    ],
    "tags": [
     "short",
@@ -1032,8 +1284,8 @@
    "id": "pgh-south-side",
    "name": "South Side Flat Loop",
    "path": [
-    "e9+",
-    "e4+"
+    "e10+",
+    "e5+"
    ],
    "tags": [
     "flat",
@@ -1047,15 +1299,15 @@
    "id": "pgh-west-end",
    "name": "Three Rivers Loop + West End Overlook",
    "path": [
-    "e7+",
-    "e1+",
     "e8+",
+    "e1+",
     "e9+",
-    "e4+",
+    "e10+",
     "e5+",
-    "e15+",
-    "e15-",
-    "e6+"
+    "e6+",
+    "e16+",
+    "e16-",
+    "e7+"
    ],
    "tags": [
     "hilly",
@@ -1072,7 +1324,8 @@
     "e2+",
     "e3+",
     "e4+",
-    "e8-"
+    "e5+",
+    "e9-"
    ],
    "tags": [
     "flat",
@@ -1081,20 +1334,21 @@
    ],
    "note": "From downtown along the Jail Trail, over the Hot Metal Bridge and back on the South Side river trail",
    "lengthM": 9260,
-   "climbM": 47
+   "climbM": 46
   },
   {
    "id": "pgh-point-jail",
    "name": "Point & Jail Trail Loop",
    "path": [
-    "e7+",
+    "e8+",
     "e1+",
     "e2+",
     "e3+",
     "e4+",
-    "e8-",
+    "e5+",
+    "e9-",
     "e1-",
-    "e7-"
+    "e8-"
    ],
    "tags": [
     "flat",
@@ -1102,19 +1356,20 @@
    ],
    "note": "The Point and downtown, the Jail Trail, the Hot Metal Bridge and the river trail, back by the Smithfield Street Bridge",
    "lengthM": 17440,
-   "climbM": 96
+   "climbM": 95
   },
   {
    "id": "pgh-jail-mt-washington",
    "name": "Jail Trail & Mount Washington Loop",
    "path": [
-    "e7+",
+    "e8+",
     "e1+",
     "e2+",
     "e3+",
     "e4+",
     "e5+",
-    "e6+"
+    "e6+",
+    "e7+"
    ],
    "tags": [
     "varied",
@@ -1122,16 +1377,16 @@
    ],
    "note": "The flat Jail Trail out, the river trail, then the McArdle climb and Grandview home",
    "lengthM": 19140,
-   "climbM": 227
+   "climbM": 226
   },
   {
    "id": "pgh-mt-washington",
    "name": "Mount Washington There & Back",
    "path": [
-    "e5+",
     "e6+",
-    "e6-",
-    "e5-"
+    "e7+",
+    "e7-",
+    "e6-"
    ],
    "tags": [
     "hilly"
@@ -1144,20 +1399,20 @@
    "id": "pgh-long",
    "name": "Three Rivers There & Back",
    "path": [
-    "e7+",
-    "e1+",
     "e8+",
+    "e1+",
     "e9+",
-    "e4+",
+    "e10+",
     "e5+",
     "e6+",
+    "e7+",
+    "e7-",
     "e6-",
     "e5-",
-    "e4-",
+    "e10-",
     "e9-",
-    "e8-",
     "e1-",
-    "e7-"
+    "e8-"
    ],
    "tags": [
     "long",
@@ -1171,8 +1426,8 @@
    "id": "pgh-schenley",
    "name": "Schenley Park Loop",
    "path": [
-    "e18+",
-    "e19+"
+    "e19+",
+    "e20+"
    ],
    "tags": [
     "short",
@@ -1188,12 +1443,12 @@
    "name": "Jail Trail, Oakland & Schenley",
    "path": [
     "e2+",
-    "e16+",
     "e17+",
     "e18+",
     "e19+",
+    "e20+",
+    "e18-",
     "e17-",
-    "e16-",
     "e2-"
    ],
    "tags": [
@@ -1208,20 +1463,21 @@
    "id": "pgh-oakland-south",
    "name": "Oakland & South Side Loop",
    "path": [
-    "e7+",
+    "e8+",
     "e1+",
     "e2+",
-    "e16+",
     "e17+",
     "e18+",
     "e19+",
+    "e20+",
+    "e18-",
     "e17-",
-    "e16-",
     "e3+",
     "e4+",
-    "e8-",
+    "e5+",
+    "e9-",
     "e1-",
-    "e7-"
+    "e8-"
    ],
    "tags": [
     "long",
@@ -1230,17 +1486,17 @@
    ],
    "note": "The Point, the Jail Trail, Oakland and Schenley Park, then over the Hot Metal Bridge and home on the river trail",
    "lengthM": 30630,
-   "climbM": 268
+   "climbM": 267
   },
   {
    "id": "pgh-allegheny",
    "name": "Allegheny Loop",
    "path": [
-    "e10+",
     "e11+",
-    "e13+",
+    "e12+",
     "e14+",
-    "e7-"
+    "e15+",
+    "e8-"
    ],
    "tags": [
     "flat",
@@ -1254,11 +1510,11 @@
    "id": "pgh-allegheny-rev",
    "name": "Allegheny Loop · reverse",
    "path": [
-    "e7+",
+    "e8+",
+    "e15-",
     "e14-",
-    "e13-",
-    "e11-",
-    "e10-"
+    "e12-",
+    "e11-"
    ],
    "tags": [
     "flat",
@@ -1272,17 +1528,18 @@
    "id": "pgh-allegheny-jail",
    "name": "Allegheny & Jail Trail Loop",
    "path": [
-    "e10+",
     "e11+",
-    "e13+",
+    "e12+",
     "e14+",
+    "e15+",
     "e1+",
     "e2+",
     "e3+",
     "e4+",
-    "e8-",
+    "e5+",
+    "e9-",
     "e1-",
-    "e7-"
+    "e8-"
    ],
    "tags": [
     "long",
@@ -1291,14 +1548,14 @@
    ],
    "note": "Both rivers on the flat: the Allegheny Loop, the Point, the Jail Trail, the Hot Metal Bridge and the South Side river trail",
    "lengthM": 27570,
-   "climbM": 131
+   "climbM": 130
   },
   {
    "id": "pgh-troy-hill",
    "name": "Troy Hill Climb Loop",
    "path": [
-    "e11+",
-    "e12+"
+    "e12+",
+    "e13+"
    ],
    "tags": [
     "short",
@@ -1313,10 +1570,10 @@
    "id": "pgh-troy-hill-steps",
    "name": "Water Steps & Troy Hill",
    "path": [
-    "e10+",
     "e11+",
     "e12+",
-    "e10-"
+    "e13+",
+    "e11-"
    ],
    "tags": [
     "hilly",
@@ -1330,13 +1587,13 @@
    "id": "pgh-allegheny-troy",
    "name": "Allegheny Loop + Troy Hill",
    "path": [
-    "e10+",
     "e11+",
     "e12+",
-    "e11+",
     "e13+",
+    "e12+",
     "e14+",
-    "e7-"
+    "e15+",
+    "e8-"
    ],
    "tags": [
     "hilly",
@@ -1351,8 +1608,8 @@
    "id": "pgh-polish-hill",
    "name": "Polish Hill Climb Loop",
    "path": [
-    "e21+",
-    "e22+"
+    "e22+",
+    "e23+"
    ],
    "tags": [
     "short",
@@ -1367,13 +1624,13 @@
    "id": "pgh-polish-crosstown",
    "name": "Polish Hill, Bloomfield & Oakland Loop",
    "path": [
-    "e20+",
     "e21+",
-    "e23+",
-    "e16-",
+    "e22+",
+    "e24+",
+    "e17-",
     "e2-",
     "e1-",
-    "e14-"
+    "e15-"
    ],
    "tags": [
     "varied",
@@ -1387,16 +1644,16 @@
    "id": "pgh-polish-rivers",
    "name": "Allegheny, Polish Hill & Oakland Loop",
    "path": [
-    "e10+",
     "e11+",
-    "e13+",
-    "e20+",
+    "e12+",
+    "e14+",
     "e21+",
-    "e23+",
-    "e16-",
+    "e22+",
+    "e24+",
+    "e17-",
     "e2-",
     "e1-",
-    "e7-"
+    "e8-"
    ],
    "tags": [
     "long",
@@ -1406,11 +1663,57 @@
    "note": "The North Shore Trail to Millvale and Lawrenceville, up through Polish Hill and Bloomfield to Oakland, down Junction Hollow and the Jail Trail, home over the Clemente Bridge",
    "lengthM": 25430,
    "climbM": 202
+  },
+  {
+   "id": "pgh-gap-homestead",
+   "name": "Great Allegheny Passage to Homestead",
+   "path": [
+    "e4-",
+    "e25+",
+    "e29+",
+    "e28+",
+    "e26-",
+    "e25-",
+    "e4+"
+   ],
+   "tags": [
+    "flat",
+    "new"
+   ],
+   "note": "From SouthSide Works out the GAP along the Mon to the Waterfront, a lap of Homestead past the Pump House and Eighth Avenue, and back",
+   "lengthM": 21000,
+   "climbM": 65
+  },
+  {
+   "id": "pgh-jail-gap",
+   "name": "Jail Trail & the GAP to Homestead",
+   "path": [
+    "e1+",
+    "e2+",
+    "e3+",
+    "e25+",
+    "e29+",
+    "e28+",
+    "e26-",
+    "e25-",
+    "e4+",
+    "e5+",
+    "e9-",
+    "e1-"
+   ],
+   "tags": [
+    "long",
+    "flat",
+    "new"
+   ],
+   "note": "The Point, the Jail Trail and the Hot Metal Bridge, the GAP to Homestead and a lap past the Pump House, home on the South Side river trail",
+   "lengthM": 35820,
+   "climbM": 152
   }
  ],
  "freeRide": {
   "name": "Free Ride · choose every turn",
-  "first": "e7+",
+  "first": "e8+",
   "note": "No plan: from the Water Steps, straight on at every junction unless you choose a turn. Ride until you stop"
  }
 }

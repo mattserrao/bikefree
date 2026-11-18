@@ -1,0 +1,89 @@
+{
+  "area": "homestead",
+  "note": "The Great Allegheny Passage from the Hot Metal Bridge's south end along the Mon to Homestead, and the Waterfront and Homestead loops. Portal: S (the core).",
+  "nodes": [
+    {
+      "id": "S",
+      "name": "Hot Metal Bridge south end",
+      "lat": 40.427298,
+      "lon": -79.962486
+    },
+    {
+      "id": "W",
+      "name": "The Waterfront by the AMC",
+      "lat": 40.40858,
+      "lon": -79.91802
+    },
+    {
+      "id": "U",
+      "name": "East Waterfront Drive by the Pump House",
+      "lat": 40.41429,
+      "lon": -79.8996
+    },
+    {
+      "id": "V",
+      "name": "Amity St & Waterfront Drive",
+      "lat": 40.41131,
+      "lon": -79.91336
+    }
+  ],
+  "edges": {
+    "S>W": {
+      "name": "Great Allegheny Passage",
+      "fwd": "the GAP along the Mon past Hazelwood Green and under the Glenwood Bridge to the Waterfront",
+      "rev": "the GAP back along the Mon to the Hot Metal Bridge"
+    },
+    "W>V": {
+      "name": "Waterfront Drive",
+      "fwd": "Waterfront Drive to Amity St",
+      "rev": "Waterfront Drive back to the trail"
+    },
+    "V>U": {
+      "name": "East Waterfront Drive",
+      "fwd": "East Waterfront Drive past the shops to the Pump House",
+      "rev": "East Waterfront Drive back to Amity St"
+    },
+    "U>V": {
+      "name": "Eighth Avenue, Homestead",
+      "fwd": "past the Pump House, down River Road and along Eighth Avenue through Homestead to Amity St",
+      "rev": "Amity St, Eighth Avenue through Homestead and River Road to the Pump House"
+    },
+    "W>U": {
+      "name": "Homestead riverfront",
+      "fwd": "the riverfront trail under the Homestead Grays Bridge to the Pump House",
+      "rev": "the riverfront trail back to the Waterfront"
+    }
+  },
+  "presets": [
+    {
+      "id": "pgh-homestead-loop",
+      "name": "Homestead Loop",
+      "path": [
+        "W>U+",
+        "U>V+",
+        "W>V-"
+      ],
+      "tags": [
+        "flat",
+        "short",
+        "new"
+      ],
+      "note": "From the Waterfront along the river to the Pump House, then Eighth Avenue through Homestead and back by Amity St"
+    },
+    {
+      "id": "pgh-waterfront-loop",
+      "name": "Waterfront Loop",
+      "path": [
+        "W>U+",
+        "V>U-",
+        "W>V-"
+      ],
+      "tags": [
+        "flat",
+        "short",
+        "new"
+      ],
+      "note": "The riverfront trail to the Pump House and back along East Waterfront Drive past the shops"
+    }
+  ]
+}
