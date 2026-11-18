@@ -432,6 +432,9 @@ def build(cid):
         rs.append(to_ll(sm[j][0] + (sm[j + 1][0] - sm[j][0]) * f, sm[j][1] + (sm[j + 1][1] - sm[j][1]) * f))
         re_.append(e2[j] + (e2[j + 1] - e2[j]) * f)
     if not cfg.get('open') and hv(rs[-1], rs[0]) > 1: rs.append(rs[0]); re_.append(re_[0])
+    # an open tour ends on its last junction: the 10 m grid and the eased line's end fall up to ~20 m short of it,
+    # so the last sample is the junction itself (a network's end node passes exactly there)
+    if cfg.get('open') and hv(rs[-1], P[-1]) > 1: rs.append(tuple(P[-1])); re_.append(E[-1])
     # The app measures the route along the GPX samples (chords): express every distance (bridges, kinds,
     # waypoints — found along the raw OSM nodes) in that measure so they land where they should.
     chord = [0.0]
@@ -489,7 +492,17 @@ def build(cid):
         re_ = road_align.line_elevation(re_, [elevation(a_, b_) for a_, b_ in rs], keep, step=10)
     # [road-align] profile: shave spikes, fill only narrow notches (real dips and crests stay on the ground),
     # limit grade and grade change, light averaging
-    e = road_align.align_profile(re_, step=10, loop=not cfg.get('open'), **cfg.get('profile', {})).tolist()
+    # `steepGrades`: a real climb steeper than the profile's limit (Rialto Street's ~24 %), ridden as mapped
+    prof = dict(cfg.get('profile', {}))
+    if cfg.get('steepGrades'):
+        mg = [prof.get('max_grade', .2)] * len(re_)
+        mc = [prof.get('max_grade_change', .03)] * len(re_)
+        for sg in cfg['steepGrades']:
+            for k_, p_ in enumerate(rs):
+                if hv(p_, (sg['lat'], sg['lon'])) < sg['radiusM']:
+                    mg[k_] = max(mg[k_], sg['maxGrade']); mc[k_] = max(mc[k_], sg.get('maxGradeChange', mc[k_]))
+        prof['max_grade'], prof['max_grade_change'] = mg, mc
+    e = road_align.align_profile(re_, step=10, loop=not cfg.get('open'), **prof).tolist()
     asc = sum(max(0, b - a) for a, b in zip(e, e[1:]))
     grades = [(e[(k + 1) % len(e)] - e[k - 1]) / 20 * 100 for k in range(len(e))]
     total = chord[-1]

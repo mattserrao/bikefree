@@ -199,7 +199,8 @@ def align_profile(ele, fixed=None, step=10.0, loop=True, spike_m=20.0, notch_m=2
     """Rideable profile from elevation sampled every `step` m along the mapped line.
 
     `fixed`: optional bool mask of samples that must not move (none by default; bridge decks are already
-    straight interpolations and pass through unchanged by the opening/closing). Returns an array.
+    straight interpolations and pass through unchanged by the opening/closing). `max_grade`: one limit, or one
+    per sample (a step takes the larger of its two ends'); `max_grade_change` too. Returns an array.
     """
     e = np.asarray(ele, dtype=float).copy()
     fixed = np.zeros(len(e), dtype=bool) if fixed is None else np.asarray(fixed, dtype=bool)
@@ -208,7 +209,9 @@ def align_profile(ele, fixed=None, step=10.0, loop=True, spike_m=20.0, notch_m=2
     e = _filt(_filt(e, ws, np.min, loop), ws, np.max, loop)     # opening: shave spikes
     e = _filt(_filt(e, wn, np.max, loop), wn, np.min, loop)     # closing: fill narrow notches only
     e[fixed] = keep[fixed]
-    g_max, dg_max = max_grade * step, max_grade_change * step
+    mg = np.broadcast_to(np.asarray(max_grade, dtype=float), e.shape)
+    g_max = (np.maximum(mg, np.roll(mg, -1)) if loop else np.maximum(mg[:-1], mg[1:])) * step
+    dg_max = np.broadcast_to(np.asarray(max_grade_change, dtype=float), e.shape) * step
     for _ in range(iters):
         moved = False
         # grade limit: pull both ends of a too-steep step towards each other

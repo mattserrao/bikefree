@@ -136,6 +136,136 @@
    ]
   },
   {
+   "mode": "road",
+   "waypoints": [
+    [
+     "31st St Bridge (junction)",
+     40.462143,
+     -79.980815,
+     "North Shore Trail"
+    ],
+    [
+     "River Ave",
+     40.463378,
+     -79.98016,
+     "River Avenue"
+    ],
+    [
+     "31st St Bridge north end",
+     40.464609,
+     -79.979414
+    ],
+    [
+     "Rialto St foot",
+     40.464993,
+     -79.979776,
+     "Rialto Street"
+    ],
+    [
+     "Rialto Street (Pig Hill)",
+     40.465673,
+     -79.981134,
+     "Rialto Street"
+    ],
+    [
+     "Rialto & Ley",
+     40.46597,
+     -79.981796,
+     "Rialto Street"
+    ],
+    [
+     "Lowrie & Ley",
+     40.464241,
+     -79.982273,
+     "Lowrie Street"
+    ],
+    [
+     "Lowrie St: Troy Hill",
+     40.46312,
+     -79.983011,
+     "Lowrie Street"
+    ],
+    [
+     "Lowrie & Gardner",
+     40.46129,
+     -79.985029,
+     "Lowrie Street"
+    ],
+    [
+     "Troy Hill Road",
+     40.457829,
+     -79.988375,
+     "Troy Hill Road"
+    ],
+    [
+     "Troy Hill Rd foot",
+     40.456755,
+     -79.991325,
+     "Troy Hill Road"
+    ],
+    [
+     "Phineas St",
+     40.456334,
+     -79.992035,
+     "Phineas Street"
+    ],
+    [
+     "Chestnut & Phineas",
+     40.455394,
+     -79.99466,
+     "Chestnut Street"
+    ],
+    [
+     "Chestnut St: 16th St Bridge",
+     40.453191,
+     -79.992688,
+     "Chestnut Street"
+    ],
+    [
+     "Progress & Heinz",
+     40.454189,
+     -79.991382,
+     "Heinz Street"
+    ],
+    [
+     "River Ave & Heinz",
+     40.453705,
+     -79.990687,
+     "River Avenue"
+    ],
+    [
+     "16th St Bridge north (junction)",
+     40.453558,
+     -79.990632,
+     "North Shore Trail"
+    ]
+   ]
+  },
+  {
+   "mode": "trail",
+   "ghost": true,
+   "waypoints": [
+    [
+     "16th St Bridge north (junction) (again)",
+     40.453558,
+     -79.990632,
+     "North Shore Trail"
+    ],
+    [
+     "North Shore Trail: Washington's Landing (again)",
+     40.459852,
+     -79.98265,
+     "North Shore Trail"
+    ],
+    [
+     "31st St Bridge (junction) (again)",
+     40.462143,
+     -79.980815,
+     "North Shore Trail"
+    ]
+   ]
+  },
+  {
    "mode": "trail",
    "waypoints": [
     [
@@ -1193,8 +1323,8 @@
  "maxDriftM": 16,
  "profileKeep": [
   [
-   12560,
-   12740
+   16590,
+   16770
   ]
  ],
  "residentialBoxes": [
@@ -1274,6 +1404,62 @@
    "eleM": 219.4,
    "keepM": 20,
    "why": "North Shore Water Steps: the ramp up to General Robinson St leaves the riverfront trail level and climbs once the two have parted (the z14 ground starts it climbing at the fork, where the North Shore Trail runs on beside it)"
+  },
+  {
+   "lat": 40.463378,
+   "lon": -79.98016,
+   "eleM": 222.4,
+   "keepM": 20,
+   "why": "River Ave beside the North Shore Trail at the 31st St Bridge: level with the trail 13 m away until the bridge (the profile would start the Rialto climb along it)"
+  },
+  {
+   "lat": 40.463398,
+   "lon": -79.980148,
+   "eleM": 222.4,
+   "keepM": 20,
+   "why": "River Ave beside the North Shore Trail at the 31st St Bridge: level with the trail 13 m away until the bridge (the profile would start the Rialto climb along it)"
+  },
+  {
+   "lat": 40.46421,
+   "lon": -79.979658,
+   "eleM": 222.8,
+   "keepM": 20,
+   "why": "River Ave beside the North Shore Trail at the 31st St Bridge: level with the trail 13 m away until the bridge (the profile would start the Rialto climb along it)"
+  },
+  {
+   "lat": 40.428633,
+   "lon": -79.965481,
+   "eleM": 229.1,
+   "keepM": 20,
+   "why": "H, where the 27th St path meets the riverfront trail (the tour ends here): the path comes in at the trail's height, so H is one height on both passes"
+  },
+  {
+   "lat": 40.428696,
+   "lon": -79.965435,
+   "eleM": 229,
+   "keepM": 20,
+   "why": "H, where the 27th St path meets the riverfront trail (the tour ends here): the path comes in at the trail's height, so H is one height on both passes"
+  },
+  {
+   "lat": 40.428735,
+   "lon": -79.965387,
+   "eleM": 228.95,
+   "keepM": 20,
+   "why": "H, where the 27th St path meets the riverfront trail (the tour ends here): the path comes in at the trail's height, so H is one height on both passes"
+  },
+  {
+   "lat": 40.428796,
+   "lon": -79.965377,
+   "eleM": 228.9,
+   "keepM": 20,
+   "why": "H, where the 27th St path meets the riverfront trail (the tour ends here): the path comes in at the trail's height, so H is one height on both passes"
+  },
+  {
+   "lat": 40.428858,
+   "lon": -79.965333,
+   "eleM": 228.85,
+   "keepM": 20,
+   "why": "H, where the 27th St path meets the riverfront trail (the tour ends here): the path comes in at the trail's height, so H is one height on both passes"
   }
  ],
  "dropStreets": [
@@ -1281,6 +1467,16 @@
    "way": 295600401,
    "name": "Janewood Way",
    "why": "a service alley 12 m up the West End hillside beside the spur (40.89 km): its flat grading made a 5 m step 12 m from the road that the 6 m ground mesh pulled over the shoulder"
+  }
+ ],
+ "steepGrades": [
+  {
+   "lat": 40.4649,
+   "lon": -79.98,
+   "radiusM": 130,
+   "maxGrade": 0.26,
+   "why": "Rialto Street (Pig Hill), from the 31st St Bridge to Ley St: about 24 % as mapped (the rider chose to keep it real), starting off the bridge as abruptly as it does",
+   "maxGradeChange": 0.1
   }
  ]
 }
