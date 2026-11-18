@@ -167,6 +167,10 @@ canvas.city-map.zoomed { touch-action: none; cursor: grab; }
 .city-extras button { display: grid; gap: 1px; text-align: left; padding: 10px 14px; min-height: 52px; border-radius: 12px; background: var(--surface); }
 .city-extras b { font-size: 14px; }
 .city-extras small { font-size: 12px; color: var(--muted); }
+.city-free { position: relative; display: grid; }
+.city-free #cityFree { padding-right: 64px; }
+.city-extras .city-free button.link { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: block; min-height: 44px; padding: 10px 8px; border-radius: 8px; background: none; font-size: 13px; color: var(--muted); }   /* Options (F104): the free ride's preview, secondary to the tile */
+.city-extras .city-free button.link:hover { color: var(--ink); background: none; }
 .city-goals { margin: 0; }
 .city-goals button { min-height: 34px; }
 .city-seg { display: flex; align-items: center; gap: 10px; justify-content: space-between; font-size: 13px; color: var(--ink-2); padding: 8px 12px;

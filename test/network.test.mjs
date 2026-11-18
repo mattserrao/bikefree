@@ -175,7 +175,17 @@ test('free ride: no plan, straight on at every junction, no laps, a far-reaching
   assert.equal(r.netRide.entries[4].t.dir, -1);
   const tour = r.netRide.entries.slice(5, 17).map((x) => `${x.t.e.key}${x.t.dir > 0 ? '+' : '-'}`);
   assert.deepEqual(tour.slice(0, 6), ['P>N-', 'A>P-', 'R>A-', 'C>R-', 'D>C-', 'GV>D-']);
-  assert.ok(tour.includes('E>F-') && tour.includes('GW>E-'), `${tour}`);   // back through downtown: a loop of the city
+  // Grandview Ave past the Incline to Sycamore, where it prefers (SY) Sycamore St down to Station Square over the
+  // street's straight on (up Wyoming St to Allentown and the Dirty Dozen south), then downtown by Market Square,
+  // and at Gateway (GW) the Point and the riverfront rather than the subway back under the Allegheny: a loop of the city
+  assert.deepEqual(tour.slice(6, 12), ['GV>SY+', 'F>SY-', 'E>F-', 'GW>E-', 'B>GW-', 'M>B-']);
+  assert.equal(straightOn(optionsAt(net, r.netRide.entries[11].t)).t.e.key, 'AL>SY', 'the label at SY stays the street\'s');
+  assert.equal(straightOn(optionsAt(net, r.netRide.entries[14].t)).t.e.key, 'NS>GW', 'and at GW (the subway)');
+  // …and round again the same way (~22 km), not stuck circling one part of the city
+  const keyOf = (x) => `${x.t.e.key}${x.t.dir > 0 ? '+' : '-'}`;
+  const round = r.netRide.entries.slice(2, 16).map(keyOf);
+  assert.deepEqual(r.netRide.entries.slice(16, 30).map(keyOf), round);
+  assert.ok(Math.abs(r.netRide.entries[16].p0 - r.netRide.entries[2].p0 - 21900) < 300, `${r.netRide.entries[16].p0 - r.netRide.entries[2].p0}`);
   // no hint: the street's straight on (the East End, round Highland Park)
   const plain = makePathRoute(net, { id: 'free', name: 'Free', path: null, first: json.freeRide.first, prefer: null });
   assert.equal(plain.netRide.entries[1].t.e.key, 'NS>GW');   // no hints: straight on at NS is the subway

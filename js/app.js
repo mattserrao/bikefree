@@ -1408,7 +1408,7 @@ function renderCity() {
   $('cityTitle').textContent = card.name;
   $('citySub').textContent = `${citySubline(card, cityAreaCount(card))}${card.mine.length ? ` · ${card.mine.length} yours` : ''}`;
   $('cityGoals').innerHTML = GOALS.map(([k, l]) => `<button type="button" data-goal="${k}" class="${k === city.goal ? 'on' : ''}" aria-pressed="${k === city.goal}">${k === 'new' ? 'New' : l}</button>`).join('');
-  $('cityFree').hidden = !card.free;
+  $('cityFree').parentElement.hidden = !card.free;
   const net = cityNet(card);
   // the tapped segment: which routes ride it
   $('citySeg').hidden = !city.seg;
@@ -1599,7 +1599,9 @@ $('cityList').addEventListener('keydown', (e) => {
   citySelect(next.dataset.id);
   $('cityList').querySelector(`.city-row-btn[data-id="${CSS.escape(next.dataset.id)}"]`)?.focus();
 });
-$('cityFree').addEventListener('click', () => { const c = cityCard(); if (c?.free) cityChoose(c.free.id); });
+// the Free ride tile starts it at once, as Ride does (F104); Options beside it chooses it and shows its preview
+$('cityFree').addEventListener('click', () => { const c = cityCard(); if (c?.free) cityRide(c.free.id); });
+$('cityFreeOpts').addEventListener('click', () => { const c = cityCard(); if (c?.free) cityChoose(c.free.id); });
 $('cityPlan').addEventListener('click', () => { const c = cityCard(); if (c) openPlanner(c.routes.find((x) => !x.custom) || c.free); });
 
 async function loadRouteItem(item) {

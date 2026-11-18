@@ -3201,7 +3201,9 @@
   "note": "No plan: from the Water Steps, straight on at every junction unless you choose a turn. Ride until you stop",
   "prefer": {
    "LB": "e21-",
-   "NS": "e13+"
+   "NS": "e13+",
+   "SY": "e49-",
+   "GW": "e1-"
   }
  },
  "keySplits": {

@@ -129,6 +129,16 @@ try {
     if (!(await page.evaluate(() => !document.getElementById('cityDlg').open && document.getElementById('rideScreen').hidden && /Connect/.test(document.getElementById('startBtn').textContent)))) {
       console.error(`${tag}: Ride with no trainer did not leave the route chosen on the menu`); failed = true;
     }
+    // the Free ride tile's Options, and the tile with no trainer: the free ride chosen on the menu (F104)
+    for (const sel of ['#cityFreeOpts', '#cityFree']) {
+      await page.click('.city-card');
+      await page.waitForSelector('#cityDlg[open]');
+      await page.click(sel);
+      await page.waitForTimeout(500);
+      const ok = await page.evaluate(() => !document.getElementById('cityDlg').open && document.getElementById('rideScreen').hidden && /Free Ride/.test(document.getElementById('pvTitle').textContent));
+      if (!ok) { console.error(`${tag}: ${sel} with no trainer did not leave the free ride chosen on the menu`); failed = true; }
+    }
+    if (w >= 600) await shot('8b-free-options');
     // Ride with the Demo trainer on: riding at once (F104), on the route picked, from its start
     await page.click('#demoBtn');
     await page.click('.city-card');
@@ -144,6 +154,29 @@ try {
     if (rode.mode !== 'route' || !rode.plan || !wantName) { console.error(`${tag}: Ride did not start the route at once: ${JSON.stringify(rode)}`); failed = true; }
     else console.log(`${tag}: Ride started ${rode.name} at ${rode.start} m`);
     if (errors.length) { console.error(`${tag}: page errors:\n  ${errors.join('\n  ')}`); failed = true; }
+    await page.close();
+  }
+  // the Free ride tile with the Demo trainer on: the free ride starts at once (F104; desktop size only)
+  if (!args.includes('--no-scenery')) {
+    const [w, h] = sizes[0], tag = `${w}x${h}`;
+    const page = await browser.newPage({ viewport: { width: w, height: h } });
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.addInitScript((t) => { localStorage.setItem('bikefree.theme', t); }, theme);
+    await page.goto(`${base}/index.html`);
+    await page.click('.mode[data-mode="route"]');
+    await page.waitForSelector('.city-card', { timeout: 120000 });
+    await page.click('#demoBtn');
+    await page.click('.city-card');
+    await page.waitForSelector('#cityDlg[open]');
+    await page.waitForTimeout(600);
+    const f1 = join(out, `${tag}-2b-panel-free-tile.png`); await page.screenshot({ path: f1 }); saved.push(f1);
+    await page.click('#cityFree');
+    await page.waitForFunction(() => !document.getElementById('rideScreen').hidden && window.bikefree?.world && document.getElementById('hLoading').hidden, null, { timeout: 240000 });
+    const rode = await page.evaluate(() => { const s = window.bikefree.session; return { mode: s.mode, free: !!s.route?.free, name: s.route?.name }; });
+    if (rode.mode !== 'route' || !rode.free) { console.error(`${tag}: the Free ride tile did not start the free ride: ${JSON.stringify(rode)}`); failed = true; }
+    else console.log(`${tag}: the Free ride tile started ${rode.name}`);
+    if (errors.length) { console.error(`${tag}: page errors (free tile):\n  ${errors.join('\n  ')}`); failed = true; }
     await page.close();
   }
   // Pittsburgh as scenery (F37): a free ride with no route rides the city's free ride over the network, its turn
