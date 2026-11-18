@@ -111,7 +111,33 @@ export function routeLine(route, index) {
     }
     return best;
   };
-  const line = { route: R, index: I, n, at, project, length: D[n] };
+  // every other pass of the drawn road within r of (x, z) (segments more than `win` m from `s` along it): the lowest
+  // line height of their cross-sections through (x, z) (null if none). Ghost repeats
+  // aren't drawn (world.js), so they don't count. A 20 m grid of the drawn segments, built on first use.
+  let grid = null;
+  const G = 20, key = (x, z) => `${Math.floor(x / G)},${Math.floor(z / G)}`;
+  const lowestNear = (x, z, r, s = -Infinity, win = 0) => {
+    if (!grid) {
+      grid = new Map();
+      for (let j = 0; j < n; j++) {
+        if (ghostAt(route, (D[j] + D[j + 1]) / 2)) continue;
+        const k = key((I.xs[j] + I.xs[j + 1]) / 2, (I.zs[j] + I.zs[j + 1]) / 2);
+        if (!grid.has(k)) grid.set(k, []); grid.get(k).push(j);
+      }
+    }
+    let low = null;
+    const cx = Math.floor(x / G), cz = Math.floor(z / G);
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const j of grid.get(`${cx + a},${cz + b}`) || []) {
+      if (D[j + 1] > s - win && D[j] < s + win) continue;
+      const ax = I.xs[j], az = I.zs[j], dx = I.xs[j + 1] - ax, dz = I.zs[j + 1] - az, l2 = dx * dx + dz * dz || 1;
+      const t = ((x - ax) * dx + (z - az) * dz) / l2;
+      if (t < -1e-6 || t > 1 + 1e-6 || Math.hypot(ax + dx * t - x, az + dz * t - z) > r) continue;   // (square across: the road's cross-section through (x, z), not a point further up or down its grade)
+      const y = R.ele[j] + (R.ele[j + 1] - R.ele[j]) * t;
+      if (low == null || y < low) low = y;
+    }
+    return low;
+  };
+  const line = { route: R, index: I, n, at, project, lowestNear, length: D[n] };
   Object.defineProperty(route, '_line', { value: { index, line }, enumerable: false, configurable: true, writable: true });
   return line;
 }
@@ -342,12 +368,12 @@ export function planJunctions(streets, ctx, options = {}) {
       // its curve: its 10 m chords can lie 5–10 cm lower at the road's edge on a bend or a grade change, and clamping
       // to them left the surface's mouth on the route's arms that far under the road's edge: a lip. The course QC
       // checks against the curve too.)
-      const rd = routeDist;
+      // (and under every other pass of the drawn road within its half-width + 1 m, not just the one routeDist() finds: a street the
+      // route rides twice, both ways, draws two roads over each other — 45.09 / 46.26 km; a pass more than 3 m below is
+      // one the junction's deck crosses over)
       J = (x, z) => {
-        let y = RL.project(x, z, rq.s, 45).y;
-        const r = rd && rd(x, z);
-        if (r && r.d < RW / 2 + 1) { const q = RL.project(x, z, route.dist[Math.min(end, r.i)], 25); if (q && q.d < RW / 2 + 1.5) y = Math.min(y, q.y); }
-        return y + ROAD_LIFT - O.routeGap - O.lift;
+        const q = RL.project(x, z, rq.s, 45), y = q.y, low = RL.lowestNear(x, z, RW / 2 + 1, q.s, 60);
+        return (low != null && low < y && y - low < 3 ? low : y) + ROAD_LIFT - O.routeGap - O.lift;
       };
     } else {
       const P = ring.map((a) => { const sp = streetPoint(streets[a.k], a.a0 + a.dir * a.t); return { x: sp.x - C.x, z: sp.z - C.z, y: sp.y }; });

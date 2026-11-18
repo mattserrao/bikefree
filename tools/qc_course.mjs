@@ -385,7 +385,9 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
         const r = landscape.routeDist(p.x, p.z);
         if (!r || r.d > ROAD_WIDTH / 2 + .6) continue;
         // [F15] against the road as drawn (its curve), not the 10 m chords routeDist follows
-        const q = RLq.project(p.x, p.z, route.dist[Math.min(end, r.i)], 25), roadY = q && q.d < ROAD_WIDTH / 2 + 1.5 ? q.y : r.y;
+        // (and every other pass of it there: a street ridden twice draws two roads over each other)
+        const q = RLq.project(p.x, p.z, route.dist[Math.min(end, r.i)], 25), low = RLq.lowestNear(p.x, p.z, ROAD_WIDTH / 2 + .6);
+        const roadY = Math.min(q && q.d < ROAD_WIDTH / 2 + 1.5 ? q.y : r.y, low ?? Infinity);
         const over = (p === jn ? jn.cy : p.y ?? jn.top(p.x, p.z)) - (roadY + ROAD_LIFT);   // [junctions] (the surface as drawn)
         if (over > -.005 && over < 4) F.add('junction-over-road', 'fail', route.dist[r.i], over, 'a junction surface covers the road');   // (4 m and up: a junction on a deck that crosses over the road, as for streets)
       }

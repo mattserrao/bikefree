@@ -216,9 +216,10 @@ class Network {
     }
     return null;
   }
-  next(i, atEnd, rand) {
+  /** The way on from an end of way i ({i, s, dir}, or null: a dead end); `keep(way, dir)` can rule ways out. */
+  next(i, atEnd, rand, keep = null) {
     const p = atEnd ? this.ways[i].path.pts[this.ways[i].path.pts.length - 1] : this.ways[i].path.pts[0];
-    const opts = (this.ends.get(this.key(p)) || []).filter((o) => o.i !== i && this.ways[o.i].allow(o.end === 0 ? 1 : -1));
+    const opts = (this.ends.get(this.key(p)) || []).filter((o) => o.i !== i && this.ways[o.i].allow(o.end === 0 ? 1 : -1) && (!keep || keep(this.ways[o.i], o.end === 0 ? 1 : -1)));
     if (!opts.length) return null;
     const o = opts[Math.floor(rand() * opts.length)];
     return { i: o.i, s: o.end === 0 ? 0 : this.ways[o.i].path.length, dir: o.end === 0 ? 1 : -1 };
@@ -495,6 +496,44 @@ export class CityLife {
   }
 
   /**
+   * Where a vehicle driving `dir` along way w turns round at its dead end (s along the way): its front at the end,
+   * or further back where that would swing it into the route's road. A vehicle turning round pivots about its
+   * middle (half its length each way, and its lane swaps sides), so on a street cut back short of the route's
+   * kerb, or running close beside the route, the middle stays half a length + a lane + room clear of the road.
+   * (A bus at a cut-back T on Second Ave swung its nose through the rider.) Cached per way, direction and size.
+   */
+  _turnRound(w, dir, bus) {
+    const key = (dir > 0 ? 'f' : 'b') + (bus ? 'B' : 'c'), cache = (w.turnAt ||= {});
+    if (cache[key] != null) return cache[key];
+    const L = this.city.landscape, len = w.path.length, half = bus ? 6.5 : 2.8, need = HALF + half + (w.lane || 1.5) + .6, p = {};
+    const endS = dir > 0 ? len : 0;
+    let at = dir > 0 ? 0 : len;   // (none clear: as far back as the way goes)
+    for (let k = half; k <= len; k += 1) {
+      const s = endS - dir * k;
+      pathAt(w.path, s, p);
+      const r = L.routeDist(p.x, p.z);
+      if (!r || r.d > need || Math.abs(p.y - r.y) > 4) { at = s; break; }
+    }
+    return (cache[key] = at);
+  }
+
+  /** Can a vehicle drive way w in direction dir: no dead end at its far end, or room to turn round before it (and to brake for that). */
+  _turnOk(w, dir, bus) {
+    const net = this.drive, i = net.ways.indexOf(w), endP = dir > 0 ? w.path.pts.at(-1) : w.path.pts[0];
+    const key = (dir > 0 ? 'f' : 'b') + (bus ? 'B' : 'c'), cache = (w.turnOk ||= {});
+    if (cache[key] != null) return cache[key];
+    const on = (net.ends.get(net.key(endP)) || []).some((o) => o.i !== i && net.ways[o.i].allow(o.end === 0 ? 1 : -1));
+    let ok = on;
+    if (!ok) {
+      // clear of the road there, and far enough in to brake for it from the way's start
+      const at = this._turnRound(w, dir, bus), p = pathAt(w.path, at, {}), r = this.city.landscape.routeDist(p.x, p.z);
+      const brake = (w.speed * 1.15) ** 2 / (4 * MOVE.car.dec) + 5;   // (its top speed, braking as _advance does)
+      ok = (!r || r.d > HALF + (bus ? 6.5 : 2.8) + (w.lane || 1.5) + .6 || Math.abs(p.y - r.y) > 4) && (dir > 0 ? at : w.path.length - at) >= brake;
+    }
+    return (cache[key] = ok);
+  }
+
+  /**
    * One step along a network: ease the speed (to a stop at the kerb or stop line while the rider is near a
    * crossing, and at the end of a dead end), move on, and draw it where it is, following no faster than its pace.
    */
@@ -502,13 +541,14 @@ export class CityLife {
     const K = MOVE[kind];
     let w = net.ways[a.way];
     const len = w.path.length, rem = a.dir > 0 ? len - a.s : a.s;
-    if (a.nx === undefined && rem < K.look + 30) a.nx = net.next(a.way, a.dir > 0, this.rand);
+    const keep = kind === 'car' ? (way, dir) => this._turnOk(way, dir, a.bus) : null;   // (no dead end too tight to turn round in)
+    if (a.nx === undefined && rem < K.look + 30) a.nx = net.next(a.way, a.dir > 0, this.rand, keep);
     let stopAt = null, turn = false;
     const x = this._ahead(a, net, K.look);
     if (!x || x.c !== a.go) a.go = x && x.inside ? x.c : null;
     if (x && !x.inside) {
       const kerb = (a.bus ? K.kerb + 4 : K.kerb) + (a.kerbJ || 0) + (a.slot || 0) * 7.5, stopD = x.dist - kerb;
-      if (x.wall) { stopAt = stopD; turn = true; }
+      if (x.wall) { stopAt = kind === 'car' ? Math.max(0, Math.min(stopD, (this._turnRound(w, a.dir, a.bus) - a.s) * a.dir)) : stopD; turn = true; }   // (cars: where they can turn round)
       else if (a.go !== x.c) {
         const t = (x.dist + x.cross + K.body) / Math.max(a.v, a.speed * .6);
         if (this._clear(x.c, rider, t)) { if (stopD < a.v * a.v / (2 * K.dec) + 1) { a.go = x.c; a.slot = 0; } }
@@ -519,9 +559,11 @@ export class CityLife {
       }
     }
     if (a.queue && stopAt == null) { a.queue.waiting = Math.max(0, (a.queue.waiting || 1) - 1); a.queue = null; a.slot = 0; }
-    // a dead end: slow down to turn round, the front (not the middle) at its end — a street cut back to the kerb of
-    // the route's road ends there, and a bus's nose would reach into it [F16]
-    if (stopAt == null && a.nx === null && rem < K.look + 7 && kind === 'car') { stopAt = Math.max(0, rem - (a.bus ? 6.5 : 2.8)); turn = true; }
+    // a dead end: slow down to turn round where its turning circle keeps off the route's road (_turnRound) [F16]
+    if (stopAt == null && a.nx === null && kind === 'car') {
+      const d = (this._turnRound(w, a.dir, a.bus) - a.s) * a.dir;
+      if (d < K.look + 7) { stopAt = Math.max(0, d); turn = true; }
+    }
     let target = a.speed;
     if (stopAt != null) target = stopAt < .05 ? 0 : Math.min(target, Math.sqrt(2 * K.dec * stopAt));
     a.v = Math.max(0, a.v + Math.max(-2 * K.dec * dt, Math.min(K.acc * dt, target - a.v)));
@@ -529,7 +571,7 @@ export class CityLife {
     a.s += a.dir * a.v * dt;
     if (a.s < 0 || a.s > len) {
       const over = a.s < 0 ? -a.s : a.s - len;
-      const nx = a.nx !== undefined ? a.nx : net.next(a.way, a.s > len, this.rand);
+      const nx = a.nx !== undefined ? a.nx : net.next(a.way, a.s > len, this.rand, keep);
       a.nx = undefined;
       if (nx) {
         a.way = nx.i; a.s = nx.s + nx.dir * over; a.dir = nx.dir; w = net.ways[a.way]; a.s = Math.max(0, Math.min(w.path.length, a.s));
@@ -612,6 +654,7 @@ export class CityLife {
       const w = net.ways[hit[0]];
       if (a.bus && !w.bus) continue;
       const dir = w.oneway ? w.oneway : (this.rand() < .5 ? 1 : -1);
+      if (!this._turnOk(w, dir, a.bus)) continue;
       Object.assign(a, { alive: true, way: hit[0], s: hit[1], dir, speed: w.speed * (.8 + this.rand() * .35), lat: w.lane || (this.rand() - .5) * 3, gait: 0, nx: undefined, go: null, slot: 0 });
       a.v = a.speed;
       return;
