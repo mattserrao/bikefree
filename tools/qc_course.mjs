@@ -383,7 +383,9 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
       for (const p of [jn, ...jn.poly]) {
         const r = landscape.routeDist(p.x, p.z);
         if (!r || r.d > ROAD_WIDTH / 2 + .6) continue;
-        const over = (p === jn ? jn.cy : p.y ?? jn.top(p.x, p.z)) - (r.y + ROAD_LIFT);   // [junctions] (the surface as drawn)
+        // [F15] against the road as drawn (its curve), not the 10 m chords routeDist follows
+        const q = RLq.project(p.x, p.z, route.dist[Math.min(end, r.i)], 25), roadY = q && q.d < ROAD_WIDTH / 2 + 1.5 ? q.y : r.y;
+        const over = (p === jn ? jn.cy : p.y ?? jn.top(p.x, p.z)) - (roadY + ROAD_LIFT);   // [junctions] (the surface as drawn)
         if (over > -.005) F.add('junction-over-road', 'fail', route.dist[r.i], over, 'a junction surface covers the road');
       }
     }

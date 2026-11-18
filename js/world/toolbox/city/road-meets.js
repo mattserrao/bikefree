@@ -26,8 +26,8 @@ export const MEET_LIMITS = {
   dangle: 1.2,       // m: a street end this far above (or below) whatever is under it hangs in the air
   touch: 1.5,        // m: a street end this close to another surface's edge meets it
   clippedM: 2,       // m: of ribbon cut away by the route's clearance tube
-  nearBudget: 38,    // [w2-meets] (38: the West End spur adds 2.7 km of streets) sites with issues within 25 m of the route the course QC accepts before it warns
-                     // (20 on Pittsburgh's loop; 36 since the Jail Trail joined it — PLAN.md network follow-up F7)
+  nearBudget: 30,    // [w2-meets] sites with issues within 25 m of the route the course QC accepts before it warns (29 there + 1)
+                     // (20 on Pittsburgh's loop; 36–38 with the Jail Trail and the West End spur; 29 after PLAN.md F7/F15 — the unit test counts 27)
   seeM: 25,          // limits grow by their own size every this many metres from the route (×4 at 75 m, ×7 at 150 m)
 };
 
@@ -277,7 +277,12 @@ export function alignAlongRoute(streets, ctx, options = {}) {
     }
     for (let i = 0; i < n; i++) {
       if (tg[i] != null) { if (Math.abs(P[i].y - tg[i]) > .005) moved++; P[i].y = tg[i]; P[i].along = true; }
-      else if (blend[i]) P[i].y = own[i] + blend[i][1] * blend[i][0];
+      else if (blend[i]) {
+        P[i].y = own[i] + blend[i][1] * blend[i][0];
+        // [F7] an end the easing moved leads the streets carrying on from it (followMovedNodes): a parkway eased up
+        // to the road's level met the deck it carries on as 0.8 m higher (1.48 km)
+        if ((i === 0 || i === n - 1) && Math.abs(blend[i][1] * blend[i][0]) > .005) P[i].followed = true;
+      }
     }
   });
   return moved;

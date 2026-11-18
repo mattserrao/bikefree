@@ -81,9 +81,9 @@ test('road meets: pittsburgh, every place roadways meet within 150 m of the rout
   assert.ok(R.sites.length > 900, `${R.sites.length} sites`);   // (fewer once overlapping carriageways are drawn as one)
   for (const kind of ['junction', 'link', 'route', 'overlap']) assert.ok(R.counts[kind] > 10, `${kind}: ${R.counts[kind]}`);
   // the junction system's own geometry: no step, gap or misplaced paint at any junction or link near the route
-  // (11: lips of 0.1–0.8 m at side-street and network junctions the West End spur and Oakland added — PLAN F15)
+  // (1: none today, one of headroom — PLAN F15 brought it down from 11)
   const own = R.sites.filter((s) => s.d < 25 && (s.kind === 'junction' || s.kind === 'link') && s.issues.some((i) => ['step', 'gap', 'paint'].includes(i.check)));
-  assert.ok(own.length <= 11, `junction/link issues near the route: ${own.map((s) => `${s.s} ${s.issues.map((i) => i.check)}`).join('; ')}`);
+  assert.ok(own.length <= 1, `junction/link issues near the route: ${own.map((s) => `${s.s} ${s.issues.map((i) => i.check)}`).join('; ')}`);
   assert.ok(R.issues < 60, `${R.issues} sites with issues`);
   const nearN = R.sites.filter((s) => s.issues.length && s.d <= 25).length;
   assert.ok(nearN <= MEET_LIMITS.nearBudget, `within 25 m of the route: ${nearN} sites with issues (at most ${MEET_LIMITS.nearBudget})`);
