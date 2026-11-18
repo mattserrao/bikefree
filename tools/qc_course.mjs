@@ -145,7 +145,10 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
   const index = makeRouteIndex(route, proj);
   const F = new Findings();
   const total = route.total, turn = route.turnS, oneWay = turn || total;
-  const nearUturn = (s, r) => !!turn && (Math.abs(s - turn) < r || s < r || total - s < r);
+  // a ride network's spur turns round where its ghost begins (js/world/ghost.js): a planned U-turn too
+  const tips = (scene?.city?.routeGhosts || []).flatMap((g) => [g.fromM, g.toM]);
+  const nearTip = (s, r) => { const x = turn && s > turn ? total - s : s; return tips.some((t) => Math.abs(x - t) < r); };
+  const nearUturn = (s, r) => (!!turn && (Math.abs(s - turn) < r || s < r || total - s < r)) || nearTip(s, r);
   const series = { s: [], ele: [], grade: [], heading: [], clearance: [], cs: [] };
 
   // 1. Source GPX (positions are distance along the ride; the far end of an out-and-back GPX is a planned U-turn)
@@ -226,7 +229,9 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
     const dy = cur.pos.y - prev.pos.y;
     const turnRate = angleBetween(prev.flat, cur.flat) / step;
     maxJump = Math.max(maxJump, dh - step);
-    if (dh - step > LIMITS.posJump) F.add('pose-jump', 'fail', at, dh - step, 'rider position jumps');
+    // (a network spur's tip: the base line turns straight back there; the network rides it with a U-turn curve,
+    // checked by tools/qc_network.mjs)
+    if (dh - step > LIMITS.posJump) F.add('pose-jump', nearTip(at, 12) ? 'info' : 'fail', at, dh - step, nearTip(at, 12) ? 'spur tip: ridden as a U-turn by the network' : 'rider position jumps');
     if (Math.abs(dy) / step > LIMITS.heightStep) F.add('pose-height', 'fail', at, dy, 'rider height steps');
     if (nearUturn(at, 12)) { if (turnRate > LIMITS.headingWarn) F.add('u-turn', 'info', at, turnRate, 'planned U-turn'); }
     else {

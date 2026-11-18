@@ -4,6 +4,7 @@
 // Data: "bikefree-city-1", built by tools/build_city.py. With a real height grid as well (the scene's
 // `terrainGridFile`, tools/build_terrain_grid.py in rivers mode) the ground is 10 m elevation along the route
 // and 40 m out to ~9 km, and the rivers beyond the city's own box come from that grid's river mask.
+import { ghostMask } from '../../ghost.js';
 import { makeRouteIndex } from '../../geo.js';
 import { smoothstep } from '../core/random.js';
 import { ROAD_WIDTH } from '../../pose.js';
@@ -48,7 +49,7 @@ export function makeCityLandscape(config, proj, index, route) {
   const D = decodeCity(data, proj);
   const level = data.waterLevelM;
   const end = route.turnIdx || route.dist.length - 1;
-  const samples = Array.from({ length: Math.ceil(end / 3) }, (_, i) => i * 3);
+  const samples = Array.from({ length: Math.ceil(end / 3) }, (_, i) => i * 3).filter((i) => !ghostMask(route)?.[i]);
   const broad = makeRouteIndex({ dist: samples, lat: samples.map((i) => route.lat[i]), lon: samples.map((i) => route.lon[i]),
     ele: samples.map((i) => route.ele[i]) }, proj, 128);
 
@@ -62,7 +63,8 @@ export function makeCityLandscape(config, proj, index, route) {
   };
   // outbound route samples on a 20 m grid, for "every stretch of road near here"
   const near = new Map();
-  for (let i = 0; i <= end; i++) { const k = `${Math.floor(index.xs[i] / 20)},${Math.floor(index.zs[i] / 20)}`; if (!near.has(k)) near.set(k, []); near.get(k).push(i); }
+  const ghost = ghostMask(route);   // (a network tour's repeated stretches are never the route's road here: js/world/ghost.js)
+  for (let i = 0; i <= end; i++) { if (ghost?.[i] || (ghost?.[i + 1] && i < end)) continue; const k = `${Math.floor(index.xs[i] / 20)},${Math.floor(index.zs[i] / 20)}`; if (!near.has(k)) near.set(k, []); near.get(k).push(i); }
   const nearbyRoute = (x, z) => {
     const out = [], cx = Math.floor(x / 20), cz = Math.floor(z / 20);
     for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const i of near.get(`${cx + a},${cz + b}`) || []) out.push(i);

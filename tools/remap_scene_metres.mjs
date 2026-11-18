@@ -4,7 +4,7 @@
 // (within 25 m, heading within ~45°). Ranges that land in pieces (the new line runs the old one in another
 // order) are split into one range per piece; pieces under 20 m are dropped.
 //
-//   node tools/remap_scene_metres.mjs <old.gpx> <new.gpx> <scene.json> [--city tools/city/<id>.json] [--write]
+//   node tools/remap_scene_metres.mjs <old.gpx> <new.gpx> <scene.json> [--city tools/city/<id>.json] [--ghosts <new city data>] [--write]
 //
 // Written for Pittsburgh's ride network (the loop became one open tour with the Jail Trail); any scene whose
 // GPX is rebuilt in a new order can use it. Without --write it prints what would change.
@@ -14,8 +14,10 @@ import { parseGpx, buildRoute } from '../js/gpx.js';
 const args = process.argv.slice(2);
 const write = args.includes('--write');
 const ci = args.indexOf('--city');
+const gi = args.indexOf('--ghosts');   // city data with routeGhosts for the NEW line: never map onto a ghost stretch
+const ghosts = gi >= 0 ? JSON.parse(readFileSync(args[gi + 1], 'utf8')).routeGhosts || [] : [];
 const cityPath = ci >= 0 ? args[ci + 1] : null;
-const [oldPath, newPath, scenePath] = args.filter((a, i) => !a.startsWith('--') && !(ci >= 0 && i === ci + 1));
+const [oldPath, newPath, scenePath] = args.filter((a, i) => !a.startsWith('--') && !(ci >= 0 && i === ci + 1) && !(gi >= 0 && i === gi + 1));
 const load = (p) => buildRoute({ ...parseGpx(readFileSync(p, 'utf8')), eleSmoothM: 0 });
 const A = load(oldPath), B = load(newPath);
 const k = 6378137 * Math.PI / 180, kx = k * Math.cos((A.lat[0] * Math.PI) / 180);
@@ -28,6 +30,7 @@ const head = (r, i) => {
 // grid of the new line's samples
 const cell = 50, grid = new Map();
 for (let j = 0; j < B.lat.length; j++) {
+  if (ghosts.some((g) => j * 10 > g.fromM && j * 10 < g.toM)) continue;
   const p = xy(B, j), key = `${Math.floor(p.x / cell)},${Math.floor(p.z / cell)}`;
   if (!grid.has(key)) grid.set(key, []);
   grid.get(key).push(j);

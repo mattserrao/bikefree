@@ -5,7 +5,7 @@
  "gpx": "routes/cities/pittsburgh.gpx",
  "data": "routes/scenes/pittsburgh-city.json",
  "osmBbox": [
-  -80.032,
+  -80.045,
   40.422,
   -79.952,
   40.454
@@ -215,6 +215,97 @@
      40.44035,
      -80.02309
     ],
+    [
+     "West End Bridge S",
+     40.44418,
+     -80.02819
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "West End Bridge S (junction)",
+     40.44418,
+     -80.02819
+    ],
+    [
+     "Steuben St",
+     40.442973,
+     -80.031905
+    ],
+    [
+     "Steuben & Wabash",
+     40.441298,
+     -80.036413
+    ],
+    [
+     "Elliott: Lorenz Ave",
+     40.441398,
+     -80.038234
+    ],
+    [
+     "Elliott: Rue Grand Vue",
+     40.443327,
+     -80.03943
+    ],
+    [
+     "Overlook drive",
+     40.44469,
+     -80.037329
+    ],
+    [
+     "West End Overlook",
+     40.446574,
+     -80.034219
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "waypoints": [
+    [
+     "West End Overlook (back)",
+     40.446574,
+     -80.034219
+    ],
+    [
+     "Overlook drive (back)",
+     40.44469,
+     -80.037329
+    ],
+    [
+     "Elliott: Rue Grand Vue (back)",
+     40.443327,
+     -80.03943
+    ],
+    [
+     "Elliott: Lorenz Ave (back)",
+     40.441398,
+     -80.038234
+    ],
+    [
+     "Steuben & Wabash (back)",
+     40.441298,
+     -80.036413
+    ],
+    [
+     "Steuben St (back)",
+     40.442973,
+     -80.031905
+    ],
+    [
+     "West End Bridge S (junction) (back)",
+     40.44418,
+     -80.02819
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
     [
      "West End Bridge S",
      40.44418,
@@ -471,8 +562,8 @@
  "maxDriftM": 16,
  "profileKeep": [
   [
-   17420,
-   17600
+   20920,
+   21100
   ]
  ],
  "residentialBoxes": [

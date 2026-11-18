@@ -3,6 +3,7 @@
 // the two inclines up Mount Washington, barges, the riverboat, motorboats and kayaks, and birds.
 // Agents live near the camera and are recycled as you ride; all draw calls are instanced. People, cyclists, dogs,
 // strollers, cars and buses come from the figures kit (life/figures): soft cartoon models, baked walk cycles.
+import { ghostAt } from '../../ghost.js';
 import * as THREE from '../../../../vendor/three.module.min.js';
 import { Crowd, CLIP, FIT, randomLook, dogLook, clipRate, PALETTES } from '../life/figures/people.js';
 import { vehicleMesh, vehicleMaterial, setPaint, setMove } from '../life/figures/vehicles.js';
@@ -264,7 +265,7 @@ export class CityLife {
     const otherPass = (i) => {
       const x = c.index.xs[i], z = c.index.zs[i];
       for (let j = 0; j <= end; j += 1) {
-        if (Math.abs(j - i) < 4) continue;
+        if (Math.abs(j - i) < 4 || ghostAt(r, r.dist[j])) continue;
         const dx = c.index.xs[j] - x, dz = c.index.zs[j] - z;
         if (dx * dx + dz * dz < 30 * 30) return true;
       }
@@ -274,6 +275,7 @@ export class CityLife {
       let pts = [];
       const flush = () => { if (pts.length > 3) walk.push({ path: makePath(pts), side: 4.7, allow: () => true, cls: 9, trail: true }); pts = []; };
       for (let i = Math.ceil(k.fromM / 10) + 1; i <= Math.min(end, Math.floor(k.toM / 10) - 1); i++) {
+        if (ghostAt(r, r.dist[i])) { flush(); continue; }   // (a network tour's repeat: walkers are on the real pass)
         if (this._passCache?.[i] ?? ((this._passCache ||= [])[i] = otherPass(i))) { flush(); continue; }
         pts.push({ x: c.index.xs[i], y: r.ele[i], z: c.index.zs[i] });
       }
@@ -527,7 +529,11 @@ export class CityLife {
       const over = a.s < 0 ? -a.s : a.s - len;
       const nx = a.nx !== undefined ? a.nx : net.next(a.way, a.s > len, this.rand);
       a.nx = undefined;
-      if (nx) { a.way = nx.i; a.s = nx.s + nx.dir * over; a.dir = nx.dir; w = net.ways[a.way]; a.s = Math.max(0, Math.min(w.path.length, a.s)); }
+      if (nx) {
+        a.way = nx.i; a.s = nx.s + nx.dir * over; a.dir = nx.dir; w = net.ways[a.way]; a.s = Math.max(0, Math.min(w.path.length, a.s));
+        // a walker keeps to the new way's sidewalk (a wide street's offset would put them in a narrow one's carriageway)
+        if (kind === 'walk' && !w.trail) { const g = a.lat < 0 ? -1 : 1, m = Math.abs(a.lat); a.lat = g * (w.side ? Math.max(w.side - .6, Math.min(w.side + .6, m)) : Math.min(1.1, m)); }
+      }
       else { a.dir = -a.dir; a.s = Math.max(0, Math.min(len, a.s)); }
     }
     // where it is on its way: its own side (on a shared trail a side of its own; cyclists keep the far half from the rider)

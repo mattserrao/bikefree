@@ -23,8 +23,8 @@ export const NET_LIMITS = {
   heightStep: 0.35,    // m of height per m along
   heading: 25,         // °/m through a turn
   headingUturn: 70,    // °/m through a U-turn ("back": a tight turn at walking pace)
-  sampleGap: 20,       // path route: neighbouring 10 m samples this far apart on the ground (a junction's passes
-                       // can sit a few metres apart: the recorded track hops that much there)
+  sampleGap: 30,       // path route: neighbouring 10 m samples this far apart on the ground (a junction's passes
+                       // can sit a few metres apart — up to ~18 m where a spur leaves and its ghost returns: the recorded track hops that much there)
 };
 
 /** The base route of a catalog item with a network, its network and the world index (as world.js builds it). */

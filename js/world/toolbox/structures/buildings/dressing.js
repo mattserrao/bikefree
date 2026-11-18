@@ -22,7 +22,7 @@ export function planDressing(R, ctx) {
   const po = R.parts.frontPorch ? R.parts.frontPorch.depth + .15 : 0;   // in front of a porch
   // by the door
   if (door != null && rand() < D.pots) for (const s of [-1, 1]) { const [x, z] = at(door + s * .95, po + .45); add('pot', x, z, yawT, [.38, .38, .42], .3, { tone: rand() }); }
-  if (door != null && rand() < D.bench) { const s = rand() < .5 ? -1 : 1; const [x, z] = at(door + s * 2.1, po ? po * .45 : .5); const extra = po ? { porch: true } : {}; if (po) { if (!ctx.blocked(x, z, .5, R)) items.push({ kind: 'bench', x, z, yaw: yawT, size: [1.4, .45, .9], ...extra }); } else add('bench', x, z, yawT, [1.4, .45, .9], .8); }
+  if (door != null && rand() < D.bench) { const s = rand() < .5 ? -1 : 1; const [x, z] = at(door + s * 2.1, po ? po * .45 : .5); const extra = po ? { porch: true } : {}; if (po) { if (!ctx.blocked(x, z, .5, R) && !ctx.index.nearest(x, z, ROAD_HALF + 1.2)) items.push({ kind: 'bench', x, z, yaw: yawT, size: [1.4, .45, .9], ...extra }); } else add('bench', x, z, yawT, [1.4, .45, .9], .8); }
   // bins at a front corner
   if (rand() < D.bins) {
     const end = rand() < .5 ? .7 : f.len - .7, [x, z] = at(end, po + 1.0);

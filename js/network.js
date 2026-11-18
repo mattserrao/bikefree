@@ -490,12 +490,35 @@ export function planNext(net, keys, startId = null) {
 /** Edge ids from spec keys ("E>H+") and back, for routes saved in settings (ids can change when the network grows). */
 export function keysToIds(net, specKeys) {
   const out = [];
+  const edges = [...net.edges.values()];
   for (const k of specKeys) {
-    const m = /^(.+)([+-])$/.exec(k);
-    const e = m && [...net.edges.values()].find((x) => x.key === m[1]);
-    if (!e) return null;
-    out.push(`${e.id}${m[2]}`);
+    const m = /^(.+)>(.+)([+-])$/.exec(k);
+    if (!m) return null;
+    const e = edges.find((x) => x.key === `${m[1]}>${m[2]}`);
+    if (e) { out.push(`${e.id}${m[3]}`); continue; }
+    // the segment was split by a new junction (a saved route from before): the chain of new segments that runs
+    // the same way from its start to its end, through junctions only (no dead ends), shortest first
+    const [from, to] = m[3] === '+' ? [m[1], m[2]] : [m[2], m[1]];
+    const chain = splitChain(net, from, to, m[3] === '+' ? 1 : -1);
+    if (!chain) return null;
+    out.push(...chain);
   }
   return out;
+}
+function splitChain(net, from, to, dir) {
+  // forward pieces (+): edges whose key runs from→…→to in base order; backward (-): the same chain reversed
+  const fwd = [...net.edges.values()].filter((e) => !net.nodes.get(e.to)?.deadEnd && !net.nodes.get(e.from)?.deadEnd);
+  const [a, b] = dir > 0 ? [from, to] : [to, from];
+  const queue = [[a, []]], seen = new Set([a]);
+  while (queue.length) {
+    const [node, path] = queue.shift();
+    if (path.length > 4) continue;
+    for (const e of fwd.filter((x) => x.from === node)) {
+      const p = [...path, e];
+      if (e.to === b) return (dir > 0 ? p : p.reverse()).map((x) => `${x.id}${dir > 0 ? '+' : '-'}`);
+      if (!seen.has(e.to)) { seen.add(e.to); queue.push([e.to, p]); }
+    }
+  }
+  return null;
 }
 export const idsToKeys = (net, ids) => ids.map((k) => { const m = /^(.+)([+-])$/.exec(k); return `${net.edges.get(m[1]).key}${m[2]}`; });

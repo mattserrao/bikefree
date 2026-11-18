@@ -165,7 +165,7 @@ test('building kit, Pittsburgh: fronts face a street; porches and dressing stay 
   assert.ok(facing / n > .8, `${facing} of ${n} fronts face their street`);
   const all = pit.city.buildings;
   for (const R of P) for (const it of R.dressing) {
-    assert.equal(S.nearest(it.x, it.z, ROAD_HALF + 1.2), null, `${it.kind} on a street or sidewalk`);
+    assert.equal(S.nearest(it.x, it.z, ROAD_HALF + 1.2), null, `${it.kind} on a street or sidewalk at ${it.x.toFixed(0)}, ${it.z.toFixed(0)}`);
     for (const O of all) {
       if (Math.abs(O.ring[0].x - it.x) > 80 || Math.abs(O.ring[0].z - it.z) > 80) continue;
       assert.ok(!pip(it.x, it.z, O.ring.map((p) => [p.x, p.z])), `${it.kind} inside a building`);

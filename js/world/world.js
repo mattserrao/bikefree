@@ -13,7 +13,8 @@ import { PerfMonitor } from './perf.js';
 import { HAZE, AERIAL, AERIAL_COLOR, installHaze } from './toolbox/atmosphere/haze.js';
 import { vistaConfig } from './toolbox/atmosphere/vista.js';
 import { decorateRoad, frenchMarkings } from './toolbox/materials/road-surface.js';
-import { denseRoad } from './road-align.js';   // [road-align]
+import { denseRoad } from './road-align.js';
+import { ghostAt } from './ghost.js';   // [road-align]
 import { BakedLighting } from './toolbox/atmosphere/baked-light.js';   // [baked-light]
 import { CourseArches } from './toolbox/roadside/course-arches.js';
 
@@ -679,6 +680,7 @@ function makeRoad(route, index) {
   }
   const idx = [];
   for (let i = 0; i < n - 1; i++) {
+    if (ghostAt(route, (route.dist[i] + route.dist[i + 1]) / 2)) continue;   // a network tour's repeat: drawn once, on its real pass
     const a = i * 2, b = a + 1, c = a + 2, d = a + 3; // a,c = left edge; b,d = right edge
     idx.push(a, b, c, b, d, c);
   }
@@ -789,7 +791,7 @@ function makeRibbon(route, index, width, lift, tex, repeatM, offset) {
     return d > .6;
   };
   const idx = [];
-  for (let i = 0; i < n - 1; i++) { if (route.scene?.switchbacks && sharp(i)) continue; const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  for (let i = 0; i < n - 1; i++) { if (route.scene?.switchbacks && sharp(i)) continue; if (ghostAt(route, (route.dist[i] + route.dist[i + 1]) / 2)) continue; const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));

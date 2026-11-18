@@ -23,6 +23,10 @@ const index = JSON.parse(read('routes/parks/index.json'));
 const item = index.find((r) => r.id === spec.catalogId);
 if (!item || item.file !== spec.base) throw new Error(`catalog entry ${spec.catalogId} must ride ${spec.base}`);
 const route = buildCatalogRoute(read(spec.base), { ...item, routeId: item.id });
+// ghost stretches (a tour's repeats, tools/build_city.py): never a pass, never an edge; their ends are junctions
+const sceneJson = item.scene ? JSON.parse(read(item.scene)) : null;
+const ghosts = sceneJson?.cityData ? JSON.parse(read(sceneJson.cityData)).routeGhosts || [] : [];
+const inGhost = (s) => ghosts.some((g) => s > g.fromM + 5 && s < g.toM - 5);
 const L = route.turnS || route.total;
 const K = Math.round(L / 10);
 const closed = !!route.oneWay?.closedLoop || !route.mirrored;
@@ -37,6 +41,7 @@ for (const n of spec.nodes) {
   let run = null;
   const passes = [];
   for (let i = 0; i <= K; i++) {
+    if (inGhost(i * 10)) { if (run) { passes.push(run.i); run = null; } continue; }
     const d = haversine(n, at(i));
     if (d < REACH) { if (!run || d < run.d) run = { d, i }; if (!run.open) run.open = true; }
     else if (run) { passes.push(run.i); run = null; }
@@ -45,6 +50,14 @@ for (const n of spec.nodes) {
   // a closed loop's start and end are one point: a node there splits at 0 (and the loop closes at L);
   // an open tour (Pittsburgh's: the loop and the Jail Trail in one line) has a node at each end
   const list = [...new Set(passes.map((i) => (closed && i === K ? 0 : i)))];
+  // a ghost's ends at this junction are splits too (where the real pass turns into its repeat and back)
+  for (const g of ghosts) for (const s of [g.fromM, g.toM]) {
+    const i = Math.round(s / 10);
+    if (haversine(n, at(i)) < REACH && !list.some((k) => Math.abs(k - i) < 3)) list.push(i);
+  }
+  // passes a few samples apart (a ghost's end next to the real pass's end) are one
+  list.sort((a, b) => a - b);
+  for (let k = list.length - 1; k > 0; k--) if (list[k] - list[k - 1] < 3) list.splice(k, 1);
   if (!list.length) throw new Error(`node ${n.id}: the loop doesn't pass within ${REACH} m`);
   n.passes = list.map((i) => i * 10);
   for (const s of n.passes) splits.push({ s, node: n.id });
@@ -64,6 +77,7 @@ const edges = [];
 for (let k = 0; k < splits.length; k++) {
   if (!closed && k === splits.length - 1) break;   // the end node of an open route
   const a = splits[k], b = splits[k + 1] || { s: L, node: splits[0].node };
+  if (inGhost((a.s + b.s) / 2)) continue;   // a tour's repeat: not an edge
   const key = `${a.node}>${b.node}`;
   const names = spec.edges[key];
   if (!names) throw new Error(`no names for edge ${key} in the spec`);
@@ -90,7 +104,8 @@ const presets = spec.presets.map((p) => {
 });
 const out = {
   format: 'bikefree-network-1', id: spec.id, base: spec.base, legM: L,
-  nodes: spec.nodes.map(({ id, name, lat, lon, ele, passes }) => ({ id, name, lat, lon, ele, passes })),
+  nodes: spec.nodes.map(({ id, name, lat, lon, ele, passes, deadEnd }) => ({ id, name, lat, lon, ele, passes, ...(deadEnd ? { deadEnd } : {}) })),
+  ...(ghosts.length ? { ghosts } : {}),
   edges, presets,
 };
 // a free ride: no plan, starting on one traversal

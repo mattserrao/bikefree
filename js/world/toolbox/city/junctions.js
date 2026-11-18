@@ -36,6 +36,7 @@ export const DEFAULTS = {
 };
 
 import { denseRoad } from '../../road-align.js';
+import { ghostAt } from '../../ghost.js';
 
 const ROAD_LIFT = .12;   // (pose.js) the route's road surface above its line
 const CURB_R = (cls) => (cls <= 1 ? 9 : cls <= 3 ? 6 : cls <= 6 ? 4.5 : 3);
@@ -103,6 +104,7 @@ export function routeLine(route, index) {
   const project = (x, z, s, win = 40) => {
     let best = null;
     for (let j = Math.max(0, seg(s - win)); j < n && D[j] <= s + win; j++) {
+      if (ghostAt(route, (D[j] + D[j + 1]) / 2)) continue;   // (a network tour's repeat isn't the road: js/world/ghost.js)
       const ax = I.xs[j], az = I.zs[j], dx = I.xs[j + 1] - ax, dz = I.zs[j + 1] - az, l2 = dx * dx + dz * dz || 1;
       const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), d = Math.hypot(ax + dx * t - x, az + dz * t - z);
       if (!best || d < best.d) best = { d, y: R.ele[j] + (R.ele[j + 1] - R.ele[j]) * t, s: D[j] + (D[j + 1] - D[j]) * t, j };

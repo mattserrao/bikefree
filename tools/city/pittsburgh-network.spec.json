@@ -21,10 +21,23 @@
       "lon": -79.98858
     },
     {
+      "id": "D",
+      "name": "West End Bridge south end",
+      "lat": 40.44418,
+      "lon": -80.02819
+    },
+    {
       "id": "A",
       "name": "North Shore Water Steps",
       "lat": 40.44548,
       "lon": -80.00825
+    },
+    {
+      "id": "O",
+      "name": "West End Overlook",
+      "lat": 40.446574,
+      "lon": -80.034219,
+      "deadEnd": true
     }
   ],
   "edges": {
@@ -37,11 +50,6 @@
       "name": "South Side river trail",
       "fwd": "the river trail to South Side Riverfront Park and 10th",
       "rev": "the river trail east to SouthSide Works"
-    },
-    "G>A": {
-      "name": "Mount Washington",
-      "fwd": "the McArdle climb, Grandview and the West End Bridge",
-      "rev": "the West End Bridge, Grandview and down McArdle"
     },
     "A>E": {
       "name": "North Shore, the Point & downtown",
@@ -57,6 +65,21 @@
       "name": "East Carson Street",
       "fwd": "East Carson Street to SouthSide Works",
       "rev": "East Carson Street to 10th"
+    },
+    "G>D": {
+      "name": "Mount Washington",
+      "fwd": "the McArdle climb, Grandview and down to the West End",
+      "rev": "up from the West End over Grandview and down McArdle"
+    },
+    "D>O": {
+      "name": "West End Overlook",
+      "fwd": "the climb up through Elliott to the West End Overlook",
+      "rev": "down from the overlook through Elliott"
+    },
+    "D>A": {
+      "name": "West End Bridge",
+      "fwd": "the West End Bridge and the North Shore trail",
+      "rev": "the North Shore trail and the West End Bridge"
     }
   },
   "presets": [
@@ -68,7 +91,8 @@
         "E>G+",
         "G>H+",
         "H>G+",
-        "G>A+"
+        "G>D+",
+        "D>A+"
       ],
       "tags": [
         "varied"
@@ -79,7 +103,8 @@
       "id": "pgh-three-rivers-rev",
       "name": "Three Rivers Loop \u00b7 reverse",
       "path": [
-        "G>A-",
+        "D>A-",
+        "G>D-",
         "H>G-",
         "G>H-",
         "E>G-",
@@ -96,7 +121,8 @@
       "path": [
         "A>E+",
         "E>G+",
-        "G>A+"
+        "G>D+",
+        "D>A+"
       ],
       "tags": [
         "short",
@@ -108,7 +134,8 @@
       "id": "pgh-short-loop-rev",
       "name": "South Side Short Loop \u00b7 reverse",
       "path": [
-        "G>A-",
+        "D>A-",
+        "G>D-",
         "E>G-",
         "A>E-"
       ],
@@ -130,6 +157,25 @@
         "short"
       ],
       "note": "East Carson Street and the river trail, round and round from East Carson & 10th"
+    },
+    {
+      "id": "pgh-west-end",
+      "name": "Three Rivers Loop + West End Overlook",
+      "path": [
+        "A>E+",
+        "E>G+",
+        "G>H+",
+        "H>G+",
+        "G>D+",
+        "D>O+",
+        "D>O-",
+        "D>A+"
+      ],
+      "tags": [
+        "hilly",
+        "new"
+      ],
+      "note": "The whole loop with the climb through Elliott to the West End Overlook and back down"
     },
     {
       "id": "pgh-jail-trail",
@@ -169,7 +215,8 @@
         "A>E+",
         "E>H+",
         "H>G+",
-        "G>A+"
+        "G>D+",
+        "D>A+"
       ],
       "tags": [
         "varied",
@@ -181,8 +228,10 @@
       "id": "pgh-mt-washington",
       "name": "Mount Washington There & Back",
       "path": [
-        "G>A+",
-        "G>A-"
+        "G>D+",
+        "D>A+",
+        "D>A-",
+        "G>D-"
       ],
       "tags": [
         "hilly"
@@ -197,8 +246,10 @@
         "E>G+",
         "G>H+",
         "H>G+",
-        "G>A+",
-        "G>A-",
+        "G>D+",
+        "D>A+",
+        "D>A-",
+        "G>D-",
         "H>G-",
         "G>H-",
         "E>G-",

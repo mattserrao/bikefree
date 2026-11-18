@@ -1,103 +1,69 @@
 {
   "quality": "balanced",
   "size": "1280x720",
-  "software": true,
+  "software": false,
   "rows": [
     {
-      "shot": "bigsur@15230",
-      "file": "tools/snapshots/bigsur-15230.jpg",
-      "calls": 330,
-      "triangles": 797439,
-      "seconds": 25,
-      "errors": []
+      "shot": "pittsburgh@12410",
+      "file": "tools/snapshots/pittsburgh-12410.jpg",
+      "calls": 215,
+      "triangles": 1113155,
+      "seconds": 44,
+      "errors": [],
+      "bake": {
+        "ms": 181,
+        "cpuMs": 179,
+        "work": [
+          4145,
+          1650
+        ],
+        "view": [
+          3167,
+          1442
+        ],
+        "cell": 2.5,
+        "passes": 11,
+        "occluders": 266,
+        "groundSamples": 168091,
+        "phases": {
+          "ground": 11,
+          "occluders": 114,
+          "passes": 51
+        },
+        "gpuMB": 21.8,
+        "worstStepMs": 114
+      }
     },
     {
-      "shot": "bigsur@15669:vista:golden",
-      "file": "tools/snapshots/bigsur-15669-vista-golden.jpg",
-      "calls": 367,
-      "triangles": 1929374,
-      "seconds": 25,
-      "errors": []
-    },
-    {
-      "shot": "bigsur@15669:vista:morning:marine",
-      "file": "tools/snapshots/bigsur-15669-vista-morning-marine.jpg",
-      "calls": 378,
-      "triangles": 1722384,
-      "seconds": 32,
-      "errors": []
-    },
-    {
-      "shot": "bigsur@17420:golden",
-      "file": "tools/snapshots/bigsur-17420-golden.jpg",
-      "calls": 311,
-      "triangles": 1311957,
-      "seconds": 28,
-      "errors": []
-    },
-    {
-      "shot": "bigsur@17400:drone:morning:marine",
-      "file": "tools/snapshots/bigsur-17400-drone-morning-marine.jpg",
-      "calls": 352,
-      "triangles": 1437528,
-      "seconds": 32,
-      "errors": []
-    },
-    {
-      "shot": "bigsur@17700:rain",
-      "file": "tools/snapshots/bigsur-17700-rain.jpg",
-      "calls": 322,
-      "triangles": 916211,
-      "seconds": 34,
-      "errors": []
-    },
-    {
-      "shot": "bigsur@14200:drone:clouds",
-      "file": "tools/snapshots/bigsur-14200-drone-clouds.jpg",
-      "calls": 449,
-      "triangles": 1366097,
-      "seconds": 32,
-      "errors": []
-    },
-    {
-      "shot": "bigsur@23800:drone:golden",
-      "file": "tools/snapshots/bigsur-23800-drone-golden.jpg",
-      "calls": 318,
-      "triangles": 1172188,
-      "seconds": 31,
-      "errors": []
-    },
-    {
-      "shot": "bigsur@24000:eye:night",
-      "file": "tools/snapshots/bigsur-24000-eye-night.jpg",
-      "calls": 250,
-      "triangles": 893969,
-      "seconds": 31,
-      "errors": []
-    },
-    {
-      "shot": "bigsur@21000",
-      "file": "tools/snapshots/bigsur-21000.jpg",
-      "calls": 368,
-      "triangles": 1445569,
-      "seconds": 43,
-      "errors": []
-    },
-    {
-      "shot": "bigsur@2060:drone",
-      "file": "tools/snapshots/bigsur-2060-drone.jpg",
-      "calls": 382,
-      "triangles": 987381,
-      "seconds": 29,
-      "errors": []
-    },
-    {
-      "shot": "bigsur@7720:vista",
-      "file": "tools/snapshots/bigsur-7720-vista.jpg",
-      "calls": 275,
-      "triangles": 1151067,
-      "seconds": 28,
-      "errors": []
+      "shot": "pittsburgh@12440",
+      "file": "tools/snapshots/pittsburgh-12440.jpg",
+      "calls": 213,
+      "triangles": 1095697,
+      "seconds": 44,
+      "errors": [],
+      "bake": {
+        "ms": 196,
+        "cpuMs": 195,
+        "work": [
+          4145,
+          1650
+        ],
+        "view": [
+          3167,
+          1442
+        ],
+        "cell": 2.5,
+        "passes": 11,
+        "occluders": 266,
+        "groundSamples": 168091,
+        "phases": {
+          "ground": 14,
+          "occluders": 122,
+          "passes": 57
+        },
+        "gpuMB": 21.8,
+        "worstStepMs": 122
+      }
     }
   ]
 }

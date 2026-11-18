@@ -2,6 +2,7 @@
 // at night, streets with sidewalks, street lamps and trees, the bridges and landmarks
 // (js/world/toolbox/city/bridges.js) and everything that moves (js/world/toolbox/city/life.js).
 // Data: "bikefree-city-1" from tools/build_city.py; ground from js/world/toolbox/city/landscape.js.
+import { ghostAt } from '../../ghost.js';
 import * as THREE from '../../../../vendor/three.module.min.js';
 import { decodeCity, LAND, cityStreets, STREET_W } from './landscape.js';
 import { MeshBuilder, ribbon, resample, hash } from '../core/mesh-builder.js';
@@ -321,6 +322,7 @@ export class CityScene {
     // the road crossing straight through a footprint
     const e = this.route.turnIdx || this.route.dist.length - 1;
     for (let i = 0; i <= e; i += 1) {
+      if (ghostAt(this.route, this.route.dist[i])) continue;
       const x = this.index.xs[i], z = this.index.zs[i];
       if (x < b.bb[0] || x > b.bb[1] || z < b.bb[2] || z > b.bb[3]) continue;
       if (this.buildingNear(x, z, 0) === b) return true;
@@ -911,6 +913,7 @@ export class CityScene {
     const r = this.route, end = r.turnIdx || r.dist.length - 1;
     for (let i = 3; i < end - 3; i += 3) {
       const s = r.dist[i], kind = this.landscape.routeKindAt(s);
+      if (ghostAt(r, s)) continue;   // (a network tour's repeat: its lamps stand on the real pass)
       const every = kind === 'road' ? 36 : 30;
       if (Math.floor(s / every) === Math.floor(r.dist[i - 3] / every)) continue;
       const dx = this.index.xs[i + 1] - this.index.xs[i - 1], dz = this.index.zs[i + 1] - this.index.zs[i - 1], len = Math.hypot(dx, dz) || 1;

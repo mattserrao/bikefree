@@ -77,8 +77,8 @@
   },
   "routeTrees": [
     {
-      "fromM": 13150,
-      "toM": 14910,
+      "fromM": 16650,
+      "toM": 18410,
       "spacingM": 11,
       "offsetM": 7.5,
       "sides": [
@@ -86,8 +86,8 @@
       ]
     },
     {
-      "fromM": 13170,
-      "toM": 14910,
+      "fromM": 16670,
+      "toM": 18410,
       "spacingM": 16,
       "offsetM": 7,
       "sides": [
@@ -107,22 +107,22 @@
     "surface": "worn",
     "zones": [
       {
-        "fromM": 15140,
-        "toM": 15690,
+        "fromM": 18640,
+        "toM": 19190,
         "surface": "worn",
         "patches": 0.55,
         "tone": 0.96
       },
       {
-        "fromM": 15690,
-        "toM": 15980,
+        "fromM": 19190,
+        "toM": 19480,
         "surface": "fresh",
         "tone": 0.9,
         "cracks": 0.1
       },
       {
-        "fromM": 17800,
-        "toM": 19050,
+        "fromM": 21300,
+        "toM": 22550,
         "surface": "patched",
         "patches": 0.85,
         "cracks": 0.5,
@@ -130,8 +130,8 @@
         "tone": 0.94
       },
       {
-        "fromM": 19060,
-        "toM": 19560,
+        "fromM": 22560,
+        "toM": 23060,
         "surface": "worn",
         "tone": 0.86,
         "wear": 0.75,
@@ -139,14 +139,14 @@
         "cracks": 0.3
       },
       {
-        "fromM": 19620,
-        "toM": 21000,
+        "fromM": 23120,
+        "toM": 24500,
         "surface": "worn",
         "patches": 0.5
       },
       {
-        "fromM": 21000,
-        "toM": 22830,
+        "fromM": 24500,
+        "toM": 26330,
         "surface": "patched",
         "patches": 0.7,
         "cracks": 0.45,
@@ -190,14 +190,21 @@
       },
       {
         "fromM": 12370,
-        "toM": 13070,
+        "toM": 12430,
         "surface": "fresh",
         "tone": 0.88,
         "cracks": 0.12
       },
       {
-        "fromM": 13080,
-        "toM": 13250,
+        "fromM": 15940,
+        "toM": 16570,
+        "surface": "fresh",
+        "tone": 0.88,
+        "cracks": 0.12
+      },
+      {
+        "fromM": 16580,
+        "toM": 16750,
         "surface": "worn"
       }
     ],
@@ -206,16 +213,16 @@
       "tone": 1.05,
       "zones": [
         {
-          "fromM": 18340,
-          "toM": 18430,
+          "fromM": 21840,
+          "toM": 21930,
           "surface": "brick",
           "centre": 0,
           "patches": 0,
           "tone": 1.05
         },
         {
-          "fromM": 22830,
-          "toM": 23230,
+          "fromM": 26330,
+          "toM": 26730,
           "surface": "worn",
           "patches": 0.3,
           "cracks": 0.35,
@@ -232,8 +239,8 @@
           "tone": 1.05
         },
         {
-          "fromM": 13260,
-          "toM": 14980,
+          "fromM": 16760,
+          "toM": 18480,
           "surface": "worn",
           "patches": 0.25,
           "tone": 1.04
@@ -269,15 +276,15 @@
   },
   "streetKit": {
     "fromM": 0,
-    "toM": 23390,
+    "toM": 26900,
     "rangeM": 220,
     "parkTrees": 16,
     "zones": [
       {
         "name": "North Shore: General Robinson & Federal",
         "style": "masonry",
-        "fromM": 15130,
-        "toM": 15740,
+        "fromM": 18630,
+        "toM": 19240,
         "widthM": 60,
         "parking": false,
         "curbM": 5.8,
@@ -287,8 +294,8 @@
       {
         "name": "Downtown: Market, Forbes & Smithfield",
         "style": "masonry",
-        "fromM": 17810,
-        "toM": 19230,
+        "fromM": 21310,
+        "toM": 22730,
         "widthM": 55,
         "parking": false,
         "curbM": 5.6,
@@ -298,8 +305,8 @@
       {
         "name": "East Carson Street",
         "style": "victorian",
-        "fromM": 20230,
-        "toM": 22840,
+        "fromM": 23730,
+        "toM": 26340,
         "widthM": 90,
         "parking": true,
         "curbM": 6.4,
@@ -331,8 +338,8 @@
       {
         "name": "North Shore: Carnegie Science Center",
         "style": "industrial",
-        "fromM": 13670,
-        "toM": 14220,
+        "fromM": 17170,
+        "toM": 17720,
         "widthM": 120,
         "parking": false,
         "curbM": 5.8,
@@ -344,8 +351,8 @@
   "mainStreets": [
     {
       "name": "East Carson Street",
-      "fromM": 19830,
-      "toM": 22830
+      "fromM": 23330,
+      "toM": 26330
     }
   ],
   "hotspots": [
@@ -758,19 +765,19 @@
   ],
   "signs": [
     {
-      "atM": 15630,
+      "atM": 19130,
       "side": "inland",
       "label": "ROBERTO CLEMENTE BRIDGE",
       "subtitle": "ALLEGHENY RIVER"
     },
     {
-      "atM": 16680,
+      "atM": 20180,
       "side": "inland",
       "label": "POINT STATE PARK",
       "subtitle": "WHERE THE THREE RIVERS MEET"
     },
     {
-      "atM": 19830,
+      "atM": 23330,
       "side": "inland",
       "label": "EAST CARSON STREET",
       "subtitle": "SOUTH SIDE"
@@ -808,12 +815,12 @@
     "maxGapM": 20,
     "spans": [
       {
-        "fromM": 16020,
-        "toM": 17300
+        "fromM": 19520,
+        "toM": 20800
       },
       {
-        "fromM": 17340,
-        "toM": 17780
+        "fromM": 20840,
+        "toM": 21280
       }
     ],
     "waterSteps": {
@@ -928,7 +935,7 @@
   "views": [
     {
       "name": "The Point",
-      "atM": 16730,
+      "atM": 20230,
       "rangeM": 500,
       "cam": {
         "lat": 40.441,
@@ -943,7 +950,7 @@
     },
     {
       "name": "The Golden Triangle from the Monongahela",
-      "atM": 19280,
+      "atM": 22780,
       "rangeM": 450,
       "cam": {
         "lat": 40.4338,
@@ -1030,8 +1037,8 @@
     },
     {
       "check": "mesh-coarse",
-      "fromM": 2456,
-      "toM": 2516,
+      "fromM": 2460,
+      "toM": 2520,
       "why": "the Jail Trail on a narrow ledge under the parkway: the 6 m ground mesh steps beside it"
     },
     {
@@ -1042,8 +1049,8 @@
     },
     {
       "check": "mesh-coarse",
-      "fromM": 3696,
-      "toM": 3736,
+      "fromM": 3700,
+      "toM": 3740,
       "why": "the Jail Trail on a narrow ledge under the parkway: the 6 m ground mesh steps beside it"
     },
     {
@@ -1060,8 +1067,56 @@
     },
     {
       "check": "lateral-jump",
-      "fromM": 23030,
-      "toM": 23070,
+      "fromM": 26530,
+      "toM": 26570,
+      "why": "the mapped path from 27th St to the riverfront jogs where it meets the trail"
+    },
+    {
+      "check": "mesh-coarse",
+      "fromM": 5164,
+      "toM": 5204,
+      "why": "a narrow ledge or hillside: the 6 m ground mesh steps beside the road"
+    },
+    {
+      "check": "street-steep",
+      "fromM": 12680,
+      "toM": 12720,
+      "why": "a West End hillside street with bad mapped heights (F14); not the route"
+    },
+    {
+      "check": "street-bank",
+      "fromM": 13220,
+      "toM": 13260,
+      "why": "a West End hillside street the ground hides (F14)"
+    },
+    {
+      "check": "verge-step",
+      "fromM": 13402,
+      "toM": 13444,
+      "why": "Elliott hillside: the ground steps beside the spur"
+    },
+    {
+      "check": "mesh-coarse",
+      "fromM": 13414,
+      "toM": 13456,
+      "why": "a narrow ledge or hillside: the 6 m ground mesh steps beside the road"
+    },
+    {
+      "check": "mesh-coarse",
+      "fromM": 14926,
+      "toM": 14966,
+      "why": "a narrow ledge or hillside: the 6 m ground mesh steps beside the road"
+    },
+    {
+      "check": "street-crease",
+      "fromM": 16110,
+      "toM": 16150,
+      "why": "a hillside street beside the route whose mapped heights crease (West End, Jail Trail ramps); not the route"
+    },
+    {
+      "check": "path-jog",
+      "fromM": 26520,
+      "toM": 26570,
       "why": "the mapped path from 27th St to the riverfront jogs where it meets the trail"
     }
   ]

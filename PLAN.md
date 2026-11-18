@@ -869,7 +869,7 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [x] 4.3 Recording follows the path (the .fit track is where you rode); laps only on a plan; the summary as for any route
 
 *Phase 5 — Remaining segments, in build order*
-- [ ] 5.1 West End Overlook spur (9)
+- [x] 5.1 West End Overlook spur (9): a dead end O up the hill from junction D (West End Bridge, north end of the West End); the base GPX is now an open tour (26.74 km) and its ride back down the spur is a **ghost stretch** (city data `routeGhosts`, 14.19–15.94 km): never drawn, never placed beside, never a network edge (js/world/ghost.js). Network 6 junctions, 8 segments, 11 presets; "Back" at the overlook. Bench dressing on porches kept off sidewalks; walkers keep to the new way's sidewalk when they turn a corner; the life sim skips ghost stretches
 - [ ] 5.2 Oakland & Schenley Park (3)
 - [ ] 5.3 Troy Hill & Rialto (7) + close gap P
 - [ ] 5.4 Area loading (the city built by area instead of around one line) — needed before 10, 6, 8, 5
@@ -894,6 +894,9 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - [ ] F11 Clipping QC: 0 fail, 551 warnings (main 420 on an 18.3 km loop; the tour is 23.2 km): mostly vehicles clipping solids (416), streets under ground (63), trees in solids (33) — review the corridor's share
 - [ ] F12 Where the Jail Trail leaves Smithfield St the two route ribbons overlap and show a dark V-shaped seam for a few metres
 - [ ] F13 A saved route whose segments disappear in a rebuilt network (a segment split by a new junction) shows "plan it again"; map the old segment onto its new pieces instead
+- [ ] F14 West End hillside: steep side streets beside the spur sit off their ground in places (accepted in `qcAccept`: 5.18, 12.70, 13.24, 13.42, 13.43, 14.95, 16.13, 26.54 km) — rework their heights from the terrain
+- [ ] F15 Road meets: a 0.5 m lip at a side-street junction beside the route at 12.43 km (by the West End Bridge); own-junction bound 7, near budget 38 for now (with F7)
+- [ ] F16 Clipping QC after 5.1: 1 fail — a bus passes through the rider at 12.34 km on the return (by junction D, West End Bridge south); the life sim harness also shows cross-street cars passing within 1 m of the rider at 0.5, 5.6 and 20.0 km (not flagged by its in-lane check). Hold cross traffic at the route's junctions while the rider is near; 740 warnings (F11)
 - [ ] F10 The tour's Water Steps start is no longer the route's start: Pittsburgh as free-ride scenery now rolls along the tour from Smithfield & Fort Pitt
 
 ### Later ideas

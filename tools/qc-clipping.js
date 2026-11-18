@@ -14,6 +14,7 @@ import { MeshBVH } from 'three-mesh-bvh';
 import { World } from '../js/world/world.js';
 import { buildCatalogRoute, loadRouteScene } from '../js/routes.js';
 import { riderPose, CHASE } from '../js/world/pose.js';
+import { ghostAt } from '../js/world/ghost.js';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const UP = V(0, 1, 0);
@@ -285,10 +286,14 @@ export async function load(park, quality = 'balanced') {
 }
 
 // ---------------------------------------------------------------- 1. rider and camera along the ride
+// a ride network's ghost stretch (a repeat the rider never rides: the network rides the street's real pass both ways)
+const onGhost = (s) => { const one = route.turnS || route.total; return ghostAt(route, s <= one ? s : route.total - s); };
+
 function checkRide() {
   const L = LIMITS, solidish = (e) => e.kind === 'solid' || (e.kind === 'surface' && !/^Route /.test(e.label));
   let lastStream = -1e9;
   for (let s = 0; s < route.total; s += L.step) {
+    if (onGhost(s)) continue;
     const pose = riderPose(route, world.index, s);
     const fwd = V(pose.flat.x, 0, pose.flat.z), right = V(-fwd.z, 0, fwd.x);
     const pos = V(pose.pos.x, pose.pos.y, pose.pos.z);
@@ -536,7 +541,7 @@ function checkLife(seconds) {
     }
     for (const a of movers) {
       // through the rider
-      if (a.g !== 'boat' && obbOverlap(a.o, rider)) F.add({ check: `${a.g === 'train' ? 'vehicle' : a.g}-through-rider`, severity: a.g === 'vehicle' || a.g === 'train' ? 'fail' : 'warn', s, label: a.label, value: round(t, 1), point: pt(a.p), note: `${a.label.toLowerCase()} passes through the rider` }, 30);
+      if (a.g !== 'boat' && !onGhost(s) && obbOverlap(a.o, rider)) F.add({ check: `${a.g === 'train' ? 'vehicle' : a.g}-through-rider`, severity: a.g === 'vehicle' || a.g === 'train' ? 'fail' : 'warn', s, label: a.label, value: round(t, 1), point: pt(a.p), note: `${a.label.toLowerCase()} passes through the rider` }, 30);
       // through buildings and structures (lifted off the road so wheels/feet don't count)
       const shrink = obb(a.o.center.clone().addScaledVector(UP, .2), a.o.right, UP, a.o.fwd, [a.o.half[0] * .85, Math.max(.1, a.o.half[1] - .3), a.o.half[2] * .9]);
       for (const e of near(shrink.world, (x) => x.kind === 'solid')) {

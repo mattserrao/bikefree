@@ -19,6 +19,7 @@
 // building's style comes from its kind (AUTO_STYLE). OSM details (signals, bus stops, benches, hydrants,
 // shops, car parks, fences) come from the city data's `streetKit` block (tools/citylib/street_kit.py); the
 // kit's own spacing rules fill in the rest. See docs/pittsburgh/detail/s3.md.
+import { ghostAt } from '../../ghost.js';
 import * as THREE from '../../../../vendor/three.module.min.js';
 import { MeshBuilder, hash } from '../core/mesh-builder.js';
 import { ROAD_WIDTH, ROAD_LIFT } from '../../pose.js';
@@ -207,7 +208,7 @@ export class StreetKit {
     const C = 40, R = this.cfg.rangeM, cells = new Map(), r = this.route;
     for (let i = 0; i <= this.end; i++) {
       const s = r.dist[i];
-      if (s < this.cfg.fromM - R || s > this.cfg.toM + R) continue;
+      if (s < this.cfg.fromM - R || s > this.cfg.toM + R || ghostAt(r, s)) continue;
       const x = this.index.xs[i], z = this.index.zs[i], n = Math.ceil(R / C), gx = Math.floor(x / C), gz = Math.floor(z / C);
       for (let a = -n; a <= n; a++) for (let b = -n; b <= n; b++) {
         const d = Math.hypot((gx + a + .5) * C - x, (gz + b + .5) * C - z);

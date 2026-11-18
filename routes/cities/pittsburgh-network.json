@@ -2,17 +2,17 @@
  "format": "bikefree-network-1",
  "id": "pittsburgh",
  "base": "routes/cities/pittsburgh.gpx",
- "legM": 23240,
+ "legM": 26740,
  "nodes": [
   {
    "id": "E",
    "name": "Smithfield St & Fort Pitt Blvd",
    "lat": 40.436469,
    "lon": -80.000952,
-   "ele": 221.83,
+   "ele": 221.87,
    "passes": [
     0,
-    19080
+    22580
    ]
   },
   {
@@ -20,10 +20,10 @@
    "name": "SouthSide Works riverfront",
    "lat": 40.429825,
    "lon": -79.966977,
-   "ele": 228.21,
+   "ele": 228.22,
    "passes": [
     4930,
-    23240
+    26740
    ]
   },
   {
@@ -34,18 +34,46 @@
    "ele": 229.77,
    "passes": [
     7280,
-    21000
+    24500
+   ]
+  },
+  {
+   "id": "D",
+   "name": "West End Bridge south end",
+   "lat": 40.444182,
+   "lon": -80.028191,
+   "ele": 228.89,
+   "passes": [
+    12430,
+    15940
    ]
   },
   {
    "id": "A",
    "name": "North Shore Water Steps",
-   "lat": 40.445497,
-   "lon": -80.00828,
-   "ele": 217.74,
+   "lat": 40.445493,
+   "lon": -80.008295,
+   "ele": 217.64,
    "passes": [
-    14980
+    18480
    ]
+  },
+  {
+   "id": "O",
+   "name": "West End Overlook",
+   "lat": 40.446445,
+   "lon": -80.034378,
+   "ele": 331.71,
+   "passes": [
+    14190
+   ],
+   "deadEnd": true
+  }
+ ],
+ "ghosts": [
+  {
+   "fromM": 14192,
+   "toM": 15936
   }
  ],
  "edges": [
@@ -91,32 +119,72 @@
   },
   {
    "id": "e3",
-   "key": "G>A",
+   "key": "G>D",
    "from": "G",
-   "to": "A",
+   "to": "D",
    "s": [
     7280,
-    14980
+    12430
    ],
-   "lengthM": 7700,
+   "lengthM": 5150,
    "climbM": [
-    162,
-    174
+    155,
+    155
    ],
    "name": "Mount Washington",
    "toward": [
-    "the McArdle climb, Grandview and the West End Bridge",
-    "the West End Bridge, Grandview and down McArdle"
+    "the McArdle climb, Grandview and down to the West End",
+    "up from the West End over Grandview and down McArdle"
    ]
   },
   {
    "id": "e4",
+   "key": "D>O",
+   "from": "D",
+   "to": "O",
+   "s": [
+    12430,
+    14190
+   ],
+   "lengthM": 1760,
+   "climbM": [
+    106,
+    3
+   ],
+   "name": "West End Overlook",
+   "toward": [
+    "the climb up through Elliott to the West End Overlook",
+    "down from the overlook through Elliott"
+   ]
+  },
+  {
+   "id": "e5",
+   "key": "D>A",
+   "from": "D",
+   "to": "A",
+   "s": [
+    15940,
+    18480
+   ],
+   "lengthM": 2540,
+   "climbM": [
+    8,
+    19
+   ],
+   "name": "West End Bridge",
+   "toward": [
+    "the West End Bridge and the North Shore trail",
+    "the North Shore trail and the West End Bridge"
+   ]
+  },
+  {
+   "id": "e6",
    "key": "A>E",
    "from": "A",
    "to": "E",
    "s": [
-    14980,
-    19080
+    18480,
+    22580
    ],
    "lengthM": 4100,
    "climbM": [
@@ -130,13 +198,13 @@
    ]
   },
   {
-   "id": "e5",
+   "id": "e7",
    "key": "E>G",
    "from": "E",
    "to": "G",
    "s": [
-    19080,
-    21000
+    22580,
+    24500
    ],
    "lengthM": 1920,
    "climbM": [
@@ -150,13 +218,13 @@
    ]
   },
   {
-   "id": "e6",
+   "id": "e8",
    "key": "G>H",
    "from": "G",
    "to": "H",
    "s": [
-    21000,
-    23240
+    24500,
+    26740
    ],
    "lengthM": 2240,
    "climbM": [
@@ -175,73 +243,77 @@
    "id": "pgh-three-rivers",
    "name": "Three Rivers Loop",
    "path": [
-    "e4+",
-    "e5+",
     "e6+",
+    "e7+",
+    "e8+",
     "e2+",
-    "e3+"
+    "e3+",
+    "e5+"
    ],
    "tags": [
     "varied"
    ],
    "note": "The whole loop: the Point, downtown, the South Side and the McArdle climb to Grandview",
-   "lengthM": 18310,
-   "climbM": 224
+   "lengthM": 18300,
+   "climbM": 225
   },
   {
    "id": "pgh-three-rivers-rev",
    "name": "Three Rivers Loop · reverse",
    "path": [
+    "e5-",
     "e3-",
     "e2-",
-    "e6-",
-    "e5-",
-    "e4-"
+    "e8-",
+    "e7-",
+    "e6-"
    ],
    "tags": [
     "varied"
    ],
    "note": "The loop the other way: over the West End Bridge, Grandview and down McArdle first",
-   "lengthM": 18310,
+   "lengthM": 18300,
    "climbM": 224
   },
   {
    "id": "pgh-short-loop",
    "name": "South Side Short Loop",
    "path": [
-    "e4+",
-    "e5+",
-    "e3+"
+    "e6+",
+    "e7+",
+    "e3+",
+    "e5+"
    ],
    "tags": [
     "short",
     "hilly"
    ],
    "note": "Skips the South Side riverfront: right at East Carson & 10th, straight up McArdle",
-   "lengthM": 13720,
-   "climbM": 206
+   "lengthM": 13710,
+   "climbM": 207
   },
   {
    "id": "pgh-short-loop-rev",
    "name": "South Side Short Loop · reverse",
    "path": [
-    "e3-",
     "e5-",
-    "e4-"
+    "e3-",
+    "e7-",
+    "e6-"
    ],
    "tags": [
     "short",
     "hilly"
    ],
    "note": "Grandview and down McArdle, then left at East Carson & 10th back to downtown",
-   "lengthM": 13720,
+   "lengthM": 13710,
    "climbM": 207
   },
   {
    "id": "pgh-south-side",
    "name": "South Side Flat Loop",
    "path": [
-    "e6+",
+    "e8+",
     "e2+"
    ],
    "tags": [
@@ -253,12 +325,33 @@
    "climbM": 18
   },
   {
+   "id": "pgh-west-end",
+   "name": "Three Rivers Loop + West End Overlook",
+   "path": [
+    "e6+",
+    "e7+",
+    "e8+",
+    "e2+",
+    "e3+",
+    "e4+",
+    "e4-",
+    "e5+"
+   ],
+   "tags": [
+    "hilly",
+    "new"
+   ],
+   "note": "The whole loop with the climb through Elliott to the West End Overlook and back down",
+   "lengthM": 21820,
+   "climbM": 334
+  },
+  {
    "id": "pgh-jail-trail",
    "name": "Jail Trail & South Side Loop",
    "path": [
     "e1+",
     "e2+",
-    "e5-"
+    "e7-"
    ],
    "tags": [
     "flat",
@@ -273,11 +366,11 @@
    "id": "pgh-point-jail",
    "name": "Point & Jail Trail Loop",
    "path": [
-    "e4+",
+    "e6+",
     "e1+",
     "e2+",
-    "e5-",
-    "e4-"
+    "e7-",
+    "e6-"
    ],
    "tags": [
     "flat",
@@ -291,60 +384,65 @@
    "id": "pgh-jail-mt-washington",
    "name": "Jail Trail & Mount Washington Loop",
    "path": [
-    "e4+",
+    "e6+",
     "e1+",
     "e2+",
-    "e3+"
+    "e3+",
+    "e5+"
    ],
    "tags": [
     "varied",
     "new"
    ],
    "note": "The flat Jail Trail out, the river trail, then the McArdle climb and Grandview home",
-   "lengthM": 19080,
-   "climbM": 231
+   "lengthM": 19070,
+   "climbM": 232
   },
   {
    "id": "pgh-mt-washington",
    "name": "Mount Washington There & Back",
    "path": [
     "e3+",
+    "e5+",
+    "e5-",
     "e3-"
    ],
    "tags": [
     "hilly"
    ],
    "note": "Up McArdle, along Grandview to the Water Steps, then back over the top",
-   "lengthM": 15400,
-   "climbM": 336
+   "lengthM": 15380,
+   "climbM": 337
   },
   {
    "id": "pgh-long",
    "name": "Three Rivers There & Back",
    "path": [
-    "e4+",
-    "e5+",
     "e6+",
+    "e7+",
+    "e8+",
     "e2+",
     "e3+",
+    "e5+",
+    "e5-",
     "e3-",
     "e2-",
-    "e6-",
-    "e5-",
-    "e4-"
+    "e8-",
+    "e7-",
+    "e6-"
    ],
    "tags": [
     "long",
     "varied"
    ],
    "note": "The whole loop, then the whole loop backwards",
-   "lengthM": 36620,
-   "climbM": 448
+   "lengthM": 36600,
+   "climbM": 449
   }
  ],
  "freeRide": {
   "name": "Free Ride · choose every turn",
-  "first": "e4+",
+  "first": "e6+",
   "note": "No plan: from the Water Steps, straight on at every junction unless you choose a turn. Ride until you stop"
  }
 }

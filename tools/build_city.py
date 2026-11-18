@@ -172,7 +172,9 @@ class Router:
 
     def build(self, legs):
         pts, wl, marks = [], [], []
+        self.ghost_legs = []   # [(first, last) point index] of legs marked "ghost": a network tour's repeat
         for leg in legs:
+            first = max(0, len(pts) - 1)
             snapped = []
             for wp in leg['waypoints']:
                 n, d = self.snap((wp[1], wp[2]), wp[3] if len(wp) > 3 else None)
@@ -183,6 +185,7 @@ class Router:
                 seq, ws = self.path(pts[-1], snapped[i], leg['mode'])
                 pts += seq[1:]; wl += ws
                 marks.append((leg['waypoints'][i][0], len(pts) - 1))
+            if leg.get('ghost'): self.ghost_legs.append([first, len(pts) - 1])
         return pts, wl, marks
 
 
@@ -298,12 +301,16 @@ def build(cid):
     router = Router(nodes, ways)
     for lk in cfg.get('links', []): router.link(tuple(lk['from']), tuple(lk['to']), lk['name'])
     pts, wl, marks = router.build(cfg['legs'])
+    # a ghost leg's ends (a spur's turnaround among them) must survive the stub folding below
+    gmarks = [('__ghost%d_%s' % (k, w), idx) for k, g in enumerate(router.ghost_legs) for w, idx in (('a', g[0]), ('b', g[1]))]
+    protect = lambda: {k for n_, k in marks if n_.startswith('__ghost')}
+    marks = marks + gmarks
     # waypoints that sit just off the line leave tiny out-and-back stubs (A B C B A): fold them away
     changed = True
     while changed:
         changed = False
         for i in range(1, len(pts) - 1):
-            if pts[i - 1] == pts[i + 1]:
+            if pts[i - 1] == pts[i + 1] and i not in protect():
                 del pts[i:i + 2]; del wl[i:i + 2]
                 marks = [(n, k if k < i else max(i - 1, k - 2)) for n, k in marks]
                 changed = True; break
@@ -322,7 +329,7 @@ def build(cid):
                 for jj in range(max(0, i - 40), i - 2):
                     if run[i] - run[jj] < 150 and run[i] - run[jj] > 25 and hv(nodes[pts[jj]], nodes[n]) < 15:
                         j = jj; break
-            if j is not None and i - j > 2 and run[i] - run[j] < 150:
+            if j is not None and i - j > 2 and run[i] - run[j] < 150 and not any(j < k_ <= i for k_ in protect()):
                 # keep pts[i] (where the line carries on from), drop the stub between
                 del pts[j + 1:i]; del wl[j + 1:i]
                 marks = [(m, k if k <= j else (j if k < i else k - (i - j - 1))) for m, k in marks]
@@ -427,6 +434,11 @@ def build(cid):
         sd = scum[i2] + (scum[i2 + 1] - scum[i2]) * (k2 - i2)
         k = max(0.0, min(len(chord) - 1.001, sd / 10)); i = int(k)
         return chord[i] + (chord[i + 1] - chord[i]) * (k - i)
+    ghost_idx = {n_: k for n_, k in marks if n_.startswith('__ghost')}
+    marks = [(n_, k) for n_, k in marks if not n_.startswith('__ghost')]
+    route_ghosts = [{'fromM': round(app_s(cum[ghost_idx['__ghost%d_a' % k]])), 'toM': round(app_s(cum[ghost_idx['__ghost%d_b' % k]]))} for k in range(len(router.ghost_legs))]
+    # bridges on a ghost stretch are the real pass's bridges again: built once
+    route_bridges = [b for b in route_bridges if not any(g['fromM'] - 5 <= app_s(b['fromM']) and app_s(b['toM']) <= g['toM'] + 5 for g in route_ghosts)]
     for b in route_bridges: b['fromM'], b['toM'] = round(app_s(b['fromM'])), round(app_s(b['toM']))
     for k in route_kinds: k['fromM'], k['toM'] = round(app_s(k['fromM'])), round(app_s(k['toM']))
     route_kinds[-1]['toM'] = round(chord[-1]) + 10
@@ -750,6 +762,7 @@ def build(cid):
         'grid': {'north': gn, 'west': gw, 'south': gs, 'east': ge, 'nx': nx, 'ny': ny, 'base': 150, 'scale': 0.1, 'h': pack_uint16([(h - 150) * 10 for h in H])},
         'land': {'nx': lx, 'ny': ly, 'rle': rle(land)},
         'routeKinds': route_kinds,
+        **({'routeGhosts': route_ghosts} if route_ghosts else {}),
         'routeBridges': [{**b, 'style': cfg.get('bridgeStyles', {}).get(b['name'], 'girder')} for b in route_bridges],
         'buildings': {
             'count': len(kept),

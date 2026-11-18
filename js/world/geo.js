@@ -1,6 +1,7 @@
 // Map math for the 3D world: web-mercator tiles and a local metre-based frame.
 // Pure functions (tested in Node).
 
+import { ghostMask } from './ghost.js';
 export const EARTH_R = 6378137;
 
 // ---- Tile sources and level-of-detail rules (shared by the live terrain and offline downloads) ----
@@ -66,9 +67,11 @@ export function makeRouteIndex(route, proj, cell = 40) {
   const n = route.dist.length;
   const xs = new Float64Array(n), zs = new Float64Array(n);
   const grid = new Map();
+  const ghost = ghostMask(route);   // a network tour's repeated stretches: never "the nearest route point" (js/world/ghost.js)
   for (let i = 0; i < n; i++) {
     const p = proj.toLocal(route.lat[i], route.lon[i]);
     xs[i] = p.x; zs[i] = p.z;
+    if (ghost?.[i]) continue;
     const key = `${Math.floor(p.x / cell)},${Math.floor(p.z / cell)}`;
     let arr = grid.get(key);
     if (!arr) grid.set(key, (arr = []));

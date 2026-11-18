@@ -15,6 +15,7 @@ import { riderPose, CHASE, ROAD_WIDTH } from '../js/world/pose.js';
 // the boats' wake texture draws on a canvas: a stand-in is enough here
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: () => new Proxy({}, { get: (_, k) => (k === 'createLinearGradient' ? () => ({ addColorStop() {} }) : () => {}), set: () => true }) }) };
 const { CityLife } = await import('../js/world/toolbox/city/life.js');
+const { ghostAt } = await import('../js/world/ghost.js');
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const item = JSON.parse(read('routes/catalog.json')).find((c) => c.id === 'pittsburgh');
@@ -91,6 +92,8 @@ export function simulate(reverse) {
     city.uniforms.uTime.value += DT;
     life.tick(cam, DT, city.uniforms.uTime.value, rider);
     R.ticks++;
+    // a ghost stretch is never ridden (the network rides that street as the reverse of its real pass): don't judge there
+    const out = back ? total - s : s, ghost = ghostAt(route, out) || ghostAt(route, out - NEAR_M) || ghostAt(route, out + NEAR_M);
     const inView = (x, z) => { const dx = x - cam.x, dz = z - cam.z, d = Math.hypot(dx, dz); return d < VIEW_M && (dx * fwd.x + dz * fwd.z) > d * Math.cos(75 * Math.PI / 180); };
     for (const { a, g, cyclist } of agents) {
       const was = last.get(a), alive = a.alive && a.x != null && Number.isFinite(a.x);
@@ -110,6 +113,7 @@ export function simulate(reverse) {
       const r = near ? L.routeDist(a.x, a.z) : null;
       const level = r && Math.abs((a.y ?? r.y) - r.y) < 3;
       let bad = false;
+      if (ghost) { episode.delete(a); continue; }
       if (g === 'person' && r && level && r.d < HALF) {
         // a background cyclist may ride a shared trail, on the far half from the rider
         const far = lateral(a.x, a.z, r.i) * rider.dir < -.5;
