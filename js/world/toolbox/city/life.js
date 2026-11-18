@@ -519,7 +519,9 @@ export class CityLife {
       }
     }
     if (a.queue && stopAt == null) { a.queue.waiting = Math.max(0, (a.queue.waiting || 1) - 1); a.queue = null; a.slot = 0; }
-    if (stopAt == null && a.nx === null && rem < K.look && kind === 'car') { stopAt = rem; turn = true; }   // a dead end: slow down to turn round
+    // a dead end: slow down to turn round, the front (not the middle) at its end — a street cut back to the kerb of
+    // the route's road ends there, and a bus's nose would reach into it [F16]
+    if (stopAt == null && a.nx === null && rem < K.look + 7 && kind === 'car') { stopAt = Math.max(0, rem - (a.bus ? 6.5 : 2.8)); turn = true; }
     let target = a.speed;
     if (stopAt != null) target = stopAt < .05 ? 0 : Math.min(target, Math.sqrt(2 * K.dec * stopAt));
     a.v = Math.max(0, a.v + Math.max(-2 * K.dec * dt, Math.min(K.acc * dt, target - a.v)));
@@ -667,9 +669,13 @@ export class CityLife {
       if (rider && !a.alive) { a.wait = (a.wait || 0) - dt; if (a.wait <= 0) this._spawnOncoming(a, rider); }
       if (!rider || !a.alive) { a.lx = null; continue; }
       a.s += a.dir * a.speed * dt;
-      // gone once well behind the rider (behind the camera); the street ahead of it was checked when it appeared
+      // gone once well behind the rider (behind the camera); the street ahead of it was checked when it appeared.
+      // [network] once the rider has turned off its street at a junction (their place on the base route jumps far
+      // from it), it drives on until it is out of sight
       const behind = (rider.out - a.s) * rider.dir, turn = this.city.route.turnS || this.city.route.total;
-      if (behind > 80 || a.s < 0 || a.s > turn || (behind > 10 && this.city.landscape.routeKindAt(a.s) !== 'road')) { a.alive = false; a.wait = 2 + this.rand() * 6; a.lx = null; continue; }
+      const left = Math.abs(rider.out - a.s) > 900;
+      if (left ? this._outOfView(a.x, a.z, cam, 160, false) || a.s < 0 || a.s > turn
+        : behind > 80 || a.s < 0 || a.s > turn || (behind > 10 && this.city.landscape.routeKindAt(a.s) !== 'road')) { a.alive = false; a.wait = 2 + this.rand() * 6; a.lx = null; continue; }
       // its lane: a fixed offset from the centre line, square to the street's smoothed heading (no step at the GPS points)
       this._routeAt(a.s + 5, q); this._routeAt(a.s - 5, p);
       let hx = q.x - p.x, hz = q.z - p.z; const hl = Math.hypot(hx, hz) || 1; hx /= hl; hz /= hl;
