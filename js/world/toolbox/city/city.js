@@ -1274,7 +1274,7 @@ export class CityScene {
 
   // ---------------------------------------------------------------- per-frame
   /** Build a few building chunks per frame, nearest first, so the ride never stalls. */
-  _stream(cx, cz) {
+  _stream(cx, cz, budgetMs = this._warm ? 7 : 400) {
     if (!this._pending.length) return;
     const t0 = performance.now();
     this._pending.sort((a, b) => {
@@ -1282,7 +1282,7 @@ export class CityScene {
       return Math.hypot((bx + .5) * CHUNK - cx, (bz + .5) * CHUNK - cz) - Math.hypot((ax + .5) * CHUNK - cx, (az + .5) * CHUNK - cz);
     });
     if (this.streetKit) this.streetKit.deferred = !!this._warm;   // [street-kit] while riding, its chunk work runs in its own frame budget
-    while (this._pending.length && performance.now() - t0 < (this._warm ? 7 : 400)) this._buildChunk(this._pending.pop());
+    while (this._pending.length && performance.now() - t0 < budgetMs) this._buildChunk(this._pending.pop());
     this._warm = true;
   }
 

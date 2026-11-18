@@ -216,6 +216,8 @@ export class CourseArches {
       const m = marks[kind];
       drawBanner(ctx, row, kind, m?.title, m?.sub);
       this._clear(kind);
+      // (m.view: the line the mark is on when it isn't the world's own — a city of areas, PLAN 5.4)
+      this._view = m?.view || this.world;
       if (m && Number.isFinite(m.atM)) this.arches[kind] = this._build(kind, row, m.atM, m.archShiftM);
     }
     this.tex.needsUpdate = true;
@@ -224,14 +226,14 @@ export class CourseArches {
 
   /** Ground height beside the road (null where the terrain doesn't know yet). */
   _ground(x, z) {
-    const t = this.world.terrain;
+    const t = (this._view || this.world).terrain;
     const y = t?.heightAt?.(x, z);
     return Number.isFinite(y) ? y : null;
   }
 
   /** The road frame at s, and how far each leg must reach down to the ground (0 where it's level or higher). */
   _fit(s) {
-    const w = this.world, pose = riderPose(w.route, w.index, s, 0);
+    const w = this._view || this.world, pose = riderPose(w.route, w.index, s, 0);
     const c = pose.centre, right = { x: -pose.flat.z, z: pose.flat.x };
     const road = c.y + ROAD_LIFT;
     const drop = (side) => {
@@ -245,7 +247,7 @@ export class CourseArches {
   }
 
   _build(kind, row, atM, shift = kind === 'start' ? [0, 4, -4, 8, 12, 18, 25, 35] : [0, 3, -3, 6, -6, 10, -10]) {
-    const w = this.world, route = w.route;
+    const w = this._view || this.world, route = w.route;
     // the travel direction at the mark, so the banner faces the rider coming up to it
     const s0 = route.closed ? wrapDist(route, atM) : Math.max(0, Math.min(route.total, atM));
     let best = null;

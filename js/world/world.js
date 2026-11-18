@@ -52,6 +52,10 @@ export class World {
     // a ride network (js/network.js): the ride's own position is in path metres; the world maps it onto
     // this route (built as usual around the city loop) and follows the path's curves through junctions
     this.path = opts.path || null;
+    // a network of areas (PLAN 5.4): { id (this route's area), origin {lat, lon} (the city's frame),
+    // load(id) → Promise<route with its scene> }. One area is drawn at a time; the ones the path reaches soon
+    // are built hidden; js/network.js NetRide.areaFor says which to draw.
+    this.areaSet = opts.areas || null;
     this.p = 0;               // displayed position along the path (m), with a path
     this.crank = 0;
     this.running = false;
@@ -67,8 +71,10 @@ export class World {
       minLat = Math.min(minLat, route.lat[i]); maxLat = Math.max(maxLat, route.lat[i]);
       minLon = Math.min(minLon, route.lon[i]); maxLon = Math.max(maxLon, route.lon[i]);
     }
-    this.proj = makeProjection((minLat + maxLat) / 2, (minLon + maxLon) / 2);
+    const origin = this.areaSet?.origin;   // a city of areas: every area in the city's own frame
+    this.proj = origin ? makeProjection(origin.lat, origin.lon) : makeProjection((minLat + maxLat) / 2, (minLon + maxLon) / 2);
     this.index = makeRouteIndex(route, this.proj);
+    this._hazeEle = route.minEle;   // (the valley haze sits on the first area's lowest point, whichever area is drawn)
 
     // Renderer
     // Stylized scenery renders through the frame pipeline (post.js): an offscreen HDR target with its own
@@ -145,6 +151,10 @@ export class World {
     if (junctions) cutRouteRibbon(this.shoulder, junctions, denseRoad(route, this.index)[0].dist);   // [junctions] no shoulder inside a junction (its stations: the drawn curve's)
     this.road = makeRoad(route, this.index);
     this.scene.add(this.road);
+    // the area drawn (one, unless this is a city of areas: then more are built and swapped in as the path goes)
+    this.area = { id: this.areaSet?.id ?? null, route, index: this.index, terrain: this.terrain, road: this.road, shoulder: this.shoulder, ready: true };
+    this.areas = new Map([[this.area.id, this.area]]);
+    this._indexOf = (id) => (id == null || id === this.area.id ? this.index : this._lineIndex(id));
     // weather: clear / marine layer / clouds / rain (stylized scenery)
     if (this.stylized) this.weather = new Weather(this, this.terrain.uniforms);
     // [baked-light] fixed sun, baked shadows and AO for the static scenery (scene "lighting": {"baked": "golden"})
@@ -189,7 +199,122 @@ export class World {
   /** Where to draw the rider: a function returning {pos, speed (m/s), cadence (rpm), riding}. */
   setSource(fn) { this.source = fn; }
   /** Follow a network ride's path (js/network.js NetRide), or null for the route itself. */
-  setPath(path) { this.path = path || null; this._pacerInit = false; }
+  setPath(path) { this.path = path || null; this._pacerInit = false; this._resT = 0; }
+
+  // ---------- Areas (PLAN 5.4) ----------
+  /** The route index of an area's line (the area's own when it is built, else one made from its line). */
+  _lineIndex(id) {
+    const a = this.areas.get(id);
+    if (a?.index) return a.index;
+    const base = this.path?.net?.areas?.get(id)?.base;
+    if (!base) return this.index;
+    const cache = (this._lineIndexes ||= new Map());
+    if (!cache.has(id)) cache.set(id, makeRouteIndex(base, this.proj));
+    return cache.get(id);
+  }
+  /** Is the world a city of areas riding a path across them? */
+  get _multi() { return !!(this.areaSet && this.path?.net?.multi); }
+  /**
+   * Every frame on a network of areas: draw the area the path says (swap when it's built, else fade until it
+   * is), keep the areas the path reaches soon built (hidden, streaming round the camera) and release the rest.
+   */
+  _areaTick(dt) {
+    const want = this.path.areaFor(this.p, this.area.id);
+    let waiting = false;
+    if (want !== this.area.id) {
+      const a = this.areas.get(want);
+      if (a?.ready) this._useArea(a);
+      else { this._ensureArea(want); waiting = true; }
+    }
+    this._fade(waiting);
+    if ((this._resT = (this._resT ?? 0) - dt) <= 0) {
+      this._resT = .5;
+      const need = this.path.areasNear(this.p);
+      const pacer = this.pacerSource?.()?.path;
+      if (pacer?.own) for (const id of pacer.own.areasNear(this.ps ?? this.p, 300, 0)) need.add(id);   // (the pacer, on its own way)
+      need.add(this.area.id);
+      for (const id of need) this._ensureArea(id);
+      for (const a of [...this.areas.values()]) if (!need.has(a.id) && a !== this.area && a.ready) this._releaseArea(a);
+    }
+    const c = this.camera.position;
+    for (const a of this.areas.values()) if (a !== this.area && a.ready) a.terrain.prepare?.(c.x, c.z, 2);
+  }
+  /** Load and build an area (hidden) unless it is built or on its way. */
+  _ensureArea(id) {
+    if (this.areas.has(id) || !this.areaSet?.load) return;
+    const rec = { id, ready: false };
+    this.areas.set(id, rec);
+    this.areaSet.load(id).then((route) => {
+      if (this.disposed || this.areas.get(id) !== rec) return;
+      const t0 = performance.now();
+      Object.assign(rec, this._buildArea(id, route));
+      rec.buildMs = Math.round(performance.now() - t0);
+      return rec.terrain.ready;
+    }).then(() => {
+      if (this.disposed || this.areas.get(id) !== rec || !rec.terrain) return;
+      rec.ready = true;
+      this.log('3d', `Area ${id} ready (built in ${rec.buildMs} ms)`, 'debug');
+    }).catch((err) => { this.log('3d', `Area ${id} could not load: ${err.message}`, 'error'); if (this.areas.get(id) === rec) this.areas.delete(id); });
+  }
+  /** An area's scenery, road and shoulder, built in the city's frame and kept hidden until it is drawn. */
+  _buildArea(id, route) {
+    const index = makeRouteIndex(route, this.proj);
+    const terrain = new StylizedTerrain(this.scene, this.proj, index, {
+      route, quality: this.qualityKey, renderer: this.renderer, farInner: FAR_INNER, farBand: FAR_BAND, look: this.look?.key,
+      uniforms: this.terrain.uniforms,   // one set for every area: the weather and the time drive them all
+      onError: (err) => this.log('3d', `Area ${id}: ${err.message}`, 'debug'),
+    });
+    terrain.group.visible = false;
+    const city = route.scene?.terrain === 'authored-city';
+    const shoulder = makeRibbon(route, index, ROAD_WIDTH + (city ? 4 : 1.6), city ? .09 : 0.05, makeGravelTexture(true, city), 3, { polygonOffsetFactor: city ? -1.8 : -1, polygonOffsetUnits: city ? -1.8 : -1 });
+    const junctions = city ? junctionPlan(terrain.landscape, index, route) : null;   // [junctions]
+    if (junctions) cutRouteRibbon(shoulder, junctions, denseRoad(route, index)[0].dist);
+    const road = makeRoad(route, index);
+    shoulder.visible = road.visible = false;
+    this.scene.add(shoulder, road);
+    this.weather?._wetRoad(road);
+    terrain.setTime?.(this.timeKey);
+    terrain.setNight?.(this._time?.night ? 1 : 0);
+    if (this.farTerrain) terrain.setFar(!!this._farOn);
+    return { id, route, index, terrain, road, shoulder };
+  }
+  /** Draw area `a` instead of the one drawn now (both are the same streets where this happens). */
+  _useArea(a) {
+    const old = this.area;
+    old.terrain.group.visible = false; old.road.visible = false; old.shoulder.visible = false;
+    a.terrain.group.visible = true; a.road.visible = true; a.shoulder.visible = !this.wireframe;
+    Object.assign(this, { area: a, route: a.route, index: a.index, terrain: a.terrain, road: a.road, shoulder: a.shoulder });
+    if (this.farTerrain) a.terrain.realHeightAt = (x, z) => this.farTerrain.heightAt(x, z);
+    const bank = this.weather?.bankUniforms;
+    if (bank && a.terrain.shoreTexture) { bank.bfShore.value = a.terrain.shoreTexture; bank.bfShoreBox.value = a.terrain.shoreBox || bank.bfShoreBox.value; }
+    (this.areaLog ||= []).push({ id: a.id, p: Math.round(this.p) });
+    this.log('3d', `Drawing area ${a.id}`, 'debug');
+  }
+  _releaseArea(a) {
+    this.areas.delete(a.id);
+    a.terrain.dispose();
+    for (const o of [a.road, a.shoulder]) {
+      o.removeFromParent();
+      o.traverse((m) => {
+        if (m.geometry) m.geometry.dispose();
+        if (m.material) [].concat(m.material).forEach((mt) => { mt.userData.disposed = true; for (const key of ['map', 'bumpMap']) mt[key]?.dispose(); mt.dispose(); });
+      });
+    }
+    this.log('3d', `Released area ${a.id}`, 'debug');
+  }
+  /** A short fade to the sky while the next area is still being built (the ride carries on underneath). */
+  _fade(on) {
+    if (!on && !this._fadeEl) return;
+    if (!this._fadeEl) {
+      this._fadeEl = document.createElement('div');
+      this._fadeEl.className = 'area-fade';
+      Object.assign(this._fadeEl.style, { position: 'absolute', inset: '0', zIndex: 4, pointerEvents: 'none', opacity: '0', transition: 'opacity .3s' });
+      this.container.appendChild(this._fadeEl);
+    }
+    if (on) this._fadeEl.style.background = `#${this.scene.fog.color.getHexString()}`;
+    this._fadeEl.style.opacity = on ? '1' : '0';
+    this._waitingArea = on;
+  }
 
   /**
    * The start and finish arches for the ride that's planned (js/world/toolbox/roadside/course-arches.js):
@@ -204,7 +329,12 @@ export class World {
     }
     if (this.path) {
       // network ride: the marks are path metres; the arches stand where that is on the city loop
-      const at = (m) => (m && Number.isFinite(m.atM) ? { ...m, atM: this.path.worldS(m.atM) } : m);
+      // (a city of areas: on the area drawn where it covers the mark, else on the mark's own area's line)
+      const at = (m) => {
+        if (!m || !Number.isFinite(m.atM)) return m;
+        const w = this.path.worldAt(m.atM, this.area.id), a = this.areas.get(w.area);
+        return { ...m, atM: w.s, view: w.area === this.area.id ? null : a?.ready ? a : { route: this.path.net.areas.get(w.area).base, index: this._lineIndex(w.area), terrain: null } };
+      };
       marks = marks && { start: at(marks.start), finish: at(marks.finish) };
     }
     if (!marks?.start && !marks?.finish && !this.courseArches) return;
@@ -225,7 +355,7 @@ export class World {
   }
   /** The same at path metre p on a network ride (the curves through junctions included); `path`: another rider's own copy of it (the pacer's). */
   _placePath(p, lane, out, path = this.path) {
-    const pose = path.pose(p, this.index, lane);
+    const pose = path.pose(p, this._indexOf, lane, this.area.id);   // (on the area drawn, PLAN 5.4)
     out.pos.set(pose.pos.x, pose.pos.y, pose.pos.z);
     out.fwd.set(pose.fwd.x, pose.fwd.y, pose.fwd.z);
     out.flat.set(pose.flat.x, 0, pose.flat.z);
@@ -308,7 +438,7 @@ export class World {
       this.sun.shadow.mapSize.set(resolution, resolution);
     }
     this.post?.setSamples(quality.samples);
-    this.terrain.setQuality(this.qualityKey);
+    for (const a of this.areas.values()) a.terrain?.setQuality(this.qualityKey);
     this.scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => { m.needsUpdate = true; }); });
     this._resize?.();
   }
@@ -364,7 +494,7 @@ export class World {
     // valley haze (haze.js): low air thickens in the morning, thins at midday; a scene can scale or deepen it
     if (this.stylized) {
       const A = this.atmosphere, strength = { morning: .5, golden: .32, midday: .2, night: .14 }[this.timeKey] ?? .25;
-      HAZE.x = (A.hazeBaseM ?? this.route.minEle) - 10;
+      HAZE.x = (A.hazeBaseM ?? this._hazeEle) - 10;
       HAZE.y = A.hazeM ?? 75;
       HAZE.z = Math.min(.85, strength * (A.haze ?? 1) * (1 + o * .4));
     } else HAZE.z = 0;
@@ -373,11 +503,10 @@ export class World {
     if (VH && !t.night) {
       const c = new THREE.Color(t.horizon).lerp(new THREE.Color(t.top), VH.blue);
       AERIAL_COLOR.r = c.r; AERIAL_COLOR.g = c.g; AERIAL_COLOR.b = c.b;
-      Object.assign(AERIAL, { x: VH.rangeM, y: VH.strength * (1 - o * .3), z: VH.falloffM, w: VH.baseM ?? this.route.minEle });
+      Object.assign(AERIAL, { x: VH.rangeM, y: VH.strength * (1 - o * .3), z: VH.falloffM, w: VH.baseM ?? this._hazeEle });
     } else AERIAL.y = 0;
     this._fogBase = { near: this._fogBase?.near ?? this.scene.fog.near, far: this._fogBase?.far ?? this.scene.fog.far, color: new THREE.Color(t.horizon) };
-    this.terrain?.setTime?.(this.timeKey);
-    this.terrain?.setNight?.(t.night ? 1 : 0);
+    for (const a of this.areas?.values() || [{ terrain: this.terrain }]) { a.terrain?.setTime?.(this.timeKey); a.terrain?.setNight?.(t.night ? 1 : 0); }
     if (t.night && this.stylized && !this.headlight) {
       // a front light on the bike, so the road ahead reads in the dark
       this.headlight = new THREE.SpotLight('#fff1d6', 650, 85, .58, 1, 1.5);
@@ -425,7 +554,8 @@ export class World {
     if (this.path) {
       // network ride: follow the path, and stand on the city loop where that is
       this.p = this._followPath(this.p, src.pos, src.speed, dt);
-      this.s = this.path.worldS(this.p);
+      if (this._multi) this._areaTick(dt);
+      this.s = this.path.worldAt(this.p, this.area.id).s;
       placed = this._placePath(this.p, RIDER_LANE, riderOut);
     } else {
       this.s += src.speed * dt;
@@ -461,7 +591,7 @@ export class World {
         this._farOn = on;
         this.farTerrain.uniforms.uFar.value.z = on ? 1 : 0;
         this.farTerrain.group.visible = on;
-        this.terrain.setFar(on);
+        for (const a of this.areas.values()) a.terrain?.setFar(on);
         // see further once the real horizon is there
         this.scene.fog.far = on ? this.atmosphere.fogFarRealM : this.atmosphere.fogFarM;
         if (this._fogBase) this._fogBase.far = this.scene.fog.far;
@@ -559,7 +689,7 @@ export class World {
   /** Render one frame without the animation loop (used for previews/tests). */
   renderOnce() { const r = this.running; this.running = true; this._frame(performance.now()); this.running = r; cancelAnimationFrame(this._raf); }
 
-  get loading() { return this.terrain.loadingCount + (this.baked?.preparing ? 4 : 0); }   // [w2-bake] (4: the app's loading bar shows from 4)
+  get loading() { return this.terrain.loadingCount + (this.baked?.preparing ? 4 : 0) + (this._waitingArea ? 4 : 0); }   // [w2-bake] (4: the app's loading bar shows from 4)
 
   /** [w2-bake] "Preparing scenery" over the view while the first bake runs behind it. */
   _bakeLoader() {
@@ -586,6 +716,8 @@ export class World {
     this._bakeEl?.remove();   // [w2-bake]
     this.post?.dispose();
     this.courseArches?.dispose();
+    for (const a of this.areas.values()) if (a !== this.area) a.terrain?.dispose();
+    this._fadeEl?.remove();
     this.terrain.dispose();
     this.farTerrain?.dispose();
     this.sun.shadow.map?.dispose(); this.sun.shadow.mapPass?.dispose();

@@ -13,6 +13,13 @@
 // of traversals), or straight on once off it; at each junction the rider can pick another way before the
 // choice locks. Positions in the path route ("path metres") map to the base route (world.s) for the 3D
 // world, and through a junction the rider's pose follows a smooth curve from one traversal to the next.
+//
+// Areas (bikefree-network-2, PLAN 5.4): a city's network can span several areas, each built around its own
+// base line (its own route, scenery and city data, all in one shared frame: the city's origin). Every edge
+// lives on one area's line; a junction where two areas meet is a portal, on both lines. An area's line also
+// runs an "apron" along the other areas' edges at its portals (drawn, not ridden as its own edge), so near a
+// portal either area can draw the streets around the rider: `areaS` maps a place on an edge onto any area
+// that covers it, `NetRide.areaFor` picks the area to draw, and poses are taken on the area drawn.
 import { routeAt } from './gpx.js';
 import { riderPose } from './world/pose.js';
 
@@ -27,6 +34,9 @@ export const PASS_R = 6;           // passing straight through where the base ro
 const AHEAD_M = 150000;            // the path route always reaches this far beyond the rider (and the planner)
 const REFILL_M = 100000;           // …refilled once less than this is left
 const HEADING_M = 15;              // an arm's heading: from the junction to this far along it
+export const SWAP_AHEAD_M = 200;   // areas: the area drawn keeps drawing while it covers the rider and this far ahead
+export const PRELOAD_M = 1500;     // …an area the path enters within this far ahead is loaded and built, hidden
+export const RELEASE_M = 600;      // …and one not drawn, not ahead and not within this far behind is released
 const CORNER = { minDeg: 60, decel: 2 };   // speed cap: sharper than this; the rider slows at this m/s²
 
 const deg = (r) => (r * 180) / Math.PI;
@@ -34,26 +44,71 @@ const unit2 = (v) => { const l = Math.hypot(v.x, v.z) || 1; return { x: v.x / l,
 export const travKey = (t) => `${t.e.id}${t.dir > 0 ? '+' : '-'}`;
 const same = (a, b) => a && b && a.e === b.e && a.dir === b.dir;
 
-/** Load a network over its base route (a catalog route, mirrored: the app's route frame). */
+/**
+ * Load a network over its base route(s) (catalog routes, mirrored: the app's route frame). `base`: the route
+ * (one area), or for a network of areas a Map (or object) of area id → that area's route.
+ */
 export function loadNetwork(json, base) {
-  if (json?.format !== 'bikefree-network-1') throw new Error('Unsupported network format');
-  const L = base.turnS || base.total;
-  if (Math.abs(L - json.legM) > 0.5) throw new Error('The network is out of date with its route (run tools/build_network.mjs)');
+  const v2 = json?.format === 'bikefree-network-2';
+  if (!v2 && json?.format !== 'bikefree-network-1') throw new Error('Unsupported network format');
+  const list = v2 ? json.areas : [{ id: MAIN, legM: json.legM, ghosts: json.ghosts }];
+  const baseOf = (id) => (base instanceof Map ? base.get(id) : base?.dist ? base : base?.[id]);
+  const areas = new Map();
+  for (const a of list) {
+    const b = baseOf(a.id);
+    if (!b) throw new Error(`No route for area ${a.id} of the ${json.id} network`);
+    const L = b.turnS || b.total;
+    if (Math.abs(L - a.legM) > 0.5) throw new Error(`The network is out of date with its route${v2 ? ` (area ${a.id})` : ''} (run tools/build_network.mjs)`);
+    areas.set(a.id, { id: a.id, json: a, base: b, L, total: b.total, aprons: [] });
+  }
   const nodes = new Map(json.nodes.map((n) => [n.id, { ...n, arms: [] }]));
-  const edges = new Map(json.edges.map((e) => [e.id, { ...e, s0: e.s[0], s1: e.s[1], len: e.lengthM }]));
-  const net = { id: json.id, json, base, L, total: base.total, nodes, edges, presets: json.presets || [] };
+  const edges = new Map(json.edges.map((e) => [e.id, { ...e, area: e.area || MAIN, s0: e.s[0], s1: e.s[1], len: e.lengthM }]));
+  const first = areas.values().next().value;
+  const net = { id: json.id, json, areas, multi: areas.size > 1, origin: json.origin || null,
+    base: first.base, L: first.L, total: first.total, nodes, edges, presets: json.presets || [] };
   for (const e of edges.values()) {
-    if (!(e.s0 >= 0 && e.s1 <= L && e.len === e.s1 - e.s0 && e.len % STEP === 0)) throw new Error(`Network edge ${e.id} is not on the route's 10 m samples`);
+    e.A = areas.get(e.area);
+    if (!e.A) throw new Error(`Network edge ${e.id}: no area ${e.area}`);
+    if (!(e.s0 >= 0 && e.s1 <= e.A.L && e.len === e.s1 - e.s0 && e.len % STEP === 0)) throw new Error(`Network edge ${e.id} is not on the route's 10 m samples`);
     nodes.get(e.from).arms.push({ e, dir: 1 });
     nodes.get(e.to).arms.push({ e, dir: -1 });
   }
+  // aprons: an area's line along another area's edge, from a portal ({edge, dir, s: [s0, s1], u0}: its samples
+  // s0…s1 ride the edge from forward metre u0, forward (dir +1) or backward)
+  for (const a of list) for (const ap of a.aprons || []) {
+    const e = edges.get(ap.edge);
+    if (!e) throw new Error(`Area ${a.id}: apron on a missing edge ${ap.edge}`);
+    areas.get(a.id).aprons.push({ e, dir: ap.dir, s0: ap.s[0], s1: ap.s[1], u0: ap.u0 });
+  }
   return net;
 }
+const MAIN = 'main';   // the one area of a network-1 (a single base line)
 
-/** Base-route position (the app's route frame) of a point `u` metres along a traversal. */
+/** Base-route position (the app's route frame) of a point `u` metres along a traversal, on its edge's own area's line. */
 export function worldS(net, t, u) {
-  return t.dir > 0 ? t.e.s0 + u : net.total - (t.e.s1 - u);
+  return t.dir > 0 ? t.e.s0 + u : t.e.A.total - (t.e.s1 - u);
 }
+
+/**
+ * The same point on area `areaId`'s line: its own edge's, or an apron of that area along the edge; null when
+ * that area doesn't cover it.
+ */
+export function areaS(net, areaId, t, u) {
+  if (t.e.area === areaId) return worldS(net, t, u);
+  const A = net.areas.get(areaId);
+  if (!A) return null;
+  const f = t.dir > 0 ? u : t.e.len - u;   // forward metre along the edge
+  for (const ap of A.aprons) {
+    if (ap.e !== t.e) continue;
+    const k = ap.dir > 0 ? f - ap.u0 : ap.u0 - f;   // metres into the apron (its outbound way)
+    if (k < -0.01 || k > ap.s1 - ap.s0 + 0.01) continue;
+    const s = ap.s0 + Math.max(0, Math.min(ap.s1 - ap.s0, k));
+    return (t.dir > 0) === (ap.dir > 0) ? s : A.total - s;   // riding the apron's way, or its mirrored return
+  }
+  return null;
+}
+/** The base route of the area an edge lives on. */
+export const baseOf = (t) => t.e.A.base;
 export const startNode = (t) => (t.dir > 0 ? t.e.from : t.e.to);
 export const endNode = (t) => (t.dir > 0 ? t.e.to : t.e.from);
 export const climbOf = (t) => t.e.climbM[t.dir > 0 ? 0 : 1];
@@ -61,8 +116,8 @@ export const towardOf = (t) => t.e.toward?.[t.dir > 0 ? 0 : 1] || t.e.name;
 
 /** Flat direction (x east, z south: the 3D world's frame) from u0 to u1 along a traversal. */
 function headingAlong(net, t, u0, u1) {
-  const a = routeAt(net.base, worldS(net, t, Math.max(0, Math.min(t.e.len, u0))));
-  const b = routeAt(net.base, worldS(net, t, Math.max(0, Math.min(t.e.len, u1))));
+  const a = routeAt(baseOf(t), worldS(net, t, Math.max(0, Math.min(t.e.len, u0))));
+  const b = routeAt(baseOf(t), worldS(net, t, Math.max(0, Math.min(t.e.len, u1))));
   const k = 6378137 * Math.PI / 180;
   return unit2({ x: (b.lon - a.lon) * k * Math.cos((a.lat * Math.PI) / 180), z: -(b.lat - a.lat) * k });
 }
@@ -187,14 +242,15 @@ export class NetRide extends EventTarget {
     }
   }
 
-  /** Lay the path out as a route: 10 m samples copied from the base route (edges sit on its samples). */
+  /** Lay the path out as a route: 10 m samples copied from the base route (edges sit on its samples; each edge from its own area's line). */
   _rebuild() {
-    const net = this.net, base = net.base, r = this.route;
+    const net = this.net, r = this.route;
     const n = Math.round(this.endOf(this.entries.length - 1) / STEP) + 1;
     const dist = new Float64Array(n), lat = new Float64Array(n), lon = new Float64Array(n), ele = new Float64Array(n), grade = new Float64Array(n);
     let k = 0;
     for (const x of this.entries) {
       const len = x.t.e.len, first = k === 0 ? 0 : 1;   // a junction's sample is shared with the last entry
+      const base = baseOf(x.t);
       for (let u = first * STEP; u <= len; u += STEP) {
         const i = Math.round(worldS(net, x.t, u) / STEP) % (base.dist.length - 1);
         dist[k] = k * STEP; lat[k] = base.lat[i]; lon[k] = base.lon[i]; ele[k] = base.ele[i]; grade[k] = base.grade[i];
@@ -288,22 +344,63 @@ export class NetRide extends EventTarget {
     return [this.entries[i].p0, this.endOf(Math.min(this.entries.length - 1, i + 1))];
   }
 
-  /** Base-route position (the 3D world's) of path metre p. */
+  /** Base-route position (the 3D world's) of path metre p (on its edge's own area's line). */
   worldS(p) {
     const i = this.entryAt(p), x = this.entries[i];
     return worldS(this.net, x.t, Math.max(0, Math.min(x.t.e.len, p - x.p0)));
+  }
+
+  /** Where path metre p is: { area, s } on `area`'s line when that area covers it (own edge or apron), else on its edge's own. */
+  worldAt(p, area = null) {
+    const x = this.entries[this.entryAt(p)], u = Math.max(0, Math.min(x.t.e.len, p - x.p0));
+    if (area != null && area !== x.t.e.area) { const s = areaS(this.net, area, x.t, u); if (s != null) return { area, s }; }
+    return { area: x.t.e.area, s: worldS(this.net, x.t, u) };
+  }
+  /** Does area `area`'s line cover path metre p? */
+  covers(area, p) {
+    const x = this.entries[this.entryAt(p)];
+    return x.t.e.area === area || areaS(this.net, area, x.t, Math.max(0, Math.min(x.t.e.len, p - x.p0))) != null;
+  }
+  /**
+   * The area to draw at path metre p, given the one drawn now: it keeps drawing while it covers p and the next
+   * SWAP_AHEAD_M; else the area that covers p and reaches furthest ahead (so the swap happens inside an apron,
+   * where both show the same streets). One area: always it.
+   */
+  areaFor(p, current = null) {
+    const net = this.net;
+    if (!net.multi) return net.areas.keys().next().value;
+    if (current != null && this.covers(current, p) && this.covers(current, p + SWAP_AHEAD_M / 2) && this.covers(current, p + SWAP_AHEAD_M)) return current;
+    let best = null, reach = -1;
+    for (const id of net.areas.keys()) {
+      if (!this.covers(id, p)) continue;
+      let d = 0;
+      while (d < 2000 && this.covers(id, p + d + 50)) d += 50;
+      if (d > reach || (d === reach && id === current)) { reach = d; best = id; }
+    }
+    return best ?? this.entries[this.entryAt(p)].t.e.area;
+  }
+  /** The areas the path is in from `behind` metres back to `ahead` metres on (the world keeps these loaded). */
+  areasNear(p, ahead = PRELOAD_M, behind = RELEASE_M) {
+    const out = new Set();
+    for (let i = this.entryAt(Math.max(0, p - behind)); i < this.entries.length && this.entries[i].p0 <= p + ahead; i++) out.add(this.entries[i].t.e.area);
+    return out;
   }
 
   /** The junction between entries i−1 and i: its curve radius, or 0 when the path runs straight on along the base route. */
   _junction(i) {
     if (i <= 0 || i >= this.entries.length) return null;
     const a = this.entries[i - 1], b = this.entries[i];
-    const sa = worldS(this.net, a.t, a.t.e.len), sb = worldS(this.net, b.t, 0);
     // straight on along the base route: the same base position, but not at its own U-turns (the far end of the
-    // way out, L, and the start, 0 = total), where carrying on along the base route means turning round
-    const T = this.net.total, L = this.net.L;
-    const atTurn = (x) => x < 0.5 || Math.abs(x - L) < 0.5 || T - x < 0.5;
-    const seamless = Math.abs(sa - sb) < 0.5 && !atTurn(sa);
+    // way out, L, and the start, 0 = total), where carrying on along the base route means turning round. Across
+    // areas: seamless on every line that covers both sides (an area's line running on into its apron)
+    let seamless = null;
+    for (const A of this.net.areas.values()) {
+      const sa = areaS(this.net, A.id, a.t, a.t.e.len), sb = areaS(this.net, A.id, b.t, 0);
+      if (sa == null || sb == null) continue;
+      const atTurn = (x) => x < 0.5 || Math.abs(x - A.L) < 0.5 || A.total - x < 0.5;
+      const here = Math.abs(sa - sb) < 0.5 && !atTurn(sa);
+      seamless = seamless == null ? here : seamless && here;
+    }
     if (seamless) return null;
     const o = optionsAt(this.net, a.t).find((x) => same(x.t, b.t));
     const angle = o ? o.angle : 0;
@@ -334,12 +431,12 @@ export class NetRide extends EventTarget {
    * (route + its world index), `lane` × road width right of the centre line. Through a junction it follows a
    * cubic curve from the pose TURN_R before it on the way in to the pose TURN_R after it on the way out.
    */
-  pose(p, index, lane) {
+  pose(p, index, lane, area = null) {
     const i = this.entryAt(p), x = this.entries[i], u = p - x.p0;
     const here = this._fit(i, index), next = this._fit(i + 1, index);
-    if (here && u < here.R) return this._curve(i, here, p, index, lane);
-    if (next && x.t.e.len - u < next.R) return this._curve(i + 1, next, p, index, lane);
-    return this._basePose(x, u, index, lane);
+    if (here && u < here.R) return this._curve(i, here, p, index, lane, area);
+    if (next && x.t.e.len - u < next.R) return this._curve(i + 1, next, p, index, lane, area);
+    return this._basePose(x, u, index, lane, area);
   }
   /**
    * The junction with its curve fitted to the real streets: the turn's own radius, or wider (up to +9 m) where
@@ -375,12 +472,16 @@ export class NetRide extends EventTarget {
     }
     return worst;
   }
-  _basePose(x, u, index, lane) {
-    return riderPose(this.net.base, index, worldS(this.net, x.t, Math.max(0, Math.min(x.t.e.len, u))), lane, { uturns: false });
+  /** A pose on a traversal's line: on area `area`'s line (the area drawn) where it covers the spot, else on its own. `index`: the route index, or a function of the area id. */
+  _basePose(x, u, index, lane, area = null) {
+    const uu = Math.max(0, Math.min(x.t.e.len, u));
+    const s = area != null && area !== x.t.e.area ? areaS(this.net, area, x.t, uu) : null;
+    const A = s != null ? this.net.areas.get(area) : x.t.e.A;
+    return riderPose(A.base, typeof index === 'function' ? index(A.id) : index, s ?? worldS(this.net, x.t, uu), lane, { uturns: false });
   }
-  _curve(i, J, p, index, lane) {
+  _curve(i, J, p, index, lane, area = null) {
     const a = this.entries[i - 1], b = this.entries[i];
-    const A = this._basePose(a, a.t.e.len - J.R, index, lane), B = this._basePose(b, J.R, index, lane);
+    const A = this._basePose(a, a.t.e.len - J.R, index, lane, area), B = this._basePose(b, J.R, index, lane, area);
     const w = Math.max(0, Math.min(1, (p - (J.P - J.R)) / (2 * J.R)));
     const chord = Math.hypot(B.pos.x - A.pos.x, B.pos.z - A.pos.z);
     const H = Math.max(chord, 1.2 * J.R);
@@ -407,21 +508,11 @@ export class NetRide extends EventTarget {
   }
 
   /** Every edge as a lat/lon line (for the minimap), built once per network. */
-  edgeLines() {
-    const net = this.net, base = net.base;
-    if (!net._lines) {
-      net._lines = [...net.edges.values()].map((e) => {
-        const n = e.len / STEP + 1, lat = new Float64Array(n), lon = new Float64Array(n);
-        for (let k = 0; k < n; k++) { const i = e.s0 / STEP + k; lat[k] = base.lat[i]; lon[k] = base.lon[i]; }
-        return { id: e.id, lat, lon };
-      });
-    }
-    return net._lines;
-  }
+  edgeLines() { return edgeLines(this.net); }
 
   /** The first `len` metres of a way on (an option at a junction) as a lat/lon line. */
   stub(t, len = 200) {
-    const base = this.net.base, out = { lat: [], lon: [] };
+    const base = baseOf(t), out = { lat: [], lon: [] };
     for (let u = 0; u <= Math.min(len, t.e.len); u += STEP) {
       const i = Math.round(worldS(this.net, t, u) / STEP) % (base.dist.length - 1);
       out.lat.push(base.lat[i]); out.lon.push(base.lon[i]);
@@ -473,11 +564,13 @@ export class PathFollower {
   }
 
   worldS(p) { return this.own.worldS(p); }
-  pose(p, index, lane) { return this.own.pose(p, index, lane); }
+  worldAt(p, area = null) { return this.own.worldAt(p, area); }
+  pose(p, index, lane, area = null) { return this.own.pose(p, index, lane, area); }
+  _at(p) { const x = this.own.entries[this.own.entryAt(p)]; return routeAt(baseOf(x.t), this.worldS(p)); }
   /** % grade at path metre p (the base route's, the way the follower rides it). */
-  grade(p) { return routeAt(this.ride.net.base, this.worldS(p)).grade; }
+  grade(p) { return this._at(p).grade; }
   /** Where path metre p is on the map. */
-  latLon(p) { const a = routeAt(this.ride.net.base, this.worldS(p)); return { lat: a.lat, lon: a.lon }; }
+  latLon(p) { const a = this._at(p); return { lat: a.lat, lon: a.lon }; }
 }
 
 /**
@@ -501,11 +594,23 @@ export function makePathRoute(net, preset, { id, name, park } = {}) {
   for (const x of route.netRide.entries) {
     if (x.p0 >= span) break;
     if (x.t.dir < 0) continue;
-    for (const s of net.base.stops || []) if (s.atM > x.t.e.s0 && s.atM < x.t.e.s1) stops.push({ name: s.name, atM: x.p0 + s.atM - x.t.e.s0 });
+    for (const s of baseOf(x.t).stops || []) if (s.atM > x.t.e.s0 && s.atM < x.t.e.s1) stops.push({ name: s.name, atM: x.p0 + s.atM - x.t.e.s0 });
   }
   route.stops = stops.sort((a, b) => a.atM - b.atM);
   if (route.free) route.stops = route.stops.filter((st, i, all) => all.findIndex((o) => o.name === st.name) === i);   // each junction once
   return route;
+}
+
+/** Every edge as a lat/lon line, each from its own area's line (the minimap, the planner), built once per network. */
+export function edgeLines(net) {
+  if (!net._lines) {
+    net._lines = [...net.edges.values()].map((e) => {
+      const n = e.len / STEP + 1, lat = new Float64Array(n), lon = new Float64Array(n), base = e.A.base;
+      for (let k = 0; k < n; k++) { const i = e.s0 / STEP + k; lat[k] = base.lat[i]; lon[k] = base.lon[i]; }
+      return { id: e.id, e, lat, lon };
+    });
+  }
+  return net._lines;
 }
 
 /** Does a plan (traversal keys) end where it starts, so it can be ridden round and round? */

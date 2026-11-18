@@ -81,7 +81,8 @@ export class StylizedTerrain {
     this.inlandAt = this.landscape.inlandAt || ((x, z) => x - this.landscape.coastX(z));
     this.lookoutFootprints = (this.config.lookouts || []).map((l) => ({ ...l,
       ...roadFrame(this.route, routeIndex, l.atM, (l.side === 'inland' ? -1 : 1) * (3.5 + l.widthM / 2)) }));
-    this.uniforms = { uTime: { value: 0 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
+    // (a city's areas share one set: the weather and the time drive them all — PLAN 5.4)
+    this.uniforms = opts.uniforms || { uTime: { value: 0 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
       uSkyTop: { value: new THREE.Color() }, uSkyHorizon: { value: new THREE.Color() },
       // weather (js/world/toolbox/atmosphere/weather.js): cloud cover/shadow/drift, wind, wet ground, sea roughness
       bfCloud: { value: new THREE.Vector4(.12, .5, .8, .57) }, bfWind: { value: .3 }, bfWet: { value: 0 }, bfRough: { value: .7 } };
@@ -1157,6 +1158,18 @@ export class StylizedTerrain {
       m.visible = (!this.farOn || d < limit) && d < lakeReach;
     }
     if (this.mistMeshes) for (const m of this.mistMeshes) m.visible = this.mistOpacity.value > 0 && (!this.farOn || Math.hypot(m.userData.c.x - cx, m.userData.c.z - cz) - m.userData.r < limit);
+  }
+
+  /**
+   * Areas (PLAN 5.4): an area built but not drawn yet streams its ground, plants and city chunks around the
+   * camera at a small frame budget, so it is ready when the world swaps to it. Its life doesn't run.
+   */
+  prepare(cx, cz, budgetMs = 2) {
+    const deadline = performance.now() + budgetMs;
+    if (Math.hypot(cx - this._lastX, cz - this._lastZ) >= 36) this._plan(cx, cz);
+    if (this._want) this._build(deadline);
+    this.stats.ready = this.patches.size;
+    this.city?._stream(cx, cz, Math.max(.5, deadline - performance.now()));
   }
 
   /** Every frame (the city's traffic, people and boats move continuously). */

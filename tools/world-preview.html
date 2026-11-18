@@ -41,16 +41,33 @@ try {
  if (route.scene && q.get('horizon') === '0') route.scene.realHorizon = false;
  // [toolbox] ?standard=1: the route with the toolbox standard look (gentle cartoon, baked light at its time of day)
  if (route.scene && q.get('standard') === '1') { route.scene.look ||= 'gentle'; route.scene.lighting = { ...route.scene.lighting, baked: q.get('time') || route.scene.timeOfDay || 'midday' }; }   // [toolbox] no streamed real horizon (deterministic guard renders)
- const world = new World($('view'), route, { quality: q.get('quality') || 'balanced', look: q.get('look'), log: (...args) => console.log(...args) });
  // ?path=e1+,e3+ (a route with a ride network): follow that path — traversal keys, repeated — and read pos in path
- // metres (js/network.js), so junction turns can be previewed and snapped (snap --path)
- let ride = null;
+ // metres (js/network.js), so junction turns can be previewed and snapped (snap --path). A city of areas (PLAN 5.4):
+ // the world starts in the area where pos is and builds the others as the path reaches them
+ let ride = null, areas = null, start = route;
+ const tweak = (r) => { if (r.scene && q.get('season')) r.scene.season = q.get('season'); if (r.scene && q.get('horizon') === '0') r.scene.realHorizon = false;
+   if (r.scene && q.get('standard') === '1') { r.scene.look ||= 'gentle'; r.scene.lighting = { ...r.scene.lighting, baked: q.get('time') || r.scene.timeOfDay || 'midday' }; } return r; };
  if (q.get('path') && item.network) {
    const { loadNetwork, NetRide } = await import('../js/network.js');
-   const net = loadNetwork(await (await fetch(`../${item.network}`)).json(), route);
+   const json = await (await fetch(`../${item.network}`)).json();
+   let bases = route;
+   if (json.format === 'bikefree-network-2') {
+     bases = new Map();
+     for (const a of json.areas) {
+       const it = catalog.find((c) => c.id === a.catalogId);
+       bases.set(a.id, it.file === item.file ? route : buildCatalogRoute(await (await fetch(`../${it.file}`)).text(), it));
+     }
+   }
+   const net = loadNetwork(json, bases);
    ride = new NetRide(net, {}, { plan: q.get('path').split(',') });
-   world.setPath(ride);
+   if (net.multi) {
+     const p0 = Math.max(0, Number(q.get('pos')) || 0), id = q.get('area') && net.areas.has(q.get('area')) ? q.get('area') : ride.areaFor(p0, null);   // (?area=: draw that area while it covers pos)
+     start = net.areas.get(id).base;
+     await loadRouteScene(start); tweak(start);
+     areas = { net, id, origin: net.origin, load: async (aid) => { const b = net.areas.get(aid).base; await loadRouteScene(b); return tweak(b); } };
+   }
  }
+ const world = new World($('view'), start, { quality: q.get('quality') || 'balanced', look: q.get('look'), log: (...args) => console.log(...args), areas, path: ride });
  const span = ride ? ride.route.total : route.total;
  let pos = Math.max(0, Math.min(span, Number(q.get('pos') ?? route.scene?.preview?.positionM ?? 0) || 0));
  let speed = Math.max(0, Math.min(45, Number(q.get('speed')) || 0));

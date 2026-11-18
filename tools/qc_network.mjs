@@ -13,6 +13,7 @@ import { buildCatalogRoute } from '../js/routes.js';
 import { haversine } from '../js/gpx.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
 import { normalizeScene } from '../js/world/toolbox/scene-schema.js';
+import { ghostAt } from '../js/world/ghost.js';
 import { loadNetwork, NetRide, optionsAt, travKey, endNode, makePathRoute } from '../js/network.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -27,11 +28,33 @@ export const NET_LIMITS = {
                        // can sit a few metres apart — up to ~18 m where a spur leaves and its ghost returns: the recorded track hops that much there)
 };
 
-/** The base route of a catalog item with a network, its network and the world index (as world.js builds it). */
-export function loadCatalogNetwork(item) {
+/** A catalog route with its scene (the road's curve: roadAlign) and its city data's ghosts and aprons. */
+function loadBase(item) {
   const base = buildCatalogRoute(read(item.file), { ...item, routeId: item.id });
-  if (item.scene) base.scene = normalizeScene(JSON.parse(read(item.scene)));   // the road's curve (roadAlign)
-  const net = loadNetwork(JSON.parse(read(item.network)), base);
+  if (item.scene) {
+    base.scene = normalizeScene(JSON.parse(read(item.scene)));
+    if (base.scene.cityData) { const c = JSON.parse(read(base.scene.cityData)); base.scene.city = { routeGhosts: c.routeGhosts, routeAprons: c.routeAprons }; }
+  }
+  return base;
+}
+
+/**
+ * The base route of a catalog item with a network, its network and the world index (as world.js builds it). A city
+ * of areas (PLAN 5.4): every area's route, projected around the city's origin; `index` is then a function of the
+ * area id (js/network.js NetRide.pose takes either).
+ */
+export function loadCatalogNetwork(item) {
+  const json = JSON.parse(read(item.network));
+  if (json.format === 'bikefree-network-2') {
+    const catalog = JSON.parse(read('routes/parks/index.json'));
+    const bases = new Map(json.areas.map((a) => [a.id, loadBase(catalog.find((c) => c.id === a.catalogId))]));
+    const net = loadNetwork(json, bases);
+    const proj = makeProjection(json.origin.lat, json.origin.lon);
+    const indexes = new Map([...bases].map(([id, b]) => [id, makeRouteIndex(b, proj)]));
+    return { base: net.base, net, index: (id) => indexes.get(id), indexes };
+  }
+  const base = loadBase(item);
+  const net = loadNetwork(json, base);
   let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
   for (let i = 0; i < base.lat.length; i++) {
     minLat = Math.min(minLat, base.lat[i]); maxLat = Math.max(maxLat, base.lat[i]);
@@ -52,9 +75,10 @@ export function sweepTurns(net, index, { step = 0.25, reach = 40, lane = 0.22 } 
         const ride = new NetRide(net, r, { first: travKey(arrive) });
         ride.pick(o.key, 0);
         const P = arrive.e.len;
-        let prev = null, jump = 0, head = 0, height = 0;
+        let prev = null, jump = 0, head = 0, height = 0, area = null;
         for (let p = Math.max(0, P - reach); p <= P + Math.min(reach, o.t.e.len - 1); p += step) {
-          const q = ride.pose(p, index, lane);
+          area = net.multi ? ride.areaFor(p, area) : null;   // (a city of areas: on the area drawn, as the world does)
+          const q = ride.pose(p, index, lane, area);
           if (prev) {
             const d = Math.hypot(q.pos.x - prev.pos.x, q.pos.z - prev.pos.z);
             jump = Math.max(jump, d - step);
@@ -68,6 +92,35 @@ export function sweepTurns(net, index, { step = 0.25, reach = 40, lane = 0.22 } 
         out.push({ node: node.id, name: node.name, from: travKey(arrive), to: o.key, label: o.label, angle: Math.round(o.angle), jump, head, height, ok });
       }
     }
+  }
+  return out;
+}
+
+/**
+ * A city of areas: ride every preset's first lap (and back the other way) at 1 m steps as the world does — the
+ * area drawn chosen by NetRide.areaFor, the pose on it — and check no jump where it swaps, and that the line under
+ * the rider is drawn there (not a ghost). [{preset, swaps, worstJump, ghostUnder, ok}]
+ */
+export function crossAreas(net, index, { lane = 0.22 } = {}) {
+  const out = [];
+  if (!net.multi) return out;
+  for (const pr of net.presets) {
+    const ride = new NetRide(net, {}, { plan: pr.path });
+    const lap = ride.lapM;
+    let area = null, prev = null, worst = 0, ghost = 0;
+    const swaps = [];
+    for (let p = 0; p <= lap; p += 1) {
+      const a = ride.areaFor(p, area);
+      if (area && a !== area) swaps.push({ p, from: area, to: a });
+      area = a;
+      const at = ride.worldAt(p, area), A = net.areas.get(area);
+      if (at.area !== area) ghost++;
+      else if (ghostAt(A.base, at.s > A.L ? A.total - at.s : at.s)) ghost++;
+      const q = ride.pose(p, index, lane, area);
+      if (prev) worst = Math.max(worst, Math.hypot(q.pos.x - prev.pos.x, q.pos.z - prev.pos.z) - 1);
+      prev = q;
+    }
+    out.push({ preset: pr.id, swaps, worstJump: worst, ghostUnder: ghost, ok: worst <= NET_LIMITS.posJump && ghost === 0 });
   }
   return out;
 }
@@ -91,11 +144,12 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const index = JSON.parse(read('routes/parks/index.json'));
   let fails = 0;
   const report = [];
-  for (const item of index.filter((r) => r.network)) {
+  for (const item of index.filter((r) => r.network && !r.area)) {
     const { net, index: idx } = loadCatalogNetwork(item);
     const turns = sweepTurns(net, idx, { step });
     const paths = checkPathRoutes(net);
-    report.push({ id: item.id, turns, paths });
+    const cross = crossAreas(net, idx);
+    report.push({ id: item.id, turns, paths, cross });
     console.log(`${item.id}: ${net.nodes.size} junctions, ${net.edges.size} edges, ${turns.length} ways through junctions`);
     for (const t of turns) {
       if (!t.ok) fails++;
@@ -104,6 +158,10 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     for (const p of paths) {
       if (!p.ok) fails++;
       console.log(`  ${p.ok ? 'ok  ' : 'FAIL'} path route ${p.preset}: lap ${(p.lapM / 1000).toFixed(2)} km, widest sample gap ${p.worstGap.toFixed(2)} m`);
+    }
+    for (const c of cross) {
+      if (!c.ok) fails++;
+      console.log(`  ${c.ok ? 'ok  ' : 'FAIL'} areas ${c.preset}: ${c.swaps.map((x) => `${x.from}→${x.to} @${(x.p / 1000).toFixed(2)} km`).join(', ') || 'one area'} · worst jump ${c.worstJump.toFixed(2)} m · ghost under the rider ${c.ghostUnder} m`);
     }
   }
   const json = opt('--json');

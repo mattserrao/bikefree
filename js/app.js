@@ -12,7 +12,7 @@ import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor, markFtpTest, f
 import { drawProfile, drawWorkout, drawTrace, drawMinimap, drawNetworkMinimap, gradeColor, profileDistAt } from './views.js';
 import { Profiles, GENDERS, initials, cmToFtIn, ftInToCm } from './profiles.js';
 import { buildCatalogRoute, loadRouteScene } from './routes.js';
-import { loadNetwork, makePathRoute, planNext, planCloses, keysToIds, idsToKeys, travKey, PathFollower } from './network.js';
+import { loadNetwork, makePathRoute, planNext, planCloses, keysToIds, idsToKeys, travKey, PathFollower, edgeLines } from './network.js';
 import { legLength, startPosition, stopsForDirection, stopNear, planRide, startArchM } from './route-plan.js';
 import { VERSION } from './version.js';
 import { planRouteTiles, tileKeysToUrls, downloadUrls, offlineStatus, setOfflineStatus, registerServiceWorker } from './offline.js';
@@ -411,8 +411,7 @@ $('planName').addEventListener('input', () => renderPlanFacts());
 $('planDlg').addEventListener('close', () => { if ($('planDlg').returnValue === 'save') savePlan(); });
 
 function planLayout(canvas) {
-  const net = plan.net, lines = [...net.edges.values()].map((e) => ({ e, lat: [], lon: [] }));
-  for (const L of lines) for (let s = L.e.s0; s <= L.e.s1; s += 10) { const i = s / 10; L.lat.push(net.base.lat[i]); L.lon.push(net.base.lon[i]); }
+  const net = plan.net, lines = edgeLines(net).map((x) => ({ e: x.e, lat: [...x.lat], lon: [...x.lon] }));   // (each segment from its own area's line)
   const rect = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
   canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr);
   let lat0 = 0, n = 0, minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -687,7 +686,7 @@ function ideasSection() {
 const watchIdeas = (list) => list.querySelector('details.ideas')?.addEventListener('toggle', (e) => { ideasOpen = e.target.open; });
 
 function renderScenery() {
-  const items = [...(parkItems || []), { id: 'none', name: 'None', park: 'Numbers only' }];
+  const items = [...(parkItems || []).filter((p) => !p.area), { id: 'none', name: 'None', park: 'Numbers only' }];   // (a city's areas: not choices of their own)
   if (!items.some((p) => p.id === settings.scenery)) settings.scenery = items[0].id;
   $('sceneCards').innerHTML = groupedCards(items, (p) => `
     <button class="rcard ${p.id === 'none' ? 'none' : ''} ${p.id === settings.scenery ? 'on' : ''}" data-id="${p.id}">
@@ -864,8 +863,17 @@ async function openWorld(route) {
   document.body.classList.toggle('no-world', !route);
   if (!route) { world?.stop(); return; }
   if (world && worldRoute === route) { world.start(); return; }
-  const base = route.base || route;
-  if (world && worldBase === base) {
+  let base = route.base || route;
+  // a city of areas (PLAN 5.4): the world starts in the area where the ride starts, and builds the others as the path reaches them
+  const net = route.netRide?.net, areas = net?.multi ? cityAreas(net) : null;
+  if (areas) {
+    const start = route.netRide.worldAt(riderPosOn(route)).area;
+    base = net.areas.get(start).base;
+    await loadRouteScene(base).catch((err) => log('3d', err.message, 'error'));
+    areas.id = start;
+  }
+  if (world && (areas ? world.areaSet?.net === net : worldBase === base && !world.areaSet)) {
+    worldBase = base;
     // the same city: just follow this ride's path (or none)
     worldRoute = route;
     world.setPath(route.netRide || null);
@@ -882,7 +890,7 @@ async function openWorld(route) {
   }
   if (world) { world.dispose(); world = null; }
   try {
-    world = new worldModule.World($('worldView'), base, { log, quality: settings.worldQuality, path: route.netRide || null });
+    world = new worldModule.World($('worldView'), base, { log, quality: settings.worldQuality, path: route.netRide || null, areas });
   } catch (err) {
     log('3d', `3D view needs WebGL: ${err.message}`, 'error');
     document.body.classList.add('no-world');
@@ -895,6 +903,10 @@ async function openWorld(route) {
   wireWorld(route);
   world.start();
   log('3d', `3D view: ${route.name}`);
+}
+/** A network of areas as the world loads them: the city's frame, and each area's route with its scene (fetched when needed). */
+function cityAreas(net) {
+  return { net, origin: net.origin, load: async (id) => { const base = net.areas.get(id).base; await loadRouteScene(base); return base; } };
 }
 function wireWorld(route) {
   world.setSource(() => ({ pos: riderPosOn(route), speed: session.speedMps, cadence: session.cadence, riding: true,
@@ -1200,7 +1212,7 @@ async function refreshRouteList(selectId) {
   const mine = (await store.listLibrary('route').catch(() => [])).map((r) => ({ ...r, group: 'My routes' }));
   const parks = await loadParks();
   // a city loop with a network is listed as its presets (the loop itself is one of them); it stays a scenery choice
-  routeItems = [...parks.flatMap((p) => (p.network && netItems.some((n) => n.baseId === p.id) ? netItems.filter((n) => n.baseId === p.id) : [p])), ...mine, DEMO_ROUTE];
+  routeItems = [...parks.filter((p) => !p.area).flatMap((p) => (p.network && netItems.some((n) => n.baseId === p.id) ? netItems.filter((n) => n.baseId === p.id) : [p])), ...mine, DEMO_ROUTE];
   await loadIdeas();
   // Load every route up front: they're small, and the cards draw their outlines.
   await Promise.all(routeItems.map((it) => loadRouteItem(it).catch(() => null)));
@@ -1285,7 +1297,7 @@ async function loadRouteItem(item) {
     // a network preset: the path route over the city loop's own route and world (js/network.js)
     const base = await loadRouteItem(parkItems.find((p) => p.id === item.baseId));
     base.networks ||= new Map();
-    if (!base.networks.has(item.network)) base.networks.set(item.network, loadNetwork(netCache.get(item.network), base));
+    if (!base.networks.has(item.network)) base.networks.set(item.network, loadNetwork(netCache.get(item.network), await networkBases(netCache.get(item.network), base)));
     const net = base.networks.get(item.network);
     let preset;
     if (item.free) preset = { id: item.routeId, name: item.name, path: null, first: net.json.freeRide.first };
@@ -1304,9 +1316,33 @@ async function loadRouteItem(item) {
   }
   const text = item.text ?? await (await fetch(item.url)).text();
   const route = buildCatalogRoute(text, item);
+  route.sourceFile = item.file;
   await loadRouteScene(route).catch((err) => log('3d', err.message, 'error'));
   routeCache.set(item.id, route);
   return route;
+}
+
+/**
+ * The base routes a network rides: its one base line, or (a city of areas, PLAN 5.4) every area's line, keyed by
+ * area id — the city's own route for the area it shares files with, the others' lines without their scenery
+ * (the world fetches that when it needs it: js/routes.js loadRouteScene).
+ */
+async function networkBases(json, cityRoute) {
+  if (json.format !== 'bikefree-network-2') return cityRoute;
+  const bases = new Map();
+  for (const a of json.areas) {
+    const it = parkItems.find((p) => p.routeId === a.catalogId);
+    if (!it) throw new Error(`No catalog entry for area ${a.id}`);
+    if (it.file === cityRoute.sourceFile) { bases.set(a.id, cityRoute); continue; }
+    const key = `area-${it.id}`;
+    if (!routeCache.has(key)) {
+      const r = buildCatalogRoute(await (await fetch(it.url)).text(), it);
+      r.sourceFile = it.file;
+      routeCache.set(key, r);
+    }
+    bases.set(a.id, routeCache.get(key));
+  }
+  return bases;
 }
 
 async function previewSelectedRoute() {

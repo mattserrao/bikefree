@@ -177,11 +177,12 @@ export class Weather {
   }
 
   /** A wet road: darker, smoother asphalt that picks up the sky, with puddles along the edges. */
-  _wetRoad() {
-    const road = this.world.road;
+  _wetRoad(road = this.world.road) {
     const meshes = road?.isGroup ? road.children : road ? [road] : [];
-    this.roadMaterials = meshes.map((m) => m.material).filter((m) => m.isMeshStandardMaterial);
-    for (const material of this.roadMaterials) {
+    const list = meshes.map((m) => m.material).filter((m) => m.isMeshStandardMaterial);
+    // (areas, PLAN 5.4: each area's road joins the list as it is built; a released one leaves it)
+    this.roadMaterials = [...(this.roadMaterials || []).filter((m) => !m.userData.disposed), ...list];
+    for (const material of list) {
       material.userData.dry = { roughness: material.roughness, color: material.color.clone() };
       // keep whatever the road already adds (the road surface, road-surface.js)
       const prev = material.onBeforeCompile, prevKey = material.customProgramCacheKey();

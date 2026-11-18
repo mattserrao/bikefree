@@ -32,7 +32,7 @@ for (const item of catalog) {
   const route = buildCatalogRoute(read(item.file), { ...item, mirror: false });   // validate the route as authored (the app rides it there and back)
   if (route.lat.some((v) => !Number.isFinite(v) || Math.abs(v) > 90) || route.lon.some((v) => !Number.isFinite(v) || Math.abs(v) > 180)) throw new Error(`${item.id}: invalid GPX coordinates`);
   // a one-way route (a Tour stage to a summit finish) stops at B; the app mirrors it into A → B → A
-  if (!route.closed && !item.oneWay && !item.network) throw new Error(`${item.id}: scenic routes must close; add a returning leg or a closed loop (or set "oneWay": true)`);
+  if (!route.closed && !item.oneWay && !item.network && !item.area) throw new Error(`${item.id}: scenic routes must close; add a returning leg or a closed loop (or set "oneWay": true)`);
   if (item.oneWay && (item.outAndBack || route.closed)) throw new Error(`${item.id}: a oneWay route must not be closed or outAndBack`);
   if (!route.hasElevation) throw new Error(`${item.id}: elevation is required`);
   if (!Array.isArray(item.expectedKm) || item.expectedKm.length !== 2) throw new Error(`${item.id}: expectedKm needs [min, max]`);
@@ -49,6 +49,7 @@ for (const item of catalog) {
   if (item.outAndBack) row.outAndBack = true;
   if (item.oneWay) row.oneWay = true;
   if (item.stage) row.stage = item.stage;   // 'draft': Rough Drafts · 'deprecated': Deprecated
+  if (item.area) row.area = item.area;      // one area of a city of areas (PLAN 5.4): not listed; QC, snapshots and the preview open it
   if (item.eleSmoothM != null) {   // [w2-align] the route's elevation smoothing (± m; the app's default is 60)
     if (!(item.eleSmoothM >= 0 && item.eleSmoothM <= 200)) throw new Error(`${item.id}: eleSmoothM must be 0–200 m`);
     row.eleSmoothM = item.eleSmoothM;
@@ -57,8 +58,16 @@ for (const item of catalog) {
     // a ride network over this loop (choose your turns: tools/build_network.mjs, js/network.js)
     if (!item.network.startsWith('routes/') || item.network.includes('..') || !existsSync(resolve(root, item.network))) throw new Error(`${item.id}: missing network ${item.network}`);
     const net = JSON.parse(read(item.network));
-    if (net.format !== 'bikefree-network-1' || net.base !== item.file) throw new Error(`${item.id}: the network must be built on ${item.file}`);
-    if (!(net.legM > 0 && net.legM <= route.total && net.edges?.length && net.presets?.length)) throw new Error(`${item.id}: invalid network (rebuild it with tools/build_network.mjs)`);
+    if (net.format === 'bikefree-network-2') {
+      // a city of areas (PLAN 5.4): one of them rides this route; each has a catalog entry of its own
+      const mine = net.areas?.find((a) => a.base === item.file);
+      if (!mine || !net.origin) throw new Error(`${item.id}: the network's areas must include ${item.file}`);
+      for (const a of net.areas) if (!catalog.some((c) => c.id === a.catalogId && c.file === a.base)) throw new Error(`${item.id}: no catalog entry ${a.catalogId} riding ${a.base}`);
+      if (!(mine.legM > 0 && mine.legM <= route.total && net.edges?.length && net.presets?.length)) throw new Error(`${item.id}: invalid network (rebuild it with tools/build_network.mjs)`);
+    } else {
+      if (net.format !== 'bikefree-network-1' || net.base !== item.file) throw new Error(`${item.id}: the network must be built on ${item.file}`);
+      if (!(net.legM > 0 && net.legM <= route.total && net.edges?.length && net.presets?.length)) throw new Error(`${item.id}: invalid network (rebuild it with tools/build_network.mjs)`);
+    }
     row.network = item.network;
     paths.push(item.network);
   }
