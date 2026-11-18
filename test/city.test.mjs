@@ -19,8 +19,12 @@ const index = makeRouteIndex(route, proj);
 const L = makeCityLandscape(scene, proj, index, route);
 const at = (lat, lon) => proj.toLocal(lat, lon);
 
-test('pittsburgh: the network tour (the loop, the Jail Trail, the Allegheny Loop and the spurs) with the Mount Washington climb', () => {
-  assert.ok(route.turnS > 50000 && route.turnS < 62000, `${route.turnS} m`);
+test('pittsburgh: the core area\'s line (downtown, the South Side, the Jail Trail, the bridges) with the Mount Washington climb', () => {
+  // (a city of areas, PLAN 5.4: Allegheny & Troy Hill, Oakland & Schenley and the West End are areas of their own)
+  assert.ok(route.turnS > 26000 && route.turnS < 32000, `${route.turnS} m`);
+  const net = JSON.parse(read(item.network));
+  assert.deepEqual(net.areas.map((x) => x.catalogId), ['pittsburgh', 'pittsburgh-allegheny', 'pittsburgh-westend', 'pittsburgh-oakland']);
+  assert.equal(net.areas[0].legM, route.turnS);
   const top = Math.max(...route.ele), bottom = Math.min(...route.ele);
   assert.ok(top - bottom > 110, `climb ${top - bottom} m`);
   assert.ok(Math.max(...route.grade.map(Math.abs)) < 25);

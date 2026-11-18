@@ -1,74 +1,208 @@
 {
- "format": "bikefree-network-1",
+ "format": "bikefree-network-2",
  "id": "pittsburgh",
- "base": "routes/cities/pittsburgh.gpx",
- "legM": 58060,
+ "origin": {
+  "lat": 40.4375,
+  "lon": -79.9925
+ },
+ "areas": [
+  {
+   "id": "core",
+   "catalogId": "pittsburgh",
+   "base": "routes/cities/pittsburgh.gpx",
+   "legM": 29100,
+   "ghosts": [
+    {
+     "fromM": 7870,
+     "toM": 8281
+    },
+    {
+     "fromM": 17190,
+     "toM": 17605
+    },
+    {
+     "fromM": 20160,
+     "toM": 20210
+    },
+    {
+     "fromM": 20610,
+     "toM": 21020
+    },
+    {
+     "fromM": 22022,
+     "toM": 25107
+    }
+   ],
+   "aprons": [
+    {
+     "edge": "e14",
+     "dir": 1,
+     "s": [
+      0,
+      400
+     ],
+     "u0": 2730
+    },
+    {
+     "edge": "e16",
+     "dir": 1,
+     "s": [
+      7470,
+      7870
+     ],
+     "u0": 0
+    },
+    {
+     "edge": "e15",
+     "dir": 1,
+     "s": [
+      16790,
+      17190
+     ],
+     "u0": 0
+    },
+    {
+     "edge": "e10",
+     "dir": 1,
+     "s": [
+      20210,
+      20610
+     ],
+     "u0": 0
+    }
+   ]
+  },
+  {
+   "id": "allegheny",
+   "catalogId": "pittsburgh-allegheny",
+   "base": "routes/cities/pittsburgh-allegheny.gpx",
+   "legM": 16000,
+   "ghosts": [
+    {
+     "fromM": 400,
+     "toM": 450
+    },
+    {
+     "fromM": 6263,
+     "toM": 7523
+    }
+   ],
+   "aprons": [
+    {
+     "edge": "e6",
+     "dir": 1,
+     "s": [
+      0,
+      400
+     ],
+     "u0": 2160
+    },
+    {
+     "edge": "e1",
+     "dir": 1,
+     "s": [
+      15600,
+      16000
+     ],
+     "u0": 0
+    }
+   ]
+  },
+  {
+   "id": "westend",
+   "catalogId": "pittsburgh-westend",
+   "base": "routes/cities/pittsburgh-westend.gpx",
+   "legM": 4300,
+   "ghosts": [
+    {
+     "fromM": 2157,
+     "toM": 3905
+    }
+   ],
+   "aprons": [
+    {
+     "edge": "e5",
+     "dir": 1,
+     "s": [
+      0,
+      400
+     ],
+     "u0": 4750
+    },
+    {
+     "edge": "e6",
+     "dir": 1,
+     "s": [
+      3900,
+      4300
+     ],
+     "u0": 0
+    }
+   ]
+  },
+  {
+   "id": "oakland",
+   "catalogId": "pittsburgh-oakland",
+   "base": "routes/cities/pittsburgh-oakland.gpx",
+   "legM": 13990,
+   "ghosts": [
+    {
+     "fromM": 9290,
+     "toM": 13591
+    }
+   ],
+   "aprons": [
+    {
+     "edge": "e2",
+     "dir": 1,
+     "s": [
+      0,
+      400
+     ],
+     "u0": 3580
+    },
+    {
+     "edge": "e3",
+     "dir": 1,
+     "s": [
+      13590,
+      13990
+     ],
+     "u0": 0
+    }
+   ]
+  }
+ ],
  "nodes": [
+  {
+   "id": "B",
+   "name": "Clemente Bridge south end",
+   "lat": 40.444158,
+   "lon": -80.002863,
+   "ele": 223.01,
+   "passes": {
+    "core": [
+     400,
+     22020
+    ],
+    "allegheny": [
+     15600
+    ]
+   },
+   "portal": true
+  },
   {
    "id": "E",
    "name": "Smithfield St & Fort Pitt Blvd",
    "lat": 40.436505,
    "lon": -80.000919,
-   "ele": 222.68,
-   "passes": [
-    18240,
-    54070
-   ]
-  },
-  {
-   "id": "H",
-   "name": "SouthSide Works riverfront",
-   "lat": 40.428871,
-   "lon": -79.965369,
-   "ele": 229,
-   "passes": [
-    36240,
-    58060
-   ]
-  },
-  {
-   "id": "G",
-   "name": "East Carson & 10th",
-   "lat": 40.428675,
-   "lon": -79.988582,
-   "ele": 229.77,
-   "passes": [
-    38770,
-    55990
-   ]
-  },
-  {
-   "id": "D",
-   "name": "West End Bridge south end",
-   "lat": 40.444204,
-   "lon": -80.028224,
-   "ele": 228.92,
-   "passes": [
-    43920,
-    47420
-   ]
-  },
-  {
-   "id": "A",
-   "name": "North Shore Water Steps",
-   "lat": 40.445507,
-   "lon": -80.008146,
-   "ele": 217.55,
-   "passes": [
-    0,
-    49980
-   ]
-  },
-  {
-   "id": "O",
-   "name": "West End Overlook",
-   "lat": 40.446438,
-   "lon": -80.034387,
-   "ele": 331.78,
-   "passes": [
-    45680
-   ],
-   "deadEnd": true
+   "ele": 222.67,
+   "passes": {
+    "core": [
+     3490,
+     25110
+    ]
+   }
   },
   {
    "id": "I",
@@ -76,10 +210,131 @@
    "lat": 40.429934,
    "lon": -79.957553,
    "ele": 228.01,
-   "passes": [
-    22220,
-    35410
-   ]
+   "passes": {
+    "core": [
+     7470,
+     8280
+    ],
+    "oakland": [
+     400,
+     13590
+    ]
+   },
+   "portal": true
+  },
+  {
+   "id": "H",
+   "name": "SouthSide Works riverfront",
+   "lat": 40.428871,
+   "lon": -79.965369,
+   "ele": 229,
+   "passes": {
+    "core": [
+     9110,
+     29100
+    ]
+   }
+  },
+  {
+   "id": "G",
+   "name": "East Carson & 10th",
+   "lat": 40.428674,
+   "lon": -79.988582,
+   "ele": 229.77,
+   "passes": {
+    "core": [
+     11640,
+     27030
+    ]
+   }
+  },
+  {
+   "id": "D",
+   "name": "West End Bridge south end",
+   "lat": 40.444204,
+   "lon": -80.028224,
+   "ele": 228.93,
+   "passes": {
+    "core": [
+     16790,
+     17600
+    ],
+    "westend": [
+     400,
+     3900
+    ]
+   },
+   "portal": true
+  },
+  {
+   "id": "A",
+   "name": "North Shore Water Steps",
+   "lat": 40.445531,
+   "lon": -80.008168,
+   "ele": 217.5,
+   "passes": {
+    "core": [
+     20160,
+     20210,
+     21020
+    ],
+    "allegheny": [
+     400,
+     450
+    ]
+   },
+   "portal": true
+  },
+  {
+   "id": "P",
+   "name": "16th Street Bridge north end",
+   "lat": 40.453576,
+   "lon": -79.990607,
+   "ele": 221.09,
+   "passes": {
+    "allegheny": [
+     2230,
+     6260
+    ]
+   }
+  },
+  {
+   "id": "N",
+   "name": "31st Street Bridge north end",
+   "lat": 40.462171,
+   "lon": -79.980865,
+   "ele": 221.12,
+   "passes": {
+    "allegheny": [
+     3500,
+     7520
+    ]
+   }
+  },
+  {
+   "id": "M",
+   "name": "Smallman & 29th, Strip District",
+   "lat": 40.458505,
+   "lon": -79.975036,
+   "ele": 223.9,
+   "passes": {
+    "allegheny": [
+     12470
+    ]
+   }
+  },
+  {
+   "id": "O",
+   "name": "West End Overlook",
+   "lat": 40.446438,
+   "lon": -80.034387,
+   "ele": 331.78,
+   "passes": {
+    "westend": [
+     2160
+    ]
+   },
+   "deadEnd": true
   },
   {
    "id": "J",
@@ -87,10 +342,12 @@
    "lat": 40.438742,
    "lon": -79.946352,
    "ele": 284,
-   "passes": [
-    26520,
-    31110
-   ]
+   "passes": {
+    "oakland": [
+     4700,
+     9290
+    ]
+   }
   },
   {
    "id": "K",
@@ -98,189 +355,23 @@
    "lat": 40.437654,
    "lon": -79.934186,
    "ele": 329.71,
-   "passes": [
-    27710
-   ]
-  },
-  {
-   "id": "B",
-   "name": "Clemente Bridge south end",
-   "lat": 40.444158,
-   "lon": -80.002863,
-   "ele": 223.07,
-   "passes": [
-    15150,
-    50980
-   ]
-  },
-  {
-   "id": "P",
-   "name": "16th Street Bridge north end",
-   "lat": 40.453575,
-   "lon": -79.990608,
-   "ele": 221.09,
-   "passes": [
-    1780,
-    5810
-   ]
-  },
-  {
-   "id": "N",
-   "name": "31st Street Bridge north end",
-   "lat": 40.462169,
-   "lon": -79.980865,
-   "ele": 221.12,
-   "passes": [
-    3050,
-    7070
-   ]
-  },
-  {
-   "id": "M",
-   "name": "Smallman & 29th, Strip District",
-   "lat": 40.458506,
-   "lon": -79.975035,
-   "ele": 223.9,
-   "passes": [
-    12020
-   ]
-  }
- ],
- "ghosts": [
-  {
-   "fromM": 5813,
-   "toM": 7073
-  },
-  {
-   "fromM": 31110,
-   "toM": 33237
-  },
-  {
-   "fromM": 33237,
-   "toM": 35411
-  },
-  {
-   "fromM": 45677,
-   "toM": 47425
-  },
-  {
-   "fromM": 50982,
-   "toM": 52652
-  },
-  {
-   "fromM": 52652,
-   "toM": 54067
+   "passes": {
+    "oakland": [
+     5890
+    ]
+   }
   }
  ],
  "edges": [
   {
    "id": "e1",
-   "key": "A>P",
-   "from": "A",
-   "to": "P",
-   "s": [
-    0,
-    1780
-   ],
-   "lengthM": 1780,
-   "climbM": [
-    6,
-    3
-   ],
-   "name": "North Shore Trail",
-   "toward": [
-    "the North Shore Trail past PNC Park to the 16th Street Bridge",
-    "the North Shore Trail past PNC Park to the Water Steps"
-   ]
-  },
-  {
-   "id": "e2",
-   "key": "P>N",
-   "from": "P",
-   "to": "N",
-   "s": [
-    1780,
-    3050
-   ],
-   "lengthM": 1270,
-   "climbM": [
-    2,
-    2
-   ],
-   "name": "North Shore Trail: Washington's Landing",
-   "toward": [
-    "the riverfront trail by Washington's Landing to the 31st Street Bridge",
-    "the riverfront trail by Washington's Landing to the 16th Street Bridge"
-   ]
-  },
-  {
-   "id": "e3",
-   "key": "N>P",
-   "from": "N",
-   "to": "P",
-   "s": [
-    3050,
-    5810
-   ],
-   "lengthM": 2760,
-   "climbM": [
-    61,
-    61
-   ],
-   "name": "Troy Hill & Rialto Street",
-   "toward": [
-    "up Rialto Street (Pig Hill, about 24 %), along Lowrie St through Troy Hill, down Troy Hill Rd and over to the 16th Street Bridge",
-    "from the 16th Street Bridge up Troy Hill Rd, along Lowrie St and down Rialto Street"
-   ]
-  },
-  {
-   "id": "e4",
-   "key": "N>M",
-   "from": "N",
-   "to": "M",
-   "s": [
-    7070,
-    12020
-   ],
-   "lengthM": 4950,
-   "climbM": [
-    27,
-    24
-   ],
-   "name": "Millvale & Lawrenceville",
-   "toward": [
-    "the trail to Millvale, over the 40th Street Bridge and down Butler Street",
-    "up Butler Street, over the 40th Street Bridge and the trail from Millvale"
-   ]
-  },
-  {
-   "id": "e5",
-   "key": "M>B",
-   "from": "M",
-   "to": "B",
-   "s": [
-    12020,
-    15150
-   ],
-   "lengthM": 3130,
-   "climbM": [
-    6,
-    7
-   ],
-   "name": "Strip District & Penn Avenue",
-   "toward": [
-    "Smallman Street through the Strip past the History Center, Penn Avenue into downtown",
-    "Penn Avenue out of downtown and Smallman Street through the Strip"
-   ]
-  },
-  {
-   "id": "e6",
    "key": "B>E",
+   "area": "core",
    "from": "B",
    "to": "E",
    "s": [
-    15150,
-    18240
+    400,
+    3490
    ],
    "lengthM": 3090,
    "climbM": [
@@ -294,13 +385,14 @@
    ]
   },
   {
-   "id": "e7",
+   "id": "e2",
    "key": "E>I",
+   "area": "core",
    "from": "E",
    "to": "I",
    "s": [
-    18240,
-    22220
+    3490,
+    7470
    ],
    "lengthM": 3980,
    "climbM": [
@@ -314,73 +406,14 @@
    ]
   },
   {
-   "id": "e8",
-   "key": "I>J",
-   "from": "I",
-   "to": "J",
-   "s": [
-    22220,
-    26520
-   ],
-   "lengthM": 4300,
-   "climbM": [
-    79,
-    23
-   ],
-   "name": "Junction Hollow & Oakland",
-   "toward": [
-    "along Second Ave, up Junction Hollow, through Oakland past the Cathedral of Learning to Phipps",
-    "past the Cathedral of Learning, down Junction Hollow and along Second Ave to the Hot Metal Bridge"
-   ]
-  },
-  {
-   "id": "e9",
-   "key": "J>K",
-   "from": "J",
-   "to": "K",
-   "s": [
-    26520,
-    27710
-   ],
-   "lengthM": 1190,
-   "climbM": [
-    45,
-    0
-   ],
-   "name": "Schenley Drive",
-   "toward": [
-    "Schenley Drive across the park to Forbes",
-    "Schenley Drive across the park to Phipps"
-   ]
-  },
-  {
-   "id": "e10",
-   "key": "K>J",
-   "from": "K",
-   "to": "J",
-   "s": [
-    27710,
-    31110
-   ],
-   "lengthM": 3400,
-   "climbM": [
-    26,
-    72
-   ],
-   "name": "Schenley Oval & Panther Hollow",
-   "toward": [
-    "Serpentine Drive, round the Schenley Oval and up Panther Hollow",
-    "down Panther Hollow, round the Schenley Oval and up Serpentine Drive"
-   ]
-  },
-  {
-   "id": "e11",
+   "id": "e3",
    "key": "I>H",
+   "area": "core",
    "from": "I",
    "to": "H",
    "s": [
-    35410,
-    36240
+    8280,
+    9110
    ],
    "lengthM": 830,
    "climbM": [
@@ -394,13 +427,14 @@
    ]
   },
   {
-   "id": "e12",
+   "id": "e4",
    "key": "H>G",
+   "area": "core",
    "from": "H",
    "to": "G",
    "s": [
-    36240,
-    38770
+    9110,
+    11640
    ],
    "lengthM": 2530,
    "climbM": [
@@ -414,13 +448,14 @@
    ]
   },
   {
-   "id": "e13",
+   "id": "e5",
    "key": "G>D",
+   "area": "core",
    "from": "G",
    "to": "D",
    "s": [
-    38770,
-    43920
+    11640,
+    16790
    ],
    "lengthM": 5150,
    "climbM": [
@@ -434,33 +469,14 @@
    ]
   },
   {
-   "id": "e14",
-   "key": "D>O",
-   "from": "D",
-   "to": "O",
-   "s": [
-    43920,
-    45680
-   ],
-   "lengthM": 1760,
-   "climbM": [
-    106,
-    3
-   ],
-   "name": "West End Overlook",
-   "toward": [
-    "the climb up through Elliott to the West End Overlook",
-    "down from the overlook through Elliott"
-   ]
-  },
-  {
-   "id": "e15",
+   "id": "e6",
    "key": "D>A",
+   "area": "core",
    "from": "D",
    "to": "A",
    "s": [
-    47420,
-    49980
+    17600,
+    20160
    ],
    "lengthM": 2560,
    "climbM": [
@@ -474,13 +490,14 @@
    ]
   },
   {
-   "id": "e16",
+   "id": "e7",
    "key": "A>B",
+   "area": "core",
    "from": "A",
    "to": "B",
    "s": [
-    49980,
-    50980
+    21020,
+    22020
    ],
    "lengthM": 1000,
    "climbM": [
@@ -494,13 +511,14 @@
    ]
   },
   {
-   "id": "e17",
+   "id": "e8",
    "key": "E>G",
+   "area": "core",
    "from": "E",
    "to": "G",
    "s": [
-    54070,
-    55990
+    25110,
+    27030
    ],
    "lengthM": 1920,
    "climbM": [
@@ -514,13 +532,14 @@
    ]
   },
   {
-   "id": "e18",
+   "id": "e9",
    "key": "G>H",
+   "area": "core",
    "from": "G",
    "to": "H",
    "s": [
-    55990,
-    58060
+    27030,
+    29100
    ],
    "lengthM": 2070,
    "climbM": [
@@ -532,6 +551,195 @@
     "East Carson Street to SouthSide Works",
     "East Carson Street to 10th"
    ]
+  },
+  {
+   "id": "e10",
+   "key": "A>P",
+   "area": "allegheny",
+   "from": "A",
+   "to": "P",
+   "s": [
+    450,
+    2230
+   ],
+   "lengthM": 1780,
+   "climbM": [
+    6,
+    3
+   ],
+   "name": "North Shore Trail",
+   "toward": [
+    "the North Shore Trail past PNC Park to the 16th Street Bridge",
+    "the North Shore Trail past PNC Park to the Water Steps"
+   ]
+  },
+  {
+   "id": "e11",
+   "key": "P>N",
+   "area": "allegheny",
+   "from": "P",
+   "to": "N",
+   "s": [
+    2230,
+    3500
+   ],
+   "lengthM": 1270,
+   "climbM": [
+    2,
+    2
+   ],
+   "name": "North Shore Trail: Washington's Landing",
+   "toward": [
+    "the riverfront trail by Washington's Landing to the 31st Street Bridge",
+    "the riverfront trail by Washington's Landing to the 16th Street Bridge"
+   ]
+  },
+  {
+   "id": "e12",
+   "key": "N>P",
+   "area": "allegheny",
+   "from": "N",
+   "to": "P",
+   "s": [
+    3500,
+    6260
+   ],
+   "lengthM": 2760,
+   "climbM": [
+    61,
+    61
+   ],
+   "name": "Troy Hill & Rialto Street",
+   "toward": [
+    "up Rialto Street (Pig Hill, about 24 %), along Lowrie St through Troy Hill, down Troy Hill Rd and over to the 16th Street Bridge",
+    "from the 16th Street Bridge up Troy Hill Rd, along Lowrie St and down Rialto Street"
+   ]
+  },
+  {
+   "id": "e13",
+   "key": "N>M",
+   "area": "allegheny",
+   "from": "N",
+   "to": "M",
+   "s": [
+    7520,
+    12470
+   ],
+   "lengthM": 4950,
+   "climbM": [
+    27,
+    24
+   ],
+   "name": "Millvale & Lawrenceville",
+   "toward": [
+    "the trail to Millvale, over the 40th Street Bridge and down Butler Street",
+    "up Butler Street, over the 40th Street Bridge and the trail from Millvale"
+   ]
+  },
+  {
+   "id": "e14",
+   "key": "M>B",
+   "area": "allegheny",
+   "from": "M",
+   "to": "B",
+   "s": [
+    12470,
+    15600
+   ],
+   "lengthM": 3130,
+   "climbM": [
+    6,
+    7
+   ],
+   "name": "Strip District & Penn Avenue",
+   "toward": [
+    "Smallman Street through the Strip past the History Center, Penn Avenue into downtown",
+    "Penn Avenue out of downtown and Smallman Street through the Strip"
+   ]
+  },
+  {
+   "id": "e15",
+   "key": "D>O",
+   "area": "westend",
+   "from": "D",
+   "to": "O",
+   "s": [
+    400,
+    2160
+   ],
+   "lengthM": 1760,
+   "climbM": [
+    106,
+    3
+   ],
+   "name": "West End Overlook",
+   "toward": [
+    "the climb up through Elliott to the West End Overlook",
+    "down from the overlook through Elliott"
+   ]
+  },
+  {
+   "id": "e16",
+   "key": "I>J",
+   "area": "oakland",
+   "from": "I",
+   "to": "J",
+   "s": [
+    400,
+    4700
+   ],
+   "lengthM": 4300,
+   "climbM": [
+    79,
+    23
+   ],
+   "name": "Junction Hollow & Oakland",
+   "toward": [
+    "along Second Ave, up Junction Hollow, through Oakland past the Cathedral of Learning to Phipps",
+    "past the Cathedral of Learning, down Junction Hollow and along Second Ave to the Hot Metal Bridge"
+   ]
+  },
+  {
+   "id": "e17",
+   "key": "J>K",
+   "area": "oakland",
+   "from": "J",
+   "to": "K",
+   "s": [
+    4700,
+    5890
+   ],
+   "lengthM": 1190,
+   "climbM": [
+    45,
+    0
+   ],
+   "name": "Schenley Drive",
+   "toward": [
+    "Schenley Drive across the park to Forbes",
+    "Schenley Drive across the park to Phipps"
+   ]
+  },
+  {
+   "id": "e18",
+   "key": "K>J",
+   "area": "oakland",
+   "from": "K",
+   "to": "J",
+   "s": [
+    5890,
+    9290
+   ],
+   "lengthM": 3400,
+   "climbM": [
+    26,
+    72
+   ],
+   "name": "Schenley Oval & Panther Hollow",
+   "toward": [
+    "Serpentine Drive, round the Schenley Oval and up Panther Hollow",
+    "down Panther Hollow, round the Schenley Oval and up Serpentine Drive"
+   ]
   }
  ],
  "presets": [
@@ -539,13 +747,13 @@
    "id": "pgh-three-rivers",
    "name": "Three Rivers Loop",
    "path": [
-    "e16+",
-    "e6+",
-    "e17+",
-    "e18+",
-    "e12+",
-    "e13+",
-    "e15+"
+    "e7+",
+    "e1+",
+    "e8+",
+    "e9+",
+    "e4+",
+    "e5+",
+    "e6+"
    ],
    "tags": [
     "varied"
@@ -558,13 +766,13 @@
    "id": "pgh-three-rivers-rev",
    "name": "Three Rivers Loop · reverse",
    "path": [
-    "e15-",
-    "e13-",
-    "e12-",
-    "e18-",
-    "e17-",
     "e6-",
-    "e16-"
+    "e5-",
+    "e4-",
+    "e9-",
+    "e8-",
+    "e1-",
+    "e7-"
    ],
    "tags": [
     "varied"
@@ -577,11 +785,11 @@
    "id": "pgh-short-loop",
    "name": "South Side Short Loop",
    "path": [
-    "e16+",
-    "e6+",
-    "e17+",
-    "e13+",
-    "e15+"
+    "e7+",
+    "e1+",
+    "e8+",
+    "e5+",
+    "e6+"
    ],
    "tags": [
     "short",
@@ -595,11 +803,11 @@
    "id": "pgh-short-loop-rev",
    "name": "South Side Short Loop · reverse",
    "path": [
-    "e15-",
-    "e13-",
-    "e17-",
     "e6-",
-    "e16-"
+    "e5-",
+    "e8-",
+    "e1-",
+    "e7-"
    ],
    "tags": [
     "short",
@@ -613,8 +821,8 @@
    "id": "pgh-south-side",
    "name": "South Side Flat Loop",
    "path": [
-    "e18+",
-    "e12+"
+    "e9+",
+    "e4+"
    ],
    "tags": [
     "flat",
@@ -628,15 +836,15 @@
    "id": "pgh-west-end",
    "name": "Three Rivers Loop + West End Overlook",
    "path": [
-    "e16+",
-    "e6+",
-    "e17+",
-    "e18+",
-    "e12+",
-    "e13+",
-    "e14+",
-    "e14-",
-    "e15+"
+    "e7+",
+    "e1+",
+    "e8+",
+    "e9+",
+    "e4+",
+    "e5+",
+    "e15+",
+    "e15-",
+    "e6+"
    ],
    "tags": [
     "hilly",
@@ -650,10 +858,10 @@
    "id": "pgh-jail-trail",
    "name": "Jail Trail & South Side Loop",
    "path": [
-    "e7+",
-    "e11+",
-    "e12+",
-    "e17-"
+    "e2+",
+    "e3+",
+    "e4+",
+    "e8-"
    ],
    "tags": [
     "flat",
@@ -668,14 +876,14 @@
    "id": "pgh-point-jail",
    "name": "Point & Jail Trail Loop",
    "path": [
-    "e16+",
-    "e6+",
     "e7+",
-    "e11+",
-    "e12+",
-    "e17-",
-    "e6-",
-    "e16-"
+    "e1+",
+    "e2+",
+    "e3+",
+    "e4+",
+    "e8-",
+    "e1-",
+    "e7-"
    ],
    "tags": [
     "flat",
@@ -689,13 +897,13 @@
    "id": "pgh-jail-mt-washington",
    "name": "Jail Trail & Mount Washington Loop",
    "path": [
-    "e16+",
-    "e6+",
     "e7+",
-    "e11+",
-    "e12+",
-    "e13+",
-    "e15+"
+    "e1+",
+    "e2+",
+    "e3+",
+    "e4+",
+    "e5+",
+    "e6+"
    ],
    "tags": [
     "varied",
@@ -709,10 +917,10 @@
    "id": "pgh-mt-washington",
    "name": "Mount Washington There & Back",
    "path": [
-    "e13+",
-    "e15+",
-    "e15-",
-    "e13-"
+    "e5+",
+    "e6+",
+    "e6-",
+    "e5-"
    ],
    "tags": [
     "hilly"
@@ -725,20 +933,20 @@
    "id": "pgh-long",
    "name": "Three Rivers There & Back",
    "path": [
-    "e16+",
+    "e7+",
+    "e1+",
+    "e8+",
+    "e9+",
+    "e4+",
+    "e5+",
     "e6+",
-    "e17+",
-    "e18+",
-    "e12+",
-    "e13+",
-    "e15+",
-    "e15-",
-    "e13-",
-    "e12-",
-    "e18-",
-    "e17-",
     "e6-",
-    "e16-"
+    "e5-",
+    "e4-",
+    "e9-",
+    "e8-",
+    "e1-",
+    "e7-"
    ],
    "tags": [
     "long",
@@ -752,8 +960,8 @@
    "id": "pgh-schenley",
    "name": "Schenley Park Loop",
    "path": [
-    "e9+",
-    "e10+"
+    "e17+",
+    "e18+"
    ],
    "tags": [
     "short",
@@ -768,12 +976,12 @@
    "id": "pgh-oakland",
    "name": "Jail Trail, Oakland & Schenley",
    "path": [
-    "e7+",
-    "e8+",
-    "e9+",
-    "e10+",
-    "e8-",
-    "e7-"
+    "e2+",
+    "e16+",
+    "e17+",
+    "e18+",
+    "e16-",
+    "e2-"
    ],
    "tags": [
     "varied",
@@ -787,18 +995,18 @@
    "id": "pgh-oakland-south",
    "name": "Oakland & South Side Loop",
    "path": [
-    "e16+",
-    "e6+",
     "e7+",
-    "e8+",
-    "e9+",
-    "e10+",
+    "e1+",
+    "e2+",
+    "e16+",
+    "e17+",
+    "e18+",
+    "e16-",
+    "e3+",
+    "e4+",
     "e8-",
-    "e11+",
-    "e12+",
-    "e17-",
-    "e6-",
-    "e16-"
+    "e1-",
+    "e7-"
    ],
    "tags": [
     "long",
@@ -813,11 +1021,11 @@
    "id": "pgh-allegheny",
    "name": "Allegheny Loop",
    "path": [
-    "e1+",
-    "e2+",
-    "e4+",
-    "e5+",
-    "e16-"
+    "e10+",
+    "e11+",
+    "e13+",
+    "e14+",
+    "e7-"
    ],
    "tags": [
     "flat",
@@ -831,11 +1039,11 @@
    "id": "pgh-allegheny-rev",
    "name": "Allegheny Loop · reverse",
    "path": [
-    "e16+",
-    "e5-",
-    "e4-",
-    "e2-",
-    "e1-"
+    "e7+",
+    "e14-",
+    "e13-",
+    "e11-",
+    "e10-"
    ],
    "tags": [
     "flat",
@@ -849,17 +1057,17 @@
    "id": "pgh-allegheny-jail",
    "name": "Allegheny & Jail Trail Loop",
    "path": [
+    "e10+",
+    "e11+",
+    "e13+",
+    "e14+",
     "e1+",
     "e2+",
+    "e3+",
     "e4+",
-    "e5+",
-    "e6+",
-    "e7+",
-    "e11+",
-    "e12+",
-    "e17-",
-    "e6-",
-    "e16-"
+    "e8-",
+    "e1-",
+    "e7-"
    ],
    "tags": [
     "long",
@@ -874,8 +1082,8 @@
    "id": "pgh-troy-hill",
    "name": "Troy Hill Climb Loop",
    "path": [
-    "e2+",
-    "e3+"
+    "e11+",
+    "e12+"
    ],
    "tags": [
     "short",
@@ -890,10 +1098,10 @@
    "id": "pgh-troy-hill-steps",
    "name": "Water Steps & Troy Hill",
    "path": [
-    "e1+",
-    "e2+",
-    "e3+",
-    "e1-"
+    "e10+",
+    "e11+",
+    "e12+",
+    "e10-"
    ],
    "tags": [
     "hilly",
@@ -907,13 +1115,13 @@
    "id": "pgh-allegheny-troy",
    "name": "Allegheny Loop + Troy Hill",
    "path": [
-    "e1+",
-    "e2+",
-    "e3+",
-    "e2+",
-    "e4+",
-    "e5+",
-    "e16-"
+    "e10+",
+    "e11+",
+    "e12+",
+    "e11+",
+    "e13+",
+    "e14+",
+    "e7-"
    ],
    "tags": [
     "hilly",
@@ -927,7 +1135,7 @@
  ],
  "freeRide": {
   "name": "Free Ride · choose every turn",
-  "first": "e16+",
+  "first": "e7+",
   "note": "No plan: from the Water Steps, straight on at every junction unless you choose a turn. Ride until you stop"
  }
 }

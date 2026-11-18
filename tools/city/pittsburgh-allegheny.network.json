@@ -1,0 +1,63 @@
+{
+  "area": "allegheny",
+  "note": "The North Shore Trail, Troy Hill and Rialto, Millvale, Lawrenceville and the Strip. Portals: A, B.",
+  "nodes": [
+    {
+      "id": "A",
+      "name": "North Shore Water Steps",
+      "lat": 40.445507,
+      "lon": -80.008146
+    },
+    {
+      "id": "P",
+      "name": "16th Street Bridge north end",
+      "lat": 40.453558,
+      "lon": -79.990632
+    },
+    {
+      "id": "N",
+      "name": "31st Street Bridge north end",
+      "lat": 40.462143,
+      "lon": -79.980815
+    },
+    {
+      "id": "M",
+      "name": "Smallman & 29th, Strip District",
+      "lat": 40.458531,
+      "lon": -79.974998
+    },
+    {
+      "id": "B",
+      "name": "Clemente Bridge south end",
+      "lat": 40.444244,
+      "lon": -80.002821
+    }
+  ],
+  "edges": {
+    "A>P": {
+      "name": "North Shore Trail",
+      "fwd": "the North Shore Trail past PNC Park to the 16th Street Bridge",
+      "rev": "the North Shore Trail past PNC Park to the Water Steps"
+    },
+    "P>N": {
+      "name": "North Shore Trail: Washington's Landing",
+      "fwd": "the riverfront trail by Washington's Landing to the 31st Street Bridge",
+      "rev": "the riverfront trail by Washington's Landing to the 16th Street Bridge"
+    },
+    "N>P": {
+      "name": "Troy Hill & Rialto Street",
+      "fwd": "up Rialto Street (Pig Hill, about 24 %), along Lowrie St through Troy Hill, down Troy Hill Rd and over to the 16th Street Bridge",
+      "rev": "from the 16th Street Bridge up Troy Hill Rd, along Lowrie St and down Rialto Street"
+    },
+    "N>M": {
+      "name": "Millvale & Lawrenceville",
+      "fwd": "the trail to Millvale, over the 40th Street Bridge and down Butler Street",
+      "rev": "up Butler Street, over the 40th Street Bridge and the trail from Millvale"
+    },
+    "M>B": {
+      "name": "Strip District & Penn Avenue",
+      "fwd": "Smallman Street through the Strip past the History Center, Penn Avenue into downtown",
+      "rev": "Penn Avenue out of downtown and Smallman Street through the Strip"
+    }
+  }
+}

@@ -115,7 +115,9 @@ export function crossAreas(net, index, { lane = 0.22, step = 0.25, around = 30 }
       if (area && a !== area) swaps.push({ p, from: area, to: a });
       area = a;
       const at = ride.worldAt(p, area), A = net.areas.get(area);
-      if (at.area !== area || ghostAt(A.base, at.s > A.L ? A.total - at.s : at.s)) ghost++;
+      // (a ghost's end can reach a few metres past a junction's pass, inside the junction: the tour's own way; not counted)
+      const x = ride.entries[ride.entryAt(p)], u = p - x.p0;
+      if (at.area !== area || (u > 10 && u < x.t.e.len - 10 && ghostAt(A.base, at.s > A.L ? A.total - at.s : at.s))) ghost++;
     }
     // each swap at `step` metres, as the world rides it: the pose on the old area up to the swap, on the new one after
     let worst = 0;

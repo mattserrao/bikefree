@@ -1,896 +1,941 @@
 [
-  {
-    "id": "yosemite",
-    "name": "Yosemite Valley Loop",
-    "park": "Yosemite National Park, California",
-    "file": "routes/parks/yosemite.gpx",
-    "outAndBack": false,
-    "expectedKm": [
-      17,
-      23
+ {
+  "id": "yosemite",
+  "name": "Yosemite Valley Loop",
+  "park": "Yosemite National Park, California",
+  "file": "routes/parks/yosemite.gpx",
+  "outAndBack": false,
+  "expectedKm": [
+   17,
+   23
+  ],
+  "routing": {
+   "profile": "fastbike",
+   "expect_km": [
+    17,
+    23
+   ],
+   "waypoints": [
+    [
+     37.7432,
+     -119.597
     ],
-    "routing": {
-      "profile": "fastbike",
-      "expect_km": [
-        17,
-        23
-      ],
-      "waypoints": [
-        [
-          37.7432,
-          -119.597
-        ],
-        [
-          37.7245,
-          -119.637
-        ],
-        [
-          37.7166,
-          -119.664
-        ],
-        [
-          37.7172,
-          -119.6465
-        ],
-        [
-          37.7366,
-          -119.6029
-        ],
-        [
-          37.7376,
-          -119.5717
-        ]
-      ],
-      "pois": {
-        "El Capitan Meadow": [
-          37.7245,
-          -119.637
-        ],
-        "Bridalveil Fall": [
-          37.7172,
-          -119.6465
-        ]
-      }
-    },
-    "scene": "routes/scenes/yosemite.json",
-    "stage": "draft"
+    [
+     37.7245,
+     -119.637
+    ],
+    [
+     37.7166,
+     -119.664
+    ],
+    [
+     37.7172,
+     -119.6465
+    ],
+    [
+     37.7366,
+     -119.6029
+    ],
+    [
+     37.7376,
+     -119.5717
+    ]
+   ],
+   "pois": {
+    "El Capitan Meadow": [
+     37.7245,
+     -119.637
+    ],
+    "Bridalveil Fall": [
+     37.7172,
+     -119.6465
+    ]
+   }
   },
-  {
-    "id": "acadia",
-    "name": "Acadia Park Loop Road",
-    "park": "Acadia National Park, Maine",
-    "file": "routes/parks/acadia.gpx",
-    "outAndBack": false,
-    "expectedKm": [
-      30,
-      45
+  "scene": "routes/scenes/yosemite.json",
+  "stage": "draft"
+ },
+ {
+  "id": "acadia",
+  "name": "Acadia Park Loop Road",
+  "park": "Acadia National Park, Maine",
+  "file": "routes/parks/acadia.gpx",
+  "outAndBack": false,
+  "expectedKm": [
+   30,
+   45
+  ],
+  "routing": {
+   "profile": "fastbike",
+   "expect_km": [
+    30,
+    45
+   ],
+   "waypoints": [
+    [
+     44.4096,
+     -68.247
     ],
-    "routing": {
-      "profile": "fastbike",
-      "expect_km": [
-        30,
-        45
-      ],
-      "waypoints": [
-        [
-          44.4096,
-          -68.247
-        ],
-        [
-          44.362,
-          -68.2075
-        ],
-        [
-          44.3305,
-          -68.184
-        ],
-        [
-          44.321,
-          -68.189
-        ],
-        [
-          44.3107,
-          -68.1925
-        ],
-        [
-          44.3204,
-          -68.253
-        ],
-        [
-          44.344,
-          -68.242
-        ]
-      ],
-      "pois": {
-        "Sand Beach": [
-          44.3305,
-          -68.184
-        ],
-        "Jordan Pond": [
-          44.3204,
-          -68.253
-        ]
-      }
-    },
-    "scene": "routes/scenes/acadia.json",
-    "stage": "deprecated"
+    [
+     44.362,
+     -68.2075
+    ],
+    [
+     44.3305,
+     -68.184
+    ],
+    [
+     44.321,
+     -68.189
+    ],
+    [
+     44.3107,
+     -68.1925
+    ],
+    [
+     44.3204,
+     -68.253
+    ],
+    [
+     44.344,
+     -68.242
+    ]
+   ],
+   "pois": {
+    "Sand Beach": [
+     44.3305,
+     -68.184
+    ],
+    "Jordan Pond": [
+     44.3204,
+     -68.253
+    ]
+   }
   },
-  {
-    "id": "teton",
-    "name": "Grand Teton Loop",
-    "park": "Grand Teton National Park, Wyoming",
-    "file": "routes/parks/teton.gpx",
-    "outAndBack": false,
-    "expectedKm": [
-      62,
-      75
+  "scene": "routes/scenes/acadia.json",
+  "stage": "deprecated"
+ },
+ {
+  "id": "teton",
+  "name": "Grand Teton Loop",
+  "park": "Grand Teton National Park, Wyoming",
+  "file": "routes/parks/teton.gpx",
+  "outAndBack": false,
+  "expectedKm": [
+   62,
+   75
+  ],
+  "routing": {
+   "profile": "car-fast",
+   "expect_km": [
+    62,
+    75
+   ],
+   "waypoints": [
+    [
+     43.6568,
+     -110.713
     ],
-    "routing": {
-      "profile": "car-fast",
-      "expect_km": [
-        62,
-        75
-      ],
-      "waypoints": [
-        [
-          43.6568,
-          -110.713
-        ],
-        [
-          43.841,
-          -110.51
-        ],
-        [
-          43.875,
-          -110.577
-        ],
-        [
-          43.79,
-          -110.727
-        ],
-        [
-          43.752,
-          -110.724
-        ]
-      ],
-      "pois": {
-        "Moran Junction": [
-          43.841,
-          -110.51
-        ],
-        "South Jenny Lake": [
-          43.752,
-          -110.724
-        ]
-      }
-    },
-    "scene": "routes/scenes/teton.json",
-    "stage": "deprecated"
+    [
+     43.841,
+     -110.51
+    ],
+    [
+     43.875,
+     -110.577
+    ],
+    [
+     43.79,
+     -110.727
+    ],
+    [
+     43.752,
+     -110.724
+    ]
+   ],
+   "pois": {
+    "Moran Junction": [
+     43.841,
+     -110.51
+    ],
+    "South Jenny Lake": [
+     43.752,
+     -110.724
+    ]
+   }
   },
-  {
-    "id": "craterlake",
-    "name": "Crater Lake Rim Drive",
-    "park": "Crater Lake National Park, Oregon",
-    "file": "routes/parks/craterlake.gpx",
-    "outAndBack": false,
-    "expectedKm": [
-      50,
-      58
+  "scene": "routes/scenes/teton.json",
+  "stage": "deprecated"
+ },
+ {
+  "id": "craterlake",
+  "name": "Crater Lake Rim Drive",
+  "park": "Crater Lake National Park, Oregon",
+  "file": "routes/parks/craterlake.gpx",
+  "outAndBack": false,
+  "expectedKm": [
+   50,
+   58
+  ],
+  "routing": {
+   "profile": "car-fast",
+   "expect_km": [
+    50,
+    58
+   ],
+   "waypoints": [
+    [
+     42.9115,
+     -122.145
     ],
-    "routing": {
-      "profile": "car-fast",
-      "expect_km": [
-        50,
-        58
-      ],
-      "waypoints": [
-        [
-          42.9115,
-          -122.145
-        ],
-        [
-          42.8966,
-          -122.134
-        ],
-        [
-          42.915,
-          -122.053
-        ],
-        [
-          42.981,
-          -122.083
-        ],
-        [
-          42.985,
-          -122.145
-        ],
-        [
-          42.947,
-          -122.168
-        ],
-        [
-          42.923,
-          -122.153
-        ]
-      ],
-      "pois": {
-        "Cleetwood Cove": [
-          42.981,
-          -122.083
-        ],
-        "Watchman": [
-          42.947,
-          -122.168
-        ]
-      }
-    },
-    "scene": "routes/scenes/craterlake.json",
-    "stage": "deprecated"
+    [
+     42.8966,
+     -122.134
+    ],
+    [
+     42.915,
+     -122.053
+    ],
+    [
+     42.981,
+     -122.083
+    ],
+    [
+     42.985,
+     -122.145
+    ],
+    [
+     42.947,
+     -122.168
+    ],
+    [
+     42.923,
+     -122.153
+    ]
+   ],
+   "pois": {
+    "Cleetwood Cove": [
+     42.981,
+     -122.083
+    ],
+    "Watchman": [
+     42.947,
+     -122.168
+    ]
+   }
   },
-  {
-    "id": "monumentvalley",
-    "name": "Monument Valley \u00b7 Forrest Gump Point",
-    "park": "US-163, Monument Valley, Utah & Arizona",
-    "file": "routes/parks/monumentvalley.gpx",
-    "outAndBack": true,
-    "expectedKm": [
-      34,
-      56
+  "scene": "routes/scenes/craterlake.json",
+  "stage": "deprecated"
+ },
+ {
+  "id": "monumentvalley",
+  "name": "Monument Valley \u00b7 Forrest Gump Point",
+  "park": "US-163, Monument Valley, Utah & Arizona",
+  "file": "routes/parks/monumentvalley.gpx",
+  "outAndBack": true,
+  "expectedKm": [
+   34,
+   56
+  ],
+  "routing": {
+   "profile": "car-fast",
+   "expect_km": [
+    17,
+    28
+   ],
+   "waypoints": [
+    [
+     37.1012,
+     -109.9898
     ],
-    "routing": {
-      "profile": "car-fast",
-      "expect_km": [
-        17,
-        28
-      ],
-      "waypoints": [
-        [
-          37.1012,
-          -109.9898
-        ],
-        [
-          37.001,
-          -110.095
-        ],
-        [
-          36.9833,
-          -110.112
-        ]
-      ],
-      "pois": {
-        "Forrest Gump Point": [
-          37.1012,
-          -109.9898
-        ],
-        "Visitor center": [
-          36.9833,
-          -110.112
-        ]
-      }
-    },
-    "scene": "routes/scenes/monumentvalley.json",
-    "stage": "deprecated"
+    [
+     37.001,
+     -110.095
+    ],
+    [
+     36.9833,
+     -110.112
+    ]
+   ],
+   "pois": {
+    "Forrest Gump Point": [
+     37.1012,
+     -109.9898
+    ],
+    "Visitor center": [
+     36.9833,
+     -110.112
+    ]
+   }
   },
-  {
-    "id": "bigsur",
-    "name": "Big Sur \u00b7 Bixby Bridge & Hurricane Point",
-    "park": "California Highway 1, Big Sur",
-    "file": "routes/parks/bigsur.gpx",
-    "outAndBack": true,
-    "expectedKm": [
-      56,
-      80
+  "scene": "routes/scenes/monumentvalley.json",
+  "stage": "deprecated"
+ },
+ {
+  "id": "bigsur",
+  "name": "Big Sur \u00b7 Bixby Bridge & Hurricane Point",
+  "park": "California Highway 1, Big Sur",
+  "file": "routes/parks/bigsur.gpx",
+  "outAndBack": true,
+  "expectedKm": [
+   56,
+   80
+  ],
+  "routing": {
+   "profile": "car-fast",
+   "expect_km": [
+    28,
+    40
+   ],
+   "waypoints": [
+    [
+     36.4985,
+     -121.9375
     ],
-    "routing": {
-      "profile": "car-fast",
-      "expect_km": [
-        28,
-        40
-      ],
-      "waypoints": [
-        [
-          36.4985,
-          -121.9375
-        ],
-        [
-          36.44,
-          -121.9215
-        ],
-        [
-          36.3716,
-          -121.9019
-        ],
-        [
-          36.306,
-          -121.88
-        ],
-        [
-          36.27,
-          -121.8075
-        ]
-      ],
-      "pois": {
-        "Bixby Bridge": [
-          36.3716,
-          -121.9019
-        ],
-        "Hurricane Point": [
-          36.3567,
-          -121.8985
-        ],
-        "Big Sur village": [
-          36.27,
-          -121.8075
-        ]
-      }
-    },
-    "scene": "routes/scenes/bigsur.json"
+    [
+     36.44,
+     -121.9215
+    ],
+    [
+     36.3716,
+     -121.9019
+    ],
+    [
+     36.306,
+     -121.88
+    ],
+    [
+     36.27,
+     -121.8075
+    ]
+   ],
+   "pois": {
+    "Bixby Bridge": [
+     36.3716,
+     -121.9019
+    ],
+    "Hurricane Point": [
+     36.3567,
+     -121.8985
+    ],
+    "Big Sur village": [
+     36.27,
+     -121.8075
+    ]
+   }
   },
-  {
-    "id": "goingtothesun",
-    "name": "Going-to-the-Sun Road",
-    "park": "Glacier National Park, Montana",
-    "file": "routes/parks/goingtothesun.gpx",
-    "outAndBack": true,
-    "expectedKm": [
-      140,
-      175
+  "scene": "routes/scenes/bigsur.json"
+ },
+ {
+  "id": "goingtothesun",
+  "name": "Going-to-the-Sun Road",
+  "park": "Glacier National Park, Montana",
+  "file": "routes/parks/goingtothesun.gpx",
+  "outAndBack": true,
+  "expectedKm": [
+   140,
+   175
+  ],
+  "routing": {
+   "profile": "fastbike",
+   "expect_km": [
+    70,
+    87
+   ],
+   "waypoints": [
+    [
+     48.5297,
+     -113.98
     ],
-    "routing": {
-      "profile": "fastbike",
-      "expect_km": [
-        70,
-        87
-      ],
-      "waypoints": [
-        [
-          48.5297,
-          -113.98
-        ],
-        [
-          48.6178,
-          -113.877
-        ],
-        [
-          48.6797,
-          -113.8187
-        ],
-        [
-          48.6965,
-          -113.718
-        ],
-        [
-          48.6773,
-          -113.6529
-        ],
-        [
-          48.7449,
-          -113.4418
-        ]
-      ],
-      "pois": {
-        "Avalanche Creek": [
-          48.6797,
-          -113.8187
-        ],
-        "Logan Pass": [
-          48.6965,
-          -113.718
-        ],
-        "Jackson Glacier Overlook": [
-          48.6773,
-          -113.6529
-        ],
-        "Sun Point": [
-          48.6765,
-          -113.611
-        ],
-        "Rising Sun": [
-          48.6946,
-          -113.519
-        ],
-        "St. Mary": [
-          48.7472,
-          -113.4389
-        ],
-        "Lake McDonald Lodge": [
-          48.617,
-          -113.878
-        ],
-        "Apgar": [
-          48.528,
-          -113.984
-        ]
-      },
-      "profile_opts": {
-        "cliff_m": 200,
-        "bridge_m": 400,
-        "smooth_m": 400
-      }
-    },
-    "scene": "routes/scenes/goingtothesun.json"
+    [
+     48.6178,
+     -113.877
+    ],
+    [
+     48.6797,
+     -113.8187
+    ],
+    [
+     48.6965,
+     -113.718
+    ],
+    [
+     48.6773,
+     -113.6529
+    ],
+    [
+     48.7449,
+     -113.4418
+    ]
+   ],
+   "pois": {
+    "Avalanche Creek": [
+     48.6797,
+     -113.8187
+    ],
+    "Logan Pass": [
+     48.6965,
+     -113.718
+    ],
+    "Jackson Glacier Overlook": [
+     48.6773,
+     -113.6529
+    ],
+    "Sun Point": [
+     48.6765,
+     -113.611
+    ],
+    "Rising Sun": [
+     48.6946,
+     -113.519
+    ],
+    "St. Mary": [
+     48.7472,
+     -113.4389
+    ],
+    "Lake McDonald Lodge": [
+     48.617,
+     -113.878
+    ],
+    "Apgar": [
+     48.528,
+     -113.984
+    ]
+   },
+   "profile_opts": {
+    "cliff_m": 200,
+    "bridge_m": 400,
+    "smooth_m": 400
+   }
   },
-  {
-    "id": "zion",
-    "name": "Zion Canyon Scenic Drive",
-    "park": "Zion National Park, Utah",
-    "file": "routes/parks/zion.gpx",
-    "outAndBack": true,
-    "expectedKm": [
-      20,
-      32
+  "scene": "routes/scenes/goingtothesun.json"
+ },
+ {
+  "id": "zion",
+  "name": "Zion Canyon Scenic Drive",
+  "park": "Zion National Park, Utah",
+  "file": "routes/parks/zion.gpx",
+  "outAndBack": true,
+  "expectedKm": [
+   20,
+   32
+  ],
+  "routing": {
+   "profile": "fastbike",
+   "expect_km": [
+    10,
+    16
+   ],
+   "waypoints": [
+    [
+     37.2002,
+     -112.9868
     ],
-    "routing": {
-      "profile": "fastbike",
-      "expect_km": [
-        10,
-        16
-      ],
-      "waypoints": [
-        [
-          37.2002,
-          -112.9868
-        ],
-        [
-          37.2508,
-          -112.957
-        ],
-        [
-          37.2849,
-          -112.9478
-        ]
-      ],
-      "pois": {
-        "Zion Lodge": [
-          37.2508,
-          -112.957
-        ],
-        "Temple of Sinawava": [
-          37.2849,
-          -112.9478
-        ]
-      }
-    },
-    "scene": "routes/scenes/zion.json"
+    [
+     37.2508,
+     -112.957
+    ],
+    [
+     37.2849,
+     -112.9478
+    ]
+   ],
+   "pois": {
+    "Zion Lodge": [
+     37.2508,
+     -112.957
+    ],
+    "Temple of Sinawava": [
+     37.2849,
+     -112.9478
+    ]
+   }
   },
-  {
-    "id": "sevenmile",
-    "name": "Overseas Highway \u00b7 Seven Mile Bridge",
-    "park": "Florida Keys (Marathon to Bahia Honda)",
-    "file": "routes/parks/sevenmile.gpx",
-    "outAndBack": true,
-    "expectedKm": [
-      36,
-      56
+  "scene": "routes/scenes/zion.json"
+ },
+ {
+  "id": "sevenmile",
+  "name": "Overseas Highway \u00b7 Seven Mile Bridge",
+  "park": "Florida Keys (Marathon to Bahia Honda)",
+  "file": "routes/parks/sevenmile.gpx",
+  "outAndBack": true,
+  "expectedKm": [
+   36,
+   56
+  ],
+  "routing": {
+   "profile": "car-fast",
+   "min_ele": 3.0,
+   "expect_km": [
+    18,
+    28
+   ],
+   "waypoints": [
+    [
+     24.712,
+     -81.088
     ],
-    "routing": {
-      "profile": "car-fast",
-      "min_ele": 3.0,
-      "expect_km": [
-        18,
-        28
-      ],
-      "waypoints": [
-        [
-          24.712,
-          -81.088
-        ],
-        [
-          24.6995,
-          -81.15
-        ],
-        [
-          24.656,
-          -81.279
-        ]
-      ],
-      "pois": {
-        "Seven Mile Bridge (Pigeon Key)": [
-          24.704,
-          -81.155
-        ],
-        "Bahia Honda": [
-          24.656,
-          -81.279
-        ]
-      }
-    },
-    "scene": "routes/scenes/sevenmile.json",
-    "stage": "deprecated"
+    [
+     24.6995,
+     -81.15
+    ],
+    [
+     24.656,
+     -81.279
+    ]
+   ],
+   "pois": {
+    "Seven Mile Bridge (Pigeon Key)": [
+     24.704,
+     -81.155
+    ],
+    "Bahia Honda": [
+     24.656,
+     -81.279
+    ]
+   }
   },
-  {
-    "id": "route28",
-    "name": "Route 28 \u00b7 Old Forge to Eighth Lake",
-    "park": "Fulton Chain of Lakes, Adirondacks, New York",
-    "file": "routes/parks/route28.gpx",
-    "outAndBack": true,
-    "expectedKm": [
-      44,
-      68
+  "scene": "routes/scenes/sevenmile.json",
+  "stage": "deprecated"
+ },
+ {
+  "id": "route28",
+  "name": "Route 28 \u00b7 Old Forge to Eighth Lake",
+  "park": "Fulton Chain of Lakes, Adirondacks, New York",
+  "file": "routes/parks/route28.gpx",
+  "outAndBack": true,
+  "expectedKm": [
+   44,
+   68
+  ],
+  "routing": {
+   "profile": "car-fast",
+   "expect_km": [
+    22,
+    34
+   ],
+   "waypoints": [
+    [
+     43.7108,
+     -74.9733
     ],
-    "routing": {
-      "profile": "car-fast",
-      "expect_km": [
-        22,
-        34
-      ],
-      "waypoints": [
-        [
-          43.7108,
-          -74.9733
-        ],
-        [
-          43.7686,
-          -74.8181
-        ],
-        [
-          43.7475,
-          -74.7925
-        ],
-        [
-          43.74,
-          -74.755
-        ],
-        [
-          43.769,
-          -74.71
-        ]
-      ],
-      "pois": {
-        "Old Forge": [
-          43.7108,
-          -74.9733
-        ],
-        "Eagle Bay": [
-          43.7686,
-          -74.8181
-        ],
-        "Inlet": [
-          43.7475,
-          -74.7925
-        ],
-        "Seventh Lake": [
-          43.74,
-          -74.755
-        ],
-        "Eighth Lake": [
-          43.769,
-          -74.71
-        ]
-      }
-    },
-    "scene": "routes/scenes/route28.json",
-    "stage": "draft"
+    [
+     43.7686,
+     -74.8181
+    ],
+    [
+     43.7475,
+     -74.7925
+    ],
+    [
+     43.74,
+     -74.755
+    ],
+    [
+     43.769,
+     -74.71
+    ]
+   ],
+   "pois": {
+    "Old Forge": [
+     43.7108,
+     -74.9733
+    ],
+    "Eagle Bay": [
+     43.7686,
+     -74.8181
+    ],
+    "Inlet": [
+     43.7475,
+     -74.7925
+    ],
+    "Seventh Lake": [
+     43.74,
+     -74.755
+    ],
+    "Eighth Lake": [
+     43.769,
+     -74.71
+    ]
+   }
   },
-  {
-    "id": "pittsburgh",
-    "name": "Pittsburgh \u00b7 Three Rivers Loop",
-    "park": "Pittsburgh, Pennsylvania",
-    "file": "routes/cities/pittsburgh.gpx",
-    "outAndBack": false,
-    "expectedKm": [
-      54,
-      61
+  "scene": "routes/scenes/route28.json",
+  "stage": "draft"
+ },
+ {
+  "id": "pittsburgh",
+  "name": "Pittsburgh \u00b7 Three Rivers Loop",
+  "park": "Pittsburgh, Pennsylvania",
+  "file": "routes/cities/pittsburgh.gpx",
+  "outAndBack": false,
+  "expectedKm": [
+   26,
+   32
+  ],
+  "scene": "routes/scenes/pittsburgh.json",
+  "network": "routes/cities/pittsburgh-network.json",
+  "eleSmoothM": 10,
+  "stage": "draft"
+ },
+ {
+  "id": "pittsburgh-allegheny",
+  "name": "Pittsburgh \u00b7 The Allegheny & Troy Hill",
+  "park": "Pittsburgh, Pennsylvania",
+  "file": "routes/cities/pittsburgh-allegheny.gpx",
+  "outAndBack": false,
+  "expectedKm": [
+   14,
+   18
+  ],
+  "scene": "routes/scenes/pittsburgh-allegheny.json",
+  "eleSmoothM": 10,
+  "stage": "draft",
+  "area": "pittsburgh"
+ },
+ {
+  "id": "pittsburgh-westend",
+  "name": "Pittsburgh \u00b7 The West End & Elliott",
+  "park": "Pittsburgh, Pennsylvania",
+  "file": "routes/cities/pittsburgh-westend.gpx",
+  "outAndBack": false,
+  "expectedKm": [
+   3,
+   6
+  ],
+  "scene": "routes/scenes/pittsburgh-westend.json",
+  "eleSmoothM": 10,
+  "stage": "draft",
+  "area": "pittsburgh"
+ },
+ {
+  "id": "pittsburgh-oakland",
+  "name": "Pittsburgh \u00b7 Oakland & Schenley Park",
+  "park": "Pittsburgh, Pennsylvania",
+  "file": "routes/cities/pittsburgh-oakland.gpx",
+  "outAndBack": false,
+  "expectedKm": [
+   12,
+   16
+  ],
+  "scene": "routes/scenes/pittsburgh-oakland.json",
+  "eleSmoothM": 10,
+  "stage": "draft",
+  "area": "pittsburgh"
+ },
+ {
+  "id": "alpedhuez",
+  "name": "Alpe d'Huez \u00b7 Tour Stage 19",
+  "park": "Gap \u2192 Alpe d'Huez, French Alps (Tour de France 2026)",
+  "file": "routes/parks/alpedhuez.gpx",
+  "outAndBack": false,
+  "oneWay": true,
+  "expectedKm": [
+   126,
+   130
+  ],
+  "routing": {
+   "profile": "fastbike",
+   "expect_km": [
+    126,
+    130
+   ],
+   "waypoints": [
+    [
+     44.57969,
+     6.08206
     ],
-    "scene": "routes/scenes/pittsburgh.json",
-    "network": "routes/cities/pittsburgh-network.json",
-    "eleSmoothM": 10,
-    "stage": "draft"
+    [
+     44.61127,
+     6.08075
+    ],
+    [
+     44.66015,
+     6.08425
+    ],
+    [
+     44.6836,
+     6.0663
+    ],
+    [
+     44.69166,
+     6.04898
+    ],
+    [
+     44.69652,
+     6.01515
+    ],
+    [
+     44.69469,
+     6.01357
+    ],
+    [
+     44.69555,
+     6.01167
+    ],
+    [
+     44.69791,
+     6.0005
+    ],
+    [
+     44.69289,
+     5.98379
+    ],
+    [
+     44.68128,
+     5.95675
+    ],
+    [
+     44.68554,
+     5.9476
+    ],
+    [
+     44.70073,
+     5.92933
+    ],
+    [
+     44.71621,
+     5.91692
+    ],
+    [
+     44.73049,
+     5.89812
+    ],
+    [
+     44.74695,
+     5.88648
+    ],
+    [
+     44.76254,
+     5.88887
+    ],
+    [
+     44.77618,
+     5.89877
+    ],
+    [
+     44.79426,
+     5.91029
+    ],
+    [
+     44.81691,
+     5.90803
+    ],
+    [
+     44.81914,
+     5.94065
+    ],
+    [
+     44.83185,
+     5.91646
+    ],
+    [
+     44.84008,
+     5.87664
+    ],
+    [
+     44.85993,
+     5.86183
+    ],
+    [
+     44.87873,
+     5.82791
+    ],
+    [
+     44.88811,
+     5.83771
+    ],
+    [
+     44.89435,
+     5.85864
+    ],
+    [
+     44.89498,
+     5.85904
+    ],
+    [
+     44.89651,
+     5.86002
+    ],
+    [
+     44.89814,
+     5.86307
+    ],
+    [
+     44.8965,
+     5.86607
+    ],
+    [
+     44.89451,
+     5.86836
+    ],
+    [
+     44.89772,
+     5.89616
+    ],
+    [
+     44.90033,
+     5.94384
+    ],
+    [
+     44.93684,
+     5.97398
+    ],
+    [
+     44.9705,
+     5.95965
+    ],
+    [
+     44.98482,
+     5.96751
+    ],
+    [
+     44.98613,
+     5.9705
+    ],
+    [
+     44.98792,
+     5.96872
+    ],
+    [
+     44.99028,
+     5.96594
+    ],
+    [
+     44.99152,
+     5.96859
+    ],
+    [
+     44.99403,
+     5.96643
+    ],
+    [
+     44.99537,
+     5.96646
+    ],
+    [
+     44.99613,
+     5.97111
+    ],
+    [
+     44.99621,
+     5.97241
+    ],
+    [
+     45.00935,
+     5.96765
+    ],
+    [
+     45.02925,
+     5.97401
+    ],
+    [
+     45.05148,
+     5.9885
+    ],
+    [
+     45.07244,
+     6.01141
+    ],
+    [
+     45.06308,
+     6.0249
+    ],
+    [
+     45.0623,
+     6.02548
+    ],
+    [
+     45.06088,
+     6.02657
+    ],
+    [
+     45.0581,
+     6.02867
+    ],
+    [
+     45.05583,
+     6.02967
+    ],
+    [
+     45.0549,
+     6.0324
+    ],
+    [
+     45.05687,
+     6.03474
+    ],
+    [
+     45.06561,
+     6.03999
+    ],
+    [
+     45.06768,
+     6.04447
+    ],
+    [
+     45.07495,
+     6.0478
+    ],
+    [
+     45.07707,
+     6.05338
+    ],
+    [
+     45.08006,
+     6.0565
+    ],
+    [
+     45.09043,
+     6.05848
+    ],
+    [
+     45.0927,
+     6.06478
+    ],
+    [
+     45.09309,
+     6.0682
+    ],
+    [
+     45.0925,
+     6.07167
+    ],
+    [
+     45.09407,
+     6.07116
+    ]
+   ],
+   "pois": {
+    "Col Bayard": [
+     44.61127,
+     6.08075
+    ],
+    "Col du Noyer": [
+     44.69289,
+     5.98379
+    ],
+    "Le P\u00e9rier": [
+     44.93684,
+     5.97398
+    ],
+    "Col d'Ornon": [
+     45.00935,
+     5.96765
+    ],
+    "Le Bourg-d'Oisans": [
+     45.0623,
+     6.02548
+    ],
+    "Alpe d'Huez finish": [
+     45.09407,
+     6.07116
+    ]
+   },
+   "profile_opts": {
+    "smooth_m": 200,
+    "max_grade": 13
+   }
   },
-  {
-    "id": "alpedhuez",
-    "name": "Alpe d'Huez \u00b7 Tour Stage 19",
-    "park": "Gap \u2192 Alpe d'Huez, French Alps (Tour de France 2026)",
-    "file": "routes/parks/alpedhuez.gpx",
-    "outAndBack": false,
-    "oneWay": true,
-    "expectedKm": [
-      126,
-      130
-    ],
-    "routing": {
-      "profile": "fastbike",
-      "expect_km": [
-        126,
-        130
-      ],
-      "waypoints": [
-        [
-          44.57969,
-          6.08206
-        ],
-        [
-          44.61127,
-          6.08075
-        ],
-        [
-          44.66015,
-          6.08425
-        ],
-        [
-          44.6836,
-          6.0663
-        ],
-        [
-          44.69166,
-          6.04898
-        ],
-        [
-          44.69652,
-          6.01515
-        ],
-        [
-          44.69469,
-          6.01357
-        ],
-        [
-          44.69555,
-          6.01167
-        ],
-        [
-          44.69791,
-          6.0005
-        ],
-        [
-          44.69289,
-          5.98379
-        ],
-        [
-          44.68128,
-          5.95675
-        ],
-        [
-          44.68554,
-          5.9476
-        ],
-        [
-          44.70073,
-          5.92933
-        ],
-        [
-          44.71621,
-          5.91692
-        ],
-        [
-          44.73049,
-          5.89812
-        ],
-        [
-          44.74695,
-          5.88648
-        ],
-        [
-          44.76254,
-          5.88887
-        ],
-        [
-          44.77618,
-          5.89877
-        ],
-        [
-          44.79426,
-          5.91029
-        ],
-        [
-          44.81691,
-          5.90803
-        ],
-        [
-          44.81914,
-          5.94065
-        ],
-        [
-          44.83185,
-          5.91646
-        ],
-        [
-          44.84008,
-          5.87664
-        ],
-        [
-          44.85993,
-          5.86183
-        ],
-        [
-          44.87873,
-          5.82791
-        ],
-        [
-          44.88811,
-          5.83771
-        ],
-        [
-          44.89435,
-          5.85864
-        ],
-        [
-          44.89498,
-          5.85904
-        ],
-        [
-          44.89651,
-          5.86002
-        ],
-        [
-          44.89814,
-          5.86307
-        ],
-        [
-          44.8965,
-          5.86607
-        ],
-        [
-          44.89451,
-          5.86836
-        ],
-        [
-          44.89772,
-          5.89616
-        ],
-        [
-          44.90033,
-          5.94384
-        ],
-        [
-          44.93684,
-          5.97398
-        ],
-        [
-          44.9705,
-          5.95965
-        ],
-        [
-          44.98482,
-          5.96751
-        ],
-        [
-          44.98613,
-          5.9705
-        ],
-        [
-          44.98792,
-          5.96872
-        ],
-        [
-          44.99028,
-          5.96594
-        ],
-        [
-          44.99152,
-          5.96859
-        ],
-        [
-          44.99403,
-          5.96643
-        ],
-        [
-          44.99537,
-          5.96646
-        ],
-        [
-          44.99613,
-          5.97111
-        ],
-        [
-          44.99621,
-          5.97241
-        ],
-        [
-          45.00935,
-          5.96765
-        ],
-        [
-          45.02925,
-          5.97401
-        ],
-        [
-          45.05148,
-          5.9885
-        ],
-        [
-          45.07244,
-          6.01141
-        ],
-        [
-          45.06308,
-          6.0249
-        ],
-        [
-          45.0623,
-          6.02548
-        ],
-        [
-          45.06088,
-          6.02657
-        ],
-        [
-          45.0581,
-          6.02867
-        ],
-        [
-          45.05583,
-          6.02967
-        ],
-        [
-          45.0549,
-          6.0324
-        ],
-        [
-          45.05687,
-          6.03474
-        ],
-        [
-          45.06561,
-          6.03999
-        ],
-        [
-          45.06768,
-          6.04447
-        ],
-        [
-          45.07495,
-          6.0478
-        ],
-        [
-          45.07707,
-          6.05338
-        ],
-        [
-          45.08006,
-          6.0565
-        ],
-        [
-          45.09043,
-          6.05848
-        ],
-        [
-          45.0927,
-          6.06478
-        ],
-        [
-          45.09309,
-          6.0682
-        ],
-        [
-          45.0925,
-          6.07167
-        ],
-        [
-          45.09407,
-          6.07116
-        ]
-      ],
-      "pois": {
-        "Col Bayard": [
-          44.61127,
-          6.08075
-        ],
-        "Col du Noyer": [
-          44.69289,
-          5.98379
-        ],
-        "Le P\u00e9rier": [
-          44.93684,
-          5.97398
-        ],
-        "Col d'Ornon": [
-          45.00935,
-          5.96765
-        ],
-        "Le Bourg-d'Oisans": [
-          45.0623,
-          6.02548
-        ],
-        "Alpe d'Huez finish": [
-          45.09407,
-          6.07116
-        ]
-      },
-      "profile_opts": {
-        "smooth_m": 200,
-        "max_grade": 13
-      }
-    },
-    "scene": "routes/scenes/alpedhuez.json"
-  }
+  "scene": "routes/scenes/alpedhuez.json"
+ }
 ]

@@ -20,16 +20,32 @@ const { CityLife } = await import('../js/world/toolbox/city/life.js');
 const { ghostAt } = await import('../js/world/ghost.js');
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
-const item = JSON.parse(read('routes/catalog.json')).find((c) => c.id === 'pittsburgh');
-const route = buildCatalogRoute(read(item.file), item);
-const scene = JSON.parse(read(item.scene));
-scene.city = JSON.parse(read(scene.cityData));
-route.scene = scene;
-let la = Infinity, lb = -Infinity, lc = Infinity, ld = -Infinity;
-for (let i = 0; i < route.lat.length; i++) { la = Math.min(la, route.lat[i]); lb = Math.max(lb, route.lat[i]); lc = Math.min(lc, route.lon[i]); ld = Math.max(ld, route.lon[i]); }
-const proj = makeProjection((la + lb) / 2, (lc + ld) / 2);
-const index = makeRouteIndex(route, proj);
-const L = makeCityLandscape(scene, proj, index, route);
+const catalog = JSON.parse(read('routes/catalog.json'));
+const item = catalog.find((c) => c.id === 'pittsburgh');
+const netJson = JSON.parse(read(item.network));
+// Pittsburgh is a city of areas (PLAN 5.4): every area in the city's frame; the ride's own area is the one drawn
+const proj = netJson.origin ? makeProjection(netJson.origin.lat, netJson.origin.lon) : null;
+const areas = new Map();
+/** An area as the world builds it: its route (with its scene and city data), index and landscape. */
+function areaCtx(catalogId) {
+  if (areas.has(catalogId)) return areas.get(catalogId);
+  const it = catalog.find((c) => c.id === catalogId);
+  const r = buildCatalogRoute(read(it.file), it);
+  const sc = JSON.parse(read(it.scene));
+  sc.city = JSON.parse(read(sc.cityData));
+  r.scene = sc;
+  let la = Infinity, lb = -Infinity, lc = Infinity, ld = -Infinity;
+  for (let i = 0; i < r.lat.length; i++) { la = Math.min(la, r.lat[i]); lb = Math.max(lb, r.lat[i]); lc = Math.min(lc, r.lon[i]); ld = Math.max(ld, r.lon[i]); }
+  const pj = proj || makeProjection((la + lb) / 2, (lc + ld) / 2);
+  const ix = makeRouteIndex(r, pj);
+  const ctx = { id: catalogId, route: r, scene: sc, index: ix, L: makeCityLandscape(sc, pj, ix, r), proj: pj };
+  areas.set(catalogId, ctx);
+  return ctx;
+}
+// (the helpers below read the area being ridden: simulate() switches these as the area drawn changes)
+let route, scene, index, L;
+const useArea = (ctx) => ({ route, scene, index, L } = ctx);
+useArea(areaCtx('pittsburgh'));
 
 const SPEED = 9, DT = .1;
 const VIEW_M = 150;         // "in view": this close to the camera and in front of it (people: tiny dots beyond)
@@ -41,7 +57,7 @@ const RIDER_BODY = { half: .32, len: .9 };   // rider + bike: half width, half l
 const VEH = { bus: [1.3, 6] };               // vehicle half width, half length (cars: VEHICLE_INFO's length, 1.9 m wide)
 
 function makeCity() {
-  const group = new THREE.Group();
+  const group = new THREE.Group(), proj = areas.get(route.id)?.proj || areaCtx('pittsburgh').proj;
   const city = {
     group, route, index, landscape: L, data: L.data, D: decodeCity(L.data, proj), uniforms: { uTime: { value: 0 } }, night: { value: 0 },
     qualityKey: 'balanced', own: (x) => x, addGlows() {}, solidMaterial: new THREE.MeshBasicMaterial(),
@@ -69,7 +85,8 @@ function localRoute(x, z, i0) {
 
 export function makeLife() { return new CityLife(makeCity()); }
 let _net = null;
-const network = () => (_net ||= loadNetwork(JSON.parse(read(item.network)), route));
+const network = () => (_net ||= loadNetwork(netJson, netJson.format === 'bikefree-network-2'
+  ? new Map(netJson.areas.map((a) => [a.id, areaCtx(a.catalogId).route])) : areaCtx('pittsburgh').route));
 
 /** Gap (m) between two flat boxes (centre, unit heading, half width, half length): 0 when they overlap. */
 function boxGap(a, b) {
@@ -97,31 +114,51 @@ const note = (what, a, t) => DEBUG && console.log(what, `t=${t.toFixed(1)}`, JSO
  * sees every step. `plan` (network traversal keys, e.g. ["e10+", "e1+"]) rides one lap of that path instead, as the
  * world places a network ride: the turns through the junctions, edges ridden backwards on the base route's way back.
  */
-export function simulate(reverse, { span = null, watch = null, plan = null, speed = SPEED } = {}) {
-  const city = makeCity(), life = new CityLife(city);
-  const turn = route.turnS, total = route.total;
+export function simulate(reverse, { span = null, watch = null, plan = null, speed = SPEED, area: areaId = 'pittsburgh' } = {}) {
+  useArea(areaCtx(areaId));
+  let city = makeCity(), life = new CityLife(city);
+  let turn = route.turnS, total = route.total;
   // spawns and despawns: hook the spawn methods (their names are the life's contract with this test)
   const respawned = new Set();
   for (const k of ['_spawnWalker', '_spawnCyclist', '_spawnCar', '_spawnOncoming']) {
     const f = life[k].bind(life);
     life[k] = (a, ...rest) => { respawned.add(a); return f(a, ...rest); };
   }
-  const groups = [['person', life.walkers], ['person', life.riders], ['vehicle', life.carAgents], ['vehicle', life.busAgents], ['vehicle', life.oncoming]];
-  const agents = groups.flatMap(([g, list]) => list.map((a) => ({ a, g, cyclist: list === life.riders })));
+  const groupsOf = (lf) => [['person', lf.walkers], ['person', lf.riders], ['vehicle', lf.carAgents], ['vehicle', lf.busAgents], ['vehicle', lf.oncoming]];
+  let agents = groupsOf(life).flatMap(([g, list]) => list.map((a) => ({ a, g, cyclist: list === life.riders })));
   const last = new Map();
-  const R = { jumps: 0, worstJump: 0, personInRoad: 0, vehicleInLane: 0, vehicleClose: 0, closest: Infinity, oneWayOncoming: 0, popIn: 0, popOut: 0, ticks: 0, seen: { person: 0, vehicle: 0 } };
+  const R = { swaps: 0, jumps: 0, worstJump: 0, personInRoad: 0, vehicleInLane: 0, vehicleClose: 0, closest: Infinity, oneWayOncoming: 0, popIn: 0, popOut: 0, ticks: 0, seen: { person: 0, vehicle: 0 } };
   const episode = new Map();   // agent → which checks are failing now (count each episode once)
   const flag = (a, key) => { const e = episode.get(a) || new Set(); episode.set(a, e); if (e.has(key)) return false; e.add(key); return true; };
   let s = reverse ? turn + speed * DT : 0;   // (Reverse: from the first step on the way back, so the city sees the rider coming back)
   let end = reverse ? total - 1 : turn - 1;
   if (span) { s = reverse ? total - span[1] : span[0]; end = reverse ? total - span[0] : span[1]; }
   const ride = plan ? new NetRide(network(), {}, { plan }) : null;
-  let lastDir = null, flipT = -Infinity;
+  let lastDir = null, flipT = -Infinity, area = null;
   if (ride) { s = 0; end = ride.lapM - 1; }
+  const lives = new Map([[areaId, { city, life, agents }]]);
+  const catalogOf = (id) => (ride?.net.multi ? ride.net.areas.get(id).json.catalogId : 'pittsburgh');
+  const indexOf = (id) => areaCtx(catalogOf(id)).index;
   for (let t = 0; s < end; t += DT, s += speed * DT) {
-    // (a network ride: path metre s, at its place on the base route, as js/world/world.js does)
-    const ws = ride ? ride.worldS(s) : s;
-    const pose = ride ? ride.pose(s, index, LANE_OFFSET / ROAD_WIDTH) : riderPose(route, index, s);
+    // (a network ride: path metre s, at its place on the area drawn, as js/world/world.js does; a city of areas
+    // swaps the area drawn — its own life — where NetRide.areaFor says. Nothing is carried across: life is
+    // judged within each area, and the step of the swap is not counted as pop-in or pop-out)
+    let swapped = false;
+    if (ride?.net.multi) {
+      const a = ride.areaFor(s, area);
+      if (a !== area) {
+        swapped = area != null; area = a;
+        if (swapped) R.swaps++;
+        const cid = catalogOf(a);
+        useArea(areaCtx(cid));
+        if (!lives.has(cid)) { const c = makeCity(); const lf = new CityLife(c); lives.set(cid, { city: c, life: lf, agents: groupsOf(lf).flatMap(([g, list]) => list.map((x) => ({ a: x, g, cyclist: list === lf.riders }))) }); for (const k of ['_spawnWalker', '_spawnCyclist', '_spawnCar', '_spawnOncoming']) { const lf2 = lives.get(cid).life, f = lf2[k].bind(lf2); lf2[k] = (x, ...rest) => { respawned.add(x); return f(x, ...rest); }; } }
+        ({ city, life, agents } = lives.get(cid));
+        turn = route.turnS; total = route.total;
+        if (swapped) { last.clear(); episode.clear(); }
+      }
+    }
+    const ws = ride ? ride.worldAt(s, area).s : s;
+    const pose = ride ? ride.pose(s, indexOf, LANE_OFFSET / ROAD_WIDTH, area) : riderPose(route, index, s);
     const fwd = { x: pose.flat.x, z: pose.flat.z };
     const cam = { x: pose.pos.x - fwd.x * CHASE.back, y: pose.pos.y + CHASE.up, z: pose.pos.z - fwd.z * CHASE.back };
     const back = ws > turn, rider = { x: pose.pos.x, z: pose.pos.z, out: back ? total - ws : ws, dir: back ? -1 : 1, speed };
@@ -139,12 +176,12 @@ export function simulate(reverse, { span = null, watch = null, plan = null, spee
     for (const { a, g, cyclist } of agents) {
       const was = last.get(a), alive = a.alive && a.x != null && Number.isFinite(a.x);
       const re = respawned.has(a);
-      if (t > 0) {
+      if (t > 0 && !swapped) {
         if (was && (!alive || re) && inView(was.x, was.z)) { R.popOut++; if (DEBUG) console.log('pop-out', `t=${t.toFixed(1)} out=${rider.out.toFixed(0)} dir=${rider.dir}`, JSON.stringify({ ...was, model: a.model, onRoute: a.onRoute, s: a.s, way: a.way })); }
         if (alive && (!was || re) && inView(a.x, a.z)) { R.popIn++; note('pop-in', a, t); }
         if (alive && was && !re) {
           const d = Math.hypot(a.x - was.x, a.z - was.z), allow = (Math.max(a.speed || 0, 1) * 1.5 + 2) * DT + .02;
-          if (d > allow && Math.hypot(a.x - rider.x, a.z - rider.z) < VIEW_M) { R.jumps++; R.worstJump = Math.max(R.worstJump, d); }
+          if (d > allow && Math.hypot(a.x - rider.x, a.z - rider.z) < VIEW_M) { R.jumps++; R.worstJump = Math.max(R.worstJump, d); if (DEBUG) console.log("jump", `t=${t.toFixed(1)} out=${rider.out.toFixed(0)} d=${d.toFixed(2)}`, JSON.stringify({ model: a.model, way: a.way, s: a.s, onRoute: a.onRoute, x: a.x, z: a.z, wx: was.x, wz: was.z })); }
         }
       }
       if (!alive) { last.delete(a); episode.delete(a); continue; }
@@ -183,16 +220,18 @@ export function simulate(reverse, { span = null, watch = null, plan = null, spee
       if (!bad) episode.delete(a);
     }
   }
-  life.dispose?.();
+  for (const x of lives.values()) x.life.dispose?.();
   return R;
 }
 
-for (const reverse of process.env.NO_TESTS ? [] : [false, true]) {
-  test(`pittsburgh life, ${reverse ? 'Reverse' : 'Forward'}: no jumps, people off the road, vehicles out of the rider's lane, no pop-in`, () => {
-    const R = simulate(reverse);
-    if (process.env.LIFE_SIM_REPORT) console.log(reverse ? 'Reverse' : 'Forward', JSON.stringify(R));
-    // still a busy city: about as many people and vehicles near the rider as before (main: ~140k / ~31k agent-steps)
-    assert.ok(R.seen.person > 90000 && R.seen.vehicle > 20000, `life near the rider: ${JSON.stringify(R.seen)}`);
+// each area's own line (PLAN 5.4: Pittsburgh's areas — the core, the Allegheny & Troy Hill, Oakland & Schenley, the West End), Forward and Reverse
+const BUSY = { pittsburgh: [90000, 20000], 'pittsburgh-allegheny': [30000, 6000], 'pittsburgh-oakland': [30000, 6000], 'pittsburgh-westend': [3000, 500] };
+for (const [areaId, reverse] of process.env.NO_TESTS ? [] : Object.keys(BUSY).flatMap((a) => [[a, false], [a, true]])) {
+  test(`${areaId} life, ${reverse ? 'Reverse' : 'Forward'}: no jumps, people off the road, vehicles out of the rider's lane, no pop-in`, () => {
+    const R = simulate(reverse, { area: areaId });
+    if (process.env.LIFE_SIM_REPORT) console.log(areaId, reverse ? 'Reverse' : 'Forward', JSON.stringify(R));
+    // still a busy city: about as many people and vehicles near the rider as before (the whole 40 km tour: ~180k / ~50k agent-steps)
+    assert.ok(R.seen.person > BUSY[areaId][0] && R.seen.vehicle > BUSY[areaId][1], `life near the rider: ${JSON.stringify(R.seen)}`);
     assert.equal(R.jumps, 0, `jumps (worst ${R.worstJump.toFixed(2)} m in one step)`);
     assert.equal(R.personInRoad, 0, 'people in the carriageway near the rider');
     assert.equal(R.vehicleInLane, 0, "vehicles in the rider's lane ahead");

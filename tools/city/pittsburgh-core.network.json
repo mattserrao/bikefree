@@ -1,0 +1,96 @@
+{
+  "area": "core",
+  "note": "Downtown, the North Shore, the South Side and Mount Washington: the Point, the Jail Trail, the Hot Metal, Smithfield Street, Clemente and West End bridges. Portals: A and B (the Allegheny & Troy Hill), I (Oakland & Schenley), D (the West End).",
+  "nodes": [
+    {
+      "id": "B",
+      "name": "Clemente Bridge south end",
+      "lat": 40.444244,
+      "lon": -80.002821
+    },
+    {
+      "id": "E",
+      "name": "Smithfield St & Fort Pitt Blvd",
+      "lat": 40.436469,
+      "lon": -80.000952
+    },
+    {
+      "id": "I",
+      "name": "Hot Metal Bridge north end",
+      "lat": 40.429959,
+      "lon": -79.957579
+    },
+    {
+      "id": "H",
+      "name": "SouthSide Works riverfront",
+      "at": "end",
+      "lat": 40.428871,
+      "lon": -79.965369
+    },
+    {
+      "id": "G",
+      "name": "East Carson & 10th",
+      "lat": 40.42871,
+      "lon": -79.98858
+    },
+    {
+      "id": "D",
+      "name": "West End Bridge south end",
+      "lat": 40.44418,
+      "lon": -80.02819
+    },
+    {
+      "id": "A",
+      "name": "North Shore Water Steps",
+      "lat": 40.445507,
+      "lon": -80.008146
+    }
+  ],
+  "edges": {
+    "B>E": {
+      "name": "The Point & downtown",
+      "fwd": "the riverfront, the Point and Market Square",
+      "rev": "Market Square, the Point and the riverfront to the Clemente Bridge"
+    },
+    "E>I": {
+      "name": "Jail Trail",
+      "fwd": "the Jail Trail along the Mon and down to the Hot Metal Bridge",
+      "rev": "the Jail Trail back to downtown"
+    },
+    "I>H": {
+      "name": "Hot Metal Bridge",
+      "fwd": "over the Hot Metal Bridge to SouthSide Works",
+      "rev": "over the Hot Metal Bridge to the Jail Trail"
+    },
+    "H>G": {
+      "name": "South Side river trail",
+      "fwd": "the river trail to South Side Riverfront Park and 10th",
+      "rev": "the river trail east to SouthSide Works"
+    },
+    "G>D": {
+      "name": "Mount Washington",
+      "fwd": "the McArdle climb, Grandview and down to the West End",
+      "rev": "up from the West End over Grandview and down McArdle"
+    },
+    "D>A": {
+      "name": "West End Bridge",
+      "fwd": "the West End Bridge and the North Shore trail",
+      "rev": "the North Shore trail and the West End Bridge"
+    },
+    "A>B": {
+      "name": "Clemente Bridge",
+      "fwd": "General Robinson St and the Clemente Bridge to Fort Duquesne Blvd",
+      "rev": "the Clemente Bridge to the North Shore and the Water Steps"
+    },
+    "E>G": {
+      "name": "Smithfield Street Bridge",
+      "fwd": "the Smithfield Street Bridge, Station Square and East Carson",
+      "rev": "East Carson, Station Square and the Smithfield Street Bridge"
+    },
+    "G>H": {
+      "name": "East Carson Street",
+      "fwd": "East Carson Street to SouthSide Works",
+      "rev": "East Carson Street to 10th"
+    }
+  }
+}

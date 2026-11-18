@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { buildCatalogRoute } from '../js/routes.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
+import { ghostAt } from '../js/world/ghost.js';
 import { makeCityLandscape, cityStreets } from '../js/world/toolbox/city/landscape.js';
 import { planJunctions, streetPieces, streetOverlaps } from '../js/world/toolbox/city/junctions.js';
 import { ROAD_WIDTH, ROAD_LIFT } from '../js/world/pose.js';
@@ -81,7 +82,9 @@ test('junctions: pittsburgh, planned the way the renderer and the course QC see 
   // every junction surface the route passes through stays under its road
   for (const jn of plan.list) for (const p of jn.poly) {
     const r = L.routeDist(p.x, p.z);
-    if (r && r.d < ROAD_WIDTH / 2 && jn.J(p.x, p.z) + jn.lift < r.y + ROAD_LIFT + 4) assert.ok(jn.J(p.x, p.z) + jn.lift < r.y + ROAD_LIFT, `junction ${jn.id} over the road by ${(jn.J(p.x, p.z) + jn.lift - r.y - ROAD_LIFT).toFixed(2)} m`);   // (4 m and up: a junction on a deck over the road)
+    // (not where the nearest route point is a ghost repeat: that road isn't drawn — the 0.59 m case at E, core 25.10 km,
+    // where the B→E ghost runs back into the junction; the merged tour had it at 54.06 km)
+    if (r && r.d < ROAD_WIDTH / 2 && !ghostAt(route, route.dist[r.i]) && jn.J(p.x, p.z) + jn.lift < r.y + ROAD_LIFT + 4) assert.ok(jn.J(p.x, p.z) + jn.lift < r.y + ROAD_LIFT, `junction ${jn.id} over the road by ${(jn.J(p.x, p.z) + jn.lift - r.y - ROAD_LIFT).toFixed(2)} m`);   // (4 m and up: a junction on a deck over the road)
   }
 });
 

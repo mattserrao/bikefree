@@ -1,0 +1,41 @@
+{
+  "area": "oakland",
+  "note": "Junction Hollow, Oakland and Schenley Park. Portal: I.",
+  "nodes": [
+    {
+      "id": "I",
+      "name": "Hot Metal Bridge north end",
+      "lat": 40.429959,
+      "lon": -79.957579
+    },
+    {
+      "id": "J",
+      "name": "Schenley Drive by Phipps Conservatory",
+      "lat": 40.438693,
+      "lon": -79.946459
+    },
+    {
+      "id": "K",
+      "name": "Schenley Drive & Forbes Ave",
+      "lat": 40.4377,
+      "lon": -79.934079
+    }
+  ],
+  "edges": {
+    "I>J": {
+      "name": "Junction Hollow & Oakland",
+      "fwd": "along Second Ave, up Junction Hollow, through Oakland past the Cathedral of Learning to Phipps",
+      "rev": "past the Cathedral of Learning, down Junction Hollow and along Second Ave to the Hot Metal Bridge"
+    },
+    "J>K": {
+      "name": "Schenley Drive",
+      "fwd": "Schenley Drive across the park to Forbes",
+      "rev": "Schenley Drive across the park to Phipps"
+    },
+    "K>J": {
+      "name": "Schenley Oval & Panther Hollow",
+      "fwd": "Serpentine Drive, round the Schenley Oval and up Panther Hollow",
+      "rev": "down Panther Hollow, round the Schenley Oval and up Serpentine Drive"
+    }
+  }
+}

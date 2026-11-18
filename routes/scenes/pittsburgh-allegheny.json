@@ -1,0 +1,793 @@
+{
+  "format": "bikefree-scene-1",
+  "style": "stylized",
+  "terrain": "authored-city",
+  "cityData": "routes/scenes/pittsburgh-allegheny-city.json",
+  "assets": "models/scenery/coastal.json",
+  "extraAssets": [
+    "models/scenery/regional.json"
+  ],
+  "seed": 412,
+  "roadAlign": {
+    "curve": true,
+    "streets": true,
+    "bankM": 30
+  },
+  "description": "Pittsburgh as a stylized city: the real terrain, rivers, streets, bridges and buildings from OpenStreetMap and AWS Terrain Tiles, with people, traffic, trains, inclines and boats. An artistic interpretation, not a survey.",
+  "title": "Pittsburgh · The Allegheny & Troy Hill",
+  "region": "pittsburgh",
+  "biome": "city",
+  "palette": {
+    "grass": "#7a9a55",
+    "meadow": "#93a26b",
+    "rock": "#8a8478",
+    "cliff": "#9a8f7c",
+    "water": "#2f5a5c",
+    "shallowWater": "#5d7f6a",
+    "bluff": "#8f7a60"
+  },
+  "packs": [
+    "alps"
+  ],
+  "vegetation": {
+    "trees": [
+      "beech0",
+      "oak0",
+      "fieldmaple0",
+      "ash0",
+      "beech1",
+      "fir0"
+    ],
+    "treeDensity": 0.6,
+    "density": 1,
+    "cover": [
+      "grass",
+      "grass",
+      "fern"
+    ],
+    "shrubs": [
+      "shrub0",
+      "shrub1"
+    ],
+    "vergeDensity": 0,
+    "yardTrees": {
+      "density": 0.5,
+      "kitDensity": 0.4,
+      "boxes": [
+        [
+          40.424,
+          -80.026,
+          40.4395,
+          -80.007
+        ],
+        [
+          40.424,
+          -80.007,
+          40.4285,
+          -79.996
+        ],
+        [
+          40.433,
+          -80.04,
+          40.4425,
+          -80.024
+        ]
+      ]
+    }
+  },
+  "routeTrees": [
+    {
+      "fromM": 0,
+      "toM": 320,
+      "spacingM": 11,
+      "offsetM": 7.5,
+      "sides": [
+        -1
+      ]
+    },
+    {
+      "fromM": 0,
+      "toM": 320,
+      "spacingM": 16,
+      "offsetM": 7,
+      "sides": [
+        1
+      ]
+    }
+  ],
+  "bridgeFrames": {
+    "Smithfield Street Bridge": "street"
+  },
+  "fountain": {
+    "lat": 40.44183,
+    "lon": -80.01277,
+    "radiusM": 22
+  },
+  "road": {
+    "surface": "worn",
+    "zones": [],
+    "trail": {
+      "surface": "fresh",
+      "tone": 1.05,
+      "zones": [
+        {
+          "fromM": 0,
+          "toM": 390,
+          "surface": "worn",
+          "patches": 0.25,
+          "tone": 1.04
+        }
+      ]
+    }
+  },
+  "brickStreets": {
+    "osm": true,
+    "minGrade": 0.07,
+    "classes": [
+      5
+    ],
+    "minLengthM": 25
+  },
+  "buildingKit": {
+    "detailM": 150,
+    "dressingM": 80,
+    "styles": [
+      {
+        "preset": "pittsburgh-rowhouse",
+        "kinds": [
+          "rowhouse"
+        ]
+      },
+      {
+        "preset": "pittsburgh-frame",
+        "kinds": [
+          "house"
+        ]
+      }
+    ]
+  },
+  "streetKit": {
+    "fromM": 0,
+    "toM": 16000,
+    "rangeM": 220,
+    "parkTrees": 16,
+    "zones": []
+  },
+  "mainStreets": [],
+  "hotspots": [
+    {
+      "name": "North Shore Water Steps",
+      "lat": 40.44585,
+      "lon": -80.0086,
+      "radiusM": 28
+    },
+    {
+      "name": "PNC Park gate",
+      "lat": 40.447,
+      "lon": -80.0044,
+      "radiusM": 30
+    },
+    {
+      "name": "Point State Park",
+      "lat": 40.442,
+      "lon": -80.012,
+      "radiusM": 45
+    },
+    {
+      "name": "Market Square",
+      "lat": 40.44075,
+      "lon": -80.00256,
+      "radiusM": 35
+    },
+    {
+      "name": "PPG Place plaza",
+      "lat": 40.43965,
+      "lon": -80.0036,
+      "radiusM": 25
+    },
+    {
+      "name": "Station Square",
+      "lat": 40.433,
+      "lon": -80.0045,
+      "radiusM": 40
+    },
+    {
+      "name": "East Carson Street",
+      "lat": 40.4288,
+      "lon": -79.982,
+      "radiusM": 60
+    },
+    {
+      "name": "SouthSide Works",
+      "lat": 40.4273,
+      "lon": -79.9655,
+      "radiusM": 40
+    },
+    {
+      "name": "Grandview Overlook",
+      "lat": 40.4353,
+      "lon": -80.0127,
+      "radiusM": 22
+    },
+    {
+      "name": "Duquesne Incline overlook",
+      "lat": 40.438,
+      "lon": -80.0182,
+      "radiusM": 22
+    },
+    {
+      "name": "Science Center",
+      "lat": 40.4456,
+      "lon": -80.018,
+      "radiusM": 30
+    }
+  ],
+  "rivers": [
+    {
+      "name": "Ohio River",
+      "widthM": 340,
+      "path": [
+        [
+          40.44246,
+          -80.01478
+        ],
+        [
+          40.44279,
+          -80.01632
+        ],
+        [
+          40.44327,
+          -80.01779
+        ],
+        [
+          40.44371,
+          -80.01928
+        ],
+        [
+          40.44426,
+          -80.02072
+        ],
+        [
+          40.44466,
+          -80.02222
+        ],
+        [
+          40.44503,
+          -80.0236
+        ],
+        [
+          40.44549,
+          -80.02503
+        ],
+        [
+          40.44595,
+          -80.02645
+        ],
+        [
+          40.44659,
+          -80.02774
+        ],
+        [
+          40.4473,
+          -80.02898
+        ],
+        [
+          40.44809,
+          -80.03016
+        ],
+        [
+          40.4488,
+          -80.03117
+        ],
+        [
+          40.44967,
+          -80.0323
+        ],
+        [
+          40.45061,
+          -80.03335
+        ]
+      ]
+    },
+    {
+      "name": "Allegheny River",
+      "widthM": 256,
+      "path": [
+        [
+          40.44359,
+          -80.01284
+        ],
+        [
+          40.44382,
+          -80.0113
+        ],
+        [
+          40.4441,
+          -80.00978
+        ],
+        [
+          40.44441,
+          -80.00828
+        ],
+        [
+          40.44468,
+          -80.00675
+        ],
+        [
+          40.44499,
+          -80.00524
+        ],
+        [
+          40.44527,
+          -80.00361
+        ],
+        [
+          40.44587,
+          -80.00237
+        ],
+        [
+          40.44635,
+          -80.00107
+        ],
+        [
+          40.44675,
+          -79.99973
+        ],
+        [
+          40.44722,
+          -79.99842
+        ],
+        [
+          40.44777,
+          -79.99716
+        ],
+        [
+          40.44835,
+          -79.99586
+        ],
+        [
+          40.44906,
+          -79.99463
+        ],
+        [
+          40.44986,
+          -79.99349
+        ],
+        [
+          40.45061,
+          -79.99229
+        ],
+        [
+          40.45147,
+          -79.99121
+        ],
+        [
+          40.4523,
+          -79.9901
+        ],
+        [
+          40.45311,
+          -79.98896
+        ],
+        [
+          40.454,
+          -79.9879
+        ],
+        [
+          40.45477,
+          -79.98689
+        ],
+        [
+          40.45559,
+          -79.98584
+        ],
+        [
+          40.45632,
+          -79.9847
+        ],
+        [
+          40.4571,
+          -79.9836
+        ],
+        [
+          40.45791,
+          -79.98254
+        ]
+      ]
+    },
+    {
+      "name": "Monongahela River",
+      "widthM": 272,
+      "path": [
+        [
+          40.44036,
+          -80.01361
+        ],
+        [
+          40.4396,
+          -80.01229
+        ],
+        [
+          40.43895,
+          -80.0109
+        ],
+        [
+          40.43826,
+          -80.00954
+        ],
+        [
+          40.43771,
+          -80.00808
+        ],
+        [
+          40.43712,
+          -80.00664
+        ],
+        [
+          40.43642,
+          -80.00522
+        ],
+        [
+          40.43582,
+          -80.00386
+        ],
+        [
+          40.43518,
+          -80.00253
+        ],
+        [
+          40.43453,
+          -80.0012
+        ],
+        [
+          40.43386,
+          -79.99989
+        ],
+        [
+          40.43329,
+          -79.99851
+        ],
+        [
+          40.43297,
+          -79.997
+        ],
+        [
+          40.43269,
+          -79.99518
+        ],
+        [
+          40.43264,
+          -79.99372
+        ],
+        [
+          40.43265,
+          -79.99225
+        ],
+        [
+          40.43264,
+          -79.99078
+        ],
+        [
+          40.43269,
+          -79.9893
+        ],
+        [
+          40.4328,
+          -79.98781
+        ],
+        [
+          40.43308,
+          -79.98627
+        ],
+        [
+          40.43318,
+          -79.98514
+        ],
+        [
+          40.43346,
+          -79.98373
+        ],
+        [
+          40.43361,
+          -79.98231
+        ],
+        [
+          40.43361,
+          -79.98086
+        ],
+        [
+          40.43384,
+          -79.97945
+        ],
+        [
+          40.43383,
+          -79.97656
+        ],
+        [
+          40.43356,
+          -79.97474
+        ],
+        [
+          40.43317,
+          -79.97337
+        ],
+        [
+          40.43291,
+          -79.97194
+        ],
+        [
+          40.43264,
+          -79.97052
+        ],
+        [
+          40.43245,
+          -79.96905
+        ],
+        [
+          40.43206,
+          -79.96769
+        ],
+        [
+          40.43153,
+          -79.96638
+        ],
+        [
+          40.43102,
+          -79.96507
+        ],
+        [
+          40.43027,
+          -79.96353
+        ],
+        [
+          40.4295,
+          -79.96237
+        ],
+        [
+          40.42875,
+          -79.96115
+        ],
+        [
+          40.42785,
+          -79.96022
+        ],
+        [
+          40.42702,
+          -79.95915
+        ],
+        [
+          40.42615,
+          -79.95816
+        ]
+      ]
+    }
+  ],
+  "signs": [],
+  "preview": {
+    "positionM": 4500,
+    "camera": "drone",
+    "time": "golden"
+  },
+  "realHorizon": false,
+  "timeOfDay": "golden",
+  "lighting": {
+    "baked": "golden"
+  },
+  "riverfront": {
+    "maxGapM": 20,
+    "spans": [
+      {
+        "fromM": 15640,
+        "toM": 16000
+      }
+    ],
+    "waterSteps": {
+      "top": {
+        "lat": 40.445842,
+        "lon": -80.008511
+      },
+      "bottom": {
+        "lat": 40.445527,
+        "lon": -80.008511
+      },
+      "widthM": 18,
+      "topM": 5
+    }
+  },
+  "weather": {
+    "presets": [
+      "clear",
+      "marine",
+      "clouds"
+    ],
+    "labels": {
+      "marine": "River fog"
+    },
+    "bankTop": 30,
+    "bank": 0.45
+  },
+  "post": true,
+  "junctions": true,
+  "terrainBuild": {
+    "gpx": "routes/cities/pittsburgh-allegheny.gpx",
+    "rivers": true,
+    "padM": 9000,
+    "coarseM": 40,
+    "fineM": 900,
+    "fineCellM": 10,
+    "lat0": 40.442373443183776,
+    "box": [
+      40.55758000574919,
+      -80.14588296146431,
+      40.34416599425081,
+      -79.8273850385357
+    ]
+  },
+  "terrainGridFile": "routes/scenes/pittsburgh-allegheny-terrain.grid.bin.gz",
+  "heroes": [
+    {
+      "model": "ussteel",
+      "name": "U.S. Steel Tower",
+      "lat": 40.44138,
+      "lon": -79.99471,
+      "heightM": 256
+    },
+    {
+      "model": "bny",
+      "name": "BNY Mellon Center",
+      "lat": 40.43975,
+      "lon": -79.99601,
+      "heightM": 221
+    },
+    {
+      "model": "fifth",
+      "name": "Fifth Avenue Place",
+      "lat": 40.4419,
+      "lon": -80.00345,
+      "bodyM": 150
+    },
+    {
+      "model": "gulf",
+      "name": "Gulf Tower",
+      "lat": 40.4425,
+      "lon": -79.9953,
+      "heightM": 177
+    },
+    {
+      "model": "grant",
+      "name": "Grant Building",
+      "lat": 40.43765,
+      "lon": -79.99754
+    },
+    {
+      "model": "blockhouse",
+      "name": "Fort Pitt Blockhouse",
+      "lat": 40.4412,
+      "lon": -80.0098
+    },
+    {
+      "model": "fort",
+      "name": "Fort Pitt",
+      "lat": 40.44098,
+      "lon": -80.00895,
+      "radiusM": 70,
+      "rebuilt": [
+        "Flag",
+        "Monongahela"
+      ],
+      "traced": [
+        "Ohio",
+        "Music"
+      ],
+      "turnDeg": -18
+    }
+  ],
+  "views": [
+    {
+      "name": "Duquesne Incline",
+      "rangeM": 350,
+      "cam": {
+        "lat": 40.4387,
+        "lon": -80.0179,
+        "up": 8
+      },
+      "look": {
+        "lat": 40.44183,
+        "lon": -80.01277,
+        "up": 12
+      }
+    }
+  ],
+  "stadiumShapes": {
+    "PNC Park": {
+      "lat": 40.4469,
+      "lon": -80.0061,
+      "rx": 100,
+      "rz": 88,
+      "power": 2.4,
+      "yawDeg": 0
+    },
+    "Acrisure Stadium": {
+      "lat": 40.4467,
+      "lon": -80.0158,
+      "rx": 125,
+      "rz": 98,
+      "power": 3.5,
+      "yawDeg": -20
+    }
+  },
+  "riverFlow": {
+    "allegheny": [
+      40.4603,
+      -79.979
+    ],
+    "monongahela": [
+      40.4339,
+      -79.979
+    ],
+    "ohio": [
+      40.468,
+      -80.051
+    ],
+    "point": [
+      40.44183,
+      -80.01277
+    ],
+    "north": [
+      40.45,
+      -80.02
+    ],
+    "south": [
+      40.438,
+      -80.03
+    ]
+  },
+  "qcAccept": [
+    {
+      "check": "heading-jitter",
+      "fromM": 9470,
+      "toM": 9520,
+      "why": "the switchback from the Millvale Riverfront Trail up to the 40th Street Bridge (service road, then the ramp path): a real hairpin, ridden with the corner speed cap"
+    },
+    {
+      "check": "road-floating",
+      "fromM": 9880,
+      "toM": 9920,
+      "why": "the 40th Street Bridge's north approach over Route 28 and its ramps: the ground falls away under the deck"
+    },
+    {
+      "check": "grade-step",
+      "fromM": 3840,
+      "toM": 3870,
+      "why": "Rialto Street (Pig Hill) starts off the 31st Street Bridge as abruptly as it does: up to ~24 %, kept real (steepGrades)"
+    },
+    {
+      "check": "grade-step",
+      "fromM": 28120,
+      "toM": 28150,
+      "why": "Rialto Street's foot on the way back (mirrored metres): the real abrupt grade change"
+    },
+    {
+      "check": "street-bank",
+      "fromM": 4940,
+      "toM": 4980,
+      "why": "a Troy Hill side street off Troy Hill Rd with bad mapped heights (the Troy Hill steps' hillside); not the route"
+    },
+    {
+      "check": "street-steep",
+      "fromM": 4940,
+      "toM": 4980,
+      "why": "a Troy Hill side street off Troy Hill Rd with bad mapped heights (the Troy Hill steps' hillside); not the route"
+    },
+    {
+      "check": "mesh-coarse",
+      "fromM": 3960,
+      "toM": 4000,
+      "why": "beside Troy Hill Rd: the 6 m ground mesh steps beside a narrow carve; its 96 m patches are laid in the city frame (the shared origin moved them, F21/F34)"
+    }
+  ],
+  "origin": {
+    "lat": 40.4375,
+    "lon": -79.9925
+  }
+}

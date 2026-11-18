@@ -1,179 +1,36 @@
 {
   "id": "pittsburgh",
-  "base": "routes/cities/pittsburgh.gpx",
-  "catalogId": "pittsburgh",
   "out": "routes/cities/pittsburgh-network.json",
-  "nodes": [
+  "origin": {
+    "lat": 40.4375,
+    "lon": -79.9925
+  },
+  "areas": [
     {
-      "id": "E",
-      "name": "Smithfield St & Fort Pitt Blvd",
-      "lat": 40.436469,
-      "lon": -80.000952
+      "id": "core",
+      "catalogId": "pittsburgh",
+      "base": "routes/cities/pittsburgh.gpx",
+      "spec": "tools/city/pittsburgh-core.network.json"
     },
     {
-      "id": "H",
-      "name": "SouthSide Works riverfront",
-      "at": "end"
+      "id": "allegheny",
+      "catalogId": "pittsburgh-allegheny",
+      "base": "routes/cities/pittsburgh-allegheny.gpx",
+      "spec": "tools/city/pittsburgh-allegheny.network.json"
     },
     {
-      "id": "G",
-      "name": "East Carson & 10th",
-      "lat": 40.42871,
-      "lon": -79.98858
+      "id": "westend",
+      "catalogId": "pittsburgh-westend",
+      "base": "routes/cities/pittsburgh-westend.gpx",
+      "spec": "tools/city/pittsburgh-westend.network.json"
     },
     {
-      "id": "D",
-      "name": "West End Bridge south end",
-      "lat": 40.44418,
-      "lon": -80.02819
-    },
-    {
-      "id": "A",
-      "name": "North Shore Water Steps",
-      "at": "start"
-    },
-    {
-      "id": "O",
-      "name": "West End Overlook",
-      "lat": 40.446574,
-      "lon": -80.034219,
-      "deadEnd": true
-    },
-    {
-      "id": "I",
-      "name": "Hot Metal Bridge north end",
-      "lat": 40.429959,
-      "lon": -79.957579
-    },
-    {
-      "id": "J",
-      "name": "Schenley Drive by Phipps Conservatory",
-      "lat": 40.438693,
-      "lon": -79.946459
-    },
-    {
-      "id": "K",
-      "name": "Schenley Drive & Forbes Ave",
-      "lat": 40.4377,
-      "lon": -79.934079
-    },
-    {
-      "id": "B",
-      "name": "Clemente Bridge south end",
-      "lat": 40.444244,
-      "lon": -80.002821
-    },
-    {
-      "id": "P",
-      "name": "16th Street Bridge north end",
-      "lat": 40.453558,
-      "lon": -79.990632
-    },
-    {
-      "id": "N",
-      "name": "31st Street Bridge north end",
-      "lat": 40.462143,
-      "lon": -79.980815
-    },
-    {
-      "id": "M",
-      "name": "Smallman & 29th, Strip District",
-      "lat": 40.458531,
-      "lon": -79.974998
+      "id": "oakland",
+      "catalogId": "pittsburgh-oakland",
+      "base": "routes/cities/pittsburgh-oakland.gpx",
+      "spec": "tools/city/pittsburgh-oakland.network.json"
     }
   ],
-  "edges": {
-    "E>I": {
-      "name": "Jail Trail",
-      "fwd": "the Jail Trail along the Mon and down to the Hot Metal Bridge",
-      "rev": "the Jail Trail back to downtown"
-    },
-    "I>H": {
-      "name": "Hot Metal Bridge",
-      "fwd": "over the Hot Metal Bridge to SouthSide Works",
-      "rev": "over the Hot Metal Bridge to the Jail Trail"
-    },
-    "I>J": {
-      "name": "Junction Hollow & Oakland",
-      "fwd": "along Second Ave, up Junction Hollow, through Oakland past the Cathedral of Learning to Phipps",
-      "rev": "past the Cathedral of Learning, down Junction Hollow and along Second Ave to the Hot Metal Bridge"
-    },
-    "J>K": {
-      "name": "Schenley Drive",
-      "fwd": "Schenley Drive across the park to Forbes",
-      "rev": "Schenley Drive across the park to Phipps"
-    },
-    "K>J": {
-      "name": "Schenley Oval & Panther Hollow",
-      "fwd": "Serpentine Drive, round the Schenley Oval and up Panther Hollow",
-      "rev": "down Panther Hollow, round the Schenley Oval and up Serpentine Drive"
-    },
-    "H>G": {
-      "name": "South Side river trail",
-      "fwd": "the river trail to South Side Riverfront Park and 10th",
-      "rev": "the river trail east to SouthSide Works"
-    },
-    "E>G": {
-      "name": "Smithfield Street Bridge",
-      "fwd": "the Smithfield Street Bridge, Station Square and East Carson",
-      "rev": "East Carson, Station Square and the Smithfield Street Bridge"
-    },
-    "G>H": {
-      "name": "East Carson Street",
-      "fwd": "East Carson Street to SouthSide Works",
-      "rev": "East Carson Street to 10th"
-    },
-    "G>D": {
-      "name": "Mount Washington",
-      "fwd": "the McArdle climb, Grandview and down to the West End",
-      "rev": "up from the West End over Grandview and down McArdle"
-    },
-    "D>O": {
-      "name": "West End Overlook",
-      "fwd": "the climb up through Elliott to the West End Overlook",
-      "rev": "down from the overlook through Elliott"
-    },
-    "D>A": {
-      "name": "West End Bridge",
-      "fwd": "the West End Bridge and the North Shore trail",
-      "rev": "the North Shore trail and the West End Bridge"
-    },
-    "A>B": {
-      "name": "Clemente Bridge",
-      "fwd": "General Robinson St and the Clemente Bridge to Fort Duquesne Blvd",
-      "rev": "the Clemente Bridge to the North Shore and the Water Steps"
-    },
-    "B>E": {
-      "name": "The Point & downtown",
-      "fwd": "the riverfront, the Point and Market Square",
-      "rev": "Market Square, the Point and the riverfront to the Clemente Bridge"
-    },
-    "A>P": {
-      "name": "North Shore Trail",
-      "fwd": "the North Shore Trail past PNC Park to the 16th Street Bridge",
-      "rev": "the North Shore Trail past PNC Park to the Water Steps"
-    },
-    "P>N": {
-      "name": "North Shore Trail: Washington's Landing",
-      "fwd": "the riverfront trail by Washington's Landing to the 31st Street Bridge",
-      "rev": "the riverfront trail by Washington's Landing to the 16th Street Bridge"
-    },
-    "N>M": {
-      "name": "Millvale & Lawrenceville",
-      "fwd": "the trail to Millvale, over the 40th Street Bridge and down Butler Street",
-      "rev": "up Butler Street, over the 40th Street Bridge and the trail from Millvale"
-    },
-    "M>B": {
-      "name": "Strip District & Penn Avenue",
-      "fwd": "Smallman Street through the Strip past the History Center, Penn Avenue into downtown",
-      "rev": "Penn Avenue out of downtown and Smallman Street through the Strip"
-    },
-    "N>P": {
-      "name": "Troy Hill & Rialto Street",
-      "fwd": "up Rialto Street (Pig Hill, about 24 %), along Lowrie St through Troy Hill, down Troy Hill Rd and over to the 16th Street Bridge",
-      "rev": "from the 16th Street Bridge up Troy Hill Rd, along Lowrie St and down Rialto Street"
-    }
-  },
   "presets": [
     {
       "id": "pgh-three-rivers",

@@ -892,23 +892,28 @@ def slice_tour(sl, rs, e, chord, kinds, bridges, ghosts, pts, node_m):
     haversine length along the master's points, `chord`): each piece starts and ends on a point interpolated there,
     so the app's 10 m samples of the area's line are the master's own samples, shifted by whole 10 m steps."""
     R_ = 6371008.8 * math.pi / 180   # (metres per degree, as the app measures: js/gpx.js haversine)
+    # the master's points as its GPX has them (6 decimals), measured as the app measures them: the app's metres
+    rs = [(round(a_, 6), round(b_, 6)) for a_, b_ in rs]
+    chord = [0.0]
+    for a_, b_ in zip(rs, rs[1:]): chord.append(chord[-1] + hv(a_, b_))
     def interp(m):
         k = max(0, min(len(chord) - 2, bisect.bisect_right(chord, m) - 1))
         f = max(0.0, min(1.0, (m - chord[k]) / max(1e-9, chord[k + 1] - chord[k])))
         return ((rs[k][0] + (rs[k + 1][0] - rs[k][0]) * f, rs[k][1] + (rs[k + 1][1] - rs[k][1]) * f), e[k] + (e[k + 1] - e[k]) * f)
-    def piece(a, b):
+    def piece(a, b, last=False):
         lo, hi = min(a, b), max(a, b)
+        if last and b > a: hi = min(chord[-1], hi + 1.0)   # (the line's end a metre on: its last 10 m sample is there for sure)
         p0, e0 = interp(lo); p1, e1 = interp(hi)
         ll, el, ml = [p0], [e0], [lo]
-        for i in range(len(chord)):
-            if lo + 0.05 < chord[i] < hi - 0.05: ll.append(rs[i]); el.append(e[i]); ml.append(chord[i])
+        for i in range(len(chord)):   # (a master point within 0.6 m of the cut gives way to it: the app drops points that close)
+            if lo + 0.6 < chord[i] < hi - 0.6: ll.append(rs[i]); el.append(e[i]); ml.append(chord[i])
         ll.append(p1); el.append(e1); ml.append(hi)
         return (ll, el, ml) if b > a else (ll[::-1], el[::-1], ml[::-1])
     out_ll, out_e, out_m, spans, at = [], [], [], [], 0.0
     for k, (a, b) in enumerate(sl['pieces']):
         if a % 10 or b % 10: raise SystemExit(f'slice piece {a}–{b}: master metres must be on the 10 m samples')
         if out_ll and spans[-1][2] == a:   # carrying straight on from the last piece's end
-            ll, el, ml = piece(a, b)
+            ll, el, ml = piece(a, b, k == len(sl['pieces']) - 1)
             ll, el, ml = ll[1:], el[1:], ml[1:]
         elif out_ll:
             # a join (a ghost's end to the next real piece: the two passes of a junction can lie ~100 m apart): the
@@ -917,12 +922,12 @@ def slice_tour(sl, rs, e, chord, kinds, bridges, ghosts, pts, node_m):
             o, pa, pb = spans[-1]
             if not pa > pb: raise SystemExit(f'slice piece {a}–{b}: a jump must follow a backward (ghost) piece')
             # take the ghost's last 10 m back off (it runs backward: its points' master metres go down)
-            while out_m and out_m[-1] is not None and out_m[-1] < pb + 10 - 0.05: out_ll.pop(); out_e.pop(); out_m.pop()
+            while out_m and out_m[-1] is not None and out_m[-1] < pb + 10 + 0.6: out_ll.pop(); out_e.pop(); out_m.pop()
             q, eq = interp(pb + 10)
-            if hv(out_ll[-1], q) > 0.05: out_ll.append(q); out_e.append(eq); out_m.append(pb + 10)
+            out_ll.append(q); out_e.append(eq); out_m.append(pb + 10)
             at -= 10
             p0, e0 = out_ll[-1], out_e[-1]
-            ll, el, ml = piece(a, b)
+            ll, el, ml = piece(a, b, k == len(sl['pieces']) - 1)
             p2, e2 = ll[0], el[0]
             kx_ = R_ * math.cos(math.radians(p0[0]))
             x2, y2 = (p2[1] - p0[1]) * kx_, (p2[0] - p0[0]) * R_
@@ -940,7 +945,7 @@ def slice_tour(sl, rs, e, chord, kinds, bridges, ghosts, pts, node_m):
             at += 10 * n
             spans[-1] = (o, pa, pb, at)   # (the ghost runs on to here: its join)
         else:
-            ll, el, ml = piece(a, b)
+            ll, el, ml = piece(a, b, k == len(sl['pieces']) - 1)
         spans.append((at, a, b))
         out_ll += ll; out_e += el; out_m += ml
         at += abs(b - a)

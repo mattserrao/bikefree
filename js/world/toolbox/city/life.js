@@ -660,7 +660,9 @@ export class CityLife {
     const L = this.city.landscape, lo = Math.min(from, s), hi = Math.max(from, s);
     if (L.routeBridges.some((b) => b.style === 'lenticular' && b.toM + 30 > lo && b.fromM - 30 < hi)) return false;
     if (this._oneWayIn(lo, hi)) return false;
-    for (let q = lo; q <= hi; q += 10) if (L.routeKindAt(q) !== 'road') return false;
+    // (nor across a ghost stretch: a network line's repeat, whose ends can turn sharply where an area's line joins
+    // its next piece — PLAN 5.4; oncoming traffic drives the real pass only)
+    for (let q = lo; q <= hi; q += 10) if (L.routeKindAt(q) !== 'road' || ghostAt(this.city.route, q)) return false;
     return L.routeKindAt(hi) === 'road';
   }
 

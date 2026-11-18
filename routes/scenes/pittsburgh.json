@@ -14,7 +14,7 @@
     "bankM": 30
   },
   "description": "Pittsburgh as a stylized city: the real terrain, rivers, streets, bridges and buildings from OpenStreetMap and AWS Terrain Tiles, with people, traffic, trains, inclines and boats. An artistic interpretation, not a survey.",
-  "title": "Pittsburgh · Three Rivers Loop",
+  "title": "Pittsburgh · Downtown, the North Shore, the South Side & Mount Washington",
   "region": "pittsburgh",
   "biome": "city",
   "palette": {
@@ -77,8 +77,8 @@
   },
   "routeTrees": [
     {
-      "fromM": 48140,
-      "toM": 49900,
+      "fromM": 18325,
+      "toM": 20085,
       "spacingM": 11,
       "offsetM": 7.5,
       "sides": [
@@ -86,8 +86,8 @@
       ]
     },
     {
-      "fromM": 48160,
-      "toM": 49900,
+      "fromM": 18345,
+      "toM": 20085,
       "spacingM": 16,
       "offsetM": 7,
       "sides": [
@@ -107,22 +107,22 @@
     "surface": "worn",
     "zones": [
       {
-        "fromM": 50130,
-        "toM": 50680,
+        "fromM": 21170,
+        "toM": 21720,
         "surface": "worn",
         "patches": 0.55,
         "tone": 0.96
       },
       {
-        "fromM": 50680,
-        "toM": 50970,
+        "fromM": 21720,
+        "toM": 22010,
         "surface": "fresh",
         "tone": 0.9,
         "cracks": 0.1
       },
       {
-        "fromM": 16970,
-        "toM": 18210,
+        "fromM": 2220,
+        "toM": 3460,
         "surface": "patched",
         "patches": 0.85,
         "cracks": 0.5,
@@ -130,8 +130,8 @@
         "tone": 0.94
       },
       {
-        "fromM": 54070,
-        "toM": 54550,
+        "fromM": 25110,
+        "toM": 25590,
         "surface": "worn",
         "tone": 0.86,
         "wear": 0.75,
@@ -139,72 +139,72 @@
         "cracks": 0.3
       },
       {
-        "fromM": 54610,
-        "toM": 55990,
+        "fromM": 25650,
+        "toM": 27030,
         "surface": "worn",
         "patches": 0.5
       },
       {
-        "fromM": 55990,
-        "toM": 57820,
+        "fromM": 27030,
+        "toM": 28860,
         "surface": "patched",
         "patches": 0.7,
         "cracks": 0.45,
         "warm": 0.15
       },
       {
-        "fromM": 38620,
-        "toM": 39160,
+        "fromM": 11491,
+        "toM": 12031,
         "surface": "worn",
         "patches": 0.5
       },
       {
-        "fromM": 39170,
-        "toM": 40490,
+        "fromM": 12041,
+        "toM": 13361,
         "surface": "worn",
         "cracks": 0.6,
         "edge": 0.7,
         "patches": 0.55
       },
       {
-        "fromM": 40490,
-        "toM": 42270,
+        "fromM": 13361,
+        "toM": 15141,
         "surface": "fresh",
         "tone": 0.84,
         "patches": 0.12
       },
       {
-        "fromM": 42280,
-        "toM": 42600,
+        "fromM": 15151,
+        "toM": 15471,
         "surface": "patched",
         "patches": 0.8,
         "cracks": 0.6,
         "edge": 0.6
       },
       {
-        "fromM": 42600,
-        "toM": 43770,
+        "fromM": 15471,
+        "toM": 16641,
         "surface": "brick",
         "centre": 0,
         "patches": 0.3
       },
       {
-        "fromM": 43850,
-        "toM": 43910,
+        "fromM": 16721,
+        "toM": 16781,
         "surface": "fresh",
         "tone": 0.88,
         "cracks": 0.12
       },
       {
-        "fromM": 47430,
-        "toM": 48060,
+        "fromM": 17615,
+        "toM": 18245,
         "surface": "fresh",
         "tone": 0.88,
         "cracks": 0.12
       },
       {
-        "fromM": 48070,
-        "toM": 48240,
+        "fromM": 18255,
+        "toM": 18425,
         "surface": "worn"
       }
     ],
@@ -213,16 +213,16 @@
       "tone": 1.05,
       "zones": [
         {
-          "fromM": 17510,
-          "toM": 17600,
+          "fromM": 2760,
+          "toM": 2850,
           "surface": "brick",
           "centre": 0,
           "patches": 0,
           "tone": 1.05
         },
         {
-          "fromM": 57820,
-          "toM": 58050,
+          "fromM": 28860,
+          "toM": 29090,
           "surface": "worn",
           "patches": 0.3,
           "cracks": 0.35,
@@ -230,8 +230,8 @@
           "tone": 1.05
         },
         {
-          "fromM": 36250,
-          "toM": 36410,
+          "fromM": 9121,
+          "toM": 9281,
           "surface": "worn",
           "patches": 0.3,
           "cracks": 0.35,
@@ -239,8 +239,8 @@
           "tone": 1.05
         },
         {
-          "fromM": 36420,
-          "toM": 38620,
+          "fromM": 9291,
+          "toM": 11491,
           "surface": "worn",
           "patches": 0.3,
           "cracks": 0.35,
@@ -248,8 +248,8 @@
           "tone": 1.05
         },
         {
-          "fromM": 48250,
-          "toM": 49970,
+          "fromM": 18435,
+          "toM": 20155,
           "surface": "worn",
           "patches": 0.25,
           "tone": 1.04
@@ -285,15 +285,15 @@
   },
   "streetKit": {
     "fromM": 0,
-    "toM": 58270,
+    "toM": 29100,
     "rangeM": 220,
     "parkTrees": 16,
     "zones": [
       {
         "name": "North Shore: General Robinson & Federal",
         "style": "masonry",
-        "fromM": 50120,
-        "toM": 50730,
+        "fromM": 21160,
+        "toM": 21770,
         "widthM": 60,
         "parking": false,
         "curbM": 5.8,
@@ -303,8 +303,8 @@
       {
         "name": "Downtown: Market, Forbes & Smithfield",
         "style": "masonry",
-        "fromM": 16980,
-        "toM": 18230,
+        "fromM": 2230,
+        "toM": 3480,
         "widthM": 55,
         "parking": false,
         "curbM": 5.6,
@@ -314,8 +314,8 @@
       {
         "name": "Downtown: Market, Forbes & Smithfield",
         "style": "masonry",
-        "fromM": 54070,
-        "toM": 54220,
+        "fromM": 25110,
+        "toM": 25260,
         "widthM": 55,
         "parking": false,
         "curbM": 5.6,
@@ -325,8 +325,8 @@
       {
         "name": "East Carson Street",
         "style": "victorian",
-        "fromM": 55220,
-        "toM": 57830,
+        "fromM": 26260,
+        "toM": 28870,
         "widthM": 90,
         "parking": true,
         "curbM": 6.4,
@@ -336,8 +336,8 @@
       {
         "name": "South Side Flats: S 10th & E Carson",
         "style": "rowhouse",
-        "fromM": 38490,
-        "toM": 39020,
+        "fromM": 11361,
+        "toM": 11891,
         "widthM": 70,
         "parking": true,
         "curbM": 6.2,
@@ -347,8 +347,8 @@
       {
         "name": "West End: Grandview W hillside",
         "style": "rowhouse",
-        "fromM": 42300,
-        "toM": 43750,
+        "fromM": 15171,
+        "toM": 16621,
         "widthM": 60,
         "parking": true,
         "curbM": 5.8,
@@ -358,8 +358,8 @@
       {
         "name": "North Shore: Carnegie Science Center",
         "style": "industrial",
-        "fromM": 48660,
-        "toM": 49210,
+        "fromM": 18845,
+        "toM": 19395,
         "widthM": 120,
         "parking": false,
         "curbM": 5.8,
@@ -371,8 +371,8 @@
   "mainStreets": [
     {
       "name": "East Carson Street",
-      "fromM": 54820,
-      "toM": 57820
+      "fromM": 25860,
+      "toM": 28860
     }
   ],
   "hotspots": [
@@ -785,44 +785,44 @@
   ],
   "signs": [
     {
-      "atM": 50620,
+      "atM": 21660,
       "side": "inland",
       "label": "ROBERTO CLEMENTE BRIDGE",
       "subtitle": "ALLEGHENY RIVER"
     },
     {
-      "atM": 15850,
+      "atM": 1100,
       "side": "inland",
       "label": "POINT STATE PARK",
       "subtitle": "WHERE THE THREE RIVERS MEET"
     },
     {
-      "atM": 54820,
+      "atM": 25860,
       "side": "inland",
       "label": "EAST CARSON STREET",
       "subtitle": "SOUTH SIDE"
     },
     {
-      "atM": 39060,
+      "atM": 11931,
       "side": "inland",
       "label": "P.J. McARDLE ROADWAY",
       "subtitle": "MOUNT WASHINGTON"
     },
     {
-      "atM": 41270,
+      "atM": 14141,
       "side": "inland",
       "label": "GRANDVIEW AVENUE",
       "subtitle": "MOUNT WASHINGTON OVERLOOKS"
     },
     {
-      "atM": 43800,
+      "atM": 16671,
       "side": "inland",
       "label": "WEST END BRIDGE",
       "subtitle": "OHIO RIVER"
     }
   ],
   "preview": {
-    "positionM": 41250,
+    "positionM": 14121,
     "camera": "drone",
     "time": "golden"
   },
@@ -835,12 +835,12 @@
     "maxGapM": 20,
     "spans": [
       {
-        "fromM": 15190,
-        "toM": 16470
+        "fromM": 440,
+        "toM": 1720
       },
       {
-        "fromM": 16510,
-        "toM": 16950
+        "fromM": 1760,
+        "toM": 2200
       }
     ],
     "waterSteps": {
@@ -876,7 +876,14 @@
     "padM": 9000,
     "coarseM": 40,
     "fineM": 900,
-    "fineCellM": 10
+    "fineCellM": 10,
+    "lat0": 40.442373443183776,
+    "box": [
+      40.55758000574919,
+      -80.14588296146431,
+      40.34416599425081,
+      -79.8273850385357
+    ]
   },
   "terrainGridFile": "routes/scenes/pittsburgh-terrain.grid.bin.gz",
   "heroes": [
@@ -938,8 +945,8 @@
     }
   ],
   "overlooks": {
-    "fromM": 40310,
-    "toM": 42450,
+    "fromM": 13181,
+    "toM": 15321,
     "count": 4,
     "spacingM": 200,
     "toward": {
@@ -955,7 +962,7 @@
   "views": [
     {
       "name": "The Point",
-      "atM": 15900,
+      "atM": 1150,
       "rangeM": 500,
       "cam": {
         "lat": 40.441,
@@ -970,7 +977,7 @@
     },
     {
       "name": "The Golden Triangle from the Monongahela",
-      "atM": 54270,
+      "atM": 25310,
       "rangeM": 450,
       "cam": {
         "lat": 40.4338,
@@ -1045,225 +1052,97 @@
   "qcAccept": [
     {
       "check": "street-crease",
-      "fromM": 19830,
-      "toM": 19870,
+      "fromM": 5080,
+      "toM": 5120,
       "why": "a street beside the Jail Trail (parkway ramps, Bates St) whose mapped heights crease; not the route"
     },
     {
       "check": "street-crease",
-      "fromM": 20650,
-      "toM": 20690,
+      "fromM": 5900,
+      "toM": 5940,
       "why": "a street beside the Jail Trail (parkway ramps, Bates St) whose mapped heights crease; not the route"
     },
     {
       "check": "mesh-coarse",
-      "fromM": 20710,
-      "toM": 20790,
+      "fromM": 5960,
+      "toM": 6040,
       "why": "the Jail Trail on a narrow ledge under the parkway: the 6 m ground mesh steps beside it"
     },
     {
       "check": "mesh-coarse",
-      "fromM": 20950,
-      "toM": 20990,
+      "fromM": 6200,
+      "toM": 6240,
       "why": "the Jail Trail on a narrow ledge under the parkway: the 6 m ground mesh steps beside it"
     },
     {
       "check": "mesh-coarse",
-      "fromM": 21950,
-      "toM": 21990,
+      "fromM": 7200,
+      "toM": 7240,
       "why": "the Jail Trail on a narrow ledge under the parkway: the 6 m ground mesh steps beside it"
     },
     {
       "check": "street-crease",
-      "fromM": 35460,
-      "toM": 35490,
+      "fromM": 8331,
+      "toM": 8361,
       "why": "a street beside the Jail Trail (parkway ramps, Bates St) whose mapped heights crease; not the route"
     },
     {
       "check": "street-crease",
-      "fromM": 36180,
-      "toM": 36220,
+      "fromM": 9051,
+      "toM": 9091,
       "why": "a street beside the Jail Trail (parkway ramps, Bates St) whose mapped heights crease; not the route"
     },
     {
       "check": "lateral-jump",
-      "fromM": 58020,
-      "toM": 58050,
+      "fromM": 29060,
+      "toM": 29090,
       "why": "the mapped path from 27th St to the riverfront jogs where it meets the trail"
     },
     {
       "check": "mesh-coarse",
-      "fromM": 36650,
-      "toM": 36690,
+      "fromM": 9521,
+      "toM": 9561,
       "why": "a narrow ledge or hillside: the 6 m ground mesh steps beside the road"
     },
     {
       "check": "street-steep",
-      "fromM": 44160,
-      "toM": 44200,
+      "fromM": 17031,
+      "toM": 17071,
       "why": "a West End hillside street with bad mapped heights (F14); not the route"
     },
     {
-      "check": "street-bank",
-      "fromM": 44700,
-      "toM": 44740,
-      "why": "a West End hillside street the ground hides (F14)"
-    },
-    {
-      "check": "verge-step",
-      "fromM": 44880,
-      "toM": 44920,
-      "why": "Elliott hillside: the ground steps beside the spur"
-    },
-    {
-      "check": "mesh-coarse",
-      "fromM": 44890,
-      "toM": 44930,
-      "why": "a narrow ledge or hillside: the 6 m ground mesh steps beside the road"
-    },
-    {
       "check": "street-crease",
-      "fromM": 47600,
-      "toM": 47640,
+      "fromM": 17785,
+      "toM": 17825,
       "why": "a hillside street beside the route whose mapped heights crease (West End, Jail Trail ramps); not the route"
     },
     {
       "check": "path-jog",
-      "fromM": 58010,
-      "toM": 58050,
+      "fromM": 29050,
+      "toM": 29090,
       "why": "the mapped path from 27th St to the riverfront jogs where it meets the trail"
     },
     {
-      "check": "heading-jitter",
-      "fromM": 24800,
-      "toM": 24840,
-      "why": "a real tight corner in Oakland or Schenley Park (Joncaire, Serpentine Drive switchback, Panther Hollow Rd); ridden with the corner speed cap"
-    },
-    {
-      "check": "heading-jitter",
-      "fromM": 25360,
-      "toM": 25400,
-      "why": "a real tight corner in Oakland or Schenley Park (Joncaire, Serpentine Drive switchback, Panther Hollow Rd); ridden with the corner speed cap"
-    },
-    {
-      "check": "heading-jitter",
-      "fromM": 28170,
-      "toM": 28210,
-      "why": "a real tight corner in Oakland or Schenley Park (Joncaire, Serpentine Drive switchback, Panther Hollow Rd); ridden with the corner speed cap"
-    },
-    {
-      "check": "heading-jitter",
-      "fromM": 28430,
-      "toM": 28470,
-      "why": "a real tight corner in Oakland or Schenley Park (Joncaire, Serpentine Drive switchback, Panther Hollow Rd); ridden with the corner speed cap"
-    },
-    {
-      "check": "heading-sharp",
-      "fromM": 28430,
-      "toM": 28470,
-      "why": "a real tight corner in Oakland or Schenley Park (Joncaire, Serpentine Drive switchback, Panther Hollow Rd); ridden with the corner speed cap"
-    },
-    {
-      "check": "heading-sharp",
-      "fromM": 30550,
-      "toM": 30590,
-      "why": "a real tight corner in Oakland or Schenley Park (Joncaire, Serpentine Drive switchback, Panther Hollow Rd); ridden with the corner speed cap"
-    },
-    {
-      "check": "heading-jitter",
-      "fromM": 30550,
-      "toM": 30650,
-      "why": "a real tight corner in Oakland or Schenley Park (Joncaire, Serpentine Drive switchback, Panther Hollow Rd); ridden with the corner speed cap"
-    },
-    {
-      "check": "street-bank",
-      "fromM": 26750,
-      "toM": 26790,
-      "why": "a street by Phipps Conservatory the ground hides (Schenley Park hillside); not the route"
-    },
-    {
       "check": "street-step",
-      "fromM": 35420,
-      "toM": 35470,
+      "fromM": 8291,
+      "toM": 8341,
       "why": "Second Ave and the Hot Metal Bridge ramp meet junction I at their mapped heights"
     },
     {
       "check": "street-crease",
-      "fromM": 16950,
-      "toM": 16990,
+      "fromM": 2200,
+      "toM": 2240,
       "why": "a downtown street beside the route whose mapped heights crease; not the route"
     },
     {
-      "check": "heading-jitter",
-      "fromM": 9020,
-      "toM": 9070,
-      "why": "the switchback from the Millvale Riverfront Trail up to the 40th Street Bridge (service road, then the ramp path): a real hairpin, ridden with the corner speed cap"
-    },
-    {
-      "check": "road-floating",
-      "fromM": 9430,
-      "toM": 9470,
-      "why": "the 40th Street Bridge's north approach over Route 28 and its ramps: the ground falls away under the deck"
-    },
-    {
-      "check": "grade-step",
-      "fromM": 3390,
-      "toM": 3420,
-      "why": "Rialto Street (Pig Hill) starts off the 31st Street Bridge as abruptly as it does: up to ~24 %, kept real (steepGrades)"
-    },
-    {
-      "check": "grade-step",
-      "fromM": 112690,
-      "toM": 112720,
-      "why": "Rialto Street's foot on the way back (mirrored metres): the real abrupt grade change"
-    },
-    {
-      "check": "street-bank",
-      "fromM": 4490,
-      "toM": 4530,
-      "why": "a Troy Hill side street off Troy Hill Rd with bad mapped heights (the Troy Hill steps' hillside); not the route"
-    },
-    {
-      "check": "street-steep",
-      "fromM": 4490,
-      "toM": 4530,
-      "why": "a Troy Hill side street off Troy Hill Rd with bad mapped heights (the Troy Hill steps' hillside); not the route"
-    },
-    {
       "check": "mesh-coarse",
-      "fromM": 22030,
-      "toM": 22070,
+      "fromM": 7280,
+      "toM": 7320,
       "why": "the Jail Trail on a narrow ledge under the parkway: the 6 m ground mesh steps beside it (moved a little with the rebuilt line)"
-    },
-    {
-      "check": "lateral-jump",
-      "fromM": 24740,
-      "toM": 24780,
-      "why": "Oakland: the mapped corner at Joncaire St steps sideways a little; ridden with the corner speed cap"
-    },
-    {
-      "check": "street-steep",
-      "fromM": 26780,
-      "toM": 26820,
-      "why": "a street by Phipps Conservatory with bad mapped heights (Schenley Park hillside); not the route"
-    },
-    {
-      "check": "street-step",
-      "fromM": 26780,
-      "toM": 26820,
-      "why": "a street by Phipps Conservatory meets its junction at its mapped height (Schenley Park hillside); not the route"
-    },
-    {
-      "check": "heading-sharp",
-      "fromM": 30610,
-      "toM": 30650,
-      "why": "a real tight corner in Schenley Park (the Panther Hollow Rd link); ridden with the corner speed cap"
-    },
-    {
-      "check": "heading-sharp",
-      "fromM": 85470,
-      "toM": 85510,
-      "why": "the Panther Hollow Rd link on the way back (mirrored metres); ridden with the corner speed cap"
     }
-  ]
+  ],
+  "origin": {
+    "lat": 40.4375,
+    "lon": -79.9925
+  }
 }

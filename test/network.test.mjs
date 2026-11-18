@@ -19,12 +19,18 @@ const edge = (key) => [...net.edges.values()].find((e) => e.key === key);
 const len = (...keys) => keys.reduce((t, k) => t + edge(k).len, 0);
 const gAt = len('A>B', 'B>E', 'E>G');   // East Carson & 10th, riding the Three Rivers Loop from the Water Steps
 
-test('the network sits on its tour: edges on its 10 m samples, presets close up', () => {
+test('the network sits on its areas\' lines: edges on their 10 m samples, presets close up', () => {
   assert.equal(item.network, 'routes/cities/pittsburgh-network.json');
   assert.equal(net.L, base.turnS);
-  const sum = [...net.edges.values()].reduce((t, e) => t + e.len, 0);
-  const ghost = (net.json.ghosts || []).reduce((t, g) => t + g.toM - g.fromM, 0);
-  assert.ok(Math.abs(sum + ghost - net.L) < 30, `${sum} + ${ghost} ghost vs ${net.L}`);   // the edges and the ghosts cover the tour once
+  // (a city of areas, PLAN 5.4) every area's line is its edges, its aprons (other areas' edges at its portals)
+  // and its ghosts, once each; every edge of the city is on exactly one line
+  for (const A of net.areas.values()) {
+    const sum = [...net.edges.values()].filter((e) => e.area === A.id).reduce((t, e) => t + e.len, 0);
+    const ghost = (A.json.ghosts || []).reduce((t, g) => t + g.toM - g.fromM, 0);
+    const apron = A.aprons.reduce((t, ap) => t + ap.s1 - ap.s0, 0);
+    assert.ok(Math.abs(sum + ghost + apron - A.L) < 30, `${A.id}: ${sum} + ${ghost} ghost + ${apron} apron vs ${A.L}`);
+  }
+  assert.equal([...net.edges.values()].reduce((t, e) => t + e.len, 0), 47670);   // the whole network, as on the one 58 km tour
   assert.deepEqual([...net.nodes.keys()].sort(), ['A', 'B', 'D', 'E', 'G', 'H', 'I', 'J', 'K', 'M', 'N', 'O', 'P']);
   const three = makePathRoute(net, preset('pgh-three-rivers'));
   const short = makePathRoute(net, preset('pgh-short-loop'));
@@ -190,10 +196,14 @@ test('the West End Overlook: a dead end with only the way back, and a ghost the 
   const i = ride.entries.findIndex((x) => x.t.e.key === 'D>O' && x.t.dir > 0);
   const opts = optionsAt(net, ride.entries[i].t);
   assert.deepEqual(opts.map((o) => o.label), ['Back']);
-  for (const x of ride.entries.slice(0, 12)) for (const g of net.json.ghosts) {
+  for (const x of ride.entries.slice(0, 12)) for (const g of x.t.e.A.json.ghosts || []) {
     const s0 = x.t.e.s0, s1 = x.t.e.s1;
     assert.ok(s1 <= g.fromM + 5 || s0 >= g.toM - 5, `${x.t.e.key} rides the ghost`);
   }
+  // the overlook is an area of its own: the ride swaps into it 200 m up the spur, and back 200 m down the West End Bridge
+  assert.equal(edge('D>O').area, 'westend');
+  assert.equal(ride.areaFor(len('A>B', 'B>E', 'E>G', 'G>H', 'H>G', 'G>D') + 150, 'core'), 'core');
+  assert.equal(ride.areaFor(len('A>B', 'B>E', 'E>G', 'G>H', 'H>G', 'G>D') + 250, 'core'), 'westend');
 });
 
 test('the pacer keeps its way: a turn changed behind it moves it not at all, one ahead of it it takes (F3)', () => {
