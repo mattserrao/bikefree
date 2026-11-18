@@ -22,6 +22,7 @@
 import { ghostAt } from '../../ghost.js';
 import * as THREE from '../../../../vendor/three.module.min.js';
 import { MeshBuilder, hash } from '../core/mesh-builder.js';
+import { drain, due, clock, each } from '../core/jobs.js';   // [F30]
 import { ROAD_WIDTH, ROAD_LIFT } from '../../pose.js';
 import { LAND } from './landscape.js';
 import { appendToMeshBuilder, parkedVehicle } from '../life/figures/vehicles.js';
@@ -127,7 +128,13 @@ export class StreetKit {
    * @param {object} config  streetKitConfig(scene)
    * @param {{chunk:number}} opts  the city's chunk size (metres)
    */
-  constructor(city, config, { chunk = 320 } = {}) {
+  constructor(city, config, { chunk = 320 } = {}, deferred = false) {
+    const job = this._buildJob(city, config, chunk);   // [F30] a job: `deferred`, the caller runs `this.job` in frame slices
+    if (deferred) { this.job = job; return; }
+    drain(job);
+  }
+
+  *_buildJob(city, config, chunk) {
     this.city = city; this.cfg = config; this.CHUNK = chunk;
     this.L = city.landscape; this.route = city.route; this.index = city.index;
     this.end = this.route.turnIdx || this.route.dist.length - 1;
@@ -146,10 +153,14 @@ export class StreetKit {
     this._lod = LOD[city.qualityKey] || LOD.balanced;
     this.maxCurb = Math.max(ROUTE_CURB, ...config.zones.map((z) => z.curbM));
     this._materials();
+    if (due()) yield;
     this._area();
+    if (due()) yield;
     this._streetGrid();
+    if (due()) yield;
     this._decodeData();
-    this._plan();
+    if (due()) yield;
+    yield* this._planJob();
     // [w2-clip] the terrain's scattered trees, shrubs and rocks stay off the kit's sidewalks and car parks
     { const plant = this.L.canPlant; this.L.canPlant = (x, z) => (!plant || plant(x, z)) && !this.onWalk(x, z); }
   }
@@ -339,12 +350,13 @@ export class StreetKit {
   }
 
   // ------------------------------------------------------------ placement plan (cheap: spots only; geometry per chunk)
-  _plan() {
+  *_planJob() {
     const L = this.L, r = this.route;
     // 1. the route's own street: sidewalk stations every 3 m on both sides (road stretches, not decks)
     const s0 = Math.max(0, this.cfg.fromM), s1 = Math.min(r.dist[this.end] - 1, this.cfg.toM);
     const decks = L.routeBridges || [];
     for (let s = s0; s <= s1; s += 3) {
+      if (due()) yield;
       if (L.routeKindAt(s) !== 'road' || decks.some((b) => s > b.fromM - 8 && s < b.toM + 8) || ghostAt(r, s)) continue;   // (a ghost: the real pass has its sidewalks)
       const f = this.frame(s);
       for (const side of [-1, 1]) {
@@ -353,7 +365,7 @@ export class StreetKit {
       }
     }
     // 2. other streets (classes 2–6, on the ground): stations every 3.5 m on both sides
-    this.city.streets.forEach((st, k) => {
+    yield* each(this.city.streets, (st, k) => {
       if (st.bridge || st.cls < 2 || st.cls > 6) return;
       let acc = 0;
       for (let i = 1; i < st.pts.length; i++) {
@@ -412,13 +424,16 @@ export class StreetKit {
    * spots for CityScene._trees ({x, z, seed, kit: true}: drawn with the city's instanced street trees, no extra
    * draw call); the pits (grates) are queued as furniture. Called once, by the city, before it plants its trees.
    */
-  treeSpots() {
+  treeSpots() { return drain(this.treeSpotsJob()); }
+  /** treeSpots as a job ([F30]). */
+  *treeSpotsJob() {
     if (this._treeSpots) return this._treeSpots;
     const out = (this._treeSpots = []), L = this.L, decks = L.routeBridges || [];
     this._treeCells = new Set();
     for (const zone of this.cfg.zones) {
       if (!(zone.trees > 0)) continue;
       for (const side of [-1, 1]) for (let s = zone.fromM + (side > 0 ? zone.trees / 2 : 0) + 4; s <= zone.toM - 4; s += zone.trees) {
+        if (due()) yield;
         if (L.routeKindAt(s) !== 'road' || decks.some((b) => s > b.fromM - 12 && s < b.toM + 12) || ghostAt(this.route, s)) continue;
         const f = this.frame(s), curb = this.curbAt(s), nx = f.rx * side, nz = f.rz * side;
         const ix = f.x + nx * curb, iz = f.z + nz * curb, x = ix + nx * 1.1, z = iz + nz * 1.1;
@@ -1018,11 +1033,14 @@ export class StreetKit {
    * sidewalks, furniture, car parks, fences) runs now — or, while the app streams (`deferred`), a few milliseconds per
    * frame from tick(), nearest chunk first. Its meshes join `out` (the city's list for the chunk) when done.
    */
-  finishChunk(key, out) {
+  finishChunk(key, out) { drain(this.finishChunkJob(key, out)); }
+  /** [F30] finishChunk as a job: not deferred, the chunk's kit work runs now — at once, or in the caller's frame slices. */
+  *finishChunkJob(key, out) {
     this._outs.set(key, out);
     const job = { key, out, gen: this._work(key) };
-    if (!this.deferred) { this._t0 = Infinity; while (!job.gen.next().done); return; }   // (all at once: no slices)
-    this.queue.push(job);
+    if (this.deferred) { this.queue.push(job); return; }
+    // (all at once outside a slice: _due() is then never true; in one, the kit's own pauses follow the caller's slice)
+    for (;;) { this._t0 = clock.deadline - 1.5; if (job.gen.next().done) return; yield; }
   }
   /** Finish every queued chunk now (tools that render one frame or inspect the scene). */
   flush() { this._t0 = Infinity; for (const j of this.queue.splice(0)) while (!j.gen.next().done); }

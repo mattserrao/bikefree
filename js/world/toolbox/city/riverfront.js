@@ -12,6 +12,7 @@
 // from the route's centre the water may be for the walk to reach it). The planner is pure (no three.js), so
 // tools and tests can run it in Node.
 import * as THREE from '../../../../vendor/three.module.min.js';
+import { drain, due, mapJob } from '../core/jobs.js';   // [F30] planned as a job (in frame slices on the ride)
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { ROAD_WIDTH, routePoint } from '../../pose.js';
 
@@ -48,7 +49,9 @@ const smoothAvg = (a, r) => a.map((_, i) => { let s = 0, n = 0; for (let k = Mat
  * deck (walk height), outer (wall line offset from the centre, m) }.
  * @param {object} ctx { landscape, route, index, streets, config }
  */
-export function planRiverfront({ landscape: L, route, index, streets = [], config }) {
+export function planRiverfront(...args) { return drain(planRiverfrontJob(...args)); }
+/** planRiverfront as a job ([F30]: js/world/toolbox/core/jobs.js). */
+export function* planRiverfrontJob({ landscape: L, route, index, streets = [], config }) {
   if (typeof streets === 'function') streets = streets();
   const O = { ...RIVERFRONT_DEFAULTS, ...config };
   const runs = [], ground = meshGround(L.heightAt, O.meshCellM);
@@ -56,6 +59,7 @@ export function planRiverfront({ landscape: L, route, index, streets = [], confi
     const so = { ...O, ...span };
     const raw = [];
     for (let s = span.fromM; s <= span.toM; s += so.stepM) {
+      if (due()) yield;
       const p = routePoint(route, index, s), a = routePoint(route, index, s - 1.5), b = routePoint(route, index, s + 1.5);
       let tx = b.x - a.x, tz = b.z - a.z; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
       const left = { x: tz, z: -tx };
@@ -75,7 +79,7 @@ export function planRiverfront({ landscape: L, route, index, streets = [], confi
     let side = span.side === 'left' ? 1 : span.side === 'right' ? -1 : 0;
     if (!side) { let l = 0, r = 0; for (const q of raw) { if (q.dl != null) l++; if (q.dr != null) r++; } side = l >= r ? 1 : -1; }
     // usable samples: water within reach, no street in the way, not on a bridge deck
-    const ok = raw.map((q) => {
+    const ok = yield* mapJob(raw, (q) => {
       q.nx = q.left.x * side; q.nz = q.left.z * side; q.d = side > 0 ? q.dl : q.dr;
       if ((L.routeBridges || []).some((b) => q.s > b.fromM - 4 && q.s < b.toM + 4)) return null;   // hard stops: decks, streets
       if (q.d == null) return false;
@@ -97,7 +101,7 @@ export function planRiverfront({ landscape: L, route, index, streets = [], confi
       while (j + 1 < raw.length && (ok[j + 1] || soft(j + 1))) j++;
       while (j > i && !ok[j]) j--;
       const run = raw.slice(i, j + 1);
-      if (run.length && (run[run.length - 1].s - run[0].s) >= so.minRunM) runs.push(finishRun(run, L, so));
+      if (run.length && (run[run.length - 1].s - run[0].s) >= so.minRunM) runs.push(yield* finishRun(run, L, so));
       i = j + 1;
     }
   }
@@ -105,14 +109,14 @@ export function planRiverfront({ landscape: L, route, index, streets = [], confi
 }
 
 /** Smooth the wall line and the walk's height along one run. */
-function finishRun(run, L, O) {
+function* finishRun(run, L, O) {
   const r = Math.max(1, Math.round(10 / O.stepM));
   const d = run.map((q) => q.d ?? NaN);
   for (let k = 0; k < d.length; k++) if (!Number.isFinite(d[k])) { let a = k - 1, b = k + 1; while (b < d.length && !Number.isFinite(d[b])) b++; d[k] = Number.isFinite(d[a]) ? (b < d.length ? (d[a] + d[b]) / 2 : d[a]) : d[b]; }
   // the furthest shore nearby, smoothed (twice), plus a margin: the wall stands out in the water all along
   const outer = smoothAvg(smoothAvg(smoothMax(d, r), r), r).map((v, k) => Math.max(O.minOuterM, v + O.marginM, d[k] + .4));
   // the walk: level with the route at its inner edge, never under the ground across it
-  const deck = run.map((q, k) => {
+  const deck = yield* mapJob(run, (q, k) => {
     let g = -Infinity;
     for (let o = O.innerM; o <= outer[k]; o += 1.5) g = Math.max(g, L.heightAt(q.x + q.nx * o, q.z + q.nz * o));
     return Math.max(q.y + .06, g + .08);
@@ -146,7 +150,8 @@ export function planWaterSteps(L, spec) {
  * plants keep off) and `groundCap(x, z)` (past the wall the ground must lie under the water, or the drawn
  * bank shows in front of the wall; it eases back over 20 m past each end of a run).
  */
-export function riverfrontField(runs, level, { pad = 4, cutInM = 3, cutOutM = 40, taperM = 20, steps = null } = {}) {
+export function riverfrontField(...args) { return drain(riverfrontFieldJob(...args)); }
+export function* riverfrontFieldJob(runs, level, { pad = 4, cutInM = 3, cutOutM = 40, taperM = 20, steps = null } = {}) {
   const C = 2, cover = new Set(), cap = new Map();
   const key = (x, z) => (Math.floor(x / C) + 32768) * 65536 + Math.floor(z / C) + 32768;
   const mark = (q, along, lift) => {
@@ -160,7 +165,7 @@ export function riverfrontField(runs, level, { pad = 4, cutInM = 3, cutOutM = 40
   };
   for (const run of runs) {
     const S = run.samples, O = run.opts;
-    for (const q of S) { q.innerM ??= O.innerM; for (let a = -O.stepM * .75; a <= O.stepM * .75; a += .5) mark(q, a, 0); }
+    for (const q of S) { q.innerM ??= O.innerM; for (let a = -O.stepM * .75; a <= O.stepM * .75; a += .5) mark(q, a, 0); if (due()) yield; }
     // past the ends: the cap rises back to the bank's own height
     for (const [q, dir] of [[S[0], -1], [S[S.length - 1], 1]]) for (let e = 1; e <= taperM; e += .5) mark(q, dir * e, 3 * e / taperM);
   }
@@ -179,10 +184,11 @@ export function riverfrontField(runs, level, { pad = 4, cutInM = 3, cutOutM = 40
  * Plan the scene's promenades on a city landscape and push the ground past their walls under the water.
  * Called once by the landscape (city-landscape.js) so the ground mesh, the city and the QC tools agree.
  */
-export function riverfrontGround(L, { route, index, streets, config }) {
-  const runs = planRiverfront({ landscape: L, route, index, streets, config });
+export function riverfrontGround(...args) { return drain(riverfrontGroundJob(...args)); }
+export function* riverfrontGroundJob(L, { route, index, streets, config }) {
+  const runs = yield* planRiverfrontJob({ landscape: L, route, index, streets, config });
   const steps = planWaterSteps(L, config.waterSteps);
-  const field = riverfrontField(runs, L.level, { steps });
+  const field = yield* riverfrontFieldJob(runs, L.level, { steps });
   const heightAt = L.heightAt;
   L.heightAt = (x, z) => Math.min(heightAt(x, z), field.groundCap(x, z));
   L.riverfront = { runs, steps, ...field };

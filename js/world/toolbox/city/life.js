@@ -8,6 +8,7 @@ import * as THREE from '../../../../vendor/three.module.min.js';
 import { Crowd, CLIP, FIT, randomLook, dogLook, clipRate, PALETTES } from '../life/figures/people.js';
 import { vehicleMesh, vehicleMaterial, setPaint, setMove } from '../life/figures/vehicles.js';
 import { MeshBuilder, makePath, hash, ribbon } from '../core/mesh-builder.js';
+import { drain, due, each } from '../core/jobs.js';   // [F30] built as a job (in frame slices on the ride)
 import { LAND } from './landscape.js';
 import { ROAD_WIDTH } from '../../pose.js';
 
@@ -228,31 +229,42 @@ class Network {
 
 // ---------------------------------------------------------------- the life of the city
 export class CityLife {
-  constructor(city) {
+  /** `deferred` ([F30]): `this.job` builds it (the same steps), for the caller to run in frame slices. */
+  constructor(city, deferred = false) {
+    const job = this._buildJob(city);
+    if (deferred) { this.job = job; return; }
+    drain(job);
+  }
+
+  *_buildJob(city) {
     this.city = city;
     this.rand = (() => { let s = 1234567; return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; }; })();
     this.counts = COUNTS[city.qualityKey] || COUNTS.balanced;
     this.m = new THREE.Matrix4(); this.q = new THREE.Quaternion(); this.e = new THREE.Euler(0, 0, 0, 'YXZ'); this.one = V(1, 1, 1);
     this.vehicleMat = animatedMaterial(this, 'vehicles');
     this.carMat = vehicleMaterial(city.night);
-    this._networks();
+    yield* this._networksJob();
     this._people();
+    if (due()) yield;
     this._traffic();
-    this._rails();
+    if (due()) yield;
+    yield* this._railsJob();
     this._inclines();
+    if (due()) yield;
     this._boats();
+    if (due()) yield;
     this._birds();
     this.zero = new THREE.Matrix4().makeScale(0, 0, 0);
   }
 
-  _networks() {
+  *_networksJob() {
     const c = this.city, walk = [], drive = [];
     const onRoute = (st) => {   // streets that run along the route itself (its other carriageway, a parallel path)
       let near = 0;
       for (const p of st.pts) { const r = c.index.nearest(p.x, p.z, 9); if (r && r.d < 8) near++; }
       return near > st.pts.length * .4;
     };
-    c.streets.forEach((st) => {
+    yield* each(c.streets, (st) => {
       const path = makePath(st.pts);
       if (path.length < 8 || onRoute(st)) return;
       if (st.cls >= 2) walk.push({ path, side: st.cls === 8 ? 0 : st.width / 2 + 1.7, allow: () => true, cls: st.cls });
@@ -273,9 +285,11 @@ export class CityLife {
       return false;
     };
     for (const k of (L.data.routeKinds || []).filter((k) => k.kind === 'trail')) {
+      if (due()) yield;
       let pts = [];
       const flush = () => { if (pts.length > 3) walk.push({ path: makePath(pts), side: 4.7, allow: () => true, cls: 9, trail: true }); pts = []; };
       for (let i = Math.ceil(k.fromM / 10) + 1; i <= Math.min(end, Math.floor(k.toM / 10) - 1); i++) {
+        if ((i & 15) === 0 && due()) yield;
         if (ghostAt(r, r.dist[i])) { flush(); continue; }   // (a network tour's repeat: walkers are on the real pass)
         if (this._passCache?.[i] ?? ((this._passCache ||= [])[i] = otherPass(i))) { flush(); continue; }
         pts.push({ x: c.index.xs[i], y: r.ele[i], z: c.index.zs[i] });
@@ -284,8 +298,8 @@ export class CityLife {
     }
     // off the route's road: sidewalks across its carriageway become crossings (with a kerb to wait at); sidewalks
     // and lanes that run along it, or that end on it with nowhere to go, are cut out here
-    this.walk = this._offRoute(walk, (w) => (w.side ? w.side + .9 : 1.4), MOVE.walk);
-    this.drive = this._offRoute(drive, (w) => (w.oneway ? 1.5 : w.lane) + 1.1, MOVE.car);
+    this.walk = yield* this._offRouteJob(walk, (w) => (w.side ? w.side + .9 : 1.4), MOVE.walk);
+    this.drive = yield* this._offRouteJob(drive, (w) => (w.oneway ? 1.5 : w.lane) + 1.1, MOVE.car);
   }
 
   /**
@@ -325,10 +339,11 @@ export class CityLife {
       rx: c.rx / c.n, rz: c.rz / c.n, half: (c.s1 - c.s0) / 2 + step }));
   }
 
-  _offRoute(ways, hwOf, K) {
-    const pieces = (list, cut) => {
+  *_offRouteJob(ways, hwOf, K) {
+    const pieces = function* (list, cut) {
       const out = [];
       for (const w of list) {
+        if (due()) yield;
         if (w.trail) { out.push(w); continue; }
         const band = w.band || this._bandOf(w.path, hwOf(w), K.margin), len = w.path.length, gaps = [];
         for (const c of band) if (cut(w, c, len)) gaps.push([c.s0 - 1, c.s1 + 1]);
@@ -342,12 +357,12 @@ export class CityLife {
       return out;
     };
     // 1. along the route's road (more than a crossing's length on it): cut out
-    let list = pieces(ways, (w, c) => c.s1 - c.s0 > K.longM);
+    let list = yield* pieces.call(this, ways, (w, c) => c.s1 - c.s0 > K.longM);
     // 2. ends on the route's road where no other way carries on (that may be entered there): cut back to the kerb
     const key = (p) => `${Math.round(p.x)},${Math.round(p.z)}`, ends = new Map();   // (as Network joins them)
     for (const w of list) for (const [end, p] of [[0, w.path.pts[0]], [1, w.path.pts.at(-1)]]) { const k = key(p); if (!ends.has(k)) ends.set(k, []); ends.get(k).push({ w, end }); }
     const others = (w, end) => (ends.get(key(end ? w.path.pts.at(-1) : w.path.pts[0])) || []).filter((o) => o.w !== w && o.w.allow(o.end === 0 ? 1 : -1)).length;
-    list = pieces(list, (w, c, len) => (c.s0 <= .01 && !others(w, false)) || (c.s1 >= len - .01 && !others(w, true)));
+    list = yield* pieces.call(this, list, (w, c, len) => (c.s0 <= .01 && !others(w, false)) || (c.s1 >= len - .01 && !others(w, true)));
     return new Network(list);
   }
 
@@ -813,10 +828,11 @@ export class CityLife {
   }
 
   // -------------------------------------------------------------- trains
-  _rails() {
+  *_railsJob() {
     const c = this.city, L = c.landscape, byKind = { light_rail: [], rail: [] };
     const tracks = new MeshBuilder();
     for (const r of c.landscape.data.rails || []) {
+      if (due()) yield;
       if (r.kind === 'funicular') continue;
       const pts = r.path.map(([a, o]) => c.D.local(a, o));
       if (r.bridge) { const y0 = L.baseHeight(pts[0].x, pts[0].z), y1 = L.baseHeight(pts.at(-1).x, pts.at(-1).z); pts.forEach((p, k) => { p.y = y0 + (y1 - y0) * k / (pts.length - 1) + 1; }); }
@@ -824,13 +840,14 @@ export class CityLife {
       (byKind[r.kind === 'tram' ? 'light_rail' : r.kind] || byKind.rail).push(pts);
     }
     for (const lines of Object.values(byKind)) for (const pts of lines) {
+      if (due()) yield;
       // ballast bed and two rails as flat ribbons (cheap: two triangles per segment)
       const raised = pts.map((p) => ({ x: p.x, y: p.y - .2, z: p.z }));
       tracks.color('#6b6359'); ribbon(tracks, raised, 3.2, 0, 10);
       tracks.color('#2f2c29');
       for (const side of [-.72, .72]) ribbon(tracks, offsetLine(pts, side), .14, .08, 10);
     }
-    tracks.keepOutOf(L.inRouteTube);   // rail beds the data lifts into the rider's space
+    yield* tracks.keepOutOfJob(L.inRouteTube);   // rail beds the data lifts into the rider's space
     if (tracks.count) { const tm = new THREE.Mesh(c.own(tracks.geometry()), c.solidMaterial); tm.receiveShadow = true; tm.name = 'Rail tracks'; c.group.add(tm); }
     // trains: two-car light-rail sets on the longest light-rail line, one long freight on the longest rail line
     const longest = (lines) => chainPolylines(lines, 2).map((l) => makePath(l)).sort((a, b) => b.length - a.length)[0];

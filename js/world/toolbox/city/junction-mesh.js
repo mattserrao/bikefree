@@ -2,7 +2,8 @@
 // route's road inside a junction go into the city's street builders (no extra draw calls), the corner sidewalks
 // into the sidewalk builders, and the paint — crosswalks, stop lines, curb edges — into one merged mesh per chunk.
 import * as THREE from '../../../../vendor/three.module.min.js';
-import { streetPieces, LIFT_BLEND_M, junctionPaint, routeLine } from './junctions.js';
+import { streetPieces, LIFT_BLEND_M, junctionPaintJob, routeLine } from './junctions.js';
+import { drain, due } from '../core/jobs.js';   // [F30]
 import { ROAD_WIDTH } from '../../pose.js';
 import { cityStreets } from './landscape.js';
 
@@ -53,7 +54,9 @@ const upNormal = (a, b, c) => {   // the face normal of a triangle (pointing up)
  * `walks`: its street and sidewalk builder maps; `liftOf(k)`: a street's ribbon lift. Junction surfaces, paint and
  * corner sidewalks join the street and sidewalk chunks (no extra draw calls); the route's overlay is one mesh.
  */
-export function buildJunctionMeshes(city, plan, { get, roads, walks, liftOf }) {
+export function buildJunctionMeshes(...args) { return drain(buildJunctionMeshesJob(...args)); }
+/** buildJunctionMeshes as a job ([F30]: js/world/toolbox/core/jobs.js). */
+export function* buildJunctionMeshesJob(city, plan, { get, roads, walks, liftOf }) {
   const streets = city.streets, O = plan.options;
   const route = city.route, index = city.index;
   const paintAt = (x, z) => get(roads, x, z).set({ aSlot: [PAINT_SLOT] });
@@ -67,6 +70,7 @@ export function buildJunctionMeshes(city, plan, { get, roads, walks, liftOf }) {
   // each junction's geometry joins the chunk of one of its streets (no chunks of its own: no extra draw calls)
   const home = (jn) => { const a = jn.arms.find((o) => !o.route) || jn.extra[0]; const p = a ? streets[a.k].pts[0] : jn; return p; };
   for (const jn of plan.list) {
+    if (due()) yield;
     const H = home(jn);
     // 1. the surface: a fan from the centre (the polygon is star-shaped about it), each vertex at its drawn height
     const B = get(roads, H.x, H.z).set({ aSlot: [TOP_SLOT] });
@@ -110,8 +114,9 @@ export function buildJunctionMeshes(city, plan, { get, roads, walks, liftOf }) {
     }
   }
   // 3. paint (js/world/toolbox/city/junctions.js junctionPaint: the same quads the course QC checks)
-  const paint = junctionPaint(plan, streets, { route, index, routeDist: city.landscape.routeDist, roadWidth: ROAD_WIDTH, liftOf, routeKindAt: city.landscape.routeKindAt });
+  const paint = yield* junctionPaintJob(plan, streets, { route, index, routeDist: city.landscape.routeDist, roadWidth: ROAD_WIDTH, liftOf, routeKindAt: city.landscape.routeKindAt });
   for (const q of paint.quads) {
+    if (due()) yield;
     if (q.kind === 'route-crosswalk') continue;   // (on the route's overlay below)
     const jn = plan.list[q.jn], H = home(jn);
     flatQuad(paintAt(H.x, H.z), q.pts); paintTris += 2;

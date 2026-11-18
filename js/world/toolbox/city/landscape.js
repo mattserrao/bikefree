@@ -9,11 +9,12 @@ import { makeRouteIndex } from '../../geo.js';
 import { smoothstep } from '../core/random.js';
 import { ROAD_WIDTH } from '../../pose.js';
 import { decodeTerrain } from '../landscape/real-terrain.js';
-import { planJunctions, junctionGround, junctionTops } from './junctions.js';   // [junctions]
-import { joinCrossings, densifyAlongside, clearOverpasses, alignAlongRoute, trimAtRoute, followMovedNodes, keepUnderRoad, resolveOverlaps, hideCrossingsAtRoute, landFreeDeckEnds, streetSlots, dropCutStubs } from './road-meets.js';   // [junctions]
-import { alignStreetProfiles, syncPinnedNodes } from '../../road-align.js';   // [road-align]
+import { planJunctionsJob, junctionGround, junctionTopsJob } from './junctions.js';   // [junctions]
+import { joinCrossingsJob, densifyAlongsideJob, clearOverpassesJob, alignAlongRouteJob, trimAtRouteJob, followMovedNodesJob, keepUnderRoadJob, resolveOverlapsJob, hideCrossingsAtRouteJob, landFreeDeckEndsJob, streetSlots, dropCutStubsJob } from './road-meets.js';   // [junctions] ([F30] as jobs)
+import { alignStreetProfilesJob, syncPinnedNodesJob } from '../../road-align.js';   // [road-align]
+import { drain, due } from '../core/jobs.js';   // [F30] the city's streets are built as a job (in frame slices on the ride)
 import { makeStreetGrade } from './street-grade.js';   // [street-kit]
-import { riverfrontGround } from './riverfront.js';   // [s1-riverfront]
+import { riverfrontGroundJob } from './riverfront.js';   // [s1-riverfront]
 
 export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand: 5, plaza: 6, outside: 7, yards: 8 };
 const LAND_COLORS = ['#8d8a84', '#77985a', '#4d6a3a', '#6c6a5e', '#7d786f', '#b5a684', '#b4ada0', '#6d8252', '#7c8c5f'];
@@ -43,7 +44,9 @@ export function decodeCity(data, proj) {
   return decoded;
 }
 
-export function makeCityLandscape(config, proj, index, route) {
+export function makeCityLandscape(config, proj, index, route) { return drain(makeCityLandscapeJob(config, proj, index, route)); }
+/** makeCityLandscape as a job ([F30]): the same build, pausing (between rows, streets…) when its slice is used up. */
+export function* makeCityLandscapeJob(config, proj, index, route) {
   const data = config.city;
   if (!data || data.format !== 'bikefree-city-1') throw new Error('City scenery data is missing');
   const D = decodeCity(data, proj);
@@ -111,19 +114,21 @@ export function makeCityLandscape(config, proj, index, route) {
   {
     const nx = D.lx, ny = D.ly, Lg = D.land, R = 3, wet = new Uint8Array(nx * ny), grow = new Uint8Array(nx * ny);
     for (let k = 0; k < wet.length; k++) wet[k] = Lg[k] === LAND.water ? 1 : 0;
-    const sweep = (src, dst, want) => {   // separable square max (want 1) / min (want 0) filter
+    const sweep = function* (src, dst, want) {   // separable square max (want 1) / min (want 0) filter
       const tmp = new Uint8Array(src.length);
-      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      for (let j = 0; j < ny; j++) for (let i = 0, last = nx - 1; i < nx; i++) {
+        if (i === last && due()) yield;
         let v = 1 - want; for (let u = Math.max(0, i - R); u <= Math.min(nx - 1, i + R); u++) if (src[j * nx + u] === want) { v = want; break; }
         tmp[j * nx + i] = v;
       }
-      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      for (let j = 0; j < ny; j++) for (let i = 0, last = nx - 1; i < nx; i++) {
+        if (i === last && due()) yield;
         let v = 1 - want; for (let w = Math.max(0, j - R); w <= Math.min(ny - 1, j + R); w++) if (tmp[w * nx + i] === want) { v = want; break; }
         dst[j * nx + i] = v;
       }
     };
-    sweep(wet, grow, 1);
-    const closed = new Uint8Array(nx * ny); sweep(grow, closed, 0);
+    yield* sweep(wet, grow, 1);
+    const closed = new Uint8Array(nx * ny); yield* sweep(grow, closed, 0);
     for (let k = 0; k < closed.length; k++) if (closed[k] && !wet[k] && Lg[k] !== LAND.building) Lg[k] = LAND.water;
   }
   const landCell = (x, z) => {
@@ -142,7 +147,7 @@ export function makeCityLandscape(config, proj, index, route) {
   // Route bridges (from OSM) as distance ranges along the outbound road.
   const routeBridges = (data.routeBridges || []).map((b) => ({ ...b, toM: Math.min(b.toM, route.turnS || route.total) }));
   const onRouteBridge = (s, margin = 0) => routeBridges.find((b) => s > b.fromM - margin && s < b.toM + margin);
-  routeBridges.push(...underpasses());
+  routeBridges.push(...(yield* underpasses()));
   routeBridges.sort((a, b) => a.fromM - b.fromM);
 
   /**
@@ -151,13 +156,14 @@ export function makeCityLandscape(config, proj, index, route) {
    * below it. Each gets a short girder span, so the
    * ground opens under the route and the street runs through instead of vanishing into the bank.
    */
-  function underpasses() {
+  function* underpasses() {
     const S = data.streets;
     if (!S) return [];
     const u8 = (t) => Uint8Array.from(atob(t), (c) => c.charCodeAt(0)).buffer;
     const starts = new Uint32Array(u8(S.starts)), xy = new Int16Array(u8(S.xy)), deck = new Uint16Array(u8(S.deck));
     const found = [];
     for (let k = 0; k < S.count; k++) {
+      if (due()) yield;
       const onDeck = !!(S.meta[k * 3 + 1] & 1);   // a ramp or viaduct: its own deck heights
       const w = STREET_W[S.meta[k * 3]], pts = [];
       for (let i = starts[k]; i < starts[k + 1]; i++) {
@@ -243,23 +249,31 @@ export function makeCityLandscape(config, proj, index, route) {
   // (streets are drawn level from side to side), easing back to the terrain over the next ~10 m. Without this,
   // on a hillside the uphill half of a street disappears under the grass.
   let streetIndex = null, buildingStreets = false;
+  // the streets and their 24 m segment grid, built on first use (or by the job, [F30], where the old code first used them)
+  function* streetIndexJob() {
+    if (streetIndex || buildingStreets) return;
+    buildingStreets = true;
+    const streets = yield* cityStreetsJob(L, index, route);
+    const grid = new Map();
+    for (let k = 0; k < streets.length; k++) {
+      const st = streets[k];
+      if (due()) yield;
+      for (let i = 1; i < st.pts.length; i++) {
+        const a = st.pts[i - 1], b = st.pts[i], r = st.width / 2 + 14;
+        for (let gx = Math.floor((Math.min(a.x, b.x) - r) / 24); gx <= Math.floor((Math.max(a.x, b.x) + r) / 24); gx++)
+          for (let gz = Math.floor((Math.min(a.z, b.z) - r) / 24); gz <= Math.floor((Math.max(a.z, b.z) + r) / 24); gz++) {
+            const key = `${gx},${gz}`; if (!grid.has(key)) grid.set(key, []); grid.get(key).push([k, i]);
+          }
+      }
+    }
+    grid.streets = streets;
+    streetIndex = grid;
+    buildingStreets = false;
+  }
   const streetAt = (x, z, extra = 0, skip = -1) => {
     if (!streetIndex) {
       if (buildingStreets) return null;
-      buildingStreets = true;
-      const streets = cityStreets(L, index, route);
-      streetIndex = new Map();
-      streets.forEach((st, k) => {
-        for (let i = 1; i < st.pts.length; i++) {
-          const a = st.pts[i - 1], b = st.pts[i], r = st.width / 2 + 14;
-          for (let gx = Math.floor((Math.min(a.x, b.x) - r) / 24); gx <= Math.floor((Math.max(a.x, b.x) + r) / 24); gx++)
-            for (let gz = Math.floor((Math.min(a.z, b.z) - r) / 24); gz <= Math.floor((Math.max(a.z, b.z) + r) / 24); gz++) {
-              const key = `${gx},${gz}`; if (!streetIndex.has(key)) streetIndex.set(key, []); streetIndex.get(key).push([k, i]);
-            }
-        }
-      });
-      streetIndex.streets = streets;
-      buildingStreets = false;
+      drain(streetIndexJob());
     }
     let best = null;
     for (const [k, i] of streetIndex.get(`${Math.floor(x / 24)},${Math.floor(z / 24)}`) || []) {
@@ -402,13 +416,14 @@ export function makeCityLandscape(config, proj, index, route) {
   // Distance to the rivers (negative over the water) on the 24 m height grid, plus the ground height there:
   // what the weather's fog bank needs to lie on the rivers and reach up the valleys (the "river fog").
   let riverField = null;
-  const rivers = () => {
+  const rivers = () => riverField || drain(riversJob());
+  function* riversJob() {   // ([F30] as a job: the start of an area built on the ride asks for it)
     if (riverField) return riverField;
     const B = T ? { x0: T.x0, z0: T.z0, x1: T.x1, z1: T.z1, step: 40 } : { x0: D.x0, z0: D.z0, x1: D.x1, z1: D.z1, step: (D.x1 - D.x0) / (D.nx - 1) };
     const nx = Math.round((B.x1 - B.x0) / B.step) + 1, nz = Math.round((B.z1 - B.z0) / B.step) + 1;
     const dx = (B.x1 - B.x0) / (nx - 1), dz = (B.z1 - B.z0) / (nz - 1), cell = (dx + dz) / 2, X0 = B.x0, Z0 = B.z0;
     const wet = new Uint8Array(nx * nz), far = 1e9;
-    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) wet[j * nx + i] = waterAt(X0 + i * dx, Z0 + j * dz) > .5 ? 1 : 0;
+    for (let j = 0; j < nz; j++) { for (let i = 0; i < nx; i++) wet[j * nx + i] = waterAt(X0 + i * dx, Z0 + j * dz) > .5 ? 1 : 0; if (due()) yield; }
     // two-pass chamfer distance, once to the water (for land) and once to the land (for water)
     const chamfer = (src) => {
       const d = new Float32Array(nx * nz);
@@ -428,14 +443,16 @@ export function makeCityLandscape(config, proj, index, route) {
       }
       return d;
     };
-    const toWater = chamfer(wet), toLand = chamfer(wet.map((w) => 1 - w));
+    const toWater = chamfer(wet); yield;
+    const toLand = chamfer(wet.map((w) => 1 - w)); yield;
     const field = new Float32Array(nx * nz), ground = new Float32Array(nx * nz);
     for (let k = 0; k < field.length; k++) {
       field[k] = wet[k] ? -toLand[k] : toWater[k];
       ground[k] = baseHeight(X0 + (k % nx) * dx, Z0 + Math.floor(k / nx) * dz);
+      if (k % nx === nx - 1 && due()) yield;
     }
     return (riverField = { nx, nz, x0: X0, z0: Z0, dx, dz, field, ground });
-  };
+  }
   const riverDistance = (x, z) => {
     const R = rivers(), u = (x - R.x0) / R.dx, v = (z - R.z0) / R.dz;
     if (u < 0 || v < 0 || u > R.nx - 1 || v > R.nz - 1) return 1e4;
@@ -481,7 +498,7 @@ export function makeCityLandscape(config, proj, index, route) {
     groundDrapeLast: (x, z) => streetsNear(x, z, 2.5).some((o) => !streetIndex.streets[o.k].bridge),   // on a street
     junctions: config.junctions || null,   // [junctions] scene key: real intersection geometry (js/world/toolbox/city/junctions.js)
     /** For the weather: fog lies on the rivers (at the water level) and reaches inland up the valleys. */
-    fogBase: level, fogField: rivers, fogInlandAt: riverDistance,
+    fogBase: level, fogField: rivers, fogFieldJob: riversJob, fogInlandAt: riverDistance,   // ([F30] fogFieldJob: the same field, as a job)
     /**
      * The space the rider and the chase camera move through: over the route's road (and a little past its
      * edges), from just above the road surface to 4.1 m up. Nothing else may be drawn there.
@@ -497,7 +514,8 @@ export function makeCityLandscape(config, proj, index, route) {
     onStreet: (x, z, margin = 0) => { const st = streetAt(x, z, 2.6 + margin); return !!st && (st.st.cls !== 8 || st.edge < margin); },
   };
   // [s1-riverfront] promenade walls along the route (scene "riverfront"): the ground past them under the water
-  if (config.riverfront) riverfrontGround(L, { route, index, config: config.riverfront, streets: () => (streetAt(0, 0), streetIndex.streets) });
+  // ([F30] the streets first, as a job: planning the promenades is what used to build them, on its first step)
+  if (config.riverfront) { yield* streetIndexJob(); yield* riverfrontGroundJob(L, { route, index, config: config.riverfront, streets: () => (streetAt(0, 0), streetIndex.streets) }); }
   return L;
 }
 
@@ -510,7 +528,9 @@ export const STREET_LIFT = .24;                                     // highest a
  * (the rest of a bridge's roadway, a ramp, the street the route rides on), it is kept just below the route's
  * own road, so it can never cover the road or the rider. Shared by the renderer and the course QC sweep.
  */
-export function cityStreets(landscape, index, route) {
+export function cityStreets(landscape, index, route) { return drain(cityStreetsJob(landscape, index, route)); }
+/** cityStreets as a job ([F30]: js/world/toolbox/core/jobs.js): the same passes, pausing between streets when its slice is used up. */
+export function* cityStreetsJob(landscape, index, route) {
   if (landscape._streets) return landscape._streets;
   const S = landscape.data.streets, D = landscape.decoded;
   const u8 = (t) => Uint8Array.from(atob(t), (c) => c.charCodeAt(0)).buffer;
@@ -543,6 +563,7 @@ export function cityStreets(landscape, index, route) {
     return l > 0 && Math.abs(dx * sx + dz * sz) / l > .94;
   };
   for (let k = 0; k < S.count; k++) {
+    if (due()) yield;
     const cls = S.meta[k * 3], flags = S.meta[k * 3 + 1], layer = S.meta[k * 3 + 2] - 8;
     const bridge = !!(flags & 1), oneway = ((flags >> 1) & 3) - 1, width = STREET_W[cls], brick = !!(flags & 8);   // [finish] bit 3: brick or sett (OSM surface)
     const raw = [];
@@ -558,40 +579,42 @@ export function cityStreets(landscape, index, route) {
       for (let m = 1; m <= n; m++) { const f = m / n; pts.push({ x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, y: a.y != null && b.y != null ? a.y + (b.y - a.y) * f : null }); }
       nodeIdx.push(pts.length - 1);   // [junctions]
     }
-    pts.forEach((p, j) => {
+    for (let j = 0; j < pts.length; j++) {   // ([F30] a loop, not forEach: a long street may pause half way)
+      const p = pts[j];
       if (p.y == null) p.y = landscape.heightAt(p.x, p.z);
       if (lower(p, width, !bridge && alongRoute(pts, j))) under = true;   // [road-align] along
-    });
+      if ((j & 63) === 63 && due()) yield;
+    }
     streets.push({ cls, bridge, oneway, layer, pts, width, ...(brick ? { brick } : {}), underRoute: under, rides: width > ROAD_WIDTH + 1 && pts.some((p) => p.along),   // [road-align] rides (wider than the road: sticks out)
       nodes: raw, nodeIdx });   // [junctions] OSM nodes → pts index
   }
   // [road-align] smooth, grade-limited street profiles with one height per junction (js/world/road-align.js)
   if (align?.streets) {
     const nearRoute = (x, z) => { const r = index.nearest(x, z, 24); return r ? 1 - smoothstep(12, 22, r.d) : 0; };
-    alignStreetProfiles(streets, { ...align, ground: landscape.baseHeight, nearRoute, floor: landscape.level + .6 });
-    for (const st of streets) st.pts.forEach((p, j) => { if (lower(p, st.width, !st.bridge && alongRoute(st.pts, j))) st.underRoute = true; });
-    syncPinnedNodes(streets);
+    yield* alignStreetProfilesJob(streets, { ...align, ground: landscape.baseHeight, nearRoute, floor: landscape.level + .6 });
+    for (const st of streets) { st.pts.forEach((p, j) => { if (lower(p, st.width, !st.bridge && alongRoute(st.pts, j))) st.underRoute = true; }); if (due()) yield; }
+    yield* syncPinnedNodesJob(streets);
   }
   landscape._streets = streets;
   // [junctions] real intersection geometry: street heights inside junctions, trims, the junction surfaces
   if (landscape.junctions) {
-    joinCrossings(streets);   // [junctions] streets crossing at one level with no shared node: give them one
-    densifyAlongside(streets);   // [junctions] (finer points where carriageways run side by side, for the trims below)
-    clearOverpasses(streets, { route, index, roadWidth: ROAD_WIDTH });   // [junctions] decks over the road clear the rider
-    landFreeDeckEnds(streets, { route, index, landscape });   // [w2-meets] a deck end that meets nothing lands on the ground
-    alignAlongRoute(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] streets alongside the road: flush with it
-    trimAtRoute(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] …or beside it at another level: kept off its shoulder
-    resolveOverlaps(streets, landscape);   // [junctions] [w2-meets] carriageways side by side or merging: drawn as their union (gores)
-    followMovedNodes(streets);   // [w2-meets] streets joining lifted decks and flush streets follow them before junctions are planned
-    landscape._junctions = planJunctions(streets, { route, index, end, routeDist: landscape.routeDist, roadWidth: ROAD_WIDTH,
+    yield* joinCrossingsJob(streets);   // [junctions] streets crossing at one level with no shared node: give them one
+    yield* densifyAlongsideJob(streets);   // [junctions] (finer points where carriageways run side by side, for the trims below)
+    yield* clearOverpassesJob(streets, { route, index, roadWidth: ROAD_WIDTH });   // [junctions] decks over the road clear the rider
+    yield* landFreeDeckEndsJob(streets, { route, index, landscape });   // [w2-meets] a deck end that meets nothing lands on the ground
+    yield* alignAlongRouteJob(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] streets alongside the road: flush with it
+    yield* trimAtRouteJob(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] …or beside it at another level: kept off its shoulder
+    yield* resolveOverlapsJob(streets, landscape);   // [junctions] [w2-meets] carriageways side by side or merging: drawn as their union (gores)
+    yield* followMovedNodesJob(streets);   // [w2-meets] streets joining lifted decks and flush streets follow them before junctions are planned
+    landscape._junctions = yield* planJunctionsJob(streets, { route, index, end, routeDist: landscape.routeDist, roadWidth: ROAD_WIDTH,
       onRouteBridge: (s, m) => landscape.routeBridges.some((b) => s > b.fromM - m && s < b.toM + m), liftOf: (k) => .1 + streetSlots(landscape, streets)[k] * .02 }, landscape.junctions);
-    keepUnderRoad(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] nothing over the road
-    followMovedNodes(streets);   // [junctions] paths, side streets and decks meet the moved ones at their height
-    resolveOverlaps(streets, landscape, { final: true });   // [w2-meets] again: heights moved since (decks and their links)
-    keepUnderRoad(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] (and still nothing over the road)
-    hideCrossingsAtRoute(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [w2-meets] crossings at another level: under the road's bank
-    dropCutStubs(streets);   // [finish] stubs cut away at one end aren't drawn
-    junctionTops(landscape._junctions, streets, landscape.routeDist, ROAD_WIDTH);   // [junctions] mouths at the streets' final heights
+    yield* keepUnderRoadJob(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] nothing over the road
+    yield* followMovedNodesJob(streets);   // [junctions] paths, side streets and decks meet the moved ones at their height
+    yield* resolveOverlapsJob(streets, landscape, { final: true });   // [w2-meets] again: heights moved since (decks and their links)
+    yield* keepUnderRoadJob(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] (and still nothing over the road)
+    yield* hideCrossingsAtRouteJob(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [w2-meets] crossings at another level: under the road's bank
+    yield* dropCutStubsJob(streets);   // [finish] stubs cut away at one end aren't drawn
+    yield* junctionTopsJob(landscape._junctions, streets, landscape.routeDist, ROAD_WIDTH);   // [junctions] mouths at the streets' final heights
   }
   return streets;
 }
