@@ -204,6 +204,44 @@ test('your own routes: the planner offers the ways on, a loop laps, a one-way ro
   assert.equal(keysToIds(net, ['X>Y+']), null);   // a segment that's gone: plan it again
 });
 
+test('sharp corners inside a segment get the junctions\' gentle speed cap (F82: Bakery Square\'s hairpin)', () => {
+  const { edgeBends } = netMod;
+  const r = makePathRoute(net, preset('pgh-squirrel-hill'));   // Forbes from K, then EL>SQ backwards: Beechwood, Fifth Ave, Penn Ave by Bakery Square
+  const e = edge('EL>SQ');
+  const bend = edgeBends(net, e).find((c) => Math.abs(e.s0 + c.u - 16490) < 30);
+  assert.ok(bend, 'the Penn/Fifth hairpin by Bakery Square is a corner');
+  const at = len('SQ>K') + e.len - bend.u;   // its path metre (ridden backwards)
+  const cap = r.netRide.speedCap(at);
+  assert.ok(cap != null && Math.abs(cap - cornerSpeed(bend.angle)) < 0.01, `${cap}`);
+  assert.ok(r.netRide.speedCap(at - 60) > cap && r.netRide.speedCap(at - 60) < 25);   // easing down into it
+  assert.equal(r.netRide.speedCap(at + 40), null);                                     // pedal back up after
+  // gentle: never under the U-turn's speed, and no corner sits in a junction's own reach
+  for (const x of net.edges.values()) for (const c of edgeBends(net, x)) {
+    assert.ok(cornerSpeed(c.angle) >= 3.5 && c.u >= 25 && c.u <= x.len - 25);
+  }
+  // a straight segment has none (East Carson Street)
+  assert.deepEqual(edgeBends(net, edge('G>Q')), []);
+});
+
+test('turn labels follow the street, not the line\'s rounded corner at a junction it passes twice (F84)', () => {
+  const at = (inKey) => { const m = /^(.+)([+-])$/.exec(inKey); return optionsAt(net, { e: edge(m[1]), dir: m[2] === '+' ? 1 : -1 }); };
+  const labels = (inKey) => Object.fromEntries(at(inKey).filter((o) => !o.back).map((o) => [`${o.t.e.key}${o.t.dir > 0 ? '+' : '-'}`, o.label]));
+  // Forbes & Shady (SQ): Forbes straight on, Shady Ave a right angle either way
+  assert.deepEqual(labels('EL>SQ+'), { 'SQ>K+': 'Straight', 'SQ>EL+': 'Right' });
+  assert.deepEqual(labels('SQ>EL-'), { 'EL>SQ-': 'Left', 'SQ>K+': 'Right' });
+  assert.deepEqual(labels('SQ>K-'), { 'SQ>EL+': 'Left', 'EL>SQ-': 'Straight' });
+  // the Clemente Bridge's south end (B): 6th St runs straight onto the bridge
+  assert.deepEqual(labels('M>B+'), { 'B>E+': 'Left', 'A>B-': 'Straight' });
+  // Highland Park (HE): from Mellon Terrace the default is Bunkerhill on, not the turn onto N Highland
+  assert.equal(straightOn(at('LB>HE+')).t.e.key, 'HP>HE');
+  // order: left to right by the street's turn; the curve keeps its own angle (first 15 m)
+  for (const e of net.edges.values()) for (const dir of [1, -1]) {
+    const o = optionsAt(net, { e, dir });
+    for (let i = 1; i < o.length; i++) assert.ok(o[i].turn >= o[i - 1].turn);
+    for (const x of o) assert.ok(Number.isFinite(x.angle) && Number.isFinite(x.turn));
+  }
+});
+
 test('saved routes from before every split map onto the way they rode (the key history, F40/F58)', () => {
   const { keysToIds, idsToKeys } = netMod;
   const map = (keys) => idsToKeys(net, keysToIds(net, keys));

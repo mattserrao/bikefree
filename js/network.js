@@ -33,11 +33,15 @@ export const UTURN_R = 9;          // the same for a U-turn ("back")
 export const PASS_R = 6;           // passing straight through where the base route has a seam (the loop's start)
 const AHEAD_M = 150000;            // the path route always reaches this far beyond the rider (and the planner)
 const REFILL_M = 100000;           // …refilled once less than this is left
-const HEADING_M = 15;              // an arm's heading: from the junction to this far along it
+const HEADING_M = 15;              // an arm's heading for the turn's curve and speed cap: from the junction to this far along it
+const LABEL_M0 = 10, LABEL_M1 = 40;   // …and for its label, order and the default rule: 10–40 m out, past the line's rounded corner (F84)
 export const SWAP_AHEAD_M = 200;   // areas: the area drawn keeps drawing while it covers the rider and this far ahead
 export const PRELOAD_M = 1500;     // …an area the path enters within this far ahead is loaded and built, hidden
 export const RELEASE_M = 600;      // …and one not drawn, not ahead and not within this far behind is released
 const CORNER = { minDeg: 60, decel: 2 };   // speed cap: sharper than this; the rider slows at this m/s²
+// sharp corners inside a segment (no junction: Bakery Square's hairpin, F82) get the same gentle cap: the turn
+// over ±ARC_M of the line, measured every SCAN_M; corners within END_M of a junction are the junction's (its own cap)
+const BEND = { arcM: 15, scanM: 5, endM: 25, holdM: 10 };
 
 const deg = (r) => (r * 180) / Math.PI;
 const unit2 = (v) => { const l = Math.hypot(v.x, v.z) || 1; return { x: v.x / l, z: v.z / l }; };
@@ -122,8 +126,8 @@ function headingAlong(net, t, u0, u1) {
   return unit2({ x: (b.lon - a.lon) * k * Math.cos((a.lat * Math.PI) / 180), z: -(b.lat - a.lat) * k });
 }
 
-const GLYPH = (o) => (o.back ? '↶' : Math.abs(o.angle) < 25 ? '↑' : o.angle < 0 ? (o.angle > -65 ? '↖' : o.angle > -135 ? '←' : '↙') : (o.angle < 65 ? '↗' : o.angle < 135 ? '→' : '↘'));
-const LABEL = (o) => (o.back ? 'Back' : Math.abs(o.angle) < 25 ? 'Straight' : o.angle < 0 ? (o.angle > -65 ? 'Bear left' : o.angle > -135 ? 'Left' : 'Sharp left') : (o.angle < 65 ? 'Bear right' : o.angle < 135 ? 'Right' : 'Sharp right'));
+const GLYPH = (o) => (o.back ? '↶' : Math.abs(o.turn) < 25 ? '↑' : o.turn < 0 ? (o.turn > -65 ? '↖' : o.turn > -135 ? '←' : '↙') : (o.turn < 65 ? '↗' : o.turn < 135 ? '→' : '↘'));
+const LABEL = (o) => (o.back ? 'Back' : Math.abs(o.turn) < 25 ? 'Straight' : o.turn < 0 ? (o.turn > -65 ? 'Bear left' : o.turn > -135 ? 'Left' : 'Sharp left') : (o.turn < 65 ? 'Bear right' : o.turn < 135 ? 'Right' : 'Sharp right'));
 
 /**
  * The ways on from the end of traversal `t`: every arm of the junction it arrives at, each with its turn
@@ -134,27 +138,58 @@ export function optionsAt(net, t) {
   const key = travKey(t);
   if (net._opts.has(key)) return net._opts.get(key);
   const node = net.nodes.get(endNode(t));
-  const fwd = headingAlong(net, t, t.e.len - HEADING_M, t.e.len);
-  const right = { x: -fwd.z, z: fwd.x };
+  // two turn angles: `angle` on the first 15 m (the curve the ride draws and its speed cap), `turn` 10–40 m out
+  // (what the street does: the label, the order, straight on). A line that passes a junction twice rounds its
+  // corners, so its first metres can bend ~30° off the street's way (F84: "bear left" for Forbes straight on at SQ)
+  const turnOf = (u0, u1) => {
+    const fwd = headingAlong(net, t, t.e.len - u1, t.e.len - u0);
+    const right = { x: -fwd.z, z: fwd.x };
+    return (t2) => { const h = headingAlong(net, t2, u0, u1); return deg(Math.atan2(h.x * right.x + h.z * right.z, h.x * fwd.x + h.z * fwd.z)); };
+  };
+  const near = turnOf(0, HEADING_M), far = turnOf(LABEL_M0, LABEL_M1);
   const list = node.arms.map((a) => {
     const t2 = { e: a.e, dir: a.dir };
     const back = a.e === t.e && a.dir === -t.dir;
-    const h = headingAlong(net, t2, 0, HEADING_M);
-    const angle = back ? -180 : deg(Math.atan2(h.x * right.x + h.z * right.z, h.x * fwd.x + h.z * fwd.z));
-    const o = { t: t2, key: travKey(t2), back, angle, to: net.nodes.get(endNode(t2)).name, toward: towardOf(t2),
+    const angle = back ? -180 : near(t2), turn = back ? -180 : far(t2);
+    const o = { t: t2, key: travKey(t2), back, angle, turn, to: net.nodes.get(endNode(t2)).name, toward: towardOf(t2),
       lengthM: t2.e.len, climbM: climbOf(t2) };
     o.glyph = GLYPH(o); o.label = LABEL(o);
     return o;
-  }).sort((a, b) => a.angle - b.angle);
+  }).sort((a, b) => a.turn - b.turn);
   net._opts.set(key, list);
   return list;
 }
 
-/** Straight on: the arm with the smallest turn (not back), or back at a dead end. */
+/** Straight on: the arm with the smallest turn in the street (not back), or back at a dead end. */
 export function straightOn(options) {
   let best = null;
-  for (const o of options) if (!o.back && (!best || Math.abs(o.angle) < Math.abs(best.angle))) best = o;
+  for (const o of options) if (!o.back && (!best || Math.abs(o.turn ?? o.angle) < Math.abs(best.turn ?? best.angle))) best = o;
   return best || options.find((o) => o.back) || null;
+}
+
+/**
+ * Sharp corners inside an edge, off its junctions (F82): [{u, angle}] at forward metre u, the turn (°) over
+ * ±BEND.arcM of the edge's line, one per corner (its sharpest point), only those over CORNER.minDeg. Cached.
+ */
+export function edgeBends(net, e) {
+  net._bends ||= new Map();
+  if (net._bends.has(e.id)) return net._bends.get(e.id);
+  const t = { e, dir: 1 }, out = [];
+  const k = 6378137 * Math.PI / 180;
+  const xy = (u) => { const q = routeAt(baseOf(t), worldS(net, t, u)); return { x: q.lon * k * Math.cos((q.lat * Math.PI) / 180), z: -q.lat * k }; };
+  let run = null;
+  for (let u = BEND.endM; u <= e.len - BEND.endM; u += BEND.scanM) {
+    const a = xy(u - BEND.arcM), b = xy(u), c = xy(u + BEND.arcM);
+    let d = Math.atan2(c.z - b.z, c.x - b.x) - Math.atan2(b.z - a.z, b.x - a.x);
+    while (d > Math.PI) d -= 2 * Math.PI;
+    while (d < -Math.PI) d += 2 * Math.PI;
+    const angle = Math.abs(deg(d));
+    if (angle >= CORNER.minDeg) { if (!run || angle > run.angle) run = { u, angle: run ? Math.max(run.angle, angle) : angle }; }
+    else if (run) { out.push(run); run = null; }
+  }
+  if (run) out.push(run);
+  net._bends.set(e.id, out);
+  return out;
 }
 
 /** Speed limit (m/s) through a turn of `angle` degrees; null when it needs none. */
@@ -421,10 +456,21 @@ export class NetRide extends EventTarget {
     return { P: b.p0, R, angle, back: !!o?.back };
   }
 
-  /** Speed cap (m/s) at path metre p for the turn at the next (or the current) junction; null: none. */
+  /** Speed cap (m/s) at path metre p for the turn at the next (or the current) junction, or a sharp corner ahead inside a segment; null: none. */
   speedCap(p) {
     const i = this.entryAt(p);
     let cap = null;
+    // corners inside segments (F82): the one the rider is in, or any within braking reach ahead
+    for (let j = i; j < this.entries.length && this.entries[j].p0 <= p + 150; j++) {
+      const x = this.entries[j];
+      for (const c of edgeBends(this.net, x.t.e)) {
+        const P = x.p0 + (x.t.dir > 0 ? c.u : x.t.e.len - c.u), d = P - p;
+        if (d < -BEND.holdM || d > 150) continue;
+        const v = cornerSpeed(c.angle);
+        const allowed = Math.sqrt(v * v + 2 * CORNER.decel * Math.max(0, d - BEND.holdM));
+        cap = cap == null ? allowed : Math.min(cap, allowed);
+      }
+    }
     for (const j of [i, i + 1]) {
       const J0 = this._junction(j);
       const J = J0 && { ...J0, R: this.net._fits?.get(`${travKey(this.entries[j - 1].t)}>${travKey(this.entries[j].t)}`) ?? J0.R };
