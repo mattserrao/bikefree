@@ -202,15 +202,15 @@ test('network scenery (F37): a free ride or workout rides the city\'s free ride,
   assert.equal(s.turnRide, scene.netRide);
   assert.equal(s.sceneryPos, 0);
   s._manualGrade = 2;
-  const atLB = scene.netRide.entries[3].p0;   // 40th & Butler: the free ride's way is the 40th Street Bridge
+  const atLB = scene.netRide.entries[4].p0;   // 40th & Butler: the free ride's way is the 40th Street Bridge
   s.distanceM = 5000 + atLB - 120;
   s._updateRoute();
   assert.equal(s.gradePct, 2, 'a free ride keeps its own grade');
   assert.equal(s.mode, 'free');
   s._onPress('navRight');   // right of the bridge: straight on up Butler St
-  assert.equal(scene.netRide.entries[3].t.e.key, 'LB>HE', 'a turn chosen on the scenery');
+  assert.equal(scene.netRide.entries[4].t.e.key, 'LB>HE', 'a turn chosen on the scenery');
   s.setScenery(scene);   // the same scenery again (resume): the path and the turn are kept
-  assert.equal(scene.netRide.entries[3].t.e.key, 'LB>HE');
+  assert.equal(scene.netRide.entries[4].t.e.key, 'LB>HE');
   // the path refills as it is ridden (a long way: no end)
   s.distanceM = 5000 + 120000;
   s._updateRoute();
@@ -221,18 +221,18 @@ test('network scenery (F37): a free ride or workout rides the city\'s free ride,
   s.setScenery(null);
   s.setScenery(scene);
   s.speedMps = 8;
-  const far = scene.netRide.entries[1].p0 - 1500;   // well before the next junction: no prompt
+  const far = scene.netRide.entries[2].p0 - 1500;   // well before the next junction: no prompt
   s.distanceM = s.sceneryOffset + far;
   s._updateRoute();
   s._onPress('navRight');
   assert.equal(s.workoutT, 300, '▶ skipped the step');
-  const near = scene.netRide.entries[1].p0 - 60;   // the Clemente Bridge's end: the prompt is up
-  const before = scene.netRide.entries[1].t;
+  const near = scene.netRide.entries[2].p0 - 60;   // the Clemente Bridge's end: the prompt is up
+  const before = scene.netRide.entries[2].t;
   s.distanceM = s.sceneryOffset + near;
   s._updateRoute();
   s._onPress('navRight');
   assert.equal(s.workoutT, 300, '▶ turned, not skipped');
-  assert.notEqual(scene.netRide.entries[1].t, before);
+  assert.notEqual(scene.netRide.entries[2].t, before);
   // a route ride has no scenery path to turn on
   s.setRoute(makePathRoute(net, preset('pgh-three-rivers')), 0, null);
   assert.notEqual(s.turnRide, scene.netRide);
