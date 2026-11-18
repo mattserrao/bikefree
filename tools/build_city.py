@@ -325,6 +325,7 @@ def build(cid):
     nodes, ntags, ways, rels = load_osm(cfg)
 
     # 1. Route ------------------------------------------------------------------
+    add_synthetic_ways(cfg, nodes, ways)   # [subway] paths the map doesn't have (a cycle path beside the T's tracks)
     router = Router(nodes, ways)
     for lk in cfg.get('links', []): router.link(tuple(lk['from']), tuple(lk['to']), lk['name'])
     pts, wl, marks = router.build(cfg['legs'])
@@ -409,6 +410,7 @@ def build(cid):
     raw_total = cum[-1]
     n2 = int(raw_total // 2)
     r2, e2, j = [], [], 0
+    r2_way = []
     for k in range(n2):
         sd = k * 2
         while j < len(cum) - 2 and cum[j + 1] < sd: j += 1
@@ -416,6 +418,7 @@ def build(cid):
         r2.append(((P[j][1] + (P[j + 1][1] - P[j][1]) * f - P[0][1]) * 111319.49 * math.cos(math.radians(P[0][0])),
                    (P[j][0] + (P[j + 1][0] - P[j][0]) * f - P[0][0]) * 111319.49))
         e2.append(E[j] + (E[j + 1] - E[j]) * f)
+        r2_way.append(wl[j + 1] if j + 1 < len(wl) else None)   # [subway] the way under each 2 m point
     # never stray more than `maxDrift` m from the mapped line: corners round inside the street, not through buildings
     drift = cfg.get('maxDriftM', 8.0)
     kx0, ky0 = 111319.49 * math.cos(math.radians(P[0][0])), 111319.49
@@ -439,7 +442,9 @@ def build(cid):
         return bool(hit)
     # buildings the mapped path itself runs through (a trail under a canopy, a mis-drawn footprint) are left out
     route_buildings = set()
-    for q in r2: in_building(q[0], q[1], route_buildings)
+    for q, w_ in zip(r2, r2_way):
+        if w_ and ways[w_][1].get('tunnel') == 'yes': continue   # [subway] a tunnel passes under buildings: they stay
+        in_building(q[0], q[1], route_buildings)
     print('  left out (on the route):', len(route_buildings), sorted(Counter(ways[w][1].get('building', ways[w][1].get('building:part', '')) for w in route_buildings).items()))
     # [road-align] plan: round corners, ease tight spots and fair the line inside the mapped corridor, clear of
     # buildings (tools/citylib/road_align.py)
@@ -647,6 +652,7 @@ def build(cid):
         cfg = area_cfg
         total = sum(hv(a_, b_) for a_, b_ in zip(rs, rs[1:]))
         print(f'{cid}: {total / 1000:.2f} km cut from {cfg["slice"]["of"]}, ghosts {route_ghosts}, aprons {route_aprons}')
+    route_under = underground_ranges(cfg, rs)   # [subway] where the line runs underground, and its conveyors
     gpx = os.path.join(ROOT, cfg['gpx'])
     os.makedirs(os.path.dirname(gpx), exist_ok=True)
     with open(gpx, 'w') as f:
@@ -783,8 +789,9 @@ def build(cid):
     for k, (la, lo) in enumerate(part_centres): pc_grid.setdefault((round(la * 500), round(lo * 500)), []).append(k)
     stadiums, kept = [], []; why = []
     special = cfg.get('specialBuildings', {})
+    drop_b = {str(d_['way']) for d_ in cfg.get('dropBuildings', [])}   # [subway] the kit draws its own (a station's headhouse)
     for wid, pts, t in outlines + parts:
-        if len(pts) < 4 or wid in route_buildings: continue
+        if len(pts) < 4 or wid in route_buildings or wid in drop_b: continue
         is_part = 'building:part' in t and wid not in [o[0] for o in outlines[:0]]
         if not is_part and any(k for (la, lo) in [(sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))]
                                for dk in [(a, b) for a in (-1, 0, 1) for b in (-1, 0, 1)]
@@ -974,6 +981,7 @@ def build(cid):
         'routeKinds': route_kinds,
         **({'routeGhosts': route_ghosts} if route_ghosts else {}),
         **({'routeAprons': route_aprons} if route_aprons else {}),
+        **(route_under or {}),
         'routeBridges': [{**b, 'style': cfg.get('bridgeStyles', {}).get(b['name'], 'girder')} for b in route_bridges],
         'buildings': {
             'count': len(kept),
@@ -989,7 +997,17 @@ def build(cid):
         'rails': rails,
         'trees': pack_int16(trees),
     }
-    out['streetKit'] = street_kit.extract(nodes, ntags, ways, q, route_dist)   # [street-kit]
+    # [subway] nothing of the street kit (walls, hedges, benches) or the map's trees in a station's headhouse, over
+    # the top of its escalator shaft (the subway kit draws the headhouse there)
+    clear = []
+    for c_ in (route_under or {}).get('routeConveyors', []):
+        top_ = c_['fromM'] if c_.get('dir') == 'down' else c_['toM']
+        clear += [rs[k] for k in range(len(rs)) if abs(k * 10 - top_ - (12 if c_.get('dir') == 'down' else -12)) <= 22]
+    kit_dist = (lambda la, lo, lim: 1e9 if any(hv((la, lo), c_) < 10 for c_ in clear) else route_dist(la, lo, lim)) if clear else route_dist
+    if clear:
+        keep_ = [k for k in range(0, len(trees), 2) if not any(hv((lat0 + trees[k] * UNIT, lon0 + trees[k + 1] * UNIT), c_) < 10 for c_ in clear)]
+        out['trees'] = pack_int16([v for k in keep_ for v in (trees[k], trees[k + 1])])
+    out['streetKit'] = street_kit.extract(nodes, ntags, ways, q, kit_dist)   # [street-kit]
     path = os.path.join(ROOT, cfg['data'])
     json.dump(out, open(path, 'w'), separators=(',', ':'))
     print(f'  wrote {cfg["data"]} ({os.path.getsize(path) / 1e6:.2f} MB): {len(streets)} streets, {len(bridges)} styled bridges, '
@@ -1376,6 +1394,51 @@ def slice_tour(sl, rs, e, chord, kinds, bridges, ghosts, pts, node_m):
             area_pts.append(pts[k])
         area_pts.append(pts[k + 1])
     return out_ll, out_e, kinds_out, bridges_out, merged, aprons, area_pts
+
+
+def add_synthetic_ways(cfg, nodes, ways):
+    """[subway] `syntheticWays` [{name, gpx, fromM, toM, tags}]: a path the map doesn't have (the cycle path beside the
+    T's tracks under the Allegheny), taken from a line's points between those metres, joined at each end to the
+    nearest mapped street node, so legs can be routed along it. Tagged a tunnel: never a city street, and the
+    buildings it passes under stay."""
+    for k, sw in enumerate(cfg.get('syntheticWays', [])):
+        txt = open(os.path.join(ROOT, sw['gpx'])).read()
+        P = [(float(a), float(b)) for a, b in __import__('re').findall(r'lat="([\d.-]+)" lon="([\d.-]+)"', txt)]
+        cum = [0.0]
+        for a, b in zip(P, P[1:]): cum.append(cum[-1] + hv(a, b))
+        ids = []
+        for i, p in enumerate(P):
+            if sw['fromM'] <= cum[i] <= sw['toM']:
+                nid = f'syn{k}_{i}'; nodes[nid] = p; ids.append(nid)
+        tags = {'highway': 'cycleway', 'tunnel': 'yes', 'name': sw['name'], **sw.get('tags', {})}
+        ways[f'syn{k}'] = (ids, tags)
+        streets = {n for nd, t in ways.values() if t.get('highway') and t.get('highway') not in BAN and t.get('tunnel') != 'yes' for n in nd if n in nodes}
+        for end, nid in (('a', ids[0]), ('b', ids[-1])):
+            near = min(streets, key=lambda n: hv(nodes[n], nodes[nid]))
+            ways[f'syn{k}{end}'] = ([nid, near] if end == 'a' else [near, nid], tags)
+            print(f'  synthetic way "{sw["name"]}": {len(ids)} points, end {end} joined {hv(nodes[near], nodes[nid]):.1f} m to node {near}')
+
+
+def underground_ranges(cfg, rs):
+    """[subway] `underground` {gpx, underground: [a, b], conveyors: […], platforms: […], river: [a, b]} (metres along that
+    line, a leg's `samplesOf` copied whole): found on this line by its points, → city data `routeUnderground`
+    [{fromM, toM}], `routeConveyors` [{fromM, toM, mps, label, dir, name}] and `subway` (platforms, river), in this
+    line's metres (outbound)."""
+    ug = cfg.get('underground')
+    if not ug: return None
+    txt = open(os.path.join(ROOT, ug['gpx'])).read()
+    P = [(round(float(a), 6), round(float(b), 6)) for a, b in __import__('re').findall(r'lat="([\d.-]+)" lon="([\d.-]+)"', txt)]
+    R = [(round(p[0], 6), round(p[1], 6)) for p in rs]
+    k = next(i for i in range(1, len(R)) if R[i] == P[1] and R[i + 1] == P[2]) - 1
+    mc = [0.0]
+    for a, b in zip(rs, rs[1:]): mc.append(mc[-1] + hv(a, b))
+    o = round(mc[k] / 10) * 10
+    sh = lambda r: {**r, 'fromM': o + r['fromM'], 'toM': o + r['toM']}
+    out = {'routeUnderground': [{'fromM': o + ug['underground'][0], 'toM': o + ug['underground'][1]}],
+           'routeConveyors': [sh(c) for c in ug.get('conveyors', [])],
+           'subway': {'platforms': [sh(p_) for p_ in ug.get('platforms', [])], 'river': [o + ug['river'][0], o + ug['river'][1]], 'fromM': o, 'toM': o + ug['lengthM']}}
+    print(f'  underground {out["routeUnderground"]}, conveyors {[(c["fromM"], c["toM"]) for c in out["routeConveyors"]]}')
+    return out
 
 
 if __name__ == '__main__':

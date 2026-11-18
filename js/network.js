@@ -297,7 +297,14 @@ export class NetRide extends EventTarget {
       minEle = Math.min(minEle, ele[i]); maxEle = Math.max(maxEle, ele[i]);
       if (i) { const d = ele[i] - ele[i - 1]; if (d > 0) ascent += d; else descent -= d; }
     }
-    Object.assign(r, { dist, lat, lon, ele, grade, total: dist[n - 1], ascent, descent, minEle, maxEle });
+    // assisted conveyors (escalators) on the path: each edge's `conveyors` ({u0, u1, mps, label}: forward metres
+    // along it) at their place on the path, either way round (js/gpx.js carryAt)
+    const carry = [];
+    for (const x of this.entries) for (const c of x.t.e.conveyors || []) {
+      const len = x.t.e.len, a = x.t.dir > 0 ? c.u0 : len - c.u1, b = x.t.dir > 0 ? c.u1 : len - c.u0;
+      carry.push({ from: x.p0 + a, to: x.p0 + b, mps: c.mps, label: c.label });
+    }
+    Object.assign(r, { dist, lat, lon, ele, grade, total: dist[n - 1], ascent, descent, minEle, maxEle, carry });
     this.version = (this.version || 0) + 1;
   }
 
@@ -628,6 +635,11 @@ export class PathFollower {
   _at(p) { const x = this.own.entries[this.own.entryAt(p)]; return routeAt(baseOf(x.t), this.worldS(p)); }
   /** % grade at path metre p (the base route's, the way the follower rides it). */
   grade(p) { return this._at(p).grade; }
+  /** The conveyor zone (an escalator: {mps, label}) at path metre p on the follower's own way, or null. */
+  carry(p) {
+    const x = this.own.entries[this.own.entryAt(p)], len = x.t.e.len, u = p - x.p0, f = x.t.dir > 0 ? u : len - u;
+    return (x.t.e.conveyors || []).find((c) => f >= c.u0 && f < c.u1) || null;
+  }
   /** Where path metre p is on the map. */
   latLon(p) { const a = this._at(p); return { lat: a.lat, lon: a.lon }; }
 }

@@ -343,6 +343,18 @@
     "scene": "routes/scenes/pittsburgh-slopes.json"
   },
   {
+    "id": "pittsburgh-subway",
+    "name": "Pittsburgh · The subway: North Side to Gateway",
+    "park": "Pittsburgh, Pennsylvania",
+    "km": 3.3,
+    "climbM": 39,
+    "file": "routes/cities/pittsburgh-subway.gpx",
+    "stage": "draft",
+    "area": "pittsburgh",
+    "eleSmoothM": 10,
+    "scene": "routes/scenes/pittsburgh-subway.json"
+  },
+  {
     "id": "alpedhuez",
     "name": "Alpe d'Huez · Tour Stage 19",
     "park": "Gap → Alpe d'Huez, French Alps (Tour de France 2026)",

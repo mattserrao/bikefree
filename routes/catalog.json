@@ -698,6 +698,21 @@
   "area": "pittsburgh"
  },
  {
+  "id": "pittsburgh-subway",
+  "name": "Pittsburgh \u00b7 The subway: North Side to Gateway",
+  "park": "Pittsburgh, Pennsylvania",
+  "file": "routes/cities/pittsburgh-subway.gpx",
+  "outAndBack": false,
+  "expectedKm": [
+   3,
+   4
+  ],
+  "scene": "routes/scenes/pittsburgh-subway.json",
+  "eleSmoothM": 10,
+  "stage": "draft",
+  "area": "pittsburgh"
+ },
+ {
   "id": "alpedhuez",
   "name": "Alpe d'Huez \u00b7 Tour Stage 19",
   "park": "Gap \u2192 Alpe d'Huez, French Alps (Tour de France 2026)",

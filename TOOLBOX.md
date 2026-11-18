@@ -148,6 +148,7 @@ js/world/toolbox/
 | `structures/cables.js` | `cables` | Ski lifts (pylons, stations, chairs and cabins) and power lines (poles, lattice towers) from the map, with sagging wires. |
 | `structures/dam.js` | `dams` | A concrete dam wall along a mapped crest. |
 | `structures/hairpin-walls.js` | `hairpinWalls` | Dry-stone retaining walls under the upper leg where two legs of a switchback climb close together. |
+| `structures/subway.js` | `subway` | A light-rail tunnel with a lit cycle path beside the tracks (railing, tiled walls with a colour band, light strips; aqua under a river), platforms with name boards, benches and people, escalator shafts with moving treads and glass balustrades, glass headhouses over the shafts' tops (the ground opens there: the ground material's `userData.holes`), two-car trains on a timetable. Built from the city data's `routeUnderground` / `routeConveyors` / `subway` (tools/build_city.py `underground`); unlit, light baked into vertex colours, ~8 draw calls. The escalators are assisted conveyors for the ride (js/gpx.js `carryAt`). |
 | `structures/arch-bridges.js` | (real terrain) | A deck and parapets over every gorge, and open-spandrel concrete arches on the deep ones. `bridgeColors` restyles them, for example as masonry. |
 
 ### roadside

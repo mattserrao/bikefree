@@ -5,7 +5,10 @@ import {
 } from './physics.js';
 import { shiftDirection } from './parsers.js';
 import { Recorder } from './recorder.js';
-import { routeAt, wrapDist, lapAt, finishDistanceM } from './gpx.js';
+import { routeAt, wrapDist, lapAt, finishDistanceM, carryAt, carrySpeed } from './gpx.js';
+
+/** SIM grade sent while a conveyor carries you (escalator): the trainer's lightest resistance, no pedalling needed. */
+export const CARRY_SIM_GRADE = -5;
 import { segmentIndexAt, targetWatts } from './workout.js';
 
 export const TICK_MS = 250;
@@ -111,6 +114,8 @@ export class Session extends EventTarget {
     this._changed();
     return true;
   }
+  /** The conveyor carrying you (an escalator: {from, to, mps, label}), or null. */
+  get carry() { return this.mode === 'route' && this.route && !this.routeDone ? carryAt(this.route, this.routePos) : null; }
   get gradePct() {
     if (this.mode === 'route' && this.route) return this.routeDone ? 0 : routeAt(this.route, this.routePos).grade;
     return this._manualGrade;
@@ -307,19 +312,23 @@ export class Session extends EventTarget {
     // Physics
     const p = this.physicsParams();
     const grade = this.gradePct;
-    this.speedMps = stepSpeed(this.speedMps, this.power, grade, dt, p);
+    // An assisted conveyor (an escalator) carries you at its own pace (no road physics on it), and you slow gently onto it.
+    const carry = this.carry;
+    if (!carry) this.speedMps = stepSpeed(this.speedMps, this.power, grade, dt, p);
     // Demo mode holds a constant speed so every feature can be tried without a bike.
     if (this.demoSpeedMps != null) this.speedMps = this.running ? this.demoSpeedMps : 0;
     // A network route slows you through sharp turns at junctions (then you pedal back up).
     const net = this.mode === 'route' ? this.route?.netRide : null;
     if (net && !this.routeDone) { const cap = net.speedCap(this.routePos); if (cap != null && this.speedMps > cap) this.speedMps = cap; }
+    if (this.mode === 'route' && this.route?.carry && !this.routeDone) this.speedMps = carrySpeed(this.route, this.routePos, this.speedMps, dt);
     if (this.running) {
       const ds = this.speedMps * dt;
       this.distanceM += ds;
       if (this.mode === 'route' && this.route) {
         // Only count climbing along the route — not the jump to its starting elevation.
         const ele = routeAt(this.route, this.routePos).ele;
-        if (this._eleRoute === this.route && ele > this.altitudeM) this.elevGainM += ele - this.altitudeM;
+        // (a conveyor's lift isn't climbing you did)
+        if (this._eleRoute === this.route && ele > this.altitudeM && !carry) this.elevGainM += ele - this.altitudeM;
         this._eleRoute = this.route;
         this.altitudeM = ele;
       } else {
@@ -328,7 +337,7 @@ export class Session extends EventTarget {
         this.altitudeM += dz;
         if (dz > 0) this.elevGainM += dz;
       }
-      if (this.speedMps > 0.3 || pedalling) this.movingS += dt;
+      if (this.speedMps > 0.3 || pedalling || carry) this.movingS += dt;
       this._powerSum += this.power;
       this._powerN++;
       if (this.mode === 'workout' && this.workout && !this.workoutDone) this.workoutT += dt;
@@ -336,8 +345,8 @@ export class Session extends EventTarget {
 
     this._updateRoute();
     this._updateWorkout(now);
-    this._record(now, grade);
-    this._control(nowPerf, p, grade);
+    this._record(now, carry ? 0 : grade);
+    this._control(nowPerf, p, grade, carry);
     this.dispatchEvent(new Event('tick'));
   }
 
@@ -433,7 +442,7 @@ export class Session extends EventTarget {
   }
 
   /** Send the trainer the resistance for the current gear, cadence, grade or workout step. */
-  _control(nowPerf, p, grade) {
+  _control(nowPerf, p, grade, carry = null) {
     if (!this.trainer.connected || this.trainer.busy || this.trainer.reconnecting) return;
     // No recent data (Bluetooth hiccup): hold the last resistance rather than guessing.
     if (!this._fresh && this.workoutTarget == null) return;
@@ -449,6 +458,17 @@ export class Session extends EventTarget {
     if (wt != null) {
       this.target = { mode: 'ERG', value: wt, source: 'workout' };
       if (this._lastSent !== `w${wt}` || due) send(`w${wt}`, () => this.trainer.setErgWatts(wt));
+      return;
+    }
+
+    if (carry) {
+      // carried (an escalator): the lightest resistance, both modes; back to the gear's at the end
+      const erg = this.settings.shiftMode === 'erg';
+      this.target = { mode: erg ? 'ERG' : 'SIM', value: erg ? 0 : CARRY_SIM_GRADE, source: 'carry' };
+      if (this._lastSent !== 'carry' || due) {
+        this._lastSentMode = 'carry';
+        send('carry', () => (erg ? this.trainer.setErgWatts(0) : this.trainer.setGrade(CARRY_SIM_GRADE, { windMps: 0, crr: 0, cw: 0 })));
+      }
       return;
     }
 

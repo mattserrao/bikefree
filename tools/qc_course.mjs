@@ -417,6 +417,18 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
   const inGhost = (f) => { const a = outM(f.from), b = outM(f.to), lo = Math.min(a, b), hi = Math.max(a, b); return ghosts.some((g) => lo > g.fromM + 2 && hi < g.toM - 2); };
   for (const f of F.list) if (f.severity !== 'info' && inGhost(f)) { f.severity = 'info'; f.note = `${f.note} (on a ghost stretch: never ridden or drawn)`; }
 
+  // [subway] underground (city data `routeUnderground`): no ground, verge or street world there — the subway kit draws the
+  // tunnel — so ground checks are info; the line's own shape still counts. An escalator (a conveyor) is ridden
+  // without its grade: grade checks within 40 m of one (the grade span and its smoothing) are info too.
+  const under = scene?.city?.routeUnderground || [], conv = scene?.city?.routeConveyors || [];
+  const SHAPE = new Set(['heading-jitter', 'heading-sharp', 'path-jog', 'lateral-jump']);
+  const inside = (f, list, pad) => { const a = outM(f.from), b = outM(f.to), lo = Math.min(a, b), hi = Math.max(a, b); return list.some((g) => lo > g.fromM - pad && hi < g.toM + pad); };
+  for (const f of F.list) {
+    if (f.severity === 'info') continue;
+    if (/^grade-/.test(f.check) && inside(f, conv, 40)) { f.severity = 'info'; f.note = `${f.note} (an escalator: carried, its grade isn't ridden)`; }
+    else if (!SHAPE.has(f.check) && !/^grade-/.test(f.check) && inside(f, under, 2)) { f.severity = 'info'; f.note = `${f.note} (underground: the subway kit draws the tunnel, not the ground)`; }
+  }
+
   // a scene's accepted warnings ("qcAccept": [{check, fromM, toM, why}]): known, reviewed spots listed with the
   // reason, reported as info. Never fails — a FAIL always stands.
   for (const f of F.list) {

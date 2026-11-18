@@ -14,7 +14,7 @@ import { HAZE, AERIAL, AERIAL_COLOR, installHaze } from './toolbox/atmosphere/ha
 import { vistaConfig } from './toolbox/atmosphere/vista.js';
 import { decorateRoad, frenchMarkings } from './toolbox/materials/road-surface.js';
 import { denseRoad } from './road-align.js';
-import { ghostAt } from './ghost.js';   // [road-align]
+import { ghostAt, undergroundAt } from './ghost.js';   // [road-align]
 import { BakedLighting } from './toolbox/atmosphere/baked-light.js';   // [baked-light]
 import { CourseArches } from './toolbox/roadside/course-arches.js';
 import { runSlice, due } from './toolbox/core/jobs.js';   // [F30] areas built in frame slices on the ride
@@ -36,6 +36,7 @@ const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vect
 
 // Stylized foreground → real far terrain hand-off (metres from the camera)
 const FAR_INNER = 1500, FAR_BAND = 400;
+const TUNNEL_AIR = new THREE.Color('#6b5f4e');   // [subway] the air far down a lit tunnel
 const RIDER_LANE = 0.22;   // × road width, right of the centre line
 // [F30] main-thread ms a frame for building areas (js/world/toolbox/core/jobs.js slices): the one the swap waits for (behind
 // the fade) or the plan's at the start (behind the loader); one the path enters within AREA_SOON_M; one further ahead
@@ -652,6 +653,7 @@ export class World {
     this._updateCamera(riderPos, flat, fwd, dt);
     this.terrain.uniforms.uTime.value = now / 1000;
     this.weather?.tick(dt);
+    this._underground(riderPos, dt);   // [subway]
     this.terrain.update(this.camera.position.x, this.camera.position.z, this.terrain.quality?.buildMs);
     if (this.terrain.tick) {
       const turn = this.route.turnS || total, back = this.route.turnS && this.s > turn;
@@ -731,8 +733,8 @@ export class World {
     // 4.5 m back (was 6.5 m): the life-size rider fills about 1.4× more of the screen.
     pos.copy(riderPos).addScaledVector(flat, -CHASE.back).addScaledVector(up, CHASE.up);
     look.copy(riderPos).addScaledVector(fwd, CHASE.ahead).addScaledVector(up, CHASE.lookUp);
-    // Keep the camera above ground
-    const g = this.terrain.heightAt(pos.x, pos.z);
+    // Keep the camera above ground (not underground: in a tunnel or an escalator shaft the ground is overhead)
+    const g = this._underS ? null : this.terrain.heightAt(pos.x, pos.z);
     if (g != null && pos.y < g + CHASE.ground) pos.y = g + CHASE.ground;
 
     if (!this._camInit) {
@@ -744,6 +746,29 @@ export class World {
       this.camTarget.lerp(look, 1 - Math.exp(-dt * 5));
     }
     this.camera.lookAt(this.camTarget);
+  }
+
+  /**
+   * [subway] Underground (the drawn line's `routeUnderground`, js/world/ghost.js): the camera may go under the ground
+   * (no lift over it), and the deeper the rider is under the ground above, the more the air is a lit tunnel's —
+   * the fog closes in and warms — so the far end of a tunnel glows instead of showing the sky's haze. Eased.
+   */
+  _underground(riderPos, dt) {
+    const turn = this.route.turnS || this.route.total, out = this.s > turn ? this.route.total - this.s : this.s;
+    this._underS = undergroundAt(this.route, out);
+    const g = this._underS ? this.terrain.heightAt(riderPos.x, riderPos.z) : null;
+    const target = g == null ? 0 : Math.max(0, Math.min(1, (g - riderPos.y - 2) / 4));
+    const u = this._under = (this._under || 0) + (target - (this._under || 0)) * Math.min(1, dt * 1.5);
+    const f = this.scene.fog, b = this._fogBase;
+    if (!f || !b) return;
+    if (u > .002) {
+      if (!this.weather) { f.near = b.near; f.far = b.far; f.color.copy(b.color); }
+      f.near += (30 - f.near) * u; f.far += (460 - f.far) * u; f.color.lerp(TUNNEL_AIR, u * .9);
+      this._fogTunnel = true;
+    } else if (this._fogTunnel) {
+      if (!this.weather) { f.near = b.near; f.far = b.far; f.color.copy(b.color); }
+      this._fogTunnel = false;
+    }
   }
 
   _render() {

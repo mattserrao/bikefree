@@ -17,7 +17,7 @@ const keys = (ride, n = 4) => ride.entries.slice(0, n).map((x) => `${x.t.e.id}${
 
 const edge = (key) => [...net.edges.values()].find((e) => e.key === key);
 const len = (...keys) => keys.reduce((t, k) => t + edge(k).len, 0);
-const gAt = len('A>B', 'B>E', 'E>F', 'F>G');   // East Carson & 10th, riding the Three Rivers Loop from the Water Steps
+const gAt = len('A>NS', 'NS>B', 'B>GW', 'GW>E', 'E>F', 'F>G');   // East Carson & 10th, riding the Three Rivers Loop from the Water Steps
 
 test('the network sits on its areas\' lines: edges on their 10 m samples, presets close up', () => {
   assert.equal(item.network, 'routes/cities/pittsburgh-network.json');
@@ -30,14 +30,14 @@ test('the network sits on its areas\' lines: edges on their 10 m samples, preset
     const apron = A.aprons.reduce((t, ap) => t + ap.s1 - ap.s0, 0);
     assert.ok(Math.abs(sum + ghost + apron - A.L) < 30, `${A.id}: ${sum} + ${ghost} ghost + ${apron} apron vs ${A.L}`);
   }
-  assert.equal([...net.edges.values()].reduce((t, e) => t + e.len, 0), 122510);   // the whole network: the one 58 km tour's 47.67 km, Polish Hill & Bloomfield's 7.16 km (PLAN 5.7), the GAP & Homestead's 14.48 km (PLAN 5.5), the North Side's 15.78 km (PLAN 5.8), the East End's 19.46 km (PLAN 5.10) and the South Side Slopes & the Dirty Dozen south's 17.96 km (PLAN 5.9)
-  assert.deepEqual([...net.nodes.keys()].sort(), ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'AL', 'EL', 'GV', 'HE', 'HP', 'LB', 'SQ', 'SY'].sort());
+  assert.equal([...net.edges.values()].reduce((t, e) => t + e.len, 0), 123580);   // the whole network: the one 58 km tour's 47.67 km, Polish Hill & Bloomfield's 7.16 km (PLAN 5.7), the GAP & Homestead's 14.48 km (PLAN 5.5), the North Side's 15.78 km (PLAN 5.8), the East End's 19.46 km (PLAN 5.10) the South Side Slopes & the Dirty Dozen south's 17.96 km (PLAN 5.9) and the subway's 1.07 km
+  assert.deepEqual([...net.nodes.keys()].sort(), ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'AL', 'EL', 'GV', 'GW', 'HE', 'HP', 'LB', 'NS', 'SQ', 'SY'].sort());
   const three = makePathRoute(net, preset('pgh-three-rivers'));
   const short = makePathRoute(net, preset('pgh-short-loop'));
   const jail = makePathRoute(net, preset('pgh-jail-trail'));
-  assert.equal(three.lapM, len('A>B', 'B>E', 'E>F', 'F>G', 'G>Q', 'Q>H', 'H>G', 'G>GV', 'GV>D', 'D>C', 'C>R', 'R>A'));
+  assert.equal(three.lapM, len('A>NS', 'NS>B', 'B>GW', 'GW>E', 'E>F', 'F>G', 'G>Q', 'Q>H', 'H>G', 'G>GV', 'GV>D', 'D>C', 'C>R', 'R>A'));
   assert.ok(Math.abs(three.lapM - 18300) < 300, `${three.lapM}`);   // the loop as it always was
-  assert.equal(short.lapM, len('A>B', 'B>E', 'E>F', 'F>G', 'G>GV', 'GV>D', 'D>C', 'C>R', 'R>A'));
+  assert.equal(short.lapM, len('A>NS', 'NS>B', 'B>GW', 'GW>E', 'E>F', 'F>G', 'G>GV', 'GV>D', 'D>C', 'C>R', 'R>A'));
   assert.equal(jail.lapM, len('E>I', 'I>S', 'S>H', 'H>G', 'E>F', 'F>G'));
   assert.ok(three.total > 140000 && short.total > 140000);   // the path runs far ahead for the planner
   for (let i = 0; i < three.dist.length; i += 997) assert.equal(three.dist[i], i * 10);
@@ -45,7 +45,7 @@ test('the network sits on its areas\' lines: edges on their 10 m samples, preset
 
 test('East Carson & 10th: back, left, straight and right, sorted left to right', () => {
   const ride = new NetRide(net, {}, { plan: preset('pgh-three-rivers').path });
-  const opts = optionsAt(net, ride.entries[3].t);   // arriving eastbound on East Carson
+  const opts = optionsAt(net, ride.entries[5].t);   // arriving eastbound on East Carson
   assert.deepEqual(opts.map((o) => o.label), ['Back', 'Left', 'Straight', 'Right']);
   assert.equal(straightOn(opts).t.e.key, 'G>Q');   // straight: East Carson on to 27th and SouthSide Works
   assert.equal(opts[3].t.e.key, 'G>GV');           // right: up McArdle to Mount Washington
@@ -54,7 +54,7 @@ test('East Carson & 10th: back, left, straight and right, sorted left to right',
 
 test('Smithfield & Fort Pitt and SouthSide Works: the Jail Trail joins the loop', () => {
   const ride = new NetRide(net, {}, { plan: preset('pgh-three-rivers').path });
-  const atE = optionsAt(net, ride.entries[1].t);   // southbound on Smithfield, at Fort Pitt Blvd
+  const atE = optionsAt(net, ride.entries[3].t);   // southbound on Smithfield, at Fort Pitt Blvd
   assert.ok(atE.some((o) => o.t.e.key === 'E>I' && o.t.dir > 0 && /left/i.test(o.label)), 'the Jail Trail is a left turn');
   assert.equal(straightOn(atE).t.e.key, 'E>F');   // straight on: the Smithfield Street Bridge
   const jail = new NetRide(net, {}, { plan: preset('pgh-jail-trail').path });
@@ -67,14 +67,14 @@ test('the path follows the plan, takes your turn, then rejoins the plan', () => 
   const r = makePathRoute(net, preset('pgh-three-rivers'));
   const ride = r.netRide;
   const key = (k) => { const e = edge(k.slice(0, -1)); return `${e.id}${k.at(-1)}`; };
-  assert.deepEqual(keys(ride, 5), ['A>B+', 'B>E+', 'E>F+', 'F>G+', 'G>Q+'].map(key));
+  assert.deepEqual(keys(ride, 5), ['A>NS+', 'NS>B+', 'B>GW+', 'GW>E+', 'E>F+'].map(key));
   const p = gAt - 120;
   const up = ride.upcoming(p);
   assert.equal(up.node.id, 'G');
   assert.equal(up.options[up.selected].label, 'Straight');
   assert.equal(up.onPlan, true);
   assert.equal(ride.choose(+1, p), true);   // right: skip the South Side
-  assert.deepEqual(keys(ride, 7), ['A>B+', 'B>E+', 'E>F+', 'F>G+', 'G>GV+', 'GV>D+', 'D>C+'].map(key));   // McArdle is on the plan too, so it rejoins
+  assert.deepEqual(keys(ride, 9), ['A>NS+', 'NS>B+', 'B>GW+', 'GW>E+', 'E>F+', 'F>G+', 'G>GV+', 'GV>D+', 'D>C+'].map(key));   // McArdle is on the plan too, so it rejoins
   assert.equal(ride.choose(+1, p), false);   // nothing further right
   // the session's path route now runs straight from East Carson onto McArdle
   const i = gAt / 10, sMcArdle = edge('G>GV').s0 / 10;
@@ -87,7 +87,7 @@ test('a choice locks close to the junction', () => {
   r.netRide.update(p);
   assert.equal(r.netRide.upcoming(p).locked, true);
   assert.equal(r.netRide.choose(+1, p), false);
-  assert.equal(r.netRide.entries[4].t.e.key, 'G>Q');
+  assert.equal(r.netRide.entries[6].t.e.key, 'G>Q');
 });
 
 test('the prompt shows ~15 s out and never later than 120 m', () => {
@@ -135,7 +135,7 @@ test('the session rides a network route: handlebar ◀ ▶ choose, laps, a fresh
   let laps = 0;
   s.addEventListener('routeLap', () => laps++);
   s.setRoute(r, 0, null);
-  const third = () => r.netRide.entries[4].t;   // after the Clemente Bridge, the Point, Smithfield and Station Square
+  const third = () => r.netRide.entries[6].t;   // after the Clemente Bridge, the Point, Smithfield and Station Square
   s.distanceM = gAt - 120;
   s._updateRoute();
   s._onPress('navRight');
@@ -160,19 +160,24 @@ test('free ride: no plan, straight on at every junction, no laps, a far-reaching
   assert.equal(r.netRide.lapAt(50000), 1);
   assert.ok(r.total > 140000);
   for (const x of r.netRide.entries.slice(1, 6)) assert.equal(x.planStep, null);
-  // off the Clemente Bridge straight on is 6th St and Penn Avenue into the Strip, then Smallman St to Lawrenceville
-  assert.equal(r.netRide.entries[1].t.e.key, 'M>B');
-  assert.equal(r.netRide.entries[1].t.dir, -1);
+  // straight on at NS (Mazeroski Way north) is the subway: down at North Side, under the Allegheny, up at Gateway;
+  // then on from Gateway round the Point to the Clemente Bridge, and straight on there is 6th St and Penn Avenue into
+  // the Strip, then Smallman St to Lawrenceville
+  assert.equal(r.netRide.entries[1].t.e.key, 'NS>GW');
+  assert.equal(r.netRide.entries[2].t.e.key, 'B>GW');
+  assert.equal(r.netRide.entries[2].t.dir, -1);
+  assert.equal(r.netRide.entries[3].t.e.key, 'M>B');
+  assert.equal(r.netRide.entries[3].t.dir, -1);
   // up Butler St to 40th St (LB, PLAN 5.10), where straight on is Butler St on to Stanton Ave and the East End
-  assert.equal(r.netRide.entries[2].t.e.key, 'LB>M');
-  assert.equal(r.netRide.entries[3].t.e.key, 'LB>HE');
+  assert.equal(r.netRide.entries[4].t.e.key, 'LB>M');
+  assert.equal(r.netRide.entries[5].t.e.key, 'LB>HE');
   assert.ok(r.stops.length >= 3);
 });
 
 test('your own routes: the planner offers the ways on, a loop laps, a one-way route finishes at its end', () => {
   const { planNext, planCloses, keysToIds, idsToKeys } = netMod;
   const fromE = planNext(net, [], 'E');
-  assert.deepEqual(fromE.map((o) => o.t.e.key).sort(), ['B>E', 'E>F', 'E>I']);
+  assert.deepEqual(fromE.map((o) => o.t.e.key).sort(), ['E>F', 'E>I', 'GW>E']);
   const loop = keysToIds(net, ['E>I+', 'I>S+', 'S>H+', 'H>G+', 'F>G-', 'E>F-']);
   assert.equal(planCloses(net, loop), true);
   assert.deepEqual(idsToKeys(net, loop), ['E>I+', 'I>S+', 'S>H+', 'H>G+', 'F>G-', 'E>F-']);
@@ -188,8 +193,8 @@ test('your own routes: the planner offers the ways on, a loop laps, a one-way ro
   // …and one saved before the North Side's junctions C and R (the West End Bridge's north end, Ridge Ave) split D>A, and GV (Grandview & McArdle) G>D
   assert.deepEqual(idsToKeys(net, keysToIds(net, ['G>D+', 'D>A+'])), ['G>GV+', 'GV>D+', 'D>C+', 'C>R+', 'R>A+']);
   // …and one saved before junction B (the Clemente Bridge, where the Allegheny Loop comes in) split A>E
-  assert.deepEqual(idsToKeys(net, keysToIds(net, ['A>E+', 'E>G+'])), ['A>B+', 'B>E+', 'E>F+', 'F>G+']);
-  assert.deepEqual(idsToKeys(net, keysToIds(net, ['E>G-', 'A>E-'])), ['F>G-', 'E>F-', 'B>E-', 'A>B-']);
+  assert.deepEqual(idsToKeys(net, keysToIds(net, ['A>E+', 'E>G+'])), ['A>NS+', 'NS>B+', 'B>GW+', 'GW>E+', 'E>F+', 'F>G+']);
+  assert.deepEqual(idsToKeys(net, keysToIds(net, ['E>G-', 'A>E-'])), ['F>G-', 'E>F-', 'GW>E-', 'B>GW-', 'NS>B-', 'A>NS-']);
   // …and one saved before junction LB (40th & Butler, where the East End leaves the Allegheny Loop) split N>M;
   // junction ids of two letters ("LB>HE") parse like one-letter ones
   assert.deepEqual(idsToKeys(net, keysToIds(net, ['P>N+', 'N>M+', 'M>B+'])), ['P>N+', 'N>LB+', 'LB>M+', 'M>B+']);
@@ -231,7 +236,7 @@ test('turn labels follow the street, not the line\'s rounded corner at a junctio
   assert.deepEqual(labels('SQ>EL-'), { 'EL>SQ-': 'Left', 'SQ>K+': 'Right' });
   assert.deepEqual(labels('SQ>K-'), { 'SQ>EL+': 'Left', 'EL>SQ-': 'Straight' });
   // the Clemente Bridge's south end (B): 6th St runs straight onto the bridge
-  assert.deepEqual(labels('M>B+'), { 'B>E+': 'Left', 'A>B-': 'Straight' });
+  assert.deepEqual(labels('M>B+'), { 'B>GW+': 'Left', 'NS>B-': 'Straight' });
   // Highland Park (HE): from Mellon Terrace the default is Bunkerhill on, not the turn onto N Highland
   assert.equal(straightOn(at('LB>HE+')).t.e.key, 'HP>HE');
   // order: left to right by the street's turn; the curve keeps its own angle (first 15 m)
@@ -248,7 +253,9 @@ test('saved routes from before every split map onto the way they rode (the key h
   const splits = {
     'E>H': ['E>I', 'I>S', 'S>H'],             // the Jail Trail & Hot Metal Bridge (junctions I, then S) — not the Smithfield Street Bridge
     'G>A': ['G>GV', 'GV>D', 'D>C', 'C>R', 'R>A'],
-    'A>E': ['A>B', 'B>E'],
+    'A>E': ['A>NS', 'NS>B', 'B>GW', 'GW>E'],
+    'A>B': ['A>NS', 'NS>B'],             // the subway's portals (NS, GW)
+    'B>E': ['B>GW', 'GW>E'],
     'I>J': ['I>L', 'L>J'],
     'I>H': ['I>S', 'S>H'],
     'N>M': ['N>LB', 'LB>M'],
@@ -286,8 +293,8 @@ test('the West End Overlook: a dead end with only the way back, and a ghost the 
   }
   // the overlook is an area of its own: the ride swaps into it 200 m up the spur, and back 200 m down the West End Bridge
   assert.equal(edge('D>O').area, 'westend');
-  assert.equal(ride.areaFor(len('A>B', 'B>E', 'E>F', 'F>G', 'G>Q', 'Q>H', 'H>G', 'G>GV', 'GV>D') + 150, 'core'), 'core');
-  assert.equal(ride.areaFor(len('A>B', 'B>E', 'E>F', 'F>G', 'G>Q', 'Q>H', 'H>G', 'G>GV', 'GV>D') + 250, 'core'), 'westend');
+  assert.equal(ride.areaFor(len('A>NS', 'NS>B', 'B>GW', 'GW>E', 'E>F', 'F>G', 'G>Q', 'Q>H', 'H>G', 'G>GV', 'GV>D') + 150, 'core'), 'core');
+  assert.equal(ride.areaFor(len('A>NS', 'NS>B', 'B>GW', 'GW>E', 'E>F', 'F>G', 'G>Q', 'Q>H', 'H>G', 'G>GV', 'GV>D') + 250, 'core'), 'westend');
 });
 
 test('the pacer keeps its way: a turn changed behind it moves it not at all, one ahead of it it takes (F3)', () => {
