@@ -90,7 +90,10 @@ export function decorateRoad(material, road, { widthM = 7, repeatM = 24, marks =
   const params = (z) => { const k = { ...LOOK, ...(SURFACES[z.surface] || SURFACES.worn) }; for (const key of KEYS) if (z[key] != null) k[key] = z[key]; k.pavedM ??= widthM; return k; };
   const base = params({ surface: road.surface || 'worn' });
   const zones = (road.zones || []).slice(0, MAX_ZONES).map((z) => ({ ...z, p: params(z) }));
-  const pack = (fn) => Array.from({ length: MAX_ZONES }, (_, i) => (zones[i] ? fn(zones[i]) : new THREE.Vector4()));
+  // (unused slots all zero: w = 0 ends the shader's loop. [F12] THREE.Vector4() is (0, 0, 0, 1): the empty slots
+  // read as zones at 0–0 m with every setting 0, blended over the first 20 m — a 0 m paved width there drew a
+  // dark V with edge lines at the start of every road, e.g. where the Jail Trail leaves Smithfield St)
+  const pack = (fn) => Array.from({ length: MAX_ZONES }, (_, i) => (zones[i] ? fn(zones[i]) : new THREE.Vector4(0, 0, 0, 0)));
   const uniforms = {
     rsBaseA: { value: new THREE.Vector4(base.tone, base.warm, base.wear, base.patches) },
     rsBaseB: { value: new THREE.Vector4(base.cracks, base.edge, base.fade, base.speckle) },

@@ -75,3 +75,15 @@ test('presets are up to date, lint clean and carry the toolbox standard look', (
 test('every module named in the scene schema exists', () => {
   for (const [k, f] of Object.entries(SCENE_FIELDS)) if (f.tool) assert.ok(existsSync(join(ROOT, f.tool)), `${k}: ${f.tool}`);
 });
+
+test('road surface: unused zone slots end the shader\'s zone loop (w = 0), so they never act as zones at 0 m (F12)', async () => {
+  const THREE = await import('../vendor/three.module.min.js');
+  const { decorateRoad } = await import('../js/world/toolbox/materials/road-surface.js');
+  const m = new THREE.MeshStandardMaterial();
+  decorateRoad(m, { surface: 'fresh', zones: [{ fromM: 100, toM: 200, surface: 'worn' }] });
+  const shader = { uniforms: {}, vertexShader: '', fragmentShader: '#include <common>\n#include <map_fragment>' };
+  m.onBeforeCompile(shader, null);
+  const span = shader.uniforms.rsSpan.value;
+  assert.equal(span[0].w, 1, 'the zone is on');
+  assert.ok(span.slice(1).every((v) => v.w === 0), 'every unused slot is off');
+});

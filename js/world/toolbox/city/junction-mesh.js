@@ -126,10 +126,16 @@ export function buildJunctionMeshes(city, plan, { get, roads, walks, liftOf }) {
  * The route's shoulder (world.js: the pale band either side of the road) is left out inside junctions the route
  * passes through: the junction surface and its corner sidewalks take its place. Cuts the ribbon exactly at each
  * span's ends (new stations interpolated along its edges). `dist`: the route's distance at each station.
+ * Quads the ribbon already left out stay out (a network tour's ghost repeats, a hairpin's apex: world.js
+ * makeRibbon): the ghost pass's shoulder lies a few cm off the real pass's road and showed through it as a
+ * pale band (F19, Boundary St).
  */
 export function cutRouteRibbon(mesh, plan, dist) {
   if (!plan?.spans.length || !mesh?.geometry) return;
   const g = mesh.geometry, P = g.attributes.position.array, U = g.attributes.uv.array, n = P.length / 6;
+  const kept = new Uint8Array(Math.max(0, n - 1));   // the ribbon's own quads: segment i joins stations i and i + 1
+  const I = g.index?.array;
+  if (I) { for (let t = 0; t < I.length; t += 3) { const a = Math.min(I[t], I[t + 1], I[t + 2]) >> 1; if (a < n - 1) kept[a] = 1; } } else kept.fill(1);
   const spans = plan.spans.map((sp) => [sp.s0, sp.s1]).sort((a, b) => a[0] - b[0]);
   const inside = (s) => spans.some(([a, b]) => s > a + 1e-3 && s < b - 1e-3);
   const pos = [], uv = [], idx = [];
@@ -142,16 +148,16 @@ export function cutRouteRibbon(mesh, plan, dist) {
     }
     return pos.length / 6 - 1;
   };
-  const link = (a, b) => { const A = a * 2, B = b * 2; idx.push(A, A + 1, B, A + 1, B + 1, B); };
+  const link = (a, b, seg) => { if (!kept[seg]) return; const A = a * 2, B = b * 2; idx.push(A, A + 1, B, A + 1, B + 1, B); };
   for (let i = 0; i < n; i++) {
     const s = dist[i];
-    if (!inside(s)) { const k = station(i, 0); if (prev >= 0) link(prev, k); prev = k; } else prev = -1;
+    if (!inside(s)) { const k = station(i, 0); if (prev >= 0) link(prev, k, i - 1); prev = k; } else prev = -1;
     if (i === n - 1) break;
     const s1 = dist[i + 1];
     for (const [a, b] of spans) for (const e of [a, b]) {
       if (e <= s || e >= s1) continue;
       const k = station(i, (e - s) / (s1 - s));
-      if (e === a) { if (prev >= 0) link(prev, k); prev = -1; } else prev = k;
+      if (e === a) { if (prev >= 0) link(prev, k, i); prev = -1; } else prev = k;
     }
   }
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
