@@ -184,7 +184,7 @@ if (!spec.areas) {
         if (more) list.push(more);
       }
     }
-    return { id: A.area.id, catalogId: A.area.catalogId, base: A.item.file, legM: A.L, ...(A.ghosts.length ? { ghosts: A.ghosts } : {}), ...(list.length ? { aprons: list } : {}) };
+    return { id: A.area.id, ...(A.area.name ? { name: A.area.name } : {}), catalogId: A.area.catalogId, base: A.item.file, legM: A.L, ...(A.ghosts.length ? { ghosts: A.ghosts } : {}), ...(list.length ? { aprons: list } : {}) };
   });
   out = {
     format: 'bikefree-network-2', id: spec.id, origin: spec.origin, areas: areasOut,

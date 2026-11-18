@@ -8,54 +8,63 @@
   "areas": [
     {
       "id": "core",
+      "name": "Downtown, the North Shore & the South Side",
       "catalogId": "pittsburgh",
       "base": "routes/cities/pittsburgh.gpx",
       "spec": "tools/city/pittsburgh-core.network.json"
     },
     {
       "id": "allegheny",
+      "name": "The Allegheny & Troy Hill",
       "catalogId": "pittsburgh-allegheny",
       "base": "routes/cities/pittsburgh-allegheny.gpx",
       "spec": "tools/city/pittsburgh-allegheny.network.json"
     },
     {
       "id": "westend",
+      "name": "The West End",
       "catalogId": "pittsburgh-westend",
       "base": "routes/cities/pittsburgh-westend.gpx",
       "spec": "tools/city/pittsburgh-westend.network.json"
     },
     {
       "id": "oakland",
+      "name": "Oakland & Schenley Park",
       "catalogId": "pittsburgh-oakland",
       "base": "routes/cities/pittsburgh-oakland.gpx",
       "spec": "tools/city/pittsburgh-oakland.network.json"
     },
     {
       "id": "polish",
+      "name": "Polish Hill & Bloomfield",
       "catalogId": "pittsburgh-polish",
       "base": "routes/cities/pittsburgh-polish.gpx",
       "spec": "tools/city/pittsburgh-polish.network.json"
     },
     {
       "id": "homestead",
+      "name": "The Great Allegheny Passage & Homestead",
       "catalogId": "pittsburgh-homestead",
       "base": "routes/cities/pittsburgh-homestead.gpx",
       "spec": "tools/city/pittsburgh-homestead.network.json"
     },
     {
       "id": "northside",
+      "name": "The North Side",
       "catalogId": "pittsburgh-northside",
       "base": "routes/cities/pittsburgh-northside.gpx",
       "spec": "tools/city/pittsburgh-northside.network.json"
     },
     {
       "id": "eastend",
+      "name": "The East End",
       "catalogId": "pittsburgh-eastend",
       "base": "routes/cities/pittsburgh-eastend.gpx",
       "spec": "tools/city/pittsburgh-eastend.network.json"
     },
     {
       "id": "slopes",
+      "name": "The South Side Slopes & the Dirty Dozen",
       "catalogId": "pittsburgh-slopes",
       "base": "routes/cities/pittsburgh-slopes.gpx",
       "spec": "tools/city/pittsburgh-slopes.network.json"

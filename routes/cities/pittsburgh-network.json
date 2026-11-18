@@ -8,6 +8,7 @@
  "areas": [
   {
    "id": "core",
+   "name": "Downtown, the North Shore & the South Side",
    "catalogId": "pittsburgh",
    "base": "routes/cities/pittsburgh.gpx",
    "legM": 29100,
@@ -74,6 +75,7 @@
   },
   {
    "id": "allegheny",
+   "name": "The Allegheny & Troy Hill",
    "catalogId": "pittsburgh-allegheny",
    "base": "routes/cities/pittsburgh-allegheny.gpx",
    "legM": 16000,
@@ -110,6 +112,7 @@
   },
   {
    "id": "westend",
+   "name": "The West End",
    "catalogId": "pittsburgh-westend",
    "base": "routes/cities/pittsburgh-westend.gpx",
    "legM": 4300,
@@ -142,6 +145,7 @@
   },
   {
    "id": "oakland",
+   "name": "Oakland & Schenley Park",
    "catalogId": "pittsburgh-oakland",
    "base": "routes/cities/pittsburgh-oakland.gpx",
    "legM": 13990,
@@ -174,6 +178,7 @@
   },
   {
    "id": "polish",
+   "name": "Polish Hill & Bloomfield",
    "catalogId": "pittsburgh-polish",
    "base": "routes/cities/pittsburgh-polish.gpx",
    "legM": 10700,
@@ -232,6 +237,7 @@
   },
   {
    "id": "homestead",
+   "name": "The Great Allegheny Passage & Homestead",
    "catalogId": "pittsburgh-homestead",
    "base": "routes/cities/pittsburgh-homestead.gpx",
    "legM": 15960,
@@ -268,6 +274,7 @@
   },
   {
    "id": "northside",
+   "name": "The North Side",
    "catalogId": "pittsburgh-northside",
    "base": "routes/cities/pittsburgh-northside.gpx",
    "legM": 18640,
@@ -317,6 +324,7 @@
   },
   {
    "id": "eastend",
+   "name": "The East End",
    "catalogId": "pittsburgh-eastend",
    "base": "routes/cities/pittsburgh-eastend.gpx",
    "legM": 27130,
@@ -379,6 +387,7 @@
   },
   {
    "id": "slopes",
+   "name": "The South Side Slopes & the Dirty Dozen",
    "catalogId": "pittsburgh-slopes",
    "base": "routes/cities/pittsburgh-slopes.gpx",
    "legM": 24110,

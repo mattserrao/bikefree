@@ -10,7 +10,7 @@ import { parseGpx, buildRoute, averageGradeAhead, wrapDist, routeAt, isPointToPo
 import { Pacer, PACER_WATTS } from './pacer.js';
 import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor, markFtpTest, ftpFromTwentyMinutes } from './workout.js';
 import { drawProfile, drawWorkout, drawTrace, drawMinimap, drawNetworkMinimap, drawCityMap, gradeColor, profileDistAt } from './views.js';
-import { groupCityItems, citySubline, filterByGoal, segmentRoutes, pickOnSegment, nearestLine, fitProjection, mergeRivers, shortName } from './city-routes.js';
+import { groupByArea, groupCityItems, citySubline, filterByGoal, segmentRoutes, pickOnSegment, nearestLine, fitProjection, zoomProjection, zoomAt, panBy, mergeRivers, shortName } from './city-routes.js';
 import { Profiles, GENDERS, initials, cmToFtIn, ftInToCm } from './profiles.js';
 import { buildCatalogRoute, loadRouteScene } from './routes.js';
 import { loadNetwork, makePathRoute, planNext, planCloses, keysToIds, idsToKeys, travKey, PathFollower, edgeLines } from './network.js';
@@ -1319,7 +1319,7 @@ $('routeCards').addEventListener('click', (e) => {
 // network over its rivers; a route tapped in the list lights up bold on it, a line tapped on the map lists the
 // routes that ride it (tap again for the next). The goal chips filter both. Ride chooses the route and goes back
 // to the menu, where its preview, start options and Start button are — the same as picking a card used to.
-const city = { baseId: null, goal: 'all', sel: null, seg: null, segIds: null, focus: null, lines: [], hint: '' };
+const city = { baseId: null, goal: 'all', sel: null, seg: null, segIds: null, focus: null, lines: [], hint: '', view: { k: 1 } };
 const cityRivers = new Map();   // baseId → rivers (the city's scenes: each area's has its own copy, some reaching further)
 async function loadCityRivers(card) {
   if (cityRivers.has(card.baseId)) return false;
@@ -1360,12 +1360,17 @@ function openCity(baseId) {
   city.goal = routeGoal;
   city.sel = card.routes.some((x) => x.id === selectedRouteId) ? selectedRouteId : null;
   city.seg = null; city.segIds = null; city.focus = null; city.hint = '';
+  city.view = { k: 1 };
   $('cityDlg').showModal();
+  // the browser's Back closes the panel (F100: on a phone Back is the way out); the panel's own ways out drop the entry
+  if (!history.state?.cityPanel) history.pushState({ ...(history.state || {}), cityPanel: true }, '');
   renderCity();
   $('cityList').querySelector('.city-row.on')?.scrollIntoView({ block: 'nearest' });
   loadCityRivers(card).then((fresh) => { if (fresh && $('cityDlg').open) renderCityMap(); });
 }
 $('cityBack').addEventListener('click', () => $('cityDlg').close());
+window.addEventListener('popstate', () => { if ($('cityDlg').open) $('cityDlg').close(); });
+$('cityDlg').addEventListener('close', () => { if (history.state?.cityPanel) history.back(); });
 window.addEventListener('resize', () => { if ($('cityDlg').open) renderCityMap(); });
 /** The routes the goal shows, and of those the ones on the tapped segment (when one is). */
 function cityShown(card) {
@@ -1377,7 +1382,6 @@ function renderCity() {
   if (!card) { $('cityDlg').close(); return; }
   const label = Object.fromEntries(GOALS);
   const { byGoal, list } = cityShown(card);
-  if (!list.some((it) => it.id === city.sel)) city.sel = list[0]?.id || null;
   $('cityTitle').textContent = card.name;
   $('citySub').textContent = `${citySubline(card, cityAreaCount(card))}${card.mine.length ? ` · ${card.mine.length} yours` : ''}`;
   $('cityGoals').innerHTML = GOALS.map(([k, l]) => `<button type="button" data-goal="${k}" class="${k === city.goal ? 'on' : ''}" aria-pressed="${k === city.goal}">${k === 'new' ? 'New' : l}</button>`).join('');
@@ -1393,7 +1397,7 @@ function renderCity() {
     const r = routeCache.get(it.id);
     return r ? `${fmtDist(r.lapM, 1)} ${distUnit()} · ${fmtElev(r.lapClimbM).toLocaleString()} ${elevUnit()}` : '';
   };
-  $('cityList').innerHTML = list.length ? list.map((it) => {
+  const rowHtml = (it) => {
     const r = routeCache.get(it.id), on = it.id === city.sel, tags = goalTags(it);
     const mine = it.custom ? '<span class="yours">yours</span>' : '';
     const row = `<button type="button" class="city-row-btn" data-id="${escapeHtml(it.id)}" aria-pressed="${on}"><span class="cr-name">${escapeHtml(shortName(it.name))}${mine}</span><span class="cr-facts">${facts(it)}</span></button>`;
@@ -1403,7 +1407,12 @@ function renderCity() {
       ${it.note && !it.custom ? `<p class="cr-note">${escapeHtml(it.note)}</p>` : ''}
       <div class="cr-actions">${it.custom ? `<button type="button" class="ghost danger" data-remove="${escapeHtml(it.id)}">Remove</button>` : ''}<button type="button" class="primary" data-ride="${escapeHtml(it.id)}" aria-label="Ride ${escapeHtml(shortName(it.name))}">Ride</button></div></div>`;
     return `<li class="city-row on">${row}${detail}</li>`;
-  }).join('') : `<li class="muted city-none">No ${city.goal === 'all' ? '' : `${label[city.goal].toLowerCase()} `}routes${city.seg ? ' on this segment' : ''} yet${byGoal.length ? '' : ' — try another goal, or plan your own'}.</li>`;
+  };
+  // grouped by area (F103) when the city has more than one: a heading per area, its routes in the network's order
+  const groups = net?.multi ? groupByArea(list, (it) => cityPath(net, it), (id) => { const e = net.edges.get(id); return e && { area: e.area, len: e.len }; }, [...net.areas.keys()]) : [{ area: null, items: list }];
+  if (!list.some((it) => it.id === city.sel)) city.sel = groups[0]?.items[0]?.id || null;   // (the top of the list as shown)
+  const heading = (g) => (groups.length > 1 ? `<li class="city-group" role="presentation">${escapeHtml(g.area ? net.areas.get(g.area)?.json?.name || g.area : 'To plan again')}</li>` : '');
+  $('cityList').innerHTML = list.length ? groups.map((g) => heading(g) + g.items.map(rowHtml).join('')).join('') : `<li class="muted city-none">No ${city.goal === 'all' ? '' : `${label[city.goal].toLowerCase()} `}routes${city.seg ? ' on this segment' : ''} yet${byGoal.length ? '' : ' — try another goal, or plan your own'}.</li>`;
   const sel = list.find((it) => it.id === city.sel);
   $('citySel').textContent = sel ? `${shortName(sel.name)}: ${facts(sel)}` : '';
   renderCityMap();
@@ -1414,7 +1423,11 @@ function renderCityMap() {
   const { byGoal } = cityShown(card);
   const lit = new Set(byGoal.flatMap((it) => (d.paths.get(it.id) || []).map((k) => k.replace(/[+-]$/, ''))));
   city.lines = drawCityMap($('cityMap'), { lines: d.lines, rivers: d.rivers, nodes: [...d.net.nodes.values()],
-    lit: city.goal === 'all' ? null : lit, route: city.sel ? d.paths.get(city.sel) : null, marked: city.seg, focus: city.focus, project: fitProjection });
+    lit: city.goal === 'all' ? null : lit, route: city.sel ? d.paths.get(city.sel) : null, marked: city.seg, focus: city.focus,
+    project: (lines, w, h, pad) => zoomProjection(fitProjection(lines, w, h, pad), w, h, city.view) });
+  const zoomed = (city.view?.k || 1) > 1;
+  $('cityMap').classList.toggle('zoomed', zoomed);
+  $('cityFit').hidden = !zoomed;
   $('cityMap').lines = city.lines;   // (tools/snap_city.mjs taps a line by these)
   const sel = card.routes.find((x) => x.id === city.sel), fe = city.focus && d.net.edges.get(city.focus);
   $('cityMap').setAttribute('aria-label', `Map of ${card.name}${sel ? `, ${shortName(sel.name)} highlighted` : ''}. Arrow keys pick a segment, Enter lists the routes that ride it.`);
@@ -1450,7 +1463,63 @@ function cityChoose(id) {
   if (matchMedia('(max-width: 1080px)').matches) document.querySelector('.preview').scrollIntoView({ block: 'start' });
   $('startBtn').focus({ preventScroll: true });
 }
+// zoom and pan (F102): pinch or the wheel zooms about the fingers / the pointer, a drag pans once zoomed in;
+// "Whole map" goes back out. Lines stay as easy to tap in px, so zoomed in they are further apart
+const mapPtrs = new Map();
+let mapDrag = null;   // {x, y, d, moved}: the gesture under way (one pointer's place, or two pointers' midpoint and spread)
+function mapGesture() {
+  const p = [...mapPtrs.values()];
+  if (!p.length) return null;
+  const x = p.reduce((t, q) => t + q.x, 0) / p.length, y = p.reduce((t, q) => t + q.y, 0) / p.length;
+  return { x, y, d: p.length > 1 ? Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) : 0, n: p.length };
+}
+$('cityMap').addEventListener('pointerdown', (e) => {
+  const rect = e.currentTarget.getBoundingClientRect();
+  mapPtrs.set(e.pointerId, { x: e.clientX - rect.left, y: e.clientY - rect.top });
+  mapDrag = { ...mapGesture(), moved: mapDrag?.moved || false };
+});
+$('cityMap').addEventListener('pointermove', (e) => {
+  if (!mapPtrs.has(e.pointerId) || !mapDrag) return;
+  const rect = e.currentTarget.getBoundingClientRect(), w = rect.width, h = rect.height;
+  mapPtrs.set(e.pointerId, { x: e.clientX - rect.left, y: e.clientY - rect.top });
+  const g = mapGesture();
+  if (g.n !== mapDrag.n) { mapDrag = { ...g, moved: mapDrag.moved }; return; }
+  if (Math.hypot(g.x - mapDrag.x, g.y - mapDrag.y) < 6 && Math.abs(g.d - mapDrag.d) < 6 && !mapDrag.moved) return;   // still a tap
+  let v = city.view || { k: 1 };
+  if (g.n > 1 && mapDrag.d > 0) v = zoomAt(v, w, h, g.x, g.y, g.d / mapDrag.d);
+  if (v.k > 1) v = panBy(v, w, h, g.x - mapDrag.x, g.y - mapDrag.y);
+  else if (g.n < 2) return;   // the whole map: a one-finger drag scrolls the page (touch-action pan-y)
+  e.preventDefault();
+  city.view = v; mapDrag = { ...g, moved: true };
+  renderCityMap();
+});
+const mapUp = (e) => { mapPtrs.delete(e.pointerId); if (!mapPtrs.size && mapDrag) setTimeout(() => { mapDrag = null; }, 0); else if (mapDrag) mapDrag = { ...mapGesture(), moved: mapDrag.moved }; };
+for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('cityMap').addEventListener(ev, mapUp);
+$('cityMap').addEventListener('wheel', (e) => {
+  const rect = e.currentTarget.getBoundingClientRect();
+  e.preventDefault();
+  city.view = zoomAt(city.view || { k: 1 }, rect.width, rect.height, e.clientX - rect.left, e.clientY - rect.top, Math.exp(-e.deltaY / 300));
+  renderCityMap();
+}, { passive: false });
+// hovering a line with a mouse previews which routes ride it (F105), in the map's hint
+$('cityMap').addEventListener('pointermove', (e) => {
+  if (e.pointerType !== 'mouse' || mapDrag?.moved) return;
+  const card = cityCard(), d = card && cityMapData(card);
+  if (!d) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const j = nearestLine(city.lines, e.clientX - rect.left, e.clientY - rect.top, 14);
+  const id = j >= 0 ? city.lines[j].id : null;
+  if (id === city.hover) return;
+  city.hover = id;
+  if (!id) { $('cityMapHint').textContent = city.hint || 'Tap a line to see the routes that ride it'; return; }
+  const { byGoal } = cityShown(card);
+  const n = (d.index.get(id) || []).filter((r) => byGoal.some((it) => it.id === r)).length;
+  $('cityMapHint').textContent = `${d.net.edges.get(id)?.name || 'This segment'} · ${n ? `${n === 1 ? '1 route rides' : `${n} routes ride`} it — click to list them` : 'no route rides it — Free ride or Plan your own can'}`;
+});
+$('cityMap').addEventListener('pointerleave', () => { if (city.hover) { city.hover = null; renderCityMap(); } });
+$('cityFit').addEventListener('click', () => { city.view = { k: 1 }; renderCityMap(); $('cityMap').focus({ preventScroll: true }); });
 $('cityMap').addEventListener('click', (e) => {
+  if (mapDrag?.moved) return;   // the end of a pinch or a drag, not a tap
   const rect = e.currentTarget.getBoundingClientRect();
   const j = nearestLine(city.lines, e.clientX - rect.left, e.clientY - rect.top, e.pointerType === 'mouse' ? 14 : 22);
   if (j >= 0) { city.focus = null; cityTapSegment(city.lines[j].id); return; }
