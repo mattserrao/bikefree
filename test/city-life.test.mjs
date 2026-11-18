@@ -109,7 +109,7 @@ export function simulate(reverse, { span = null, watch = null, plan = null, spee
   const groups = [['person', life.walkers], ['person', life.riders], ['vehicle', life.carAgents], ['vehicle', life.busAgents], ['vehicle', life.oncoming]];
   const agents = groups.flatMap(([g, list]) => list.map((a) => ({ a, g, cyclist: list === life.riders })));
   const last = new Map();
-  const R = { jumps: 0, worstJump: 0, personInRoad: 0, vehicleInLane: 0, vehicleClose: 0, closest: Infinity, popIn: 0, popOut: 0, ticks: 0, seen: { person: 0, vehicle: 0 } };
+  const R = { jumps: 0, worstJump: 0, personInRoad: 0, vehicleInLane: 0, vehicleClose: 0, closest: Infinity, oneWayOncoming: 0, popIn: 0, popOut: 0, ticks: 0, seen: { person: 0, vehicle: 0 } };
   const episode = new Map();   // agent → which checks are failing now (count each episode once)
   const flag = (a, key) => { const e = episode.get(a) || new Set(); episode.set(a, e); if (e.has(key)) return false; e.add(key); return true; };
   let s = reverse ? turn : 0;
@@ -167,6 +167,8 @@ export function simulate(reverse, { span = null, watch = null, plan = null, spee
         const ahead = (a.x - rider.x) * fwd.x + (a.z - rider.z) * fwd.z;
         if (ahead > 0 && ahead < NEAR_M && lateral(a.x, a.z, lr.i) * rider.dir > -.3) { bad = true; if (flag(a, 'lane')) { R.vehicleInLane++; note('in-lane', a, t); } }
       }
+      // [F18] no oncoming traffic on a one-way stretch of the route (against its traffic, or head-on at a rider riding it backwards)
+      if (a.onRoute && near && life._oneWays().some((o) => a.s > o.fromM && a.s < o.toM)) { bad = true; if (flag(a, 'oneway')) { R.oneWayOncoming++; note('one-way', a, t); } }
       // nothing drives into (or brushes past) the rider: cross traffic waits at the kerb. Oncoming traffic on the
       // route's own street keeps its far lane (that lane is its own: it passes ~2 m off, so it is held to 0.5 m)
       if (g === 'vehicle' && near && Math.abs((a.y ?? pose.pos.y) - pose.pos.y) < 3) {
@@ -194,6 +196,7 @@ for (const reverse of process.env.NO_TESTS ? [] : [false, true]) {
     assert.equal(R.jumps, 0, `jumps (worst ${R.worstJump.toFixed(2)} m in one step)`);
     assert.equal(R.personInRoad, 0, 'people in the carriageway near the rider');
     assert.equal(R.vehicleInLane, 0, "vehicles in the rider's lane ahead");
+    assert.equal(R.oneWayOncoming, 0, 'oncoming traffic on a one-way stretch of the route');
     assert.equal(R.vehicleClose, 0, `vehicles within ${CLOSE_M} m of the rider (closest ${R.closest.toFixed(2)} m)`);
     assert.equal(R.popIn + R.popOut, 0, `spawned ${R.popIn} / despawned ${R.popOut} in view`);
   });

@@ -1,6 +1,6 @@
 // City life on Pittsburgh's ride network (test/city-life.test.mjs's checks, js/network.js rides): one lap of a
-// few presets as the world places them — turns through the junctions, edges ridden backwards, a U-turn at a
-// dead end and at the Water Steps. Cross traffic waits at the kerb (F16).
+// few presets as the world places them — turns through the junctions, edges ridden backwards (Forbes Ave
+// against its one-way, F18), a U-turn at a dead end and at the Water Steps. Cross traffic waits at the kerb (F16).
 //   LIFE_SIM_REPORT=1 node --test test/city-life-network.test.mjs   prints the counts (LIFE_SIM_DEBUG=1: and each finding)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -20,6 +20,7 @@ for (const id of ['pgh-oakland-south', 'pgh-mt-washington']) {
     assert.equal(R.jumps, 0, `jumps (worst ${R.worstJump.toFixed(2)} m in one step)`);
     assert.equal(R.personInRoad, 0, 'people in the carriageway near the rider');
     assert.equal(R.vehicleInLane, 0, "vehicles in the rider's lane ahead");
+    assert.equal(R.oneWayOncoming, 0, 'oncoming traffic on a one-way stretch of the route (Forbes Ave, F18)');
     assert.equal(R.vehicleClose, 0, `vehicles within 1.5 m of the rider (closest ${R.closest.toFixed(2)} m)`);
     assert.equal(R.popIn + R.popOut, 0, `spawned ${R.popIn} / despawned ${R.popOut} in view`);
   });

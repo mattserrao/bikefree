@@ -619,10 +619,47 @@ export class CityLife {
     a.alive = false;
   }
 
-  /** The route's own streets from the rider out to s are all street (no trail, no lenticular bridge): oncoming traffic can meet the rider there. */
+  /**
+   * [F18] Where the route rides a one-way street (the mapped street under its centre line, running along it):
+   * [{fromM, toM, dir}] outbound metres, dir +1 where its traffic goes the way out, −1 the way back. The route
+   * rides every street both ways (a network's edge backwards, the return leg), so on these stretches no oncoming
+   * traffic is drawn: whichever way you ride, it would drive against the one-way or meet you head-on in it.
+   */
+  _oneWays() {
+    if (this._ow) return this._ow;
+    const c = this.city, L = c.landscape, r = c.route, end = (r.turnIdx || r.dist.length - 1) - 1, ix = c.index;
+    const mark = new Int8Array(end + 1), p = {};
+    for (const st of c.streets || []) {
+      if (!st.oneway || st.pts.length < 2) continue;
+      if (!st.pts.some((q) => ix.nearest(q.x, q.z, 60))) continue;   // (most streets are nowhere near the route)
+      const path = makePath(st.pts);
+      for (let s = 0; s <= path.length; s += 4) {
+        poseOn(path, s, 2, p);
+        const h = L.routeDist(p.x, p.z);
+        if (!h || h.d > 3 || h.i >= end || Math.abs(p.y - h.y) > 3) continue;
+        const dx = ix.xs[h.i + 1] - ix.xs[h.i], dz = ix.zs[h.i + 1] - ix.zs[h.i], l = Math.hypot(dx, dz) || 1;
+        const cos = (p.tx * dx + p.tz * dz) / l;
+        if (Math.abs(cos) > .85) mark[h.i] = Math.sign(cos) * st.oneway;
+      }
+    }
+    // runs of marked samples (gaps under 40 m bridged, runs under 50 m dropped: a side street's mouth, a crossing)
+    const out = [];
+    let cur = null;
+    for (let i = 0; i <= end; i++) {
+      if (!mark[i]) continue;
+      if (cur && cur.dir === mark[i] && r.dist[i] - cur.toM <= 40) cur.toM = r.dist[i + 1];
+      else { if (cur) out.push(cur); cur = { fromM: r.dist[i], toM: r.dist[i + 1], dir: mark[i] }; }
+    }
+    if (cur) out.push(cur);
+    return (this._ow = out.filter((o) => o.toM - o.fromM >= 50));
+  }
+  _oneWayIn(lo, hi) { return this._oneWays().some((o) => o.toM + 10 > lo && o.fromM - 10 < hi); }
+
+  /** The route's own streets from the rider out to s are all two-way street (no trail, no lenticular bridge, no one-way): oncoming traffic can meet the rider there. */
   _roadTo(from, s) {
     const L = this.city.landscape, lo = Math.min(from, s), hi = Math.max(from, s);
     if (L.routeBridges.some((b) => b.style === 'lenticular' && b.toM + 30 > lo && b.fromM - 30 < hi)) return false;
+    if (this._oneWayIn(lo, hi)) return false;
     for (let q = lo; q <= hi; q += 10) if (L.routeKindAt(q) !== 'road') return false;
     return L.routeKindAt(hi) === 'road';
   }
@@ -675,7 +712,7 @@ export class CityLife {
       const behind = (rider.out - a.s) * rider.dir, turn = this.city.route.turnS || this.city.route.total;
       const left = Math.abs(rider.out - a.s) > 900;
       if (left ? this._outOfView(a.x, a.z, cam, 160, false) || a.s < 0 || a.s > turn
-        : behind > 80 || a.s < 0 || a.s > turn || (behind > 10 && this.city.landscape.routeKindAt(a.s) !== 'road')) { a.alive = false; a.wait = 2 + this.rand() * 6; a.lx = null; continue; }
+        : behind > 80 || a.s < 0 || a.s > turn || (behind > 10 && (this.city.landscape.routeKindAt(a.s) !== 'road' || this._oneWayIn(a.s, a.s)))) { a.alive = false; a.wait = 2 + this.rand() * 6; a.lx = null; continue; }
       // its lane: a fixed offset from the centre line, square to the street's smoothed heading (no step at the GPS points)
       this._routeAt(a.s + 5, q); this._routeAt(a.s - 5, p);
       let hx = q.x - p.x, hz = q.z - p.z; const hl = Math.hypot(hx, hz) || 1; hx /= hl; hz /= hl;
