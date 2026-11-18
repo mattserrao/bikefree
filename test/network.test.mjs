@@ -2,7 +2,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { makePathRoute, optionsAt, straightOn, cornerSpeed, LOCK_M, NetRide } from '../js/network.js';
+import { makePathRoute, optionsAt, straightOn, cornerSpeed, LOCK_M, NetRide, PathFollower, FOLLOW_AHEAD_M } from '../js/network.js';
 import { Session } from '../js/session.js';
 import * as netMod from '../js/network.js';
 import * as gpxMod from '../js/gpx.js';
@@ -190,4 +190,44 @@ test('the West End Overlook: a dead end with only the way back, and a ghost the 
     const s0 = x.t.e.s0, s1 = x.t.e.s1;
     assert.ok(s1 <= g.fromM + 5 || s0 >= g.toM - 5, `${x.t.e.key} rides the ghost`);
   }
+});
+
+test('the pacer keeps its way: a turn changed behind it moves it not at all, one ahead of it it takes (F3)', () => {
+  const lane = 0.07, at = (f, p) => f.pose(p, worldIndex, lane).pos;
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+  for (const pacerAt of [gAt + 25, gAt + 3, gAt - 12]) {   // past East Carson & 10th, in the turn's curve, entering it
+    const ride = new NetRide(net, {}, { plan: preset('pgh-three-rivers').path });
+    const pacer = new PathFollower(ride).update(pacerAt);
+    const before = at(pacer, pacerAt), planned = ride.upcoming(gAt - 200).selected;
+    // the rider, 200 m back, takes another way at the junction (the plan goes straight on to SouthSide Works)
+    const other = ride.upcoming(gAt - 200).options.findIndex((o, j) => j !== planned && !o.back);
+    assert.ok(ride.pick(ride.upcoming(gAt - 200).options[other].key, gAt - 200));
+    assert.ok(dist(ride.pose(pacerAt, worldIndex, lane).pos, before) > (pacerAt < gAt ? .2 : 3), 'the rider\'s new path does move that metre (the old jump)');
+    pacer.update(pacerAt);
+    assert.ok(pacer.diverged);
+    assert.ok(dist(at(pacer, pacerAt), before) < 1e-6, `pacer at ${pacerAt - gAt} m from the junction moved ${dist(at(pacer, pacerAt), before).toFixed(2)} m`);
+    // and it rides on along its own way, smoothly, onto the plan's next edge (G>H, East Carson to SouthSide Works)
+    let prev = before, worst = 0;
+    for (let p = pacerAt; p < pacerAt + 400; p += 0.5) { const q = at(pacer.update(p), p); worst = Math.max(worst, dist(q, prev)); prev = q; }
+    assert.ok(worst < 0.8, `pacer step ${worst.toFixed(2)} m`);
+    assert.equal(pacer.own.entries[pacer.own.entryAt(gAt + 50)].t.e.key, 'G>H');
+    assert.notEqual(ride.entries[ride.entryAt(gAt + 50)].t.e.key, 'G>H');
+    assert.ok(Number.isFinite(pacer.grade(gAt + 50)));
+  }
+  // a turn changed ahead of the pacer (before it is FOLLOW_AHEAD_M from the junction): it takes the rider's new way
+  const ride = new NetRide(net, {}, { plan: preset('pgh-three-rivers').path });
+  const pacer = new PathFollower(ride).update(gAt - FOLLOW_AHEAD_M - 20);
+  const up = ride.upcoming(gAt - 300), other = up.options.find((o, j) => j !== up.selected && !o.back);
+  assert.ok(ride.pick(other.key, gAt - 300));
+  pacer.update(gAt - FOLLOW_AHEAD_M - 19);
+  assert.ok(!pacer.diverged);
+  for (const p of [gAt - 5, gAt + 60, gAt + 500]) assert.equal(pacer.worldS(p), ride.worldS(p));
+  // the turn changed back while the pacer rides its own way: the rider's path matches its own again, and it follows it
+  const r2 = new NetRide(net, {}, { plan: preset('pgh-three-rivers').path }), f2 = new PathFollower(r2).update(gAt + 25);
+  const u2 = r2.upcoming(gAt - 200), keep = u2.options[u2.selected].key;
+  r2.pick(u2.options.find((o, j) => j !== u2.selected && !o.back).key, gAt - 200);
+  assert.ok(f2.update(gAt + 26).diverged);
+  r2.pick(keep, gAt - 190);
+  assert.ok(!f2.update(gAt + 27).diverged);
+  assert.equal(f2.worldS(gAt + 900), r2.worldS(gAt + 900));
 });

@@ -441,6 +441,45 @@ export class NetRide extends EventTarget {
   }
 }
 
+export const FOLLOW_AHEAD_M = 30;   // a follower holds on to its way this far ahead of it (a turn's curve: ≤ 22 m)
+
+/**
+ * Someone else riding a network ride's path (the pacer), on its own copy of that path. While the way it has come,
+ * and the next FOLLOW_AHEAD_M metres, are still the rider's, it takes the rider's path as it is now (turns chosen
+ * ahead of it included). When the rider changes a turn it has already passed (or is turning through), it keeps
+ * the way it is on and carries on from there as the path would have: the plan, else straight on — and takes the
+ * rider's path up again if it ever matches its own up to where it is (the turn changed back). So it never jumps. Positions are path metres, as for the rider; `pose`, `worldS`, `grade` and `latLon` place them.
+ */
+export class PathFollower {
+  constructor(ride) {
+    this.ride = ride;
+    this.own = Object.create(NetRide.prototype);
+    Object.assign(this.own, { net: ride.net, plan: ride.plan, first: ride.first, route: null, lockedAt: -1, entries: ride.entries.slice() });
+    this.diverged = false;
+    this.p = 0;
+  }
+
+  /** The follower is at path metre p (call as it moves): take up the rider's path while it still shares the way. */
+  update(p) {
+    this.p = p;
+    const own = this.own, theirs = this.ride.entries;
+    const k = own.entryAt(p + FOLLOW_AHEAD_M);
+    let shared = theirs.length > k;
+    for (let i = 0; shared && i <= k; i++) shared = same(own.entries[i].t, theirs[i].t) && own.entries[i].p0 === theirs[i].p0;
+    if (shared) own.entries = theirs.slice();   // (the same way up to here: taking theirs moves nothing)
+    this.diverged = !shared;
+    if (own.endOf(own.entries.length - 1) - p < REFILL_M) own._fill(p + AHEAD_M);
+    return this;
+  }
+
+  worldS(p) { return this.own.worldS(p); }
+  pose(p, index, lane) { return this.own.pose(p, index, lane); }
+  /** % grade at path metre p (the base route's, the way the follower rides it). */
+  grade(p) { return routeAt(this.ride.net.base, this.worldS(p)).grade; }
+  /** Where path metre p is on the map. */
+  latLon(p) { const a = routeAt(this.ride.net.base, this.worldS(p)); return { lat: a.lat, lon: a.lon }; }
+}
+
 /**
  * A path route: the object the session rides (a route like gpx.js builds, open, 10 m samples) for a
  * preset on a network, with `netRide` driving it and `base` the route the 3D world is built around.

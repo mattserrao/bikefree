@@ -211,7 +211,7 @@ export class World {
     (this.courseArches ||= new CourseArches(this)).set(marks || {});
   }
 
-  /** The virtual pacer: a function returning {pos, speed, cadence} along the route, or null when off. */
+  /** The virtual pacer: a function returning {pos, speed, cadence, path?} along the route, or null when off (path: its own PathFollower on a network ride). */
   setPacerSource(fn) { this.pacerSource = fn; this._pacerInit = false; }
 
   /** Point on the road at distance s, `lane` × road width right of the centre line (with the U-turn drifts). */
@@ -223,9 +223,9 @@ export class World {
     out.flat.set(pose.flat.x, 0, pose.flat.z);
     return out;
   }
-  /** The same at path metre p on a network ride (the curves through junctions included). */
-  _placePath(p, lane, out) {
-    const pose = this.path.pose(p, this.index, lane);
+  /** The same at path metre p on a network ride (the curves through junctions included); `path`: another rider's own copy of it (the pacer's). */
+  _placePath(p, lane, out, path = this.path) {
+    const pose = path.pose(p, this.index, lane);
     out.pos.set(pose.pos.x, pose.pos.y, pose.pos.z);
     out.fwd.set(pose.fwd.x, pose.fwd.y, pose.fwd.z);
     out.flat.set(pose.flat.x, 0, pose.flat.z);
@@ -258,8 +258,9 @@ export class World {
     // Same smoothing as the rider: roll at its speed, ease toward the true position.
     if (!this._pacerInit) { this.ps = src.pos; this.pacerCrank = 0; this._pacerInit = true; }
     if (this.path) {
+      // (on its own copy of the path, src.path: a turn you change behind it doesn't move it — js/network.js PathFollower)
       this.ps = this._followPath(this.ps, src.pos, src.speed, dt);
-      const { pos, fwd } = this._placePath(this.ps, PACER_LANE, this._pacerPose ||= { pos: new THREE.Vector3(), fwd: new THREE.Vector3(), flat: new THREE.Vector3() });
+      const { pos, fwd } = this._placePath(this.ps, PACER_LANE, this._pacerPose ||= { pos: new THREE.Vector3(), fwd: new THREE.Vector3(), flat: new THREE.Vector3() }, src.path || this.path);
       this.pacerCrank += (src.cadence / 60) * Math.PI * 2 * dt;
       this.pacer.group.visible = true;
       this.pacer.update(pos, fwd, this.pacerCrank, src.speed, Math.min(dt, 0.1), src);

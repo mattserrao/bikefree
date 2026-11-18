@@ -12,7 +12,7 @@ import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor, markFtpTest, f
 import { drawProfile, drawWorkout, drawTrace, drawMinimap, drawNetworkMinimap, gradeColor, profileDistAt } from './views.js';
 import { Profiles, GENDERS, initials, cmToFtIn, ftInToCm } from './profiles.js';
 import { buildCatalogRoute, loadRouteScene } from './routes.js';
-import { loadNetwork, makePathRoute, planNext, planCloses, keysToIds, idsToKeys, travKey } from './network.js';
+import { loadNetwork, makePathRoute, planNext, planCloses, keysToIds, idsToKeys, travKey, PathFollower } from './network.js';
 import { legLength, startPosition, stopsForDirection, stopNear, planRide, startArchM } from './route-plan.js';
 import { VERSION } from './version.js';
 import { planRouteTiles, tileKeysToUrls, downloadUrls, offlineStatus, setOfflineStatus, registerServiceWorker } from './offline.js';
@@ -525,12 +525,19 @@ async function savePlan() {
 // A rider in a yellow-checkered jersey who holds a set power on the same road physics as you.
 const pacer = new Pacer(PACER_WATTS.includes(Number(settings.pacerWatts)) ? Number(settings.pacerWatts) : 0);
 let pacerKey = null;
+let pacerTrack = null;   // on a network ride: the pacer's own copy of the path (js/network.js PathFollower)
 const onRoute = () => session.mode === 'route' && session.route;
 const riderDist = () => (onRoute() ? session.routeRidden : session.distanceM);
 const rideKey = () => (onRoute() ? `r:${session.route.name}:${session.routeStart}:${session.routeFinishM ?? 'endless'}` : session.mode === 'workout' ? `w:${session.workout?.id ?? session.workout?.name}` : 'free');
 function resetPacer() {
   pacer.reset(riderDist());
   pacerKey = rideKey();
+  pacerTrack = onRoute() && session.route.netRide ? new PathFollower(session.route.netRide) : null;
+}
+/** The pacer's own way on a network ride, kept up to date (null elsewhere). */
+function pacerPath(route) {
+  if (!pacerTrack || pacerTrack.ride !== route?.netRide || session.route !== route) return null;
+  return pacerTrack.update(session.routeStart + pacer.dist);
 }
 function renderPacerChoice() {
   for (const b of $('pacerSeg').children) b.classList.toggle('on', Number(b.dataset.w) === pacer.watts);
@@ -553,7 +560,8 @@ function stepPacer() {
   if (!pacer.on || !session.running) return;
   if (pacerKey !== rideKey()) resetPacer();
   const r = onRoute() ? session.route : null;
-  const gradeAt = r ? (d) => routeAt(r, wrapDist(r, session.routeStart + d)).grade : () => session.gradePct;
+  const track = r ? pacerPath(r) : null;
+  const gradeAt = track ? (d) => track.grade(session.routeStart + d) : r ? (d) => routeAt(r, wrapDist(r, session.routeStart + d)).grade : () => session.gradePct;
   pacer.step(dt, gradeAt, session.physicsParams());
   if (r && !r.closed) pacer.dist = Math.min(pacer.dist, r.total);
   if (r && session.routeFinishM != null) pacer.dist = Math.min(pacer.dist, session.routeFinishM);   // the pacer stops at the finish too
@@ -825,7 +833,7 @@ function renderMinimap(now = performance.now(), force = false) {
     const up = net.prompt(pos, session.speedMps);
     const span = net.profileSpan(pos);
     drawNetworkMinimap($('hMapCanvas'), net, pos, { mode: settings.minimap === 'follow' ? 'follow' : 'course',
-      pacerPos: pacer.on ? pacerPosOn(route) : null, spanM: imperial() ? 1609.344 : 1500, up,
+      pacerPos: !pacer.on ? null : pacerPath(route) ? pacerPath(route).latLon(pacerPosOn(route)) : pacerPosOn(route), spanM: imperial() ? 1609.344 : 1500, up,
       aheadTo: Math.max(span[1], net.endOf(Math.min(net.entries.length - 1, net.entryAt(pos) + 1))) });
     return;
   }
@@ -894,7 +902,7 @@ function wireWorld(route) {
   world.setPacerSource(() => {
     if (!pacer.on) return null;
     return { pos: pacerPosOn(route), speed: session.running ? pacer.speed : 0, cadence: session.running ? pacer.cadence : 0,
-      grade: pacer.grade, power: session.running ? pacer.watts : 0, ftp: settings.ftp };
+      grade: pacer.grade, power: session.running ? pacer.watts : 0, ftp: settings.ftp, path: pacerPath(route) };
   });
 }
 function cycleWeather() {

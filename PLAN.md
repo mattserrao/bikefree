@@ -884,7 +884,7 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 **Follow-ups found along the way**
 - [x] F1 Minimap and card thumbnails draw the path route, laps on top of each other (→ 2.2)
 - [x] F2 The classic "Three Rivers Loop" and the network "Three Rivers Loop · choose your turns" are both listed (→ 2.1: one entry)
-- [ ] F3 The pacer follows your path as it is now; if you change a turn after the pacer has passed that junction it jumps to the new path
+- [x] F3 The pacer follows your path as it is now; if you change a turn after the pacer has passed that junction it jumps to the new path → the pacer rides its own copy of the path (`PathFollower`, js/network.js): it takes your path while the way up to 30 m ahead of it is still yours (turns you change ahead of it included); a turn you change behind it (or in its curve) leaves it on its way, carrying on along the plan (else straight on), and it takes your path up again if you change the turn back. Its grade, its place in the world and its minimap dot follow its own way; test in `test/network.test.mjs`
 - [x] F4 Route traffic (cars that overtake / wait behind you) follows the loop's direction; check on the bike that it behaves after a turn onto the other half of the loop
 - [ ] F5 At the Water Steps the loop's start/finish is a junction with only straight on or back (kept: "Back" is offered at every junction; it gains real arms with segments 4 and 6)
 - [x] F6 Headless runs can't ride in real time (software rendering): the on-bike check covers the feel of the turn, the camera swing and the prompt timing

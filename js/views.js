@@ -325,11 +325,12 @@ export function drawNetworkMinimap(canvas, ride, p, { mode = 'course', pacerPos 
     ctx.fillStyle = ink; ctx.strokeStyle = bg; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   }
-  // pacer
+  // pacer (a path metre, or {lat, lon}: where it is on its own way)
   if (pacerPos != null) {
     const j = Math.max(0, Math.min(r.lat.length - 1, Math.round(pacerPos / 10)));
+    const at = typeof pacerPos === 'object' ? pacerPos : { lat: r.lat[j], lon: r.lon[j] };
     ctx.fillStyle = '#f5c400'; ctx.strokeStyle = '#1d1d1c'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(X(r.lon[j]), Y(r.lat[j]), 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(X(at.lon), Y(at.lat), 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   }
   // rider arrow along the path
   const a = Math.max(0, ci - 2), b = Math.min(r.lat.length - 1, ci + 2);
