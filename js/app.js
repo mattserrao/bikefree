@@ -6,7 +6,7 @@ import { powerRequired, speedFromCadence, WHEEL_CIRC } from './physics.js';
 import { loadSettings, saveSettings, KG_PER_LB, MI_PER_KM } from './settings.js';
 import { rideToFit, fitFilename, summarize } from './recorder.js';
 import * as store from './store.js';
-import { parseGpx, buildRoute, averageGradeAhead, wrapDist, routeAt, isPointToPoint, finishDistanceM, legSpan } from './gpx.js';
+import { parseGpx, buildRoute, averageGradeAhead, wrapDist, routeAt, isPointToPoint, finishDistanceM, legSpan, carryAt } from './gpx.js';
 import { Pacer, PACER_WATTS } from './pacer.js';
 import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor, markFtpTest, ftpFromTwentyMinutes } from './workout.js';
 import { drawProfile, drawWorkout, drawTrace, drawMinimap, drawNetworkMinimap, drawCityMap, gradeColor, profileDistAt } from './views.js';
@@ -567,7 +567,9 @@ function stepPacer() {
   const r = onRoute() ? session.route : null;
   const track = r ? pacerPath(r) : null;
   const gradeAt = track ? (d) => track.grade(session.routeStart + d) : r ? (d) => routeAt(r, wrapDist(r, session.routeStart + d)).grade : () => session.gradePct;
-  pacer.step(dt, gradeAt, session.physicsParams());
+  // conveyors (escalators) carry the pacer too: its own way's on a network ride, the route's elsewhere
+  const carryAt_ = track ? (d) => track.carry(session.routeStart + d) : r?.carry ? (d) => carryAt(r, session.routeStart + d) : null;
+  pacer.step(dt, gradeAt, session.physicsParams(), carryAt_);
   if (r && !r.closed) pacer.dist = Math.min(pacer.dist, r.total);
   if (r && session.routeFinishM != null) pacer.dist = Math.min(pacer.dist, session.routeFinishM);   // the pacer stops at the finish too
 }
@@ -1059,9 +1061,11 @@ function renderHud() {
       showRow(3, `${ftpFromTwentyMinutes(avg)} W`, 'FTP so far');
     }
   } else {
-    $('hGrade').textContent = fmtGrade(session.gradePct);
-    $('hGrade').style.color = readable(gradeColor(session.gradePct));
-    $('hGradeLabel').textContent = 'grade';
+    const carry = session.carry;   // an escalator (a conveyor) carries you: its name instead of the grade
+    $('hGrade').textContent = carry ? carry.label || 'Carried' : fmtGrade(session.gradePct);
+    $('hGrade').style.color = carry ? '' : readable(gradeColor(session.gradePct));
+    $('hGrade').classList.toggle('carry', !!carry);
+    $('hGradeLabel').textContent = carry ? 'no pedalling' : 'grade';
     if (session.mode === 'route' && session.route) {
       const r = session.route;
       const ahead = imperial() ? 804.672 : 500;

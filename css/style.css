@@ -344,6 +344,7 @@ body.no-world .world-view { background: radial-gradient(ellipse at 50% 30%, var(
 .hud-right { position: absolute; right: 20px; top: 20px; display: grid; gap: 10px; justify-items: end; }
 .hud-tr { padding: 12px 18px; min-width: 200px; text-align: right; }
 .tr-main b { font-size: clamp(40px, 6.2vh, 56px); letter-spacing: -1px; transition: color .4s; }
+.tr-main b.carry { font-size: clamp(22px, 3.4vh, 32px); letter-spacing: 0; color: #7fd1ff; }   /* an escalator carries you: its name for the grade */
 .tr-rows { margin-top: 8px; display: grid; gap: 4px; border-top: 1px solid var(--hud-div); padding-top: 8px; }
 .tr-row { display: flex; justify-content: space-between; align-items: baseline; gap: 18px; }
 .tr-row small { font-size: 12px; }

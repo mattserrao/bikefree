@@ -25,7 +25,11 @@ export function makeGroundMaterial(palette, config = {}, farUniform = null, cano
   // vista kit (js/world/toolbox/atmosphere/vista.js): mountain faces, snow, meadows and canopy that hold up at a distance
   const vk = vistaGroundGLSL(vista, palette, vkAttr), vkCanopy = canopy ? vistaCanopyGLSL(vista, vkAttr) : null;
   if (vk || vkCanopy) material.customProgramCacheKey = () => `bf-ground-vista-${!!vk}-${!!vkCanopy}-${vkAttr}`;
+  // [subway] holes in the ground (a station's escalator shaft opening): up to 4 rectangles, each {a: (centre x, z,
+  // along x, z), b: (half length, half width, on, 0)}, set by the kit that draws what is under them
+  const holes = material.userData.holes = { a: { value: Array.from({ length: 4 }, () => new THREE.Vector4()) }, b: { value: Array.from({ length: 4 }, () => new THREE.Vector4()) } };
   material.onBeforeCompile = (shader) => {
+    shader.uniforms.bfHoleA = holes.a; shader.uniforms.bfHoleB = holes.b;
     if (vk) Object.assign(shader.uniforms, vk.uniforms);
     if (vkAttr) {
       // vista kit: road-cut depth (x) and fire scar (y) per vertex
@@ -82,12 +86,18 @@ export function makeGroundMaterial(palette, config = {}, farUniform = null, cano
         varying vec3 vBfGround; varying vec3 vBfGroundNormal;
         uniform vec3 bfRock; uniform vec3 bfSoil; uniform float bfSnowLine; uniform vec4 bfFar;
         uniform float uTime; uniform vec4 bfCloud; uniform float bfWet;
+        uniform vec4 bfHoleA[4]; uniform vec4 bfHoleB[4];
         #ifdef BF_FORMATIONS
         uniform vec3 bfArgRed; uniform vec3 bfArgGreen; uniform vec3 bfSnowColor;
         #endif
         ${noise}
         ${vk ? vk.pars : ''}`)
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+        for (int i = 0; i < 4; i++) {
+          if (bfHoleB[i].z < .5) continue;
+          vec2 bfD = vBfGround.xz - bfHoleA[i].xy;
+          if (abs(dot(bfD, bfHoleA[i].zw)) < bfHoleB[i].x && abs(dot(bfD, vec2(-bfHoleA[i].w, bfHoleA[i].z))) < bfHoleB[i].y) discard;
+        }
         if (bfFar.z > .5) {
           // complementary dither to the far terrain: each pixel shows exactly one of the two grounds
           float bfFarT = smoothstep(bfFar.x - bfFar.y * .5, bfFar.x + bfFar.y * .5, length(vBfGround.xz - cameraPosition.xz));

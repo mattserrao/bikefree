@@ -102,8 +102,11 @@ function buildArea(area) {
     if (edges.some((e) => e.key === key)) throw new Error(`two edges ${key}: name them apart in the spec`);
     let up = 0, down = 0;
     for (let i = a.s / 10 + 1; i <= b.s / 10; i++) { const d = route.ele[i] - route.ele[i - 1]; if (d > 0) up += d; else down -= d; }
+    // assisted conveyors (escalators: city data `routeConveyors`, line metres) on this edge, in its forward metres
+    const conveyors = (city.routeConveyors || []).filter((c) => c.fromM >= a.s - 1 && c.toM <= b.s + 1)
+      .map((c) => ({ u0: Math.max(0, c.fromM - a.s), u1: Math.min(b.s - a.s, c.toM - a.s), mps: c.mps, label: c.label }));
     edges.push({ key, from: a.node, to: b.node, s: [a.s, b.s], lengthM: b.s - a.s,
-      climbM: [Math.round(up), Math.round(down)], name: names.name, toward: [names.fwd, names.rev] });
+      climbM: [Math.round(up), Math.round(down)], name: names.name, toward: [names.fwd, names.rev], ...(conveyors.length ? { conveyors } : {}) });
   }
   return { area, item, route, L, nodes, edges, ghosts, aprons };
 }
@@ -205,7 +208,7 @@ if (!spec.areas) {
     format: 'bikefree-network-2', id: spec.id, origin: spec.origin, areas: areasOut,
     nodes: [...nodes.values()].map(({ id, name, lat, lon, ele, passes, deadEnd }) => ({ id, name, lat, lon, ele, passes,
       ...(Object.keys(passes).length > 1 ? { portal: true } : {}), ...(deadEnd ? { deadEnd } : {}) })),
-    edges: edges.map(({ id, key, area, from, to, s, lengthM, climbM, name, toward }) => ({ id, key, area, from, to, s, lengthM, climbM, name, toward })),
+    edges: edges.map(({ id, key, area, from, to, s, lengthM, climbM, name, toward, conveyors }) => ({ id, key, area, from, to, s, lengthM, climbM, name, toward, ...(conveyors ? { conveyors } : {}) })),
     presets: buildPresets([...built.flatMap((A) => A.presets), ...(spec.presets || [])], edges),
   };
   if (spec.freeRide) out.freeRide = freeRideOut(spec.freeRide, edges);

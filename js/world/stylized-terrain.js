@@ -7,6 +7,7 @@ import { scenePacks, PACK_META } from './toolbox/packs/index.js';
 import { normalizeScene, lifeKit } from './toolbox/scene-schema.js';
 import { ForestPlanner, TILE_M, makeClearings } from './toolbox/vegetation/forest.js';
 import { GroundBlocks, InstancePool, packMatrices, proxyGroup } from './toolbox/core/pools.js';
+import { Subway } from './toolbox/structures/subway.js';   // [subway]
 import { MountainRoad } from './toolbox/structures/mountain-road.js';
 import { planSettlement, Settlement } from './toolbox/structures/settlement.js';
 import { RoadsideDetails, fitBridgeToRoad, roadFrame } from './toolbox/roadside/details.js';
@@ -203,8 +204,24 @@ export class StylizedTerrain {
       else this.cityMs = Math.round(performance.now() - t0);   // (areas, PLAN 5.4: what building an area costs)
       this.city.setNight(this._night || 0);
     }
+    // [subway] a tunnel, its platforms and escalators along the line's underground stretch (toolbox/structures)
+    if (this.config.subway && this.config.city?.routeUnderground) this.subway = new Subway(this.group, this.route, this.index, this.config.city, this.uniforms, this.config.subway, this.groundMaterial, this.landscape);
     this._lastX = Infinity;
     this.stats.loading = 0;
+  }
+
+  /** [subway] Does a ground patch lie over (or within 40 m of) an underground stretch of the line? Its skirts stay
+   *  shallow there: the usual 20 m curtains would hang into the tunnel. */
+  _overTunnel(x, z, size) {
+    const U = this.config.city?.routeUnderground;
+    if (!U?.length) return false;
+    if (!this._tunnelPts) {
+      this._tunnelPts = [];
+      const d = this.route.dist;
+      for (let i = 0; i < d.length && d[i] <= (this.route.turnS || this.route.total); i++) if (U.some((u) => d[i] >= u.fromM - 20 && d[i] <= u.toM + 20)) this._tunnelPts.push([this.index.xs[i], this.index.zs[i]]);
+    }
+    const m = 40;
+    return this._tunnelPts.some(([px, pz]) => px > x - m && px < x + size + m && pz > z - m && pz < z + size + m);
   }
 
   /** Ground carries the vista kit's road-cut / fire-scar attribute (mountain scenes with rock cuts or burns). */
@@ -674,7 +691,7 @@ export class StylizedTerrain {
     for (const edge of [Array.from({ length: N }, (_, i) => i), Array.from({ length: N }, (_, i) => S * N + i),
       Array.from({ length: N }, (_, i) => i * N), Array.from({ length: N }, (_, i) => i * N + S)]) {
       const base = positions.length / 3;
-      for (const depth of [0, Math.max(20, size * .6)]) for (const k of edge) {
+      for (const depth of [0, this._overTunnel(x, z, size) ? 1.5 : Math.max(20, size * .6)]) for (const k of edge) {
         positions.push(positions[k * 3], positions[k * 3 + 1] - depth, positions[k * 3 + 2]);
         realH.push(realH[k] - depth);
         if (this.forest) canopy.push(canopy[k]);
@@ -1220,6 +1237,7 @@ export class StylizedTerrain {
     this.life?.tick(dt, camera);
     this.visitors?.tick(dt, camera);
     this.raceDay?.tick(dt, camera);
+    this.subway?.tick(dt, rider);
   }
 
   setNight(v) {
@@ -1250,7 +1268,7 @@ export class StylizedTerrain {
     for (const pool of Object.values(this.pools || {})) pool.dispose();
     this.farCards?.dispose();
     this.details?.dispose(); this.verge?.dispose(); this.visitors?.dispose();
-    this.city?.dispose();
+    this.city?.dispose(); this.subway?.dispose();
     this.landmarkGeometries.forEach((g) => g.dispose()); this.landmarkGeometries.clear();
     this.surf?.geometry.dispose(); this.surf?.material.dispose(); this.landmarks?.dispose(); this.shoreTexture?.dispose(); this.bridges?.dispose(); this.traffic?.dispose(); this.life?.dispose();
     this.ocean?.geometry.dispose(); this.ocean?.material.dispose();   // ([F30] ?.: a build released half way)

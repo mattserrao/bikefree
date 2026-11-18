@@ -68,6 +68,13 @@
       "catalogId": "pittsburgh-slopes",
       "base": "routes/cities/pittsburgh-slopes.gpx",
       "spec": "tools/city/pittsburgh-slopes.network.json"
+    },
+    {
+      "id": "subway",
+      "name": "The subway: North Side to Gateway",
+      "catalogId": "pittsburgh-subway",
+      "base": "routes/cities/pittsburgh-subway.gpx",
+      "spec": "tools/city/pittsburgh-subway.network.json"
     }
   ],
   "presets": [
@@ -75,8 +82,10 @@
       "id": "pgh-three-rivers",
       "name": "Three Rivers Loop",
       "path": [
-        "A>B+",
-        "B>E+",
+        "A>NS+",
+        "NS>B+",
+        "B>GW+",
+        "GW>E+",
         "E>F+",
         "F>G+",
         "G>Q+",
@@ -107,8 +116,10 @@
         "G>Q-",
         "F>G-",
         "E>F-",
-        "B>E-",
-        "A>B-"
+        "GW>E-",
+        "B>GW-",
+        "NS>B-",
+        "A>NS-"
       ],
       "tags": [
         "varied"
@@ -119,8 +130,10 @@
       "id": "pgh-short-loop",
       "name": "South Side Short Loop",
       "path": [
-        "A>B+",
-        "B>E+",
+        "A>NS+",
+        "NS>B+",
+        "B>GW+",
+        "GW>E+",
         "E>F+",
         "F>G+",
         "G>GV+",
@@ -146,8 +159,10 @@
         "G>GV-",
         "F>G-",
         "E>F-",
-        "B>E-",
-        "A>B-"
+        "GW>E-",
+        "B>GW-",
+        "NS>B-",
+        "A>NS-"
       ],
       "tags": [
         "short",
@@ -173,8 +188,10 @@
       "id": "pgh-west-end",
       "name": "Three Rivers Loop + West End Overlook",
       "path": [
-        "A>B+",
-        "B>E+",
+        "A>NS+",
+        "NS>B+",
+        "B>GW+",
+        "GW>E+",
         "E>F+",
         "F>G+",
         "G>Q+",
@@ -216,16 +233,20 @@
       "id": "pgh-point-jail",
       "name": "Point & Jail Trail Loop",
       "path": [
-        "A>B+",
-        "B>E+",
+        "A>NS+",
+        "NS>B+",
+        "B>GW+",
+        "GW>E+",
         "E>I+",
         "I>S+",
         "S>H+",
         "H>G+",
         "F>G-",
         "E>F-",
-        "B>E-",
-        "A>B-"
+        "GW>E-",
+        "B>GW-",
+        "NS>B-",
+        "A>NS-"
       ],
       "tags": [
         "flat",
@@ -237,8 +258,10 @@
       "id": "pgh-jail-mt-washington",
       "name": "Jail Trail & Mount Washington Loop",
       "path": [
-        "A>B+",
-        "B>E+",
+        "A>NS+",
+        "NS>B+",
+        "B>GW+",
+        "GW>E+",
         "E>I+",
         "I>S+",
         "S>H+",
@@ -279,8 +302,10 @@
       "id": "pgh-long",
       "name": "Three Rivers There & Back",
       "path": [
-        "A>B+",
-        "B>E+",
+        "A>NS+",
+        "NS>B+",
+        "B>GW+",
+        "GW>E+",
         "E>F+",
         "F>G+",
         "G>Q+",
@@ -301,8 +326,10 @@
         "G>Q-",
         "F>G-",
         "E>F-",
-        "B>E-",
-        "A>B-"
+        "GW>E-",
+        "B>GW-",
+        "NS>B-",
+        "A>NS-"
       ],
       "tags": [
         "long",
@@ -347,8 +374,10 @@
       "id": "pgh-oakland-south",
       "name": "Oakland & South Side Loop",
       "path": [
-        "A>B+",
-        "B>E+",
+        "A>NS+",
+        "NS>B+",
+        "B>GW+",
+        "GW>E+",
         "E>I+",
         "I>L+",
         "L>J+",
@@ -361,8 +390,10 @@
         "H>G+",
         "F>G-",
         "E>F-",
-        "B>E-",
-        "A>B-"
+        "GW>E-",
+        "B>GW-",
+        "NS>B-",
+        "A>NS-"
       ],
       "tags": [
         "long",
@@ -380,7 +411,8 @@
         "N>LB+",
         "LB>M+",
         "M>B+",
-        "A>B-"
+        "NS>B-",
+        "A>NS-"
       ],
       "tags": [
         "flat",
@@ -392,7 +424,8 @@
       "id": "pgh-allegheny-rev",
       "name": "Allegheny Loop · reverse",
       "path": [
-        "A>B+",
+        "A>NS+",
+        "NS>B+",
         "M>B-",
         "LB>M-",
         "N>LB-",
@@ -414,15 +447,18 @@
         "N>LB+",
         "LB>M+",
         "M>B+",
-        "B>E+",
+        "B>GW+",
+        "GW>E+",
         "E>I+",
         "I>S+",
         "S>H+",
         "H>G+",
         "F>G-",
         "E>F-",
-        "B>E-",
-        "A>B-"
+        "GW>E-",
+        "B>GW-",
+        "NS>B-",
+        "A>NS-"
       ],
       "tags": [
         "long",
@@ -471,7 +507,8 @@
         "N>LB+",
         "LB>M+",
         "M>B+",
-        "A>B-"
+        "NS>B-",
+        "A>NS-"
       ],
       "tags": [
         "hilly",
@@ -503,7 +540,8 @@
         "T>L+",
         "I>L-",
         "E>I-",
-        "B>E-",
+        "GW>E-",
+        "B>GW-",
         "M>B-"
       ],
       "tags": [
@@ -525,8 +563,10 @@
         "T>L+",
         "I>L-",
         "E>I-",
-        "B>E-",
-        "A>B-"
+        "GW>E-",
+        "B>GW-",
+        "NS>B-",
+        "A>NS-"
       ],
       "tags": [
         "long",
@@ -557,7 +597,8 @@
       "id": "pgh-jail-gap",
       "name": "Jail Trail & the GAP to Homestead",
       "path": [
-        "B>E+",
+        "B>GW+",
+        "GW>E+",
         "E>I+",
         "I>S+",
         "S>W+",
@@ -569,7 +610,8 @@
         "H>G+",
         "F>G-",
         "E>F-",
-        "B>E-"
+        "GW>E-",
+        "B>GW-"
       ],
       "tags": [
         "long",
@@ -634,8 +676,10 @@
       "id": "pgh-three-rivers-northside",
       "name": "Three Rivers & North Side Loop",
       "path": [
-        "A>B+",
-        "B>E+",
+        "A>NS+",
+        "NS>B+",
+        "B>GW+",
+        "GW>E+",
         "E>F+",
         "F>G+",
         "G>Q+",
@@ -672,8 +716,10 @@
         "L>J-",
         "I>L-",
         "E>I-",
-        "B>E-",
-        "A>B-"
+        "GW>E-",
+        "B>GW-",
+        "NS>B-",
+        "A>NS-"
       ],
       "tags": [
         "long",
@@ -745,14 +791,95 @@
         "new"
       ],
       "note": "From East Carson & 27th up Barry, Holt and Eleanor to Allentown, over to Mount Washington and down to Beechview for Boustead Street and Canton Avenue's cobbles, back up Warrington Ave and down the Slopes"
+    },
+    {
+      "id": "pgh-subway-point",
+      "name": "Under the Allegheny: North Shore to the Point",
+      "path": [
+        "A>NS+",
+        "NS>GW+",
+        "B>GW-",
+        "NS>B-",
+        "A>NS-"
+      ],
+      "tags": [
+        "short",
+        "flat",
+        "new"
+      ],
+      "note": "From the Water Steps: the escalator down at North Side, the subway path under the Allegheny, up at Gateway, round the Point and the riverfront, home over the Clemente Bridge"
+    },
+    {
+      "id": "pgh-subway-three-rivers",
+      "name": "Three Rivers Loop · via the subway",
+      "path": [
+        "A>NS+",
+        "NS>GW+",
+        "GW>E+",
+        "E>F+",
+        "F>G+",
+        "G>Q+",
+        "Q>H+",
+        "H>G+",
+        "G>GV+",
+        "GV>D+",
+        "D>C+",
+        "C>R+",
+        "R>A+"
+      ],
+      "tags": [
+        "varied",
+        "new"
+      ],
+      "note": "The Three Rivers Loop with the subway under the Allegheny instead of the Clemente Bridge and the Point"
+    },
+    {
+      "id": "pgh-long-subway",
+      "name": "Long Loop · out by the subway",
+      "path": [
+        "A>NS+",
+        "NS>GW+",
+        "GW>E+",
+        "E>F+",
+        "F>G+",
+        "G>Q+",
+        "Q>H+",
+        "H>G+",
+        "G>GV+",
+        "GV>D+",
+        "D>C+",
+        "C>R+",
+        "R>A+",
+        "R>A-",
+        "C>R-",
+        "D>C-",
+        "GV>D-",
+        "G>GV-",
+        "H>G-",
+        "Q>H-",
+        "G>Q-",
+        "F>G-",
+        "E>F-",
+        "GW>E-",
+        "B>GW-",
+        "NS>B-",
+        "A>NS-"
+      ],
+      "tags": [
+        "long",
+        "varied",
+        "new"
+      ],
+      "note": "The long loop both ways: out under the Allegheny by the subway, home round the Point and over the Clemente Bridge"
     }
   ],
   "freeRide": {
     "name": "Free Ride · choose every turn",
-    "first": "A>B+",
+    "first": "A>NS+",
     "note": "No plan: from the Water Steps, straight on at every junction unless you choose a turn. Ride until you stop",
     "prefer": {
-      "LB": "N>LB-"
+      "LB": "N>LB-",
+      "NS": "NS>B+"
     }
   },
   "keySplits": {
@@ -796,6 +923,14 @@
     "N>M": [
       "N>LB",
       "LB>M"
+    ],
+    "A>B": [
+      "A>NS",
+      "NS>B"
+    ],
+    "B>E": [
+      "B>GW",
+      "GW>E"
     ]
   }
 }
