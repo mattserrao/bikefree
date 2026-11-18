@@ -249,6 +249,7 @@ export class Weather {
     }
     // inside the bank (or in rain) the air closes in
     const L = this.world.terrain?.landscape;
+    if (s.rain > .02 && L?.sheltered) this.rain.visible = !L.sheltered(cam.x, cam.z);   // [glasshouse] no rain under glass
     const inland = L?.fogInlandAt ? L.fogInlandAt(cam.x, cam.z) : L?.inlandAt ? L.inlandAt(cam.x, cam.z) : -1000;
     const reach = 1 - Math.min(1, Math.max(0, (inland - 300) / 900));
     const inside = s.bank * reach * Math.min(1, Math.max(0, (this.base + s.bankTop - cam.y) / 35));

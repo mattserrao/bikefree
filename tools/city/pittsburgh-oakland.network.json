@@ -44,9 +44,9 @@
       "rev": "Schenley Drive across the park to Phipps"
     },
     "K>J": {
-      "name": "Schenley Oval & Panther Hollow",
-      "fwd": "Serpentine Drive, round the Schenley Oval and up Panther Hollow",
-      "rev": "down Panther Hollow, round the Schenley Oval and up Serpentine Drive"
+      "name": "Schenley Oval, Panther Hollow & Phipps",
+      "fwd": "Serpentine Drive, round the Schenley Oval, up Panther Hollow, round Phipps Conservatory's gardens and through its glass rooms",
+      "rev": "through Phipps Conservatory's glass rooms and round its gardens, down Panther Hollow, round the Schenley Oval and up Serpentine Drive"
     }
   }
 }

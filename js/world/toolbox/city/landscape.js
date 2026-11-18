@@ -4,6 +4,7 @@
 // Data: "bikefree-city-1", built by tools/build_city.py. With a real height grid as well (the scene's
 // `terrainGridFile`, tools/build_terrain_grid.py in rivers mode) the ground is 10 m elevation along the route
 // and 40 m out to ~9 km, and the rivers beyond the city's own box come from that grid's river mask.
+import { makeGlasshousePads } from '../structures/glasshouse.js';
 import { ghostMask } from '../../ghost.js';
 import { makeRouteIndex } from '../../geo.js';
 import { smoothstep } from '../core/random.js';
@@ -326,9 +327,11 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
     }
     return [...out.values()];
   };
+  const pads = makeGlasshousePads(config, proj, route, index);   // [glasshouse] (js/world/toolbox/structures/glasshouse.js)
   const grade = makeStreetGrade(config, { data, decoded: D, route, index, outbound, routeKindAt, onRouteBridge, routeDist });   // [street-kit] main-street cross-section
   const heightAt = (x, z) => {
     let h = routeHeightAt(x, z);
+    { const pad = pads?.at(x, z); if (pad) h += (pad.y - h) * pad.w; }   // [glasshouse] level under the glass, eased back outside
     if (buildingStreets) return h;
     // Flat for 6.5 m past the carriageway (sidewalks reach 2.5 m; one more ground-mesh cell so the 6 m mesh
     // can't drag a hillside over it), easing back to the terrain by 18 m. Where streets overlap at different
@@ -486,6 +489,7 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
     kind: 'city', city: true, data, decoded: D, level, wallAt, shoreWalls, outer: OW && { x0: T.x0, z0: T.z0, x1: T.x1, z1: T.z1, water: outerWater, mask: OW }, hasOcean: false, coastSide: 1,
     coast: [{ x: -1e5, z: 0 }, { x: -1e5, z: 1 }], coastX: () => -1e5, inlandAt: () => 1e4,
     lakes: [], waterIslands: [], creeks: [], creekAt: () => null, landmarks,
+    sheltered: pads ? pads.sheltered : () => false,   // [glasshouse] under glass (no rain, no street lamps)
     heightAt, baseHeight, terrainAt, bridgeAt, waterLevelAt, landAt: landCell, waterAt, routeKindAt, routeBridges, broad,
     isWater: (x, z, height) => waterAt(x, z) > .35 && height < level + .6,
     colorAt: (x, z) => LAND_COLORS[landCell(x, z)] || null,

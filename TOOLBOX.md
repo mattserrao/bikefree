@@ -148,6 +148,7 @@ js/world/toolbox/
 | `structures/cables.js` | `cables` | Ski lifts (pylons, stations, chairs and cabins) and power lines (poles, lattice towers) from the map, with sagging wires. |
 | `structures/dam.js` | `dams` | A concrete dam wall along a mapped crest. |
 | `structures/hairpin-walls.js` | `hairpinWalls` | Dry-stone retaining walls under the upper leg where two legs of a switchback climb close together. |
+| `structures/glasshouse.js` | `glasshouses` | A conservatory the route rides through (Phipps Conservatory at ~5×, Oakland first): barrel-vaulted glass ranges and a domed palm court laid out in their own u/v frame, white frames on a stone plinth, glass partitions between themed rooms, a door wherever the route crosses a wall; themed instanced planting in peak bloom (palms, rain forest, desert, orchids, a sunken parterre, outdoor borders), hanging glass art, a waterfall, fountains and pools, benches. The ground is levelled under the footprint and follows the path (`makeGlasshousePads`, read by the city landscape); `sheltered(x, z)` keeps rain and street lamps out. The route itself is a `detours` stretch in the city config, and `clearAreas` clears map buildings, streets, trees and furniture under it (`tools/build_city.py`). About 20 draws. |
 | `structures/arch-bridges.js` | (real terrain) | A deck and parapets over every gorge, and open-spandrel concrete arches on the deep ones. `bridgeColors` restyles them, for example as masonry. |
 
 ### roadside

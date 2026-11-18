@@ -115,6 +115,7 @@ export const SCENE_FIELDS = {
   qcAccept: { type: 'array', doc: 'course QC warnings reviewed and accepted: [{check, fromM, toM, why}] (reported as info)' },
   routeTrees: { type: 'array', keys: ['fromM', 'toM', 'spacingM', 'offsetM', 'sides'], doc: 'street trees along the route' },
   bridgeFrames: { type: 'object', tool: T + 'city/bridges.js', doc: 'city bridge frames by name' },
+  glasshouses: { type: 'array', tool: T + 'structures/glasshouse.js', keys: ['name', 'origin', 'yawDeg', 'seed', 'pathM', 'padM', 'floorDropM', 'walkM', 'gardenM', 'doorM', 'panelM', 'ribM', 'frameM', 'footprint', 'gardenBox', 'rooms', 'partitions', 'themes', 'plazas', 'features', 'art'], doc: 'conservatories the route rides through (city): glass rooms (barrel ranges, a domed palm court) in their own u/v frame, doors where the route crosses a wall, the floor following the path, themed instanced planting in peak bloom, hanging glass art, water; the ground levelled under the footprint' },
   heroes: { type: 'array', tool: T + 'city/heroes.js', keys: ['model', 'name', 'lat', 'lon', 'heightM', 'bodyM', 'radiusM', 'rebuilt', 'traced', 'turnDeg'], doc: 'landmark buildings' },
   hotspots: { type: 'array', keys: ['name', 'lat', 'lon', 'radiusM'], doc: 'busy places (more people)' },
   overlooks: { type: 'object', keys: ['fromM', 'toM', 'count', 'spacingM', 'toward', 'look'], doc: 'city overlooks' },

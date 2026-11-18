@@ -144,11 +144,11 @@
    "id": "oakland",
    "catalogId": "pittsburgh-oakland",
    "base": "routes/cities/pittsburgh-oakland.gpx",
-   "legM": 13990,
+   "legM": 14960,
    "ghosts": [
     {
-     "fromM": 9290,
-     "toM": 13591
+     "fromM": 10260,
+     "toM": 14561
     }
    ],
    "aprons": [
@@ -165,8 +165,8 @@
      "edge": "e3",
      "dir": 1,
      "s": [
-      13590,
-      13990
+      14560,
+      14960
      ],
      "u0": 0
     }
@@ -527,7 +527,7 @@
     ],
     "oakland": [
      400,
-     13590
+     14560
     ]
    },
    "portal": true
@@ -757,11 +757,11 @@
    "name": "Schenley Drive by Phipps Conservatory",
    "lat": 40.438742,
    "lon": -79.946352,
-   "ele": 284,
+   "ele": 284.02,
    "passes": {
     "oakland": [
      4700,
-     9290
+     10260
     ]
    }
   },
@@ -1505,17 +1505,17 @@
    "to": "J",
    "s": [
     5890,
-    9290
+    10260
    ],
-   "lengthM": 3400,
+   "lengthM": 4370,
    "climbM": [
-    26,
-    72
+    33,
+    79
    ],
-   "name": "Schenley Oval & Panther Hollow",
+   "name": "Schenley Oval, Panther Hollow & Phipps",
    "toward": [
-    "Serpentine Drive, round the Schenley Oval and up Panther Hollow",
-    "down Panther Hollow, round the Schenley Oval and up Serpentine Drive"
+    "Serpentine Drive, round the Schenley Oval, up Panther Hollow, round Phipps Conservatory's gardens and through its glass rooms",
+    "through Phipps Conservatory's glass rooms and round its gardens, down Panther Hollow, round the Schenley Oval and up Serpentine Drive"
    ]
   },
   {
@@ -2425,8 +2425,8 @@
     "new"
    ],
    "note": "Round Schenley Park from Phipps: Schenley Drive, Serpentine Drive, the Oval and up Panther Hollow",
-   "lengthM": 4590,
-   "climbM": 71
+   "lengthM": 5560,
+   "climbM": 78
   },
   {
    "id": "pgh-oakland",
@@ -2446,8 +2446,8 @@
     "new"
    ],
    "note": "The Jail Trail, up Junction Hollow to Oakland and the Cathedral of Learning, round Schenley Park and back down to downtown",
-   "lengthM": 21150,
-   "climbM": 201
+   "lengthM": 22120,
+   "climbM": 208
   },
   {
    "id": "pgh-oakland-south",
@@ -2476,8 +2476,8 @@
     "new"
    ],
    "note": "The Point, the Jail Trail, Oakland and Schenley Park, then over the Hot Metal Bridge and home on the river trail",
-   "lengthM": 30630,
-   "climbM": 267
+   "lengthM": 31600,
+   "climbM": 274
   },
   {
    "id": "pgh-allegheny",
@@ -2819,8 +2819,8 @@
     "new"
    ],
    "note": "The North Shore Trail to Millvale and over the 40th Street Bridge, up Stanton Ave to Highland Park and round the reservoir, East Liberty and Shady Ave to Squirrel Hill, Forbes to Schenley Park, round the Oval and down through Oakland, Junction Hollow and the Jail Trail, home over the Clemente Bridge",
-   "lengthM": 36890,
-   "climbM": 377
+   "lengthM": 37860,
+   "climbM": 384
   },
   {
    "id": "pgh-sycamore",
