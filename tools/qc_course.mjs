@@ -74,25 +74,25 @@ const angleBetween = (a, b) => deg(Math.acos(Math.max(-1, Math.min(1, a.x * b.x 
 function makeMeshGround(heightAt, fineCells = PATCH_CELLS, fineAt = null, landscape = null) {
   // [w2-align] city patches are draped off the streets (js/world/toolbox/landscape/ground-drape.js): model each 96 m patch the same way
   if (landscape?.groundClearPoints) {
-    const cell = PATCH / PATCH_CELLS;
-    const patches = new Map(), N = PATCH_CELLS + 1;
+    // (a patch the landscape asks to draw finer — groundMesh.fineCells along a city's fineRanges — as stylized-terrain.js builds it)
+    const patches = new Map();
     const patch = (pi, pj) => {
       const key = pi * 1e7 + pj;
       let h = patches.get(key);
       if (!h) {
-        const x0 = pi * PATCH, z0 = pj * PATCH;
-        h = new Float64Array(N * N);
+        const x0 = pi * PATCH, z0 = pj * PATCH, S = fineAt && fineAt(x0 + 1, z0 + 1) ? fineCells : PATCH_CELLS, cell = PATCH / S, N = S + 1;
+        h = new Float64Array(N * N); h.S = S;
         for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) h[j * N + i] = heightAt(x0 + i * cell, z0 + j * cell);
-        const d = groundDrape(h, x0, z0, cell, PATCH_CELLS, heightAt, { maxDrop: DRAPE_MAX_DROP, fixed: landscape.groundDrapeFixed, last: landscape.groundDrapeLast });
-        d.add(landscape.groundClearPoints(x0, z0, x0 + PATCH, z0 + PATCH, 2)); d.apply();
+        const d = groundDrape(h, x0, z0, cell, S, heightAt, { maxDrop: DRAPE_MAX_DROP, fixed: landscape.groundDrapeFixed, last: landscape.groundDrapeLast });
+        d.add(landscape.groundClearPoints(x0, z0, x0 + PATCH, z0 + PATCH, Math.max(2, cell / 3))); d.apply();
         patches.set(key, h);
       }
       return h;
     };
     return (x, z) => {
-      const pi = Math.floor(x / PATCH), pj = Math.floor(z / PATCH), h = patch(pi, pj);
+      const pi = Math.floor(x / PATCH), pj = Math.floor(z / PATCH), h = patch(pi, pj), S = h.S, cell = PATCH / S, N = S + 1;
       const u = (x - pi * PATCH) / cell, w = (z - pj * PATCH) / cell;
-      const i = Math.min(PATCH_CELLS - 1, Math.floor(u)), j = Math.min(PATCH_CELLS - 1, Math.floor(w)), fu = u - i, fw = w - j;
+      const i = Math.min(S - 1, Math.floor(u)), j = Math.min(S - 1, Math.floor(w)), fu = u - i, fw = w - j;
       const a = h[j * N + i], b = h[j * N + i + 1], d = h[(j + 1) * N + i], e = h[(j + 1) * N + i + 1];
       return fu + fw <= 1 ? a + (b - a) * fu + (d - a) * fw : e + (d - e) * (1 - fu) + (b - e) * (1 - fw);
     };
@@ -386,7 +386,7 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
         if (!r || r.d > ROAD_WIDTH / 2 + .6) continue;
         // [F15] against the road as drawn (its curve), not the 10 m chords routeDist follows
         // (and every other pass of it there: a street ridden twice draws two roads over each other)
-        const q = RLq.project(p.x, p.z, route.dist[Math.min(end, r.i)], 25), low = RLq.lowestNear(p.x, p.z, ROAD_WIDTH / 2 + .6);
+        const q = RLq.project(p.x, p.z, route.dist[Math.min(end, r.i)], 25), low = RLq.lowestNear(p.x, p.z, ROAD_WIDTH / 2 + .6, q ? q.s : route.dist[Math.min(end, r.i)], 60);   // (other passes: 60 m along the road either way is this pass, as the junction planner counts them — on a tight corner up a steep street the pass's own chords before and after the bend lie within reach at other heights)
         const roadY = Math.min(q && q.d < ROAD_WIDTH / 2 + 1.5 ? q.y : r.y, low ?? Infinity);
         const over = (p === jn ? jn.cy : p.y ?? jn.top(p.x, p.z)) - (roadY + ROAD_LIFT);   // [junctions] (the surface as drawn)
         if (over > -.005 && over < 4) F.add('junction-over-road', 'fail', route.dist[r.i], over, 'a junction surface covers the road');   // (4 m and up: a junction on a deck that crosses over the road, as for streets)

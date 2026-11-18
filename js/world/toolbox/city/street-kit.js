@@ -601,7 +601,7 @@ export class StreetKit {
       if (!st.route) { const r = L.routeDist(px, pz); if (r && r.d < this.curbAt(this.sOf(r)) + .3) return null; }
       // `clearRouteCrossings` (opt-in, PLAN 5.5: the GAP meeting East Waterfront Drive): no sidewalk across another
       // pass of the route — a trail that joins the route's street at a junction (F41: the other areas, after review)
-      else if (this.cfg.clearRouteCrossings) { const r = L.routeDist(px, pz), s2 = r && this.sOf(r); if (r && r.d < ROAD_WIDTH / 2 + .3 && Math.abs(s2 - st.s) > 20 && !ghostAt(this.route, s2)) return null; }
+      else if (this.cfg.clearRouteCrossings) { const r = L.routeDist(px, pz), s2 = r && this.sOf(r); if (r && r.d < ROAD_WIDTH / 2 + .3 && !ghostAt(this.route, s2) && (Math.abs(s2 - st.s) > 20 || (() => { const g = this.frame(s2); return g.tx * tx + g.tz * tz < .5; })())) return null; }   // (…or the other leg of a hairpin, under 20 m along: PLAN 5.9, Broadway to Coast Ave)
     }
     if (line < 1.2) return null;   // a building right at the curb: no room
     const top = y + CURB_H;

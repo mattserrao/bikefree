@@ -653,6 +653,21 @@
   "area": "pittsburgh"
  },
  {
+  "id": "pittsburgh-northside",
+  "name": "Pittsburgh \u00b7 The North Side",
+  "park": "Pittsburgh, Pennsylvania",
+  "file": "routes/cities/pittsburgh-northside.gpx",
+  "outAndBack": false,
+  "expectedKm": [
+   16,
+   21
+  ],
+  "scene": "routes/scenes/pittsburgh-northside.json",
+  "eleSmoothM": 10,
+  "stage": "draft",
+  "area": "pittsburgh"
+ },
+ {
   "id": "pittsburgh-slopes",
   "name": "Pittsburgh \u00b7 The South Side Slopes, Mount Washington & the Dirty Dozen south",
   "park": "Pittsburgh, Pennsylvania",

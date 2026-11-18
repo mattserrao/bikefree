@@ -178,6 +178,11 @@ if (!spec.areas) {
       const m = matchApron(A, ap, built, edges);
       if (!m) throw new Error(`area ${A.area.id}: the apron ${ap.fromM}–${ap.toM} m doesn't run along another area's edge`);
       list.push(m);
+      // an apron through a portal of the other area (two of its junctions close together): on along its next edges
+      for (let more = m; more && Math.floor(ap.toM / 10) * 10 - more.s[1] >= 50;) {
+        more = matchApron(A, { fromM: more.s[1], toM: ap.toM }, built, edges);
+        if (more) list.push(more);
+      }
     }
     return { id: A.area.id, catalogId: A.area.catalogId, base: A.item.file, legM: A.L, ...(A.ghosts.length ? { ghosts: A.ghosts } : {}), ...(list.length ? { aprons: list } : {}) };
   });

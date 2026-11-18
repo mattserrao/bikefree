@@ -372,10 +372,7 @@ export function planJunctions(streets, ctx, options = {}) {
       // route rides twice, both ways, draws two roads over each other — 45.09 / 46.26 km; a pass more than 3 m below is
       // one the junction's deck crosses over)
       J = (x, z) => {
-        const q = RL.project(x, z, rq.s, 45), low = RL.lowestNear(x, z, RW / 2 + 1, q.s, 60);
-        // (and its own pass's cross-sections there too: on a turn that climbs, a corner lies across both legs of the
-        // turn, the lower one a few cm under the nearest chord — the course QC's road there. PLAN 5.9: steep corners)
-        const own = RL.lowestNear(x, z, RW / 2 + .6), y = own != null && own < q.y && q.y - own < .3 ? own : q.y;
+        const q = RL.project(x, z, rq.s, 45), y = q.y, low = RL.lowestNear(x, z, RW / 2 + 1, q.s, 60);
         return (low != null && low < y && y - low < 3 ? low : y) + ROAD_LIFT - O.routeGap - O.lift;
       };
     } else {

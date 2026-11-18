@@ -452,6 +452,19 @@ export function makeCityLandscape(config, proj, index, route) {
   });
   const yardTree = (x, z) => !!YT && (!ytBoxes.length || ytBoxes.some((b) => x > b[0] && x < b[1] && z > b[2] && z < b[3]))
     && ((h) => h - Math.floor(h))(Math.sin(x * 4.1414 + z * 91.7171) * 24634.6345) < (YT.kitDensity ?? .5);
+  // a scene may ask for finer ground (groundMesh.fineCells) along stretches of the route (groundMesh.fineRanges:
+  // [{fromM, toM}]) where a road cut into a steep hillside carves a bank the 6 m mesh can't follow (a park road
+  // spiralling round a hill): the 96 m ground patches within 30 m of the road there (stylized-terrain.js)
+  const fineRanges = config.groundMesh?.fineCells ? config.groundMesh.fineRanges || [] : [];
+  const fineCells = fineRanges.length ? (() => {
+    const set = new Set();
+    for (let i = 0; i < route.dist.length; i++) {
+      const s = route.dist[i];
+      if (!fineRanges.some((r) => s >= r.fromM && s <= r.toM)) continue;
+      for (const dx of [-30, 30]) for (const dz of [-30, 30]) set.add(`${Math.floor((index.xs[i] + dx) / 96)},${Math.floor((index.zs[i] + dz) / 96)}`);
+    }
+    return set;
+  })() : null;
   const L = {
     kind: 'city', city: true, data, decoded: D, level, wallAt, shoreWalls, outer: OW && { x0: T.x0, z0: T.z0, x1: T.x1, z1: T.z1, water: outerWater, mask: OW }, hasOcean: false, coastSide: 1,
     coast: [{ x: -1e5, z: 0 }, { x: -1e5, z: 1 }], coastX: () => -1e5, inlandAt: () => 1e4,
@@ -461,6 +474,7 @@ export function makeCityLandscape(config, proj, index, route) {
     colorAt: (x, z) => LAND_COLORS[landCell(x, z)] || null,
     /** Trees and shrubs from the shared kit grow only in parks, woods and the hills beyond. */
     canPlant: (x, z) => { const c = landCell(x, z); return c === LAND.woods || c === LAND.outside || (c === LAND.grass && ((x * 13 + z * 7) & 3) === 0) || (c === LAND.yards && yardTree(x, z)); },   // [s4-section] yards
+    ...(fineCells ? { fineGroundAt: (x, z) => fineCells.has(`${Math.floor(x / 96)},${Math.floor(z / 96)}`) } : {}),
     routeDist, streetAt, streetsNear, groundClearPoints,   // [w2-align] groundClearPoints, groundDrapeFixed/Last
     // the route's bank and verge (not under its bridges and viaducts, 10 m in from their ends: the ground there is the streets' below)
     groundDrapeFixed: (x, z) => { const r = routeDist(x, z); return !!r && r.d < 20 && !onRouteBridge(route.dist[r.i], -10); },

@@ -43,6 +43,12 @@
       "spec": "tools/city/pittsburgh-homestead.network.json"
     },
     {
+      "id": "northside",
+      "catalogId": "pittsburgh-northside",
+      "base": "routes/cities/pittsburgh-northside.gpx",
+      "spec": "tools/city/pittsburgh-northside.network.json"
+    },
+    {
       "id": "slopes",
       "catalogId": "pittsburgh-slopes",
       "base": "routes/cities/pittsburgh-slopes.gpx",
@@ -63,7 +69,9 @@
         "H>G+",
         "G>GV+",
         "GV>D+",
-        "D>A+"
+        "D>C+",
+        "C>R+",
+        "R>A+"
       ],
       "tags": [
         "varied"
@@ -74,7 +82,9 @@
       "id": "pgh-three-rivers-rev",
       "name": "Three Rivers Loop · reverse",
       "path": [
-        "D>A-",
+        "R>A-",
+        "C>R-",
+        "D>C-",
         "GV>D-",
         "G>GV-",
         "H>G-",
@@ -100,7 +110,9 @@
         "F>G+",
         "G>GV+",
         "GV>D+",
-        "D>A+"
+        "D>C+",
+        "C>R+",
+        "R>A+"
       ],
       "tags": [
         "short",
@@ -112,7 +124,9 @@
       "id": "pgh-short-loop-rev",
       "name": "South Side Short Loop · reverse",
       "path": [
-        "D>A-",
+        "R>A-",
+        "C>R-",
+        "D>C-",
         "GV>D-",
         "G>GV-",
         "F>G-",
@@ -155,7 +169,9 @@
         "GV>D+",
         "D>O+",
         "D>O-",
-        "D>A+"
+        "D>C+",
+        "C>R+",
+        "R>A+"
       ],
       "tags": [
         "hilly",
@@ -214,7 +230,9 @@
         "H>G+",
         "G>GV+",
         "GV>D+",
-        "D>A+"
+        "D>C+",
+        "C>R+",
+        "R>A+"
       ],
       "tags": [
         "varied",
@@ -228,8 +246,12 @@
       "path": [
         "G>GV+",
         "GV>D+",
-        "D>A+",
-        "D>A-",
+        "D>C+",
+        "C>R+",
+        "R>A+",
+        "R>A-",
+        "C>R-",
+        "D>C-",
         "GV>D-",
         "G>GV-"
       ],
@@ -251,8 +273,12 @@
         "H>G+",
         "G>GV+",
         "GV>D+",
-        "D>A+",
-        "D>A-",
+        "D>C+",
+        "C>R+",
+        "R>A+",
+        "R>A-",
+        "C>R-",
+        "D>C-",
         "GV>D-",
         "G>GV-",
         "H>G-",
@@ -531,6 +557,84 @@
         "new"
       ],
       "note": "The Point, the Jail Trail and the Hot Metal Bridge, the GAP to Homestead and a lap past the Pump House, home on the South Side river trail"
+    },
+    {
+      "id": "pgh-northside-hills",
+      "name": "North Side Hills Loop",
+      "path": [
+        "R>A-",
+        "R>Y+",
+        "Y>Z+",
+        "Z>C+",
+        "C>R+",
+        "R>A+"
+      ],
+      "tags": [
+        "hilly",
+        "new"
+      ],
+      "note": "From the Water Steps: the National Aviary, Randyland, the Fineview climb and overlook, Riverview Park and the Allegheny Observatory, the Davis Avenue Bridge and down Brighton Road"
+    },
+    {
+      "id": "pgh-northside-hills-rev",
+      "name": "North Side Hills Loop · reverse",
+      "path": [
+        "R>A-",
+        "C>R-",
+        "Z>C-",
+        "Y>Z-",
+        "R>Y-",
+        "R>A+"
+      ],
+      "tags": [
+        "hilly",
+        "new"
+      ],
+      "note": "Up Brighton Road to Riverview Park and the Observatory first, then down through Fineview past the overlook, Randyland and the Aviary"
+    },
+    {
+      "id": "pgh-fineview",
+      "name": "Fineview Climb Loop",
+      "path": [
+        "R>A-",
+        "R>Y+",
+        "Y>Z+",
+        "Z>Y+",
+        "R>Y-",
+        "R>A+"
+      ],
+      "tags": [
+        "short",
+        "hilly",
+        "new"
+      ],
+      "note": "From the Water Steps past the Aviary and Randyland, up Belleau Street to the Fineview Overlook, down Perrysville Avenue's bends and back"
+    },
+    {
+      "id": "pgh-three-rivers-northside",
+      "name": "Three Rivers & North Side Loop",
+      "path": [
+        "A>B+",
+        "B>E+",
+        "E>F+",
+        "F>G+",
+        "G>Q+",
+        "Q>H+",
+        "H>G+",
+        "G>GV+",
+        "GV>D+",
+        "D>C+",
+        "Z>C-",
+        "Y>Z-",
+        "R>Y-",
+        "R>A+"
+      ],
+      "tags": [
+        "long",
+        "varied",
+        "new"
+      ],
+      "note": "The Three Rivers Loop with McArdle and Grandview, over the West End Bridge, up Brighton Road to Riverview Park, down through Fineview, Randyland and the Aviary to the Water Steps"
     },
     {
       "id": "pgh-sycamore",

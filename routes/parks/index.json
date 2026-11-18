@@ -307,11 +307,23 @@
     "scene": "routes/scenes/pittsburgh-homestead.json"
   },
   {
+    "id": "pittsburgh-northside",
+    "name": "Pittsburgh · The North Side",
+    "park": "Pittsburgh, Pennsylvania",
+    "km": 18.6,
+    "climbM": 350,
+    "file": "routes/cities/pittsburgh-northside.gpx",
+    "stage": "draft",
+    "area": "pittsburgh",
+    "eleSmoothM": 10,
+    "scene": "routes/scenes/pittsburgh-northside.json"
+  },
+  {
     "id": "pittsburgh-slopes",
     "name": "Pittsburgh · The South Side Slopes, Mount Washington & the Dirty Dozen south",
     "park": "Pittsburgh, Pennsylvania",
     "km": 24.1,
-    "climbM": 665,
+    "climbM": 664,
     "file": "routes/cities/pittsburgh-slopes.gpx",
     "stage": "draft",
     "area": "pittsburgh",
