@@ -52,9 +52,10 @@ def _b64(fmt, vals):
     return base64.b64encode(struct.pack(f'<{len(vals)}{fmt}', *vals)).decode()
 
 
-def extract(nodes, ntags, ways, q, route_dist, radius=350):
-    """Street furniture, storefronts, car parks and fences within `radius` metres of the route."""
-    near = lambda la, lo: route_dist(la, lo, radius) < radius
+def extract(nodes, ntags, ways, q, route_dist, radius=350, skip=None):
+    """Street furniture, storefronts, car parks and fences within `radius` metres of the route (`skip(lat, lon)`:
+    a cleared area — a hero model's footprint, `clearAreas` in the city config — keeps none of them)."""
+    near = lambda la, lo: route_dist(la, lo, radius) < radius and not (skip and skip(la, lo))
     pk, pxy, sc, sxy = [], [], [], []
     for i, t in ntags.items():
         if i not in nodes: continue
@@ -69,6 +70,7 @@ def extract(nodes, ntags, ways, q, route_dist, radius=350):
         if len(nd) < 2: continue
         pts = [nodes[i] for i in nd]
         if not any(near(*p) for p in pts[::max(1, len(pts) // 4)] + [pts[-1]]): continue
+        if skip and any(skip(*p) for p in pts): continue
         closed = nd[0] == nd[-1] and len(nd) >= 4
         cat = _shop_cat(t)
         if cat and closed and t.get('building') is None and len(nd) < 40:   # a shop drawn as a small area

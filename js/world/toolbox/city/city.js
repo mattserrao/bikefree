@@ -10,6 +10,7 @@ import { MeshBuilder, ribbon, resample, hash } from '../core/mesh-builder.js';
 import { buildRiverfront } from './riverfront.js';   // [s1-riverfront]
 import { buildBridgesJob, buildStadiums, buildLandmarks } from './bridges.js';
 import { buildHeroes } from './heroes.js';
+import { buildGlasshousesJob } from '../structures/glasshouse.js';
 import { CityLife } from './life.js';
 import { StreetKit, streetKitConfig } from './street-kit.js';   // [street-kit]
 import { ROAD_WIDTH } from '../../pose.js';
@@ -213,6 +214,8 @@ export class CityScene {
     if (due()) yield;
     this.heroes = buildHeroes(this);
     this.landscape.landmarks.push(...this.heroes.landmarks);   // postcard views for the scenic camera
+    if (due()) yield;
+    this.glasshouses = yield* buildGlasshousesJob(this);   // [glasshouse] conservatories ridden through (scene `glasshouses`)
     if (due()) yield;
     yield* this._treesJob();
     { const life = new CityLife(this, true); yield* life.job; life.job = null; this.life = life; }
@@ -958,6 +961,7 @@ export class CityScene {
         const off = deckBridge ? (ROAD_WIDTH + 3) / 2 + .05 : ROAD_WIDTH / 2 + (kind === 'road' ? 2.6 : 1.6);
         const x = kitLamp ? kitLamp.x : this.index.xs[i] - dz / len * off * side, z = kitLamp ? kitLamp.z : this.index.zs[i] + dx / len * off * side;
         if (!deckBridge && !this._clearSpot(x, z, .35, -1, ROAD_WIDTH / 2 + 1.2, this.streetKit ? .95 : .35)) continue;   // [finish] (kit facades)
+        if (this.landscape.sheltered?.(x, z, 12)) continue;   // [glasshouse] no street lamps under the glass (nor in its doorways)
         // on a deck: not in another carriageway that runs alongside at the same level (the roadway's other half)
         if (deckBridge && this.landscape.streetsNear(x, z, .35).some((o) => this.streets[o.k].cls !== 8 && Math.abs(o.y - r.ele[i]) < 1.5)) continue;
         lamps.push({ x, z, y: deckBridge ? r.ele[i] : kitLamp ? kitLamp.y : this.landscape.heightAt(x, z), yaw: Math.atan2(dz / len * side, -dx / len * side), bridge: !!deckBridge });   // [street-kit] (kitLamp.y)

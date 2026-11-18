@@ -90,7 +90,30 @@
     "trail": {
       "surface": "fresh",
       "tone": 1.05,
-      "zones": []
+      "zones": [
+        {
+          "fromM": 9190,
+          "toM": 9636,
+          "surface": "brick",
+          "centre": 0,
+          "tone": 1.12
+        },
+        {
+          "fromM": 9636,
+          "toM": 10214,
+          "surface": "cobble",
+          "centre": 0,
+          "tone": 1.35,
+          "warm": 0.25
+        },
+        {
+          "fromM": 10214,
+          "toM": 10260,
+          "surface": "brick",
+          "centre": 0,
+          "tone": 1.12
+        }
+      ]
     }
   },
   "brickStreets": {
@@ -121,7 +144,7 @@
   },
   "streetKit": {
     "fromM": 0,
-    "toM": 13990,
+    "toM": 14960,
     "rangeM": 220,
     "parkTrees": 16,
     "zones": []
@@ -193,6 +216,24 @@
       "lat": 40.4456,
       "lon": -80.018,
       "radiusM": 30
+    },
+    {
+      "name": "Phipps Palm Court",
+      "lat": 40.440247,
+      "lon": -79.948065,
+      "radiusM": 5
+    },
+    {
+      "name": "Phipps Sunken Garden",
+      "lat": 40.439033,
+      "lon": -79.947002,
+      "radiusM": 4
+    },
+    {
+      "name": "Phipps gardens",
+      "lat": 40.439588,
+      "lon": -79.949076,
+      "radiusM": 4.5
     }
   ],
   "rivers": [
@@ -719,8 +760,8 @@
     },
     {
       "check": "street-crease",
-      "fromM": 13640,
-      "toM": 13670,
+      "fromM": 14610,
+      "toM": 14640,
       "why": "a street beside the Jail Trail (parkway ramps, Bates St) whose mapped heights crease; not the route"
     },
     {
@@ -773,8 +814,8 @@
     },
     {
       "check": "street-step",
-      "fromM": 13600,
-      "toM": 13650,
+      "fromM": 14570,
+      "toM": 14620,
       "why": "Second Ave and the Hot Metal Bridge ramp meet junction I at their mapped heights"
     },
     {
@@ -809,13 +850,442 @@
     },
     {
       "check": "heading-sharp",
-      "fromM": 19150,
-      "toM": 19190,
+      "fromM": 21090,
+      "toM": 21130,
       "why": "the Panther Hollow Rd link on the way back (mirrored metres); ridden with the corner speed cap"
+    },
+    {
+      "check": "route-off-ground",
+      "fromM": 9240,
+      "toM": 9320,
+      "why": "Phipps Conservatory's garden walk (K>J): it leaves the Panther Hollow Bridge's end level, on a garden terrace above the ravine's slope, banked up to it (the bare ground falls away ~7 m)"
+    },
+    {
+      "check": "route-off-ground",
+      "fromM": 9460,
+      "toM": 9680,
+      "why": "Phipps Conservatory's garden walk round the west end: a raised terrace at the conservatory's floor level where the plateau falls to Junction Hollow (up to ~10 m over the bare ground), banked up to it"
+    },
+    {
+      "check": "mesh-coarse",
+      "fromM": 9440,
+      "toM": 9480,
+      "why": "the 6 m ground mesh beside Phipps' raised garden terrace at its north-west corner, where the bank meets the falling slope"
     }
   ],
   "origin": {
     "lat": 40.4375,
     "lon": -79.9925
-  }
+  },
+  "glasshouses": [
+    {
+      "name": "Phipps Conservatory",
+      "origin": {
+        "lat": 40.438742,
+        "lon": -79.946352
+      },
+      "yawDeg": -65.8993,
+      "seed": 1893,
+      "pathM": [
+        9190,
+        10260
+      ],
+      "padM": 14,
+      "floorDropM": 0.45,
+      "walkM": 6,
+      "gardenM": 14.5,
+      "doorM": [
+        14,
+        11
+      ],
+      "footprint": [
+        [
+          -232,
+          55
+        ],
+        [
+          -142,
+          55
+        ],
+        [
+          -142,
+          30
+        ],
+        [
+          -5,
+          30
+        ],
+        [
+          -5,
+          70
+        ],
+        [
+          15,
+          70
+        ],
+        [
+          15,
+          150
+        ],
+        [
+          -232,
+          150
+        ]
+      ],
+      "gardenBox": [
+        -280,
+        80,
+        -10,
+        190
+      ],
+      "rooms": [
+        {
+          "id": "palm",
+          "name": "Palm Court",
+          "rect": [
+            -232,
+            -142,
+            55,
+            150
+          ],
+          "wallM": 20,
+          "roof": "dome",
+          "dome": {
+            "c": [
+              -187,
+              102.5
+            ],
+            "r": 40,
+            "hipM": 6,
+            "drumM": 14,
+            "riseM": 42,
+            "lanternM": 8
+          }
+        },
+        {
+          "id": "range1",
+          "name": "Tropical Forest",
+          "rect": [
+            -142,
+            15,
+            110,
+            150
+          ],
+          "wallM": 16,
+          "roof": "vault",
+          "riseM": 16,
+          "axis": "u"
+        },
+        {
+          "id": "range2",
+          "name": "Desert and Orchid Rooms",
+          "rect": [
+            -142,
+            15,
+            70,
+            110
+          ],
+          "wallM": 16,
+          "roof": "vault",
+          "riseM": 16,
+          "axis": "u"
+        },
+        {
+          "id": "range3",
+          "name": "Sunken Garden",
+          "rect": [
+            -142,
+            -5,
+            30,
+            70
+          ],
+          "wallM": 16,
+          "roof": "vault",
+          "riseM": 16,
+          "axis": "u"
+        }
+      ],
+      "partitions": [
+        [
+          [
+            -142,
+            55
+          ],
+          [
+            -142,
+            150
+          ]
+        ],
+        [
+          [
+            -142,
+            110
+          ],
+          [
+            -38,
+            110
+          ]
+        ],
+        [
+          [
+            -90,
+            70
+          ],
+          [
+            -5,
+            70
+          ]
+        ],
+        [
+          [
+            -38,
+            70
+          ],
+          [
+            -38,
+            110
+          ]
+        ],
+        [
+          [
+            -90,
+            70
+          ],
+          [
+            -90,
+            110
+          ]
+        ]
+      ],
+      "themes": [
+        {
+          "theme": "palm",
+          "rect": [
+            -232,
+            -142,
+            55,
+            150
+          ]
+        },
+        {
+          "theme": "tropical",
+          "rect": [
+            -142,
+            15,
+            110,
+            150
+          ]
+        },
+        {
+          "theme": "tropical",
+          "rect": [
+            -38,
+            15,
+            70,
+            110
+          ]
+        },
+        {
+          "theme": "desert",
+          "rect": [
+            -90,
+            -38,
+            70,
+            110
+          ]
+        },
+        {
+          "theme": "orchid",
+          "rect": [
+            -142,
+            -90,
+            70,
+            110
+          ]
+        },
+        {
+          "theme": "orchid",
+          "rect": [
+            -142,
+            -108,
+            30,
+            70
+          ]
+        },
+        {
+          "theme": "sunken",
+          "rect": [
+            -108,
+            -5,
+            30,
+            70
+          ]
+        },
+        {
+          "theme": "outdoor",
+          "rect": [
+            -290,
+            90,
+            -20,
+            200
+          ]
+        }
+      ],
+      "plazas": [
+        [
+          -212,
+          64,
+          5.5
+        ],
+        [
+          -52,
+          37,
+          4.5
+        ],
+        [
+          -180,
+          172,
+          5
+        ]
+      ],
+      "features": [
+        {
+          "kind": "fountain",
+          "at": [
+            -187,
+            108
+          ],
+          "r": 7,
+          "clearM": 9
+        },
+        {
+          "kind": "waterfall",
+          "at": [
+            -16,
+            110
+          ],
+          "r": 5,
+          "faceDeg": 0,
+          "heightM": 16,
+          "widthM": 7,
+          "clearM": 12
+        },
+        {
+          "kind": "pool",
+          "at": [
+            -52,
+            62.5
+          ],
+          "size": [
+            7,
+            40
+          ],
+          "clearM": 0,
+          "globes": 12
+        }
+      ],
+      "art": [
+        {
+          "kind": "chandelier",
+          "at": [
+            -187,
+            108
+          ],
+          "y": 34,
+          "r": 8,
+          "n": 80,
+          "dropM": 18,
+          "hangFrom": 82
+        },
+        {
+          "kind": "coils",
+          "line": [
+            [
+              -128,
+              130
+            ],
+            [
+              -28,
+              130
+            ]
+          ],
+          "y": 22,
+          "n": 5,
+          "hangFrom": 31
+        },
+        {
+          "kind": "coils",
+          "line": [
+            [
+              -30,
+              90
+            ],
+            [
+              -128,
+              90
+            ]
+          ],
+          "y": 21,
+          "n": 5,
+          "hangFrom": 31
+        },
+        {
+          "kind": "coils",
+          "line": [
+            [
+              -96,
+              50
+            ],
+            [
+              -20,
+              50
+            ]
+          ],
+          "y": 21,
+          "n": 4,
+          "hangFrom": 31
+        },
+        {
+          "kind": "spires",
+          "at": [
+            -64,
+            101
+          ],
+          "r": 2.5,
+          "h": 7,
+          "n": 9
+        },
+        {
+          "kind": "spires",
+          "at": [
+            -118,
+            72
+          ],
+          "r": 2,
+          "h": 5,
+          "n": 7
+        },
+        {
+          "kind": "spires",
+          "at": [
+            -75,
+            144
+          ],
+          "r": 2.5,
+          "h": 8,
+          "n": 8
+        },
+        {
+          "kind": "spires",
+          "at": [
+            -150,
+            176
+          ],
+          "r": 2.5,
+          "h": 6,
+          "n": 8
+        }
+      ]
+    }
+  ]
 }
