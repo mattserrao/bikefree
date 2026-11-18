@@ -9,7 +9,8 @@ import * as store from './store.js';
 import { parseGpx, buildRoute, averageGradeAhead, wrapDist, routeAt, isPointToPoint, finishDistanceM, legSpan } from './gpx.js';
 import { Pacer, PACER_WATTS } from './pacer.js';
 import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor, markFtpTest, ftpFromTwentyMinutes } from './workout.js';
-import { drawProfile, drawWorkout, drawTrace, drawMinimap, drawNetworkMinimap, gradeColor, profileDistAt } from './views.js';
+import { drawProfile, drawWorkout, drawTrace, drawMinimap, drawNetworkMinimap, drawCityMap, gradeColor, profileDistAt } from './views.js';
+import { groupCityItems, citySubline, filterByGoal, segmentRoutes, pickOnSegment, nearestLine, fitProjection, mergeRivers, shortName } from './city-routes.js';
 import { Profiles, GENDERS, initials, cmToFtIn, ftInToCm } from './profiles.js';
 import { buildCatalogRoute, loadRouteScene } from './routes.js';
 import { loadNetwork, makePathRoute, planNext, planCloses, keysToIds, idsToKeys, travKey, PathFollower, edgeLines } from './network.js';
@@ -395,8 +396,8 @@ function lapView(r) {
 // tapping the segment you just rode turns back along it. A route that ends where it started laps; one that
 // ends elsewhere finishes there. Saved in settings by segment names (they survive a rebuilt network).
 const plan = { net: null, item: null, start: null, keys: [], layout: null };
-function openPlanner() {
-  const r = previewRoute, item = routeItems.find((it) => it.id === selectedRouteId);
+function openPlanner(item = routeItems.find((it) => it.id === selectedRouteId)) {
+  const r = item && routeCache.get(item.id);
   if (!r?.netRide || !item) return;
   plan.net = r.network; plan.item = item; plan.start = null; plan.keys = [];
   $('planTitle').textContent = `Plan your own route · ${(item.name || '').split(' · ')[0]}`;
@@ -404,7 +405,7 @@ function openPlanner() {
   $('planDlg').showModal();
   renderPlanner();
 }
-$('planOpen').addEventListener('click', openPlanner);
+$('planOpen').addEventListener('click', () => openPlanner());
 $('planUndo').addEventListener('click', () => { if (plan.keys.length) plan.keys.pop(); else plan.start = null; renderPlanner(); });
 $('planClear').addEventListener('click', () => { plan.keys = []; plan.start = null; renderPlanner(); });
 $('planName').addEventListener('input', () => renderPlanFacts());
@@ -518,6 +519,7 @@ async function savePlan() {
   log('app', `Saved your route: ${city} · ${name}`, 'ok');
   parkItems = null;   // rebuild the list with it
   await refreshRouteList(id);
+  if ($('cityDlg').open) { city.sel = id; city.seg = null; renderCity(); }
 }
 
 // ---------- Virtual pacer ----------
@@ -1253,11 +1255,27 @@ $('goalSeg').addEventListener('click', (e) => {
   renderRouteCards();
 });
 
+// A city with a ride network (Pittsburgh) is one card: its presets, free ride and your own routes are in its panel.
+let routeCards = [];   // routeItems with each city's items folded into one card (js/city-routes.js)
+const cityAreaCount = (card) => routeCache.get(card.baseId)?.networks?.get(card.network)?.areas.size || 0;
+const CHEVRON = '<svg class="ic chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>';
 function renderRouteCards() {
   renderGoalSeg();
-  const shown = routeGoal === 'all' ? routeItems : routeItems.filter((it) => goalTags(it).includes(routeGoal));
+  routeCards = groupCityItems(routeItems);
   const label = Object.fromEntries(GOALS);
+  const matches = (it) => goalTags(it).includes(routeGoal);
+  // a city shows while any of its routes (or its free ride) suits the goal
+  const shown = routeGoal === 'all' ? routeCards : routeCards.filter((it) => (it.city ? [...it.routes, ...(it.free ? [it.free] : [])].some(matches) : matches(it)));
   $('routeCards').innerHTML = (shown.length ? '' : '<p class="muted">No routes for that goal yet.</p>') + groupedCards(shown, (it) => {
+    if (it.city) {
+      const n = routeGoal === 'all' ? it.routes.length : it.routes.filter(matches).length;
+      let sub = citySubline(it, cityAreaCount(it));
+      if (routeGoal !== 'all') sub = sub.replace(/\d+ routes?/, `${n} ${label[routeGoal].toLowerCase()} route${n === 1 ? '' : 's'}`);
+      if (it.mine.length) sub += ` · ${it.mine.length} yours`;
+      const sel = [...it.routes, it.free].find((x) => x?.id === selectedRouteId);
+      return `<button class="rcard city-card ${sel ? 'on' : ''}" data-city="${escapeHtml(it.baseId)}" aria-haspopup="dialog"><canvas></canvas>
+        <div class="city-text"><b>${escapeHtml(it.name)}</b><div class="rsub">${escapeHtml(sub)}</div>${sel ? `<div class="rsel">Selected · ${escapeHtml(shortName(sel.name))}</div>` : '<div class="rsel muted">Pick a route on the map</div>'}</div>${CHEVRON}</button>`;
+    }
     const r = routeCache.get(it.id);
     const sub = !r ? 'Could not load' : r.stageRoute && r.oneWay
       ? `${fmtDist(r.turnS, 1)} ${distUnit()} to the finish · ${fmtElev(r.oneWay.ascent).toLocaleString()} ${elevUnit()}`
@@ -1270,13 +1288,17 @@ function renderRouteCards() {
   }) + ideasSection();
   watchIdeas($('routeCards'));
   drawThumbs();
+  for (const c of routeCards.filter((x) => x.city)) loadCityRivers(c).then((fresh) => { if (fresh) drawThumbs(); });
 }
 
 // Card thumbnails need a laid-out canvas, so draw them whenever their pane is visible.
 function drawThumbs() {
   for (const c of document.querySelectorAll('#routeCards canvas, #sceneCards canvas')) {
+    if (!c.clientWidth) continue;
+    const cityId = c.closest('.rcard').dataset.city;
+    if (cityId) { drawCityThumb(c, routeCards.find((x) => x.city && x.baseId === cityId)); continue; }
     const r = routeCache.get(c.closest('.rcard').dataset.id);
-    if (r && c.clientWidth) drawTrace(c, lapView(r), 0);
+    if (r) drawTrace(c, lapView(r), 0);
   }
   for (const c of document.querySelectorAll('#workoutList canvas')) {
     const w = workoutCache.get(c.closest('.wrow').dataset.id);
@@ -1286,10 +1308,197 @@ function drawThumbs() {
 $('routeCards').addEventListener('click', (e) => {
   const card = e.target.closest('.rcard');
   if (!card) return;
+  if (card.dataset.city) { openCity(card.dataset.city); return; }
   selectedRouteId = card.dataset.id;
   for (const c of $('routeCards').querySelectorAll('.rcard')) c.classList.toggle('on', c === card);
   previewSelectedRoute();
 });
+
+// ---------- City panel (a ride network's map and routes) ----------
+// Full screen over the menu (a <dialog>: Escape closes it, focus goes back to the card). The map shows the whole
+// network over its rivers; a route tapped in the list lights up bold on it, a line tapped on the map lists the
+// routes that ride it (tap again for the next). The goal chips filter both. Ride chooses the route and goes back
+// to the menu, where its preview, start options and Start button are — the same as picking a card used to.
+const city = { baseId: null, goal: 'all', sel: null, seg: null, segIds: null, focus: null, lines: [], hint: '' };
+const cityRivers = new Map();   // baseId → rivers (the city's scenes: each area's has its own copy, some reaching further)
+async function loadCityRivers(card) {
+  if (cityRivers.has(card.baseId)) return false;
+  const base = routeCache.get(card.baseId);
+  const lists = [base?.scene?.rivers];
+  cityRivers.set(card.baseId, mergeRivers(lists));
+  const cityPark = parkItems?.find((p) => p.id === card.baseId);
+  const areas = (parkItems || []).filter((p) => p.area && p.area === cityPark?.routeId && p.scene);
+  await Promise.all(areas.map(async (a) => { try { lists.push((await (await fetch(a.scene)).json()).rivers); } catch { /* the core's rivers will do */ } }));
+  cityRivers.set(card.baseId, mergeRivers(lists));
+  return true;
+}
+const cityNet = (card) => routeCache.get(card.baseId)?.networks?.get(card.network) || null;
+/** A city route's traversal keys (a preset's path; your own route's, from its saved segment names). */
+function cityPath(net, it) {
+  if (it.preset) return net.presets.find((x) => x.id === it.preset)?.path || [];
+  if (it.custom) return keysToIds(net, it.keys) || [];
+  return [];
+}
+function cityMapData(card) {
+  const net = cityNet(card);
+  if (!net) return null;
+  const paths = new Map(card.routes.map((it) => [it.id, cityPath(net, it)]));
+  return { net, paths, index: segmentRoutes(card.routes.map((it) => ({ id: it.id, path: paths.get(it.id) }))),
+    lines: edgeLines(net).map((L) => ({ id: L.id, lat: L.lat, lon: L.lon })), rivers: cityRivers.get(card.baseId) || [] };
+}
+function drawCityThumb(canvas, card) {
+  const d = card && cityMapData(card);
+  if (!d) return;
+  const sel = [...card.routes].find((x) => x.id === selectedRouteId);
+  drawCityMap(canvas, { lines: d.lines, rivers: d.rivers, route: sel ? d.paths.get(sel.id) : null, thumb: true, project: fitProjection });
+}
+const cityCard = () => routeCards.find((x) => x.city && x.baseId === city.baseId) || null;
+function openCity(baseId) {
+  city.baseId = baseId;
+  const card = cityCard();
+  if (!card) return;
+  city.goal = routeGoal;
+  city.sel = card.routes.some((x) => x.id === selectedRouteId) ? selectedRouteId : null;
+  city.seg = null; city.segIds = null; city.focus = null; city.hint = '';
+  $('cityDlg').showModal();
+  renderCity();
+  $('cityList').querySelector('.city-row.on')?.scrollIntoView({ block: 'nearest' });
+  loadCityRivers(card).then((fresh) => { if (fresh && $('cityDlg').open) renderCityMap(); });
+}
+$('cityBack').addEventListener('click', () => $('cityDlg').close());
+window.addEventListener('resize', () => { if ($('cityDlg').open) renderCityMap(); });
+/** The routes the goal shows, and of those the ones on the tapped segment (when one is). */
+function cityShown(card) {
+  const byGoal = filterByGoal(card.routes, city.goal, goalTags);
+  return { byGoal, list: city.segIds ? byGoal.filter((it) => city.segIds.includes(it.id)) : byGoal };
+}
+function renderCity() {
+  const card = cityCard();
+  if (!card) { $('cityDlg').close(); return; }
+  const label = Object.fromEntries(GOALS);
+  const { byGoal, list } = cityShown(card);
+  if (!list.some((it) => it.id === city.sel)) city.sel = list[0]?.id || null;
+  $('cityTitle').textContent = card.name;
+  $('citySub').textContent = `${citySubline(card, cityAreaCount(card))}${card.mine.length ? ` · ${card.mine.length} yours` : ''}`;
+  $('cityGoals').innerHTML = GOALS.map(([k, l]) => `<button type="button" data-goal="${k}" class="${k === city.goal ? 'on' : ''}" aria-pressed="${k === city.goal}">${k === 'new' ? 'New' : l}</button>`).join('');
+  $('cityFree').hidden = !card.free;
+  const net = cityNet(card);
+  // the tapped segment: which routes ride it
+  $('citySeg').hidden = !city.seg;
+  if (city.seg && net) {
+    const e = net.edges.get(city.seg), k = city.segIds.indexOf(city.sel);
+    $('citySeg').innerHTML = `<span><b>${escapeHtml(e?.name || 'This segment')}</b> · ${city.segIds.length === 1 ? '1 route rides it' : `${city.segIds.length} routes ride it${k >= 0 ? ` · ${k + 1} of ${city.segIds.length}, tap it again for the next` : ''}`}</span><button type="button" class="link" id="citySegClear">Show all</button>`;
+  }
+  const facts = (it) => {
+    const r = routeCache.get(it.id);
+    return r ? `${fmtDist(r.lapM, 1)} ${distUnit()} · ${fmtElev(r.lapClimbM).toLocaleString()} ${elevUnit()}` : '';
+  };
+  $('cityList').innerHTML = list.length ? list.map((it) => {
+    const r = routeCache.get(it.id), on = it.id === city.sel, tags = goalTags(it);
+    const mine = it.custom ? '<span class="yours">yours</span>' : '';
+    const row = `<button type="button" class="city-row-btn" data-id="${escapeHtml(it.id)}" aria-pressed="${on}"><span class="cr-name">${escapeHtml(shortName(it.name))}${mine}</span><span class="cr-facts">${facts(it)}</span></button>`;
+    if (!on) return `<li class="city-row">${row}</li>`;
+    const kind = r ? (r.netOpen ? 'One way' : 'Loop') : '';
+    const detail = `<div class="cr-detail"><div class="cr-tags">${[kind, ...tags.map((t) => label[t])].filter(Boolean).map((t) => `<span>${escapeHtml(t)}</span>`).join('')}</div>
+      ${it.note && !it.custom ? `<p class="cr-note">${escapeHtml(it.note)}</p>` : ''}
+      <div class="cr-actions">${it.custom ? `<button type="button" class="ghost danger" data-remove="${escapeHtml(it.id)}">Remove</button>` : ''}<button type="button" class="primary" data-ride="${escapeHtml(it.id)}" aria-label="Ride ${escapeHtml(shortName(it.name))}">Ride</button></div></div>`;
+    return `<li class="city-row on">${row}${detail}</li>`;
+  }).join('') : `<li class="muted city-none">No ${city.goal === 'all' ? '' : `${label[city.goal].toLowerCase()} `}routes${city.seg ? ' on this segment' : ''} yet${byGoal.length ? '' : ' — try another goal, or plan your own'}.</li>`;
+  const sel = list.find((it) => it.id === city.sel);
+  $('citySel').textContent = sel ? `${shortName(sel.name)}: ${facts(sel)}` : '';
+  renderCityMap();
+}
+function renderCityMap() {
+  const card = cityCard(), d = card && cityMapData(card);
+  if (!d) return;
+  const { byGoal } = cityShown(card);
+  const lit = new Set(byGoal.flatMap((it) => (d.paths.get(it.id) || []).map((k) => k.replace(/[+-]$/, ''))));
+  city.lines = drawCityMap($('cityMap'), { lines: d.lines, rivers: d.rivers, nodes: [...d.net.nodes.values()],
+    lit: city.goal === 'all' ? null : lit, route: city.sel ? d.paths.get(city.sel) : null, marked: city.seg, focus: city.focus, project: fitProjection });
+  $('cityMap').lines = city.lines;   // (tools/snap_city.mjs taps a line by these)
+  const sel = card.routes.find((x) => x.id === city.sel), fe = city.focus && d.net.edges.get(city.focus);
+  $('cityMap').setAttribute('aria-label', `Map of ${card.name}${sel ? `, ${shortName(sel.name)} highlighted` : ''}. Arrow keys pick a segment, Enter lists the routes that ride it.`);
+  $('cityMapHint').textContent = city.hint || (fe ? `${fe.name} · Enter to see its routes` : 'Tap a line to see the routes that ride it');
+}
+function citySelect(id, { scroll = true } = {}) {
+  city.sel = id;
+  renderCity();
+  if (scroll) $('cityList').querySelector('.city-row.on')?.scrollIntoView({ block: 'nearest' });
+}
+/** A segment tapped (or chosen with the keyboard): list the routes that ride it, select the first (again: the next). */
+function cityTapSegment(edgeId) {
+  const card = cityCard(), d = card && cityMapData(card);
+  if (!d) return;
+  const { byGoal } = cityShown(card);
+  const res = pickOnSegment(d.index, edgeId, byGoal.map((it) => it.id), { lastEdge: city.seg, selected: city.sel });
+  const e = d.net.edges.get(edgeId);
+  if (!res.ids.length) {
+    city.hint = `No ${city.goal === 'all' ? '' : `${Object.fromEntries(GOALS)[city.goal].toLowerCase()} `}route rides ${e?.name || 'that segment'} — Free ride or Plan your own can`;
+    renderCityMap();
+    return;
+  }
+  city.hint = '';
+  city.seg = edgeId; city.segIds = res.ids;
+  citySelect(res.selected);
+}
+function cityChoose(id) {
+  // the same as picking its card in the list used to: it's the route, and the menu shows its preview and Start
+  $('cityDlg').close();
+  selectedRouteId = id;
+  renderRouteCards();
+  previewSelectedRoute();
+  if (matchMedia('(max-width: 1080px)').matches) document.querySelector('.preview').scrollIntoView({ block: 'start' });
+  $('startBtn').focus({ preventScroll: true });
+}
+$('cityMap').addEventListener('click', (e) => {
+  const rect = e.currentTarget.getBoundingClientRect();
+  const j = nearestLine(city.lines, e.clientX - rect.left, e.clientY - rect.top, e.pointerType === 'mouse' ? 14 : 22);
+  if (j >= 0) { city.focus = null; cityTapSegment(city.lines[j].id); return; }
+  if (city.seg) { city.seg = null; city.segIds = null; renderCity(); }   // off the lines: back to every route
+});
+$('cityMap').addEventListener('keydown', (e) => {
+  const card = cityCard(), d = card && cityMapData(card);
+  if (!d) return;
+  // the keyboard's way round the map: the segments the goal lights, in order
+  const { byGoal } = cityShown(card);
+  const ids = d.lines.map((L) => L.id).filter((id) => (d.index.get(id) || []).some((r) => byGoal.some((it) => it.id === r)));
+  if (['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(e.key) && ids.length) {
+    const i = ids.indexOf(city.focus), dir = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1;
+    city.focus = ids[(i < 0 ? (dir > 0 ? 0 : ids.length - 1) : (i + dir + ids.length) % ids.length)];
+    city.hint = '';
+    renderCityMap();
+    $('citySel').textContent = `${d.net.edges.get(city.focus)?.name}: ${(d.index.get(city.focus) || []).length} routes`;
+  } else if ((e.key === 'Enter' || e.key === ' ') && city.focus) cityTapSegment(city.focus);
+  else return;
+  e.preventDefault();
+});
+$('cityGoals').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-goal]');
+  if (!b) return;
+  city.goal = b.dataset.goal; city.seg = null; city.segIds = null; city.hint = '';
+  renderCity();
+});
+$('citySeg').addEventListener('click', (e) => { if (e.target.id === 'citySegClear') { city.seg = null; city.segIds = null; renderCity(); } });
+$('cityList').addEventListener('click', async (e) => {
+  const ride = e.target.closest('[data-ride]'), rm = e.target.closest('[data-remove]'), row = e.target.closest('.city-row-btn');
+  if (ride) cityChoose(ride.dataset.ride);
+  else if (rm) {
+    if (!confirm('Remove this route from your library?')) return;
+    await removeNetRoute(rm.dataset.remove);
+    if ($('cityDlg').open) renderCity();
+  } else if (row) citySelect(row.dataset.id, { scroll: false });
+});
+$('cityList').addEventListener('keydown', (e) => {
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  const rows = [...$('cityList').querySelectorAll('.city-row-btn')], i = rows.indexOf(document.activeElement);
+  if (i < 0) return;
+  const next = rows[Math.max(0, Math.min(rows.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))];
+  e.preventDefault();
+  citySelect(next.dataset.id);
+  $('cityList').querySelector(`.city-row-btn[data-id="${CSS.escape(next.dataset.id)}"]`)?.focus();
+});
+$('cityFree').addEventListener('click', () => { const c = cityCard(); if (c?.free) cityChoose(c.free.id); });
+$('cityPlan').addEventListener('click', () => { const c = cityCard(); if (c) openPlanner(c.routes.find((x) => !x.custom) || c.free); });
 
 async function loadRouteItem(item) {
   if (routeCache.has(item.id)) return routeCache.get(item.id);
@@ -1422,19 +1631,19 @@ $('routeDelete').addEventListener('click', async () => {
   closeMenus();
   const id = selectedRouteId;
   if (id.startsWith('builtin') || !confirm('Remove this route from your library?')) return;
-  if (id.startsWith('mynet-')) {
-    // your own network route (the map planner): kept in settings
-    settings.netRoutes = (settings.netRoutes || []).filter((m) => m.id !== id);
-    saveSettings(settings);
-    routeCache.delete(id);
-    netItems = []; parkItems = null;
-    await refreshRouteList();
-    return;
-  }
+  if (id.startsWith('mynet-')) { await removeNetRoute(id); return; }
   await store.deleteLibraryItem(id);
   routeCache.delete(id);
   await refreshRouteList();
 });
+/** Your own network route (the map planner): kept in settings. */
+async function removeNetRoute(id) {
+  settings.netRoutes = (settings.netRoutes || []).filter((m) => m.id !== id);
+  saveSettings(settings);
+  routeCache.delete(id);
+  netItems = []; parkItems = null;
+  await refreshRouteList();
+}
 $('gpxFile').addEventListener('change', async (e) => {
   closeMenus();
   const file = e.target.files[0];

@@ -343,6 +343,62 @@ export function drawNetworkMinimap(canvas, ride, p, { mode = 'course', pacerPos 
   ctx.restore();
 }
 
+/**
+ * A city's network map (the city card's thumbnail and its panel, js/app.js): rivers, every segment faint, the
+ * ones the goal filter lights a little brighter, the selected route bold with an arrow on each step, the tapped
+ * segment outlined and the junctions as dots. lines: [{ id, lat, lon }] (js/network.js edgeLines); rivers:
+ * [{ widthM, path: [[lat, lon], …] }]; lit: Set of edge ids (null: all); route: traversal keys ("e12+") drawn
+ * bold; marked: an edge id (the tapped segment); focus: an edge id (keyboard). Returns the lines in CSS px
+ * ({ id, pts }) for hit testing (js/city-routes.js nearestLine).
+ */
+export function drawCityMap(canvas, { lines, rivers = [], nodes = [], lit = null, route = null, marked = null, focus = null, thumb = false, project }) {
+  const { ctx, w, h } = setup(canvas);
+  if (!lines?.length || !w) return [];
+  const small = !thumb && w < 520, k = small ? 0.7 : 1;   // a phone: thinner lines, smaller dots
+  const { X, Y, scale } = project(lines, w, h, thumb ? 8 : small ? 12 : 26);
+  const light = document.documentElement.dataset.theme === 'light';
+  const accent = tok('--accent', '#7aa9f5'), ink = tok('--ink', '#ece9e1'), muted = tok('--muted', '#a8a69d'), faint = tok('--faint', '#62615c');
+  const bg = tok('--inset', '#20201f'), water = tok('--map-water', light ? '#cfe0ea' : '#24343b');
+  const stroke = (pts, color, width, dash = null) => {
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.setLineDash(dash || []);
+    ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); ctx.setLineDash([]);
+  };
+  // rivers: as wide as they are (a few px at least), under everything
+  for (const r of rivers) stroke(r.path.map(([la, lo]) => [X(lo), Y(la)]), water, Math.max(thumb ? 3 : 5, (r.widthM || 200) * scale));
+  const out = lines.map((L) => {
+    const pts = [], n = L.lat.length, step = Math.max(1, Math.floor(n / 80));
+    for (let i = 0; i < n; i += step) pts.push([X(L.lon[i]), Y(L.lat[i])]);
+    pts.push([X(L.lon[n - 1]), Y(L.lat[n - 1])]);
+    return { id: L.id, pts };
+  });
+  const byId = new Map(out.map((L) => [L.id, L]));
+  // the tapped segment: a soft halo under everything
+  if (marked && byId.has(marked)) { ctx.globalAlpha = 0.3; stroke(byId.get(marked).pts, accent, 18 * k); ctx.globalAlpha = 1; }
+  // the network: faint; with a goal, its routes' segments brighter and the rest dimmer still
+  for (const L of out) if (lit && !lit.has(L.id)) stroke(L.pts, faint, thumb ? 1.5 : 1.5 * k);
+  ctx.globalAlpha = lit ? 1 : 0.75;
+  for (const L of out) if (!lit || lit.has(L.id)) stroke(L.pts, lit ? tok('--ink-2', '#c2c0b6') : muted, thumb ? 2 : 2.5 * k);
+  ctx.globalAlpha = 1;
+  // the selected route, bold, an arrow on each step
+  const steps = (route || []).map((k) => { const m = /^(.+)([+-])$/.exec(k); const L = m && byId.get(m[1]); return L && (m[2] === '+' ? L.pts : [...L.pts].reverse()); }).filter(Boolean);
+  for (const pts of steps) stroke(pts, light ? 'rgba(255,255,255,.85)' : 'rgba(0,0,0,.45)', thumb ? 5 : 9 * k);
+  for (const pts of steps) stroke(pts, accent, thumb ? 3 : 5 * k);
+  if (!thumb) for (const pts of steps) {
+    if (pts.length < 3) continue;
+    const m = Math.floor(pts.length / 2), [ax, ay] = pts[m - 1], [bx, by] = pts[m + 1];
+    ctx.save(); ctx.translate(pts[m][0], pts[m][1]); ctx.rotate(Math.atan2(by - ay, bx - ax)); ctx.scale(k, k);
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-4, 4.5); ctx.lineTo(-4, -4.5); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  if (focus && byId.has(focus)) { stroke(byId.get(focus).pts, bg, 5); stroke(byId.get(focus).pts, ink, 2.5, [5, 4]); }
+  // junctions
+  if (!thumb) for (const nd of nodes) {
+    ctx.fillStyle = muted; ctx.strokeStyle = bg; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(X(nd.lon), Y(nd.lat), small ? 2.5 : 3.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  return out;
+}
+
 /** Workout blocks coloured by zone, with progress. */
 export function drawWorkout(canvas, workout, t, ftp, bias = 1, { compact = false } = {}) {
   const { ctx, w, h } = setup(canvas);

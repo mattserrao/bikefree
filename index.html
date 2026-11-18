@@ -403,6 +403,30 @@
   </dialog>
 
   <!-- Map planner (ride networks): tap a junction, then the segments to ride -->
+  <!-- City panel (a ride network, e.g. Pittsburgh): its map and routes, opened from the city's card -->
+  <dialog id="cityDlg" class="city-dlg" aria-labelledby="cityTitle">
+    <div class="city-head">
+      <button type="button" class="city-back" id="cityBack" aria-label="Back to the routes"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <div class="city-id"><h2 id="cityTitle">Pittsburgh</h2><div class="city-sub" id="citySub"></div></div>
+    </div>
+    <div class="city-body">
+      <div class="city-mapcol">
+        <canvas id="cityMap" class="city-map" tabindex="0" role="img" aria-label="Map of the routes"></canvas>
+        <div class="city-maphint" id="cityMapHint">Tap a line to see the routes that ride it</div>
+      </div>
+      <div class="city-side">
+        <div class="city-extras">
+          <button type="button" id="cityFree"><b>Free ride</b><small>Choose every turn</small></button>
+          <button type="button" id="cityPlan"><b>Plan your own</b><small>Draw it on the map</small></button>
+        </div>
+        <div class="seg goal-seg city-goals" id="cityGoals" role="group" aria-label="Ride goal"></div>
+        <div class="city-seg" id="citySeg" hidden></div>
+        <div class="city-sel" id="citySel" aria-live="polite"></div>
+        <ul class="city-list" id="cityList" role="listbox" aria-label="Routes"></ul>
+      </div>
+    </div>
+  </dialog>
+
   <dialog id="planDlg" class="plan-dlg">
     <form method="dialog">
       <h2 id="planTitle">Plan your own route</h2>

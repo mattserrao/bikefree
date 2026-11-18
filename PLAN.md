@@ -832,6 +832,20 @@ The 0.9 km gap builds up evenly (about 0.7 %): the organisers measure on the roa
 - Minimap: the whole network faint, your path bold, the next junction's options highlighted
 - One branch, one PR at the end; on-bike review stops after phase 1 and phase 3
 
+**City card: one Pittsburgh card with a map picker** *(branch `sprint-card`, 18 Nov 2026)*
+- Asked: one Pittsburgh card on the main page instead of every preset; clicked, it opens a map where you pick the route. Chosen (mockup approved): a full-screen panel (back arrow / <kbd>Esc</kbd>); list + map both tappable; goal chips inside the panel; Free ride and Plan your own at the top; your saved routes listed with the presets (marked *yours*, removable); 44 px tap targets on a phone
+- Built: `js/city-routes.js` (no DOM, `test/city-routes.test.mjs`): a network's items folded into one card (any catalog route with a `network`, not just Pittsburgh), segment → routes index, tap-to-cycle, goal filter, the map projection, rivers merged from each area's scene. `js/views.js` `drawCityMap` (rivers, every segment faint, the goal's segments brighter and the rest dimmed, the selected route bold with an arrow per step, the tapped segment haloed, junction dots); the card's thumbnail is the same map. Panel in `index.html` (`#cityDlg`, a `<dialog>`), logic in `js/app.js` ("City panel"), styles in `css/style.css`
+- Behaviour: the card shows "8 areas · 36 routes · free ride" (+ "· n yours") and the selected Pittsburgh route; with a goal on the main page it counts that goal's routes and hides when none (nor the free ride) suits it. The panel's goal starts at the main page's and doesn't change it. Tapping a line lists the routes that ride it (of the goal's), selects the first, tapping it again selects the next; "Show all" (or a tap off the lines) clears it. **Ride** chooses the route and returns to the menu with its preview, start options and Start button, as picking its card did (it doesn't start the ride); on a narrow screen it scrolls to the preview. Keyboard: the card opens with Enter, the list moves with ↑ ↓, the map takes ← → (segments the goal lights) and Enter. The app keeps no browser history, so Back in the browser doesn't close the panel
+- QC: `node tools/snap_city.mjs` (headless Chrome, 1440×900 and 390×844, `--theme light`): screenshots of the main page, the panel, a route picked, a line tapped twice, a goal, after Ride → `tools/snapshots/card/` (not committed); it fails on page errors or if Escape doesn't close back onto the card
+- Follow-ups (F100–F109 kept for this card):
+- [ ] F100 City card: the browser's Back doesn't close the panel (the app keeps no history); add a `pushState` for the panel if it's wanted on a phone
+- [ ] F101 City card map: the rivers are the scenes' `rivers` (the Allegheny stops at ~-79.98, short of the East End and Lawrenceville); a fuller river outline (from the city data's water, baked small for the map) would read better. No labels yet (rivers, neighbourhoods, the Point)
+- [ ] F102 City card map: no zoom or pan; on a phone the Polish Hill / North Side tangle is tight to tap (22 px tap radius). Pinch-zoom, or zoom to the selected route
+- [ ] F103 City card: the list keeps the network's preset order (presets, then yours); sort by length / climb or group by area if the list grows (Dirty Dozen)
+- [ ] F104 City card: Ride only chooses the route (the menu's Start starts it, with the start/length options); a one-tap "ride now" from the panel would skip those — keep as is unless asked
+- [ ] F105 City card: hovering a line on the desktop could preview which routes ride it (tooltip) before the tap
+- [ ] F106 `sw-assets.js` (the offline app files) doesn't list `js/city-routes.js` yet: it was already stale on `pittsburgh-network-test` (01a4c0c), so it's left for one `npm run routes:build` after the parallel branches merge
+
 **Action items, in order**
 
 *Phase 1 — Turns on the current loop (junction G, East Carson & 10th)* — review stop
