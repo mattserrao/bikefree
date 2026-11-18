@@ -2,133 +2,309 @@
  "format": "bikefree-network-1",
  "id": "pittsburgh",
  "base": "routes/cities/pittsburgh.gpx",
- "legM": 39980,
+ "legM": 58060,
  "nodes": [
   {
    "id": "E",
    "name": "Smithfield St & Fort Pitt Blvd",
-   "lat": 40.436469,
-   "lon": -80.000952,
-   "ele": 221.86,
+   "lat": 40.436505,
+   "lon": -80.000919,
+   "ele": 222.68,
    "passes": [
-    0,
-    35830
+    18240,
+    54070
    ]
   },
   {
    "id": "H",
    "name": "SouthSide Works riverfront",
-   "lat": 40.429741,
-   "lon": -79.966938,
-   "ele": 228.26,
+   "lat": 40.428871,
+   "lon": -79.965369,
+   "ele": 229,
    "passes": [
-    18170,
-    39980
+    36240,
+    58060
    ]
   },
   {
    "id": "G",
    "name": "East Carson & 10th",
-   "lat": 40.428708,
+   "lat": 40.428675,
    "lon": -79.988582,
-   "ele": 229.78,
+   "ele": 229.77,
    "passes": [
-    20530,
-    37750
+    38770,
+    55990
    ]
   },
   {
    "id": "D",
    "name": "West End Bridge south end",
-   "lat": 40.444183,
-   "lon": -80.028192,
-   "ele": 228.88,
+   "lat": 40.444204,
+   "lon": -80.028224,
+   "ele": 228.92,
    "passes": [
-    25680,
-    29190
+    43920,
+    47420
    ]
   },
   {
    "id": "A",
    "name": "North Shore Water Steps",
-   "lat": 40.445495,
-   "lon": -80.008287,
-   "ele": 217.68,
+   "lat": 40.445507,
+   "lon": -80.008146,
+   "ele": 217.55,
    "passes": [
-    31730
+    0,
+    49980
    ]
   },
   {
    "id": "O",
    "name": "West End Overlook",
-   "lat": 40.446441,
-   "lon": -80.034382,
-   "ele": 331.69,
+   "lat": 40.446438,
+   "lon": -80.034387,
+   "ele": 331.78,
    "passes": [
-    27440
+    45680
    ],
    "deadEnd": true
   },
   {
    "id": "I",
    "name": "Hot Metal Bridge north end",
-   "lat": 40.429928,
-   "lon": -79.957545,
-   "ele": 228.03,
+   "lat": 40.429934,
+   "lon": -79.957553,
+   "ele": 228.01,
    "passes": [
-    3980,
-    17180
+    22220,
+    35410
    ]
   },
   {
    "id": "J",
    "name": "Schenley Drive by Phipps Conservatory",
-   "lat": 40.438777,
-   "lon": -79.946403,
-   "ele": 283.88,
+   "lat": 40.438742,
+   "lon": -79.946352,
+   "ele": 284,
    "passes": [
-    8280,
-    12870
+    26520,
+    31110
    ]
   },
   {
    "id": "K",
    "name": "Schenley Drive & Forbes Ave",
-   "lat": 40.437633,
-   "lon": -79.934147,
-   "ele": 329.75,
+   "lat": 40.437654,
+   "lon": -79.934186,
+   "ele": 329.71,
    "passes": [
-    9480
+    27710
+   ]
+  },
+  {
+   "id": "B",
+   "name": "Clemente Bridge south end",
+   "lat": 40.444158,
+   "lon": -80.002863,
+   "ele": 223.07,
+   "passes": [
+    15150,
+    50980
+   ]
+  },
+  {
+   "id": "P",
+   "name": "16th Street Bridge north end",
+   "lat": 40.453575,
+   "lon": -79.990608,
+   "ele": 221.09,
+   "passes": [
+    1780,
+    5810
+   ]
+  },
+  {
+   "id": "N",
+   "name": "31st Street Bridge north end",
+   "lat": 40.462169,
+   "lon": -79.980865,
+   "ele": 221.12,
+   "passes": [
+    3050,
+    7070
+   ]
+  },
+  {
+   "id": "M",
+   "name": "Smallman & 29th, Strip District",
+   "lat": 40.458506,
+   "lon": -79.975035,
+   "ele": 223.9,
+   "passes": [
+    12020
    ]
   }
  ],
  "ghosts": [
   {
-   "fromM": 12873,
-   "toM": 15001
+   "fromM": 5813,
+   "toM": 7073
   },
   {
-   "fromM": 15001,
-   "toM": 17174
+   "fromM": 31110,
+   "toM": 33237
   },
   {
-   "fromM": 27440,
-   "toM": 29185
+   "fromM": 33237,
+   "toM": 35411
+  },
+  {
+   "fromM": 45677,
+   "toM": 47425
+  },
+  {
+   "fromM": 50982,
+   "toM": 52652
+  },
+  {
+   "fromM": 52652,
+   "toM": 54067
   }
  ],
  "edges": [
   {
    "id": "e1",
+   "key": "A>P",
+   "from": "A",
+   "to": "P",
+   "s": [
+    0,
+    1780
+   ],
+   "lengthM": 1780,
+   "climbM": [
+    6,
+    3
+   ],
+   "name": "North Shore Trail",
+   "toward": [
+    "the North Shore Trail past PNC Park to the 16th Street Bridge",
+    "the North Shore Trail past PNC Park to the Water Steps"
+   ]
+  },
+  {
+   "id": "e2",
+   "key": "P>N",
+   "from": "P",
+   "to": "N",
+   "s": [
+    1780,
+    3050
+   ],
+   "lengthM": 1270,
+   "climbM": [
+    2,
+    2
+   ],
+   "name": "North Shore Trail: Washington's Landing",
+   "toward": [
+    "the riverfront trail by Washington's Landing to the 31st Street Bridge",
+    "the riverfront trail by Washington's Landing to the 16th Street Bridge"
+   ]
+  },
+  {
+   "id": "e3",
+   "key": "N>P",
+   "from": "N",
+   "to": "P",
+   "s": [
+    3050,
+    5810
+   ],
+   "lengthM": 2760,
+   "climbM": [
+    61,
+    61
+   ],
+   "name": "Troy Hill & Rialto Street",
+   "toward": [
+    "up Rialto Street (Pig Hill, about 24 %), along Lowrie St through Troy Hill, down Troy Hill Rd and over to the 16th Street Bridge",
+    "from the 16th Street Bridge up Troy Hill Rd, along Lowrie St and down Rialto Street"
+   ]
+  },
+  {
+   "id": "e4",
+   "key": "N>M",
+   "from": "N",
+   "to": "M",
+   "s": [
+    7070,
+    12020
+   ],
+   "lengthM": 4950,
+   "climbM": [
+    27,
+    24
+   ],
+   "name": "Millvale & Lawrenceville",
+   "toward": [
+    "the trail to Millvale, over the 40th Street Bridge and down Butler Street",
+    "up Butler Street, over the 40th Street Bridge and the trail from Millvale"
+   ]
+  },
+  {
+   "id": "e5",
+   "key": "M>B",
+   "from": "M",
+   "to": "B",
+   "s": [
+    12020,
+    15150
+   ],
+   "lengthM": 3130,
+   "climbM": [
+    6,
+    7
+   ],
+   "name": "Strip District & Penn Avenue",
+   "toward": [
+    "Smallman Street through the Strip past the History Center, Penn Avenue into downtown",
+    "Penn Avenue out of downtown and Smallman Street through the Strip"
+   ]
+  },
+  {
+   "id": "e6",
+   "key": "B>E",
+   "from": "B",
+   "to": "E",
+   "s": [
+    15150,
+    18240
+   ],
+   "lengthM": 3090,
+   "climbM": [
+    21,
+    21
+   ],
+   "name": "The Point & downtown",
+   "toward": [
+    "the riverfront, the Point and Market Square",
+    "Market Square, the Point and the riverfront to the Clemente Bridge"
+   ]
+  },
+  {
+   "id": "e7",
    "key": "E>I",
    "from": "E",
    "to": "I",
    "s": [
-    0,
-    3980
+    18240,
+    22220
    ],
    "lengthM": 3980,
    "climbM": [
-    19,
+    17,
     12
    ],
    "name": "Jail Trail",
@@ -138,18 +314,18 @@
    ]
   },
   {
-   "id": "e2",
+   "id": "e8",
    "key": "I>J",
    "from": "I",
    "to": "J",
    "s": [
-    3980,
-    8280
+    22220,
+    26520
    ],
    "lengthM": 4300,
    "climbM": [
-    78,
-    22
+    79,
+    23
    ],
    "name": "Junction Hollow & Oakland",
    "toward": [
@@ -158,17 +334,17 @@
    ]
   },
   {
-   "id": "e3",
+   "id": "e9",
    "key": "J>K",
    "from": "J",
    "to": "K",
    "s": [
-    8280,
-    9480
+    26520,
+    27710
    ],
-   "lengthM": 1200,
+   "lengthM": 1190,
    "climbM": [
-    46,
+    45,
     0
    ],
    "name": "Schenley Drive",
@@ -178,15 +354,15 @@
    ]
   },
   {
-   "id": "e4",
+   "id": "e10",
    "key": "K>J",
    "from": "K",
    "to": "J",
    "s": [
-    9480,
-    12870
+    27710,
+    31110
    ],
-   "lengthM": 3390,
+   "lengthM": 3400,
    "climbM": [
     26,
     72
@@ -198,17 +374,17 @@
    ]
   },
   {
-   "id": "e5",
+   "id": "e11",
    "key": "I>H",
    "from": "I",
    "to": "H",
    "s": [
-    17180,
-    18170
+    35410,
+    36240
    ],
-   "lengthM": 990,
+   "lengthM": 830,
    "climbM": [
-    5,
+    6,
     5
    ],
    "name": "Hot Metal Bridge",
@@ -218,18 +394,18 @@
    ]
   },
   {
-   "id": "e6",
+   "id": "e12",
    "key": "H>G",
    "from": "H",
    "to": "G",
    "s": [
-    18170,
-    20530
+    36240,
+    38770
    ],
-   "lengthM": 2360,
+   "lengthM": 2530,
    "climbM": [
     14,
-    12
+    13
    ],
    "name": "South Side river trail",
    "toward": [
@@ -238,18 +414,18 @@
    ]
   },
   {
-   "id": "e7",
+   "id": "e13",
    "key": "G>D",
    "from": "G",
    "to": "D",
    "s": [
-    20530,
-    25680
+    38770,
+    43920
    ],
    "lengthM": 5150,
    "climbM": [
-    156,
-    156
+    155,
+    155
    ],
    "name": "Mount Washington",
    "toward": [
@@ -258,13 +434,13 @@
    ]
   },
   {
-   "id": "e8",
+   "id": "e14",
    "key": "D>O",
    "from": "D",
    "to": "O",
    "s": [
-    25680,
-    27440
+    43920,
+    45680
    ],
    "lengthM": 1760,
    "climbM": [
@@ -278,15 +454,15 @@
    ]
   },
   {
-   "id": "e9",
+   "id": "e15",
    "key": "D>A",
    "from": "D",
    "to": "A",
    "s": [
-    29190,
-    31730
+    47420,
+    49980
    ],
-   "lengthM": 2540,
+   "lengthM": 2560,
    "climbM": [
     8,
     19
@@ -298,33 +474,33 @@
    ]
   },
   {
-   "id": "e10",
-   "key": "A>E",
+   "id": "e16",
+   "key": "A>B",
    "from": "A",
-   "to": "E",
+   "to": "B",
    "s": [
-    31730,
-    35830
+    49980,
+    50980
    ],
-   "lengthM": 4100,
+   "lengthM": 1000,
    "climbM": [
-    27,
-    23
+    6,
+    1
    ],
-   "name": "North Shore, the Point & downtown",
+   "name": "Clemente Bridge",
    "toward": [
-    "the Clemente Bridge, the Point and Market Square",
-    "Market Square, the Point and the Clemente Bridge"
+    "General Robinson St and the Clemente Bridge to Fort Duquesne Blvd",
+    "the Clemente Bridge to the North Shore and the Water Steps"
    ]
   },
   {
-   "id": "e11",
+   "id": "e17",
    "key": "E>G",
    "from": "E",
    "to": "G",
    "s": [
-    35830,
-    37750
+    54070,
+    55990
    ],
    "lengthM": 1920,
    "climbM": [
@@ -338,18 +514,18 @@
    ]
   },
   {
-   "id": "e12",
+   "id": "e18",
    "key": "G>H",
    "from": "G",
    "to": "H",
    "s": [
-    37750,
-    39980
+    55990,
+    58060
    ],
-   "lengthM": 2230,
+   "lengthM": 2070,
    "climbM": [
-    4,
-    5
+    3,
+    4
    ],
    "name": "East Carson Street",
    "toward": [
@@ -363,116 +539,121 @@
    "id": "pgh-three-rivers",
    "name": "Three Rivers Loop",
    "path": [
-    "e10+",
-    "e11+",
-    "e12+",
+    "e16+",
     "e6+",
-    "e7+",
-    "e9+"
+    "e17+",
+    "e18+",
+    "e12+",
+    "e13+",
+    "e15+"
    ],
    "tags": [
     "varied"
    ],
    "note": "The whole loop: the Point, downtown, the South Side and the McArdle climb to Grandview",
-   "lengthM": 18300,
-   "climbM": 226
+   "lengthM": 18320,
+   "climbM": 224
   },
   {
    "id": "pgh-three-rivers-rev",
    "name": "Three Rivers Loop · reverse",
    "path": [
-    "e9-",
-    "e7-",
-    "e6-",
+    "e15-",
+    "e13-",
     "e12-",
-    "e11-",
-    "e10-"
+    "e18-",
+    "e17-",
+    "e6-",
+    "e16-"
    ],
    "tags": [
     "varied"
    ],
    "note": "The loop the other way: over the West End Bridge, Grandview and down McArdle first",
-   "lengthM": 18300,
-   "climbM": 225
+   "lengthM": 18320,
+   "climbM": 223
   },
   {
    "id": "pgh-short-loop",
    "name": "South Side Short Loop",
    "path": [
-    "e10+",
-    "e11+",
-    "e7+",
-    "e9+"
+    "e16+",
+    "e6+",
+    "e17+",
+    "e13+",
+    "e15+"
    ],
    "tags": [
     "short",
     "hilly"
    ],
    "note": "Skips the South Side riverfront: right at East Carson & 10th, straight up McArdle",
-   "lengthM": 13710,
-   "climbM": 208
+   "lengthM": 13720,
+   "climbM": 207
   },
   {
    "id": "pgh-short-loop-rev",
    "name": "South Side Short Loop · reverse",
    "path": [
-    "e9-",
-    "e7-",
-    "e11-",
-    "e10-"
+    "e15-",
+    "e13-",
+    "e17-",
+    "e6-",
+    "e16-"
    ],
    "tags": [
     "short",
     "hilly"
    ],
    "note": "Grandview and down McArdle, then left at East Carson & 10th back to downtown",
-   "lengthM": 13710,
-   "climbM": 208
+   "lengthM": 13720,
+   "climbM": 206
   },
   {
    "id": "pgh-south-side",
    "name": "South Side Flat Loop",
    "path": [
-    "e12+",
-    "e6+"
+    "e18+",
+    "e12+"
    ],
    "tags": [
     "flat",
     "short"
    ],
    "note": "East Carson Street and the river trail, round and round from East Carson & 10th",
-   "lengthM": 4590,
-   "climbM": 18
+   "lengthM": 4600,
+   "climbM": 17
   },
   {
    "id": "pgh-west-end",
    "name": "Three Rivers Loop + West End Overlook",
    "path": [
-    "e10+",
-    "e11+",
-    "e12+",
+    "e16+",
     "e6+",
-    "e7+",
-    "e8+",
-    "e8-",
-    "e9+"
+    "e17+",
+    "e18+",
+    "e12+",
+    "e13+",
+    "e14+",
+    "e14-",
+    "e15+"
    ],
    "tags": [
     "hilly",
     "new"
    ],
    "note": "The whole loop with the climb through Elliott to the West End Overlook and back down",
-   "lengthM": 21820,
-   "climbM": 335
+   "lengthM": 21840,
+   "climbM": 333
   },
   {
    "id": "pgh-jail-trail",
    "name": "Jail Trail & South Side Loop",
    "path": [
-    "e1+",
-    "e5+",
-    "e6+",
-    "e11-"
+    "e7+",
+    "e11+",
+    "e12+",
+    "e17-"
    ],
    "tags": [
     "flat",
@@ -480,94 +661,99 @@
     "new"
    ],
    "note": "From downtown along the Jail Trail, over the Hot Metal Bridge and back on the South Side river trail",
-   "lengthM": 9250,
-   "climbM": 48
+   "lengthM": 9260,
+   "climbM": 47
   },
   {
    "id": "pgh-point-jail",
    "name": "Point & Jail Trail Loop",
    "path": [
-    "e10+",
-    "e1+",
-    "e5+",
+    "e16+",
     "e6+",
-    "e11-",
-    "e10-"
+    "e7+",
+    "e11+",
+    "e12+",
+    "e17-",
+    "e6-",
+    "e16-"
    ],
    "tags": [
     "flat",
     "new"
    ],
    "note": "The Point and downtown, the Jail Trail, the Hot Metal Bridge and the river trail, back by the Smithfield Street Bridge",
-   "lengthM": 17450,
-   "climbM": 98
+   "lengthM": 17440,
+   "climbM": 96
   },
   {
    "id": "pgh-jail-mt-washington",
    "name": "Jail Trail & Mount Washington Loop",
    "path": [
-    "e10+",
-    "e1+",
-    "e5+",
+    "e16+",
     "e6+",
     "e7+",
-    "e9+"
+    "e11+",
+    "e12+",
+    "e13+",
+    "e15+"
    ],
    "tags": [
     "varied",
     "new"
    ],
    "note": "The flat Jail Trail out, the river trail, then the McArdle climb and Grandview home",
-   "lengthM": 19120,
-   "climbM": 229
+   "lengthM": 19140,
+   "climbM": 227
   },
   {
    "id": "pgh-mt-washington",
    "name": "Mount Washington There & Back",
    "path": [
-    "e7+",
-    "e9+",
-    "e9-",
-    "e7-"
+    "e13+",
+    "e15+",
+    "e15-",
+    "e13-"
    ],
    "tags": [
     "hilly"
    ],
    "note": "Up McArdle, along Grandview to the Water Steps, then back over the top",
-   "lengthM": 15380,
-   "climbM": 339
+   "lengthM": 15420,
+   "climbM": 337
   },
   {
    "id": "pgh-long",
    "name": "Three Rivers There & Back",
    "path": [
-    "e10+",
-    "e11+",
-    "e12+",
+    "e16+",
     "e6+",
-    "e7+",
-    "e9+",
-    "e9-",
-    "e7-",
-    "e6-",
+    "e17+",
+    "e18+",
+    "e12+",
+    "e13+",
+    "e15+",
+    "e15-",
+    "e13-",
     "e12-",
-    "e11-",
-    "e10-"
+    "e18-",
+    "e17-",
+    "e6-",
+    "e16-"
    ],
    "tags": [
     "long",
     "varied"
    ],
    "note": "The whole loop, then the whole loop backwards",
-   "lengthM": 36600,
-   "climbM": 451
+   "lengthM": 36640,
+   "climbM": 447
   },
   {
    "id": "pgh-schenley",
    "name": "Schenley Park Loop",
    "path": [
-    "e3+",
-    "e4+"
+    "e9+",
+    "e10+"
    ],
    "tags": [
     "short",
@@ -576,18 +762,18 @@
    ],
    "note": "Round Schenley Park from Phipps: Schenley Drive, Serpentine Drive, the Oval and up Panther Hollow",
    "lengthM": 4590,
-   "climbM": 72
+   "climbM": 71
   },
   {
    "id": "pgh-oakland",
    "name": "Jail Trail, Oakland & Schenley",
    "path": [
-    "e1+",
-    "e2+",
-    "e3+",
-    "e4+",
-    "e2-",
-    "e1-"
+    "e7+",
+    "e8+",
+    "e9+",
+    "e10+",
+    "e8-",
+    "e7-"
    ],
    "tags": [
     "varied",
@@ -595,22 +781,24 @@
    ],
    "note": "The Jail Trail, up Junction Hollow to Oakland and the Cathedral of Learning, round Schenley Park and back down to downtown",
    "lengthM": 21150,
-   "climbM": 203
+   "climbM": 202
   },
   {
    "id": "pgh-oakland-south",
    "name": "Oakland & South Side Loop",
    "path": [
-    "e10+",
-    "e1+",
-    "e2+",
-    "e3+",
-    "e4+",
-    "e2-",
-    "e5+",
+    "e16+",
     "e6+",
-    "e11-",
-    "e10-"
+    "e7+",
+    "e8+",
+    "e9+",
+    "e10+",
+    "e8-",
+    "e11+",
+    "e12+",
+    "e17-",
+    "e6-",
+    "e16-"
    ],
    "tags": [
     "long",
@@ -618,13 +806,128 @@
     "new"
    ],
    "note": "The Point, the Jail Trail, Oakland and Schenley Park, then over the Hot Metal Bridge and home on the river trail",
-   "lengthM": 30640,
-   "climbM": 270
+   "lengthM": 30630,
+   "climbM": 269
+  },
+  {
+   "id": "pgh-allegheny",
+   "name": "Allegheny Loop",
+   "path": [
+    "e1+",
+    "e2+",
+    "e4+",
+    "e5+",
+    "e16-"
+   ],
+   "tags": [
+    "flat",
+    "new"
+   ],
+   "note": "From the Water Steps along the North Shore Trail to Millvale, over the 40th Street Bridge, down Butler Street and through the Strip, home over the Clemente Bridge",
+   "lengthM": 12130,
+   "climbM": 42
+  },
+  {
+   "id": "pgh-allegheny-rev",
+   "name": "Allegheny Loop · reverse",
+   "path": [
+    "e16+",
+    "e5-",
+    "e4-",
+    "e2-",
+    "e1-"
+   ],
+   "tags": [
+    "flat",
+    "new"
+   ],
+   "note": "Over the Clemente Bridge, up Penn Avenue and Smallman Street through the Strip and Lawrenceville, back along the river from Millvale",
+   "lengthM": 12130,
+   "climbM": 42
+  },
+  {
+   "id": "pgh-allegheny-jail",
+   "name": "Allegheny & Jail Trail Loop",
+   "path": [
+    "e1+",
+    "e2+",
+    "e4+",
+    "e5+",
+    "e6+",
+    "e7+",
+    "e11+",
+    "e12+",
+    "e17-",
+    "e6-",
+    "e16-"
+   ],
+   "tags": [
+    "long",
+    "flat",
+    "new"
+   ],
+   "note": "Both rivers on the flat: the Allegheny Loop, the Point, the Jail Trail, the Hot Metal Bridge and the South Side river trail",
+   "lengthM": 27570,
+   "climbM": 131
+  },
+  {
+   "id": "pgh-troy-hill",
+   "name": "Troy Hill Climb Loop",
+   "path": [
+    "e2+",
+    "e3+"
+   ],
+   "tags": [
+    "short",
+    "hilly",
+    "new"
+   ],
+   "note": "From the 16th Street Bridge along the river to the 31st Street Bridge, straight up Rialto Street (Pig Hill, about 24 %), over Troy Hill and back down Troy Hill Road",
+   "lengthM": 4030,
+   "climbM": 63
+  },
+  {
+   "id": "pgh-troy-hill-steps",
+   "name": "Water Steps & Troy Hill",
+   "path": [
+    "e1+",
+    "e2+",
+    "e3+",
+    "e1-"
+   ],
+   "tags": [
+    "hilly",
+    "new"
+   ],
+   "note": "Out along the North Shore Trail, up Rialto Street to Troy Hill and down Troy Hill Road, back past PNC Park to the Water Steps",
+   "lengthM": 7590,
+   "climbM": 72
+  },
+  {
+   "id": "pgh-allegheny-troy",
+   "name": "Allegheny Loop + Troy Hill",
+   "path": [
+    "e1+",
+    "e2+",
+    "e3+",
+    "e2+",
+    "e4+",
+    "e5+",
+    "e16-"
+   ],
+   "tags": [
+    "hilly",
+    "varied",
+    "new"
+   ],
+   "note": "The Allegheny Loop with a lap of Troy Hill: up Rialto Street at the 31st Street Bridge, down Troy Hill Road, then on to Millvale, Lawrenceville and the Strip",
+   "lengthM": 16160,
+   "climbM": 105
   }
  ],
  "freeRide": {
   "name": "Free Ride · choose every turn",
-  "first": "e10+",
+  "first": "e16+",
   "note": "No plan: from the Water Steps, straight on at every junction unless you choose a turn. Ride until you stop"
  }
 }

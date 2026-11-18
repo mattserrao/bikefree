@@ -4,34 +4,34 @@
   "software": false,
   "rows": [
     {
-      "shot": "pittsburgh@6460:midday:current",
-      "file": "tools/snapshots/pittsburgh-6460-midday-current.jpg",
-      "calls": 219,
-      "triangles": 1219146,
-      "seconds": 49,
+      "shot": "pittsburgh@54000",
+      "file": "tools/snapshots/pittsburgh-54000.jpg",
+      "calls": 194,
+      "triangles": 1429145,
+      "seconds": 90,
       "errors": [],
       "bake": {
-        "ms": 221,
-        "cpuMs": 219,
+        "ms": 425,
+        "cpuMs": 420,
         "work": [
-          4972,
-          1747
+          3735,
+          2187
         ],
         "view": [
-          3994,
-          1539
+          3001,
+          2031
         ],
-        "cell": 2.5,
-        "passes": 11,
-        "occluders": 326,
-        "groundSamples": 213172,
+        "cell": 3.33,
+        "passes": 10,
+        "occluders": 476,
+        "groundSamples": 354768,
         "phases": {
-          "ground": 23,
-          "occluders": 133,
-          "passes": 60
+          "ground": 37,
+          "occluders": 297,
+          "passes": 76
         },
-        "gpuMB": 29.3,
-        "worstStepMs": 133
+        "gpuMB": 29.1,
+        "worstStepMs": 297
       }
     }
   ]

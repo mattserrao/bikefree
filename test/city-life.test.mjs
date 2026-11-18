@@ -112,7 +112,7 @@ export function simulate(reverse, { span = null, watch = null, plan = null, spee
   const R = { jumps: 0, worstJump: 0, personInRoad: 0, vehicleInLane: 0, vehicleClose: 0, closest: Infinity, oneWayOncoming: 0, popIn: 0, popOut: 0, ticks: 0, seen: { person: 0, vehicle: 0 } };
   const episode = new Map();   // agent → which checks are failing now (count each episode once)
   const flag = (a, key) => { const e = episode.get(a) || new Set(); episode.set(a, e); if (e.has(key)) return false; e.add(key); return true; };
-  let s = reverse ? turn : 0;
+  let s = reverse ? turn + speed * DT : 0;   // (Reverse: from the first step on the way back, so the city sees the rider coming back)
   let end = reverse ? total - 1 : turn - 1;
   if (span) { s = reverse ? total - span[1] : span[0]; end = reverse ? total - span[0] : span[1]; }
   const ride = plan ? new NetRide(network(), {}, { plan }) : null;
