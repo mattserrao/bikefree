@@ -11,6 +11,7 @@ feature goes into the toolbox behind a scene field, so the next route can use it
 - **Refactor safety:** `npm run guard`, which checks that every route still builds identically
 - **Texture expansion proposal and backlog:** [docs/toolbox/TEXTURE_EXPANSION.md](docs/toolbox/TEXTURE_EXPANSION.md) (existing options stay available)
 - **Additional procedural materials:** [docs/toolbox/MATERIALS.md](docs/toolbox/MATERIALS.md) — 8 road/path selections and 12 opt-in materials for kit authors, with PNG studies and usage examples
+- **Expanded texture catalog:** [docs/toolbox/CATALOG.md](docs/toolbox/CATALOG.md) — 768 further presets across 10 families (788 total additions), searchable gallery, JSON catalog and per-part material factories
 - **Step by step:** the new-route guide (the Project doc `claude/new_route.md`), then `ROUTES.md` for the full field reference
 
 ---
@@ -114,6 +115,7 @@ js/world/toolbox/
 | `materials/stonework.js` | (used by structures) | `makeMasonryMaterial({ stones })`: rubble masonry in world space for walls, parapets and portals. |
 | `materials/road-textures.js` | `road.surface`, `road.texture`, road/trail zones | Additional road/path patterns; seeded physical grain, concrete joints, soil, gravel, limestone and stone setts. Existing kinds stay available. |
 | `materials/surface-library.js` | (opt-in factory for kit authors) | `makeToolboxSurface(id, options)`: standalone building, masonry, terrain, bark and detail materials. Catalog and limits in `docs/toolbox/MATERIALS.md`. |
+| `materials/index.js` | (opt-in factory for kit authors) | `findTextures`, `getTexture`, `makeCatalogMaterial`: 768 named presets for vehicles, plants, buildings, walls, roofs, terrain and props. Existing factories are re-exported too. See `docs/toolbox/CATALOG.md`. |
 
 ### Packs: regional models (`"packs"`)
 

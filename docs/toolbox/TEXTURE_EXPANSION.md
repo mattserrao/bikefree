@@ -3,6 +3,9 @@
 Status: proposal followed by an authorized first implementation. See [MATERIALS.md](MATERIALS.md) for
 the 20 available additions, integration boundaries, previews and validation. Remaining candidates below
 are still proposals; existing appearances are preserved.
+
+The owner's subsequent 750+ target is implemented as 768 more named presets in [CATALOG.md](CATALOG.md),
+with explicit recipe/finish counts and factory integration boundaries. Total additions: 788.
 Branch: `toolbox-textures-test`.
 Baseline: `83110de5cdc4349257ab571f3d529b1245ebd37b` (`main`, 18 Nov 2026).
 

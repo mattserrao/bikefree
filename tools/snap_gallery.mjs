@@ -14,7 +14,7 @@ const args = process.argv.slice(2);
 const opt = (name, dflt) => { const i = args.indexOf(name); return i < 0 ? dflt : args[i + 1]; };
 const out = resolve(ROOT, opt('--out', 'tools/snapshots/toolbox-gallery.png'));
 const gallery = opt('--page', 'toolbox');
-if (!['toolbox', 'textures'].includes(gallery)) throw new Error('--page must be toolbox or textures');
+if (!['toolbox', 'textures', 'catalog'].includes(gallery)) throw new Error('--page must be toolbox, textures or catalog');
 const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync));
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.css': 'text/css' };
@@ -32,7 +32,8 @@ const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => { if (m.type() === 'error' && !m.text().startsWith('Failed to load resource')) errors.push(m.text()); });
 page.on('response', (r) => { if (r.status() >= 400 && !r.url().endsWith('/favicon.ico')) errors.push(`${r.status()} ${r.url()}`); });
-await page.goto(`http://127.0.0.1:${server.address().port}/tools/${gallery}-gallery.html?${new URLSearchParams({ condition: opt('--condition', 'midday'), library: opt('--library', 'roads') })}`);
+try {
+await page.goto(`http://127.0.0.1:${server.address().port}/tools/${gallery}-gallery.html?${new URLSearchParams({ condition: opt('--condition', 'midday'), library: opt('--library', 'roads'),family:opt('--family',''),selection:opt('--selection','representatives'),limit:opt('--limit','24'),page:opt('--offset-page','0'),q:opt('--query','') })}`);
 await page.waitForFunction(() => window.galleryReady || null, null, { timeout: 300000, polling: 500 });
 for (const [sel, name] of [['#shade', '--shade'], ['#season', '--season']]) {
   const v = opt(name, null);
@@ -43,7 +44,14 @@ if (kit) await page.selectOption('#kit', kit);
 const stat = gallery === 'textures' ? await page.evaluate(() => `${window.textureStats.length} surface studies`) : await page.textContent('#stat');
 await page.screenshot({ path: out, fullPage: true });
 if (gallery === 'textures' && args.includes('--verify')) console.log(await page.evaluate(() => window.verifyTextures()));
+if (gallery === 'catalog' && args.includes('--verify')) console.log(await page.evaluate(() => window.verifyCatalog()));
 console.log(`${errors.length ? 'ERR' : 'ok '} ${stat} → ${out}`);
 for (const e of errors) console.log('   ', e.slice(0, 200));
-await browser.close(); server.close();
 process.exitCode = errors.length ? 1 : 0;
+} catch (error) {
+  console.error(error.message);
+  for (const e of errors) console.error(e.slice(0, 4000));
+  process.exitCode = 1;
+} finally {
+  await browser.close(); server.close();
+}

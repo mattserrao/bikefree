@@ -1,5 +1,9 @@
 # Additional procedural materials
 
+The following documents the first 20 additions. The subsequent [expanded catalog](CATALOG.md) provides
+768 more presets for all ten material families, bringing this branch to 788 new options. All IDs and
+factories below remain available.
+
 First implementation on `toolbox-textures-test`, 18 Nov 2026. These are opt-in additions; all existing
 materials, building surface codes, exports and scene defaults remain available. No routes were converted.
 
