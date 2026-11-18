@@ -94,3 +94,45 @@ test('rivers from each area\'s scene: the longest of each name', () => {
   const ohio = { name: 'Ohio River', path: [[0, 0], [1, 1]] };
   assert.deepEqual(mergeRivers([[short, ohio], null, [long]]), [long, ohio]);
 });
+
+test('the panel\'s list by area: each route under its main area, areas in the network\'s order (F103)', async () => {
+  const { groupByArea } = await import('../js/city-routes.js');
+  const edges = new Map(json.edges.map((e) => [e.id, { area: e.area, len: e.lengthM }]));
+  const order = json.areas.map((a) => a.id);
+  const groups = groupByArea(presets, (it) => it.path, (id) => edges.get(id), order);
+  assert.equal(groups.reduce((n, g) => n + g.items.length, 0), presets.length);
+  assert.deepEqual(groups.map((g) => g.area), order.filter((a) => groups.some((g) => g.area === a)));   // the network's order
+  const where = (id) => groups.find((g) => g.items.some((it) => it.preset === id)).area;
+  assert.equal(where('pgh-three-rivers'), 'core');
+  assert.equal(where('pgh-schenley'), 'oakland');
+  assert.equal(where('pgh-dirty-dozen'), 'slopes');
+  assert.equal(where('pgh-highland-park'), 'eastend');
+  // within an area, the presets keep their order
+  for (const g of groups) assert.deepEqual(g.items, presets.filter((p) => g.items.includes(p)));
+  // a route with no known segments goes last, on its own
+  const lost = { id: 'x', path: [] };
+  assert.equal(groupByArea([lost, presets[0]], (it) => it.path, (id) => edges.get(id), order).at(-1).area, null);
+  // every area is named in the network (the headings)
+  for (const a of json.areas) assert.ok(a.name, a.id);
+});
+
+test('the panel map zooms about the finger and pans within the map (F102)', async () => {
+  const { zoomProjection, zoomAt, panBy, MAP_ZOOM_MAX } = await import('../js/city-routes.js');
+  const lines = json.edges.map((e) => ({ id: e.id, lat: [40.40 + (e.lengthM % 97) / 1000, 40.46], lon: [-80.02, -79.93 + (e.lengthM % 89) / 1000] }));
+  const w = 390, h = 220, P = fitProjection(lines, w, h, 12);
+  assert.equal(zoomProjection(P, w, h, { k: 1 }), P);   // the whole map
+  // the point under the finger stays put
+  const lat = 40.44, lon = -79.96, px = P.X(lon), py = P.Y(lat);
+  const v = zoomAt({ k: 1 }, w, h, px, py, 3);
+  const Z = zoomProjection(P, w, h, v);
+  assert.equal(v.k, 3);
+  assert.ok(Math.abs(Z.X(lon) - px) < 1e-6 && Math.abs(Z.Y(lat) - py) < 1e-6);
+  assert.ok(Math.abs(Z.scale - P.scale * 3) < 1e-9);
+  // never past the map's edges, never out past the whole map, never deeper than the limit
+  const far = panBy(v, w, h, 5000, -5000);
+  assert.ok(far.ox >= w / 2 / far.k - 1e-9 && far.oy <= h - h / 2 / far.k + 1e-9);
+  assert.deepEqual(zoomAt(v, w, h, 10, 10, 0.01), { k: 1, ox: w / 2, oy: h / 2 });
+  assert.equal(zoomAt(v, w, h, px, py, 100).k, MAP_ZOOM_MAX);
+  // a tap 22 px from a line at k 3 is 7 px of the whole map: lines 3× further apart
+  assert.ok(Math.abs(Z.X(lon + 0.001) - Z.X(lon) - 3 * (P.X(lon + 0.001) - P.X(lon))) < 1e-6);
+});

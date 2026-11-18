@@ -85,6 +85,29 @@ try {
     await page.keyboard.press('Escape');
     const closed = await page.evaluate(() => !document.getElementById('cityDlg').open && document.activeElement?.classList.contains('city-card'));
     if (!closed) { console.error(`${tag}: Escape did not close the panel back onto the card`); failed = true; }
+    // zoom (F102): the wheel over the North Side zooms in about the pointer, "Whole map" goes back out
+    await page.click('.city-card');
+    await page.waitForSelector('#cityDlg[open]');
+    await page.waitForTimeout(300);
+    const box = await page.locator('#cityMap').boundingBox();
+    // hovering a line previews its routes in the hint (F105)
+    const hp = await page.evaluate(() => { const c = document.getElementById('cityMap'), r = c.getBoundingClientRect(), L = [...c.lines].sort((a, b) => b.pts.length - a.pts.length)[0]; const [x, y] = L.pts[Math.floor(L.pts.length / 2)]; return { x: r.left + x, y: r.top + y }; });
+    await page.mouse.move(hp.x, hp.y);
+    await page.waitForTimeout(100);
+    if (!/ride/.test(await page.textContent('#cityMapHint'))) { console.error(`${tag}: hovering a line did not preview its routes`); failed = true; }
+    await page.mouse.move(box.x + box.width * .3, box.y + box.height * .45);
+    for (let k = 0; k < 4; k++) { await page.mouse.wheel(0, -120); await page.waitForTimeout(60); }
+    await page.waitForTimeout(200);
+    await shot('9-zoomed');
+    const zoomed = await page.evaluate(() => !document.getElementById('cityFit').hidden);
+    if (!zoomed) { console.error(`${tag}: the wheel did not zoom the map`); failed = true; }
+    await page.click('#cityFit');
+    if (!(await page.evaluate(() => document.getElementById('cityFit').hidden))) { console.error(`${tag}: "Whole map" did not zoom back out`); failed = true; }
+    // the browser's Back closes the panel and stays on the app (F100)
+    const url = page.url();
+    await page.goBack();
+    await page.waitForTimeout(300);
+    if (await page.evaluate(() => document.getElementById('cityDlg').open) || page.url() !== url) { console.error(`${tag}: Back did not close the panel`); failed = true; }
     if (errors.length) { console.error(`${tag}: page errors:\n  ${errors.join('\n  ')}`); failed = true; }
     await page.close();
   }

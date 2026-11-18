@@ -181,8 +181,7 @@ test('your own routes: the planner offers the ways on, a loop laps, a one-way ro
   assert.deepEqual(idsToKeys(net, keysToIds(net, ['H>G-', 'I>H-'])), ['H>G-', 'S>H-', 'I>S-']);
   const after = planNext(net, loop.slice(0, 1));   // at the Hot Metal Bridge: the three ways on (back included)
   assert.equal(after.length, 3);
-  // a route saved before junctions S (the GAP at the Hot Metal Bridge) D (West End), C and R (the North Side) split I>H and G>A (one saved
-  // before junction I as well, with E>H, now maps onto the shorter chain E>G, G>H: F40)
+  // a route saved before junctions S (the GAP at the Hot Metal Bridge) D (West End), C and R (the North Side) split I>H and G>A
   const oneWay = keysToIds(net, ['E>I+', 'I>H+', 'H>G+', 'G>A+']);
   assert.deepEqual(idsToKeys(net, oneWay), ['E>I+', 'I>S+', 'S>H+', 'H>G+', 'G>GV+', 'GV>D+', 'D>C+', 'C>R+', 'R>A+']);
   assert.deepEqual(idsToKeys(net, keysToIds(net, ['G>A-'])), ['R>A-', 'C>R-', 'D>C-', 'GV>D-', 'G>GV-']);
@@ -203,6 +202,76 @@ test('your own routes: the planner offers the ways on, a loop laps, a one-way ro
   const { finishDistanceM } = gpxMod;
   assert.equal(finishDistanceM(r, 0), r.lapM);
   assert.equal(keysToIds(net, ['X>Y+']), null);   // a segment that's gone: plan it again
+});
+
+test('sharp corners inside a segment get the junctions\' gentle speed cap (F82: Bakery Square\'s hairpin)', () => {
+  const { edgeBends } = netMod;
+  const r = makePathRoute(net, preset('pgh-squirrel-hill'));   // Forbes from K, then EL>SQ backwards: Beechwood, Fifth Ave, Penn Ave by Bakery Square
+  const e = edge('EL>SQ');
+  const bend = edgeBends(net, e).find((c) => Math.abs(e.s0 + c.u - 16490) < 30);
+  assert.ok(bend, 'the Penn/Fifth hairpin by Bakery Square is a corner');
+  const at = len('SQ>K') + e.len - bend.u;   // its path metre (ridden backwards)
+  const cap = r.netRide.speedCap(at);
+  assert.ok(cap != null && Math.abs(cap - cornerSpeed(bend.angle)) < 0.01, `${cap}`);
+  assert.ok(r.netRide.speedCap(at - 60) > cap && r.netRide.speedCap(at - 60) < 25);   // easing down into it
+  assert.equal(r.netRide.speedCap(at + 40), null);                                     // pedal back up after
+  // gentle: never under the U-turn's speed, and no corner sits in a junction's own reach
+  for (const x of net.edges.values()) for (const c of edgeBends(net, x)) {
+    assert.ok(cornerSpeed(c.angle) >= 3.5 && c.u >= 25 && c.u <= x.len - 25);
+  }
+  // a straight segment has none (East Carson Street)
+  assert.deepEqual(edgeBends(net, edge('G>Q')), []);
+});
+
+test('turn labels follow the street, not the line\'s rounded corner at a junction it passes twice (F84)', () => {
+  const at = (inKey) => { const m = /^(.+)([+-])$/.exec(inKey); return optionsAt(net, { e: edge(m[1]), dir: m[2] === '+' ? 1 : -1 }); };
+  const labels = (inKey) => Object.fromEntries(at(inKey).filter((o) => !o.back).map((o) => [`${o.t.e.key}${o.t.dir > 0 ? '+' : '-'}`, o.label]));
+  // Forbes & Shady (SQ): Forbes straight on, Shady Ave a right angle either way
+  assert.deepEqual(labels('EL>SQ+'), { 'SQ>K+': 'Straight', 'SQ>EL+': 'Right' });
+  assert.deepEqual(labels('SQ>EL-'), { 'EL>SQ-': 'Left', 'SQ>K+': 'Right' });
+  assert.deepEqual(labels('SQ>K-'), { 'SQ>EL+': 'Left', 'EL>SQ-': 'Straight' });
+  // the Clemente Bridge's south end (B): 6th St runs straight onto the bridge
+  assert.deepEqual(labels('M>B+'), { 'B>E+': 'Left', 'A>B-': 'Straight' });
+  // Highland Park (HE): from Mellon Terrace the default is Bunkerhill on, not the turn onto N Highland
+  assert.equal(straightOn(at('LB>HE+')).t.e.key, 'HP>HE');
+  // order: left to right by the street's turn; the curve keeps its own angle (first 15 m)
+  for (const e of net.edges.values()) for (const dir of [1, -1]) {
+    const o = optionsAt(net, { e, dir });
+    for (let i = 1; i < o.length; i++) assert.ok(o[i].turn >= o[i - 1].turn);
+    for (const x of o) assert.ok(Number.isFinite(x.angle) && Number.isFinite(x.turn));
+  }
+});
+
+test('saved routes from before every split map onto the way they rode (the key history, F40/F58)', () => {
+  const { keysToIds, idsToKeys } = netMod;
+  const map = (keys) => idsToKeys(net, keysToIds(net, keys));
+  const splits = {
+    'E>H': ['E>I', 'I>S', 'S>H'],             // the Jail Trail & Hot Metal Bridge (junctions I, then S) — not the Smithfield Street Bridge
+    'G>A': ['G>GV', 'GV>D', 'D>C', 'C>R', 'R>A'],
+    'A>E': ['A>B', 'B>E'],
+    'I>J': ['I>L', 'L>J'],
+    'I>H': ['I>S', 'S>H'],
+    'N>M': ['N>LB', 'LB>M'],
+    'D>A': ['D>C', 'C>R', 'R>A'],
+    'E>G': ['E>F', 'F>G'],
+    'G>D': ['G>GV', 'GV>D'],
+    'G>H': ['G>Q', 'Q>H'],
+  };
+  for (const [old, pieces] of Object.entries(splits)) {
+    assert.deepEqual(map([`${old}+`]), pieces.map((k) => `${k}+`), old);
+    assert.deepEqual(map([`${old}-`]), [...pieces].reverse().map((k) => `${k}-`), `${old} backwards`);
+    // the pieces ride the old segment's length
+    const ids = keysToIds(net, [`${old}+`]);
+    assert.equal(ids.length, pieces.length);
+  }
+  // a whole route saved in phase 3 (E>H, H>G, E>G back) is the Jail Trail loop it was
+  assert.deepEqual(map(['E>H+', 'H>G+', 'E>G-']), ['E>I+', 'I>S+', 'S>H+', 'H>G+', 'F>G-', 'E>F-']);
+  // the history is a chain from each old segment's start to its end
+  for (const old of Object.keys(net.keySplits)) {
+    const keys = map([`${old}+`]).map((k) => k.slice(0, -1).split('>'));
+    assert.equal(keys[0][0], old.split('>')[0]);
+    assert.equal(keys[keys.length - 1][1], old.split('>')[1]);
+  }
 });
 
 test('the West End Overlook: a dead end with only the way back, and a ghost the rider never rides', () => {

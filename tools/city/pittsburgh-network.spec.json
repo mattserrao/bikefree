@@ -8,54 +8,63 @@
   "areas": [
     {
       "id": "core",
+      "name": "Downtown, the North Shore & the South Side",
       "catalogId": "pittsburgh",
       "base": "routes/cities/pittsburgh.gpx",
       "spec": "tools/city/pittsburgh-core.network.json"
     },
     {
       "id": "allegheny",
+      "name": "The Allegheny & Troy Hill",
       "catalogId": "pittsburgh-allegheny",
       "base": "routes/cities/pittsburgh-allegheny.gpx",
       "spec": "tools/city/pittsburgh-allegheny.network.json"
     },
     {
       "id": "westend",
+      "name": "The West End",
       "catalogId": "pittsburgh-westend",
       "base": "routes/cities/pittsburgh-westend.gpx",
       "spec": "tools/city/pittsburgh-westend.network.json"
     },
     {
       "id": "oakland",
+      "name": "Oakland & Schenley Park",
       "catalogId": "pittsburgh-oakland",
       "base": "routes/cities/pittsburgh-oakland.gpx",
       "spec": "tools/city/pittsburgh-oakland.network.json"
     },
     {
       "id": "polish",
+      "name": "Polish Hill & Bloomfield",
       "catalogId": "pittsburgh-polish",
       "base": "routes/cities/pittsburgh-polish.gpx",
       "spec": "tools/city/pittsburgh-polish.network.json"
     },
     {
       "id": "homestead",
+      "name": "The Great Allegheny Passage & Homestead",
       "catalogId": "pittsburgh-homestead",
       "base": "routes/cities/pittsburgh-homestead.gpx",
       "spec": "tools/city/pittsburgh-homestead.network.json"
     },
     {
       "id": "northside",
+      "name": "The North Side",
       "catalogId": "pittsburgh-northside",
       "base": "routes/cities/pittsburgh-northside.gpx",
       "spec": "tools/city/pittsburgh-northside.network.json"
     },
     {
       "id": "eastend",
+      "name": "The East End",
       "catalogId": "pittsburgh-eastend",
       "base": "routes/cities/pittsburgh-eastend.gpx",
       "spec": "tools/city/pittsburgh-eastend.network.json"
     },
     {
       "id": "slopes",
+      "name": "The South Side Slopes & the Dirty Dozen",
       "catalogId": "pittsburgh-slopes",
       "base": "routes/cities/pittsburgh-slopes.gpx",
       "spec": "tools/city/pittsburgh-slopes.network.json"
@@ -742,5 +751,48 @@
     "name": "Free Ride · choose every turn",
     "first": "A>B+",
     "note": "No plan: from the Water Steps, straight on at every junction unless you choose a turn. Ride until you stop"
+  },
+  "keySplits": {
+    "G>A": [
+      "G>D",
+      "D>A"
+    ],
+    "E>H": [
+      "E>I",
+      "I>H"
+    ],
+    "I>H": [
+      "I>S",
+      "S>H"
+    ],
+    "I>J": [
+      "I>L",
+      "L>J"
+    ],
+    "A>E": [
+      "A>B",
+      "B>E"
+    ],
+    "D>A": [
+      "D>C",
+      "C>R",
+      "R>A"
+    ],
+    "E>G": [
+      "E>F",
+      "F>G"
+    ],
+    "G>D": [
+      "G>GV",
+      "GV>D"
+    ],
+    "G>H": [
+      "G>Q",
+      "Q>H"
+    ],
+    "N>M": [
+      "N>LB",
+      "LB>M"
+    ]
   }
 }

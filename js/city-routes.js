@@ -113,3 +113,50 @@ export function mergeRivers(lists) {
   }
   return [...by.values()];
 }
+
+/**
+ * The panel's list by area (F103): each route under the area where most of its metres are, areas in the network's
+ * order (a route that crosses areas sits under its main one). `pathOf(it)` → its traversal keys ("e3+");
+ * `edgeOf(id)` → {area, len}. [{area, items}], in the items' own order within each area; one group for one area.
+ */
+export function groupByArea(items, pathOf, edgeOf, areaOrder) {
+  const by = new Map();
+  for (const it of items) {
+    const m = new Map();
+    for (const k of pathOf(it) || []) { const e = edgeOf(String(k).replace(/[+-]$/, '')); if (e) m.set(e.area, (m.get(e.area) || 0) + e.len); }
+    let area = null, best = -1;
+    for (const a of areaOrder) if ((m.get(a) || 0) > best) { best = m.get(a) || 0; area = a; }
+    if (!best) area = null;   // no known segments (a route to plan again): its own group at the end
+    if (!by.has(area)) by.set(area, []);
+    by.get(area).push(it);
+  }
+  return [...areaOrder, null].filter((a) => by.has(a)).map((area) => ({ area, items: by.get(area) }));
+}
+
+// The panel map's zoom (F102: the Polish Hill / North Side tangle is tight to tap on a phone). A view is
+// {k, ox, oy}: k× the fitted map, centred on the fitted map's point (ox, oy) in canvas px; k 1 is the whole map.
+export const MAP_ZOOM_MAX = 8;
+/** A fitted projection (fitProjection's {X, Y, scale}) seen through a view. */
+export function zoomProjection(P, w, h, view) {
+  const k = view?.k || 1;
+  if (k <= 1) return P;
+  const ox = view.ox ?? w / 2, oy = view.oy ?? h / 2;
+  return { X: (lon) => w / 2 + (P.X(lon) - ox) * k, Y: (lat) => h / 2 + (P.Y(lat) - oy) * k, scale: P.scale * k };
+}
+const clampView = (v, w, h) => {
+  if (v.k <= 1) return { k: 1, ox: w / 2, oy: h / 2 };
+  const hw = w / 2 / v.k, hh = h / 2 / v.k;
+  return { k: v.k, ox: Math.max(hw, Math.min(w - hw, v.ox)), oy: Math.max(hh, Math.min(h - hh, v.oy)) };
+};
+/** Zoom by `factor` about canvas point (px, py): the map under it stays under it (within the map's edges). */
+export function zoomAt(view, w, h, px, py, factor) {
+  const k = view?.k || 1, ox = view?.ox ?? w / 2, oy = view?.oy ?? h / 2;
+  const bx = ox + (px - w / 2) / k, by = oy + (py - h / 2) / k;
+  const k2 = Math.max(1, Math.min(MAP_ZOOM_MAX, k * factor));
+  return clampView({ k: k2, ox: bx - (px - w / 2) / k2, oy: by - (py - h / 2) / k2 }, w, h);
+}
+/** Drag the zoomed map by (dx, dy) canvas px. */
+export function panBy(view, w, h, dx, dy) {
+  const k = view?.k || 1;
+  return clampView({ k, ox: (view?.ox ?? w / 2) - dx / k, oy: (view?.oy ?? h / 2) - dy / k }, w, h);
+}

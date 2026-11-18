@@ -43,3 +43,22 @@ test('the parked car has wheels, a glass cabin and stays low-poly', () => {
     for (let k = 0; k < M.n.length; k += 3) assert.ok(Math.abs(Math.hypot(M.n[k], M.n[k + 1], M.n[k + 2]) - 1) < 1e-3, 'unit normals');
   }
 });
+
+// F79: at a sharp corner of the route the sidewalk is dropped on the inside of the turn only (where its slabs
+// would fan across the road); the outside keeps its sidewalk
+test('route corner: no sidewalk on the inside of a sharp turn, the outside keeps it', () => {
+  // the route runs east (+x) to s = 100, then turns 90° to −z; side +1 is the +z (outside) side, −1 the inside
+  const frame = (s) => (s < 100 ? { x: s, z: 0, y: 0, tx: 1, tz: 0 } : { x: 100, z: -(s - 100), y: 0, tx: 0, tz: -1 });
+  const kit = (clear) => ({
+    cfg: { clearRouteCrossings: clear }, route: { scene: {} }, city: {},
+    frame, curbAt: () => 4, zoneAt: () => null, sOf: (r) => r.s, crossing: () => false, buildingLine: () => Infinity,
+    L: { landAt: () => 0, bridgeAt: () => null, routeDist: () => null },
+  });
+  const at = (clear, side) => StreetKit.prototype._station.call(kit(clear), { route: true, s: 100, side });
+  assert.equal(at(true, -1), null, 'inside of the turn: none');
+  assert.ok(at(true, 1), 'outside of the turn: kept');
+  assert.ok(at(false, -1) && at(false, 1), 'not opted in: both');
+  // a straight stretch keeps both sides
+  const straight = (side) => StreetKit.prototype._station.call(kit(true), { route: true, s: 50, side });
+  assert.ok(straight(1) && straight(-1));
+});
