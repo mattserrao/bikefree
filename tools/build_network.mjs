@@ -195,6 +195,21 @@ if (!spec.areas) {
   };
   if (spec.freeRide) out.freeRide = { ...spec.freeRide, first: trav(edges)(spec.freeRide.first) };
 }
+// the key history (F40): every segment a new junction split, old key → its pieces in its own forward order, so a
+// route saved before the split maps onto the way it rode (js/network.js keysToIds); a piece may itself have split later
+if (spec.keySplits) {
+  const keys = new Set(out.edges.map((e) => e.key));
+  const expand = (k, depth = 0) => (keys.has(k) ? [k] : spec.keySplits[k] && depth < 8 ? spec.keySplits[k].flatMap((p) => expand(p, depth + 1)) : null);
+  for (const [old, pieces] of Object.entries(spec.keySplits)) {
+    if (keys.has(old)) throw new Error(`keySplits: ${old} is still a segment`);
+    const flat = pieces.flatMap((p) => expand(p) || [p]);
+    const missing = flat.filter((p) => !keys.has(p));
+    if (missing.length) throw new Error(`keySplits: ${old} → ${missing.join(', ')} not a segment (add their own split)`);
+    const ends = flat.map((p) => p.split('>'));
+    if (ends[0][0] !== old.split('>')[0] || ends[ends.length - 1][1] !== old.split('>')[1] || ends.some((e, i) => i && e[0] !== ends[i - 1][1])) throw new Error(`keySplits: ${old} → ${flat.join(', ')} is not a chain from its start to its end`);
+  }
+  out.keySplits = spec.keySplits;
+}
 
 /**
  * An apron of area A ([fromM, toM] on its line) as {edge, dir, s: [s0, s1], u0}: the edge of another area whose

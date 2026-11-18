@@ -742,5 +742,48 @@
     "name": "Free Ride · choose every turn",
     "first": "A>B+",
     "note": "No plan: from the Water Steps, straight on at every junction unless you choose a turn. Ride until you stop"
+  },
+  "keySplits": {
+    "G>A": [
+      "G>D",
+      "D>A"
+    ],
+    "E>H": [
+      "E>I",
+      "I>H"
+    ],
+    "I>H": [
+      "I>S",
+      "S>H"
+    ],
+    "I>J": [
+      "I>L",
+      "L>J"
+    ],
+    "A>E": [
+      "A>B",
+      "B>E"
+    ],
+    "D>A": [
+      "D>C",
+      "C>R",
+      "R>A"
+    ],
+    "E>G": [
+      "E>F",
+      "F>G"
+    ],
+    "G>D": [
+      "G>GV",
+      "GV>D"
+    ],
+    "G>H": [
+      "G>Q",
+      "Q>H"
+    ],
+    "N>M": [
+      "N>LB",
+      "LB>M"
+    ]
   }
 }

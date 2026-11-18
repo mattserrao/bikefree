@@ -65,7 +65,7 @@ export function loadNetwork(json, base) {
   const edges = new Map(json.edges.map((e) => [e.id, { ...e, area: e.area || MAIN, s0: e.s[0], s1: e.s[1], len: e.lengthM }]));
   const first = areas.values().next().value;
   const net = { id: json.id, json, areas, multi: areas.size > 1, origin: json.origin || null,
-    base: first.base, L: first.L, total: first.total, nodes, edges, presets: json.presets || [] };
+    base: first.base, L: first.L, total: first.total, nodes, edges, presets: json.presets || [], keySplits: json.keySplits || {} };
   for (const e of edges.values()) {
     e.A = areas.get(e.area);
     if (!e.A) throw new Error(`Network edge ${e.id}: no area ${e.area}`);
@@ -653,12 +653,34 @@ export function keysToIds(net, specKeys) {
     if (!m) return null;
     const e = edges.find((x) => x.key === `${m[1]}>${m[2]}`);
     if (e) { out.push(`${e.id}${m[3]}`); continue; }
+    // a segment a new junction split (a saved route from before): the network's key history knows its pieces
+    // (F40: the chain of fewest pieces can be another way, e.g. E>H's Jail Trail vs the Smithfield Street Bridge)
+    const hist = splitKeys(net, `${m[1]}>${m[2]}`);
+    if (hist) {
+      const ids = hist.map((key) => edges.find((x) => x.key === key)?.id);
+      if (ids.some((id) => !id)) return null;
+      out.push(...(m[3] === '+' ? ids.map((id) => `${id}+`) : ids.reverse().map((id) => `${id}-`)));
+      continue;
+    }
     // the segment was split by a new junction (a saved route from before): the chain of new segments that runs
     // the same way from its start to its end, through junctions only (no dead ends), shortest first
     const [from, to] = m[3] === '+' ? [m[1], m[2]] : [m[2], m[1]];
     const chain = splitChain(net, from, to, m[3] === '+' ? 1 : -1);
     if (!chain) return null;
     out.push(...chain);
+  }
+  return out;
+}
+function splitKeys(net, key, depth = 0) {
+  const pieces = net.keySplits?.[key];
+  if (!pieces || depth > 8) return null;
+  const has = (k) => [...net.edges.values()].some((x) => x.key === k);
+  const out = [];
+  for (const p of pieces) {
+    if (has(p)) { out.push(p); continue; }
+    const sub = splitKeys(net, p, depth + 1);
+    if (!sub) return null;
+    out.push(...sub);
   }
   return out;
 }
