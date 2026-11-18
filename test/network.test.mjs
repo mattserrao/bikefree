@@ -17,7 +17,7 @@ const keys = (ride, n = 4) => ride.entries.slice(0, n).map((x) => `${x.t.e.id}${
 
 const edge = (key) => [...net.edges.values()].find((e) => e.key === key);
 const len = (...keys) => keys.reduce((t, k) => t + edge(k).len, 0);
-const gAt = len('A>E', 'E>G');   // East Carson & 10th, riding the Three Rivers Loop from the Water Steps
+const gAt = len('A>B', 'B>E', 'E>G');   // East Carson & 10th, riding the Three Rivers Loop from the Water Steps
 
 test('the network sits on its tour: edges on its 10 m samples, presets close up', () => {
   assert.equal(item.network, 'routes/cities/pittsburgh-network.json');
@@ -25,13 +25,13 @@ test('the network sits on its tour: edges on its 10 m samples, presets close up'
   const sum = [...net.edges.values()].reduce((t, e) => t + e.len, 0);
   const ghost = (net.json.ghosts || []).reduce((t, g) => t + g.toM - g.fromM, 0);
   assert.ok(Math.abs(sum + ghost - net.L) < 30, `${sum} + ${ghost} ghost vs ${net.L}`);   // the edges and the ghosts cover the tour once
-  assert.deepEqual([...net.nodes.keys()].sort(), ['A', 'D', 'E', 'G', 'H', 'I', 'J', 'K', 'O']);
+  assert.deepEqual([...net.nodes.keys()].sort(), ['A', 'B', 'D', 'E', 'G', 'H', 'I', 'J', 'K', 'M', 'N', 'O', 'P']);
   const three = makePathRoute(net, preset('pgh-three-rivers'));
   const short = makePathRoute(net, preset('pgh-short-loop'));
   const jail = makePathRoute(net, preset('pgh-jail-trail'));
-  assert.equal(three.lapM, len('A>E', 'E>G', 'G>H', 'H>G', 'G>D', 'D>A'));
+  assert.equal(three.lapM, len('A>B', 'B>E', 'E>G', 'G>H', 'H>G', 'G>D', 'D>A'));
   assert.ok(Math.abs(three.lapM - 18300) < 300, `${three.lapM}`);   // the loop as it always was
-  assert.equal(short.lapM, len('A>E', 'E>G', 'G>D', 'D>A'));
+  assert.equal(short.lapM, len('A>B', 'B>E', 'E>G', 'G>D', 'D>A'));
   assert.equal(jail.lapM, len('E>I', 'I>H', 'H>G', 'E>G'));
   assert.ok(three.total > 140000 && short.total > 140000);   // the path runs far ahead for the planner
   for (let i = 0; i < three.dist.length; i += 997) assert.equal(three.dist[i], i * 10);
@@ -39,7 +39,7 @@ test('the network sits on its tour: edges on its 10 m samples, presets close up'
 
 test('East Carson & 10th: back, left, straight and right, sorted left to right', () => {
   const ride = new NetRide(net, {}, { plan: preset('pgh-three-rivers').path });
-  const opts = optionsAt(net, ride.entries[1].t);   // arriving eastbound on East Carson
+  const opts = optionsAt(net, ride.entries[2].t);   // arriving eastbound on East Carson
   assert.deepEqual(opts.map((o) => o.label), ['Back', 'Left', 'Straight', 'Right']);
   assert.equal(straightOn(opts).t.e.key, 'G>H');   // straight: East Carson on to SouthSide Works
   assert.equal(opts[3].t.e.key, 'G>D');            // right: up McArdle to Mount Washington
@@ -48,7 +48,7 @@ test('East Carson & 10th: back, left, straight and right, sorted left to right',
 
 test('Smithfield & Fort Pitt and SouthSide Works: the Jail Trail joins the loop', () => {
   const ride = new NetRide(net, {}, { plan: preset('pgh-three-rivers').path });
-  const atE = optionsAt(net, ride.entries[0].t);   // southbound on Smithfield, at Fort Pitt Blvd
+  const atE = optionsAt(net, ride.entries[1].t);   // southbound on Smithfield, at Fort Pitt Blvd
   assert.ok(atE.some((o) => o.t.e.key === 'E>I' && o.t.dir > 0 && /left/i.test(o.label)), 'the Jail Trail is a left turn');
   assert.equal(straightOn(atE).t.e.key, 'E>G');   // straight on: the Smithfield Street Bridge
   const jail = new NetRide(net, {}, { plan: preset('pgh-jail-trail').path });
@@ -61,14 +61,14 @@ test('the path follows the plan, takes your turn, then rejoins the plan', () => 
   const r = makePathRoute(net, preset('pgh-three-rivers'));
   const ride = r.netRide;
   const key = (k) => { const e = edge(k.slice(0, -1)); return `${e.id}${k.at(-1)}`; };
-  assert.deepEqual(keys(ride, 3), ['A>E+', 'E>G+', 'G>H+'].map(key));
+  assert.deepEqual(keys(ride, 4), ['A>B+', 'B>E+', 'E>G+', 'G>H+'].map(key));
   const p = gAt - 120;
   const up = ride.upcoming(p);
   assert.equal(up.node.id, 'G');
   assert.equal(up.options[up.selected].label, 'Straight');
   assert.equal(up.onPlan, true);
   assert.equal(ride.choose(+1, p), true);   // right: skip the South Side
-  assert.deepEqual(keys(ride, 4), ['A>E+', 'E>G+', 'G>D+', 'D>A+'].map(key));   // McArdle is on the plan too, so it rejoins
+  assert.deepEqual(keys(ride, 5), ['A>B+', 'B>E+', 'E>G+', 'G>D+', 'D>A+'].map(key));   // McArdle is on the plan too, so it rejoins
   assert.equal(ride.choose(+1, p), false);   // nothing further right
   // the session's path route now runs straight from East Carson onto McArdle
   const i = gAt / 10, sMcArdle = edge('G>D').s0 / 10;
@@ -81,7 +81,7 @@ test('a choice locks close to the junction', () => {
   r.netRide.update(p);
   assert.equal(r.netRide.upcoming(p).locked, true);
   assert.equal(r.netRide.choose(+1, p), false);
-  assert.equal(r.netRide.entries[2].t.e.key, 'G>H');
+  assert.equal(r.netRide.entries[3].t.e.key, 'G>H');
 });
 
 test('the prompt shows ~15 s out and never later than 120 m', () => {
@@ -129,7 +129,7 @@ test('the session rides a network route: handlebar ◀ ▶ choose, laps, a fresh
   let laps = 0;
   s.addEventListener('routeLap', () => laps++);
   s.setRoute(r, 0, null);
-  const third = () => r.netRide.entries[2].t;
+  const third = () => r.netRide.entries[3].t;   // after the Clemente Bridge, the Point and Smithfield
   s.distanceM = gAt - 120;
   s._updateRoute();
   s._onPress('navRight');
@@ -154,16 +154,17 @@ test('free ride: no plan, straight on at every junction, no laps, a far-reaching
   assert.equal(r.netRide.lapAt(50000), 1);
   assert.ok(r.total > 140000);
   for (const x of r.netRide.entries.slice(1, 6)) assert.equal(x.planStep, null);
-  // at East Carson & 10th (from Smithfield) straight on is East Carson; a right takes you up McArdle
-  assert.equal(r.netRide.entries[1].t.e.key, 'E>G');
-  assert.equal(r.netRide.entries[2].t.e.key, 'G>H');
+  // off the Clemente Bridge straight on is 6th St and Penn Avenue into the Strip, then Smallman St to Lawrenceville
+  assert.equal(r.netRide.entries[1].t.e.key, 'M>B');
+  assert.equal(r.netRide.entries[1].t.dir, -1);
+  assert.equal(r.netRide.entries[2].t.e.key, 'N>M');
   assert.ok(r.stops.length >= 3);
 });
 
 test('your own routes: the planner offers the ways on, a loop laps, a one-way route finishes at its end', () => {
   const { planNext, planCloses, keysToIds, idsToKeys } = netMod;
   const fromE = planNext(net, [], 'E');
-  assert.deepEqual(fromE.map((o) => o.t.e.key).sort(), ['A>E', 'E>G', 'E>I']);
+  assert.deepEqual(fromE.map((o) => o.t.e.key).sort(), ['B>E', 'E>G', 'E>I']);
   const loop = keysToIds(net, ['E>I+', 'I>H+', 'H>G+', 'E>G-']);
   assert.equal(planCloses(net, loop), true);
   assert.deepEqual(idsToKeys(net, loop), ['E>I+', 'I>H+', 'H>G+', 'E>G-']);
@@ -172,6 +173,9 @@ test('your own routes: the planner offers the ways on, a loop laps, a one-way ro
   const oneWay = keysToIds(net, ['E>H+', 'H>G+', 'G>A+']);   // a route saved before junctions I (Hot Metal Bridge) and D (West End) split E>H and G>A
   assert.deepEqual(idsToKeys(net, oneWay), ['E>I+', 'I>H+', 'H>G+', 'G>D+', 'D>A+']);
   assert.deepEqual(idsToKeys(net, keysToIds(net, ['G>A-'])), ['D>A-', 'G>D-']);
+  // …and one saved before junction B (the Clemente Bridge, where the Allegheny Loop comes in) split A>E
+  assert.deepEqual(idsToKeys(net, keysToIds(net, ['A>E+', 'E>G+'])), ['A>B+', 'B>E+', 'E>G+']);
+  assert.deepEqual(idsToKeys(net, keysToIds(net, ['E>G-', 'A>E-'])), ['E>G-', 'B>E-', 'A>B-']);
   const r = makePathRoute(net, { id: 'mine', name: 'Mine', path: oneWay });
   assert.equal(r.netOpen, true);
   assert.equal(r.lapM, len('E>I', 'I>H', 'H>G', 'G>D', 'D>A'));

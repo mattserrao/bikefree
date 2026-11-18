@@ -569,8 +569,8 @@
     "file": "routes/cities/pittsburgh.gpx",
     "outAndBack": false,
     "expectedKm": [
-      38,
-      44
+      54,
+      61
     ],
     "scene": "routes/scenes/pittsburgh.json",
     "network": "routes/cities/pittsburgh-network.json",

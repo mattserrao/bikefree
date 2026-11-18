@@ -386,7 +386,7 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
         // [F15] against the road as drawn (its curve), not the 10 m chords routeDist follows
         const q = RLq.project(p.x, p.z, route.dist[Math.min(end, r.i)], 25), roadY = q && q.d < ROAD_WIDTH / 2 + 1.5 ? q.y : r.y;
         const over = (p === jn ? jn.cy : p.y ?? jn.top(p.x, p.z)) - (roadY + ROAD_LIFT);   // [junctions] (the surface as drawn)
-        if (over > -.005) F.add('junction-over-road', 'fail', route.dist[r.i], over, 'a junction surface covers the road');
+        if (over > -.005 && over < 4) F.add('junction-over-road', 'fail', route.dist[r.i], over, 'a junction surface covers the road');   // (4 m and up: a junction on a deck that crosses over the road, as for streets)
       }
     }
     // [junctions] how much street surface is still drawn over other street surface (overlapping ribbons)
