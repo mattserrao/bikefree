@@ -94,11 +94,12 @@ const note = (what, a, t) => DEBUG && console.log(what, `t=${t.toFixed(1)}`, JSO
 
 /**
  * A ride Forward or Reverse; `span` [a, b] outbound metres limits it to a stretch (debugging), `watch(life, rider, t)`
- * sees every step. `plan` (network traversal keys, e.g. ["e10+", "e1+"]) rides one lap of that path instead, as the
+ * sees every step; `seed` draws the city's life anew. `plan` (network traversal keys, e.g. ["e10+", "e1+"]) rides one lap of that path instead, as the
  * world places a network ride: the turns through the junctions, edges ridden backwards on the base route's way back.
  */
-export function simulate(reverse, { span = null, watch = null, plan = null, speed = SPEED } = {}) {
+export function simulate(reverse, { span = null, watch = null, plan = null, speed = SPEED, seed = null } = {}) {
   const city = makeCity(), life = new CityLife(city);
+  if (seed != null) { let q = seed; life.rand = () => { q = (q * 1103515245 + 12345) & 0x7fffffff; return q / 0x7fffffff; }; }   // (another draw of the same city's life)
   const turn = route.turnS, total = route.total;
   // spawns and despawns: hook the spawn methods (their names are the life's contract with this test)
   const respawned = new Set();
@@ -186,6 +187,57 @@ export function simulate(reverse, { span = null, watch = null, plan = null, spee
   life.dispose?.();
   return R;
 }
+
+/**
+ * Every dead end near the route that cars and buses drive into: one of each driven in from 40 m out and left to
+ * turn round there (no rider about). No corner of it may come onto the route's road (F16: a bus turning round at
+ * a T cut back from the route on Second Ave swung its nose through the rider). [{way, dir, bus, worst}] where it does.
+ */
+export function deadEndTurns() {
+  const life = new CityLife(makeCity()), net = life.drive, out = [];
+  let n = 0;
+  net.ways.forEach((w, i) => {
+    for (const dir of [1, -1]) {
+      const endP = dir > 0 ? w.path.pts.at(-1) : w.path.pts[0];
+      if (!w.allow(dir) || (net.ends.get(net.key(endP)) || []).some((o) => o.i !== i && net.ways[o.i].allow(o.end === 0 ? 1 : -1))) continue;
+      const near = L.routeDist(endP.x, endP.z);
+      if (!near || near.d > 40) continue;
+      for (const bus of w.bus ? [false, true] : [false]) {
+        if (!life._turnOk(w, dir, bus)) continue;   // (never driven into)
+        n++;
+        // (driven in at full speed from far enough out to brake for where it turns round, but past the last crossing of the
+        // route on the way: crossing it is fine)
+        const wall = (c) => (dir > 0 ? c.s1 >= w.path.length - .01 : c.s0 <= .01);   // (a band at the end: the way ends on the road there)
+        const lastX = (w.band || []).filter((c) => !wall(c)).reduce((m, c) => (dir > 0 ? Math.max(m, c.s1) : Math.min(m, c.s0)), dir > 0 ? -Infinity : Infinity);
+        const turnAt = life._turnRound(w, dir, bus), brake = w.speed ** 2 / (4 * 3.2) + 10;
+        const from = dir > 0 ? Math.max(0, turnAt - brake, lastX + 12) : Math.min(w.path.length, turnAt + brake, lastX - 12);
+        if (dir > 0 ? from >= turnAt - 3 : from <= turnAt + 3) continue;
+        const a = { alive: true, bus, model: bus ? 'bus' : 'sedan', way: i, s: from, dir,
+          speed: w.speed, v: w.speed, lat: w.lane || 0, gait: 0, nx: undefined, go: null, slot: 0, x: null };
+        const len = bus ? VEH.bus[1] : VEHICLE_INFO.sedan.len / 2, half = bus ? VEH.bus[0] : .95;
+        let worst = Infinity;
+        for (let k = 0; k < 300 && a.way === i; k++) {
+          life._advance(a, net, DT, null, 'car');
+          const hx = Math.sin(a.yaw), hz = Math.cos(a.yaw);
+          for (const [f, g] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+            const r = L.routeDist(a.x + hx * len * f - hz * half * g, a.z + hz * len * f + hx * half * g);
+            if (r && Math.abs(r.y - a.y) < 3) worst = Math.min(worst, r.d - HALF);
+          }
+          if (a.dir !== dir && (Math.abs(a.s - from) < 3 || (a.s - from) * dir < 0)) break;   // turned round and back where it came in
+        }
+        if (worst < 0) out.push({ way: i, dir, bus, worst: +worst.toFixed(2) });
+      }
+    }
+  });
+  return Object.assign(out, { checked: n });
+}
+
+if (!process.env.NO_TESTS) test('pittsburgh life: cars and buses turn round at dead ends clear of the route\'s road', () => {
+  const bad = deadEndTurns();
+  if (process.env.LIFE_SIM_REPORT) console.log('dead-end turns', bad.checked, JSON.stringify(bad));
+  assert.ok(bad.checked > 50, `dead ends checked: ${bad.checked}`);
+  assert.deepEqual([...bad], [], 'vehicles swinging onto the route\'s road as they turn round');
+});
 
 for (const reverse of process.env.NO_TESTS ? [] : [false, true]) {
   test(`pittsburgh life, ${reverse ? 'Reverse' : 'Forward'}: no jumps, people off the road, vehicles out of the rider's lane, no pop-in`, () => {
