@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // City card QC: the route list's city card (a ride network, e.g. Pittsburgh) and its full-screen panel, in
 // headless Chrome at desktop and phone sizes. Screenshots: the main page, the panel opened, a route picked in
-// the list, a line tapped on the map (and tapped again: the next route on it), a goal chip, and back.
+// the list, a line tapped on the map (and tapped again: the next route on it), a goal chip, and back; Options
+// (the menu with the route's start options), Ride with no trainer (the route chosen), and Ride with the Demo
+// trainer on (F104: the ride starts at once on the route).
 //
 //   node tools/snap_city.mjs                     → tools/snapshots/card/*.png
 //   options: --out <dir>  --sizes 1440x900,390x844  --theme dark|light  --chrome <path> (or CHROME)
@@ -47,6 +49,11 @@ try {
     await page.waitForSelector('.city-card', { timeout: 120000 });
     await page.waitForTimeout(600);
     const shot = async (name, full = false) => { const f = join(out, `${tag}-${name}.png`); await page.screenshot({ path: f, fullPage: full }); saved.push(f); };
+    // the ride screen: stop the 3D loop (software GL keeps the page too busy to screenshot), draw one frame, shoot
+    const rideShot = async (name) => {
+      await page.evaluate(() => { const w = window.bikefree.world; w?.stop(); if (w?._render) w._render(); else w?.renderer.render(w.scene, w.camera); });
+      const f = join(out, `${tag}-${name}.png`); await page.screenshot({ path: f, timeout: 120000 }); saved.push(f);
+    };
     await page.locator('.city-card').scrollIntoViewIfNeeded();
     await shot('1-main');
     await page.click('.city-card');
@@ -74,10 +81,14 @@ try {
     await page.waitForTimeout(200);
     await shot('6-goal-hilly');
     if (w < 600) { await page.evaluate(() => document.querySelector('.city-body').scrollTo(0, 99999)); await page.waitForTimeout(150); await shot('7-panel-scrolled'); }
-    // Ride: back on the menu with the route chosen
-    await page.locator('#cityList [data-ride]').click();
+    // Options: back on the menu with the route chosen, its preview and start options showing (F104)
+    const picked = await page.locator('#cityList [data-ride]').getAttribute('data-ride');
+    await page.locator('#cityList [data-options]').click();
     await page.waitForTimeout(500);
-    await shot('8-after-ride');
+    await shot('8-after-options');
+    const onMenu = await page.evaluate((id) => !document.getElementById('cityDlg').open && document.getElementById('rideScreen').hidden && !document.getElementById('routeOpts').hidden
+      && document.querySelector('.city-card')?.textContent.length > 0, picked);
+    if (!onMenu) { console.error(`${tag}: Options did not go back to the menu with the route's options`); failed = true; }
     // keyboard: open with Enter, Escape closes
     await page.focus('.city-card');
     await page.keyboard.press('Enter');
@@ -108,6 +119,29 @@ try {
     await page.goBack();
     await page.waitForTimeout(300);
     if (await page.evaluate(() => document.getElementById('cityDlg').open) || page.url() !== url) { console.error(`${tag}: Back did not close the panel`); failed = true; }
+    // Ride with no trainer: the route is chosen on the menu (its Start button asks for the trainer)
+    await page.click('.city-card');
+    await page.waitForSelector('#cityDlg[open]');
+    await page.locator('.city-row-btn').nth(1).click();
+    await page.locator('#cityList [data-ride]').click();
+    await page.waitForTimeout(500);
+    if (!(await page.evaluate(() => !document.getElementById('cityDlg').open && document.getElementById('rideScreen').hidden && /Connect/.test(document.getElementById('startBtn').textContent)))) {
+      console.error(`${tag}: Ride with no trainer did not leave the route chosen on the menu`); failed = true;
+    }
+    // Ride with the Demo trainer on: riding at once (F104), on the route picked, from its start
+    await page.click('#demoBtn');
+    await page.click('.city-card');
+    await page.waitForSelector('#cityDlg[open]');
+    await page.locator('.city-row-btn').nth(2).click();
+    const want = await page.locator('#cityList [data-ride]').getAttribute('data-ride');
+    await page.locator('#cityList [data-ride]').click();
+    await page.waitForFunction(() => !document.getElementById('rideScreen').hidden && window.bikefree?.world && document.getElementById('hLoading').hidden, null, { timeout: 240000 });
+    await page.waitForTimeout(1500);
+    await rideShot('10-ride-now');
+    const rode = await page.evaluate(() => { const s = window.bikefree.session; return { mode: s.mode, name: s.route?.name, start: s.routeStart, plan: !!s.route?.netRide?.plan }; });
+    const wantName = await page.evaluate((id) => document.querySelector(`.city-card`) && id, want);
+    if (rode.mode !== 'route' || !rode.plan || !wantName) { console.error(`${tag}: Ride did not start the route at once: ${JSON.stringify(rode)}`); failed = true; }
+    else console.log(`${tag}: Ride started ${rode.name} at ${rode.start} m`);
     if (errors.length) { console.error(`${tag}: page errors:\n  ${errors.join('\n  ')}`); failed = true; }
     await page.close();
   }

@@ -1317,8 +1317,10 @@ $('routeCards').addEventListener('click', (e) => {
 // ---------- City panel (a ride network's map and routes) ----------
 // Full screen over the menu (a <dialog>: Escape closes it, focus goes back to the card). The map shows the whole
 // network over its rivers; a route tapped in the list lights up bold on it, a line tapped on the map lists the
-// routes that ride it (tap again for the next). The goal chips filter both. Ride chooses the route and goes back
-// to the menu, where its preview, start options and Start button are — the same as picking a card used to.
+// routes that ride it (tap again for the next). The goal chips filter both. Ride starts riding the route at once
+// (F104: the defaults the preview would apply — its remembered start, else the plan's, and the ride length and
+// pacer as set); "Options" beside it chooses the route and goes back to the menu, where its preview, start
+// options and Start button are — the same as picking a card used to (and Ride does that too, with no trainer).
 const city = { baseId: null, goal: 'all', sel: null, seg: null, segIds: null, focus: null, lines: [], hint: '', view: { k: 1 } };
 const cityRivers = new Map();   // baseId → rivers (the city's scenes: each area's has its own copy, some reaching further)
 async function loadCityRivers(card) {
@@ -1405,7 +1407,7 @@ function renderCity() {
     const kind = r ? (r.netOpen ? 'One way' : 'Loop') : '';
     const detail = `<div class="cr-detail"><div class="cr-tags">${[kind, ...tags.map((t) => label[t])].filter(Boolean).map((t) => `<span>${escapeHtml(t)}</span>`).join('')}</div>
       ${it.note && !it.custom ? `<p class="cr-note">${escapeHtml(it.note)}</p>` : ''}
-      <div class="cr-actions">${it.custom ? `<button type="button" class="ghost danger" data-remove="${escapeHtml(it.id)}">Remove</button>` : ''}<button type="button" class="primary" data-ride="${escapeHtml(it.id)}" aria-label="Ride ${escapeHtml(shortName(it.name))}">Ride</button></div></div>`;
+      <div class="cr-actions">${it.custom ? `<button type="button" class="ghost danger" data-remove="${escapeHtml(it.id)}">Remove</button>` : ''}<button type="button" class="link" data-options="${escapeHtml(it.id)}" title="Choose where to start and how long to ride, then Start" aria-label="Options for ${escapeHtml(shortName(it.name))}: start and length">Options</button><button type="button" class="primary" data-ride="${escapeHtml(it.id)}" aria-label="Ride ${escapeHtml(shortName(it.name))} now" title="Start riding it now">Ride</button></div></div>`;
     return `<li class="city-row on">${row}${detail}</li>`;
   };
   // grouped by area (F103) when the city has more than one: a heading per area, its routes in the network's order
@@ -1459,9 +1461,18 @@ function cityChoose(id) {
   $('cityDlg').close();
   selectedRouteId = id;
   renderRouteCards();
-  previewSelectedRoute();
+  const shown = previewSelectedRoute();
   if (matchMedia('(max-width: 1080px)').matches) document.querySelector('.preview').scrollIntoView({ block: 'start' });
   $('startBtn').focus({ preventScroll: true });
+  return shown;
+}
+/** Ride (F104): choose the route and start riding it at once, as Start would with the preview's defaults. */
+async function cityRide(id) {
+  if (chosen !== 'route') showPane('route');
+  await cityChoose(id);
+  // (no trainer yet, or the route didn't load: the menu shows it chosen, with what's missing on its Start button)
+  if (!trainer.connected || selectedRouteId !== id || !previewRoute || previewRoute !== routeCache.get(id)) return;
+  await startRide();
 }
 // zoom and pan (F102): pinch or the wheel zooms about the fingers / the pointer, a drag pans once zoomed in;
 // "Whole map" goes back out. Lines stay as easy to tap in px, so zoomed in they are further apart
@@ -1549,8 +1560,9 @@ $('cityGoals').addEventListener('click', (e) => {
 });
 $('citySeg').addEventListener('click', (e) => { if (e.target.id === 'citySegClear') { city.seg = null; city.segIds = null; renderCity(); } });
 $('cityList').addEventListener('click', async (e) => {
-  const ride = e.target.closest('[data-ride]'), rm = e.target.closest('[data-remove]'), row = e.target.closest('.city-row-btn');
-  if (ride) cityChoose(ride.dataset.ride);
+  const ride = e.target.closest('[data-ride]'), opts = e.target.closest('[data-options]'), rm = e.target.closest('[data-remove]'), row = e.target.closest('.city-row-btn');
+  if (ride) cityRide(ride.dataset.ride);
+  else if (opts) cityChoose(opts.dataset.options);
   else if (rm) {
     if (!confirm('Remove this route from your library?')) return;
     await removeNetRoute(rm.dataset.remove);
