@@ -156,6 +156,7 @@ function chainPolylines(lines, tol = 1.5) {
 // ease up and down, and what is drawn follows the agent's place on its way at no more than its own pace (corners,
 // the far sidewalk after a turn round), so nothing snaps sideways in view.
 const HALF = ROAD_WIDTH / 2;
+const HIDDEN = new THREE.Vector3(0, 0, 0);   // a train car not drawn (scale 0): in a shallow cut under the route (F59)
 const MOVE = {
   //      look: m ahead to decide · acc/dec: m/s² · kerb: stop this far before the route's road · catch: m/s
   //      drawn place may close on the agent's place beyond its pace · turn: rad/s · body: length to clear
@@ -865,6 +866,28 @@ export class CityLife {
     return (t.crossings = out);
   }
 
+  /**
+   * Where a train line passes under the route's road with too little room (F59: a short deck over a rail cut the
+   * z14 ground fills, so the rails are drawn in the cut's floor ~3 m under the deck): [{s0, s1}] along the line.
+   * Cars there aren't drawn — the train runs into the cut under the deck rather than through the road and rider.
+   * (At a level crossing the rails are at the road's height: that's `_crossings`.)
+   */
+  _underpasses(t) {
+    if (t.underpasses) return t.underpasses;
+    const L = this.city.landscape, out = [], p = {}, reach = t.gap / 2 + 2;
+    let cur = null;
+    for (let s = 0; s <= t.path.length; s += 2) {
+      t.path.at(s, p);
+      const r = L.routeDist(p.x, p.z), below = r ? r.y - p.y : 0;
+      const on = r && r.d < ROAD_WIDTH / 2 + 2.5 && below > 1.5 && below < 6;
+      if (on && !cur) cur = { s0: s - reach, s1: s + reach };
+      else if (on) cur.s1 = s + reach;
+      else if (cur) { out.push(cur); cur = null; }
+    }
+    if (cur) out.push(cur);
+    return (t.underpasses = out);
+  }
+
   _updateTrains(dt, rider) {
     const p = {};
     for (const t of this.trains) {
@@ -886,10 +909,12 @@ export class CityLife {
         if (t.dir > 0 && t.s > t.path.length - 5) { t.s -= tail; t.dir = -1; t.wait = 25; }
         else if (t.dir < 0 && t.s < 5) { t.s += tail; t.dir = 1; t.wait = 25; }
       }
+      const under = this._underpasses(t);
       for (let k = 0; k < t.cars; k++) {
-        t.path.at(Math.max(0, Math.min(t.path.length, t.s - t.dir * k * t.gap)), p);
+        const sk = Math.max(0, Math.min(t.path.length, t.s - t.dir * k * t.gap));
+        t.path.at(sk, p);
         this.e.set(-Math.atan(p.dy || 0) * t.dir, Math.atan2(p.dx, p.dz) + (t.dir < 0 ? Math.PI : 0), 0); this.q.setFromEuler(this.e);
-        this.m.compose(V(p.x, p.y, p.z), this.q, this.one);
+        this.m.compose(V(p.x, p.y, p.z), this.q, under.some((u) => sk > u.s0 && sk < u.s1) ? HIDDEN : this.one);
         if (t.freight) { if (k < 2) t.im.setMatrixAt(k, this.m); else t.carIm.setMatrixAt(k - 2, this.m); }
         else t.im.setMatrixAt((t.offset || 0) + k, this.m);
       }
