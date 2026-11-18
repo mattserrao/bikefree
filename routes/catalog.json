@@ -623,6 +623,21 @@
   "area": "pittsburgh"
  },
  {
+  "id": "pittsburgh-northside",
+  "name": "Pittsburgh \u00b7 The North Side",
+  "park": "Pittsburgh, Pennsylvania",
+  "file": "routes/cities/pittsburgh-northside.gpx",
+  "outAndBack": false,
+  "expectedKm": [
+   16,
+   21
+  ],
+  "scene": "routes/scenes/pittsburgh-northside.json",
+  "eleSmoothM": 10,
+  "stage": "draft",
+  "area": "pittsburgh"
+ },
+ {
   "id": "alpedhuez",
   "name": "Alpe d'Huez \u00b7 Tour Stage 19",
   "park": "Gap \u2192 Alpe d'Huez, French Alps (Tour de France 2026)",

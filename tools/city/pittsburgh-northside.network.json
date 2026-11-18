@@ -1,0 +1,52 @@
+{
+  "area": "northside",
+  "note": "The North Side: Allegheny Commons and the National Aviary, the Mexican War Streets and Randyland, Fineview, Perrysville Avenue, Riverview Park and the Allegheny Observatory, the Davis Avenue Bridge, Brighton Road and Western Avenue. Portals: C, R (on the core's old D>A).",
+  "nodes": [
+    {
+      "id": "C",
+      "name": "West End Bridge north end",
+      "lat": 40.450595,
+      "lon": -80.023818
+    },
+    {
+      "id": "R",
+      "name": "Ridge Ave by the Rivers Casino",
+      "lat": 40.449089,
+      "lon": -80.021263
+    },
+    {
+      "id": "Y",
+      "name": "Federal St & Perrysville Ave",
+      "lat": 40.46122,
+      "lon": -80.00872
+    },
+    {
+      "id": "Z",
+      "name": "Perrysville Ave & Federal St Extension",
+      "lat": 40.46703,
+      "lon": -80.01004
+    }
+  ],
+  "edges": {
+    "R>Y": {
+      "name": "Allegheny Commons & Mexican War Streets",
+      "fwd": "Ridge Avenue past West Park, Arch Street by the National Aviary, Randyland and up Federal Street",
+      "rev": "down Federal Street, Randyland, Arch Street by the National Aviary and Ridge Avenue"
+    },
+    "Y>Z": {
+      "name": "Fineview",
+      "fwd": "the climb up Belleau Street to the Fineview Overlook, up Lanark Street and over to Perrysville Avenue",
+      "rev": "from Perrysville Avenue through Fineview, down past the overlook and down Belleau Street"
+    },
+    "Z>Y": {
+      "name": "Perrysville Avenue",
+      "fwd": "down Perrysville Avenue's bends to Federal Street",
+      "rev": "up Perrysville Avenue's bends to the top of Fineview"
+    },
+    "Z>C": {
+      "name": "Riverview Park & Brighton Road",
+      "fwd": "Perrysville Avenue north, Riverview Park past the Allegheny Observatory, the Davis Avenue Bridge, down Brighton Road and Western Avenue to the West End Bridge",
+      "rev": "Western Avenue, up Brighton Road, the Davis Avenue Bridge, Riverview Park past the Allegheny Observatory and down Perrysville Avenue"
+    }
+  }
+}

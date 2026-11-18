@@ -1,6 +1,6 @@
 {
   "area": "core",
-  "note": "Downtown, the North Shore, the South Side and Mount Washington: the Point, the Jail Trail, the Hot Metal, Smithfield Street, Clemente and West End bridges. Portals: A and B (the Allegheny & Troy Hill), I (Oakland & Schenley), D (the West End).",
+  "note": "Downtown, the North Shore, the South Side and Mount Washington: the Point, the Jail Trail, the Hot Metal, Smithfield Street, Clemente and West End bridges. Portals: A and B (the Allegheny & Troy Hill), I (Oakland & Schenley), D (the West End), C and R (the North Side).",
   "nodes": [
     {
       "id": "B",
@@ -40,6 +40,18 @@
       "lon": -80.02819
     },
     {
+      "id": "C",
+      "name": "West End Bridge north end",
+      "lat": 40.450595,
+      "lon": -80.023818
+    },
+    {
+      "id": "R",
+      "name": "Ridge Ave by the Rivers Casino",
+      "lat": 40.449089,
+      "lon": -80.021263
+    },
+    {
       "id": "A",
       "name": "North Shore Water Steps",
       "lat": 40.445507,
@@ -72,10 +84,20 @@
       "fwd": "the McArdle climb, Grandview and down to the West End",
       "rev": "up from the West End over Grandview and down McArdle"
     },
-    "D>A": {
+    "D>C": {
       "name": "West End Bridge",
-      "fwd": "the West End Bridge and the North Shore trail",
-      "rev": "the North Shore trail and the West End Bridge"
+      "fwd": "the West End Bridge to Western Avenue",
+      "rev": "the West End Bridge to the West End"
+    },
+    "C>R": {
+      "name": "Fulton Street",
+      "fwd": "down Fulton Street to Ridge Avenue",
+      "rev": "Ridge Avenue and up Fulton Street to the West End Bridge"
+    },
+    "R>A": {
+      "name": "North Shore Trail: Science Center",
+      "fwd": "under Ohio River Boulevard and the North Shore trail past the Science Center to the Water Steps",
+      "rev": "the North Shore trail past the Science Center and up to Ridge Avenue"
     },
     "A>B": {
       "name": "Clemente Bridge",

@@ -283,6 +283,18 @@
     "scene": "routes/scenes/pittsburgh-oakland.json"
   },
   {
+    "id": "pittsburgh-northside",
+    "name": "Pittsburgh · The North Side",
+    "park": "Pittsburgh, Pennsylvania",
+    "km": 18.6,
+    "climbM": 350,
+    "file": "routes/cities/pittsburgh-northside.gpx",
+    "stage": "draft",
+    "area": "pittsburgh",
+    "eleSmoothM": 10,
+    "scene": "routes/scenes/pittsburgh-northside.json"
+  },
+  {
     "id": "alpedhuez",
     "name": "Alpe d'Huez · Tour Stage 19",
     "park": "Gap → Alpe d'Huez, French Alps (Tour de France 2026)",
