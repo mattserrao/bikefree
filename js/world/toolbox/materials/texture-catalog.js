@@ -13,7 +13,7 @@ const treatments = {
   props: ['clean','aged','sun-faded','damp','dusty','worn','scratched','frosted'],
 };
 export const TEXTURE_FAMILIES = Object.freeze(Object.fromEntries(Object.entries(treatments).map(([id, finishes]) => [id, Object.freeze({ id, finishes: Object.freeze(finishes) })])));
-// family | recipe | pattern | primary | secondary | accent | size(m) | structural controls (ratio,joint,density,shape)
+// family | recipe | pattern | primary | secondary | accent | size(m) | structural controls (ratio,joint,density,shape) | relief(m, optional, default .004)
 const authored = `
 vehicles|coach-enamel|paint|#31566c|#193444|#b7ccd1|.035|1,.02,1,0
 vehicles|metallic-flake|paint|#7e2335|#421524|#d8a4a9|.008|1,.02,1,1
@@ -115,9 +115,9 @@ props|pebble-aggregate|aggregate|#a6aa96|#667663|#d0ceb0|.045|1,.03,1,2
 
 const title = (s) => s.split('-').map((w) => w[0].toUpperCase()+w.slice(1)).join(' ');
 export const TEXTURE_RECIPES = Object.freeze(authored.split('\n').map((line) => {
-  const [family,id,pattern,color,secondary,accent,size,params] = line.split('|');
+  const [family,id,pattern,color,secondary,accent,size,params,reliefM] = line.split('|');
   const cutout = ['leaves','grass','flowers'].includes(family);
-  return Object.freeze({ id, family, pattern, color, secondary, accent, scaleM:Number(size), structure:Object.freeze(params.split(',').map(Number)),
+  return Object.freeze({ id, family, pattern, color, secondary, accent, scaleM:Number(size), structure:Object.freeze(params.split(',').map(Number)), relief:reliefM===undefined?.004:Number(reliefM),
     cutout, projection:cutout ? 'uv' : family === 'ground' ? 'world' : family === 'trees' ? 'cylindrical' : 'local',
     usage: family === 'vehicles' ? 'Car/bike body, trim, tyres, lenses and glazing; apply per part.' : cutout ? 'UV-mapped foliage/flower cards; shader supplies the alpha silhouette.' : 'Static or instanced mesh surfaces; select per material slot.',
   });

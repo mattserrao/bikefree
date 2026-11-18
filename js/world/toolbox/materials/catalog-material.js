@@ -28,7 +28,7 @@ export function makeCatalogMaterial(id, options = {}) {
   });
   const uniforms={ catParams:{value:new THREE.Vector4(spec.scaleM*spec.scale,spec.seed,spec.variation,PROJECTIONS[spec.projection])},
     catBase:{value:new THREE.Color(spec.colors[0])},catSecondary:{value:new THREE.Color(spec.colors[1])},catAccent:{value:new THREE.Color(spec.colors[2])},
-    catStructure:{value:new THREE.Vector4(...spec.structure)},catEffects:{value:new THREE.Vector4(...spec.effects)},catDensity:{value:spec.density},catTreatment:{value:spec.treatment} };
+    catStructure:{value:new THREE.Vector4(...spec.structure)},catEffects:{value:new THREE.Vector4(...spec.effects)},catDensity:{value:spec.density},catTreatment:{value:spec.treatment},catRelief:{value:spec.relief??.004} };
   material.onBeforeCompile=(shader)=>{
     Object.assign(shader.uniforms,uniforms);
     shader.vertexShader=shader.vertexShader.replace('#include <common>',`#include <common>
@@ -50,7 +50,7 @@ export function makeCatalogMaterial(id, options = {}) {
     shader.fragmentShader=shader.fragmentShader.replace('#include <common>',`#include <common>
       varying vec3 vCatLocal; varying vec3 vCatWorld; varying vec3 vCatNormal; varying vec3 vCatWorldNormal; varying vec2 vCatUV;
       uniform vec4 catParams; uniform vec3 catBase; uniform vec3 catSecondary; uniform vec3 catAccent;
-      uniform vec4 catStructure; uniform vec4 catEffects; uniform float catDensity; uniform float catTreatment;
+      uniform vec4 catStructure; uniform vec4 catEffects; uniform float catDensity; uniform float catTreatment; uniform float catRelief;
       ${CATALOG_GLSL}`)
       .replace('#include <color_fragment>',`#include <color_fragment>
         vec3 point=catParams.w>.5&&catParams.w<1.5?vCatWorld:vCatLocal;
@@ -65,6 +65,10 @@ export function makeCatalogMaterial(id, options = {}) {
         vec4 st=catStructure; st.z*=catDensity;
         vec3 base=catBase,secondary=catSecondary,accent=catAccent;
         vec3 c=base*(1.+(catF(q*.37)-.5)*.15*catParams.z); float alpha=1.;
+        // Relief contract: a kernel may write h (0 = deepest joint, 1 = proud face, .5 = flat), relief (metres
+        // of depth for h 0→1; default from the recipe) and rgh (roughness multiplier). The core turns h into a
+        // bump normal (no extra textures, no geometry) and fades it out with distance via nearD.
+        float h=.5, relief=catRelief, rgh=1.;
         ${CATALOG_PATTERNS[spec.pattern]}
         float wear=catEffects.x, damp=catEffects.y, dust=catEffects.z, frost=catEffects.w;
         float mottling=catF(q*.7);
@@ -85,9 +89,18 @@ export function makeCatalogMaterial(id, options = {}) {
           c=mix(c,secondary,scratch*.4*nearD);
         }
         if(catTreatment>7.5&&catTreatment<9.5)c=mix(c,vec3(.2,.1,.035),smoothstep(.45,.72,mottling)*.55);
-        diffuseColor.rgb*=c; diffuseColor.a*=alpha;`);
+        diffuseColor.rgb*=c; diffuseColor.a*=alpha;
+        float catHm=(h-.5)*relief*nearD; float catRgh=rgh;`)
+      .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\n        roughnessFactor=clamp(roughnessFactor*catRgh,.04,1.);')
+      .replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
+        {
+          vec3 sx=dFdx(-vViewPosition), sy=dFdy(-vViewPosition);
+          vec3 r1=cross(sy,normal), r2=cross(normal,sx); float det=dot(sx,r1)*faceDirection;
+          vec3 grad=sign(det)*(dFdx(catHm)*r1+dFdy(catHm)*r2);
+          normal=normalize(abs(det)*normal-grad);
+        }`);
   };
-  material.customProgramCacheKey=()=>`catalog-material-1-${spec.pattern}-${spec.cutout}`;
+  material.customProgramCacheKey=()=>`catalog-material-2-${spec.pattern}-${spec.cutout}`;
   material.userData.textureCatalog={id,recipe:spec.recipe,family:spec.family,finish:spec.finish,seed:spec.seed,projection:spec.projection};
   return material;
 }

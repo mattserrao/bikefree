@@ -33,6 +33,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -80,6 +81,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -127,6 +129,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -174,6 +177,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -221,6 +225,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -268,6 +273,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -315,6 +321,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -362,6 +369,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -409,6 +417,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -456,6 +465,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -503,6 +513,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -550,6 +561,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -597,6 +609,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -644,6 +657,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -691,6 +705,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -738,6 +753,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -785,6 +801,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -832,6 +849,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -879,6 +897,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -926,6 +945,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -973,6 +993,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -1020,6 +1041,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -1067,6 +1089,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -1114,6 +1137,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -1161,6 +1185,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -1208,6 +1233,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -1255,6 +1281,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -1302,6 +1329,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -1349,6 +1377,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -1396,6 +1425,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -1443,6 +1473,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -1490,6 +1521,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -1537,6 +1569,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -1584,6 +1617,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -1631,6 +1665,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -1678,6 +1713,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -1725,6 +1761,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -1772,6 +1809,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -1819,6 +1857,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -1866,6 +1905,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -1913,6 +1953,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -1960,6 +2001,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -2007,6 +2049,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -2054,6 +2097,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -2101,6 +2145,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -2148,6 +2193,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -2195,6 +2241,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -2242,6 +2289,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -2289,6 +2337,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -2336,6 +2385,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -2383,6 +2433,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -2430,6 +2481,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -2477,6 +2529,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -2524,6 +2577,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -2571,6 +2625,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -2618,6 +2673,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -2665,6 +2721,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -2712,6 +2769,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -2759,6 +2817,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -2806,6 +2865,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -2853,6 +2913,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -2900,6 +2961,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -2947,6 +3009,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -2994,6 +3057,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -3041,6 +3105,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -3088,6 +3153,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -3135,6 +3201,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -3182,6 +3249,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -3229,6 +3297,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -3276,6 +3345,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -3323,6 +3393,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -3370,6 +3441,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -3417,6 +3489,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -3464,6 +3537,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -3511,6 +3585,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -3558,6 +3633,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -3605,6 +3681,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -3652,6 +3729,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -3699,6 +3777,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -3746,6 +3825,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Car/bike body, trim, tyres, lenses and glazing; apply per part.",
@@ -3793,6 +3873,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -3840,6 +3921,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -3887,6 +3969,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -3934,6 +4017,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -3981,6 +4065,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -4028,6 +4113,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -4075,6 +4161,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -4122,6 +4209,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -4169,6 +4257,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -4216,6 +4305,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -4263,6 +4353,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -4310,6 +4401,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -4357,6 +4449,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -4404,6 +4497,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -4451,6 +4545,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -4498,6 +4593,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -4545,6 +4641,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -4592,6 +4689,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -4639,6 +4737,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -4686,6 +4785,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -4733,6 +4833,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -4780,6 +4881,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -4827,6 +4929,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -4874,6 +4977,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -4921,6 +5025,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -4968,6 +5073,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -5015,6 +5121,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -5062,6 +5169,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -5109,6 +5217,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -5156,6 +5265,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -5203,6 +5313,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -5250,6 +5361,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -5297,6 +5409,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -5344,6 +5457,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -5391,6 +5505,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -5438,6 +5553,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -5485,6 +5601,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -5532,6 +5649,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -5579,6 +5697,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -5626,6 +5745,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -5673,6 +5793,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -5720,6 +5841,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -5767,6 +5889,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -5814,6 +5937,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -5861,6 +5985,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -5908,6 +6033,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -5955,6 +6081,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -6002,6 +6129,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -6049,6 +6177,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -6096,6 +6225,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -6143,6 +6273,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -6190,6 +6321,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -6237,6 +6369,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -6284,6 +6417,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -6331,6 +6465,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -6378,6 +6513,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -6425,6 +6561,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -6472,6 +6609,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -6519,6 +6657,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -6566,6 +6705,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -6613,6 +6753,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -6660,6 +6801,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -6707,6 +6849,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -6754,6 +6897,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -6801,6 +6945,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -6848,6 +6993,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -6895,6 +7041,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -6942,6 +7089,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -6989,6 +7137,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -7036,6 +7185,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -7083,6 +7233,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -7130,6 +7281,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -7177,6 +7329,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -7224,6 +7377,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -7271,6 +7425,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -7318,6 +7473,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -7365,6 +7521,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -7412,6 +7569,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -7459,6 +7617,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -7506,6 +7665,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "cylindrical",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -7553,6 +7713,7 @@
         1,
         5
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -7600,6 +7761,7 @@
         1,
         5
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -7647,6 +7809,7 @@
         1,
         5
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -7694,6 +7857,7 @@
         1,
         5
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -7741,6 +7905,7 @@
         1,
         5
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -7788,6 +7953,7 @@
         1,
         5
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -7835,6 +8001,7 @@
         1,
         5
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -7882,6 +8049,7 @@
         1,
         5
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -7929,6 +8097,7 @@
         1,
         5
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -7976,6 +8145,7 @@
         1,
         5
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -8023,6 +8193,7 @@
         1,
         5
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -8070,6 +8241,7 @@
         1,
         5
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -8117,6 +8289,7 @@
         1,
         5
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -8164,6 +8337,7 @@
         1,
         5
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -8211,6 +8385,7 @@
         1,
         5
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -8258,6 +8433,7 @@
         1,
         5
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -8305,6 +8481,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -8352,6 +8529,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -8399,6 +8577,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -8446,6 +8625,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -8493,6 +8673,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -8540,6 +8721,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -8587,6 +8769,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -8634,6 +8817,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -8681,6 +8865,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -8728,6 +8913,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -8775,6 +8961,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -8822,6 +9009,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -8869,6 +9057,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -8916,6 +9105,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -8963,6 +9153,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -9010,6 +9201,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -9057,6 +9249,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -9104,6 +9297,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -9151,6 +9345,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -9198,6 +9393,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -9245,6 +9441,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -9292,6 +9489,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -9339,6 +9537,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -9386,6 +9585,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -9433,6 +9633,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -9480,6 +9681,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -9527,6 +9729,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -9574,6 +9777,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -9621,6 +9825,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -9668,6 +9873,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -9715,6 +9921,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -9762,6 +9969,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -9809,6 +10017,7 @@
         12,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -9856,6 +10065,7 @@
         12,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -9903,6 +10113,7 @@
         12,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -9950,6 +10161,7 @@
         12,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -9997,6 +10209,7 @@
         12,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -10044,6 +10257,7 @@
         12,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -10091,6 +10305,7 @@
         12,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -10138,6 +10353,7 @@
         12,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -10185,6 +10401,7 @@
         9,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -10232,6 +10449,7 @@
         9,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -10279,6 +10497,7 @@
         9,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -10326,6 +10545,7 @@
         9,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -10373,6 +10593,7 @@
         9,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -10420,6 +10641,7 @@
         9,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -10467,6 +10689,7 @@
         9,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -10514,6 +10737,7 @@
         9,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -10561,6 +10785,7 @@
         15,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -10608,6 +10833,7 @@
         15,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -10655,6 +10881,7 @@
         15,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -10702,6 +10929,7 @@
         15,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -10749,6 +10977,7 @@
         15,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -10796,6 +11025,7 @@
         15,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -10843,6 +11073,7 @@
         15,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -10890,6 +11121,7 @@
         15,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -10937,6 +11169,7 @@
         18,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -10984,6 +11217,7 @@
         18,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -11031,6 +11265,7 @@
         18,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -11078,6 +11313,7 @@
         18,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -11125,6 +11361,7 @@
         18,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -11172,6 +11409,7 @@
         18,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -11219,6 +11457,7 @@
         18,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -11266,6 +11505,7 @@
         18,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -11313,6 +11553,7 @@
         12,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -11360,6 +11601,7 @@
         12,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -11407,6 +11649,7 @@
         12,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -11454,6 +11697,7 @@
         12,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -11501,6 +11745,7 @@
         12,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -11548,6 +11793,7 @@
         12,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -11595,6 +11841,7 @@
         12,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -11642,6 +11889,7 @@
         12,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -11689,6 +11937,7 @@
         7,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -11736,6 +11985,7 @@
         7,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -11783,6 +12033,7 @@
         7,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -11830,6 +12081,7 @@
         7,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -11877,6 +12129,7 @@
         7,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -11924,6 +12177,7 @@
         7,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -11971,6 +12225,7 @@
         7,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -12018,6 +12273,7 @@
         7,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -12065,6 +12321,7 @@
         9,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -12112,6 +12369,7 @@
         9,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -12159,6 +12417,7 @@
         9,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -12206,6 +12465,7 @@
         9,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -12253,6 +12513,7 @@
         9,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -12300,6 +12561,7 @@
         9,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -12347,6 +12609,7 @@
         9,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -12394,6 +12657,7 @@
         9,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -12441,6 +12705,7 @@
         11,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -12488,6 +12753,7 @@
         11,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -12535,6 +12801,7 @@
         11,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -12582,6 +12849,7 @@
         11,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -12629,6 +12897,7 @@
         11,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -12676,6 +12945,7 @@
         11,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -12723,6 +12993,7 @@
         11,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -12770,6 +13041,7 @@
         11,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -12817,6 +13089,7 @@
         15,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -12864,6 +13137,7 @@
         15,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -12911,6 +13185,7 @@
         15,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -12958,6 +13233,7 @@
         15,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -13005,6 +13281,7 @@
         15,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -13052,6 +13329,7 @@
         15,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -13099,6 +13377,7 @@
         15,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -13146,6 +13425,7 @@
         15,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -13193,6 +13473,7 @@
         5,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -13240,6 +13521,7 @@
         5,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -13287,6 +13569,7 @@
         5,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -13334,6 +13617,7 @@
         5,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -13381,6 +13665,7 @@
         5,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -13428,6 +13713,7 @@
         5,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -13475,6 +13761,7 @@
         5,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -13522,6 +13809,7 @@
         5,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -13569,6 +13857,7 @@
         8,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -13616,6 +13905,7 @@
         8,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -13663,6 +13953,7 @@
         8,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -13710,6 +14001,7 @@
         8,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -13757,6 +14049,7 @@
         8,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -13804,6 +14097,7 @@
         8,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -13851,6 +14145,7 @@
         8,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -13898,6 +14193,7 @@
         8,
         2
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -13945,6 +14241,7 @@
         3,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -13992,6 +14289,7 @@
         3,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -14039,6 +14337,7 @@
         3,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -14086,6 +14385,7 @@
         3,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -14133,6 +14433,7 @@
         3,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -14180,6 +14481,7 @@
         3,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -14227,6 +14529,7 @@
         3,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -14274,6 +14577,7 @@
         3,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -14321,6 +14625,7 @@
         16,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -14368,6 +14673,7 @@
         16,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -14415,6 +14721,7 @@
         16,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -14462,6 +14769,7 @@
         16,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -14509,6 +14817,7 @@
         16,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -14556,6 +14865,7 @@
         16,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -14603,6 +14913,7 @@
         16,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -14650,6 +14961,7 @@
         16,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -14697,6 +15009,7 @@
         4,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -14744,6 +15057,7 @@
         4,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -14791,6 +15105,7 @@
         4,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -14838,6 +15153,7 @@
         4,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -14885,6 +15201,7 @@
         4,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -14932,6 +15249,7 @@
         4,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -14979,6 +15297,7 @@
         4,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -15026,6 +15345,7 @@
         4,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -15073,6 +15393,7 @@
         5,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -15120,6 +15441,7 @@
         5,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -15167,6 +15489,7 @@
         5,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -15214,6 +15537,7 @@
         5,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -15261,6 +15585,7 @@
         5,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -15308,6 +15633,7 @@
         5,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -15355,6 +15681,7 @@
         5,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -15402,6 +15729,7 @@
         5,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -15449,6 +15777,7 @@
         12,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -15496,6 +15825,7 @@
         12,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -15543,6 +15873,7 @@
         12,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -15590,6 +15921,7 @@
         12,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -15637,6 +15969,7 @@
         12,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -15684,6 +16017,7 @@
         12,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -15731,6 +16065,7 @@
         12,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -15778,6 +16113,7 @@
         12,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -15825,6 +16161,7 @@
         8,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -15872,6 +16209,7 @@
         8,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -15919,6 +16257,7 @@
         8,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -15966,6 +16305,7 @@
         8,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -16013,6 +16353,7 @@
         8,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -16060,6 +16401,7 @@
         8,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -16107,6 +16449,7 @@
         8,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -16154,6 +16497,7 @@
         8,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -16201,6 +16545,7 @@
         5,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -16248,6 +16593,7 @@
         5,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -16295,6 +16641,7 @@
         5,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -16342,6 +16689,7 @@
         5,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -16389,6 +16737,7 @@
         5,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -16436,6 +16785,7 @@
         5,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -16483,6 +16833,7 @@
         5,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -16530,6 +16881,7 @@
         5,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -16577,6 +16929,7 @@
         11,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -16624,6 +16977,7 @@
         11,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -16671,6 +17025,7 @@
         11,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -16718,6 +17073,7 @@
         11,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -16765,6 +17121,7 @@
         11,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -16812,6 +17169,7 @@
         11,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -16859,6 +17217,7 @@
         11,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -16906,6 +17265,7 @@
         11,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -16953,6 +17313,7 @@
         22,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -17000,6 +17361,7 @@
         22,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -17047,6 +17409,7 @@
         22,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -17094,6 +17457,7 @@
         22,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -17141,6 +17505,7 @@
         22,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -17188,6 +17553,7 @@
         22,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -17235,6 +17601,7 @@
         22,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -17282,6 +17649,7 @@
         22,
         0
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -17329,6 +17697,7 @@
         5,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -17376,6 +17745,7 @@
         5,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -17423,6 +17793,7 @@
         5,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -17470,6 +17841,7 @@
         5,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -17517,6 +17889,7 @@
         5,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -17564,6 +17937,7 @@
         5,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -17611,6 +17985,7 @@
         5,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -17658,6 +18033,7 @@
         5,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -17705,6 +18081,7 @@
         4,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -17752,6 +18129,7 @@
         4,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -17799,6 +18177,7 @@
         4,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -17846,6 +18225,7 @@
         4,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -17893,6 +18273,7 @@
         4,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -17940,6 +18321,7 @@
         4,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -17987,6 +18369,7 @@
         4,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -18034,6 +18417,7 @@
         4,
         1
       ],
+      "relief": 0.004,
       "cutout": true,
       "projection": "uv",
       "usage": "UV-mapped foliage/flower cards; shader supplies the alpha silhouette.",
@@ -18081,6 +18465,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -18128,6 +18513,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -18175,6 +18561,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -18222,6 +18609,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -18269,6 +18657,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -18316,6 +18705,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -18363,6 +18753,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -18410,6 +18801,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -18457,6 +18849,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -18504,6 +18897,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -18551,6 +18945,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -18598,6 +18993,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -18645,6 +19041,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -18692,6 +19089,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -18739,6 +19137,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -18786,6 +19185,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -18833,6 +19233,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -18880,6 +19281,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -18927,6 +19329,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -18974,6 +19377,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -19021,6 +19425,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -19068,6 +19473,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -19115,6 +19521,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -19162,6 +19569,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -19209,6 +19617,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -19256,6 +19665,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -19303,6 +19713,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -19350,6 +19761,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -19397,6 +19809,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -19444,6 +19857,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -19491,6 +19905,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -19538,6 +19953,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -19585,6 +20001,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -19632,6 +20049,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -19679,6 +20097,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -19726,6 +20145,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -19773,6 +20193,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -19820,6 +20241,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -19867,6 +20289,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -19914,6 +20337,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -19961,6 +20385,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -20008,6 +20433,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -20055,6 +20481,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -20102,6 +20529,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -20149,6 +20577,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -20196,6 +20625,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -20243,6 +20673,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -20290,6 +20721,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -20337,6 +20769,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -20384,6 +20817,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -20431,6 +20865,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -20478,6 +20913,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -20525,6 +20961,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -20572,6 +21009,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -20619,6 +21057,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -20666,6 +21105,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -20713,6 +21153,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -20760,6 +21201,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -20807,6 +21249,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -20854,6 +21297,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -20901,6 +21345,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -20948,6 +21393,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -20995,6 +21441,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -21042,6 +21489,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -21089,6 +21537,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -21136,6 +21585,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -21183,6 +21633,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -21230,6 +21681,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -21277,6 +21729,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -21324,6 +21777,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -21371,6 +21825,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -21418,6 +21873,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -21465,6 +21921,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -21512,6 +21969,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -21559,6 +22017,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -21606,6 +22065,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -21653,6 +22113,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -21700,6 +22161,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -21747,6 +22209,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -21794,6 +22257,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -21841,6 +22305,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -21888,6 +22353,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -21935,6 +22401,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -21982,6 +22449,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -22029,6 +22497,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -22076,6 +22545,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -22123,6 +22593,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -22170,6 +22641,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -22217,6 +22689,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -22264,6 +22737,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -22311,6 +22785,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -22358,6 +22833,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -22405,6 +22881,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -22452,6 +22929,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -22499,6 +22977,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -22546,6 +23025,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -22593,6 +23073,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -22640,6 +23121,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -22687,6 +23169,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -22734,6 +23217,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -22781,6 +23265,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -22828,6 +23313,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -22875,6 +23361,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -22922,6 +23409,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -22969,6 +23457,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -23016,6 +23505,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -23063,6 +23553,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -23110,6 +23601,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -23157,6 +23649,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -23204,6 +23697,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -23251,6 +23745,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -23298,6 +23793,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -23345,6 +23841,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -23392,6 +23889,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -23439,6 +23937,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -23486,6 +23985,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -23533,6 +24033,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -23580,6 +24081,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -23627,6 +24129,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -23674,6 +24177,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -23721,6 +24225,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -23768,6 +24273,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -23815,6 +24321,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -23862,6 +24369,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -23909,6 +24417,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -23956,6 +24465,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -24003,6 +24513,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -24050,6 +24561,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -24097,6 +24609,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -24144,6 +24657,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -24191,6 +24705,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -24238,6 +24753,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -24285,6 +24801,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -24332,6 +24849,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -24379,6 +24897,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -24426,6 +24945,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -24473,6 +24993,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -24520,6 +25041,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -24567,6 +25089,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -24614,6 +25137,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -24661,6 +25185,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -24708,6 +25233,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -24755,6 +25281,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -24802,6 +25329,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -24849,6 +25377,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -24896,6 +25425,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -24943,6 +25473,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -24990,6 +25521,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -25037,6 +25569,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -25084,6 +25617,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -25131,6 +25665,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -25178,6 +25713,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -25225,6 +25761,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -25272,6 +25809,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -25319,6 +25857,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -25366,6 +25905,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -25413,6 +25953,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -25460,6 +26001,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -25507,6 +26049,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -25554,6 +26097,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -25601,6 +26145,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -25648,6 +26193,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -25695,6 +26241,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -25742,6 +26289,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -25789,6 +26337,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -25836,6 +26385,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -25883,6 +26433,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -25930,6 +26481,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -25977,6 +26529,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -26024,6 +26577,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -26071,6 +26625,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -26118,6 +26673,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -26165,6 +26721,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -26212,6 +26769,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -26259,6 +26817,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -26306,6 +26865,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -26353,6 +26913,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -26400,6 +26961,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -26447,6 +27009,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -26494,6 +27057,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -26541,6 +27105,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -26588,6 +27153,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -26635,6 +27201,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -26682,6 +27249,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -26729,6 +27297,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -26776,6 +27345,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -26823,6 +27393,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -26870,6 +27441,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -26917,6 +27489,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -26964,6 +27537,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -27011,6 +27585,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -27058,6 +27633,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -27105,6 +27681,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -27152,6 +27729,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -27199,6 +27777,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -27246,6 +27825,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -27293,6 +27873,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -27340,6 +27921,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -27387,6 +27969,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -27434,6 +28017,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -27481,6 +28065,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -27528,6 +28113,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -27575,6 +28161,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -27622,6 +28209,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -27669,6 +28257,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -27716,6 +28305,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -27763,6 +28353,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -27810,6 +28401,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -27857,6 +28449,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -27904,6 +28497,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -27951,6 +28545,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -27998,6 +28593,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -28045,6 +28641,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -28092,6 +28689,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -28139,6 +28737,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -28186,6 +28785,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -28233,6 +28833,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -28280,6 +28881,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -28327,6 +28929,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -28374,6 +28977,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -28421,6 +29025,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -28468,6 +29073,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -28515,6 +29121,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -28562,6 +29169,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -28609,6 +29217,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -28656,6 +29265,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -28703,6 +29313,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -28750,6 +29361,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -28797,6 +29409,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -28844,6 +29457,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -28891,6 +29505,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -28938,6 +29553,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -28985,6 +29601,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -29032,6 +29649,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -29079,6 +29697,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -29126,6 +29745,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -29173,6 +29793,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -29220,6 +29841,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -29267,6 +29889,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -29314,6 +29937,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -29361,6 +29985,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -29408,6 +30033,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -29455,6 +30081,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -29502,6 +30129,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -29549,6 +30177,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -29596,6 +30225,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -29643,6 +30273,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -29690,6 +30321,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -29737,6 +30369,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -29784,6 +30417,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -29831,6 +30465,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -29878,6 +30513,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -29925,6 +30561,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -29972,6 +30609,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -30019,6 +30657,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -30066,6 +30705,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -30113,6 +30753,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -30160,6 +30801,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -30207,6 +30849,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -30254,6 +30897,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -30301,6 +30945,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -30348,6 +30993,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -30395,6 +31041,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -30442,6 +31089,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -30489,6 +31137,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -30536,6 +31185,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -30583,6 +31233,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -30630,6 +31281,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -30677,6 +31329,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -30724,6 +31377,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -30771,6 +31425,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -30818,6 +31473,7 @@
         1,
         3
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -30865,6 +31521,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -30912,6 +31569,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -30959,6 +31617,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -31006,6 +31665,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -31053,6 +31713,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -31100,6 +31761,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -31147,6 +31809,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -31194,6 +31857,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -31241,6 +31905,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -31288,6 +31953,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -31335,6 +32001,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -31382,6 +32049,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -31429,6 +32097,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -31476,6 +32145,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -31523,6 +32193,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -31570,6 +32241,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -31617,6 +32289,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -31664,6 +32337,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -31711,6 +32385,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -31758,6 +32433,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -31805,6 +32481,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -31852,6 +32529,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -31899,6 +32577,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -31946,6 +32625,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -31993,6 +32673,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -32040,6 +32721,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -32087,6 +32769,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -32134,6 +32817,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -32181,6 +32865,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -32228,6 +32913,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -32275,6 +32961,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -32322,6 +33009,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -32369,6 +33057,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -32416,6 +33105,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -32463,6 +33153,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -32510,6 +33201,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -32557,6 +33249,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -32604,6 +33297,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -32651,6 +33345,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -32698,6 +33393,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -32745,6 +33441,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -32792,6 +33489,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -32839,6 +33537,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -32886,6 +33585,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -32933,6 +33633,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -32980,6 +33681,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -33027,6 +33729,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -33074,6 +33777,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "world",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -33121,6 +33825,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -33168,6 +33873,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -33215,6 +33921,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -33262,6 +33969,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -33309,6 +34017,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -33356,6 +34065,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -33403,6 +34113,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -33450,6 +34161,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -33497,6 +34209,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -33544,6 +34257,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -33591,6 +34305,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -33638,6 +34353,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -33685,6 +34401,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -33732,6 +34449,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -33779,6 +34497,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -33826,6 +34545,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -33873,6 +34593,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -33920,6 +34641,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -33967,6 +34689,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -34014,6 +34737,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -34061,6 +34785,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -34108,6 +34833,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -34155,6 +34881,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -34202,6 +34929,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -34249,6 +34977,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -34296,6 +35025,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -34343,6 +35073,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -34390,6 +35121,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -34437,6 +35169,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -34484,6 +35217,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -34531,6 +35265,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -34578,6 +35313,7 @@
         1,
         1
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -34625,6 +35361,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -34672,6 +35409,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -34719,6 +35457,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -34766,6 +35505,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -34813,6 +35553,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -34860,6 +35601,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -34907,6 +35649,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -34954,6 +35697,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -35001,6 +35745,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -35048,6 +35793,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -35095,6 +35841,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -35142,6 +35889,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -35189,6 +35937,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -35236,6 +35985,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -35283,6 +36033,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -35330,6 +36081,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -35377,6 +36129,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -35424,6 +36177,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -35471,6 +36225,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -35518,6 +36273,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -35565,6 +36321,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -35612,6 +36369,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -35659,6 +36417,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -35706,6 +36465,7 @@
         1,
         0
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -35753,6 +36513,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -35800,6 +36561,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -35847,6 +36609,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -35894,6 +36657,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -35941,6 +36705,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -35988,6 +36753,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -36035,6 +36801,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
@@ -36082,6 +36849,7 @@
         1,
         2
       ],
+      "relief": 0.004,
       "cutout": false,
       "projection": "local",
       "usage": "Static or instanced mesh surfaces; select per material slot.",
