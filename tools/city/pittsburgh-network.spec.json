@@ -41,6 +41,12 @@
       "catalogId": "pittsburgh-homestead",
       "base": "routes/cities/pittsburgh-homestead.gpx",
       "spec": "tools/city/pittsburgh-homestead.network.json"
+    },
+    {
+      "id": "slopes",
+      "catalogId": "pittsburgh-slopes",
+      "base": "routes/cities/pittsburgh-slopes.gpx",
+      "spec": "tools/city/pittsburgh-slopes.network.json"
     }
   ],
   "presets": [
@@ -50,10 +56,13 @@
       "path": [
         "A>B+",
         "B>E+",
-        "E>G+",
-        "G>H+",
+        "E>F+",
+        "F>G+",
+        "G>Q+",
+        "Q>H+",
         "H>G+",
-        "G>D+",
+        "G>GV+",
+        "GV>D+",
         "D>A+"
       ],
       "tags": [
@@ -66,10 +75,13 @@
       "name": "Three Rivers Loop · reverse",
       "path": [
         "D>A-",
-        "G>D-",
+        "GV>D-",
+        "G>GV-",
         "H>G-",
-        "G>H-",
-        "E>G-",
+        "Q>H-",
+        "G>Q-",
+        "F>G-",
+        "E>F-",
         "B>E-",
         "A>B-"
       ],
@@ -84,8 +96,10 @@
       "path": [
         "A>B+",
         "B>E+",
-        "E>G+",
-        "G>D+",
+        "E>F+",
+        "F>G+",
+        "G>GV+",
+        "GV>D+",
         "D>A+"
       ],
       "tags": [
@@ -99,8 +113,10 @@
       "name": "South Side Short Loop · reverse",
       "path": [
         "D>A-",
-        "G>D-",
-        "E>G-",
+        "GV>D-",
+        "G>GV-",
+        "F>G-",
+        "E>F-",
         "B>E-",
         "A>B-"
       ],
@@ -114,7 +130,8 @@
       "id": "pgh-south-side",
       "name": "South Side Flat Loop",
       "path": [
-        "G>H+",
+        "G>Q+",
+        "Q>H+",
         "H>G+"
       ],
       "tags": [
@@ -129,10 +146,13 @@
       "path": [
         "A>B+",
         "B>E+",
-        "E>G+",
-        "G>H+",
+        "E>F+",
+        "F>G+",
+        "G>Q+",
+        "Q>H+",
         "H>G+",
-        "G>D+",
+        "G>GV+",
+        "GV>D+",
         "D>O+",
         "D>O-",
         "D>A+"
@@ -151,7 +171,8 @@
         "I>S+",
         "S>H+",
         "H>G+",
-        "E>G-"
+        "F>G-",
+        "E>F-"
       ],
       "tags": [
         "flat",
@@ -170,7 +191,8 @@
         "I>S+",
         "S>H+",
         "H>G+",
-        "E>G-",
+        "F>G-",
+        "E>F-",
         "B>E-",
         "A>B-"
       ],
@@ -190,7 +212,8 @@
         "I>S+",
         "S>H+",
         "H>G+",
-        "G>D+",
+        "G>GV+",
+        "GV>D+",
         "D>A+"
       ],
       "tags": [
@@ -203,10 +226,12 @@
       "id": "pgh-mt-washington",
       "name": "Mount Washington There & Back",
       "path": [
-        "G>D+",
+        "G>GV+",
+        "GV>D+",
         "D>A+",
         "D>A-",
-        "G>D-"
+        "GV>D-",
+        "G>GV-"
       ],
       "tags": [
         "hilly"
@@ -219,16 +244,22 @@
       "path": [
         "A>B+",
         "B>E+",
-        "E>G+",
-        "G>H+",
+        "E>F+",
+        "F>G+",
+        "G>Q+",
+        "Q>H+",
         "H>G+",
-        "G>D+",
+        "G>GV+",
+        "GV>D+",
         "D>A+",
         "D>A-",
-        "G>D-",
+        "GV>D-",
+        "G>GV-",
         "H>G-",
-        "G>H-",
-        "E>G-",
+        "Q>H-",
+        "G>Q-",
+        "F>G-",
+        "E>F-",
         "B>E-",
         "A>B-"
       ],
@@ -287,7 +318,8 @@
         "I>S+",
         "S>H+",
         "H>G+",
-        "E>G-",
+        "F>G-",
+        "E>F-",
         "B>E-",
         "A>B-"
       ],
@@ -343,7 +375,8 @@
         "I>S+",
         "S>H+",
         "H>G+",
-        "E>G-",
+        "F>G-",
+        "E>F-",
         "B>E-",
         "A>B-"
       ],
@@ -488,7 +521,8 @@
         "S>W-",
         "S>H+",
         "H>G+",
-        "E>G-",
+        "F>G-",
+        "E>F-",
         "B>E-"
       ],
       "tags": [
@@ -497,6 +531,70 @@
         "new"
       ],
       "note": "The Point, the Jail Trail and the Hot Metal Bridge, the GAP to Homestead and a lap past the Pump House, home on the South Side river trail"
+    },
+    {
+      "id": "pgh-sycamore",
+      "name": "Sycamore Street & Grandview",
+      "path": [
+        "F>SY+",
+        "GV>SY-",
+        "G>GV-",
+        "F>G-"
+      ],
+      "tags": [
+        "short",
+        "hilly",
+        "new"
+      ],
+      "note": "From Station Square straight up Sycamore Street (a Dirty Dozen climb) to Mount Washington, over Wyoming St's cobbles to Grandview past the Monongahela Incline, down McArdle and back along East Carson"
+    },
+    {
+      "id": "pgh-slopes",
+      "name": "South Side Slopes Climb Loop",
+      "path": [
+        "AL>Q-",
+        "AL>SY+",
+        "F>SY-",
+        "F>G+",
+        "G>Q+"
+      ],
+      "tags": [
+        "hilly",
+        "new"
+      ],
+      "note": "From East Carson & 27th up the Slopes' Dirty Dozen streets (Barry, Holt and Eleanor), along Arlington's ridge to Allentown, over Bailey Ave to Mount Washington, down Sycamore Street to Station Square and East Carson home"
+    },
+    {
+      "id": "pgh-dirty-dozen",
+      "name": "Dirty Dozen South Loop",
+      "path": [
+        "F>SY+",
+        "SY>AL+",
+        "AL>Q+",
+        "G>Q-",
+        "F>G-"
+      ],
+      "tags": [
+        "hilly",
+        "varied",
+        "new"
+      ],
+      "note": "Up Sycamore Street from Station Square, across Mount Washington and down to Beechview for Boustead Street and Canton Avenue's cobbles (about 37 %), up Warrington Ave to Allentown, along Arlington's ridge and down the South Side Slopes to East Carson"
+    },
+    {
+      "id": "pgh-dirty-dozen-slopes",
+      "name": "Dirty Dozen South from the Slopes",
+      "path": [
+        "AL>Q-",
+        "AL>SY+",
+        "SY>AL+",
+        "AL>Q+"
+      ],
+      "tags": [
+        "hilly",
+        "new"
+      ],
+      "note": "From East Carson & 27th up Barry, Holt and Eleanor to Allentown, over to Mount Washington and down to Beechview for Boustead Street and Canton Avenue's cobbles, back up Warrington Ave and down the Slopes"
     }
   ],
   "freeRide": {

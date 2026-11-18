@@ -35,7 +35,7 @@
    ],
    "aprons": [
     {
-     "edge": "e15",
+     "edge": "e18",
      "dir": 1,
      "s": [
       0,
@@ -44,7 +44,7 @@
      "u0": 2730
     },
     {
-     "edge": "e17",
+     "edge": "e20",
      "dir": 1,
      "s": [
       7470,
@@ -53,7 +53,7 @@
      "u0": 0
     },
     {
-     "edge": "e16",
+     "edge": "e19",
      "dir": 1,
      "s": [
       16790,
@@ -62,7 +62,7 @@
      "u0": 0
     },
     {
-     "edge": "e11",
+     "edge": "e14",
      "dir": 1,
      "s": [
       20210,
@@ -89,7 +89,7 @@
    ],
    "aprons": [
     {
-     "edge": "e7",
+     "edge": "e8",
      "dir": 1,
      "s": [
       0,
@@ -121,16 +121,16 @@
    ],
    "aprons": [
     {
-     "edge": "e6",
+     "edge": "e7",
      "dir": 1,
      "s": [
       0,
       400
      ],
-     "u0": 4750
+     "u0": 2260
     },
     {
-     "edge": "e7",
+     "edge": "e8",
      "dir": 1,
      "s": [
       3900,
@@ -193,7 +193,7 @@
    ],
    "aprons": [
     {
-     "edge": "e14",
+     "edge": "e17",
      "dir": 1,
      "s": [
       0,
@@ -202,7 +202,7 @@
      "u0": 4550
     },
     {
-     "edge": "e15",
+     "edge": "e18",
      "dir": 1,
      "s": [
       400,
@@ -211,7 +211,7 @@
      "u0": 0
     },
     {
-     "edge": "e17",
+     "edge": "e20",
      "dir": -1,
      "s": [
       9500,
@@ -220,7 +220,7 @@
      "u0": 3430
     },
     {
-     "edge": "e18",
+     "edge": "e21",
      "dir": 1,
      "s": [
       10300,
@@ -265,6 +265,94 @@
      "u0": 0
     }
    ]
+  },
+  {
+   "id": "slopes",
+   "catalogId": "pittsburgh-slopes",
+   "base": "routes/cities/pittsburgh-slopes.gpx",
+   "legM": 24110,
+   "ghosts": [
+    {
+     "fromM": 800,
+     "toM": 1200
+    },
+    {
+     "fromM": 14632,
+     "toM": 15504
+    },
+    {
+     "fromM": 15910,
+     "toM": 16310
+    },
+    {
+     "fromM": 16710,
+     "toM": 17110
+    },
+    {
+     "fromM": 17981,
+     "toM": 19590
+    },
+    {
+     "fromM": 23480,
+     "toM": 23710
+    }
+   ],
+   "aprons": [
+    {
+     "edge": "e10",
+     "dir": 1,
+     "s": [
+      0,
+      400
+     ],
+     "u0": 360
+    },
+    {
+     "edge": "e11",
+     "dir": 1,
+     "s": [
+      400,
+      800
+     ],
+     "u0": 0
+    },
+    {
+     "edge": "e7",
+     "dir": 1,
+     "s": [
+      15510,
+      15910
+     ],
+     "u0": 0
+    },
+    {
+     "edge": "e6",
+     "dir": -1,
+     "s": [
+      16310,
+      16710
+     ],
+     "u0": 2490
+    },
+    {
+     "edge": "e13",
+     "dir": 1,
+     "s": [
+      23250,
+      23480
+     ],
+     "u0": 0
+    },
+    {
+     "edge": "e12",
+     "dir": -1,
+     "s": [
+      23710,
+      24110
+     ],
+     "u0": 1840
+    }
+   ]
   }
  ],
  "nodes": [
@@ -297,6 +385,23 @@
      25110
     ]
    }
+  },
+  {
+   "id": "F",
+   "name": "Station Square: Carson & Arlington",
+   "lat": 40.431046,
+   "lon": -80.001528,
+   "ele": 225.32,
+   "passes": {
+    "core": [
+     25870
+    ],
+    "slopes": [
+     400,
+     1200
+    ]
+   },
+   "portal": true
   },
   {
    "id": "I",
@@ -347,6 +452,23 @@
    }
   },
   {
+   "id": "Q",
+   "name": "East Carson & 27th, South Side",
+   "lat": 40.427249,
+   "lon": -79.967051,
+   "ele": 229.12,
+   "passes": {
+    "core": [
+     28870
+    ],
+    "slopes": [
+     23250,
+     23710
+    ]
+   },
+   "portal": true
+  },
+  {
    "id": "G",
    "name": "East Carson & 10th",
    "lat": 40.428674,
@@ -358,6 +480,24 @@
      27030
     ]
    }
+  },
+  {
+   "id": "GV",
+   "name": "Grandview & McArdle, Mount Washington",
+   "lat": 40.435424,
+   "lon": -80.012955,
+   "ele": 340.35,
+   "passes": {
+    "core": [
+     14130
+    ],
+    "slopes": [
+     15510,
+     16310,
+     17110
+    ]
+   },
+   "portal": true
   },
   {
    "id": "D",
@@ -558,6 +698,33 @@
      13600
     ]
    }
+  },
+  {
+   "id": "SY",
+   "name": "Sycamore & Wyoming, Mount Washington",
+   "lat": 40.430287,
+   "lon": -80.006477,
+   "ele": 330.59,
+   "passes": {
+    "slopes": [
+     2010,
+     14630,
+     17980
+    ]
+   }
+  },
+  {
+   "id": "AL",
+   "name": "Warrington & Beltzhoover, Allentown",
+   "lat": 40.421685,
+   "lon": -79.997505,
+   "ele": 334.87,
+   "passes": {
+    "slopes": [
+     13020,
+     19590
+    ]
+   }
   }
  ],
  "edges": [
@@ -668,27 +835,48 @@
   },
   {
    "id": "e6",
-   "key": "G>D",
+   "key": "G>GV",
    "area": "core",
    "from": "G",
-   "to": "D",
+   "to": "GV",
    "s": [
     11640,
-    16790
+    14130
    ],
-   "lengthM": 5150,
+   "lengthM": 2490,
    "climbM": [
-    155,
-    155
+    113,
+    3
    ],
-   "name": "Mount Washington",
+   "name": "McArdle Roadway",
    "toward": [
-    "the McArdle climb, Grandview and down to the West End",
-    "up from the West End over Grandview and down McArdle"
+    "the McArdle climb to Grandview",
+    "down McArdle Roadway to East Carson & 10th"
    ]
   },
   {
    "id": "e7",
+   "key": "GV>D",
+   "area": "core",
+   "from": "GV",
+   "to": "D",
+   "s": [
+    14130,
+    16790
+   ],
+   "lengthM": 2660,
+   "climbM": [
+    41,
+    152
+   ],
+   "name": "Grandview & the West End",
+   "toward": [
+    "Grandview and down to the West End",
+    "up from the West End over Grandview to McArdle"
+   ]
+  },
+  {
+   "id": "e8",
    "key": "D>A",
    "area": "core",
    "from": "D",
@@ -709,7 +897,7 @@
    ]
   },
   {
-   "id": "e8",
+   "id": "e9",
    "key": "A>B",
    "area": "core",
    "from": "A",
@@ -730,49 +918,91 @@
    ]
   },
   {
-   "id": "e9",
-   "key": "E>G",
+   "id": "e10",
+   "key": "E>F",
    "area": "core",
    "from": "E",
-   "to": "G",
+   "to": "F",
    "s": [
     25110,
-    27030
+    25870
    ],
-   "lengthM": 1920,
+   "lengthM": 760,
    "climbM": [
-    17,
-    10
+    4,
+    1
    ],
    "name": "Smithfield Street Bridge",
    "toward": [
-    "the Smithfield Street Bridge, Station Square and East Carson",
-    "East Carson, Station Square and the Smithfield Street Bridge"
-   ]
-  },
-  {
-   "id": "e10",
-   "key": "G>H",
-   "area": "core",
-   "from": "G",
-   "to": "H",
-   "s": [
-    27030,
-    29100
-   ],
-   "lengthM": 2070,
-   "climbM": [
-    3,
-    4
-   ],
-   "name": "East Carson Street",
-   "toward": [
-    "East Carson Street to SouthSide Works",
-    "East Carson Street to 10th"
+    "the Smithfield Street Bridge to Station Square",
+    "Station Square and the Smithfield Street Bridge"
    ]
   },
   {
    "id": "e11",
+   "key": "F>G",
+   "area": "core",
+   "from": "F",
+   "to": "G",
+   "s": [
+    25870,
+    27030
+   ],
+   "lengthM": 1160,
+   "climbM": [
+    13,
+    9
+   ],
+   "name": "Station Square & East Carson",
+   "toward": [
+    "Carson St past Station Square and East Carson to 10th",
+    "East Carson to Station Square"
+   ]
+  },
+  {
+   "id": "e12",
+   "key": "G>Q",
+   "area": "core",
+   "from": "G",
+   "to": "Q",
+   "s": [
+    27030,
+    28870
+   ],
+   "lengthM": 1840,
+   "climbM": [
+    3,
+    3
+   ],
+   "name": "East Carson Street",
+   "toward": [
+    "East Carson Street to 27th",
+    "East Carson Street to 10th"
+   ]
+  },
+  {
+   "id": "e13",
+   "key": "Q>H",
+   "area": "core",
+   "from": "Q",
+   "to": "H",
+   "s": [
+    28870,
+    29100
+   ],
+   "lengthM": 230,
+   "climbM": [
+    1,
+    1
+   ],
+   "name": "27th Street to the riverfront",
+   "toward": [
+    "27th St to the riverfront at SouthSide Works",
+    "27th St to East Carson"
+   ]
+  },
+  {
+   "id": "e14",
    "key": "A>P",
    "area": "allegheny",
    "from": "A",
@@ -793,7 +1023,7 @@
    ]
   },
   {
-   "id": "e12",
+   "id": "e15",
    "key": "P>N",
    "area": "allegheny",
    "from": "P",
@@ -814,7 +1044,7 @@
    ]
   },
   {
-   "id": "e13",
+   "id": "e16",
    "key": "N>P",
    "area": "allegheny",
    "from": "N",
@@ -835,7 +1065,7 @@
    ]
   },
   {
-   "id": "e14",
+   "id": "e17",
    "key": "N>M",
    "area": "allegheny",
    "from": "N",
@@ -856,7 +1086,7 @@
    ]
   },
   {
-   "id": "e15",
+   "id": "e18",
    "key": "M>B",
    "area": "allegheny",
    "from": "M",
@@ -877,7 +1107,7 @@
    ]
   },
   {
-   "id": "e16",
+   "id": "e19",
    "key": "D>O",
    "area": "westend",
    "from": "D",
@@ -898,7 +1128,7 @@
    ]
   },
   {
-   "id": "e17",
+   "id": "e20",
    "key": "I>L",
    "area": "oakland",
    "from": "I",
@@ -919,7 +1149,7 @@
    ]
   },
   {
-   "id": "e18",
+   "id": "e21",
    "key": "L>J",
    "area": "oakland",
    "from": "L",
@@ -940,7 +1170,7 @@
    ]
   },
   {
-   "id": "e19",
+   "id": "e22",
    "key": "J>K",
    "area": "oakland",
    "from": "J",
@@ -961,7 +1191,7 @@
    ]
   },
   {
-   "id": "e20",
+   "id": "e23",
    "key": "K>J",
    "area": "oakland",
    "from": "K",
@@ -982,7 +1212,7 @@
    ]
   },
   {
-   "id": "e21",
+   "id": "e24",
    "key": "M>X",
    "area": "polish",
    "from": "M",
@@ -1003,7 +1233,7 @@
    ]
   },
   {
-   "id": "e22",
+   "id": "e25",
    "key": "X>T",
    "area": "polish",
    "from": "X",
@@ -1024,7 +1254,7 @@
    ]
   },
   {
-   "id": "e23",
+   "id": "e26",
    "key": "T>X",
    "area": "polish",
    "from": "T",
@@ -1045,7 +1275,7 @@
    ]
   },
   {
-   "id": "e24",
+   "id": "e27",
    "key": "T>L",
    "area": "polish",
    "from": "T",
@@ -1066,7 +1296,7 @@
    ]
   },
   {
-   "id": "e25",
+   "id": "e28",
    "key": "S>W",
    "area": "homestead",
    "from": "S",
@@ -1087,7 +1317,7 @@
    ]
   },
   {
-   "id": "e26",
+   "id": "e29",
    "key": "W>V",
    "area": "homestead",
    "from": "W",
@@ -1108,7 +1338,7 @@
    ]
   },
   {
-   "id": "e27",
+   "id": "e30",
    "key": "V>U",
    "area": "homestead",
    "from": "V",
@@ -1129,7 +1359,7 @@
    ]
   },
   {
-   "id": "e28",
+   "id": "e31",
    "key": "U>V",
    "area": "homestead",
    "from": "U",
@@ -1150,7 +1380,7 @@
    ]
   },
   {
-   "id": "e29",
+   "id": "e32",
    "key": "W>U",
    "area": "homestead",
    "from": "W",
@@ -1169,6 +1399,111 @@
     "the riverfront trail under the Homestead Grays Bridge to the Pump House",
     "the riverfront trail back to the Waterfront"
    ]
+  },
+  {
+   "id": "e33",
+   "key": "F>SY",
+   "area": "slopes",
+   "from": "F",
+   "to": "SY",
+   "s": [
+    1200,
+    2010
+   ],
+   "lengthM": 810,
+   "climbM": [
+    105,
+    0
+   ],
+   "name": "Sycamore Street",
+   "toward": [
+    "Arlington Ave out of Station Square and up Sycamore Street to Mount Washington",
+    "down Sycamore Street and Arlington Ave to Station Square"
+   ]
+  },
+  {
+   "id": "e34",
+   "key": "SY>AL",
+   "area": "slopes",
+   "from": "SY",
+   "to": "AL",
+   "s": [
+    2010,
+    13020
+   ],
+   "lengthM": 11010,
+   "climbM": [
+    333,
+    329
+   ],
+   "name": "Dirty Dozen south: Beechview",
+   "toward": [
+    "West Sycamore and down Woodruff St, Crane Ave and Banksville Rd to Beechview, up Boustead St, Coast Ave and up Canton Avenue's cobbles (about 37 %), Hampshire Ave, West Liberty and up Warrington Ave to Allentown",
+    "down Warrington Ave, West Liberty and Hampshire Ave, down Canton Avenue's cobbles, Coast Ave, Broadway and down Boustead St, Banksville Rd, Crane Ave and up Woodruff St to Mount Washington"
+   ]
+  },
+  {
+   "id": "e35",
+   "key": "AL>SY",
+   "area": "slopes",
+   "from": "AL",
+   "to": "SY",
+   "s": [
+    13020,
+    14630
+   ],
+   "lengthM": 1610,
+   "climbM": [
+    32,
+    35
+   ],
+   "name": "Allentown to Mount Washington",
+   "toward": [
+    "Beltzhoover Ave, Bailey Ave along the hilltop and Wyoming St's cobbles down to Sycamore",
+    "up Wyoming St's cobbles, Bailey Ave and Beltzhoover Ave to Allentown"
+   ]
+  },
+  {
+   "id": "e36",
+   "key": "GV>SY",
+   "area": "slopes",
+   "from": "GV",
+   "to": "SY",
+   "s": [
+    17110,
+    17980
+   ],
+   "lengthM": 870,
+   "climbM": [
+    10,
+    20
+   ],
+   "name": "Grandview & the Incline",
+   "toward": [
+    "Grandview Ave past the Monongahela Incline and Wyoming St's cobbles to Sycamore",
+    "Wyoming St's cobbles and Grandview Ave past the Monongahela Incline to McArdle"
+   ]
+  },
+  {
+   "id": "e37",
+   "key": "AL>Q",
+   "area": "slopes",
+   "from": "AL",
+   "to": "Q",
+   "s": [
+    19590,
+    23250
+   ],
+   "lengthM": 3660,
+   "climbM": [
+    64,
+    170
+   ],
+   "name": "South Side Slopes",
+   "toward": [
+    "Warrington and Arlington Ave along the ridge, down Eleanor St, Holt St, Barry St and 27th St to East Carson",
+    "up 27th St, Barry St, Holt St and Eleanor St, Arlington and Warrington Ave along the ridge to Allentown"
+   ]
   }
  ],
  "presets": [
@@ -1176,9 +1511,9 @@
    "id": "pgh-homestead-loop",
    "name": "Homestead Loop",
    "path": [
-    "e29+",
-    "e28+",
-    "e26-"
+    "e32+",
+    "e31+",
+    "e29-"
    ],
    "tags": [
     "flat",
@@ -1193,9 +1528,9 @@
    "id": "pgh-waterfront-loop",
    "name": "Waterfront Loop",
    "path": [
-    "e29+",
-    "e27-",
-    "e26-"
+    "e32+",
+    "e30-",
+    "e29-"
    ],
    "tags": [
     "flat",
@@ -1210,13 +1545,16 @@
    "id": "pgh-three-rivers",
    "name": "Three Rivers Loop",
    "path": [
-    "e8+",
-    "e1+",
     "e9+",
+    "e1+",
     "e10+",
+    "e11+",
+    "e12+",
+    "e13+",
     "e5+",
     "e6+",
-    "e7+"
+    "e7+",
+    "e8+"
    ],
    "tags": [
     "varied"
@@ -1229,13 +1567,16 @@
    "id": "pgh-three-rivers-rev",
    "name": "Three Rivers Loop · reverse",
    "path": [
+    "e8-",
     "e7-",
     "e6-",
     "e5-",
+    "e13-",
+    "e12-",
+    "e11-",
     "e10-",
-    "e9-",
     "e1-",
-    "e8-"
+    "e9-"
    ],
    "tags": [
     "varied"
@@ -1248,11 +1589,13 @@
    "id": "pgh-short-loop",
    "name": "South Side Short Loop",
    "path": [
-    "e8+",
-    "e1+",
     "e9+",
+    "e1+",
+    "e10+",
+    "e11+",
     "e6+",
-    "e7+"
+    "e7+",
+    "e8+"
    ],
    "tags": [
     "short",
@@ -1260,17 +1603,19 @@
    ],
    "note": "Skips the South Side riverfront: right at East Carson & 10th, straight up McArdle",
    "lengthM": 13720,
-   "climbM": 207
+   "climbM": 206
   },
   {
    "id": "pgh-short-loop-rev",
    "name": "South Side Short Loop · reverse",
    "path": [
+    "e8-",
     "e7-",
     "e6-",
-    "e9-",
+    "e11-",
+    "e10-",
     "e1-",
-    "e8-"
+    "e9-"
    ],
    "tags": [
     "short",
@@ -1284,7 +1629,8 @@
    "id": "pgh-south-side",
    "name": "South Side Flat Loop",
    "path": [
-    "e10+",
+    "e12+",
+    "e13+",
     "e5+"
    ],
    "tags": [
@@ -1293,21 +1639,24 @@
    ],
    "note": "East Carson Street and the river trail, round and round from East Carson & 10th",
    "lengthM": 4600,
-   "climbM": 17
+   "climbM": 18
   },
   {
    "id": "pgh-west-end",
    "name": "Three Rivers Loop + West End Overlook",
    "path": [
-    "e8+",
-    "e1+",
     "e9+",
+    "e1+",
     "e10+",
+    "e11+",
+    "e12+",
+    "e13+",
     "e5+",
     "e6+",
-    "e16+",
-    "e16-",
-    "e7+"
+    "e7+",
+    "e19+",
+    "e19-",
+    "e8+"
    ],
    "tags": [
     "hilly",
@@ -1325,7 +1674,8 @@
     "e3+",
     "e4+",
     "e5+",
-    "e9-"
+    "e11-",
+    "e10-"
    ],
    "tags": [
     "flat",
@@ -1340,15 +1690,16 @@
    "id": "pgh-point-jail",
    "name": "Point & Jail Trail Loop",
    "path": [
-    "e8+",
+    "e9+",
     "e1+",
     "e2+",
     "e3+",
     "e4+",
     "e5+",
-    "e9-",
+    "e11-",
+    "e10-",
     "e1-",
-    "e8-"
+    "e9-"
    ],
    "tags": [
     "flat",
@@ -1362,14 +1713,15 @@
    "id": "pgh-jail-mt-washington",
    "name": "Jail Trail & Mount Washington Loop",
    "path": [
-    "e8+",
+    "e9+",
     "e1+",
     "e2+",
     "e3+",
     "e4+",
     "e5+",
     "e6+",
-    "e7+"
+    "e7+",
+    "e8+"
    ],
    "tags": [
     "varied",
@@ -1377,7 +1729,7 @@
    ],
    "note": "The flat Jail Trail out, the river trail, then the McArdle climb and Grandview home",
    "lengthM": 19140,
-   "climbM": 226
+   "climbM": 225
   },
   {
    "id": "pgh-mt-washington",
@@ -1385,6 +1737,8 @@
    "path": [
     "e6+",
     "e7+",
+    "e8+",
+    "e8-",
     "e7-",
     "e6-"
    ],
@@ -1393,26 +1747,32 @@
    ],
    "note": "Up McArdle, along Grandview to the Water Steps, then back over the top",
    "lengthM": 15420,
-   "climbM": 337
+   "climbM": 336
   },
   {
    "id": "pgh-long",
    "name": "Three Rivers There & Back",
    "path": [
-    "e8+",
-    "e1+",
     "e9+",
+    "e1+",
     "e10+",
+    "e11+",
+    "e12+",
+    "e13+",
     "e5+",
     "e6+",
     "e7+",
+    "e8+",
+    "e8-",
     "e7-",
     "e6-",
     "e5-",
+    "e13-",
+    "e12-",
+    "e11-",
     "e10-",
-    "e9-",
     "e1-",
-    "e8-"
+    "e9-"
    ],
    "tags": [
     "long",
@@ -1426,8 +1786,8 @@
    "id": "pgh-schenley",
    "name": "Schenley Park Loop",
    "path": [
-    "e19+",
-    "e20+"
+    "e22+",
+    "e23+"
    ],
    "tags": [
     "short",
@@ -1443,12 +1803,12 @@
    "name": "Jail Trail, Oakland & Schenley",
    "path": [
     "e2+",
-    "e17+",
-    "e18+",
-    "e19+",
     "e20+",
-    "e18-",
-    "e17-",
+    "e21+",
+    "e22+",
+    "e23+",
+    "e21-",
+    "e20-",
     "e2-"
    ],
    "tags": [
@@ -1463,21 +1823,22 @@
    "id": "pgh-oakland-south",
    "name": "Oakland & South Side Loop",
    "path": [
-    "e8+",
+    "e9+",
     "e1+",
     "e2+",
-    "e17+",
-    "e18+",
-    "e19+",
     "e20+",
-    "e18-",
-    "e17-",
+    "e21+",
+    "e22+",
+    "e23+",
+    "e21-",
+    "e20-",
     "e3+",
     "e4+",
     "e5+",
-    "e9-",
+    "e11-",
+    "e10-",
     "e1-",
-    "e8-"
+    "e9-"
    ],
    "tags": [
     "long",
@@ -1492,11 +1853,11 @@
    "id": "pgh-allegheny",
    "name": "Allegheny Loop",
    "path": [
-    "e11+",
-    "e12+",
     "e14+",
     "e15+",
-    "e8-"
+    "e17+",
+    "e18+",
+    "e9-"
    ],
    "tags": [
     "flat",
@@ -1510,11 +1871,11 @@
    "id": "pgh-allegheny-rev",
    "name": "Allegheny Loop · reverse",
    "path": [
-    "e8+",
+    "e9+",
+    "e18-",
+    "e17-",
     "e15-",
-    "e14-",
-    "e12-",
-    "e11-"
+    "e14-"
    ],
    "tags": [
     "flat",
@@ -1528,18 +1889,19 @@
    "id": "pgh-allegheny-jail",
    "name": "Allegheny & Jail Trail Loop",
    "path": [
-    "e11+",
-    "e12+",
     "e14+",
     "e15+",
+    "e17+",
+    "e18+",
     "e1+",
     "e2+",
     "e3+",
     "e4+",
     "e5+",
-    "e9-",
+    "e11-",
+    "e10-",
     "e1-",
-    "e8-"
+    "e9-"
    ],
    "tags": [
     "long",
@@ -1554,8 +1916,8 @@
    "id": "pgh-troy-hill",
    "name": "Troy Hill Climb Loop",
    "path": [
-    "e12+",
-    "e13+"
+    "e15+",
+    "e16+"
    ],
    "tags": [
     "short",
@@ -1570,10 +1932,10 @@
    "id": "pgh-troy-hill-steps",
    "name": "Water Steps & Troy Hill",
    "path": [
-    "e11+",
-    "e12+",
-    "e13+",
-    "e11-"
+    "e14+",
+    "e15+",
+    "e16+",
+    "e14-"
    ],
    "tags": [
     "hilly",
@@ -1587,13 +1949,13 @@
    "id": "pgh-allegheny-troy",
    "name": "Allegheny Loop + Troy Hill",
    "path": [
-    "e11+",
-    "e12+",
-    "e13+",
-    "e12+",
     "e14+",
     "e15+",
-    "e8-"
+    "e16+",
+    "e15+",
+    "e17+",
+    "e18+",
+    "e9-"
    ],
    "tags": [
     "hilly",
@@ -1608,8 +1970,8 @@
    "id": "pgh-polish-hill",
    "name": "Polish Hill Climb Loop",
    "path": [
-    "e22+",
-    "e23+"
+    "e25+",
+    "e26+"
    ],
    "tags": [
     "short",
@@ -1624,13 +1986,13 @@
    "id": "pgh-polish-crosstown",
    "name": "Polish Hill, Bloomfield & Oakland Loop",
    "path": [
-    "e21+",
-    "e22+",
     "e24+",
-    "e17-",
+    "e25+",
+    "e27+",
+    "e20-",
     "e2-",
     "e1-",
-    "e15-"
+    "e18-"
    ],
    "tags": [
     "varied",
@@ -1644,16 +2006,16 @@
    "id": "pgh-polish-rivers",
    "name": "Allegheny, Polish Hill & Oakland Loop",
    "path": [
-    "e11+",
-    "e12+",
     "e14+",
-    "e21+",
-    "e22+",
+    "e15+",
+    "e17+",
     "e24+",
-    "e17-",
+    "e25+",
+    "e27+",
+    "e20-",
     "e2-",
     "e1-",
-    "e8-"
+    "e9-"
    ],
    "tags": [
     "long",
@@ -1669,11 +2031,11 @@
    "name": "Great Allegheny Passage to Homestead",
    "path": [
     "e4-",
-    "e25+",
-    "e29+",
     "e28+",
-    "e26-",
-    "e25-",
+    "e32+",
+    "e31+",
+    "e29-",
+    "e28-",
     "e4+"
    ],
    "tags": [
@@ -1691,14 +2053,15 @@
     "e1+",
     "e2+",
     "e3+",
-    "e25+",
-    "e29+",
     "e28+",
-    "e26-",
-    "e25-",
+    "e32+",
+    "e31+",
+    "e29-",
+    "e28-",
     "e4+",
     "e5+",
-    "e9-",
+    "e11-",
+    "e10-",
     "e1-"
    ],
    "tags": [
@@ -1709,11 +2072,83 @@
    "note": "The Point, the Jail Trail and the Hot Metal Bridge, the GAP to Homestead and a lap past the Pump House, home on the South Side river trail",
    "lengthM": 35820,
    "climbM": 152
+  },
+  {
+   "id": "pgh-sycamore",
+   "name": "Sycamore Street & Grandview",
+   "path": [
+    "e33+",
+    "e36-",
+    "e6-",
+    "e11-"
+   ],
+   "tags": [
+    "short",
+    "hilly",
+    "new"
+   ],
+   "note": "From Station Square straight up Sycamore Street (a Dirty Dozen climb) to Mount Washington, over Wyoming St's cobbles to Grandview past the Monongahela Incline, down McArdle and back along East Carson",
+   "lengthM": 5330,
+   "climbM": 137
+  },
+  {
+   "id": "pgh-slopes",
+   "name": "South Side Slopes Climb Loop",
+   "path": [
+    "e37-",
+    "e35+",
+    "e33-",
+    "e11+",
+    "e12+"
+   ],
+   "tags": [
+    "hilly",
+    "new"
+   ],
+   "note": "From East Carson & 27th up the Slopes' Dirty Dozen streets (Barry, Holt and Eleanor), along Arlington's ridge to Allentown, over Bailey Ave to Mount Washington, down Sycamore Street to Station Square and East Carson home",
+   "lengthM": 9080,
+   "climbM": 218
+  },
+  {
+   "id": "pgh-dirty-dozen",
+   "name": "Dirty Dozen South Loop",
+   "path": [
+    "e33+",
+    "e34+",
+    "e37+",
+    "e12-",
+    "e11-"
+   ],
+   "tags": [
+    "hilly",
+    "varied",
+    "new"
+   ],
+   "note": "Up Sycamore Street from Station Square, across Mount Washington and down to Beechview for Boustead Street and Canton Avenue's cobbles (about 37 %), up Warrington Ave to Allentown, along Arlington's ridge and down the South Side Slopes to East Carson",
+   "lengthM": 18480,
+   "climbM": 514
+  },
+  {
+   "id": "pgh-dirty-dozen-slopes",
+   "name": "Dirty Dozen South from the Slopes",
+   "path": [
+    "e37-",
+    "e35+",
+    "e34+",
+    "e37+"
+   ],
+   "tags": [
+    "hilly",
+    "new"
+   ],
+   "note": "From East Carson & 27th up Barry, Holt and Eleanor to Allentown, over to Mount Washington and down to Beechview for Boustead Street and Canton Avenue's cobbles, back up Warrington Ave and down the Slopes",
+   "lengthM": 19940,
+   "climbM": 599
   }
  ],
  "freeRide": {
   "name": "Free Ride · choose every turn",
-  "first": "e8+",
+  "first": "e9+",
   "note": "No plan: from the Water Steps, straight on at every junction unless you choose a turn. Ride until you stop"
  }
 }

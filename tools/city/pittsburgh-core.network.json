@@ -1,6 +1,6 @@
 {
   "area": "core",
-  "note": "Downtown, the North Shore, the South Side and Mount Washington: the Point, the Jail Trail, the Hot Metal, Smithfield Street, Clemente and West End bridges. Portals: A and B (the Allegheny & Troy Hill), I (Oakland & Schenley), D (the West End), S (the Great Allegheny Passage & Homestead).",
+  "note": "Downtown, the North Shore, the South Side and Mount Washington: the Point, the Jail Trail, the Hot Metal, Smithfield Street, Clemente and West End bridges. Portals: A and B (the Allegheny & Troy Hill), I (Oakland & Schenley), D (the West End), S (the Great Allegheny Passage & Homestead), F, GV and Q (the South Side Slopes & Mount Washington).",
   "nodes": [
     {
       "id": "B",
@@ -13,6 +13,12 @@
       "name": "Smithfield St & Fort Pitt Blvd",
       "lat": 40.436469,
       "lon": -80.000952
+    },
+    {
+      "id": "F",
+      "name": "Station Square: Carson & Arlington",
+      "lat": 40.431046,
+      "lon": -80.001528
     },
     {
       "id": "I",
@@ -34,10 +40,22 @@
       "lon": -79.965369
     },
     {
+      "id": "Q",
+      "name": "East Carson & 27th, South Side",
+      "lat": 40.427249,
+      "lon": -79.967051
+    },
+    {
       "id": "G",
       "name": "East Carson & 10th",
       "lat": 40.42871,
       "lon": -79.98858
+    },
+    {
+      "id": "GV",
+      "name": "Grandview & McArdle, Mount Washington",
+      "lat": 40.435424,
+      "lon": -80.012955
     },
     {
       "id": "D",
@@ -78,10 +96,15 @@
       "fwd": "the river trail to South Side Riverfront Park and 10th",
       "rev": "the river trail east to SouthSide Works"
     },
-    "G>D": {
-      "name": "Mount Washington",
-      "fwd": "the McArdle climb, Grandview and down to the West End",
-      "rev": "up from the West End over Grandview and down McArdle"
+    "G>GV": {
+      "name": "McArdle Roadway",
+      "fwd": "the McArdle climb to Grandview",
+      "rev": "down McArdle Roadway to East Carson & 10th"
+    },
+    "GV>D": {
+      "name": "Grandview & the West End",
+      "fwd": "Grandview and down to the West End",
+      "rev": "up from the West End over Grandview to McArdle"
     },
     "D>A": {
       "name": "West End Bridge",
@@ -93,15 +116,25 @@
       "fwd": "General Robinson St and the Clemente Bridge to Fort Duquesne Blvd",
       "rev": "the Clemente Bridge to the North Shore and the Water Steps"
     },
-    "E>G": {
+    "E>F": {
       "name": "Smithfield Street Bridge",
-      "fwd": "the Smithfield Street Bridge, Station Square and East Carson",
-      "rev": "East Carson, Station Square and the Smithfield Street Bridge"
+      "fwd": "the Smithfield Street Bridge to Station Square",
+      "rev": "Station Square and the Smithfield Street Bridge"
     },
-    "G>H": {
+    "F>G": {
+      "name": "Station Square & East Carson",
+      "fwd": "Carson St past Station Square and East Carson to 10th",
+      "rev": "East Carson to Station Square"
+    },
+    "G>Q": {
       "name": "East Carson Street",
-      "fwd": "East Carson Street to SouthSide Works",
+      "fwd": "East Carson Street to 27th",
       "rev": "East Carson Street to 10th"
+    },
+    "Q>H": {
+      "name": "27th Street to the riverfront",
+      "fwd": "27th St to the riverfront at SouthSide Works",
+      "rev": "27th St to East Carson"
     }
   }
 }

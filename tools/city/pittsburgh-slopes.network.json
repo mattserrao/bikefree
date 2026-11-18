@@ -1,0 +1,64 @@
+{
+  "area": "slopes",
+  "note": "The South Side Slopes, Mount Washington and the Dirty Dozen south: Sycamore St from Station Square (F) to Mount Washington (SY), Grandview Ave to McArdle (GV), Beechview's Canton Ave and Boustead St, Allentown (AL) and the Slopes' Eleanor, Holt and Barry streets down to East Carson & 27th (Q). Portals: F, GV, Q (the core).",
+  "nodes": [
+    {
+      "id": "F",
+      "name": "Station Square: Carson & Arlington",
+      "lat": 40.431046,
+      "lon": -80.001528
+    },
+    {
+      "id": "SY",
+      "name": "Sycamore & Wyoming, Mount Washington",
+      "lat": 40.430275,
+      "lon": -80.006468
+    },
+    {
+      "id": "AL",
+      "name": "Warrington & Beltzhoover, Allentown",
+      "lat": 40.421659,
+      "lon": -79.997397
+    },
+    {
+      "id": "GV",
+      "name": "Grandview & McArdle, Mount Washington",
+      "lat": 40.435424,
+      "lon": -80.012955
+    },
+    {
+      "id": "Q",
+      "name": "East Carson & 27th, South Side",
+      "lat": 40.427249,
+      "lon": -79.967051
+    }
+  ],
+  "edges": {
+    "F>SY": {
+      "name": "Sycamore Street",
+      "fwd": "Arlington Ave out of Station Square and up Sycamore Street to Mount Washington",
+      "rev": "down Sycamore Street and Arlington Ave to Station Square"
+    },
+    "SY>AL": {
+      "name": "Dirty Dozen south: Beechview",
+      "fwd": "West Sycamore and down Woodruff St, Crane Ave and Banksville Rd to Beechview, up Boustead St, Coast Ave and up Canton Avenue's cobbles (about 37 %), Hampshire Ave, West Liberty and up Warrington Ave to Allentown",
+      "rev": "down Warrington Ave, West Liberty and Hampshire Ave, down Canton Avenue's cobbles, Coast Ave, Broadway and down Boustead St, Banksville Rd, Crane Ave and up Woodruff St to Mount Washington"
+    },
+    "AL>SY": {
+      "name": "Allentown to Mount Washington",
+      "fwd": "Beltzhoover Ave, Bailey Ave along the hilltop and Wyoming St's cobbles down to Sycamore",
+      "rev": "up Wyoming St's cobbles, Bailey Ave and Beltzhoover Ave to Allentown"
+    },
+    "GV>SY": {
+      "name": "Grandview & the Incline",
+      "fwd": "Grandview Ave past the Monongahela Incline and Wyoming St's cobbles to Sycamore",
+      "rev": "Wyoming St's cobbles and Grandview Ave past the Monongahela Incline to McArdle"
+    },
+    "AL>Q": {
+      "name": "South Side Slopes",
+      "fwd": "Warrington and Arlington Ave along the ridge, down Eleanor St, Holt St, Barry St and 27th St to East Carson",
+      "rev": "up 27th St, Barry St, Holt St and Eleanor St, Arlington and Warrington Ave along the ridge to Allentown"
+    }
+  },
+  "presets": []
+}

@@ -23,7 +23,7 @@ test('pittsburgh: the core area\'s line (downtown, the South Side, the Jail Trai
   // (a city of areas, PLAN 5.4: Allegheny & Troy Hill, Oakland & Schenley, the West End Polish Hill & Bloomfield and the GAP & Homestead are areas of their own)
   assert.ok(route.turnS > 26000 && route.turnS < 32000, `${route.turnS} m`);
   const net = JSON.parse(read(item.network));
-  assert.deepEqual(net.areas.map((x) => x.catalogId), ['pittsburgh', 'pittsburgh-allegheny', 'pittsburgh-westend', 'pittsburgh-oakland', 'pittsburgh-polish', 'pittsburgh-homestead']);
+  assert.deepEqual(net.areas.map((x) => x.catalogId), ['pittsburgh', 'pittsburgh-allegheny', 'pittsburgh-westend', 'pittsburgh-oakland', 'pittsburgh-polish', 'pittsburgh-homestead', 'pittsburgh-slopes']);
   assert.equal(net.areas[0].legM, route.turnS);
   const top = Math.max(...route.ele), bottom = Math.min(...route.ele);
   assert.ok(top - bottom > 110, `climb ${top - bottom} m`);
