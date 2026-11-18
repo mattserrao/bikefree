@@ -1,6 +1,8 @@
 # Toolbox texture expansion proposal
 
-Status: design exploration only; no texture or runtime changes yet.
+Status: proposal followed by an authorized first implementation. See [MATERIALS.md](MATERIALS.md) for
+the 20 available additions, integration boundaries, previews and validation. Remaining candidates below
+are still proposals; existing appearances are preserved.
 Branch: `toolbox-textures-test`.
 Baseline: `83110de5cdc4349257ab571f3d529b1245ebd37b` (`main`, 18 Nov 2026).
 
@@ -102,4 +104,5 @@ that procedural detail is free: more fragment work can reduce frame rate without
 
 Suggested first review: asphalt, compacted gravel, stone setts, brick and limewash samples. This tests
 fine grain, loose aggregate, large joints, repeating patterns and weathering before expanding the library.
-Implementation begins after the design review; this document does not claim any candidates are shipped.
+The owner authorized proceeding after this proposal. Only the IDs in `MATERIALS.md` are implemented;
+the wider candidate list above remains a backlog for review.

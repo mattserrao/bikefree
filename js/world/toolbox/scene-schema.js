@@ -76,7 +76,7 @@ export const SCENE_FIELDS = {
   water: { type: 'object', tool: T + 'materials/surfaces.js', keys: ['style', 'lakeReachM', 'nearRouteM'], doc: '"lake" style: ripples and treeline reflection, no surf' },
 
   // road and roadside
-  road: { type: 'object', tool: T + 'materials/road-surface.js', keys: ['surface', 'zones', 'markings', 'trail'], doc: 'road surface by stretch: fresh, worn, patched, chip seal, frost-heaved …; markings "eu": white dashed centre and edges; "fr": French rules in metres (T1 centre, T2 edges, solid on blind bends, villages); trail: { surface, zones } for a city route\'s trail stretches' },
+  road: { type: 'object', tool: T + 'materials/road-surface.js', keys: ['surface', 'zones', 'markings', 'trail', 'texture'], doc: 'road surface by stretch: legacy kinds plus asphalt-fine/coarse, concrete-broom/slabs, gravel-compacted, limestone-path, earth-packed, stone-setts; texture: { seed, scale, variation }; markings "eu": white dashed centre and edges; "fr": French rules in metres; trail: { surface, zones, texture } for city trails' },
   brickStreets: { type: 'object', tool: T + 'city/city.js', keys: ['osm', 'minGrade', 'classes', 'minLengthM'], doc: 'city: brick-paved streets — the ones OSM tags brick, sett or paving stones, and steep residential streets (minGrade)' },
   roadAlign: { type: 'object', tool: 'js/world/road-align.js', keys: ['curve', 'streets', 'bankM', 'turns'], doc: 'smooth the route (curve: Catmull-Rom centre line; turns: { minRadiusM, maxShiftM, marginM, stepDeg } eases too-tight turns and cuts the road finer there) and, in a city, street profiles' },
   roadside: { type: 'array', tool: T + 'roadside/guardrail.js', keys: ['fromM', 'toM', 'side'], doc: 'post-and-rail guardrail stretches' },

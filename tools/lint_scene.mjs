@@ -13,6 +13,7 @@ import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SCENE_FIELDS, FIELD_ALIASES } from '../js/world/toolbox/scene-schema.js';
 import { PACK_META, packId } from '../js/world/toolbox/packs/meta.js';
+import { ROAD_TEXTURES, ROAD_TEXTURE_CONTROLS, roadTextureSpec } from '../js/world/toolbox/materials/road-textures.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -68,6 +69,19 @@ export function lintScene(scene, name = 'scene') {
   if (scene.format && scene.format !== 'bikefree-scene-1') errors.push(`${name}: format must be "bikefree-scene-1"`);
   if (scene.style && !['stylized', 'wireframe'].includes(scene.style)) errors.push(`${name}: style must be "stylized" or "wireframe"`);
   if (scene.life?.kit && !['wildlife', 'coast'].includes(scene.life.kit)) errors.push(`${name}: life.kit must be "wildlife" or "coast"`);
+  // New texture controls are checked at every supported level without changing legacy ID fallback.
+  for (const [label, road] of [['road', scene.road], ['road.trail', scene.road?.trail]]) {
+    if (!road || typeOf(road) !== 'object') continue;
+    const check = (block, path, inherited = {}) => {
+      if (block.texture !== undefined && typeOf(block.texture) !== 'object') { errors.push(`${name}: ${path}.texture must be an object`); return; }
+      for (const key of Object.keys(block.texture || {})) if (!(key in ROAD_TEXTURE_CONTROLS)) errors.push(`${name}: unknown ${path}.texture.${key}`);
+      try { roadTextureSpec('asphalt-fine', { ...inherited, ...block.texture }); }
+      catch (e) { errors.push(`${name}: ${path}: ${e.message}`); }
+      if (block.surface && !(block.surface in ROAD_TEXTURES) && !['fresh', 'worn', 'chipseal', 'alpine', 'patched', 'tunnel', 'brick'].includes(block.surface)) warnings.push(`${name}: unknown ${path}.surface "${block.surface}"; legacy fallback is worn asphalt`);
+    };
+    check(road, label);
+    if (Array.isArray(road.zones)) road.zones.forEach((zone, i) => { if (typeOf(zone) === 'object') check(zone, `${label}.zones[${i}]`, road.texture); });
+  }
   if (scene.style === 'stylized' && scene.terrain !== 'authored-city') {
     if (!scene.look) warnings.push(`${name}: no "look" — the toolbox standard is "gentle"`);
     if (!scene.lighting?.baked) warnings.push(`${name}: no baked lighting — the toolbox standard is "lighting": { "baked": "<time>" }`);

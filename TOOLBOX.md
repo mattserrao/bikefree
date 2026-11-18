@@ -9,7 +9,8 @@ feature goes into the toolbox behind a scene field, so the next route can use it
 - **Models:** `tools/toolbox-gallery.html`, rendered headlessly by `npm run gallery`
 - **New route:** `npm run new-route -- <id> --preset <biome>`, starting from `routes/presets/`
 - **Refactor safety:** `npm run guard`, which checks that every route still builds identically
-- **Texture expansion proposal:** [docs/toolbox/TEXTURE_EXPANSION.md](docs/toolbox/TEXTURE_EXPANSION.md) (design only; existing options stay available)
+- **Texture expansion proposal and backlog:** [docs/toolbox/TEXTURE_EXPANSION.md](docs/toolbox/TEXTURE_EXPANSION.md) (existing options stay available)
+- **Additional procedural materials:** [docs/toolbox/MATERIALS.md](docs/toolbox/MATERIALS.md) — 8 road/path selections and 12 opt-in materials for kit authors, with PNG studies and usage examples
 - **Step by step:** the new-route guide (the Project doc `claude/new_route.md`), then `ROUTES.md` for the full field reference
 
 ---
@@ -111,6 +112,8 @@ js/world/toolbox/
 | `materials/surfaces.js` | `palette`, `water`, `vista` | Ground shader: palette by slope, height, shore and canopy, with vista detail far off. Also sea, lake water, lake mist, and scenery decorations (wind on soft plants, foliage, concrete). |
 | `materials/road-surface.js` | `road` | Road kind by stretch: fresh, worn, patched, chip seal, alpine, frost-heaved, tunnel, brick (running bond across the road), wet. Costs no draw calls. `markings: "fr"` draws the paint in metres by the French rules (T1 centre 3/10 m, T2 edges 3/3.5 m, short dashes and no edges in villages, solid centre on blind bends with T3 warning dashes, no paint on narrow roads) and adds aggregate, mottling, the paving seam and edge repair strips. A city route's trail stretches take their own `road.trail: { surface, zones }`. |
 | `materials/stonework.js` | (used by structures) | `makeMasonryMaterial({ stones })`: rubble masonry in world space for walls, parapets and portals. |
+| `materials/road-textures.js` | `road.surface`, `road.texture`, road/trail zones | Additional road/path patterns; seeded physical grain, concrete joints, soil, gravel, limestone and stone setts. Existing kinds stay available. |
+| `materials/surface-library.js` | (opt-in factory for kit authors) | `makeToolboxSurface(id, options)`: standalone building, masonry, terrain, bark and detail materials. Catalog and limits in `docs/toolbox/MATERIALS.md`. |
 
 ### Packs: regional models (`"packs"`)
 

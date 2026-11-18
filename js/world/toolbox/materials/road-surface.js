@@ -25,6 +25,7 @@
 // asphalt gets the detail of the Alpine reference photos: light aggregate in a darker binder, bleached and oily
 // mottling, the paving seam down the middle, and repair strips along the edges.
 import * as THREE from '../../../../vendor/three.module.min.js';
+import { decorateRoadTextures } from './road-textures.js';
 
 // tone (×brightness), warm (toward brown), wear (polished wheel tracks), patches, cracks, edge (crumbling
 // edges and dust), fade (paint faded), speckle (chip-seal stones), runoff (snowmelt across the road), grime
@@ -271,5 +272,5 @@ export function decorateRoad(material, road, { widthM = 7, repeatM = 24, marks =
   };
   material.customProgramCacheKey = () => `${prevKey}|road-surface-2${fr ? '-fr' : ''}`;
   material.needsUpdate = true;
-  return material;
+  return decorateRoadTextures(material, road, MAX_ZONES);
 }
