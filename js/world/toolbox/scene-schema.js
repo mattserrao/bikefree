@@ -107,7 +107,7 @@ export const SCENE_FIELDS = {
   // city kit (authored-city)
   cityData: { type: 'string', tool: T + 'city/city.js', doc: 'city data (tools/build_city.py)' },
   origin: { type: 'object', keys: ['lat', 'lon'], doc: 'a city of areas (PLAN 5.4): the city\'s shared frame — every area is projected around this point (js/world/world.js)' },
-  streetKit: { type: 'object', tool: T + 'city/street-kit.js', keys: ['fromM', 'toM', 'rangeM', 'parkTrees', 'zones'], doc: 'facades, furniture, street trees' },
+  streetKit: { type: 'object', tool: T + 'city/street-kit.js', keys: ['fromM', 'toM', 'rangeM', 'parkTrees', 'zones', 'clearRouteCrossings'], doc: 'facades, furniture, street trees' },
   mainStreets: { type: 'array', keys: ['name', 'fromM', 'toM'], doc: 'city main streets' },
   junctions: { type: 'any', tool: T + 'city/junctions.js', doc: 'junction planning' },
   riverfront: { type: 'object', tool: T + 'city/riverfront.js', keys: ['maxGapM', 'spans', 'waterSteps'], doc: 'river walls, steps, trails' },

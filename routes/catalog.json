@@ -623,6 +623,36 @@
   "area": "pittsburgh"
  },
  {
+  "id": "pittsburgh-polish",
+  "name": "Pittsburgh \u00b7 Polish Hill, Bloomfield & the Oakland crosstown",
+  "park": "Pittsburgh, Pennsylvania",
+  "file": "routes/cities/pittsburgh-polish.gpx",
+  "outAndBack": false,
+  "expectedKm": [
+   9,
+   13
+  ],
+  "scene": "routes/scenes/pittsburgh-polish.json",
+  "eleSmoothM": 10,
+  "stage": "draft",
+  "area": "pittsburgh"
+ },
+ {
+  "id": "pittsburgh-homestead",
+  "name": "Pittsburgh \u00b7 The Great Allegheny Passage & Homestead",
+  "park": "Pittsburgh, Pennsylvania",
+  "file": "routes/cities/pittsburgh-homestead.gpx",
+  "outAndBack": false,
+  "expectedKm": [
+   14,
+   18
+  ],
+  "scene": "routes/scenes/pittsburgh-homestead.json",
+  "eleSmoothM": 10,
+  "stage": "draft",
+  "area": "pittsburgh"
+ },
+ {
   "id": "pittsburgh-northside",
   "name": "Pittsburgh \u00b7 The North Side",
   "park": "Pittsburgh, Pennsylvania",

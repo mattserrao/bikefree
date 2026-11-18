@@ -203,7 +203,9 @@ if (!spec.areas) {
  */
 function matchApron(A, ap, built, edges) {
   const pt = (r, s) => ({ lat: r.lat[Math.round(s / 10)], lon: r.lon[Math.round(s / 10)] });
-  const s0 = Math.ceil(ap.fromM / 10) * 10, s1 = Math.floor(ap.toM / 10) * 10;
+  // (to the nearest sample: an apron that starts at a portal a few metres past a sample — a legs-built line, PLAN 5.5 —
+  // must cover the path from the junction itself, or the area drawn flips at the portal)
+  const s0 = Math.round(ap.fromM / 10) * 10, s1 = Math.round(ap.toM / 10) * 10;
   for (const e of edges) {
     if (e.area === A.area.id) continue;
     const B = built.find((x) => x.area.id === e.area);

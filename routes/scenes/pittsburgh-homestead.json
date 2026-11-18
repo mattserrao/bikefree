@@ -1,0 +1,826 @@
+{
+  "format": "bikefree-scene-1",
+  "style": "stylized",
+  "terrain": "authored-city",
+  "cityData": "routes/scenes/pittsburgh-homestead-city.json",
+  "assets": "models/scenery/coastal.json",
+  "extraAssets": [
+    "models/scenery/regional.json"
+  ],
+  "seed": 412,
+  "roadAlign": {
+    "curve": true,
+    "streets": true,
+    "bankM": 30
+  },
+  "description": "Pittsburgh as a stylized city: the real terrain, rivers, streets, bridges and buildings from OpenStreetMap and AWS Terrain Tiles, with people, traffic, trains, inclines and boats. An artistic interpretation, not a survey.",
+  "title": "Pittsburgh · The Great Allegheny Passage & Homestead",
+  "region": "pittsburgh",
+  "biome": "city",
+  "palette": {
+    "grass": "#7a9a55",
+    "meadow": "#93a26b",
+    "rock": "#8a8478",
+    "cliff": "#9a8f7c",
+    "water": "#2f5a5c",
+    "shallowWater": "#5d7f6a",
+    "bluff": "#8f7a60"
+  },
+  "packs": [
+    "alps"
+  ],
+  "vegetation": {
+    "trees": [
+      "beech0",
+      "oak0",
+      "fieldmaple0",
+      "ash0",
+      "beech1",
+      "fir0"
+    ],
+    "treeDensity": 0.6,
+    "density": 1,
+    "cover": [
+      "grass",
+      "grass",
+      "fern"
+    ],
+    "shrubs": [
+      "shrub0",
+      "shrub1"
+    ],
+    "vergeDensity": 0,
+    "yardTrees": {
+      "density": 0.5,
+      "kitDensity": 0.4,
+      "boxes": [
+        [
+          40.393,
+          -79.918,
+          40.4065,
+          -79.885
+        ],
+        [
+          40.4,
+          -79.945,
+          40.42,
+          -79.93
+        ],
+        [
+          40.415,
+          -79.945,
+          40.432,
+          -79.925
+        ],
+        [
+          40.385,
+          -79.955,
+          40.394,
+          -79.925
+        ]
+      ]
+    }
+  },
+  "routeTrees": [],
+  "bridgeFrames": {
+    "Smithfield Street Bridge": "street"
+  },
+  "fountain": {
+    "lat": 40.44183,
+    "lon": -80.01277,
+    "radiusM": 22
+  },
+  "road": {
+    "surface": "worn",
+    "zones": [],
+    "trail": {
+      "surface": "fresh",
+      "tone": 1.05,
+      "zones": []
+    }
+  },
+  "brickStreets": {
+    "osm": true,
+    "minGrade": 0.07,
+    "classes": [
+      5
+    ],
+    "minLengthM": 25
+  },
+  "buildingKit": {
+    "detailM": 150,
+    "dressingM": 80,
+    "styles": [
+      {
+        "preset": "pittsburgh-rowhouse",
+        "kinds": [
+          "rowhouse"
+        ]
+      },
+      {
+        "preset": "pittsburgh-frame",
+        "kinds": [
+          "house"
+        ]
+      }
+    ]
+  },
+  "streetKit": {
+    "fromM": 0,
+    "toM": 16150,
+    "rangeM": 220,
+    "parkTrees": 16,
+    "zones": [],
+    "clearRouteCrossings": true
+  },
+  "mainStreets": [],
+  "hotspots": [
+    {
+      "name": "North Shore Water Steps",
+      "lat": 40.44585,
+      "lon": -80.0086,
+      "radiusM": 28
+    },
+    {
+      "name": "PNC Park gate",
+      "lat": 40.447,
+      "lon": -80.0044,
+      "radiusM": 30
+    },
+    {
+      "name": "Point State Park",
+      "lat": 40.442,
+      "lon": -80.012,
+      "radiusM": 45
+    },
+    {
+      "name": "Market Square",
+      "lat": 40.44075,
+      "lon": -80.00256,
+      "radiusM": 35
+    },
+    {
+      "name": "PPG Place plaza",
+      "lat": 40.43965,
+      "lon": -80.0036,
+      "radiusM": 25
+    },
+    {
+      "name": "Station Square",
+      "lat": 40.433,
+      "lon": -80.0045,
+      "radiusM": 40
+    },
+    {
+      "name": "East Carson Street",
+      "lat": 40.4288,
+      "lon": -79.982,
+      "radiusM": 60
+    },
+    {
+      "name": "SouthSide Works",
+      "lat": 40.4273,
+      "lon": -79.9655,
+      "radiusM": 40
+    },
+    {
+      "name": "Grandview Overlook",
+      "lat": 40.4353,
+      "lon": -80.0127,
+      "radiusM": 22
+    },
+    {
+      "name": "Duquesne Incline overlook",
+      "lat": 40.438,
+      "lon": -80.0182,
+      "radiusM": 22
+    },
+    {
+      "name": "Science Center",
+      "lat": 40.4456,
+      "lon": -80.018,
+      "radiusM": 30
+    }
+  ],
+  "rivers": [
+    {
+      "name": "Ohio River",
+      "widthM": 340,
+      "path": [
+        [
+          40.44246,
+          -80.01478
+        ],
+        [
+          40.44279,
+          -80.01632
+        ],
+        [
+          40.44327,
+          -80.01779
+        ],
+        [
+          40.44371,
+          -80.01928
+        ],
+        [
+          40.44426,
+          -80.02072
+        ],
+        [
+          40.44466,
+          -80.02222
+        ],
+        [
+          40.44503,
+          -80.0236
+        ],
+        [
+          40.44549,
+          -80.02503
+        ],
+        [
+          40.44595,
+          -80.02645
+        ],
+        [
+          40.44659,
+          -80.02774
+        ],
+        [
+          40.4473,
+          -80.02898
+        ],
+        [
+          40.44809,
+          -80.03016
+        ],
+        [
+          40.4488,
+          -80.03117
+        ],
+        [
+          40.44967,
+          -80.0323
+        ],
+        [
+          40.45061,
+          -80.03335
+        ]
+      ]
+    },
+    {
+      "name": "Allegheny River",
+      "widthM": 256,
+      "path": [
+        [
+          40.44359,
+          -80.01284
+        ],
+        [
+          40.44382,
+          -80.0113
+        ],
+        [
+          40.4441,
+          -80.00978
+        ],
+        [
+          40.44441,
+          -80.00828
+        ],
+        [
+          40.44468,
+          -80.00675
+        ],
+        [
+          40.44499,
+          -80.00524
+        ],
+        [
+          40.44527,
+          -80.00361
+        ],
+        [
+          40.44587,
+          -80.00237
+        ],
+        [
+          40.44635,
+          -80.00107
+        ],
+        [
+          40.44675,
+          -79.99973
+        ],
+        [
+          40.44722,
+          -79.99842
+        ],
+        [
+          40.44777,
+          -79.99716
+        ],
+        [
+          40.44835,
+          -79.99586
+        ],
+        [
+          40.44906,
+          -79.99463
+        ],
+        [
+          40.44986,
+          -79.99349
+        ],
+        [
+          40.45061,
+          -79.99229
+        ],
+        [
+          40.45147,
+          -79.99121
+        ],
+        [
+          40.4523,
+          -79.9901
+        ],
+        [
+          40.45311,
+          -79.98896
+        ],
+        [
+          40.454,
+          -79.9879
+        ],
+        [
+          40.45477,
+          -79.98689
+        ],
+        [
+          40.45559,
+          -79.98584
+        ],
+        [
+          40.45632,
+          -79.9847
+        ],
+        [
+          40.4571,
+          -79.9836
+        ],
+        [
+          40.45791,
+          -79.98254
+        ]
+      ]
+    },
+    {
+      "name": "Monongahela River",
+      "widthM": 272,
+      "path": [
+        [
+          40.44036,
+          -80.01361
+        ],
+        [
+          40.4396,
+          -80.01229
+        ],
+        [
+          40.43895,
+          -80.0109
+        ],
+        [
+          40.43826,
+          -80.00954
+        ],
+        [
+          40.43771,
+          -80.00808
+        ],
+        [
+          40.43712,
+          -80.00664
+        ],
+        [
+          40.43642,
+          -80.00522
+        ],
+        [
+          40.43582,
+          -80.00386
+        ],
+        [
+          40.43518,
+          -80.00253
+        ],
+        [
+          40.43453,
+          -80.0012
+        ],
+        [
+          40.43386,
+          -79.99989
+        ],
+        [
+          40.43329,
+          -79.99851
+        ],
+        [
+          40.43297,
+          -79.997
+        ],
+        [
+          40.43311,
+          -79.99656
+        ],
+        [
+          40.43274,
+          -79.99469
+        ],
+        [
+          40.43259,
+          -79.99135
+        ],
+        [
+          40.43274,
+          -79.98775
+        ],
+        [
+          40.43355,
+          -79.9815
+        ],
+        [
+          40.43385,
+          -79.97776
+        ],
+        [
+          40.43315,
+          -79.97356
+        ],
+        [
+          40.43306,
+          -79.97301
+        ],
+        [
+          40.43199,
+          -79.96813
+        ],
+        [
+          40.43047,
+          -79.96414
+        ],
+        [
+          40.42838,
+          -79.96073
+        ],
+        [
+          40.4257,
+          -79.95755
+        ],
+        [
+          40.42354,
+          -79.9555
+        ],
+        [
+          40.422,
+          -79.95464
+        ],
+        [
+          40.42087,
+          -79.95401
+        ],
+        [
+          40.41862,
+          -79.95344
+        ],
+        [
+          40.41346,
+          -79.9532
+        ],
+        [
+          40.41188,
+          -79.95305
+        ],
+        [
+          40.41072,
+          -79.95292
+        ],
+        [
+          40.40965,
+          -79.9528
+        ],
+        [
+          40.40473,
+          -79.95127
+        ],
+        [
+          40.40368,
+          -79.95052
+        ],
+        [
+          40.40121,
+          -79.94875
+        ],
+        [
+          40.39856,
+          -79.94552
+        ],
+        [
+          40.39742,
+          -79.94218
+        ],
+        [
+          40.39719,
+          -79.93783
+        ],
+        [
+          40.39758,
+          -79.93539
+        ],
+        [
+          40.39783,
+          -79.93383
+        ],
+        [
+          40.39804,
+          -79.93268
+        ],
+        [
+          40.39825,
+          -79.93153
+        ],
+        [
+          40.39898,
+          -79.92967
+        ],
+        [
+          40.3996,
+          -79.92883
+        ],
+        [
+          40.40017,
+          -79.92804
+        ],
+        [
+          40.40157,
+          -79.92668
+        ],
+        [
+          40.40514,
+          -79.9236
+        ],
+        [
+          40.40977,
+          -79.9196
+        ],
+        [
+          40.41077,
+          -79.91857
+        ],
+        [
+          40.41236,
+          -79.91695
+        ],
+        [
+          40.41358,
+          -79.91493
+        ],
+        [
+          40.41455,
+          -79.91286
+        ],
+        [
+          40.41542,
+          -79.90977
+        ],
+        [
+          40.4159,
+          -79.90603
+        ],
+        [
+          40.41625,
+          -79.90328
+        ],
+        [
+          40.41583,
+          -79.89951
+        ],
+        [
+          40.41488,
+          -79.89705
+        ],
+        [
+          40.41439,
+          -79.89597
+        ],
+        [
+          40.41114,
+          -79.89119
+        ],
+        [
+          40.4108,
+          -79.89069
+        ],
+        [
+          40.40872,
+          -79.88678
+        ],
+        [
+          40.40734,
+          -79.88432
+        ],
+        [
+          40.40424,
+          -79.87941
+        ],
+        [
+          40.40234,
+          -79.87675
+        ],
+        [
+          40.40159,
+          -79.87583
+        ],
+        [
+          40.39623,
+          -79.87019
+        ],
+        [
+          40.39426,
+          -79.86733
+        ],
+        [
+          40.39237,
+          -79.86396
+        ]
+      ]
+    }
+  ],
+  "signs": [],
+  "preview": {
+    "positionM": 9000,
+    "camera": "drone",
+    "time": "golden"
+  },
+  "realHorizon": false,
+  "timeOfDay": "golden",
+  "lighting": {
+    "baked": "golden"
+  },
+  "riverfront": {
+    "maxGapM": 20,
+    "spans": [],
+    "waterSteps": {
+      "top": {
+        "lat": 40.445842,
+        "lon": -80.008511
+      },
+      "bottom": {
+        "lat": 40.445527,
+        "lon": -80.008511
+      },
+      "widthM": 18,
+      "topM": 5
+    }
+  },
+  "weather": {
+    "presets": [
+      "clear",
+      "marine",
+      "clouds"
+    ],
+    "labels": {
+      "marine": "River fog"
+    },
+    "bankTop": 30,
+    "bank": 0.45
+  },
+  "post": true,
+  "junctions": true,
+  "terrainBuild": {
+    "gpx": "routes/cities/pittsburgh-homestead.gpx",
+    "rivers": true,
+    "padM": 9000,
+    "coarseM": 40,
+    "fineM": 900,
+    "fineCellM": 10,
+    "lat0": 40.442373443183776,
+    "box": [
+      40.55758000574919,
+      -80.14588296146431,
+      40.34416599425081,
+      -79.8273850385357
+    ]
+  },
+  "terrainGridFile": "routes/scenes/pittsburgh-homestead-terrain.grid.bin.gz",
+  "heroes": [
+    {
+      "model": "ussteel",
+      "name": "U.S. Steel Tower",
+      "lat": 40.44138,
+      "lon": -79.99471,
+      "heightM": 256
+    },
+    {
+      "model": "bny",
+      "name": "BNY Mellon Center",
+      "lat": 40.43975,
+      "lon": -79.99601,
+      "heightM": 221
+    },
+    {
+      "model": "fifth",
+      "name": "Fifth Avenue Place",
+      "lat": 40.4419,
+      "lon": -80.00345,
+      "bodyM": 150
+    },
+    {
+      "model": "gulf",
+      "name": "Gulf Tower",
+      "lat": 40.4425,
+      "lon": -79.9953,
+      "heightM": 177
+    },
+    {
+      "model": "grant",
+      "name": "Grant Building",
+      "lat": 40.43765,
+      "lon": -79.99754
+    },
+    {
+      "model": "blockhouse",
+      "name": "Fort Pitt Blockhouse",
+      "lat": 40.4412,
+      "lon": -80.0098
+    },
+    {
+      "model": "fort",
+      "name": "Fort Pitt",
+      "lat": 40.44098,
+      "lon": -80.00895,
+      "radiusM": 70,
+      "rebuilt": [
+        "Flag",
+        "Monongahela"
+      ],
+      "traced": [
+        "Ohio",
+        "Music"
+      ],
+      "turnDeg": -18
+    }
+  ],
+  "views": [],
+  "stadiumShapes": {
+    "PNC Park": {
+      "lat": 40.4469,
+      "lon": -80.0061,
+      "rx": 100,
+      "rz": 88,
+      "power": 2.4,
+      "yawDeg": 0
+    },
+    "Acrisure Stadium": {
+      "lat": 40.4467,
+      "lon": -80.0158,
+      "rx": 125,
+      "rz": 98,
+      "power": 3.5,
+      "yawDeg": -20
+    }
+  },
+  "riverFlow": {
+    "allegheny": [
+      40.4603,
+      -79.979
+    ],
+    "monongahela": [
+      40.4339,
+      -79.979
+    ],
+    "ohio": [
+      40.468,
+      -80.051
+    ],
+    "point": [
+      40.44183,
+      -80.01277
+    ],
+    "north": [
+      40.45,
+      -80.02
+    ],
+    "south": [
+      40.438,
+      -80.03
+    ]
+  },
+  "qcAccept": [],
+  "origin": {
+    "lat": 40.4375,
+    "lon": -79.9925
+  }
+}

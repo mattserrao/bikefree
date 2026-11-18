@@ -31,6 +31,18 @@
       "spec": "tools/city/pittsburgh-oakland.network.json"
     },
     {
+      "id": "polish",
+      "catalogId": "pittsburgh-polish",
+      "base": "routes/cities/pittsburgh-polish.gpx",
+      "spec": "tools/city/pittsburgh-polish.network.json"
+    },
+    {
+      "id": "homestead",
+      "catalogId": "pittsburgh-homestead",
+      "base": "routes/cities/pittsburgh-homestead.gpx",
+      "spec": "tools/city/pittsburgh-homestead.network.json"
+    },
+    {
       "id": "northside",
       "catalogId": "pittsburgh-northside",
       "base": "routes/cities/pittsburgh-northside.gpx",
@@ -152,7 +164,8 @@
       "name": "Jail Trail & South Side Loop",
       "path": [
         "E>I+",
-        "I>H+",
+        "I>S+",
+        "S>H+",
         "H>G+",
         "E>G-"
       ],
@@ -170,7 +183,8 @@
         "A>B+",
         "B>E+",
         "E>I+",
-        "I>H+",
+        "I>S+",
+        "S>H+",
         "H>G+",
         "E>G-",
         "B>E-",
@@ -189,7 +203,8 @@
         "A>B+",
         "B>E+",
         "E>I+",
-        "I>H+",
+        "I>S+",
+        "S>H+",
         "H>G+",
         "G>D+",
         "D>C+",
@@ -268,10 +283,12 @@
       "name": "Jail Trail, Oakland & Schenley",
       "path": [
         "E>I+",
-        "I>J+",
+        "I>L+",
+        "L>J+",
         "J>K+",
         "K>J+",
-        "I>J-",
+        "L>J-",
+        "I>L-",
         "E>I-"
       ],
       "tags": [
@@ -287,11 +304,14 @@
         "A>B+",
         "B>E+",
         "E>I+",
-        "I>J+",
+        "I>L+",
+        "L>J+",
         "J>K+",
         "K>J+",
-        "I>J-",
-        "I>H+",
+        "L>J-",
+        "I>L-",
+        "I>S+",
+        "S>H+",
         "H>G+",
         "E>G-",
         "B>E-",
@@ -346,7 +366,8 @@
         "M>B+",
         "B>E+",
         "E>I+",
-        "I>H+",
+        "I>S+",
+        "S>H+",
         "H>G+",
         "E>G-",
         "B>E-",
@@ -406,6 +427,102 @@
         "new"
       ],
       "note": "The Allegheny Loop with a lap of Troy Hill: up Rialto Street at the 31st Street Bridge, down Troy Hill Road, then on to Millvale, Lawrenceville and the Strip"
+    },
+    {
+      "id": "pgh-polish-hill",
+      "name": "Polish Hill Climb Loop",
+      "path": [
+        "X>T+",
+        "T>X+"
+      ],
+      "tags": [
+        "short",
+        "hilly",
+        "new"
+      ],
+      "note": "From Liberty Ave over the 28th Street Bridge, up Brereton St past Immaculate Heart of Mary and Dobson St, down Herron Avenue's hairpin and back along Liberty"
+    },
+    {
+      "id": "pgh-polish-crosstown",
+      "name": "Polish Hill, Bloomfield & Oakland Loop",
+      "path": [
+        "M>X+",
+        "X>T+",
+        "T>L+",
+        "I>L-",
+        "E>I-",
+        "B>E-",
+        "M>B-"
+      ],
+      "tags": [
+        "varied",
+        "new"
+      ],
+      "note": "From the Strip up through Polish Hill, over the Bloomfield Bridge, through Bloomfield and across to Schenley Plaza; down Junction Hollow, the Jail Trail into downtown and Penn Avenue back to the Strip"
+    },
+    {
+      "id": "pgh-polish-rivers",
+      "name": "Allegheny, Polish Hill & Oakland Loop",
+      "path": [
+        "A>P+",
+        "P>N+",
+        "N>M+",
+        "M>X+",
+        "X>T+",
+        "T>L+",
+        "I>L-",
+        "E>I-",
+        "B>E-",
+        "A>B-"
+      ],
+      "tags": [
+        "long",
+        "varied",
+        "new"
+      ],
+      "note": "The North Shore Trail to Millvale and Lawrenceville, up through Polish Hill and Bloomfield to Oakland, down Junction Hollow and the Jail Trail, home over the Clemente Bridge"
+    },
+    {
+      "id": "pgh-gap-homestead",
+      "name": "Great Allegheny Passage to Homestead",
+      "path": [
+        "S>H-",
+        "S>W+",
+        "W>U+",
+        "U>V+",
+        "W>V-",
+        "S>W-",
+        "S>H+"
+      ],
+      "tags": [
+        "flat",
+        "new"
+      ],
+      "note": "From SouthSide Works out the GAP along the Mon to the Waterfront, a lap of Homestead past the Pump House and Eighth Avenue, and back"
+    },
+    {
+      "id": "pgh-jail-gap",
+      "name": "Jail Trail & the GAP to Homestead",
+      "path": [
+        "B>E+",
+        "E>I+",
+        "I>S+",
+        "S>W+",
+        "W>U+",
+        "U>V+",
+        "W>V-",
+        "S>W-",
+        "S>H+",
+        "H>G+",
+        "E>G-",
+        "B>E-"
+      ],
+      "tags": [
+        "long",
+        "flat",
+        "new"
+      ],
+      "note": "The Point, the Jail Trail and the Hot Metal Bridge, the GAP to Homestead and a lap past the Pump House, home on the South Side river trail"
     },
     {
       "id": "pgh-northside-hills",

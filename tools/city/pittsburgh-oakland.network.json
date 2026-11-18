@@ -1,6 +1,6 @@
 {
   "area": "oakland",
-  "note": "Junction Hollow, Oakland and Schenley Park. Portal: I.",
+  "note": "Junction Hollow, Oakland and Schenley Park. Portals: I (the core), L (Polish Hill & Bloomfield).",
   "nodes": [
     {
       "id": "I",
@@ -15,6 +15,12 @@
       "lon": -79.946459
     },
     {
+      "id": "L",
+      "name": "Forbes & Bigelow, Schenley Plaza",
+      "lat": 40.443191,
+      "lon": -79.953547
+    },
+    {
       "id": "K",
       "name": "Schenley Drive & Forbes Ave",
       "lat": 40.4377,
@@ -22,10 +28,15 @@
     }
   ],
   "edges": {
-    "I>J": {
+    "I>L": {
       "name": "Junction Hollow & Oakland",
-      "fwd": "along Second Ave, up Junction Hollow, through Oakland past the Cathedral of Learning to Phipps",
-      "rev": "past the Cathedral of Learning, down Junction Hollow and along Second Ave to the Hot Metal Bridge"
+      "fwd": "along Second Ave, up Junction Hollow, through Oakland to Forbes and Schenley Plaza",
+      "rev": "along Forbes, down through Oakland and Junction Hollow, along Second Ave to the Hot Metal Bridge"
+    },
+    "L>J": {
+      "name": "Schenley Plaza",
+      "fwd": "past the Cathedral of Learning and Schenley Plaza to Phipps",
+      "rev": "past Schenley Plaza and the Cathedral of Learning to Forbes & Bigelow"
     },
     "J>K": {
       "name": "Schenley Drive",

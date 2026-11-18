@@ -283,6 +283,30 @@
     "scene": "routes/scenes/pittsburgh-oakland.json"
   },
   {
+    "id": "pittsburgh-polish",
+    "name": "Pittsburgh · Polish Hill, Bloomfield & the Oakland crosstown",
+    "park": "Pittsburgh, Pennsylvania",
+    "km": 10.7,
+    "climbM": 179,
+    "file": "routes/cities/pittsburgh-polish.gpx",
+    "stage": "draft",
+    "area": "pittsburgh",
+    "eleSmoothM": 10,
+    "scene": "routes/scenes/pittsburgh-polish.json"
+  },
+  {
+    "id": "pittsburgh-homestead",
+    "name": "Pittsburgh · The Great Allegheny Passage & Homestead",
+    "park": "Pittsburgh, Pennsylvania",
+    "km": 16,
+    "climbM": 56,
+    "file": "routes/cities/pittsburgh-homestead.gpx",
+    "stage": "draft",
+    "area": "pittsburgh",
+    "eleSmoothM": 10,
+    "scene": "routes/scenes/pittsburgh-homestead.json"
+  },
+  {
     "id": "pittsburgh-northside",
     "name": "Pittsburgh · The North Side",
     "park": "Pittsburgh, Pennsylvania",

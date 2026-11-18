@@ -1,0 +1,630 @@
+{
+ "id": "pittsburgh-polish",
+ "name": "Pittsburgh \u00b7 Polish Hill, Bloomfield & the Oakland crosstown",
+ "park": "Pittsburgh, Pennsylvania",
+ "gpx": "routes/cities/pittsburgh-polish.gpx",
+ "data": "routes/scenes/pittsburgh-polish-city.json",
+ "osmBbox": [
+  -80.045,
+  40.422,
+  -79.925,
+  40.486
+ ],
+ "osmTile": [
+  0.01,
+  0.008
+ ],
+ "gridBbox": [
+  -79.995,
+  40.428,
+  -79.925,
+  40.476
+ ],
+ "gridM": 24,
+ "landM": 12,
+ "lattice": "pittsburgh",
+ "osmCache": "pittsburgh",
+ "open": true,
+ "waterRelations": [
+  1080,
+  2097217,
+  7937544
+ ],
+ "waterLevelM": 216.6,
+ "buildingRadiusM": 1100,
+ "tallBuildingM": 40,
+ "streetRadiusM": 900,
+ "cornerPasses": 3,
+ "cornerHalfWindow": 8,
+ "maxDriftM": 16,
+ "legs": [
+  {
+   "mode": "road",
+   "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh-allegheny.gpx",
+    "fromM": 12070,
+    "toM": 12470
+   },
+   "waypoints": [
+    [
+     "Penn Ave & 31st St (apron)",
+     40.459829,
+     -79.971469
+    ],
+    [
+     "31st St",
+     40.460303,
+     -79.972394
+    ],
+    [
+     "Smallman St: 30th",
+     40.459714,
+     -79.973285,
+     "Smallman Street"
+    ],
+    [
+     "Smallman & 29th (junction)",
+     40.458531,
+     -79.974998,
+     "Smallman Street"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh-allegheny.gpx",
+    "fromM": 12470,
+    "toM": 12870
+   },
+   "waypoints": [
+    [
+     "Smallman & 29th (junction)",
+     40.458531,
+     -79.974998,
+     "Smallman Street"
+    ],
+    [
+     "Smallman St: 28th",
+     40.457907,
+     -79.975918,
+     "Smallman Street"
+    ],
+    [
+     "Smallman St: 27th (apron)",
+     40.456093,
+     -79.978543,
+     "Smallman Street"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh-allegheny.gpx",
+    "fromM": 12870,
+    "toM": 12470
+   },
+   "waypoints": [
+    [
+     "Smallman St: 27th (back)",
+     40.456093,
+     -79.978543,
+     "Smallman Street"
+    ],
+    [
+     "Smallman St: 28th (back)",
+     40.457907,
+     -79.975918,
+     "Smallman Street"
+    ],
+    [
+     "Smallman & 29th (junction) (back)",
+     40.458531,
+     -79.974998,
+     "Smallman Street"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Smallman & 29th (junction)",
+     40.458531,
+     -79.974998,
+     "Smallman Street"
+    ],
+    [
+     "Penn Ave & 29th St",
+     40.457842,
+     -79.974207,
+     "29th Street"
+    ],
+    [
+     "Liberty Ave & 29th St (junction)",
+     40.45728,
+     -79.973536,
+     "Liberty Avenue"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Liberty Ave & 29th St (junction)",
+     40.45728,
+     -79.973536,
+     "Liberty Avenue"
+    ],
+    [
+     "Liberty Ave & 28th St",
+     40.456308,
+     -79.974953,
+     "Liberty Avenue"
+    ],
+    [
+     "28th Street Bridge",
+     40.4559,
+     -79.974,
+     "28th Street Bridge"
+    ],
+    [
+     "Brereton St: the bridge",
+     40.455623,
+     -79.972907,
+     "Brereton Street"
+    ],
+    [
+     "Brereton St: Polish Hill",
+     40.4562,
+     -79.97,
+     "Brereton Street"
+    ],
+    [
+     "Brereton & Dobson: Immaculate Heart of Mary",
+     40.456653,
+     -79.967664,
+     "Dobson Street"
+    ],
+    [
+     "Dobson St",
+     40.4575,
+     -79.966,
+     "Dobson Street"
+    ],
+    [
+     "Dobson St & Herron Ave (junction)",
+     40.458317,
+     -79.964191,
+     "Herron Avenue"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Dobson St & Herron Ave (junction)",
+     40.458317,
+     -79.964191,
+     "Herron Avenue"
+    ],
+    [
+     "Herron Ave: the hairpin",
+     40.45893,
+     -79.96478,
+     "Herron Avenue"
+    ],
+    [
+     "Herron Ave: down to Liberty",
+     40.45944,
+     -79.96602,
+     "Herron Avenue"
+    ],
+    [
+     "Herron Ave & Liberty Ave",
+     40.461577,
+     -79.967091,
+     "Liberty Avenue"
+    ],
+    [
+     "Liberty Ave: Lower Lawrenceville",
+     40.4595,
+     -79.9705,
+     "Liberty Avenue"
+    ],
+    [
+     "Liberty Ave & 29th St (junction)",
+     40.45728,
+     -79.973536,
+     "Liberty Avenue"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "waypoints": [
+    [
+     "Liberty Ave & 29th St (junction) (again)",
+     40.45728,
+     -79.973536,
+     "Liberty Avenue"
+    ],
+    [
+     "Liberty Ave & 28th St (again)",
+     40.456308,
+     -79.974953,
+     "Liberty Avenue"
+    ],
+    [
+     "28th Street Bridge (again)",
+     40.4559,
+     -79.974,
+     "28th Street Bridge"
+    ],
+    [
+     "Brereton St: the bridge (again)",
+     40.455623,
+     -79.972907,
+     "Brereton Street"
+    ],
+    [
+     "Brereton St: Polish Hill (again)",
+     40.4562,
+     -79.97,
+     "Brereton Street"
+    ],
+    [
+     "Brereton & Dobson: Immaculate Heart of Mary (again)",
+     40.456653,
+     -79.967664,
+     "Dobson Street"
+    ],
+    [
+     "Dobson St (again)",
+     40.4575,
+     -79.966,
+     "Dobson Street"
+    ],
+    [
+     "Dobson St & Herron Ave (junction) (again)",
+     40.458317,
+     -79.964191,
+     "Herron Avenue"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Dobson St & Herron Ave (junction)",
+     40.458317,
+     -79.964191,
+     "Herron Avenue"
+    ],
+    [
+     "Herron Ave: Polish Hill",
+     40.4577,
+     -79.9641,
+     "Herron Avenue"
+    ],
+    [
+     "Bethoven St",
+     40.45705,
+     -79.9639,
+     "Bethoven Street"
+    ],
+    [
+     "Bethoven St: Polish Hill",
+     40.45828,
+     -79.96095,
+     "Bethoven Street"
+    ],
+    [
+     "Bethoven St: to the bridge",
+     40.45942,
+     -79.95823,
+     "Bethoven Street"
+    ],
+    [
+     "Bloomfield Bridge",
+     40.46244,
+     -79.95403,
+     "Bloomfield Bridge"
+    ],
+    [
+     "Bloomfield Bridge & Liberty Ave",
+     40.463611,
+     -79.952833,
+     "Liberty Avenue"
+    ],
+    [
+     "Liberty Ave: Bloomfield",
+     40.462,
+     -79.9495,
+     "Liberty Avenue"
+    ],
+    [
+     "Liberty Ave & S Millvale Ave",
+     40.460026,
+     -79.945957,
+     "South Millvale Avenue"
+    ],
+    [
+     "S Millvale Ave",
+     40.4567,
+     -79.9466,
+     "South Millvale Avenue"
+    ],
+    [
+     "S Millvale & Centre Ave",
+     40.453287,
+     -79.947355,
+     "Centre Avenue"
+    ],
+    [
+     "Centre Ave",
+     40.4526,
+     -79.9497,
+     "Centre Avenue"
+    ],
+    [
+     "Centre Ave & N Craig St",
+     40.451891,
+     -79.952015,
+     "North Craig Street"
+    ],
+    [
+     "N Craig St",
+     40.4494,
+     -79.9505,
+     "North Craig Street"
+    ],
+    [
+     "N Craig St & Fifth Ave",
+     40.446941,
+     -79.948982,
+     "Fifth Avenue"
+    ],
+    [
+     "Fifth Ave: Cathedral of Learning",
+     40.4457,
+     -79.952,
+     "Fifth Avenue"
+    ],
+    [
+     "Fifth Ave & Bigelow Blvd",
+     40.444418,
+     -79.954785,
+     "Bigelow Boulevard"
+    ],
+    [
+     "Forbes Ave & Bigelow Blvd, Schenley Plaza (junction)",
+     40.443191,
+     -79.953547,
+     "Forbes Avenue"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh-oakland.gpx",
+    "fromM": 3830,
+    "toM": 3430
+   },
+   "waypoints": [
+    [
+     "Forbes Ave & Bigelow Blvd, Schenley Plaza (junction)",
+     40.443191,
+     -79.953547,
+     "Forbes Avenue"
+    ],
+    [
+     "Forbes Ave: Oakland (apron)",
+     40.443043,
+     -79.954083
+    ],
+    [
+     "Forbes Ave west",
+     40.442738,
+     -79.955194
+    ],
+    [
+     "Forbes Ave & Atwood",
+     40.44215,
+     -79.95607
+    ],
+    [
+     "Oakland (apron)",
+     40.441796,
+     -79.956045
+    ],
+    [
+     "Oakland (apron end)",
+     40.441226,
+     -79.955135
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh-oakland.gpx",
+    "fromM": 3430,
+    "toM": 3830
+   },
+   "waypoints": [
+    [
+     "Oakland (apron end) (back)",
+     40.441226,
+     -79.955135
+    ],
+    [
+     "Oakland (back)",
+     40.441796,
+     -79.956045
+    ],
+    [
+     "Forbes Ave & Atwood (back)",
+     40.44215,
+     -79.95607
+    ],
+    [
+     "Forbes Ave west (back)",
+     40.442738,
+     -79.955194
+    ],
+    [
+     "Forbes Ave: Oakland (back)",
+     40.443043,
+     -79.954083
+    ],
+    [
+     "Forbes Ave & Bigelow Blvd, Schenley Plaza (junction) (back)",
+     40.443191,
+     -79.953547,
+     "Forbes Avenue"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh-oakland.gpx",
+    "fromM": 3830,
+    "toM": 4230
+   },
+   "waypoints": [
+    [
+     "Forbes Ave & Bigelow Blvd, Schenley Plaza (junction)",
+     40.443191,
+     -79.953547,
+     "Forbes Avenue"
+    ],
+    [
+     "Forbes Ave: Schenley Plaza",
+     40.443476,
+     -79.952405
+    ],
+    [
+     "Schenley Drive Extension",
+     40.443218,
+     -79.952011
+    ],
+    [
+     "Schenley Dr Ext (apron)",
+     40.442392,
+     -79.951571
+    ],
+    [
+     "Schenley Dr Ext (apron end)",
+     40.441783,
+     -79.949999
+    ]
+   ]
+  }
+ ],
+ "bridgeStyles": {
+  "Roberto Clemente Bridge": "sister",
+  "Andy Warhol Bridge": "sister",
+  "Rachel Carson Bridge": "sister",
+  "Fort Duquesne Bridge": "arch-gold",
+  "Fort Pitt Bridge": "fortpitt",
+  "West End Bridge": "arch-gold",
+  "Smithfield Street Bridge": "lenticular",
+  "Liberty Bridge": "truss",
+  "South 10th Street Bridge": "suspension",
+  "Hot Metal Bridge": "truss-dark",
+  "Birmingham Bridge": "arch",
+  "David McCullough Bridge": "arch",
+  "Veterans Bridge": "girder",
+  "Washington Crossing Bridge;40th Street Bridge": "arch"
+ },
+ "stadiums": {
+  "PNC Park": {
+   "seats": "#2a5596",
+   "open": "river",
+   "heightM": 28
+  },
+  "Acrisure Stadium": {
+   "seats": "#e7b416",
+   "open": "river",
+   "heightM": 40
+  }
+ },
+ "specialBuildings": {
+  "One PPG Place": 6,
+  "Two PPG Place": 6,
+  "Three PPG Place": 6,
+  "Four PPG Place": 6,
+  "Five PPG Place": 6,
+  "Six PPG Place": 6,
+  "PPG Place Wintergarden": 6,
+  "U.S. Steel Tower": 9,
+  "Gulf Tower": 10,
+  "Grant Building": 11,
+  "Union Trust Building": 11,
+  "Koppers Tower": 11,
+  "BNY Mellon Center": 5,
+  "Fifth Avenue Place": 5,
+  "Tower at PNC Plaza": 5,
+  "EQT Plaza": 5,
+  "USS Requin": 12
+ },
+ "residentialBoxes": [
+  [
+   40.424,
+   -80.026,
+   40.4395,
+   -80.007
+  ],
+  [
+   40.424,
+   -80.007,
+   40.4285,
+   -79.996
+  ],
+  [
+   40.433,
+   -80.04,
+   40.4425,
+   -80.024
+  ]
+ ],
+ "dropStreets": [
+  {
+   "way": 295600401,
+   "name": "Janewood Way",
+   "why": "a service alley 12 m up the West End hillside beside the spur (40.89 km): its flat grading made a 5 m step 12 m from the road that the 6 m ground mesh pulled over the shoulder"
+  }
+ ],
+ "heightPins": [
+  {
+   "lat": 40.458317,
+   "lon": -79.964191,
+   "eleM": 267.0,
+   "keepM": 20,
+   "why": "Dobson St & Herron Ave (junction T): two steep streets meet, so every pass (the climb up Dobson, Herron down to Liberty, Herron up to Bethoven) takes one height there",
+   "everyPass": true
+  },
+  {
+   "lat": 40.45728,
+   "lon": -79.973536,
+   "eleM": 225.2,
+   "keepM": 20,
+   "why": "Liberty Ave & 29th St (junction X): one height for 29th St and both passes along Liberty",
+   "everyPass": true
+  }
+ ]
+}
