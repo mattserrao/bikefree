@@ -81,7 +81,7 @@ export function simulate(reverse) {
   const R = { jumps: 0, worstJump: 0, personInRoad: 0, vehicleInLane: 0, popIn: 0, popOut: 0, ticks: 0, seen: { person: 0, vehicle: 0 } };
   const episode = new Map();   // agent → which checks are failing now (count each episode once)
   const flag = (a, key) => { const e = episode.get(a) || new Set(); episode.set(a, e); if (e.has(key)) return false; e.add(key); return true; };
-  let s = reverse ? turn : 0;
+  let s = reverse ? turn + SPEED * DT : 0;   // (Reverse: from the first step on the way back, so the city sees the rider coming back)
   const end = reverse ? total - 1 : turn - 1;
   for (let t = 0; s < end; t += DT, s += SPEED * DT) {
     const pose = riderPose(route, index, s);

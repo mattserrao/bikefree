@@ -8,7 +8,7 @@
   -80.045,
   40.422,
   -79.925,
-  40.454
+  40.486
  ],
  "osmTile": [
   0.01,
@@ -18,7 +18,7 @@
   -80.06,
   40.405,
   -79.925,
-  40.47
+  40.488
  ],
  "gridM": 24,
  "landM": 12,
@@ -78,6 +78,299 @@
   }
  ],
  "legs": [
+  {
+   "mode": "trail",
+   "waypoints": [
+    [
+     "North Shore Water Steps (junction)",
+     40.44548,
+     -80.00825
+    ],
+    [
+     "North Shore Trail: PNC Park",
+     40.446946,
+     -80.002773,
+     "North Shore Trail"
+    ],
+    [
+     "North Shore Trail: Rachel Carson Bridge",
+     40.448437,
+     -79.998419,
+     "North Shore Trail"
+    ],
+    [
+     "North Shore Trail: under the 16th St Bridge",
+     40.451878,
+     -79.99257,
+     "North Shore Trail"
+    ],
+    [
+     "16th St Bridge north (junction)",
+     40.453558,
+     -79.990632,
+     "North Shore Trail"
+    ]
+   ]
+  },
+  {
+   "mode": "trail",
+   "waypoints": [
+    [
+     "16th St Bridge north (junction)",
+     40.453558,
+     -79.990632,
+     "North Shore Trail"
+    ],
+    [
+     "North Shore Trail: Washington's Landing",
+     40.459852,
+     -79.98265,
+     "North Shore Trail"
+    ],
+    [
+     "31st St Bridge (junction)",
+     40.462143,
+     -79.980815,
+     "North Shore Trail"
+    ]
+   ]
+  },
+  {
+   "mode": "trail",
+   "waypoints": [
+    [
+     "31st St Bridge (junction)",
+     40.462143,
+     -79.980815,
+     "North Shore Trail"
+    ],
+    [
+     "North Shore Trail: 31st St Bridge",
+     40.465046,
+     -79.979018,
+     "North Shore Trail"
+    ],
+    [
+     "Millvale Riverfront Trail",
+     40.470496,
+     -79.973557,
+     "Millvale Riverfront Trail"
+    ],
+    [
+     "Millvale Riverfront Park",
+     40.476299,
+     -79.968356,
+     "Millvale Riverfront Trail"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Millvale Riverfront Park",
+     40.476299,
+     -79.968356,
+     "Millvale Riverfront Trail"
+    ],
+    [
+     "40th St Bridge ramp",
+     40.47701,
+     -79.969003
+    ],
+    [
+     "40th St Bridge ramp path",
+     40.4755,
+     -79.9702
+    ],
+    [
+     "40th Street Bridge",
+     40.472,
+     -79.9675,
+     "40th Street Bridge"
+    ],
+    [
+     "40th St Bridge south",
+     40.469772,
+     -79.963609,
+     "40th Street Bridge"
+    ],
+    [
+     "Butler & 40th",
+     40.468726,
+     -79.9623,
+     "Butler Street"
+    ],
+    [
+     "Butler Street: Lawrenceville",
+     40.4664,
+     -79.9646,
+     "Butler Street"
+    ],
+    [
+     "Butler & Penn",
+     40.463973,
+     -79.966319,
+     "Butler Street"
+    ],
+    [
+     "Penn Ave: 34th St",
+     40.4615,
+     -79.9689,
+     "Penn Avenue"
+    ],
+    [
+     "Smallman & 31st",
+     40.46042,
+     -79.97227,
+     "Smallman Street"
+    ],
+    [
+     "Smallman & 29th (junction)",
+     40.458535,
+     -79.97502,
+     "Smallman Street"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Smallman & 29th (junction)",
+     40.458535,
+     -79.97502,
+     "Smallman Street"
+    ],
+    [
+     "Smallman St: Strip District",
+     40.452,
+     -79.984,
+     "Smallman Street"
+    ],
+    [
+     "Smallman & 16th",
+     40.449,
+     -79.98882,
+     "Smallman Street"
+    ],
+    [
+     "Heinz History Center",
+     40.447,
+     -79.9919,
+     "Smallman Street"
+    ],
+    [
+     "Smallman & 11th",
+     40.445699,
+     -79.99415,
+     "Smallman Street"
+    ],
+    [
+     "Penn & 10th",
+     40.444578,
+     -79.995223,
+     "Penn Avenue"
+    ],
+    [
+     "Penn Ave: Cultural District",
+     40.443504,
+     -79.999346,
+     "Penn Avenue"
+    ],
+    [
+     "Penn & 6th",
+     40.442732,
+     -80.002164,
+     "Penn Avenue"
+    ],
+    [
+     "Clemente S (junction)",
+     40.44424,
+     -80.00282
+    ]
+   ]
+  },
+  {
+   "mode": "trail",
+   "waypoints": [
+    [
+     "Clemente S (junction)",
+     40.44424,
+     -80.00282
+    ],
+    [
+     "Allegheny riverfront trail",
+     40.44401,
+     -80.00463
+    ],
+    [
+     "Under the Fort Duquesne Bridge",
+     40.44296,
+     -80.00921
+    ],
+    [
+     "Point Allegheny promenade",
+     40.44251,
+     -80.01128
+    ],
+    [
+     "Point State Park fountain",
+     40.44189,
+     -80.01324
+    ],
+    [
+     "Point Mon promenade",
+     40.44,
+     -80.0095
+    ],
+    [
+     "Mon Wharf",
+     40.43838,
+     -80.00668
+    ],
+    [
+     "Mon Wharf ramp",
+     40.43812,
+     -80.00607
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Mon Wharf ramp",
+     40.43812,
+     -80.00607
+    ],
+    [
+     "Market & Fort Pitt",
+     40.43776,
+     -80.00441
+    ],
+    [
+     "Market & Third",
+     40.43952,
+     -80.00335
+    ],
+    [
+     "Market Square",
+     40.44075,
+     -80.00256
+    ],
+    [
+     "Forbes & Smithfield",
+     40.43941,
+     -79.99909
+    ],
+    [
+     "Smithfield & Fort Pitt (junction)",
+     40.43653,
+     -80.00101
+    ]
+   ]
+  },
   {
    "mode": "trail",
    "waypoints": [
@@ -668,7 +961,7 @@
      -80.01508
     ],
     [
-     "Finish: Water Steps",
+     "North Shore Water Steps (junction)",
      40.44548,
      -80.00825
     ]
@@ -678,7 +971,7 @@
    "mode": "road",
    "waypoints": [
     [
-     "Start: North Shore Water Steps",
+     "North Shore Water Steps (junction)",
      40.44548,
      -80.00825
     ],
@@ -709,7 +1002,7 @@
      "Roberto Clemente Bridge"
     ],
     [
-     "Clemente S",
+     "Clemente S (junction)",
      40.44424,
      -80.00282
     ]
@@ -717,44 +1010,45 @@
   },
   {
    "mode": "trail",
+   "ghost": true,
    "waypoints": [
     [
-     "Clemente S",
+     "Clemente S (junction) (again)",
      40.44424,
      -80.00282
     ],
     [
-     "Allegheny riverfront trail",
+     "Allegheny riverfront trail (again)",
      40.44401,
      -80.00463
     ],
     [
-     "Under the Fort Duquesne Bridge",
+     "Under the Fort Duquesne Bridge (again)",
      40.44296,
      -80.00921
     ],
     [
-     "Point Allegheny promenade",
+     "Point Allegheny promenade (again)",
      40.44251,
      -80.01128
     ],
     [
-     "Point State Park fountain",
+     "Point State Park fountain (again)",
      40.44189,
      -80.01324
     ],
     [
-     "Point Mon promenade",
+     "Point Mon promenade (again)",
      40.44,
      -80.0095
     ],
     [
-     "Mon Wharf",
+     "Mon Wharf (again)",
      40.43838,
      -80.00668
     ],
     [
-     "Mon Wharf ramp",
+     "Mon Wharf ramp (again)",
      40.43812,
      -80.00607
     ]
@@ -762,34 +1056,45 @@
   },
   {
    "mode": "road",
+   "ghost": true,
    "waypoints": [
     [
-     "Mon Wharf ramp",
+     "Mon Wharf ramp (again)",
      40.43812,
      -80.00607
     ],
     [
-     "Market & Fort Pitt",
+     "Market & Fort Pitt (again)",
      40.43776,
      -80.00441
     ],
     [
-     "Market & Third",
+     "Market & Third (again)",
      40.43952,
      -80.00335
     ],
     [
-     "Market Square",
+     "Market Square (again)",
      40.44075,
      -80.00256
     ],
     [
-     "Forbes & Smithfield",
+     "Forbes & Smithfield (again)",
      40.43941,
      -79.99909
     ],
     [
-     "Smithfield & Ft Pitt",
+     "Smithfield & Fort Pitt (junction) (again)",
+     40.43653,
+     -80.00101
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Smithfield & Fort Pitt (junction)",
      40.43653,
      -80.00101
     ],
@@ -829,9 +1134,9 @@
      -79.96705
     ],
     [
-     "SouthSide Works riverfront",
-     40.430042,
-     -79.967068
+     "SouthSide Works riverfront (junction)",
+     40.428858,
+     -79.965333
     ]
    ]
   }
@@ -849,7 +1154,8 @@
   "Hot Metal Bridge": "truss-dark",
   "Birmingham Bridge": "arch",
   "David McCullough Bridge": "arch",
-  "Veterans Bridge": "girder"
+  "Veterans Bridge": "girder",
+  "Washington Crossing Bridge;40th Street Bridge": "arch"
  },
  "stadiums": {
   "PNC Park": {
@@ -887,8 +1193,8 @@
  "maxDriftM": 16,
  "profileKeep": [
   [
-   34170,
-   34350
+   12560,
+   12740
   ]
  ],
  "residentialBoxes": [
@@ -911,5 +1217,70 @@
    -80.024
   ]
  ],
- "open": true
+ "open": true,
+ "heightPins": [
+  {
+   "lat": 40.444244,
+   "lon": -80.002821,
+   "eleM": 223.6,
+   "keepM": 30,
+   "why": "Clemente Bridge south end: level with Fort Duquesne Blvd and 6th St (the z14 ground falls off the river wall here)"
+  },
+  {
+   "lat": 40.445535,
+   "lon": -80.008138,
+   "eleM": 217.45,
+   "keepM": 20,
+   "why": "North Shore Water Steps: the ramp up to General Robinson St leaves the riverfront trail level and climbs once the two have parted (the z14 ground starts it climbing at the fork, where the North Shore Trail runs on beside it)"
+  },
+  {
+   "lat": 40.445582,
+   "lon": -80.008037,
+   "eleM": 217.45,
+   "keepM": 20,
+   "why": "North Shore Water Steps: the ramp up to General Robinson St leaves the riverfront trail level and climbs once the two have parted (the z14 ground starts it climbing at the fork, where the North Shore Trail runs on beside it)"
+  },
+  {
+   "lat": 40.44562,
+   "lon": -80.007927,
+   "eleM": 217.5,
+   "keepM": 20,
+   "why": "North Shore Water Steps: the ramp up to General Robinson St leaves the riverfront trail level and climbs once the two have parted (the z14 ground starts it climbing at the fork, where the North Shore Trail runs on beside it)"
+  },
+  {
+   "lat": 40.445647,
+   "lon": -80.007835,
+   "eleM": 217.55,
+   "keepM": 20,
+   "why": "North Shore Water Steps: the ramp up to General Robinson St leaves the riverfront trail level and climbs once the two have parted (the z14 ground starts it climbing at the fork, where the North Shore Trail runs on beside it)"
+  },
+  {
+   "lat": 40.445692,
+   "lon": -80.007768,
+   "eleM": 217.7,
+   "keepM": 20,
+   "why": "North Shore Water Steps: the ramp up to General Robinson St leaves the riverfront trail level and climbs once the two have parted (the z14 ground starts it climbing at the fork, where the North Shore Trail runs on beside it)"
+  },
+  {
+   "lat": 40.445755,
+   "lon": -80.007701,
+   "eleM": 218.3,
+   "keepM": 20,
+   "why": "North Shore Water Steps: the ramp up to General Robinson St leaves the riverfront trail level and climbs once the two have parted (the z14 ground starts it climbing at the fork, where the North Shore Trail runs on beside it)"
+  },
+  {
+   "lat": 40.445806,
+   "lon": -80.00765,
+   "eleM": 219.4,
+   "keepM": 20,
+   "why": "North Shore Water Steps: the ramp up to General Robinson St leaves the riverfront trail level and climbs once the two have parted (the z14 ground starts it climbing at the fork, where the North Shore Trail runs on beside it)"
+  }
+ ],
+ "dropStreets": [
+  {
+   "way": 295600401,
+   "name": "Janewood Way",
+   "why": "a service alley 12 m up the West End hillside beside the spur (40.89 km): its flat grading made a 5 m step 12 m from the road that the 6 m ground mesh pulled over the shoulder"
+  }
+ ]
 }

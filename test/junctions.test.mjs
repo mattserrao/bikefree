@@ -77,7 +77,7 @@ test('junctions: pittsburgh, planned the way the renderer and the course QC see 
   assert.ok(plan.list.length > 1000, `${plan.list.length} junctions`);
   assert.ok(plan.list.filter((j) => j.route).length > 60);
   const o = streetOverlaps(streets, plan);
-  assert.ok(o.overlapM < 12000, `overlapping ribbons ${o.overlapM} m (41.8 km without junctions)`);
+  assert.ok(o.overlapM < 16500, `overlapping ribbons ${o.overlapM} m (41.8 km without junctions)`);   // (~18 m per km of street: 11.1 km over 617 km before the Allegheny Loop, 15.6 km over 877 km with it)
   // every junction surface the route passes through stays under its road
   for (const jn of plan.list) for (const p of jn.poly) {
     const r = L.routeDist(p.x, p.z);

@@ -17,7 +17,7 @@ Reads tools/city/<id>.json and writes two files:
 OSM tiles are cached in tools/.cache/osm-<id>/ (the OSM API is used politely,
 one small area at a time). Data © OpenStreetMap contributors, ODbL.
 """
-import base64, io, json, math, os, sys, time, heapq, urllib.request
+import base64, bisect, io, json, math, os, sys, time, heapq, urllib.request
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 from collections import Counter
@@ -339,6 +339,13 @@ def build(cid):
     cum = [0.0]
     for a, b in zip(P, P[1:]): cum.append(cum[-1] + hv(a, b))
     raw = [elevation(*p) for p in P]
+    # `heightPins`: mapped nodes whose terrain height is wrong (a bridge end on a river wall, where the z14 ground
+    # falls away): the node takes the pinned height, and the line keeps the mapped profile for `keepM` around it
+    # on every pass, so a junction there sits at one height whichever way it is ridden
+    pin_at = []
+    for pin in cfg.get('heightPins', []):
+        for k, p in enumerate(P):
+            if hv(p, (pin['lat'], pin['lon'])) < 3: raw[k] = pin['eleM']; pin_at.append((k, pin.get('keepM', 30)))
     on_bridge = [bool(w and ways[w][1].get('bridge') not in (None, 'no')) for w in wl]
     E = raw[:]
     route_bridges = []
@@ -448,9 +455,17 @@ def build(cid):
         k0 = int(round(m / 10)); best = max(range(max(2, k0 - 8), min(len(rs) - 3, k0 + 8) + 1), key=_turn, default=k0)
         return round(chord[best]) if _turn(best) > math.radians(120) else m
     for g in route_ghosts: g['fromM'], g['toM'] = _snap(g['fromM']), _snap(g['toM'])
-    # bridges on a ghost stretch are the real pass's bridges again: built once
-    route_bridges = [b for b in route_bridges if not any(g['fromM'] - 5 <= app_s(b['fromM']) and app_s(b['toM']) <= g['toM'] + 5 for g in route_ghosts)]
-    for b in route_bridges: b['fromM'], b['toM'] = round(app_s(b['fromM'])), round(app_s(b['toM']))
+    # bridges on a ghost stretch are the real pass's bridges again: built once (their decks still shape the
+    # profile, so the line doesn't dip to the river beside a junction at a bridge end)
+    deck_keep = [{'fromM': round(app_s(b['fromM'])), 'toM': round(app_s(b['toM'])), 'padM': 20} for b in route_bridges]
+    # (a deck that runs on into a ghost, where the line turns round at a bridge end, keeps only its real part)
+    clipped = []
+    for b in route_bridges:
+        parts = [(app_s(b['fromM']), app_s(b['toM']))]
+        for g in route_ghosts:
+            parts = [q for x, y in parts for q in ((x, min(y, g['fromM'])), (max(x, g['toM']), y)) if q[1] - q[0] > 30]
+        clipped += [{**b, 'fromM': round(x), 'toM': round(y)} for x, y in parts]
+    route_bridges = clipped
     for k in route_kinds: k['fromM'], k['toM'] = round(app_s(k['fromM'])), round(app_s(k['toM']))
     route_kinds[-1]['toM'] = round(chord[-1]) + 10
     # rideable profile
@@ -462,8 +477,15 @@ def build(cid):
     # `profileFromLine`: true (default) everywhere but the decks, "roads" also keeps the trails, false: off.
     from_line = cfg.get('profileFromLine', True)
     if from_line:
-        keep = [{**b, 'padM': 20} for b in route_bridges] + [k for k in route_kinds if from_line == 'roads' and k['kind'] == 'trail']
+        keep = deck_keep + [k for k in route_kinds if from_line == 'roads' and k['kind'] == 'trail']
+        keep += [{'fromM': app_s(cum[k]) - r, 'toM': app_s(cum[k]) + r} for k, r in pin_at]
         keep += [{'fromM': a_, 'toM': b_} for a_, b_ in cfg.get('profileKeep', [])]   # ramps and walls the ground grid can't see
+        # keeps are in the app's metres (along the GPX chords); the profile is sampled every 10 m of the drawn
+        # line, which runs ahead of the chords (~0.2 %, 100 m by 50 km): place each keep on its samples
+        def on_line(m):
+            i = max(0, min(len(chord) - 2, bisect.bisect_right(chord, m) - 1))
+            return (i + max(0.0, min(1.0, (m - chord[i]) / max(1e-9, chord[i + 1] - chord[i])))) * 10.0
+        keep = [{**k_, 'fromM': on_line(k_['fromM']), 'toM': on_line(k_['toM'])} for k_ in keep]
         re_ = road_align.line_elevation(re_, [elevation(a_, b_) for a_, b_ in rs], keep, step=10)
     # [road-align] profile: shave spikes, fill only narrow notches (real dips and crests stay on the ground),
     # limit grade and grade change, light averaging
@@ -663,9 +685,11 @@ def build(cid):
     srad = cfg['streetRadiusM']
     streets = []
     bridge_ways = []
+    drop = {str(d_['way']) for d_ in cfg.get('dropStreets', [])}   # alleys whose ground grading fights the route's bank
     for wid, (nd, t) in ways.items():
         h = t.get('highway')
         if h not in CLS or t.get('area') == 'yes' or t.get('tunnel') in ('yes', 'building_passage'): continue
+        if wid in drop: continue
         if h == 'service' and t.get('service') in ('parking_aisle', 'driveway', 'drive-through'): continue
         nd = [i for i in nd if i in nodes]
         if len(nd) < 2: continue

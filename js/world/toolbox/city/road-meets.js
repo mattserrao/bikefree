@@ -26,7 +26,7 @@ export const MEET_LIMITS = {
   dangle: 1.2,       // m: a street end this far above (or below) whatever is under it hangs in the air
   touch: 1.5,        // m: a street end this close to another surface's edge meets it
   clippedM: 2,       // m: of ribbon cut away by the route's clearance tube
-  nearBudget: 38,    // [w2-meets] (38: the West End spur adds 2.7 km of streets) sites with issues within 25 m of the route the course QC accepts before it warns
+  nearBudget: 52,    // [w2-meets] (52: the Allegheny Loop adds 12 km of route through the North Shore, Millvale, Lawrenceville and the Strip — the course QC counts 45, the unit test 51; 38: the West End spur) sites with issues within 25 m of the route the course QC accepts before it warns
                      // (20 on Pittsburgh's loop; 36 since the Jail Trail joined it — PLAN.md network follow-up F7)
   seeM: 25,          // limits grow by their own size every this many metres from the route (×4 at 75 m, ×7 at 150 m)
 };
