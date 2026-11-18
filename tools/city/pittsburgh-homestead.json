@@ -1,0 +1,401 @@
+{
+ "id": "pittsburgh-homestead",
+ "name": "Pittsburgh · The Great Allegheny Passage & Homestead",
+ "park": "Pittsburgh, Pennsylvania",
+ "gpx": "routes/cities/pittsburgh-homestead.gpx",
+ "data": "routes/scenes/pittsburgh-homestead-city.json",
+ "osmBbox": [
+  -79.985,
+  40.382,
+  -79.875,
+  40.446
+ ],
+ "osmOrigin": [
+  -80.045,
+  40.422
+ ],
+ "osmTile": [
+  0.01,
+  0.008
+ ],
+ "gridBbox": [
+  -79.995,
+  40.378,
+  -79.865,
+  40.45
+ ],
+ "gridM": 24,
+ "landM": 12,
+ "waterRelations": [
+  1080,
+  2097217,
+  7937544
+ ],
+ "waterLevelM": 216.6,
+ "buildingRadiusM": 1100,
+ "tallBuildingM": 40,
+ "streetRadiusM": 900,
+ "open": true,
+ "trimStartM": 3.65,
+ "lattice": "pittsburgh",
+ "osmCache": "pittsburgh",
+ "cornerPasses": 3,
+ "cornerHalfWindow": 8,
+ "maxDriftM": 12,
+ "links": [
+  {
+   "name": "GAP to East Waterfront Drive at the Pump House",
+   "from": [
+    40.41441,
+    -79.8996
+   ],
+   "to": [
+    40.41429,
+    -79.8996
+   ]
+  },
+  {
+   "name": "Waterfront Drive West to the GAP where it turns for the river",
+   "from": [
+    40.40841,
+    -79.91781
+   ],
+   "to": [
+    40.40858,
+    -79.91802
+   ]
+  }
+ ],
+ "heightPins": [
+  {
+   "lat": 40.40858,
+   "lon": -79.91802,
+   "eleM": 227.3,
+   "keepM": 30,
+   "why": "W, where the GAP turns off Waterfront Drive West for the river: the link from Waterfront Drive comes in at the trail's height, so W is one height on both passes (the line along the link drifts towards the bank, where the ground is lower)"
+  },
+  {
+   "lat": 40.40841,
+   "lon": -79.91781,
+   "eleM": 227.2,
+   "keepM": 40,
+   "why": "the link's end on Waterfront Drive West: the drive stays level into W (the z14 ground beside it falls to the river bank, and the line's last 20 m cut across it)"
+  }
+ ],
+ "legs": [
+  {
+   "mode": "trail",
+   "apron": true,
+   "waypoints": [
+    [
+     "Hot Metal Bridge (apron)",
+     40.429514,
+     -79.958605
+    ],
+    [
+     "Hot Metal Bridge",
+     40.4285217,
+     -79.9602715
+    ],
+    [
+     "Hot Metal Bridge south end (junction)",
+     40.427298,
+     -79.962486
+    ]
+   ]
+  },
+  {
+   "mode": "trail",
+   "apron": true,
+   "waypoints": [
+    [
+     "Hot Metal Bridge south end (junction)",
+     40.427298,
+     -79.962486
+    ],
+    [
+     "SouthSide Works riverfront (junction)",
+     40.428858,
+     -79.965333
+    ]
+   ]
+  },
+  {
+   "mode": "trail",
+   "ghost": true,
+   "waypoints": [
+    [
+     "SouthSide Works riverfront (junction) (back)",
+     40.428858,
+     -79.965333
+    ],
+    [
+     "Hot Metal Bridge south end (junction) (back)",
+     40.427298,
+     -79.962486
+    ]
+   ]
+  },
+  {
+   "mode": "trail",
+   "waypoints": [
+    [
+     "Hot Metal Bridge south end (junction)",
+     40.427298,
+     -79.962486
+    ],
+    [
+     "GAP: South Water St",
+     40.4181,
+     -79.95508,
+     "Great Allegheny Passage"
+    ],
+    [
+     "GAP: Glenwood Bridge",
+     40.39487,
+     -79.93934,
+     "Great Allegheny Passage"
+    ],
+    [
+     "GAP: Sandcastle",
+     40.39797,
+     -79.92636,
+     "Great Allegheny Passage"
+    ],
+    [
+     "GAP: Waterfront Drive West",
+     40.40193,
+     -79.92116,
+     "Great Allegheny Passage"
+    ],
+    [
+     "The Waterfront (junction)",
+     40.40858,
+     -79.91802,
+     "Great Allegheny Passage"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "The Waterfront (junction)",
+     40.40858,
+     -79.91802,
+     "Great Allegheny Passage"
+    ],
+    [
+     "Waterfront Drive West",
+     40.40904,
+     -79.91698,
+     "Waterfront Drive West"
+    ],
+    [
+     "Amity St & Waterfront Dr (junction)",
+     40.41131,
+     -79.91336,
+     "Amity Street"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Amity St & Waterfront Dr (junction)",
+     40.41131,
+     -79.91336,
+     "Amity Street"
+    ],
+    [
+     "East Waterfront Drive",
+     40.41294,
+     -79.9085,
+     "East Waterfront Drive"
+    ],
+    [
+     "Pump House, East Waterfront Dr (junction)",
+     40.41429,
+     -79.8996,
+     "East Waterfront Drive"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Pump House, East Waterfront Dr (junction)",
+     40.41429,
+     -79.8996,
+     "East Waterfront Drive"
+    ],
+    [
+     "East Waterfront Dr: Pump House",
+     40.41231,
+     -79.89692,
+     "East Waterfront Drive"
+    ],
+    [
+     "River Road",
+     40.40724,
+     -79.88994
+    ],
+    [
+     "East 8th Ave: Bost Building",
+     40.40904,
+     -79.90319,
+     "East 8th Avenue"
+    ],
+    [
+     "8th Ave & Amity St",
+     40.40704,
+     -79.91087,
+     "East 8th Avenue"
+    ],
+    [
+     "Amity St",
+     40.40861,
+     -79.91254,
+     "Amity Street"
+    ],
+    [
+     "Amity St & Waterfront Dr (junction)",
+     40.41131,
+     -79.91336,
+     "Amity Street"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "waypoints": [
+    [
+     "Amity St & Waterfront Dr (junction) (back)",
+     40.41131,
+     -79.91336,
+     "Amity Street"
+    ],
+    [
+     "Waterfront Drive West (back)",
+     40.40904,
+     -79.91698,
+     "Waterfront Drive West"
+    ],
+    [
+     "The Waterfront (junction) (back)",
+     40.40858,
+     -79.91802,
+     "Great Allegheny Passage"
+    ]
+   ]
+  },
+  {
+   "mode": "trail",
+   "waypoints": [
+    [
+     "The Waterfront (junction)",
+     40.40858,
+     -79.91802,
+     "Great Allegheny Passage"
+    ],
+    [
+     "GAP: Homestead riverfront",
+     40.41256,
+     -79.91323,
+     "Great Allegheny Passage"
+    ],
+    [
+     "Pump House, East Waterfront Dr (junction)",
+     40.41429,
+     -79.8996,
+     "East Waterfront Drive"
+    ]
+   ]
+  }
+ ],
+ "bridgeStyles": {
+  "Roberto Clemente Bridge": "sister",
+  "Andy Warhol Bridge": "sister",
+  "Rachel Carson Bridge": "sister",
+  "Fort Duquesne Bridge": "arch-gold",
+  "Fort Pitt Bridge": "fortpitt",
+  "West End Bridge": "arch-gold",
+  "Smithfield Street Bridge": "lenticular",
+  "Liberty Bridge": "truss",
+  "South 10th Street Bridge": "suspension",
+  "Hot Metal Bridge": "truss-dark",
+  "Birmingham Bridge": "arch",
+  "David McCullough Bridge": "arch",
+  "Veterans Bridge": "girder",
+  "Washington Crossing Bridge;40th Street Bridge": "arch",
+  "Glenwood Bridge": "truss",
+  "Homestead Grays Bridge": "truss"
+ },
+ "stadiums": {
+  "PNC Park": {
+   "seats": "#2a5596",
+   "open": "river",
+   "heightM": 28
+  },
+  "Acrisure Stadium": {
+   "seats": "#e7b416",
+   "open": "river",
+   "heightM": 40
+  }
+ },
+ "specialBuildings": {
+  "One PPG Place": 6,
+  "Two PPG Place": 6,
+  "Three PPG Place": 6,
+  "Four PPG Place": 6,
+  "Five PPG Place": 6,
+  "Six PPG Place": 6,
+  "PPG Place Wintergarden": 6,
+  "U.S. Steel Tower": 9,
+  "Gulf Tower": 10,
+  "Grant Building": 11,
+  "Union Trust Building": 11,
+  "Koppers Tower": 11,
+  "BNY Mellon Center": 5,
+  "Fifth Avenue Place": 5,
+  "Tower at PNC Plaza": 5,
+  "EQT Plaza": 5,
+  "USS Requin": 12
+ },
+ "residentialBoxes": [
+  [
+   40.393,
+   -79.918,
+   40.4065,
+   -79.885
+  ],
+  [
+   40.4,
+   -79.945,
+   40.42,
+   -79.93
+  ],
+  [
+   40.415,
+   -79.945,
+   40.432,
+   -79.925
+  ],
+  [
+   40.385,
+   -79.955,
+   40.394,
+   -79.925
+  ]
+ ],
+ "dropStreets": [
+  {
+   "way": 1365836292,
+   "name": "(a path by West Agnew Road)",
+   "why": "a 24 m path at the foot of the Hays Woods bluff, 150 m off the GAP (4.91 km): drawn 76 m under the ground on both sides of it (street-bank)"
+  }
+ ]
+}

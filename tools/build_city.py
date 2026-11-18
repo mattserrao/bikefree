@@ -65,12 +65,16 @@ def load_osm(cfg):
     w, s, e, n = cfg['osmBbox']
     dx, dy = cfg.get('osmTile', [0.01, 0.008])
     files = []
-    nx, ny = math.ceil((e - w) / dx - 1e-9), math.ceil((n - s) / dy - 1e-9)
-    for x in range(nx):
-        for y in range(ny):
+    # "osmOrigin": [west, south] of the shared cache's tile lattice (default: this box's own corner), so an area's
+    # box can reach west or south of the cache's first box and still share its tiles (indices may go negative)
+    ow, os_ = cfg.get('osmOrigin', [w, s])
+    x0, y0 = round((w - ow) / dx), round((s - os_) / dy)
+    nx, ny = math.ceil((e - ow) / dx - 1e-9), math.ceil((n - os_) / dy - 1e-9)
+    for x in range(x0, nx):
+        for y in range(y0, ny):
             path = os.path.join(folder, f't_{x}_{y}.osm')
             if not os.path.exists(path) or os.path.getsize(path) < 200:
-                lo, la = round(w + x * dx, 4), round(s + y * dy, 4)
+                lo, la = round(ow + x * dx, 4), round(os_ + y * dy, 4)
                 print(f'  fetching OSM {lo},{la}')
                 data = http_get(f'https://api.openstreetmap.org/api/0.6/map?bbox={lo},{la},{round(lo + dx, 4)},{round(la + dy, 4)}')
                 open(path, 'wb').write(data)
@@ -446,9 +450,12 @@ def build(cid):
     for a_, b_ in zip(sm, sm[1:]): scum.append(scum[-1] + math.hypot(b_[0] - a_[0], b_[1] - a_[1]))
     to_ll = lambda x, y: (P[0][0] + y / 111319.49, P[0][1] + x / (111319.49 * math.cos(math.radians(P[0][0]))))
     total = scum[-1]
+    # `trimStartM` (an area that starts in an apron, PLAN 5.5): the line starts this far along the eased line, so its
+    # 10 m samples fall on the neighbour's samples along the apron (build_network matches aprons sample by sample)
+    trim = cfg.get('trimStartM', 0.0)
     rs, re_, j = [], [], 0
-    for k in range(int(total // 10) + 1):
-        sd = k * 10
+    for k in range(int((total - trim) // 10) + 1):
+        sd = k * 10 + trim
         while j < len(scum) - 2 and scum[j + 1] < sd: j += 1
         f = (sd - scum[j]) / max(1e-9, scum[j + 1] - scum[j])
         rs.append(to_ll(sm[j][0] + (sm[j + 1][0] - sm[j][0]) * f, sm[j][1] + (sm[j + 1][1] - sm[j][1]) * f))
@@ -464,7 +471,7 @@ def build(cid):
     def app_s(d):
         k2 = max(0.0, min(len(scum) - 1.001, d / 2)); i2 = int(k2)
         sd = scum[i2] + (scum[i2 + 1] - scum[i2]) * (k2 - i2)
-        k = max(0.0, min(len(chord) - 1.001, sd / 10)); i = int(k)
+        k = max(0.0, min(len(chord) - 1.001, (sd - trim) / 10)); i = int(k)
         return chord[i] + (chord[i + 1] - chord[i]) * (k - i)
     ghost_idx = {n_: k for n_, k in marks if n_.startswith('__ghost')}
     marks = [(n_, k) for n_, k in marks if not n_.startswith('__ghost')]

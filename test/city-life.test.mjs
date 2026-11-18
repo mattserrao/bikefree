@@ -277,8 +277,8 @@ if (!process.env.NO_TESTS) test('pittsburgh life: cars and buses turn round at d
   assert.deepEqual([...bad], [], 'vehicles swinging onto the route\'s road as they turn round');
 });
 
-// each area's own line (PLAN 5.4: Pittsburgh's areas — the core, the Allegheny & Troy Hill, Oakland & Schenley, the West End), Forward and Reverse
-const BUSY = { pittsburgh: [90000, 20000], 'pittsburgh-allegheny': [30000, 6000], 'pittsburgh-oakland': [30000, 6000], 'pittsburgh-westend': [3000, 500] };
+// each area's own line (PLAN 5.4: Pittsburgh's areas — the core, the Allegheny & Troy Hill, Oakland & Schenley, the West End, the GAP & Homestead), Forward and Reverse
+const BUSY = { pittsburgh: [90000, 20000], 'pittsburgh-allegheny': [30000, 6000], 'pittsburgh-oakland': [30000, 6000], 'pittsburgh-westend': [3000, 500], 'pittsburgh-homestead': [30000, 6000] };
 for (const [areaId, reverse] of process.env.NO_TESTS ? [] : Object.keys(BUSY).flatMap((a) => [[a, false], [a, true]])) {
   test(`${areaId} life, ${reverse ? 'Reverse' : 'Forward'}: no jumps, people off the road, vehicles out of the rider's lane, no pop-in`, () => {
     const R = simulate(reverse, { area: areaId });

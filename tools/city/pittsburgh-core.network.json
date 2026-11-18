@@ -1,6 +1,6 @@
 {
   "area": "core",
-  "note": "Downtown, the North Shore, the South Side and Mount Washington: the Point, the Jail Trail, the Hot Metal, Smithfield Street, Clemente and West End bridges. Portals: A and B (the Allegheny & Troy Hill), I (Oakland & Schenley), D (the West End).",
+  "note": "Downtown, the North Shore, the South Side and Mount Washington: the Point, the Jail Trail, the Hot Metal, Smithfield Street, Clemente and West End bridges. Portals: A and B (the Allegheny & Troy Hill), I (Oakland & Schenley), D (the West End), S (the Great Allegheny Passage & Homestead).",
   "nodes": [
     {
       "id": "B",
@@ -19,6 +19,12 @@
       "name": "Hot Metal Bridge north end",
       "lat": 40.429959,
       "lon": -79.957579
+    },
+    {
+      "id": "S",
+      "name": "Hot Metal Bridge south end",
+      "lat": 40.427298,
+      "lon": -79.962486
     },
     {
       "id": "H",
@@ -57,10 +63,15 @@
       "fwd": "the Jail Trail along the Mon and down to the Hot Metal Bridge",
       "rev": "the Jail Trail back to downtown"
     },
-    "I>H": {
+    "I>S": {
       "name": "Hot Metal Bridge",
-      "fwd": "over the Hot Metal Bridge to SouthSide Works",
+      "fwd": "over the Hot Metal Bridge to the South Side",
       "rev": "over the Hot Metal Bridge to the Jail Trail"
+    },
+    "S>H": {
+      "name": "SouthSide Works riverfront",
+      "fwd": "the riverfront path to SouthSide Works",
+      "rev": "to the Hot Metal Bridge and the Great Allegheny Passage"
     },
     "H>G": {
       "name": "South Side river trail",
