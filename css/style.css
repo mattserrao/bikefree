@@ -188,6 +188,8 @@ canvas.city-map.zoomed { touch-action: none; cursor: grab; }
 .cr-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .cr-actions button { min-height: 44px; padding: 10px 22px; border-radius: 12px; }
 .cr-actions .primary { min-width: 120px; font-size: 15px; }
+.cr-actions button.link { min-height: 44px; padding: 10px 8px; border-radius: 8px; background: none; font-size: 13.5px; color: var(--muted); }   /* Options (F104): the preview's start and length, secondary to Ride */
+.cr-actions button.link:hover { color: var(--ink); background: none; }
 .city-none { padding: 12px; font-size: 13px; }
 @media (max-width: 1080px) {
   .city-body { grid-template-columns: 1fr; overflow-y: auto; padding: 0 16px 24px; gap: 12px; }

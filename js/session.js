@@ -28,6 +28,7 @@ export class Session extends EventTarget {
     this.mode = 'free';      // 'free' | 'route' | 'workout'
     this.route = null;       // built route (gpx.js)
     this.workout = null;     // parsed workout (workout.js)
+    this.sceneryRoute = null;   // network scenery behind a free ride or workout (setScenery)
     this.gear = settings.startGear;
     this._manualGrade = 0;
     this.workoutBias = 1;
@@ -59,6 +60,8 @@ export class Session extends EventTarget {
     this._lastSent = null;
     this.target = null;
     this.routeOffset = 0;
+    this.sceneryOffset = 0;       // a free ride's or workout's network scenery (F37): ridden from 0 with the ride
+    this.sceneryRoute?.netRide?.reset();
     this.routeStart = 0;          // metres along the route where this ride started (Reverse / ⅓ / ⅔)
     this.routeFinishM = null;     // point to point, not endless: metres to ride before the finish (null: endless)
     this.routeGoalM = null;       // route selector, "Keep riding": metres to the planned goal (a toast, the ride goes on)
@@ -103,10 +106,27 @@ export class Session extends EventTarget {
   }
   /** Current lap on a loop route (1-based). */
   get routeLap() { return !this.route ? 1 : this.route.netRide ? this.route.netRide.lapAt(this.routePos) : lapAt(this.route, this.routeRidden); }
-  /** On a network route: change the way you'll go at the next junction (−1 left, +1 right). */
+  /**
+   * Scenery behind a free ride or workout (F37): a network's free ride (a path route) is ridden along as you go —
+   * from where it was set, its turns yours to choose as on a route; the grade stays the ride's own (free: yours,
+   * a workout: its targets). Anything else (a loop, none): null, and the app rolls the loop by as before.
+   */
+  setScenery(route) {
+    const r = route?.netRide ? route : null;
+    if (r === (this.sceneryRoute || null)) return;
+    this.sceneryRoute = r;
+    this.sceneryOffset = this.distanceM;
+    r?.netRide.reset();
+  }
+  /** Where you are on the scenery's path (metres since it was set). */
+  get sceneryPos() { return Math.max(0, this.distanceM - this.sceneryOffset); }
+  /** The network path whose turns you choose now — a network route's, or (off a route) the scenery's — and where you are on it. */
+  get turnRide() { return this.mode === 'route' ? this.route?.netRide || null : this.sceneryRoute?.netRide || null; }
+  get turnPos() { return this.mode === 'route' ? this.routePos : this.sceneryPos; }
+  /** On a network route (or network scenery): change the way you'll go at the next junction (−1 left, +1 right). */
   turn(dir) {
-    const net = this.mode === 'route' ? this.route?.netRide : null;
-    if (!net || !net.choose(dir, this.routePos)) return false;
+    const net = this.turnRide;
+    if (!net || !net.choose(dir, this.turnPos)) return false;
     if (this.settings.haptics) this.ride.vibrate();
     this._changed();
     return true;
@@ -265,8 +285,12 @@ export class Session extends EventTarget {
     if (name === 'navDown') return this.upDown(-1);
     if (name === 'A') return this.toggle();
     if (name === 'Y') return this.lap();
-    if (name === 'navRight' && this.mode === 'workout') return this.skipSegment();
-    if ((name === 'navLeft' || name === 'navRight') && this.mode === 'route' && this.route?.netRide) return this.turn(name === 'navLeft' ? -1 : 1);
+    if (name === 'navLeft' || name === 'navRight') {
+      // ◀ ▶ choose the turn; in a workout ▶ skips the step, except while a junction's prompt is up on its scenery
+      const net = this.turnRide;
+      if (net && (this.mode !== 'workout' || net.prompt(this.turnPos, this.speedMps))) return this.turn(name === 'navLeft' ? -1 : 1);
+      if (name === 'navRight' && this.mode === 'workout') return this.skipSegment();
+    }
   }
 
   // ---------- Loop ----------
@@ -342,6 +366,7 @@ export class Session extends EventTarget {
   }
 
   _updateRoute() {
+    if (this.mode !== 'route' && this.sceneryRoute) this.sceneryRoute.netRide.update(this.sceneryPos);   // its path refills, its turns lock
     if (this.mode !== 'route' || !this.route || this.routeDone) return;
     if (this.routeGoalM != null && !this.routeGoalHit && this.distanceM - this.routeOffset >= this.routeGoalM) {
       this.routeGoalHit = true;

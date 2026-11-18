@@ -213,13 +213,18 @@ export class NetRide extends EventTarget {
    * @param net     loadNetwork()
    * @param route   the path route object to fill (makePathRoute); its arrays are replaced in place
    * @param plan    traversal keys (["e1+", "e3+"]) ridden round and round; null: straight on from `first`
+   * @param prefer  a free ride's hints (no plan only): junction id → the traversal key it takes there instead of
+   *                the street's straight on (F25, F80: over the 40th Street Bridge at LB); default the
+   *                network's freeRide.prefer. The options' labels are unchanged: only the way the path fills.
    */
-  constructor(net, route, { plan = null, first = null } = {}) {
+  constructor(net, route, { plan = null, first = null, prefer } = {}) {
     super();
     this.net = net;
     this.route = route;
     this.plan = plan ? plan.map((k) => this.trav(k)) : null;
     this.first = this.plan ? this.plan[0] : this.trav(first);
+    const hints = this.plan ? null : prefer === undefined ? net.json?.freeRide?.prefer : prefer;
+    this.prefer = hints ? new Map(Object.entries(hints).map(([n, k]) => [n, this.trav(k)])) : null;
     this.reset();
   }
 
@@ -251,7 +256,7 @@ export class NetRide extends EventTarget {
   }
   endOf(i) { const x = this.entries[i]; return x.p0 + x.t.e.len; }
 
-  /** What the path does after entry i when nothing is chosen: the plan's next step, else straight on. */
+  /** What the path does after entry i when nothing is chosen: the plan's next step, else straight on (or a free ride's hint). */
   _next(i) {
     const prev = this.entries[i];
     const opts = optionsAt(this.net, prev.t);
@@ -261,7 +266,9 @@ export class NetRide extends EventTarget {
       const o = opts.find((x) => same(x.t, this.plan[step]));
       if (o) return { t: o.t, planStep: step };
     }
-    return { t: straightOn(opts).t, planStep: null };
+    const hint = this.prefer?.get(endNode(prev.t));
+    const o = hint && opts.find((x) => !x.back && same(x.t, hint));
+    return { t: (o || straightOn(opts)).t, planStep: null };
   }
   /** Which plan step an entry is: its own, or — off the plan — the step that rides the same way (rejoining). */
   _planStepOf(x) {
@@ -604,7 +611,7 @@ export class PathFollower {
   constructor(ride) {
     this.ride = ride;
     this.own = Object.create(NetRide.prototype);
-    Object.assign(this.own, { net: ride.net, plan: ride.plan, first: ride.first, route: null, lockedAt: -1, entries: ride.entries.slice() });
+    Object.assign(this.own, { net: ride.net, plan: ride.plan, first: ride.first, prefer: ride.prefer, route: null, lockedAt: -1, entries: ride.entries.slice() });
     this.diverged = false;
     this.p = 0;
   }
@@ -641,7 +648,7 @@ export function makePathRoute(net, preset, { id, name, park } = {}) {
     hasElevation: net.base.hasElevation, network: net, base: net.base, preset: preset.id, tags: preset.tags || [] };
   // a preset rides its plan round and round; a free ride (no plan) starts on `first` and goes where you turn;
   // a one-way plan (your own route that ends somewhere else) finishes at its end
-  route.netRide = new NetRide(net, route, preset.path ? { plan: preset.path } : { first: preset.first });
+  route.netRide = new NetRide(net, route, preset.path ? { plan: preset.path } : { first: preset.first, prefer: preset.prefer });
   route.free = !preset.path;
   route.netOpen = !!preset.path && !planCloses(net, preset.path);
   route.lapM = route.netRide.lapM;

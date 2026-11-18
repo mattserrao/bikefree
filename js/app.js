@@ -529,16 +529,20 @@ let pacerKey = null;
 let pacerTrack = null;   // on a network ride: the pacer's own copy of the path (js/network.js PathFollower)
 const onRoute = () => session.mode === 'route' && session.route;
 const riderDist = () => (onRoute() ? session.routeRidden : session.distanceM);
-const rideKey = () => (onRoute() ? `r:${session.route.name}:${session.routeStart}:${session.routeFinishM ?? 'endless'}` : session.mode === 'workout' ? `w:${session.workout?.id ?? session.workout?.name}` : 'free');
+const rideKey = () => (onRoute() ? `r:${session.route.name}:${session.routeStart}:${session.routeFinishM ?? 'endless'}`
+  : `${session.mode === 'workout' ? `w:${session.workout?.id ?? session.workout?.name}` : 'free'}${session.sceneryRoute ? `:s:${session.sceneryRoute.id}` : ''}`);
+/** A network path the ride follows (a network route's, or a free ride's / workout's network scenery: F37), and the pacer's metre on it. */
+const turnPath = () => session.turnRide;
+const pacerPathPos = () => (onRoute() ? session.routeStart + pacer.dist : Math.max(0, pacer.dist - session.sceneryOffset));
 function resetPacer() {
   pacer.reset(riderDist());
   pacerKey = rideKey();
-  pacerTrack = onRoute() && session.route.netRide ? new PathFollower(session.route.netRide) : null;
+  pacerTrack = turnPath() ? new PathFollower(turnPath()) : null;
 }
-/** The pacer's own way on a network ride, kept up to date (null elsewhere). */
+/** The pacer's own way on a network ride (or network scenery), kept up to date (null elsewhere). */
 function pacerPath(route) {
-  if (!pacerTrack || pacerTrack.ride !== route?.netRide || session.route !== route) return null;
-  return pacerTrack.update(session.routeStart + pacer.dist);
+  if (!pacerTrack || pacerTrack.ride !== route?.netRide || pacerTrack.ride !== turnPath()) return null;
+  return pacerTrack.update(pacerPathPos());
 }
 function renderPacerChoice() {
   for (const b of $('pacerSeg').children) b.classList.toggle('on', Number(b.dataset.w) === pacer.watts);
@@ -640,7 +644,8 @@ function renderPreview() {
     $('pvTitle').textContent = scene ? scene.name : 'Numbers only';
     $('pvSub').textContent = scene ? `Scenery · ${scene.park}` : 'No scenery — a plain dark background';
     $('pvFacts').innerHTML = '';
-    $('pvDesc').innerHTML = 'Change the grade with ▲ ▼ on the handlebars (or <kbd>↑</kbd> <kbd>↓</kbd>) while you ride.';
+    $('pvDesc').innerHTML = 'Change the grade with ▲ ▼ on the handlebars (or <kbd>↑</kbd> <kbd>↓</kbd>) while you ride.' +
+      (sceneryFreeItem(scene) ? ` The scenery is ${escapeHtml(scene.name.split(' · ')[0])}'s free ride: straight on at each junction, or turn with ◀ ▶ (<kbd>A</kbd> <kbd>D</kbd>) into any part of the city.` : '');
     chart.hidden = true;
     map.hidden = !scene;
     if (scene && routeCache.has(scene.id)) drawTrace(map, routeCache.get(scene.id), 0);
@@ -711,9 +716,16 @@ $('sceneCards').addEventListener('click', (e) => {
   if (card) setScenery(card.dataset.id);
 });
 $('sceneSelect').addEventListener('change', (e) => setScenery(e.target.value));
+/** A city with a ride network as scenery (F37): its free ride over the whole network (its own copy, not the route list's). */
+const sceneryFreeItem = (item) => {
+  const free = item?.network && netItems.find((n) => n.baseId === item.id && n.free);
+  return free ? { ...free, id: `scenery-${free.id}` } : null;
+};
 async function sceneryRoute() {
   const item = sceneryItem();
   if (!item) return null;
+  const free = sceneryFreeItem(item);
+  if (free) { try { return await loadRouteItem(free); } catch (err) { log('app', `Scenery: ${err.message} — riding the ${item.name} loop`, 'error'); } }
   try { return await loadRouteItem(item); } catch { return null; }
 }
 
@@ -752,6 +764,9 @@ async function startRide() {
     session.setFree();
     log('app', 'Free ride');
   }
+  // the 3D world: the route, else the scenery — a city with a ride network rides its free ride (F37)
+  const route = session.mode === 'route' ? session.route : await sceneryRoute();
+  session.setScenery(session.mode === 'route' ? null : route);
   if (!session.hasRide || pacerKey !== rideKey()) resetPacer();
   if (pausedByUser()) session.start();
   onRideScreen = true;
@@ -759,7 +774,6 @@ async function startRide() {
   $('setup').hidden = true;
   $('rideScreen').hidden = false;
   document.documentElement.requestFullscreen?.().catch(() => {});
-  const route = session.mode === 'route' ? session.route : await sceneryRoute();
   await openWorld(route);
   world?.setCourseMarks(courseMarks());
   renderHudStatic();
@@ -791,7 +805,7 @@ document.addEventListener('keydown', (e) => {
   else if (k === 'l' || k === 'L') session.lap();
   else if ((k === 'n' || k === 'N') && session.mode === 'workout') session.skipSegment();
   else if ((k === 'm' || k === 'M') && onRideScreen) cycleMinimap();
-  else if ((k === 'a' || k === 'A' || k === 'd' || k === 'D') && onRideScreen && session.route?.netRide) { if (session.turn(k === 'a' || k === 'A' ? -1 : 1)) renderTurnPrompt(true); }
+  else if ((k === 'a' || k === 'A' || k === 'd' || k === 'D') && onRideScreen && session.turnRide) { if (session.turn(k === 'a' || k === 'A' ? -1 : 1)) renderTurnPrompt(true); }
   else if ((k === ',' || k === '.') && trainer.demo) setDemoSpeed(DEMO_MPH + (k === '.' ? 5 : -5));
   else if ((k === 'f' || k === 'F') && onRideScreen) toggleFullscreen();
   else if ((k === 'w' || k === 'W') && onRideScreen) cycleWeather();
@@ -807,14 +821,17 @@ function toggleFullscreen() {
 
 // ---------- 3D world ----------
 // On a route the rider is where the ride is; otherwise the scenery loop simply rolls by.
+// A free ride's or workout's network scenery (F37) is a path the rider rides along, turns and all.
 function riderPosOn(route) {
-  return session.mode === 'route' && session.route === route ? session.routePos : session.distanceM % route.total;
+  if (session.mode === 'route' && session.route === route) return session.routePos;
+  if (session.mode !== 'route' && route.netRide && session.sceneryRoute === route) return session.sceneryPos;
+  return session.distanceM % route.total;
 }
 function pacerPosOn(route) {
   const t = route.total;
-  return session.mode === 'route' && session.route === route
-    ? wrapDist(route, session.routeStart + pacer.dist)
-    : ((pacer.dist % t) + t) % t;
+  if (session.mode === 'route' && session.route === route) return wrapDist(route, session.routeStart + pacer.dist);
+  if (session.mode !== 'route' && route.netRide && session.sceneryRoute === route) return pacerPathPos();
+  return ((pacer.dist % t) + t) % t;
 }
 
 // ---------- Minimap (ride screen, bottom-left) ----------
@@ -1106,8 +1123,8 @@ function renderHud() {
 // Turn prompt (network routes): the next junction's ways on, about 15 s before it; ◀ ▶ / A D to choose.
 let turnKey = '';
 function renderTurnPrompt(force = false) {
-  const box = $('hTurn'), net = session.mode === 'route' ? session.route?.netRide : null;
-  const up = net && !session.routeDone ? net.prompt(session.routePos, session.speedMps) : null;
+  const box = $('hTurn'), net = session.turnRide;   // a network route's, or a free ride's / workout's network scenery (F37)
+  const up = net && !(session.mode === 'route' && session.routeDone) ? net.prompt(session.turnPos, session.speedMps) : null;
   if (!up) { if (!box.hidden) { box.hidden = true; turnKey = ''; } return; }
   const key = `${up.node.id}:${up.i}:${up.selected}:${up.locked}:${Math.round(up.distTo / 10)}:${settings.units}`;
   if (!force && key === turnKey) return;
@@ -1317,8 +1334,10 @@ $('routeCards').addEventListener('click', (e) => {
 // ---------- City panel (a ride network's map and routes) ----------
 // Full screen over the menu (a <dialog>: Escape closes it, focus goes back to the card). The map shows the whole
 // network over its rivers; a route tapped in the list lights up bold on it, a line tapped on the map lists the
-// routes that ride it (tap again for the next). The goal chips filter both. Ride chooses the route and goes back
-// to the menu, where its preview, start options and Start button are — the same as picking a card used to.
+// routes that ride it (tap again for the next). The goal chips filter both. Ride starts riding the route at once
+// (F104: the defaults the preview would apply — its remembered start, else the plan's, and the ride length and
+// pacer as set); "Options" beside it chooses the route and goes back to the menu, where its preview, start
+// options and Start button are — the same as picking a card used to (and Ride does that too, with no trainer).
 const city = { baseId: null, goal: 'all', sel: null, seg: null, segIds: null, focus: null, lines: [], hint: '', view: { k: 1 } };
 const cityRivers = new Map();   // baseId → rivers (the city's scenes: each area's has its own copy, some reaching further)
 async function loadCityRivers(card) {
@@ -1405,7 +1424,7 @@ function renderCity() {
     const kind = r ? (r.netOpen ? 'One way' : 'Loop') : '';
     const detail = `<div class="cr-detail"><div class="cr-tags">${[kind, ...tags.map((t) => label[t])].filter(Boolean).map((t) => `<span>${escapeHtml(t)}</span>`).join('')}</div>
       ${it.note && !it.custom ? `<p class="cr-note">${escapeHtml(it.note)}</p>` : ''}
-      <div class="cr-actions">${it.custom ? `<button type="button" class="ghost danger" data-remove="${escapeHtml(it.id)}">Remove</button>` : ''}<button type="button" class="primary" data-ride="${escapeHtml(it.id)}" aria-label="Ride ${escapeHtml(shortName(it.name))}">Ride</button></div></div>`;
+      <div class="cr-actions">${it.custom ? `<button type="button" class="ghost danger" data-remove="${escapeHtml(it.id)}">Remove</button>` : ''}<button type="button" class="link" data-options="${escapeHtml(it.id)}" title="Choose where to start and how long to ride, then Start" aria-label="Options for ${escapeHtml(shortName(it.name))}: start and length">Options</button><button type="button" class="primary" data-ride="${escapeHtml(it.id)}" aria-label="Ride ${escapeHtml(shortName(it.name))} now" title="Start riding it now">Ride</button></div></div>`;
     return `<li class="city-row on">${row}${detail}</li>`;
   };
   // grouped by area (F103) when the city has more than one: a heading per area, its routes in the network's order
@@ -1459,9 +1478,18 @@ function cityChoose(id) {
   $('cityDlg').close();
   selectedRouteId = id;
   renderRouteCards();
-  previewSelectedRoute();
+  const shown = previewSelectedRoute();
   if (matchMedia('(max-width: 1080px)').matches) document.querySelector('.preview').scrollIntoView({ block: 'start' });
   $('startBtn').focus({ preventScroll: true });
+  return shown;
+}
+/** Ride (F104): choose the route and start riding it at once, as Start would with the preview's defaults. */
+async function cityRide(id) {
+  if (chosen !== 'route') showPane('route');
+  await cityChoose(id);
+  // (no trainer yet, or the route didn't load: the menu shows it chosen, with what's missing on its Start button)
+  if (!trainer.connected || selectedRouteId !== id || !previewRoute || previewRoute !== routeCache.get(id)) return;
+  await startRide();
 }
 // zoom and pan (F102): pinch or the wheel zooms about the fingers / the pointer, a drag pans once zoomed in;
 // "Whole map" goes back out. Lines stay as easy to tap in px, so zoomed in they are further apart
@@ -1549,8 +1577,9 @@ $('cityGoals').addEventListener('click', (e) => {
 });
 $('citySeg').addEventListener('click', (e) => { if (e.target.id === 'citySegClear') { city.seg = null; city.segIds = null; renderCity(); } });
 $('cityList').addEventListener('click', async (e) => {
-  const ride = e.target.closest('[data-ride]'), rm = e.target.closest('[data-remove]'), row = e.target.closest('.city-row-btn');
-  if (ride) cityChoose(ride.dataset.ride);
+  const ride = e.target.closest('[data-ride]'), opts = e.target.closest('[data-options]'), rm = e.target.closest('[data-remove]'), row = e.target.closest('.city-row-btn');
+  if (ride) cityRide(ride.dataset.ride);
+  else if (opts) cityChoose(opts.dataset.options);
   else if (rm) {
     if (!confirm('Remove this route from your library?')) return;
     await removeNetRoute(rm.dataset.remove);

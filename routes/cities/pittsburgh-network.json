@@ -2907,7 +2907,10 @@
  "freeRide": {
   "name": "Free Ride · choose every turn",
   "first": "e11+",
-  "note": "No plan: from the Water Steps, straight on at every junction unless you choose a turn. Ride until you stop"
+  "note": "No plan: from the Water Steps, straight on at every junction unless you choose a turn. Ride until you stop",
+  "prefer": {
+   "LB": "e19-"
+  }
  },
  "keySplits": {
   "G>A": [
