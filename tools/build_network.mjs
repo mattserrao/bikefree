@@ -26,7 +26,7 @@ const check = args.includes('--check');
 const specPath = args.find((a) => !a.startsWith('--')) || 'tools/city/pittsburgh-network.spec.json';
 const read = (p) => readFileSync(resolve(root, p), 'utf8');
 const spec = JSON.parse(read(specPath));
-const index = JSON.parse(read('routes/parks/index.json'));
+const index = JSON.parse(read('routes/catalog.json'));   // (the catalog itself: tools/build_routes.mjs checks the network against it)
 const REACH = 30;   // a pass is where the loop comes within this many metres of the node
 
 /** One area's line split at its junctions: { route, L, nodes (with passes), edges, ghosts, aprons }. */

@@ -158,7 +158,9 @@ export class StylizedTerrain {
         this.landmarks.setNight(this._night || 0);
       }
       if (this.landscape.city) {
+        const t0 = performance.now();
         this.city = new CityScene(this.group, this.route, this.index, this.landscape, kit, this.uniforms, this.qualityKey);
+        this.cityMs = Math.round(performance.now() - t0);   // (areas, PLAN 5.4: what building an area costs)
         this.city.setNight(this._night || 0);
       }
       this._lastX = Infinity;

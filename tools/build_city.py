@@ -15,9 +15,22 @@ Reads tools/city/<id>.json and writes two files:
           js/world/toolbox/city/landscape.js and js/world/toolbox/city/city.js.
 
 OSM tiles are cached in tools/.cache/osm-<id>/ (the OSM API is used politely,
-one small area at a time). Data © OpenStreetMap contributors, ODbL.
+one small area at a time; "osmCache": "<id>" shares another config's tiles). Data © OpenStreetMap
+contributors, ODbL.
+
+Areas (a city of areas, PLAN 5.4) — each area is a config of its own:
+  "lattice": "<id>"   the height and land grids sit on that config's grid lattice (the same samples where
+                      two areas overlap; the box snaps outwards to it)
+  legs "apron": true  a stretch along another area's segment at a portal: drawn as route, not ridden as this
+                      area's own (city data "routeAprons", like "routeGhosts")
+  "slice": {"of": "<master id>", "pieces": [[a, b], [b2, a2], …], "aprons": [[a, b], …]}
+                      the area's line is cut from the master's tour (routed exactly as the master builds it) on
+                      its own 10 m samples: pieces in master metres, forward (a < b) or backward (a ghost: the
+                      line going back to a junction); joins between pieces fall inside ghosts. Every stretch
+                      keeps its exact samples, so segments keep their lengths. The master config itself
+                      ("master": true) writes nothing.
 """
-import base64, io, json, math, os, sys, time, heapq, urllib.request
+import base64, bisect, io, json, math, os, sys, time, heapq, urllib.request
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 from collections import Counter
@@ -47,7 +60,7 @@ def hv(a, b):
 
 # ---------------------------------------------------------------- OSM
 def load_osm(cfg):
-    folder = os.path.join(CACHE, f'osm-{cfg["id"]}')
+    folder = os.path.join(CACHE, f'osm-{cfg.get("osmCache", cfg["id"])}')
     os.makedirs(folder, exist_ok=True)
     w, s, e, n = cfg['osmBbox']
     dx, dy = cfg.get('osmTile', [0.01, 0.008])
@@ -173,6 +186,7 @@ class Router:
     def build(self, legs):
         pts, wl, marks = [], [], []
         self.ghost_legs = []   # [(first, last) point index] of legs marked "ghost": a network tour's repeat
+        self.apron_legs = []   # …and "apron": another area's segment, drawn here (PLAN 5.4)
         for leg in legs:
             first = max(0, len(pts) - 1)
             snapped = []
@@ -186,6 +200,7 @@ class Router:
                 pts += seq[1:]; wl += ws
                 marks.append((leg['waypoints'][i][0], len(pts) - 1))
             if leg.get('ghost'): self.ghost_legs.append([first, len(pts) - 1])
+            if leg.get('apron'): self.apron_legs.append([first, len(pts) - 1])
         return pts, wl, marks
 
 
@@ -295,6 +310,12 @@ def point_in(poly, x, y):
 # ---------------------------------------------------------------- main build
 def build(cid):
     cfg = json.load(open(os.path.join(ROOT, 'tools', 'city', f'{cid}.json')))
+    if cfg.get('master'):
+        print(f'{cid}: a master tour (its areas slice it: build them)'); return
+    area_cfg = None
+    if cfg.get('slice'):
+        # an area cut from a master tour: route the master exactly as it builds, then keep the pieces (below)
+        area_cfg, cfg = cfg, json.load(open(os.path.join(ROOT, 'tools', 'city', f'{cfg["slice"]["of"]}.json')))
     nodes, ntags, ways, rels = load_osm(cfg)
 
     # 1. Route ------------------------------------------------------------------
@@ -303,6 +324,7 @@ def build(cid):
     pts, wl, marks = router.build(cfg['legs'])
     # a ghost leg's ends (a spur's turnaround among them) must survive the stub folding below
     gmarks = [('__ghost%d_%s' % (k, w), idx) for k, g in enumerate(router.ghost_legs) for w, idx in (('a', g[0]), ('b', g[1]))]
+    gmarks += [('__ghostapron%d_%s' % (k, w), idx) for k, g in enumerate(router.apron_legs) for w, idx in (('a', g[0]), ('b', g[1]))]
     protect = lambda: {k for n_, k in marks if n_.startswith('__ghost')}
     marks = marks + gmarks
     # waypoints that sit just off the line leave tiny out-and-back stubs (A B C B A): fold them away
@@ -436,6 +458,7 @@ def build(cid):
         return chord[i] + (chord[i + 1] - chord[i]) * (k - i)
     ghost_idx = {n_: k for n_, k in marks if n_.startswith('__ghost')}
     marks = [(n_, k) for n_, k in marks if not n_.startswith('__ghost')]
+    route_aprons = [{'fromM': round(app_s(cum[ghost_idx['__ghostapron%d_a' % k]])), 'toM': round(app_s(cum[ghost_idx['__ghostapron%d_b' % k]]))} for k in range(len(router.apron_legs))]
     route_ghosts = [{'fromM': round(app_s(cum[ghost_idx['__ghost%d_a' % k]])), 'toM': round(app_s(cum[ghost_idx['__ghost%d_b' % k]]))} for k in range(len(router.ghost_legs))]
     # a ghost's ends are where the line turns round (a spur's tip, the junction it comes back to): rounding the
     # corners moves that turn a little along the line, so snap each end to the sharpest turn within 80 m
@@ -475,6 +498,13 @@ def build(cid):
           f'ele {min(e):.0f}–{max(e):.0f} m, grade {min(grades):.1f}…{max(grades):.1f} %')
     for name, idx in marks: print(f'    {app_s(cum[idx]) / 1000:6.2f} km  {name}')
     for b in route_bridges: print(f'    bridge {b["fromM"] / 1000:.2f}–{b["toM"] / 1000:.2f} km  {b["name"]}')
+    if area_cfg:
+        # [areas] the area's line: pieces of the master's samples (PLAN 5.4)
+        node_m = [app_s(cum[k]) for k in range(len(pts))]
+        rs, e, route_kinds, route_bridges, route_ghosts, route_aprons, pts = slice_tour(area_cfg['slice'], rs, e, chord, route_kinds, route_bridges, route_ghosts, pts, node_m)
+        cfg = area_cfg
+        total = sum(hv(a_, b_) for a_, b_ in zip(rs, rs[1:]))
+        print(f'{cid}: {total / 1000:.2f} km cut from {cfg["slice"]["of"]}, ghosts {route_ghosts}, aprons {route_aprons}')
     gpx = os.path.join(ROOT, cfg['gpx'])
     os.makedirs(os.path.dirname(gpx), exist_ok=True)
     with open(gpx, 'w') as f:
@@ -488,6 +518,9 @@ def build(cid):
 
     # 2. City data ----------------------------------------------------------------
     gw, gs, ge, gn = cfg['gridBbox']
+    lattice = grid_lattice(cfg)
+    if lattice:   # [areas] snap the box outwards onto the shared lattice: the same samples where areas overlap
+        gw, gs, ge, gn = lattice['box'](gw, gs, ge, gn)
     lat0, lon0 = (gs + gn) / 2, (gw + ge) / 2
     kx = 111319.49 * math.cos(math.radians(lat0)); ky = 111319.49
     q = lambda lat, lon: (round((lat - lat0) / UNIT), round((lon - lon0) / UNIT))
@@ -510,6 +543,7 @@ def build(cid):
     # height grid
     gm = cfg['gridM']
     nx = int((ge - gw) * kx / gm) + 1; ny = int((gn - gs) * ky / gm) + 1
+    if lattice: nx, ny = round((ge - gw) / lattice['dlon']) + 1, round((gn - gs) / lattice['dlat']) + 1
     dlon, dlat = (ge - gw) / (nx - 1), (gn - gs) / (ny - 1)
     H = [elevation(gn - r * dlat, gw + c * dlon) for r in range(ny) for c in range(nx)]
     print(f'  height grid {nx}×{ny} @ {gm} m, {min(H):.0f}–{max(H):.0f} m')
@@ -517,6 +551,7 @@ def build(cid):
     # land-use grid (finer): 0 paved/urban, 1 grass/park, 2 woods, 3 water, 4 building, 5 sand/bare, 6 plaza
     lm = cfg['landM']
     lx = int((ge - gw) * kx / lm) + 1; ly = int((gn - gs) * ky / lm) + 1
+    if lattice: lx, ly = round((ge - gw) / lattice['ldlon']) + 1, round((gn - gs) / lattice['ldlat']) + 1
     img = Image.new('L', (lx, ly), 7)    # 7: outside the OSM area (wooded hills and suburbs, seen from afar)
     dr = ImageDraw.Draw(img)
     pix = lambda lat, lon: ((lon - gw) / (ge - gw) * (lx - 1), (gn - lat) / (gn - gs) * (ly - 1))
@@ -774,6 +809,7 @@ def build(cid):
         'land': {'nx': lx, 'ny': ly, 'rle': rle(land)},
         'routeKinds': route_kinds,
         **({'routeGhosts': route_ghosts} if route_ghosts else {}),
+        **({'routeAprons': route_aprons} if route_aprons else {}),
         'routeBridges': [{**b, 'style': cfg.get('bridgeStyles', {}).get(b['name'], 'girder')} for b in route_bridges],
         'buildings': {
             'count': len(kept),
@@ -796,6 +832,124 @@ def build(cid):
           f'{len(rails)} rail lines, {len(trees) // 2} trees')
 
 
+def grid_lattice(cfg):
+    """[areas] The grid lattice of the config named by "lattice": its grid's origin and spacing (as build() lays it)."""
+    if not cfg.get('lattice'): return None
+    ref = json.load(open(os.path.join(ROOT, 'tools', 'city', f'{cfg["lattice"]}.json')))
+    w, s_, e_, n = ref['gridBbox']
+    kx = 111319.49 * math.cos(math.radians((s_ + n) / 2)); ky = 111319.49
+    nx, ny = int((e_ - w) * kx / ref['gridM']) + 1, int((n - s_) * ky / ref['gridM']) + 1
+    lx, ly = int((e_ - w) * kx / ref['landM']) + 1, int((n - s_) * ky / ref['landM']) + 1
+    if cfg['gridM'] != ref['gridM'] or cfg['landM'] != ref['landM']: raise SystemExit(f'{cfg["id"]}: a lattice needs the same gridM and landM as {cfg["lattice"]}')
+    dlon, dlat = (e_ - w) / (nx - 1), (n - s_) / (ny - 1)
+    snap = lambda v, o, d, up: o + (math.ceil if up else math.floor)((v - o) / d - 1e-9 * (1 if up else -1)) * d
+    # (the heights are what must match sample for sample; the land grid keeps the reference's spacing, its cells a
+    # part of a cell off where the two grids' spacings don't divide — land kinds, not heights)
+    return {'dlon': dlon, 'dlat': dlat, 'ldlon': (e_ - w) / (lx - 1), 'ldlat': (n - s_) / (ly - 1),
+            'box': lambda gw, gs, ge, gn: (snap(gw, w, dlon, False), snap(gs, n, dlat, False), snap(ge, w, dlon, True), snap(gn, n, dlat, True))}
+
+
+def slice_tour(sl, rs, e, chord, kinds, bridges, ghosts, pts, node_m):
+    """[areas] Cut an area's line from a master tour (see the module notes): its points and elevations, and its
+    kinds, bridges, ghosts and aprons in the area's own metres; the OSM nodes it rides. Metres are the app's (the
+    haversine length along the master's points, `chord`): each piece starts and ends on a point interpolated there,
+    so the app's 10 m samples of the area's line are the master's own samples, shifted by whole 10 m steps."""
+    R_ = 6371008.8 * math.pi / 180   # (metres per degree, as the app measures: js/gpx.js haversine)
+    def interp(m):
+        k = max(0, min(len(chord) - 2, bisect.bisect_right(chord, m) - 1))
+        f = max(0.0, min(1.0, (m - chord[k]) / max(1e-9, chord[k + 1] - chord[k])))
+        return ((rs[k][0] + (rs[k + 1][0] - rs[k][0]) * f, rs[k][1] + (rs[k + 1][1] - rs[k][1]) * f), e[k] + (e[k + 1] - e[k]) * f)
+    def piece(a, b):
+        lo, hi = min(a, b), max(a, b)
+        p0, e0 = interp(lo); p1, e1 = interp(hi)
+        ll, el, ml = [p0], [e0], [lo]
+        for i in range(len(chord)):
+            if lo + 0.05 < chord[i] < hi - 0.05: ll.append(rs[i]); el.append(e[i]); ml.append(chord[i])
+        ll.append(p1); el.append(e1); ml.append(hi)
+        return (ll, el, ml) if b > a else (ll[::-1], el[::-1], ml[::-1])
+    out_ll, out_e, out_m, spans, at = [], [], [], [], 0.0
+    for k, (a, b) in enumerate(sl['pieces']):
+        if a % 10 or b % 10: raise SystemExit(f'slice piece {a}–{b}: master metres must be on the 10 m samples')
+        if out_ll and spans[-1][2] == a:   # carrying straight on from the last piece's end
+            ll, el, ml = piece(a, b)
+            ll, el, ml = ll[1:], el[1:], ml[1:]
+        elif out_ll:
+            # a join (a ghost's end to the next real piece: the two passes of a junction can lie ~100 m apart): the
+            # ghost stops 10 m short of its end and n chords of exactly 10 m lead on to the next piece (a zig, never
+            # drawn), so the line's length stays a whole number of 10 m steps
+            o, pa, pb = spans[-1]
+            if not pa > pb: raise SystemExit(f'slice piece {a}–{b}: a jump must follow a backward (ghost) piece')
+            # take the ghost's last 10 m back off (it runs backward: its points' master metres go down)
+            while out_m and out_m[-1] is not None and out_m[-1] < pb + 10 - 0.05: out_ll.pop(); out_e.pop(); out_m.pop()
+            q, eq = interp(pb + 10)
+            if hv(out_ll[-1], q) > 0.05: out_ll.append(q); out_e.append(eq); out_m.append(pb + 10)
+            at -= 10
+            p0, e0 = out_ll[-1], out_e[-1]
+            ll, el, ml = piece(a, b)
+            p2, e2 = ll[0], el[0]
+            kx_ = R_ * math.cos(math.radians(p0[0]))
+            x2, y2 = (p2[1] - p0[1]) * kx_, (p2[0] - p0[0]) * R_
+            d = math.hypot(x2, y2)
+            if d > 200 or d < 0.5: raise SystemExit(f'slice piece {a}–{b}: the join is {d:.1f} m long')
+            n = max(2, math.ceil(d / 10 - 1e-9))
+            ux, uy = x2 / d, y2 / d
+            vx, vy = -uy, ux
+            a_ = (d - 10 * (n - 2)) / 2
+            h = math.sqrt(max(0.0, 100 - a_ * a_))
+            chain = [(a_ * ux + h * vx, a_ * uy + h * vy)]
+            for _ in range(n - 2): chain.append((chain[-1][0] + 10 * ux, chain[-1][1] + 10 * uy))
+            for k_, (qx, qy) in enumerate(chain):
+                out_ll.append((p0[0] + qy / R_, p0[1] + qx / kx_)); out_e.append(e0 + (e2 - e0) * (k_ + 1) / n); out_m.append(None)
+            at += 10 * n
+            spans[-1] = (o, pa, pb, at)   # (the ghost runs on to here: its join)
+        else:
+            ll, el, ml = piece(a, b)
+        spans.append((at, a, b))
+        out_ll += ll; out_e += el; out_m += ml
+        at += abs(b - a)
+    spans = [sp[:3] + (sp[3] if len(sp) > 3 else sp[0] + abs(sp[2] - sp[1]),) for sp in spans]
+    total = at
+    def mapped(ranges, real_only=False):
+        out = []
+        for r in ranges:
+            for o, a, b, _ in spans:
+                lo, hi = min(a, b), max(a, b)
+                f, t = max(r['fromM'], lo), min(r['toM'], hi)
+                if t - f < 1: continue
+                if b < a and real_only: continue
+                m = (lambda x: o + x - a) if b > a else (lambda x: o + a - x)
+                out.append({**r, 'fromM': round(min(m(f), m(t))), 'toM': round(max(m(f), m(t)))})
+        return sorted(out, key=lambda r: r['fromM'])
+    # ghosts: the master's inside forward pieces, and every backward piece; aprons: as listed (master metres)
+    g = mapped(ghosts, real_only=True) + [{'fromM': round(o), 'toM': round(end)} for o, a, b, end in spans if b < a]
+    g.sort(key=lambda r: r['fromM'])
+    merged = []
+    for r in g:
+        if merged and r['fromM'] - merged[-1]['toM'] <= 10: merged[-1]['toM'] = max(merged[-1]['toM'], r['toM'])
+        else: merged.append(dict(r))
+    aprons = mapped([{'fromM': a, 'toM': b} for a, b in sl.get('aprons', [])], real_only=True)
+    k2 = mapped(kinds)
+    kinds_out = []
+    for r in k2:   # the master's kinds piece by piece (a backward piece's run in reverse), joined where they meet
+        if kinds_out and kinds_out[-1]['kind'] == r['kind'] and r['fromM'] - kinds_out[-1]['toM'] <= 12: kinds_out[-1]['toM'] = max(kinds_out[-1]['toM'], r['toM'])
+        else: kinds_out.append({'kind': r['kind'], 'fromM': r['fromM'], 'toM': r['toM']})
+    if kinds_out: kinds_out[0]['fromM'] = 0; kinds_out[-1]['toM'] = round(total) + 10
+    for a_, b_ in zip(kinds_out, kinds_out[1:]): b_['fromM'] = a_['toM']
+    bridges_out = mapped(bridges, real_only=True)
+    # the OSM nodes this line rides: a master route step counts when its middle lies on a piece
+    keep = []
+    for k in range(len(pts) - 1):
+        mid = (node_m[k] + node_m[k + 1]) / 2
+        if any(min(a, b) - 1 <= mid <= max(a, b) + 1 for _, a, b, _ in spans): keep.append(k)
+    area_pts = []
+    for k in keep:
+        if not area_pts or area_pts[-1] != pts[k]:
+            if area_pts: area_pts.append(None)   # (a break: route steps are pairs of neighbours)
+            area_pts.append(pts[k])
+        area_pts.append(pts[k + 1])
+    return out_ll, out_e, kinds_out, bridges_out, merged, aprons, area_pts
+
+
 if __name__ == '__main__':
-    for cid in sys.argv[1:] or [f[:-5] for f in os.listdir(os.path.join(ROOT, 'tools', 'city')) if f.endswith('.json')]:
+    for cid in sys.argv[1:] or [f[:-5] for f in os.listdir(os.path.join(ROOT, 'tools', 'city')) if f.endswith('.json') and '.network' not in f and '.spec' not in f]:
         build(cid)

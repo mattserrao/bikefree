@@ -27,7 +27,7 @@ export const SCENE_FIELDS = {
   terrain: { type: 'string', required: true, tool: T + 'landscape/index.js', doc: 'authored-coast (default) | authored-region | real-coast | real-mountain | authored-city | wireframe' },
   terrainData: { type: 'object', tool: T + 'landscape/authored-region.js', keys: ['file', 'format', 'north', 'south', 'west', 'east', 'width', 'height', 'baseM', 'sdfMaxM', 'lakes'], doc: 'baked USGS grid + lakes (tools/build_scene_terrain.py)' },
   terrainGridFile: { type: 'string', tool: T + 'landscape/real-terrain.js', doc: 'real height grid (tools/build_terrain_grid.py)' },
-  terrainBuild: { type: 'object', keys: ['padM', 'coarseM', 'fineM', 'fineCellM', 'lakes', 'minLakeHa', 'lakeNames', 'gpx', 'rivers', 'osmWater', 'osmCorridorM'], doc: 'settings for the terrain bake tools' },
+  terrainBuild: { type: 'object', keys: ['padM', 'coarseM', 'fineM', 'fineCellM', 'lakes', 'minLakeHa', 'lakeNames', 'gpx', 'rivers', 'osmWater', 'osmCorridorM', 'box', 'lat0'], doc: 'settings for the terrain bake tools (a city\'s areas share one "box" and "lat0": PLAN 5.4)' },
   buildingStyles: { type: 'array', tool: T + 'structures/footprints.js', keys: ['fromM', 'toM', 'walls', 'roofs', 'trim', 'stone', 'pitch', 'eaveM', 'blockAreaM2', 'balconies'], doc: 'map-footprint buildings: wall, roof and shutter colours, stone plinths and roof pitch by stretch' },
   buildings: { type: 'object', tool: T + 'structures/footprints.js', keys: ['reachM', 'chunkM', 'landmarks'], doc: 'map-footprint buildings: draw reach, stretch size, landmark shapes by name ("tent")' },
   buildingKit: { type: 'object', tool: T + 'structures/buildings/kit.js', keys: ['detailM', 'dressingM', 'chunkM', 'reachM', 'detailReachM', 'detailBudgetMs', 'cityFacades', 'styles'], doc: 'map-footprint buildings drawn by the building kit (cities: homes, and textured facades for the rest): archetypes, textured walls and roofs, windows, wings, balconies, dormers, chimneys, lean-tos and ground dressing, by regional style per stretch (presets.js)' },
@@ -106,6 +106,7 @@ export const SCENE_FIELDS = {
 
   // city kit (authored-city)
   cityData: { type: 'string', tool: T + 'city/city.js', doc: 'city data (tools/build_city.py)' },
+  origin: { type: 'object', keys: ['lat', 'lon'], doc: 'a city of areas (PLAN 5.4): the city\'s shared frame — every area is projected around this point (js/world/world.js)' },
   streetKit: { type: 'object', tool: T + 'city/street-kit.js', keys: ['fromM', 'toM', 'rangeM', 'parkTrees', 'zones'], doc: 'facades, furniture, street trees' },
   mainStreets: { type: 'array', keys: ['name', 'fromM', 'toM'], doc: 'city main streets' },
   junctions: { type: 'any', tool: T + 'city/junctions.js', doc: 'junction planning' },

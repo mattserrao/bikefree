@@ -141,7 +141,8 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
     minLat = Math.min(minLat, route.lat[i]); maxLat = Math.max(maxLat, route.lat[i]);
     minLon = Math.min(minLon, route.lon[i]); maxLon = Math.max(maxLon, route.lon[i]);
   }
-  const proj = makeProjection((minLat + maxLat) / 2, (minLon + maxLon) / 2);   // as world.js
+  const o = scene?.origin;   // (a city's areas: the city's frame, PLAN 5.4)
+  const proj = o ? makeProjection(o.lat, o.lon) : makeProjection((minLat + maxLat) / 2, (minLon + maxLon) / 2);   // as world.js
   const index = makeRouteIndex(route, proj);
   const F = new Findings();
   const total = route.total, turn = route.turnS, oneWay = turn || total;

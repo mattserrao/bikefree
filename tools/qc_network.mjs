@@ -97,30 +97,37 @@ export function sweepTurns(net, index, { step = 0.25, reach = 40, lane = 0.22 } 
 }
 
 /**
- * A city of areas: ride every preset's first lap (and back the other way) at 1 m steps as the world does — the
- * area drawn chosen by NetRide.areaFor, the pose on it — and check no jump where it swaps, and that the line under
- * the rider is drawn there (not a ghost). [{preset, swaps, worstJump, ghostUnder, ok}]
+ * A city of areas: ride every preset's first lap as the world does — the area drawn chosen by NetRide.areaFor —
+ * and check the line under the rider is drawn there (not a ghost), and that where the area drawn swaps the pose
+ * doesn't jump (from the old area's line to the new one's). [{preset, swaps, worstJump, ghostUnder, ok}]
  */
-export function crossAreas(net, index, { lane = 0.22 } = {}) {
+export function crossAreas(net, index, { lane = 0.22, step = 0.25, around = 30 } = {}) {
   const out = [];
   if (!net.multi) return out;
   for (const pr of net.presets) {
     const ride = new NetRide(net, {}, { plan: pr.path });
     const lap = ride.lapM;
-    let area = null, prev = null, worst = 0, ghost = 0;
+    // the area drawn along the lap (1 m steps), and the line under the rider drawn there (no ghost)
+    let area = null, ghost = 0;
     const swaps = [];
     for (let p = 0; p <= lap; p += 1) {
       const a = ride.areaFor(p, area);
       if (area && a !== area) swaps.push({ p, from: area, to: a });
       area = a;
       const at = ride.worldAt(p, area), A = net.areas.get(area);
-      if (at.area !== area) ghost++;
-      else if (ghostAt(A.base, at.s > A.L ? A.total - at.s : at.s)) ghost++;
-      const q = ride.pose(p, index, lane, area);
-      if (prev) worst = Math.max(worst, Math.hypot(q.pos.x - prev.pos.x, q.pos.z - prev.pos.z) - 1);
-      prev = q;
+      if (at.area !== area || ghostAt(A.base, at.s > A.L ? A.total - at.s : at.s)) ghost++;
     }
-    out.push({ preset: pr.id, swaps, worstJump: worst, ghostUnder: ghost, ok: worst <= NET_LIMITS.posJump && ghost === 0 });
+    // each swap at `step` metres, as the world rides it: the pose on the old area up to the swap, on the new one after
+    let worst = 0;
+    for (const sw of swaps) {
+      let prev = null;
+      for (let p = sw.p - around; p <= sw.p + around; p += step) {
+        const q = ride.pose(p, index, lane, p < sw.p ? sw.from : sw.to);
+        if (prev) worst = Math.max(worst, Math.hypot(q.pos.x - prev.pos.x, q.pos.z - prev.pos.z) - step, Math.abs(q.pos.y - prev.pos.y) - NET_LIMITS.heightStep * step);
+        prev = q;
+      }
+    }
+    out.push({ preset: pr.id, swaps, worstJump: Math.max(0, worst), ghostUnder: ghost, ok: worst <= NET_LIMITS.posJump && ghost === 0 });
   }
   return out;
 }

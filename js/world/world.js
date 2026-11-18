@@ -71,7 +71,7 @@ export class World {
       minLat = Math.min(minLat, route.lat[i]); maxLat = Math.max(maxLat, route.lat[i]);
       minLon = Math.min(minLon, route.lon[i]); maxLon = Math.max(maxLon, route.lon[i]);
     }
-    const origin = this.areaSet?.origin;   // a city of areas: every area in the city's own frame
+    const origin = this.areaSet?.origin || route.scene?.origin;   // a city of areas: every area in the city's own frame (scene "origin")
     this.proj = origin ? makeProjection(origin.lat, origin.lon) : makeProjection((minLat + maxLat) / 2, (minLon + maxLon) / 2);
     this.index = makeRouteIndex(route, this.proj);
     this._hazeEle = route.minEle;   // (the valley haze sits on the first area's lowest point, whichever area is drawn)
@@ -219,6 +219,7 @@ export class World {
    * is), keep the areas the path reaches soon built (hidden, streaming round the camera) and release the rest.
    */
   _areaTick(dt) {
+    dt = Math.max(0, dt);   // (frames held behind the bake loader can run with a clock behind)
     const want = this.path.areaFor(this.p, this.area.id);
     let waiting = false;
     if (want !== this.area.id) {
@@ -230,6 +231,10 @@ export class World {
     if ((this._resT = (this._resT ?? 0) - dt) <= 0) {
       this._resT = .5;
       const need = this.path.areasNear(this.p);
+      // the areas a planned ride (a preset, your own route) goes through are built once, at the start behind the
+      // loader, and kept: building an area is main-thread work (seconds), so a planned ride never builds one on
+      // the way; off the plan (a free ride, a turn of your own) an area is built when the path reaches 1.5 km of it
+      for (const id of this._planAreas()) need.add(id);
       const pacer = this.pacerSource?.()?.path;
       if (pacer?.own) for (const id of pacer.own.areasNear(this.ps ?? this.p, 300, 0)) need.add(id);   // (the pacer, on its own way)
       need.add(this.area.id);
@@ -239,32 +244,50 @@ export class World {
     const c = this.camera.position;
     for (const a of this.areas.values()) if (a !== this.area && a.ready) a.terrain.prepare?.(c.x, c.z, 2);
   }
+  /** The areas of the ride's plan (cached per path and plan). */
+  _planAreas() {
+    const plan = this.path?.plan;
+    if (!plan) return [];
+    if (this._planFor !== plan) { this._planFor = plan; this._planIds = [...new Set(plan.map((t) => t.e.area))]; }
+    return this._planIds;
+  }
   /** Load and build an area (hidden) unless it is built or on its way. */
   _ensureArea(id) {
     if (this.areas.has(id) || !this.areaSet?.load) return;
     const rec = { id, ready: false };
     this.areas.set(id, rec);
-    this.areaSet.load(id).then((route) => {
-      if (this.disposed || this.areas.get(id) !== rec) return;
-      const t0 = performance.now();
-      Object.assign(rec, this._buildArea(id, route));
-      rec.buildMs = Math.round(performance.now() - t0);
-      return rec.terrain.ready;
+    // built in steps, a frame apart (each is main-thread work: the scenery, the road's junctions, the city)
+    const frame = () => new Promise((ok) => setTimeout(ok, 0));
+    const live = () => !this.disposed && this.areas.get(id) === rec;
+    const timed = (key, fn) => { const t0 = performance.now(); const v = fn(); (rec.ms ||= {})[key] = Math.round(performance.now() - t0); return v; };
+    this.areaSet.load(id).then(async (route) => {
+      if (!live()) return;
+      const parts = timed('scenery', () => this._buildArea(id, route, 'scenery'));
+      await frame(); if (!live()) { parts.terrain.dispose(); return; }
+      timed('road', () => this._buildArea(id, route, 'road', parts));
+      Object.assign(rec, parts);
+      await rec.terrain.ready;
     }).then(() => {
-      if (this.disposed || this.areas.get(id) !== rec || !rec.terrain) return;
+      if (!live() || !rec.terrain) return;
       rec.ready = true;
-      this.log('3d', `Area ${id} ready (built in ${rec.buildMs} ms)`, 'debug');
+      rec.buildMs = Object.values(rec.ms).reduce((a, b) => a + b, 0) + (rec.terrain.cityMs || 0);
+      this.log('3d', `Area ${id} ready: ${JSON.stringify({ ...rec.ms, city: rec.terrain.cityMs })} ms`, 'debug');
     }).catch((err) => { this.log('3d', `Area ${id} could not load: ${err.message}`, 'error'); if (this.areas.get(id) === rec) this.areas.delete(id); });
   }
   /** An area's scenery, road and shoulder, built in the city's frame and kept hidden until it is drawn. */
-  _buildArea(id, route) {
-    const index = makeRouteIndex(route, this.proj);
-    const terrain = new StylizedTerrain(this.scene, this.proj, index, {
-      route, quality: this.qualityKey, renderer: this.renderer, farInner: FAR_INNER, farBand: FAR_BAND, look: this.look?.key,
-      uniforms: this.terrain.uniforms,   // one set for every area: the weather and the time drive them all
-      onError: (err) => this.log('3d', `Area ${id}: ${err.message}`, 'debug'),
-    });
-    terrain.group.visible = false;
+  _buildArea(id, route, step = 'all', parts = {}) {
+    if (step === 'all' || step === 'scenery') {
+      const index = makeRouteIndex(route, this.proj);
+      const terrain = new StylizedTerrain(this.scene, this.proj, index, {
+        route, quality: this.qualityKey, renderer: this.renderer, farInner: FAR_INNER, farBand: FAR_BAND, look: this.look?.key,
+        uniforms: this.terrain.uniforms,   // one set for every area: the weather and the time drive them all
+        onError: (err) => this.log('3d', `Area ${id}: ${err.message}`, 'debug'),
+      });
+      terrain.group.visible = false;
+      Object.assign(parts, { id, route, index, terrain });
+      if (step === 'scenery') return parts;
+    }
+    const { index, terrain } = parts;
     const city = route.scene?.terrain === 'authored-city';
     const shoulder = makeRibbon(route, index, ROAD_WIDTH + (city ? 4 : 1.6), city ? .09 : 0.05, makeGravelTexture(true, city), 3, { polygonOffsetFactor: city ? -1.8 : -1, polygonOffsetUnits: city ? -1.8 : -1 });
     const junctions = city ? junctionPlan(terrain.landscape, index, route) : null;   // [junctions]
@@ -276,7 +299,7 @@ export class World {
     terrain.setTime?.(this.timeKey);
     terrain.setNight?.(this._time?.night ? 1 : 0);
     if (this.farTerrain) terrain.setFar(!!this._farOn);
-    return { id, route, index, terrain, road, shoulder };
+    return Object.assign(parts, { road, shoulder });
   }
   /** Draw area `a` instead of the one drawn now (both are the same streets where this happens). */
   _useArea(a) {
@@ -689,7 +712,7 @@ export class World {
   /** Render one frame without the animation loop (used for previews/tests). */
   renderOnce() { const r = this.running; this.running = true; this._frame(performance.now()); this.running = r; cancelAnimationFrame(this._raf); }
 
-  get loading() { return this.terrain.loadingCount + (this.baked?.preparing ? 4 : 0) + (this._waitingArea ? 4 : 0); }   // [w2-bake] (4: the app's loading bar shows from 4)
+  get loading() { return this.terrain.loadingCount + (this.baked?.preparing ? 4 : 0) + (this._waitingArea || (this._multi && this._planAreas().some((id) => !this.areas.get(id)?.ready)) ? 4 : 0); }   // [w2-bake] (4: the app's loading bar shows from 4)
 
   /** [w2-bake] "Preparing scenery" over the view while the first bake runs behind it. */
   _bakeLoader() {
