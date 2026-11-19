@@ -29,6 +29,7 @@
   7937544
  ],
  "waterLevelM": 216.6,
+ "inlandWaterAboveM": 10,
  "buildingRadiusM": 1100,
  "tallBuildingM": 40,
  "streetRadiusM": 900,

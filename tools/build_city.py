@@ -683,13 +683,16 @@ def build(cid):
     # became a pit down to the rivers. Water polygons whose ground lies more than this above the water level are
     # left out (drawn as the park around them); off by default
     inland = cfg.get('inlandWaterAboveM')
-    for nd, t in ways.values():
+    hill_water = []
+    for wid_, (nd, t) in ways.items():
         if (t.get('natural') == 'water' or t.get('waterway') == 'riverbank') and nd and nd[0] == nd[-1]:
             pts = [nodes[i] for i in nd if i in nodes]
             if inland is not None and pts:
                 ground = sorted(elevation(*p_) for p_ in pts[::max(1, len(pts) // 12)])
-                if ground[len(ground) // 2] > cfg['waterLevelM'] + inland: poly(pts, 1); continue
+                if ground[len(ground) // 2] > cfg['waterLevelM'] + inland:
+                    poly(pts, 1); hill_water.append(t.get('name') or f'way {wid_}'); continue
             poly(pts, 3)
+    if hill_water: print(f'  hill water drawn as park ({len(hill_water)}):', ', '.join(sorted(set(hill_water))[:20]))
     for a_ in cfg.get('clearAreas', []):
         if a_.get('land') is not None: poly([(p_[0], p_[1]) for p_ in a_['poly']], a_['land'])
 
