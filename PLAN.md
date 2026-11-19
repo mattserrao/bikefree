@@ -1158,6 +1158,18 @@ The user (18 Nov): "Minimap should zoom in and not show the entirety of the map.
 - [x] `test/smooth-turns.test.mjs` (fails on main): cross-section steps, folds, tightest radius, rider turn rate and its change, ride distance / elevation / drawn length, rider on the drawn road
 - [ ] Ride the Alpe's hairpins and Pittsburgh's corners on the Mac and the Air (githack link)
 
+### Pittsburgh phase 6: clean roads, smooth swaps, polish *(test branch `pittsburgh-phase6-test`, from `main` after PR #38, 19 Nov 2026; one PR at the end)*
+Decided with the user (19 Nov; project doc `claude/pittsburgh-phase5-plan.md`):
+- [ ] 6.1 **No road clipping**, all three kinds, every area: ground over streets and sidewalks; vehicles through poles, walls and buildings; anything cutting the ridden road (gaps, steps, z-fighting). Drive the clipping warnings toward zero, not only 0 FAIL (F11, F49, F87, F167, F178, F180)
+- [ ] 6.2 **Smoother area swaps:** people, traffic and baked light carried across a swap (F31, F32); the route ribbon fades into the street where an apron ends (F33, F133)
+- [ ] 6.3 **Phipps polish:** a postcard view of the dome, night lighting, visitors on the benches (F111, F116, F118)
+- [ ] 6.4 **Subway polish:** better T trains, sound, the North Side station at its real platform spot (F121, F125)
+- [ ] 6.5 **Hill water:** reservoirs, ponds and fountains as water at their own level (F131) — after 6.1's map-data work
+- [ ] 6.6 **Area dressing:** signs, views and road zones for Bloomfield, the East End and the Slopes, the Grandview overlooks (F68, F78, F88) — after 6.1
+- [ ] 6.7 Final QC (tests, network, course strict, clipping on all 10 areas, performance), PR
+- Not doing: minimap changes (F140–F144), free-ride defaults (F165, F170 stay), new routes (F161, F162, F166, F177), Allegheny Center through (F174), Phipps length (F110), lidar street heights (F132, F164, F14), load-stall work (F90–F93), a rain preset (F117). Saved for later: inclines and a ferry as conveyors (F129)
+- Follow-up numbers for this phase start at F200 (6.1: F200–F219, 6.2: F220–F229, 6.3: F230–F239, 6.4: F240–F249, 6.5: F250–F259, 6.6: F260–F269)
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)
