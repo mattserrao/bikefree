@@ -14,7 +14,7 @@ export const DEFAULT_SETTINGS = {
   worldTime: 'auto',      // 3D time of day: auto (the route's default) | morning | midday | golden | night
   worldQuality: 'balanced', // stylized scenery: low | balanced | high
   hudSize: 'small',       // ride-screen power bar: small (default) | medium | large (the original size)
-  minimap: 'course',      // ride-screen minimap: course (whole route) | follow (zoomed in) | off
+  minimap: 'follow',      // ride-screen minimap: follow (zoomed in, ~3 km across: the default) | course (whole route) | off
   worldWeather: 'clear',  // 3D weather: clear | marine | clouds | rain
   scenery: 'builtin-park-yosemite', // 3D loop shown behind free rides and workouts
 };
@@ -25,6 +25,8 @@ export function loadSettings() {
     const s = { ...DEFAULT_SETTINGS, ...(raw ? JSON.parse(raw) : {}) };
     // v0.13: 'midday' was the old default, so a saved 'midday' becomes "Route's default" once.
     if (!s.timeAuto) { if (s.worldTime === 'midday') s.worldTime = 'auto'; s.timeAuto = true; }
+    // 18 Nov: the minimap zooms in and follows you by default, so a saved 'course' (the old default) becomes 'follow' once.
+    if (!s.mapFollow) { if (s.minimap === 'course') s.minimap = 'follow'; s.mapFollow = true; }
     return s;
   } catch {
     return { ...DEFAULT_SETTINGS };
