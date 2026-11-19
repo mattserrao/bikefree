@@ -790,6 +790,25 @@
         "Music"
       ],
       "turnDeg": -18
+    },
+    {
+      "model": "church",
+      "look": "elpc",
+      "name": "East Liberty Presbyterian Church",
+      "lat": 40.461006,
+      "lon": -79.925521,
+      "lengthM": 87.2,
+      "widthM": 74.9,
+      "axisDeg": 108.3
+    },
+    {
+      "model": "cathedral",
+      "name": "Cathedral of Learning",
+      "lat": 40.444287,
+      "lon": -79.953229,
+      "lengthM": 102.4,
+      "widthM": 82.5,
+      "axisDeg": 137
     }
   ],
   "views": [
@@ -833,6 +852,21 @@
         "lat": 40.47936,
         "lon": -79.91553,
         "up": 1
+      }
+    },
+    {
+      "name": "East Liberty Presbyterian Church",
+      "atM": 15100,
+      "rangeM": 250,
+      "cam": {
+        "lat": 40.461949,
+        "lon": -79.924609,
+        "up": 3
+      },
+      "look": {
+        "lat": 40.461006,
+        "lon": -79.925521,
+        "up": 43
       }
     }
   ],

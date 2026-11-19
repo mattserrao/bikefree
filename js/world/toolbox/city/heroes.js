@@ -6,60 +6,13 @@
 //
 // Each hero is anchored by position in the scene (`heroes`: model, lat, lon) and replaces the map footprints
 // it stands on. The scene's `views` add postcard camera positions for the scenic ("vista") camera.
+// The landmarks outside downtown (Oakland's icons, the churches, the Homestead steel heritage: PLAN 7.7) are in
+// city/landmark-heroes.js and share this build's builders and helpers.
 import * as THREE from '../../../../vendor/three.module.min.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { ROAD_WIDTH } from '../../pose.js';
-
-const V = (x, y, z) => new THREE.Vector3(x, y, z);
-const TAU = Math.PI * 2;
-
-// ---------------------------------------------------------------- polygon helpers
-const centroid = (ring) => { let x = 0, z = 0; for (const p of ring) { x += p.x; z += p.z; } return { x: x / ring.length, z: z / ring.length }; };
-const area2 = (ring) => { let a = 0; for (let i = 0; i < ring.length; i++) { const p = ring[i], q = ring[(i + 1) % ring.length]; a += p.x * q.z - q.x * p.z; } return a; };
-/** Walls face outwards with the city's quad convention when the ring's signed area is ≤ 0. */
-const orient = (ring) => (area2(ring) > 0 ? ring.slice().reverse() : ring);
-const scaleRing = (ring, f, c = centroid(ring)) => ring.map((p) => ({ x: c.x + (p.x - c.x) * f, z: c.z + (p.z - c.z) * f }));
-const lerp2 = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t });
-const inPoly = (ring, x, z) => {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const a = ring[i], c = ring[j];
-    if ((a.z > z) !== (c.z > z) && x < ((c.x - a.x) * (z - a.z)) / (c.z - a.z) + a.x) inside = !inside;
-  }
-  return inside;
-};
-
-function prism(B, ring, y0, y1) {
-  ring = orient(ring);
-  for (let i = 0; i < ring.length; i++) {
-    const a = ring[i], c = ring[(i + 1) % ring.length];
-    B.quad(V(a.x, y0, a.z), V(c.x, y0, c.z), V(c.x, y1, c.z), V(a.x, y1, a.z));
-  }
-}
-function cap(B, ring, y) {
-  ring = orient(ring);
-  let tris;
-  try { tris = THREE.ShapeUtils.triangulateShape(ring.map((p) => new THREE.Vector2(p.x, p.z)), []); } catch { return; }
-  const first = B.count;
-  for (const p of ring) B.vertex(p.x, y, p.z, 0, 1, 0);
-  for (const [i, j, k] of tris) {
-    const ax = ring[j].x - ring[i].x, az = ring[j].z - ring[i].z, bx = ring[k].x - ring[i].x, bz = ring[k].z - ring[i].z;
-    if (az * bx - ax * bz > 0) B.tri(first + i, first + j, first + k); else B.tri(first + i, first + k, first + j);
-  }
-}
-/** A solid block: walls, plus a roof. */
-function block(B, ring, y0, y1) { prism(B, ring, y0, y1); cap(B, ring, y1); }
-/** Chamfer every corner of a polygon by `t` of each edge (notched or cut corners). */
-function chamfer(ring, t, notch = 0) {
-  const c = centroid(ring), out = [];
-  ring.forEach((p, i) => {
-    const prev = ring[(i + ring.length - 1) % ring.length], next = ring[(i + 1) % ring.length];
-    out.push(lerp2(p, prev, t));
-    if (notch) out.push(lerp2(p, c, notch));
-    out.push(lerp2(p, next, t));
-  });
-  return out;
-}
+import { V, TAU, centroid, area2, orient, scaleRing, lerp2, inPoly, prism, cap, block, chamfer } from './hero-geom.js';
+import { landmarkModels } from './landmark-heroes.js';
 
 // ---------------------------------------------------------------- materials
 /** Lit at night: an `aGlow` colour added as emission, scaled by the city's night. */
@@ -344,6 +297,9 @@ export function buildHeroes(city) {
       }
     },
   };
+
+  // [7.7] Oakland's icons, the churches on the routes and the Homestead steel heritage
+  Object.assign(models, landmarkModels({ city, L, W, S, N, glows, beacons, out, claim, clearUnder, ground, groundMax, wall, local }));
 
   for (const h of scene.heroes || []) {
     const fn = models[h.model];

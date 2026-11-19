@@ -989,6 +989,16 @@
         "Music"
       ],
       "turnDeg": -18
+    },
+    {
+      "model": "church",
+      "look": "smm",
+      "name": "Saint Mary of the Mount",
+      "lat": 40.43434,
+      "lon": -80.01185,
+      "lengthM": 44.1,
+      "widthM": 22.6,
+      "axisDeg": 12.1
     }
   ],
   "views": [
@@ -1018,6 +1028,21 @@
         "lat": 40.4335,
         "lon": -80.0042,
         "abs": 240
+      }
+    },
+    {
+      "name": "Saint Mary of the Mount",
+      "atM": 17200,
+      "rangeM": 250,
+      "cam": {
+        "lat": 40.435008,
+        "lon": -80.012059,
+        "up": 3
+      },
+      "look": {
+        "lat": 40.43434,
+        "lon": -80.01185,
+        "up": 25
       }
     }
   ],
