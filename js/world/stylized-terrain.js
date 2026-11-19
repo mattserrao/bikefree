@@ -20,7 +20,7 @@ import { CoastLife } from './toolbox/life/coast-life.js';
 import { Wildlife } from './toolbox/life/wildlife.js';
 import { groundDrape, DRAPE_MAX_DROP, DRAPE_MAX_PATCH } from './toolbox/landscape/ground-drape.js';   // [w2-align]
 import { makeRouteIndex } from './geo.js';
-import { vistaConfig, makeCumulusAtlas } from './toolbox/atmosphere/vista.js';
+import { vistaConfig, makeCumulusAtlas, makeSoftCloudAtlas } from './toolbox/atmosphere/vista.js';
 import { Verge } from './toolbox/roadside/verge.js';
 import { buildGuardrail } from './toolbox/roadside/guardrail.js';
 import { Visitors } from './toolbox/life/visitors.js';
@@ -284,27 +284,47 @@ export class StylizedTerrain {
 
   _makeClouds() {
     // Soft, unlit billboards: shaded spheres read as grey boulders hanging in the sky.
-    const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 64;
-    const ctx = canvas.getContext('2d');
-    for (const [x, y, r, a] of [[64, 36, 30, .9], [40, 40, 22, .75], [88, 40, 24, .75], [52, 28, 20, .6], [78, 27, 18, .6]]) {
-      const g = ctx.createRadialGradient(x, y, 1, x, y, r);
-      g.addColorStop(0, `rgba(255,255,255,${a})`); g.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = g; ctx.fillRect(0, 0, 128, 64);
-    }
-    const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+    // A five-puff blob: the peak caps' texture (mountain scenes only)
+    const blob = () => {
+      const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      for (const [x, y, r, a] of [[64, 36, 30, .9], [40, 40, 22, .75], [88, 40, 24, .75], [52, 28, 20, .6], [78, 27, 18, .6]]) {
+        const g = ctx.createRadialGradient(x, y, 1, x, y, r);
+        g.addColorStop(0, `rgba(255,255,255,${a})`); g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, 128, 64);
+      }
+      const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+      return texture;
+    };
     // one draw call for the whole ring: camera-facing quads drawn by a small shader (was a Sprite each)
-    // vista kit: cartoon cumulus (four shapes in one texture), lower and closer, so they sit among the peaks
-    const C = this.vista?.clouds, atlas = C ? makeCumulusAtlas() : null;
+    // vista kit: cartoon cumulus (four shapes in one texture), lower and closer, so they sit among the peaks;
+    // elsewhere four soft heaps (the five-puff blob above is kept for the peak caps)
+    const C = this.vista?.clouds, atlas = C ? makeCumulusAtlas() : makeSoftCloudAtlas();
     const rand = randomSequence(1101);
     const base = C ? (C.baseM ?? this.route.maxEle + 900) : Math.max(1800, this.route.maxEle + 1100);
     const centers = [], corners = [], sizes = [], cells = [], idx = [];
-    for (let i = 0, n = C ? C.count : 26; i < n; i++) {
-      const angle = i * 2.399 + rand() * .4, radius = C ? C.minM + rand() * (C.maxM - C.minM) : 9000 + rand() * 7000;
-      const c = [Math.cos(angle) * radius, base + rand() * (C ? C.spanM : 900), Math.sin(angle) * radius];
-      const w = C ? (900 + rand() * 1400) * radius / 10000 : 2200 + rand() * 2600, h = w * (C ? .5 : .32 + rand() * .12), k = centers.length / 3;
-      const cell = atlas ? atlas.cells[Math.floor(rand() * 4)] : [0, 0];
-      for (const [u, v] of [[-.5, -.5], [.5, -.5], [.5, .5], [-.5, .5]]) { centers.push(...c); corners.push(u, v); sizes.push(w, h); cells.push(...cell); }
-      idx.push(k, k + 1, k + 2, k, k + 2, k + 3);
+    // [7.3] Not polka dots: the clouds were one shape each, the same size on screen (size grew with
+    // distance) and spread evenly round the sky (golden-angle steps). Now they gather in groups of 1–4
+    // that overlap into bigger formations at random bearings, with open sky between, and their sizes vary
+    // a lot (a few big ones, many small). Same number of quads: no extra cost.
+    const n = C ? C.count : 26;
+    for (let i = 0; i < n;) {
+      const group = Math.min(n - i, 1 + Math.floor(rand() * 4));
+      const angle = rand() * Math.PI * 2, radius = C ? C.minM + rand() * (C.maxM - C.minM) : 9000 + rand() * 7000;
+      const scale = .55 + Math.pow(rand(), 2) * 1.3;   // the group's size: mostly modest, now and then a big one
+      const y0 = base + rand() * (C ? C.spanM : 900);
+      let along = 0;
+      for (let g = 0; g < group; g++, i++) {
+        const w = (C ? (900 + rand() * 1400) * radius / 10000 : 2000 + rand() * 2400) * scale * (g ? .55 + rand() * .5 : 1);
+        const h = w * (C ? .5 : .42 + rand() * .14), k = centers.length / 3;
+        // members step sideways along the ring, overlapping the one before by about a third
+        if (g) along += (rand() < .5 ? -1 : 1) * w * (.45 + rand() * .3);
+        const a = angle + along / radius, r = radius * (1 + (rand() - .5) * .08);
+        const c = [Math.cos(a) * r, y0 + (rand() - .5) * h * .35, Math.sin(a) * r];
+        const cell = atlas.cells[Math.floor(rand() * 4)];
+        for (const [u, v] of [[-.5, -.5], [.5, -.5], [.5, .5], [-.5, .5]]) { centers.push(...c); corners.push(u, v); sizes.push(w, h); cells.push(...cell); }
+        idx.push(k, k + 1, k + 2, k, k + 2, k + 3);
+      }
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(centers, 3));
@@ -313,8 +333,8 @@ export class StylizedTerrain {
     geo.setAttribute('aCell', new THREE.Float32BufferAttribute(cells, 2));
     geo.setIndex(idx);
     const material = new THREE.ShaderMaterial({
-      uniforms: { map: { value: atlas ? atlas.texture : texture }, color: { value: new THREE.Color('#ffffff') }, opacity: { value: atlas ? .97 : .8 },
-        uCellSize: { value: new THREE.Vector2(...(atlas ? atlas.cellSize : [1, 1])) } },
+      uniforms: { map: { value: atlas.texture }, color: { value: new THREE.Color('#ffffff') }, opacity: { value: C ? .97 : .85 },
+        uCellSize: { value: new THREE.Vector2(...atlas.cellSize) } },
       transparent: true, depthWrite: false, fog: false,
       vertexShader: `
         #include <common>
@@ -345,7 +365,7 @@ export class StylizedTerrain {
     this.clouds = new THREE.Mesh(geo, material); this.clouds.name = 'clouds';
     this.clouds.frustumCulled = false; this.clouds.renderOrder = -1;
     this.group.add(this.clouds);
-    if (this.landscape.mountain) this._makePeakClouds(texture);
+    if (this.landscape.mountain) this._makePeakClouds(blob());
   }
 
   // Mountains: cloud caps that hang on the summits and drift through the cirques (weather "clouds" and "rain")
@@ -1294,7 +1314,7 @@ export class StylizedTerrain {
     this.lakeMaterial?.dispose(); this.mistMaterial?.dispose();
     this.settlement?.dispose(); this.footprints?.dispose(); this.cables?.dispose(); this.dams?.dispose(); this.boards?.dispose(); this.raceDay?.dispose(); this.hairpinWalls?.dispose();
     if (this.clouds) { this.clouds.material.uniforms.map.value.dispose(); this.clouds.material.dispose(); this.clouds.geometry.dispose(); }
-    this.peakMaterial?.dispose(); this.peakClouds?.geometry.dispose();
+    this.peakUniforms?.map.value?.dispose(); this.peakMaterial?.dispose(); this.peakClouds?.geometry.dispose();
     if (this.shadowAsset) { this.shadowAsset.geometry.dispose(); this.shadowAsset.material.map.dispose(); this.shadowAsset.material.dispose(); }
     this.roadside?.children.forEach((m) => { m.geometry.dispose(); m.dispose(); });
     this.roadside?.children[0]?.material.dispose();

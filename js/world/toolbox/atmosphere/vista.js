@@ -227,3 +227,39 @@ export function makeCumulusAtlas() {
   texture.colorSpace = THREE.SRGBColorSpace;
   return { texture, cells: [[0, .5], [.5, .5], [0, 0], [.5, 0]], cellSize: [.5, .5] };
 }
+
+/**
+ * Soft cloud ring (scenes without the vista kit's cumulus): four soft, flat-bottomed cloud shapes in one
+ * texture, each a long, uneven heap of many overlapping flattened puffs. [7.3] Replaces one five-puff blob
+ * drawn on every cloud: 26 copies of the same round blob, evenly spread, read as polka dots.
+ */
+export function makeSoftCloudAtlas() {
+  const W = 512, H = 256, canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  let seed = 7331;
+  const rand = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  for (let k = 0; k < 4; k++) {
+    const ox = (k % 2) * 256, oy = Math.floor(k / 2) * 128;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(ox, oy, 256, 128); ctx.clip();
+    // a faint, wide base the puffs sit on (no gaps between them)
+    const n = 8 + Math.floor(rand() * 5), lean = (rand() - .5) * .5;
+    const puffs = [[ox + 128, oy + 80, 112, .3, .32]];
+    for (let i = 0; i < n; i++) {
+      const t = (i + .5) / n, hump = Math.sin(t * Math.PI) * (.7 + rand() * .5) + lean * (t - .5);
+      const r = 16 + hump * 30 + rand() * 12;
+      puffs.push([ox + 22 + t * 212 + (rand() - .5) * 16, oy + 86 - hump * 26 - rand() * 10, r, .42 + hump * .4 + rand() * .15, .62 + rand() * .2]);
+    }
+    for (const [x, y, r, a, sy] of puffs) {
+      ctx.save(); ctx.translate(x, y); ctx.scale(1, sy);
+      const g = ctx.createRadialGradient(0, 0, r * .05, 0, 0, r);
+      g.addColorStop(0, `rgba(255,255,255,${Math.min(.9, a)})`); g.addColorStop(.55, `rgba(255,255,255,${Math.min(.9, a) * .6})`); g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g; ctx.fillRect(-r, -r, r * 2, r * 2);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return { texture, cells: [[0, .5], [.5, .5], [0, 0], [.5, 0]], cellSize: [.5, .5] };
+}
