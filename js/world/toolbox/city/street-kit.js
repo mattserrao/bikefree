@@ -15,6 +15,7 @@
 // Scene key (all optional; without `streetKit` the kit is off):
 //   "streetKit": { "fromM": 0, "toM": 1e9, "rangeM": 220,
 //                  "zones": [{ "name", "style": "victorian", "fromM", "toM", "widthM": 80, "parking": true }] }
+//                  (a zone with "sidewalks": false lays no sidewalk along the route: a park drive, PLAN 6.6)
 // Facade styles: FACADE_STYLES (victorian, rowhouse, masonry, industrial, tower, glass). Outside a zone a
 // building's style comes from its kind (AUTO_STYLE). OSM details (signals, bus stops, benches, hydrants,
 // shops, car parks, fences) come from the city data's `streetKit` block (tools/citylib/street_kit.py); the
@@ -442,11 +443,14 @@ export class StreetKit {
         let bad = false;
         for (const u of [-2.6, 0, 2.6]) {
           const px = x + f.tx * u, pz = z + f.tz * u;
-          if (this.crossing(px, pz, -1, f.tx, f.tz) || this.crossing(ix + f.tx * u, iz + f.tz * u, -1, f.tx, f.tz) || L.landAt(px, pz) === LAND.water) { bad = true; break; }
+          if (this.crossing(px, pz, -1, f.tx, f.tz) || this.crossing(ix + f.tx * u, iz + f.tz * u, -1, f.tx, f.tz) || [LAND.water, LAND.pond].includes(L.landAt(px, pz))) { bad = true; break; }
         }
         if (!bad) for (const o of this.streetsAt(x, z, 1.2)) if (o.st.cls < 8 && (o.edge < .5 || !this.routeStreet(o, f.tx, f.tz))) { bad = true; break; }
         if (!bad && !this._station({ route: true, s, side })) bad = true;   // no sidewalk here
         if (bad || this.lampNear(x, z, 3)) continue;
+        // [6.1] the trunk clear of every wall's facade, not just the one straight out from the curb (a corner block,
+        // a frontage at an angle): pilasters and bays stand ~.9 m proud, awnings and blade signs reach 1.3 m out
+        if (this.city.buildingNear(x, z, 2.3)) continue;
         // crown radius 2.4 × scale (city tree: scale .75 + seed × .5): clear of the tube (ROAD_WIDTH / 2 + .6) and the walls
         const wmax = Math.min(1.25, (curb + 1.1 - ROAD_WIDTH / 2 - .9) / 2.4, (Math.min(line, 8) - 1.1 + .4) / 2.4);
         if (wmax < .78) continue;
@@ -479,7 +483,7 @@ export class StreetKit {
    * at the curb; null where the zone has no sidewalk there (a junction); undefined outside the zones.
    */
   routeLamp(s, side) {
-    if (!this.zoneAt(s)) return undefined;
+    if (!this.zoneAt(s) || this.zoneAt(s).sidewalks === false) return undefined;   // ([6.6] a park drive: lamps on the verge, as outside the zones)
     const P = this._station({ route: true, s, side });
     if (!P || !this._station({ route: true, s: s - 3, side }) || !this._station({ route: true, s: s + 3, side })) return null;   // on a run of slabs, not at its end
     return { x: P.ix + P.nx * .45, z: P.iz + P.nz * .45, y: P.top };
@@ -593,6 +597,7 @@ export class StreetKit {
     const L = this.L, city = this.city;
     let x, z, y, tx, tz, curb, width = 3, zone = null, own = -1;
     if (st.route) {
+      if (this.zoneAt(st.s)?.sidewalks === false) return null;   // [6.6] (F88) a park drive: no sidewalks (Lake Drive)
       const f = this.frame(st.s); x = f.x; z = f.z; y = f.y + ROAD_LIFT; tx = f.tx; tz = f.tz; curb = this.curbAt(st.s);
       // (`clearRouteCrossings`, PLAN 5.9: no sidewalk round the apex of a hairpin — the slabs between stations fan
       // across the road there; Broadway Ave to Coast Ave in Beechview) — on the inside of the turn only: the outside's
@@ -620,7 +625,7 @@ export class StreetKit {
     for (const f of [0, .5, 1]) {
       const px = ix + nx * w * f, pz = iz + nz * w * f;
       if (this.crossing(px, pz, own, tx, tz)) return null;
-      if (L.landAt(px, pz) === LAND.water || L.bridgeAt(px, pz, 0)) return null;
+      if ([LAND.water, LAND.pond].includes(L.landAt(px, pz)) || L.bridgeAt(px, pz, 0)) return null;
       if (!st.route) { const r = L.routeDist(px, pz); if (r && r.d < this.curbAt(this.sOf(r)) + .3) return null; }
       // `clearRouteCrossings` (opt-in, PLAN 5.5: the GAP meeting East Waterfront Drive): no sidewalk across another
       // pass of the route — a trail that joins the route's street at a junction (F41: the other areas, after review)
@@ -987,6 +992,9 @@ export class StreetKit {
     if (!fn) return false;
     if (kind !== 'treePit' && kind !== 'car' && this.treeNear(x, z, Math.max(.9, LAMP_CLEAR[kind] ?? 0))) return false;   // [finish] not in a street tree's trunk
     if (kind !== 'car' && this.lampNear(x, z, LAMP_CLEAR[kind] ?? .7)) return false;   // [finish] …nor in a lamp post (hydrants every 90 m, pits, masts)
+    // [6.1] nothing standing in another street's carriageway (a mapped piece snapped to the wrong curb, a corner sign
+    // or bollard at a lane's mouth): its traffic drives through it. (The route's own street keeps the kit's curbs.)
+    if (kind !== 'treePit' && kind !== 'car' && this.streetsAt(x, z, -.2).some((o) => o.st.cls < 8 && !(this.L.routeDist(o.px, o.pz)?.d < 3))) return false;
     const y = opts.y ?? this.walkLevel(x, z);
     const M = opts.lod === 'mid' ? C.mid : C.near;
     const f = { x, y, z, yaw, c: Math.cos(yaw), s: Math.sin(yaw) };
@@ -1217,7 +1225,7 @@ export class StreetKit {
     const contour = ring.map((p) => new THREE.Vector2(p.x, p.z));
     let tris; try { tris = THREE.ShapeUtils.triangulateShape(contour, []); } catch { return; }
     const level = (x, z) => {
-      if (L.landAt(x, z) === LAND.water || this.streetsAt(x, z, .3).some((o) => o.st.cls < 8)) return null;   // not over a street (lots drawn across one)
+      if ([LAND.water, LAND.pond].includes(L.landAt(x, z)) || this.streetsAt(x, z, .3).some((o) => o.st.cls < 8)) return null;   // not over a street (lots drawn across one)
       const r = L.routeDist(x, z);
       if (r && r.d < ROAD_WIDTH / 2 + 2.2) return null;
       return L.heightAt(x, z) + .07;
@@ -1326,7 +1334,7 @@ export class StreetKit {
       for (let k = 0; k < n; k++) {
         const p = { x: a.x + (b.x - a.x) * k / n, z: a.z + (b.z - a.z) * k / n }, q = { x: a.x + (b.x - a.x) * (k + 1) / n, z: a.z + (b.z - a.z) * (k + 1) / n };
         const mx = (p.x + q.x) / 2, mz = (p.z + q.z) / 2;
-        if (!this.inArea(mx, mz) || L.landAt(mx, mz) === LAND.water || this.streetsAt(mx, mz, .2).some((o) => o.st.cls < 8)) continue;
+        if (!this.inArea(mx, mz) || [LAND.water, LAND.pond].includes(L.landAt(mx, mz)) || this.streetsAt(mx, mz, .2).some((o) => o.st.cls < 8)) continue;
         const rd = L.routeDist(mx, mz); if (rd && rd.d < ROAD_WIDTH / 2 + 1.5) continue;
         if (this.city.buildingNear(mx, mz, 0)) continue;
         if (this.lampNear(mx, mz, Math.hypot(q.x - p.x, q.z - p.z) / 2 + .4)) continue;   // [finish] a gap where a lamp post stands

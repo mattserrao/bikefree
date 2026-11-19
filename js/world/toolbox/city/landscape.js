@@ -17,8 +17,16 @@ import { drain, due } from '../core/jobs.js';   // [F30] the city's streets are 
 import { makeStreetGrade } from './street-grade.js';   // [street-kit]
 import { riverfrontGroundJob } from './riverfront.js';   // [s1-riverfront]
 
-export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand: 5, plaza: 6, outside: 7, yards: 8 };
-const LAND_COLORS = ['#8d8a84', '#77985a', '#4d6a3a', '#6c6a5e', '#7d786f', '#b5a684', '#b4ada0', '#6d8252', '#7c8c5f'];
+// [6.5] pond: hill water at its own level (the city data's "ponds", build_city.py): not the rivers' water
+export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand: 5, plaza: 6, outside: 7, yards: 8, pond: 9 };
+const LAND_COLORS = ['#8d8a84', '#77985a', '#4d6a3a', '#6c6a5e', '#7d786f', '#b5a684', '#b4ada0', '#6d8252', '#7c8c5f', '#6f7a58'];
+/** [6.5] (F131) How a pond's bank is built, by kind: `rim` the bank's top over the water, `wall` a stone edge (a
+ *  reservoir's or a basin's coping) rather than a sloping earth bank. */
+export const POND_KINDS = {
+  reservoir: { rim: .55, wall: true }, fountain: { rim: .45, wall: true }, pool: { rim: .45, wall: true }, pond: { rim: .3, wall: false },
+};
+/** The ground a pond holds (metres out from its edge): raised to its bank, easing back to the hillside. */
+export const POND_BANK_M = 9;
 
 const decode = (text, Type) => {
   const bytes = Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
@@ -35,14 +43,51 @@ export function decodeCity(data, proj) {
   for (let i = 0, k = 0; i < data.land.rle.length; i += 2) { land.fill(data.land.rle[i], k, k + data.land.rle[i + 1]); k += data.land.rle[i + 1]; }
   const [lat0, lon0] = data.origin, unit = data.unit;
   const local = (qlat, qlon) => proj.toLocal(lat0 + qlat * unit, lon0 + qlon * unit);
+  // [6.5] (F131) hill water: each pond's ring in local metres, its level, kind and box
+  const ponds = (data.ponds || []).map((p, k) => {
+    const ring = p.ring.map(([a, o]) => local(a, o));
+    let area = 0; for (let i = 0; i < ring.length; i++) { const a = ring[i], b = ring[(i + 1) % ring.length]; area += a.x * b.z - b.x * a.z; }
+    if (area < 0) ring.reverse();   // counter-clockwise in (x, z): the outward normal of edge a→b is (dz, -dx)
+    const xs = ring.map((q) => q.x), zs = ring.map((q) => q.z);
+    return { k, name: p.name || '', kind: POND_KINDS[p.kind] ? p.kind : 'pond', level: p.level, ring, area: Math.abs(area) / 2,
+      x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) };
+  });
   const decoded = {
-    proj, heights, land, x0: nw.x, z0: nw.z, x1: se.x, z1: se.z, nx: g.nx, ny: g.ny, lx: data.land.nx, ly: data.land.ny,
+    proj, heights, land, ponds, x0: nw.x, z0: nw.z, x1: se.x, z1: se.z, nx: g.nx, ny: g.ny, lx: data.land.nx, ly: data.land.ny,
     base: g.base, scale: g.scale, local,
     /** Polylines/polygons stored as [qlat, qlon] pairs → local {x, z}. */
     points(xy, from, to) { const out = []; for (let i = from; i < to; i++) out.push(local(xy[i * 2], xy[i * 2 + 1])); return out; },
   };
   Object.defineProperty(data, '_decoded', { value: decoded, enumerable: false, configurable: true });
   return decoded;
+}
+
+/**
+ * [6.5] (F131) A street or path running along a pond (a service road on a reservoir's edge) keeps its carriageway
+ * and sidewalks 35 cm over the water, ramping back to its own profile at 8 %; streets sharing a lifted node follow
+ * (two passes). The route's road is never moved (its bank rules round it).
+ */
+function* liftOverPondsJob(streets, landscape) {
+  if (!landscape.ponds?.length) return;
+  const key = (p) => Math.round(p.x * 100) * 4194304 + Math.round(p.z * 100), need = new Map();
+  for (let pass = 0; pass < 2; pass++) {
+    for (const st of streets) {
+      if (st.bridge || !st.pts.length) continue;
+      const P = st.pts, n = P.length, req = new Float64Array(n).fill(-Infinity);
+      let any = false;
+      for (let i = 0; i < n; i++) {
+        const pd = landscape.pondAt(P[i].x, P[i].z, st.width / 2 + 2.6), k = need.get(key(P[i]));
+        if (pd && !P[i].pin) { req[i] = pd.p.level + .35; any = true; }
+        if (k != null && k > P[i].y + .005) { req[i] = Math.max(req[i], k); any = true; }
+      }
+      if (!any) continue;
+      const s = [0]; for (let i = 1; i < n; i++) s.push(s[i - 1] + Math.hypot(P[i].x - P[i - 1].x, P[i].z - P[i - 1].z));
+      for (let i = 1; i < n; i++) req[i] = Math.max(req[i], req[i - 1] - .08 * (s[i] - s[i - 1]));
+      for (let i = n - 2; i >= 0; i--) req[i] = Math.max(req[i], req[i + 1] - .08 * (s[i + 1] - s[i]));
+      for (let i = 0; i < n; i++) if (req[i] > P[i].y && !P[i].pin) { P[i].y = req[i]; need.set(key(P[i]), Math.max(need.get(key(P[i])) ?? -Infinity, req[i])); }
+      if (due()) yield;
+    }
+  }
 }
 
 export function makeCityLandscape(config, proj, index, route) { return drain(makeCityLandscapeJob(config, proj, index, route)); }
@@ -145,6 +190,41 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
     return (w(j * n + i) * (1 - a) + w(j * n + i + 1) * a) * (1 - b) + (w((j + 1) * n + i) * (1 - a) + w((j + 1) * n + i + 1) * a) * b;
   };
 
+  // [6.5] (F131) Hill water: the pond at (x, z) or within `band` of its edge — {p, d}: d the distance to its edge,
+  // positive inside (the ponds on a 32 m grid of their boxes and banks)
+  const pondGrid = new Map();
+  for (const p of D.ponds) {
+    for (let gx = Math.floor((p.x0 - POND_BANK_M) / 32); gx <= Math.floor((p.x1 + POND_BANK_M) / 32); gx++)
+      for (let gz = Math.floor((p.z0 - POND_BANK_M) / 32); gz <= Math.floor((p.z1 + POND_BANK_M) / 32); gz++) {
+        const key = `${gx},${gz}`; if (!pondGrid.has(key)) pondGrid.set(key, []); pondGrid.get(key).push(p);
+      }
+  }
+  const pondAt = (x, z, band = 0) => {
+    if (!pondGrid.size) return null;
+    let best = null;
+    for (const p of pondGrid.get(`${Math.floor(x / 32)},${Math.floor(z / 32)}`) || []) {
+      if (x < p.x0 - band || x > p.x1 + band || z < p.z0 - band || z > p.z1 + band) continue;
+      const R = p.ring; let inside = false, d2 = Infinity;
+      for (let i = 0, j = R.length - 1; i < R.length; j = i++) {
+        const a = R[j], b = R[i];
+        if ((b.z > z) !== (a.z > z) && x < (a.x - b.x) * (z - b.z) / (a.z - b.z) + b.x) inside = !inside;
+        const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1;
+        const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / l2));
+        d2 = Math.min(d2, (a.x + dx * t - x) ** 2 + (a.z + dz * t - z) ** 2);
+      }
+      const d = inside ? Math.sqrt(d2) : -Math.sqrt(d2);
+      if (d >= -band && (!best || d > best.d)) best = { p, d };
+    }
+    return best;
+  };
+  /** The ground at a pond: under the water a basin (0.8 m under it at the edge, down to 2.8 m), round it a bank
+   *  just over the water (its rim) for 1.6 m, then easing down 1:2 to the hillside where that lies lower. */
+  const pondGround = (h, hit) => {
+    const lv = hit.p.level, d = hit.d;
+    if (d > 0) return Math.min(h, lv - .8 - Math.min(2, d * .25));
+    return Math.max(h, lv + .35 - Math.max(0, -d - 1.6) * .5);
+  };
+
   // Route bridges (from OSM) as distance ranges along the outbound road.
   const routeBridges = (data.routeBridges || []).map((b) => ({ ...b, toM: Math.min(b.toM, route.turnS || route.total) }));
   const onRouteBridge = (s, margin = 0) => routeBridges.find((b) => s > b.fromM - margin && s < b.toM + margin);
@@ -244,6 +324,7 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
     // at exactly the water level): kept 35 cm above or 60 cm below, so the shoreline is a steep crossing rather
     // than ground lying a few centimetres from the water across a whole cell (that flickers)
     if (h > level - .6 && h < level + .35) h = h >= level - .1 ? level + .35 : level - .6;
+    { const pd = pondAt(x, z, POND_BANK_M); if (pd) h = pondGround(h, pd); }   // [6.5] hill water
     return h;
   };
   // The ground follows the city's streets: under a street and its sidewalks it sits just below the ribbon
@@ -372,9 +453,19 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
     if (!own || own.d > 9) {   // (near the route's own road its bank wins: the ground mesh can't step that fast)
       for (const o of streetsNear(x, z, 1.5)) if (streetIndex.streets[o.k].bridge && h > o.y - .35) h = Math.min(h, o.y - .35);
     }
+    // [6.1] and never over a street's own carriageway, sidewalk or path (away from the route's road, whose
+    // bank wins there): the route's bank, a hillside or a junction's grading used to rise over a lower street beside
+    // the route, and the grass covered its edge
+    if (!own || own.d > 9) {   // (as decks: within 9 m the route's bank wins — the 6 m mesh couldn't follow a step there)
+      for (const o of around) if (o.edge < (SIDEWALK_CLS(streetIndex.streets[o.k].cls) ? 2.6 : .4) && h > o.y - .12) h = o.y - .12;   // (around: no decks)
+    }
     // nor, after all that grading, near the water's level (the route's riverside trail around the Point presses
     // the ground to exactly the water's level)
     if (h > level - .6 && h < level + .35) h = h >= level - .1 ? level + .35 : level - .6;
+    // [6.5] nor over a pond's water inside it (a street's grading reaching over its edge)
+    // (and its basin kept under the water: a path's grading beside a small basin reached right across it)
+    // and its bank's top over the water where no street or path runs along it (their grading may bring it down)
+    { const pd = pondAt(x, z, 1.6); if (pd) h = pd.d > 0 ? Math.min(h, pd.p.level - .8 - Math.min(2, pd.d * .25)) : (!own || own.d > 9) && around.every((o) => o.edge > 3) ? Math.max(h, pd.p.level + .35) : h; }
     return h;
   };
   // [road-align] how far the ground eases towards the route's road (a route that follows its own ground needs less)
@@ -397,6 +488,9 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
         }
         if (under) h += (roadEle(under.j, x, z) - .5 - h) * (1 - smoothstep(13, 20, under.d));
       }
+      // [6.5] a pond beside the route keeps its basin and bank through the route's bank (but never over its road)
+      const pd = pondAt(x, z, POND_BANK_M);
+      if (pd) { h = pondGround(h, pd); if (!bridge && road.d < 9) h = Math.min(h, roadEle(i, x, z) - .5 + Math.max(0, road.d - 5) * .2); }
     }
     return h;
   };
@@ -405,7 +499,7 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
     if (!road || road.d > 26) return null;
     return onRouteBridge(route.dist[outbound(road.i)], margin) || null;
   };
-  const waterLevelAt = (x, z) => (waterAt(x, z) > .5 ? level : -Infinity);
+  const waterLevelAt = (x, z) => { if (waterAt(x, z) > .5) return level; const pd = pondAt(x, z); return pd ? pd.p.level : -Infinity; };
 
   // A first landmark for the scenic camera: the first styled bridge on the route.
   const landmarks = [];
@@ -491,7 +585,8 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
     lakes: [], waterIslands: [], creeks: [], creekAt: () => null, landmarks,
     sheltered: pads ? pads.sheltered : () => false,   // [glasshouse] under glass (no rain, no street lamps)
     heightAt, baseHeight, terrainAt, bridgeAt, waterLevelAt, landAt: landCell, waterAt, routeKindAt, routeBridges, broad,
-    isWater: (x, z, height) => waterAt(x, z) > .35 && height < level + .6,
+    isWater: (x, z, height) => (waterAt(x, z) > .35 && height < level + .6) || (((pd) => !!pd && height < pd.p.level + .6)(pondAt(x, z))),
+    ponds: D.ponds, pondAt,   // [6.5] (F131) hill water at its own level
     colorAt: (x, z) => LAND_COLORS[landCell(x, z)] || null,
     /** Trees and shrubs from the shared kit grow only in parks, woods and the hills beyond. */
     canPlant: (x, z) => { const c = landCell(x, z); return c === LAND.woods || c === LAND.outside || (c === LAND.grass && ((x * 13 + z * 7) & 3) === 0) || (c === LAND.yards && yardTree(x, z)); },   // [s4-section] yards
@@ -525,6 +620,7 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
 
 export const STREET_W = [15, 7.5, 13, 11, 9.5, 7.5, 9, 5, 3.4];   // street width by class (tools/build_city.py)
 export const STREET_LIFT = .24;                                     // highest a street ribbon sits above its line
+const SIDEWALK_CLS = (cls) => cls >= 2 && cls <= 6;   // [6.1] streets drawn with sidewalks (city.js), 2.5 m past the carriageway
 
 /**
  * The city's streets as drawn: [{cls, bridge, oneway, layer, width, pts: [{x, y, z}]}]. Bridge decks keep their
@@ -599,6 +695,7 @@ export function* cityStreetsJob(landscape, index, route) {
     for (const st of streets) { st.pts.forEach((p, j) => { if (lower(p, st.width, !st.bridge && alongRoute(st.pts, j))) st.underRoute = true; }); if (due()) yield; }
     yield* syncPinnedNodesJob(streets);
   }
+  yield* liftOverPondsJob(streets, landscape);   // [6.5] no street, path or sidewalk at or under a pond's water
   landscape._streets = streets;
   // [junctions] real intersection geometry: street heights inside junctions, trims, the junction surfaces
   if (landscape.junctions) {

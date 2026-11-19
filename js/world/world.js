@@ -7,13 +7,13 @@ import { Weather } from './toolbox/atmosphere/weather.js';
 import { PostFX } from './toolbox/atmosphere/post.js';
 import { Look, LOOKS } from './toolbox/atmosphere/look.js';
 import { StylizedTerrain, SCENERY_QUALITY } from './stylized-terrain.js';
-import { riderPose, routePoint, ROAD_WIDTH, CHASE, CAMERAS } from './pose.js';
+import { riderPose, routePoint, ROAD_WIDTH, CHASE, CAMERAS, DEFAULT_CAMERA, PACER_LANE } from './pose.js';
 import { loadRider } from './rider.js';
 import { PerfMonitor } from './perf.js';
 import { HAZE, AERIAL, AERIAL_COLOR, installHaze } from './toolbox/atmosphere/haze.js';
 import { vistaConfig } from './toolbox/atmosphere/vista.js';
 import { decorateRoad, frenchMarkings } from './toolbox/materials/road-surface.js';
-import { denseRoad, ribbonSections } from './road-align.js';   // [road-align] [smooth-turns]
+import { denseRoad, ribbonSections, apronFades } from './road-align.js';   // [road-align] [smooth-turns] [F133]
 import { ghostAt, undergroundAt } from './ghost.js';   // [road-align]
 import { BakedLighting } from './toolbox/atmosphere/baked-light.js';   // [baked-light]
 import { CourseArches } from './toolbox/roadside/course-arches.js';
@@ -41,7 +41,22 @@ const RIDER_LANE = 0.22;   // × road width, right of the centre line
 // [F30] main-thread ms a frame for building areas (js/world/toolbox/core/jobs.js slices): the one the swap waits for (behind
 // the fade) or the plan's at the start (behind the loader); one the path enters within AREA_SOON_M; one further ahead
 const AREA_BUDGET = { urgent: 40, soon: 10, ahead: 4 }, AREA_SOON_M = 500;
-const PACER_LANE = 0.07;   // a bike-width further in, so you can ride alongside or pass
+// [F220] waiting for an area: after this long under the fade the build gets `rush` ms a frame (behind a "Loading…"
+// notice); an area that fails to load or build is tried again after AREA_RETRY_S × tries, at most AREA_TRIES times
+const AREA_RUSH_S = 1.5, AREA_RUSH_MS = 250, AREA_RETRY_S = 10, AREA_TRIES = 3;
+
+/**
+ * [F220] What the world does when the path wants area `want` drawn and `current` is drawn: 'swap' (it is built),
+ * 'stay' (keep drawing the current one: nothing to swap to — it failed — or the rider is still on streets the
+ * current area covers, its apron, while the wanted one is hurried), or 'wait' (the rider has left the current area's
+ * streets and the wanted one isn't built: the fade, the last resort).
+ */
+export function areaChoice({ want, current, ready, failed, covers }) {
+  if (want === current) return 'stay';
+  if (ready) return 'swap';
+  if (failed || covers) return 'stay';
+  return 'wait';
+}
 
 export class World {
   /**
@@ -149,12 +164,13 @@ export class World {
     }
 
     const city = route.scene?.terrain === 'authored-city';
-    this.shoulder = makeRibbon(route, this.index, ROAD_WIDTH + (city ? 4 : this.stylized ? 1.6 : 3.4), city ? .09 : 0.05, makeGravelTexture(this.stylized, city), 3, { polygonOffsetFactor: city ? -1.8 : -1, polygonOffsetUnits: city ? -1.8 : -1 });
+    const widthAt = city ? streetWidthAt(this.terrain.landscape) : null;   // [F133]
+    this.shoulder = makeRibbon(route, this.index, ROAD_WIDTH + (city ? 4 : this.stylized ? 1.6 : 3.4), city ? .09 : 0.05, makeGravelTexture(this.stylized, city), 3, { polygonOffsetFactor: city ? -1.8 : -1, polygonOffsetUnits: city ? -1.8 : -1 }, widthAt);
     this.shoulder.visible = !this.wireframe;   // no gravel verge on a wireframe placeholder
     this.scene.add(this.shoulder);
     const junctions = city ? junctionPlan(this.terrain.landscape, this.index, route) : null;   // [junctions]
     if (junctions) cutRouteRibbon(this.shoulder, junctions, denseRoad(route, this.index)[0].dist);   // [junctions] no shoulder inside a junction (its stations: the drawn curve's)
-    this.road = makeRoad(route, this.index);
+    this.road = makeRoad(route, this.index, { widthAt });
     this.scene.add(this.road);
     // the area drawn (one, unless this is a city of areas: then more are built and swapped in as the path goes)
     this.area = { id: this.areaSet?.id ?? null, route, index: this.index, terrain: this.terrain, road: this.road, shoulder: this.shoulder, ready: true };
@@ -226,13 +242,21 @@ export class World {
   _areaTick(dt) {
     dt = Math.max(0, dt);   // (frames held behind the bake loader can run with a clock behind)
     const want = this.path.areaFor(this.p, this.area.id);
-    let waiting = false;
-    if (want !== this.area.id) {
-      const a = this.areas.get(want);
-      if (a?.ready) this._useArea(a);
-      else { this._ensureArea(want); waiting = true; }
-    }
-    this._fade(waiting);
+    // [F220] never a blank screen while the rider is still on the drawn area's streets: swap once the wanted area is
+    // built; until then keep drawing this one while it covers the rider (its apron; the build runs at the 500 m budget); fade only when
+    // the rider has left its streets — and past AREA_RUSH_S, build the rest fast behind a "Loading…" notice. An area
+    // that fails to load or build doesn't hold the ride: the drawn one stays (no fade, no endless retry)
+    const a = this.areas.get(want);
+    const choice = areaChoice({ want, current: this.area.id, ready: !!a?.ready, failed: this._areaFailed(want), covers: this.path.covers(this.area.id, this.p) });
+    if (choice === 'swap') this._useArea(a);
+    else if (want !== this.area.id && choice !== 'swap' && !this._areaFailed(want)) this._ensureArea(want);
+    const waiting = choice === 'wait';
+    this._waitS = waiting ? (this._waitS || 0) + dt : 0;
+    this._fade(waiting, this._waitS > AREA_RUSH_S);
+    // (each wait under the fade, for tools/ride_area_load.mjs: [{id, p, s}])
+    const w = (this.areaWaits ||= []).at(-1);
+    if (waiting) { if (w?.open) w.s += dt; else this.areaWaits.push({ id: want, p: Math.round(this.p), s: dt, open: true }); }
+    else if (w?.open) w.open = false;
     if ((this._resT = (this._resT ?? 0) - dt) <= 0) {
       this._resT = .5;
       const need = this.path.areasNear(this.p);
@@ -240,14 +264,16 @@ export class World {
       // loader, and kept; off the plan (a free ride, a turn of your own) an area is built when the path reaches 1.5 km
       // of it. [F30] Either way the build runs in frame slices (_runAreaJobs): seconds of main-thread work spread thin
       for (const id of this._planAreas()) need.add(id);
+      for (const id of this.path.areasReachable?.(this.p) || []) need.add(id);   // [F220] where a choice at the junctions ahead could go
       const pacer = this.pacerSource?.()?.path;
       if (pacer?.own) for (const id of pacer.own.areasNear(this.ps ?? this.p, 300, 0)) need.add(id);   // (the pacer, on its own way)
       need.add(this.area.id);
       for (const id of need) this._ensureArea(id);
       for (const a of [...this.areas.values()]) if (!need.has(a.id) && a !== this.area && (a.ready || a.job)) this._releaseArea(a);
       this._soon = this.path.areasNear(this.p, AREA_SOON_M, 0);   // [F30] (areas the path enters within 500 m: their builds hurry)
+      this._near = this.path.areasNear(this.p);   // [F32] (areas the path enters within 1.5 km: baked ahead of their swap)
     }
-    this._runAreaJobs(want, waiting);
+    this._runAreaJobs(want, waiting, this._waitS > AREA_RUSH_S);   // (on the apron it builds at the 500 m budget: the view is still drawn)
     const c = this.camera.position;
     for (const a of this.areas.values()) if (a !== this.area && a.ready) { const t0 = performance.now(); a.terrain.prepare?.(c.x, c.z, 2); this._areaWork(a.id, 'prepare', performance.now() - t0); }
   }
@@ -270,7 +296,7 @@ export class World {
    * same order as building it at once, so the area is the same, but no frame stalls for it.
    */
   _ensureArea(id) {
-    if (this.areas.has(id) || !this.areaSet?.load) return;
+    if (this.areas.has(id) || !this.areaSet?.load || this._areaFailed(id)) return;
     const rec = { id, ready: false, ms: {} };
     this.areas.set(id, rec);
     const live = () => !this.disposed && this.areas.get(id) === rec;
@@ -278,8 +304,15 @@ export class World {
     this.areaSet.load(id).then((route) => {
       if (!live()) return;
       rec.job = this._areaJob(id, route, rec);
-    }).catch((err) => { this.log('3d', `Area ${id} could not load: ${err.message}`, 'error'); if (this.areas.get(id) === rec) this.areas.delete(id); });
+    }).catch((err) => { this.log('3d', `Area ${id} could not load: ${err.message}`, 'error'); if (this.areas.get(id) === rec) { this.areas.delete(id); this._areaFail(id); } });
   }
+  /** [F220] Area `id` failed to load or build: not tried again for AREA_RETRY_S × tries (after AREA_TRIES, not this ride). */
+  _areaFail(id) {
+    const f = (this._areaFails ||= new Map()).get(id) || { n: 0 };
+    f.n++; f.until = f.n >= AREA_TRIES ? Infinity : performance.now() + AREA_RETRY_S * 1000 * f.n;
+    this._areaFails.set(id, f);
+  }
+  _areaFailed(id) { const f = this._areaFails?.get(id); return !!f && performance.now() < f.until; }
   /** [F30] An area's build as a job: its scenery (landscape, streets, ground, water), road and shoulder, then the city. */
   *_areaJob(id, route, rec) {
     const index = makeRouteIndex(route, this.proj);
@@ -300,13 +333,14 @@ export class World {
   *_areaRoadJob(parts) {
     const { route, index, terrain } = parts;
     const city = route.scene?.terrain === 'authored-city';
-    const shoulder = makeRibbon(route, index, ROAD_WIDTH + (city ? 4 : 1.6), city ? .09 : 0.05, makeGravelTexture(true, city), 3, { polygonOffsetFactor: city ? -1.8 : -1, polygonOffsetUnits: city ? -1.8 : -1 });
+    const widthAt = city ? streetWidthAt(terrain.landscape) : null;   // [F133]
+    const shoulder = makeRibbon(route, index, ROAD_WIDTH + (city ? 4 : 1.6), city ? .09 : 0.05, makeGravelTexture(true, city), 3, { polygonOffsetFactor: city ? -1.8 : -1, polygonOffsetUnits: city ? -1.8 : -1 }, widthAt);
     parts.shoulder = shoulder;
     if (due()) yield;
     const junctions = city ? junctionPlan(terrain.landscape, index, route) : null;   // [junctions]
     if (junctions) cutRouteRibbon(shoulder, junctions, denseRoad(route, index)[0].dist);
     if (due()) yield;
-    const road = makeRoad(route, index);
+    const road = makeRoad(route, index, { widthAt });
     shoulder.visible = road.visible = false;
     this.scene.add(shoulder, road);
     parts.road = road;
@@ -319,13 +353,13 @@ export class World {
    * [F30] Run the area builds a slice each frame: the area the swap waits for (behind the fade) and the plan's areas at
    * the start (behind the loader) get AREA_BUDGET.urgent, an area the path enters within 500 m .soon, the rest .ahead.
    */
-  _runAreaJobs(want, waiting) {
+  _runAreaJobs(want, waiting, rush = false) {
     let left = null;
     for (const rec of [...this.areas.values()].sort((a, b) => (b.id === want) - (a.id === want))) {
       if (!rec.job || rec.wait) continue;
       const urgent = (waiting && rec.id === want) || (!this._planBuilt && this._planAreas().includes(rec.id));
       const B = this.areaBudget || AREA_BUDGET;   // (tools may set world.areaBudget: Infinity = all at once, the old way)
-      const budget = urgent ? B.urgent : this._soon?.has(rec.id) ? B.soon : B.ahead;
+      const budget = rush && rec.id === want ? Math.max(B.urgent, AREA_RUSH_MS) : urgent ? B.urgent : this._soon?.has(rec.id) ? B.soon : B.ahead;   // [F220] rush
       left = left == null ? budget : Math.min(left, budget);
       if (left <= .5) break;
       const t0 = performance.now();
@@ -333,6 +367,7 @@ export class World {
       try { r = runSlice(rec.job, left); } catch (err) {
         this.log('3d', `Area ${rec.id} could not be built: ${err.message}`, 'error');
         this._releaseArea(rec);
+        this._areaFail(rec.id);   // [F220] (not again next frame: the drawn area stays)
         continue;
       }
       const ms = performance.now() - t0;
@@ -359,6 +394,8 @@ export class World {
     a.terrain.group.visible = true; a.road.visible = true; a.shoulder.visible = !this.wireframe;
     Object.assign(this, { area: a, route: a.route, index: a.index, terrain: a.terrain, road: a.road, shoulder: a.shoulder });
     if (this.farTerrain) a.terrain.realHeightAt = (x, z) => this.farTerrain.heightAt(x, z);
+    a.terrain.city?.life?.takeOver?.(old.terrain.city?.life);   // [F31] its life takes over the people and traffic near the camera
+    this.baked?.useArea(a.id, old.id);   // [F32] its own bake (baked ahead), if it has one
     const bank = this.weather?.bankUniforms;
     if (bank && a.terrain.shoreTexture) { bank.bfShore.value = a.terrain.shoreTexture; bank.bfShoreBox.value = a.terrain.shoreBox || bank.bfShoreBox.value; }
     (this.areaLog ||= []).push({ id: a.id, p: Math.round(this.p) });
@@ -367,6 +404,7 @@ export class World {
   _releaseArea(a) {
     const t0 = performance.now();
     this.areas.delete(a.id);
+    this.baked?.releaseArea(a.id);   // [F32]
     a.job = null;   // [F30] (a build half done stops here)
     const parts = a.terrain ? a : a.parts || {};
     parts.terrain?.dispose();
@@ -381,15 +419,30 @@ export class World {
     this._areaWork(a.id, 'release', performance.now() - t0);
     this.log('3d', `Released area ${a.id}`, 'debug');
   }
+  /**
+   * [F32] The areas to bake ahead of their swap (js/world/toolbox/atmosphere/baked-light.js _bakeAhead): built, hidden
+   * areas the path enters within 1.5 km, the ones within 500 m (`soon`) first.
+   */
+  _bakeAhead() {
+    if (!this._multi || !this._near) return [];
+    const out = [];
+    for (const a of this.areas.values()) {
+      if (a === this.area || !a.ready || !a.terrain || !this._near.has(a.id)) continue;
+      out.push({ id: a.id, terrain: a.terrain, road: a.road, shoulder: a.shoulder, index: a.index, route: a.route, soon: !!this._soon?.has(a.id) });
+    }
+    return out.sort((p, q) => q.soon - p.soon);
+  }
   /** A short fade to the sky while the next area is still being built (the ride carries on underneath). */
-  _fade(on) {
+  _fade(on, notice = false) {
     if (!on && !this._fadeEl) return;
     if (!this._fadeEl) {
       this._fadeEl = document.createElement('div');
       this._fadeEl.className = 'area-fade';
-      Object.assign(this._fadeEl.style, { position: 'absolute', inset: '0', zIndex: 4, pointerEvents: 'none', opacity: '0', transition: 'opacity .3s' });
+      Object.assign(this._fadeEl.style, { position: 'absolute', inset: '0', zIndex: 4, pointerEvents: 'none', opacity: '0', transition: 'opacity .3s',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', font: '600 15px/1.4 system-ui, sans-serif', color: '#3c4a52', letterSpacing: '.02em' });
       this.container.appendChild(this._fadeEl);
     }
+    this._fadeEl.textContent = on && notice ? 'Loading the streets ahead…' : '';   // [F220] (a wait past a moment says so)
     if (on) this._fadeEl.style.background = `#${this.scene.fog.color.getHexString()}`;
     this._fadeEl.style.opacity = on ? '1' : '0';
     this._waitingArea = on;
@@ -466,6 +519,7 @@ export class World {
     const total = this.route.total;
     // Same smoothing as the rider: roll at its speed, ease toward the true position.
     if (!this._pacerInit) { this.ps = src.pos; this.pacerCrank = 0; this._pacerInit = true; }
+    this._pacerSpeed = src.speed;   // [6.10] (for the city's riders on the route)
     if (this.path) {
       // (on its own copy of the path, src.path: a turn you change behind it doesn't move it — js/network.js PathFollower)
       this.ps = this._followPath(this.ps, src.pos, src.speed, dt);
@@ -661,6 +715,8 @@ export class World {
       // [network] a U-turn ahead on the path, in the same frame (out metres): oncoming traffic doesn't pass you just before it
       const U = this.path?.uturnAhead?.(this.p);
       if (U != null) { const w = this.path.worldAt(Math.max(0, U - 1), this.area?.id ?? null); if (w.area === (this.area?.id ?? w.area)) rider.uturn = w.s > turn ? total - w.s : w.s; }
+      // [6.10] the pacer where it's drawn: the city's riders on the route keep out of its line too
+      if (this.pacer?.group.visible && this._pacerPose) rider.pacer = { x: this._pacerPose.pos.x, z: this._pacerPose.pos.z, speed: this._pacerSpeed ?? src.speed };
       this.terrain.tick(this.camera.position, dt, rider);
     }
     if (this.headlight?.visible) {
@@ -724,9 +780,9 @@ export class World {
     sm.needsUpdate = moved || this._shadowFrame % 2 === 0;
   }
 
-  /** Settings → Camera: 'close' (default, speed feel) or 'classic' (the fixed 4.5 m camera). */
+  /** Settings → Camera: 'closest' (default, PLAN 6.10), 'close' (speed feel) or 'classic' (the fixed 4.5 m camera). */
   setCamera(key) {
-    this.camKey = CAMERAS[key] ? key : 'close';
+    this.camKey = CAMERAS[key] ? key : DEFAULT_CAMERA;
     this._camInit = false;   // jump straight to the new spot
   }
 
@@ -751,6 +807,7 @@ export class World {
     // Aim a little low so the rider sits above the HUD strip at the bottom of the screen.
     pos.copy(riderPos).addScaledVector(flat, -(K.back + pull)).addScaledVector(up, K.up);
     look.copy(riderPos).addScaledVector(fwd, K.ahead).addScaledVector(up, K.lookUp);
+    look.y += this.terrain.cameraLookUp?.(riderPos.x, riderPos.z) || 0;   // [F111] e.g. up into a glasshouse's dome
     // Keep the camera above ground (not underground: in a tunnel or an escalator shaft the ground is overhead)
     const g = this._underS ? null : this.terrain.heightAt(pos.x, pos.z);
     if (g != null && pos.y < g + K.ground) pos.y = g + K.ground;
@@ -930,13 +987,15 @@ function makeSky() {
 const roadPoints = (route) => (route.turnIdx ? route.turnIdx + 1 : route.dist.length);
 
 // ---------- Road ----------
-function makeRoad(route, index) {
+function makeRoad(route, index, opts = {}) {
   [route, index] = denseRoad(route, index);   // [road-align] the curved centre line, when the scene asks for it
   const stylized = route.scene?.style === 'stylized';
   const n = roadPoints(route);
   const pos = new Float32Array(n * 2 * 3);
   const uv = new Float32Array(n * 2 * 2);
   const E = ribbonSections(index, n, ROAD_WIDTH / 2);   // [smooth-turns] left/right edges (no folds with roadAlign.turns)
+  const fade = roadFades(route, index, n, opts.widthAt);   // [F133] an apron's road ending mid-street: its last 50 m fade into the street
+  if (fade) taperSections(E, index, n, fade.half, ROAD_WIDTH / 2);
   for (let i = 0; i < n; i++) {
     const y = route.ele[i] + 0.12;
     pos.set([E[i * 4], y, E[i * 4 + 1], E[i * 4 + 2], y, E[i * 4 + 3]], i * 6);
@@ -1014,10 +1073,12 @@ function makeRoad(route, index) {
   // A city route: streets keep the lane paint; riverfront trails and park paths get a plain,
   // lighter surface with a dashed white centre line.
   const trail = (i) => (kinds.find((k) => route.dist[i] >= k.fromM && route.dist[i] < k.toM) || {}).kind === 'trail';
-  const roadIdx = [], trailIdx = [];
+  const roadIdx = [], trailIdx = [], fadeRoadIdx = [], fadeTrailIdx = [];
+  // [F133] the quads of a fading end go to their own transparent meshes (the street shows through as they fade)
+  const fading = (i) => fade && (fade.alpha[i] < .999 || fade.alpha[i + 1] < .999);
   // (by the quad's own sample: after a ghost stretch, slicing idx by sample shifted every later stretch's paint
   // by the ghost's length — F45: road paint on the South Side Trail at S, the Homestead riverfront)
-  quadAt.forEach((i, q) => (trail(i) ? trailIdx : roadIdx).push(...idx.slice(q * 6, q * 6 + 6)));
+  quadAt.forEach((i, q) => (trail(i) ? (fading(i) ? fadeTrailIdx : trailIdx) : (fading(i) ? fadeRoadIdx : roadIdx)).push(...idx.slice(q * 6, q * 6 + 6)));
   geo.setIndex(roadIdx);
   const tc = document.createElement('canvas'); tc.width = 64; tc.height = 256;
   const t = tc.getContext('2d');
@@ -1034,15 +1095,78 @@ function makeRoad(route, index) {
   const tmesh = new THREE.Mesh(tgeo, tmat);
   tmesh.frustumCulled = false; tmesh.renderOrder = 2; tmesh.receiveShadow = true;
   const group = new THREE.Group(); group.add(mesh, tmesh);
+  // [F133] the fading ends: the same surface (a copy of the material, decorated alike), its alpha per vertex
+  if (fade) {
+    const alpha = new THREE.BufferAttribute(fadeColors(fade.alpha, n), 4);
+    const fadeMesh = (src, list, decorate, name) => {
+      if (!list.length) return;
+      const g = new THREE.BufferGeometry();
+      for (const k of ['position', 'uv', 'normal']) g.setAttribute(k, geo.attributes[k]);
+      g.setAttribute('color', alpha); g.setIndex(list);
+      const m = src.material.clone();
+      Object.assign(m, { transparent: true, depthWrite: false, vertexColors: true });
+      decorate?.(m);
+      const fm = new THREE.Mesh(g, m);
+      fm.frustumCulled = false; fm.renderOrder = 2; fm.receiveShadow = src.receiveShadow; fm.name = name;
+      fm.userData.fadeOf = src.name || (src === mesh ? 'road' : 'trail');
+      group.add(fm);
+    };
+    fadeMesh(mesh, fadeRoadIdx, stylized && route.scene.road ? (m) => decorateRoad(m, route.scene.road, { widthM: ROAD_WIDTH, repeatM: 24, marks }) : null, 'Route road fade');
+    fadeMesh(tmesh, fadeTrailIdx, stylized && route.scene.road?.trail ? (m) => decorateRoad(m, route.scene.road.trail, { widthM: ROAD_WIDTH, repeatM: 24 }) : null, 'Route trail fade');
+    group.userData.fades = fade.ends;
+  }
   return group;
 }
 
+/**
+ * [F133] The width of the street a route runs on, from the city landscape: the street under most of the points
+ * (its centre line within its own carriageway), a path only where no street is. Null where none is found.
+ */
+export function streetWidthAt(L) {
+  if (!L?.streetAt) return null;
+  return (pts) => {
+    const seen = new Map();
+    for (const p of pts) {
+      const h = L.streetAt(p.x, p.z, 0);
+      if (!h || h.d > h.st.width / 2) continue;
+      const o = seen.get(h.k) || { n: 0, st: h.st }; o.n++; seen.set(h.k, o);
+    }
+    const best = [...seen.values()].sort((a, b) => b.n - a.n || (a.st.cls === 8) - (b.st.cls === 8))[0];
+    return best && best.n >= Math.min(2, pts.length) ? best.st.width : null;
+  };
+}
+
+/** [F133] The apron ends of a city route whose road fades into the street (js/world/road-align.js apronFades), cached on the dense route. */
+function roadFades(route, index, n, widthAt) {
+  if (!route.scene?.city?.routeAprons?.length) return null;
+  if (route._fades?.index !== index) Object.defineProperty(route, '_fades', { value: { index, fade: apronFades(route, index, n, { roadWidth: ROAD_WIDTH, widthAt }) }, enumerable: false, configurable: true, writable: true });
+  return route._fades.fade;
+}
+/** Narrow ribbon cross-sections to `half` per sample (about the centre line), where it is under `full`. */
+function taperSections(E, index, n, half, full) {
+  for (let i = 0; i < n; i++) {
+    const k = half[i] / full;
+    if (k >= .999) continue;
+    const cx = index.xs[i], cz = index.zs[i];
+    for (const o of [0, 2]) { E[i * 4 + o] = cx + (E[i * 4 + o] - cx) * k; E[i * 4 + o + 1] = cz + (E[i * 4 + o + 1] - cz) * k; }
+  }
+}
+/** White RGBA per ribbon vertex (two a sample), the alpha the fade's. */
+function fadeColors(alpha, n) {
+  const c = new Float32Array(n * 2 * 4).fill(1);
+  for (let i = 0; i < n; i++) { c[i * 8 + 3] = alpha[i]; c[i * 8 + 7] = alpha[i]; }
+  return c;
+}
+
 // ---------- Shoulders ----------
-function makeRibbon(route, index, width, lift, tex, repeatM, offset) {
+function makeRibbon(route, index, width, lift, tex, repeatM, offset, widthAt = null) {
   [route, index] = denseRoad(route, index);   // [road-align]
   const n = roadPoints(route);
   const pos = new Float32Array(n * 2 * 3), uv = new Float32Array(n * 2 * 2);
   const E = ribbonSections(index, n, width / 2);   // [smooth-turns]
+  // [F133] where an apron's road fades into the street, its shoulder narrows with it and fades too
+  const fade = roadFades(route, index, n, widthAt);
+  if (fade) taperSections(E, index, n, Float32Array.from(fade.half, (h) => width / 2 - (ROAD_WIDTH / 2 - h)), width / 2);
   for (let i = 0; i < n; i++) {
     const y = route.ele[i] + lift;
     pos.set([E[i * 4], y, E[i * 4 + 1], E[i * 4 + 2], y, E[i * 4 + 3]], i * 6);
@@ -1063,7 +1187,8 @@ function makeRibbon(route, index, width, lift, tex, repeatM, offset) {
   geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   geo.setIndex(idx);
   geo.computeVertexNormals();
-  const mat = new THREE.MeshLambertMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, ...offset });
+  if (fade) geo.setAttribute('color', new THREE.BufferAttribute(fadeColors(fade.alpha, n), 4));
+  const mat = new THREE.MeshLambertMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, vertexColors: !!fade, ...offset });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.frustumCulled = false;
   mesh.renderOrder = 1;

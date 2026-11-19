@@ -96,14 +96,91 @@ export function feltGrade(gradePct, hillFeelPct = HILL_FEEL_DEFAULT) {
   return gradePct * clamp(hillFeelPct, 0, 100) / 100;
 }
 
-/**
- * Seconds for the trainer's grade to catch up with the road. A real bike carries its momentum into a hill and
- * slows over several seconds; without this, ERG jumped to the full hill wattage the instant the grade changed.
- */
-export const MOMENTUM_TAU_S = 3;
+// ---------- Hill feel, up and down (PLAN 6.11) ----------
+//
+// Three stages between the road and the trainer, each run once per tick by the session:
+//   road grade → feltGrade (Hill feel) → shapeGrade (blended over distance, ≤ 1 %/s)
+//     → SIM: sent as it is (the trainer's own flywheel carries the momentum)
+//     → ERG: momentumGrade (the bike's momentum takes the hill first) → ergTargetForBike (gear demand + descent floor)
 
-/** One step of the momentum lag: move `cur` toward `target` with time constant `tau` over `dt` seconds. */
-export function easeGrade(cur, target, dt, tau = MOMENTUM_TAU_S) {
+/** Most the felt grade changes per second (%/s), however sharp the road's change. */
+export const GRADE_RATE_PCT_S = 1;
+/** The felt grade blends toward the road's over a distance of GRADE_BLEND_M + GRADE_BLEND_S × speed (longer at speed). */
+export const GRADE_BLEND_M = 2;
+export const GRADE_BLEND_S = 1;
+/** Below this speed the blend runs as if rolling at it, so a change while stopped (free ride ▲ ▼) still arrives. */
+const GRADE_BLEND_MIN_MPS = 1.5;
+
+/**
+ * One step of the felt grade's shaping: blend toward `target` over distance (ds = metres ridden this step, at
+ * speed v), then limit the change to GRADE_RATE_PCT_S. `cur` null: start at the target.
+ */
+export function shapeGrade(cur, target, v, dt) {
   if (cur == null || !Number.isFinite(cur)) return target;
-  return cur + (target - cur) * (1 - Math.exp(-dt / Math.max(0.01, tau)));
+  const sp = Math.max(GRADE_BLEND_MIN_MPS, v || 0);
+  const len = GRADE_BLEND_M + GRADE_BLEND_S * sp;
+  const want = cur + (target - cur) * (1 - Math.exp(-(sp * dt) / len));
+  const max = GRADE_RATE_PCT_S * dt;
+  return cur + clamp(want - cur, -max, max);
+}
+
+/**
+ * Momentum (ERG). A bike rolling into a hill doesn't meet the hill's full force at the pedals at once: the force
+ * first slows the bike, and the pedals take up the load as the bike gives up its speed. Modelled as a drivetrain
+ * that picks up the hill's force in proportion to the share of the bike's speed it has lost: the speed it loses
+ * builds at the unmet force / mass and the pedals' share of the force is mass × MOMENTUM_ACCEL × (speed lost /
+ * speed), so the hill bites over τ = speed / MOMENTUM_ACCEL — ~5 s at 25 km/h, longer when you come in faster,
+ * shorter as the bike slows on the climb (mass cancels: a heavier bike carries more momentum into a hill that
+ * also pulls harder). The same holds at a crest (the load eases off as the bike picks up speed) and into a descent.
+ */
+export const MOMENTUM_ACCEL = 1.3;     // m/s²: tuned so a 5–8 % hill entered at 25 km/h is at ~90 % in ~10 s (Hill feel 50 %)
+export const MOMENTUM_MIN_TAU_S = 0.8; // at a crawl the load still comes over the trainer's own response time
+
+/** One step of the grade the pedals feel in ERG: toward `target` (the shaped felt grade) over τ = v / MOMENTUM_ACCEL, ≤ 1 %/s. */
+export function momentumGrade(cur, target, v, dt) {
+  if (cur == null || !Number.isFinite(cur)) return target;
+  const tau = Math.max(MOMENTUM_MIN_TAU_S, Math.max(0, v || 0) / MOMENTUM_ACCEL);
+  const max = GRADE_RATE_PCT_S * dt;     // and, like the shaped grade, at most 1 %/s (the bike slowing fast on a wall)
+  return cur + clamp((target - cur) * (1 - Math.exp(-dt / tau)), -max, max);
+}
+
+/**
+ * Descents: pedalling still meets resistance — the air and rolling drag of the bike you're driving at the descent's
+ * speed (up to the fastest your gear still drives it, gear speed / SPIN_OUT_FROM), taken at the speed your gear turns
+ * the pedals, × DESCENT_FLOOR_SHARE. It fades as the bike runs away from your gear (you spin out), to
+ * DESCENT_FLOOR_MIN of that (never 0 while you pedal; coasting, under 15 rpm, is 0).
+ */
+export const DESCENT_FLOOR_SHARE = 0.7;
+export const DESCENT_FLOOR_MIN = 0.4;
+export const SPIN_OUT_FROM = 0.95;     // gear speed / bike speed where the fade starts…
+export const SPIN_OUT_TO = 0.5;        // …and where it's all the way down to DESCENT_FLOOR_MIN
+export const PEDAL_FLOOR_MIN_W = 10;
+
+/** Engagement of the pedals with the bike: 1 while the gear keeps up with it, down to DESCENT_FLOOR_MIN as you spin out. */
+export function gearEngagement(gearMps, bikeMps) {
+  if (!(bikeMps > 0.5)) return 1;
+  const x = clamp((gearMps / bikeMps - SPIN_OUT_TO) / (SPIN_OUT_FROM - SPIN_OUT_TO), 0, 1);
+  const s = x * x * (3 - 2 * x);
+  return DESCENT_FLOOR_MIN + (1 - DESCENT_FLOOR_MIN) * s;
+}
+
+/** The descent floor (W) for pedalling at this cadence and gear with the bike at bikeMps (0 below 15 rpm: coasting). */
+export function descentFloorW(cadenceRpm, ratio, bikeMps, p = DEFAULTS, difficulty = 1) {
+  if (cadenceRpm < 15) return 0;
+  const vc = speedFromCadence(cadenceRpm, ratio);
+  const vb = clamp(bikeMps || 0, vc, vc / SPIN_OUT_FROM);  // the bike's speed, as far as your gear still drives it
+  const drag = resistForce(vb, 0, p);                       // air + rolling at that speed
+  const w = (drag * vc / (1 - DRIVETRAIN_LOSS)) * DESCENT_FLOOR_SHARE * gearEngagement(vc, bikeMps);
+  return Math.max(PEDAL_FLOOR_MIN_W, w * difficulty);
+}
+
+/**
+ * ERG target for the simulated bike: the gear/cadence demand on the grade the pedals feel (`momentumGrade`), never
+ * under the descent floor while you pedal. Shifting changes it at once (the gear speed), the hill comes in with the bike.
+ */
+export function ergTargetForBike(cadenceRpm, ratio, pedalGradePct, bikeMps, p = DEFAULTS, difficulty = 1) {
+  if (cadenceRpm < 15) return 0;
+  const v = speedFromCadence(cadenceRpm, ratio);
+  const demand = powerRequired(v, pedalGradePct, p) * difficulty;
+  return clamp(Math.round(Math.max(demand, descentFloorW(cadenceRpm, ratio, bikeMps, p, difficulty))), 0, 1500);
 }

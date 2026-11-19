@@ -725,16 +725,68 @@ def build(cid):
     # became a pit down to the rivers. Water polygons whose ground lies more than this above the water level are
     # left out (drawn as the park around them); off by default
     inland = cfg.get('inlandWaterAboveM')
-    hill_water = []
+    hill_water, ponds = [], []
+    # [6.5] (F131) hill water at its own level: a flat body (reservoir, pond, lake, fountain basin, pool) becomes a
+    # "pond" — land code 9 under it and its ring, level and kind in the city data ("ponds"), drawn by the city as
+    # water at that level with a bank (js/world/toolbox/city/landscape.js pondAt, city.js _pondsJob). Water that
+    # isn't flat (a stream's polygons running down a hollow) stays park
+    def hill_pond(pts, t, wid_):
+        if not all(gs < p_[0] < gn and gw < p_[1] < ge for p_ in pts): return None, 'outside the box'
+        xy = [loc(*p_) for p_ in pts]
+        area = abs(sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(xy, xy[1:] + xy[:1]))) / 2
+        if area < 20: return None, 'tiny'
+        ring_ll = [(p_[1], p_[0]) for p_ in pts]
+        la0, la1 = min(p_[0] for p_ in pts), max(p_[0] for p_ in pts)
+        lo0, lo1 = min(p_[1] for p_ in pts), max(p_[1] for p_ in pts)
+        step = max(3.0, math.sqrt(area) / 14)
+        inside = []
+        la = la0 + step / ky / 2
+        while la < la1:
+            lo = lo0 + step / kx / 2
+            while lo < lo1:
+                if point_in(ring_ll, lo, la): inside.append(elevation(la, lo))
+                lo += step / kx
+            la += step / ky
+        rim = sorted(elevation(*p_) for p_ in pts[::max(1, len(pts) // 24)])
+        name = t.get('name', '')
+        nm = name.lower()
+        flowing = t.get('water') in ('river', 'stream', 'canal', 'rapids', 'stream_pool') or t.get('waterway') == 'riverbank'
+        if t.get('amenity') == 'fountain' or t.get('water') == 'fountain' or 'fountain' in nm: kind = 'fountain'
+        elif t.get('water') in ('reservoir', 'basin') or t.get('landuse') == 'reservoir' or 'reservoir' in nm: kind = 'reservoir'
+        elif t.get('water') in ('pool', 'reflecting_pool') or t.get('zoo') or 'habitat' in nm or 'pool' in nm: kind = 'pool'
+        else: kind = 'pond'
+        if len(inside) >= 4:
+            inside.sort()
+            level = inside[len(inside) // 2]
+            span = inside[int(len(inside) * .9)] - inside[int(len(inside) * .1)]
+        else:   # smaller than the DEM's pixels: just under its ring's ground
+            level, span = rim[len(rim) // 4] - .25, 0.0
+        if kind in ('fountain', 'pool'): level = min(level, rim[len(rim) // 4] - .3)   # a basin: its water under the ground round it
+        if flowing and span > 1.2: return None, f'a stream, not flat ({span:.1f} m)'
+        if span > 3.0: return None, f'not flat ({span:.1f} m)'
+        lp_ = xy[:-1] if xy[0] == xy[-1] else xy
+        far_ = max(range(len(lp_)), key=lambda k: math.hypot(lp_[k][0] - lp_[0][0], lp_[k][1] - lp_[0][1]))
+        ring = simplify(lp_[:far_ + 1], .4)[:-1] + simplify(lp_[far_:] + [lp_[0]], .4)[:-1]
+        if len(ring) < 3: return None, 'degenerate'
+        return {'name': name, 'way': wid_, 'kind': kind, 'level': round(level, 2), 'areaM2': round(area),
+                'ring': [q((y / ky) + lat0, (x / kx) + lon0) for x, y in ring]}, f'{kind} {area:.0f} m², flat ±{span:.1f} m'
     for wid_, (nd, t) in ways.items():
         if (t.get('natural') == 'water' or t.get('waterway') == 'riverbank') and nd and nd[0] == nd[-1]:
             pts = [nodes[i] for i in nd if i in nodes]
             if inland is not None and pts:
                 ground = sorted(elevation(*p_) for p_ in pts[::max(1, len(pts) // 12)])
                 if ground[len(ground) // 2] > cfg['waterLevelM'] + inland:
-                    poly(pts, 1); hill_water.append(t.get('name') or f'way {wid_}'); continue
+                    pond, why_ = hill_pond(pts, t, wid_) if cfg.get('hillWater', True) else (None, 'off')
+                    label_ = t.get('name') or f'way {wid_}'
+                    if pond: poly(pts, 9); ponds.append(pond)
+                    else: poly(pts, 1)
+                    hill_water.append((label_, why_, pond is not None)); continue
             poly(pts, 3)
-    if hill_water: print(f'  hill water drawn as park ({len(hill_water)}):', ', '.join(sorted(set(hill_water))[:20]))
+    if hill_water:
+        kept_ = [h_ for h_ in hill_water if h_[2]]
+        print(f'  hill water ({len(hill_water)}): {len(kept_)} drawn as water at their own level, {len(hill_water) - len(kept_)} as park')
+        for label_, why_, ok_ in sorted(hill_water):
+            print(f'    {"water" if ok_ else "park "}  {label_}: {why_}')
     for a_ in cfg.get('clearAreas', []):
         if a_.get('land') is not None: poly([(p_[0], p_[1]) for p_ in a_['poly']], a_['land'])
 
@@ -959,6 +1011,18 @@ def build(cid):
             la, lo = nodes[i]
             if gs < la < gn and gw < lo < ge and route_dist(la, lo, 700) < 700 and not (clear_polys and cleared(la, lo)): trees += q(la, lo)
 
+    # [6.5] streets and paths that run into a pond (a causeway, a path mapped over the water): reported
+    for pd_ in ponds:
+        ring_ = [(lon0 + qo * UNIT, lat0 + qa * UNIT) for qa, qo in pd_['ring']]
+        bx0, bx1 = min(p_[0] for p_ in ring_), max(p_[0] for p_ in ring_)
+        by0, by1 = min(p_[1] for p_ in ring_), max(p_[1] for p_ in ring_)
+        hits_ = set()
+        for rec in streets:
+            if rec['bridge']: continue
+            for n_ in rec['nodes']:
+                la_, lo_ = nodes[n_]
+                if bx0 < lo_ < bx1 and by0 < la_ < by1 and point_in(ring_, lo_, la_): hits_.add(rec['name'] or f"cls {rec['cls']}")
+        if hits_: print(f"    pond {pd_['name'] or pd_['way']}: streets inside: {', '.join(sorted(hits_))}")
     out = {
         'format': 'bikefree-city-1',
         'attribution': 'Map data © OpenStreetMap contributors (ODbL); elevation: AWS Terrain Tiles',
@@ -983,6 +1047,7 @@ def build(cid):
         'bridges': bridges,
         'rails': rails,
         'trees': pack_int16(trees),
+        **({'ponds': ponds} if ponds else {}),
     }
     # [subway] nothing of the street kit (walls, hedges, benches) or the map's trees in a station's headhouse, over
     # the top of its escalator shaft (the subway kit draws the headhouse there)

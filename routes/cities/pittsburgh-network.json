@@ -518,15 +518,15 @@
    "name": "The subway: North Side to Gateway",
    "catalogId": "pittsburgh-subway",
    "base": "routes/cities/pittsburgh-subway.gpx",
-   "legM": 3340,
+   "legM": 3630,
    "ghosts": [
     {
      "fromM": 670,
      "toM": 1070
     },
     {
-     "fromM": 2540,
-     "toM": 2940
+     "fromM": 2830,
+     "toM": 3230
     }
    ],
    "aprons": [
@@ -561,8 +561,8 @@
      "edge": "e2",
      "dir": 1,
      "s": [
-      2140,
-      2540
+      2430,
+      2830
      ],
      "u0": 0
     },
@@ -570,8 +570,8 @@
      "edge": "e1",
      "dir": -1,
      "s": [
-      2940,
-      3340
+      3230,
+      3630
      ],
      "u0": 2260
     }
@@ -590,8 +590,8 @@
      2660
     ],
     "subway": [
-     2140,
-     2940
+     2430,
+     3230
     ]
    },
    "portal": true
@@ -813,7 +813,7 @@
    "name": "Mazeroski Way & General Robinson St, North Side",
    "lat": 40.447659,
    "lon": -80.007513,
-   "ele": 222.95,
+   "ele": 222.94,
    "passes": {
     "core": [
      21290
@@ -2420,9 +2420,9 @@
    "to": "GW",
    "s": [
     1070,
-    2140
+    2430
    ],
-   "lengthM": 1070,
+   "lengthM": 1360,
    "climbM": [
     24,
     24
@@ -2434,14 +2434,14 @@
    ],
    "conveyors": [
     {
-     "u0": 169,
-     "u1": 217,
+     "u0": 329,
+     "u1": 377,
      "mps": 3,
      "label": "Escalator"
     },
     {
-     "u0": 965,
-     "u1": 1013,
+     "u0": 1251,
+     "u1": 1299,
      "mps": 3,
      "label": "Escalator"
     }
@@ -3452,7 +3452,7 @@
     "new"
    ],
    "note": "From the Water Steps: the escalator down at North Side, the subway path under the Allegheny, up at Gateway, round the Point and the riverfront, home over the Clemente Bridge",
-   "lengthM": 4600,
+   "lengthM": 4890,
    "climbM": 45
   },
   {
@@ -3478,7 +3478,7 @@
     "new"
    ],
    "note": "The Three Rivers Loop with the subway under the Allegheny instead of the Clemente Bridge and the Point",
-   "lengthM": 16400,
+   "lengthM": 16690,
    "climbM": 232
   },
   {
@@ -3520,7 +3520,7 @@
     "new"
    ],
    "note": "The long loop both ways: out under the Allegheny by the subway, home round the Point and over the Clemente Bridge",
-   "lengthM": 34720,
+   "lengthM": 35010,
    "climbM": 455
   }
  ],

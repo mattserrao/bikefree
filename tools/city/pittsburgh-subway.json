@@ -88,8 +88,8 @@
   {
    "name": "North Side–Gateway subway path",
    "gpx": "tools/city/pittsburgh-subway.line.gpx",
-   "fromM": 150,
-   "toM": 1030,
+   "fromM": 310,
+   "toM": 1316,
    "why": "the cycle path beside the T through the tunnel under the Allegheny (not in the map): routed along for the city data, its points copied from the line"
   }
  ],
@@ -170,7 +170,7 @@
    "samplesOf": {
     "gpx": "tools/city/pittsburgh-subway.line.gpx",
     "fromM": 0,
-    "toM": 1070
+    "toM": 1360
    },
    "waypoints": [
     [
@@ -188,6 +188,12 @@
      "Reedsdale St",
      40.448214,
      -80.008274,
+     "Reedsdale Street"
+    ],
+    [
+     "Reedsdale St & Tony Dorsett Dr",
+     40.44824,
+     -80.010438,
      "Reedsdale Street"
     ],
     [
@@ -271,23 +277,23 @@
  ],
  "underground": {
   "gpx": "tools/city/pittsburgh-subway.line.gpx",
-  "lengthM": 1070,
+  "lengthM": 1360,
   "underground": [
-   169,
-   1013
+   329,
+   1299
   ],
   "conveyors": [
    {
-    "fromM": 169,
-    "toM": 217,
+    "fromM": 329,
+    "toM": 377,
     "mps": 3.0,
     "label": "Escalator",
     "dir": "down",
     "name": "North Side"
    },
    {
-    "fromM": 965,
-    "toM": 1013,
+    "fromM": 1251,
+    "toM": 1299,
     "mps": 3.0,
     "label": "Escalator",
     "dir": "up",
@@ -297,18 +303,18 @@
   "platforms": [
    {
     "name": "North Side",
-    "fromM": 217,
-    "toM": 277
+    "fromM": 377,
+    "toM": 437
    },
    {
     "name": "Gateway",
-    "fromM": 905,
-    "toM": 965
+    "fromM": 1191,
+    "toM": 1251
    }
   ],
   "river": [
-   470,
-   740
+   760,
+   1030
   ]
  },
  "dropBuildings": [
@@ -318,7 +324,14 @@
   },
   {
    "way": 450174434,
-   "why": "North Side Station: the station is drawn by the subway kit (its entrance on Red Lot 5A)"
+   "why": "North Side Station: the station is drawn by the subway kit (its headhouse off Tony Dorsett Dr by the West General Robinson St Garage, F121)"
+  }
+ ],
+ "dropStreets": [
+  {
+   "way": 398920497,
+   "name": "(the parking aisle north of the West General Robinson St Garage)",
+   "why": "F121: it runs over the North Side escalator's shaft beside the headhouse"
   }
  ]
 }

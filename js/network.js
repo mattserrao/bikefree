@@ -39,6 +39,7 @@ const LABEL_M0 = 10, LABEL_M1 = 40;   // …and for its label, order and the def
 export const SWAP_AHEAD_M = 200;   // areas: the area drawn keeps drawing while it covers the rider and this far ahead
 export const PRELOAD_M = 1500;     // …an area the path enters within this far ahead is loaded and built, hidden
 export const RELEASE_M = 600;      // …and one not drawn, not ahead and not within this far behind is released
+export const REACH_M = 800;        // [F220] …and one a choice at a junction this far ahead could take the path into (along its arms)
 const CORNER = { minDeg: 60, decel: 2 };   // speed cap: sharper than this; the rider slows at this m/s²
 // sharp corners inside a segment (no junction: Bakery Square's hairpin, F82) get the same gentle cap: the turn
 // over ±ARC_M of the line, measured every SCAN_M; corners within END_M of a junction are the junction's (its own cap)
@@ -473,6 +474,47 @@ export class NetRide extends EventTarget {
       if (d > reach || (d === reach && id === current)) { reach = d; best = id; }
     }
     return best ?? this.entries[this.entryAt(p)].t.e.area;
+  }
+  /**
+   * [F220] The areas a choice at the junctions ahead could take the path into: every arm of each junction within
+   * `ahead` metres whose choice isn't locked yet — the arm's own area, and the areas of the way on from it within
+   * `ahead` (as the path would carry on: the plan, a free ride's hint, else straight on). The world builds these hidden as well (a choice is made ~15 s before a junction: too late
+   * to build an area the path didn't go into), and lets them go once the junction is passed.
+   */
+  areasReachable(p, ahead = REACH_M) {
+    const out = new Set();
+    for (let i = this.entryAt(p); i < this.entries.length && this.endOf(i) <= p + ahead; i++) {
+      if (i <= this.lockedAt) continue;   // (locked: the way on is the path's own)
+      for (const o of optionsAt(this.net, this.entries[i].t)) {
+        // the arm, and straight on from it as far as `ahead` reaches (the way a ride carries on unless turned again)
+        let t = o.t, d = this.endOf(i) - p;
+        for (let k = 0; t && d <= ahead && k < 8; k++) {
+          for (const id of this._coverers(t)) out.add(id);   // (its own area, and any whose apron runs along it: areaFor may pick that one)
+          d += t.e.len;
+          t = this._after(t);
+        }
+      }
+    }
+    return out;
+  }
+  /** [F220] The areas whose lines cover any of edge t's length (its own, and those with an apron on it), cached per edge. */
+  _coverers(t) {
+    const c = (this.net._coverers ||= new Map());
+    if (!c.has(t.e.id)) {
+      const ids = new Set([t.e.area]);
+      for (const id of this.net.areas.keys()) for (let u = 0; u <= t.e.len; u += 50) if (areaS(this.net, id, { e: t.e, dir: 1 }, Math.min(u, t.e.len)) != null) { ids.add(id); break; }
+      c.set(t.e.id, ids);
+    }
+    return c.get(t.e.id);
+  }
+  /** [F220] The way the path would take on from traversal t if nothing more is chosen (as _next: the plan, a free ride's hint, straight on). */
+  _after(t) {
+    const opts = optionsAt(this.net, t);
+    const j = this.plan ? this.plan.findIndex((x) => same(x, t)) : -1;
+    const o = j >= 0 && opts.find((x) => same(x.t, this.plan[(j + 1) % this.plan.length]));
+    if (o) return o.t;
+    const hint = this.prefer?.get(endNode(t)), h = hint && opts.find((x) => !x.back && same(x.t, hint));
+    return (h || straightOn(opts))?.t || null;
   }
   /** The areas the path is in from `behind` metres back to `ahead` metres on (the world keeps these loaded). */
   areasNear(p, ahead = PRELOAD_M, behind = RELEASE_M) {

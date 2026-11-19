@@ -57,19 +57,23 @@
 
         <section>
           <h2>Ride type</h2>
-          <div class="modes" role="tablist">
-          <button role="tab" data-mode="free" class="mode on"><span class="mode-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19 10 10l4 4 7-8"/><path d="M3 19h18"/></svg></span><span class="mode-text"><b>Free ride</b><span>You set the grade</span></span><span class="tick"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"><path d="m5 12 5 5 9-10"/></svg></span></button>
-          <button role="tab" data-mode="route" class="mode"><span class="mode-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></svg></span><span class="mode-text"><b>Route</b><span>Parks in 3D or your GPX</span></span><span class="tick"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"><path d="m5 12 5 5 9-10"/></svg></span></button>
-          <button role="tab" data-mode="workout" class="mode"><span class="mode-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><rect x="4" y="12" width="3.5" height="6" rx="1"/><rect x="10" y="7" width="3.5" height="11" rx="1"/><rect x="16" y="10" width="3.5" height="8" rx="1"/></svg></span><span class="mode-text"><b>Workout</b><span>Trainer holds the watts</span></span><span class="tick"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"><path d="m5 12 5 5 9-10"/></svg></span></button>
+          <div class="modes" role="tablist" aria-label="Ride type">
+          <button role="tab" data-mode="route" class="mode on" aria-selected="true"><span class="mode-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></svg></span><span class="mode-text"><b>Route</b><span>Parks in 3D or your GPX</span></span><span class="tick"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"><path d="m5 12 5 5 9-10"/></svg></span></button>
+          <button role="tab" data-mode="workout" class="mode" aria-selected="false"><span class="mode-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><rect x="4" y="12" width="3.5" height="6" rx="1"/><rect x="10" y="7" width="3.5" height="11" rx="1"/><rect x="16" y="10" width="3.5" height="8" rx="1"/></svg></span><span class="mode-text"><b>Workout</b><span>Trainer holds the watts</span></span><span class="tick"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"><path d="m5 12 5 5 9-10"/></svg></span></button>
           </div>
         </section>
 
-        <section class="mode-pane" data-pane="free">
-          <h2>Routes</h2>
+        <section class="mode-pane" data-pane="free" hidden>
+          <div class="h2row">
+            <h2>Ride without a route</h2>
+            <div class="spacer"></div>
+            <button type="button" class="link" id="freeBack">Back to routes</button>
+          </div>
+          <p class="free-note">You set the grade with ▲ ▼ while you ride. Pick the scenery:</p>
           <div class="cards" id="sceneCards"></div>
         </section>
 
-        <section class="mode-pane" data-pane="route" hidden>
+        <section class="mode-pane" data-pane="route">
           <div class="h2row">
             <h2>Routes</h2>
             <details class="more">
@@ -83,6 +87,7 @@
           </div>
           <div class="seg goal-seg" id="goalSeg" role="group" aria-label="Ride goal"></div>
           <div class="cards" id="routeCards"></div>
+          <p class="free-link"><button type="button" class="link" id="freeRideLink">Ride without a route (you set the grade)</button></p>
         </section>
 
         <section class="mode-pane" data-pane="workout" hidden>
@@ -103,10 +108,11 @@
       </div>
 
       <aside class="preview">
-        <div class="pv-kicker" id="pvKicker">Free ride</div>
+        <div class="pv-kicker" id="pvKicker">Route</div>
         <h3 class="pv-title" id="pvTitle">—</h3>
         <div class="pv-sub" id="pvSub"></div>
         <div class="facts" id="pvFacts"></div>
+        <div class="pv-shots" id="pvShots" hidden></div>
         <div class="route-opts" id="routeOpts" hidden>
           <div class="seg" id="dirSeg" role="group" aria-label="Direction">
             <button type="button" data-dir="fwd" class="on">Forward</button><button type="button" data-dir="rev" title="Start from the far end">Reverse</button>
@@ -306,12 +312,14 @@
         </label>
         <label>Camera
           <select name="camera">
-            <option value="close">Close — speed feel (default)</option>
+            <option value="closest">Closest — just behind the back wheel (default)</option>
+            <option value="close">Close — speed feel</option>
             <option value="classic">Classic — 4.5 m back</option>
           </select>
         </label>
       </div>
       <label class="check"><input type="checkbox" name="haptics"> Buzz handlebars on shift and workout steps</label>
+      <label class="check"><input type="checkbox" name="worldSound"> World sounds (quiet: trains, escalators and chimes in the subway)</label>
       <details class="advanced">
         <summary>Advanced</summary>
         <div class="adv-body">
@@ -465,6 +473,10 @@
   </dialog>
 
   <!-- History -->
+  <dialog id="shotDlg" class="shot-dlg" aria-label="Route picture">
+    <figure><img id="shotImg" alt="" width="480" height="270"><figcaption id="shotCap"></figcaption></figure>
+    <div class="shot-nav"><button type="button" id="shotPrev" aria-label="Previous picture">‹</button><span id="shotCount"></span><button type="button" id="shotNext" aria-label="Next picture">›</button><span class="spacer"></span><button type="button" id="shotClose">Close</button></div>
+  </dialog>
   <dialog id="history">
     <form method="dialog">
       <h2 id="histTitle">Saved rides</h2>

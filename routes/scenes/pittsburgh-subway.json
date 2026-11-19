@@ -121,7 +121,7 @@
  },
  "streetKit": {
   "fromM": 0,
-  "toM": 3340,
+  "toM": 3630,
   "rangeM": 220,
   "parkTrees": 16,
   "zones": []
@@ -555,7 +555,7 @@
  ],
  "signs": [],
  "preview": {
-  "positionM": 1450,
+  "positionM": 1610,
   "camera": "drone",
   "time": "golden"
  },
@@ -718,48 +718,60 @@
    "check": "heading-jitter",
    "fromM": 1130,
    "toM": 1150,
-   "why": "the lead-in across Red Lot 5A to the North Side escalator: a rounded corner off Reedsdale St (the line is drawn as built by tools/build_subway_line.py)"
+   "why": "the corner from Mazeroski Way onto Reedsdale St on the subway line (a rounded corner, drawn as built by tools/build_subway_line.py)"
   },
   {
    "check": "heading-jitter",
-   "fromM": 2130,
-   "toM": 2160,
+   "fromM": 6110,
+   "toM": 6130,
+   "why": "the corner from Mazeroski Way onto Reedsdale St on the subway line (a rounded corner, drawn as built by tools/build_subway_line.py) (the way back)"
+  },
+  {
+   "check": "heading-jitter",
+   "fromM": 1370,
+   "toM": 1390,
+   "why": "the lead-in off Tony Dorsett Dr into the North Side headhouse (F121): a rounded corner (the line is drawn as built by tools/build_subway_line.py)"
+  },
+  {
+   "check": "heading-jitter",
+   "fromM": 2420,
+   "toM": 2450,
    "why": "GW, Stanwix & Forbes: the subway line's slip road meets the core's own samples at the portal, so the corner there isn't rounded on the line (the ride turns on the junction's curve; as F61)"
   },
   {
    "check": "heading-sharp",
-   "fromM": 2130,
-   "toM": 2150,
+   "fromM": 2420,
+   "toM": 2440,
    "why": "GW: the slip road onto Forbes at the portal (as above)"
   },
   {
    "check": "path-jog",
-   "fromM": 2130,
-   "toM": 2150,
+   "fromM": 2420,
+   "toM": 2440,
    "why": "GW: the slip road onto Forbes at the portal (as above)"
   },
   {
    "check": "heading-jitter",
-   "fromM": 5530,
-   "toM": 5550,
-   "why": "the lead-in across Red Lot 5A to the North Side escalator: a rounded corner off Reedsdale St (the line is drawn as built by tools/build_subway_line.py) (the way back)"
+   "fromM": 5870,
+   "toM": 5890,
+   "why": "the lead-in off Tony Dorsett Dr into the North Side headhouse (F121): a rounded corner (the line is drawn as built by tools/build_subway_line.py) (the way back)"
   },
   {
    "check": "heading-jitter",
-   "fromM": 4520,
-   "toM": 4550,
+   "fromM": 4810,
+   "toM": 4840,
    "why": "GW, Stanwix & Forbes: the subway line's slip road meets the core's own samples at the portal, so the corner there isn't rounded on the line (the ride turns on the junction's curve; as F61) (the way back)"
   },
   {
    "check": "heading-sharp",
-   "fromM": 4530,
-   "toM": 4550,
+   "fromM": 4820,
+   "toM": 4840,
    "why": "GW: the slip road onto Forbes at the portal (as above) (the way back)"
   },
   {
    "check": "path-jog",
-   "fromM": 4530,
-   "toM": 4550,
+   "fromM": 4820,
+   "toM": 4840,
    "why": "GW: the slip road onto Forbes at the portal (as above) (the way back)"
   }
  ],

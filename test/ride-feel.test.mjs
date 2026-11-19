@@ -1,9 +1,11 @@
-// ride-feel-test: Hill feel (grade scaling like Zwift's trainer difficulty) and momentum easing.
+// ride-feel-test: Hill feel (grade scaling like Zwift's trainer difficulty) and the felt grade's shaping (PLAN 6.11;
+// the ride through a hill, a crest and a descent is in test/hill-feel.test.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GEAR_RATIOS, ergTargetForGear, feltGrade, easeGrade, HILL_FEEL_DEFAULT, HILL_FEEL_OPTIONS, MOMENTUM_TAU_S } from '../js/physics.js';
-import { CHASE, CHASE_CLASSIC, CAMERAS } from '../js/world/pose.js';
-import { DEFAULT_SETTINGS } from '../js/settings.js';
+import { GEAR_RATIOS, ergTargetForGear, feltGrade, shapeGrade, momentumGrade, HILL_FEEL_DEFAULT, HILL_FEEL_OPTIONS } from '../js/physics.js';
+import { readFileSync } from 'node:fs';
+import { CHASE, CHASE_CLASSIC, CHASE_CLOSE, CHASE_CLOSEST, CAMERAS, DEFAULT_CAMERA } from '../js/world/pose.js';
+import { DEFAULT_SETTINGS, loadSettings } from '../js/settings.js';
 
 test('Hill feel defaults to 50% like Zwift and scales grade only', () => {
   assert.equal(HILL_FEEL_DEFAULT, 50);
@@ -22,20 +24,71 @@ test('at 50% a 1% hill asks for far less of a jump than full physics', () => {
   assert.ok(half / flat < 1.4, `half ${half} vs flat ${flat}`);
 });
 
-test('momentum easing ramps the grade in over a few seconds', () => {
-  let g = easeGrade(null, 0, 0.25);
-  assert.equal(g, 0);
+test('the felt grade blends in over distance and changes at most 1 %/s', () => {
+  assert.equal(shapeGrade(null, 3, 7, 0.25), 3);
+  let g = 0;
   const steps = [];
-  for (let t = 0; t < 12; t += 0.25) { g = easeGrade(g, 1, 0.25); steps.push(g); }
-  assert.ok(steps[0] < 0.1, 'first quarter second is small');
-  const at3s = steps[11];
-  assert.ok(at3s > 0.55 && at3s < 0.7, `≈63% after one time constant (${MOMENTUM_TAU_S} s): ${at3s}`);
-  assert.ok(steps.at(-1) > 0.97, 'settled after ~12 s');
+  for (let t = 0; t < 12; t += 0.25) { const n = shapeGrade(g, 3, 7, 0.25); steps.push(n - g); g = n; }
+  assert.ok(Math.max(...steps) <= 0.25 + 1e-9, 'never over 1 %/s');
+  assert.ok(g > 2.95, `settled after ~12 s: ${g}`);
+  // longer at speed (in distance): after 20 m, a slow bike is further along than a fast one, which covered it in less time
+  const after20m = (v) => { let x = 0; for (let d = 0; d < 20; d += v * 0.25) x = shapeGrade(x, 0.5, v, 0.25); return x; };
+  assert.ok(after20m(3) > after20m(12), `${after20m(3)} vs ${after20m(12)}`);
+  // stopped (free ride ▲ ▼ at a standstill) it still arrives
+  let s0 = 0; for (let t = 0; t < 10; t += 0.25) s0 = shapeGrade(s0, 1, 0, 0.25);
+  assert.ok(s0 > 0.95);
 });
 
-test('close camera is the default and nearer than classic', () => {
-  assert.equal(CHASE, CAMERAS.close);
-  assert.equal(DEFAULT_SETTINGS.camera, 'close');
+test('momentum lets the hill through more slowly when the bike is faster', () => {
+  const after = (v) => { let x = 0; for (let t = 0; t < 3; t += 0.25) x = momentumGrade(x, 3, v, 0.25); return x; };
+  assert.ok(after(4) > after(7) && after(7) > after(10), `${after(4)} ${after(7)} ${after(10)}`);
+  assert.equal(momentumGrade(null, 2, 7, 0.25), 2);
+});
+
+test('closest camera is the default (PLAN 6.10), nearer than close, which is nearer than classic', () => {
+  assert.equal(DEFAULT_CAMERA, 'closest');
+  assert.equal(CHASE, CAMERAS.closest);
+  assert.equal(CHASE, CHASE_CLOSEST);
+  assert.deepEqual(Object.keys(CAMERAS).sort(), ['classic', 'close', 'closest']);
+  assert.equal(DEFAULT_SETTINGS.camera, 'closest');
   const d = (c) => Math.hypot(c.back, c.up);
-  assert.ok(d(CHASE_CLASSIC) / d(CHASE) > 1.25);
+  assert.ok(d(CHASE_CLASSIC) / d(CHASE_CLOSE) > 1.25);
+  assert.ok(d(CHASE_CLOSE) / d(CHASE_CLOSEST) > 1.25, `close ${d(CHASE_CLOSE)} vs closest ${d(CHASE_CLOSEST)}`);
+  // the back wheel (hub 0.41 m behind the rider's origin, 0.336 m radius: models/rider.json) is in front of the camera and
+  // below its view centre, and the camera stays well clear of the rider's helmet (~1.6 m up)
+  for (const c of Object.values(CAMERAS)) {
+    assert.ok(c.back > .41 + .336 + 1, `${JSON.stringify(c)} too close to the wheel`);
+    assert.ok(c.up >= 1.4 && c.ground >= 1.4, `${JSON.stringify(c)} too low`);
+  }
+  // Settings → Camera offers all three, Closest first and marked the default
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const opts = [...html.match(/<select name="camera">([\s\S]*?)<\/select>/)[1].matchAll(/value="(\w+)"[^>]*>([^<]*)/g)].map((m) => [m[1], m[2]]);
+  assert.deepEqual(opts.map((o) => o[0]), ['closest', 'close', 'classic']);
+  assert.match(opts[0][1], /default/);
+  assert.ok(!/default/.test(opts[1][1]) && !/default/.test(opts[2][1]));
+});
+
+test('saved camera settings: the old default "close" moves to "closest" once; a later choice is kept', () => {
+  const store = new Map();
+  globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) };
+  const KEY = 'bikefree.settings.v1';
+  const save = (o) => localStorage.setItem(KEY, JSON.stringify(o));
+  try {
+    // nothing saved: the default
+    assert.equal(loadSettings().camera, 'closest');
+    // saved before 6.10 with the old default
+    save({ camera: 'close', units: 'metric' });
+    let s = loadSettings();
+    assert.equal(s.camera, 'closest');
+    assert.equal(s.units, 'metric');
+    // … once: Close chosen again afterwards (saved with the migration's mark) stays Close
+    save({ ...s, camera: 'close' });
+    assert.equal(loadSettings().camera, 'close');
+    // Classic saved before 6.10 is kept
+    save({ camera: 'classic' });
+    assert.equal(loadSettings().camera, 'classic');
+    // Closest saved stays
+    save({ camera: 'closest', camClosest: true });
+    assert.equal(loadSettings().camera, 'closest');
+  } finally { delete globalThis.localStorage; }
 });

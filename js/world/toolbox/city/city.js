@@ -4,7 +4,8 @@
 // Data: "bikefree-city-1" from tools/build_city.py; ground from js/world/toolbox/city/landscape.js.
 import { ghostAt } from '../../ghost.js';
 import * as THREE from '../../../../vendor/three.module.min.js';
-import { decodeCity, LAND, cityStreetsJob, STREET_W } from './landscape.js';
+import { decodeCity, LAND, POND_KINDS, cityStreetsJob, STREET_W } from './landscape.js';
+import { makeLakeWaterMaterial } from '../materials/surfaces.js';   // [6.5] hill water
 import { drain, due, each, runSlice } from '../core/jobs.js';   // [F30] the city is built as a job (in frame slices on the ride)
 import { MeshBuilder, ribbon, resample, hash } from '../core/mesh-builder.js';
 import { buildRiverfront } from './riverfront.js';   // [s1-riverfront]
@@ -497,6 +498,101 @@ export class CityScene {
       const om = Float32Array.from(O.mask.m);
       this.outerWater = yield* this._waterMeshJob(om, O.mask.nx, O.mask.ny, O.x0, O.z0, O.x1, O.z1, 'Rivers beyond', [D.x0, D.z0, D.x1, D.z1]);
     }
+    yield* this._pondsJob();
+  }
+
+  /**
+   * [6.5] (F131) Hill water at its own level: reservoirs, ponds, lakes, fountain basins and pools up on the hills
+   * (the city data's `ponds`, tools/build_city.py). Each is still water at its level on a grid of cells over its
+   * ring (the shore distance per vertex, cut at the ring in the shader), with a bank: a stone wall and coping for
+   * a reservoir, a basin or a pool, a sloping earth bank for a pond. The ground holds a basin under it and a bank
+   * round it (landscape.js pondGround). Two water draws (open water, basins) and one for the banks.
+   */
+  *_pondsJob() {
+    const L = this.landscape, ponds = L.ponds || [];
+    if (!ponds.length) return;
+    const U = this.uniforms, V = (x, y, z) => new THREE.Vector3(x, y, z);
+    const looks = {
+      open: { water: '#2c4b4c', shallow: '#5d7558', trees: '#24382a', name: 'Ponds' },
+      basin: { water: '#2f6470', shallow: '#6f9f9c', trees: '#2a3a34', name: 'Fountain basins' },
+    };
+    const parts = { open: { pos: [], shore: [], idx: [] }, basin: { pos: [], shore: [], idx: [] } };
+    const B = new MeshBuilder();
+    for (const p of ponds) {
+      if (due()) yield;
+      const look = p.kind === 'fountain' || p.kind === 'pool' ? 'basin' : 'open', P = parts[look], spec = POND_KINDS[p.kind];
+      // the water: cells over the ring's box (finer for small ponds), kept where any corner is within a cell of it
+      const cell = Math.max(.75, Math.min(4, Math.sqrt(p.area) / 30)), nx = Math.ceil((p.x1 - p.x0) / cell) + 2, nz = Math.ceil((p.z1 - p.z0) / cell) + 2;
+      const ox = p.x0 - cell, oz = p.z0 - cell, sd = new Float32Array((nx + 1) * (nz + 1)), vid = new Int32Array((nx + 1) * (nz + 1)).fill(-1);
+      for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) {
+        const hit = L.pondAt(ox + i * cell, oz + j * cell, cell * 2);
+        sd[j * (nx + 1) + i] = hit && hit.p === p ? -hit.d : cell * 3;   // metres to the shore, negative on the water
+      }
+      const vert = (i, j) => {
+        const k = j * (nx + 1) + i;
+        if (vid[k] < 0) { vid[k] = P.pos.length / 3; P.pos.push(ox + i * cell, p.level, oz + j * cell); P.shore.push(sd[k]); }
+        return vid[k];
+      };
+      for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+        const k = j * (nx + 1) + i, c = [sd[k], sd[k + 1], sd[k + nx + 1], sd[k + nx + 2]];
+        if (Math.min(...c) > .1) continue;
+        const a = vert(i, j), b = vert(i + 1, j), d = vert(i, j + 1), e = vert(i + 1, j + 1);
+        P.idx.push(a, d, b, b, d, e);
+      }
+      // the bank, along the ring (counter-clockwise: outward normals (dz, -dx)), mitred at the corners
+      const R = p.ring, n = R.length, lv = p.level, top = lv + spec.rim;
+      const nrm = R.map((q, k) => {
+        const a = R[(k + n - 1) % n], b = R[(k + 1) % n];
+        let ax = q.z - a.z, az = -(q.x - a.x), bx = b.z - q.z, bz = -(b.x - q.x);
+        const la = Math.hypot(ax, az) || 1, lb = Math.hypot(bx, bz) || 1; ax /= la; az /= la; bx /= lb; bz /= lb;
+        let mx = ax + bx, mz = az + bz; const ml = Math.hypot(mx, mz) || 1; mx /= ml; mz /= ml;
+        const miter = 1 / Math.max(.5, mx * ax + mz * az);   // (≤ 2× at the sharpest corners)
+        return { x: mx * miter, z: mz * miter };
+      });
+      const at = (k, off, y) => V(R[k].x + nrm[k].x * off, y, R[k].z + nrm[k].z * off);
+      const ground = (k, off) => L.heightAt(R[k].x + nrm[k].x * off, R[k].z + nrm[k].z * off);
+      for (let k = 0; k < n; k++) {
+        const m = (k + 1) % n;
+        if (spec.wall) {
+          // a stone wall at the waterline (its wet foot darker), a pale coping, its outer face down into the ground
+          B.color('#4f5048'); B.quad(at(k, 0, lv - 1.1), at(m, 0, lv - 1.1), at(m, 0, lv + .12), at(k, 0, lv + .12));
+          B.color(p.kind === 'reservoir' ? '#8f8a7e' : '#a49c8c'); B.quad(at(k, 0, lv + .12), at(m, 0, lv + .12), at(m, 0, top), at(k, 0, top));
+          B.color(p.kind === 'reservoir' ? '#bdb6a6' : '#c9c0ae'); B.quad(at(k, 0, top), at(m, 0, top), at(m, .55, top), at(k, .55, top));
+          const gk = Math.min(top - .15, ground(k, .55) - .3), gm = Math.min(top - .15, ground(m, .55) - .3);
+          B.color('#9a9386'); B.quad(at(m, .55, top), at(k, .55, top), at(k, .55, gk), at(m, .55, gm));
+        } else {
+          // an earth bank from under the water up to the grass, a darker wet band at the waterline
+          B.color('#5d5a45'); B.quad(at(k, -.5, lv - 1), at(m, -.5, lv - 1), at(m, .25, lv + .06), at(k, .25, lv + .06));
+          B.color('#7d7658'); B.quad(at(k, .25, lv + .06), at(m, .25, lv + .06), at(m, 1.3, top), at(k, 1.3, top));
+        }
+      }
+    }
+    for (const [key, P] of Object.entries(parts)) {
+      if (!P.idx.length) continue;
+      const lk = looks[key];
+      const mat = this.own(makeLakeWaterMaterial(U, lk.water, lk.shallow, lk.trees));
+      // cut at the ring (the cells reach a little past it), and dark at night like the rivers
+      mat.uniforms.uNight = this.night;
+      mat.fragmentShader = mat.fragmentShader
+        .replace('uniform vec3 bfWater;', 'uniform float uNight; uniform vec3 bfWater;')
+        .replace('vec2 p = vBfLake.xz;', 'if (vBfShore > 0.) discard;\n        vec2 p = vBfLake.xz;')
+        .replace('gl_FragColor = vec4(color, 1.);', 'gl_FragColor = vec4(color * mix(1., .16, uNight), 1.);');
+      const geo = this.own(new THREE.BufferGeometry());
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(P.pos, 3));
+      geo.setAttribute('aShore', new THREE.Float32BufferAttribute(P.shore, 1));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(P.pos.map((_, i) => (i % 3 === 1 ? 1 : 0)), 3));
+      if (P.pos.length / 3 > 65535) geo.setIndex(new THREE.Uint32BufferAttribute(P.idx, 1)); else geo.setIndex(P.idx);
+      geo.computeBoundingSphere();
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.name = lk.name; mesh.renderOrder = 1; mesh.userData.bake = false;   // (after the land, as the rivers; no shadow caster)
+      this.group.add(mesh);
+      (this.ponds ||= []).push(mesh);
+    }
+    if (B.count) {
+      yield* B.keepOutOfJob(L.inRouteTube);
+      const m = new THREE.Mesh(this.own(B.geometry()), this.solidMaterial);
+      m.name = 'Pond banks'; m.receiveShadow = true; this.group.add(m);
+    }
   }
 
   /**
@@ -939,7 +1035,9 @@ export class CityScene {
           const x = b.x - dz * off * side, z = b.z + dx * off * side;
           if (!this._clearSpot(x, z, .35, k, ROAD_WIDTH / 2 + 1.2, this.streetKit ? .95 : .35)) continue;   // [finish] (kit facades stand ~.25–.9 m proud of the walls)
           if (this._onStyledBridge(x, z)) continue;   // the famous bridges carry their own lights (and railings); [finish] and no post among their members
-          lamps.push({ x, z, y: st.bridge ? b.y : this.landscape.heightAt(x, z), yaw: Math.atan2(dz * side, -dx * side), bridge: st.bridge });
+          const y = st.bridge ? b.y : this.landscape.heightAt(x, z);
+          if (this._underDeck(x, z, y, k)) continue;   // [6.1]
+          lamps.push({ x, z, y, yaw: Math.atan2(dz * side, -dx * side), bridge: st.bridge });
         }
       }
     });
@@ -964,7 +1062,9 @@ export class CityScene {
         if (this.landscape.sheltered?.(x, z, 12)) continue;   // [glasshouse] no street lamps under the glass (nor in its doorways)
         // on a deck: not in another carriageway that runs alongside at the same level (the roadway's other half)
         if (deckBridge && this.landscape.streetsNear(x, z, .35).some((o) => this.streets[o.k].cls !== 8 && Math.abs(o.y - r.ele[i]) < 1.5)) continue;
-        lamps.push({ x, z, y: deckBridge ? r.ele[i] : kitLamp ? kitLamp.y : this.landscape.heightAt(x, z), yaw: Math.atan2(dz / len * side, -dx / len * side), bridge: !!deckBridge });   // [street-kit] (kitLamp.y)
+        const y = deckBridge ? r.ele[i] : kitLamp ? kitLamp.y : this.landscape.heightAt(x, z);   // [street-kit] (kitLamp.y)
+        if (this._underDeck(x, z, y, -1)) continue;   // [6.1]
+        lamps.push({ x, z, y, yaw: Math.atan2(dz / len * side, -dx / len * side), bridge: !!deckBridge });
       }
     }
     if (due()) yield;
@@ -1150,9 +1250,19 @@ export class CityScene {
    * street's carriageway (nor within `margin` of it; `skip` = the street it belongs to, when on its own deck),
    * and not within `routeClear` of the route's road (true distance to the road, not its 10 m sample points).
    */
+  /** [6.1] A post at (x, y, z) would run up through a deck over it (bridges.js: its slab, .4 m past the carriageway). */
+  _underDeck(x, z, y, skip) {
+    for (const o of this.landscape.streetsNear(x, z, .6)) {
+      const st = this.streets[o.k];
+      if (o.k !== skip && st.bridge && st.cls <= 7 && o.y > y + .6 && o.y - (st.cls <= 2 ? 2.2 : 1.6) < y + 7.4) return true;
+    }
+    return false;
+  }
+
   _clearSpot(x, z, margin, skip, routeClear, wall = margin) {
     const L = this.landscape, c = L.landAt(x, z);
     if (c === LAND.water && !L.bridgeAt(x, z, 0)) return false;
+    if (c === LAND.pond || L.pondAt?.(x, z, 1.8)) return false;   // [6.5] hill water and its bank
     if (this.buildingNear(x, z, wall)) return false;
     if (this.buildingKit?.occupied(x, z, wall)) return false;   // [buildings] the kit's eaves, porches, steps and dressing
     if (this.inStadium(x, z, 4) || this.nearWall(x, z, Math.max(1.2, margin + .6))) return false;
@@ -1368,10 +1478,10 @@ export class CityScene {
   setQuality(key) { this.qualityKey = key; this.life.setQuality(key); this.streetKit?.setQuality(key); this._lodFrame = 0; }   // [street-kit] [w2-budget] (lamp LOD on the next tick)
 
   dispose() {
-    this.life.dispose();
-    this.group.parent?.remove(this.group);
-    this.group.traverse((o) => { if (o.isInstancedMesh) o.dispose(); });
-    for (const x of this.disposables) x.dispose?.();
-    this.disposables.clear();
+    this.life?.dispose();   // [F220] (a build released half way — an arm not taken at a junction — has no life yet)
+    this.group?.parent?.remove(this.group);
+    this.group?.traverse((o) => { if (o.isInstancedMesh) o.dispose(); });
+    for (const x of this.disposables || []) x.dispose?.();
+    this.disposables?.clear();
   }
 }

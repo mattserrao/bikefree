@@ -10,6 +10,11 @@
 // long tasks (PerformanceObserver), the main-thread time the world spent on area building (world.areaWork: per
 // area and step, its longest slice), when each area was ready and drawn (swap), frames under the fade (an area
 // not ready at its swap), and the JS heap. Prints a summary (and the longest frames with what ran in them).
+// [F220] --pick E>I+,e26+ : take those ways at the junctions that offer them (at the prompt, as a rider would — an
+// off-plan turn into an area that may not be built yet); every wait under the fade is listed (world.areaWaits).
+// [6.2] Each swap: its frame and the next few (ms), the life carried across it (F31: people, cyclists, vehicles,
+// oncoming, trains, boats [carried, dropped], dropped in view) and whether the new area showed its own bake (F32:
+// baked ahead), and every bake of the ride (baked.history: 'ride' re-bakes of the area drawn, 'ahead' ones).
 // Options: --park pittsburgh, --quality low|balanced|high, --size WxH (960x540), --draw (draw the view: on a
 // software GPU a frame takes 100s of ms and hides the rest; default: everything but the draw), --chrome <path>,
 // --profile <file.cpuprofile> (a CPU profile of the ride, for chrome://inspect / speedscope).
@@ -28,6 +33,7 @@ const from = Number(opt('--from', '2000')), to = Number(opt('--to', '4500')), sp
 const quality = opt('--quality', 'balanced'), outFile = opt('--out', null), profile = opt('--profile', null);
 const [width, height] = opt('--size', '960x540').split('x').map(Number);
 const draw = flag('--draw');
+const picks = (opt('--pick', '') || '').split(',').filter(Boolean);   // [F220] choose these ways (network keys, "E>I-" or ids "e3-") at the junctions that offer them
 const trace = flag('--trace');
 const gapsOpt = flag('--gaps');   // (debug: with a jobs.js that records gaps between pause points — see the F30 notes)   // list the slow calls (> 25 ms) of the build's and streaming's main methods
 const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -49,15 +55,21 @@ const page = await context.newPage();
 if (gapsOpt) await page.addInitScript(() => { window.__gapDebug = true; });
 page.setDefaultTimeout(0);
 const errors = [], logs = [];
-page.on('pageerror', (e) => errors.push(e.message));
+page.on('pageerror', (e) => errors.push((e.stack || e.message).split('\n').slice(0, 5).join(' | ')));
 page.on('console', (m) => { const t = m.text(); if (m.type() === 'error') errors.push(t); else if (/Area |Drawing area|Released area/.test(t)) logs.push(t); });
 const q = new URLSearchParams({ park, clean: '1', quality, pos: String(from), free, horizon: '0' });
 const t0 = Date.now();
 await page.goto(`${base}/tools/world-preview.html?${q}`);
-await page.waitForFunction(() => window.world?.terrain?.kit && window.world._camInit && window.world.rider?.triangles, null, { timeout: 300000, polling: 500 });
+// (a slow open: say where it is every minute, and any page errors)
+const status = setInterval(async () => { try { console.error(`waiting ${Math.round((Date.now() - t0) / 1000)} s:`, JSON.stringify(await page.evaluate(() => { const w = window.world; return w ? { kit: !!w.terrain?.kit, cam: !!w._camInit, rider: !!w.rider?.triangles, areas: [...(w.areas?.values() || [])].map((a) => `${a.id}:${a.ready ? 'ready' : 'building'}`), bake: w.baked?.preparing ? Math.round(w.baked.progress * 100) : null } : 'no world'; })), errors.slice(-3)); } catch { /* navigating */ } }, 60000);
+await page.waitForFunction(() => window.world?.terrain?.kit && window.world._camInit && window.world.rider?.triangles, null, { timeout: 1200000, polling: 500 });
+// (no draw while the start's areas build either: on a software GPU a drawn frame takes seconds, and the build gets
+// its 40 ms slice once a frame — the core took over 10 minutes)
+if (!draw) await page.evaluate(() => { const w = window.world; w._render = () => { w.perf?.end(performance.now()); }; });
 // the areas within reach at the start are built (as behind the app's loader), then a few quiet seconds
-await page.waitForFunction(() => { const w = window.world; return !w._multi || (w._resT != null && [...w.areas.values()].every((a) => a.ready) && !w.baked?.preparing); }, null, { timeout: 300000, polling: 500 });
+await page.waitForFunction(() => { const w = window.world; return !w._multi || (w._resT != null && [...w.areas.values()].every((a) => a.ready) && !w.baked?.preparing); }, null, { timeout: 1200000, polling: 500 });
 await page.waitForTimeout(3000);
+clearInterval(status);
 const startAreas = await page.evaluate(() => [...window.world.areas.keys()]);
 console.error(`opened at ${from} m in ${((Date.now() - t0) / 1000).toFixed(0)} s, areas built: ${startAreas.join(', ')}`);
 let cdp = null;
@@ -72,7 +84,7 @@ if (trace) await page.evaluate(async () => {
   wrap(P.GroundBlocks.prototype, ['set'], 'groundBlocks'); wrap(P.InstancePool.prototype, ['set'], 'pool');
   const W = window.world; wrap(Object.getPrototypeOf(W), ['_areaTick', '_useArea', '_releaseArea'], 'world');
 });
-const run = await page.evaluate(async ({ from, to, speed, draw }) => {
+const run = await page.evaluate(async ({ from, to, speed, draw, picks }) => {
   const w = window.world;
   if (!draw) w._render = () => { w.perf?.end(performance.now()); };
   w.areaWork = {};   // (the start's building isn't the ride's)
@@ -82,7 +94,17 @@ const run = await page.evaluate(async ({ from, to, speed, draw }) => {
   try { obs.observe({ type: 'longtask', buffered: false }); } catch { /* no long tasks API */ }
   let pos = from, last = performance.now();
   const t0 = performance.now();
-  w.setSource(() => { const now = performance.now(); pos += speed * (now - last) / 1000; last = now; return { pos, speed, cadence: 84, riding: true }; });
+  const picked = [];
+  const keyOf = (o) => [o.key, `${o.t.e.key}${o.t.dir > 0 ? '+' : '-'}`];
+  w.setSource(() => {
+    const now = performance.now(); pos += speed * (now - last) / 1000; last = now;
+    w.path.update(pos);   // (the app does this: the path fills on, the choice locks)
+    // [F220] a choice at the prompt
+    const up = picks.length ? w.path.prompt(pos, speed) : null;
+    const o = up && !up.locked && up.options.find((x) => keyOf(x).some((k) => picks.includes(k)) && !picked.some((q) => q.atP === up.atP));
+    if (o && up.selected !== up.options.indexOf(o) && w.path.pick(o.key, pos)) picked.push({ atP: Math.round(up.atP), p: Math.round(pos), key: keyOf(o)[1], node: up.node.id });
+    return { pos, speed, cadence: 84, riding: true };
+  });
   w.p = from; w.s = w.path.worldAt(from, w.area.id).s;
   const frames = [], events = [];
   const workNow = () => { let n = 0; for (const a of Object.values(w.areaWork || {})) n += a.ms; return n; };
@@ -96,7 +118,10 @@ const run = await page.evaluate(async ({ from, to, speed, draw }) => {
       frames.push({ at: Math.round(t - t0), p: Math.round(w.p), ms: Math.round((t - prev) * 10) / 10, work: Math.round((wk - work0) * 10) / 10, fade: !!w._waitingArea });
       work0 = wk;
       prev = t;
-      if (w.area.id !== area) { events.push({ at: Math.round(t - t0), p: Math.round(w.p), swap: `${area}→${w.area.id}` }); area = w.area.id; }
+      if (w.area.id !== area) { events.push({ at: Math.round(t - t0), p: Math.round(w.p), swap: `${area}→${w.area.id}`, frame: frames.length - 1 }); area = w.area.id; }
+      // [6.2] the life carried across the last swap (set by the new area's first tick) and its bake
+      const sw = events.filter((e) => e.swap).at(-1);
+      if (sw && !sw.life && w.terrain.city?.life?.handOff) { sw.life = w.terrain.city.life.handOff; w.terrain.city.life.handOff = null; sw.bake = w.baked?.swaps?.at(-1) || null; }
       for (const [id, a] of w.areas) {
         if (!have.has(id) && a.ready) { have.add(id); events.push({ at: Math.round(t - t0), p: Math.round(w.p), ready: id, ms: a.ms, buildMs: a.buildMs }); }
       }
@@ -110,8 +135,8 @@ const run = await page.evaluate(async ({ from, to, speed, draw }) => {
   obs.disconnect();
   heaps.push({ p: Math.round(w.p), mb: heap() });
   const gaps = window.__gapDebug ? (await import('/js/world/toolbox/core/jobs.js')).gaps?.sort((a, b) => b.ms - a.ms).slice(0, 25) : null;
-  return { gaps, frames, events, long, heaps, work: w.areaWork, rel: Math.round(t0), slow: (window.__slow || []).filter((x) => x.at >= t0).map((x) => ({ ...x, at: x.at - Math.round(t0) })) };
-}, { from, to, speed, draw });
+  return { picked, waits: (w.areaWaits || []).map((x) => ({ id: x.id, p: x.p, s: +x.s.toFixed(2) })), bakes: w.baked?.history || [], gaps, frames, events, long, heaps, work: w.areaWork, rel: Math.round(t0), slow: (window.__slow || []).filter((x) => x.at >= t0).map((x) => ({ ...x, at: x.at - Math.round(t0) })) };
+}, { from, to, speed, draw, picks });
 if (cdp) { const { profile: prof } = await cdp.send('Profiler.stop'); await writeFile(profile, JSON.stringify(prof)); }
 await browser.close(); server.close();
 
@@ -132,6 +157,10 @@ const summary = {
       worstFrameWithWork: Math.max(0, ...wf.map((f) => f.ms)), over50WithWork: wf.filter((f) => f.ms > 50).length }; })(),
   longTasks: { count: run.long.length, worstMs: Math.max(0, ...run.long.map((l) => l.ms)), totalMs: run.long.reduce((a, l) => a + l.ms, 0) },
   areaWork: work, areaWorkMs: Object.values(work).reduce((a, w) => a + w.ms, 0),
+  picked: run.picked, waits: run.waits, longestWaitS: Math.max(0, ...run.waits.map((x) => x.s)),
+  // [6.2] each swap's frame and the three after it, the life carried, the bake shown
+  swaps: run.events.filter((e) => e.swap).map((e) => ({ swap: e.swap, p: e.p, frameMs: run.frames.slice(e.frame, e.frame + 4).map((f) => f.ms), life: e.life || null, prebaked: e.bake?.prebaked ?? null })),
+  bakes: run.bakes.map((h) => ({ n: h.n, mode: h.mode, s: +(h.ms / 1000).toFixed(1), frames: h.frames, worstCpuMs: h.worstCpuMs, worstEstMs: h.worstEstMs })),
   events: run.events, heapMB: { start: run.heaps[0].mb, max: Math.max(...run.heaps.map((h) => h.mb)), end: run.heaps.at(-1).mb }, errors,
   ...(trace ? { slow: run.slow } : {}), ...(run.gaps ? { gaps: run.gaps } : {}),
 };

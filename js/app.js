@@ -10,13 +10,15 @@ import { parseGpx, buildRoute, averageGradeAhead, wrapDist, routeAt, isPointToPo
 import { Pacer, PACER_WATTS } from './pacer.js';
 import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor, markFtpTest, ftpFromTwentyMinutes } from './workout.js';
 import { drawProfile, drawWorkout, drawTrace, drawMinimap, drawNetworkMinimap, drawCityMap, gradeColor, profileDistAt } from './views.js';
-import { groupByArea, groupCityItems, citySubline, filterByGoal, segmentRoutes, pickOnSegment, nearestLine, fitProjection, zoomProjection, zoomAt, panBy, mergeRivers, areaLabelSpots, shortName } from './city-routes.js';
+import { groupByArea, groupCityItems, cityCardsFirst, defaultRouteId, citySubline, filterByGoal, segmentRoutes, pickOnSegment, nearestLine, fitProjection, zoomProjection, zoomAt, panBy, mergeRivers, areaLabelSpots, shortName } from './city-routes.js';
 import { Profiles, GENDERS, initials, cmToFtIn, ftInToCm } from './profiles.js';
 import { buildCatalogRoute, loadRouteScene } from './routes.js';
 import { loadNetwork, makePathRoute, planNext, planCloses, keysToIds, idsToKeys, travKey, PathFollower, edgeLines } from './network.js';
 import { legLength, startPosition, stopsForDirection, stopNear, planRide, startArchM } from './route-plan.js';
 import { VERSION } from './version.js';
+import { PREVIEW_INDEX, previewShots, shotsHtml, prunePreviewCache } from './route-previews.js';
 import { ScreenAwake } from './wakelock.js';
+import { worldSound } from './world/toolbox/core/sound.js';
 import { planRouteTiles, tileKeysToUrls, downloadUrls, offlineStatus, setOfflineStatus, registerServiceWorker } from './offline.js';
 
 const $ = (id) => document.getElementById(id);
@@ -62,6 +64,7 @@ if (!hasBluetooth) for (const id of ['rideBtn', 'hrBtn']) $(id).disabled = true;
 
 // ---------- Core objects ----------
 const settings = loadSettings();
+worldSound.setEnabled(settings.worldSound !== false);   // [subway sound] Settings → World sounds (on, quiet)
 // The active rider's weight drives the physics.
 const profiles = new Profiles(localStorage, settings.riderKg, settings.ftp);
 settings.riderKg = profiles.active.weightKg;
@@ -187,15 +190,23 @@ $('demoBtn').addEventListener('click', () => setDemo(!trainer.demo));
 $('demoOff').addEventListener('click', () => setDemo(false));
 
 // ---------- Ride type picker ----------
-let chosen = 'free';
+// Two tabs, Route (the default: Pittsburgh is selected when the app opens) and Workout. The free ride where you
+// set the grade has no tab of its own any more (PLAN 6.9): a small link under the route list opens its pane
+// ('free': the scenery cards), and it rides exactly as before. (The mode isn't saved, so nothing to migrate.)
+let chosen = 'route';
 function showPane(p) {
   chosen = p;
-  for (const t of document.querySelectorAll('.mode')) t.classList.toggle('on', t.dataset.mode === p);
+  for (const t of document.querySelectorAll('.mode')) {
+    t.classList.toggle('on', t.dataset.mode === p);
+    t.setAttribute('aria-selected', String(t.dataset.mode === p));
+  }
   for (const el of document.querySelectorAll('.mode-pane')) el.hidden = el.dataset.pane !== p;
   drawThumbs();
   renderPreview();
 }
 for (const t of document.querySelectorAll('.mode')) t.addEventListener('click', () => showPane(t.dataset.mode));
+$('freeRideLink').addEventListener('click', () => { showPane('free'); $('freeBack').focus({ preventScroll: true }); });
+$('freeBack').addEventListener('click', () => { showPane('route'); $('freeRideLink').focus({ preventScroll: true }); });
 
 const pausedByUser = () => !session.running && session.movingS > 0 && !session.autoPaused;
 
@@ -611,6 +622,7 @@ function renderPreview() {
       : fact(`${fmtDist(leg, 1)}`, `${distUnit()} each way`) + fact(fmtElev(r.ascent).toLocaleString(), `${elevUnit()} climb / lap`)) +
       fact(`${Math.round(Math.max(...r.grade))}%`, 'max grade') +
       `<div class="fact tag">${p2p ? 'Point to point' : r.oneWay?.closedLoop ? 'Loop · each lap turns and rides it back' : 'There &amp; back · turns at each end'}</div>`);
+    renderShots(r);
     $('planOpen').hidden = !r.netRide;
     if (r.netRide) $('pvDesc').innerHTML = `${r.note ? `${escapeHtml(r.note)}. ` : ''}At each junction choose left, straight, right or back with ◀ ▶ on the handlebars (or <kbd>A</kbd> <kbd>D</kbd>) — or follow the plan.`;
     if (!r.netRide) $('pvDesc').innerHTML = r.hasElevation ? '' : '<span class="warn">No elevation in this file — it will ride flat.</span>';
@@ -632,6 +644,7 @@ function renderPreview() {
     $('pvHint').hidden = false;
     $('pvHint').textContent = `Drag on the profile to move the start · starting ${fmtDist(cp.st.offsetM, 1)} ${distUnit()} in at ${fmtElev(at.ele).toLocaleString()} ${elevUnit()}`;
   } else if (chosen === 'workout' && previewWorkout) {
+    renderShots(null);
     $('planOpen').hidden = true;
     const w = previewWorkout, st = workoutStats(w);
     $('pvKicker').textContent = 'Workout';
@@ -643,6 +656,8 @@ function renderPreview() {
     drawWorkout(chart, w, 0, settings.ftp, 1);
   } else {
     const scene = sceneryItem();
+    renderShots(null);
+    $('planOpen').hidden = true;   // (the route pane's map planner link: the free pane now opens from there)
     $('pvKicker').textContent = 'Free ride';
     $('pvTitle').textContent = scene ? scene.name : 'Numbers only';
     $('pvSub').textContent = scene ? `Scenery · ${scene.park}` : 'No scenery — a plain dark background';
@@ -655,6 +670,39 @@ function renderPreview() {
   }
   renderStart();
 }
+
+// ---------- Route pictures (PLAN 6.8): start, highlight, a climb — pre-rendered (tools/build_previews.mjs) ----------
+let previewManifest = null, shownShots = [], shotsKey = null, shotAt = 0;
+async function loadPreviewManifest() {
+  try { previewManifest = await (await fetch(PREVIEW_INDEX)).json(); } catch { previewManifest = null; }
+  prunePreviewCache(previewManifest).catch(() => {});
+}
+function renderShots(r) {
+  const key = r ? r.id : null;
+  if (key === shotsKey) return;   // the same route: keep the pictures (no reload while the start is dragged)
+  shotsKey = key;
+  shownShots = r ? previewShots(previewManifest, r.id) : [];
+  const box = $('pvShots');
+  box.hidden = !shownShots.length;
+  box.style.setProperty('--n', shownShots.length || 1);
+  box.innerHTML = shotsHtml(shownShots);
+}
+function showShot(i) {
+  if (!shownShots.length) return;
+  shotAt = (i + shownShots.length) % shownShots.length;
+  const s = shownShots[shotAt];
+  $('shotImg').src = s.url; $('shotImg').alt = s.caption;
+  $('shotCap').innerHTML = `<b>${escapeHtml(s.word)}</b>${s.place ? ` ${escapeHtml(s.place)}` : ''}`;
+  $('shotCount').textContent = `${shotAt + 1} of ${shownShots.length}`;
+  $('shotPrev').hidden = $('shotNext').hidden = shownShots.length < 2;
+  if (!$('shotDlg').open) $('shotDlg').showModal();
+}
+$('pvShots').addEventListener('click', (e) => { const b = e.target.closest('[data-shot]'); if (b) showShot(Number(b.dataset.shot)); });
+$('shotPrev').addEventListener('click', () => showShot(shotAt - 1));
+$('shotNext').addEventListener('click', () => showShot(shotAt + 1));
+$('shotClose').addEventListener('click', () => $('shotDlg').close());
+$('shotDlg').addEventListener('click', (e) => { if (e.target === $('shotDlg')) $('shotDlg').close(); });   // the backdrop
+$('shotDlg').addEventListener('keydown', (e) => { if (e.key === 'ArrowLeft') showShot(shotAt - 1); if (e.key === 'ArrowRight') showShot(shotAt + 1); });
 
 // ---------- Scenery (3D loop behind free rides and workouts) ----------
 const sceneryItem = () => (parkItems || []).find((p) => p.id === settings.scenery) || null;
@@ -1233,6 +1281,7 @@ let selectedRouteId = null;
 
 async function loadParks() {
   if (parkItems) return parkItems;
+  await loadPreviewManifest();
   try {
     const list = await (await fetch('routes/parks/index.json')).json();
     parkItems = list.map((p) => ({ ...p, routeId: p.id, id: `builtin-park-${p.id}`, kind: 'route', url: p.file, group: 'Scenic routes — 3D' }));
@@ -1271,7 +1320,7 @@ async function refreshRouteList(selectId) {
   await loadIdeas();
   // Load every route up front: they're small, and the cards draw their outlines.
   await Promise.all(routeItems.map((it) => loadRouteItem(it).catch(() => null)));
-  if (selectId || !routeItems.some((r) => r.id === selectedRouteId)) selectedRouteId = selectId || routeItems[0].id;
+  if (selectId || !routeItems.some((r) => r.id === selectedRouteId)) selectedRouteId = selectId || defaultRouteId(routeItems);
   renderRouteCards();
   renderScenery();
   await previewSelectedRoute();
@@ -1319,7 +1368,9 @@ function renderRouteCards() {
   const matches = (it) => goalTags(it).includes(routeGoal);
   // a city shows while any of its routes (or its free ride) suits the goal
   const shown = routeGoal === 'all' ? routeCards : routeCards.filter((it) => (it.city ? [...it.routes, ...(it.free ? [it.free] : [])].some(matches) : matches(it)));
-  $('routeCards').innerHTML = (shown.length ? '' : '<p class="muted">No routes for that goal yet.</p>') + groupedCards(shown, (it) => {
+  // the city (Pittsburgh) at the very top, above every park and outside the stage groups (PLAN 6.9)
+  const { top, rest } = cityCardsFirst(shown);
+  const card = (it) => {
     if (it.city) {
       const n = routeGoal === 'all' ? it.routes.length : it.routes.filter(matches).length;
       let sub = citySubline(it, cityAreaCount(it));
@@ -1338,7 +1389,8 @@ function renderRouteCards() {
     const tags = goalTags(it);
     return `<button class="rcard ${it.id === selectedRouteId ? 'on' : ''}" data-id="${it.id}"><canvas></canvas>
       <div><b>${escapeHtml(it.name.replace(' (built-in)', ''))}</b><div class="rsub">${escapeHtml(it.park || it.group)} · ${sub}</div>${tags.length ? `<div class="rtags">${tags.map((t) => `<span>${label[t]}</span>`).join('')}</div>` : ''}</div></button>`;
-  }) + ideasSection();
+  };
+  $('routeCards').innerHTML = (shown.length ? '' : '<p class="muted">No routes for that goal yet.</p>') + top.map(card).join('') + groupedCards(rest, card) + ideasSection();
   watchIdeas($('routeCards'));
   drawThumbs();
   for (const c of routeCards.filter((x) => x.city)) loadCityRivers(c).then((fresh) => { if (fresh) drawThumbs(); });
@@ -2193,9 +2245,10 @@ function fillSettings() {
   $('diffOut').textContent = `${settings.difficulty}%`;
   f.realRatio.value = settings.realRatio;
   f.haptics.checked = settings.haptics;
+  f.worldSound.checked = settings.worldSound !== false;
   f.hudSize.value = settings.hudSize;
   f.hillFeel.value = String(settings.hillFeel ?? 50);
-  f.camera.value = settings.camera || 'close';
+  f.camera.value = settings.camera || 'closest';
   f.minimap.value = settings.minimap;
   f.startGear.value = settings.startGear;
   for (const el of dlg.querySelectorAll('.u-weight')) el.textContent = imp ? 'lb' : 'kg';
@@ -2225,6 +2278,7 @@ dlg.addEventListener('close', () => {
     difficulty: Number(f.difficulty.value),
     realRatio: Math.max(0, Number(f.realRatio.value) || 0),
     haptics: f.haptics.checked,
+    worldSound: f.worldSound.checked,
     hudSize: f.hudSize.value,
     hillFeel: Number(f.hillFeel.value) || 50,
     camera: f.camera.value,
@@ -2238,6 +2292,7 @@ dlg.addEventListener('close', () => {
   world?.setQuality(settings.worldQuality);
   world?.setWeather(settings.worldWeather);
   world?.setCamera?.(settings.camera);
+  worldSound.setEnabled(settings.worldSound);
   applyHudPrefs();
   renderRouteCards();
   renderWorkoutList();

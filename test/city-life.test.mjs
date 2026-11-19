@@ -10,9 +10,10 @@ import * as THREE from '../vendor/three.module.min.js';
 import { buildCatalogRoute } from '../js/routes.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
 import { makeCityLandscape, cityStreets, decodeCity } from '../js/world/toolbox/city/landscape.js';
-import { riderPose, CHASE, ROAD_WIDTH, LANE_OFFSET } from '../js/world/pose.js';
+import { riderPose, CHASE, ROAD_WIDTH, LANE_OFFSET, PACER_LANE } from '../js/world/pose.js';
 import { loadNetwork, NetRide } from '../js/network.js';
 import { VEHICLE_INFO } from '../js/world/toolbox/life/figures/vehicles.js';
+import { powerRequired, stepSpeed } from '../js/physics.js';
 
 // the boats' wake texture draws on a canvas: a stand-in is enough here
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: () => new Proxy({}, { get: (_, k) => (k === 'createLinearGradient' ? () => ({ addColorStop() {} }) : () => {}), set: () => true }) }) };
@@ -48,6 +49,7 @@ const useArea = (ctx) => ({ route, scene, index, L } = ctx);
 useArea(areaCtx('pittsburgh'));
 
 const SPEED = 9, DT = .1;
+const SPAWNS = ['_spawnWalker', '_spawnCyclist', '_spawnCar', '_spawnOncoming', '_spawnRouteRider'];
 const VIEW_M = 150;         // "in view": this close to the camera and in front of it (people: tiny dots beyond)
 const NEAR_M = 60;          // people out of the carriageway, vehicles out of the rider's lane, this close
 const HALF = ROAD_WIDTH / 2;
@@ -84,6 +86,17 @@ function localRoute(x, z, i0) {
   return best;
 }
 
+/**
+ * [6.10] A rider holding a steady power: speedAt(s) for simulate — the bike physics (js/physics.js) on the route's grade
+ * there (its rise over ±15 m), starting at the speed that power makes on the flat. `kph`: that flat speed.
+ */
+export function steadyPower(kph, reverse = false) {
+  const flat = kph / 3.6, watts = powerRequired(flat, 0);
+  let v = flat;
+  const y = (q) => riderPose(route, index, Math.max(0, Math.min(route.total - 1, q))).pos.y;
+  return Object.assign((s) => { const g = (y(s + 15) - y(s - 15)) / 30 * 100; v = stepSpeed(v, watts, g, DT); return Math.max(v, 1); }, { watts });
+}
+
 export function makeLife() { return new CityLife(makeCity()); }
 let _net = null;
 const network = () => (_net ||= loadNetwork(netJson, netJson.format === 'bikefree-network-2'
@@ -115,21 +128,21 @@ const note = (what, a, t) => DEBUG && console.log(what, `t=${t.toFixed(1)}`, JSO
  * sees every step; `seed` draws the city's life anew. `plan` (network traversal keys, e.g. ["e10+", "e1+"]) rides one lap of that path instead, as the
  * world places a network ride: the turns through the junctions, edges ridden backwards on the base route's way back.
  */
-export function simulate(reverse, { span = null, watch = null, plan = null, speed = SPEED, seed = null, area: areaId = 'pittsburgh' } = {}) {
+export function simulate(reverse, { span = null, watch = null, plan = null, speed = SPEED, speedAt = null, pacer = false, seed = null, area: areaId = 'pittsburgh', handOff = false } = {}) {
   useArea(areaCtx(areaId));
   let city = makeCity(), life = new CityLife(city);
   if (seed != null) { let q = seed; life.rand = () => { q = (q * 1103515245 + 12345) & 0x7fffffff; return q / 0x7fffffff; }; }   // (another draw of the same city's life)
   let turn = route.turnS, total = route.total;
   // spawns and despawns: hook the spawn methods (their names are the life's contract with this test)
   const respawned = new Set();
-  for (const k of ['_spawnWalker', '_spawnCyclist', '_spawnCar', '_spawnOncoming']) {
+  for (const k of SPAWNS) {
     const f = life[k].bind(life);
     life[k] = (a, ...rest) => { respawned.add(a); return f(a, ...rest); };
   }
-  const groupsOf = (lf) => [['person', lf.walkers], ['person', lf.riders], ['vehicle', lf.carAgents], ['vehicle', lf.busAgents], ['vehicle', lf.oncoming]];
+  const groupsOf = (lf) => [['person', lf.walkers], ['person', lf.riders], ['vehicle', lf.carAgents], ['vehicle', lf.busAgents], ['vehicle', lf.oncoming], ['routeRider', lf.routeRiders]];
   let agents = groupsOf(life).flatMap(([g, list]) => list.map((a) => ({ a, g, cyclist: list === life.riders })));
   const last = new Map();
-  const R = { swaps: 0, jumps: 0, worstJump: 0, personInRoad: 0, vehicleInLane: 0, vehicleClose: 0, closest: Infinity, oneWayOncoming: 0, popIn: 0, popOut: 0, ticks: 0, seen: { person: 0, vehicle: 0 } };
+  const R = { routeRiderClose: 0, closestRouteRider: Infinity, pacerClose: 0, routeRiderSeen: 0, minutes: 0, swaps: 0, carried: 0, dropped: 0, swapPopOut: 0, swapGone: 0, swapNew: 0, jumps: 0, worstJump: 0, personInRoad: 0, vehicleInLane: 0, vehicleClose: 0, closest: Infinity, oneWayOncoming: 0, popIn: 0, popOut: 0, ticks: 0, seen: { person: 0, vehicle: 0 } };
   const episode = new Map();   // agent → which checks are failing now (count each episode once)
   const flag = (a, key) => { const e = episode.get(a) || new Set(); episode.set(a, e); if (e.has(key)) return false; e.add(key); return true; };
   let s = reverse ? turn + speed * DT : 0;   // (Reverse: from the first step on the way back, so the city sees the rider coming back)
@@ -141,22 +154,28 @@ export function simulate(reverse, { span = null, watch = null, plan = null, spee
   const lives = new Map([[areaId, { city, life, agents }]]);
   const catalogOf = (id) => (ride?.net.multi ? ride.net.areas.get(id).json.catalogId : 'pittsburgh');
   const indexOf = (id) => areaCtx(catalogOf(id)).index;
+  let inViewAt = () => false;   // (in view of the last step's camera: what the swap takes away without a hand-off)
   for (let t = 0; s < end; t += DT, s += speed * DT) {
+    if (speedAt) speed = speedAt(s);   // (e.g. the speed a steady power makes on the grade there)
     // (a network ride: path metre s, at its place on the area drawn, as js/world/world.js does; a city of areas
     // swaps the area drawn — its own life — where NetRide.areaFor says. Nothing is carried across: life is
     // judged within each area, and the step of the swap is not counted as pop-in or pop-out)
-    let swapped = false;
+    let swapped = false, handing = null;
     if (ride?.net.multi) {
       const a = ride.areaFor(s, area);
       if (a !== area) {
         swapped = area != null; area = a;
         if (swapped) R.swaps++;
+        // [F31] with handOff the new area's life takes over the old one's agents (life-handoff.js), and the swap's
+        // step is judged like any other: what was in view and isn't carried is a pop-out, and nothing may jump
+        if (swapped && handOff) handing = { life, agents };
         const cid = catalogOf(a);
         useArea(areaCtx(cid));
-        if (!lives.has(cid)) { const c = makeCity(); const lf = new CityLife(c); lives.set(cid, { city: c, life: lf, agents: groupsOf(lf).flatMap(([g, list]) => list.map((x) => ({ a: x, g, cyclist: list === lf.riders }))) }); for (const k of ['_spawnWalker', '_spawnCyclist', '_spawnCar', '_spawnOncoming']) { const lf2 = lives.get(cid).life, f = lf2[k].bind(lf2); lf2[k] = (x, ...rest) => { respawned.add(x); return f(x, ...rest); }; } }
+        if (!lives.has(cid)) { const c = makeCity(); const lf = new CityLife(c); lives.set(cid, { city: c, life: lf, agents: groupsOf(lf).flatMap(([g, list]) => list.map((x) => ({ a: x, g, cyclist: list === lf.riders }))) }); for (const k of SPAWNS) { const lf2 = lives.get(cid).life, f = lf2[k].bind(lf2); lf2[k] = (x, ...rest) => { respawned.add(x); return f(x, ...rest); }; } }
         ({ city, life, agents } = lives.get(cid));
         turn = route.turnS; total = route.total;
-        if (swapped) { last.clear(); episode.clear(); }
+        if (handing) life.takeOver(handing.life);
+        else if (swapped) { R.swapGone += [...last.values()].filter((w) => inViewAt(w.x, w.z)).length; last.clear(); episode.clear(); }
       }
     }
     const ws = ride ? ride.worldAt(s, area).s : s;
@@ -164,6 +183,13 @@ export function simulate(reverse, { span = null, watch = null, plan = null, spee
     const fwd = { x: pose.flat.x, z: pose.flat.z };
     const cam = { x: pose.pos.x - fwd.x * CHASE.back, y: pose.pos.y + CHASE.up, z: pose.pos.z - fwd.z * CHASE.back };
     const back = ws > turn, rider = { x: pose.pos.x, z: pose.pos.z, out: back ? total - ws : ws, dir: back ? -1 : 1, speed };
+    // [6.10] a pacer riding with you, drifting from 6 m behind to 6 m ahead and back (its own lane, js/world/world.js)
+    let pacerBox = null;
+    if (pacer && !ride) {
+      const ps = Math.max(0, Math.min(total - 1, s + 6 * Math.sin(t / 15))), pp = riderPose(route, index, ps, PACER_LANE);
+      rider.pacer = { x: pp.pos.x, z: pp.pos.z, speed: speed * (1 + .4 * Math.cos(t / 15) * 6 / 15 / Math.max(speed, 1)) };
+      pacerBox = { x: pp.pos.x, z: pp.pos.z, hx: pp.flat.x, hz: pp.flat.z, ...RIDER_BODY };
+    }
     // (a U-turn ahead on the path, as js/world/world.js tells the life)
     const U = ride?.uturnAhead(s);
     if (U != null) { const w = ride.worldAt(Math.max(0, U - 1), area); if (w.area === area) rider.uturn = w.s > turn ? total - w.s : w.s; }
@@ -175,9 +201,25 @@ export function simulate(reverse, { span = null, watch = null, plan = null, spee
     life.tick(cam, DT, city.uniforms.uTime.value, rider);
     watch?.(life, rider, t);
     R.ticks++;
+    const inView = (x, z) => { const dx = x - cam.x, dz = z - cam.z, d = Math.hypot(dx, dz); return d < VIEW_M && (dx * fwd.x + dz * fwd.z) > d * Math.cos(75 * Math.PI / 180); };
+    inViewAt = inView;
+    if (swapped && !handing) R.swapNew += agents.filter(({ a }) => a.alive && a.x != null && inView(a.x, a.z)).length;   // (the new area's life, there at once)
+    if (handing) {
+      // the old life's agents → the new life's (the same lists, index for index): carried, or gone
+      const moved = new Map();
+      handing.agents.forEach(({ a }, j) => {
+        const was = last.get(a), b = agents[j]?.a;
+        if (!was) return;
+        if (b && b.alive && !respawned.has(b) && Number.isFinite(b.x)) { moved.set(b, was); R.carried++; }
+        else { R.dropped++; if (inView(was.x, was.z)) { R.popOut++; R.swapPopOut++; if (DEBUG) console.log('swap drop', `t=${t.toFixed(1)}`, JSON.stringify({ ...was, model: a.model, way: a.way, s: a.s, stand: a.stand })); } }
+      });
+      last.clear(); episode.clear();
+      for (const [b, was] of moved) last.set(b, was);
+      swapped = false;   // (judged: no pop-in, no jump on this step either)
+    }
     // a ghost stretch is never ridden (the network rides that street as the reverse of its real pass): don't judge there
     const out = rider.out, ghost = ghostAt(route, out) || ghostAt(route, out - NEAR_M) || ghostAt(route, out + NEAR_M);
-    const inView = (x, z) => { const dx = x - cam.x, dz = z - cam.z, d = Math.hypot(dx, dz); return d < VIEW_M && (dx * fwd.x + dz * fwd.z) > d * Math.cos(75 * Math.PI / 180); };
+    R.minutes += DT / 60;
     for (const { a, g, cyclist } of agents) {
       const was = last.get(a), alive = a.alive && a.x != null && Number.isFinite(a.x);
       const re = respawned.has(a);
@@ -197,6 +239,19 @@ export function simulate(reverse, { span = null, watch = null, plan = null, spee
       const level = r && Math.abs((a.y ?? r.y) - r.y) < 3;
       let bad = false;
       if (ghost) { episode.delete(a); continue; }
+      // [6.10] riders on the route with you: in the road by design, clear of you and the pacer (bike boxes ≥ .25 m apart)
+      if (g === 'routeRider') {
+        if (Math.hypot(a.x - rider.x, a.z - rider.z) < VIEW_M) R.routeRiderSeen++;
+        const box = { x: a.x, z: a.z, hx: Math.sin(a.yaw), hz: Math.cos(a.yaw), ...RIDER_BODY };
+        if (Math.abs(a.y - pose.pos.y) < 2 && Math.hypot(a.x - rider.x, a.z - rider.z) < 6) {
+          const gap = boxGap(riderBox, box);
+          R.closestRouteRider = Math.min(R.closestRouteRider, gap);
+          if (gap < .25) { bad = true; if (flag(a, 'rr')) { R.routeRiderClose++; note('route rider close', a, t); } }
+        }
+        if (pacerBox && Math.hypot(a.x - pacerBox.x, a.z - pacerBox.z) < 6 && boxGap(pacerBox, box) < .25) { bad = true; if (flag(a, 'rp')) { R.pacerClose++; note('route rider at the pacer', a, t); } }
+        if (!bad) episode.delete(a);
+        continue;
+      }
       if (g === 'person' && r && level && r.d < HALF) {
         // a background cyclist may ride a shared trail, on the far half from the rider
         const far = lateral(a.x, a.z, r.i) * rider.dir < -.5;
@@ -225,6 +280,13 @@ export function simulate(reverse, { span = null, watch = null, plan = null, spee
       if (!bad) episode.delete(a);
     }
   }
+  // [6.10] passes (either way) over the ride, from every area's life
+  // (an area swap hands the plan on: life-handoff.js — each plan once)
+  const plans = [...new Set([...lives.values()].map((x) => x.life._rr).filter(Boolean))];
+  R.passes = plans.reduce((n, p) => n + p.passes.length, 0);
+  R.caught = plans.reduce((n, p) => n + p.caught, 0);
+  R.passedBy = plans.reduce((n, p) => n + p.passedBy, 0);
+  R.perMinute = +(R.passes / Math.max(R.minutes, 1e-9)).toFixed(2);
   for (const x of lives.values()) x.life.dispose?.();
   return R;
 }
@@ -295,5 +357,6 @@ for (const [areaId, reverse] of process.env.NO_TESTS ? [] : Object.keys(BUSY).fl
     assert.equal(R.oneWayOncoming, 0, 'oncoming traffic on a one-way stretch of the route');
     assert.equal(R.vehicleClose, 0, `vehicles within ${CLOSE_M} m of the rider (closest ${R.closest.toFixed(2)} m)`);
     assert.equal(R.popIn + R.popOut, 0, `spawned ${R.popIn} / despawned ${R.popOut} in view`);
+    assert.equal(R.routeRiderClose, 0, `[6.10] riders on the route within .25 m of the rider (closest ${R.closestRouteRider.toFixed(2)} m)`);
   });
 }

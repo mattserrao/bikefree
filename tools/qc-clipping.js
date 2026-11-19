@@ -505,6 +505,26 @@ function checkSurfaces() {
 }
 
 // ---------------------------------------------------------------- 4. a simulated ride with the city's life
+let WHY = [], whyOn = false;
+/** [6.1] Where a box cuts a solid: the cut triangles' mean point (relative to `base`, the vehicle's road point; along/right/up in the box's frame) and mean normal's up. */
+function touch(e, o, base) {
+  const toBox = new THREE.Matrix4().copy(o.matrix).invert().multiply(e.matrix), toWorld = e.matrix;
+  const t2 = new THREE.Triangle(), c = V(), sum = V(); let n = 0, ny = 0, top = -Infinity, bot = Infinity;
+  e.bvh.shapecast({
+    intersectsBounds: (box) => box.clone().applyMatrix4(toBox).intersectsBox(o.box),
+    intersectsTriangle: (tri) => {
+      t2.a.copy(tri.a).applyMatrix4(toBox); t2.b.copy(tri.b).applyMatrix4(toBox); t2.c.copy(tri.c).applyMatrix4(toBox);
+      if (!o.box.intersectsTriangle(t2)) return false;
+      tri.getMidpoint(c).applyMatrix4(toWorld); sum.add(c); n++;
+      const nn = tri.getNormal(V()).transformDirection(toWorld); ny += Math.abs(nn.y);
+      for (const v of [tri.a, tri.b, tri.c]) { const w = v.clone().applyMatrix4(toWorld); top = Math.max(top, w.y); bot = Math.min(bot, w.y); }
+      return n > 40;
+    },
+  });
+  if (!n) return null;
+  sum.divideScalar(n).sub(base);
+  return { right: round(sum.dot(o.right), 2), up: round(sum.y, 2), fwd: round(sum.dot(o.fwd), 2), flat: round(ny / n, 2), n, top: round(top - base.y, 2), bot: round(bot - base.y, 2) };
+}
 function checkLife(seconds) {
   const L = LIMITS, life = city?.life, dt = .1;
   const meshes = [];
@@ -528,6 +548,7 @@ function checkLife(seconds) {
     const right = V(-fwd.z, 0, fwd.x), riderPos = V(pose.pos.x, pose.pos.y, pose.pos.z);
     const rider = obb(riderPos.clone().addScaledVector(UP, L.body.lift), right, UP, fwd, [L.body.half[0], L.body.half[1], L.body.half[2]]);
     const movers = [];
+    const agentOf = whyOn ? (() => { const map = new Map(), n = {}; for (const a of [...life.carAgents, ...life.busAgents].filter((a) => a.alive).concat(life.oncoming.filter((a) => a.alive))) { const im = life.carMeshes[a.model].im; const k = n[a.model] = (n[a.model] || 0); n[a.model]++; map.set(im.uuid + ':' + k, a); } return map; })() : null;
     for (const im of meshes) {
       const bb = im.geometry.boundingBox, g = group(im.name);
       for (let i = 0; i < im.count; i++) {
@@ -550,6 +571,13 @@ function checkLife(seconds) {
         if (!hitsOBB(e, shrink)) continue;
         // background life brushing past posts and trees is accepted (info); vehicles into buildings/bridges are not
         const background = a.g === 'person' || (a.g !== 'boat' && /^(Lamp posts|Street trees|Scenery)/.test(e.label));
+        if (whyOn && a.g === 'vehicle' && !background) {
+          const ag = agentOf.get(a.im.uuid + ':' + a.i), w = ag && !ag.onRoute ? life.drive.ways[ag.way] : null, cp = touch(e, shrink, a.p);
+          const st = w?.src;
+          WHY.push({ s: round(s, 0), solid: e.label, model: ag?.model, onRoute: !!ag?.onRoute, x: round(a.p.x, 1), y: round(a.p.y, 2), z: round(a.p.z, 1), way: ag?.way, cls: w?.cls, lat: ag && round(ag.lat, 2), v: ag && round(ag.v, 1),
+            street: st && { k: city.streets.indexOf(st), bridge: st.bridge, layer: st.layer, width: st.width, oneway: st.oneway, n: st.pts.length },
+            ground: round(landscape.heightAt(a.p.x, a.p.z), 2), base: round(landscape.baseHeight(a.p.x, a.p.z), 2), contact: cp, building: e.label === 'Buildings' ? describeBuilding(buildingAt(a.p.x, a.p.z)) : '' });
+        }
         F.add({ check: a.g === 'boat' ? 'boat-clips-bridge' : `${a.g}-clips-solid`, severity: background ? 'info' : 'warn', s, label: `${a.label} ↔ ${e.label}`, value: round(t, 1), point: pt(a.p),
           extra: describeBuilding(e.label === 'Buildings' ? buildingAt(a.p.x, a.p.z) : null), note: `${a.label.toLowerCase()} pass through ${e.label.toLowerCase()}` }, 60);
       }
@@ -583,9 +611,10 @@ export async function run(opts = {}) {
   F = new Findings();
   const timing = {};
   let t0 = performance.now();
-  checkRide(); timing.ride = round((performance.now() - t0) / 1000, 1); t0 = performance.now();
-  checkStatics(); timing.statics = round((performance.now() - t0) / 1000, 1); t0 = performance.now();
-  checkSurfaces(); timing.surfaces = round((performance.now() - t0) / 1000, 1); t0 = performance.now();
+  if (!opts.lifeOnly) checkRide(); timing.ride = round((performance.now() - t0) / 1000, 1); t0 = performance.now();
+  if (!opts.lifeOnly) checkStatics(); timing.statics = round((performance.now() - t0) / 1000, 1); t0 = performance.now();
+  if (!opts.lifeOnly) checkSurfaces(); timing.surfaces = round((performance.now() - t0) / 1000, 1); t0 = performance.now();
+  whyOn = !!opts.why; WHY = [];
   const life = opts.life === false ? { simulated: 0 } : checkLife(opts.lifeSeconds); timing.life = round((performance.now() - t0) / 1000, 1);
   // A there-and-back ride passes each spot twice: report it once, at its one-way distance, noting both directions.
   const turn = route.turnS, oneWay = (x) => (x == null || !turn ? x : x <= turn ? x : route.total - x);
@@ -612,7 +641,7 @@ export async function run(opts = {}) {
   F.list = merged;
   const rank = { fail: 0, warn: 1, info: 2 };
   F.list.sort((a, b) => rank[a.severity] - rank[b.severity] || a.check.localeCompare(b.check) || (a.at ?? 0) - (b.at ?? 0));
-  return { findings: F.list, timing, life, limits: LIMITS, oneWay: turn || route.total };
+  return { findings: F.list, timing, life, limits: LIMITS, oneWay: turn || route.total, ...(whyOn ? { why: WHY } : {}) };
 }
 
 /** A picture of a finding: the rider's own view for ride checks, otherwise a close camera aimed at the spot. */

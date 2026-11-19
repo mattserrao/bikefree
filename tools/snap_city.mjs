@@ -189,6 +189,7 @@ try {
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
     await page.addInitScript((t) => { localStorage.setItem('bikefree.theme', t); }, theme);
     await page.goto(`${base}/index.html`);
+    await page.click('#freeRideLink');   // (the free ride where you set the grade: no tab of its own, PLAN 6.9)
     await page.waitForSelector('#sceneCards .rcard[data-id="builtin-park-pittsburgh"]', { timeout: 120000 });
     await page.click('#sceneCards .rcard[data-id="builtin-park-pittsburgh"]');
     await page.waitForTimeout(300);

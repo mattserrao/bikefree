@@ -14,6 +14,7 @@ import { routePoint } from '../../pose.js';
 import { randomSequence } from '../core/random.js';
 import { Builder, M, box, linear } from '../core/model-builder.js';
 import { figureMaterial, staticCrowdMesh, randomLook, CLIP } from '../life/figures/people.js';
+import { worldSound, noiseLoop, toneLoop } from '../core/sound.js';
 
 const FLOOR = .1;                    // the path surface above the line (the rider's wheels)
 export const TRACKS = [-4, -8];      // track centres, metres right of the line (left: negative)
@@ -27,6 +28,14 @@ const RIVER = { tile: '#c4e6e8', tile2: '#b0dade', band: '#1fa59a', ceil: '#a9cf
 const STN = { tile: '#f7f5ef', tile2: '#ecebe4', ceil: '#e6e3dc' };
 const PATH = '#4caf6e', WALK = '#c9c5bd', BEDC = '#5d5953', RAIL = '#b8bcc4', SAFETY = '#f2c230';
 const STATION_BANDS = ['#e2b33c', '#3f86d8', '#d9534f', '#8e6bd1'];
+// [F125] the trains: sections (one instance each) [offset of its centre behind the train's front, flipped: cab at the
+// back]; two cars of two sections each, coupled cab to cab. secL: a section with its half of the bellows
+const TRAIN = (() => {
+  const secL = 12.9, carL = 2 * secL, gap = .7;
+  return { secL, W: 2.65, carL, trainL: 2 * carL + gap, doors: [-3.4, 2.2], period: 150, dwell: 18, offset: 70,
+    sections: [[secL / 2, false], [secL * 1.5, true], [carL + gap + secL / 2, false], [carL + gap + secL * 1.5, true]] };
+})();
+export { TRAIN };
 const SIGNS = ['North Side', 'Gateway', 'Under the Allegheny', 'Bikes keep right ·  Trains on the left'];
 
 const lerpC = (a, b, t) => linear(a).lerp(linear(b), t);
@@ -61,6 +70,7 @@ export class Subway {
     this._trains();
     this._people();
     if (ground?.userData.holes) this._holes(ground.userData.holes);
+    this.sound = cfg.sound === false ? null : new SubwaySound();   // [subway sound] (Settings → World sounds)
     this.t = 0;
   }
 
@@ -351,38 +361,105 @@ export class Subway {
   }
 
   // ---- trains: two-car light-rail trains on both tracks, never on the path ----
+  // [F125] A stylised take on Pittsburgh's light-rail cars: each car two sections on an articulation (bellows), cabs
+  // at both ends (coupled cab to cab), white with a red skirt and a black window band, lit windows with riders in
+  // them, a pantograph, an amber destination sign. One instance per section, so a train bends on the curve. Doors
+  // (two per side per section) slide open on the platform side while it dwells (a vertex shader: Builder part =
+  // which leaf). Head- and tail-lights are camera-facing glows (bright in the dark mouths, through the tunnel air).
   _trains() {
-    const B = new Builder(), L = 25.4, W = 2.65, Hh = 3.3;
-    B.add(box(W, Hh - .5, L), M(0, .55, 0), '#d9dde2');                  // body
-    B.add(box(W + .02, .55, L - .4), M(0, 1.45, 0), '#25303b');           // windows
-    B.add(box(W + .03, .28, L - .2), M(0, .95, 0), '#c8323c');            // stripe
-    B.add(box(W - .3, .2, L - 1), M(0, Hh, 0), '#9aa1a9');                // roof gear
-    for (const z of [-L / 2 + .02, L / 2 - .02]) B.add(box(W - .6, .7, .05), M(0, 1.4, z), '#25303b');
-    for (const z of [-L / 2 + .03, L / 2 - .03]) for (const x of [-.8, .8]) B.add(box(.28, .16, .04), M(x, .8, z), '#fff3c0');
+    const { secL, W } = TRAIN, half = secL / 2, rand = randomSequence(6215);
+    const B = new Builder();
+    const WHITE = '#eceef0', RED = '#c8202e', BLACK = '#1b1e22', LIT = '#ffe08f', ROOF = '#c4c8cd';
+    // body (the cab end at +z: its nose tapers in over the last 1.3 m)
+    const body = half - 1.3, zb0 = -half + .42, Lb = body - zb0, zc = (body + zb0) / 2;
+    B.add(box(W, .6, Lb), M(0, .45, zc), RED);
+    B.add(box(W, .5, Lb), M(0, 1.05, zc), WHITE);
+    B.add(box(W - .02, 1.0, Lb), M(0, 1.55, zc), BLACK);
+    B.add(box(W, .65, Lb), M(0, 2.55, zc), WHITE);
+    B.add(box(W - .25, .25, Lb), M(0, 3.2, zc), ROOF);
+    // windows: lit panes (proud of the black band) between pillars, with riders' heads and shoulders in them
+    for (const sx of [-1, 1]) for (let z = zb0 + .9; z < body - .7; z += 1.65) {
+      if (TRAIN.doors.some((d) => Math.abs(z - d) < 1.25)) continue;
+      B.add(box(.02, .78, 1.3), M(sx * (W / 2 + .005), 1.65, z), LIT);
+      if (rand() < .55) { const zz = z + (rand() - .5) * .6; B.add(box(.025, .34, .42), M(sx * (W / 2 + .006), 1.65, zz), '#4a4540'); B.add(box(.025, .24, .2), M(sx * (W / 2 + .007), 2.0, zz), '#4a4540'); }
+    }
+    // door openings (the lit inside, seen when the leaves slide) and the leaves (parts 1–4: side × slide)
+    for (const sx of [-1, 1]) for (const dz of TRAIN.doors) {
+      B.add(box(.02, 2.15, 1.34), M(sx * (W / 2 + .004), .5, dz), '#ffd67a');
+      for (const sl of [-1, 1]) {
+        B.as((sx < 0 ? 1 : 3) + (sl < 0 ? 0 : 1));
+        const z = dz + sl * .34;
+        B.add(box(.04, 2.1, .66), M(sx * (W / 2 + .03), .52, z), '#d3d7dc');
+        B.add(box(.05, .8, .46), M(sx * (W / 2 + .035), 1.62, z), LIT);
+        B.add(box(.05, 2.1, .06), M(sx * (W / 2 + .035), .52, z + sl * .3), '#f2b630');
+        B.as(0);
+      }
+    }
+    // the cab nose: a red lower front, a wrap-round black windscreen, an amber destination sign, a white cap
+    const nz = body, nl = 1.3;
+    B.add(box(W * .96, .95, nl * .9), M(0, .45, nz + nl * .45), RED);
+    B.add(box(W * .9, 1.15, nl * .7), M(0, 1.4, nz + nl * .5), BLACK);
+    B.add(box(W * .82, .3, nl * .55), M(0, 2.55, nz + nl * .45), '#ffb43a');
+    B.add(box(W * .92, .55, nl * .6), M(0, 2.85, nz + nl * .3), WHITE);
+    B.add(box(W * .8, .2, nl * .4), M(0, 3.2, nz + nl * .2), ROOF);
+    for (const x of [-.85, .85]) B.add(box(.34, .16, .05), M(x, .82, nz + nl * .9), '#fff6d8');   // head/tail lamp housings
+    // the articulation's half at -z: dark bellows ribs
+    for (let k = 0; k < 4; k++) B.add(box(W * .86, 2.7, .08), M(0, .55, -half + .06 + k * .11), k % 2 ? '#2f3237' : '#45494f');
+    // roof gear and (on the cab half) a pantograph
+    B.add(box(1.2, .3, 2.6), M(0, 3.45, -1.5), '#8d939b');
+    const bar = (x0, y0, z0, x1, y1, z1, t = .06) => { const a = new THREE.Vector3(x0, y0, z0), b = new THREE.Vector3(x1, y1, z1), l = a.distanceTo(b);
+      const g = new THREE.BoxGeometry(t, t, l); const m = new THREE.Matrix4().lookAt(b, a, new THREE.Vector3(0, 1, 0)).setPosition(a.clone().add(b).multiplyScalar(.5)); B.add(g, m, '#2b2e33'); };
+    bar(0, 3.75, 1.8, 0, 4.35, 2.8); bar(0, 4.35, 2.8, 0, 4.85, 1.9); bar(-.7, 4.85, 1.9, .7, 4.85, 1.9, .08);
     const geo = B.build();
-    this.trainMat = new THREE.MeshBasicMaterial({ vertexColors: true });
-    this.trains = new THREE.InstancedMesh(geo, this.trainMat, 4);
+    const mat = new THREE.MeshBasicMaterial({ vertexColors: true });
+    mat.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aTree; attribute vec2 aDoor;')
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+          if (aTree > .5) {   // a door leaf: slides along the car when this section's doors on its side are open
+            float side = aTree < 2.5 ? -1. : 1., sl = mod(aTree, 2.) > .5 ? -1. : 1.;
+            transformed.z += sl * .62 * aDoor.x * step(.5, side * aDoor.y);
+          }`);
+    };
+    mat.customProgramCacheKey = () => 'subway-train-2';
+    this.trainMat = mat;
+    const n = 8;
+    this.trains = new THREE.InstancedMesh(geo, mat, n);
+    this._door = new THREE.InstancedBufferAttribute(new Float32Array(n * 2), 2); this._door.setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute('aDoor', this._door);
     this.trains.name = 'Subway trains'; this.trains.frustumCulled = false;
-    this.group.add(this.trains); this.disposables.push(geo, this.trainMat);
-    this.carL = L + .6;
-    this._m = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._v = new THREE.Vector3(); this._sc = new THREE.Vector3(1, 1, 1);
+    this.group.add(this.trains); this.disposables.push(geo, mat);
+    // lamps: head (warm white) at the front, tail (red) at the back of each train
+    this.lamps = glowSprites(12, 'Subway train lights'); this.group.add(this.lamps); this.disposables.push(this.lamps.geometry, this.lamps.material);
+    this.carL = TRAIN.carL;
+    this._m = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._q2 = new THREE.Quaternion(); this._v = new THREE.Vector3(); this._sc = new THREE.Vector3(1, 1, 1);
   }
 
   /** Where a train's front is at time t (outbound metres; dir +1 outbound on the near track, −1 on the far one). */
-  trainFront(t, dir) {
-    const PERIOD = 150, len = 2 * this.carL, P0 = this.platforms[0], P1 = this.platforms[1];
+  trainFront(t, dir) { return this.trainState(t, dir)?.front ?? null; }
+  /**
+   * A train's state at time t: { front (outbound metres), open (doors 0–1), leg (0 in, 1 dwell, 2 run, 3 dwell, 4 out),
+   * u (seconds into the leg), d (the leg's seconds) }, or null while it's in the tunnels beyond (hidden).
+   */
+  trainState(t, dir) {
+    const PERIOD = TRAIN.period, len = TRAIN.trainL, P0 = this.platforms[0], P1 = this.platforms[1];
     // outbound (near track): in from the first mouth, dwell at the first platform, run, dwell at the second, out of
     // the far mouth; inbound (far track) the other way. The front stops at the platform's far end each way.
     const seq = dir > 0
       ? [this.s0 - 4, P0 ? P0.toM - 2 : this.s0 + 60, P1 ? P1.toM - 2 : this.s1 - 2, this.s1 + len + 4]
       : [this.s1 + 4, P1 ? P1.fromM + 2 : this.s1 - 60, P0 ? P0.fromM + 2 : this.s0 + 2, this.s0 - len - 4];
-    const legs = [[seq[0], seq[1], 9], [seq[1], seq[1], 18], [seq[1], seq[2], Math.abs(seq[2] - seq[1]) / 11 + 6], [seq[2], seq[2], 18], [seq[2], seq[3], 9]];
-    let u = ((t + (dir > 0 ? 0 : 70)) % PERIOD + PERIOD) % PERIOD;
-    for (const [a, b, d] of legs) {
-      if (u < d) { const k = u / d, e = k * k * (3 - 2 * k); return a + (b - a) * e; }
+    const legs = [[seq[0], seq[1], 9], [seq[1], seq[1], TRAIN.dwell], [seq[1], seq[2], Math.abs(seq[2] - seq[1]) / 11 + 6], [seq[2], seq[2], TRAIN.dwell], [seq[2], seq[3], 9]];
+    let u = ((t + (dir > 0 ? 0 : TRAIN.offset)) % PERIOD + PERIOD) % PERIOD;
+    for (let k = 0; k < legs.length; k++) {
+      const [a, b, d] = legs[k];
+      if (u < d) {
+        const q = u / d, e = q * q * (3 - 2 * q);
+        // doors: open 2.5 s after it stops, close 3 s before it leaves (1.5 s each way)
+        const open = a === b ? Math.max(0, Math.min(1, (u - 2.5) / 1.5, (d - 3 - u) / 1.5)) : 0;
+        return { front: a + (b - a) * e, open, leg: k, u, d };
+      }
       u -= d;
     }
-    return null;   // in the tunnels beyond (hidden)
+    return null;
   }
 
   _people() {
@@ -418,21 +495,41 @@ export class Subway {
     this.t += dt;
     if (this.treadTex) this.treadTex.offset.y -= (rider?.dir < 0 ? -1 : 1) * 3 * dt / .45;
     if (!this.trains) return;
-    let n = 0;
+    let n = 0, nl = 0;
+    const states = [];
     for (const [dir, lat] of [[1, TRACKS[0]], [-1, TRACKS[1]]]) {
-      const front = this.trainFront(this.t, dir);
-      if (front == null) continue;
-      for (let k = 0; k < 2; k++) {
-        const c = front - dir * (this.carL * (k + .5));
-        if (c < this.s0 - 20 || c > this.s1 + 20) continue;
-        const a = this._trackF(c - 10), b = this._trackF(c + 10), m = this._trackF(c);
-        const fx = b.x - a.x, fy = b.y - a.y, fz = b.z - a.z, l = Math.hypot(fx, fy, fz) || 1;
-        this._q.setFromUnitVectors(_Z, this._v.set(fx / l, fy / l, fz / l));
-        this._m.compose(this._v.set(m.x + m.rx * lat, m.y + BED + .25, m.z + m.rz * lat), this._q, this._sc);
-        this.trains.setMatrixAt(n++, this._m);
-      }
+      const st = this.trainState(this.t, dir);
+      states.push(st && { ...st, dir, lat });
+      if (!st) continue;
+      TRAIN.sections.forEach(([off, flip], k) => {
+        const c = st.front - dir * off;
+        if (c < this.s0 - 30 || c > this.s1 + 30) return;
+        const a = this._trackF(c - TRAIN.secL / 2 + .5), b = this._trackF(c + TRAIN.secL / 2 - .5), m = this._trackF(c);
+        let fx = (b.x - a.x) * dir, fy = (b.y - a.y) * dir, fz = (b.z - a.z) * dir;
+        const l = Math.hypot(fx, fy, fz) || 1; fx /= l; fy /= l; fz /= l;
+        this._q.setFromUnitVectors(_Z, this._v.set(fx, fy, fz));
+        if (flip) this._q.multiply(this._q2.setFromAxisAngle(_Y, Math.PI));
+        const px = m.x + m.rx * lat, py = m.y + BED + .25, pz = m.z + m.rz * lat;
+        this._m.compose(this._v.set(px, py, pz), this._q, this._sc);
+        this.trains.setMatrixAt(n, this._m);
+        // the doors on the platform side (the path's, right of the line): the section's local +x is (fz, −fx) turned
+        const sx = flip ? -1 : 1, side = Math.sign(((fz * m.rx - fx * m.rz) * sx) || 1);
+        this._door.setXY(n, st.open, side); n++;
+        // lamps: head-lights on the lead cab, tail-lights on the last
+        if (k === 0 || k === TRAIN.sections.length - 1) {
+          const end = k === 0 ? 1 : -1, ex = px + fx * TRAIN.secL / 2 * end, ez = pz + fz * TRAIN.secL / 2 * end, ey = py + fy * TRAIN.secL / 2 * end + .9;
+          for (const o of [-.85, .85]) {
+            const lx = ex + fz * o, lz = ez - fx * o;
+            setGlow(this.lamps, nl++, lx, ey, lz, k === 0 ? 2.6 : 1.3, k === 0 ? _HEAD : _TAIL);
+          }
+          if (k === 0) setGlow(this.lamps, nl++, ex, ey + 1.95, ez, 2.2, _HEAD);   // the high centre lamp over the windscreen
+        }
+      });
     }
-    this.trains.count = n; this.trains.instanceMatrix.needsUpdate = true;
+    this.trains.count = n; this.trains.instanceMatrix.needsUpdate = true; this._door.needsUpdate = true;
+    this.lamps.count = nl; this.lamps.instanceMatrix.needsUpdate = true; this.lamps.geometry.attributes.aGlow.needsUpdate = true;
+    this.trainStates = states;
+    this.sound?.update(this, rider, dt);   // [subway sound]
   }
 
   /** The tracks' frame at s: the line's in the tube; beyond its ends (into the dark mouths) it runs straight on, level. */
@@ -446,10 +543,108 @@ export class Subway {
   setNight() {}
 
   dispose() {
+    this.sound?.dispose();
     if (this.holes) for (const v of this.holes.b.value) v.z = 0;
     this.group.removeFromParent();
     for (const d of this.disposables) d.dispose?.();
     this.trains?.dispose();
   }
 }
-const _Z = new THREE.Vector3(0, 0, 1);
+/**
+ * [subway sound] The subway's ambience, from the trains' timetable and where the rider is (the line's metres): a low
+ * tunnel air underground, the escalators' hum near them, a train's rumble as it comes and goes (louder the nearer
+ * it is and the faster it moves), its brakes as it stops, the door tones before it leaves, its motors winding up,
+ * and the station chime ~8 s before a train comes in at the platform you're near. Quiet; heard only below ground
+ * (and faintly at the headhouses).
+ */
+class SubwaySound {
+  constructor() { this.prev = new Map(); this.voices = null; }
+  _voices() {
+    return this.voices ||= {
+      air: worldSound.loop('subway-air', (ctx, out) => [noiseLoop(ctx, out, { kind: 'brown', freq: 260, gain: .6 })]),
+      hum: worldSound.loop('subway-escalator', (ctx, out) => [toneLoop(ctx, out, 100, .25), toneLoop(ctx, out, 150, .08, 'triangle'), noiseLoop(ctx, out, { kind: 'white', type: 'bandpass', freq: 900, q: 1.4, gain: .05 })]),
+      rumble: worldSound.loop('subway-train', (ctx, out) => { const n = noiseLoop(ctx, out, { kind: 'brown', freq: 140, q: 1.1, gain: 1.4 }); this._rf = n.filter; return [n, toneLoop(ctx, out, 55, .18, 'triangle')]; }),
+    };
+  }
+  update(sub, rider, dt) {
+    if (rider?.out == null || !worldSound.touch()) return;
+    const V = this._voices(), r = rider.out, U = sub.under;
+    const fall = (d, R) => { const k = Math.max(0, 1 - d / R); return k * k; };
+    const deep = r > U.fromM + 4 && r < U.toM - 4 ? 1 : 0;
+    const nearTop = Math.min(...sub.conv.map((c) => Math.abs(r - (c.dir === 'down' ? c.fromM : c.toM))));
+    const hear = deep || fall(nearTop, 40) * .5;   // up at the headhouses: faintly
+    V.air.set(.18 * (deep ? 1 : fall(nearTop, 30)));
+    const dEsc = Math.min(...sub.conv.map((c) => Math.max(0, c.fromM - r, r - c.toM)));
+    V.hum.set(.3 * fall(dEsc, 45) * Math.max(hear, fall(dEsc, 45)));
+    // trains: the nearest one's rumble; events by leg
+    let loud = 0, pitch = 0;
+    for (const st of sub.trainStates || []) {
+      if (!st) continue;
+      const tail = st.front - st.dir * TRAIN.trainL, d = Math.hypot(Math.max(0, Math.min(st.front, tail) - r, r - Math.max(st.front, tail)), Math.abs(st.lat));
+      const moving = st.leg % 2 === 0 ? Math.sin(Math.PI * Math.min(1, st.u / st.d)) * .7 + .3 : .15;
+      const lv = fall(d, 220) * moving * hear;
+      if (lv > loud) { loud = lv; pitch = moving; }
+      const pv = this.prev.get(st.dir), stopAt = st.leg === 1 || st.leg === 3 ? st.front : null;
+      const level = fall(Math.abs(r - st.front), 160) * hear;
+      if (pv && pv.leg !== st.leg) {
+        if (stopAt != null) worldSound.play('brakes', level);
+        if (st.leg === 2 || st.leg === 4) worldSound.play('depart', level);
+      }
+      if (pv && pv.leg === st.leg && stopAt != null && pv.u < st.d - 4.5 && st.u >= st.d - 4.5) worldSound.play('doors', level);
+      // the chime: ~8 s before it stops at a platform, heard near that platform
+      if (pv && pv.leg === st.leg && (st.leg === 0 || st.leg === 2)) {
+        const left = st.d - st.u, was = pv.d - pv.u;
+        if (was > 8 && left <= 8) {
+          const P = sub.platforms[(st.dir > 0) === (st.leg === 0) ? 0 : 1];
+          if (P) worldSound.play('chime', fall(Math.max(0, P.fromM - r, r - P.toM), 120) * hear);
+        }
+      }
+      this.prev.set(st.dir, { leg: st.leg, u: st.u, d: st.d });
+    }
+    V.rumble.set(.55 * loud);
+    if (this._rf) this._rf.frequency.setTargetAtTime(90 + 170 * pitch, this._rf.context.currentTime, .3);
+    void dt;
+  }
+  dispose() { if (this.voices) for (const v of Object.values(this.voices)) v.stop(); this.voices = null; }
+}
+
+const _Z = new THREE.Vector3(0, 0, 1), _Y = new THREE.Vector3(0, 1, 0);
+const _HEAD = new THREE.Color('#fff2cc'), _TAIL = new THREE.Color('#ff3a2a');
+
+/** Camera-facing additive glows (an instanced quad; per-instance colour `aGlow`), always on, through the fog. */
+function glowSprites(n, name) {
+  const geo = new THREE.PlaneGeometry(1, 1);
+  geo.setAttribute('aGlow', new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3));
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: /* glsl */`
+      attribute vec3 aGlow; varying vec3 vColor; varying vec2 vUv;
+      #include <common>
+      #include <logdepthbuf_pars_vertex>
+      void main() {
+        vUv = uv; vColor = aGlow;
+        vec4 mv = modelViewMatrix * instanceMatrix * vec4(0., 0., 0., 1.);
+        mv.xy += (uv - .5) * length(instanceMatrix[0].xyz);
+        gl_Position = projectionMatrix * mv;
+        #include <logdepthbuf_vertex>
+      }`,
+    fragmentShader: /* glsl */`
+      varying vec3 vColor; varying vec2 vUv;
+      #include <logdepthbuf_pars_fragment>
+      void main() {
+        #include <logdepthbuf_fragment>
+        float r = length(vUv - .5) * 2.;
+        float a = exp(-r * r * 5.) * .8 + exp(-r * r * 60.);
+        if (a < .004) discard;
+        gl_FragColor = vec4(vColor * a, a);
+      }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  });
+  const im = new THREE.InstancedMesh(geo, mat, n);
+  im.name = name; im.frustumCulled = false; im.count = 0; im.renderOrder = 6;
+  return im;
+}
+const _gm = new THREE.Matrix4(), _gq = new THREE.Quaternion(), _gv = new THREE.Vector3(), _gs = new THREE.Vector3();
+function setGlow(im, i, x, y, z, size, color) {
+  im.setMatrixAt(i, _gm.compose(_gv.set(x, y, z), _gq, _gs.set(size, size, size)));
+  im.geometry.attributes.aGlow.setXYZ(i, color.r, color.g, color.b);
+}

@@ -22,7 +22,7 @@ const ss = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
 
 /**
  * The scene's street-kit settings, normalised; null when the scene doesn't use the kit. Zones:
- *   { name, style, fromM, toM, widthM: 80, parking: false, sidewalkM: 3, curbM: ROUTE_CURB, grade: true, trees: 0 }
+ *   { name, style, fromM, toM, widthM: 80, parking: false, sidewalkM: 3, curbM: ROUTE_CURB, grade: true, trees: 0, sidewalks: true }
  * `curbM`: the route's curb line from its centre (the asphalt between the lanes and the curb is the kit's);
  * `grade`: the sidewalk-level ground above; `trees`: street-tree spacing in metres (0: none).
  */
@@ -30,7 +30,8 @@ export function streetKitConfig(scene) {
   const k = scene?.streetKit;
   if (!k) return null;
   const zones = (k.zones || (scene.mainStreets || []).map((m) => ({ ...m, style: 'victorian', parking: true })))
-    .map((z) => ({ widthM: 80, parking: false, sidewalkM: 3, curbM: ROUTE_CURB, grade: true, trees: 0, ...z }));
+    .map((z) => ({ widthM: 80, parking: false, sidewalkM: 3, curbM: ROUTE_CURB, grade: true, trees: 0, ...z }))
+    .map((z) => (z.sidewalks === false ? { ...z, grade: false } : z));   // [6.6] a park drive: no sidewalk, so no sidewalk-level ground
   return { fromM: 0, toM: Infinity, rangeM: 220, ...k, zones };
 }
 

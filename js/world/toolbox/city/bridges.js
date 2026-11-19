@@ -89,6 +89,12 @@ function deck(M, city, pts, width, opts = {}) {
     for (let k = 0; k < rn; k++) {
       const a = at(k / rn * path.length), b = at((k + 1) / rn * path.length);
       const o = side * (width / 2 + .25);
+      // [6.1] not across another carriageway at about the deck's level (a ramp merging, the other half of a
+      // divided road alongside): its traffic would drive through the rail
+      if (L.streetsNear && [.25, .75].some((f) => {
+        const q = at((k + f) / rn * path.length), x = q.p.x + q.r.x * o, z = q.p.z + q.r.z * o;
+        return L.streetsNear(x, z, .2).some((n) => n.k !== opts.street && city.streets?.[n.k]?.cls <= 7 && Math.abs(n.y - q.p.y) < 2.6);
+      })) continue;
       M.beam(a.p.clone().addScaledVector(a.r, o).setY(a.p.y + 1.05), b.p.clone().addScaledVector(b.r, o).setY(b.p.y + 1.05), .12, .12);
     }
   }

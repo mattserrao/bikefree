@@ -1,0 +1,20 @@
+{
+ "_note": "Hand picks for the route pictures (PLAN 6.8, tools/preview_spots.mjs): per route id, start | highlight | third: { atM (route metres: a park's outbound leg, a preset's path), name, aim: {lat, lon, up}, view: <scene view name>, of: <a candidate's name, e.g. a bridge>, climb: true, off: true }. Then: node tools/build_previews.mjs --only <id>",
+ "route28": {
+  "highlight": {
+   "atM": 10650,
+   "name": "the Fulton Chain of Lakes"
+  }
+ },
+ "pgh-subway-point": {
+  "third": {
+   "atM": 680,
+   "name": "North Side station, under the Allegheny"
+  }
+ },
+ "bigsur": {
+  "highlight": {
+   "of": "Bixby Creek Bridge"
+  }
+ }
+}

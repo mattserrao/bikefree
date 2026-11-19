@@ -20,6 +20,7 @@ import { Builder, M, cyl, cone, blob, box, withSmooth } from '../core/model-buil
 import { randomSequence, smoothstep, vnoise } from '../core/random.js';
 import { ghostMask } from '../../ghost.js';
 import { drain, due } from '../core/jobs.js';
+import { figureMaterial, staticCrowdMesh, randomLook, CLIP } from '../life/figures/people.js';
 
 const R_ = 6371008.8 * Math.PI / 180;
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -287,37 +288,56 @@ const THEMES = {
 };
 
 // ---------------------------------------------------------------- materials
-function plantMaterial() {
+function plantMaterial(night) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .78, metalness: 0 });
   m.onBeforeCompile = (sh) => {
+    nightGlow(sh, night, 'vColor.rgb * vec3(1., .86, .62) * .16');   // [F116] the house's own lamps on the beds after dark
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aTree;')
       .replace('#include <color_vertex>', `#include <color_vertex>
         #ifdef USE_INSTANCING_COLOR
           vColor.xyz = color.xyz * mix(vec3(1.), instanceColor.xyz, aTree);
         #endif`);
   };
-  m.customProgramCacheKey = () => 'glasshouse-plant-1';
+  m.customProgramCacheKey = () => 'glasshouse-plant-2';
   return m;
 }
-function glassMaterial() {
+function glassMaterial(night) {
   const m = new THREE.MeshStandardMaterial({ color: '#d4ece8', transparent: true, opacity: .16, roughness: .55, metalness: 0, depthWrite: false, side: THREE.DoubleSide });
   m.onBeforeCompile = (sh) => {
-    sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', `
+    sh.uniforms.uNight = night;
+    // [F116] after dark the glass glows warm, lit from inside: a lantern seen from the park (brighter at the edges)
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight;').replace('#include <opaque_fragment>', `
       float bfFres = pow(1. - abs(dot(normalize(vNormal), normalize(vViewPosition))), 3.);
-      diffuseColor.a = clamp(diffuseColor.a + bfFres * .42, 0., .62);
-      outgoingLight += vec3(.10, .13, .13) * bfFres;
+      diffuseColor.a = clamp(diffuseColor.a + bfFres * .42 + uNight * (.1 + bfFres * .12), 0., .7);
+      outgoingLight += vec3(.10, .13, .13) * bfFres * (1. - uNight);
+      outgoingLight += vec3(1., .74, .42) * (.26 + bfFres * .3) * uNight;
       #include <opaque_fragment>`);
   };
-  m.customProgramCacheKey = () => 'glasshouse-glass-1';
+  m.customProgramCacheKey = () => 'glasshouse-glass-2';
   m.userData.noBake = true;
   return m;
 }
-function artMaterial() {
+function artMaterial(night) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .18, metalness: .05, side: THREE.DoubleSide });
   m.onBeforeCompile = (sh) => {
-    sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vColor.rgb * .38;');
+    // (the glass art and the path lamps' globes: a little glow by day, lit up after dark [F116])
+    sh.uniforms.uNight = night;
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vColor.rgb * (.38 + uNight * 1.25);');
   };
-  m.customProgramCacheKey = () => 'glasshouse-art-1';
+  m.customProgramCacheKey = () => 'glasshouse-art-2';
+  return m;
+}
+/** [F116] Adds `uNight` and an emissive term (GLSL, in terms of vColor) that comes up after dark. */
+function nightGlow(sh, night, term) {
+  sh.uniforms.uNight = night;
+  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight;')
+    .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\ntotalEmissiveRadiance += ${term} * uNight;`);
+}
+function frameMaterial(night) {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .62, metalness: .05, side: THREE.DoubleSide });
+  m.onBeforeCompile = (sh) => nightGlow(sh, night, 'vColor.rgb * vec3(1., .82, .58) * .2');   // the white frames lit from inside
+  m.customProgramCacheKey = () => 'glasshouse-frames-1';
   return m;
 }
 function waterMaterial(uTime) {
@@ -345,12 +365,29 @@ export function* buildGlasshousesJob(city) {
   const out = { frames: [], meshes: [] };
   const uTime = city.uniforms?.uTime || { value: 0 };
   for (const spec of specs) out.frames.push(yield* buildOneJob(city, spec, out, uTime));
+  const domes = out.frames.flatMap((f) => f.domes || []);
+  /** [F111] How far (m) the chase camera looks up at (x, z): up into a dome when the rider is under it. */
+  out.lookUp = (x, z) => domeLookUp(domes, x, z);
   return out;
+}
+
+/**
+ * [F111] Under a dome the chase camera looks up a little, into it: `lookUpM` (default 3 m at the look point, ~10°)
+ * at the dome's centre, easing to nothing at its rim. domes: [{x, z, r, m}] (scene metres).
+ */
+export function domeLookUp(domes, x, z) {
+  let up = 0;
+  for (const d of domes) {
+    const t = 1 - Math.hypot(x - d.x, z - d.z) / d.r;
+    if (t > 0) up = Math.max(up, d.m * smoothstep(0, .55, t));
+  }
+  return up;
 }
 
 function* buildOneJob(city, spec, out, uTime) {
   const L = city.landscape, F = glasshouseFrame(spec, city.D.proj);
   const rand = randomSequence(spec.seed ?? 1871);
+  const night = city.night || { value: 0 };   // [F116] the city's night (0 day, 1 night)
   const pts = routeInFrame(F, city.route, city.index, 80), runs = runsOf(pts), rdist = routeDistField(runs);
   const inside = pts.filter((p) => inRing(F.foot, p.u, p.v));
   // the garden walk: only the stretch of route the glasshouse owns (`pathM`) gets borders outside the glass
@@ -670,15 +707,21 @@ function* buildOneJob(city, spec, out, uTime) {
   }
   for (const bn of benches) { const k = `${Math.floor(bn.bu / 10)},${Math.floor(bn.bv / 10)}`; if (!benchCells.has(k)) benchCells.set(k, []); benchCells.get(k).push(bn); }
   S.color('#7a5634');
-  for (const { bu, bv, p, q, side } of benches) {
+  for (const bn of benches) {
+    const { bu, bv, p, q } = bn;
     const gy = ground(bu, bv), c = P(bu, bv, 0), w0 = P(p.u, p.v, 0), w1 = P(q.u, q.v, 0), yaw = Math.atan2(w1.x - w0.x, w1.z - w0.z);
+    // the back on the side away from the path (n: from the path to the bench, in the scene; F118: it was on the
+    // path's side in this frame, so a bench faced the beds)
+    let nx = c.x - w0.x, nz = c.z - w0.z; const nl = Math.hypot(nx, nz) || 1; nx /= nl; nz /= nl;
+    const ax = Math.sin(yaw), az = Math.cos(yaw), d = nx * ax + nz * az;
+    nx -= ax * d; nz -= az * d; const nl2 = Math.hypot(nx, nz) || 1; bn.nx = nx / nl2; bn.nz = nz / nl2;
     S.box(c.x, gy + .42, c.z, .55, .12, 2.2, yaw);
-    S.box(c.x + Math.sin(yaw + Math.PI / 2) * .28 * side, gy + .54, c.z + Math.cos(yaw + Math.PI / 2) * .28 * side, .08, .45, 2.2, yaw);
+    S.box(c.x + bn.nx * .28, gy + .54, c.z + bn.nz * .28, .08, .45, 2.2, yaw);
     for (const o of [-.9, .9]) S.box(c.x + Math.sin(yaw) * o, gy, c.z + Math.cos(yaw) * o, .5, .42, .12, yaw);
   }
 
   // ---- planting
-  const models = plantModels(), pmat = city.own(plantMaterial());
+  const models = plantModels(), pmat = city.own(plantMaterial(night));
   const inst = {};   // model → [{u, v, y, h, yaw, tint}]
   const put = (model, u, v, h, tint, yaw = rand() * TAU, y = ground(u, v), d = Infinity) => { (inst[model] ||= []).push({ u, v, y, h, yaw, tint, d }); };
   for (const [name, th] of Object.entries(THEMES)) {
@@ -764,6 +807,89 @@ function* buildOneJob(city, spec, out, uTime) {
     else if (a.kind === 'rod') { A.color('#d8d8d8'); A.beam(V(base.x, a.y, base.z), V(base.x, a.top, base.z), .12, .12); }
   }
 
+  // ---- [F116] path lamps: low lantern posts along the walk strip (glass globes, lit after dark), with glows and
+  // pools of light on the path at night (the city's night-only lists)
+  const lamps = [];
+  {
+    const every = spec.lampEveryM ?? 16, off = walk - .7;
+    const wallClear = (u, v) => {
+      if (!inRing(F.foot, u, v)) return ringDist(F.foot, u, v) > 3;
+      if (ringDist(F.foot, u, v) < 3) return false;
+      for (const R of F.rooms) if (inRect(R, u, v) && Math.min(u - R.u0, R.u1 - u, v - R.v0, R.v1 - v) < 3) return false;
+      return (spec.partitions || []).every(([a, b]) => segDist(u, v, a, b) > 3);
+    };
+    let k = 0;
+    for (const run of runsOf(own)) for (let j = 1; j < run.length - 1; j++) {
+      const p = run[j];
+      if (Math.floor(p.s / every) === Math.floor(run[j - 1].s / every)) continue;
+      const a = run[j - 1], b = run[j + 1], du = b.u - a.u, dv = b.v - a.v, l = Math.hypot(du, dv) || 1, side = k++ % 2 ? 1 : -1;
+      const u = p.u - dv / l * off * side, v = p.v + du / l * off * side;
+      if (rdist(u, v).d < walk - 1.2 || !wallClear(u, v)) continue;
+      if (benches.some((bn) => Math.hypot(bn.bu - u, bn.bv - v) < 2.6)) continue;
+      if (features.some((f) => Math.hypot(f[0] - u, f[1] - v) < f[2] - 1)) continue;
+      const gy = ground(u, v), q = P(u, v, gy);
+      if ((city.lamps || []).some((l) => Math.abs(l.x - q.x) < 4 && Math.abs(l.z - q.z) < 4)) continue;   // (outside: the city's route lamps already stand there)
+      lamps.push({ u, v, x: q.x, y: gy, z: q.z, path: P(p.u - dv / l * 1.4 * side, p.v + du / l * 1.4 * side, p.y) });
+    }
+    for (const lp of lamps) {
+      S.color('#2f4a3c'); S.cylinder(lp.x, lp.y, lp.z, .11, .2, 6, .09); S.cylinder(lp.x, lp.y + .2, lp.z, .06, 1.05, 6, .05);
+      S.cylinder(lp.x, lp.y + 1.25, lp.z, .14, .05, 6, .14);
+      A.color('#fff1c8'); sphere(A, lp.x, lp.y + 1.48, lp.z, .2);
+    }
+  }
+  if (lamps.length && city.addGlows) {
+    city.addGlows(lamps.map((lp) => ({ x: lp.x, y: lp.y + 1.48, z: lp.z, size: 2.4, color: '#ffd9a0' })), 'Glasshouse lamp glows');
+    if (city.poolMaterial) {
+      const geo = city.own(new THREE.PlaneGeometry(1, 1)); geo.rotateX(-Math.PI / 2);
+      const pools = new THREE.InstancedMesh(geo, city.poolMaterial, lamps.length), m4 = new THREE.Matrix4(), q0 = new THREE.Quaternion();
+      lamps.forEach((lp, i) => pools.setMatrixAt(i, m4.compose(V(lp.path.x, lp.path.y + .12, lp.path.z), q0, V(9, 1, 9))));
+      pools.instanceMatrix.needsUpdate = true; pools.computeBoundingSphere(); pools.name = 'Glasshouse lamp pools'; pools.renderOrder = 3;
+      pools.visible = night.value > .01;
+      (city.nightOnly ||= []).push(pools); meshes.push(pools);
+    }
+  }
+  // the chandelier and the dome lit at night: big soft glows inside the glass
+  if (city.addGlows) {
+    const big = [];
+    for (const a of spec.art || []) if (a.kind === 'chandelier') { const q = P(a.at[0], a.at[1], ground(a.at[0], a.at[1]) + (a.y ?? 40) - (a.dropM ?? 16) * .4); big.push({ x: q.x, y: q.y, z: q.z, size: (a.r ?? 9) * 4.5, color: '#ffe0b0' }); }
+    for (const R of F.rooms) if (R.domeC) { const q = P(R.domeC[0], R.domeC[1], R.domeY + R.domeR * .5); big.push({ x: q.x, y: q.y, z: q.z, size: R.domeR * 2.6, color: '#ffcf96' }); }
+    if (big.length) city.addGlows(big, 'Glasshouse night glow');
+  }
+
+  // ---- [F118] visitors: sitting on the benches, standing at the fountain, the pools and the glass art (one draw)
+  const visitors = [];
+  {
+    const vr = randomSequence((spec.seed ?? 1871) + 7);
+    for (const bn of benches) {
+      const roll = vr(); if (roll > (spec.benchSitters ?? .85)) continue;
+      const gy = ground(bn.bu, bn.bv), c = P(bn.bu, bn.bv, 0), w0 = P(bn.p.u, bn.p.v, 0), w1 = P(bn.q.u, bn.q.v, 0), yaw = Math.atan2(w1.x - w0.x, w1.z - w0.z);
+      // the bench's back is away from the path (bn.n); a sitter faces the path
+      const bx = bn.nx, bz = bn.nz, ax = Math.sin(yaw), az = Math.cos(yaw);
+      const fy = Math.atan2(-bx, -bz), seats = roll < .25 ? [-.55, .55] : [(vr() - .5) * 1.2];
+      for (const o of seats) visitors.push({ look: randomLook(vr, { kids: .12 }), x: c.x + ax * o - bx * .06, y: gy + .05, z: c.z + az * o - bz * .06, yaw: fy, clip: CLIP.sit, phase: vr(), rate: 1 / 7 });
+    }
+    // standing: round the features' rims, facing them (never on the path)
+    const spots = [];
+    for (const f of spec.features || []) {
+      if (f.kind === 'pool') { const [w, l] = f.size || [10, 30]; for (let k = 0; k < 8; k++) spots.push({ u: f.at[0] - l / 2 + (k + .5) * l / 8, v: f.at[1] + (k % 2 ? 1 : -1) * (w / 2 + .9), fu: f.at[0] - l / 2 + (k + .5) * l / 8, fv: f.at[1] }); }
+      else { const r = (f.r ?? 6) + 1.1; for (let k = 0; k < 14; k++) { const a = k / 14 * TAU; spots.push({ u: f.at[0] + Math.cos(a) * r, v: f.at[1] + Math.sin(a) * r, fu: f.at[0], fv: f.at[1] }); } }
+    }
+    for (const a of spec.art || []) if (a.kind === 'spires') { const r = (a.r ?? 3) + 1.3; for (let k = 0; k < 6; k++) { const t = k / 6 * TAU; spots.push({ u: a.at[0] + Math.cos(t) * r, v: a.at[1] + Math.sin(t) * r, fu: a.at[0], fv: a.at[1] }); } }
+    const clips = [CLIP.look, CLIP.photo, CLIP.idle, CLIP.phone];
+    for (const sp of spots) {
+      if (vr() > (spec.standers ?? .45) || rdist(sp.u, sp.v).d < 4.6) continue;
+      if (visitors.some((o) => Math.hypot(o.u - sp.u, o.v - sp.v) < .9)) continue;
+      const q = P(sp.u, sp.v, 0), t = P(sp.fu, sp.fv, 0);
+      visitors.push({ u: sp.u, v: sp.v, look: randomLook(vr, { kids: .15 }), x: q.x, y: ground(sp.u, sp.v), z: q.z, yaw: Math.atan2(t.x - q.x, t.z - q.z) + (vr() - .5) * .5, clip: clips[Math.floor(vr() * clips.length)], phase: vr(), rate: undefined });
+    }
+  }
+  if (visitors.length) {
+    const vm = city.own(figureMaterial(uTime));
+    // (named as people: city life to the clipping QC — sitters sit on the benches, they don't stand in them)
+    const crowd = staticCrowdMesh(visitors, vm, 'People · glasshouse visitors', 'hi');
+    city.own(crowd.geometry); meshes.push(crowd);
+  }
+
   // ---- meshes
   const add = (builder, mat, name, opts = {}) => {
     if (!builder.count) return null;
@@ -773,16 +899,18 @@ function* buildOneJob(city, spec, out, uTime) {
     if (opts.renderOrder != null) mesh.renderOrder = opts.renderOrder;
     meshes.push(mesh); return mesh;
   };
-  add(S, city.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .62, metalness: .05, side: THREE.DoubleSide })), 'Glasshouse frames', { userData: { bake: false } });
+  add(S, city.own(frameMaterial(night)), 'Glasshouse frames', { userData: { bake: false } });
   add(Bd, city.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: THREE.DoubleSide })), 'Glasshouse beds', { renderOrder: 1, userData: { bake: false } });
-  add(A, city.own(artMaterial()), 'Glasshouse glass art', { userData: { bake: false } });
+  add(A, city.own(artMaterial(night)), 'Glasshouse glass art', { userData: { bake: false } });
   add(W, city.own(waterMaterial(uTime)), 'Glasshouse water', { userData: { bake: false } });
-  add(G, city.own(glassMaterial()), 'Glasshouse glass', { renderOrder: 5, receive: false, userData: { bake: false } });
+  add(G, city.own(glassMaterial(night)), 'Glasshouse glass', { renderOrder: 5, receive: false, userData: { bake: false } });
   const group = new THREE.Group(); group.name = `Glasshouse · ${spec.name || 'glasshouse'}`;
   for (const m of meshes) group.add(m);
   city.group.add(group);
   out.meshes.push(...meshes);
-  return { F, group, rooms: F.rooms, instances: Object.fromEntries(Object.entries(inst).map(([k, v]) => [k, v.length])) };
+  const domes = F.rooms.filter((R) => R.domeC).map((R) => { const q = F.toXZ(...R.domeC); return { x: q.x, z: q.z, r: R.domeR, m: spec.lookUpM ?? 3 }; });
+  return { F, group, rooms: F.rooms, domes, lamps: lamps.length, visitors: visitors.length, benches: benches.map((b) => [b.bu, b.bv]),
+    instances: Object.fromEntries(Object.entries(inst).map(([k, v]) => [k, v.length])) };
 }
 
 /** A low-poly sphere (6 rings × 8) into a MeshBuilder. */
