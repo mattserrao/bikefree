@@ -345,9 +345,7 @@ export class Session extends EventTarget {
     if (!carry) this.speedMps = stepSpeed(this.speedMps, this.power, grade, dt, p);
     // Demo mode holds a constant speed so every feature can be tried without a bike.
     if (this.demoSpeedMps != null) this.speedMps = this.running ? this.demoSpeedMps : 0;
-    // A network route slows you through sharp turns at junctions (then you pedal back up).
-    const net = this.mode === 'route' ? this.route?.netRide : null;
-    if (net && !this.routeDone) { const cap = net.speedCap(this.routePos); if (cap != null && this.speedMps > cap) this.speedMps = cap; }
+    // (no corner speed cap: you carry your speed through a network's turns, U-turns included — PLAN 7.4)
     if (this.mode === 'route' && this.route?.carry && !this.routeDone) this.speedMps = carrySpeed(this.route, this.routePos, this.speedMps, dt);
     if (this.running) {
       const ds = this.speedMps * dt;

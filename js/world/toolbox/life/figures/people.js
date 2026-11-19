@@ -462,6 +462,7 @@ export function clipRate(clip, speed = 0, look = null) {
 
 // ---------------------------------------------------------------- crowds
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1), _up = new THREE.Vector3(0, 1, 0), _o = new THREE.Vector3();
+const _qr = new THREE.Quaternion(), _fz = new THREE.Vector3(0, 0, 1);   // [7.5] a cyclist's lean (roll about its forward axis)
 function writeFig(im, i, look, clip, phase, rate) {
   const at = im.geometry.attributes;
   at.iA.setXYZ(i, look.shirt.r, look.shirt.g, look.shirt.b); at.iB.setXYZ(i, look.pants.r, look.pants.g, look.pants.b); at.iC.setXYZ(i, look.skin.r, look.skin.g, look.skin.b);
@@ -490,8 +491,11 @@ export class Crowd {
     this.cam = new THREE.Vector3();
   }
   begin(cam) { this.cam.copy(cam); this.n = [0, 0, 0, 0, 0]; return this; }
-  /** Place one figure: position, heading (radians, 0 = +Z), clip, phase (0–1), rate (loops per second). */
-  add(look, x, y, z, yaw, clip, phase = 0, rate = null) {
+  /**
+   * Place one figure: position, heading (radians, 0 = +Z), clip, phase (0–1), rate (loops per second), and roll
+   * (radians, + leaning to its right: a cyclist leaning into a turn, PLAN 7.5) about its forward axis at the ground.
+   */
+  add(look, x, y, z, yaw, clip, phase = 0, rate = null, roll = 0) {
     rate ??= clipRate(clip);
     const d = Math.hypot(x - this.cam.x, y - this.cam.y, z - this.cam.z);
     const useHi = !this.lo || d < this.nearM, useFar = !useHi && this.far && d >= this.farM;
@@ -499,7 +503,9 @@ export class Crowd {
     if (this.n[k] >= im.instanceMatrix.count) { if (k === 0 && this.lo) { im = this.lo; k = 1; } if (this.n[k] >= im.instanceMatrix.count) return -1; }
     const i = this.n[k]++;
     _q.setFromAxisAngle(_up, yaw);
+    if (roll) _q.multiply(_qr.setFromAxisAngle(_fz, roll));
     im.setMatrixAt(i, _m.compose(_p.set(x, y, z), _q, _s));
+    if (roll) _q.setFromAxisAngle(_up, yaw);   // (a dog or a stroller stays upright)
     writeFig(im, i, look, clip, phase, rate);
     if (look.dog && this.dogs && this.n[2] < this.dogs.instanceMatrix.count) {
       const j = this.n[2]++, off = _o.set(...HOLD.leash.dog).multiplyScalar(look.h).applyQuaternion(_q);

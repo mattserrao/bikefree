@@ -82,3 +82,54 @@ export function riderPose(route, index, s, lane = LANE_OFFSET / ROAD_WIDTH, { ut
   const pos = { x: p.x + right.x * lateral, y: p.y + ROAD_LIFT, z: p.z + right.z * lateral };
   return { pos, fwd, flat, right, lateral, centre: p };
 }
+
+// ------------------------------------------------------------------------------------------- lean (PLAN 7.5)
+// The rider and bike lean into turns (the camera stays level): roughly the physical lean angle of a bike holding a
+// curve, φ = atan(v² / (g·r)) — sharper turns and more speed lean more, nothing when stopped — capped, and eased in
+// and out (a first-order response, `tauS`) so it never snaps. The turn is the drawn path's own: three poses `spanM`
+// apart round the rider (route curves, the curves through a network's junctions and U-turns alike). 10 m: the routes'
+// sample spacing, so a line drawn as a polygon of 10 m chords reads as its circle wherever the rider is along it (a
+// shorter span sees each corner twice as sharp and the chords between them straight: the lean would wobble).
+// (25 km/h: a 10 m radius → 26°, a 30 m radius → 9°; 40 km/h on a 30 m radius → 23°; the cap 38° below a ~6.3 m radius at 25 km/h)
+export const LEAN = { g: 9.81, maxDeg: 38, tauS: 0.4, spanM: 10 };
+
+/**
+ * Signed curvature (1/m; + turning right, − left) of the flat path a → b → c ({x, z} points in the world frame,
+ * where right of a heading (fx, fz) is (−fz, fx), as riderPose's `right`). 0 for a straight or degenerate path.
+ */
+export function pathCurvature(a, b, c) {
+  const ux = b.x - a.x, uz = b.z - a.z, vx = c.x - b.x, vz = c.z - b.z;
+  const lu = Math.hypot(ux, uz), lv = Math.hypot(vx, vz);
+  if (lu < 1e-6 || lv < 1e-6) return 0;
+  // the angle turned (toward the right is +), over the arc between the chords' midpoints
+  const turn = Math.atan2(vx * -uz + vz * ux, vx * ux + vz * uz);
+  return turn / ((lu + lv) / 2);
+}
+
+/** The lean angle (radians; + to the right) for speed (m/s) through a curve of signed curvature (1/m): atan(v²κ/g), capped. */
+export function leanTarget(speed, curvature) {
+  const v = Math.max(0, speed || 0);
+  if (!v || !curvature || !Number.isFinite(curvature)) return 0;
+  const max = (LEAN.maxDeg * Math.PI) / 180;
+  return Math.sign(curvature) * Math.min(max, Math.atan((v * v * Math.abs(curvature)) / LEAN.g));
+}
+
+/** Ease the lean shown toward the target over dt seconds (first order, time constant tauS); capped. */
+export function stepLean(current, target, dt, tauS = LEAN.tauS) {
+  const max = (LEAN.maxDeg * Math.PI) / 180;
+  const k = dt > 0 ? 1 - Math.exp(-dt / tauS) : 0;
+  const x = (current || 0) + (target - (current || 0)) * k;
+  return Math.max(-max, Math.min(max, x));
+}
+
+/**
+ * The lean target at distance s along a path: `poseAt(s)` → {pos: {x, z}} (riderPose, or a network path's pose)
+ * sampled `spanM` either side of s (clamped at `minS`), at `speed` m/s.
+ */
+export function leanAlong(poseAt, s, speed, { minS = -Infinity, spanM = LEAN.spanM } = {}) {
+  if (!(speed > 0)) return 0;
+  const s0 = Math.max(minS, s - spanM), s2 = Math.max(s0 + 0.5, s + spanM);
+  const at = (x) => { const p = poseAt(x).pos; return { x: p.x, z: p.z }; };   // (copied: poseAt may reuse its result)
+  const a = at(s0), b = at(s), c = at(s2);
+  return leanTarget(speed, pathCurvature(a, b, c));
+}

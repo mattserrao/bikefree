@@ -11,7 +11,7 @@ import { MeshBuilder, makePath, hash, ribbon } from '../core/mesh-builder.js';
 import { drain, due, each } from '../core/jobs.js';   // [F30] built as a job (in frame slices on the ride)
 import { handOffLife } from './life-handoff.js';   // [F31] life carried across an area swap
 import { LAND } from './landscape.js';
-import { ROAD_WIDTH, LANE_OFFSET, PACER_LANE, ROAD_LIFT, routePoint } from '../../pose.js';
+import { ROAD_WIDTH, LANE_OFFSET, PACER_LANE, ROAD_LIFT, routePoint, leanTarget, stepLean } from '../../pose.js';
 import { powerRequired } from '../../../physics.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -609,7 +609,7 @@ export class CityLife {
       if (!this._outOfView(p.x, p.z, cam, P.aheadMin, false)) continue;
       const lat = P.lane, wl = lat * rider.dir;
       Object.assign(a, { alive: true, onRoute: true, routeRider: true, s, dir: rider.dir, ratio: ahead ? 1 - f : 1 + f, side0: ahead ? 1 : -1, passed: false, ended: false, plan: plan.at,
-        wl, v: (ahead ? 1 - f : 1 + f) * Math.max(rider.speed || 0, P.minRef), x: null, gait: 3 });
+        wl, v: (ahead ? 1 - f : 1 + f) * Math.max(rider.speed || 0, P.minRef), x: null, gait: 3, yawPrev: null, lean: 0 });
       a.speed = a.v;
       a.look = randomLook(this.rand, { kids: 0, helmet: true }); a.phase = this.rand();
       return;
@@ -723,6 +723,11 @@ export class CityLife {
       else { const dx = x - a.x, dz = z - a.z, d = Math.hypot(dx, dz), max = (a.v * 1.25 + 1.5) * dt, k = d > max ? max / d : 1; a.x += dx * k; a.z += dz * k; }
       a.y = p.y + ROAD_LIFT;
       a.yaw = Math.atan2(p.hx * a.dir, p.hz * a.dir); a.pitch = Math.atan(p.dy) * a.dir;
+      // [7.5] leaning into the road's bends: its turn rate ω (+ left) at speed v is a curvature −ω/v (+ right), eased
+      let dYaw = a.yawPrev == null ? 0 : a.yaw - a.yawPrev;
+      dYaw -= Math.round(dYaw / (2 * Math.PI)) * 2 * Math.PI;
+      a.yawPrev = a.yaw;
+      a.lean = stepLean(a.lean || 0, a.v > .3 && dt > 0 ? leanTarget(a.v, -dYaw / dt / a.v) : 0, dt);
       // a pass: it was ahead of you and now is behind, or the other way round
       if (a.with) {
         const gNow = (a.s - rider.out) * rider.dir;
@@ -750,7 +755,7 @@ export class CityLife {
       const free = list.find((a) => !a.alive);
       if (free && pending < P.pending) { const plan = this._nextPass(rider); if (plan) this._spawnRouteRider(free, rider, cam, plan); }
     }
-    for (const a of list) if (a.alive) this.cyclistCrowd.add(a.look, a.x, a.y, a.z, a.yaw, CLIP.cycle, a.phase, a.v > .3 ? clipRate(CLIP.cycle, a.v) : 0);
+    for (const a of list) if (a.alive) this.cyclistCrowd.add(a.look, a.x, a.y, a.z, a.yaw, CLIP.cycle, a.phase, a.v > .3 ? clipRate(CLIP.cycle, a.v) : 0, a.lean || 0);
   }
 
   /** The speed (m/s) on grade g (%) with the power that holds speed v on grade g0: the bike physics (js/physics.js). */

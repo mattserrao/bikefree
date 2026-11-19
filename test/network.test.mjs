@@ -2,7 +2,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { makePathRoute, optionsAt, straightOn, cornerSpeed, LOCK_M, NetRide, PathFollower, FOLLOW_AHEAD_M } from '../js/network.js';
+import { makePathRoute, optionsAt, straightOn, LOCK_M, NetRide, PathFollower, FOLLOW_AHEAD_M } from '../js/network.js';
 import { Session } from '../js/session.js';
 import * as netMod from '../js/network.js';
 import * as gpxMod from '../js/gpx.js';
@@ -113,21 +113,35 @@ test('every way through every junction rides smoothly (course QC)', () => {
   for (const p of checkPathRoutes(net)) assert.ok(p.ok, `${p.preset} sample gap ${p.worstGap.toFixed(1)} m`);
 });
 
-test('corner speeds: none under 60°, slower the sharper', () => {
-  assert.equal(cornerSpeed(30), null);
-  assert.ok(cornerSpeed(90) < cornerSpeed(60));
-  assert.ok(cornerSpeed(180) < cornerSpeed(135));
-  const r = makePathRoute(net, preset('pgh-short-loop'));   // right at East Carson & 10th: ~90°
-  assert.equal(r.netRide.speedCap(gAt - 2000), null);
-  assert.ok(r.netRide.speedCap(gAt) < cornerSpeed(91) && r.netRide.speedCap(gAt) > 5);   // a right turn: tighter, a little slower
-  assert.ok(r.netRide.speedCap(gAt - 70) > r.netRide.speedCap(gAt - 20));   // easing down into it
-  assert.equal(r.netRide.speedCap(gAt + 80), null);                         // pedal back up after
-});
-
 const stub = () => Object.assign(new EventTarget(), { vibrate() {} });
 const sessions = [];
 const makeSession = () => { const s = new Session({ trainer: stub(), ride: stub(), hr: stub(), log: () => {}, settings: {} }); sessions.push(s); return s; };
 after(() => { for (const s of sessions) clearInterval(s._timer); });
+
+// PLAN 7.4: no corner speed caps anywhere — a session riding through a sharp junction turn, a U-turn ("Back") and a
+// sharp corner inside a segment (Bakery Square's hairpin, F82) keeps its speed every tick
+test('no slowdowns into turns (7.4): the session keeps its speed through a right turn, a U-turn and a hairpin', () => {
+  assert.equal(netMod.cornerSpeed, undefined);
+  assert.equal(netMod.edgeBends, undefined);
+  assert.equal(NetRide.prototype.speedCap, undefined);
+  const through = (r, from, to) => {
+    const s = makeSession();
+    s.setRoute(r, 0, null);
+    s.running = true; s.demoSpeedMps = 12;   // 43 km/h: the old caps were 13–36 km/h
+    s.distanceM = from; s._updateRoute();
+    let ticks = 0;
+    while (s.distanceM < to && ticks++ < 2000) { s._tick(); assert.equal(s.speedMps, 12, `slowed at ${s.distanceM.toFixed(1)} m`); }
+    assert.ok(s.distanceM >= to, `rode ${s.distanceM}`);
+    clearInterval(s._timer);
+  };
+  through(makePathRoute(net, preset('pgh-short-loop')), gAt - 150, gAt + 60);   // right at East Carson & 10th (was ~21 km/h)
+  const mw = makePathRoute(net, preset('pgh-mt-washington'));   // …R>A, then "Back" at the Water Steps (was 13 km/h)
+  const k = mw.netRide.entries.findIndex((x) => x.t.e.key === 'R>A');
+  const back = mw.netRide.entries[k].p0 + mw.netRide.entries[k].t.e.len;
+  through(mw, back - 150, back + 60);
+  const e = edge('EL>SQ');   // Penn & Fifth by Bakery Square (16.49 km on the line), ridden backwards on the Squirrel Hill loop
+  through(makePathRoute(net, preset('pgh-squirrel-hill')), len('SQ>K') + e.len - (16490 - e.s0) - 150, len('SQ>K') + e.len - (16490 - e.s0) + 60);
+});
 
 test('the session rides a network route: handlebar ◀ ▶ choose, laps, a fresh plan each ride', () => {
   const r = makePathRoute(net, preset('pgh-three-rivers'));
@@ -284,25 +298,6 @@ test('your own routes: the planner offers the ways on, a loop laps, a one-way ro
   const { finishDistanceM } = gpxMod;
   assert.equal(finishDistanceM(r, 0), r.lapM);
   assert.equal(keysToIds(net, ['X>Y+']), null);   // a segment that's gone: plan it again
-});
-
-test('sharp corners inside a segment get the junctions\' gentle speed cap (F82: Bakery Square\'s hairpin)', () => {
-  const { edgeBends } = netMod;
-  const r = makePathRoute(net, preset('pgh-squirrel-hill'));   // Forbes from K, then EL>SQ backwards: Beechwood, Fifth Ave, Penn Ave by Bakery Square
-  const e = edge('EL>SQ');
-  const bend = edgeBends(net, e).find((c) => Math.abs(e.s0 + c.u - 16490) < 30);
-  assert.ok(bend, 'the Penn/Fifth hairpin by Bakery Square is a corner');
-  const at = len('SQ>K') + e.len - bend.u;   // its path metre (ridden backwards)
-  const cap = r.netRide.speedCap(at);
-  assert.ok(cap != null && Math.abs(cap - cornerSpeed(bend.angle)) < 0.01, `${cap}`);
-  assert.ok(r.netRide.speedCap(at - 60) > cap && r.netRide.speedCap(at - 60) < 25);   // easing down into it
-  assert.equal(r.netRide.speedCap(at + 40), null);                                     // pedal back up after
-  // gentle: never under the U-turn's speed, and no corner sits in a junction's own reach
-  for (const x of net.edges.values()) for (const c of edgeBends(net, x)) {
-    assert.ok(cornerSpeed(c.angle) >= 3.5 && c.u >= 25 && c.u <= x.len - 25);
-  }
-  // a straight segment has none (East Carson Street)
-  assert.deepEqual(edgeBends(net, edge('G>Q')), []);
 });
 
 test('turn labels follow the street, not the line\'s rounded corner at a junction it passes twice (F84)', () => {
