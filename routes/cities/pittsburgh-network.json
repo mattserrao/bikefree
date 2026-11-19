@@ -240,7 +240,7 @@
    "name": "The Great Allegheny Passage & Homestead",
    "catalogId": "pittsburgh-homestead",
    "base": "routes/cities/pittsburgh-homestead.gpx",
-   "legM": 16010,
+   "legM": 26010,
    "ghosts": [
     {
      "fromM": 710,
@@ -249,6 +249,10 @@
     {
      "fromM": 13655,
      "toM": 14154
+    },
+    {
+     "fromM": 16012,
+     "toM": 19238
     }
    ],
    "aprons": [
@@ -933,6 +937,19 @@
    }
   },
   {
+   "id": "GB",
+   "name": "The GAP at the Glenwood Bridge",
+   "lat": 40.394944,
+   "lon": -79.934839,
+   "ele": 223.73,
+   "passes": {
+    "homestead": [
+     5830,
+     26010
+    ]
+   }
+  },
+  {
    "id": "W",
    "name": "The Waterfront by the AMC",
    "lat": 40.408479,
@@ -950,7 +967,7 @@
    "name": "East Waterfront Drive by the Pump House",
    "lat": 40.414277,
    "lon": -79.899565,
-   "ele": 228.72,
+   "ele": 228.73,
    "passes": {
     "homestead": [
      9900,
@@ -968,6 +985,19 @@
     "homestead": [
      8670,
      13650
+    ]
+   }
+  },
+  {
+   "id": "EA",
+   "name": "Eighth Avenue & Amity St",
+   "lat": 40.407137,
+   "lon": -79.910887,
+   "ele": 235.83,
+   "passes": {
+    "homestead": [
+     13120,
+     19240
     ]
    }
   },
@@ -1753,27 +1783,48 @@
   },
   {
    "id": "e33",
-   "key": "S>W",
+   "key": "S>GB",
    "area": "homestead",
    "from": "S",
-   "to": "W",
+   "to": "GB",
    "s": [
     1020,
-    8160
+    5830
    ],
-   "lengthM": 7140,
+   "lengthM": 4810,
    "climbM": [
-    16,
-    18
+    10,
+    16
    ],
    "name": "Great Allegheny Passage",
    "toward": [
-    "the GAP along the Mon past Hazelwood Green and under the Glenwood Bridge to the Waterfront",
+    "the GAP along the Mon past Hazelwood Green to the Glenwood Bridge",
     "the GAP back along the Mon to the Hot Metal Bridge"
    ]
   },
   {
    "id": "e34",
+   "key": "GB>W",
+   "area": "homestead",
+   "from": "GB",
+   "to": "W",
+   "s": [
+    5830,
+    8160
+   ],
+   "lengthM": 2330,
+   "climbM": [
+    5,
+    2
+   ],
+   "name": "Great Allegheny Passage",
+   "toward": [
+    "the GAP under the Glenwood Bridge and past Sandcastle to the Waterfront",
+    "the GAP past Sandcastle to the Glenwood Bridge"
+   ]
+  },
+  {
+   "id": "e35",
    "key": "W>V",
    "area": "homestead",
    "from": "W",
@@ -1794,7 +1845,7 @@
    ]
   },
   {
-   "id": "e35",
+   "id": "e36",
    "key": "V>U",
    "area": "homestead",
    "from": "V",
@@ -1815,28 +1866,49 @@
    ]
   },
   {
-   "id": "e36",
-   "key": "U>V",
+   "id": "e37",
+   "key": "U>EA",
    "area": "homestead",
    "from": "U",
-   "to": "V",
+   "to": "EA",
    "s": [
     9900,
-    13650
+    13120
    ],
-   "lengthM": 3750,
+   "lengthM": 3220,
    "climbM": [
     22,
-    23
+    15
    ],
    "name": "Eighth Avenue, Homestead",
    "toward": [
     "past the Pump House, down River Road and along Eighth Avenue through Homestead to Amity St",
-    "Amity St, Eighth Avenue through Homestead and River Road to the Pump House"
+    "Eighth Avenue through Homestead and River Road to the Pump House"
    ]
   },
   {
-   "id": "e37",
+   "id": "e38",
+   "key": "EA>V",
+   "area": "homestead",
+   "from": "EA",
+   "to": "V",
+   "s": [
+    13120,
+    13650
+   ],
+   "lengthM": 530,
+   "climbM": [
+    0,
+    8
+   ],
+   "name": "Amity Street",
+   "toward": [
+    "down Amity St to Waterfront Drive",
+    "up Amity St to Eighth Avenue"
+   ]
+  },
+  {
+   "id": "e39",
    "key": "W>U",
    "area": "homestead",
    "from": "W",
@@ -1857,7 +1929,28 @@
    ]
   },
   {
-   "id": "e38",
+   "id": "e40",
+   "key": "EA>GB",
+   "area": "homestead",
+   "from": "EA",
+   "to": "GB",
+   "s": [
+    19240,
+    26010
+   ],
+   "lengthM": 6770,
+   "climbM": [
+    61,
+    74
+   ],
+   "name": "Homestead Grays & Glenwood Bridges",
+   "toward": [
+    "over the Homestead Grays Bridge, down Old Browns Hill Road to Duck Hollow and the Duck Hollow Trail to Hazelwood, back over the Glenwood Bridge to the GAP",
+    "over the Glenwood Bridge, the Duck Hollow Trail to Duck Hollow, up Old Browns Hill Road and over the Homestead Grays Bridge to Eighth Avenue"
+   ]
+  },
+  {
+   "id": "e41",
    "key": "R>Y",
    "area": "northside",
    "from": "R",
@@ -1878,7 +1971,7 @@
    ]
   },
   {
-   "id": "e39",
+   "id": "e42",
    "key": "Y>Z",
    "area": "northside",
    "from": "Y",
@@ -1899,7 +1992,7 @@
    ]
   },
   {
-   "id": "e40",
+   "id": "e43",
    "key": "Z>Y",
    "area": "northside",
    "from": "Z",
@@ -1920,7 +2013,7 @@
    ]
   },
   {
-   "id": "e41",
+   "id": "e44",
    "key": "Z>C",
    "area": "northside",
    "from": "Z",
@@ -1941,7 +2034,7 @@
    ]
   },
   {
-   "id": "e42",
+   "id": "e45",
    "key": "LB>HE",
    "area": "eastend",
    "from": "LB",
@@ -1962,7 +2055,7 @@
    ]
   },
   {
-   "id": "e43",
+   "id": "e46",
    "key": "HP>HE",
    "area": "eastend",
    "from": "HP",
@@ -1983,7 +2076,7 @@
    ]
   },
   {
-   "id": "e44",
+   "id": "e47",
    "key": "HE>HP",
    "area": "eastend",
    "from": "HE",
@@ -2004,7 +2097,7 @@
    ]
   },
   {
-   "id": "e45",
+   "id": "e48",
    "key": "HP>EL",
    "area": "eastend",
    "from": "HP",
@@ -2025,7 +2118,7 @@
    ]
   },
   {
-   "id": "e46",
+   "id": "e49",
    "key": "EL>SQ",
    "area": "eastend",
    "from": "EL",
@@ -2046,7 +2139,7 @@
    ]
   },
   {
-   "id": "e47",
+   "id": "e50",
    "key": "SQ>EL",
    "area": "eastend",
    "from": "SQ",
@@ -2067,7 +2160,7 @@
    ]
   },
   {
-   "id": "e48",
+   "id": "e51",
    "key": "SQ>K",
    "area": "eastend",
    "from": "SQ",
@@ -2088,7 +2181,7 @@
    ]
   },
   {
-   "id": "e49",
+   "id": "e52",
    "key": "F>SY",
    "area": "slopes",
    "from": "F",
@@ -2109,7 +2202,7 @@
    ]
   },
   {
-   "id": "e50",
+   "id": "e53",
    "key": "SY>AL",
    "area": "slopes",
    "from": "SY",
@@ -2130,7 +2223,7 @@
    ]
   },
   {
-   "id": "e51",
+   "id": "e54",
    "key": "AL>SY",
    "area": "slopes",
    "from": "AL",
@@ -2151,7 +2244,7 @@
    ]
   },
   {
-   "id": "e52",
+   "id": "e55",
    "key": "GV>SY",
    "area": "slopes",
    "from": "GV",
@@ -2172,7 +2265,7 @@
    ]
   },
   {
-   "id": "e53",
+   "id": "e56",
    "key": "AL>Q",
    "area": "slopes",
    "from": "AL",
@@ -2193,7 +2286,7 @@
    ]
   },
   {
-   "id": "e54",
+   "id": "e57",
    "key": "NS>GW",
    "area": "subway",
    "from": "NS",
@@ -2233,9 +2326,10 @@
    "id": "pgh-homestead-loop",
    "name": "Homestead Loop",
    "path": [
+    "e39+",
     "e37+",
-    "e36+",
-    "e34-"
+    "e38+",
+    "e35-"
    ],
    "tags": [
     "flat",
@@ -2250,9 +2344,9 @@
    "id": "pgh-waterfront-loop",
    "name": "Waterfront Loop",
    "path": [
-    "e37+",
-    "e35-",
-    "e34-"
+    "e39+",
+    "e36-",
+    "e35-"
    ],
    "tags": [
     "flat",
@@ -2264,17 +2358,35 @@
    "climbM": 10
   },
   {
+   "id": "pgh-two-bridges",
+   "name": "Two Bridges Loop",
+   "path": [
+    "e35+",
+    "e38-",
+    "e40+",
+    "e34+"
+   ],
+   "tags": [
+    "short",
+    "varied",
+    "new"
+   ],
+   "note": "From the Waterfront up Amity St, over the Homestead Grays Bridge, down Old Browns Hill Road to Duck Hollow and along the Duck Hollow Trail to Hazelwood, back over the Glenwood Bridge and home on the GAP",
+   "lengthM": 10140,
+   "climbM": 75
+  },
+  {
    "id": "pgh-east-end",
    "name": "East End Loop",
    "path": [
+    "e51-",
+    "e49-",
     "e48-",
-    "e46-",
-    "e45-",
-    "e43+",
-    "e44+",
-    "e45+",
-    "e47-",
-    "e48+"
+    "e46+",
+    "e47+",
+    "e48+",
+    "e50-",
+    "e51+"
    ],
    "tags": [
     "varied",
@@ -2288,10 +2400,10 @@
    "id": "pgh-squirrel-hill",
    "name": "Squirrel Hill & Bakery Square Loop",
    "path": [
-    "e48-",
-    "e46-",
-    "e47-",
-    "e48+"
+    "e51-",
+    "e49-",
+    "e50-",
+    "e51+"
    ],
    "tags": [
     "short",
@@ -2306,8 +2418,8 @@
    "id": "pgh-highland-park",
    "name": "Highland Park Reservoir Loop",
    "path": [
-    "e43+",
-    "e44+"
+    "e46+",
+    "e47+"
    ],
    "tags": [
     "short",
@@ -2322,10 +2434,10 @@
    "id": "pgh-stanton-heights",
    "name": "Stanton Heights & Highland Park Climb",
    "path": [
-    "e42+",
-    "e44+",
-    "e43+",
-    "e42-"
+    "e45+",
+    "e47+",
+    "e46+",
+    "e45-"
    ],
    "tags": [
     "hilly",
@@ -2884,8 +2996,11 @@
    "path": [
     "e5-",
     "e33+",
+    "e34+",
+    "e39+",
     "e37+",
-    "e36+",
+    "e38+",
+    "e35-",
     "e34-",
     "e33-",
     "e5+"
@@ -2896,7 +3011,7 @@
    ],
    "note": "From SouthSide Works out the GAP along the Mon to the Waterfront, a lap of Homestead past the Pump House and Eighth Avenue, and back",
    "lengthM": 21020,
-   "climbM": 65
+   "climbM": 64
   },
   {
    "id": "pgh-jail-gap",
@@ -2907,8 +3022,11 @@
     "e3+",
     "e4+",
     "e33+",
+    "e34+",
+    "e39+",
     "e37+",
-    "e36+",
+    "e38+",
+    "e35-",
     "e34-",
     "e33-",
     "e5+",
@@ -2925,16 +3043,39 @@
    ],
    "note": "The Point, the Jail Trail and the Hot Metal Bridge, the GAP to Homestead and a lap past the Pump House, home on the South Side river trail",
    "lengthM": 35840,
-   "climbM": 152
+   "climbM": 151
+  },
+  {
+   "id": "pgh-gap-two-bridges",
+   "name": "The GAP & Two Bridges",
+   "path": [
+    "e5-",
+    "e33+",
+    "e34+",
+    "e35+",
+    "e36+",
+    "e37+",
+    "e40+",
+    "e33-",
+    "e5+"
+   ],
+   "tags": [
+    "long",
+    "varied",
+    "new"
+   ],
+   "note": "From SouthSide Works out the GAP to the Waterfront, Waterfront Drive past the shops to the Pump House, Eighth Avenue through Homestead, over the Homestead Grays Bridge, down to Duck Hollow and the Duck Hollow Trail to Hazelwood, back over the Glenwood Bridge and home on the GAP",
+   "lengthM": 24300,
+   "climbM": 120
   },
   {
    "id": "pgh-northside-hills",
    "name": "North Side Hills Loop",
    "path": [
     "e11-",
-    "e38+",
-    "e39+",
     "e41+",
+    "e42+",
+    "e44+",
     "e10+",
     "e11+"
    ],
@@ -2952,9 +3093,9 @@
    "path": [
     "e11-",
     "e10-",
+    "e44-",
+    "e42-",
     "e41-",
-    "e39-",
-    "e38-",
     "e11+"
    ],
    "tags": [
@@ -2970,10 +3111,10 @@
    "name": "Fineview Climb Loop",
    "path": [
     "e11-",
-    "e38+",
-    "e39+",
-    "e40+",
-    "e38-",
+    "e41+",
+    "e42+",
+    "e43+",
+    "e41-",
     "e11+"
    ],
    "tags": [
@@ -3001,9 +3142,9 @@
     "e7+",
     "e8+",
     "e9+",
+    "e44-",
+    "e42-",
     "e41-",
-    "e39-",
-    "e38-",
     "e11+"
    ],
    "tags": [
@@ -3022,11 +3163,11 @@
     "e18+",
     "e19+",
     "e21+",
-    "e42+",
-    "e43-",
     "e45+",
-    "e47-",
+    "e46-",
     "e48+",
+    "e50-",
+    "e51+",
     "e28+",
     "e26-",
     "e25-",
@@ -3049,8 +3190,8 @@
    "id": "pgh-sycamore",
    "name": "Sycamore Street & Grandview",
    "path": [
-    "e49+",
-    "e52-",
+    "e52+",
+    "e55-",
     "e7-",
     "e15-"
    ],
@@ -3067,9 +3208,9 @@
    "id": "pgh-slopes",
    "name": "South Side Slopes Climb Loop",
    "path": [
-    "e53-",
-    "e51+",
-    "e49-",
+    "e56-",
+    "e54+",
+    "e52-",
     "e15+",
     "e16+"
    ],
@@ -3085,9 +3226,9 @@
    "id": "pgh-dirty-dozen",
    "name": "Dirty Dozen South Loop",
    "path": [
-    "e49+",
-    "e50+",
+    "e52+",
     "e53+",
+    "e56+",
     "e16-",
     "e15-"
    ],
@@ -3104,10 +3245,10 @@
    "id": "pgh-dirty-dozen-slopes",
    "name": "Dirty Dozen South from the Slopes",
    "path": [
-    "e53-",
-    "e51+",
-    "e50+",
-    "e53+"
+    "e56-",
+    "e54+",
+    "e53+",
+    "e56+"
    ],
    "tags": [
     "hilly",
@@ -3122,7 +3263,7 @@
    "name": "Under the Allegheny: North Shore to the Point",
    "path": [
     "e12+",
-    "e54+",
+    "e57+",
     "e1-",
     "e13-",
     "e12-"
@@ -3141,7 +3282,7 @@
    "name": "Three Rivers Loop · via the subway",
    "path": [
     "e12+",
-    "e54+",
+    "e57+",
     "e2+",
     "e14+",
     "e15+",
@@ -3167,7 +3308,7 @@
    "name": "Long Loop · out by the subway",
    "path": [
     "e12+",
-    "e54+",
+    "e57+",
     "e2+",
     "e14+",
     "e15+",
@@ -3211,7 +3352,7 @@
   "prefer": {
    "LB": "e21-",
    "NS": "e13+",
-   "SY": "e49-",
+   "SY": "e52-",
    "GW": "e1-"
   }
  },
@@ -3265,6 +3406,14 @@
   "B>E": [
    "B>GW",
    "GW>E"
+  ],
+  "S>W": [
+   "S>GB",
+   "GB>W"
+  ],
+  "U>V": [
+   "U>EA",
+   "EA>V"
   ]
  }
 }

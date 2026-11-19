@@ -581,11 +581,14 @@
       "name": "Great Allegheny Passage to Homestead",
       "path": [
         "S>H-",
-        "S>W+",
+        "S>GB+",
+        "GB>W+",
         "W>U+",
-        "U>V+",
+        "U>EA+",
+        "EA>V+",
         "W>V-",
-        "S>W-",
+        "GB>W-",
+        "S>GB-",
         "S>H+"
       ],
       "tags": [
@@ -602,11 +605,14 @@
         "GW>E+",
         "E>I+",
         "I>S+",
-        "S>W+",
+        "S>GB+",
+        "GB>W+",
         "W>U+",
-        "U>V+",
+        "U>EA+",
+        "EA>V+",
         "W>V-",
-        "S>W-",
+        "GB>W-",
+        "S>GB-",
         "S>H+",
         "H>G+",
         "F>G-",
@@ -620,6 +626,27 @@
         "new"
       ],
       "note": "The Point, the Jail Trail and the Hot Metal Bridge, the GAP to Homestead and a lap past the Pump House, home on the South Side river trail"
+    },
+    {
+      "id": "pgh-gap-two-bridges",
+      "name": "The GAP & Two Bridges",
+      "path": [
+        "S>H-",
+        "S>GB+",
+        "GB>W+",
+        "W>V+",
+        "V>U+",
+        "U>EA+",
+        "EA>GB+",
+        "S>GB-",
+        "S>H+"
+      ],
+      "tags": [
+        "long",
+        "varied",
+        "new"
+      ],
+      "note": "From SouthSide Works out the GAP to the Waterfront, Waterfront Drive past the shops to the Pump House, Eighth Avenue through Homestead, over the Homestead Grays Bridge, down to Duck Hollow and the Duck Hollow Trail to Hazelwood, back over the Glenwood Bridge and home on the GAP"
     },
     {
       "id": "pgh-northside-hills",
@@ -934,6 +961,14 @@
     "B>E": [
       "B>GW",
       "GW>E"
+    ],
+    "S>W": [
+      "S>GB",
+      "GB>W"
+    ],
+    "U>V": [
+      "U>EA",
+      "EA>V"
     ]
   }
 }

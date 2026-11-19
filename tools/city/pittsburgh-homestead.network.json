@@ -1,12 +1,20 @@
 {
   "area": "homestead",
-  "note": "The Great Allegheny Passage from the Hot Metal Bridge's south end along the Mon to Homestead, and the Waterfront and Homestead loops. Portal: S (the core).",
+  "note": "The Great Allegheny Passage from the Hot Metal Bridge's south end along the Mon to Homestead, the Waterfront and Homestead loops, and the Two Bridges loop over the Homestead Grays Bridge, through Duck Hollow and Hazelwood and back over the Glenwood Bridge. Portal: S (the core).",
   "nodes": [
     {
       "id": "S",
       "name": "Hot Metal Bridge south end",
       "lat": 40.427298,
       "lon": -79.962486
+    },
+    {
+      "id": "GB",
+      "name": "The GAP at the Glenwood Bridge",
+      "lat": 40.39499,
+      "lon": -79.93483,
+      "reachM": 20,
+      "why": "the Glenwood Bridge's deck passes 28 m off, 14 m overhead: only the GAP and Haysglen St are passes"
     },
     {
       "id": "W",
@@ -25,13 +33,24 @@
       "name": "Amity St & Waterfront Drive",
       "lat": 40.41131,
       "lon": -79.91336
+    },
+    {
+      "id": "EA",
+      "name": "Eighth Avenue & Amity St",
+      "lat": 40.40704,
+      "lon": -79.91087
     }
   ],
   "edges": {
-    "S>W": {
+    "S>GB": {
       "name": "Great Allegheny Passage",
-      "fwd": "the GAP along the Mon past Hazelwood Green and under the Glenwood Bridge to the Waterfront",
+      "fwd": "the GAP along the Mon past Hazelwood Green to the Glenwood Bridge",
       "rev": "the GAP back along the Mon to the Hot Metal Bridge"
+    },
+    "GB>W": {
+      "name": "Great Allegheny Passage",
+      "fwd": "the GAP under the Glenwood Bridge and past Sandcastle to the Waterfront",
+      "rev": "the GAP past Sandcastle to the Glenwood Bridge"
     },
     "W>V": {
       "name": "Waterfront Drive",
@@ -43,15 +62,25 @@
       "fwd": "East Waterfront Drive past the shops to the Pump House",
       "rev": "East Waterfront Drive back to Amity St"
     },
-    "U>V": {
+    "U>EA": {
       "name": "Eighth Avenue, Homestead",
       "fwd": "past the Pump House, down River Road and along Eighth Avenue through Homestead to Amity St",
-      "rev": "Amity St, Eighth Avenue through Homestead and River Road to the Pump House"
+      "rev": "Eighth Avenue through Homestead and River Road to the Pump House"
+    },
+    "EA>V": {
+      "name": "Amity Street",
+      "fwd": "down Amity St to Waterfront Drive",
+      "rev": "up Amity St to Eighth Avenue"
     },
     "W>U": {
       "name": "Homestead riverfront",
       "fwd": "the riverfront trail under the Homestead Grays Bridge to the Pump House",
       "rev": "the riverfront trail back to the Waterfront"
+    },
+    "EA>GB": {
+      "name": "Homestead Grays & Glenwood Bridges",
+      "fwd": "over the Homestead Grays Bridge, down Old Browns Hill Road to Duck Hollow and the Duck Hollow Trail to Hazelwood, back over the Glenwood Bridge to the GAP",
+      "rev": "over the Glenwood Bridge, the Duck Hollow Trail to Duck Hollow, up Old Browns Hill Road and over the Homestead Grays Bridge to Eighth Avenue"
     }
   },
   "presets": [
@@ -60,7 +89,8 @@
       "name": "Homestead Loop",
       "path": [
         "W>U+",
-        "U>V+",
+        "U>EA+",
+        "EA>V+",
         "W>V-"
       ],
       "tags": [
@@ -84,6 +114,22 @@
         "new"
       ],
       "note": "The riverfront trail to the Pump House and back along East Waterfront Drive past the shops"
+    },
+    {
+      "id": "pgh-two-bridges",
+      "name": "Two Bridges Loop",
+      "path": [
+        "W>V+",
+        "EA>V-",
+        "EA>GB+",
+        "GB>W+"
+      ],
+      "tags": [
+        "short",
+        "varied",
+        "new"
+      ],
+      "note": "From the Waterfront up Amity St, over the Homestead Grays Bridge, down Old Browns Hill Road to Duck Hollow and along the Duck Hollow Trail to Hazelwood, back over the Glenwood Bridge and home on the GAP"
     }
   ]
 }

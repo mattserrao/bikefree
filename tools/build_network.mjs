@@ -27,7 +27,8 @@ const specPath = args.find((a) => !a.startsWith('--')) || 'tools/city/pittsburgh
 const read = (p) => readFileSync(resolve(root, p), 'utf8');
 const spec = JSON.parse(read(specPath));
 const index = JSON.parse(read('routes/catalog.json'));   // (the catalog itself: tools/build_routes.mjs checks the network against it)
-const REACH = 30;   // a pass is where the loop comes within this many metres of the node
+const REACH = 30;   // a pass is where the loop comes within this many metres of the node (a node's own "reachM" overrides it:
+                    // a junction with a bridge deck passing overhead within 30 m, the GAP's GB under the Glenwood Bridge)
 
 /** One area's line split at its junctions: { route, L, nodes (with passes), edges, ghosts, aprons }. */
 function buildArea(area) {
@@ -52,10 +53,11 @@ function buildArea(area) {
     if (n.at === 'start' || n.at === 'end') Object.assign(n, at(n.at === 'start' ? 0 : K));
     let run = null;
     const passes = [];
+    const reach = n.reachM ?? REACH;
     for (let i = 0; i <= K; i++) {
       if (skip(i * 10)) { if (run) { passes.push(run.i); run = null; } continue; }
       const d = haversine(n, at(i));
-      if (d < REACH) { if (!run || d < run.d) run = { d, i }; if (!run.open) run.open = true; }
+      if (d < reach) { if (!run || d < run.d) run = { d, i }; if (!run.open) run.open = true; }
       else if (run) { passes.push(run.i); run = null; }
     }
     if (run) passes.push(run.i);
@@ -65,12 +67,12 @@ function buildArea(area) {
     // a ghost's (or an apron's) ends at this junction are splits too (where the real pass turns into its repeat and back)
     for (const g of [...ghosts, ...aprons]) for (const s of [g.fromM, g.toM]) {
       const i = Math.round(s / 10);
-      if (i <= K && haversine(n, at(i)) < REACH && !list.some((k) => Math.abs(k - i) < 3)) list.push(i);
+      if (i <= K && haversine(n, at(i)) < reach && !list.some((k) => Math.abs(k - i) < 3)) list.push(i);
     }
     // passes a few samples apart (a ghost's end next to the real pass's end) are one
     list.sort((a, b) => a - b);
     for (let k = list.length - 1; k > 0; k--) if (list[k] - list[k - 1] < 3) list.splice(k, 1);
-    if (!list.length) throw new Error(`node ${n.id}: the ${area.id || 'route'} line doesn't pass within ${REACH} m`);
+    if (!list.length) throw new Error(`node ${n.id}: the ${area.id || 'route'} line doesn't pass within ${reach} m`);
     n.passes = list.map((i) => i * 10);
     for (const s of n.passes) splits.push({ s, node: n.id });
   }
