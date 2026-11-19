@@ -6,7 +6,7 @@ import { powerRequired, speedFromCadence, WHEEL_CIRC } from './physics.js';
 import { loadSettings, saveSettings, KG_PER_LB, MI_PER_KM } from './settings.js';
 import { rideToFit, fitFilename, summarize } from './recorder.js';
 import * as store from './store.js';
-import { parseGpx, buildRoute, averageGradeAhead, wrapDist, routeAt, isPointToPoint, finishDistanceM, legSpan } from './gpx.js';
+import { parseGpx, buildRoute, averageGradeAhead, wrapDist, routeAt, isPointToPoint, finishDistanceM, legSpan, carryAt } from './gpx.js';
 import { Pacer, PACER_WATTS } from './pacer.js';
 import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor, markFtpTest, ftpFromTwentyMinutes } from './workout.js';
 import { drawProfile, drawWorkout, drawTrace, drawMinimap, drawNetworkMinimap, drawCityMap, gradeColor, profileDistAt } from './views.js';
@@ -567,7 +567,9 @@ function stepPacer() {
   const r = onRoute() ? session.route : null;
   const track = r ? pacerPath(r) : null;
   const gradeAt = track ? (d) => track.grade(session.routeStart + d) : r ? (d) => routeAt(r, wrapDist(r, session.routeStart + d)).grade : () => session.gradePct;
-  pacer.step(dt, gradeAt, session.physicsParams());
+  // conveyors (escalators) carry the pacer too: its own way's on a network ride, the route's elsewhere
+  const carryAt_ = track ? (d) => track.carry(session.routeStart + d) : r?.carry ? (d) => carryAt(r, session.routeStart + d) : null;
+  pacer.step(dt, gradeAt, session.physicsParams(), carryAt_);
   if (r && !r.closed) pacer.dist = Math.min(pacer.dist, r.total);
   if (r && session.routeFinishM != null) pacer.dist = Math.min(pacer.dist, session.routeFinishM);   // the pacer stops at the finish too
 }
@@ -1000,7 +1002,26 @@ function renderHudStatic() {
   lastProfileDraw = 0;
 }
 
-let lastProfileDraw = 0;
+let lastProfileDraw = 0, lastProfileKey = '';
+/**
+ * The ride-screen profile's stretch (span) and height scale (eleRange). A network route's path changes as you
+ * choose turns (and refills as you ride): its NetRide.profileView follows the path as it is now — the lap as
+ * you'll ride it, else the way ahead — rebuilt once per path change (`version`) and segment, not per frame
+ * (PLAN F150). `key` changes when the stretch does, so the strip is redrawn at once.
+ */
+let finishView = null;
+function hudProfileView() {
+  const r = session.route, net = r.netRide;
+  if (!net) return { key: '', span: session.routeFinishM != null ? legSpan(r, session.routeStart) : null, eleRange: null };
+  if (session.routeFinishM != null) {
+    // a planned finish: the start to the finish line, on the path as it is now
+    const from = session.routeStart, to = from + session.routeFinishM, key = `f${net.version}:${from}:${to}`;
+    if (finishView?.key !== key) { const v = net.eleRange(from, to); finishView = { key, span: [from, to], eleRange: [v.minEle, v.maxEle] }; }
+    return finishView;
+  }
+  const v = net.profileView(session.routePos);
+  return { key: v.key, span: [v.from, v.to], eleRange: [v.minEle, v.maxEle] };
+}
 let lastGear = session.gear;
 function renderHud() {
   if (!onRideScreen) return;
@@ -1059,9 +1080,11 @@ function renderHud() {
       showRow(3, `${ftpFromTwentyMinutes(avg)} W`, 'FTP so far');
     }
   } else {
-    $('hGrade').textContent = fmtGrade(session.gradePct);
-    $('hGrade').style.color = readable(gradeColor(session.gradePct));
-    $('hGradeLabel').textContent = 'grade';
+    const carry = session.carry;   // an escalator (a conveyor) carries you: its name instead of the grade
+    $('hGrade').textContent = carry ? carry.label || 'Carried' : fmtGrade(session.gradePct);
+    $('hGrade').style.color = carry ? '' : readable(gradeColor(session.gradePct));
+    $('hGrade').classList.toggle('carry', !!carry);
+    $('hGradeLabel').textContent = carry ? 'no pedalling' : 'grade';
     if (session.mode === 'route' && session.route) {
       const r = session.route;
       const ahead = imperial() ? 804.672 : 500;
@@ -1072,8 +1095,10 @@ function renderHud() {
       const toGoal = !toFinish && session.routeGoalM != null && !session.routeGoalHit;
       if (r.netRide && !toFinish && !toGoal) {
         // a network route: the rest of this lap on the plan, else the way to the next junction
-        const up = r.netRide.upcoming(session.routePos), onPlan = r.netRide.entries[up.i].planStep != null;
-        const toGo = onPlan ? r.netRide.profileSpan(session.routePos)[1] - session.routePos : up.distTo;
+        // (the lap as the path rides it now — with the turns chosen — PLAN F150; off it, or the chosen way
+        // leaving it: the next junction)
+        const up = r.netRide.upcoming(session.routePos), view = r.netRide.profileView(session.routePos), onPlan = view.lap;
+        const toGo = onPlan ? view.to - session.routePos : up.distTo;
         showRow(3, `${fmtDist(Math.max(0, toGo), 1)} ${distUnit()}`, onPlan ? 'lap to go' : `to ${up.node.name}`);
       } else showRow(3, `${fmtDist(Math.max(0, toGoal ? session.routeGoalM - session.routeRidden : session.routeLapToGo), 1)} ${distUnit()}`,
         toFinish ? 'to the finish' : toGoal ? 'to your goal' : 'lap to go');
@@ -1093,14 +1118,15 @@ function renderHud() {
     $('hPacerT').textContent = `Pacer ${pacer.watts} W · ${Math.abs(gap) < 3 ? 'alongside' : `${fmtGap(gap)} ${gap > 0 ? 'ahead' : 'behind'}`}`;
   }
 
-  // Bottom edge: route profile or workout chart (redrawn once a second; blank on free rides).
+  // Bottom edge: route profile or workout chart (redrawn once a second, and at once when a network route's path
+  // changes under it; blank on free rides).
   const now = performance.now();
-  if (now - lastProfileDraw > 1000) {
+  const pv = session.mode === 'route' && session.route ? hudProfileView() : null;
+  if (now - lastProfileDraw > 1000 || (pv && pv.key !== lastProfileKey)) {
     lastProfileDraw = now;
+    lastProfileKey = pv?.key ?? '';
     const c = $('hudProfile');
-    if (session.mode === 'route' && session.route) drawProfile(c, session.route, session.routePos, { metric: !imperial(), compact: true,
-      span: session.route.netRide ? (session.routeFinishM != null ? [session.routeStart, session.routeStart + session.routeFinishM] : session.route.netRide.profileSpan(session.routePos))
-        : session.routeFinishM != null ? legSpan(session.route, session.routeStart) : null,
+    if (pv) drawProfile(c, session.route, session.routePos, { metric: !imperial(), compact: true, span: pv.span, eleRange: pv.eleRange,
       finishAt: session.routeFinishM != null ? session.routeStart + session.routeFinishM : null });
     else if (session.mode === 'workout' && session.workout) drawWorkout(c, session.workout, session.workoutT, settings.ftp, session.workoutBias, { compact: true });
     else c.getContext('2d').clearRect(0, 0, c.width, c.height);
@@ -1409,7 +1435,7 @@ function renderCity() {
   $('cityTitle').textContent = card.name;
   $('citySub').textContent = `${citySubline(card, cityAreaCount(card))}${card.mine.length ? ` · ${card.mine.length} yours` : ''}`;
   $('cityGoals').innerHTML = GOALS.map(([k, l]) => `<button type="button" data-goal="${k}" class="${k === city.goal ? 'on' : ''}" aria-pressed="${k === city.goal}">${k === 'new' ? 'New' : l}</button>`).join('');
-  $('cityFree').hidden = !card.free;
+  $('cityFree').parentElement.hidden = !card.free;
   const net = cityNet(card);
   // the tapped segment: which routes ride it
   $('citySeg').hidden = !city.seg;
@@ -1600,7 +1626,9 @@ $('cityList').addEventListener('keydown', (e) => {
   citySelect(next.dataset.id);
   $('cityList').querySelector(`.city-row-btn[data-id="${CSS.escape(next.dataset.id)}"]`)?.focus();
 });
-$('cityFree').addEventListener('click', () => { const c = cityCard(); if (c?.free) cityChoose(c.free.id); });
+// the Free ride tile starts it at once, as Ride does (F104); Options beside it chooses it and shows its preview
+$('cityFree').addEventListener('click', () => { const c = cityCard(); if (c?.free) cityRide(c.free.id); });
+$('cityFreeOpts').addEventListener('click', () => { const c = cityCard(); if (c?.free) cityChoose(c.free.id); });
 $('cityPlan').addEventListener('click', () => { const c = cityCard(); if (c) openPlanner(c.routes.find((x) => !x.custom) || c.free); });
 
 async function loadRouteItem(item) {

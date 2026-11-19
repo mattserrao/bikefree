@@ -32,14 +32,17 @@ export function gradeColor(g) {
  * selector). finishAt: route metres of a chequered finish line, labelled endLabel. ticks: route metres of named stops. Returns the layout, so a pointer
  * x can be turned back into route metres (profileDistAt).
  */
-export function drawProfile(canvas, route, pos, { metric = false, compact = false, ahead = 805, span = null, selection = null, finishAt = null, ticks = null, endLabel = null } = {}) {
+export function drawProfile(canvas, route, pos, { metric = false, compact = false, ahead = 805, span = null, selection = null, finishAt = null, ticks = null, endLabel = null, eleRange = null } = {}) {
   const { ctx, w, h } = setup(canvas);
   if (!route) return null;
   // compact: the ride-screen strip — no axis labels, the stretch just ahead is brightest.
   const padL = compact ? 0 : 40, padB = compact ? 0 : 18, padT = compact ? 10 : 8, padR = compact ? 0 : 8;
   const pw = w - padL - padR, ph = h - padT - padB;
-  const range = Math.max(20, route.maxEle - route.minEle);
-  const lo = route.minEle - range * 0.08, hi = route.maxEle + range * 0.12;
+  // eleRange [min, max]: the height scale of the stretch drawn (a network path's, js/network.js profileView),
+  // else the whole route's
+  const [minEle, maxEle] = eleRange || [route.minEle, route.maxEle];
+  const range = Math.max(20, maxEle - minEle);
+  const lo = minEle - range * 0.08, hi = maxEle + range * 0.12;
   // span [from, to]: draw just that stretch (a point-to-point ride that ends at the finish: one leg)
   const [from, to] = span || [0, route.total];
   const X = (d) => padL + ((d - from) / (to - from)) * pw;
@@ -100,8 +103,8 @@ export function drawProfile(canvas, route, pos, { metric = false, compact = fals
   ctx.font = '11px -apple-system, sans-serif';
   const eu = metric ? 1 : 3.28084;
   ctx.textAlign = 'right';
-  ctx.fillText(`${Math.round(route.maxEle * eu)}`, padL - 6, Y(route.maxEle) + 4);
-  ctx.fillText(`${Math.round(route.minEle * eu)}`, padL - 6, Y(route.minEle) + 4);
+  ctx.fillText(`${Math.round(maxEle * eu)}`, padL - 6, Y(maxEle) + 4);
+  ctx.fillText(`${Math.round(minEle * eu)}`, padL - 6, Y(minEle) + 4);
   ctx.textAlign = 'left';
   const du = metric ? 1000 : 1609.344;
   const totalU = (to - from) / du;

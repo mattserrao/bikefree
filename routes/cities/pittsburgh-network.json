@@ -36,7 +36,7 @@
    ],
    "aprons": [
     {
-     "edge": "e21",
+     "edge": "e23",
      "dir": 1,
      "s": [
       0,
@@ -45,7 +45,7 @@
      "u0": 2730
     },
     {
-     "edge": "e23",
+     "edge": "e25",
      "dir": 1,
      "s": [
       7470,
@@ -54,7 +54,7 @@
      "u0": 0
     },
     {
-     "edge": "e22",
+     "edge": "e24",
      "dir": 1,
      "s": [
       16790,
@@ -63,7 +63,7 @@
      "u0": 0
     },
     {
-     "edge": "e16",
+     "edge": "e18",
      "dir": 1,
      "s": [
       20210,
@@ -91,7 +91,7 @@
    ],
    "aprons": [
     {
-     "edge": "e10",
+     "edge": "e11",
      "dir": 1,
      "s": [
       0,
@@ -124,7 +124,7 @@
    ],
    "aprons": [
     {
-     "edge": "e7",
+     "edge": "e8",
      "dir": 1,
      "s": [
       0,
@@ -133,7 +133,7 @@
      "u0": 2260
     },
     {
-     "edge": "e8",
+     "edge": "e9",
      "dir": 1,
      "s": [
       3900,
@@ -157,7 +157,7 @@
    ],
    "aprons": [
     {
-     "edge": "e2",
+     "edge": "e3",
      "dir": 1,
      "s": [
       0,
@@ -166,7 +166,7 @@
      "u0": 3580
     },
     {
-     "edge": "e3",
+     "edge": "e4",
      "dir": 1,
      "s": [
       14560,
@@ -198,7 +198,7 @@
    ],
    "aprons": [
     {
-     "edge": "e20",
+     "edge": "e22",
      "dir": 1,
      "s": [
       0,
@@ -207,7 +207,7 @@
      "u0": 1270
     },
     {
-     "edge": "e21",
+     "edge": "e23",
      "dir": 1,
      "s": [
       400,
@@ -216,7 +216,7 @@
      "u0": 0
     },
     {
-     "edge": "e23",
+     "edge": "e25",
      "dir": -1,
      "s": [
       9500,
@@ -225,7 +225,7 @@
      "u0": 3430
     },
     {
-     "edge": "e24",
+     "edge": "e26",
      "dir": 1,
      "s": [
       10300,
@@ -253,7 +253,7 @@
    ],
    "aprons": [
     {
-     "edge": "e3",
+     "edge": "e4",
      "dir": 1,
      "s": [
       0,
@@ -262,7 +262,7 @@
      "u0": 120
     },
     {
-     "edge": "e4",
+     "edge": "e5",
      "dir": 1,
      "s": [
       400,
@@ -294,7 +294,7 @@
    ],
    "aprons": [
     {
-     "edge": "e8",
+     "edge": "e9",
      "dir": 1,
      "s": [
       0,
@@ -303,7 +303,7 @@
      "u0": 420
     },
     {
-     "edge": "e8",
+     "edge": "e9",
      "dir": 1,
      "s": [
       230,
@@ -312,7 +312,7 @@
      "u0": 650
     },
     {
-     "edge": "e9",
+     "edge": "e10",
      "dir": 1,
      "s": [
       400,
@@ -321,7 +321,7 @@
      "u0": 0
     },
     {
-     "edge": "e10",
+     "edge": "e11",
      "dir": 1,
      "s": [
       710,
@@ -357,7 +357,7 @@
    ],
    "aprons": [
     {
-     "edge": "e19",
+     "edge": "e21",
      "dir": 1,
      "s": [
       0,
@@ -366,7 +366,7 @@
      "u0": 2280
     },
     {
-     "edge": "e20",
+     "edge": "e22",
      "dir": 1,
      "s": [
       1000,
@@ -375,7 +375,7 @@
      "u0": 0
     },
     {
-     "edge": "e25",
+     "edge": "e27",
      "dir": -1,
      "s": [
       25930,
@@ -384,7 +384,7 @@
      "u0": 1190
     },
     {
-     "edge": "e26",
+     "edge": "e28",
      "dir": 1,
      "s": [
       26730,
@@ -428,7 +428,7 @@
    ],
    "aprons": [
     {
-     "edge": "e12",
+     "edge": "e14",
      "dir": 1,
      "s": [
       0,
@@ -437,7 +437,7 @@
      "u0": 360
     },
     {
-     "edge": "e13",
+     "edge": "e15",
      "dir": 1,
      "s": [
       400,
@@ -446,7 +446,7 @@
      "u0": 0
     },
     {
-     "edge": "e7",
+     "edge": "e8",
      "dir": 1,
      "s": [
       15510,
@@ -455,7 +455,7 @@
      "u0": 0
     },
     {
-     "edge": "e6",
+     "edge": "e7",
      "dir": -1,
      "s": [
       16310,
@@ -464,7 +464,7 @@
      "u0": 2490
     },
     {
-     "edge": "e15",
+     "edge": "e17",
      "dir": 1,
      "s": [
       23250,
@@ -473,7 +473,7 @@
      "u0": 0
     },
     {
-     "edge": "e14",
+     "edge": "e16",
      "dir": -1,
      "s": [
       23710,
@@ -482,9 +482,81 @@
      "u0": 1840
     }
    ]
+  },
+  {
+   "id": "subway",
+   "name": "The subway: North Side to Gateway",
+   "catalogId": "pittsburgh-subway",
+   "base": "routes/cities/pittsburgh-subway.gpx",
+   "legM": 3340,
+   "ghosts": [
+    {
+     "fromM": 670,
+     "toM": 1070
+    },
+    {
+     "fromM": 2540,
+     "toM": 2940
+    }
+   ],
+   "aprons": [
+    {
+     "edge": "e12",
+     "dir": 1,
+     "s": [
+      0,
+      270
+     ],
+     "u0": 0
+    },
+    {
+     "edge": "e13",
+     "dir": 1,
+     "s": [
+      270,
+      670
+     ],
+     "u0": 0
+    },
+    {
+     "edge": "e2",
+     "dir": 1,
+     "s": [
+      2140,
+      2540
+     ],
+     "u0": 0
+    },
+    {
+     "edge": "e1",
+     "dir": -1,
+     "s": [
+      2940,
+      3340
+     ],
+     "u0": 2260
+    }
+   ]
   }
  ],
  "nodes": [
+  {
+   "id": "GW",
+   "name": "Stanwix St & Forbes Ave, Gateway",
+   "lat": 40.441042,
+   "lon": -80.004016,
+   "ele": 222.95,
+   "passes": {
+    "core": [
+     2660
+    ],
+    "subway": [
+     2140,
+     2940
+    ]
+   },
+   "portal": true
+  },
   {
    "id": "B",
    "name": "Clemente Bridge south end",
@@ -693,6 +765,23 @@
     "allegheny": [
      400,
      450
+    ]
+   },
+   "portal": true
+  },
+  {
+   "id": "NS",
+   "name": "Mazeroski Way & General Robinson St, North Side",
+   "lat": 40.447659,
+   "lon": -80.007513,
+   "ele": 222.95,
+   "passes": {
+    "core": [
+     21290
+    ],
+    "subway": [
+     270,
+     1070
     ]
    },
    "portal": true
@@ -992,27 +1081,48 @@
  "edges": [
   {
    "id": "e1",
-   "key": "B>E",
+   "key": "B>GW",
    "area": "core",
    "from": "B",
-   "to": "E",
+   "to": "GW",
    "s": [
     400,
-    3490
+    2660
    ],
-   "lengthM": 3090,
+   "lengthM": 2260,
    "climbM": [
-    21,
-    21
+    15,
+    15
    ],
-   "name": "The Point & downtown",
+   "name": "The riverfront & the Point",
    "toward": [
-    "the riverfront, the Point and Market Square",
-    "Market Square, the Point and the riverfront to the Clemente Bridge"
+    "the riverfront and the Point to Stanwix St",
+    "Stanwix St, the Point and the riverfront to the Clemente Bridge"
    ]
   },
   {
    "id": "e2",
+   "key": "GW>E",
+   "area": "core",
+   "from": "GW",
+   "to": "E",
+   "s": [
+    2660,
+    3490
+   ],
+   "lengthM": 830,
+   "climbM": [
+    6,
+    6
+   ],
+   "name": "Downtown: Forbes Ave & Market Square",
+   "toward": [
+    "Forbes Ave, Market Square and down to Smithfield St",
+    "Market Square and Forbes Ave to Stanwix St"
+   ]
+  },
+  {
+   "id": "e3",
    "key": "E>I",
    "area": "core",
    "from": "E",
@@ -1033,7 +1143,7 @@
    ]
   },
   {
-   "id": "e3",
+   "id": "e4",
    "key": "I>S",
    "area": "core",
    "from": "I",
@@ -1054,7 +1164,7 @@
    ]
   },
   {
-   "id": "e4",
+   "id": "e5",
    "key": "S>H",
    "area": "core",
    "from": "S",
@@ -1075,7 +1185,7 @@
    ]
   },
   {
-   "id": "e5",
+   "id": "e6",
    "key": "H>G",
    "area": "core",
    "from": "H",
@@ -1096,7 +1206,7 @@
    ]
   },
   {
-   "id": "e6",
+   "id": "e7",
    "key": "G>GV",
    "area": "core",
    "from": "G",
@@ -1117,7 +1227,7 @@
    ]
   },
   {
-   "id": "e7",
+   "id": "e8",
    "key": "GV>D",
    "area": "core",
    "from": "GV",
@@ -1138,7 +1248,7 @@
    ]
   },
   {
-   "id": "e8",
+   "id": "e9",
    "key": "D>C",
    "area": "core",
    "from": "D",
@@ -1159,7 +1269,7 @@
    ]
   },
   {
-   "id": "e9",
+   "id": "e10",
    "key": "C>R",
    "area": "core",
    "from": "C",
@@ -1180,7 +1290,7 @@
    ]
   },
   {
-   "id": "e10",
+   "id": "e11",
    "key": "R>A",
    "area": "core",
    "from": "R",
@@ -1201,28 +1311,49 @@
    ]
   },
   {
-   "id": "e11",
-   "key": "A>B",
+   "id": "e12",
+   "key": "A>NS",
    "area": "core",
    "from": "A",
-   "to": "B",
+   "to": "NS",
    "s": [
     21020,
+    21290
+   ],
+   "lengthM": 270,
+   "climbM": [
+    5,
+    0
+   ],
+   "name": "Mazeroski Way",
+   "toward": [
+    "up Mazeroski Way past PNC Park to General Robinson St",
+    "down Mazeroski Way to the Water Steps"
+   ]
+  },
+  {
+   "id": "e13",
+   "key": "NS>B",
+   "area": "core",
+   "from": "NS",
+   "to": "B",
+   "s": [
+    21290,
     22020
    ],
-   "lengthM": 1000,
+   "lengthM": 730,
    "climbM": [
-    6,
+    1,
     1
    ],
    "name": "Clemente Bridge",
    "toward": [
     "General Robinson St and the Clemente Bridge to Fort Duquesne Blvd",
-    "the Clemente Bridge to the North Shore and the Water Steps"
+    "the Clemente Bridge to General Robinson St"
    ]
   },
   {
-   "id": "e12",
+   "id": "e14",
    "key": "E>F",
    "area": "core",
    "from": "E",
@@ -1243,7 +1374,7 @@
    ]
   },
   {
-   "id": "e13",
+   "id": "e15",
    "key": "F>G",
    "area": "core",
    "from": "F",
@@ -1264,7 +1395,7 @@
    ]
   },
   {
-   "id": "e14",
+   "id": "e16",
    "key": "G>Q",
    "area": "core",
    "from": "G",
@@ -1285,7 +1416,7 @@
    ]
   },
   {
-   "id": "e15",
+   "id": "e17",
    "key": "Q>H",
    "area": "core",
    "from": "Q",
@@ -1306,7 +1437,7 @@
    ]
   },
   {
-   "id": "e16",
+   "id": "e18",
    "key": "A>P",
    "area": "allegheny",
    "from": "A",
@@ -1327,7 +1458,7 @@
    ]
   },
   {
-   "id": "e17",
+   "id": "e19",
    "key": "P>N",
    "area": "allegheny",
    "from": "P",
@@ -1348,7 +1479,7 @@
    ]
   },
   {
-   "id": "e18",
+   "id": "e20",
    "key": "N>P",
    "area": "allegheny",
    "from": "N",
@@ -1369,7 +1500,7 @@
    ]
   },
   {
-   "id": "e19",
+   "id": "e21",
    "key": "N>LB",
    "area": "allegheny",
    "from": "N",
@@ -1390,7 +1521,7 @@
    ]
   },
   {
-   "id": "e20",
+   "id": "e22",
    "key": "LB>M",
    "area": "allegheny",
    "from": "LB",
@@ -1411,7 +1542,7 @@
    ]
   },
   {
-   "id": "e21",
+   "id": "e23",
    "key": "M>B",
    "area": "allegheny",
    "from": "M",
@@ -1432,7 +1563,7 @@
    ]
   },
   {
-   "id": "e22",
+   "id": "e24",
    "key": "D>O",
    "area": "westend",
    "from": "D",
@@ -1453,7 +1584,7 @@
    ]
   },
   {
-   "id": "e23",
+   "id": "e25",
    "key": "I>L",
    "area": "oakland",
    "from": "I",
@@ -1474,7 +1605,7 @@
    ]
   },
   {
-   "id": "e24",
+   "id": "e26",
    "key": "L>J",
    "area": "oakland",
    "from": "L",
@@ -1495,7 +1626,7 @@
    ]
   },
   {
-   "id": "e25",
+   "id": "e27",
    "key": "J>K",
    "area": "oakland",
    "from": "J",
@@ -1516,7 +1647,7 @@
    ]
   },
   {
-   "id": "e26",
+   "id": "e28",
    "key": "K>J",
    "area": "oakland",
    "from": "K",
@@ -1537,7 +1668,7 @@
    ]
   },
   {
-   "id": "e27",
+   "id": "e29",
    "key": "M>X",
    "area": "polish",
    "from": "M",
@@ -1558,7 +1689,7 @@
    ]
   },
   {
-   "id": "e28",
+   "id": "e30",
    "key": "X>T",
    "area": "polish",
    "from": "X",
@@ -1579,7 +1710,7 @@
    ]
   },
   {
-   "id": "e29",
+   "id": "e31",
    "key": "T>X",
    "area": "polish",
    "from": "T",
@@ -1600,7 +1731,7 @@
    ]
   },
   {
-   "id": "e30",
+   "id": "e32",
    "key": "T>L",
    "area": "polish",
    "from": "T",
@@ -1621,7 +1752,7 @@
    ]
   },
   {
-   "id": "e31",
+   "id": "e33",
    "key": "S>W",
    "area": "homestead",
    "from": "S",
@@ -1642,7 +1773,7 @@
    ]
   },
   {
-   "id": "e32",
+   "id": "e34",
    "key": "W>V",
    "area": "homestead",
    "from": "W",
@@ -1663,7 +1794,7 @@
    ]
   },
   {
-   "id": "e33",
+   "id": "e35",
    "key": "V>U",
    "area": "homestead",
    "from": "V",
@@ -1684,7 +1815,7 @@
    ]
   },
   {
-   "id": "e34",
+   "id": "e36",
    "key": "U>V",
    "area": "homestead",
    "from": "U",
@@ -1705,7 +1836,7 @@
    ]
   },
   {
-   "id": "e35",
+   "id": "e37",
    "key": "W>U",
    "area": "homestead",
    "from": "W",
@@ -1726,7 +1857,7 @@
    ]
   },
   {
-   "id": "e36",
+   "id": "e38",
    "key": "R>Y",
    "area": "northside",
    "from": "R",
@@ -1747,7 +1878,7 @@
    ]
   },
   {
-   "id": "e37",
+   "id": "e39",
    "key": "Y>Z",
    "area": "northside",
    "from": "Y",
@@ -1768,7 +1899,7 @@
    ]
   },
   {
-   "id": "e38",
+   "id": "e40",
    "key": "Z>Y",
    "area": "northside",
    "from": "Z",
@@ -1789,7 +1920,7 @@
    ]
   },
   {
-   "id": "e39",
+   "id": "e41",
    "key": "Z>C",
    "area": "northside",
    "from": "Z",
@@ -1810,7 +1941,7 @@
    ]
   },
   {
-   "id": "e40",
+   "id": "e42",
    "key": "LB>HE",
    "area": "eastend",
    "from": "LB",
@@ -1831,7 +1962,7 @@
    ]
   },
   {
-   "id": "e41",
+   "id": "e43",
    "key": "HP>HE",
    "area": "eastend",
    "from": "HP",
@@ -1852,7 +1983,7 @@
    ]
   },
   {
-   "id": "e42",
+   "id": "e44",
    "key": "HE>HP",
    "area": "eastend",
    "from": "HE",
@@ -1873,7 +2004,7 @@
    ]
   },
   {
-   "id": "e43",
+   "id": "e45",
    "key": "HP>EL",
    "area": "eastend",
    "from": "HP",
@@ -1894,7 +2025,7 @@
    ]
   },
   {
-   "id": "e44",
+   "id": "e46",
    "key": "EL>SQ",
    "area": "eastend",
    "from": "EL",
@@ -1915,7 +2046,7 @@
    ]
   },
   {
-   "id": "e45",
+   "id": "e47",
    "key": "SQ>EL",
    "area": "eastend",
    "from": "SQ",
@@ -1936,7 +2067,7 @@
    ]
   },
   {
-   "id": "e46",
+   "id": "e48",
    "key": "SQ>K",
    "area": "eastend",
    "from": "SQ",
@@ -1957,7 +2088,7 @@
    ]
   },
   {
-   "id": "e47",
+   "id": "e49",
    "key": "F>SY",
    "area": "slopes",
    "from": "F",
@@ -1978,7 +2109,7 @@
    ]
   },
   {
-   "id": "e48",
+   "id": "e50",
    "key": "SY>AL",
    "area": "slopes",
    "from": "SY",
@@ -1999,7 +2130,7 @@
    ]
   },
   {
-   "id": "e49",
+   "id": "e51",
    "key": "AL>SY",
    "area": "slopes",
    "from": "AL",
@@ -2020,7 +2151,7 @@
    ]
   },
   {
-   "id": "e50",
+   "id": "e52",
    "key": "GV>SY",
    "area": "slopes",
    "from": "GV",
@@ -2041,7 +2172,7 @@
    ]
   },
   {
-   "id": "e51",
+   "id": "e53",
    "key": "AL>Q",
    "area": "slopes",
    "from": "AL",
@@ -2060,6 +2191,41 @@
     "Warrington and Arlington Ave along the ridge, down Eleanor St, Holt St, Barry St and 27th St to East Carson",
     "up 27th St, Barry St, Holt St and Eleanor St, Arlington and Warrington Ave along the ridge to Allentown"
    ]
+  },
+  {
+   "id": "e54",
+   "key": "NS>GW",
+   "area": "subway",
+   "from": "NS",
+   "to": "GW",
+   "s": [
+    1070,
+    2140
+   ],
+   "lengthM": 1070,
+   "climbM": [
+    24,
+    24
+   ],
+   "name": "The subway: under the Allegheny",
+   "toward": [
+    "down the escalator at North Side, the tunnel under the Allegheny and up the escalator at Gateway",
+    "down the escalator at Gateway, the tunnel under the Allegheny and up the escalator at North Side"
+   ],
+   "conveyors": [
+    {
+     "u0": 169,
+     "u1": 217,
+     "mps": 3,
+     "label": "Escalator"
+    },
+    {
+     "u0": 965,
+     "u1": 1013,
+     "mps": 3,
+     "label": "Escalator"
+    }
+   ]
   }
  ],
  "presets": [
@@ -2067,9 +2233,9 @@
    "id": "pgh-homestead-loop",
    "name": "Homestead Loop",
    "path": [
-    "e35+",
-    "e34+",
-    "e32-"
+    "e37+",
+    "e36+",
+    "e34-"
    ],
    "tags": [
     "flat",
@@ -2084,9 +2250,9 @@
    "id": "pgh-waterfront-loop",
    "name": "Waterfront Loop",
    "path": [
-    "e35+",
-    "e33-",
-    "e32-"
+    "e37+",
+    "e35-",
+    "e34-"
    ],
    "tags": [
     "flat",
@@ -2101,14 +2267,14 @@
    "id": "pgh-east-end",
    "name": "East End Loop",
    "path": [
+    "e48-",
     "e46-",
-    "e44-",
-    "e43-",
-    "e41+",
-    "e42+",
-    "e43+",
     "e45-",
-    "e46+"
+    "e43+",
+    "e44+",
+    "e45+",
+    "e47-",
+    "e48+"
    ],
    "tags": [
     "varied",
@@ -2122,10 +2288,10 @@
    "id": "pgh-squirrel-hill",
    "name": "Squirrel Hill & Bakery Square Loop",
    "path": [
+    "e48-",
     "e46-",
-    "e44-",
-    "e45-",
-    "e46+"
+    "e47-",
+    "e48+"
    ],
    "tags": [
     "short",
@@ -2140,8 +2306,8 @@
    "id": "pgh-highland-park",
    "name": "Highland Park Reservoir Loop",
    "path": [
-    "e41+",
-    "e42+"
+    "e43+",
+    "e44+"
    ],
    "tags": [
     "short",
@@ -2156,10 +2322,10 @@
    "id": "pgh-stanton-heights",
    "name": "Stanton Heights & Highland Park Climb",
    "path": [
-    "e40+",
     "e42+",
-    "e41+",
-    "e40-"
+    "e44+",
+    "e43+",
+    "e42-"
    ],
    "tags": [
     "hilly",
@@ -2173,18 +2339,20 @@
    "id": "pgh-three-rivers",
    "name": "Three Rivers Loop",
    "path": [
-    "e11+",
-    "e1+",
     "e12+",
     "e13+",
+    "e1+",
+    "e2+",
     "e14+",
     "e15+",
-    "e5+",
+    "e16+",
+    "e17+",
     "e6+",
     "e7+",
     "e8+",
     "e9+",
-    "e10+"
+    "e10+",
+    "e11+"
    ],
    "tags": [
     "varied"
@@ -2197,18 +2365,20 @@
    "id": "pgh-three-rivers-rev",
    "name": "Three Rivers Loop · reverse",
    "path": [
+    "e11-",
     "e10-",
     "e9-",
     "e8-",
     "e7-",
     "e6-",
-    "e5-",
+    "e17-",
+    "e16-",
     "e15-",
     "e14-",
-    "e13-",
-    "e12-",
+    "e2-",
     "e1-",
-    "e11-"
+    "e13-",
+    "e12-"
    ],
    "tags": [
     "varied"
@@ -2221,15 +2391,17 @@
    "id": "pgh-short-loop",
    "name": "South Side Short Loop",
    "path": [
-    "e11+",
-    "e1+",
     "e12+",
     "e13+",
-    "e6+",
+    "e1+",
+    "e2+",
+    "e14+",
+    "e15+",
     "e7+",
     "e8+",
     "e9+",
-    "e10+"
+    "e10+",
+    "e11+"
    ],
    "tags": [
     "short",
@@ -2243,15 +2415,17 @@
    "id": "pgh-short-loop-rev",
    "name": "South Side Short Loop · reverse",
    "path": [
+    "e11-",
     "e10-",
     "e9-",
     "e8-",
     "e7-",
-    "e6-",
-    "e13-",
-    "e12-",
+    "e15-",
+    "e14-",
+    "e2-",
     "e1-",
-    "e11-"
+    "e13-",
+    "e12-"
    ],
    "tags": [
     "short",
@@ -2265,9 +2439,9 @@
    "id": "pgh-south-side",
    "name": "South Side Flat Loop",
    "path": [
-    "e14+",
-    "e15+",
-    "e5+"
+    "e16+",
+    "e17+",
+    "e6+"
    ],
    "tags": [
     "flat",
@@ -2281,20 +2455,22 @@
    "id": "pgh-west-end",
    "name": "Three Rivers Loop + West End Overlook",
    "path": [
-    "e11+",
-    "e1+",
     "e12+",
     "e13+",
+    "e1+",
+    "e2+",
     "e14+",
     "e15+",
-    "e5+",
+    "e16+",
+    "e17+",
     "e6+",
     "e7+",
-    "e22+",
-    "e22-",
     "e8+",
+    "e24+",
+    "e24-",
     "e9+",
-    "e10+"
+    "e10+",
+    "e11+"
    ],
    "tags": [
     "hilly",
@@ -2308,12 +2484,12 @@
    "id": "pgh-jail-trail",
    "name": "Jail Trail & South Side Loop",
    "path": [
-    "e2+",
     "e3+",
     "e4+",
     "e5+",
-    "e13-",
-    "e12-"
+    "e6+",
+    "e15-",
+    "e14-"
    ],
    "tags": [
     "flat",
@@ -2328,16 +2504,20 @@
    "id": "pgh-point-jail",
    "name": "Point & Jail Trail Loop",
    "path": [
-    "e11+",
+    "e12+",
+    "e13+",
     "e1+",
     "e2+",
     "e3+",
     "e4+",
     "e5+",
-    "e13-",
-    "e12-",
+    "e6+",
+    "e15-",
+    "e14-",
+    "e2-",
     "e1-",
-    "e11-"
+    "e13-",
+    "e12-"
    ],
    "tags": [
     "flat",
@@ -2351,7 +2531,8 @@
    "id": "pgh-jail-mt-washington",
    "name": "Jail Trail & Mount Washington Loop",
    "path": [
-    "e11+",
+    "e12+",
+    "e13+",
     "e1+",
     "e2+",
     "e3+",
@@ -2361,7 +2542,8 @@
     "e7+",
     "e8+",
     "e9+",
-    "e10+"
+    "e10+",
+    "e11+"
    ],
    "tags": [
     "varied",
@@ -2375,16 +2557,16 @@
    "id": "pgh-mt-washington",
    "name": "Mount Washington There & Back",
    "path": [
-    "e6+",
     "e7+",
     "e8+",
     "e9+",
     "e10+",
+    "e11+",
+    "e11-",
     "e10-",
     "e9-",
     "e8-",
-    "e7-",
-    "e6-"
+    "e7-"
    ],
    "tags": [
     "hilly"
@@ -2397,30 +2579,34 @@
    "id": "pgh-long",
    "name": "Three Rivers There & Back",
    "path": [
-    "e11+",
-    "e1+",
     "e12+",
     "e13+",
+    "e1+",
+    "e2+",
     "e14+",
     "e15+",
-    "e5+",
+    "e16+",
+    "e17+",
     "e6+",
     "e7+",
     "e8+",
     "e9+",
     "e10+",
+    "e11+",
+    "e11-",
     "e10-",
     "e9-",
     "e8-",
     "e7-",
     "e6-",
-    "e5-",
+    "e17-",
+    "e16-",
     "e15-",
     "e14-",
-    "e13-",
-    "e12-",
+    "e2-",
     "e1-",
-    "e11-"
+    "e13-",
+    "e12-"
    ],
    "tags": [
     "long",
@@ -2434,8 +2620,8 @@
    "id": "pgh-schenley",
    "name": "Schenley Park Loop",
    "path": [
-    "e25+",
-    "e26+"
+    "e27+",
+    "e28+"
    ],
    "tags": [
     "short",
@@ -2450,14 +2636,14 @@
    "id": "pgh-oakland",
    "name": "Jail Trail, Oakland & Schenley",
    "path": [
-    "e2+",
-    "e23+",
-    "e24+",
+    "e3+",
     "e25+",
     "e26+",
-    "e24-",
-    "e23-",
-    "e2-"
+    "e27+",
+    "e28+",
+    "e26-",
+    "e25-",
+    "e3-"
    ],
    "tags": [
     "varied",
@@ -2471,22 +2657,26 @@
    "id": "pgh-oakland-south",
    "name": "Oakland & South Side Loop",
    "path": [
-    "e11+",
+    "e12+",
+    "e13+",
     "e1+",
     "e2+",
-    "e23+",
-    "e24+",
+    "e3+",
     "e25+",
     "e26+",
-    "e24-",
-    "e23-",
-    "e3+",
+    "e27+",
+    "e28+",
+    "e26-",
+    "e25-",
     "e4+",
     "e5+",
-    "e13-",
-    "e12-",
+    "e6+",
+    "e15-",
+    "e14-",
+    "e2-",
     "e1-",
-    "e11-"
+    "e13-",
+    "e12-"
    ],
    "tags": [
     "long",
@@ -2501,12 +2691,13 @@
    "id": "pgh-allegheny",
    "name": "Allegheny Loop",
    "path": [
-    "e16+",
-    "e17+",
+    "e18+",
     "e19+",
-    "e20+",
     "e21+",
-    "e11-"
+    "e22+",
+    "e23+",
+    "e13-",
+    "e12-"
    ],
    "tags": [
     "flat",
@@ -2520,12 +2711,13 @@
    "id": "pgh-allegheny-rev",
    "name": "Allegheny Loop · reverse",
    "path": [
-    "e11+",
+    "e12+",
+    "e13+",
+    "e23-",
+    "e22-",
     "e21-",
-    "e20-",
     "e19-",
-    "e17-",
-    "e16-"
+    "e18-"
    ],
    "tags": [
     "flat",
@@ -2539,20 +2731,23 @@
    "id": "pgh-allegheny-jail",
    "name": "Allegheny & Jail Trail Loop",
    "path": [
-    "e16+",
-    "e17+",
+    "e18+",
     "e19+",
-    "e20+",
     "e21+",
+    "e22+",
+    "e23+",
     "e1+",
     "e2+",
     "e3+",
     "e4+",
     "e5+",
-    "e13-",
-    "e12-",
+    "e6+",
+    "e15-",
+    "e14-",
+    "e2-",
     "e1-",
-    "e11-"
+    "e13-",
+    "e12-"
    ],
    "tags": [
     "long",
@@ -2567,8 +2762,8 @@
    "id": "pgh-troy-hill",
    "name": "Troy Hill Climb Loop",
    "path": [
-    "e17+",
-    "e18+"
+    "e19+",
+    "e20+"
    ],
    "tags": [
     "short",
@@ -2583,10 +2778,10 @@
    "id": "pgh-troy-hill-steps",
    "name": "Water Steps & Troy Hill",
    "path": [
-    "e16+",
-    "e17+",
     "e18+",
-    "e16-"
+    "e19+",
+    "e20+",
+    "e18-"
    ],
    "tags": [
     "hilly",
@@ -2600,14 +2795,15 @@
    "id": "pgh-allegheny-troy",
    "name": "Allegheny Loop + Troy Hill",
    "path": [
-    "e16+",
-    "e17+",
     "e18+",
-    "e17+",
     "e19+",
     "e20+",
+    "e19+",
     "e21+",
-    "e11-"
+    "e22+",
+    "e23+",
+    "e13-",
+    "e12-"
    ],
    "tags": [
     "hilly",
@@ -2622,8 +2818,8 @@
    "id": "pgh-polish-hill",
    "name": "Polish Hill Climb Loop",
    "path": [
-    "e28+",
-    "e29+"
+    "e30+",
+    "e31+"
    ],
    "tags": [
     "short",
@@ -2638,13 +2834,14 @@
    "id": "pgh-polish-crosstown",
    "name": "Polish Hill, Bloomfield & Oakland Loop",
    "path": [
-    "e27+",
-    "e28+",
+    "e29+",
     "e30+",
-    "e23-",
+    "e32+",
+    "e25-",
+    "e3-",
     "e2-",
     "e1-",
-    "e21-"
+    "e23-"
    ],
    "tags": [
     "varied",
@@ -2658,17 +2855,19 @@
    "id": "pgh-polish-rivers",
    "name": "Allegheny, Polish Hill & Oakland Loop",
    "path": [
-    "e16+",
-    "e17+",
+    "e18+",
     "e19+",
-    "e20+",
-    "e27+",
-    "e28+",
+    "e21+",
+    "e22+",
+    "e29+",
     "e30+",
-    "e23-",
+    "e32+",
+    "e25-",
+    "e3-",
     "e2-",
     "e1-",
-    "e11-"
+    "e13-",
+    "e12-"
    ],
    "tags": [
     "long",
@@ -2683,13 +2882,13 @@
    "id": "pgh-gap-homestead",
    "name": "Great Allegheny Passage to Homestead",
    "path": [
-    "e4-",
-    "e31+",
-    "e35+",
-    "e34+",
-    "e32-",
-    "e31-",
-    "e4+"
+    "e5-",
+    "e33+",
+    "e37+",
+    "e36+",
+    "e34-",
+    "e33-",
+    "e5+"
    ],
    "tags": [
     "flat",
@@ -2706,15 +2905,17 @@
     "e1+",
     "e2+",
     "e3+",
-    "e31+",
-    "e35+",
-    "e34+",
-    "e32-",
-    "e31-",
     "e4+",
+    "e33+",
+    "e37+",
+    "e36+",
+    "e34-",
+    "e33-",
     "e5+",
-    "e13-",
-    "e12-",
+    "e6+",
+    "e15-",
+    "e14-",
+    "e2-",
     "e1-"
    ],
    "tags": [
@@ -2730,12 +2931,12 @@
    "id": "pgh-northside-hills",
    "name": "North Side Hills Loop",
    "path": [
-    "e10-",
-    "e36+",
-    "e37+",
+    "e11-",
+    "e38+",
     "e39+",
-    "e9+",
-    "e10+"
+    "e41+",
+    "e10+",
+    "e11+"
    ],
    "tags": [
     "hilly",
@@ -2749,12 +2950,12 @@
    "id": "pgh-northside-hills-rev",
    "name": "North Side Hills Loop · reverse",
    "path": [
+    "e11-",
     "e10-",
-    "e9-",
+    "e41-",
     "e39-",
-    "e37-",
-    "e36-",
-    "e10+"
+    "e38-",
+    "e11+"
    ],
    "tags": [
     "hilly",
@@ -2768,12 +2969,12 @@
    "id": "pgh-fineview",
    "name": "Fineview Climb Loop",
    "path": [
-    "e10-",
-    "e36+",
-    "e37+",
+    "e11-",
     "e38+",
-    "e36-",
-    "e10+"
+    "e39+",
+    "e40+",
+    "e38-",
+    "e11+"
    ],
    "tags": [
     "short",
@@ -2788,20 +2989,22 @@
    "id": "pgh-three-rivers-northside",
    "name": "Three Rivers & North Side Loop",
    "path": [
-    "e11+",
-    "e1+",
     "e12+",
     "e13+",
+    "e1+",
+    "e2+",
     "e14+",
     "e15+",
-    "e5+",
+    "e16+",
+    "e17+",
     "e6+",
     "e7+",
     "e8+",
+    "e9+",
+    "e41-",
     "e39-",
-    "e37-",
-    "e36-",
-    "e10+"
+    "e38-",
+    "e11+"
    ],
    "tags": [
     "long",
@@ -2816,20 +3019,22 @@
    "id": "pgh-allegheny-east-end",
    "name": "Allegheny, East End & Oakland Loop",
    "path": [
-    "e16+",
-    "e17+",
+    "e18+",
     "e19+",
-    "e40+",
-    "e41-",
-    "e43+",
-    "e45-",
-    "e46+",
-    "e26+",
-    "e24-",
-    "e23-",
+    "e21+",
+    "e42+",
+    "e43-",
+    "e45+",
+    "e47-",
+    "e48+",
+    "e28+",
+    "e26-",
+    "e25-",
+    "e3-",
     "e2-",
     "e1-",
-    "e11-"
+    "e13-",
+    "e12-"
    ],
    "tags": [
     "long",
@@ -2844,10 +3049,10 @@
    "id": "pgh-sycamore",
    "name": "Sycamore Street & Grandview",
    "path": [
-    "e47+",
-    "e50-",
-    "e6-",
-    "e13-"
+    "e49+",
+    "e52-",
+    "e7-",
+    "e15-"
    ],
    "tags": [
     "short",
@@ -2862,11 +3067,11 @@
    "id": "pgh-slopes",
    "name": "South Side Slopes Climb Loop",
    "path": [
-    "e51-",
-    "e49+",
-    "e47-",
-    "e13+",
-    "e14+"
+    "e53-",
+    "e51+",
+    "e49-",
+    "e15+",
+    "e16+"
    ],
    "tags": [
     "hilly",
@@ -2880,11 +3085,11 @@
    "id": "pgh-dirty-dozen",
    "name": "Dirty Dozen South Loop",
    "path": [
-    "e47+",
-    "e48+",
-    "e51+",
-    "e14-",
-    "e13-"
+    "e49+",
+    "e50+",
+    "e53+",
+    "e16-",
+    "e15-"
    ],
    "tags": [
     "hilly",
@@ -2899,10 +3104,10 @@
    "id": "pgh-dirty-dozen-slopes",
    "name": "Dirty Dozen South from the Slopes",
    "path": [
-    "e51-",
-    "e49+",
-    "e48+",
-    "e51+"
+    "e53-",
+    "e51+",
+    "e50+",
+    "e53+"
    ],
    "tags": [
     "hilly",
@@ -2911,14 +3116,103 @@
    "note": "From East Carson & 27th up Barry, Holt and Eleanor to Allentown, over to Mount Washington and down to Beechview for Boustead Street and Canton Avenue's cobbles, back up Warrington Ave and down the Slopes",
    "lengthM": 19940,
    "climbM": 601
+  },
+  {
+   "id": "pgh-subway-point",
+   "name": "Under the Allegheny: North Shore to the Point",
+   "path": [
+    "e12+",
+    "e54+",
+    "e1-",
+    "e13-",
+    "e12-"
+   ],
+   "tags": [
+    "short",
+    "flat",
+    "new"
+   ],
+   "note": "From the Water Steps: the escalator down at North Side, the subway path under the Allegheny, up at Gateway, round the Point and the riverfront, home over the Clemente Bridge",
+   "lengthM": 4600,
+   "climbM": 45
+  },
+  {
+   "id": "pgh-subway-three-rivers",
+   "name": "Three Rivers Loop · via the subway",
+   "path": [
+    "e12+",
+    "e54+",
+    "e2+",
+    "e14+",
+    "e15+",
+    "e16+",
+    "e17+",
+    "e6+",
+    "e7+",
+    "e8+",
+    "e9+",
+    "e10+",
+    "e11+"
+   ],
+   "tags": [
+    "varied",
+    "new"
+   ],
+   "note": "The Three Rivers Loop with the subway under the Allegheny instead of the Clemente Bridge and the Point",
+   "lengthM": 16400,
+   "climbM": 232
+  },
+  {
+   "id": "pgh-long-subway",
+   "name": "Long Loop · out by the subway",
+   "path": [
+    "e12+",
+    "e54+",
+    "e2+",
+    "e14+",
+    "e15+",
+    "e16+",
+    "e17+",
+    "e6+",
+    "e7+",
+    "e8+",
+    "e9+",
+    "e10+",
+    "e11+",
+    "e11-",
+    "e10-",
+    "e9-",
+    "e8-",
+    "e7-",
+    "e6-",
+    "e17-",
+    "e16-",
+    "e15-",
+    "e14-",
+    "e2-",
+    "e1-",
+    "e13-",
+    "e12-"
+   ],
+   "tags": [
+    "long",
+    "varied",
+    "new"
+   ],
+   "note": "The long loop both ways: out under the Allegheny by the subway, home round the Point and over the Clemente Bridge",
+   "lengthM": 34720,
+   "climbM": 455
   }
  ],
  "freeRide": {
   "name": "Free Ride · choose every turn",
-  "first": "e11+",
+  "first": "e12+",
   "note": "No plan: from the Water Steps, straight on at every junction unless you choose a turn. Ride until you stop",
   "prefer": {
-   "LB": "e19-"
+   "LB": "e21-",
+   "NS": "e13+",
+   "SY": "e49-",
+   "GW": "e1-"
   }
  },
  "map": "routes/cities/pittsburgh-map.json",
@@ -2963,6 +3257,14 @@
   "N>M": [
    "N>LB",
    "LB>M"
+  ],
+  "A>B": [
+   "A>NS",
+   "NS>B"
+  ],
+  "B>E": [
+   "B>GW",
+   "GW>E"
   ]
  }
 }

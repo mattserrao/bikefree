@@ -1,7 +1,13 @@
 {
   "area": "core",
-  "note": "Downtown, the North Shore, the South Side and Mount Washington: the Point, the Jail Trail, the Hot Metal, Smithfield Street, Clemente and West End bridges. Portals: A and B (the Allegheny & Troy Hill), I (Oakland & Schenley), D (the West End), S (the Great Allegheny Passage & Homestead), C and R (the North Side), F, GV and Q (the South Side Slopes & Mount Washington).",
+  "note": "Downtown, the North Shore, the South Side and Mount Washington: the Point, the Jail Trail, the Hot Metal, Smithfield Street, Clemente and West End bridges. Portals: NS and GW (the subway), A and B (the Allegheny & Troy Hill), I (Oakland & Schenley), D (the West End), S (the Great Allegheny Passage & Homestead), C and R (the North Side), F, GV and Q (the South Side Slopes & Mount Washington).",
   "nodes": [
+    {
+      "id": "GW",
+      "name": "Stanwix St & Forbes Ave, Gateway",
+      "lat": 40.441042,
+      "lon": -80.004016
+    },
     {
       "id": "B",
       "name": "Clemente Bridge south end",
@@ -80,13 +86,24 @@
       "name": "North Shore Water Steps",
       "lat": 40.445507,
       "lon": -80.008146
+    },
+    {
+      "id": "NS",
+      "name": "Mazeroski Way & General Robinson St, North Side",
+      "lat": 40.447659,
+      "lon": -80.007513
     }
   ],
   "edges": {
-    "B>E": {
-      "name": "The Point & downtown",
-      "fwd": "the riverfront, the Point and Market Square",
-      "rev": "Market Square, the Point and the riverfront to the Clemente Bridge"
+    "B>GW": {
+      "name": "The riverfront & the Point",
+      "fwd": "the riverfront and the Point to Stanwix St",
+      "rev": "Stanwix St, the Point and the riverfront to the Clemente Bridge"
+    },
+    "GW>E": {
+      "name": "Downtown: Forbes Ave & Market Square",
+      "fwd": "Forbes Ave, Market Square and down to Smithfield St",
+      "rev": "Market Square and Forbes Ave to Stanwix St"
     },
     "E>I": {
       "name": "Jail Trail",
@@ -133,10 +150,15 @@
       "fwd": "under Ohio River Boulevard and the North Shore trail past the Science Center to the Water Steps",
       "rev": "the North Shore trail past the Science Center and up to Ridge Avenue"
     },
-    "A>B": {
+    "A>NS": {
+      "name": "Mazeroski Way",
+      "fwd": "up Mazeroski Way past PNC Park to General Robinson St",
+      "rev": "down Mazeroski Way to the Water Steps"
+    },
+    "NS>B": {
       "name": "Clemente Bridge",
       "fwd": "General Robinson St and the Clemente Bridge to Fort Duquesne Blvd",
-      "rev": "the Clemente Bridge to the North Shore and the Water Steps"
+      "rev": "the Clemente Bridge to General Robinson St"
     },
     "E>F": {
       "name": "Smithfield Street Bridge",

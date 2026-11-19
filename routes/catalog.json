@@ -451,7 +451,8 @@
     ]
    }
   },
-  "scene": "routes/scenes/zion.json"
+  "scene": "routes/scenes/zion.json",
+  "stage": "draft"
  },
  {
   "id": "sevenmile",
@@ -574,8 +575,7 @@
   ],
   "scene": "routes/scenes/pittsburgh.json",
   "network": "routes/cities/pittsburgh-network.json",
-  "eleSmoothM": 10,
-  "stage": "draft"
+  "eleSmoothM": 10
  },
  {
   "id": "pittsburgh-allegheny",
@@ -589,7 +589,6 @@
   ],
   "scene": "routes/scenes/pittsburgh-allegheny.json",
   "eleSmoothM": 10,
-  "stage": "draft",
   "area": "pittsburgh"
  },
  {
@@ -604,7 +603,6 @@
   ],
   "scene": "routes/scenes/pittsburgh-westend.json",
   "eleSmoothM": 10,
-  "stage": "draft",
   "area": "pittsburgh"
  },
  {
@@ -619,7 +617,6 @@
   ],
   "scene": "routes/scenes/pittsburgh-oakland.json",
   "eleSmoothM": 10,
-  "stage": "draft",
   "area": "pittsburgh"
  },
  {
@@ -634,7 +631,6 @@
   ],
   "scene": "routes/scenes/pittsburgh-polish.json",
   "eleSmoothM": 10,
-  "stage": "draft",
   "area": "pittsburgh"
  },
  {
@@ -649,7 +645,6 @@
   ],
   "scene": "routes/scenes/pittsburgh-homestead.json",
   "eleSmoothM": 10,
-  "stage": "draft",
   "area": "pittsburgh"
  },
  {
@@ -664,7 +659,6 @@
   ],
   "scene": "routes/scenes/pittsburgh-northside.json",
   "eleSmoothM": 10,
-  "stage": "draft",
   "area": "pittsburgh"
  },
  {
@@ -679,7 +673,6 @@
   ],
   "scene": "routes/scenes/pittsburgh-eastend.json",
   "eleSmoothM": 10,
-  "stage": "draft",
   "area": "pittsburgh"
  },
  {
@@ -694,7 +687,20 @@
   ],
   "scene": "routes/scenes/pittsburgh-slopes.json",
   "eleSmoothM": 10,
-  "stage": "draft",
+  "area": "pittsburgh"
+ },
+ {
+  "id": "pittsburgh-subway",
+  "name": "Pittsburgh \u00b7 The subway: North Side to Gateway",
+  "park": "Pittsburgh, Pennsylvania",
+  "file": "routes/cities/pittsburgh-subway.gpx",
+  "outAndBack": false,
+  "expectedKm": [
+   3,
+   4
+  ],
+  "scene": "routes/scenes/pittsburgh-subway.json",
+  "eleSmoothM": 10,
   "area": "pittsburgh"
  },
  {

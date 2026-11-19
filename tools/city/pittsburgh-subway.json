@@ -1,0 +1,324 @@
+{
+ "id": "pittsburgh-subway",
+ "name": "Pittsburgh · The subway: North Side to Gateway",
+ "park": "Pittsburgh, Pennsylvania",
+ "gridM": 24,
+ "landM": 12,
+ "lattice": "pittsburgh",
+ "waterRelations": [
+  1080,
+  2097217,
+  7937544
+ ],
+ "waterLevelM": 216.6,
+ "buildingRadiusM": 1100,
+ "tallBuildingM": 40,
+ "streetRadiusM": 900,
+ "bridgeStyles": {
+  "Roberto Clemente Bridge": "sister",
+  "Andy Warhol Bridge": "sister",
+  "Rachel Carson Bridge": "sister",
+  "Fort Duquesne Bridge": "arch-gold",
+  "Fort Pitt Bridge": "fortpitt",
+  "West End Bridge": "arch-gold",
+  "Smithfield Street Bridge": "lenticular",
+  "Liberty Bridge": "truss",
+  "South 10th Street Bridge": "suspension",
+  "Hot Metal Bridge": "truss-dark",
+  "Birmingham Bridge": "arch",
+  "David McCullough Bridge": "arch",
+  "Veterans Bridge": "girder",
+  "Washington Crossing Bridge;40th Street Bridge": "arch"
+ },
+ "stadiums": {
+  "PNC Park": {
+   "seats": "#2a5596",
+   "open": "river",
+   "heightM": 28
+  },
+  "Acrisure Stadium": {
+   "seats": "#e7b416",
+   "open": "river",
+   "heightM": 40
+  }
+ },
+ "specialBuildings": {
+  "One PPG Place": 6,
+  "Two PPG Place": 6,
+  "Three PPG Place": 6,
+  "Four PPG Place": 6,
+  "Five PPG Place": 6,
+  "Six PPG Place": 6,
+  "PPG Place Wintergarden": 6,
+  "U.S. Steel Tower": 9,
+  "Gulf Tower": 10,
+  "Grant Building": 11,
+  "Union Trust Building": 11,
+  "Koppers Tower": 11,
+  "BNY Mellon Center": 5,
+  "Fifth Avenue Place": 5,
+  "Tower at PNC Plaza": 5,
+  "EQT Plaza": 5,
+  "USS Requin": 12
+ },
+ "cornerPasses": 3,
+ "cornerHalfWindow": 8,
+ "maxDriftM": 16,
+ "open": true,
+ "osmCache": "pittsburgh",
+ "osmTile": [
+  0.01,
+  0.008
+ ],
+ "gpx": "routes/cities/pittsburgh-subway.gpx",
+ "data": "routes/scenes/pittsburgh-subway-city.json",
+ "osmBbox": [
+  -80.045,
+  40.422,
+  -79.975,
+  40.47
+ ],
+ "gridBbox": [
+  -80.03,
+  40.425,
+  -79.975,
+  40.465
+ ],
+ "syntheticWays": [
+  {
+   "name": "North Side–Gateway subway path",
+   "gpx": "tools/city/pittsburgh-subway.line.gpx",
+   "fromM": 150,
+   "toM": 1030,
+   "why": "the cycle path beside the T through the tunnel under the Allegheny (not in the map): routed along for the city data, its points copied from the line"
+  }
+ ],
+ "legs": [
+  {
+   "mode": "trail",
+   "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 21020,
+    "toM": 21290
+   },
+   "waypoints": [
+    [
+     "North Shore Water Steps (apron)",
+     40.445531,
+     -80.008168
+    ],
+    [
+     "Mazeroski Way",
+     40.447174,
+     -80.007496,
+     "Mazeroski Way"
+    ],
+    [
+     "Mazeroski Way & W General Robinson St (junction)",
+     40.447677,
+     -80.007652
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 21290,
+    "toM": 21690
+   },
+   "waypoints": [
+    [
+     "Mazeroski Way & W General Robinson St (junction)",
+     40.447677,
+     -80.007652
+    ],
+    [
+     "W General Robinson St (apron end)",
+     40.44799,
+     -80.005889,
+     "West General Robinson Street"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 21690,
+    "toM": 21290
+   },
+   "waypoints": [
+    [
+     "W General Robinson St (apron end) (back)",
+     40.44799,
+     -80.005889,
+     "West General Robinson Street"
+    ],
+    [
+     "Mazeroski Way & W General Robinson St (junction) (back)",
+     40.447677,
+     -80.007652
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "samplesOf": {
+    "gpx": "tools/city/pittsburgh-subway.line.gpx",
+    "fromM": 0,
+    "toM": 1070
+   },
+   "waypoints": [
+    [
+     "Mazeroski Way & W General Robinson St (junction)",
+     40.447677,
+     -80.007652
+    ],
+    [
+     "Mazeroski Way north",
+     40.448183,
+     -80.007816,
+     "Mazeroski Way"
+    ],
+    [
+     "Reedsdale St",
+     40.448214,
+     -80.008274,
+     "Reedsdale Street"
+    ],
+    [
+     "Under the Allegheny",
+     40.4448,
+     -80.006,
+     "North Side–Gateway subway path"
+    ],
+    [
+     "Stanwix St & Forbes Ave (junction)",
+     40.441108,
+     -80.004009
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 2660,
+    "toM": 3060
+   },
+   "waypoints": [
+    [
+     "Stanwix St & Forbes Ave (junction)",
+     40.441108,
+     -80.004009
+    ],
+    [
+     "Forbes Ave (apron end)",
+     40.439673,
+     -79.999754,
+     "Forbes Avenue"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 3060,
+    "toM": 2660
+   },
+   "waypoints": [
+    [
+     "Forbes Ave (apron end) (back)",
+     40.439673,
+     -79.999754,
+     "Forbes Avenue"
+    ],
+    [
+     "Stanwix St & Forbes Ave (junction) (back)",
+     40.441108,
+     -80.004009
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 2660,
+    "toM": 2260
+   },
+   "waypoints": [
+    [
+     "Stanwix St & Forbes Ave (junction)",
+     40.441108,
+     -80.004009
+    ],
+    [
+     "Stanwix St south (apron end)",
+     40.438392,
+     -80.004118
+    ]
+   ]
+  }
+ ],
+ "underground": {
+  "gpx": "tools/city/pittsburgh-subway.line.gpx",
+  "lengthM": 1070,
+  "underground": [
+   169,
+   1013
+  ],
+  "conveyors": [
+   {
+    "fromM": 169,
+    "toM": 217,
+    "mps": 3.0,
+    "label": "Escalator",
+    "dir": "down",
+    "name": "North Side"
+   },
+   {
+    "fromM": 965,
+    "toM": 1013,
+    "mps": 3.0,
+    "label": "Escalator",
+    "dir": "up",
+    "name": "Gateway"
+   }
+  ],
+  "platforms": [
+   {
+    "name": "North Side",
+    "fromM": 217,
+    "toM": 277
+   },
+   {
+    "name": "Gateway",
+    "fromM": 905,
+    "toM": 965
+   }
+  ],
+  "river": [
+   470,
+   740
+  ]
+ },
+ "dropBuildings": [
+  {
+   "way": 380036601,
+   "why": "Gateway Station: the subway kit draws its headhouse over the escalator"
+  },
+  {
+   "way": 450174434,
+   "why": "North Side Station: the station is drawn by the subway kit (its entrance on Red Lot 5A)"
+  }
+ ]
+}
