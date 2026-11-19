@@ -191,6 +191,7 @@ export function isPointToPoint(route) {
 
 /** The leg a ride from `startM` is on: [0, turn] riding forward, [turn, total] riding the way back. */
 export function legSpan(route, startM) {
+  if (route.lapM) return [0, route.lapM];   // a network route (js/network.js): its first lap
   const turn = route.turnS || route.total;
   const s = ((startM % route.total) + route.total) % route.total;
   return s < turn ? [0, turn] : [turn, route.total];
@@ -198,7 +199,51 @@ export function legSpan(route, startM) {
 
 /** Metres from a start point to the finish: the far end riding forward, back at A riding the way back. */
 export function finishDistanceM(route, startM) {
+  if (route.netOpen) return Math.max(0, route.lapM - startM);   // your own one-way network route: its end
   const turn = route.turnS || route.total;
   const s = ((startM % route.total) + route.total) % route.total;
   return (s < turn ? turn : route.total) - s;
+}
+
+// ---------- Assisted conveyors (escalators, and later ferries or inclines) ----------
+// A route may carry `carry`: [{from, to, mps, label}] in route metres (a network path route builds them from its
+// edges' `conveyors`). On such a stretch the rider is carried at `mps` whatever the pedals do: the session holds
+// that speed, the trainer is set to (near) no resistance, the HUD shows the label instead of the grade.
+export const CARRY_EASE_MPS2 = 1.5;   // how fast the speed eases onto (and the approach slows to) a conveyor's pace
+
+/** The conveyor zone at route metre s (wrapped on loops), or null. */
+export function carryAt(route, s) {
+  const zones = route?.carry;
+  if (!zones?.length) return null;
+  const x = wrapDist(route, s);
+  for (const z of zones) if (x >= z.from && x < z.to) return z;
+  return null;
+}
+
+/** The next conveyor zone starting within `reach` m ahead of s: {zone, dist}, or null. */
+export function carryAhead(route, s, reach = 80) {
+  const zones = route?.carry;
+  if (!zones?.length) return null;
+  const x = wrapDist(route, s);
+  let best = null;
+  for (const z of zones) {
+    const d = z.from - x;
+    if (d > 0 && d <= reach && (!best || d < best.dist)) best = { zone: z, dist: d };
+  }
+  return best;
+}
+
+/**
+ * Speed (m/s) for one step near conveyors: on one, eased to its pace (up or down); approaching one, no faster than
+ * a gentle slow-down (CARRY_EASE_MPS2) onto its pace allows. Otherwise `v` unchanged.
+ */
+export function carrySpeed(route, s, v, dt) {
+  const z = carryAt(route, s);
+  if (z) {
+    const step = CARRY_EASE_MPS2 * dt;
+    return v > z.mps ? Math.max(z.mps, v - step) : Math.min(z.mps, v + step);
+  }
+  const a = carryAhead(route, s);
+  if (a) { const cap = Math.sqrt(a.zone.mps ** 2 + 2 * CARRY_EASE_MPS2 * a.dist); if (v > cap) return cap; }
+  return v;
 }

@@ -36,6 +36,8 @@ export const DEFAULTS = {
 };
 
 import { denseRoad } from '../../road-align.js';
+import { ghostAt } from '../../ghost.js';
+import { drain, each, due } from '../core/jobs.js';   // [F30] junction planning runs as a job (in frame slices on the ride)
 
 const ROAD_LIFT = .12;   // (pose.js) the route's road surface above its line
 const CURB_R = (cls) => (cls <= 1 ? 9 : cls <= 3 ? 6 : cls <= 6 ? 4.5 : 3);
@@ -103,13 +105,40 @@ export function routeLine(route, index) {
   const project = (x, z, s, win = 40) => {
     let best = null;
     for (let j = Math.max(0, seg(s - win)); j < n && D[j] <= s + win; j++) {
+      if (ghostAt(route, (D[j] + D[j + 1]) / 2)) continue;   // (a network tour's repeat isn't the road: js/world/ghost.js)
       const ax = I.xs[j], az = I.zs[j], dx = I.xs[j + 1] - ax, dz = I.zs[j + 1] - az, l2 = dx * dx + dz * dz || 1;
       const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), d = Math.hypot(ax + dx * t - x, az + dz * t - z);
       if (!best || d < best.d) best = { d, y: R.ele[j] + (R.ele[j + 1] - R.ele[j]) * t, s: D[j] + (D[j + 1] - D[j]) * t, j };
     }
     return best;
   };
-  const line = { route: R, index: I, n, at, project, length: D[n] };
+  // every other pass of the drawn road within r of (x, z) (segments more than `win` m from `s` along it): the lowest
+  // line height of their cross-sections through (x, z) (null if none). Ghost repeats
+  // aren't drawn (world.js), so they don't count. A 20 m grid of the drawn segments, built on first use.
+  let grid = null;
+  const G = 20, key = (x, z) => `${Math.floor(x / G)},${Math.floor(z / G)}`;
+  const lowestNear = (x, z, r, s = -Infinity, win = 0) => {
+    if (!grid) {
+      grid = new Map();
+      for (let j = 0; j < n; j++) {
+        if (ghostAt(route, (D[j] + D[j + 1]) / 2)) continue;
+        const k = key((I.xs[j] + I.xs[j + 1]) / 2, (I.zs[j] + I.zs[j + 1]) / 2);
+        if (!grid.has(k)) grid.set(k, []); grid.get(k).push(j);
+      }
+    }
+    let low = null;
+    const cx = Math.floor(x / G), cz = Math.floor(z / G);
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const j of grid.get(`${cx + a},${cz + b}`) || []) {
+      if (D[j + 1] > s - win && D[j] < s + win) continue;
+      const ax = I.xs[j], az = I.zs[j], dx = I.xs[j + 1] - ax, dz = I.zs[j + 1] - az, l2 = dx * dx + dz * dz || 1;
+      const t = ((x - ax) * dx + (z - az) * dz) / l2;
+      if (t < -1e-6 || t > 1 + 1e-6 || Math.hypot(ax + dx * t - x, az + dz * t - z) > r) continue;   // (square across: the road's cross-section through (x, z), not a point further up or down its grade)
+      const y = R.ele[j] + (R.ele[j + 1] - R.ele[j]) * t;
+      if (low == null || y < low) low = y;
+    }
+    return low;
+  };
+  const line = { route: R, index: I, n, at, project, lowestNear, length: D[n] };
   Object.defineProperty(route, '_line', { value: { index, line }, enumerable: false, configurable: true, writable: true });
   return line;
 }
@@ -119,7 +148,9 @@ export function routeLine(route, index) {
  * roadWidth }. Mutates street heights inside (and just outside) junctions; returns the plan:
  * { list: [junction], cuts: Map k → [[a0, a1]…] (arc-length ranges not drawn), spans: [[s0, s1]] on the route }.
  */
-export function planJunctions(streets, ctx, options = {}) {
+export function planJunctions(...args) { return drain(planJunctionsJob(...args)); }
+/** planJunctions as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
+export function* planJunctionsJob(streets, ctx, options = {}) {
   const O = { ...DEFAULTS, ...(options === true ? {} : options) };
   const { route, index, end, routeDist } = ctx, RW = ctx.roadWidth || 7;
   const RL = routeLine(route, index);   // [road meets] the road as drawn (its curve), not the 10 m chords
@@ -129,7 +160,7 @@ export function planJunctions(streets, ctx, options = {}) {
   // 0. [road meets] a street crossing the route's road at its level with no OSM node near the crossing (a trail
   // across a street, a street across a riverfront path) gets one there, so the crossing becomes a junction
   const virtual = new Set();
-  streets.forEach((st) => {
+  yield* each(streets, (st) => {
     if (!eligible(st)) return;
     const P = st.pts;
     for (let i = 1; i < P.length - 1; i++) {
@@ -153,7 +184,7 @@ export function planJunctions(streets, ctx, options = {}) {
 
   // 1. nodes and their streets
   const nodes = new Map(), keys = new Map(), byIdx = new Map();
-  streets.forEach((st, k) => {
+  yield* each(streets, (st, k) => {
     if (!eligible(st)) return;
     const last = st.nodes.length - 1, ks = st.nodes.map((p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`), bi = new Map();
     keys.set(k, ks); byIdx.set(k, bi);
@@ -166,6 +197,7 @@ export function planJunctions(streets, ctx, options = {}) {
   const routeY = (i, x, z) => RL.project(x, z, route.dist[Math.min(end, i)], 35);   // the drawn line's height and distance
   const items = [];
   for (const nd of nodes.values()) {
+    if (due()) yield;
     const deg = nd.inc.reduce((a, o) => a + (o.end ? 1 : 2), 0);
     const ys = nd.inc.map((o) => streets[o.k].pts[o.i].y), w = Math.max(...nd.inc.map((o) => streets[o.k].width));
     if (Math.max(...ys) - Math.min(...ys) > O.levelM) continue;   // a crossing at different heights
@@ -199,9 +231,9 @@ export function planJunctions(streets, ctx, options = {}) {
   const parent = items.map((_, i) => i), members = items.map((_, i) => [i]);
   const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
   const grid = new Map(), G = 20;
-  items.forEach((it, i) => { const key = `${Math.floor(it.x / G)},${Math.floor(it.z / G)}`; if (!grid.has(key)) grid.set(key, []); grid.get(key).push(i); });
+  yield* each(items, (it, i) => { const key = `${Math.floor(it.x / G)},${Math.floor(it.z / G)}`; if (!grid.has(key)) grid.set(key, []); grid.get(key).push(i); });
   const pairs = [];
-  items.forEach((a, i) => {
+  yield* each(items, (a, i) => {
     for (let gx = Math.floor(a.x / G) - 1; gx <= Math.floor(a.x / G) + 1; gx++) for (let gz = Math.floor(a.z / G) - 1; gz <= Math.floor(a.z / G) + 1; gz++) {
       for (const j of grid.get(`${gx},${gz}`) || []) {
         if (j <= i) continue;
@@ -214,6 +246,7 @@ export function planJunctions(streets, ctx, options = {}) {
   });
   pairs.sort((a, b) => a[0] - b[0]);
   for (const [, i, j] of pairs) {
+    if (due()) yield;
     const a = find(i), b = find(j);
     if (a === b) continue;
     const all = [...members[a], ...members[b]];
@@ -234,14 +267,25 @@ export function planJunctions(streets, ctx, options = {}) {
   const addCut = (k, a0, a1, d0 = null, d1 = null) => { if (a1 - a0 < .01) return; if (!cuts.has(k)) cuts.set(k, []); cuts.get(k).push([a0, a1, d0, d1]); };
   const heightJobs = [];
 
-  clusters.forEach((cl, c) => {
+  yield* each(clusters, (cl, c) => {
     const isRoute = cl.some((it) => it.route);
     let C, rq = null;
     if (isRoute) {
-      const rs = cl.filter((it) => it.route), s = rs.reduce((a, it) => a + it.s, 0) / rs.length;
+      // (the route items' mean place along the line — but a cluster can hold two passes of the line, a portal the line
+      // leaves along an apron and comes back to after a ghost: their mean is neither, often on the ghost between them,
+      // where no road is drawn. Take the pass with the most items then, the first on a tie)
+      let rs = cl.filter((it) => it.route).sort((a, b) => a.s - b.s), others = [];
+      if (rs[rs.length - 1].s - rs[0].s > 60) {
+        const groups = [[rs[0]]];
+        for (let i = 1; i < rs.length; i++) { if (rs[i].s - rs[i - 1].s > 60) groups.push([]); groups[groups.length - 1].push(rs[i]); }
+        rs = groups.reduce((a, g) => (g.length > a.length ? g : a));
+        // (the other passes still lead into it: their arms below)
+        others = groups.filter((g) => g !== rs).map((g) => g.reduce((a, it) => a + it.s, 0) / g.length);
+      }
+      const s = rs.reduce((a, it) => a + it.s, 0) / rs.length;
       const c0 = RL.at(s);
       C = { x: c0.x, z: c0.z };
-      rq = { s };
+      rq = { s, others };
     } else C = { x: cl.reduce((a, it) => a + it.x, 0) / cl.length, z: cl.reduce((a, it) => a + it.z, 0) / cl.length };
 
     // 3. arms
@@ -278,9 +322,10 @@ export function planJunctions(streets, ctx, options = {}) {
     }
     if (isRoute) {
       const at = RL.at;
-      for (const dir of [-1, 1]) {
-        const s1 = rq.s + dir * 12;
+      for (const s0 of [rq.s, ...(rq.others || [])]) for (const dir of [-1, 1]) {
+        const s1 = s0 + dir * 12;
         if (s1 < 0 || s1 > route.dist[end]) continue;
+        if (ghostAt(route, s0 + dir * 6)) continue;   // [F15] no road is drawn along a ghost repeat: no arm into it
         const p = at(s1);
         arms.push({ k: -1, route: true, dir, N: C, u: norm(sub(p, C)), h: RW / 2, cls: 3, oneway: 0, avail: 60, theta: Math.atan2(p.z - C.z, p.x - C.x) });
       }
@@ -335,12 +380,16 @@ export function planJunctions(streets, ctx, options = {}) {
     // 5. the surface's height (line height; drawn at +lift)
     let J;
     if (isRoute) {
-      // [finish] (and never above the road as landscape.routeDist() sees it: the two lines can differ by millimetres
-      // where the profile bends hard, e.g. on ramps)
-      const rd = routeDist;
+      // (and never above another pass of the road there — the one landscape.routeDist() finds — [F15] as drawn, on
+      // its curve: its 10 m chords can lie 5–10 cm lower at the road's edge on a bend or a grade change, and clamping
+      // to them left the surface's mouth on the route's arms that far under the road's edge: a lip. The course QC
+      // checks against the curve too.)
+      // (and under every other pass of the drawn road within its half-width + 1 m, not just the one routeDist() finds: a street the
+      // route rides twice, both ways, draws two roads over each other — 45.09 / 46.26 km; a pass more than 3 m below is
+      // one the junction's deck crosses over)
       J = (x, z) => {
-        const y = RL.project(x, z, rq.s, 45).y + ROAD_LIFT - O.routeGap - O.lift, r = rd && rd(x, z);
-        return r && r.d < RW / 2 + 1 && Number.isFinite(r.y) ? Math.min(y, r.y + ROAD_LIFT - O.routeGap - O.lift) : y;
+        const q = RL.project(x, z, rq.s, 45), y = q.y, low = RL.lowestNear(x, z, RW / 2 + 1, q.s, 60);
+        return (low != null && low < y && y - low < 3 ? low : y) + ROAD_LIFT - O.routeGap - O.lift;
       };
     } else {
       const P = ring.map((a) => { const sp = streetPoint(streets[a.k], a.a0 + a.dir * a.t); return { x: sp.x - C.x, z: sp.z - C.z, y: sp.y }; });
@@ -416,6 +465,7 @@ export function planJunctions(streets, ctx, options = {}) {
   // 7. heights: inside a junction the surface's; past its mouth easing back to the street's own profile
   const own = streets.map((st) => (st.nodes ? st.pts.map((p) => p.y) : null));
   for (const job of heightJobs) {
+    if (due()) yield;
     const st = streets[job.k], acc = arcs(st), base = own[job.k];
     if (job.inside) {
       const jn = list[clusterToJn.get(job.c)];
@@ -450,12 +500,13 @@ export function planJunctions(streets, ctx, options = {}) {
     if (r && r.d < RW / 2 + reach && y > r.y - 4) lim = Math.min(lim, r.y);
     return lim === Infinity ? y : Math.min(y, lim + ROAD_LIFT - O.routeGap - lift);
   };
-  streets.forEach((st, k) => {
+  yield* each(streets, (st, k) => {
     if (!st.nodes || st.bridge) return;
     // ([road meets] each ribbon's own lift when the caller knows it: ctx.liftOf, as city.js draws it)
     for (const p of st.pts) if (p.je != null) p.y = below(p.x, p.z, p.y, drawnLiftMax(p, { options: O }, ctx.liftOf ? ctx.liftOf(k) : .24), st.width / 2 + 1);
   });
   for (const jn of list) {
+    if (due()) yield;
     if (jn.route || !index.nearest(jn.x, jn.z, O.maxTrimM + O.maxSpanM + RW)) continue;   // (far from the route: nothing to do)
     const J0 = jn.J;
     jn.J = (x, z) => below(x, z, J0(x, z), O.lift, 1);
@@ -464,6 +515,7 @@ export function planJunctions(streets, ctx, options = {}) {
   // flicker: the later one sits 12 mm higher (still under the route's road)
   const plan = { list, cuts, spans, options: O };
   for (const jn of list) {
+    if (due()) yield;
     for (const { jn: o } of junctionsNear(plan, jn.x, jn.z, 40)) {
       if (o.id >= jn.id || o.lift !== jn.lift) continue;
       const hit = jn.poly.find((p) => inside(o.poly, p.x, p.z)) || o.poly.find((p) => inside(jn.poly, p.x, p.z));
@@ -473,18 +525,59 @@ export function planJunctions(streets, ctx, options = {}) {
   }
   // 10. [road meets] the surface as drawn: each street's mouth at the height its ribbon arrives at (ribbons are level
   // across, the junction's plane need not be), the rest on the plane; jn.top(x, z) is that surface's height
-  const onRoad = (x, z) => { const r = routeDist(x, z); return !!r && r.d < RW / 2 + .8; };
-  for (const jn of list) surfaceTops(jn, streets, O, onRoad);
+  const onRoad = roadCap(routeDist, RW, O, RL, route, end);
+  Object.defineProperty(plan, 'roadCap', { value: onRoad, enumerable: false });
+  for (const jn of list) { surfaceTops(jn, streets, O, onRoad); if (due()) yield; }
   // 11. [road meets] two streets meeting end to end outside any junction (a street carrying on as another, a street
   // onto a bridge deck): both ribbons end square to the bend's bisector, so no notch opens on its outside
-  mitreLinks(streets);
+  yield* mitreLinksJob(streets);
   return plan;
 }
 
 /** Recompute every junction's drawn surface heights after later passes moved street heights (cityStreets). */
-export function junctionTops(plan, streets, routeDist, roadWidth = 7) {
-  const onRoad = (x, z) => { const r = routeDist(x, z); return !!r && r.d < roadWidth / 2 + .8; };
-  for (const jn of plan.list) surfaceTops(jn, streets, plan.options, onRoad);
+export function junctionTops(...args) { return drain(junctionTopsJob(...args)); }
+/** junctionTops as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
+export function* junctionTopsJob(plan, streets, routeDist, roadWidth = 7) {
+  const onRoad = plan.roadCap || roadCap(routeDist, roadWidth, plan.options);
+  yield* sinkMouthsUnderRoad(plan, streets, onRoad);
+  for (const jn of plan.list) { surfaceTops(jn, streets, plan.options, onRoad); if (due()) yield; }
+}
+
+/** (x, z) on the route's road (within its half-width + 0.8 m): the highest a junction's surface may be drawn there
+ * (routeGap under the road's surface, as drawn: its curve when given), else null. */
+const roadCap = (routeDist, RW, O, RL = null, route = null, end = 0) => (x, z) => {
+  const r = routeDist(x, z);
+  if (!r || !(r.d < RW / 2 + .8) || !Number.isFinite(r.y)) return null;
+  const q = RL && RL.project(x, z, route.dist[Math.min(end, r.i)], 25), y = q && q.d < RW / 2 + 1.5 ? q.y : r.y;
+  return y + ROAD_LIFT - O.routeGap;
+};
+
+/**
+ * [F15] A street arm whose mouth reaches onto the route's road (a street meeting it at a slant, or on a cross-fall):
+ * its ribbon is level across, so where the road falls away under one corner the ribbon's end stood above the road's
+ * edge with a lip down to the junction surface (which stays under the road). Lower the street's end until every
+ * corner on the road is under it, easing back to its own profile beyond the mouth.
+ */
+const SINK_MAX = .6;   // m
+function* sinkMouthsUnderRoad(plan, streets, onRoad) {
+  const O = plan.options;
+  for (const jn of plan.list) for (const A of jn.arms) {
+    if (due()) yield;
+    if (A.route || A.cutS == null) continue;
+    const st = streets[A.k];
+    if (!st?.pts) continue;
+    const top = streetPoint(st, A.cutS).y + O.lift;
+    let drop = 0;
+    for (const m of A.mouth) { const cap = onRoad(m.x, m.z); if (cap != null) drop = Math.max(drop, top - cap); }
+    if (!(drop > .005) || drop > SINK_MAX) continue;   // (more than that is a street at another level, not a lip)
+    const acc = arcs(st), ease = Math.min(Math.max(6, drop / .04), Math.max(2, (A.avail - A.t) * .6));
+    for (let i = 0; i < st.pts.length; i++) {
+      const d = (acc[i] - A.cutS) * A.dir;   // metres beyond the mouth (negative: inside the junction)
+      if (d > ease) continue;
+      if (d < -(A.t + 1e-6)) continue;
+      st.pts[i].y -= drop * (d <= 0 ? 1 : 1 - smooth(d / ease));
+    }
+  }
 }
 
 /** Vertex heights of a junction's surface (`poly[i].y`, `cy` at the centre) and `jn.top(x, z)`. */
@@ -492,8 +585,11 @@ function surfaceTops(jn, streets, O, onRoad) {
   const mouthTop = new Map();
   for (const A of jn.arms) if (!A.route) {
     const y = streetPoint(streets[A.k], A.cutS).y + O.lift;
-    // (on the route's road, never above the surface's own height there: that is under the road)
-    for (const m of A.mouth) mouthTop.set(m, onRoad(m.x, m.z) ? Math.min(y, jn.J(m.x, m.z) + jn.lift) : y);
+    // (on the route's road, never above it: routeGap under its surface. [F15] Not pulled down to the junction's own
+    // plane there — a street-only junction's plane can lie 0.3 m under the road at its edge, and the mouth corner
+    // then met the street's ribbon end with a lip)
+    // (a street end more than SINK_MAX over the road there is at another level — a ramp passing by above — not capped)
+    for (const m of A.mouth) { const cap = onRoad(m.x, m.z); mouthTop.set(m, cap != null && y - cap <= SINK_MAX ? Math.min(y, cap) : y); }
   }
   for (const v of jn.poly) v.y = mouthTop.has(v) ? mouthTop.get(v) : jn.J(v.x, v.z) + jn.lift;
   jn.cy = jn.J(jn.x, jn.z) + jn.lift;
@@ -512,9 +608,11 @@ function surfaceTops(jn, streets, O, onRoad) {
 }
 
 /** Mitre the ends of streets that meet end to end (exactly two street ends at a node, no third street through it). */
-export function mitreLinks(streets) {
+export function mitreLinks(...args) { return drain(mitreLinksJob(...args)); }
+/** mitreLinks as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
+export function* mitreLinksJob(streets) {
   const at = new Map();
-  streets.forEach((st, k) => {
+  yield* each(streets, (st, k) => {
     if (!st.pts || st.pts.length < 2 || st.cls > 7) return;
     st.pts.forEach((p, i) => {
       const key = `${p.x.toFixed(2)},${p.z.toFixed(2)}`, endI = i === 0 ? 0 : i === st.pts.length - 1 ? 1 : -1;
@@ -524,8 +622,9 @@ export function mitreLinks(streets) {
     });
   });
   // (a node first seen as a street's inner point is added only once one end reaches it: re-check inner points)
-  streets.forEach((st, k) => { if (!st.pts || st.cls > 7) return; for (let i = 1; i < st.pts.length - 1; i++) { const key = `${st.pts[i].x.toFixed(2)},${st.pts[i].z.toFixed(2)}`, l = at.get(key); if (l && !l.some((o) => o.k === k && o.i === i)) l.push({ k, i, end: false }); } });
+  yield* each(streets, (st, k) => { if (!st.pts || st.cls > 7) return; for (let i = 1; i < st.pts.length - 1; i++) { const key = `${st.pts[i].x.toFixed(2)},${st.pts[i].z.toFixed(2)}`, l = at.get(key); if (l && !l.some((o) => o.k === k && o.i === i)) l.push({ k, i, end: false }); } });
   for (const l of at.values()) {
+    if (due()) yield;
     if (l.length !== 2 || !l.every((o) => o.end) || l[0].k === l[1].k) continue;
     const out = l.map((o) => { const st = streets[o.k], p = st.pts[o.i], q = st.pts[o.i === 0 ? 1 : o.i - 1]; return norm(sub(q, p)); });
     if (dot(out[0], out[1]) > -.5) continue;   // a sharp bend (> 60°): left square
@@ -547,7 +646,9 @@ export function mitreLinks(streets) {
  * where the block is too short. ctx: { route, index, routeDist, roadWidth, liftOf(k), routeKindAt(s) }.
  * → { quads: [{ jn, kind, pts: [4 × {x, y, z}] }], bad: [{ jn, kind, why }] (left out, by rule) }
  */
-export function junctionPaint(plan, streets, ctx) {
+export function junctionPaint(...args) { return drain(junctionPaintJob(...args)); }
+/** junctionPaint as a job ([F30]). */
+export function* junctionPaintJob(plan, streets, ctx) {
   if (plan._paint) return plan._paint;
   const O = plan.options, JL = O.lift, RW = ctx.roadWidth || 7, RL = routeLine(ctx.route, ctx.index);
   const quads = [], bad = [];
@@ -559,6 +660,7 @@ export function junctionPaint(plan, streets, ctx) {
     return q.d < RW / 2 + .5 && Math.abs(q.y + ROAD_LIFT - p.y) < 4;
   };
   for (const jn of plan.list) {
+    if (due()) yield;
     const busy = jn.arms.length >= 3;
     for (const A of jn.arms) {
       if (A.route || !busy || !CROSSWALK(A.cls)) continue;
@@ -575,13 +677,18 @@ export function junctionPaint(plan, streets, ctx) {
       for (let dd = d0; dd <= d1 + 1.6 + 1e-6; dd += Math.max(.5, (d1 + 1.6 - d0) / 4)) for (let sd = -A.h; sd <= A.h + 1e-6; sd += Math.max(.5, A.h / 4)) probe.push(at(dd, sd));
       if (probe.some((p) => onRoad(p))) { bad.push({ jn: jn.id, kind: 'crosswalk', why: 'would lie on the route’s road' }); continue; }
       if (box.some((p) => inJunction(jn, p, 1.5))) { bad.push({ jn: jn.id, kind: 'crosswalk', why: 'would lie in another junction' }); continue; }
-      const bars = Math.max(2, Math.floor((2 * h) / 1.1));
+      const bars = Math.max(2, Math.floor((2 * h) / 1.1)), mine = [];
       for (let q = 0; q < bars; q++) {
         const s0 = -h + (2 * h) * (q + .25) / bars, s1 = -h + (2 * h) * (q + .75) / bars;
-        quads.push({ jn: jn.id, kind: 'crosswalk', pts: [at(d0, s0), at(d0, s1), at(d1, s1), at(d1, s0)] });
+        mine.push({ jn: jn.id, kind: 'crosswalk', pts: [at(d0, s0), at(d0, s1), at(d1, s1), at(d1, s0)] });
       }
       const inbound = A.oneway === 0 ? [-A.h + .3, -.15] : A.oneway * A.dir < 0 ? [-A.h + .3, A.h - .3] : null;
-      if (inbound) { const ds = d1 + 1.1; quads.push({ jn: jn.id, kind: 'stop', pts: [at(ds, inbound[0]), at(ds, inbound[1]), at(ds + .45, inbound[1]), at(ds + .45, inbound[0])] }); }
+      if (inbound) { const ds = d1 + 1.1; mine.push({ jn: jn.id, kind: 'stop', pts: [at(ds, inbound[0]), at(ds, inbound[1]), at(ds + .45, inbound[1]), at(ds + .45, inbound[0])] }); }
+      // [F15] nor inside its own junction: a neighbouring arm's corner can sweep round over this arm past its mouth
+      // (a wide junction with arms at a slant); the street's paint would lie on the junction's plain surface
+      const ownInside = (p) => junctionsNear(plan, p.x, p.z, 0).some((o) => o.jn === jn && o.d < 0);
+      if (mine.some((m) => ownInside({ x: (m.pts[0].x + m.pts[2].x) / 2, z: (m.pts[0].z + m.pts[2].z) / 2 }))) { bad.push({ jn: jn.id, kind: 'crosswalk', why: 'would lie inside its own junction' }); continue; }
+      quads.push(...mine);
     }
   }
   // the route's own crosswalks, across its road just outside each mouth of a junction it passes through

@@ -2,16 +2,19 @@
 // at night, streets with sidewalks, street lamps and trees, the bridges and landmarks
 // (js/world/toolbox/city/bridges.js) and everything that moves (js/world/toolbox/city/life.js).
 // Data: "bikefree-city-1" from tools/build_city.py; ground from js/world/toolbox/city/landscape.js.
+import { ghostAt } from '../../ghost.js';
 import * as THREE from '../../../../vendor/three.module.min.js';
-import { decodeCity, LAND, cityStreets, STREET_W } from './landscape.js';
+import { decodeCity, LAND, cityStreetsJob, STREET_W } from './landscape.js';
+import { drain, due, each, runSlice } from '../core/jobs.js';   // [F30] the city is built as a job (in frame slices on the ride)
 import { MeshBuilder, ribbon, resample, hash } from '../core/mesh-builder.js';
 import { buildRiverfront } from './riverfront.js';   // [s1-riverfront]
-import { buildBridges, buildStadiums, buildLandmarks } from './bridges.js';
+import { buildBridgesJob, buildStadiums, buildLandmarks } from './bridges.js';
 import { buildHeroes } from './heroes.js';
+import { buildGlasshousesJob } from '../structures/glasshouse.js';
 import { CityLife } from './life.js';
 import { StreetKit, streetKitConfig } from './street-kit.js';   // [street-kit]
 import { ROAD_WIDTH } from '../../pose.js';
-import { buildJunctionMeshes, drawnPieces } from './junction-mesh.js';   // [junctions]
+import { buildJunctionMeshesJob, drawnPieces } from './junction-mesh.js';   // [junctions]
 import { junctionsNear } from './junctions.js';   // [junctions]
 import { streetSlots } from './road-meets.js';   // [junctions]
 import { decorateTreeMaterial } from '../packs/northern-rockies.js';   // [finish] foliage shader on the street trees
@@ -172,7 +175,15 @@ const CITY_FACADE_GLSL = /* glsl */`
 `;
 
 export class CityScene {
-  constructor(parent, route, index, landscape, kit, uniforms, qualityKey = 'balanced') {
+  /** `deferred` ([F30]): don't build now — `this.job` builds it (the same steps), for the caller to run in frame slices. */
+  constructor(parent, route, index, landscape, kit, uniforms, qualityKey = 'balanced', deferred = false) {
+    const job = this._buildJob(parent, route, index, landscape, kit, uniforms, qualityKey);
+    if (deferred) { this.job = job; return; }
+    drain(job);
+  }
+
+  /** [F30] The build, as a job (js/world/toolbox/core/jobs.js): pauses between its steps (and inside the long ones). */
+  *_buildJob(parent, route, index, landscape, kit, uniforms, qualityKey) {
     this.group = new THREE.Group(); this.group.name = 'City'; parent.add(this.group);
     this.route = route; this.index = index; this.landscape = landscape; this.kit = kit;
     this.data = landscape.data; this.D = decodeCity(this.data, landscape.decoded.proj);
@@ -181,23 +192,33 @@ export class CityScene {
     this.qualityKey = qualityKey;
     this.disposables = new Set();
     this.chunks = new Map();          // key → {buildings, streets, ...} meshes
-    this._decodeStreets();
-    this._decodeBuildings();
+    this.streets = yield* cityStreetsJob(this.landscape, this.index, this.route);
+    yield* this._decodeBuildingsJob();
     this._materials();
+    if (due()) yield;
     this.riverfront = buildRiverfront(this);   // [s1-riverfront] promenade walls where the route runs along a river
-    this._water();
-    { const k = streetKitConfig(this.route.scene); if (k) this.streetKit = new StreetKit(this, k, { chunk: CHUNK }); }   // [street-kit] (before the lamps and trees: it places some of both)
-    { const bk = this.route.scene?.buildingKit; if (bk) this.buildingKit = new CityBuildingKit(this, bk); }   // [buildings] homes the kit draws (before the lamps and trees: they keep clear of its porches and eaves)
-    this._streetsAndLamps();
-    this.bridges = buildBridges(this);
+    if (due()) yield;
+    yield* this._waterJob();
+    { const k = streetKitConfig(this.route.scene); if (k) { const sk = new StreetKit(this, k, { chunk: CHUNK }, true); yield* sk.job; sk.job = null; this.streetKit = sk; } }   // [street-kit] (before the lamps and trees: it places some of both)
+    if (due()) yield;
+    { const bk = this.route.scene?.buildingKit; if (bk) { const k = new CityBuildingKit(this, bk, true); yield* k.job; k.job = null; this.buildingKit = k; } }   // [buildings] homes the kit draws (before the lamps and trees: they keep clear of its porches and eaves)
+    if (due()) yield;
+    yield* this._streetsAndLampsJob();
+    this.bridges = yield* buildBridgesJob(this);
+    if (due()) yield;
     this.stadiums = buildStadiums(this);
     { const plant = this.landscape.canPlant; if (plant) this.landscape.canPlant = (x, z) => plant(x, z) && !this.inStadium(x, z, 2)
       && (this.landscape.landAt(x, z) !== LAND.yards || !this.buildingNear(x, z, 3.5)); }   // no trees on the field; [s4-section] yard trees clear of houses
+    if (due()) yield;
     this.landmarks = buildLandmarks(this);
+    if (due()) yield;
     this.heroes = buildHeroes(this);
     this.landscape.landmarks.push(...this.heroes.landmarks);   // postcard views for the scenic camera
-    this._trees();
-    this.life = new CityLife(this);
+    if (due()) yield;
+    this.glasshouses = yield* buildGlasshousesJob(this);   // [glasshouse] conservatories ridden through (scene `glasshouses`)
+    if (due()) yield;
+    yield* this._treesJob();
+    { const life = new CityLife(this, true); yield* life.job; life.job = null; this.life = life; }
     this._pending = [...new Set([...this.buildingChunks.keys(), ...(this.streetKit?.keys() || [])])];   // [street-kit] (+ chunks with only kit content)
     // [w2-budget] each sector: the chunks still to build, and the built chunks' building meshes waiting to be merged
     this.sectors = new Map();
@@ -207,15 +228,14 @@ export class CityScene {
   own(x) { this.disposables.add(x); return x; }
 
   // ---------------------------------------------------------------- data
-  _decodeStreets() { this.streets = cityStreets(this.landscape, this.index, this.route); }
-
-  _decodeBuildings() {
+  *_decodeBuildingsJob() {
     const B = this.data.buildings, D = this.D;
     const u8 = (t) => Uint8Array.from(atob(t), (c) => c.charCodeAt(0)).buffer;
     const h = new Uint16Array(u8(B.h)), mh = new Uint16Array(u8(B.mh)), starts = new Uint32Array(u8(B.starts)), xy = new Int16Array(u8(B.xy));
     this.buildingChunks = new Map();
     this.buildings = [];
     for (let k = 0; k < B.count; k++) {
+      if ((k & 63) === 63 && due()) yield;
       const ring = D.points(xy, starts[k], starts[k + 1]);
       const b = { k, ring, h: h[k] / 10, mh: mh[k] / 10, kind: B.kind[k], name: B.names[k] || '' };
       this.buildings.push(b);
@@ -226,6 +246,7 @@ export class CityScene {
     // 40 m grid of footprints for "is something standing in (or right against) a building"
     this.buildingGrid = new Map();
     for (const b of this.buildings) {
+      if ((b.k & 63) === 63 && due()) yield;
       let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
       for (const p of b.ring) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); }
       b.bb = [x0, x1, z0, z1];
@@ -233,7 +254,7 @@ export class CityScene {
         const k = `${gx},${gz}`; if (!this.buildingGrid.has(k)) this.buildingGrid.set(k, []); this.buildingGrid.get(k).push(b);
       }
     }
-    this._hideDuplicates();
+    yield* this._hideDuplicatesJob();
   }
 
   /**
@@ -241,9 +262,10 @@ export class CityScene {
    * footprint lies more than 60% inside another standing on the same ground (25% when their roofs are level),
    * and that is no taller, isn't drawn.
    */
-  _hideDuplicates() {
+  *_hideDuplicatesJob() {
     const inside = (ring, x, z) => { let r = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], c = ring[j]; if ((a.z > z) !== (c.z > z) && x < ((c.x - a.x) * (z - a.z)) / (c.z - a.z) + a.x) r = !r; } return r; };
     for (const b of this.buildings) {
+      if ((b.k & 31) === 31 && due()) yield;
       const pts = [];
       for (let u = 1; u < 6; u++) for (let v = 1; v < 6; v++) {
         const x = b.bb[0] + (b.bb[1] - b.bb[0]) * u / 6, z = b.bb[2] + (b.bb[3] - b.bb[2]) * v / 6;
@@ -321,6 +343,7 @@ export class CityScene {
     // the road crossing straight through a footprint
     const e = this.route.turnIdx || this.route.dist.length - 1;
     for (let i = 0; i <= e; i += 1) {
+      if (ghostAt(this.route, this.route.dist[i])) continue;
       const x = this.index.xs[i], z = this.index.zs[i];
       if (x < b.bb[0] || x > b.bb[1] || z < b.bb[2] || z > b.bb[3]) continue;
       if (this.buildingNear(x, z, 0) === b) return true;
@@ -462,16 +485,17 @@ export class CityScene {
   }
 
   // ---------------------------------------------------------------- rivers
-  _water() {
+  *_waterJob() {
     const D = this.D, mask = new Float32Array(D.lx * D.ly);
     for (let i = 0; i < mask.length; i++) mask[i] = D.land[i] === LAND.water ? 1 : 0;
-    this.water = this._waterMesh(mask, D.lx, D.ly, D.x0, D.z0, D.x1, D.z1, 'Rivers', null, this._riverFields(mask, D.lx, D.ly));
-    this._riverWalls(mask);
+    const fields = yield* this._riverFieldsJob(mask, D.lx, D.ly);
+    this.water = yield* this._waterMeshJob(mask, D.lx, D.ly, D.x0, D.z0, D.x1, D.z1, 'Rivers', null, fields);
+    yield* this._riverWallsJob(mask);
     // the rivers beyond the city's box, from the real height grid's river mask (drawn only outside the box)
     const O = this.landscape.outer;
     if (O) {
       const om = Float32Array.from(O.mask.m);
-      this.outerWater = this._waterMesh(om, O.mask.nx, O.mask.ny, O.x0, O.z0, O.x1, O.z1, 'Rivers beyond', [D.x0, D.z0, D.x1, D.z1]);
+      this.outerWater = yield* this._waterMeshJob(om, O.mask.nx, O.mask.ny, O.x0, O.z0, O.x1, O.z1, 'Rivers beyond', [D.x0, D.z0, D.x1, D.z1]);
     }
   }
 
@@ -480,9 +504,10 @@ export class CityScene {
    * shoreline (marching squares on the water mask) wherever the landscape marks the shore as walled, from below
    * the waterline to the bank, with a dark wet band and a pale coping.
    */
-  _riverWalls(mask) {
+  *_riverWallsJob(mask) {
     const D = this.D, L = this.landscape, W = D.lx, H = D.ly, level = L.level, dx = (D.x1 - D.x0) / (W - 1), dz = (D.z1 - D.z0) / (H - 1);
     const walls = L.shoreWalls?.();
+    if (due()) yield;
     this.wallGrid = new Map();
     if (!walls) return;
     const B = new MeshBuilder(), X = (i) => D.x0 + i * dx, Z = (j) => D.z0 + j * dz;
@@ -504,6 +529,7 @@ export class CityScene {
     };
     let n = 0;
     for (let j = 0; j < H - 1; j++) for (let i = 0; i < W - 1; i++) {
+      if (i === W - 2 && due()) yield;
       const k = j * W + i, a = mask[k], b = mask[k + 1], c = mask[k + W + 1], d = mask[k + W];
       const code = (a > .5 ? 1 : 0) | (b > .5 ? 2 : 0) | (c > .5 ? 4 : 0) | (d > .5 ? 8 : 0);
       if (code === 0 || code === 15) continue;
@@ -535,7 +561,7 @@ export class CityScene {
       }
     }
     if (!n) return;
-    B.keepOutOf(L.inRouteTube);
+    yield* B.keepOutOfJob(L.inRouteTube);
     const m = new THREE.Mesh(this.own(B.geometry()), this.solidMaterial);
     m.name = 'River walls'; m.receiveShadow = true; this.group.add(m);
   }
@@ -547,7 +573,7 @@ export class CityScene {
    * along the water, so below the Point the Allegheny's green and the Mon's brown run side by side down the Ohio,
    * blending over the next few kilometres. Returns { tex: RG flow direction, B Allegheny-ness, A blend }.
    */
-  _riverFields(mask, W, H) {
+  *_riverFieldsJob(mask, W, H) {
     const F = this.route.scene?.riverFlow;
     if (!F) return null;
     const D = this.D, dx = (D.x1 - D.x0) / (W - 1), dz = (D.z1 - D.z0) / (H - 1);
@@ -560,7 +586,7 @@ export class CityScene {
       }
       return best;
     };
-    const dijkstra = (seed) => {
+    const dijkstra = function* (seed) {
       const dist = new Float64Array(W * H).fill(Infinity);   // (64-bit: a float32 rounds below its queued value and the cell is never expanded)
       const seeds = Array.isArray(seed) ? seed : seed >= 0 ? [seed] : [];
       if (!seeds.length) return dist;
@@ -570,7 +596,9 @@ export class CityScene {
       const pop = () => { const d = hd[0], i = hi[0], ld = hd.pop(), li = hi.pop(); if (hd.length) { hd[0] = ld; hi[0] = li; let c = 0; for (;;) { const l = 2 * c + 1, r = l + 1; let m = c; if (l < hd.length && hd[l] < hd[m]) m = l; if (r < hd.length && hd[r] < hd[m]) m = r; if (m === c) break; [hd[m], hd[c]] = [hd[c], hd[m]]; [hi[m], hi[c]] = [hi[c], hi[m]]; c = m; } } return [d, i]; };
       for (const q of seeds) { dist[q] = 0; push(0, q); }
       const nb = [[1, 0, dx], [-1, 0, dx], [0, 1, dz], [0, -1, dz], [1, 1, Math.hypot(dx, dz)], [-1, 1, Math.hypot(dx, dz)], [1, -1, Math.hypot(dx, dz)], [-1, -1, Math.hypot(dx, dz)]];
+      let steps = 0;
       while (hd.length) {
+        if ((++steps & 2047) === 0 && due()) yield;
         const [d, i] = pop();
         if (d > dist[i]) continue;
         const x = i % W, y = (i / W) | 0;
@@ -582,7 +610,7 @@ export class CityScene {
       }
       return dist;
     };
-    const dA = dijkstra(cellOf(F.allegheny)), dM = dijkstra(cellOf(F.monongahela)), dO = dijkstra(cellOf(F.ohio));
+    const dA = yield* dijkstra(cellOf(F.allegheny)), dM = yield* dijkstra(cellOf(F.monongahela)), dO = yield* dijkstra(cellOf(F.ohio));
     const point = cellOf(F.point), dOPoint = point >= 0 ? dO[point] : Infinity, pP = D.proj.toLocal(...F.point);
     // the confluence: on the shortest water path from the Allegheny's seed to the Mon's (every cell on it has the
     // least dA + dM), the cell nearest the outlet — the tip of the Point. Offsetting the Mon's distances so both
@@ -603,18 +631,20 @@ export class CityScene {
     let dN = null, dS = null;
     if (F.north && F.south) {
       const land = new Int32Array(W * H);
-      const fill = (start, id) => {
+      const fill = function* (start, id) {
         if (start < 0 || mask[start] >= .5) return;
         const st = [start]; land[start] = id;
-        while (st.length) { const q = st.pop(), x = q % W, y = (q / W) | 0; for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + a, Y = y + b; if (X < 0 || Y < 0 || X >= W || Y >= H) continue; const j = Y * W + X; if (!land[j] && mask[j] < .5) { land[j] = id; st.push(j); } } }
+        let steps = 0;
+        while (st.length) { if ((++steps & 4095) === 0 && due()) yield; const q = st.pop(), x = q % W, y = (q / W) | 0; for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + a, Y = y + b; if (X < 0 || Y < 0 || X >= W || Y >= H) continue; const j = Y * W + X; if (!land[j] && mask[j] < .5) { land[j] = id; st.push(j); } } }
       };
       const landCellOf = ([lat, lon]) => { const p = D.proj.toLocal(lat, lon); return Math.round((p.z - D.z0) / dz) * W + Math.round((p.x - D.x0) / dx); };
-      fill(landCellOf(F.north), 1); fill(landCellOf(F.south), 2);
+      yield* fill(landCellOf(F.north), 1); yield* fill(landCellOf(F.south), 2);
       const shore = (id) => { const out = []; for (let k = W; k < W * H - W; k++) { if (mask[k] < .5) continue; if (land[k - 1] === id || land[k + 1] === id || land[k - W] === id || land[k + W] === id) out.push(k); } return out; };
-      dN = dijkstra(shore(1)); dS = dijkstra(shore(2));
+      dN = yield* dijkstra(shore(1)); dS = yield* dijkstra(shore(2));
     }
     const tex = new Uint8Array(W * H * 4);
     for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+      if (i === W - 1 && due()) yield;
       const k = j * W + i;
       if (mask[k] < .5 || !isFinite(dO[k])) { tex[k * 4] = tex[k * 4 + 1] = 128; tex[k * 4 + 2] = 128; continue; }
       // the current: down the gradient of the distance to the outlet
@@ -638,6 +668,7 @@ export class CityScene {
     // soften the band and the current
     const out = new Uint8Array(tex);
     for (let j = 1; j < H - 1; j++) for (let i = 1; i < W - 1; i++) {
+      if (i === W - 2 && due()) yield;
       const k = j * W + i; if (mask[k] < .5) continue;
       for (let c = 0; c < 4; c++) { let sum = 0, n = 0; for (let v = -1; v <= 1; v++) for (let u = -1; u <= 1; u++) { const q = (j + v) * W + i + u; if (mask[q] >= .5) { sum += tex[q * 4 + c]; n++; } } out[k * 4 + c] = sum / n; }
     }
@@ -645,18 +676,18 @@ export class CityScene {
     return t;
   }
 
-  _waterMesh(mask, W, H, x0, z0, x1, z1, name, hole = null, fields = null) {
+  *_waterMeshJob(mask, W, H, x0, z0, x1, z1, name, hole = null, fields = null) {
     const level = this.landscape.level;
     // Water mask → soft distance-to-bank texture (blurred), for shallow colour and bank foam.
-    const blur = (src, r) => {
+    const blur = function* (src, r) {
       const tmp = new Float32Array(src.length), out = new Float32Array(src.length);
-      for (let y = 0; y < H; y++) { let acc = 0; for (let x = -r; x < W + r; x++) { if (x + r < W) acc += src[y * W + Math.min(W - 1, x + r)]; if (x - r - 1 >= 0) acc -= src[y * W + x - r - 1]; if (x >= 0 && x < W) tmp[y * W + x] = acc / (2 * r + 1); } }
-      for (let x = 0; x < W; x++) { let acc = 0; for (let y = -r; y < H + r; y++) { if (y + r < H) acc += tmp[Math.min(H - 1, y + r) * W + x]; if (y - r - 1 >= 0) acc -= tmp[(y - r - 1) * W + x]; if (y >= 0 && y < H) out[y * W + x] = acc / (2 * r + 1); } }
+      for (let y = 0; y < H; y++) { if (due()) yield; let acc = 0; for (let x = -r; x < W + r; x++) { if (x + r < W) acc += src[y * W + Math.min(W - 1, x + r)]; if (x - r - 1 >= 0) acc -= src[y * W + x - r - 1]; if (x >= 0 && x < W) tmp[y * W + x] = acc / (2 * r + 1); } }
+      for (let x = 0; x < W; x++) { if (due()) yield; let acc = 0; for (let y = -r; y < H + r; y++) { if (y + r < H) acc += tmp[Math.min(H - 1, y + r) * W + x]; if (y - r - 1 >= 0) acc -= tmp[(y - r - 1) * W + x]; if (y >= 0 && y < H) out[y * W + x] = acc / (2 * r + 1); } }
       return out;
     };
-    const deep = blur(blur(mask, 3), 3);
+    const deep = yield* blur(yield* blur(mask, 3), 3);
     const tex = new Uint8Array(W * H * 4);
-    for (let i = 0; i < W * H; i++) { tex[i * 4] = mask[i] * 255; tex[i * 4 + 1] = Math.min(255, deep[i] * 255); tex[i * 4 + 3] = 255; }
+    for (let i = 0; i < W * H; i++) { tex[i * 4] = mask[i] * 255; tex[i * 4 + 1] = Math.min(255, deep[i] * 255); tex[i * 4 + 3] = 255; if (i % W === W - 1 && due()) yield; }
     const dt = this.own(new THREE.DataTexture(tex, W, H)); dt.magFilter = dt.minFilter = THREE.LinearFilter; dt.needsUpdate = true;
     const U = this.uniforms;
     const mat = this.own(new THREE.ShaderMaterial({
@@ -754,11 +785,14 @@ export class CityScene {
   }
 
   // ---------------------------------------------------------------- buildings
-  _buildChunk(key) {
+  _buildChunk(key) { drain(this._chunkJob(key)); }
+  /** A chunk's buildings, as a job ([F30]): pauses between buildings when its slice is used up (`_stream`). */
+  *_chunkJob(key) {
     const list = this.buildingChunks.get(key) || [];   // [street-kit] (a chunk can hold only street-kit content)
     const B = new MeshBuilder({ aBld: 4 });   // [w2-budget] walls, roofs and the rooftop details (aBld.w = 1: no windows), one mesh
     const roofTint = new THREE.Color();
     for (const b of list) {
+      if (due()) yield;
       if (b.kind === 12 || b.hero || b.hidden) continue;   // the submarine and the hero landmarks are drawn on their own; duplicates not at all
       if (b.onRoute ??= this._onRoute(b)) continue;   // OSM footprints that overlap the ride's road: not drawn
       if (b.crossed ??= this._crossed(b)) continue;   // a ramp, incline or raised railway runs through it: not drawn
@@ -805,14 +839,16 @@ export class CityScene {
       }
       this._rooftop(B, b, ring, y1, seed, !!kit);   // [w2-budget] (was its own mesh in the solid material)
     }
+    if (due()) yield;
     const mesh = new THREE.Mesh(this.own(B.geometry()), this.buildingMaterial);
     mesh.castShadow = mesh.receiveShadow = true; mesh.name = `Buildings ${key}`;
     this.group.add(mesh);
     const out = [];
-    this.streetKit?.finishChunk(key, out);   // [street-kit] sidewalks, furniture, trim
+    if (this.streetKit) yield* this.streetKit.finishChunkJob(key, out);   // [street-kit] sidewalks, furniture, trim
     this.chunks.set(key, out);
+    if (due()) yield;
     this._sectorChunk(key, mesh);   // [w2-budget]
-    this.buildingKit?.chunkBuilt(key, sectorOf(key), this.sectors.get(sectorOf(key)));   // [buildings]
+    if (this.buildingKit) { if (due()) yield; yield* this.buildingKit.chunkBuiltJob(key, sectorOf(key), this.sectors.get(sectorOf(key))); }   // [buildings]
   }
 
   /**
@@ -874,14 +910,14 @@ export class CityScene {
   }
 
   // ---------------------------------------------------------------- streets, sidewalks and lamps
-  _streetsAndLamps() {
+  *_streetsAndLampsJob() {
     const roads = new Map(), walks = new Map(), paths = new Map(), bricks = new Map();   // [finish] bricks: brick streets
     const get = (map, x, z) => { const key = `${Math.floor(x / SECTOR_M)},${Math.floor(z / SECTOR_M)}`; if (!map.has(key)) map.set(key, new MeshBuilder(map === roads || map === bricks ? { aSlot: 1 } : {})); return map.get(key); };   // [w2-budget] per sector (was 512 m)
     const lamps = [];
     const plan = this.junctions = this.landscape._junctions || null;   // [junctions] real intersections (js/world/toolbox/city/junctions.js)
     this._levelJunctions();
     const slots = this.streetSlots = this._streetSlots();
-    this.streets.forEach((st, k) => {
+    yield* each(this.streets, (st, k) => {
       // crossing ribbons each get their own height (2 cm apart), so lane paint never flickers at a junction
       const p0 = st.pts[0], lift = .1 + slots[k] * .02;
       if (st.cls === 8) { ribbon(get(paths, p0.x, p0.z), st.pts, st.width, lift, 8); return; }
@@ -910,7 +946,9 @@ export class CityScene {
     // the route itself: lamps along streets and riverfront trails
     const r = this.route, end = r.turnIdx || r.dist.length - 1;
     for (let i = 3; i < end - 3; i += 3) {
+      if (due()) yield;
       const s = r.dist[i], kind = this.landscape.routeKindAt(s);
+      if (ghostAt(r, s)) continue;   // (a network tour's repeat: its lamps stand on the real pass)
       const every = kind === 'road' ? 36 : 30;
       if (Math.floor(s / every) === Math.floor(r.dist[i - 3] / every)) continue;
       const dx = this.index.xs[i + 1] - this.index.xs[i - 1], dz = this.index.zs[i + 1] - this.index.zs[i - 1], len = Math.hypot(dx, dz) || 1;
@@ -923,22 +961,27 @@ export class CityScene {
         const off = deckBridge ? (ROAD_WIDTH + 3) / 2 + .05 : ROAD_WIDTH / 2 + (kind === 'road' ? 2.6 : 1.6);
         const x = kitLamp ? kitLamp.x : this.index.xs[i] - dz / len * off * side, z = kitLamp ? kitLamp.z : this.index.zs[i] + dx / len * off * side;
         if (!deckBridge && !this._clearSpot(x, z, .35, -1, ROAD_WIDTH / 2 + 1.2, this.streetKit ? .95 : .35)) continue;   // [finish] (kit facades)
+        if (this.landscape.sheltered?.(x, z, 12)) continue;   // [glasshouse] no street lamps under the glass (nor in its doorways)
         // on a deck: not in another carriageway that runs alongside at the same level (the roadway's other half)
         if (deckBridge && this.landscape.streetsNear(x, z, .35).some((o) => this.streets[o.k].cls !== 8 && Math.abs(o.y - r.ele[i]) < 1.5)) continue;
         lamps.push({ x, z, y: deckBridge ? r.ele[i] : kitLamp ? kitLamp.y : this.landscape.heightAt(x, z), yaw: Math.atan2(dz / len * side, -dx / len * side), bridge: !!deckBridge });   // [street-kit] (kitLamp.y)
       }
     }
-    if (plan) this.junctionMeshes = buildJunctionMeshes(this, plan, { get, roads, walks, liftOf: (k) => .1 + slots[k] * .02 });   // [junctions]
+    if (due()) yield;
+    if (plan) this.junctionMeshes = yield* buildJunctionMeshesJob(this, plan, { get, roads, walks, liftOf: (k) => .1 + slots[k] * .02 });   // [junctions]
     for (const [map, mat, name] of [[roads, this.streetMaterial, 'Streets'], [bricks, this.brickMaterial, 'Streets'], [walks, this.sidewalkMaterial, 'Sidewalks'], [paths, this.pathMaterial, 'Paths']]) {
       for (const [key, builder] of map) {
-        builder.keepOutOf(this.landscape.inRouteTube);   // ramps and roadways the data puts in the rider's space
+        if (due()) yield;
+        yield* builder.keepOutOfJob(this.landscape.inRouteTube);   // ramps and roadways the data puts in the rider's space
         const mesh = new THREE.Mesh(this.own(builder.geometry()), mat);
         mesh.receiveShadow = true; mesh.name = `${name} ${key}`; mesh.renderOrder = 1;
         this.group.add(mesh);
       }
     }
     this.lamps = lamps;
+    if (due()) yield;
     if (plan && this.streetKit) this._junctionCorners(plan);   // [finish] the kit's signals and corner signs at the junctions' corners (after the lamps: it keeps clear of them)
+    if (due()) yield;
     this._lampMeshes(lamps);
   }
 
@@ -1168,9 +1211,9 @@ export class CityScene {
     return slots;
   }
 
-  _trees() {
+  *_treesJob() {
     const spots = [];
-    this.streets.forEach((st, k) => {
+    yield* each(this.streets, (st, k) => {
       if (st.bridge || st.cls < 3 || st.cls > 6) return;
       let acc = hash(k * 3) * 15;
       for (let i = 1; i < st.pts.length; i++) {
@@ -1183,10 +1226,11 @@ export class CityScene {
         }
       }
     });
-    const kitTrees = this.streetKit?.treeSpots() || [];   // [street-kit] street trees in the kit's tree pits (placed and checked by the kit)
+    if (due()) yield;
+    const kitTrees = (this.streetKit ? yield* this.streetKit.treeSpotsJob() : null) || [];   // [street-kit] street trees in the kit's tree pits (placed and checked by the kit)
     spots.push(...kitTrees);
     const T = this.data.trees ? new Int16Array(Uint8Array.from(atob(this.data.trees), (c) => c.charCodeAt(0)).buffer) : [];
-    for (let i = 0; i < T.length; i += 2) { const p = this.D.local(T[i], T[i + 1]); spots.push({ ...p, seed: hash(i) }); }
+    for (let i = 0; i < T.length; i += 2) { const p = this.D.local(T[i], T[i + 1]); spots.push({ ...p, seed: hash(i) }); if ((i & 1023) === 1022 && due()) yield; }
     // [s4-section] tree rows along the route (a riverfront park, an avenue): scene `routeTrees` =
     // [{fromM, toM, spacingM = 12, offsetM = 7.5, sides: [-1, 1] (left, right of the ride)}]; spots that aren't clear are dropped
     // [s4-section] yard trees: scene `vegetation.yardTrees` = {density, spacingM = 15, boxes: [[s, w, n, e]…]} — a
@@ -1203,6 +1247,7 @@ export class CityScene {
     for (const [bs, bw, bn, be] of YT?.boxes || []) {
       const P = this.D.proj, a = P.toLocal(bs, bw), b = P.toLocal(bn, be), g = YT.spacingM || 15;
       for (let x = Math.min(a.x, b.x); x < Math.max(a.x, b.x); x += g) for (let z = Math.min(a.z, b.z); z < Math.max(a.z, b.z); z += g) {
+        if (z === Math.min(a.z, b.z) && due()) yield;
         const seed = hash(x * .37 + z * 1.13);
         if (seed > (YT.density ?? .5)) continue;
         const px = x + (hash(x + z * 3.1) - .5) * g * .8, pz = z + (hash(x * 2.3 - z) - .5) * g * .8;
@@ -1211,8 +1256,10 @@ export class CityScene {
       }
     }
     for (const row of this.route.scene?.routeTrees || []) {
+      if (due()) yield;
       const R = this.route, I = this.index, last = (R.turnIdx || R.dist.length - 1) - 1;
       for (let s = row.fromM, n = 0; s < row.toM; s += row.spacingM || 12, n++) {
+        if (ghostAt(R, s)) continue;   // (a ghost: the real pass has its trees)
         const i = Math.max(0, Math.min(last - 1, Math.floor(s / 10))), f = Math.min(1, (s - R.dist[i]) / 10);
         const x = I.xs[i] + (I.xs[i + 1] - I.xs[i]) * f, z = I.zs[i] + (I.zs[i + 1] - I.zs[i]) * f;
         const dx = I.xs[i + 1] - I.xs[i], dz = I.zs[i + 1] - I.zs[i], l = Math.hypot(dx, dz) || 1;
@@ -1248,7 +1295,9 @@ export class CityScene {
     const lists = new Map();
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0);
     this.treeTrunks = [];
+    let n = 0;
     for (const t of spots) {
+      if ((++n & 63) === 0 && due()) yield;
       const road = this.index.nearest(t.x, t.z, 520);
       if (!road) continue;   // near the ride only ([finish] 520 m, was 650: the hillside woods carry the distance)
       // trunk clear of every carriageway, the crown clear of walls, and nothing growing over the rider's road
@@ -1260,6 +1309,7 @@ export class CityScene {
       lists.get(key).push({ m: m.compose(new THREE.Vector3(t.x, t.y ?? this.landscape.heightAt(t.x, t.z) - .1, t.z), q, new THREE.Vector3(w, w * (.85 + t.seed * .3) * (t.sy || 1), w)).clone(), seed: t.seed });   // [street-kit] (sy: kit street trees stand taller)
     }
     for (const list of lists.values()) {
+      if (due()) yield;
       const im = new THREE.InstancedMesh(geo, mat, list.length);
       list.forEach((t, i) => { im.setMatrixAt(i, t.m); im.setColorAt(i, greens[Math.floor(t.seed * 997) % greens.length]); });
       im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere();
@@ -1270,15 +1320,23 @@ export class CityScene {
 
   // ---------------------------------------------------------------- per-frame
   /** Build a few building chunks per frame, nearest first, so the ride never stalls. */
-  _stream(cx, cz) {
+  _stream(cx, cz, budgetMs = this._warm ? 7 : 400) {
     if (!this._pending.length) return;
     const t0 = performance.now();
-    this._pending.sort((a, b) => {
+    // ([F30] a chunk half built carries on first: the next is picked, nearest first, once it is done)
+    if (!this._chunk) this._pending.sort((a, b) => {
       const [ax, az] = a.split(',').map(Number), [bx, bz] = b.split(',').map(Number);
       return Math.hypot((bx + .5) * CHUNK - cx, (bz + .5) * CHUNK - cz) - Math.hypot((ax + .5) * CHUNK - cx, (az + .5) * CHUNK - cz);
     });
     if (this.streetKit) this.streetKit.deferred = !!this._warm;   // [street-kit] while riding, its chunk work runs in its own frame budget
-    while (this._pending.length && performance.now() - t0 < (this._warm ? 7 : 400)) this._buildChunk(this._pending.pop());
+    // [F30] each chunk is a job, run within the budget (it pauses between buildings), so one big chunk doesn't stall a frame
+    while (this._pending.length && performance.now() - t0 < budgetMs) {
+      const c = (this._chunk ||= { key: this._pending.at(-1), job: this._chunkJob(this._pending.at(-1)), deferred: !!this._warm });
+      if (this.streetKit) this.streetKit.deferred = c.deferred;   // (as when the chunk was started)
+      if (!runSlice(c.job, budgetMs - (performance.now() - t0)).done) break;
+      this._pending.pop(); this._chunk = null;   // (it stays pending until it's done: the bake waits for it)
+    }
+    if (this.streetKit) this.streetKit.deferred = !!this._warm;
     this._warm = true;
   }
 

@@ -1,0 +1,195 @@
+{
+  "area": "core",
+  "note": "Downtown, the North Shore, the South Side and Mount Washington: the Point, the Jail Trail, the Hot Metal, Smithfield Street, Clemente and West End bridges. Portals: NS and GW (the subway), A and B (the Allegheny & Troy Hill), I (Oakland & Schenley), D (the West End), S (the Great Allegheny Passage & Homestead), C, R and CB (the North Side), F, GV and Q (the South Side Slopes & Mount Washington).",
+  "nodes": [
+    {
+      "id": "GW",
+      "name": "Stanwix St & Forbes Ave, Gateway",
+      "lat": 40.441042,
+      "lon": -80.004016
+    },
+    {
+      "id": "B",
+      "name": "Clemente Bridge south end",
+      "lat": 40.444244,
+      "lon": -80.002821
+    },
+    {
+      "id": "E",
+      "name": "Smithfield St & Fort Pitt Blvd",
+      "lat": 40.436469,
+      "lon": -80.000952
+    },
+    {
+      "id": "F",
+      "name": "Station Square: Carson & Arlington",
+      "lat": 40.431046,
+      "lon": -80.001528
+    },
+    {
+      "id": "I",
+      "name": "Hot Metal Bridge north end",
+      "lat": 40.429959,
+      "lon": -79.957579
+    },
+    {
+      "id": "S",
+      "name": "Hot Metal Bridge south end",
+      "lat": 40.427298,
+      "lon": -79.962486
+    },
+    {
+      "id": "H",
+      "name": "SouthSide Works riverfront",
+      "at": "end",
+      "lat": 40.428871,
+      "lon": -79.965369
+    },
+    {
+      "id": "Q",
+      "name": "East Carson & 27th, South Side",
+      "lat": 40.427249,
+      "lon": -79.967051
+    },
+    {
+      "id": "G",
+      "name": "East Carson & 10th",
+      "lat": 40.42871,
+      "lon": -79.98858
+    },
+    {
+      "id": "GV",
+      "name": "Grandview & McArdle, Mount Washington",
+      "lat": 40.435424,
+      "lon": -80.012955
+    },
+    {
+      "id": "D",
+      "name": "West End Bridge south end",
+      "lat": 40.44418,
+      "lon": -80.02819
+    },
+    {
+      "id": "C",
+      "name": "West End Bridge north end",
+      "lat": 40.450595,
+      "lon": -80.023818
+    },
+    {
+      "id": "R",
+      "name": "Ridge Ave by the Rivers Casino",
+      "lat": 40.449089,
+      "lon": -80.021263
+    },
+    {
+      "id": "A",
+      "name": "North Shore Water Steps",
+      "lat": 40.445507,
+      "lon": -80.008146
+    },
+    {
+      "id": "NS",
+      "name": "Mazeroski Way & General Robinson St, North Side",
+      "lat": 40.447659,
+      "lon": -80.007513
+    },
+    {
+      "id": "CB",
+      "name": "Clemente Bridge north end: Federal St & General Robinson",
+      "lat": 40.448224,
+      "lon": -80.004424
+    }
+  ],
+  "edges": {
+    "B>GW": {
+      "name": "The riverfront & the Point",
+      "fwd": "the riverfront and the Point to Stanwix St",
+      "rev": "Stanwix St, the Point and the riverfront to the Clemente Bridge"
+    },
+    "GW>E": {
+      "name": "Downtown: Forbes Ave & Market Square",
+      "fwd": "Forbes Ave, Market Square and down to Smithfield St",
+      "rev": "Market Square and Forbes Ave to Stanwix St"
+    },
+    "E>I": {
+      "name": "Jail Trail",
+      "fwd": "the Jail Trail along the Mon and down to the Hot Metal Bridge",
+      "rev": "the Jail Trail back to downtown"
+    },
+    "I>S": {
+      "name": "Hot Metal Bridge",
+      "fwd": "over the Hot Metal Bridge to the South Side",
+      "rev": "over the Hot Metal Bridge to the Jail Trail"
+    },
+    "S>H": {
+      "name": "SouthSide Works riverfront",
+      "fwd": "the riverfront path to SouthSide Works",
+      "rev": "to the Hot Metal Bridge and the Great Allegheny Passage"
+    },
+    "H>G": {
+      "name": "South Side river trail",
+      "fwd": "the river trail to South Side Riverfront Park and 10th",
+      "rev": "the river trail east to SouthSide Works"
+    },
+    "G>GV": {
+      "name": "McArdle Roadway",
+      "fwd": "the McArdle climb to Grandview",
+      "rev": "down McArdle Roadway to East Carson & 10th"
+    },
+    "GV>D": {
+      "name": "Grandview & the West End",
+      "fwd": "Grandview and down to the West End",
+      "rev": "up from the West End over Grandview to McArdle"
+    },
+    "D>C": {
+      "name": "West End Bridge",
+      "fwd": "the West End Bridge to Western Avenue",
+      "rev": "the West End Bridge to the West End"
+    },
+    "C>R": {
+      "name": "Fulton Street",
+      "fwd": "down Fulton Street to Ridge Avenue",
+      "rev": "Ridge Avenue and up Fulton Street to the West End Bridge"
+    },
+    "R>A": {
+      "name": "North Shore Trail: Science Center",
+      "fwd": "under Ohio River Boulevard and the North Shore trail past the Science Center to the Water Steps",
+      "rev": "the North Shore trail past the Science Center and up to Ridge Avenue"
+    },
+    "A>NS": {
+      "name": "Mazeroski Way",
+      "fwd": "up Mazeroski Way past PNC Park to General Robinson St",
+      "rev": "down Mazeroski Way to the Water Steps"
+    },
+    "NS>CB": {
+      "name": "General Robinson Street",
+      "fwd": "General Robinson St past PNC Park to Federal St",
+      "rev": "General Robinson St past PNC Park to Mazeroski Way"
+    },
+    "CB>B": {
+      "name": "Clemente Bridge",
+      "fwd": "the Clemente Bridge to Fort Duquesne Blvd",
+      "rev": "the Clemente Bridge to General Robinson St"
+    },
+    "E>F": {
+      "name": "Smithfield Street Bridge",
+      "fwd": "the Smithfield Street Bridge to Station Square",
+      "rev": "Station Square and the Smithfield Street Bridge"
+    },
+    "F>G": {
+      "name": "Station Square & East Carson",
+      "fwd": "Carson St past Station Square and East Carson to 10th",
+      "rev": "East Carson to Station Square"
+    },
+    "G>Q": {
+      "name": "East Carson Street",
+      "fwd": "East Carson Street to 27th",
+      "rev": "East Carson Street to 10th"
+    },
+    "Q>H": {
+      "name": "27th Street to the riverfront",
+      "fwd": "27th St to the riverfront at SouthSide Works",
+      "rev": "27th St to East Carson"
+    }
+  }
+}

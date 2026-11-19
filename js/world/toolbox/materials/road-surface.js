@@ -10,7 +10,7 @@
 //                { "fromM": 41380, "toM": 41620, "surface": "alpine", "wet": 1 } ]   // later zones win
 //   }
 //
-// Kinds: fresh, worn, chipseal, alpine, patched, tunnel, brick. Any number in a kind can be overridden in a zone
+// Kinds: fresh, worn, chipseal, alpine, patched, tunnel, brick, cobble. Any number in a kind can be overridden in a zone
 // (e.g. "patches": 0.9). Distances are along the road from the start (out-and-backs: the outbound half).
 // A zone can also change the road's look without moving anything:
 //   "pavedM": 6      the paved width (the rest of the 7 m strip becomes a gravel shoulder; edge lines move in)
@@ -37,9 +37,11 @@ export const SURFACES = {
   tunnel:   { tone: .72, warm: .15, wear: .8,  patches: .2,  cracks: .2,  edge: .3,  fade: .5,  speckle: .1, runoff: .2, grime: 1 },
   // [finish] red paving brick in running bond, laid across the road (Pittsburgh's hillside streets); asphalt patches stay
   brick:    { tone: 1,   warm: 0,   wear: .45, patches: .35, cracks: .1,  edge: .3,  fade: .6,  speckle: 0,  runoff: 0,  grime: 0, brick: 1 },
+  // granite setts ("Belgian block") laid in courses across the road (Canton Ave, Wyoming St); no paint, few patches
+  cobble:   { tone: 1,   warm: 0,   wear: .35, patches: .1,  cracks: 0,   edge: .3,  fade: 1,   speckle: 0,  runoff: 0,  grime: 0, cobble: 1, centre: 0 },
 };
-const KEYS = ['tone', 'warm', 'wear', 'patches', 'cracks', 'edge', 'fade', 'speckle', 'runoff', 'grime', 'pavedM', 'centre', 'gravel', 'brick'];
-const LOOK = { pavedM: null, centre: 1, gravel: 0, brick: 0 };   // defaults for the look-only settings (pavedM: full width)
+const KEYS = ['tone', 'warm', 'wear', 'patches', 'cracks', 'edge', 'fade', 'speckle', 'runoff', 'grime', 'pavedM', 'centre', 'gravel', 'brick', 'cobble'];
+const LOOK = { pavedM: null, centre: 1, gravel: 0, brick: 0, cobble: 0 };   // defaults for the look-only settings (pavedM: full width)
 const MAX_ZONES = 24;
 
 const MARK_BIN = 2, MARK_W = 4096;
@@ -90,17 +92,20 @@ export function decorateRoad(material, road, { widthM = 7, repeatM = 24, marks =
   const params = (z) => { const k = { ...LOOK, ...(SURFACES[z.surface] || SURFACES.worn) }; for (const key of KEYS) if (z[key] != null) k[key] = z[key]; k.pavedM ??= widthM; return k; };
   const base = params({ surface: road.surface || 'worn' });
   const zones = (road.zones || []).slice(0, MAX_ZONES).map((z) => ({ ...z, p: params(z) }));
-  const pack = (fn) => Array.from({ length: MAX_ZONES }, (_, i) => (zones[i] ? fn(zones[i]) : new THREE.Vector4()));
+  // (unused slots all zero: w = 0 ends the shader's loop. [F12] THREE.Vector4() is (0, 0, 0, 1): the empty slots
+  // read as zones at 0–0 m with every setting 0, blended over the first 20 m — a 0 m paved width there drew a
+  // dark V with edge lines at the start of every road, e.g. where the Jail Trail leaves Smithfield St)
+  const pack = (fn) => Array.from({ length: MAX_ZONES }, (_, i) => (zones[i] ? fn(zones[i]) : new THREE.Vector4(0, 0, 0, 0)));
   const uniforms = {
     rsBaseA: { value: new THREE.Vector4(base.tone, base.warm, base.wear, base.patches) },
     rsBaseB: { value: new THREE.Vector4(base.cracks, base.edge, base.fade, base.speckle) },
     rsBaseC: { value: new THREE.Vector4(base.runoff, base.grime, base.pavedM, base.centre) },
-    rsBaseD: { value: new THREE.Vector4(base.gravel, base.brick || 0, 0, 0) },
+    rsBaseD: { value: new THREE.Vector4(base.gravel, base.brick || 0, base.cobble || 0, 0) },
     rsSpan: { value: pack((z) => new THREE.Vector4(z.fromM, z.toM, z.wet || 0, 1)) },
     rsA: { value: pack((z) => new THREE.Vector4(z.p.tone, z.p.warm, z.p.wear, z.p.patches)) },
     rsB: { value: pack((z) => new THREE.Vector4(z.p.cracks, z.p.edge, z.p.fade, z.p.speckle)) },
     rsC: { value: pack((z) => new THREE.Vector4(z.p.runoff, z.p.grime, z.p.pavedM, z.p.centre)) },
-    rsD: { value: pack((z) => new THREE.Vector4(z.p.gravel, z.p.brick || 0, 0, 0)) },
+    rsD: { value: pack((z) => new THREE.Vector4(z.p.gravel, z.p.brick || 0, z.p.cobble || 0, 0)) },
     rsDims: { value: new THREE.Vector2(widthM, repeatM) },
   };
   if (fr) { uniforms.rsMarks = { value: marks.texture }; uniforms.rsMarksDims = { value: marks.dims }; }
@@ -216,6 +221,26 @@ export function decorateRoad(material, road, { widthM = 7, repeatM = 24, marks =
             brickCol = mix(brickCol, vec3(.11, .1, .095), smoothstep(.62, .7, rsNoise(vec2(x * .7, s * .12))) * .55);   // grime and sunken spots
             asphalt = mix(asphalt, brickCol * tone, D.y);
           }
+          // cobble: granite setts ~12 cm deep and 20–28 cm long in courses across the road, rounded tops (lit a little
+          // lighter in the middle), wide dark joints; grey-brown with some stones bluer or warmer; fades to its mean far off
+          if (D.z > .01) {
+            float rowH = .13, row = floor(s / rowH), off = rsHash(vec2(row, 3.7)) * .24;
+            float bl = .24, bx = (x + off) / bl, bc = floor(bx);
+            float len = .8 + rsHash(vec2(bc, row)) * .35, fx = fract(bx) / len, fy = fract(s / rowH);
+            float nearC = 1. - smoothstep(.012, .05, px);
+            float jx = min(fract(bx), 1. - fract(bx)), jy = min(fy, 1. - fy);
+            float joint = max(1. - smoothstep(.0, .09, jx), 1. - smoothstep(.0, .13, jy));
+            float ch = rsHash(vec2(bc + 17., row));
+            vec3 setCol = mix(vec3(.13, .125, .12), vec3(.2, .19, .175), ch);
+            setCol = mix(setCol, vec3(.12, .13, .15), step(.82, rsHash(vec2(bc, row + 5.))) * .6);     // bluer granite
+            setCol = mix(setCol, vec3(.19, .15, .12), step(.88, rsHash(vec2(bc + 3., row))) * .5);      // warmer stones
+            setCol *= .9 + .2 * (1. - abs(fy - .5) * 2.) * (1. - abs(fract(bx) - .5) * 2.);             // rounded tops
+            setCol = mix(setCol, vec3(.035, .033, .03), joint * .9 * nearC);
+            setCol = mix(setCol, vec3(.14, .135, .125), (1. - nearC) * .4);
+            setCol *= 1. - tracks * .12 * wearK;
+            asphalt = mix(asphalt, setCol * tone, D.z);
+            paint *= 1. - D.z;
+          }
           ${fr ? `          {
             // aggregate: light grey stones a centimetre or two across in a darker binder (fades to its mean far off)
             float near = 1. - smoothstep(.006, .04, px);
@@ -269,7 +294,7 @@ export function decorateRoad(material, road, { widthM = 7, repeatM = 24, marks =
         }
         #endif`);
   };
-  material.customProgramCacheKey = () => `${prevKey}|road-surface-2${fr ? '-fr' : ''}`;
+  material.customProgramCacheKey = () => `${prevKey}|road-surface-3${fr ? '-fr' : ''}`;
   material.needsUpdate = true;
   return material;
 }

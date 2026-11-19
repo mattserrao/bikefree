@@ -1,5 +1,6 @@
 // Canvas views: route elevation profile, route trace, workout chart.
 import { zoneColor, segIntensity } from './workout.js';
+import { SPAN_M, AHEAD_M, ARROW_SCALE, metresPerDeg, projectLine, makeView, toPx, visibleRuns, easeLean, aheadIndex } from './minimap-view.js';
 
 // Theme colours come from the CSS tokens, so charts follow light / dark mode.
 const tok = (name, fallback) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
@@ -32,14 +33,17 @@ export function gradeColor(g) {
  * selector). finishAt: route metres of a chequered finish line, labelled endLabel. ticks: route metres of named stops. Returns the layout, so a pointer
  * x can be turned back into route metres (profileDistAt).
  */
-export function drawProfile(canvas, route, pos, { metric = false, compact = false, ahead = 805, span = null, selection = null, finishAt = null, ticks = null, endLabel = null } = {}) {
+export function drawProfile(canvas, route, pos, { metric = false, compact = false, ahead = 805, span = null, selection = null, finishAt = null, ticks = null, endLabel = null, eleRange = null } = {}) {
   const { ctx, w, h } = setup(canvas);
   if (!route) return null;
   // compact: the ride-screen strip — no axis labels, the stretch just ahead is brightest.
   const padL = compact ? 0 : 40, padB = compact ? 0 : 18, padT = compact ? 10 : 8, padR = compact ? 0 : 8;
   const pw = w - padL - padR, ph = h - padT - padB;
-  const range = Math.max(20, route.maxEle - route.minEle);
-  const lo = route.minEle - range * 0.08, hi = route.maxEle + range * 0.12;
+  // eleRange [min, max]: the height scale of the stretch drawn (a network path's, js/network.js profileView),
+  // else the whole route's
+  const [minEle, maxEle] = eleRange || [route.minEle, route.maxEle];
+  const range = Math.max(20, maxEle - minEle);
+  const lo = minEle - range * 0.08, hi = maxEle + range * 0.12;
   // span [from, to]: draw just that stretch (a point-to-point ride that ends at the finish: one leg)
   const [from, to] = span || [0, route.total];
   const X = (d) => padL + ((d - from) / (to - from)) * pw;
@@ -100,8 +104,8 @@ export function drawProfile(canvas, route, pos, { metric = false, compact = fals
   ctx.font = '11px -apple-system, sans-serif';
   const eu = metric ? 1 : 3.28084;
   ctx.textAlign = 'right';
-  ctx.fillText(`${Math.round(route.maxEle * eu)}`, padL - 6, Y(route.maxEle) + 4);
-  ctx.fillText(`${Math.round(route.minEle * eu)}`, padL - 6, Y(route.minEle) + 4);
+  ctx.fillText(`${Math.round(maxEle * eu)}`, padL - 6, Y(maxEle) + 4);
+  ctx.fillText(`${Math.round(minEle * eu)}`, padL - 6, Y(minEle) + 4);
   ctx.textAlign = 'left';
   const du = metric ? 1000 : 1609.344;
   const totalU = (to - from) / du;
@@ -184,91 +188,273 @@ export function drawTrace(canvas, route, pos, { markerOnly = false, section = nu
 
 /**
  * Ride-screen minimap: north-up route outline with the current leg's progress, the rider (an arrow
- * pointing the way they're riding) and the pacer. mode 'course' fits the whole route; 'follow' keeps
- * the rider centred with about `spanM` metres across.
+ * pointing the way they're riding) and the pacer. mode 'follow' (the default since 18 Nov) shows about `spanM`
+ * metres across, centred a little ahead of the rider and following them (js/minimap-view.js); 'course' fits the
+ * whole route. Lines are projected once (cached per route) and only the chunks in view are drawn.
  */
 const mapCache = new WeakMap();
 function mapPoints(route) {
   let m = mapCache.get(route);
-  if (m) return m;
+  if (m && m.ver === route.netRide?.version && m.lat === route.lat) return m;   // a network route's path changes as you choose turns
   let lat0 = 0;
   for (let i = 0; i < route.lat.length; i++) lat0 += route.lat[i];
   lat0 /= route.lat.length;
-  const kx = Math.cos((lat0 * Math.PI) / 180) * 111320, ky = 110540;   // metres per degree
-  const n = route.lat.length, x = new Float64Array(n), y = new Float64Array(n);
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  for (let i = 0; i < n; i++) {
-    x[i] = route.lon[i] * kx; y[i] = route.lat[i] * ky;
-    minX = Math.min(minX, x[i]); maxX = Math.max(maxX, x[i]); minY = Math.min(minY, y[i]); maxY = Math.max(maxY, y[i]);
-  }
+  const { kx, ky } = metresPerDeg(lat0);
+  const L = projectLine(route.lat, route.lon, kx, ky), n = route.lat.length;
   // On a mirrored there-and-back route the return leg retraces the outbound one, so only one leg is outlined.
   const outlineEnd = route.mirrored && route.turnIdx ? route.turnIdx : n - 1;
-  m = { x, y, minX, maxX, minY, maxY, outlineEnd };
+  m = { L, outlineEnd, ver: route.netRide?.version, lat: route.lat };
   mapCache.set(route, m);
   return m;
 }
 
-export function drawMinimap(canvas, route, pos, { mode = 'course', pacerPos = null, spanM = 1600 } = {}) {
+// Each minimap canvas's eased lean ahead (js/minimap-view.js easeLean).
+const leans = new WeakMap();
+const leanOf = (canvas) => { let s = leans.get(canvas); if (!s) leans.set(canvas, (s = { dx: 0, dy: 0, t: null })); return s; };
+
+// Adds the visible runs of a projected line (from…to) to a path, a vertex every `step` points.
+function addRuns(path, v, L, from, to, step) {
+  const { x, y } = L, ox = v.w / 2 - v.cx * v.s, oy = v.h / 2 + v.cy * v.s, s = v.s;
+  for (const [a, b] of visibleRuns(L, v, from, to)) {
+    path.moveTo(ox + x[a] * s, oy - y[a] * s);
+    for (let i = a + step; i < b; i += step) path.lineTo(ox + x[i] * s, oy - y[i] * s);
+    path.lineTo(ox + x[b] * s, oy - y[b] * s);
+  }
+}
+function strokePath(ctx, path, color, width, dash = null) {
+  ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  if (dash) ctx.setLineDash(dash);
+  ctx.stroke(path);
+  if (dash) ctx.setLineDash([]);
+}
+// The rider: an arrow along the way they're riding (half the size it was, 18 Nov).
+function riderArrow(ctx, x, y, ang, fill) {
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(ang); ctx.scale(ARROW_SCALE, ARROW_SCALE);
+  ctx.fillStyle = fill; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(-7, 8); ctx.lineTo(-3, 0); ctx.lineTo(-7, -8); ctx.closePath();
+  ctx.stroke(); ctx.fill();
+  ctx.restore();
+}
+
+export function drawMinimap(canvas, route, pos, { mode = 'course', pacerPos = null, spanM = SPAN_M, now = null } = {}) {
   const { ctx, w, h } = setup(canvas);
   if (!route || !route.lat?.length) return;
-  const m = mapPoints(route), n = m.x.length;
+  const m = mapPoints(route), L = m.L, n = L.x.length;
   const idx = (d) => Math.max(0, Math.min(n - 1, Math.round(d / 10)));
   const cut = idx(pos);
-  const pad = 14;
-  let s, cx, cy;
+  let off = null;
   if (mode === 'follow') {
-    s = Math.min(w, h) / spanM;
-    cx = m.x[cut]; cy = m.y[cut];
-  } else {
-    s = Math.min((w - pad * 2) / (m.maxX - m.minX || 1), (h - pad * 2) / (m.maxY - m.minY || 1));
-    cx = (m.minX + m.maxX) / 2; cy = (m.minY + m.maxY) / 2;
+    const j = aheadIndex(cut, n, AHEAD_M, !!route.closed);
+    off = easeLean(leanOf(canvas), L.x[j] - L.x[cut], L.y[j] - L.y[cut], now);
   }
-  const PX = (i) => w / 2 + (m.x[i] - cx) * s, PY = (i) => h / 2 - (m.y[i] - cy) * s;
-  // Fewer vertices when zoomed out; a vertex every ~1.5 px is plenty.
-  const step = Math.max(1, Math.floor(1.5 / (10 * s)));
-  const line = (from, to, color, width) => {
-    if (to <= from) return;
-    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(PX(from), PY(from));
-    for (let i = from + step; i < to; i += step) ctx.lineTo(PX(i), PY(i));
-    ctx.lineTo(PX(to), PY(to));
-    ctx.stroke();
-  };
+  const v = makeView(w, h, { mode, rx: L.x[cut], ry: L.y[cut], off, spanM, bounds: L });
+  const P = (i) => toPx(v, L.x[i], L.y[i]);
+  // A vertex every ~1.5 px is plenty.
+  const step = Math.max(1, Math.floor(1.5 / (10 * v.s)));
   const ink = tok('--ink', '#ece9e1'), bg = tok('--bg', '#262624'), accent = tok('--accent', '#7aa9f5');
   const light = document.documentElement.dataset.theme === 'light';
 
   // Outline (with a soft casing so it reads over the glass), then this leg's ridden part.
-  line(0, m.outlineEnd, light ? 'rgba(255,255,255,.75)' : 'rgba(0,0,0,.35)', 6);
-  line(0, m.outlineEnd, tok('--hud-muted', '#a8a69d'), 3);
+  const outline = new Path2D();
+  addRuns(outline, v, L, 0, m.outlineEnd, step);
+  strokePath(ctx, outline, light ? 'rgba(255,255,255,.75)' : 'rgba(0,0,0,.35)', 6);
+  strokePath(ctx, outline, tok('--hud-muted', '#a8a69d'), 3);
   const turn = route.turnIdx || 0;
   const legStart = turn && cut > turn ? turn : 0;
-  line(legStart, cut, accent, 4);
+  const ridden = new Path2D();
+  addRuns(ridden, v, L, legStart, cut, step);
+  strokePath(ctx, ridden, accent, 4);
 
   // Start / turnaround marks
   const mark = (i, fill) => {
+    const [x, y] = P(i);
+    if (x < -8 || y < -8 || x > w + 8 || y > h + 8) return;
     ctx.fillStyle = fill; ctx.strokeStyle = bg; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.rect(PX(i) - 3.5, PY(i) - 3.5, 7, 7); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.rect(x - 3.5, y - 3.5, 7, 7); ctx.fill(); ctx.stroke();
   };
   mark(0, ink);
   if (turn && route.mirrored) mark(turn, tok('--hud-muted', '#a8a69d'));
 
   // Pacer: a yellow dot
   if (pacerPos != null) {
-    const j = idx(pacerPos);
+    const [x, y] = P(idx(pacerPos));
     ctx.fillStyle = '#f5c400'; ctx.strokeStyle = '#1d1d1c'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(PX(j), PY(j), 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   }
 
-  // Rider: an arrow along the direction of travel (sampled within the current leg so the U-turn doesn't flip it).
+  // Rider: sampled within the current leg so the U-turn doesn't flip it.
   const legEnd = turn && cut <= turn ? turn : n - 1;
   const a = Math.max(legStart, cut - 2), b = Math.min(legEnd, cut + 2);
-  const ang = b > a ? Math.atan2(-(m.y[b] - m.y[a]), m.x[b] - m.x[a]) : -Math.PI / 2;
-  ctx.save();
-  ctx.translate(PX(cut), PY(cut)); ctx.rotate(ang);
-  ctx.fillStyle = accent; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.lineJoin = 'round';
-  ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(-7, 8); ctx.lineTo(-3, 0); ctx.lineTo(-7, -8); ctx.closePath();
-  ctx.stroke(); ctx.fill();
-  ctx.restore();
+  const ang = b > a ? Math.atan2(-(L.y[b] - L.y[a]), L.x[b] - L.x[a]) : -Math.PI / 2;
+  const [rx, ry] = P(cut);
+  riderArrow(ctx, rx, ry, ang, accent);
+}
+
+// A network's lines projected once (per edgeLines array, built once per network), and its path route per version.
+const netCache = new WeakMap(), pathCache = new WeakMap();
+function netPoints(lines) {
+  let c = netCache.get(lines);
+  if (c) return c;
+  let lat0 = 0, nn = 0;
+  for (const Ln of lines) for (let i = 0; i < Ln.lat.length; i += 5) { lat0 += Ln.lat[i]; nn++; }
+  const { kx, ky } = metresPerDeg(lat0 / (nn || 1));
+  const ls = lines.map((Ln) => projectLine(Ln.lat, Ln.lon, kx, ky));
+  const bounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+  for (const P of ls) {
+    bounds.minX = Math.min(bounds.minX, P.minX); bounds.minY = Math.min(bounds.minY, P.minY);
+    bounds.maxX = Math.max(bounds.maxX, P.maxX); bounds.maxY = Math.max(bounds.maxY, P.maxY);
+  }
+  c = { kx, ky, ls, bounds };
+  netCache.set(lines, c);
+  return c;
+}
+function pathPoints(ride, r, kx, ky) {
+  let c = pathCache.get(ride);
+  if (!c || c.lat !== r.lat || c.ver !== ride.version || c.kx !== kx) {
+    c = { L: projectLine(r.lat, r.lon, kx, ky), lat: r.lat, ver: ride.version, kx };
+    pathCache.set(ride, c);
+  }
+  return c.L;
+}
+
+/**
+ * Ride-screen minimap for a network route (js/network.js): every rideable segment faint, the path ahead
+ * bold, the next junction's ways on (when `up` is given: NetRide.upcoming) with the chosen one bright,
+ * the rider's arrow and the pacer. mode 'follow' shows about `spanM` across, following the rider a little
+ * behind centre (js/minimap-view.js); 'course' fits the whole network. Only the chunks in view are drawn.
+ */
+export function drawNetworkMinimap(canvas, ride, p, { mode = 'course', pacerPos = null, spanM = SPAN_M, up = null, aheadTo = null, now = null } = {}) {
+  const { ctx, w, h } = setup(canvas);
+  const r = ride.route, N = netPoints(ride.edgeLines()), { kx, ky } = N;
+  const R = pathPoints(ride, r, kx, ky), n = R.x.length;
+  const ci = Math.max(0, Math.min(n - 1, Math.round(p / 10)));
+  let off = null;
+  if (mode === 'follow') {
+    const j = aheadIndex(ci, n, AHEAD_M);
+    off = easeLean(leanOf(canvas), R.x[j] - R.x[ci], R.y[j] - R.y[ci], now);
+  }
+  const v = makeView(w, h, { mode, rx: R.x[ci], ry: R.y[ci], off, spanM, bounds: N.bounds });
+  const X = (lon) => v.w / 2 + (lon * kx - v.cx) * v.s, Y = (lat) => v.h / 2 - (lat * ky - v.cy) * v.s;
+  const step = Math.max(1, Math.floor(1.5 / (10 * v.s)));
+  const accent = tok('--accent', '#7aa9f5'), ink = tok('--ink', '#ece9e1'), bg = tok('--bg', '#262624');
+  const light = document.documentElement.dataset.theme === 'light';
+  const casing = light ? 'rgba(255,255,255,.75)' : 'rgba(0,0,0,.35)';
+  // the network, faint: one path of every segment's part in view
+  const faint = new Path2D();
+  for (const Ln of N.ls) addRuns(faint, v, Ln, 0, Ln.x.length - 1, step);
+  strokePath(ctx, faint, casing, 5);
+  strokePath(ctx, faint, tok('--hud-muted', '#a8a69d'), 2.5);
+  // the path ahead, bold
+  const end = Math.max(ci, Math.min(n - 1, Math.round((aheadTo ?? p + 3000) / 10)));
+  const ahead = new Path2D();
+  addRuns(ahead, v, R, ci, end, step);
+  strokePath(ctx, ahead, casing, 7);
+  strokePath(ctx, ahead, accent, 4);
+  // the next junction: each way on, the chosen one bright (a stub is ~20 points: drawn whole)
+  if (up) {
+    up.options.forEach((o, j) => {
+      const st = ride.stub(o.t, 220), last = st.lat.length - 1;
+      if (last < 1) return;
+      const sp = new Path2D();
+      sp.moveTo(X(st.lon[0]), Y(st.lat[0]));
+      for (let i = 1; i <= last; i++) sp.lineTo(X(st.lon[i]), Y(st.lat[i]));
+      if (j === up.selected) strokePath(ctx, sp, ink, 5);
+      else strokePath(ctx, sp, ink, 2.5, [3, 3]);
+    });
+    const x = X(up.node.lon), y = Y(up.node.lat);
+    ctx.fillStyle = ink; ctx.strokeStyle = bg; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  // pacer (a path metre, or {lat, lon}: where it is on its own way)
+  if (pacerPos != null) {
+    let x, y;
+    if (typeof pacerPos === 'object') { x = X(pacerPos.lon); y = Y(pacerPos.lat); }
+    else { const j = Math.max(0, Math.min(n - 1, Math.round(pacerPos / 10))); [x, y] = toPx(v, R.x[j], R.y[j]); }
+    ctx.fillStyle = '#f5c400'; ctx.strokeStyle = '#1d1d1c'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(x, y, 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  // rider arrow along the path
+  const a = Math.max(0, ci - 2), b = Math.min(n - 1, ci + 2);
+  const ang = Math.atan2(-(R.y[b] - R.y[a]), R.x[b] - R.x[a]);
+  const [rx, ry] = toPx(v, R.x[ci], R.y[ci]);
+  riderArrow(ctx, rx, ry, ang, accent);
+}
+
+/**
+ * A city's network map (the city card's thumbnail and its panel, js/app.js): rivers, every segment faint, the
+ * ones the goal filter lights a little brighter, the selected route bold with an arrow on each step, the tapped
+ * segment outlined and the junctions as dots. lines: [{ id, lat, lon }] (js/network.js edgeLines); rivers:
+ * [{ widthM, path: [[lat, lon], …] }] (or waterAreas: [{rings: [[[lat, lon], …], …]}], a city's baked banks, F101);
+ * labels: [{text, lat, lon, kind: river|area|place, angle?}] (not on a thumbnail); lit: Set of edge ids (null: all); route: traversal keys ("e12+") drawn
+ * bold; marked: an edge id (the tapped segment); focus: an edge id (keyboard). Returns the lines in CSS px
+ * ({ id, pts }) for hit testing (js/city-routes.js nearestLine).
+ */
+export function drawCityMap(canvas, { lines, rivers = [], waterAreas = null, labels = [], nodes = [], lit = null, route = null, marked = null, focus = null, thumb = false, project }) {
+  const { ctx, w, h } = setup(canvas);
+  if (!lines?.length || !w) return [];
+  const small = !thumb && w < 520, k = small ? 0.7 : 1;   // a phone: thinner lines, smaller dots
+  const { X, Y, scale } = project(lines, w, h, thumb ? 8 : small ? 12 : 26);
+  const light = document.documentElement.dataset.theme === 'light';
+  const accent = tok('--accent', '#7aa9f5'), ink = tok('--ink', '#ece9e1'), muted = tok('--muted', '#a8a69d'), faint = tok('--faint', '#62615c');
+  const bg = tok('--inset', '#20201f'), water = tok('--map-water', light ? '#cfe0ea' : '#24343b');
+  const stroke = (pts, color, width, dash = null) => {
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.setLineDash(dash || []);
+    ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); ctx.setLineDash([]);
+  };
+  // rivers: the baked outline when the city has one (F101: its banks and islands, filled even-odd), else the scenes'
+  // river lines as wide as they are (a few px at least); under everything
+  if (waterAreas?.length) {
+    ctx.fillStyle = water;
+    for (const wa of waterAreas) {
+      ctx.beginPath();
+      for (const ring of wa.rings) ring.forEach(([la, lo], i) => (i ? ctx.lineTo(X(lo), Y(la)) : ctx.moveTo(X(lo), Y(la))));
+      ctx.fill('evenodd');
+    }
+  } else for (const r of rivers) stroke(r.path.map(([la, lo]) => [X(lo), Y(la)]), water, Math.max(thumb ? 3 : 5, (r.widthM || 200) * scale));
+  const out = lines.map((L) => {
+    const pts = [], n = L.lat.length, step = Math.max(1, Math.floor(n / 80));
+    for (let i = 0; i < n; i += step) pts.push([X(L.lon[i]), Y(L.lat[i])]);
+    pts.push([X(L.lon[n - 1]), Y(L.lat[n - 1])]);
+    return { id: L.id, pts };
+  });
+  const byId = new Map(out.map((L) => [L.id, L]));
+  // the tapped segment: a soft halo under everything
+  if (marked && byId.has(marked)) { ctx.globalAlpha = 0.3; stroke(byId.get(marked).pts, accent, 18 * k); ctx.globalAlpha = 1; }
+  // the network: faint; with a goal, its routes' segments brighter and the rest dimmer still
+  for (const L of out) if (lit && !lit.has(L.id)) stroke(L.pts, faint, thumb ? 1.5 : 1.5 * k);
+  ctx.globalAlpha = lit ? 1 : 0.75;
+  for (const L of out) if (!lit || lit.has(L.id)) stroke(L.pts, lit ? tok('--ink-2', '#c2c0b6') : muted, thumb ? 2 : 2.5 * k);
+  ctx.globalAlpha = 1;
+  // labels (F101): the rivers along their banks, the areas at their segments, places; over the network, under the route
+  if (!thumb) for (const lb of labels) {
+    const river = lb.kind === 'river', size = Math.round((river ? 12 : lb.kind === 'area' ? 11.5 : 10.5) * (small ? .9 : 1));
+    ctx.save(); ctx.translate(X(lb.lon), Y(lb.lat)); if (lb.angle) ctx.rotate((lb.angle * Math.PI) / 180);
+    ctx.font = `${river ? 'italic ' : lb.kind === 'area' ? '600 ' : ''}${size}px system-ui, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    ctx.lineWidth = 3; ctx.strokeStyle = river ? water : bg; ctx.globalAlpha = .85; ctx.strokeText(lb.text, 0, 0);
+    ctx.globalAlpha = 1; ctx.fillStyle = river ? tok('--map-water-ink', light ? '#5d8199' : '#7fa3b5') : lb.kind === 'area' ? ink : muted;
+    ctx.fillText(lb.text, 0, 0);
+    ctx.restore();
+  }
+  // the selected route, bold, an arrow on each step
+  const steps = (route || []).map((k) => { const m = /^(.+)([+-])$/.exec(k); const L = m && byId.get(m[1]); return L && (m[2] === '+' ? L.pts : [...L.pts].reverse()); }).filter(Boolean);
+  for (const pts of steps) stroke(pts, light ? 'rgba(255,255,255,.85)' : 'rgba(0,0,0,.45)', thumb ? 5 : 9 * k);
+  for (const pts of steps) stroke(pts, accent, thumb ? 3 : 5 * k);
+  if (!thumb) for (const pts of steps) {
+    if (pts.length < 3) continue;
+    const m = Math.floor(pts.length / 2), [ax, ay] = pts[m - 1], [bx, by] = pts[m + 1];
+    ctx.save(); ctx.translate(pts[m][0], pts[m][1]); ctx.rotate(Math.atan2(by - ay, bx - ax)); ctx.scale(k, k);
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-4, 4.5); ctx.lineTo(-4, -4.5); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  if (focus && byId.has(focus)) { stroke(byId.get(focus).pts, bg, 5); stroke(byId.get(focus).pts, ink, 2.5, [5, 4]); }
+  // junctions
+  if (!thumb) for (const nd of nodes) {
+    ctx.fillStyle = muted; ctx.strokeStyle = bg; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(X(nd.lon), Y(nd.lat), small ? 2.5 : 3.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  return out;
 }
 
 /** Workout blocks coloured by zone, with progress. */

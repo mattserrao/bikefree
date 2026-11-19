@@ -42,7 +42,7 @@ const flatRight = (a, b) => { const f = unit({ x: b.x - a.x, y: 0, z: b.z - a.z 
  * forward direction (3D), flat forward and right vectors, and the lateral offset used.
  * `lane` is the offset right of the centre line as a fraction of the road width (the pacer rides further in).
  */
-export function riderPose(route, index, s, lane = LANE_OFFSET / ROAD_WIDTH) {
+export function riderPose(route, index, s, lane = LANE_OFFSET / ROAD_WIDTH, { uturns = true } = {}) {
   const total = route.total;
   const p = routePoint(route, index, s);
   const turn = route.turnS;
@@ -58,8 +58,9 @@ export function riderPose(route, index, s, lane = LANE_OFFSET / ROAD_WIDTH) {
   // direction; over the 10 m beyond that, that direction blends into the road's own, so there is no hop
   // where the drift starts even when the road bends there.
   const reach = DRIFT_M + BLEND_M;
-  const atFar = !!turn && Math.abs(x - turn) < reach;
-  const atStart = !!turn && !atFar && (x < reach || total - x < reach);
+  // (a ride network's path turns by itself at junctions: js/network.js passes uturns: false)
+  const atFar = uturns && !!turn && Math.abs(x - turn) < reach;
+  const atStart = uturns && !!turn && !atFar && (x < reach || total - x < reach);
   if (atFar || atStart) {
     const u = atFar ? turn - x : (x < total / 2 ? x : x - total);   // + before the U-turn, − after it
     const fixed = atFar

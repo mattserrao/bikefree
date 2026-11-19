@@ -1,0 +1,692 @@
+{
+ "id": "pittsburgh-northside",
+ "name": "Pittsburgh · The North Side",
+ "park": "Pittsburgh, Pennsylvania",
+ "gpx": "routes/cities/pittsburgh-northside.gpx",
+ "data": "routes/scenes/pittsburgh-northside-city.json",
+ "osmBbox": [
+  -80.045,
+  40.422,
+  -79.975,
+  40.494
+ ],
+ "osmTile": [
+  0.01,
+  0.008
+ ],
+ "gridBbox": [
+  -80.06,
+  40.405,
+  -79.925,
+  40.498
+ ],
+ "gridM": 24,
+ "landM": 12,
+ "lattice": "pittsburgh",
+ "waterRelations": [
+  1080,
+  2097217,
+  7937544
+ ],
+ "waterLevelM": 216.6,
+ "inlandWaterAboveM": 10,
+ "buildingRadiusM": 1100,
+ "tallBuildingM": 40,
+ "streetRadiusM": 900,
+ "bridgeStyles": {
+  "Roberto Clemente Bridge": "sister",
+  "Andy Warhol Bridge": "sister",
+  "Rachel Carson Bridge": "sister",
+  "Fort Duquesne Bridge": "arch-gold",
+  "Fort Pitt Bridge": "fortpitt",
+  "West End Bridge": "arch-gold",
+  "Smithfield Street Bridge": "lenticular",
+  "Liberty Bridge": "truss",
+  "South 10th Street Bridge": "suspension",
+  "Hot Metal Bridge": "truss-dark",
+  "Birmingham Bridge": "arch",
+  "David McCullough Bridge": "arch",
+  "Veterans Bridge": "girder",
+  "Washington Crossing Bridge;40th Street Bridge": "arch"
+ },
+ "stadiums": {
+  "PNC Park": {
+   "seats": "#2a5596",
+   "open": "river",
+   "heightM": 28
+  },
+  "Acrisure Stadium": {
+   "seats": "#e7b416",
+   "open": "river",
+   "heightM": 40
+  }
+ },
+ "specialBuildings": {
+  "One PPG Place": 6,
+  "Two PPG Place": 6,
+  "Three PPG Place": 6,
+  "Four PPG Place": 6,
+  "Five PPG Place": 6,
+  "Six PPG Place": 6,
+  "PPG Place Wintergarden": 6,
+  "U.S. Steel Tower": 9,
+  "Gulf Tower": 10,
+  "Grant Building": 11,
+  "Union Trust Building": 11,
+  "Koppers Tower": 11,
+  "BNY Mellon Center": 5,
+  "Fifth Avenue Place": 5,
+  "Tower at PNC Plaza": 5,
+  "EQT Plaza": 5,
+  "USS Requin": 12
+ },
+ "residentialBoxes": [
+  [
+   40.424,
+   -80.026,
+   40.4395,
+   -80.007
+  ],
+  [
+   40.424,
+   -80.007,
+   40.4285,
+   -79.996
+  ],
+  [
+   40.433,
+   -80.04,
+   40.4425,
+   -80.024
+  ]
+ ],
+ "cornerPasses": 3,
+ "cornerHalfWindow": 8,
+ "maxDriftM": 16,
+ "open": true,
+ "links": [
+  {
+   "name": "Ridge Ave from the riverfront path",
+   "from": [
+    40.44912,
+    -80.02119
+   ],
+   "to": [
+    40.44927,
+    -80.02057
+   ]
+  }
+ ],
+ "legs": [
+  {
+   "mode": "road",
+   "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 21290,
+    "toM": 21960
+   },
+   "waypoints": [
+    [
+     "NS Mazeroski & General Robinson",
+     40.447659,
+     -80.007513
+    ],
+    [
+     "General Robinson St",
+     40.44798,
+     -80.00598
+    ],
+    [
+     "CB Federal & General Robinson",
+     40.448224,
+     -80.004424
+    ],
+    [
+     "Clemente Bridge",
+     40.44483,
+     -80.003041
+    ]
+   ],
+   "why": "F51: the core's NS>CB (whole) and CB>B's first 400 m (the Clemente Bridge): the aprons at the new portal CB"
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 21960,
+    "toM": 21560
+   },
+   "waypoints": [
+    [
+     "Clemente Bridge (back)",
+     40.44483,
+     -80.003041
+    ],
+    [
+     "CB (back)",
+     40.448224,
+     -80.004424
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "CB Federal & General Robinson",
+     40.448224,
+     -80.004424
+    ],
+    [
+     "Federal St under the expressway",
+     40.4493,
+     -80.00456
+    ],
+    [
+     "Federal & South Commons",
+     40.45032,
+     -80.00489
+    ],
+    [
+     "South Commons",
+     40.45058,
+     -80.0035
+    ],
+    [
+     "East Commons",
+     40.4521,
+     -80.00352
+    ],
+    [
+     "East & North Commons",
+     40.45425,
+     -80.00418
+    ],
+    [
+     "North Commons",
+     40.45405,
+     -80.0052
+    ],
+    [
+     "Federal & North Commons",
+     40.45398,
+     -80.00614
+    ],
+    [
+     "Federal & North Ave",
+     40.45541,
+     -80.00661
+    ],
+    [
+     "Federal St",
+     40.45729,
+     -80.00723
+    ],
+    [
+     "Federal St (west carriageway)",
+     40.45777,
+     -80.00743
+    ],
+    [
+     "FJ Federal & Jacksonia",
+     40.4582581,
+     -80.0075844
+    ],
+    [
+     "Federal St",
+     40.4598,
+     -80.0082
+    ],
+    [
+     "Y",
+     40.46122,
+     -80.00872
+    ]
+   ],
+   "why": "F51: CB>FJ, Federal Street round Allegheny Center (South, East and North Commons) to Jacksonia St, and straight on up Federal St to Y (FJ>Y)"
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Y Federal & Perrysville",
+     40.46122,
+     -80.00872,
+     "Federal Street"
+    ],
+    [
+     "Mercy St",
+     40.4624,
+     -80.00855,
+     "Mercy Street"
+    ],
+    [
+     "Belleau St",
+     40.46185,
+     -80.0065,
+     "Belleau Street"
+    ],
+    [
+     "Meadville St",
+     40.4612,
+     -80.0051,
+     "Meadville Street"
+    ],
+    [
+     "Fineview Overlook",
+     40.46053,
+     -80.0044,
+     "Catoma Street"
+    ],
+    [
+     "Lanark St",
+     40.4622,
+     -80.0047,
+     "Lanark Street"
+    ],
+    [
+     "Marsonia St",
+     40.4639,
+     -80.0065,
+     "Marsonia Street"
+    ],
+    [
+     "Lafayette Ave",
+     40.46555,
+     -80.0077,
+     "Lafayette Avenue"
+    ],
+    [
+     "Z Perrysville & Federal Ext",
+     40.46703,
+     -80.01004
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "waypoints": [
+    [
+     "Z (round the block)",
+     40.46703,
+     -80.01004
+    ],
+    [
+     "Perrysville & Burgess",
+     40.46759,
+     -80.0099,
+     "Perrysville Avenue"
+    ],
+    [
+     "East Burgess St",
+     40.46773,
+     -80.009,
+     "East Burgess Street"
+    ],
+    [
+     "Maple Ave",
+     40.46889,
+     -80.00805,
+     "Maple Avenue"
+    ],
+    [
+     "Perrysville & McIntyre",
+     40.46878,
+     -80.0095,
+     "Perrysville Avenue"
+    ],
+    [
+     "Z (round the block, back)",
+     40.46703,
+     -80.01004
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Z",
+     40.46703,
+     -80.01004
+    ],
+    [
+     "Perrysville Ave",
+     40.465,
+     -80.011,
+     "Perrysville Avenue"
+    ],
+    [
+     "Perrysville Ave hairpin",
+     40.46294,
+     -80.01371,
+     "Perrysville Avenue"
+    ],
+    [
+     "Y",
+     40.46122,
+     -80.00872,
+     "Federal Street"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "waypoints": [
+    [
+     "Y (back)",
+     40.46122,
+     -80.00872,
+     "Federal Street"
+    ],
+    [
+     "Federal St Extension (back)",
+     40.464,
+     -80.0094,
+     "Federal Street Extension"
+    ],
+    [
+     "Z (back)",
+     40.46703,
+     -80.01004
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Z",
+     40.46703,
+     -80.01004
+    ],
+    [
+     "Perrysville Ave",
+     40.4757,
+     -80.0121,
+     "Perrysville Avenue"
+    ],
+    [
+     "Perrysville & Riverview",
+     40.4843,
+     -80.01386,
+     "Perrysville Avenue"
+    ],
+    [
+     "Riverview Ave: park entrance",
+     40.4835,
+     -80.0165,
+     "Riverview Avenue"
+    ],
+    [
+     "Riverview Ave: Allegheny Observatory",
+     40.48185,
+     -80.01796,
+     "Riverview Avenue"
+    ],
+    [
+     "Riverview Ave: below the Observatory",
+     40.48129,
+     -80.02107,
+     "Riverview Avenue"
+    ],
+    [
+     "Riverview Ave: west",
+     40.48245,
+     -80.0232,
+     "Riverview Avenue"
+    ],
+    [
+     "Riverview Ave: hairpin",
+     40.48425,
+     -80.02,
+     "Riverview Avenue"
+    ],
+    [
+     "Riverview Drive",
+     40.48358,
+     -80.0242,
+     "Riverview Avenue"
+    ],
+    [
+     "Davis Avenue Bridge",
+     40.48174,
+     -80.0257,
+     "Davis Avenue Bridge"
+    ],
+    [
+     "Davis Ave",
+     40.4817,
+     -80.03,
+     "Davis Avenue"
+    ],
+    [
+     "Davis & Brighton",
+     40.48154,
+     -80.03486
+    ],
+    [
+     "Brighton Rd",
+     40.471,
+     -80.0259,
+     "Brighton Road"
+    ],
+    [
+     "Brighton Rd",
+     40.4635,
+     -80.0225,
+     "Brighton Road"
+    ],
+    [
+     "Brighton Rd",
+     40.458,
+     -80.016,
+     "Brighton Road"
+    ],
+    [
+     "Brighton & Western",
+     40.45243,
+     -80.01401,
+     "Western Avenue"
+    ],
+    [
+     "Western Ave",
+     40.4513,
+     -80.0201,
+     "Western Avenue"
+    ],
+    [
+     "West End Bridge north end (junction)",
+     40.450595,
+     -80.023818
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 18420,
+    "toM": 18020
+   },
+   "waypoints": [
+    [
+     "C (ghost)",
+     40.450595,
+     -80.023818
+    ],
+    [
+     "West End Bridge (ghost)",
+     40.447725,
+     -80.026234
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 18020,
+    "toM": 18250,
+    "portals": [
+     [
+      40.450594,
+      -80.023816,
+      6
+     ],
+     [
+      40.449081,
+      -80.021258,
+      15
+     ]
+    ]
+   },
+   "waypoints": [
+    [
+     "West End Bridge",
+     40.447725,
+     -80.026234,
+     "West End Bridge"
+    ],
+    [
+     "West End Bridge north",
+     40.44964,
+     -80.02517
+    ]
+   ]
+  },
+  {
+   "mode": "trail",
+   "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 18250,
+    "toM": 19190
+   },
+   "waypoints": [
+    [
+     "West End Bridge north",
+     40.44964,
+     -80.02517
+    ],
+    [
+     "Casino Drive",
+     40.445639,
+     -80.019346
+    ]
+   ]
+  },
+  {
+   "mode": "trail",
+   "ghost": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 19190,
+    "toM": 18730
+   },
+   "waypoints": [
+    [
+     "Casino Drive (back)",
+     40.445639,
+     -80.019346
+    ],
+    [
+     "Ridge Ave (junction) (back)",
+     40.449089,
+     -80.021263
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Ridge Ave (junction)",
+     40.449089,
+     -80.021263
+    ],
+    [
+     "Ridge Ave",
+     40.44969,
+     -80.01832,
+     "Ridge Avenue"
+    ],
+    [
+     "Ridge Ave: West Park",
+     40.45165,
+     -80.01053,
+     "Ridge Avenue"
+    ],
+    [
+     "Ridge & Arch",
+     40.45198,
+     -80.00872,
+     "Arch Street"
+    ],
+    [
+     "Arch St: National Aviary",
+     40.4535,
+     -80.00835,
+     "Arch Street"
+    ],
+    [
+     "Arch St: Mexican War Streets",
+     40.4565,
+     -80.009,
+     "Arch Street"
+    ],
+    [
+     "Randyland (Arch & Jacksonia)",
+     40.4579,
+     -80.00953,
+     "Jacksonia Street"
+    ],
+    [
+     "Jacksonia St",
+     40.4581,
+     -80.0085,
+     "Jacksonia Street"
+    ],
+    [
+     "FJ Federal & Jacksonia (end)",
+     40.4582581,
+     -80.0075844
+    ]
+   ]
+  }
+ ],
+ "osmCache": "pittsburgh",
+ "heightPins": [
+  {
+   "lat": 40.46122,
+   "lon": -80.00872,
+   "eleM": 284.5,
+   "keepM": 30,
+   "why": "Federal St & Perrysville Ave (junction Y): passed straight up Federal St, and again off Perrysville Ave's bends onto Federal St; the second pass takes the first's plane (\"level\": \"first\": Federal St keeps its climb)",
+   "level": "first"
+  },
+  {
+   "lat": 40.46703,
+   "lon": -80.01004,
+   "eleM": 341.0,
+   "keepM": 30,
+   "everyPass": "round",
+   "why": "Perrysville Ave & Federal St Extension (junction Z): passed off Federal St Extension, round the block and from Perrysville Ave's bends, and on north; every pass level at one height round it"
+  }
+ ],
+ "routeBridgeMinM": 20,
+ "railGaps": [
+  {
+   "lat": 40.45391,
+   "lon": -80.01454,
+   "radiusM": 40,
+   "why": "Brighton Road's deck over the Fort Wayne Line: the railway runs in a cut the z14 ground fills, so a train drawn on the ground would run through the road; the tracks are left out under the deck"
+  }
+ ]
+}

@@ -6,7 +6,10 @@ import {
 } from './physics.js';
 import { shiftDirection } from './parsers.js';
 import { Recorder } from './recorder.js';
-import { routeAt, wrapDist, lapAt, finishDistanceM } from './gpx.js';
+import { routeAt, wrapDist, lapAt, finishDistanceM, carryAt, carrySpeed } from './gpx.js';
+
+/** SIM grade sent while a conveyor carries you (escalator): the trainer's lightest resistance, no pedalling needed. */
+export const CARRY_SIM_GRADE = -5;
 import { segmentIndexAt, targetWatts } from './workout.js';
 
 export const TICK_MS = 250;
@@ -29,6 +32,7 @@ export class Session extends EventTarget {
     this.mode = 'free';      // 'free' | 'route' | 'workout'
     this.route = null;       // built route (gpx.js)
     this.workout = null;     // parsed workout (workout.js)
+    this.sceneryRoute = null;   // network scenery behind a free ride or workout (setScenery)
     this.gear = settings.startGear;
     this._manualGrade = 0;
     this.workoutBias = 1;
@@ -61,6 +65,8 @@ export class Session extends EventTarget {
     this.target = null;
     this.trainerGrade = null;    // the grade the trainer feels: Hill feel × road grade, eased for momentum
     this.routeOffset = 0;
+    this.sceneryOffset = 0;       // a free ride's or workout's network scenery (F37): ridden from 0 with the ride
+    this.sceneryRoute?.netRide?.reset();
     this.routeStart = 0;          // metres along the route where this ride started (Reverse / ⅓ / ⅔)
     this.routeFinishM = null;     // point to point, not endless: metres to ride before the finish (null: endless)
     this.routeGoalM = null;       // route selector, "Keep riding": metres to the planned goal (a toast, the ride goes on)
@@ -104,7 +110,34 @@ export class Session extends EventTarget {
     return this.route.total - (this.routeRidden % this.route.total);
   }
   /** Current lap on a loop route (1-based). */
-  get routeLap() { return this.route ? lapAt(this.route, this.routeRidden) : 1; }
+  get routeLap() { return !this.route ? 1 : this.route.netRide ? this.route.netRide.lapAt(this.routePos) : lapAt(this.route, this.routeRidden); }
+  /**
+   * Scenery behind a free ride or workout (F37): a network's free ride (a path route) is ridden along as you go —
+   * from where it was set, its turns yours to choose as on a route; the grade stays the ride's own (free: yours,
+   * a workout: its targets). Anything else (a loop, none): null, and the app rolls the loop by as before.
+   */
+  setScenery(route) {
+    const r = route?.netRide ? route : null;
+    if (r === (this.sceneryRoute || null)) return;
+    this.sceneryRoute = r;
+    this.sceneryOffset = this.distanceM;
+    r?.netRide.reset();
+  }
+  /** Where you are on the scenery's path (metres since it was set). */
+  get sceneryPos() { return Math.max(0, this.distanceM - this.sceneryOffset); }
+  /** The network path whose turns you choose now — a network route's, or (off a route) the scenery's — and where you are on it. */
+  get turnRide() { return this.mode === 'route' ? this.route?.netRide || null : this.sceneryRoute?.netRide || null; }
+  get turnPos() { return this.mode === 'route' ? this.routePos : this.sceneryPos; }
+  /** On a network route (or network scenery): change the way you'll go at the next junction (−1 left, +1 right). */
+  turn(dir) {
+    const net = this.turnRide;
+    if (!net || !net.choose(dir, this.turnPos)) return false;
+    if (this.settings.haptics) this.ride.vibrate();
+    this._changed();
+    return true;
+  }
+  /** The conveyor carrying you (an escalator: {from, to, mps, label}), or null. */
+  get carry() { return this.mode === 'route' && this.route && !this.routeDone ? carryAt(this.route, this.routePos) : null; }
   get gradePct() {
     if (this.mode === 'route' && this.route) return this.routeDone ? 0 : routeAt(this.route, this.routePos).grade;
     return this._manualGrade;
@@ -203,6 +236,7 @@ export class Session extends EventTarget {
     this.routeGoalHit = false;
     this.mode = 'route';
     this.route = route;
+    route.netRide?.reset();   // a network route (js/network.js): the plan again, nothing chosen yet
     this.routeOffset = this.distanceM;
     this.routeDone = false;
     this._lastLap = 1;
@@ -258,7 +292,12 @@ export class Session extends EventTarget {
     if (name === 'navDown') return this.upDown(-1);
     if (name === 'A') return this.toggle();
     if (name === 'Y') return this.lap();
-    if (name === 'navRight' && this.mode === 'workout') return this.skipSegment();
+    if (name === 'navLeft' || name === 'navRight') {
+      // ◀ ▶ choose the turn; in a workout ▶ skips the step, except while a junction's prompt is up on its scenery
+      const net = this.turnRide;
+      if (net && (this.mode !== 'workout' || net.prompt(this.turnPos, this.speedMps))) return this.turn(name === 'navLeft' ? -1 : 1);
+      if (name === 'navRight' && this.mode === 'workout') return this.skipSegment();
+    }
   }
 
   // ---------- Loop ----------
@@ -299,16 +338,23 @@ export class Session extends EventTarget {
     // Physics
     const p = this.physicsParams();
     const grade = this.gradePct;
-    this.speedMps = stepSpeed(this.speedMps, this.power, grade, dt, p);
+    // An assisted conveyor (an escalator) carries you at its own pace (no road physics on it), and you slow gently onto it.
+    const carry = this.carry;
+    if (!carry) this.speedMps = stepSpeed(this.speedMps, this.power, grade, dt, p);
     // Demo mode holds a constant speed so every feature can be tried without a bike.
     if (this.demoSpeedMps != null) this.speedMps = this.running ? this.demoSpeedMps : 0;
+    // A network route slows you through sharp turns at junctions (then you pedal back up).
+    const net = this.mode === 'route' ? this.route?.netRide : null;
+    if (net && !this.routeDone) { const cap = net.speedCap(this.routePos); if (cap != null && this.speedMps > cap) this.speedMps = cap; }
+    if (this.mode === 'route' && this.route?.carry && !this.routeDone) this.speedMps = carrySpeed(this.route, this.routePos, this.speedMps, dt);
     if (this.running) {
       const ds = this.speedMps * dt;
       this.distanceM += ds;
       if (this.mode === 'route' && this.route) {
         // Only count climbing along the route — not the jump to its starting elevation.
         const ele = routeAt(this.route, this.routePos).ele;
-        if (this._eleRoute === this.route && ele > this.altitudeM) this.elevGainM += ele - this.altitudeM;
+        // (a conveyor's lift isn't climbing you did)
+        if (this._eleRoute === this.route && ele > this.altitudeM && !carry) this.elevGainM += ele - this.altitudeM;
         this._eleRoute = this.route;
         this.altitudeM = ele;
       } else {
@@ -317,7 +363,7 @@ export class Session extends EventTarget {
         this.altitudeM += dz;
         if (dz > 0) this.elevGainM += dz;
       }
-      if (this.speedMps > 0.3 || pedalling) this.movingS += dt;
+      if (this.speedMps > 0.3 || pedalling || carry) this.movingS += dt;
       this._powerSum += this.power;
       this._powerN++;
       if (this.mode === 'workout' && this.workout && !this.workoutDone) this.workoutT += dt;
@@ -325,12 +371,13 @@ export class Session extends EventTarget {
 
     this._updateRoute();
     this._updateWorkout(now);
-    this._record(now, grade);
-    this._control(nowPerf, p, grade, dt);
+    this._record(now, carry ? 0 : grade);
+    this._control(nowPerf, p, grade, carry, dt);
     this.dispatchEvent(new Event('tick'));
   }
 
   _updateRoute() {
+    if (this.mode !== 'route' && this.sceneryRoute) this.sceneryRoute.netRide.update(this.sceneryPos);   // its path refills, its turns lock
     if (this.mode !== 'route' || !this.route || this.routeDone) return;
     if (this.routeGoalM != null && !this.routeGoalHit && this.distanceM - this.routeOffset >= this.routeGoalM) {
       this.routeGoalHit = true;
@@ -345,6 +392,19 @@ export class Session extends EventTarget {
         this._lastSent = null;
         this.log('app', `Finish: ${this.route.name}`, 'ok');
         this.dispatchEvent(new Event('routeFinished'));
+      }
+      return;
+    }
+    if (this.route.netRide) {
+      // a network route: the path follows the plan (or your turns); a lap each time the plan comes round
+      this.route.netRide.update(this.routePos);
+      const lap = this.route.netRide.lapAt(this.routePos);
+      if (lap !== this._lastLap) {
+        this._lastLap = lap;
+        if (this.recorder.active) this.recorder.lap(Date.now(), `${this.route.name} · lap ${lap}`);
+        if (this.settings.haptics) this.ride.vibrate();
+        this.log('app', `Lap ${lap} of ${this.route.name}`, 'ok');
+        this.dispatchEvent(new Event('routeLap'));
       }
       return;
     }
@@ -409,7 +469,7 @@ export class Session extends EventTarget {
   }
 
   /** Send the trainer the resistance for the current gear, cadence, grade or workout step. */
-  _control(nowPerf, p, grade, dt = TICK_MS / 1000) {
+  _control(nowPerf, p, grade, carry = null, dt = TICK_MS / 1000) {
     // Ride feel: the trainer gets Hill feel × grade (like Zwift's trainer difficulty), eased in over a few
     // seconds the way momentum carries a real bike into a hill. Shifts still change resistance at once.
     this.trainerGrade = easeGrade(this.trainerGrade, feltGrade(grade, this.settings.hillFeel ?? HILL_FEEL_DEFAULT), dt);
@@ -429,6 +489,17 @@ export class Session extends EventTarget {
     if (wt != null) {
       this.target = { mode: 'ERG', value: wt, source: 'workout' };
       if (this._lastSent !== `w${wt}` || due) send(`w${wt}`, () => this.trainer.setErgWatts(wt));
+      return;
+    }
+
+    if (carry) {
+      // carried (an escalator): the lightest resistance, both modes; back to the gear's at the end
+      const erg = this.settings.shiftMode === 'erg';
+      this.target = { mode: erg ? 'ERG' : 'SIM', value: erg ? 0 : CARRY_SIM_GRADE, source: 'carry' };
+      if (this._lastSent !== 'carry' || due) {
+        this._lastSentMode = 'carry';
+        send('carry', () => (erg ? this.trainer.setErgWatts(0) : this.trainer.setGrade(CARRY_SIM_GRADE, { windMps: 0, crr: 0, cw: 0 })));
+      }
       return;
     }
 

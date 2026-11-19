@@ -1,0 +1,1033 @@
+{
+  "id": "pittsburgh",
+  "out": "routes/cities/pittsburgh-network.json",
+  "origin": {
+    "lat": 40.4375,
+    "lon": -79.9925
+  },
+  "map": "routes/cities/pittsburgh-map.json",
+  "areas": [
+    {
+      "id": "core",
+      "name": "Downtown, the North Shore & the South Side",
+      "catalogId": "pittsburgh",
+      "base": "routes/cities/pittsburgh.gpx",
+      "spec": "tools/city/pittsburgh-core.network.json"
+    },
+    {
+      "id": "allegheny",
+      "name": "The Allegheny & Troy Hill",
+      "catalogId": "pittsburgh-allegheny",
+      "base": "routes/cities/pittsburgh-allegheny.gpx",
+      "spec": "tools/city/pittsburgh-allegheny.network.json"
+    },
+    {
+      "id": "westend",
+      "name": "The West End",
+      "catalogId": "pittsburgh-westend",
+      "base": "routes/cities/pittsburgh-westend.gpx",
+      "spec": "tools/city/pittsburgh-westend.network.json"
+    },
+    {
+      "id": "oakland",
+      "name": "Oakland & Schenley Park",
+      "catalogId": "pittsburgh-oakland",
+      "base": "routes/cities/pittsburgh-oakland.gpx",
+      "spec": "tools/city/pittsburgh-oakland.network.json"
+    },
+    {
+      "id": "polish",
+      "name": "Polish Hill & Bloomfield",
+      "catalogId": "pittsburgh-polish",
+      "base": "routes/cities/pittsburgh-polish.gpx",
+      "spec": "tools/city/pittsburgh-polish.network.json"
+    },
+    {
+      "id": "homestead",
+      "name": "The Great Allegheny Passage & Homestead",
+      "catalogId": "pittsburgh-homestead",
+      "base": "routes/cities/pittsburgh-homestead.gpx",
+      "spec": "tools/city/pittsburgh-homestead.network.json"
+    },
+    {
+      "id": "northside",
+      "name": "The North Side",
+      "catalogId": "pittsburgh-northside",
+      "base": "routes/cities/pittsburgh-northside.gpx",
+      "spec": "tools/city/pittsburgh-northside.network.json"
+    },
+    {
+      "id": "eastend",
+      "name": "The East End",
+      "catalogId": "pittsburgh-eastend",
+      "base": "routes/cities/pittsburgh-eastend.gpx",
+      "spec": "tools/city/pittsburgh-eastend.network.json"
+    },
+    {
+      "id": "slopes",
+      "name": "The South Side Slopes & the Dirty Dozen",
+      "catalogId": "pittsburgh-slopes",
+      "base": "routes/cities/pittsburgh-slopes.gpx",
+      "spec": "tools/city/pittsburgh-slopes.network.json"
+    },
+    {
+      "id": "subway",
+      "name": "The subway: North Side to Gateway",
+      "catalogId": "pittsburgh-subway",
+      "base": "routes/cities/pittsburgh-subway.gpx",
+      "spec": "tools/city/pittsburgh-subway.network.json"
+    }
+  ],
+  "presets": [
+    {
+      "id": "pgh-three-rivers",
+      "name": "Three Rivers Loop",
+      "path": [
+        "A>NS+",
+        "NS>CB+",
+        "CB>B+",
+        "B>GW+",
+        "GW>E+",
+        "E>F+",
+        "F>G+",
+        "G>Q+",
+        "Q>H+",
+        "H>G+",
+        "G>GV+",
+        "GV>D+",
+        "D>C+",
+        "C>R+",
+        "R>A+"
+      ],
+      "tags": [
+        "varied"
+      ],
+      "note": "The whole loop: the Point, downtown, the South Side and the McArdle climb to Grandview"
+    },
+    {
+      "id": "pgh-three-rivers-rev",
+      "name": "Three Rivers Loop · reverse",
+      "path": [
+        "R>A-",
+        "C>R-",
+        "D>C-",
+        "GV>D-",
+        "G>GV-",
+        "H>G-",
+        "Q>H-",
+        "G>Q-",
+        "F>G-",
+        "E>F-",
+        "GW>E-",
+        "B>GW-",
+        "CB>B-",
+        "NS>CB-",
+        "A>NS-"
+      ],
+      "tags": [
+        "varied"
+      ],
+      "note": "The loop the other way: over the West End Bridge, Grandview and down McArdle first"
+    },
+    {
+      "id": "pgh-short-loop",
+      "name": "South Side Short Loop",
+      "path": [
+        "A>NS+",
+        "NS>CB+",
+        "CB>B+",
+        "B>GW+",
+        "GW>E+",
+        "E>F+",
+        "F>G+",
+        "G>GV+",
+        "GV>D+",
+        "D>C+",
+        "C>R+",
+        "R>A+"
+      ],
+      "tags": [
+        "short",
+        "hilly"
+      ],
+      "note": "Skips the South Side riverfront: right at East Carson & 10th, straight up McArdle"
+    },
+    {
+      "id": "pgh-short-loop-rev",
+      "name": "South Side Short Loop · reverse",
+      "path": [
+        "R>A-",
+        "C>R-",
+        "D>C-",
+        "GV>D-",
+        "G>GV-",
+        "F>G-",
+        "E>F-",
+        "GW>E-",
+        "B>GW-",
+        "CB>B-",
+        "NS>CB-",
+        "A>NS-"
+      ],
+      "tags": [
+        "short",
+        "hilly"
+      ],
+      "note": "Grandview and down McArdle, then left at East Carson & 10th back to downtown"
+    },
+    {
+      "id": "pgh-south-side",
+      "name": "South Side Flat Loop",
+      "path": [
+        "G>Q+",
+        "Q>H+",
+        "H>G+"
+      ],
+      "tags": [
+        "flat",
+        "short"
+      ],
+      "note": "East Carson Street and the river trail, round and round from East Carson & 10th"
+    },
+    {
+      "id": "pgh-west-end",
+      "name": "Three Rivers Loop + West End Overlook",
+      "path": [
+        "A>NS+",
+        "NS>CB+",
+        "CB>B+",
+        "B>GW+",
+        "GW>E+",
+        "E>F+",
+        "F>G+",
+        "G>Q+",
+        "Q>H+",
+        "H>G+",
+        "G>GV+",
+        "GV>D+",
+        "D>O+",
+        "D>O-",
+        "D>C+",
+        "C>R+",
+        "R>A+"
+      ],
+      "tags": [
+        "hilly",
+        "new"
+      ],
+      "note": "The whole loop with the climb through Elliott to the West End Overlook and back down"
+    },
+    {
+      "id": "pgh-jail-trail",
+      "name": "Jail Trail & South Side Loop",
+      "path": [
+        "E>I+",
+        "I>S+",
+        "S>H+",
+        "H>G+",
+        "F>G-",
+        "E>F-"
+      ],
+      "tags": [
+        "flat",
+        "short",
+        "new"
+      ],
+      "note": "From downtown along the Jail Trail, over the Hot Metal Bridge and back on the South Side river trail"
+    },
+    {
+      "id": "pgh-point-jail",
+      "name": "Point & Jail Trail Loop",
+      "path": [
+        "A>NS+",
+        "NS>CB+",
+        "CB>B+",
+        "B>GW+",
+        "GW>E+",
+        "E>I+",
+        "I>S+",
+        "S>H+",
+        "H>G+",
+        "F>G-",
+        "E>F-",
+        "GW>E-",
+        "B>GW-",
+        "CB>B-",
+        "NS>CB-",
+        "A>NS-"
+      ],
+      "tags": [
+        "flat",
+        "new"
+      ],
+      "note": "The Point and downtown, the Jail Trail, the Hot Metal Bridge and the river trail, back by the Smithfield Street Bridge"
+    },
+    {
+      "id": "pgh-jail-mt-washington",
+      "name": "Jail Trail & Mount Washington Loop",
+      "path": [
+        "A>NS+",
+        "NS>CB+",
+        "CB>B+",
+        "B>GW+",
+        "GW>E+",
+        "E>I+",
+        "I>S+",
+        "S>H+",
+        "H>G+",
+        "G>GV+",
+        "GV>D+",
+        "D>C+",
+        "C>R+",
+        "R>A+"
+      ],
+      "tags": [
+        "varied",
+        "new"
+      ],
+      "note": "The flat Jail Trail out, the river trail, then the McArdle climb and Grandview home"
+    },
+    {
+      "id": "pgh-mt-washington",
+      "name": "Mount Washington There & Back",
+      "path": [
+        "G>GV+",
+        "GV>D+",
+        "D>C+",
+        "C>R+",
+        "R>A+",
+        "R>A-",
+        "C>R-",
+        "D>C-",
+        "GV>D-",
+        "G>GV-"
+      ],
+      "tags": [
+        "hilly"
+      ],
+      "note": "Up McArdle, along Grandview to the Water Steps, then back over the top"
+    },
+    {
+      "id": "pgh-long",
+      "name": "Three Rivers There & Back",
+      "path": [
+        "A>NS+",
+        "NS>CB+",
+        "CB>B+",
+        "B>GW+",
+        "GW>E+",
+        "E>F+",
+        "F>G+",
+        "G>Q+",
+        "Q>H+",
+        "H>G+",
+        "G>GV+",
+        "GV>D+",
+        "D>C+",
+        "C>R+",
+        "R>A+",
+        "R>A-",
+        "C>R-",
+        "D>C-",
+        "GV>D-",
+        "G>GV-",
+        "H>G-",
+        "Q>H-",
+        "G>Q-",
+        "F>G-",
+        "E>F-",
+        "GW>E-",
+        "B>GW-",
+        "CB>B-",
+        "NS>CB-",
+        "A>NS-"
+      ],
+      "tags": [
+        "long",
+        "varied"
+      ],
+      "note": "The whole loop, then the whole loop backwards"
+    },
+    {
+      "id": "pgh-schenley",
+      "name": "Schenley Park Loop",
+      "path": [
+        "J>K+",
+        "K>J+"
+      ],
+      "tags": [
+        "short",
+        "hilly",
+        "new"
+      ],
+      "note": "Round Schenley Park from Phipps: Schenley Drive, Serpentine Drive, the Oval and up Panther Hollow"
+    },
+    {
+      "id": "pgh-oakland",
+      "name": "Jail Trail, Oakland & Schenley",
+      "path": [
+        "E>I+",
+        "I>L+",
+        "L>J+",
+        "J>K+",
+        "K>J+",
+        "L>J-",
+        "I>L-",
+        "E>I-"
+      ],
+      "tags": [
+        "varied",
+        "new"
+      ],
+      "note": "The Jail Trail, up Junction Hollow to Oakland and the Cathedral of Learning, round Schenley Park and back down to downtown"
+    },
+    {
+      "id": "pgh-oakland-south",
+      "name": "Oakland & South Side Loop",
+      "path": [
+        "A>NS+",
+        "NS>CB+",
+        "CB>B+",
+        "B>GW+",
+        "GW>E+",
+        "E>I+",
+        "I>L+",
+        "L>J+",
+        "J>K+",
+        "K>J+",
+        "L>J-",
+        "I>L-",
+        "I>S+",
+        "S>H+",
+        "H>G+",
+        "F>G-",
+        "E>F-",
+        "GW>E-",
+        "B>GW-",
+        "CB>B-",
+        "NS>CB-",
+        "A>NS-"
+      ],
+      "tags": [
+        "long",
+        "varied",
+        "new"
+      ],
+      "note": "The Point, the Jail Trail, Oakland and Schenley Park, then over the Hot Metal Bridge and home on the river trail"
+    },
+    {
+      "id": "pgh-allegheny",
+      "name": "Allegheny Loop",
+      "path": [
+        "A>P+",
+        "P>N+",
+        "N>LB+",
+        "LB>M+",
+        "M>B+",
+        "CB>B-",
+        "NS>CB-",
+        "A>NS-"
+      ],
+      "tags": [
+        "flat",
+        "new"
+      ],
+      "note": "From the Water Steps along the North Shore Trail to Millvale, over the 40th Street Bridge, down Butler Street and through the Strip, home over the Clemente Bridge"
+    },
+    {
+      "id": "pgh-allegheny-rev",
+      "name": "Allegheny Loop · reverse",
+      "path": [
+        "A>NS+",
+        "NS>CB+",
+        "CB>B+",
+        "M>B-",
+        "LB>M-",
+        "N>LB-",
+        "P>N-",
+        "A>P-"
+      ],
+      "tags": [
+        "flat",
+        "new"
+      ],
+      "note": "Over the Clemente Bridge, up Penn Avenue and Smallman Street through the Strip and Lawrenceville, back along the river from Millvale"
+    },
+    {
+      "id": "pgh-allegheny-jail",
+      "name": "Allegheny & Jail Trail Loop",
+      "path": [
+        "A>P+",
+        "P>N+",
+        "N>LB+",
+        "LB>M+",
+        "M>B+",
+        "B>GW+",
+        "GW>E+",
+        "E>I+",
+        "I>S+",
+        "S>H+",
+        "H>G+",
+        "F>G-",
+        "E>F-",
+        "GW>E-",
+        "B>GW-",
+        "CB>B-",
+        "NS>CB-",
+        "A>NS-"
+      ],
+      "tags": [
+        "long",
+        "flat",
+        "new"
+      ],
+      "note": "Both rivers on the flat: the Allegheny Loop, the Point, the Jail Trail, the Hot Metal Bridge and the South Side river trail"
+    },
+    {
+      "id": "pgh-troy-hill",
+      "name": "Troy Hill Climb Loop",
+      "path": [
+        "P>N+",
+        "N>P+"
+      ],
+      "tags": [
+        "short",
+        "hilly",
+        "new"
+      ],
+      "note": "From the 16th Street Bridge along the river to the 31st Street Bridge, straight up Rialto Street (Pig Hill, about 24 %), over Troy Hill and back down Troy Hill Road"
+    },
+    {
+      "id": "pgh-troy-hill-steps",
+      "name": "Water Steps & Troy Hill",
+      "path": [
+        "A>P+",
+        "P>N+",
+        "N>P+",
+        "A>P-"
+      ],
+      "tags": [
+        "hilly",
+        "new"
+      ],
+      "note": "Out along the North Shore Trail, up Rialto Street to Troy Hill and down Troy Hill Road, back past PNC Park to the Water Steps"
+    },
+    {
+      "id": "pgh-allegheny-troy",
+      "name": "Allegheny Loop + Troy Hill",
+      "path": [
+        "A>P+",
+        "P>N+",
+        "N>P+",
+        "P>N+",
+        "N>LB+",
+        "LB>M+",
+        "M>B+",
+        "CB>B-",
+        "NS>CB-",
+        "A>NS-"
+      ],
+      "tags": [
+        "hilly",
+        "varied",
+        "new"
+      ],
+      "note": "The Allegheny Loop with a lap of Troy Hill: up Rialto Street at the 31st Street Bridge, down Troy Hill Road, then on to Millvale, Lawrenceville and the Strip"
+    },
+    {
+      "id": "pgh-polish-hill",
+      "name": "Polish Hill Climb Loop",
+      "path": [
+        "X>T+",
+        "T>X+"
+      ],
+      "tags": [
+        "short",
+        "hilly",
+        "new"
+      ],
+      "note": "From Liberty Ave over the 28th Street Bridge, up Brereton St past Immaculate Heart of Mary and Dobson St, down Herron Avenue's hairpin and back along Liberty"
+    },
+    {
+      "id": "pgh-polish-crosstown",
+      "name": "Polish Hill, Bloomfield & Oakland Loop",
+      "path": [
+        "M>X+",
+        "X>T+",
+        "T>L+",
+        "I>L-",
+        "E>I-",
+        "GW>E-",
+        "B>GW-",
+        "M>B-"
+      ],
+      "tags": [
+        "varied",
+        "new"
+      ],
+      "note": "From the Strip up through Polish Hill, over the Bloomfield Bridge, through Bloomfield and across to Schenley Plaza; down Junction Hollow, the Jail Trail into downtown and Penn Avenue back to the Strip"
+    },
+    {
+      "id": "pgh-polish-rivers",
+      "name": "Allegheny, Polish Hill & Oakland Loop",
+      "path": [
+        "A>P+",
+        "P>N+",
+        "N>LB+",
+        "LB>M+",
+        "M>X+",
+        "X>T+",
+        "T>L+",
+        "I>L-",
+        "E>I-",
+        "GW>E-",
+        "B>GW-",
+        "CB>B-",
+        "NS>CB-",
+        "A>NS-"
+      ],
+      "tags": [
+        "long",
+        "varied",
+        "new"
+      ],
+      "note": "The North Shore Trail to Millvale and Lawrenceville, up through Polish Hill and Bloomfield to Oakland, down Junction Hollow and the Jail Trail, home over the Clemente Bridge"
+    },
+    {
+      "id": "pgh-gap-homestead",
+      "name": "Great Allegheny Passage to Homestead",
+      "path": [
+        "S>H-",
+        "S>GB+",
+        "GB>W+",
+        "W>U+",
+        "U>EA+",
+        "EA>V+",
+        "W>V-",
+        "GB>W-",
+        "S>GB-",
+        "S>H+"
+      ],
+      "tags": [
+        "flat",
+        "new"
+      ],
+      "note": "From SouthSide Works out the GAP along the Mon to the Waterfront, a lap of Homestead past the Pump House and Eighth Avenue, and back"
+    },
+    {
+      "id": "pgh-jail-gap",
+      "name": "Jail Trail & the GAP to Homestead",
+      "path": [
+        "B>GW+",
+        "GW>E+",
+        "E>I+",
+        "I>S+",
+        "S>GB+",
+        "GB>W+",
+        "W>U+",
+        "U>EA+",
+        "EA>V+",
+        "W>V-",
+        "GB>W-",
+        "S>GB-",
+        "S>H+",
+        "H>G+",
+        "F>G-",
+        "E>F-",
+        "GW>E-",
+        "B>GW-"
+      ],
+      "tags": [
+        "long",
+        "flat",
+        "new"
+      ],
+      "note": "The Point, the Jail Trail and the Hot Metal Bridge, the GAP to Homestead and a lap past the Pump House, home on the South Side river trail"
+    },
+    {
+      "id": "pgh-gap-two-bridges",
+      "name": "The GAP & Two Bridges",
+      "path": [
+        "S>H-",
+        "S>GB+",
+        "GB>W+",
+        "W>V+",
+        "V>U+",
+        "U>EA+",
+        "EA>GB+",
+        "S>GB-",
+        "S>H+"
+      ],
+      "tags": [
+        "long",
+        "varied",
+        "new"
+      ],
+      "note": "From SouthSide Works out the GAP to the Waterfront, Waterfront Drive past the shops to the Pump House, Eighth Avenue through Homestead, over the Homestead Grays Bridge, down to Duck Hollow and the Duck Hollow Trail to Hazelwood, back over the Glenwood Bridge and home on the GAP"
+    },
+    {
+      "id": "pgh-northside-hills",
+      "name": "North Side Hills Loop",
+      "path": [
+        "A>NS+",
+        "NS>CB+",
+        "CB>FJ+",
+        "FJ>Y+",
+        "Y>Z+",
+        "Z>C+",
+        "C>R+",
+        "R>A+"
+      ],
+      "tags": [
+        "hilly",
+        "new"
+      ],
+      "note": "From the Water Steps: past PNC Park, up Federal Street round Allegheny Center, the Fineview climb and overlook, Riverview Park and the Allegheny Observatory, the Davis Avenue Bridge, down Brighton Road and home along the river"
+    },
+    {
+      "id": "pgh-northside-hills-rev",
+      "name": "North Side Hills Loop · reverse",
+      "path": [
+        "R>A-",
+        "C>R-",
+        "Z>C-",
+        "Y>Z-",
+        "FJ>Y-",
+        "CB>FJ-",
+        "NS>CB-",
+        "A>NS-"
+      ],
+      "tags": [
+        "hilly",
+        "new"
+      ],
+      "note": "Along the river and up Brighton Road to Riverview Park and the Observatory first, then down through Fineview past the overlook and down Federal Street to PNC Park"
+    },
+    {
+      "id": "pgh-northside-clemente",
+      "name": "North Side Hills Loop · from the Clemente Bridge",
+      "path": [
+        "CB>B-",
+        "CB>FJ+",
+        "FJ>Y+",
+        "Y>Z+",
+        "Z>C+",
+        "C>R+",
+        "R>A+",
+        "A>NS+",
+        "NS>CB+",
+        "CB>B+"
+      ],
+      "tags": [
+        "hilly",
+        "new"
+      ],
+      "note": "From downtown over the Clemente Bridge straight up Federal Street, the Fineview climb, Riverview Park and the Observatory, down Brighton Road, the river past the Science Center and PNC Park, and back over the bridge"
+    },
+    {
+      "id": "pgh-fineview",
+      "name": "Fineview Climb Loop",
+      "path": [
+        "A>NS+",
+        "NS>CB+",
+        "CB>FJ+",
+        "FJ>Y+",
+        "Y>Z+",
+        "Z>Y+",
+        "FJ>Y-",
+        "R>FJ-",
+        "R>A+"
+      ],
+      "tags": [
+        "short",
+        "hilly",
+        "new"
+      ],
+      "note": "From the Water Steps up Federal Street, up Belleau Street to the Fineview Overlook, down Perrysville Avenue's bends, Randyland and the Aviary, home along the river"
+    },
+    {
+      "id": "pgh-three-rivers-northside",
+      "name": "Three Rivers & North Side Loop",
+      "path": [
+        "A>NS+",
+        "NS>CB+",
+        "CB>B+",
+        "B>GW+",
+        "GW>E+",
+        "E>F+",
+        "F>G+",
+        "G>Q+",
+        "Q>H+",
+        "H>G+",
+        "G>GV+",
+        "GV>D+",
+        "D>C+",
+        "Z>C-",
+        "Y>Z-",
+        "FJ>Y-",
+        "R>FJ-",
+        "R>A+"
+      ],
+      "tags": [
+        "long",
+        "varied",
+        "new"
+      ],
+      "note": "The Three Rivers Loop with McArdle and Grandview, over the West End Bridge, up Brighton Road to Riverview Park, down through Fineview, Randyland and the Aviary to the Water Steps"
+    },
+    {
+      "id": "pgh-allegheny-east-end",
+      "name": "Allegheny, East End & Oakland Loop",
+      "path": [
+        "A>P+",
+        "P>N+",
+        "N>LB+",
+        "LB>HE+",
+        "HP>HE-",
+        "HP>EL+",
+        "SQ>EL-",
+        "SQ>K+",
+        "K>J+",
+        "L>J-",
+        "I>L-",
+        "E>I-",
+        "GW>E-",
+        "B>GW-",
+        "CB>B-",
+        "NS>CB-",
+        "A>NS-"
+      ],
+      "tags": [
+        "long",
+        "varied",
+        "new"
+      ],
+      "note": "The North Shore Trail to Millvale and over the 40th Street Bridge, up Stanton Ave to Highland Park and round the reservoir, East Liberty and Shady Ave to Squirrel Hill, Forbes to Schenley Park, round the Oval and down through Oakland, Junction Hollow and the Jail Trail, home over the Clemente Bridge"
+    },
+    {
+      "id": "pgh-sycamore",
+      "name": "Sycamore Street & Grandview",
+      "path": [
+        "F>SY+",
+        "GV>SY-",
+        "G>GV-",
+        "F>G-"
+      ],
+      "tags": [
+        "short",
+        "hilly",
+        "new"
+      ],
+      "note": "From Station Square straight up Sycamore Street (a Dirty Dozen climb) to Mount Washington, over Wyoming St's cobbles to Grandview past the Monongahela Incline, down McArdle and back along East Carson"
+    },
+    {
+      "id": "pgh-slopes",
+      "name": "South Side Slopes Climb Loop",
+      "path": [
+        "AL>Q-",
+        "AL>SY+",
+        "F>SY-",
+        "F>G+",
+        "G>Q+"
+      ],
+      "tags": [
+        "hilly",
+        "new"
+      ],
+      "note": "From East Carson & 27th up the Slopes' Dirty Dozen streets (Barry, Holt and Eleanor), along Arlington's ridge to Allentown, over Bailey Ave to Mount Washington, down Sycamore Street to Station Square and East Carson home"
+    },
+    {
+      "id": "pgh-dirty-dozen",
+      "name": "Dirty Dozen South Loop",
+      "path": [
+        "F>SY+",
+        "SY>AL+",
+        "AL>Q+",
+        "G>Q-",
+        "F>G-"
+      ],
+      "tags": [
+        "hilly",
+        "varied",
+        "new"
+      ],
+      "note": "Up Sycamore Street from Station Square, across Mount Washington and down to Beechview for Boustead Street and Canton Avenue's cobbles (about 37 %), up Warrington Ave to Allentown, along Arlington's ridge and down the South Side Slopes to East Carson"
+    },
+    {
+      "id": "pgh-dirty-dozen-slopes",
+      "name": "Dirty Dozen South from the Slopes",
+      "path": [
+        "AL>Q-",
+        "AL>SY+",
+        "SY>AL+",
+        "AL>Q+"
+      ],
+      "tags": [
+        "hilly",
+        "new"
+      ],
+      "note": "From East Carson & 27th up Barry, Holt and Eleanor to Allentown, over to Mount Washington and down to Beechview for Boustead Street and Canton Avenue's cobbles, back up Warrington Ave and down the Slopes"
+    },
+    {
+      "id": "pgh-subway-point",
+      "name": "Under the Allegheny: North Shore to the Point",
+      "path": [
+        "A>NS+",
+        "NS>GW+",
+        "B>GW-",
+        "CB>B-",
+        "NS>CB-",
+        "A>NS-"
+      ],
+      "tags": [
+        "short",
+        "flat",
+        "new"
+      ],
+      "note": "From the Water Steps: the escalator down at North Side, the subway path under the Allegheny, up at Gateway, round the Point and the riverfront, home over the Clemente Bridge"
+    },
+    {
+      "id": "pgh-subway-three-rivers",
+      "name": "Three Rivers Loop · via the subway",
+      "path": [
+        "A>NS+",
+        "NS>GW+",
+        "GW>E+",
+        "E>F+",
+        "F>G+",
+        "G>Q+",
+        "Q>H+",
+        "H>G+",
+        "G>GV+",
+        "GV>D+",
+        "D>C+",
+        "C>R+",
+        "R>A+"
+      ],
+      "tags": [
+        "varied",
+        "new"
+      ],
+      "note": "The Three Rivers Loop with the subway under the Allegheny instead of the Clemente Bridge and the Point"
+    },
+    {
+      "id": "pgh-long-subway",
+      "name": "Long Loop · out by the subway",
+      "path": [
+        "A>NS+",
+        "NS>GW+",
+        "GW>E+",
+        "E>F+",
+        "F>G+",
+        "G>Q+",
+        "Q>H+",
+        "H>G+",
+        "G>GV+",
+        "GV>D+",
+        "D>C+",
+        "C>R+",
+        "R>A+",
+        "R>A-",
+        "C>R-",
+        "D>C-",
+        "GV>D-",
+        "G>GV-",
+        "H>G-",
+        "Q>H-",
+        "G>Q-",
+        "F>G-",
+        "E>F-",
+        "GW>E-",
+        "B>GW-",
+        "CB>B-",
+        "NS>CB-",
+        "A>NS-"
+      ],
+      "tags": [
+        "long",
+        "varied",
+        "new"
+      ],
+      "note": "The long loop both ways: out under the Allegheny by the subway, home round the Point and over the Clemente Bridge"
+    }
+  ],
+  "freeRide": {
+    "name": "Free Ride · choose every turn",
+    "first": "A>NS+",
+    "note": "No plan: from the Water Steps, straight on at every junction unless you choose a turn. Ride until you stop",
+    "prefer": {
+      "LB": "N>LB-",
+      "NS": "NS>CB+",
+      "SY": "F>SY-",
+      "GW": "B>GW-",
+      "CB": "CB>B+"
+    }
+  },
+  "keySplits": {
+    "G>A": [
+      "G>D",
+      "D>A"
+    ],
+    "E>H": [
+      "E>I",
+      "I>H"
+    ],
+    "I>H": [
+      "I>S",
+      "S>H"
+    ],
+    "I>J": [
+      "I>L",
+      "L>J"
+    ],
+    "A>E": [
+      "A>B",
+      "B>E"
+    ],
+    "D>A": [
+      "D>C",
+      "C>R",
+      "R>A"
+    ],
+    "E>G": [
+      "E>F",
+      "F>G"
+    ],
+    "G>D": [
+      "G>GV",
+      "GV>D"
+    ],
+    "G>H": [
+      "G>Q",
+      "Q>H"
+    ],
+    "N>M": [
+      "N>LB",
+      "LB>M"
+    ],
+    "A>B": [
+      "A>NS",
+      "NS>B"
+    ],
+    "B>E": [
+      "B>GW",
+      "GW>E"
+    ],
+    "S>W": [
+      "S>GB",
+      "GB>W"
+    ],
+    "U>V": [
+      "U>EA",
+      "EA>V"
+    ],
+    "NS>B": [
+      "NS>CB",
+      "CB>B"
+    ],
+    "R>Y": [
+      "R>FJ",
+      "FJ>Y"
+    ]
+  }
+}

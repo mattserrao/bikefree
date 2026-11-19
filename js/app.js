@@ -6,12 +6,14 @@ import { powerRequired, speedFromCadence, WHEEL_CIRC } from './physics.js';
 import { loadSettings, saveSettings, KG_PER_LB, MI_PER_KM } from './settings.js';
 import { rideToFit, fitFilename, summarize } from './recorder.js';
 import * as store from './store.js';
-import { parseGpx, buildRoute, averageGradeAhead, wrapDist, routeAt, isPointToPoint, finishDistanceM, legSpan } from './gpx.js';
+import { parseGpx, buildRoute, averageGradeAhead, wrapDist, routeAt, isPointToPoint, finishDistanceM, legSpan, carryAt } from './gpx.js';
 import { Pacer, PACER_WATTS } from './pacer.js';
 import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor, markFtpTest, ftpFromTwentyMinutes } from './workout.js';
-import { drawProfile, drawWorkout, drawTrace, drawMinimap, gradeColor, profileDistAt } from './views.js';
+import { drawProfile, drawWorkout, drawTrace, drawMinimap, drawNetworkMinimap, drawCityMap, gradeColor, profileDistAt } from './views.js';
+import { groupByArea, groupCityItems, citySubline, filterByGoal, segmentRoutes, pickOnSegment, nearestLine, fitProjection, zoomProjection, zoomAt, panBy, mergeRivers, areaLabelSpots, shortName } from './city-routes.js';
 import { Profiles, GENDERS, initials, cmToFtIn, ftInToCm } from './profiles.js';
 import { buildCatalogRoute, loadRouteScene } from './routes.js';
+import { loadNetwork, makePathRoute, planNext, planCloses, keysToIds, idsToKeys, travKey, PathFollower, edgeLines } from './network.js';
 import { legLength, startPosition, stopsForDirection, stopNear, planRide, startArchM } from './route-plan.js';
 import { VERSION } from './version.js';
 import { ScreenAwake } from './wakelock.js';
@@ -263,7 +265,7 @@ const planWatts = () => (Number(settings.planWatts) > 0 ? Number(settings.planWa
 const lengthGoal = () => ({ mode: rideLength.mode, value: rideLength.mode === 'open' ? 0 : rideLength[rideLength.mode] });
 /** Everything the Start button would ride on a route: start, the planned ride, its finish or goal. */
 function chosenPlan(r) {
-  const st = startOf(r), startM = startPosition(r, st), p2p = isPointToPoint(r), keep = routeChoice.endless;
+  const st = startOf(r), startM = startPosition(r, st), p2p = isPointToPoint(r) || !!r.netOpen, keep = routeChoice.endless;
   const len = lengthGoal();
   const plan = planRide(r, startM, len, { watts: planWatts(), params: session.physicsParams(), pointToPoint: p2p, stopAtEnd: !keep });
   const distM = plan.distM == null ? null : Math.max(10, Math.round(plan.distM));
@@ -311,6 +313,7 @@ function renderRouteSelector(r, cp) {
   const { st, startM, p2p, plan, len } = cp;
   const leg = legLength(r);
   for (const b of $('dirSeg').children) b.classList.toggle('on', (b.dataset.dir === 'rev') === st.reverse);
+  $('dirSeg').hidden = !!r.netRide;   // a network preset has its own direction (and turns of your choosing)
   // start chips: the beginning of the leg, then the named stops in riding order
   const list = stopsForDirection(r, r.stops, st.reverse);
   const chips = [];
@@ -340,13 +343,15 @@ function renderRouteSelector(r, cp) {
     const legEnd = startM < leg ? leg : r.total;
     const back = plan.endM - legEnd;
     note = `<b>${fmtDist(plan.distM, 1)} ${distUnit()}</b> · <b>${fmtElev(plan.climbM).toLocaleString()} ${elevUnit()}</b> climb · <b>~${fmtPlanTime(plan.timeS)}</b> at ${planWatts()} W`;
-    if (back > 50 && plan.endM <= r.total + leg) note += ` · turns at the ${startM < leg ? 'far end' : 'start'} and comes back ${fmtDist(back, 1)} ${distUnit()}`;
+    if (r.netRide) { if (plan.distM > leg + 50) note += ` · about ${(plan.distM / leg).toFixed(1)} laps`; }
+    else if (back > 50 && plan.endM <= r.total + leg) note += ` · turns at the ${startM < leg ? 'far end' : 'start'} and comes back ${fmtDist(back, 1)} ${distUnit()}`;
     else if (back > 50) note += ' · more than there and back';
-    if (end && back <= 50) note += ` · ends ${end.d < 150 ? 'at' : 'near'} ${esc(end.name)}`;
+    if (end && (back <= 50 || r.netRide)) note += ` · ends ${end.d < 150 ? 'at' : 'near'} ${esc(end.name)}`;
     if (plan.capped) note += ` <span class="warn">· the stage finishes first</span>`;
     if (cp.goalM != null) note += ' · goal only, the ride keeps going';
   } else {
-    note = p2p ? 'Turns at the finish and rides it back, endlessly.' : 'Rides on until you stop, turning at each end.';
+    note = r.netRide ? 'Rides on until you stop, lap after lap — or wherever your turns take you.'
+      : p2p ? 'Turns at the finish and rides it back, endlessly.' : 'Rides on until you stop, turning at each end.';
   }
   $('planNote').innerHTML = note;
 }
@@ -380,16 +385,165 @@ const endDrag = () => { if (pvDragging) { pvDragging = false; saveRouteChoice();
 $('pvChart').addEventListener('pointerup', endDrag);
 $('pvChart').addEventListener('pointercancel', endDrag);
 
+/** A network route's first lap as a route-like view (thumbnails and the preview map); other routes as they are. */
+function lapView(r) {
+  if (!r?.lapM) return r;
+  const n = Math.round(r.lapM / 10) + 1;
+  return { lat: r.lat.subarray(0, n), lon: r.lon.subarray(0, n), dist: r.dist.subarray(0, n), total: r.lapM };
+}
+
+// ---------- Map planner (ride networks) ----------
+// Tap a junction to start, then each segment to ride (only the ways on from where you've got to light up);
+// tapping the segment you just rode turns back along it. A route that ends where it started laps; one that
+// ends elsewhere finishes there. Saved in settings by segment names (they survive a rebuilt network).
+const plan = { net: null, item: null, start: null, keys: [], layout: null };
+function openPlanner(item = routeItems.find((it) => it.id === selectedRouteId)) {
+  const r = item && routeCache.get(item.id);
+  if (!r?.netRide || !item) return;
+  plan.net = r.network; plan.item = item; plan.start = null; plan.keys = [];
+  $('planTitle').textContent = `Plan your own route · ${(item.name || '').split(' · ')[0]}`;
+  $('planName').value = '';
+  $('planDlg').showModal();
+  renderPlanner();
+}
+$('planOpen').addEventListener('click', () => openPlanner());
+$('planUndo').addEventListener('click', () => { if (plan.keys.length) plan.keys.pop(); else plan.start = null; renderPlanner(); });
+$('planClear').addEventListener('click', () => { plan.keys = []; plan.start = null; renderPlanner(); });
+$('planName').addEventListener('input', () => renderPlanFacts());
+$('planDlg').addEventListener('close', () => { if ($('planDlg').returnValue === 'save') savePlan(); });
+
+function planLayout(canvas) {
+  const net = plan.net, lines = edgeLines(net).map((x) => ({ e: x.e, lat: [...x.lat], lon: [...x.lon] }));   // (each segment from its own area's line)
+  const rect = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr);
+  let lat0 = 0, n = 0, minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const L of lines) for (const v of L.lat) { lat0 += v; n++; }
+  lat0 /= n;
+  const kx = Math.cos((lat0 * Math.PI) / 180) * 111320, ky = 110540;
+  for (const L of lines) for (let i = 0; i < L.lat.length; i++) {
+    const x = L.lon[i] * kx, y = L.lat[i] * ky;
+    minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+  }
+  const pad = 34 * dpr, w = canvas.width, h = canvas.height;
+  const sc = Math.min((w - pad * 2) / (maxX - minX), (h - pad * 2) / (maxY - minY));
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  const X = (lon) => w / 2 + (lon * kx - cx) * sc, Y = (lat) => h / 2 - (lat * ky - cy) * sc;
+  for (const L of lines) L.pts = L.lat.map((la, i) => [X(L.lon[i]), Y(la)]);
+  const nodes = [...net.nodes.values()].map((nd) => ({ nd, x: X(nd.lon), y: Y(nd.lat) }));
+  return { lines, nodes, dpr, w, h };
+}
+const segDist = (pts, x, y) => {
+  let best = Infinity;
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, ay] = pts[i - 1], [bx, by] = pts[i], dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy || 1;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / l2));
+    best = Math.min(best, Math.hypot(ax + dx * t - x, ay + dy * t - y));
+  }
+  return best;
+};
+function renderPlanner() {
+  const c = $('planMap');
+  plan.layout = planLayout(c);
+  const { lines, nodes, dpr, w, h } = plan.layout, ctx = c.getContext('2d');
+  const css = (v, d) => getComputedStyle(document.documentElement).getPropertyValue(v).trim() || d;
+  const accent = css('--accent', '#7aa9f5'), ink = css('--ink', '#ece9e1'), muted = css('--muted', '#a8a69d'), bg = css('--panel', '#262624');
+  ctx.clearRect(0, 0, w, h);
+  const stroke = (pts, color, width, dash = []) => {
+    ctx.strokeStyle = color; ctx.lineWidth = width * dpr; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.setLineDash(dash.map((d) => d * dpr));
+    ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); ctx.setLineDash([]);
+  };
+  for (const L of lines) stroke(L.pts, muted, 3);
+  const next = plan.start ? planNext(plan.net, plan.keys, plan.start) : [];
+  for (const o of next) stroke(lines.find((L) => L.e === o.t.e).pts, ink, 4, [6, 5]);
+  // the route so far, with an arrow on each step
+  plan.keys.forEach((k, j) => {
+    const L = lines.find((x) => x.e.id === k.slice(0, -1)), pts = k.endsWith('+') ? L.pts : [...L.pts].reverse();
+    stroke(pts, accent, 6);
+    const m = Math.floor(pts.length / 2), [ax, ay] = pts[Math.max(0, m - 1)], [bx, by] = pts[Math.min(pts.length - 1, m + 1)];
+    const ang = Math.atan2(by - ay, bx - ax);
+    ctx.save(); ctx.translate(pts[m][0], pts[m][1]); ctx.rotate(ang);
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(7 * dpr, 0); ctx.lineTo(-5 * dpr, 5 * dpr); ctx.lineTo(-5 * dpr, -5 * dpr); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = ink; ctx.font = `600 ${11 * dpr}px system-ui`; ctx.fillText(String(j + 1), pts[m][0] + 8 * dpr, pts[m][1] - 8 * dpr);
+  });
+  for (const { nd, x, y } of nodes) {
+    const isStart = nd.id === plan.start;
+    ctx.fillStyle = isStart ? accent : ink; ctx.strokeStyle = bg; ctx.lineWidth = 2 * dpr;
+    ctx.beginPath(); ctx.arc(x, y, (isStart ? 8 : 6) * dpr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = ink; ctx.font = `${12 * dpr}px system-ui`;
+    const tw = ctx.measureText(nd.name).width;
+    ctx.fillText(nd.name, Math.min(w - tw - 4 * dpr, x + 10 * dpr), y - 10 * dpr);
+  }
+  $('planSub').textContent = !plan.start ? 'Tap a junction to start.' : next.length ? 'Tap the next segment (dashed) — the one you just rode turns back.' : '';
+  $('planSteps').innerHTML = plan.keys.map((k) => {
+    const e = plan.net.edges.get(k.slice(0, -1)), fwd = k.endsWith('+');
+    return `<li>${escapeHtml((e.toward?.[fwd ? 0 : 1] || e.name).replace(/^./, (ch) => ch.toUpperCase()))}</li>`;
+  }).join('');
+  renderPlanFacts();
+}
+function renderPlanFacts() {
+  const keys = plan.keys;
+  if (!keys.length) { $('planFacts').innerHTML = ''; $('planSave').disabled = true; return; }
+  const r = makePathRoute(plan.net, { id: 'plan', name: 'plan', path: keys });
+  const sim = planRide(r, 0, { mode: 'dist', value: r.lapM }, { watts: planWatts(), params: session.physicsParams(), pointToPoint: false, stopAtEnd: false });
+  const loop = planCloses(plan.net, keys);
+  const endName = plan.net.nodes.get(keys.at(-1).endsWith('+') ? plan.net.edges.get(keys.at(-1).slice(0, -1)).to : plan.net.edges.get(keys.at(-1).slice(0, -1)).from).name;
+  $('planFacts').innerHTML = `<span><b>${fmtDist(r.lapM, 1)}</b> ${distUnit()}</span><span><b>${fmtElev(r.lapClimbM).toLocaleString()}</b> ${elevUnit()} climb</span>` +
+    `<span><b>~${fmtPlanTime(sim.timeS)}</b> at ${planWatts()} W</span><span>${loop ? 'Loop — rides round and round' : `One way — finishes at ${escapeHtml(endName)}`}</span>`;
+  $('planSave').disabled = false;
+}
+$('planMap').addEventListener('click', (e) => {
+  if (!plan.layout) return;
+  const rect = e.currentTarget.getBoundingClientRect(), d = plan.layout.dpr;
+  const x = (e.clientX - rect.left) * d, y = (e.clientY - rect.top) * d;
+  if (!plan.start) {
+    let best = null;
+    for (const n of plan.layout.nodes) { const dd = Math.hypot(n.x - x, n.y - y); if (dd < 26 * d && (!best || dd < best.d)) best = { n, d: dd }; }
+    if (best) { plan.start = best.n.nd.id; renderPlanner(); }
+    return;
+  }
+  // the nearest of the ways on (by the segment's line); a segment both ways on from here (a loop edge): the closer end
+  let best = null;
+  for (const o of planNext(plan.net, plan.keys, plan.start)) {
+    const L = plan.layout.lines.find((l) => l.e === o.t.e), dd = segDist(L.pts, x, y);
+    if (dd < 22 * d && (!best || dd < best.d - .5)) best = { o, d: dd };
+  }
+  if (best) { plan.keys.push(best.o.key); renderPlanner(); }
+});
+async function savePlan() {
+  if (!plan.keys.length) return;
+  const city = (plan.item.name || '').split(' · ')[0];
+  const name = $('planName').value.trim() || `My route ${(settings.netRoutes || []).length + 1}`;
+  const id = `mynet-${Date.now().toString(36)}`;
+  settings.netRoutes = [...(settings.netRoutes || []), { id, network: plan.item.network, name, keys: idsToKeys(plan.net, plan.keys), created: Date.now() }];
+  saveSettings(settings);
+  log('app', `Saved your route: ${city} · ${name}`, 'ok');
+  parkItems = null;   // rebuild the list with it
+  await refreshRouteList(id);
+  if ($('cityDlg').open) { city.sel = id; city.seg = null; renderCity(); }
+}
+
 // ---------- Virtual pacer ----------
 // A rider in a yellow-checkered jersey who holds a set power on the same road physics as you.
 const pacer = new Pacer(PACER_WATTS.includes(Number(settings.pacerWatts)) ? Number(settings.pacerWatts) : 0);
 let pacerKey = null;
+let pacerTrack = null;   // on a network ride: the pacer's own copy of the path (js/network.js PathFollower)
 const onRoute = () => session.mode === 'route' && session.route;
 const riderDist = () => (onRoute() ? session.routeRidden : session.distanceM);
-const rideKey = () => (onRoute() ? `r:${session.route.name}:${session.routeStart}:${session.routeFinishM ?? 'endless'}` : session.mode === 'workout' ? `w:${session.workout?.id ?? session.workout?.name}` : 'free');
+const rideKey = () => (onRoute() ? `r:${session.route.name}:${session.routeStart}:${session.routeFinishM ?? 'endless'}`
+  : `${session.mode === 'workout' ? `w:${session.workout?.id ?? session.workout?.name}` : 'free'}${session.sceneryRoute ? `:s:${session.sceneryRoute.id}` : ''}`);
+/** A network path the ride follows (a network route's, or a free ride's / workout's network scenery: F37), and the pacer's metre on it. */
+const turnPath = () => session.turnRide;
+const pacerPathPos = () => (onRoute() ? session.routeStart + pacer.dist : Math.max(0, pacer.dist - session.sceneryOffset));
 function resetPacer() {
   pacer.reset(riderDist());
   pacerKey = rideKey();
+  pacerTrack = turnPath() ? new PathFollower(turnPath()) : null;
+}
+/** The pacer's own way on a network ride (or network scenery), kept up to date (null elsewhere). */
+function pacerPath(route) {
+  if (!pacerTrack || pacerTrack.ride !== route?.netRide || pacerTrack.ride !== turnPath()) return null;
+  return pacerTrack.update(pacerPathPos());
 }
 function renderPacerChoice() {
   for (const b of $('pacerSeg').children) b.classList.toggle('on', Number(b.dataset.w) === pacer.watts);
@@ -412,8 +566,11 @@ function stepPacer() {
   if (!pacer.on || !session.running) return;
   if (pacerKey !== rideKey()) resetPacer();
   const r = onRoute() ? session.route : null;
-  const gradeAt = r ? (d) => routeAt(r, wrapDist(r, session.routeStart + d)).grade : () => session.gradePct;
-  pacer.step(dt, gradeAt, session.physicsParams());
+  const track = r ? pacerPath(r) : null;
+  const gradeAt = track ? (d) => track.grade(session.routeStart + d) : r ? (d) => routeAt(r, wrapDist(r, session.routeStart + d)).grade : () => session.gradePct;
+  // conveyors (escalators) carry the pacer too: its own way's on a network ride, the route's elsewhere
+  const carryAt_ = track ? (d) => track.carry(session.routeStart + d) : r?.carry ? (d) => carryAt(r, session.routeStart + d) : null;
+  pacer.step(dt, gradeAt, session.physicsParams(), carryAt_);
   if (r && !r.closed) pacer.dist = Math.min(pacer.dist, r.total);
   if (r && session.routeFinishM != null) pacer.dist = Math.min(pacer.dist, session.routeFinishM);   // the pacer stops at the finish too
 }
@@ -438,15 +595,25 @@ function renderPreview() {
     $('pvKicker').textContent = 'Route';
     $('pvTitle').textContent = r.name;
     $('pvSub').textContent = r.park || 'Your route';
-    const leg = r.turnS || r.total, cp = chosenPlan(r), startM = cp.startM;
+    const leg = legLength(r), cp = chosenPlan(r), startM = cp.startM;
     // point to point (a one-way stage like Alpe d'Huez, or your own GPX): distance and climbing start to finish
     const p2p = cp.p2p;
-    $('pvFacts').innerHTML = (p2p
+    const netKm = r.netRide ? [...r.network.edges.values()].reduce((t, e) => t + e.len, 0) : 0;
+    $('pvFacts').innerHTML = r.free
+      ? fact(`${fmtDist(netKm, 1)}`, `${distUnit()} of streets & trails`) + fact(String(r.network.nodes.size), 'junctions') +
+        '<div class="fact tag">Free ride · choose every turn</div>'
+      : r.netRide
+      ? fact(`${fmtDist(leg, 1)}`, `${distUnit()} ${r.netOpen ? 'start to finish' : 'lap'}`) + fact(fmtElev(r.lapClimbM).toLocaleString(), `${elevUnit()} climb / lap`) +
+        fact(`${Math.round(Math.max(...r.grade.subarray(0, Math.round(leg / 10) + 1)))}%`, 'max grade') +
+        `<div class="fact tag">${r.netOpen ? 'One way · finishes at the end' : 'Loop · choose your turns at junctions'}</div>`
+      : ((p2p
       ? fact(`${fmtDist(leg, 1)}`, `${distUnit()} start to finish`) + fact(fmtElev(r.oneWay.ascent).toLocaleString(), `${elevUnit()} climb to the finish`)
       : fact(`${fmtDist(leg, 1)}`, `${distUnit()} each way`) + fact(fmtElev(r.ascent).toLocaleString(), `${elevUnit()} climb / lap`)) +
       fact(`${Math.round(Math.max(...r.grade))}%`, 'max grade') +
-      `<div class="fact tag">${p2p ? 'Point to point' : r.oneWay?.closedLoop ? 'Loop · each lap turns and rides it back' : 'There &amp; back · turns at each end'}</div>`;
-    $('pvDesc').innerHTML = r.hasElevation ? '' : '<span class="warn">No elevation in this file — it will ride flat.</span>';
+      `<div class="fact tag">${p2p ? 'Point to point' : r.oneWay?.closedLoop ? 'Loop · each lap turns and rides it back' : 'There &amp; back · turns at each end'}</div>`);
+    $('planOpen').hidden = !r.netRide;
+    if (r.netRide) $('pvDesc').innerHTML = `${r.note ? `${escapeHtml(r.note)}. ` : ''}At each junction choose left, straight, right or back with ◀ ▶ on the handlebars (or <kbd>A</kbd> <kbd>D</kbd>) — or follow the plan.`;
+    if (!r.netRide) $('pvDesc').innerHTML = r.hasElevation ? '' : '<span class="warn">No elevation in this file — it will ride flat.</span>';
     map.hidden = false; chart.hidden = false;
     $('routeOpts').hidden = false;
     renderRouteSelector(r, cp);
@@ -455,8 +622,8 @@ function renderPreview() {
     const endM = cp.plan.endM;
     const selEnd = endM == null ? span[1] : Math.min(span[1], endM);
     const end = endM != null ? stopNear(r, r.stops, endM) : null;
-    const ticks = (r.stops || []).map((st) => (span[0] === 0 ? st.atM : r.total - st.atM));
-    drawTrace(map, r, startM, { markerOnly: true, section: endM != null ? [startM, endM] : null });
+    const ticks = (r.stops || []).map((st) => (r.netRide || span[0] === 0 ? st.atM : r.total - st.atM));
+    drawTrace(map, lapView(r), startM, { markerOnly: true, section: endM != null ? [startM, endM] : null });
     pvLayout = drawProfile(chart, r, startM, { metric: !imperial(), span, selection: [startM, selEnd], ticks,
       finishAt: endM != null && endM <= span[1] + 1 ? Math.min(endM, span[1]) : null,
       endLabel: endM == null ? null : end && end.d < 600 ? end.name : `~${fmtPlanTime(cp.plan.timeS)}` });
@@ -465,6 +632,7 @@ function renderPreview() {
     $('pvHint').hidden = false;
     $('pvHint').textContent = `Drag on the profile to move the start · starting ${fmtDist(cp.st.offsetM, 1)} ${distUnit()} in at ${fmtElev(at.ele).toLocaleString()} ${elevUnit()}`;
   } else if (chosen === 'workout' && previewWorkout) {
+    $('planOpen').hidden = true;
     const w = previewWorkout, st = workoutStats(w);
     $('pvKicker').textContent = 'Workout';
     $('pvTitle').textContent = w.name;
@@ -479,7 +647,8 @@ function renderPreview() {
     $('pvTitle').textContent = scene ? scene.name : 'Numbers only';
     $('pvSub').textContent = scene ? `Scenery · ${scene.park}` : 'No scenery — a plain dark background';
     $('pvFacts').innerHTML = '';
-    $('pvDesc').innerHTML = 'Change the grade with ▲ ▼ on the handlebars (or <kbd>↑</kbd> <kbd>↓</kbd>) while you ride.';
+    $('pvDesc').innerHTML = 'Change the grade with ▲ ▼ on the handlebars (or <kbd>↑</kbd> <kbd>↓</kbd>) while you ride.' +
+      (sceneryFreeItem(scene) ? ` The scenery is ${escapeHtml(scene.name.split(' · ')[0])}'s free ride: straight on at each junction, or turn with ◀ ▶ (<kbd>A</kbd> <kbd>D</kbd>) into any part of the city.` : '');
     chart.hidden = true;
     map.hidden = !scene;
     if (scene && routeCache.has(scene.id)) drawTrace(map, routeCache.get(scene.id), 0);
@@ -527,7 +696,7 @@ function ideasSection() {
 const watchIdeas = (list) => list.querySelector('details.ideas')?.addEventListener('toggle', (e) => { ideasOpen = e.target.open; });
 
 function renderScenery() {
-  const items = [...(parkItems || []), { id: 'none', name: 'None', park: 'Numbers only' }];
+  const items = [...(parkItems || []).filter((p) => !p.area), { id: 'none', name: 'None', park: 'Numbers only' }];   // (a city's areas: not choices of their own)
   if (!items.some((p) => p.id === settings.scenery)) settings.scenery = items[0].id;
   $('sceneCards').innerHTML = groupedCards(items, (p) => `
     <button class="rcard ${p.id === 'none' ? 'none' : ''} ${p.id === settings.scenery ? 'on' : ''}" data-id="${p.id}">
@@ -550,9 +719,16 @@ $('sceneCards').addEventListener('click', (e) => {
   if (card) setScenery(card.dataset.id);
 });
 $('sceneSelect').addEventListener('change', (e) => setScenery(e.target.value));
+/** A city with a ride network as scenery (F37): its free ride over the whole network (its own copy, not the route list's). */
+const sceneryFreeItem = (item) => {
+  const free = item?.network && netItems.find((n) => n.baseId === item.id && n.free);
+  return free ? { ...free, id: `scenery-${free.id}` } : null;
+};
 async function sceneryRoute() {
   const item = sceneryItem();
   if (!item) return null;
+  const free = sceneryFreeItem(item);
+  if (free) { try { return await loadRouteItem(free); } catch (err) { log('app', `Scenery: ${err.message} — riding the ${item.name} loop`, 'error'); } }
   try { return await loadRouteItem(item); } catch { return null; }
 }
 
@@ -591,6 +767,9 @@ async function startRide() {
     session.setFree();
     log('app', 'Free ride');
   }
+  // the 3D world: the route, else the scenery — a city with a ride network rides its free ride (F37)
+  const route = session.mode === 'route' ? session.route : await sceneryRoute();
+  session.setScenery(session.mode === 'route' ? null : route);
   if (!session.hasRide || pacerKey !== rideKey()) resetPacer();
   if (pausedByUser()) session.start();
   onRideScreen = true;
@@ -598,7 +777,6 @@ async function startRide() {
   $('setup').hidden = true;
   $('rideScreen').hidden = false;
   document.documentElement.requestFullscreen?.().catch(() => {});
-  const route = session.mode === 'route' ? session.route : await sceneryRoute();
   await openWorld(route);
   world?.setCourseMarks(courseMarks());
   renderHudStatic();
@@ -630,6 +808,7 @@ document.addEventListener('keydown', (e) => {
   else if (k === 'l' || k === 'L') session.lap();
   else if ((k === 'n' || k === 'N') && session.mode === 'workout') session.skipSegment();
   else if ((k === 'm' || k === 'M') && onRideScreen) cycleMinimap();
+  else if ((k === 'a' || k === 'A' || k === 'd' || k === 'D') && onRideScreen && session.turnRide) { if (session.turn(k === 'a' || k === 'A' ? -1 : 1)) renderTurnPrompt(true); }
   else if ((k === ',' || k === '.') && trainer.demo) setDemoSpeed(DEMO_MPH + (k === '.' ? 5 : -5));
   else if ((k === 'f' || k === 'F') && onRideScreen) toggleFullscreen();
   else if ((k === 'w' || k === 'W') && onRideScreen) cycleWeather();
@@ -645,17 +824,22 @@ function toggleFullscreen() {
 
 // ---------- 3D world ----------
 // On a route the rider is where the ride is; otherwise the scenery loop simply rolls by.
+// A free ride's or workout's network scenery (F37) is a path the rider rides along, turns and all.
 function riderPosOn(route) {
-  return session.mode === 'route' && session.route === route ? session.routePos : session.distanceM % route.total;
+  if (session.mode === 'route' && session.route === route) return session.routePos;
+  if (session.mode !== 'route' && route.netRide && session.sceneryRoute === route) return session.sceneryPos;
+  return session.distanceM % route.total;
 }
 function pacerPosOn(route) {
   const t = route.total;
-  return session.mode === 'route' && session.route === route
-    ? wrapDist(route, session.routeStart + pacer.dist)
-    : ((pacer.dist % t) + t) % t;
+  if (session.mode === 'route' && session.route === route) return wrapDist(route, session.routeStart + pacer.dist);
+  if (session.mode !== 'route' && route.netRide && session.sceneryRoute === route) return pacerPathPos();
+  return ((pacer.dist % t) + t) % t;
 }
 
 // ---------- Minimap (ride screen, bottom-left) ----------
+// Zoomed in by default (18 Nov): about 3 km across, north up, following the rider a little behind centre
+// (js/minimap-view.js); Settings or M: whole course · off. Redrawn 5× a second; only what's in view is drawn.
 let lastMapDraw = 0;
 function minimapRoute() {
   if (session.mode === 'route' && session.route) return session.route;
@@ -666,10 +850,19 @@ function renderMinimap(now = performance.now(), force = false) {
   box.hidden = !route;
   if (!route || (!force && now - lastMapDraw < 200)) return;
   lastMapDraw = now;
+  if (route.netRide) {
+    // a network route: the network, the path ahead and the next junction's ways on
+    const pos = riderPosOn(route), net = route.netRide;
+    const up = net.prompt(pos, session.speedMps);
+    const span = net.profileSpan(pos);
+    drawNetworkMinimap($('hMapCanvas'), net, pos, { mode: settings.minimap === 'course' ? 'course' : 'follow', now,
+      pacerPos: !pacer.on ? null : pacerPath(route) ? pacerPath(route).latLon(pacerPosOn(route)) : pacerPosOn(route), up,
+      aheadTo: Math.max(span[1], net.endOf(Math.min(net.entries.length - 1, net.entryAt(pos) + 1))) });
+    return;
+  }
   drawMinimap($('hMapCanvas'), route, riderPosOn(route), {
-    mode: settings.minimap === 'follow' ? 'follow' : 'course',
+    mode: settings.minimap === 'course' ? 'course' : 'follow', now,
     pacerPos: pacer.on ? pacerPosOn(route) : null,
-    spanM: imperial() ? 1609.344 : 1500,
   });
 }
 function applyHudPrefs() {
@@ -677,7 +870,7 @@ function applyHudPrefs() {
   if (onRideScreen) renderMinimap(performance.now(), true);
 }
 function cycleMinimap() {
-  const order = ['course', 'follow', 'off'];
+  const order = ['follow', 'course', 'off'];
   settings.minimap = order[(order.indexOf(settings.minimap) + 1) % order.length];
   saveSettings(settings);
   renderMinimap(performance.now(), true);
@@ -686,12 +879,31 @@ function cycleMinimap() {
 
 let world = null;
 let worldRoute = null;
+let worldBase = null;   // the route the world is built around (a network route rides its city loop's world)
 let worldModule = null;
 
 async function openWorld(route) {
   document.body.classList.toggle('no-world', !route);
   if (!route) { world?.stop(); return; }
   if (world && worldRoute === route) { world.start(); return; }
+  let base = route.base || route;
+  // a city of areas (PLAN 5.4): the world starts in the area where the ride starts, and builds the others as the path reaches them
+  const net = route.netRide?.net, areas = net?.multi ? cityAreas(net) : null;
+  if (areas) {
+    const start = route.netRide.worldAt(riderPosOn(route)).area;
+    base = net.areas.get(start).base;
+    await loadRouteScene(base).catch((err) => log('3d', err.message, 'error'));
+    areas.id = start;
+  }
+  if (world && (areas ? world.areaSet?.net === net : worldBase === base && !world.areaSet)) {
+    worldBase = base;
+    // the same city: just follow this ride's path (or none)
+    worldRoute = route;
+    world.setPath(route.netRide || null);
+    wireWorld(route);
+    world.start();
+    return;
+  }
   try {
     worldModule = worldModule || await import('./world/world.js');
   } catch (err) {
@@ -701,25 +913,33 @@ async function openWorld(route) {
   }
   if (world) { world.dispose(); world = null; }
   try {
-    world = new worldModule.World($('worldView'), route, { log, quality: settings.worldQuality });
+    world = new worldModule.World($('worldView'), base, { log, quality: settings.worldQuality, path: route.netRide || null, areas });
   } catch (err) {
     log('3d', `3D view needs WebGL: ${err.message}`, 'error');
     document.body.classList.add('no-world');
     return;
   }
   worldRoute = route;
+  worldBase = base;
   world.setTimeOfDay(settings.worldTime);
   world.setWeather(settings.worldWeather || 'clear', true);
   world.setCamera(settings.camera);
+  wireWorld(route);
+  world.start();
+  log('3d', `3D view: ${route.name}`);
+}
+/** A network of areas as the world loads them: the city's frame, and each area's route with its scene (fetched when needed). */
+function cityAreas(net) {
+  return { net, origin: net.origin, load: async (id) => { const base = net.areas.get(id).base; await loadRouteScene(base); return base; } };
+}
+function wireWorld(route) {
   world.setSource(() => ({ pos: riderPosOn(route), speed: session.speedMps, cadence: session.cadence, riding: true,
     grade: session.gradePct, power: session.power3s, ftp: settings.ftp }));
   world.setPacerSource(() => {
     if (!pacer.on) return null;
     return { pos: pacerPosOn(route), speed: session.running ? pacer.speed : 0, cadence: session.running ? pacer.cadence : 0,
-      grade: pacer.grade, power: session.running ? pacer.watts : 0, ftp: settings.ftp };
+      grade: pacer.grade, power: session.running ? pacer.watts : 0, ftp: settings.ftp, path: pacerPath(route) };
   });
-  world.start();
-  log('3d', `3D view: ${route.name}`);
 }
 function cycleWeather() {
   // The route decides which presets it offers and what they're called (Pittsburgh: Clear, River fog, Clouds).
@@ -785,7 +1005,26 @@ function renderHudStatic() {
   lastProfileDraw = 0;
 }
 
-let lastProfileDraw = 0;
+let lastProfileDraw = 0, lastProfileKey = '';
+/**
+ * The ride-screen profile's stretch (span) and height scale (eleRange). A network route's path changes as you
+ * choose turns (and refills as you ride): its NetRide.profileView follows the path as it is now — the lap as
+ * you'll ride it, else the way ahead — rebuilt once per path change (`version`) and segment, not per frame
+ * (PLAN F150). `key` changes when the stretch does, so the strip is redrawn at once.
+ */
+let finishView = null;
+function hudProfileView() {
+  const r = session.route, net = r.netRide;
+  if (!net) return { key: '', span: session.routeFinishM != null ? legSpan(r, session.routeStart) : null, eleRange: null };
+  if (session.routeFinishM != null) {
+    // a planned finish: the start to the finish line, on the path as it is now
+    const from = session.routeStart, to = from + session.routeFinishM, key = `f${net.version}:${from}:${to}`;
+    if (finishView?.key !== key) { const v = net.eleRange(from, to); finishView = { key, span: [from, to], eleRange: [v.minEle, v.maxEle] }; }
+    return finishView;
+  }
+  const v = net.profileView(session.routePos);
+  return { key: v.key, span: [v.from, v.to], eleRange: [v.minEle, v.maxEle] };
+}
 let lastGear = session.gear;
 function renderHud() {
   if (!onRideScreen) return;
@@ -844,18 +1083,27 @@ function renderHud() {
       showRow(3, `${ftpFromTwentyMinutes(avg)} W`, 'FTP so far');
     }
   } else {
-    $('hGrade').textContent = fmtGrade(session.gradePct);
-    $('hGrade').style.color = readable(gradeColor(session.gradePct));
-    $('hGradeLabel').textContent = 'grade';
+    const carry = session.carry;   // an escalator (a conveyor) carries you: its name instead of the grade
+    $('hGrade').textContent = carry ? carry.label || 'Carried' : fmtGrade(session.gradePct);
+    $('hGrade').style.color = carry ? '' : readable(gradeColor(session.gradePct));
+    $('hGrade').classList.toggle('carry', !!carry);
+    $('hGradeLabel').textContent = carry ? 'no pedalling' : 'grade';
     if (session.mode === 'route' && session.route) {
       const r = session.route;
       const ahead = imperial() ? 804.672 : 500;
       const g = averageGradeAhead(r, session.routePos, ahead);
       showRow(1, `${g > 0.05 ? '+' : ''}${fmtGrade(g)}`, imperial() ? 'next ½ mi' : 'next 500 m');
       const toFinish = session.routeFinishM != null;
-      showRow(2, r.closed && !toFinish ? String(session.routeLap) : null, 'lap');
+      showRow(2, (r.closed || (r.netRide && !r.free && !r.netOpen)) && !toFinish ? String(session.routeLap) : null, 'lap');
       const toGoal = !toFinish && session.routeGoalM != null && !session.routeGoalHit;
-      showRow(3, `${fmtDist(Math.max(0, toGoal ? session.routeGoalM - session.routeRidden : session.routeLapToGo), 1)} ${distUnit()}`,
+      if (r.netRide && !toFinish && !toGoal) {
+        // a network route: the rest of this lap on the plan, else the way to the next junction
+        // (the lap as the path rides it now — with the turns chosen — PLAN F150; off it, or the chosen way
+        // leaving it: the next junction)
+        const up = r.netRide.upcoming(session.routePos), view = r.netRide.profileView(session.routePos), onPlan = view.lap;
+        const toGo = onPlan ? view.to - session.routePos : up.distTo;
+        showRow(3, `${fmtDist(Math.max(0, toGo), 1)} ${distUnit()}`, onPlan ? 'lap to go' : `to ${up.node.name}`);
+      } else showRow(3, `${fmtDist(Math.max(0, toGoal ? session.routeGoalM - session.routeRidden : session.routeLapToGo), 1)} ${distUnit()}`,
         toFinish ? 'to the finish' : toGoal ? 'to your goal' : 'lap to go');
     } else {
       showRow(1, session.mode === 'workout' && session.workoutDone ? 'Done' : null, 'workout');
@@ -873,18 +1121,21 @@ function renderHud() {
     $('hPacerT').textContent = `Pacer ${pacer.watts} W · ${Math.abs(gap) < 3 ? 'alongside' : `${fmtGap(gap)} ${gap > 0 ? 'ahead' : 'behind'}`}`;
   }
 
-  // Bottom edge: route profile or workout chart (redrawn once a second; blank on free rides).
+  // Bottom edge: route profile or workout chart (redrawn once a second, and at once when a network route's path
+  // changes under it; blank on free rides).
   const now = performance.now();
-  if (now - lastProfileDraw > 1000) {
+  const pv = session.mode === 'route' && session.route ? hudProfileView() : null;
+  if (now - lastProfileDraw > 1000 || (pv && pv.key !== lastProfileKey)) {
     lastProfileDraw = now;
+    lastProfileKey = pv?.key ?? '';
     const c = $('hudProfile');
-    if (session.mode === 'route' && session.route) drawProfile(c, session.route, session.routePos, { metric: !imperial(), compact: true,
-      span: session.routeFinishM != null ? legSpan(session.route, session.routeStart) : null,
+    if (pv) drawProfile(c, session.route, session.routePos, { metric: !imperial(), compact: true, span: pv.span, eleRange: pv.eleRange,
       finishAt: session.routeFinishM != null ? session.routeStart + session.routeFinishM : null });
     else if (session.mode === 'workout' && session.workout) drawWorkout(c, session.workout, session.workoutT, settings.ftp, session.workoutBias, { compact: true });
     else c.getContext('2d').clearRect(0, 0, c.width, c.height);
   }
   renderMinimap(now);
+  renderTurnPrompt();
 
   // Status and pause overlay
   const userPaused = pausedByUser();
@@ -896,6 +1147,25 @@ function renderHud() {
   $('hAlert').hidden = !lost;
   $('hAlert').textContent = trainer.reconnecting ? 'Trainer reconnecting…' : 'Trainer not connected';
   $('pauseOverlay').hidden = !userPaused || $('summary').open;
+}
+
+// Turn prompt (network routes): the next junction's ways on, about 15 s before it; ◀ ▶ / A D to choose.
+let turnKey = '';
+function renderTurnPrompt(force = false) {
+  const box = $('hTurn'), net = session.turnRide;   // a network route's, or a free ride's / workout's network scenery (F37)
+  const up = net && !(session.mode === 'route' && session.routeDone) ? net.prompt(session.turnPos, session.speedMps) : null;
+  if (!up) { if (!box.hidden) { box.hidden = true; turnKey = ''; } return; }
+  const key = `${up.node.id}:${up.i}:${up.selected}:${up.locked}:${Math.round(up.distTo / 10)}:${settings.units}`;
+  if (!force && key === turnKey) return;
+  turnKey = key;
+  const fmtLen = (m) => `${fmtDist(m, 1)} ${distUnit()}`;
+  box.hidden = false;
+  box.classList.toggle('locked', up.locked);
+  const sel = up.options[up.selected];
+  box.innerHTML = `<div class="turn-head"><b>${escapeHtml(up.node.name)}</b><span>${up.distTo > 5 ? `in ${Math.round(imperial() ? up.distTo * 3.28084 / 10 : up.distTo / 5) * (imperial() ? 10 : 5)} ${imperial() ? 'ft' : 'm'}` : 'now'}</span></div>
+    <div class="turn-opts">${up.options.map((o, j) => `<div class="turn-opt ${j === up.selected ? 'on' : ''} ${o.back ? 'back' : ''}"><i>${o.glyph}</i><b>${o.label}</b></div>`).join('')}</div>
+    <div class="turn-sel">${up.onPlan ? '<em>Plan</em> ' : ''}${escapeHtml(sel.toward.charAt(0).toUpperCase() + sel.toward.slice(1))} · ${fmtLen(sel.lengthM)} · ${fmtElev(sel.climbM).toLocaleString()} ${elevUnit()} up</div>
+    <div class="turn-hint">${up.locked ? 'Locked in' : '◀ ▶ on the handlebars · <kbd>A</kbd> <kbd>D</kbd>'}</div>`;
 }
 
 // Hide the on-screen buttons until the mouse moves.
@@ -955,7 +1225,9 @@ function renderDiag() {
 const DEMO_ROUTE = { id: 'builtin-demo-hills', kind: 'route', name: 'Demo Hills (built-in)', url: 'routes/demo-hills.gpx', scene: 'routes/scenes/demo-hills.json', group: 'Other' };
 let routeItems = [];
 let parkItems = null;
+let netItems = [];          // network presets (choose your turns): listed as routes, not as scenery
 const routeCache = new Map();
+const netCache = new Map();   // network JSON by URL
 let previewRoute = null;
 let selectedRouteId = null;
 
@@ -967,12 +1239,35 @@ async function loadParks() {
   } catch {
     parkItems = [];
   }
+  // a city loop with a ride network: one route per preset, on the same world (js/network.js)
+  netItems = [];
+  for (const p of parkItems.filter((x) => x.network)) {
+    try {
+      if (!netCache.has(p.network)) netCache.set(p.network, await (await fetch(p.network)).json());
+      const city = p.name.split(' · ')[0];
+      for (const pr of netCache.get(p.network).presets || []) {
+        netItems.push({ id: `builtin-net-${pr.id}`, routeId: pr.id, kind: 'route', name: `${city} · ${pr.name}`, park: p.park,
+          stage: p.stage, group: 'Scenic routes — 3D', baseId: p.id, network: p.network, preset: pr.id,
+          km: +(pr.lengthM / 1000).toFixed(1), climbM: pr.climbM, tags: pr.tags || [], note: pr.note || '' });
+      }
+      const json = netCache.get(p.network);
+      const base = { kind: 'route', park: p.park, stage: p.stage, group: 'Scenic routes — 3D', baseId: p.id, network: p.network };
+      if (json.freeRide) netItems.push({ ...base, id: `builtin-netfree-${json.id}`, routeId: `${json.id}-free`, name: `${city} · ${json.freeRide.name}`,
+        free: true, tags: ['varied'], note: json.freeRide.note || '' });
+      // your own routes from the map planner (kept in settings, by segment names so they survive a rebuilt network)
+      for (const m of (settings.netRoutes || []).filter((x) => x.network === p.network)) {
+        netItems.push({ ...base, id: m.id, routeId: m.id, name: `${city} · ${m.name}`, custom: true, keys: m.keys, tags: [], note: 'Your own route' });
+      }
+    } catch (err) { log('app', `Could not load the ${p.name} network: ${err.message}`, 'error'); }
+  }
   return parkItems;
 }
 
 async function refreshRouteList(selectId) {
   const mine = (await store.listLibrary('route').catch(() => [])).map((r) => ({ ...r, group: 'My routes' }));
-  routeItems = [...(await loadParks()), ...mine, DEMO_ROUTE];
+  const parks = await loadParks();
+  // a city loop with a network is listed as its presets (the loop itself is one of them); it stays a scenery choice
+  routeItems = [...parks.filter((p) => !p.area).flatMap((p) => (p.network && netItems.some((n) => n.baseId === p.id) ? netItems.filter((n) => n.baseId === p.id) : [p])), ...mine, DEMO_ROUTE];
   await loadIdeas();
   // Load every route up front: they're small, and the cards draw their outlines.
   await Promise.all(routeItems.map((it) => loadRouteItem(it).catch(() => null)));
@@ -982,24 +1277,81 @@ async function refreshRouteList(selectId) {
   await previewSelectedRoute();
 }
 
+// Ride goals: a filter over the route list. A network preset says its own (varied, new areas…); every route
+// also gets flat / hilly from its climbing per km and short / long from its length (one lap or one way).
+const GOALS = [['all', 'All'], ['flat', 'Flat'], ['hilly', 'Hilly'], ['short', 'Short'], ['long', 'Long'], ['varied', 'Varied'], ['new', 'New areas']];
+function goalTags(it) {
+  const r = routeCache.get(it.id);
+  const km = r ? (r.lapM || (r.stageRoute ? r.turnS : r.turnS || r.total)) / 1000 : it.km;
+  const climb = r ? (r.lapClimbM ?? (r.oneWay?.ascent ?? r.ascent)) : it.climbM;
+  const tags = new Set(it.tags || []);
+  if (it.free) return GOALS.map(([k]) => k).filter((k) => tags.has(k));   // a free ride is what you make it
+  if (km > 0 && climb != null) {
+    const perKm = climb / km;
+    if (!tags.has('hilly') && perKm < 6) tags.add('flat');
+    if (!tags.has('flat') && perKm >= 12) tags.add('hilly');
+    if (!tags.has('long') && km < 15) tags.add('short');
+    if (!tags.has('short') && km >= 30) tags.add('long');
+  }
+  return GOALS.map(([k]) => k).filter((k) => tags.has(k));
+}
+let routeGoal = GOALS.some(([k]) => k === settings.routeGoal) ? settings.routeGoal : 'all';
+function renderGoalSeg() {
+  $('goalSeg').innerHTML = GOALS.map(([k, label]) => `<button type="button" data-goal="${k}" class="${k === routeGoal ? 'on' : ''}">${label}</button>`).join('');
+}
+$('goalSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-goal]');
+  if (!b) return;
+  routeGoal = b.dataset.goal;
+  settings.routeGoal = routeGoal;
+  saveSettings(settings);
+  renderRouteCards();
+});
+
+// A city with a ride network (Pittsburgh) is one card: its presets, free ride and your own routes are in its panel.
+let routeCards = [];   // routeItems with each city's items folded into one card (js/city-routes.js)
+const cityAreaCount = (card) => routeCache.get(card.baseId)?.networks?.get(card.network)?.areas.size || 0;
+const CHEVRON = '<svg class="ic chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>';
 function renderRouteCards() {
-  $('routeCards').innerHTML = groupedCards(routeItems, (it) => {
+  renderGoalSeg();
+  routeCards = groupCityItems(routeItems);
+  const label = Object.fromEntries(GOALS);
+  const matches = (it) => goalTags(it).includes(routeGoal);
+  // a city shows while any of its routes (or its free ride) suits the goal
+  const shown = routeGoal === 'all' ? routeCards : routeCards.filter((it) => (it.city ? [...it.routes, ...(it.free ? [it.free] : [])].some(matches) : matches(it)));
+  $('routeCards').innerHTML = (shown.length ? '' : '<p class="muted">No routes for that goal yet.</p>') + groupedCards(shown, (it) => {
+    if (it.city) {
+      const n = routeGoal === 'all' ? it.routes.length : it.routes.filter(matches).length;
+      let sub = citySubline(it, cityAreaCount(it));
+      if (routeGoal !== 'all') sub = sub.replace(/\d+ routes?/, `${n} ${label[routeGoal].toLowerCase()} route${n === 1 ? '' : 's'}`);
+      if (it.mine.length) sub += ` · ${it.mine.length} yours`;
+      const sel = [...it.routes, it.free].find((x) => x?.id === selectedRouteId);
+      return `<button class="rcard city-card ${sel ? 'on' : ''}" data-city="${escapeHtml(it.baseId)}" aria-haspopup="dialog"><canvas></canvas>
+        <div class="city-text"><b>${escapeHtml(it.name)}</b><div class="rsub">${escapeHtml(sub)}</div>${sel ? `<div class="rsel">Selected · ${escapeHtml(shortName(sel.name))}</div>` : '<div class="rsel muted">Pick a route on the map</div>'}</div>${CHEVRON}</button>`;
+    }
     const r = routeCache.get(it.id);
     const sub = !r ? 'Could not load' : r.stageRoute && r.oneWay
       ? `${fmtDist(r.turnS, 1)} ${distUnit()} to the finish · ${fmtElev(r.oneWay.ascent).toLocaleString()} ${elevUnit()}`
+      : r.free ? `${r.network.nodes.size} junctions · choose every turn`
+      : r.netRide ? `${fmtDist(r.lapM, 1)} ${distUnit()} ${r.netOpen ? 'one way' : 'loop'} · ${fmtElev(r.lapClimbM).toLocaleString()} ${elevUnit()} · choose your turns`
       : `${fmtDist(r.turnS || r.total, 1)} ${distUnit()} each way · ${fmtElev(r.ascent).toLocaleString()} ${elevUnit()}`;
+    const tags = goalTags(it);
     return `<button class="rcard ${it.id === selectedRouteId ? 'on' : ''}" data-id="${it.id}"><canvas></canvas>
-      <div><b>${escapeHtml(it.name.replace(' (built-in)', ''))}</b><div class="rsub">${escapeHtml(it.park || it.group)} · ${sub}</div></div></button>`;
+      <div><b>${escapeHtml(it.name.replace(' (built-in)', ''))}</b><div class="rsub">${escapeHtml(it.park || it.group)} · ${sub}</div>${tags.length ? `<div class="rtags">${tags.map((t) => `<span>${label[t]}</span>`).join('')}</div>` : ''}</div></button>`;
   }) + ideasSection();
   watchIdeas($('routeCards'));
   drawThumbs();
+  for (const c of routeCards.filter((x) => x.city)) loadCityRivers(c).then((fresh) => { if (fresh) drawThumbs(); });
 }
 
 // Card thumbnails need a laid-out canvas, so draw them whenever their pane is visible.
 function drawThumbs() {
   for (const c of document.querySelectorAll('#routeCards canvas, #sceneCards canvas')) {
+    if (!c.clientWidth) continue;
+    const cityId = c.closest('.rcard').dataset.city;
+    if (cityId) { drawCityThumb(c, routeCards.find((x) => x.city && x.baseId === cityId)); continue; }
     const r = routeCache.get(c.closest('.rcard').dataset.id);
-    if (r && c.clientWidth) drawTrace(c, r, 0);
+    if (r) drawTrace(c, lapView(r), 0);
   }
   for (const c of document.querySelectorAll('#workoutList canvas')) {
     const w = workoutCache.get(c.closest('.wrow').dataset.id);
@@ -1009,18 +1361,338 @@ function drawThumbs() {
 $('routeCards').addEventListener('click', (e) => {
   const card = e.target.closest('.rcard');
   if (!card) return;
+  if (card.dataset.city) { openCity(card.dataset.city); return; }
   selectedRouteId = card.dataset.id;
   for (const c of $('routeCards').querySelectorAll('.rcard')) c.classList.toggle('on', c === card);
   previewSelectedRoute();
 });
 
+// ---------- City panel (a ride network's map and routes) ----------
+// Full screen over the menu (a <dialog>: Escape closes it, focus goes back to the card). The map shows the whole
+// network over its rivers; a route tapped in the list lights up bold on it, a line tapped on the map lists the
+// routes that ride it (tap again for the next). The goal chips filter both. Ride starts riding the route at once
+// (F104: the defaults the preview would apply — its remembered start, else the plan's, and the ride length and
+// pacer as set); "Options" beside it chooses the route and goes back to the menu, where its preview, start
+// options and Start button are — the same as picking a card used to (and Ride does that too, with no trainer).
+const city = { baseId: null, goal: 'all', sel: null, seg: null, segIds: null, focus: null, lines: [], hint: '', view: { k: 1 } };
+const cityRivers = new Map();   // baseId → rivers (the city's scenes: each area's has its own copy, some reaching further)
+const cityMaps = new Map();     // baseId → the network's baked map (F101: river banks, labels), when it has one
+async function loadCityRivers(card) {
+  if (cityRivers.has(card.baseId)) return false;
+  const base = routeCache.get(card.baseId);
+  const lists = [base?.scene?.rivers];
+  cityRivers.set(card.baseId, mergeRivers(lists));
+  const mapUrl = netCache.get(card.network)?.map;
+  if (mapUrl) try { cityMaps.set(card.baseId, await (await fetch(mapUrl)).json()); } catch { /* the scenes' rivers will do */ }
+  const cityPark = parkItems?.find((p) => p.id === card.baseId);
+  const areas = (parkItems || []).filter((p) => p.area && p.area === cityPark?.routeId && p.scene);
+  await Promise.all(areas.map(async (a) => { try { lists.push((await (await fetch(a.scene)).json()).rivers); } catch { /* the core's rivers will do */ } }));
+  cityRivers.set(card.baseId, mergeRivers(lists));
+  return true;
+}
+const cityNet = (card) => routeCache.get(card.baseId)?.networks?.get(card.network) || null;
+/** A city route's traversal keys (a preset's path; your own route's, from its saved segment names). */
+function cityPath(net, it) {
+  if (it.preset) return net.presets.find((x) => x.id === it.preset)?.path || [];
+  if (it.custom) return keysToIds(net, it.keys) || [];
+  return [];
+}
+function cityMapData(card) {
+  const net = cityNet(card);
+  if (!net) return null;
+  const paths = new Map(card.routes.map((it) => [it.id, cityPath(net, it)]));
+  const lines = edgeLines(net).map((L) => ({ id: L.id, lat: L.lat, lon: L.lon })), map = cityMaps.get(card.baseId);
+  return { net, paths, index: segmentRoutes(card.routes.map((it) => ({ id: it.id, path: paths.get(it.id) }))),
+    lines, rivers: cityRivers.get(card.baseId) || [], waterAreas: map?.water || null,
+    labels: map ? [...(map.labels || []), ...areaLabelSpots(lines, (id) => net.edges.get(id)?.area, map.areaLabels)] : [] };
+}
+function drawCityThumb(canvas, card) {
+  const d = card && cityMapData(card);
+  if (!d) return;
+  const sel = [...card.routes].find((x) => x.id === selectedRouteId);
+  drawCityMap(canvas, { lines: d.lines, rivers: d.rivers, waterAreas: d.waterAreas, route: sel ? d.paths.get(sel.id) : null, thumb: true, project: fitProjection });
+}
+const cityCard = () => routeCards.find((x) => x.city && x.baseId === city.baseId) || null;
+function openCity(baseId) {
+  city.baseId = baseId;
+  const card = cityCard();
+  if (!card) return;
+  city.goal = routeGoal;
+  city.sel = card.routes.some((x) => x.id === selectedRouteId) ? selectedRouteId : null;
+  city.seg = null; city.segIds = null; city.focus = null; city.hint = '';
+  city.view = { k: 1 };
+  $('cityDlg').showModal();
+  // the browser's Back closes the panel (F100: on a phone Back is the way out); the panel's own ways out drop the entry
+  if (!history.state?.cityPanel) history.pushState({ ...(history.state || {}), cityPanel: true }, '');
+  renderCity();
+  $('cityList').querySelector('.city-row.on')?.scrollIntoView({ block: 'nearest' });
+  loadCityRivers(card).then((fresh) => { if (fresh && $('cityDlg').open) renderCityMap(); });
+}
+$('cityBack').addEventListener('click', () => $('cityDlg').close());
+window.addEventListener('popstate', () => { if ($('cityDlg').open) $('cityDlg').close(); });
+$('cityDlg').addEventListener('close', () => { if (history.state?.cityPanel) history.back(); });
+window.addEventListener('resize', () => { if ($('cityDlg').open) renderCityMap(); });
+/** The routes the goal shows, and of those the ones on the tapped segment (when one is). */
+function cityShown(card) {
+  const byGoal = filterByGoal(card.routes, city.goal, goalTags);
+  return { byGoal, list: city.segIds ? byGoal.filter((it) => city.segIds.includes(it.id)) : byGoal };
+}
+function renderCity() {
+  const card = cityCard();
+  if (!card) { $('cityDlg').close(); return; }
+  const label = Object.fromEntries(GOALS);
+  const { byGoal, list } = cityShown(card);
+  $('cityTitle').textContent = card.name;
+  $('citySub').textContent = `${citySubline(card, cityAreaCount(card))}${card.mine.length ? ` · ${card.mine.length} yours` : ''}`;
+  $('cityGoals').innerHTML = GOALS.map(([k, l]) => `<button type="button" data-goal="${k}" class="${k === city.goal ? 'on' : ''}" aria-pressed="${k === city.goal}">${k === 'new' ? 'New' : l}</button>`).join('');
+  $('cityFree').parentElement.hidden = !card.free;
+  const net = cityNet(card);
+  // the tapped segment: which routes ride it
+  $('citySeg').hidden = !city.seg;
+  if (city.seg && net) {
+    const e = net.edges.get(city.seg), k = city.segIds.indexOf(city.sel);
+    $('citySeg').innerHTML = `<span><b>${escapeHtml(e?.name || 'This segment')}</b> · ${city.segIds.length === 1 ? '1 route rides it' : `${city.segIds.length} routes ride it${k >= 0 ? ` · ${k + 1} of ${city.segIds.length}, tap it again for the next` : ''}`}</span><button type="button" class="link" id="citySegClear">Show all</button>`;
+  }
+  const facts = (it) => {
+    const r = routeCache.get(it.id);
+    return r ? `${fmtDist(r.lapM, 1)} ${distUnit()} · ${fmtElev(r.lapClimbM).toLocaleString()} ${elevUnit()}` : '';
+  };
+  const rowHtml = (it) => {
+    const r = routeCache.get(it.id), on = it.id === city.sel, tags = goalTags(it);
+    const mine = it.custom ? '<span class="yours">yours</span>' : '';
+    const row = `<button type="button" class="city-row-btn" data-id="${escapeHtml(it.id)}" aria-pressed="${on}"><span class="cr-name">${escapeHtml(shortName(it.name))}${mine}</span><span class="cr-facts">${facts(it)}</span></button>`;
+    if (!on) return `<li class="city-row">${row}</li>`;
+    const kind = r ? (r.netOpen ? 'One way' : 'Loop') : '';
+    const detail = `<div class="cr-detail"><div class="cr-tags">${[kind, ...tags.map((t) => label[t])].filter(Boolean).map((t) => `<span>${escapeHtml(t)}</span>`).join('')}</div>
+      ${it.note && !it.custom ? `<p class="cr-note">${escapeHtml(it.note)}</p>` : ''}
+      <div class="cr-actions">${it.custom ? `<button type="button" class="ghost danger" data-remove="${escapeHtml(it.id)}">Remove</button>` : ''}<button type="button" class="link" data-options="${escapeHtml(it.id)}" title="Choose where to start and how long to ride, then Start" aria-label="Options for ${escapeHtml(shortName(it.name))}: start and length">Options</button><button type="button" class="primary" data-ride="${escapeHtml(it.id)}" aria-label="Ride ${escapeHtml(shortName(it.name))} now" title="Start riding it now">Ride</button></div></div>`;
+    return `<li class="city-row on">${row}${detail}</li>`;
+  };
+  // grouped by area (F103) when the city has more than one: a heading per area, its routes in the network's order
+  const groups = net?.multi ? groupByArea(list, (it) => cityPath(net, it), (id) => { const e = net.edges.get(id); return e && { area: e.area, len: e.len }; }, [...net.areas.keys()]) : [{ area: null, items: list }];
+  if (!list.some((it) => it.id === city.sel)) city.sel = groups[0]?.items[0]?.id || null;   // (the top of the list as shown)
+  const heading = (g) => (groups.length > 1 ? `<li class="city-group" role="presentation">${escapeHtml(g.area ? net.areas.get(g.area)?.json?.name || g.area : 'To plan again')}</li>` : '');
+  $('cityList').innerHTML = list.length ? groups.map((g) => heading(g) + g.items.map(rowHtml).join('')).join('') : `<li class="muted city-none">No ${city.goal === 'all' ? '' : `${label[city.goal].toLowerCase()} `}routes${city.seg ? ' on this segment' : ''} yet${byGoal.length ? '' : ' — try another goal, or plan your own'}.</li>`;
+  const sel = list.find((it) => it.id === city.sel);
+  $('citySel').textContent = sel ? `${shortName(sel.name)}: ${facts(sel)}` : '';
+  renderCityMap();
+}
+function renderCityMap() {
+  const card = cityCard(), d = card && cityMapData(card);
+  if (!d) return;
+  const { byGoal } = cityShown(card);
+  const lit = new Set(byGoal.flatMap((it) => (d.paths.get(it.id) || []).map((k) => k.replace(/[+-]$/, ''))));
+  city.lines = drawCityMap($('cityMap'), { lines: d.lines, rivers: d.rivers, waterAreas: d.waterAreas, labels: d.labels, nodes: [...d.net.nodes.values()],
+    lit: city.goal === 'all' ? null : lit, route: city.sel ? d.paths.get(city.sel) : null, marked: city.seg, focus: city.focus,
+    project: (lines, w, h, pad) => zoomProjection(fitProjection(lines, w, h, pad), w, h, city.view) });
+  const zoomed = (city.view?.k || 1) > 1;
+  $('cityMap').classList.toggle('zoomed', zoomed);
+  $('cityFit').hidden = !zoomed;
+  $('cityMap').lines = city.lines;   // (tools/snap_city.mjs taps a line by these)
+  const sel = card.routes.find((x) => x.id === city.sel), fe = city.focus && d.net.edges.get(city.focus);
+  $('cityMap').setAttribute('aria-label', `Map of ${card.name}${sel ? `, ${shortName(sel.name)} highlighted` : ''}. Arrow keys pick a segment, Enter lists the routes that ride it.`);
+  $('cityMapHint').textContent = city.hint || (fe ? `${fe.name} · Enter to see its routes` : 'Tap a line to see the routes that ride it');
+}
+function citySelect(id, { scroll = true } = {}) {
+  city.sel = id;
+  renderCity();
+  if (scroll) $('cityList').querySelector('.city-row.on')?.scrollIntoView({ block: 'nearest' });
+}
+/** A segment tapped (or chosen with the keyboard): list the routes that ride it, select the first (again: the next). */
+function cityTapSegment(edgeId) {
+  const card = cityCard(), d = card && cityMapData(card);
+  if (!d) return;
+  const { byGoal } = cityShown(card);
+  const res = pickOnSegment(d.index, edgeId, byGoal.map((it) => it.id), { lastEdge: city.seg, selected: city.sel });
+  const e = d.net.edges.get(edgeId);
+  if (!res.ids.length) {
+    city.hint = `No ${city.goal === 'all' ? '' : `${Object.fromEntries(GOALS)[city.goal].toLowerCase()} `}route rides ${e?.name || 'that segment'} — Free ride or Plan your own can`;
+    renderCityMap();
+    return;
+  }
+  city.hint = '';
+  city.seg = edgeId; city.segIds = res.ids;
+  citySelect(res.selected);
+}
+function cityChoose(id) {
+  // the same as picking its card in the list used to: it's the route, and the menu shows its preview and Start
+  $('cityDlg').close();
+  selectedRouteId = id;
+  renderRouteCards();
+  const shown = previewSelectedRoute();
+  if (matchMedia('(max-width: 1080px)').matches) document.querySelector('.preview').scrollIntoView({ block: 'start' });
+  $('startBtn').focus({ preventScroll: true });
+  return shown;
+}
+/** Ride (F104): choose the route and start riding it at once, as Start would with the preview's defaults. */
+async function cityRide(id) {
+  if (chosen !== 'route') showPane('route');
+  await cityChoose(id);
+  // (no trainer yet, or the route didn't load: the menu shows it chosen, with what's missing on its Start button)
+  if (!trainer.connected || selectedRouteId !== id || !previewRoute || previewRoute !== routeCache.get(id)) return;
+  await startRide();
+}
+// zoom and pan (F102): pinch or the wheel zooms about the fingers / the pointer, a drag pans once zoomed in;
+// "Whole map" goes back out. Lines stay as easy to tap in px, so zoomed in they are further apart
+const mapPtrs = new Map();
+let mapDrag = null;   // {x, y, d, moved}: the gesture under way (one pointer's place, or two pointers' midpoint and spread)
+function mapGesture() {
+  const p = [...mapPtrs.values()];
+  if (!p.length) return null;
+  const x = p.reduce((t, q) => t + q.x, 0) / p.length, y = p.reduce((t, q) => t + q.y, 0) / p.length;
+  return { x, y, d: p.length > 1 ? Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) : 0, n: p.length };
+}
+$('cityMap').addEventListener('pointerdown', (e) => {
+  const rect = e.currentTarget.getBoundingClientRect();
+  mapPtrs.set(e.pointerId, { x: e.clientX - rect.left, y: e.clientY - rect.top });
+  mapDrag = { ...mapGesture(), moved: mapDrag?.moved || false };
+});
+$('cityMap').addEventListener('pointermove', (e) => {
+  if (!mapPtrs.has(e.pointerId) || !mapDrag) return;
+  const rect = e.currentTarget.getBoundingClientRect(), w = rect.width, h = rect.height;
+  mapPtrs.set(e.pointerId, { x: e.clientX - rect.left, y: e.clientY - rect.top });
+  const g = mapGesture();
+  if (g.n !== mapDrag.n) { mapDrag = { ...g, moved: mapDrag.moved }; return; }
+  if (Math.hypot(g.x - mapDrag.x, g.y - mapDrag.y) < 6 && Math.abs(g.d - mapDrag.d) < 6 && !mapDrag.moved) return;   // still a tap
+  let v = city.view || { k: 1 };
+  if (g.n > 1 && mapDrag.d > 0) v = zoomAt(v, w, h, g.x, g.y, g.d / mapDrag.d);
+  if (v.k > 1) v = panBy(v, w, h, g.x - mapDrag.x, g.y - mapDrag.y);
+  else if (g.n < 2) return;   // the whole map: a one-finger drag scrolls the page (touch-action pan-y)
+  e.preventDefault();
+  city.view = v; mapDrag = { ...g, moved: true };
+  renderCityMap();
+});
+const mapUp = (e) => { mapPtrs.delete(e.pointerId); if (!mapPtrs.size && mapDrag) setTimeout(() => { mapDrag = null; }, 0); else if (mapDrag) mapDrag = { ...mapGesture(), moved: mapDrag.moved }; };
+for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('cityMap').addEventListener(ev, mapUp);
+$('cityMap').addEventListener('wheel', (e) => {
+  const rect = e.currentTarget.getBoundingClientRect();
+  e.preventDefault();
+  city.view = zoomAt(city.view || { k: 1 }, rect.width, rect.height, e.clientX - rect.left, e.clientY - rect.top, Math.exp(-e.deltaY / 300));
+  renderCityMap();
+}, { passive: false });
+// hovering a line with a mouse previews which routes ride it (F105), in the map's hint
+$('cityMap').addEventListener('pointermove', (e) => {
+  if (e.pointerType !== 'mouse' || mapDrag?.moved) return;
+  const card = cityCard(), d = card && cityMapData(card);
+  if (!d) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const j = nearestLine(city.lines, e.clientX - rect.left, e.clientY - rect.top, 14);
+  const id = j >= 0 ? city.lines[j].id : null;
+  if (id === city.hover) return;
+  city.hover = id;
+  if (!id) { $('cityMapHint').textContent = city.hint || 'Tap a line to see the routes that ride it'; return; }
+  const { byGoal } = cityShown(card);
+  const n = (d.index.get(id) || []).filter((r) => byGoal.some((it) => it.id === r)).length;
+  $('cityMapHint').textContent = `${d.net.edges.get(id)?.name || 'This segment'} · ${n ? `${n === 1 ? '1 route rides' : `${n} routes ride`} it — click to list them` : 'no route rides it — Free ride or Plan your own can'}`;
+});
+$('cityMap').addEventListener('pointerleave', () => { if (city.hover) { city.hover = null; renderCityMap(); } });
+$('cityFit').addEventListener('click', () => { city.view = { k: 1 }; renderCityMap(); $('cityMap').focus({ preventScroll: true }); });
+$('cityMap').addEventListener('click', (e) => {
+  if (mapDrag?.moved) return;   // the end of a pinch or a drag, not a tap
+  const rect = e.currentTarget.getBoundingClientRect();
+  const j = nearestLine(city.lines, e.clientX - rect.left, e.clientY - rect.top, e.pointerType === 'mouse' ? 14 : 22);
+  if (j >= 0) { city.focus = null; cityTapSegment(city.lines[j].id); return; }
+  if (city.seg) { city.seg = null; city.segIds = null; renderCity(); }   // off the lines: back to every route
+});
+$('cityMap').addEventListener('keydown', (e) => {
+  const card = cityCard(), d = card && cityMapData(card);
+  if (!d) return;
+  // the keyboard's way round the map: the segments the goal lights, in order
+  const { byGoal } = cityShown(card);
+  const ids = d.lines.map((L) => L.id).filter((id) => (d.index.get(id) || []).some((r) => byGoal.some((it) => it.id === r)));
+  if (['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(e.key) && ids.length) {
+    const i = ids.indexOf(city.focus), dir = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1;
+    city.focus = ids[(i < 0 ? (dir > 0 ? 0 : ids.length - 1) : (i + dir + ids.length) % ids.length)];
+    city.hint = '';
+    renderCityMap();
+    $('citySel').textContent = `${d.net.edges.get(city.focus)?.name}: ${(d.index.get(city.focus) || []).length} routes`;
+  } else if ((e.key === 'Enter' || e.key === ' ') && city.focus) cityTapSegment(city.focus);
+  else return;
+  e.preventDefault();
+});
+$('cityGoals').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-goal]');
+  if (!b) return;
+  city.goal = b.dataset.goal; city.seg = null; city.segIds = null; city.hint = '';
+  renderCity();
+});
+$('citySeg').addEventListener('click', (e) => { if (e.target.id === 'citySegClear') { city.seg = null; city.segIds = null; renderCity(); } });
+$('cityList').addEventListener('click', async (e) => {
+  const ride = e.target.closest('[data-ride]'), opts = e.target.closest('[data-options]'), rm = e.target.closest('[data-remove]'), row = e.target.closest('.city-row-btn');
+  if (ride) cityRide(ride.dataset.ride);
+  else if (opts) cityChoose(opts.dataset.options);
+  else if (rm) {
+    if (!confirm('Remove this route from your library?')) return;
+    await removeNetRoute(rm.dataset.remove);
+    if ($('cityDlg').open) renderCity();
+  } else if (row) citySelect(row.dataset.id, { scroll: false });
+});
+$('cityList').addEventListener('keydown', (e) => {
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  const rows = [...$('cityList').querySelectorAll('.city-row-btn')], i = rows.indexOf(document.activeElement);
+  if (i < 0) return;
+  const next = rows[Math.max(0, Math.min(rows.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))];
+  e.preventDefault();
+  citySelect(next.dataset.id);
+  $('cityList').querySelector(`.city-row-btn[data-id="${CSS.escape(next.dataset.id)}"]`)?.focus();
+});
+// the Free ride tile starts it at once, as Ride does (F104); Options beside it chooses it and shows its preview
+$('cityFree').addEventListener('click', () => { const c = cityCard(); if (c?.free) cityRide(c.free.id); });
+$('cityFreeOpts').addEventListener('click', () => { const c = cityCard(); if (c?.free) cityChoose(c.free.id); });
+$('cityPlan').addEventListener('click', () => { const c = cityCard(); if (c) openPlanner(c.routes.find((x) => !x.custom) || c.free); });
+
 async function loadRouteItem(item) {
   if (routeCache.has(item.id)) return routeCache.get(item.id);
+  if (item.preset || item.free || item.custom) {
+    // a network preset: the path route over the city loop's own route and world (js/network.js)
+    const base = await loadRouteItem(parkItems.find((p) => p.id === item.baseId));
+    base.networks ||= new Map();
+    if (!base.networks.has(item.network)) base.networks.set(item.network, loadNetwork(netCache.get(item.network), await networkBases(netCache.get(item.network), base)));
+    const net = base.networks.get(item.network);
+    let preset;
+    if (item.free) preset = { id: item.routeId, name: item.name, path: null, first: net.json.freeRide.first };
+    else if (item.custom) {
+      const path = keysToIds(net, item.keys);
+      if (!path) throw new Error(`${item.name} uses segments the network no longer has — plan it again`);
+      preset = { id: item.routeId, name: item.name, path };
+    } else preset = net.presets.find((x) => x.id === item.preset);
+    const route = makePathRoute(net, preset, { id: item.routeId, name: item.name, park: item.park });
+    route.note = item.note || '';
+    route.scene = base.scene;
+    // the path ahead changed (a turn chosen, or the path refilled): the arches follow it
+    route.netRide.addEventListener('change', () => { if (session.route === route && world?.path === route.netRide) world.setCourseMarks(courseMarks()); });
+    routeCache.set(item.id, route);
+    return route;
+  }
   const text = item.text ?? await (await fetch(item.url)).text();
   const route = buildCatalogRoute(text, item);
+  route.sourceFile = item.file;
   await loadRouteScene(route).catch((err) => log('3d', err.message, 'error'));
   routeCache.set(item.id, route);
   return route;
+}
+
+/**
+ * The base routes a network rides: its one base line, or (a city of areas, PLAN 5.4) every area's line, keyed by
+ * area id — the city's own route for the area it shares files with, the others' lines without their scenery
+ * (the world fetches that when it needs it: js/routes.js loadRouteScene).
+ */
+async function networkBases(json, cityRoute) {
+  if (json.format !== 'bikefree-network-2') return cityRoute;
+  const bases = new Map();
+  for (const a of json.areas) {
+    const it = parkItems.find((p) => p.routeId === a.catalogId);
+    if (!it) throw new Error(`No catalog entry for area ${a.id}`);
+    if (it.file === cityRoute.sourceFile) { bases.set(a.id, cityRoute); continue; }
+    const key = `area-${it.id}`;
+    if (!routeCache.has(key)) {
+      const r = buildCatalogRoute(await (await fetch(it.url)).text(), it);
+      r.sourceFile = it.file;
+      routeCache.set(key, r);
+    }
+    bases.set(a.id, routeCache.get(key));
+  }
+  return bases;
 }
 
 async function previewSelectedRoute() {
@@ -1030,6 +1702,8 @@ async function previewSelectedRoute() {
   if (!item) return;
   try {
     previewRoute = await loadRouteItem(item);
+    // a network route not being ridden: show its plan, not the turns chosen on the last ride
+    if (previewRoute.netRide && session.route !== previewRoute) previewRoute.netRide.reset();
   } catch (err) {
     previewRoute = null;
     log('app', `Could not load route: ${err.message}`, 'error');
@@ -1098,10 +1772,19 @@ $('routeDelete').addEventListener('click', async () => {
   closeMenus();
   const id = selectedRouteId;
   if (id.startsWith('builtin') || !confirm('Remove this route from your library?')) return;
+  if (id.startsWith('mynet-')) { await removeNetRoute(id); return; }
   await store.deleteLibraryItem(id);
   routeCache.delete(id);
   await refreshRouteList();
 });
+/** Your own network route (the map planner): kept in settings. */
+async function removeNetRoute(id) {
+  settings.netRoutes = (settings.netRoutes || []).filter((m) => m.id !== id);
+  saveSettings(settings);
+  routeCache.delete(id);
+  netItems = []; parkItems = null;
+  await refreshRouteList();
+}
 $('gpxFile').addEventListener('change', async (e) => {
   closeMenus();
   const file = e.target.files[0];
@@ -1583,4 +2266,4 @@ registerServiceWorker(log);
 log('app', 'Ready. Close Zwift, Zwift Companion and the Wahoo app, then connect your devices.');
 
 // For debugging in the browser console.
-window.bikefree = { pacer, session, trainer, ride, hrStrap, store, profiles, get world() { return world; }, get ftpRun() { return ftpRun; } };
+window.bikefree = { pacer, session, trainer, ride, hrStrap, store, profiles, get world() { return world; }, get ftpRun() { return ftpRun; }, get plan() { return plan; } };

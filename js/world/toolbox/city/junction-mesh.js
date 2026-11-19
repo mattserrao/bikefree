@@ -2,7 +2,8 @@
 // route's road inside a junction go into the city's street builders (no extra draw calls), the corner sidewalks
 // into the sidewalk builders, and the paint — crosswalks, stop lines, curb edges — into one merged mesh per chunk.
 import * as THREE from '../../../../vendor/three.module.min.js';
-import { streetPieces, LIFT_BLEND_M, junctionPaint, routeLine } from './junctions.js';
+import { streetPieces, LIFT_BLEND_M, junctionPaintJob, routeLine } from './junctions.js';
+import { drain, due } from '../core/jobs.js';   // [F30]
 import { ROAD_WIDTH } from '../../pose.js';
 import { cityStreets } from './landscape.js';
 
@@ -53,7 +54,9 @@ const upNormal = (a, b, c) => {   // the face normal of a triangle (pointing up)
  * `walks`: its street and sidewalk builder maps; `liftOf(k)`: a street's ribbon lift. Junction surfaces, paint and
  * corner sidewalks join the street and sidewalk chunks (no extra draw calls); the route's overlay is one mesh.
  */
-export function buildJunctionMeshes(city, plan, { get, roads, walks, liftOf }) {
+export function buildJunctionMeshes(...args) { return drain(buildJunctionMeshesJob(...args)); }
+/** buildJunctionMeshes as a job ([F30]: js/world/toolbox/core/jobs.js). */
+export function* buildJunctionMeshesJob(city, plan, { get, roads, walks, liftOf }) {
   const streets = city.streets, O = plan.options;
   const route = city.route, index = city.index;
   const paintAt = (x, z) => get(roads, x, z).set({ aSlot: [PAINT_SLOT] });
@@ -67,6 +70,7 @@ export function buildJunctionMeshes(city, plan, { get, roads, walks, liftOf }) {
   // each junction's geometry joins the chunk of one of its streets (no chunks of its own: no extra draw calls)
   const home = (jn) => { const a = jn.arms.find((o) => !o.route) || jn.extra[0]; const p = a ? streets[a.k].pts[0] : jn; return p; };
   for (const jn of plan.list) {
+    if (due()) yield;
     const H = home(jn);
     // 1. the surface: a fan from the centre (the polygon is star-shaped about it), each vertex at its drawn height
     const B = get(roads, H.x, H.z).set({ aSlot: [TOP_SLOT] });
@@ -110,8 +114,9 @@ export function buildJunctionMeshes(city, plan, { get, roads, walks, liftOf }) {
     }
   }
   // 3. paint (js/world/toolbox/city/junctions.js junctionPaint: the same quads the course QC checks)
-  const paint = junctionPaint(plan, streets, { route, index, routeDist: city.landscape.routeDist, roadWidth: ROAD_WIDTH, liftOf, routeKindAt: city.landscape.routeKindAt });
+  const paint = yield* junctionPaintJob(plan, streets, { route, index, routeDist: city.landscape.routeDist, roadWidth: ROAD_WIDTH, liftOf, routeKindAt: city.landscape.routeKindAt });
   for (const q of paint.quads) {
+    if (due()) yield;
     if (q.kind === 'route-crosswalk') continue;   // (on the route's overlay below)
     const jn = plan.list[q.jn], H = home(jn);
     flatQuad(paintAt(H.x, H.z), q.pts); paintTris += 2;
@@ -126,10 +131,16 @@ export function buildJunctionMeshes(city, plan, { get, roads, walks, liftOf }) {
  * The route's shoulder (world.js: the pale band either side of the road) is left out inside junctions the route
  * passes through: the junction surface and its corner sidewalks take its place. Cuts the ribbon exactly at each
  * span's ends (new stations interpolated along its edges). `dist`: the route's distance at each station.
+ * Quads the ribbon already left out stay out (a network tour's ghost repeats, a hairpin's apex: world.js
+ * makeRibbon): the ghost pass's shoulder lies a few cm off the real pass's road and showed through it as a
+ * pale band (F19, Boundary St).
  */
 export function cutRouteRibbon(mesh, plan, dist) {
   if (!plan?.spans.length || !mesh?.geometry) return;
   const g = mesh.geometry, P = g.attributes.position.array, U = g.attributes.uv.array, n = P.length / 6;
+  const kept = new Uint8Array(Math.max(0, n - 1));   // the ribbon's own quads: segment i joins stations i and i + 1
+  const I = g.index?.array;
+  if (I) { for (let t = 0; t < I.length; t += 3) { const a = Math.min(I[t], I[t + 1], I[t + 2]) >> 1; if (a < n - 1) kept[a] = 1; } } else kept.fill(1);
   const spans = plan.spans.map((sp) => [sp.s0, sp.s1]).sort((a, b) => a[0] - b[0]);
   const inside = (s) => spans.some(([a, b]) => s > a + 1e-3 && s < b - 1e-3);
   const pos = [], uv = [], idx = [];
@@ -142,16 +153,16 @@ export function cutRouteRibbon(mesh, plan, dist) {
     }
     return pos.length / 6 - 1;
   };
-  const link = (a, b) => { const A = a * 2, B = b * 2; idx.push(A, A + 1, B, A + 1, B + 1, B); };
+  const link = (a, b, seg) => { if (!kept[seg]) return; const A = a * 2, B = b * 2; idx.push(A, A + 1, B, A + 1, B + 1, B); };
   for (let i = 0; i < n; i++) {
     const s = dist[i];
-    if (!inside(s)) { const k = station(i, 0); if (prev >= 0) link(prev, k); prev = k; } else prev = -1;
+    if (!inside(s)) { const k = station(i, 0); if (prev >= 0) link(prev, k, i - 1); prev = k; } else prev = -1;
     if (i === n - 1) break;
     const s1 = dist[i + 1];
     for (const [a, b] of spans) for (const e of [a, b]) {
       if (e <= s || e >= s1) continue;
       const k = station(i, (e - s) / (s1 - s));
-      if (e === a) { if (prev >= 0) link(prev, k); prev = -1; } else prev = k;
+      if (e === a) { if (prev >= 0) link(prev, k, i); prev = -1; } else prev = k;
     }
   }
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));

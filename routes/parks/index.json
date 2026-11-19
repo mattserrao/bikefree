@@ -168,6 +168,7 @@
     "climbM": 188,
     "file": "routes/parks/zion.gpx",
     "outAndBack": true,
+    "stage": "draft",
     "stops": [
       {
         "name": "Zion Lodge",
@@ -238,12 +239,111 @@
     "id": "pittsburgh",
     "name": "Pittsburgh · Three Rivers Loop",
     "park": "Pittsburgh, Pennsylvania",
-    "km": 18.3,
-    "climbM": 224,
+    "km": 29.1,
+    "climbM": 280,
     "file": "routes/cities/pittsburgh.gpx",
-    "stage": "draft",
     "eleSmoothM": 10,
+    "network": "routes/cities/pittsburgh-network.json",
     "scene": "routes/scenes/pittsburgh.json"
+  },
+  {
+    "id": "pittsburgh-allegheny",
+    "name": "Pittsburgh · The Allegheny & Troy Hill",
+    "park": "Pittsburgh, Pennsylvania",
+    "km": 16,
+    "climbM": 107,
+    "file": "routes/cities/pittsburgh-allegheny.gpx",
+    "area": "pittsburgh",
+    "eleSmoothM": 10,
+    "scene": "routes/scenes/pittsburgh-allegheny.json"
+  },
+  {
+    "id": "pittsburgh-westend",
+    "name": "Pittsburgh · The West End & Elliott",
+    "park": "Pittsburgh, Pennsylvania",
+    "km": 4.3,
+    "climbM": 109,
+    "file": "routes/cities/pittsburgh-westend.gpx",
+    "area": "pittsburgh",
+    "eleSmoothM": 10,
+    "scene": "routes/scenes/pittsburgh-westend.json"
+  },
+  {
+    "id": "pittsburgh-oakland",
+    "name": "Pittsburgh · Oakland & Schenley Park",
+    "park": "Pittsburgh, Pennsylvania",
+    "km": 15,
+    "climbM": 184,
+    "file": "routes/cities/pittsburgh-oakland.gpx",
+    "area": "pittsburgh",
+    "eleSmoothM": 10,
+    "scene": "routes/scenes/pittsburgh-oakland.json"
+  },
+  {
+    "id": "pittsburgh-polish",
+    "name": "Pittsburgh · Polish Hill, Bloomfield & the Oakland crosstown",
+    "park": "Pittsburgh, Pennsylvania",
+    "km": 10.7,
+    "climbM": 178,
+    "file": "routes/cities/pittsburgh-polish.gpx",
+    "area": "pittsburgh",
+    "eleSmoothM": 10,
+    "scene": "routes/scenes/pittsburgh-polish.json"
+  },
+  {
+    "id": "pittsburgh-homestead",
+    "name": "Pittsburgh · The Great Allegheny Passage & Homestead",
+    "park": "Pittsburgh, Pennsylvania",
+    "km": 26,
+    "climbM": 140,
+    "file": "routes/cities/pittsburgh-homestead.gpx",
+    "area": "pittsburgh",
+    "eleSmoothM": 10,
+    "scene": "routes/scenes/pittsburgh-homestead.json"
+  },
+  {
+    "id": "pittsburgh-northside",
+    "name": "Pittsburgh · The North Side",
+    "park": "Pittsburgh, Pennsylvania",
+    "km": 21.6,
+    "climbM": 384,
+    "file": "routes/cities/pittsburgh-northside.gpx",
+    "area": "pittsburgh",
+    "eleSmoothM": 10,
+    "scene": "routes/scenes/pittsburgh-northside.json"
+  },
+  {
+    "id": "pittsburgh-eastend",
+    "name": "Pittsburgh · The East End: Highland Park, East Liberty & Squirrel Hill",
+    "park": "Pittsburgh, Pennsylvania",
+    "km": 27.1,
+    "climbM": 421,
+    "file": "routes/cities/pittsburgh-eastend.gpx",
+    "area": "pittsburgh",
+    "eleSmoothM": 10,
+    "scene": "routes/scenes/pittsburgh-eastend.json"
+  },
+  {
+    "id": "pittsburgh-slopes",
+    "name": "Pittsburgh · The South Side Slopes, Mount Washington & the Dirty Dozen south",
+    "park": "Pittsburgh, Pennsylvania",
+    "km": 24.1,
+    "climbM": 667,
+    "file": "routes/cities/pittsburgh-slopes.gpx",
+    "area": "pittsburgh",
+    "eleSmoothM": 10,
+    "scene": "routes/scenes/pittsburgh-slopes.json"
+  },
+  {
+    "id": "pittsburgh-subway",
+    "name": "Pittsburgh · The subway: North Side to Gateway",
+    "park": "Pittsburgh, Pennsylvania",
+    "km": 3.3,
+    "climbM": 39,
+    "file": "routes/cities/pittsburgh-subway.gpx",
+    "area": "pittsburgh",
+    "eleSmoothM": 10,
+    "scene": "routes/scenes/pittsburgh-subway.json"
   },
   {
     "id": "alpedhuez",

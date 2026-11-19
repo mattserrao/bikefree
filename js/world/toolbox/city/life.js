@@ -3,10 +3,12 @@
 // the two inclines up Mount Washington, barges, the riverboat, motorboats and kayaks, and birds.
 // Agents live near the camera and are recycled as you ride; all draw calls are instanced. People, cyclists, dogs,
 // strollers, cars and buses come from the figures kit (life/figures): soft cartoon models, baked walk cycles.
+import { ghostAt } from '../../ghost.js';
 import * as THREE from '../../../../vendor/three.module.min.js';
 import { Crowd, CLIP, FIT, randomLook, dogLook, clipRate, PALETTES } from '../life/figures/people.js';
 import { vehicleMesh, vehicleMaterial, setPaint, setMove } from '../life/figures/vehicles.js';
 import { MeshBuilder, makePath, hash, ribbon } from '../core/mesh-builder.js';
+import { drain, due, each } from '../core/jobs.js';   // [F30] built as a job (in frame slices on the ride)
 import { LAND } from './landscape.js';
 import { ROAD_WIDTH } from '../../pose.js';
 
@@ -155,6 +157,7 @@ function chainPolylines(lines, tol = 1.5) {
 // ease up and down, and what is drawn follows the agent's place on its way at no more than its own pace (corners,
 // the far sidewalk after a turn round), so nothing snaps sideways in view.
 const HALF = ROAD_WIDTH / 2;
+const HIDDEN = new THREE.Vector3(0, 0, 0);   // a train car not drawn (scale 0): in a shallow cut under the route (F59)
 const MOVE = {
   //      look: m ahead to decide · acc/dec: m/s² · kerb: stop this far before the route's road · catch: m/s
   //      drawn place may close on the agent's place beyond its pace · turn: rad/s · body: length to clear
@@ -215,9 +218,10 @@ class Network {
     }
     return null;
   }
-  next(i, atEnd, rand) {
+  /** The way on from an end of way i ({i, s, dir}, or null: a dead end); `keep(way, dir)` can rule ways out. */
+  next(i, atEnd, rand, keep = null) {
     const p = atEnd ? this.ways[i].path.pts[this.ways[i].path.pts.length - 1] : this.ways[i].path.pts[0];
-    const opts = (this.ends.get(this.key(p)) || []).filter((o) => o.i !== i && this.ways[o.i].allow(o.end === 0 ? 1 : -1));
+    const opts = (this.ends.get(this.key(p)) || []).filter((o) => o.i !== i && this.ways[o.i].allow(o.end === 0 ? 1 : -1) && (!keep || keep(this.ways[o.i], o.end === 0 ? 1 : -1)));
     if (!opts.length) return null;
     const o = opts[Math.floor(rand() * opts.length)];
     return { i: o.i, s: o.end === 0 ? 0 : this.ways[o.i].path.length, dir: o.end === 0 ? 1 : -1 };
@@ -226,31 +230,42 @@ class Network {
 
 // ---------------------------------------------------------------- the life of the city
 export class CityLife {
-  constructor(city) {
+  /** `deferred` ([F30]): `this.job` builds it (the same steps), for the caller to run in frame slices. */
+  constructor(city, deferred = false) {
+    const job = this._buildJob(city);
+    if (deferred) { this.job = job; return; }
+    drain(job);
+  }
+
+  *_buildJob(city) {
     this.city = city;
     this.rand = (() => { let s = 1234567; return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; }; })();
     this.counts = COUNTS[city.qualityKey] || COUNTS.balanced;
     this.m = new THREE.Matrix4(); this.q = new THREE.Quaternion(); this.e = new THREE.Euler(0, 0, 0, 'YXZ'); this.one = V(1, 1, 1);
     this.vehicleMat = animatedMaterial(this, 'vehicles');
     this.carMat = vehicleMaterial(city.night);
-    this._networks();
+    yield* this._networksJob();
     this._people();
+    if (due()) yield;
     this._traffic();
-    this._rails();
+    if (due()) yield;
+    yield* this._railsJob();
     this._inclines();
+    if (due()) yield;
     this._boats();
+    if (due()) yield;
     this._birds();
     this.zero = new THREE.Matrix4().makeScale(0, 0, 0);
   }
 
-  _networks() {
+  *_networksJob() {
     const c = this.city, walk = [], drive = [];
     const onRoute = (st) => {   // streets that run along the route itself (its other carriageway, a parallel path)
       let near = 0;
       for (const p of st.pts) { const r = c.index.nearest(p.x, p.z, 9); if (r && r.d < 8) near++; }
       return near > st.pts.length * .4;
     };
-    c.streets.forEach((st) => {
+    yield* each(c.streets, (st) => {
       const path = makePath(st.pts);
       if (path.length < 8 || onRoute(st)) return;
       if (st.cls >= 2) walk.push({ path, side: st.cls === 8 ? 0 : st.width / 2 + 1.7, allow: () => true, cls: st.cls });
@@ -259,15 +274,33 @@ export class CityLife {
     });
     // the route's trails: people out on the riverfront with you
     const r = c.route, end = r.turnIdx || r.dist.length - 1, L = c.landscape;
+    // [network] (not where the route passes itself: a ride network's junction, where a walker beside one pass
+    // would be on the other's carriageway — the trail walk breaks there)
+    const otherPass = (i) => {
+      const x = c.index.xs[i], z = c.index.zs[i];
+      for (let j = 0; j <= end; j += 1) {
+        if (Math.abs(j - i) < 4 || ghostAt(r, r.dist[j])) continue;
+        const dx = c.index.xs[j] - x, dz = c.index.zs[j] - z;
+        if (dx * dx + dz * dz < 30 * 30) return true;
+      }
+      return false;
+    };
     for (const k of (L.data.routeKinds || []).filter((k) => k.kind === 'trail')) {
-      const pts = [];
-      for (let i = Math.ceil(k.fromM / 10) + 1; i <= Math.min(end, Math.floor(k.toM / 10) - 1); i++) pts.push({ x: c.index.xs[i], y: r.ele[i], z: c.index.zs[i] });
-      if (pts.length > 3) walk.push({ path: makePath(pts), side: 4.7, allow: () => true, cls: 9, trail: true });
+      if (due()) yield;
+      let pts = [];
+      const flush = () => { if (pts.length > 3) walk.push({ path: makePath(pts), side: 4.7, allow: () => true, cls: 9, trail: true }); pts = []; };
+      for (let i = Math.ceil(k.fromM / 10) + 1; i <= Math.min(end, Math.floor(k.toM / 10) - 1); i++) {
+        if ((i & 15) === 0 && due()) yield;
+        if (ghostAt(r, r.dist[i])) { flush(); continue; }   // (a network tour's repeat: walkers are on the real pass)
+        if (this._passCache?.[i] ?? ((this._passCache ||= [])[i] = otherPass(i))) { flush(); continue; }
+        pts.push({ x: c.index.xs[i], y: r.ele[i], z: c.index.zs[i] });
+      }
+      flush();
     }
     // off the route's road: sidewalks across its carriageway become crossings (with a kerb to wait at); sidewalks
     // and lanes that run along it, or that end on it with nowhere to go, are cut out here
-    this.walk = this._offRoute(walk, (w) => (w.side ? w.side + .9 : 1.4), MOVE.walk);
-    this.drive = this._offRoute(drive, (w) => (w.oneway ? 1.5 : w.lane) + 1.1, MOVE.car);
+    this.walk = yield* this._offRouteJob(walk, (w) => (w.side ? w.side + .9 : 1.4), MOVE.walk);
+    this.drive = yield* this._offRouteJob(drive, (w) => (w.oneway ? 1.5 : w.lane) + 1.1, MOVE.car);
   }
 
   /**
@@ -295,7 +328,10 @@ export class CityLife {
         if (r && r.d < HALF + margin && Math.abs(p.y - r.y) < 3.5) { hit = r; break; }
       }
       if (!hit) { close(); continue; }
+      // [network] where the route passes the same spot twice (a ride network's junction), each pass is its own band
+      if (cur && Math.abs(dist[hit.i] - cur.at) > 60) close();
       if (!cur) cur = { s0: s, s1: s, lo: Infinity, hi: -Infinity, rx: 0, rz: 0, n: 0 };
+      cur.at = dist[hit.i];
       cur.s1 = s; cur.lo = Math.min(cur.lo, dist[hit.i]); cur.hi = Math.max(cur.hi, dist[hit.i + 1] ?? dist[hit.i]);
       cur.rx += ix.xs[hit.i]; cur.rz += ix.zs[hit.i]; cur.n++;
     }
@@ -304,10 +340,11 @@ export class CityLife {
       rx: c.rx / c.n, rz: c.rz / c.n, half: (c.s1 - c.s0) / 2 + step }));
   }
 
-  _offRoute(ways, hwOf, K) {
-    const pieces = (list, cut) => {
+  *_offRouteJob(ways, hwOf, K) {
+    const pieces = function* (list, cut) {
       const out = [];
       for (const w of list) {
+        if (due()) yield;
         if (w.trail) { out.push(w); continue; }
         const band = w.band || this._bandOf(w.path, hwOf(w), K.margin), len = w.path.length, gaps = [];
         for (const c of band) if (cut(w, c, len)) gaps.push([c.s0 - 1, c.s1 + 1]);
@@ -321,12 +358,12 @@ export class CityLife {
       return out;
     };
     // 1. along the route's road (more than a crossing's length on it): cut out
-    let list = pieces(ways, (w, c) => c.s1 - c.s0 > K.longM);
+    let list = yield* pieces.call(this, ways, (w, c) => c.s1 - c.s0 > K.longM);
     // 2. ends on the route's road where no other way carries on (that may be entered there): cut back to the kerb
     const key = (p) => `${Math.round(p.x)},${Math.round(p.z)}`, ends = new Map();   // (as Network joins them)
     for (const w of list) for (const [end, p] of [[0, w.path.pts[0]], [1, w.path.pts.at(-1)]]) { const k = key(p); if (!ends.has(k)) ends.set(k, []); ends.get(k).push({ w, end }); }
     const others = (w, end) => (ends.get(key(end ? w.path.pts.at(-1) : w.path.pts[0])) || []).filter((o) => o.w !== w && o.w.allow(o.end === 0 ? 1 : -1)).length;
-    list = pieces(list, (w, c, len) => (c.s0 <= .01 && !others(w, false)) || (c.s1 >= len - .01 && !others(w, true)));
+    list = yield* pieces.call(this, list, (w, c, len) => (c.s0 <= .01 && !others(w, false)) || (c.s1 >= len - .01 && !others(w, true)));
     return new Network(list);
   }
 
@@ -475,6 +512,67 @@ export class CityLife {
   }
 
   /**
+   * Where a vehicle driving `dir` along way w turns round at its dead end (s along the way): its front at the end,
+   * or further back where that would swing it into the route's road. A vehicle turning round pivots about its
+   * middle (half its length each way, and its lane swaps sides), so on a street cut back short of the route's
+   * kerb, or running close beside the route, the middle stays half a length + a lane + room clear of the road.
+   * (A bus at a cut-back T on Second Ave swung its nose through the rider.) Cached per way, direction and size.
+   */
+  _turnRound(w, dir, bus) {
+    const key = (dir > 0 ? 'f' : 'b') + (bus ? 'B' : 'c'), cache = (w.turnAt ||= {});
+    if (cache[key] != null) return cache[key];
+    const L = this.city.landscape, len = w.path.length, half = bus ? 6.5 : 2.8, need = HALF + half + (w.lane || 1.5) + .6, p = {};
+    const endS = dir > 0 ? len : 0;
+    let at = dir > 0 ? 0 : len;   // (none clear: as far back as the way goes)
+    for (let k = half; k <= len; k += 1) {
+      const s = endS - dir * k;
+      pathAt(w.path, s, p);
+      const r = L.routeDist(p.x, p.z);
+      if (!r || r.d > need || Math.abs(p.y - r.y) > 4) { at = s; break; }
+    }
+    return (cache[key] = at);
+  }
+
+  /**
+   * [F38] The nearest stretch of the route's road beyond the far end of way i (driven `dir`), on any way that carries
+   * on from there (within 160 m): {d: metres from that end to its kerb side, c: the band} or null. Cached.
+   */
+  _roadAhead(net, i, dir, car, left = 160, depth = 0) {
+    const top = depth === 0, key = `${dir > 0 ? 'f' : 'b'}${car ? 'c' : 'w'}`, w = net.ways[i];
+    if (top && (w.roadAhead ||= {})[key] !== undefined) return w.roadAhead[key];
+    const endP = dir > 0 ? w.path.pts.at(-1) : w.path.pts[0];
+    let best = null;
+    for (const o of net.ends.get(net.key(endP)) || []) {
+      if (o.i === i) continue;
+      const od = o.end === 0 ? 1 : -1, ow = net.ways[o.i];
+      if (!ow.allow(od) || (car && !this._turnOk(ow, od, false))) continue;
+      const len = ow.path.length;
+      let hit = null;
+      for (const c of ow.band || []) { const d = od > 0 ? c.s0 : len - c.s1; if (!hit || d < hit.d) hit = { d: Math.max(0, d), c }; }
+      if (!hit && len < left && depth < 6) { const r = this._roadAhead(net, o.i, od, car, left - len, depth + 1); if (r) hit = { d: len + r.d, c: r.c }; }
+      if (hit && hit.d < left && (!best || hit.d < best.d)) best = hit;
+    }
+    if (top) w.roadAhead[key] = best;
+    return best;
+  }
+
+  /** Can a vehicle drive way w in direction dir: no dead end at its far end, or room to turn round before it (and to brake for that). */
+  _turnOk(w, dir, bus) {
+    const net = this.drive, i = net.ways.indexOf(w), endP = dir > 0 ? w.path.pts.at(-1) : w.path.pts[0];
+    const key = (dir > 0 ? 'f' : 'b') + (bus ? 'B' : 'c'), cache = (w.turnOk ||= {});
+    if (cache[key] != null) return cache[key];
+    const on = (net.ends.get(net.key(endP)) || []).some((o) => o.i !== i && net.ways[o.i].allow(o.end === 0 ? 1 : -1));
+    let ok = on;
+    if (!ok) {
+      // clear of the road there, and far enough in to brake for it from the way's start
+      const at = this._turnRound(w, dir, bus), p = pathAt(w.path, at, {}), r = this.city.landscape.routeDist(p.x, p.z);
+      const brake = (w.speed * 1.15) ** 2 / (4 * MOVE.car.dec) + 5;   // (its top speed, braking as _advance does)
+      ok = (!r || r.d > HALF + (bus ? 6.5 : 2.8) + (w.lane || 1.5) + .6 || Math.abs(p.y - r.y) > 4) && (dir > 0 ? at : w.path.length - at) >= brake;
+    }
+    return (cache[key] = ok);
+  }
+
+  /**
    * One step along a network: ease the speed (to a stop at the kerb or stop line while the rider is near a
    * crossing, and at the end of a dead end), move on, and draw it where it is, following no faster than its pace.
    */
@@ -482,13 +580,14 @@ export class CityLife {
     const K = MOVE[kind];
     let w = net.ways[a.way];
     const len = w.path.length, rem = a.dir > 0 ? len - a.s : a.s;
-    if (a.nx === undefined && rem < K.look + 30) a.nx = net.next(a.way, a.dir > 0, this.rand);
+    const keep = kind === 'car' ? (way, dir) => this._turnOk(way, dir, a.bus) : null;   // (no dead end too tight to turn round in)
+    if (a.nx === undefined && rem < K.look + 30) a.nx = net.next(a.way, a.dir > 0, this.rand, keep);
     let stopAt = null, turn = false;
     const x = this._ahead(a, net, K.look);
     if (!x || x.c !== a.go) a.go = x && x.inside ? x.c : null;
     if (x && !x.inside) {
       const kerb = (a.bus ? K.kerb + 4 : K.kerb) + (a.kerbJ || 0) + (a.slot || 0) * 7.5, stopD = x.dist - kerb;
-      if (x.wall) { stopAt = stopD; turn = true; }
+      if (x.wall) { stopAt = kind === 'car' ? Math.max(0, Math.min(stopD, (this._turnRound(w, a.dir, a.bus) - a.s) * a.dir)) : stopD; turn = true; }   // (cars: where they can turn round)
       else if (a.go !== x.c) {
         const t = (x.dist + x.cross + K.body) / Math.max(a.v, a.speed * .6);
         if (this._clear(x.c, rider, t)) { if (stopD < a.v * a.v / (2 * K.dec) + 1) { a.go = x.c; a.slot = 0; } }
@@ -499,17 +598,34 @@ export class CityLife {
       }
     }
     if (a.queue && stopAt == null) { a.queue.waiting = Math.max(0, (a.queue.waiting || 1) - 1); a.queue = null; a.slot = 0; }
-    if (stopAt == null && a.nx === null && rem < K.look && kind === 'car') { stopAt = rem; turn = true; }   // a dead end: slow down to turn round
+    // a dead end: slow down to turn round where its turning circle keeps off the route's road (_turnRound) [F16]
+    if (stopAt == null && a.nx === null && kind === 'car') {
+      const d = (this._turnRound(w, a.dir, a.bus) - a.s) * a.dir;
+      if (d < K.look + 7) { stopAt = Math.max(0, d); turn = true; }
+    }
     let target = a.speed;
     if (stopAt != null) target = stopAt < .05 ? 0 : Math.min(target, Math.sqrt(2 * K.dec * stopAt));
+    // [F38] a crossing beyond what _ahead sees (past the next way, or further than `look`: a fast street, short ways
+    // in a junction) may not be clear when it comes into view: no faster than it could still stop at its kerb
+    else if (!x && rider) {
+      const far = this._roadAhead(net, a.way, a.dir, kind === 'car');
+      if (far && rem + far.d < 160 && !this._clear(far.c, rider, (rem + far.d) / Math.max(a.v, 1) + 2)) {
+        const kerb = (a.bus ? K.kerb + 4 : K.kerb) + 1.2;
+        target = Math.min(target, Math.sqrt(2 * K.dec * Math.max(0, rem + far.d - kerb)));
+      }
+    }
     a.v = Math.max(0, a.v + Math.max(-2 * K.dec * dt, Math.min(K.acc * dt, target - a.v)));
     if (turn && a.v < .05 && stopAt < .3) { a.dir = -a.dir; a.nx = undefined; a.go = null; }   // nowhere to go but back
     a.s += a.dir * a.v * dt;
     if (a.s < 0 || a.s > len) {
       const over = a.s < 0 ? -a.s : a.s - len;
-      const nx = a.nx !== undefined ? a.nx : net.next(a.way, a.s > len, this.rand);
+      const nx = a.nx !== undefined ? a.nx : net.next(a.way, a.s > len, this.rand, keep);
       a.nx = undefined;
-      if (nx) { a.way = nx.i; a.s = nx.s + nx.dir * over; a.dir = nx.dir; w = net.ways[a.way]; a.s = Math.max(0, Math.min(w.path.length, a.s)); }
+      if (nx) {
+        a.way = nx.i; a.s = nx.s + nx.dir * over; a.dir = nx.dir; w = net.ways[a.way]; a.s = Math.max(0, Math.min(w.path.length, a.s));
+        // a walker keeps to the new way's sidewalk (a wide street's offset would put them in a narrow one's carriageway)
+        if (kind === 'walk' && !w.trail) { const g = a.lat < 0 ? -1 : 1, m = Math.abs(a.lat); a.lat = g * (w.side ? Math.max(w.side - .6, Math.min(w.side + .6, m)) : Math.min(1.1, m)); }
+      }
       else { a.dir = -a.dir; a.s = Math.max(0, Math.min(len, a.s)); }
     }
     // where it is on its way: its own side (on a shared trail a side of its own; cyclists keep the far half from the rider)
@@ -586,6 +702,16 @@ export class CityLife {
       const w = net.ways[hit[0]];
       if (a.bus && !w.bus) continue;
       const dir = w.oneway ? w.oneway : (this.rand() < .5 ? 1 : -1);
+      if (!this._turnOk(w, dir, a.bus)) continue;
+      // [F38] not so close before the route's road that it could not stop at the kerb for it (the first frame)
+      const room = (w.speed * 1.15) ** 2 / (4 * MOVE.car.dec) + MOVE.car.kerb + 10, rem = dir > 0 ? w.path.length - hit[1] : hit[1];
+      if ((w.band || []).some((c) => { const d = dir > 0 ? c.s0 - hit[1] : hit[1] - c.s1; return d > -4 && d < room; })) continue;
+      if (rem < room) { const far = this._roadAhead(this.drive, hit[0], dir, true); if (far && rem + far.d < room) continue; }
+      // [F130] nor past where it would turn round at a dead end ahead (it would stop and swing round right there: on a
+      // street running close beside the route, into the rider's road)
+      const endP = dir > 0 ? w.path.pts.at(-1) : w.path.pts[0];
+      const dead = !(net.ends.get(net.key(endP)) || []).some((o) => o.i !== hit[0] && net.ways[o.i].allow(o.end === 0 ? 1 : -1) && this._turnOk(net.ways[o.i], o.end === 0 ? 1 : -1, a.bus));
+      if (dead && (this._turnRound(w, dir, a.bus) - hit[1]) * dir < room) continue;
       Object.assign(a, { alive: true, way: hit[0], s: hit[1], dir, speed: w.speed * (.8 + this.rand() * .35), lat: w.lane || (this.rand() - .5) * 3, gait: 0, nx: undefined, go: null, slot: 0 });
       a.v = a.speed;
       return;
@@ -593,11 +719,50 @@ export class CityLife {
     a.alive = false;
   }
 
-  /** The route's own streets from the rider out to s are all street (no trail, no lenticular bridge): oncoming traffic can meet the rider there. */
+  /**
+   * [F18] Where the route rides a one-way street (the mapped street under its centre line, running along it):
+   * [{fromM, toM, dir}] outbound metres, dir +1 where its traffic goes the way out, −1 the way back. The route
+   * rides every street both ways (a network's edge backwards, the return leg), so on these stretches no oncoming
+   * traffic is drawn: whichever way you ride, it would drive against the one-way or meet you head-on in it.
+   */
+  _oneWays() {
+    if (this._ow) return this._ow;
+    const c = this.city, L = c.landscape, r = c.route, end = (r.turnIdx || r.dist.length - 1) - 1, ix = c.index;
+    const mark = new Int8Array(end + 1), p = {};
+    for (const st of c.streets || []) {
+      if (!st.oneway || st.pts.length < 2) continue;
+      if (!st.pts.some((q) => ix.nearest(q.x, q.z, 60))) continue;   // (most streets are nowhere near the route)
+      const path = makePath(st.pts);
+      for (let s = 0; s <= path.length; s += 4) {
+        poseOn(path, s, 2, p);
+        const h = L.routeDist(p.x, p.z);
+        if (!h || h.d > 3 || h.i >= end || Math.abs(p.y - h.y) > 3) continue;
+        const dx = ix.xs[h.i + 1] - ix.xs[h.i], dz = ix.zs[h.i + 1] - ix.zs[h.i], l = Math.hypot(dx, dz) || 1;
+        const cos = (p.tx * dx + p.tz * dz) / l;
+        if (Math.abs(cos) > .85) mark[h.i] = Math.sign(cos) * st.oneway;
+      }
+    }
+    // runs of marked samples (gaps under 40 m bridged, runs under 50 m dropped: a side street's mouth, a crossing)
+    const out = [];
+    let cur = null;
+    for (let i = 0; i <= end; i++) {
+      if (!mark[i]) continue;
+      if (cur && cur.dir === mark[i] && r.dist[i] - cur.toM <= 40) cur.toM = r.dist[i + 1];
+      else { if (cur) out.push(cur); cur = { fromM: r.dist[i], toM: r.dist[i + 1], dir: mark[i] }; }
+    }
+    if (cur) out.push(cur);
+    return (this._ow = out.filter((o) => o.toM - o.fromM >= 50));
+  }
+  _oneWayIn(lo, hi) { return this._oneWays().some((o) => o.toM + 10 > lo && o.fromM - 10 < hi); }
+
+  /** The route's own streets from the rider out to s are all two-way street (no trail, no lenticular bridge, no one-way): oncoming traffic can meet the rider there. */
   _roadTo(from, s) {
     const L = this.city.landscape, lo = Math.min(from, s), hi = Math.max(from, s);
     if (L.routeBridges.some((b) => b.style === 'lenticular' && b.toM + 30 > lo && b.fromM - 30 < hi)) return false;
-    for (let q = lo; q <= hi; q += 10) if (L.routeKindAt(q) !== 'road') return false;
+    if (this._oneWayIn(lo, hi)) return false;
+    // (nor across a ghost stretch: a network line's repeat, whose ends can turn sharply where an area's line joins
+    // its next piece — PLAN 5.4; oncoming traffic drives the real pass only)
+    for (let q = lo; q <= hi; q += 10) if (L.routeKindAt(q) !== 'road' || ghostAt(this.city.route, q)) return false;
     return L.routeKindAt(hi) === 'road';
   }
 
@@ -607,8 +772,13 @@ export class CityLife {
     const r = this.city.route, turn = r.turnS || r.total, p = this._tmpR || (this._tmpR = {});
     const ahead = 260 + this.rand() * 380, s = rider.out + rider.dir * ahead;
     const far = s >= 0 && s <= turn && Math.hypot(this._routeAt(s, p).x - rider.x, p.z - rider.z) > 220;
-    if (!far || !this._roadTo(rider.out, s)) { a.alive = false; a.wait = 1 + this.rand() * 3; return; }
-    Object.assign(a, { alive: true, onRoute: true, s, dir: -rider.dir, speed: 8 + this.rand() * 4 });
+    const speed = 8 + this.rand() * 4;
+    // [network] not to pass the rider just before a U-turn on their path (rider.uturn, out metres): after it, it would be
+    // ahead of them in their own lane
+    const meet = rider.out + rider.dir * ahead * Math.max(rider.speed || 0, 1) / (Math.max(rider.speed || 0, 1) + speed);
+    const uturn = rider.uturn != null && (rider.uturn - meet) * rider.dir < 80;
+    if (!far || uturn || !this._roadTo(rider.out, s)) { a.alive = false; a.wait = 1 + this.rand() * 3; return; }
+    Object.assign(a, { alive: true, onRoute: true, s, dir: -rider.dir, speed });
   }
 
   _routeAt(s, out) {
@@ -643,9 +813,13 @@ export class CityLife {
       if (rider && !a.alive) { a.wait = (a.wait || 0) - dt; if (a.wait <= 0) this._spawnOncoming(a, rider); }
       if (!rider || !a.alive) { a.lx = null; continue; }
       a.s += a.dir * a.speed * dt;
-      // gone once well behind the rider (behind the camera); the street ahead of it was checked when it appeared
+      // gone once well behind the rider (behind the camera); the street ahead of it was checked when it appeared.
+      // [network] once the rider has turned off its street at a junction (their place on the base route jumps far
+      // from it), it drives on until it is out of sight
       const behind = (rider.out - a.s) * rider.dir, turn = this.city.route.turnS || this.city.route.total;
-      if (behind > 80 || a.s < 0 || a.s > turn || (behind > 10 && this.city.landscape.routeKindAt(a.s) !== 'road')) { a.alive = false; a.wait = 2 + this.rand() * 6; a.lx = null; continue; }
+      const left = Math.abs(rider.out - a.s) > 900;
+      if (left ? this._outOfView(a.x, a.z, cam, 160, false) || a.s < 0 || a.s > turn
+        : behind > 80 || a.s < 0 || a.s > turn || (behind > 10 && (this.city.landscape.routeKindAt(a.s) !== 'road' || this._oneWayIn(a.s, a.s)))) { a.alive = false; a.wait = 2 + this.rand() * 6; a.lx = null; continue; }
       // its lane: a fixed offset from the centre line, square to the street's smoothed heading (no step at the GPS points)
       this._routeAt(a.s + 5, q); this._routeAt(a.s - 5, p);
       let hx = q.x - p.x, hz = q.z - p.z; const hl = Math.hypot(hx, hz) || 1; hx /= hl; hz /= hl;
@@ -660,10 +834,11 @@ export class CityLife {
   }
 
   // -------------------------------------------------------------- trains
-  _rails() {
+  *_railsJob() {
     const c = this.city, L = c.landscape, byKind = { light_rail: [], rail: [] };
     const tracks = new MeshBuilder();
     for (const r of c.landscape.data.rails || []) {
+      if (due()) yield;
       if (r.kind === 'funicular') continue;
       const pts = r.path.map(([a, o]) => c.D.local(a, o));
       if (r.bridge) { const y0 = L.baseHeight(pts[0].x, pts[0].z), y1 = L.baseHeight(pts.at(-1).x, pts.at(-1).z); pts.forEach((p, k) => { p.y = y0 + (y1 - y0) * k / (pts.length - 1) + 1; }); }
@@ -671,13 +846,14 @@ export class CityLife {
       (byKind[r.kind === 'tram' ? 'light_rail' : r.kind] || byKind.rail).push(pts);
     }
     for (const lines of Object.values(byKind)) for (const pts of lines) {
+      if (due()) yield;
       // ballast bed and two rails as flat ribbons (cheap: two triangles per segment)
       const raised = pts.map((p) => ({ x: p.x, y: p.y - .2, z: p.z }));
       tracks.color('#6b6359'); ribbon(tracks, raised, 3.2, 0, 10);
       tracks.color('#2f2c29');
       for (const side of [-.72, .72]) ribbon(tracks, offsetLine(pts, side), .14, .08, 10);
     }
-    tracks.keepOutOf(L.inRouteTube);   // rail beds the data lifts into the rider's space
+    yield* tracks.keepOutOfJob(L.inRouteTube);   // rail beds the data lifts into the rider's space
     if (tracks.count) { const tm = new THREE.Mesh(c.own(tracks.geometry()), c.solidMaterial); tm.receiveShadow = true; tm.name = 'Rail tracks'; c.group.add(tm); }
     // trains: two-car light-rail sets on the longest light-rail line, one long freight on the longest rail line
     const longest = (lines) => chainPolylines(lines, 2).map((l) => makePath(l)).sort((a, b) => b.length - a.length)[0];
@@ -712,6 +888,28 @@ export class CityLife {
     return (t.crossings = out);
   }
 
+  /**
+   * Where a train line passes under the route's road with too little room (F59: a short deck over a rail cut the
+   * z14 ground fills, so the rails are drawn in the cut's floor ~3 m under the deck): [{s0, s1}] along the line.
+   * Cars there aren't drawn — the train runs into the cut under the deck rather than through the road and rider.
+   * (At a level crossing the rails are at the road's height: that's `_crossings`.)
+   */
+  _underpasses(t) {
+    if (t.underpasses) return t.underpasses;
+    const L = this.city.landscape, out = [], p = {}, reach = t.gap / 2 + 2;
+    let cur = null;
+    for (let s = 0; s <= t.path.length; s += 2) {
+      t.path.at(s, p);
+      const r = L.routeDist(p.x, p.z), below = r ? r.y - p.y : 0;
+      const on = r && r.d < ROAD_WIDTH / 2 + 2.5 && below > 1.5 && below < 6;
+      if (on && !cur) cur = { s0: s - reach, s1: s + reach };
+      else if (on) cur.s1 = s + reach;
+      else if (cur) { out.push(cur); cur = null; }
+    }
+    if (cur) out.push(cur);
+    return (t.underpasses = out);
+  }
+
   _updateTrains(dt, rider) {
     const p = {};
     for (const t of this.trains) {
@@ -733,10 +931,12 @@ export class CityLife {
         if (t.dir > 0 && t.s > t.path.length - 5) { t.s -= tail; t.dir = -1; t.wait = 25; }
         else if (t.dir < 0 && t.s < 5) { t.s += tail; t.dir = 1; t.wait = 25; }
       }
+      const under = this._underpasses(t);
       for (let k = 0; k < t.cars; k++) {
-        t.path.at(Math.max(0, Math.min(t.path.length, t.s - t.dir * k * t.gap)), p);
+        const sk = Math.max(0, Math.min(t.path.length, t.s - t.dir * k * t.gap));
+        t.path.at(sk, p);
         this.e.set(-Math.atan(p.dy || 0) * t.dir, Math.atan2(p.dx, p.dz) + (t.dir < 0 ? Math.PI : 0), 0); this.q.setFromEuler(this.e);
-        this.m.compose(V(p.x, p.y, p.z), this.q, this.one);
+        this.m.compose(V(p.x, p.y, p.z), this.q, under.some((u) => sk > u.s0 && sk < u.s1) ? HIDDEN : this.one);
         if (t.freight) { if (k < 2) t.im.setMatrixAt(k, this.m); else t.carIm.setMatrixAt(k - 2, this.m); }
         else t.im.setMatrixAt((t.offset || 0) + k, this.m);
       }

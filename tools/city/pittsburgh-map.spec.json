@@ -1,0 +1,24 @@
+{
+ "osmCache": "pittsburgh",
+ "waterRelations": [1080, 2097217, 7937544],
+ "marginM": 1200,
+ "simplifyM": 12,
+ "minAreaM2": 3000,
+ "labels": [
+  {"text": "Allegheny River", "kind": "river", "lat": 40.4527, "lon": -79.9935, "angle": -22},
+  {"text": "Monongahela River", "kind": "river", "lat": 40.4302, "lon": -79.9842, "angle": 18},
+  {"text": "Ohio River", "kind": "river", "lat": 40.4555, "lon": -80.0355, "angle": -35},
+  {"text": "The Point", "kind": "place", "lat": 40.4418, "lon": -80.0122}
+ ],
+ "areaLabels": {
+  "core": "Downtown & the South Side",
+  "allegheny": "The Allegheny & Troy Hill",
+  "westend": "West End",
+  "oakland": "Oakland",
+  "polish": "Polish Hill & Bloomfield",
+  "homestead": "GAP & Homestead",
+  "northside": "North Side",
+  "eastend": "East End",
+  "slopes": "The Slopes & Beechview"
+ }
+}

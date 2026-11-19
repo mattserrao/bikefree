@@ -27,7 +27,7 @@ export const SCENE_FIELDS = {
   terrain: { type: 'string', required: true, tool: T + 'landscape/index.js', doc: 'authored-coast (default) | authored-region | real-coast | real-mountain | authored-city | wireframe' },
   terrainData: { type: 'object', tool: T + 'landscape/authored-region.js', keys: ['file', 'format', 'north', 'south', 'west', 'east', 'width', 'height', 'baseM', 'sdfMaxM', 'lakes'], doc: 'baked USGS grid + lakes (tools/build_scene_terrain.py)' },
   terrainGridFile: { type: 'string', tool: T + 'landscape/real-terrain.js', doc: 'real height grid (tools/build_terrain_grid.py)' },
-  terrainBuild: { type: 'object', keys: ['padM', 'coarseM', 'fineM', 'fineCellM', 'lakes', 'minLakeHa', 'lakeNames', 'gpx', 'rivers', 'osmWater', 'osmCorridorM'], doc: 'settings for the terrain bake tools' },
+  terrainBuild: { type: 'object', keys: ['padM', 'coarseM', 'fineM', 'fineCellM', 'lakes', 'minLakeHa', 'lakeNames', 'gpx', 'rivers', 'osmWater', 'osmCorridorM', 'box', 'lat0'], doc: 'settings for the terrain bake tools (a city\'s areas share one "box" and "lat0": PLAN 5.4)' },
   buildingStyles: { type: 'array', tool: T + 'structures/footprints.js', keys: ['fromM', 'toM', 'walls', 'roofs', 'trim', 'stone', 'pitch', 'eaveM', 'blockAreaM2', 'balconies'], doc: 'map-footprint buildings: wall, roof and shutter colours, stone plinths and roof pitch by stretch' },
   buildings: { type: 'object', tool: T + 'structures/footprints.js', keys: ['reachM', 'chunkM', 'landmarks'], doc: 'map-footprint buildings: draw reach, stretch size, landmark shapes by name ("tent")' },
   buildingKit: { type: 'object', tool: T + 'structures/buildings/kit.js', keys: ['detailM', 'dressingM', 'chunkM', 'reachM', 'detailReachM', 'detailBudgetMs', 'cityFacades', 'styles'], doc: 'map-footprint buildings drawn by the building kit (cities: homes, and textured facades for the rest): archetypes, textured walls and roofs, windows, wings, balconies, dormers, chimneys, lean-tos and ground dressing, by regional style per stretch (presets.js)' },
@@ -76,7 +76,7 @@ export const SCENE_FIELDS = {
   water: { type: 'object', tool: T + 'materials/surfaces.js', keys: ['style', 'lakeReachM', 'nearRouteM'], doc: '"lake" style: ripples and treeline reflection, no surf' },
 
   // road and roadside
-  road: { type: 'object', tool: T + 'materials/road-surface.js', keys: ['surface', 'zones', 'markings', 'trail'], doc: 'road surface by stretch: fresh, worn, patched, chip seal, frost-heaved …; markings "eu": white dashed centre and edges; "fr": French rules in metres (T1 centre, T2 edges, solid on blind bends, villages); trail: { surface, zones } for a city route\'s trail stretches' },
+  road: { type: 'object', tool: T + 'materials/road-surface.js', keys: ['surface', 'zones', 'markings', 'trail'], doc: 'road surface by stretch: fresh, worn, patched, chip seal, frost-heaved, brick, cobble (granite setts) …; markings "eu": white dashed centre and edges; "fr": French rules in metres (T1 centre, T2 edges, solid on blind bends, villages); trail: { surface, zones } for a city route\'s trail stretches' },
   brickStreets: { type: 'object', tool: T + 'city/city.js', keys: ['osm', 'minGrade', 'classes', 'minLengthM'], doc: 'city: brick-paved streets — the ones OSM tags brick, sett or paving stones, and steep residential streets (minGrade)' },
   roadAlign: { type: 'object', tool: 'js/world/road-align.js', keys: ['curve', 'streets', 'bankM', 'turns'], doc: 'smooth the route (curve: Catmull-Rom centre line; turns: { minRadiusM, maxShiftM, marginM, stepDeg } eases too-tight turns and cuts the road finer there) and, in a city, street profiles' },
   roadside: { type: 'array', tool: T + 'roadside/guardrail.js', keys: ['fromM', 'toM', 'side'], doc: 'post-and-rail guardrail stretches' },
@@ -92,6 +92,7 @@ export const SCENE_FIELDS = {
   bridges: { type: 'array', tool: T + 'structures/arch-bridges.js', keys: ['fromM', 'toM', 'name', 'creek', 'arch', 'style', 'side'], doc: 'bridges by distance; arch: open-spandrel concrete arch' },
   bridgeRanges: { type: 'array', keys: ['name', 'fromM', 'toM', 'depthM', 'lateralM'], doc: 'authored bridge decks' },
   bridgeColors: { type: 'object', keys: ['structure', 'rail'], doc: 'bridge colours (masonry for stone)' },
+  subway: { type: 'object', tool: T + 'structures/subway.js', keys: ['kit', 'note', 'tunnelLit', 'heads', 'platforms'], doc: 'a light-rail tunnel with a lit cycle path beside the tracks, platforms, escalators (assisted conveyors) and headhouses, along the city data\'s routeUnderground / routeConveyors / subway; or (heads, platforms: tools/bake_subway_heads.mjs) only the stations\' headhouses, for a neighbouring area that rides past them on the street (F123)' },
   mountainRoad: { type: 'object', tool: T + 'structures/mountain-road.js', keys: ['culverts', 'guardwalls', 'tunnels', 'waterfalls', 'buildings', 'parking', 'snowbanks'], doc: 'mountain road structures: masonry guardwalls, tunnels with galleries, arches, waterfalls, culverts, lodges, snowbanks' },
 
   // life
@@ -100,19 +101,22 @@ export const SCENE_FIELDS = {
   reflectorPosts: { type: 'boolean', tool: T + 'roadside/details.js', doc: 'false: no white reflector posts every 90 m (the verge kit has the road\'s own delineators)' },
   switchbacks: { type: 'boolean', tool: T + 'landscape/real-terrain.js', doc: 'real terrain: one bank between close legs of a switchback, the inside of tight turns at the lower level (Alpe d\'Huez)' },
   hairpinWalls: { type: 'object', tool: T + 'structures/hairpin-walls.js', keys: ['minDropM', 'parapetM', 'color'], doc: 'dry-stone retaining walls under the upper leg of close switchbacks' },
-  groundMesh: { type: 'object', tool: 'js/world/stylized-terrain.js', keys: ['fineCells'], doc: 'cells across the finest 96 m ground patch (16 = 6 m; 32 = 3 m for hairpin roads)' },
+  groundMesh: { type: 'object', tool: 'js/world/stylized-terrain.js', keys: ['fineCells', 'fineRanges'], doc: 'cells across the finest 96 m ground patch (16 = 6 m; 32 = 3 m for hairpin roads); a city: only along fineRanges [{fromM, toM, why}] of the route (a road cut into a steep hillside)' },
   raceDay: { type: 'object', tool: T + 'life/race-day.js', keys: ['crowd', 'camps', 'barriers', 'kom', 'kmToGo', 'flammeRouge', 'finishM', 'helicopter', 'noCrowd', 'paint', 'paintWords', 'peopleReachM', 'cardReachM', 'campReachM'], doc: 'race day: crowds, flags, camper vans, barriers, banners, finish gantry, TV helicopter (no traffic)' },
   visitors: { type: 'object', tool: T + 'life/visitors.js', keys: ['spots', 'lookouts', 'walking', 'kids', 'dogs', 'strollers'], doc: 'people at overlooks and sites' },
 
   // city kit (authored-city)
   cityData: { type: 'string', tool: T + 'city/city.js', doc: 'city data (tools/build_city.py)' },
-  streetKit: { type: 'object', tool: T + 'city/street-kit.js', keys: ['fromM', 'toM', 'rangeM', 'parkTrees', 'zones'], doc: 'facades, furniture, street trees' },
+  origin: { type: 'object', keys: ['lat', 'lon'], doc: 'a city of areas (PLAN 5.4): the city\'s shared frame — every area is projected around this point (js/world/world.js)' },
+  streetKit: { type: 'object', tool: T + 'city/street-kit.js', keys: ['fromM', 'toM', 'rangeM', 'parkTrees', 'zones', 'clearRouteCrossings'], doc: 'facades, furniture, street trees' },
   mainStreets: { type: 'array', keys: ['name', 'fromM', 'toM'], doc: 'city main streets' },
   junctions: { type: 'any', tool: T + 'city/junctions.js', doc: 'junction planning' },
   riverfront: { type: 'object', tool: T + 'city/riverfront.js', keys: ['maxGapM', 'spans', 'waterSteps'], doc: 'river walls, steps, trails' },
   riverFlow: { type: 'object', doc: 'river flow directions' },
+  qcAccept: { type: 'array', doc: 'course QC warnings reviewed and accepted: [{check, fromM, toM, why}] (reported as info)' },
   routeTrees: { type: 'array', keys: ['fromM', 'toM', 'spacingM', 'offsetM', 'sides'], doc: 'street trees along the route' },
   bridgeFrames: { type: 'object', tool: T + 'city/bridges.js', doc: 'city bridge frames by name' },
+  glasshouses: { type: 'array', tool: T + 'structures/glasshouse.js', keys: ['name', 'origin', 'yawDeg', 'seed', 'pathM', 'padM', 'floorDropM', 'walkM', 'gardenM', 'doorM', 'panelM', 'ribM', 'frameM', 'footprint', 'gardenBox', 'rooms', 'partitions', 'themes', 'plazas', 'features', 'art'], doc: 'conservatories the route rides through (city): glass rooms (barrel ranges, a domed palm court) in their own u/v frame, doors where the route crosses a wall, the floor following the path, themed instanced planting in peak bloom, hanging glass art, water; the ground levelled under the footprint' },
   heroes: { type: 'array', tool: T + 'city/heroes.js', keys: ['model', 'name', 'lat', 'lon', 'heightM', 'bodyM', 'radiusM', 'rebuilt', 'traced', 'turnDeg'], doc: 'landmark buildings' },
   hotspots: { type: 'array', keys: ['name', 'lat', 'lon', 'radiusM'], doc: 'busy places (more people)' },
   overlooks: { type: 'object', keys: ['fromM', 'toM', 'count', 'spacingM', 'toward', 'look'], doc: 'city overlooks' },

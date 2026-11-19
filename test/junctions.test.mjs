@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { buildCatalogRoute } from '../js/routes.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
 import { makeCityLandscape, cityStreets } from '../js/world/toolbox/city/landscape.js';
-import { planJunctions, streetPieces, streetOverlaps } from '../js/world/toolbox/city/junctions.js';
+import { planJunctions, streetPieces, streetOverlaps, routeLine } from '../js/world/toolbox/city/junctions.js';
 import { ROAD_WIDTH, ROAD_LIFT } from '../js/world/pose.js';
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
@@ -77,10 +77,37 @@ test('junctions: pittsburgh, planned the way the renderer and the course QC see 
   assert.ok(plan.list.length > 1000, `${plan.list.length} junctions`);
   assert.ok(plan.list.filter((j) => j.route).length > 60);
   const o = streetOverlaps(streets, plan);
-  assert.ok(o.overlapM < 12000, `overlapping ribbons ${o.overlapM} m (41.8 km without junctions)`);
-  // every junction surface the route passes through stays under its road
+  assert.ok(o.overlapM < 16500, `overlapping ribbons ${o.overlapM} m (41.8 km without junctions)`);   // (~18 m per km of street: 11.1 km over 617 km before the Allegheny Loop, 15.6 km over 877 km with it)
+  // every junction surface stays under the road as drawn (its curve), on every pass of it: the lowest cross-section of
+  // the drawn road through each corner (junctions.js routeLine().lowestNear: world.js leaves out a network tour's ghost
+  // repeats; landscape.routeDist() still reaches the segment just before a ghost's end, whose road isn't drawn —
+  // 54.06 km, East Carson, beside the junction at the Hot Metal Bridge's landing — and follows the 10 m chords)
+  const RL = routeLine(route, index);
+  let checked = 0;
   for (const jn of plan.list) for (const p of jn.poly) {
-    const r = L.routeDist(p.x, p.z);
-    if (r && r.d < ROAD_WIDTH / 2) assert.ok(jn.J(p.x, p.z) + jn.lift < r.y + ROAD_LIFT, `junction ${jn.id} over the road`);
+    const y = RL.lowestNear(p.x, p.z, ROAD_WIDTH / 2);
+    if (y == null) continue;
+    const top = jn.J(p.x, p.z) + jn.lift;
+    if (top >= y + ROAD_LIFT + 4) continue;   // (4 m and up: a junction on a deck over the road)
+    checked++;
+    assert.ok(top < y + ROAD_LIFT, `junction ${jn.id} over the road by ${(top - y - ROAD_LIFT).toFixed(2)} m`);
   }
+  assert.ok(checked > 500, `${checked} junction corners on the road checked`);
+});
+
+test('junctions: cutting the route shoulder at a junction keeps the quads the ribbon left out (ghost repeats, F19)', async () => {
+  const THREE = await import('../vendor/three.module.min.js');
+  const { cutRouteRibbon } = await import('../js/world/toolbox/city/junction-mesh.js');
+  // a straight 10-station ribbon along z; segments 6–7 dropped (a ghost repeat), a junction span over 2–3.5 m
+  const n = 10, pos = [], uv = [], idx = [];
+  for (let i = 0; i < n; i++) { pos.push(-1, 0, i, 1, 0, i); uv.push(0, i, 1, i); }
+  for (let i = 0; i < n - 1; i++) { if (i === 6 || i === 7) continue; const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx);
+  const mesh = new THREE.Mesh(g);
+  cutRouteRibbon(mesh, { spans: [{ s0: 2, s1: 3.5 }] }, Float64Array.from({ length: n }, (_, i) => i));
+  const P = mesh.geometry.attributes.position.array, I = mesh.geometry.index.array;
+  const covered = (z) => { for (let t = 0; t < I.length; t += 6) { const zs = [I[t], I[t + 2]].map((v) => P[v * 3 + 2]); if (z > Math.min(...zs) && z < Math.max(...zs)) return true; } return false; };
+  for (const z of [0.5, 1.5, 3.7, 5.5, 8.5]) assert.ok(covered(z), `shoulder at ${z} m`);
+  for (const z of [2.5, 3.2, 6.5, 7.5]) assert.ok(!covered(z), `no shoulder at ${z} m`);
 });

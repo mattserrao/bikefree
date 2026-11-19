@@ -1,0 +1,131 @@
+{
+ "id": "pittsburgh-allegheny",
+ "name": "Pittsburgh \u00b7 The Allegheny & Troy Hill",
+ "park": "Pittsburgh, Pennsylvania",
+ "gpx": "routes/cities/pittsburgh-allegheny.gpx",
+ "data": "routes/scenes/pittsburgh-allegheny-city.json",
+ "osmBbox": [
+  -80.045,
+  40.422,
+  -79.925,
+  40.486
+ ],
+ "osmTile": [
+  0.01,
+  0.008
+ ],
+ "gridBbox": [
+  -80.06,
+  40.405,
+  -79.925,
+  40.488
+ ],
+ "gridM": 24,
+ "landM": 12,
+ "waterRelations": [
+  1080,
+  2097217,
+  7937544
+ ],
+ "waterLevelM": 216.6,
+ "inlandWaterAboveM": 10,
+ "buildingRadiusM": 1100,
+ "tallBuildingM": 40,
+ "streetRadiusM": 900,
+ "bridgeStyles": {
+  "Roberto Clemente Bridge": "sister",
+  "Andy Warhol Bridge": "sister",
+  "Rachel Carson Bridge": "sister",
+  "Fort Duquesne Bridge": "arch-gold",
+  "Fort Pitt Bridge": "fortpitt",
+  "West End Bridge": "arch-gold",
+  "Smithfield Street Bridge": "lenticular",
+  "Liberty Bridge": "truss",
+  "South 10th Street Bridge": "suspension",
+  "Hot Metal Bridge": "truss-dark",
+  "Birmingham Bridge": "arch",
+  "David McCullough Bridge": "arch",
+  "Veterans Bridge": "girder",
+  "Washington Crossing Bridge;40th Street Bridge": "arch"
+ },
+ "stadiums": {
+  "PNC Park": {
+   "seats": "#2a5596",
+   "open": "river",
+   "heightM": 28
+  },
+  "Acrisure Stadium": {
+   "seats": "#e7b416",
+   "open": "river",
+   "heightM": 40
+  }
+ },
+ "specialBuildings": {
+  "One PPG Place": 6,
+  "Two PPG Place": 6,
+  "Three PPG Place": 6,
+  "Four PPG Place": 6,
+  "Five PPG Place": 6,
+  "Six PPG Place": 6,
+  "PPG Place Wintergarden": 6,
+  "U.S. Steel Tower": 9,
+  "Gulf Tower": 10,
+  "Grant Building": 11,
+  "Union Trust Building": 11,
+  "Koppers Tower": 11,
+  "BNY Mellon Center": 5,
+  "Fifth Avenue Place": 5,
+  "Tower at PNC Plaza": 5,
+  "EQT Plaza": 5,
+  "USS Requin": 12
+ },
+ "residentialBoxes": [
+  [
+   40.424,
+   -80.026,
+   40.4395,
+   -80.007
+  ],
+  [
+   40.424,
+   -80.007,
+   40.4285,
+   -79.996
+  ],
+  [
+   40.433,
+   -80.04,
+   40.4425,
+   -80.024
+  ]
+ ],
+ "dropStreets": [],
+ "osmCache": "pittsburgh",
+ "slice": {
+  "of": "pittsburgh-tour",
+  "pieces": [
+   [
+    49580,
+    49980
+   ],
+   [
+    49980,
+    49950
+   ],
+   [
+    0,
+    15550
+   ]
+  ],
+  "aprons": [
+   [
+    49580,
+    49980
+   ],
+   [
+    15150,
+    15550
+   ]
+  ]
+ }
+}

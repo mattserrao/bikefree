@@ -3,6 +3,7 @@
 // aircraft beacons and the Gulf Tower's weather beacon.
 import * as THREE from '../../../../vendor/three.module.min.js';
 import { MeshBuilder, resample, makePath, hash } from '../core/mesh-builder.js';
+import { drain, due, each } from '../core/jobs.js';   // [F30]
 import { ROAD_WIDTH } from '../../pose.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -236,12 +237,15 @@ function superstructure(M, city, path, style, width, lights) {
   }
 }
 
-export function buildBridges(city) {
+export function buildBridges(city) { return drain(buildBridgesJob(city)); }
+/** buildBridges as a job ([F30]: js/world/toolbox/core/jobs.js). */
+export function* buildBridgesJob(city) {
   const M = new MeshBuilder(), lights = [];
   const route = city.route, index = city.index;
   const routeNames = new Set();
   // 1. Bridges the route rides over (deck from the GPX itself)
   for (const b of city.landscape.routeBridges) {
+    if (due()) yield;
     const pts = [];
     for (let s = b.fromM; s <= b.toM; s += 5) {
       const i = Math.min((route.turnIdx || route.dist.length - 1) - 1, Math.floor(s / 10)), f = (s - route.dist[i]) / 10;
@@ -254,9 +258,10 @@ export function buildBridges(city) {
     if (b.style && b.style !== 'girder' && !useStreet) { superstructure(M, city, path, b.style, width, lights); routeNames.add(b.name); }
   }
   // 2. Every other bridge street (ramps, viaducts, the other river bridges): deck + piers
-  city.streets.forEach((st, k) => { if (st.bridge && st.cls <= 7) deck(M, city, st.pts, st.width, { thick: st.cls <= 2 ? 2.2 : 1.6, noRail: st.underRoute, street: k }); });
+  yield* each(city.streets, (st, k) => { if (st.bridge && st.cls <= 7) deck(M, city, st.pts, st.width, { thick: st.cls <= 2 ? 2.2 : 1.6, noRail: st.underRoute, street: k }); });
   // 3. The famous ones get their structure
   for (const b of city.landscape.data.bridges || []) {
+    if (due()) yield;
     if (routeNames.has(b.name)) continue;
     const pts = b.path.map(([qa, qo, y]) => { const p = city.D.local(qa, qo); return { x: p.x, y, z: p.z }; });
     if (pts.length < 2) continue;
@@ -264,7 +269,7 @@ export function buildBridges(city) {
     const width = b.style === 'fortpitt' || b.style === 'arch-gold' ? 17 : 12;
     superstructure(M, city, path, b.style, width, lights);
   }
-  M.keepOutOf(city.landscape.inRouteTube, { whole: true });   // decks, ramps and members the data puts in the rider's space (whole members: no cut stubs)
+  yield* M.keepOutOfJob(city.landscape.inRouteTube, { whole: true });   // decks, ramps and members the data puts in the rider's space (whole members: no cut stubs)
   const mesh = new THREE.Mesh(city.own(M.geometry()), city.solidMaterial);
   mesh.castShadow = mesh.receiveShadow = true; mesh.name = 'Bridges';
   city.group.add(mesh);

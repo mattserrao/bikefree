@@ -15,7 +15,8 @@
 // Cost: one draw call per stretch for the buildings, one per stretch for the near detail (Balanced: about
 // 10 + 2 in view). Everything uses the one facade material (facade-material.js).
 import * as THREE from '../../../../../vendor/three.module.min.js';
-import { planBuildings, ROAD_HALF } from './recipe.js';
+import { planBuildingsJob, ROAD_HALF } from './recipe.js';
+import { drain, due } from '../../core/jobs.js';   // [F30]
 import { assemble, Writer, NullWriter } from './assemble.js';
 import { planDressing } from './dressing.js';
 import { makeFacadeMaterial } from './facade-material.js';
@@ -27,12 +28,14 @@ const srgb = (hex) => { let c = SRGB.get(hex); if (!c) SRGB.set(hex, c = new THR
 const u8 = (c) => [Math.round(Math.min(1, c.r) * 255), Math.round(Math.min(1, c.g) * 255), Math.round(Math.min(1, c.b) * 255)];
 
 /** Plan the kit (pure): recipes and dressing for every footprint. Used by BuildingKit and the tests. */
-export function planBuildingKit(footprintPlan, config, index, tierIndex = null) {
-  const plan = planBuildings(footprintPlan, config, index, config.buildingKit || {}, tierIndex);
+export function planBuildingKit(...args) { return drain(planBuildingKitJob(...args)); }
+export function* planBuildingKitJob(footprintPlan, config, index, tierIndex = null) {
+  const plan = yield* planBuildingsJob(footprintPlan, config, index, config.buildingKit || {}, tierIndex);
   // a 20 m grid of footprints for "is this spot inside a building"
   const G = 20, grid = new Map();
   for (const n of footprintPlan.neighbours || []) if (!n.bb) { let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; for (const [x, z] of n.pts) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); } n.bb = [x0, x1, z0, z1]; }
   for (const R of [...plan.buildings, ...(footprintPlan.neighbours || [])]) {
+    if (due()) yield;
     let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
     for (const [x, z] of R.pts) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
     R.bb = [x0, x1, z0, z1];
@@ -55,7 +58,7 @@ export function planBuildingKit(footprintPlan, config, index, tierIndex = null) 
   const troughs = [];
   const claimTrough = (x, z) => { if (troughs.some((t) => Math.hypot(t[0] - x, t[1] - z) < 90)) return false; troughs.push([x, z]); return true; };
   const ctx = { index, blocked, claimTrough };
-  for (const R of plan.buildings) R.dressing = planDressing(R, ctx);
+  for (const R of plan.buildings) { R.dressing = planDressing(R, ctx); if (due()) yield; }
   return plan;
 }
 
@@ -172,7 +175,8 @@ export function makeStreetIndex(lines, cell = 40) {
  * every other building as a neighbour, fronts toward the nearest street, detail tiers by distance to the route.
  * `city` needs buildings (decoded: { k, ring, h, kind, name, hero, hidden }), streets (cityStreets), index, route.
  */
-export function planCityHomes(city, cfg) {
+export function planCityHomes(...args) { return drain(planCityHomesJob(...args)); }
+export function* planCityHomesJob(city, cfg) {
   const kinds = { 0: 'rowhouse', 1: 'house' };
   const homes = [], neighbours = [];
   for (const b of city.buildings) {
@@ -188,18 +192,25 @@ export function planCityHomes(city, cfg) {
   const ix = city.index; lines.push({ pts: Array.from(ix.xs, (x, i) => ({ x, z: ix.zs[i] })), half: 3.5 + 1.5 });
   const streets = makeStreetIndex(lines);
   const scene = { ...city.route.scene, buildingKit: cfg };
-  return { plan: planBuildingKit({ buildings: homes, neighbours }, scene, streets, city.index), streets };
+  return { plan: yield* planBuildingKitJob({ buildings: homes, neighbours }, scene, streets, city.index), streets };
 }
 
 export class CityBuildingKit {
-  constructor(city, cfg = {}) {
+  /** `deferred` ([F30]): `this.job` builds it (the same steps), for the caller to run in frame slices. */
+  constructor(city, cfg = {}, deferred = false) {
+    const job = this._buildJob(city, cfg);
+    if (deferred) { this.job = job; return; }
+    drain(job);
+  }
+
+  *_buildJob(city, cfg) {
     const t0 = performance.now();
     this.city = city;
     this.cfg = { detailM: 150, dressingM: 80, detailReachM: 550, ...cfg };
     this.L = city.landscape;
     this.group = new THREE.Group(); this.group.name = 'Buildings (building kit)'; city.group.add(this.group);
     this.material = city.own(makeFacadeMaterial(city.uniforms));
-    const { plan, streets } = planCityHomes(city, this.cfg);
+    const { plan, streets } = yield* planCityHomesJob(city, this.cfg);
     this.plan = plan; this.streets = streets;
     this.byKey = new Map(this.plan.buildings.map((R) => [R.key, R]));
     // what the kit adds outside the footprints (eaves, porches, steps, dressing), for the city's lamps and trees
@@ -238,12 +249,14 @@ export class CityBuildingKit {
   }
 
   /** After the city built chunk `key`: draw its homes; fold the main meshes into the sector once it is complete. */
-  chunkBuilt(key, sk, S) {
+  chunkBuilt(...args) { drain(this.chunkBuiltJob(...args)); }
+  /** chunkBuilt as a job ([F30]): pauses between homes when its slice is used up. */
+  *chunkBuiltJob(key, sk, S) {
     const list = this.chunks.get(key);
     let T = this.sectors.get(sk); if (!T) this.sectors.set(sk, (T = { parts: [], mesh: null }));
     if (list?.length) {
       const w = new Writer(8192), d = new Writer(4096);
-      for (const R of list) { const res = assemble(R, w, d, this.L); if (R.dressing?.length) for (const it of R.dressing) dress(d, it, R, this.L, res); }
+      for (const R of list) { if (due()) yield; const res = assemble(R, w, d, this.L); if (R.dressing?.length) for (const it of R.dressing) dress(d, it, R, this.L, res); }
       if (w.n) {
         const m = new THREE.Mesh(this.city.own(w.geometry()), this.material);
         m.name = `Buildings ${key}`; m.castShadow = m.receiveShadow = true;

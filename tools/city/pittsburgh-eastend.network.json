@@ -1,0 +1,145 @@
+{
+  "area": "eastend",
+  "note": "The East End: from Lawrenceville (LB, 40th & Butler) up Stanton Avenue over Stanton Heights to Highland Park and round the reservoir, down N Highland Ave to East Liberty, Shady Ave and Beechwood Blvd past Mellon Park and Bakery Square to Squirrel Hill, and Forbes Ave to Schenley Park (K). Portals: LB (the Allegheny & Troy Hill), K (Oakland & Schenley). Junction ids may be two letters (LB, HE, HP, EL, SQ): edge keys are FROM>TO with any ids.",
+  "nodes": [
+    {
+      "id": "LB",
+      "name": "Butler St & 40th St, Lawrenceville",
+      "lat": 40.468713,
+      "lon": -79.962418
+    },
+    {
+      "id": "HE",
+      "name": "Highland Park: Bunkerhill St & One Wild Place",
+      "lat": 40.47983,
+      "lon": -79.91964
+    },
+    {
+      "id": "HP",
+      "name": "N Highland Ave & Stanton Ave, Highland Park",
+      "lat": 40.46969,
+      "lon": -79.92103
+    },
+    {
+      "id": "EL",
+      "name": "Penn Ave & Shady Ave, East Liberty",
+      "lat": 40.45982,
+      "lon": -79.92081
+    },
+    {
+      "id": "SQ",
+      "name": "Forbes Ave & Shady Ave, Squirrel Hill",
+      "lat": 40.43804,
+      "lon": -79.91935
+    },
+    {
+      "id": "K",
+      "name": "Schenley Drive & Forbes Ave",
+      "lat": 40.437654,
+      "lon": -79.934186
+    }
+  ],
+  "edges": {
+    "LB>HE": {
+      "name": "Stanton Avenue & N Negley Avenue",
+      "fwd": "up Butler Street to Stanton Ave, the long climb over Stanton Heights, down to N Negley Ave and up Mellon Terrace to the Highland Park gates",
+      "rev": "Mellon Terrace and down N Negley Ave, Stanton Ave up over Stanton Heights and the long descent to Butler Street"
+    },
+    "HE>HP": {
+      "name": "N Highland Avenue: the park entrance",
+      "fwd": "Bunkerhill St past the Highland Park entrance garden and down N Highland Ave to Stanton",
+      "rev": "up N Highland Ave to the Highland Park entrance garden and Bunkerhill St to the zoo gates"
+    },
+    "HP>HE": {
+      "name": "Highland Park Reservoir & Lake Drive",
+      "fwd": "Stanton Ave along the park, Lake Drive past Lake Carnegie and round the reservoir to the zoo gates",
+      "rev": "past the zoo gates, Lake Drive round the reservoir and Lake Carnegie, down Stanton Ave to N Highland"
+    },
+    "HP>EL": {
+      "name": "N Highland Avenue: East Liberty",
+      "fwd": "down N Highland Ave into East Liberty and Penn Ave to Shady",
+      "rev": "Penn Ave and up N Highland Ave to Stanton"
+    },
+    "EL>SQ": {
+      "name": "Bakery Square & Beechwood Boulevard",
+      "fwd": "Penn Ave past Bakery Square, Fifth to Beechwood Blvd and up past Mellon Park to Forbes",
+      "rev": "Forbes Ave to Beechwood Blvd, down past Mellon Park to Fifth, Penn Ave past Bakery Square to Shady"
+    },
+    "SQ>EL": {
+      "name": "Shady Avenue",
+      "fwd": "down Shady Ave past Mellon Park, over Fifth to Penn Ave in East Liberty",
+      "rev": "Shady Ave over Fifth past Mellon Park and up into Squirrel Hill to Forbes"
+    },
+    "SQ>K": {
+      "name": "Forbes Avenue: Squirrel Hill",
+      "fwd": "Forbes Ave through Squirrel Hill past Murray Ave to Schenley Park",
+      "rev": "Forbes Ave out of Schenley Park through Squirrel Hill past Murray Ave to Shady"
+    }
+  },
+  "presets": [
+    {
+      "id": "pgh-east-end",
+      "name": "East End Loop",
+      "path": [
+        "SQ>K-",
+        "EL>SQ-",
+        "HP>EL-",
+        "HP>HE+",
+        "HE>HP+",
+        "HP>EL+",
+        "SQ>EL-",
+        "SQ>K+"
+      ],
+      "tags": [
+        "varied",
+        "new"
+      ],
+      "note": "From Schenley Park along Forbes into Squirrel Hill, Beechwood Blvd past Mellon Park and Penn Ave past Bakery Square to East Liberty, up N Highland and Stanton Ave to Highland Park, round Lake Carnegie and the reservoir on Lake Drive, down N Highland and back over Shady Ave"
+    },
+    {
+      "id": "pgh-squirrel-hill",
+      "name": "Squirrel Hill & Bakery Square Loop",
+      "path": [
+        "SQ>K-",
+        "EL>SQ-",
+        "SQ>EL-",
+        "SQ>K+"
+      ],
+      "tags": [
+        "short",
+        "hilly",
+        "new"
+      ],
+      "note": "From Schenley Park along Forbes to Squirrel Hill, down Beechwood Blvd past Mellon Park, Penn Ave past Bakery Square, and the long pull back up Shady Ave"
+    },
+    {
+      "id": "pgh-highland-park",
+      "name": "Highland Park Reservoir Loop",
+      "path": [
+        "HP>HE+",
+        "HE>HP+"
+      ],
+      "tags": [
+        "short",
+        "hilly",
+        "new"
+      ],
+      "note": "Stanton Ave along the park, Lake Drive past Lake Carnegie and round the reservoir to the zoo gates, past the entrance garden and down N Highland Ave"
+    },
+    {
+      "id": "pgh-stanton-heights",
+      "name": "Stanton Heights & Highland Park Climb",
+      "path": [
+        "LB>HE+",
+        "HE>HP+",
+        "HP>HE+",
+        "LB>HE-"
+      ],
+      "tags": [
+        "hilly",
+        "new"
+      ],
+      "note": "From Lawrenceville the long steady climb up Stanton Ave over Stanton Heights and N Negley to Highland Park, a lap of the reservoir, and back over the top to Butler Street"
+    }
+  ]
+}

@@ -6,6 +6,7 @@
 // Footprints are cut into rectangles (L, T and U plans become a main block and wings, each with its own
 // roof, so they meet as cross gables) — an outline too ragged for that keeps its outline and a low cap.
 import { randomSequence } from '../../core/random.js';
+import { drain, due } from '../../core/jobs.js';   // [F30]
 import { resolveStyle, pick, WALLS, ROOFS, WINDOW_SETS, W, WINDOW_BAY, ROOF_COLORS, S } from './presets.js';
 
 export const ROAD_HALF = 3.5;
@@ -134,7 +135,9 @@ const FLOORS = {
  * Plan every building: footprint plan (planFootprints) + the scene → recipes, sorted along the road.
  * `index` is the route index (road clearance and which way each house faces), `opts` the scene's buildingKit.
  */
-export function planBuildings(plan, config, index, opts = {}, tierIndex = null) {
+export function planBuildings(...args) { return drain(planBuildingsJob(...args)); }
+/** planBuildings as a job ([F30]: js/world/toolbox/core/jobs.js). */
+export function* planBuildingsJob(plan, config, index, opts = {}, tierIndex = null) {
   const kit = { detailM: 120, dressingM: 70, ...opts };
   const styles = (kit.styles?.length ? kit.styles : [{}]).map(resolveStyle);
   // a style can be limited to some kinds of map building ("kinds": ["rowhouse"]): cities pick by kind, routes by stretch
@@ -144,7 +147,7 @@ export function planBuildings(plan, config, index, opts = {}, tierIndex = null) 
   // neighbour grid (35 m density, 30 m scheme rule)
   const G = 40, grid = new Map(), key = (x, z) => `${Math.floor(x / G)},${Math.floor(z / G)}`;
   // every footprint is a neighbour (density, party walls, clearances); only plan.buildings are planned
-  for (const b of [...plan.buildings, ...(plan.neighbours || [])]) { const k = key(b.x, b.z); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(b); }
+  for (const b of [...plan.buildings, ...(plan.neighbours || [])]) { const k = key(b.x, b.z); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(b); if (due()) yield; }
   const around = (x, z, r, fn) => {
     const i0 = Math.floor((x - r) / G), i1 = Math.floor((x + r) / G), j0 = Math.floor((z - r) / G), j1 = Math.floor((z + r) / G);
     for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) for (const o of grid.get(`${i},${j}`) || []) if (Math.hypot(o.x - x, o.z - z) < r) fn(o);
@@ -154,6 +157,7 @@ export function planBuildings(plan, config, index, opts = {}, tierIndex = null) 
   if (tierIndex) {
     const c = 40, r = Math.ceil((tierR + c) / c);
     for (let i = 0; i < tierIndex.xs.length; i += 4) {
+      if (due()) yield;
       const cx = Math.floor(tierIndex.xs[i] / c), cz = Math.floor(tierIndex.zs[i] / c);
       for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) tierCells.add((cx + dx) * 100003 + (cz + dz));
     }
@@ -161,10 +165,13 @@ export function planBuildings(plan, config, index, opts = {}, tierIndex = null) 
   const nearTier = (x, z) => tierCells.has(Math.floor(x / 40) * 100003 + Math.floor(z / 40));
   // the map has some buildings twice (or a part drawn over its whole): keep the bigger, drop what overlaps it
   const dup = new Set();
+  if (due()) yield;
   const bySize = plan.buildings.slice().sort((a, b) => Math.abs(polyArea(b.pts)) - Math.abs(polyArea(a.pts)));
+  if (due()) yield;
   const kept = [];
   const keptGrid = new Map();
   for (const b of bySize) {
+    if (due()) yield;
     let hit = false;
     const i0 = Math.floor((b.x - b.r - 45) / G), i1 = Math.floor((b.x + b.r + 45) / G), j0 = Math.floor((b.z - b.r - 45) / G), j1 = Math.floor((b.z + b.r + 45) / G);
     for (let i = i0; i <= i1 && !hit; i++) for (let j = j0; j <= j1 && !hit; j++) for (const o of keptGrid.get(`${i},${j}`) || []) {
@@ -178,6 +185,7 @@ export function planBuildings(plan, config, index, opts = {}, tierIndex = null) 
   const done = new Map();   // building → recipe (for the neighbour rule)
   const sorted = plan.buildings.filter((b) => !dup.has(b)).sort((a, b) => a.s - b.s);
   for (let n = 0; n < sorted.length; n++) {
+    if (due()) yield;
     const b = sorted[n];
     const rand = randomSequence(seed0 ^ Math.imul(Math.round(b.x * 10) | 0, 73856093) ^ Math.imul(Math.round(b.z * 10) | 0, 19349663));
     const style = styleAt(b.s, b.kind);

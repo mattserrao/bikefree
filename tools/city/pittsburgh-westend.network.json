@@ -1,0 +1,26 @@
+{
+  "area": "westend",
+  "note": "Elliott and the West End Overlook (a dead end). Portal: D.",
+  "nodes": [
+    {
+      "id": "D",
+      "name": "West End Bridge south end",
+      "lat": 40.44418,
+      "lon": -80.02819
+    },
+    {
+      "id": "O",
+      "name": "West End Overlook",
+      "lat": 40.446574,
+      "lon": -80.034219,
+      "deadEnd": true
+    }
+  ],
+  "edges": {
+    "D>O": {
+      "name": "West End Overlook",
+      "fwd": "the climb up through Elliott to the West End Overlook",
+      "rev": "down from the overlook through Elliott"
+    }
+  }
+}

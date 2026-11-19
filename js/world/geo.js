@@ -2,6 +2,7 @@
 // Pure functions (tested in Node).
 import { turnOptions, smoothTurns } from './road-align.js';   // [smooth-turns]
 
+import { ghostMask } from './ghost.js';
 export const EARTH_R = 6378137;
 
 // ---- Tile sources and level-of-detail rules (shared by the live terrain and offline downloads) ----
@@ -67,11 +68,13 @@ export function makeRouteIndex(route, proj, cell = 40) {
   const n = route.dist.length;
   const xs = new Float64Array(n), zs = new Float64Array(n);
   const grid = new Map();
+  const ghost = ghostMask(route);   // a network tour's repeated stretches: never "the nearest route point" (js/world/ghost.js)
   for (let i = 0; i < n; i++) { const p = proj.toLocal(route.lat[i], route.lon[i]); xs[i] = p.x; zs[i] = p.z; }
   // [smooth-turns] a scene with roadAlign.turns eases its too-tight turns (js/world/road-align.js); others unchanged
   const turns = turnOptions(route);
   const smoothed = turns ? smoothTurns(route, xs, zs, turns) : null;
   for (let i = 0; i < n; i++) {
+    if (ghost?.[i]) continue;
     const p = { x: xs[i], z: zs[i] };
     const key = `${Math.floor(p.x / cell)},${Math.floor(p.z / cell)}`;
     let arr = grid.get(key);

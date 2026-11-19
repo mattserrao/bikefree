@@ -1,14 +1,14 @@
 {
  "id": "pittsburgh",
- "name": "Pittsburgh \u00b7 Three Rivers Loop",
+ "name": "Pittsburgh \u00b7 Downtown, the North Shore, the South Side & Mount Washington",
  "park": "Pittsburgh, Pennsylvania",
  "gpx": "routes/cities/pittsburgh.gpx",
  "data": "routes/scenes/pittsburgh-city.json",
  "osmBbox": [
-  -80.032,
+  -80.045,
   40.422,
-  -79.952,
-  40.454
+  -79.925,
+  40.486
  ],
  "osmTile": [
   0.01,
@@ -18,7 +18,7 @@
   -80.06,
   40.405,
   -79.925,
-  40.47
+  40.488
  ],
  "gridM": 24,
  "landM": 12,
@@ -28,323 +28,10 @@
   7937544
  ],
  "waterLevelM": 216.6,
+ "inlandWaterAboveM": 10,
  "buildingRadiusM": 1100,
  "tallBuildingM": 40,
  "streetRadiusM": 900,
- "links": [
-  {
-   "name": "South Side Trail ramp",
-   "from": [
-    40.43129,
-    -79.99002
-   ],
-   "to": [
-    40.43003,
-    -79.98863
-   ]
-  },
-  {
-   "name": "Clemente Bridge ramp to the riverfront",
-   "from": [
-    40.44424,
-    -80.00282
-   ],
-   "to": [
-    40.44401,
-    -80.00463
-   ]
-  },
-  {
-   "name": "Mon Wharf ramp",
-   "from": [
-    40.43812,
-    -80.00607
-   ],
-   "to": [
-    40.43776,
-    -80.00441
-   ]
-  }
- ],
- "legs": [
-  {
-   "mode": "road",
-   "waypoints": [
-    [
-     "Start: North Shore Water Steps",
-     40.44548,
-     -80.00825
-    ],
-    [
-     "General Robinson Street",
-     40.44768,
-     -80.00765
-    ],
-    [
-     "Federal & General Robinson",
-     40.44828,
-     -80.00427
-    ]
-   ]
-  },
-  {
-   "mode": "road",
-   "waypoints": [
-    [
-     "Federal & General Robinson",
-     40.44828,
-     -80.00427
-    ],
-    [
-     "Roberto Clemente Bridge",
-     40.44635,
-     -80.00361,
-     "Roberto Clemente Bridge"
-    ],
-    [
-     "Clemente S",
-     40.44424,
-     -80.00282
-    ]
-   ]
-  },
-  {
-   "mode": "trail",
-   "waypoints": [
-    [
-     "Clemente S",
-     40.44424,
-     -80.00282
-    ],
-    [
-     "Allegheny riverfront trail",
-     40.44401,
-     -80.00463
-    ],
-    [
-     "Under the Fort Duquesne Bridge",
-     40.44296,
-     -80.00921
-    ],
-    [
-     "Point Allegheny promenade",
-     40.44251,
-     -80.01128
-    ],
-    [
-     "Point State Park fountain",
-     40.44189,
-     -80.01324
-    ],
-    [
-     "Point Mon promenade",
-     40.44,
-     -80.0095
-    ],
-    [
-     "Mon Wharf",
-     40.43838,
-     -80.00668
-    ],
-    [
-     "Mon Wharf ramp",
-     40.43812,
-     -80.00607
-    ]
-   ]
-  },
-  {
-   "mode": "road",
-   "waypoints": [
-    [
-     "Mon Wharf ramp",
-     40.43812,
-     -80.00607
-    ],
-    [
-     "Market & Fort Pitt",
-     40.43776,
-     -80.00441
-    ],
-    [
-     "Market & Third",
-     40.43952,
-     -80.00335
-    ],
-    [
-     "Market Square",
-     40.44075,
-     -80.00256
-    ],
-    [
-     "Forbes & Smithfield",
-     40.43941,
-     -79.99909
-    ],
-    [
-     "Smithfield & Ft Pitt",
-     40.43653,
-     -80.00101
-    ],
-    [
-     "Smithfield Street Bridge",
-     40.435,
-     -80.002
-    ],
-    [
-     "Station Square",
-     40.43144,
-     -80.00192
-    ],
-    [
-     "E Carson & 10th",
-     40.42871,
-     -79.98858
-    ],
-    [
-     "E Carson & 18th",
-     40.42877,
-     -79.98055
-    ],
-    [
-     "E Carson & 27th",
-     40.4271,
-     -79.96705
-    ]
-   ]
-  },
-  {
-   "mode": "trail",
-   "waypoints": [
-    [
-     "E Carson & 27th",
-     40.4271,
-     -79.96705
-    ],
-    [
-     "SouthSide Works riverfront",
-     40.42986,
-     -79.966
-    ],
-    [
-     "South Side Riverfront Park",
-     40.4322,
-     -79.98018
-    ],
-    [
-     "South Side Trail mid",
-     40.4318,
-     -79.985,
-     "South Side Trail"
-    ],
-    [
-     "South Side Trail ramp",
-     40.43129,
-     -79.99002
-    ]
-   ]
-  },
-  {
-   "mode": "road",
-   "waypoints": [
-    [
-     "South Side Trail ramp",
-     40.43129,
-     -79.99002
-    ],
-    [
-     "Muriel & S 10th",
-     40.43003,
-     -79.98863
-    ],
-    [
-     "E Carson & 10th",
-     40.42871,
-     -79.98858
-    ],
-    [
-     "McArdle Roadway foot",
-     40.4272,
-     -79.98975,
-     "P J McArdle Roadway"
-    ],
-    [
-     "McArdle viaduct",
-     40.4287,
-     -79.99678,
-     "P J McArdle Roadway"
-    ],
-    [
-     "McArdle",
-     40.4307,
-     -80.0031,
-     "P J McArdle Roadway"
-    ],
-    [
-     "McArdle top",
-     40.43171,
-     -80.00557,
-     "P J McArdle Roadway"
-    ],
-    [
-     "Grandview Overlook",
-     40.43537,
-     -80.0129
-    ],
-    [
-     "Duquesne Incline top",
-     40.43782,
-     -80.01832
-    ],
-    [
-     "Grandview W",
-     40.44035,
-     -80.02309
-    ],
-    [
-     "West End Bridge S",
-     40.44418,
-     -80.02819
-    ],
-    [
-     "West End Bridge",
-     40.448,
-     -80.02608,
-     "West End Bridge"
-    ],
-    [
-     "West End Bridge N",
-     40.44964,
-     -80.02517
-    ]
-   ]
-  },
-  {
-   "mode": "trail",
-   "waypoints": [
-    [
-     "West End Bridge N",
-     40.44964,
-     -80.02517
-    ],
-    [
-     "Carnegie Science Center",
-     40.44536,
-     -80.01847
-    ],
-    [
-     "USS Requin",
-     40.44477,
-     -80.01508
-    ],
-    [
-     "Finish: Water Steps",
-     40.44548,
-     -80.00825
-    ]
-   ]
-  }
- ],
  "bridgeStyles": {
   "Roberto Clemente Bridge": "sister",
   "Andy Warhol Bridge": "sister",
@@ -358,7 +45,8 @@
   "Hot Metal Bridge": "truss-dark",
   "Birmingham Bridge": "arch",
   "David McCullough Bridge": "arch",
-  "Veterans Bridge": "girder"
+  "Veterans Bridge": "girder",
+  "Washington Crossing Bridge;40th Street Bridge": "arch"
  },
  "stadiums": {
   "PNC Park": {
@@ -391,15 +79,6 @@
   "EQT Plaza": 5,
   "USS Requin": 12
  },
- "cornerPasses": 3,
- "cornerHalfWindow": 8,
- "maxDriftM": 16,
- "profileKeep": [
-  [
-   2440,
-   2620
-  ]
- ],
  "residentialBoxes": [
   [
    40.424,
@@ -419,5 +98,81 @@
    40.4425,
    -80.024
   ]
- ]
+ ],
+ "dropStreets": [],
+ "osmCache": "pittsburgh",
+ "dropBuildings": [
+  {
+   "way": 380036601,
+   "why": "Gateway Station: the subway kit draws its headhouse over the escalator (the core draws the headhouses too: F123)"
+  },
+  {
+   "way": 450174434,
+   "why": "North Side Station: the station is drawn by the subway kit (its entrance on Red Lot 5A) (the core draws the headhouses too: F123)"
+  }
+ ],
+ "subwayHeadsOf": {
+  "gpx": "routes/cities/pittsburgh-subway.gpx",
+  "data": "routes/scenes/pittsburgh-subway-city.json",
+  "why": "F123: the subway's headhouses are drawn here too (scene subway.heads, tools/bake_subway_heads.mjs): no street kit or map trees round them, as in the subway area"
+ },
+ "slice": {
+  "of": "pittsburgh-tour",
+  "pieces": [
+   [
+    14750,
+    22620
+   ],
+   [
+    22620,
+    22220
+   ],
+   [
+    35410,
+    44320
+   ],
+   [
+    44320,
+    43920
+   ],
+   [
+    47420,
+    49980
+   ],
+   [
+    49980,
+    49950
+   ],
+   [
+    0,
+    400
+   ],
+   [
+    400,
+    0
+   ],
+   [
+    49980,
+    58060
+   ]
+  ],
+  "aprons": [
+   [
+    14750,
+    15150
+   ],
+   [
+    22220,
+    22620
+   ],
+   [
+    43920,
+    44320
+   ],
+   [
+    0,
+    400
+   ]
+  ]
+ }
 }

@@ -8,7 +8,8 @@ Pittsburgh uses it too (inland: "rivers" mode), for Mount Washington's bluff and
   python3 tools/build_terrain_grid.py bigsur
   python3 tools/build_terrain_grid.py pittsburgh
 
-Reads   routes/parks/<id>.gpx, routes/scenes/<id>.json ("terrainBuild": settings)
+Reads   routes/parks/<id>.gpx, routes/scenes/<id>.json ("terrainBuild": settings; a city's areas share
+        one "box" and "lat0" there)
 Writes  routes/scenes/<id>-terrain.grid.bin.gz (the binary container in js/terrain-grid.js, gzipped;
         the same JSON header, with the height rows as raw bytes)
 Source  AWS Terrain Tiles (terrarium, z14 ≈ 8 m), cached in ~/.cache/bikefree-dem
@@ -122,11 +123,15 @@ def main():
     cfg = {'padM': 6000, 'coarseM': 40, 'fineM': 900, 'fineCellM': 10, 'floorM': -45, 'seaBelowM': 3.0, **scene.get('terrainBuild', {})}
     gpx = (ROOT / scene.get('terrainBuild', {}).get('gpx', f'routes/parks/{rid}.gpx')).read_text()
     pts = np.array([(float(a), float(b)) for a, b in re.findall(r'lat="([\d.-]+)" lon="([\d.-]+)"', gpx)])
-    lat0 = pts[:, 0].mean()
+    lat0 = cfg.get('lat0', pts[:, 0].mean())
     mlat, mlon = 111320.0, 111320.0 * math.cos(math.radians(lat0))
     pad = cfg['padM']
     north, south = pts[:, 0].max() + pad / mlat, pts[:, 0].min() - pad / mlat
     west, east = pts[:, 1].min() - pad / mlon, pts[:, 1].max() + pad / mlon
+    if cfg.get('box'):
+        # a city of areas (PLAN 5.4): every area's grid on one box and lattice ("box": [north, west, south, east],
+        # "lat0"), so their heights are the same samples; only the fine blocks near each area's own line differ
+        north, west, south, east = cfg['box']
     print(f'{rid}: box {north:.4f} {west:.4f} → {south:.4f} {east:.4f}')
     M = Mosaic(north, west, south, east)
 

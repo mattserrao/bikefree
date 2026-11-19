@@ -11,7 +11,9 @@
 // No @metres = the scene's preview spot.
 // Options: --out <dir> (default tools/snapshots), --quality low|balanced|high, --size 1280x720,
 // --arches 22350:START:Avalanche Creek,47310:FINISH:Logan Pass (the start / finish arches),
+// --path e1+,e3+ (a route with a ride network: follow that path through its junctions; @metres along the path),
 // --chrome <path> (default: CHROME env, else the usual Mac/Linux locations), --software (no GPU).
+// --areas-now (a city of areas: build the path's other areas at once, not in frame slices),
 // --png (lossless), --fingerprint (hash of every object for refactor checks, with a frozen clock, seeded
 // random and no streamed real horizon, so runs repeat exactly; see tools/toolbox_guard.mjs).
 import { createServer } from 'node:http';
@@ -27,11 +29,14 @@ const flag = (name) => { const i = args.indexOf(name); if (i < 0) return false; 
 const out = opt('--out', 'tools/snapshots');   // relative to the repo, or an absolute path
 const quality = opt('--quality', 'balanced');
 const arches = opt('--arches', null);   // course arches: <startM>[:TITLE[:sub]][,<finishM>[:TITLE[:sub]]] (js/world/toolbox/roadside/course-arches.js)
+const pathKeys = opt('--path', null);   // a ride network's path (e1+,e3+): @metres are then path metres (js/network.js)
+const areaId = opt('--area', null);     // a city of areas (PLAN 5.4): draw this area (while it covers the spot), not the one the path would pick
 const [width, height] = opt('--size', '1280x720').split('x').map(Number);
 const software = flag('--software');
 const breakdown = flag('--breakdown');   // list draw calls by object
 const png = flag('--png');   // [toolbox] lossless PNG instead of JPEG (pixel-exact refactor checks)
 const fingerprint = flag('--fingerprint');   // [toolbox] hash of every mesh, matrix, attribute and material in the scene
+const areasNow = flag('--areas-now');   // a city of areas: build the other areas at once (world.areaBudget Infinity), not in frame slices — headless frames can be slow enough that a second area takes minutes
 const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync));
 if (!args.length) { console.log('usage: npm run snap -- <park>[@metres][:camera][:time][:season][:weather][:gentle|bold|current|standard] …'); process.exit(1); }
@@ -66,7 +71,7 @@ try { ({ chromium } = await import('playwright-core')); }
 catch { console.error('Needs playwright-core: npm install'); server.close(); process.exit(1); }
 const proxy = process.env.HTTPS_PROXY ? { server: process.env.HTTPS_PROXY, bypass: '127.0.0.1,localhost' } : undefined;   // tile downloads behind a proxy
 const browser = await chromium.launch({ executablePath: chrome, proxy,
-  args: software ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : ['--ignore-gpu-blocklist', '--enable-gpu'] });
+  args: [...(software ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : ['--ignore-gpu-blocklist', '--enable-gpu']), '--enable-precise-memory-info'] });
 const page = await browser.newPage({ viewport: { width, height } });
 // [toolbox] --fingerprint: a seeded Math.random and a clock that only moves when asked, so two builds of the
 // same scene are byte-identical (water, weather and traffic otherwise depend on wall time)
@@ -84,11 +89,14 @@ await mkdir(resolve(ROOT, out), { recursive: true });
 const rows = [];
 for (const shot of shots) {
   const t0 = Date.now(); errors.length = 0;
-  const q = new URLSearchParams({ park: shot.park, clean: '1', quality, ...(shot.pos ? { pos: shot.pos } : {}), ...(shot.time ? { time: shot.time } : {}), ...(shot.season ? { season: shot.season } : {}), ...(shot.weather ? { weather: shot.weather } : {}), ...(shot.look === 'standard' ? { standard: '1' } : shot.look ? { look: shot.look === 'current' ? 'none' : shot.look } : {}), ...(fingerprint ? { horizon: '0' } : {}), ...(arches ? { arches } : {}) });
+  const q = new URLSearchParams({ park: shot.park, clean: '1', quality, ...(shot.pos ? { pos: shot.pos } : {}), ...(pathKeys ? { path: pathKeys } : {}), ...(areaId ? { area: areaId } : {}), ...(shot.time ? { time: shot.time } : {}), ...(shot.season ? { season: shot.season } : {}), ...(shot.weather ? { weather: shot.weather } : {}), ...(shot.look === 'standard' ? { standard: '1' } : shot.look ? { look: shot.look === 'current' ? 'none' : shot.look } : {}), ...(fingerprint ? { horizon: '0' } : {}), ...(arches ? { arches } : {}) });
   await page.goto(`${base}/tools/world-preview.html?${q}`);
   if (breakdown) await page.evaluate(() => { window.__breakdown = true; });
+  if (areasNow) { await page.waitForFunction(() => window.world, null, { timeout: 180000, polling: 200 }); await page.evaluate(() => { window.world.areaBudget = { urgent: Infinity, soon: Infinity, ahead: Infinity }; }); }
   await page.evaluate(([p, f]) => { window.__png = p; window.__fingerprint = f; }, [png, fingerprint]);   // [toolbox]
   await page.waitForFunction(() => window.world?.terrain && (window.world.terrain.kit || !window.world.stylized) && window.world._camInit && window.world.rider?.triangles, null, { timeout: 180000, polling: 500 });
+  // a city of areas: wait until the areas the path reaches soon are built too (resident, hidden), as at a portal
+  await page.waitForFunction(() => { const w = window.world; return !w._multi || (w._resT != null && [...w.path.areasNear(w.p)].every((id) => w.areas.get(id)?.ready) && [...w.areas.values()].every((a) => a.ready)); }, null, { timeout: 180000, polling: 500 });
   // streamed terrain (non-stylized and wireframe scenes): wait until the visible tiles are in
   await page.waitForFunction(() => { const w = window.world; if (w.stylized) return true; const c = w.camera.position; w.terrain.update(c.x, c.z); return w.terrain.loadingCount === 0 && w.terrain.stats.ready > 4; }, null, { timeout: 180000, polling: 1000 });
   // stop the loop, let every queued scenery tile build, then draw one frame and read it back
@@ -156,13 +164,14 @@ for (const shot of shots) {
       });
       fp = { all: all.toString(16), objects: n, per };
     }
-    return { fp, breakdown, url: w.renderer.domElement.toDataURL(window.__png ? 'image/png' : 'image/jpeg', .9), calls: info.calls, triangles: info.triangles, bake: window.__bake || null };
+    return { fp, breakdown, url: w.renderer.domElement.toDataURL(window.__png ? 'image/png' : 'image/jpeg', .9), calls: info.calls, triangles: info.triangles, bake: window.__bake || null,
+      areas: w._multi ? [...w.areas.values()].map((a) => `${a.id}${a === w.area ? '*' : ''}`).join(' ') : null, memory: { ...w.renderer.info.memory, heapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null } };
   });
   const file = join(out, `${shot.name}.${png ? 'png' : 'jpg'}`);
   await writeFile(resolve(ROOT, file), Buffer.from(r.url.split(',')[1], 'base64'));
-  rows.push({ shot: shot.spec, file, calls: r.calls, triangles: r.triangles, seconds: Math.round((Date.now() - t0) / 1000), errors: [...errors], ...(r.bake ? { bake: r.bake } : {}), ...(r.fp ? { fingerprint: r.fp } : {}) });   // [baked-light] bake stats
+  rows.push({ shot: shot.spec, file, calls: r.calls, triangles: r.triangles, seconds: Math.round((Date.now() - t0) / 1000), errors: [...errors], ...(r.areas ? { areas: r.areas } : {}), memory: r.memory, ...(r.bake ? { bake: r.bake } : {}), ...(r.fp ? { fingerprint: r.fp } : {}) });   // [baked-light] bake stats
   if (r.breakdown) console.log(r.breakdown.map(([k, n, t]) => `   ${String(n).padStart(4)}  ${String(Math.round(t / 1000)).padStart(5)} k  ${k}`).join('\n'));   // [w2-budget] calls, triangles
-  console.log(`${errors.length ? 'ERR ' : 'ok  '} ${shot.spec.padEnd(34)} ${String(r.calls).padStart(5)} calls ${(r.triangles / 1e6).toFixed(2).padStart(6)} M tris  → ${file}`);
+  console.log(`${errors.length ? 'ERR ' : 'ok  '} ${shot.spec.padEnd(34)} ${String(r.calls).padStart(5)} calls ${(r.triangles / 1e6).toFixed(2).padStart(6)} M tris${r.areas ? ` · areas ${r.areas}` : ''} · ${r.memory.geometries} geometries, ${r.memory.textures} textures, heap ${r.memory.heapMB} MB  → ${file}`);
   for (const e of errors) console.log(`       ${e.slice(0, 200)}`);
 }
 await writeFile(resolve(ROOT, out, 'snapshots.json'), JSON.stringify({ quality, size: `${width}x${height}`, software, rows }, null, 2));

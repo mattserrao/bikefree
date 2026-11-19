@@ -18,6 +18,8 @@ function load(id, { turns = true } = {}) {
   const item = catalog.find((r) => r.id === id);
   const route = buildCatalogRoute(read(item.file), item);
   route.scene = normalizeScene(JSON.parse(read(item.scene)));
+  // [pittsburgh-network] the city data's ghost and underground stretches (never drawn as road; js/world/ghost.js)
+  if (route.scene.cityData) { const c = JSON.parse(read(route.scene.cityData)); route.scene.city = { routeGhosts: c.routeGhosts, routeUnderground: c.routeUnderground }; }
   if (!turns && route.scene.roadAlign) { route.scene.roadAlign = { ...route.scene.roadAlign }; delete route.scene.roadAlign.turns; }
   let a = Infinity, b = -Infinity, c = Infinity, d = -Infinity;
   for (let i = 0; i < route.lat.length; i++) { a = Math.min(a, route.lat[i]); b = Math.max(b, route.lat[i]); c = Math.min(c, route.lon[i]); d = Math.max(d, route.lon[i]); }
@@ -37,6 +39,23 @@ function sections(I, n, hw) {
   return out;
 }
 
+
+// [pittsburgh-network] a network area's line turns round at its dead ends (a turnaround) and its ghost repeats' ends:
+// those U-turns are the rider's (js/world/pose.js), like the far turnaround, and a ghost or underground stretch is
+// never drawn as road, so the checks skip them and 20 m round them
+function uturns(route) {
+  const out = [], n = route.turnIdx > 0 ? route.turnIdx : route.dist.length - 1;
+  const P = (i) => [route.lat[i], route.lon[i] * Math.cos(route.lat[i] * Math.PI / 180)];
+  for (let i = 1; i < n; i++) {
+    const a = P(i - 1), b = P(i), c = P(i + 1), u = [b[0] - a[0], b[1] - a[1]], v = [c[0] - b[0], c[1] - b[1]];
+    const lu = Math.hypot(...u), lv = Math.hypot(...v);
+    if (lu > 0 && lv > 0 && (u[0] * v[0] + u[1] * v[1]) / (lu * lv) < -.7) out.push(route.dist[i]);
+  }
+  return out;
+}
+const nearUturn = (route, s, m = 20) => (route._uturns ??= uturns(route)).some((u) => Math.abs(u - s) < m)
+  || [...(route.scene?.city?.routeGhosts || []), ...(route.scene?.city?.routeUnderground || [])].some((g) => s > g.fromM - m && s < g.toM + m);
+
 /** The drawn road's numbers: worst heading step between cross-sections, flipped ribbon triangles, drawn length. */
 function drawn(route, index) {
   const [R, I] = RA.denseRoad(route, index);
@@ -50,13 +69,13 @@ function drawn(route, index) {
     for (let i = 1; i < n; i++) {
       let d = Math.abs(head(i) - head(i - 1)); if (d > Math.PI) d = 2 * Math.PI - d;
       d *= 180 / Math.PI;
-      if (R.dist[i] < (route.turnS || route.total) - 20 && d > out.worstStep) { out.worstStep = d; out.worstAt = R.dist[i]; }
+      if (R.dist[i] < (route.turnS || route.total) - 20 && !nearUturn(route, R.dist[i]) && d > out.worstStep) { out.worstStep = d; out.worstAt = R.dist[i]; }
       // triangles (a, b, c) and (b, d, c) of world.js: a flipped one has the other winding
       const A = [E[(i - 1) * 4], E[(i - 1) * 4 + 1]], B = [E[(i - 1) * 4 + 2], E[(i - 1) * 4 + 3]], C = [E[i * 4], E[i * 4 + 1]], D = [E[i * 4 + 2], E[i * 4 + 3]];
       const cr = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
       // (world.js winds every ribbon triangle the same way: (a, b, c) and (b, d, c) are clockwise seen from above
       // in this frame; a degenerate one, where an inside edge is held still, is not a fold)
-      if (cr(A, B, C) > 1e-6 || cr(B, D, C) > 1e-6) out.flips++;
+      if ((cr(A, B, C) > 1e-6 || cr(B, D, C) > 1e-6) && !nearUturn(route, R.dist[i])) out.flips++;
     }
   }
   for (let i = 1; i < n; i++) out.length += Math.hypot(I.xs[i] - I.xs[i - 1], I.zs[i] - I.zs[i - 1]);
@@ -70,8 +89,9 @@ function riderTurn(route, index) {
   for (let s = 15 + h; s <= end; s += h) {
     const cur = riderPose(route, index, s);
     const r = Math.acos(Math.max(-1, Math.min(1, prev.flat.x * cur.flat.x + prev.flat.z * cur.flat.z))) * 180 / Math.PI / h;
-    if (r > rate) { rate = r; rateAt = s; }
-    if (prevRate != null) accel = Math.max(accel, Math.abs(r - prevRate) / h);
+    const skip = nearUturn(route, s, 30);
+    if (r > rate && !skip) { rate = r; rateAt = s; }
+    if (prevRate != null && !skip) accel = Math.max(accel, Math.abs(r - prevRate) / h);
     prevRate = r; prev = cur;
   }
   return { rate, accel, rateAt };
@@ -97,7 +117,7 @@ for (const [id, L] of Object.entries(CASES)) {
       const p = P(s - 1), q = P(s), r = P(s + 1);
       const cross = (q.x - p.x) * (r.z - p.z) - (q.z - p.z) * (r.x - p.x);
       const R = Math.abs(cross) < 1e-12 ? Infinity : Math.hypot(q.x - p.x, q.z - p.z) * Math.hypot(r.x - q.x, r.z - q.z) * Math.hypot(r.x - p.x, r.z - p.z) / (2 * Math.abs(cross));
-      if (R < minR) { minR = R; minAt = s; }
+      if (R < minR && !nearUturn(route, s)) { minR = R; minAt = s; }
     }
     assert.ok(minR >= L.minRadius, `the road turns on a ${minR.toFixed(2)} m radius at ${minAt} m (limit ${L.minRadius} m)`);
     const t = riderTurn(route, index);

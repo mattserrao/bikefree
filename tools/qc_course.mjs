@@ -74,25 +74,25 @@ const angleBetween = (a, b) => deg(Math.acos(Math.max(-1, Math.min(1, a.x * b.x 
 function makeMeshGround(heightAt, fineCells = PATCH_CELLS, fineAt = null, landscape = null) {
   // [w2-align] city patches are draped off the streets (js/world/toolbox/landscape/ground-drape.js): model each 96 m patch the same way
   if (landscape?.groundClearPoints) {
-    const cell = PATCH / PATCH_CELLS;
-    const patches = new Map(), N = PATCH_CELLS + 1;
+    // (a patch the landscape asks to draw finer — groundMesh.fineCells along a city's fineRanges — as stylized-terrain.js builds it)
+    const patches = new Map();
     const patch = (pi, pj) => {
       const key = pi * 1e7 + pj;
       let h = patches.get(key);
       if (!h) {
-        const x0 = pi * PATCH, z0 = pj * PATCH;
-        h = new Float64Array(N * N);
+        const x0 = pi * PATCH, z0 = pj * PATCH, S = fineAt && fineAt(x0 + 1, z0 + 1) ? fineCells : PATCH_CELLS, cell = PATCH / S, N = S + 1;
+        h = new Float64Array(N * N); h.S = S;
         for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) h[j * N + i] = heightAt(x0 + i * cell, z0 + j * cell);
-        const d = groundDrape(h, x0, z0, cell, PATCH_CELLS, heightAt, { maxDrop: DRAPE_MAX_DROP, fixed: landscape.groundDrapeFixed, last: landscape.groundDrapeLast });
-        d.add(landscape.groundClearPoints(x0, z0, x0 + PATCH, z0 + PATCH, 2)); d.apply();
+        const d = groundDrape(h, x0, z0, cell, S, heightAt, { maxDrop: DRAPE_MAX_DROP, fixed: landscape.groundDrapeFixed, last: landscape.groundDrapeLast });
+        d.add(landscape.groundClearPoints(x0, z0, x0 + PATCH, z0 + PATCH, Math.max(2, cell / 3))); d.apply();
         patches.set(key, h);
       }
       return h;
     };
     return (x, z) => {
-      const pi = Math.floor(x / PATCH), pj = Math.floor(z / PATCH), h = patch(pi, pj);
+      const pi = Math.floor(x / PATCH), pj = Math.floor(z / PATCH), h = patch(pi, pj), S = h.S, cell = PATCH / S, N = S + 1;
       const u = (x - pi * PATCH) / cell, w = (z - pj * PATCH) / cell;
-      const i = Math.min(PATCH_CELLS - 1, Math.floor(u)), j = Math.min(PATCH_CELLS - 1, Math.floor(w)), fu = u - i, fw = w - j;
+      const i = Math.min(S - 1, Math.floor(u)), j = Math.min(S - 1, Math.floor(w)), fu = u - i, fw = w - j;
       const a = h[j * N + i], b = h[j * N + i + 1], d = h[(j + 1) * N + i], e = h[(j + 1) * N + i + 1];
       return fu + fw <= 1 ? a + (b - a) * fu + (d - a) * fw : e + (d - e) * (1 - fu) + (b - e) * (1 - fw);
     };
@@ -141,11 +141,15 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
     minLat = Math.min(minLat, route.lat[i]); maxLat = Math.max(maxLat, route.lat[i]);
     minLon = Math.min(minLon, route.lon[i]); maxLon = Math.max(maxLon, route.lon[i]);
   }
-  const proj = makeProjection((minLat + maxLat) / 2, (minLon + maxLon) / 2);   // as world.js
+  const o = scene?.origin;   // (a city's areas: the city's frame, PLAN 5.4)
+  const proj = o ? makeProjection(o.lat, o.lon) : makeProjection((minLat + maxLat) / 2, (minLon + maxLon) / 2);   // as world.js
   const index = makeRouteIndex(route, proj);
   const F = new Findings();
   const total = route.total, turn = route.turnS, oneWay = turn || total;
-  const nearUturn = (s, r) => !!turn && (Math.abs(s - turn) < r || s < r || total - s < r);
+  // a ride network's spur turns round where its ghost begins (js/world/ghost.js): a planned U-turn too
+  const tips = (scene?.city?.routeGhosts || []).flatMap((g) => [g.fromM, g.toM]);
+  const nearTip = (s, r) => { const x = turn && s > turn ? total - s : s; return tips.some((t) => Math.abs(x - t) < r); };
+  const nearUturn = (s, r) => (!!turn && (Math.abs(s - turn) < r || s < r || total - s < r)) || nearTip(s, r);
   const series = { s: [], ele: [], grade: [], heading: [], clearance: [], cs: [] };
 
   // 1. Source GPX (positions are distance along the ride; the far end of an out-and-back GPX is a planned U-turn)
@@ -226,7 +230,9 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
     const dy = cur.pos.y - prev.pos.y;
     const turnRate = angleBetween(prev.flat, cur.flat) / step;
     maxJump = Math.max(maxJump, dh - step);
-    if (dh - step > LIMITS.posJump) F.add('pose-jump', 'fail', at, dh - step, 'rider position jumps');
+    // (a network spur's tip: the base line turns straight back there; the network rides it with a U-turn curve,
+    // checked by tools/qc_network.mjs)
+    if (dh - step > LIMITS.posJump) F.add('pose-jump', nearTip(at, 12) ? 'info' : 'fail', at, dh - step, nearTip(at, 12) ? 'spur tip: ridden as a U-turn by the network' : 'rider position jumps');
     if (Math.abs(dy) / step > LIMITS.heightStep) F.add('pose-height', 'fail', at, dy, 'rider height steps');
     if (nearUturn(at, 12)) { if (turnRate > LIMITS.headingWarn) F.add('u-turn', 'info', at, turnRate, 'planned U-turn'); }
     else {
@@ -261,8 +267,11 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
       const g = (o) => ground(c.x + rx * o, c.z + rz * o);
       const onBridge = bridgeAt(c.x, c.z, 12);
       let clearance = Infinity;
-      for (const o of [0, -ROAD_WIDTH / 2, ROAD_WIDTH / 2]) clearance = Math.min(clearance, road - g(o));
-      for (const o of [-SHOULDER_HALF, SHOULDER_HALF]) clearance = Math.min(clearance, shoulder - g(o));
+      // (on a switchback the edge probes cross the tight inside of the turn, where the bank between the legs
+      // meets the road: only its centre line is checked there)
+      const tight = switchback(s);
+      for (const o of tight ? [0] : [0, -ROAD_WIDTH / 2, ROAD_WIDTH / 2]) clearance = Math.min(clearance, road - g(o));
+      if (!tight) for (const o of [-SHOULDER_HALF, SHOULDER_HALF]) clearance = Math.min(clearance, shoulder - g(o));
       if (clearance < LIMITS.buried) F.add('road-buried', 'fail', s, clearance, 'ground shows through the road');
       // On a hairpin the probes square to the road cross the inside of the turn into the other leg: the ground
       // there is the landscape's bank between the legs (real-terrain.js), so only the road surface is checked.
@@ -375,8 +384,12 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
       for (const p of [jn, ...jn.poly]) {
         const r = landscape.routeDist(p.x, p.z);
         if (!r || r.d > ROAD_WIDTH / 2 + .6) continue;
-        const over = (p === jn ? jn.cy : p.y ?? jn.top(p.x, p.z)) - (r.y + ROAD_LIFT);   // [junctions] (the surface as drawn)
-        if (over > -.005) F.add('junction-over-road', 'fail', route.dist[r.i], over, 'a junction surface covers the road');
+        // [F15] against the road as drawn (its curve), not the 10 m chords routeDist follows
+        // (and every other pass of it there: a street ridden twice draws two roads over each other)
+        const q = RLq.project(p.x, p.z, route.dist[Math.min(end, r.i)], 25), low = RLq.lowestNear(p.x, p.z, ROAD_WIDTH / 2 + .6, q ? q.s : route.dist[Math.min(end, r.i)], 60);   // (other passes: 60 m along the road either way is this pass, as the junction planner counts them — on a tight corner up a steep street the pass's own chords before and after the bend lie within reach at other heights)
+        const roadY = Math.min(q && q.d < ROAD_WIDTH / 2 + 1.5 ? q.y : r.y, low ?? Infinity);
+        const over = (p === jn ? jn.cy : p.y ?? jn.top(p.x, p.z)) - (roadY + ROAD_LIFT);   // [junctions] (the surface as drawn)
+        if (over > -.005 && over < 4) F.add('junction-over-road', 'fail', route.dist[r.i], over, 'a junction surface covers the road');   // (4 m and up: a junction on a deck that crosses over the road, as for streets)
       }
     }
     // [junctions] how much street surface is still drawn over other street surface (overlapping ribbons)
@@ -398,6 +411,31 @@ export function qcRoute({ id, name, gpxText, item = {}, scene = null, step = 1 }
   // 6. Road alignment: kinks, jitter and creases in the drawn road; city streets' profiles ([road-align])
   alignmentChecks({ route, index, landscape, F, nearUturn, oneWay });
 
+  // a ride network's ghost stretch (js/world/ghost.js) is never ridden or drawn: what is found along it is info
+  const ghosts = scene?.city?.routeGhosts || [];
+  const outM = (s) => (turn && s > turn ? total - s : s);
+  const inGhost = (f) => { const a = outM(f.from), b = outM(f.to), lo = Math.min(a, b), hi = Math.max(a, b); return ghosts.some((g) => lo > g.fromM + 2 && hi < g.toM - 2); };
+  for (const f of F.list) if (f.severity !== 'info' && inGhost(f)) { f.severity = 'info'; f.note = `${f.note} (on a ghost stretch: never ridden or drawn)`; }
+
+  // [subway] underground (city data `routeUnderground`): no ground, verge or street world there — the subway kit draws the
+  // tunnel — so ground checks are info; the line's own shape still counts. An escalator (a conveyor) is ridden
+  // without its grade: grade checks within 40 m of one (the grade span and its smoothing) are info too.
+  const under = scene?.city?.routeUnderground || [], conv = scene?.city?.routeConveyors || [];
+  const SHAPE = new Set(['heading-jitter', 'heading-sharp', 'path-jog', 'lateral-jump']);
+  const inside = (f, list, pad) => { const a = outM(f.from), b = outM(f.to), lo = Math.min(a, b), hi = Math.max(a, b); return list.some((g) => lo > g.fromM - pad && hi < g.toM + pad); };
+  for (const f of F.list) {
+    if (f.severity === 'info') continue;
+    if (/^grade-/.test(f.check) && inside(f, conv, 40)) { f.severity = 'info'; f.note = `${f.note} (an escalator: carried, its grade isn't ridden)`; }
+    else if (!SHAPE.has(f.check) && !/^grade-/.test(f.check) && inside(f, under, 2)) { f.severity = 'info'; f.note = `${f.note} (underground: the subway kit draws the tunnel, not the ground)`; }
+  }
+
+  // a scene's accepted warnings ("qcAccept": [{check, fromM, toM, why}]): known, reviewed spots listed with the
+  // reason, reported as info. Never fails — a FAIL always stands.
+  for (const f of F.list) {
+    if (f.severity !== 'warn') continue;
+    const a = (scene?.qcAccept || []).find((q) => q.check === f.check && f.from >= q.fromM && f.to <= q.toM);
+    if (a) { f.severity = 'info'; f.note = `${f.note} (accepted: ${a.why})`; }
+  }
   const list = F.list.sort((a, b) => a.from - b.from);
   const count = (sev) => list.filter((f) => f.severity === sev).length;
   return {

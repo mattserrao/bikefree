@@ -81,6 +81,7 @@
               </div>
             </details>
           </div>
+          <div class="seg goal-seg" id="goalSeg" role="group" aria-label="Ride goal"></div>
           <div class="cards" id="routeCards"></div>
         </section>
 
@@ -144,6 +145,7 @@
         <canvas id="pvChart" class="pv-chart"></canvas>
         <div class="pv-hint" id="pvHint" hidden></div>
         <p class="pv-desc" id="pvDesc"></p>
+        <button type="button" class="link plan-open" id="planOpen" hidden>Plan your own route on the map…</button>
         <div class="offline-status" id="offlineStatus"></div>
         <button id="startBtn" class="primary start">Start riding</button>
         <div class="start-note" id="startNote"></div>
@@ -172,6 +174,7 @@
         <div class="hud-title" id="hTitle"></div>
         <div class="pill pacer" id="hPacer" hidden><i class="chk"></i><span id="hPacerT">Pacer</span></div>
         <div class="pill big" id="hState">Pedal to start</div>
+        <div class="glass turn-prompt" id="hTurn" hidden></div>
       </div>
 
       <div class="hud-right">
@@ -286,8 +289,8 @@
         </label>
         <label>Minimap
           <select name="minimap">
-            <option value="course">Whole course</option>
             <option value="follow">Zoomed in — follows you</option>
+            <option value="course">Whole course</option>
             <option value="off">Off</option>
           </select>
         </label>
@@ -412,6 +415,51 @@
         <button value="save" id="sumSave">Save</button>
         <button value="discard" class="ghost danger" id="sumDiscard" formnovalidate>Discard</button>
         <button value="resume" class="ghost" id="sumResume" formnovalidate>Keep riding</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Map planner (ride networks): tap a junction, then the segments to ride -->
+  <!-- City panel (a ride network, e.g. Pittsburgh): its map and routes, opened from the city's card -->
+  <dialog id="cityDlg" class="city-dlg" aria-labelledby="cityTitle">
+    <div class="city-head">
+      <button type="button" class="city-back" id="cityBack" aria-label="Back to the routes"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <div class="city-id"><h2 id="cityTitle">Pittsburgh</h2><div class="city-sub" id="citySub"></div></div>
+    </div>
+    <div class="city-body">
+      <div class="city-mapcol">
+        <div class="city-mapwrap">
+          <canvas id="cityMap" class="city-map" tabindex="0" role="img" aria-label="Map of the routes"></canvas>
+          <button type="button" class="city-fit" id="cityFit" hidden>Whole map</button>
+        </div>
+        <div class="city-maphint" id="cityMapHint">Tap a line to see the routes that ride it</div>
+      </div>
+      <div class="city-side">
+        <div class="city-extras">
+          <div class="city-free"><button type="button" id="cityFree" title="Start a free ride now"><b>Free ride</b><small>Choose every turn</small></button><button type="button" class="link" id="cityFreeOpts" title="Choose where to start and how long to ride, then Start" aria-label="Free ride options: start and length">Options</button></div>
+          <button type="button" id="cityPlan"><b>Plan your own</b><small>Draw it on the map</small></button>
+        </div>
+        <div class="seg goal-seg city-goals" id="cityGoals" role="group" aria-label="Ride goal"></div>
+        <div class="city-seg" id="citySeg" hidden></div>
+        <div class="city-sel" id="citySel" aria-live="polite"></div>
+        <ul class="city-list" id="cityList" role="listbox" aria-label="Routes"></ul>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="planDlg" class="plan-dlg">
+    <form method="dialog">
+      <h2 id="planTitle">Plan your own route</h2>
+      <div class="sum-sub" id="planSub">Tap a junction to start, then each segment to ride.</div>
+      <canvas id="planMap" class="plan-map"></canvas>
+      <div class="plan-facts" id="planFacts"></div>
+      <ol class="plan-steps" id="planSteps"></ol>
+      <label><b>Name</b><input type="text" id="planName" maxlength="40" placeholder="My route"></label>
+      <div class="dialog-actions">
+        <button value="save" class="primary" id="planSave" disabled>Save route</button>
+        <button type="button" id="planUndo">Undo</button>
+        <button type="button" class="ghost" id="planClear">Clear</button>
+        <button value="cancel" class="ghost" formnovalidate>Cancel</button>
       </div>
     </form>
   </dialog>

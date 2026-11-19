@@ -1,0 +1,16 @@
+{
+ "area": "subway",
+ "note": "The subway: a cycle path beside the T's tracks from the North Side to Gateway, under the Allegheny, with an escalator down at North Side and up at Gateway (assisted conveyors: you're carried, no pedalling). Portals NS (Mazeroski Way & General Robinson St, splitting the core's A>B) and GW (Stanwix St & Forbes Ave, splitting the core's B>E).",
+ "nodes": [
+  {"id": "NS", "name": "Mazeroski Way & General Robinson St, North Side", "lat": 40.447659, "lon": -80.007513},
+  {"id": "GW", "name": "Stanwix St & Forbes Ave, Gateway", "lat": 40.441042, "lon": -80.004016}
+ ],
+ "edges": {
+  "NS>GW": {
+   "name": "The subway: under the Allegheny",
+   "fwd": "down the escalator at North Side, the tunnel under the Allegheny and up the escalator at Gateway",
+   "rev": "down the escalator at Gateway, the tunnel under the Allegheny and up the escalator at North Side"
+  }
+ },
+ "presets": []
+}

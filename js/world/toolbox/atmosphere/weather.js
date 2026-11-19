@@ -177,11 +177,12 @@ export class Weather {
   }
 
   /** A wet road: darker, smoother asphalt that picks up the sky, with puddles along the edges. */
-  _wetRoad() {
-    const road = this.world.road;
+  _wetRoad(road = this.world.road) {
     const meshes = road?.isGroup ? road.children : road ? [road] : [];
-    this.roadMaterials = meshes.map((m) => m.material).filter((m) => m.isMeshStandardMaterial);
-    for (const material of this.roadMaterials) {
+    const list = meshes.map((m) => m.material).filter((m) => m.isMeshStandardMaterial);
+    // (areas, PLAN 5.4: each area's road joins the list as it is built; a released one leaves it)
+    this.roadMaterials = [...(this.roadMaterials || []).filter((m) => !m.userData.disposed), ...list];
+    for (const material of list) {
       material.userData.dry = { roughness: material.roughness, color: material.color.clone() };
       // keep whatever the road already adds (the road surface, road-surface.js)
       const prev = material.onBeforeCompile, prevKey = material.customProgramCacheKey();
@@ -248,6 +249,7 @@ export class Weather {
     }
     // inside the bank (or in rain) the air closes in
     const L = this.world.terrain?.landscape;
+    if (s.rain > .02 && L?.sheltered) this.rain.visible = !L.sheltered(cam.x, cam.z);   // [glasshouse] no rain under glass
     const inland = L?.fogInlandAt ? L.fogInlandAt(cam.x, cam.z) : L?.inlandAt ? L.inlandAt(cam.x, cam.z) : -1000;
     const reach = 1 - Math.min(1, Math.max(0, (inland - 300) / 900));
     const inside = s.bank * reach * Math.min(1, Math.max(0, (this.base + s.bankTop - cam.y) / 35));

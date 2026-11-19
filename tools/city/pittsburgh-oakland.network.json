@@ -1,0 +1,52 @@
+{
+  "area": "oakland",
+  "note": "Junction Hollow, Oakland and Schenley Park. Portals: I (the core), L (Polish Hill & Bloomfield).",
+  "nodes": [
+    {
+      "id": "I",
+      "name": "Hot Metal Bridge north end",
+      "lat": 40.429959,
+      "lon": -79.957579
+    },
+    {
+      "id": "J",
+      "name": "Schenley Drive by Phipps Conservatory",
+      "lat": 40.438693,
+      "lon": -79.946459
+    },
+    {
+      "id": "L",
+      "name": "Forbes & Bigelow, Schenley Plaza",
+      "lat": 40.443191,
+      "lon": -79.953547
+    },
+    {
+      "id": "K",
+      "name": "Schenley Drive & Forbes Ave",
+      "lat": 40.4377,
+      "lon": -79.934079
+    }
+  ],
+  "edges": {
+    "I>L": {
+      "name": "Junction Hollow & Oakland",
+      "fwd": "along Second Ave, up Junction Hollow, through Oakland to Forbes and Schenley Plaza",
+      "rev": "along Forbes, down through Oakland and Junction Hollow, along Second Ave to the Hot Metal Bridge"
+    },
+    "L>J": {
+      "name": "Schenley Plaza",
+      "fwd": "past the Cathedral of Learning and Schenley Plaza to Phipps",
+      "rev": "past Schenley Plaza and the Cathedral of Learning to Forbes & Bigelow"
+    },
+    "J>K": {
+      "name": "Schenley Drive",
+      "fwd": "Schenley Drive across the park to Forbes",
+      "rev": "Schenley Drive across the park to Phipps"
+    },
+    "K>J": {
+      "name": "Schenley Oval, Panther Hollow & Phipps",
+      "fwd": "Serpentine Drive, round the Schenley Oval, up Panther Hollow, round Phipps Conservatory's gardens and through its glass rooms",
+      "rev": "through Phipps Conservatory's glass rooms and round its gardens, down Panther Hollow, round the Schenley Oval and up Serpentine Drive"
+    }
+  }
+}

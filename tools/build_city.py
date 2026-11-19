@@ -15,9 +15,45 @@ Reads tools/city/<id>.json and writes two files:
           js/world/toolbox/city/landscape.js and js/world/toolbox/city/city.js.
 
 OSM tiles are cached in tools/.cache/osm-<id>/ (the OSM API is used politely,
-one small area at a time). Data © OpenStreetMap contributors, ODbL.
+one small area at a time; "osmCache": "<id>" shares another config's tiles). Data © OpenStreetMap
+contributors, ODbL.
+
+Areas (a city of areas, PLAN 5.4) — each area is a config of its own:
+  "lattice": "<id>"   the height and land grids sit on that config's grid lattice (the same samples where
+                      two areas overlap; the box snaps outwards to it)
+  legs "apron": true  a stretch along another area's segment at a portal: drawn as route, not ridden as this
+                      area's own (city data "routeAprons", like "routeGhosts")
+  legs "samplesOf": {"gpx", "fromM", "toM"(, "portals", "zigM")}
+                      THE apron mechanism of a legs-built area (PLAN 5.7, F60; splice_samples): the leg is routed like
+                      any leg, then replaced by the neighbour line's own points between those metres (its app metres
+                      on its 10 m samples; toM < fromM runs it backward) — an apron matches its segment sample for
+                      sample, a portal on it is the same place and height on both lines, and the copy's kinds and
+                      bridges are the neighbour's. Put one on every apron leg and on the ghost back between a portal's
+                      two aprons. A routed stretch leading into a copy holds a ghost (a zig there keeps the 10 m
+                      phase); "portals" (junctions on the copy the line comes back to from another street: the line's
+                      end meets the copy's sample there, see junction_heights); "zigM" (a ghost's copy only): a zig
+                      of that many metres so the line after it keeps a given 10 m phase (a migrated area's samples)
+  "trimStartM"        the routed line's 10 m sampling starts this far along it (the GAP area keeps its 3.65 m so its
+                      own samples stay where they were; aprons no longer depend on it)
+  "heightPins"        [{lat, lon, eleM, keepM(, "everyPass": true | "round", "level": "first")}]: see junction_heights
+  "slice": {"of": "<master id>", "pieces": [[a, b], [b2, a2], …], "aprons": [[a, b], …]}
+                      the area's line is cut from the master's tour (routed exactly as the master builds it) on
+                      its own 10 m samples: pieces in master metres, forward (a < b) or backward (a ghost: the
+                      line going back to a junction); joins between pieces fall inside ghosts. Every stretch
+                      keeps its exact samples, so segments keep their lengths. The master config itself
+                      ("master": true) writes nothing.
+
+Hero models that take ground (PLAN "Phipps Conservatory (giant)"):
+  "detours": [{"fromM", "toM", "name", "kind", "path": [[lat, lon, ele], …]}]
+                      the line between two of its samples (fromM, toM: app metres) is replaced by an authored path
+                      (a ride through a building, not an OSM way): resampled to ~10 m chords whose total keeps the
+                      line's 10 m phase after it (so aprons further on still match their neighbours sample for
+                      sample); its heights are the path's own; kinds, bridges, ghosts and aprons after it move on
+  "clearAreas": [{"name", "poly": [[lat, lon], …], "land": <code>}]
+                      ground a hero model takes: no map buildings, streets or paths (cut at the edge), trees or
+                      street furniture inside; "land" paints its land-use code (6: plaza under a glasshouse)
 """
-import base64, io, json, math, os, sys, time, heapq, urllib.request
+import base64, bisect, io, json, math, os, sys, time, heapq, urllib.request
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 from collections import Counter
@@ -47,17 +83,21 @@ def hv(a, b):
 
 # ---------------------------------------------------------------- OSM
 def load_osm(cfg):
-    folder = os.path.join(CACHE, f'osm-{cfg["id"]}')
+    folder = os.path.join(CACHE, f'osm-{cfg.get("osmCache", cfg["id"])}')
     os.makedirs(folder, exist_ok=True)
     w, s, e, n = cfg['osmBbox']
     dx, dy = cfg.get('osmTile', [0.01, 0.008])
     files = []
-    nx, ny = math.ceil((e - w) / dx - 1e-9), math.ceil((n - s) / dy - 1e-9)
-    for x in range(nx):
-        for y in range(ny):
+    # "osmOrigin": [west, south] of the shared cache's tile lattice (default: this box's own corner), so an area's
+    # box can reach west or south of the cache's first box and still share its tiles (indices may go negative)
+    ow, os_ = cfg.get('osmOrigin', [w, s])
+    x0, y0 = round((w - ow) / dx), round((s - os_) / dy)
+    nx, ny = math.ceil((e - ow) / dx - 1e-9), math.ceil((n - os_) / dy - 1e-9)
+    for x in range(x0, nx):
+        for y in range(y0, ny):
             path = os.path.join(folder, f't_{x}_{y}.osm')
             if not os.path.exists(path) or os.path.getsize(path) < 200:
-                lo, la = round(w + x * dx, 4), round(s + y * dy, 4)
+                lo, la = round(ow + x * dx, 4), round(os_ + y * dy, 4)
                 print(f'  fetching OSM {lo},{la}')
                 data = http_get(f'https://api.openstreetmap.org/api/0.6/map?bbox={lo},{la},{round(lo + dx, 4)},{round(la + dy, 4)}')
                 open(path, 'wb').write(data)
@@ -172,7 +212,11 @@ class Router:
 
     def build(self, legs):
         pts, wl, marks = [], [], []
+        self.ghost_legs = []   # [(first, last) point index] of legs marked "ghost": a network tour's repeat
+        self.apron_legs = []   # …and "apron": another area's segment, drawn here (PLAN 5.4)
+        self.copy_legs = []    # …and "samplesOf": a stretch replaced by another area's own samples (PLAN 5.7)
         for leg in legs:
+            first = max(0, len(pts) - 1)
             snapped = []
             for wp in leg['waypoints']:
                 n, d = self.snap((wp[1], wp[2]), wp[3] if len(wp) > 3 else None)
@@ -183,6 +227,9 @@ class Router:
                 seq, ws = self.path(pts[-1], snapped[i], leg['mode'])
                 pts += seq[1:]; wl += ws
                 marks.append((leg['waypoints'][i][0], len(pts) - 1))
+            if leg.get('ghost'): self.ghost_legs.append([first, len(pts) - 1])
+            if leg.get('apron'): self.apron_legs.append([first, len(pts) - 1])
+            if leg.get('samplesOf'): self.copy_legs.append([first, len(pts) - 1])   # [areas] see splice_samples
         return pts, wl, marks
 
 
@@ -292,25 +339,66 @@ def point_in(poly, x, y):
 # ---------------------------------------------------------------- main build
 def build(cid):
     cfg = json.load(open(os.path.join(ROOT, 'tools', 'city', f'{cid}.json')))
+    if cfg.get('master'):
+        print(f'{cid}: a master tour (its areas slice it: build them)'); return
+    area_cfg = None
+    if cfg.get('slice'):
+        # an area cut from a master tour: route the master exactly as it builds, then keep the pieces (below)
+        area_cfg, cfg = cfg, json.load(open(os.path.join(ROOT, 'tools', 'city', f'{cfg["slice"]["of"]}.json')))
     nodes, ntags, ways, rels = load_osm(cfg)
 
     # 1. Route ------------------------------------------------------------------
+    add_synthetic_ways(cfg, nodes, ways)   # [subway] paths the map doesn't have (a cycle path beside the T's tracks)
     router = Router(nodes, ways)
     for lk in cfg.get('links', []): router.link(tuple(lk['from']), tuple(lk['to']), lk['name'])
     pts, wl, marks = router.build(cfg['legs'])
+    # a ghost leg's ends (a spur's turnaround among them) must survive the stub folding below
+    gmarks = [('__ghost%d_%s' % (k, w), idx) for k, g in enumerate(router.ghost_legs) for w, idx in (('a', g[0]), ('b', g[1]))]
+    gmarks += [('__ghostapron%d_%s' % (k, w), idx) for k, g in enumerate(router.apron_legs) for w, idx in (('a', g[0]), ('b', g[1]))]
+    gmarks += [('__ghostcopy%d_%s' % (k, w), idx) for k, g in enumerate(router.copy_legs) for w, idx in (('a', g[0]), ('b', g[1]))]
+    protect = lambda: {k for n_, k in marks if n_.startswith('__ghost')}
+    marks = marks + gmarks
     # waypoints that sit just off the line leave tiny out-and-back stubs (A B C B A): fold them away
     changed = True
     while changed:
         changed = False
         for i in range(1, len(pts) - 1):
-            if pts[i - 1] == pts[i + 1]:
+            if pts[i - 1] == pts[i + 1] and i not in protect():
                 del pts[i:i + 2]; del wl[i:i + 2]
                 marks = [(n, k if k < i else max(i - 1, k - 2)) for n, k in marks]
                 changed = True; break
+    # longer out-and-back stubs (A … X … A: a waypoint that snapped onto a side path a few nodes off the line):
+    # cut any return to a node within 150 m of path (real revisits — a loop's junctions — are kilometres apart)
+    changed = True
+    while changed:
+        changed = False
+        seen = {}
+        run = [0.0]
+        for a_, b_ in zip(pts, pts[1:]): run.append(run[-1] + hv(nodes[a_], nodes[b_]))
+        for i, n in enumerate(pts):
+            j = seen.get(n)
+            if j is None:
+                # …or comes back within 15 m of a point on a parallel way (a pair of one-way paths)
+                for jj in range(max(0, i - 40), i - 2):
+                    if run[i] - run[jj] < 150 and run[i] - run[jj] > 25 and hv(nodes[pts[jj]], nodes[n]) < 15:
+                        j = jj; break
+            if j is not None and i - j >= 2 and run[i] - run[j] < 150 and not any(j < k_ <= i for k_ in protect()):
+                # keep pts[i] (where the line carries on from), drop the stub between
+                del pts[j + 1:i]; del wl[j + 1:i]
+                marks = [(m, k if k <= j else (j if k < i else k - (i - j - 1))) for m, k in marks]
+                changed = True; break
+            seen[n] = i
     P = [nodes[n] for n in pts]
     cum = [0.0]
     for a, b in zip(P, P[1:]): cum.append(cum[-1] + hv(a, b))
     raw = [elevation(*p) for p in P]
+    # `heightPins`: mapped nodes whose terrain height is wrong (a bridge end on a river wall, where the z14 ground
+    # falls away): the node takes the pinned height, and the line keeps the mapped profile for `keepM` around it
+    # on every pass, so a junction there sits at one height whichever way it is ridden
+    pin_at = []
+    for pin in cfg.get('heightPins', []):
+        for k, p in enumerate(P):
+            if hv(p, (pin['lat'], pin['lon'])) < 3: raw[k] = pin['eleM']; pin_at.append((k, pin.get('keepM', 30)))
     on_bridge = [bool(w and ways[w][1].get('bridge') not in (None, 'no')) for w in wl]
     E = raw[:]
     route_bridges = []
@@ -324,7 +412,7 @@ def build(cid):
             t = ways[wl[i]][1]
             name = t.get('bridge:name') or next((ways[wl[k]][1].get('bridge:name') or ways[wl[k]][1].get('name') for k in range(i, j + 1)
                                                  if ways[wl[k]][1].get('bridge:name') or 'Bridge' in ways[wl[k]][1].get('name', '')), None) or t.get('name', '')
-            if cum[b] - cum[a] > 30: route_bridges.append({'name': name, 'fromM': round(cum[a]), 'toM': round(cum[b])})
+            if cum[b] - cum[a] > cfg.get('routeBridgeMinM', 30): route_bridges.append({'name': name, 'fromM': round(cum[a]), 'toM': round(cum[b])})
             i = j + 1
         else: i += 1
     # what each stretch of the route is: a street (cars may pass) or a trail/park path
@@ -345,6 +433,7 @@ def build(cid):
     raw_total = cum[-1]
     n2 = int(raw_total // 2)
     r2, e2, j = [], [], 0
+    r2_way = []
     for k in range(n2):
         sd = k * 2
         while j < len(cum) - 2 and cum[j + 1] < sd: j += 1
@@ -352,6 +441,7 @@ def build(cid):
         r2.append(((P[j][1] + (P[j + 1][1] - P[j][1]) * f - P[0][1]) * 111319.49 * math.cos(math.radians(P[0][0])),
                    (P[j][0] + (P[j + 1][0] - P[j][0]) * f - P[0][0]) * 111319.49))
         e2.append(E[j] + (E[j + 1] - E[j]) * f)
+        r2_way.append(wl[j + 1] if j + 1 < len(wl) else None)   # [subway] the way under each 2 m point
     # never stray more than `maxDrift` m from the mapped line: corners round inside the street, not through buildings
     drift = cfg.get('maxDriftM', 8.0)
     kx0, ky0 = 111319.49 * math.cos(math.radians(P[0][0])), 111319.49
@@ -375,28 +465,36 @@ def build(cid):
         return bool(hit)
     # buildings the mapped path itself runs through (a trail under a canopy, a mis-drawn footprint) are left out
     route_buildings = set()
-    for q in r2: in_building(q[0], q[1], route_buildings)
+    for q, w_ in zip(r2, r2_way):
+        if w_ and ways[w_][1].get('tunnel') == 'yes': continue   # [subway] a tunnel passes under buildings: they stay
+        in_building(q[0], q[1], route_buildings)
     print('  left out (on the route):', len(route_buildings), sorted(Counter(ways[w][1].get('building', ways[w][1].get('building:part', '')) for w in route_buildings).items()))
     # [road-align] plan: round corners, ease tight spots and fair the line inside the mapped corridor, clear of
     # buildings (tools/citylib/road_align.py)
     polys = list({wid_: poly for cell_ in bgrid.values() for wid_, poly in cell_ if wid_ not in route_buildings}.values())
     sm = [tuple(q_) for q_ in road_align.align_plan(
-        r2, clear=road_align.Clearance(polys, cfg.get('clearM', 3.2)), drift=drift, loop=True,
+        r2, clear=road_align.Clearance(polys, cfg.get('clearM', 3.2)), drift=drift, loop=not cfg.get('open'),
         corner_passes=cfg.get('cornerPasses', 2), corner_half_window=cfg.get('cornerHalfWindow', 6),
         fair_iters=cfg.get('fairIters', 240)).tolist()]
-    sm.append(sm[0]); e2.append(e2[0])
+    if not cfg.get('open'): sm.append(sm[0]); e2.append(e2[0])   # an open tour (a ride network's base) doesn't close
     scum = [0.0]
     for a_, b_ in zip(sm, sm[1:]): scum.append(scum[-1] + math.hypot(b_[0] - a_[0], b_[1] - a_[1]))
     to_ll = lambda x, y: (P[0][0] + y / 111319.49, P[0][1] + x / (111319.49 * math.cos(math.radians(P[0][0]))))
     total = scum[-1]
+    # `trimStartM`: the line's 10 m samples start this far along the eased line (PLAN 5.5 aligned the GAP area's
+    # routed apron with it; since F60 aprons are `samplesOf` copies and it only keeps that area's samples in place)
+    trim = cfg.get('trimStartM', 0.0)
     rs, re_, j = [], [], 0
-    for k in range(int(total // 10) + 1):
-        sd = k * 10
+    for k in range(int((total - trim) // 10) + 1):
+        sd = k * 10 + trim
         while j < len(scum) - 2 and scum[j + 1] < sd: j += 1
         f = (sd - scum[j]) / max(1e-9, scum[j + 1] - scum[j])
         rs.append(to_ll(sm[j][0] + (sm[j + 1][0] - sm[j][0]) * f, sm[j][1] + (sm[j + 1][1] - sm[j][1]) * f))
         re_.append(e2[j] + (e2[j + 1] - e2[j]) * f)
-    if hv(rs[-1], rs[0]) > 1: rs.append(rs[0]); re_.append(re_[0])
+    if not cfg.get('open') and hv(rs[-1], rs[0]) > 1: rs.append(rs[0]); re_.append(re_[0])
+    # an open tour ends on its last junction: the 10 m grid and the eased line's end fall up to ~20 m short of it,
+    # so the last sample is the junction itself (a network's end node passes exactly there)
+    if cfg.get('open') and hv(rs[-1], P[-1]) > 1: rs.append(tuple(P[-1])); re_.append(E[-1])
     # The app measures the route along the GPX samples (chords): express every distance (bridges, kinds,
     # waypoints — found along the raw OSM nodes) in that measure so they land where they should.
     chord = [0.0]
@@ -404,9 +502,34 @@ def build(cid):
     def app_s(d):
         k2 = max(0.0, min(len(scum) - 1.001, d / 2)); i2 = int(k2)
         sd = scum[i2] + (scum[i2 + 1] - scum[i2]) * (k2 - i2)
-        k = max(0.0, min(len(chord) - 1.001, sd / 10)); i = int(k)
+        k = max(0.0, min(len(chord) - 1.001, (sd - trim) / 10)); i = int(k)
         return chord[i] + (chord[i + 1] - chord[i]) * (k - i)
-    for b in route_bridges: b['fromM'], b['toM'] = round(app_s(b['fromM'])), round(app_s(b['toM']))
+    ghost_idx = {n_: k for n_, k in marks if n_.startswith('__ghost')}
+    marks = [(n_, k) for n_, k in marks if not n_.startswith('__ghost')]
+    route_aprons = [{'fromM': round(app_s(cum[ghost_idx['__ghostapron%d_a' % k]])), 'toM': round(app_s(cum[ghost_idx['__ghostapron%d_b' % k]]))} for k in range(len(router.apron_legs))]
+    route_ghosts = [{'fromM': round(app_s(cum[ghost_idx['__ghost%d_a' % k]])), 'toM': round(app_s(cum[ghost_idx['__ghost%d_b' % k]]))} for k in range(len(router.ghost_legs))]
+    # a ghost's ends are where the line turns round (a spur's tip, the junction it comes back to): rounding the
+    # corners moves that turn a little along the line, so snap each end to the sharpest turn within 80 m
+    def _hd(a_, b_): return math.atan2((b_[1] - a_[1]) * math.cos(math.radians(a_[0])), b_[0] - a_[0])
+    def _turn(k):
+        if k < 2 or k > len(rs) - 3: return 0.0
+        d_ = _hd(rs[k], rs[k + 2]) - _hd(rs[k - 2], rs[k])
+        return abs((d_ + math.pi) % (2 * math.pi) - math.pi)
+    def _snap(m):
+        k0 = int(round(m / 10)); best = max(range(max(2, k0 - 8), min(len(rs) - 3, k0 + 8) + 1), key=_turn, default=k0)
+        return round(chord[best]) if _turn(best) > math.radians(120) else m
+    for g in route_ghosts: g['fromM'], g['toM'] = _snap(g['fromM']), _snap(g['toM'])
+    # bridges on a ghost stretch are the real pass's bridges again: built once (their decks still shape the
+    # profile, so the line doesn't dip to the river beside a junction at a bridge end)
+    deck_keep = [{'fromM': round(app_s(b['fromM'])), 'toM': round(app_s(b['toM'])), 'padM': 20} for b in route_bridges]
+    # (a deck that runs on into a ghost, where the line turns round at a bridge end, keeps only its real part)
+    clipped = []
+    for b in route_bridges:
+        parts = [(app_s(b['fromM']), app_s(b['toM']))]
+        for g in route_ghosts:
+            parts = [q for x, y in parts for q in ((x, min(y, g['fromM'])), (max(x, g['toM']), y)) if q[1] - q[0] > 30]
+        clipped += [{**b, 'fromM': round(x), 'toM': round(y)} for x, y in parts]
+    route_bridges = clipped
     for k in route_kinds: k['fromM'], k['toM'] = round(app_s(k['fromM'])), round(app_s(k['toM']))
     route_kinds[-1]['toM'] = round(chord[-1]) + 10
     # rideable profile
@@ -418,12 +541,65 @@ def build(cid):
     # `profileFromLine`: true (default) everywhere but the decks, "roads" also keeps the trails, false: off.
     from_line = cfg.get('profileFromLine', True)
     if from_line:
-        keep = [{**b, 'padM': 20} for b in route_bridges] + [k for k in route_kinds if from_line == 'roads' and k['kind'] == 'trail']
+        keep = deck_keep + [k for k in route_kinds if from_line == 'roads' and k['kind'] == 'trail']
+        keep += [{'fromM': app_s(cum[k]) - r, 'toM': app_s(cum[k]) + r} for k, r in pin_at]
         keep += [{'fromM': a_, 'toM': b_} for a_, b_ in cfg.get('profileKeep', [])]   # ramps and walls the ground grid can't see
+        # keeps are in the app's metres (along the GPX chords); the profile is sampled every 10 m of the drawn
+        # line, which runs ahead of the chords (~0.2 %, 100 m by 50 km): place each keep on its samples
+        def on_line(m):
+            i = max(0, min(len(chord) - 2, bisect.bisect_right(chord, m) - 1))
+            return (i + max(0.0, min(1.0, (m - chord[i]) / max(1e-9, chord[i + 1] - chord[i])))) * 10.0
+        keep = [{**k_, 'fromM': on_line(k_['fromM']), 'toM': on_line(k_['toM'])} for k_ in keep]
         re_ = road_align.line_elevation(re_, [elevation(a_, b_) for a_, b_ in rs], keep, step=10)
+    # `surveyHeights` (F73): [{name, source, easeM, points: [[lat, lon, ele], …]}] — a street's profile surveyed along
+    # the line (USGS 3DEP 1 m lidar, the National Map's EPQS) where the z14 tiles smooth a steep block away (Canton Ave):
+    # samples within 8 m of the survey line, between its ends, take its heights (interpolated along it); the offset at
+    # each end eases back to the line's own over `easeM` (default 40) beyond it. Before the profile's grade limits and
+    # its light averaging (so `steepGrades` still governs how steep and how abrupt it may be: keeping the survey's
+    # samples through them gave Canton's foot a resistance jolt the trainer can't follow)
+    for sv in cfg.get('surveyHeights', []):
+        kx_ = 111319.49 * math.cos(math.radians(sv['points'][0][0]))
+        sxy = [((p_[1] - sv['points'][0][1]) * kx_, (p_[0] - sv['points'][0][0]) * 111319.49) for p_ in sv['points']]
+        sm_ = [0.0]
+        for a_, b_ in zip(sxy, sxy[1:]): sm_.append(sm_[-1] + math.hypot(b_[0] - a_[0], b_[1] - a_[1]))
+        on = {}
+        for k_, p_ in enumerate(rs):
+            x, y = (p_[1] - sv['points'][0][1]) * kx_, (p_[0] - sv['points'][0][0]) * 111319.49
+            best = None
+            for j in range(len(sxy) - 1):
+                (ax, ay), (bx, by) = sxy[j], sxy[j + 1]
+                dx, dy = bx - ax, by - ay; L2 = dx * dx + dy * dy or 1e-9
+                t = ((x - ax) * dx + (y - ay) * dy) / L2
+                if not (-1e-6 <= t <= 1 + 1e-6) and not (j == 0 and t < 0) and not (j == len(sxy) - 2 and t > 1): continue
+                tc = max(0.0, min(1.0, t)); d_ = math.hypot(ax + dx * tc - x, ay + dy * tc - y)
+                if best is None or d_ < best[0]: best = (d_, j, t)
+            if best and best[0] < 8 and 0 < sm_[best[1]] + best[2] * (sm_[best[1] + 1] - sm_[best[1]]) < sm_[-1]:
+                j, t = best[1], max(0.0, min(1.0, best[2]))
+                on[k_] = sv['points'][j][2] + (sv['points'][j + 1][2] - sv['points'][j][2]) * t
+        if not on: raise SystemExit(f'surveyHeights {sv.get("name")}: the line doesn\'t run along it')
+        k0, k1 = min(on), max(on)
+        if k1 - k0 + 1 != len(on): raise SystemExit(f'surveyHeights {sv.get("name")}: the line passes it more than once')
+        o0, o1 = on[k0] - re_[k0], on[k1] - re_[k1]
+        ease_n = sv.get('easeM', 40) / 10
+        re_ = list(re_)
+        for k_ in range(len(re_)):
+            if k0 <= k_ <= k1: re_[k_] = on[k_]
+            elif k_ < k0 and k0 - k_ < ease_n: re_[k_] += o0 * (1 - (k0 - k_) / ease_n)
+            elif k_ > k1 and k_ - k1 < ease_n: re_[k_] += o1 * (1 - (k_ - k1) / ease_n)
+        print(f'  survey {sv.get("name")}: {(k1 - k0) * 10} m from its heights ({sv.get("source", "")}), offsets {o0:+.1f} / {o1:+.1f} m at its ends')
     # [road-align] profile: shave spikes, fill only narrow notches (real dips and crests stay on the ground),
     # limit grade and grade change, light averaging
-    e = road_align.align_profile(re_, step=10, loop=True, **cfg.get('profile', {})).tolist()
+    # `steepGrades`: a real climb steeper than the profile's limit (Rialto Street's ~24 %), ridden as mapped
+    prof = dict(cfg.get('profile', {}))
+    if cfg.get('steepGrades'):
+        mg = [prof.get('max_grade', .2)] * len(re_)
+        mc = [prof.get('max_grade_change', .03)] * len(re_)
+        for sg in cfg['steepGrades']:
+            for k_, p_ in enumerate(rs):
+                if hv(p_, (sg['lat'], sg['lon'])) < sg['radiusM']:
+                    mg[k_] = max(mg[k_], sg['maxGrade']); mc[k_] = max(mc[k_], sg.get('maxGradeChange', mc[k_]))
+        prof['max_grade'], prof['max_grade_change'] = mg, mc
+    e = road_align.align_profile(re_, step=10, loop=not cfg.get('open'), **prof).tolist()
     asc = sum(max(0, b - a) for a, b in zip(e, e[1:]))
     grades = [(e[(k + 1) % len(e)] - e[k - 1]) / 20 * 100 for k in range(len(e))]
     total = chord[-1]
@@ -431,6 +607,30 @@ def build(cid):
           f'ele {min(e):.0f}–{max(e):.0f} m, grade {min(grades):.1f}…{max(grades):.1f} %')
     for name, idx in marks: print(f'    {app_s(cum[idx]) / 1000:6.2f} km  {name}')
     for b in route_bridges: print(f'    bridge {b["fromM"] / 1000:.2f}–{b["toM"] / 1000:.2f} km  {b["name"]}')
+    if any(leg_.get('copy') for leg_ in cfg['legs']):
+        raise SystemExit(f'{cid}: "copy" legs are gone (PLAN F60): use "samplesOf" legs (see splice_samples)')
+    if router.copy_legs:
+        # [areas] aprons (and the ghosts between them): stretches replaced by a neighbour area's own samples — the one
+        # apron mechanism (PLAN 5.7, F60): an apron matches its segment sample for sample, a portal on it is the same
+        # place and height on both lines
+        copy_m = [(app_s(cum[ghost_idx['__ghostcopy%d_a' % k]]), app_s(cum[ghost_idx['__ghostcopy%d_b' % k]])) for k in range(len(router.copy_legs))]
+        rs, e, route_kinds, route_bridges, route_ghosts, route_aprons, copied = splice_samples(
+            cfg, rs, e, copy_m, route_kinds, route_bridges, route_ghosts, route_aprons)
+        e = junction_heights(cfg, rs, e, route_ghosts, copied)
+        total = sum(hv(a_, b_) for a_, b_ in zip(rs, rs[1:]))
+        print(f'{cid}: {total / 1000:.2f} km with the neighbours\' samples spliced in, ghosts {route_ghosts}, aprons {route_aprons}')
+    if area_cfg:
+        # [areas] the area's line: pieces of the master's samples (PLAN 5.4)
+        node_m = [app_s(cum[k]) for k in range(len(pts))]
+        rs, e, route_kinds, route_bridges, route_ghosts, route_aprons, pts = slice_tour(area_cfg['slice'], rs, e, chord, route_kinds, route_bridges, route_ghosts, pts, node_m)
+        cfg = area_cfg
+        total = sum(hv(a_, b_) for a_, b_ in zip(rs, rs[1:]))
+        print(f'{cid}: {total / 1000:.2f} km cut from {cfg["slice"]["of"]}, ghosts {route_ghosts}, aprons {route_aprons}')
+    if cfg.get('detours'):
+        rs, e, route_kinds, route_bridges, route_ghosts, route_aprons = apply_detours(cfg['detours'], rs, e, route_kinds, route_bridges, route_ghosts, route_aprons)
+        total = sum(hv(a_, b_) for a_, b_ in zip(rs, rs[1:]))
+        print(f'{cid}: {total / 1000:.2f} km with its detours, kinds {route_kinds}, ghosts {route_ghosts}, aprons {route_aprons}')
+    route_under = underground_ranges(cfg, rs)   # [subway] where the line runs underground, and its conveyors
     gpx = os.path.join(ROOT, cfg['gpx'])
     os.makedirs(os.path.dirname(gpx), exist_ok=True)
     with open(gpx, 'w') as f:
@@ -443,7 +643,13 @@ def build(cid):
         f.write('  </trkseg></trk>\n</gpx>\n')
 
     # 2. City data ----------------------------------------------------------------
+    clear_polys = [[(p_[0], p_[1]) for p_ in a_['poly']] for a_ in cfg.get('clearAreas', [])]
+    def cleared(la, lo):
+        return any(point_in([(q_[1], q_[0]) for q_ in cp], lo, la) for cp in clear_polys)
     gw, gs, ge, gn = cfg['gridBbox']
+    lattice = grid_lattice(cfg)
+    if lattice:   # [areas] snap the box outwards onto the shared lattice: the same samples where areas overlap
+        gw, gs, ge, gn = lattice['box'](gw, gs, ge, gn)
     lat0, lon0 = (gs + gn) / 2, (gw + ge) / 2
     kx = 111319.49 * math.cos(math.radians(lat0)); ky = 111319.49
     q = lambda lat, lon: (round((lat - lat0) / UNIT), round((lon - lon0) / UNIT))
@@ -466,6 +672,7 @@ def build(cid):
     # height grid
     gm = cfg['gridM']
     nx = int((ge - gw) * kx / gm) + 1; ny = int((gn - gs) * ky / gm) + 1
+    if lattice: nx, ny = round((ge - gw) / lattice['dlon']) + 1, round((gn - gs) / lattice['dlat']) + 1
     dlon, dlat = (ge - gw) / (nx - 1), (gn - gs) / (ny - 1)
     H = [elevation(gn - r * dlat, gw + c * dlon) for r in range(ny) for c in range(nx)]
     print(f'  height grid {nx}×{ny} @ {gm} m, {min(H):.0f}–{max(H):.0f} m')
@@ -473,6 +680,7 @@ def build(cid):
     # land-use grid (finer): 0 paved/urban, 1 grass/park, 2 woods, 3 water, 4 building, 5 sand/bare, 6 plaza
     lm = cfg['landM']
     lx = int((ge - gw) * kx / lm) + 1; ly = int((gn - gs) * ky / lm) + 1
+    if lattice: lx, ly = round((ge - gw) / lattice['ldlon']) + 1, round((gn - gs) / lattice['ldlat']) + 1
     img = Image.new('L', (lx, ly), 7)    # 7: outside the OSM area (wooded hills and suburbs, seen from afar)
     dr = ImageDraw.Draw(img)
     pix = lambda lat, lon: ((lon - gw) / (ge - gw) * (lx - 1), (gn - lat) / (gn - gs) * (ly - 1))
@@ -512,9 +720,23 @@ def build(cid):
         if not rel: continue
         for pts in rings_of(rel, ways, nodes, 'outer'): poly(pts, 3)
         for pts in rings_of(rel, ways, nodes, 'inner'): poly(pts, 1)
-    for nd, t in ways.values():
+    # "inlandWaterAboveM" (PLAN 5.10): the city has one water level (its rivers'), and water is drawn by pressing the
+    # ground under it to that level — so a reservoir or a pond up on a hill (Highland Park's, ~100 m above the rivers)
+    # became a pit down to the rivers. Water polygons whose ground lies more than this above the water level are
+    # left out (drawn as the park around them); off by default
+    inland = cfg.get('inlandWaterAboveM')
+    hill_water = []
+    for wid_, (nd, t) in ways.items():
         if (t.get('natural') == 'water' or t.get('waterway') == 'riverbank') and nd and nd[0] == nd[-1]:
-            poly([nodes[i] for i in nd if i in nodes], 3)
+            pts = [nodes[i] for i in nd if i in nodes]
+            if inland is not None and pts:
+                ground = sorted(elevation(*p_) for p_ in pts[::max(1, len(pts) // 12)])
+                if ground[len(ground) // 2] > cfg['waterLevelM'] + inland:
+                    poly(pts, 1); hill_water.append(t.get('name') or f'way {wid_}'); continue
+            poly(pts, 3)
+    if hill_water: print(f'  hill water drawn as park ({len(hill_water)}):', ', '.join(sorted(set(hill_water))[:20]))
+    for a_ in cfg.get('clearAreas', []):
+        if a_.get('land') is not None: poly([(p_[0], p_[1]) for p_ in a_['poly']], a_['land'])
 
     # 3. Buildings --------------------------------------------------------------
     brad, tall = cfg['buildingRadiusM'], cfg['tallBuildingM']
@@ -553,8 +775,9 @@ def build(cid):
     for k, (la, lo) in enumerate(part_centres): pc_grid.setdefault((round(la * 500), round(lo * 500)), []).append(k)
     stadiums, kept = [], []; why = []
     special = cfg.get('specialBuildings', {})
+    drop_b = {str(d_['way']) for d_ in cfg.get('dropBuildings', [])}   # [subway] the kit draws its own (a station's headhouse)
     for wid, pts, t in outlines + parts:
-        if len(pts) < 4 or wid in route_buildings: continue
+        if len(pts) < 4 or wid in route_buildings or wid in drop_b: continue
         is_part = 'building:part' in t and wid not in [o[0] for o in outlines[:0]]
         if not is_part and any(k for (la, lo) in [(sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))]
                                for dk in [(a, b) for a in (-1, 0, 1) for b in (-1, 0, 1)]
@@ -562,6 +785,7 @@ def build(cid):
                                if point_in([(p[1], p[0]) for p in pts], part_centres[k][1], part_centres[k][0])):
             continue
         clat = sum(p[0] for p in pts) / len(pts); clon = sum(p[1] for p in pts) / len(pts)
+        if clear_polys and cleared(clat, clon): why.append('cleared'); continue
         h = height_of(t)
         name = t.get('name', '')
         if t.get('building') == 'stadium' or t.get('leisure') == 'stadium' or name in cfg.get('stadiums', {}):
@@ -619,9 +843,11 @@ def build(cid):
     srad = cfg['streetRadiusM']
     streets = []
     bridge_ways = []
+    drop = {str(d_['way']) for d_ in cfg.get('dropStreets', [])}   # alleys whose ground grading fights the route's bank
     for wid, (nd, t) in ways.items():
         h = t.get('highway')
         if h not in CLS or t.get('area') == 'yes' or t.get('tunnel') in ('yes', 'building_passage'): continue
+        if wid in drop: continue
         if h == 'service' and t.get('service') in ('parking_aisle', 'driveway', 'drive-through'): continue
         nd = [i for i in nd if i in nodes]
         if len(nd) < 2: continue
@@ -637,7 +863,7 @@ def build(cid):
                 streets.append(rec)
                 if bridge: bridge_ways.append(rec)
         for a, b in zip(nd, nd[1:]):
-            if (a, b) in route_edges:
+            if (a, b) in route_edges or (clear_polys and (cleared(*nodes[a]) or cleared(*nodes[b]))):
                 flush(); run[:] = [b]
             else: run.append(b)
         flush()
@@ -715,12 +941,23 @@ def build(cid):
         if r in ('funicular', 'light_rail', 'tram', 'rail') and t.get('tunnel') not in ('yes',):
             nd = [i for i in nd if i in nodes]
             if len(nd) < 2 or min(route_dist(*nodes[i], 900) for i in nd[::max(1, len(nd) // 5)]) > 900: continue
-            rails.append({'kind': r, 'name': t.get('name', ''), 'path': [q(*nodes[i]) for i in nd], 'bridge': t.get('bridge') not in (None, 'no')})
+            # `railGaps` [{lat, lon, radiusM, why}]: a railway in a cut under a route deck that the z14 ground fills
+            # (the trains would run through the road) is left out there; the line is kept either side of the gap
+            gaps = cfg.get('railGaps', [])
+            runs_, cur_ = [], []
+            for i in nd:
+                if any(hv(nodes[i], (g_['lat'], g_['lon'])) < g_['radiusM'] for g_ in gaps):
+                    if len(cur_) >= 2: runs_.append(cur_)
+                    cur_ = []
+                else: cur_.append(i)
+            if len(cur_) >= 2: runs_.append(cur_)
+            for run_ in runs_:
+                rails.append({'kind': r, 'name': t.get('name', ''), 'path': [q(*nodes[i]) for i in run_], 'bridge': t.get('bridge') not in (None, 'no')})
     trees = []
     for i, t in ntags.items():
         if t.get('natural') == 'tree' and i in nodes:
             la, lo = nodes[i]
-            if gs < la < gn and gw < lo < ge and route_dist(la, lo, 700) < 700: trees += q(la, lo)
+            if gs < la < gn and gw < lo < ge and route_dist(la, lo, 700) < 700 and not (clear_polys and cleared(la, lo)): trees += q(la, lo)
 
     out = {
         'format': 'bikefree-city-1',
@@ -729,6 +966,9 @@ def build(cid):
         'grid': {'north': gn, 'west': gw, 'south': gs, 'east': ge, 'nx': nx, 'ny': ny, 'base': 150, 'scale': 0.1, 'h': pack_uint16([(h - 150) * 10 for h in H])},
         'land': {'nx': lx, 'ny': ly, 'rle': rle(land)},
         'routeKinds': route_kinds,
+        **({'routeGhosts': route_ghosts} if route_ghosts else {}),
+        **({'routeAprons': route_aprons} if route_aprons else {}),
+        **(route_under or {}),
         'routeBridges': [{**b, 'style': cfg.get('bridgeStyles', {}).get(b['name'], 'girder')} for b in route_bridges],
         'buildings': {
             'count': len(kept),
@@ -744,13 +984,652 @@ def build(cid):
         'rails': rails,
         'trees': pack_int16(trees),
     }
-    out['streetKit'] = street_kit.extract(nodes, ntags, ways, q, route_dist)   # [street-kit]
+    # [subway] nothing of the street kit (walls, hedges, benches) or the map's trees in a station's headhouse, over
+    # the top of its escalator shaft (the subway kit draws the headhouse there)
+    clear = []
+    def head_clear(pts_, conv_):
+        # the points of a line round each headhouse (its centre 12 m from the escalator's top, towards the shaft)
+        mc_ = [0.0]
+        for p_, q_ in zip(pts_, pts_[1:]): mc_.append(mc_[-1] + hv(p_, q_))
+        out_ = []
+        for c_ in conv_:
+            top_ = c_['fromM'] if c_.get('dir') == 'down' else c_['toM']
+            out_ += [pts_[k] for k in range(len(pts_)) if abs(mc_[k] - top_ - (12 if c_.get('dir') == 'down' else -12)) <= 22]
+        return out_
+    clear += head_clear(rs, (route_under or {}).get('routeConveyors', []))
+    if cfg.get('subwayHeadsOf'):
+        # [F123] another area's stations seen from this one's streets (its headhouses drawn here too: scene subway.heads):
+        # the same clearing round them, from that area's line and escalators
+        so_ = cfg['subwayHeadsOf']
+        import re as _re
+        so_pts = [(float(a_), float(b_)) for a_, b_ in _re.findall(r'lat="([\d.-]+)" lon="([\d.-]+)"', open(os.path.join(ROOT, so_['gpx'])).read())]
+        clear += head_clear(so_pts, json.load(open(os.path.join(ROOT, so_['data']))).get('routeConveyors', []))
+    CLEAR_M = 12   # [F122] (was 10: Liberty Avenue Park's walls and steps still showed at Gateway's escalator top)
+    near_head = lambda la, lo: any(hv((la, lo), c_) < CLEAR_M for c_ in clear)
+    kit_dist = (lambda la, lo, lim: 1e9 if near_head(la, lo) else route_dist(la, lo, lim)) if clear else route_dist
+    if clear:
+        keep_ = [k for k in range(0, len(trees), 2) if not near_head(lat0 + trees[k] * UNIT, lon0 + trees[k + 1] * UNIT)]
+        out['trees'] = pack_int16([v for k in keep_ for v in (trees[k], trees[k + 1])])
+    out['streetKit'] = street_kit.extract(nodes, ntags, ways, q, kit_dist, skip=cleared if clear_polys else None,
+                                          drop_line=near_head if clear else None)   # [street-kit]
     path = os.path.join(ROOT, cfg['data'])
     json.dump(out, open(path, 'w'), separators=(',', ':'))
     print(f'  wrote {cfg["data"]} ({os.path.getsize(path) / 1e6:.2f} MB): {len(streets)} streets, {len(bridges)} styled bridges, '
           f'{len(rails)} rail lines, {len(trees) // 2} trees')
 
 
+def grid_lattice(cfg):
+    """[areas] The grid lattice of the config named by "lattice": its grid's origin and spacing (as build() lays it)."""
+    if not cfg.get('lattice'): return None
+    ref = json.load(open(os.path.join(ROOT, 'tools', 'city', f'{cfg["lattice"]}.json')))
+    w, s_, e_, n = ref['gridBbox']
+    kx = 111319.49 * math.cos(math.radians((s_ + n) / 2)); ky = 111319.49
+    nx, ny = int((e_ - w) * kx / ref['gridM']) + 1, int((n - s_) * ky / ref['gridM']) + 1
+    lx, ly = int((e_ - w) * kx / ref['landM']) + 1, int((n - s_) * ky / ref['landM']) + 1
+    if cfg['gridM'] != ref['gridM'] or cfg['landM'] != ref['landM']: raise SystemExit(f'{cfg["id"]}: a lattice needs the same gridM and landM as {cfg["lattice"]}')
+    dlon, dlat = (e_ - w) / (nx - 1), (n - s_) / (ny - 1)
+    snap = lambda v, o, d, up: o + (math.ceil if up else math.floor)((v - o) / d - 1e-9 * (1 if up else -1)) * d
+    # (the heights are what must match sample for sample; the land grid keeps the reference's spacing, its cells a
+    # part of a cell off where the two grids' spacings don't divide — land kinds, not heights)
+    return {'dlon': dlon, 'dlat': dlat, 'ldlon': (e_ - w) / (lx - 1), 'ldlat': (n - s_) / (ly - 1),
+            'box': lambda gw, gs, ge, gn: (snap(gw, w, dlon, False), snap(gs, n, dlat, False), snap(ge, w, dlon, True), snap(gn, n, dlat, True))}
+
+
+def junction_heights(cfg, rs, e, ghosts, copied):
+    """[areas] Heights where a legs-built line passes a junction more than once (after splice_samples), from the
+    config's `heightPins` (in order) and the copies' `portals`:
+      "everyPass": true     every pass's nearest sample (the line rounds the corner ~10 m off the node, on a different
+                            side for each turn) takes the pin's height, eased over 40 m along the line (ghosts skipped):
+                            steep streets meeting at one junction (Polish Hill's T and X, the Slopes' SY and AL)
+      "everyPass": "round"  every sample within 8 m takes the pin's height, eased back over the next 40 m (a cosine)
+                            (hill junctions graded flat: the North Side's Z)
+      "level": "first"      the first pass keeps its grade and the others take its plane (a street running straight
+                            through at a steady grade: the North Side's Y)
+    (a pin without these only sets the mapped node's height before the profile, as everywhere)
+    and, for a samplesOf leg with "portals": [[lat, lon(, metres)], …] (junctions on the copy where the line comes back
+    from another street), every routed pass is level with the copy for 15 m round the portal — a few centimetres
+    under the copy's lowest point within those metres (default 6) — and, where it runs within 8 m of the copy, never
+    above the copy's height there (the neighbour's road is fixed). Returns the heights."""
+    e = list(e)
+    mc_ = [0.0]
+    for p_, q_ in zip(rs, rs[1:]): mc_.append(mc_[-1] + hv(p_, q_))
+    kx_ = 111319.49 * math.cos(math.radians(rs[0][0]))
+    xy = [((p_[1] - rs[0][1]) * kx_, (p_[0] - rs[0][0]) * 111319.49) for p_ in rs]
+    def jdist(la, lo):
+        jx, jy = (lo - rs[0][1]) * kx_, (la - rs[0][0]) * 111319.49
+        return [math.hypot(x_ - jx, y_ - jy) for x_, y_ in xy]
+    for pin in cfg.get('heightPins', []):
+        if pin.get('everyPass') is True:
+            runs, cur = [], None
+            for k, p_ in enumerate(rs):
+                d_ = hv(p_, (pin['lat'], pin['lon']))
+                if d_ < 30 and not any(g['fromM'] + 5 < mc_[k] < g['toM'] - 5 for g in ghosts):
+                    if cur is None or d_ < cur[0]: cur = (d_, k)
+                elif cur is not None: runs.append(cur[1]); cur = None
+            if cur is not None: runs.append(cur[1])
+            for k in runs:
+                off = pin['eleM'] - e[k]
+                for i in range(len(e)):
+                    w = max(0.0, 1 - abs(mc_[i] - mc_[k]) / 40)
+                    if w: e[i] += off * w
+        elif pin.get('everyPass') == 'round':
+            dist = jdist(pin['lat'], pin['lon'])
+            for k in range(len(rs)):
+                w = 1.0 if dist[k] <= 8 else 0.5 + 0.5 * math.cos(math.pi * min(1.0, (dist[k] - 8) / 40))
+                if w > 1e-6: e[k] += (pin['eleM'] - e[k]) * w
+        elif pin.get('level') == 'first':
+            dist = jdist(pin['lat'], pin['lon'])
+            jx, jy = (pin['lon'] - rs[0][1]) * kx_, (pin['lat'] - rs[0][0]) * 111319.49
+            first, k = [], 0
+            while k < len(rs) and not (dist[k] < 25): k += 1
+            while k < len(rs) and dist[k] < 25: first.append(k); k += 1
+            import numpy as _np
+            ux, uy = xy[first[-1]][0] - xy[first[0]][0], xy[first[-1]][1] - xy[first[0]][1]
+            ul = math.hypot(ux, uy) or 1.0; ux, uy = ux / ul, uy / ul   # (its grade along it; level across)
+            along = lambda k_: (xy[k_][0] - jx) * ux + (xy[k_][1] - jy) * uy
+            c_ = _np.polyfit([along(k_) for k_ in first], [e[k_] for k_ in first], 1)
+            for k in range(len(rs)):
+                if first[0] <= k <= first[-1] or dist[k] > 55: continue
+                w = 1.0 if dist[k] <= 15 else 0.5 + 0.5 * math.cos(math.pi * min(1.0, (dist[k] - 15) / 40))
+                e[k] += (c_[1] + c_[0] * max(-15.0, min(15.0, along(k))) - e[k]) * w
+    portals = [pt_ for c in copied for pt_ in c['portals']]
+    if portals:
+        on_copy = [any(c['o0'] - 1 <= mc_[k] <= c['o1'] + 1 for c in copied) for k in range(len(rs))]
+        ref = [k for k in range(len(rs)) if on_copy[k]]
+        for pt_ in portals:
+            la, lo, under_ = pt_[0], pt_[1], (pt_[2] if len(pt_) > 2 else 6)
+            dist = jdist(la, lo)
+            low_ = min(e[i] for i in ref if dist[i] < under_) - .03
+            for k in range(len(rs)):
+                if on_copy[k]: continue
+                w = 1.0 if dist[k] <= 15 else max(0.0, 1 - (dist[k] - 15) / 30)
+                if w: e[k] += (low_ - e[k]) * w
+            for k in range(len(rs)):
+                if on_copy[k] or dist[k] > 50: continue
+                best = None
+                for i in ref:
+                    if i + 1 >= len(rs) or not on_copy[i + 1] or dist[i] > 60: continue
+                    (ax, ay), (bx, by) = xy[i], xy[i + 1]
+                    dx, dy = bx - ax, by - ay; L2 = dx * dx + dy * dy or 1e-9
+                    t = max(0.0, min(1.0, ((xy[k][0] - ax) * dx + (xy[k][1] - ay) * dy) / L2))
+                    d_ = math.hypot(ax + dx * t - xy[k][0], ay + dy * t - xy[k][1])
+                    if best is None or d_ < best[0]: best = (d_, e[i] + (e[i + 1] - e[i]) * t)
+                if best is None or best[0] > 8: continue
+                w = 1.0 if dist[k] <= 20 else max(0.0, 1 - (dist[k] - 20) / 30)
+                e[k] += (min(best[1] - .03, e[k]) - e[k]) * w
+    return e
+
+
+def splice_samples(cfg, rs, e, copy_m, kinds, bridges, ghosts, aprons):
+    """[areas] Legs with "samplesOf": {"gpx": <a neighbour area's line>, "fromM": a, "toM": b} (its app metres, on its
+    10 m samples; b < a runs it backward) are routed like any leg (the streets they ride are this area's route too),
+    then replaced by the neighbour's own points between those metres, so the app's 10 m samples there are the
+    neighbour's samples: an apron matches its segment sample for sample and a portal on it is the same place and
+    height on both lines. Copies may follow one another (a portal's two aprons and the ghost back between them).
+    The routed stretches between copies keep their own points, eased onto the copies' ends over 60 m (heights over
+    80 m); a routed stretch that leads into a copy must hold a ghost, where a sideways zig (never drawn) makes up the
+    length so the copy starts on a whole 10 m step. Returns the line and its kinds, bridges, ghosts and aprons."""
+    import re as _re
+    R6 = lambda p: (round(p[0], 6), round(p[1], 6))
+    rs = [R6(p) for p in rs]
+    mc = [0.0]
+    for p_, q_ in zip(rs, rs[1:]): mc.append(mc[-1] + hv(p_, q_))
+    def interp_on(ch, ll, el, m):
+        k = max(0, min(len(ch) - 2, bisect.bisect_right(ch, m) - 1))
+        f = max(0.0, min(1.0, (m - ch[k]) / max(1e-9, ch[k + 1] - ch[k])))
+        return (ll[k][0] + (ll[k + 1][0] - ll[k][0]) * f, ll[k][1] + (ll[k + 1][1] - ll[k][1]) * f), el[k] + (el[k + 1] - el[k]) * f
+    srcs = {}
+    def source(path):
+        if path not in srcs:
+            ll, el = [], []
+            for la, lo, z in _re.findall(r'lat="([\d.-]+)" lon="([\d.-]+)"><ele>([\d.-]+)', open(os.path.join(ROOT, path)).read()):
+                p_ = (float(la), float(lo))
+                if ll and hv(ll[-1], p_) <= 0.5: continue   # (the app drops points this close)
+                ll.append(p_); el.append(float(z))
+            ch = [0.0]
+            for p_, q_ in zip(ll, ll[1:]): ch.append(ch[-1] + hv(p_, q_))
+            srcs[path] = (ch, ll, el)
+        return srcs[path]
+    def copy_pts(sp):
+        a, b = sp['fromM'], sp['toM']
+        if a % 10 or b % 10 or a == b: raise SystemExit(f'samplesOf {a}–{b}: on the neighbour\'s 10 m samples')
+        ch, ll, el = source(sp['gpx'])
+        lo_, hi_ = min(a, b), max(a, b)
+        p0, e0 = interp_on(ch, ll, el, lo_); p1, e1 = interp_on(ch, ll, el, hi_)
+        cl, ce = [R6(p0)], [e0]
+        for i in range(len(ch)):
+            if lo_ + 0.6 < ch[i] < hi_ - 0.6: cl.append(ll[i]); ce.append(el[i])
+        cl.append(R6(p1)); ce.append(e1)
+        return (cl, ce) if b > a else (cl[::-1], ce[::-1])
+    copy_legs = [leg for leg in cfg['legs'] if leg.get('samplesOf')]
+    order = sorted(range(len(copy_m)), key=lambda k: copy_m[k][0])
+    out, oe, seg_map = [], [], []   # seg_map: (my from, my to, out from, out to) linear pieces
+    olen = lambda: sum(hv(p_, q_) for p_, q_ in zip(out, out[1:]))
+    def routed(m0, m1):
+        p0, e0 = interp_on(mc, rs, e, m0); p1, e1 = interp_on(mc, rs, e, m1)
+        ll, el, ml = [p0], [e0], [m0]
+        for i in range(len(mc)):
+            if m0 + 0.6 < mc[i] < m1 - 0.6: ll.append(rs[i]); el.append(e[i]); ml.append(mc[i])
+        ll.append(p1); el.append(e1); ml.append(m1)
+        return ll, el, ml
+    def ease(ll, el, ml, k_ref, to_p, to_e):
+        dla, dlo, dz = to_p[0] - ll[k_ref][0], to_p[1] - ll[k_ref][1], to_e - el[k_ref]
+        for i in range(len(ll)):
+            d_ = abs(ml[i] - ml[k_ref])
+            w, wz = max(0.0, 1 - d_ / 60), max(0.0, 1 - d_ / 80)
+            if w: ll[i] = (ll[i][0] + dla * w, ll[i][1] + dlo * w)
+            if wz: el[i] += dz * wz
+    # "portals" on a copy (junctions on it the line comes back to from another street, PLAN 5.8): where the line
+    # ends on one, its end meets the copy's own 10 m sample there (eased sideways over its last 60 m), its last 60 m
+    # run on the copy's line where within 8 m of it (two roads drawn a metre apart would cross at different heights),
+    # and its heights ease onto the copy's where it touches it (80 m); junction_heights levels the passes after
+    portals = [tuple(p_[:2]) for leg in copy_legs for p_ in leg['samplesOf'].get('portals', [])]
+    copies = [copy_pts(leg['samplesOf']) for leg in copy_legs]
+    def meet_portal(ll, el, ml):
+        cand = []
+        for cl_, ce_ in copies:
+            ch_ = [0.0]
+            for p_, q_ in zip(cl_, cl_[1:]): ch_.append(ch_[-1] + hv(p_, q_))
+            for j in range(int(ch_[-1] // 10 + 1e-6) + 1):
+                p_, _ = interp_on(ch_, cl_, ce_, 10 * j)
+                if min(hv(p_, o_) for o_ in portals) < 6: cand.append(p_)
+        k = len(ll) - 1
+        if cand:
+            d_, q_ = min((hv(ll[k], q_), q_) for q_ in cand)
+            if d_ <= 25:
+                dla, dlo = q_[0] - ll[k][0], q_[1] - ll[k][1]
+                for i in range(len(ll)):
+                    w = max(0.0, 1 - abs(ml[i] - ml[k]) / 60)
+                    if w: ll[i] = (ll[i][0] + dla * w, ll[i][1] + dlo * w)
+        lat0_, lon0_ = copies[0][0][0]
+        kx0 = 111319.49 * math.cos(math.radians(lat0_))
+        segs = [[((q_[1] - lon0_) * kx0, (q_[0] - lat0_) * 111319.49) for q_ in cl_] for cl_, _ in copies]
+        for i in range(len(ll) - 1, -1, -1):
+            w = 1 - (ml[-1] - ml[i]) / 60
+            if w <= 0: break
+            x, y = (ll[i][1] - lon0_) * kx0, (ll[i][0] - lat0_) * 111319.49
+            best = None
+            for cxy in segs:
+                for j in range(len(cxy) - 1):
+                    (ax, ay), (bx, by) = cxy[j], cxy[j + 1]
+                    dx, dy = bx - ax, by - ay; L2 = dx * dx + dy * dy or 1e-9
+                    t = max(0.0, min(1.0, ((x - ax) * dx + (y - ay) * dy) / L2))
+                    d_ = math.hypot(ax + dx * t - x, ay + dy * t - y)
+                    if best is None or d_ < best[0]: best = (d_, ax + dx * t, ay + dy * t)
+            if best and best[0] < 8:
+                nx_, ny_ = x + (best[1] - x) * w, y + (best[2] - y) * w
+                ll[i] = (lat0_ + ny_ / 111319.49, lon0_ + nx_ / kx0)
+        touch = []
+        for k_, p_ in enumerate(ll):
+            d_, z_ = min((hv(p_, q_), z_) for cl_, ce_ in copies for q_, z_ in zip(cl_, ce_))
+            if d_ < 6: touch.append((k_, z_ - el[k_]))
+        if touch:
+            for k_ in range(len(ll)):
+                kt, off = min(touch, key=lambda t_: abs(t_[0] - k_))
+                w = max(0.0, 1 - abs(kt - k_) * 10 / 80)
+                el[k_] += off * w
+    cursor, prev_end = 0.0, None
+    for n_, k in enumerate(order):
+        f, t = copy_m[k]
+        sp = copy_legs[k]['samplesOf']
+        cl, ce = copies[k]
+        if sp.get('zigM'):
+            # "zigM" on a ghost's copy: a sideways zig of that many metres in its middle (a ghost is never drawn nor
+            # matched to a segment): the line after it keeps the 10 m phase it had before (F60: the North Side and the
+            # GAP area moved onto samplesOf with their own segments' samples where they were)
+            if not copy_legs[k].get('ghost'): raise SystemExit('samplesOf zigM: on a ghost leg only')
+            i = len(cl) // 2
+            p_, q_ = cl[i - 1], cl[i]
+            d_, z = hv(p_, q_), sp['zigM']
+            h = math.sqrt(max(0.0, ((d_ + z) / 2) ** 2 - (d_ / 2) ** 2))
+            kx_ = 6371008.8 * math.pi / 180 * math.cos(math.radians(p_[0])); ky_ = 6371008.8 * math.pi / 180
+            ux, uy = (q_[1] - p_[1]) * kx_ / d_, (q_[0] - p_[0]) * ky_ / d_
+            mx, my = (p_[1] + q_[1]) / 2, (p_[0] + q_[0]) / 2
+            ideal = (my + ux * h / ky_, mx - uy * h / kx_)
+            # (the points are written to 6 decimals, ~0.1 m: of the grid points round the ideal one, the one whose
+            # zig is closest to z)
+            zp = min((R6((ideal[0] + a_ * 1e-6, ideal[1] + b_ * 1e-6)) for a_ in range(-20, 21) for b_ in range(-20, 21)),
+                     key=lambda c_: abs(hv(p_, c_) + hv(c_, q_) - d_ - z))
+            cl = cl[:i] + [zp] + cl[i:]
+            ce = ce[:i] + [(ce[i - 1] + ce[i]) / 2] + ce[i:]
+        if f - cursor > 1.0:
+            ll, el, ml = routed(cursor, f)
+            if prev_end: ease(ll, el, ml, 0, prev_end[0], prev_end[1])
+            ease(ll, el, ml, len(ll) - 1, cl[0], ce[0])
+            ll = [R6(p_) for p_ in ll]
+            o0 = olen() if out else 0.0
+            # the length up to the copy's start: a whole number of 10 m steps (a zig in this stretch's ghost)
+            body = (out[-1:] if out else []) + ll[1:] if out else ll
+            run = o0 + sum(hv(p_, q_) for p_, q_ in zip(body, body[1:]))
+            need = (-run) % 10.0
+            zig_at = None
+            if need > 0.05 and need < 9.95:
+                gh = [g for g in ghosts if g['fromM'] >= cursor - 1 and g['toM'] <= f + 1]
+                if not gh: raise SystemExit(f'samplesOf at {f:.0f} m: the routed stretch before it holds no ghost to make up {need:.2f} m')
+                gm = (gh[-1]['fromM'] + gh[-1]['toM']) / 2
+                i = max(1, min(len(ll) - 1, min(range(1, len(ll)), key=lambda i: abs(ml[i] - gm))))
+                p_, q_ = ll[i - 1], ll[i]
+                d_ = hv(p_, q_)
+                h = math.sqrt(max(0.0, ((d_ + need) / 2) ** 2 - (d_ / 2) ** 2))
+                kx_ = 6371008.8 * math.pi / 180 * math.cos(math.radians(p_[0])); ky_ = 6371008.8 * math.pi / 180
+                ux, uy = (q_[1] - p_[1]) * kx_ / d_, (q_[0] - p_[0]) * ky_ / d_
+                mx, my = (p_[1] + q_[1]) / 2, (p_[0] + q_[0]) / 2
+                z = R6((my + ux * h / ky_, mx - uy * h / kx_))
+                ll.insert(i, z); el.insert(i, (el[i - 1] + el[i]) / 2); ml.insert(i, (ml[i - 1] + ml[i]) / 2)
+                zig_at = ml[i]
+                body = (out[-1:] if out else []) + ll[1:] if out else ll
+                run = o0 + sum(hv(p_, q_) for p_, q_ in zip(body, body[1:]))
+                if abs((run + 5) % 10 - 5) > 0.3: raise SystemExit(f'samplesOf at {f:.0f} m: the zig left {run % 10:.2f} m')
+            # metres: this stretch maps on with the zig's extra length after it
+            extra = (run - o0) - (f - cursor)
+            if zig_at is None: seg_map.append((cursor, f, o0, run))
+            else:
+                z_out = o0 + (zig_at - cursor) + 0.0
+                seg_map.append((cursor, zig_at, o0, z_out)); seg_map.append((zig_at, f, z_out + extra, run))
+            if out: out += ll[1:]; oe += el[1:]
+            else: out, oe = ll, el
+            # the copy's first point is the routed stretch's last (eased onto it): use the copy's own
+            out[-1], oe[-1] = cl[0], ce[0]
+        else:
+            if out and hv(out[-1], cl[0]) > 0.6: raise SystemExit(f'samplesOf at {f:.0f} m: follows the last copy but doesn\'t start where it ended')
+            run = olen() if out else 0.0
+            if not out: out, oe = [cl[0]], [ce[0]]
+        o_start = run
+        out += cl[1:]; oe += ce[1:]
+        L_ = abs(sp['toM'] - sp['fromM']) + sp.get('zigM', 0.0)
+        seg_map.append((f, t, o_start, o_start + L_))
+        cursor, prev_end = t, (cl[-1], ce[-1])
+    if mc[-1] - cursor > 1.0:
+        ll, el, ml = routed(cursor, mc[-1])
+        if prev_end: ease(ll, el, ml, 0, prev_end[0], prev_end[1])
+        if portals: meet_portal(ll, el, ml)
+        o0 = olen()
+        out += [R6(p_) for p_ in ll[1:]]; oe += el[1:]
+        seg_map.append((cursor, mc[-1], o0, olen()))
+    def mp(m):
+        for a_, b_, c_, d_ in seg_map:
+            if a_ - 1e-6 <= m <= b_ + 1e-6: return c_ + (d_ - c_) * (m - a_) / max(1e-9, b_ - a_)
+        return seg_map[-1][3] if m > seg_map[-1][1] else 0.0
+    out_rng = {k: (seg_map_k[2], seg_map_k[3]) for k, seg_map_k in zip(order, [s for s in seg_map if any(abs(s[0] - copy_m[k_][0]) < 1e-6 and abs(s[1] - copy_m[k_][1]) < 1e-6 for k_ in range(len(copy_m)))])}
+    # ghosts and aprons in leg order: a copied one takes its copy's exact range
+    gi = ai = ci = 0
+    g_out, a_out = [], []
+    for leg in cfg['legs']:
+        cr = None
+        if leg.get('samplesOf'): cr = out_rng[ci]; ci += 1
+        if leg.get('ghost'):
+            g_out.append({'fromM': round(cr[0]), 'toM': round(cr[1])} if cr else {'fromM': round(mp(ghosts[gi]['fromM'])), 'toM': round(mp(ghosts[gi]['toM']))}); gi += 1
+        if leg.get('apron'):
+            a_out.append({'fromM': round(cr[0]), 'toM': round(cr[1])} if cr else {'fromM': round(mp(aprons[ai]['fromM'])), 'toM': round(mp(aprons[ai]['toM']))}); ai += 1
+    # a routed ghost's ends on the line's point nearest its leg's first and last waypoints (its junctions): the
+    # metres carried from the mapped nodes drift ~15 m where the line rounds the junction's corner
+    oc = [0.0]
+    for p_, q_ in zip(out, out[1:]): oc.append(oc[-1] + hv(p_, q_))
+    gk = 0
+    for leg in cfg['legs']:
+        if not leg.get('ghost'): continue
+        g = g_out[gk]; gk += 1
+        if leg.get('samplesOf'): continue
+        for key, wp in (('fromM', leg['waypoints'][0]), ('toM', leg['waypoints'][-1])):
+            near = [(hv(out[i], (wp[1], wp[2])), i) for i in range(len(out)) if abs(oc[i] - g[key]) < 100]
+            if near and min(near)[0] < 25: g[key] = round(oc[min(near)[1]])
+    # ghosts that meet are one
+    g_out.sort(key=lambda r: r['fromM'])
+    merged = []
+    for r in g_out:
+        if merged and r['fromM'] - merged[-1]['toM'] <= 1: merged[-1]['toM'] = max(merged[-1]['toM'], r['toM'])
+        else: merged.append(dict(r))
+    total = olen()
+    # kinds and bridges on a copy are the neighbour's own (its city data: the same paint and decks either side of a
+    # swap); the routed stretches keep theirs
+    def nb_data(gpx_):
+        for f_ in sorted(os.listdir(os.path.join(ROOT, 'tools', 'city'))):
+            if f_.endswith('.json') and '.network' not in f_ and '.spec' not in f_:
+                c_ = json.load(open(os.path.join(ROOT, 'tools', 'city', f_)))
+                if c_.get('gpx') == gpx_ and c_.get('data'): return json.load(open(os.path.join(ROOT, c_['data'])))
+        # a line no area writes (the subway's own segment, tools/build_subway_line.py): the copy keeps this line's
+        # routed kinds and bridges (as before F60; the subway area couldn't be rebuilt since the merge)
+        if not gpx_.startswith('routes/'): return None
+        raise SystemExit(f'samplesOf {gpx_}: no city config writes that line')
+    cps = []   # (out from, out to, neighbour from, neighbour to, its data, an apron)
+    for k, leg in enumerate(copy_legs):
+        sp = leg['samplesOf']
+        cps.append((out_rng[k][0], out_rng[k][1], sp['fromM'], sp['toM'], nb_data(sp['gpx']), bool(leg.get('apron'))))
+    cps = [c_ for c_ in cps if c_[4] is not None]   # (copies of a line no area writes keep the routed kinds)
+    in_cp = lambda x: any(o0 - .5 < x < o1 + .5 for o0, o1, *_ in cps)
+    pieces = []
+    for r in kinds:
+        f_, t_ = mp(r['fromM']), mp(r['toM'])
+        cuts = sorted({f_, t_} | {v for o0, o1, *_ in cps for v in (o0, o1) if f_ < v < t_})
+        pieces += [{'kind': r['kind'], 'fromM': round(x), 'toM': round(y)} for x, y in zip(cuts, cuts[1:]) if y - x >= .5 and not in_cp((x + y) / 2)]
+    for o0, o1, a, b, sd, ap in cps:
+        lo_, hi_ = min(a, b), max(a, b)
+        m = (lambda x, o0=o0, a=a: o0 + x - a) if b > a else (lambda x, o0=o0, a=a: o0 + a - x)
+        for r in sd['routeKinds']:
+            f_, t_ = max(r['fromM'], lo_), min(r['toM'], hi_)
+            if t_ - f_ >= .5: pieces.append({'kind': r['kind'], 'fromM': round(min(m(f_), m(t_))), 'toM': round(max(m(f_), m(t_)))})
+    pieces.sort(key=lambda r: r['fromM'])
+    k_out = []
+    for r in pieces:
+        if k_out and k_out[-1]['kind'] == r['kind']: k_out[-1]['toM'] = max(k_out[-1]['toM'], r['toM'])
+        else: k_out.append(dict(r))
+    k_out[0]['fromM'] = 0; k_out[-1]['toM'] = round(total) + 10
+    for p_, q_ in zip(k_out, k_out[1:]): q_['fromM'] = p_['toM']
+    b_out = [{**b, 'fromM': round(mp(b['fromM'])), 'toM': round(mp(b['toM']))} for b in bridges]
+    b_out = [b for b in b_out if not in_cp((b['fromM'] + b['toM']) / 2)]
+    for o0, o1, a, b, sd, ap in cps:
+        if not ap: continue
+        lo_, hi_ = min(a, b), max(a, b)
+        m = (lambda x, o0=o0, a=a: o0 + x - a) if b > a else (lambda x, o0=o0, a=a: o0 + a - x)
+        for r in sd.get('routeBridges', []):
+            f_, t_ = max(r['fromM'], lo_), min(r['toM'], hi_)
+            if t_ - f_ >= 1: b_out.append({k_: v for k_, v in r.items() if k_ != 'style'} | {'fromM': round(min(m(f_), m(t_))), 'toM': round(max(m(f_), m(t_)))})
+    b_out.sort(key=lambda r: r['fromM'])
+    # (a deck that runs from one copy into the next is one deck)
+    b2 = []
+    for r in b_out:
+        if b2 and b2[-1]['name'] == r['name'] and r['fromM'] - b2[-1]['toM'] <= 1: b2[-1]['toM'] = max(b2[-1]['toM'], r['toM'])
+        else: b2.append(r)
+    b_out = b2
+    copied = [{'o0': out_rng[k][0], 'o1': out_rng[k][1], 'portals': copy_legs[k]['samplesOf'].get('portals', [])} for k in range(len(copy_legs))]
+    return out, oe, k_out, b_out, merged, a_out, copied
+
+
+def apply_detours(detours, rs, e, kinds, bridges, ghosts, aprons):
+    """A stretch of the line replaced by an authored path ("detours", see the module notes). Metres are the app's
+    (haversine along the GPX points as written, 6 decimals). The path is walked in 10 m chords, the last one whatever
+    is left (5–15 m); the new stretch's length must differ from the old one's by whole 10 m steps (to 2 cm) — so every
+    sample after it lies where it did, a whole number of steps on (to 3 cm: the points are written to 6 decimals,
+    ~0.1 m, so the chords' sum jitters by a few cm). The error says by how much to shorten the path."""
+    R_ = 6371008.8 * math.pi / 180
+    rd = lambda p: (round(p[0], 6), round(p[1], 6))
+    for d in sorted(detours, key=lambda d_: -d_['fromM']):
+        rs = [rd(p) for p in rs]
+        chord = [0.0]
+        for a_, b_ in zip(rs, rs[1:]): chord.append(chord[-1] + hv(a_, b_))
+        ia = min(range(len(rs)), key=lambda k: abs(chord[k] - d['fromM']))
+        ib = min(range(len(rs)), key=lambda k: abs(chord[k] - d['toM']))
+        if abs(chord[ia] - d['fromM']) > 1 or abs(chord[ib] - d['toM']) > 1: raise SystemExit(f'detour {d["name"]}: fromM/toM must be on the line\'s samples')
+        a_m, b_m, old = chord[ia], chord[ib], chord[ib] - chord[ia]
+        lat0_, lon0_ = rs[ia]
+        kx_ = R_ * math.cos(math.radians(lat0_))
+        to_l = lambda la, lo: ((lo - lon0_) * kx_, (la - lat0_) * R_)
+        to_g = lambda x, y: (lat0_ + y / R_, lon0_ + x / kx_)
+        path = [to_l(p_[0], p_[1]) for p_ in d['path']]
+        if math.hypot(*path[0]) > 1.5 or math.hypot(*(a2 - b2 for a2, b2 in zip(path[-1], to_l(*rs[ib])))) > 1.5:
+            raise SystemExit(f'detour {d["name"]}: the path must start and end on the line ({math.hypot(*path[0]):.1f} m)')
+        path[0], path[-1] = (0.0, 0.0), to_l(*rs[ib])
+        pe = [p_[2] for p_ in d['path']]
+        ps = [0.0]
+        for a2, b2 in zip(path, path[1:]): ps.append(ps[-1] + math.hypot(b2[0] - a2[0], b2[1] - a2[1]))
+        def walk(c0):
+            out, k, cur, c = [], 0, path[0], c0
+            while True:
+                if math.hypot(path[-1][0] - cur[0], path[-1][1] - cur[1]) <= 15 and out: break
+                # the next point along the path at straight distance c from cur
+                while k < len(path) - 1 and math.hypot(path[k + 1][0] - cur[0], path[k + 1][1] - cur[1]) < c: k += 1
+                if k >= len(path) - 1: break
+                (ax, ay), (bx, by) = path[k], path[k + 1]
+                fx, fy, dx, dy = ax - cur[0], ay - cur[1], bx - ax, by - ay
+                A, B, C = dx * dx + dy * dy, 2 * (fx * dx + fy * dy), fx * fx + fy * fy - c * c
+                t = (-B + math.sqrt(max(0.0, B * B - 4 * A * C))) / (2 * A)
+                t = max(0.0, min(1.0, t))
+                cur = (ax + dx * t, ay + dy * t)
+                out.append((cur, ps[k] + (ps[k + 1] - ps[k]) * t))
+                c = 10.0
+            pts_ = [rd(to_g(*q_)) for q_, _ in out] + [rs[ib]]
+            ss = [s_ for _, s_ in out] + [ps[-1]]
+            tot, prev = 0.0, rs[ia]
+            for q_ in pts_: tot += hv(prev, q_); prev = q_
+            return pts_, ss, tot
+        new_pts, ss, tot = walk(10.0)
+        err = (tot - old + 5) % 10 - 5   # (signed: the authored path is this much too long for the phase)
+        if abs(err) > 0.03: raise SystemExit(f'detour {d["name"]}: its length breaks the 10 m phase by {err:+.3f} m (shorten the path by that)')
+        c0 = 10.0
+        def ele_at(s_):
+            k = max(0, min(len(ps) - 2, bisect.bisect_right(ps, s_) - 1)); f = (s_ - ps[k]) / max(1e-9, ps[k + 1] - ps[k])
+            return pe[k] + (pe[k + 1] - pe[k]) * max(0.0, min(1.0, f))
+        new_e = [ele_at(s_) for s_ in ss[:-1]] + [e[ib]]
+        delta = tot - old
+        print(f'  detour {d["name"]}: {old:.1f} m → {tot:.1f} m ({len(new_pts)} points, first chord {c0:.3f} m, phase error {err:.4f} m)')
+        rs = rs[:ia + 1] + new_pts + rs[ib + 1:]
+        e = list(e[:ia + 1]) + new_e + list(e[ib + 1:])
+        def mv(m): return m + delta if m >= b_m - 0.5 else (min(m, a_m) if m <= a_m + 0.5 else a_m)
+        def mv_ranges(rr):
+            return [{**r, 'fromM': round(mv(r['fromM'])), 'toM': round(mv(r['toM']))} for r in rr]
+        # kinds: the detour's own kind over the new stretch
+        kind = d.get('kind', 'trail')
+        out_k = []
+        for r in kinds:
+            f_, t_ = r['fromM'], r['toM']
+            if t_ <= a_m + 0.5: out_k.append(dict(r)); continue
+            if f_ >= b_m - 0.5: out_k.append({**r, 'fromM': round(f_ + delta), 'toM': round(t_ + delta)}); continue
+            if f_ < a_m: out_k.append({**r, 'toM': round(a_m)})
+            if t_ > b_m: out_k.append({**r, 'fromM': round(b_m + delta), 'toM': round(t_ + delta)})
+        out_k.append({'kind': kind, 'fromM': round(a_m), 'toM': round(a_m + tot)})
+        out_k.sort(key=lambda r: r['fromM'])
+        merged = []
+        for r in out_k:
+            if merged and merged[-1]['kind'] == r['kind']: merged[-1]['toM'] = max(merged[-1]['toM'], r['toM'])
+            else: merged.append(r)
+        for a2, b2 in zip(merged, merged[1:]): b2['fromM'] = a2['toM']
+        kinds = merged
+        bridges = [b for b in mv_ranges(bridges) if b['toM'] - b['fromM'] > 1]
+        ghosts, aprons = mv_ranges(ghosts), mv_ranges(aprons)
+    return rs, e, kinds, bridges, ghosts, aprons
+
+
+def slice_tour(sl, rs, e, chord, kinds, bridges, ghosts, pts, node_m):
+    """[areas] Cut an area's line from a master tour (see the module notes): its points and elevations, and its
+    kinds, bridges, ghosts and aprons in the area's own metres; the OSM nodes it rides. Metres are the app's (the
+    haversine length along the master's points, `chord`): each piece starts and ends on a point interpolated there,
+    so the app's 10 m samples of the area's line are the master's own samples, shifted by whole 10 m steps."""
+    R_ = 6371008.8 * math.pi / 180   # (metres per degree, as the app measures: js/gpx.js haversine)
+    # the master's points as its GPX has them (6 decimals), measured as the app measures them: the app's metres
+    rs = [(round(a_, 6), round(b_, 6)) for a_, b_ in rs]
+    chord = [0.0]
+    for a_, b_ in zip(rs, rs[1:]): chord.append(chord[-1] + hv(a_, b_))
+    def interp(m):
+        k = max(0, min(len(chord) - 2, bisect.bisect_right(chord, m) - 1))
+        f = max(0.0, min(1.0, (m - chord[k]) / max(1e-9, chord[k + 1] - chord[k])))
+        return ((rs[k][0] + (rs[k + 1][0] - rs[k][0]) * f, rs[k][1] + (rs[k + 1][1] - rs[k][1]) * f), e[k] + (e[k + 1] - e[k]) * f)
+    def piece(a, b, last=False):
+        lo, hi = min(a, b), max(a, b)
+        if last and b > a: hi = min(chord[-1], hi + 1.0)   # (the line's end a metre on: its last 10 m sample is there for sure)
+        p0, e0 = interp(lo); p1, e1 = interp(hi)
+        ll, el, ml = [p0], [e0], [lo]
+        for i in range(len(chord)):   # (a master point within 0.6 m of the cut gives way to it: the app drops points that close)
+            if lo + 0.6 < chord[i] < hi - 0.6: ll.append(rs[i]); el.append(e[i]); ml.append(chord[i])
+        ll.append(p1); el.append(e1); ml.append(hi)
+        return (ll, el, ml) if b > a else (ll[::-1], el[::-1], ml[::-1])
+    out_ll, out_e, out_m, spans, at = [], [], [], [], 0.0
+    for k, (a, b) in enumerate(sl['pieces']):
+        if a % 10 or b % 10: raise SystemExit(f'slice piece {a}–{b}: master metres must be on the 10 m samples')
+        if out_ll and spans[-1][2] == a:   # carrying straight on from the last piece's end
+            ll, el, ml = piece(a, b, k == len(sl['pieces']) - 1)
+            ll, el, ml = ll[1:], el[1:], ml[1:]
+        elif out_ll:
+            # a join (a ghost's end to the next real piece: the two passes of a junction can lie ~100 m apart): the
+            # ghost stops 10 m short of its end and n chords of exactly 10 m lead on to the next piece (a zig, never
+            # drawn), so the line's length stays a whole number of 10 m steps
+            o, pa, pb = spans[-1]
+            if not pa > pb: raise SystemExit(f'slice piece {a}–{b}: a jump must follow a backward (ghost) piece')
+            # take the ghost's last 10 m back off (it runs backward: its points' master metres go down)
+            while out_m and out_m[-1] is not None and out_m[-1] < pb + 10 + 0.6: out_ll.pop(); out_e.pop(); out_m.pop()
+            q, eq = interp(pb + 10)
+            out_ll.append(q); out_e.append(eq); out_m.append(pb + 10)
+            at -= 10
+            p0, e0 = out_ll[-1], out_e[-1]
+            ll, el, ml = piece(a, b, k == len(sl['pieces']) - 1)
+            p2, e2 = ll[0], el[0]
+            kx_ = R_ * math.cos(math.radians(p0[0]))
+            x2, y2 = (p2[1] - p0[1]) * kx_, (p2[0] - p0[0]) * R_
+            d = math.hypot(x2, y2)
+            if d > 200 or d < 0.5: raise SystemExit(f'slice piece {a}–{b}: the join is {d:.1f} m long')
+            n = max(2, math.ceil(d / 10 - 1e-9))
+            ux, uy = x2 / d, y2 / d
+            vx, vy = -uy, ux
+            a_ = (d - 10 * (n - 2)) / 2
+            h = math.sqrt(max(0.0, 100 - a_ * a_))
+            chain = [(a_ * ux + h * vx, a_ * uy + h * vy)]
+            for _ in range(n - 2): chain.append((chain[-1][0] + 10 * ux, chain[-1][1] + 10 * uy))
+            for k_, (qx, qy) in enumerate(chain):
+                out_ll.append((p0[0] + qy / R_, p0[1] + qx / kx_)); out_e.append(e0 + (e2 - e0) * (k_ + 1) / n); out_m.append(None)
+            at += 10 * n
+            spans[-1] = (o, pa, pb, at)   # (the ghost runs on to here: its join)
+        else:
+            ll, el, ml = piece(a, b, k == len(sl['pieces']) - 1)
+        spans.append((at, a, b))
+        out_ll += ll; out_e += el; out_m += ml
+        at += abs(b - a)
+    spans = [sp[:3] + (sp[3] if len(sp) > 3 else sp[0] + abs(sp[2] - sp[1]),) for sp in spans]
+    total = at
+    def mapped(ranges, real_only=False):
+        out = []
+        for r in ranges:
+            for o, a, b, _ in spans:
+                lo, hi = min(a, b), max(a, b)
+                f, t = max(r['fromM'], lo), min(r['toM'], hi)
+                if t - f < 1: continue
+                if b < a and real_only: continue
+                m = (lambda x: o + x - a) if b > a else (lambda x: o + a - x)
+                out.append({**r, 'fromM': round(min(m(f), m(t))), 'toM': round(max(m(f), m(t)))})
+        return sorted(out, key=lambda r: r['fromM'])
+    # ghosts: the master's inside forward pieces, and every backward piece; aprons: as listed (master metres)
+    g = mapped(ghosts, real_only=True) + [{'fromM': round(o), 'toM': round(end)} for o, a, b, end in spans if b < a]
+    g.sort(key=lambda r: r['fromM'])
+    merged = []
+    for r in g:
+        if merged and r['fromM'] - merged[-1]['toM'] <= 10: merged[-1]['toM'] = max(merged[-1]['toM'], r['toM'])
+        else: merged.append(dict(r))
+    aprons = mapped([{'fromM': a, 'toM': b} for a, b in sl.get('aprons', [])], real_only=True)
+    k2 = mapped(kinds)
+    kinds_out = []
+    for r in k2:   # the master's kinds piece by piece (a backward piece's run in reverse), joined where they meet
+        if kinds_out and kinds_out[-1]['kind'] == r['kind'] and r['fromM'] - kinds_out[-1]['toM'] <= 12: kinds_out[-1]['toM'] = max(kinds_out[-1]['toM'], r['toM'])
+        else: kinds_out.append({'kind': r['kind'], 'fromM': r['fromM'], 'toM': r['toM']})
+    if kinds_out: kinds_out[0]['fromM'] = 0; kinds_out[-1]['toM'] = round(total) + 10
+    for a_, b_ in zip(kinds_out, kinds_out[1:]): b_['fromM'] = a_['toM']
+    bridges_out = mapped(bridges, real_only=True)
+    # the OSM nodes this line rides: a master route step counts when its middle lies on a piece
+    keep = []
+    for k in range(len(pts) - 1):
+        mid = (node_m[k] + node_m[k + 1]) / 2
+        if any(min(a, b) - 1 <= mid <= max(a, b) + 1 for _, a, b, _ in spans): keep.append(k)
+    area_pts = []
+    for k in keep:
+        if not area_pts or area_pts[-1] != pts[k]:
+            if area_pts: area_pts.append(None)   # (a break: route steps are pairs of neighbours)
+            area_pts.append(pts[k])
+        area_pts.append(pts[k + 1])
+    return out_ll, out_e, kinds_out, bridges_out, merged, aprons, area_pts
+
+
+def add_synthetic_ways(cfg, nodes, ways):
+    """[subway] `syntheticWays` [{name, gpx, fromM, toM, tags}]: a path the map doesn't have (the cycle path beside the
+    T's tracks under the Allegheny), taken from a line's points between those metres, joined at each end to the
+    nearest mapped street node, so legs can be routed along it. Tagged a tunnel: never a city street, and the
+    buildings it passes under stay."""
+    for k, sw in enumerate(cfg.get('syntheticWays', [])):
+        txt = open(os.path.join(ROOT, sw['gpx'])).read()
+        P = [(float(a), float(b)) for a, b in __import__('re').findall(r'lat="([\d.-]+)" lon="([\d.-]+)"', txt)]
+        cum = [0.0]
+        for a, b in zip(P, P[1:]): cum.append(cum[-1] + hv(a, b))
+        ids = []
+        for i, p in enumerate(P):
+            if sw['fromM'] <= cum[i] <= sw['toM']:
+                nid = f'syn{k}_{i}'; nodes[nid] = p; ids.append(nid)
+        tags = {'highway': 'cycleway', 'tunnel': 'yes', 'name': sw['name'], **sw.get('tags', {})}
+        ways[f'syn{k}'] = (ids, tags)
+        streets = {n for nd, t in ways.values() if t.get('highway') and t.get('highway') not in BAN and t.get('tunnel') != 'yes' for n in nd if n in nodes}
+        for end, nid in (('a', ids[0]), ('b', ids[-1])):
+            near = min(streets, key=lambda n: hv(nodes[n], nodes[nid]))
+            ways[f'syn{k}{end}'] = ([nid, near] if end == 'a' else [near, nid], tags)
+            print(f'  synthetic way "{sw["name"]}": {len(ids)} points, end {end} joined {hv(nodes[near], nodes[nid]):.1f} m to node {near}')
+
+
+def underground_ranges(cfg, rs):
+    """[subway] `underground` {gpx, underground: [a, b], conveyors: […], platforms: […], river: [a, b]} (metres along that
+    line, a leg's `samplesOf` copied whole): found on this line by its points, → city data `routeUnderground`
+    [{fromM, toM}], `routeConveyors` [{fromM, toM, mps, label, dir, name}] and `subway` (platforms, river), in this
+    line's metres (outbound)."""
+    ug = cfg.get('underground')
+    if not ug: return None
+    txt = open(os.path.join(ROOT, ug['gpx'])).read()
+    P = [(round(float(a), 6), round(float(b), 6)) for a, b in __import__('re').findall(r'lat="([\d.-]+)" lon="([\d.-]+)"', txt)]
+    R = [(round(p[0], 6), round(p[1], 6)) for p in rs]
+    k = next(i for i in range(1, len(R)) if R[i] == P[1] and R[i + 1] == P[2]) - 1
+    mc = [0.0]
+    for a, b in zip(rs, rs[1:]): mc.append(mc[-1] + hv(a, b))
+    o = round(mc[k] / 10) * 10
+    sh = lambda r: {**r, 'fromM': o + r['fromM'], 'toM': o + r['toM']}
+    out = {'routeUnderground': [{'fromM': o + ug['underground'][0], 'toM': o + ug['underground'][1]}],
+           'routeConveyors': [sh(c) for c in ug.get('conveyors', [])],
+           'subway': {'platforms': [sh(p_) for p_ in ug.get('platforms', [])], 'river': [o + ug['river'][0], o + ug['river'][1]], 'fromM': o, 'toM': o + ug['lengthM']}}
+    print(f'  underground {out["routeUnderground"]}, conveyors {[(c["fromM"], c["toM"]) for c in out["routeConveyors"]]}')
+    return out
+
+
 if __name__ == '__main__':
-    for cid in sys.argv[1:] or [f[:-5] for f in os.listdir(os.path.join(ROOT, 'tools', 'city')) if f.endswith('.json')]:
+    for cid in sys.argv[1:] or [f[:-5] for f in os.listdir(os.path.join(ROOT, 'tools', 'city')) if f.endswith('.json') and '.network' not in f and '.spec' not in f]:
         build(cid)

@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { buildCatalogRoute } from '../js/routes.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
 import { makeCityLandscape, LAND } from '../js/world/toolbox/city/landscape.js';
+import { ghostAt } from '../js/world/ghost.js';
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const item = JSON.parse(read('routes/catalog.json')).find((c) => c.id === 'pittsburgh');
@@ -18,8 +19,12 @@ const index = makeRouteIndex(route, proj);
 const L = makeCityLandscape(scene, proj, index, route);
 const at = (lat, lon) => proj.toLocal(lat, lon);
 
-test('pittsburgh: a closed loop of about 19 km with the Mount Washington climb', () => {
-  assert.ok(route.turnS > 18000 && route.turnS < 21000, `${route.turnS} m`);
+test('pittsburgh: the core area\'s line (downtown, the South Side, the Jail Trail, the bridges) with the Mount Washington climb', () => {
+  // (a city of areas, PLAN 5.4: Allegheny & Troy Hill, Oakland & Schenley, the West End, Polish Hill & Bloomfield, the GAP & Homestead, the North Side, the East End, the South Side Slopes and the subway are areas of their own)
+  assert.ok(route.turnS > 26000 && route.turnS < 32000, `${route.turnS} m`);
+  const net = JSON.parse(read(item.network));
+  assert.deepEqual(net.areas.map((x) => x.catalogId), ['pittsburgh', 'pittsburgh-allegheny', 'pittsburgh-westend', 'pittsburgh-oakland', 'pittsburgh-polish', 'pittsburgh-homestead', 'pittsburgh-northside', 'pittsburgh-eastend', 'pittsburgh-slopes', 'pittsburgh-subway']);
+  assert.equal(net.areas[0].legM, route.turnS);
   const top = Math.max(...route.ele), bottom = Math.min(...route.ele);
   assert.ok(top - bottom > 110, `climb ${top - bottom} m`);
   assert.ok(Math.max(...route.grade.map(Math.abs)) < 25);
@@ -34,6 +39,8 @@ test('pittsburgh: the three rivers are water, the road sits on the ground', () =
   for (let i = 0; i <= route.turnIdx; i += 25) {
     const x = index.xs[i], z = index.zs[i];
     if (L.bridgeAt(x, z, 15)) continue;
+    if (ghostAt(route, route.dist[i])) continue;   // a network tour's repeat is never drawn: the ground follows the real pass
+    if (Math.abs(route.ele[i] - .5 - L.level) < 1) continue;   // a wharf at the water's edge: the ground keeps off the water's level
     assert.ok(Math.abs(L.heightAt(x, z) - (route.ele[i] - .5)) < .25, `ground meets the road at ${route.dist[i]} m`);
   }
 });

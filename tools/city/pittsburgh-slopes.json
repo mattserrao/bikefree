@@ -1,0 +1,1092 @@
+{
+ "id": "pittsburgh-slopes",
+ "name": "Pittsburgh \u00b7 The South Side Slopes, Mount Washington & the Dirty Dozen south",
+ "park": "Pittsburgh, Pennsylvania",
+ "gpx": "routes/cities/pittsburgh-slopes.gpx",
+ "data": "routes/scenes/pittsburgh-slopes-city.json",
+ "osmBbox": [
+  -80.055,
+  40.39,
+  -79.955,
+  40.446
+ ],
+ "osmTile": [
+  0.01,
+  0.008
+ ],
+ "gridBbox": [
+  -80.06,
+  40.393,
+  -79.95,
+  40.447
+ ],
+ "gridM": 24,
+ "landM": 12,
+ "lattice": "pittsburgh",
+ "osmCache": "pittsburgh",
+ "open": true,
+ "waterRelations": [
+  1080,
+  2097217,
+  7937544
+ ],
+ "waterLevelM": 216.6,
+ "inlandWaterAboveM": 10,
+ "buildingRadiusM": 1100,
+ "tallBuildingM": 40,
+ "streetRadiusM": 900,
+ "cornerPasses": 3,
+ "cornerHalfWindow": 8,
+ "maxDriftM": 12,
+ "bridgeStyles": {
+  "Roberto Clemente Bridge": "sister",
+  "Andy Warhol Bridge": "sister",
+  "Rachel Carson Bridge": "sister",
+  "Fort Duquesne Bridge": "arch-gold",
+  "Fort Pitt Bridge": "fortpitt",
+  "West End Bridge": "arch-gold",
+  "Smithfield Street Bridge": "lenticular",
+  "Liberty Bridge": "truss",
+  "South 10th Street Bridge": "suspension",
+  "Hot Metal Bridge": "truss-dark",
+  "Birmingham Bridge": "arch",
+  "David McCullough Bridge": "arch",
+  "Veterans Bridge": "girder",
+  "Washington Crossing Bridge;40th Street Bridge": "arch"
+ },
+ "stadiums": {
+  "PNC Park": {
+   "seats": "#2a5596",
+   "open": "river",
+   "heightM": 28
+  },
+  "Acrisure Stadium": {
+   "seats": "#e7b416",
+   "open": "river",
+   "heightM": 40
+  }
+ },
+ "specialBuildings": {
+  "One PPG Place": 6,
+  "Two PPG Place": 6,
+  "Three PPG Place": 6,
+  "Four PPG Place": 6,
+  "Five PPG Place": 6,
+  "Six PPG Place": 6,
+  "PPG Place Wintergarden": 6,
+  "U.S. Steel Tower": 9,
+  "Gulf Tower": 10,
+  "Grant Building": 11,
+  "Union Trust Building": 11,
+  "Koppers Tower": 11,
+  "BNY Mellon Center": 5,
+  "Fifth Avenue Place": 5,
+  "Tower at PNC Plaza": 5,
+  "EQT Plaza": 5,
+  "USS Requin": 12
+ },
+ "residentialBoxes": [
+  [
+   40.424,
+   -80.026,
+   40.4395,
+   -80.007
+  ],
+  [
+   40.424,
+   -80.007,
+   40.4285,
+   -79.996
+  ],
+  [
+   40.433,
+   -80.04,
+   40.4425,
+   -80.024
+  ],
+  [
+   40.4,
+   -80.037,
+   40.418,
+   -80.012
+  ],
+  [
+   40.413,
+   -80.008,
+   40.4245,
+   -79.962
+  ],
+  [
+   40.4245,
+   -80.008,
+   40.4285,
+   -79.996
+  ]
+ ],
+ "dropStreets": [],
+ "heightPins": [
+  {
+   "lat": 40.430275,
+   "lon": -80.006468,
+   "eleM": 330.4,
+   "keepM": 20,
+   "everyPass": true,
+   "why": "Sycamore St & Wyoming St (junction SY): four steep streets meet (Sycamore up from Station Square, Wyoming's cobbles from Grandview and from Bailey Ave, West Sycamore), so every pass takes one height there"
+  },
+  {
+   "lat": 40.421659,
+   "lon": -79.997397,
+   "eleM": 335.5,
+   "keepM": 20,
+   "everyPass": true,
+   "why": "Warrington Ave & Beltzhoover Ave, Allentown (junction AL): one height for Warrington from the west, from Arlington and Beltzhoover Ave"
+  },
+  {
+   "lat": 40.4216,
+   "lon": -79.99769,
+   "eleM": 334.9,
+   "keepM": 20,
+   "everyPass": true,
+   "why": "Warrington Ave 25 m west of Beltzhoover (AL): the climb from West Warrington eases into the junction, so its pass meets Allentown's corner at the height the other passes cross it (it reached it at 9 %, a metre under the junction's surface)"
+  },
+  {
+   "lat": 40.4300577,
+   "lon": -80.0059441,
+   "eleM": 327.4,
+   "keepM": 20,
+   "why": "Sycamore St 50 m below its top (SY): the climb's last bend eases to ~10 % into the junction, where Wyoming St comes in beside it a little higher (the z14 ground kept 15 % to the top and the road's left shoulder 0.1 m under the ground of the wedge between the two)"
+  }
+ ],
+ "osmOrigin": [
+  -80.045,
+  40.422
+ ],
+ "steepGrades": [
+  {
+   "lat": 40.40945,
+   "lon": -80.03006,
+   "radiusM": 70,
+   "maxGrade": 0.37,
+   "maxGradeChange": 0.15,
+   "why": "Canton Avenue, Beechview: the steepest street of the Dirty Dozen (about 37 % on its cobbled block by its own sign; the z14/z15 ground shows ~27 % over ~50 m, the USGS 3DEP 1 m lidar ~32 % over its steepest 40 m along the line: `surveyHeights`, F73), ridden as mapped (the rider chose to keep it), starting off Coast Ave as abruptly as the profile's limits allow"
+  }
+ ],
+ "legs": [
+  {
+   "mode": "road",
+   "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 25470,
+    "toM": 25870
+   },
+   "waypoints": [
+    [
+     "Smithfield Street Bridge south end (apron)",
+     40.433588,
+     -80.002858
+    ],
+    [
+     "Station Square: Carson St",
+     40.432025,
+     -80.003363
+    ],
+    [
+     "Station Square: Carson & Arlington (junction)",
+     40.431046,
+     -80.001528,
+     "East Carson Street"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 25870,
+    "toM": 26270
+   },
+   "waypoints": [
+    [
+     "Station Square: Carson & Arlington (junction)",
+     40.431046,
+     -80.001528,
+     "East Carson Street"
+    ],
+    [
+     "East Carson St (apron)",
+     40.430241,
+     -79.999441,
+     "East Carson Street"
+    ],
+    [
+     "East Carson St (apron end)",
+     40.429507,
+     -79.997284,
+     "East Carson Street"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 26270,
+    "toM": 25870
+   },
+   "waypoints": [
+    [
+     "East Carson St (apron end) (back)",
+     40.429507,
+     -79.997284,
+     "East Carson Street"
+    ],
+    [
+     "East Carson St (back)",
+     40.430241,
+     -79.999441,
+     "East Carson Street"
+    ],
+    [
+     "Station Square: Carson & Arlington (junction) (back)",
+     40.431046,
+     -80.001528,
+     "East Carson Street"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Station Square: Carson & Arlington (junction)",
+     40.43101,
+     -80.00163,
+     "Arlington Avenue"
+    ],
+    [
+     "Arlington Ave & Sycamore St",
+     40.43028,
+     -80.00056,
+     "East Sycamore Street"
+    ],
+    [
+     "Sycamore St: the climb",
+     40.43065,
+     -80.00242,
+     "East Sycamore Street"
+    ],
+    [
+     "Sycamore St: the bend",
+     40.42913,
+     -80.00493,
+     "East Sycamore Street"
+    ],
+    [
+     "Sycamore St & Wyoming St, Mount Washington (junction)",
+     40.430275,
+     -80.006468,
+     "Wyoming Street"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Sycamore St & Wyoming St, Mount Washington (junction)",
+     40.430275,
+     -80.006468,
+     "West Sycamore Street"
+    ],
+    [
+     "West Sycamore St",
+     40.43255,
+     -80.01176,
+     "West Sycamore Street"
+    ],
+    [
+     "Bertha St",
+     40.431435,
+     -80.012119,
+     "Bertha Street"
+    ],
+    [
+     "Kearsarge St",
+     40.431154,
+     -80.010605,
+     "Kearsarge Street"
+    ],
+    [
+     "Woodruff St: the top",
+     40.430912,
+     -80.010718,
+     "Woodruff Street"
+    ],
+    [
+     "Woodruff St",
+     40.43016,
+     -80.01372,
+     "Woodruff Street"
+    ],
+    [
+     "Woodruff St: the foot",
+     40.42584,
+     -80.01991,
+     "Woodruff Street"
+    ],
+    [
+     "Saw Mill Run Blvd",
+     40.4215,
+     -80.0172,
+     "Saw Mill Run Boulevard"
+    ],
+    [
+     "Saw Mill Run Blvd & Crane Ave",
+     40.417088,
+     -80.014629,
+     "Crane Avenue"
+    ],
+    [
+     "Crane Ave",
+     40.417,
+     -80.023,
+     "Crane Avenue"
+    ],
+    [
+     "Crane Ave & Banksville Rd",
+     40.415912,
+     -80.029877,
+     "Banksville Road"
+    ],
+    [
+     "Banksville Rd",
+     40.4115,
+     -80.032,
+     "Banksville Road"
+    ],
+    [
+     "Banksville Rd & Wenzell Ave",
+     40.406985,
+     -80.034183,
+     "Wenzell Avenue"
+    ],
+    [
+     "Boustead St: the foot",
+     40.404994,
+     -80.033486,
+     "Boustead Street"
+    ],
+    [
+     "Boustead St: the top, Broadway Ave",
+     40.405653,
+     -80.02968,
+     "Boustead Street"
+    ],
+    [
+     "Broadway Ave, Beechview",
+     40.4072,
+     -80.027,
+     "Broadway Avenue"
+    ],
+    [
+     "Broadway Ave & Coast Ave",
+     40.408655,
+     -80.024773,
+     "Coast Avenue"
+    ],
+    [
+     "Coast Ave",
+     40.4092,
+     -80.0275,
+     "Coast Avenue"
+    ],
+    [
+     "Canton Ave: the foot",
+     40.409094,
+     -80.030012,
+     "Canton Avenue"
+    ],
+    [
+     "Canton Ave: the cobbles",
+     40.40955,
+     -80.03007,
+     "Canton Avenue"
+    ],
+    [
+     "Canton Ave & Hampshire Ave: the top",
+     40.410398,
+     -80.03012,
+     "Canton Avenue"
+    ],
+    [
+     "Hampshire Ave",
+     40.41049,
+     -80.02743,
+     "Hampshire Avenue"
+    ],
+    [
+     "Hampshire Ave east",
+     40.41074,
+     -80.01918,
+     "Hampshire Avenue"
+    ],
+    [
+     "Princess Ave",
+     40.410214,
+     -80.01914,
+     "Princess Avenue"
+    ],
+    [
+     "Brookside Ave",
+     40.41257,
+     -80.017489,
+     "Brookside Avenue"
+    ],
+    [
+     "West Liberty Ave",
+     40.410451,
+     -80.015561,
+     "West Liberty Avenue"
+    ],
+    [
+     "West Liberty Ave: the Liberty Tunnels",
+     40.414187,
+     -80.009589,
+     "West Liberty Avenue"
+    ],
+    [
+     "West Warrington Ave: the foot",
+     40.415172,
+     -80.011247,
+     "West Warrington Avenue"
+    ],
+    [
+     "West Warrington Ave",
+     40.41696,
+     -80.01121,
+     "West Warrington Avenue"
+    ],
+    [
+     "Warrington Ave",
+     40.42062,
+     -80.00605,
+     "East Warrington Avenue"
+    ],
+    [
+     "Warrington Ave & Beltzhoover Ave, Allentown (junction)",
+     40.421659,
+     -79.997397,
+     "East Warrington Avenue"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Warrington Ave & Beltzhoover Ave, Allentown (junction)",
+     40.421659,
+     -79.997397,
+     "Beltzhoover Avenue"
+    ],
+    [
+     "Beltzhoover Ave",
+     40.4245,
+     -79.998,
+     "Beltzhoover Avenue"
+    ],
+    [
+     "Bailey Ave",
+     40.42614,
+     -79.99775,
+     "Bailey Avenue"
+    ],
+    [
+     "Bailey Ave west",
+     40.42703,
+     -80.00517,
+     "Bailey Avenue"
+    ],
+    [
+     "Wyoming St",
+     40.42896,
+     -80.00639,
+     "Wyoming Street"
+    ],
+    [
+     "Sycamore St & Wyoming St, Mount Washington (junction)",
+     40.430275,
+     -80.006468,
+     "Wyoming Street"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "waypoints": [
+    [
+     "Sycamore St & Wyoming St, Mount Washington (junction) (again)",
+     40.430275,
+     -80.006468,
+     "Wyoming Street"
+    ],
+    [
+     "Wyoming St: Grandview (again)",
+     40.43116,
+     -80.00592,
+     "Grandview Avenue"
+    ],
+    [
+     "Grandview Ave east (again)",
+     40.43507,
+     -80.01213,
+     "Grandview Avenue"
+    ],
+    [
+     "Grandview Ave & McArdle Roadway (junction) (again)",
+     40.43537,
+     -80.0129,
+     "Grandview Avenue"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 14130,
+    "toM": 14530
+   },
+   "waypoints": [
+    [
+     "Grandview Ave & McArdle Roadway (junction)",
+     40.435424,
+     -80.012955,
+     "Grandview Avenue"
+    ],
+    [
+     "Grandview Ave (apron)",
+     40.436092,
+     -80.015089,
+     "Grandview Avenue"
+    ],
+    [
+     "Grandview Ave (apron end)",
+     40.437137,
+     -80.017012,
+     "Grandview Avenue"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 14530,
+    "toM": 14130
+   },
+   "waypoints": [
+    [
+     "Grandview Ave (apron end) (back)",
+     40.437137,
+     -80.017012,
+     "Grandview Avenue"
+    ],
+    [
+     "Grandview Ave (back)",
+     40.436092,
+     -80.015089,
+     "Grandview Avenue"
+    ],
+    [
+     "Grandview Ave & McArdle Roadway (junction) (back)",
+     40.435424,
+     -80.012955,
+     "Grandview Avenue"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 14130,
+    "toM": 13730
+   },
+   "waypoints": [
+    [
+     "Grandview Ave & McArdle Roadway (junction)",
+     40.435424,
+     -80.012955,
+     "Grandview Avenue"
+    ],
+    [
+     "McArdle Roadway (apron)",
+     40.43459,
+     -80.011119,
+     "P J McArdle Roadway"
+    ],
+    [
+     "McArdle Roadway (apron end)",
+     40.433432,
+     -80.009312,
+     "P J McArdle Roadway"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 13730,
+    "toM": 14130
+   },
+   "waypoints": [
+    [
+     "McArdle Roadway (apron end) (back)",
+     40.433432,
+     -80.009312,
+     "P J McArdle Roadway"
+    ],
+    [
+     "McArdle Roadway (back)",
+     40.43459,
+     -80.011119,
+     "P J McArdle Roadway"
+    ],
+    [
+     "Grandview Ave & McArdle Roadway (junction) (back)",
+     40.435424,
+     -80.012955,
+     "Grandview Avenue"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Grandview Ave & McArdle Roadway (junction)",
+     40.43537,
+     -80.0129,
+     "Grandview Avenue"
+    ],
+    [
+     "Grandview Ave east",
+     40.43507,
+     -80.01213,
+     "Grandview Avenue"
+    ],
+    [
+     "Grandview Ave: the Monongahela Incline",
+     40.43116,
+     -80.00592,
+     "Grandview Avenue"
+    ],
+    [
+     "Wyoming St: the cobbles",
+     40.43062,
+     -80.00639,
+     "Wyoming Street"
+    ],
+    [
+     "Sycamore St & Wyoming St, Mount Washington (junction)",
+     40.430275,
+     -80.006468,
+     "Wyoming Street"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "waypoints": [
+    [
+     "Sycamore St & Wyoming St, Mount Washington (junction) (again)",
+     40.430275,
+     -80.006468,
+     "Wyoming Street"
+    ],
+    [
+     "Wyoming St (again)",
+     40.42896,
+     -80.00639,
+     "Wyoming Street"
+    ],
+    [
+     "Bailey Ave west (again)",
+     40.42703,
+     -80.00517,
+     "Bailey Avenue"
+    ],
+    [
+     "Bailey Ave (again)",
+     40.42614,
+     -79.99775,
+     "Bailey Avenue"
+    ],
+    [
+     "Beltzhoover Ave (again)",
+     40.4245,
+     -79.998,
+     "Beltzhoover Avenue"
+    ],
+    [
+     "Warrington Ave & Beltzhoover Ave, Allentown (junction) (again)",
+     40.421659,
+     -79.997397,
+     "Beltzhoover Avenue"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Warrington Ave & Beltzhoover Ave, Allentown (junction)",
+     40.421659,
+     -79.997397,
+     "East Warrington Avenue"
+    ],
+    [
+     "Warrington Ave & Arlington Ave",
+     40.42185,
+     -79.99233,
+     "Arlington Avenue"
+    ],
+    [
+     "Arlington Ave",
+     40.42045,
+     -79.99124,
+     "Arlington Avenue"
+    ],
+    [
+     "Arlington Ave & South 18th St",
+     40.41763,
+     -79.98646,
+     "Arlington Avenue"
+    ],
+    [
+     "Arlington Ave: South Side Slopes",
+     40.41795,
+     -79.97866,
+     "Arlington Avenue"
+    ],
+    [
+     "Arlington Ave & Eleanor St",
+     40.41743,
+     -79.97291,
+     "Eleanor Street"
+    ],
+    [
+     "Eleanor St",
+     40.42,
+     -79.9728,
+     "Eleanor Street"
+    ],
+    [
+     "Eleanor St & Holt St",
+     40.42213,
+     -79.97271,
+     "Holt Street"
+    ],
+    [
+     "Holt St & Barry St",
+     40.42206,
+     -79.97097,
+     "Barry Street"
+    ],
+    [
+     "Barry St",
+     40.42362,
+     -79.96996,
+     "Barry Street"
+    ],
+    [
+     "Barry St & Josephine St",
+     40.42381,
+     -79.9689,
+     "South 27th Street"
+    ],
+    [
+     "South 27th St",
+     40.42623,
+     -79.96748,
+     "South 27th Street"
+    ],
+    [
+     "East Carson & South 27th (junction)",
+     40.4271,
+     -79.96705,
+     "South 27th Street"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 28870,
+    "toM": 29100
+   },
+   "waypoints": [
+    [
+     "East Carson & South 27th (junction)",
+     40.427249,
+     -79.967051,
+     "South 27th Street"
+    ],
+    [
+     "South 27th St (apron)",
+     40.427717,
+     -79.966502
+    ],
+    [
+     "SouthSide Works riverfront (apron end)",
+     40.428845,
+     -79.965342
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 29100,
+    "toM": 28870
+   },
+   "waypoints": [
+    [
+     "SouthSide Works riverfront (apron end) (back)",
+     40.428845,
+     -79.965342
+    ],
+    [
+     "South 27th St (back)",
+     40.427717,
+     -79.966502
+    ],
+    [
+     "East Carson & South 27th (junction) (back)",
+     40.427249,
+     -79.967051,
+     "South 27th Street"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 28870,
+    "toM": 28470
+   },
+   "waypoints": [
+    [
+     "East Carson & South 27th (junction)",
+     40.427249,
+     -79.967051,
+     "East Carson Street"
+    ],
+    [
+     "East Carson St (apron)",
+     40.427708,
+     -79.969305,
+     "East Carson Street"
+    ],
+    [
+     "East Carson St (apron end)",
+     40.428228,
+     -79.971561,
+     "East Carson Street"
+    ]
+   ]
+  }
+ ],
+ "surveyHeights": [
+  {
+   "name": "Canton Avenue",
+   "source": "USGS 3DEP 1 m lidar (2020), the National Map EPQS, sampled every 5 m along the line on 18 Nov 2026",
+   "easeM": 40,
+   "why": "Canton Ave (the Dirty Dozen's steepest): the z14/z15 tiles smooth its cobbled block to ~26 %; the lidar has ~32 % over its 40 m steep part (F73). Coast Ave's end and the flat top are in the survey too, so the block meets them at their own heights",
+   "points": [
+    [
+     40.408818,
+     -80.029303,
+     306.86
+    ],
+    [
+     40.408839,
+     -80.029355,
+     306.01
+    ],
+    [
+     40.408861,
+     -80.029407,
+     305.37
+    ],
+    [
+     40.408882,
+     -80.029459,
+     304.68
+    ],
+    [
+     40.408903,
+     -80.029511,
+     304.08
+    ],
+    [
+     40.408924,
+     -80.029563,
+     303.54
+    ],
+    [
+     40.408945,
+     -80.029615,
+     303.16
+    ],
+    [
+     40.408967,
+     -80.029667,
+     302.74
+    ],
+    [
+     40.408988,
+     -80.029719,
+     302.38
+    ],
+    [
+     40.409012,
+     -80.029769,
+     302.0
+    ],
+    [
+     40.409035,
+     -80.029819,
+     301.69
+    ],
+    [
+     40.409064,
+     -80.029865,
+     301.33
+    ],
+    [
+     40.409092,
+     -80.02991,
+     301.04
+    ],
+    [
+     40.409127,
+     -80.029945,
+     301.38
+    ],
+    [
+     40.409163,
+     -80.029981,
+     301.07
+    ],
+    [
+     40.409205,
+     -80.030004,
+     301.65
+    ],
+    [
+     40.409246,
+     -80.030027,
+     302.57
+    ],
+    [
+     40.40929,
+     -80.030039,
+     304.17
+    ],
+    [
+     40.409334,
+     -80.030051,
+     305.76
+    ],
+    [
+     40.409379,
+     -80.030057,
+     307.41
+    ],
+    [
+     40.409423,
+     -80.030064,
+     309.0
+    ],
+    [
+     40.409468,
+     -80.030068,
+     310.64
+    ],
+    [
+     40.409513,
+     -80.030071,
+     312.22
+    ],
+    [
+     40.409557,
+     -80.030074,
+     313.79
+    ],
+    [
+     40.409602,
+     -80.030076,
+     315.28
+    ],
+    [
+     40.409647,
+     -80.030079,
+     316.62
+    ],
+    [
+     40.409692,
+     -80.030081,
+     317.9
+    ],
+    [
+     40.409737,
+     -80.030083,
+     319.0
+    ],
+    [
+     40.409782,
+     -80.030086,
+     319.66
+    ],
+    [
+     40.409827,
+     -80.030088,
+     320.14
+    ],
+    [
+     40.409872,
+     -80.03009,
+     320.4
+    ],
+    [
+     40.409917,
+     -80.030092,
+     320.58
+    ],
+    [
+     40.409961,
+     -80.030095,
+     320.72
+    ]
+   ]
+  }
+ ]
+}
