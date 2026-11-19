@@ -1042,15 +1042,15 @@
     },
     {
       "check": "grade-step",
-      "fromM": 8820,
-      "toM": 8880,
-      "why": "Canton Avenue's foot: the cobbled ~37 % block starts off Coast Ave as abruptly as it does (ridden as mapped, the rider's choice)"
+      "fromM": 8800,
+      "toM": 8940,
+      "why": "Canton Avenue's foot: the cobbled block starts off Coast Ave as abruptly as the profile's limits allow (its heights surveyed from the USGS 3DEP lidar since F73, ~29 % at its steepest; ridden as mapped, the rider's choice)"
     },
     {
       "check": "grade-crease",
       "fromM": 8840,
       "toM": 8930,
-      "why": "Canton Avenue's cobbled block (~26 % as the ground maps it): the abrupt start and top, as real"
+      "why": "Canton Avenue's cobbled block (its lidar profile since F73, ~29 % at its steepest): the abrupt start and top, as real"
     },
     {
       "check": "street-steep",
@@ -1120,8 +1120,8 @@
     },
     {
       "check": "grade-step",
-      "fromM": 39330,
-      "toM": 39390,
+      "fromM": 39270,
+      "toM": 39410,
       "why": "Canton Avenue's foot (mirrored half of the out-and-back QC ride)"
     },
     {

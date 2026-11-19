@@ -142,20 +142,6 @@
    "why": "Warrington Ave & Beltzhoover Ave, Allentown (junction AL): one height for Warrington from the west, from Arlington and Beltzhoover Ave"
   },
   {
-   "lat": 40.4093,
-   "lon": -80.03006,
-   "eleM": 306.2,
-   "keepM": 30,
-   "why": "Canton Avenue's cobbled block (the Dirty Dozen's ~37 %): its foot and top at the mapped ground (z15 terrain tiles: 306.2 / 319.1 m), kept unsmoothed between, so the block is ridden at the ~26 % the map shows over 50 m"
-  },
-  {
-   "lat": 40.40975,
-   "lon": -80.03008,
-   "eleM": 319.1,
-   "keepM": 30,
-   "why": "Canton Avenue's cobbled block (the Dirty Dozen's ~37 %): its foot and top at the mapped ground (z15 terrain tiles: 306.2 / 319.1 m), kept unsmoothed between, so the block is ridden at the ~26 % the map shows over 50 m"
-  },
-  {
    "lat": 40.4216,
    "lon": -79.99769,
    "eleM": 334.9,
@@ -182,7 +168,7 @@
    "radiusM": 70,
    "maxGrade": 0.37,
    "maxGradeChange": 0.15,
-   "why": "Canton Avenue, Beechview: the steepest street of the Dirty Dozen (about 37 % on its cobbled block; the z14/z15 ground shows ~27 % over ~50 m), ridden as mapped (the rider chose to keep it), starting off Coast Ave as abruptly as it does"
+   "why": "Canton Avenue, Beechview: the steepest street of the Dirty Dozen (about 37 % on its cobbled block by its own sign; the z14/z15 ground shows ~27 % over ~50 m, the USGS 3DEP 1 m lidar ~32 % over its steepest 40 m along the line: `surveyHeights`, F73), ridden as mapped (the rider chose to keep it), starting off Coast Ave as abruptly as the profile's limits allow"
   }
  ],
  "legs": [
@@ -924,6 +910,181 @@
      40.428228,
      -79.971561,
      "East Carson Street"
+    ]
+   ]
+  }
+ ],
+ "surveyHeights": [
+  {
+   "name": "Canton Avenue",
+   "source": "USGS 3DEP 1 m lidar (2020), the National Map EPQS, sampled every 5 m along the line on 18 Nov 2026",
+   "easeM": 40,
+   "why": "Canton Ave (the Dirty Dozen's steepest): the z14/z15 tiles smooth its cobbled block to ~26 %; the lidar has ~32 % over its 40 m steep part (F73). Coast Ave's end and the flat top are in the survey too, so the block meets them at their own heights",
+   "points": [
+    [
+     40.408818,
+     -80.029303,
+     306.86
+    ],
+    [
+     40.408839,
+     -80.029355,
+     306.01
+    ],
+    [
+     40.408861,
+     -80.029407,
+     305.37
+    ],
+    [
+     40.408882,
+     -80.029459,
+     304.68
+    ],
+    [
+     40.408903,
+     -80.029511,
+     304.08
+    ],
+    [
+     40.408924,
+     -80.029563,
+     303.54
+    ],
+    [
+     40.408945,
+     -80.029615,
+     303.16
+    ],
+    [
+     40.408967,
+     -80.029667,
+     302.74
+    ],
+    [
+     40.408988,
+     -80.029719,
+     302.38
+    ],
+    [
+     40.409012,
+     -80.029769,
+     302.0
+    ],
+    [
+     40.409035,
+     -80.029819,
+     301.69
+    ],
+    [
+     40.409064,
+     -80.029865,
+     301.33
+    ],
+    [
+     40.409092,
+     -80.02991,
+     301.04
+    ],
+    [
+     40.409127,
+     -80.029945,
+     301.38
+    ],
+    [
+     40.409163,
+     -80.029981,
+     301.07
+    ],
+    [
+     40.409205,
+     -80.030004,
+     301.65
+    ],
+    [
+     40.409246,
+     -80.030027,
+     302.57
+    ],
+    [
+     40.40929,
+     -80.030039,
+     304.17
+    ],
+    [
+     40.409334,
+     -80.030051,
+     305.76
+    ],
+    [
+     40.409379,
+     -80.030057,
+     307.41
+    ],
+    [
+     40.409423,
+     -80.030064,
+     309.0
+    ],
+    [
+     40.409468,
+     -80.030068,
+     310.64
+    ],
+    [
+     40.409513,
+     -80.030071,
+     312.22
+    ],
+    [
+     40.409557,
+     -80.030074,
+     313.79
+    ],
+    [
+     40.409602,
+     -80.030076,
+     315.28
+    ],
+    [
+     40.409647,
+     -80.030079,
+     316.62
+    ],
+    [
+     40.409692,
+     -80.030081,
+     317.9
+    ],
+    [
+     40.409737,
+     -80.030083,
+     319.0
+    ],
+    [
+     40.409782,
+     -80.030086,
+     319.66
+    ],
+    [
+     40.409827,
+     -80.030088,
+     320.14
+    ],
+    [
+     40.409872,
+     -80.03009,
+     320.4
+    ],
+    [
+     40.409917,
+     -80.030092,
+     320.58
+    ],
+    [
+     40.409961,
+     -80.030095,
+     320.72
     ]
    ]
   }

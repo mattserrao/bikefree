@@ -189,7 +189,7 @@
     },
     {
      "fromM": 3740,
-     "toM": 4879
+     "toM": 4880
     },
     {
      "fromM": 9900,
@@ -835,7 +835,7 @@
    "name": "Dobson St & Herron Ave, Polish Hill",
    "lat": 40.45833,
    "lon": -79.964311,
-   "ele": 267.15,
+   "ele": 267.1,
    "passes": {
     "polish": [
      2510,
@@ -1989,8 +1989,8 @@
    ],
    "lengthM": 11010,
    "climbM": [
-    334,
-    329
+    336,
+    331
    ],
    "name": "Dirty Dozen south: Beechview",
    "toward": [
@@ -2893,7 +2893,7 @@
    ],
    "note": "Up Sycamore Street from Station Square, across Mount Washington and down to Beechview for Boustead Street and Canton Avenue's cobbles (about 37 %), up Warrington Ave to Allentown, along Arlington's ridge and down the South Side Slopes to East Carson",
    "lengthM": 18480,
-   "climbM": 515
+   "climbM": 517
   },
   {
    "id": "pgh-dirty-dozen-slopes",
@@ -2910,7 +2910,7 @@
    ],
    "note": "From East Carson & 27th up Barry, Holt and Eleanor to Allentown, over to Mount Washington and down to Beechview for Boustead Street and Canton Avenue's cobbles, back up Warrington Ave and down the Slopes",
    "lengthM": 19940,
-   "climbM": 599
+   "climbM": 601
   }
  ],
  "freeRide": {
@@ -2921,6 +2921,7 @@
    "LB": "e19-"
   }
  },
+ "map": "routes/cities/pittsburgh-map.json",
  "keySplits": {
   "G>A": [
    "G>D",

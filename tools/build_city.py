@@ -546,6 +546,42 @@ def build(cid):
             return (i + max(0.0, min(1.0, (m - chord[i]) / max(1e-9, chord[i + 1] - chord[i])))) * 10.0
         keep = [{**k_, 'fromM': on_line(k_['fromM']), 'toM': on_line(k_['toM'])} for k_ in keep]
         re_ = road_align.line_elevation(re_, [elevation(a_, b_) for a_, b_ in rs], keep, step=10)
+    # `surveyHeights` (F73): [{name, source, easeM, points: [[lat, lon, ele], …]}] — a street's profile surveyed along
+    # the line (USGS 3DEP 1 m lidar, the National Map's EPQS) where the z14 tiles smooth a steep block away (Canton Ave):
+    # samples within 8 m of the survey line, between its ends, take its heights (interpolated along it); the offset at
+    # each end eases back to the line's own over `easeM` (default 40) beyond it. Before the profile's grade limits and
+    # its light averaging (so `steepGrades` still governs how steep and how abrupt it may be: keeping the survey's
+    # samples through them gave Canton's foot a resistance jolt the trainer can't follow)
+    for sv in cfg.get('surveyHeights', []):
+        kx_ = 111319.49 * math.cos(math.radians(sv['points'][0][0]))
+        sxy = [((p_[1] - sv['points'][0][1]) * kx_, (p_[0] - sv['points'][0][0]) * 111319.49) for p_ in sv['points']]
+        sm_ = [0.0]
+        for a_, b_ in zip(sxy, sxy[1:]): sm_.append(sm_[-1] + math.hypot(b_[0] - a_[0], b_[1] - a_[1]))
+        on = {}
+        for k_, p_ in enumerate(rs):
+            x, y = (p_[1] - sv['points'][0][1]) * kx_, (p_[0] - sv['points'][0][0]) * 111319.49
+            best = None
+            for j in range(len(sxy) - 1):
+                (ax, ay), (bx, by) = sxy[j], sxy[j + 1]
+                dx, dy = bx - ax, by - ay; L2 = dx * dx + dy * dy or 1e-9
+                t = ((x - ax) * dx + (y - ay) * dy) / L2
+                if not (-1e-6 <= t <= 1 + 1e-6) and not (j == 0 and t < 0) and not (j == len(sxy) - 2 and t > 1): continue
+                tc = max(0.0, min(1.0, t)); d_ = math.hypot(ax + dx * tc - x, ay + dy * tc - y)
+                if best is None or d_ < best[0]: best = (d_, j, t)
+            if best and best[0] < 8 and 0 < sm_[best[1]] + best[2] * (sm_[best[1] + 1] - sm_[best[1]]) < sm_[-1]:
+                j, t = best[1], max(0.0, min(1.0, best[2]))
+                on[k_] = sv['points'][j][2] + (sv['points'][j + 1][2] - sv['points'][j][2]) * t
+        if not on: raise SystemExit(f'surveyHeights {sv.get("name")}: the line doesn\'t run along it')
+        k0, k1 = min(on), max(on)
+        if k1 - k0 + 1 != len(on): raise SystemExit(f'surveyHeights {sv.get("name")}: the line passes it more than once')
+        o0, o1 = on[k0] - re_[k0], on[k1] - re_[k1]
+        ease_n = sv.get('easeM', 40) / 10
+        re_ = list(re_)
+        for k_ in range(len(re_)):
+            if k0 <= k_ <= k1: re_[k_] = on[k_]
+            elif k_ < k0 and k0 - k_ < ease_n: re_[k_] += o0 * (1 - (k0 - k_) / ease_n)
+            elif k_ > k1 and k_ - k1 < ease_n: re_[k_] += o1 * (1 - (k_ - k1) / ease_n)
+        print(f'  survey {sv.get("name")}: {(k1 - k0) * 10} m from its heights ({sv.get("source", "")}), offsets {o0:+.1f} / {o1:+.1f} m at its ends')
     # [road-align] profile: shave spikes, fill only narrow notches (real dips and crests stay on the ground),
     # limit grade and grade change, light averaging
     # `steepGrades`: a real climb steeper than the profile's limit (Rialto Street's ~24 %), ridden as mapped
