@@ -11,6 +11,8 @@ import { powerRequired } from '../js/physics.js';
 process.env.NO_TESTS = '1';   // (the harness only: its own tests run in their file)
 const { simulate, steadyPower, makeLife } = await import('./city-life.test.mjs');
 const { COUNTS, ROUTE_RIDE } = await import('../js/world/toolbox/city/life.js');
+const { LEAN } = await import('../js/world/pose.js');
+const DT = .1;   // (the life harness's step: test/city-life.test.mjs)
 const report = (name, R) => process.env.LIFE_SIM_REPORT && console.log(name, JSON.stringify({ perMinute: R.perMinute, passes: R.passes, caught: R.caught, passedBy: R.passedBy,
   minutes: +R.minutes.toFixed(1), closest: +R.closestRouteRider.toFixed(2), routeRiderClose: R.routeRiderClose, pacerClose: R.pacerClose, popIn: R.popIn, popOut: R.popOut, jumps: R.jumps }));
 
@@ -79,6 +81,29 @@ test('route riders with a pacer riding beside you: kept clear of it too', () => 
 
 // a climb: Pittsburgh's own line 12.3–14.6 km (about 2 km at 4–7 %, ~11 % at its steepest),
 // holding the power that makes 30 km/h on the flat — the speed falls to a crawl on the steep parts and they slow too
-test('route riders on a climb (a steady power): still passes, both ways, slowing as you do', () => {
-  ridePasses('climb, 30 km/h power', simulate(false, { area: 'pittsburgh', span: [12300, 14600], speed: 30 / 3.6, speedAt: steadyPower(30) }), { lo: .6 });
+// [7.5] …and they lean into the road's bends as you do: into the turn (− left, + right), within the cap, eased
+test('route riders on a climb (a steady power): still passes, both ways, slowing as you do; they lean into the bends', () => {
+  const cap = LEAN.maxDeg * Math.PI / 180, prev = new Map();
+  let n = 0, agree = 0, against = 0, most = 0, worstStep = 0;
+  const watch = (life) => {
+    for (const a of life.routeRiders) {
+      if (!a.alive) { prev.delete(a); continue; }
+      assert.ok(Number.isFinite(a.lean) && Math.abs(a.lean) <= cap + 1e-9, `lean ${a.lean}`);
+      most = Math.max(most, Math.abs(a.lean));
+      const q = prev.get(a);
+      if (q) {
+        worstStep = Math.max(worstStep, Math.abs(a.lean - q.lean));
+        let d = a.yaw - q.yaw; d -= Math.round(d / (2 * Math.PI)) * 2 * Math.PI;
+        // a steady bend (turning > 0.15 rad/s for a while: the lean has caught up): leaning into it
+        if (a.v > 2 && Math.abs(d) / DT > .15 && Math.sign(d) === q.sign && ++q.run > 5) { n++; if (Math.sign(a.lean) === -Math.sign(d)) agree++; else against++; }
+        else if (Math.sign(d) !== q.sign) q.run = 0;
+        Object.assign(q, { yaw: a.yaw, lean: a.lean, sign: Math.sign(d) });
+      } else prev.set(a, { yaw: a.yaw, lean: a.lean, sign: 0, run: 0 });
+    }
+  };
+  ridePasses('climb, 30 km/h power', simulate(false, { area: 'pittsburgh', span: [12300, 14600], speed: 30 / 3.6, speedAt: steadyPower(30), watch }), { lo: .6 });
+  if (process.env.LIFE_SIM_REPORT) console.log('route rider lean', { most: most * 180 / Math.PI, worstStep: worstStep * 180 / Math.PI, n, agree, against });
+  assert.ok(most > 3 * Math.PI / 180, `they lean in the bends: most ${most * 180 / Math.PI}°`);
+  assert.ok(n > 20 && agree / n > .95, `into the turn: ${agree} of ${n}`);
+  assert.ok(worstStep < 2 * Math.PI / 180, `no snaps: ${worstStep * 180 / Math.PI}° in a step`);
 });

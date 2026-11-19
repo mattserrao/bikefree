@@ -7,7 +7,7 @@ import { Weather } from './toolbox/atmosphere/weather.js';
 import { PostFX } from './toolbox/atmosphere/post.js';
 import { Look, LOOKS } from './toolbox/atmosphere/look.js';
 import { StylizedTerrain, SCENERY_QUALITY } from './stylized-terrain.js';
-import { riderPose, routePoint, ROAD_WIDTH, CHASE, CAMERAS, DEFAULT_CAMERA, PACER_LANE } from './pose.js';
+import { riderPose, routePoint, ROAD_WIDTH, CHASE, CAMERAS, DEFAULT_CAMERA, PACER_LANE, leanAlong, stepLean } from './pose.js';
 import { loadRider } from './rider.js';
 import { PerfMonitor } from './perf.js';
 import { HAZE, AERIAL, AERIAL_COLOR, installHaze } from './toolbox/atmosphere/haze.js';
@@ -493,6 +493,15 @@ export class World {
     out.flat.set(pose.flat.x, 0, pose.flat.z);
     return out;
   }
+  /**
+   * [7.5] The lean (radians, + right) a rider drawn at s (path metre on a network ride: `path`) in `lane` would hold
+   * at `speed` m/s: from the drawn path's curvature round it (pose.js leanAlong). `path` null: the route's own line.
+   */
+  _leanTarget(s, lane, speed, path) {
+    const tmp = this._leanTmp ||= { pos: new THREE.Vector3(), fwd: new THREE.Vector3(), flat: new THREE.Vector3() };
+    if (path) return leanAlong((x) => this._placePath(x, lane, tmp, path), s, speed, { minS: 0 });
+    return leanAlong((x) => this._place(x, lane, tmp), s, speed);
+  }
   /** Ease a displayed path position toward the ride's (no wrapping: a path runs on). */
   _followPath(cur, target, speed, dt) {
     let x = cur + speed * dt;
@@ -527,6 +536,8 @@ export class World {
       this.pacerCrank += (src.cadence / 60) * Math.PI * 2 * dt;
       this.pacer.group.visible = true;
       this.pacer.update(pos, fwd, this.pacerCrank, src.speed, Math.min(dt, 0.1), src);
+      this._pacerLean = stepLean(this._pacerLean, this._leanTarget(this.ps, PACER_LANE, src.speed, src.path || this.path), Math.min(dt, 0.1));   // [7.5]
+      this.pacer.setLean?.(this._pacerLean);
       return;
     }
     this.ps += src.speed * dt;
@@ -538,6 +549,8 @@ export class World {
     this.pacerCrank += (src.cadence / 60) * Math.PI * 2 * dt;
     this.pacer.group.visible = true;
     this.pacer.update(pos, fwd, this.pacerCrank, src.speed, Math.min(dt, 0.1), src);
+    this._pacerLean = stepLean(this._pacerLean, this._leanTarget(this.ps, PACER_LANE, src.speed, null), Math.min(dt, 0.1));   // [7.5]
+    this.pacer.setLean?.(this._pacerLean);
   }
 
   /** clear | marine | clouds | rain (eases in over a few seconds). */
@@ -702,6 +715,9 @@ export class World {
     const { pos: riderPos, fwd, flat } = placed;
     this.crank += (src.cadence / 60) * Math.PI * 2 * dt;
     this.rider.update(riderPos, fwd, this.crank, src.speed, Math.min(dt, 0.1), src);
+    // [7.5] the rider and bike lean into the turn (eased; the camera below stays level: it follows riderPos, not the model)
+    this._lean = stepLean(this._lean, this._leanTarget(this.path ? this.p : this.s, RIDER_LANE, src.speed || 0, this.path), Math.min(dt, 0.1));
+    this.rider.setLean?.(this._lean);   // (not the stand-in before the model loads)
     this._updatePacer(dt);
 
     this._updateCamera(riderPos, flat, fwd, dt, src.speed || 0);
