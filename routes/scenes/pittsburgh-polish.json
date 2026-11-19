@@ -939,6 +939,21 @@
         "lon": -79.951891,
         "up": 24
       }
+    },
+    {
+      "name": "Soldiers & Sailors Memorial Hall",
+      "atM": 9320,
+      "rangeM": 300,
+      "cam": {
+        "lat": 40.444507,
+        "lon": -79.954627,
+        "up": 3
+      },
+      "look": {
+        "lat": 40.44505,
+        "lon": -79.956438,
+        "up": 16
+      }
     }
   ],
   "stadiumShapes": {

@@ -822,21 +822,6 @@
       }
     },
     {
-      "name": "Soldiers & Sailors Memorial Hall",
-      "atM": 3800,
-      "rangeM": 400,
-      "cam": {
-        "lat": 40.443103,
-        "lon": -79.95386,
-        "up": 3
-      },
-      "look": {
-        "lat": 40.44505,
-        "lon": -79.956438,
-        "up": 18
-      }
-    },
-    {
       "name": "The Cathedral of Learning",
       "atM": 4140,
       "rangeM": 450,
