@@ -78,7 +78,7 @@ export const SCENE_FIELDS = {
   // road and roadside
   road: { type: 'object', tool: T + 'materials/road-surface.js', keys: ['surface', 'zones', 'markings', 'trail'], doc: 'road surface by stretch: fresh, worn, patched, chip seal, frost-heaved, brick, cobble (granite setts) …; markings "eu": white dashed centre and edges; "fr": French rules in metres (T1 centre, T2 edges, solid on blind bends, villages); trail: { surface, zones } for a city route\'s trail stretches' },
   brickStreets: { type: 'object', tool: T + 'city/city.js', keys: ['osm', 'minGrade', 'classes', 'minLengthM'], doc: 'city: brick-paved streets — the ones OSM tags brick, sett or paving stones, and steep residential streets (minGrade)' },
-  roadAlign: { type: 'object', keys: ['curve', 'streets', 'bankM'], doc: 'city: smooth the route and street profiles' },
+  roadAlign: { type: 'object', tool: 'js/world/road-align.js', keys: ['curve', 'streets', 'bankM', 'turns'], doc: 'smooth the route (curve: Catmull-Rom centre line; turns: { minRadiusM, maxShiftM, marginM, stepDeg } eases too-tight turns and cuts the road finer there) and, in a city, street profiles' },
   roadside: { type: 'array', tool: T + 'roadside/guardrail.js', keys: ['fromM', 'toM', 'side'], doc: 'post-and-rail guardrail stretches' },
   verge: { type: 'object', tool: T + 'roadside/verge.js', keys: ['markers', 'poles', 'posts', 'debris', 'reachM'], doc: 'mile markers, snow poles, delineators, rockfall' },
   signs: { type: 'array', tool: T + 'roadside/details.js', keys: ['atM', 'side', 'label', 'subtitle', 'direction', 'lateralM', 'kind', 'symbol'], doc: 'guide, warning, DEC and diamond signs' },

@@ -1,5 +1,6 @@
 // Map math for the 3D world: web-mercator tiles and a local metre-based frame.
 // Pure functions (tested in Node).
+import { turnOptions, smoothTurns } from './road-align.js';   // [smooth-turns]
 
 import { ghostMask } from './ghost.js';
 export const EARTH_R = 6378137;
@@ -68,10 +69,13 @@ export function makeRouteIndex(route, proj, cell = 40) {
   const xs = new Float64Array(n), zs = new Float64Array(n);
   const grid = new Map();
   const ghost = ghostMask(route);   // a network tour's repeated stretches: never "the nearest route point" (js/world/ghost.js)
+  for (let i = 0; i < n; i++) { const p = proj.toLocal(route.lat[i], route.lon[i]); xs[i] = p.x; zs[i] = p.z; }
+  // [smooth-turns] a scene with roadAlign.turns eases its too-tight turns (js/world/road-align.js); others unchanged
+  const turns = turnOptions(route);
+  const smoothed = turns ? smoothTurns(route, xs, zs, turns) : null;
   for (let i = 0; i < n; i++) {
-    const p = proj.toLocal(route.lat[i], route.lon[i]);
-    xs[i] = p.x; zs[i] = p.z;
     if (ghost?.[i]) continue;
+    const p = { x: xs[i], z: zs[i] };
     const key = `${Math.floor(p.x / cell)},${Math.floor(p.z / cell)}`;
     let arr = grid.get(key);
     if (!arr) grid.set(key, (arr = []));
@@ -95,5 +99,5 @@ export function makeRouteIndex(route, proj, cell = 40) {
     }
     return best == null ? null : { d: Math.sqrt(bd), i: best, ele: route.ele[best] };
   }
-  return { xs, zs, nearest, cell };
+  return smoothed ? { xs, zs, nearest, cell, turns: smoothed } : { xs, zs, nearest, cell };
 }

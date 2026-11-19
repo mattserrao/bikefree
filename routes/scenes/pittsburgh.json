@@ -11,7 +11,10 @@
   "roadAlign": {
     "curve": true,
     "streets": true,
-    "bankM": 30
+    "bankM": 30,
+    "turns": {
+      "minRadiusM": 8
+    }
   },
   "description": "Pittsburgh as a stylized city: the real terrain, rivers, streets, bridges and buildings from OpenStreetMap and AWS Terrain Tiles, with people, traffic, trains, inclines and boats. An artistic interpretation, not a survey.",
   "title": "Pittsburgh · Downtown, the North Shore, the South Side & Mount Washington",

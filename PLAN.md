@@ -1137,6 +1137,21 @@ The user (18 Nov): "Minimap should zoom in and not show the entirety of the map.
 - [ ] F178 The North Side's clipping warnings rose with its longer line (262 → 433, mostly vehicles against solids by PNC Park and the North Shore, F11's kind); worth one look at the apron's stadium traffic
 - [ ] F179 On the bike: the swap 200 m before CB from the bridge (core → North Side) and on General Robinson (subway or core → North Side) — the same streets either side (snapshots match), but check the baked light's re-bake there
 
+### Smooth sharp turns *(test branch `smooth-turns-test`, from `main` after PR #34)*
+**Goal:** roads and their paint did not look smooth through sharp turns on Pittsburgh and Alpe d'Huez: the road was faceted, the lines kinked and the rider and camera swung round the corner. Fix it for those two routes only, at the root, without changing ride distance or the profile.
+
+**Causes**
+- The route is kept as samples exactly 10 m apart. The Alpe's hairpins put up to 133° into one sample (Pittsburgh's corners up to 53°), so the road drawn through them (straight 10 m pieces on the Alpe; a Catmull-Rom curve through the samples on Pittsburgh) turned on a 0.5 m (Alpe) / 5 m (Pittsburgh) radius, with 85° / 19° between consecutive cross-sections.
+- The paint is drawn in road coordinates on the ribbon, so it kinked wherever the ribbon did.
+- The rider's heading is the chord over ±6 m of the same line, so on the Alpe it turned up to 22°/m and jumped by 24°/m per metre at the hairpins.
+
+**Passes**
+- [x] `roadAlign.turns` (`js/world/road-align.js`, run by `makeRouteIndex`): every stretch tighter than `minRadiusM` (8 m) is redrawn with its heading eased (curvature built up over a few metres, total turn and end headings kept), the end offset taken out smoothly, and the line spaced evenly; less radius where the road would move more than `maxShiftM` (6 m). The 10 m samples inside move onto it, so the ground, rails and walls follow the same road
+- [x] The drawn road (`denseRoad`): a cross-section every 3° where a 10 m piece would step more than 6°; the curve's own tangents for the cross-sections; ribbon edges clamped so they never run backwards (`ribbonSections`). Everything else keeps its old cut
+- [x] Gated: only Pittsburgh and Alpe d'Huez have `turns`; the city preset leaves it out; the refactor guard shows the other routes unchanged
+- [x] `test/smooth-turns.test.mjs` (fails on main): cross-section steps, folds, tightest radius, rider turn rate and its change, ride distance / elevation / drawn length, rider on the drawn road
+- [ ] Ride the Alpe's hairpins and Pittsburgh's corners on the Mac and the Air (githack link)
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)
@@ -1160,3 +1175,13 @@ Close Zwift, Zwift Companion and the Wahoo app before connecting — they can ho
 - [x] Ride-screen minimap (bottom-left): route outline, this leg's progress, rider arrow, pacer dot; on routes and scenery loops
 - [x] Settings → Minimap: Whole course (default) · Zoomed in, follows you · Off; <kbd>M</kbd> cycles it on the ride screen
 - [x] Settings → Power bar size: Small (default, ~50% of the old size) · Medium · Large (original); labels keep a readable minimum
+
+### ride-feel-test — riders' feel notes *(branch `ride-feel-test`)*
+From the group ride: screen sleeps, a 1% hill "felt like a truck", shifts feel small, bike too far away.
+- [x] Keep the screen awake while a trainer is connected or a ride is going (Screen Wake Lock, `js/wakelock.js`)
+- [x] Power check: watts come straight from the KICKR; physics (CdA 0.32, Crr 0.004, profile weight + bike) gives real-world numbers — accurate, but full-strength hills with no momentum felt harsh in ERG (gear 12 @ 85 rpm: 0→1% was 98→163 W at once)
+- [x] Hill feel setting 25/50/75/100%, default 50% like Zwift's trainer difficulty — scales the grade sent to the trainer only (flat and on-screen speed unchanged)
+- [x] Momentum: the trainer's grade eases toward the road's over ~3 s (time constant) instead of jumping; shifts still act at once
+- [x] Camera setting: Close (default, 3.3 m back and lower, ~1.3× bigger rider, FOV widens with speed, slight pull-back on acceleration, faint road buzz) or Classic (old fixed 4.5 m)
+- [x] Diagnostics show "Trainer feels X% (road Y%, hill feel Z%)"
+- [ ] Gear spacing: no change for now (revisit after riders try Hill feel + momentum)

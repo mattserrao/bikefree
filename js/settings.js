@@ -7,12 +7,14 @@ export const DEFAULT_SETTINGS = {
   bikeKg: 9,
   shiftMode: 'erg',       // 'erg' | 'sim'
   difficulty: 100,        // % of physics resistance
+  hillFeel: 50,           // % of the road grade the trainer passes on (Zwift's trainer difficulty; 25/50/75/100)
   realRatio: 0,           // 0 = auto-estimate from the trainer
   haptics: true,
   startGear: 12,
   ftp: 200,               // watts, for % FTP workouts
   worldTime: 'auto',      // 3D time of day: auto (the route's default) | morning | midday | golden | night
   worldQuality: 'balanced', // stylized scenery: low | balanced | high
+  camera: 'close',        // chase camera: close (speed feel, default) | classic (4.5 m back, fixed)
   hudSize: 'small',       // ride-screen power bar: small (default) | medium | large (the original size)
   minimap: 'follow',      // ride-screen minimap: follow (zoomed in, ~3 km across: the default) | course (whole route) | off
   worldWeather: 'clear',  // 3D weather: clear | marine | clouds | rain

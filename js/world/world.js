@@ -7,13 +7,13 @@ import { Weather } from './toolbox/atmosphere/weather.js';
 import { PostFX } from './toolbox/atmosphere/post.js';
 import { Look, LOOKS } from './toolbox/atmosphere/look.js';
 import { StylizedTerrain, SCENERY_QUALITY } from './stylized-terrain.js';
-import { riderPose, routePoint, ROAD_WIDTH, CHASE } from './pose.js';
+import { riderPose, routePoint, ROAD_WIDTH, CHASE, CAMERAS } from './pose.js';
 import { loadRider } from './rider.js';
 import { PerfMonitor } from './perf.js';
 import { HAZE, AERIAL, AERIAL_COLOR, installHaze } from './toolbox/atmosphere/haze.js';
 import { vistaConfig } from './toolbox/atmosphere/vista.js';
 import { decorateRoad, frenchMarkings } from './toolbox/materials/road-surface.js';
-import { denseRoad } from './road-align.js';
+import { denseRoad, ribbonSections } from './road-align.js';   // [road-align] [smooth-turns]
 import { ghostAt, undergroundAt } from './ghost.js';   // [road-align]
 import { BakedLighting } from './toolbox/atmosphere/baked-light.js';   // [baked-light]
 import { CourseArches } from './toolbox/roadside/course-arches.js';
@@ -650,7 +650,7 @@ export class World {
     this.rider.update(riderPos, fwd, this.crank, src.speed, Math.min(dt, 0.1), src);
     this._updatePacer(dt);
 
-    this._updateCamera(riderPos, flat, fwd, dt);
+    this._updateCamera(riderPos, flat, fwd, dt, src.speed || 0);
     this.terrain.uniforms.uTime.value = now / 1000;
     this.weather?.tick(dt);
     this._underground(riderPos, dt);   // [subway]
@@ -724,18 +724,42 @@ export class World {
     sm.needsUpdate = moved || this._shadowFrame % 2 === 0;
   }
 
+  /** Settings → Camera: 'close' (default, speed feel) or 'classic' (the fixed 4.5 m camera). */
+  setCamera(key) {
+    this.camKey = CAMERAS[key] ? key : 'close';
+    this._camInit = false;   // jump straight to the new spot
+  }
+
   // The one camera: chase, behind and above the rider (the drone, scenic, side and eye views were retired).
-  _updateCamera(riderPos, flat, fwd, dt) {
+  // "Close" adds three speed cues (ride-feel-test): the field of view widens with speed (more road streams past
+  // the edges), the camera drops back a touch when you accelerate and closes in when you slow, and a faint
+  // road buzz grows with speed. "Classic" is the earlier fixed camera.
+  _updateCamera(riderPos, flat, fwd, dt, speed = 0) {
     // scratch vectors (no allocations in the frame loop)
-    const C = this._cam ||= { pos: new THREE.Vector3(), look: new THREE.Vector3() };
+    const C = this._cam ||= { pos: new THREE.Vector3(), look: new THREE.Vector3(), v: 0, acc: 0, fov: 0, t: 0 };
     const up = UP, pos = C.pos, look = C.look;
+    const K = CAMERAS[this.camKey] || CHASE;
+    const step = Math.min(Math.max(dt, 0), 0.1);
+    // smoothed acceleration (m/s²) for the pull-back, and smoothed speed for the field of view
+    if (step > 0) {
+      const a = (speed - C.v) / step;
+      C.acc += (a - C.acc) * (1 - Math.exp(-step * 1.5));
+      C.v = speed;
+      C.t += step;
+    }
+    const pull = Math.max(-0.5, Math.min(0.7, C.acc * K.pull));
     // Aim a little low so the rider sits above the HUD strip at the bottom of the screen.
-    // 4.5 m back (was 6.5 m): the life-size rider fills about 1.4× more of the screen.
-    pos.copy(riderPos).addScaledVector(flat, -CHASE.back).addScaledVector(up, CHASE.up);
-    look.copy(riderPos).addScaledVector(fwd, CHASE.ahead).addScaledVector(up, CHASE.lookUp);
+    pos.copy(riderPos).addScaledVector(flat, -(K.back + pull)).addScaledVector(up, K.up);
+    look.copy(riderPos).addScaledVector(fwd, K.ahead).addScaledVector(up, K.lookUp);
     // Keep the camera above ground (not underground: in a tunnel or an escalator shaft the ground is overhead)
     const g = this._underS ? null : this.terrain.heightAt(pos.x, pos.z);
-    if (g != null && pos.y < g + CHASE.ground) pos.y = g + CHASE.ground;
+    if (g != null && pos.y < g + K.ground) pos.y = g + K.ground;
+
+    // field of view: base, widening smoothly to +speedFov by about 50 km/h
+    const kph = speed * 3.6;
+    const fov = K.fov + K.speedFov * (1 - Math.exp(-kph / 25));
+    C.fov = !this._camInit || !C.fov ? fov : C.fov + (fov - C.fov) * (1 - Math.exp(-step * 2));
+    if (Math.abs(this.camera.fov - C.fov) > 0.01) { this.camera.fov = C.fov; this.camera.updateProjectionMatrix(); }
 
     if (!this._camInit) {
       this.camera.position.copy(pos);
@@ -744,6 +768,11 @@ export class World {
     } else {
       this.camera.position.lerp(pos, 1 - Math.exp(-dt * 3.5));
       this.camTarget.lerp(look, 1 - Math.exp(-dt * 5));
+    }
+    // road buzz: a centimetre or less, two out-of-step frequencies so it never looks like a regular bounce
+    if (K.buzz && speed > 1) {
+      const amp = K.buzz * Math.min(1, speed / 12);
+      this.camera.position.y += amp * (Math.sin(C.t * 71) * 0.6 + Math.sin(C.t * 43.7) * 0.4);
     }
     this.camera.lookAt(this.camTarget);
   }
@@ -907,14 +936,10 @@ function makeRoad(route, index) {
   const n = roadPoints(route);
   const pos = new Float32Array(n * 2 * 3);
   const uv = new Float32Array(n * 2 * 2);
+  const E = ribbonSections(index, n, ROAD_WIDTH / 2);   // [smooth-turns] left/right edges (no folds with roadAlign.turns)
   for (let i = 0; i < n; i++) {
-    const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1);
-    let dx = index.xs[b] - index.xs[a], dz = index.zs[b] - index.zs[a];
-    const len = Math.hypot(dx, dz) || 1; dx /= len; dz /= len;
-    const rx = -dz, rz = dx; // right
     const y = route.ele[i] + 0.12;
-    const hw = ROAD_WIDTH / 2;
-    pos.set([index.xs[i] - rx * hw, y, index.zs[i] - rz * hw, index.xs[i] + rx * hw, y, index.zs[i] + rz * hw], i * 6);
+    pos.set([E[i * 4], y, E[i * 4 + 1], E[i * 4 + 2], y, E[i * 4 + 3]], i * 6);
     const v = route.dist[i] / 24;
     uv.set([0, v, 1, v], i * 4);
   }
@@ -1017,12 +1042,10 @@ function makeRibbon(route, index, width, lift, tex, repeatM, offset) {
   [route, index] = denseRoad(route, index);   // [road-align]
   const n = roadPoints(route);
   const pos = new Float32Array(n * 2 * 3), uv = new Float32Array(n * 2 * 2);
+  const E = ribbonSections(index, n, width / 2);   // [smooth-turns]
   for (let i = 0; i < n; i++) {
-    const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1);
-    let dx = index.xs[b] - index.xs[a], dz = index.zs[b] - index.zs[a];
-    const len = Math.hypot(dx, dz) || 1; dx /= len; dz /= len;
-    const rx = -dz, rz = dx, hw = width / 2, y = route.ele[i] + lift;
-    pos.set([index.xs[i] - rx * hw, y, index.zs[i] - rz * hw, index.xs[i] + rx * hw, y, index.zs[i] + rz * hw], i * 6);
+    const y = route.ele[i] + lift;
+    pos.set([E[i * 4], y, E[i * 4 + 1], E[i * 4 + 2], y, E[i * 4 + 3]], i * 6);
     const v = route.dist[i] / repeatM;
     uv.set([0, v, 1, v], i * 4);
   }

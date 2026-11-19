@@ -497,6 +497,15 @@ the curved route centre line (ribbons, rider and camera follow a Catmull-Rom cur
 the street profile solver (`js/world/road-align.js`) and a narrower ground bank beside the route; the builder
 half is `tools/citylib/road_align.py`. How-to and numbers: `docs/pittsburgh/detail/s4.md`.
 
+`"roadAlign": { "turns": { "minRadiusM": 8 } }` (Pittsburgh and Alpe d'Huez) smooths the sharp turns. The 10 m
+samples squeeze a hairpin into one or two samples, so even the curve through them turned on a ~0.5 m radius: a
+faceted road, paint that kinks, a rider who swings round. With `turns` (it implies `curve`) each too-tight stretch
+is redrawn with its heading eased to at least `minRadiusM` (less where that would move the road more than
+`maxShiftM`, default 6 m, off the GPX curve), the 10 m samples there move onto the new line (so the ground, rails
+and walls follow), the ribbons get a cross-section every 3° (`stepDeg`) where a 10 m piece would otherwise step
+more than 6° (`refineDeg`), and their inside edges never fold. Ride distance and the elevation profile are
+unchanged. `test/smooth-turns.test.mjs` measures it; `heading-jitter` warns on these scenes.
+
 ## Clipping & overlap QC: things drawn through each other
 
 ```sh
