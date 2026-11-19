@@ -7,8 +7,10 @@ Writes tools/city/pittsburgh-subway.line.gpx (10 m chords, exact: the subway are
 leg, build_city.py `samplesOf`) and the `underground` block of tools/city/pittsburgh-subway.json (its ranges in
 the line's metres: underground, escalators, platforms, the river crossing), and prints the synthetic way for the
 router. Geometry (PLAN "Subway: North Side to Gateway"):
-  NS (Mazeroski Way & W General Robinson St, on the core's A>B) — Mazeroski Way north, Reedsdale St west, into
-  Red Lot 5A — an escalator down beside the T's curve towards the river (the North Side platform at its foot) —
+  NS (Mazeroski Way & W General Robinson St, on the core's A>B) — Mazeroski Way north, Reedsdale St west past the
+  West General Robinson St Garage, left down Tony Dorsett Drive and left again into the headhouse beside the
+  garage's north side — an escalator down eastward to the real North Side platform (under the garage's north side,
+  along Reedsdale; PLAN F121, phase 6: it was in Red Lot 5A, ~120 m south-east, on the T's curve) —
   the tunnel beside the tracks (the T's alignment from OSM, offset to the right) under the Allegheny — the Gateway
   platform — an escalator up into the Gateway Station headhouse — across Liberty Ave and the slip road to
   GW (Stanwix St & Forbes Ave, on the core's B>E).
@@ -24,6 +26,9 @@ PLATFORM = 60.0       # level platform at each escalator's foot
 LOW = 199.0           # the tunnel's floor under the river
 MAX_G = .032          # the tunnel's grades
 C = (40.447677, -80.007652)   # NS: Mazeroski Way & W General Robinson St
+FOOT_LON = -80.00960  # [F121] the North Side escalator's foot: on the real platform (OSM 524689673, -80.0092 to -80.0102); nudged
+TONY_DORSETT = (40.448240, -80.010438)   # Reedsdale St & Tony Dorsett Dr (the line turns down it, then into the headhouse)
+LEAD_NS = 6.0         # the straight before the North Side escalator's top (from the turn off Tony Dorsett Dr)
 GWN = (40.441108, -80.004009)  # GW: Stanwix St & Forbes Ave
 KX, KY = 111319.49 * math.cos(math.radians(C[0])), 111319.49
 xy = lambda la, lo: ((lo - C[1]) * KX, (la - C[0]) * KY)
@@ -62,11 +67,13 @@ def rails():
         r = ET.parse(f).getroot()
         for n in r.iter('node'): nodes[n.get('id')] = (float(n.get('lat')), float(n.get('lon')))
         for w in r.iter('way'):
-            if w.get('id') in ('557202014', '663076344', '663076342', '663076345', '663076343', '557202015'):
+            if w.get('id') in ('557202014', '663076344', '663076342', '663076345', '663076343', '557202015', '233830502', '557202013'):
                 ways[w.get('id')] = [nd.get('ref') for nd in w.iter('nd')]
     pts = lambda ids, rev=False: [xy(*nodes[i]) for w in ids for i in (ways[w][::-1] if rev else ways[w])]
-    A = pts(['557202014', '663076344', '663076342'])
-    B = pts(['557202015', '663076343', '663076345'])[::-1]
+    # [F121] each track from the North Side platform (west, along Reedsdale St: ways 233830502 and 557202013) round
+    # the curve and under the river to Gateway
+    A = pts(['233830502', '557202014', '663076344', '663076342'])
+    B = pts(['557202015', '663076343', '663076345', '557202013'])[::-1]
     return dedupe(A), dedupe(B)
 
 
@@ -147,26 +154,30 @@ def fillet(pts, fixed, r=7.0):
     return dedupe(out)
 
 
-def build(turn_lon):
+def build(foot_lon):
     (kn, mn, NS), (kg, mg, GW) = core()
     O = offset_curve(); So = arclen(O)
-    # the North Side escalator: its foot on the offset curve where it passes General Robinson's latitude, along the
-    # curve's direction there; the Gateway escalator: its top in the headhouse (lat ≈ 40.44160), its foot on the curve
+    # [F121] the North Side escalator: its foot on the offset curve at the west end of the real platform, along the
+    # curve's direction there (east: it comes down towards the platform); the Gateway escalator: its top in the
+    # headhouse (lat ≈ 40.44160), its foot on the curve
     def u_at_lat(lat):
         y = xy(lat, C[1])[1]
         return min(range(len(O)), key=lambda i: abs(O[i][1] - y))
-    ub = So[u_at_lat(40.44772)]
+    fx = xy(C[0], foot_lon)[0]
+    ub = So[min((i for i in range(len(O)) if O[i][1] > xy(40.4478, C[1])[1]), key=lambda i: abs(O[i][0] - fx))]
     tb = (at(O, So, ub + 3)[0] - at(O, So, ub - 3)[0], at(O, So, ub + 3)[1] - at(O, So, ub - 3)[1]); L = math.hypot(*tb); tb = (tb[0] / L, tb[1] / L)
     Eb = at(O, So, ub); Et = (Eb[0] - tb[0] * ESC_LEN, Eb[1] - tb[1] * ESC_LEN)
     ug = So[u_at_lat(40.44160 + ESC_LEN * .98 / KY)]
     tg = (at(O, So, ug + 3)[0] - at(O, So, ug - 3)[0], at(O, So, ug + 3)[1] - at(O, So, ug - 3)[1]); L = math.hypot(*tg); tg = (tg[0] / L, tg[1] / L)
     Gb = at(O, So, ug); Gt = (Gb[0] + tg[0] * ESC_LEN, Gb[1] + tg[1] * ESC_LEN)
-    # surface, NS side: Mazeroski Way north, Reedsdale St west to the lot, into the escalator's lead-in
+    # surface, NS side: Mazeroski Way north, Reedsdale St west past the garage, left down Tony Dorsett Dr, left
+    # into the headhouse's lead-in (clear of the I-279 ramps over the lots further west)
     maz = [xy(40.447758, -80.007678), xy(40.448183, -80.007816), xy(40.448223, -80.007829)]
-    reed_y = xy(40.448214, -80.008274)[1]
-    T1 = (xy(40.4482, turn_lon)[0], reed_y - 1)
-    lead = (Et[0] - tb[0] * 9, Et[1] - tb[1] * 9)
-    north = [xy(*NS[:2])] + maz + [xy(40.448214, -80.008274), T1, lead]
+    reed = [xy(40.448214, -80.008274), xy(40.448228, -80.008864), xy(40.448217, -80.009302), xy(40.448213, -80.009650)]
+    lead = (Et[0] - tb[0] * LEAD_NS, Et[1] - tb[1] * LEAD_NS)
+    T1 = xy(*TONY_DORSETT)
+    T2 = (T1[0] + (lead[1] - T1[1]) * (-80.010384 - TONY_DORSETT[1]) * KX / ((40.447544 - TONY_DORSETT[0]) * KY), lead[1])   # (on Tony Dorsett Dr)
+    north = [xy(*NS[:2])] + maz + reed + [T1, T2, lead]
     fixed = [True] + [False] * (len(north) - 2) + [True]
     north = fillet(north, fixed, 8.0)
     # surface, GW side: out of the headhouse south across Liberty Ave onto the slip road to Stanwix & Forbes
@@ -230,13 +241,14 @@ def chords10(path, z):
 
 
 def main():
-    # the turn off Reedsdale St into the lot: moved east or west until the line is a whole number of 10 m chords
+    # [F121] the North Side escalator's foot: moved a few metres east or west until the line is a whole number of
+    # 10 m chords
     def err(lon):
         path, s, key, NS, GW, mn, mg = build(lon)
         z, g = profile(path, s, key, NS, GW)
         last = chords10(path, z)[2]
         return min(last, 10 - last)
-    lon = min((-80.00885 + 0.00045 * i / 60 for i in range(61)), key=err)
+    lon = min((FOOT_LON - 0.00007 + 0.00014 * i / 60 for i in range(61)), key=err)
     for span in (0.0000075, 0.000001):
         lon = min((lon + span * (i - 10) / 10 for i in range(21)), key=err)
     path, s, key, NS, GW, mn, mg = build(lon)
@@ -247,7 +259,8 @@ def main():
     lls = list(pts)
     lls[0], lls[-1] = NS[:2], GW[:2]
     total = sum(hv(a, b) for a, b in zip(lls, lls[1:]))
-    print(f'subway line: {len(lls)} points, {total:.2f} m (turn off Reedsdale at {lon:.6f}); NS core {mn} m, GW core {mg} m')
+    print(f'subway line: {len(lls)} points, {total:.2f} m (North Side escalator foot at {lon:.6f}); NS core {mn} m, GW core {mg} m')
+    print(f'  North Side escalator top {ll(*path[min(range(len(path)), key=lambda i: abs(s[i] - key["esc1_top"]))])}, foot {ll(*path[min(range(len(path)), key=lambda i: abs(s[i] - key["esc1_bot"]))])}')
     # depth check over the tunnel (between the escalators' tops): ground over the path
     gl = [elevation(*q) for q in pts]
     um = [10 * i for i in range(len(pts))]

@@ -14,6 +14,7 @@
 // --path e1+,e3+ (a route with a ride network: follow that path through its junctions; @metres along the path),
 // --chrome <path> (default: CHROME env, else the usual Mac/Linux locations), --software (no GPU).
 // --areas-now (a city of areas: build the path's other areas at once, not in frame slices),
+// --eval '<js>' (run with the world as `w` just before the frame: `w.terrain.subway.t = 95` puts the trains at 95 s),
 // --png (lossless), --fingerprint (hash of every object for refactor checks, with a frozen clock, seeded
 // random and no streamed real horizon, so runs repeat exactly; see tools/toolbox_guard.mjs).
 import { createServer } from 'node:http';
@@ -36,6 +37,7 @@ const software = flag('--software');
 const breakdown = flag('--breakdown');   // list draw calls by object
 const png = flag('--png');   // [toolbox] lossless PNG instead of JPEG (pixel-exact refactor checks)
 const fingerprint = flag('--fingerprint');   // [toolbox] hash of every mesh, matrix, attribute and material in the scene
+const evalJs = opt('--eval', null);   // JavaScript run on the stopped world (as `w`) before each frame, e.g. to set the subway trains' clock
 const areasNow = flag('--areas-now');   // a city of areas: build the other areas at once (world.areaBudget Infinity), not in frame slices — headless frames can be slow enough that a second area takes minutes
 const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync));
@@ -100,9 +102,10 @@ for (const shot of shots) {
   // streamed terrain (non-stylized and wireframe scenes): wait until the visible tiles are in
   await page.waitForFunction(() => { const w = window.world; if (w.stylized) return true; const c = w.camera.position; w.terrain.update(c.x, c.z); return w.terrain.loadingCount === 0 && w.terrain.stats.ready > 4; }, null, { timeout: 180000, polling: 1000 });
   // stop the loop, let every queued scenery tile build, then draw one frame and read it back
-  const r = await page.evaluate(async () => {
+  const r = await page.evaluate(async (evalJs) => {
     const w = window.world, t = w.terrain, c = w.camera.position;
     w.stop();
+    if (evalJs) new Function('w', evalJs)(w);
     for (let k = 0; k < 600 && (t.forestQueue?.length || k < 2); k++) { t._lastX = Infinity; t.update(c.x, c.z); }
     t.city?.streetKit?.flush();   // [street-kit] chunks whose kit work is still queued
     window.__bake = w.baked?.bakeNow();   // [baked-light] build the static scenery and bake before the one frame
@@ -166,7 +169,7 @@ for (const shot of shots) {
     }
     return { fp, breakdown, url: w.renderer.domElement.toDataURL(window.__png ? 'image/png' : 'image/jpeg', .9), calls: info.calls, triangles: info.triangles, bake: window.__bake || null,
       areas: w._multi ? [...w.areas.values()].map((a) => `${a.id}${a === w.area ? '*' : ''}`).join(' ') : null, memory: { ...w.renderer.info.memory, heapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null } };
-  });
+  }, evalJs);
   const file = join(out, `${shot.name}.${png ? 'png' : 'jpg'}`);
   await writeFile(resolve(ROOT, file), Buffer.from(r.url.split(',')[1], 'base64'));
   rows.push({ shot: shot.spec, file, calls: r.calls, triangles: r.triangles, seconds: Math.round((Date.now() - t0) / 1000), errors: [...errors], ...(r.areas ? { areas: r.areas } : {}), memory: r.memory, ...(r.bake ? { bake: r.bake } : {}), ...(r.fp ? { fingerprint: r.fp } : {}) });   // [baked-light] bake stats

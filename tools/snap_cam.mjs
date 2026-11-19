@@ -5,6 +5,8 @@
 //   node tools/snap_cam.mjs pittsburgh --shots shots.json [--software] [--out dir] [--size 1280x720]
 //   shots.json: [{ "name": "gulf-night", "cam": [lat, lon, alt], "look": [lat, lon, alt], "time": "night" }, …]
 //   (or pass the same JSON in the SHOTS environment variable)
+//   node tools/snap_cam.mjs pittsburgh-oakland --views [--time night]   (the scene's postcard `views`: each camera
+//   `up` metres over the ground at its spot, looking at its `look` point `up` metres over the ground there; PLAN F111)
 import { createServer } from 'node:http';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
@@ -22,7 +24,8 @@ const software = flag('--software');
 const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync));
 const shotsFile = opt('--shots', '');
-if (!args.length || (!shotsFile && !process.env.SHOTS)) { console.log('usage: node tools/snap_cam.mjs <park> --shots shots.json [--software]'); process.exit(1); }
+const views = flag('--views'), viewTime = opt('--time', null);
+if (!args.length || (!shotsFile && !process.env.SHOTS && !views)) { console.log('usage: node tools/snap_cam.mjs <park> --shots shots.json [--software]'); process.exit(1); }
 
 // a tiny static server for the repo (the preview needs http, not file://)
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.css': 'text/css', '.gpx': 'application/gpx+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.bin': 'application/octet-stream' };
@@ -48,8 +51,12 @@ page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 await mkdir(resolve(ROOT, out), { recursive: true });
 
 // free-camera shots: name lat lon alt  →  lookLat lookLon lookAlt  [time]
-const SHOTS = JSON.parse(process.env.SHOTS || readFileSync(shotsFile, 'utf8'));
 const park = args[0] || 'pittsburgh';
+const slug = (t) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const SHOTS = views
+  ? (JSON.parse(readFileSync(resolve(ROOT, `routes/scenes/${park}.json`), 'utf8')).views || []).map((v) => ({ name: `view-${slug(v.name)}${viewTime ? `-${viewTime}` : ''}`,
+    cam: [v.cam.lat, v.cam.lon, v.cam.abs ?? null], camUp: v.cam.up ?? 30, look: [v.look.lat, v.look.lon, v.look.abs ?? null], lookUp: v.look.up ?? 0, time: viewTime }))
+  : JSON.parse(process.env.SHOTS || readFileSync(shotsFile, 'utf8'));
 await page.goto(`${base}/tools/world-preview.html?park=${park}&clean=1&quality=${quality}&pos=4300`);
 await page.waitForFunction(() => window.world?.terrain && (window.world.terrain.city || !window.world.terrain.landscape?.city) && window.world.terrain.kit && window.world._camInit, null, { timeout: 300000, polling: 500 });
 for (const sh of SHOTS) {
@@ -58,7 +65,8 @@ for (const sh of SHOTS) {
     w.stop();
     if (sh.time) w.setTimeOfDay(sh.time);
     const a = P.toLocal(sh.cam[0], sh.cam[1]), b = P.toLocal(sh.look[0], sh.look[1]);
-    w.camera.position.set(a.x, sh.cam[2], a.z); w.camera.lookAt(b.x, sh.look[2], b.z); w.camera.updateMatrixWorld(); w.sky.position.copy(w.camera.position);
+    if (sh.cam[2] == null) sh.cam[2] = t.heightAt(a.x, a.z) + (sh.camUp ?? 30);   // (--views: over the ground)
+    if (sh.look[2] == null) sh.look[2] = t.heightAt(b.x, b.z) + (sh.lookUp ?? 0);    w.camera.position.set(a.x, sh.cam[2], a.z); w.camera.lookAt(b.x, sh.look[2], b.z); w.camera.updateMatrixWorld(); w.sky.position.copy(w.camera.position);
     for (let k = 0; k < 40 && city?._pending.length; k++) { city._warm = false; city._stream(a.x, a.z); }
     for (let k = 0; k < 400 && (t.forestQueue?.length || k < 2); k++) { t._lastX = Infinity; t.update(a.x, a.z); }
     city?.tick(w.camera.position, .016, 12.3, null);

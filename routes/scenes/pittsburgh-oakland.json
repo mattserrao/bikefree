@@ -694,6 +694,34 @@
   ],
   "views": [
     {
+      "name": "Phipps Conservatory from Schenley Drive",
+      "rangeM": 400,
+      "cam": {
+        "lat": 40.439779,
+        "lon": -79.946055,
+        "up": 5
+      },
+      "look": {
+        "lat": 40.439901,
+        "lon": -79.94836,
+        "up": 42
+      }
+    },
+    {
+      "name": "Phipps Conservatory: up into the dome",
+      "rangeM": 60,
+      "cam": {
+        "lat": 40.440211,
+        "lon": -79.948173,
+        "up": 2.5
+      },
+      "look": {
+        "lat": 40.439901,
+        "lon": -79.94836,
+        "up": 75
+      }
+    },
+    {
       "name": "Duquesne Incline",
       "rangeM": 350,
       "cam": {

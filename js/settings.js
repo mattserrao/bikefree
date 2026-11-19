@@ -10,6 +10,7 @@ export const DEFAULT_SETTINGS = {
   hillFeel: 50,           // % of the road grade the trainer passes on (Zwift's trainer difficulty; 25/50/75/100)
   realRatio: 0,           // 0 = auto-estimate from the trainer
   haptics: true,
+  worldSound: true,       // ambience in the 3D world (the subway's trains, escalators, chimes): quiet; off = silent
   startGear: 12,
   ftp: 200,               // watts, for % FTP workouts
   worldTime: 'auto',      // 3D time of day: auto (the route's default) | morning | midday | golden | night
