@@ -34,16 +34,14 @@ export const PASS_R = 6;           // passing straight through where the base ro
 const AHEAD_M = 150000;            // the path route always reaches this far beyond the rider (and the planner)
 const REFILL_M = 100000;           // …refilled once less than this is left
 const VIEW_AHEAD_M = 5000;         // the ride-screen profile off the plan (a free ride): this segment and on to at least this far past its start
-const HEADING_M = 15;             // an arm's heading for the turn's curve and speed cap: from the junction to this far along it
+const HEADING_M = 15;             // an arm's heading for the turn's curve: from the junction to this far along it
 const LABEL_M0 = 10, LABEL_M1 = 40;   // …and for its label, order and the default rule: 10–40 m out, past the line's rounded corner (F84)
 export const SWAP_AHEAD_M = 200;   // areas: the area drawn keeps drawing while it covers the rider and this far ahead
 export const PRELOAD_M = 1500;     // …an area the path enters within this far ahead is loaded and built, hidden
 export const RELEASE_M = 600;      // …and one not drawn, not ahead and not within this far behind is released
 export const REACH_M = 800;        // [F220] …and one a choice at a junction this far ahead could take the path into (along its arms)
-const CORNER = { minDeg: 60, decel: 2 };   // speed cap: sharper than this; the rider slows at this m/s²
-// sharp corners inside a segment (no junction: Bakery Square's hairpin, F82) get the same gentle cap: the turn
-// over ±ARC_M of the line, measured every SCAN_M; corners within END_M of a junction are the junction's (its own cap)
-const BEND = { arcM: 15, scanM: 5, endM: 25, holdM: 10 };
+// (no corner speed caps: PLAN 7.4 took out CORNER / cornerSpeed / edgeBends / NetRide.speedCap — you carry your speed
+// through every turn, U-turns included; the rider leans into it instead, 7.5)
 
 const deg = (r) => (r * 180) / Math.PI;
 const unit2 = (v) => { const l = Math.hypot(v.x, v.z) || 1; return { x: v.x / l, z: v.z / l }; };
@@ -140,7 +138,7 @@ export function optionsAt(net, t) {
   const key = travKey(t);
   if (net._opts.has(key)) return net._opts.get(key);
   const node = net.nodes.get(endNode(t));
-  // two turn angles: `angle` on the first 15 m (the curve the ride draws and its speed cap), `turn` 10–40 m out
+  // two turn angles: `angle` on the first 15 m (the curve the ride draws), `turn` 10–40 m out
   // (what the street does: the label, the order, straight on). A line that passes a junction twice rounds its
   // corners, so its first metres can bend ~30° off the street's way (F84: "bear left" for Forbes straight on at SQ)
   const turnOf = (u0, u1) => {
@@ -167,43 +165,6 @@ export function straightOn(options) {
   let best = null;
   for (const o of options) if (!o.back && (!best || Math.abs(o.turn ?? o.angle) < Math.abs(best.turn ?? best.angle))) best = o;
   return best || options.find((o) => o.back) || null;
-}
-
-/**
- * Sharp corners inside an edge, off its junctions (F82): [{u, angle}] at forward metre u, the turn (°) over
- * ±BEND.arcM of the edge's line, one per corner (its sharpest point), only those over CORNER.minDeg. Cached.
- */
-export function edgeBends(net, e) {
-  net._bends ||= new Map();
-  if (net._bends.has(e.id)) return net._bends.get(e.id);
-  const t = { e, dir: 1 }, out = [];
-  const k = 6378137 * Math.PI / 180;
-  const xy = (u) => { const q = routeAt(baseOf(t), worldS(net, t, u)); return { x: q.lon * k * Math.cos((q.lat * Math.PI) / 180), z: -q.lat * k }; };
-  let run = null;
-  for (let u = BEND.endM; u <= e.len - BEND.endM; u += BEND.scanM) {
-    const a = xy(u - BEND.arcM), b = xy(u), c = xy(u + BEND.arcM);
-    let d = Math.atan2(c.z - b.z, c.x - b.x) - Math.atan2(b.z - a.z, b.x - a.x);
-    while (d > Math.PI) d -= 2 * Math.PI;
-    while (d < -Math.PI) d += 2 * Math.PI;
-    const angle = Math.abs(deg(d));
-    if (angle >= CORNER.minDeg) { if (!run || angle > run.angle) run = { u, angle: run ? Math.max(run.angle, angle) : angle }; }
-    else if (run) { out.push(run); run = null; }
-  }
-  if (run) out.push(run);
-  net._bends.set(e.id, out);
-  return out;
-}
-
-/** Speed limit (m/s) through a turn of `angle` degrees; null when it needs none. */
-export function cornerSpeed(angle) {
-  const a = Math.abs(angle);
-  if (a < CORNER.minDeg) return null;
-  // 60° → 10 m/s (36 km/h), 90° → 7.5, 135° → 5, 180° (U-turn) → 3.5
-  const pts = [[60, 10], [90, 7.5], [135, 5], [180, 3.5]];
-  for (let i = 1; i < pts.length; i++) {
-    if (a <= pts[i][0]) { const [a0, v0] = pts[i - 1], [a1, v1] = pts[i]; return v0 + ((a - a0) / (a1 - a0)) * (v1 - v0); }
-  }
-  return 3.5;
 }
 
 /**
@@ -543,35 +504,6 @@ export class NetRide extends EventTarget {
     const angle = o ? o.angle : 0;
     const R = o?.back || Math.abs(angle) > 150 ? UTURN_R : Math.abs(angle) < 25 ? PASS_R : angle > 0 ? RIGHT_R : TURN_R;   // (a hairpin turns like a U-turn)
     return { P: b.p0, R, angle, back: !!o?.back };
-  }
-
-  /** Speed cap (m/s) at path metre p for the turn at the next (or the current) junction, or a sharp corner ahead inside a segment; null: none. */
-  speedCap(p) {
-    const i = this.entryAt(p);
-    let cap = null;
-    // corners inside segments (F82): the one the rider is in, or any within braking reach ahead
-    for (let j = i; j < this.entries.length && this.entries[j].p0 <= p + 150; j++) {
-      const x = this.entries[j];
-      for (const c of edgeBends(this.net, x.t.e)) {
-        const P = x.p0 + (x.t.dir > 0 ? c.u : x.t.e.len - c.u), d = P - p;
-        if (d < -BEND.holdM || d > 150) continue;
-        const v = cornerSpeed(c.angle);
-        const allowed = Math.sqrt(v * v + 2 * CORNER.decel * Math.max(0, d - BEND.holdM));
-        cap = cap == null ? allowed : Math.min(cap, allowed);
-      }
-    }
-    for (const j of [i, i + 1]) {
-      const J0 = this._junction(j);
-      const J = J0 && { ...J0, R: this.net._fits?.get(`${travKey(this.entries[j - 1].t)}>${travKey(this.entries[j].t)}`) ?? J0.R };
-      // tighter curves slow you more: the angle's speed, scaled for the curve's size
-      const v = J && cornerSpeed(J.angle) && cornerSpeed(J.angle) * Math.sqrt(Math.min(1, J.R / TURN_R));
-      if (v == null) continue;
-      const d = J.P - p;   // + before the junction
-      if (d < -J.R) continue;
-      const allowed = Math.sqrt(v * v + 2 * CORNER.decel * Math.max(0, d - J.R));
-      cap = cap == null ? allowed : Math.min(cap, allowed);
-    }
-    return cap != null && cap < 25 ? cap : null;   // (above 90 km/h it holds nobody back)
   }
 
   /**
