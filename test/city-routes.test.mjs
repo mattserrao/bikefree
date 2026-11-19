@@ -136,3 +136,20 @@ test('the panel map zooms about the finger and pans within the map (F102)', asyn
   // a tap 22 px from a line at k 3 is 7 px of the whole map: lines 3× further apart
   assert.ok(Math.abs(Z.X(lon + 0.001) - Z.X(lon) - 3 * (P.X(lon + 0.001) - P.X(lon))) < 1e-6);
 });
+
+test('the city map: baked river banks round the network and a label on each area\'s own segments (F101)', async () => {
+  const { areaLabelSpots } = await import('../js/city-routes.js');
+  assert.ok(json.map, 'the network names its baked map');
+  const map = JSON.parse(readFileSync(new URL(`../${json.map}`, import.meta.url), 'utf8'));
+  assert.equal(map.format, 'bikefree-city-map-1');
+  assert.deepEqual(map.water.map((w) => w.name).sort(), ['Allegheny River', 'Monongahela River', 'Ohio River']);
+  for (const w of map.water) for (const r of w.rings) assert.ok(r.length >= 3 && r.every(([la, lo]) => la >= map.box[0] - 1e-4 && la <= map.box[2] + 1e-4 && lo >= map.box[1] - 1e-4 && lo <= map.box[3] + 1e-4));
+  // (a tiny network of two areas: each label sits on one of its own segments' points)
+  const lines = [{ id: 'a1', lat: [40.44, 40.45], lon: [-80, -80] }, { id: 'a2', lat: [40.45, 40.45], lon: [-80, -79.99] }, { id: 'b1', lat: [40.43, 40.43], lon: [-79.95, -79.94] }];
+  const spots = areaLabelSpots(lines, (id) => (id[0] === 'a' ? 'A' : 'B'), { A: 'Area A', B: 'Area B' });
+  assert.equal(spots.length, 2);
+  const a = spots.find((s) => s.text === 'Area A');
+  assert.ok(lines.slice(0, 2).some((L) => L.lat.some((la, i) => la === a.lat && L.lon[i] === a.lon)));
+  assert.equal(areaLabelSpots(lines, () => 'C', { A: 'x' }).length, 0);   // (no name, no label)
+  for (const id of Object.keys(map.areaLabels)) assert.ok(json.areas.some((A) => A.id === id), `areaLabels: ${id} is an area`);
+});

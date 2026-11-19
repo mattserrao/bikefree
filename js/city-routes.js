@@ -115,6 +115,35 @@ export function mergeRivers(lists) {
 }
 
 /**
+ * Where each area's name goes on the city map (F101): on its own segments, at the point nearest their middle (a
+ * centroid can fall in a river or another area). lines: [{id, lat, lon}]; areaOf(id) → the segment's area id;
+ * names: {areaId: text} (an area without one gets no label). [{text, lat, lon, kind: 'area'}]
+ */
+export function areaLabelSpots(lines, areaOf, names = {}) {
+  const by = new Map();
+  for (const L of lines) {
+    const a = areaOf(L.id);
+    if (!a || !names[a]) continue;
+    if (!by.has(a)) by.set(a, []);
+    by.get(a).push(L);
+  }
+  const out = [];
+  for (const [a, ls] of by) {
+    let sx = 0, sy = 0, n = 0;
+    for (const L of ls) for (let i = 0; i < L.lat.length; i++) { sx += L.lon[i]; sy += L.lat[i]; n++; }
+    if (!n) continue;
+    const cx = sx / n, cy = sy / n, k = Math.cos((cy * Math.PI) / 180);
+    let best = null;
+    for (const L of ls) for (let i = 0; i < L.lat.length; i++) {
+      const d = ((L.lon[i] - cx) * k) ** 2 + (L.lat[i] - cy) ** 2;
+      if (!best || d < best.d) best = { d, lat: L.lat[i], lon: L.lon[i] };
+    }
+    out.push({ text: names[a], lat: best.lat, lon: best.lon, kind: 'area' });
+  }
+  return out;
+}
+
+/**
  * The panel's list by area (F103): each route under the area where most of its metres are, areas in the network's
  * order (a route that crosses areas sits under its main one). `pathOf(it)` → its traversal keys ("e3+");
  * `edgeOf(id)` → {area, len}. [{area, items}], in the items' own order within each area; one group for one area.

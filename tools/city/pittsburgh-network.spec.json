@@ -5,6 +5,7 @@
     "lat": 40.4375,
     "lon": -79.9925
   },
+  "map": "routes/cities/pittsburgh-map.json",
   "areas": [
     {
       "id": "core",

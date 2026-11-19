@@ -10,7 +10,7 @@ import { parseGpx, buildRoute, averageGradeAhead, wrapDist, routeAt, isPointToPo
 import { Pacer, PACER_WATTS } from './pacer.js';
 import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor, markFtpTest, ftpFromTwentyMinutes } from './workout.js';
 import { drawProfile, drawWorkout, drawTrace, drawMinimap, drawNetworkMinimap, drawCityMap, gradeColor, profileDistAt } from './views.js';
-import { groupByArea, groupCityItems, citySubline, filterByGoal, segmentRoutes, pickOnSegment, nearestLine, fitProjection, zoomProjection, zoomAt, panBy, mergeRivers, shortName } from './city-routes.js';
+import { groupByArea, groupCityItems, citySubline, filterByGoal, segmentRoutes, pickOnSegment, nearestLine, fitProjection, zoomProjection, zoomAt, panBy, mergeRivers, areaLabelSpots, shortName } from './city-routes.js';
 import { Profiles, GENDERS, initials, cmToFtIn, ftInToCm } from './profiles.js';
 import { buildCatalogRoute, loadRouteScene } from './routes.js';
 import { loadNetwork, makePathRoute, planNext, planCloses, keysToIds, idsToKeys, travKey, PathFollower, edgeLines } from './network.js';
@@ -1340,11 +1340,14 @@ $('routeCards').addEventListener('click', (e) => {
 // options and Start button are — the same as picking a card used to (and Ride does that too, with no trainer).
 const city = { baseId: null, goal: 'all', sel: null, seg: null, segIds: null, focus: null, lines: [], hint: '', view: { k: 1 } };
 const cityRivers = new Map();   // baseId → rivers (the city's scenes: each area's has its own copy, some reaching further)
+const cityMaps = new Map();     // baseId → the network's baked map (F101: river banks, labels), when it has one
 async function loadCityRivers(card) {
   if (cityRivers.has(card.baseId)) return false;
   const base = routeCache.get(card.baseId);
   const lists = [base?.scene?.rivers];
   cityRivers.set(card.baseId, mergeRivers(lists));
+  const mapUrl = netCache.get(card.network)?.map;
+  if (mapUrl) try { cityMaps.set(card.baseId, await (await fetch(mapUrl)).json()); } catch { /* the scenes' rivers will do */ }
   const cityPark = parkItems?.find((p) => p.id === card.baseId);
   const areas = (parkItems || []).filter((p) => p.area && p.area === cityPark?.routeId && p.scene);
   await Promise.all(areas.map(async (a) => { try { lists.push((await (await fetch(a.scene)).json()).rivers); } catch { /* the core's rivers will do */ } }));
@@ -1362,14 +1365,16 @@ function cityMapData(card) {
   const net = cityNet(card);
   if (!net) return null;
   const paths = new Map(card.routes.map((it) => [it.id, cityPath(net, it)]));
+  const lines = edgeLines(net).map((L) => ({ id: L.id, lat: L.lat, lon: L.lon })), map = cityMaps.get(card.baseId);
   return { net, paths, index: segmentRoutes(card.routes.map((it) => ({ id: it.id, path: paths.get(it.id) }))),
-    lines: edgeLines(net).map((L) => ({ id: L.id, lat: L.lat, lon: L.lon })), rivers: cityRivers.get(card.baseId) || [] };
+    lines, rivers: cityRivers.get(card.baseId) || [], waterAreas: map?.water || null,
+    labels: map ? [...(map.labels || []), ...areaLabelSpots(lines, (id) => net.edges.get(id)?.area, map.areaLabels)] : [] };
 }
 function drawCityThumb(canvas, card) {
   const d = card && cityMapData(card);
   if (!d) return;
   const sel = [...card.routes].find((x) => x.id === selectedRouteId);
-  drawCityMap(canvas, { lines: d.lines, rivers: d.rivers, route: sel ? d.paths.get(sel.id) : null, thumb: true, project: fitProjection });
+  drawCityMap(canvas, { lines: d.lines, rivers: d.rivers, waterAreas: d.waterAreas, route: sel ? d.paths.get(sel.id) : null, thumb: true, project: fitProjection });
 }
 const cityCard = () => routeCards.find((x) => x.city && x.baseId === city.baseId) || null;
 function openCity(baseId) {
@@ -1441,7 +1446,7 @@ function renderCityMap() {
   if (!d) return;
   const { byGoal } = cityShown(card);
   const lit = new Set(byGoal.flatMap((it) => (d.paths.get(it.id) || []).map((k) => k.replace(/[+-]$/, ''))));
-  city.lines = drawCityMap($('cityMap'), { lines: d.lines, rivers: d.rivers, nodes: [...d.net.nodes.values()],
+  city.lines = drawCityMap($('cityMap'), { lines: d.lines, rivers: d.rivers, waterAreas: d.waterAreas, labels: d.labels, nodes: [...d.net.nodes.values()],
     lit: city.goal === 'all' ? null : lit, route: city.sel ? d.paths.get(city.sel) : null, marked: city.seg, focus: city.focus,
     project: (lines, w, h, pad) => zoomProjection(fitProjection(lines, w, h, pad), w, h, city.view) });
   const zoomed = (city.view?.k || 1) > 1;

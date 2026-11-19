@@ -14,7 +14,7 @@
 // areas, the shared "origin" and the presets that cross areas. A junction found on two areas' lines is a portal.
 // An area's apron stretches (city data `routeAprons`: drawn, not ridden as its own edges) are matched to the
 // edge of another area they run along. Edge keys must be unique across the city.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildCatalogRoute } from '../js/routes.js';
@@ -210,6 +210,8 @@ if (!spec.areas) {
   };
   if (spec.freeRide) out.freeRide = freeRideOut(spec.freeRide, edges);
 }
+// the city map's baked rivers and labels (F101: tools/build_city_map.py), for the city card and panel
+if (spec.map) { if (!existsSync(resolve(root, spec.map))) throw new Error(`map ${spec.map}: run tools/build_city_map.py`); out.map = spec.map; }
 // the key history (F40): every segment a new junction split, old key → its pieces in its own forward order, so a
 // route saved before the split maps onto the way it rode (js/network.js keysToIds); a piece may itself have split later
 if (spec.keySplits) {
