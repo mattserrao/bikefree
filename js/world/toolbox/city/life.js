@@ -9,6 +9,7 @@ import { Crowd, CLIP, FIT, randomLook, dogLook, clipRate, PALETTES } from '../li
 import { vehicleMesh, vehicleMaterial, setPaint, setMove } from '../life/figures/vehicles.js';
 import { MeshBuilder, makePath, hash, ribbon } from '../core/mesh-builder.js';
 import { drain, due, each } from '../core/jobs.js';   // [F30] built as a job (in frame slices on the ride)
+import { handOffLife } from './life-handoff.js';   // [F31] life carried across an area swap
 import { LAND } from './landscape.js';
 import { ROAD_WIDTH } from '../../pose.js';
 
@@ -687,7 +688,8 @@ export class CityLife {
     }
     for (const [model, m] of Object.entries(this.carMeshes)) {
       m.im = vehicleMesh(model, this.carMat, m.list.length, model === 'bus' ? 'Buses' : `Cars · ${model}`);
-      if (model !== 'bus' && model !== 'taxi') m.list.forEach((a) => setPaint(m.im, a.slot, CARS[Math.floor(this.rand() * CARS.length)]));
+      // [F31] the paint is the car's own: drawn wherever its instance is this frame (draw, _updateTraffic)
+      if (model !== 'bus' && model !== 'taxi') m.list.forEach((a) => { a.paint = CARS[Math.floor(this.rand() * CARS.length)]; setPaint(m.im, a.slot, a.paint); (m.painted ||= [])[a.slot] = a.paint; });
       this.city.group.add(m.im);
     }
   }
@@ -794,6 +796,7 @@ export class CityLife {
     for (const m of Object.values(this.carMeshes)) m.n = 0;
     const draw = (a) => {
       const m = this.carMeshes[a.model], i = m.n++;
+      if (a.paint && m.painted[i] !== a.paint) { setPaint(m.im, i, a.paint); m.painted[i] = a.paint; }   // [F31] (it was the slot's: a car's paint changed when one before it went)
       this.e.set(-(a.pitch || 0), a.yaw, 0); this.q.setFromEuler(this.e);
       m.im.setMatrixAt(i, this.m.compose(V(a.x, a.y + .02, a.z), this.q, this.one));
       if (a.lx != null) a.dist += Math.hypot(a.x - a.lx, a.z - a.lz);
@@ -1140,6 +1143,8 @@ export class CityLife {
   // -------------------------------------------------------------- per frame
   tick(cam, dt, time, rider) {
     dt = Math.min(dt, .1);
+    // [F31] the first frame after an area swap: take over the life of the area drawn before (life-handoff.js)
+    if (this._from) { const t0 = performance.now(); this.handOff = handOffLife(this._from, this, cam, rider, { poseOn }); this.handOff.ms = +(performance.now() - t0).toFixed(1); this._from = null; }
     this._clock = (this._clock || 0) + dt;
     this._rider = rider;   // (new agents appear out of the rider's sight)
     this._updatePeople(cam, dt, time, rider);
@@ -1152,6 +1157,8 @@ export class CityLife {
   }
 
   setQuality(key) { this.counts = COUNTS[key] || COUNTS.balanced; }
+  /** [F31] This life is drawn from the next tick on, after `from`'s (an area swap, PLAN 5.4): it takes over its agents then. */
+  takeOver(from) { this._from = from && from !== this ? from : null; }
 
   dispose() {
     this.crowd.dispose(); this.cyclistCrowd.dispose(); this.carMat.dispose();

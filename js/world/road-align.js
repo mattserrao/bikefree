@@ -339,6 +339,67 @@ export function ribbonSections(index, n, hw) {
   return out;
 }
 
+/**
+ * [F133] Where an apron's drawn road ends in the middle of a street (PLAN 5.4: an area's line runs ≥ 400 m along a
+ * neighbour's segment past a portal, then stops — the line's own end, or a ghost back to the portal — while the
+ * street carries on), its last `fadeM` metres fade into the street: the ribbon narrows to the street's own width
+ * (never wider than the road) and its surface fades out over the street drawn under it (pinned just below the
+ * road), so the street's own paint and width take over. An end where another pass of the line is drawn (a portal
+ * the line comes back to) is left alone. Pure: works on the dense road ribbon builders draw (denseRoad).
+ *   route, index  the (dense) route and index; n: the samples drawn (the outbound half)
+ *   widthAt(pts)  the street's width (m) at the points [{x, z}] along the end's last metres (or null: unknown)
+ * → null (no such end), or { alpha: Float32Array(n) (1 = the road, 0 = gone), half: Float32Array(n) (the road's
+ *   half width there), ends: [{atM, i, toward (+1: the road runs on toward larger metres), streetW, halfEnd}] }
+ */
+export function apronFades(route, index, n, { roadWidth = 7, fadeM = 50, widthAt = null, otherPassM = 9 } = {}) {
+  const aprons = route.scene?.city?.routeAprons;
+  if (!aprons?.length || n < 2) return null;
+  const dist = route.dist, ghost = ghostMask(route), last = dist[n - 1];
+  const at = (s) => { let lo = 0, hi = n - 1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (dist[m] <= s) lo = m; else hi = m - 1; } return lo; };
+  const ghostNear = (s) => { const i = at(Math.max(0, Math.min(last, s))); return !!(ghost && (ghost[i] || ghost[Math.min(n - 1, i + 1)])) || ghostOf(route, s); };
+  // runs of aprons that follow on from each other (a portal between two neighbours' segments: one run)
+  const runs = [];
+  for (const a of [...aprons].sort((p, q) => p.fromM - q.fromM)) {
+    const r = runs.at(-1);
+    if (r && a.fromM <= r.toM + 1) r.toM = Math.max(r.toM, a.toM); else runs.push({ fromM: a.fromM, toM: a.toM });
+  }
+  const ends = [];
+  for (const r of runs) {
+    for (const [x, toward] of [[r.fromM, 1], [r.toM, -1]]) {
+      if (r.toM - r.fromM < fadeM * 2) continue;
+      // the drawn road stops here: the line's own end, or a ghost just beyond it
+      const stops = x <= dist[0] + 1 || x >= last - 1 || ghostNear(x - toward * 3);
+      if (!stops) continue;
+      const i = at(Math.max(dist[0], Math.min(last, x)));
+      // another pass of the line drawn at this spot (a portal the line comes back to): not an end of the road
+      const px = index.xs[i], pz = index.zs[i];
+      let other = false;
+      for (let j = 0; j < n && !other; j++) {
+        if (Math.abs(dist[j] - x) < 80 || (ghost && ghost[j])) continue;
+        if (Math.hypot(index.xs[j] - px, index.zs[j] - pz) < otherPassM) other = true;
+      }
+      if (other) continue;
+      const pts = [0, .3, .6, .9].map((f) => { const k = at(Math.max(dist[0], Math.min(last, x + toward * fadeM * f))); return { x: index.xs[k], z: index.zs[k] }; });
+      const streetW = widthAt ? widthAt(pts) : null;
+      ends.push({ atM: x, i, toward, streetW, halfEnd: Math.min(roadWidth, streetW || roadWidth) / 2 });
+    }
+  }
+  if (!ends.length) return null;
+  const alpha = new Float32Array(n).fill(1), half = new Float32Array(n).fill(roadWidth / 2);
+  const ease = (t) => t * t * (3 - 2 * t);
+  for (const e of ends) {
+    for (let j = 0; j < n; j++) {
+      const u = (dist[j] - e.atM) * e.toward;   // metres in from the end, along the road
+      if (u < -1e-6 || u >= fadeM) continue;
+      const t = ease(Math.max(0, u / fadeM));
+      alpha[j] = Math.min(alpha[j], t);
+      half[j] = Math.min(half[j], e.halfEnd + (roadWidth / 2 - e.halfEnd) * t);
+    }
+  }
+  return { alpha, half, ends };
+}
+const ghostOf = (route, s) => (route.scene?.city?.routeGhosts || []).some((g) => s > g.fromM + .5 && s < g.toM - .5);
+
 // ---------------------------------------------------------------- street profiles
 export const STREET_DEFAULTS = {
   smoothM: 9,          // σ of the along-street smoothing (m)
