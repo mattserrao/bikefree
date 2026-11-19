@@ -164,6 +164,7 @@
     "toM": 18632,
     "rangeM": 220,
     "parkTrees": 16,
+    "clearRouteCrossings": true,
     "zones": [
       {
         "name": "North Shore: Carnegie Science Center",

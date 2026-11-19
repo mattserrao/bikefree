@@ -147,6 +147,7 @@
     "toM": 14960,
     "rangeM": 220,
     "parkTrees": 16,
+    "clearRouteCrossings": true,
     "zones": []
   },
   "mainStreets": [],

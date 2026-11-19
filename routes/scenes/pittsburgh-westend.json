@@ -146,6 +146,7 @@
     "toM": 4300,
     "rangeM": 220,
     "parkTrees": 16,
+    "clearRouteCrossings": true,
     "zones": [
       {
         "name": "West End: Grandview W hillside",

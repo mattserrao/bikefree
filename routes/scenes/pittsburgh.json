@@ -288,6 +288,7 @@
     "toM": 29100,
     "rangeM": 220,
     "parkTrees": 16,
+    "clearRouteCrossings": true,
     "zones": [
       {
         "name": "North Shore: General Robinson & Federal",
