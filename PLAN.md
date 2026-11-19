@@ -1343,6 +1343,16 @@ Decided with the user (19 Nov; project doc `claude/pittsburgh-phase5-plan.md`):
 - [ ] F244 Sound: check on the Air and a phone (autoplay: the first tap or key wakes it; Safari's `webkitAudioContext`), the level (one fixed master, no slider), and that it stays quiet in the background; only the subway makes sounds so far (traffic, the river, the city could use the mixer)
 - [ ] F245 The trains still run on a fixed timetable and don't react to the rider; a train could wait for the rider at the platform, or the chime could announce the next train's minutes
 
+### Pittsburgh phase 7: ride feedback *(test branch `pittsburgh-phase7-test`, from `main` after PR #39, 19 Nov 2026; one PR at the end)*
+Decided with the user (19 Nov, after riding phase 6):
+- [ ] 7.1 **Route previews in the full-screen Pittsburgh panel:** the selected route's preview pictures (6.8) below the cycling map when the panel is full screen (they were hidden behind it). Follow-ups F310–F314
+- [ ] 7.2 **Camera closer and higher:** the "Closest" camera (default) tuned so the rider's back wheel almost touches the bottom bar (the HUD strip): camera higher, rider lower on screen. Follow-ups F315–F319
+- [ ] 7.3 **Polka-dot clouds:** a dotted / speckled look on the clouds on every route — find the cause and fix it. Follow-ups F320–F324
+- [ ] 7.4 **No slowdowns into turns:** remove every junction corner speed cap, U-turns included (`CORNER`, `speedCap` in js/network.js). Follow-ups F325–F329
+- [ ] 7.5 **Lean into turns:** the rider and bike lean into turns — sharper for sharper turns and higher speed (roughly the physical lean angle atan(v²/(g·r)), eased in and out, capped); the camera stays level; the pacer and route cyclists lean too if cheap. Follow-ups F330–F334
+- [ ] 7.6 Final QC (as phase 6's trimmed set) and PR
+- Landmarks: an inventory and a brainstorm of missing landmarks near the routes (project doc `claude/pittsburgh-landmarks.md`); which to build is the user's call
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)
