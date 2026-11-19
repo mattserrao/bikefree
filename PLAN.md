@@ -1401,6 +1401,14 @@ Decided with the user (19 Nov, after riding phase 6):
 - [ ] 7.6 Final QC (as phase 6's trimmed set) and PR
 - Landmarks: an inventory and a brainstorm of missing landmarks near the routes (project doc `claude/pittsburgh-landmarks.md`); which to build is the user's call
 
+### Later test branch: street-by-street review and beautification (pre-launch) *(asked 19 Nov; not started)*
+The user: the final overview before a **public launch** of the game.
+- [ ] Street-by-street review of every Pittsburgh area and park route, in ride order
+- [ ] Better textures (roads, sidewalks, facades, roofs, ground), consistent across areas
+- [ ] Sidewalks, homes and street details better defined (kerbs, driveways, porches, steps, fences, street furniture)
+- [ ] No clipping anywhere: road, sidewalk and other graphics never through one another (includes the saved clipping round 2, 6.1b, and the deferred F336)
+- [ ] Also fold in: F270 (render all preview images once the scenes are final), F261 hero detail passes
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)
