@@ -92,7 +92,7 @@ export const SCENE_FIELDS = {
   bridges: { type: 'array', tool: T + 'structures/arch-bridges.js', keys: ['fromM', 'toM', 'name', 'creek', 'arch', 'style', 'side'], doc: 'bridges by distance; arch: open-spandrel concrete arch' },
   bridgeRanges: { type: 'array', keys: ['name', 'fromM', 'toM', 'depthM', 'lateralM'], doc: 'authored bridge decks' },
   bridgeColors: { type: 'object', keys: ['structure', 'rail'], doc: 'bridge colours (masonry for stone)' },
-  subway: { type: 'object', tool: T + 'structures/subway.js', keys: ['kit', 'note', 'tunnelLit'], doc: 'a light-rail tunnel with a lit cycle path beside the tracks, platforms, escalators (assisted conveyors) and headhouses, along the city data\'s routeUnderground / routeConveyors / subway' },
+  subway: { type: 'object', tool: T + 'structures/subway.js', keys: ['kit', 'note', 'tunnelLit', 'heads', 'platforms'], doc: 'a light-rail tunnel with a lit cycle path beside the tracks, platforms, escalators (assisted conveyors) and headhouses, along the city data\'s routeUnderground / routeConveyors / subway; or (heads, platforms: tools/bake_subway_heads.mjs) only the stations\' headhouses, for a neighbouring area that rides past them on the street (F123)' },
   mountainRoad: { type: 'object', tool: T + 'structures/mountain-road.js', keys: ['culverts', 'guardwalls', 'tunnels', 'waterfalls', 'buildings', 'parking', 'snowbanks'], doc: 'mountain road structures: masonry guardwalls, tunnels with galleries, arches, waterfalls, culverts, lodges, snowbanks' },
 
   // life

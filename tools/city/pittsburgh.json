@@ -101,6 +101,21 @@
  ],
  "dropStreets": [],
  "osmCache": "pittsburgh",
+ "dropBuildings": [
+  {
+   "way": 380036601,
+   "why": "Gateway Station: the subway kit draws its headhouse over the escalator (the core draws the headhouses too: F123)"
+  },
+  {
+   "way": 450174434,
+   "why": "North Side Station: the station is drawn by the subway kit (its entrance on Red Lot 5A) (the core draws the headhouses too: F123)"
+  }
+ ],
+ "subwayHeadsOf": {
+  "gpx": "routes/cities/pittsburgh-subway.gpx",
+  "data": "routes/scenes/pittsburgh-subway-city.json",
+  "why": "F123: the subway's headhouses are drawn here too (scene subway.heads, tools/bake_subway_heads.mjs): no street kit or map trees round them, as in the subway area"
+ },
  "slice": {
   "of": "pittsburgh-tour",
   "pieces": [

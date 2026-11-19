@@ -77,8 +77,8 @@
   },
   "routeTrees": [
     {
-      "fromM": 305,
-      "toM": 1170,
+      "fromM": 18260,
+      "toM": 19120,
       "spacingM": 11,
       "offsetM": 7.5,
       "sides": [
@@ -86,8 +86,8 @@
       ]
     },
     {
-      "fromM": 325,
-      "toM": 1170,
+      "fromM": 18280,
+      "toM": 19120,
       "spacingM": 16,
       "offsetM": 7,
       "sides": [
@@ -108,14 +108,28 @@
     "zones": [
       {
         "fromM": 0,
-        "toM": 225,
+        "toM": 430,
+        "surface": "worn",
+        "patches": 0.55,
+        "tone": 0.96
+      },
+      {
+        "fromM": 430,
+        "toM": 670,
+        "surface": "fresh",
+        "tone": 0.9,
+        "cracks": 0.1
+      },
+      {
+        "fromM": 17950,
+        "toM": 18170,
         "surface": "fresh",
         "tone": 0.88,
         "cracks": 0.12
       },
       {
-        "fromM": 235,
-        "toM": 405,
+        "fromM": 18190,
+        "toM": 18360,
         "surface": "worn"
       }
     ],
@@ -124,8 +138,8 @@
       "tone": 1.05,
       "zones": [
         {
-          "fromM": 415,
-          "toM": 1170,
+          "fromM": 18370,
+          "toM": 19120,
           "surface": "worn",
           "patches": 0.25,
           "tone": 1.04
@@ -161,16 +175,27 @@
   },
   "streetKit": {
     "fromM": 0,
-    "toM": 18632,
+    "toM": 21580,
     "rangeM": 220,
     "parkTrees": 16,
     "clearRouteCrossings": true,
     "zones": [
       {
+        "name": "North Shore: General Robinson & Federal",
+        "style": "masonry",
+        "fromM": 0,
+        "toM": 480,
+        "widthM": 60,
+        "parking": false,
+        "curbM": 5.8,
+        "sidewalkM": 3.6,
+        "trees": 18
+      },
+      {
         "name": "North Shore: Carnegie Science Center",
         "style": "industrial",
-        "fromM": 825,
-        "toM": 1170,
+        "fromM": 18780,
+        "toM": 19120,
         "widthM": 120,
         "parking": false,
         "curbM": 5.8,
@@ -614,7 +639,7 @@
   ],
   "signs": [],
   "preview": {
-    "positionM": 4370,
+    "positionM": 3260,
     "camera": "drone",
     "time": "golden"
   },
@@ -789,64 +814,82 @@
   },
   "qcAccept": [
     {
+      "check": "street-step",
+      "fromM": 2440,
+      "toM": 2460,
+      "why": "Federal St's two carriageways at Jacksonia St (FJ, F51): the route rides the west one; the east one and Lang Way meet at their own mapped heights 0.3 m apart (not the route)"
+    },
+    {
+      "check": "mesh-coarse",
+      "fromM": 2500,
+      "toM": 2530,
+      "why": "FJ (F51): the line's end off Jacksonia St (R>FJ) meets Federal St 5 m west of the pass straight up Federal St; the 6 m ground mesh can't follow the narrow strip between the two carves (reviewed in a snapshot)"
+    },
+    {
       "check": "heading-jitter",
-      "fromM": 4320,
-      "toM": 4360,
+      "fromM": 3210,
+      "toM": 3250,
       "why": "Fineview: Belleau St turns hard down Meadville St (a mapped right-angle corner on a 15 % street), ridden with the corner as drawn"
     },
     {
       "check": "lateral-jump",
-      "fromM": 4640,
-      "toM": 4680,
+      "fromM": 3530,
+      "toM": 3570,
       "why": "the Fineview Overlook: Meadville St, 40 m of Catoma St and Lanark St zigzag round the overlook's corner (real streets, ridden as mapped)"
     },
     {
       "check": "street-steep",
-      "fromM": 5210,
-      "toM": 5250,
+      "fromM": 4100,
+      "toM": 4140,
       "why": "Fineview's hillside: a short side street off Marsonia St whose mapped ends sit on the steep z14 ground (not the route; Fineview's streets are among the city's steepest)"
     },
     {
       "check": "route-off-ground",
-      "fromM": 5230,
-      "toM": 5270,
+      "fromM": 4120,
+      "toM": 4160,
       "why": "Marsonia St along the crest of Fineview's hill: the bare ground falls 8 m across the street within 45 m, so the road sits on its own cut and fill above the grid's sample"
     },
     {
       "check": "street-steep",
-      "fromM": 5400,
-      "toM": 5440,
+      "fromM": 4290,
+      "toM": 4330,
       "why": "Fineview's hillside: a side street off Lafayette Ave down the hill (not the route)"
     },
     {
       "check": "heading-jitter",
-      "fromM": 13030,
-      "toM": 13070,
+      "fromM": 11930,
+      "toM": 11970,
       "why": "Riverview Drive turns back onto the path to the Davis Avenue Bridge: the bridge path leaves the drive at a real switchback, ridden with the corner speed cap"
     },
     {
       "check": "heading-jitter",
-      "fromM": 13880,
-      "toM": 13920,
+      "fromM": 12780,
+      "toM": 12820,
       "why": "Davis Ave meets Brighton Rd at a sharp mapped corner (a right-angle turn down Brighton Rd)"
     },
     {
       "check": "heading-sharp",
-      "fromM": 13880,
-      "toM": 13920,
+      "fromM": 12780,
+      "toM": 12820,
       "why": "Davis Ave meets Brighton Rd at a sharp mapped corner (a right-angle turn down Brighton Rd)"
     },
     {
       "check": "heading-sharp",
-      "fromM": 23380,
-      "toM": 23430,
-      "why": "the Davis Ave / Brighton Rd corner (13.83 km) on the line's mirrored return"
+      "fromM": 30330,
+      "toM": 30390,
+      "why": "the Davis Ave / Brighton Rd corner (12.80 km) on the line's mirrored return"
     },
     {
       "check": "street-bank",
-      "fromM": 16690,
-      "toM": 16730,
+      "fromM": 15590,
+      "toM": 15630,
       "why": "a side street off Brighton Rd in Marshall-Shadeland that drops below the road in a cut (its mapped grade; not the route)"
+    },
+    {
+      "check": "heading-jitter",
+      "fromM": 10080,
+      "toM": 10100,
+      "why": "Riverview Ave turns west below the Allegheny Observatory (a mapped corner): re-ordering the line for the Clemente Bridge entry (F51) moved its 10 m chords ~1 m and the kink just over the limit (reviewed)"
     }
   ],
   "origin": {
@@ -857,13 +900,13 @@
     "fineCells": 32,
     "fineRanges": [
       {
-        "fromM": 12170,
-        "toM": 12470,
+        "fromM": 11070,
+        "toM": 11370,
         "why": "Riverview Avenue cut into Observatory Hill: the bank above the road is steeper than the 6 m ground mesh can follow"
       },
       {
-        "fromM": 12970,
-        "toM": 13170,
+        "fromM": 11870,
+        "toM": 12070,
         "why": "Riverview Drive down to the Davis Avenue Bridge: the path turns back on the steep hillside"
       }
     ]

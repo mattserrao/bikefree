@@ -36,7 +36,7 @@
    ],
    "aprons": [
     {
-     "edge": "e23",
+     "edge": "e24",
      "dir": 1,
      "s": [
       0,
@@ -45,7 +45,7 @@
      "u0": 2730
     },
     {
-     "edge": "e25",
+     "edge": "e26",
      "dir": 1,
      "s": [
       7470,
@@ -54,7 +54,7 @@
      "u0": 0
     },
     {
-     "edge": "e24",
+     "edge": "e25",
      "dir": 1,
      "s": [
       16790,
@@ -63,7 +63,7 @@
      "u0": 0
     },
     {
-     "edge": "e18",
+     "edge": "e19",
      "dir": 1,
      "s": [
       20210,
@@ -198,7 +198,7 @@
    ],
    "aprons": [
     {
-     "edge": "e22",
+     "edge": "e23",
      "dir": 1,
      "s": [
       0,
@@ -207,7 +207,7 @@
      "u0": 1270
     },
     {
-     "edge": "e23",
+     "edge": "e24",
      "dir": 1,
      "s": [
       400,
@@ -216,7 +216,7 @@
      "u0": 0
     },
     {
-     "edge": "e25",
+     "edge": "e26",
      "dir": -1,
      "s": [
       9500,
@@ -225,7 +225,7 @@
      "u0": 3430
     },
     {
-     "edge": "e26",
+     "edge": "e27",
      "dir": 1,
      "s": [
       10300,
@@ -277,28 +277,54 @@
    "name": "The North Side",
    "catalogId": "pittsburgh-northside",
    "base": "routes/cities/pittsburgh-northside.gpx",
-   "legM": 18650,
+   "legM": 21570,
    "ghosts": [
     {
-     "fromM": 1170,
-     "toM": 1631
+     "fromM": 670,
+     "toM": 1070
     },
     {
-     "fromM": 5796,
-     "toM": 6371
+     "fromM": 4687,
+     "toM": 5262
     },
     {
-     "fromM": 7809,
-     "toM": 8478
+     "fromM": 6699,
+     "toM": 7364
+    },
+    {
+     "fromM": 17550,
+     "toM": 17950
+    },
+    {
+     "fromM": 19120,
+     "toM": 19580
     }
    ],
    "aprons": [
     {
-     "edge": "e9",
+     "edge": "e13",
      "dir": 1,
      "s": [
       0,
-      230
+      270
+     ],
+     "u0": 0
+    },
+    {
+     "edge": "e14",
+     "dir": 1,
+     "s": [
+      270,
+      670
+     ],
+     "u0": 0
+    },
+    {
+     "edge": "e9",
+     "dir": 1,
+     "s": [
+      17950,
+      18180
      ],
      "u0": 420
     },
@@ -306,8 +332,8 @@
      "edge": "e9",
      "dir": 1,
      "s": [
-      230,
-      400
+      18180,
+      18350
      ],
      "u0": 650
     },
@@ -315,8 +341,8 @@
      "edge": "e10",
      "dir": 1,
      "s": [
-      400,
-      710
+      18350,
+      18660
      ],
      "u0": 0
     },
@@ -324,8 +350,8 @@
      "edge": "e11",
      "dir": 1,
      "s": [
-      710,
-      1170
+      18660,
+      19120
      ],
      "u0": 0
     }
@@ -357,7 +383,7 @@
    ],
    "aprons": [
     {
-     "edge": "e21",
+     "edge": "e22",
      "dir": 1,
      "s": [
       0,
@@ -366,7 +392,7 @@
      "u0": 2280
     },
     {
-     "edge": "e22",
+     "edge": "e23",
      "dir": 1,
      "s": [
       1000,
@@ -375,7 +401,7 @@
      "u0": 0
     },
     {
-     "edge": "e27",
+     "edge": "e28",
      "dir": -1,
      "s": [
       25930,
@@ -384,7 +410,7 @@
      "u0": 1190
     },
     {
-     "edge": "e28",
+     "edge": "e29",
      "dir": 1,
      "s": [
       26730,
@@ -428,7 +454,7 @@
    ],
    "aprons": [
     {
-     "edge": "e14",
+     "edge": "e15",
      "dir": 1,
      "s": [
       0,
@@ -437,7 +463,7 @@
      "u0": 360
     },
     {
-     "edge": "e15",
+     "edge": "e16",
      "dir": 1,
      "s": [
       400,
@@ -464,7 +490,7 @@
      "u0": 2490
     },
     {
-     "edge": "e17",
+     "edge": "e18",
      "dir": 1,
      "s": [
       23250,
@@ -473,7 +499,7 @@
      "u0": 0
     },
     {
-     "edge": "e16",
+     "edge": "e17",
      "dir": -1,
      "s": [
       23710,
@@ -514,6 +540,15 @@
      "dir": 1,
      "s": [
       270,
+      540
+     ],
+     "u0": 0
+    },
+    {
+     "edge": "e14",
+     "dir": 1,
+     "s": [
+      540,
       670
      ],
      "u0": 0
@@ -723,13 +758,13 @@
    "name": "West End Bridge north end",
    "lat": 40.450594,
    "lon": -80.023816,
-   "ele": 227.37,
+   "ele": 227.32,
    "passes": {
     "core": [
      18420
     ],
     "northside": [
-     18650
+     17550
     ]
    },
    "portal": true
@@ -739,13 +774,13 @@
    "name": "Ridge Ave by the Rivers Casino",
    "lat": 40.449081,
    "lon": -80.021258,
-   "ele": 225.65,
+   "ele": 225.64,
    "passes": {
     "core": [
      18730
     ],
     "northside": [
-     1630
+     19580
     ]
    },
    "portal": true
@@ -781,6 +816,22 @@
     ],
     "subway": [
      270,
+     1070
+    ]
+   },
+   "portal": true
+  },
+  {
+   "id": "CB",
+   "name": "Clemente Bridge north end: Federal St & General Robinson",
+   "lat": 40.448224,
+   "lon": -80.004424,
+   "ele": 223.4,
+   "passes": {
+    "core": [
+     21560
+    ],
+    "northside": [
      1070
     ]
    },
@@ -974,27 +1025,40 @@
   {
    "id": "Y",
    "name": "Federal St & Perrysville Ave",
-   "lat": 40.461238,
-   "lon": -80.008716,
-   "ele": 285.22,
+   "lat": 40.461211,
+   "lon": -80.008713,
+   "ele": 285.08,
    "passes": {
     "northside": [
-     3970,
-     7810
+     2860,
+     6700
     ]
    }
   },
   {
    "id": "Z",
    "name": "Perrysville Ave & Federal St Extension",
-   "lat": 40.467066,
-   "lon": -80.010007,
+   "lat": 40.467051,
+   "lon": -80.010012,
    "ele": 341,
    "passes": {
     "northside": [
-     5800,
-     6370,
-     8480
+     4690,
+     5270,
+     7370
+    ]
+   }
+  },
+  {
+   "id": "FJ",
+   "name": "Federal St & Jacksonia St, Central Northside",
+   "lat": 40.458256,
+   "lon": -80.007584,
+   "ele": 253.26,
+   "passes": {
+    "northside": [
+     2510,
+     21570
     ]
    }
   },
@@ -1333,27 +1397,48 @@
   },
   {
    "id": "e13",
-   "key": "NS>B",
+   "key": "NS>CB",
    "area": "core",
    "from": "NS",
-   "to": "B",
+   "to": "CB",
    "s": [
     21290,
-    22020
+    21560
    ],
-   "lengthM": 730,
+   "lengthM": 270,
    "climbM": [
     1,
-    1
+    0
    ],
-   "name": "Clemente Bridge",
+   "name": "General Robinson Street",
    "toward": [
-    "General Robinson St and the Clemente Bridge to Fort Duquesne Blvd",
-    "the Clemente Bridge to General Robinson St"
+    "General Robinson St past PNC Park to Federal St",
+    "General Robinson St past PNC Park to Mazeroski Way"
    ]
   },
   {
    "id": "e14",
+   "key": "CB>B",
+   "area": "core",
+   "from": "CB",
+   "to": "B",
+   "s": [
+    21560,
+    22020
+   ],
+   "lengthM": 460,
+   "climbM": [
+    0,
+    1
+   ],
+   "name": "Clemente Bridge",
+   "toward": [
+    "the Clemente Bridge to Fort Duquesne Blvd",
+    "the Clemente Bridge to General Robinson St"
+   ]
+  },
+  {
+   "id": "e15",
    "key": "E>F",
    "area": "core",
    "from": "E",
@@ -1374,7 +1459,7 @@
    ]
   },
   {
-   "id": "e15",
+   "id": "e16",
    "key": "F>G",
    "area": "core",
    "from": "F",
@@ -1395,7 +1480,7 @@
    ]
   },
   {
-   "id": "e16",
+   "id": "e17",
    "key": "G>Q",
    "area": "core",
    "from": "G",
@@ -1416,7 +1501,7 @@
    ]
   },
   {
-   "id": "e17",
+   "id": "e18",
    "key": "Q>H",
    "area": "core",
    "from": "Q",
@@ -1437,7 +1522,7 @@
    ]
   },
   {
-   "id": "e18",
+   "id": "e19",
    "key": "A>P",
    "area": "allegheny",
    "from": "A",
@@ -1458,7 +1543,7 @@
    ]
   },
   {
-   "id": "e19",
+   "id": "e20",
    "key": "P>N",
    "area": "allegheny",
    "from": "P",
@@ -1479,7 +1564,7 @@
    ]
   },
   {
-   "id": "e20",
+   "id": "e21",
    "key": "N>P",
    "area": "allegheny",
    "from": "N",
@@ -1500,7 +1585,7 @@
    ]
   },
   {
-   "id": "e21",
+   "id": "e22",
    "key": "N>LB",
    "area": "allegheny",
    "from": "N",
@@ -1521,7 +1606,7 @@
    ]
   },
   {
-   "id": "e22",
+   "id": "e23",
    "key": "LB>M",
    "area": "allegheny",
    "from": "LB",
@@ -1542,7 +1627,7 @@
    ]
   },
   {
-   "id": "e23",
+   "id": "e24",
    "key": "M>B",
    "area": "allegheny",
    "from": "M",
@@ -1563,7 +1648,7 @@
    ]
   },
   {
-   "id": "e24",
+   "id": "e25",
    "key": "D>O",
    "area": "westend",
    "from": "D",
@@ -1584,7 +1669,7 @@
    ]
   },
   {
-   "id": "e25",
+   "id": "e26",
    "key": "I>L",
    "area": "oakland",
    "from": "I",
@@ -1605,7 +1690,7 @@
    ]
   },
   {
-   "id": "e26",
+   "id": "e27",
    "key": "L>J",
    "area": "oakland",
    "from": "L",
@@ -1626,7 +1711,7 @@
    ]
   },
   {
-   "id": "e27",
+   "id": "e28",
    "key": "J>K",
    "area": "oakland",
    "from": "J",
@@ -1647,7 +1732,7 @@
    ]
   },
   {
-   "id": "e28",
+   "id": "e29",
    "key": "K>J",
    "area": "oakland",
    "from": "K",
@@ -1668,7 +1753,7 @@
    ]
   },
   {
-   "id": "e29",
+   "id": "e30",
    "key": "M>X",
    "area": "polish",
    "from": "M",
@@ -1689,7 +1774,7 @@
    ]
   },
   {
-   "id": "e30",
+   "id": "e31",
    "key": "X>T",
    "area": "polish",
    "from": "X",
@@ -1710,7 +1795,7 @@
    ]
   },
   {
-   "id": "e31",
+   "id": "e32",
    "key": "T>X",
    "area": "polish",
    "from": "T",
@@ -1731,7 +1816,7 @@
    ]
   },
   {
-   "id": "e32",
+   "id": "e33",
    "key": "T>L",
    "area": "polish",
    "from": "T",
@@ -1752,7 +1837,7 @@
    ]
   },
   {
-   "id": "e33",
+   "id": "e34",
    "key": "S>W",
    "area": "homestead",
    "from": "S",
@@ -1773,7 +1858,7 @@
    ]
   },
   {
-   "id": "e34",
+   "id": "e35",
    "key": "W>V",
    "area": "homestead",
    "from": "W",
@@ -1794,7 +1879,7 @@
    ]
   },
   {
-   "id": "e35",
+   "id": "e36",
    "key": "V>U",
    "area": "homestead",
    "from": "V",
@@ -1815,7 +1900,7 @@
    ]
   },
   {
-   "id": "e36",
+   "id": "e37",
    "key": "U>V",
    "area": "homestead",
    "from": "U",
@@ -1836,7 +1921,7 @@
    ]
   },
   {
-   "id": "e37",
+   "id": "e38",
    "key": "W>U",
    "area": "homestead",
    "from": "W",
@@ -1857,35 +1942,56 @@
    ]
   },
   {
-   "id": "e38",
-   "key": "R>Y",
+   "id": "e39",
+   "key": "CB>FJ",
    "area": "northside",
-   "from": "R",
-   "to": "Y",
+   "from": "CB",
+   "to": "FJ",
    "s": [
-    1630,
-    3970
+    1070,
+    2510
    ],
-   "lengthM": 2340,
+   "lengthM": 1440,
    "climbM": [
-    70,
-    11
+    32,
+    2
    ],
-   "name": "Allegheny Commons & Mexican War Streets",
+   "name": "Federal Street & Allegheny Center",
    "toward": [
-    "Ridge Avenue past West Park, Arch Street by the National Aviary, Randyland and up Federal Street",
-    "down Federal Street, Randyland, Arch Street by the National Aviary and Ridge Avenue"
+    "up Federal Street under the expressway, round Allegheny Center by the Commons and on up Federal Street to Jacksonia Street",
+    "down Federal Street, round Allegheny Center by the Commons and on down to PNC Park and the Clemente Bridge"
    ]
   },
   {
-   "id": "e39",
+   "id": "e40",
+   "key": "FJ>Y",
+   "area": "northside",
+   "from": "FJ",
+   "to": "Y",
+   "s": [
+    2510,
+    2860
+   ],
+   "lengthM": 350,
+   "climbM": [
+    31,
+    0
+   ],
+   "name": "Federal Street to Perrysville Avenue",
+   "toward": [
+    "up Federal Street to Perrysville Avenue",
+    "down Federal Street to Jacksonia Street"
+   ]
+  },
+  {
+   "id": "e41",
    "key": "Y>Z",
    "area": "northside",
    "from": "Y",
    "to": "Z",
    "s": [
-    3970,
-    5800
+    2860,
+    4690
    ],
    "lengthM": 1830,
    "climbM": [
@@ -1899,16 +2005,16 @@
    ]
   },
   {
-   "id": "e40",
+   "id": "e42",
    "key": "Z>Y",
    "area": "northside",
    "from": "Z",
    "to": "Y",
    "s": [
-    6370,
-    7810
+    5270,
+    6700
    ],
-   "lengthM": 1440,
+   "lengthM": 1430,
    "climbM": [
     1,
     56
@@ -1920,18 +2026,18 @@
    ]
   },
   {
-   "id": "e41",
+   "id": "e43",
    "key": "Z>C",
    "area": "northside",
    "from": "Z",
    "to": "C",
    "s": [
-    8480,
-    18650
+    7370,
+    17550
    ],
-   "lengthM": 10170,
+   "lengthM": 10180,
    "climbM": [
-    91,
+    92,
     205
    ],
    "name": "Riverview Park & Brighton Road",
@@ -1941,7 +2047,28 @@
    ]
   },
   {
-   "id": "e42",
+   "id": "e44",
+   "key": "R>FJ",
+   "area": "northside",
+   "from": "R",
+   "to": "FJ",
+   "s": [
+    19580,
+    21570
+   ],
+   "lengthM": 1990,
+   "climbM": [
+    38,
+    11
+   ],
+   "name": "Allegheny Commons & Mexican War Streets",
+   "toward": [
+    "Ridge Avenue past West Park, Arch Street by the National Aviary, Randyland and along Jacksonia Street to Federal Street",
+    "Jacksonia Street, Randyland, Arch Street by the National Aviary and Ridge Avenue"
+   ]
+  },
+  {
+   "id": "e45",
    "key": "LB>HE",
    "area": "eastend",
    "from": "LB",
@@ -1962,7 +2089,7 @@
    ]
   },
   {
-   "id": "e43",
+   "id": "e46",
    "key": "HP>HE",
    "area": "eastend",
    "from": "HP",
@@ -1983,7 +2110,7 @@
    ]
   },
   {
-   "id": "e44",
+   "id": "e47",
    "key": "HE>HP",
    "area": "eastend",
    "from": "HE",
@@ -2004,7 +2131,7 @@
    ]
   },
   {
-   "id": "e45",
+   "id": "e48",
    "key": "HP>EL",
    "area": "eastend",
    "from": "HP",
@@ -2025,7 +2152,7 @@
    ]
   },
   {
-   "id": "e46",
+   "id": "e49",
    "key": "EL>SQ",
    "area": "eastend",
    "from": "EL",
@@ -2046,7 +2173,7 @@
    ]
   },
   {
-   "id": "e47",
+   "id": "e50",
    "key": "SQ>EL",
    "area": "eastend",
    "from": "SQ",
@@ -2067,7 +2194,7 @@
    ]
   },
   {
-   "id": "e48",
+   "id": "e51",
    "key": "SQ>K",
    "area": "eastend",
    "from": "SQ",
@@ -2088,7 +2215,7 @@
    ]
   },
   {
-   "id": "e49",
+   "id": "e52",
    "key": "F>SY",
    "area": "slopes",
    "from": "F",
@@ -2109,7 +2236,7 @@
    ]
   },
   {
-   "id": "e50",
+   "id": "e53",
    "key": "SY>AL",
    "area": "slopes",
    "from": "SY",
@@ -2130,7 +2257,7 @@
    ]
   },
   {
-   "id": "e51",
+   "id": "e54",
    "key": "AL>SY",
    "area": "slopes",
    "from": "AL",
@@ -2151,7 +2278,7 @@
    ]
   },
   {
-   "id": "e52",
+   "id": "e55",
    "key": "GV>SY",
    "area": "slopes",
    "from": "GV",
@@ -2172,7 +2299,7 @@
    ]
   },
   {
-   "id": "e53",
+   "id": "e56",
    "key": "AL>Q",
    "area": "slopes",
    "from": "AL",
@@ -2193,7 +2320,7 @@
    ]
   },
   {
-   "id": "e54",
+   "id": "e57",
    "key": "NS>GW",
    "area": "subway",
    "from": "NS",
@@ -2233,9 +2360,9 @@
    "id": "pgh-homestead-loop",
    "name": "Homestead Loop",
    "path": [
+    "e38+",
     "e37+",
-    "e36+",
-    "e34-"
+    "e35-"
    ],
    "tags": [
     "flat",
@@ -2250,9 +2377,9 @@
    "id": "pgh-waterfront-loop",
    "name": "Waterfront Loop",
    "path": [
-    "e37+",
-    "e35-",
-    "e34-"
+    "e38+",
+    "e36-",
+    "e35-"
    ],
    "tags": [
     "flat",
@@ -2267,14 +2394,14 @@
    "id": "pgh-east-end",
    "name": "East End Loop",
    "path": [
+    "e51-",
+    "e49-",
     "e48-",
-    "e46-",
-    "e45-",
-    "e43+",
-    "e44+",
-    "e45+",
-    "e47-",
-    "e48+"
+    "e46+",
+    "e47+",
+    "e48+",
+    "e50-",
+    "e51+"
    ],
    "tags": [
     "varied",
@@ -2288,10 +2415,10 @@
    "id": "pgh-squirrel-hill",
    "name": "Squirrel Hill & Bakery Square Loop",
    "path": [
-    "e48-",
-    "e46-",
-    "e47-",
-    "e48+"
+    "e51-",
+    "e49-",
+    "e50-",
+    "e51+"
    ],
    "tags": [
     "short",
@@ -2306,8 +2433,8 @@
    "id": "pgh-highland-park",
    "name": "Highland Park Reservoir Loop",
    "path": [
-    "e43+",
-    "e44+"
+    "e46+",
+    "e47+"
    ],
    "tags": [
     "short",
@@ -2322,10 +2449,10 @@
    "id": "pgh-stanton-heights",
    "name": "Stanton Heights & Highland Park Climb",
    "path": [
-    "e42+",
-    "e44+",
-    "e43+",
-    "e42-"
+    "e45+",
+    "e47+",
+    "e46+",
+    "e45-"
    ],
    "tags": [
     "hilly",
@@ -2341,12 +2468,13 @@
    "path": [
     "e12+",
     "e13+",
+    "e14+",
     "e1+",
     "e2+",
-    "e14+",
     "e15+",
     "e16+",
     "e17+",
+    "e18+",
     "e6+",
     "e7+",
     "e8+",
@@ -2371,12 +2499,13 @@
     "e8-",
     "e7-",
     "e6-",
+    "e18-",
     "e17-",
     "e16-",
     "e15-",
-    "e14-",
     "e2-",
     "e1-",
+    "e14-",
     "e13-",
     "e12-"
    ],
@@ -2393,10 +2522,11 @@
    "path": [
     "e12+",
     "e13+",
+    "e14+",
     "e1+",
     "e2+",
-    "e14+",
     "e15+",
+    "e16+",
     "e7+",
     "e8+",
     "e9+",
@@ -2420,10 +2550,11 @@
     "e9-",
     "e8-",
     "e7-",
+    "e16-",
     "e15-",
-    "e14-",
     "e2-",
     "e1-",
+    "e14-",
     "e13-",
     "e12-"
    ],
@@ -2439,8 +2570,8 @@
    "id": "pgh-south-side",
    "name": "South Side Flat Loop",
    "path": [
-    "e16+",
     "e17+",
+    "e18+",
     "e6+"
    ],
    "tags": [
@@ -2457,17 +2588,18 @@
    "path": [
     "e12+",
     "e13+",
+    "e14+",
     "e1+",
     "e2+",
-    "e14+",
     "e15+",
     "e16+",
     "e17+",
+    "e18+",
     "e6+",
     "e7+",
     "e8+",
-    "e24+",
-    "e24-",
+    "e25+",
+    "e25-",
     "e9+",
     "e10+",
     "e11+"
@@ -2488,8 +2620,8 @@
     "e4+",
     "e5+",
     "e6+",
-    "e15-",
-    "e14-"
+    "e16-",
+    "e15-"
    ],
    "tags": [
     "flat",
@@ -2506,16 +2638,18 @@
    "path": [
     "e12+",
     "e13+",
+    "e14+",
     "e1+",
     "e2+",
     "e3+",
     "e4+",
     "e5+",
     "e6+",
+    "e16-",
     "e15-",
-    "e14-",
     "e2-",
     "e1-",
+    "e14-",
     "e13-",
     "e12-"
    ],
@@ -2533,6 +2667,7 @@
    "path": [
     "e12+",
     "e13+",
+    "e14+",
     "e1+",
     "e2+",
     "e3+",
@@ -2581,12 +2716,13 @@
    "path": [
     "e12+",
     "e13+",
+    "e14+",
     "e1+",
     "e2+",
-    "e14+",
     "e15+",
     "e16+",
     "e17+",
+    "e18+",
     "e6+",
     "e7+",
     "e8+",
@@ -2599,12 +2735,13 @@
     "e8-",
     "e7-",
     "e6-",
+    "e18-",
     "e17-",
     "e16-",
     "e15-",
-    "e14-",
     "e2-",
     "e1-",
+    "e14-",
     "e13-",
     "e12-"
    ],
@@ -2620,8 +2757,8 @@
    "id": "pgh-schenley",
    "name": "Schenley Park Loop",
    "path": [
-    "e27+",
-    "e28+"
+    "e28+",
+    "e29+"
    ],
    "tags": [
     "short",
@@ -2637,12 +2774,12 @@
    "name": "Jail Trail, Oakland & Schenley",
    "path": [
     "e3+",
-    "e25+",
     "e26+",
     "e27+",
     "e28+",
+    "e29+",
+    "e27-",
     "e26-",
-    "e25-",
     "e3-"
    ],
    "tags": [
@@ -2659,22 +2796,24 @@
    "path": [
     "e12+",
     "e13+",
+    "e14+",
     "e1+",
     "e2+",
     "e3+",
-    "e25+",
     "e26+",
     "e27+",
     "e28+",
+    "e29+",
+    "e27-",
     "e26-",
-    "e25-",
     "e4+",
     "e5+",
     "e6+",
+    "e16-",
     "e15-",
-    "e14-",
     "e2-",
     "e1-",
+    "e14-",
     "e13-",
     "e12-"
    ],
@@ -2691,11 +2830,12 @@
    "id": "pgh-allegheny",
    "name": "Allegheny Loop",
    "path": [
-    "e18+",
     "e19+",
-    "e21+",
+    "e20+",
     "e22+",
     "e23+",
+    "e24+",
+    "e14-",
     "e13-",
     "e12-"
    ],
@@ -2713,11 +2853,12 @@
    "path": [
     "e12+",
     "e13+",
+    "e14+",
+    "e24-",
     "e23-",
     "e22-",
-    "e21-",
-    "e19-",
-    "e18-"
+    "e20-",
+    "e19-"
    ],
    "tags": [
     "flat",
@@ -2731,21 +2872,22 @@
    "id": "pgh-allegheny-jail",
    "name": "Allegheny & Jail Trail Loop",
    "path": [
-    "e18+",
     "e19+",
-    "e21+",
+    "e20+",
     "e22+",
     "e23+",
+    "e24+",
     "e1+",
     "e2+",
     "e3+",
     "e4+",
     "e5+",
     "e6+",
+    "e16-",
     "e15-",
-    "e14-",
     "e2-",
     "e1-",
+    "e14-",
     "e13-",
     "e12-"
    ],
@@ -2762,8 +2904,8 @@
    "id": "pgh-troy-hill",
    "name": "Troy Hill Climb Loop",
    "path": [
-    "e19+",
-    "e20+"
+    "e20+",
+    "e21+"
    ],
    "tags": [
     "short",
@@ -2778,10 +2920,10 @@
    "id": "pgh-troy-hill-steps",
    "name": "Water Steps & Troy Hill",
    "path": [
-    "e18+",
     "e19+",
     "e20+",
-    "e18-"
+    "e21+",
+    "e19-"
    ],
    "tags": [
     "hilly",
@@ -2795,13 +2937,14 @@
    "id": "pgh-allegheny-troy",
    "name": "Allegheny Loop + Troy Hill",
    "path": [
-    "e18+",
     "e19+",
     "e20+",
-    "e19+",
     "e21+",
+    "e20+",
     "e22+",
     "e23+",
+    "e24+",
+    "e14-",
     "e13-",
     "e12-"
    ],
@@ -2818,8 +2961,8 @@
    "id": "pgh-polish-hill",
    "name": "Polish Hill Climb Loop",
    "path": [
-    "e30+",
-    "e31+"
+    "e31+",
+    "e32+"
    ],
    "tags": [
     "short",
@@ -2834,14 +2977,14 @@
    "id": "pgh-polish-crosstown",
    "name": "Polish Hill, Bloomfield & Oakland Loop",
    "path": [
-    "e29+",
     "e30+",
-    "e32+",
-    "e25-",
+    "e31+",
+    "e33+",
+    "e26-",
     "e3-",
     "e2-",
     "e1-",
-    "e23-"
+    "e24-"
    ],
    "tags": [
     "varied",
@@ -2855,17 +2998,18 @@
    "id": "pgh-polish-rivers",
    "name": "Allegheny, Polish Hill & Oakland Loop",
    "path": [
-    "e18+",
     "e19+",
-    "e21+",
+    "e20+",
     "e22+",
-    "e29+",
+    "e23+",
     "e30+",
-    "e32+",
-    "e25-",
+    "e31+",
+    "e33+",
+    "e26-",
     "e3-",
     "e2-",
     "e1-",
+    "e14-",
     "e13-",
     "e12-"
    ],
@@ -2883,11 +3027,11 @@
    "name": "Great Allegheny Passage to Homestead",
    "path": [
     "e5-",
-    "e33+",
+    "e34+",
+    "e38+",
     "e37+",
-    "e36+",
+    "e35-",
     "e34-",
-    "e33-",
     "e5+"
    ],
    "tags": [
@@ -2906,15 +3050,15 @@
     "e2+",
     "e3+",
     "e4+",
-    "e33+",
+    "e34+",
+    "e38+",
     "e37+",
-    "e36+",
+    "e35-",
     "e34-",
-    "e33-",
     "e5+",
     "e6+",
+    "e16-",
     "e15-",
-    "e14-",
     "e2-",
     "e1-"
    ],
@@ -2931,10 +3075,12 @@
    "id": "pgh-northside-hills",
    "name": "North Side Hills Loop",
    "path": [
-    "e11-",
-    "e38+",
+    "e12+",
+    "e13+",
     "e39+",
+    "e40+",
     "e41+",
+    "e43+",
     "e10+",
     "e11+"
    ],
@@ -2942,9 +3088,9 @@
     "hilly",
     "new"
    ],
-   "note": "From the Water Steps: the National Aviary, Randyland, the Fineview climb and overlook, Riverview Park and the Allegheny Observatory, the Davis Avenue Bridge and down Brighton Road",
-   "lengthM": 17510,
-   "climbM": 272
+   "note": "From the Water Steps: past PNC Park, up Federal Street round Allegheny Center, the Fineview climb and overlook, Riverview Park and the Allegheny Observatory, the Davis Avenue Bridge, down Brighton Road and home along the river",
+   "lengthM": 16080,
+   "climbM": 260
   },
   {
    "id": "pgh-northside-hills-rev",
@@ -2952,28 +3098,56 @@
    "path": [
     "e11-",
     "e10-",
+    "e43-",
     "e41-",
+    "e40-",
     "e39-",
-    "e38-",
-    "e11+"
+    "e13-",
+    "e12-"
    ],
    "tags": [
     "hilly",
     "new"
    ],
-   "note": "Up Brighton Road to Riverview Park and the Observatory first, then down through Fineview past the overlook, Randyland and the Aviary",
-   "lengthM": 17510,
-   "climbM": 272
+   "note": "Along the river and up Brighton Road to Riverview Park and the Observatory first, then down through Fineview past the overlook and down Federal Street to PNC Park",
+   "lengthM": 16080,
+   "climbM": 260
+  },
+  {
+   "id": "pgh-northside-clemente",
+   "name": "North Side Hills Loop · from the Clemente Bridge",
+   "path": [
+    "e14-",
+    "e39+",
+    "e40+",
+    "e41+",
+    "e43+",
+    "e10+",
+    "e11+",
+    "e12+",
+    "e13+",
+    "e14+"
+   ],
+   "tags": [
+    "hilly",
+    "new"
+   ],
+   "note": "From downtown over the Clemente Bridge straight up Federal Street, the Fineview climb, Riverview Park and the Observatory, down Brighton Road, the river past the Science Center and PNC Park, and back over the bridge",
+   "lengthM": 17000,
+   "climbM": 261
   },
   {
    "id": "pgh-fineview",
    "name": "Fineview Climb Loop",
    "path": [
-    "e11-",
-    "e38+",
+    "e12+",
+    "e13+",
     "e39+",
     "e40+",
-    "e38-",
+    "e41+",
+    "e42+",
+    "e40-",
+    "e44-",
     "e11+"
    ],
    "tags": [
@@ -2981,9 +3155,9 @@
     "hilly",
     "new"
    ],
-   "note": "From the Water Steps past the Aviary and Randyland, up Belleau Street to the Fineview Overlook, down Perrysville Avenue's bends and back",
-   "lengthM": 10810,
-   "climbM": 191
+   "note": "From the Water Steps up Federal Street, up Belleau Street to the Fineview Overlook, down Perrysville Avenue's bends, Randyland and the Aviary, home along the river",
+   "lengthM": 9360,
+   "climbM": 178
   },
   {
    "id": "pgh-three-rivers-northside",
@@ -2991,19 +3165,21 @@
    "path": [
     "e12+",
     "e13+",
+    "e14+",
     "e1+",
     "e2+",
-    "e14+",
     "e15+",
     "e16+",
     "e17+",
+    "e18+",
     "e6+",
     "e7+",
     "e8+",
     "e9+",
+    "e43-",
     "e41-",
-    "e39-",
-    "e38-",
+    "e40-",
+    "e44-",
     "e11+"
    ],
    "tags": [
@@ -3012,27 +3188,28 @@
     "new"
    ],
    "note": "The Three Rivers Loop with McArdle and Grandview, over the West End Bridge, up Brighton Road to Riverview Park, down through Fineview, Randyland and the Aviary to the Water Steps",
-   "lengthM": 32350,
+   "lengthM": 32360,
    "climbM": 476
   },
   {
    "id": "pgh-allegheny-east-end",
    "name": "Allegheny, East End & Oakland Loop",
    "path": [
-    "e18+",
     "e19+",
-    "e21+",
-    "e42+",
-    "e43-",
+    "e20+",
+    "e22+",
     "e45+",
-    "e47-",
+    "e46-",
     "e48+",
-    "e28+",
+    "e50-",
+    "e51+",
+    "e29+",
+    "e27-",
     "e26-",
-    "e25-",
     "e3-",
     "e2-",
     "e1-",
+    "e14-",
     "e13-",
     "e12-"
    ],
@@ -3049,10 +3226,10 @@
    "id": "pgh-sycamore",
    "name": "Sycamore Street & Grandview",
    "path": [
-    "e49+",
-    "e52-",
+    "e52+",
+    "e55-",
     "e7-",
-    "e15-"
+    "e16-"
    ],
    "tags": [
     "short",
@@ -3067,11 +3244,11 @@
    "id": "pgh-slopes",
    "name": "South Side Slopes Climb Loop",
    "path": [
-    "e53-",
-    "e51+",
-    "e49-",
-    "e15+",
-    "e16+"
+    "e56-",
+    "e54+",
+    "e52-",
+    "e16+",
+    "e17+"
    ],
    "tags": [
     "hilly",
@@ -3085,11 +3262,11 @@
    "id": "pgh-dirty-dozen",
    "name": "Dirty Dozen South Loop",
    "path": [
-    "e49+",
-    "e50+",
+    "e52+",
     "e53+",
-    "e16-",
-    "e15-"
+    "e56+",
+    "e17-",
+    "e16-"
    ],
    "tags": [
     "hilly",
@@ -3104,10 +3281,10 @@
    "id": "pgh-dirty-dozen-slopes",
    "name": "Dirty Dozen South from the Slopes",
    "path": [
-    "e53-",
-    "e51+",
-    "e50+",
-    "e53+"
+    "e56-",
+    "e54+",
+    "e53+",
+    "e56+"
    ],
    "tags": [
     "hilly",
@@ -3122,8 +3299,9 @@
    "name": "Under the Allegheny: North Shore to the Point",
    "path": [
     "e12+",
-    "e54+",
+    "e57+",
     "e1-",
+    "e14-",
     "e13-",
     "e12-"
    ],
@@ -3141,12 +3319,12 @@
    "name": "Three Rivers Loop · via the subway",
    "path": [
     "e12+",
-    "e54+",
+    "e57+",
     "e2+",
-    "e14+",
     "e15+",
     "e16+",
     "e17+",
+    "e18+",
     "e6+",
     "e7+",
     "e8+",
@@ -3167,12 +3345,12 @@
    "name": "Long Loop · out by the subway",
    "path": [
     "e12+",
-    "e54+",
+    "e57+",
     "e2+",
-    "e14+",
     "e15+",
     "e16+",
     "e17+",
+    "e18+",
     "e6+",
     "e7+",
     "e8+",
@@ -3185,12 +3363,13 @@
     "e8-",
     "e7-",
     "e6-",
+    "e18-",
     "e17-",
     "e16-",
     "e15-",
-    "e14-",
     "e2-",
     "e1-",
+    "e14-",
     "e13-",
     "e12-"
    ],
@@ -3209,10 +3388,11 @@
   "first": "e12+",
   "note": "No plan: from the Water Steps, straight on at every junction unless you choose a turn. Ride until you stop",
   "prefer": {
-   "LB": "e21-",
+   "LB": "e22-",
    "NS": "e13+",
-   "SY": "e49-",
-   "GW": "e1-"
+   "SY": "e52-",
+   "GW": "e1-",
+   "CB": "e14+"
   }
  },
  "map": "routes/cities/pittsburgh-map.json",
@@ -3265,6 +3445,14 @@
   "B>E": [
    "B>GW",
    "GW>E"
+  ],
+  "NS>B": [
+   "NS>CB",
+   "CB>B"
+  ],
+  "R>Y": [
+   "R>FJ",
+   "FJ>Y"
   ]
  }
 }

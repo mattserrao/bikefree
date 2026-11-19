@@ -84,7 +84,8 @@
       "name": "Three Rivers Loop",
       "path": [
         "A>NS+",
-        "NS>B+",
+        "NS>CB+",
+        "CB>B+",
         "B>GW+",
         "GW>E+",
         "E>F+",
@@ -119,7 +120,8 @@
         "E>F-",
         "GW>E-",
         "B>GW-",
-        "NS>B-",
+        "CB>B-",
+        "NS>CB-",
         "A>NS-"
       ],
       "tags": [
@@ -132,7 +134,8 @@
       "name": "South Side Short Loop",
       "path": [
         "A>NS+",
-        "NS>B+",
+        "NS>CB+",
+        "CB>B+",
         "B>GW+",
         "GW>E+",
         "E>F+",
@@ -162,7 +165,8 @@
         "E>F-",
         "GW>E-",
         "B>GW-",
-        "NS>B-",
+        "CB>B-",
+        "NS>CB-",
         "A>NS-"
       ],
       "tags": [
@@ -190,7 +194,8 @@
       "name": "Three Rivers Loop + West End Overlook",
       "path": [
         "A>NS+",
-        "NS>B+",
+        "NS>CB+",
+        "CB>B+",
         "B>GW+",
         "GW>E+",
         "E>F+",
@@ -235,7 +240,8 @@
       "name": "Point & Jail Trail Loop",
       "path": [
         "A>NS+",
-        "NS>B+",
+        "NS>CB+",
+        "CB>B+",
         "B>GW+",
         "GW>E+",
         "E>I+",
@@ -246,7 +252,8 @@
         "E>F-",
         "GW>E-",
         "B>GW-",
-        "NS>B-",
+        "CB>B-",
+        "NS>CB-",
         "A>NS-"
       ],
       "tags": [
@@ -260,7 +267,8 @@
       "name": "Jail Trail & Mount Washington Loop",
       "path": [
         "A>NS+",
-        "NS>B+",
+        "NS>CB+",
+        "CB>B+",
         "B>GW+",
         "GW>E+",
         "E>I+",
@@ -304,7 +312,8 @@
       "name": "Three Rivers There & Back",
       "path": [
         "A>NS+",
-        "NS>B+",
+        "NS>CB+",
+        "CB>B+",
         "B>GW+",
         "GW>E+",
         "E>F+",
@@ -329,7 +338,8 @@
         "E>F-",
         "GW>E-",
         "B>GW-",
-        "NS>B-",
+        "CB>B-",
+        "NS>CB-",
         "A>NS-"
       ],
       "tags": [
@@ -376,7 +386,8 @@
       "name": "Oakland & South Side Loop",
       "path": [
         "A>NS+",
-        "NS>B+",
+        "NS>CB+",
+        "CB>B+",
         "B>GW+",
         "GW>E+",
         "E>I+",
@@ -393,7 +404,8 @@
         "E>F-",
         "GW>E-",
         "B>GW-",
-        "NS>B-",
+        "CB>B-",
+        "NS>CB-",
         "A>NS-"
       ],
       "tags": [
@@ -412,7 +424,8 @@
         "N>LB+",
         "LB>M+",
         "M>B+",
-        "NS>B-",
+        "CB>B-",
+        "NS>CB-",
         "A>NS-"
       ],
       "tags": [
@@ -426,7 +439,8 @@
       "name": "Allegheny Loop · reverse",
       "path": [
         "A>NS+",
-        "NS>B+",
+        "NS>CB+",
+        "CB>B+",
         "M>B-",
         "LB>M-",
         "N>LB-",
@@ -458,7 +472,8 @@
         "E>F-",
         "GW>E-",
         "B>GW-",
-        "NS>B-",
+        "CB>B-",
+        "NS>CB-",
         "A>NS-"
       ],
       "tags": [
@@ -508,7 +523,8 @@
         "N>LB+",
         "LB>M+",
         "M>B+",
-        "NS>B-",
+        "CB>B-",
+        "NS>CB-",
         "A>NS-"
       ],
       "tags": [
@@ -566,7 +582,8 @@
         "E>I-",
         "GW>E-",
         "B>GW-",
-        "NS>B-",
+        "CB>B-",
+        "NS>CB-",
         "A>NS-"
       ],
       "tags": [
@@ -625,8 +642,10 @@
       "id": "pgh-northside-hills",
       "name": "North Side Hills Loop",
       "path": [
-        "R>A-",
-        "R>Y+",
+        "A>NS+",
+        "NS>CB+",
+        "CB>FJ+",
+        "FJ>Y+",
         "Y>Z+",
         "Z>C+",
         "C>R+",
@@ -636,7 +655,7 @@
         "hilly",
         "new"
       ],
-      "note": "From the Water Steps: the National Aviary, Randyland, the Fineview climb and overlook, Riverview Park and the Allegheny Observatory, the Davis Avenue Bridge and down Brighton Road"
+      "note": "From the Water Steps: past PNC Park, up Federal Street round Allegheny Center, the Fineview climb and overlook, Riverview Park and the Allegheny Observatory, the Davis Avenue Bridge, down Brighton Road and home along the river"
     },
     {
       "id": "pgh-northside-hills-rev",
@@ -646,24 +665,50 @@
         "C>R-",
         "Z>C-",
         "Y>Z-",
-        "R>Y-",
-        "R>A+"
+        "FJ>Y-",
+        "CB>FJ-",
+        "NS>CB-",
+        "A>NS-"
       ],
       "tags": [
         "hilly",
         "new"
       ],
-      "note": "Up Brighton Road to Riverview Park and the Observatory first, then down through Fineview past the overlook, Randyland and the Aviary"
+      "note": "Along the river and up Brighton Road to Riverview Park and the Observatory first, then down through Fineview past the overlook and down Federal Street to PNC Park"
+    },
+    {
+      "id": "pgh-northside-clemente",
+      "name": "North Side Hills Loop · from the Clemente Bridge",
+      "path": [
+        "CB>B-",
+        "CB>FJ+",
+        "FJ>Y+",
+        "Y>Z+",
+        "Z>C+",
+        "C>R+",
+        "R>A+",
+        "A>NS+",
+        "NS>CB+",
+        "CB>B+"
+      ],
+      "tags": [
+        "hilly",
+        "new"
+      ],
+      "note": "From downtown over the Clemente Bridge straight up Federal Street, the Fineview climb, Riverview Park and the Observatory, down Brighton Road, the river past the Science Center and PNC Park, and back over the bridge"
     },
     {
       "id": "pgh-fineview",
       "name": "Fineview Climb Loop",
       "path": [
-        "R>A-",
-        "R>Y+",
+        "A>NS+",
+        "NS>CB+",
+        "CB>FJ+",
+        "FJ>Y+",
         "Y>Z+",
         "Z>Y+",
-        "R>Y-",
+        "FJ>Y-",
+        "R>FJ-",
         "R>A+"
       ],
       "tags": [
@@ -671,14 +716,15 @@
         "hilly",
         "new"
       ],
-      "note": "From the Water Steps past the Aviary and Randyland, up Belleau Street to the Fineview Overlook, down Perrysville Avenue's bends and back"
+      "note": "From the Water Steps up Federal Street, up Belleau Street to the Fineview Overlook, down Perrysville Avenue's bends, Randyland and the Aviary, home along the river"
     },
     {
       "id": "pgh-three-rivers-northside",
       "name": "Three Rivers & North Side Loop",
       "path": [
         "A>NS+",
-        "NS>B+",
+        "NS>CB+",
+        "CB>B+",
         "B>GW+",
         "GW>E+",
         "E>F+",
@@ -691,7 +737,8 @@
         "D>C+",
         "Z>C-",
         "Y>Z-",
-        "R>Y-",
+        "FJ>Y-",
+        "R>FJ-",
         "R>A+"
       ],
       "tags": [
@@ -719,7 +766,8 @@
         "E>I-",
         "GW>E-",
         "B>GW-",
-        "NS>B-",
+        "CB>B-",
+        "NS>CB-",
         "A>NS-"
       ],
       "tags": [
@@ -800,7 +848,8 @@
         "A>NS+",
         "NS>GW+",
         "B>GW-",
-        "NS>B-",
+        "CB>B-",
+        "NS>CB-",
         "A>NS-"
       ],
       "tags": [
@@ -863,7 +912,8 @@
         "E>F-",
         "GW>E-",
         "B>GW-",
-        "NS>B-",
+        "CB>B-",
+        "NS>CB-",
         "A>NS-"
       ],
       "tags": [
@@ -880,9 +930,10 @@
     "note": "No plan: from the Water Steps, straight on at every junction unless you choose a turn. Ride until you stop",
     "prefer": {
       "LB": "N>LB-",
-      "NS": "NS>B+",
+      "NS": "NS>CB+",
       "SY": "F>SY-",
-      "GW": "B>GW-"
+      "GW": "B>GW-",
+      "CB": "CB>B+"
     }
   },
   "keySplits": {
@@ -934,6 +985,14 @@
     "B>E": [
       "B>GW",
       "GW>E"
+    ],
+    "NS>B": [
+      "NS>CB",
+      "CB>B"
+    ],
+    "R>Y": [
+      "R>FJ",
+      "FJ>Y"
     ]
   }
 }

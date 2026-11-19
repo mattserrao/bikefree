@@ -1,6 +1,6 @@
 {
   "area": "core",
-  "note": "Downtown, the North Shore, the South Side and Mount Washington: the Point, the Jail Trail, the Hot Metal, Smithfield Street, Clemente and West End bridges. Portals: NS and GW (the subway), A and B (the Allegheny & Troy Hill), I (Oakland & Schenley), D (the West End), S (the Great Allegheny Passage & Homestead), C and R (the North Side), F, GV and Q (the South Side Slopes & Mount Washington).",
+  "note": "Downtown, the North Shore, the South Side and Mount Washington: the Point, the Jail Trail, the Hot Metal, Smithfield Street, Clemente and West End bridges. Portals: NS and GW (the subway), A and B (the Allegheny & Troy Hill), I (Oakland & Schenley), D (the West End), S (the Great Allegheny Passage & Homestead), C, R and CB (the North Side), F, GV and Q (the South Side Slopes & Mount Washington).",
   "nodes": [
     {
       "id": "GW",
@@ -92,6 +92,12 @@
       "name": "Mazeroski Way & General Robinson St, North Side",
       "lat": 40.447659,
       "lon": -80.007513
+    },
+    {
+      "id": "CB",
+      "name": "Clemente Bridge north end: Federal St & General Robinson",
+      "lat": 40.448224,
+      "lon": -80.004424
     }
   ],
   "edges": {
@@ -155,9 +161,14 @@
       "fwd": "up Mazeroski Way past PNC Park to General Robinson St",
       "rev": "down Mazeroski Way to the Water Steps"
     },
-    "NS>B": {
+    "NS>CB": {
+      "name": "General Robinson Street",
+      "fwd": "General Robinson St past PNC Park to Federal St",
+      "rev": "General Robinson St past PNC Park to Mazeroski Way"
+    },
+    "CB>B": {
       "name": "Clemente Bridge",
-      "fwd": "General Robinson St and the Clemente Bridge to Fort Duquesne Blvd",
+      "fwd": "the Clemente Bridge to Fort Duquesne Blvd",
       "rev": "the Clemente Bridge to General Robinson St"
     },
     "E>F": {

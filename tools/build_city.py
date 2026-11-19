@@ -987,14 +987,31 @@ def build(cid):
     # [subway] nothing of the street kit (walls, hedges, benches) or the map's trees in a station's headhouse, over
     # the top of its escalator shaft (the subway kit draws the headhouse there)
     clear = []
-    for c_ in (route_under or {}).get('routeConveyors', []):
-        top_ = c_['fromM'] if c_.get('dir') == 'down' else c_['toM']
-        clear += [rs[k] for k in range(len(rs)) if abs(k * 10 - top_ - (12 if c_.get('dir') == 'down' else -12)) <= 22]
-    kit_dist = (lambda la, lo, lim: 1e9 if any(hv((la, lo), c_) < 10 for c_ in clear) else route_dist(la, lo, lim)) if clear else route_dist
+    def head_clear(pts_, conv_):
+        # the points of a line round each headhouse (its centre 12 m from the escalator's top, towards the shaft)
+        mc_ = [0.0]
+        for p_, q_ in zip(pts_, pts_[1:]): mc_.append(mc_[-1] + hv(p_, q_))
+        out_ = []
+        for c_ in conv_:
+            top_ = c_['fromM'] if c_.get('dir') == 'down' else c_['toM']
+            out_ += [pts_[k] for k in range(len(pts_)) if abs(mc_[k] - top_ - (12 if c_.get('dir') == 'down' else -12)) <= 22]
+        return out_
+    clear += head_clear(rs, (route_under or {}).get('routeConveyors', []))
+    if cfg.get('subwayHeadsOf'):
+        # [F123] another area's stations seen from this one's streets (its headhouses drawn here too: scene subway.heads):
+        # the same clearing round them, from that area's line and escalators
+        so_ = cfg['subwayHeadsOf']
+        import re as _re
+        so_pts = [(float(a_), float(b_)) for a_, b_ in _re.findall(r'lat="([\d.-]+)" lon="([\d.-]+)"', open(os.path.join(ROOT, so_['gpx'])).read())]
+        clear += head_clear(so_pts, json.load(open(os.path.join(ROOT, so_['data']))).get('routeConveyors', []))
+    CLEAR_M = 12   # [F122] (was 10: Liberty Avenue Park's walls and steps still showed at Gateway's escalator top)
+    near_head = lambda la, lo: any(hv((la, lo), c_) < CLEAR_M for c_ in clear)
+    kit_dist = (lambda la, lo, lim: 1e9 if near_head(la, lo) else route_dist(la, lo, lim)) if clear else route_dist
     if clear:
-        keep_ = [k for k in range(0, len(trees), 2) if not any(hv((lat0 + trees[k] * UNIT, lon0 + trees[k + 1] * UNIT), c_) < 10 for c_ in clear)]
+        keep_ = [k for k in range(0, len(trees), 2) if not near_head(lat0 + trees[k] * UNIT, lon0 + trees[k + 1] * UNIT)]
         out['trees'] = pack_int16([v for k in keep_ for v in (trees[k], trees[k + 1])])
-    out['streetKit'] = street_kit.extract(nodes, ntags, ways, q, kit_dist, skip=cleared if clear_polys else None)   # [street-kit]
+    out['streetKit'] = street_kit.extract(nodes, ntags, ways, q, kit_dist, skip=cleared if clear_polys else None,
+                                          drop_line=near_head if clear else None)   # [street-kit]
     path = os.path.join(ROOT, cfg['data'])
     json.dump(out, open(path, 'w'), separators=(',', ':'))
     print(f'  wrote {cfg["data"]} ({os.path.getsize(path) / 1e6:.2f} MB): {len(streets)} streets, {len(bridges)} styled bridges, '
@@ -1330,11 +1347,15 @@ def splice_samples(cfg, rs, e, copy_m, kinds, bridges, ghosts, aprons):
             if f_.endswith('.json') and '.network' not in f_ and '.spec' not in f_:
                 c_ = json.load(open(os.path.join(ROOT, 'tools', 'city', f_)))
                 if c_.get('gpx') == gpx_ and c_.get('data'): return json.load(open(os.path.join(ROOT, c_['data'])))
+        # a line no area writes (the subway's own segment, tools/build_subway_line.py): the copy keeps this line's
+        # routed kinds and bridges (as before F60; the subway area couldn't be rebuilt since the merge)
+        if not gpx_.startswith('routes/'): return None
         raise SystemExit(f'samplesOf {gpx_}: no city config writes that line')
     cps = []   # (out from, out to, neighbour from, neighbour to, its data, an apron)
     for k, leg in enumerate(copy_legs):
         sp = leg['samplesOf']
         cps.append((out_rng[k][0], out_rng[k][1], sp['fromM'], sp['toM'], nb_data(sp['gpx']), bool(leg.get('apron'))))
+    cps = [c_ for c_ in cps if c_[4] is not None]   # (copies of a line no area writes keep the routed kinds)
     in_cp = lambda x: any(o0 - .5 < x < o1 + .5 for o0, o1, *_ in cps)
     pieces = []
     for r in kinds:

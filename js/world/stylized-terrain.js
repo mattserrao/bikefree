@@ -206,19 +206,34 @@ export class StylizedTerrain {
     }
     // [subway] a tunnel, its platforms and escalators along the line's underground stretch (toolbox/structures)
     if (this.config.subway && this.config.city?.routeUnderground) this.subway = new Subway(this.group, this.route, this.index, this.config.city, this.uniforms, this.config.subway, this.groundMaterial, this.landscape);
+    // [F123] a neighbouring area that rides past the stations on the street draws their headhouses (scene subway.heads)
+    else if (this.config.subway?.heads?.length) this.subway = new Subway(this.group, this.route, this.index, { heads: this._subwayHeads(), platforms: this.config.subway.platforms }, this.uniforms, this.config.subway, this.groundMaterial, this.landscape);
     this._lastX = Infinity;
     this.stats.loading = 0;
+  }
+
+  /** [F123] The scene's subway.heads (another area's stations seen from the street): each a short piece of the subway
+   *  line (its 10 m samples from s0, the app's own heights) as a route and index of its own, in the city's frame. */
+  _subwayHeads() {
+    return this._heads ||= this.config.subway.heads.map((h) => {
+      const n = h.pts.length, dist = new Float64Array(n), lat = new Float64Array(n), lon = new Float64Array(n), ele = new Float64Array(n);
+      h.pts.forEach(([la, lo, z], k) => { dist[k] = k * 10; lat[k] = la; lon[k] = lo; ele[k] = z; });
+      const route = { dist, lat, lon, ele, total: (n - 1) * 10, closed: false, scene: { roadAlign: { curve: true } } };
+      return { name: h.name, dir: h.dir, fromM: h.fromM, toM: h.toM, s0: h.s0, route, index: makeRouteIndex(route, this.proj) };
+    });
   }
 
   /** [subway] Does a ground patch lie over (or within 40 m of) an underground stretch of the line? Its skirts stay
    *  shallow there: the usual 20 m curtains would hang into the tunnel. */
   _overTunnel(x, z, size) {
     const U = this.config.city?.routeUnderground;
-    if (!U?.length) return false;
+    if (!U?.length && !this.config.subway?.heads?.length) return false;
     if (!this._tunnelPts) {
       this._tunnelPts = [];
       const d = this.route.dist;
-      for (let i = 0; i < d.length && d[i] <= (this.route.turnS || this.route.total); i++) if (U.some((u) => d[i] >= u.fromM - 20 && d[i] <= u.toM + 20)) this._tunnelPts.push([this.index.xs[i], this.index.zs[i]]);
+      if (U?.length) {
+        for (let i = 0; i < d.length && d[i] <= (this.route.turnS || this.route.total); i++) if (U.some((u) => d[i] >= u.fromM - 20 && d[i] <= u.toM + 20)) this._tunnelPts.push([this.index.xs[i], this.index.zs[i]]);
+      } else for (const h of this._subwayHeads()) for (let i = 0; i < h.index.xs.length; i++) this._tunnelPts.push([h.index.xs[i], h.index.zs[i]]);   // [F123] a headhouse's shaft
     }
     const m = 40;
     return this._tunnelPts.some(([px, pz]) => px > x - m && px < x + size + m && pz > z - m && pz < z + size + m);
