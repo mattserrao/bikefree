@@ -127,7 +127,7 @@
   },
   "streetKit": {
     "fromM": 0,
-    "toM": 16200,
+    "toM": 26100,
     "rangeM": 220,
     "parkTrees": 16,
     "zones": [],
@@ -824,10 +824,56 @@
       "fromM": 650,
       "toM": 690,
       "why": "the core’s accepted crease beside the S>H trail (the core’s 9.05–9.09 km): the apron is the core’s own samples (F60)"
+    },
+    {
+      "check": "road-floating",
+      "fromM": 19970,
+      "toM": 20010,
+      "why": "the Homestead Grays Bridge's deck over the riverfront trail (W>U, ~14.31 km), the route's own lower pass: the probe finds the trail under the deck, not the bridge (EA>GB)"
+    },
+    {
+      "check": "road-floating",
+      "fromM": 20290,
+      "toM": 20340,
+      "why": "the Homestead Grays Bridge's north end over the Duck Hollow Trail (the route's own pass, ~21.70 km) and the railroad: the deck is 30–40 m up"
+    },
+    {
+      "check": "street-crease",
+      "fromM": 21270,
+      "toM": 21330,
+      "why": "the foot of Old Browns Hill Road at Duck Hollow (~13 % down to the Nine Mile Run Trail): the side paths there leave the bottom of the descent"
+    },
+    {
+      "check": "heading-jitter",
+      "fromM": 23970,
+      "toM": 24010,
+      "why": "the real hairpin from the Duck Hollow Trail's Hazelwood end (Alluvian St) onto Second Ave, which climbs back to the Glenwood Bridge"
+    },
+    {
+      "check": "road-floating",
+      "fromM": 24150,
+      "toM": 24200,
+      "why": "the Glenwood Bridge's north end over the path under it (the route's own pass to Alluvian St, ~23.84 km): the probe finds the path below the deck"
+    },
+    {
+      "check": "road-floating",
+      "fromM": 24660,
+      "toM": 24710,
+      "why": "the Glenwood Bridge's south span over the GAP (the route's own pass, S>GB / GB>W at ~5.8 km): the deck is ~14 m over the trail"
     }
   ],
   "origin": {
     "lat": 40.4375,
     "lon": -79.9925
+  },
+  "groundMesh": {
+    "fineCells": 32,
+    "fineRanges": [
+      {
+        "fromM": 25200,
+        "toM": 25340,
+        "why": "the Route 885 ramp down to Glass Run Rd, banked between the highway's embankments: the 6 m ground mesh poked through its edge"
+      }
+    ]
   }
 }

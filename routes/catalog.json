@@ -640,8 +640,8 @@
   "file": "routes/cities/pittsburgh-homestead.gpx",
   "outAndBack": false,
   "expectedKm": [
-   14,
-   18
+   24,
+   28
   ],
   "scene": "routes/scenes/pittsburgh-homestead.json",
   "eleSmoothM": 10,

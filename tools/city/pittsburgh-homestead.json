@@ -331,6 +331,157 @@
      "East Waterfront Drive"
     ]
    ]
+  },
+  {
+   "mode": "road",
+   "ghost": true,
+   "waypoints": [
+    [
+     "Pump House, East Waterfront Dr (junction) (again)",
+     40.41429,
+     -79.8996,
+     "East Waterfront Drive"
+    ],
+    [
+     "East Waterfront Dr: Pump House (again)",
+     40.41231,
+     -79.89692,
+     "East Waterfront Drive"
+    ],
+    [
+     "River Road (again)",
+     40.40724,
+     -79.88994
+    ],
+    [
+     "East 8th Ave: Bost Building (again)",
+     40.40904,
+     -79.90319,
+     "East 8th Avenue"
+    ],
+    [
+     "8th Ave & Amity St (junction) (again)",
+     40.40704,
+     -79.91087,
+     "East 8th Avenue"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "8th Ave & Amity St (junction)",
+     40.40704,
+     -79.91087,
+     "East 8th Avenue"
+    ],
+    [
+     "8th Ave & West St: Homestead Grays Bridge south end",
+     40.406,
+     -79.9122
+    ],
+    [
+     "Homestead Grays Bridge",
+     40.41063,
+     -79.9184,
+     "Homestead Grays Bridge"
+    ],
+    [
+     "Browns Hill Rd & Parkview Blvd",
+     40.41378,
+     -79.92271,
+     "Browns Hill Road"
+    ],
+    [
+     "Old Browns Hill Road",
+     40.4147,
+     -79.9199,
+     "Old Browns Hill Road"
+    ],
+    [
+     "Duck Hollow",
+     40.41547,
+     -79.9172,
+     "Old Browns Hill Road"
+    ]
+   ]
+  },
+  {
+   "mode": "trail",
+   "waypoints": [
+    [
+     "Duck Hollow",
+     40.41547,
+     -79.9172,
+     "Old Browns Hill Road"
+    ],
+    [
+     "Duck Hollow Trail",
+     40.40942,
+     -79.92137,
+     "Duck Hollow Trail"
+    ],
+    [
+     "Duck Hollow Trail: Hazelwood end",
+     40.39943,
+     -79.93441,
+     "Duck Hollow Trail"
+    ]
+   ]
+  },
+  {
+   "mode": "road",
+   "waypoints": [
+    [
+     "Duck Hollow Trail: Hazelwood end",
+     40.39943,
+     -79.93441,
+     "Duck Hollow Trail"
+    ],
+    [
+     "Alluvian St, Hazelwood",
+     40.39997,
+     -79.9377,
+     "Alluvian Street"
+    ],
+    [
+     "Second Ave at the Glenwood Bridge",
+     40.40007,
+     -79.93765,
+     "Second Avenue"
+    ],
+    [
+     "Glenwood Bridge",
+     40.3966,
+     -79.9354,
+     "Glenwood Bridge"
+    ],
+    [
+     "Glenwood Bridge south end",
+     40.3935081,
+     -79.9349874,
+     "Glenwood Bridge"
+    ],
+    [
+     "Glass Run Rd & Baldwin Rd",
+     40.38982,
+     -79.93281,
+     "Baldwin Road"
+    ],
+    [
+     "Baldwin Road under Route 837",
+     40.393,
+     -79.9334,
+     "Baldwin Road"
+    ],
+    [
+     "GAP at Haysglen St, under the Glenwood Bridge (junction)",
+     40.39499,
+     -79.93483,
+     "Haysglen Street"
+    ]
+   ]
   }
  ],
  "bridgeStyles": {
@@ -413,6 +564,11 @@
    "way": 1365836292,
    "name": "(a path by West Agnew Road)",
    "why": "a 24 m path at the foot of the Hays Woods bluff, 150 m off the GAP (4.91 km): drawn 76 m under the ground on both sides of it (street-bank)"
+  },
+  {
+   "way": 1217193873,
+   "name": "(a dirt path under the Glenwood Bridge's north end)",
+   "why": "passes under the route's deck where it leaves Second Ave (EA>GB, 24.14 km), 2–3 m off the line and 3 m below it: its walkers stood in the route's carriageway (the life sim's Reverse ride)"
   }
  ]
 }
