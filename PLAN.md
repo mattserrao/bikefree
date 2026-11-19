@@ -1069,6 +1069,23 @@ Classes: **a** code fix now · **b** needs a map-data rebuild (the data pass aft
 
 QC (sweep, after all its commits): `npm test` 219 of 219, `qc:network` clean, `qc_course --strict` 0 fail / 0 warn on every route and area, clipping 0 fail on the core (763 warn), the Slopes (581, unchanged) and the GAP area (88: was 105 before F79's rule, 84 with it dropping both sides). Notes: F82's cap is the junctions' (60° → 36 km/h … 180° → 13 km/h) on the turn measured over ±15 m of the segment's line — rounded corners measure softer than the street (Bakery Square's ~140° V reads 80°, ~30 km/h). F84 changes the default way at 12 junction approaches to the street's straight on (presets are unchanged; a free ride or an off-plan ride can go another way than before).
 
+### Minimap zooms in and follows you *(branch `sprint-minimap`, from `pittsburgh-network-test`, 18 Nov 2026)*
+The user (18 Nov): "Minimap should zoom in and not show the entirety of the map. Moves as you move. Arrow should be 50% smaller." Decided:
+- [x] **Zoomed and following:** about 3 km across the minimap's larger side, centred a little ahead of the rider (the view leans halfway to the point 900 m on along the route, at most 450 m; the lean eases over ~0.8 s, so a turn chosen at a junction or the path refilling never jumps it); it moves as you ride (redrawn 5× a second, under a pixel each time). Near a route's ends it keeps following (empty space beyond); a loop wraps through its start. `js/minimap-view.js` (the view maths), `js/views.js` drawMinimap / drawNetworkMinimap
+- [x] **North up:** the map doesn't rotate; the arrow turns with the heading
+- [x] **Every route:** park routes, network rides (network faint, path bold, the next options), free ride, scenery rides, demo. Settings → Minimap: Zoomed in (now the default; a saved "Whole course", the old default, becomes Zoomed in once) · Whole course · Off; <kbd>M</kbd> cycles them. No tap on the minimap (there wasn't one)
+- [x] **Arrow 50 % smaller** (same shape and outline, scaled by half)
+- [x] **Cheap per draw:** every line is projected to metres once (per route, per network, per path version) and cut into 32-point chunks with bounding boxes; a draw walks only the chunks in view, one Path2D per style. Headless (swiftshader, 1440×900, JS time of the draw calls, the 3D loop stopped), at the same 3 km zoom: Pittsburgh network 0.84 → 0.14 ms (whole course 0.38 → 0.16 ms), Yosemite 0.10 → 0.08 ms, the free ride's loop 0.09 → 0.10 ms; with the raster flushed (a 1 px read back) 4.1 → 3.1 ms on the network, ~1 ms on a park route. Crisp at devicePixelRatio 2 (the canvas is sized ×dpr as before)
+- QC: `test/minimap.test.mjs` (3 km span, centring and lean, north up, clipping runs, the eased lean, no jump through a loop's start, a network clipped to the view, half-size arrow, dpr 2); `node tools/snap_minimap.mjs [--bench]` (the ride HUD on a Pittsburgh junction, Yosemite and a free ride at 1440×900 and 390×844 → `tools/snapshots/minimap/`, not committed)
+- Follow-ups:
+- [ ] F140 The arrow at half size is ~10 px long on the desktop (~200 px minimap); at a junction the junction's dot (4 px) can sit over it. Check on the bike that it reads; draw the dot under the arrow or the arrow last with a dark casing if not
+- [ ] F141 3 km in both units (it was 1 mi / 1.5 km when zoomed in): decide whether imperial wants 2 mi
+- [ ] F142 "Whole course" kept as a setting; drop it if nobody wants it (the migration turns the old default into Zoomed in once, flag `mapFollow` in the saved settings)
+- [ ] F143 The pacer's dot, the start mark or the junction off the view aren't shown at all: an edge marker pointing to an off-view pacer would help on a long gap
+- [ ] F144 On the 390×844 phone the minimap (clamp(150px, 22vh, 220px), bottom 92 px) overlaps the left of the power bar and its colour strip (as before this change: CSS untouched); place it above the bar on narrow screens
+- [ ] F145 Not checked live across an area swap on a real ride (the path route is network-level, so the view doesn't jump in the tests or the junction shot); look at it once riding over a portal (e.g. the Smithfield Street Bridge at F)
+- [ ] F146 The bench's raster numbers are swiftshader (software); the wide strokes of the network dominate there. On the Air's GPU canvas they should be well under that; check the perf overlay on a Pittsburgh ride
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

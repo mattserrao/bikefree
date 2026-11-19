@@ -49,7 +49,7 @@ async function benchDraw(page, label) {
     const c = document.getElementById('hMapCanvas');
     const res = {};
     for (const mode of ['course', 'follow']) {
-      const ts = [];
+      const ts = [], js = [];
       for (let k = 0; k < 220; k++) {
         const t0 = performance.now();
         if (route?.netRide) {
@@ -62,17 +62,20 @@ async function benchDraw(page, label) {
           const pos = (session.mode === 'route' ? session.routePos : session.distanceM % rt.total) + k * 3;
           v.drawMinimap(c, rt, pos, { mode, spanM: 3000, pacerPos: pos + 40, now: t0 });
         }
-        c.getContext('2d').getImageData(0, 0, 1, 1);   // flush: the raster work counts too
-        if (k >= 20) ts.push(performance.now() - t0);   // the first draws build the caches
+        const t1 = performance.now();
+        c.getContext('2d').getImageData(0, 0, 1, 1);   // flush: the raster work (and a 1 px read back) counts too
+        if (k >= 20) { ts.push(performance.now() - t0); js.push(t1 - t0); }   // the first draws build the caches
       }
-      ts.sort((a, b) => a - b);
-      res[mode] = { mean: ts.reduce((a, b) => a + b, 0) / ts.length, p95: ts[Math.floor(ts.length * 0.95)], max: ts[ts.length - 1] };
+      ts.sort((a, b) => a - b); js.sort((a, b) => a - b);
+      res[mode] = { mean: ts.reduce((a, b) => a + b, 0) / ts.length, p95: ts[Math.floor(ts.length * 0.95)], max: ts[ts.length - 1],
+        js: js.reduce((a, b) => a + b, 0) / js.length, jsP95: js[Math.floor(js.length * 0.95)] };
     }
     void pacer;
     return res;
   });
   const f = (x) => x.toFixed(3);
-  const line = `${label}: course mean ${f(r.course.mean)} ms p95 ${f(r.course.p95)} · follow mean ${f(r.follow.mean)} ms p95 ${f(r.follow.p95)} max ${f(r.follow.max)}`;
+  const line = `${label}: draw calls (JS) course ${f(r.course.js)} ms (p95 ${f(r.course.jsP95)}) · follow ${f(r.follow.js)} ms (p95 ${f(r.follow.jsP95)})`
+    + ` | with raster flush: course ${f(r.course.mean)} ms (p95 ${f(r.course.p95)}) · follow ${f(r.follow.mean)} ms (p95 ${f(r.follow.p95)})`;
   timings.push(line); console.log(line);
 }
 
