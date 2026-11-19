@@ -168,6 +168,7 @@
     "climbM": 188,
     "file": "routes/parks/zion.gpx",
     "outAndBack": true,
+    "stage": "draft",
     "stops": [
       {
         "name": "Zion Lodge",
@@ -241,7 +242,6 @@
     "km": 29.1,
     "climbM": 280,
     "file": "routes/cities/pittsburgh.gpx",
-    "stage": "draft",
     "eleSmoothM": 10,
     "network": "routes/cities/pittsburgh-network.json",
     "scene": "routes/scenes/pittsburgh.json"
@@ -253,7 +253,6 @@
     "km": 16,
     "climbM": 107,
     "file": "routes/cities/pittsburgh-allegheny.gpx",
-    "stage": "draft",
     "area": "pittsburgh",
     "eleSmoothM": 10,
     "scene": "routes/scenes/pittsburgh-allegheny.json"
@@ -265,7 +264,6 @@
     "km": 4.3,
     "climbM": 109,
     "file": "routes/cities/pittsburgh-westend.gpx",
-    "stage": "draft",
     "area": "pittsburgh",
     "eleSmoothM": 10,
     "scene": "routes/scenes/pittsburgh-westend.json"
@@ -277,7 +275,6 @@
     "km": 15,
     "climbM": 184,
     "file": "routes/cities/pittsburgh-oakland.gpx",
-    "stage": "draft",
     "area": "pittsburgh",
     "eleSmoothM": 10,
     "scene": "routes/scenes/pittsburgh-oakland.json"
@@ -289,7 +286,6 @@
     "km": 10.7,
     "climbM": 179,
     "file": "routes/cities/pittsburgh-polish.gpx",
-    "stage": "draft",
     "area": "pittsburgh",
     "eleSmoothM": 10,
     "scene": "routes/scenes/pittsburgh-polish.json"
@@ -301,7 +297,6 @@
     "km": 16,
     "climbM": 56,
     "file": "routes/cities/pittsburgh-homestead.gpx",
-    "stage": "draft",
     "area": "pittsburgh",
     "eleSmoothM": 10,
     "scene": "routes/scenes/pittsburgh-homestead.json"
@@ -313,7 +308,6 @@
     "km": 18.6,
     "climbM": 350,
     "file": "routes/cities/pittsburgh-northside.gpx",
-    "stage": "draft",
     "area": "pittsburgh",
     "eleSmoothM": 10,
     "scene": "routes/scenes/pittsburgh-northside.json"
@@ -325,7 +319,6 @@
     "km": 27.1,
     "climbM": 421,
     "file": "routes/cities/pittsburgh-eastend.gpx",
-    "stage": "draft",
     "area": "pittsburgh",
     "eleSmoothM": 10,
     "scene": "routes/scenes/pittsburgh-eastend.json"
@@ -337,7 +330,6 @@
     "km": 24.1,
     "climbM": 664,
     "file": "routes/cities/pittsburgh-slopes.gpx",
-    "stage": "draft",
     "area": "pittsburgh",
     "eleSmoothM": 10,
     "scene": "routes/scenes/pittsburgh-slopes.json"
@@ -349,7 +341,6 @@
     "km": 3.3,
     "climbM": 39,
     "file": "routes/cities/pittsburgh-subway.gpx",
-    "stage": "draft",
     "area": "pittsburgh",
     "eleSmoothM": 10,
     "scene": "routes/scenes/pittsburgh-subway.json"
