@@ -419,3 +419,82 @@ test('a U-turn ahead on the path: "Back" at the end of the way out (the city lif
   assert.equal(ride.uturnAhead(back - 900), null);   // (beyond its reach)
   assert.equal(ride.uturnAhead(10, 3000), null);     // (up McArdle: no junction in the first 3 km)
 });
+
+// the ride-screen profile follows the path as it is now (PLAN F150): its stretch and height scale are the live
+// path's, rebuilt when the path changes (a turn chosen, a refill), not kept from the plan
+const rangeOf = (r, from, to) => {
+  const a = r.ele.slice(Math.floor(from / 10), Math.ceil(to / 10) + 1);
+  return [Math.min(...a), Math.max(...a)];
+};
+test('the profile follows a turn off the plan: the new way\'s stretch and heights, rebuilt once per change (F150)', () => {
+  const r = makePathRoute(net, preset('pgh-three-rivers')), n = r.netRide, p = gAt - 300;
+  const v0 = n.profileView(p);
+  assert.equal(v0.lap, true);
+  assert.deepEqual([v0.from, v0.to], [0, r.lapM]);   // on the plan: the lap
+  assert.deepEqual([v0.minEle, v0.maxEle], rangeOf(r, 0, r.lapM));   // its own height scale, not the 150 km path's
+  assert.ok(v0.maxEle - v0.minEle < r.maxEle - r.minEle + 1e-9);
+  assert.equal(n.profileView(p + 50), v0, 'the same segment, the same path: not rebuilt');
+  assert.deepEqual(n.profileSpan(p), [0, r.lapM]);
+  const oldEle = Float64Array.from(r.ele);
+  // every way off the plan at East Carson & 10th
+  const up = n.upcoming(p), ways = up.options.filter((o, j) => j !== up.selected && !o.back);
+  assert.ok(ways.length >= 1);
+  for (const o of ways) {
+    const r2 = makePathRoute(net, preset('pgh-three-rivers')), n2 = r2.netRide, before = n2.profileView(p), ver = n2.version;
+    assert.ok(n2.pick(o.key, p));
+    assert.ok(n2.version > ver);
+    const v = n2.profileView(p);
+    assert.notEqual(v, before, `${o.key}: the profile was rebuilt`);
+    assert.ok(v.from <= p && v.to > gAt + 500, `${o.key}: it reaches onto the new way (${v.from}–${v.to})`);
+    assert.deepEqual([v.minEle, v.maxEle], rangeOf(r2, v.from, v.to), `${o.key}: the new path's heights`);
+    let differs = false;
+    for (let k = Math.ceil(gAt / 10) + 5; k <= Math.min(oldEle.length - 1, Math.floor(v.to / 10)); k++) if (Math.abs(r2.ele[k] - oldEle[k]) > 0.5) { differs = true; break; }
+    assert.ok(differs, `${o.key}: the profile past the junction is the new way's, not the plan's`);
+    // past the junction, on the new way: the profile is the way you ride (a lap only if this way brings it round)
+    const after = n2.profileView(gAt + 50);
+    assert.ok(after.from <= gAt + 50 && after.to > gAt + 50);
+    if (after.lap) assert.equal(n2.lapAt(after.to - 10) + 1, n2.lapAt(after.to + 10));
+    else assert.ok(after.to - after.from >= 5000 || after.to === n2.endOf(n2.entries.length - 1));
+  }
+  // a shortcut that rejoins the plan (right at East Carson & 10th: skip the SouthSide Works loop): the lap as
+  // ridden — shorter — and it ends where the lap counter says
+  const r3 = makePathRoute(net, preset('pgh-three-rivers')), n3 = r3.netRide;
+  assert.ok(n3.choose(+1, gAt - 120));
+  const short = gAt + len('G>GV', 'GV>D', 'D>C', 'C>R', 'R>A');
+  const v3 = n3.profileView(gAt - 120);
+  assert.deepEqual([v3.from, v3.to, v3.lap], [0, short, true]);
+  assert.equal(n3.lapAt(short - 10), 1);
+  assert.equal(n3.lapAt(short + 10), 2);
+  assert.deepEqual([v3.minEle, v3.maxEle], rangeOf(r3, 0, short));
+  // lap 2: the next lap, from the shortcut lap's end
+  const v4 = n3.profileView(short + 100);
+  assert.deepEqual([v4.from, v4.to, v4.lap], [short, short + r3.lapM, true]);
+});
+
+test('a free ride\'s profile: this segment and ~5 km on, rebuilt when the path refills (F150)', () => {
+  const json = JSON.parse(readFileSync(new URL('../routes/cities/pittsburgh-network.json', import.meta.url), 'utf8'));
+  const r = makePathRoute(net, { id: 'free', name: 'Free', path: null, first: json.freeRide.first }), n = r.netRide;
+  const v = n.profileView(100);
+  assert.equal(v.lap, false);
+  assert.equal(v.from, 0);
+  assert.ok(v.to >= 5000 && v.to >= n.endOf(1));
+  assert.deepEqual([v.minEle, v.maxEle], rangeOf(r, v.from, v.to));
+  // ride on until the path refills: the arrays are new, the profile with them
+  const far = r.total - 99000, ver = n.version, total = r.total;
+  n.update(far);
+  assert.ok(n.version > ver && r.total > total, 'refilled');
+  const w = n.profileView(far), i = n.entryAt(far);
+  assert.equal(w.from, n.entries[i].p0);
+  assert.ok(w.to >= w.from + 5000 && w.to > far);
+  assert.deepEqual([w.minEle, w.maxEle], rangeOf(r, w.from, w.to));
+  assert.ok(w.climbM >= 0 && w.climbM <= (w.to - w.from) * 0.3);
+  // a turn chosen ahead on the free ride: rebuilt with the new way
+  const p = n.endOf(i) - 200, up = n.upcoming(p), o = up.options.find((x, j) => j !== up.selected && !x.back);
+  if (o) {
+    const before = n.profileView(p);
+    assert.ok(n.pick(o.key, p));
+    const after = n.profileView(p);
+    assert.notEqual(after, before);
+    assert.deepEqual([after.minEle, after.maxEle], rangeOf(r, after.from, after.to));
+  }
+});
