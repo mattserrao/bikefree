@@ -38,6 +38,20 @@
  "cornerPasses": 3,
  "cornerHalfWindow": 8,
  "maxDriftM": 16,
+ "links": [
+  {
+   "name": "N Craig St to Fifth Ave across the corner",
+   "from": [
+    40.447123,
+    -79.949091
+   ],
+   "to": [
+    40.446914,
+    -79.94924
+   ],
+   "why": "N Craig St meets Fifth Ave in an acute V (the turn west onto Fifth is ~145°): routed through the junction's node the line folded back and rounded only ~1 m on the sidewalk corner (a kink in the centre line, F62); this link across the V's inside (the corner's sidewalk plaza) makes it two easy bends"
+  }
+ ],
  "legs": [
   {
    "mode": "road",
@@ -390,8 +404,8 @@
     ],
     [
      "N Craig St & Fifth Ave",
-     40.446941,
-     -79.948982,
+     40.446914,
+     -79.94924,
      "Fifth Avenue"
     ],
     [

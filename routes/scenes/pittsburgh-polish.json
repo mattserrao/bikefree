@@ -738,21 +738,9 @@
     },
     {
       "check": "street-steep",
-      "fromM": 5490,
-      "toM": 5530,
+      "fromM": 5491,
+      "toM": 5531,
       "why": "a Polish Hill side street by Bethoven St with bad mapped heights on the hillside under the Bloomfield Bridge; not the route"
-    },
-    {
-      "check": "lateral-jump",
-      "fromM": 8720,
-      "toM": 8780,
-      "why": "Craig St & Fifth Ave: a real right-angle city corner with buildings on it (the line can round it only a little); ridden with the corner speed cap"
-    },
-    {
-      "check": "heading-jitter",
-      "fromM": 8720,
-      "toM": 8780,
-      "why": "Craig St & Fifth Ave: a real right-angle city corner with buildings on it (the line can round it only a little); ridden with the corner speed cap"
     },
     {
       "check": "heading-jitter",
