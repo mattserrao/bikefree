@@ -306,6 +306,11 @@ export function buildHeroes(city) {
     if (fn) fn(local(h.lat, h.lon), h);
   }
   overlooks(city, S, N, glows, out, scene);
+  /** [7.7] Does a hero stand at (x, z) (within `pad`)? The city's trees keep off them. */
+  out.covers = (x, z, pad = 0) => (out.zones || []).some((o) => {
+    if (o.F) { const dx = x - o.F.c.x, dz = z - o.F.c.z; if (Math.hypot(dx, dz) > o.r + pad) return false; return Math.abs(dx * o.F.u.x + dz * o.F.u.z) < o.hl + pad && Math.abs(dx * o.F.v.x + dz * o.F.v.z) < o.hw + pad; }
+    return Math.hypot(x - o.c.x, z - o.c.z) < o.r + pad;
+  });
 
   // ---------------------------------------------------------------- meshes
   const add = (B, mat, name) => {

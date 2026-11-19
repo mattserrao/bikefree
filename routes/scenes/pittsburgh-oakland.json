@@ -765,7 +765,7 @@
       "name": "Dippy",
       "lat": 40.4435532,
       "lon": -79.9514976,
-      "headingDeg": 251
+      "headingDeg": 340
     },
     {
       "model": "memorial",
@@ -822,36 +822,6 @@
       }
     },
     {
-      "name": "Heinz Memorial Chapel",
-      "atM": 11020,
-      "rangeM": 265,
-      "cam": {
-        "lat": 40.443483,
-        "lon": -79.952284,
-        "up": 3
-      },
-      "look": {
-        "lat": 40.445286,
-        "lon": -79.951891,
-        "up": 30
-      }
-    },
-    {
-      "name": "Dippy and the Carnegie Museum",
-      "atM": 4020,
-      "rangeM": 250,
-      "cam": {
-        "lat": 40.442878,
-        "lon": -79.951858,
-        "up": 3
-      },
-      "look": {
-        "lat": 40.44345,
-        "lon": -79.95135,
-        "up": 11
-      }
-    },
-    {
       "name": "Soldiers & Sailors Memorial Hall",
       "atM": 3800,
       "rangeM": 400,
@@ -879,6 +849,21 @@
         "lat": 40.4443,
         "lon": -79.9531,
         "up": 78
+      }
+    },
+    {
+      "name": "Dippy and the Carnegie Museum",
+      "atM": 3960,
+      "rangeM": 250,
+      "cam": {
+        "lat": 40.443383,
+        "lon": -79.952105,
+        "up": 2.5
+      },
+      "look": {
+        "lat": 40.4435532,
+        "lon": -79.9514976,
+        "up": 6
       }
     }
   ],

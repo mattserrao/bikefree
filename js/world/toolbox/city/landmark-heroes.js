@@ -39,6 +39,10 @@ const CHURCH = {
 export function landmarkModels(ctx) {
   const { city, L, W, S, N, glows, beacons, out, claim, clearUnder, ground, wall } = ctx;
   const fits = (out.heroFits ||= []);
+  // the ground each hero stands on, kept clear of the city's trees and other planting (`out.covers`)
+  const zones = (out.zones ||= []);
+  const zoneRect = (F, hl = F.hl, hw = F.hw) => zones.push({ F, hl, hw, r: Math.hypot(hl, hw) });
+  const zoneCircle = (q, r) => zones.push({ c: q, r });
   const P = (q, y) => V(q.x, y, q.z);
 
   // ---------------------------------------------------------------- placing a plan
@@ -175,7 +179,7 @@ export function landmarkModels(ctx) {
   function church(p, o) {
     const look = { ...CHURCH[o.look || 'holyname'], ...(o.style || {}) };
     let F = fit(frameFor(p, o), o.name || o.look);
-    take(F, p);
+    take(F, p); zoneRect(F);
     const { hl, hw } = F, g = ground(F.rect(-hl, hl, -hw, hw)), yE = g + look.eaves, yR = g + look.ridge;
     const ts = Math.min(look.towerS, hw * .9);
     // the nave between the front (towers) and the apse
@@ -250,6 +254,7 @@ export function landmarkModels(ctx) {
       parts = [{ ring: F.rect(-F.hl, F.hl, -F.hw, F.hw), h: 15.5 }, sq(46, 54), sq(34, 89), sq(27, 116), sq(17.4, 163)];
     }
     for (const b of parts) b.hero = true;
+    zoneRect(F);
     clearUnder(scaleRing(outline, .98));
     const g = ground(outline.map((q) => lerp2(q, F.c, .3)));
     const stone = o.color || '#c4b79c';
@@ -301,15 +306,30 @@ export function landmarkModels(ctx) {
       const q = ctx.local(part.lat, part.lon), F = frameFor(q, part), rect = F.rect(-F.hl, F.hl, -F.hw, F.hw);
       let rings = city.buildings.filter((b) => !b.hero && !b.hidden && inPoly(scaleRing(rect, 1.02), ...Object.values(centroid(b.ring))));
       for (const b of rings) b.hero = true;
+      zoneRect(F, F.hl + 3, F.hw + 3);
       rings = rings.length ? rings.map((b) => b.ring) : [rect];
       const g = ground(rect.map((r) => lerp2(r, F.c, .2))), H = g + part.h;
       const col = part.kind === 'art' ? '#8b8a85' : '#b8ad98';
       for (const ring0 of rings) {
         const ring = orient(ring0), c = centroid(ring);
-        wall(11, part.kind === 'art' ? .63 : .52, g, 0, col); prism(W, ring, g - 1.5, H);
-        wall(11, .52, g, 1, part.kind === 'art' ? '#6f6e6a' : '#7b8a7f'); cap(W, ring, H);
+        // plain dressed stone (no office window grid): pilasters and tall round-headed windows on every face
+        S.color(col); prism(S, ring, g - 1.5, H);
+        S.color(part.kind === 'art' ? '#6f6e6a' : '#7b8a7f'); cap(S, ring, H);
         S.color(shade(col, .88)); prism(S, scaleRing(ring, 1.012, c), H - 1.3, H + .2);   // cornice
         if (part.kind !== 'art') { S.color(shade(col, .8)); prism(S, scaleRing(ring, 1.008, c), g - 1, g + 2.2); }   // rusticated base
+        for (let i = 0; i < ring.length; i++) {
+          const a = ring[i], q = ring[(i + 1) % ring.length], len = Math.hypot(q.x - a.x, q.z - a.z);
+          if (len < 7) continue;
+          let n = { x: (q.z - a.z) / len, z: -(q.x - a.x) / len }; const m = lerp2(a, q, .5);
+          if ((m.x - c.x) * n.x + (m.z - c.z) * n.z < 0) n = { x: -n.x, z: -n.z };
+          const bays = Math.floor(len / 6.5), yaw = Math.atan2(q.x - a.x, q.z - a.z);
+          for (let k = 0; k < bays; k++) {
+            const w = lerp2(a, q, (k + .5) / bays), e = lerp2(a, q, k / bays);
+            if (part.kind === 'art') { lancet(w, n, g + 3, 4.2, part.h - 7, { pointed: false, glow: [.8, .8, .75] }); continue; }
+            lancet(w, n, g + 4, 2.2, part.h * .45, { pointed: false });
+            if (k) { S.color(shade(col, 1.06)); S.box(e.x + n.x * .3, g + 2.2, e.z + n.z * .3, .6, part.h - 3.5, .9, yaw); }
+          }
+        }
       }
       if (part.colonnadeDeg != null) {   // a colonnade along the face toward colonnadeDeg (the Forbes Avenue front)
         const n = dirOf(part.colonnadeDeg), alongU = Math.abs(dot(F.v, n)) >= Math.abs(dot(F.u, n));
@@ -327,6 +347,7 @@ export function landmarkModels(ctx) {
   function dippy(p, o) {
     const u = dirOf(o.headingDeg ?? 250), v = { x: -u.z, z: u.x }, at = (a, b) => ({ x: p.x + u.x * a + v.x * b, z: p.z + u.z * a + v.z * b });
     const g = ground([at(-13, -2), at(13, -2), at(13, 2), at(-13, 2)]) + .9;
+    zoneCircle(p, 16);
     S.color('#9b9486'); block(S, [at(-6, -2.6), at(7, -2.6), at(7, 2.6), at(-6, 2.6)], g - 1.5, g);
     S.color('#5e4b33');
     // the spine: tail tip → hips → shoulders → neck → head (along, height, beam width, beam height)
@@ -345,7 +366,7 @@ export function landmarkModels(ctx) {
   /** Beaux-Arts after the Mausoleum at Halicarnassus: a podium, a colonnaded block, an attic and a stepped pyramid. */
   function memorial(p, o) {
     const F = fit(frameFor(p, o), o.name || 'memorial', { minScale: .85 });
-    take(F, p, 20);
+    take(F, p, 20); zoneRect(F, F.hl + 5, F.hw);
     const { hl, hw } = F, g = ground(F.rect(-hl * .7, hl * .7, -hw * .7, hw * .7)), stone = '#d2c8b3';
     S.color(shade(stone, .86)); block(S, F.rect(-hl, hl, -hw, hw), g - 1.5, g + 3);
     wall(11, .71, g, 0, stone); prism(W, F.rect(-hl * .9, hl * .9, -hw * .9, hw * .9), g + 3, g + 21);
@@ -369,7 +390,7 @@ export function landmarkModels(ctx) {
   /** The Homestead Works Pump House (1892): brick, a slate gable with a ridge monitor, tall round-headed windows. */
   function pumphouse(p, o) {
     const F = fit(frameFor(p, o), o.name || 'pumphouse', { pad: 1 });
-    take(F, p);
+    take(F, p); zoneRect(F);
     const { hl, hw } = F, g = ground(F.rect(-hl, hl, -hw, hw)), look = { wall: '#8b4a36', roof: '#4c4b4c' };
     S.color('#7d6d5d'); block(S, F.rect(-hl - .3, hl + .3, -hw - .3, hw + .3), g - 1, g + .8);
     range(F, -hl, hl, hw, g + .8, g + 7.5, g + 11.5, look);
@@ -385,7 +406,7 @@ export function landmarkModels(ctx) {
     for (const [la, lo] of o.points || []) {
       const q = ctx.local(la, lo);
       if (!clearAt(q.x, q.z, .5)) { fits.push({ name: 'stack', ok: false, at: [la, lo] }); continue; }
-      claim(q, 3);
+      claim(q, 3); zoneCircle(q, 4);
       const g = ground([q, { x: q.x + 2, z: q.z }, { x: q.x, z: q.z + 2 }, { x: q.x - 2, z: q.z }, { x: q.x, z: q.z - 2 }]);
       S.color('#9b9284'); S.cylinder(q.x, g - 1, q.z, 2.6, 2.4, 8);
       S.color('#8a4936'); lathe(S, q.x, g + 1.4, q.z, [[2.05, 0], [1.75, H * .6], [1.5, H - 2.4]], 10);
@@ -402,13 +423,13 @@ export function landmarkModels(ctx) {
     const rust = '#6b4a3a', soot = '#3b3532';
     for (const st of o.stoves || []) {
       const q = ctx.local(st[0], st[1]), r = st[2] || 3.4, g = ground([q]);
-      claim(q, 4);
+      claim(q, 4); zoneCircle(q, r + 1.5);
       S.color(soot); S.cylinder(q.x, g - 1, q.z, r, 28, 10);
       lathe(S, q.x, g + 27, q.z, [[r, 0], [r * .8, r * .55], [r * .4, r * .85], [0, r * .95]], 10);
     }
     for (const f of o.furnaces || []) {
       const q = ctx.local(f[0], f[1]), g = ground([q]), u = dirOf(o.axisDeg ?? 0);
-      claim(q, 8);
+      claim(q, 8); zoneCircle(q, 10);
       S.color('#5a5049'); S.cylinder(q.x, g - 1, q.z, 7.5, 9, 10);                                   // the hearth and cast-house floor
       S.color(rust); lathe(S, q.x, g + 8, q.z, [[5.2, 0], [6.4, 5], [6.4, 7], [5, 22], [3.4, 24], [3.4, 27]], 12);   // the shell
       S.color(soot); S.cylinder(q.x, g + 13, q.z, 7.3, 1.4, 12);                                       // the bustle pipe

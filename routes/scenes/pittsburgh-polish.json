@@ -834,7 +834,7 @@
       "name": "Dippy",
       "lat": 40.4435532,
       "lon": -79.9514976,
-      "headingDeg": 251
+      "headingDeg": 340
     },
     {
       "model": "memorial",
@@ -923,6 +923,21 @@
         "lat": 40.45639,
         "lon": -79.967944,
         "up": 20
+      }
+    },
+    {
+      "name": "Heinz Memorial Chapel",
+      "atM": 9140,
+      "rangeM": 250,
+      "cam": {
+        "lat": 40.44563,
+        "lon": -79.953096,
+        "up": 3
+      },
+      "look": {
+        "lat": 40.445286,
+        "lon": -79.951891,
+        "up": 24
       }
     }
   ],
