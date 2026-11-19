@@ -7,7 +7,7 @@ import { Weather } from './toolbox/atmosphere/weather.js';
 import { PostFX } from './toolbox/atmosphere/post.js';
 import { Look, LOOKS } from './toolbox/atmosphere/look.js';
 import { StylizedTerrain, SCENERY_QUALITY } from './stylized-terrain.js';
-import { riderPose, routePoint, ROAD_WIDTH, CHASE, CAMERAS } from './pose.js';
+import { riderPose, routePoint, ROAD_WIDTH, CHASE, CAMERAS, DEFAULT_CAMERA, PACER_LANE } from './pose.js';
 import { loadRider } from './rider.js';
 import { PerfMonitor } from './perf.js';
 import { HAZE, AERIAL, AERIAL_COLOR, installHaze } from './toolbox/atmosphere/haze.js';
@@ -57,7 +57,6 @@ export function areaChoice({ want, current, ready, failed, covers }) {
   if (failed || covers) return 'stay';
   return 'wait';
 }
-const PACER_LANE = 0.07;   // a bike-width further in, so you can ride alongside or pass
 
 export class World {
   /**
@@ -520,6 +519,7 @@ export class World {
     const total = this.route.total;
     // Same smoothing as the rider: roll at its speed, ease toward the true position.
     if (!this._pacerInit) { this.ps = src.pos; this.pacerCrank = 0; this._pacerInit = true; }
+    this._pacerSpeed = src.speed;   // [6.10] (for the city's riders on the route)
     if (this.path) {
       // (on its own copy of the path, src.path: a turn you change behind it doesn't move it — js/network.js PathFollower)
       this.ps = this._followPath(this.ps, src.pos, src.speed, dt);
@@ -715,6 +715,8 @@ export class World {
       // [network] a U-turn ahead on the path, in the same frame (out metres): oncoming traffic doesn't pass you just before it
       const U = this.path?.uturnAhead?.(this.p);
       if (U != null) { const w = this.path.worldAt(Math.max(0, U - 1), this.area?.id ?? null); if (w.area === (this.area?.id ?? w.area)) rider.uturn = w.s > turn ? total - w.s : w.s; }
+      // [6.10] the pacer where it's drawn: the city's riders on the route keep out of its line too
+      if (this.pacer?.group.visible && this._pacerPose) rider.pacer = { x: this._pacerPose.pos.x, z: this._pacerPose.pos.z, speed: this._pacerSpeed ?? src.speed };
       this.terrain.tick(this.camera.position, dt, rider);
     }
     if (this.headlight?.visible) {
@@ -778,9 +780,9 @@ export class World {
     sm.needsUpdate = moved || this._shadowFrame % 2 === 0;
   }
 
-  /** Settings → Camera: 'close' (default, speed feel) or 'classic' (the fixed 4.5 m camera). */
+  /** Settings → Camera: 'closest' (default, PLAN 6.10), 'close' (speed feel) or 'classic' (the fixed 4.5 m camera). */
   setCamera(key) {
-    this.camKey = CAMERAS[key] ? key : 'close';
+    this.camKey = CAMERAS[key] ? key : DEFAULT_CAMERA;
     this._camInit = false;   // jump straight to the new spot
   }
 
