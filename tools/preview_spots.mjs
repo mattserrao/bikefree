@@ -8,7 +8,8 @@
 //
 // A spot is in route metres (`atM`: a park's outbound leg, a network preset's path metres) and renders as
 // `render`: { park (catalog id of the world drawn), s (the world's own route metre, so the riding direction is
-// kept), aim? (look at this lat/lon/up instead of down the road), view? (a scene view's postcard camera) }.
+// kept), subject? (a bridge, tower, landform or overlook view to point a postcard camera at and check in the frame),
+// view? (a scene view's postcard camera) }.
 // Pittsburgh presets render on their areas' own worlds (one world per area, many presets' spots each), so a
 // spot shared by several presets is one image.
 import { readFileSync, existsSync } from 'node:fs';
@@ -23,8 +24,13 @@ export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const PICKS_FILE = 'routes/previews/picks.json';
 
 // scores: which highlight wins (higher first)
-export const SCORE = { pick: 1000, view: 100, arch: 85, styledBridge: 80, feature: 62, overlook: 65, lookout: 60, hero: 55,
-  col: 55, preview: 50, parkPreview: 90, namedBridge: 48, summit: 45, landform: 44, stop: 40, sign: 35, town: 25, along: 1 };
+// Spots that show a subject (a bridge, a tower, a landform, the view from an overlook) come first: the renderer
+// points a postcard camera at the subject and checks it is in the picture (tools/build_previews.mjs)
+export const SCORE = { pick: 1000, view: 100, arch: 85, styledBridge: 80, overlook: 65, feature: 62, hero: 55,
+  col: 55, namedBridge: 48, summit: 42, landform: 44, stop: 40, preview: 38, parkPreview: 38, lookout: 36, sign: 35, town: 25, along: 1 };
+// the postcard camera for a subject: metres back from the rider and up, and how much of the frame it must fill
+export const SUBJECT_CAM = { bridge: { back: 10, up: 10, minFrac: 0.22 }, hero: { back: 6, up: 6, minFrac: 0.16 },
+  landform: { back: 0, up: 20, minFrac: 0.08 }, overlook: { back: 0, up: 3, minFrac: 0.25 } };
 // a climb worth a picture: the steepest window's average grade (city streets: short and steep; parks: long)
 const CLIMB = { city: { windowM: 150, strong: 7, mild: 4 }, park: { windowM: 500, strong: 5, mild: 3 } };
 const STEP = 10;
@@ -112,16 +118,18 @@ export function sceneCandidates(park, scene, { city = null, stops = [], leg = In
   const ov = scene.overlooks;
   if (ov && Number.isFinite(ov.fromM)) {
     const mid = (ov.fromM + ov.toM) / 2, name = signName(mid, (ov.toM - ov.fromM) / 2 + 300);
-    C.push({ park, kind: 'overlook', name: name ? `the view from ${name}` : 'the overlooks', score: SCORE.overlook, atM: mid, aim: ov.look ? { lat: ov.look.lat, lon: ov.look.lon, up: ov.look.up ?? 40 } : null });
+    if (ov.look) C.push({ park, kind: 'overlook', name: name ? `the view from ${name}` : 'the overlooks', score: SCORE.overlook, atM: mid, subject: { pts: [{ lat: ov.look.lat, lon: ov.look.lon, up: ov.look.up ?? 40 }], radius: 350 } });
   }
   for (const l of scene.lookouts || []) if (Number.isFinite(l.atM)) C.push({ park, kind: 'lookout', name: signName(l.atM, 400) || 'the overlook', score: SCORE.lookout, atM: l.atM, beforeM: 40 });
   // landmarks to look at: a city's hero towers, a park's named landforms and lakes
   for (const h of scene.heroes || []) if (Number.isFinite(h.lat)) {
     const tall = (h.heightM || h.bodyM || 0) >= 140;
-    C.push({ park, kind: 'hero', name: h.name, score: SCORE.hero - (tall ? 0 : 10), lat: h.lat, lon: h.lon, up: Math.min(90, (h.heightM || h.bodyM || 30) * 0.45), nearM: tall ? 250 : 120, farM: tall ? 1400 : 380 });
+    const H = h.heightM || h.bodyM || 30;
+    C.push({ park, kind: 'hero', name: h.name, score: SCORE.hero - (tall ? 0 : 10), lat: h.lat, lon: h.lon, height: H, radius: h.radiusM || 15, nearM: tall ? 250 : 120, farM: tall ? 1400 : 380 });
   }
   for (const f of [...(scene.formations || []), ...(scene.lakes || [])]) if (f.name && Number.isFinite(f.lat)) {
-    C.push({ park, kind: 'landform', name: f.name, score: SCORE.landform, lat: f.lat, lon: f.lon, up: f.heightM ? f.heightM * 0.4 : 0, nearM: 300, farM: 9000 });
+    const lake = !f.heightM;
+    C.push({ park, kind: 'landform', name: f.name, score: SCORE.landform, lat: f.lat, lon: f.lon, height: f.heightM || 1, radius: (Array.isArray(f.radiusM) ? f.radiusM[0] : f.radiusM) || 200, nearM: 300, farM: lake ? 2500 : 9000 });
   }
   // the Tour stage's named places (Alpe d'Huez): cols and named crowd spots (the 21 bends, Dutch Corner)
   const towns = new Set((scene.boards || []).filter((b) => b.kind === 'town').map((b) => b.title));
@@ -160,18 +168,27 @@ function place(track, c) {
       const k = off + Math.abs(d - (c.nearM + c.farM) / 3) / c.farM * 10;
       if (k < cost) { cost = k; best = S[i]; }
     }
-    return best && { ...c, p: best.p, render: { park: best.park, s: best.s, aim: { lat: c.lat, lon: c.lon, up: c.up } } };
+    if (!best) return null;
+    // looked at: its foot, middle and top (and its width), from a postcard camera over the road
+    const pts = [0, 0.5, 1].map((f) => ({ lat: c.lat, lon: c.lon, up: Math.round(c.height * f) }));
+    return { ...c, p: best.p, render: { park: best.park, s: best.s, subject: subjectOf(c, { pts, radius: c.radius }) } };
   }
   // placed in outbound metres: find the samples riding it (either way)
   const hit = (out) => S.find((x) => x.park === c.park && Math.abs(x.out - out) <= STEP / 2);
-  let p = null;
+  let p = null, subject = c.subject ? subjectOf(c, c.subject) : null;
   if (Number.isFinite(c.fromM)) {
+    // a bridge: seen from its approach (far enough back to take it all in), its deck's ends and middle the subject
     const a = hit(c.fromM), b = hit(c.toM);
-    if (!a && !b) return null;
-    const into = c.intoM ?? 0;   // a long bridge (Seven Mile): from out on the deck, not the shore
-    if (a && (!b || a.p <= b.p)) p = a.dir > 0 ? a.p - 30 + into : null;
-    if (p == null && b) p = b.dir < 0 ? b.p - 30 + into : (a ? a.p - 30 + into : null);
-    if (p == null) return null;
+    if (!a || !b) return null;
+    const [e, x] = a.p <= b.p ? [a, b] : [b, a];   // riding onto it at e, off it at x
+    const len = x.p - e.p;
+    if (len < 20) return null;
+    let pts, back;
+    if (c.intoM) { const q = e.p + c.intoM; pts = [q + 150, q + 500, Math.min(x.p, q + 1200)]; back = -c.intoM; }   // a long bridge (Seven Mile): out on the deck
+    else { pts = [e.p, (e.p + x.p) / 2, x.p]; back = Math.max(70, Math.min(350, len * 0.9)); }
+    p = e.p - back;
+    while (p > 20 && at(track, p).park !== c.park) p += 10;   // stay on the bridge's own world
+    subject = subjectOf(c, { pts: pts.map((q) => ({ s: Math.round(at(track, q).s), up: 2 })) });
   } else {
     if (Number.isFinite(c.atM) && c.kind === 'view') {
       const x = S.find((y) => y.park === c.park && Math.abs(y.out - c.atM) <= (c.rangeM ?? 400));
@@ -183,7 +200,12 @@ function place(track, c) {
   }
   p = Math.max(20, Math.min(track.span - 10, p));
   const y = at(track, p);
-  return { ...c, p, render: { park: y.park, s: y.s, ...(c.aim ? { aim: c.aim } : {}) } };
+  if (subject && y.park !== c.park) return null;
+  return { ...c, p, render: { park: y.park, s: y.s, ...(subject ? { subject } : {}) } };
+}
+/** A subject to frame and check: points ({s, up} on the world's road, or {lat, lon, up} over the ground). */
+function subjectOf(c, { pts, radius = 0 }) {
+  return { name: c.name, kind: c.kind, pts, ...(radius ? { radius: Math.round(radius) } : {}), ...SUBJECT_CAM[c.kind] };
 }
 
 /** The steepest climb: the window of `windowM` with the highest average grade (riding direction). */
@@ -208,10 +230,11 @@ export function steepestClimb(track) {
  * Pick a route's spots from its track and candidates: [{ role, kind, name, atM, caption, render }].
  * picks: the route's hand overrides ({ start | highlight | third: { atM?, name?, aim?, view?, off? } }).
  */
-export function pickSpots(track, candidates, { picks = {}, startName = null, startFallback = null, routeName = '' } = {}) {
+export function pickSpots(track, candidates, { picks = {}, startName = null, startFallback = null, routeName = '', rejected = new Set() } = {}) {
   const span = track.span, gap = Math.max(250, Math.min(3000, span * 0.1));
-  // (nothing underground but a view: a tunnel shows nothing of the place)
-  const placed = candidates.map((c) => place(track, c)).filter((c) => c && (c.kind === 'view' || !at(track, c.p).under));
+  // (nothing underground but a view: a tunnel shows nothing of the place; nothing the renderer found its subject
+  // missing from: `rejected` picture names)
+  const placed = candidates.map((c) => place(track, c)).filter((c) => c && (c.kind === 'view' || !at(track, c.p).under) && !rejected.has(imageName(c.render)));
   // a nameless preview spot borrows the nearest name
   const nearName = (p, reach) => { let best = null, d = reach; for (const c of placed) if (c.name && c.kind !== 'hero' && c.kind !== 'landform' && Math.abs(c.p - p) <= d) { d = Math.abs(c.p - p); best = c.name; } return best || at(track, p).name; };
   for (const c of placed) if (!c.name) c.name = nearName(c.p, track.city ? 600 : 2000);
@@ -230,8 +253,9 @@ export function pickSpots(track, candidates, { picks = {}, startName = null, sta
   const asSpot = (c, role) => { c.used = true; if (c.name) names.add(c.name); return { role, kind: c.kind, name: c.name || null, atM: Math.round(c.p), render: c.render }; };
   const hand = (role, pick) => {
     if (pick.view) { const c = placed.find((x) => x.view === pick.view); if (c) return { ...asSpot(c, role), name: pick.name || c.name }; }
+    if (pick.of) { const c = placed.find((x) => x.name === pick.of && !x.used); if (c) return { ...asSpot(c, role), name: pick.name || c.name }; }
     const p = pick.atM ?? 20, s = spotAt(p);
-    return { role, kind: 'pick', name: pick.name ?? nearName(p, 400), ...s, render: { ...s.render, ...(pick.aim ? { aim: pick.aim } : {}) } };
+    return { role, kind: 'pick', name: pick.name ?? nearName(p, 400), ...s };
   };
   // Highlight
   let h = picks.highlight ? hand('highlight', picks.highlight) : null;
@@ -320,7 +344,7 @@ export function planRoutes(src, { only = null } = {}) {
     const r = src.route(it.id), track = parkTrack(r, it.id);
     markUnderground(src, track);
     const scene = src.scene(it.id);
-    plans.push({ id: it.id, name: it.name, kind: 'park', spots: pickSpots(track, candidatesOf(src, it.id), { picks: src.picks[it.id], routeName: scene.title || it.name.split(' · ')[0], startFallback: it.name.split(' · ')[0] }) });
+    plans.push({ id: it.id, name: it.name, kind: 'park', spots: pickSpots(track, candidatesOf(src, it.id), { picks: src.picks[it.id], rejected: src.rejected || new Set(), routeName: scene.title || it.name.split(' · ')[0], startFallback: it.name.split(' · ')[0] }) });
   }
   for (const { item, json, net } of src.networks) {
     const parks = [...net.areas.values()].map((A) => A.json?.catalogId || item.id);
@@ -337,7 +361,7 @@ export function planRoutes(src, { only = null } = {}) {
       // any area's copy of a landmark may be the one the path rides past: match each on every area
       const mine = uniq.flatMap((c) => ((c.kind === 'view' && !Number.isFinite(c.atM)) || c.kind === 'hero') ? parks.map((p) => ({ ...c, park: p })) : [c]);
       const startName = track.samples[0]?.node || null;
-      plans.push({ id, name, kind: preset.path ? 'preset' : 'free', spots: pickSpots(track, mine, { picks: src.picks[id], startName, routeName: name }) });
+      plans.push({ id, name, kind: preset.path ? 'preset' : 'free', spots: pickSpots(track, mine, { picks: src.picks[id], rejected: src.rejected || new Set(), startName, routeName: name }) });
     }
   }
   return plans;
@@ -345,5 +369,5 @@ export function planRoutes(src, { only = null } = {}) {
 /** The image a spot renders to (shared by every route with the same spot). */
 export function imageName(render) {
   if (render.view) return `${render.park}-view-${slug(render.view)}.webp`;
-  return `${render.park}-${Math.round(render.s)}${render.aim ? `-to-${slug(`${render.aim.lat.toFixed(4)}-${render.aim.lon.toFixed(4)}`)}` : ''}.webp`;
+  return `${render.park}-${Math.round(render.s)}${render.subject ? `-${slug(render.subject.name)}` : ''}.webp`;
 }

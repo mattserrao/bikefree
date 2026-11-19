@@ -44,8 +44,10 @@ test('pickSpots: start, the best highlight, the steep climb; spread apart', () =
   assert.equal(s[0].caption, 'Start · Water Steps');
   assert.equal(s[0].atM, 20);
   assert.equal(s[1].caption, 'Highlight · Big Bridge');
-  assert.equal(s[1].atM, 6470, 'a bridge is pictured from just before it');
-  assert.equal(s[1].render.s, 6470);
+  assert.equal(s[1].atM, 6320, 'a bridge is pictured from its approach (0.9 × its length, at least 70 m back)');
+  assert.equal(s[1].render.s, 6320);
+  assert.equal(s[1].render.subject.name, 'Big Bridge', 'the camera points at the bridge and checks it is seen');
+  assert.deepEqual(s[1].render.subject.pts.map((q) => q.s), [6500, 6600, 6700], 'its ends and middle');
   assert.match(s[2].caption, /^Climb · First Street, 10 %$/);
   assert.ok(s[2].atM > 3000 && s[2].atM < 3200, 'part way up the ramp');
   const gap = Math.max(250, Math.min(3000, t.span * 0.1));
@@ -59,6 +61,19 @@ test('pickSpots: an escalator is not a climb; nothing underground but a view', (
   const s = pickSpots(u, [{ park: 'fx', kind: 'bridge', name: 'Tunnel Bridge', score: SCORE.styledBridge, fromM: 6000, toM: 6100 },
     { park: 'fx', kind: 'sign', name: 'Daylight Sign', score: SCORE.sign, atM: 7500, beforeM: 50 }]);
   assert.equal(s[1].name, 'Daylight Sign');
+});
+
+test('pickSpots: a subject the renderer could not see is skipped for the next best', () => {
+  const t = track({ ramp: [0, 0, 0], escalator: [0, 0] });
+  const C = [{ park: 'fx', kind: 'bridge', name: 'Hidden Bridge', score: SCORE.styledBridge, fromM: 4000, toM: 4100 },
+    { park: 'fx', kind: 'hero', name: 'Tall Tower', score: SCORE.hero, lat: 40 + 6500 / 111000, lon: -80, height: 200, radius: 15, nearM: 250, farM: 1400 }];
+  const a = pickSpots(t, C);
+  assert.equal(a[1].name, 'Hidden Bridge');
+  const b = pickSpots(t, C, { rejected: new Set([imageName(a[1].render)]) });
+  assert.equal(b[1].name, 'Tall Tower');
+  assert.equal(b[1].render.subject.kind, 'hero');
+  assert.deepEqual(b[1].render.subject.pts.map((q) => q.up), [0, 100, 200], 'its foot, middle and top');
+  assert.ok(b[1].atM < 6500 - 250, 'from the road riding toward it');
 });
 
 test('pickSpots: a flat route gets a second highlight instead of a climb; hand picks win', () => {
@@ -77,7 +92,7 @@ test('caption and image names', () => {
   assert.equal(caption({ role: 'highlight', kind: 'summit', name: 'Logan Pass' }), 'Summit · Logan Pass');
   assert.equal(imageName({ park: 'pittsburgh-oakland', s: 5420.4 }), 'pittsburgh-oakland-5420.webp');
   assert.equal(imageName({ park: 'pittsburgh', view: 'The Point' }), 'pittsburgh-view-the-point.webp');
-  assert.match(imageName({ park: 'pittsburgh', s: 100, aim: { lat: 40.44138, lon: -79.99471, up: 90 } }), /^pittsburgh-100-to-40-4414-79-9947\.webp$/);
+  assert.equal(imageName({ park: 'pittsburgh', s: 100, subject: { name: 'U.S. Steel Tower' } }), 'pittsburgh-100-u-s-steel-tower.webp');
 });
 
 // the repo's routes: every park route in the menu, every Pittsburgh preset and the free ride

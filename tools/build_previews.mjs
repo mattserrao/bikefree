@@ -26,7 +26,7 @@ import { ROOT, loadSources, planRoutes, imageName } from './preview_spots.mjs';
 
 export const SIZE = { width: 480, height: 270 };
 export const RENDER = {
-  version: 1,   // bump to re-render everything (a camera or encoding change)
+  version: 2,   // bump to re-render everything (a camera or encoding change)
   scale: 2,     // drawn at 960×540, scaled down (sharper edges than drawing small)
   webp: 0.72,
   time: 'midday', weather: 'clear',
@@ -51,6 +51,21 @@ const sha = (buf) => createHash('sha256').update(buf).digest('hex');
 // ---------- plan ----------
 const t0 = Date.now();
 const src = loadSources(ROOT);
+// what a picture depends on: its world's data files, the spot and the render settings (code changes are not
+// tracked: re-render at the end of a phase, or bump RENDER.version)
+const fileHash = new Map();
+const hashOf = (p) => { if (!fileHash.has(p)) fileHash.set(p, existsSync(resolve(ROOT, p)) ? sha(readFileSync(resolve(ROOT, p))).slice(0, 16) : 'missing'); return fileHash.get(p); };
+function worldOf(park) {
+  const it = src.item(park), sc = src.scene(park);
+  const files = [it.file, it.scene, sc.cityData, sc.terrainGridFile, sc.placesFile, sc.terrainData?.file, sc.assets, ...(sc.extraAssets || [])].filter(Boolean);
+  return sha(JSON.stringify({ files: files.map((f) => [f, hashOf(f)]), RENDER, SIZE, quality })).slice(0, 16);
+}
+const inputsOf = (render) => sha(JSON.stringify({ world: worldOf(render.park), render })).slice(0, 16);
+// subjects the renderer found out of view or hidden (checks): the picker skips those spots while their world is unchanged
+const renders = readJson(RENDERS, { images: {}, checks: {} });
+renders.checks ||= {};
+for (const [f, c] of Object.entries(renders.checks)) if (c.world !== worldOf(c.park)) delete renders.checks[f];
+src.rejected = new Set(Object.entries(renders.checks).filter(([, c]) => !c.ok).map(([f]) => f));
 const plans = planRoutes(src);   // always the whole menu: the manifests list every route
 const images = new Map();        // file → { render, routes }
 for (const p of plans) for (const s of p.spots) {
@@ -58,17 +73,7 @@ for (const p of plans) for (const s of p.spots) {
   if (!images.has(s.file)) images.set(s.file, { render: s.render, routes: [] });
   images.get(s.file).routes.push(p.id);
 }
-// what a picture depends on: its world's data files, the spot and the render settings (code changes are not
-// tracked: re-render at the end of a phase, or bump RENDER.version)
-const fileHash = new Map();
-const hashOf = (p) => { if (!fileHash.has(p)) fileHash.set(p, existsSync(resolve(ROOT, p)) ? sha(readFileSync(resolve(ROOT, p))).slice(0, 16) : 'missing'); return fileHash.get(p); };
-function inputsOf(render) {
-  const it = src.item(render.park), sc = src.scene(render.park);
-  const files = [it.file, it.scene, sc.cityData, sc.terrainGridFile, sc.placesFile, sc.terrainData?.file, sc.assets, ...(sc.extraAssets || [])].filter(Boolean);
-  return sha(JSON.stringify({ files: files.map((f) => [f, hashOf(f)]), render, RENDER, SIZE, quality })).slice(0, 16);
-}
 for (const [file, im] of images) im.inputs = inputsOf(im.render);
-const renders = readJson(RENDERS, { images: {} });
 const stateOf = (file) => !existsSync(resolve(ROOT, DIR, file)) ? 'missing' : renders.images[file]?.inputs !== images.get(file).inputs ? 'stale' : 'ok';
 
 function writeManifests() {
@@ -85,7 +90,7 @@ function writeManifests() {
   const sorted = (o) => Object.fromEntries(Object.keys(o).sort().map((k) => [k, o[k]]));
   return Promise.all([
     writeFile(resolve(ROOT, INDEX), JSON.stringify({ ...index, routes: sorted(routes) }, null, 1) + '\n'),
-    writeFile(resolve(ROOT, RENDERS), JSON.stringify({ format: 'bikefree-preview-renders-1', note: 'tools/build_previews.mjs: each picture\'s spot and input hash (--check)', images: sorted(renders.images) }, null, 1) + '\n'),
+    writeFile(resolve(ROOT, RENDERS), JSON.stringify({ format: 'bikefree-preview-renders-1', note: 'tools/build_previews.mjs: each picture\'s spot and input hash (--check)', images: sorted(renders.images), checks: sorted(renders.checks) }, null, 1) + '\n'),
   ]);
 }
 
@@ -136,7 +141,7 @@ const launch = () => chromium.launch({ executablePath: chrome, proxy,
   args: software ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : ['--ignore-gpu-blocklist', '--enable-gpu'] });
 let browser = await launch();
 const W = SIZE.width * RENDER.scale, H = SIZE.height * RENDER.scale;
-let failed = 0, done = 0;
+let failed = 0, done = 0, unseen = 0;
 const tRender = Date.now();
 
 async function renderPark(park, files) {
@@ -166,7 +171,7 @@ async function renderPark(park, files) {
       const t1 = Date.now();
       await page.waitForFunction(() => { const w = window.world; if (w.stylized) return !w.loading; const c = w.camera.position; w.terrain.update(c.x, c.z); return w.terrain.loadingCount === 0 && w.terrain.stats.ready > 4; }, null, { timeout: 180000, polling: 500 });
       const t2 = Date.now();
-      const url = await page.evaluate(async ({ render, W, H, out, webp }) => {
+      const shot = await page.evaluate(async ({ render, W, H, out, webp }) => {
         const w = window.world, t = w.terrain, city = t.city;
         w.stop();
         const cam = w.camera, P = w.proj;
@@ -176,9 +181,31 @@ async function renderPark(park, files) {
           const a = P.toLocal(v.cam.lat, v.cam.lon), b = P.toLocal(v.look.lat, v.look.lon);
           cam.position.set(a.x, v.cam.abs ?? t.heightAt(a.x, a.z) + (v.cam.up ?? 30), a.z);
           cam.lookAt(b.x, v.look.abs ?? t.heightAt(b.x, b.z) + (v.look.up ?? 0), b.z);
-        } else if (render.aim) {
-          const b = P.toLocal(render.aim.lat, render.aim.lon);
-          cam.lookAt(b.x, (t.heightAt(b.x, b.z) ?? cam.position.y) + (render.aim.up || 0), b.z);
+        }
+        // a subject (bridge, tower, landform, the view from an overlook): a postcard camera over the road, `back`
+        // metres behind the rider and `up` over it, pointed at the subject's points (their middle)
+        let pts = null, mid = null;
+        const THREE = render.subject ? await import('/vendor/three.module.min.js') : null;
+        if (render.subject) {
+          const S = render.subject, V = THREE.Vector3, s = render.s;
+          const r = w.pointAt(s), fwd = new V().subVectors(w.pointAt(s + 5), w.pointAt(Math.max(0, s - 5))).setY(0).normalize();
+          pts = S.pts.map((q) => { if (q.s != null) return w.pointAt(q.s).add(new V(0, q.up || 0, 0)); const a = P.toLocal(q.lat, q.lon); return new V(a.x, t.heightAt(a.x, a.z) + (q.up || 0), a.z); });
+          if (S.kind === 'landform') {
+            // a landform is part of the terrain (heightAt is its surface): its top, and its foot on the side facing the road
+            const a = P.toLocal(S.pts[0].lat, S.pts[0].lon), toward = new V(r.x - a.x, 0, r.z - a.z).normalize();
+            const fx = a.x + toward.x * (S.radius || 200), fz = a.z + toward.z * (S.radius || 200);
+            // (just over its top: a ray to a point on a slope grazes the slope before it; a little above, it sees the ridge line)
+            const d = Math.hypot(r.x - a.x, r.z - a.z);
+            pts = [new V(a.x, t.heightAt(a.x, a.z) + Math.max(15, d * 0.025), a.z), new V(fx, t.heightAt(fx, fz) + Math.max(4, d * 0.01), fz)];
+          }
+          mid = pts.reduce((m, v) => m.add(v), new V()).multiplyScalar(1 / pts.length);
+          cam.position.copy(r).addScaledVector(fwd, -S.back); cam.position.y += S.up;
+          const g = t.heightAt(cam.position.x, cam.position.z);
+          if (g != null && cam.position.y < g + 2) cam.position.y = g + 2;
+          // look at its middle, but no more than ~10° up: the road stays in the bottom of the picture
+          const look = mid.clone(), run = Math.hypot(look.x - cam.position.x, look.z - cam.position.z);
+          look.y = Math.min(look.y, cam.position.y + run * Math.tan(10 * Math.PI / 180));
+          cam.lookAt(look);
         }
         cam.updateMatrixWorld(); w.sky.position.copy(cam.position);
         const cx = cam.position.x, cz = cam.position.z;
@@ -187,17 +214,61 @@ async function renderPark(park, files) {
         city?.streetKit?.flush();
         if (w.baked && !w.baked.ready) w.baked.bakeNow();   // [baked-light] once per world (as snap_cam)
         city?.streetKit?.flush();
+        // the check: is the subject in the frame, big enough, and not hidden (rays from the camera to its points
+        // against everything drawn but the rider, the sky and see-through things)?
+        let check = null;
+        if (render.subject) {
+          const S = render.subject, V = THREE.Vector3;
+          cam.updateProjectionMatrix(); cam.updateMatrixWorld();
+          const all = [...pts];
+          if (S.radius) { const right = new V().subVectors(mid, cam.position).cross(new V(0, 1, 0)).normalize(); all.push(mid.clone().addScaledVector(right, S.radius), mid.clone().addScaledVector(right, -S.radius)); }
+          const ndc = all.map((v) => v.clone().project(cam)).filter((v) => v.z < 1);
+          // in the frame: its middle, or (a tall one, the view tilted down) any of its points
+          const m = mid.clone().project(cam);
+          const inFrame = (m.z < 1 && Math.abs(m.x) < 0.92 && Math.abs(m.y) < 0.92) || ndc.some((v) => Math.abs(v.x) < 0.9 && Math.abs(v.y) < 0.9);
+          const cl = (x) => Math.max(-1, Math.min(1, x));
+          const xs = ndc.map((v) => cl(v.x)), ys = ndc.map((v) => cl(v.y));
+          const frac = ndc.length ? Math.max((Math.max(...xs) - Math.min(...xs)) / 2, (Math.max(...ys) - Math.min(...ys)) / 2) : 0;
+          const list = [];
+          // (the terrain by its height function, as the world places everything on it — its meshes are shaped on the GPU)
+          const isGround = (o) => /terrain|ground|cloud|mist/i.test(`${o.name} ${o.parent?.name || ''}`);
+          const walk = (o) => { if (!o.visible || o === w.sky || o === w.rider?.group) return; if (o.isMesh && o.geometry && !isGround(o) && !(o.material?.transparent && (o.material.opacity ?? 1) < 0.6)) list.push(o); for (const c of o.children) walk(c); };
+          walk(w.scene);
+          const ray = new THREE.Raycaster();
+          let seen = 0; const blockers = new Set();
+          for (const v of pts) {
+            const d = v.distanceTo(cam.position);
+            ray.set(cam.position, v.clone().sub(cam.position).normalize()); ray.near = 1; ray.far = Math.max(1, d - Math.max(6, d * 0.08));
+            let hit = false;
+            const n = Math.ceil(ray.far / Math.max(4, ray.far / 300));
+            for (let k = 1; k < n && !hit; k++) { const q = cam.position.clone().addScaledVector(ray.ray.direction, ray.far * k / n); const g = t.heightAt(q.x, q.z); if (g != null && q.y < g - 0.5) { hit = true; blockers.add('the ground'); } }
+            if (!hit) try { const h = ray.intersectObjects(list, false)[0]; hit = !!h; if (h) blockers.add((h.object.name || h.object.parent?.name || h.object.type).slice(0, 30)); } catch { hit = false; }
+            if (!hit) seen++;
+          }
+          check = { inFrame, frac: +frac.toFixed(3), seen: `${seen}/${pts.length}`, by: [...blockers].join(', '), ok: inFrame && frac >= S.minFrac && seen > 0 };
+          check.why = check.ok ? '' : !inFrame ? 'out of frame' : frac < S.minFrac ? `too small (${Math.round(frac * 100)} % of the frame)` : `hidden (by ${[...blockers].join(', ') || '?'})`;
+          if (!check.ok) return { check };
+        }
         w.renderer.shadowMap.needsUpdate = true;
         if (w._render) w._render(); else w.renderer.render(w.scene, cam);
         const c = document.createElement('canvas'); c.width = out[0]; c.height = out[1];
         const g = c.getContext('2d'); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
         g.drawImage(w.renderer.domElement, 0, 0, W, H, 0, 0, out[0], out[1]);
-        return c.toDataURL('image/webp', webp);
+        return { url: c.toDataURL('image/webp', webp), check };
       }, { render, W, H, out: [SIZE.width, SIZE.height], webp: RENDER.webp });
+      const { url, check } = shot;
+      if (check) renders.checks[file] = { park, world: worldOf(park), ok: check.ok, frac: check.frac, seen: check.seen, ...(check.ok ? {} : { why: check.why }) };
+      if (check && !check.ok) {
+        unseen++;
+        if (existsSync(resolve(ROOT, DIR, file))) unlinkSync(resolve(ROOT, DIR, file));
+        delete renders.images[file];
+        console.log(`no  ${file.padEnd(46)} ${render.subject.name}: ${check.why} (seen ${check.seen}) — another spot next run`);
+        continue;
+      }
       if (!url.startsWith('data:image/webp')) throw new Error('no WebP encoder in this browser');
       const buf = Buffer.from(url.split(',')[1], 'base64');
       await writeFile(resolve(ROOT, DIR, file), buf);
-      renders.images[file] = { park, ...(render.s != null ? { s: render.s } : {}), ...(render.view ? { view: render.view } : {}), ...(render.aim ? { aim: render.aim } : {}), inputs: images.get(file).inputs, sha: sha(buf), bytes: buf.length };
+      renders.images[file] = { park, ...(render.s != null ? { s: render.s } : {}), ...(render.view ? { view: render.view } : {}), ...(render.subject ? { subject: render.subject.name, frac: check?.frac } : {}), inputs: images.get(file).inputs, sha: sha(buf), bytes: buf.length };
       done++;
       console.log(`${errors.length ? 'ERR' : 'ok '} ${file.padEnd(46)} ${(buf.length / 1024).toFixed(1).padStart(5)} kB  ${Math.round((Date.now() - r0) / 1000)} s (seek ${Math.round((t1 - r0) / 1000)}, stream ${Math.round((t2 - t1) / 1000)}, draw ${Math.round((Date.now() - t2) / 1000)})${errors.length ? '  ' + errors.slice(0, 2).join(' | ').slice(0, 200) : ''}`);
       if (errors.length) failed++;
@@ -218,5 +289,5 @@ await browser.close(); server.close();
 const used = new Set(images.keys());
 if (!only && !parkOnly) for (const f of readdirSync(resolve(ROOT, DIR)).filter((x) => x.endsWith('.webp'))) if (!used.has(f)) { unlinkSync(resolve(ROOT, DIR, f)); console.log(`removed ${f} (no route uses it)`); }
 await writeManifests();
-console.log(`Rendered ${done} picture${done === 1 ? '' : 's'} in ${Math.round((Date.now() - tRender) / 1000)} s${failed ? ` · ${failed} failed` : ''} → ${DIR}/`);
+console.log(`Rendered ${done} picture${done === 1 ? '' : 's'} in ${Math.round((Date.now() - tRender) / 1000)} s${failed ? ` · ${failed} failed` : ''}${unseen ? ` · ${unseen} subjects not in view (their routes pick another spot: run again)` : ''} → ${DIR}/`);
 process.exitCode = failed ? 1 : 0;
