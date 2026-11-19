@@ -1377,6 +1377,7 @@ Decided with the user (19 Nov, after riding phase 6):
   - **New preset "Stadiums Loop"** on the North Shore: Water Steps → PNC Park → Acrisure Stadium → back over the Clemente Bridge
   - Goes with 7.7's North Shore landmarks (the Clemente / Stargell / Wagner statues, Mister Rogers, USS Requin) since they share the area; core and North Side map data. Views (postcards) of the photo's angle; route preview images for the new preset
   - Follow-ups F350–F369
+- Check budget (user, 19 Nov: no non-productive checks): agents run targeted tests for what they touch; the full `npm test` runs once, at merge, by the coordinator; `qc:network` / `qc_course --strict` only after ridden-geometry or network changes; `qc_clipping` once at the end and only for areas whose scene changed (`--life-only` for traffic-only changes); one performance measurement at the busiest new view; snapshots limited to the deliverable's views; no parameter sweeps beyond a confirming measurement
 - [ ] 7.6 Final QC (as phase 6's trimmed set) and PR
 - Landmarks: an inventory and a brainstorm of missing landmarks near the routes (project doc `claude/pittsburgh-landmarks.md`); which to build is the user's call
 
