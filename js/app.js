@@ -672,7 +672,7 @@ function renderPreview() {
 }
 
 // ---------- Route pictures (PLAN 6.8): start, highlight, a climb — pre-rendered (tools/build_previews.mjs) ----------
-let previewManifest = null, shownShots = [], shotsKey = null, shotAt = 0;
+let previewManifest = null, shownShots = [], shotsKey = null, shotAt = 0, dlgShots = [];
 async function loadPreviewManifest() {
   try { previewManifest = await (await fetch(PREVIEW_INDEX)).json(); } catch { previewManifest = null; }
   prunePreviewCache(previewManifest).catch(() => {});
@@ -687,17 +687,33 @@ function renderShots(r) {
   box.style.setProperty('--n', shownShots.length || 1);
   box.innerHTML = shotsHtml(shownShots);
 }
-function showShot(i) {
-  if (!shownShots.length) return;
-  shotAt = (i + shownShots.length) % shownShots.length;
-  const s = shownShots[shotAt];
+/** Enlarges picture i of a strip's list (the menu's, or the city panel's: 7.1) — ‹ › go round that list. */
+function showShot(i, list = dlgShots) {
+  if (!list.length) return;
+  dlgShots = list;
+  shotAt = (i + list.length) % list.length;
+  const s = list[shotAt];
   $('shotImg').src = s.url; $('shotImg').alt = s.caption;
   $('shotCap').innerHTML = `<b>${escapeHtml(s.word)}</b>${s.place ? ` ${escapeHtml(s.place)}` : ''}`;
-  $('shotCount').textContent = `${shotAt + 1} of ${shownShots.length}`;
-  $('shotPrev').hidden = $('shotNext').hidden = shownShots.length < 2;
-  if (!$('shotDlg').open) $('shotDlg').showModal();
+  $('shotCount').textContent = `${shotAt + 1} of ${list.length}`;
+  $('shotPrev').hidden = $('shotNext').hidden = list.length < 2;
+  if (!$('shotDlg').open) $('shotDlg').showModal();   // (over the full-screen city panel too: the later modal is on top)
 }
-$('pvShots').addEventListener('click', (e) => { const b = e.target.closest('[data-shot]'); if (b) showShot(Number(b.dataset.shot)); });
+$('pvShots').addEventListener('click', (e) => { const b = e.target.closest('[data-shot]'); if (b) showShot(Number(b.dataset.shot), shownShots); });
+// the full-screen city panel covers the menu's pictures (7.1): the selected route's are shown below its map
+let cityShotList = [], cityShotsKey;
+function renderCityShots(routeId) {
+  const key = `${routeId}|${previewManifest ? 1 : 0}`;
+  if (key === cityShotsKey) return;   // the same route: no reload (the list is redrawn on every pick)
+  cityShotsKey = key;
+  cityShotList = routeId ? previewShots(previewManifest, routeId) : [];
+  const box = $('cityShots');
+  box.hidden = !cityShotList.length;
+  box.style.setProperty('--n', cityShotList.length || 1);
+  box.innerHTML = shotsHtml(cityShotList);
+  $('cityDlg').classList.toggle('has-shots', cityShotList.length > 0);
+}
+$('cityShots').addEventListener('click', (e) => { const b = e.target.closest('[data-shot]'); if (b) showShot(Number(b.dataset.shot), cityShotList); });
 $('shotPrev').addEventListener('click', () => showShot(shotAt - 1));
 $('shotNext').addEventListener('click', () => showShot(shotAt + 1));
 $('shotClose').addEventListener('click', () => $('shotDlg').close());
@@ -1527,6 +1543,7 @@ function renderCity() {
   $('cityList').innerHTML = list.length ? groups.map((g) => heading(g) + g.items.map(rowHtml).join('')).join('') : `<li class="muted city-none">No ${city.goal === 'all' ? '' : `${label[city.goal].toLowerCase()} `}routes${city.seg ? ' on this segment' : ''} yet${byGoal.length ? '' : ' — try another goal, or plan your own'}.</li>`;
   const sel = list.find((it) => it.id === city.sel);
   $('citySel').textContent = sel ? `${shortName(sel.name)}: ${facts(sel)}` : '';
+  renderCityShots(sel ? sel.routeId : null);
   renderCityMap();
 }
 function renderCityMap() {

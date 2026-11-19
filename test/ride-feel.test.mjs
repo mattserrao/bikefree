@@ -60,6 +60,14 @@ test('closest camera is the default (PLAN 6.10), nearer than close, which is nea
     assert.ok(c.back > .41 + .336 + 1, `${JSON.stringify(c)} too close to the wheel`);
     assert.ok(c.up >= 1.4 && c.ground >= 1.4, `${JSON.stringify(c)} too low`);
   }
+  // 7.2: Closest is closer and higher than 6.10's (2.3 m back, 1.5 m up), aimed down so the back wheel sits just over
+  // the power bar (measured 1440×900 and 390×844): the look point well below the road ahead
+  assert.ok(CHASE_CLOSEST.back <= 2.0 && CHASE_CLOSEST.up >= 1.7, JSON.stringify(CHASE_CLOSEST));
+  const pitch = Math.atan2(CHASE_CLOSEST.up - CHASE_CLOSEST.lookUp, CHASE_CLOSEST.back + CHASE_CLOSEST.ahead) * 180 / Math.PI;
+  assert.ok(pitch > 25 && pitch < 32, `aimed ${pitch.toFixed(1)}° down`);
+  // Close and Classic unchanged
+  assert.deepEqual(CHASE_CLOSE, { back: 3.3, up: 1.8, ahead: 7, lookUp: -0.4, ground: 1.6, fov: 58, speedFov: 10, pull: 0.25, buzz: 0.01 });
+  assert.deepEqual(CHASE_CLASSIC, { back: 4.5, up: 2.1, ahead: 8, lookUp: -0.6, ground: 1.6, fov: 62, speedFov: 0, pull: 0, buzz: 0 });
   // Settings → Camera offers all three, Closest first and marked the default
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const opts = [...html.match(/<select name="camera">([\s\S]*?)<\/select>/)[1].matchAll(/value="(\w+)"[^>]*>([^<]*)/g)].map((m) => [m[1], m[2]]);
