@@ -9,7 +9,7 @@
 // time midday|morning|afternoon|golden|night, season summer|fall, weather clear|marine|clouds|rain|smoke,
 // look gentle|bold|current (default: the scene's own look; current = no cartoon).
 // No @metres = the scene's preview spot.
-// Options: --out <dir> (default tools/snapshots), --quality low|balanced|high, --size 1280x720,
+// Options: --out <dir> (default tools/snapshots), --quality low|balanced|high, --size 1280x720, --dpr 2 (a Retina screen),
 // --arches 22350:START:Avalanche Creek,47310:FINISH:Logan Pass (the start / finish arches),
 // --path e1+,e3+ (a route with a ride network: follow that path through its junctions; @metres along the path),
 // --chrome <path> (default: CHROME env, else the usual Mac/Linux locations), --software (no GPU).
@@ -33,6 +33,7 @@ const arches = opt('--arches', null);   // course arches: <startM>[:TITLE[:sub]]
 const pathKeys = opt('--path', null);   // a ride network's path (e1+,e3+): @metres are then path metres (js/network.js)
 const areaId = opt('--area', null);     // a city of areas (PLAN 5.4): draw this area (while it covers the spot), not the one the path would pick
 const [width, height] = opt('--size', '1280x720').split('x').map(Number);
+const dpr = Number(opt('--dpr', '1'));   // device pixel ratio (2 = a Retina screen: the canvas renders at twice the size)
 const software = flag('--software');
 const breakdown = flag('--breakdown');   // list draw calls by object
 const png = flag('--png');   // [toolbox] lossless PNG instead of JPEG (pixel-exact refactor checks)
@@ -74,7 +75,7 @@ catch { console.error('Needs playwright-core: npm install'); server.close(); pro
 const proxy = process.env.HTTPS_PROXY ? { server: process.env.HTTPS_PROXY, bypass: '127.0.0.1,localhost' } : undefined;   // tile downloads behind a proxy
 const browser = await chromium.launch({ executablePath: chrome, proxy,
   args: [...(software ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : ['--ignore-gpu-blocklist', '--enable-gpu']), '--enable-precise-memory-info'] });
-const page = await browser.newPage({ viewport: { width, height } });
+const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: dpr });
 // [toolbox] --fingerprint: a seeded Math.random and a clock that only moves when asked, so two builds of the
 // same scene are byte-identical (water, weather and traffic otherwise depend on wall time)
 if (fingerprint) await page.addInitScript(() => {
@@ -177,6 +178,6 @@ for (const shot of shots) {
   console.log(`${errors.length ? 'ERR ' : 'ok  '} ${shot.spec.padEnd(34)} ${String(r.calls).padStart(5)} calls ${(r.triangles / 1e6).toFixed(2).padStart(6)} M tris${r.areas ? ` · areas ${r.areas}` : ''} · ${r.memory.geometries} geometries, ${r.memory.textures} textures, heap ${r.memory.heapMB} MB  → ${file}`);
   for (const e of errors) console.log(`       ${e.slice(0, 200)}`);
 }
-await writeFile(resolve(ROOT, out, 'snapshots.json'), JSON.stringify({ quality, size: `${width}x${height}`, software, rows }, null, 2));
+await writeFile(resolve(ROOT, out, 'snapshots.json'), JSON.stringify({ quality, size: `${width}x${height}`, dpr, software, rows }, null, 2));
 await browser.close(); server.close();
 process.exitCode = rows.some((r) => r.errors.length) ? 1 : 0;
