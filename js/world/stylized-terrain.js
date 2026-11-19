@@ -1245,6 +1245,9 @@ export class StylizedTerrain {
     this.city?._stream(cx, cz, Math.max(.5, deadline - performance.now()));
   }
 
+  /** [F111] Metres the chase camera's look point rises at (x, z): up into a glasshouse's dome (0 elsewhere). */
+  cameraLookUp(x, z) { return this.city?.glasshouses?.lookUp?.(x, z) || 0; }
+
   /** Every frame (the city's traffic, people and boats move continuously). */
   tick(camera, dt, rider) {
     this.city?.tick(camera, dt, this.uniforms.uTime.value, rider);

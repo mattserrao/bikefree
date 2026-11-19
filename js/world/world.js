@@ -751,6 +751,7 @@ export class World {
     // Aim a little low so the rider sits above the HUD strip at the bottom of the screen.
     pos.copy(riderPos).addScaledVector(flat, -(K.back + pull)).addScaledVector(up, K.up);
     look.copy(riderPos).addScaledVector(fwd, K.ahead).addScaledVector(up, K.lookUp);
+    look.y += this.terrain.cameraLookUp?.(riderPos.x, riderPos.z) || 0;   // [F111] e.g. up into a glasshouse's dome
     // Keep the camera above ground (not underground: in a tunnel or an escalator shaft the ground is overhead)
     const g = this._underS ? null : this.terrain.heightAt(pos.x, pos.z);
     if (g != null && pos.y < g + K.ground) pos.y = g + K.ground;

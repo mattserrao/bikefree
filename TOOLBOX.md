@@ -91,6 +91,7 @@ js/world/toolbox/
 | `core/random.js` | `randomSequence(seed)`: seeded, so a scene builds the same every time. Never use `Math.random` for placement. Also `smoothstep`, `vnoise`/`vhash` (planting patterns), `ROAD_CORRIDOR_M`. |
 | `core/jobs.js` | Jobs: long builds as generators that pause at `due()` (`each`, `mapJob`, `mapGen`), run all at once (`drain`) or in frame slices (`runSlice(job, ms)`; `yield { wait: promise }` to wait). The same steps in the same order either way, so the result is the same: the city's areas are built this way on the ride (PLAN F30, `tools/area_build_check.mjs` proves it). |
 | `core/pools.js` | `InstancePool`, `GroundBlocks`, `packMatrices`: one instanced draw per plant kind per quarter around the camera. |
+| `core/sound.js` | `worldSound`: a tiny Web Audio mixer for the world's ambience, all synthesised (no files): looping voices (`loop`, `noiseLoop`, `toneLoop`) and one-shots (`play`: chime, doors, brakes, depart); quiet, off with Settings → World sounds; call `touch()` each frame something plays (it fades out and suspends otherwise). The subway kit's `SubwaySound` is the first user. |
 
 ### Landscape: the ground (`"terrain"`)
 

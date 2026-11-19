@@ -17,6 +17,7 @@ import { loadNetwork, makePathRoute, planNext, planCloses, keysToIds, idsToKeys,
 import { legLength, startPosition, stopsForDirection, stopNear, planRide, startArchM } from './route-plan.js';
 import { VERSION } from './version.js';
 import { ScreenAwake } from './wakelock.js';
+import { worldSound } from './world/toolbox/core/sound.js';
 import { planRouteTiles, tileKeysToUrls, downloadUrls, offlineStatus, setOfflineStatus, registerServiceWorker } from './offline.js';
 
 const $ = (id) => document.getElementById(id);
@@ -62,6 +63,7 @@ if (!hasBluetooth) for (const id of ['rideBtn', 'hrBtn']) $(id).disabled = true;
 
 // ---------- Core objects ----------
 const settings = loadSettings();
+worldSound.setEnabled(settings.worldSound !== false);   // [subway sound] Settings → World sounds (on, quiet)
 // The active rider's weight drives the physics.
 const profiles = new Profiles(localStorage, settings.riderKg, settings.ftp);
 settings.riderKg = profiles.active.weightKg;
@@ -2205,6 +2207,7 @@ function fillSettings() {
   $('diffOut').textContent = `${settings.difficulty}%`;
   f.realRatio.value = settings.realRatio;
   f.haptics.checked = settings.haptics;
+  f.worldSound.checked = settings.worldSound !== false;
   f.hudSize.value = settings.hudSize;
   f.hillFeel.value = String(settings.hillFeel ?? 50);
   f.camera.value = settings.camera || 'close';
@@ -2237,6 +2240,7 @@ dlg.addEventListener('close', () => {
     difficulty: Number(f.difficulty.value),
     realRatio: Math.max(0, Number(f.realRatio.value) || 0),
     haptics: f.haptics.checked,
+    worldSound: f.worldSound.checked,
     hudSize: f.hudSize.value,
     hillFeel: Number(f.hillFeel.value) || 50,
     camera: f.camera.value,
@@ -2250,6 +2254,7 @@ dlg.addEventListener('close', () => {
   world?.setQuality(settings.worldQuality);
   world?.setWeather(settings.worldWeather);
   world?.setCamera?.(settings.camera);
+  worldSound.setEnabled(settings.worldSound);
   applyHudPrefs();
   renderRouteCards();
   renderWorkoutList();
