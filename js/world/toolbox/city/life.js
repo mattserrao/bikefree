@@ -707,6 +707,11 @@ export class CityLife {
       const room = (w.speed * 1.15) ** 2 / (4 * MOVE.car.dec) + MOVE.car.kerb + 10, rem = dir > 0 ? w.path.length - hit[1] : hit[1];
       if ((w.band || []).some((c) => { const d = dir > 0 ? c.s0 - hit[1] : hit[1] - c.s1; return d > -4 && d < room; })) continue;
       if (rem < room) { const far = this._roadAhead(this.drive, hit[0], dir, true); if (far && rem + far.d < room) continue; }
+      // [F130] nor past where it would turn round at a dead end ahead (it would stop and swing round right there: on a
+      // street running close beside the route, into the rider's road)
+      const endP = dir > 0 ? w.path.pts.at(-1) : w.path.pts[0];
+      const dead = !(net.ends.get(net.key(endP)) || []).some((o) => o.i !== hit[0] && net.ways[o.i].allow(o.end === 0 ? 1 : -1) && this._turnOk(net.ways[o.i], o.end === 0 ? 1 : -1, a.bus));
+      if (dead && (this._turnRound(w, dir, a.bus) - hit[1]) * dir < room) continue;
       Object.assign(a, { alive: true, way: hit[0], s: hit[1], dir, speed: w.speed * (.8 + this.rand() * .35), lat: w.lane || (this.rand() - .5) * 3, gait: 0, nx: undefined, go: null, slot: 0 });
       a.v = a.speed;
       return;
