@@ -1261,7 +1261,11 @@ Decided with the user (19 Nov; project doc `claude/pittsburgh-phase5-plan.md`):
   - [ ] F304 The momentum uses the on-screen bike's speed: junction speed caps and the escalator's slow-down shorten τ there (the load comes faster); demo mode's fixed speed holds τ fixed
   - [ ] F305 The descent floor uses the drag at the bike's speed, not the grade: a gentle descent in a gear that keeps up feels like ~70 % of the flat; Hill feel doesn't scale the floor
   - [ ] F306 Settings' "Trainer feels" diagnostic shows the momentum grade in ERG and the shaped grade in SIM; the HUD's grade is still the road's
-- [ ] 6.7 Final QC (tests, network, course strict, clipping on all 10 areas, performance), PR
+- [ ] 6.7 Final QC, trimmed (user, 19 Nov: drop checks that needn't run). After the 6.5/6.6 merge:
+  - Run: `npm test` (full, once); `npm run qc:network`; `node tools/qc_course.mjs --strict`; `npm run routes:check`; `bake_subway_heads --check` (seconds each, except tests ~20 min and course ~10 min)
+  - Clipping: `qc_clipping --life-only` on the 9 street areas (the one change not yet clipped: 6.10's cyclists and halved traffic; ~3 min each, 0 FAIL); full static clipping only on areas 6.5/6.6 changed that its agent didn't already run on the final code
+  - Dropped: full clipping on all 10 areas (each area's static scene was clipped by the item that last changed it: 6.1 r1, 6.2, 6.3/6.4, 6.5/6.6; ~3 h of lock time); a separate performance pass (each item measured its own views; cyclists reuse existing meshes; the frame rate is the user's check on the Air); the preview re-render (F270); clipping round 2 (6.1b)
+  - Then the PR to main with the user's ride-check list
 - Not doing: minimap changes (F140–F144), free-ride defaults (F165, F170 stay), new routes (F161, F162, F166, F177), Allegheny Center through (F174), Phipps length (F110), lidar street heights (F132, F164, F14), load-stall work (F90–F93), a rain preset (F117). Saved for later: inclines and a ferry as conveyors (F129)
 - Follow-up numbers for this phase start at F200 (6.1: F200–F219, 6.2: F220–F229, 6.3: F230–F239, 6.4: F240–F249, 6.5: F250–F259, 6.6: F260–F269)
 
