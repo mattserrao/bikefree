@@ -8,6 +8,8 @@
 // appear again out of the rider's sight as the life always does. Nothing new appears in view on the swap's frame.
 // Pure apart from the agents it writes: the life sim (test/city-life.test.mjs) rides it across the portals.
 
+const ROAD_HALF = 3.5;   // (pose.js ROAD_WIDTH / 2)
+
 /** Nearest point on a polyline path ({pts, d}) to (x, z): {s, d, tx, tz, y} or null beyond `maxD`. */
 function project(path, x, z, maxD) {
   const P = path.pts, D = path.d;
@@ -122,6 +124,27 @@ export function handOffLife(from, to, cam, rider, { poseOn, viewM = 150 } = {}) 
     Object.assign(b, { alive: true, onRoute: true, s, dir });
     R.oncoming[0]++;
   }
+  // [6.10] riders on the route with you: on the new line where they are (the same street: the swap is inside an apron),
+  // riding the same way in the world, at the same side of the road; the pass plan carries on
+  R.routeRiders = [0, 0];
+  for (let k = 0; k < (to.routeRiders || []).length; k++) {
+    const a = from.routeRiders?.[k], b = to.routeRiders[k];
+    b.alive = false; b.x = null;
+    if (!a?.alive || a.x == null) continue;
+    const L = to.city.landscape, r = L.routeDist(a.x, a.z), route = to.city.route, ix = to.city.index, turn = route.turnS || route.total;
+    if (!r || r.d > ROAD_HALF + 1 || Math.abs(r.y - (a.y - .12)) > 3) { R.routeRiders[1]++; if (inView(a.x, a.z)) R.droppedInView++; continue; }
+    const i = r.i, dx = ix.xs[i + 1] - ix.xs[i], dz = ix.zs[i + 1] - ix.zs[i], l = Math.hypot(dx, dz) || 1;
+    const t = Math.max(0, Math.min(1, ((a.x - ix.xs[i]) * dx + (a.z - ix.zs[i]) * dz) / (l * l)));
+    const s = route.dist[i] + (route.dist[i + 1] - route.dist[i]) * t;
+    if (s < 0 || s > turn) { R.routeRiders[1]++; if (inView(a.x, a.z)) R.droppedInView++; continue; }
+    const dir = Math.sin(a.yaw) * dx + Math.cos(a.yaw) * dz > 0 ? 1 : -1;
+    // its offset off the centre line, right of the new line's own direction (+s)
+    const side = ((a.x - ix.xs[i]) * -dz + (a.z - ix.zs[i]) * dx) / l;
+    for (const key of ['look', 'phase', 'v', 'speed', 'ratio', 'side0', 'passed', 'ended', 'plan', 'x', 'y', 'z', 'yaw', 'pitch', 'gait']) b[key] = a[key];
+    Object.assign(b, { alive: true, onRoute: true, routeRider: true, s, dir, wl: side });
+    R.routeRiders[0]++;
+  }
+  if (from._rr) to._rr = from._rr;   // (the one plan: the old life is drawn no more)
   // trains: the same line (the longest light-rail and freight lines near both areas) at the same place, if it is one
   for (const t of to.trains || []) {
     const o = (from.trains || []).find((u) => !!u.freight === !!t.freight && (u.offset || 0) === (t.offset || 0));

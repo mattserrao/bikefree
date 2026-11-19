@@ -3,8 +3,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { GEAR_RATIOS, ergTargetForGear, feltGrade, shapeGrade, momentumGrade, HILL_FEEL_DEFAULT, HILL_FEEL_OPTIONS } from '../js/physics.js';
-import { CHASE, CHASE_CLASSIC, CAMERAS } from '../js/world/pose.js';
-import { DEFAULT_SETTINGS } from '../js/settings.js';
+import { readFileSync } from 'node:fs';
+import { CHASE, CHASE_CLASSIC, CHASE_CLOSE, CHASE_CLOSEST, CAMERAS, DEFAULT_CAMERA } from '../js/world/pose.js';
+import { DEFAULT_SETTINGS, loadSettings } from '../js/settings.js';
 
 test('Hill feel defaults to 50% like Zwift and scales grade only', () => {
   assert.equal(HILL_FEEL_DEFAULT, 50);
@@ -44,9 +45,50 @@ test('momentum lets the hill through more slowly when the bike is faster', () =>
   assert.equal(momentumGrade(null, 2, 7, 0.25), 2);
 });
 
-test('close camera is the default and nearer than classic', () => {
-  assert.equal(CHASE, CAMERAS.close);
-  assert.equal(DEFAULT_SETTINGS.camera, 'close');
+test('closest camera is the default (PLAN 6.10), nearer than close, which is nearer than classic', () => {
+  assert.equal(DEFAULT_CAMERA, 'closest');
+  assert.equal(CHASE, CAMERAS.closest);
+  assert.equal(CHASE, CHASE_CLOSEST);
+  assert.deepEqual(Object.keys(CAMERAS).sort(), ['classic', 'close', 'closest']);
+  assert.equal(DEFAULT_SETTINGS.camera, 'closest');
   const d = (c) => Math.hypot(c.back, c.up);
-  assert.ok(d(CHASE_CLASSIC) / d(CHASE) > 1.25);
+  assert.ok(d(CHASE_CLASSIC) / d(CHASE_CLOSE) > 1.25);
+  assert.ok(d(CHASE_CLOSE) / d(CHASE_CLOSEST) > 1.25, `close ${d(CHASE_CLOSE)} vs closest ${d(CHASE_CLOSEST)}`);
+  // the back wheel (hub 0.41 m behind the rider's origin, 0.336 m radius: models/rider.json) is in front of the camera and
+  // below its view centre, and the camera stays well clear of the rider's helmet (~1.6 m up)
+  for (const c of Object.values(CAMERAS)) {
+    assert.ok(c.back > .41 + .336 + 1, `${JSON.stringify(c)} too close to the wheel`);
+    assert.ok(c.up >= 1.4 && c.ground >= 1.4, `${JSON.stringify(c)} too low`);
+  }
+  // Settings → Camera offers all three, Closest first and marked the default
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const opts = [...html.match(/<select name="camera">([\s\S]*?)<\/select>/)[1].matchAll(/value="(\w+)"[^>]*>([^<]*)/g)].map((m) => [m[1], m[2]]);
+  assert.deepEqual(opts.map((o) => o[0]), ['closest', 'close', 'classic']);
+  assert.match(opts[0][1], /default/);
+  assert.ok(!/default/.test(opts[1][1]) && !/default/.test(opts[2][1]));
+});
+
+test('saved camera settings: the old default "close" moves to "closest" once; a later choice is kept', () => {
+  const store = new Map();
+  globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) };
+  const KEY = 'bikefree.settings.v1';
+  const save = (o) => localStorage.setItem(KEY, JSON.stringify(o));
+  try {
+    // nothing saved: the default
+    assert.equal(loadSettings().camera, 'closest');
+    // saved before 6.10 with the old default
+    save({ camera: 'close', units: 'metric' });
+    let s = loadSettings();
+    assert.equal(s.camera, 'closest');
+    assert.equal(s.units, 'metric');
+    // … once: Close chosen again afterwards (saved with the migration's mark) stays Close
+    save({ ...s, camera: 'close' });
+    assert.equal(loadSettings().camera, 'close');
+    // Classic saved before 6.10 is kept
+    save({ camera: 'classic' });
+    assert.equal(loadSettings().camera, 'classic');
+    // Closest saved stays
+    save({ camera: 'closest', camClosest: true });
+    assert.equal(loadSettings().camera, 'closest');
+  } finally { delete globalThis.localStorage; }
 });

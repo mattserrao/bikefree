@@ -2248,7 +2248,7 @@ function fillSettings() {
   f.worldSound.checked = settings.worldSound !== false;
   f.hudSize.value = settings.hudSize;
   f.hillFeel.value = String(settings.hillFeel ?? 50);
-  f.camera.value = settings.camera || 'close';
+  f.camera.value = settings.camera || 'closest';
   f.minimap.value = settings.minimap;
   f.startGear.value = settings.startGear;
   for (const el of dlg.querySelectorAll('.u-weight')) el.textContent = imp ? 'lb' : 'kg';

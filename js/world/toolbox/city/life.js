@@ -3,7 +3,7 @@
 // the two inclines up Mount Washington, barges, the riverboat, motorboats and kayaks, and birds.
 // Agents live near the camera and are recycled as you ride; all draw calls are instanced. People, cyclists, dogs,
 // strollers, cars and buses come from the figures kit (life/figures): soft cartoon models, baked walk cycles.
-import { ghostAt } from '../../ghost.js';
+import { ghostAt, undergroundAt } from '../../ghost.js';
 import * as THREE from '../../../../vendor/three.module.min.js';
 import { Crowd, CLIP, FIT, randomLook, dogLook, clipRate, PALETTES } from '../life/figures/people.js';
 import { vehicleMesh, vehicleMaterial, setPaint, setMove } from '../life/figures/vehicles.js';
@@ -11,12 +11,26 @@ import { MeshBuilder, makePath, hash, ribbon } from '../core/mesh-builder.js';
 import { drain, due, each } from '../core/jobs.js';   // [F30] built as a job (in frame slices on the ride)
 import { handOffLife } from './life-handoff.js';   // [F31] life carried across an area swap
 import { LAND } from './landscape.js';
-import { ROAD_WIDTH } from '../../pose.js';
+import { ROAD_WIDTH, LANE_OFFSET, PACER_LANE, ROAD_LIFT, routePoint } from '../../pose.js';
+import { powerRequired } from '../../../physics.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 // car models by share (the city's mix)
 const CAR_MIX = [['sedan', .34], ['hatch', .2], ['suv', .22], ['pickup', .07], ['van', .09], ['taxi', .08]];
-const COUNTS = { low: { people: 70, cars: 40, cyclists: 6 }, balanced: { people: 160, cars: 85, cyclists: 12 }, high: { people: 260, cars: 140, cyclists: 18 } };
+// [6.10] people and traffic about half what they were (low 70 / 40, balanced 160 / 85, high 260 / 140; buses
+// max(4, cars / 12) → max(2, cars / 12); 4 oncoming cars → 2); `cyclists` ride the side streets and trails as before,
+// `routeRiders` ride the route's own road with you (ROUTE_RIDE below)
+export const COUNTS = { low: { people: 35, cars: 20, cyclists: 6, routeRiders: 5 }, balanced: { people: 80, cars: 42, cyclists: 12, routeRiders: 8 }, high: { people: 130, cars: 70, cyclists: 18, routeRiders: 10 } };
+const ONCOMING = 2;
+// [6.10] riders on the route with you (_updateRouteRiders): their lanes (m right of the centre line, riding their way:
+// the shoulder, its outer `edge`, passing, passing wide round the pacer; `clear` between lines, `clearNear` beside you), how fast they move across (m/s), a pass
+// about `every` s, the next planned no sooner than `soonest` s and no further off than `horizon` s (`behindLead` s for one
+// from behind), at most `pending` on
+// their way to a pass; slower ones start `aheadMin`–`aheadMax` m ahead (out of sight), faster ones `behindMin`–`behindMax`
+// m behind; their share slower / faster than you (`unseen`: how far that may go while out of sight: more than `unseenM` m
+// behind or ahead; and at least `minDv` m/s); your speed taken as at least `minRef` m/s, smoothed over `refTau` s
+export const ROUTE_RIDE = { lane: 2.8, edge: 3.15, pass: .3, passWide: -.75, clear: .95, clearNear: 1.25, latRate: .7, every: 80, soonest: 15, horizon: 600, behindLead: 75, pending: 3,
+  aheadMin: 175, aheadMax: 650, behindMin: 14, behindMax: 260, slower: [.06, .2], faster: [.06, .2], unseen: [.5, .6], unseenM: [15, 110], minDv: .5, endM: 60, minRef: 1, refTau: 3 };
 const CARS = ['#c0392b', '#1f3a5f', '#ecf0f1', '#2c2c2c', '#7f8c8d', '#bdc3c7', '#1e8449', '#f4d03f', '#5b2c6f', '#a04000', '#ffffff', '#566573'];
 
 // ---------------------------------------------------------------- shared animated material
@@ -433,11 +447,12 @@ export class CityLife {
     const uTime = this.city.uniforms.uTime, nearM = { low: 25, balanced: 45, high: 70 }[this.city.qualityKey] ?? 45;
     const farM = { low: 70, balanced: 110, high: 160 }[this.city.qualityKey] ?? 110;
     this.crowd = new Crowd(this.city.group, { uTime, name: 'People', capacity: n, nearM, farM, dogs: Math.ceil(n * .08), strollers: Math.ceil(n * .05) });
-    this.cyclistCrowd = new Crowd(this.city.group, { uTime, name: 'Cyclists', capacity: this.counts.cyclists, nearM: Infinity, kind: 'cyclist' });
+    this.cyclistCrowd = new Crowd(this.city.group, { uTime, name: 'Cyclists', capacity: this.counts.cyclists + this.counts.routeRiders, nearM: Infinity, kind: 'cyclist' });
     this.walkers = [];
     for (let i = 0; i < n; i++) this.walkers.push({ id: i, alive: false });
     this.riders = [];
     for (let i = 0; i < this.counts.cyclists; i++) this.riders.push({ id: i, alive: false, bike: true, look: randomLook(this.rand, { kids: 0, helmet: true }), phase: this.rand() });
+    this.routeRiders = Array.from({ length: this.counts.routeRiders }, (_, id) => ({ id, alive: false, bike: true, routeRider: true }));   // [6.10]
     // gathering spots (squares, overlooks, the stadium plaza): people standing about
     this.hotspots = (scene.hotspots || []).map((h) => ({ ...h, ...this.city.D.proj.toLocal(h.lat, h.lon) }));
   }
@@ -539,6 +554,216 @@ export class CityLife {
       lat: w.trail ? 2.3 : w.side ? (w.side - 1.2) : 0, wside: -1 });
     if (w.cls <= 5) a.lat = w.side - 2.4;
     a.v = a.speed;
+  }
+
+  // -------------------------------------------------------------- [6.10] riders on the route with you
+  /**
+   * Cyclists on the route's own road, riding your way: each ~5–20 % faster or slower than you (a mix of both), so you
+   * are always catching someone or being passed — about one pass a minute. Their pace follows yours and the hill:
+   * each rides with the power that would carry it its share faster or slower than you on the grade you are on, and
+   * that power sets its speed on its own grade (the bike physics, js/physics.js) — on the same grade it holds its
+   * share of your speed; a hill ahead slows it before it slows you, as it would a rider. They keep the shoulder,
+   * overtake on the outside (wider past the pacer, not while an oncoming car is near), and keep out of your and the
+   * pacer's line. New ones appear out of sight — well ahead (slower) or behind the camera (faster) — at a distance
+   * that brings the next pass about a minute after the last; ones done with appear out of sight too.
+   */
+  _routeRiderAt(s, out) {
+    const r = this.city.route, ix = this.city.index, turn = r.turnS || r.total, c = Math.max(0, Math.min(turn, s));
+    const a = routePoint(r, ix, Math.max(0, c - 4)), b = routePoint(r, ix, Math.min(turn, c + 4)), p = routePoint(r, ix, c);
+    const l = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    out.x = p.x; out.y = p.y; out.z = p.z; out.hx = (b.x - a.x) / l; out.hz = (b.z - a.z) / l; out.dy = (b.y - a.y) / l;
+    return out;
+  }
+
+  /** The grade (%) riding `dir` at out-metre s: the road's rise over ±15 m. */
+  _gradeAt(s, dir) {
+    const r = this.city.route, turn = r.turnS || r.total, at = (q) => routePoint(r, this.city.index, Math.max(0, Math.min(turn, q))).y;
+    const a = Math.max(0, Math.min(turn, s - 15)), b = Math.max(0, Math.min(turn, s + 15));
+    return b - a > 1 ? (at(b) - at(a)) / (b - a) * 100 * dir : 0;
+  }
+
+  /** Can a route rider be on the route from out-metre a to b: within the line, never underground (the T's tunnels). */
+  _rideable(a, b) {
+    const r = this.city.route, turn = r.turnS || r.total, lo = Math.min(a, b), hi = Math.max(a, b);
+    if (lo < ROUTE_RIDE.endM || hi > turn - ROUTE_RIDE.endM) return false;
+    for (let q = lo; q <= hi; q += 10) if (undergroundAt(r, q)) return false;
+    return !undergroundAt(r, hi);
+  }
+
+  _spawnRouteRider(a, rider, cam, plan) {
+    const P = ROUTE_RIDE, vRef = this._rr.vRef, turn = this.city.route.turnS || this.city.route.total, p = this._tmpRR || (this._tmpRR = {});
+    a.alive = false;
+    if (!rider || !plan) return;
+    const lead = plan.at - this._clock;
+    for (const ahead of plan.ahead ? [true, false] : [false]) {
+      // the share faster or slower than you, and how far out it starts so that it passes about when planned
+      let f, D;
+      if (ahead) { const f0 = Math.max(P.slower[0], Math.min(P.slower[1], P.aheadMin / (vRef * Math.max(lead, 1)))); f = f0 + this.rand() * (P.slower[1] - f0); D = Math.max(P.aheadMin, f * vRef * lead); }
+      else { f = P.faster[0] + this.rand() * (P.faster[1] - P.faster[0]); D = Math.max(P.behindMin, Math.min(P.behindMax, f * vRef * lead)); }
+      if (ahead && D > P.aheadMax) continue;
+      const s = rider.out + rider.dir * (ahead ? D : -D);
+      if (s < 0 || s > turn || !this._rideable(rider.out, s)) continue;
+      // [network] not past a U-turn on your path: you'd never meet it
+      if (ahead && rider.uturn != null && (rider.uturn - s) * rider.dir < 40) continue;
+      this._routeRiderAt(s, p);
+      if (!this._outOfView(p.x, p.z, cam, P.aheadMin, false)) continue;
+      const lat = P.lane, wl = lat * rider.dir;
+      Object.assign(a, { alive: true, onRoute: true, routeRider: true, s, dir: rider.dir, ratio: ahead ? 1 - f : 1 + f, side0: ahead ? 1 : -1, passed: false, ended: false, plan: plan.at,
+        wl, v: (ahead ? 1 - f : 1 + f) * Math.max(rider.speed || 0, P.minRef), x: null, gait: 3 });
+      a.speed = a.v;
+      a.look = randomLook(this.rand, { kids: 0, helmet: true }); a.phase = this.rand();
+      return;
+    }
+  }
+
+  /** When the next pass should come: {at, ahead} — in the first gap of about a minute between the passes already on their way. */
+  _nextPass(rider) {
+    const P = ROUTE_RIDE, R = this._rr, now = this._clock, every = P.every * (.75 + this.rand() * .5);
+    const due = [];
+    for (const a of this.routeRiders) if (a.alive && !a.passed && a.plan != null) due.push(a.with && a.eta != null && a.g > -P.unseenM[0] && a.g < P.unseenM[1] ? now + a.eta : a.plan);
+    due.sort((x, y) => x - y);
+    const slot = (from) => {
+      let at = Math.max(from, now + P.soonest, (R.lastPass ?? now - P.every * .5) + every);
+      for (const t of due) { if (t - at >= every) break; at = Math.max(at, t + every); }
+      return at;
+    };
+    // slower riders start well ahead (out of sight), so they need the lead time: a later slot. Mixed: whichever way has
+    // passed less lately goes next
+    const wantAhead = R.caught < R.passedBy || (R.caught === R.passedBy && this.rand() < .5);
+    if (wantAhead) {
+      const at = slot(now + P.aheadMin / (P.slower[1] * R.vRef));
+      if (at - now <= P.horizon) return { at, ahead: true };
+    }
+    // (faster ones only for a pass coming soon: started further back, a hill between makes them early — they'd bunch)
+    const at = slot(now);
+    return at - now <= P.behindLead ? { at, ahead: false } : null;
+  }
+
+  _updateRouteRiders(cam, dt, rider) {
+    const P = ROUTE_RIDE, R = this._rr || (this._rr = { vRef: P.minRef, caught: 0, passedBy: 0, lastPass: null, wait: 0, passes: [] });
+    if (rider) R.vRef = R.fresh === false ? R.vRef + (Math.max(rider.speed || 0, P.minRef) - R.vRef) * Math.min(1, dt / P.refTau) : Math.max(rider.speed || 0, P.minRef);
+    if (rider) R.fresh = false;
+    const turn = this.city.route.turnS || this.city.route.total, p = this._tmpRR || (this._tmpRR = {});
+    // your effort, as the power that holds your speed on your grade (smoothed), and the pacer's place along the road
+    // (where you and the pacer really are across the road: a ride network's path rounds its junctions off the line's corners)
+    let gRider = 0, fx = 0, fz = 1, pacerG = null, pacerV = 0, riderLat = LANE_OFFSET, pacerLat = 0;
+    if (rider) {
+      gRider = this._gradeAt(rider.out, rider.dir);
+      this._routeRiderAt(rider.out, p); fx = p.hx * rider.dir; fz = p.hz * rider.dir;
+      riderLat = (rider.x - p.x) * -p.hz + (rider.z - p.z) * p.hx;   // m right of the line (+s)
+      if (rider.pacer) {
+        pacerG = (rider.pacer.x - rider.x) * fx + (rider.pacer.z - rider.z) * fz; pacerV = rider.pacer.speed ?? rider.speed ?? 0;
+        pacerLat = (rider.pacer.x - p.x) * -p.hz + (rider.pacer.z - p.z) * p.hx;
+      }
+    }
+    // oncoming cars on the route near: no going over the centre line round the pacer while one comes
+    const oncomingNear = (s, dir) => this.oncoming.some((o) => o.alive && o.onRoute && (o.s - s) * dir > -10 && (o.s - s) * dir < 70);
+    const list = this.routeRiders;
+    for (const a of list) {
+      if (!a.alive) continue;
+      a.with = !!rider && a.dir === rider.dir && Math.abs(a.s - rider.out) < 900;
+      a.g = a.with ? (a.s - rider.out) * rider.dir : null;   // m ahead of you along the road
+    }
+    for (const a of list) {
+      if (!a.alive) continue;
+      // its pace: the power for its share of your speed on your grade, on its own grade
+      const g = this._gradeAt(a.s, a.dir);
+      let want = this._paceFor(a.ratio * R.vRef, gRider, g);
+      // (at a climb's crawl, at least `minDv` m/s faster or slower than you: else a pass would take many minutes)
+      if (gRider === g || Math.abs(g - gRider) < 1) want = a.ratio > 1 ? Math.max(want, R.vRef + P.minDv) : Math.max(.5, Math.min(want, R.vRef - P.minDv));
+      // still out of sight on its way to you (behind the camera, or far ahead): paced to come by about when planned — a
+      // hill between you would otherwise bunch them up, or a slow climb keep them away (unseen, they may go well past
+      // their 5–20 %: OUT_OF_SIGHT_PACE); in sight they ride their own pace
+      if (rider && a.with && !a.passed && a.plan != null && (a.g < -P.unseenM[0] || a.g > P.unseenM[1])) {
+        const vr = Math.max(rider.speed || 0, P.minRef), left = Math.max(a.plan - this._clock, 5), close = Math.abs(a.g) / left, [lo, hi] = P.unseen;
+        want = a.side0 < 0 ? vr * Math.max(1 + P.faster[0] * .8, Math.min(1 + hi, 1 + close / vr)) : vr * Math.max(1 - lo, Math.min(1 - P.slower[0] * .8, 1 - close / vr));
+      }
+      let cap = Infinity;
+      // the lane: the shoulder; out to pass anyone slower just ahead (you and the pacer always on your outside;
+      // another rider in its line), wider round the pacer — but not over the centre line while an oncoming car is near
+      const latOwn = a.wl * a.dir, others = [];
+      if (rider && Math.abs(a.s - rider.out) < 900) {
+        others.push({ s: rider.out, lat: riderLat * a.dir, v: rider.speed || 0, you: true });
+        if (pacerG != null) others.push({ s: rider.out + pacerG * rider.dir, lat: pacerLat * a.dir, v: pacerV, you: true });
+      }
+      for (const b of list) if (b !== a && b.alive && Math.abs(b.s - a.s) < 60) others.push({ s: b.s, lat: b.wl * a.dir, v: b.v * (b.dir === a.dir ? 1 : -1) });
+      for (const o of others) o.gap = (o.s - a.s) * a.dir;   // + ahead of it
+      const pacerNear = pacerG != null && others.some((o) => o.you && o.lat < riderLat * a.dir - .5 && o.gap > -12 && o.gap < 30);
+      let target = P.lane;
+      const passing = others.some((o) => o.gap > -3 && o.gap < 25 && want > o.v + .15 && (o.you || Math.abs(o.lat - latOwn) < 1));
+      if (passing) target = pacerNear ? (oncomingNear(a.s, a.dir) ? Math.max(Math.min(latOwn, P.lane), P.pass) : P.passWide) : P.pass;
+      else if (latOwn < P.lane - .05 && others.some((o) => o.gap < 0 && o.gap > -6 && o.lat > latOwn)) target = latOwn;   // back in 6 m past whoever it passed
+      // never across your or the pacer's line while beside you, or while you come up from behind faster; beside you,
+      // a little further off (`clearNear`: your line wanders a little at a junction's curve)
+      for (const o of others) {
+        if (!o.you) continue;
+        const beside = o.gap > -6 && o.gap < 8, room = beside ? P.clearNear : P.clear;
+        if (beside || (o.gap > -30 && o.gap <= -6 && o.v > a.v + .2)) target = latOwn < o.lat ? Math.min(target, o.lat - room) : Math.max(target, o.lat + room);
+      }
+      target = Math.max(P.passWide, Math.min(P.edge, target));
+      const latNew = latOwn + Math.max(-P.latRate * dt, Math.min(P.latRate * dt, target - latOwn));
+      // no closer than 3.5 m behind anyone in its line it can't get round yet (you and the pacer: nor on your inside)
+      for (const o of others) {
+        if (o.gap <= 0 || o.gap > 20 || o.v < 0) continue;
+        if (Math.abs(o.lat - latNew) < P.clear || (o.you && latNew > o.lat && o.gap < 8)) cap = Math.min(cap, Math.max(0, o.v + (o.gap - 3.5) * .8));
+      }
+      const goal = a.ended ? 0 : Math.min(want, cap);
+      a.v = Math.max(0, a.v + Math.max(-3 * dt, Math.min(.8 * dt, goal - a.v)));
+      a.speed = a.v;
+      a.wl = latNew * a.dir;
+      a.s += a.dir * a.v * dt;
+      // the end of the line (or the T's tunnel ahead): it turns round there, drifting across to the other side
+      // the end of its ride (`endM` short of the line's ends, clear of where you turn round; or the T's tunnel ahead): it
+      // stops at the roadside and is gone once out of sight
+      if ((a.dir < 0 ? a.s <= P.endM : a.s >= turn - P.endM) || undergroundAt(this.city.route, a.s + a.dir * 20)) { a.s -= a.dir * a.v * dt; a.v = 0; a.ended = true; }
+      // where it is: its lane off the road's centre line, square to the road's smoothed heading
+      this._routeRiderAt(a.s, p);
+      const x = p.x - p.hz * a.wl, z = p.z + p.hx * a.wl;
+      if (a.x == null) { a.x = x; a.z = z; }
+      else { const dx = x - a.x, dz = z - a.z, d = Math.hypot(dx, dz), max = (a.v * 1.25 + 1.5) * dt, k = d > max ? max / d : 1; a.x += dx * k; a.z += dz * k; }
+      a.y = p.y + ROAD_LIFT;
+      a.yaw = Math.atan2(p.hx * a.dir, p.hz * a.dir); a.pitch = Math.atan(p.dy) * a.dir;
+      // a pass: it was ahead of you and now is behind, or the other way round
+      if (a.with) {
+        const gNow = (a.s - rider.out) * rider.dir;
+        if (!a.passed && Math.sign(gNow) !== a.side0 && Math.abs(gNow) < 50) {
+          a.passed = true; R.lastPass = this._clock;
+          if (a.side0 > 0) R.caught++; else R.passedBy++;
+          R.passes.push({ t: this._clock, caught: a.side0 > 0, plan: a.plan, id: a.id });
+        }
+        const dv = (want - (rider.speed || 0)) * -Math.sign(gNow);   // closing speed (at its own pace: held up behind someone, it still comes)
+        a.eta = !a.passed && dv > .05 ? Math.abs(gNow) / dv : null;
+        a.apart = a.eta == null && !a.passed ? (a.apart || 0) + dt : 0;
+      } else a.eta = null;
+    }
+    // done with: out of sight once it has passed (or been passed), left your road, or fallen far off
+    for (const a of list) {
+      if (!a.alive) continue;
+      const done = a.passed || !a.with || a.ended || Math.abs(a.g ?? 0) > P.aheadMax + 100 || a.apart > 8;   // (apart: not closing on you for 8 s)
+      if (done && this._outOfView(a.x, a.z, cam, P.aheadMin, false)) { a.alive = false; a.x = null; }
+    }
+    // the next one on its way, when it's time
+    R.wait -= dt;
+    if (rider && R.wait <= 0 && this._started && !undergroundAt(this.city.route, rider.out)) {
+      R.wait = .5;
+      const pending = list.filter((a) => a.alive && !a.passed).length;
+      const free = list.find((a) => !a.alive);
+      if (free && pending < P.pending) { const plan = this._nextPass(rider); if (plan) this._spawnRouteRider(free, rider, cam, plan); }
+    }
+    for (const a of list) if (a.alive) this.cyclistCrowd.add(a.look, a.x, a.y, a.z, a.yaw, CLIP.cycle, a.phase, a.v > .3 ? clipRate(CLIP.cycle, a.v) : 0);
+  }
+
+  /** The speed (m/s) on grade g (%) with the power that holds speed v on grade g0: the bike physics (js/physics.js). */
+  _paceFor(v, g0, g) {
+    if (Math.abs(g - g0) < .05) return v;
+    // (pedalling: at least 60 % of what that speed takes on the flat — coasting down a hill you'd still pedal on the flat)
+    const P = Math.max(powerRequired(v, g0), .6 * powerRequired(v, 0));
+    // powerRequired rises with speed past its low point (a descent's): the speed there where it meets P
+    let lo = 0, hi = 30;
+    if (powerRequired(lo, g) > P) return lo;
+    if (powerRequired(hi, g) < P) return hi;
+    for (let k = 0; k < 24; k++) { const m = (lo + hi) / 2; if (powerRequired(m, g) < P) lo = m; else hi = m; }
+    return Math.max(.8, Math.min(22, (lo + hi) / 2));
   }
 
   /**
@@ -745,17 +970,18 @@ export class CityLife {
       this._advance(a, this.walk, dt, rider, 'bike');
       this.cyclistCrowd.add(a.look, a.x, a.y, a.z, a.yaw, CLIP.cycle, a.phase, a.v > .3 ? clipRate(CLIP.cycle, a.v) : 0);
     }
+    this._updateRouteRiders(cam, dt, rider);   // [6.10]
     this.cyclistCrowd.end();
   }
 
   // -------------------------------------------------------------- cars and buses
   _traffic() {
-    const n = this.counts.cars, buses = Math.max(4, Math.round(n / 12));
+    const n = this.counts.cars, buses = Math.max(2, Math.round(n / 12));
     // every car keeps its model and paint for good (one instanced mesh per model)
     const pickModel = () => { let r = this.rand(); for (const [k, w] of CAR_MIX) { r -= w; if (r <= 0) return k; } return 'sedan'; };
     this.carAgents = Array.from({ length: n }, (_, id) => ({ id, alive: false, model: pickModel(), dist: 0 }));
     this.busAgents = Array.from({ length: buses }, (_, id) => ({ id, alive: false, bus: true, model: 'bus', dist: 0 }));
-    this.oncoming = Array.from({ length: 4 }, (_, id) => ({ id: n + id, alive: false, model: ['sedan', 'suv', 'hatch', 'van'][id], dist: 0 }));   // oncoming traffic on the route's streets
+    this.oncoming = Array.from({ length: ONCOMING }, (_, id) => ({ id: n + id, alive: false, model: ['sedan', 'suv', 'hatch', 'van'][id], dist: 0 }));   // oncoming traffic on the route's streets
     this.carMeshes = {};
     for (const a of [...this.carAgents, ...this.oncoming, ...this.busAgents]) {
       const m = (this.carMeshes[a.model] ||= { list: [] }); a.slot = m.list.length; m.list.push(a);
