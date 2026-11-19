@@ -33,7 +33,8 @@ export const UTURN_R = 9;          // the same for a U-turn ("back")
 export const PASS_R = 6;           // passing straight through where the base route has a seam (the loop's start)
 const AHEAD_M = 150000;            // the path route always reaches this far beyond the rider (and the planner)
 const REFILL_M = 100000;           // …refilled once less than this is left
-const HEADING_M = 15;              // an arm's heading for the turn's curve and speed cap: from the junction to this far along it
+const VIEW_AHEAD_M = 5000;         // the ride-screen profile off the plan (a free ride): this segment and on to at least this far past its start
+const HEADING_M = 15;             // an arm's heading for the turn's curve and speed cap: from the junction to this far along it
 const LABEL_M0 = 10, LABEL_M1 = 40;   // …and for its label, order and the default rule: 10–40 m out, past the line's rounded corner (F84)
 export const SWAP_AHEAD_M = 200;   // areas: the area drawn keeps drawing while it covers the rider and this far ahead
 export const PRELOAD_M = 1500;     // …an area the path enters within this far ahead is loaded and built, hidden
@@ -380,17 +381,49 @@ export class NetRide extends EventTarget {
     return laps;
   }
 
-  /** The stretch the ride-screen profile shows: the current lap on plan, else this edge and the next. */
-  profileSpan(p) {
-    const lap = this.lapM;
-    const i = this.entryAt(p);
-    if (lap && this.entries[i].planStep != null) {
-      // back to where this lap began (the last entry with planStep 0 at or before i)
-      let j = i;
-      while (j > 0 && this.entries[j].planStep !== 0) j--;
-      if (this.entries[j].planStep === 0) return [this.entries[j].p0, this.entries[j].p0 + lap];
+  /** The stretch the ride-screen profile shows ([from, to] path metres): profileView's. */
+  profileSpan(p) { const v = this.profileView(p); return [v.from, v.to]; }
+
+  /**
+   * The ride-screen profile at path metre p, as the path is now (PLAN F150): `{ from, to, lap, minEle, maxEle,
+   * climbM }`. On the plan, the lap you're on as you'll ride it — from where the last lap ended (lapAt's count)
+   * to where this one ends, turns you've chosen included; off the plan (or a free ride, or a lap the chosen way
+   * doesn't bring round within two laps' length), a window from the start of this segment to the end of the
+   * one reaching VIEW_AHEAD_M past it. minEle / maxEle / climbM are that stretch's own (the profile's height
+   * scale). It depends only on the path and the segment you're on, so it's built once per path change
+   * (`version`) and segment, not per frame.
+   */
+  profileView(p) {
+    const i = this.entryAt(p), key = `${this.version}:${i}`;
+    if (this._view?.key === key) return this._view;
+    const E = this.entries, last = this.plan ? this.plan.length - 1 : -1;
+    let from = E[i].p0, to = null, lap = false;
+    if (this.plan && E[i].planStep != null) {
+      // this lap: from the end of the last entry that completed the plan (lapAt's boundary) to the next one's end
+      let a = 0;
+      for (let j = i - 1; j >= 0; j--) if (E[j].planStep === last) { a = this.endOf(j); break; }
+      for (let k = i; k < E.length && this.endOf(k) - a <= 2 * this.lapM; k++) if (E[k].planStep === last) { to = this.endOf(k); break; }
+      if (to != null) { from = a; lap = true; }
     }
-    return [this.entries[i].p0, this.endOf(Math.min(this.entries.length - 1, i + 1))];
+    if (to == null) {
+      let k = Math.min(E.length - 1, i + 1);
+      while (k < E.length - 1 && this.endOf(k) < from + VIEW_AHEAD_M) k++;
+      to = this.endOf(k);
+    }
+    this._view = { key, from, to, lap, ...this.eleRange(from, to) };
+    return this._view;
+  }
+
+  /** Lowest and highest point and the climbing on path metres [from, to] of the path as it is now. */
+  eleRange(from, to) {
+    const ele = this.route.ele, n = ele.length;
+    const i0 = Math.max(0, Math.min(n - 1, Math.floor(from / STEP))), i1 = Math.max(i0, Math.min(n - 1, Math.ceil(to / STEP)));
+    let minEle = Infinity, maxEle = -Infinity, climbM = 0;
+    for (let i = i0; i <= i1; i++) {
+      minEle = Math.min(minEle, ele[i]); maxEle = Math.max(maxEle, ele[i]);
+      if (i > i0 && ele[i] > ele[i - 1]) climbM += ele[i] - ele[i - 1];
+    }
+    return { minEle, maxEle, climbM };
   }
 
   /** Base-route position (the 3D world's) of path metre p (on its edge's own area's line). */

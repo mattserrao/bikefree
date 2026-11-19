@@ -1003,7 +1003,26 @@ function renderHudStatic() {
   lastProfileDraw = 0;
 }
 
-let lastProfileDraw = 0;
+let lastProfileDraw = 0, lastProfileKey = '';
+/**
+ * The ride-screen profile's stretch (span) and height scale (eleRange). A network route's path changes as you
+ * choose turns (and refills as you ride): its NetRide.profileView follows the path as it is now — the lap as
+ * you'll ride it, else the way ahead — rebuilt once per path change (`version`) and segment, not per frame
+ * (PLAN F150). `key` changes when the stretch does, so the strip is redrawn at once.
+ */
+let finishView = null;
+function hudProfileView() {
+  const r = session.route, net = r.netRide;
+  if (!net) return { key: '', span: session.routeFinishM != null ? legSpan(r, session.routeStart) : null, eleRange: null };
+  if (session.routeFinishM != null) {
+    // a planned finish: the start to the finish line, on the path as it is now
+    const from = session.routeStart, to = from + session.routeFinishM, key = `f${net.version}:${from}:${to}`;
+    if (finishView?.key !== key) { const v = net.eleRange(from, to); finishView = { key, span: [from, to], eleRange: [v.minEle, v.maxEle] }; }
+    return finishView;
+  }
+  const v = net.profileView(session.routePos);
+  return { key: v.key, span: [v.from, v.to], eleRange: [v.minEle, v.maxEle] };
+}
 let lastGear = session.gear;
 function renderHud() {
   if (!onRideScreen) return;
@@ -1077,8 +1096,10 @@ function renderHud() {
       const toGoal = !toFinish && session.routeGoalM != null && !session.routeGoalHit;
       if (r.netRide && !toFinish && !toGoal) {
         // a network route: the rest of this lap on the plan, else the way to the next junction
-        const up = r.netRide.upcoming(session.routePos), onPlan = r.netRide.entries[up.i].planStep != null;
-        const toGo = onPlan ? r.netRide.profileSpan(session.routePos)[1] - session.routePos : up.distTo;
+        // (the lap as the path rides it now — with the turns chosen — PLAN F150; off it, or the chosen way
+        // leaving it: the next junction)
+        const up = r.netRide.upcoming(session.routePos), view = r.netRide.profileView(session.routePos), onPlan = view.lap;
+        const toGo = onPlan ? view.to - session.routePos : up.distTo;
         showRow(3, `${fmtDist(Math.max(0, toGo), 1)} ${distUnit()}`, onPlan ? 'lap to go' : `to ${up.node.name}`);
       } else showRow(3, `${fmtDist(Math.max(0, toGoal ? session.routeGoalM - session.routeRidden : session.routeLapToGo), 1)} ${distUnit()}`,
         toFinish ? 'to the finish' : toGoal ? 'to your goal' : 'lap to go');
@@ -1098,14 +1119,15 @@ function renderHud() {
     $('hPacerT').textContent = `Pacer ${pacer.watts} W · ${Math.abs(gap) < 3 ? 'alongside' : `${fmtGap(gap)} ${gap > 0 ? 'ahead' : 'behind'}`}`;
   }
 
-  // Bottom edge: route profile or workout chart (redrawn once a second; blank on free rides).
+  // Bottom edge: route profile or workout chart (redrawn once a second, and at once when a network route's path
+  // changes under it; blank on free rides).
   const now = performance.now();
-  if (now - lastProfileDraw > 1000) {
+  const pv = session.mode === 'route' && session.route ? hudProfileView() : null;
+  if (now - lastProfileDraw > 1000 || (pv && pv.key !== lastProfileKey)) {
     lastProfileDraw = now;
+    lastProfileKey = pv?.key ?? '';
     const c = $('hudProfile');
-    if (session.mode === 'route' && session.route) drawProfile(c, session.route, session.routePos, { metric: !imperial(), compact: true,
-      span: session.route.netRide ? (session.routeFinishM != null ? [session.routeStart, session.routeStart + session.routeFinishM] : session.route.netRide.profileSpan(session.routePos))
-        : session.routeFinishM != null ? legSpan(session.route, session.routeStart) : null,
+    if (pv) drawProfile(c, session.route, session.routePos, { metric: !imperial(), compact: true, span: pv.span, eleRange: pv.eleRange,
       finishAt: session.routeFinishM != null ? session.routeStart + session.routeFinishM : null });
     else if (session.mode === 'workout' && session.workout) drawWorkout(c, session.workout, session.workoutT, settings.ftp, session.workoutBias, { compact: true });
     else c.getContext('2d').clearRect(0, 0, c.width, c.height);
