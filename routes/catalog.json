@@ -654,8 +654,8 @@
   "file": "routes/cities/pittsburgh-northside.gpx",
   "outAndBack": false,
   "expectedKm": [
-   16,
-   21
+   21,
+   26
   ],
   "scene": "routes/scenes/pittsburgh-northside.json",
   "eleSmoothM": 10,

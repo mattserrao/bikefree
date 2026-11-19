@@ -13,6 +13,7 @@
 // --arches 22350:START:Avalanche Creek,47310:FINISH:Logan Pass (the start / finish arches),
 // --path e1+,e3+ (a route with a ride network: follow that path through its junctions; @metres along the path),
 // --chrome <path> (default: CHROME env, else the usual Mac/Linux locations), --software (no GPU).
+// --areas-now (a city of areas: build the path's other areas at once, not in frame slices),
 // --png (lossless), --fingerprint (hash of every object for refactor checks, with a frozen clock, seeded
 // random and no streamed real horizon, so runs repeat exactly; see tools/toolbox_guard.mjs).
 import { createServer } from 'node:http';
@@ -35,6 +36,7 @@ const software = flag('--software');
 const breakdown = flag('--breakdown');   // list draw calls by object
 const png = flag('--png');   // [toolbox] lossless PNG instead of JPEG (pixel-exact refactor checks)
 const fingerprint = flag('--fingerprint');   // [toolbox] hash of every mesh, matrix, attribute and material in the scene
+const areasNow = flag('--areas-now');   // a city of areas: build the other areas at once (world.areaBudget Infinity), not in frame slices — headless frames can be slow enough that a second area takes minutes
 const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync));
 if (!args.length) { console.log('usage: npm run snap -- <park>[@metres][:camera][:time][:season][:weather][:gentle|bold|current|standard] …'); process.exit(1); }
@@ -90,6 +92,7 @@ for (const shot of shots) {
   const q = new URLSearchParams({ park: shot.park, clean: '1', quality, ...(shot.pos ? { pos: shot.pos } : {}), ...(pathKeys ? { path: pathKeys } : {}), ...(areaId ? { area: areaId } : {}), ...(shot.time ? { time: shot.time } : {}), ...(shot.season ? { season: shot.season } : {}), ...(shot.weather ? { weather: shot.weather } : {}), ...(shot.look === 'standard' ? { standard: '1' } : shot.look ? { look: shot.look === 'current' ? 'none' : shot.look } : {}), ...(fingerprint ? { horizon: '0' } : {}), ...(arches ? { arches } : {}) });
   await page.goto(`${base}/tools/world-preview.html?${q}`);
   if (breakdown) await page.evaluate(() => { window.__breakdown = true; });
+  if (areasNow) { await page.waitForFunction(() => window.world, null, { timeout: 180000, polling: 200 }); await page.evaluate(() => { window.world.areaBudget = { urgent: Infinity, soon: Infinity, ahead: Infinity }; }); }
   await page.evaluate(([p, f]) => { window.__png = p; window.__fingerprint = f; }, [png, fingerprint]);   // [toolbox]
   await page.waitForFunction(() => window.world?.terrain && (window.world.terrain.kit || !window.world.stylized) && window.world._camInit && window.world.rider?.triangles, null, { timeout: 180000, polling: 500 });
   // a city of areas: wait until the areas the path reaches soon are built too (resident, hidden), as at a portal

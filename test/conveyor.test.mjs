@@ -115,5 +115,5 @@ test('Pittsburgh\'s subway (NS>GW): its two escalators are conveyors on the path
   assert.ok(ele(z[1].to + 10) - ele(z[1].from - 10) > 12, 'up at Gateway');
   // a route saved over the Clemente Bridge and the Point before the subway split them still maps (key history)
   const { keysToIds, idsToKeys } = await import('../js/network.js');
-  assert.deepEqual(idsToKeys(net, keysToIds(net, ['A>B+', 'B>E+'])), ['A>NS+', 'NS>B+', 'B>GW+', 'GW>E+']);
+  assert.deepEqual(idsToKeys(net, keysToIds(net, ['A>B+', 'B>E+'])), ['A>NS+', 'NS>CB+', 'CB>B+', 'B>GW+', 'GW>E+']);
 });

@@ -37,6 +37,7 @@ export class Subway {
     this.group = new THREE.Group(); this.group.name = 'Subway'; parent.add(this.group);
     this.route = route; this.index = index; this.cfg = cfg; this.uniforms = uniforms; this.L = landscape;
     this.disposables = [];
+    if (data.heads) { this._headsOnly(data, ground); return; }
     const under = data.routeUnderground?.[0], sub = data.subway || {}, conv = data.routeConveyors || [];
     if (!under) return;
     this.under = under; this.conv = conv; this.platforms = sub.platforms || []; this.river = sub.river || [Infinity, Infinity];
@@ -63,9 +64,48 @@ export class Subway {
     this.t = 0;
   }
 
+  /**
+   * [F123] The stations' headhouses only, for a neighbouring area that rides past them on the street (the core: General
+   * Robinson St by Red Lot 5A, Stanwix St and Liberty Ave by Gateway), so they don't pop in at the swap. `data.heads`:
+   * [{name, dir, fromM, toM, s0, route, index}] — each escalator in the subway line's metres and a short piece of that
+   * line round it (its own 10 m samples from s0: the same frames, so the same headhouse, shaft and treads as the
+   * subway area draws); `data.platforms` (the station colours). No tube, trains or people: the shaft ends in a wall
+   * at its foot. The ground opens over each shaft as in the subway area.
+   */
+  _headsOnly(data, ground) {
+    this.spans = data.heads;
+    this.conv = data.heads.map((h) => ({ fromM: h.fromM, toM: h.toM, dir: h.dir, name: h.name, mps: 3 }));
+    this.platforms = data.platforms || []; this.river = [Infinity, Infinity];
+    this.s0 = this.s1 = NaN;   // (no tube)
+    this.mat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, fog: true });
+    this.glow = new THREE.MeshBasicMaterial({ vertexColors: true, fog: true, toneMapped: false, side: THREE.DoubleSide });
+    this.disposables.push(this.mat, this.glow);
+    const T = new Builder(), G = new Builder(), S = new Builder();
+    for (const c of this.conv) {
+      this._shaft(c, T, G, S);
+      // the shaft's foot: a tiled wall where the subway area's platform opens
+      const foot = c.dir === 'down' ? c.toM : c.fromM, f = this.F(foot);
+      this.quad(T, this.at(f, SHAFT.l, FLOOR), this.at(f, SHAFT.r, FLOOR), this.at(f, SHAFT.r, SHAFT.h), this.at(f, SHAFT.l, SHAFT.h), linear(STN.tile));
+    }
+    this._mesh(T.build(), this.mat, 'Subway headhouses');
+    this._mesh(G.build(), this.glow, 'Subway headhouse lights');
+    this._mesh(S.build(), this.mat, 'Subway headhouse fittings');
+    this._treads();
+    this._glass();
+    this._signs();
+    if (ground?.userData.holes) this._holes(ground.userData.holes);
+    this.t = 0;
+  }
+
   // ---- frames along the line ----
   /** {x, y, z, fx, fz, rx, rz}: a point of the line, its flat forward and right (+ = right riding outbound). */
   F(s) {
+    if (this.spans) {   // [F123] headhouses only: the piece of the subway line round this metre
+      const h = this.spans.find((q) => s >= q.s0 - 1 && s <= q.s0 + q.route.total + 1) || this.spans[0], u = s - h.s0;
+      const p = routePoint(h.route, h.index, u), a = routePoint(h.route, h.index, u - 1.5), b = routePoint(h.route, h.index, u + 1.5);
+      const l = Math.hypot(b.x - a.x, b.z - a.z) || 1, fx = (b.x - a.x) / l, fz = (b.z - a.z) / l;
+      return { x: p.x, y: p.y, z: p.z, fx, fz, rx: -fz, rz: fx };
+    }
     const p = routePoint(this.route, this.index, s), a = routePoint(this.route, this.index, s - 1.5), b = routePoint(this.route, this.index, s + 1.5);
     const l = Math.hypot(b.x - a.x, b.z - a.z) || 1, fx = (b.x - a.x) / l, fz = (b.z - a.z) / l;
     return { x: p.x, y: p.y, z: p.z, fx, fz, rx: -fz, rz: fx };
@@ -187,10 +227,20 @@ export class Subway {
   _ends(T) {
     for (const [s, dir] of [[this.s0, 1], [this.s1, -1]]) {
       const f = this.F(s), st = this.station(s + dir), Wr = TUBE.wall + (STATION.wall - TUBE.wall) * st, H = TUBE.h + (STATION.h - TUBE.h) * st;
-      const wall = linear(STN.tile), dark = linear('#14161a');
+      const wall = linear(STN.tile), dark = linear('#14161a'), dark2 = linear('#22252b');
       const q = (l0, h0, l1, h1, c) => this.quad(T, this.at(f, l0, h0), this.at(f, l1, h0), this.at(f, l1, h1), this.at(f, l0, h1), c);
-      q(WALL_L, BED, EDGE, H, wall);           // over the track bed…
-      q(-9.6, BED, -2.5, 3.9, dark);            // …the tracks' tunnel mouth (in front of it)
+      // over the track bed, round the tracks' tunnel mouth: the wall is cut round the opening (it was one quad with
+      // the dark mouth drawn on it, the same plane: they fought for depth, a black wedge on the wall)
+      const M0 = -9.6, M1 = -2.5, MH = 3.9, D = 6;   // the mouth's sides, its top and how deep it goes on (dark)
+      q(WALL_L, BED, M0, H, wall); q(M1, BED, EDGE, H, wall); q(M0, MH, M1, H, wall);
+      // the mouth: a short dark tunnel going on beyond the wall (sides, roof, back), level with the end
+      const bx = -dir * f.fx * D, bz = -dir * f.fz * D, on = (v) => new THREE.Vector3(v.x + bx, v.y, v.z + bz);
+      const P = (l, h) => this.at(f, l, h);
+      this.quad(T, P(M0, BED), on(P(M0, BED)), on(P(M0, MH)), P(M0, MH), dark2);
+      this.quad(T, P(M1, BED), on(P(M1, BED)), on(P(M1, MH)), P(M1, MH), dark2);
+      this.quad(T, P(M0, MH), on(P(M0, MH)), on(P(M1, MH)), P(M1, MH), dark);
+      this.quad(T, P(M0, BED), on(P(M0, BED)), on(P(M1, BED)), P(M1, BED), linear(BEDC).multiplyScalar(.45));
+      this.quad(T, on(P(M0, BED)), on(P(M1, BED)), on(P(M1, MH)), on(P(M0, MH)), dark);
       q(SHAFT.r, FLOOR, Wr, H, wall);           // right of the shaft
       q(EDGE, SHAFT.h, SHAFT.r, H, wall);       // over the shaft's opening
     }
@@ -282,7 +332,7 @@ export class Subway {
       const v0 = 1 - (row + 1) / 4, v1 = 1 - row / 4, U = [[0, v0], [1, v0], [1, v1], [0, v1]];
       for (const k of [0, 1, 2, 0, 2, 3]) { pos.push(P[k].x, P[k].y, P[k].z); uv.push(...U[k]); }
     };
-    this.platforms.forEach((p, i) => {
+    if (!this.spans) this.platforms.forEach((p, i) => {   // (not with the headhouses only: F123)
       const row = Math.min(1, i);
       for (let s = p.fromM + 8; s < p.toM - 4; s += 16) add(this.F(s), STATION.wall - .05, 2.0, 4.2, .52, row);
       add(this.F((p.fromM + p.toM) / 2), 1.2, STATION.h - 1.4, 3.2, .4, row, 0);   // hanging over the path
@@ -375,7 +425,7 @@ export class Subway {
       for (let k = 0; k < 2; k++) {
         const c = front - dir * (this.carL * (k + .5));
         if (c < this.s0 - 20 || c > this.s1 + 20) continue;
-        const a = this.F(c - 10), b = this.F(c + 10), m = this.F(c);
+        const a = this._trackF(c - 10), b = this._trackF(c + 10), m = this._trackF(c);
         const fx = b.x - a.x, fy = b.y - a.y, fz = b.z - a.z, l = Math.hypot(fx, fy, fz) || 1;
         this._q.setFromUnitVectors(_Z, this._v.set(fx / l, fy / l, fz / l));
         this._m.compose(this._v.set(m.x + m.rx * lat, m.y + BED + .25, m.z + m.rz * lat), this._q, this._sc);
@@ -383,6 +433,14 @@ export class Subway {
       }
     }
     this.trains.count = n; this.trains.instanceMatrix.needsUpdate = true;
+  }
+
+  /** The tracks' frame at s: the line's in the tube; beyond its ends (into the dark mouths) it runs straight on, level. */
+  _trackF(s) {
+    const e = s < this.s0 ? this.s0 : s > this.s1 ? this.s1 : null;
+    if (e == null) return this.F(s);
+    const f = this.F(e), d = s - e;
+    return { ...f, x: f.x + f.fx * d, z: f.z + f.fz * d };
   }
 
   setNight() {}
