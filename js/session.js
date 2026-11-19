@@ -1,8 +1,8 @@
 // The ride: virtual gears, terrain (manual grade or GPX route), workouts, trainer control,
 // speed/distance physics, timer and 1 Hz recording.
 import {
-  GEAR_RATIOS, clamp, stepSpeed, ergTargetForGear, simGradeForGear, estimateRealRatio, DEFAULTS,
-  feltGrade, easeGrade, HILL_FEEL_DEFAULT,
+  GEAR_RATIOS, clamp, stepSpeed, ergTargetForBike, simGradeForGear, estimateRealRatio, DEFAULTS,
+  feltGrade, shapeGrade, momentumGrade, HILL_FEEL_DEFAULT,
 } from './physics.js';
 import { shiftDirection } from './parsers.js';
 import { Recorder } from './recorder.js';
@@ -63,7 +63,9 @@ export class Session extends EventTarget {
     this._lastSentAt = 0;
     this._lastSent = null;
     this.target = null;
-    this.trainerGrade = null;    // the grade the trainer feels: Hill feel × road grade, eased for momentum
+    this.trainerGrade = null;    // the grade the trainer feels (ERG: pedalGrade, SIM: shapedGrade)
+    this.shapedGrade = null;     // Hill feel × road grade, blended over distance and ≤ 1 %/s (PLAN 6.11)
+    this.pedalGrade = null;      // ERG: the shaped grade as the bike's momentum lets it through to the pedals
     this.routeOffset = 0;
     this.sceneryOffset = 0;       // a free ride's or workout's network scenery (F37): ridden from 0 with the ride
     this.sceneryRoute?.netRide?.reset();
@@ -470,10 +472,14 @@ export class Session extends EventTarget {
 
   /** Send the trainer the resistance for the current gear, cadence, grade or workout step. */
   _control(nowPerf, p, grade, carry = null, dt = TICK_MS / 1000) {
-    // Ride feel: the trainer gets Hill feel × grade (like Zwift's trainer difficulty), eased in over a few
-    // seconds the way momentum carries a real bike into a hill. Shifts still change resistance at once.
-    this.trainerGrade = easeGrade(this.trainerGrade, feltGrade(grade, this.settings.hillFeel ?? HILL_FEEL_DEFAULT), dt);
-    grade = this.trainerGrade;
+    // Ride feel (PLAN 6.11): the trainer gets Hill feel × grade (like Zwift's trainer difficulty), blended in over
+    // distance and at most 1 %/s; in ERG the bike's momentum then takes the hill first (it bites as the bike slows).
+    // Shifts still change resistance at once (the gear's speed is in the target, not in the lag).
+    const v = this.speedMps;
+    this.shapedGrade = shapeGrade(this.shapedGrade, feltGrade(grade, this.settings.hillFeel ?? HILL_FEEL_DEFAULT), v, dt);
+    this.pedalGrade = momentumGrade(this.pedalGrade, this.shapedGrade, v, dt);
+    const ergMode = this.settings.shiftMode === 'erg';
+    this.trainerGrade = ergMode ? this.pedalGrade : this.shapedGrade;
     if (!this.trainer.connected || this.trainer.busy || this.trainer.reconnecting) return;
     // No recent data (Bluetooth hiccup): hold the last resistance rather than guessing.
     if (!this._fresh && this.workoutTarget == null) return;
@@ -504,7 +510,7 @@ export class Session extends EventTarget {
     }
 
     if (this.settings.shiftMode === 'erg') {
-      const watts = ergTargetForGear(this.cadence, this.ratio, grade, p, diff);
+      const watts = ergTargetForBike(this.cadence, this.ratio, this.pedalGrade, v, p, diff);
       this.target = { mode: 'ERG', value: watts, source: 'gear' };
       const last = typeof this._lastSent === 'number' ? this._lastSent : null;
       if (last === null || this._lastSentMode !== 'erg' || Math.abs(watts - last) >= 3 || due) {
@@ -512,7 +518,7 @@ export class Session extends EventTarget {
         send(watts, () => this.trainer.setErgWatts(watts));
       }
     } else {
-      const g = simGradeForGear(this.cadence, this.ratio, this.realRatio, grade, p, diff);
+      const g = simGradeForGear(this.cadence, this.ratio, this.realRatio, this.shapedGrade, p, diff);
       this.target = { mode: 'SIM', value: g, source: 'gear' };
       const last = typeof this._lastSent === 'number' ? this._lastSent : null;
       if (last === null || this._lastSentMode !== 'sim' || Math.abs(g - last) >= 0.2 || due) {

@@ -1,7 +1,8 @@
-// ride-feel-test: Hill feel (grade scaling like Zwift's trainer difficulty) and momentum easing.
+// ride-feel-test: Hill feel (grade scaling like Zwift's trainer difficulty) and the felt grade's shaping (PLAN 6.11;
+// the ride through a hill, a crest and a descent is in test/hill-feel.test.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GEAR_RATIOS, ergTargetForGear, feltGrade, easeGrade, HILL_FEEL_DEFAULT, HILL_FEEL_OPTIONS, MOMENTUM_TAU_S } from '../js/physics.js';
+import { GEAR_RATIOS, ergTargetForGear, feltGrade, shapeGrade, momentumGrade, HILL_FEEL_DEFAULT, HILL_FEEL_OPTIONS } from '../js/physics.js';
 import { CHASE, CHASE_CLASSIC, CAMERAS } from '../js/world/pose.js';
 import { DEFAULT_SETTINGS } from '../js/settings.js';
 
@@ -22,15 +23,25 @@ test('at 50% a 1% hill asks for far less of a jump than full physics', () => {
   assert.ok(half / flat < 1.4, `half ${half} vs flat ${flat}`);
 });
 
-test('momentum easing ramps the grade in over a few seconds', () => {
-  let g = easeGrade(null, 0, 0.25);
-  assert.equal(g, 0);
+test('the felt grade blends in over distance and changes at most 1 %/s', () => {
+  assert.equal(shapeGrade(null, 3, 7, 0.25), 3);
+  let g = 0;
   const steps = [];
-  for (let t = 0; t < 12; t += 0.25) { g = easeGrade(g, 1, 0.25); steps.push(g); }
-  assert.ok(steps[0] < 0.1, 'first quarter second is small');
-  const at3s = steps[11];
-  assert.ok(at3s > 0.55 && at3s < 0.7, `≈63% after one time constant (${MOMENTUM_TAU_S} s): ${at3s}`);
-  assert.ok(steps.at(-1) > 0.97, 'settled after ~12 s');
+  for (let t = 0; t < 12; t += 0.25) { const n = shapeGrade(g, 3, 7, 0.25); steps.push(n - g); g = n; }
+  assert.ok(Math.max(...steps) <= 0.25 + 1e-9, 'never over 1 %/s');
+  assert.ok(g > 2.95, `settled after ~12 s: ${g}`);
+  // longer at speed (in distance): after 20 m, a slow bike is further along than a fast one, which covered it in less time
+  const after20m = (v) => { let x = 0; for (let d = 0; d < 20; d += v * 0.25) x = shapeGrade(x, 0.5, v, 0.25); return x; };
+  assert.ok(after20m(3) > after20m(12), `${after20m(3)} vs ${after20m(12)}`);
+  // stopped (free ride ▲ ▼ at a standstill) it still arrives
+  let s0 = 0; for (let t = 0; t < 10; t += 0.25) s0 = shapeGrade(s0, 1, 0, 0.25);
+  assert.ok(s0 > 0.95);
+});
+
+test('momentum lets the hill through more slowly when the bike is faster', () => {
+  const after = (v) => { let x = 0; for (let t = 0; t < 3; t += 0.25) x = momentumGrade(x, 3, v, 0.25); return x; };
+  assert.ok(after(4) > after(7) && after(7) > after(10), `${after(4)} ${after(7)} ${after(10)}`);
+  assert.equal(momentumGrade(null, 2, 7, 0.25), 2);
 });
 
 test('close camera is the default and nearer than classic', () => {
