@@ -837,6 +837,8 @@ function pacerPosOn(route) {
 }
 
 // ---------- Minimap (ride screen, bottom-left) ----------
+// Zoomed in by default (18 Nov): about 3 km across, north up, following the rider a little behind centre
+// (js/minimap-view.js); Settings or M: whole course · off. Redrawn 5× a second; only what's in view is drawn.
 let lastMapDraw = 0;
 function minimapRoute() {
   if (session.mode === 'route' && session.route) return session.route;
@@ -852,15 +854,14 @@ function renderMinimap(now = performance.now(), force = false) {
     const pos = riderPosOn(route), net = route.netRide;
     const up = net.prompt(pos, session.speedMps);
     const span = net.profileSpan(pos);
-    drawNetworkMinimap($('hMapCanvas'), net, pos, { mode: settings.minimap === 'follow' ? 'follow' : 'course',
-      pacerPos: !pacer.on ? null : pacerPath(route) ? pacerPath(route).latLon(pacerPosOn(route)) : pacerPosOn(route), spanM: imperial() ? 1609.344 : 1500, up,
+    drawNetworkMinimap($('hMapCanvas'), net, pos, { mode: settings.minimap === 'course' ? 'course' : 'follow', now,
+      pacerPos: !pacer.on ? null : pacerPath(route) ? pacerPath(route).latLon(pacerPosOn(route)) : pacerPosOn(route), up,
       aheadTo: Math.max(span[1], net.endOf(Math.min(net.entries.length - 1, net.entryAt(pos) + 1))) });
     return;
   }
   drawMinimap($('hMapCanvas'), route, riderPosOn(route), {
-    mode: settings.minimap === 'follow' ? 'follow' : 'course',
+    mode: settings.minimap === 'course' ? 'course' : 'follow', now,
     pacerPos: pacer.on ? pacerPosOn(route) : null,
-    spanM: imperial() ? 1609.344 : 1500,
   });
 }
 function applyHudPrefs() {
@@ -868,7 +869,7 @@ function applyHudPrefs() {
   if (onRideScreen) renderMinimap(performance.now(), true);
 }
 function cycleMinimap() {
-  const order = ['course', 'follow', 'off'];
+  const order = ['follow', 'course', 'off'];
   settings.minimap = order[(order.indexOf(settings.minimap) + 1) % order.length];
   saveSettings(settings);
   renderMinimap(performance.now(), true);
