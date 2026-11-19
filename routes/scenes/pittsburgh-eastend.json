@@ -86,7 +86,42 @@
   },
   "road": {
     "surface": "worn",
-    "zones": [],
+    "zones": [
+      {
+        "fromM": 3040,
+        "toM": 5250,
+        "surface": "worn",
+        "patches": 0.45,
+        "cracks": 0.4
+      },
+      {
+        "fromM": 10495,
+        "toM": 12634,
+        "surface": "fresh",
+        "tone": 0.92,
+        "cracks": 0.1
+      },
+      {
+        "fromM": 15182,
+        "toM": 15672,
+        "surface": "patched",
+        "patches": 0.7,
+        "cracks": 0.4
+      },
+      {
+        "fromM": 15672,
+        "toM": 16512,
+        "surface": "fresh",
+        "tone": 0.88
+      },
+      {
+        "fromM": 24701,
+        "toM": 25852,
+        "surface": "patched",
+        "patches": 0.6,
+        "cracks": 0.35
+      }
+    ],
     "trail": {
       "surface": "fresh",
       "tone": 1.05,
@@ -125,7 +160,52 @@
     "rangeM": 220,
     "parkTrees": 16,
     "clearRouteCrossings": true,
-    "zones": []
+    "zones": [
+      {
+        "name": "Highland Park: Lake Drive",
+        "fromM": 10520,
+        "toM": 12610,
+        "widthM": 0,
+        "sidewalks": false,
+        "grade": false,
+        "trees": 0
+      },
+      {
+        "name": "East Liberty: Penn Ave",
+        "style": "victorian",
+        "fromM": 15200,
+        "toM": 15660,
+        "widthM": 70,
+        "parking": true,
+        "curbM": 6.2,
+        "sidewalkM": 3.4,
+        "trees": 16,
+        "grade": false
+      },
+      {
+        "name": "Bakery Square: Penn Ave",
+        "style": "industrial",
+        "fromM": 15690,
+        "toM": 16350,
+        "widthM": 90,
+        "parking": false,
+        "curbM": 6,
+        "sidewalkM": 3.6,
+        "trees": 14,
+        "grade": false
+      },
+      {
+        "name": "Squirrel Hill: Forbes Ave",
+        "style": "victorian",
+        "fromM": 24720,
+        "toM": 25420,
+        "widthM": 70,
+        "parking": true,
+        "curbM": 6.2,
+        "sidewalkM": 3.4,
+        "trees": 16
+      }
+    ]
   },
   "mainStreets": [],
   "hotspots": [
@@ -554,7 +634,50 @@
       ]
     }
   ],
-  "signs": [],
+  "signs": [
+    {
+      "atM": 3090,
+      "side": "inland",
+      "label": "STANTON AVENUE",
+      "subtitle": "STANTON HEIGHTS"
+    },
+    {
+      "atM": 10540,
+      "side": "inland",
+      "label": "LAKE DRIVE",
+      "subtitle": "HIGHLAND PARK \u00b7 LAKE CARNEGIE"
+    },
+    {
+      "atM": 12880,
+      "side": "inland",
+      "label": "HIGHLAND PARK",
+      "subtitle": "ENTRANCE GARDEN \u00b7 RESERVOIR"
+    },
+    {
+      "atM": 15230,
+      "side": "inland",
+      "label": "PENN AVENUE",
+      "subtitle": "EAST LIBERTY"
+    },
+    {
+      "atM": 15720,
+      "side": "inland",
+      "label": "BAKERY SQUARE",
+      "subtitle": "PENN AVENUE"
+    },
+    {
+      "atM": 16810,
+      "side": "inland",
+      "label": "BEECHWOOD BOULEVARD",
+      "subtitle": "MELLON PARK"
+    },
+    {
+      "atM": 24760,
+      "side": "inland",
+      "label": "FORBES AVENUE",
+      "subtitle": "SQUIRREL HILL"
+    }
+  ],
   "preview": {
     "positionM": 4000,
     "camera": "drone",
@@ -669,7 +792,50 @@
       "turnDeg": -18
     }
   ],
-  "views": [],
+  "views": [
+    {
+      "name": "Highland Park Reservoir",
+      "rangeM": 450,
+      "cam": {
+        "lat": 40.4793,
+        "lon": -79.9158,
+        "up": 30
+      },
+      "look": {
+        "lat": 40.4825,
+        "lon": -79.9148,
+        "up": 0
+      }
+    },
+    {
+      "name": "Lake Carnegie from Lake Drive",
+      "rangeM": 300,
+      "cam": {
+        "lat": 40.4796,
+        "lon": -79.9113,
+        "up": 8
+      },
+      "look": {
+        "lat": 40.481,
+        "lon": -79.9113,
+        "up": 0
+      }
+    },
+    {
+      "name": "Highland Park: the entrance fountain and the reservoir",
+      "rangeM": 300,
+      "cam": {
+        "lat": 40.47905,
+        "lon": -79.916,
+        "up": 10
+      },
+      "look": {
+        "lat": 40.47936,
+        "lon": -79.91553,
+        "up": 1
+      }
+    }
+  ],
   "stadiumShapes": {
     "PNC Park": {
       "lat": 40.4469,
