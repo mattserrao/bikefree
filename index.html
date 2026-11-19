@@ -112,6 +112,7 @@
         <h3 class="pv-title" id="pvTitle">—</h3>
         <div class="pv-sub" id="pvSub"></div>
         <div class="facts" id="pvFacts"></div>
+        <div class="pv-shots" id="pvShots" hidden></div>
         <div class="route-opts" id="routeOpts" hidden>
           <div class="seg" id="dirSeg" role="group" aria-label="Direction">
             <button type="button" data-dir="fwd" class="on">Forward</button><button type="button" data-dir="rev" title="Start from the far end">Reverse</button>
@@ -471,6 +472,10 @@
   </dialog>
 
   <!-- History -->
+  <dialog id="shotDlg" class="shot-dlg" aria-label="Route picture">
+    <figure><img id="shotImg" alt="" width="480" height="270"><figcaption id="shotCap"></figcaption></figure>
+    <div class="shot-nav"><button type="button" id="shotPrev" aria-label="Previous picture">‹</button><span id="shotCount"></span><button type="button" id="shotNext" aria-label="Next picture">›</button><span class="spacer"></span><button type="button" id="shotClose">Close</button></div>
+  </dialog>
   <dialog id="history">
     <form method="dialog">
       <h2 id="histTitle">Saved rides</h2>

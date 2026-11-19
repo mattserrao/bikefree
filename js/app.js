@@ -16,6 +16,7 @@ import { buildCatalogRoute, loadRouteScene } from './routes.js';
 import { loadNetwork, makePathRoute, planNext, planCloses, keysToIds, idsToKeys, travKey, PathFollower, edgeLines } from './network.js';
 import { legLength, startPosition, stopsForDirection, stopNear, planRide, startArchM } from './route-plan.js';
 import { VERSION } from './version.js';
+import { PREVIEW_INDEX, previewShots, shotsHtml, prunePreviewCache } from './route-previews.js';
 import { ScreenAwake } from './wakelock.js';
 import { worldSound } from './world/toolbox/core/sound.js';
 import { planRouteTiles, tileKeysToUrls, downloadUrls, offlineStatus, setOfflineStatus, registerServiceWorker } from './offline.js';
@@ -621,6 +622,7 @@ function renderPreview() {
       : fact(`${fmtDist(leg, 1)}`, `${distUnit()} each way`) + fact(fmtElev(r.ascent).toLocaleString(), `${elevUnit()} climb / lap`)) +
       fact(`${Math.round(Math.max(...r.grade))}%`, 'max grade') +
       `<div class="fact tag">${p2p ? 'Point to point' : r.oneWay?.closedLoop ? 'Loop · each lap turns and rides it back' : 'There &amp; back · turns at each end'}</div>`);
+    renderShots(r);
     $('planOpen').hidden = !r.netRide;
     if (r.netRide) $('pvDesc').innerHTML = `${r.note ? `${escapeHtml(r.note)}. ` : ''}At each junction choose left, straight, right or back with ◀ ▶ on the handlebars (or <kbd>A</kbd> <kbd>D</kbd>) — or follow the plan.`;
     if (!r.netRide) $('pvDesc').innerHTML = r.hasElevation ? '' : '<span class="warn">No elevation in this file — it will ride flat.</span>';
@@ -642,6 +644,7 @@ function renderPreview() {
     $('pvHint').hidden = false;
     $('pvHint').textContent = `Drag on the profile to move the start · starting ${fmtDist(cp.st.offsetM, 1)} ${distUnit()} in at ${fmtElev(at.ele).toLocaleString()} ${elevUnit()}`;
   } else if (chosen === 'workout' && previewWorkout) {
+    renderShots(null);
     $('planOpen').hidden = true;
     const w = previewWorkout, st = workoutStats(w);
     $('pvKicker').textContent = 'Workout';
@@ -653,6 +656,7 @@ function renderPreview() {
     drawWorkout(chart, w, 0, settings.ftp, 1);
   } else {
     const scene = sceneryItem();
+    renderShots(null);
     $('planOpen').hidden = true;   // (the route pane's map planner link: the free pane now opens from there)
     $('pvKicker').textContent = 'Free ride';
     $('pvTitle').textContent = scene ? scene.name : 'Numbers only';
@@ -666,6 +670,39 @@ function renderPreview() {
   }
   renderStart();
 }
+
+// ---------- Route pictures (PLAN 6.8): start, highlight, a climb — pre-rendered (tools/build_previews.mjs) ----------
+let previewManifest = null, shownShots = [], shotsKey = null, shotAt = 0;
+async function loadPreviewManifest() {
+  try { previewManifest = await (await fetch(PREVIEW_INDEX)).json(); } catch { previewManifest = null; }
+  prunePreviewCache(previewManifest).catch(() => {});
+}
+function renderShots(r) {
+  const key = r ? r.id : null;
+  if (key === shotsKey) return;   // the same route: keep the pictures (no reload while the start is dragged)
+  shotsKey = key;
+  shownShots = r ? previewShots(previewManifest, r.id) : [];
+  const box = $('pvShots');
+  box.hidden = !shownShots.length;
+  box.style.setProperty('--n', shownShots.length || 1);
+  box.innerHTML = shotsHtml(shownShots);
+}
+function showShot(i) {
+  if (!shownShots.length) return;
+  shotAt = (i + shownShots.length) % shownShots.length;
+  const s = shownShots[shotAt];
+  $('shotImg').src = s.url; $('shotImg').alt = s.caption;
+  $('shotCap').innerHTML = `<b>${escapeHtml(s.word)}</b>${s.place ? ` ${escapeHtml(s.place)}` : ''}`;
+  $('shotCount').textContent = `${shotAt + 1} of ${shownShots.length}`;
+  $('shotPrev').hidden = $('shotNext').hidden = shownShots.length < 2;
+  if (!$('shotDlg').open) $('shotDlg').showModal();
+}
+$('pvShots').addEventListener('click', (e) => { const b = e.target.closest('[data-shot]'); if (b) showShot(Number(b.dataset.shot)); });
+$('shotPrev').addEventListener('click', () => showShot(shotAt - 1));
+$('shotNext').addEventListener('click', () => showShot(shotAt + 1));
+$('shotClose').addEventListener('click', () => $('shotDlg').close());
+$('shotDlg').addEventListener('click', (e) => { if (e.target === $('shotDlg')) $('shotDlg').close(); });   // the backdrop
+$('shotDlg').addEventListener('keydown', (e) => { if (e.key === 'ArrowLeft') showShot(shotAt - 1); if (e.key === 'ArrowRight') showShot(shotAt + 1); });
 
 // ---------- Scenery (3D loop behind free rides and workouts) ----------
 const sceneryItem = () => (parkItems || []).find((p) => p.id === settings.scenery) || null;
@@ -1244,6 +1281,7 @@ let selectedRouteId = null;
 
 async function loadParks() {
   if (parkItems) return parkItems;
+  await loadPreviewManifest();
   try {
     const list = await (await fetch('routes/parks/index.json')).json();
     parkItems = list.map((p) => ({ ...p, routeId: p.id, id: `builtin-park-${p.id}`, kind: 'route', url: p.file, group: 'Scenic routes — 3D' }));

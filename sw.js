@@ -2,6 +2,9 @@
 importScripts('./sw-assets.js');
 const APP_CACHE = `bikefree-app-${self.BIKEFREE_APP_REVISION}`;
 const TILE_CACHE = 'bikefree-tiles-v1';
+// Route pictures (PLAN 6.8, routes/previews/*.webp?v=<hash>): not precached (~200 files, a few MB); each is kept the
+// first time the menu shows it, in a cache that survives app updates (the page prunes ones no longer listed)
+const PREVIEW_CACHE = 'bikefree-previews-v1';
 const TILE_HOSTS = ['s3.amazonaws.com', 'basemap.nationalmap.gov'];
 const MAX_TILES = 40000;
 
@@ -43,6 +46,18 @@ self.addEventListener('fetch', (e) => {
       if (hit) return hit;
       const res = await fetch(e.request);
       if (res.ok) { c.put(e.request.url, res.clone()); if (Math.random() < 0.01) trimTiles(); }
+      return res;
+    })());
+    return;
+  }
+
+  if (url.origin === self.location.origin && url.pathname.includes('/routes/previews/') && url.pathname.endsWith('.webp')) {
+    e.respondWith((async () => {
+      const c = await caches.open(PREVIEW_CACHE);
+      const hit = await c.match(e.request);
+      if (hit) return hit;
+      const res = await fetch(e.request);
+      if (res.ok) c.put(e.request, res.clone());
       return res;
     })());
     return;
