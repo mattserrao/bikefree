@@ -447,6 +447,9 @@ export class StreetKit {
         if (!bad) for (const o of this.streetsAt(x, z, 1.2)) if (o.st.cls < 8 && (o.edge < .5 || !this.routeStreet(o, f.tx, f.tz))) { bad = true; break; }
         if (!bad && !this._station({ route: true, s, side })) bad = true;   // no sidewalk here
         if (bad || this.lampNear(x, z, 3)) continue;
+        // [6.1] the trunk clear of every wall's facade, not just the one straight out from the curb (a corner block,
+        // a frontage at an angle): pilasters and bays stand ~.9 m proud, awnings and blade signs reach 1.3 m out
+        if (this.city.buildingNear(x, z, 2.3)) continue;
         // crown radius 2.4 × scale (city tree: scale .75 + seed × .5): clear of the tube (ROAD_WIDTH / 2 + .6) and the walls
         const wmax = Math.min(1.25, (curb + 1.1 - ROAD_WIDTH / 2 - .9) / 2.4, (Math.min(line, 8) - 1.1 + .4) / 2.4);
         if (wmax < .78) continue;
@@ -987,6 +990,9 @@ export class StreetKit {
     if (!fn) return false;
     if (kind !== 'treePit' && kind !== 'car' && this.treeNear(x, z, Math.max(.9, LAMP_CLEAR[kind] ?? 0))) return false;   // [finish] not in a street tree's trunk
     if (kind !== 'car' && this.lampNear(x, z, LAMP_CLEAR[kind] ?? .7)) return false;   // [finish] …nor in a lamp post (hydrants every 90 m, pits, masts)
+    // [6.1] nothing standing in another street's carriageway (a mapped piece snapped to the wrong curb, a corner sign
+    // or bollard at a lane's mouth): its traffic drives through it. (The route's own street keeps the kit's curbs.)
+    if (kind !== 'treePit' && kind !== 'car' && this.streetsAt(x, z, -.2).some((o) => o.st.cls < 8 && !(this.L.routeDist(o.px, o.pz)?.d < 3))) return false;
     const y = opts.y ?? this.walkLevel(x, z);
     const M = opts.lod === 'mid' ? C.mid : C.near;
     const f = { x, y, z, yaw, c: Math.cos(yaw), s: Math.sin(yaw) };

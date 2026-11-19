@@ -129,6 +129,16 @@ function offsetLine(pts, off) {
     return { x: p.x - (b.z - a.z) / len * off, y: p.y, z: p.z + (b.x - a.x) / len * off };
   });
 }
+/** A polyline with a point at least every `step` m (x, z; y carried along if present). */
+function densify(pts, step) {
+  const out = [pts[0]];
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i], n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / step));
+    for (let k = 1; k <= n; k++) out.push(k === n ? b : { x: a.x + (b.x - a.x) * k / n, z: a.z + (b.z - a.z) * k / n, ...(a.y != null && b.y != null ? { y: a.y + (b.y - a.y) * k / n } : {}) });
+  }
+  return out;
+}
+
 function chainPolylines(lines, tol = 1.5) {
   const key = (p) => `${Math.round(p.x / tol)},${Math.round(p.z / tol)}`;
   const pool = lines.map((l) => l.slice());
@@ -271,7 +281,7 @@ export class CityLife {
       if (path.length < 8 || onRoute(st)) return;
       if (st.cls >= 2) walk.push({ path, side: st.cls === 8 ? 0 : st.width / 2 + 1.7, allow: () => true, cls: st.cls });
       if (st.cls <= 5) drive.push({ path, lane: st.oneway ? 0 : Math.min(st.width / 4, 2.6), oneway: st.oneway, speed: [22, 14, 12, 11, 10, 7.5][st.cls],
-        allow: (dir) => !st.oneway || dir === st.oneway, cls: st.cls, bus: st.cls >= 2 && st.cls <= 3 });
+        allow: (dir) => !st.oneway || dir === st.oneway, cls: st.cls, src: st, bus: st.cls >= 2 && st.cls <= 3 });
     });
     // the route's trails: people out on the riverfront with you
     const r = c.route, end = r.turnIdx || r.dist.length - 1, L = c.landscape;
@@ -301,7 +311,56 @@ export class CityLife {
     // off the route's road: sidewalks across its carriageway become crossings (with a kerb to wait at); sidewalks
     // and lanes that run along it, or that end on it with nowhere to go, are cut out here
     this.walk = yield* this._offRouteJob(walk, (w) => (w.side ? w.side + .9 : 1.4), MOVE.walk);
-    this.drive = yield* this._offRouteJob(drive, (w) => (w.oneway ? 1.5 : w.lane) + 1.1, MOVE.car);
+    this.drive = yield* this._offRouteJob(yield* this._openJob(drive), (w) => (w.oneway ? 1.5 : w.lane) + 1.1, MOVE.car);
+  }
+
+  /**
+   * [6.1] Drive ways cut where a car would be inside something drawn solid down to the street: a building (an OSM
+   * service way through a passage, a lot under a block) or a bridge deck (a ramp's slab or a viaduct's pier over a
+   * street it meets too low). Cars stop and turn round at the cut (a dead end) instead of driving through walls.
+   */
+  *_openJob(ways) {
+    const c = this.city, out = [], p = {};
+    const blocked = (x, z, y) => {
+      const m = .5;   // (the street kit's facades stand up to ~.9 m proud of the walls)
+      for (const b of c.buildingGrid?.get(`${Math.floor(x / 40)},${Math.floor(z / 40)}`) || []) {
+        if (b.kind === 12 || b.hidden || b.hero || b.mh > 3.4 || x < b.bb[0] - m || x > b.bb[1] + m || z < b.bb[2] - m || z > b.bb[3] + m) continue;
+        let inside = false, near = false;
+        for (let i = 0, j = b.ring.length - 1; i < b.ring.length; j = i++) {
+          const a = b.ring[i], q = b.ring[j];
+          if ((a.z > z) !== (q.z > z) && x < ((q.x - a.x) * (z - a.z)) / (q.z - a.z) + a.x) inside = !inside;
+          const dx = q.x - a.x, dz = q.z - a.z, t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz || 1)));
+          if (Math.hypot(a.x + dx * t - x, a.z + dz * t - z) < m) near = true;
+        }
+        if ((inside || near) && !(b.onRoute ??= c._onRoute(b)) && !(b.crossed ??= c._crossed(b))) return true;
+      }
+      // a deck's slab (bridges.js: 1.6–2.2 m deep, .4 m past the carriageway) over the street too low to drive under
+      // (the map's decks over streets are lifted to clear them, build_city.py; where one can't be — a ramp leaving
+      // its street, a deck beside it at about its level — the street stops there)
+      for (const o of c.landscape.streetsNear(x, z, .4)) {
+        const st = c.streets[o.k];
+        if (st.bridge && st.cls <= 7 && o.y - y > .3 && o.y - (st.cls <= 2 ? 2.2 : 1.6) < y + 3.6) return true;   // (a bus is ~3.2 m tall)
+      }
+      return false;
+    };
+    for (const w of ways) {
+      if (due()) yield;
+      const reach = (w.oneway ? 1.5 : w.lane) + .9, cuts = [];
+      for (let s = 0; s <= w.path.length; s += 2) {
+        poseOn(w.path, Math.min(s, w.path.length), 1, p);
+        if ([0, -1, 1].some((f) => blocked(p.x - p.tz * reach * f, p.z + p.tx * reach * f, p.y))) {
+          const a = s - 2 - MOVE.car.body / 2, b = s + 2 + MOVE.car.body / 2;
+          if (cuts.length && a <= cuts.at(-1)[1]) cuts.at(-1)[1] = b; else cuts.push([a, b]);
+        }
+      }
+      if (!cuts.length) { out.push(w); continue; }
+      let from = 0;
+      for (const [a, b] of [...cuts, [w.path.length + 1, w.path.length + 1]]) {
+        if (Math.min(w.path.length, a) - from >= 12) out.push({ ...w, path: subPath(w.path, from, Math.min(w.path.length, a)) });
+        from = Math.max(from, b);
+      }
+    }
+    return out;
   }
 
   /**
@@ -442,7 +501,7 @@ export class CityLife {
       const ang = this.rand() * Math.PI * 2, d = Math.sqrt(this.rand()) * (spot.radiusM || 25);
       const x = spot.x + Math.cos(ang) * d, z = spot.z + Math.sin(ang) * d;
       const c = L.landAt(x, z), road = L.routeDist(x, z);
-      if (c !== LAND.water && c !== LAND.building && !(road && road.d < HALF + 1.5) && this._outOfView(x, z, cam, 165, initial)) {
+      if (c !== LAND.water && c !== LAND.building && !(road && road.d < HALF + 1.5) && !this._wet(x, z) && this._outOfView(x, z, cam, 165, initial)) {
         Object.assign(a, { alive: true, stand: true, x, z, y: L.heightAt(x, z), yaw: this.rand() * 6.28, gait: this.rand() < .8 ? 0 : 1, speed: 0, v: 0, way: -1 });
         if (a.gait === 1) Object.assign(a, { stand: false, speed: .6, v: .6, wander: true });
         return;
@@ -455,8 +514,19 @@ export class CityLife {
       speed: jog ? 2.6 + this.rand() * .8 : 1.1 + this.rand() * .5, gait: jog ? 2 : 1, nx: undefined, go: null, kerbJ: this.rand() * 1.2,
       lat: (w.side ? (this.rand() < .5 ? -1 : 1) * (w.side + (this.rand() - .5) * 1.2) : (this.rand() - .5) * 2.2) });
     // on a shared trail: a side of their own, off the rider's road (4.3–5.3 m from its centre line; the rider rides 1.5 m out)
-    if (w.trail) { a.lat = 4.3 + this.rand(); a.wside = this.rand() < .5 ? -1 : 1; }
+    if (w.trail) {
+      a.lat = 4.3 + this.rand(); a.wside = this.rand() < .5 ? -1 : 1;
+      // [6.1] (F180) on the land side, where one side of the trail is the river
+      const p = poseOn(w.path, a.s, 2, {}), at = (side) => this._wet(p.x - p.tz * a.lat * side, p.z + p.tx * a.lat * side);
+      if (at(a.wside)) { if (at(-a.wside)) { a.alive = false; return; } a.wside = -a.wside; }
+    }
     a.v = a.speed;
+  }
+
+  /** [6.1] Over the river (or by it, on ground below its level): no place for a walker. (The water grid first: cheap.) */
+  _wet(x, z) {
+    const L = this.city.landscape, w = L.waterAt(x, z);
+    return w > .35 || (w > .01 && L.heightAt(x, z) < L.level + .3);
   }
 
   _spawnCyclist(a, cam, initial) {
@@ -634,6 +704,9 @@ export class CityLife {
     let wl = a.lat * (a.dir > 0 ? 1 : -1);
     if (w.trail) wl = (kind === 'bike' && rider ? -rider.dir : a.wside || -1) * Math.abs(a.lat);
     const tx = p.x - p.tz * wl, tz = p.z + p.tx * wl;
+    // [6.1] (F180) a walker beside a riverside trail keeps out of the river: where their side of the trail is the
+    // water's edge they turn back, rather than walk on over the water
+    if (kind === 'walk' && w.trail && a.x != null && this._wet(tx, tz)) { a.dir = -a.dir; a.nx = undefined; a.v = 0; return w; }
     a.pitch = Math.atan(p.dy || 0) * a.dir;
     if (a.x == null) { a.x = tx; a.z = tz; a.y = p.y; a.yaw = Math.atan2(p.tx * a.dir, p.tz * a.dir); return w; }
     const dx = tx - a.x, dz = tz - a.z, d = Math.hypot(dx, dz), max = (a.v * 1.25 + K.catch) * dt, f = d > max ? max / d : 1;
@@ -655,9 +728,10 @@ export class CityLife {
       if (a.wander) {
         // strolling about a square: turn away (gently) rather than wander onto the rider's road
         const nx = a.x + Math.sin(a.yaw) * a.speed * dt, nz = a.z + Math.cos(a.yaw) * a.speed * dt, r = L.routeDist(nx, nz);
-        if (r && r.d < HALF + 1.5) a.yaw += 2 * dt;
+        const away = (r && r.d < HALF + 1.5) || this._wet(nx + Math.sin(a.yaw) * .8, nz + Math.cos(a.yaw) * .8);   // [6.1] (F180) nor into the river (the Point's lawn runs to the water)
+        if (away) a.yaw += 2 * dt;
         else { a.yaw += (this.rand() - .5) * dt; a.x = nx; a.z = nz; a.y = L.heightAt(a.x, a.z); }
-        a.v = r && r.d < HALF + 1.5 ? 0 : a.speed;
+        a.v = away ? 0 : a.speed;
       } else if (!a.stand) this._advance(a, this.walk, dt, rider, 'walk');
       // waiting at the kerb: stand still until moving again
       const still = !a.stand && dt > 0 && a.v < .15;
@@ -843,9 +917,22 @@ export class CityLife {
     for (const r of c.landscape.data.rails || []) {
       if (due()) yield;
       if (r.kind === 'funicular') continue;
-      const pts = r.path.map(([a, o]) => c.D.local(a, o));
+      let pts = r.path.map(([a, o]) => c.D.local(a, o));
       if (r.bridge) { const y0 = L.baseHeight(pts[0].x, pts[0].z), y1 = L.baseHeight(pts.at(-1).x, pts.at(-1).z); pts.forEach((p, k) => { p.y = y0 + (y1 - y0) * k / (pts.length - 1) + 1; }); }
-      else pts.forEach((p) => { p.y = L.heightAt(p.x, p.z) + .25; });
+      else {
+        // [6.1] every 4 m (the map's nodes can be 50 m apart: a straight line between them rode over or under the
+        // streets it crossed), and where the line lies in a street's carriageway (a level crossing, track in the
+        // street) at the street's own height: rails just proud of it, the bed under it — cars cross, not climb through
+        // (the extra points only where a street is near: elsewhere the map's nodes, as before)
+        pts.forEach((p) => { p.node = true; });
+        const dense = densify(pts, 4);
+        for (const p of dense) {
+          const g = L.heightAt(p.x, p.z), st = L.streetAt?.(p.x, p.z, 1.6);
+          p.st = !!(st && !st.st.bridge && st.st.cls <= 7 && Math.abs(st.y - g) < 3);
+          p.y = p.st ? st.y + .2 : g + .25;
+        }
+        pts = dense.filter((p, k) => p.node || p.st || dense[k - 1]?.st || dense[k + 1]?.st);
+      }
       (byKind[r.kind === 'tram' ? 'light_rail' : r.kind] || byKind.rail).push(pts);
     }
     for (const lines of Object.values(byKind)) for (const pts of lines) {
@@ -991,7 +1078,16 @@ export class CityLife {
         for (const u of [-3, 3]) { const q = dk.clone().addScaledVector(right, u).addScaledVector(dir, -4), g = L.baseHeight(q.x, q.z); if (y - g > 1) M.beam(V(q.x, g - .5, q.z), V(q.x, y - .5, q.z), .5, .5); }
         lights.push({ x: dk.x, y: y + 3, z: dk.z, size: 6, color: '#ffe0a8' });
       }
-      this.inclines.push({ name, a, b, dir, right, len, period: 190 + this.inclines.length * 23 });
+      // [6.1] the cars' run: from 4 m inside each station, but never into the route's road (a ride along Grandview
+      // Avenue passes the Mon Incline's upper station: a cabin at the top came out across it)
+      const clearAt = (s) => [-1.7, 1.7].every((side) => [-4.5, 0, 4.5].every((u) => {
+        const q = a.clone().addScaledVector(dir, s + u).addScaledVector(right, side), r = L.routeDist?.(q.x, q.z);
+        return !(r && r.d < ROAD_WIDTH / 2 + 3.5 && Math.abs(q.y - 1.2 - r.y) < 5);
+      }));
+      let s0 = 4, s1 = len - 4;
+      while (s1 > s0 + 10 && !clearAt(s1)) s1 -= 1;
+      while (s0 < s1 - 10 && !clearAt(s0)) s0 += 1;
+      this.inclines.push({ name, a, b, dir, right, len, s0, s1, period: 190 + this.inclines.length * 23 });
       for (let s = 0; s < len; s += 9) for (const side of [-2.7, 2.7]) { const p = a.clone().addScaledVector(dir, s).addScaledVector(right, side); lights.push({ x: p.x, y: p.y + .6, z: p.z, size: 1.8, color: '#ffe7b0' }); }
       c.addGlows(lights, `${name} lights`);
     }
@@ -1015,7 +1111,7 @@ export class CityLife {
     for (const inc of this.inclines) {
       const f = .5 - .5 * Math.cos((time / inc.period) * Math.PI * 2);
       for (const [side, u] of [[-1.7, f], [1.7, 1 - f]]) {
-        const p = inc.a.clone().addScaledVector(inc.dir, 4 + u * (inc.len - 8)).addScaledVector(inc.right, side);
+        const p = inc.a.clone().addScaledVector(inc.dir, inc.s0 + u * (inc.s1 - inc.s0)).addScaledVector(inc.right, side);
         this.e.set(0, Math.atan2(inc.dir.x, inc.dir.z), 0); this.q.setFromEuler(this.e);
         this.inclineCars.setMatrixAt(k++, this.m.compose(V(p.x, p.y - 1.2, p.z), this.q, this.one));
       }
@@ -1122,6 +1218,7 @@ export class CityLife {
     if (!n) return;
     const mat = c.own(new THREE.MeshBasicMaterial({ color: '#e8e8e4', side: THREE.DoubleSide }));
     this.birds = new THREE.InstancedMesh(c.own(birdGeometry().geometry()), mat, n);
+    this.birds.name = 'Birds · gulls';   // [6.1] (named: the clipping QC took the unnamed flock for lamp posts floating over the rivers)
     this.birds.frustumCulled = false; c.group.add(this.birds);
   }
 

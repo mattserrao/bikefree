@@ -99,7 +99,13 @@
    -80.024
   ]
  ],
- "dropStreets": [],
+ "dropStreets": [
+  {
+   "way": 398920497,
+   "name": "(a parking aisle in the North Shore lot by Allegheny Ave)",
+   "why": "F240: drawn over the North Side station's new shaft and headhouse (the subway line moved, PLAN 6.4 F121)"
+  }
+ ],
  "osmCache": "pittsburgh",
  "dropBuildings": [
   {

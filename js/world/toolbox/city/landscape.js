@@ -372,6 +372,12 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
     if (!own || own.d > 9) {   // (near the route's own road its bank wins: the ground mesh can't step that fast)
       for (const o of streetsNear(x, z, 1.5)) if (streetIndex.streets[o.k].bridge && h > o.y - .35) h = Math.min(h, o.y - .35);
     }
+    // [6.1] and never over a street's own carriageway, sidewalk or path (away from the route's road, whose
+    // bank wins there): the route's bank, a hillside or a junction's grading used to rise over a lower street beside
+    // the route, and the grass covered its edge
+    if (!own || own.d > 9) {   // (as decks: within 9 m the route's bank wins — the 6 m mesh couldn't follow a step there)
+      for (const o of around) if (o.edge < (SIDEWALK_CLS(streetIndex.streets[o.k].cls) ? 2.6 : .4) && h > o.y - .12) h = o.y - .12;   // (around: no decks)
+    }
     // nor, after all that grading, near the water's level (the route's riverside trail around the Point presses
     // the ground to exactly the water's level)
     if (h > level - .6 && h < level + .35) h = h >= level - .1 ? level + .35 : level - .6;
@@ -525,6 +531,7 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
 
 export const STREET_W = [15, 7.5, 13, 11, 9.5, 7.5, 9, 5, 3.4];   // street width by class (tools/build_city.py)
 export const STREET_LIFT = .24;                                     // highest a street ribbon sits above its line
+const SIDEWALK_CLS = (cls) => cls >= 2 && cls <= 6;   // [6.1] streets drawn with sidewalks (city.js), 2.5 m past the carriageway
 
 /**
  * The city's streets as drawn: [{cls, bridge, oneway, layer, width, pts: [{x, y, z}]}]. Bridge decks keep their

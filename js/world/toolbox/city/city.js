@@ -939,7 +939,9 @@ export class CityScene {
           const x = b.x - dz * off * side, z = b.z + dx * off * side;
           if (!this._clearSpot(x, z, .35, k, ROAD_WIDTH / 2 + 1.2, this.streetKit ? .95 : .35)) continue;   // [finish] (kit facades stand ~.25–.9 m proud of the walls)
           if (this._onStyledBridge(x, z)) continue;   // the famous bridges carry their own lights (and railings); [finish] and no post among their members
-          lamps.push({ x, z, y: st.bridge ? b.y : this.landscape.heightAt(x, z), yaw: Math.atan2(dz * side, -dx * side), bridge: st.bridge });
+          const y = st.bridge ? b.y : this.landscape.heightAt(x, z);
+          if (this._underDeck(x, z, y, k)) continue;   // [6.1]
+          lamps.push({ x, z, y, yaw: Math.atan2(dz * side, -dx * side), bridge: st.bridge });
         }
       }
     });
@@ -964,7 +966,9 @@ export class CityScene {
         if (this.landscape.sheltered?.(x, z, 12)) continue;   // [glasshouse] no street lamps under the glass (nor in its doorways)
         // on a deck: not in another carriageway that runs alongside at the same level (the roadway's other half)
         if (deckBridge && this.landscape.streetsNear(x, z, .35).some((o) => this.streets[o.k].cls !== 8 && Math.abs(o.y - r.ele[i]) < 1.5)) continue;
-        lamps.push({ x, z, y: deckBridge ? r.ele[i] : kitLamp ? kitLamp.y : this.landscape.heightAt(x, z), yaw: Math.atan2(dz / len * side, -dx / len * side), bridge: !!deckBridge });   // [street-kit] (kitLamp.y)
+        const y = deckBridge ? r.ele[i] : kitLamp ? kitLamp.y : this.landscape.heightAt(x, z);   // [street-kit] (kitLamp.y)
+        if (this._underDeck(x, z, y, -1)) continue;   // [6.1]
+        lamps.push({ x, z, y, yaw: Math.atan2(dz / len * side, -dx / len * side), bridge: !!deckBridge });
       }
     }
     if (due()) yield;
@@ -1150,6 +1154,15 @@ export class CityScene {
    * street's carriageway (nor within `margin` of it; `skip` = the street it belongs to, when on its own deck),
    * and not within `routeClear` of the route's road (true distance to the road, not its 10 m sample points).
    */
+  /** [6.1] A post at (x, y, z) would run up through a deck over it (bridges.js: its slab, .4 m past the carriageway). */
+  _underDeck(x, z, y, skip) {
+    for (const o of this.landscape.streetsNear(x, z, .6)) {
+      const st = this.streets[o.k];
+      if (o.k !== skip && st.bridge && st.cls <= 7 && o.y > y + .6 && o.y - (st.cls <= 2 ? 2.2 : 1.6) < y + 7.4) return true;
+    }
+    return false;
+  }
+
   _clearSpot(x, z, margin, skip, routeClear, wall = margin) {
     const L = this.landscape, c = L.landAt(x, z);
     if (c === LAND.water && !L.bridgeAt(x, z, 0)) return false;
