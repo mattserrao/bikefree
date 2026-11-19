@@ -167,6 +167,33 @@
         "fromM": 17885,
         "toM": 17982,
         "surface": "cobble"
+      },
+      {
+        "fromM": 7886,
+        "toM": 8416,
+        "surface": "patched",
+        "patches": 0.6,
+        "cracks": 0.35
+      },
+      {
+        "fromM": 11437,
+        "toM": 13037,
+        "surface": "worn",
+        "patches": 0.45
+      },
+      {
+        "fromM": 17110,
+        "toM": 17880,
+        "surface": "fresh",
+        "tone": 0.9,
+        "cracks": 0.12
+      },
+      {
+        "fromM": 20028,
+        "toM": 21898,
+        "surface": "worn",
+        "cracks": 0.45,
+        "patches": 0.3
       }
     ],
     "trail": {
@@ -805,25 +832,49 @@
       "atM": 1260,
       "side": "inland",
       "label": "SYCAMORE STREET",
-      "subtitle": "MOUNT WASHINGTON"
-    },
-    {
-      "atM": 8800,
-      "side": "inland",
-      "label": "CANTON AVENUE",
-      "subtitle": "BEECHVIEW · 37 %"
+      "subtitle": "DIRTY DOZEN · MOUNT WASHINGTON"
     },
     {
       "atM": 7520,
       "side": "inland",
       "label": "BOUSTEAD STREET",
+      "subtitle": "DIRTY DOZEN · BEECHVIEW"
+    },
+    {
+      "atM": 7960,
+      "side": "inland",
+      "label": "BROADWAY AVENUE",
       "subtitle": "BEECHVIEW"
+    },
+    {
+      "atM": 8800,
+      "side": "inland",
+      "label": "CANTON AVENUE",
+      "subtitle": "DIRTY DOZEN · BEECHVIEW · 37 %"
+    },
+    {
+      "atM": 11660,
+      "side": "inland",
+      "label": "WARRINGTON AVENUE",
+      "subtitle": "ALLENTOWN"
+    },
+    {
+      "atM": 17150,
+      "side": "inland",
+      "label": "GRANDVIEW AVENUE",
+      "subtitle": "MOUNT WASHINGTON OVERLOOKS"
+    },
+    {
+      "atM": 17670,
+      "side": "inland",
+      "label": "MONONGAHELA INCLINE",
+      "subtitle": "UPPER STATION"
     },
     {
       "atM": 21900,
       "side": "inland",
       "label": "ELEANOR STREET",
-      "subtitle": "SOUTH SIDE SLOPES"
+      "subtitle": "DIRTY DOZEN · SOUTH SIDE SLOPES"
     }
   ],
   "preview": {
@@ -940,7 +991,36 @@
       "turnDeg": -18
     }
   ],
-  "views": [],
+  "views": [
+    {
+      "name": "The South Side from the Slopes",
+      "rangeM": 400,
+      "cam": {
+        "lat": 40.4178,
+        "lon": -79.9729,
+        "up": 40
+      },
+      "look": {
+        "lat": 40.43,
+        "lon": -79.97,
+        "up": 0
+      }
+    },
+    {
+      "name": "Downtown from the top of the Monongahela Incline",
+      "rangeM": 300,
+      "cam": {
+        "lat": 40.43125,
+        "lon": -80.0062,
+        "abs": 356
+      },
+      "look": {
+        "lat": 40.4335,
+        "lon": -80.0042,
+        "abs": 240
+      }
+    }
+  ],
   "stadiumShapes": {
     "PNC Park": {
       "lat": 40.4469,
@@ -1134,5 +1214,20 @@
   "origin": {
     "lat": 40.4375,
     "lon": -79.9925
+  },
+  "overlooks": {
+    "fromM": 17120,
+    "toM": 17840,
+    "count": 3,
+    "spacingM": 200,
+    "toward": {
+      "lat": 40.4406,
+      "lon": -79.9959
+    },
+    "look": {
+      "lat": 40.4413,
+      "lon": -79.9985,
+      "up": 60
+    }
   }
 }

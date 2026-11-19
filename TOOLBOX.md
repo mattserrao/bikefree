@@ -189,7 +189,8 @@ js/world/toolbox/
 | Module | What it does |
 | --- | --- |
 | `city/city.js` | The city scene (`brickStreets`: brick and sett streets from OSM, and steep residential streets, in brick) |
-| `city/street-kit.js` | Facades and furniture |
+| `city/landscape.js` `pondAt`, `city.js` `_pondsJob` | Hill water at its own level (PLAN 6.5): the city data's `ponds` (`tools/build_city.py`: flat water polygons more than `inlandWaterAboveM` over the rivers; land code 9) drawn as still lake water at each one's level, in a basin with a bank — a stone wall and coping for reservoirs, fountain basins and pools, a sloping earth bank for ponds; streets along one are kept 35 cm over its water. Streams that fall along a hollow stay park |
+| `city/street-kit.js` | Facades and furniture (`streetKit.zones`; a zone with `"sidewalks": false` is a park drive: no sidewalks or sidewalk grading along the route) |
 | `city/junctions.js`, `junction-mesh.js`, `road-meets.js` | Junctions and where roads meet |
 | `city/street-grade.js` | Curbs and sidewalks |
 | `city/riverfront.js` | Walls, steps and trails along the rivers |

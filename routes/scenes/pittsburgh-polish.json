@@ -86,7 +86,36 @@
   },
   "road": {
     "surface": "worn",
-    "zones": [],
+    "zones": [
+      {
+        "fromM": 1560,
+        "toM": 2180,
+        "surface": "patched",
+        "patches": 0.7,
+        "cracks": 0.45,
+        "warm": 0.1
+      },
+      {
+        "fromM": 2180,
+        "toM": 3030,
+        "surface": "worn",
+        "cracks": 0.5,
+        "patches": 0.35
+      },
+      {
+        "fromM": 3035,
+        "toM": 3740,
+        "surface": "worn",
+        "patches": 0.5
+      },
+      {
+        "fromM": 6294,
+        "toM": 6994,
+        "surface": "patched",
+        "patches": 0.65,
+        "cracks": 0.4
+      }
+    ],
     "trail": {
       "surface": "fresh",
       "tone": 1.05,
@@ -125,7 +154,42 @@
     "rangeM": 220,
     "parkTrees": 16,
     "clearRouteCrossings": true,
-    "zones": []
+    "zones": [
+      {
+        "name": "Polish Hill: Brereton St",
+        "style": "rowhouse",
+        "fromM": 1660,
+        "toM": 2160,
+        "widthM": 50,
+        "parking": true,
+        "curbM": 5.6,
+        "sidewalkM": 2.4,
+        "trees": 0,
+        "grade": false
+      },
+      {
+        "name": "Lower Lawrenceville: Liberty Ave",
+        "style": "victorian",
+        "fromM": 3060,
+        "toM": 3700,
+        "widthM": 60,
+        "parking": true,
+        "curbM": 6,
+        "sidewalkM": 3,
+        "trees": 0
+      },
+      {
+        "name": "Bloomfield: Liberty Ave",
+        "style": "victorian",
+        "fromM": 6310,
+        "toM": 6980,
+        "widthM": 70,
+        "parking": true,
+        "curbM": 6.2,
+        "sidewalkM": 3.4,
+        "trees": 0
+      }
+    ]
   },
   "mainStreets": [],
   "hotspots": [
@@ -554,7 +618,35 @@
       ]
     }
   ],
-  "signs": [],
+  "signs": [
+    {
+      "atM": 1700,
+      "side": "inland",
+      "label": "BRERETON STREET",
+      "subtitle": "POLISH HILL",
+      "lateralM": 6.9
+    },
+    {
+      "atM": 3110,
+      "side": "inland",
+      "label": "LIBERTY AVENUE",
+      "subtitle": "LOWER LAWRENCEVILLE",
+      "lateralM": 7.6
+    },
+    {
+      "atM": 5600,
+      "side": "inland",
+      "label": "BLOOMFIELD BRIDGE",
+      "subtitle": "TO BLOOMFIELD"
+    },
+    {
+      "atM": 6350,
+      "side": "inland",
+      "label": "LIBERTY AVENUE",
+      "subtitle": "BLOOMFIELD · LITTLE ITALY",
+      "lateralM": 7.6
+    }
+  ],
   "preview": {
     "positionM": 2200,
     "camera": "drone",
@@ -681,6 +773,34 @@
       "look": {
         "lat": 40.44183,
         "lon": -80.01277,
+        "up": 12
+      }
+    },
+    {
+      "name": "Brereton Street, Polish Hill",
+      "rangeM": 300,
+      "cam": {
+        "lat": 40.456544,
+        "lon": -79.970095,
+        "abs": 266
+      },
+      "look": {
+        "lat": 40.4565,
+        "lon": -79.96797,
+        "up": 4
+      }
+    },
+    {
+      "name": "Bloomfield from the Bloomfield Bridge",
+      "rangeM": 350,
+      "cam": {
+        "lat": 40.461777,
+        "lon": -79.954643,
+        "abs": 294
+      },
+      "look": {
+        "lat": 40.4622,
+        "lon": -79.9495,
         "up": 12
       }
     }
