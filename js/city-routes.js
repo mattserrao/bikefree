@@ -33,6 +33,24 @@ export function groupCityItems(items) {
   return out;
 }
 
+/**
+ * The main menu's route list (PLAN 6.9): the city cards first, above every park and outside the In Progress /
+ * Rough Drafts / Deprecated groups; the rest keep their order (and their groups). → { top, rest }.
+ */
+export function cityCardsFirst(cards) {
+  return { top: cards.filter((c) => c.city), rest: cards.filter((c) => !c.city) };
+}
+
+/**
+ * The route selected when the app opens (PLAN 6.9): the first city's first route (a preset, not your own and not
+ * its free ride), else the first route of the list. items: the route list before it is folded into city cards.
+ */
+export function defaultRouteId(items) {
+  const card = groupCityItems(items).find((c) => c.city);
+  const first = card && (card.routes.find((r) => !r.custom) || card.routes[0] || card.free);
+  return first ? first.id : items[0]?.id ?? null;
+}
+
 /** "8 areas · 39 routes · free ride" */
 export function citySubline(card, areas) {
   const n = card.routes.length;

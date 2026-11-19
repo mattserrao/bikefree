@@ -10,7 +10,7 @@ import { parseGpx, buildRoute, averageGradeAhead, wrapDist, routeAt, isPointToPo
 import { Pacer, PACER_WATTS } from './pacer.js';
 import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor, markFtpTest, ftpFromTwentyMinutes } from './workout.js';
 import { drawProfile, drawWorkout, drawTrace, drawMinimap, drawNetworkMinimap, drawCityMap, gradeColor, profileDistAt } from './views.js';
-import { groupByArea, groupCityItems, citySubline, filterByGoal, segmentRoutes, pickOnSegment, nearestLine, fitProjection, zoomProjection, zoomAt, panBy, mergeRivers, areaLabelSpots, shortName } from './city-routes.js';
+import { groupByArea, groupCityItems, cityCardsFirst, defaultRouteId, citySubline, filterByGoal, segmentRoutes, pickOnSegment, nearestLine, fitProjection, zoomProjection, zoomAt, panBy, mergeRivers, areaLabelSpots, shortName } from './city-routes.js';
 import { Profiles, GENDERS, initials, cmToFtIn, ftInToCm } from './profiles.js';
 import { buildCatalogRoute, loadRouteScene } from './routes.js';
 import { loadNetwork, makePathRoute, planNext, planCloses, keysToIds, idsToKeys, travKey, PathFollower, edgeLines } from './network.js';
@@ -187,15 +187,23 @@ $('demoBtn').addEventListener('click', () => setDemo(!trainer.demo));
 $('demoOff').addEventListener('click', () => setDemo(false));
 
 // ---------- Ride type picker ----------
-let chosen = 'free';
+// Two tabs, Route (the default: Pittsburgh is selected when the app opens) and Workout. The free ride where you
+// set the grade has no tab of its own any more (PLAN 6.9): a small link under the route list opens its pane
+// ('free': the scenery cards), and it rides exactly as before. (The mode isn't saved, so nothing to migrate.)
+let chosen = 'route';
 function showPane(p) {
   chosen = p;
-  for (const t of document.querySelectorAll('.mode')) t.classList.toggle('on', t.dataset.mode === p);
+  for (const t of document.querySelectorAll('.mode')) {
+    t.classList.toggle('on', t.dataset.mode === p);
+    t.setAttribute('aria-selected', String(t.dataset.mode === p));
+  }
   for (const el of document.querySelectorAll('.mode-pane')) el.hidden = el.dataset.pane !== p;
   drawThumbs();
   renderPreview();
 }
 for (const t of document.querySelectorAll('.mode')) t.addEventListener('click', () => showPane(t.dataset.mode));
+$('freeRideLink').addEventListener('click', () => { showPane('free'); $('freeBack').focus({ preventScroll: true }); });
+$('freeBack').addEventListener('click', () => { showPane('route'); $('freeRideLink').focus({ preventScroll: true }); });
 
 const pausedByUser = () => !session.running && session.movingS > 0 && !session.autoPaused;
 
@@ -643,6 +651,7 @@ function renderPreview() {
     drawWorkout(chart, w, 0, settings.ftp, 1);
   } else {
     const scene = sceneryItem();
+    $('planOpen').hidden = true;   // (the route pane's map planner link: the free pane now opens from there)
     $('pvKicker').textContent = 'Free ride';
     $('pvTitle').textContent = scene ? scene.name : 'Numbers only';
     $('pvSub').textContent = scene ? `Scenery · ${scene.park}` : 'No scenery — a plain dark background';
@@ -1271,7 +1280,7 @@ async function refreshRouteList(selectId) {
   await loadIdeas();
   // Load every route up front: they're small, and the cards draw their outlines.
   await Promise.all(routeItems.map((it) => loadRouteItem(it).catch(() => null)));
-  if (selectId || !routeItems.some((r) => r.id === selectedRouteId)) selectedRouteId = selectId || routeItems[0].id;
+  if (selectId || !routeItems.some((r) => r.id === selectedRouteId)) selectedRouteId = selectId || defaultRouteId(routeItems);
   renderRouteCards();
   renderScenery();
   await previewSelectedRoute();
@@ -1319,7 +1328,9 @@ function renderRouteCards() {
   const matches = (it) => goalTags(it).includes(routeGoal);
   // a city shows while any of its routes (or its free ride) suits the goal
   const shown = routeGoal === 'all' ? routeCards : routeCards.filter((it) => (it.city ? [...it.routes, ...(it.free ? [it.free] : [])].some(matches) : matches(it)));
-  $('routeCards').innerHTML = (shown.length ? '' : '<p class="muted">No routes for that goal yet.</p>') + groupedCards(shown, (it) => {
+  // the city (Pittsburgh) at the very top, above every park and outside the stage groups (PLAN 6.9)
+  const { top, rest } = cityCardsFirst(shown);
+  const card = (it) => {
     if (it.city) {
       const n = routeGoal === 'all' ? it.routes.length : it.routes.filter(matches).length;
       let sub = citySubline(it, cityAreaCount(it));
@@ -1338,7 +1349,8 @@ function renderRouteCards() {
     const tags = goalTags(it);
     return `<button class="rcard ${it.id === selectedRouteId ? 'on' : ''}" data-id="${it.id}"><canvas></canvas>
       <div><b>${escapeHtml(it.name.replace(' (built-in)', ''))}</b><div class="rsub">${escapeHtml(it.park || it.group)} · ${sub}</div>${tags.length ? `<div class="rtags">${tags.map((t) => `<span>${label[t]}</span>`).join('')}</div>` : ''}</div></button>`;
-  }) + ideasSection();
+  };
+  $('routeCards').innerHTML = (shown.length ? '' : '<p class="muted">No routes for that goal yet.</p>') + top.map(card).join('') + groupedCards(rest, card) + ideasSection();
   watchIdeas($('routeCards'));
   drawThumbs();
   for (const c of routeCards.filter((x) => x.city)) loadCityRivers(c).then((fresh) => { if (fresh) drawThumbs(); });

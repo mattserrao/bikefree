@@ -144,6 +144,7 @@ try {
     }
     if (only.includes('free')) {
       const { page, errors } = await open();
+      await page.click('#freeRideLink');   // (no tab of its own, PLAN 6.9)
       await page.waitForSelector('#sceneCards .rcard', { timeout: 120000 });
       await page.click('#demoBtn');
       await page.click('#startBtn');
