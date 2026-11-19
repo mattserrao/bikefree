@@ -25,3 +25,18 @@ for (const id of ['pgh-oakland-south', 'pgh-mt-washington']) {
     assert.equal(R.popIn + R.popOut, 0, `spawned ${R.popIn} / despawned ${R.popOut} in view`);
   });
 }
+
+// [F31] Life carried across area swaps (js/world/toolbox/city/life-handoff.js): the crosstown ride swaps four times
+// (Polish Hill, Oakland, the core, Allegheny); at each swap the new area's life takes over the people and traffic near
+// the camera on the same streets, so the swap's step is judged like any other — nothing in view vanishes or appears,
+// nothing jumps (without the hand-off: ~70 in view vanished and ~80 appeared over the four swaps)
+test('pittsburgh life across area swaps, pgh-polish-crosstown: carried over, no pop-out, no pop-in, no jumps', () => {
+  const R = simulate(false, { plan: net.presets.find((p) => p.id === 'pgh-polish-crosstown').path, handOff: true });
+  if (process.env.LIFE_SIM_REPORT) console.log('pgh-polish-crosstown hand-off', JSON.stringify(R));
+  assert.ok(R.swaps >= 3, `swaps: ${R.swaps}`);
+  assert.ok(R.carried > 150 * R.swaps && R.dropped < R.carried / 10, `carried ${R.carried}, dropped ${R.dropped}`);
+  assert.equal(R.swapPopOut, 0, 'agents in view not carried across a swap');
+  assert.equal(R.jumps, 0, `jumps (worst ${R.worstJump.toFixed(2)} m in one step)`);
+  assert.equal(R.personInRoad + R.vehicleInLane + R.vehicleClose + R.oneWayOncoming, 0, `people in the road ${R.personInRoad}, vehicles in the lane ${R.vehicleInLane} / close ${R.vehicleClose}, oncoming on a one-way ${R.oneWayOncoming}`);
+  assert.equal(R.popIn + R.popOut, 0, `spawned ${R.popIn} / despawned ${R.popOut} in view`);
+});

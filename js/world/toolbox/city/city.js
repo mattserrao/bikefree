@@ -1368,10 +1368,10 @@ export class CityScene {
   setQuality(key) { this.qualityKey = key; this.life.setQuality(key); this.streetKit?.setQuality(key); this._lodFrame = 0; }   // [street-kit] [w2-budget] (lamp LOD on the next tick)
 
   dispose() {
-    this.life.dispose();
-    this.group.parent?.remove(this.group);
-    this.group.traverse((o) => { if (o.isInstancedMesh) o.dispose(); });
-    for (const x of this.disposables) x.dispose?.();
-    this.disposables.clear();
+    this.life?.dispose();   // [F220] (a build released half way — an arm not taken at a junction — has no life yet)
+    this.group?.parent?.remove(this.group);
+    this.group?.traverse((o) => { if (o.isInstancedMesh) o.dispose(); });
+    for (const x of this.disposables || []) x.dispose?.();
+    this.disposables?.clear();
   }
 }

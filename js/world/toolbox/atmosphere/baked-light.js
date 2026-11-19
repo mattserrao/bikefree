@@ -25,6 +25,9 @@
 //     step a frame, each sized from the calibration to cost about `stepMs` (full-screen passes in bands of
 //     rows, occluders in batches by triangles); the old bake stays in use until the new one is complete.
 //   - Tools that draw one frame call bakeNow() (the whole bake at once).
+//   - [F32] A city of areas (PLAN 5.4) bakes the area drawn; an area the path reaches soon (built, hidden) is baked
+//     ahead in the same time slices once the drawn one is done ("ahead" bakes), and its maps are kept for it, so
+//     the swap shows its own light at once (useArea). Each area keeps its bake while it stays built (releaseArea).
 //   - Cost per frame: `costLine()` (the I overlay), `history` (one entry per bake), a summary log line per
 //     bake, and a console line per frame with bake work when the page has ?bakelog=1 (or localStorage
 //     'bikefree.bakelog' = '1').
@@ -237,6 +240,12 @@ export class BakedLighting {
     this._frame = 0;
     this._sig = ''; this._settled = 0; this._bakedSig = null;
     this._job = null;
+    // [F32] per area (PLAN 5.4): { sig, settled, bakedSig, ground, res (its maps: { sun, ao, box, K, sig }), occluders };
+    // the drawn area's sig / settled / bakedSig live in the fields above while it is drawn
+    this._active = world.area?.id ?? null;
+    this._states = new Map();
+    this._shown = null;     // the maps in the uniforms now (the drawn area's, or until its first bake the one drawn before's)
+    this.swaps = [];        // one entry per area swap: { id, prebaked, at } (tools/ride_area_load.mjs)
     this.dynamicSpan = this.opts.dynamicSpanM;
     try { this.logFrames = /[?&]bakelog=1\b/.test(location.search) || localStorage.getItem('bikefree.bakelog') === '1'; } catch { this.logFrames = false; }
   }
@@ -327,8 +336,7 @@ export class BakedLighting {
     if (String(sig) === this._sig) this._settled++; else { this._sig = String(sig); this._settled = 0; }
   }
 
-  _busy() {
-    const t = this.world.terrain;
+  _busy(t = this.world.terrain) {
     return !t?.kit || !!t.city?._pending?.length || (t.stats?.loading ?? 0) > 0;
   }
 
@@ -357,6 +365,7 @@ export class BakedLighting {
           if (Math.hypot(c.x - this._bakedCentre.x, c.z - this._bakedCentre.z) > move) this._bakedSig = null;
         }
         if (!this._busy() && this._settled >= SETTLE_SWEEPS && this._sig !== this._bakedSig) this._startJob('ride');
+        else this._bakeAhead();   // [F32] the drawn area is baked: an area the path reaches soon is baked ahead
       }
       if (this._job) this._rideStep();
     }
@@ -370,10 +379,79 @@ export class BakedLighting {
     if (Math.abs(on.y - ao) < .002) on.y = ao;
   }
 
-  _startJob(mode) {
-    this._job = this._bake();
-    this._jobInfo = { mode, t0: performance.now(), frames: 0, steps: 0, worstCpuMs: 0, worstEstMs: 0, worstSyncMs: 0 };
+  _startJob(mode, view = null) {
+    this._job = this._bake(view);
+    this._jobInfo = { mode, area: view ? view.id : this._active, t0: performance.now(), frames: 0, steps: 0, worstCpuMs: 0, worstEstMs: 0, worstSyncMs: 0 };
   }
+
+  // ------------------------------------------------------------------ [F32] areas
+  _state(id) { let st = this._states.get(id); if (!st) this._states.set(id, st = { sig: '', settled: 0, bakedSig: null, ground: null, res: null, occluders: [] }); return st; }
+  /** The drawn area as a bake view. */
+  _view() { const w = this.world; return { id: this._active, terrain: w.terrain, road: w.road, shoulder: w.shoulder, index: w.index, route: w.route }; }
+  /** A hidden area's static set (as sweep() does for the drawn one): its occluders and their signature. */
+  _scan(view, st) {
+    const occ = [];
+    for (const root of [view.terrain?.group, view.road, view.shoulder]) root?.traverse((o) => {
+      if (!o.isMesh) return;
+      if (o.userData.bakeCast === undefined) o.userData.bakeCast = o.castShadow;
+      if (o.userData.bakeOcc === undefined) o.userData.bakeOcc = this._isOccluder(o);
+      if (o.userData.bakeOcc && o.visible) occ.push(o);
+    });
+    let sig = occ.length;
+    for (const o of occ) sig = (sig * 31 + o.id * 7 + (o.geometry.id || 0) + (o.count ?? 0)) % 2147483647;
+    st.occluders = occ;
+    if (String(sig) === st.sig) st.settled++; else { st.sig = String(sig); st.settled = 0; }
+  }
+  /**
+   * Bake an area ahead of its swap: the world's `_bakeAhead()` lists the built, hidden areas the path reaches soon
+   * ([{id, terrain, road, shoulder, index, route, soon}], soonest first). One is baked once its static set has
+   * settled — and its city has streamed in, unless the swap is near (`soon`: then what is built is baked, and the
+   * rest re-bakes after the swap with this bake in use). Bakes of areas no longer listed are let go.
+   */
+  _bakeAhead() {
+    const list = this.world._bakeAhead?.() || [];
+    const keep = new Set([this._active, ...list.map((v) => v.id)]);
+    for (const [id, st] of this._states) if (!keep.has(id) && st.res && st.res !== this._shown) { this._free(st.res); st.res = null; st.bakedSig = null; }
+    for (const v of list) {
+      const st = this._state(v.id);
+      this._scan(v, st);
+      if (st.settled >= SETTLE_SWEEPS && st.sig !== st.bakedSig && (v.soon || !this._busy(v.terrain))) { this._startJob('ahead', v); return; }
+    }
+  }
+  /** The world draws area `id` now (instead of `from`): its own bake goes in if it has one (else the old one stays until it has). */
+  useArea(id, from = this._active) {
+    if (id === this._active) return;
+    if (this._job && this._jobInfo?.area === from && !this.preparing) { this._job.return(); this._job = null; this._jobInfo = null; }   // (a re-bake of the area left: dropped)
+    const old = this._state(from);
+    Object.assign(old, { sig: this._sig, settled: this._settled, bakedSig: this._bakedSig });
+    this._active = id;
+    const st = this._state(id);
+    this._sig = st.sig; this._settled = st.settled; this._bakedSig = st.bakedSig;
+    if (st.res) this._show(st.res);
+    this.swaps.push({ id, from, prebaked: !!st.res, at: Math.round(performance.now()) });
+    if (this.swaps.length > 50) this.swaps.shift();
+    this.world.log('3d', `Baked lighting: drawing area ${id} with ${st.res ? 'its own bake (baked ahead)' : `area ${from}'s bake until its own is done`}`, 'debug');
+  }
+  /** Area `id` was released: its bake goes (once it is no longer the one shown). */
+  releaseArea(id) {
+    const st = this._states.get(id);
+    if (!st || id === this._active) return;
+    if (this._job && this._jobInfo?.area === id) { this._job.return(); this._job = null; this._jobInfo = null; }
+    if (st.res) { if (st.res === this._shown) this._orphan = st.res; else this._free(st.res); }
+    this._states.delete(id);
+  }
+  /** Put a bake's maps in the uniforms. */
+  _show(res) {
+    this.uniforms.bfBakeSun.value = res.sun.texture;
+    this.uniforms.bfBakeAO.value = res.ao.texture;
+    this.uniforms.bfBakeBox.value.fromArray(res.box);
+    this.uniforms.bfBakeK.value.fromArray(res.K);
+    this._shown = res;
+    this._bakedCentre = res.centre;
+    this.ready = true;
+    if (this._orphan && this._orphan !== res) { this._free(this._orphan); this._orphan = null; }
+  }
+  _free(res) { if (res === this._shown) return; res.sun.dispose(); res.ao.dispose(); }
 
   /** The budget of one GPU step, in units of its kind. */
   _units(kind, ms) {
@@ -568,14 +646,16 @@ export class BakedLighting {
    * { kind: 'taps' | 'tris', units } (texel reads of a full-screen band, triangles of an occluder batch); its
    * size comes from this._budget(kind). The old maps stay in use until the new ones are complete.
    */
-  *_bake() {
+  *_bake(view = null) {
     const t0 = performance.now(); let cpu = 0, c0 = performance.now();
-    const w = this.world, R = w.renderer, O = this.opts, sigAtStart = this._sig;
+    const w = this.world, R = w.renderer, O = this.opts;
+    // [F32] the area baked: the drawn one, or (`view`) a hidden one baked ahead of its swap
+    const V = view || this._view(), G = this._state(V.id), sigAtStart = view ? G.sig : this._sig;
     const budget = (kind) => (this._budget ? this._budget(kind) : Infinity);
     const d = this.sunDir.clone();
     const flat = Math.hypot(d.x, d.z) || 1, ux = d.x / flat, uz = d.z / flat, k = Math.max(.02, d.y) / flat;   // rise per metre toward the sun
     // the area: the route's box plus the margin (what is seen), and the work area reaching up-sun
-    const ix = w.index.xs, iz = w.index.zs;
+    const ix = V.index.xs, iz = V.index.zs;
     let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
     for (let i = 0; i < ix.length; i++) { x0 = Math.min(x0, ix[i]); x1 = Math.max(x1, ix[i]); z0 = Math.min(z0, iz[i]); z1 = Math.max(z1, iz[i]); }
     x0 -= O.marginM; x1 += O.marginM; z0 -= O.marginM; z1 += O.marginM;
@@ -598,9 +678,10 @@ export class BakedLighting {
     const vi0 = Math.floor((x0 - ex0) / cell), vi1 = Math.ceil((x1 - ex0) / cell);
     const vj0 = Math.floor((EZ1 - z1) / cell), vj1 = Math.ceil((EZ1 - z0) / cell);   // rows count from the max-z edge (v = 0)
     const VW = vi1 - vi0, VH = vj1 - vj0, vx0 = ex0 + vi0 * cell, vz1 = EZ1 - vj0 * cell;
-    const base = (w.route.minEle ?? 0) - 40;
+    const base = (V.route.minEle ?? 0) - 40;
     let passes = 0;
-    const occluders = (this.occluders || []).filter((o) => o.visible);
+    const occluders = ((view ? G.occluders : this.occluders) || []).filter((o) => o.visible);
+    const roots = view ? [V.terrain?.group, V.road, V.shoulder].filter(Boolean) : [];   // (a hidden area's: shown for its occluder draws only)
     // progress: GPU units of the whole bake (for the overlay)
     const sweeps = Math.ceil(Math.log2(reach * 1.05 / cell));
     const totalUnits = EW * EH * (2 + 4 + 4 + 2 * sweeps) + VW * VH * (2 + 33) + occluders.reduce((a, o) => a + meshTris(o), 0) * 4;
@@ -618,10 +699,10 @@ export class BakedLighting {
     try {
       // 1. terrain heights on a coarse grid (CPU, in ~4 ms slices; kept for re-bakes of the same area)
       const ph = {}; let p0 = performance.now();
-      const ground = this._groundSampler();
+      const ground = this._groundSampler(V.terrain);
       const GN = Math.max(2, Math.ceil((EX1 - ex0) / O.groundCellM) + 1), GM = Math.max(2, Math.ceil((EZ1 - ez0) / O.groundCellM) + 1);
       const gkey = [ex0, EX1, ez0, EZ1, GN, GM, base].join();
-      let gdata = this._ground?.key === gkey ? this._ground.data : null;
+      let gdata = G.ground?.key === gkey ? G.ground.data : null;
       cpu += performance.now() - c0;
       if (!gdata) {
         gdata = new Float32Array(GN * GM);
@@ -632,7 +713,7 @@ export class BakedLighting {
           if (performance.now() - c0 > 2 && j < GM - 1) { cpu += performance.now() - c0; yield; c0 = performance.now(); }
         }
         cpu += performance.now() - c0;
-        this._ground = { key: gkey, data: gdata };
+        G.ground = { key: gkey, data: gdata };
       }
       ph.ground = performance.now() - p0;
       c0 = performance.now();
@@ -669,7 +750,9 @@ export class BakedLighting {
         const prev = { target: R.getRenderTarget(), override: w.scene.overrideMaterial, sm: R.shadowMap.enabled, autoClear: R.autoClear, fog: w.scene.fog, bg: w.scene.background };
         w.scene.overrideMaterial = occMat; w.scene.fog = null; w.scene.background = null;
         R.shadowMap.enabled = false; R.autoClear = false;   // depth kept: the highest top wins
+        const vis = roots.map((o) => o.visible); for (const o of roots) o.visible = true;   // [F32]
         R.setRenderTarget(occRT); R.render(w.scene, cam);
+        roots.forEach((o, k) => { o.visible = vis[k]; });
         for (const o of batch) o.layers.disable(OCC_LAYER);
         w.scene.overrideMaterial = prev.override; w.scene.fog = prev.fog; w.scene.background = prev.bg;
         R.shadowMap.enabled = prev.sm; R.autoClear = prev.autoClear; R.setRenderTarget(prev.target);
@@ -717,37 +800,33 @@ export class BakedLighting {
       yield* bands(aoRT, AO, { tTop: topRT.texture, uView: viewUv, uTexel: texel, uCell: cell, uStrength: O.ao }, VW, VH);
       ph.passes = performance.now() - p0;
 
-      // swap in
+      // swap in (the area's own maps; shown now if it is the area drawn — [F32] else kept for its swap)
       c0 = performance.now();
-      const old = this._maps;
-      this._maps = { sun: sunRT, ao: aoRT };
-      swapped = true;
-      this.uniforms.bfBakeSun.value = sunRT.texture;
-      this.uniforms.bfBakeAO.value = aoRT.texture;
       // every grid here has v = 0 on its max-z edge: v = (z1 - z) / depth (the bake camera looks down with north up)
-      this.uniforms.bfBakeBox.value.set(vx0, vz1, 1 / (VW * cell), 1 / (VH * cell));
-      this.uniforms.bfBakeK.value.set(base, O.soft, O.bias, O.normalOffset * cell);
-      old?.sun.dispose(); old?.ao.dispose();
-      this._bakedSig = sigAtStart;
-      this._bakedCentre = centre;
-      this.ready = true; this.bakes++; this.progress = 1;
+      const res = { sun: sunRT, ao: aoRT, box: [vx0, vz1, 1 / (VW * cell), 1 / (VH * cell)], K: [base, O.soft, O.bias, O.normalOffset * cell], sig: sigAtStart, centre };
+      const old = G.res;
+      G.res = res; G.bakedSig = sigAtStart;
+      swapped = true;
+      if (V.id === this._active) { this._show(res); this._bakedSig = sigAtStart; }
+      if (old && old !== res) { if (old === this._shown) this._orphan = old; else this._free(old); }
+      this.bakes++; this.progress = 1;
       cpu += performance.now() - c0;
       this.stats = { ms: Math.round(performance.now() - t0), cpuMs: Math.round(cpu), work: [EW, EH], view: [VW, VH], cell: +cell.toFixed(2), passes, occluders: occluders.length, groundSamples: GN * GM,
         phases: Object.fromEntries(Object.entries(ph).map(([key, val]) => [key, Math.round(val)])),
         gpuMB: +((VW * VH * (4 + 1)) / 1048576).toFixed(1) };
-      w.log('3d', `Baked lighting: ${VW}×${VH} at ${cell.toFixed(1)} m, ${occluders.length} meshes, ${this.stats.ms} ms (${this.stats.cpuMs} ms on the CPU)`, 'debug');
+      w.log('3d', `Baked lighting: ${VW}×${VH} at ${cell.toFixed(1)} m, ${occluders.length} meshes, ${this.stats.ms} ms (${this.stats.cpuMs} ms on the CPU)${view ? ` (area ${V.id}, ahead of its swap)` : ''}`, 'debug');
       // static meshes leave the live shadow map now that the bake has them
-      this.sweep();
+      if (V.id === this._active) this.sweep();
     } finally {
       // the work targets (and, for a bake abandoned half way, its own outputs)
-      for (const r of targets) if (!swapped || (r !== this._maps?.sun && r !== this._maps?.ao)) r.dispose();
+      for (const r of targets) if (!swapped || (r !== G.res?.sun && r !== G.res?.ao)) r.dispose();
       gtex?.dispose();
     }
   }
 
   /** Terrain height for the bake: the scene's base ground (no street grading), else the terrain's own. */
-  _groundSampler() {
-    const t = this.world.terrain, L = t.landscape;
+  _groundSampler(t = this.world.terrain) {
+    const L = t.landscape;
     if (this.opts.groundAt) return this.opts.groundAt;
     if (L?.baseHeight) return L.baseHeight;
     return (x, z) => t.heightAt(x, z);
@@ -757,7 +836,8 @@ export class BakedLighting {
     this._disposed = true;
     this._job?.return(); this._job = null;
     this._prep?.return(); this._prep = null; this.preparing = false;
-    this._maps?.sun.dispose(); this._maps?.ao.dispose();
+    const all = new Set([this._shown, this._orphan, ...[...this._states.values()].map((st) => st.res)].filter(Boolean));   // [F32] every area's bake
+    for (const r of all) { r.sun.dispose(); r.ao.dispose(); }
     this._occMat?.dispose();
     this._fs?.dispose();
     this._proxy?.rt.dispose(); this._proxy?.geo.dispose();
