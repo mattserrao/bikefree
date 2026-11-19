@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { groupCityItems, citySubline, filterByGoal, segmentRoutes, pickOnSegment, pathEdges, nearestLine, fitProjection, mergeRivers, shortName, cityName, isNetItem } from '../js/city-routes.js';
+import { groupCityItems, cityCardsFirst, defaultRouteId, citySubline, filterByGoal, segmentRoutes, pickOnSegment, pathEdges, nearestLine, fitProjection, mergeRivers, shortName, cityName, isNetItem } from '../js/city-routes.js';
 
 const json = JSON.parse(readFileSync(new URL('../routes/cities/pittsburgh-network.json', import.meta.url), 'utf8'));
 const base = { kind: 'route', park: 'Pittsburgh, Pennsylvania', stage: 'draft', baseId: 'builtin-park-pittsburgh', network: 'routes/cities/pittsburgh-network.json' };
@@ -152,4 +152,33 @@ test('the city map: baked river banks round the network and a label on each area
   assert.ok(lines.slice(0, 2).some((L) => L.lat.some((la, i) => la === a.lat && L.lon[i] === a.lon)));
   assert.equal(areaLabelSpots(lines, () => 'C', { A: 'x' }).length, 0);   // (no name, no label)
   for (const id of Object.keys(map.areaLabels)) assert.ok(json.areas.some((A) => A.id === id), `areaLabels: ${id} is an area`);
+});
+
+// PLAN 6.9: the main menu opens on Route with Pittsburgh at the very top of the list, selected.
+test('the city card goes first, above every park and outside its stage group; the rest keep their order', () => {
+  const draft = { id: 'builtin-park-yosemite', kind: 'route', name: 'Yosemite', stage: 'draft' };
+  const cards = groupCityItems([draft, other, ...presets, free, demo]);
+  const { top, rest } = cityCardsFirst(cards);
+  assert.deepEqual(top.map((c) => c.id), ['city-builtin-park-pittsburgh']);
+  assert.deepEqual(rest, [draft, other, demo]);
+  assert.deepEqual(cityCardsFirst([other, demo]), { top: [], rest: [other, demo] });
+});
+
+test('the route selected when the app opens is the city\'s first preset, else the first route', () => {
+  assert.equal(defaultRouteId([other, mine, free, ...presets, demo]), presets[0].id, 'a preset: not your own route, not the free ride');
+  assert.equal(defaultRouteId([other, mine, demo]), mine.id, 'only your own route on the network');
+  assert.equal(defaultRouteId([other, demo]), other.id);
+  assert.equal(defaultRouteId([]), null);
+});
+
+test('the main menu: two ride-type tabs (Route, the default, and Workout); the free ride is a link under the routes', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const tabs = [...html.matchAll(/<button role="tab" data-mode="(\w+)" class="mode( on)?" aria-selected="(\w+)"/g)].map((m) => [m[1], !!m[2], m[3]]);
+  assert.deepEqual(tabs, [['route', true, 'true'], ['workout', false, 'false']]);
+  assert.match(html, /<section class="mode-pane" data-pane="route">/, 'the route pane shows at first');
+  assert.match(html, /<section class="mode-pane" data-pane="free" hidden>/);
+  assert.match(html, /id="freeRideLink"[^>]*>Ride without a route/);
+  const app = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
+  assert.match(app, /^let chosen = 'route';/m);
+  assert.match(app, /selectedRouteId = selectId \|\| defaultRouteId\(routeItems\)/);
 });
