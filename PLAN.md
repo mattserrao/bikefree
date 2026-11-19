@@ -1166,6 +1166,7 @@ Decided with the user (19 Nov; project doc `claude/pittsburgh-phase5-plan.md`):
 - [ ] 6.4 **Subway polish:** better T trains, sound, the North Side station at its real platform spot (F121, F125)
 - [ ] 6.5 **Hill water:** reservoirs, ponds and fountains as water at their own level (F131) — after 6.1's map-data work
 - [ ] 6.6 **Area dressing:** signs, views and road zones for Bloomfield, the East End and the Slopes, the Grandview overlooks (F68, F78, F88) — after 6.1
+- [ ] 6.8 **Route preview images** (asked 19 Nov): when a route is selected, the route menu (start/length options before riding) shows 2–3 small pictures along it — the start, its highlight (auto-picked: a bridge, overlook or landmark; per-route hand override) and a climb or second highlight. Pre-rendered by a tool from the app's own 3D world into small image files kept in the repo (not rendered live); every park route and every Pittsburgh preset; listed for offline use. Follow-ups F270–F279
 - [ ] 6.7 Final QC (tests, network, course strict, clipping on all 10 areas, performance), PR
 - Not doing: minimap changes (F140–F144), free-ride defaults (F165, F170 stay), new routes (F161, F162, F166, F177), Allegheny Center through (F174), Phipps length (F110), lidar street heights (F132, F164, F14), load-stall work (F90–F93), a rain preset (F117). Saved for later: inclines and a ferry as conveyors (F129)
 - Follow-up numbers for this phase start at F200 (6.1: F200–F219, 6.2: F220–F229, 6.3: F230–F239, 6.4: F240–F249, 6.5: F250–F259, 6.6: F260–F269)
