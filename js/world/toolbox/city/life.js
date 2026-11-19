@@ -3,7 +3,7 @@
 // the two inclines up Mount Washington, barges, the riverboat, motorboats and kayaks, and birds.
 // Agents live near the camera and are recycled as you ride; all draw calls are instanced. People, cyclists, dogs,
 // strollers, cars and buses come from the figures kit (life/figures): soft cartoon models, baked walk cycles.
-import { ghostAt, undergroundAt } from '../../ghost.js';
+import { ghostAt, offStreetAt } from '../../ghost.js';
 import * as THREE from '../../../../vendor/three.module.min.js';
 import { Crowd, CLIP, FIT, randomLook, dogLook, clipRate, PALETTES } from '../life/figures/people.js';
 import { vehicleMesh, vehicleMaterial, setPaint, setMove } from '../life/figures/vehicles.js';
@@ -586,8 +586,8 @@ export class CityLife {
   _rideable(a, b) {
     const r = this.city.route, turn = r.turnS || r.total, lo = Math.min(a, b), hi = Math.max(a, b);
     if (lo < ROUTE_RIDE.endM || hi > turn - ROUTE_RIDE.endM) return false;
-    for (let q = lo; q <= hi; q += 10) if (undergroundAt(r, q)) return false;
-    return !undergroundAt(r, hi);
+    for (let q = lo; q <= hi; q += 10) if (offStreetAt(r, q)) return false;   // [7.8] (nor on a stadium's decks)
+    return !offStreetAt(r, hi);
   }
 
   _spawnRouteRider(a, rider, cam, plan) {
@@ -715,7 +715,7 @@ export class CityLife {
       // the end of the line (or the T's tunnel ahead): it turns round there, drifting across to the other side
       // the end of its ride (`endM` short of the line's ends, clear of where you turn round; or the T's tunnel ahead): it
       // stops at the roadside and is gone once out of sight
-      if ((a.dir < 0 ? a.s <= P.endM : a.s >= turn - P.endM) || undergroundAt(this.city.route, a.s + a.dir * 20)) { a.s -= a.dir * a.v * dt; a.v = 0; a.ended = true; }
+      if ((a.dir < 0 ? a.s <= P.endM : a.s >= turn - P.endM) || offStreetAt(this.city.route, a.s + a.dir * 20)) { a.s -= a.dir * a.v * dt; a.v = 0; a.ended = true; }
       // where it is: its lane off the road's centre line, square to the road's smoothed heading
       this._routeRiderAt(a.s, p);
       const x = p.x - p.hz * a.wl, z = p.z + p.hx * a.wl;
@@ -749,7 +749,7 @@ export class CityLife {
     }
     // the next one on its way, when it's time
     R.wait -= dt;
-    if (rider && R.wait <= 0 && this._started && !undergroundAt(this.city.route, rider.out)) {
+    if (rider && R.wait <= 0 && this._started && !offStreetAt(this.city.route, rider.out)) {
       R.wait = .5;
       const pending = list.filter((a) => a.alive && !a.passed).length;
       const free = list.find((a) => !a.alive);

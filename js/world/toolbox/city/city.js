@@ -12,6 +12,7 @@ import { buildRiverfront } from './riverfront.js';   // [s1-riverfront]
 import { buildBridgesJob, buildStadiums, buildLandmarks } from './bridges.js';
 import { buildHeroes } from './heroes.js';
 import { buildGlasshousesJob } from '../structures/glasshouse.js';
+import { buildStadiumKit } from '../structures/stadium.js';   // [7.8]
 import { CityLife } from './life.js';
 import { StreetKit, streetKitConfig } from './street-kit.js';   // [street-kit]
 import { ROAD_WIDTH } from '../../pose.js';
@@ -207,7 +208,7 @@ export class CityScene {
     yield* this._streetsAndLampsJob();
     this.bridges = yield* buildBridgesJob(this);
     if (due()) yield;
-    this.stadiums = buildStadiums(this);
+    this.stadiums = this.route.scene?.stadiumKit ? buildStadiumKit(this) : buildStadiums(this);   // [7.8] the stadium kit (ridden through) replaces the old bowls
     { const plant = this.landscape.canPlant; if (plant) this.landscape.canPlant = (x, z) => plant(x, z) && !this.inStadium(x, z, 2)
       && (this.landscape.landAt(x, z) !== LAND.yards || !this.buildingNear(x, z, 3.5)); }   // no trees on the field; [s4-section] yard trees clear of houses
     if (due()) yield;
@@ -1455,6 +1456,7 @@ export class CityScene {
     this.life.tick(camera, dt, time, rider);
     this.landmarks?.tick?.(time, dt);
     this.heroes?.tick?.(time, dt);
+    this.stadiums?.tick?.(time, dt, camera);   // [7.8] the game on the field
     this.streetKit?.tick(camera);   // [street-kit] LOD
     this.buildingKit?.tick(camera);   // [buildings] near detail
     if ((this._lodFrame = (this._lodFrame || 0) + 1) % 10 === 1) this._lampLod(camera);   // [w2-budget]
@@ -1470,6 +1472,7 @@ export class CityScene {
   setNight(v) {
     this.night.value = v;
     this.landmarks?.setNight?.(v);
+    this.stadiums?.setNight?.(v);   // [7.8] floodlit field and boards
     if (this.poolMaterial) this.poolMaterial.opacity = v;
     this.streetKit?.setNight(v);   // [street-kit]
     for (const m of this.nightOnly || []) m.visible = v > 0.01;
@@ -1478,6 +1481,7 @@ export class CityScene {
   setQuality(key) { this.qualityKey = key; this.life.setQuality(key); this.streetKit?.setQuality(key); this._lodFrame = 0; }   // [street-kit] [w2-budget] (lamp LOD on the next tick)
 
   dispose() {
+    this.stadiums?.dispose?.();   // [7.8]
     this.life?.dispose();   // [F220] (a build released half way — an arm not taken at a junction — has no life yet)
     this.group?.parent?.remove(this.group);
     this.group?.traverse((o) => { if (o.isInstancedMesh) o.dispose(); });

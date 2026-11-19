@@ -122,6 +122,7 @@ export const SCENE_FIELDS = {
   overlooks: { type: 'object', keys: ['fromM', 'toM', 'count', 'spacingM', 'toward', 'look'], doc: 'city overlooks' },
   views: { type: 'array', keys: ['name', 'atM', 'rangeM', 'cam', 'look'], doc: 'named views' },
   stadiumShapes: { type: 'object', tool: T + 'city/bridges.js', doc: 'stadium footprints' },
+  stadiumKit: { type: 'object', tool: T + 'structures/stadium.js', doc: '[7.8] stadiums ridden through (tools/build_stadiums.py): footprint, field, the ride\'s escalator, concourse and ramp; game on' },
   fountain: { type: 'object', keys: ['lat', 'lon', 'radiusM'], doc: 'fountain' },
 };
 

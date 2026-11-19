@@ -177,8 +177,8 @@
    "apron": true,
    "samplesOf": {
     "gpx": "routes/cities/pittsburgh.gpx",
-    "fromM": 25470,
-    "toM": 25870
+    "fromM": 26560,
+    "toM": 26960
    },
    "waypoints": [
     [
@@ -204,8 +204,8 @@
    "apron": true,
    "samplesOf": {
     "gpx": "routes/cities/pittsburgh.gpx",
-    "fromM": 25870,
-    "toM": 26270
+    "fromM": 26960,
+    "toM": 27360
    },
    "waypoints": [
     [
@@ -233,8 +233,8 @@
    "ghost": true,
    "samplesOf": {
     "gpx": "routes/cities/pittsburgh.gpx",
-    "fromM": 26270,
-    "toM": 25870
+    "fromM": 27360,
+    "toM": 26960
    },
    "waypoints": [
     [
@@ -835,8 +835,8 @@
    "apron": true,
    "samplesOf": {
     "gpx": "routes/cities/pittsburgh.gpx",
-    "fromM": 28870,
-    "toM": 29100
+    "fromM": 29960,
+    "toM": 30190
    },
    "waypoints": [
     [
@@ -862,8 +862,8 @@
    "ghost": true,
    "samplesOf": {
     "gpx": "routes/cities/pittsburgh.gpx",
-    "fromM": 29100,
-    "toM": 28870
+    "fromM": 30190,
+    "toM": 29960
    },
    "waypoints": [
     [
@@ -889,8 +889,8 @@
    "apron": true,
    "samplesOf": {
     "gpx": "routes/cities/pittsburgh.gpx",
-    "fromM": 28870,
-    "toM": 28470
+    "fromM": 29960,
+    "toM": 29560
    },
    "waypoints": [
     [
