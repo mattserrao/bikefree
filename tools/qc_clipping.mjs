@@ -65,7 +65,7 @@ async function main() {
   const flag = (name) => { const i = args.indexOf(name); if (i < 0) return false; args.splice(i, 1); return true; };
   const shotsPer = Number(opt('--shots', 4)), json = opt('--json', null), lifeSeconds = opt('--life-seconds', null);
   const html = opt('--html', 'tools/qc-clipping-report.html'), chrome = opt('--chrome', process.env.CHROME_PATH || null);
-  const noLife = flag('--no-life'), strict = flag('--strict'), quality = opt('--quality', 'balanced');
+  const why = flag('--why'), lifeOnly = flag('--life-only'), noLife = flag('--no-life'), strict = flag('--strict'), quality = opt('--quality', 'balanced');
   const parks = args.length ? args : ['pittsburgh'];
 
   let chromium;
@@ -88,7 +88,7 @@ async function main() {
       process.stdout.write(`${park}: building the scene… `);
       const info = await page.evaluate(([p, q]) => window.qc.load(p, q), [park, quality]);
       process.stdout.write(`${info.meshes} meshes, ${Math.round(info.triangles).toLocaleString()} triangles. Checking… `);
-      const result = await page.evaluate((o) => window.qc.run(o), { life: !noLife, lifeSeconds: lifeSeconds == null ? undefined : Number(lifeSeconds) });
+      const result = await page.evaluate((o) => window.qc.run(o), { why, lifeOnly, life: !noLife, lifeSeconds: lifeSeconds == null ? undefined : Number(lifeSeconds) });
       console.log(`done in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
       const shots = {};
       const per = new Map();
