@@ -1,0 +1,194 @@
+{
+ "format": "bikefree-preview-renders-1",
+ "note": "tools/build_previews.mjs: each picture's spot and input hash (--check)",
+ "images": {
+  "acadia-17820-jordan-pond.webp": {
+   "park": "acadia",
+   "s": 17820,
+   "subject": "Jordan Pond",
+   "frac": 1,
+   "inputs": "dc7e7fa14991f720",
+   "sha": "abcb671d77237d1ade72fa5cf777ff022795d32eed8147b227b9abb455f52f4d",
+   "bytes": 11008
+  },
+  "acadia-20.webp": {
+   "park": "acadia",
+   "s": 20,
+   "inputs": "8a3dbdc1d9029f67",
+   "sha": "021e52dd63c477890619fcac5b4bb840535131025526a3e1f15b8e464c4e8ace",
+   "bytes": 13808
+  },
+  "acadia-5120.webp": {
+   "park": "acadia",
+   "s": 5120,
+   "inputs": "c9daccb235744e14",
+   "sha": "21ecc362b8d8a1a173e2f3ccf2129cb85ea7a84a078f515756be953954090305",
+   "bytes": 12788
+  },
+  "bigsur-15390-bixby-creek-bridge.webp": {
+   "park": "bigsur",
+   "s": 15390,
+   "subject": "Bixby Creek Bridge",
+   "frac": 0.24,
+   "inputs": "331e38dcb6ba1469",
+   "sha": "4cf4360d69c3b1b42042650d207e0f6d7f4c3429202843ba90437969024d6c29",
+   "bytes": 10674
+  },
+  "bigsur-20.webp": {
+   "park": "bigsur",
+   "s": 20,
+   "inputs": "0340f213496b50d0",
+   "sha": "3f067af56a146b212cc6654b111740d465a048aa8585b49e0c3e202504cfe06f",
+   "bytes": 12864
+  },
+  "bigsur-20850.webp": {
+   "park": "bigsur",
+   "s": 20850,
+   "inputs": "ee01039b4ac3ffeb",
+   "sha": "78f5a649ca7474c989803d5d27f043257138d7a743bfa69b2308e27c18743042",
+   "bytes": 16254
+  },
+  "craterlake-20.webp": {
+   "park": "craterlake",
+   "s": 20,
+   "inputs": "b9a145e7b4fd0cce",
+   "sha": "1f871cbddf8cbbf0ec537b83cfa006b157c17c205f25b35ff240313335493fce",
+   "bytes": 10862
+  },
+  "craterlake-39390.webp": {
+   "park": "craterlake",
+   "s": 39390,
+   "inputs": "a41557c5fe33abfa",
+   "sha": "f2d8a0940446bc00c0f0f1fd37dd81a66e7989ba96901efe7cb8cbc18db4504b",
+   "bytes": 11070
+  },
+  "craterlake-6990-wizard-island.webp": {
+   "park": "craterlake",
+   "s": 6990,
+   "subject": "Wizard Island",
+   "frac": 0.253,
+   "inputs": "404fa8a01bede08c",
+   "sha": "895334c47b6959f057970afa4469e47be031f270c02a1d89f576905d0a1607b6",
+   "bytes": 7822
+  },
+  "monumentvalley-20.webp": {
+   "park": "monumentvalley",
+   "s": 20,
+   "inputs": "f4849dea3c48075e",
+   "sha": "711d362ed3229c531a4284cedebce96690ea6a20957ce6058ea4c862295d3840",
+   "bytes": 8646
+  },
+  "monumentvalley-3400.webp": {
+   "park": "monumentvalley",
+   "s": 3400,
+   "inputs": "0ffdfd42151eb03b",
+   "sha": "52cdd634ab0566f2c39fdd33768b2faa415311ef950ba956da8ac2498c9fc003",
+   "bytes": 10122
+  },
+  "pittsburgh-oakland-4720.webp": {
+   "park": "pittsburgh-oakland",
+   "s": 4720,
+   "inputs": "a9b7508411cbb26a",
+   "sha": "fe618dd4149414a6adaa1bcc937d4c032f09bd257a8b264a996311383d3bb9f7",
+   "bytes": 11872
+  },
+  "pittsburgh-oakland-view-phipps-conservatory-from-schenley-drive.webp": {
+   "park": "pittsburgh-oakland",
+   "view": "Phipps Conservatory from Schenley Drive",
+   "inputs": "10382183603132c9",
+   "sha": "3799288b1cd9d24230a25f5e3574fb4ec781977958060d6dee5890a1ac4003cf",
+   "bytes": 12164
+  },
+  "pittsburgh-oakland-view-phipps-conservatory-up-into-the-dome.webp": {
+   "park": "pittsburgh-oakland",
+   "view": "Phipps Conservatory: up into the dome",
+   "inputs": "3de0c4a75609d90c",
+   "sha": "126d2668f678ccf8421a8e15911df9a7fc39b0b19392db31502402cadf358543",
+   "bytes": 14658
+  },
+  "teton-20.webp": {
+   "park": "teton",
+   "s": 20,
+   "inputs": "661c960bb0f02772",
+   "sha": "9dcb085d22e15d44186e7b88f7ce78a87f0845e3b933434634938a4c45b887f5",
+   "bytes": 13726
+  },
+  "teton-46810.webp": {
+   "park": "teton",
+   "s": 46810,
+   "inputs": "b8c47cbc0a5a2776",
+   "sha": "da5dd9be028bc792743d9b4a5b85bb5c127f7b16bd366205a279640d788158c4",
+   "bytes": 13538
+  },
+  "teton-66660-mount-moran.webp": {
+   "park": "teton",
+   "s": 66660,
+   "subject": "Mount Moran",
+   "frac": 0.338,
+   "inputs": "a1708398cbaa7e14",
+   "sha": "e2f1c54b4ffb3fab1b432c58d9d40b86eef7b40d9795c64e21b15fb109c7957f",
+   "bytes": 9708
+  },
+  "yosemite-12310.webp": {
+   "park": "yosemite",
+   "s": 12310,
+   "inputs": "aae50f49c7fdc171",
+   "sha": "2650f0a3410d00a1f3ee520dab077ff64b917705545ab7d783e4bf8d765ab82f",
+   "bytes": 13642
+  },
+  "yosemite-20.webp": {
+   "park": "yosemite",
+   "s": 20,
+   "inputs": "8a8b1f29efc2a495",
+   "sha": "653aad48bec2e83bd86d7f803040a633160df7558a3c225273c2310149092091",
+   "bytes": 15356
+  },
+  "yosemite-2550-el-capitan.webp": {
+   "park": "yosemite",
+   "s": 2550,
+   "subject": "El Capitan",
+   "frac": 0.262,
+   "inputs": "fbb9aef2fd954c9e",
+   "sha": "2fc8a2ae46f982d333adfabca80a402e818c52b5530e146f10d0a5912d0f6e41",
+   "bytes": 13120
+  }
+ },
+ "checks": {
+  "acadia-17820-jordan-pond.webp": {
+   "park": "acadia",
+   "world": "5aae8f222210ccd7",
+   "ok": true,
+   "frac": 1,
+   "seen": "1/2"
+  },
+  "craterlake-6990-wizard-island.webp": {
+   "park": "craterlake",
+   "world": "edca13012efa67b6",
+   "ok": true,
+   "frac": 0.253,
+   "seen": "2/2"
+  },
+  "monumentvalley-26310-east-mitten.webp": {
+   "park": "monumentvalley",
+   "world": "8a7e03db1374090a",
+   "ok": false,
+   "frac": 0.151,
+   "seen": "0/2",
+   "why": "hidden (by the ground)"
+  },
+  "teton-66660-mount-moran.webp": {
+   "park": "teton",
+   "world": "8871b88b56c35dc9",
+   "ok": true,
+   "frac": 0.338,
+   "seen": "2/2"
+  },
+  "yosemite-2550-el-capitan.webp": {
+   "park": "yosemite",
+   "world": "a417047f362f937e",
+   "ok": true,
+   "frac": 0.262,
+   "seen": "1/2"
+  }
+ }
+}
