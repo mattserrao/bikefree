@@ -271,10 +271,21 @@ export function* planJunctionsJob(streets, ctx, options = {}) {
     const isRoute = cl.some((it) => it.route);
     let C, rq = null;
     if (isRoute) {
-      const rs = cl.filter((it) => it.route), s = rs.reduce((a, it) => a + it.s, 0) / rs.length;
+      // (the route items' mean place along the line — but a cluster can hold two passes of the line, a portal the line
+      // leaves along an apron and comes back to after a ghost: their mean is neither, often on the ghost between them,
+      // where no road is drawn. Take the pass with the most items then, the first on a tie)
+      let rs = cl.filter((it) => it.route).sort((a, b) => a.s - b.s), others = [];
+      if (rs[rs.length - 1].s - rs[0].s > 60) {
+        const groups = [[rs[0]]];
+        for (let i = 1; i < rs.length; i++) { if (rs[i].s - rs[i - 1].s > 60) groups.push([]); groups[groups.length - 1].push(rs[i]); }
+        rs = groups.reduce((a, g) => (g.length > a.length ? g : a));
+        // (the other passes still lead into it: their arms below)
+        others = groups.filter((g) => g !== rs).map((g) => g.reduce((a, it) => a + it.s, 0) / g.length);
+      }
+      const s = rs.reduce((a, it) => a + it.s, 0) / rs.length;
       const c0 = RL.at(s);
       C = { x: c0.x, z: c0.z };
-      rq = { s };
+      rq = { s, others };
     } else C = { x: cl.reduce((a, it) => a + it.x, 0) / cl.length, z: cl.reduce((a, it) => a + it.z, 0) / cl.length };
 
     // 3. arms
@@ -311,10 +322,10 @@ export function* planJunctionsJob(streets, ctx, options = {}) {
     }
     if (isRoute) {
       const at = RL.at;
-      for (const dir of [-1, 1]) {
-        const s1 = rq.s + dir * 12;
+      for (const s0 of [rq.s, ...(rq.others || [])]) for (const dir of [-1, 1]) {
+        const s1 = s0 + dir * 12;
         if (s1 < 0 || s1 > route.dist[end]) continue;
-        if (ghostAt(route, rq.s + dir * 6)) continue;   // [F15] no road is drawn along a ghost repeat: no arm into it
+        if (ghostAt(route, s0 + dir * 6)) continue;   // [F15] no road is drawn along a ghost repeat: no arm into it
         const p = at(s1);
         arms.push({ k: -1, route: true, dir, N: C, u: norm(sub(p, C)), h: RW / 2, cls: 3, oneway: 0, avail: 60, theta: Math.atan2(p.z - C.z, p.x - C.x) });
       }

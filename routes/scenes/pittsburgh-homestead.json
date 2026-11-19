@@ -127,7 +127,7 @@
   },
   "streetKit": {
     "fromM": 0,
-    "toM": 16150,
+    "toM": 16200,
     "rangeM": 220,
     "parkTrees": 16,
     "zones": [],
@@ -660,7 +660,7 @@
   ],
   "signs": [],
   "preview": {
-    "positionM": 9000,
+    "positionM": 9050,
     "camera": "drone",
     "time": "golden"
   },
@@ -818,7 +818,14 @@
       -80.03
     ]
   },
-  "qcAccept": [],
+  "qcAccept": [
+    {
+      "check": "street-crease",
+      "fromM": 650,
+      "toM": 690,
+      "why": "the core’s accepted crease beside the S>H trail (the core’s 9.05–9.09 km): the apron is the core’s own samples (F60)"
+    }
+  ],
   "origin": {
     "lat": 40.4375,
     "lon": -79.9925

@@ -86,6 +86,11 @@
   {
    "mode": "trail",
    "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 8400,
+    "toM": 8800
+   },
    "waypoints": [
     [
      "Hot Metal Bridge (apron)",
@@ -107,6 +112,11 @@
   {
    "mode": "trail",
    "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 8800,
+    "toM": 9110
+   },
    "waypoints": [
     [
      "Hot Metal Bridge south end (junction)",
@@ -123,6 +133,12 @@
   {
    "mode": "trail",
    "ghost": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 9110,
+    "toM": 8800,
+    "zigM": 5.008
+   },
    "waypoints": [
     [
      "SouthSide Works riverfront (junction) (back)",

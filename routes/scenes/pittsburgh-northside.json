@@ -161,7 +161,7 @@
   },
   "streetKit": {
     "fromM": 0,
-    "toM": 18622,
+    "toM": 18632,
     "rangeM": 220,
     "parkTrees": 16,
     "zones": [
@@ -613,7 +613,7 @@
   ],
   "signs": [],
   "preview": {
-    "positionM": 4360,
+    "positionM": 4370,
     "camera": "drone",
     "time": "golden"
   },
@@ -789,62 +789,62 @@
   "qcAccept": [
     {
       "check": "heading-jitter",
-      "fromM": 4310,
-      "toM": 4350,
+      "fromM": 4320,
+      "toM": 4360,
       "why": "Fineview: Belleau St turns hard down Meadville St (a mapped right-angle corner on a 15 % street), ridden with the corner as drawn"
     },
     {
       "check": "lateral-jump",
-      "fromM": 4630,
-      "toM": 4670,
+      "fromM": 4640,
+      "toM": 4680,
       "why": "the Fineview Overlook: Meadville St, 40 m of Catoma St and Lanark St zigzag round the overlook's corner (real streets, ridden as mapped)"
     },
     {
       "check": "street-steep",
-      "fromM": 5200,
-      "toM": 5240,
+      "fromM": 5210,
+      "toM": 5250,
       "why": "Fineview's hillside: a short side street off Marsonia St whose mapped ends sit on the steep z14 ground (not the route; Fineview's streets are among the city's steepest)"
     },
     {
       "check": "route-off-ground",
-      "fromM": 5220,
-      "toM": 5260,
+      "fromM": 5230,
+      "toM": 5270,
       "why": "Marsonia St along the crest of Fineview's hill: the bare ground falls 8 m across the street within 45 m, so the road sits on its own cut and fill above the grid's sample"
     },
     {
       "check": "street-steep",
-      "fromM": 5390,
-      "toM": 5430,
+      "fromM": 5400,
+      "toM": 5440,
       "why": "Fineview's hillside: a side street off Lafayette Ave down the hill (not the route)"
     },
     {
       "check": "heading-jitter",
-      "fromM": 13020,
-      "toM": 13060,
+      "fromM": 13030,
+      "toM": 13070,
       "why": "Riverview Drive turns back onto the path to the Davis Avenue Bridge: the bridge path leaves the drive at a real switchback, ridden with the corner speed cap"
     },
     {
       "check": "heading-jitter",
-      "fromM": 13870,
-      "toM": 13910,
+      "fromM": 13880,
+      "toM": 13920,
       "why": "Davis Ave meets Brighton Rd at a sharp mapped corner (a right-angle turn down Brighton Rd)"
     },
     {
       "check": "heading-sharp",
-      "fromM": 13870,
-      "toM": 13910,
+      "fromM": 13880,
+      "toM": 13920,
       "why": "Davis Ave meets Brighton Rd at a sharp mapped corner (a right-angle turn down Brighton Rd)"
     },
     {
       "check": "heading-sharp",
-      "fromM": 23370,
-      "toM": 23420,
+      "fromM": 23380,
+      "toM": 23430,
       "why": "the Davis Ave / Brighton Rd corner (13.83 km) on the line's mirrored return"
     },
     {
       "check": "street-bank",
-      "fromM": 16680,
-      "toM": 16720,
+      "fromM": 16690,
+      "toM": 16730,
       "why": "a side street off Brighton Rd in Marshall-Shadeland that drops below the road in a cut (its mapped grade; not the route)"
     }
   ],
@@ -856,13 +856,13 @@
     "fineCells": 32,
     "fineRanges": [
       {
-        "fromM": 12160,
-        "toM": 12460,
+        "fromM": 12170,
+        "toM": 12470,
         "why": "Riverview Avenue cut into Observatory Hill: the bank above the road is steeper than the 6 m ground mesh can follow"
       },
       {
-        "fromM": 12960,
-        "toM": 13160,
+        "fromM": 12970,
+        "toM": 13170,
         "why": "Riverview Drive down to the Davis Avenue Bridge: the path turns back on the steep hillside"
       }
     ]

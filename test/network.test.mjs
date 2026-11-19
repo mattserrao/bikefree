@@ -30,7 +30,7 @@ test('the network sits on its areas\' lines: edges on their 10 m samples, preset
     const apron = A.aprons.reduce((t, ap) => t + ap.s1 - ap.s0, 0);
     assert.ok(Math.abs(sum + ghost + apron - A.L) < 30, `${A.id}: ${sum} + ${ghost} ghost + ${apron} apron vs ${A.L}`);
   }
-  assert.equal([...net.edges.values()].reduce((t, e) => t + e.len, 0), 123480);   // the whole network: the one 58 km tour's 47.67 km (+0.97 km since K>J rides round and through the giant Phipps Conservatory), Polish Hill & Bloomfield's 7.16 km (PLAN 5.7), the GAP & Homestead's 14.48 km (PLAN 5.5), the North Side's 15.78 km (PLAN 5.8), the East End's 19.46 km (PLAN 5.10) and the South Side Slopes & the Dirty Dozen south's 17.96 km (PLAN 5.9)
+  assert.equal([...net.edges.values()].reduce((t, e) => t + e.len, 0), 123490);   // the whole network: the one 58 km tour's 47.67 km (+0.97 km since K>J rides round and through the giant Phipps Conservatory), Polish Hill & Bloomfield's 7.16 km (PLAN 5.7), the GAP & Homestead's 14.49 km (PLAN 5.5; S>W +10 m since its apron is the core's own samples, F60), the North Side's 15.78 km (PLAN 5.8), the East End's 19.46 km (PLAN 5.10) and the South Side Slopes & the Dirty Dozen south's 17.96 km (PLAN 5.9)
   assert.deepEqual([...net.nodes.keys()].sort(), ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'AL', 'EL', 'GV', 'HE', 'HP', 'LB', 'SQ', 'SY'].sort());
   const three = makePathRoute(net, preset('pgh-three-rivers'));
   const short = makePathRoute(net, preset('pgh-short-loop'));

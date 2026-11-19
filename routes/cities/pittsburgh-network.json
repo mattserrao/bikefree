@@ -240,15 +240,15 @@
    "name": "The Great Allegheny Passage & Homestead",
    "catalogId": "pittsburgh-homestead",
    "base": "routes/cities/pittsburgh-homestead.gpx",
-   "legM": 15960,
+   "legM": 16010,
    "ghosts": [
     {
-     "fromM": 689,
-     "toM": 976
+     "fromM": 710,
+     "toM": 1025
     },
     {
-     "fromM": 13601,
-     "toM": 14105
+     "fromM": 13655,
+     "toM": 14154
     }
    ],
    "aprons": [
@@ -266,7 +266,7 @@
      "dir": 1,
      "s": [
       400,
-      690
+      710
      ],
      "u0": 0
     }
@@ -277,19 +277,19 @@
    "name": "The North Side",
    "catalogId": "pittsburgh-northside",
    "base": "routes/cities/pittsburgh-northside.gpx",
-   "legM": 18640,
+   "legM": 18650,
    "ghosts": [
     {
      "fromM": 1170,
-     "toM": 1621
+     "toM": 1631
     },
     {
-     "fromM": 5786,
-     "toM": 6361
+     "fromM": 5796,
+     "toM": 6371
     },
     {
-     "fromM": 7799,
-     "toM": 8468
+     "fromM": 7809,
+     "toM": 8478
     }
    ],
    "aprons": [
@@ -298,9 +298,18 @@
      "dir": 1,
      "s": [
       0,
-      400
+      230
      ],
      "u0": 420
+    },
+    {
+     "edge": "e8",
+     "dir": 1,
+     "s": [
+      230,
+      400
+     ],
+     "u0": 650
     },
     {
      "edge": "e9",
@@ -546,14 +555,14 @@
    "name": "Hot Metal Bridge south end",
    "lat": 40.427301,
    "lon": -79.962453,
-   "ele": 229.45,
+   "ele": 229.57,
    "passes": {
     "core": [
      8800
     ],
     "homestead": [
      400,
-     980
+     1020
     ]
    },
    "portal": true
@@ -648,7 +657,7 @@
      18420
     ],
     "northside": [
-     18640
+     18650
     ]
    },
    "portal": true
@@ -658,13 +667,13 @@
    "name": "Ridge Ave by the Rivers Casino",
    "lat": 40.449081,
    "lon": -80.021258,
-   "ele": 225.47,
+   "ele": 225.65,
    "passes": {
     "core": [
      18730
     ],
     "northside": [
-     1620
+     1630
     ]
    },
    "portal": true
@@ -838,12 +847,12 @@
    "id": "W",
    "name": "The Waterfront by the AMC",
    "lat": 40.408479,
-   "lon": -79.918026,
+   "lon": -79.918027,
    "ele": 227.14,
    "passes": {
     "homestead": [
-     8110,
-     14100
+     8160,
+     14150
     ]
    }
   },
@@ -855,8 +864,8 @@
    "ele": 228.72,
    "passes": {
     "homestead": [
-     9850,
-     15960
+     9900,
+     16010
     ]
    }
   },
@@ -868,8 +877,8 @@
    "ele": 227.4,
    "passes": {
     "homestead": [
-     8620,
-     13600
+     8670,
+     13650
     ]
    }
   },
@@ -881,8 +890,8 @@
    "ele": 285.22,
    "passes": {
     "northside": [
-     3960,
-     7800
+     3970,
+     7810
     ]
    }
   },
@@ -894,9 +903,9 @@
    "ele": 341,
    "passes": {
     "northside": [
-     5790,
-     6360,
-     8470
+     5800,
+     6370,
+     8480
     ]
    }
   },
@@ -1618,10 +1627,10 @@
    "from": "S",
    "to": "W",
    "s": [
-    980,
-    8110
+    1020,
+    8160
    ],
-   "lengthM": 7130,
+   "lengthM": 7140,
    "climbM": [
     16,
     18
@@ -1639,8 +1648,8 @@
    "from": "W",
    "to": "V",
    "s": [
-    8110,
-    8620
+    8160,
+    8670
    ],
    "lengthM": 510,
    "climbM": [
@@ -1660,8 +1669,8 @@
    "from": "V",
    "to": "U",
    "s": [
-    8620,
-    9850
+    8670,
+    9900
    ],
    "lengthM": 1230,
    "climbM": [
@@ -1681,8 +1690,8 @@
    "from": "U",
    "to": "V",
    "s": [
-    9850,
-    13600
+    9900,
+    13650
    ],
    "lengthM": 3750,
    "climbM": [
@@ -1702,8 +1711,8 @@
    "from": "W",
    "to": "U",
    "s": [
-    14100,
-    15960
+    14150,
+    16010
    ],
    "lengthM": 1860,
    "climbM": [
@@ -1723,8 +1732,8 @@
    "from": "R",
    "to": "Y",
    "s": [
-    1620,
-    3960
+    1630,
+    3970
    ],
    "lengthM": 2340,
    "climbM": [
@@ -1744,8 +1753,8 @@
    "from": "Y",
    "to": "Z",
    "s": [
-    3960,
-    5790
+    3970,
+    5800
    ],
    "lengthM": 1830,
    "climbM": [
@@ -1765,8 +1774,8 @@
    "from": "Z",
    "to": "Y",
    "s": [
-    6360,
-    7800
+    6370,
+    7810
    ],
    "lengthM": 1440,
    "climbM": [
@@ -1786,8 +1795,8 @@
    "from": "Z",
    "to": "C",
    "s": [
-    8470,
-    18640
+    8480,
+    18650
    ],
    "lengthM": 10170,
    "climbM": [
@@ -2687,7 +2696,7 @@
     "new"
    ],
    "note": "From SouthSide Works out the GAP along the Mon to the Waterfront, a lap of Homestead past the Pump House and Eighth Avenue, and back",
-   "lengthM": 21000,
+   "lengthM": 21020,
    "climbM": 65
   },
   {
@@ -2714,7 +2723,7 @@
     "new"
    ],
    "note": "The Point, the Jail Trail and the Hot Metal Bridge, the GAP to Homestead and a lap past the Pump House, home on the South Side river trail",
-   "lengthM": 35820,
+   "lengthM": 35840,
    "climbM": 152
   },
   {

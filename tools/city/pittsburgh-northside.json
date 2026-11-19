@@ -120,11 +120,10 @@
   {
    "mode": "road",
    "apron": true,
-   "copy": {
+   "samplesOf": {
     "gpx": "routes/cities/pittsburgh.gpx",
-    "data": "routes/scenes/pittsburgh-city.json",
     "fromM": 18020,
-    "toM": 19190,
+    "toM": 18250,
     "portals": [
      [
       40.450594,
@@ -155,6 +154,11 @@
   {
    "mode": "trail",
    "apron": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 18250,
+    "toM": 19190
+   },
    "waypoints": [
     [
      "West End Bridge north",
@@ -171,6 +175,12 @@
   {
    "mode": "trail",
    "ghost": true,
+   "samplesOf": {
+    "gpx": "routes/cities/pittsburgh.gpx",
+    "fromM": 19190,
+    "toM": 18730,
+    "zigM": 1.217
+   },
    "waypoints": [
     [
      "Casino Drive (back)",
@@ -529,6 +539,7 @@
    "lon": -80.01004,
    "eleM": 341.0,
    "keepM": 30,
+   "everyPass": "round",
    "why": "Perrysville Ave & Federal St Extension (junction Z): passed off Federal St Extension, round the block and from Perrysville Ave's bends, and on north; every pass level at one height round it"
   }
  ],
