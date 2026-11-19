@@ -15,7 +15,7 @@
 // --chrome <path> (default: CHROME env, else the usual Mac/Linux locations), --software (no GPU).
 // --areas-now (a city of areas: build the path's other areas at once, not in frame slices),
 // --eval '<js>' (run with the world as `w` just before the frame: `w.terrain.subway.t = 95` puts the trains at 95 s),
-// --png (lossless), --fingerprint (hash of every object for refactor checks, with a frozen clock, seeded
+// --far (wait for the real far horizon), --png (lossless), --fingerprint (hash of every object for refactor checks, with a frozen clock, seeded
 // random and no streamed real horizon, so runs repeat exactly; see tools/toolbox_guard.mjs).
 import { createServer } from 'node:http';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
@@ -39,6 +39,7 @@ const breakdown = flag('--breakdown');   // list draw calls by object
 const png = flag('--png');   // [toolbox] lossless PNG instead of JPEG (pixel-exact refactor checks)
 const fingerprint = flag('--fingerprint');   // [toolbox] hash of every mesh, matrix, attribute and material in the scene
 const evalJs = opt('--eval', null);   // JavaScript run on the stopped world (as `w`) before each frame, e.g. to set the subway trains' clock
+const waitFar = flag('--far');   // stylized scenes: wait (up to 2 min) for the real far horizon to stream in, so the ~1.5 km hand-off is drawn
 const areasNow = flag('--areas-now');   // a city of areas: build the other areas at once (world.areaBudget Infinity), not in frame slices — headless frames can be slow enough that a second area takes minutes
 const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync));
@@ -102,6 +103,7 @@ for (const shot of shots) {
   await page.waitForFunction(() => { const w = window.world; return !w._multi || (w._resT != null && [...w.path.areasNear(w.p)].every((id) => w.areas.get(id)?.ready) && [...w.areas.values()].every((a) => a.ready)); }, null, { timeout: 180000, polling: 500 });
   // streamed terrain (non-stylized and wireframe scenes): wait until the visible tiles are in
   await page.waitForFunction(() => { const w = window.world; if (w.stylized) return true; const c = w.camera.position; w.terrain.update(c.x, c.z); return w.terrain.loadingCount === 0 && w.terrain.stats.ready > 4; }, null, { timeout: 180000, polling: 1000 });
+  if (waitFar) await page.waitForFunction(() => { const w = window.world; return !w.farTerrain || w._farOn; }, null, { timeout: 120000, polling: 1000 }).catch(() => console.warn(`${shot.spec}: no real far horizon after 2 min (offline?)`));
   // stop the loop, let every queued scenery tile build, then draw one frame and read it back
   const r = await page.evaluate(async (evalJs) => {
     const w = window.world, t = w.terrain, c = w.camera.position;

@@ -2,7 +2,7 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { randomSequence, smoothstep, vhash, vnoise } from './toolbox/core/random.js';
 import { makeTreeCards } from './toolbox/vegetation/tree-cards.js';
 import { loadSceneryAssets } from './toolbox/packs/blender-kits.js';
-import { makeGroundMaterial, makeSeaMaterial, makeLakeWaterMaterial, makeLakeMistMaterial, decorateSceneryMaterial } from './toolbox/materials/surfaces.js';
+import { makeGroundMaterial, setGroundHandoff, makeSeaMaterial, makeLakeWaterMaterial, makeLakeMistMaterial, decorateSceneryMaterial } from './toolbox/materials/surfaces.js';
 import { scenePacks, PACK_META } from './toolbox/packs/index.js';
 import { normalizeScene, lifeKit } from './toolbox/scene-schema.js';
 import { ForestPlanner, TILE_M, makeClearings } from './toolbox/vegetation/forest.js';
@@ -1227,6 +1227,7 @@ export class StylizedTerrain {
     if (on === !!this.farOn) return;
     this.farOn = on;
     this.farUniform.value.z = on ? 1 : 0;
+    setGroundHandoff(this.groundMaterial, on);   // 7.3b: the band fades the ground out over the far terrain (blended, no dither)
     // rebuild the ground so every patch knows the real height it morphs toward
     for (const mesh of this.patches.values()) mesh.geometry.dispose();
     this.patches.clear();
