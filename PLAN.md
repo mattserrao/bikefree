@@ -1396,6 +1396,8 @@ Decided with the user (19 Nov, after riding phase 6):
   - Goes with 7.7's North Shore landmarks (the Clemente / Stargell / Wagner statues, Mister Rogers, USS Requin) since they share the area; core and North Side map data. Views (postcards) of the photo's angle; route preview images for the new preset
   - Follow-ups F350–F369
 - Check budget (user, 19 Nov: no non-productive checks): agents run targeted tests for what they touch; the full `npm test` runs once, at merge, by the coordinator; `qc:network` / `qc_course --strict` only after ridden-geometry or network changes; `qc_clipping` once at the end and only for areas whose scene changed (`--life-only` for traffic-only changes); one performance measurement at the busiest new view; snapshots limited to the deliverable's views; no parameter sweeps beyond a confirming measurement
+- [ ] 7.9 **Landmarks on the Pittsburgh panel map** (asked 19 Nov): landmark markers (the 7.7/7.8 heroes, stadiums, Phipps, the inclines, the Point…) on the full-screen Pittsburgh panel's map, with a **small show/hide toggle at the bottom right** of the map (remembered in settings). Follow-ups F370–F374
+- [ ] 7.10 **"Tour de Pittsburgh"** (asked 19 Nov): a new preset of **~40–60 km** routed to pass as many landmarks as possible (the 7.7/7.8 heroes, stadiums, Phipps, the inclines, the Point, the overlooks), over existing segments; after 7.8 merges (it changes the North Shore line and the network). Follow-ups F375–F379
 - [ ] 7.6 Final QC (as phase 6's trimmed set) and PR
 - Landmarks: an inventory and a brainstorm of missing landmarks near the routes (project doc `claude/pittsburgh-landmarks.md`); which to build is the user's call
 
