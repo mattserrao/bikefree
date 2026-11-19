@@ -27,7 +27,7 @@ export const MEET_LIMITS = {
   dangle: 1.2,       // m: a street end this far above (or below) whatever is under it hangs in the air
   touch: 1.5,        // m: a street end this close to another surface's edge meets it
   clippedM: 2,       // m: of ribbon cut away by the route's clearance tube
-  nearBudget: 42,    // [w2-meets] sites with issues within 25 m of the route the course QC accepts before it warns (course QC 38, unit test 41 with the Allegheny Loop and Troy Hill, +1)
+  nearBudget: 32,    // [w2-meets] sites with issues within 25 m of the route the course QC accepts before it warns, per area (data pass, F20/F26: the core's 30 in the course QC, 27 in the unit test, +2; was 42)
                      // (20 on Pittsburgh's loop; 36–38 with the Jail Trail and the West End spur; 29 after PLAN.md F7/F15)
   seeM: 25,          // limits grow by their own size every this many metres from the route (×4 at 75 m, ×7 at 150 m)
 };

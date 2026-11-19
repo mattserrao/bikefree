@@ -603,13 +603,7 @@
    -80.024
   ]
  ],
- "dropStreets": [
-  {
-   "way": 295600401,
-   "name": "Janewood Way",
-   "why": "a service alley 12 m up the West End hillside beside the spur (40.89 km): its flat grading made a 5 m step 12 m from the road that the 6 m ground mesh pulled over the shoulder"
-  }
- ],
+ "dropStreets": [],
  "heightPins": [
   {
    "lat": 40.458317,

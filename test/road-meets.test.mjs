@@ -81,10 +81,11 @@ test('road meets: pittsburgh, every place roadways meet within 150 m of the rout
   assert.ok(R.sites.length > 900, `${R.sites.length} sites`);   // (fewer once overlapping carriageways are drawn as one)
   for (const kind of ['junction', 'link', 'route', 'overlap']) assert.ok(R.counts[kind] > 10, `${kind}: ${R.counts[kind]}`);
   // the junction system's own geometry: no step, gap or misplaced paint at any junction or link near the route
-  // (5: 4 after the Allegheny Loop and Troy Hill joined — F15 fixes took it from 11 to 0 on the 40 km tour; F20 — plus one of headroom)
+  // (5: 4 after the Allegheny Loop and Troy Hill joined — F15 fixes took it from 11 to 0 on the 40 km tour; F20 — plus one of headroom;
+  // re-based in the data pass, F20/F26: 2 on the core — Smithfield & Fort Pitt's lip at 3.46 km and the E gap at 25.11 km — plus one)
   const own = R.sites.filter((s) => s.d < 25 && (s.kind === 'junction' || s.kind === 'link') && s.issues.some((i) => ['step', 'gap', 'paint'].includes(i.check)));
-  assert.ok(own.length <= 5, `junction/link issues near the route: ${own.map((s) => `${s.s} ${s.issues.map((i) => i.check)}`).join('; ')}`);
-  assert.ok(R.issues < 62, `${R.issues} sites with issues`);   // (60 with the Allegheny Loop and Troy Hill)
+  assert.ok(own.length <= 3, `junction/link issues near the route: ${own.map((s) => `${s.s} ${s.issues.map((i) => i.check)}`).join('; ')}`);
+  assert.ok(R.issues < 40, `${R.issues} sites with issues`);   // (60 with the Allegheny Loop and Troy Hill; 36 in the data pass, F20)
   const nearN = R.sites.filter((s) => s.issues.length && s.d <= 25).length;
   assert.ok(nearN <= MEET_LIMITS.nearBudget, `within 25 m of the route: ${nearN} sites with issues (at most ${MEET_LIMITS.nearBudget})`);
 });
