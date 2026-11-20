@@ -4,6 +4,7 @@
 //
 //   node tools/snap_cam.mjs pittsburgh --shots shots.json [--software] [--out dir] [--size 1280x720]
 //   shots.json: [{ "name": "gulf-night", "cam": [lat, lon, alt], "look": [lat, lon, alt], "time": "night" }, …]
+//   (a shot's "tint": { "Sidewalks · kit": "#ff0000" } draws meshes whose name starts so in one flat colour: debugging layers)
 //   (or pass the same JSON in the SHOTS environment variable)
 //   node tools/snap_cam.mjs pittsburgh-oakland --views [--time night]   (the scene's postcard `views`: each camera
 //   `up` metres over the ground at its spot, looking at its `look` point `up` metres over the ground there; PLAN F111)
@@ -67,9 +68,11 @@ for (const sh of SHOTS) {
     const a = P.toLocal(sh.cam[0], sh.cam[1]), b = P.toLocal(sh.look[0], sh.look[1]);
     if (sh.cam[2] == null) sh.cam[2] = t.heightAt(a.x, a.z) + (sh.camUp ?? 30);   // (--views: over the ground)
     if (sh.look[2] == null) sh.look[2] = t.heightAt(b.x, b.z) + (sh.lookUp ?? 0);    w.camera.position.set(a.x, sh.cam[2], a.z); w.camera.lookAt(b.x, sh.look[2], b.z); w.camera.updateMatrixWorld(); w.sky.position.copy(w.camera.position);
-    for (let k = 0; k < 40 && city?._pending.length; k++) { city._warm = false; city._stream(a.x, a.z); }
+    for (let k = 0; k < 400 && city?._pending.length; k++) { city._warm = false; city._stream(a.x, a.z); }
     for (let k = 0; k < 400 && (t.forestQueue?.length || k < 2); k++) { t._lastX = Infinity; t.update(a.x, a.z); }
     city?.tick(w.camera.position, .016, 12.3, null);
+    // (debug: "tint": { "<mesh name prefix>": "#rrggbb" } paints those meshes one flat colour, to tell layers apart)
+    if (sh.tint) w.scene.traverse((o) => { const c = o.isMesh && Object.entries(sh.tint).find(([pre]) => o.name.startsWith(pre)); if (c) o.material = new o.material.constructor({ color: c[1] }); });
     if (w.baked && !w.baked.ready) w.baked.bakeNow();   // [baked-light] bake once, before the first frame
     w.renderer.info.autoReset = false; w.renderer.info.reset();
     w.renderer.shadowMap.needsUpdate = true;   // the ride redraws shadows only as needed
