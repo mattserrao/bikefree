@@ -636,6 +636,81 @@ const SIDEWALK_CLS = (cls) => cls >= 2 && cls <= 6;   // [6.1] streets drawn wit
  * own road, so it can never cover the road or the rider. Shared by the renderer and the course QC sweep.
  */
 export function cityStreets(landscape, index, route) { return drain(cityStreetsJob(landscape, index, route)); }
+// [audit-A] Street profile fairing. Street heights are set point by point by several passes: the ground under each
+// point, then pins just under the route's road (lower(): a point over or beside the road, while its neighbours
+// keep the ground or their deck height), junction-node sync, and the road-meets passes (keepUnderRoad, …) that
+// move single points. Nothing eased between, so a ribbon could dip 2 m and hump 2 m back within 6 m beside the
+// route (the "jagged highways": tools/qc_map.mjs `bump`, `height-step`). This pass fairs every street profile
+// (decks too) without moving what other passes rely on. It runs twice: once the pins are set (so the junction and
+// road-meets passes see eased heights) and again before the junction tops (for what those passes moved).
+//   fixed   ends · pinned points (p.pin, p.under: under the route's road) · junction points (p.jn) · nodes shared
+//           with another street (streets meeting there still arrive at one height) · points over the route's
+//           road at its level (they meet it) or at another level (over the rider's head, or far below)
+//   capped  other points over the route's road never rise above the pinned height (just under the road's
+//           surface) or, if already above it, above where they are: nothing comes up through the road
+//   free    every other point
+// Free and capped points move (Gauss–Seidel) just far enough that every point — a fixed one too, by moving its
+// neighbours — lies within `bump` of the straight line through its neighbours and, on ground streets, within
+// `grade` of them: a pinned dip or a deck's step spreads into a ramp over the points around it.
+const FAIR = { bump: .3, grade: .36, gradeSeg: 3, iters: 400, overRoad: 1.5, under: .26 };
+function* fairStreetProfilesJob(streets, { landscape, index, route }) {
+  const end = route.turnIdx || route.dist.length - 1;
+  // the route's road height under a street point whose ribbon reaches over the road (as lower() and the course QC
+  // see it: the nearest 10 m sample, else the road between samples when that is the same pass), else null
+  const roadUnder = (p, width) => {
+    const r = index.nearest(p.x, p.z, width / 2 + ROAD_WIDTH / 2 + FAIR.overRoad);
+    if (!r) return null;
+    const i = r.i > end ? Math.max(0, 2 * end - r.i) : r.i, rd = landscape.routeDist?.(p.x, p.z);
+    return rd && Math.abs(rd.y - route.ele[i]) < 3 ? rd.y : route.ele[i];
+  };
+  const key = (p) => Math.round(p.x * 100) * 4194304 + Math.round(p.z * 100);
+  const shared = new Map();
+  streets.forEach((st, k) => { for (const p of st.pts) { const id = key(p), o = shared.get(id); shared.set(id, o == null || o === k ? k : -1); } });
+  for (let k = 0; k < streets.length; k++) {
+    if (due()) yield;
+    const st = streets[k], P = st.pts, n = P.length;
+    if (n < 3 || st.cls > 7) continue;
+    const s = new Float64Array(n), y = Float64Array.from(P, (p) => p.y), fixed = new Uint8Array(n), cap = new Float64Array(n).fill(Infinity);
+    for (let i = 1; i < n; i++) s[i] = s[i - 1] + Math.hypot(P[i].x - P[i - 1].x, P[i].z - P[i - 1].z);
+    for (let i = 0; i < n; i++) {
+      const p = P[i];
+      fixed[i] = i === 0 || i === n - 1 || p.pin || p.under || p.jn != null || shared.get(key(p)) === -1;
+      const e = fixed[i] ? null : roadUnder(p, st.width);
+      if (e == null) continue;
+      if (e - y[i] >= 6 || y[i] >= e + 4 || Math.abs(y[i] - e + .1) < .4) fixed[i] = 1;   // (another level: over the rider, far below; or flush: it meets the road)
+      else cap[i] = Math.max(e - FAIR.under, y[i]);
+    }
+    const put = (i, v) => { const w = Math.min(cap[i], v); if (Math.abs(w - y[i]) < 1e-4) return false; y[i] = w; return true; };
+    let moved = false;
+    for (let it = 0; it < FAIR.iters; it++) {
+      let any = false;
+      for (let i = 1; i + 1 < n; i++) {
+        const d1 = s[i] - s[i - 1], d2 = s[i + 1] - s[i];
+        if (d1 < .5 || d2 < .5) continue;
+        const off = y[i] - (y[i - 1] + (y[i + 1] - y[i - 1]) * d1 / (d1 + d2));
+        if (Math.abs(off) <= FAIR.bump + 1e-3) continue;
+        const dy = off - Math.sign(off) * FAIR.bump;
+        if (!fixed[i]) { any = put(i, y[i] - dy) || any; continue; }
+        // a fixed point off the line: its free neighbours come towards it (never past it, never away from it)
+        const a = !fixed[i - 1], b = !fixed[i + 1];
+        const toward = (j, by) => { const v = y[j] + by; if ((y[i] - y[j]) * by <= 0) return false; return put(j, by > 0 ? Math.min(v, y[i]) : Math.max(v, y[i])); };
+        if (a && b) { any = toward(i - 1, dy) || any; any = toward(i + 1, dy) || any; }
+        else if (a) any = toward(i - 1, dy * Math.min(2, (d1 + d2) / d2)) || any;
+        else if (b) any = toward(i + 1, dy * Math.min(2, (d1 + d2) / d1)) || any;
+      }
+      if (!st.bridge) for (let i = 0; i + 1 < n; i++) {
+        const ds = s[i + 1] - s[i], d = y[i + 1] - y[i], over = Math.abs(d) - FAIR.grade * ds;
+        if (ds < FAIR.gradeSeg || over <= 1e-3 || (fixed[i] && fixed[i + 1])) continue;
+        const a = fixed[i] ? 0 : fixed[i + 1] ? 1 : .5;
+        if (a) any = put(i, y[i] + Math.sign(d) * over * a) || any;
+        if (a < 1) any = put(i + 1, y[i + 1] - Math.sign(d) * over * (1 - a)) || any;
+      }
+      if (!any) break;
+      moved = true;
+    }
+    if (moved) for (let i = 0; i < n; i++) P[i].y = y[i];
+  }
+}
 /** cityStreets as a job ([F30]: js/world/toolbox/core/jobs.js): the same passes, pausing between streets when its slice is used up. */
 export function* cityStreetsJob(landscape, index, route) {
   if (landscape._streets) return landscape._streets;
@@ -702,6 +777,7 @@ export function* cityStreetsJob(landscape, index, route) {
     for (const st of streets) { st.pts.forEach((p, j) => { if (lower(p, st.width, !st.bridge && alongRoute(st.pts, j))) st.underRoute = true; }); if (due()) yield; }
     yield* syncPinnedNodesJob(streets);
   }
+  yield* fairStreetProfilesJob(streets, { landscape, index, route });   // [audit-A] pinned dips and deck steps eased (before the junction passes see them)
   yield* liftOverPondsJob(streets, landscape);   // [6.5] no street, path or sidewalk at or under a pond's water
   landscape._streets = streets;
   // [junctions] real intersection geometry: street heights inside junctions, trims, the junction surfaces
@@ -722,6 +798,7 @@ export function* cityStreetsJob(landscape, index, route) {
     yield* keepUnderRoadJob(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] (and still nothing over the road)
     yield* hideCrossingsAtRouteJob(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [w2-meets] crossings at another level: under the road's bank
     yield* dropCutStubsJob(streets);   // [finish] stubs cut away at one end aren't drawn
+    yield* fairStreetProfilesJob(streets, { landscape, index, route });   // [audit-A] …and again: what the passes above moved
     yield* junctionTopsJob(landscape._junctions, streets, landscape.routeDist, ROAD_WIDTH);   // [junctions] mouths at the streets' final heights
   }
   return streets;
