@@ -334,6 +334,13 @@ export async function loadRider(opts = {}) {
   return {
     group, mesh, update,
     triangles: data.mesh.tris,
+    /**
+     * [7.5] Lean the bike and rider into a turn: radians, + to the rider's right. The whole model (bike, rider, the
+     * pedalling) rolls about the tyres' contact line (the model's ground line along its length), so the wheels stay
+     * on the road; the shadow stays flat on it. The caller eases it (js/world/pose.js stepLean).
+     */
+    setLean(rad) { mesh.rotation.z = rad || 0; },
+    get lean() { return mesh.rotation.z; },
     /** Force a posture ('seated' | 'standing' | 'tuck'), or null to let grade + effort decide. */
     setPosture(p) { st.forced = p && POSTURES[p] ? p : null; st.since = 99; },
     get posture() { return st.posture; },

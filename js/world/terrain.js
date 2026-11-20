@@ -403,6 +403,9 @@ export class Terrain {
       g.boundingSphere = geo.boundingSphere;
       const mesh = new THREE.Mesh(g, mat);
       mesh.visible = false;
+      // far background: drawn before the stylized ground (renderOrder 0), after the sky (-1), so the ground's
+      // hand-off band can fade out over it (7.3b)
+      if (this.far) mesh.renderOrder = -.5;
       mesh.matrixAutoUpdate = false;
       this.group.add(mesh);
       return mesh;
@@ -628,7 +631,7 @@ function makeGroundMaterial(tex, uniforms) {
         varying float vWater; varying vec3 vWorldPos; varying vec3 vWorldNormal;`)
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
         if (uFar.z > 0.5) {
-          // Far background: dithered hand-off with the stylized ground (it uses the complementary pattern).
+          // Far background: the stylized ground fades out over it across the hand-off band (7.3b).
           float farD = length(vWorldPos.xz - cameraPosition.xz);
           // solid from the start of the blend band: the stylized ground dithers away on top of it,
           // so every pixel always has ground behind it (no gaps where the two heights differ)

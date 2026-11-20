@@ -45,7 +45,7 @@ test('momentum lets the hill through more slowly when the bike is faster', () =>
   assert.equal(momentumGrade(null, 2, 7, 0.25), 2);
 });
 
-test('closest camera is the default (PLAN 6.10), nearer than close, which is nearer than classic', () => {
+test('closest (now the Zwift-style chase, 7.2b) camera is the default (PLAN 6.10); close is nearer than classic', () => {
   assert.equal(DEFAULT_CAMERA, 'closest');
   assert.equal(CHASE, CAMERAS.closest);
   assert.equal(CHASE, CHASE_CLOSEST);
@@ -53,13 +53,21 @@ test('closest camera is the default (PLAN 6.10), nearer than close, which is nea
   assert.equal(DEFAULT_SETTINGS.camera, 'closest');
   const d = (c) => Math.hypot(c.back, c.up);
   assert.ok(d(CHASE_CLASSIC) / d(CHASE_CLOSE) > 1.25);
-  assert.ok(d(CHASE_CLOSE) / d(CHASE_CLOSEST) > 1.25, `close ${d(CHASE_CLOSE)} vs closest ${d(CHASE_CLOSEST)}`);
+  assert.ok(d(CHASE_CLOSEST) > d(CHASE_CLASSIC), `7.2b: the Zwift-style chase sits further back than classic (${d(CHASE_CLOSEST)})`);
   // the back wheel (hub 0.41 m behind the rider's origin, 0.336 m radius: models/rider.json) is in front of the camera and
   // below its view centre, and the camera stays well clear of the rider's helmet (~1.6 m up)
   for (const c of Object.values(CAMERAS)) {
     assert.ok(c.back > .41 + .336 + 1, `${JSON.stringify(c)} too close to the wheel`);
     assert.ok(c.up >= 1.4 && c.ground >= 1.4, `${JSON.stringify(c)} too low`);
   }
+  // 7.2: Closest is closer and higher than 6.10's (2.3 m back, 1.5 m up), aimed down so the back wheel sits just over
+  // the power bar (measured 1440×900 and 390×844): the look point well below the road ahead
+  assert.ok(CHASE_CLOSEST.back >= 5.5 && CHASE_CLOSEST.up >= 2.2 && CHASE_CLOSEST.fov <= 52, JSON.stringify(CHASE_CLOSEST));   // 7.2b: Zwift-style
+  const pitch = Math.atan2(CHASE_CLOSEST.up - CHASE_CLOSEST.lookUp, CHASE_CLOSEST.back + CHASE_CLOSEST.ahead) * 180 / Math.PI;
+  assert.ok(pitch > 5 && pitch < 12, `aimed ${pitch.toFixed(1)}° down`);
+  // Close and Classic unchanged
+  assert.deepEqual(CHASE_CLOSE, { back: 3.3, up: 1.8, ahead: 7, lookUp: -0.4, ground: 1.6, fov: 58, speedFov: 10, pull: 0.25, buzz: 0.01 });
+  assert.deepEqual(CHASE_CLASSIC, { back: 4.5, up: 2.1, ahead: 8, lookUp: -0.6, ground: 1.6, fov: 62, speedFov: 0, pull: 0, buzz: 0 });
   // Settings → Camera offers all three, Closest first and marked the default
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const opts = [...html.match(/<select name="camera">([\s\S]*?)<\/select>/)[1].matchAll(/value="(\w+)"[^>]*>([^<]*)/g)].map((m) => [m[1], m[2]]);

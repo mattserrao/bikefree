@@ -165,9 +165,22 @@ canvas.city-map { width: 100%; aspect-ratio: 16 / 9; max-height: calc(100dvh - 1
 .city-mapwrap { position: relative; }
 canvas.city-map.zoomed { touch-action: none; cursor: grab; }
 .city-fit { position: absolute; top: 8px; right: 8px; min-height: 36px; padding: 6px 12px; border-radius: 10px; font-size: 13px; background: var(--surface); }
+/* the landmarks' show/hide toggle (PLAN 7.9): small, at the map's bottom right; dimmed and struck through when off */
+.city-lm { position: absolute; right: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 4px 10px 4px 8px; border-radius: 9px;
+  font-size: 12px; background: color-mix(in srgb, var(--surface) 88%, transparent); color: var(--ink-2); border: 1px solid var(--line); }
+.city-lm .ic { width: 15px; height: 15px; }
+.city-lm[aria-pressed="false"] { color: var(--muted); }
+.city-lm[aria-pressed="false"] span { text-decoration: line-through; }
 .city-group { list-style: none; padding: 12px 12px 4px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .city-group:first-child { padding-top: 2px; }
 .city-side { display: grid; grid-template-rows: auto auto auto auto minmax(0, 1fr); gap: 12px; min-height: 0; }
+/* the selected route's pictures below the map (7.1): the left column's second row; the routes span both rows */
+.city-body { grid-template-rows: auto minmax(0, 1fr); }
+.city-mapcol { grid-column: 1; grid-row: 1; }
+.city-side { grid-column: 2; grid-row: 1 / span 2; }
+.city-shots { grid-column: 1; grid-row: 2; align-self: start; }
+.pv-shots.city-shots { grid-template-columns: repeat(var(--n, 3), minmax(0, 260px)); }
+.city-dlg.has-shots canvas.city-map { max-height: calc(100dvh - 340px); }   /* room for the pictures on a short screen */
 .city-extras { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .city-extras button { display: grid; gap: 1px; text-align: left; padding: 10px 14px; min-height: 52px; border-radius: 12px; background: var(--surface); }
 .city-extras b { font-size: 14px; }
@@ -206,6 +219,9 @@ canvas.city-map.zoomed { touch-action: none; cursor: grab; }
   canvas.city-map { max-height: 42dvh; }
   .city-side { grid-template-rows: none; }
   .city-list { overflow: visible; }
+  .city-body { grid-template-rows: none; }
+  .city-mapcol, .city-shots, .city-side { grid-column: 1; grid-row: auto; }
+  .city-dlg.has-shots canvas.city-map { max-height: 42dvh; }
   .city-head { padding: 10px 12px; }
 }
 @media (max-width: 760px) {
@@ -214,6 +230,9 @@ canvas.city-map.zoomed { touch-action: none; cursor: grab; }
   .city-goals button { min-height: 44px; }
   canvas.city-map { aspect-ratio: 16 / 11; }
   .city-goals button { padding: 7px 2px; }
+  .city-lm { right: 6px; bottom: 6px; width: 34px; min-height: 34px; padding: 0; justify-content: center; }   /* a phone: the icon alone */
+  .city-lm span { display: none; }
+  .city-lm[aria-pressed="false"] .ic { opacity: .45; }
 }
 .wlist { display: grid; gap: 8px; }
 .wrow { display: grid; grid-template-columns: 1fr 200px; align-items: center; gap: 16px; text-align: left; padding: 12px 14px; border-radius: 14px; background: var(--panel); }
@@ -269,6 +288,7 @@ dialog.shot-dlg { width: min(960px, 94vw); padding: 0; overflow: hidden; }
   .pv-shots::-webkit-scrollbar { display: none; }
   .shot { scroll-snap-align: start; }
   .shot figcaption { font-size: 12.5px; }
+  .pv-shots.city-shots { grid-template-columns: none; margin: 0 -16px; padding: 0 16px 4px; scroll-padding: 0 16px; }
 }
 .offline-status { color: var(--muted); font-size: 12.5px; }
 .offline-status:empty { display: none; }

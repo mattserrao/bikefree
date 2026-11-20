@@ -312,7 +312,7 @@
         </label>
         <label>Camera
           <select name="camera">
-            <option value="closest">Closest — just behind the back wheel (default)</option>
+            <option value="closest">Chase — Zwift-style, back wheel at the power bar (default)</option>
             <option value="close">Close — speed feel</option>
             <option value="classic">Classic — 4.5 m back</option>
           </select>
@@ -439,9 +439,11 @@
         <div class="city-mapwrap">
           <canvas id="cityMap" class="city-map" tabindex="0" role="img" aria-label="Map of the routes"></canvas>
           <button type="button" class="city-fit" id="cityFit" hidden>Whole map</button>
+          <button type="button" class="city-lm" id="cityLm" aria-pressed="true" aria-label="Landmarks" hidden><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></svg><span>Landmarks</span></button>
         </div>
         <div class="city-maphint" id="cityMapHint">Tap a line to see the routes that ride it</div>
       </div>
+      <div class="pv-shots city-shots" id="cityShots" hidden aria-label="Pictures along the selected route"></div>
       <div class="city-side">
         <div class="city-extras">
           <div class="city-free"><button type="button" id="cityFree" title="Start a free ride now"><b>Free ride</b><small>Choose every turn</small></button><button type="button" class="link" id="cityFreeOpts" title="Choose where to start and how long to ride, then Start" aria-label="Free ride options: start and length">Options</button></div>

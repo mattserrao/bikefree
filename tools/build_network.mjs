@@ -42,6 +42,9 @@ function buildArea(area) {
   const ghosts = city.routeGhosts || [], aprons = city.routeAprons || [];
   const inRange = (list) => (s) => list.some((g) => s > g.fromM + 5 && s < g.toM - 5);
   const inGhost = inRange(ghosts), inApron = inRange(aprons), skip = (s) => inGhost(s) || inApron(s);
+  // [7.8] a deck (a stadium's escalator, concourse and ramp: city data `routeDecks`) is ridden but never a junction: its
+  // helices pass over the street below (and over themselves) at other heights
+  const onDeck = inRange(city.routeDecks || []);
   const L = route.turnS || route.total;
   const K = Math.round(L / 10);
   const closed = !!route.oneWay?.closedLoop || !route.mirrored;
@@ -55,7 +58,7 @@ function buildArea(area) {
     const passes = [];
     const reach = n.reachM ?? REACH;
     for (let i = 0; i <= K; i++) {
-      if (skip(i * 10)) { if (run) { passes.push(run.i); run = null; } continue; }
+      if (skip(i * 10) || onDeck(i * 10)) { if (run) { passes.push(run.i); run = null; } continue; }
       const d = haversine(n, at(i));
       if (d < reach) { if (!run || d < run.d) run = { d, i }; if (!run.open) run.open = true; }
       else if (run) { passes.push(run.i); run = null; }

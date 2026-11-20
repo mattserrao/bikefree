@@ -9,7 +9,9 @@ given here). PLAN F101.
 Reads   tools/city/<city>-map.spec.json (settings: the OSM cache and water relations to use, the margin, the labels;
         the relation files carry their own ways, so no map tiles are read), routes/cities/<city>-network.json (the network: the box)
 Writes  routes/cities/<city>-map.json ("bikefree-city-map-1": water [{name, rings: [[[lat, lon], …], …]}] — outer
-        rings and islands, even-odd —, labels [{text, lat, lon, kind, angle?}], areaLabels {areaId: text})
+        rings and islands, even-odd —, labels [{text, lat, lon, kind, angle?}], areaLabels {areaId: text},
+        landmarks [{name, label, kind, rank, lat, lon}]: the panel map's markers, PLAN 7.9 — kind: city | park | sport |
+        view | culture | church | steel | transit (the marker's colour), rank 1–3: which labels show first)
 Data © OpenStreetMap contributors, ODbL.
 """
 import json, math, os, sys
@@ -17,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import build_city as B
 
 ROOT = B.ROOT
+LANDMARK_KINDS = ('city', 'park', 'sport', 'view', 'culture', 'church', 'steel', 'transit')
 
 
 def clip(ring, box):
@@ -76,12 +79,21 @@ def build(city):
                 if area < cfg.get('minAreaM2', 2000): continue
                 rings.append([[round(box[0] + y / 111319.49, 5), round(box[1] + x / kx, 5)] for x, y in keep])
         if rings: water.append({'name': name, 'rings': rings})
+    lms = []
+    for lm in cfg.get('landmarks', []):
+        if lm.get('kind') not in LANDMARK_KINDS or lm.get('rank') not in (1, 2, 3) or not lm.get('name') or not lm.get('label'):
+            sys.exit(f'{city}: landmark {lm!r}: needs a name, a label, a kind of {LANDMARK_KINDS} and a rank 1–3')
+        if not (box[0] <= lm['lat'] <= box[2] and box[1] <= lm['lon'] <= box[3]):
+            print(f'{city}: landmark {lm["label"]} is off the map, left out'); continue
+        lms.append({k: lm[k] for k in ('name', 'label', 'kind', 'rank', 'lat', 'lon')})
     out = {'format': 'bikefree-city-map-1', 'attribution': 'Map data © OpenStreetMap contributors (ODbL)',
-           'box': [round(v, 5) for v in box], 'water': water, 'labels': cfg.get('labels', []), 'areaLabels': cfg.get('areaLabels', {})}
+           'box': [round(v, 5) for v in box], 'water': water, 'labels': cfg.get('labels', []), 'areaLabels': cfg.get('areaLabels', {}),
+           'landmarks': lms}
     path = os.path.join(ROOT, 'routes', 'cities', f'{city}-map.json')
     json.dump(out, open(path, 'w'), separators=(',', ':'))
     print(f'{city}: wrote {os.path.relpath(path, ROOT)} ({os.path.getsize(path) / 1e3:.1f} kB): '
-          + ', '.join(f'{w["name"]} {len(w["rings"])} rings / {sum(len(r) for r in w["rings"])} points' for w in water))
+          + ', '.join(f'{w["name"]} {len(w["rings"])} rings / {sum(len(r) for r in w["rings"])} points' for w in water)
+          + f'; {len(lms)} landmarks')
 
 
 if __name__ == '__main__':

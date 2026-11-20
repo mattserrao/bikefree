@@ -182,3 +182,87 @@ test('the main menu: two ride-type tabs (Route, the default, and Workout); the f
   assert.match(app, /^let chosen = 'route';/m);
   assert.match(app, /selectedRouteId = selectId \|\| defaultRouteId\(routeItems\)/);
 });
+
+// PLAN 7.9: landmarks on the panel map — baked from the map spec, placed with labels that never overlap, and the
+// show/hide toggle remembered in settings (default shown).
+test('the city map\'s landmarks: in the baked map, on the map, labels placed without overlap', async () => {
+  const { placeLandmarks, nearestLandmark, landmarkRank } = await import('../js/city-routes.js');
+  const map = JSON.parse(readFileSync(new URL(`../${json.map}`, import.meta.url), 'utf8'));
+  const lms = map.landmarks;
+  assert.ok(lms.length >= 30, `${lms.length} landmarks`);
+  for (const want of ['Downtown', 'Fort Pitt', 'PNC Park', 'Acrisure Stadium', 'PPG Place', 'Duquesne Incline', 'Mon Incline', 'Phipps', 'Cathedral of Learning', 'Carrie Furnaces', 'Randyland', 'USS Requin', 'Steel Plaza'])
+    assert.ok(lms.some((l) => l.label === want), want);
+  for (const l of lms) {
+    assert.ok(l.name && l.label && [1, 2, 3].includes(l.rank) && ['city', 'park', 'sport', 'view', 'culture', 'church', 'steel', 'transit'].includes(l.kind), l.name);
+    assert.ok(l.lat >= map.box[0] && l.lat <= map.box[2] && l.lon >= map.box[1] && l.lon <= map.box[3], l.name);
+  }
+  // leader-line callouts (PLAN 7.9b) on the network as drawn, with the map's own labels to keep clear of: the panel's
+  // map at 1440 × 900 (970 × 545) and 1280 × 800 (810 × 455), the whole map and downtown at 3×; a phone's (356 × 244,
+  // rank 1) only has to stay clean
+  const { loadCatalogNetwork } = await import('../tools/qc_network.mjs');
+  const { edgeLines } = await import('../js/network.js');
+  const { zoomProjection, areaLabelSpots } = await import('../js/city-routes.js');
+  const index = JSON.parse(readFileSync(new URL('../routes/parks/index.json', import.meta.url), 'utf8'));
+  const { net } = loadCatalogNetwork(index.find((r) => r.id === 'pittsburgh'));
+  const lines = edgeLines(net).map((L) => ({ id: L.id, lat: L.lat, lon: L.lon }));
+  const mapLabels = [...map.labels, ...areaLabelSpots(lines, (id) => net.edges.get(id)?.area, map.areaLabels)];
+  const measure = (t) => t.length * 6.3, r = 5, lh = 14;
+  const cross = (a, b) => { const o = (p, q, x, y) => Math.sign((q[0] - p[0]) * (y - p[1]) - (q[1] - p[1]) * (x - p[0])); const A = [a[0], a[1]], B = [a[2], a[3]], C = [b[0], b[1]], D = [b[2], b[3]]; return o(A, B, ...C) * o(A, B, ...D) < 0 && o(C, D, ...A) * o(C, D, ...B) < 0; };
+  let placed;
+  for (const [w, h, k, rank] of [[970, 545, 1, 2], [810, 455, 1, 2], [970, 545, 3, 3], [356, 244, 1, 1]]) {
+    const tag = `${w}×${h} at ${k}×`;
+    let P = fitProjection(lines, w, h, w < 520 ? 12 : 26);
+    const dt = lms.find((l) => l.label === 'Downtown');
+    if (k > 1) P = zoomProjection(P, w, h, { k, ox: P.X(dt.lon), oy: P.Y(dt.lat) });
+    const px = lines.map((L) => ({ pts: Array.from(L.lat, (la, i) => [P.X(L.lon[i]), P.Y(la)]) }));
+    const avoid = mapLabels.filter((lb) => !lb.angle).map((lb) => { const tw = lb.text.length * 6.5, x = P.X(lb.lon), y = P.Y(lb.lat); return [x - tw / 2 - 2, y - 8, x + tw / 2 + 2, y + 8]; });
+    const pl = placeLandmarks(lms.filter((l) => l.rank <= (rank >= 3 ? 3 : 2)), P.X, P.Y, { w, h, r, lh, maxRank: rank, measure, avoid, lines: px });
+    if (k === 1 && w === 970) placed = pl;
+    if (k === 1) assert.equal(pl.length, lms.filter((l) => l.rank <= 2).length, `${tag}: every marker on the map`);
+    const lab = pl.filter((p) => p.label), lead = lab.filter((p) => p.label.leader);
+    assert.ok(lab.every((p) => p.lm.rank <= rank), `${tag}: ranks`);
+    if (w > 600) assert.equal(lab.length, pl.filter((p) => p.lm.rank <= rank).length, `${tag}: every label placed (${pl.filter((p) => !p.label).map((p) => p.lm.label)})`);
+    for (const p of lab) {
+      const b = p.label.box;
+      assert.ok(b[0] >= 0 && b[2] <= w && b[1] >= 0 && b[3] <= h, `${tag}: ${p.lm.label} inside`);
+      for (const q of lab) if (q !== p) assert.ok(!(b[0] < q.label.box[2] && b[2] > q.label.box[0] && b[1] < q.label.box[3] && b[3] > q.label.box[1]), `${tag}: ${p.lm.label} over ${q.lm.label}`);
+      for (const q of pl) assert.ok(!(q.x + r > b[0] && q.x - r < b[2] && q.y + r > b[1] && q.y - r < b[3]), `${tag}: ${p.lm.label} over the dot of ${q.lm.label}`);
+      for (const a of avoid) assert.ok(!(b[0] < a[2] && b[2] > a[0] && b[1] < a[3] && b[3] > a[1]), `${tag}: ${p.lm.label} over a map label`);
+      const L = p.label.leader;
+      if (L) for (const q of pl) if (q !== p) {
+        const dx = L[2] - L[0], dy = L[3] - L[1], t = Math.max(0, Math.min(1, ((q.x - L[0]) * dx + (q.y - L[1]) * dy) / (dx * dx + dy * dy || 1)));
+        assert.ok(Math.hypot(L[0] + t * dx - q.x, L[1] + t * dy - q.y) >= r, `${tag}: ${p.lm.label}'s leader through ${q.lm.label}`);
+      }
+    }
+    // leaders short where they can be, and (almost) never crossing
+    const lens = lead.map((p) => Math.hypot(p.label.leader[2] - p.label.leader[0], p.label.leader[3] - p.label.leader[1]));
+    let x = 0;
+    for (let i = 0; i < lead.length; i++) for (let j = i + 1; j < lead.length; j++) x += cross(lead[i].label.leader, lead[j].label.leader);
+    assert.ok(x <= 1, `${tag}: ${x} leaders cross`);
+    if (lens.length) assert.ok(lens.reduce((a, b) => a + b, 0) / lens.length <= 50 && Math.max(...lens) <= 240, `${tag}: leaders ${lens.map(Math.round)}`);
+  }
+  const pnc = placed.find((p) => p.lm.label === 'PNC Park');
+  assert.equal(nearestLandmark(placed, pnc.x + 1, pnc.y, 8)?.lm.label, 'PNC Park');
+  assert.equal(nearestLandmark(placed, -50, -50, 10), null);
+  assert.deepEqual([landmarkRank(1, true), landmarkRank(2, true), landmarkRank(1, false), landmarkRank(3, true)], [1, 2, 2, 3]);
+});
+
+test('the landmarks toggle is remembered in settings, shown by default', async () => {
+  const store = new Map();
+  globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) };
+  const { loadSettings, saveSettings } = await import('../js/settings.js');
+  const s = loadSettings();
+  assert.equal(s.mapLandmarks, true);
+  s.mapLandmarks = false; saveSettings(s);
+  assert.equal(loadSettings().mapLandmarks, false);
+  delete globalThis.localStorage;
+});
+
+test('a route picked on the map: the list scrolls only when its row is not fully in view (7.9c)', async () => {
+  const { revealScrollTop } = await import('../js/city-routes.js');
+  assert.equal(revealScrollTop(100, 200, 50, 300), null);          // fully visible: no scroll
+  assert.equal(revealScrollTop(400, 520, 50, 300), 228);           // below: its bottom (Ride) just in view
+  assert.equal(revealScrollTop(20, 120, 50, 300), 12);             // above: its top in view
+  assert.equal(revealScrollTop(100, 500, 0, 300), 92);             // taller than the view: its top
+  assert.equal(revealScrollTop(2, 80, 40, 300), 0);                // never negative
+});

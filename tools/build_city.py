@@ -627,10 +627,26 @@ def build(cid):
         total = sum(hv(a_, b_) for a_, b_ in zip(rs, rs[1:]))
         print(f'{cid}: {total / 1000:.2f} km cut from {cfg["slice"]["of"]}, ghosts {route_ghosts}, aprons {route_aprons}')
     if cfg.get('detours'):
-        rs, e, route_kinds, route_bridges, route_ghosts, route_aprons = apply_detours(cfg['detours'], rs, e, route_kinds, route_bridges, route_ghosts, route_aprons)
+        rs, e, route_kinds, route_bridges, route_ghosts, route_aprons, detoured = apply_detours(cfg['detours'], rs, e, route_kinds, route_bridges, route_ghosts, route_aprons)
+        for k_ in ('routeConveyors', 'routeDecks'): detoured[k_].sort(key=lambda r: r['fromM'])
         total = sum(hv(a_, b_) for a_, b_ in zip(rs, rs[1:]))
         print(f'{cid}: {total / 1000:.2f} km with its detours, kinds {route_kinds}, ghosts {route_ghosts}, aprons {route_aprons}')
+    else: detoured = None
     route_under = underground_ranges(cfg, rs)   # [subway] where the line runs underground, and its conveyors
+    if (SPLICED_DECKS or SPLICED_CONVEYORS) and not area_cfg:   # [7.8] the neighbours' decks on this line's copies (F355: and their escalators)
+        detoured = detoured or {'routeConveyors': [], 'routeDecks': []}
+        decks_ = []
+        for r in sorted(detoured['routeDecks'] + SPLICED_DECKS, key=lambda r: r['fromM']):
+            # (a deck copied onto an apron and on along the ghost back is one deck: F355)
+            if decks_ and decks_[-1]['name'] == r['name'] and r['fromM'] - decks_[-1]['toM'] <= 1: decks_[-1]['toM'] = max(decks_[-1]['toM'], r['toM'])
+            else: decks_.append(dict(r))
+        detoured['routeDecks'] = decks_
+        detoured['routeConveyors'] = sorted(detoured['routeConveyors'] + SPLICED_CONVEYORS, key=lambda r: r['fromM'])
+    if detoured and (detoured['routeConveyors'] or detoured['routeDecks']):   # [7.8] a detour's escalators and decks
+        route_under = dict(route_under or {})
+        if detoured['routeConveyors']: route_under['routeConveyors'] = sorted(route_under.get('routeConveyors', []) + detoured['routeConveyors'], key=lambda r: r['fromM'])
+        if detoured['routeDecks']: route_under['routeDecks'] = detoured['routeDecks']
+        print(f'  detour conveyors {[(c["fromM"], c["toM"]) for c in detoured["routeConveyors"]]}, decks {[(c["fromM"], c["toM"]) for c in detoured["routeDecks"]]}')
     gpx = os.path.join(ROOT, cfg['gpx'])
     os.makedirs(os.path.dirname(gpx), exist_ok=True)
     with open(gpx, 'w') as f:
@@ -1061,14 +1077,14 @@ def build(cid):
             top_ = c_['fromM'] if c_.get('dir') == 'down' else c_['toM']
             out_ += [pts_[k] for k in range(len(pts_)) if abs(mc_[k] - top_ - (12 if c_.get('dir') == 'down' else -12)) <= 22]
         return out_
-    clear += head_clear(rs, (route_under or {}).get('routeConveyors', []))
+    clear += head_clear(rs, [c_ for c_ in (route_under or {}).get('routeConveyors', []) if c_.get('kind') != 'stadium'])
     if cfg.get('subwayHeadsOf'):
         # [F123] another area's stations seen from this one's streets (its headhouses drawn here too: scene subway.heads):
         # the same clearing round them, from that area's line and escalators
         so_ = cfg['subwayHeadsOf']
         import re as _re
         so_pts = [(float(a_), float(b_)) for a_, b_ in _re.findall(r'lat="([\d.-]+)" lon="([\d.-]+)"', open(os.path.join(ROOT, so_['gpx'])).read())]
-        clear += head_clear(so_pts, json.load(open(os.path.join(ROOT, so_['data']))).get('routeConveyors', []))
+        clear += head_clear(so_pts, [c_ for c_ in json.load(open(os.path.join(ROOT, so_['data']))).get('routeConveyors', []) if c_.get('kind') != 'stadium'])
     CLEAR_M = 12   # [F122] (was 10: Liberty Avenue Park's walls and steps still showed at Gateway's escalator top)
     near_head = lambda la, lo: any(hv((la, lo), c_) < CLEAR_M for c_ in clear)
     kit_dist = (lambda la, lo, lim: 1e9 if near_head(la, lo) else route_dist(la, lo, lim)) if clear else route_dist
@@ -1185,6 +1201,10 @@ def junction_heights(cfg, rs, e, ghosts, copied):
     return e
 
 
+SPLICED_DECKS = []   # [7.8] (splice_samples → build: the neighbours' decks on this line's copies)
+SPLICED_CONVEYORS = []   # [F355] (… and their stadium escalators)
+
+
 def splice_samples(cfg, rs, e, copy_m, kinds, bridges, ghosts, aprons):
     """[areas] Legs with "samplesOf": {"gpx": <a neighbour area's line>, "fromM": a, "toM": b} (its app metres, on its
     10 m samples; b < a runs it backward) are routed like any leg (the streets they ride are this area's route too),
@@ -1195,6 +1215,7 @@ def splice_samples(cfg, rs, e, copy_m, kinds, bridges, ghosts, aprons):
     80 m); a routed stretch that leads into a copy must hold a ghost, where a sideways zig (never drawn) makes up the
     length so the copy starts on a whole 10 m step. Returns the line and its kinds, bridges, ghosts and aprons."""
     import re as _re
+    SPLICED_DECKS.clear(); SPLICED_CONVEYORS.clear()   # (one build's: build_city.py may build several areas in a run)
     R6 = lambda p: (round(p[0], 6), round(p[1], 6))
     rs = [R6(p) for p in rs]
     mc = [0.0]
@@ -1457,10 +1478,27 @@ def splice_samples(cfg, rs, e, copy_m, kinds, bridges, ghosts, aprons):
         else: b2.append(r)
     b_out = b2
     copied = [{'o0': out_rng[k][0], 'o1': out_rng[k][1], 'portals': copy_legs[k]['samplesOf'].get('portals', [])} for k in range(len(copy_legs))]
+    # [7.8] a neighbour's decks (a stadium's escalator, concourse and ramp: its city data `routeDecks`) on a copy are
+    # this line's too (the stadium kit draws them here as well; nothing of the street world along them)
+    for o0, o1, a, b, sd, ap in cps:
+        lo_, hi_ = min(a, b), max(a, b)
+        m = (lambda x, o0=o0, a=a: o0 + x - a) if b > a else (lambda x, o0=o0, a=a: o0 + a - x)
+        for r in sd.get('routeDecks', []):
+            f_, t_ = max(r['fromM'], lo_), min(r['toM'], hi_)
+            if t_ - f_ >= 1: SPLICED_DECKS.append({**r, 'fromM': round(min(m(f_), m(t_)), 2), 'toM': round(max(m(f_), m(t_)), 2)})
+        # [F355] and a stadium's escalator on them (`kind: stadium` conveyors: carried, its grade not ridden — the QC and
+        # the app treat the copy as they treat the neighbour's own). Whole escalators only; a copy run backward carries
+        # it the other way. (The subway's own conveyors are its shafts: never copied — the subway kit and
+        # tools/bake_subway_heads.mjs draw every conveyor that isn't a stadium's)
+        for r in sd.get('routeConveyors', []):
+            if r.get('kind') != 'stadium' or r['fromM'] < lo_ - .5 or r['toM'] > hi_ + .5: continue
+            fwd = b > a
+            SPLICED_CONVEYORS.append({**r, 'fromM': round(min(m(r['fromM']), m(r['toM'])), 2), 'toM': round(max(m(r['fromM']), m(r['toM'])), 2),
+                                      **({} if fwd else {'dir': {'up': 'down', 'down': 'up'}.get(r.get('dir'), r.get('dir'))})})
     return out, oe, k_out, b_out, merged, a_out, copied
 
 
-def apply_detours(detours, rs, e, kinds, bridges, ghosts, aprons):
+def apply_detours(detours, rs, e, kinds, bridges, ghosts, aprons, extra=None):
     """A stretch of the line replaced by an authored path ("detours", see the module notes). Metres are the app's
     (haversine along the GPX points as written, 6 decimals). The path is walked in 10 m chords, the last one whatever
     is left (5–15 m); the new stretch's length must differ from the old one's by whole 10 m steps (to 2 cm) — so every
@@ -1468,6 +1506,11 @@ def apply_detours(detours, rs, e, kinds, bridges, ghosts, aprons):
     ~0.1 m, so the chords' sum jitters by a few cm). The error says by how much to shorten the path."""
     R_ = 6371008.8 * math.pi / 180
     rd = lambda p: (round(p[0], 6), round(p[1], 6))
+    # [7.8] a detour's own conveyors (escalators: `conveyors` [{fromU, toU, mps, label, name}]) and decks (the stretch a
+    # structure draws, off the ground: `decks` [{fromU, toU, name, structure}]), in metres along its authored path →
+    # city data `routeConveyors` / `routeDecks` in line metres (the street the detour leaves is drawn as a street again:
+    # the map's streets are drawn wherever the line isn't)
+    extra = extra if extra is not None else {'routeConveyors': [], 'routeDecks': []}
     for d in sorted(detours, key=lambda d_: -d_['fromM']):
         rs = [rd(p) for p in rs]
         chord = [0.0]
@@ -1517,6 +1560,13 @@ def apply_detours(detours, rs, e, kinds, bridges, ghosts, aprons):
         new_e = [ele_at(s_) for s_ in ss[:-1]] + [e[ib]]
         delta = tot - old
         print(f'  detour {d["name"]}: {old:.1f} m → {tot:.1f} m ({len(new_pts)} points, first chord {c0:.3f} m, phase error {err:.4f} m)')
+        # path metres → line metres over the new stretch (the chords' haversine sum, as the app measures)
+        lm, prev_ = [a_m], rs[ia]
+        for q_ in new_pts: lm.append(lm[-1] + hv(prev_, q_)); prev_ = q_
+        us = [0.0] + ss
+        def line_m(u):
+            k = max(0, min(len(us) - 2, bisect.bisect_right(us, u) - 1)); f = (u - us[k]) / max(1e-9, us[k + 1] - us[k])
+            return lm[k] + (lm[k + 1] - lm[k]) * max(0.0, min(1.0, f))
         rs = rs[:ia + 1] + new_pts + rs[ib + 1:]
         e = list(e[:ia + 1]) + new_e + list(e[ib + 1:])
         def mv(m): return m + delta if m >= b_m - 0.5 else (min(m, a_m) if m <= a_m + 0.5 else a_m)
@@ -1541,7 +1591,14 @@ def apply_detours(detours, rs, e, kinds, bridges, ghosts, aprons):
         kinds = merged
         bridges = [b for b in mv_ranges(bridges) if b['toM'] - b['fromM'] > 1]
         ghosts, aprons = mv_ranges(ghosts), mv_ranges(aprons)
-    return rs, e, kinds, bridges, ghosts, aprons
+        for k_ in ('routeConveyors', 'routeDecks'):
+            extra[k_] = [{**r, 'fromM': round(r['fromM'] + delta, 2), 'toM': round(r['toM'] + delta, 2)} if r['fromM'] >= b_m - .5 else r for r in extra[k_]]
+        for c_ in d.get('conveyors', []):
+            extra['routeConveyors'].append({'fromM': round(line_m(c_['fromU']), 2), 'toM': round(line_m(c_['toU']), 2), 'mps': c_['mps'], 'label': c_['label'],
+                                            'dir': 'up', 'name': c_['name'], **({'kind': c_['kind']} if c_.get('kind') else {})})
+        for k_ in d.get('decks', []):
+            extra['routeDecks'].append({'fromM': round(line_m(k_['fromU']), 2), 'toM': round(line_m(k_['toU']), 2), 'name': k_['name'], 'structure': k_.get('structure', '')})
+    return rs, e, kinds, bridges, ghosts, aprons, extra
 
 
 def slice_tour(sl, rs, e, chord, kinds, bridges, ghosts, pts, node_m):

@@ -123,8 +123,8 @@
    "apron": true,
    "samplesOf": {
     "gpx": "routes/cities/pittsburgh.gpx",
-    "fromM": 21290,
-    "toM": 21960
+    "fromM": 22040,
+    "toM": 23050
    },
    "waypoints": [
     [
@@ -155,8 +155,8 @@
    "ghost": true,
    "samplesOf": {
     "gpx": "routes/cities/pittsburgh.gpx",
-    "fromM": 21960,
-    "toM": 21560
+    "fromM": 23050,
+    "toM": 22650
    },
    "waypoints": [
     [

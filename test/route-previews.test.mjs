@@ -104,7 +104,7 @@ const expected = [...parkIds, ...network.presets.map((p) => p.id), `${network.id
 
 test('every route in the menu gets 2–3 spots on its own track', () => {
   assert.deepEqual(plans.map((p) => p.id).sort(), [...expected].sort());
-  assert.equal(network.presets.length, 46);
+  assert.equal(network.presets.length, 48);
   for (const p of plans) {
     assert.ok(p.spots.length >= 2 && p.spots.length <= 3, `${p.id}: ${p.spots.length} spots`);
     assert.equal(p.spots[0].role, 'start', p.id);
@@ -180,4 +180,22 @@ test('the menu shows them: preview pane strip, enlarge dialog, offline cache', (
   assert.ok(assets.includes('"routes/previews/index.json"'), 'the manifest is precached');
   assert.ok(!/routes\/previews\/[^"]+\.webp/.test(assets), 'the pictures are not');
   assert.ok(assets.includes('"js/route-previews.js"'));
+});
+
+test('the full-screen city panel shows the selected route\'s pictures below its map (7.1)', () => {
+  const html = read('index.html'), app = read('js/app.js'), css = read('css/style.css');
+  // in the panel's body, after the map column (below the map), before the route list
+  const body = html.slice(html.indexOf('<div class="city-body">'), html.indexOf('<ul class="city-list"'));
+  assert.ok(body.indexOf('id="cityShots"') > body.indexOf('id="cityMapHint"'), 'below the map');
+  assert.ok(body.indexOf('id="cityShots"') < body.indexOf('<div class="city-side">'), 'not in the route list column');
+  assert.match(body, /class="pv-shots city-shots" id="cityShots" hidden/);
+  // drawn on every pick (list or map: both go through renderCity) for the selected item's route id
+  assert.match(app, /renderCityShots\(sel \? sel\.routeId : null\)/);
+  assert.match(app, /box\.hidden = !cityShotList\.length/);
+  assert.match(app, /showShot\(Number\(b\.dataset\.shot\), cityShotList\)/);
+  // desktop: the map column's second row; phone/tablet: one column, a swipeable strip
+  assert.match(css, /\.city-shots \{ grid-column: 1; grid-row: 2;/);
+  assert.match(css, /\.city-side \{ grid-column: 2; grid-row: 1 \/ span 2; \}/);
+  // the pictures are lazy (the same strip HTML as the menu)
+  assert.match(shotsHtml(previewShots({ format: 'bikefree-previews-1', routes: { a: [{ file: 'x-1.webp', caption: 'Start · A' }] } }, 'a')), /loading="lazy"/);
 });

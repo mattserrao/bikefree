@@ -887,6 +887,13 @@
       "note": "From the Water Steps: the escalator down at North Side, the subway path under the Allegheny, up at Gateway, round the Point and the riverfront, home over the Clemente Bridge"
     },
     {
+      "id": "pgh-stadiums",
+      "name": "Stadiums Loop",
+      "path": ["A>NS+", "NS>CB+", "CB>FJ+", "R>FJ-", "R>A+", "A>NS+", "NS>GW+", "B>GW-", "CB>B-", "NS>CB-", "A>NS-"],
+      "tags": ["short", "flat", "new"],
+      "note": "From the Water Steps: up PNC Park's spiral escalator, round the upper deck behind home plate and down its ramp by the Clemente Bridge; round Allegheny Commons to Acrisure Stadium's escalator, its rim with the view to the Point and its ramp down to the river; under the Allegheny by the subway, round the Point and back over the Clemente Bridge (through PNC Park the other way)"
+    },
+    {
       "id": "pgh-subway-three-rivers",
       "name": "Three Rivers Loop · via the subway",
       "path": [
@@ -949,6 +956,47 @@
         "new"
       ],
       "note": "The long loop both ways: out under the Allegheny by the subway, home round the Point and over the Clemente Bridge"
+    },
+    {
+      "id": "pgh-tour",
+      "name": "Tour de Pittsburgh",
+      "path": [
+        "A>NS+",
+        "NS>CB+",
+        "CB>FJ+",
+        "R>FJ-",
+        "R>A+",
+        "A>P+",
+        "N>P-",
+        "N>LB+",
+        "LB>HE+",
+        "HP>HE-",
+        "HP>EL+",
+        "SQ>EL-",
+        "SQ>K+",
+        "K>J+",
+        "L>J-",
+        "T>L-",
+        "X>T-",
+        "M>X-",
+        "M>B+",
+        "B>GW+",
+        "GW>E+",
+        "E>F+",
+        "F>G+",
+        "G>GV+",
+        "GV>D+",
+        "D>C+",
+        "C>R+",
+        "R>A+"
+      ],
+      "tags": [
+        "long",
+        "hilly",
+        "varied",
+        "landmarks"
+      ],
+      "note": "The city's landmarks in one loop from the Water Steps: through PNC Park, Randyland and the Aviary, past Mister Rogers and the USS Requin and through Acrisure Stadium; up Troy Hill past St Anthony's Chapel and Most Holy Name, Millvale and the 40th Street Bridge, Highland Park's reservoir, East Liberty Presbyterian, Shady Ave to Squirrel Hill and through Phipps Conservatory; Schenley Plaza by the Carnegie Museum, Heinz Chapel and the Cathedral of Learning, Soldiers & Sailors, Bloomfield and down past Immaculate Heart of Mary on Polish Hill; St Stanislaus in the Strip, the Point and Fort Pitt, PPG Place and downtown's towers, Station Square and the Mon Incline, up McArdle to the Grandview overlooks and St Mary of the Mount, the Duquesne Incline, over the West End Bridge and home past the Science Center through Acrisure Stadium"
     }
   ],
   "freeRide": {

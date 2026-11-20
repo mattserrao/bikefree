@@ -3,7 +3,7 @@
 // the two inclines up Mount Washington, barges, the riverboat, motorboats and kayaks, and birds.
 // Agents live near the camera and are recycled as you ride; all draw calls are instanced. People, cyclists, dogs,
 // strollers, cars and buses come from the figures kit (life/figures): soft cartoon models, baked walk cycles.
-import { ghostAt, undergroundAt } from '../../ghost.js';
+import { ghostAt, offStreetAt } from '../../ghost.js';
 import * as THREE from '../../../../vendor/three.module.min.js';
 import { Crowd, CLIP, FIT, randomLook, dogLook, clipRate, PALETTES } from '../life/figures/people.js';
 import { vehicleMesh, vehicleMaterial, setPaint, setMove } from '../life/figures/vehicles.js';
@@ -11,7 +11,7 @@ import { MeshBuilder, makePath, hash, ribbon } from '../core/mesh-builder.js';
 import { drain, due, each } from '../core/jobs.js';   // [F30] built as a job (in frame slices on the ride)
 import { handOffLife } from './life-handoff.js';   // [F31] life carried across an area swap
 import { LAND } from './landscape.js';
-import { ROAD_WIDTH, LANE_OFFSET, PACER_LANE, ROAD_LIFT, routePoint } from '../../pose.js';
+import { ROAD_WIDTH, LANE_OFFSET, PACER_LANE, ROAD_LIFT, routePoint, leanTarget, stepLean } from '../../pose.js';
 import { powerRequired } from '../../../physics.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -586,8 +586,8 @@ export class CityLife {
   _rideable(a, b) {
     const r = this.city.route, turn = r.turnS || r.total, lo = Math.min(a, b), hi = Math.max(a, b);
     if (lo < ROUTE_RIDE.endM || hi > turn - ROUTE_RIDE.endM) return false;
-    for (let q = lo; q <= hi; q += 10) if (undergroundAt(r, q)) return false;
-    return !undergroundAt(r, hi);
+    for (let q = lo; q <= hi; q += 10) if (offStreetAt(r, q)) return false;   // [7.8] (nor on a stadium's decks)
+    return !offStreetAt(r, hi);
   }
 
   _spawnRouteRider(a, rider, cam, plan) {
@@ -609,7 +609,7 @@ export class CityLife {
       if (!this._outOfView(p.x, p.z, cam, P.aheadMin, false)) continue;
       const lat = P.lane, wl = lat * rider.dir;
       Object.assign(a, { alive: true, onRoute: true, routeRider: true, s, dir: rider.dir, ratio: ahead ? 1 - f : 1 + f, side0: ahead ? 1 : -1, passed: false, ended: false, plan: plan.at,
-        wl, v: (ahead ? 1 - f : 1 + f) * Math.max(rider.speed || 0, P.minRef), x: null, gait: 3 });
+        wl, v: (ahead ? 1 - f : 1 + f) * Math.max(rider.speed || 0, P.minRef), x: null, gait: 3, yawPrev: null, lean: 0 });
       a.speed = a.v;
       a.look = randomLook(this.rand, { kids: 0, helmet: true }); a.phase = this.rand();
       return;
@@ -715,7 +715,7 @@ export class CityLife {
       // the end of the line (or the T's tunnel ahead): it turns round there, drifting across to the other side
       // the end of its ride (`endM` short of the line's ends, clear of where you turn round; or the T's tunnel ahead): it
       // stops at the roadside and is gone once out of sight
-      if ((a.dir < 0 ? a.s <= P.endM : a.s >= turn - P.endM) || undergroundAt(this.city.route, a.s + a.dir * 20)) { a.s -= a.dir * a.v * dt; a.v = 0; a.ended = true; }
+      if ((a.dir < 0 ? a.s <= P.endM : a.s >= turn - P.endM) || offStreetAt(this.city.route, a.s + a.dir * 20)) { a.s -= a.dir * a.v * dt; a.v = 0; a.ended = true; }
       // where it is: its lane off the road's centre line, square to the road's smoothed heading
       this._routeRiderAt(a.s, p);
       const x = p.x - p.hz * a.wl, z = p.z + p.hx * a.wl;
@@ -723,6 +723,11 @@ export class CityLife {
       else { const dx = x - a.x, dz = z - a.z, d = Math.hypot(dx, dz), max = (a.v * 1.25 + 1.5) * dt, k = d > max ? max / d : 1; a.x += dx * k; a.z += dz * k; }
       a.y = p.y + ROAD_LIFT;
       a.yaw = Math.atan2(p.hx * a.dir, p.hz * a.dir); a.pitch = Math.atan(p.dy) * a.dir;
+      // [7.5] leaning into the road's bends: its turn rate ω (+ left) at speed v is a curvature −ω/v (+ right), eased
+      let dYaw = a.yawPrev == null ? 0 : a.yaw - a.yawPrev;
+      dYaw -= Math.round(dYaw / (2 * Math.PI)) * 2 * Math.PI;
+      a.yawPrev = a.yaw;
+      a.lean = stepLean(a.lean || 0, a.v > .3 && dt > 0 ? leanTarget(a.v, -dYaw / dt / a.v) : 0, dt);
       // a pass: it was ahead of you and now is behind, or the other way round
       if (a.with) {
         const gNow = (a.s - rider.out) * rider.dir;
@@ -744,13 +749,13 @@ export class CityLife {
     }
     // the next one on its way, when it's time
     R.wait -= dt;
-    if (rider && R.wait <= 0 && this._started && !undergroundAt(this.city.route, rider.out)) {
+    if (rider && R.wait <= 0 && this._started && !offStreetAt(this.city.route, rider.out)) {
       R.wait = .5;
       const pending = list.filter((a) => a.alive && !a.passed).length;
       const free = list.find((a) => !a.alive);
       if (free && pending < P.pending) { const plan = this._nextPass(rider); if (plan) this._spawnRouteRider(free, rider, cam, plan); }
     }
-    for (const a of list) if (a.alive) this.cyclistCrowd.add(a.look, a.x, a.y, a.z, a.yaw, CLIP.cycle, a.phase, a.v > .3 ? clipRate(CLIP.cycle, a.v) : 0);
+    for (const a of list) if (a.alive) this.cyclistCrowd.add(a.look, a.x, a.y, a.z, a.yaw, CLIP.cycle, a.phase, a.v > .3 ? clipRate(CLIP.cycle, a.v) : 0, a.lean || 0);
   }
 
   /** The speed (m/s) on grade g (%) with the power that holds speed v on grade g0: the bike physics (js/physics.js). */
