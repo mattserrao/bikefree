@@ -522,6 +522,17 @@ ending in the air is trimmed back to the ground. Tunnel approaches (an end runni
 fixed. Only the `streets` block changes; a second run changes nothing. Re-run it after `tools/build_city.py`
 rebuilds an area, then `npm run qc` and `npm run routes:build`. `--rules near-miss,stub` limits it to some checks.
 
+Interchange thinning (rule `interchange`, on by default; PLAN: Pittsburgh audit, E): too many roads drawn around the
+highways. Within 300 m of the area's route or 150 m of any link road (every interchange), never a street a route
+rides: service roads and < 150 m pedestrian / path pieces lying between ramps (a highway / link within 40 m on both
+sides for half their length; service roads also hugging one within 10 m) are dropped; link ramps every point of which
+lies > 150 m from every Pittsburgh route are dropped (with the far link pieces joined to them); 20–200 m tertiary…path
+pieces running beside a kept highway / link / primary (≤ 15°, edges < 6 m apart, for 60 % of their length; secondary
+only where drawn over it) are dropped; service / path pieces the drops leave meeting nothing go too. Nothing is
+dropped that would leave a kept residential-or-bigger street or a deck ending on nothing, on only service roads /
+paths, or on no street at its own height. Check with `npm run qc:interchanges` (`clutter`, `parallel`;
+`node tools/qc_interchanges.mjs --baseline` → `tools/qc-interchanges-baseline.json`, ~2 min for all ten areas).
+
 ## Clipping & overlap QC: things drawn through each other
 
 ```sh

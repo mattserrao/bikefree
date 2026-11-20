@@ -6,11 +6,13 @@
 //   node tools/repair_city.mjs                         every Pittsburgh area
 //   node tools/repair_city.mjs pittsburgh-westend      one area (catalog ids)
 //   options: --dry (report, write nothing)   --near 300 (only ends / pieces within m of the area's route)
-//            --rules near-miss,stub,dead-end,end-step,deck-end (only these qc_map checks; default: all)
+//            --rules interchange,near-miss,stub,dead-end,end-step,deck-end (only these rules; default: all)
 //            --json out.json (every repair, what was left and why, the tunnel approaches)
 //
 // Only the `streets` block of the city JSON changes (the rest of the file stays byte for byte); streets keep their order
 // (a dropped street's entry is removed: nothing stored refers to a street by its index — see `INDEX REFERENCES` below).
+// interchange: thinning at interchanges (see thinPass below: service roads and paths between ramps, ramps far from every
+// route, minor ribbons beside a carriageway) — run first in each pass; then the qc_map-driven rules.
 // Rules (an end or piece within --near of the route; never a street along any Pittsburgh route, the ride network):
 //   near-miss   an end 1.5–12 m short of another street, pointing at it (≤ 45°), at its height (≤ 1.2 m; or a deck above
 //               a ground street long enough to ramp up to it): extended onto it, with a node shared by both (the
@@ -56,7 +58,7 @@ export const REPAIR = {
   deckDrop: 150,      // m: a deck that floats all along is dropped only if this short
   rideM: 4,           // m (+ half the street's width + half the road's): a street point this close to a route rides it
   rideShare: .3,      //    …a street with this share of its points (or ≥ 30 m) along one is the ride network's: never touched
-  passes: 4,
+  passes: 6,
 };
 
 // ---------- codec: the packed `streets` block (tools/build_city.py; decoded as in js/world/toolbox/city/landscape.js) ----------
@@ -148,6 +150,124 @@ function rideStreets(G, rides, ownIndex) {
 }
 
 const deckOf = (h) => Math.max(1, Math.round((h - 150) * 10));
+
+/**
+ * Interchange thinning (rule `interchange`): too many roads drawn around the highways. In scope (within `near` of the
+ * area's route, or within THIN.ixReach of a link road: every interchange), never a street a route rides:
+ *   between   a service road (cls 7) or a pedestrian / path piece (6, 8), < THIN.betweenMax m (a longer one is a real
+ *             trail), not a deck, lying between ramps: for ≥ half its
+ *             length a highway / link ribbon within THIN.box m on both sides (service roads also: hugging one within
+ *             THIN.hug m of its edge) — dropped
+ *   ramp      a link road (cls 1) no route rides, every point > THIN.rampReach m from every Pittsburgh route — dropped
+ *             with the far link pieces joined to it (the carriageways stay; nobody rides past it up close)
+ *   parallel  a minor piece (tertiary…path, < THIN.parMax m) running beside a kept highway / link / primary
+ *             (≤ THIN.parAngle° apart, edges < THIN.parGap m apart, within 4.5 m in height) for ≥ THIN.parShare of its
+ *             length and ≥ THIN.parMin m (a shorter one is a junction's stub): a frontage / duplicate ribbon — dropped; a secondary piece only where drawn over it (a duplicate)
+ *   orphan    a service / pedestrian / path piece (or any < 25 m piece) left meeting nothing at either end — dropped
+ * Nothing is dropped that would leave a kept residential-or-bigger street or a deck ending on nothing, on only service
+ * roads / paths, or on no street at its own height (qc_map's dead-end / near-miss / end-step / deck-end).
+ */
+export const THIN = { ixReach: 150, rampReach: 150, box: 40, hug: 10, share: .5, parGap: 6, parAngle: 15, parShare: .6, parMin: 20, parMax: 200, betweenMax: 150, step: 5 };
+
+export function thinPass({ streets, city, proj, ground, index, rides, near }) {
+  const { G, near: around } = geometry(streets, city, proj, ground);
+  const ride = rideStreets(G, rides), M = MAP_LIMITS, T = THIN;
+  const drop = new Set(), changes = [];
+  const toRoute = (p) => { const r = index.nearest(p.x, p.z, near + 1); return r ? r.d : Infinity; };
+  const anyRoute = (p, r) => rides.some(({ index: ix }) => { const q = ix.nearest(p.x, p.z, r + 1); return q && q.d <= r; });
+  const C = 50, ck = (x, z) => Math.floor(x / C) * 100003 + Math.floor(z / C), Rc = Math.ceil(T.ixReach / C), ix = new Set();
+  for (const g of G) if (g.cls === 1) for (const p of g.pts) for (let a = -Rc; a <= Rc; a++) for (let b = -Rc; b <= Rc; b++) ix.add((Math.floor(p.x / C) + a) * 100003 + Math.floor(p.z / C) + b);
+  const inScope = (p) => ix.has(ck(p.x, p.z)) || toRoute(p) <= near;
+  /** Points every `step` m along street g, with the unit heading there. */
+  const samples = (g, step = T.step) => {
+    const out = [];
+    for (let i = 1; i < g.pts.length; i++) {
+      const a = g.pts[i - 1], b = g.pts[i], l = dist(a, b); if (l < .01) continue;
+      const n = Math.max(1, Math.round(l / step));
+      for (let m = 0; m < n; m++) { const t = (m + .5) / n; out.push({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, y: g.h[i - 1] + (g.h[i] - g.h[i - 1]) * t, hx: (b.x - a.x) / l, hz: (b.z - a.z) / l, l: l / n }); }
+    }
+    return out;
+  };
+  // every street end: the streets it meets (by index) and whether it meets the route's road
+  const ends = G.map((g) => [0, g.pts.length - 1].map((j) => { const e = g.pts[j], hits = around(e.x, e.z, M.join, g.k); return { e, on: hits.map((h) => h.k), level: hits.filter((h) => Math.abs(h.y - g.h[j]) <= M.endStep).map((h) => h.k), route: toRoute(e) <= ROAD_WIDTH / 2 + g.w / 2 + M.join }; }));
+  const loose = (k, j, gone) => !ends[k][j].route && ends[k][j].on.every((o) => gone.has(o));
+  const weak = (k, j, gone) => !ends[k][j].route && ends[k][j].on.some((o) => gone.has(o)) && !ends[k][j].on.some((o) => !gone.has(o) && G[o].cls <= 5);
+  // (a kept end left meeting nothing but service roads and paths, or losing every street at its own height: loose, or a step up / down to a deck — qc_map's end-step, deck-end)
+  const unlevel = (k, j, gone) => !ends[k][j].route && ends[k][j].level.some((o) => gone.has(o)) && ends[k][j].level.every((o) => gone.has(o));
+  const byEnd = new Map(); ends.forEach((two, k) => two.forEach(({ on }) => on.forEach((o) => { if (!byEnd.has(o)) byEnd.set(o, new Set()); byEnd.get(o).add(k); })));
+  /** Would dropping the streets `set` leave a kept residential-or-bigger street ending on nothing? → its index, else -1 */
+  const strands = (set) => {
+    const gone = new Set([...drop, ...set]);
+    for (const k of set) for (const o of byEnd.get(k) || []) if (!gone.has(o) && (G[o].cls <= 5 || G[o].bridge) && (weak(o, 0, gone) || weak(o, 1, gone) || unlevel(o, 0, gone) || unlevel(o, 1, gone))) return o;
+    return -1;
+  };
+  const log = (rule, g, note) => { const p = g.pts[Math.floor(g.pts.length / 2)]; changes.push({ rule, k: g.k, cls: g.cls, x: +p.x.toFixed(1), z: +p.z.toFixed(1), note }); };
+  const tryDrop = (rule, list, note) => { if (list.some((g) => ride.has(g.k) || drop.has(g.k))) return false; if (strands(new Set(list.map((g) => g.k))) >= 0) return false; for (const g of list) { drop.add(g.k); log(rule, g, note(g)); } return true; };
+
+  // ramp: link pieces far from every route, dropped chain by chain (pieces joined end to end, or one's end on the other)
+  const far = new Set(G.filter((g) => g.cls === 1 && !ride.has(g.k) && !samples(g, 10).some((p) => anyRoute(p, T.rampReach))).map((g) => g.k));
+  const seen = new Set();
+  for (const k0 of far) {
+    if (seen.has(k0)) continue;
+    const comp = [G[k0]]; seen.add(k0);
+    for (let q = 0; q < comp.length; q++) for (const k of [...ends[comp[q].k][0].on, ...ends[comp[q].k][1].on, ...(byEnd.get(comp[q].k) || [])]) {
+      if (!far.has(k) || seen.has(k)) continue;
+      seen.add(k); comp.push(G[k]);
+    }
+    tryDrop('ix-ramp', comp, (o) => `${o.len.toFixed(0)} m link (${comp.length > 1 ? `a ${comp.length}-piece ramp ` : ''}> ${T.rampReach} m from every route) dropped`);
+  }
+  // between: service / pedestrian / path pieces between ramps
+  for (const g of G) {
+    if (g.cls < 6 || g.bridge || g.len > T.betweenMax || ride.has(g.k) || drop.has(g.k)) continue;
+    const S = samples(g); if (!S.length) continue;
+    let inside = 0, boxed = 0, hug = 0;
+    for (const p of S) {
+      if (!inScope(p)) continue;
+      inside += p.l;
+      let L = false, R = false, H = false;
+      for (const h of around(p.x, p.z, T.box, new Set([g.k, ...drop]))) {
+        const o = G[h.k]; if (o.cls > 1) continue;
+        const side = p.hx * (h.z - p.z) - p.hz * (h.x - p.x);
+        if (side > 0) L = true; else R = true;
+        if (h.d - o.w / 2 - g.w / 2 < T.hug) H = true;
+      }
+      if (L && R) boxed += p.l; if (H) hug += p.l;
+    }
+    const total = S.reduce((a, p) => a + p.l, 0);
+    if (inside < total * T.share) continue;
+    const share = g.cls === 7 ? Math.max(boxed, hug) : boxed;
+    if (share >= total * T.share) tryDrop('ix-between', [g], () => `${g.len.toFixed(0)} m ${['', '', '', '', '', '', 'pedestrian', 'service', 'path'][g.cls]} piece between ramps dropped`);
+  }
+  // parallel: minor frontage / duplicate pieces beside a kept carriageway
+  for (const g of G) {
+    if (g.cls < 3 || g.len >= T.parMax || ride.has(g.k) || drop.has(g.k)) continue;
+    const S = samples(g); if (!S.length || !inScope(S[Math.floor(S.length / 2)])) continue;
+    let run = 0;
+    for (const p of S) {
+      const ok = around(p.x, p.z, g.w / 2 + 7.5 + T.parGap, new Set([g.k, ...drop])).some((h) => {
+        const o = G[h.k]; if (o.cls > 2 || o.bridge !== g.bridge || Math.abs(h.y - p.y) > 4.5 || h.d - o.w / 2 - g.w / 2 > (g.cls === 3 ? 0 : T.parGap)) return false;
+        const a = o.pts[h.i - 1], b = o.pts[h.i], l = dist(a, b) || 1;
+        return Math.abs(((b.x - a.x) * p.hx + (b.z - a.z) * p.hz) / l) >= Math.cos(T.parAngle * Math.PI / 180);
+      });
+      if (ok) run += p.l;
+    }
+    if (run >= g.len * T.parShare && run >= T.parMin) tryDrop('ix-parallel', [g], () => `${g.len.toFixed(0)} m ${['', '', '', 'secondary', 'tertiary', 'residential', 'pedestrian', 'service', 'path'][g.cls]} piece beside a carriageway (${run.toFixed(0)} m within ${T.parGap} m) dropped`);
+  }
+  // orphans the drops leave (repeat: a chain of them)
+  for (let again = true; again;) {
+    again = false;
+    for (const g of G) {
+      if (drop.has(g.k) || ride.has(g.k) || g.pts.length < 2 || g.len >= (g.cls < 6 ? M.stub : 60)) continue;
+      if ([...(byEnd.get(g.k) || [])].some((o) => !drop.has(o))) continue;   // a kept street ends on it
+      if (!inScope(g.pts[0]) && !inScope(g.pts.at(-1))) continue;
+      if (!loose(g.k, 0, drop) || !loose(g.k, 1, drop)) continue;
+      // it met something before the drops (else it is the data's own: left alone)
+      if (!ends[g.k][0].on.length && !ends[g.k][1].on.length) continue;
+      if (tryDrop('ix-orphan', [g], () => `${g.len.toFixed(0)} m piece left meeting nothing dropped`)) again = true;
+    }
+  }
+  return { streets: streets.filter((s, k) => !drop.has(k)), changes };
+}
 
 /**
  * One repair pass over an area's streets, driven by qc_map's findings (`near` m of the route).
@@ -373,11 +493,22 @@ export function repairArea({ item, scene, text, near = REPAIR.near, rides, rules
   let findings = qc(text);
   const before = counts(findings, near), changes = [];
   let tunnels = [], left = [], passes = 0;
+  const thin = !rules || rules.includes('interchange');
   for (; passes < REPAIR.passes; passes++) {
+    let n = 0;
+    if (thin) {
+      const t = thinPass({ streets: decodeStreets(text).streets, city: JSON.parse(text), proj, ground, index, rides: rideIdx, near });
+      if (t.changes.length) {
+        n += t.changes.length; changes.push(...t.changes.map((c) => ({ ...c, pass: passes + 1 })));
+        log(`  pass ${passes + 1}: ${t.changes.length} interchange drops`);
+        text = withStreets(text, t.streets); findings = qc(text);
+      }
+    }
     const city = JSON.parse(text);
     const r = repairPass({ streets: decodeStreets(text).streets, city, proj, ground, index, findings, rides: rideIdx, near, rules });
     tunnels = r.tunnels; left = r.left;
-    if (!r.changes.length) break;
+    if (!r.changes.length && !n) break;
+    if (!r.changes.length) continue;
     changes.push(...r.changes.map((c) => ({ ...c, pass: passes + 1 })));
     log(`  pass ${passes + 1}: ${r.changes.length} repairs`);
     text = withStreets(text, r.streets);

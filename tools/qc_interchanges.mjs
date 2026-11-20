@@ -11,7 +11,10 @@
 //
 // | check     | severity     | what it catches |
 // | floating  | fail / warn  | a ground street (not a bridge deck) whose edge is > 3 m (fail) / > 1 m (warn) over the drawn ground:
-// |           |              | a slab in the air — it needs an embankment (ground raised to it) or to be a deck |
+// |           |              | a slab in the air — it needs an embankment (ground raised to it) or to be a deck. Read 1.5 m past
+// |           |              | the carriageway, or past the sidewalk for streets drawn with one (warn > 1.5 m there: the 6 m mesh
+// |           |              | falls that much off a ridge or shelf street). A hillside street (the other side's ground within
+// |           |              | .3 m of it or above) warns only > 2.5 m, fails > 5 m: the slope falling away is normal |
 // | buried    | warn         | the drawn ground > 0.6 m over a street's edge (not in a junction): the street sits in a trench lip |
 // | bank-wall | fail / warn  | the ground just beyond a street's edge changes > 5 m (fail) / > 3 m (warn) within 6 m: a dirt cliff |
 // | scallop   | warn         | along a street, the ground beside it saws up and down (> 0.75 m, three turns within 18 m) |
@@ -27,6 +30,10 @@
 // work site by site; each site comes with a snap_cam shot (an oblique look from 70 m out, 40 m up) to render before
 // and after: `node tools/snap_cam.mjs <area> --shots <the site's shots.json>`.
 //
+// Speed: ~2 min for all ten areas (~17 s for the core; was ~5½ min): the route distance is asked within the scope's
+// radius (index.nearest's cost grows with its radius squared) and cached per 5 m; the drawn ground is built only for the
+// 96 m patches a scoped sample touches.
+//
 //   node tools/qc_interchanges.mjs                    every Pittsburgh area → tools/qc-interchanges-report.html
 //   node tools/qc_interchanges.mjs pittsburgh         one area (catalog ids)
 //   options: --near 300 (m from the area's route; 0 = everywhere)  --classes 4 (highway…tertiary)  --json out.json
@@ -41,10 +48,14 @@ import { cityStreets } from '../js/world/toolbox/city/landscape.js';
 import { makeMeshGround } from './qc_course.mjs';
 import { cityAreas, segGrid, CLASS } from './qc_map.mjs';
 
+const SIDEWALK = (cls) => cls >= 2 && cls <= 6;   // (js/world/toolbox/city/landscape.js SIDEWALK_CLS)
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const IX_LIMITS = {
   edgeOut: 1.5,      // m beyond the carriageway where the ground is read (sidewalks and verges sit within it)
+  sidewalk: 2.5,     // m: streets of SIDEWALK classes are drawn with sidewalks this wide: the ground is read beyond them
   floatWarn: 1, floatFail: 3,
+  floatWarnWalk: 1.5, // streets with sidewalks (read beyond them): the 6 m ground mesh falls ~1–1.5 m off a sidewalk on a ridge or a shelf
+  hillLevel: .3, hillWarn: 2.5, hillFail: 5,   // a hillside street (the other side's ground within .3 m of it or above): a drop to this side is the slope
   buried: .6,
   wallSpan: 6, wallWarn: 3, wallFail: 5,   // m of ground change within wallSpan m beyond the edge
   scallop: .75, scallopSpan: 18,
@@ -66,15 +77,22 @@ export function qcInterchanges({ id, name, gpxText, item, scene, near = 300, cla
   const G = makeMeshGround(L.heightAt, scene.groundMesh?.fineCells, scene.groundMesh?.fineCells ? L.fineGroundAt : null, L);
   const others = segGrid(streets);
   const M = IX_LIMITS, F = [];
-  const toRoute = (x, z) => { const r = index.nearest(x, z, 5000); return r ? r.d : Infinity; };
+  // (index.nearest's cost grows with the square of its radius: ask within what is needed, widening only when nothing is found)
+  const within = (x, z, r) => { const q = index.nearest(x, z, r); return q && q.d <= r ? q.d : Infinity; };
+  const toRoute = (x, z) => { for (const r of [near || 300, 1200, 5000]) { const d = within(x, z, r); if (d < Infinity) return d; } return Infinity; };
   // interchanges: 50 m cells within ixReach of a link road's point
   const ixCells = new Set(), C = 50, ck = (x, z) => Math.floor(x / C) * 100003 + Math.floor(z / C), R = Math.ceil(M.ixReach / C);
   for (const st of streets) if (st.cls === 1) for (const p of st.pts) for (let a = -R; a <= R; a++) for (let b = -R; b <= R; b++) ixCells.add((Math.floor(p.x / C) + a) * 100003 + Math.floor(p.z / C) + b);
-  const inScope = (x, z) => !near || toRoute(x, z) <= near || ixCells.has(ck(x, z));
+  const scopeCache = new Map();   // (per 5 m cell)
+  const inScope = (x, z) => {
+    if (!near || ixCells.has(ck(x, z))) return true;
+    const key = Math.floor(x / 5) * 100003 + Math.floor(z / 5);
+    let v = scopeCache.get(key); if (v === undefined) scopeCache.set(key, (v = within(x, z, near) <= near)); return v;
+  };
   const add = (check, severity, x, z, value, note, k) => F.push({ check, severity, x: +x.toFixed(1), z: +z.toFixed(1), value: +value.toFixed(2), note, cls: CLASS[streets[k].cls], street: k, routeM: Math.round(toRoute(x, z)) });
   streets.forEach((st, k) => {
     if (st.cls > classes || st.pts.length < 2) return;
-    const P = st.pts, e = st.width / 2 + M.edgeOut;
+    const P = st.pts, e = st.width / 2 + M.edgeOut, eF = e + (SIDEWALK(st.cls) ? M.sidewalk : 0);   // (floating: read beyond the sidewalk, which covers the ground under it)
     const side = [[], []];   // the ground beside the street every step m, each side: [s, height above/below the ribbon, x, z]
     let s = 0, next = 0;
     for (let i = 1; i < P.length; i++) {
@@ -85,17 +103,23 @@ export function qcInterchanges({ id, name, gpxText, item, scene, near = 300, cla
         const t = (next - s) / l, x = a.x + (b.x - a.x) * t, z = a.z + (b.z - a.z) * t, y = a.y + (b.y - a.y) * t;
         const inJn = (t < .5 ? a : b).jn != null;
         if (!inScope(x, z)) { next += M.step; continue; }
-        const onRoute = toRoute(x, z) < st.width / 2 + 6;   // (beside the route's own road its bank rules: qc_course checks it)
-        for (const [j, sg] of [[0, 1], [1, -1]]) {
-          const ex = x + nx * e * sg, ez = z + nz * e * sg, g = G(ex, ez), far = G(x + nx * (e + M.wallSpan) * sg, z + nz * (e + M.wallSpan) * sg);
+        const onRoute = within(x, z, st.width / 2 + 6) < Infinity;   // (beside the route's own road its bank rules: qc_course checks it)
+        // both sides first: a street on a hillside has one side at or above it (the bank) and one below — normal; a slab
+        // in the air (an embankment ramp drawn flat) has the ground below it on both sides
+        const at = [1, -1].map((sg) => {
+          const ex = x + nx * e * sg, ez = z + nz * e * sg, g = G(ex, ez), gf = eF > e ? G(x + nx * eF * sg, z + nz * eF * sg) : g;
+          return { sg, ex, ez, g, gf, cover: others(ex, ez, 1, k) };
+        });
+        for (const [j, { sg, ex, ez, g, gf, cover }] of at.entries()) {
+          const far = G(x + nx * (e + M.wallSpan) * sg, z + nz * (e + M.wallSpan) * sg);
           // something else drawn there (another street, a deck) carries the edge: not ground's job
-          const cover = others(ex, ez, 1, k);
           side[j].push([next, g - y, ex, ez, cover]);
           if (inJn || onRoute || cover) continue;
           if (!st.bridge) {
-            const over = y - g;
-            if (over > M.floatWarn) add('floating', over > M.floatFail ? 'fail' : 'warn', ex, ez, over, `a ${CLASS[st.cls]} edge ${over.toFixed(1)} m over the ground: a slab in the air (needs an embankment, or to be a deck)`, k);
-            else if (-over > M.buried) add('buried', 'warn', ex, ez, -over, `the ground ${(-over).toFixed(1)} m over a ${CLASS[st.cls]}'s edge`, k);
+            const over = y - gf, o = at[1 - j], hill = !o.cover && y - o.gf <= M.hillLevel;
+            const warn = hill ? M.hillWarn : eF > e ? M.floatWarnWalk : M.floatWarn, fail = hill ? M.hillFail : M.floatFail;
+            if (over > warn) add('floating', over > fail ? 'fail' : 'warn', ex, ez, over, `a ${CLASS[st.cls]} edge ${over.toFixed(1)} m over the ground${hill ? ' (a hillside street: the bank above it on the other side)' : ' on both sides'}: a slab in the air (needs an embankment, or to be a deck)`, k);
+            else if (g - y > M.buried) add('buried', 'warn', ex, ez, g - y, `the ground ${(g - y).toFixed(1)} m over a ${CLASS[st.cls]}'s edge`, k);
           }
           const wall = Math.abs(far - g);
           if (wall > M.wallWarn) add('bank-wall', wall > M.wallFail ? 'fail' : 'warn', ex, ez, wall, `the ground beside a ${CLASS[st.cls]} ${far > g ? 'rises' : 'drops'} ${wall.toFixed(1)} m within ${M.wallSpan} m: a dirt cliff`, k);
