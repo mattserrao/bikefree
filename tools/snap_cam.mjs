@@ -74,9 +74,9 @@ for (const sh of SHOTS) {
     w.renderer.info.autoReset = false; w.renderer.info.reset();
     w.renderer.shadowMap.needsUpdate = true;   // the ride redraws shadows only as needed
     if (w._render) w._render(); else w.renderer.render(w.scene, w.camera);
-    return { url: w.renderer.domElement.toDataURL('image/jpeg', .9), calls: w.renderer.info.render.calls };
+    return { url: w.renderer.domElement.toDataURL('image/jpeg', .9), calls: w.renderer.info.render.calls, tris: w.renderer.info.render.triangles };
   }, sh);
   await writeFile(resolve(ROOT, out, sh.name + '.jpg'), Buffer.from(r.url.split(',')[1], 'base64'));
-  console.log('ok', sh.name, r.calls, errors.slice(0, 3));
+  console.log('ok', sh.name, r.calls, 'calls', (r.tris / 1e6).toFixed(2), 'M tris', errors.slice(0, 3));
 }
 await browser.close(); server.close();

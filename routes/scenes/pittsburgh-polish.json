@@ -759,6 +759,112 @@
         "Music"
       ],
       "turnDeg": -18
+    },
+    {
+      "model": "cathedral",
+      "name": "Cathedral of Learning",
+      "lat": 40.444287,
+      "lon": -79.953229,
+      "lengthM": 102.4,
+      "widthM": 82.5,
+      "axisDeg": 137
+    },
+    {
+      "model": "church",
+      "look": "heinz",
+      "name": "Heinz Memorial Chapel",
+      "lat": 40.445286,
+      "lon": -79.951891,
+      "lengthM": 43.3,
+      "widthM": 24.5,
+      "axisDeg": 45.7,
+      "frontDeg": 225.7
+    },
+    {
+      "model": "carnegie",
+      "name": "Carnegie Museum & Library",
+      "lat": 40.443117,
+      "lon": -79.949778,
+      "parts": [
+        {
+          "name": "Carnegie Museum of Natural History",
+          "kind": "museum",
+          "lat": 40.443035,
+          "lon": -79.950087,
+          "lengthM": 175,
+          "widthM": 88.9,
+          "axisDeg": 157,
+          "h": 24,
+          "colonnadeDeg": 341
+        },
+        {
+          "name": "Carnegie Music Hall",
+          "kind": "hall",
+          "lat": 40.443312,
+          "lon": -79.951029,
+          "lengthM": 66.8,
+          "widthM": 41.2,
+          "axisDeg": 162.6,
+          "h": 24
+        },
+        {
+          "name": "Carnegie Library of Pittsburgh - Main",
+          "kind": "library",
+          "lat": 40.44276,
+          "lon": -79.950567,
+          "lengthM": 76.1,
+          "widthM": 72.3,
+          "axisDeg": 161.3,
+          "h": 20
+        },
+        {
+          "name": "Carnegie Museum of Art",
+          "kind": "art",
+          "lat": 40.443661,
+          "lon": -79.94926,
+          "lengthM": 105.4,
+          "widthM": 74.5,
+          "axisDeg": 71.1,
+          "h": 17
+        }
+      ]
+    },
+    {
+      "model": "dippy",
+      "name": "Dippy",
+      "lat": 40.4435532,
+      "lon": -79.9514976,
+      "headingDeg": 340
+    },
+    {
+      "model": "memorial",
+      "name": "Soldiers & Sailors Memorial Hall",
+      "lat": 40.44505,
+      "lon": -79.956438,
+      "lengthM": 73,
+      "widthM": 64.6,
+      "axisDeg": 46.7,
+      "frontDeg": 316.7
+    },
+    {
+      "model": "church",
+      "look": "ihm",
+      "name": "Immaculate Heart of Mary",
+      "lat": 40.45639,
+      "lon": -79.967944,
+      "lengthM": 49.4,
+      "widthM": 32.2,
+      "axisDeg": 86.9
+    },
+    {
+      "model": "church",
+      "look": "stanislaus",
+      "name": "Saint Stanislaus Kostka",
+      "lat": 40.452399,
+      "lon": -79.983541,
+      "lengthM": 38.6,
+      "widthM": 22.9,
+      "axisDeg": 47.3
     }
   ],
   "views": [
@@ -802,6 +908,51 @@
         "lat": 40.4622,
         "lon": -79.9495,
         "up": 12
+      }
+    },
+    {
+      "name": "Immaculate Heart of Mary",
+      "atM": 4580,
+      "rangeM": 250,
+      "cam": {
+        "lat": 40.456897,
+        "lon": -79.967266,
+        "up": 3
+      },
+      "look": {
+        "lat": 40.45639,
+        "lon": -79.967944,
+        "up": 20
+      }
+    },
+    {
+      "name": "Heinz Memorial Chapel",
+      "atM": 9140,
+      "rangeM": 250,
+      "cam": {
+        "lat": 40.44563,
+        "lon": -79.953096,
+        "up": 3
+      },
+      "look": {
+        "lat": 40.445286,
+        "lon": -79.951891,
+        "up": 24
+      }
+    },
+    {
+      "name": "Soldiers & Sailors Memorial Hall",
+      "atM": 9320,
+      "rangeM": 300,
+      "cam": {
+        "lat": 40.444507,
+        "lon": -79.954627,
+        "up": 3
+      },
+      "look": {
+        "lat": 40.44505,
+        "lon": -79.956438,
+        "up": 16
       }
     }
   ],

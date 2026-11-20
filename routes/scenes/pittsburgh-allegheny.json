@@ -681,6 +681,46 @@
         "Music"
       ],
       "turnDeg": -18
+    },
+    {
+      "model": "church",
+      "look": "ihm",
+      "name": "Immaculate Heart of Mary",
+      "lat": 40.45639,
+      "lon": -79.967944,
+      "lengthM": 49.4,
+      "widthM": 32.2,
+      "axisDeg": 86.9
+    },
+    {
+      "model": "church",
+      "look": "anthony",
+      "name": "Saint Anthony's Chapel",
+      "lat": 40.464925,
+      "lon": -79.983767,
+      "lengthM": 36.7,
+      "widthM": 13,
+      "axisDeg": 134
+    },
+    {
+      "model": "church",
+      "look": "holyname",
+      "name": "Most Holy Name of Jesus",
+      "lat": 40.464169,
+      "lon": -79.983929,
+      "lengthM": 48.1,
+      "widthM": 17,
+      "axisDeg": 43.9
+    },
+    {
+      "model": "church",
+      "look": "stanislaus",
+      "name": "Saint Stanislaus Kostka",
+      "lat": 40.452399,
+      "lon": -79.983541,
+      "lengthM": 38.6,
+      "widthM": 22.9,
+      "axisDeg": 47.3
     }
   ],
   "views": [
@@ -696,6 +736,36 @@
         "lat": 40.44183,
         "lon": -80.01277,
         "up": 12
+      }
+    },
+    {
+      "name": "Troy Hill: Most Holy Name and Saint Anthony",
+      "atM": 4240,
+      "rangeM": 250,
+      "cam": {
+        "lat": 40.464178,
+        "lon": -79.982317,
+        "up": 3
+      },
+      "look": {
+        "lat": 40.4645,
+        "lon": -79.9838,
+        "up": 25
+      }
+    },
+    {
+      "name": "Saint Stanislaus Kostka",
+      "atM": 13540,
+      "rangeM": 250,
+      "cam": {
+        "lat": 40.451998,
+        "lon": -79.984348,
+        "up": 3
+      },
+      "look": {
+        "lat": 40.452399,
+        "lon": -79.983541,
+        "up": 19
       }
     }
   ],
