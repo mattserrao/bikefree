@@ -20,6 +20,7 @@ export const DEFAULT_SETTINGS = {
   minimap: 'follow',      // ride-screen minimap: follow (zoomed in, ~3 km across: the default) | course (whole route) | off
   worldWeather: 'clear',  // 3D weather: clear | marine | clouds | rain
   scenery: 'builtin-park-yosemite', // 3D loop shown behind free rides and workouts
+  mapLandmarks: true,     // the city panel's map shows its landmarks (PLAN 7.9; the toggle at the map's bottom right)
 };
 
 export function loadSettings() {

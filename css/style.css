@@ -165,6 +165,12 @@ canvas.city-map { width: 100%; aspect-ratio: 16 / 9; max-height: calc(100dvh - 1
 .city-mapwrap { position: relative; }
 canvas.city-map.zoomed { touch-action: none; cursor: grab; }
 .city-fit { position: absolute; top: 8px; right: 8px; min-height: 36px; padding: 6px 12px; border-radius: 10px; font-size: 13px; background: var(--surface); }
+/* the landmarks' show/hide toggle (PLAN 7.9): small, at the map's bottom right; dimmed and struck through when off */
+.city-lm { position: absolute; right: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 4px 10px 4px 8px; border-radius: 9px;
+  font-size: 12px; background: color-mix(in srgb, var(--surface) 88%, transparent); color: var(--ink-2); border: 1px solid var(--line); }
+.city-lm .ic { width: 15px; height: 15px; }
+.city-lm[aria-pressed="false"] { color: var(--muted); }
+.city-lm[aria-pressed="false"] span { text-decoration: line-through; }
 .city-group { list-style: none; padding: 12px 12px 4px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .city-group:first-child { padding-top: 2px; }
 .city-side { display: grid; grid-template-rows: auto auto auto auto minmax(0, 1fr); gap: 12px; min-height: 0; }
@@ -224,6 +230,9 @@ canvas.city-map.zoomed { touch-action: none; cursor: grab; }
   .city-goals button { min-height: 44px; }
   canvas.city-map { aspect-ratio: 16 / 11; }
   .city-goals button { padding: 7px 2px; }
+  .city-lm { right: 6px; bottom: 6px; width: 34px; min-height: 34px; padding: 0; justify-content: center; }   /* a phone: the icon alone */
+  .city-lm span { display: none; }
+  .city-lm[aria-pressed="false"] .ic { opacity: .45; }
 }
 .wlist { display: grid; gap: 8px; }
 .wrow { display: grid; grid-template-columns: 1fr 200px; align-items: center; gap: 16px; text-align: left; padding: 12px 14px; border-radius: 14px; background: var(--panel); }

@@ -182,3 +182,42 @@ test('the main menu: two ride-type tabs (Route, the default, and Workout); the f
   assert.match(app, /^let chosen = 'route';/m);
   assert.match(app, /selectedRouteId = selectId \|\| defaultRouteId\(routeItems\)/);
 });
+
+// PLAN 7.9: landmarks on the panel map — baked from the map spec, placed with labels that never overlap, and the
+// show/hide toggle remembered in settings (default shown).
+test('the city map\'s landmarks: in the baked map, on the map, labels placed without overlap', async () => {
+  const { placeLandmarks, nearestLandmark, landmarkRank } = await import('../js/city-routes.js');
+  const map = JSON.parse(readFileSync(new URL(`../${json.map}`, import.meta.url), 'utf8'));
+  const lms = map.landmarks;
+  assert.ok(lms.length >= 30, `${lms.length} landmarks`);
+  for (const want of ['Downtown', 'Fort Pitt', 'PNC Park', 'Acrisure Stadium', 'PPG Place', 'Duquesne Incline', 'Mon Incline', 'Phipps', 'Cathedral of Learning', 'Carrie Furnaces', 'Randyland', 'USS Requin', 'Steel Plaza'])
+    assert.ok(lms.some((l) => l.label === want), want);
+  for (const l of lms) {
+    assert.ok(l.name && l.label && [1, 2, 3].includes(l.rank) && ['city', 'park', 'sport', 'view', 'culture', 'church', 'steel', 'transit'].includes(l.kind), l.name);
+    assert.ok(l.lat >= map.box[0] && l.lat <= map.box[2] && l.lon >= map.box[1] && l.lon <= map.box[3], l.name);
+  }
+  // placed on a 1000 × 560 map of the box: every marker on it, labels inside and clear of each other and the markers
+  const P = fitProjection([{ lat: [map.box[0], map.box[2]], lon: [map.box[1], map.box[3]] }], 1000, 560, 26);
+  const placed = placeLandmarks(lms, P.X, P.Y, { w: 1000, h: 560, measure: (t) => t.length * 6, maxRank: 2 });
+  assert.equal(placed.length, lms.length);
+  const boxes = placed.filter((p) => p.label).map((p) => { const tw = p.lm.label.length * 6, x0 = p.label.align === 'left' ? p.label.x : p.label.align === 'right' ? p.label.x - tw : p.label.x - tw / 2; return [x0, p.label.y - 6, x0 + tw, p.label.y + 6]; });
+  assert.ok(boxes.length >= 8 && placed.every((p) => !p.label || p.lm.rank <= 2), `${boxes.length} labels`);
+  for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) { const a = boxes[i], b = boxes[j]; assert.ok(!(a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1]), 'labels overlap'); }
+  for (const b of boxes) assert.ok(b[0] >= 0 && b[2] <= 1000 && b[1] >= 0 && b[3] <= 560);
+  for (const b of boxes) for (const p of placed) assert.ok(!(p.x + 5 > b[0] + 1 && p.x - 5 < b[2] - 1 && p.y + 5 > b[1] + 1 && p.y - 5 < b[3] - 1), `a label over ${p.lm.label}`);
+  const pnc = placed.find((p) => p.lm.label === 'PNC Park');
+  assert.equal(nearestLandmark(placed, pnc.x + 1, pnc.y, 8)?.lm.label, 'PNC Park');
+  assert.equal(nearestLandmark(placed, -50, -50, 10), null);
+  assert.deepEqual([landmarkRank(1, true), landmarkRank(2, true), landmarkRank(1, false), landmarkRank(3, true)], [1, 2, 2, 3]);
+});
+
+test('the landmarks toggle is remembered in settings, shown by default', async () => {
+  const store = new Map();
+  globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) };
+  const { loadSettings, saveSettings } = await import('../js/settings.js');
+  const s = loadSettings();
+  assert.equal(s.mapLandmarks, true);
+  s.mapLandmarks = false; saveSettings(s);
+  assert.equal(loadSettings().mapLandmarks, false);
+  delete globalThis.localStorage;
+});

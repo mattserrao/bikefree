@@ -1,6 +1,7 @@
 // Canvas views: route elevation profile, route trace, workout chart.
 import { zoneColor, segIntensity } from './workout.js';
 import { SPAN_M, AHEAD_M, ARROW_SCALE, metresPerDeg, projectLine, makeView, toPx, visibleRuns, easeLean, aheadIndex } from './minimap-view.js';
+import { placeLandmarks } from './city-routes.js';
 
 // Theme colours come from the CSS tokens, so charts follow light / dark mode.
 const tok = (name, fallback) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
@@ -387,10 +388,11 @@ export function drawNetworkMinimap(canvas, ride, p, { mode = 'course', pacerPos 
  * segment outlined and the junctions as dots. lines: [{ id, lat, lon }] (js/network.js edgeLines); rivers:
  * [{ widthM, path: [[lat, lon], …] }] (or waterAreas: [{rings: [[[lat, lon], …], …]}], a city's baked banks, F101);
  * labels: [{text, lat, lon, kind: river|area|place, angle?}] (not on a thumbnail); lit: Set of edge ids (null: all); route: traversal keys ("e12+") drawn
- * bold; marked: an edge id (the tapped segment); focus: an edge id (keyboard). Returns the lines in CSS px
- * ({ id, pts }) for hit testing (js/city-routes.js nearestLine).
+ * bold; marked: an edge id (the tapped segment); focus: an edge id (keyboard); landmarks: the map's landmarks
+ * (PLAN 7.9: a marker each, a label where it fits up to landmarkRank; null: none; never on a thumbnail). Returns the
+ * lines in CSS px ({ id, pts }) for hit testing (js/city-routes.js nearestLine), with .landmarks: the markers placed.
  */
-export function drawCityMap(canvas, { lines, rivers = [], waterAreas = null, labels = [], nodes = [], lit = null, route = null, marked = null, focus = null, thumb = false, project }) {
+export function drawCityMap(canvas, { lines, rivers = [], waterAreas = null, labels = [], nodes = [], lit = null, route = null, marked = null, focus = null, thumb = false, landmarks = null, landmarkRank = 3, project }) {
   const { ctx, w, h } = setup(canvas);
   if (!lines?.length || !w) return [];
   const small = !thumb && w < 520, k = small ? 0.7 : 1;   // a phone: thinner lines, smaller dots
@@ -426,16 +428,51 @@ export function drawCityMap(canvas, { lines, rivers = [], waterAreas = null, lab
   ctx.globalAlpha = lit ? 1 : 0.75;
   for (const L of out) if (!lit || lit.has(L.id)) stroke(L.pts, lit ? tok('--ink-2', '#c2c0b6') : muted, thumb ? 2 : 2.5 * k);
   ctx.globalAlpha = 1;
+  // landmarks (PLAN 7.9): a dot in its kind's colour, ringed (the T's stations: a square), under the map's labels;
+  // their own short labels where they fit, over the network, under the route's highlight (taps go to the lines
+  // first: js/app.js). Rank 3 (the T's stations, the ones beside another) only once zoomed in
+  const labelFont = (lb) => `${lb.kind === 'river' ? 'italic ' : lb.kind === 'area' ? '600 ' : ''}${Math.round((lb.kind === 'river' ? 12 : lb.kind === 'area' ? 11.5 : 10.5) * (small ? .9 : 1))}px system-ui, sans-serif`;
+  let placed = [];
+  if (!thumb && landmarks?.length) {
+    const r = small ? 4 : 5, fs = small ? 10 : 11, lh = fs + 3;
+    const avoid = labels.filter((lb) => !lb.angle).map((lb) => {
+      ctx.font = labelFont(lb);
+      const tw = ctx.measureText(lb.text).width, x = X(lb.lon), y = Y(lb.lat), hh = parseFloat(/(\d+(\.\d+)?)px/.exec(ctx.font)[1]) / 2 + 2;
+      return [x - tw / 2 - 2, y - hh, x + tw / 2 + 2, y + hh];
+    });
+    ctx.font = `600 ${fs}px system-ui, sans-serif`;
+    const shown = landmarks.filter((lm) => lm.rank <= (landmarkRank >= 3 ? 3 : 2));
+    placed = placeLandmarks(shown, X, Y, { w, h, r, lh, maxRank: landmarkRank, measure: (t) => ctx.measureText(t).width, avoid });
+    const color = { city: '#e8b04a', park: '#6cc06a', sport: '#4fb0a0', view: '#5fa6e8', culture: '#d98fd0', church: '#a58cf0', steel: '#e07a4f', transit: '#9aa3ad' };
+    for (const p of placed) {
+      const tr = p.lm.kind === 'transit';
+      ctx.fillStyle = color[p.lm.kind] || ink; ctx.strokeStyle = bg; ctx.lineWidth = 2;
+      ctx.beginPath();
+      if (tr) ctx.roundRect(p.x - r, p.y - r, r * 2, r * 2, 2); else ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = bg;
+      if (tr) { ctx.font = `800 ${Math.round(r * 1.6)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('T', p.x, p.y + .5); }
+      else { ctx.beginPath(); ctx.arc(p.x, p.y, r * .38, 0, Math.PI * 2); ctx.fill(); }
+    }
+  }
   // labels (F101): the rivers along their banks, the areas at their segments, places; over the network, under the route
   if (!thumb) for (const lb of labels) {
-    const river = lb.kind === 'river', size = Math.round((river ? 12 : lb.kind === 'area' ? 11.5 : 10.5) * (small ? .9 : 1));
+    const river = lb.kind === 'river';
     ctx.save(); ctx.translate(X(lb.lon), Y(lb.lat)); if (lb.angle) ctx.rotate((lb.angle * Math.PI) / 180);
-    ctx.font = `${river ? 'italic ' : lb.kind === 'area' ? '600 ' : ''}${size}px system-ui, sans-serif`;
+    ctx.font = labelFont(lb);
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
     ctx.lineWidth = 3; ctx.strokeStyle = river ? water : bg; ctx.globalAlpha = .85; ctx.strokeText(lb.text, 0, 0);
     ctx.globalAlpha = 1; ctx.fillStyle = river ? tok('--map-water-ink', light ? '#5d8199' : '#7fa3b5') : lb.kind === 'area' ? ink : muted;
     ctx.fillText(lb.text, 0, 0);
     ctx.restore();
+  }
+  if (placed.length) {
+    ctx.font = `600 ${small ? 10 : 11}px system-ui, sans-serif`; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    for (const p of placed) if (p.label) {
+      ctx.textAlign = p.label.align;
+      ctx.lineWidth = 3; ctx.strokeStyle = bg; ctx.globalAlpha = .9; ctx.strokeText(p.lm.label, p.label.x, p.label.y);
+      ctx.globalAlpha = 1; ctx.fillStyle = tok('--ink-2', '#c2c0b6'); ctx.fillText(p.lm.label, p.label.x, p.label.y);
+    }
   }
   // the selected route, bold, an arrow on each step
   const steps = (route || []).map((k) => { const m = /^(.+)([+-])$/.exec(k); const L = m && byId.get(m[1]); return L && (m[2] === '+' ? L.pts : [...L.pts].reverse()); }).filter(Boolean);
@@ -454,6 +491,7 @@ export function drawCityMap(canvas, { lines, rivers = [], waterAreas = null, lab
     ctx.fillStyle = muted; ctx.strokeStyle = bg; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc(X(nd.lon), Y(nd.lat), small ? 2.5 : 3.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   }
+  out.landmarks = placed;
   return out;
 }
 
