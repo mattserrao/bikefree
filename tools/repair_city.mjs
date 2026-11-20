@@ -26,6 +26,12 @@
 //               a street of its own); a deck ending on ground streets below: those ending there ramp up, else
 //   deck-end    the deck is trimmed back to its last node at the ground or meeting another street at its own height;
 //               dropped if it all floats (and < 150 m). Ends already level in the stored data (run-time heights) are left.
+// highways (user, 20 Nov: "highways, their on- and off-ramps aren't drawn logically, and they're not important for the
+//             game"): every ramp (link, cls 1) is dropped — none at all; highways (cls 0) are kept only on the city's
+//             two main corridors (the Parkway East / I-279 / I-579 / Route 28 system and the west side: Ohio River Blvd
+//             and the West End / Saw Mill Run), whose lines are in tools/city/pittsburgh-highways-keep.json (chosen on
+//             the highways map); every other highway piece is dropped. A street a route rides is never
+//             dropped (listed instead). Runs first, before the other rules clean up what it leaves.
 // Tunnel approaches (a highway, link or primary ending at a hillside: the tunnel way was dropped) are listed, not
 // fixed (a later "portals" job). Repeats until nothing changes (a second run changes nothing).
 //
@@ -167,6 +173,39 @@ const deckOf = (h) => Math.max(1, Math.round((h - 150) * 10));
  * Nothing is dropped that would leave a kept residential-or-bigger street or a deck ending on nothing, on only service
  * roads / paths, or on no street at its own height (qc_map's dead-end / near-miss / end-step / deck-end).
  */
+/**
+ * [highways] The highway corridors to keep: tools/city/pittsburgh-highways-keep.json (the lines of the corridors the user
+ * chose, from the highways map), as a lookup "is (x, z) on a kept corridor" (within `r` m of one).
+ */
+export const KEEP_FILE = 'tools/city/pittsburgh-highways-keep.json';
+export function highwayCorridors({ r = 4 } = {}) {
+  const K = new Map(), kk = (x, z) => Math.floor(x / 5) * 100003 + Math.floor(z / 5);
+  let total = 0;
+  for (const P of JSON.parse(read(KEEP_FILE)).corridors) for (let j = 1; j < P.length; j++) {
+    const [ax, az] = P[j - 1], [bx, bz] = P[j], l = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(l / 2)); total += l;
+    for (let m = 0; m <= n; m++) { const x = ax + (bx - ax) * m / n, z = az + (bz - az) * m / n, k = kk(x, z); if (!K.has(k)) K.set(k, []); K.get(k).push([x, z]); }
+  }
+  const on = (x, z) => { for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const [px, pz] of K.get((Math.floor(x / 5) + a) * 100003 + Math.floor(z / 5) + b) || []) if (Math.hypot(px - x, pz - z) <= r) return true; return false; };
+  return { on, keptM: Math.round(total) };
+}
+
+/** [highways] Drop every ramp and every highway piece off the kept corridors (never a street a route rides). */
+export function highwayPass({ streets, city, proj, ground, index, rides, corridors }) {
+  const { G } = geometry(streets, city, proj, ground);
+  const ride = rideStreets(G, rides, null), drop = new Set(), kept = [], changes = [];
+  for (const g of G) {
+    if (g.cls > 1) continue;
+    if (ride.has(g.k)) { kept.push({ k: g.k, cls: g.cls, why: 'a route rides it' }); continue; }
+    const onShare = g.cls === 0 ? g.pts.filter((p) => corridors.on(p.x, p.z)).length / g.pts.length : 0;
+    if (g.cls === 1 || onShare < .8) {
+      drop.add(g.k);
+      const m = g.pts[Math.floor(g.pts.length / 2)];
+      changes.push({ rule: g.cls === 1 ? 'hw-ramp' : 'hw-off-corridor', k: g.k, cls: g.cls, x: Math.round(m.x), z: Math.round(m.z), lenM: Math.round(g.len) });
+    }
+  }
+  return { streets: streets.filter((_, k) => !drop.has(k)), changes, kept };
+}
+
 export const THIN = { ixReach: 150, rampReach: 150, box: 40, hug: 10, share: .5, parGap: 6, parAngle: 15, parShare: .6, parMin: 20, parMax: 200, betweenMax: 150, step: 5 };
 
 export function thinPass({ streets, city, proj, ground, index, rides, near }) {
@@ -482,7 +521,7 @@ export function counts(findings, near) {
 }
 
 /** Repair one area's city JSON text. → { text, before, after, changes, tunnels, left, passes } */
-export function repairArea({ item, scene, text, near = REPAIR.near, rides, rules = null, log = () => {} }) {
+export function repairArea({ item, scene, text, near = REPAIR.near, rides, rules = null, corridors = null, log = () => {} }) {
   const route = buildCatalogRoute(read(item.file), item); route.scene = scene;
   const o = scene.origin, proj = makeProjection(o.lat, o.lon), index = makeRouteIndex(route, proj);
   const city0 = JSON.parse(text);
@@ -494,6 +533,12 @@ export function repairArea({ item, scene, text, near = REPAIR.near, rides, rules
   const before = counts(findings, near), changes = [];
   let tunnels = [], left = [], passes = 0;
   const thin = !rules || rules.includes('interchange');
+  let rideHighways = [];
+  if (corridors && (!rules || rules.includes('highways'))) {
+    const h = highwayPass({ streets: decodeStreets(text).streets, city: JSON.parse(text), proj, ground, index, rides: rideIdx, corridors });
+    rideHighways = h.kept;
+    if (h.changes.length) { changes.push(...h.changes.map((c) => ({ ...c, pass: 0 }))); log(`  highways: ${h.changes.length} dropped (${h.changes.filter((c) => c.rule === 'hw-ramp').length} ramps)${h.kept.length ? `, ${h.kept.length} kept: a route rides them` : ''}`); text = withStreets(text, h.streets); findings = qc(text); }
+  }
   for (; passes < REPAIR.passes; passes++) {
     let n = 0;
     if (thin) {
@@ -514,7 +559,7 @@ export function repairArea({ item, scene, text, near = REPAIR.near, rides, rules
     text = withStreets(text, r.streets);
     findings = qc(text);
   }
-  return { text, before, after: counts(findings, near), changes, tunnels, left, passes };
+  return { text, before, after: counts(findings, near), changes, tunnels, left, passes, rideHighways };
 }
 
 /** Every Pittsburgh route (the ride network), for "never touch a street a route rides". */
@@ -531,13 +576,16 @@ async function main() {
   const items = catalog.filter((it) => (args.length ? args.includes(it.id) : it.id.startsWith('pittsburgh') && !HOLD[it.id]) && it.scene);
   for (const id of Object.keys(HOLD)) if (!args.length) console.log(`${id}: held (${HOLD[id]}; name it to repair it)`);
   const rides = loadRides(catalog), report = [];
+  // [highways] the corridors to keep, from every Pittsburgh area's data (not only the areas named)
+  const corridors = !rules || rules.includes('highways') ? highwayCorridors() : null;
+  if (corridors) console.log(`highways: keeping ${(corridors.keptM / 1000).toFixed(1)} km of corridor lines (${KEEP_FILE})`);
   const fmt = (c) => CHECKS.map((k) => `${k} ${c[k][0]}/${c[k][1]}`).join('  ');
   for (const item of items) {
     const t0 = Date.now(), scene = loadSceneSync(item.scene);
     if (!scene.cityData) continue;
     const text = read(scene.cityData);
     console.log(`${item.id}:`);
-    const r = repairArea({ item, scene, text, near, rides, rules, log: console.log });
+    const r = repairArea({ item, scene, text, near, rides, rules, corridors, log: console.log });
     if (!dry && r.text !== text) writeFileSync(join(ROOT, scene.cityData), r.text);
     const by = {}; for (const c of r.changes) by[c.rule] = (by[c.rule] || 0) + 1;
     console.log(`  before  ${fmt(r.before)}   (within ${near} m / total)\n  after   ${fmt(r.after)}\n  repairs ${JSON.stringify(by)}  ${r.text === text ? 'unchanged' : dry ? '(dry: not written)' : `→ ${scene.cityData}`}  (${((Date.now() - t0) / 1000).toFixed(0)} s)`);
