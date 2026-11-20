@@ -122,10 +122,11 @@ def ground(x, z):
     return (h(j, i) * (1 - u) + h(j, i + 1) * u) * (1 - v) + (h(j + 1, i) * (1 - u) + h(j + 1, i + 1) * u) * v
 
 
-def heights(det, s, feats):
+def heights(det, xy, s, feats):
     """Heights along the path: keys at the helices' ends (escalator: exact, carried; a ramp: eased), linear between.
     The escalator starts on the ground at its foot and rises to the concourse (`rimEle`); the ramp comes down to the
-    ground where it ends (the map's ground, so the deck never dips under it), and the path runs on to the line."""
+    ground where it ends (the map's ground, so the deck never dips under it), and the path runs on to the line —
+    off the deck, on the ground (F354: never under it where the ground rises between the keys)."""
     S = s[-1]; rim = det['rimEle']
     hel = sorted([f for f in feats if 'turns' in f], key=lambda f: f['s0'])
     keys = [(0.0, det['from']['ele'], False)]
@@ -150,7 +151,30 @@ def heights(det, s, feats):
             if abs(u - b) < w:
                 # average of the line over [u - w, u + w] (a parabolic blend through the kink)
                 out[k] = sum(lin(min(S, max(0, u + (j / 10 - 1) * w))) for j in range(21)) / 21
-    return out
+    # [F354] off the deck (the line to the escalator's foot, the ramp's foot to the line) the path keeps to the
+    # ground: the straight run between the keys cut up to 4 m under the rise between Acrisure's ramp foot and the
+    # riverfront. Each stretch is raised to the ground (+0.3 m, as the feet) under a grade cap (`groundGrade`, 8 %:
+    # where the ground falls faster — the bank down to the riverfront — the path cuts into it rather than drop
+    # off it), its ends held (the line's samples, the deck's feet), then smoothed over easeM (a window that
+    # shrinks to the ends)
+    G = det.get('groundGrade', 8) / 100
+    sm = out[:]
+    for lo_u, hi_u in ((0.0, hel[0]['s0']), (hel[-1]['s1'], S)):
+        ks = [k for k in range(len(s)) if lo_u <= s[k] <= hi_u]
+        if len(ks) < 3: continue
+        F = {k: ground(*xy[k]) + .3 for k in ks}
+        a_, b_ = ks[0], ks[-1]
+        base = {}
+        for k in ks:
+            up = max(F[v] - G * abs(s[k] - s[v]) for v in ks)
+            cap = min(out[a_] + G * (s[k] - s[a_]), out[b_] + G * (s[b_] - s[k]))
+            base[k] = max(out[k], min(up, cap))
+        for k in ks:
+            h = min(w, s[k] - s[a_], s[b_] - s[k])
+            if h < .5: sm[k] = base[k]; continue
+            win = [base[j] for j in ks if abs(s[j] - s[k]) <= h]
+            sm[k] = sum(win) / len(win)
+    return sm
 
 
 def walk_len(det, path):
@@ -210,7 +234,7 @@ def solve(st):
         _, R, e, tot = best
     if abs(e) > .01: raise SystemExit(f'{st["name"]}: no phase match ({e:+.3f} m)')
     xy, s, feats = build_path(det, R)
-    E = heights(det, s, feats)
+    E = heights(det, xy, s, feats)
     return {'R': R, 'xy': xy, 's': s, 'E': E, 'feats': feats, 'tot': tot, 'old': old}
 
 

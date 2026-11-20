@@ -24,7 +24,7 @@ const item = JSON.parse(read('routes/catalog.json')).find((r) => r.id === id);
 if (!item) throw new Error(`no catalog route ${id}`);
 const route = buildCatalogRoute(read(item.file), { ...item, routeId: item.id });
 const city = JSON.parse(read(JSON.parse(read(item.scene)).cityData));
-const conv = city.routeConveyors || [];
+const conv = (city.routeConveyors || []).filter((c) => c.kind !== 'stadium');   // (F355: not a stadium's escalator on an apron)
 if (!conv.length) throw new Error(`${id}: no escalators (city data routeConveyors)`);
 const R6 = (v) => Math.round(v * 1e6) / 1e6, R2 = (v) => Math.round(v * 100) / 100;
 const MARGIN = 30;   // metres of line beyond the shaft each way: the headhouse (16 m), the frames' ±1.5 m and the curve's neighbours

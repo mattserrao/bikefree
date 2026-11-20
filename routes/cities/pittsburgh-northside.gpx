@@ -2,10 +2,10 @@
 <gpx version="1.1" creator="bikefree" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata><name>Pittsburgh · The North Side</name><desc>Pittsburgh, Pennsylvania. Routed on OpenStreetMap data (© OpenStreetMap contributors, ODbL); elevation from AWS Terrain Tiles.</desc></metadata>
   <trk><name>Pittsburgh · The North Side</name><trkseg>
-    <trkpt lat="40.447656" lon="-80.007510"><ele>223.0</ele></trkpt>
-    <trkpt lat="40.447686" lon="-80.007453"><ele>223.1</ele></trkpt>
-    <trkpt lat="40.447668" lon="-80.007337"><ele>223.3</ele></trkpt>
-    <trkpt lat="40.447634" lon="-80.007228"><ele>223.5</ele></trkpt>
+    <trkpt lat="40.447656" lon="-80.007510"><ele>223.1</ele></trkpt>
+    <trkpt lat="40.447686" lon="-80.007453"><ele>223.3</ele></trkpt>
+    <trkpt lat="40.447668" lon="-80.007337"><ele>223.4</ele></trkpt>
+    <trkpt lat="40.447634" lon="-80.007228"><ele>223.6</ele></trkpt>
     <trkpt lat="40.447600" lon="-80.007119"><ele>223.9</ele></trkpt>
     <trkpt lat="40.447533" lon="-80.007040"><ele>226.8</ele></trkpt>
     <trkpt lat="40.447443" lon="-80.007047"><ele>229.7</ele></trkpt>
@@ -59,10 +59,10 @@
     <trkpt lat="40.447838" lon="-80.005065"><ele>225.2</ele></trkpt>
     <trkpt lat="40.447922" lon="-80.005022"><ele>224.6</ele></trkpt>
     <trkpt lat="40.447992" lon="-80.004949"><ele>224.2</ele></trkpt>
-    <trkpt lat="40.448063" lon="-80.004876"><ele>223.9</ele></trkpt>
-    <trkpt lat="40.448133" lon="-80.004803"><ele>223.8</ele></trkpt>
-    <trkpt lat="40.448172" lon="-80.004696"><ele>223.6</ele></trkpt>
-    <trkpt lat="40.448202" lon="-80.004584"><ele>223.5</ele></trkpt>
+    <trkpt lat="40.448063" lon="-80.004876"><ele>224.0</ele></trkpt>
+    <trkpt lat="40.448133" lon="-80.004803"><ele>223.9</ele></trkpt>
+    <trkpt lat="40.448172" lon="-80.004696"><ele>223.8</ele></trkpt>
+    <trkpt lat="40.448202" lon="-80.004584"><ele>223.7</ele></trkpt>
     <trkpt lat="40.448230" lon="-80.004477"><ele>223.4</ele></trkpt>
     <trkpt lat="40.448216" lon="-80.004362"><ele>223.4</ele></trkpt>
     <trkpt lat="40.448159" lon="-80.004272"><ele>223.4</ele></trkpt>
