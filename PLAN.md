@@ -1558,7 +1558,12 @@ The user: as the map grew, performance dropped; it will grow further and needs r
 - [x] `tools/qc_map.mjs` (`npm run qc:map`): dead-end, stub, deck-end, end-step, near-miss, zig-zag, kink, facet, bump, height-step, overlap per area → `tools/qc-map-report.html` (map per area with the findings circled, list sorted by distance from a route) + `--json`
 - [x] `tools/memory_check.mjs` (PR #41) and the existing `ride_frames`, `ride_area_load --profile`, `snap_cam` were used for the numbers above
 
-**Work packages (proposed; decisions in the questions to the user)** — see the next list once agreed
+**Decisions (user, 20 Nov):** repair the stored city data (a tool; the same rules into the OSM builder later); fix only what lies near the routes (≤ 300 m), the corridor's edge stays; execute A–D; tunnel portals planned for later.
+- [ ] A Street profiles: ease pinned points and smooth major streets' heights (`bump`, `height-step` near routes → ~0) — `cityStreetsJob` in js/world/toolbox/city/landscape.js (helper 1)
+- [ ] B City-data repair tool `tools/repair_city.mjs`: join near-miss ends, drop stubs and dead fragments, trim decks ending in the air / slab edges, near routes; writes the city JSON; qc:map before/after (helper 2)
+- [ ] C Ground-height table: each area's `heightAt` sampled once into a grid after its streets are built, read by the ground, scatter, riverfront and life (load and frame time)
+- [ ] D `qc:map` budget in `npm test` (fails and warnings near routes may not grow)
+- [ ] Later: tunnel portals (Fort Pitt, Liberty, Squirrel Hill, Armstrong…) where highways meet the hill — the builder drops `tunnel=yes` ways today; one shared street/building set for the whole city instead of one per area (1.62× today); ribbon-over-ribbon (52.8 km: dual carriageways, links); bundle the menu's 72 modules; split the dense modules and retire history tags
 
 ### Follow-up list (after phase 7) *(saved 20 Nov; outside PR #40)*
 Open items from phase 7, grouped. Details stay at each F number in the phase 7 section above.
