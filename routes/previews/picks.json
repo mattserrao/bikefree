@@ -16,5 +16,15 @@
   "highlight": {
    "of": "Bixby Creek Bridge"
   }
+ },
+ "pgh-stadiums": {
+  "highlight": {
+   "view": "PNC Park from the upper deck",
+   "name": "PNC Park from the upper deck"
+  },
+  "third": {
+   "view": "The Point from Acrisure Stadium's rim",
+   "name": "The Point from Acrisure Stadium's rim"
+  }
  }
 }

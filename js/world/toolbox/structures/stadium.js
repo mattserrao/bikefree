@@ -136,7 +136,7 @@ export function buildStadiumKit(city) {
   const out = { stadiums: [], tick: null, setNight: null };
   const mats = {
     field: city.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95, metalness: 0, emissive: new THREE.Color('#000000') })),
-    screen: city.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .5, emissive: new THREE.Color('#ffffff'), emissiveIntensity: .45 })),
+    screen: city.own(new THREE.MeshBasicMaterial({ vertexColors: true, fog: true })),   // (a video board: its own light, day and night)
     figures: city.own(figureMaterial(city.uniforms.uTime)),
   };
   const solid = city.solidMaterial, glows = [];
@@ -160,7 +160,7 @@ export function buildStadiumKit(city) {
     const helices = (st.helices || []).map((h) => ({ ...h, c: L(h.x, h.z) }));
     const stand = buildStands(S, st, plan, ring, gField, rim, nearDeck, helices, col, land);
     buildField(F, st, plan, gField, col);
-    buildDeck(S, deck, st, helices, ring, land, col);
+    buildDeck(S, deck, st, helices, ring, land, col, city.data.routeConveyors);
     for (const h of helices) buildHelix(S, h, st, land, col, glows);
     buildBoards(S, Sc, st, plan, gField, rim, col);
     const towers = buildLights(S, stand, st, glows);
@@ -180,9 +180,8 @@ export function buildStadiumKit(city) {
   out.lights = city.addGlows(glows, 'Stadium lights');
   out.tick = (time, dt, camera) => { for (const s of out.stadiums) s.game.tick(time, dt, camera); };
   out.setNight = (v) => {
-    // the floodlights: the field brightens and the boards glow brighter at night
+    // the floodlights: the field brightens at night
     mats.field.emissive.setRGB(.16 * v, .2 * v, .14 * v);
-    mats.screen.emissiveIntensity = .45 + .75 * v;
   };
   out.dispose = () => { for (const s of out.stadiums) s.game.dispose(); };
   return out;
@@ -355,16 +354,14 @@ function buildField(B, st, plan, g0, col) {
  * (the escalator's balustrades and moving treads where it's carried), columns down to the ground where it's out of
  * the stands. Built from the same points the rider rides.
  */
-function buildDeck(B, deck, st, helices, ring, land, col) {
+function buildDeck(B, deck, st, helices, ring, land, col, convs) {
   if (deck.length < 2) return;
   const w = DECK.width / 2, esc = helices.filter((h) => h.role === 'escalator');
   const onEsc = (p) => esc.some((h) => (p.own ? false : p.s >= h.u0 && p.s <= h.u1) || (p.own && h._s && p.s >= h._s[0] && p.s <= h._s[1]));
-  // (the escalator's stretch on the area's own line: where the deck is within the helix's radius ± 1 m of its centre and rising)
-  for (const h of esc) {
-    let a = null, b = null;
-    for (const p of deck) { const r = Math.hypot(p.x - h.c.x, p.z - h.c.z); if (Math.abs(r - h.R) < 1.2 && p.y > h.y0 - .5 && p.y < h.y1 + .5) { a ??= p.s; b = p.s; } }
-    if (a != null) h._s = [a, b];
-  }
+  // (the escalator's stretch on the area's own line: the city data's conveyor of that name, line metres)
+  // (an apron's copy has no conveyors: the deck's start is the escalator's foot, so its length on from there)
+  const own0 = deck.find((p) => p.own)?.s;
+  for (const h of esc) { const c = (convs || []).find((q) => q.name === h.name); h._s = c ? [c.fromM, c.toM] : own0 != null ? [own0 + h.u0 - st.deckU[0], own0 + h.u1 - st.deckU[0]] : null; }
   const concrete = new THREE.Color(col.deck || '#b9b3a8'), tread = new THREE.Color('#3b3f45'), tread2 = new THREE.Color('#4a4f56'), edge = new THREE.Color('#f2c230');
   const steel = new THREE.Color(col.steel || '#3a3d42'), glass = new THREE.Color('#9fc4cf');
   let lastCol = -1e9;
@@ -376,15 +373,15 @@ function buildDeck(B, deck, st, helices, ring, land, col) {
     const L = (p, r, s, y) => V(p.x + r.x * s, y, p.z + r.z * s);
     // the top
     B.color(e ? (k % 2 ? tread : tread2) : concrete.clone().multiplyScalar(.96 + (k % 8 === 0 ? -.06 : 0)));
-    B.quad(L(a, ra, -w, ya), L(b, rb, -w, yb), L(b, rb, w, yb), L(a, ra, w, ya));
-    if (e) { B.color(edge); for (const s of [-1, 1]) B.quad(L(a, ra, s * (w - .35) - .12, ya + .01), L(b, rb, s * (w - .35) - .12, yb + .01), L(b, rb, s * (w - .35) + .12, yb + .01), L(a, ra, s * (w - .35) + .12, ya + .01)); }
+    B.quad(L(a, ra, w, ya), L(b, rb, w, yb), L(b, rb, -w, yb), L(a, ra, -w, ya));   // (wound to face up)
+    if (e) { B.color(edge); for (const s of [-1, 1]) B.quad(L(a, ra, s * (w - .35) + .12, ya + .01), L(b, rb, s * (w - .35) + .12, yb + .01), L(b, rb, s * (w - .35) - .12, yb + .01), L(a, ra, s * (w - .35) - .12, ya + .01)); }
     // the slab's edges and underside
     B.color(concrete.clone().multiplyScalar(.72));
     for (const s of [-1, 1]) {
       const A = L(a, ra, s * w, ya), Bv = L(b, rb, s * w, yb), A2 = L(a, ra, s * w, ya - DECK.slab), B2 = L(b, rb, s * w, yb - DECK.slab);
       if (s > 0) B.quad(A2, B2, Bv, A); else B.quad(B2, A2, A, Bv);
     }
-    B.quad(L(b, rb, -w, yb - DECK.slab), L(a, ra, -w, ya - DECK.slab), L(a, ra, w, ya - DECK.slab), L(b, rb, w, yb - DECK.slab));
+    B.quad(L(a, ra, -w, ya - DECK.slab), L(b, rb, -w, yb - DECK.slab), L(b, rb, w, yb - DECK.slab), L(a, ra, w, ya - DECK.slab));   // (the underside, facing down)
     // railings: a balustrade on the escalator (glass panels), posts and a top rail elsewhere
     for (const s of [-1, 1]) {
       const A = L(a, ra, s * (w - .1), ya), Bv = L(b, rb, s * (w - .1), yb);

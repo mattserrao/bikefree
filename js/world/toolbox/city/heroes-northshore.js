@@ -75,10 +75,13 @@ export function northShoreModels(k) {
       const c = b ? centroid(b.ring) : p, g = ground(b ? b.ring : [p]);
       let yaw = 0;
       if (b) { let best = 0; for (let i = 0; i < b.ring.length; i++) { const a = b.ring[i], q = b.ring[(i + 1) % b.ring.length], l = Math.hypot(q.x - a.x, q.z - a.z); if (l > best) { best = l; yaw = Math.atan2(q.z - a.z, q.x - a.x); } } }
-      const H = o.heightM || 194, body = H - 30, half = (o.halfM || 26);
+      const H = o.heightM || 194, body = H - 30;
+      // the square's half-width from the map's footprint (in its own axes), less the prisms' depth: the walls stay on it
+      let half = o.halfM || 26;
+      if (b) { const cs = Math.cos(yaw), sn = Math.sin(yaw); let hu = 0, hv = 0; for (const q of b.ring) { const dx = q.x - c.x, dz = q.z - c.z; hu = Math.max(hu, Math.abs(dx * cs + dz * sn)); hv = Math.max(hv, Math.abs(-dx * sn + dz * cs)); } half = Math.min(half, Math.min(hu, hv) - 2.4); }
       const { ring, tips } = pleated(c, half, yaw, 6, 2.2);
       clearUnder(ring.map((q) => ({ x: c.x + (q.x - c.x) * 1.05, z: c.z + (q.z - c.z) * 1.05 })));
-      wall(5, .91, g, 0, GLASS); prism(W, ring, g - 1, g + body);
+      wall(5, .91, g, 0, GLASS); for (let y = g - 1; y < g + body; y += 12) prism(W, ring, y, Math.min(g + body, y + 12));   // (in bands: a street's clearance trims a band, not a whole face)
       // setbacks: three tiers of pleated glass narrowing to the crown
       const tiers = [[.82, body, body + 10], [.62, body + 10, body + 18]];
       for (const [f, y0, y1] of tiers) {
@@ -103,7 +106,7 @@ export function northShoreModels(k) {
         const q = L(la, lo), [a] = claim(q, 22);
         if (!a) continue;
         const ga = ground(a.ring), ha = h || a.h;
-        wall(5, .92, ga, 0, GLASS); prism(W, a.ring, ga - 1, ga + ha); S.color(FRAME); cap(S, a.ring, ga + ha);
+        wall(5, .92, ga, 0, GLASS); for (let y = ga - 1; y < ga + ha; y += 10) prism(W, a.ring, y, Math.min(ga + ha, y + 10)); S.color(FRAME); cap(S, a.ring, ga + ha);
         S.color('#6f8aa3');
         for (let i = 0; i < a.ring.length; i++) {
           const u = a.ring[i], v = a.ring[(i + 1) % a.ring.length], n = Math.max(1, Math.round(Math.hypot(v.x - u.x, v.z - u.z) / 7));
@@ -133,7 +136,7 @@ export function northShoreModels(k) {
       const base = o.who === 'wagner' ? [3.6, 3.2, 3.6] : [2.4, 1.6, 2.4];
       const bat = o.who === 'wagner' ? [[.35, 1.05, .1], [.75, 1.85, -.35]] : o.who === 'stargell' ? [[.1, 1.75, 0], [.2, 2.55, -.3]] : null;
       // (clear of the ride: the heroes' builders keep out of the rider's tube)
-      statue(p, pose[0], { yaw, base, frame: pose[1], scale: o.scale || 1.35, bat });
+      statue(p, pose[0], { yaw, base, frame: pose[1], scale: o.scale || (o.who === 'wagner' ? 2.4 : 2.1), bat });
     },
 
     // "Tribute to Children" (2009): Fred Rogers, seated, tying his shoe — 7,000 lb of bronze on a pier of the old
@@ -168,13 +171,17 @@ export function northShoreModels(k) {
       }
       const f = { x: Math.sin(yaw), z: Math.cos(yaw) }, y = city.landscape.level - .9, n = 24;
       const at = (u, dy = 0) => V(c.x + f.x * u * len, y + dy, c.z + f.z * u * len);
+      // the hull: elliptic sections lofted bow to stern (fuller aft, a sharp bow), half under the water
+      const r = (u) => 4.2 * Math.pow(Math.max(.02, 1 - Math.pow(Math.abs(2 * u), u > 0 ? 2.6 : 3.4)), .55);
+      const side = { x: f.z, z: -f.x }, sect = (u) => { const R = r(u), q = at(u, 0); return Array.from({ length: 12 }, (_, j) => { const a = j / 12 * TAU; return V(q.x + side.x * Math.cos(a) * R, y + Math.sin(a) * R * .62 + .6, q.z + side.z * Math.cos(a) * R); }); };
       S.color('#2d3236');
-      for (let k = 0; k < n; k++) {
-        const u0 = k / n - .5, u1 = (k + 1) / n - .5;
-        const r = (u) => 4.1 * Math.pow(Math.max(0, 1 - Math.pow(Math.abs(2 * u) * (u > 0 ? 1 : 1.04), 3.2)), .5);
-        S.beam(at(u0, .9), at(u1, .9), Math.max(.5, r(u0) + r(u1)) * .95, Math.max(.4, r(u0) + r(u1)) * .62);
+      let prev = sect(-.5);
+      for (let k = 1; k <= n; k++) {
+        const cur = sect(k / n - .5);
+        for (let j = 0; j < 12; j++) { const j2 = (j + 1) % 12; S.quad(prev[j], prev[j2], cur[j2], cur[j]); }   // (outward)
+        prev = cur;
       }
-      S.color('#55595c'); S.beam(at(-.47, 2.75), at(.45, 2.75), 3, .3);   // the casing deck
+      S.color('#55595c'); S.beam(at(-.4, 3.25), at(.38, 3.25), 2.6, .25);   // the casing deck
       // the sail (conning tower), its bridge rail and periscopes
       S.color('#2a2e31'); S.box(c.x + f.x * len * .04, y + 2.8, c.z + f.z * len * .04, 2.9, 4.6, 12, yaw);
       S.color('#202326'); S.box(c.x + f.x * len * .07, y + 7.4, c.z + f.z * len * .07, 2.6, .9, 6, yaw);
