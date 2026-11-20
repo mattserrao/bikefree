@@ -1016,6 +1016,30 @@ export class CityScene {
   }
 
   // ---------------------------------------------------------------- streets, sidewalks and lamps
+  /**
+   * [route-sites] D (user, 20 Nov: "no sidewalk or kerb piece may cross the route's road"): a street's sidewalk band
+   * split into the runs off the route's road — cut where its line enters the road (at the road's height: a street
+   * passing under a route bridge keeps its band), its ends at the road's edge. Streets running along the road (pinned
+   * under it: [road-align] along) keep theirs (it lies beside the road).
+   */
+  _offRouteRoad(pts) {
+    const L = this.landscape, edge = ROAD_WIDTH / 2 + .3;
+    const inRoad = (p) => { if (p.along) return false; const r = L.routeDist(p.x, p.z); return !!r && r.d < edge && Math.abs(r.y - p.y) < 2.5; };
+    const flags = pts.map(inRoad);
+    if (!flags.some(Boolean)) return [pts];
+    const cut = (a, b) => {   // the point between a (off) and b (on) where the line meets the road's edge
+      let lo = 0, hi = 1;
+      for (let k = 0; k < 12; k++) { const m = (lo + hi) / 2, q = { x: a.x + (b.x - a.x) * m, z: a.z + (b.z - a.z) * m, y: a.y + (b.y - a.y) * m }; if (inRoad(q)) hi = m; else lo = m; }
+      return { x: a.x + (b.x - a.x) * lo, z: a.z + (b.z - a.z) * lo, y: a.y + (b.y - a.y) * lo };
+    };
+    const runs = []; let run = [];
+    for (let i = 0; i < pts.length; i++) {
+      if (!flags[i]) { if (!run.length && i > 0) run.push(cut(pts[i], pts[i - 1])); run.push(pts[i]); continue; }
+      if (run.length) { run.push(cut(pts[i - 1], pts[i])); if (run.length > 1) runs.push(run); run = []; }
+    }
+    if (run.length > 1) runs.push(run);
+    return runs.filter((r) => { let l = 0; for (let i = 1; i < r.length; i++) l += Math.hypot(r[i].x - r[i - 1].x, r[i].z - r[i - 1].z); return l > 1; });
+  }
   *_streetsAndLampsJob() {
     const roads = new Map(), walks = new Map(), paths = new Map(), bricks = new Map();   // [finish] bricks: brick streets
     const get = (map, x, z) => { const key = `${Math.floor(x / SECTOR_M)},${Math.floor(z / SECTOR_M)}`; if (!map.has(key)) map.set(key, new MeshBuilder(map === roads || map === bricks ? { aSlot: 1 } : {})); return map.get(key); };   // [w2-budget] per sector (was 512 m)
@@ -1030,7 +1054,7 @@ export class CityScene {
       for (const pc of plan ? drawnPieces(st, k, plan, lift) : [st.pts]) {   // [junctions] trimmed to each junction's edge
         const brick = this._brickStreet(st);   // [finish]
         ribbon(get(brick ? bricks : roads, p0.x, p0.z).set({ aSlot: [slots[k]] }), pc, st.width, lift, 24, brick ? [0, 1] : streetPaint(st), !!plan);   // [s1-lanes] paint style; [junctions] normals lean with the grade
-        if (!st.bridge && st.cls >= 2 && st.cls <= 6) ribbon(get(walks, p0.x, p0.z), pc, st.width + 5, .06, 8);
+        if (!st.bridge && st.cls >= 2 && st.cls <= 6) for (const run of this._offRouteRoad(pc)) ribbon(get(walks, p0.x, p0.z), run, st.width + 5, .06, 8);   // [route-sites] D
       }
       // lamps every ~34 m, alternating sides
       if (st.cls >= 1 && st.cls <= 6) {

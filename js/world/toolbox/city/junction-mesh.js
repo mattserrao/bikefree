@@ -66,6 +66,8 @@ export function* buildJunctionMeshesJob(city, plan, { get, roads, walks, liftOf 
     const ax = p[1].x - p[0].x, az = p[1].z - p[0].z, bx = p[2].x - p[0].x, bz = p[2].z - p[0].z;
     if (az * bx - ax * bz > 0) { B.tri(k[0], k[1], k[2]); B.tri(k[0], k[2], k[3]); } else { B.tri(k[0], k[2], k[1]); B.tri(k[0], k[3], k[2]); }
   };
+  // [route-sites] D: does a sidewalk quad reach into the route's road (at its height; not a street passing under a route bridge)?
+  const inRouteRoad = (P, y) => { const L = city.landscape; return P.some((p) => { const r = L.routeDist(p.x, p.z); return r && r.d < ROAD_WIDTH / 2 - .2 && Math.abs(r.y - y) < 2.5; }) || (() => { const c = { x: (P[0].x + P[2].x) / 2, z: (P[0].z + P[2].z) / 2 }, r = L.routeDist(c.x, c.z); return r && r.d < ROAD_WIDTH / 2 - .2 && Math.abs(r.y - y) < 2.5; })(); };
   let surfaces = 0, paintTris = 0;
   // each junction's geometry joins the chunk of one of its streets (no chunks of its own: no extra draw calls)
   const home = (jn) => { const a = jn.arms.find((o) => !o.route) || jn.extra[0]; const p = a ? streets[a.k].pts[0] : jn; return p; };
@@ -109,6 +111,8 @@ export function* buildJunctionMeshesJob(city, plan, { get, roads, walks, liftOf 
       const sy = cb.pts.map((p) => y(p));
       for (let i = 1; i < n; i++) {
         const a = cb.pts[i - 1], b = cb.pts[i];
+        // [route-sites] D: no corner sidewalk piece across the route's road (a curb return of an odd junction beside it)
+        if (inRouteRoad([a, b, outer[i], outer[i - 1]], sy[i])) continue;
         flatQuad(W, [{ ...a, y: sy[i - 1] }, { ...b, y: sy[i] }, { ...outer[i], y: sy[i] }, { ...outer[i - 1], y: sy[i - 1] }], 0);
       }
     }
