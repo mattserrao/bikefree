@@ -659,9 +659,14 @@ export function* junctionPaintJob(plan, streets, ctx) {
     const q = RL.project(p.x, p.z, ctx.route.dist[Math.min(RL.n, r.i)], 25) || r;
     return q.d < RW / 2 + .5 && Math.abs(q.y + ROAD_LIFT - p.y) < 4;
   };
+  // [audit-E2] no zebra on or across a highway or a ramp: none at a junction one of them leaves (an interchange's
+  // merge or ramp end, not a pedestrian crossing), and none whose box lies on a highway's or ramp's drawn ribbon
+  const fastAt = fastRibbons(plan, streets);
+  const interchange = (jn) => jn.arms.some((o) => !o.route && streets[o.k].cls <= 1) || jn.extra.some((o) => o.k >= 0 && streets[o.k]?.cls <= 1);
   for (const jn of plan.list) {
     if (due()) yield;
     const busy = jn.arms.length >= 3;
+    if (interchange(jn)) { if (busy) bad.push({ jn: jn.id, kind: 'crosswalk', why: 'an interchange (a highway or ramp arm)' }); continue; }
     for (const A of jn.arms) {
       if (A.route || !busy || !CROSSWALK(A.cls)) continue;
       const st = streets[A.k], lift = ctx.liftOf ? ctx.liftOf(A.k) : JL;
@@ -677,6 +682,7 @@ export function* junctionPaintJob(plan, streets, ctx) {
       for (let dd = d0; dd <= d1 + 1.6 + 1e-6; dd += Math.max(.5, (d1 + 1.6 - d0) / 4)) for (let sd = -A.h; sd <= A.h + 1e-6; sd += Math.max(.5, A.h / 4)) probe.push(at(dd, sd));
       if (probe.some((p) => onRoad(p))) { bad.push({ jn: jn.id, kind: 'crosswalk', why: 'would lie on the route’s road' }); continue; }
       if (box.some((p) => inJunction(jn, p, 1.5))) { bad.push({ jn: jn.id, kind: 'crosswalk', why: 'would lie in another junction' }); continue; }
+      if (probe.some((p) => fastAt(p))) { bad.push({ jn: jn.id, kind: 'crosswalk', why: 'would lie on a highway or ramp' }); continue; }
       const bars = Math.max(2, Math.floor((2 * h) / 1.1)), mine = [];
       for (let q = 0; q < bars; q++) {
         const s0 = -h + (2 * h) * (q + .25) / bars, s1 = -h + (2 * h) * (q + .75) / bars;
@@ -696,7 +702,7 @@ export function* junctionPaintJob(plan, streets, ctx) {
   const spans = plan.spans.map((sp) => ({ ...sp, s0: Math.max(0, sp.s0), s1: Math.min(total, sp.s1) })).filter((sp) => sp.s1 - sp.s0 > 1);
   for (const sp of spans) {
     const jn = plan.list[sp.jn];
-    if (jn.arms.length < 3 || !jn.arms.some((o) => !o.route && CROSSWALK(o.cls))) continue;
+    if (jn.arms.length < 3 || !jn.arms.some((o) => !o.route && CROSSWALK(o.cls)) || interchange(jn)) continue;
     for (const [d0, sgn] of [[sp.s0 - .5, -1], [sp.s1 + .5, 1]]) {
       const a0 = sgn > 0 ? d0 : d0 - W, a1 = sgn > 0 ? d0 + W : d0;
       if (a0 < 5 || a1 > total - 5 || spans.some((o) => o !== sp && o.s0 - 2 < a1 + 1.5 && o.s1 + 2 > a0 - 1.5)) continue;   // no room before the next junction
@@ -704,6 +710,7 @@ export function* junctionPaintJob(plan, streets, ctx) {
       const pt = (s, side) => { const r = RL.at(s); return { x: r.x + r.rx * side, z: r.z + r.rz * side, y: r.y + ROAD_LIFT + .008 }; };
       const box = [pt(a0, -RW / 2), pt(a0, RW / 2), pt(a1, RW / 2), pt(a1, -RW / 2)];
       if (box.some((p) => inJunction(null, p, .3))) { bad.push({ jn: jn.id, kind: 'route-crosswalk', why: 'would lie in a junction' }); continue; }
+      if (box.some((p) => fastAt(p))) { bad.push({ jn: jn.id, kind: 'route-crosswalk', why: 'would lie on a highway or ramp' }); continue; }
       for (let q = 0; q < 6; q++) {
         const u0 = -3 + 6 * (q + .2) / 6, u1 = -3 + 6 * (q + .8) / 6;
         quads.push({ jn: jn.id, kind: 'route-crosswalk', pts: [pt(a0, u0), pt(a0, u1), pt(a1, u1), pt(a1, u0)] });
@@ -713,6 +720,34 @@ export function* junctionPaintJob(plan, streets, ctx) {
   const out = { quads, bad };
   Object.defineProperty(plan, '_paint', { value: out, enumerable: false, configurable: true });
   return out;
+}
+
+/**
+ * [audit-E2] A lookup for "does this point lie on a highway's or ramp's (cls 0–1) drawn ribbon, within 1.5 m of its
+ * height?" — their pieces as drawn (cut at junctions, trims taken off). → (p {x, y, z}) → boolean
+ */
+function fastRibbons(plan, streets) {
+  const G = 24, grid = new Map(), segs = [];
+  streets.forEach((st, k) => {
+    if (st.cls > 1) return;
+    for (const pc of streetPieces(st, plan.cuts.get(k))) for (let i = 1; i < pc.length; i++) {
+      const a = pc[i - 1], b = pc[i], r = st.width / 2, id = segs.length;
+      segs.push({ a, b, r });
+      for (let gx = Math.floor((Math.min(a.x, b.x) - r) / G); gx <= Math.floor((Math.max(a.x, b.x) + r) / G); gx++)
+        for (let gz = Math.floor((Math.min(a.z, b.z) - r) / G); gz <= Math.floor((Math.max(a.z, b.z) + r) / G); gz++) {
+          const kk = jKey(gx, gz); if (!grid.has(kk)) grid.set(kk, []); grid.get(kk).push(id);
+        }
+    }
+  });
+  return (p) => {
+    for (const id of grid.get(jKey(Math.floor(p.x / G), Math.floor(p.z / G))) || []) {
+      const { a, b, r } = segs[id], dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / l2)), px = a.x + dx * t, pz = a.z + dz * t;
+      const trim = (p.x - px) * dz - (p.z - pz) * dx > 0 ? (a.tl || 0) + ((b.tl || 0) - (a.tl || 0)) * t : (a.tr || 0) + ((b.tr || 0) - (a.tr || 0)) * t;
+      if (Math.hypot(px - p.x, pz - p.z) < r - trim - .2 && Math.abs(a.y + (b.y - a.y) * t - p.y) < 1.5) return true;
+    }
+    return false;
+  };
 }
 
 const inside = (ring, x, z) => { let r = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], c = ring[j]; if ((a.z > z) !== (c.z > z) && x < ((c.x - a.x) * (z - a.z)) / (c.z - a.z) + a.x) r = !r; } return r; };

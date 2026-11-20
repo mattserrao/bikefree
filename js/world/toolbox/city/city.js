@@ -77,7 +77,8 @@ const KIND_COLORS = [
 
 /** [s1-lanes] Which third of the street texture a street uses (u range; reversed for one-ways drawn backwards). */
 export function streetPaint(st) {
-  const k = st.oneway ? (st.width >= 10 ? 1 : 2) : 0, u = [k / 4, (k + 1) / 4];   // (u .75–1: junction paint)
+  // [audit-E2] a ramp (cls 1) is a one-lane road with edge lines whatever its tagging: never a centre line
+  const k = st.oneway ? (st.width >= 10 ? 1 : 2) : st.cls === 1 ? 2 : 0, u = [k / 4, (k + 1) / 4];   // (u .75–1: junction paint)
   return st.oneway < 0 ? [u[1], u[0]] : u;
 }
 
@@ -403,7 +404,8 @@ export class CityScene {
     // Streets: asphalt with lane paint; sidewalks; paths.
     // [s1-lanes] three paint styles side by side (u 0–.75 in thirds, see streetPaint): two-way with a double yellow
     // centre line; one-way multi-lane (divided highways, one-way pairs): yellow left edge, dashed white lanes;
-    // one-way single lane (ramps): edge lines only. [junctions] u .77–.98: the white block for crosswalks and stop
+    // one-way single lane (ramps): white edge lines only ([audit-E2] both white: two ramps or one-ways side by side
+    // with yellow left edges read as a double yellow centre line). [junctions] u .77–.98: the white block for crosswalks and stop
     // lines (junction-mesh.js PAINT_U); junction surfaces sample the plain asphalt of the two-way style (u .02–.11)
     const c = document.createElement('canvas'); c.width = 256; c.height = 256;
     const ctx = c.getContext('2d');
@@ -412,8 +414,8 @@ export class CityScene {
     ctx.fillStyle = '#e4e1d6'; ctx.fillRect(196, 0, 56, 256);   // [junctions] crosswalk and stop-line white
     ctx.fillStyle = '#d9d6c8'; ctx.fillRect(3, 0, 1.5, 256); ctx.fillRect(59.5, 0, 1.5, 256);
     ctx.fillStyle = '#d6b44c'; ctx.fillRect(30.5, 0, 1.4, 150); ctx.fillRect(32.6, 0, 1.4, 150);
-    ctx.fillStyle = '#d6b44c'; ctx.fillRect(64 + 4, 0, 1.6, 256); ctx.fillRect(128 + 4, 0, 1.6, 256);
-    ctx.fillStyle = '#d9d6c8'; ctx.fillRect(64 + 58.5, 0, 1.5, 256); ctx.fillRect(128 + 58.5, 0, 1.5, 256);
+    ctx.fillStyle = '#d6b44c'; ctx.fillRect(64 + 4, 0, 1.6, 256);
+    ctx.fillStyle = '#d9d6c8'; ctx.fillRect(64 + 58.5, 0, 1.5, 256); ctx.fillRect(128 + 4, 0, 1.5, 256); ctx.fillRect(128 + 58.5, 0, 1.5, 256);
     for (const x of [64 + 23, 64 + 41]) ctx.fillRect(x, 0, 1.3, 96);
     const tex = this.own(new THREE.CanvasTexture(c)); tex.wrapT = THREE.RepeatWrapping; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
     const offset = (f) => ({ polygonOffset: true, polygonOffsetFactor: f, polygonOffsetUnits: f });
