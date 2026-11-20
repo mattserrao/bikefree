@@ -201,6 +201,7 @@ export function* planJunctionsJob(streets, ctx, options = {}) {
     const deg = nd.inc.reduce((a, o) => a + (o.end ? 1 : 2), 0);
     const ys = nd.inc.map((o) => streets[o.k].pts[o.i].y), w = Math.max(...nd.inc.map((o) => streets[o.k].width));
     if (Math.max(...ys) - Math.min(...ys) > O.levelM) continue;   // a crossing at different heights
+    if (nd.inc.every((o) => streets[o.k].profiled)) continue;   // [audit-F] only highway pieces meet here (a carriageway split, not an intersection): its stored profile stays
     const r = routeDist(nd.x, nd.z);
     const nearRoute = r && r.d < RW / 2 + Math.max(O.routeReachM, w / 2 + 3) && Math.abs(Math.min(...ys) - r.y) < O.levelM &&
       !(ctx.onRouteBridge && ctx.onRouteBridge(route.dist[r.i], 4));

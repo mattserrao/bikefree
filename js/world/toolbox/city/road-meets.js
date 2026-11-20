@@ -230,7 +230,7 @@ export function* alignAlongRouteJob(streets, ctx, options = {}) {
   let moved = 0;
   const targets = streets.map(() => null);
   yield* each(streets, (st, k) => {
-    if (st.cls > 7 || st.pts.length < 2 || !nearRouteStreet(st, index, RW / 2 + st.width / 2 + 2)) return;
+    if (st.profiled || st.cls > 7 || st.pts.length < 2 || !nearRouteStreet(st, index, RW / 2 + st.width / 2 + 2)) return;   // [audit-F] (a highway's stored profile stays)
     const lift = SLOT_LIFT(slots[k]), P = st.pts, tg = new Array(P.length).fill(null);
     let any = false;
     for (let i = 0; i < P.length; i++) {
@@ -533,7 +533,7 @@ export function* landFreeDeckEndsJob(streets, ctx, options = {}) {
   let n = 0;
   for (const st of streets) {
     if (due()) yield;
-    if (!st.bridge || st.pts.length < 2) continue;
+    if (!st.bridge || st.profiled || st.pts.length < 2) continue;   // [audit-F]
     const P = st.pts, acc = [0];
     for (let i = 1; i < P.length; i++) acc.push(acc[i - 1] + Math.hypot(P[i].x - P[i - 1].x, P[i].z - P[i - 1].z));
     for (const e of [0, P.length - 1]) {
@@ -571,6 +571,7 @@ export function* followMovedNodesJob(streets, options = {}) {
   for (const st of streets) {
     if (due()) yield;
     // (decks too where one ends on a moved street: it follows over its last metres)
+    if (st.profiled) continue;   // [audit-F] (a highway's stored profile stays)
     const P = st.pts, own = P.map((p) => p.y), tg = P.map((p) => { const y = lead.get(key(p)); return y != null && !isLead(p) && Math.abs(y - p.y) > .005 && Math.abs(y - p.y) < (st.bridge || lifted.has(key(p)) ? 4.5 : O.level) ? y : null; });
     if (!tg.some((v) => v != null)) continue;
     const acc = [0]; for (let i = 1; i < P.length; i++) acc.push(acc[i - 1] + Math.hypot(P[i].x - P[i - 1].x, P[i].z - P[i - 1].z));

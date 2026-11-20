@@ -30,8 +30,8 @@
 //             game"): every ramp (link, cls 1) is dropped — none at all; highways (cls 0) are kept only on the city's
 //             two main corridors (the Parkway East / I-279 / I-579 / Route 28 system and the west side: Ohio River Blvd
 //             and the West End / Saw Mill Run), whose lines are in tools/city/pittsburgh-highways-keep.json (chosen on
-//             the highways map); every other highway piece is dropped. A street a route rides is never
-//             dropped (listed instead). Runs first, before the other rules clean up what it leaves.
+//             the highways map); every other highway piece is dropped. Ramps and off-corridor highways go even where a route
+//             rides along them (the route draws its own road; user, 20 Nov). Runs first, before the other rules clean up what it leaves.
 // Tunnel approaches (a highway, link or primary ending at a hillside: the tunnel way was dropped) are listed, not
 // fixed (a later "portals" job). Repeats until nothing changes (a second run changes nothing).
 //
@@ -195,7 +195,8 @@ export function highwayPass({ streets, city, proj, ground, index, rides, corrido
   const ride = rideStreets(G, rides, null), drop = new Set(), kept = [], changes = [];
   for (const g of G) {
     if (g.cls > 1) continue;
-    if (ride.has(g.k)) { kept.push({ k: g.k, cls: g.cls, why: 'a route rides it' }); continue; }
+    // (user, 20 Nov: ramps and off-corridor highways go even where a route rides along them — the route draws its own road)
+    if (ride.has(g.k)) kept.push({ k: g.k, cls: g.cls, why: 'a route rides along it (dropped anyway)' });
     const onShare = g.cls === 0 ? g.pts.filter((p) => corridors.on(p.x, p.z)).length / g.pts.length : 0;
     if (g.cls === 1 || onShare < .8) {
       drop.add(g.k);

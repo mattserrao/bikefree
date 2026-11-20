@@ -748,7 +748,7 @@ function* fairStreetProfilesJob(streets, { landscape, index, route }) {
     for (let i = 1; i < n; i++) s[i] = s[i - 1] + Math.hypot(P[i].x - P[i - 1].x, P[i].z - P[i - 1].z);
     for (let i = 0; i < n; i++) {
       const p = P[i];
-      fixed[i] = i === 0 || i === n - 1 || p.pin || p.under || p.jn != null || shared.get(key(p)) === -1;
+      fixed[i] = i === 0 || i === n - 1 || p.pin || p.under || p.jn != null || shared.get(key(p)) === -1 || st.profiled;   // [audit-F] (a highway's stored profile: already smooth)
       const e = fixed[i] ? null : roadUnder(p, st.width);
       if (e == null) continue;
       if (e - y[i] >= 6 || y[i] >= e + 4 || Math.abs(y[i] - e + .1) < .4) fixed[i] = 1;   // (another level: over the rider, far below; or flush: it meets the road)
@@ -955,7 +955,7 @@ export function* cityStreetsJob(landscape, index, route) {
     const raw = [];
     for (let i = starts[k]; i < starts[k + 1]; i++) {
       const p = D.local(xy[i * 2], xy[i * 2 + 1]);
-      p.y = bridge && deck[i] ? 150 + deck[i] / 10 : null;
+      p.y = (bridge || (flags & 16)) && deck[i] ? 150 + deck[i] / 10 : null;   // [audit-F] bit 4: a highway's stored profile (tools/highway_profiles.mjs)
       raw.push(p);
     }
     const pts = [raw[0]], step = bridge ? 6 : 7, nodeIdx = [0];
@@ -968,10 +968,10 @@ export function* cityStreetsJob(landscape, index, route) {
     for (let j = 0; j < pts.length; j++) {   // ([F30] a loop, not forEach: a long street may pause half way)
       const p = pts[j];
       if (p.y == null) p.y = landscape.heightAt(p.x, p.z);
-      if (lower(p, width, !bridge && alongRoute(pts, j))) under = true;   // [road-align] along
+      if (!(flags & 16) && lower(p, width, !bridge && alongRoute(pts, j))) under = true;   // [road-align] along ([audit-F] a highway's stored profile isn't pinned)
       if ((j & 63) === 63 && due()) yield;
     }
-    streets.push({ cls, bridge, oneway, layer, pts, width, ...(brick ? { brick } : {}), underRoute: under, rides: width > ROAD_WIDTH + 1 && pts.some((p) => p.along),   // [road-align] rides (wider than the road: sticks out)
+    streets.push({ cls, bridge, oneway, layer, pts, width, ...(brick ? { brick } : {}), ...(flags & 16 ? { profiled: true } : {}), underRoute: under, rides: width > ROAD_WIDTH + 1 && pts.some((p) => p.along),   // [road-align] rides (wider than the road: sticks out)
       nodes: raw, nodeIdx });   // [junctions] OSM nodes → pts index
   }
   yield* rampDecksJob(streets, { index, route });   // [audit-E1] raised roads with no room for a bank: decks
@@ -979,7 +979,7 @@ export function* cityStreetsJob(landscape, index, route) {
   if (align?.streets) {
     const nearRoute = (x, z) => { const r = index.nearest(x, z, 24); return r ? 1 - smoothstep(12, 22, r.d) : 0; };
     yield* alignStreetProfilesJob(streets, { ...align, ground: landscape.baseHeight, nearRoute, floor: landscape.level + .6 });
-    for (const st of streets) { st.pts.forEach((p, j) => { if (lower(p, st.width, !st.bridge && alongRoute(st.pts, j))) st.underRoute = true; }); if (due()) yield; }
+    for (const st of streets) { if (!st.profiled) st.pts.forEach((p, j) => { if (lower(p, st.width, !st.bridge && alongRoute(st.pts, j))) st.underRoute = true; }); if (due()) yield; }
     yield* syncPinnedNodesJob(streets);
   }
   syncDeckJoins(streets);   // [audit-E1]

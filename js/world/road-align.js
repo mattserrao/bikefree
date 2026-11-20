@@ -437,9 +437,9 @@ export function* alignStreetProfilesJob(streets, options = {}) {
   // a street mapped below another level (layer < 0: under a deck or the route) that never meets the route follows
   // its own bare ground (o.ground) instead of riding up the route's bank
   const y0 = yield* mapJob(streets, (st) => {
-    const own = o.ground && st.layer < 0 && !st.bridge && !st.pts.some((p) => p.pin);
+    const own = o.ground && st.layer < 0 && !st.bridge && !st.profiled && !st.pts.some((p) => p.pin);
     // a ground street never runs below the water's surface (riverside streets mapped on the water's edge cells)
-    if (!own) return st.pts.map((p) => (st.bridge || p.pin || o.floor == null ? p.y : Math.max(p.y, o.floor)));
+    if (!own) return st.pts.map((p) => (st.bridge || st.profiled || p.pin || o.floor == null ? p.y : Math.max(p.y, o.floor)));   // [audit-F] (a highway's stored profile)
     // (within ~16 m of the route the route's bank still decides: the 6 m ground mesh can't drop faster)
     return st.pts.map((p) => { const w = o.nearRoute ? o.nearRoute(p.x, p.z) : 0; return Math.max(o.floor ?? -Infinity, p.y * w + o.ground(p.x, p.z) * (1 - w)); });
   });
