@@ -25,6 +25,8 @@
 //   node tools/qc_map.mjs                       every area of Pittsburgh → tools/qc-map-report.html
 //   node tools/qc_map.mjs pittsburgh-oakland    one area (catalog ids)
 //   options: --json out.json   --html file   --strict (warnings fail too)   --near 300 (only within m of a route: off)
+//   node tools/qc_map.mjs --baseline        write tools/qc-map-baseline.json: per area and check, the fails and warnings
+//                                          within BASELINE_NEAR_M of a route — the budget test/qc-map.test.mjs holds the map to
 // Exit code 1 on any fail (or warn with --strict).
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -63,6 +65,24 @@ export const MAP_LIMITS = {
 };
 // street classes (tools/build_city.py CLS)
 export const CLASS = ['highway', 'link', 'primary', 'secondary', 'tertiary', 'residential', 'pedestrian', 'service', 'path'];
+export const BASELINE_NEAR_M = 300;   // (the user's scope: what a rider sees near the routes)
+export const BASELINE_FILE = 'tools/qc-map-baseline.json';
+/** Per check: fails and warnings within BASELINE_NEAR_M of the area's route. */
+export function nearCounts(r) {
+  const out = {};
+  for (const f of r.findings) if (f.severity !== 'info' && f.routeM != null && f.routeM <= BASELINE_NEAR_M) out[f.check] = (out[f.check] || 0) + 1;
+  return out;
+}
+/** The Pittsburgh areas qc_map checks (catalog items with a city), with their scenes loaded. */
+export function cityAreas(ids = null) {
+  const catalog = JSON.parse(read('routes/parks/index.json'));
+  return catalog.filter((it) => (ids?.length ? ids.includes(it.id) : it.id.startsWith('pittsburgh')) && it.scene).map((item) => {
+    let scene = loadSceneSync(item.scene);
+    if (!scene.cityData) return null;
+    scene = { ...scene, city: JSON.parse(read(scene.cityData)) };
+    return { id: item.id, name: item.name, gpxText: read(item.file), item, scene };
+  }).filter(Boolean);
+}
 const sevByClass = (cls, fail, warn) => (cls <= fail ? 'fail' : cls <= warn ? 'warn' : 'info');
 
 const turnDeg = (a, b, c) => ((((Math.atan2(c.z - b.z, c.x - b.x) - Math.atan2(b.z - a.z, b.x - a.x)) * 180) / Math.PI + 540) % 360) - 180;
@@ -205,22 +225,18 @@ async function main() {
   const args = process.argv.slice(2);
   const opt = (name, dflt) => { const i = args.indexOf(name); if (i < 0) return dflt; const v = args[i + 1]; args.splice(i, 2); return v; };
   const flag = (name) => { const i = args.indexOf(name); if (i < 0) return false; args.splice(i, 1); return true; };
-  const json = opt('--json', null), html = opt('--html', 'tools/qc-map-report.html'), near = Number(opt('--near', '0')), strict = flag('--strict');
-  const catalog = JSON.parse(read('routes/parks/index.json'));
-  const items = catalog.filter((it) => (args.length ? args.includes(it.id) : it.id.startsWith('pittsburgh')) && it.scene);
+  const json = opt('--json', null), html = opt('--html', 'tools/qc-map-report.html'), near = Number(opt('--near', '0')), strict = flag('--strict'), baseline = flag('--baseline');
   const results = [];
-  for (const item of items) {
-    const t0 = Date.now();
-    let scene = loadSceneSync(item.scene);
-    if (!scene.cityData) continue;
-    scene = { ...scene, city: JSON.parse(read(scene.cityData)) };
-    const r = qcMap({ id: item.id, name: item.name, gpxText: read(item.file), item, scene, near });
+  for (const area of cityAreas(args)) {
+    const t0 = Date.now(), item = area.item;
+    const r = qcMap({ ...area, near });
     results.push(r);
     const c = (s) => r.findings.filter((f) => f.severity === s).length;
     const by = {}; for (const f of r.findings) if (f.severity !== 'info') by[f.check] = (by[f.check] || 0) + 1;
     console.log(`${c('fail') ? 'FAIL' : c('warn') ? 'warn' : 'ok  '} ${item.name.padEnd(44).slice(0, 44)} ${String(r.streets).padStart(5)} streets ${String(r.km).padStart(6)} km  ${c('fail')} fail ${c('warn')} warn ${c('info')} info  ${JSON.stringify(by)}${r.overlaps ? `  overlap ${(r.overlaps.overlapM / 1000).toFixed(1)} km` : ''}  (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
   }
   writeFileSync(join(ROOT, html), htmlReport(results));
+  if (baseline) { writeFileSync(join(ROOT, BASELINE_FILE), `${JSON.stringify(Object.fromEntries(results.map((r) => [r.id, nearCounts(r)])), null, 1)}\n`); console.log(`Baseline: ${BASELINE_FILE}`); }
   if (json) writeFileSync(json, JSON.stringify(results.map(({ lines, routeLine, ...r }) => r), null, 1));
   console.log(`Report: ${html}`);
   const bad = results.some((r) => r.findings.some((f) => f.severity === 'fail' || (strict && f.severity === 'warn')));
