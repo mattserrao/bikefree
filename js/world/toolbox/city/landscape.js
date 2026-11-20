@@ -331,6 +331,10 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
   // (streets are drawn level from side to side), easing back to the terrain over the next ~10 m. Without this,
   // on a hillside the uphill half of a street disappears under the grass.
   let streetIndex = null, buildingStreets = false;
+  // [F399] the grid compact: a number per cell (not a "gx,gz" string) and a number per street segment (street k,
+  // point i: k·2^20 + i, not a [k, i] pair) — it was ~60 MB of small arrays on a Pittsburgh area
+  const cellOf = (gx, gz) => (gx + 32768) * 65536 + (gz + 32768);
+  const SEG = 1 << 20;   // (a street up to a million points; numbers past 2^31 just make the cell a double array)
   // the streets and their 24 m segment grid, built on first use (or by the job, [F30], where the old code first used them)
   function* streetIndexJob() {
     if (streetIndex || buildingStreets) return;
@@ -344,7 +348,7 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
         const a = st.pts[i - 1], b = st.pts[i], r = st.width / 2 + 14;
         for (let gx = Math.floor((Math.min(a.x, b.x) - r) / 24); gx <= Math.floor((Math.max(a.x, b.x) + r) / 24); gx++)
           for (let gz = Math.floor((Math.min(a.z, b.z) - r) / 24); gz <= Math.floor((Math.max(a.z, b.z) + r) / 24); gz++) {
-            const key = `${gx},${gz}`; if (!grid.has(key)) grid.set(key, []); grid.get(key).push([k, i]);
+            const key = cellOf(gx, gz); let l = grid.get(key); if (!l) grid.set(key, (l = [])); l.push(k * SEG + i);
           }
       }
     }
@@ -358,7 +362,8 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
       drain(streetIndexJob());
     }
     let best = null;
-    for (const [k, i] of streetIndex.get(`${Math.floor(x / 24)},${Math.floor(z / 24)}`) || []) {
+    for (const v of streetIndex.get(cellOf(Math.floor(x / 24), Math.floor(z / 24))) || []) {
+      const k = Math.floor(v / SEG), i = v - k * SEG;
       if (k === skip) continue;
       const st = streetIndex.streets[k], a = st.pts[i - 1], b = st.pts[i];
       const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1;
@@ -376,8 +381,9 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
     if (!streetIndex) return [];
     const out = [], seen = new Set();
     for (let gx = Math.floor(x0 / 24); gx <= Math.floor(x1 / 24); gx++) for (let gz = Math.floor(z0 / 24); gz <= Math.floor(z1 / 24); gz++) {
-      for (const [k, i] of streetIndex.get(`${gx},${gz}`) || []) {
-        const key = k * 1e5 + i; if (seen.has(key)) continue; seen.add(key);
+      for (const v of streetIndex.get(cellOf(gx, gz)) || []) {
+        const k = Math.floor(v / SEG), i = v - k * SEG;
+        if (seen.has(v)) continue; seen.add(v);
         const st = streetIndex.streets[k]; if (st.bridge) continue;
         const a = st.pts[i - 1], b = st.pts[i], dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
         if (len < .01) continue;
@@ -399,7 +405,8 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
   const streetsNear = (x, z, extra = 0) => {
     if (!streetIndex) streetAt(x, z);
     const out = new Map();
-    for (const [k, i] of streetIndex?.get(`${Math.floor(x / 24)},${Math.floor(z / 24)}`) || []) {
+    for (const v of streetIndex?.get(cellOf(Math.floor(x / 24), Math.floor(z / 24))) || []) {
+      const k = Math.floor(v / SEG), i = v - k * SEG;
       const st = streetIndex.streets[k], a = st.pts[i - 1], b = st.pts[i];
       const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1;
       const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / l2));

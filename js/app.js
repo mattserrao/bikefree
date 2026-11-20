@@ -157,8 +157,7 @@ for (const r of document.querySelectorAll('.demo-range')) {
 }
 let demoHr = 92;
 function demoData() {
-  const pausedByUser = !session.running && session.movingS > 0 && !session.autoPaused;
-  if (pausedByUser) return { powerW: 0, cadenceRpm: 0, speedKph: 0, heartRate: Math.round((demoHr += (78 - demoHr) * 0.01)) };
+  if (pausedByUser()) return { powerW: 0, cadenceRpm: 0, speedKph: 0, heartRate: Math.round((demoHr += (78 - demoHr) * 0.01)) };
   const jitter = (a) => 1 + (Math.random() - 0.5) * a;
   const workoutW = session.workoutTarget;
   // Power: what it takes to hold 15 mph on the current grade (or the workout step's target).
@@ -208,7 +207,8 @@ for (const t of document.querySelectorAll('.mode')) t.addEventListener('click', 
 $('freeRideLink').addEventListener('click', () => { showPane('free'); $('freeBack').focus({ preventScroll: true }); });
 $('freeBack').addEventListener('click', () => { showPane('route'); $('freeRideLink').focus({ preventScroll: true }); });
 
-const pausedByUser = () => !session.running && session.movingS > 0 && !session.autoPaused;
+// (a ride held while the world loads the streets ahead, phase 8, isn't one you paused — unless you paused it meanwhile)
+const pausedByUser = () => !session.running && session.movingS > 0 && !session.autoPaused && !(session.held && session._resumeAfterHold);
 
 // What the Start button would ride, and whether that's the ride already under way.
 function sameAsCurrent() {
@@ -814,9 +814,11 @@ function courseMarks() {
 
 // ---------- Start / leave the ride screen ----------
 async function startRide() {
+  let plan = null;
   if (chosen === 'route') {
     if (!previewRoute) return;
-    const { startM, finishM, goalM } = chosenPlan(previewRoute);
+    const cp = chosenPlan(previewRoute), { startM, finishM, goalM } = cp;
+    plan = cp.plan;
     if (!sameAsCurrent() || session.mode !== 'route') {
       session.setRoute(previewRoute, startM, finishM, goalM);
       log('app', `Riding route: ${previewRoute.name} (${finishM != null ? `${fmtDist(finishM, 1)} ${distUnit()} to the finish`
@@ -832,26 +834,168 @@ async function startRide() {
     session.setFree();
     log('app', 'Free ride');
   }
-  // the 3D world: the route, else the scenery — a city with a ride network rides its free ride (F37)
-  const route = session.mode === 'route' ? session.route : await sceneryRoute();
-  session.setScenery(session.mode === 'route' ? null : route);
-  if (!session.hasRide || pacerKey !== rideKey()) resetPacer();
-  if (pausedByUser()) session.start();
+  // [phase 8] the ride screen opens behind the loading screen; the clock is held (no auto start, no resume) until the
+  // route's start is built, then the first pedal stroke starts it (L1–L4)
+  const resume = pausedByUser();
+  session.autoStart = false;
   onRideScreen = true;
-  session.autoStart = true;
+  const run = beginLoad(plan);
   $('setup').hidden = true;
   $('rideScreen').hidden = false;
   document.documentElement.requestFullscreen?.().catch(() => {});
+  // the 3D world: the route, else the scenery — a city with a ride network rides its free ride (F37)
+  const route = session.mode === 'route' ? session.route : await sceneryRoute();
+  if (run !== loadRun) return;   // (cancelled meanwhile)
+  session.setScenery(session.mode === 'route' ? null : route);
+  if (!session.hasRide || pacerKey !== rideKey()) resetPacer();
+  setLoadInfo(run, route);
   await openWorld(route);
+  if (run !== loadRun) return;
+  run.worldOpen = true;
   world?.setCourseMarks(courseMarks());
   renderHudStatic();
   renderHud();
+  const how = await run.done;
+  if (how === 'cancel' || run !== loadRun) return;
+  endLoad();
+  if (how === 'anyway') log('app', 'Riding before the scenery was ready (Ride anyway)', 'info');
+  if (resume) session.start();
+  session.autoStart = true;
+  renderHud();
+}
+
+// ---------- Loading screen (phase 8: load before you ride) ----------
+// Menu → route → this screen while the route's start is built (js/world/world.js readiness(): scenery, ground,
+// roads & buildings, light, riders) → "Pedal to start". The trainer stays connected (its resistance: the start's
+// grade). Cancel goes back to the menu; past LOAD_VALVE_S or on an error, "Ride anyway" rides at once (today's way).
+const LOAD_VALVE_S = 30;
+let loadRun = null;   // { t0, done (promise: 'ready' | 'anyway' | 'cancel'), finish, raf, valve }
+function beginLoad(plan) {
+  cancelLoad();
+  let finish;
+  const run = { t0: performance.now(), done: new Promise((ok) => { finish = ok; }), plan };
+  run.finish = (how) => { if (run.ended) return; run.ended = true; cancelAnimationFrame(run.raf); world?.setPreload?.(false); finish(how); };
+  loadRun = run;
+  session.setHeld(true);   // (the A button / Space meanwhile: go once it's ready)
+  $('loadScreen').hidden = false;
+  $('loadAnyway').hidden = true;
+  $('loadNote').classList.remove('warn');
+  $('loadNote').textContent = 'The clock starts on your first pedal stroke once the route is ready.';
+  $('loadPic').hidden = true;
+  $('loadSteps').innerHTML = '';
+  setLoadInfo(run, session.mode === 'route' ? session.route : null);
+  showLoadProgress(0, 'Getting ready…');
+  const tick = () => {
+    if (loadRun !== run || run.ended) return;
+    run.raf = requestAnimationFrame(tick);
+    pollLoad(run);
+  };
+  run.raf = requestAnimationFrame(tick);
+  return run;
+}
+/** The route's name, length, climb and first preview picture (a free ride / workout: its scenery's). */
+function setLoadInfo(run, route) {
+  const r = session.mode === 'route' ? session.route : route;
+  const fact = (b, small) => `<span><b>${b}</b> ${small}</span>`;
+  let kicker = 'Loading the route', title = r?.name || '', facts = '';
+  if (session.mode === 'route' && r) {
+    const p = run.plan;
+    const distM = p?.distM ?? r.lapM ?? r.oneWay?.total ?? r.total, climbM = p?.climbM ?? r.lapClimbM ?? r.oneWay?.ascent ?? r.ascent;
+    facts = fact(fmtDist(distM, 1), distUnit()) + (climbM != null ? fact(fmtElev(climbM).toLocaleString(), `${elevUnit()} climb`) : '') +
+      (p?.timeS ? fact(`~${fmtPlanTime(p.timeS)}`, `at ${planWatts()} W`) : '');
+  } else if (session.mode === 'workout' && session.workout) {
+    kicker = 'Loading the scenery'; title = session.workout.name;
+    facts = fact(fmtTime(session.workout.duration), 'workout') + (r ? fact(escapeHtml(r.name), '') : '');
+  } else {
+    kicker = 'Loading the scenery'; title = 'Free ride';
+    facts = r ? fact(escapeHtml(r.name), '') : '';
+  }
+  $('loadKicker').textContent = kicker;
+  $('loadTitle').textContent = title;
+  $('loadFacts').innerHTML = facts;
+  const id = r ? (session.mode === 'route' ? r.id : r.id?.replace(/^scenery-/, '')) : null;
+  const shot = id ? previewShots(previewManifest, id)[0] : null;
+  if (shot) { $('loadPic').src = shot.url; $('loadPic').alt = shot.caption || ''; }
+  $('loadPic').hidden = !shot;
+}
+function showLoadProgress(p, what) {
+  const pct = Math.round(Math.max(0, Math.min(1, p)) * 100);
+  $('loadFill').style.width = `${pct}%`;
+  $('loadBar').setAttribute('aria-valuenow', String(pct));
+  if ($('loadWhat').textContent !== what) $('loadWhat').textContent = what;
+}
+function pollLoad(run) {
+  const s = (performance.now() - run.t0) / 1000;
+  if (!run.worldOpen) {   // (the route's scene file and the 3D view are still on their way)
+    if (!run.valve && s > LOAD_VALVE_S) offerRideAnyway(run, false, 'opening the 3D view');
+    return;
+  }
+  // no 3D view (no WebGL, or nothing to show): nothing to wait for
+  if (!world || document.body.classList.contains('no-world')) { run.finish('ready'); return; }
+  world.setPreload?.(true);
+  const r = world.readiness();
+  const next = r.steps.find((x) => !x.done);
+  showLoadProgress(r.progress, r.ready ? 'Ready' : `Loading ${next.label.toLowerCase()}…`);
+  const key = r.steps.map((x) => +x.done).join('');
+  if (key !== run.stepsKey) {
+    run.stepsKey = key;
+    $('loadSteps').innerHTML = r.steps.map((x) => `<li class="${x.done ? 'done' : ''}">${escapeHtml(x.label)}</li>`).join('');
+  }
+  if (r.ready) {
+    log('3d', `Start ready in ${s.toFixed(1)} s`, 'info');
+    run.finish('ready');
+    return;
+  }
+  if (!run.valve && (r.failed || s > LOAD_VALVE_S)) offerRideAnyway(run, r.failed, r.steps.filter((x) => !x.done).map((x) => x.key).join(', '));
+}
+function offerRideAnyway(run, failed, what) {
+  run.valve = true;
+  $('loadAnyway').hidden = false;
+  $('loadNote').classList.add('warn');
+  $('loadNote').textContent = failed ? 'Some of the scenery couldn’t load. You can ride anyway — it carries on loading as you ride.'
+    : 'This is taking a while. You can ride anyway — the scenery carries on loading as you ride.';
+  log('3d', failed ? 'Loading screen: a scenery file failed — offering Ride anyway' : `Loading screen: still loading after ${LOAD_VALVE_S} s — offering Ride anyway (${what})`, 'info');
+}
+function endLoad() {
+  $('loadScreen').hidden = true;
+  loadRun = null;
+  session.setHeld(false);
+}
+function cancelLoad() {
+  if (!loadRun) return;
+  const run = loadRun;
+  loadRun = null;
+  run.finish('cancel');
+  $('loadScreen').hidden = true;
+  session._resumeAfterHold = false;   // (a press meanwhile doesn't start it on the menu)
+  session.setHeld(false);
+}
+$('loadAnyway').addEventListener('click', () => loadRun?.finish('anyway'));
+$('loadCancel').addEventListener('click', () => { if (loadRun) showSetup(); });
+
+// [phase 8] L5: while the world waits for the streets ahead (the fade), time and distance are held; past
+// LOAD_VALVE_S the ride goes on regardless (the world keeps the drawn area on screen), until that wait ends.
+let holdSince = 0, holdGaveUp = false;
+function holdForWorld() {
+  if (loadRun) return;   // (the loading screen holds it)
+  const wait = onRideScreen && !!world?.waitingForArea;
+  if (!wait) { holdGaveUp = false; session.setHeld(false); return; }
+  const now = performance.now();
+  if (!session.held && !holdGaveUp) holdSince = now;
+  if (session.held && now - holdSince > LOAD_VALVE_S * 1000) {
+    holdGaveUp = true;
+    log('3d', `The streets ahead took over ${LOAD_VALVE_S} s to load — the clock runs on`, 'info');
+    toast('The streets ahead are slow to load — the clock runs on');
+  }
+  session.setHeld(!holdGaveUp);
 }
 $('startBtn').addEventListener('click', startRide);
 
 function showSetup() {
+  cancelLoad();   // [phase 8]
   onRideScreen = false;
   session.autoStart = false;
+  session.setHeld(false);
   $('rideScreen').hidden = true;
   $('setup').hidden = false;
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
@@ -975,6 +1119,8 @@ async function openWorld(route) {
   }
   try {
     worldModule = worldModule || await import('./world/world.js');
+    // [F399] static city meshes keep no CPU copy once on the GPU (~300 MB less on a Pittsburgh start); ?keepGeometry=1 keeps it
+    worldModule.setGeometryRelease?.(!new URLSearchParams(location.search).has('keepGeometry'));
   } catch (err) {
     log('3d', `Could not start the 3D view: ${err.message}`, 'error');
     document.body.classList.add('no-world');
@@ -1211,7 +1357,7 @@ function renderHud() {
   const state = session.running ? '' : session.autoPaused ? 'Paused — pedal to resume' : session.movingS ? '' : 'Pedal to start';
   $('hState').hidden = !state;
   $('hState').textContent = state;
-  $('hLoading').hidden = !world || document.body.classList.contains('no-world') || world.loading < 4;
+  $('hLoading').hidden = !world || !!loadRun || document.body.classList.contains('no-world') || world.loading < 4;
   const lost = !trainer.demo && !trainer.connected;
   $('hAlert').hidden = !lost;
   $('hAlert').textContent = trainer.reconnecting ? 'Trainer reconnecting…' : 'Trainer not connected';
@@ -1263,6 +1409,7 @@ session.addEventListener('tick', () => {
   screenAwake.want(trainer.connected || session.running || session.hasRide);
 });
 session.addEventListener('tick', () => {
+  holdForWorld();   // [phase 8]
   trackFtpTest();
   stepPacer();
   renderHud();

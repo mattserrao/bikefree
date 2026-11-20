@@ -72,6 +72,7 @@ class KitBuilder extends MeshBuilder {
 }
 const GROUND_CELL = 6;   // [w2-clip] the near ground's grid (stylized-terrain.js: 96 m patches, 16 cells a side)
 import { CURB_H, ROUTE_CURB, streetKitConfig, routeCurbAt, zoneCurbAt, walkTopAt } from './street-grade.js';
+import { releaseAfterUpload } from '../core/release.js';   // [F399]
 export { streetKitConfig, zoneCurbAt, walkTopAt, CURB_H, ROUTE_CURB };
 const LOD = { light: { near: 160, mid: 450, carDetail: 40 }, balanced: { near: 260, mid: 750, carDetail: 90 }, high: { near: 320, mid: 900, carDetail: 90 } };   // [finish] High: near 380 → 320, mid 1100 → 900, detailed cars 140 → 90 m (the 2 M triangle budget)   // [w2-polish] carDetail: detailed parked cars within this of them
 
@@ -1097,7 +1098,7 @@ export class StreetKit {
       if (lod !== 'walk' && !builder.tubeDone) yield* this._keepOutOfTube(builder);
       if (!builder.i.length) continue;
       if (this._due()) yield 'tube';
-      const mesh = new THREE.Mesh(this.city.own(builder.geometry()), material);
+      const mesh = new THREE.Mesh(this.city.own(releaseAfterUpload(builder.geometry())), material);   // [F399] (setDrawRange only, later)
       mesh.name = `${name} ${key}`; mesh.receiveShadow = true; mesh.castShadow = shadow;
       mesh.userData.bake = false;   // [baked-light] kit pieces stream with the camera (LOD bands): they receive the bake but never trigger a re-bake
       mesh.userData.kitLod = lod; mesh.renderOrder = lod === 'walk' ? 1 : 0;

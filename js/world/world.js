@@ -21,6 +21,7 @@ import { runSlice, due } from './toolbox/core/jobs.js';   // [F30] areas built i
 
 installHaze();   // valley haze in the fog chunks: before any material compiles
 import { wrapDist } from '../gpx.js';
+export { setGeometryRelease, releaseStats } from './toolbox/core/release.js';   // [F399] (the app turns it on)
 
 export const TIME_PRESETS = {
   morning: { label: 'Morning', elev: 14, az: 105, top: '#6f9fd8', horizon: '#f2d6b8', hemiSky: '#f6eedf', hemiGround: '#9a917e', sun: '#ffe2b8', sunI: 0.45, hemiI: 1.45, exposure: 1.0 },
@@ -44,6 +45,10 @@ const AREA_BUDGET = { urgent: 40, soon: 10, ahead: 4 }, AREA_SOON_M = 500;
 // [F220] waiting for an area: after this long under the fade the build gets `rush` ms a frame (behind a "Loading…"
 // notice); an area that fails to load or build is tried again after AREA_RETRY_S × tries, at most AREA_TRIES times
 const AREA_RUSH_S = 1.5, AREA_RUSH_MS = 250, AREA_RETRY_S = 10, AREA_TRIES = 3;
+// [phase 8] behind the loading screen (World.setPreload): nothing to look at yet, so the start builds at a larger budget
+// a frame (ground tiles, city chunks, the start's areas), and the view is drawn only every PRELOAD_DRAW_EVERY frames
+// (enough to compile its programs before the screen opens). The start is ready once the city within START_NEAR_M is built.
+export const PRELOAD_MS = 40, PRELOAD_AREA_MS = 60, PRELOAD_DRAW_EVERY = 4, START_NEAR_M = 450;
 
 /**
  * [F220] What the world does when the path wants area `want` drawn and `current` is drawn: 'swap' (it is built),
@@ -191,14 +196,16 @@ export class World {
     // Simple stand-in until the Blender model loads
     this.rider = makeRider();
     this.scene.add(this.rider.group);
+    this._riderModel = 'loading';   // [phase 8] (the loading screen waits for it: 'ok' or 'failed')
     loadRider().then((r) => {
+      this._riderModel = 'ok';
       if (this.disposed) return;
       this.scene.remove(this.rider.group);
       this.rider = r;
       if (this.stylized) r.group.traverse((o) => { if (o.isMesh && !o.material.transparent) { o.castShadow = true; o.receiveShadow = true; } });
       this.scene.add(r.group);
       this.log('3d', `Rider model loaded (${r.triangles.toLocaleString()} triangles)`, 'debug');
-    }).catch((err) => this.log('3d', `Using the simple rider: ${err.message}`, 'debug'));
+    }).catch((err) => { this._riderModel = 'failed'; this.log('3d', `Using the simple rider: ${err.message}`, 'debug'); });
 
     this.setTimeOfDay('midday');
 
@@ -359,7 +366,8 @@ export class World {
       if (!rec.job || rec.wait) continue;
       const urgent = (waiting && rec.id === want) || (!this._planBuilt && this._planAreas().includes(rec.id));
       const B = this.areaBudget || AREA_BUDGET;   // (tools may set world.areaBudget: Infinity = all at once, the old way)
-      const budget = rush && rec.id === want ? Math.max(B.urgent, AREA_RUSH_MS) : urgent ? B.urgent : this._soon?.has(rec.id) ? B.soon : B.ahead;   // [F220] rush
+      let budget = rush && rec.id === want ? Math.max(B.urgent, AREA_RUSH_MS) : urgent ? B.urgent : this._soon?.has(rec.id) ? B.soon : B.ahead;   // [F220] rush
+      if (this._preload && (rec.id === want || this._soon?.has(rec.id))) budget = Math.max(budget, PRELOAD_AREA_MS);   // [phase 8] (behind the loading screen)
       left = left == null ? budget : Math.min(left, budget);
       if (left <= .5) break;
       const t0 = performance.now();
@@ -521,7 +529,7 @@ export class World {
           if (this.stylized) r.group.traverse((o) => { if (o.isMesh && !o.material.transparent) { o.castShadow = true; o.receiveShadow = true; } });
           this.pacer = r;
           this.scene.add(r.group);
-        }).catch((err) => this.log('3d', `Pacer model: ${err.message}`, 'debug'));
+        }).catch((err) => { this._pacerFailed = true; this.log('3d', `Pacer model: ${err.message}`, 'debug'); });
       }
       return;
     }
@@ -688,6 +696,7 @@ export class World {
   _frame(now) {
     if (!this.running) return;
     this._raf = requestAnimationFrame(this._frame);
+    this._frames = (this._frames || 0) + 1;
     this.perf?.begin(now);
     const dt = Math.min(1.0, (now - this._last) / 1000); // real time (movement must not lag on slow frames)
     this._last = now;
@@ -724,7 +733,8 @@ export class World {
     this.terrain.uniforms.uTime.value = now / 1000;
     this.weather?.tick(dt);
     this._underground(riderPos, dt);   // [subway]
-    this.terrain.update(this.camera.position.x, this.camera.position.z, this.terrain.quality?.buildMs);
+    this.terrain.update(this.camera.position.x, this.camera.position.z, this._preload ? PRELOAD_MS : this.terrain.quality?.buildMs);
+    if (this._preload) this.terrain.city?._stream?.(this.camera.position.x, this.camera.position.z, PRELOAD_MS);   // [phase 8] the start's city, nearest first
     if (this.terrain.tick) {
       const turn = this.route.turnS || total, back = this.route.turnS && this.s > turn;
       const rider = { x: riderPos.x, z: riderPos.z, out: back ? total - this.s : this.s, dir: back ? -1 : 1, speed: src.speed };
@@ -759,6 +769,7 @@ export class World {
     this.baked?.tick(dt);   // [baked-light]
     if (this.baked) { this._bakeLoader(); if (this.baked.frame.kind && !this.baked.preparing) this.perf?.flag(); }   // [w2-bake] loader; frames with bake work
     if (this.baked?.preparing) return;   // [w2-bake] nothing drawn behind the loader (the bake has the GPU)
+    if (this._preload && this._frames % PRELOAD_DRAW_EVERY) return;   // [phase 8] behind the loading screen: drawn now and then only
     if (this.stylized) this._placeShadows(riderPos, flat);
     else {
       this.sun.position.copy(this.camera.position).addScaledVector(this.sunDir, 5000);
@@ -903,6 +914,44 @@ export class World {
 
   /** Render one frame without the animation loop (used for previews/tests). */
   renderOnce() { const r = this.running; this.running = true; this._frame(performance.now()); this.running = r; cancelAnimationFrame(this._raf); }
+
+  /** [phase 8] The app's loading screen is up: build the start faster (PRELOAD_MS), draw only now and then. */
+  setPreload(on) { this._preload = !!on; }
+  /** [phase 8] The world is holding the rider while the streets ahead load (the fade): the app holds the clock. */
+  get waitingForArea() { return !!this._waitingArea && this.running; }
+  /**
+   * [phase 8] How far the start is from ready, for the loading screen: { ready, failed, progress 0..1, steps:
+   * [{ key, label, p, done }] }. Ready = the start area fully built: the scenery's assets, the ground tiles round the
+   * start, the roads and buildings within START_NEAR_M (and an area the path enters within 500 m, on a city of areas),
+   * the first bake, the rider (and pacer) models. Further areas still load during the ride.
+   */
+  readiness() {
+    const t = this.terrain, c = this.camera.position, steps = [];
+    const add = (key, label, p) => { p = Math.max(0, Math.min(1, p)); steps.push({ key, label, p, done: p >= 1 }); };
+    const drawn = (this._frames || 0) > 0;
+    const kitIn = drawn && (this.stylized ? (t.stats?.loading ?? 0) === 0 : t.loadingCount === 0);
+    add('scenery', 'Scenery', kitIn ? 1 : 0);
+    // the ground: the tiles wanted round the start (stylized: the build queue; real terrain: tiles being fetched)
+    const q = this.stylized ? (t.stats?.queued ?? 0) + (t._want ? 0 : 1) : t.loadingCount;
+    this._q0 = Math.max(this._q0 || 0, q);
+    // (and the real horizon, if it's coming: its tiles in flight, then the stylized ground re-made for it — seconds of
+    // work best done here than on the first pedal strokes; offline it never arrives and isn't waited for)
+    const f = this.farTerrain, farIn = !f || (f.loadingCount === 0 && !!this._farOn === !!f.covered);
+    add('ground', 'Ground', !kitIn ? 0 : q === 0 && farIn ? 1 : q === 0 ? .95 : Math.min(.95, 1 - q / this._q0));
+    // roads and buildings near the start (and, on a city of areas, an area the path enters within 500 m)
+    let n = kitIn ? (t.city?.pendingNear?.(c.x, c.z, START_NEAR_M) ?? 0) : 1;
+    if (this._multi) for (const id of [this.area.id, ...(this._soon || [])]) if (!this.areas.get(id)?.ready && !this._areaFailed(id)) n++;
+    this._n0 = Math.max(this._n0 || 0, n);
+    add('streets', 'Roads & buildings', n === 0 ? 1 : 1 - n / Math.max(1, this._n0));
+    // the light: the first bake (behind the loader), if the route bakes its light
+    const b = this.baked;
+    add('light', 'Light', !b || b.prepMs != null ? 1 : b.preparing ? b.progress * .98 : 0);
+    const pacerWanted = !!this.pacerSource?.();
+    const riders = (this._riderModel !== 'loading' ? 1 : 0) + (!pacerWanted || this.pacer || this._pacerFailed ? 1 : 0);
+    add('riders', 'Riders', riders / 2);
+    const failed = (t.stats?.errors ?? 0) > 0 || !!t.failed;
+    return { ready: steps.every((s) => s.done), failed, progress: steps.reduce((a, s) => a + s.p, 0) / steps.length, steps };
+  }
 
   get loading() { return this.terrain.loadingCount + (this.baked?.preparing ? 4 : 0) + (this._waitingArea || (this._multi && this._planAreas().some((id) => !this.areas.get(id)?.ready)) ? 4 : 0); }   // [w2-bake] (4: the app's loading bar shows from 4)
 

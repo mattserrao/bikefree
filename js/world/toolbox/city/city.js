@@ -22,6 +22,7 @@ import { streetSlots } from './road-meets.js';   // [junctions]
 import { decorateTreeMaterial } from '../packs/northern-rockies.js';   // [finish] foliage shader on the street trees
 import { FACADE_GLSL } from '../structures/buildings/facade-material.js';   // [buildings] brick, stone, metal and window detail
 import { CityBuildingKit } from '../structures/buildings/kit.js';   // [buildings] homes drawn by the building kit
+import { releaseAfterUpload } from '../core/release.js';   // [F399]
 
 export { STREET_W };
 const CHUNK = 320;
@@ -958,12 +959,17 @@ export class CityScene {
     if (!S) { this.chunks.get(key).push(mesh); return; }
     S.left.delete(key); S.parts.push(mesh);
     if (S.left.size) return;
-    const geo = this.own(mergeGeometries(S.parts.map((m) => m.geometry)));
+    this._mergeSector(S, sectorOf(key));
+  }
+  /** [w2-budget] Merge a sector's building meshes into its one mesh. */
+  _mergeSector(S, sk) {
+    if (!S.parts.length) return;
+    const geo = this.own(releaseAfterUpload(mergeGeometries(S.parts.map((m) => m.geometry))));   // [F399] (final: the GPU keeps the only copy)
     for (const m of S.parts) { this.group.remove(m); m.geometry.dispose(); this.disposables.delete(m.geometry); }
     S.parts = [];
     if (!geo.attributes.position?.count) return;
     const sm = new THREE.Mesh(geo, this.buildingMaterial);
-    sm.castShadow = sm.receiveShadow = true; sm.name = `Buildings ${sectorOf(key)}`;
+    sm.castShadow = sm.receiveShadow = true; sm.name = `Buildings ${sk}`;
     sm.matrixAutoUpdate = false; sm.updateMatrix();
     this.group.add(sm);
     S.mesh = sm;
@@ -1075,7 +1081,7 @@ export class CityScene {
       for (const [key, builder] of map) {
         if (due()) yield;
         yield* builder.keepOutOfJob(this.landscape.inRouteTube);   // ramps and roadways the data puts in the rider's space
-        const mesh = new THREE.Mesh(this.own(builder.geometry()), mat);
+        const mesh = new THREE.Mesh(this.own(releaseAfterUpload(builder.geometry())), mat);   // [F399]
         mesh.receiveShadow = true; mesh.name = `${name} ${key}`; mesh.renderOrder = 1;
         this.group.add(mesh);
       }
@@ -1432,6 +1438,15 @@ export class CityScene {
   }
 
   // ---------------------------------------------------------------- per-frame
+  /** [phase 8] Building chunks still to build within r metres of (cx, cz) (the loading screen waits for the start's). */
+  pendingNear(cx, cz, r) {
+    let n = 0;
+    for (const key of this._pending) {
+      const [x, z] = key.split(',').map(Number);
+      if (Math.hypot((x + .5) * CHUNK - cx, (z + .5) * CHUNK - cz) < r + CHUNK * .71) n++;
+    }
+    return n;
+  }
   /** Build a few building chunks per frame, nearest first, so the ride never stalls. */
   _stream(cx, cz, budgetMs = this._warm ? 7 : 400) {
     if (!this._pending.length) return;
@@ -1453,7 +1468,18 @@ export class CityScene {
     this._warm = true;
   }
 
+  /**
+   * [F399] Every chunk is built: merge the sectors still waiting on a chunk that never reported in (one with only
+   * street-kit content), so every sector's buildings end as one final mesh (whose CPU copy then goes).
+   */
+  _finishSectors() {
+    this._finished = true;
+    for (const [sk, S] of this.sectors) if (S.parts.length) { S.left.clear(); this._mergeSector(S, sk); }
+    this.buildingKit?.finishAll?.();
+  }
+
   tick(camera, dt, time, rider) {
+    if (!this._pending.length && !this._finished && !this._chunk) this._finishSectors();
     this._stream(camera.x, camera.z);
     this.life.tick(camera, dt, time, rider);
     this.landmarks?.tick?.(time, dt);

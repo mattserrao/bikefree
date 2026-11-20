@@ -37,7 +37,9 @@ export class Session extends EventTarget {
     this._manualGrade = 0;
     this.workoutBias = 1;
     this.demoSpeedMps = null;
-    this.autoStart = true;      // the app turns this off while you're on the menu
+    this.autoStart = true;      // the app turns this off while you're on the menu (and behind the loading screen)
+    this.held = false;          // [phase 8] the world is loading the streets ahead: time and distance wait (setHeld)
+    this._resumeAfterHold = false;
     this._resetRideState();
 
     ride.addEventListener('press', (e) => this._onPress(e.detail));
@@ -53,6 +55,7 @@ export class Session extends EventTarget {
     this.movingS = 0;
     this.running = false;
     this.autoPaused = false;
+    this.held = false; this._resumeAfterHold = false;   // [phase 8]
     this.power = 0;
     this.cadence = 0;
     this.hr = null;
@@ -182,6 +185,7 @@ export class Session extends EventTarget {
   }
 
   start() {
+    if (this.held) { this._resumeAfterHold = true; return; }   // [phase 8] (it starts when the hold ends)
     if (!this.recorder.active) this.recorder.setLapLabel(this._lapName());
     this.running = true;
     this.autoPaused = false;
@@ -190,12 +194,38 @@ export class Session extends EventTarget {
   }
 
   pause() {
+    this._resumeAfterHold = false;
     this.running = false;
     this.recorder.stop(Date.now());
     this._changed();
   }
 
-  toggle() { this.running ? this.pause() : this.start(); }
+  toggle() {
+    if (this.held) { this._resumeAfterHold = !this._resumeAfterHold; this._changed(); return; }   // [phase 8] (pause / unpause the hold's resume)
+    this.running ? this.pause() : this.start();
+  }
+
+  /**
+   * [phase 8] Hold the ride while the world loads the streets ahead: time and distance stop (as a pause, so the
+   * recording has the gap), and the ride carries on by itself when the hold ends — unless you paused meanwhile.
+   * The trainer keeps its resistance (the grade where you are).
+   */
+  setHeld(on) {
+    on = !!on;
+    if (on === this.held) return;
+    if (on) {
+      const was = this.running;
+      if (was) this.pause();
+      this.held = true;
+      this._resumeAfterHold = was;
+    } else {
+      this.held = false;
+      const go = this._resumeAfterHold;
+      this._resumeAfterHold = false;
+      if (go) this.start();
+    }
+    this._changed();
+  }
 
   lap() {
     if (!this.recorder.active) return;
@@ -328,14 +358,14 @@ export class Session extends EventTarget {
     if (pedalling) this._lastActiveAt = nowPerf;
 
     // Auto start / auto pause
-    if (this.autoStart && !this.running && !this.autoPaused && pedalling && this.movingS === 0) this.start();
+    if (this.autoStart && !this.held && !this.running && !this.autoPaused && pedalling && this.movingS === 0) this.start();
     if (this.running && !pedalling && this.speedMps < 0.5 && nowPerf - this._lastActiveAt > AUTO_PAUSE_MS) {
       this.running = false;
       this.autoPaused = true;
       this.recorder.stop(now);
       this._changed();
     }
-    if (this.autoPaused && pedalling) this.start();
+    if (this.autoPaused && pedalling && !this.held) this.start();
 
     // Physics
     const p = this.physicsParams();

@@ -63,6 +63,20 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
+  // [F391] Route data and models (GPX, scenes, terrain, city files, the rider): cache first, in this revision's cache
+  // (a new build is a new cache, so nothing stale is served); fetched and kept the first time a ride needs them
+  if (url.origin === self.location.origin && /\/(routes\/(scenes|parks|cities|presets)|models)\//.test(url.pathname)) {
+    e.respondWith((async () => {
+      const c = await caches.open(APP_CACHE);
+      const hit = await c.match(e.request, { ignoreSearch: true });
+      if (hit) return hit;
+      const res = await fetch(e.request);
+      if (res.ok && !url.search) c.put(e.request, res.clone()).catch(() => {});
+      return res;
+    })());
+    return;
+  }
+
   // The app itself: network first so updates show up, cache when offline.
   if (url.origin === self.location.origin) {
     e.respondWith((async () => {
