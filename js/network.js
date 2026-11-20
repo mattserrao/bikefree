@@ -39,7 +39,7 @@ const LABEL_M0 = 10, LABEL_M1 = 40;   // …and for its label, order and the def
 export const SWAP_AHEAD_M = 200;   // areas: the area drawn keeps drawing while it covers the rider and this far ahead
 export const PRELOAD_M = 1500;     // …an area the path enters within this far ahead is loaded and built, hidden
 export const RELEASE_M = 600;      // …and one not drawn, not ahead and not within this far behind is released
-export const REACH_M = 800;        // [F220] …and one a choice at a junction this far ahead could take the path into (along its arms)
+export const REACH_M = 300;        // [F220; 7.8c: 800 → 300 m, user 20 Nov: fewer areas resident at once] …and one a choice at a junction this far ahead could take the path into (along its arms)
 // (no corner speed caps: PLAN 7.4 took out CORNER / cornerSpeed / edgeBends / NetRide.speedCap — you carry your speed
 // through every turn, U-turns included; the rider leans into it instead, 7.5)
 

@@ -121,10 +121,10 @@ function pittsburgh() {
 
 test('F220: every way a choice can take into another area is built well ahead of where it is drawn (the world\'s need set)', () => {
   // for every junction and every arm: ride up to it straight on, choose the arm at the prompt (150 m before it, ~15 s at
-  // 10 m/s), and look at each area the world then wants drawn: before the choice — 700 m before it is wanted (70 s at 10 m/s) (or from
+  // 10 m/s), and look at each area the world then wants drawn: before the choice — 300 m before it is wanted (30 s at 10 m/s) (or from
   // the start of the way in) — it was already in the need set the world builds hidden (the path's areas within
   // 1.5 km, and every arm's of the junctions ahead: areasReachable)
-  const net = pittsburgh(), LEAD = 700;
+  const net = pittsburgh(), LEAD = 300;   // (7.8c: REACH_M 300)
   let checked = 0, minLead = Infinity;
   for (const e of net.edges.values()) for (const dir of [1, -1]) {
     const key = `${e.id}${dir > 0 ? '+' : '-'}`, len = e.len;
@@ -147,7 +147,7 @@ test('F220: every way a choice can take into another area is built well ahead of
       }
     }
   }
-  assert.ok(checked > 30, `swaps after a choice checked: ${checked}`);
+  assert.ok(checked > 5, `swaps after a choice checked: ${checked}`);   // (7.8c: with a 300 m lead most swaps come after the choice, covered by the path's own areas)
   if (process.env.LIFE_SIM_REPORT) console.log('F220 swaps checked', checked, 'shortest lead', minLead);
 });
 const same = (a, b) => a.e === b.e && a.dir === b.dir;
