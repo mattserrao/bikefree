@@ -74,6 +74,19 @@ for (const item of catalog) {
   // named start points for the route selector: the routing POIs, placed on the way out
   const stops = findStops(route, item.routing?.pois);
   if (stops.length) row.stops = stops;
+  if (!item.area) {
+    // the menu's card (PLAN 7.11): its numbers and a thumbnail outline, so the list shows without fetching any GPX.
+    // The same fields as the route the app builds (js/app.js reads `stats` where it would read the loaded route).
+    const ridden = buildCatalogRoute(read(item.file), item);
+    row.stats = { total: ridden.total, ascent: ridden.ascent };   // (unrounded: the card rounds them, as it does the route's)
+    if (ridden.turnS) row.stats.turnS = ridden.turnS;
+    if (ridden.oneWay) row.stats.oneWay = { ascent: ridden.oneWay.ascent };
+    if (ridden.stageRoute) row.stats.stageRoute = true;
+    const last = ridden.turnIdx ?? ridden.lat.length - 1, step = Math.max(1, Math.ceil(last / 120)), outline = [];
+    for (let i = 0; i <= last; i += step) outline.push([+ridden.lat[i].toFixed(5), +ridden.lon[i].toFixed(5)]);
+    if ((last % step) !== 0) outline.push([+ridden.lat[last].toFixed(5), +ridden.lon[last].toFixed(5)]);
+    row.outline = outline;
+  }
   if (item.scene) {
     const scene = normalizeScene(JSON.parse(read(item.scene)));
     if (scene.format !== 'bikefree-scene-1' || !['authored-coast', 'authored-region', 'authored-city', 'real-coast', 'real-mountain', 'wireframe'].includes(scene.terrain)) throw new Error(`${item.id}: unsupported scene format or terrain`);
@@ -157,7 +170,8 @@ const xml = spawnSync('python3', ['-c', 'import sys, xml.etree.ElementTree as E;
   ...catalog.map((p) => resolve(root, p.file)), resolve(root, 'routes/demo-hills.gpx')], { encoding: 'utf8' });
 if (xml.status !== 0) throw new Error(`GPX XML validation failed:\n${xml.stderr || xml.error}`);
 
-const index = JSON.stringify(output, null, 2) + '\n';
+// (the outlines one line each: the catalog stays readable)
+const index = JSON.stringify(output, (k, v) => (k === 'outline' ? `@@${JSON.stringify(v)}@@` : v), 2).replace(/"@@(.*?)@@"/g, (m, s) => JSON.parse(`"${s}"`)) + '\n';
 const walk = (dir) => readdirSync(resolve(root, dir), { withFileTypes: true }).flatMap((p) => p.isDirectory() ? walk(`${dir}/${p.name}`) : [`${dir}/${p.name}`]);
 const files = [...new Set(['./', 'index.html', 'css/style.css', 'sw-assets.js',
   ...walk('js').filter((p) => p.endsWith('.js')), 'vendor/three.module.min.js', 'models/rider.json', 'models/rider-atlas.png', 'models/pacer-atlas.png',
