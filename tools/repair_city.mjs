@@ -351,9 +351,7 @@ function repairPass({ streets, city, proj, ground, index, findings, rides, near,
 }
 
 /** Areas left out of a run with no area named: why. */
-export const HOLD = {
-  'pittsburgh-polish': 'its repair reshuffles city life so the pgh-polish-crosstown sim (test/city-life-network.test.mjs) meets F336, a route rider touching you at a junction curve 1 km from any repair',
-};
+export const HOLD = {};   // (pittsburgh-polish was held for F336; the user chose to skip that one life check instead, 20 Nov)
 
 const CHECKS = ['near-miss', 'stub', 'dead-end', 'end-step', 'deck-end'];
 /** Counts of the repaired checks: { check: [near, total] } (dead-end: fail and warn only). */

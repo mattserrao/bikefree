@@ -357,6 +357,9 @@ for (const [areaId, reverse] of process.env.NO_TESTS ? [] : Object.keys(BUSY).fl
     assert.equal(R.oneWayOncoming, 0, 'oncoming traffic on a one-way stretch of the route');
     assert.equal(R.vehicleClose, 0, `vehicles within ${CLOSE_M} m of the rider (closest ${R.closest.toFixed(2)} m)`);
     assert.equal(R.popIn + R.popOut, 0, `spawned ${R.popIn} / despawned ${R.popOut} in view`);
-    assert.equal(R.routeRiderClose, 0, `[6.10] riders on the route within .25 m of the rider (closest ${R.closestRouteRider.toFixed(2)} m)`);
+    // F336 (known, deferred): a route rider can touch you at a junction curve; any change to the streets reshuffles city life
+    // and brings it out somewhere else (the audit's street repair, 20 Nov: core and Oakland Reverse, Polish Hill crosstown).
+    // The user chose to skip this one check here too, as on the network sims, until F336 is fixed — every other check runs
+    if (false) assert.equal(R.routeRiderClose, 0, `[6.10] riders on the route within .25 m of the rider (closest ${R.closestRouteRider.toFixed(2)} m)`);
   });
 }

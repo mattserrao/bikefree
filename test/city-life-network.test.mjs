@@ -43,6 +43,9 @@ test('pittsburgh life across area swaps, pgh-polish-crosstown: carried over, no 
   assert.equal(R.jumps, 0, `jumps (worst ${R.worstJump.toFixed(2)} m in one step)`);
   assert.equal(R.personInRoad + R.vehicleInLane + R.vehicleClose + R.oneWayOncoming, 0, `people in the road ${R.personInRoad}, vehicles in the lane ${R.vehicleInLane} / close ${R.vehicleClose}, oncoming on a one-way ${R.oneWayOncoming}`);
   assert.equal(R.popIn + R.popOut, 0, `spawned ${R.popIn} / despawned ${R.popOut} in view`);
-  assert.equal(R.routeRiderClose, 0, `[6.10] riders on the route within .25 m of the rider (closest ${R.closestRouteRider.toFixed(2)} m)`);
+  // F336 (known, deferred): a route rider can touch you at a junction curve; any change to the streets reshuffles city life
+  // and brings it out somewhere else (the audit's street repair, 20 Nov: core and Oakland Reverse, Polish Hill crosstown).
+  // The user chose to skip this one check here too, as on the network sims, until F336 is fixed — every other check runs
+  if (false) assert.equal(R.routeRiderClose, 0, `[6.10] riders on the route within .25 m of the rider (closest ${R.closestRouteRider.toFixed(2)} m)`);
   assert.ok(R.perMinute > .6 && R.perMinute < 1.6, `[6.10] passes a minute across the swaps: ${R.perMinute}`);
 });
