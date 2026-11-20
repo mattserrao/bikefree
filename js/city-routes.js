@@ -207,3 +207,42 @@ export function panBy(view, w, h, dx, dy) {
   const k = view?.k || 1;
   return clampView({ k, ox: (view?.ox ?? w / 2) - dx / k, oy: (view?.oy ?? h / 2) - dy / k }, w, h);
 }
+
+// Landmarks on the panel map (PLAN 7.9): the city map's `landmarks` ([{name, label, kind, rank, lat, lon}], baked
+// from the map spec by tools/build_city_map.py). Every marker is drawn; a label only where it fits.
+/** The label ranks shown at a zoom: on a phone-sized map rank 1 only until zoomed in, else ranks 1–2; all at 2.5×. */
+export const landmarkRank = (k, small) => (k >= 2.5 ? 3 : small ? (k >= 1.6 ? 2 : 1) : 2);
+/**
+ * Where the landmarks go in canvas px, and which labels fit: greedy by rank then list order, each label tried right,
+ * left, above, below and on the diagonals, kept off the canvas edge, every marker and the labels placed before (and the
+ * `avoid` boxes: the map's own labels). items: the map's landmarks; X, Y: the projection; measure(text) → px width;
+ * r: the marker's radius; lh: the label's height. → [{lm, x, y, label: {x, y, align} | null}] (markers off the
+ * canvas are left out).
+ */
+export function placeLandmarks(items, X, Y, { w, h, r = 5, lh = 13, maxRank = 3, measure, avoid = [] }) {
+  const pts = (items || []).map((lm) => ({ lm, x: X(lm.lon), y: Y(lm.lat), label: null }))
+    .filter((p) => p.x >= -r && p.x <= w + r && p.y >= -r && p.y <= h + r);
+  const boxes = [...avoid, ...pts.map((p) => [p.x - r, p.y - r, p.x + r, p.y + r])];
+  const hit = (b, own) => boxes.some((o) => o !== own && b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1]);
+  const order = pts.map((p, i) => i).sort((a, b) => pts[a].lm.rank - pts[b].lm.rank || a - b);
+  for (const i of order) {
+    const p = pts[i], own = boxes[avoid.length + i];
+    if (p.lm.rank > maxRank) continue;
+    const tw = measure(p.lm.label), g = r + 3;
+    const d = g * .7, tries = [[p.x + g, p.y, 'left'], [p.x - g, p.y, 'right'], [p.x, p.y - g - lh / 2, 'center'], [p.x, p.y + g + lh / 2, 'center'],
+      [p.x + d, p.y - d - lh / 2 + 2, 'left'], [p.x + d, p.y + d + lh / 2 - 2, 'left'], [p.x - d, p.y - d - lh / 2 + 2, 'right'], [p.x - d, p.y + d + lh / 2 - 2, 'right']];
+    for (const [tx, ty, align] of tries) {
+      const x0 = align === 'left' ? tx : align === 'right' ? tx - tw : tx - tw / 2, b = [x0 - 2, ty - lh / 2, x0 + tw + 2, ty + lh / 2];
+      if (b[0] < 2 || b[2] > w - 2 || b[1] < 2 || b[3] > h - 2 || hit(b, own)) continue;
+      boxes.push(b); p.label = { x: tx, y: ty, align };
+      break;
+    }
+  }
+  return pts;
+}
+/** The landmark marker nearest (x, y) within maxD px: placed (placeLandmarks) → the entry, or null. */
+export function nearestLandmark(placed, x, y, maxD) {
+  let best = null, bestD = maxD;
+  for (const p of placed || []) { const d = Math.hypot(p.x - x, p.y - y); if (d < bestD) { bestD = d; best = p; } }
+  return best;
+}
