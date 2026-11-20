@@ -239,7 +239,7 @@ test('the city map\'s landmarks: in the baked map, on the map, labels placed wit
     let x = 0;
     for (let i = 0; i < lead.length; i++) for (let j = i + 1; j < lead.length; j++) x += cross(lead[i].label.leader, lead[j].label.leader);
     assert.ok(x <= 1, `${tag}: ${x} leaders cross`);
-    if (lens.length) assert.ok(lens.reduce((a, b) => a + b, 0) / lens.length <= 50 && Math.max(...lens) <= 160, `${tag}: leaders ${lens.map(Math.round)}`);
+    if (lens.length) assert.ok(lens.reduce((a, b) => a + b, 0) / lens.length <= 50 && Math.max(...lens) <= 240, `${tag}: leaders ${lens.map(Math.round)}`);
   }
   const pnc = placed.find((p) => p.lm.label === 'PNC Park');
   assert.equal(nearestLandmark(placed, pnc.x + 1, pnc.y, 8)?.lm.label, 'PNC Park');

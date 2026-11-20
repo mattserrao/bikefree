@@ -277,12 +277,12 @@ export function placeLandmarks(items, X, Y, { w, h, r = 5, lh = 13, maxRank = 3,
   });
   const tws = pts.map((p) => (p.lm.rank <= maxRank ? measure(p.lm.label) : 0));
   const dirs = Array.from({ length: 16 }, (_, k) => [Math.cos(k * Math.PI / 8), Math.sin(k * Math.PI / 8)]);
-  const radii = [0, 8, 14, 22, 32, 44, 58, 74, 92, 112, 135, 160].filter((d) => d <= lead);
+  const all = [0, 8, 14, 22, 32, 44, 58, 74, 92, 112, 135, 160, 190, 225], radii = all.filter((d) => d <= lead), far = all.filter((d) => d <= lead * 1.5);
   /** The best spot for pts[i]'s label with every other label as placed (crossings cost `xCost` each); null: none. */
-  const best = (i, xCost) => {
+  const best = (i, xCost, R = radii) => {
     const p = pts[i], bw = tws[i] + 4, o = out[i];
     let top = null;
-    for (const d of radii) {
+    for (const d of R) {
       if (top && d > top.cost) break;   // (a longer leader can't win)
       for (const [cx, cy] of dirs) {
         const ax = p.x + cx * (r + 3 + d), ay = p.y + cy * (r + 3 + d);
@@ -321,7 +321,7 @@ export function placeLandmarks(items, X, Y, { w, h, r = 5, lh = 13, maxRank = 3,
   };
   const order = pts.map((p, i) => i).filter((i) => pts[i].lm.rank <= maxRank)
     .sort((a, b) => pts[a].lm.rank - pts[b].lm.rank || out[b].c - out[a].c || a - b);
-  for (const i of order) pts[i].label = best(i, 60)?.label || null;
+  for (const i of order) pts[i].label = (best(i, 60) || best(i, 60, far))?.label || null;   // (no room near: a longer leader)
   // leaders that still cross: re-place each such label with the others fixed (its old spot is still a candidate)
   for (let round = 0; round < 3; round++) {
     let moved = false;
