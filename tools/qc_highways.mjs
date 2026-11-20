@@ -22,7 +22,7 @@ import { cityStreets } from '../js/world/toolbox/city/landscape.js';
 import { cityAreas } from './qc_map.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-export const HW_LIMITS = { join: 2, jump: .5, step: .5, stepSeg: 5, grade: .08, gradeLen: 20, air: 1.5, edge: 150, hill: 6 };
+export const HW_LIMITS = { corridor: 650, join: 2, jump: .5, step: .5, stepSeg: 5, grade: .08, gradeLen: 20, air: 1.5, edge: 150, hill: 6 };
 
 export function qcHighways(areas = cityAreas()) {
   const M = HW_LIMITS, pieces = [], ground = [];
@@ -57,11 +57,16 @@ export function qcHighways(areas = cityAreas()) {
   };
   const onRoute = (x, z, r) => routes.some((ix) => { const q = ix.nearest(x, z, r); return q && q.d <= r; });
   const F = [];
-  const add = (check, severity, p, value, note, area) => F.push({ check, severity, x: Math.round(p.x), z: Math.round(p.z), value: +value.toFixed(2), note, area });
+  const routeM = (x, z) => Math.min(...routes.map((ix) => { const q = ix.nearest(x, z, 3000); return q ? q.d : Infinity; }));
+  const add = (check, severity, p, value, note, area) => F.push({ check, severity, x: Math.round(p.x), z: Math.round(p.z), value: +value.toFixed(2), note, area, routeM: Math.round(routeM(p.x, p.z)) });
+  // (an area's street data is a corridor ~900 m round its route: an end farther than this from every route is where the
+  // data stops, and no area draws on — the map's edge)
+  const atEdge = (p) => routeM(p.x, p.z) > M.corridor;
   pieces.forEach((P, k) => {
     const pts = P.pts;
     for (const [e, nb] of [[pts[0], pts[1]], [pts.at(-1), pts.at(-2)]]) {
       const hits = near(e.x, e.z, M.join, null, k);
+      if (atEdge(e)) continue;
       if (hits.length) {
         // pieces meeting here: a level join? (any piece within 0.5 m of this end's height)
         if (!hits.some((h) => Math.abs(h.y - e.y) <= M.jump)) { const h = hits.reduce((a, b) => (Math.abs(a.y - e.y) < Math.abs(b.y - e.y) ? a : b)); add('jump', 'fail', e, e.y - h.y, `highway pieces meet ${Math.abs(e.y - h.y).toFixed(1)} m apart in height`, P.area); }
@@ -97,7 +102,7 @@ function html(r) {
   const col = { fail: '#d00', warn: '#e0a020', info: '#888' };
   const marks = r.findings.map((f, i) => `<circle cx="${((f.x - x0) * s).toFixed(1)}" cy="${((f.z - z0) * s).toFixed(1)}" r="6" fill="none" stroke="${col[f.severity]}" stroke-width="2"><title>#${i + 1} ${f.check}: ${f.note} (${f.area}, ${f.x}, ${f.z})</title></circle>`).join('');
   const by = {}; for (const f of r.findings) by[`${f.check} (${f.severity})`] = (by[`${f.check} (${f.severity})`] || 0) + 1;
-  return `<!doctype html><meta charset="utf-8"><title>Highway continuity</title><style>body{font:14px system-ui;margin:20px}td{padding:2px 8px;font-size:12.5px;border-bottom:1px solid #eee}</style><h1>Highway continuity</h1><p>${r.km} km of highway ribbon in ${r.pieces} pieces (all areas). ${Object.entries(by).map(([k, n]) => `${k}: ${n}`).join(' · ')}</p><svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;border:1px solid #ddd;background:#fafafa">${lines}${marks}</svg><table>${r.findings.map((f, i) => `<tr><td>${i + 1}</td><td>${f.severity}</td><td>${f.check}</td><td>${f.area}</td><td>${f.x}, ${f.z}</td><td>${f.note}</td></tr>`).join('')}</table>`;
+  return `<!doctype html><meta charset="utf-8"><title>Highway continuity</title><style>body{font:14px system-ui;margin:20px}td{padding:2px 8px;font-size:12.5px;border-bottom:1px solid #eee}</style><h1>Highway continuity</h1><p>${r.km} km of highway ribbon in ${r.pieces} pieces (all areas). ${Object.entries(by).map(([k, n]) => `${k}: ${n}`).join(' · ')}</p><svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;border:1px solid #ddd;background:#fafafa">${lines}${marks}</svg><table>${r.findings.map((f, i) => `<tr><td>${i + 1}</td><td>${f.severity}</td><td>${f.check}</td><td>${f.area}</td><td>${f.x}, ${f.z}</td><td>${f.note}</td><td>${f.routeM} m from a route</td></tr>`).join('')}</table>`;
 }
 
 async function main() {
