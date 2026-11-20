@@ -30,7 +30,7 @@
 // Exit code 1 on any fail (or warn with --strict).
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, isAbsolute } from 'node:path';
 import { buildCatalogRoute } from '../js/routes.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
 import { landscapeBuilder } from '../js/world/toolbox/landscape/index.js';
@@ -235,7 +235,7 @@ async function main() {
     const by = {}; for (const f of r.findings) if (f.severity !== 'info') by[f.check] = (by[f.check] || 0) + 1;
     console.log(`${c('fail') ? 'FAIL' : c('warn') ? 'warn' : 'ok  '} ${item.name.padEnd(44).slice(0, 44)} ${String(r.streets).padStart(5)} streets ${String(r.km).padStart(6)} km  ${c('fail')} fail ${c('warn')} warn ${c('info')} info  ${JSON.stringify(by)}${r.overlaps ? `  overlap ${(r.overlaps.overlapM / 1000).toFixed(1)} km` : ''}  (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
   }
-  writeFileSync(join(ROOT, html), htmlReport(results));
+  writeFileSync(isAbsolute(html) ? html : join(ROOT, html), htmlReport(results));
   if (baseline) { writeFileSync(join(ROOT, BASELINE_FILE), `${JSON.stringify(Object.fromEntries(results.map((r) => [r.id, nearCounts(r)])), null, 1)}\n`); console.log(`Baseline: ${BASELINE_FILE}`); }
   if (json) writeFileSync(json, JSON.stringify(results.map(({ lines, routeLine, ...r }) => r), null, 1));
   console.log(`Report: ${html}`);
