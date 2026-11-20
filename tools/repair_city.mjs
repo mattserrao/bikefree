@@ -186,15 +186,31 @@ export function highwayCorridors({ r = 4 } = {}) {
     for (let m = 0; m <= n; m++) { const x = ax + (bx - ax) * m / n, z = az + (bz - az) * m / n, k = kk(x, z); if (!K.has(k)) K.set(k, []); K.get(k).push([x, z]); }
   }
   const on = (x, z) => { for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const [px, pz] of K.get((Math.floor(x / 5) + a) * 100003 + Math.floor(z / 5) + b) || []) if (Math.hypot(px - x, pz - z) <= r) return true; return false; };
-  return { on, keptM: Math.round(total) };
+  const dropRamps = JSON.parse(read(KEEP_FILE)).dropRamps || [];
+  return { on, keptM: Math.round(total), dropRamps };
 }
 
 /** [highways] Drop every ramp and every highway piece off the kept corridors (never a street a route rides). */
 export function highwayPass({ streets, city, proj, ground, index, rides, corridors }) {
   const { G } = geometry(streets, city, proj, ground);
   const ride = rideStreets(G, rides, null), drop = new Set(), kept = [], changes = [];
+  // ramp pieces in these zones go even where they overlap a route road (Parkway East: they floated as slabs, user 20 Nov)
+  const zones = (corridors.dropRamps || []).map((z) => ({ ...proj.toLocal(z.lat, z.lon), r: z.r, groundDecks: !!z.groundDecks }));
+  const inZone = (g, f = () => true) => g.pts.some((p) => zones.some((z) => f(z) && Math.hypot(p.x - z.x, p.z - z.z) <= z.r));
+  // (and a zone's highway viaducts are laid on the ground: their decks ended over the road below as slabs)
+  for (const g of G) if (g.cls === 0 && g.bridge && inZone(g, (z) => z.groundDecks)) {
+    const s = streets[g.k]; s.meta = [s.meta[0], s.meta[1] & ~1, 8]; s.deck = s.deck.map(() => 0);
+    const m = g.pts[Math.floor(g.pts.length / 2)];
+    changes.push({ rule: 'hw-deck-ground', k: g.k, cls: 0, x: Math.round(m.x), z: Math.round(m.z), lenM: Math.round(g.len) });
+  }
   for (const g of G) {
     if (g.cls > 1) continue;
+    if (g.cls === 1 && inZone(g)) {
+      drop.add(g.k);
+      const m = g.pts[Math.floor(g.pts.length / 2)];
+      changes.push({ rule: 'hw-ramp-zone', k: g.k, cls: g.cls, x: Math.round(m.x), z: Math.round(m.z), lenM: Math.round(g.len) });
+      continue;
+    }
     // (user, 20 Nov: ramps and off-corridor highways go even where a route rides along them — the route draws its own road)
     if (ride.has(g.k)) {
       // a piece whose ribbon lies on, over or under a route road stays (any of it) — it shapes the ground and the

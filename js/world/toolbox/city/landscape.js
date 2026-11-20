@@ -526,6 +526,10 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
     if (own && own.d < 14 && own.d >= 9 && routeKindAt(route.dist[outbound(own.i)]) === 'trail' && !all.some((o) => o.edge < 2 && o.y < own.y + 1)) {
       h = Math.min(h, own.y - .5 + (own.d - 5) * .12);
     }
+    // [parkway-east] past the 9 m clamp a hillside cut could stand right over the verge, and the 6 m mesh then
+    // draws it over the shoulder (Three Rivers Loop 6.21 km, once the Parkway East ramps that graded it were removed):
+    // out to 13 m it stays under a 1:1.25 bank from the clamp's edge
+    if (own && own.d >= 9 && own.d < 13) h = Math.min(h, own.y - .5 + .8 + (own.d - 9) * .8);
     if (!own || own.d > 9) {   // (near the route's own road its bank wins: the ground mesh can't step that fast)
       // ([audit-E1] a ramp deck doesn't, on a ground street's own carriageway: the ground street wins there)
       const onGround = around.some((o) => o.edge < .5);
