@@ -1500,8 +1500,73 @@ Decided with the user (19 Nov, after riding phase 6):
   - [ ] F392 The selected route's preview pane waits on its GPX (a Pittsburgh preset: the city network); it could show the catalog's numbers and outline first
   - [ ] F393 Measured headless against a local server only: check on the Mac and the phone (raw.githack / GitHub Pages) that the list now appears in about a second
   - [ ] F394 tools/menu_load.mjs throttles the page through CDP, which doesn't throttle the service worker's own fetches, so warm throttled numbers are optimistic; the cold throttled "bytes before the list" also undercounts
-- [ ] 7.6 Final QC (as phase 6's trimmed set) and PR
+- [x] 7.6 Final QC (as phase 6's trimmed set) and PR: tests 306/306, course strict 22 routes 0/0, network clean; PR #40. Open items moved to "Follow-up list (after phase 7)" below
 - Landmarks: an inventory and a brainstorm of missing landmarks near the routes (project doc `claude/pittsburgh-landmarks.md`); which to build is the user's call
+
+### Follow-up list (after phase 7) *(saved 20 Nov; outside PR #40)*
+Open items from phase 7, grouped. Details stay at each F number in the phase 7 section above.
+
+**Ride checks (on the bike, from PR #40)**
+- [ ] F325 / F330 Turning at 30–40 km/h: view swing and the 38° lean at junctions and U-turns
+- [ ] F350 Stadium escalators (26 s / 30 s) and ramps (~9–10.6 %) ridden up in the reverse presets
+- [ ] F377 / F378 Tour de Pittsburgh: the repeat through Acrisure as a finish; Pig Hill descent feel
+- [ ] F393 Main-page load time on the Mac and the phone (measured headless only)
+
+**Riders and lean**
+- [ ] F336 / F327 Route riders ride the area's line, not your junction curve, and can overlap you (life-sim check skipped)
+- [ ] F326 The North Side escalator approach still slows (F241)
+- [ ] F331 Side-street, trail and highway cyclists don't lean
+- [ ] F332 Rider's body could counter-lean less than the bike
+- [ ] F333 Lean not in course / clipping QC; shadow doesn't follow the lean
+- [ ] F334 Lean poses could reuse the camera's heading samples
+
+**Landmarks**
+- [ ] F340 / F346 Church facades approximate; stone-course texture on church walls
+- [ ] F341 Soldiers & Sailors' front faces away from every route
+- [ ] F342 Add Saint Mary of the Mount (and the Cathedral) to the core area
+- [ ] F343 Carrie Furnaces placement by eye; rust reads near-black at evening distance
+- [ ] F344 / F345 Carnegie campaniles, Dippy's heading, stack and spire heights are estimates
+- [ ] F347 / F348 PPG Place and the statues' poses are approximate
+- [ ] F349 Scene schema missing the 7.7 hero keys (lint warnings)
+- [ ] Postcard `views` are data only (F262); hero keep-clear zones only for 7.7 heroes; the view chooser ignores trees
+- [ ] F360 Far versions of landmark heroes in areas that only see them from afar
+
+**Stadiums**
+- [ ] F351 Stands: no roof or real upper-deck overhang; PNC's rotunda not modelled
+- [ ] F353 Crowd doesn't react to the play; no ball; no night shot of the floodlights
+- [ ] F357 Field level vs the stand's front wall on the North Shore slope
+- [ ] F358 Stadium layout is Pittsburgh-only
+- [ ] F361 Far stadium shells have no deck railings or escalator
+- [ ] F362 The Game's crowd geometries are never disposed (pre-existing)
+- [ ] F395 New clipping warning: ground over the riverfront path at 20488 m (0.11 m) after the F354 fix; hold the last 10–15 m of Acrisure's descent nearer the line
+
+**Memory and loading**
+- [ ] F359 Stadiums Loop peak from F220's reachable areas on phones (reach now 300 m; revisit with device memory)
+- [ ] F390 Pittsburgh card's map thumbnail still needs the whole network: bake a card outline
+- [ ] F391 Service worker: cache-first for routes/ data, precache only app code + catalog (today ~47 MB per build)
+- [ ] F392 Selected route's preview pane waits on its GPX
+- [ ] F394 tools/menu_load.mjs throttling undercounts service-worker fetches
+
+**Panel map**
+- [ ] F370 / F380 Phone: only ~3 labels at the whole map; cluster close markers (phones deferred)
+- [ ] F371 Read landmark positions from the scenes' heroes / stadium shapes
+- [ ] F372 / F382 Area labels still overlap each other; move them with the same placer
+- [ ] F373 No legend for marker colours
+- [ ] F374 Landmarks not reachable from the keyboard
+- [ ] F381 One leader crossing in Oakland at 1440 × 900
+- [ ] F383 Cache label placement by view
+- [ ] F384 Label widths estimated in the test
+
+**Tour de Pittsburgh**
+- [ ] F375 Homestead doesn't fit: a ~75–80 km "grand" tour or a "Tour of the Mon"
+- [ ] F376 Allegheny Observatory in a longer variant
+- [ ] F379 A "featured" slot at the top of the panel list
+
+**Carried from earlier phases**
+- [ ] F270 / F352 Render all route previews (80 missing, 6 stale)
+- [ ] 6.1b Clipping round 2 (ground near the route, bridges, boats, Oakland)
+- [ ] F261 Hero detail passes (East End, Polish Hill)
+- [ ] F129 Inclines and a ferry as conveyors
 
 ### Later test branch: more Pittsburgh landmarks + a detail pass *(decided 19 Nov; not started)*
 - [ ] All four groups from the project doc `claude/pittsburgh-landmarks.md` ("Future test branch"), at the same stylised level as phase 7: **Downtown skyline & culture** (Koppers Tower, Frick Building, Mellon Bank, Tower at PNC Plaza, EQT Plaza, Heinz Hall, Benedum, Old Jail & Courthouse, Engine Co. 1, Duquesne Upper Station, the P&LE terminal), **North Side museums** (Randyland, Aviary, Carnegie Library Allegheny, Observatory dome, Children's Museum, Warhol Museum, Mattress Factory, Soldiers & Sailors Monument), **statues & memorials** (Stargell, Clemente, Korean War, Point of View, Doughboy, Troy Hill WWI, Vietnam, Steelworkers, the Hiker, Columbus, Bigelow, Washington, the Millennium Panther), **Strip, Oakland & more** (Heinz History Center, Produce Terminal, Penn Brewery, Hamerschlag Hall, Forbes Field wall, Stephen Foster, Mellon Institute, Frick Fine Arts, St Josaphat, the Zoo entrance, Union Project, Sandcastle)
