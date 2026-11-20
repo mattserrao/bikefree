@@ -21,6 +21,7 @@ import { runSlice, due } from './toolbox/core/jobs.js';   // [F30] areas built i
 
 installHaze();   // valley haze in the fog chunks: before any material compiles
 import { wrapDist } from '../gpx.js';
+export { setGeometryRelease, releaseStats } from './toolbox/core/release.js';   // [F399] (the app turns it on)
 
 export const TIME_PRESETS = {
   morning: { label: 'Morning', elev: 14, az: 105, top: '#6f9fd8', horizon: '#f2d6b8', hemiSky: '#f6eedf', hemiGround: '#9a917e', sun: '#ffe2b8', sunI: 0.45, hemiI: 1.45, exposure: 1.0 },

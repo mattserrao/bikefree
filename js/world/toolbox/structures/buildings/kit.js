@@ -21,6 +21,7 @@ import { assemble, Writer, NullWriter } from './assemble.js';
 import { planDressing } from './dressing.js';
 import { makeFacadeMaterial } from './facade-material.js';
 import { S } from './presets.js';
+import { releaseAfterUpload } from '../../core/release.js';   // [F399]
 
 // colours stay in sRGB here (the shader linearises them): no colour-space conversion
 const SRGB = new Map();
@@ -253,7 +254,7 @@ export class CityBuildingKit {
   /** chunkBuilt as a job ([F30]): pauses between homes when its slice is used up. */
   *chunkBuiltJob(key, sk, S) {
     const list = this.chunks.get(key);
-    let T = this.sectors.get(sk); if (!T) this.sectors.set(sk, (T = { parts: [], mesh: null }));
+    let T = this.sectors.get(sk); if (!T) this.sectors.set(sk, (T = { parts: [], mesh: null, sk }));
     if (list?.length) {
       const w = new Writer(8192), d = new Writer(4096);
       for (const R of list) { if (due()) yield; const res = assemble(R, w, d, this.L); if (R.dressing?.length) for (const it of R.dressing) dress(d, it, R, this.L, res); }
@@ -271,24 +272,36 @@ export class CityBuildingKit {
       this.stats.drawn += list.length;
       this.chunks.delete(key);
     }
-    if ((!S || !S.left.size) && T.dparts?.length) {
+    if (!S || !S.left.size) this._completeSector(T);
+  }
+
+  /**
+   * A sector's chunks are all in: fold its near detail into one mesh and its main meshes into one (or keep the one).
+   * [F399] The meshes that result are final: their CPU copy goes once the GPU has them. finishAll() does this for
+   * sectors whose chunk list never empties (a chunk with only street-kit content never reports in).
+   */
+  _completeSector(T) {
+    if (T.done) return;
+    if (T.dparts?.length) {
       // the sector's near detail: one mesh, shown near the camera
       const parts = T.dparts;
-      const geo = parts.length > 1 ? this.city.own(mergeKit(parts.map((m) => m.geometry))) : parts[0].geometry;
+      const geo = releaseAfterUpload(parts.length > 1 ? this.city.own(mergeKit(parts.map((m) => m.geometry))) : parts[0].geometry);   // [F399] (final)
       if (parts.length > 1) for (const m of parts) { this.group.remove(m); m.geometry.dispose(); this.city.disposables.delete(m.geometry); this.details.splice(this.details.indexOf(m), 1); }
       const dm = parts.length > 1 ? new THREE.Mesh(geo, this.material) : parts[0];
-      if (parts.length > 1) { dm.name = `Building detail ${sk}`; dm.castShadow = false; dm.receiveShadow = true; dm.userData.bake = false; this.group.add(dm); }
+      if (parts.length > 1) { dm.name = `Building detail ${T.sk}`; dm.castShadow = false; dm.receiveShadow = true; dm.userData.bake = false; this.group.add(dm); }
       if (!geo.boundingBox) geo.computeBoundingBox();
       dm.userData.box = geo.boundingBox; dm.visible = this._near(dm); if (parts.length > 1) this.details.push(dm); T.dparts = null;
     }
-    if ((!S || !S.left.size) && T.parts.length > 1) {
-      const geo = this.city.own(mergeKit(T.parts.map((m) => m.geometry)));
+    if (T.parts.length > 1) {
+      const geo = this.city.own(releaseAfterUpload(mergeKit(T.parts.map((m) => m.geometry))));   // [F399] (final)
       for (const m of T.parts) { this.group.remove(m); m.geometry.dispose(); this.city.disposables.delete(m.geometry); }
       const sm = new THREE.Mesh(geo, this.material);
-      sm.name = `Buildings ${sk}`; sm.castShadow = sm.receiveShadow = true; sm.matrixAutoUpdate = false; sm.updateMatrix();
+      sm.name = `Buildings ${T.sk}`; sm.castShadow = sm.receiveShadow = true; sm.matrixAutoUpdate = false; sm.updateMatrix();
       this.group.add(sm); T.parts = [sm]; T.mesh = sm;
-    }
+    } else if (T.parts.length === 1) releaseAfterUpload(T.parts[0].geometry);   // [F399] (a sector of one chunk: final as it is)
+    T.done = true;
   }
+  finishAll() { for (const T of this.sectors.values()) this._completeSector(T); }
 
   /** Near detail (canopies, steps, porches' rails, dressing) only near the camera. */
   tick(camera) {

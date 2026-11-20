@@ -1119,6 +1119,8 @@ async function openWorld(route) {
   }
   try {
     worldModule = worldModule || await import('./world/world.js');
+    // [F399] static city meshes keep no CPU copy once on the GPU (~300 MB less on a Pittsburgh start); ?keepGeometry=1 keeps it
+    worldModule.setGeometryRelease?.(!new URLSearchParams(location.search).has('keepGeometry'));
   } catch (err) {
     log('3d', `Could not start the 3D view: ${err.message}`, 'error');
     document.body.classList.add('no-world');
