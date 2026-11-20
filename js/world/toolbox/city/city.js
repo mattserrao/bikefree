@@ -216,6 +216,7 @@ export class CityScene {
     if (due()) yield;
     this.heroes = buildHeroes(this);
     this.landscape.landmarks.push(...this.heroes.landmarks);   // postcard views for the scenic camera
+    { const plant = this.landscape.canPlant; if (plant && this.heroes.zones?.length) this.landscape.canPlant = (x, z) => plant(x, z) && !this.heroes.covers(x, z, 3); }   // [7.7] no woods on the heroes
     if (due()) yield;
     this.glasshouses = yield* buildGlasshousesJob(this);   // [glasshouse] conservatories ridden through (scene `glasshouses`)
     if (due()) yield;
@@ -1265,6 +1266,7 @@ export class CityScene {
     if (c === LAND.water && !L.bridgeAt(x, z, 0)) return false;
     if (c === LAND.pond || L.pondAt?.(x, z, 1.8)) return false;   // [6.5] hill water and its bank
     if (this.buildingNear(x, z, wall)) return false;
+    if (this.heroes?.covers?.(x, z, wall)) return false;   // [7.7] the landmark heroes' ground
     if (this.buildingKit?.occupied(x, z, wall)) return false;   // [buildings] the kit's eaves, porches, steps and dressing
     if (this.inStadium(x, z, 4) || this.nearWall(x, z, Math.max(1.2, margin + .6))) return false;
     // any street's carriageway, not just the nearest; its own street too, where a bend brings the roadway back

@@ -98,12 +98,16 @@ export function makeGroundMaterial(palette, config = {}, farUniform = null, cano
           vec2 bfD = vBfGround.xz - bfHoleA[i].xy;
           if (abs(dot(bfD, bfHoleA[i].zw)) < bfHoleB[i].x && abs(dot(bfD, vec2(-bfHoleA[i].w, bfHoleA[i].z))) < bfHoleB[i].y) discard;
         }
+        // 7.3b: smooth hand-off to the real far terrain. Across the band the stylized ground fades out (alpha,
+        // blended by setGroundHandoff) over the far terrain, which is drawn first and solid under the whole band:
+        // a colour crossfade, no per-pixel screen-door dither (that read as a fine halftone of dots on the hills)
+        float bfFarA = 1.;
         if (bfFar.z > .5) {
-          // complementary dither to the far terrain: each pixel shows exactly one of the two grounds
           float bfFarT = smoothstep(bfFar.x - bfFar.y * .5, bfFar.x + bfFar.y * .5, length(vBfGround.xz - cameraPosition.xz));
-          float bfFarH = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(.06711056, .00583715))));
-          if (bfFarH < bfFarT) discard;
+          if (bfFarT > .996) discard;
+          bfFarA = 1. - bfFarT;
         }`)
+      .replace('#include <opaque_fragment>', 'diffuseColor.a *= bfFarA;\n#include <opaque_fragment>')
       .replace('#include <color_fragment>', `#include <color_fragment>
         vec3 bp = vBfGround;
         float bfDistance = length(cameraPosition - bp);
@@ -450,4 +454,17 @@ export function makeLakeMistMaterial(uniforms, opacity) {
       }`,
     fog: true,
   });
+}
+
+/**
+ * 7.3b: the ground's hand-off to the real far terrain blends (the near ground fades out across the band over the
+ * far terrain, drawn before it) only while the far terrain is on; otherwise it stays a plain opaque draw.
+ * Alpha keeps at least the destination's (the frame's alpha reaches the canvas).
+ */
+export function setGroundHandoff(material, on) {
+  const blending = on ? THREE.CustomBlending : THREE.NormalBlending;
+  if (material.blending === blending) return;
+  Object.assign(material, { blending, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
+    blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor });
+  material.needsUpdate = true;
 }

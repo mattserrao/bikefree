@@ -24,8 +24,18 @@ export function makeTreeCards(uniforms) {
   const geometry = new THREE.PlaneGeometry(1, 1); geometry.translate(0, .5, 0);
   const hide = { value: new THREE.Vector4(0, 0, 0, 0) }, reach = { value: 1e9 };
   const make = (u0) => {
-    const material = new THREE.MeshLambertMaterial({ map: texture, alphaTest: .3, alphaToCoverage: true, side: THREE.DoubleSide });
+    const material = new THREE.MeshLambertMaterial({ map: texture, alphaTest: .3, side: THREE.DoubleSide });
+    // 7.3b: no alpha-to-coverage — a far card is a few pixels tall, all edge, and Apple GPUs resolve partial
+    // coverage as a dither pattern (a fine speckle over the distant forest). A plain alpha test instead, with
+    // the mip-blurred alpha scaled up by mip level so distant cards keep their size rather than thinning out.
     material.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader.replace('#include <alphatest_fragment>', `
+        #ifdef USE_MAP
+          vec2 bfTx = vMapUv * 128.;
+          float bfLod = max(0., .5 * log2(max(dot(dFdx(bfTx), dFdx(bfTx)), dot(dFdy(bfTx), dFdy(bfTx)))));
+          diffuseColor.a *= 1. + bfLod * .2;
+        #endif
+        #include <alphatest_fragment>`);
       shader.uniforms.bfHide = hide; shader.uniforms.bfReach = reach; shader.uniforms.uTime = uniforms.uTime; shader.uniforms.bfWind = uniforms.bfWind || { value: .3 };
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', '#include <common>\nuniform vec4 bfHide; uniform float bfReach; uniform float uTime; uniform float bfWind;')

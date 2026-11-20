@@ -10,7 +10,7 @@ import { parseGpx, buildRoute, averageGradeAhead, wrapDist, routeAt, isPointToPo
 import { Pacer, PACER_WATTS } from './pacer.js';
 import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor, markFtpTest, ftpFromTwentyMinutes } from './workout.js';
 import { drawProfile, drawWorkout, drawTrace, drawMinimap, drawNetworkMinimap, drawCityMap, gradeColor, profileDistAt } from './views.js';
-import { groupByArea, groupCityItems, cityCardsFirst, defaultRouteId, citySubline, filterByGoal, segmentRoutes, pickOnSegment, nearestLine, fitProjection, zoomProjection, zoomAt, panBy, mergeRivers, areaLabelSpots, shortName } from './city-routes.js';
+import { groupByArea, groupCityItems, cityCardsFirst, defaultRouteId, citySubline, filterByGoal, segmentRoutes, pickOnSegment, nearestLine, fitProjection, zoomProjection, zoomAt, panBy, mergeRivers, areaLabelSpots, shortName, landmarkRank, nearestLandmark } from './city-routes.js';
 import { Profiles, GENDERS, initials, cmToFtIn, ftInToCm } from './profiles.js';
 import { buildCatalogRoute, loadRouteScene } from './routes.js';
 import { loadNetwork, makePathRoute, planNext, planCloses, keysToIds, idsToKeys, travKey, PathFollower, edgeLines } from './network.js';
@@ -1472,7 +1472,8 @@ function cityMapData(card) {
   const lines = edgeLines(net).map((L) => ({ id: L.id, lat: L.lat, lon: L.lon })), map = cityMaps.get(card.baseId);
   return { net, paths, index: segmentRoutes(card.routes.map((it) => ({ id: it.id, path: paths.get(it.id) }))),
     lines, rivers: cityRivers.get(card.baseId) || [], waterAreas: map?.water || null,
-    labels: map ? [...(map.labels || []), ...areaLabelSpots(lines, (id) => net.edges.get(id)?.area, map.areaLabels)] : [] };
+    labels: map ? [...(map.labels || []), ...areaLabelSpots(lines, (id) => net.edges.get(id)?.area, map.areaLabels)] : [],
+    landmarks: map?.landmarks || [] };
 }
 function drawCityThumb(canvas, card) {
   const d = card && cityMapData(card);
@@ -1551,7 +1552,13 @@ function renderCityMap() {
   if (!d) return;
   const { byGoal } = cityShown(card);
   const lit = new Set(byGoal.flatMap((it) => (d.paths.get(it.id) || []).map((k) => k.replace(/[+-]$/, ''))));
+  // landmarks (PLAN 7.9): shown unless switched off with the map's toggle (remembered); labels by rank as you zoom
+  const showLm = settings.mapLandmarks !== false;
+  $('cityLm').hidden = !d.landmarks.length;
+  $('cityLm').setAttribute('aria-pressed', String(showLm));
+  $('cityLm').title = showLm ? 'Hide the landmarks' : 'Show the landmarks';
   city.lines = drawCityMap($('cityMap'), { lines: d.lines, rivers: d.rivers, waterAreas: d.waterAreas, labels: d.labels, nodes: [...d.net.nodes.values()],
+    landmarks: showLm ? d.landmarks : null, landmarkRank: landmarkRank(city.view?.k || 1, $('cityMap').clientWidth < 520),
     lit: city.goal === 'all' ? null : lit, route: city.sel ? d.paths.get(city.sel) : null, marked: city.seg, focus: city.focus,
     project: (lines, w, h, pad) => zoomProjection(fitProjection(lines, w, h, pad), w, h, city.view) });
   const zoomed = (city.view?.k || 1) > 1;
@@ -1559,7 +1566,7 @@ function renderCityMap() {
   $('cityFit').hidden = !zoomed;
   $('cityMap').lines = city.lines;   // (tools/snap_city.mjs taps a line by these)
   const sel = card.routes.find((x) => x.id === city.sel), fe = city.focus && d.net.edges.get(city.focus);
-  $('cityMap').setAttribute('aria-label', `Map of ${card.name}${sel ? `, ${shortName(sel.name)} highlighted` : ''}. Arrow keys pick a segment, Enter lists the routes that ride it.`);
+  $('cityMap').setAttribute('aria-label', `Map of ${card.name}${sel ? `, ${shortName(sel.name)} highlighted` : ''}${showLm && d.landmarks.length ? `, with ${d.landmarks.length} landmarks` : ''}. Arrow keys pick a segment, Enter lists the routes that ride it.`);
   $('cityMapHint').textContent = city.hint || (fe ? `${fe.name} · Enter to see its routes` : 'Tap a line to see the routes that ride it');
 }
 function citySelect(id, { scroll = true } = {}) {
@@ -1644,8 +1651,15 @@ $('cityMap').addEventListener('pointermove', (e) => {
   if (e.pointerType !== 'mouse' || mapDrag?.moved) return;
   const card = cityCard(), d = card && cityMapData(card);
   if (!d) return;
-  const rect = e.currentTarget.getBoundingClientRect();
-  const j = nearestLine(city.lines, e.clientX - rect.left, e.clientY - rect.top, 14);
+  const rect = e.currentTarget.getBoundingClientRect(), px = e.clientX - rect.left, py = e.clientY - rect.top;
+  const lm = nearestLandmark(city.lines.landmarks, px, py, 8);   // (PLAN 7.9: a marker under the pointer names itself)
+  if (lm) {
+    if (city.hover === `lm:${lm.lm.name}`) return;
+    city.hover = `lm:${lm.lm.name}`;
+    $('cityMapHint').textContent = lm.lm.name;
+    return;
+  }
+  const j = nearestLine(city.lines, px, py, 14);
   const id = j >= 0 ? city.lines[j].id : null;
   if (id === city.hover) return;
   city.hover = id;
@@ -1655,12 +1669,21 @@ $('cityMap').addEventListener('pointermove', (e) => {
   $('cityMapHint').textContent = `${d.net.edges.get(id)?.name || 'This segment'} · ${n ? `${n === 1 ? '1 route rides' : `${n} routes ride`} it — click to list them` : 'no route rides it — Free ride or Plan your own can'}`;
 });
 $('cityMap').addEventListener('pointerleave', () => { if (city.hover) { city.hover = null; renderCityMap(); } });
+$('cityLm').addEventListener('click', () => {
+  settings.mapLandmarks = settings.mapLandmarks === false;
+  saveSettings(settings);
+  if (city.hint && !settings.mapLandmarks) city.hint = '';
+  renderCityMap();
+});
 $('cityFit').addEventListener('click', () => { city.view = { k: 1 }; renderCityMap(); $('cityMap').focus({ preventScroll: true }); });
 $('cityMap').addEventListener('click', (e) => {
   if (mapDrag?.moved) return;   // the end of a pinch or a drag, not a tap
   const rect = e.currentTarget.getBoundingClientRect();
   const j = nearestLine(city.lines, e.clientX - rect.left, e.clientY - rect.top, e.pointerType === 'mouse' ? 14 : 22);
   if (j >= 0) { city.focus = null; cityTapSegment(city.lines[j].id); return; }
+  // off the lines, on a landmark (PLAN 7.9): its name in the hint
+  const lm = nearestLandmark(city.lines.landmarks, e.clientX - rect.left, e.clientY - rect.top, e.pointerType === 'mouse' ? 10 : 18);
+  if (lm) { city.hint = lm.lm.name; renderCityMap(); return; }
   if (city.seg) { city.seg = null; city.segIds = null; renderCity(); }   // off the lines: back to every route
 });
 $('cityMap').addEventListener('keydown', (e) => {

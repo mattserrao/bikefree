@@ -668,6 +668,16 @@
    "turnDeg": -18
   },
   {
+   "model": "church",
+   "look": "smm",
+   "name": "Saint Mary of the Mount",
+   "lat": 40.43434,
+   "lon": -80.01185,
+   "lengthM": 44.1,
+   "widthM": 22.6,
+   "axisDeg": 12.1
+  },
+  {
    "model": "ppg",
    "name": "PPG Place",
    "lat": 40.440071,
