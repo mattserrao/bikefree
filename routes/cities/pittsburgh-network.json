@@ -804,7 +804,7 @@
    "name": "Mazeroski Way & General Robinson St, North Side",
    "lat": 40.447656,
    "lon": -80.00751,
-   "ele": 223.03,
+   "ele": 223.11,
    "passes": {
     "core": [
      22040
@@ -821,7 +821,7 @@
    "name": "Clemente Bridge north end: Federal St & General Robinson",
    "lat": 40.448224,
    "lon": -80.004424,
-   "ele": 223.41,
+   "ele": 223.43,
    "passes": {
     "core": [
      22650

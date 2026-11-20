@@ -633,9 +633,15 @@ def build(cid):
         print(f'{cid}: {total / 1000:.2f} km with its detours, kinds {route_kinds}, ghosts {route_ghosts}, aprons {route_aprons}')
     else: detoured = None
     route_under = underground_ranges(cfg, rs)   # [subway] where the line runs underground, and its conveyors
-    if SPLICED_DECKS and not area_cfg:   # [7.8] the neighbours' decks on this line's copies
+    if (SPLICED_DECKS or SPLICED_CONVEYORS) and not area_cfg:   # [7.8] the neighbours' decks on this line's copies (F355: and their escalators)
         detoured = detoured or {'routeConveyors': [], 'routeDecks': []}
-        detoured['routeDecks'] = sorted(detoured['routeDecks'] + SPLICED_DECKS, key=lambda r: r['fromM'])
+        decks_ = []
+        for r in sorted(detoured['routeDecks'] + SPLICED_DECKS, key=lambda r: r['fromM']):
+            # (a deck copied onto an apron and on along the ghost back is one deck: F355)
+            if decks_ and decks_[-1]['name'] == r['name'] and r['fromM'] - decks_[-1]['toM'] <= 1: decks_[-1]['toM'] = max(decks_[-1]['toM'], r['toM'])
+            else: decks_.append(dict(r))
+        detoured['routeDecks'] = decks_
+        detoured['routeConveyors'] = sorted(detoured['routeConveyors'] + SPLICED_CONVEYORS, key=lambda r: r['fromM'])
     if detoured and (detoured['routeConveyors'] or detoured['routeDecks']):   # [7.8] a detour's escalators and decks
         route_under = dict(route_under or {})
         if detoured['routeConveyors']: route_under['routeConveyors'] = sorted(route_under.get('routeConveyors', []) + detoured['routeConveyors'], key=lambda r: r['fromM'])
@@ -1078,7 +1084,7 @@ def build(cid):
         so_ = cfg['subwayHeadsOf']
         import re as _re
         so_pts = [(float(a_), float(b_)) for a_, b_ in _re.findall(r'lat="([\d.-]+)" lon="([\d.-]+)"', open(os.path.join(ROOT, so_['gpx'])).read())]
-        clear += head_clear(so_pts, json.load(open(os.path.join(ROOT, so_['data']))).get('routeConveyors', []))
+        clear += head_clear(so_pts, [c_ for c_ in json.load(open(os.path.join(ROOT, so_['data']))).get('routeConveyors', []) if c_.get('kind') != 'stadium'])
     CLEAR_M = 12   # [F122] (was 10: Liberty Avenue Park's walls and steps still showed at Gateway's escalator top)
     near_head = lambda la, lo: any(hv((la, lo), c_) < CLEAR_M for c_ in clear)
     kit_dist = (lambda la, lo, lim: 1e9 if near_head(la, lo) else route_dist(la, lo, lim)) if clear else route_dist
@@ -1196,6 +1202,7 @@ def junction_heights(cfg, rs, e, ghosts, copied):
 
 
 SPLICED_DECKS = []   # [7.8] (splice_samples → build: the neighbours' decks on this line's copies)
+SPLICED_CONVEYORS = []   # [F355] (… and their stadium escalators)
 
 
 def splice_samples(cfg, rs, e, copy_m, kinds, bridges, ghosts, aprons):
@@ -1208,6 +1215,7 @@ def splice_samples(cfg, rs, e, copy_m, kinds, bridges, ghosts, aprons):
     80 m); a routed stretch that leads into a copy must hold a ghost, where a sideways zig (never drawn) makes up the
     length so the copy starts on a whole 10 m step. Returns the line and its kinds, bridges, ghosts and aprons."""
     import re as _re
+    SPLICED_DECKS.clear(); SPLICED_CONVEYORS.clear()   # (one build's: build_city.py may build several areas in a run)
     R6 = lambda p: (round(p[0], 6), round(p[1], 6))
     rs = [R6(p) for p in rs]
     mc = [0.0]
@@ -1478,6 +1486,15 @@ def splice_samples(cfg, rs, e, copy_m, kinds, bridges, ghosts, aprons):
         for r in sd.get('routeDecks', []):
             f_, t_ = max(r['fromM'], lo_), min(r['toM'], hi_)
             if t_ - f_ >= 1: SPLICED_DECKS.append({**r, 'fromM': round(min(m(f_), m(t_)), 2), 'toM': round(max(m(f_), m(t_)), 2)})
+        # [F355] and a stadium's escalator on them (`kind: stadium` conveyors: carried, its grade not ridden — the QC and
+        # the app treat the copy as they treat the neighbour's own). Whole escalators only; a copy run backward carries
+        # it the other way. (The subway's own conveyors are its shafts: never copied — the subway kit and
+        # tools/bake_subway_heads.mjs draw every conveyor that isn't a stadium's)
+        for r in sd.get('routeConveyors', []):
+            if r.get('kind') != 'stadium' or r['fromM'] < lo_ - .5 or r['toM'] > hi_ + .5: continue
+            fwd = b > a
+            SPLICED_CONVEYORS.append({**r, 'fromM': round(min(m(r['fromM']), m(r['toM'])), 2), 'toM': round(max(m(r['fromM']), m(r['toM'])), 2),
+                                      **({} if fwd else {'dir': {'up': 'down', 'down': 'up'}.get(r.get('dir'), r.get('dir'))})})
     return out, oe, k_out, b_out, merged, a_out, copied
 
 

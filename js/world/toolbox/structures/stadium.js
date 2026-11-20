@@ -424,7 +424,7 @@ function buildDeck(B, deck, st, helices, ring, land, col, convs) {
   const w = DECK.width / 2, esc = helices.filter((h) => h.role === 'escalator');
   const onEsc = (p) => esc.some((h) => (p.own ? false : p.s >= h.u0 && p.s <= h.u1) || (p.own && h._s && p.s >= h._s[0] && p.s <= h._s[1]));
   // (the escalator's stretch on the area's own line: the city data's conveyor of that name, line metres)
-  // (an apron's copy has no conveyors: the deck's start is the escalator's foot, so its length on from there)
+  // (an apron's copy carries the neighbour's conveyor too, F355; without one, the deck's start is the escalator's foot, so its length on from there)
   const own0 = deck.find((p) => p.own)?.s;
   for (const h of esc) { const c = (convs || []).find((q) => q.name === h.name); h._s = c ? [c.fromM, c.toM] : own0 != null ? [own0 + h.u0 - st.deckU[0], own0 + h.u1 - st.deckU[0]] : null; }
   const concrete = new THREE.Color(col.deck || '#b9b3a8'), tread = new THREE.Color('#3b3f45'), tread2 = new THREE.Color('#4a4f56'), edge = new THREE.Color('#f2c230');

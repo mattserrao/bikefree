@@ -47,7 +47,7 @@ export class Subway {
     this.route = route; this.index = index; this.cfg = cfg; this.uniforms = uniforms; this.L = landscape;
     this.disposables = [];
     if (data.heads) { this._headsOnly(data, ground); return; }
-    const under = data.routeUnderground?.[0], sub = data.subway || {}, conv = data.routeConveyors || [];
+    const under = data.routeUnderground?.[0], sub = data.subway || {}, conv = (data.routeConveyors || []).filter((c) => c.kind !== 'stadium');   // (F355: a stadium's escalator copied onto an apron is the stadium kit's)
     if (!under) return;
     this.under = under; this.conv = conv; this.platforms = sub.platforms || []; this.river = sub.river || [Infinity, Infinity];
     // the tube with the tracks: from the first escalator's foot to the last's (the shafts are their own)
