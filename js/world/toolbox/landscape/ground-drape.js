@@ -7,6 +7,13 @@
 // for every sample point that must stay clear (a street's carriageway and sidewalks), the triangle under it is
 // lowered at the vertex that stands highest (the bank's) first, until the mesh at the point is no higher than the ground there. Vertices at
 // street level move last (rarely), so nothing much opens under the ribbon; the bank above just gets a steeper first metre or two.
+//
+// [audit-E1] And the other way: a street on an embankment (a ramp beside the carriageway below it). The mesh between
+// a vertex on the bank's top and one at its toe sags under the street's edge — the street floats, and along it the
+// ground saws up and down as the edge crosses the cells. Points marked `up` (the bank's top: landscape
+// groundClearPoints) must not have the mesh more than `upTol` under the ground there: the triangle's highest vertex is
+// raised first (never over the point's ground, nor more than `maxLift` over its own). Raises run before the clear
+// points of the same call, so a lower street's clear points (the bank's toe) still win.
 
 /**
  * Incremental form (the ground patch job feeds points a slice at a time between frames).
@@ -20,7 +27,7 @@
  * @param {(x:number,z:number)=>boolean} [opts.last]  vertices lowered only when the bank's can't do it alone (those on
  *   the streets themselves: already at street level, and a dip there shows beside the sidewalk)
  */
-export function groundDrape(h, x0, z0, cell, S, heightAt, { clear = 0, maxDrop = Infinity, fixed = null, last = null } = {}) {
+export function groundDrape(h, x0, z0, cell, S, heightAt, { clear = 0, maxDrop = Infinity, fixed = null, last = null, upTol = .3, maxLift = 3 } = {}) {
   const N = S + 1, drop = new Float64Array(N * N);
   // free: 0 fixed, 1 lowered only when the others can't do it (on a street), 2 lowered first (the bank)
   const free = new Uint8Array(N * N).fill(2);
@@ -29,9 +36,13 @@ export function groundDrape(h, x0, z0, cell, S, heightAt, { clear = 0, maxDrop =
     if (fixed?.(x, z)) free[j * N + i] = 0; else if (last?.(x, z)) free[j * N + i] = 1;
   }
   return {
-    /** @param {Iterable<{x:number,z:number}>} points  where the drawn ground must not rise above the ground */
+    /** @param {Iterable<{x:number,z:number,up?:boolean}>} points  where the drawn ground must not rise above the
+     *  ground (or, `up`, sink more than upTol under it) */
     add(points) {
-      for (const p of points) {
+      const list = Array.isArray(points) ? points : [...points];
+      for (const p of list) if (p.up) raise(p);
+      for (const p of list) {
+        if (p.up) continue;
         const u = (p.x - x0) / cell, w = (p.z - z0) / cell;
         if (!(u >= 0 && w >= 0 && u <= S && w <= S)) continue;
         const i = Math.min(S - 1, Math.floor(u)), j = Math.min(S - 1, Math.floor(w)), fu = u - i, fw = w - j;
@@ -57,13 +68,35 @@ export function groundDrape(h, x0, z0, cell, S, heightAt, { clear = 0, maxDrop =
         }
       }
     },
-    /** Lower the vertices; returns {n: vertices lowered, max: deepest drop (m)}. */
+    /** Move the vertices; returns {n: vertices moved, max: deepest drop (m), drop: how far each vertex moved (m, ≥ 0)}. */
     apply() {
       let n = 0, max = 0;
-      for (let k = 0; k < drop.length; k++) if (drop[k] > 0) { h[k] -= drop[k]; n++; max = Math.max(max, drop[k]); }
-      return { n, max, drop };
+      const moved = new Float64Array(drop.length);
+      for (let k = 0; k < drop.length; k++) if (drop[k] !== 0) { h[k] -= drop[k]; n++; max = Math.max(max, drop[k]); moved[k] = Math.abs(drop[k]); }
+      return { n, max, drop: moved };
     },
   };
+  // [audit-E1] a bank-top point: lift the triangle's highest (free) vertices until the mesh there is within upTol of the ground
+  function raise(p) {
+    const u = (p.x - x0) / cell, w = (p.z - z0) / cell;
+    if (!(u >= 0 && w >= 0 && u <= S && w <= S)) return;
+    const i = Math.min(S - 1, Math.floor(u)), j = Math.min(S - 1, Math.floor(w)), fu = u - i, fw = w - j;
+    const a = j * N + i, b = a + 1, d = a + N, e = d + 1;
+    const tri = fu + fw <= 1 ? [[a, 1 - fu - fw], [b, fu], [d, fw]] : [[e, fu + fw - 1], [d, 1 - fu], [b, 1 - fw]];
+    const t = heightAt(p.x, p.z);
+    let m = 0;
+    for (const [k, wt] of tri) m += wt * (h[k] - drop[k]);
+    let under = t - upTol - m;
+    if (under <= 1e-3) return;
+    const order = tri.filter(([k, wt]) => wt > .15 && free[k]).sort((p1, p2) => (h[p2[0]] - drop[p2[0]]) - (h[p1[0]] - drop[p1[0]]));
+    for (const [k, wt] of order) {
+      if (under <= 1e-3) break;
+      const cur = h[k] - drop[k], room = Math.min(t - cur, h[k] + maxLift - cur);
+      const dk = Math.min(room, under / wt);
+      if (dk <= 0) continue;
+      drop[k] -= dk; under -= wt * dk;
+    }
+  }
 }
 
 /** One-shot form: lower `h` for all `points` at once. Returns how many vertices were lowered. */
