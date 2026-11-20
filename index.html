@@ -216,6 +216,25 @@
       <div class="glass minimap" id="hMap" hidden><canvas id="hMapCanvas"></canvas></div>
     </div>
 
+    <div class="load-screen" id="loadScreen" hidden>
+      <div class="load-card" role="dialog" aria-modal="true" aria-labelledby="loadTitle">
+        <img class="load-pic" id="loadPic" alt="" width="480" height="270" hidden>
+        <div class="load-body">
+          <small class="load-kicker" id="loadKicker">Loading the route</small>
+          <h2 class="load-title" id="loadTitle"></h2>
+          <div class="load-facts" id="loadFacts"></div>
+          <div class="load-bar" role="progressbar" aria-labelledby="loadWhat" aria-valuemin="0" aria-valuemax="100" id="loadBar"><i id="loadFill"></i></div>
+          <div class="load-what" id="loadWhat" aria-live="polite">Getting ready…</div>
+          <ul class="load-steps" id="loadSteps"></ul>
+          <div class="load-actions">
+            <button id="loadAnyway" class="primary" hidden>Ride anyway</button>
+            <button id="loadCancel">Cancel</button>
+          </div>
+          <p class="load-note" id="loadNote">The clock starts on your first pedal stroke once the route is ready.</p>
+        </div>
+      </div>
+    </div>
+
     <div class="pause-overlay" id="pauseOverlay" hidden>
       <div class="pause-card">
         <h2 class="pause-title">Paused</h2>

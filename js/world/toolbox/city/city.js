@@ -1432,6 +1432,15 @@ export class CityScene {
   }
 
   // ---------------------------------------------------------------- per-frame
+  /** [phase 8] Building chunks still to build within r metres of (cx, cz) (the loading screen waits for the start's). */
+  pendingNear(cx, cz, r) {
+    let n = 0;
+    for (const key of this._pending) {
+      const [x, z] = key.split(',').map(Number);
+      if (Math.hypot((x + .5) * CHUNK - cx, (z + .5) * CHUNK - cz) < r + CHUNK * .71) n++;
+    }
+    return n;
+  }
   /** Build a few building chunks per frame, nearest first, so the ride never stalls. */
   _stream(cx, cz, budgetMs = this._warm ? 7 : 400) {
     if (!this._pending.length) return;
