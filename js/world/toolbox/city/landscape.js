@@ -380,7 +380,7 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
   const groundClearPoints = (x0, z0, x1, z1, step = 2, clearOfRouteM = 9) => {
     if (!streetIndex) streetAt(x0, z0);
     if (!streetIndex) return [];
-    const out = [], seen = new Set();
+    const out = [], up = [], seen = new Set();
     for (let gx = Math.floor(x0 / 24); gx <= Math.floor(x1 / 24); gx++) for (let gz = Math.floor(z0 / 24); gz <= Math.floor(z1 / 24); gz++) {
       for (const v of streetIndex.get(cellOf(gx, gz)) || []) {
         const k = Math.floor(v / SEG), i = v - k * SEG;
@@ -397,10 +397,22 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
             const r = routeDist(x, z); if (r && r.d < clearOfRouteM && !onRouteBridge(route.dist[r.i], -10)) continue;   // the route's own bank and verge rule there
             out.push({ x, z });
           }
+          // [audit-E1] a street on a bank (the ground falls away more than 1.5 m in the 6 m past its shoulder): its
+          // bank's top, so the mesh can't sag under its edge (ground-drape.js `up`; raised before any clearing)
+          if (st.cls > 6) continue;
+          const sh = hw + (SIDEWALK_CLS(st.cls) ? 2.5 : 1);
+          for (const sg of [-1, 1]) {
+            const x = cx + nx * sg * sh, z = cz + nz * sg * sh;
+            if (!(x >= x0 && x <= x1 && z >= z0 && z <= z1)) continue;
+            const r = routeDist(x, z); if (r && r.d < clearOfRouteM + 4) continue;
+            const top = heightAt(x, z);
+            if (top - heightAt(x + nx * sg * 6, z + nz * sg * 6) < 1.5) continue;
+            up.push({ x, z, up: true }, { x: cx + nx * sg * (hw + .3), z: cz + nz * sg * (hw + .3), up: true });
+          }
         }
       }
     }
-    return out;
+    return up.concat(out);
   };
   /** Every street whose carriageway comes within `extra` of (x, z): [{k, edge}] (one per street). */
   const streetsNear = (x, z, extra = 0) => {
@@ -418,13 +430,20 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
       if (!(edge < extra)) continue;
       let o = null;
       for (let m = 0; m < out.length; m++) if (out[m].k === k) { o = out[m]; break; }
-      if (!o) out.push({ k, edge, y: a.y + (b.y - a.y) * t });
-      else if (edge < o.edge) { o.edge = edge; o.y = a.y + (b.y - a.y) * t; }
+      if (!o) out.push({ k, edge, y: a.y + (b.y - a.y) * t, i, t });
+      else if (edge < o.edge) { o.edge = edge; o.y = a.y + (b.y - a.y) * t; o.i = i; o.t = t; }
     }
     return out;
   };
   const pads = makeGlasshousePads(config, proj, route, index);   // [glasshouse] (js/world/toolbox/structures/glasshouse.js)
   const grade = makeStreetGrade(config, { data, decoded: D, route, index, outbound, routeKindAt, onRouteBridge, routeDist });   // [street-kit] main-street cross-section
+  // [audit-E1] how far the ground stays under a ramp deck at a point of it: DECK_UNDER, eased to the ground street's
+  // .1 m over the last ~12 m to each end (p.endM: rampDecksJob)
+  // (and within 20 m of the route's road, whose bank the drape holds to the 6 m mesh: .1 m there, as a ground street's)
+  const deckUnder = (st, o, own) => {
+    const a = st.pts[o.i - 1], b = st.pts[o.i], e = (a.endM ?? 99) + ((b.endM ?? 99) - (a.endM ?? 99)) * o.t;
+    return .1 + (Math.min(DECK_UNDER, .1 + Math.max(0, e) * .2) - .1) * (own ? smoothstep(13, 20, own.d) : 1);
+  };
   const heightAt = (x, z) => {
     let h = routeHeightAt(x, z);
     { const pad = pads?.at(x, z); if (pad) h += (pad.y - h) * pad.w; }   // [glasshouse] level under the glass, eased back outside
@@ -436,20 +455,60 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
     // radius below is a subset of the 18 m one (each street's nearest piece is the same), so the result is identical
     const all = streetsNear(x, z, 18), own = routeDist(x, z);
     const flat = 6.5, around = all.filter((o) => !streetIndex.streets[o.k].bridge);
-    if (around.length) {
+    // [audit-E1] the ground is graded to a ramp deck (rampDecksJob) as to a street 2.5 m under its roadway (less towards
+    // its ends, where it lands on the ground street it continues): under and beside it the ground follows it down to
+    // the street below, eased back to the terrain like any street's, not a hillside or a cliff right against it
+    let graded = around;
+    if (all.length !== around.length) {
+      graded = around.slice();
+      for (const o of all) { const st = streetIndex.streets[o.k]; if (st.rampDeck) graded.push({ k: o.k, edge: o.edge, y: o.y - deckUnder(st, o, own) + .1 }); }
+    }
+    if (graded.length) {
       let target = Infinity, edge = Infinity, ride = Infinity;
-      for (const o of around) {
+      for (const o of graded) {
         edge = Math.min(edge, o.edge);
         if (o.edge < flat) target = Math.min(target, o.y - .1);
         if (o.edge < 2.5 && streetIndex.streets[o.k].rides) ride = Math.min(ride, o.y - .1);   // [road-align] rides
       }
-      if (target === Infinity) target = around.reduce((a, b) => (a.edge < b.edge ? a : b)).y - .1;
+      if (target === Infinity) target = graded.reduce((a, b) => (a.edge < b.edge ? a : b)).y - .1;
       // the route's own road wins: no street grading under it, easing in beyond its shoulders — except under the
       // street the route rides on, which lies just under the road and is wider than it ([road-align] rides)
       const r = own, byRoute = r ? smoothstep(ROAD_WIDTH / 2 + 2, 13, r.d) : 1;
       h += (target - h) * (1 - smoothstep(flat, 18, edge)) * byRoute;
       if (ride < Infinity) h += (ride - h) * (1 - byRoute);
       if (r && r.d < 9) h = Math.min(h, r.y - .5 + Math.max(0, r.d - 5) * .2);   // never over the route's own road
+    }
+    // [audit-E1] streets at two levels (a ramp on its embankment beside the carriageway it leaves): the "lowest street
+    // wins" above pulled the ground under the upper one's edge down to the lower one (a slab in the air) and stepped
+    // between the two in a vertical dirt wall. Between them the ground is a 1:2 bank instead (BANK_SLOPE): no lower
+    // than each street's shoulder less half the distance past it (the upper one's embankment), no higher than each
+    // street's shoulder plus half (the lower one's cut); the lower street wins where both can't hold (a ramp deck
+    // counts as above). Not in the water; eased out under the route's own road.
+    {
+      let lo = -Infinity, hi = Infinity, yMin = Infinity, yMax = -Infinity, n = 0;
+      const onGround = around.some((o) => o.edge < .5);
+      for (const o of graded) {
+        const st = streetIndex.streets[o.k];
+        if (st.cls > 7 || o.edge > BANK_REACH + 2) continue;
+        const y = o.y - .1, run = Math.max(0, o.edge - (SIDEWALK_CLS(st.cls) && !st.bridge ? 2.5 : 1)) * BANK_SLOPE + Math.max(0, o.edge - BANK_REACH) * 2;   // (past BANK_REACH it lets go: the terrain's again)
+        lo = Math.max(lo, y - run); if (!(onGround && st.bridge)) hi = Math.min(hi, y + run);
+        yMin = Math.min(yMin, y); yMax = Math.max(yMax, y); n++;
+      }
+      if (n > 1 && yMax - yMin > 1) {
+        const byRoute = own ? smoothstep(13, 20, own.d) : 1;   // (not on the route's bank: the drape holds it to the mesh there)
+        const want = Math.min(waterAt(x, z) > 0 ? h : Math.max(h, lo), hi);
+        h += (want - h) * byRoute;
+        if (own && own.d < 9) h = Math.min(h, own.y - .5 + Math.max(0, own.d - 5) * .2);
+      }
+      // under and beside a ramp deck the lower street's grading wins: its 1:2 bank, without letting go, reaches under
+      // the deck (the embankment the deck replaced is still in the terrain there: it stood as a dirt cliff)
+      if (graded !== around && around.length) {
+        let deckEdge = Infinity, deckY = -Infinity;
+        for (const o of all) if (streetIndex.streets[o.k].rampDeck && o.edge < deckEdge) { deckEdge = o.edge; deckY = o.y; }
+        let cap = Infinity;
+        for (const o of around) if (o.y < deckY - DECK_UNDER) cap = Math.min(cap, o.y - .1 + Math.max(0, o.edge - (SIDEWALK_CLS(streetIndex.streets[o.k].cls) ? 2.5 : 1)) * BANK_SLOPE);
+        if (cap < h) h += (cap - h) * (1 - smoothstep(4, 12, deckEdge)) * (own ? smoothstep(13, 20, own.d) : 1);
+      }
     }
     // [junctions] round a junction: just under its surface and corner sidewalks (but still never over the route's road)
     if (L._junctions) {
@@ -468,7 +527,9 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
       h = Math.min(h, own.y - .5 + (own.d - 5) * .12);
     }
     if (!own || own.d > 9) {   // (near the route's own road its bank wins: the ground mesh can't step that fast)
-      for (const o of all) if (o.edge < 1.5 && streetIndex.streets[o.k].bridge && h > o.y - .35) h = Math.min(h, o.y - .35);
+      // ([audit-E1] a ramp deck doesn't, on a ground street's own carriageway: the ground street wins there)
+      const onGround = around.some((o) => o.edge < .5);
+      for (const o of all) if (o.edge < 1.5 && streetIndex.streets[o.k].bridge && h > o.y - .35 && !(onGround && streetIndex.streets[o.k].rampDeck)) h = Math.min(h, o.y - .35);
     }
     // [6.1] and never over a street's own carriageway, sidewalk or path (away from the route's road, whose
     // bank wins there): the route's bank, a hillside or a junction's grading used to rise over a lower street beside
@@ -638,6 +699,9 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
 export const STREET_W = [15, 7.5, 13, 11, 9.5, 7.5, 9, 5, 3.4];   // street width by class (tools/build_city.py)
 export const STREET_LIFT = .24;                                     // highest a street ribbon sits above its line
 const SIDEWALK_CLS = (cls) => cls >= 2 && cls <= 6;   // [6.1] streets drawn with sidewalks (city.js), 2.5 m past the carriageway
+export const BANK_SLOPE = .45;   // [audit-E1] a grassy bank between two street levels: about 1 m up per 2 m across
+const BANK_REACH = 10;        // [audit-E1] m past a street's edge its bank reaches (≈ 4 m high at 1:2); beyond, it lets go quickly
+const DECK_UNDER = 2.5;         // [audit-E1] the ground under a ramp deck stays this far under its roadway (bridges.js: a 2.2 m slab)
 
 /**
  * The city's streets as drawn: [{cls, bridge, oneway, layer, width, pts: [{x, y, z}]}]. Bridge decks keep their
@@ -721,6 +785,136 @@ function* fairStreetProfilesJob(streets, { landscape, index, route }) {
     if (moved) for (let i = 0; i < n; i++) P[i].y = y[i];
   }
 }
+/**
+ * [audit-E1] Raised roads with no room for a bank. OSM maps many ramps and carriageways on embankments (not tagged
+ * bridge); the ground under them follows the streets, and where a lower street runs too close for a 1:2 bank
+ * (BANK_SLOPE) between them, the lower one's grading wins and the upper one was a slab in the air. Those stretches
+ * become decks (bridge streets: the bridge kit draws the slab, railings and piers, js/world/toolbox/city/bridges.js;
+ * the ground under them follows the lower street): a highway, ramp or primary point that would float more than
+ * `floatM` over the bank from any lower street (or the route's road) nearby. Short gaps are closed, short runs
+ * dropped, and the street is split at the run's ends (new OSM-style nodes, so the pieces meet end to end).
+ * The bank's shoulders: 1 m past a carriageway (2.5 m where it has sidewalks).
+ */
+export const RAMP_DECK = { maxCls: 4, floatM: 1.2, reachM: 30, minRun: 4, gap: 2, routeM: 3, junctionM: 12 };
+export function* rampDecksJob(streets, { index, route } = {}) {
+  const C = 24, grid = new Map(), cell = (x, z) => Math.floor(x / C) * 100003 + Math.floor(z / C);
+  const shoulder = (st) => (SIDEWALK_CLS(st.cls) ? 2.5 : 1);
+  const orig = streets.slice();   // (the neighbours as built: the pieces split off below don't move them)
+  orig.forEach((st, k) => {
+    if (st.cls > 7 || (st.bridge && st.pts.some((p) => p.y == null))) return;
+    for (let i = 1; i < st.pts.length; i++) {
+      const a = st.pts[i - 1], b = st.pts[i];
+      for (let gx = Math.floor(Math.min(a.x, b.x) / C); gx <= Math.floor(Math.max(a.x, b.x) / C); gx++)
+        for (let gz = Math.floor(Math.min(a.z, b.z) / C); gz <= Math.floor(Math.max(a.z, b.z) / C); gz++) {
+          const key = gx * 100003 + gz; let l = grid.get(key); if (!l) grid.set(key, (l = [])); l.push(k * 65536 + i);
+        }
+    }
+  });
+  const R = RAMP_DECK, end = route ? route.turnIdx || route.dist.length - 1 : 0;
+  // city junctions (an OSM node three or more street arms meet at, one of them a secondary or smaller, or a path): a deck stays
+  // clear of them (the junction is on the ground)
+  const arms = new Map(), nk = (p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`;
+  for (const st of orig) if (st.nodes) st.nodes.forEach((p, j) => { const o = arms.get(nk(p)) || { p, n: 0, city: false }; o.n += j === 0 || j === st.nodes.length - 1 ? 1 : 2; o.city ||= st.cls >= 3; arms.set(nk(p), o); });
+  const jGrid = new Map();
+  // (a city street's junction: a highway's gores are the decks' to carry)
+  for (const { p, n, city } of arms.values()) if (n >= 3 && city) { const c = cell(p.x, p.z); if (!jGrid.has(c)) jGrid.set(c, []); jGrid.get(c).push(p); }
+  const nearJunction = (p) => { for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const q of jGrid.get(cell(p.x, p.z) + a * 100003 + b) || []) if (Math.hypot(q.x - p.x, q.z - p.z) < R.junctionM) return true; return false; };
+  // how far a point of street k (half width hw, shoulder s) would float over a 1:2 bank down to the lowest neighbour
+  const floatAt = (k, p, hw, s, cls) => {
+    let worst = -Infinity;
+    const span = Math.ceil(R.reachM / C);
+    const best = new Map();   // nearest piece of each other street
+    for (let a = -span; a <= span; a++) for (let b = -span; b <= span; b++) {
+      for (const v of grid.get(cell(p.x, p.z) + a * 100003 + b) || []) {
+        const q = Math.floor(v / 65536), i = v % 65536;
+        if (q === k) continue;
+        const st = orig[q], A = st.pts[i - 1], B = st.pts[i], dx = B.x - A.x, dz = B.z - A.z, l2 = dx * dx + dz * dz || 1;
+        const t = Math.max(0, Math.min(1, ((p.x - A.x) * dx + (p.z - A.z) * dz) / l2));
+        const d = Math.hypot(A.x + dx * t - p.x, A.z + dz * t - p.z);
+        const o = best.get(q);
+        if (o?.cross) continue;
+        // (a bridge crossing over or under it, or a city street it crosses or merges into: not beside it — a
+        // highway's ramps merging into it are)
+        if (d - st.width / 2 - hw < -1 && (st.bridge || Math.max(st.cls, cls) >= 2)) { best.set(q, { d: Infinity, st, cross: true }); continue; }
+        if (!o || d < o.d) best.set(q, { d, y: A.y + (B.y - A.y) * t, st });
+      }
+    }
+    for (const o of best.values()) {
+      if (o.cross) continue;
+      const gap = o.d - hw - o.st.width / 2;
+      if (gap > R.reachM) continue;
+      // (an OSM bridge below: the ground must pass under it, .35 m down, right at its edge)
+      worst = Math.max(worst, o.st.bridge ? p.y - o.y + .35 - Math.max(0, gap - s) * BANK_SLOPE : p.y - o.y - Math.max(0, gap - s - shoulder(o.st)) * BANK_SLOPE);
+    }
+    // the route's road below (a bank would cover it)
+    if (index && route) {
+      const r = index.nearest(p.x, p.z, hw + ROAD_WIDTH / 2 + 20);
+      if (r) {
+        const i = r.i > end ? Math.max(0, 2 * end - r.i) : r.i, gap = r.d - hw - ROAD_WIDTH / 2;
+        worst = Math.max(worst, p.y - route.ele[i] - Math.max(0, gap - s - 1) * BANK_SLOPE);
+      }
+    }
+    return worst;
+  };
+  const n0 = streets.length;
+  for (let k = 0; k < n0; k++) {
+    if (due()) yield;
+    const st = streets[k], P = st.pts, n = P.length;
+    if (st.bridge || st.cls > R.maxCls || n < 2) continue;
+    // (not within routeM of the route's road: its bank, junctions and clearances rule there — tools/qc_course.mjs)
+    const nearRoute = (p) => index && !!index.nearest(p.x, p.z, st.width / 2 + ROAD_WIDTH / 2 + R.routeM);
+    const mask = P.map((p) => !nearRoute(p) && !nearJunction(p) && floatAt(k, p, st.width / 2, shoulder(st), st.cls) > R.floatM);
+    // close short gaps, drop short runs, and widen each run by a point (the deck lands where the bank can take it)
+    for (let i = 0; i < n; i++) if (!mask[i]) { let j = i; while (j < n && !mask[j]) j++; if (i > 0 && j < n && j - i <= R.gap) for (let q = i; q < j; q++) mask[q] = true; i = j; }
+    const runs = [];
+    for (let i = 0; i < n; i++) if (mask[i]) { let j = i; while (j + 1 < n && mask[j + 1]) j++; if (j - i + 1 >= R.minRun) runs.push([Math.max(0, i - 1), Math.min(n - 1, j + 1)]); i = j; }
+    if (!runs.length) continue;
+    // a run within a couple of points of an end reaches it (no stub of ground street left at the end)
+    for (const r of runs) { if (r[0] <= 2) r[0] = 0; if (r[1] >= n - 3) r[1] = n - 1; }
+    if (runs.length === 1 && runs[0][0] === 0 && runs[0][1] === n - 1) { streets[k] = { ...st, bridge: true, rampDeck: true }; continue; }
+    // split at the runs' ends: pieces [cut_i, cut_i+1], every other one a deck
+    const cuts = [0], deckFrom = new Set();
+    for (const [a, b] of runs) { if (a > cuts[cuts.length - 1]) cuts.push(a); deckFrom.add(cuts[cuts.length - 1]); if (b > cuts[cuts.length - 1]) cuts.push(b); }
+    if (cuts[cuts.length - 1] !== n - 1) cuts.push(n - 1);
+    const pieces = [];
+    for (let c = 0; c + 1 < cuts.length; c++) {
+      const a = cuts[c], b = cuts[c + 1];
+      const nodes = [], nodeIdx = [];
+      st.nodeIdx.forEach((ni, j) => { if (ni >= a && ni <= b) { nodes.push(st.nodes[j]); nodeIdx.push(ni - a); } });
+      if (nodeIdx[0] !== 0) { nodes.unshift(P[a]); nodeIdx.unshift(0); }
+      if (nodeIdx[nodeIdx.length - 1] !== b - a) { nodes.push(P[b]); nodeIdx.push(b - a); }
+      const pts = P.slice(a, b + 1).map((p, j) => (j === 0 && c > 0 ? { ...p } : p));   // (the shared end point: one object per street)
+      const deck = deckFrom.has(a);
+      pieces.push({ ...st, bridge: deck, ...(deck ? { rampDeck: true } : {}), pts, nodes, nodeIdx, underRoute: st.underRoute && pts.some((p) => p.pin) });
+    }
+    // (the longest ground piece keeps the street's index: passes that go street by street see it where they did)
+    let keep = 0;
+    pieces.forEach((pc, c) => { if (!pc.bridge && (pieces[keep].bridge || pc.pts.length > pieces[keep].pts.length)) keep = c; });
+    streets[k] = pieces[keep];
+    pieces.forEach((pc, c) => { if (c !== keep) streets.push(pc); });
+  }
+  // each deck point's distance to the deck's nearer end (heightAt: the ground under it eases to the street it lands on)
+  for (const st of streets) if (st.rampDeck) {
+    const P = st.pts, s = [0];
+    for (let i = 1; i < P.length; i++) s.push(s[i - 1] + Math.hypot(P[i].x - P[i - 1].x, P[i].z - P[i - 1].z));
+    P.forEach((p, i) => { p.endM = Math.min(s[i], s[P.length - 1] - s[i]); });
+  }
+}
+
+/** [audit-E1] A ramp deck's ends meet what they carry on as at one height (the passes after the split move them
+ *  apart: the ground piece's grading, the junctions; an OSM bridge keeps its own deck heights): each end of a ramp
+ *  deck takes the height of the other street's point there (not a ramp deck's), and the fairing after eases the deck to it. */
+function syncDeckJoins(streets) {
+  const key = (p) => Math.round(p.x * 20) * 1e7 + Math.round(p.z * 20);
+  const ends = new Map();
+  for (const st of streets) if (st.rampDeck) for (const p of [st.pts[0], st.pts[st.pts.length - 1]]) ends.set(key(p), p);
+  if (!ends.size) return;
+  for (const st of streets) {
+    if (st.rampDeck) continue;
+    for (const q of st.pts) { const p = ends.get(key(q)); if (p) p.y = q.y; }
+  }
+}
+
 /** cityStreets as a job ([F30]: js/world/toolbox/core/jobs.js): the same passes, pausing between streets when its slice is used up. */
 export function* cityStreetsJob(landscape, index, route) {
   if (landscape._streets) return landscape._streets;
@@ -780,6 +974,7 @@ export function* cityStreetsJob(landscape, index, route) {
     streets.push({ cls, bridge, oneway, layer, pts, width, ...(brick ? { brick } : {}), underRoute: under, rides: width > ROAD_WIDTH + 1 && pts.some((p) => p.along),   // [road-align] rides (wider than the road: sticks out)
       nodes: raw, nodeIdx });   // [junctions] OSM nodes → pts index
   }
+  yield* rampDecksJob(streets, { index, route });   // [audit-E1] raised roads with no room for a bank: decks
   // [road-align] smooth, grade-limited street profiles with one height per junction (js/world/road-align.js)
   if (align?.streets) {
     const nearRoute = (x, z) => { const r = index.nearest(x, z, 24); return r ? 1 - smoothstep(12, 22, r.d) : 0; };
@@ -787,6 +982,7 @@ export function* cityStreetsJob(landscape, index, route) {
     for (const st of streets) { st.pts.forEach((p, j) => { if (lower(p, st.width, !st.bridge && alongRoute(st.pts, j))) st.underRoute = true; }); if (due()) yield; }
     yield* syncPinnedNodesJob(streets);
   }
+  syncDeckJoins(streets);   // [audit-E1]
   yield* fairStreetProfilesJob(streets, { landscape, index, route });   // [audit-A] pinned dips and deck steps eased (before the junction passes see them)
   yield* liftOverPondsJob(streets, landscape);   // [6.5] no street, path or sidewalk at or under a pond's water
   landscape._streets = streets;
@@ -808,6 +1004,7 @@ export function* cityStreetsJob(landscape, index, route) {
     yield* keepUnderRoadJob(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [junctions] (and still nothing over the road)
     yield* hideCrossingsAtRouteJob(streets, { route, index, landscape, roadWidth: ROAD_WIDTH });   // [w2-meets] crossings at another level: under the road's bank
     yield* dropCutStubsJob(streets);   // [finish] stubs cut away at one end aren't drawn
+    syncDeckJoins(streets);   // [audit-E1]
     yield* fairStreetProfilesJob(streets, { landscape, index, route });   // [audit-A] …and again: what the passes above moved
     yield* junctionTopsJob(landscape._junctions, streets, landscape.routeDist, ROAD_WIDTH);   // [junctions] mouths at the streets' final heights
   }
