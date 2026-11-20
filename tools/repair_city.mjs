@@ -6,7 +6,8 @@
 //   node tools/repair_city.mjs                         every Pittsburgh area
 //   node tools/repair_city.mjs pittsburgh-westend      one area (catalog ids)
 //   options: --dry (report, write nothing)   --near 300 (only ends / pieces within m of the area's route)
-//            --rules interchange,near-miss,stub,dead-end,end-step,deck-end (only these rules; default: all)
+//            --rules interchange,near-miss,stub,dead-end,end-step,deck-end,highways,route-stub,route-service,route-leftover,route-copy
+//                    (only these rules; default: all)
 //            --json out.json (every repair, what was left and why, the tunnel approaches)
 //
 // Only the `streets` block of the city JSON changes (the rest of the file stays byte for byte); streets keep their order
@@ -333,6 +334,192 @@ export function thinPass({ streets, city, proj, ground, index, rides, near }) {
 }
 
 /**
+ * [route-sites] The 25 busiest route sites (tools/city/pittsburgh-route-sites.json: where the most city roads meet or crowd a
+ * bike route; user, 20 Nov: "the roads should make sense where they meet the path"). Only streets within a site's r m:
+ *   route-stub     (C) a piece < SITE.stubMax m (primary…service, ground) with one end at a route's road and the other end
+ *                  meeting nothing (a stub left where the data was split at the route, or a street ending at a bank), or
+ *                  lying all inside a route's road (a split fragment under it): dropped, unless another street ends on it
+ *   route-service  (E) parking aisles and alleys (service, cls 7) at the path: every service piece whose ribbon reaches a
+ *                  route's road, and every one < SITE.svcShort m within SITE.svcClose m of a route, is dropped; a lot or
+ *                  block (service pieces joined end to end) left with no other way in keeps its one longest entrance;
+ *                  pieces of it left cut off within SITE.orphanR m of a route go too
+ *   route-copy     (F) a street drawn beside a route's road as a copy of it (≥ SITE.copyShare of it, ≥ SITE.copyMin m,
+ *                  running along the route within SITE.copyGap m of the road's edge, its centre line off the route's by
+ *                  > SITE.copyOff m): its nodes along the route are moved onto the route's centre line (with every other
+ *                  street's node or end there), so it lies under the road ([road-align] rides: the road carries its width,
+ *                  paint and side-street joins — js/world/toolbox/city/landscape.js cityStreets)
+ * Never a deck (bridges keep their own structure); never a street another street would be left ending on nothing by.
+ */
+export const SITES_FILE = 'tools/city/pittsburgh-route-sites.json';
+export const SITE = { leftMax: 80, leftR: 40, stubMax: 30, svcClose: 25, svcShort: 60, orphanR: 60, copyGap: 3, copyShare: .6, copyMin: 20, copyOff: 2, copyAngle: .94 };
+export const routeSites = () => JSON.parse(read(SITES_FILE)).sites;
+
+export function routeSitePass({ streets, city, proj, ground, rides, sites, rules = null }) {
+  const { G, near: around, quant } = geometry(streets, city, proj, ground);
+  const ride = rideStreets(G, rides), M = MAP_LIMITS, on = (r) => !rules || rules.includes(r);
+  const Z = sites.map((s) => ({ ...proj.toLocal(s.lat, s.lon), r: s.r }));
+  const inZone = (p) => Z.some((z) => Math.hypot(p.x - z.x, p.z - z.z) <= z.r);
+  /** The nearest route point to p within r: { d, x, z (on the route's centre line), tx, tz } */
+  const routeAt = (p, r) => {
+    let best = null;
+    for (const { index: ix } of rides) {
+      const q = ix.nearest(p.x, p.z, r + 12); if (!q) continue;
+      for (const j of [q.i - 1, q.i]) {
+        if (j < 0 || j + 1 >= ix.xs.length) continue;
+        const ax = ix.xs[j], az = ix.zs[j], dx = ix.xs[j + 1] - ax, dz = ix.zs[j + 1] - az, l2 = dx * dx + dz * dz; if (!l2) continue;
+        const t = Math.max(0, Math.min(1, ((p.x - ax) * dx + (p.z - az) * dz) / l2)), x = ax + dx * t, z = az + dz * t, d = Math.hypot(p.x - x, p.z - z);
+        if (d <= r && (!best || d < best.d)) { const l = Math.sqrt(l2); best = { d, x, z, tx: dx / l, tz: dz / l }; }
+      }
+    }
+    return best;
+  };
+  const samples = (g, step = 3) => {
+    const out = [];
+    for (let i = 1; i < g.pts.length; i++) {
+      const a = g.pts[i - 1], b = g.pts[i], l = dist(a, b); if (l < .01) continue;
+      const n = Math.max(1, Math.round(l / step));
+      for (let m = 0; m < n; m++) { const t = (m + .5) / n; out.push({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, hx: (b.x - a.x) / l, hz: (b.z - a.z) / l, l: l / n }); }
+    }
+    return out;
+  };
+  const atRoad = (g, p, extra = M.join) => !!routeAt(p, ROAD_WIDTH / 2 + g.w / 2 + extra);
+  const drop = new Set(), changes = [], moved = new Map();   // k → new xy
+  const log = (rule, g, note) => { const p = g.pts[Math.floor(g.pts.length / 2)]; changes.push({ rule, k: g.k, cls: g.cls, x: +p.x.toFixed(1), z: +p.z.toFixed(1), note }); };
+  // street ends: what each meets (streets, by index) and whether it is at a route's road
+  const ends = G.map((g) => [0, g.pts.length - 1].map((j) => { const e = g.pts[j]; return { e, on: around(e.x, e.z, M.join, g.k).map((h) => h.k), road: atRoad(g, e) }; }));
+  const byEnd = new Map(); ends.forEach((two, k) => two.forEach(({ on }) => on.forEach((o) => { if (!byEnd.has(o)) byEnd.set(o, new Set()); byEnd.get(o).add(k); })));
+  /** Would dropping `set` leave a kept street (not a path) ending on nothing (an end that met only dropped streets, not at a road)? */
+  const strands = (set, minor = 8) => {   // (minor: streets of this class and up don't count — service pieces of the same lot)
+    const gone = new Set([...drop, ...set]);
+    for (const k of set) for (const o of byEnd.get(k) || []) {
+      if (gone.has(o) || G[o].cls >= minor) continue;
+      for (const en of ends[o]) if (en.on.includes(k) && !en.road && en.on.every((x) => gone.has(x))) return true;
+    }
+    return false;
+  };
+  const scope = (g) => !g.bridge && !ride.has(g.k) && g.pts.some(inZone);
+
+  // C. route-stub
+  if (on('route-stub')) for (const g of G) {
+    if (g.cls < 2 || g.cls > 7 || g.len >= SITE.stubMax || !scope(g) || drop.has(g.k)) continue;
+    const [a, b] = ends[g.k], under = g.pts.every((p) => routeAt(p, ROAD_WIDTH / 2 + 1));
+    const loose = (en) => !en.road && en.on.every((o) => drop.has(o));
+    const stub = (a.road && loose(b)) || (b.road && loose(a));
+    // a sliver: both ends at the road, beside it (what a copy moved under the road leaves: a short loop off it)
+    const sliver = a.road && b.road && !under && g.pts.every((p) => routeAt(p, ROAD_WIDTH / 2 + g.w / 2 + 6));
+    if (!stub && !sliver && !(under && (!a.on.length || !b.on.length))) continue;   // (a piece under the road joining two streets: the crossing's own)
+    if ([...(byEnd.get(g.k) || [])].some((o) => !drop.has(o) && G[o].cls !== 8 && ends[o].some((en) => en.on.includes(g.k) && !en.road))) continue;   // a kept street ends on it (away from the road)
+    if (strands([g.k])) continue;
+    drop.add(g.k); log('route-stub', g, `${g.len.toFixed(0)} m ${under ? 'fragment under the route\'s road' : sliver ? 'sliver beside the route\'s road' : 'stub at the route\'s road'} dropped`);
+  }
+
+  // E. route-service
+  if (on('route-service')) {
+    const svc = G.filter((g) => g.cls === 7 && !g.bridge && !drop.has(g.k));
+    const isSvc = new Set(svc.map((g) => g.k));
+    // lots / blocks: service pieces joined end to end (or one's end on the other)
+    const comp = new Map(); let nc = 0;
+    for (const g of svc) {
+      if (comp.has(g.k)) continue;
+      const q = [g.k]; comp.set(g.k, nc);
+      while (q.length) { const k = q.pop(); for (const o of [...ends[k][0].on, ...ends[k][1].on, ...(byEnd.get(k) || [])]) if (isSvc.has(o) && !comp.has(o)) { comp.set(o, nc); q.push(o); } }
+      nc++;
+    }
+    const touch = new Map();   // candidates: k → touches a route's road
+    for (const g of svc) {
+      if (!scope(g)) continue;
+      const S = samples(g); let t = false, close = false;
+      for (const p of S) { if (!inZone(p)) continue; const r = routeAt(p, SITE.svcClose); if (!r) continue; close = true; if (r.d <= ROAD_WIDTH / 2 + g.w / 2 + 1) { t = true; break; } }
+      if (t || (close && g.len < SITE.svcShort)) touch.set(g.k, t);
+    }
+    // a component's other ways in: an end of a piece not dropped on a street that isn't a service road or path
+    const access = (c, gone) => svc.some((g) => comp.get(g.k) === c && !gone.has(g.k) && (ends[g.k].some((en) => en.on.some((o) => !gone.has(o) && G[o].cls <= 6 && !isSvc.has(o))) || [...(byEnd.get(g.k) || [])].some((o) => !gone.has(o) && G[o].cls <= 6)));
+    const byComp = new Map(); for (const k of touch.keys()) { const c = comp.get(k); if (!byComp.has(c)) byComp.set(c, []); byComp.get(c).push(k); }
+    for (const [c, ks] of byComp) {
+      let go = ks.filter((k) => !strands([k], 7));
+      const gone = new Set([...drop, ...go]);
+      if (!access(c, gone)) {   // the lot's only ways in are at the path: keep its longest entrance there
+        const keep = ks.filter((k) => touch.get(k)).sort((a, b) => G[b].len - G[a].len)[0];
+        if (keep != null) go = go.filter((k) => k !== keep);
+      }
+      if (strands(go, 7)) go = go.filter((k) => !strands([k], 7));
+      for (const k of go) { drop.add(k); log('route-service', G[k], `${G[k].len.toFixed(0)} m service piece ${touch.get(k) ? 'at the route\'s road' : 'beside the path'} dropped`); }
+    }
+    // pieces left cut off (meeting nothing at either end, nothing ending on them) near the path
+    for (let again = true; again;) {
+      again = false;
+      for (const g of svc) {
+        if (drop.has(g.k) || !scope(g)) continue;
+        const near = g.pts.some((p) => inZone(p) && routeAt(p, SITE.orphanR));
+        if (!near) continue;
+        const cut = ends[g.k].every((en) => !en.road && en.on.every((o) => drop.has(o))) && [...(byEnd.get(g.k) || [])].every((o) => drop.has(o));
+        const met = ends[g.k].some((en) => en.on.length || en.road) || (byEnd.get(g.k)?.size ?? 0) > 0;
+        if (!cut || !met || strands([g.k], 7)) continue;
+        drop.add(g.k); again = true; log('route-service', g, `${g.len.toFixed(0)} m service piece left cut off beside the path dropped`);
+      }
+    }
+  }
+
+  // B. route-leftover: deck pieces near the path that end in the air
+  if (on('route-leftover')) for (let again = true; again;) {
+    again = false;
+    for (const g of G) {
+      if (!g.bridge || g.cls > 7 || g.len >= SITE.leftMax || ride.has(g.k) || drop.has(g.k) || !g.pts.some(inZone)) continue;
+      if (!g.pts.some((p) => routeAt(p, SITE.leftR))) continue;
+      const loose = ends[g.k].filter((en) => !en.road && en.on.every((o) => drop.has(o))).length;
+      if (!loose) continue;
+      if ([...(byEnd.get(g.k) || [])].some((o) => !drop.has(o) && G[o].cls !== 8 && ends[o].some((en) => en.on.includes(g.k) && !en.road && en.on.every((x) => x === g.k || drop.has(x))))) continue;
+      drop.add(g.k); again = true; log('route-leftover', g, `${g.len.toFixed(0)} m deck piece ending in the air beside the path dropped`);
+    }
+  }
+
+  // F. route-copy: a copy beside the route's road moved onto its centre line
+  if (on('route-copy')) for (const g of G) {
+    if (g.cls < 2 || g.cls > 6 || g.bridge || drop.has(g.k) || !g.pts.some(inZone)) continue;
+    const reach = ROAD_WIDTH / 2 + g.w / 2 + SITE.copyGap;
+    let run = 0, off = 0;
+    for (const p of samples(g)) { const r = routeAt(p, reach); if (r && Math.abs(r.tx * p.hx + r.tz * p.hz) >= SITE.copyAngle) { run += p.l; off += r.d * p.l; } }
+    if (run < SITE.copyMin || run < g.len * SITE.copyShare || off / run <= SITE.copyOff) continue;
+    // (the other carriageway of a divided road carried on over a bridge, or run on in a piece too long to move: left as it is —
+    // moving only part of it left kinks and slivers between the moved and the kept pieces)
+    const carriesOn = ends[g.k].some((en) => en.on.some((o) => { const h = G[o]; if (h.cls > 6 || drop.has(o)) return false;
+      if (!h.bridge && h.len <= g.len * 3) return false;
+      let par = 0; for (const p of samples(h)) { const r = routeAt(p, ROAD_WIDTH / 2 + h.w / 2 + SITE.copyGap); if (r && r.d > SITE.copyOff && Math.abs(r.tx * p.hx + r.tz * p.hz) >= SITE.copyAngle) par += p.l; }
+      return par >= SITE.copyMin; }));
+    if (carriesOn) continue;
+    // its nodes along the route (and within a site): onto the route's centre line
+    const raw = streets[g.k], xy = raw.xy.slice(), shifts = [];
+    g.pts.forEach((p, i) => {
+      if (!inZone(p)) return;
+      const r = routeAt(p, reach); if (!r || r.d <= .3) return;
+      // along the route at this node: the street's heading here (the segments either side) runs with the route's
+      const a = g.pts[Math.max(0, i - 1)], b = g.pts[Math.min(g.pts.length - 1, i + 1)], l = dist(a, b) || 1;
+      if (Math.abs(r.tx * (b.x - a.x) + r.tz * (b.z - a.z)) / l < SITE.copyAngle) return;
+      xy[i] = quant(r.x, r.z); shifts.push({ from: p, q: xy[i], to: r });
+    });
+    if (!shifts.length) continue;
+    moved.set(g.k, xy);
+    // every other street's node at a moved node, or end on the copy, follows it (onto the route's centre line)
+    const onCopy = (p) => { for (let i = 1; i < g.pts.length; i++) { const a = g.pts[i - 1], b = g.pts[i], dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / l2)); if (Math.hypot(a.x + dx * t - p.x, a.z + dz * t - p.z) <= M.join) return true; } return false; };
+    for (const o of G) {
+      if (o.k === g.k || o.bridge || drop.has(o.k) || !o.pts.some(inZone)) continue;
+      let oxy = null;
+      o.pts.forEach((p, i) => {
+        const sh = shifts.find((s) => dist(s.from, p) < .5);
+        if (sh) { (oxy ||= moved.get(o.k) || streets[o.k].xy.slice())[i] = sh.q; return; }
+        if ((i === 0 || i === o.pts.length - 1) && inZone(p) && onCopy(p)) { const r = routeAt(p, reach); if (r && r.d > .3) (oxy ||= moved.get(o.k) || streets[o.k].xy.slice())[i] = quant(r.x, r.z); }
+      });
+      if (oxy) moved.set(o.k, oxy);
+    }
+    log('route-copy', g, `${run.toFixed(0)} m drawn ${(off / run).toFixed(1)} m beside the route's centre line: ${shifts.length} nodes moved onto it`);
+  }
+
+  const out = [];
+  streets.forEach((s, k) => { if (!drop.has(k)) out.push(moved.has(k) ? { ...s, xy: moved.get(k) } : s); });
+  return { streets: out, changes };
+}
+
+/**
  * One repair pass over an area's streets, driven by qc_map's findings (`near` m of the route).
  * → { streets (new list), changes: [{ rule, k, x, z, note }], tunnels: [...], left: [...] }
  */
@@ -545,7 +732,7 @@ export function counts(findings, near) {
 }
 
 /** Repair one area's city JSON text. → { text, before, after, changes, tunnels, left, passes } */
-export function repairArea({ item, scene, text, near = REPAIR.near, rides, rules = null, corridors = null, log = () => {} }) {
+export function repairArea({ item, scene, text, near = REPAIR.near, rides, rules = null, corridors = null, sites = null, log = () => {} }) {
   const route = buildCatalogRoute(read(item.file), item); route.scene = scene;
   const o = scene.origin, proj = makeProjection(o.lat, o.lon), index = makeRouteIndex(route, proj);
   const city0 = JSON.parse(text);
@@ -562,6 +749,17 @@ export function repairArea({ item, scene, text, near = REPAIR.near, rides, rules
     const h = highwayPass({ streets: decodeStreets(text).streets, city: JSON.parse(text), proj, ground, index, rides: rideIdx, corridors });
     rideHighways = h.kept;
     if (h.changes.length) { changes.push(...h.changes.map((c) => ({ ...c, pass: 0 }))); log(`  highways: ${h.changes.length} dropped (${h.changes.filter((c) => c.rule === 'hw-ramp').length} ramps)${h.kept.length ? `, ${h.kept.length} kept: a route rides them` : ''}`); text = withStreets(text, h.streets); findings = qc(text); }
+  }
+  // [route-sites] the busiest route sites: stubs, parking aisles and copies of the route's road at the path
+  if (sites && (!rules || rules.some((r) => r.startsWith('route-')))) {
+    let n = 0;
+    for (let p = 0; p < 4; p++) {
+      const s = routeSitePass({ streets: decodeStreets(text).streets, city: JSON.parse(text), proj, ground, rides: rideIdx, sites, rules });
+      if (!s.changes.length) break;
+      n += s.changes.length; changes.push(...s.changes.map((c) => ({ ...c, pass: 0 })));
+      text = withStreets(text, s.streets);
+    }
+    if (n) { log(`  route sites: ${n} changes`); findings = qc(text); }
   }
   for (; passes < REPAIR.passes; passes++) {
     let n = 0;
@@ -602,6 +800,7 @@ async function main() {
   const rides = loadRides(catalog), report = [];
   // [highways] the corridors to keep, from every Pittsburgh area's data (not only the areas named)
   const corridors = !rules || rules.includes('highways') ? highwayCorridors() : null;
+  const sites = !rules || rules.some((r) => r.startsWith('route-')) ? routeSites() : null;   // [route-sites]
   if (corridors) console.log(`highways: keeping ${(corridors.keptM / 1000).toFixed(1)} km of corridor lines (${KEEP_FILE})`);
   const fmt = (c) => CHECKS.map((k) => `${k} ${c[k][0]}/${c[k][1]}`).join('  ');
   for (const item of items) {
@@ -609,7 +808,7 @@ async function main() {
     if (!scene.cityData) continue;
     const text = read(scene.cityData);
     console.log(`${item.id}:`);
-    const r = repairArea({ item, scene, text, near, rides, rules, corridors, log: console.log });
+    const r = repairArea({ item, scene, text, near, rides, rules, corridors, sites, log: console.log });
     if (!dry && r.text !== text) writeFileSync(join(ROOT, scene.cityData), r.text);
     const by = {}; for (const c of r.changes) by[c.rule] = (by[c.rule] || 0) + 1;
     console.log(`  before  ${fmt(r.before)}   (within ${near} m / total)\n  after   ${fmt(r.after)}\n  repairs ${JSON.stringify(by)}  ${r.text === text ? 'unchanged' : dry ? '(dry: not written)' : `→ ${scene.cityData}`}  (${((Date.now() - t0) / 1000).toFixed(0)} s)`);
