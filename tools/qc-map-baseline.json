@@ -1,19 +1,20 @@
 {
  "pittsburgh": {
-  "stub": 9,
-  "bump": 11,
-  "near-miss": 15,
+  "stub": 10,
+  "bump": 8,
+  "near-miss": 13,
   "height-step": 4,
-  "dead-end": 10,
+  "dead-end": 9,
   "deck-end": 2,
   "end-step": 2
  },
  "pittsburgh-allegheny": {
   "deck-end": 2,
   "end-step": 2,
-  "near-miss": 13,
-  "stub": 2,
-  "dead-end": 1
+  "near-miss": 14,
+  "stub": 3,
+  "dead-end": 1,
+  "bump": 1
  },
  "pittsburgh-westend": {
   "bump": 5,
@@ -29,17 +30,19 @@
  "pittsburgh-polish": {
   "near-miss": 4,
   "stub": 1,
-  "dead-end": 1
+  "dead-end": 1,
+  "zig-zag": 1
  },
  "pittsburgh-homestead": {
-  "near-miss": 1,
+  "near-miss": 2,
   "stub": 2,
   "bump": 1
  },
  "pittsburgh-northside": {
-  "near-miss": 4,
-  "stub": 3,
-  "dead-end": 5
+  "near-miss": 5,
+  "stub": 4,
+  "dead-end": 5,
+  "zig-zag": 1
  },
  "pittsburgh-eastend": {
   "near-miss": 7,
@@ -48,7 +51,7 @@
   "stub": 1
  },
  "pittsburgh-slopes": {
-  "near-miss": 6,
+  "near-miss": 9,
   "bump": 5,
   "stub": 5,
   "dead-end": 2
@@ -56,7 +59,7 @@
  "pittsburgh-subway": {
   "dead-end": 2,
   "deck-end": 1,
-  "near-miss": 2,
+  "near-miss": 3,
   "stub": 2
  }
 }
