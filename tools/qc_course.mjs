@@ -71,7 +71,7 @@ const deg = (r) => (r * 180) / Math.PI;
 const angleBetween = (a, b) => deg(Math.acos(Math.max(-1, Math.min(1, a.x * b.x + a.z * b.z))));
 
 /** Ground as the stylized patch mesh draws it: 6 m grid, triangles (a,d,b) and (b,d,e). */
-function makeMeshGround(heightAt, fineCells = PATCH_CELLS, fineAt = null, landscape = null) {
+export function makeMeshGround(heightAt, fineCells = PATCH_CELLS, fineAt = null, landscape = null) {
   // [w2-align] city patches are draped off the streets (js/world/toolbox/landscape/ground-drape.js): model each 96 m patch the same way
   if (landscape?.groundClearPoints) {
     // (a patch the landscape asks to draw finer — groundMesh.fineCells along a city's fineRanges — as stylized-terrain.js builds it)

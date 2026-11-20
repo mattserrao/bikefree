@@ -89,7 +89,7 @@ const turnDeg = (a, b, c) => ((((Math.atan2(c.z - b.z, c.x - b.x) - Math.atan2(b
 const len = (a, b) => Math.hypot(b.x - a.x, b.z - a.z);
 
 /** A grid of street segments for "the nearest other street to (x, z)". */
-function segGrid(streets, cell = 20) {
+export function segGrid(streets, cell = 20) {
   const g = new Map(), key = (i, j) => i * 100003 + j;
   streets.forEach((st, k) => {
     for (let i = 1; i < st.pts.length; i++) {
