@@ -617,6 +617,7 @@ export function resolveOverlaps(...args) { return drain(resolveOverlapsJob(...ar
 export function* resolveOverlapsJob(streets, landscape, options = {}) {
   const O = { cos: .7, level: .6, grade: .08, ...options };
   const slots = streetSlots(landscape, streets), lift = (k) => SLOT_LIFT(slots[k]);
+  if (O.final) yield* flushBranchesJob(streets, lift);   // [audit-E2] ramps level with their carriageway where they overlap it
   const len = streets.map((st) => { let l = 0; for (let i = 1; i < st.pts.length; i++) l += Math.hypot(st.pts[i].x - st.pts[i - 1].x, st.pts[i].z - st.pts[i - 1].z); return l; });
   const order = streets.map((_, k) => k).filter((k) => streets[k].cls <= 7 && streets[k].pts.length > 1)
     .sort((a, b) => streets[a].cls - streets[b].cls || (streets[b].bridge ? 1 : 0) - (streets[a].bridge ? 1 : 0) || len[b] - len[a] || a - b);
@@ -693,6 +694,113 @@ export function* resolveOverlapsJob(streets, landscape, options = {}) {
       for (let i = 0; i < P.length; i++) { const d = Math.abs(A[i] - A[j]); if (d < L) { const w = t.has(i) ? (i === j ? 1 : 0) : 1 - smooth(d / L); if (w > 0 && (!best[i] || w > best[i][0])) best[i] = [w, dy]; } }
     }
     P.forEach((p, i) => { if (best[i] && !p.along && !p.pin && p.jn == null && !(O.final && p.je != null) && shared.get(nk(p)) < 2) p.y = own[i] + best[i][1] * best[i][0]; });
+  }
+  return n;
+}
+
+/**
+ * [audit-E2] Merges and diverges: a link (ramp, cls 1) that ends on its carriageway (a highway, a link or a primary
+ * it shares the node with, running on near-parallel from it) meets it at the node at its height, and stays level
+ * with it as long as the two ribbons overlap in plan — so the overlap pass after this trims the ramp to what lies
+ * beyond the carriageway's edge (one ribbon, the carriageway's solid edge line along the gore) instead of leaving
+ * two ribbons a metre or two apart in height drawn over each other with their paint crossing. Past the overlap the
+ * ramp eases back to its own heights. The node's other streets, route-aligned and pinned points, and points inside
+ * a junction keep their heights; a ramp more than `maxStep` m off its carriageway at the node (another level) is
+ * left alone. → number of branches levelled. Pure (no three.js); exported for the tests.
+ */
+export function flushBranches(...args) { return drain(flushBranchesJob(...args)); }
+export function* flushBranchesJob(streets, lift = () => .1, options = {}) {
+  const O = { cos: .8, maxStep: 3, maxDy: 3, grade: .06, reach: 160, ...options };
+  const nk = (p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`;
+  const at = new Map();   // node key → [[k, i]]
+  streets.forEach((st, k) => { if (st.cls <= 7) st.pts.forEach((p, i) => { const kk = nk(p); if (!at.has(kk)) at.set(kk, []); at.get(kk).push([k, i]); }); });
+  const acc = (P) => { const a = [0]; for (let i = 1; i < P.length; i++) a.push(a[i - 1] + Math.hypot(P[i].x - P[i - 1].x, P[i].z - P[i - 1].z)); return a; };
+  const outward = (P, i, dir, A) => {   // unit direction from P[i] to the point ~10 m along in `dir`
+    let j = i; while (j + dir >= 0 && j + dir < P.length && Math.abs(A[j] - A[i]) < 10) j += dir;
+    if (j === i) return null;
+    const dx = P[j].x - P[i].x, dz = P[j].z - P[i].z, l = Math.hypot(dx, dz) || 1; return { x: dx / l, z: dz / l };
+  };
+  let n = 0;
+  for (let k = 0; k < streets.length; k++) {
+    const st = streets[k], P = st.pts;
+    if (st.cls !== 1 || P.length < 2) continue;
+    if (due()) yield;
+    const A = acc(P), L = A[A.length - 1];
+    for (const e of [0, P.length - 1]) {
+      const dir = e === 0 ? 1 : -1, mine = outward(P, e, dir, A);
+      if (!mine) continue;
+      // the carriageway: a street through this node (or the greater one ending here) running on alongside the ramp
+      let par = null;
+      for (const [ko, j] of at.get(nk(P[e])) || []) {
+        const so = streets[ko];
+        if (ko === k || so.cls > 2 || so.cls === 7) continue;
+        const through = j > 0 && j < so.pts.length - 1, AO = acc(so.pts);
+        // (two ramps both ending here — a ramp splitting in two — the shorter one follows the longer)
+        if (!through && so.cls === st.cls && (AO[AO.length - 1] < L || (AO[AO.length - 1] === L && ko < k))) continue;
+        for (const d of [1, -1]) {
+          const u = outward(so.pts, j, d, AO); if (!u) continue;
+          const c = u.x * mine.x + u.z * mine.z;
+          if (c > O.cos && (!par || c > par.c)) par = { ko, c };
+        }
+      }
+      if (!par) continue;
+      const so = streets[par.ko], hB = so.width / 2, h = st.width / 2, Q = so.pts;
+      const near = (p) => {   // nearest point of the carriageway's line: distance and the top there
+        let best = null;
+        for (let i = 1; i < Q.length; i++) {
+          const a = Q[i - 1], b = Q[i], { d, t } = segDist(p.x, p.z, a, b);
+          if (!best || d < best.d) best = { d, y: a.y + (b.y - a.y) * t };
+        }
+        return best;
+      };
+      const step0 = near(P[e]).y + lift(par.ko) - lift(k) - P[e].y;
+      if (Math.abs(step0) > O.maxStep) continue;
+      // walk out from the node while the ribbons overlap: the ramp's height there is the carriageway's
+      const sharedAt = (i) => (at.get(nk(P[i])) || []).some(([ko]) => ko !== k);
+      const free = (i) => { const p = P[i]; return !p.along && !p.pin && p.jn == null && p.je == null && (i === e || !sharedAt(i)); };
+      const target = new Map();
+      let last = -1;
+      for (let i = e; i >= 0 && i < P.length && Math.abs(A[i] - A[e]) < O.reach; i += dir) {
+        const q = near(P[i]);
+        if (i !== e && q.d > h + hB - .3) break;
+        if (!free(i)) { if (P[i].jn != null || P[i].je != null || i === e) continue; break; }   // (a junction's own heights: kept; another street's node: stop)
+        const y = q.y + lift(par.ko) - lift(k);
+        if (Math.abs(y - P[i].y) > O.maxDy) break;
+        target.set(i, y); last = i;
+      }
+      if (last < 0) continue;
+      const Y0 = P.map((p) => p.y), order = [...target.keys()];   // (from the node outward)
+      /** The new profile with the first m levelled points, then the ease back; null where it would crease. */
+      const profile = (m) => {
+        const T = new Map(order.slice(0, m).map((i) => [i, target.get(i)])), lst = order[m - 1];
+        const dyEnd = T.get(lst) - Y0[lst], sEnd = A[lst];
+        // (the far end keeps its height, and so does any point that isn't ours to move: the ease ends before it)
+        let stop = dir > 0 ? L : 0;
+        for (let i = lst + dir; i >= 0 && i < P.length; i += dir) if (!free(i) || i === 0 || i === P.length - 1) { stop = A[i]; break; }
+        const ease = Math.min(Math.max(8, Math.abs(dyEnd) / O.grade), Math.max(0, Math.abs(stop - sEnd) - 1));
+        if (Math.abs(dyEnd) > .05 && Math.abs(dyEnd) / Math.max(ease, .1) > 2 * O.grade) return null;   // no room to ease back
+        const Y = Y0.slice();
+        for (let i = 0; i < P.length; i++) {
+          if (!free(i)) continue;
+          if (T.has(i)) Y[i] = T.get(i);
+          else { const ds = (A[i] - sEnd) * dir; if (ds > 0 && ds < ease) Y[i] = Y0[i] + dyEnd * (1 - smooth(ds / ease)); }
+        }
+        // …which must not crease or step where the old one didn't (against a junction's eased heights, a node kept)
+        for (let i = 1; i < P.length - 1; i++) {
+          const l1 = A[i] - A[i - 1], l2 = A[i + 1] - A[i];
+          if (l1 < 1 || l2 < 1) continue;
+          const dg = (y) => Math.abs((y[i + 1] - y[i]) / l2 - (y[i] - y[i - 1]) / l1), lim = l1 >= 3 && l2 >= 3 ? .18 : .3;
+          if (dg(Y) > lim && dg(Y) > dg(Y0) + .01) return null;
+        }
+        return Y;
+      };
+      let Y = null;
+      for (let m = order.length; m >= 1 && !Y; m = m > 4 ? Math.floor(m * .75) : m - 1) Y = profile(m);
+      if (!Y) continue;
+      let moved = false;
+      for (let i = 0; i < P.length; i++) if (Math.abs(Y[i] - P[i].y) > .003) { P[i].y = Y[i]; moved = true; }
+      if (moved) n++;
+    }
   }
   return n;
 }
