@@ -107,7 +107,7 @@ test('Pittsburgh\'s subway (NS>GW): its two escalators are conveyors on the path
   assert.equal(e.conveyors.length, 2);
   const r = makePathRoute(net, net.presets.find((p) => p.id === 'pgh-subway-point'));
   const a = [...net.edges.values()].find((x) => x.key === 'A>NS').len;
-  const z = r.carry.filter((c) => c.from < r.lapM);
+  const z = r.carry.filter((c) => c.from < r.lapM && c.from - a < e.len);   // (the subway's: the loop home through PNC Park has the stadium's, PLAN 7.8)
   assert.deepEqual(z.map((c) => [c.from - a, c.to - a]), e.conveyors.map((c) => [c.u0, c.u1]));
   // riding down the first: the line drops ~13 m over its ~48 m; up the second: it climbs as much
   const ele = (s) => r.ele[Math.round(s / 10)];
@@ -116,4 +116,38 @@ test('Pittsburgh\'s subway (NS>GW): its two escalators are conveyors on the path
   // a route saved over the Clemente Bridge and the Point before the subway split them still maps (key history)
   const { keysToIds, idsToKeys } = await import('../js/network.js');
   assert.deepEqual(idsToKeys(net, keysToIds(net, ['A>B+', 'B>E+'])), ['A>NS+', 'NS>CB+', 'CB>B+', 'B>GW+', 'GW>E+']);
+});
+
+test('PLAN 7.8: the North Shore rides through PNC Park and Acrisure Stadium — a spiral escalator up, the upper deck, a ramp down', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { loadCatalogNetwork } = await import('../tools/qc_network.mjs');
+  const index = JSON.parse(readFileSync(new URL('../routes/parks/index.json', import.meta.url), 'utf8'));
+  const { net } = loadCatalogNetwork(index.find((r) => r.id === 'pittsburgh'));
+  const city = JSON.parse(readFileSync(new URL('../routes/scenes/pittsburgh-city.json', import.meta.url), 'utf8'));
+  for (const [key, name, rise] of [['NS>CB', 'PNC Park', 24], ['R>A', 'Acrisure Stadium', 24]]) {
+    const e = [...net.edges.values()].find((x) => x.key === key);
+    assert.equal(e.conveyors?.length, 1, `${key}: one escalator`);
+    const c = e.conveyors[0];
+    // the escalator is a whole turn of a helix: it rises the stand's height and you're carried, not pedalling
+    assert.ok(c.u1 - c.u0 > 75 && c.u1 - c.u0 < 100, `${key}: ${c.u1 - c.u0} m of escalator`);
+    const deck = city.routeDecks.find((d) => d.name === name);
+    assert.ok(deck && deck.fromM <= e.s[0] + c.u0 + 1 && deck.toM > e.s[0] + c.u1 + 150, `${name}: the deck runs from the escalator's foot over the concourse`);
+    // ridden in a preset: carried up it at its pace; the concourse is up there; the ramp brings you back down
+    const r = makePathRoute(net, net.presets.find((p) => p.id === 'pgh-stadiums'));
+    const at = r.netRide.entries.find((x) => x.t.e.key === key && x.t.dir > 0);
+    const z = r.carry.find((q) => Math.abs(q.from - (at.p0 + c.u0)) < 1);
+    assert.ok(z, `${key}: a carry zone on the Stadiums Loop`);
+    assert.equal(carryAt(r, z.from + 10)?.mps, z.mps);
+    const ele = (s) => r.ele[Math.round(s / 10)];
+    assert.ok(Math.abs(ele(z.to + 10) - ele(z.from - 10) - rise) < 3, `${key}: up ${ele(z.to + 10) - ele(z.from - 10)} m`);
+    // the ramp down: steady, no steeper than a ramp should be
+    for (let s = z.to + 40; s < at.p0 + e.len - 20; s += 10) assert.ok(ele(s) - ele(s + 10) < 1.4, `${key}: ${(ele(s) - ele(s + 10)) * 10}% at ${s}`);
+  }
+  // the Stadiums Loop: from the Water Steps, PNC Park, Acrisure Stadium, back over the Clemente Bridge; it closes
+  const p = net.presets.find((x) => x.id === 'pgh-stadiums');
+  assert.equal(p.name, 'Stadiums Loop');
+  assert.ok(p.lengthM > 10000 && p.lengthM < 13500, `${p.lengthM}`);
+  // saved routes from before keep working (the edges keep their keys; the old composite keys still split)
+  const { keysToIds, idsToKeys } = await import('../js/network.js');
+  assert.deepEqual(idsToKeys(net, keysToIds(net, ['D>A+', 'A>B+'])), ['D>C+', 'C>R+', 'R>A+', 'A>NS+', 'NS>CB+', 'CB>B+']);
 });

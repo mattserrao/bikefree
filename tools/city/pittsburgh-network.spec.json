@@ -887,6 +887,13 @@
       "note": "From the Water Steps: the escalator down at North Side, the subway path under the Allegheny, up at Gateway, round the Point and the riverfront, home over the Clemente Bridge"
     },
     {
+      "id": "pgh-stadiums",
+      "name": "Stadiums Loop",
+      "path": ["A>NS+", "NS>CB+", "CB>FJ+", "R>FJ-", "R>A+", "A>NS+", "NS>GW+", "B>GW-", "CB>B-", "NS>CB-", "A>NS-"],
+      "tags": ["short", "flat", "new"],
+      "note": "From the Water Steps: up PNC Park's spiral escalator, round the upper deck behind home plate and down its ramp by the Clemente Bridge; round Allegheny Commons to Acrisure Stadium's escalator, its rim with the view to the Point and its ramp down to the river; under the Allegheny by the subway, round the Point and back over the Clemente Bridge (through PNC Park the other way)"
+    },
+    {
       "id": "pgh-subway-three-rivers",
       "name": "Three Rivers Loop · via the subway",
       "path": [

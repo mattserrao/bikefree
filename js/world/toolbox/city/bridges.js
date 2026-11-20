@@ -490,8 +490,9 @@ export function buildLandmarks(city) {
   }
 
   // USS Requin: the submarine moored by the Science Center.
+  const requinHero = (scene.heroes || []).some((h) => h.model === 'requin');   // [7.7] the heroes kit draws it
   for (const b of city.buildings) {
-    if (b.kind !== 12) continue;
+    if (b.kind !== 12 || requinHero) continue;
     let cx = 0, cz = 0; for (const p of b.ring) { cx += p.x; cz += p.z; } cx /= b.ring.length; cz /= b.ring.length;
     let len = 0, yaw = 0;
     for (const a of b.ring) for (const c of b.ring) { const d = Math.hypot(c.x - a.x, c.z - a.z); if (d > len) { len = d; yaw = Math.atan2(c.x - a.x, c.z - a.z); } }

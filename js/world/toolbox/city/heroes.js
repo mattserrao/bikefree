@@ -13,6 +13,7 @@ import { MeshBuilder } from '../core/mesh-builder.js';
 import { ROAD_WIDTH } from '../../pose.js';
 import { V, TAU, centroid, area2, orient, scaleRing, lerp2, inPoly, prism, cap, block, chamfer } from './hero-geom.js';
 import { landmarkModels } from './landmark-heroes.js';
+import { northShoreModels } from './heroes-northshore.js';   // [7.7] PPG Place, the PNC Park statues, Mister Rogers, USS Requin
 
 // ---------------------------------------------------------------- materials
 /** Lit at night: an `aGlow` colour added as emission, scaled by the city's night. */
@@ -301,6 +302,7 @@ export function buildHeroes(city) {
   // [7.7] Oakland's icons, the churches on the routes and the Homestead steel heritage
   Object.assign(models, landmarkModels({ city, L, W, S, N, glows, beacons, out, claim, clearUnder, ground, groundMax, wall, local }));
 
+  Object.assign(models, northShoreModels({ city, S, W, N, glows, claim, clearUnder, ground, wall, L: local }));   // [7.7] Downtown / North Shore
   for (const h of scene.heroes || []) {
     const fn = models[h.model];
     if (fn) fn(local(h.lat, h.lon), h);
