@@ -1507,10 +1507,13 @@ Decided with the user (19 Nov, after riding phase 6):
 Open items from phase 7, grouped. Details stay at each F number in the phase 7 section above.
 
 **Ride checks (on the bike, from PR #40)**
-- [ ] F325 / F330 Turning at 30–40 km/h: view swing and the 38° lean at junctions and U-turns
-- [ ] F350 Stadium escalators (26 s / 30 s) and ramps (~9–10.6 %) ridden up in the reverse presets
-- [ ] F377 / F378 Tour de Pittsburgh: the repeat through Acrisure as a finish; Pig Hill descent feel
-- [ ] F393 Main-page load time on the Mac and the phone (measured headless only)
+- [x] F325 / F330 Turning at 30–40 km/h: view swing and the 38° lean at junctions and U-turns (user, 20 Nov: good)
+- [ ] F350 Stadium escalators (26 s / 30 s) and ramps (~9–10.6 %) ridden up in the reverse presets: "Three Rivers Loop · reverse", "North Side Hills Loop · reverse", the Stadiums Loop's way home (user, 20 Nov: couldn't find a reverse mode; the reverses are separate presets in the Pittsburgh list)
+- [x] F377 / F378 Tour de Pittsburgh: the repeat through Acrisure as a finish; Pig Hill descent feel (user, 20 Nov: good)
+- [x] F393 Main-page load time on the Mac and the phone (user, 20 Nov: improved)
+
+**Future PR action**
+- [ ] Main-page load time: carry on from 7.11 (user, 20 Nov: improved, save as a future PR action): F390 baked card outline, F391 service-worker caching, F392 preview pane, F394 timing tool; re-measure on the Mac and the phone
 
 **Riders and lean**
 - [ ] F336 / F327 Route riders ride the area's line, not your junction curve, and can overlap you (life-sim check skipped)
