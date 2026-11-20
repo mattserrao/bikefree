@@ -11,6 +11,7 @@
     "qc:clipping": "node tools/qc_clipping.mjs",
     "qc:network": "node tools/qc_network.mjs",
     "qc:map": "node tools/qc_map.mjs",
+    "qc:interchanges": "node tools/qc_interchanges.mjs",
     "repair:city": "node tools/repair_city.mjs",
     "network:build": "node tools/build_network.mjs",
     "snap": "node tools/snap_scene.mjs",

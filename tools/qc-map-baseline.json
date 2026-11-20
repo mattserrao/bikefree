@@ -1,0 +1,56 @@
+{
+ "pittsburgh": {
+  "stub": 8,
+  "bump": 13,
+  "near-miss": 12,
+  "height-step": 4,
+  "end-step": 4,
+  "dead-end": 1
+ },
+ "pittsburgh-allegheny": {
+  "end-step": 1,
+  "near-miss": 11,
+  "stub": 2,
+  "bump": 1
+ },
+ "pittsburgh-westend": {
+  "bump": 5,
+  "near-miss": 1,
+  "height-step": 3,
+  "stub": 1
+ },
+ "pittsburgh-oakland": {
+  "near-miss": 2,
+  "stub": 3
+ },
+ "pittsburgh-polish": {
+  "near-miss": 10,
+  "stub": 4,
+  "dead-end": 1
+ },
+ "pittsburgh-homestead": {
+  "near-miss": 2,
+  "stub": 2,
+  "bump": 1
+ },
+ "pittsburgh-northside": {
+  "stub": 3,
+  "near-miss": 4,
+  "end-step": 1
+ },
+ "pittsburgh-eastend": {
+  "near-miss": 6,
+  "dead-end": 1,
+  "bump": 1
+ },
+ "pittsburgh-slopes": {
+  "near-miss": 6,
+  "bump": 5,
+  "stub": 5,
+  "dead-end": 1
+ },
+ "pittsburgh-subway": {
+  "near-miss": 2,
+  "stub": 2
+ }
+}
