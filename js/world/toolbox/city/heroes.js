@@ -9,6 +9,7 @@
 import * as THREE from '../../../../vendor/three.module.min.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { ROAD_WIDTH } from '../../pose.js';
+import { northShoreModels } from './heroes-northshore.js';   // [7.7] PPG Place, the PNC Park statues, Mister Rogers, USS Requin
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const TAU = Math.PI * 2;
@@ -345,6 +346,7 @@ export function buildHeroes(city) {
     },
   };
 
+  Object.assign(models, northShoreModels({ city, S, W, N, glows, claim, clearUnder, ground, wall, L: local }));   // [7.7]
   for (const h of scene.heroes || []) {
     const fn = models[h.model];
     if (fn) fn(local(h.lat, h.lon), h);

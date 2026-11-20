@@ -466,7 +466,7 @@ function buildBoards(B, Sc, st, plan, g0, rim, col) {
 
 // ---------------------------------------------------------------- light towers
 function buildLights(B, stand, st, glows) {
-  const towers = [], rays = stand.rays.filter((r) => r && r.kind === 'full');
+  const towers = [], rays = stand.rays.filter((r) => r && r.kind === 'full' && !r.stop);   // (not where the stand meets the ridden deck)
   if (!rays.length) return towers;
   const want = st.sport === 'baseball' ? 6 : 4;
   // spread round the full-height sectors: every n-th of them

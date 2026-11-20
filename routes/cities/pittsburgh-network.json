@@ -804,7 +804,7 @@
    "name": "Mazeroski Way & General Robinson St, North Side",
    "lat": 40.447656,
    "lon": -80.00751,
-   "ele": 222.9,
+   "ele": 223.03,
    "passes": {
     "core": [
      22040
@@ -821,7 +821,7 @@
    "name": "Clemente Bridge north end: Federal St & General Robinson",
    "lat": 40.448224,
    "lon": -80.004424,
-   "ele": 223.39,
+   "ele": 223.41,
    "passes": {
     "core": [
      22650
@@ -1386,8 +1386,8 @@
    ],
    "lengthM": 2180,
    "climbM": [
-    32,
-    40
+    29,
+    37
    ],
    "name": "North Shore Trail: Science Center",
    "toward": [
@@ -1415,7 +1415,7 @@
    ],
    "lengthM": 270,
    "climbM": [
-    5,
+    6,
     0
    ],
    "name": "Mazeroski Way",
@@ -1437,7 +1437,7 @@
    "lengthM": 610,
    "climbM": [
     24,
-    24
+    23
    ],
    "name": "General Robinson Street",
    "toward": [
@@ -2606,7 +2606,7 @@
    ],
    "note": "The whole loop: the Point, downtown, the South Side and the McArdle climb to Grandview",
    "lengthM": 19410,
-   "climbM": 276
+   "climbM": 274
   },
   {
    "id": "pgh-three-rivers-rev",
@@ -2633,7 +2633,7 @@
    ],
    "note": "The loop the other way: over the West End Bridge, Grandview and down McArdle first",
    "lengthM": 19410,
-   "climbM": 275
+   "climbM": 271
   },
   {
    "id": "pgh-short-loop",
@@ -2658,7 +2658,7 @@
    ],
    "note": "Skips the South Side riverfront: right at East Carson & 10th, straight up McArdle",
    "lengthM": 14810,
-   "climbM": 258
+   "climbM": 256
   },
   {
    "id": "pgh-short-loop-rev",
@@ -2683,7 +2683,7 @@
    ],
    "note": "Grandview and down McArdle, then left at East Carson & 10th back to downtown",
    "lengthM": 14810,
-   "climbM": 258
+   "climbM": 254
   },
   {
    "id": "pgh-south-side",
@@ -2729,7 +2729,7 @@
    ],
    "note": "The whole loop with the climb through Elliott to the West End Overlook and back down",
    "lengthM": 22930,
-   "climbM": 385
+   "climbM": 383
   },
   {
    "id": "pgh-jail-trail",
@@ -2805,7 +2805,7 @@
    ],
    "note": "The flat Jail Trail out, the river trail, then the McArdle climb and Grandview home",
    "lengthM": 20230,
-   "climbM": 277
+   "climbM": 275
   },
   {
    "id": "pgh-mt-washington",
@@ -2827,7 +2827,7 @@
    ],
    "note": "Up McArdle, along Grandview to the Water Steps, then back over the top",
    "lengthM": 16920,
-   "climbM": 393
+   "climbM": 387
   },
   {
    "id": "pgh-long",
@@ -2870,7 +2870,7 @@
    ],
    "note": "The whole loop, then the whole loop backwards",
    "lengthM": 38820,
-   "climbM": 551
+   "climbM": 545
   },
   {
    "id": "pgh-schenley",
@@ -2964,7 +2964,7 @@
    ],
    "note": "From the Water Steps along the North Shore Trail to Millvale, over the 40th Street Bridge, down Butler Street and through the Strip, home over the Clemente Bridge",
    "lengthM": 12470,
-   "climbM": 66
+   "climbM": 65
   },
   {
    "id": "pgh-allegheny-rev",
@@ -2985,7 +2985,7 @@
    ],
    "note": "Over the Clemente Bridge, up Penn Avenue and Smallman Street through the Strip and Lawrenceville, back along the river from Millvale",
    "lengthM": 12470,
-   "climbM": 65
+   "climbM": 66
   },
   {
    "id": "pgh-allegheny-jail",
@@ -3017,7 +3017,7 @@
    ],
    "note": "Both rivers on the flat: the Allegheny Loop, the Point, the Jail Trail, the Hot Metal Bridge and the South Side river trail",
    "lengthM": 27910,
-   "climbM": 154
+   "climbM": 153
   },
   {
    "id": "pgh-troy-hill",
@@ -3074,7 +3074,7 @@
    ],
    "note": "The Allegheny Loop with a lap of Troy Hill: up Rialto Street at the 31st Street Bridge, down Troy Hill Road, then on to Millvale, Lawrenceville and the Strip",
    "lengthM": 16500,
-   "climbM": 129
+   "climbM": 128
   },
   {
    "id": "pgh-polish-hill",
@@ -3139,7 +3139,7 @@
    ],
    "note": "The North Shore Trail to Millvale and Lawrenceville, up through Polish Hill and Bloomfield to Oakland, down Junction Hollow and the Jail Trail, home over the Clemente Bridge",
    "lengthM": 25770,
-   "climbM": 226
+   "climbM": 225
   },
   {
    "id": "pgh-gap-homestead",
@@ -3238,7 +3238,7 @@
    ],
    "note": "From the Water Steps: past PNC Park, up Federal Street round Allegheny Center, the Fineview climb and overlook, Riverview Park and the Allegheny Observatory, the Davis Avenue Bridge, down Brighton Road and home along the river",
    "lengthM": 17170,
-   "climbM": 312
+   "climbM": 310
   },
   {
    "id": "pgh-northside-hills-rev",
@@ -3259,7 +3259,7 @@
    ],
    "note": "Along the river and up Brighton Road to Riverview Park and the Observatory first, then down through Fineview past the overlook and down Federal Street to PNC Park",
    "lengthM": 17170,
-   "climbM": 312
+   "climbM": 308
   },
   {
    "id": "pgh-northside-clemente",
@@ -3282,7 +3282,7 @@
    ],
    "note": "From downtown over the Clemente Bridge straight up Federal Street, the Fineview climb, Riverview Park and the Observatory, down Brighton Road, the river past the Science Center and PNC Park, and back over the bridge",
    "lengthM": 18090,
-   "climbM": 313
+   "climbM": 311
   },
   {
    "id": "pgh-fineview",
@@ -3305,7 +3305,7 @@
    ],
    "note": "From the Water Steps up Federal Street, up Belleau Street to the Fineview Overlook, down Perrysville Avenue's bends, Randyland and the Aviary, home along the river",
    "lengthM": 10450,
-   "climbM": 230
+   "climbM": 228
   },
   {
    "id": "pgh-three-rivers-northside",
@@ -3337,7 +3337,7 @@
    ],
    "note": "The Three Rivers Loop with McArdle and Grandview, over the West End Bridge, up Brighton Road to Riverview Park, down through Fineview, Randyland and the Aviary to the Water Steps",
    "lengthM": 33450,
-   "climbM": 528
+   "climbM": 526
   },
   {
    "id": "pgh-allegheny-east-end",
@@ -3368,7 +3368,7 @@
    ],
    "note": "The North Shore Trail to Millvale and over the 40th Street Bridge, up Stanton Ave to Highland Park and round the reservoir, East Liberty and Shady Ave to Squirrel Hill, Forbes to Schenley Park, round the Oval and down through Oakland, Junction Hollow and the Jail Trail, home over the Clemente Bridge",
    "lengthM": 38200,
-   "climbM": 408
+   "climbM": 407
   },
   {
    "id": "pgh-sycamore",
@@ -3463,6 +3463,31 @@
    "climbM": 69
   },
   {
+   "id": "pgh-stadiums",
+   "name": "Stadiums Loop",
+   "path": [
+    "e12+",
+    "e13+",
+    "e42+",
+    "e47-",
+    "e11+",
+    "e12+",
+    "e60+",
+    "e1-",
+    "e14-",
+    "e13-",
+    "e12-"
+   ],
+   "tags": [
+    "short",
+    "flat",
+    "new"
+   ],
+   "note": "From the Water Steps: up PNC Park's spiral escalator, round the upper deck behind home plate and down its ramp by the Clemente Bridge; round Allegheny Commons to Acrisure Stadium's escalator, its rim with the view to the Point and its ramp down to the river; under the Allegheny by the subway, round the Point and back over the Clemente Bridge (through PNC Park the other way)",
+   "lengthM": 11720,
+   "climbM": 171
+  },
+  {
    "id": "pgh-subway-three-rivers",
    "name": "Three Rivers Loop · via the subway",
    "path": [
@@ -3486,7 +3511,7 @@
    ],
    "note": "The Three Rivers Loop with the subway under the Allegheny instead of the Clemente Bridge and the Point",
    "lengthM": 17440,
-   "climbM": 261
+   "climbM": 259
   },
   {
    "id": "pgh-long-subway",
@@ -3528,7 +3553,7 @@
    ],
    "note": "The long loop both ways: out under the Allegheny by the subway, home round the Point and over the Clemente Bridge",
    "lengthM": 36850,
-   "climbM": 536
+   "climbM": 530
   }
  ],
  "freeRide": {

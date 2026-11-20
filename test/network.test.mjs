@@ -30,13 +30,13 @@ test('the network sits on its areas\' lines: edges on their 10 m samples, preset
     const apron = A.aprons.reduce((t, ap) => t + ap.s1 - ap.s0, 0);
     assert.ok(Math.abs(sum + ghost + apron - A.L) < 30, `${A.id}: ${sum} + ${ghost} ghost + ${apron} apron vs ${A.L}`);
   }
-  assert.equal([...net.edges.values()].reduce((t, e) => t + e.len, 0), 133060);   // the whole network: the one 58 km tour's 47.67 km (+0.97 km since K>J rides round and through the giant Phipps Conservatory), Polish Hill & Bloomfield's 7.16 km (PLAN 5.7), the GAP & Homestead's 14.49 km (PLAN 5.5; S>W +10 m since its apron is the core's own samples, F60), the North Side's 15.78 km (PLAN 5.8), the East End's 19.46 km (PLAN 5.10) and the South Side Slopes & the Dirty Dozen south's 17.96 km (PLAN 5.9) and the subway (NS>GW, 1.36 km since its North Side station moved to the real platform, PLAN subway, F121), the Two Bridges loop's EA>GB (6.77 km, F42) and Federal St from the Clemente Bridge (CB>FJ, 1.44 km, F51)
+  assert.equal([...net.edges.values()].reduce((t, e) => t + e.len, 0), 134150);   // the whole network: the one 58 km tour's 47.67 km (+0.97 km since K>J rides round and through the giant Phipps Conservatory; +1.09 km since R>A and NS>CB ride through Acrisure Stadium and PNC Park, PLAN 7.8), Polish Hill & Bloomfield's 7.16 km (PLAN 5.7), the GAP & Homestead's 14.49 km (PLAN 5.5; S>W +10 m since its apron is the core's own samples, F60), the North Side's 15.78 km (PLAN 5.8), the East End's 19.46 km (PLAN 5.10) and the South Side Slopes & the Dirty Dozen south's 17.96 km (PLAN 5.9) and the subway (NS>GW, 1.36 km since its North Side station moved to the real platform, PLAN subway, F121), the Two Bridges loop's EA>GB (6.77 km, F42) and Federal St from the Clemente Bridge (CB>FJ, 1.44 km, F51)
   assert.deepEqual([...net.nodes.keys()].sort(), ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'AL', 'CB', 'EA', 'EL', 'FJ', 'GB', 'GV', 'GW', 'HE', 'HP', 'LB', 'NS', 'SQ', 'SY'].sort());
   const three = makePathRoute(net, preset('pgh-three-rivers'));
   const short = makePathRoute(net, preset('pgh-short-loop'));
   const jail = makePathRoute(net, preset('pgh-jail-trail'));
   assert.equal(three.lapM, len('A>NS', 'NS>CB', 'CB>B', 'B>GW', 'GW>E', 'E>F', 'F>G', 'G>Q', 'Q>H', 'H>G', 'G>GV', 'GV>D', 'D>C', 'C>R', 'R>A'));
-  assert.ok(Math.abs(three.lapM - 18300) < 300, `${three.lapM}`);   // the loop as it always was
+  assert.ok(Math.abs(three.lapM - 19410) < 300, `${three.lapM}`);   // the loop as it always was, +1.09 km through the two stadiums (PLAN 7.8)
   assert.equal(short.lapM, len('A>NS', 'NS>CB', 'CB>B', 'B>GW', 'GW>E', 'E>F', 'F>G', 'G>GV', 'GV>D', 'D>C', 'C>R', 'R>A'));
   assert.equal(jail.lapM, len('E>I', 'I>S', 'S>H', 'H>G', 'E>F', 'F>G'));
   assert.ok(three.total > 140000 && short.total > 140000);   // the path runs far ahead for the planner
@@ -202,7 +202,8 @@ test('free ride: no plan, straight on at every junction, no laps, a far-reaching
   const keyOf = (x) => `${x.t.e.key}${x.t.dir > 0 ? '+' : '-'}`;
   const round = r.netRide.entries.slice(3, 17).map(keyOf);
   assert.deepEqual(r.netRide.entries.slice(17, 31).map(keyOf), round);
-  assert.ok(Math.abs(r.netRide.entries[17].p0 - r.netRide.entries[3].p0 - 21900) < 300, `${r.netRide.entries[17].p0 - r.netRide.entries[3].p0}`);
+  assert.ok(Math.abs(r.netRide.entries[17].p0 - r.netRide.entries[3].p0 - 22630) < 300,   // (+750 m through Acrisure Stadium, PLAN 7.8)
+    `${r.netRide.entries[17].p0 - r.netRide.entries[3].p0}`);
   // no hint: the street's straight on (the East End, round Highland Park)
   const plain = makePathRoute(net, { id: 'free', name: 'Free', path: null, first: json.freeRide.first, prefer: null });
   assert.equal(plain.netRide.entries[1].t.e.key, 'NS>GW');   // no hints: straight on at NS is the subway

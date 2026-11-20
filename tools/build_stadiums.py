@@ -104,14 +104,37 @@ def build_path(det, slack_r=None):
     return out, s, feats
 
 
+_GROUND = None
+def ground(x, z):
+    """The map's ground at (x, z) (the core's city grid, tools/build_city.py: bilinear)."""
+    global _GROUND
+    if _GROUND is None:
+        import base64, array
+        g = json.load(open(os.path.join(ROOT, 'routes', 'scenes', 'pittsburgh-city.json')))['grid']
+        a = array.array('H'); a.frombytes(base64.b64decode(g['h']))
+        if sys.byteorder != 'little': a.byteswap()
+        _GROUND = (g, a)
+    g, a = _GROUND
+    la, lo = to_ll(x, z)
+    fx = (lo - g['west']) / (g['east'] - g['west']) * (g['nx'] - 1); fy = (g['north'] - la) / (g['north'] - g['south']) * (g['ny'] - 1)
+    i, j = int(fx), int(fy); u, v = fx - i, fy - j
+    h = lambda r, c: g['base'] + a[r * g['nx'] + c] * g['scale']
+    return (h(j, i) * (1 - u) + h(j, i + 1) * u) * (1 - v) + (h(j + 1, i) * (1 - u) + h(j + 1, i + 1) * u) * v
+
+
 def heights(det, s, feats):
-    """Heights along the path: keys at the helices' ends (escalator: exact, carried; a ramp: eased), linear between."""
+    """Heights along the path: keys at the helices' ends (escalator: exact, carried; a ramp: eased), linear between.
+    The escalator starts on the ground at its foot and rises to the concourse (`rimEle`); the ramp comes down to the
+    ground where it ends (the map's ground, so the deck never dips under it), and the path runs on to the line."""
     S = s[-1]; rim = det['rimEle']
     hel = sorted([f for f in feats if 'turns' in f], key=lambda f: f['s0'])
     keys = [(0.0, det['from']['ele'], False)]
     for f in hel:
-        y0 = keys[-1][1] if f['role'] == 'escalator' else rim
-        keys.append((f['s0'], y0, f['role'] == 'escalator')); keys.append((f['s1'], y0 + f['rise'], f['role'] == 'escalator'))
+        foot = ground(f['cx'] + f['R'] * math.cos(f['a0']), f['cz'] + f['R'] * math.sin(f['a0'])) + .3
+        if f['role'] == 'escalator': y0, y1 = foot, rim
+        else: y0, y1 = rim, foot
+        f['rise'] = round(y1 - y0, 2)
+        keys.append((f['s0'], y0, f['role'] == 'escalator')); keys.append((f['s1'], y1, f['role'] == 'escalator'))
     keys.append((S, det['to']['ele'], False))
     def lin(u):
         for (a, ya, _), (b, yb, _) in zip(keys, keys[1:]):
@@ -207,8 +230,7 @@ def written(det, xy, s, E):
 def deck_end(det, sol):
     """Where the way down meets the ground again (path metres): the deck runs from the escalator's foot to here."""
     ramp = [f for f in sol['feats'] if f.get('role') == 'ramp']
-    g_end = det['to']['ele'] + .6
-    return next((sol['s'][k] for k in range(len(sol['s'])) if sol['s'][k] > ramp[-1]['s1'] and sol['E'][k] <= g_end), ramp[-1]['s1'])
+    return ramp[-1]['s1'] + 2
 
 
 def detour_of(st, sol):
