@@ -1503,6 +1503,17 @@ Decided with the user (19 Nov, after riding phase 6):
 - [x] 7.6 Final QC (as phase 6's trimmed set) and PR: tests 306/306, course strict 22 routes 0/0, network clean; PR #40. Open items moved to "Follow-up list (after phase 7)" below
 - Landmarks: an inventory and a brainstorm of missing landmarks near the routes (project doc `claude/pittsburgh-landmarks.md`); which to build is the user's call
 
+### Next work package: load before you ride *(decided 20 Nov; not started)*
+The user: a ride starts at once (time and distance record) while its scenery is still loading. Wanted: menu and route choice → load the route's assets behind a loading screen → then the ride begins.
+Today: Ride hides the menu and shows the ride screen at once; only the start area's scene file is fetched first; terrain tiles, roads, trees, buildings, baked light, rider / pacer models and the next areas build in frame-budget slices on the ride screen (a thin `#hLoading` bar); `session.autoStart` is armed at once, so the first pedal stroke (or a resume) starts the clock.
+- [ ] L1 Loading screen (full screen, over the ride screen): route name, distance and climb, preview picture if any, a progress bar with what's loading (scenery, ground, roads & buildings, light, riders). Cancel goes back to the menu
+- [ ] L2 Ready = the start area fully built: terrain tiles around the start, road, scenery near the start, baked light, rider and pacer loaded, the start area's `ready`. Build at a larger per-frame budget while the screen is up (nothing to draw yet). Later Pittsburgh areas still load during the ride
+- [ ] L3 Clock held: `session.autoStart` off and no auto-resume until ready; the trainer stays connected (ERG / resistance flat at the start grade)
+- [ ] L4 Then "Pedal to start": time and distance begin on the first pedal stroke after the screen closes
+- [ ] L5 Mid-ride (Pittsburgh): while the world waits for an area ("Loading the streets ahead…"), time and distance are held and resume when it's ready
+- [ ] L6 Safety valve: if loading errors or passes ~30 s, offer "Ride anyway" (today's behaviour) so a slow phone or a failed file never traps the rider
+- [ ] L7 Checks (targeted): a headless test that the clock can't start before ready; timing of the loading screen on a park route, a Pittsburgh preset and the Stadiums Loop; phones not broken
+
 ### Follow-up list (after phase 7) *(saved 20 Nov; outside PR #40)*
 Open items from phase 7, grouped. Details stay at each F number in the phase 7 section above.
 
