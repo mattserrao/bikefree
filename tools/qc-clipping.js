@@ -13,8 +13,8 @@ import * as THREE from 'three';
 import { MeshBVH } from 'three-mesh-bvh';
 import { World } from '../js/world/world.js';
 import { buildCatalogRoute, loadRouteScene } from '../js/routes.js';
-import { riderPose, CHASE } from '../js/world/pose.js';
-import { ghostAt } from '../js/world/ghost.js';
+import { riderPose, CHASE, CHASE_CLOSE } from '../js/world/pose.js';
+import { ghostAt, undergroundAt } from '../js/world/ghost.js';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const UP = V(0, 1, 0);
@@ -308,8 +308,12 @@ function checkRide() {
         note: e.kind === 'surface' ? 'another street/path surface cuts through the rider' : `the rider rides through ${e.label.toLowerCase()}` });
     }
     // chase camera (world._updateCamera, CHASE in pose.js): behind and up, kept above the ground
-    const cam = pos.clone().addScaledVector(fwd, -CHASE.back).addScaledVector(UP, CHASE.up);
-    const g = world.terrain.heightAt(cam.x, cam.z); if (g != null && cam.y < g + CHASE.ground) cam.y = g + CHASE.ground;
+    // [7.2b] on an underground stretch the app uses the "close" camera (world._camUnder)
+    const one = route.turnS || route.total, so = s <= one ? s : route.total - s, under = undergroundAt(route, so) || undergroundAt(route, so - 25) || undergroundAt(route, so + 25);
+    const u = under ? 1 : 0;
+    const camBack = CHASE.back + (CHASE_CLOSE.back - CHASE.back) * u, camUp = CHASE.up + (CHASE_CLOSE.up - CHASE.up) * u;
+    const cam = pos.clone().addScaledVector(fwd, -camBack).addScaledVector(UP, camUp);
+    const g = under ? null : world.terrain.heightAt(cam.x, cam.z); if (g != null && cam.y < g + CHASE.ground) cam.y = g + CHASE.ground;
     _sphere.set(cam, L.cameraRadius);
     let camInside = false;
     const camBox = new THREE.Box3().setFromCenterAndSize(cam, V(1, 1, 1));

@@ -7,7 +7,7 @@ import { Weather } from './toolbox/atmosphere/weather.js';
 import { PostFX } from './toolbox/atmosphere/post.js';
 import { Look, LOOKS } from './toolbox/atmosphere/look.js';
 import { StylizedTerrain, SCENERY_QUALITY } from './stylized-terrain.js';
-import { riderPose, routePoint, ROAD_WIDTH, CHASE, CAMERAS, DEFAULT_CAMERA, PACER_LANE, leanAlong, stepLean } from './pose.js';
+import { riderPose, routePoint, ROAD_WIDTH, CHASE, CHASE_CLOSE, CAMERAS, DEFAULT_CAMERA, PACER_LANE, leanAlong, stepLean } from './pose.js';
 import { loadRider } from './rider.js';
 import { PerfMonitor } from './perf.js';
 import { HAZE, AERIAL, AERIAL_COLOR, installHaze } from './toolbox/atmosphere/haze.js';
@@ -820,9 +820,13 @@ export class World {
       C.t += step;
     }
     const pull = Math.max(-0.5, Math.min(0.7, C.acc * K.pull));
+    // [7.2b] underground (a tunnel, an escalator shaft) the far-back chase would sit in the rock: ease toward the
+    // "close" camera's spot on an underground stretch (this._camUnder, eased 0 → 1 in _underground)
+    const u = Math.max(0, Math.min(1, this._camUnder || 0)), mix = (a, b) => a + (b - a) * u;
+    const back = mix(K.back, CHASE_CLOSE.back), camUp = mix(K.up, CHASE_CLOSE.up), lookUp = mix(K.lookUp, CHASE_CLOSE.lookUp), ahead = mix(K.ahead, CHASE_CLOSE.ahead);
     // Aim a little low so the rider sits above the HUD strip at the bottom of the screen.
-    pos.copy(riderPos).addScaledVector(flat, -(K.back + pull)).addScaledVector(up, K.up);
-    look.copy(riderPos).addScaledVector(fwd, K.ahead).addScaledVector(up, K.lookUp);
+    pos.copy(riderPos).addScaledVector(flat, -(back + pull)).addScaledVector(up, camUp);
+    look.copy(riderPos).addScaledVector(fwd, ahead).addScaledVector(up, lookUp);
     look.y += this.terrain.cameraLookUp?.(riderPos.x, riderPos.z) || 0;   // [F111] e.g. up into a glasshouse's dome
     // Keep the camera above ground (not underground: in a tunnel or an escalator shaft the ground is overhead)
     const g = this._underS ? null : this.terrain.heightAt(pos.x, pos.z);
@@ -861,6 +865,8 @@ export class World {
     const g = this._underS ? this.terrain.heightAt(riderPos.x, riderPos.z) : null;
     const target = g == null ? 0 : Math.max(0, Math.min(1, (g - riderPos.y - 2) / 4));
     const u = this._under = (this._under || 0) + (target - (this._under || 0)) * Math.min(1, dt * 1.5);
+    const nearUnder = this._underS || undergroundAt(this.route, out - 25) || undergroundAt(this.route, out + 25);   // (and its portals: the far camera would sit in the mouth)
+    this._camUnder = (this._camUnder || 0) + ((nearUnder ? 1 : 0) - (this._camUnder || 0)) * Math.min(1, dt * 2);   // [7.2b]
     const f = this.scene.fog, b = this._fogBase;
     if (!f || !b) return;
     if (u > .002) {
