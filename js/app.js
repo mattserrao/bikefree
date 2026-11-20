@@ -666,7 +666,8 @@ function renderPreview() {
       (sceneryFreeItem(scene) ? ` The scenery is ${escapeHtml(scene.name.split(' · ')[0])}'s free ride: straight on at each junction, or turn with ◀ ▶ (<kbd>A</kbd> <kbd>D</kbd>) into any part of the city.` : '');
     chart.hidden = true;
     map.hidden = !scene;
-    if (scene && routeCache.has(scene.id)) drawTrace(map, routeCache.get(scene.id), 0);
+    const line = scene && routeOutline(scene);
+    if (line) drawTrace(map, line, 0);
   }
   renderStart();
 }
@@ -958,6 +959,10 @@ async function openWorld(route) {
     base = net.areas.get(start).base;
     await loadRouteScene(base).catch((err) => log('3d', err.message, 'error'));
     areas.id = start;
+  } else {
+    // the scenery loads here, not with the route (PLAN 7.11: the menu never waits on it)
+    await loadRouteScene(base).catch((err) => log('3d', err.message, 'error'));
+    if (route !== base && !route.scene) route.scene = base.scene;
   }
   if (world && (areas ? world.areaSet?.net === net : worldBase === base && !world.areaSet)) {
     worldBase = base;
@@ -1297,7 +1302,7 @@ let selectedRouteId = null;
 
 async function loadParks() {
   if (parkItems) return parkItems;
-  await loadPreviewManifest();
+  const manifest = loadPreviewManifest();   // (alongside the catalog, not before it: PLAN 7.11)
   try {
     const list = await (await fetch('routes/parks/index.json')).json();
     parkItems = list.map((p) => ({ ...p, routeId: p.id, id: `builtin-park-${p.id}`, kind: 'route', url: p.file, group: 'Scenic routes — 3D' }));
@@ -1325,28 +1330,48 @@ async function loadParks() {
       }
     } catch (err) { log('app', `Could not load the ${p.name} network: ${err.message}`, 'error'); }
   }
+  await manifest;
   return parkItems;
 }
 
 async function refreshRouteList(selectId) {
-  const mine = (await store.listLibrary('route').catch(() => [])).map((r) => ({ ...r, group: 'My routes' }));
-  const parks = await loadParks();
+  const [library, parks] = await Promise.all([store.listLibrary('route').catch(() => []), loadParks(), loadIdeas()]);
+  const mine = library.map((r) => ({ ...r, group: 'My routes' }));
   // a city loop with a network is listed as its presets (the loop itself is one of them); it stays a scenery choice
   routeItems = [...parks.filter((p) => !p.area).flatMap((p) => (p.network && netItems.some((n) => n.baseId === p.id) ? netItems.filter((n) => n.baseId === p.id) : [p])), ...mine, DEMO_ROUTE];
-  await loadIdeas();
-  // Load every route up front: they're small, and the cards draw their outlines.
-  await Promise.all(routeItems.map((it) => loadRouteItem(it).catch(() => null)));
   if (selectId || !routeItems.some((r) => r.id === selectedRouteId)) selectedRouteId = selectId || defaultRouteId(routeItems);
+  // The list shows straight from the catalog (PLAN 7.11): a park's numbers and outline are baked into it
+  // (tools/build_routes.mjs), so no GPX or scenery is fetched first. Scenery loads when a ride starts (openWorld).
   renderRouteCards();
   renderScenery();
+  // then, in the background: your own routes and the demo (no catalog numbers), and each city's network routes
+  // (its card's map and panel); a park's GPX only when it's previewed
+  routesLoaded = Promise.all(routeItems.filter((it) => !it.stats && !it.baseId).map((it) => loadRouteItem(it).catch(() => null)))
+    .then(() => loadCityRoutes()).then(() => { routesLoadedYet = true; renderRouteCards(); renderScenery(); if ($('cityDlg').open) { renderCity(); renderCityMap(); } });
   await previewSelectedRoute();
+}
+let routesLoaded = Promise.resolve(), routesLoadedYet = false;
+/** Every city route (presets, free ride, your own): built over the city's network once it has loaded. */
+function loadCityRoutes() {
+  return Promise.all(netItems.map((it) => loadRouteItem(it).catch((err) => { log('app', `Could not load ${it.name}: ${err.message}`, 'error'); return null; })));
+}
+/** A route's numbers for its card and goal tags: the loaded route, else the catalog's (the same fields). */
+const routeStats = (it) => routeCache.get(it.id) || it.stats || null;
+const outlines = new Map();
+/** A card thumbnail's line: the loaded route's lap, else the catalog's outline (the way out). */
+function routeOutline(it) {
+  const r = it && routeCache.get(it.id);
+  if (r) return lapView(r);
+  if (!it?.outline) return null;
+  if (!outlines.has(it.id)) outlines.set(it.id, { lat: it.outline.map((p) => p[0]), lon: it.outline.map((p) => p[1]) });
+  return outlines.get(it.id);
 }
 
 // Ride goals: a filter over the route list. A network preset says its own (varied, new areas…); every route
 // also gets flat / hilly from its climbing per km and short / long from its length (one lap or one way).
 const GOALS = [['all', 'All'], ['flat', 'Flat'], ['hilly', 'Hilly'], ['short', 'Short'], ['long', 'Long'], ['varied', 'Varied'], ['new', 'New areas']];
 function goalTags(it) {
-  const r = routeCache.get(it.id);
+  const r = routeStats(it);
   const km = r ? (r.lapM || (r.stageRoute ? r.turnS : r.turnS || r.total)) / 1000 : it.km;
   const climb = r ? (r.lapClimbM ?? (r.oneWay?.ascent ?? r.ascent)) : it.climbM;
   const tags = new Set(it.tags || []);
@@ -1375,7 +1400,7 @@ $('goalSeg').addEventListener('click', (e) => {
 
 // A city with a ride network (Pittsburgh) is one card: its presets, free ride and your own routes are in its panel.
 let routeCards = [];   // routeItems with each city's items folded into one card (js/city-routes.js)
-const cityAreaCount = (card) => routeCache.get(card.baseId)?.networks?.get(card.network)?.areas.size || 0;
+const cityAreaCount = (card) => routeCache.get(card.baseId)?.networks?.get(card.network)?.areas.size || netCache.get(card.network)?.areas?.length || 0;
 const CHEVRON = '<svg class="ic chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>';
 function renderRouteCards() {
   renderGoalSeg();
@@ -1396,8 +1421,8 @@ function renderRouteCards() {
       return `<button class="rcard city-card ${sel ? 'on' : ''}" data-city="${escapeHtml(it.baseId)}" aria-haspopup="dialog"><canvas></canvas>
         <div class="city-text"><b>${escapeHtml(it.name)}</b><div class="rsub">${escapeHtml(sub)}</div>${sel ? `<div class="rsel">Selected · ${escapeHtml(shortName(sel.name))}</div>` : '<div class="rsel muted">Pick a route on the map</div>'}</div>${CHEVRON}</button>`;
     }
-    const r = routeCache.get(it.id);
-    const sub = !r ? 'Could not load' : r.stageRoute && r.oneWay
+    const r = routeStats(it);
+    const sub = !r ? (routesLoadedYet ? 'Could not load' : '…') : r.stageRoute && r.oneWay
       ? `${fmtDist(r.turnS, 1)} ${distUnit()} to the finish · ${fmtElev(r.oneWay.ascent).toLocaleString()} ${elevUnit()}`
       : r.free ? `${r.network.nodes.size} junctions · choose every turn`
       : r.netRide ? `${fmtDist(r.lapM, 1)} ${distUnit()} ${r.netOpen ? 'one way' : 'loop'} · ${fmtElev(r.lapClimbM).toLocaleString()} ${elevUnit()} · choose your turns`
@@ -1418,8 +1443,9 @@ function drawThumbs() {
     if (!c.clientWidth) continue;
     const cityId = c.closest('.rcard').dataset.city;
     if (cityId) { drawCityThumb(c, routeCards.find((x) => x.city && x.baseId === cityId)); continue; }
-    const r = routeCache.get(c.closest('.rcard').dataset.id);
-    if (r) drawTrace(c, lapView(r), 0);
+    const id = c.closest('.rcard').dataset.id;
+    const r = routeOutline(routeItems.find((x) => x.id === id) || parkItems?.find((x) => x.id === id));
+    if (r) drawTrace(c, r, 0);
   }
   for (const c of document.querySelectorAll('#workoutList canvas')) {
     const w = workoutCache.get(c.closest('.wrow').dataset.id);
@@ -1453,7 +1479,8 @@ async function loadCityRivers(card) {
   const mapUrl = netCache.get(card.network)?.map;
   if (mapUrl) try { cityMaps.set(card.baseId, await (await fetch(mapUrl)).json()); } catch { /* the scenes' rivers will do */ }
   const cityPark = parkItems?.find((p) => p.id === card.baseId);
-  const areas = (parkItems || []).filter((p) => p.area && p.area === cityPark?.routeId && p.scene);
+  // each area's scene file (only its top level: rivers), the city's own too while its scenery isn't loaded (PLAN 7.11)
+  const areas = (parkItems || []).filter((p) => ((p.area && p.area === cityPark?.routeId) || (p === cityPark && !base?.scene)) && p.scene);
   await Promise.all(areas.map(async (a) => { try { lists.push((await (await fetch(a.scene)).json()).rivers); } catch { /* the core's rivers will do */ } }));
   cityRivers.set(card.baseId, mergeRivers(lists));
   return true;
@@ -1741,14 +1768,32 @@ $('cityFree').addEventListener('click', () => { const c = cityCard(); if (c?.fre
 $('cityFreeOpts').addEventListener('click', () => { const c = cityCard(); if (c?.free) cityChoose(c.free.id); });
 $('cityPlan').addEventListener('click', () => { const c = cityCard(); if (c) openPlanner(c.routes.find((x) => !x.custom) || c.free); });
 
-async function loadRouteItem(item) {
-  if (routeCache.has(item.id)) return routeCache.get(item.id);
+// Loads in flight, by item id / network URL: the city's ~40 routes load together, and each used to fetch and parse
+// the city loop, its scenery and all 11 areas' GPX again (and build the network again) — 600+ requests before the
+// list showed (PLAN 7.11). Now each is fetched and built once.
+const routeLoads = new Map(), netBuilds = new Map();
+function loadRouteItem(item) {
+  if (routeCache.has(item.id)) return Promise.resolve(routeCache.get(item.id));
+  if (!routeLoads.has(item.id)) routeLoads.set(item.id, loadRouteItemNow(item).finally(() => routeLoads.delete(item.id)));
+  return routeLoads.get(item.id);
+}
+function buildNetwork(base, url) {
+  base.networks ||= new Map();
+  if (base.networks.has(url)) return Promise.resolve(base.networks.get(url));
+  if (!netBuilds.has(url)) {
+    netBuilds.set(url, (async () => {
+      const net = loadNetwork(netCache.get(url), await networkBases(netCache.get(url), base));
+      base.networks.set(url, net);
+      return net;
+    })().finally(() => netBuilds.delete(url)));
+  }
+  return netBuilds.get(url);
+}
+async function loadRouteItemNow(item) {
   if (item.preset || item.free || item.custom) {
     // a network preset: the path route over the city loop's own route and world (js/network.js)
     const base = await loadRouteItem(parkItems.find((p) => p.id === item.baseId));
-    base.networks ||= new Map();
-    if (!base.networks.has(item.network)) base.networks.set(item.network, loadNetwork(netCache.get(item.network), await networkBases(netCache.get(item.network), base)));
-    const net = base.networks.get(item.network);
+    const net = await buildNetwork(base, item.network);
     let preset;
     if (item.free) preset = { id: item.routeId, name: item.name, path: null, first: net.json.freeRide.first };
     else if (item.custom) {
@@ -1767,7 +1812,7 @@ async function loadRouteItem(item) {
   const text = item.text ?? await (await fetch(item.url)).text();
   const route = buildCatalogRoute(text, item);
   route.sourceFile = item.file;
-  await loadRouteScene(route).catch((err) => log('3d', err.message, 'error'));
+  // (its scenery — MBs of city, terrain and places data — loads when a ride starts: openWorld, PLAN 7.11)
   routeCache.set(item.id, route);
   return route;
 }
@@ -1780,18 +1825,24 @@ async function loadRouteItem(item) {
 async function networkBases(json, cityRoute) {
   if (json.format !== 'bikefree-network-2') return cityRoute;
   const bases = new Map();
-  for (const a of json.areas) {
+  const items = json.areas.map((a) => {
     const it = parkItems.find((p) => p.routeId === a.catalogId);
     if (!it) throw new Error(`No catalog entry for area ${a.id}`);
-    if (it.file === cityRoute.sourceFile) { bases.set(a.id, cityRoute); continue; }
+    return it;
+  });
+  // the areas' GPX fetched together, not one after another (PLAN 7.11)
+  const texts = await Promise.all(items.map((it) => (it.file === cityRoute.sourceFile || routeCache.has(`area-${it.id}`) ? null : fetch(it.url).then((r) => r.text()))));
+  json.areas.forEach((a, i) => {
+    const it = items[i];
+    if (it.file === cityRoute.sourceFile) { bases.set(a.id, cityRoute); return; }
     const key = `area-${it.id}`;
     if (!routeCache.has(key)) {
-      const r = buildCatalogRoute(await (await fetch(it.url)).text(), it);
+      const r = buildCatalogRoute(texts[i], it);
       r.sourceFile = it.file;
       routeCache.set(key, r);
     }
     bases.set(a.id, routeCache.get(key));
-  }
+  });
   return bases;
 }
 
@@ -1820,7 +1871,7 @@ document.addEventListener('click', (e) => { if (!e.target.closest('details.more'
 let offlineAbort = null;
 function renderOffline() {
   if (offlineAbort) return;
-  const bundled = !!previewRoute?.scene;
+  const bundled = !!(previewRoute?.scene || previewRoute?.sceneUrl || previewRoute?.base?.sceneUrl);
   $('routeOffline').disabled = bundled;
   if (bundled) {
     $('routeOffline').textContent = 'Scenery included';
@@ -2362,10 +2413,13 @@ applyHudPrefs();
 renderProfile();
 session.autoStart = false;
 deviceStatus();
-refreshRouteList();
+const listShown = refreshRouteList();
 refreshWorkoutList();
 checkRecovery();
-registerServiceWorker(log);
+// The service worker's first install precaches the whole app (~47 MB of scenery): not while the menu is loading
+// (PLAN 7.11) — once the list and its background routes are in and the page is idle
+const whenIdle = (fn) => (window.requestIdleCallback ? requestIdleCallback(fn, { timeout: 5000 }) : setTimeout(fn, 1000));
+listShown.catch(() => {}).then(() => routesLoaded).catch(() => {}).then(() => whenIdle(() => registerServiceWorker(log)));
 log('app', 'Ready. Close Zwift, Zwift Companion and the Wahoo app, then connect your devices.');
 
 // For debugging in the browser console.
