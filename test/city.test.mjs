@@ -27,7 +27,9 @@ test('pittsburgh: the core area\'s line (downtown, the South Side, the Jail Trai
   assert.equal(net.areas[0].legM, route.turnS);
   const top = Math.max(...route.ele), bottom = Math.min(...route.ele);
   assert.ok(top - bottom > 110, `climb ${top - bottom} m`);
-  assert.ok(Math.max(...route.grade.map(Math.abs)) < 25);
+  // (7.8: the stadiums' spiral escalators are carried, not ridden — their grade is skipped)
+  const carried = (i) => { const d = route.dist[i] <= route.turnS ? route.dist[i] : route.total - route.dist[i]; return (scene.city.routeConveyors || []).some((z) => d >= z.fromM - 20 && d <= z.toM + 20); };
+  assert.ok(Math.max(...route.grade.map((g, i) => carried(i) ? 0 : Math.abs(g))) < 25);
 });
 
 test('pittsburgh: the three rivers are water, the road sits on the ground', () => {
