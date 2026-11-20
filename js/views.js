@@ -389,7 +389,7 @@ export function drawNetworkMinimap(canvas, ride, p, { mode = 'course', pacerPos 
  * [{ widthM, path: [[lat, lon], …] }] (or waterAreas: [{rings: [[[lat, lon], …], …]}], a city's baked banks, F101);
  * labels: [{text, lat, lon, kind: river|area|place, angle?}] (not on a thumbnail); lit: Set of edge ids (null: all); route: traversal keys ("e12+") drawn
  * bold; marked: an edge id (the tapped segment); focus: an edge id (keyboard); landmarks: the map's landmarks
- * (PLAN 7.9: a marker each, a label where it fits up to landmarkRank; null: none; never on a thumbnail). Returns the
+ * (PLAN 7.9: a marker each, a label up to landmarkRank as a leader-line callout where it fits, 7.9b; null: none; never on a thumbnail). Returns the
  * lines in CSS px ({ id, pts }) for hit testing (js/city-routes.js nearestLine), with .landmarks: the markers placed.
  */
 export function drawCityMap(canvas, { lines, rivers = [], waterAreas = null, labels = [], nodes = [], lit = null, route = null, marked = null, focus = null, thumb = false, landmarks = null, landmarkRank = 3, project }) {
@@ -433,17 +433,20 @@ export function drawCityMap(canvas, { lines, rivers = [], waterAreas = null, lab
   // first: js/app.js). Rank 3 (the T's stations, the ones beside another) only once zoomed in
   const labelFont = (lb) => `${lb.kind === 'river' ? 'italic ' : lb.kind === 'area' ? '600 ' : ''}${Math.round((lb.kind === 'river' ? 12 : lb.kind === 'area' ? 11.5 : 10.5) * (small ? .9 : 1))}px system-ui, sans-serif`;
   let placed = [];
+  const color = { city: '#e8b04a', park: '#6cc06a', sport: '#4fb0a0', view: '#5fa6e8', culture: '#d98fd0', church: '#a58cf0', steel: '#e07a4f', transit: '#9aa3ad' };
   if (!thumb && landmarks?.length) {
     const r = small ? 4 : 5, fs = small ? 10 : 11, lh = fs + 3;
-    const avoid = labels.filter((lb) => !lb.angle).map((lb) => {
+    // the map's own labels to keep clear of: a box each; a slanted one (the rivers) as a chain of small boxes along it
+    const avoid = labels.flatMap((lb) => {
       ctx.font = labelFont(lb);
       const tw = ctx.measureText(lb.text).width, x = X(lb.lon), y = Y(lb.lat), hh = parseFloat(/(\d+(\.\d+)?)px/.exec(ctx.font)[1]) / 2 + 2;
-      return [x - tw / 2 - 2, y - hh, x + tw / 2 + 2, y + hh];
+      if (!lb.angle) return [[x - tw / 2 - 2, y - hh, x + tw / 2 + 2, y + hh]];
+      const a = (lb.angle * Math.PI) / 180, m = Math.max(2, Math.ceil(tw / (hh * 2))), c = Math.cos(a), sn = Math.sin(a);
+      return Array.from({ length: m + 1 }, (_, i) => { const t = -tw / 2 + (tw * i) / m; return [x + c * t - hh, y + sn * t - hh, x + c * t + hh, y + sn * t + hh]; });
     });
     ctx.font = `600 ${fs}px system-ui, sans-serif`;
     const shown = landmarks.filter((lm) => lm.rank <= (landmarkRank >= 3 ? 3 : 2));
-    placed = placeLandmarks(shown, X, Y, { w, h, r, lh, maxRank: landmarkRank, measure: (t) => ctx.measureText(t).width, avoid });
-    const color = { city: '#e8b04a', park: '#6cc06a', sport: '#4fb0a0', view: '#5fa6e8', culture: '#d98fd0', church: '#a58cf0', steel: '#e07a4f', transit: '#9aa3ad' };
+    placed = placeLandmarks(shown, X, Y, { w, h, r, lh, maxRank: landmarkRank, measure: (t) => ctx.measureText(t).width, avoid, lines: out });
     for (const p of placed) {
       const tr = p.lm.kind === 'transit';
       ctx.fillStyle = color[p.lm.kind] || ink; ctx.strokeStyle = bg; ctx.lineWidth = 2;
@@ -468,6 +471,18 @@ export function drawCityMap(canvas, { lines, rivers = [], waterAreas = null, lab
   }
   if (placed.length) {
     ctx.font = `600 ${small ? 10 : 11}px system-ui, sans-serif`; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    // the leaders (PLAN 7.9b): a thin line from each callout to its dot in the dot's colour (not to be taken for a
+    // street), haloed so it reads over the network
+    const leads = placed.filter((p) => p.label?.leader);
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = bg; ctx.lineWidth = 3; ctx.globalAlpha = .8; ctx.beginPath();
+    for (const p of leads) { const [x1, y1, x2, y2] = p.label.leader; ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); }
+    ctx.stroke(); ctx.globalAlpha = 1; ctx.lineWidth = 1.25;
+    for (const p of leads) {
+      const [x1, y1, x2, y2] = p.label.leader;
+      ctx.strokeStyle = color[p.lm.kind] || ink; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
     for (const p of placed) if (p.label) {
       ctx.textAlign = p.label.align;
       ctx.lineWidth = 3; ctx.strokeStyle = bg; ctx.globalAlpha = .9; ctx.strokeText(p.lm.label, p.label.x, p.label.y);
