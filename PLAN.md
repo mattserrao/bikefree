@@ -1529,6 +1529,37 @@ Work packages A (world readiness), B (loading screen + clock), C (checks), done 
 - [ ] L8 Ride check on the Mac and the phone (raw.githack): how long the screen is up on a park route, a Pittsburgh preset and the Stadiums Loop; that the first pedal stroke starts the clock; Cancel; a mid-ride wait into an area off the plan
 - Open: F396 the screen's timings on real devices may still want a shorter wait (e.g. not waiting for the real horizon on phones); F397 the old "Preparing scenery…" bake overlay still exists under the screen (now only seen after Ride anyway); F398 the loading screen has no map outline when a route has no preview picture (80 missing, F270)
 
+### Pittsburgh audit: performance, map layout, code *(test branch `pittsburgh-audit-test`, from `phase8-load-test` / PR #41, 20 Nov 2026)*
+The user: as the map grew, performance dropped; it will grow further and needs refining first. Audit the game (menu, loading, routes; Pittsburgh above all), report performance and map-layout issues (jagged highways, roads to nowhere, clipping), build tools that find and then fix them, flag what holds the Pittsburgh map back in code quality. Up to two subagents; efficient tests only.
+
+**Measured (headless; software GPU, so CPU numbers are meaningful, GPU ones only relative)**
+- Load: a Pittsburgh preset ~40 s to ready headless (scenery files + city build ~25 s, first bake ~14 s). Main menu 1.6 MB (was 31 MB before PR #41) in 72 JS module files.
+- Frame (no draw), Three Rivers 0–2.5 km: median 11.4 ms, p95 19.6 ms, 25 frames > 25 ms, worst 295 ms — JS alone takes ~70 % of a 60 fps frame before any drawing.
+- Hottest code while riding (CPU profile, ride_area_load): the ground height chain `landscape.heightAt → streetsNear → routeDist → index.nearest` (~8 % of all time, most of the non-idle work), then the riverfront (8 %), city life (8 %). Height is recomputed per query through ~10 special cases.
+- Per view: 140–316 draw calls, 0.9–1.75 M triangles; the core area holds 4.7 M triangles (buildings 2.5 M vertices). Memory after PR #41: 430–560 MB JS heap, ~330 MB on the GPU.
+- Areas overlap: summed over the 10 areas the street data covers 1.62× the ground it really does — 38 % of the city is built 2–6 times (each area its own 900 m corridor), and each copy is solved separately (seams, memory, build time).
+
+**Map layout (`npm run qc:map`, new: every street of every area, not just near the routes)** — across 10 areas, 29,000 street pieces, ~3,600 km of ribbon:
+- route path and network: clean (`qc`, `qc:network` all ok)
+- `bump` 270 (114 within 50 m of a route): a street point ±0.5–2 m off the line through its neighbours — the **jagged highways**: e.g. the Parkway by the route at 1.95 km E dips 2.1 m then humps 2.0 m within 6 m. Cause: street heights are set point by point (pinned under the route's road, sampled from the ground) with nothing easing between
+- `near-miss` 235, `stub` 135, `dead-end` 34 (+808 info at residential / the corridor's edge), `end-step` 23, `deck-end` 4 — **roads to nowhere**: interchange pieces and decks cut where the builder drops tunnels (`tunnel=yes`), splits ways along the route (`route_edges`) or clears polygons; ends that stop 2–12 m short of the street they should meet; decks that stop in the air or meet a road 4–5 m below them (the slab edges in the interchange pictures)
+- `height-step` 21: ground streets climbing > 40 % between two points
+- ribbon over ribbon: 52.8 km (dual carriageways, links and ramps drawn full width over each other: z-fighting, the interchange "spaghetti")
+- streets end at each area's 900 m corridor: the map's edge shows as roads to nowhere from overlooks
+
+**Code and pipeline**
+- Big dense modules: city.js, street-kit.js, life.js, app.js 93–141 KB each (road-meets 75 KB), long lines, ~470 history tags in comments (`[F30]`, `[w2-…]`) — hard to read and to change safely
+- Street data is fixed up at every load (road-meets.js, junctions, street-grade: ~2,100 lines of runtime repair of OSM data) instead of once at build time — load time and complexity
+- The city builder needs OSM tiles fetched on the Mac (`tools/.cache` not in the repo); the stored city JSON (base64 inside JSON, ~2 MB per area) can't be fixed without a rebuild
+- Height: one `heightAt` with ~10 layered special cases (route bank, pads, ponds, streets, rides, decks) evaluated per query — the hot path and the source of the bumps
+- Tests ~10 min (312); QC tools many and slow; PLAN.md 1,645 lines, 229 open items
+
+**Tools added**
+- [x] `tools/qc_map.mjs` (`npm run qc:map`): dead-end, stub, deck-end, end-step, near-miss, zig-zag, kink, facet, bump, height-step, overlap per area → `tools/qc-map-report.html` (map per area with the findings circled, list sorted by distance from a route) + `--json`
+- [x] `tools/memory_check.mjs` (PR #41) and the existing `ride_frames`, `ride_area_load --profile`, `snap_cam` were used for the numbers above
+
+**Work packages (proposed; decisions in the questions to the user)** — see the next list once agreed
+
 ### Follow-up list (after phase 7) *(saved 20 Nov; outside PR #40)*
 Open items from phase 7, grouped. Details stay at each F number in the phase 7 section above.
 
