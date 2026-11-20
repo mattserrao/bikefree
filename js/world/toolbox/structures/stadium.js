@@ -9,10 +9,15 @@
 // in the kit's frame), `helices` (escalator and ramp: centre, radius, turns, heights) and `deckU` (the stretch off the
 // ground, path metres). The deck the rider rides is drawn from the area's own line where the city data has it
 // (`routeDecks`: the same curve and heights the rider follows), else from the kit's path (an area that only sees it).
-// Every area whose grid holds the stadiums carries the kit, so the stadium doesn't change at an area swap.
+// Every area whose grid holds the stadiums carries the kit, so the stadium doesn't change at an area swap — but only
+// an area whose own line rides through a stadium (its `routeDecks` name it: the core both, the North Side's and the
+// subway's aprons PNC Park) builds that stadium in full (the deck, escalator, crowd and players). Everywhere else it is
+// a light far shell (PLAN 7.8b, phone memory): the bowl's silhouette, the field's colours, the boards and the light
+// towers (lit at night), a plain slab where the deck runs; no crowd, players, railings or escalator. A shell's geometry
+// is shared between the areas resident at once (a module cache by stadium and field level, released with the last).
 //
-// Lean cartoon style: vertex colours, merged meshes. Budget per stadium: ~10 draws, ~0.35 M triangles (mostly the
-// crowd's far figures).
+// Lean cartoon style: vertex colours, merged meshes. Budget per stadium: ~10 draws, ~0.25 M triangles (mostly the
+// crowd's far figures, drawn only within ~1.5 km; the near rows and the players only within ~300 m).
 import * as THREE from '../../../../vendor/three.module.min.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { routePoint } from '../../pose.js';
@@ -129,18 +134,29 @@ function pointHash(pts, cell = 8) {
 }
 
 // ---------------------------------------------------------------- the build
+/** Far shells built once for the areas resident together: key (stadium, field level) → { geos, glows, refs }. */
+const SHELLS = new Map();
+export const NEAR_M = 300, CROWD_FAR_M = 1500;   // the near rows and the players within NEAR_M of the stands; the crowd within CROWD_FAR_M
+
+/** The stadiums this area's own line rides through (its `routeDecks`): those are built in full, the rest as far shells. */
+export function riddenStadiums(data) { return new Set((data?.routeDecks || []).map((d) => d.name)); }
+
 export function buildStadiumKit(city) {
   const kit = city.route.scene?.stadiumKit;
   if (!kit?.stadiums?.length) return null;
   const L0 = kitToLocal(kit, city.D.proj), land = city.landscape;
   const out = { stadiums: [], tick: null, setNight: null };
+  // (materials stay per area: a world's light bake patches them, and a module-level one would be patched again by
+  // the next ride's world; only geometry is shared)
   const mats = {
     field: city.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95, metalness: 0, emissive: new THREE.Color('#000000') })),
     screen: city.own(new THREE.MeshBasicMaterial({ vertexColors: true, fog: true })),   // (a video board: its own light, day and night)
-    figures: city.own(figureMaterial(city.uniforms.uTime)),
+    figures: null,
   };
+  const ridden = riddenStadiums(city.data), shells = [];
   const solid = city.solidMaterial, glows = [];
   for (const st of kit.stadiums) {
+    const full = ridden.has(st.name);
     const L = L0, S = new MeshBuilder(), F = new MeshBuilder(), Sc = new MeshBuilder();
     const ring = st.ring.map(([x, z]) => L(x, z));
     const plan = fieldPlan(st, L);
@@ -155,6 +171,33 @@ export function buildStadiumKit(city) {
       const c = b.ring.reduce((a, p) => ({ x: a.x + p.x / b.ring.length, z: a.z + p.z / b.ring.length }), { x: 0, z: 0 });
       if (inPoly(ring, c.x, c.z)) b.hero = true;
     }
+    const add = (B, mat, name, shadow = true, geo = null) => { if (!geo && !B.count) return null; const m = new THREE.Mesh(geo || city.own(B.geometry()), mat); m.name = name; m.castShadow = shadow; m.receiveShadow = true; city.group.add(m); return m; };
+    if (!full) {
+      // a far shell: shared with the other areas resident that see it from the same field level
+      const key = `${st.name}|${Math.round(gField * 2)}`;
+      let sh = SHELLS.get(key);
+      if (!sh) {
+        const deck = deckPoints(city, st, L), nearDeck = pointHash(deck);
+        const helices = (st.helices || []).map((h) => ({ ...h, c: L(h.x, h.z) }));
+        const stand = buildStands(S, st, plan, ring, gField, rim, nearDeck, helices, col, land, SHELL_STANDS);
+        buildFieldShell(F, st, plan, gField, col);
+        buildDeckShell(S, deck, col);
+        for (const h of helices) buildDrum(S, h, land, col);
+        buildBoards(S, Sc, st, plan, gField, rim, col);
+        const g = [];
+        const towers = buildLights(S, stand, st, g);
+        sh = { geos: [S.count ? S.geometry() : null, F.count ? F.geometry() : null, Sc.count ? Sc.geometry() : null], glows: g, towers, refs: 0 };
+        SHELLS.set(key, sh);
+      }
+      sh.refs++; shells.push(key);
+      add(null, solid, `${st.name} (far)`, true, sh.geos[0]);
+      add(null, mats.field, `${st.name} field (far)`, false, sh.geos[1]);
+      add(null, mats.screen, `${st.name} scoreboard (far)`, false, sh.geos[2]);
+      glows.push(...sh.glows);
+      out.stadiums.push({ name: st.name, full: false, plan, gField, towers: sh.towers, game: null, fans: 0 });
+      continue;
+    }
+    mats.figures ||= city.own(figureMaterial(city.uniforms.uTime));
     const deck = deckPoints(city, st, L);
     const nearDeck = pointHash(deck);
     const helices = (st.helices || []).map((h) => ({ ...h, c: L(h.x, h.z) }));
@@ -167,28 +210,46 @@ export function buildStadiumKit(city) {
     for (const h of helices) buildHelix(S, h, st, land, col, glows, nearPath);
     buildBoards(S, Sc, st, plan, gField, rim, col);
     const towers = buildLights(S, stand, st, glows);
-    const add = (B, mat, name, shadow = true) => { if (!B.count) return null; const m = new THREE.Mesh(city.own(B.geometry()), mat); m.name = name; m.castShadow = shadow; m.receiveShadow = true; city.group.add(m); return m; };
     add(S, solid, `${st.name}`);
     add(F, mats.field, `${st.name} field`, false);
     add(Sc, mats.screen, `${st.name} scoreboard`, false);
     // the crowd: still figures in the stands (the near rows by the concourse in more detail), cheering now and then
-    const fans = crowdIn(stand, st, nearDeck);
-    for (const [list, lod, nm] of [[fans.far, 'far', 'crowd'], [fans.near, 'lo', 'crowd (near the concourse)']]) {
+    const fans = crowdIn(stand, st, nearDeck), crowd = {};
+    for (const [list, lod, nm, k] of [[fans.far, 'far', 'crowd', 'far'], [fans.near, 'lo', 'crowd (near the concourse)', 'near']]) {
       if (!list.length) continue;
       const im = staticCrowdMesh(list, mats.figures, `${st.name} ${nm}`, lod); im.castShadow = false; city.group.add(im); city.own(im.geometry);
+      crowd[k] = im;
     }
     const game = new Game(city, st, plan, gField, mats.figures);
-    out.stadiums.push({ name: st.name, plan, gField, stand, deck, helices, towers, game, fans: fans.far.length + fans.near.length });
+    let rad = 0; for (const p of ring) rad = Math.max(rad, Math.hypot(p.x - plan.centre.x, p.z - plan.centre.z));
+    out.stadiums.push({ name: st.name, full: true, plan, gField, stand, deck, helices, towers, game, crowd, rad, fans: fans.far.length + fans.near.length });
   }
   out.lights = city.addGlows(glows, 'Stadium lights');
-  out.tick = (time, dt, camera) => { for (const s of out.stadiums) s.game.tick(time, dt, camera); };
+  out.tick = (time, dt, camera) => {
+    const c = camera.position || camera;
+    for (const s of out.stadiums) {
+      if (!s.game) continue;
+      // near/far detail: the near rows and the players within NEAR_M of the stands, the crowd within CROWD_FAR_M
+      const d = Math.max(0, Math.hypot(c.x - s.plan.centre.x, c.z - s.plan.centre.z) - s.rad), near = d < NEAR_M;
+      if (s.crowd.near) s.crowd.near.visible = near;
+      if (s.crowd.far) s.crowd.far.visible = d < CROWD_FAR_M;
+      s.game.setVisible(near);
+      if (near) s.game.tick(time, dt, camera);
+    }
+  };
   out.setNight = (v) => {
     // the floodlights: the field brightens at night
     mats.field.emissive.setRGB(.16 * v, .2 * v, .14 * v);
   };
-  out.dispose = () => { for (const s of out.stadiums) s.game.dispose(); };
+  out.dispose = () => {
+    for (const s of out.stadiums) s.game?.dispose();
+    for (const key of shells.splice(0)) { const sh = SHELLS.get(key); if (sh && --sh.refs <= 0) { for (const g of sh.geos) g?.dispose(); SHELLS.delete(key); } }
+  };
   return out;
 }
+
+/** Far shells cached now (tests). */
+export function stadiumShellCount() { return SHELLS.size; }
 
 // ---------------------------------------------------------------- the stands
 /**
@@ -197,8 +258,10 @@ export function buildStadiumKit(city) {
  * is its sector's: two tiers to the concourse round the infield (football: both sides and the closed end), one low
  * tier along the outfield and the open end, none in centre field (the view out).
  */
-function buildStands(B, st, plan, ring, g0, rim, nearDeck, helices, col, land) {
-  const rays = [], N = 240, C = plan.centre, baseball = st.sport === 'baseball';
+const FULL_STANDS = { rays: 240, rows: 18, treads: true, arches: 3, rail: true };
+const SHELL_STANDS = { rays: 96, rows: 4, treads: false, arches: 0, rail: false };   // (a far shell: the bowl's silhouette)
+function buildStands(B, st, plan, ring, g0, rim, nearDeck, helices, col, land, opt = FULL_STANDS) {
+  const rays = [], N = opt.rays, C = plan.centre, baseball = st.sport === 'baseball';
   const seat = new THREE.Color(col.seats || '#2a4d8f'), upper = new THREE.Color(col.upper || col.seats || '#2a4d8f');
   const stone = new THREE.Color(col.stone || '#a89a86'), steel = new THREE.Color(col.steel || '#3a3d42');
   for (let k = 0; k < N; k++) {
@@ -241,7 +304,7 @@ function buildStands(B, st, plan, ring, g0, rim, nearDeck, helices, col, land) {
   const prof = (r) => (r.kind === 'full' || r.kind === 'step' ? TWO : ONE);
   const at = (r, f) => { const P = prof(r); for (let k = 1; k < P.length; k++) if (f <= P[k][0] + 1e-9) { const t = (f - P[k - 1][0]) / (P[k][0] - P[k - 1][0] || 1); return P[k - 1][1] + (P[k][1] - P[k - 1][1]) * t; } return 1; };
   const pt = (r, f) => { const t = r.t0 + (r.t1 - r.t0) * f; return V(r.inner.x + r.dx * (t - r.t0), g0 + .6 + (r.H - .6) * at(r, f), r.inner.z + r.dz * (t - r.t0)); };
-  const ROWS = 18, fs = Array.from({ length: ROWS + 1 }, (_, k) => k / ROWS);
+  const ROWS = opt.rows, fs = Array.from({ length: ROWS + 1 }, (_, k) => k / ROWS);
   for (let k = 0; k < N; k++) {
     const a = rays[k], b = rays[(k + 1) % N];
     if (!a || !b || a.kind === 'open' || b.kind === 'open' || !a.H || !b.H) continue;
@@ -251,12 +314,11 @@ function buildStands(B, st, plan, ring, g0, rim, nearDeck, helices, col, land) {
       const f0 = F[j], f1 = F[j + 1], mid = (f0 + f1) / 2;
       const fascia = same && prof(a) === TWO && mid > .5 && mid < .56;
       const c = fascia ? steel.clone().multiplyScalar(.75) : (mid > .52 ? upper : seat).clone().multiplyScalar(.82 + (j % 2) * .12 + ((k >> 1) % 3) * .02);
-      if (!fascia && (k % 24 === 0 || k % 24 === 1)) c.multiplyScalar(.7);   // an aisle
+      if (!fascia && Math.floor(k * 240 / N) % 24 < 2) c.multiplyScalar(.7);   // an aisle
       B.color(c);
       const A0 = pt(a, f0), A1 = pt(a, f1), B0 = pt(b, f0), B1 = pt(b, f1);
-      // treads: each row a riser and a flat step (the seats read as rows)
-      const Am = A1.clone().setY(A0.y), Bm = B1.clone().setY(B0.y);
-      B.quad(A0, B0, Bm, Am); B.quad(Am, Bm, B1, A1);
+      // treads: each row a riser and a flat step (the seats read as rows); a shell is one slope per band
+      if (opt.treads) { const Am = A1.clone().setY(A0.y), Bm = B1.clone().setY(B0.y); B.quad(A0, B0, Bm, Am); B.quad(Am, Bm, B1, A1); } else B.quad(A0, B0, B1, A1);
     }
     // the back of the stand: the outer wall down to the ground (arches below the concourse, a cornice)
     const ta = pt(a, 1), tb = pt(b, 1);
@@ -264,7 +326,7 @@ function buildStands(B, st, plan, ring, g0, rim, nearDeck, helices, col, land) {
     B.color(stone);
     B.quad(V(tb.x, gb, tb.z), V(ta.x, ga, ta.z), V(ta.x, ta.y, ta.z), V(tb.x, tb.y, tb.z));
     B.quad(V(ta.x, ga, ta.z), V(tb.x, gb, tb.z), V(tb.x, tb.y, tb.z), V(ta.x, ta.y, ta.z));
-    if (k % 3 === 0 && Math.min(ta.y, tb.y) - g0 > 9) {   // an arched opening on the street side
+    if (opt.arches && k % opt.arches === 0 && Math.min(ta.y, tb.y) - g0 > 9) {   // an arched opening on the street side
       const m = V((ta.x + tb.x) / 2 + a.dx * .25, 0, (ta.z + tb.z) / 2 + a.dz * .25);
       B.color(stone.clone().multiplyScalar(.45)); B.box(m.x, g0, m.z, .2, 6.5, Math.hypot(tb.x - ta.x, tb.z - ta.z) * .8, Math.atan2(tb.x - ta.x, tb.z - ta.z));
     }
@@ -272,7 +334,7 @@ function buildStands(B, st, plan, ring, g0, rim, nearDeck, helices, col, land) {
     const ia = pt(a, 0), ib = pt(b, 0);
     B.color(col.wall || '#24543a'); B.quad(V(ia.x, g0 - .2, ia.z), V(ib.x, g0 - .2, ib.z), V(ib.x, ia.y + .9, ib.z), V(ia.x, ia.y + .9, ia.z));
     // a rail along the stand's top where it doesn't meet the deck
-    if (!a.stop && !b.stop) { B.color(steel); B.beam(V(ta.x, ta.y + 1.05, ta.z), V(tb.x, tb.y + 1.05, tb.z), .08, .08); }
+    if (opt.rail && !a.stop && !b.stop) { B.color(steel); B.beam(V(ta.x, ta.y + 1.05, ta.z), V(tb.x, tb.y + 1.05, tb.z), .08, .08); }
   }
   return { rays, pt, g0 };
 }
@@ -385,16 +447,20 @@ function buildDeck(B, deck, st, helices, ring, land, col, convs) {
       if (s > 0) B.quad(A2, B2, Bv, A); else B.quad(B2, A2, A, Bv);
     }
     B.quad(L(a, ra, -w, ya - DECK.slab), L(b, rb, -w, yb - DECK.slab), L(b, rb, w, yb - DECK.slab), L(a, ra, w, ya - DECK.slab));   // (the underside, facing down)
-    // railings: a balustrade on the escalator (glass panels), posts and a top rail elsewhere
-    for (const s of [-1, 1]) {
-      const A = L(a, ra, s * (w - .1), ya), Bv = L(b, rb, s * (w - .1), yb);
-      if (e) {
-        B.color(glass); B.quad(s > 0 ? A : Bv, s > 0 ? Bv : A, (s > 0 ? Bv : A).clone().setY((s > 0 ? yb : ya) + 1), (s > 0 ? A : Bv).clone().setY((s > 0 ? ya : yb) + 1));
-        B.color('#1d1f22'); B.beam(A.clone().setY(ya + 1.02), Bv.clone().setY(yb + 1.02), .1, .08);
-      } else {
-        B.color(steel); B.beam(A.clone().setY(ya + DECK.rail), Bv.clone().setY(yb + DECK.rail), .07, .07);
-        B.beam(A.clone().setY(ya + .55), Bv.clone().setY(yb + .55), .04, .04);
-        if (k % 4 === 0) B.beam(A.clone().setY(ya), A.clone().setY(ya + DECK.rail), .07, .07);
+    // railings (every 2 m: four of the deck's 0.5 m steps — PLAN 7.8b, a quarter of the beams; the top stays at
+    // 0.5 m, the surface the rider rides): a balustrade on the escalator (glass panels), posts and a top rail elsewhere
+    if (k % RAIL_STEP === 0) {
+      const kb = Math.min(deck.length - 1, k + RAIL_STEP), b2 = deck[kb], rb2 = { x: -b2.tz, z: b2.tx }, yb2 = b2.y + DECK.lift;
+      for (const s of [-1, 1]) {
+        const A = L(a, ra, s * (w - .1), ya), Bv = L(b2, rb2, s * (w - .1), yb2);
+        if (e) {
+          B.color(glass); B.quad(s > 0 ? A : Bv, s > 0 ? Bv : A, (s > 0 ? Bv : A).clone().setY((s > 0 ? yb2 : ya) + 1), (s > 0 ? A : Bv).clone().setY((s > 0 ? ya : yb2) + 1));
+          B.color('#1d1f22'); B.beam(A.clone().setY(ya + 1.02), Bv.clone().setY(yb2 + 1.02), .1, .08);
+        } else {
+          B.color(steel); B.beam(A.clone().setY(ya + DECK.rail), Bv.clone().setY(yb2 + DECK.rail), .07, .07);
+          B.beam(A.clone().setY(ya + .55), Bv.clone().setY(yb2 + .55), .04, .04);
+          B.beam(A.clone().setY(ya), A.clone().setY(ya + DECK.rail), .07, .07);
+        }
       }
     }
     // columns down to the ground where the deck is high and not over the stands or in a helix
@@ -407,6 +473,61 @@ function buildDeck(B, deck, st, helices, ring, land, col, convs) {
     }
     void along;
   }
+}
+
+const RAIL_STEP = 4;
+
+/** A far shell's deck: a plain slab along the kit's path every ~4 m (top and underside), no railings or treads. */
+function buildDeckShell(B, deck, col) {
+  if (deck.length < 2) return;
+  const w = DECK.width / 2, concrete = new THREE.Color(col.deck || '#b9b3a8');
+  const pts = [deck[0]];
+  for (const p of deck) if (Math.hypot(p.x - pts.at(-1).x, p.z - pts.at(-1).z) >= 4) pts.push(p);
+  if (pts.at(-1) !== deck.at(-1)) pts.push(deck.at(-1));
+  const L = (p, s, y) => V(p.x - p.tz * s, y, p.z + p.tx * s);
+  for (let k = 0; k < pts.length - 1; k++) {
+    const a = pts[k], b = pts[k + 1], ya = a.y + DECK.lift, yb = b.y + DECK.lift;
+    B.color(concrete); B.quad(L(a, w, ya), L(b, w, yb), L(b, -w, yb), L(a, -w, ya));
+    B.color(concrete.clone().multiplyScalar(.72));
+    B.quad(L(a, -w, ya - DECK.slab), L(b, -w, yb - DECK.slab), L(b, w, yb - DECK.slab), L(a, w, ya - DECK.slab));
+    B.quad(L(a, w, ya - DECK.slab), L(b, w, yb - DECK.slab), L(b, w, yb), L(a, w, ya));
+    B.quad(L(b, -w, yb - DECK.slab), L(a, -w, ya - DECK.slab), L(a, -w, ya), L(b, -w, yb));
+  }
+}
+
+/** A far shell's helix: its drum alone. */
+function buildDrum(B, h, land, col) {
+  const g = land.heightAt(h.c.x, h.c.z) - .5, top = Math.max(h.y0, h.y1) + (h.role === 'escalator' ? 5 : 2.5);
+  B.color(h.role === 'escalator' ? (col.steel || '#3a3d42') : (col.stone || '#a89a86'));
+  B.cylinder(h.c.x, g, h.c.z, h.R - DECK.width / 2 - 1.6, top - g, 14);
+}
+
+/** A far shell's field: the grass, the infield (baseball) or the end zones (football). */
+function buildFieldShell(B, st, plan, g0, col) {
+  const y = g0 + .02;
+  const flat = (ring, color, dy = 0) => {
+    B.color(color);
+    const tris = THREE.ShapeUtils.triangulateShape(ring.map((p) => new THREE.Vector2(p.x, p.z)), []);
+    for (const [i, j, k] of tris) {
+      const A = V(ring[i].x, y + dy, ring[i].z), Bv = V(ring[j].x, y + dy, ring[j].z), C = V(ring[k].x, y + dy, ring[k].z);
+      const n = new THREE.Vector3().subVectors(Bv, A).cross(new THREE.Vector3().subVectors(C, A));
+      if (n.y > 0) B.triangle(A, Bv, C); else B.triangle(A, C, Bv);
+    }
+  };
+  if (st.sport === 'baseball') {
+    const { P } = plan;
+    flat(plan.ring, '#4f8f3a');
+    const arc = [P(-1.5, 0)];
+    for (let phi = -6; phi <= 96; phi += 12) { const a = (45 - phi) * DEG; arc.push(P(18.4 + Math.cos(a) * 29, Math.sin(a) * 29)); }
+    flat(arc, '#b0764a', .02);
+    const d = 27.43 * Math.SQRT1_2;
+    flat([P(1.5, 0), P(d - 1, d - 2.4), P(2 * d - 2.4, 0), P(d - 1, -(d - 2.4))], '#4f8f3a', .03);
+    return;
+  }
+  const { P } = plan, f = st.field, hl = f.lengthM / 2, hw = f.widthM / 2;
+  flat(plan.ring, '#3f7d35');
+  const ez = (a0, a1, c) => flat([P(a0, -hw), P(a1, -hw), P(a1, hw), P(a0, hw)], c, .02);
+  ez(-hl, -45.72, col.endzone || '#1b1b1b'); ez(45.72, hl, col.endzone2 || '#f2b81c');
 }
 
 // ---------------------------------------------------------------- the helices: a spiral escalator, a spiral ramp
@@ -494,7 +615,7 @@ function crowdIn(stand, st, nearDeck) {
     for (let j = 0; j < rows; j++) {
       const f = (j + .5) / rows;
       if (a.kind === 'full' && f > .48 && f < .58) continue;   // (the club level)
-      if (rand() > .62) continue;
+      if (rand() > .45) continue;   // (PLAN 7.8b: ~27 % fewer than 7.8's .62)
       const t = rand(), A = stand.pt(a, f), B = stand.pt(b, f), x = A.x + (B.x - A.x) * t, y = Math.min(A.y, B.y), z = A.z + (B.z - A.z) * t;
       const look = randomLook(rand, { shirts: home, kids: .1, caps: .35 });
       const r = rand(), clip = r < .55 ? CLIP.sit : r < .72 ? CLIP.clap : r < .84 ? CLIP.cheer : r < .92 ? CLIP.idle : CLIP.flag;
@@ -528,6 +649,7 @@ class Game {
     }
     c.end();
   }
+  setVisible(v) { if (this.visible === v) return; this.visible = v; for (const m of this.crowd.meshes) m.visible = v; }
   dispose() { for (const m of this.crowd.meshes) { m.removeFromParent(); m.geometry.dispose(); m.dispose(); } }
 }
 
