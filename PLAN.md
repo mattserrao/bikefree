@@ -1432,6 +1432,10 @@ Decided with the user (19 Nov, after riding phase 6):
 - [ ] 7.6 Final QC (as phase 6's trimmed set) and PR
 - Landmarks: an inventory and a brainstorm of missing landmarks near the routes (project doc `claude/pittsburgh-landmarks.md`); which to build is the user's call
 
+### Later test branch: more Pittsburgh landmarks + a detail pass *(decided 19 Nov; not started)*
+- [ ] All four groups from the project doc `claude/pittsburgh-landmarks.md` ("Future test branch"), at the same stylised level as phase 7: **Downtown skyline & culture** (Koppers Tower, Frick Building, Mellon Bank, Tower at PNC Plaza, EQT Plaza, Heinz Hall, Benedum, Old Jail & Courthouse, Engine Co. 1, Duquesne Upper Station, the P&LE terminal), **North Side museums** (Randyland, Aviary, Carnegie Library Allegheny, Observatory dome, Children's Museum, Warhol Museum, Mattress Factory, Soldiers & Sailors Monument), **statues & memorials** (Stargell, Clemente, Korean War, Point of View, Doughboy, Troy Hill WWI, Vietnam, Steelworkers, the Hiker, Columbus, Bigelow, Washington, the Millennium Panther), **Strip, Oakland & more** (Heinz History Center, Produce Terminal, Penn Brewery, Hamerschlag Hall, Forbes Field wall, Stephen Foster, Mellon Institute, Frick Fine Arts, St Josaphat, the Zoo entrance, Union Project, Sandcastle)
+- [ ] A detail pass on the existing landmarks (PNC Park's stone arched facade, Heinz Chapel's windows and tracery, fuller statues, church fronts — F340, F346)
+
 ### Later test branch: street-by-street review and beautification (pre-launch) *(asked 19 Nov; not started)*
 The user: the final overview before a **public launch** of the game.
 - [ ] Street-by-street review of every Pittsburgh area and park route, in ride order
