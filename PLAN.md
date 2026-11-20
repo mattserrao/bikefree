@@ -1503,7 +1503,7 @@ Decided with the user (19 Nov, after riding phase 6):
 - [x] 7.6 Final QC (as phase 6's trimmed set) and PR: tests 306/306, course strict 22 routes 0/0, network clean; PR #40. Open items moved to "Follow-up list (after phase 7)" below
 - Landmarks: an inventory and a brainstorm of missing landmarks near the routes (project doc `claude/pittsburgh-landmarks.md`); which to build is the user's call
 
-### Next work package: load before you ride *(decided 20 Nov; not started)*
+### Next test branch (phase 8): load before you ride *(decided 20 Nov; starts after PR #40 is merged)*
 The user: a ride starts at once (time and distance record) while its scenery is still loading. Wanted: menu and route choice → load the route's assets behind a loading screen → then the ride begins.
 Today: Ride hides the menu and shows the ride screen at once; only the start area's scene file is fetched first; terrain tiles, roads, trees, buildings, baked light, rider / pacer models and the next areas build in frame-budget slices on the ride screen (a thin `#hLoading` bar); `session.autoStart` is armed at once, so the first pedal stroke (or a resume) starts the clock.
 - [ ] L1 Loading screen (full screen, over the ride screen): route name, distance and climb, preview picture if any, a progress bar with what's loading (scenery, ground, roads & buildings, light, riders). Cancel goes back to the menu
@@ -1519,7 +1519,7 @@ Open items from phase 7, grouped. Details stay at each F number in the phase 7 s
 
 **Ride checks (on the bike, from PR #40)**
 - [x] F325 / F330 Turning at 30–40 km/h: view swing and the 38° lean at junctions and U-turns (user, 20 Nov: good)
-- [ ] F350 Stadium escalators (26 s / 30 s) and ramps (~9–10.6 %) ridden up in the reverse presets: "Three Rivers Loop · reverse", "North Side Hills Loop · reverse", the Stadiums Loop's way home (user, 20 Nov: couldn't find a reverse mode; the reverses are separate presets in the Pittsburgh list)
+- [x] F350 Stadium escalators (26 s / 30 s) and ramps (~9–10.6 %) ridden up in the reverse presets: "Three Rivers Loop · reverse", "North Side Hills Loop · reverse", the Stadiums Loop's way home (user, 20 Nov: couldn't find a reverse mode; the reverses are separate presets in the Pittsburgh list) (user, 20 Nov: Stadiums Loop, all escalators worked)
 - [x] F377 / F378 Tour de Pittsburgh: the repeat through Acrisure as a finish; Pig Hill descent feel (user, 20 Nov: good)
 - [x] F393 Main-page load time on the Mac and the phone (user, 20 Nov: improved)
 
