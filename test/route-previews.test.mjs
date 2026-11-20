@@ -104,7 +104,7 @@ const expected = [...parkIds, ...network.presets.map((p) => p.id), `${network.id
 
 test('every route in the menu gets 2–3 spots on its own track', () => {
   assert.deepEqual(plans.map((p) => p.id).sort(), [...expected].sort());
-  assert.equal(network.presets.length, 46);
+  assert.equal(network.presets.length, 48);
   for (const p of plans) {
     assert.ok(p.spots.length >= 2 && p.spots.length <= 3, `${p.id}: ${p.spots.length} spots`);
     assert.equal(p.spots[0].role, 'start', p.id);

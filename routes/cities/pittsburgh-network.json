@@ -3554,6 +3554,49 @@
    "note": "The long loop both ways: out under the Allegheny by the subway, home round the Point and over the Clemente Bridge",
    "lengthM": 36850,
    "climbM": 530
+  },
+  {
+   "id": "pgh-tour",
+   "name": "Tour de Pittsburgh",
+   "path": [
+    "e12+",
+    "e13+",
+    "e42+",
+    "e47-",
+    "e11+",
+    "e19+",
+    "e21-",
+    "e22+",
+    "e48+",
+    "e49-",
+    "e51+",
+    "e53-",
+    "e54+",
+    "e29+",
+    "e27-",
+    "e33-",
+    "e31-",
+    "e30-",
+    "e24+",
+    "e1+",
+    "e2+",
+    "e15+",
+    "e16+",
+    "e7+",
+    "e8+",
+    "e9+",
+    "e10+",
+    "e11+"
+   ],
+   "tags": [
+    "long",
+    "hilly",
+    "varied",
+    "landmarks"
+   ],
+   "note": "The city's landmarks in one loop from the Water Steps: through PNC Park, Randyland and the Aviary, past Mister Rogers and the USS Requin and through Acrisure Stadium; up Troy Hill past St Anthony's Chapel and Most Holy Name, Millvale and the 40th Street Bridge, Highland Park's reservoir, East Liberty Presbyterian, Shady Ave to Squirrel Hill and through Phipps Conservatory; Schenley Plaza by the Carnegie Museum, Heinz Chapel and the Cathedral of Learning, Soldiers & Sailors, Bloomfield and down past Immaculate Heart of Mary on Polish Hill; St Stanislaus in the Strip, the Point and Fort Pitt, PPG Place and downtown's towers, Station Square and the Mon Incline, up McArdle to the Grandview overlooks and St Mary of the Mount, the Duquesne Incline, over the West End Bridge and home past the Science Center through Acrisure Stadium",
+   "lengthM": 56870,
+   "climbM": 793
   }
  ],
  "freeRide": {
