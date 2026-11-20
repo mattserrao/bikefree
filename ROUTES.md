@@ -506,6 +506,22 @@ and walls follow), the ribbons get a cross-section every 3° (`stepDeg`) where a
 more than 6° (`refineDeg`), and their inside edges never fold. Ride distance and the elevation profile are
 unchanged. `test/smooth-turns.test.mjs` measures it; `heading-jitter` warns on these scenes.
 
+### Repairing the city's street ends (roads to nowhere)
+
+```sh
+npm run qc:map -- pittsburgh-oakland --json /tmp/map.json      # find them: near-miss, stub, dead-end, end-step, deck-end
+npm run repair:city -- pittsburgh-oakland --dry                 # what would change (counts before / after)
+npm run repair:city -- pittsburgh-oakland --json /tmp/fix.json  # repair routes/scenes/<area>-city.json in place
+```
+
+`tools/repair_city.mjs` fixes the stored street data (no OpenStreetMap re-fetch), only within `--near` (300 m) of the
+area's route and never on a street along any Pittsburgh route: a near-miss end is extended onto the street it points
+at (or an overshoot past a junction trimmed), < 25 m stubs and < 150 m highway / link / primary fragments
+(< 60 m secondary / tertiary) are dropped, a ground street ending at a deck above it gets a ≤ 10 % ramp, a deck
+ending in the air is trimmed back to the ground. Tunnel approaches (an end running into a hillside) are listed, not
+fixed. Only the `streets` block changes; a second run changes nothing. Re-run it after `tools/build_city.py`
+rebuilds an area, then `npm run qc` and `npm run routes:build`. `--rules near-miss,stub` limits it to some checks.
+
 ## Clipping & overlap QC: things drawn through each other
 
 ```sh
