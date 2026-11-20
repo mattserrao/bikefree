@@ -354,3 +354,12 @@ export function nearestLandmark(placed, x, y, maxD) {
   if (!best) for (const p of placed || []) { const b = p.label?.box; if (b && x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3]) return p; }
   return best;
 }
+/**
+ * The list's scrollTop that brings a row fully into view (PLAN 7.9c): null when it is already fully visible.
+ * rowTop / rowBottom are the row's edges in the list's content (px from its top); a row taller than the view shows its top.
+ */
+export function revealScrollTop(rowTop, rowBottom, scrollTop, viewHeight, pad = 8) {
+  if (rowTop >= scrollTop && rowBottom <= scrollTop + viewHeight) return null;
+  const want = rowBottom - rowTop + 2 * pad > viewHeight || rowTop < scrollTop ? rowTop - pad : rowBottom + pad - viewHeight;
+  return Math.max(0, Math.round(want));
+}

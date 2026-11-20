@@ -257,3 +257,12 @@ test('the landmarks toggle is remembered in settings, shown by default', async (
   assert.equal(loadSettings().mapLandmarks, false);
   delete globalThis.localStorage;
 });
+
+test('a route picked on the map: the list scrolls only when its row is not fully in view (7.9c)', async () => {
+  const { revealScrollTop } = await import('../js/city-routes.js');
+  assert.equal(revealScrollTop(100, 200, 50, 300), null);          // fully visible: no scroll
+  assert.equal(revealScrollTop(400, 520, 50, 300), 228);           // below: its bottom (Ride) just in view
+  assert.equal(revealScrollTop(20, 120, 50, 300), 12);             // above: its top in view
+  assert.equal(revealScrollTop(100, 500, 0, 300), 92);             // taller than the view: its top
+  assert.equal(revealScrollTop(2, 80, 40, 300), 0);                // never negative
+});

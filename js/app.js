@@ -10,7 +10,7 @@ import { parseGpx, buildRoute, averageGradeAhead, wrapDist, routeAt, isPointToPo
 import { Pacer, PACER_WATTS } from './pacer.js';
 import { parseWorkout, BUILT_IN_WORKOUTS, targetWatts, zoneColor, markFtpTest, ftpFromTwentyMinutes } from './workout.js';
 import { drawProfile, drawWorkout, drawTrace, drawMinimap, drawNetworkMinimap, drawCityMap, gradeColor, profileDistAt } from './views.js';
-import { groupByArea, groupCityItems, cityCardsFirst, defaultRouteId, citySubline, filterByGoal, segmentRoutes, pickOnSegment, nearestLine, fitProjection, zoomProjection, zoomAt, panBy, mergeRivers, areaLabelSpots, shortName, landmarkRank, nearestLandmark } from './city-routes.js';
+import { groupByArea, groupCityItems, cityCardsFirst, defaultRouteId, citySubline, filterByGoal, segmentRoutes, pickOnSegment, nearestLine, fitProjection, zoomProjection, zoomAt, panBy, mergeRivers, areaLabelSpots, shortName, landmarkRank, nearestLandmark, revealScrollTop } from './city-routes.js';
 import { Profiles, GENDERS, initials, cmToFtIn, ftInToCm } from './profiles.js';
 import { buildCatalogRoute, loadRouteScene } from './routes.js';
 import { loadNetwork, makePathRoute, planNext, planCloses, keysToIds, idsToKeys, travKey, PathFollower, edgeLines } from './network.js';
@@ -1569,13 +1569,21 @@ function renderCityMap() {
   $('cityMap').setAttribute('aria-label', `Map of ${card.name}${sel ? `, ${shortName(sel.name)} highlighted` : ''}${showLm && d.landmarks.length ? `, with ${d.landmarks.length} landmarks` : ''}. Arrow keys pick a segment, Enter lists the routes that ride it.`);
   $('cityMapHint').textContent = city.hint || (fe ? `${fe.name} · Enter to see its routes` : 'Tap a line to see the routes that ride it');
 }
-function citySelect(id, { scroll = true } = {}) {
+function citySelect(id, { scroll = true, fromMap = false, focusRide = false } = {}) {
   city.sel = id;
   renderCity();
-  if (scroll) $('cityList').querySelector('.city-row.on')?.scrollIntoView({ block: 'nearest' });
+  const list = $('cityList'), row = list.querySelector('.city-row.on');
+  if (!row) return;
+  if (fromMap && list.scrollHeight > list.clientHeight) {
+    // picked on the map (7.9c): glide the list so the row and its Ride / Options are fully in view, and give Ride focus
+    const lr = list.getBoundingClientRect(), rr = row.getBoundingClientRect(), top = rr.top - lr.top + list.scrollTop;
+    const to = revealScrollTop(top, top + rr.height, list.scrollTop, list.clientHeight);
+    if (to != null) list.scrollTo({ top: to, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    if (focusRide) row.querySelector('[data-ride]')?.focus({ preventScroll: true });   // (not from the map's keys: Enter again picks the next route)
+  } else if (scroll) row.scrollIntoView({ block: 'nearest' });
 }
 /** A segment tapped (or chosen with the keyboard): list the routes that ride it, select the first (again: the next). */
-function cityTapSegment(edgeId) {
+function cityTapSegment(edgeId, { pointer = false } = {}) {
   const card = cityCard(), d = card && cityMapData(card);
   if (!d) return;
   const { byGoal } = cityShown(card);
@@ -1588,7 +1596,7 @@ function cityTapSegment(edgeId) {
   }
   city.hint = '';
   city.seg = edgeId; city.segIds = res.ids;
-  citySelect(res.selected);
+  citySelect(res.selected, { fromMap: true, focusRide: pointer });
 }
 function cityChoose(id) {
   // the same as picking its card in the list used to: it's the route, and the menu shows its preview and Start
@@ -1680,7 +1688,7 @@ $('cityMap').addEventListener('click', (e) => {
   if (mapDrag?.moved) return;   // the end of a pinch or a drag, not a tap
   const rect = e.currentTarget.getBoundingClientRect();
   const j = nearestLine(city.lines, e.clientX - rect.left, e.clientY - rect.top, e.pointerType === 'mouse' ? 14 : 22);
-  if (j >= 0) { city.focus = null; cityTapSegment(city.lines[j].id); return; }
+  if (j >= 0) { city.focus = null; cityTapSegment(city.lines[j].id, { pointer: true }); return; }
   // off the lines, on a landmark (PLAN 7.9): its name in the hint
   const lm = nearestLandmark(city.lines.landmarks, e.clientX - rect.left, e.clientY - rect.top, e.pointerType === 'mouse' ? 10 : 18);
   if (lm) { city.hint = lm.lm.name; renderCityMap(); return; }
