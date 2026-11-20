@@ -1,89 +1,88 @@
 {
  "pittsburgh": {
-  "floating": 2225,
-  "bank-wall": 1132,
-  "stacked": 578,
-  "scallop": 30,
-  "buried": 83,
-  "parallel": 705,
-  "clutter": 392
+  "bank-wall": 769,
+  "floating": 890,
+  "stacked": 613,
+  "buried": 13,
+  "scallop": 19,
+  "parallel": 581,
+  "clutter": 433
  },
  "pittsburgh-allegheny": {
-  "stacked": 466,
-  "bank-wall": 437,
-  "floating": 1417,
-  "scallop": 11,
-  "buried": 10,
-  "parallel": 594,
-  "clutter": 325
+  "bank-wall": 286,
+  "floating": 708,
+  "stacked": 511,
+  "scallop": 4,
+  "parallel": 508,
+  "clutter": 346
  },
  "pittsburgh-westend": {
-  "floating": 476,
-  "bank-wall": 88,
-  "stacked": 69,
+  "floating": 300,
+  "stacked": 72,
   "buried": 4,
-  "parallel": 127,
-  "clutter": 74
+  "bank-wall": 75,
+  "scallop": 1,
+  "parallel": 123,
+  "clutter": 83
  },
  "pittsburgh-oakland": {
-  "floating": 555,
-  "bank-wall": 253,
-  "stacked": 90,
-  "scallop": 10,
-  "buried": 3,
-  "parallel": 124,
-  "clutter": 50
+  "floating": 223,
+  "stacked": 111,
+  "bank-wall": 136,
+  "scallop": 6,
+  "buried": 2,
+  "parallel": 91,
+  "clutter": 58
  },
  "pittsburgh-polish": {
-  "bank-wall": 50,
-  "floating": 202,
+  "floating": 112,
   "scallop": 1,
-  "stacked": 26,
-  "parallel": 137,
-  "clutter": 81
+  "stacked": 33,
+  "bank-wall": 28,
+  "parallel": 133,
+  "clutter": 86
  },
  "pittsburgh-homestead": {
-  "bank-wall": 275,
-  "stacked": 91,
-  "floating": 480,
-  "scallop": 12,
-  "buried": 4,
-  "parallel": 180,
-  "clutter": 93
+  "bank-wall": 175,
+  "stacked": 105,
+  "floating": 172,
+  "scallop": 10,
+  "buried": 3,
+  "parallel": 149,
+  "clutter": 99
  },
  "pittsburgh-northside": {
-  "bank-wall": 349,
-  "stacked": 384,
-  "floating": 1259,
-  "scallop": 11,
-  "buried": 7,
-  "parallel": 539,
-  "clutter": 285
+  "stacked": 402,
+  "bank-wall": 222,
+  "floating": 765,
+  "buried": 1,
+  "scallop": 4,
+  "parallel": 489,
+  "clutter": 305
  },
  "pittsburgh-eastend": {
-  "floating": 303,
-  "stacked": 82,
-  "bank-wall": 75,
+  "floating": 172,
+  "stacked": 84,
+  "bank-wall": 44,
   "buried": 1,
-  "parallel": 218,
-  "clutter": 90
+  "scallop": 2,
+  "parallel": 186,
+  "clutter": 93
  },
  "pittsburgh-slopes": {
-  "floating": 1184,
-  "bank-wall": 589,
-  "stacked": 282,
-  "buried": 16,
-  "scallop": 26,
-  "parallel": 393,
-  "clutter": 200
+  "floating": 495,
+  "stacked": 306,
+  "bank-wall": 449,
+  "scallop": 17,
+  "parallel": 341,
+  "clutter": 214
  },
  "pittsburgh-subway": {
-  "bank-wall": 319,
-  "floating": 903,
-  "stacked": 350,
-  "scallop": 15,
-  "buried": 10,
-  "parallel": 316,
-  "clutter": 181
+  "bank-wall": 230,
+  "stacked": 356,
+  "floating": 444,
+  "scallop": 11,
+  "parallel": 276,
+  "clutter": 195
  }
 }

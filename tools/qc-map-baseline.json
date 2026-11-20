@@ -4,7 +4,7 @@
   "bump": 13,
   "near-miss": 11,
   "height-step": 4,
-  "end-step": 4,
+  "end-step": 2,
   "dead-end": 1
  },
  "pittsburgh-allegheny": {
@@ -33,8 +33,7 @@
  },
  "pittsburgh-northside": {
   "stub": 3,
-  "near-miss": 3,
-  "end-step": 1
+  "near-miss": 3
  },
  "pittsburgh-eastend": {
   "near-miss": 6,
