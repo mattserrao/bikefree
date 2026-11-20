@@ -113,10 +113,11 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
   // outbound route samples on a 20 m grid, for "every stretch of road near here"
   const near = new Map();
   const ghost = ghostMask(route);   // (a network tour's repeated stretches are never the route's road here: js/world/ghost.js)
-  for (let i = 0; i <= end; i++) { if (ghost?.[i] || (ghost?.[i + 1] && i < end)) continue; const k = `${Math.floor(index.xs[i] / 20)},${Math.floor(index.zs[i] / 20)}`; if (!near.has(k)) near.set(k, []); near.get(k).push(i); }
+  const nearKey = (i, j) => (i + 32768) * 65536 + (j + 32768);   // [audit-C] numeric cell keys: no string per lookup
+  for (let i = 0; i <= end; i++) { if (ghost?.[i] || (ghost?.[i + 1] && i < end)) continue; const k = nearKey(Math.floor(index.xs[i] / 20), Math.floor(index.zs[i] / 20)); if (!near.has(k)) near.set(k, []); near.get(k).push(i); }
   const nearbyRoute = (x, z) => {
     const out = [], cx = Math.floor(x / 20), cz = Math.floor(z / 20);
-    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const i of near.get(`${cx + a},${cz + b}`) || []) out.push(i);
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const l = near.get(nearKey(cx + a, cz + b)); if (l) for (let q = 0; q < l.length; q++) out.push(l[q]); }
     return out;
   };
   /** True distance to the route's road (its segments, not its 10 m sample points) within ~30 m: {d, i, y} or null. */
@@ -404,16 +405,23 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
   /** Every street whose carriageway comes within `extra` of (x, z): [{k, edge}] (one per street). */
   const streetsNear = (x, z, extra = 0) => {
     if (!streetIndex) streetAt(x, z);
-    const out = new Map();
-    for (const v of streetIndex?.get(cellOf(Math.floor(x / 24), Math.floor(z / 24))) || []) {
-      const k = Math.floor(v / SEG), i = v - k * SEG;
+    // [audit-C] (no Map and no object per segment: a cell holds a few streets, a linear scan of the kept ones is faster
+    // and this runs for every ground height; the same streets, in the same order, as before)
+    const out = [], cell = streetIndex?.get(cellOf(Math.floor(x / 24), Math.floor(z / 24)));
+    if (!cell) return out;
+    for (let q = 0; q < cell.length; q++) {
+      const v = cell[q], k = Math.floor(v / SEG), i = v - k * SEG;
       const st = streetIndex.streets[k], a = st.pts[i - 1], b = st.pts[i];
       const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1;
       const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / l2));
-      const edge = Math.hypot(a.x + dx * t - x, a.z + dz * t - z) - st.width / 2;
-      if (edge < extra && (!out.has(k) || edge < out.get(k).edge)) out.set(k, { k, edge, y: a.y + (b.y - a.y) * t });
+      const ex = a.x + dx * t - x, ez = a.z + dz * t - z, edge = Math.sqrt(ex * ex + ez * ez) - st.width / 2;
+      if (!(edge < extra)) continue;
+      let o = null;
+      for (let m = 0; m < out.length; m++) if (out[m].k === k) { o = out[m]; break; }
+      if (!o) out.push({ k, edge, y: a.y + (b.y - a.y) * t });
+      else if (edge < o.edge) { o.edge = edge; o.y = a.y + (b.y - a.y) * t; }
     }
-    return [...out.values()];
+    return out;
   };
   const pads = makeGlasshousePads(config, proj, route, index);   // [glasshouse] (js/world/toolbox/structures/glasshouse.js)
   const grade = makeStreetGrade(config, { data, decoded: D, route, index, outbound, routeKindAt, onRouteBridge, routeDist });   // [street-kit] main-street cross-section
@@ -424,7 +432,10 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
     // Flat for 6.5 m past the carriageway (sidewalks reach 2.5 m; one more ground-mesh cell so the 6 m mesh
     // can't drag a hillside over it), easing back to the terrain by 18 m. Where streets overlap at different
     // heights (a ramp beside a street), follow the lowest, so none is buried.
-    const flat = 6.5, around = streetsNear(x, z, 18).filter((o) => !streetIndex.streets[o.k].bridge);
+    // [audit-C] one street lookup and one route lookup per call (they were made up to 3 and 4 times): every smaller
+    // radius below is a subset of the 18 m one (each street's nearest piece is the same), so the result is identical
+    const all = streetsNear(x, z, 18), own = routeDist(x, z);
+    const flat = 6.5, around = all.filter((o) => !streetIndex.streets[o.k].bridge);
     if (around.length) {
       let target = Infinity, edge = Infinity, ride = Infinity;
       for (const o of around) {
@@ -435,30 +446,29 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
       if (target === Infinity) target = around.reduce((a, b) => (a.edge < b.edge ? a : b)).y - .1;
       // the route's own road wins: no street grading under it, easing in beyond its shoulders — except under the
       // street the route rides on, which lies just under the road and is wider than it ([road-align] rides)
-      const r = routeDist(x, z), byRoute = r ? smoothstep(ROAD_WIDTH / 2 + 2, 13, r.d) : 1;
+      const r = own, byRoute = r ? smoothstep(ROAD_WIDTH / 2 + 2, 13, r.d) : 1;
       h += (target - h) * (1 - smoothstep(flat, 18, edge)) * byRoute;
       if (ride < Infinity) h += (ride - h) * (1 - byRoute);
       if (r && r.d < 9) h = Math.min(h, r.y - .5 + Math.max(0, r.d - 5) * .2);   // never over the route's own road
     }
     // [junctions] round a junction: just under its surface and corner sidewalks (but still never over the route's road)
     if (L._junctions) {
-      const r = routeDist(x, z);
+      const r = own;
       const w = r ? smoothstep(ROAD_WIDTH / 2 + 1, ROAD_WIDTH / 2 + 7, r.d) : 1;   // (under the road and its shoulder: the road's bank)
       if (w > 0) h += (junctionGround(L._junctions, x, z, h) - h) * w;
       if (r && r.d < 9) h = Math.min(h, r.y - .5 + Math.max(0, r.d - 5) * .2);
     }
-    if (grade) h = grade(x, z, h, routeDist(x, z));   // [street-kit] (after [junctions]: it fades out near other streets, so junctions keep their grading) sidewalk-level ground beside a kit zone's curbs
+    if (grade) h = grade(x, z, h, own);   // [street-kit] (after [junctions]: it fades out near other streets, so junctions keep their grading) sidewalk-level ground beside a kit zone's curbs
     // nor over a low ramp or viaduct deck (they're left out of the grading above, but one running close to the
     // ground beside the route would otherwise be buried by the bank the route's road raises)
-    const own = routeDist(x, z);
     // [network] a trail on a ledge (the Jail Trail under the parkway): the ground's 6 m mesh must not reach over
     // the shoulders from the embankment beside it, so out to 14 m it stays under a gentle bank — where no
     // street lies (a street keeps its own grading)
-    if (own && own.d < 14 && own.d >= 9 && routeKindAt(route.dist[outbound(own.i)]) === 'trail' && !streetsNear(x, z, 2).some((o) => o.y < own.y + 1)) {
+    if (own && own.d < 14 && own.d >= 9 && routeKindAt(route.dist[outbound(own.i)]) === 'trail' && !all.some((o) => o.edge < 2 && o.y < own.y + 1)) {
       h = Math.min(h, own.y - .5 + (own.d - 5) * .12);
     }
     if (!own || own.d > 9) {   // (near the route's own road its bank wins: the ground mesh can't step that fast)
-      for (const o of streetsNear(x, z, 1.5)) if (streetIndex.streets[o.k].bridge && h > o.y - .35) h = Math.min(h, o.y - .35);
+      for (const o of all) if (o.edge < 1.5 && streetIndex.streets[o.k].bridge && h > o.y - .35) h = Math.min(h, o.y - .35);
     }
     // [6.1] and never over a street's own carriageway, sidewalk or path (away from the route's road, whose
     // bank wins there): the route's bank, a hillside or a junction's grading used to rise over a lower street beside

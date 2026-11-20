@@ -64,6 +64,7 @@ export const tileSizeM = (z, lat) => (2 * Math.PI * EARTH_R * Math.cos(lat * DEG
  * Spatial index of route points in the local frame, for "how far is this spot from the road"
  * queries (road carving, tree placement).
  */
+const cellKey = (i, j) => (i + 32768) * 65536 + (j + 32768);
 export function makeRouteIndex(route, proj, cell = 40) {
   const n = route.dist.length;
   const xs = new Float64Array(n), zs = new Float64Array(n);
@@ -76,7 +77,7 @@ export function makeRouteIndex(route, proj, cell = 40) {
   for (let i = 0; i < n; i++) {
     if (ghost?.[i]) continue;
     const p = { x: xs[i], z: zs[i] };
-    const key = `${Math.floor(p.x / cell)},${Math.floor(p.z / cell)}`;
+    const key = cellKey(Math.floor(p.x / cell), Math.floor(p.z / cell));   // [audit-C] numeric cell keys (no string per lookup)
     let arr = grid.get(key);
     if (!arr) grid.set(key, (arr = []));
     arr.push(i);
@@ -88,7 +89,7 @@ export function makeRouteIndex(route, proj, cell = 40) {
     let best = null, bd = maxR * maxR;
     for (let dx = -r; dx <= r; dx++) {
       for (let dz = -r; dz <= r; dz++) {
-        const arr = grid.get(`${cx + dx},${cz + dz}`);
+        const arr = grid.get(cellKey(cx + dx, cz + dz));
         if (!arr) continue;
         for (const i of arr) {
           const ddx = xs[i] - x, ddz = zs[i] - z;

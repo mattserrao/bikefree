@@ -717,6 +717,7 @@ export function* junctionPaintJob(plan, streets, ctx) {
 
 const inside = (ring, x, z) => { let r = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], c = ring[j]; if ((a.z > z) !== (c.z > z) && x < ((c.x - a.x) * (z - a.z)) / (c.z - a.z) + a.x) r = !r; } return r; };
 
+const jKey = (i, j) => (i + 32768) * 65536 + (j + 32768);   // [audit-C] numeric grid keys (this runs for every ground height)
 /** Junctions within `reach` of (x, z): [{jn, d}] (d: distance to the surface's outline, negative inside). */
 export function junctionsNear(plan, x, z, reach) {
   if (!plan) return [];
@@ -728,14 +729,14 @@ export function junctionsNear(plan, x, z, reach) {
       for (const p of jn.poly) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); }
       jn.bb = [x0, x1, z0, z1];
       for (let gx = Math.floor(x0 / G); gx <= Math.floor(x1 / G); gx++) for (let gz = Math.floor(z0 / G); gz <= Math.floor(z1 / G); gz++) {
-        const key = `${gx},${gz}`; if (!grid.has(key)) grid.set(key, []); grid.get(key).push(jn);
+        const key = jKey(gx, gz); if (!grid.has(key)) grid.set(key, []); grid.get(key).push(jn);
       }
     }
     Object.defineProperty(plan, '_grid', { value: grid, enumerable: false });
   }
   const out = [], seen = new Set();
   for (let gx = Math.floor((x - reach) / G); gx <= Math.floor((x + reach) / G); gx++) for (let gz = Math.floor((z - reach) / G); gz <= Math.floor((z + reach) / G); gz++) {
-    for (const jn of plan._grid.get(`${gx},${gz}`) || []) {
+    for (const jn of plan._grid.get(jKey(gx, gz)) || []) {
       if (seen.has(jn) || x < jn.bb[0] - reach || x > jn.bb[1] + reach || z < jn.bb[2] - reach || z > jn.bb[3] + reach) continue;
       seen.add(jn);
       let d = Infinity;
