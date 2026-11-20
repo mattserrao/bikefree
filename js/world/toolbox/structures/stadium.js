@@ -161,7 +161,10 @@ export function buildStadiumKit(city) {
     const stand = buildStands(S, st, plan, ring, gField, rim, nearDeck, helices, col, land);
     buildField(F, st, plan, gField, col);
     buildDeck(S, deck, st, helices, ring, land, col, city.data.routeConveyors);
-    for (const h of helices) buildHelix(S, h, st, land, col, glows);
+    // the whole ride's path (its ground ends too): the ramp's colonnade keeps clear of where it runs past (PLAN 7.8 clipping QC:
+    // the rider and the chase camera leaving or entering the ramp the other way round passed through a column)
+    const nearPath = pointHash(st.path.split(',').map((t) => { const [x, y, z] = t.split(' ').map(Number); return { ...L(x, z), y }; }));
+    for (const h of helices) buildHelix(S, h, st, land, col, glows, nearPath);
     buildBoards(S, Sc, st, plan, gField, rim, col);
     const towers = buildLights(S, stand, st, glows);
     const add = (B, mat, name, shadow = true) => { if (!B.count) return null; const m = new THREE.Mesh(city.own(B.geometry()), mat); m.name = name; m.castShadow = shadow; m.receiveShadow = true; city.group.add(m); return m; };
@@ -411,7 +414,7 @@ function buildDeck(B, deck, st, helices, ring, land, col, convs) {
  * Round each helix: a drum at its heart (the escalator's lit glass, the ramp's stone rotunda), short of the deck's
  * inner edge and of the rider leaning in; the ramp gets a colonnade outside and a ring beam on top.
  */
-function buildHelix(B, h, st, land, col, glows) {
+function buildHelix(B, h, st, land, col, glows, nearPath = () => null) {
   const g = land.heightAt(h.c.x, h.c.z) - .5, top = Math.max(h.y0, h.y1) + (h.role === 'escalator' ? 5 : 2.5);
   const rIn = h.R - DECK.width / 2 - 1.6, rOut = h.R + DECK.width / 2 + .8;
   if (h.role === 'escalator') {
@@ -425,7 +428,7 @@ function buildHelix(B, h, st, land, col, glows) {
     for (let y = g + 2; y < top - 2; y += 6) B.cylinder(h.c.x, y, h.c.z, rIn + .05, 1.2, 28);
     // the colonnade outside the ramp, and its ring beam
     B.color(col.steel2 || col.steel || '#3a3d42');
-    for (let k = 0; k < 16; k++) { const a = k / 16 * TAU; B.cylinder(h.c.x + Math.cos(a) * rOut, g, h.c.z + Math.sin(a) * rOut, .35, top - g, 6); }
+    for (let k = 0; k < 16; k++) { const a = k / 16 * TAU, x = h.c.x + Math.cos(a) * rOut, z = h.c.z + Math.sin(a) * rOut; if (!nearPath(x, z, DECK.width / 2 + .6)) B.cylinder(x, g, z, .35, top - g, 6); }
     for (let k = 0; k < 32; k++) {
       const a0 = k / 32 * TAU, a1 = (k + 1) / 32 * TAU;
       B.beam(V(h.c.x + Math.cos(a0) * rOut, top, h.c.z + Math.sin(a0) * rOut), V(h.c.x + Math.cos(a1) * rOut, top, h.c.z + Math.sin(a1) * rOut), .5, .7);
