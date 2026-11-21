@@ -59,7 +59,7 @@ table.cmp{border-collapse:collapse;width:100%;margin-top:6px;font-size:12px}tabl
 </style></head><body>
 <canvas id="c"></canvas>
 <div class="panel" id="panel"><button id="tog">Hide</button>
-<h1>PGH road review — overlapping roads</h1><div class="sub">Pink = ways drawn on top of each other; orange = the one to remove. Nothing changed yet. Tap a circle or way for details.</div>
+<h1>PGH road review — overlaps fixed</h1><div class="sub">Pink = overlaps still left (none can go without a dead end). Tap a circle or way for details.</div>
 <div class="body" id="legend"></div></div>
 <div id="info"></div>
 <script>

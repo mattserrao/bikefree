@@ -1014,6 +1014,67 @@ def enforce_grades(cfg, E):
     return E
 
 
+RANK = {'path': 0, 'plaza': 0, 'alley': 1, 'residential': 2, 'tertiary': 3, 'secondary': 4, 'primary': 5}
+
+
+def find_overlaps(cfg, E):
+    """Ways drawn on top of each other: centre lines closer than half their widths added up (+0.5 m), within 3 m in height,
+    for ≥ 20 m, away from their own junctions (15 m). [(ka, kb, metres, [ia…], [ib…])]: both directions of a divided
+    road, a trail beside its street."""
+    W = cfg['widths']
+    lat0 = E[0]['lat'][0]
+    kx, ky = 111320 * math.cos(math.radians(lat0)), 110540
+    pts = defaultdict(list)
+    for k, e in enumerate(E):
+        for i in range(e['n'] + 1): pts[(int(e['lon'][i] * kx / 20), int(e['lat'][i] * ky / 20))].append((k, i))
+    hits = defaultdict(list)
+    for k, e in enumerate(E):
+        sp = e['L'] / max(1, e['n'])
+        for i in range(e['n'] + 1):
+            if min(i, e['n'] - i) * sp < 15: continue
+            x, y = e['lon'][i] * kx, e['lat'][i] * ky
+            cx, cy = int(x / 20), int(y / 20)
+            for a in (-1, 0, 1):
+                for b in (-1, 0, 1):
+                    for k2, j in pts.get((cx + a, cy + b), ()):
+                        if k2 <= k: continue
+                        o = E[k2]
+                        if min(j, o['n'] - j) * o['L'] / max(1, o['n']) < 15: continue
+                        d = math.hypot(o['lon'][j] * kx - x, o['lat'][j] * ky - y)
+                        if d < (W.get(e['kind'], 7) + W.get(o['kind'], 7)) / 2 + 0.5 and abs(o['ele'][j] - e['ele'][i]) < 3:
+                            hits[(k, k2)].append((i, j))
+    out = []
+    for (ka, kb), h in hits.items():
+        ia = sorted({i for i, _ in h}); ib = sorted({j for _, j in h})
+        m = max(len(ia) * E[ka]['L'] / max(1, E[ka]['n']), len(ib) * E[kb]['L'] / max(1, E[kb]['n']))
+        if m >= 20: out.append((ka, kb, m, ia, ib))
+    return out
+
+
+def overlap_pick(E, G, ka, kb):
+    """Which of two overlapping ways goes: the minor one (trail < alley < street < … < primary; then the shorter), else
+    the other, so long as no junction is left with < 2 ways and the network stays whole. None: neither can go."""
+    a, b = sorted((ka, kb), key=lambda k: (RANK.get(E[k]['kind'], 2), E[k]['L']))
+    return a if G.can_remove(a) else b if G.can_remove(b) else None
+
+
+def remove_overlaps(cfg, E):
+    """Take one way out of every overlapping pair (biggest overlaps first), join through, again until none can go."""
+    total, km = 0, 0.0
+    for _ in range(6):
+        xs = sorted(find_overlaps(cfg, E), key=lambda x: -x[2])
+        G = Graph(E)
+        for ka, kb, m, _, _ in xs:
+            if ka in G.gone or kb in G.gone: continue
+            k = overlap_pick(E, G, ka, kb)
+            if k is not None: G.remove(k); total += 1; km += E[k]['L'] / 1000
+        if not G.gone: break
+        E = merge_through([e for k, e in enumerate(E) if k not in G.gone])
+    left = len(find_overlaps(cfg, E))
+    print(f'  overlapping roads: removed {total} ways ({km:.1f} km), {left} overlaps left')
+    return E
+
+
 def build_all(cfg):
     """The whole graph as written: built, heights, simplified, crossings cleared, joined, too-steep edges dropped."""
     nodes, chains, jpos, cor = build(cfg)
@@ -1033,6 +1094,7 @@ def build_all(cfg):
         E = merge_through([e for k, e in enumerate(E) if k not in G.gone])
         if not plan: break
         print(f'  after the dead ends: removed {len(plan)} more')
+    E = remove_overlaps(cfg, E)
     E = drop_unrideable(cfg, E)
     E = enforce_grades(cfg, merge_through(E))
     used = {e['a'] for e in E} | {e['b'] for e in E}

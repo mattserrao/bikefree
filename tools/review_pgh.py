@@ -133,29 +133,9 @@ def main():
     # ---------------------------------------------------------------- overlapping roads
     # two ways whose drawn ribbons overlap (centre lines closer than half their widths added up, at about the same height),
     # away from the junctions they share: parallel ways drawn on top of each other
-    W = cfg['widths']
-    RANK = {'path': 0, 'plaza': 0, 'alley': 1, 'residential': 2, 'tertiary': 3, 'secondary': 4, 'primary': 5}
-    kx, ky = cor.kx, 110540
-    pts = defaultdict(list)
-    for k, e in enumerate(E):
-        for i in range(e['n'] + 1): pts[(int(e['lon'][i] * kx / 20), int(e['lat'][i] * ky / 20))].append((k, i))
-    pair_hits = defaultdict(list)   # (ka, kb) → [(ia, ib)]
-    for k, e in enumerate(E):
-        sp = e['L'] / max(1, e['n'])
-        for i in range(e['n'] + 1):
-            if min(i, e['n'] - i) * sp < 15: continue   # (near its own junctions: ways meet there)
-            x, y = e['lon'][i] * kx, e['lat'][i] * ky
-            cx, cy = int(x / 20), int(y / 20)
-            for a in (-1, 0, 1):
-                for b in (-1, 0, 1):
-                    for k2, j in pts.get((cx + a, cy + b), ()):
-                        if k2 <= k: continue
-                        o = E[k2]
-                        sp2 = o['L'] / max(1, o['n'])
-                        if min(j, o['n'] - j) * sp2 < 15: continue
-                        d = math.hypot(o['lon'][j] * kx - x, o['lat'][j] * ky - y)
-                        if d < (W.get(e['kind'], 7) + W.get(o['kind'], 7)) / 2 + 0.5 and abs(o['ele'][j] - e['ele'][i]) < 3:
-                            pair_hits[(k, k2)].append((i, j))
+    pair_hits = {(ka, kb): list(zip(ia, ib)) + [(i, ib[-1]) for i in ia[len(ib):]] + [(ia[-1], j) for j in ib[len(ia):]]
+                 for ka, kb, m, ia, ib in B.find_overlaps(cfg, E)}
+    RANK = B.RANK
     Gx = B.Graph(E)
     overlaps = []
     for (ka, kb), hits in pair_hits.items():

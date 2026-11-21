@@ -12,7 +12,7 @@ test('PGH is rideable: every edge both ways through every junction, one connecte
   const r = qcGraph(json, { rides: 60, km: 20 });
   assert.deepEqual(r.fails.slice(0, 5), [], `${r.fails.length} rideability failures`);
   assert.ok(r.summary.km > 1000, `the corridor's streets: ${r.summary.km} km`);
-  assert.ok(r.summary.waysChecked > 50000);
+  assert.ok(r.summary.waysChecked > 30000);   // (fewer since the cleanup: one way per divided road, no alleys or dead ends)
 });
 
 test('the graph rides on the network machinery: edges on the synthetic base line, mirrored for the way back', () => {
