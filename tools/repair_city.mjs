@@ -413,7 +413,7 @@ export function routeSitePass({ streets, city, proj, ground, rides, sites, rules
     const mid = (g) => g.pts[Math.floor(g.pts.length / 2)];
     for (const g of G) {
       if (drop.has(g.k) || !g.pts.some((p) => inP(p))) continue;
-      if (g.bridge && g.cls <= 5) {
+      if (g.bridge && g.cls <= 5 && (g.cls > 1 || PZ.some((z) => z.bridgeHighways && g.pts.some((p) => Math.hypot(p.x - z.x, p.z - z.z) <= z.r)))) {   // (a highway deck only where the site asks: #21)
         const reach = ROAD_WIDTH / 2 + g.w / 2 + 6, S = samples(g, 4);
         if (S.filter((p) => routeAt(p, reach)).length >= S.length * .5) { drop.add(g.k); log('route-prune', g, `${g.len.toFixed(0)} m city deck along the route's own bridge dropped`); continue; }
       }
@@ -438,7 +438,8 @@ export function routeSitePass({ streets, city, proj, ground, rides, sites, rules
       for (const h of span) { const raw = streets[h.k]; if (!(raw.meta[1] & 1)) continue; raw.meta = [raw.meta[0], raw.meta[1] & ~1, 8]; raw.deck = raw.deck.map(() => 0); log('route-prune', h, `${h.len.toFixed(0)} m overpass over a dropped highway laid on the ground`); }
     }
     // pairs: most important first, so the kept one of a pair is never also dropped
-    const cand = G.filter((g) => g.cls >= 2 && g.cls <= 5 && !drop.has(g.k) && g.pts.some((p) => inP(p)));
+    const PP = PZ.filter((z) => !z.nopairs), inPP = (p) => PP.some((z) => Math.hypot(p.x - z.x, p.z - z.z) <= z.r);
+    const cand = G.filter((g) => g.cls >= 2 && g.cls <= 5 && !drop.has(g.k) && g.pts.some(inPP));
     cand.sort((a, b) => b.cls - a.cls || a.len - b.len);   // least important first: they are the ones to go
     const segNear = (h, p) => { let best = null; for (let i = 1; i < h.pts.length; i++) { const a = h.pts[i - 1], b = h.pts[i], dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz; if (!l2) continue;
       const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / l2)), x = a.x + dx * t, z = a.z + dz * t, d = Math.hypot(x - p.x, z - p.z), l = Math.sqrt(l2);
