@@ -1488,12 +1488,17 @@ async function loadParks() {
   }
   // [pgh] free-ride road graphs: listed as routes of their own (their data loads only when picked)
   for (const g of GRAPH_ITEMS) netItems.push({ ...g });
-  // …and the Pittsburgh routes mapped onto PGH (rough drafts while PGH is a test map)
+  // …and the Pittsburgh routes mapped onto PGH: those that follow their original ≥ 90 % of the way are listed with the
+  // routes; the rest stay in Rough Drafts, marked approximate (they lean on roads PGH doesn't have: the subway, the
+  // West End Bridge and Point approaches)
   try {
     const list = await (await fetch('routes/cities/pgh-presets.json')).json();
-    for (const pr of list) netItems.push({ id: `builtin-graph-${pr.id}`, routeId: pr.id, kind: 'route', name: `PGH · ${pr.name}`, park: 'Pittsburgh, PA',
-      group: 'Scenic routes — 3D', stage: 'draft', network: 'routes/cities/pgh.json', graph: true, preset: pr.id, tags: pr.tags || [],
-      note: pr.note || '', lengthM: pr.lengthM, climbM: pr.climbM });
+    for (const pr of list) {
+      const good = (pr.followPct ?? 0) >= 90;
+      netItems.push({ id: `builtin-graph-${pr.id}`, routeId: pr.id, kind: 'route', name: `PGH · ${pr.name}${good ? '' : ' (approximate)'}`, park: 'Pittsburgh, PA',
+        group: 'Scenic routes — 3D', ...(good ? {} : { stage: 'draft' }), network: 'routes/cities/pgh.json', graph: true, preset: pr.id, tags: pr.tags || [],
+        note: (good ? '' : `Approximate: follows ${pr.followPct}% of the original route (PGH lacks some of its roads). `) + (pr.note || ''), lengthM: pr.lengthM, climbM: pr.climbM });
+    }
   } catch { /* (no PGH routes yet) */ }
   await manifest;
   return parkItems;

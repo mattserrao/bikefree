@@ -26,6 +26,12 @@ ROOT = B.ROOT
 cfg = json.load(open(os.path.join(ROOT, 'tools', 'city', 'pgh.json')))
 POOL = cfg['waterLevelM']
 WET = POOL + 1.2          # graph-world.js BED_BELOW: ground this close to the pool is river bed
+POOLS = cfg.get('pools', [])
+def pool_at(la, lo):
+    for p in POOLS:
+        s_, w_, n_, e_ = p['box']
+        if s_ <= la <= n_ and w_ <= lo <= e_: return p['level']
+    return cfg['waterLevelM']
 KX, KY = 111320 * math.cos(math.radians(40.44)), 110540
 X = lambda lo: (lo + 80) * KX
 Y = lambda la: (la - 40.44) * KY
@@ -86,6 +92,7 @@ for line in shore_lines:
             x, y = x0 + tx * s, y0 + ty * s
             s += 20
             if not near_net(x, y, 600): continue
+            POOL_ = pool_at(*LL(x, y)); WET_ = POOL_ + 1.2
             nx, ny = -ty, tx
             # which side is land: higher terrain 40 m out
             if ele(x + nx * 40, y + ny * 40) < ele(x - nx * 40, y - ny * 40): nx, ny = -nx, -ny
@@ -93,11 +100,11 @@ for line in shore_lines:
             # the drawn water's edge: the last wet point from the river side before the land stays dry
             edge = None
             for (d0, h0), (d1, h1) in zip(prof, prof[1:]):
-                if h0 < WET <= h1: edge = d0 + (WET - h0) / (h1 - h0) * (d1 - d0); break
-            if edge is None: edge = 60 if all(h < WET for _, h in prof) else -60
-            hb = ele(x + nx * 25, y + ny * 25) - POOL
-            h0 = max(ele(x + nx * max(edge, 0), y + ny * max(edge, 0)) - POOL, 0)
-            spread = next((d - max(edge, 0) for d, h in prof if d >= max(edge, 0) and h - POOL >= h0 + 0.8 * (hb - h0)), 60)
+                if h0 < WET_ <= h1: edge = d0 + (WET_ - h0) / (h1 - h0) * (d1 - d0); break
+            if edge is None: edge = 60 if all(h < WET_ for _, h in prof) else -60
+            hb = ele(x + nx * 25, y + ny * 25) - POOL_
+            h0 = max(ele(x + nx * max(edge, 0), y + ny * max(edge, 0)) - POOL_, 0)
+            spread = next((d - max(edge, 0) for d, h in prof if d >= max(edge, 0) and h - POOL_ >= h0 + 0.8 * (hb - h0)), 60)
             walled = sorted({k for i in (-1, 0, 1) for j in (-1, 0, 1) for wx, wy, k in wgrid.get((int(x // 20) + i, int(y // 20) + j), ()) if math.hypot(wx - x, wy - y) < 15})
             # nearest way inland within 60 m
             best = None
@@ -105,7 +112,7 @@ for line in shore_lines:
                 for j in range(-3, 4):
                     for px, py, pe, pn, pk, half in egrid.get((int(x // 30) + i, int(y // 30) + j), ()):
                         d = math.hypot(px - x, py - y)
-                        if d < 60 and (best is None or d < best[0]) and ((px - x) * nx + (py - y) * ny) > -10: best = (d, pe - POOL, pn, pk, half)
+                        if d < 60 and (best is None or d < best[0]) and ((px - x) * nx + (py - y) * ny) > -10: best = (d, pe - POOL_, pn, pk, half)
             la, lo = LL(x, y)
             spot = {'lat': round(la, 6), 'lon': round(lo, 6), 'shift': round(edge, 1), 'bank': round(hb, 1), 'spread': spread, 'walled': walled,
                     'way': None if not best else {'name': best[2], 'kind': best[3], 'gap': round(best[0] - best[4], 1), 'over': round(best[1], 1)}}

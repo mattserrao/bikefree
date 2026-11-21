@@ -37,7 +37,8 @@ const FILL_SLOPE = 0.66;            // an embankment's side: down 1 m per 1.5 m 
 const FILL_REACH = 25;              // m from a road's edge the fill reaches
 const ABUT_M = 12;                  // m of a deck from its end that stand on an abutment (the ground filled up to under it)
 const BANK_CAP = 22;                // m: a walled bank's promenade, from the wall back
-const BANK_SLOPE = 14;              // m: a natural bank, from the water's edge to its top
+const BANK_SLOPE = 14;
+const PIER_STEP = 7;                // samples (70 m) between a deck's piers              // m: a natural bank, from the water's edge to its top
 const PAINT_GAP = 9;                // m: no centre or edge lines this close to a junction
 
 const COLORS = {
@@ -175,6 +176,8 @@ export class GraphWorld {
     for (const [key, t] of this.tiles) { const [i, j] = key.split(',').map(Number); t.cx = (i + 0.5) * TILE; t.cz = (j + 0.5) * TILE; t.i = i; t.j = j; }
     this.cut = roadHash(this.G.edges, this.widths);
     this.waterY = (this.json.waterLevelM ?? 216.6) + WATER_ABOVE;
+    // upper pools (above a dam: the Allegheny above Lock & Dam 2) — their own water level inside their box
+    this.pools = (this.json.pools || []).map((p) => { const a = this.proj.toLocal(p.box[0], p.box[1]), b = this.proj.toLocal(p.box[2], p.box[3]); return { level: p.level, x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), z0: Math.min(a.z, b.z), z1: Math.max(a.z, b.z), west: a.x }; });
 
     // renderer, scene, light
     this.renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance' });
@@ -200,6 +203,16 @@ export class GraphWorld {
     this.water = new THREE.Mesh(new THREE.PlaneGeometry(2 * FAR_M + 4000, 2 * FAR_M + 4000).rotateX(-Math.PI / 2), this.mats.water);
     this.water.position.y = this.waterY;
     this.scene.add(this.water);
+    for (const p of this.pools) {
+      const w = new THREE.Mesh(new THREE.PlaneGeometry(p.x1 - p.x0, p.z1 - p.z0).rotateX(-Math.PI / 2), this.mats.water);
+      w.position.set((p.x0 + p.x1) / 2, p.level + WATER_ABOVE, (p.z0 + p.z1) / 2);
+      this.scene.add(w);
+      // the dam: a concrete face across the box's downstream edge, from the lower pool's bed to the upper water
+      const lowY = this.waterY - WATER_ABOVE - 3, topY = p.level + WATER_ABOVE + 0.6;
+      const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(p.west, lowY, p.z0), new THREE.Vector3(p.west, lowY, p.z1), new THREE.Vector3(p.west, topY, p.z1), new THREE.Vector3(p.west, topY, p.z0)]);
+      g.setIndex([0, 1, 2, 0, 2, 3]); g.computeVertexNormals();
+      this.scene.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: '#a09c92', side: THREE.DoubleSide })));
+    }
     this.group = new THREE.Group();
     this.scene.add(this.group);
 
@@ -360,10 +373,15 @@ export class GraphWorld {
     if (!this.ground) return null;
     return this._groundH(x, z);
   }
+  /** The pool level at (x, z): an upper pool inside its box, else the main one. */
+  poolAt(x, z) {
+    for (const p of this.pools || []) if (x >= p.x0 && x <= p.x1 && z >= p.z0 && z <= p.z1) return p.level;
+    return this.waterY - WATER_ABOVE;
+  }
   _groundH(x, z) {
     const raw = this.ground.at(x, z);
     let h = raw;
-    const pool = this.waterY - WATER_ABOVE;
+    const pool = this.poolAt(x, z);
     const f = this.cut.fill(x, z);
     if (f > h) h = f;   // under a road above the ground: its embankment, a deck's abutment
     const sh = this.shore ? this.shore.at(x, z) : null;
@@ -375,7 +393,7 @@ export class GraphWorld {
         else if (sh.s <= BANK_CAP) h = sh.top - 0.15;                             // the promenade (filled up or cut down to it)
         else { const t = (sh.s - BANK_CAP) / 12; h = (sh.top - 0.15) * (1 - t) + Math.max(h, pool + BED_BELOW) * t; }
       } else if (sh.s < 0) h = Math.min(h, pool - 2.5);
-      else h = bankProfile(sh.s, sh.top, this.waterY, pool) - 0.15;
+      else h = bankProfile(sh.s, sh.top, sh.pool + WATER_ABOVE, sh.pool) - 0.15;
     } else if (h < pool + BED_BELOW) h = Math.min(h, pool - 2.5);
     return Math.min(h, this.cut.cap(x, z));
   }
@@ -496,9 +514,8 @@ export class GraphWorld {
     const nx = Math.round(TILE / GROUND_CELL), x0 = t.i * TILE, z0 = t.j * TILE, cell = TILE / nx, n1 = nx + 1;
     const pos = new Float32Array(n1 * n1 * 3), color = new Float32Array(n1 * n1 * 3);
     const grass = new THREE.Color('#89a868'), dry = new THREE.Color('#a7a27a'), bed = new THREE.Color('#6f6a58'), tmp = new THREE.Color();
-    const pool = this.waterY - WATER_ABOVE;
     for (let j = 0, k = 0; j <= nx; j++) for (let i = 0; i <= nx; i++, k++) {
-      const x = x0 + i * cell, z = z0 + j * cell, h = this._groundH(x, z);
+      const x = x0 + i * cell, z = z0 + j * cell, h = this._groundH(x, z), pool = this.poolAt(x, z);
       pos[3 * k] = x; pos[3 * k + 1] = h; pos[3 * k + 2] = z;
       const raw = this.ground.at(x, z), cutDepth = Math.max(0, raw - h);
       tmp.copy(h < pool ? bed : grass).lerp(dry, Math.min(1, cutDepth / 6));
@@ -517,15 +534,16 @@ export class GraphWorld {
     g.computeVertexNormals();
     t.groundMesh = new THREE.Mesh(g, this.mats.ground);
     this.group.add(t.groundMesh);
-    if (this.shore) this._buildBank(t);
+    this._buildBank(t);
   }
 
   /** The riverbank along the shore lines in this tile: a stone face and a promenade where walled, a firm slope elsewhere. */
   _buildBank(t) {
-    const x0 = t.i * TILE, z0 = t.j * TILE, pool = this.waterY - WATER_ABOVE, M = new Mesher();
+    const x0 = t.i * TILE, z0 = t.j * TILE, M = new Mesher();
     const grass = new THREE.Color('#89a868'), stone = new THREE.Color('#8f8a80'), bed = new THREE.Color('#6f6a58');
     const capY = (x, z, y) => Math.min(y, this.cut.cap(x, z) + 0.12);   // (under a road's cut: just over the ground there, under the road)
-    for (const L of this.shore.lines) {
+    for (const L of this.shore ? this.shore.lines : []) {
+      const pool = L.pool, waterY = pool + WATER_ABOVE;
       for (let i = 0; i + 1 < L.n; i++) {
         const mx = (L.x[i] + L.x[i + 1]) / 2, mz = (L.z[i] + L.z[i + 1]) / 2;
         if (mx < x0 || mx >= x0 + TILE || mz < z0 || mz >= z0 + TILE) continue;
@@ -538,10 +556,33 @@ export class GraphWorld {
         } else {
           const S = [-4, 0, 5, BANK_SLOPE];
           for (let q = 0; q + 1 < S.length; q++) {
-            const y = (k, s) => bankProfile(s, L.top[k], this.waterY, pool) + 0.03;
+            const y = (k, s) => bankProfile(s, L.top[k], waterY, pool) + 0.03;
             M.quad(row(i, S[q], y(i, S[q])), row(i + 1, S[q], y(i + 1, S[q])), row(i + 1, S[q + 1], y(i + 1, S[q + 1])), row(i, S[q + 1], y(i, S[q + 1])), q === 0 ? bed : grass);
           }
         }
+      }
+    }
+    // bridge piers: under every deck that stands over a hollow or the water, one every PIER_M (not within 20 m of the
+    // deck's ends — the abutments hold those), a slab as wide as the road, from the deck's underside to the ground
+    const pier = new THREE.Color('#9a968c');
+    for (const { e, a, b } of t.pieces) {
+      if (!e.bridges.length) continue;
+      const deck = new Uint8Array(e.n + 1);
+      for (const [p, q] of e.bridges) for (let i = p + 1; i < q; i++) deck[i] = 1;
+      const toEnd = new Float32Array(e.n + 1).fill(Infinity);
+      for (let i = 0; i <= e.n; i++) if (!deck[i]) toEnd[i] = 0;
+      for (let i = 1; i <= e.n; i++) toEnd[i] = Math.min(toEnd[i], toEnd[i - 1] + 10);
+      for (let i = e.n - 1; i >= 0; i--) toEnd[i] = Math.min(toEnd[i], toEnd[i + 1] + 10);
+      const half = (this.widths[e.kind] || 7) / 2 - 0.4;
+      for (let i = Math.max(a, 1); i <= Math.min(b, e.n - 1); i++) {
+        if (!deck[i] || toEnd[i] < 20 || i % PIER_STEP) continue;
+        const gy = this._groundH(e.x[i], e.z[i]), top = e.ele[i] - 1.0;
+        if (top - gy < 3) continue;   // (low over the ground: the fill and the abutments are enough)
+        let dx = e.x[i + 1] - e.x[i - 1], dz = e.z[i + 1] - e.z[i - 1]; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
+        const nx = -dz, nz = dx, t2 = 0.9, bot = Math.min(gy, this.poolAt(e.x[i], e.z[i]) - 1) - 0.5;
+        const c = (u, v, y) => [e.x[i] + dx * u + nx * v, y, e.z[i] + dz * u + nz * v];
+        for (const [u0, v0, u1, v1] of [[-t2, -half, t2, -half], [t2, -half, t2, half], [t2, half, -t2, half], [-t2, half, -t2, -half]])
+          M.quad(c(u0, v0, bot), c(u1, v1, bot), c(u1, v1, top), c(u0, v0, top), pier);
       }
     }
     t.bankMesh = M.mesh(this.mats.road);
@@ -619,7 +660,7 @@ export function decodeShore(json, proj) {
     const x = new Float64Array(n), z = new Float64Array(n), nx = new Float64Array(n), nz = new Float64Array(n), walled = new Uint8Array(n);
     for (let i = 0; i < n; i++) { const q = proj.toLocal(la[i], lo[i]); x[i] = q.x; z[i] = q.z; nx[i] = Math.cos(side[i]); nz[i] = Math.sin(side[i]); }
     for (const [a, b] of l.walled) for (let i = a; i <= b; i++) walled[i] = 1;
-    return { n, x, z, nx, nz, top, walled };
+    return { n, x, z, nx, nz, top, walled, pool: l.pool ?? json.pool };
   });
   // NB: the builder's x/z come from the same projection (the graph's origin), so its sides hold here
   const C = 25, grid = new Map();
@@ -641,7 +682,7 @@ export function decodeShore(json, proj) {
           if (d < bd) {
             bd = d;
             const nx = L.nx[i] * (1 - t) + L.nx[i + 1] * t, nz = L.nz[i] * (1 - t) + L.nz[i + 1] * t;
-            best = { s: (x - px) * nx + (z - pz) * nz, top: L.top[i] * (1 - t) + L.top[i + 1] * t, walled: L.walled[i] && L.walled[i + 1], d };
+            best = { s: (x - px) * nx + (z - pz) * nz, top: L.top[i] * (1 - t) + L.top[i + 1] * t, walled: L.walled[i] && L.walled[i + 1], d, pool: L.pool };
           }
         }
       }

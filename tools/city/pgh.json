@@ -60,6 +60,7 @@
   "plaza": 6
  },
  "waterLevelM": 216.6,
+  "pools": [{ "name": "Allegheny Pool 2 (above Lock & Dam 2, Highland Park)", "level": 219.9, "box": [40.474, -79.9143, 40.52, -79.85], "note": "USACE project pool 721 ft; the terrain tiles put its surface at ~220.2 m (the main pool at ~216.9). West edge: the dam (40.4898, -79.9143)" }],
  "groundCellM": 20,
  "groundMarginM": 1500,
  "groundFile": "routes/cities/pgh-ground.grid.bin.gz",

@@ -18,12 +18,18 @@ const pgh = JSON.parse(readFileSync(resolve(root, 'routes/cities/pgh.json'), 'ut
 const grid = parseTerrainGrid(gunzipSync(readFileSync(resolve(root, pgh.ground))));
 const proj = makeProjection(pgh.origin.lat, pgh.origin.lon);
 const T = decodeTerrain(grid, proj);
-const POOL = pgh.waterLevelM, WET = POOL + 1.2;
+const POOL = pgh.waterLevelM;
+// the pools: the main one everywhere but the upper pools' boxes (above a dam: the Allegheny above Lock & Dam 2)
+const POOLS = (pgh.pools || []).map((p) => ({ ...p, a: proj.toLocal(p.box[0], p.box[1]), b: proj.toLocal(p.box[2], p.box[3]) }));
+const poolAt = (x, z) => { for (const p of POOLS) if (x >= Math.min(p.a.x, p.b.x) && x <= Math.max(p.a.x, p.b.x) && z >= Math.min(p.a.z, p.b.z) && z <= Math.max(p.a.z, p.b.z)) return p.level; return POOL; };
+let WET = POOL + 1.2;
 const C = grid.coarse, cell = 20;
 const H = (i, j) => T.at(T.x0 + i * cell, T.z0 + j * cell);
 
-// 1. marching squares on the grid's nodes (bilinear between them: the contour the world's ground has)
+// 1. marching squares on the grid's nodes (bilinear between them: the contour the world's ground has), once per pool
 const segs = [];
+for (const level of [POOL, ...POOLS.map((p) => p.level)]) {
+WET = level + 1.2;
 const nx = C.nx, nz = C.ny;
 const hv = new Float32Array(nx * nz);
 for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) hv[j * nx + i] = H(i, j);
@@ -36,8 +42,10 @@ for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) {
   if (code === 0 || code === 15) continue;
   const E = [0, 1, 2, 3].map((k) => ((h[k] >= WET) !== (h[(k + 1) % 4] >= WET) ? lerp(c[k], c[(k + 1) % 4], h[k], h[(k + 1) % 4]) : null));
   const pts = E.filter(Boolean);
-  if (pts.length === 2) segs.push(pts);
-  else if (pts.length === 4) { segs.push([E[0], E[1]]); segs.push([E[2], E[3]]); }
+  const own = (p) => poolAt(p[0], p[1]) === level;   // (a contour only counts in its own pool)
+  if (pts.length === 2) { if (own(pts[0]) && own(pts[1])) segs.push(pts); }
+  else if (pts.length === 4) { for (const q of [[E[0], E[1]], [E[2], E[3]]]) if (own(q[0]) && own(q[1])) segs.push(q); }
+}
 }
 // 2. chain into lines
 const key = (p) => `${p[0].toFixed(2)},${p[1].toFixed(2)}`;
@@ -114,7 +122,8 @@ for (const l of keep) {
     const prof = []; for (let s = 6; s <= 30; s += 2) prof.push(T.at(x + nx_ * s, z + nz_ * s));
     prof.sort((p, q) => p - q);
     const t = w ? prof[Math.floor(prof.length * 0.8)] : T.at(x + nx_ * 14, z + nz_ * 14);
-    top.push(Math.min(POOL + 14, Math.max(POOL + (w ? 3 : 1.9), t)));
+    const lp = poolAt(x, z);
+    top.push(Math.min(lp + 14, Math.max(lp + (w ? 3 : 1.9), t)));
   }
   // walled runs: no flicker (runs and gaps under 30 m go)
   const fix = (v, want) => { for (let i = 0; i < n;) { if (v[i] !== want) { i++; continue; } let j = i; while (j < n && v[j] === want) j++; if ((j - i) * 5 < 30 && i > 0 && j < n) for (let k = i; k < j; k++) v[k] = !want; i = j; } };
@@ -125,9 +134,9 @@ for (const l of keep) {
   const d = (a) => a.map((v, i) => (i ? v - a[i - 1] : v));
   const runs = []; for (let i = 0; i < n;) { if (!walled[i]) { i++; continue; } let j = i; while (j < n && walled[j]) j++; runs.push([i, j - 1]); walledM += (j - i) * 5; i = j; }
   totalM += (n - 1) * 5;
-  out.push({ lat: d(ll.map((p) => Math.round(p.lat * 1e6))), lon: d(ll.map((p) => Math.round(p.lon * 1e6))), top: d(sm.map((v) => Math.round(v * 10))),
+  out.push({ pool: poolAt(l[Math.floor(n / 2)][0], l[Math.floor(n / 2)][1]), lat: d(ll.map((p) => Math.round(p.lat * 1e6))), lon: d(ll.map((p) => Math.round(p.lon * 1e6))), top: d(sm.map((v) => Math.round(v * 10))),
     side: d(nrm.map(([a, b]) => Math.round(Math.atan2(b, a) * 1000))), walled: runs });
 }
-writeFileSync(resolve(root, 'routes/cities/pgh-shore.json'), JSON.stringify({ format: 'bikefree-shore-1', pool: POOL, edge: WET, unit: { latlon: 1e-6, top: 0.1, side: 0.001 },
+writeFileSync(resolve(root, 'routes/cities/pgh-shore.json'), JSON.stringify({ format: 'bikefree-shore-1', pool: POOL, pools: (pgh.pools || []).map((p) => ({ level: p.level, box: p.box })), unit: { latlon: 1e-6, top: 0.1, side: 0.001 },
   note: 'tools/pgh_shore.mjs: the water edge (ground at pool + 1.2 m) traced and smoothed; side = the land side (radians, local x/z), top = the bank top (m), walled = runs of point indices', lines: out }));
 console.log(`shore: ${out.length} lines, ${(totalM / 1000).toFixed(1)} km (${(walledM / 1000).toFixed(1)} km walled) from ${lines.length} raw contours`);

@@ -16,15 +16,15 @@ const pgh = JSON.parse(readFileSync(resolve(root, 'routes/cities/pgh.json'), 'ut
 const proj = makeProjection(pgh.origin.lat, pgh.origin.lon);
 const G = decodeGraph(pgh);
 for (const e of G.edges) { e.x = new Float64Array(e.n + 1); e.z = new Float64Array(e.n + 1); for (let i = 0; i <= e.n; i++) { const q = proj.toLocal(e.lat[i], e.lon[i]); e.x[i] = q.x; e.z[i] = q.z; } }
-const W = { ground: decodeTerrain(parseTerrainGrid(gunzipSync(readFileSync(resolve(root, pgh.ground)))), proj), shore: decodeShore(JSON.parse(readFileSync(resolve(root, pgh.shore), 'utf8')), proj),
+const W = { pools: (pgh.pools || []).map((p) => { const a = proj.toLocal(p.box[0], p.box[1]), b = proj.toLocal(p.box[2], p.box[3]); return { level: p.level, x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), z0: Math.min(a.z, b.z), z1: Math.max(a.z, b.z) }; }), poolAt: GraphWorld.prototype.poolAt, ground: decodeTerrain(parseTerrainGrid(gunzipSync(readFileSync(resolve(root, pgh.ground)))), proj), shore: decodeShore(JSON.parse(readFileSync(resolve(root, pgh.shore), 'utf8')), proj),
   cut: roadHash(G.edges, pgh.widths), waterY: pgh.waterLevelM + 0.35 };
 const H = (x, z) => GraphWorld.prototype._groundH.call(W, x, z);
 const A = JSON.parse(readFileSync(resolve(root, 'tools/.cache/pgh-riverbank.json'), 'utf8'));
-const pool = pgh.waterLevelM, wy = W.waterY;
+const pool0 = pgh.waterLevelM;
 const tot = { spots: 0, walled: 0, wallSmeared: 0, lowBank: 0, before: { walledSmeared: 0, lowBank: 0 } };
 const byArea = {}, drawn = [];
 for (const s of A.spots) {
-  const q = proj.toLocal(s.lat, s.lon), sh = W.shore.at(q.x, q.z);
+  const q = proj.toLocal(s.lat, s.lon), sh = W.shore.at(q.x, q.z), pool = W.poolAt(q.x, q.z), wy = pool + 0.35;
   if (!sh) continue;
   // the drawn profile across the nearest shore line, from 20 m out to 40 m in
   const L = W.shore.lines, nx0 = 0;

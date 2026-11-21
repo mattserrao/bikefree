@@ -20,7 +20,7 @@ const { nodes, E } = load(json);
 const want = (la, lo) => {
   const q = proj.toLocal(la, lo), sh = shore.at(q.x, q.z);
   if (!sh || sh.s < -3 || sh.s > 25) return null;
-  return sh.walled ? sh.top : bankProfile(Math.max(0, sh.s), sh.top, waterY, pool);
+  return sh.walled ? sh.top : bankProfile(Math.max(0, sh.s), sh.top, sh.pool + 0.35, sh.pool);
 };
 // the lift each sample wants (never down; not on a deck)
 const lift = E.map((e) => e.lat.map((la, i) => { if (e.br[i]) return 0; const t = want(la, e.lon[i]); return t == null ? 0 : Math.max(0, t - e.ele[i]); }));
