@@ -241,6 +241,14 @@ export class GraphWorld {
         this.shore = shore ? decodeShore(shore, this.proj) : null;
         this.dressing = dressing ? decodeDressing(dressing, this.proj, TILE) : null;
         this.ground = decodeTerrain(grid, this.proj);
+        // the landmarks (the Pittsburgh map's hero models: js/world/graph-heroes.js), once the ground is there to stand on
+        if (this.json.heroes) {
+          this._heroesState = 'loading';
+          fetch(new URL(`../../${this.json.heroes}`, import.meta.url)).then((r) => r.json())
+            .then((hj) => import('./graph-heroes.js').then(({ buildGraphHeroes }) => buildGraphHeroes(this, hj)))
+            .then((h) => { if (this.disposed) { h.dispose(); return; } this.heroes = h; this.scene.add(h.group); h.setNight(this.timeKey === 'night' ? 1 : 0); this._heroesState = 'ok'; })
+            .catch((err) => { this._heroesState = 'failed'; this.log('3d', `PGH landmarks: ${err.message} ${(err.stack || '').split('\n').slice(0, 4).join(' | ')}`, 'error'); });
+        }
         for (const t of this.tiles.values()) if (t.built && !t.groundMesh) t.needsGround = true;
         this.log('3d', 'PGH ground loaded', 'debug');
       }).catch((err) => { this.groundFailed = true; this.log('3d', `PGH ground: ${err.message}`, 'error'); });
@@ -298,6 +306,7 @@ export class GraphWorld {
     this.renderer.toneMappingExposure = t.exposure;
     this.scene.background = new THREE.Color(t.sky);
     this.scene.fog.color.set(t.fog);
+    this.heroes?.setNight(t.night ? 1 : 0);
   }
 
   start() {
@@ -323,6 +332,7 @@ export class GraphWorld {
     add('streets', 'Roads', (this._frames || 0) > 0 ? roads : 0);
     add('ground', 'Ground', ground);
     add('riders', 'Rider', this._riderModel !== 'loading' ? 1 : 0);
+    if (this.json.heroes) add('landmarks', 'Landmarks', this._heroesState && this._heroesState !== 'loading' ? 1 : 0);
     return { ready: steps.every((s) => s.done), failed: this.groundFailed, progress: steps.reduce((a, s) => a + s.p, 0) / steps.length, steps };
   }
   get loading() { return (this._queued || 0) > 6 ? 4 : 0; }
@@ -332,7 +342,8 @@ export class GraphWorld {
     this.disposed = true;
     this._ro?.disconnect();
     for (const t of this.tiles.values()) this._release(t);
-    for (const m of Object.values(this.mats)) m.dispose();
+    for (const m of Object.values(this.mats)) { if (m.dispose) m.dispose(); else for (const x of Object.values(m)) x.dispose?.(); }
+    this.heroes?.dispose();
     this.water.geometry.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
@@ -357,6 +368,7 @@ export class GraphWorld {
       this._place(this.p, RIDER_LANE, out);
     }
     this.crank += ((src.cadence || 0) / 60) * Math.PI * 2 * dt;
+    this.heroes?.tick(now / 1000, dt);
     this.rider.update(out.pos, out.fwd, this.crank, src.speed || 0, Math.min(dt, 0.1), src);
     if (this.path) {
       const tmp = this._leanTmp ||= { pos: new THREE.Vector3(), fwd: new THREE.Vector3(), flat: new THREE.Vector3() };
