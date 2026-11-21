@@ -29,6 +29,7 @@ for (const e of G.edges) {
   if (e.from !== e.to) for (let i = 0; i <= e.n; i++) {
     let found = -1;
     for (let j = i + 4; j <= e.n; j++) if (Math.hypot(X(e, j) - X(e, i), Y(e, j) - Y(e, i)) < 8) { found = j; }
+    if (found >= 0 && Math.abs(e.ele[found] - e.ele[i]) > 2) { i = found; continue; }   // (a curl that climbs: a real ramp)
     if (found >= 0 && !(e.from === e.to && i === 0 && found === e.n)) {
       add('knot', e, Math.floor((i + found) / 2), (found - i) * 10, `${e.name}: curls ${(found - i) * 10} m round and back to within 8 m of itself`, 'Cut the curl out: the line goes straight from where it starts to where it ends', line(e, i, found));
       i = found;
