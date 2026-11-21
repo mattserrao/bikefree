@@ -36,6 +36,7 @@ export const DEFAULTS = {
   routeSpanM: 34,     // [junction-check] a junction on the route never spans more than this (tried 20: it split blobs into overlapping junctions — the blobs were long trims at sharp arms, see sharpTrimM)
   sharpTrimM: 14,     // [junction-check] two arms meeting at < sharpDeg: neither trimmed back further than this (a taper, not a blob)
   sharpDeg: 25,
+  joinPasses: 4,      // [junction-join] at most this many streets join a neighbour per junction
   curbMinGap: Math.PI / 4,      // [junction-check] corner kerbs only between arms 45°…
   curbMaxGap: Math.PI * 5 / 6,  //   …to 150° apart,
   curbMinM: 1.5,                //   at least this long
@@ -70,6 +71,12 @@ function hull(pts) {
   for (const p of P) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
   for (let i = P.length - 1; i >= 0; i--) { const p = P[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
   return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+/** [junction-join] Do segments ab and cd cross (strictly)? */
+function segCross(a, b, c, d) {
+  const o = (p, q, r) => (q.x - p.x) * (r.z - p.z) - (q.z - p.z) * (r.x - p.x);
+  const d1 = o(a, b, c), d2 = o(a, b, d), d3 = o(c, d, a), d4 = o(c, d, b);
+  return ((d1 > 1e-9 && d2 < -1e-9) || (d1 < -1e-9 && d2 > 1e-9)) && ((d3 > 1e-9 && d4 < -1e-9) || (d3 < -1e-9 && d4 > 1e-9));
 }
 /** [junction-check] Does a closed outline cross itself (two edges that aren't neighbours)? */
 function selfCrosses(P) {
@@ -364,52 +371,87 @@ export function* planJunctionsJob(streets, ctx, options = {}) {
       for (const r of routeArms) if (dot(a.u, r.u) > .94 && Math.abs(dot(sub(a.N, C), left(r.u))) < RW / 2 + a.h) a.alongRoute = r;
     }
     arms.sort((a, b) => a.theta - b.theta);
-    const ring = arms.filter((a) => !a.alongRoute);
-    if (ring.length < 2 || (!isRoute && !corner && ring.length < 3)) return;
-
-    // 4. corners: curb returns between neighbours
-    const n = ring.length, corners = [];
-    for (let q = 0; q < n; q++) {
-      const A = ring[q], B = ring[(q + 1) % n];
-      let gap = B.theta - A.theta; if (gap <= 0) gap += Math.PI * 2;
-      if (n === 2 && q === 1) gap = Math.PI * 2 - (ring[1].theta - ring[0].theta);
-      const nA = left(A.u), nB = left(B.u);
-      const corner = { A, B, gap, arc: null, tA: 0, tB: 0 };
-      if (gap < Math.PI * .86 && gap > .3) {
-        const r = Math.min(CURB_R(A.cls), CURB_R(B.cls));
-        const pA = along(A.N, nA, A.h + r), pB = along(B.N, nB, -(B.h + r));
-        const m = meet(pA, A.u, pB, B.u);
-        if (m && m[0] > 0 && m[1] > 0 && m[0] < O.maxTrimM && m[1] < O.maxTrimM) {
-          const Oc = along(pA, A.u, m[0]);
-          corner.tA = dot(sub(Oc, A.N), A.u); corner.tB = dot(sub(Oc, B.N), B.u);
-          corner.arc = { O: Oc, r };
+    let ring = arms.filter((a) => !a.alongRoute), n, corners;
+    const edge = (A, side, t) => along(along(A.N, A.u, t), left(A.u), side * A.h);
+    // [junction-join] (user, 21 Nov: "fix the overlapping junctions by joining the overlapping arms") corners, trims and
+    // mouths are laid out, and where two neighbouring arms' mouths cross (two streets leaving at nearly the same angle,
+    // their ribbons over each other: the outline tore), the narrower street (never the route) leaves the ring and joins
+    // its neighbour — like a street along the route joins the route's arm: trimmed to end over its partner's ribbon, it
+    // tapers into it — and the rest is laid out again
+    for (let pass = 0; ; pass++) {
+      if (ring.length < 2 || (!isRoute && !corner && ring.length < 3)) return;
+      // 4. corners: curb returns between neighbours
+      n = ring.length; corners = [];
+      for (let q = 0; q < n; q++) {
+        const A = ring[q], B = ring[(q + 1) % n];
+        let gap = B.theta - A.theta; if (gap <= 0) gap += Math.PI * 2;
+        if (n === 2 && q === 1) gap = Math.PI * 2 - (ring[1].theta - ring[0].theta);
+        const nA = left(A.u), nB = left(B.u);
+        const corner = { A, B, gap, arc: null, tA: 0, tB: 0 };
+        if (gap < Math.PI * .86 && gap > .3) {
+          const r = Math.min(CURB_R(A.cls), CURB_R(B.cls));
+          const pA = along(A.N, nA, A.h + r), pB = along(B.N, nB, -(B.h + r));
+          const m = meet(pA, A.u, pB, B.u);
+          if (m && m[0] > 0 && m[1] > 0 && m[0] < O.maxTrimM && m[1] < O.maxTrimM) {
+            const Oc = along(pA, A.u, m[0]);
+            corner.tA = dot(sub(Oc, A.N), A.u); corner.tB = dot(sub(Oc, B.N), B.u);
+            corner.arc = { O: Oc, r };
+          }
         }
+        if (!corner.arc && gap < Math.PI * .95) {   // sharp or awkward: the edges' own crossing
+          const m = meet(along(A.N, nA, A.h), A.u, along(B.N, nB, -B.h), B.u);
+          // [junction-check] two arms at a sharp angle cross only far out: trimmed back no further than sharpTrimM, the
+          // narrower one tapers into the wider (its ribbon ends over it) instead of a long wedge of junction surface
+          const lim = gap < O.sharpDeg * Math.PI / 180 ? O.sharpTrimM : O.maxTrimM;
+          if (m && m[0] > 0 && m[1] > 0) { corner.tA = Math.min(lim, m[0]); corner.tB = Math.min(lim, m[1]); }
+        }
+        corners.push(corner);
       }
-      if (!corner.arc && gap < Math.PI * .95) {   // sharp or awkward: the edges' own crossing
-        const m = meet(along(A.N, nA, A.h), A.u, along(B.N, nB, -B.h), B.u);
-        // [junction-check] two arms at a sharp angle cross only far out: trimmed back no further than sharpTrimM, the
-        // narrower one tapers into the wider (its ribbon ends over it) instead of a long wedge of junction surface
-        const lim = gap < O.sharpDeg * Math.PI / 180 ? O.sharpTrimM : O.maxTrimM;
-        if (m && m[0] > 0 && m[1] > 0) { corner.tA = Math.min(lim, m[0]); corner.tB = Math.min(lim, m[1]); }
+      // trim distances
+      for (let q = 0; q < n; q++) {
+        const A = ring[q], before = corners[(q - 1 + n) % n], after = corners[q];
+        let t = Math.max(before.tB, after.tA, 1.5);
+        // never past the middle of the street to the next junction, nor beyond the street's end
+        t = Math.min(t, A.route ? 40 : A.shared ? A.avail * .45 : Math.max(1.5, A.avail - 4));
+        A.t = t;
       }
-      corners.push(corner);
+      // [junction-check] (user, 20 Nov: junctions at bridge ends, #12, #18) a route junction stops short of a bridge the route
+      // draws: its route arms are trimmed no further than 2 m before the deck, so the surface stays on the ground
+      if (isRoute && ctx.onRouteBridge) for (const A of ring) {
+        if (!A.route) continue;
+        for (let d = 0; d <= A.t; d += 1) if (ctx.onRouteBridge(rq.s + A.dir * d, 0)) { A.t = Math.max(1.5, d - 2); A.bridgeCut = true; break; }
+      }
+      for (const a of arms) if (a.alongRoute) a.t = Math.min(a.alongRoute.t + 2, a.avail);
+      for (const cr of corners) if (cr.arc && (cr.tA > cr.A.t + .01 || cr.tB > cr.B.t + .01)) cr.arc = null;   // clamped short: straight corner
+
+      // [road meets] each arm's mouth: square to the street (or the road) where it is cut, exactly where its ribbon ends
+      for (const A of ring) {
+        let P, ud;
+        if (A.route) { const p = RL.at(rq.s + A.dir * A.t); P = { x: p.x, z: p.z }; ud = { x: p.tx * A.dir, z: p.tz * A.dir }; }
+        else {
+          const st = streets[A.k], cs = A.a0 + A.dir * A.t, p = streetPoint(st, cs);
+          P = { x: p.x, z: p.z }; ud = norm(sub(streetPoint(st, cs + A.dir * 2.5), streetPoint(st, cs - A.dir * Math.min(2.5, A.t))));
+          A.cutS = cs;
+        }
+        A.cutP = P; A.ud = ud;
+        A.mouth = [along(P, left(ud), -A.h), along(P, left(ud), A.h)];
+      }
+      if (pass >= O.joinPasses) break;
+      let join = null;
+      for (let q = 0; q < n && !join; q++) {
+        const A = ring[q], B = ring[(q + 1) % n];
+        if ((A.route && B.route) || A === B || !segCross(A.mouth[0], A.mouth[1], B.mouth[0], B.mouth[1])) continue;
+        const minor = (x) => (x.route ? -1 : streets[x.k].cls * 100 - x.h);   // higher: the one to join
+        const [J, P] = minor(A) >= minor(B) ? [A, B] : [B, A];
+        if (J.route) continue;
+        join = { J, P };
+      }
+      if (!join) break;
+      join.J.joinedTo = join.P; delete join.J.ud; delete join.J.mouth;
+      ring = ring.filter((x) => x !== join.J);
     }
-    // trim distances
-    for (let q = 0; q < n; q++) {
-      const A = ring[q], before = corners[(q - 1 + n) % n], after = corners[q];
-      let t = Math.max(before.tB, after.tA, 1.5);
-      // never past the middle of the street to the next junction, nor beyond the street's end
-      t = Math.min(t, A.route ? 40 : A.shared ? A.avail * .45 : Math.max(1.5, A.avail - 4));
-      A.t = t;
-    }
-    // [junction-check] (user, 20 Nov: junctions at bridge ends, #12, #18) a route junction stops short of a bridge the route
-    // draws: its route arms are trimmed no further than 2 m before the deck, so the surface stays on the ground
-    if (isRoute && ctx.onRouteBridge) for (const A of ring) {
-      if (!A.route) continue;
-      for (let d = 0; d <= A.t; d += 1) if (ctx.onRouteBridge(rq.s + A.dir * d, 0)) { A.t = Math.max(1.5, d - 2); A.bridgeCut = true; break; }
-    }
-    for (const a of arms) if (a.alongRoute) a.t = Math.min(a.alongRoute.t + 2, a.avail);
-    for (const cr of corners) if (cr.arc && (cr.tA > cr.A.t + .01 || cr.tB > cr.B.t + .01)) cr.arc = null;   // clamped short: straight corner
+    // a joined street ends 1 m over its partner's ribbon (or the route's road)
+    for (const a of arms) if (a.joinedTo) a.t = Math.max(1.5, Math.min(a.avail, a.joinedTo.t + 1));
 
     // 5. the surface's height (line height; drawn at +lift)
     let J;
@@ -442,19 +484,6 @@ export function* planJunctionsJob(streets, ctx, options = {}) {
 
     // 6. polygon (counter-clockwise in x/z), curbs and paint
     const poly = [], curbs = [];
-    const edge = (A, side, t) => along(along(A.N, A.u, t), left(A.u), side * A.h);
-    // [road meets] each arm's mouth: square to the street (or the road) where it is cut, exactly where its ribbon ends
-    for (const A of ring) {
-      let P, ud;
-      if (A.route) { const p = RL.at(rq.s + A.dir * A.t); P = { x: p.x, z: p.z }; ud = { x: p.tx * A.dir, z: p.tz * A.dir }; }
-      else {
-        const st = streets[A.k], cs = A.a0 + A.dir * A.t, p = streetPoint(st, cs);
-        P = { x: p.x, z: p.z }; ud = norm(sub(streetPoint(st, cs + A.dir * 2.5), streetPoint(st, cs - A.dir * Math.min(2.5, A.t))));
-        A.cutS = cs;
-      }
-      A.cutP = P; A.ud = ud;
-      A.mouth = [along(P, left(ud), -A.h), along(P, left(ud), A.h)];
-    }
     for (let q = 0; q < n; q++) {
       const A = ring[q], cr = corners[q], B = cr.B;
       poly.push(A.mouth[0], A.mouth[1]);
@@ -490,7 +519,7 @@ export function* planJunctionsJob(streets, ctx, options = {}) {
       if (h.length >= 3 && ring.every((A) => A.mouth.every((m) => keep.has(m)))) { poly.length = 0; poly.push(...h); curbs.length = 0; fallback = true; }
     }
     const id = list.length;
-    const jn = { id, x: C.x, z: C.z, route: isRoute, s: rq?.s ?? null, fallback, arms: ring, extra: arms.filter((a) => a.alongRoute), poly, curbs, J, lift: O.lift,
+    const jn = { id, x: C.x, z: C.z, route: isRoute, s: rq?.s ?? null, fallback, arms: ring, extra: arms.filter((a) => a.alongRoute || a.joinedTo), poly, curbs, J, lift: O.lift,
       deck: arms.some((a) => !a.route && streets[a.k].bridge) };   // [road meets] (a junction of decks: the ground doesn't rise to it)
     list.push(jn); clusterToJn.set(c, id);
 
