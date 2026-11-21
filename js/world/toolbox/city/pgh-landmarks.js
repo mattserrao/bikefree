@@ -170,7 +170,7 @@ export function buildPghLandmarks(host, data) {
     korean(l) {
       const q = local(l.center[0], l.center[1]), g = L.heightAt(q.x, q.z);
       S.color('#c8c3b8'); S.cylinder(q.x, g, q.z, 13, .25, 32);
-      S.color('#6e6a66'); for (let k = 0; k < 10; k++) { const a = k / 10 * TAU; S.box(q.x + Math.cos(a) * 10, g, q.z + Math.sin(a) * 10, 2.4, 4.8, .7, -a + Math.PI / 2); }
+      S.color('#8d8984'); for (let k = 0; k < 10; k++) { const a = k / 10 * TAU, x = q.x + Math.cos(a) * 10, z = q.z + Math.sin(a) * 10; if (L.wayNear?.(x, z, 1.8)) continue; S.box(x, L.heightAt(x, z), z, 2.2, 2.8, .45, -a + Math.PI / 2); }
     },
     // "Point of View": George Washington and Guyasuta face each other across a fire, on a granite base, Mount Washington
     pointofview(l) {

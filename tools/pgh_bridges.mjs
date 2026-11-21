@@ -36,7 +36,7 @@ const BRIDGES = [
   { name: 'Brilliant Branch Railroad Bridge', alias: ['Brilliant Branch Bridge'], style: 'truss', color: '#3e4246', width: 8, rail: true, note: 'rail truss' },
   // Monongahela River
   { name: 'Fort Pitt Bridge', style: 'tied-arch', color: GOLD, width: 22, decks: 2, riseM: 36, note: '1959: double-deck bowstring arch, 229 m' },
-  { name: 'Smithfield Street Bridge', style: 'lenticular', color: '#3f6f9c', accent: '#c9a24a', width: 14, note: '1883 (Lindenthal): two lenticular (Pauli) truss spans of 110 m, blue with gold, cast portals' },
+  { name: 'Smithfield Street Bridge', style: 'lenticular', color: '#3f6f9c', accent: '#c9a24a', width: 8.5, note: '1883 (Lindenthal): two lenticular (Pauli) truss spans of 110 m, blue with gold, cast portals' },
   { name: 'Panhandle Bridge', style: 'truss', color: '#7d8791', width: 9, rail: true, note: '1903: through truss (the T)' },
   { name: 'Liberty Bridge', style: 'deck-arch', color: '#8a8e91', width: 14, arches: 2, cantilever: true, note: '1928: deck spandrel-braced arch (cantilever)' },
   { name: 'South 10th Street Bridge', style: 'suspension', color: '#5f7f9a', width: 12, towerM: 35, note: '1933: wire-cable suspension, 116 ft towers' },
@@ -97,6 +97,21 @@ for (const b of BRIDGES) {
       const ok = (p, q) => dist(p, q) < 3;
       if (ok(a, t) && dist(z, chain[0]) > lenOf(chain) * 0.5) { chain = chain.concat(w.pts.slice(1)); used.add(w.id); grew = true; }
       else if (ok(z, h) && dist(a, t) > lenOf(chain) * 0.5) { chain = w.pts.slice(0, -1).concat(chain); used.add(w.id); grew = true; }
+    }
+  }
+  // a dual carriageway (one OSM way each direction, Smithfield's, the forts'): the spine is the middle of the two
+  {
+    const other = pool.filter((w) => !used.has(w.id) && lenOf(w.pts) > lenOf(chain) * 0.4);
+    if (other.length) {
+      const near = (p) => { let best = null; for (const w of other) for (let i = 0; i + 1 < w.pts.length; i++) {
+        const a = w.pts[i], b = w.pts[i + 1], ax = (a[1] - p[1]) * M_LON, az = (a[0] - p[0]) * M_LAT, bx = (b[1] - p[1]) * M_LON, bz = (b[0] - p[0]) * M_LAT;
+        const dx = bx - ax, dz = bz - az, t = Math.max(0, Math.min(1, -(ax * dx + az * dz) / (dx * dx + dz * dz || 1))), qx = ax + dx * t, qz = az + dz * t, d = Math.hypot(qx, qz);
+        if (!best || d < best.d) best = { d, qx, qz }; } return best; };
+      const offs = chain.map(near).filter((o) => o && o.d > 2.5 && o.d < 22);
+      if (offs.length > chain.length * 0.6) {
+        chain = chain.map((p) => { const o = near(p); return o && o.d > 2.5 && o.d < 22 ? [p[0] + o.qz / 2 / M_LAT, p[1] + o.qx / 2 / M_LON] : p; });
+        console.log(`    ${b.name}: centred between its two carriageways (${(offs.reduce((a, o) => a + o.d, 0) / offs.length).toFixed(1)} m apart)`);
+      }
     }
   }
   const mid = chain[Math.floor(chain.length / 2)];

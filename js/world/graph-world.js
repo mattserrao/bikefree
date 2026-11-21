@@ -42,11 +42,15 @@ const BANK_CAP = 22;                // m: a walled bank's promenade, from the wa
 const BANK_SLOPE = 14;
 const PIER_STEP = 7;
 const PROM_M = 6;                   // m of granite paving along the top of a river wall                // samples (70 m) between a deck's piers              // m: a natural bank, from the water's edge to its top
-const PAINT_GAP = 9;                // m: no centre or edge lines this close to a junction
+const PAINT_GAP = 9;
+const LAND_PAVED = 0;
+const ZERO4 = [0, 0, 0, 3];
+const SUB = 3;                      // a drawn way: each 10 m sample span in this many pieces (a Catmull-Rom curve through the samples)
+const SURF_CODE = { asphalt: 0, brick: 1, sett: 2, concrete: 3, paving: 4, gravel: 5, dirt: 6, wood: 7 };                // m: no centre or edge lines this close to a junction
 
 const COLORS = {
   primary: '#4c4e52', secondary: '#4c4e52', tertiary: '#4c4e52', residential: '#4c4e52', alley: '#57554f',
-  path: '#a08b6a', plaza: '#8e8a83', side: '#7d7a5e', deck: '#8a8780', rail: '#a29e95', under: '#57544f',
+  path: '#5f5d59', plaza: '#8e8a83', side: '#7d7a5e', deck: '#8a8780', rail: '#a29e95', under: '#57544f',
 };
 const PAINTED = { primary: 'double', secondary: 'double', tertiary: 'dash', residential: null, alley: null, path: 'dash-white', plaza: null };
 
@@ -62,9 +66,9 @@ const _v = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
 /** Spatial hash of road samples, for shaping the ground: cell → [x, z, top, halfWidth, fill, …] (top: the highest the ground may be at the
  *  road's edge; fill: the lowest — an embankment under a road above the ground, an abutment under a deck's end; NaN: none). */
 export function roadHash(edges, widths, cell = 32) {
-  const grid = new Map();
+  const grid = new Map(), wf = typeof widths === 'function' ? widths : (e) => widths[e.kind] || 7;
   for (const e of edges) {
-    const half = (widths[e.kind] || 7) / 2;
+    const half = wf(e) / 2 + (e._walk ? e._walk : 0);   // (a sidewalk: the ground keeps under it too)
     const deck = new Uint8Array(e.n + 1);
     for (const [a, b] of e.bridges) for (let i = a + 1; i < b; i++) deck[i] = 1;
     // a deck sample this near its deck's end stands on the abutment
@@ -150,6 +154,10 @@ export class GraphWorld {
     const o = this.json.origin;
     this.proj = makeProjection(o.lat, o.lon);
     this.widths = this.json.widths || {};
+    // per edge (js/world/graph-city.js sets them once the city data is in: trail and riverwalk widths, sidewalks)
+    this.wOf = (e) => e._w ?? (this.widths[e.kind] || 7);
+    this.walkOf = (e) => e._walk || 0;
+    this.isRiverwalk = (e) => !!e._rw;
 
     // the base line in the local frame (NetRide.pose places the rider on it: routePoint reads index.xs / zs)
     const n = base.lat.length, xs = new Float64Array(n), zs = new Float64Array(n);
@@ -171,7 +179,10 @@ export class GraphWorld {
       }
     }
     this.nodeWidth = new Map();
-    for (const e of this.G.edges) for (const id of [e.from, e.to]) this.nodeWidth.set(id, Math.max(this.nodeWidth.get(id) || 0, this.widths[e.kind] || 7));
+    this._nodeWidths();
+    // the ways into each junction (crosswalks)
+    this.arms = new Map();
+    for (const e of this.G.edges) for (const [id, end] of [[e.from, 0], [e.to, 1]]) { if (!this.arms.has(id)) this.arms.set(id, []); this.arms.get(id).push({ e, end }); }
     for (const nd of this.G.nodes.values()) {
       const q = this.proj.toLocal(nd.lat, nd.lon);
       slot(tileOf(q.x, q.z)).nodes.push({ id: nd.id, x: q.x, z: q.z, y: nd.ele });
@@ -200,7 +211,8 @@ export class GraphWorld {
     this.mats = {
       road: new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
       paint: new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
-      ground: new THREE.MeshLambertMaterial({ vertexColors: true }),
+      ground: groundMaterial(),
+      roadSurface: roadSurfaceMaterial(),
       water: new THREE.MeshLambertMaterial({ color: '#4f7f97', transparent: true, opacity: 0.92 }),
       // the dressed places and the river walls: textured from world position (toolbox/materials)
       park: Object.fromEntries(['lawn', 'plaza', 'granite', 'walk', 'garden', 'wood', 'scrub'].map((k) => [k, makeParkMaterial(k)])),
@@ -246,7 +258,7 @@ export class GraphWorld {
           this._heroesState = 'loading';
           fetch(new URL(`../../${this.json.heroes}`, import.meta.url)).then((r) => r.json())
             .then((hj) => import('./graph-heroes.js').then(({ buildGraphHeroes }) => buildGraphHeroes(this, hj)))
-            .then((h) => { if (this.disposed) { h.dispose(); return; } this.heroes = h; this.scene.add(h.group); h.setNight(this.timeKey === 'night' ? 1 : 0); this._heroesState = 'ok'; this._loadBridges(); })
+            .then((h) => { if (this.disposed) { h.dispose(); return; } this.heroes = h; this.scene.add(h.group); h.setNight(this.timeKey === 'night' ? 1 : 0); this._heroesState = 'ok'; this._loadBridges(); this._loadCity(); })
             .catch((err) => { this._heroesState = 'failed'; this.log('3d', `PGH landmarks: ${err.message} ${(err.stack || '').split('\n').slice(0, 4).join(' | ')}`, 'error'); });
         }
         for (const t of this.tiles.values()) if (t.built && !t.groundMesh) t.needsGround = true;
@@ -334,6 +346,10 @@ export class GraphWorld {
     add('riders', 'Rider', this._riderModel !== 'loading' ? 1 : 0);
     if (this.json.heroes) add('landmarks', 'Landmarks', this._heroesState && this._heroesState !== 'loading' ? 1 : 0);
     if (this.json.bridges && this._heroesState === 'ok') add('bridges', 'Bridges', this._bridgesState && this._bridgesState !== 'loading' ? 1 : 0);
+    if (this.json.city && this._heroesState === 'ok') {
+      const c = this.city, p = this._cityState === 'failed' ? 1 : !c ? 0 : !c.ready ? 0.3 : c.pendingNear(this.camera.position.x, this.camera.position.z, 900) ? 0.7 : 1;
+      add('city', 'Buildings and trees', p);
+    }
     return { ready: steps.every((s) => s.done), failed: this.groundFailed, progress: steps.reduce((a, s) => a + s.p, 0) / steps.length, steps };
   }
   get loading() { return (this._queued || 0) > 6 ? 4 : 0; }
@@ -346,6 +362,7 @@ export class GraphWorld {
     for (const m of Object.values(this.mats)) { if (m.dispose) m.dispose(); else for (const x of Object.values(m)) x.dispose?.(); }
     this.heroes?.dispose();
     this.bridges?.dispose();
+    this.city?.dispose();
     this.water.geometry.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
@@ -371,6 +388,7 @@ export class GraphWorld {
     }
     this.crank += ((src.cadence || 0) / 60) * Math.PI * 2 * dt;
     this.heroes?.tick(now / 1000, dt);
+    this.city?.tick(this.camera.position, now / 1000);
     this.rider.update(out.pos, out.fwd, this.crank, src.speed || 0, Math.min(dt, 0.1), src);
     if (this.path) {
       const tmp = this._leanTmp ||= { pos: new THREE.Vector3(), fwd: new THREE.Vector3(), flat: new THREE.Vector3() };
@@ -379,6 +397,7 @@ export class GraphWorld {
     }
     this._updateCamera(out.pos, out.flat, out.fwd, dt);
     this._stream(this.camera.position.x, this.camera.position.z, this._preload ? PRELOAD_BUDGET_MS : BUDGET_MS);
+    this.city?.stream(this.camera.position.x, this.camera.position.z, this._preload ? 30 : 4);
     this.water.position.x = Math.round(this.camera.position.x / 100) * 100;
     this.water.position.z = Math.round(this.camera.position.z / 100) * 100;
     this.sun.position.copy(this.camera.position).addScaledVector(this.sunDir, 5000);
@@ -439,6 +458,89 @@ export class GraphWorld {
   }
 
   // ---------- streaming ----------
+  _nodeWidths() {
+    this.nodeWidth = new Map();
+    for (const e of this.G.edges) for (const id of [e.from, e.to]) this.nodeWidth.set(id, Math.max(this.nodeWidth.get(id) || 0, this.wOf(e)));
+  }
+
+  /** PGH's city (js/world/graph-city.js, tools/pgh_city.py): buildings, trees, furniture, the land cover and what each
+   *  edge is made of. Once it's in, the edges take their widths and sidewalks and the tiles are rebuilt. */
+  _loadCity() {
+    if (!this.json.city || this._cityState || !this.heroes) return;
+    this._cityState = 'loading';
+    fetch(new URL(`../../${this.json.city}`, import.meta.url)).then((r) => r.json())
+      .then((cj) => import('./graph-city.js').then(({ GraphCity }) => {
+        if (this.disposed) return;
+        const c = new GraphCity(this, this.heroes, cj);
+        this.city = c;
+        this._classify(c);
+        this.cut = roadHash(this.G.edges, this.wOf);
+        this._nodeWidths();
+        const b = c.landBox, U = this.mats.ground.userData.land;
+        if (U) { U.uLand.value = c.landTexture; U.uLandBox.value.set(b.x0, b.z0, b.x1, b.z1); U.uLandOn.value = 1; }
+        for (const t of this.tiles.values()) if (t.built) this._release(t);
+        this._cityState = 'ok';
+        this.log('3d', `PGH city: ${c.buildings.length} buildings`, 'debug');
+      }))
+      .catch((err) => { this._cityState = 'failed'; this.log('3d', `PGH city: ${err.message} ${(err.stack || '').split('\n').slice(0, 3).join(' | ')}`, 'error'); });
+  }
+
+  /**
+   * What each edge is (from the city data): a trail's width (a main trail 3.6 m, a park path 2.6 m), a riverwalk (a
+   * paved walk along the water: 5.5 m of concrete or pavers), a street's sidewalks (in built-up places: 3.2 m on the
+   * main streets among shops, 2.4 m elsewhere on them, 1.8 m on residential streets; none where OSM says none), and
+   * its surface sample by sample (OSM's, plus the Pittsburgh map's rule: a residential street of 7 % or more,
+   * 25 m or longer, among the houses, is red brick).
+   */
+  _classify(c) {
+    const MAIN_TRAIL = /Heritage|Allegheny Passage|Eliza Furnace|North Shore Trail|South Side Trail|Station Square Trail|Strip District Trail|Hot Metal|Mon Wharf|^Trail$|Riverwalk|Riverfront/i;
+    const wet = (x, z) => this.ground.at(x, z) < this.poolAt(x, z) + 0.5;
+    for (const e of this.G.edges) {
+      const info = c.edgeInfo(e), half = (this.widths[e.kind] || 7) / 2;
+      e._surf = new Array(e.n + 1);
+      for (let i = 0; i <= e.n; i++) e._surf[i] = info.surf(i);
+      if (e.kind === 'path') {
+        let river = 0, n = 0, paved = 0;
+        for (let i = 0; i <= e.n; i += 2) {
+          const i0 = Math.max(0, i - 1), i1 = Math.min(e.n, i + 1), dx = e.x[i1] - e.x[i0], dz = e.z[i1] - e.z[i0], l = Math.hypot(dx, dz) || 1;
+          n++; if ([-22, -12, 12, 22].some((o) => wet(e.x[i] - dz / l * o, e.z[i] + dx / l * o))) river++;
+          if (e._surf[i] === 'concrete' || e._surf[i] === 'paving') paved++;
+        }
+        const onDeck = e.bridges.reduce((a, [p, q]) => a + q - p, 0) > e.n * 0.5;
+        const riverside = river / n > 0.4 && !onDeck;
+        if (riverside && (paved / n > 0.5 || /Riverwalk|Riverfront/i.test(e.name || ''))) { e._w = 5.5; e._rw = true; }
+        else if (riverside || MAIN_TRAIL.test(e.name || '')) e._w = 3.6;
+        else e._w = 2.6;
+        continue;
+      }
+      if (e.kind === 'plaza' || e.kind === 'alley') continue;
+      // sidewalks: in built-up places (land cover and buildings near), unless OSM says none
+      let urban = 0, shops = 0, n = 0;
+      for (let i = 0; i <= e.n; i += 2) {
+        const i0 = Math.max(0, i - 1), i1 = Math.min(e.n, i + 1), dx = e.x[i1] - e.x[i0], dz = e.z[i1] - e.z[i0], l = Math.hypot(dx, dz) || 1;
+        for (const sd of [-1, 1]) {
+          const x = e.x[i] - dz / l * (half + 6) * sd, z = e.z[i] + dx / l * (half + 6) * sd;
+          n++;
+          const b = c.host.buildingNear(x, z, 18);
+          if (b && c.urban(x, z)) { urban++; if (b.kind === 2 || b.kind === 4 || b.kind === 5) shops++; }
+        }
+      }
+      if (info.walk !== 0 && !e.bridges.some(([a, b]) => b - a > e.n * 0.8) && urban / n > 0.45) {
+        e._walk = e.kind === 'residential' ? 1.8 : shops / n > 0.3 ? 3.2 : 2.4;
+      }
+      // brick: a steep residential street among houses
+      if (e.kind === 'residential') {
+        let run = 0;
+        for (let i = 0; i <= e.n; i++) {
+          const i0 = Math.max(0, i - 1), i1 = Math.min(e.n, i + 1), g = Math.abs(e.ele[i1] - e.ele[i0]) / ((i1 - i0) * 10 || 1);
+          const steep = g >= 0.07 && c.landAt(e.x[i], e.z[i]) !== LAND_PAVED;
+          run = steep ? run + 1 : 0;
+          if (run >= 3) for (let k = i - run + 1; k <= i; k++) if (e._surf[k] === 'asphalt') e._surf[k] = 'brick';
+        }
+      }
+    }
+  }
+
   /** PGH's bridge models (js/world/graph-bridges.js, tools/pgh_bridges.mjs): built once; the tiles they stand in are
    *  rebuilt without the world's plain piers (and a ridden roadway's parapets) where a model stands. */
   _loadBridges() {
@@ -487,84 +589,159 @@ export class GraphWorld {
   }
 
   _release(t) {
-    for (const m of [t.roadMesh, t.paintMesh, t.groundMesh, t.bankMesh, ...(t.extra || [])]) if (m) { this.group.remove(m); m.geometry.dispose(); }
-    t.roadMesh = t.paintMesh = t.groundMesh = t.bankMesh = null; t.extra = [];
+    for (const m of [t.roadMesh, t.paintMesh, t.groundMesh, t.bankMesh, ...(t.extra || []), ...(t.extraRoad || [])]) if (m) { this.group.remove(m); m.geometry.dispose(); }
+    t.roadMesh = t.paintMesh = t.groundMesh = t.bankMesh = null; t.extra = []; t.extraRoad = [];
     t.built = false;
+  }
+
+  /** A way drawn smooth: a Catmull-Rom curve through its samples from a to b, SUB points a span:
+   *  [{x, z, y, i (the sample, fractional), s (m from a), dx, dz}]. */
+  _curve(e, a, b) {
+    const out = [], P = (k) => Math.max(0, Math.min(e.n, k));
+    let s = 0, px = null, pz = null;
+    for (let i = a; i < b || (i === b && true); i++) {
+      for (let q = 0; q < (i === b ? 1 : SUB); q++) {
+        const t = q / SUB, i0 = P(i - 1), i1 = i, i2 = P(i + 1), i3 = P(i + 2);
+        const cr = (v) => { const p0 = v[i0], p1 = v[i1], p2 = v[i2], p3 = v[i3]; return 0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t); };
+        const x = i === b ? e.x[b] : cr(e.x), z = i === b ? e.z[b] : cr(e.z), y = i === b ? e.ele[b] : e.ele[i1] + (e.ele[i2] - e.ele[i1]) * t;
+        if (px !== null) s += Math.hypot(x - px, z - pz);
+        out.push({ x, z, y, i: i + t, s }); px = x; pz = z;
+      }
+      if (i === b) break;
+    }
+    for (let k = 0; k < out.length; k++) {
+      const p0 = out[Math.max(0, k - 1)], p1 = out[Math.min(out.length - 1, k + 1)];
+      let dx = p1.x - p0.x, dz = p1.z - p0.z; const l = Math.hypot(dx, dz) || 1; out[k].dx = dx / l; out[k].dz = dz / l;
+    }
+    return out;
+  }
+
+  /** How a way is painted: centre line, lane lines, edge lines (one-ways and lanes from the city data). */
+  _paintOf(e) {
+    const ow = this.city?.edgeInfo(e).ow || 0, lanes = this.city?.edgeInfo(e).lanes || 0;
+    if (e.kind === 'path') return { centre: !e._rw && (e._w || 3) >= 3.4 ? 'dash-yellow' : null, edges: false, lanes: 0 };
+    if (e.kind === 'plaza' || e.kind === 'alley') return { centre: null, edges: false, lanes: 0 };
+    if (ow) return { centre: null, edges: e.kind !== 'residential', lanes: Math.max(1, lanes), oneway: true };
+    if (e.kind === 'primary' || e.kind === 'secondary') return { centre: 'double', edges: true, lanes: 0 };
+    if (e.kind === 'tertiary') return { centre: 'dash-yellow', edges: false, lanes: 0 };
+    return { centre: null, edges: false, lanes: 0 };
   }
 
   _buildRoads(t) {
     t.built = true;
     if (!t.pieces.length && !t.nodes.length) return;
-    const R = new Mesher(), P = new Mesher();
+    const R = new Mesher(true), P = new Mesher(), W = new Mesher();
     const col = (k) => new THREE.Color(COLORS[k] || COLORS.residential);
+    const side = col('side'), deckC = col('deck'), rail = col('rail'), under = col('under');
+    const verge = new THREE.Color('#7b8556'), gravelC = new THREE.Color('#a59b84'), walkC = new THREE.Color('#b4afa4'), curbC = new THREE.Color('#c3beb3'), walkSide = new THREE.Color('#9d988e');
     for (const { e, a, b } of t.pieces) {
-      const half = (this.widths[e.kind] || 7) / 2, c = col(e.kind), lift = ROAD_LIFT + (e.kind === 'path' ? -0.03 : 0);
+      const half = this.wOf(e) / 2, path = e.kind === 'path', walk = this.walkOf(e);
+      const base = e._rw ? new THREE.Color('#a9a59c') : col(e.kind), lift = ROAD_LIFT + (path ? -0.03 : 0);
       const deck = new Uint8Array(e.n + 1);
       for (const [p, q] of e.bridges) for (let i = p; i <= q; i++) deck[i] = 1;
-      const L = [], Rt = [];
-      for (let i = a; i <= b; i++) {
-        const i0 = Math.max(0, i - 1), i1 = Math.min(e.n, i + 1);
-        let dx = e.x[i1] - e.x[i0], dz = e.z[i1] - e.z[i0];
-        const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
-        const y = e.ele[i] + lift;
-        L.push([e.x[i] + dz * half, y, e.z[i] - dx * half]);
-        Rt.push([e.x[i] - dz * half, y, e.z[i] + dx * half]);
+      const bm = this.bridgeMask?.get(e.id);
+      const C = this._curve(e, a, b), n = C.length;
+      // the ends at a junction: no sidewalk, paint or shoulder inside the junction's disc
+      const lenM = e.n * 10, r0 = (this.nodeWidth.get(e.from) || 7) / 2 * 1.15 + 0.6, r1 = (this.nodeWidth.get(e.to) || 7) / 2 * 1.15 + 0.6;
+      const atS = (c) => c.i * 10;
+      const L = [], Rt = [], cols = [], ext = [];
+      for (const c of C) {
+        const y = c.y + lift;
+        L.push([c.x + c.dz * half, y, c.z - c.dx * half]);
+        Rt.push([c.x - c.dz * half, y, c.z + c.dx * half]);
+        const si = Math.round(c.i), surf = SURF_CODE[e._surf?.[si] || (e._rw ? 'concrete' : 'asphalt')] ?? 0;
+        cols.push(surf === 0 || surf === 5 || surf === 6 ? base : surf === 3 ? new THREE.Color('#a7a399') : surf === 4 ? new THREE.Color('#a49c8f') : base);
+        ext.push(surf);
       }
-      R.strip(L, Rt, c);
-      // sides: down to the ground on an embankment (a skirt), a deck with parapets on a bridge
-      const side = col('side'), deckC = col('deck'), rail = col('rail'), under = col('under'), bm = this.bridgeMask?.get(e.id);
-      for (let i = a; i < b; i++) {
-        const k = i - a, br = deck[i] && deck[i + 1];
-        const drop = br ? 1.0 : 3.5;
-        for (const [S, flip] of [[L, false], [Rt, true]]) {
+      for (let k = 0; k + 1 < n; k++) {
+        const uv = (c, x) => [ext[k], x, c.s, half];
+        R.quadX(L[k], Rt[k], Rt[k + 1], L[k + 1], cols[k], [uv(C[k], -half), uv(C[k], half), uv(C[k + 1], half), uv(C[k + 1], -half)]);
+      }
+      // the sides: a deck's slab and parapets; on the ground a curb and sidewalk, or a shoulder down to the ground
+      for (let k = 0; k + 1 < n; k++) {
+        const c0 = C[k], c1 = C[k + 1], i0 = Math.floor(c0.i), i1 = Math.min(e.n, Math.ceil(c1.i));
+        const br = deck[i0] && deck[i1];
+        const inJn = atS(c0) < r0 || atS(c1) > lenM - r1;
+        for (const [S, flip, sgn] of [[L, false, 1], [Rt, true, -1]]) {
           const p0 = S[k], p1 = S[k + 1];
-          R.wall(p0, p1, -drop, 0, br ? deckC : side, flip);
-          if (br && !(bm && (bm[i] & 2) && (bm[i + 1] & 2))) R.wall(p0, p1, 0, 0.9, rail, flip);
-        }
-        if (br) R.quad([L[k][0], L[k][1] - 1, L[k][2]], [Rt[k][0], Rt[k][1] - 1, Rt[k][2]], [Rt[k + 1][0], Rt[k + 1][1] - 1, Rt[k + 1][2]], [L[k + 1][0], L[k + 1][1] - 1, L[k + 1][2]], under, true);
-      }
-      // paint: centre lines and trail centre dashes, not near a junction
-      const style = PAINTED[e.kind];
-      if (style) {
-        const lenM = e.n * 10;
-        for (let i = a; i < b; i++) {
-          const s0 = i * 10, s1 = s0 + 10;
-          if (s0 < PAINT_GAP || s1 > lenM - PAINT_GAP) continue;
-          if (style !== 'double' && i % 2) continue;   // dashes: every other 10 m
-          const yellow = style !== 'dash-white', c2 = new THREE.Color(yellow ? '#e3b53a' : '#f2efe6');
-          const offs = style === 'double' ? [-0.18, 0.18] : [0];
-          for (const off of offs) {
-            const p = (s) => {
-              const k = s - a, i0 = Math.max(0, s - 1), i1 = Math.min(e.n, s + 1);
-              let dx = e.x[i1] - e.x[i0], dz = e.z[i1] - e.z[i0]; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
-              return { x: (L[k][0] + Rt[k][0]) / 2 - dz * off, y: L[k][1] + 0.02, z: (L[k][2] + Rt[k][2]) / 2 + dx * off, dx, dz };
-            };
-            const A = p(i), B = p(i + 1), w = 0.07;
-            P.quad([A.x + A.dz * w, A.y, A.z - A.dx * w], [A.x - A.dz * w, A.y, A.z + A.dx * w], [B.x - B.dz * w, B.y, B.z + B.dx * w], [B.x + B.dz * w, B.y, B.z - B.dx * w], c2);
+          const o0 = [c0.dz * sgn, -c0.dx * sgn], o1 = [c1.dz * sgn, -c1.dx * sgn];   // outward
+          const out = (p, o, d, dy) => [p[0] + o[0] * d, p[1] + dy, p[2] + o[1] * d];
+          if (br) {
+            W.wall(p0, p1, -1.0, 0, deckC, flip);
+            if (!(bm && (bm[i0] & 2) && (bm[i1] & 2))) W.wall(p0, p1, 0, 0.9, rail, flip);
+            continue;
           }
+          if (walk && !inJn) {
+            W.wall(p0, p1, -0.05, 0.15, curbC, flip);                                                            // the curb's face
+            W.quad(out(p0, o0, 0, 0.15), out(p1, o1, 0, 0.15), out(p1, o1, walk, 0.15), out(p0, o0, walk, 0.15), walkC, !flip);   // the sidewalk
+            W.quad(out(p0, o0, walk, 0.15), out(p1, o1, walk, 0.15), out(p1, o1, walk, -1.4), out(p0, o0, walk, -1.4), walkSide, flip);
+            continue;
+          }
+          // a shoulder: a gravel edge on a trail, then the verge sloping down to the ground, then a short face
+          const band = path ? 0.35 : 0.2;
+          W.quad(out(p0, o0, 0, -0.01), out(p1, o1, 0, -0.01), out(p1, o1, band, -0.06), out(p0, o0, band, -0.06), path ? gravelC : verge, !flip);
+          W.quad(out(p0, o0, band, -0.06), out(p1, o1, band, -0.06), out(p1, o1, 1.6, -0.9), out(p0, o0, 1.6, -0.9), verge, !flip);
+          // on an embankment, the slope runs on down (1 : 1.5) to meet the ground, then a short face below it
+          const toe = (p, o) => { const q = out(p, o, 1.6, -0.9), gy = this.ground ? this._groundH(q[0], q[2]) : q[1] - 2; const drop = Math.max(0, q[1] - 0.2 - gy); const d = Math.min(9, drop * 1.5); return [out(p, o, 1.6 + d, -0.9 - d / 1.5), gy]; };
+          const [ta, ga] = toe(p0, o0), [tb, gb] = toe(p1, o1);
+          W.quad(out(p0, o0, 1.6, -0.9), out(p1, o1, 1.6, -0.9), tb, ta, verge, !flip);
+          W.quad(ta, tb, [tb[0], Math.min(tb[1], gb) - 1.5, tb[2]], [ta[0], Math.min(ta[1], ga) - 1.5, ta[2]], verge, flip);
+          W.wall(p0, p1, -0.6, -0.01, side, flip);
         }
+        if (br) W.quad([L[k][0], L[k][1] - 1, L[k][2]], [Rt[k][0], Rt[k][1] - 1, Rt[k][2]], [Rt[k + 1][0], Rt[k + 1][1] - 1, Rt[k + 1][2]], [L[k + 1][0], L[k + 1][1] - 1, L[k + 1][2]], under, true);
       }
+      // paint, clear of the junctions
+      const paint = this._paintOf(e), yellow = new THREE.Color('#e3b53a'), white = new THREE.Color('#f2efe6');
+      const line = (off, w, dashM, gapM, color) => {
+        for (let k = 0; k + 1 < n; k++) {
+          const c0 = C[k], c1 = C[k + 1], s0 = atS(c0), s1 = atS(c1);
+          if (s0 < Math.max(PAINT_GAP, r0 + 1) || s1 > lenM - Math.max(PAINT_GAP, r1 + 1)) continue;
+          if (ext[k] === 1 || ext[k] === 2) continue;   // (no paint on brick or setts)
+          if (dashM && (c0.s % (dashM + gapM)) > dashM) continue;
+          const A = { x: c0.x - c0.dz * off, y: c0.y + lift + 0.02, z: c0.z + c0.dx * off }, B = { x: c1.x - c1.dz * off, y: c1.y + lift + 0.02, z: c1.z + c1.dx * off };
+          P.quad([A.x + c0.dz * w, A.y, A.z - c0.dx * w], [A.x - c0.dz * w, A.y, A.z + c0.dx * w], [B.x - c1.dz * w, B.y, B.z + c1.dx * w], [B.x + c1.dz * w, B.y, B.z - c1.dx * w], color);
+        }
+      };
+      if (paint.centre === 'double') { line(-0.18, 0.06, 0, 0, yellow); line(0.18, 0.06, 0, 0, yellow); }
+      else if (paint.centre === 'dash-yellow') line(0, path ? 0.05 : 0.07, path ? 3 : 3.3, path ? 6 : 6.7, yellow);
+      if (paint.edges) { line(half - 0.35, 0.07, 0, 0, white); line(-(half - 0.35), 0.07, 0, 0, paint.oneway ? yellow : white); }
+      if (paint.oneway && paint.lanes >= 2) for (let q = 1; q < paint.lanes; q++) line(-half + (2 * half) * q / paint.lanes, 0.06, 3, 9, white);
     }
-    // junctions: a disc as wide as the widest way into it, a hair above the roads (one colour: no seams)
+    // junctions: a disc as wide as the widest way into it, a hair above the roads (one colour: no seams); crosswalks
+    // where a main street meets two or more others among the buildings
+    const white = new THREE.Color('#ece9de');
     for (const nd of t.nodes) {
       const w = this.nodeWidth.get(nd.id) || 7, r = w / 2 * 1.15, y = nd.y + ROAD_LIFT + 0.01;
-      R.disc(nd.x, y, nd.z, r, col('residential'));
+      R.discX(nd.x, y, nd.z, r, col('residential'));
+      const arms = (this.arms.get(nd.id) || []).filter((a) => a.e.kind !== 'path' && a.e.kind !== 'plaza');
+      if (arms.length < 3 || !arms.some((a) => a.e.kind === 'primary' || a.e.kind === 'secondary' || a.e.kind === 'tertiary') || !arms.some((a) => a.e._walk)) continue;
+      for (const { e, end } of arms) {
+        const i0 = end ? e.n : 0, i1 = end ? e.n - 1 : 1, dx = e.x[i1] - e.x[i0], dz = e.z[i1] - e.z[i0], l = Math.hypot(dx, dz) || 1, ux = dx / l, uz = dz / l;
+        const half = this.wOf(e) / 2, d = r + 1.6, cx = nd.x + ux * d, cz = nd.z + uz * d, yy = y + 0.015;
+        for (let v = -half + 0.4; v < half - 0.3; v += 1.1) {
+          const px = cx - uz * v, pz = cz + ux * v, qx = px - uz * 0.55, qz = pz + ux * 0.55;
+          P.quad([px - ux * 1.4, yy, pz - uz * 1.4], [px + ux * 1.4, yy, pz + uz * 1.4], [qx + ux * 1.4, yy, qz + uz * 1.4], [qx - ux * 1.4, yy, qz - uz * 1.4], white);
+        }
+      }
     }
-    t.roadMesh = R.mesh(this.mats.road);
+    t.roadMesh = R.mesh(this.mats.roadSurface);
     if (t.roadMesh) this.group.add(t.roadMesh);
     t.paintMesh = P.mesh(this.mats.paint);
     if (t.paintMesh) this.group.add(t.paintMesh);
+    const sm = W.mesh(this.mats.road);
+    if (sm) { this.group.add(sm); (t.extraRoad ||= []).push(sm); }
   }
 
   _buildGround(t) {
     const nx = Math.round(TILE / GROUND_CELL), x0 = t.i * TILE, z0 = t.j * TILE, cell = TILE / nx, n1 = nx + 1;
-    const pos = new Float32Array(n1 * n1 * 3), color = new Float32Array(n1 * n1 * 3);
+    const pos = new Float32Array(n1 * n1 * 3), color = new Float32Array(n1 * n1 * 3), landW = new Float32Array(n1 * n1);
     const grass = new THREE.Color('#89a868'), dry = new THREE.Color('#a7a27a'), bed = new THREE.Color('#6f6a58'), tmp = new THREE.Color();
     for (let j = 0, k = 0; j <= nx; j++) for (let i = 0; i <= nx; i++, k++) {
       const x = x0 + i * cell, z = z0 + j * cell, h = this._groundH(x, z), pool = this.poolAt(x, z);
       pos[3 * k] = x; pos[3 * k + 1] = h; pos[3 * k + 2] = z;
       const raw = this.ground.at(x, z), cutDepth = Math.max(0, raw - h);
       tmp.copy(h < pool ? bed : grass).lerp(dry, Math.min(1, cutDepth / 6));
+      landW[k] = h < pool + 0.2 ? 0 : 1 - Math.min(1, cutDepth / 6) * 0.7;   // (the land cover's colour: not on the river bed, less on a cut)
       const v = 0.94 + 0.06 * Math.sin(x * 0.013 + z * 0.021) * Math.cos(x * 0.007 - z * 0.011);
       color[3 * k] = tmp.r * v; color[3 * k + 1] = tmp.g * v; color[3 * k + 2] = tmp.b * v;
     }
@@ -578,6 +755,7 @@ export class GraphWorld {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     g.setAttribute('color', new THREE.BufferAttribute(color, 3));
+    g.setAttribute('aLandW', new THREE.BufferAttribute(landW, 1));
     g.setIndex(new THREE.BufferAttribute(idx, 1));
     g.computeVertexNormals();
     t.groundMesh = new THREE.Mesh(g, this.mats.ground);
@@ -688,7 +866,7 @@ export class GraphWorld {
 
   /** The riverbank along the shore lines in this tile: a stone face and a promenade where walled, a firm slope elsewhere. */
   _buildBank(t) {
-    const x0 = t.i * TILE, z0 = t.j * TILE, M = new Mesher(), Face = new Mesher(), Prom = new Mesher();
+    const x0 = t.i * TILE, z0 = t.j * TILE, M = new Mesher(), Face = new Mesher(), Prom = new Mesher(), Rail = new Mesher(), iron = new THREE.Color('#202325');
     const grass = new THREE.Color('#89a868'), stone = new THREE.Color('#8f8a80'), bed = new THREE.Color('#6f6a58');
     const capY = (x, z, y) => Math.min(y, this.cut.cap(x, z) + 0.12);   // (under a road's cut: just over the ground there, under the road)
     for (const L of this.shore ? this.shore.lines : []) {
@@ -703,6 +881,16 @@ export class GraphWorld {
           Face.quad(a, b, tb, ta, stone);                                            // the wall's face (dressed stone)
           const pa = row(i, PROM_M, L.top[i] + 0.03), pb = row(i + 1, PROM_M, L.top[i + 1] + 0.03);
           Prom.quad(ta, tb, pb, pa, stone);                                          // the promenade's paving along the wall
+          // the railing on the wall's edge: black iron, posts every 2.4 m, top and bottom rails, pickets
+          {
+            const ra = row(i, 0.25, L.top[i] + 0.03), rb = row(i + 1, 0.25, L.top[i + 1] + 0.03), seg = Math.hypot(rb[0] - ra[0], rb[2] - ra[2]);
+            const at = (f, dy) => [ra[0] + (rb[0] - ra[0]) * f, ra[1] + (rb[1] - ra[1]) * f + dy, ra[2] + (rb[2] - ra[2]) * f];
+            Rail.wall(at(0, 0), at(1, 0), 1.02, 1.1, iron, false); Rail.wall(at(0, 0), at(1, 0), 0.08, 0.14, iron, false);
+            const np = Math.max(1, Math.round(seg / 0.32));
+            for (let q = 0; q < np; q++) { const f0 = q / np, f1 = f0 + 0.04 / Math.max(seg, 0.1); Rail.quad(at(f0, 0.08), at(f1, 0.08), at(f1, 1.05), at(f0, 1.05), iron); }
+            const nPost = Math.max(1, Math.round(seg / 2.4));
+            for (let q = 0; q < nPost; q++) { const f0 = q / nPost, f1 = f0 + 0.09 / Math.max(seg, 0.1); Rail.quad(at(f0, 0), at(f1, 0), at(f1, 1.18), at(f0, 1.18), iron); }
+          }
           if (!this.dressing?.inside(mx, mz)) M.quad(pa, pb, row(i + 1, BANK_CAP, L.top[i + 1] + 0.03), row(i, BANK_CAP, L.top[i] + 0.03), grass);   // then grass (a dressed place has its own)
         } else {
           const S = [-4, 0, 5, BANK_SLOPE];
@@ -724,7 +912,7 @@ export class GraphWorld {
       for (let i = 0; i <= e.n; i++) if (!deck[i]) toEnd[i] = 0;
       for (let i = 1; i <= e.n; i++) toEnd[i] = Math.min(toEnd[i], toEnd[i - 1] + 10);
       for (let i = e.n - 1; i >= 0; i--) toEnd[i] = Math.min(toEnd[i], toEnd[i + 1] + 10);
-      const half = (this.widths[e.kind] || 7) / 2 - 0.4, pm = this.bridgeMask?.get(e.id);
+      const half = this.wOf(e) / 2 - 0.4, pm = this.bridgeMask?.get(e.id);
       for (let i = Math.max(a, 1); i <= Math.min(b, e.n - 1); i++) {
         if (!deck[i] || toEnd[i] < 20 || i % PIER_STEP) continue;
         if (pm && pm[i] & 1) continue;   // a bridge model stands here (its own piers)
@@ -739,7 +927,7 @@ export class GraphWorld {
     }
     t.bankMesh = M.mesh(this.mats.road);
     if (t.bankMesh) this.group.add(t.bankMesh);
-    t.extra = [Face.mesh(this.mats.riverWall), Prom.mesh(this.mats.park.granite)].filter(Boolean);
+    t.extra = [Face.mesh(this.mats.riverWall), Prom.mesh(this.mats.park.granite), Rail.mesh(this.mats.road)].filter(Boolean);
     for (const m of t.extra) this.group.add(m);
     if (this.dressing) this._buildDressing(t);
   }
@@ -747,12 +935,22 @@ export class GraphWorld {
 
 /** Triangles with flat colours, gathered then made one mesh. */
 class Mesher {
-  constructor() { this.pos = []; this.col = []; this.nrm = []; }
-  _tri(a, b, c, color) {
+  /** `road`: the road surface's attribute too (aRd: surface code, metres across from the centre, metres along, half width). */
+  constructor(road = false) { this.pos = []; this.col = []; this.nrm = []; this.rd = road ? [] : null; }
+  _tri(a, b, c, color, ra = null, rb = null, rc = null) {
     const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
     let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
     const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
     for (const p of [a, b, c]) { this.pos.push(p[0], p[1], p[2]); this.col.push(color.r, color.g, color.b); this.nrm.push(nx, ny, nz); }
+    if (this.rd) for (const r of [ra, rb, rc]) this.rd.push(...(r || ZERO4));
+  }
+  /** A road quad with its aRd per corner. */
+  quadX(a, b, c, d, color, r) { this._tri(a, b, c, color, r[0], r[1], r[2]); this._tri(a, c, d, color, r[0], r[2], r[3]); }
+  discX(x, y, z, r, color, seg = 14) {
+    for (let k = 0; k < seg; k++) {
+      const a0 = (k / seg) * Math.PI * 2, a1 = ((k + 1) / seg) * Math.PI * 2;
+      this._tri([x, y, z], [x + Math.cos(a1) * r, y, z + Math.sin(a1) * r], [x + Math.cos(a0) * r, y, z + Math.sin(a0) * r], color, [0, 0, 0, r], [0, 0, 0, r], [0, 0, 0, r]);
+    }
   }
   quad(a, b, c, d, color, flip = false) {
     if (flip) { this._tri(a, c, b, color); this._tri(a, d, c, color); }
@@ -778,6 +976,7 @@ class Mesher {
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
     g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nrm, 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
+    if (this.rd) g.setAttribute('aRd', new THREE.Float32BufferAttribute(this.rd, 4));
     g.computeBoundingSphere();
     return new THREE.Mesh(g, material);
   }
@@ -870,4 +1069,112 @@ export function decodeDressing(json, proj, tile) {
   const parks = json.areas.filter((a) => a.kind === 'park').map((a) => a.pts.map(P));
   const inside = (x, z) => parks.some((pts) => { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, zi] = pts[i], [xj, zj] = pts[j]; if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c; } return c; });
   return { areas, lines, trees, inside };
+}
+
+// ---------------------------------------------------------------- surfaces
+const NOISE_GLSL = /* glsl */`
+  float gwH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float gwN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
+    return mix(mix(gwH(i), gwH(i + vec2(1., 0.)), f.x), mix(gwH(i + vec2(0., 1.)), gwH(i + vec2(1., 1.)), f.x), f.y); }
+`;
+
+/**
+ * The roads' surface (aRd: surface code, metres across, metres along, half width): asphalt with grain, polished wheel
+ * tracks, patches and sealed cracks that come and go by place (the Pittsburgh map's road-surface look); red paving
+ * brick in running bond laid across the street; granite setts (Belgian block); concrete slabs with joints; pavers;
+ * gravel and dirt. Patterns fade to their average when a brick is a few pixels, so nothing shimmers far off.
+ */
+function roadSurfaceMaterial() {
+  const m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aRd; varying vec4 vRd; varying vec3 vGW;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRd = aRd; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vRd; varying vec3 vGW;\n' + NOISE_GLSL)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        {
+          vec3 c = diffuseColor.rgb;
+          int sf = int(vRd.x + .5);
+          vec2 q = vRd.yz;
+          float px = max(fwidth(q.y), fwidth(q.x)) + 1e-4, det = 1. - smoothstep(.015, .07, px);
+          float wear = .25 + .65 * gwN(vGW.xz * .004 + 3.1);
+          float track = 1. - smoothstep(0., .45, abs(abs(abs(q.x) - vRd.w * .5) - .85));
+          if (sf == 1) {           // red paving brick, running bond, laid across
+            float row = floor(q.y / .105), u = q.x / .215 + .5 * mod(row, 2.);
+            vec2 cell = vec2(floor(u), row), f = vec2(fract(u), fract(q.y / .105));
+            vec3 br = mix(vec3(.36, .16, .12), vec3(.5, .25, .18), gwH(cell)) * (.82 + .25 * gwH(cell + 7.));
+            float mortar = max(1. - smoothstep(.0, .07, f.x) * smoothstep(.0, .07, 1. - f.x), 1. - smoothstep(.0, .12, f.y) * smoothstep(.0, .12, 1. - f.y));
+            vec3 pat = mix(br, vec3(.16, .14, .13), mortar * .8);
+            c = mix(vec3(.38, .2, .15), pat, det) * (1. - .14 * track);
+            c = mix(c, vec3(.27, .28, .29), step(.9, gwN(vGW.xz * .3 + 5.)) * .85);   // an asphalt patch
+            c = pow(c, vec3(2.2));
+          } else if (sf == 2) {    // granite setts
+            float row = floor(q.y / .16), u = q.x / .26 + .37 * mod(row, 3.);
+            vec2 cell = vec2(floor(u), row), f = vec2(fract(u), fract(q.y / .16));
+            vec3 st = vec3(.44, .43, .42) * (.78 + .32 * gwH(cell));
+            float jt = max(1. - smoothstep(.0, .09, f.x) * smoothstep(.0, .09, 1. - f.x), 1. - smoothstep(.0, .12, f.y) * smoothstep(.0, .12, 1. - f.y));
+            c = pow(mix(vec3(.4), mix(st, vec3(.2, .2, .19), jt * .8), det), vec3(2.2));
+          } else if (sf == 3) {    // concrete slabs, joints every 4.5 m and down the middle
+            float slab = floor(q.y / 4.5);
+            c = c * (.94 + .1 * gwH(vec2(slab, floor(q.x / 3.)))) * (.95 + .08 * gwN(vGW.xz * 2.));
+            float j = max(1. - smoothstep(0., .035, abs(fract(q.y / 4.5) - .5) * 4.5 - 2.22), 1. - smoothstep(0., .03, abs(q.x)));
+            c *= 1. - .35 * j * det;
+          } else if (sf == 4) {    // pavers
+            vec2 cell = floor(vec2(q.x, q.y) / .6), f = fract(vec2(q.x, q.y) / .6);
+            float jt = max(1. - smoothstep(0., .06, f.x) * smoothstep(0., .06, 1. - f.x), 1. - smoothstep(0., .06, f.y) * smoothstep(0., .06, 1. - f.y));
+            c = mix(c, c * (.82 + .3 * gwH(cell)) * (1. - .4 * jt), det);
+          } else if (sf == 5 || sf == 6) {   // gravel, dirt
+            vec3 g = sf == 5 ? vec3(.55, .51, .44) : vec3(.43, .36, .27);
+            c = pow(g * (.8 + .35 * gwH(floor(vGW.xz * 14.)) * det + .15 * gwN(vGW.xz * 1.3)), vec3(2.2));
+          } else {                 // asphalt
+            float g = gwN(vGW.xz * 4.1) * .5 + gwN(vGW.xz * 19.) * .5;
+            c *= .9 + .2 * mix(.5, g, det);
+            c *= 1. - wear * .1 * track;                                                     // polished wheel tracks
+            float pa = gwN(vGW.xz * .09 + 7.3);
+            c = mix(c, c * 1.16, step(.74 - wear * .12, pa) * .7);                           // patches
+            float cr = abs(gwN(vGW.xz * .55 + 11.) - .5);
+            c *= 1. - wear * .22 * step(.62, gwN(vGW.xz * .05 + 2.)) * (1. - smoothstep(.0, .01, cr)) * det;   // sealed cracks (in the worn places)
+            c *= 1. - .08 * (1. - smoothstep(0., .5, vRd.w - abs(q.x)));                     // the edge, darker
+          }
+          diffuseColor.rgb = c;
+        }`);
+  };
+  m.customProgramCacheKey = () => 'pgh-road-surface-1';
+  return m;
+}
+
+/**
+ * The ground: its vertex colour (grass, cut slopes, river bed), and over it the city's land cover (aLandW: how much)
+ * from a texture of codes (js/world/graph-city.js LAND): paved lots and yards, lawns and parks, the woods' floor,
+ * plazas, sand — with a little noise in the edges so they aren't the grid's.
+ */
+function groundMaterial() {
+  const m = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const blank = new THREE.DataTexture(new Uint8Array([1]), 1, 1, THREE.RedFormat); blank.needsUpdate = true;
+  const U = { uLand: { value: blank }, uLandBox: { value: new THREE.Vector4(0, 0, 1, 1) }, uLandOn: { value: 0 } };
+  m.userData.land = U;
+  m.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, U);
+    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aLandW; varying float vLandW; varying vec3 vGW;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLandW = aLandW; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLand; uniform vec4 uLandBox; uniform float uLandOn; varying float vLandW; varying vec3 vGW;\n' + NOISE_GLSL)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        if (uLandOn > .5 && vLandW > .01) {
+          vec2 size = uLandBox.zw - uLandBox.xy;
+          vec2 uv = (vGW.xz - uLandBox.xy) / size + (vec2(gwN(vGW.xz * .21), gwN(vGW.xz * .21 + 19.)) - .5) * 4. / size;
+          float k = floor(texture2D(uLand, uv).r * 255. + .5);
+          float n = gwN(vGW.xz * .35) * .6 + gwN(vGW.xz * 2.3) * .4;
+          vec3 lc = vec3(-1.);
+          if (k < .5) lc = mix(vec3(.43, .42, .4), vec3(.52, .5, .47), n);                   // paved: lots, yards of the works
+          else if (k < 1.5) lc = mix(vec3(.38, .52, .24), vec3(.47, .6, .3), n);             // grass, parks
+          else if (k < 2.5) lc = mix(vec3(.25, .3, .17), vec3(.36, .35, .22), n);            // the woods' floor
+          else if (k < 4.5 && k > 3.5) lc = vec3(.42, .4, .36);                               // under a building
+          else if (k < 5.5 && k > 4.5) lc = vec3(.66, .6, .46);                               // sand, bare rock
+          else if (k < 6.5 && k > 5.5) lc = mix(vec3(.62, .59, .54), vec3(.68, .65, .6), n);  // plaza
+          else if (k < 7.5 && k > 6.5) lc = mix(vec3(.3, .42, .22), vec3(.38, .44, .25), n);  // beyond: suburbs and hills
+          else if (k > 7.5) lc = mix(vec3(.4, .54, .27), vec3(.5, .58, .33), n);             // yards: lawns
+          if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vLandW * .85);
+        }`);
+  };
+  m.customProgramCacheKey = () => 'pgh-ground-land-1';
+  return m;
 }

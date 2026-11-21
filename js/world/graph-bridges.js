@@ -28,7 +28,7 @@ const shade = (c, f) => new THREE.Color(c).multiplyScalar(f);
 
 export function buildGraphBridges(world, json) {
   const M = new MeshBuilder();
-  const glows = [], mask = new Map(), proj = world.proj;
+  const glows = [], mask = new Map(), proj = world.proj, qc = [], qcPier = [];
   const G = world.G, edges = G.edges;
   const groundH = (x, z) => world._groundH(x, z), pool = (x, z) => world.poolAt(x, z);
 
@@ -47,7 +47,7 @@ export function buildGraphBridges(world, json) {
     }
     return out;
   };
-  const halfOf = (e) => (world.widths[e.kind] || 7) / 2;
+  const halfOf = (e) => (world.wOf ? world.wOf(e) : world.widths[e.kind] || 7) / 2;
   /** Is a way (not the bridge's own deck: `own` edges) within r of (x, z) at the ground there (a pier would stand on it)? */
   const wayAt = (x, z, r, own, yTop) => near(x, z, r + 6).some(({ e, i }) => !own.has(e.id) && e.ele[i] < yTop - 3 && Math.hypot(e.x[i] - x, e.z[i] - z) < r + halfOf(e) + 1);
   const markMask = (e, i, bits) => { let m = mask.get(e.id); if (!m) mask.set(e.id, (m = new Uint8Array(e.n + 1))); m[i] |= bits; };
@@ -60,7 +60,7 @@ export function buildGraphBridges(world, json) {
     for (const e of edges) if (names.has(e.name) && e.bridges.length) for (const [a, z] of e.bridges) ownRuns.push({ e, a, z, L: (z - a) * 10 });
     ownRuns.sort((p, q) => q.L - p.L);
     const osm = b.path.map(([la, lo]) => proj.toLocal(la, lo));
-    let pts, ridden = null, own = new Set();
+    let pts, ridden = null, own = new Set();   // (ridden: reassigned below when a ridden way runs along the middle)
     const riddenRoad = ownRuns.find((r) => r.e.kind !== 'path' || b.width <= 6);
     if (riddenRoad && osm.length >= 2) {
       // the run nearest OSM's line (40th Street: the river run, not its rail viaduct)
@@ -80,9 +80,9 @@ export function buildGraphBridges(world, json) {
     const at = (s) => { const p = path.at(s); const f = V(p.dx, 0, p.dz).normalize(); return { p: V(p.x, p.y, p.z), f, r: V(-f.z, 0, f.x) }; };
 
     // scenery: heights from any ridden deck beside it (a walkway on it), else from its ends' ground and clear of the river
-    const beside = [];
+    const beside = [], cand = [];
     if (!ridden) {
-      const ys = S.map((s) => {
+      const ys0 = S.map((s) => {
         const { p, r } = at(s);
         let best = null;
         for (const { e, i } of near(p.x, p.z, 26)) {
@@ -94,9 +94,32 @@ export function buildGraphBridges(world, json) {
           if (Math.abs((ex * r.z * -1 + ez * r.x) / el) < 0.85) continue;
           if (!best || Math.abs(v) < Math.abs(best.v)) best = { v, y: e.ele[i], e };
         }
-        if (best) { beside.push(best); own.add(best.e.id); }
+        if (best) cand.push({ ...best, s });
         return best ? best.y : NaN;
       });
+      // a ridden deck counts as part of this bridge (its walkway: its heights, and the model keeps clear of it) when it
+      // carries the bridge's name, or runs along it for 120 m or more over the river; others (a street on a ramp
+      // beside an approach) are only ways to keep clear of
+      const wetAt = (s) => { const p = path.at(s); return pool(p.x, p.z) - groundH(p.x, p.z) > 0.5; };
+      const byEdge = new Map(); for (const c of cand) { if (!byEdge.has(c.e.id)) byEdge.set(c.e.id, []); byEdge.get(c.e.id).push(c); }
+      const keep = new Set();
+      for (const [id, list] of byEdge) {
+        const e = list[0].e, wetRun = list.filter((c) => wetAt(c.s)).length * (path.length / N);
+        if (names.has(e.name) || wetRun >= 120) keep.add(id);
+      }
+      const ys = ys0.map((y, k) => { const c = cand.find((q) => q.s === S[k]); return c && keep.has(c.e.id) ? y : NaN; });
+      for (const c of cand) if (keep.has(c.e.id)) { beside.push(c); own.add(c.e.id); }
+      // the walkway is the truth: the model slides sideways so it sits outside the structure (OSM's offsets are rough)
+      if (beside.length) {
+        const vs = beside.map((c) => c.v).sort((a, b) => a - b), v = vs[vs.length >> 1], half = halfOf(beside[0].e);
+        const need = b.width / 2 + 1.05 + half;
+        if (Math.abs(v) < 3) ridden = { e: beside[0].e, a: 0, z: 0, along: true };   // (the ridden way IS the bridge's roadway, under another name)
+        else if (Math.abs(v) < need) {
+          const shift = v - Math.sign(v || 1) * need;   // move the spine by this along r
+          path = makePath(path.pts.map((p, k) => { const f = path.at(Math.min(path.length, path.d[k])); const rx = -f.dz, rz = f.dx; return { x: p.x + rx * shift, y: p.y, z: p.z + rz * shift }; }));
+          for (const c of beside) c.v -= shift;
+        }
+      }
       const g0 = groundH(path.pts[0].x, path.pts[0].z), g1 = groundH(path.pts.at(-1).x, path.pts.at(-1).z);
       const clear = b.rail ? 14 : 12;
       for (let k = 0; k <= N; k++) {
@@ -142,18 +165,41 @@ export function buildGraphBridges(world, json) {
     const hw = ridden ? halfOf(ridden.e) : b.width / 2;
     const ctx = { b, at, len, w0, w1, hw, ridden, own, beside, bedAt, path };
     // the structure's planes either side: outside the roadway, and not through a ridden walkway beside it
+    // how far the model's roadway may reach on a side at s: short of a ridden walkway there
+    ctx.limit = (s, side) => { let m = ctx.planeAt && ctx.planeAt[side] < hw + 0.9 ? ctx.planeAt[side] - 0.9 : Infinity; for (const x of beside) if (!(ridden?.along && x.e === ridden.e) && Math.sign(x.v) === side && Math.abs(x.s - s) < 6) m = Math.min(m, Math.abs(x.v) - halfOf(x.e) - 0.3); return m; };
+    // the structure's planes either side: outside the roadway, and never through a ridden walkway beside it — between
+    // the roadway and the walkway where there's room, else outside the walkway (it runs inside, like a sidewalk)
     ctx.plane = (want) => {
       let L = want, R = want;
-      for (const sd of beside) {
-        const half = halfOf(sd.e), inner = Math.abs(sd.v) - half - 0.9, outer = Math.abs(sd.v) + half + 1.0;
-        const pick = inner >= hw + 0.4 ? inner : outer;
-        if (sd.v > 0) R = Math.abs(sd.v) - half < want + 0.8 ? pick : R; else L = Math.abs(sd.v) - half < want + 0.8 ? pick : L;
+      for (const side of [-1, 1]) {
+        const xs = beside.filter((x) => Math.sign(x.v) === side && x.s > w0 + 5 && x.s < w1 - 5 && !(ridden?.along && x.e === ridden.e)); if (!xs.length) continue;
+        const half = halfOf(xs[0].e);
+        let innerMin = Infinity, outerMax = 0; for (const x of xs) { innerMin = Math.min(innerMin, Math.abs(x.v) - half); outerMax = Math.max(outerMax, Math.abs(x.v) + half); }
+        let p = want;
+        if (innerMin < want + 1.2 && outerMax > want - 1.2) {
+          // between the roadway and the walkway where there's room; outside the walkway if that doesn't make the
+          // structure much wider; else between them anyway, the roadway narrowed to keep clear of it
+          p = innerMin - 1.2 >= hw + 0.3 || (outerMax + 1.2 > want + 6 && innerMin - 1.2 >= 3) ? innerMin - 1.2 : outerMax + 1.2;
+        }
+        if (side > 0) R = p; else L = p;
       }
+      ctx.planeAt = { [-1]: L, [1]: R };
       return { L: -L, R };
     };
 
     const S0 = STYLES[b.style] || STYLES.girder;
     const extent = S0(ctx);
+    // for the clipping QC (tools/pgh_bridge_clip.mjs): the model's roadway and planes against the ridden decks beside it
+    const pl = ctx.plane(hw + 0.6);
+    // clashes: a ridden walkway's samples (within the structure's span) under the model's roadway or through its planes
+    const [q0, q1] = extent || [0, len], clash = [];
+    if (!ridden || !ridden.along) for (const x of beside) {
+      if (x.s < q0 || x.s > q1) continue;
+      const half = halfOf(x.e), inner = Math.abs(x.v) - half, outer = Math.abs(x.v) + half, plane = Math.abs(x.v > 0 ? pl.R : pl.L);
+      const road = ridden ? 0 : Math.max(0, Math.min(hw, ctx.limit(x.s, Math.sign(x.v)))) - 0.05;
+      if (inner < road || (x.s > w0 + 5 && x.s < w1 - 5 && inner < plane + 0.5 && outer > plane - 0.5)) clash.push(Math.round(x.s));
+    }
+    qc.push({ name: b.name, style: b.style, ridden: !!ridden, hw, planes: [pl.L, pl.R], clash, beside: [...new Map(beside.map((x) => [x.e.id, x])).values()].map((x) => ({ id: x.e.id, name: x.e.name, kind: x.e.kind })) });
     // the world leaves out its plain piers (and a ridden road's parapets) where the model stands
     const [e0, e1] = extent || [0, len];
     for (const id of own) {
@@ -225,6 +271,13 @@ export function buildGraphBridges(world, json) {
   function pier(c, s, vL, vR, yTop, { al = 6, stone = true, cut = 3.5, coping = true } = {}) {
     const { p, r, f } = c.at(s), bed = c.bedAt(p), wet = pool(p.x, p.z) > groundH(p.x, p.z);
     if (yTop - bed < 1) return;
+    // never on a ridden way (not the bridge's own deck): a pier on land over a trail or a street isn't drawn
+    { const mid0 = (vL + vR) / 2, half0 = (vR - vL) / 2 + 1, q0 = p.clone().addScaledVector(r, mid0);
+      for (const { e, i } of near(q0.x, q0.z, half0 + 12)) {
+        if (c.own.has(e.id) || e._deck[i] || e.ele[i] > yTop - 2) continue;
+        const dx = e.x[i] - q0.x, dz = e.z[i] - q0.z, along = Math.abs(dx * f.x + dz * f.z), across = Math.abs(dx * r.x + dz * r.z);
+        if (along < al / 2 + halfOf(e) + 1 && across < half0 + halfOf(e)) { qcPier.push({ bridge: c.b.name, way: e.name || e.id }); return; }
+      } }
     const col = stone ? STONE : CONCRETE, yaw = Math.atan2(f.x, f.z), mid = (vL + vR) / 2, half = (vR - vL) / 2;
     const q = p.clone().addScaledVector(r, mid);
     M.color(col); M.box(q.x, bed, q.z, half * 2, yTop - bed, al, yaw);
@@ -267,15 +320,18 @@ export function buildGraphBridges(world, json) {
   /** A scenery roadway (PGH doesn't ride it): asphalt, kerbed sidewalks, a parapet, the slab under it. */
   function roadway(c, s0, s1, { rail = false, walk = 1.8, slab = 1.2 } = {}) {
     const hw = c.hw;
-    sweep(c, s0, s1, rect(-hw, hw, -slab, 0), (j) => (j === 2 ? (rail ? '#6b6259' : ASPHALT) : shade(CONCRETE, 0.85)), { caps: false });
+    const lim = (s, sd) => Math.max(0, Math.min(hw, c.limit(s, sd)));
+    sweep(c, s0, s1, (s) => { const l = lim(s, -1), r = lim(s, 1); return [[-l, -slab], [r, -slab], [r, 0], [-l, 0]]; }, (j) => (j === 2 ? (rail ? '#6b6259' : ASPHALT) : shade(CONCRETE, 0.85)), { caps: false });
     if (rail) {
       for (const v of [-0.75, 0.75]) for (const g of [-0.72, 0.72]) sweep(c, s0, s1, rect(v + g - 0.04, v + g + 0.04, 0, 0.18), '#58534d', { step: 8, caps: false });
     } else {
       for (const sd of [-1, 1]) {
-        const v0 = sd > 0 ? hw : -hw - walk, v1 = sd > 0 ? hw + walk : -hw;
-        sweep(c, s0, s1, rect(v0, v1, -0.4, 0.2), WALK, { caps: false });
-        const vb = sd > 0 ? hw + walk : -hw - walk;
-        sweep(c, s0, s1, rect(vb - (sd > 0 ? 0.35 : 0), vb + (sd > 0 ? 0 : 0.35), 0.2, 1.15), shade(CONCRETE, 1.05), { step: 6, caps: false });
+        // (not where a ridden walkway is: it is the walk there)
+        const open = (s) => c.limit(s, sd) > hw + walk + 0.4;
+        const fold = (s, pts) => (open(s) ? pts : pts.map(([v]) => [sd * hw, 0]));
+        sweep(c, s0, s1, (s) => fold(s, rect(sd > 0 ? hw : -hw - walk, sd > 0 ? hw + walk : -hw, -0.4, 0.2)()), WALK, { caps: false });
+        // the parapet: at the walk's outer edge; where a ridden walkway runs beside the roadway, a barrier between them
+        sweep(c, s0, s1, (s) => { const vb = open(s) ? sd * (hw + walk) : sd * lim(s, sd); return rect(vb - (sd > 0 ? 0.35 : 0), vb + (sd > 0 ? 0 : 0.35), open(s) ? 0.2 : 0, 1.1)(); }, shade(CONCRETE, 1.05), { step: 4, caps: false });
       }
     }
     // centre line on a road
@@ -683,5 +739,5 @@ export function buildGraphBridges(world, json) {
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0.22, side: THREE.DoubleSide });
   const group = new THREE.Group(); group.name = 'PGH bridges';
   if (M.count) { const mesh = new THREE.Mesh(M.geometry(), mat); mesh.name = 'PGH bridge models'; mesh.castShadow = mesh.receiveShadow = true; group.add(mesh); }
-  return { group, glows, mask, count, dispose() { for (const m of group.children) m.geometry.dispose(); mat.dispose(); } };
+  return { group, glows, mask, count, qc, qcPier, dispose() { for (const m of group.children) m.geometry.dispose(); mat.dispose(); } };
 }

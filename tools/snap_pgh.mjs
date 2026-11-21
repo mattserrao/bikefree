@@ -20,7 +20,8 @@ const opt = (k, d) => { const i = args.indexOf(k); if (i < 0) return d; const v 
 const flag = (k) => { const i = args.indexOf(k); if (i < 0) return false; args.splice(i, 1); return true; };
 const software = flag('--software');
 const [width, height] = opt('--size', '1280x720').split('x').map(Number);
-const view = opt('--view', null);   // "<back>,<up>": an overview camera this far behind and above the rider
+const view = opt('--view', null);
+const evalJs = opt('--eval', null);   // run in the page after the frame (the world as `w`, THREE as `T`): its result is printed   // "<back>,<up>": an overview camera this far behind and above the rider
 const time = opt('--time', 'midday'), out = opt('--out', 'tools/snapshots'), graph = opt('--graph', 'routes/cities/pgh.json');
 const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/chromium'].find(existsSync));
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.gz': 'application/octet-stream', '.png': 'image/png', '.jpg': 'image/jpeg' };
@@ -65,6 +66,7 @@ for (const spec of args) {
     const up = window.route.netRide.upcoming(w.p);
     return { bridges: `${w._bridgesState} ${w.bridges?.count ?? ''}`, calls: i.calls, triangles: i.triangles, tiles: [...w.tiles.values()].filter((t) => t.built).length, next: `${up.node.name} in ${Math.round(up.distTo)} m: ${up.options.map((o) => o.label).join(' / ')}` };
   }, [view, cam]);
+  if (evalJs) console.log('  eval:', JSON.stringify(await page.evaluate(async (code) => { const w = window.world; const T = await import('/vendor/three.module.min.js'); return eval(code); }, evalJs)));
   const file = resolve(ROOT, out, `pgh-${name}${view || cam ? '-view' : ''}.png`);
   await page.screenshot({ path: file });
   console.log(`${name}: bridges ${stats.bridges}, ${stats.calls} draw calls, ${(stats.triangles / 1e6).toFixed(2)} M triangles, ${stats.tiles} tiles · next ${stats.next} · ${((Date.now() - t0) / 1000).toFixed(1)} s → ${file.slice(ROOT.length)}${errors.length ? `\n  errors: ${errors.slice(0, 3).join(' | ')}` : ''}`);

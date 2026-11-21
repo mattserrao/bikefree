@@ -36,6 +36,8 @@ export async function buildGraphHeroes(world, json) {
     decoded: { proj }, level: pool(), landmarks: [], routeBridges: [],
     heightAt: H, terrainAt: H,
     waterAt: (x, z) => (H(x, z) < world.poolAt(x, z) ? 1 : 0),
+    // a PGH way within r of (x, z) (its edge): monuments and dressing keep off the ways
+    wayNear: (x, z, r = 1) => { const g = world.cut, c = g.cell, k = Math.ceil((r + 8) / c); for (let i = -k; i <= k; i++) for (let j = -k; j <= k; j++) { const a = g.grid.get(`${Math.floor(x / c) + i},${Math.floor(z / c) + j}`); if (!a) continue; for (let q = 0; q < a.length; q += 5) if (Math.hypot(a[q] - x, a[q + 1] - z) - a[q + 3] < r) return true; } return false; },
     routeDist: () => 1e9, streetsNear: () => [], onStreet: () => false, inRouteTube: () => false, sheltered: () => false,
   };
   // the footprints round the heroes, as the city decodes them
@@ -49,6 +51,12 @@ export async function buildGraphHeroes(world, json) {
   for (const b of host.buildings) for (let gx = Math.floor(b.bb[0] / 40); gx <= Math.floor(b.bb[1] / 40); gx++) for (let gz = Math.floor(b.bb[2] / 40); gz <= Math.floor(b.bb[3] / 40); gz++) {
     const key = `${gx},${gz}`; if (!host.buildingGrid.has(key)) host.buildingGrid.set(key, []); host.buildingGrid.get(key).push(b);
   }
+  // the windows' night light, softer than the city scenes' (PGH's exposure is higher and there's no bloom: the lit
+  // windows burnt out white)
+  host.windowNight = { value: 0 };
+  // the city's facades (brick, stone, metal, window frames, sills) as the Pittsburgh map draws them: they come with a
+  // building kit in the scene (js/world/graph-city.js plans PGH's homes with it)
+  host.route.scene.buildingKit = { detailM: 150, dressingM: 80, styles: [{ preset: 'pittsburgh-rowhouse', kinds: ['rowhouse'] }, { preset: 'pittsburgh-frame', kinds: ['house'] }] };
   host._materials();
   const heroes = buildHeroes(host);
   let landmarks = { count: 0, tick() {} };
@@ -57,10 +65,10 @@ export async function buildGraphHeroes(world, json) {
   const claimed = host.buildings.filter((b) => b.hero);
   return {
     claimed,
-    group: host.group, heroes, landmarks,
+    group: host.group, heroes, landmarks, host, json,
     addGlows: (list, name) => host.addGlows(list, name),
     tick(time, dt) { host.uniforms.uTime.value = time; heroes.tick?.(time, dt); landmarks.tick(time); },
-    setNight(v) { host.night.value = v; for (const m of host.nightOnly || []) m.visible = v > 0.01; heroes.setNight?.(v); },
+    setNight(v) { host.night.value = v; host.windowNight.value = v * 0.45; for (const m of host.nightOnly || []) m.visible = v > 0.01; heroes.setNight?.(v); },
     dispose() { host.group.removeFromParent(); for (const d of host.disposables) d.dispose?.(); },
   };
 }

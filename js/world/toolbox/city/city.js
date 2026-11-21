@@ -364,7 +364,7 @@ export class CityScene {
     const facades = !!this.route.scene?.buildingKit && this.route.scene.buildingKit.cityFacades !== false;
     const bm = this.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .86, metalness: .02 }));
     bm.onBeforeCompile = (shader) => {
-      shader.uniforms.uNight = night; shader.uniforms.uSkyTop = U.uSkyTop;
+      shader.uniforms.uNight = this.windowNight || night; shader.uniforms.uSkyTop = U.uSkyTop;   // (windowNight: a host's own, softer window light — js/world/graph-heroes.js)
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', '#include <common>\nattribute vec4 aBld; varying vec4 vBld; varying vec3 vWPos; varying vec3 vWNorm;')
         .replace('#include <fog_vertex>', '#include <fog_vertex>\nvBld = aBld; vWPos = (modelMatrix * vec4(transformed, 1.)).xyz; vWNorm = normalize(mat3(modelMatrix) * objectNormal);');
