@@ -12,7 +12,7 @@ const args = process.argv.slice(2);
 const out = resolve(root, args.includes('--out') ? args[args.indexOf('--out') + 1] : 'tools/.cache/pgh-review-map');
 const load = (f) => { try { return JSON.parse(readFileSync(resolve(root, f), 'utf8')); } catch { return []; } };
 const PGH = load('routes/cities/pgh.json'), ROUTES = load('tools/.cache/pgh-routes.json'), MARKS = load('tools/.cache/pgh-landmarks.json');
-const JUNC = load('tools/.cache/pgh-junctions.json'), CROSS = load('tools/.cache/pgh-crossings.json'), BANK = load('tools/.cache/pgh-riverbank-drawn.json');
+const JUNC = load('tools/.cache/pgh-junctions.json'), CROSS = load('tools/.cache/pgh-crossings.json'), BANK = load('tools/.cache/pgh-riverbank-drawn.json'), STUBS = load('tools/.cache/pgh-stubs.json');
 const USE = routeUse(PGH, ROUTES.map((r) => r.line));
 const lat0 = 40.44, lon0 = -79.98, kx = 111320 * Math.cos((lat0 * Math.PI) / 180), ky = 110540;
 const P = ([la, lo]) => [Math.round((lo - lon0) * kx), Math.round((la - lat0) * ky)];
@@ -23,6 +23,7 @@ const data = {
   net: USE.G.edges.map((e) => [USE.use.get(e.id), e.name, e.n * 10, eline(e), e.kind, USE.stub.has(e.id) ? 1 : 0]),
   routes: ROUTES.map((r) => [r.name, r.followPct, Math.round(r.pghM / 100) / 10, enc(r.oldLine), enc(r.line)]),
   marks: MARKS.filter((m) => m.found).map((m) => [m.label, m.type, enc(m.poly), ...P(m.center), m.resolution || '']),
+  stubs: STUBS.map((b) => [b.why, b.m, b.names.join(', '), b.kinds.join(', '), b.root, b.ridden ? 1 : 0, b.onRoute ? 1 : 0, b.fix, b.lines.map(enc), ...P(b.at)]),
   bank: (BANK.spots || []).map((b) => [...P([b.lat, b.lon]), b.cls.join(','), b.shift, b.bank, b.spread, b.walled.join(', '), b.way ? `${b.way.name} ${b.way.over} m over the pool, ${b.way.gap} m from the shore` : '', b.area]),
   cross: CROSS.map((o) => [o.kind, ...P([o.lat, o.lon]), o.upper, o.upperKind, o.lower, o.dz, o.osm, o.fix, o.ridden ? 1 : 0, byId.get(o.upperId) ? eline(byId.get(o.upperId)) : [], byId.get(o.lowerId) ? eline(byId.get(o.lowerId)) : []]),
   junc: JUNC.map((j) => [j.kind, ...P(j.at), j.msg, j.fix, j.route ? 1 : 0, j.edges.map((id) => eline(byId.get(id))), j.cut ? j.edges.indexOf(j.cut) : -1,
@@ -50,13 +51,13 @@ select{width:100%;margin:2px 0 4px;font:inherit;padding:3px;border-radius:6px;bo
 #tog{position:fixed;right:10px;top:10px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 10px;font:inherit;color:var(--fg)}
 </style></head><body>
 <canvas id="c"></canvas>
-<div class="panel" id="panel"><h1>PGH — road network review</h1><div class="sub">The network as it is now. Coloured dots: junctions still worth tidying; red diamonds: overpasses not right (none now). Tap anything marked. More layers in the list. Blue = ridden by a route, grey = the rest (dashed = dead end).</div><div id="legend"></div></div>
+<div class="panel" id="panel"><h1>PGH — road network review</h1><div class="sub">Stubs: every branch that hangs off the network (red = left by the trim, orange = real dead ends, green = a route rides it). Tap one. Junction ideas and other layers are in the list. Blue = ridden by a route, grey = the rest (dashed = dead end).</div><div id="legend"></div></div>
 <button id="tog">Layers</button>
 <div id="info"></div>
 <script>
-const COL={xok:'#12a150',xbad:'#e0332f',ridden:'#1673e6',road:'#9aa1ab',rold:'#e0332f',rnew:'#1673e6',mark:'#12a150',short:'#e0332f',cluster:'#7a3fe0',acute:'#f08a00',busy:'#d6249f',triangle:'#0aa5c2',cut:'#f08a00'};
+const COL={st_trimmed:'#e0332f',st_osm:'#f08a00',st_ridden:'#12a150',xok:'#12a150',xbad:'#e0332f',ridden:'#1673e6',road:'#9aa1ab',rold:'#e0332f',rnew:'#1673e6',mark:'#12a150',short:'#e0332f',cluster:'#7a3fe0',acute:'#f08a00',busy:'#d6249f',triangle:'#0aa5c2',cut:'#f08a00'};
 const KINDS=[['short','Short links','under 25 m between junctions: merge them'],['cluster','Clusters','3+ junctions within 40 m: collapse to one'],['acute','Sharp forks','ways under 25° apart: drop the minor'],['busy','Busy junctions','5+ ways: drop minor ways to 4'],['triangle','Small triangles','under 200 m round: drop the minor side']];
-const on={bank:false,xok:false,xbad:true,net:true,routes:false,marks:false,short:true,cluster:true,acute:true,busy:true,triangle:true};
+const on={st_trimmed:true,st_osm:true,st_ridden:true,bank:false,xok:false,xbad:true,net:true,routes:false,marks:false,short:false,cluster:false,acute:false,busy:false,triangle:false};
 let D, cam={x:0,y:0,s:0.08}, sel=null, cur=-1;
 const c=document.getElementById('c'), g=c.getContext('2d');
 const lines=(a)=>{ const o=new Float32Array(a.length); let x=0,y=0; for(let i=0;i<a.length;i+=2){ x+=a[i]; y+=a[i+1]; o[i]=x; o[i+1]=y; } return o; };
@@ -66,6 +67,7 @@ fetch('data.json').then(r=>r.json()).then(d=>{
   D.N=d.net.map(w=>{ const r={u:w[0],name:w[1],L:w[2],p:lines(w[3]),kind:w[4],stub:!!w[5]}; r.bb=bbx(r.p); return r; });
   D.RT=d.routes.map(r=>({name:r[0],follow:r[1],km:r[2],old:lines(r[3]),line:lines(r[4])}));
   D.M=d.marks.map(m=>({label:m[0],type:m[1],poly:lines(m[2]),x:m[3],y:m[4],res:m[5]}));
+  D.S=(d.stubs||[]).map(s=>{ const r={why:s[0],m:s[1],names:s[2],kinds:s[3],root:s[4],ridden:!!s[5],onRoute:!!s[6],fix:s[7],ls:s[8].map(lines),x:s[9],y:s[10],isStub:true}; r.bb=bbx(r.ls.reduce((a,l)=>{const o=new Float32Array(a.length+l.length);o.set(a);o.set(l,a.length);return o;},new Float32Array(0))); r.k=r.ridden?'st_ridden':'st_'+(r.why==='trimmed'?'trimmed':'osm'); return r; });
   D.B=(d.bank||[]).map(b=>({x:b[0],y:b[1],cls:b[2]?b[2].split(','):[],shift:b[3],bank:b[4],spread:b[5],walled:b[6],way:b[7],area:b[8],isBank:true}));
   D.X=(d.cross||[]).map(x=>({kind:x[0],x:x[1],y:x[2],up:x[3],upk:x[4],lo:x[5],dz:x[6],osm:x[7],fix:x[8],route:!!x[9],ls:[lines(x[10]),lines(x[11])],cut:-1,cutp:null,cross:true}));
   D.J=d.junc.map(j=>({kind:j[0],x:j[1],y:j[2],msg:j[3],fix:j[4],route:!!j[5],ls:j[6].map(lines),cut:j[7],cutp:j[8]?lines(j[8]):null}));
@@ -76,7 +78,9 @@ function legend(){
   const row=(k,t,col,l,n)=>'<label class="lg"><input type="checkbox" data-k="'+k+'" '+(on[k]?'checked':'')+'><span class="'+t+'" style="background:'+col+'"></span><span>'+l+'</span><span class="n">'+n+'</span></label>';
   const bad=D.X.filter(x=>x.kind!=='ok');
   const bc=(c)=>D.B.filter(b=>b.cls.includes(c)).length;
-  let h='<div class="grp">Riverbank (every 20 m of real shore)</div>'+row('bank','dot','#7a3fe0','<b>Shore as drawn</b> <span class="n" style="margin:0;white-space:normal">purple = OSM wall still drawn as a slope · yellow = low bank · grey = fine</span>',D.B.length+' · '+bc('walled-smeared')+' / '+bc('low-bank'));
+  const sk=(k)=>{ const l=D.S.filter(s=>s.k===k); return l.length+' · '+(l.reduce((a,s)=>a+s.m,0)/1000).toFixed(1)+' km'; };
+  let h='<div class="grp">Stubs (branches hanging off the network)</div>'+row('st_trimmed','sw',COL.st_trimmed,'<b>Left by the trim</b> <span class="n" style="margin:0;white-space:normal">side streets whose far end went with the unused ways</span>',sk('st_trimmed'))+row('st_osm','sw',COL.st_osm,'<b>Real dead ends</b> <span class="n" style="margin:0;white-space:normal">cul-de-sacs, trail ends, driveways</span>',sk('st_osm'))+row('st_ridden','sw',COL.st_ridden,'<b>A route rides it</b> <span class="n" style="margin:0;white-space:normal">keep (a turnaround)</span>',sk('st_ridden'));
+  h+='<div class="grp">Riverbank (every 20 m of real shore)</div>'+row('bank','dot','#7a3fe0','<b>Shore as drawn</b> <span class="n" style="margin:0;white-space:normal">purple = OSM wall still drawn as a slope · yellow = low bank · grey = fine</span>',D.B.length+' · '+bc('walled-smeared')+' / '+bc('low-bank'));
   h+='<div class="grp">Overpasses &amp; underpasses</div>'+row('xbad','dot',COL.xbad,'<b>Not right</b> <span class="n" style="margin:0;white-space:normal">'+[...new Set(bad.map(x=>x.kind))].join(', ')+'</span>',bad.length+'')+row('xok','dot',COL.xok,'<b>Correct</b> <span class="n" style="margin:0;white-space:normal">a deck ≥ 4.5 m over the way under it</span>',D.X.length-bad.length+'');
   h+='<div class="grp">Junction ideas</div>'+KINDS.map(([k,l,f])=>{ const L=D.J.filter(j=>j.kind===k); return row(k,'dot',COL[k],'<b>'+l+'</b> <span class="n" style="margin:0;white-space:normal">'+f+'</span>', L.length+''); }).join('');
   h+='<div class="grp">Map</div>'+row('net','sw',COL.ridden,'PGH ('+D.N.length+' ways)',kmOf(()=>true)+' km · '+D.N.filter(w=>w.stub).length+' dead ends');
@@ -100,6 +104,7 @@ function draw(){
   const dark=matchMedia('(prefers-color-scheme:dark)').matches; g.fillStyle=dark?'#15171a':'#f6f5f1'; g.fillRect(0,0,innerWidth,innerHeight);
   const v=view(), z=Math.max(0.6,Math.min(4,cam.s*12)); g.lineCap='round'; g.lineJoin='round';
   if(on.net){ for(const pass of [1,0]){ g.strokeStyle=pass?COL.road:COL.ridden; g.lineWidth=z*(pass?0.9:1.5); for(const w of D.N) if((w.u===0)!==!!pass&&vis(w.bb,v)){ if(w.stub) g.setLineDash([4,3]); path(w.p); g.setLineDash([]); } } }
+  for(const s of D.S){ if(!on[s.k]||!vis(s.bb,v)) continue; g.strokeStyle=COL[s.k]; g.lineWidth=z*(s===sel?3.4:2.2); for(const l of s.ls) path(l); }
   if(on.routes){ const rs=cur<0?D.RT:[D.RT[cur]]; g.lineWidth=z*3; g.strokeStyle=COL.rold; g.globalAlpha=cur<0?.25:.5; for(const r of rs) path(r.old); g.globalAlpha=cur<0?.5:1; g.lineWidth=z*2; g.strokeStyle=COL.rnew; for(const r of rs) path(r.line); g.globalAlpha=1; }
   if(on.marks) for(const m of D.M){ g.fillStyle=COL.mark+'55'; g.strokeStyle=COL.mark; g.lineWidth=1.2; g.beginPath(); for(let i=0;i<m.poly.length;i+=2){ const X=sx(m.poly[i]),Y=sy(m.poly[i+1]); i?g.lineTo(X,Y):g.moveTo(X,Y);} g.closePath(); g.fill(); g.stroke(); }
   if(sel){ g.globalAlpha=.85; g.lineWidth=z*3; g.strokeStyle=dark?'#fff':'#000'; sel.ls.forEach(path); if(sel.cut>=0||sel.cutp){ g.strokeStyle=COL.cut; g.lineWidth=z*3.4; path(sel.cutp||sel.ls[sel.cut]); } g.globalAlpha=1; }
@@ -111,6 +116,7 @@ function draw(){
 function hit(px,py){
   const x=(px-innerWidth/2)/cam.s+cam.x, y=-(py-innerHeight/2)/cam.s+cam.y; let best=null, bd=14/cam.s;
   for(const [k] of KINDS) if(on[k]) for(const j of D.J) if(j.kind===k){ const d=Math.hypot(j.x-x,j.y-y); if(d<bd){bd=d;best=j;} }
+  { const tol=10/cam.s; for(const s of D.S){ if(!on[s.k]||s.bb[0]-tol>x||s.bb[2]+tol<x||s.bb[1]-tol>y||s.bb[3]+tol<y) continue; for(const l of s.ls) for(let i=2;i<l.length;i+=2){ const ax=l[i-2],ay=l[i-1],bx=l[i],by=l[i+1],dx=bx-ax,dy=by-ay,t=Math.max(0,Math.min(1,((x-ax)*dx+(y-ay)*dy)/(dx*dx+dy*dy||1))),d=Math.hypot(ax+dx*t-x,ay+dy*t-y); if(d<bd){bd=d;best=s;} } } }
   if(on.bank) for(const o of D.B){ const d=Math.hypot(o.x-x,o.y-y); if(d<bd){bd=d;best=o;} }
   for(const o of D.X) if(on[o.kind==='ok'?'xok':'xbad']){ const d=Math.hypot(o.x-x,o.y-y); if(d<bd){bd=d;best=o;} }
   return best;
@@ -118,6 +124,7 @@ function hit(px,py){
 function show(j){
   const el=document.getElementById('info'); sel=j||null;
   if(!j){ el.style.display='none'; draw(); return; }
+  if(j.isStub){ el.innerHTML='<b>Stub: '+j.names+' — '+j.m+' m</b><span class="m">'+({trimmed:'Left by the trim (its far end went with the unused ways)',osm:'A real dead end'})[j.why]+' · hangs off '+(j.root||'—')+(j.onRoute?' (a junction on a route)':'')+' · '+j.kinds+'</span><div class="fix">Suggest: '+j.fix+'</div>'; el.style.display='block'; sel=j; draw(); return; }
   if(j.isBank){ const nm={'walled-smeared':'Walled bank drawn as a slope',flooded:'Land drawn under water','land-in-river':'Land drawn in the river','low-bank':'Low muddy bank','way-on-slope':'A way on the bank slope'};
     el.innerHTML='<b>'+j.area+' — '+(j.cls.length?j.cls.map(c=>nm[c]).join(' · '):'fine')+'</b><span class="m">Bank '+j.bank+' m over the pool, reached over '+j.spread+' m'+(j.walled?' · OSM: '+j.walled:'')+(j.way?' · '+j.way:'')+'</span>'; el.style.display='block'; sel={ls:[]}; draw(); return; }
   if(j.cross){ const nm={ok:'Overpass — correct',low:'Overpass — low clearance','no-deck':'Overpass — deck too short',clash:'Overpass — rider hits the deck',level:'Ways cross with no junction',tunnel:'Underpass drawn open',kink:'Junction kink'}[j.kind];
