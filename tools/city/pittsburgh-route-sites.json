@@ -1,5 +1,5 @@
 {
- "note": "The 25 Pittsburgh route sites where the most city roads meet or crowd a bike route (busiest-crossings audit, 20 Nov 2026; ranked by roads within 20 m of the path). Used by tools/repair_city.mjs rules route-stub, route-service, route-leftover, route-copy: they act only on streets within r m of a site. lat/lon WGS84. decks: true marks sites where rule route-deck acts (low city decks at the route; user, 20 Nov).",
+ "note": "The 25 Pittsburgh route sites where the most city roads meet or crowd a bike route (busiest-crossings audit, 20 Nov 2026; ranked by roads within 20 m of the path). Used by tools/repair_city.mjs rules route-stub, route-service, route-leftover, route-copy: they act only on streets within r m of a site. lat/lon WGS84. decks: true marks sites where rule route-deck acts (low city decks at the route; user, 20 Nov). prune: {r, highwayR} marks sites where rule route-prune acts (#21 West End Bridge, user 20 Nov: one road over the bridge, Route 51 removed near the circle, divided roads merged, ramps and links dropped).",
  "sites": [
   {
    "n": 1,
@@ -170,7 +170,11 @@
    "lat": 40.444261,
    "lon": -80.028316,
    "r": 90,
-   "decks": true
+   "decks": true,
+   "prune": {
+    "r": 300,
+    "highwayR": 400
+   }
   },
   {
    "n": 22,

@@ -1,8 +1,8 @@
 {
  "pittsburgh": {
   "stub": 9,
-  "near-miss": 12,
   "height-step": 3,
+  "near-miss": 14,
   "dead-end": 9,
   "deck-end": 2,
   "end-step": 2,
@@ -18,8 +18,8 @@
  },
  "pittsburgh-westend": {
   "bump": 1,
-  "near-miss": 2,
   "height-step": 3,
+  "near-miss": 4,
   "dead-end": 1,
   "stub": 1
  },

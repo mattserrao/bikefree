@@ -6,7 +6,7 @@
 //   node tools/repair_city.mjs                         every Pittsburgh area
 //   node tools/repair_city.mjs pittsburgh-westend      one area (catalog ids)
 //   options: --dry (report, write nothing)   --near 300 (only ends / pieces within m of the area's route)
-//            --rules interchange,near-miss,stub,dead-end,end-step,deck-end,highways,route-deck,route-stub,route-service,route-leftover,route-copy
+//            --rules interchange,near-miss,stub,dead-end,end-step,deck-end,highways,route-prune,route-deck,route-stub,route-service,route-leftover,route-copy
 //                    (only these rules; default: all)
 //            --json out.json (every repair, what was left and why, the tunnel approaches)
 //
@@ -398,6 +398,76 @@ export function routeSitePass({ streets, city, proj, ground, rides, sites, rules
     return false;
   };
   const scope = (g) => !g.bridge && !ride.has(g.k) && g.pts.some(inZone);
+
+  // [route-prune] sites with a `prune` block (user, 20 Nov, #21 West End Bridge: "only one road over the bridge; prune
+  // the random roads, the double roads"): within prune.r m of the site
+  //   bridge:   city decks drawn along a bridge the route draws itself (≥ half their length beside its road) — dropped
+  //             (footpaths kept: the bridge's sidewalks)
+  //   highways: highway pieces (cls 0) with their middle within prune.highwayR m — dropped (Route 51 at the West End circle)
+  //   ramps:    ramp / link pieces (cls 1) — dropped, even where they overlap a route road
+  //   pairs:    a street drawn twice side by side (the two directions of a divided road, 5–22 m apart, parallel along
+  //             ≥ 60 % of it): the less important / shorter one dropped, and the streets ending on it moved onto the other
+  if (on('route-prune')) {
+    const PZ = sites.filter((s) => s.prune).map((s) => ({ ...proj.toLocal(s.lat, s.lon), ...s.prune }));
+    const inP = (p, key = 'r') => PZ.some((z) => Math.hypot(p.x - z.x, p.z - z.z) <= (z[key] ?? z.r));
+    const mid = (g) => g.pts[Math.floor(g.pts.length / 2)];
+    for (const g of G) {
+      if (drop.has(g.k) || !g.pts.some((p) => inP(p))) continue;
+      if (g.bridge && g.cls <= 5) {
+        const reach = ROAD_WIDTH / 2 + g.w / 2 + 6, S = samples(g, 4);
+        if (S.filter((p) => routeAt(p, reach)).length >= S.length * .5) { drop.add(g.k); log('route-prune', g, `${g.len.toFixed(0)} m city deck along the route's own bridge dropped`); continue; }
+      }
+      if (g.cls === 1) { drop.add(g.k); log('route-prune', g, `${g.len.toFixed(0)} m ramp / link piece dropped`); continue; }
+      if (g.cls === 0 && inP(mid(g), 'highwayR') && !ride.has(g.k)) { drop.add(g.k); log('route-prune', g, `${g.len.toFixed(0)} m highway piece near the site dropped`); continue; }
+    }
+    // decks that crossed a highway dropped here (an overpass over nothing now): laid on the ground — unless the overpass
+    // also spans a street that stays
+    const gone = G.filter((h) => drop.has(h.k) && h.cls === 0);
+    const crosses = (g, hs) => hs.some((h) => { for (let i = 1; i < g.pts.length; i++) for (let j = 1; j < h.pts.length; j++) {
+      const a = g.pts[i - 1], b = g.pts[i], c = h.pts[j - 1], d = h.pts[j];
+      const o = (p, q, r) => Math.sign((q.x - p.x) * (r.z - p.z) - (q.z - p.z) * (r.x - p.x));
+      if (o(a, b, c) !== o(a, b, d) && o(c, d, a) !== o(c, d, b)) return true; } return false; });
+    const under = G.filter((h) => !h.bridge && !drop.has(h.k) && h.cls <= 7);
+    for (const g of G) {
+      if (!g.bridge || g.cls < 2 || g.cls > 7 || drop.has(g.k) || !g.pts.some((p) => inP(p)) || !crosses(g, gone)) continue;
+      // the whole overpass: this deck and the decks joined to it end to end
+      const span = [g], seen = new Set([g.k]);
+      for (let q = 0; q < span.length; q++) for (const o of byEnd.get(span[q].k) || []) if (!seen.has(o) && G[o].bridge && !drop.has(o)) { seen.add(o); span.push(G[o]); }
+      for (const e of ends[g.k]) for (const o of e.on) if (!seen.has(o) && G[o].bridge && !drop.has(o)) { seen.add(o); span.push(G[o]); }
+      if (span.some((h) => crosses(h, under))) continue;
+      for (const h of span) { const raw = streets[h.k]; if (!(raw.meta[1] & 1)) continue; raw.meta = [raw.meta[0], raw.meta[1] & ~1, 8]; raw.deck = raw.deck.map(() => 0); log('route-prune', h, `${h.len.toFixed(0)} m overpass over a dropped highway laid on the ground`); }
+    }
+    // pairs: most important first, so the kept one of a pair is never also dropped
+    const cand = G.filter((g) => g.cls >= 2 && g.cls <= 5 && !drop.has(g.k) && g.pts.some((p) => inP(p)));
+    cand.sort((a, b) => b.cls - a.cls || a.len - b.len);   // least important first: they are the ones to go
+    const segNear = (h, p) => { let best = null; for (let i = 1; i < h.pts.length; i++) { const a = h.pts[i - 1], b = h.pts[i], dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz; if (!l2) continue;
+      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / l2)), x = a.x + dx * t, z = a.z + dz * t, d = Math.hypot(x - p.x, z - p.z), l = Math.sqrt(l2);
+      if (!best || d < best.d) best = { d, x, z, hx: dx / l, hz: dz / l }; } return best; };
+    for (const g of cand) {
+      if (drop.has(g.k) || ride.has(g.k)) continue;
+      const S = samples(g, 4); let par = 0; const partners = new Map();
+      for (const p of S) {
+        for (const h of cand) {
+          if (h.k === g.k || drop.has(h.k) || (h.cls > g.cls) || (h.cls === g.cls && h.len < g.len)) continue;
+          const q = segNear(h, p); if (!q || q.d < 5 || q.d > 22 || Math.abs(q.hx * p.hx + q.hz * p.hz) < .9) continue;
+          par += p.l; partners.set(h.k, (partners.get(h.k) || 0) + 1); break;
+        }
+      }
+      if (par < 30 || par < g.len * .6) continue;
+      drop.add(g.k); log('route-prune', g, `${g.len.toFixed(0)} m second carriageway beside ${[...partners.keys()].map((k) => 'k' + k).join(', ')} dropped`);
+      // streets ending on it: their end onto the nearest kept partner
+      const keep = [...partners.keys()].map((k) => G[k]);
+      for (const o of G) {
+        if (o.k === g.k || drop.has(o.k)) continue;
+        for (const j of [0, o.pts.length - 1]) {
+          const e = o.pts[j]; if (!(segNear(g, e)?.d <= 1.5)) continue;
+          let best = null; for (const h of keep) { const q = segNear(h, e); if (q && (!best || q.d < best.d)) best = q; }
+          if (!best || best.d > 30) continue;
+          const xy = moved.get(o.k) || streets[o.k].xy.slice(); xy[j] = quant(best.x, best.z); moved.set(o.k, xy);
+        }
+      }
+    }
+  }
 
   // A/B. route-deck (sites marked decks: true): low city decks at the route — short "bridges" a few metres over the ground
   // that copy the route's own road (it is a ground road there, carved to its own level) are dropped; the others, laid
