@@ -18,6 +18,8 @@ import { loadTerrainGrid } from '../terrain-grid.js';
 import { CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean, ROAD_LIFT } from './pose.js';
 import { loadRider } from './rider.js';
 import { PerfMonitor } from './perf.js';
+import { makeParkMaterial } from './toolbox/materials/park-surfaces.js';
+import { makeMasonryMaterial } from './toolbox/materials/stonework.js';
 
 export const TILE = 400;            // m: a streaming tile
 export const PIECE = 32;            // samples: an edge is cut into pieces of at most this many (320 m) for the tiles
@@ -38,7 +40,8 @@ const FILL_REACH = 25;              // m from a road's edge the fill reaches
 const ABUT_M = 12;                  // m of a deck from its end that stand on an abutment (the ground filled up to under it)
 const BANK_CAP = 22;                // m: a walled bank's promenade, from the wall back
 const BANK_SLOPE = 14;
-const PIER_STEP = 7;                // samples (70 m) between a deck's piers              // m: a natural bank, from the water's edge to its top
+const PIER_STEP = 7;
+const PROM_M = 6;                   // m of granite paving along the top of a river wall                // samples (70 m) between a deck's piers              // m: a natural bank, from the water's edge to its top
 const PAINT_GAP = 9;                // m: no centre or edge lines this close to a junction
 
 const COLORS = {
@@ -199,6 +202,14 @@ export class GraphWorld {
       paint: new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
       ground: new THREE.MeshLambertMaterial({ vertexColors: true }),
       water: new THREE.MeshLambertMaterial({ color: '#4f7f97', transparent: true, opacity: 0.92 }),
+      // the dressed places and the river walls: textured from world position (toolbox/materials)
+      park: Object.fromEntries(['lawn', 'plaza', 'granite', 'walk', 'garden', 'wood', 'scrub'].map((k) => [k, makeParkMaterial(k)])),
+      riverWall: makeMasonryMaterial({ stones: ['#8f897d', '#9b9487', '#857f74', '#a29b8e', '#8a8376', '#7f796f'], mortar: '#b3ada1', courseM: 0.45, moss: '#4f5a3c', mossM: 1.2 }),
+      parkWall: makeMasonryMaterial({ stones: ['#a39a8a', '#958c7c', '#ab9f8c', '#8f8576', '#9c9282', '#b0a693'], mortar: '#c2b9a8', courseM: 0.3, mossM: 0.4 }),
+      fountainWater: new THREE.MeshLambertMaterial({ color: '#5d93ad', transparent: true, opacity: 0.88 }),
+      spray: new THREE.MeshLambertMaterial({ color: '#f4f8fb', transparent: true, opacity: 0.55, depthWrite: false }),
+      trunk: new THREE.MeshLambertMaterial({ color: '#5b4636' }),
+      crown: new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true }),
     };
     this.water = new THREE.Mesh(new THREE.PlaneGeometry(2 * FAR_M + 4000, 2 * FAR_M + 4000).rotateX(-Math.PI / 2), this.mats.water);
     this.water.position.y = this.waterY;
@@ -220,12 +231,15 @@ export class GraphWorld {
     this.ground = null;
     this.groundFailed = false;
     const url = new URL(`../../${this.json.ground}`, import.meta.url);
+    const dressUrl = this.json.dressing ? new URL(`../../${this.json.dressing}`, import.meta.url) : null;
+    const dressP = dressUrl ? fetch(dressUrl).then((r) => (r.ok ? r.json() : null)).catch(() => null) : Promise.resolve(null);
     const shoreUrl = this.json.shore ? new URL(`../../${this.json.shore}`, import.meta.url) : null;
     const shoreP = shoreUrl ? fetch(shoreUrl).then((r) => (r.ok ? r.json() : null)).catch(() => null) : Promise.resolve(null);
     fetch(url).then((r) => { if (!r.ok) throw new Error(`${r.status} for ${this.json.ground}`); return r.arrayBuffer(); })
-      .then((buf) => Promise.all([loadTerrainGrid(buf), shoreP])).then(([grid, shore]) => {
+      .then((buf) => Promise.all([loadTerrainGrid(buf), shoreP, dressP])).then(([grid, shore, dressing]) => {
         if (this.disposed) return;
         this.shore = shore ? decodeShore(shore, this.proj) : null;
+        this.dressing = dressing ? decodeDressing(dressing, this.proj, TILE) : null;
         this.ground = decodeTerrain(grid, this.proj);
         for (const t of this.tiles.values()) if (t.built && !t.groundMesh) t.needsGround = true;
         this.log('3d', 'PGH ground loaded', 'debug');
@@ -441,8 +455,8 @@ export class GraphWorld {
   }
 
   _release(t) {
-    for (const m of [t.roadMesh, t.paintMesh, t.groundMesh, t.bankMesh]) if (m) { this.group.remove(m); m.geometry.dispose(); }
-    t.roadMesh = t.paintMesh = t.groundMesh = t.bankMesh = null;
+    for (const m of [t.roadMesh, t.paintMesh, t.groundMesh, t.bankMesh, ...(t.extra || [])]) if (m) { this.group.remove(m); m.geometry.dispose(); }
+    t.roadMesh = t.paintMesh = t.groundMesh = t.bankMesh = null; t.extra = [];
     t.built = false;
   }
 
@@ -522,6 +536,8 @@ export class GraphWorld {
       const v = 0.94 + 0.06 * Math.sin(x * 0.013 + z * 0.021) * Math.cos(x * 0.007 - z * 0.011);
       color[3 * k] = tmp.r * v; color[3 * k + 1] = tmp.g * v; color[3 * k + 2] = tmp.b * v;
     }
+    t.gridH = new Float32Array(n1 * n1); for (let k = 0; k < n1 * n1; k++) t.gridH[k] = pos[3 * k + 1];
+    t.gridCell = cell;
     const idx = new Uint32Array(nx * nx * 6);
     for (let j = 0, q = 0; j < nx; j++) for (let i = 0; i < nx; i++) {
       const a = j * n1 + i, b = a + 1, c = a + n1, d = c + 1;
@@ -537,9 +553,110 @@ export class GraphWorld {
     this._buildBank(t);
   }
 
+  /** The dressed places' ground in this tile (toolbox/materials/park-surfaces.js): lawns, beds, woods, plazas and walks
+   *  draped on the ground; the fountain and pools; retaining walls and low walls in dressed stone; the trees. */
+  _buildDressing(t) {
+    const D = this.dressing, key = `${t.i},${t.j}`;
+    const areas = D.areas.get(key) || [], lines = D.lines.get(key) || [], trees = D.trees.get(key) || [];
+    if (!areas.length && !lines.length && !trees.length) return;
+    const by = new Map(), grey = new THREE.Color('#ffffff');
+    const mesher = (k) => { if (!by.has(k)) by.set(k, new Mesher()); return by.get(k); };
+    // the surface here: the ground, or a walled bank's promenade over it
+    // the ground as its mesh draws it (the 12.8 m grid's triangles, a → c → b, b → c → d), so a drape lies on it everywhere
+    const meshH = (x, z) => {
+      const tt = this.tiles.get(`${Math.floor(x / TILE)},${Math.floor(z / TILE)}`);
+      if (!tt || !tt.gridH) return this._groundH(x, z);
+      const c = tt.gridCell, n1 = Math.round(TILE / c) + 1, u = (x - tt.i * TILE) / c, v = (z - tt.j * TILE) / c;
+      const i = Math.min(n1 - 2, Math.max(0, Math.floor(u))), j = Math.min(n1 - 2, Math.max(0, Math.floor(v))), fu = u - i, fv = v - j;
+      const H = tt.gridH, a0 = H[j * n1 + i], b0 = H[j * n1 + i + 1], c0 = H[(j + 1) * n1 + i], d0 = H[(j + 1) * n1 + i + 1];
+      return fu + fv <= 1 ? a0 + (b0 - a0) * fu + (c0 - a0) * fv : d0 + (c0 - d0) * (1 - fu) + (b0 - d0) * (1 - fv);
+    };
+    const surf = (x, z) => { const h = Math.max(this._groundH(x, z), meshH(x, z)), sh = this.shore?.at(x, z); return sh && sh.walled && sh.s >= 0 && sh.s <= BANK_CAP ? Math.max(h, sh.top + 0.03) : h; };
+    const under = (x, z, y) => Math.min(y, this.cut.cap(x, z) + 0.2);   // (never over a road: its surface is ≥ 0.35 m over its cut)
+    const drape = (M, tri, lift) => {
+      const split = (a, b, c, depth) => {
+        const ab = Math.hypot(a[0] - b[0], a[1] - b[1]), bc = Math.hypot(b[0] - c[0], b[1] - c[1]), ca = Math.hypot(c[0] - a[0], c[1] - a[1]);
+        const m = Math.max(ab, bc, ca);
+        if (m <= 4 || depth > 9) { const v = (p) => [p[0], under(p[0], p[1], surf(p[0], p[1]) + lift), p[1]]; M._tri(v(a), v(c), v(b), grey); return; }
+        if (m === ab) { const d = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; split(a, d, c, depth + 1); split(d, b, c, depth + 1); }
+        else if (m === bc) { const d = [(b[0] + c[0]) / 2, (b[1] + c[1]) / 2]; split(a, b, d, depth + 1); split(a, d, c, depth + 1); }
+        else { const d = [(c[0] + a[0]) / 2, (c[1] + a[1]) / 2]; split(a, b, d, depth + 1); split(d, b, c, depth + 1); }
+      };
+      split(tri[0], tri[1], tri[2], 0);
+    };
+    const LIFT = { park: 0.22, wood: 0.25, scrub: 0.25, lawn: 0.28, garden: 0.31, plaza: 0.34 };   // (over the 12.8 m ground mesh's facets)
+    for (const A of areas) {
+      if (A.kind === 'fountain' || A.kind === 'pool') {
+        // a basin: water a little under its granite rim, the rim a low dressed-stone kerb round it
+        const h = Math.max(...A.pts.map(([x, z]) => surf(x, z))) + 0.2;   // (over the lawns draped round it)
+        for (const tri of A.tris) mesher('water')._tri(...tri.map((p) => [p[0], h + 0.25, p[1]]).reverse(), grey);
+        const R = mesher('rim'), F = mesher('rimFace');
+        for (let i = 0; i + 1 < A.pts.length; i++) {
+          const [p, q] = [A.pts[i], A.pts[i + 1]], dx = q[0] - p[0], dz = q[1] - p[1], l = Math.hypot(dx, dz) || 1, nx = -dz / l * A.wind, nz = dx / l * A.wind;
+          const yi = h + 0.55, o = (pt, s) => [pt[0] + nx * s, yi, pt[1] + nz * s];
+          R.quad(o(p, 0), o(q, 0), o(q, 1.4), o(p, 1.4), grey);
+          F.quad([p[0], h - 0.2, p[1]], [q[0], h - 0.2, q[1]], [q[0], yi, q[1]], [p[0], yi, p[1]], grey);
+        }
+        if (A.kind === 'fountain') {   // the Point's jet: up to ~45 m on a summer day
+          const [cx, cz] = A.centre, sp = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 3.2, 40, 14, 1, true), this.mats.spray);
+          sp.position.set(cx, h + 20, cz); (t.extra ||= []).push(sp); this.group.add(sp);
+        }
+        continue;
+      }
+      const mat = A.kind === 'park' ? 'lawn' : A.kind;
+      for (const tri of A.tris) drape(mesher(mat), tri, LIFT[A.kind] ?? 0.06);
+    }
+    for (const Ln of lines) {
+      const P = Ln.pts;
+      if (Ln.kind === 'walk' || Ln.kind === 'steps') {
+        const half = Ln.width / 2, M = mesher(Ln.kind === 'steps' ? 'granite' : 'walk');
+        for (let i = 0; i + 1 < P.length; i++) {
+          const [p, q] = [P[i], P[i + 1]], dx = q[0] - p[0], dz = q[1] - p[1], l = Math.hypot(dx, dz) || 1, nx = -dz / l * half, nz = dx / l * half;
+          drape(M, [[p[0] + nx, p[1] + nz], [q[0] + nx, q[1] + nz], [q[0] - nx, q[1] - nz]], 0.38);
+          drape(M, [[p[0] + nx, p[1] + nz], [q[0] - nx, q[1] - nz], [p[0] - nx, p[1] - nz]], 0.38);
+        }
+      } else {
+        // a retaining wall from the low side's ground to a 0.4 m parapet over the high side; a low wall 0.9 m
+        const W = mesher('wall');
+        for (let i = 0; i + 1 < P.length; i++) {
+          const [p, q] = [P[i], P[i + 1]], dx = q[0] - p[0], dz = q[1] - p[1], l = Math.hypot(dx, dz) || 1;
+          if (l < 0.3) continue;
+          const nx = -dz / l, nz = dx / l, side = (pt, s) => surf(pt[0] + nx * s, pt[1] + nz * s);
+          const lowP = Math.min(side(p, 2.5), side(p, -2.5)), lowQ = Math.min(side(q, 2.5), side(q, -2.5));
+          const topP = Ln.kind === 'wall' ? surf(p[0], p[1]) + 0.9 : Math.max(side(p, 2.5), side(p, -2.5)) + 0.4;
+          const topQ = Ln.kind === 'wall' ? surf(q[0], q[1]) + 0.9 : Math.max(side(q, 2.5), side(q, -2.5)) + 0.4;
+          const th = 0.2;
+          for (const s of [th, -th]) W.quad([p[0] + nx * s, lowP - 0.2, p[1] + nz * s], [q[0] + nx * s, lowQ - 0.2, q[1] + nz * s], [q[0] + nx * s, topQ, q[1] + nz * s], [p[0] + nx * s, topP, p[1] + nz * s], grey);
+          W.quad([p[0] + nx * th, topP, p[1] + nz * th], [q[0] + nx * th, topQ, q[1] + nz * th], [q[0] - nx * th, topQ, q[1] - nz * th], [p[0] - nx * th, topP, p[1] - nz * th], grey);
+        }
+      }
+    }
+    const mats = { water: this.mats.fountainWater, rim: this.mats.park.granite, rimFace: this.mats.parkWall, wall: this.mats.parkWall };
+    for (const [k, M] of by) {
+      const m = M.mesh(mats[k] || this.mats.park[k]);
+      if (!m) continue;
+      m.material.side = THREE.DoubleSide;
+      if (this.mats.park[k] && k !== 'granite' || k === 'water') { const n = m.geometry.attributes.normal; for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0); }   // (draped: lit as the flat ground it lies on, not facet by facet)
+      (t.extra ||= []).push(m); this.group.add(m);
+    }
+    if (trees.length) {
+      // the park's trees: a trunk and a broad crown each (the Point's planes, oaks and lindens), sized and tinted by seed
+      const trunkG = new THREE.CylinderGeometry(0.22, 0.32, 1, 6).translate(0, 0.5, 0), crownG = new THREE.IcosahedronGeometry(1, 1);
+      const T1 = new THREE.InstancedMesh(trunkG, this.mats.trunk, trees.length), T2 = new THREE.InstancedMesh(crownG, this.mats.crown, trees.length);
+      const m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), c = new THREE.Color();
+      trees.forEach(([x, z], k) => {
+        const r = Math.abs(Math.sin(x * 12.9898 + z * 78.233)) % 1, h = this._groundH(x, z), H = 5 + r * 5, R = 3 + r * 2.5;
+        m4.compose(new THREE.Vector3(x, h, z), q4, new THREE.Vector3(1, H * 0.55, 1)); T1.setMatrixAt(k, m4);
+        m4.compose(new THREE.Vector3(x, h + H * 0.55 + R * 0.7, z), q4.setFromAxisAngle(UP, r * 6), new THREE.Vector3(R, R * 0.85, R)); T2.setMatrixAt(k, m4);
+        T2.setColorAt(k, c.set('#4f7a35').offsetHSL((r - 0.5) * 0.04, 0, (r - 0.5) * 0.12));
+      });
+      for (const m of [T1, T2]) { (t.extra ||= []).push(m); this.group.add(m); }
+    }
+  }
+
   /** The riverbank along the shore lines in this tile: a stone face and a promenade where walled, a firm slope elsewhere. */
   _buildBank(t) {
-    const x0 = t.i * TILE, z0 = t.j * TILE, M = new Mesher();
+    const x0 = t.i * TILE, z0 = t.j * TILE, M = new Mesher(), Face = new Mesher(), Prom = new Mesher();
     const grass = new THREE.Color('#89a868'), stone = new THREE.Color('#8f8a80'), bed = new THREE.Color('#6f6a58');
     const capY = (x, z, y) => Math.min(y, this.cut.cap(x, z) + 0.12);   // (under a road's cut: just over the ground there, under the road)
     for (const L of this.shore ? this.shore.lines : []) {
@@ -551,8 +668,10 @@ export class GraphWorld {
         if (L.walled[i] && L.walled[i + 1]) {
           const a = [L.x[i], pool - 4, L.z[i]], b = [L.x[i + 1], pool - 4, L.z[i + 1]];
           const ta = row(i, 0, L.top[i] + 0.03), tb = row(i + 1, 0, L.top[i + 1] + 0.03);
-          M.quad(a, b, tb, ta, stone);                                               // the wall's face
-          M.quad(ta, tb, row(i + 1, BANK_CAP, L.top[i + 1] + 0.03), row(i, BANK_CAP, L.top[i] + 0.03), grass);   // the promenade
+          Face.quad(a, b, tb, ta, stone);                                            // the wall's face (dressed stone)
+          const pa = row(i, PROM_M, L.top[i] + 0.03), pb = row(i + 1, PROM_M, L.top[i + 1] + 0.03);
+          Prom.quad(ta, tb, pb, pa, stone);                                          // the promenade's paving along the wall
+          if (!this.dressing?.inside(mx, mz)) M.quad(pa, pb, row(i + 1, BANK_CAP, L.top[i + 1] + 0.03), row(i, BANK_CAP, L.top[i] + 0.03), grass);   // then grass (a dressed place has its own)
         } else {
           const S = [-4, 0, 5, BANK_SLOPE];
           for (let q = 0; q + 1 < S.length; q++) {
@@ -587,6 +706,9 @@ export class GraphWorld {
     }
     t.bankMesh = M.mesh(this.mats.road);
     if (t.bankMesh) this.group.add(t.bankMesh);
+    t.extra = [Face.mesh(this.mats.riverWall), Prom.mesh(this.mats.park.granite)].filter(Boolean);
+    for (const m of t.extra) this.group.add(m);
+    if (this.dressing) this._buildDressing(t);
   }
 }
 
@@ -689,4 +811,30 @@ export function decodeShore(json, proj) {
       return best;
     },
   };
+}
+
+/** The dressed places (tools/pgh_dressing.mjs → <id>-dressing.json) in the local frame, by tile: areas triangulated, lines,
+ *  trees. An area goes to every tile its box touches (each tile draws its own copy of it, clipped by nothing: a big
+ *  lawn is drawn once, in the tile of its centre). */
+export function decodeDressing(json, proj, tile) {
+  const P = (p) => { const q = proj.toLocal(p[0], p[1]); return [q.x, q.z]; };
+  const put = (map, x, z, item) => { const k = `${Math.floor(x / tile)},${Math.floor(z / tile)}`; (map.get(k) || map.set(k, []).get(k)).push(item); };
+  const ORDER = ['park', 'wood', 'scrub', 'lawn', 'garden', 'plaza', 'pool', 'fountain'];
+  const areas = new Map(), lines = new Map(), trees = new Map();
+  for (const a of [...json.areas].sort((p, q) => ORDER.indexOf(p.kind) - ORDER.indexOf(q.kind))) {
+    let pts = a.pts.map(P);
+    if (pts.length > 1 && Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1]) < 0.01) pts = pts.slice(0, -1);
+    if (pts.length < 3) continue;
+    const contour = pts.map(([x, z]) => new THREE.Vector2(x, z));
+    const tris = THREE.ShapeUtils.triangulateShape(contour, []).map((t3) => t3.map((k) => pts[k]));
+    const area2 = pts.reduce((s2, p, i) => { const q = pts[(i + 1) % pts.length]; return s2 + p[0] * q[1] - q[0] * p[1]; }, 0);
+    const cx = pts.reduce((s2, p) => s2 + p[0], 0) / pts.length, cz = pts.reduce((s2, p) => s2 + p[1], 0) / pts.length;
+    put(areas, cx, cz, { kind: a.kind, name: a.name, pts: [...pts, pts[0]], tris, centre: [cx, cz], wind: area2 > 0 ? 1 : -1 });
+  }
+  for (const l of json.lines) { const pts = l.pts.map(P), m = pts[Math.floor(pts.length / 2)]; put(lines, m[0], m[1], { ...l, pts }); }
+  for (const p of json.trees) { const [x, z] = P(p); put(trees, x, z, [x, z]); }
+  // the dressed places' extent (their 'park' areas): the bank's plain grass gives way to the dressing there
+  const parks = json.areas.filter((a) => a.kind === 'park').map((a) => a.pts.map(P));
+  const inside = (x, z) => parks.some((pts) => { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, zi] = pts[i], [xj, zj] = pts[j]; if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c; } return c; });
+  return { areas, lines, trees, inside };
 }

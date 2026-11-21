@@ -94,12 +94,97 @@ const walls = new Map();
       const refs = [...b.matchAll(/<nd ref="(\d+)"/g)].map((x) => nodes.get(x[1])).filter(Boolean).map(([la, lo]) => { const q = proj.toLocal(la, lo); return [q.x, q.z]; });
       for (let i = 1; i < refs.length; i++) {
         const [a, c] = [refs[i - 1], refs[i]], L = Math.hypot(c[0] - a[0], c[1] - a[1]), k = Math.max(1, Math.ceil(L / 5));
-        for (let j = 0; j <= k; j++) { const x = a[0] + ((c[0] - a[0]) * j) / k, z = a[1] + ((c[1] - a[1]) * j) / k, kk = `${Math.floor(x / 25)},${Math.floor(z / 25)}`; (walls.get(kk) || walls.set(kk, []).get(kk)).push([x, z]); }
+        for (let j = 0; j <= k; j++) { const x = a[0] + ((c[0] - a[0]) * j) / k, z = a[1] + ((c[1] - a[1]) * j) / k, kk = `${Math.floor(x / 25)},${Math.floor(z / 25)}`; (walls.get(kk) || walls.set(kk, []).get(kk)).push([x, z, (c[0] - a[0]) / L, (c[1] - a[1]) / L]); }
       }
     }
   }
 }
 const wallNear = (x, z, r) => { for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const [px, pz] of walls.get(`${Math.floor(x / 25) + a},${Math.floor(z / 25) + b}`) || []) if (Math.hypot(px - x, pz - z) < r) return true; return false; };
+
+// 4b. where riders pass (within 250 m of a way a route rides), a walled bank's water edge goes to its wall: the terrain
+// tiles smear a river wall into a 10–40 m slope, so the traced edge sits at the slope's foot, off the real wall.
+// A wall counts if it runs along the shore (within 30°), within 45 m inland of the traced edge, on the smeared bank (2–6 m
+// over the pool) — not a pier out in the river, not a wall at the foot of a two-level riverwalk.
+const riders = new Set();
+{
+  const ridden = new Set((pgh.presets || []).flatMap((p) => p.path.map((k) => k.slice(0, -1))));
+  for (const e of pgh.edges) { if (!ridden.has(e.id)) continue; let la = 0, lo = 0; for (let i = 0; i < e.lat.length; i++) { la += e.lat[i]; lo += e.lon[i]; const q = proj.toLocal(la * 1e-6, lo * 1e-6); riders.add(`${Math.floor(q.x / 125)},${Math.floor(q.z / 125)}`); } }
+}
+const wayPts = new Map();   // every way's samples (a riverwalk in front of a wall keeps the water at its own edge)
+for (const e of pgh.edges) { let la = 0, lo = 0; const onDeck = (i) => (e.bridges || []).some(([a, b]) => i >= a && i <= b); for (let i = 0; i < e.lat.length; i++) { la += e.lat[i]; lo += e.lon[i]; if (onDeck(i)) continue; /* (a bridge is over the water: not land) */ const q = proj.toLocal(la * 1e-6, lo * 1e-6), k = `${Math.floor(q.x / 25)},${Math.floor(q.z / 25)}`; (wayPts.get(k) || wayPts.set(k, []).get(k)).push([q.x, q.z, (pgh.widths[e.kind] || 7) / 2]); } }
+const wayBetween = (x, z, wx, wz) => {
+  const dx = wx - x, dz = wz - z, L = Math.hypot(dx, dz) || 1;
+  for (let u = -3; u <= 3; u++) for (let v = -3; v <= 3; v++) for (const [px, pz, h] of wayPts.get(`${Math.floor(x / 25) + u},${Math.floor(z / 25) + v}`) || []) {
+    const t = ((px - x) * dx + (pz - z) * dz) / (L * L);
+    if (t < -0.1 || t > 1.1) continue;
+    if (Math.hypot(px - (x + dx * t), pz - (z + dz * t)) < h + 6) return true;
+  }
+  return false;
+};
+const nearRiders = (x, z) => { for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) if (riders.has(`${Math.floor(x / 125) + a},${Math.floor(z / 125) + b}`)) return true; return false; };
+let snapped = 0;
+keep = keep.map((l) => {
+  const n = l.length, moved = l.map((p) => p.slice()), hit = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const [x, z] = l[i];
+    if (!nearRiders(x, z) || process.env.NO_SNAP) continue;
+    const a = l[Math.max(0, i - 2)], b = l[Math.min(n - 1, i + 2)];
+    let tx = b[0] - a[0], tz = b[1] - a[1]; const L = Math.hypot(tx, tz) || 1; tx /= L; tz /= L;
+    const lp = poolAt(x, z);
+    let nx_ = -tz, nz_ = tx;
+    if (T.at(x + nx_ * 15, z + nz_ * 15) < T.at(x - nx_ * 15, z - nz_ * 15)) { nx_ = -nx_; nz_ = -nz_; }
+    let best = null, bd = 45;
+    for (let u = -2; u <= 2; u++) for (let v = -2; v <= 2; v++) for (const w of walls.get(`${Math.floor(x / 25) + u},${Math.floor(z / 25) + v}`) || []) {
+      const d = Math.hypot(w[0] - x, w[1] - z);
+      if (d >= bd || Math.abs(w[2] * tx + w[3] * tz) < Math.cos(Math.PI / 6)) continue;
+      const hw = T.at(w[0], w[1]);
+      if (hw > lp + 6 || hw < lp + 2 || (w[0] - x) * nx_ + (w[1] - z) * nz_ < 3) continue;   // (inland of the traced edge, on the smeared bank)
+      if (wayBetween(x, z, w[0], w[1])) continue;   // (a way runs between the edge and the wall: a riverwalk on a quay)
+      bd = d; best = w;
+    }
+    if (best) { moved[i] = [best[0], best[1]]; hit[i] = 1; }
+  }
+  // ease between snapped and unsnapped stretches (±25 m), so the edge doesn't jump
+  const out2 = l.map((p, i) => {
+    let sx = 0, sz = 0, c = 0;
+    for (let k = Math.max(0, i - 5); k <= Math.min(n - 1, i + 5); k++) { sx += moved[k][0]; sz += moved[k][1]; c++; }
+    return hit.slice(Math.max(0, i - 5), i + 6).some(Boolean) ? [sx / c, sz / c] : p;
+  });
+  snapped += hit.reduce((s2, v) => s2 + v, 0);
+  return resample(out2, 5);
+});
+// 4c. a way out on the water side of the traced edge (the Point's tip, a riverwalk on its quay) is on land: the water edge
+// goes out past it (its outer edge + 1.5 m) — riders never ride in the river
+let pushed = 0;
+keep = keep.map((l) => {
+  const n = l.length, moved = l.map((p) => p.slice()), hit = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const [x, z] = l[i];
+    if (!nearRiders(x, z)) continue;
+    const a = l[Math.max(0, i - 2)], b = l[Math.min(n - 1, i + 2)];
+    let tx = b[0] - a[0], tz = b[1] - a[1]; const L = Math.hypot(tx, tz) || 1; tx /= L; tz /= L;
+    let nx_ = -tz, nz_ = tx;
+    if (T.at(x + nx_ * 15, z + nz_ * 15) < T.at(x - nx_ * 15, z - nz_ * 15)) { nx_ = -nx_; nz_ = -nz_; }
+    let out = 0;
+    for (let u = -2; u <= 2; u++) for (let v = -2; v <= 2; v++) for (const [px, pz, h] of wayPts.get(`${Math.floor(x / 25) + u},${Math.floor(z / 25) + v}`) || []) {
+      const along = (px - x) * tx + (pz - z) * tz, across = (px - x) * nx_ + (pz - z) * nz_;   // across < 0: on the water side
+      if (Math.abs(along) > 12 || across > 0 || across < -40) continue;
+      out = Math.max(out, -across + h + 1.5);
+    }
+    if (out > 0) { moved[i] = [x - nx_ * out, z - nz_ * out]; hit[i] = 1; }
+  }
+  const out2 = l.map((p, i) => {
+    if (!hit.slice(Math.max(0, i - 4), i + 5).some(Boolean)) return p;
+    // the farthest out of the neighbours (±20 m), so the edge clears the whole way
+    let best = p, bo = 0;
+    for (let k = Math.max(0, i - 4); k <= Math.min(n - 1, i + 4); k++) if (hit[k]) { const d = Math.hypot(moved[k][0] - l[k][0], moved[k][1] - l[k][1]); if (d > bo) { bo = d; best = [p[0] + (moved[k][0] - l[k][0]), p[1] + (moved[k][1] - l[k][1])]; } }
+    return best;
+  });
+  pushed += hit.reduce((s2, v) => s2 + v, 0);
+  return resample(chaikin(chaikin(out2)), 5);
+});
+console.log(`  water edge pushed out past a way on the water side at ${pushed} points (${(pushed * 5 / 1000).toFixed(1)} km)`);
+console.log(`  water edge moved to its wall at ${snapped} points (${(snapped * 5 / 1000).toFixed(1)} km) where riders pass`);
 
 // 5. per point: land normal, walled, bank top
 const out = [];

@@ -27,7 +27,7 @@ const steps = [
   ['build', () => { run(`python3 tools/build_pgh.py${offline}`); map(); }],
   ['prune', () => { run('node tools/prune_pgh.mjs'); map(); }],
   ['neaten', () => { run('node tools/pgh_junctions.mjs'); run('node tools/neaten_pgh.mjs'); map(); }],
-  ['riverside', () => { run('node tools/pgh_shore.mjs'); run('node tools/riverside_pgh.mjs'); map(); separations(); }],
+  ['riverside', () => { run('node tools/pgh_shore.mjs'); run('node tools/riverside_pgh.mjs'); map(); separations(); run('node tools/pgh_dressing.mjs'); }],
   ['loops', () => { for (let k = 0; k < 2; k++) { run('node tools/pgh_loops.mjs'); run('node tools/fix_loops_pgh.mjs'); map(); } }],
   ['stubs', () => {
     run('node tools/pgh_stubs.mjs'); run('node tools/remove_stubs_pgh.mjs'); map();
@@ -37,6 +37,7 @@ const steps = [
     separations();
   }],
   ['report', () => {
+    run('node tools/pgh_shore.mjs'); run('node tools/riverside_pgh.mjs'); map(); separations();
     for (const c of ['node tools/pgh_junctions.mjs', 'node tools/pgh_stubs.mjs', 'node tools/pgh_loops.mjs', 'node tools/pgh_crossings.mjs', 'python3 tools/pgh_landmarks.py', 'python3 tools/pgh_riverbank.py', 'node tools/pgh_riverbank_check.mjs', 'node tools/qc_pgh.mjs', 'node tools/pgh_map_page.mjs']) run(c);
   }],
 ];

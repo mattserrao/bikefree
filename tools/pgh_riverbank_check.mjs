@@ -33,7 +33,7 @@ for (const s of A.spots) {
   for (const Li of L) for (let i = 0; i < Li.n; i += 1) { const d = Math.hypot(Li.x[i] - q.x, Li.z[i] - q.z); if (!best || d < best.d) best = { d, L: Li, i }; }
   const { L: Ln, i } = best, nx = Ln.nx[i], nz = Ln.nz[i], x0 = Ln.x[i], z0 = Ln.z[i];
   const prof = []; for (let d = -20; d <= 40; d += 1) prof.push([d, H(x0 + nx * d, z0 + nz * d)]);
-  const edge = prof.find(([, h]) => h >= wy)?.[0] ?? 40;
+  let edge = -20; for (let k = prof.length - 1; k >= 0; k--) if (prof[k][1] < wy) { edge = prof[k][0] + 1; break; }   // (the water's edge: the land's side of the last wet point)
   const top = Math.max(...prof.filter(([d]) => d >= edge && d <= edge + 25).map(([, h]) => h));
   const spread = (prof.find(([d, h]) => d >= edge && h - wy >= 0.8 * (top - wy))?.[0] ?? 40) - edge;
   const h5 = H(x0 + nx * (edge + 5), z0 + nz * (edge + 5)) - pool;
@@ -43,7 +43,7 @@ for (const s of A.spots) {
   if (s.cls.includes('walled-smeared')) { area.smeared0++; tot.before.walledSmeared++; }
   if (s.cls.includes('low-bank')) { area.low0++; tot.before.lowBank++; }
   if (s.walled.length) { area.walled++; tot.walled++; if (spread > 8 && top - pool > 2) { area.smeared++; tot.wallSmeared++; } }
-  if (h5 < 1.5) { area.low++; tot.lowBank++; }
+  if (h5 < 1.5) { area.low++; tot.lowBank++; if (process.env.DEBUG && s.area === process.env.DEBUG) console.log('low', s.lat, s.lon, 'edge', edge, 'h5', h5.toFixed(1), 'walled', walled, 's', sh.s.toFixed(1), 'top', (sh.top - pool).toFixed(1), prof.filter(([d]) => d % 5 === 0).map(([d, h]) => d + ':' + (h - pool).toFixed(1)).join(' ')); }
   const cls = [];
   if (s.walled.length && spread > 8 && top - pool > 2) cls.push('walled-smeared');
   if (h5 < 1.5) cls.push('low-bank');
