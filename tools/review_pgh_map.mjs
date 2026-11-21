@@ -29,6 +29,8 @@ const data = {
   leaves: R.leaves.map(P),
   removed: B ? B.edges.filter((e) => e.status === 'simplify' || e.status === 'alley' || e.status === 'deadend').map((e) => [e.name || '', e.why || '', e.L, enc(e.line), e.hw]) : [],
   before: B ? B.summary : null,
+  parallels: (R.parallels || []).map((o) => [enc(o.segA), enc(o.segB), o.names.join(' & '), o.m, o.gap, o.remove == null ? null : enc(R.edges[o.remove].line), o.remove == null ? '' : (R.edges[o.remove].name || R.edges[o.remove].kind), o.why, o.kinds.join(' + ')]),
+  jagged: (R.jagged || []).map((j) => [j.name, Object.entries(j.types).map(([k, v]) => k + ' ' + v).join(', '), enc(j.line), j.spots.map((s) => [...P([s[0], s[1]]), s[2], s[3]])]),
   overlaps: (R.overlaps || []).map((o) => [enc(o.segA), enc(o.segB), o.names.join(' & '), o.m, o.removable ? 1 : 0, enc(R.edges[o.remove].line), R.edges[o.remove].name || R.edges[o.remove].kind, o.kinds.join(' + ')]),
   overlapAreas: (R.overlapAreas || []).map((a) => [...P([a.lat, a.lon]), a.n, a.m, a.names.join(', ')]),
   bridges: (R.bridges || []).map((b) => [...P([b.lat, b.lon]), b.ok ? 1 : 0, b.name, b.msg, b.line ? enc(b.line) : null]),
@@ -59,14 +61,14 @@ table.cmp{border-collapse:collapse;width:100%;margin-top:6px;font-size:12px}tabl
 </style></head><body>
 <canvas id="c"></canvas>
 <div class="panel" id="panel"><button id="tog">Hide</button>
-<h1>PGH road review — overlaps fixed</h1><div class="sub">Pink = overlaps still left (none can go without a dead end). Tap a circle or way for details.</div>
+<h1>PGH road review — similar roads &amp; jagged roads</h1><div class="sub">Blue pairs = similar roads side by side; orange = the one to remove. Purple dots = jagged spots to smooth. Nothing changed yet. Tap for details.</div>
 <div class="body" id="legend"></div></div>
 <div id="info"></div>
 <script>
-const COL = { overlap:'#d6249f', cut:'#f08a00', conn:'#12a150', deadbr:'#e0332f', removed:'#5b6470', keep:'#9aa1ab', deadend:'#e0332f', simplify:'#f08a00', alley:'#d9b300', piece:'#8b3fd1', dense:'#ff4fa3', river:'#1673e6', leaf:'#e0332f' };
+const COL = { par:'#0aa5c2', parcut:'#f08a00', jag:'#7a3fe0', overlap:'#d6249f', cut:'#f08a00', conn:'#12a150', deadbr:'#e0332f', removed:'#5b6470', keep:'#9aa1ab', deadend:'#e0332f', simplify:'#f08a00', alley:'#d9b300', piece:'#8b3fd1', dense:'#ff4fa3', river:'#1673e6', leaf:'#e0332f' };
 const KIND = { 'low-deck':'Bridge deck too low over the river', 'deck-kink':'Kink where a deck meets the street', 'in-river':'Street on the river (river wall read as water)', 'crossing':'Ways cross at nearly the same height, no junction', 'river-dip':'Dip beside the river' };
 let D, cam = { x: 0, y: 0, s: 0.08 }, sel = null;
-const on = { overlap:true, cut:true, bridges:true, removed:false, keep:true, deadend:true, simplify:true, alley:false, piece:true, dense:true, river:true };
+const on = { par:true, parcut:true, jag:true, jagb:false, overlap:false, cut:false, bridges:false, removed:false, keep:true, deadend:true, simplify:true, alley:false, piece:true, dense:true, river:true };
 const c = document.getElementById('c'), g = c.getContext('2d');
 function lines(arr){ const out=[]; let x=0,y=0; for(let i=0;i<arr.length;i+=2){ x+=arr[i]; y+=arr[i+1]; out.push(x,y);} return out; }
 fetch('data.json').then(r=>r.json()).then(d=>{
@@ -76,6 +78,9 @@ fetch('data.json').then(r=>r.json()).then(d=>{
   for (const o of [...D.W, ...D.P.flatMap(p=>p.ls.map(l=>({p:l,piece:p})))]) { let a=1e9,b=1e9,cc=-1e9,dd=-1e9; for(let i=0;i<o.p.length;i+=2){a=Math.min(a,o.p[i]);cc=Math.max(cc,o.p[i]);b=Math.min(b,o.p[i+1]);dd=Math.max(dd,o.p[i+1]);} o.bb=[a,b,cc,dd]; }
   D.R = (d.removed||[]).map(w=>({ st:'removed', name:w[0], why:w[1], L:w[2], p:lines(w[3]), hw:w[4] }));
   for (const o of D.R) { let a=1e9,b=1e9,cc=-1e9,dd=-1e9; for(let i=0;i<o.p.length;i+=2){a=Math.min(a,o.p[i]);cc=Math.max(cc,o.p[i]);b=Math.min(b,o.p[i+1]);dd=Math.max(dd,o.p[i+1]);} o.bb=[a,b,cc,dd]; }
+  const bbx=(p)=>{ let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(let i=0;i<p.length;i+=2){x0=Math.min(x0,p[i]);x1=Math.max(x1,p[i]);y0=Math.min(y0,p[i+1]);y1=Math.max(y1,p[i+1]);} return [x0,y0,x1,y1]; };
+  D.PA = (d.parallels||[]).map(o=>{ const r={ a:lines(o[0]), b:lines(o[1]), name:o[2], m:o[3], gap:o[4], p:o[5]?lines(o[5]):null, cutName:o[6], why:o[7], kinds:o[8] }; r.bb=bbx(r.a.concat(r.b)); if(r.p){ r.pbb=bbx(r.p); let L=0; for(let i=2;i<r.p.length;i+=2) L+=Math.hypot(r.p[i]-r.p[i-2],r.p[i+1]-r.p[i-1]); r.L=L; } else r.L=0; return r; });
+  D.J = (d.jagged||[]).map(j=>{ const r={ name:j[0], types:j[1], p:lines(j[2]), spots:j[3] }; r.bb=bbx(r.p); return r; });
   D.O = (d.overlaps||[]).map(o=>{ const r={ a:lines(o[0]), b:lines(o[1]), name:o[2], m:o[3], ok:!!o[4], p:lines(o[5]), cutName:o[6], kinds:o[7] }; let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(let i=0;i<r.p.length;i+=2){x0=Math.min(x0,r.p[i]);x1=Math.max(x1,r.p[i]);y0=Math.min(y0,r.p[i+1]);y1=Math.max(y1,r.p[i+1]);} r.bb=[x0,y0,x1,y1]; return r; });
   D.OA = (d.overlapAreas||[]).map(a=>({ x:a[0], y:a[1], n:a[2], m:a[3], names:a[4] }));
   D.BR = (d.bridges||[]).map(b=>({ x:b[0], y:b[1], ok:!!b[2], name:b[3], msg:b[4], p:b[5]?lines(b[5]):null }));
@@ -100,6 +105,10 @@ function legend(){
   const S=D.summary, rv=D.river.length, cnt=(st)=>D.W.filter(w=>w.st===st).length;
   const rkm=(D.R.reduce((s,w)=>s+w.L,0)/1000).toFixed(1);
   const rows=[
+    ['par','sw','<b>Similar roads close by</b> (parallel, ≤ 30 m apart)', D.PA.length+' pairs'],
+    ['parcut','sw','<b>Keep one</b>: the way suggested to go', D.PA.filter(p=>p.p).length+' · '+(D.PA.filter(p=>p.p).reduce((s,p)=>s+p.L,0)/1000).toFixed(1)+' km'],
+    ['jag','dot','<b>Jagged</b>: zigzags, kinks, bends at junctions', D.J.filter(j=>j.spots.some(s=>s[2]!=='bump')).length+' roads'],
+    ['jagb','dot','Bumpy profile (grade jumps &gt; 15 %)', D.J.filter(j=>j.spots.some(s=>s[2]==='bump')).length+' roads'],
     ['overlap','sw','<b>Overlapping roads</b> (drawn on top of each other)', D.O.length+' pairs · '+(D.O.reduce((s,o)=>s+o.m,0)/1000).toFixed(1)+' km in '+D.OA.length+' areas'],
     ['cut','sw','<b>Suggested removal</b>: the one way of each pair to take out', D.O.filter(o=>o.ok).length+' can go'],
     ['bridges','sw','<b>Bridge connectors</b> (new)', D.BR.length+' connected'],
@@ -131,6 +140,9 @@ function draw(){
   for (const st of ['keep','alley','simplify','deadend']) { if(!on[st]) continue; g.strokeStyle=COL[st]; g.lineWidth=st==='keep'?Math.max(0.6,z*0.5):z*1.4; for(const w of D.W) if(w.st===st&&vis(w.bb,v)) path(w.p); }
   if(on.piece){ g.strokeStyle=COL.piece; g.lineWidth=z*1.4; for(const o of D.PL) if(vis(o.bb,v)) path(o.p); }
   if(on.deadend&&cam.s>0.25){ g.fillStyle=COL.leaf; for(const l of D.leaves){ g.beginPath(); g.arc(sx(l[0]),sy(l[1]),2.2,0,7); g.fill(); } }
+  if(on.parcut){ g.strokeStyle=COL.parcut; g.lineWidth=z*2; for(const o of D.PA) if(o.p&&vis(o.pbb,v)) path(o.p); }
+  if(on.par){ g.strokeStyle=COL.par; g.lineWidth=z*2.6; g.globalAlpha=.8; for(const o of D.PA) if(vis(o.bb,v)){ path(o.a); path(o.b); } g.globalAlpha=1; }
+  if(on.jag||on.jagb){ for(const j of D.J) for(const s of j.spots){ const b=s[2]==='bump'; if(b?!on.jagb:!on.jag) continue; g.beginPath(); g.arc(sx(s[0]),sy(s[1]),b?2.5:4,0,7); g.fillStyle=b?'#b08be8':COL.jag; g.fill(); } }
   if(on.cut){ g.strokeStyle=COL.cut; g.lineWidth=z*1.8; for(const o of D.O) if(o.ok&&vis(o.bb,v)) path(o.p); }
   if(on.overlap){ g.strokeStyle=COL.overlap; g.lineWidth=z*3; for(const o of D.O){ path(o.a); path(o.b); }
     for(const a of D.OA){ const r=Math.max(7,Math.min(26,Math.sqrt(a.m)*0.7)); g.beginPath(); g.arc(sx(a.x),sy(a.y),r,0,7); g.fillStyle=COL.overlap+'30'; g.fill(); g.lineWidth=1.5; g.strokeStyle=COL.overlap; g.stroke(); } }
@@ -141,6 +153,10 @@ function draw(){
 function segd(px,py,ax,ay,bx,by){ const dx=bx-ax,dy=by-ay,l=dx*dx+dy*dy||1; let t=((px-ax)*dx+(py-ay)*dy)/l; t=Math.max(0,Math.min(1,t)); return Math.hypot(px-ax-t*dx,py-ay-t*dy); }
 function pick(px,py){
   const x=(px-innerWidth/2)/cam.s+cam.x, y=-(py-innerHeight/2)/cam.s+cam.y, tol=14/cam.s; let best=null,bd=tol;
+  if(on.jag||on.jagb) for(const j of D.J) for(const s of j.spots){ if(s[2]==='bump'?!on.jagb:!on.jag) continue; const d=Math.hypot(s[0]-x,s[1]-y); if(d<bd){bd=d; best={t:'jag',j,s};} }
+  if(best) return best;
+  if(on.par||on.parcut) for(const o of D.PA){ test({p:o.a.concat([]),bb:o.bb,o},'par'); test({p:o.b,bb:o.bb,o},'par'); if(o.p) test({p:o.p,bb:o.pbb,o},'par'); }
+  if(best) return best;
   if(on.overlap) for(const a of D.OA){ const d=Math.hypot(a.x-x,a.y-y); if(d<Math.max(bd*1.2, Math.min(26,Math.sqrt(a.m)*0.7)/cam.s)){bd=d; best={t:'oarea',a};} }
   if(best) return best;
   if(on.overlap||on.cut) for(const o of D.O) test({p:o.p,bb:o.bb,o},'overlap');
@@ -158,7 +174,9 @@ function show(h){
   const el=document.getElementById('info'); sel=null;
   if(!h){ el.style.display='none'; draw(); return; }
   let t='';
-  if(h.t==='oarea'){ t='<b>Overlap area: '+h.a.n+' pair'+(h.a.n>1?'s':'')+', '+h.a.m+' m</b>'+h.a.names; }
+  if(h.t==='jag'){ sel={p:h.j.p}; t='<b>Jagged: '+h.j.name+'</b><span class="m">'+h.s[3]+' · this road: '+h.j.types+'</span>'; }
+  else if(h.t==='par'){ const o=h.o.o; sel={ls:[o.a,o.b]}; t='<b>Similar roads: '+o.name+'</b><span class="m">'+o.m+' m side by side, '+o.gap+' m apart ('+o.kinds+'). '+(o.p?'Suggest removing <b>'+o.cutName+'</b> (orange) — '+o.why+'.':o.why+'.')+'</span>'; }
+  else if(h.t==='oarea'){ t='<b>Overlap area: '+h.a.n+' pair'+(h.a.n>1?'s':'')+', '+h.a.m+' m</b>'+h.a.names; }
   else if(h.t==='overlap'){ const o=h.o.o; sel=o; t='<b>Overlap: '+o.name+'</b><span class="m">'+o.m+' m drawn on top of each other ('+o.kinds+'). '+(o.ok?'Suggest removing <b>'+o.cutName+'</b> (orange).':'Neither can go without leaving a dead end.')+'</span>'; }
   else if(h.t==='bridge'){ sel=h.b.p?{p:h.b.p}:null; t='<b>Dead-end bridge — '+(h.b.ok?'connected':'not connected')+'</b>'+h.b.name+' · <span class="m">'+h.b.msg+'</span>'; }
   else if(h.t==='river'){ t='<b>'+(KIND[h.r[2]]||h.r[2])+'</b>'+(h.r[3]?h.r[3]+' · ':'')+'<span class="m">'+h.r[4]+'</span>'; }

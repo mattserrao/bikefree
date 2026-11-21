@@ -166,6 +166,81 @@ def main():
                              'lon': round(sum(overlaps[i]['lon'] for i in ix) / len(ix), 6),
                              'names': list(dict.fromkeys(nm for i in ix for nm in overlaps[i]['names'] if nm))[:6]} for ix in areas.values()), key=lambda a: -a['m'])
 
+    # ---------------------------------------------------------------- similar roads close by (parallel, within PAR_M)
+    # at the game's scale two ways running side by side a few tens of metres apart read as one: keep one of the two
+    PAR_M, PAR_MIN = 30, 60
+    kx, ky = cor.kx, 110540
+    def heading(e, i):
+        a, b = max(0, i - 1), min(e['n'], i + 1)
+        return math.atan2((e['lat'][b] - e['lat'][a]) * ky, (e['lon'][b] - e['lon'][a]) * kx)
+    grid = defaultdict(list)
+    for k, e in enumerate(E):
+        for i in range(e['n'] + 1): grid[(int(e['lon'][i] * kx / PAR_M), int(e['lat'][i] * ky / PAR_M))].append((k, i))
+    near = defaultdict(lambda: [set(), set(), []])   # (ka, kb) → [samples of a, samples of b, distances]
+    for k, e in enumerate(E):
+        spk = e['L'] / max(1, e['n'])
+        for i in range(e['n'] + 1):
+            if min(i, e['n'] - i) * spk < 20: continue
+            x, y = e['lon'][i] * kx, e['lat'][i] * ky
+            cx, cy = int(x / PAR_M), int(y / PAR_M)
+            ha = heading(e, i)
+            for a in (-1, 0, 1):
+                for b in (-1, 0, 1):
+                    for k2, j in grid.get((cx + a, cy + b), ()):
+                        if k2 == k: continue
+                        o = E[k2]
+                        if min(j, o['n'] - j) * o['L'] / max(1, o['n']) < 20: continue
+                        d = math.hypot(o['lon'][j] * kx - x, o['lat'][j] * ky - y)
+                        if d > PAR_M or abs(o['ele'][j] - e['ele'][i]) > 8: continue
+                        dh = abs((heading(o, j) - ha + math.pi) % (2 * math.pi) - math.pi)
+                        if dh > math.radians(20) and dh < math.radians(160): continue
+                        key = (min(k, k2), max(k, k2))
+                        r = near[key]
+                        (r[0] if k == key[0] else r[1]).add(i if k == key[0] else i)
+                        (r[1] if k == key[0] else r[0]).add(j)
+                        r[2].append(d)
+    parallels = []
+    for (ka, kb), (sa, sb, ds) in near.items():
+        la = len(sa) * E[ka]['L'] / max(1, E[ka]['n']); lb = len(sb) * E[kb]['L'] / max(1, E[kb]['n'])
+        if min(la, lb) < PAR_MIN: continue
+        parallels.append({'a': ka, 'b': kb, 'm': round(min(la, lb)), 'gap': round(sum(ds) / len(ds), 1),
+                          'names': [E[ka]['name'] or E[ka]['kind'], E[kb]['name'] or E[kb]['kind']], 'kinds': [E[ka]['kind'], E[kb]['kind']],
+                          'segA': [[round(E[ka]['lat'][i], 6), round(E[ka]['lon'][i], 6)] for i in range(min(sa), max(sa) + 1)],
+                          'segB': [[round(E[kb]['lat'][j], 6), round(E[kb]['lon'][j], 6)] for j in range(min(sb), max(sb) + 1)]})
+    # which one goes (a dry run: biggest pairs first; the minor way, else the other; never a dead end or a split network)
+    Gp = B.Graph(E)
+    for p_ in sorted(parallels, key=lambda p_: -p_['m']):
+        if p_['a'] in Gp.gone or p_['b'] in Gp.gone: p_['remove'] = None; p_['why'] = 'the other way of this pair goes with another pair'; continue
+        k = B.overlap_pick(E, Gp, p_['a'], p_['b'])
+        p_['remove'] = k
+        if k is None: p_['why'] = 'neither can go without leaving a dead end'
+        else: Gp.remove(k); p_['why'] = 'keep ' + (E[p_['b'] if k == p_['a'] else p_['a']]['name'] or 'the other')
+
+    # ---------------------------------------------------------------- jagged roads (to smooth)
+    jag = []
+    for k, e in enumerate(E):
+        n = e['n']
+        if n < 3: continue
+        hd = [math.atan2((e['lat'][i + 1] - e['lat'][i]) * ky, (e['lon'][i + 1] - e['lon'][i]) * kx) for i in range(n)]
+        turn = [((hd[i] - hd[i - 1] + math.pi) % (2 * math.pi) - math.pi) * 180 / math.pi for i in range(1, n)]   # at sample i
+        sp = e['L'] / n
+        found = []
+        for t in range(1, len(turn)):   # zigzag: two sharp turns back and forth
+            if abs(turn[t]) > 20 and abs(turn[t - 1]) > 20 and turn[t] * turn[t - 1] < 0: found.append(('zigzag', t + 1, f'zigzags {abs(turn[t - 1]):.0f}° / {abs(turn[t]):.0f}°'))
+        for t, a in enumerate(turn):
+            i = t + 1
+            if min(i, n - i) <= 3 and abs(a) > 35: found.append(('junction', i, f'bends {abs(a):.0f}° {min(i, n - i) * sp:.0f} m from its junction'))
+            elif abs(a) > 70: found.append(('kink', i, f'turns {abs(a):.0f}° in one 10 m step'))
+        for i in range(1, n):   # bumps in the profile
+            dg = abs((e['ele'][i + 1] - e['ele'][i]) - (e['ele'][i] - e['ele'][i - 1])) / sp * 100
+            if dg > 15: found.append(('bump', i, f'grade changes {dg:.0f} % in one step' + (' at its junction' if min(i, n - i) <= 2 else '')))
+        if found:
+            kinds = Counter(f[0] for f in found)
+            worst = found[0]
+            jag.append({'k': k, 'name': e['name'] or e['kind'], 'kind': e['kind'], 'types': dict(kinds),
+                        'spots': [[round(e['lat'][i], 6), round(e['lon'][i], 6), t, msg] for t, i, msg in found[:12]],
+                        'line': [[round(a, 6), round(b, 6)] for a, b in zip(e['lat'], e['lon'])]})
+
     # ---------------------------------------------------------------- summary + geometry
     km = lambda ks: round(sum(E[k]['L'] for k in ks) / 1000, 1)
     by_why = Counter(w for _, w in simplify)
@@ -178,6 +253,11 @@ def main():
                   'remove': {w: {'edges': n, 'km': km([k for k, x in simplify if x == w])} for w, n in by_why.items()}},
         'alleys': {'edges': len(alleys), 'km': km([k for k, _ in alleys])},
         'river': dict(Counter(r['kind'] for r in river)), 'bridgeEdges': bridge_edges,
+        'parallels': {'pairs': len(parallels), 'removable': sum(1 for p_ in parallels if p_['remove'] is not None),
+                      'km': round(sum(E[p_['remove']]['L'] for p_ in parallels if p_['remove'] is not None) / 1000, 1),
+                      'byKinds': dict(Counter('+'.join(sorted(p_['kinds'])) for p_ in parallels))},
+        'jagged': {'roads': len(jag), 'byType': dict(sum((Counter(j['types']) for j in jag), Counter())),
+                   'roadsByType': dict(Counter(t for j in jag for t in j['types']))},
         'overlaps': {'pairs': len(overlaps), 'areas': len(overlap_areas), 'm': sum(o['m'] for o in overlaps),
                      'removable': sum(1 for o in overlaps if o['removable']), 'byKinds': dict(Counter('+'.join(sorted(o['kinds'])) for o in overlaps))},
         'deadBridges': {'connected': sum(1 for r in B.REVIEW.get('bridges', []) if r['ok']), 'left': sum(1 for r in B.REVIEW.get('bridges', []) if not r['ok']),
@@ -199,7 +279,8 @@ def main():
                       'why': whys.get(e['k']), 'line': line(e)} for e in E],
            'leaves': [[round(jpos[n][0], 6), round(jpos[n][1], 6)] for n in leaves],
            'dense': [[[round(jpos[n][0], 6), round(jpos[n][1], 6)] for n in c] for c in dense],
-           'pieces': pieces, 'river': river, 'bridges': B.REVIEW.get('bridges', []), 'overlaps': overlaps, 'overlapAreas': overlap_areas}
+           'pieces': pieces, 'river': river, 'bridges': B.REVIEW.get('bridges', []), 'overlaps': overlaps, 'overlapAreas': overlap_areas,
+           'parallels': parallels, 'jagged': jag}
     os.makedirs(os.path.join(ROOT, 'tools', '.cache'), exist_ok=True)
     json.dump(out, open(os.path.join(ROOT, 'tools', '.cache', 'pgh-review.json'), 'w'), separators=(',', ':'))
     print(json.dumps(summary, indent=1, ensure_ascii=False))
