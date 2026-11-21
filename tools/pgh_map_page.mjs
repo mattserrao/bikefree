@@ -12,7 +12,7 @@ const args = process.argv.slice(2);
 const out = resolve(root, args.includes('--out') ? args[args.indexOf('--out') + 1] : 'tools/.cache/pgh-review-map');
 const load = (f) => { try { return JSON.parse(readFileSync(resolve(root, f), 'utf8')); } catch { return []; } };
 const PGH = load('routes/cities/pgh.json'), ROUTES = load('tools/.cache/pgh-routes.json'), MARKS = load('tools/.cache/pgh-landmarks.json');
-const JUNC = load('tools/.cache/pgh-junctions.json'), CROSS = load('tools/.cache/pgh-crossings.json'), BANK = load('tools/.cache/pgh-riverbank.json');
+const JUNC = load('tools/.cache/pgh-junctions.json'), CROSS = load('tools/.cache/pgh-crossings.json'), BANK = load('tools/.cache/pgh-riverbank-drawn.json');
 const USE = routeUse(PGH, ROUTES.map((r) => r.line));
 const lat0 = 40.44, lon0 = -79.98, kx = 111320 * Math.cos((lat0 * Math.PI) / 180), ky = 110540;
 const P = ([la, lo]) => [Math.round((lo - lon0) * kx), Math.round((la - lat0) * ky)];
@@ -50,13 +50,13 @@ select{width:100%;margin:2px 0 4px;font:inherit;padding:3px;border-radius:6px;bo
 #tog{position:fixed;right:10px;top:10px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 10px;font:inherit;color:var(--fg)}
 </style></head><body>
 <canvas id="c"></canvas>
-<div class="panel" id="panel"><h1>PGH — riverbanks, overpasses &amp; junctions</h1><div class="sub">Dots along the rivers: the real shore every 20 m, coloured by what the world draws there. Tap one. Overpasses and junction ideas are in the list. Blue = ridden by a route, grey = the rest (dashed = dead end).</div><div id="legend"></div></div>
+<div class="panel" id="panel"><h1>PGH — road network review</h1><div class="sub">The network as it is now. Coloured dots: junctions still worth tidying; red diamonds: overpasses not right (none now). Tap anything marked. More layers in the list. Blue = ridden by a route, grey = the rest (dashed = dead end).</div><div id="legend"></div></div>
 <button id="tog">Layers</button>
 <div id="info"></div>
 <script>
 const COL={xok:'#12a150',xbad:'#e0332f',ridden:'#1673e6',road:'#9aa1ab',rold:'#e0332f',rnew:'#1673e6',mark:'#12a150',short:'#e0332f',cluster:'#7a3fe0',acute:'#f08a00',busy:'#d6249f',triangle:'#0aa5c2',cut:'#f08a00'};
 const KINDS=[['short','Short links','under 25 m between junctions: merge them'],['cluster','Clusters','3+ junctions within 40 m: collapse to one'],['acute','Sharp forks','ways under 25° apart: drop the minor'],['busy','Busy junctions','5+ ways: drop minor ways to 4'],['triangle','Small triangles','under 200 m round: drop the minor side']];
-const on={bank:true,xok:false,xbad:false,net:true,routes:false,marks:false,short:false,cluster:false,acute:false,busy:false,triangle:false};
+const on={bank:false,xok:false,xbad:true,net:true,routes:false,marks:false,short:true,cluster:true,acute:true,busy:true,triangle:true};
 let D, cam={x:0,y:0,s:0.08}, sel=null, cur=-1;
 const c=document.getElementById('c'), g=c.getContext('2d');
 const lines=(a)=>{ const o=new Float32Array(a.length); let x=0,y=0; for(let i=0;i<a.length;i+=2){ x+=a[i]; y+=a[i+1]; o[i]=x; o[i+1]=y; } return o; };
@@ -76,9 +76,9 @@ function legend(){
   const row=(k,t,col,l,n)=>'<label class="lg"><input type="checkbox" data-k="'+k+'" '+(on[k]?'checked':'')+'><span class="'+t+'" style="background:'+col+'"></span><span>'+l+'</span><span class="n">'+n+'</span></label>';
   const bad=D.X.filter(x=>x.kind!=='ok');
   const bc=(c)=>D.B.filter(b=>b.cls.includes(c)).length;
-  let h='<div class="grp">Riverbank (every 20 m of real shore)</div>'+row('bank','dot','#7a3fe0','<b>Shore spots</b> <span class="n" style="margin:0">purple = walled in OSM but drawn as a slope · red = land drawn under water · orange = land drawn in the river · yellow = low muddy bank · teal = a way on the slope · grey = fine</span>',D.B.length+' · '+bc('walled-smeared')+' / '+bc('flooded')+' / '+bc('land-in-river')+' / '+bc('low-bank')+' / '+bc('way-on-slope'));
-  h+='<div class="grp">Overpasses &amp; underpasses</div>'+row('xbad','dot',COL.xbad,'<b>Not right</b> <span class="n" style="margin:0">'+[...new Set(bad.map(x=>x.kind))].join(', ')+'</span>',bad.length+'')+row('xok','dot',COL.xok,'<b>Correct</b> <span class="n" style="margin:0">a deck ≥ 4.5 m over the way under it</span>',D.X.length-bad.length+'');
-  h+='<div class="grp">Junction ideas</div>'+KINDS.map(([k,l,f])=>{ const L=D.J.filter(j=>j.kind===k); return row(k,'dot',COL[k],'<b>'+l+'</b> <span class="n" style="margin:0">'+f+'</span>', L.length+''); }).join('');
+  let h='<div class="grp">Riverbank (every 20 m of real shore)</div>'+row('bank','dot','#7a3fe0','<b>Shore as drawn</b> <span class="n" style="margin:0;white-space:normal">purple = OSM wall still drawn as a slope · yellow = low bank · grey = fine</span>',D.B.length+' · '+bc('walled-smeared')+' / '+bc('low-bank'));
+  h+='<div class="grp">Overpasses &amp; underpasses</div>'+row('xbad','dot',COL.xbad,'<b>Not right</b> <span class="n" style="margin:0;white-space:normal">'+[...new Set(bad.map(x=>x.kind))].join(', ')+'</span>',bad.length+'')+row('xok','dot',COL.xok,'<b>Correct</b> <span class="n" style="margin:0;white-space:normal">a deck ≥ 4.5 m over the way under it</span>',D.X.length-bad.length+'');
+  h+='<div class="grp">Junction ideas</div>'+KINDS.map(([k,l,f])=>{ const L=D.J.filter(j=>j.kind===k); return row(k,'dot',COL[k],'<b>'+l+'</b> <span class="n" style="margin:0;white-space:normal">'+f+'</span>', L.length+''); }).join('');
   h+='<div class="grp">Map</div>'+row('net','sw',COL.ridden,'PGH ('+D.N.length+' ways)',kmOf(()=>true)+' km · '+D.N.filter(w=>w.stub).length+' dead ends');
   h+=row('routes','sw',COL.rold,'Pittsburgh routes (red = old, blue = on PGH)',D.RT.length+'');
   h+='<select id="rsel"><option value="-1">All routes</option>'+D.RT.map((r,i)=>'<option value="'+i+'">'+r.name+' · '+r.km+' km · '+r.follow+' %</option>').join('')+'</select>';
@@ -119,7 +119,7 @@ function show(j){
   const el=document.getElementById('info'); sel=j||null;
   if(!j){ el.style.display='none'; draw(); return; }
   if(j.isBank){ const nm={'walled-smeared':'Walled bank drawn as a slope',flooded:'Land drawn under water','land-in-river':'Land drawn in the river','low-bank':'Low muddy bank','way-on-slope':'A way on the bank slope'};
-    el.innerHTML='<b>'+j.area+' — '+(j.cls.length?j.cls.map(c=>nm[c]).join(' · '):'fine')+'</b><span class="m">Drawn water edge '+(j.shift>0?j.shift+' m inland of':-j.shift+' m out from')+' the real shore · bank '+j.bank+' m over the pool, reaching it over '+j.spread+' m'+(j.walled?' · OSM: '+j.walled:'')+(j.way?' · '+j.way:'')+'</span>'; el.style.display='block'; sel={ls:[]}; draw(); return; }
+    el.innerHTML='<b>'+j.area+' — '+(j.cls.length?j.cls.map(c=>nm[c]).join(' · '):'fine')+'</b><span class="m">Bank '+j.bank+' m over the pool, reached over '+j.spread+' m'+(j.walled?' · OSM: '+j.walled:'')+(j.way?' · '+j.way:'')+'</span>'; el.style.display='block'; sel={ls:[]}; draw(); return; }
   if(j.cross){ const nm={ok:'Overpass — correct',low:'Overpass — low clearance','no-deck':'Overpass — deck too short',clash:'Overpass — rider hits the deck',level:'Ways cross with no junction',tunnel:'Underpass drawn open',kink:'Junction kink'}[j.kind];
     el.innerHTML='<b>'+nm+(j.route?' · on a route':'')+'</b><span class="m">'+(j.kind==='kink'?j.up+' into '+j.lo:j.up+' ('+j.upk+') over '+j.lo+' · '+j.dz+' m apart')+' · OSM: '+j.osm+'</span>'+(j.kind==='ok'?'':'<div class="fix">Fix: '+j.fix+'</div>'); el.style.display='block'; draw(); return; }
   const name={short:'Short link',cluster:'Cluster',acute:'Sharp fork',busy:'Busy junction',triangle:'Small triangle'}[j.kind];

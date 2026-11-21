@@ -1,7 +1,7 @@
 // The riverbank as the world now draws it (js/world/graph-world.js: ground shaped by the shore lines, embankments and
 // cuts), at the analysis spots of tools/pgh_riverbank.py — before/after numbers for F-PGH6.
 //   node tools/pgh_riverbank_check.mjs
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,7 +22,7 @@ const H = (x, z) => GraphWorld.prototype._groundH.call(W, x, z);
 const A = JSON.parse(readFileSync(resolve(root, 'tools/.cache/pgh-riverbank.json'), 'utf8'));
 const pool = pgh.waterLevelM, wy = W.waterY;
 const tot = { spots: 0, walled: 0, wallSmeared: 0, lowBank: 0, before: { walledSmeared: 0, lowBank: 0 } };
-const byArea = {};
+const byArea = {}, drawn = [];
 for (const s of A.spots) {
   const q = proj.toLocal(s.lat, s.lon), sh = W.shore.at(q.x, q.z);
   if (!sh) continue;
@@ -44,6 +44,11 @@ for (const s of A.spots) {
   if (s.cls.includes('low-bank')) { area.low0++; tot.before.lowBank++; }
   if (s.walled.length) { area.walled++; tot.walled++; if (spread > 8 && top - pool > 2) { area.smeared++; tot.wallSmeared++; } }
   if (h5 < 1.5) { area.low++; tot.lowBank++; }
+  const cls = [];
+  if (s.walled.length && spread > 8 && top - pool > 2) cls.push('walled-smeared');
+  if (h5 < 1.5) cls.push('low-bank');
+  drawn.push({ lat: s.lat, lon: s.lon, area: s.area, cls, shift: 0, bank: +(top - pool).toFixed(1), spread, walled: s.walled, way: s.way, drawnWall: !!walled });
 }
+writeFileSync(resolve(root, 'tools/.cache/pgh-riverbank-drawn.json'), JSON.stringify({ spots: drawn }));
 console.log(`riverbank as drawn: ${tot.spots} spots · walled banks smeared (> 8 m to the top) ${tot.before.walledSmeared} → ${tot.wallSmeared} · low banks (< 1.5 m, 5 m in) ${tot.before.lowBank} → ${tot.lowBank}`);
 for (const [a, v] of Object.entries(byArea).sort((p, q) => q[1].n - p[1].n)) console.log(`  ${a.padEnd(28)} smeared ${String(v.smeared0).padStart(3)} → ${String(v.smeared).padStart(3)} · low ${String(v.low0).padStart(3)} → ${String(v.low).padStart(3)}`);
