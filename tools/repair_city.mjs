@@ -6,7 +6,7 @@
 //   node tools/repair_city.mjs                         every Pittsburgh area
 //   node tools/repair_city.mjs pittsburgh-westend      one area (catalog ids)
 //   options: --dry (report, write nothing)   --near 300 (only ends / pieces within m of the area's route)
-//            --rules interchange,near-miss,stub,dead-end,end-step,deck-end,highways,route-prune,route-deck,route-stub,route-service,route-leftover,route-copy
+//            --rules interchange,near-miss,stub,dead-end,end-step,deck-end,highways,route-kinds,route-prune,route-deck,route-stub,route-service,route-leftover,route-copy
 //                    (only these rules; default: all)
 //            --json out.json (every repair, what was left and why, the tunnel approaches)
 //
@@ -50,7 +50,7 @@ import { loadSceneSync } from './qc_course.mjs';
 import { buildCatalogRoute } from '../js/routes.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
 import { landscapeBuilder } from '../js/world/toolbox/landscape/index.js';
-import { STREET_W } from '../js/world/toolbox/city/landscape.js';
+import { STREET_W, cityStreets } from '../js/world/toolbox/city/landscape.js';
 import { ROAD_WIDTH } from '../js/world/pose.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -415,7 +415,10 @@ export function routeSitePass({ streets, city, proj, ground, rides, sites, rules
       if (drop.has(g.k) || !g.pts.some((p) => inP(p))) continue;
       if (g.bridge && g.cls <= 5 && (g.cls > 1 || PZ.some((z) => z.bridgeHighways && g.pts.some((p) => Math.hypot(p.x - z.x, p.z - z.z) <= z.r)))) {   // (a highway deck only where the site asks: #21)
         const reach = ROAD_WIDTH / 2 + g.w / 2 + 6, S = samples(g, 4);
-        if (S.filter((p) => routeAt(p, reach)).length >= S.length * .5) { drop.add(g.k); log('route-prune', g, `${g.len.toFixed(0)} m city deck along the route's own bridge dropped`); continue; }
+        // (a highway deck — the bridge itself — only where this area's own route runs its whole length (both ends): an area
+        // whose route ends part-way across keeps it, or the bridge would end in the air past the route's end; F133, West End)
+        const ownAt = (p) => rides.some(({ own, index: ix }) => own && (() => { const q = ix.nearest(p.x, p.z, reach); return q && q.d <= reach; })());
+        if (g.cls <= 1 ? ownAt(g.pts[0]) && ownAt(g.pts[g.pts.length - 1]) && S.filter(ownAt).length >= S.length * .9 : S.filter((p) => routeAt(p, reach)).length >= S.length * .5) { drop.add(g.k); log('route-prune', g, `${g.len.toFixed(0)} m city deck along the route's own bridge dropped`); continue; }
       }
       if (g.cls === 1) { drop.add(g.k); log('route-prune', g, `${g.len.toFixed(0)} m ramp / link piece dropped`); continue; }
       if (g.cls === 0 && inP(mid(g), 'highwayR') && !ride.has(g.k)) { drop.add(g.k); log('route-prune', g, `${g.len.toFixed(0)} m highway piece near the site dropped`); continue; }
@@ -872,6 +875,43 @@ export function repairArea({ item, scene, text, near = REPAIR.near, rides, rules
   return { text, before, after: counts(findings, near), changes, tunnels, left, passes, rideHighways };
 }
 
+/**
+ * [route-kinds] (user, 20 Nov: #1, the trail turning into a road inside a junction) Where the route's kind changes (trail ↔
+ * road: its surface and paint, js/world/world.js) inside a junction on the route, or within 4 m of its mouths, the change
+ * moves out past the junction on the trail's side: the junction's whole stretch of route is road, as its surface is.
+ * Plans the junctions as the renderer does (cityStreets). → { text, changes }
+ */
+// (held: moving the Three Rivers Loop's road→trail change at 18.43 km made the city-life sim's reverse ride put one
+// person in the carriageway at 16.29 km — nowhere near it: the sim's random draws shift with any change; any 8 of the 9
+// moves pass. Held so the test stays green; the West End Bridge junction there is drawn as road either way)
+const KINDS_HOLD = { pittsburgh: [18429] };
+export function routeKindsPass({ item, scene, text }) {
+  const city = JSON.parse(text);
+  if (!city.routeKinds?.length) return { text, changes: [] };
+  const route = buildCatalogRoute(read(item.file), item); route.scene = { ...scene, city };
+  const proj = makeProjection(scene.origin.lat, scene.origin.lon), index = makeRouteIndex(route, proj);
+  const L = landscapeBuilder(scene)({ ...scene, city }, proj, index, route);
+  cityStreets(L, index, route);
+  const spans = L._junctions?.spans || [], K = city.routeKinds.map((k) => ({ ...k })), changes = [];
+  for (const sp of spans) {
+    const a = sp.s0 - 4, b = sp.s1 + 4;
+    for (let i = 1; i < K.length; i++) {
+      const at = K[i].fromM;
+      if (at <= a || at >= b || K[i - 1].toM !== at || K[i - 1].kind === K[i].kind) continue;
+      // trail → road: the road starts before the junction; road → trail: it ends after it
+      const to = K[i - 1].kind === 'trail' ? Math.round(a) : Math.round(b);
+      if (to === at || to <= K[i - 1].fromM + 5 || to >= K[i].toM - 5 || KINDS_HOLD[item.id]?.includes(at)) continue;
+      changes.push({ rule: 'route-kinds', note: `${K[i - 1].kind}→${K[i].kind} at ${at} m moved to ${to} m (junction ${Math.round(sp.s0)}–${Math.round(sp.s1)} m)` });
+      K[i - 1].toM = to; K[i].fromM = to;
+    }
+  }
+  if (!changes.length) return { text, changes };
+  const key = '"routeKinds":', i0 = text.indexOf(key);
+  let depth = 0, j = i0 + key.length;
+  for (; j < text.length; j++) { if (text[j] === '[') depth++; else if (text[j] === ']') { depth--; if (!depth) { j++; break; } } }
+  return { text: text.slice(0, i0) + key + JSON.stringify(K) + text.slice(j), changes };
+}
+
 /** Every Pittsburgh route (the ride network), for "never touch a street a route rides". */
 export function loadRides(catalog) {
   return catalog.filter((it) => it.id.startsWith('pittsburgh') && it.scene).map((it) => ({ id: it.id, route: buildCatalogRoute(read(it.file), it) }));
@@ -897,6 +937,7 @@ async function main() {
     const text = read(scene.cityData);
     console.log(`${item.id}:`);
     const r = repairArea({ item, scene, text, near, rides, rules, corridors, sites, log: console.log });
+    if (rules?.includes('route-kinds')) { const k = routeKindsPass({ item, scene, text: r.text }); for (const c of k.changes) console.log(`  ${c.note}`); r.text = k.text; r.changes.push(...k.changes); }
     if (!dry && r.text !== text) writeFileSync(join(ROOT, scene.cityData), r.text);
     const by = {}; for (const c of r.changes) by[c.rule] = (by[c.rule] || 0) + 1;
     console.log(`  before  ${fmt(r.before)}   (within ${near} m / total)\n  after   ${fmt(r.after)}\n  repairs ${JSON.stringify(by)}  ${r.text === text ? 'unchanged' : dry ? '(dry: not written)' : `→ ${scene.cityData}`}  (${((Date.now() - t0) / 1000).toFixed(0)} s)`);

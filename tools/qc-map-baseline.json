@@ -53,7 +53,7 @@
  },
  "pittsburgh-slopes": {
   "near-miss": 8,
-  "bump": 5,
+  "bump": 4,
   "stub": 5,
   "dead-end": 2
  },
