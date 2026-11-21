@@ -48,7 +48,7 @@ select{width:100%;margin:2px 0 4px;font:inherit;padding:3px;border-radius:6px;bo
 #tog{position:fixed;right:10px;top:10px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 10px;font:inherit;color:var(--fg)}
 </style></head><body>
 <canvas id="c"></canvas>
-<div class="panel" id="panel"><h1>PGH — junctions within the routes</h1><div class="sub">Tap a marker for the idea. Blue = ridden by a route, grey = the rest (dashed = dead end).</div><div id="legend"></div></div>
+<div class="panel" id="panel"><h1>PGH — junctions within the routes</h1><div class="sub">Neatened 21 Nov: the markers are what is left. Tap one for the idea. Blue = ridden by a route, grey = the rest (dashed = dead end).</div><div id="legend"></div></div>
 <button id="tog">Layers</button>
 <div id="info"></div>
 <script>
