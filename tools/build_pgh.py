@@ -30,6 +30,7 @@ CACHE = os.path.join(ROOT, 'tools', '.cache')
 UA = {'User-Agent': 'bikefree-graph-builder/0.1 (personal project)'}
 OFFLINE = '--offline' in sys.argv
 STEP = 10
+REVIEW = {}   # what the build left out, for tools/review_pgh.py
 
 
 def http_get(url, pause=1.0):
@@ -288,6 +289,7 @@ def build(cfg):
                     if y not in seen: seen.add(y); stack.append(y)
         comps.append(comp)
     comps.sort(key=len, reverse=True)
+    REVIEW['pieces'] = [[e for e in edges if find(e['refs'][0]) in set(c)] for c in comps[1:]]   # (tools/review_pgh.py)
     main = set(comps[0])
     lost = sum(1 for e in edges if find(e['refs'][0]) not in main)
     edges = [e for e in edges if find(e['refs'][0]) in main]
@@ -326,7 +328,9 @@ def build(cfg):
         named = defaultdict(float)
         for p in parts: named[p['name']] += p['len']
         kind = max(parts, key=lambda p: p['len'])['kind']
-        chains.append({'a': start, 'b': n, 'refs': refs, 'bridge': br, 'kind': kind,
+        hws = defaultdict(float)
+        for p in parts: hws[p['hw']] += p['len']
+        chains.append({'a': start, 'b': n, 'refs': refs, 'bridge': br, 'kind': kind, 'hw': max(hws.items(), key=lambda x: x[1])[0],
                        'name': max(named.items(), key=lambda x: x[1])[0], 'names': [k for k, v in sorted(named.items(), key=lambda x: -x[1]) if k]})
     print(f'  graph: {len(chains)} edges after joining through bends')
 
