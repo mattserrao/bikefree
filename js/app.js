@@ -1117,10 +1117,15 @@ async function openWorld(route) {
     world.start();
     return;
   }
+  let WorldClass;
   try {
-    worldModule = worldModule || await import('./world/world.js');
-    // [F399] static city meshes keep no CPU copy once on the GPU (~300 MB less on a Pittsburgh start); ?keepGeometry=1 keeps it
-    worldModule.setGeometryRelease?.(!new URLSearchParams(location.search).has('keepGeometry'));
+    if (base.graph) WorldClass = (await import('./world/graph-world.js')).GraphWorld;   // [pgh] a free-ride road graph: its own light world
+    else {
+      worldModule = worldModule || await import('./world/world.js');
+      // [F399] static city meshes keep no CPU copy once on the GPU (~300 MB less on a Pittsburgh start); ?keepGeometry=1 keeps it
+      worldModule.setGeometryRelease?.(!new URLSearchParams(location.search).has('keepGeometry'));
+      WorldClass = worldModule.World;
+    }
   } catch (err) {
     log('3d', `Could not start the 3D view: ${err.message}`, 'error');
     document.body.classList.add('no-world');
@@ -1128,7 +1133,7 @@ async function openWorld(route) {
   }
   if (world) { world.dispose(); world = null; }
   try {
-    world = new worldModule.World($('worldView'), base, { log, quality: settings.worldQuality, path: route.netRide || null, areas });
+    world = new WorldClass($('worldView'), base, { log, quality: settings.worldQuality, path: route.netRide || null, areas });
   } catch (err) {
     log('3d', `3D view needs WebGL: ${err.message}`, 'error');
     document.body.classList.add('no-world');
@@ -1442,6 +1447,10 @@ const DEMO_ROUTE = { id: 'builtin-demo-hills', kind: 'route', name: 'Demo Hills 
 let routeItems = [];
 let parkItems = null;
 let netItems = [];          // network presets (choose your turns): listed as routes, not as scenery
+// [pgh] free-ride road graphs (tools/build_pgh.py → js/graph.js, js/world/graph-world.js): every street, trail and bridge
+const GRAPH_ITEMS = [{ id: 'builtin-graph-pgh', routeId: 'pgh-free', kind: 'route', name: 'PGH · Free ride', park: 'Pittsburgh, PA',
+  group: 'Scenic routes — 3D', network: 'routes/cities/pgh.json', graph: true, free: true, tags: ['varied'],
+  note: 'Every street, trail and bridge in the Pittsburgh corridor. No traffic and no set route: straight on at every junction unless you choose a turn' }];
 const routeCache = new Map();
 const netCache = new Map();   // network JSON by URL
 let previewRoute = null;
@@ -1477,6 +1486,8 @@ async function loadParks() {
       }
     } catch (err) { log('app', `Could not load the ${p.name} network: ${err.message}`, 'error'); }
   }
+  // [pgh] free-ride road graphs: listed as routes of their own (their data loads only when picked)
+  for (const g of GRAPH_ITEMS) netItems.push({ ...g });
   await manifest;
   return parkItems;
 }
@@ -1485,7 +1496,7 @@ async function refreshRouteList(selectId) {
   const [library, parks] = await Promise.all([store.listLibrary('route').catch(() => []), loadParks(), loadIdeas()]);
   const mine = library.map((r) => ({ ...r, group: 'My routes' }));
   // a city loop with a network is listed as its presets (the loop itself is one of them); it stays a scenery choice
-  routeItems = [...parks.filter((p) => !p.area).flatMap((p) => (p.network && netItems.some((n) => n.baseId === p.id) ? netItems.filter((n) => n.baseId === p.id) : [p])), ...mine, DEMO_ROUTE];
+  routeItems = [...parks.filter((p) => !p.area).flatMap((p) => (p.network && netItems.some((n) => n.baseId === p.id) ? netItems.filter((n) => n.baseId === p.id) : [p])), ...netItems.filter((n) => n.graph), ...mine, DEMO_ROUTE];
   if (selectId || !routeItems.some((r) => r.id === selectedRouteId)) selectedRouteId = selectId || defaultRouteId(routeItems);
   // The list shows straight from the catalog (PLAN 7.11): a park's numbers and outline are baked into it
   // (tools/build_routes.mjs), so no GPX or scenery is fetched first. Scenery loads when a ride starts (openWorld).
@@ -1493,14 +1504,14 @@ async function refreshRouteList(selectId) {
   renderScenery();
   // then, in the background: your own routes and the demo (no catalog numbers), and each city's network routes
   // (its card's map and panel); a park's GPX only when it's previewed
-  routesLoaded = Promise.all(routeItems.filter((it) => !it.stats && !it.baseId).map((it) => loadRouteItem(it).catch(() => null)))
+  routesLoaded = Promise.all(routeItems.filter((it) => !it.stats && !it.baseId && !it.graph).map((it) => loadRouteItem(it).catch(() => null)))
     .then(() => loadCityRoutes()).then(() => { routesLoadedYet = true; renderRouteCards(); renderScenery(); if ($('cityDlg').open) { renderCity(); renderCityMap(); } });
   await previewSelectedRoute();
 }
 let routesLoaded = Promise.resolve(), routesLoadedYet = false;
 /** Every city route (presets, free ride, your own): built over the city's network once it has loaded. */
 function loadCityRoutes() {
-  return Promise.all(netItems.map((it) => loadRouteItem(it).catch((err) => { log('app', `Could not load ${it.name}: ${err.message}`, 'error'); return null; })));
+  return Promise.all(netItems.filter((it) => !it.graph).map((it) => loadRouteItem(it).catch((err) => { log('app', `Could not load ${it.name}: ${err.message}`, 'error'); return null; })));
 }
 /** A route's numbers for its card and goal tags: the loaded route, else the catalog's (the same fields). */
 const routeStats = (it) => routeCache.get(it.id) || it.stats || null;
@@ -1569,7 +1580,7 @@ function renderRouteCards() {
         <div class="city-text"><b>${escapeHtml(it.name)}</b><div class="rsub">${escapeHtml(sub)}</div>${sel ? `<div class="rsel">Selected · ${escapeHtml(shortName(sel.name))}</div>` : '<div class="rsel muted">Pick a route on the map</div>'}</div>${CHEVRON}</button>`;
     }
     const r = routeStats(it);
-    const sub = !r ? (routesLoadedYet ? 'Could not load' : '…') : r.stageRoute && r.oneWay
+    const sub = !r ? (it.graph ? 'every street, trail and bridge · free ride' : routesLoadedYet ? 'Could not load' : '…') : r.stageRoute && r.oneWay
       ? `${fmtDist(r.turnS, 1)} ${distUnit()} to the finish · ${fmtElev(r.oneWay.ascent).toLocaleString()} ${elevUnit()}`
       : r.free ? `${r.network.nodes.size} junctions · choose every turn`
       : r.netRide ? `${fmtDist(r.lapM, 1)} ${distUnit()} ${r.netOpen ? 'one way' : 'loop'} · ${fmtElev(r.lapClimbM).toLocaleString()} ${elevUnit()} · choose your turns`
@@ -1937,6 +1948,20 @@ function buildNetwork(base, url) {
   return netBuilds.get(url);
 }
 async function loadRouteItemNow(item) {
+  if (item.graph) {
+    // [pgh] a free-ride road graph (js/graph.js): every edge on a synthetic base line, ridden by the network machinery
+    const [json, { graphNetwork }] = await Promise.all([fetch(item.network).then((r) => r.json()), import('./graph.js')]);
+    const { base, network } = graphNetwork(json, { name: item.name });
+    const net = loadNetwork(network, base);
+    const route = makePathRoute(net, { id: item.routeId, name: item.name, path: null, first: network.freeRide.first }, { id: item.routeId, name: item.name, park: item.park });
+    route.note = item.note || '';
+    route.scene = null;
+    route.graph = true;
+    route.stops = route.stops.slice(0, 8);   // (a free ride over a whole city: its first few junctions as start points, not hundreds)
+    route.netRide.addEventListener('change', () => { if (session.route === route && world?.path === route.netRide) world.setCourseMarks(courseMarks()); });
+    routeCache.set(item.id, route);
+    return route;
+  }
   if (item.preset || item.free || item.custom) {
     // a network preset: the path route over the city loop's own route and world (js/network.js)
     const base = await loadRouteItem(parkItems.find((p) => p.id === item.baseId));
