@@ -33,6 +33,9 @@ export const DEFAULTS = {
   sidewalkLift: .06,  // corner sidewalks above the junction's height line (the streets' sidewalks: city.js, .06)
   crosswalkW: 3,      // crosswalk depth along the arm
   maxSlope: .1,       // a street-only junction's plane is never steeper than this
+  routeSpanM: 34,     // [junction-check] a junction on the route never spans more than this (tried 20: it split blobs into overlapping junctions — the blobs were long trims at sharp arms, see sharpTrimM)
+  sharpTrimM: 14,     // [junction-check] two arms meeting at < sharpDeg: neither trimmed back further than this (a taper, not a blob)
+  sharpDeg: 25,
   curbMinGap: Math.PI / 4,      // [junction-check] corner kerbs only between arms 45°…
   curbMaxGap: Math.PI * 5 / 6,  //   …to 150° apart,
   curbMinM: 1.5,                //   at least this long
@@ -274,7 +277,7 @@ export function* planJunctionsJob(streets, ctx, options = {}) {
     const all = [...members[a], ...members[b]];
     let span = 0;
     for (const p of all) for (const q of all) span = Math.max(span, Math.hypot(items[p].x - items[q].x, items[p].z - items[q].z));
-    if (span > O.maxSpanM) continue;
+    if (span > (all.some((m) => items[m].route) ? O.routeSpanM : O.maxSpanM)) continue;
     if (all.some((m) => items[m].route) && new Set(all.filter((m) => items[m].route).map((m) => Math.round(items[m].s / 60))).size > 2) continue;
     parent[b] = a; members[a] = all;
   }
@@ -384,7 +387,10 @@ export function* planJunctionsJob(streets, ctx, options = {}) {
       }
       if (!corner.arc && gap < Math.PI * .95) {   // sharp or awkward: the edges' own crossing
         const m = meet(along(A.N, nA, A.h), A.u, along(B.N, nB, -B.h), B.u);
-        if (m && m[0] > 0 && m[1] > 0) { corner.tA = Math.min(O.maxTrimM, m[0]); corner.tB = Math.min(O.maxTrimM, m[1]); }
+        // [junction-check] two arms at a sharp angle cross only far out: trimmed back no further than sharpTrimM, the
+        // narrower one tapers into the wider (its ribbon ends over it) instead of a long wedge of junction surface
+        const lim = gap < O.sharpDeg * Math.PI / 180 ? O.sharpTrimM : O.maxTrimM;
+        if (m && m[0] > 0 && m[1] > 0) { corner.tA = Math.min(lim, m[0]); corner.tB = Math.min(lim, m[1]); }
       }
       corners.push(corner);
     }
