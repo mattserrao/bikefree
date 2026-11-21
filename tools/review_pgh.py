@@ -130,6 +130,62 @@ def main():
         river.append({'kind': 'crossing', 'name': f"{eo['name']} over {eu['name']}", 'lat': round(eo['lat'][i], 6), 'lon': round(eo['lon'][i], 6),
                       'msg': f'only {gap:.1f} m between them (want ≥ {cfg["overpassClearM"]} m), no junction', 'sev': 'fail'})
 
+    # ---------------------------------------------------------------- overlapping roads
+    # two ways whose drawn ribbons overlap (centre lines closer than half their widths added up, at about the same height),
+    # away from the junctions they share: parallel ways drawn on top of each other
+    W = cfg['widths']
+    RANK = {'path': 0, 'plaza': 0, 'alley': 1, 'residential': 2, 'tertiary': 3, 'secondary': 4, 'primary': 5}
+    kx, ky = cor.kx, 110540
+    pts = defaultdict(list)
+    for k, e in enumerate(E):
+        for i in range(e['n'] + 1): pts[(int(e['lon'][i] * kx / 20), int(e['lat'][i] * ky / 20))].append((k, i))
+    pair_hits = defaultdict(list)   # (ka, kb) → [(ia, ib)]
+    for k, e in enumerate(E):
+        sp = e['L'] / max(1, e['n'])
+        for i in range(e['n'] + 1):
+            if min(i, e['n'] - i) * sp < 15: continue   # (near its own junctions: ways meet there)
+            x, y = e['lon'][i] * kx, e['lat'][i] * ky
+            cx, cy = int(x / 20), int(y / 20)
+            for a in (-1, 0, 1):
+                for b in (-1, 0, 1):
+                    for k2, j in pts.get((cx + a, cy + b), ()):
+                        if k2 <= k: continue
+                        o = E[k2]
+                        sp2 = o['L'] / max(1, o['n'])
+                        if min(j, o['n'] - j) * sp2 < 15: continue
+                        d = math.hypot(o['lon'][j] * kx - x, o['lat'][j] * ky - y)
+                        if d < (W.get(e['kind'], 7) + W.get(o['kind'], 7)) / 2 + 0.5 and abs(o['ele'][j] - e['ele'][i]) < 3:
+                            pair_hits[(k, k2)].append((i, j))
+    Gx = B.Graph(E)
+    overlaps = []
+    for (ka, kb), hits in pair_hits.items():
+        ia = sorted({i for i, _ in hits}); ib = sorted({j for _, j in hits})
+        lenm = max(len(ia) * E[ka]['L'] / max(1, E[ka]['n']), len(ib) * E[kb]['L'] / max(1, E[kb]['n']))
+        if lenm < 20: continue   # (a crossing, not an overlap)
+        ea, eb = E[ka], E[kb]
+        minor = min((ka, kb), key=lambda k: (RANK.get(E[k]['kind'], 2), E[k]['L']))
+        major = kb if minor == ka else ka
+        ok = Gx.can_remove(minor)
+        if not ok and Gx.can_remove(major): minor, major, ok = major, minor, True
+        overlaps.append({'a': ka, 'b': kb, 'm': round(lenm), 'names': [ea['name'] or ea['kind'], eb['name'] or eb['kind']],
+                         'kinds': [ea['kind'], eb['kind']], 'remove': minor, 'removable': ok,
+                         'segA': [[round(ea['lat'][i], 6), round(ea['lon'][i], 6)] for i in range(ia[0], ia[-1] + 1)],
+                         'segB': [[round(eb['lat'][j], 6), round(eb['lon'][j], 6)] for j in range(ib[0], ib[-1] + 1)],
+                         'lat': round(ea['lat'][ia[len(ia) // 2]], 6), 'lon': round(ea['lon'][ia[len(ia) // 2]], 6)})
+    # areas: overlaps within 150 m of each other
+    par = list(range(len(overlaps)))
+    def fo(x):
+        while par[x] != x: par[x] = par[par[x]]; x = par[x]
+        return x
+    for i, o in enumerate(overlaps):
+        for j in range(i):
+            if B.hv((o['lat'], o['lon']), (overlaps[j]['lat'], overlaps[j]['lon'])) < 150: par[fo(i)] = fo(j)
+    areas = defaultdict(list)
+    for i in range(len(overlaps)): areas[fo(i)].append(i)
+    overlap_areas = sorted(({'n': len(ix), 'm': sum(overlaps[i]['m'] for i in ix), 'lat': round(sum(overlaps[i]['lat'] for i in ix) / len(ix), 6),
+                             'lon': round(sum(overlaps[i]['lon'] for i in ix) / len(ix), 6),
+                             'names': list(dict.fromkeys(nm for i in ix for nm in overlaps[i]['names'] if nm))[:6]} for ix in areas.values()), key=lambda a: -a['m'])
+
     # ---------------------------------------------------------------- summary + geometry
     km = lambda ks: round(sum(E[k]['L'] for k in ks) / 1000, 1)
     by_why = Counter(w for _, w in simplify)
@@ -142,6 +198,8 @@ def main():
                   'remove': {w: {'edges': n, 'km': km([k for k, x in simplify if x == w])} for w, n in by_why.items()}},
         'alleys': {'edges': len(alleys), 'km': km([k for k, _ in alleys])},
         'river': dict(Counter(r['kind'] for r in river)), 'bridgeEdges': bridge_edges,
+        'overlaps': {'pairs': len(overlaps), 'areas': len(overlap_areas), 'm': sum(o['m'] for o in overlaps),
+                     'removable': sum(1 for o in overlaps if o['removable']), 'byKinds': dict(Counter('+'.join(sorted(o['kinds'])) for o in overlaps))},
         'deadBridges': {'connected': sum(1 for r in B.REVIEW.get('bridges', []) if r['ok']), 'left': sum(1 for r in B.REVIEW.get('bridges', []) if not r['ok']),
                         'worstKinkPct': max((r.get('kinkPct', 0) for r in B.REVIEW.get('bridges', [])), default=0)},
     }
@@ -161,7 +219,7 @@ def main():
                       'why': whys.get(e['k']), 'line': line(e)} for e in E],
            'leaves': [[round(jpos[n][0], 6), round(jpos[n][1], 6)] for n in leaves],
            'dense': [[[round(jpos[n][0], 6), round(jpos[n][1], 6)] for n in c] for c in dense],
-           'pieces': pieces, 'river': river, 'bridges': B.REVIEW.get('bridges', [])}
+           'pieces': pieces, 'river': river, 'bridges': B.REVIEW.get('bridges', []), 'overlaps': overlaps, 'overlapAreas': overlap_areas}
     os.makedirs(os.path.join(ROOT, 'tools', '.cache'), exist_ok=True)
     json.dump(out, open(os.path.join(ROOT, 'tools', '.cache', 'pgh-review.json'), 'w'), separators=(',', ':'))
     print(json.dumps(summary, indent=1, ensure_ascii=False))
