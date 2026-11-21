@@ -74,5 +74,12 @@
  ],
  "connectorM": 180,
  "maxGradePct": 30,
- "maxAvgGradePct": 34
+ "maxAvgGradePct": 34,
+ "bridgeClearM": 11,
+ "bridgeRampPct": 6,
+ "riverFloorM": 2.5,
+ "riversideM": 25,
+ "denseM": 40,
+ "removeAlleys": true,
+ "overpassClearM": 4.5
 }

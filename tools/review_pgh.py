@@ -24,7 +24,7 @@ ROOT = B.ROOT
 DENSE_M = 40          # an edge shorter than this joins two junctions into one cluster
 MINOR = {'service', 'footway', 'path', 'cycleway', 'pedestrian', 'track', 'bridleway', 'living_street'}
 LINKS = {'primary_link', 'secondary_link', 'tertiary_link', 'trunk', 'trunk_link'}
-CLEAR_M = 10          # a river bridge's deck should be at least this far above the pool
+CLEAR_M = 9.5         # a river bridge's deck should be about bridgeClearM above the pool (half a metre's slack)
 STEP_JUMP = 8         # % grade change where a deck meets the street that reads as a kink
 
 
@@ -32,8 +32,7 @@ def main():
     cfg = json.load(open(os.path.join(ROOT, 'tools', 'city', 'pgh.json')))
     import contextlib, io
     with contextlib.redirect_stdout(io.StringIO()):
-        nodes, chains, jpos, cor = B.build(cfg)
-        E, jh = B.heights(cfg, nodes, chains, jpos)
+        nodes, E, jpos, jh, cor = B.build_all(cfg)   # the graph as written (simplified, crossings cleared)
     pool = cfg['waterLevelM']
     for k, e in enumerate(E): e['k'] = k
     water_cache = {}
@@ -82,64 +81,13 @@ def main():
     for k in dead: branches[bf(k)].append(k)
     blen = sorted((sum(E[k]['L'] for k in ks) for ks in branches.values()), reverse=True)
 
-    # ---------------------------------------------------------------- dense clusters and what could go (on the loops)
-    core = [E[k] for k in alive]
-    cdeg = defaultdict(int)
-    for e in core: cdeg[e['a']] += 1; cdeg[e['b']] += 1
-    parent = {}
-    def f(x):
-        while parent.get(x, x) != x: parent[x] = parent.get(parent[x], parent[x]); x = parent[x]
-        return x
-    for e in core:
-        if e['L'] < DENSE_M and e['a'] != e['b']: parent[f(e['a'])] = f(e['b'])
-    clusters = defaultdict(set)
-    for e in core:
-        for n in (e['a'], e['b']): clusters[f(n)].add(n)
-    dense = [c for c in clusters.values() if len(c) >= 3]
-    in_dense = {n: i for i, c in enumerate(dense) for n in c}
-
-    adj = defaultdict(list)
-    for e in core: adj[e['a']].append(e['k']); adj[e['b']].append(e['k'])
-    removed = set()
-    def still_connected(k):
-        e = E[k]
-        if e['a'] == e['b']: return True
-        seen, st = {e['a']}, [e['a']]
-        while st:
-            x = st.pop()
-            for j in adj[x]:
-                if j == k or j in removed: continue
-                o = E[j]
-                for y in (o['a'], o['b']):
-                    if y == e['b']: return True
-                    if y not in seen: seen.add(y); st.append(y)
-        return False
-    def try_remove(k, why, out):
-        e = E[k]
-        if k in removed: return
-        if cdeg[e['a']] < 3 or cdeg[e['b']] < 3: return   # (leaves no new dead end)
-        if not still_connected(k): return
-        removed.add(k); cdeg[e['a']] -= 1; cdeg[e['b']] -= 1
-        out.append((k, why))
-    simplify = []
-    # 1. turn slips and boulevard crossing pieces (links), short trail / crosswalk bits
-    for e in sorted(core, key=lambda e: e['L']):
-        if e['hw'] in LINKS and e['L'] < 150: try_remove(e['k'], 'turn slip / link', simplify)
-    for e in sorted(core, key=lambda e: e['L']):
-        if e['kind'] == 'path' and e['L'] < DENSE_M: try_remove(e['k'], 'short trail or crosswalk piece', simplify)
-    # 2. short minor edges inside dense clusters (alleys, service, paths), shortest first
-    for e in sorted(core, key=lambda e: e['L']):
-        if e['L'] < DENSE_M and (e['hw'] in MINOR or e['kind'] == 'alley') and (e['a'] in in_dense or e['b'] in in_dense):
-            try_remove(e['k'], 'short minor way in a dense cluster', simplify)
-    # 3. other short edges inside dense clusters (a street stub between two junctions a few metres apart)
-    for e in sorted(core, key=lambda e: e['L']):
-        if e['L'] < 25 and e['a'] in in_dense and e['b'] in in_dense:
-            try_remove(e['k'], 'very short link inside a dense cluster', simplify)
-    # 4. optional: every alley still on a loop (a big simplification; Pittsburgh's "Ways")
-    alleys = []
-    for e in sorted(core, key=lambda e: e['L']):
-        if e['kind'] == 'alley': try_remove(e['k'], 'alley', alleys)
-    # cascade: removing ways leaves no new dead ends by construction (both ends kept ≥ 2 ways)
+    # ---------------------------------------------------------------- dense clusters and what could still go (a dry run of the build's own plan)
+    G = B.Graph(E)
+    # (on the graph as it is: dead ends stay)
+    dense = B.dense_nodes(cfg, E, G.gone)
+    plan = B.simplify_plan(cfg, E, G)
+    simplify = [(k, w) for k, w in plan if w != 'alley']
+    alleys = [(k, w) for k, w in plan if w == 'alley']
 
     # ---------------------------------------------------------------- disconnected pieces (left out by the build)
     pieces = []
@@ -166,7 +114,7 @@ def main():
         if runs: bridge_edges += 1
         for a, b in runs:
             over = [i for i in range(a, b + 1) if is_water(e['lat'][i], e['lon'][i])]
-            if over:
+            if len(over) >= 4:   # (a deck across the river, not a boardwalk on the bank)
                 clear = min(ele[i] for i in over) - pool
                 if clear < CLEAR_M: add('low-deck', e, over[len(over) // 2], f'deck {clear:.1f} m above the river (want ≥ {CLEAR_M} m)')
             for end, inner, outer in ((a, a + 1, a - 1), (b, b - 1, b + 1)):
@@ -177,7 +125,7 @@ def main():
         # streets on the river / dips beside it (not on decks)
         for i in range(n + 1):
             if br[i]: continue
-            if is_water(e['lat'][i], e['lon'][i]) and ele[i] < pool + 4:
+            if is_water(e['lat'][i], e['lon'][i]) and ele[i] < pool + cfg['riverFloorM'] - 0.1:
                 add('in-river', e, i, f'street at {ele[i] - pool:.1f} m above the pool where the terrain reads river (a river wall)'); break
         for i in range(3, n - 2):
             if br[i] or not near_water(e['lat'][i], e['lon'][i]): continue
@@ -185,13 +133,11 @@ def main():
             if around - lo > 1.5:
                 add('river-dip', e, i, f'dips {around - lo:.1f} m beside the river', 'warn'); break
     # near-level crossings (from the QC on the written graph)
-    js = json.load(open(os.path.join(ROOT, 'routes', 'cities', 'pgh.json')))
-    sys.path.insert(0, ROOT)
-    import subprocess
-    q = subprocess.run(['node', '-e', "import('./tools/qc_pgh.mjs').then(async (m) => { const j = JSON.parse(require('fs').readFileSync('routes/cities/pgh.json', 'utf8')); const r = m.qcGraph(j, { rides: 0 }); console.log(JSON.stringify(r.warns.filter((w) => w.check === 'crossing'))); })"],
-                       cwd=ROOT, capture_output=True, text=True)
-    crossings = json.loads(q.stdout or '[]')
-    for c in crossings: river.append({'kind': 'crossing', 'name': c['name'], 'lat': c['lat'], 'lon': c['lon'], 'msg': c['msg'], 'sev': 'fail'})
+    for ko, so, ku, su, gap in B.find_crossings(E, (), cfg['overpassClearM']):
+        eo, eu = E[ko], E[ku]
+        i = min(eo['n'], round(so / (eo['L'] / eo['n'])))
+        river.append({'kind': 'crossing', 'name': f"{eo['name']} over {eu['name']}", 'lat': round(eo['lat'][i], 6), 'lon': round(eo['lon'][i], 6),
+                      'msg': f'only {gap:.1f} m between them (want ≥ {cfg["overpassClearM"]} m), no junction', 'sev': 'fail'})
 
     # ---------------------------------------------------------------- summary + geometry
     km = lambda ks: round(sum(E[k]['L'] for k in ks) / 1000, 1)

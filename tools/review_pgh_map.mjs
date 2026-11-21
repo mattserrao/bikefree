@@ -13,6 +13,9 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const args = process.argv.slice(2);
 const out = resolve(root, args.includes('--out') ? args[args.indexOf('--out') + 1] : 'tools/.cache/pgh-review-map');
 const R = JSON.parse(readFileSync(resolve(root, 'tools/.cache/pgh-review.json'), 'utf8'));
+// the review before the last change (tools/.cache/pgh-review-before.json, if kept): its planned cuts are drawn as "removed"
+let B = null;
+try { B = JSON.parse(readFileSync(resolve(root, 'tools/.cache/pgh-review-before.json'), 'utf8')); } catch {}
 const lat0 = 40.44, lon0 = -79.98, kx = 111320 * Math.cos((lat0 * Math.PI) / 180), ky = 110540;
 const P = ([la, lo]) => [Math.round((lo - lon0) * kx), Math.round((la - lat0) * ky)];
 const enc = (pts) => { const o = []; let px = 0, py = 0; for (const p of pts) { const [x, y] = P(p); o.push(x - px, y - py); px = x; py = y; } return o; };
@@ -24,13 +27,15 @@ const data = {
   dense: R.dense.map((c) => { const xs = c.map(P); const cx = xs.reduce((s, p) => s + p[0], 0) / xs.length, cy = xs.reduce((s, p) => s + p[1], 0) / xs.length; return [Math.round(cx), Math.round(cy), c.length, Math.round(Math.max(...xs.map((p) => Math.hypot(p[0] - cx, p[1] - cy))) + 12)]; }),
   river: R.river.map((r) => [...P([r.lat, r.lon]), r.kind, r.name || '', r.msg]),
   leaves: R.leaves.map(P),
+  removed: B ? B.edges.filter((e) => e.status === 'simplify' || e.status === 'alley').map((e) => [e.name || '', e.why || '', e.L, enc(e.line), e.hw]) : [],
+  before: B ? B.summary : null,
 };
 mkdirSync(out, { recursive: true });
 writeFileSync(resolve(out, 'data.json'), JSON.stringify(data));
 
 const html = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>PGH road review — what to remove</title>
+<title>PGH road review</title>
 <style>
 :root{--bg:#f6f5f1;--fg:#1d1f23;--mut:#6b6f76;--card:#fffffffa;--line:#e3e1da}
 @media (prefers-color-scheme:dark){:root{--bg:#15171a;--fg:#eceae4;--mut:#9aa0a8;--card:#1f2226f5;--line:#33373d}}
@@ -46,17 +51,19 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 #info b{display:block;margin-bottom:2px}#info .m{color:var(--mut)}
 .tot{border-top:1px solid var(--line);margin-top:6px;padding-top:6px;font-size:12px;color:var(--mut)}
 .collapsed .body{display:none}
+.dash{width:22px;height:0;border-top:3px dashed #5b6470;flex:none}
+table.cmp{border-collapse:collapse;width:100%;margin-top:6px;font-size:12px}table.cmp td,table.cmp th{padding:2px 4px;text-align:right;border-top:1px solid var(--line)}table.cmp td:first-child,table.cmp th:first-child{text-align:left;color:var(--mut)}
 </style></head><body>
 <canvas id="c"></canvas>
 <div class="panel" id="panel"><button id="tog">Hide</button>
-<h1>PGH review — what to remove</h1><div class="sub">Nothing changed yet. Tap a way or marker for details.</div>
+<h1>PGH road review — after the cleanup</h1><div class="sub">Dashed = removed this pass. Red = dead ends (flagged, not changed). Tap anything for details.</div>
 <div class="body" id="legend"></div></div>
 <div id="info"></div>
 <script>
-const COL = { keep:'#9aa1ab', deadend:'#e0332f', simplify:'#f08a00', alley:'#d9b300', piece:'#8b3fd1', dense:'#ff4fa3', river:'#1673e6', leaf:'#e0332f' };
+const COL = { removed:'#5b6470', keep:'#9aa1ab', deadend:'#e0332f', simplify:'#f08a00', alley:'#d9b300', piece:'#8b3fd1', dense:'#ff4fa3', river:'#1673e6', leaf:'#e0332f' };
 const KIND = { 'low-deck':'Bridge deck too low over the river', 'deck-kink':'Kink where a deck meets the street', 'in-river':'Street on the river (river wall read as water)', 'crossing':'Ways cross at nearly the same height, no junction', 'river-dip':'Dip beside the river' };
 let D, cam = { x: 0, y: 0, s: 0.08 }, sel = null;
-const on = { keep:true, deadend:true, simplify:true, alley:false, piece:true, dense:true, river:true };
+const on = { removed:true, keep:true, deadend:true, simplify:true, alley:false, piece:true, dense:true, river:true };
 const c = document.getElementById('c'), g = c.getContext('2d');
 function lines(arr){ const out=[]; let x=0,y=0; for(let i=0;i<arr.length;i+=2){ x+=arr[i]; y+=arr[i+1]; out.push(x,y);} return out; }
 fetch('data.json').then(r=>r.json()).then(d=>{
@@ -64,24 +71,40 @@ fetch('data.json').then(r=>r.json()).then(d=>{
   D.W = d.ways.map(w=>({ st:ST[w[0]], name:w[1], why:w[2], L:w[3], p:lines(w[4]), hw:w[5] }));
   D.P = d.pieces.map(p=>({ km:p[0], name:p[1], ls:p[2].map(lines) }));
   for (const o of [...D.W, ...D.P.flatMap(p=>p.ls.map(l=>({p:l,piece:p})))]) { let a=1e9,b=1e9,cc=-1e9,dd=-1e9; for(let i=0;i<o.p.length;i+=2){a=Math.min(a,o.p[i]);cc=Math.max(cc,o.p[i]);b=Math.min(b,o.p[i+1]);dd=Math.max(dd,o.p[i+1]);} o.bb=[a,b,cc,dd]; }
+  D.R = (d.removed||[]).map(w=>({ st:'removed', name:w[0], why:w[1], L:w[2], p:lines(w[3]), hw:w[4] }));
+  for (const o of D.R) { let a=1e9,b=1e9,cc=-1e9,dd=-1e9; for(let i=0;i<o.p.length;i+=2){a=Math.min(a,o.p[i]);cc=Math.max(cc,o.p[i]);b=Math.min(b,o.p[i+1]);dd=Math.max(dd,o.p[i+1]);} o.bb=[a,b,cc,dd]; }
   D.PL = D.P.flatMap(p=>p.ls.map(l=>({p:l,piece:p})));
   for (const o of D.PL) { let a=1e9,b=1e9,cc=-1e9,dd=-1e9; for(let i=0;i<o.p.length;i+=2){a=Math.min(a,o.p[i]);cc=Math.max(cc,o.p[i]);b=Math.min(b,o.p[i+1]);dd=Math.max(dd,o.p[i+1]);} o.bb=[a,b,cc,dd]; }
   legend(); fit(); draw();
 });
+function compare(){
+  const A=D.summary, B=D.before; if(!B) return '<div class="tot">'+A.network.km+' km · '+A.network.junctions.toLocaleString()+' junctions</div>';
+  const rv=(s)=>Object.values(s.river).reduce((a,b)=>a+b,0);
+  const row=(l,b,a)=>'<tr><td>'+l+'</td><td>'+b+'</td><td><b>'+a+'</b></td></tr>';
+  return '<table class="cmp"><tr><th></th><th>Before</th><th>Now</th></tr>'
+    + row('Network', B.network.km+' km', A.network.km+' km') + row('Junctions', B.network.junctions.toLocaleString(), A.network.junctions.toLocaleString())
+    + row('Dead ends (not changed)', B.deadEnds.junctions, A.deadEnds.junctions) + row('Not connected (left out)', B.disconnected.pieces, A.disconnected.pieces)
+    + row('Dense clusters', B.dense.clusters, A.dense.clusters) + row('Alleys', B.alleys.edges, A.alleys.edges === 0 ? 'removed' : A.alleys.edges)
+    + row('River &amp; bridge problems', rv(B), rv(A))
+    + ['low-deck','deck-kink','in-river','crossing','river-dip'].map(k=>row('&nbsp;· '+({'low-deck':'Low decks','deck-kink':'Deck kinks','in-river':'On the river','crossing':'Near-level crossings','river-dip':'Dips by the river'})[k], B.river[k]||0, A.river[k]||0)).join('')
+    + '</table>';
+}
 function km(st){ return (D.W.filter(w=>w.st===st).reduce((s,w)=>s+w.L,0)/1000).toFixed(1); }
 function legend(){
   const S=D.summary, rv=D.river.length, cnt=(st)=>D.W.filter(w=>w.st===st).length;
+  const rkm=(D.R.reduce((s,w)=>s+w.L,0)/1000).toFixed(1);
   const rows=[
-    ['keep','sw','Kept (after every cut, alleys included)', km('keep')+' km'],
+    ...(D.R.length?[['removed','dash','<b>Removed in this pass</b>', D.R.length+' ways · '+rkm+' km']]:[]),
+    ['keep','sw','Through roads (on a loop)', km('keep')+' km'],
     ['deadend','sw','<b>Dead-end branches</b> (U-turn only)', cnt('deadend')+' ways · '+km('deadend')+' km'],
-    ['simplify','sw','<b>Simplify</b>: slips, crosswalk bits, short ways in tight clusters', cnt('simplify')+' · '+km('simplify')+' km'],
-    ['alley','sw','Alleys (optional extra cut)', cnt('alley')+' · '+km('alley')+' km'],
+    ['simplify','sw','<b>Simplify</b>: still to remove', cnt('simplify')+' · '+km('simplify')+' km'],
+    ['alley','sw','Alleys still in', cnt('alley')+' · '+km('alley')+' km'],
     ['piece','sw','<b>Not connected</b> to the network', D.P.length+' pieces · '+S.disconnected.km+' km'],
     ['dense','dot','Dense junction clusters', S.dense.clusters+''],
     ['river','dot','<b>River &amp; bridge problems</b>', rv+''],
   ];
   document.getElementById('legend').innerHTML = rows.map(([k,t,l,n])=>'<label class="lg"><input type="checkbox" data-k="'+k+'" '+(on[k]?'checked':'')+'><span class="'+t+'" style="background:'+COL[k]+'"></span><span>'+l+'</span><span class="n">'+n+'</span></label>').join('')
-    + '<div class="tot">Removing dead ends + simplify: '+S.after.edges.toLocaleString()+' ways, '+S.after.km+' km left; with alleys too: '+S.after.withAlleysToo.km+' km.</div>';
+    + compare();
   for (const i of document.querySelectorAll('#legend input')) i.onchange=()=>{ on[i.dataset.k]=i.checked; draw(); };
 }
 document.getElementById('tog').onclick=()=>{ const p=document.getElementById('panel'); p.classList.toggle('collapsed'); document.getElementById('tog').textContent=p.classList.contains('collapsed')?'Show':'Hide'; };
@@ -96,6 +119,7 @@ function draw(){
   const dark=matchMedia('(prefers-color-scheme:dark)').matches; g.fillStyle=dark?'#15171a':'#f6f5f1'; g.fillRect(0,0,innerWidth,innerHeight);
   const v=view(), z=Math.max(0.6,Math.min(4,cam.s*12)); g.lineCap='round'; g.lineJoin='round';
   if(on.dense){ g.fillStyle=COL.dense+'33'; g.strokeStyle=COL.dense; g.lineWidth=1; for(const d of D.dense){ const r=Math.max(4,d[3]*cam.s); g.beginPath(); g.arc(sx(d[0]),sy(d[1]),r,0,7); g.fill(); g.stroke(); } }
+  if(on.removed){ g.strokeStyle=COL.removed; g.lineWidth=z*1.2; g.setLineDash([4,4]); for(const w of D.R) if(vis(w.bb,v)) path(w.p); g.setLineDash([]); }
   for (const st of ['keep','alley','simplify','deadend']) { if(!on[st]) continue; g.strokeStyle=COL[st]; g.lineWidth=st==='keep'?Math.max(0.6,z*0.5):z*1.4; for(const w of D.W) if(w.st===st&&vis(w.bb,v)) path(w.p); }
   if(on.piece){ g.strokeStyle=COL.piece; g.lineWidth=z*1.4; for(const o of D.PL) if(vis(o.bb,v)) path(o.p); }
   if(on.deadend&&cam.s>0.25){ g.fillStyle=COL.leaf; for(const l of D.leaves){ g.beginPath(); g.arc(sx(l[0]),sy(l[1]),2.2,0,7); g.fill(); } }
@@ -110,6 +134,7 @@ function pick(px,py){
   const test=(o,t)=>{ if(o.bb[0]-tol>x||o.bb[2]+tol<x||o.bb[1]-tol>y||o.bb[3]+tol<y) return; for(let i=2;i<o.p.length;i+=2){ const d=segd(x,y,o.p[i-2],o.p[i-1],o.p[i],o.p[i+1]); if(d<bd){bd=d;best={t,o};} } };
   if(on.piece) for(const o of D.PL) test(o,'piece');
   for(const st of ['deadend','simplify','alley','keep']) if(on[st]) for(const w of D.W) if(w.st===st) test(w,'way');
+  if(on.removed) for(const w of D.R) test(w,'way');
   return best;
 }
 function show(h){
@@ -118,7 +143,7 @@ function show(h){
   let t='';
   if(h.t==='river'){ t='<b>'+(KIND[h.r[2]]||h.r[2])+'</b>'+(h.r[3]?h.r[3]+' · ':'')+'<span class="m">'+h.r[4]+'</span>'; }
   else if(h.t==='piece'){ sel=h.o.piece; t='<b>Not connected to the network</b>'+(h.o.piece.name||'Unnamed ways')+' · <span class="m">'+h.o.piece.km+' km, left out of PGH</span>'; }
-  else { const w=h.o; sel=w; const lab={keep:'Kept',deadend:'Dead-end branch — remove',simplify:'Simplify — remove',alley:'Alley — optional remove'}[w.st];
+  else { const w=h.o; sel=w; const lab={removed:'Removed in this pass',keep:'Ridden',deadend:'Dead-end branch (U-turn only) — flagged, not changed',simplify:'Simplify — remove',alley:'Alley — optional remove'}[w.st];
     t='<b>'+lab+'</b>'+(w.name||'Unnamed')+' <span class="m">('+(w.hw||'')+', '+w.L+' m)'+(w.why?' · '+w.why:'')+'</span>'; }
   el.innerHTML=t; el.style.display='block'; draw();
 }
