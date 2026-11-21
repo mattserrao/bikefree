@@ -93,10 +93,19 @@ for (const c of found.values()) {
   const { up, ui, lo, li, dz } = c;
   // the deck must cover the lower way's width (crossed at an angle) + 2 m each side
   const sinA = Math.max(0.3, Math.abs(Math.sin(c.ang)));
-  const need = ((W[lo.kind] || 7) / 2 + 2) / sinA;
+  const need = ((W[lo.kind] || 7) / 2 + 4) / sinA;   // (+ 4 m: a skirt that close still walls the way in)
   const dU = decks.get(up.id), dL = decks.get(lo.id);
   const s0 = Math.max(0, Math.floor(ui - need / 10)), s1 = Math.min(up.n, Math.ceil(ui + need / 10));
-  let covered = true; for (let k = s0; k <= s1; k++) if (!dU[k]) covered = false;
+  let covered = true; for (let k = s0; k <= s1; k++) if (!dU[k] && k !== 0 && k !== up.n) covered = false;
+  // past the way's end: the ways on from that junction must be decks for the rest
+  for (const [j, rem] of [[up.from, Math.ceil(need / 10) - Math.floor(ui)], [up.to, Math.ceil(ui + need / 10) - up.n]]) {
+    if (rem <= 0) continue;
+    for (const o of G.edges) {
+      if (o === up || (o.from !== j && o.to !== j)) continue;
+      const dO = decks.get(o.id);
+      for (let k = 1; k <= Math.min(o.n - 1, rem); k++) if (!dO[o.from === j ? k : o.n - k]) covered = false;
+    }
+  }
   const anyDeck = dU[Math.round(ui)] || dU[Math.floor(ui)] || dU[Math.ceil(ui)];
   const lowerDeck = dL[Math.round(li)];
   const osm = osmNear(c.x, c.y);
