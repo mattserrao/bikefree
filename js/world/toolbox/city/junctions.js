@@ -421,6 +421,13 @@ export function* planJunctionsJob(streets, ctx, options = {}) {
         if (!A.route) continue;
         for (let d = 0; d <= A.t; d += 1) if (ctx.onRouteBridge(rq.s + A.dir * d, 0)) { A.t = Math.max(1.5, d - 2); A.bridgeCut = true; break; }
       }
+      // (and its side streets' ends too: trimmed back until both their corners lie off the deck — a street meeting the
+      // route right at a bridge's end laps no further onto the bridge than the route's own arm)
+      if (isRoute && ctx.onRouteBridge && ring.some((a) => a.bridgeCut)) for (const A of ring) {
+        if (A.route) continue;
+        const onDeck = (t) => [-1, 1].some((sd) => { const e = edge(A, sd, t), q = RL.project(e.x, e.z, rq.s, 45); return q && ctx.onRouteBridge(q.s, 1); });
+        while (A.t > 1.5 && onDeck(A.t)) A.t = Math.max(1.5, A.t - 1);
+      }
       for (const a of arms) if (a.alongRoute) a.t = Math.min(a.alongRoute.t + 2, a.avail);
       for (const cr of corners) if (cr.arc && (cr.tA > cr.A.t + .01 || cr.tB > cr.B.t + .01)) cr.arc = null;   // clamped short: straight corner
 
@@ -440,7 +447,11 @@ export function* planJunctionsJob(streets, ctx, options = {}) {
       let join = null;
       for (let q = 0; q < n && !join; q++) {
         const A = ring[q], B = ring[(q + 1) % n];
-        if ((A.route && B.route) || A === B || !segCross(A.mouth[0], A.mouth[1], B.mouth[0], B.mouth[1])) continue;
+        if ((A.route && B.route) || A === B) continue;
+        // (crossing mouths, or two arms leaving < sharpDeg apart: a taper, not two ribbons side by side with a wedge between)
+        // (the angle between the arms' directions — not their places round the centre, which can differ by 10°+)
+        const gap = Math.acos(Math.max(-1, Math.min(1, dot(A.u, B.u))));
+        if (!segCross(A.mouth[0], A.mouth[1], B.mouth[0], B.mouth[1]) && !(n > 2 && gap < O.sharpDeg * Math.PI / 180)) continue;
         const minor = (x) => (x.route ? -1 : streets[x.k].cls * 100 - x.h);   // higher: the one to join
         const [J, P] = minor(A) >= minor(B) ? [A, B] : [B, A];
         if (J.route) continue;
@@ -483,32 +494,39 @@ export function* planJunctionsJob(streets, ctx, options = {}) {
     }
 
     // 6. polygon (counter-clockwise in x/z), curbs and paint
-    const poly = [], curbs = [];
-    for (let q = 0; q < n; q++) {
-      const A = ring[q], cr = corners[q], B = cr.B;
-      poly.push(A.mouth[0], A.mouth[1]);
-      const curb = [A.mouth[1]];
-      if (cr.arc) {
-        if (cr.tA < A.t - .05) curb.push(edge(A, 1, cr.tA));
-        const { O: Oc, r } = cr.arc, a0 = Math.atan2(curb[curb.length - 1].z - Oc.z, curb[curb.length - 1].x - Oc.x);
-        const pB = cr.tB < B.t - .05 ? edge(B, -1, cr.tB) : B.mouth[0];
-        let da = Math.atan2(pB.z - Oc.z, pB.x - Oc.x) - a0;
-        while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
-        const steps = Math.max(2, Math.ceil(Math.abs(da) / (Math.PI / 9)));
-        for (let s = 1; s < steps; s++) curb.push({ x: Oc.x + Math.cos(a0 + da * s / steps) * r, z: Oc.z + Math.sin(a0 + da * s / steps) * r });
-        curb.push(pB);
-        if (cr.tB < B.t - .05) curb.push(B.mouth[0]);
-      } else curb.push(B.mouth[0]);
-      for (let s = 1; s < curb.length - 1; s++) poly.push(curb[s]);
-      // a corner with a sidewalk on either side gets one wrapping round it (the route's road: its 2 m shoulder)
-      const swA = A.route ? 2 : SIDEWALK(A.cls) ? O.sidewalkW : 0, swB = B.route ? 2 : SIDEWALK(B.cls) ? O.sidewalkW : 0;
-      // [junction-check] (user, 20 Nov: kerb wedges and shards at the route's junctions) a corner kerb only between two arms
-      // that both carry a sidewalk (or the route's shoulder), meeting at 45–150°, at least 1.5 m long, and clear of the
-      // route's road — anything else drew as a wedge, a sliver, or a kerb in the bike lane
-      let curbLen = 0; for (let s = 1; s < curb.length; s++) curbLen += Math.hypot(curb[s].x - curb[s - 1].x, curb[s].z - curb[s - 1].z);
-      const onRouteRoad = curb.some((p) => { const r = routeDist(p.x, p.z); return r && r.d < RW / 2 - .5; });
-      if (cr.gap > O.curbMinGap && cr.gap < O.curbMaxGap && swA && swB && curbLen >= O.curbMinM && !onRouteRoad) curbs.push({ pts: curb, wA: swA, wB: swB, arc: !!cr.arc });
-    }
+    // [junction-check] (user, 21 Nov) a curb return that swings across a neighbouring arm tore the outline: drawn again
+    // with straight corners (mouth to mouth) before the hull is tried
+    const outline = (arcs) => {
+      const poly = [], curbs = [];
+      for (let q = 0; q < n; q++) {
+        const A = ring[q], cr = corners[q], B = cr.B;
+        poly.push(A.mouth[0], A.mouth[1]);
+        const curb = [A.mouth[1]];
+        if (cr.arc && arcs) {
+          if (cr.tA < A.t - .05) curb.push(edge(A, 1, cr.tA));
+          const { O: Oc, r } = cr.arc, a0 = Math.atan2(curb[curb.length - 1].z - Oc.z, curb[curb.length - 1].x - Oc.x);
+          const pB = cr.tB < B.t - .05 ? edge(B, -1, cr.tB) : B.mouth[0];
+          let da = Math.atan2(pB.z - Oc.z, pB.x - Oc.x) - a0;
+          while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
+          const steps = Math.max(2, Math.ceil(Math.abs(da) / (Math.PI / 9)));
+          for (let s = 1; s < steps; s++) curb.push({ x: Oc.x + Math.cos(a0 + da * s / steps) * r, z: Oc.z + Math.sin(a0 + da * s / steps) * r });
+          curb.push(pB);
+          if (cr.tB < B.t - .05) curb.push(B.mouth[0]);
+        } else curb.push(B.mouth[0]);
+        for (let s = 1; s < curb.length - 1; s++) poly.push(curb[s]);
+        // a corner with a sidewalk on either side gets one wrapping round it (the route's road: its 2 m shoulder)
+        const swA = A.route ? 2 : SIDEWALK(A.cls) ? O.sidewalkW : 0, swB = B.route ? 2 : SIDEWALK(B.cls) ? O.sidewalkW : 0;
+        // [junction-check] (user, 20 Nov: kerb wedges and shards at the route's junctions) a corner kerb only between two arms
+        // that both carry a sidewalk (or the route's shoulder), meeting at 45–150°, at least 1.5 m long, and clear of the
+        // route's road — anything else drew as a wedge, a sliver, or a kerb in the bike lane
+        let curbLen = 0; for (let s = 1; s < curb.length; s++) curbLen += Math.hypot(curb[s].x - curb[s - 1].x, curb[s].z - curb[s - 1].z);
+        const onRouteRoad = curb.some((p) => { const r = routeDist(p.x, p.z); return r && r.d < RW / 2 - .5; });
+        if (cr.gap > O.curbMinGap && cr.gap < O.curbMaxGap && swA && swB && curbLen >= O.curbMinM && !onRouteRoad) curbs.push({ pts: curb, wA: swA, wB: swB, arc: !!cr.arc });
+      }
+      return { poly, curbs };
+    };
+    let { poly, curbs } = outline(true), straight = false;
+    if (selfCrosses(poly)) { const o = outline(false); if (!selfCrosses(o.poly)) { ({ poly, curbs } = o); straight = true; } }
     // [junction-check] an outline that crosses itself (arms overlapping at awkward angles: a torn, shard-like surface) is
     // replaced by the convex hull of its outline, without kerbs: plain asphalt where the arms meet — when the hull keeps
     // every arm's mouth corners (the street ribbons end exactly on them; a mouth inside the hull would leave its ribbon's
@@ -519,7 +537,7 @@ export function* planJunctionsJob(streets, ctx, options = {}) {
       if (h.length >= 3 && ring.every((A) => A.mouth.every((m) => keep.has(m)))) { poly.length = 0; poly.push(...h); curbs.length = 0; fallback = true; }
     }
     const id = list.length;
-    const jn = { id, x: C.x, z: C.z, route: isRoute, s: rq?.s ?? null, fallback, arms: ring, extra: arms.filter((a) => a.alongRoute || a.joinedTo), poly, curbs, J, lift: O.lift,
+    const jn = { id, x: C.x, z: C.z, route: isRoute, s: rq?.s ?? null, fallback, straight, arms: ring, extra: arms.filter((a) => a.alongRoute || a.joinedTo), poly, curbs, J, lift: O.lift,
       deck: arms.some((a) => !a.route && streets[a.k].bridge) };   // [road meets] (a junction of decks: the ground doesn't rise to it)
     list.push(jn); clusterToJn.set(c, id);
 

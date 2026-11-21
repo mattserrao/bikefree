@@ -11,7 +11,7 @@
 // | kerb-road  | a corner sidewalk (kerb) point lies on the route's road: a kerb wedge in the bike lane (#14, #22) |
 // | sliver     | a corner sidewalk whose curb is shorter than 1.5 m, or a gap < 3° between arms: a leftover shard |
 // | overlap    | two junctions' surfaces overlap: two blobs drawn over each other |
-// | bridge-end | a route junction whose stretch of the route (its trimmed route arms) reaches within 2 m of a bridge the route draws:
+// | bridge-end | a route junction whose stretch of the route (its trimmed route arms) reaches onto a bridge the route draws (> 0.5 m):
 // |            | a junction at an abutment or on the deck (#12, #18) |
 //
 // node tools/qc_junctions.mjs [area ids…] [--near 25] [--json out.json] [--baseline] [--shots dir]
@@ -99,7 +99,7 @@ export function qcJunctions({ item, scene, near = JQ.near }) {
         }
         if (best && Math.abs(best.s - jn.s) < 80) { s0 = Math.min(s0, best.s); s1 = Math.max(s1, best.s); }
       }
-      const b = bridges.find((b) => s1 > b.fromM - 2 && s0 < b.toM + 2);
+      const b = bridges.find((b) => s1 > b.fromM + .5 && s0 < b.toM - .5);
       if (b) add('bridge-end', jn, Math.max(0, Math.min(Math.abs(jn.s - b.fromM), Math.abs(jn.s - b.toM))), `route junction (${s0.toFixed(0)}–${s1.toFixed(0)} m) reaches ${b.name || 'a bridge'} (${b.fromM}–${b.toM} m)`);
     }
   }

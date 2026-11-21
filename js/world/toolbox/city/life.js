@@ -745,7 +745,9 @@ export class CityLife {
     for (const a of list) {
       if (!a.alive) continue;
       const done = a.passed || !a.with || a.ended || Math.abs(a.g ?? 0) > P.aheadMax + 100 || a.apart > 8;   // (apart: not closing on you for 8 s)
-      if (done && this._outOfView(a.x, a.z, cam, P.aheadMin, false)) { a.alive = false; a.x = null; }
+      // (never while it's going by right at the camera — within 3 m it is "behind" on the rider's heading yet still on
+      // screen (the near plane is 0.3 m): a pop at the lens; it goes a moment later, clearly behind)
+      if (done && Math.hypot(a.x - cam.x, a.z - cam.z) > 3 && this._outOfView(a.x, a.z, cam, P.aheadMin, false)) { a.alive = false; a.x = null; }
     }
     // the next one on its way, when it's time
     R.wait -= dt;
