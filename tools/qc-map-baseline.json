@@ -1,12 +1,12 @@
 {
  "pittsburgh": {
-  "stub": 10,
-  "bump": 8,
-  "near-miss": 13,
-  "height-step": 4,
+  "stub": 9,
+  "near-miss": 12,
+  "height-step": 3,
   "dead-end": 9,
   "deck-end": 2,
-  "end-step": 2
+  "end-step": 2,
+  "bump": 3
  },
  "pittsburgh-allegheny": {
   "deck-end": 2,
@@ -17,7 +17,7 @@
   "bump": 1
  },
  "pittsburgh-westend": {
-  "bump": 5,
+  "bump": 1,
   "near-miss": 2,
   "height-step": 3,
   "dead-end": 1,
@@ -57,9 +57,9 @@
   "dead-end": 2
  },
  "pittsburgh-subway": {
-  "dead-end": 2,
+  "dead-end": 3,
   "deck-end": 1,
-  "near-miss": 3,
-  "stub": 2
+  "near-miss": 4,
+  "stub": 3
  }
 }

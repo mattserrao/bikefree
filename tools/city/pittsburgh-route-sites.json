@@ -1,30 +1,208 @@
 {
- "note": "The 25 Pittsburgh route sites where the most city roads meet or crowd a bike route (busiest-crossings audit, 20 Nov 2026; ranked by roads within 20 m of the path). Used by tools/repair_city.mjs rules route-stub, route-service, route-leftover, route-copy: they act only on streets within r m of a site. lat/lon WGS84.",
+ "note": "The 25 Pittsburgh route sites where the most city roads meet or crowd a bike route (busiest-crossings audit, 20 Nov 2026; ranked by roads within 20 m of the path). Used by tools/repair_city.mjs rules route-stub, route-service, route-leftover, route-copy: they act only on streets within r m of a site. lat/lon WGS84. decks: true marks sites where rule route-deck acts (low city decks at the route; user, 20 Nov).",
  "sites": [
-  {"n": 1, "area": "pittsburgh", "km": 2.22, "lat": 40.437898, "lon": -80.004429, "r": 90 },
-  {"n": 2, "area": "pittsburgh", "km": 3.48, "lat": 40.436593, "lon": -80.000926, "r": 90 },
-  {"n": 3, "area": "pittsburgh-northside", "km": 15.07, "lat": 40.467093, "lon": -80.025016, "r": 90 },
-  {"n": 4, "area": "pittsburgh-eastend", "km": 14.59, "lat": 40.466276, "lon": -79.922609, "r": 90 },
-  {"n": 5, "area": "pittsburgh", "km": 26.67, "lat": 40.432705, "lon": -80.003443, "r": 90 },
-  {"n": 6, "area": "pittsburgh-northside", "km": 16.88, "lat": 40.45388, "lon": -80.014528, "r": 90 },
-  {"n": 7, "area": "pittsburgh-homestead", "km": 19.09, "lat": 40.407768, "lon": -79.909465, "r": 90 },
-  {"n": 8, "area": "pittsburgh-homestead", "km": 24.9, "lat": 40.392933, "lon": -79.934904, "r": 90 },
-  {"n": 9, "area": "pittsburgh", "km": 12.66, "lat": 40.429063, "lon": -79.998217, "r": 90 },
-  {"n": 10, "area": "pittsburgh-allegheny", "km": 13.97, "lat": 40.449472, "lon": -79.988189, "r": 90 },
-  {"n": 11, "area": "pittsburgh", "km": 5.96, "lat": 40.436189, "lon": -79.972922, "r": 90 },
-  {"n": 12, "area": "pittsburgh-allegheny", "km": 5.81, "lat": 40.454809, "lon": -79.994404, "r": 90 },
-  {"n": 13, "area": "pittsburgh-polish", "km": 6.27, "lat": 40.463545, "lon": -79.952959, "r": 90 },
-  {"n": 14, "area": "pittsburgh-northside", "km": 1.51, "lat": 40.449116, "lon": -80.004512, "r": 90 },
-  {"n": 15, "area": "pittsburgh", "km": 11.63, "lat": 40.428764, "lon": -79.988583, "r": 90 },
-  {"n": 16, "area": "pittsburgh-polish", "km": 8.09, "lat": 40.452177, "lon": -79.951063, "r": 90 },
-  {"n": 17, "area": "pittsburgh-polish", "km": 8.63, "lat": 40.448102, "lon": -79.949687, "r": 90 },
-  {"n": 18, "area": "pittsburgh-homestead", "km": 19.43, "lat": 40.406294, "lon": -79.912586, "r": 90 },
-  {"n": 19, "area": "pittsburgh-northside", "km": 2.54, "lat": 40.455559, "lon": -80.006657, "r": 90 },
-  {"n": 20, "area": "pittsburgh-slopes", "km": 4.85, "lat": 40.417171, "lon": -80.014714, "r": 90 },
-  {"n": 21, "area": "pittsburgh", "km": 17.58, "lat": 40.444261, "lon": -80.028316, "r": 90 },
-  {"n": 22, "area": "pittsburgh-subway", "km": 1.16, "lat": 40.448218, "lon": -80.008063, "r": 90 },
-  {"n": 23, "area": "pittsburgh", "km": 29.38, "lat": 40.428369, "lon": -79.973676, "r": 90 },
-  {"n": 24, "area": "pittsburgh-polish", "km": 3.89, "lat": 40.456317, "lon": -79.974728, "r": 90 },
-  {"n": 25, "area": "pittsburgh-homestead", "km": 7.09, "lat": 40.400669, "lon": -79.922866, "r": 90 }
+  {
+   "n": 1,
+   "area": "pittsburgh",
+   "km": 2.22,
+   "lat": 40.437898,
+   "lon": -80.004429,
+   "r": 90,
+   "decks": true
+  },
+  {
+   "n": 2,
+   "area": "pittsburgh",
+   "km": 3.48,
+   "lat": 40.436593,
+   "lon": -80.000926,
+   "r": 90
+  },
+  {
+   "n": 3,
+   "area": "pittsburgh-northside",
+   "km": 15.07,
+   "lat": 40.467093,
+   "lon": -80.025016,
+   "r": 90
+  },
+  {
+   "n": 4,
+   "area": "pittsburgh-eastend",
+   "km": 14.59,
+   "lat": 40.466276,
+   "lon": -79.922609,
+   "r": 90
+  },
+  {
+   "n": 5,
+   "area": "pittsburgh",
+   "km": 26.67,
+   "lat": 40.432705,
+   "lon": -80.003443,
+   "r": 90
+  },
+  {
+   "n": 6,
+   "area": "pittsburgh-northside",
+   "km": 16.88,
+   "lat": 40.45388,
+   "lon": -80.014528,
+   "r": 90
+  },
+  {
+   "n": 7,
+   "area": "pittsburgh-homestead",
+   "km": 19.09,
+   "lat": 40.407768,
+   "lon": -79.909465,
+   "r": 90
+  },
+  {
+   "n": 8,
+   "area": "pittsburgh-homestead",
+   "km": 24.9,
+   "lat": 40.392933,
+   "lon": -79.934904,
+   "r": 90
+  },
+  {
+   "n": 9,
+   "area": "pittsburgh",
+   "km": 12.66,
+   "lat": 40.429063,
+   "lon": -79.998217,
+   "r": 90
+  },
+  {
+   "n": 10,
+   "area": "pittsburgh-allegheny",
+   "km": 13.97,
+   "lat": 40.449472,
+   "lon": -79.988189,
+   "r": 90
+  },
+  {
+   "n": 11,
+   "area": "pittsburgh",
+   "km": 5.96,
+   "lat": 40.436189,
+   "lon": -79.972922,
+   "r": 90
+  },
+  {
+   "n": 12,
+   "area": "pittsburgh-allegheny",
+   "km": 5.81,
+   "lat": 40.454809,
+   "lon": -79.994404,
+   "r": 90,
+   "decks": true
+  },
+  {
+   "n": 13,
+   "area": "pittsburgh-polish",
+   "km": 6.27,
+   "lat": 40.463545,
+   "lon": -79.952959,
+   "r": 90
+  },
+  {
+   "n": 14,
+   "area": "pittsburgh-northside",
+   "km": 1.51,
+   "lat": 40.449116,
+   "lon": -80.004512,
+   "r": 90
+  },
+  {
+   "n": 15,
+   "area": "pittsburgh",
+   "km": 11.63,
+   "lat": 40.428764,
+   "lon": -79.988583,
+   "r": 90
+  },
+  {
+   "n": 16,
+   "area": "pittsburgh-polish",
+   "km": 8.09,
+   "lat": 40.452177,
+   "lon": -79.951063,
+   "r": 90
+  },
+  {
+   "n": 17,
+   "area": "pittsburgh-polish",
+   "km": 8.63,
+   "lat": 40.448102,
+   "lon": -79.949687,
+   "r": 90
+  },
+  {
+   "n": 18,
+   "area": "pittsburgh-homestead",
+   "km": 19.43,
+   "lat": 40.406294,
+   "lon": -79.912586,
+   "r": 90
+  },
+  {
+   "n": 19,
+   "area": "pittsburgh-northside",
+   "km": 2.54,
+   "lat": 40.455559,
+   "lon": -80.006657,
+   "r": 90
+  },
+  {
+   "n": 20,
+   "area": "pittsburgh-slopes",
+   "km": 4.85,
+   "lat": 40.417171,
+   "lon": -80.014714,
+   "r": 90
+  },
+  {
+   "n": 21,
+   "area": "pittsburgh",
+   "km": 17.58,
+   "lat": 40.444261,
+   "lon": -80.028316,
+   "r": 90,
+   "decks": true
+  },
+  {
+   "n": 22,
+   "area": "pittsburgh-subway",
+   "km": 1.16,
+   "lat": 40.448218,
+   "lon": -80.008063,
+   "r": 90
+  },
+  {
+   "n": 23,
+   "area": "pittsburgh",
+   "km": 29.38,
+   "lat": 40.428369,
+   "lon": -79.973676,
+   "r": 90
+  },
+  {
+   "n": 24,
+   "area": "pittsburgh-polish",
+   "km": 3.89,
+   "lat": 40.456317,
+   "lon": -79.974728,
+   "r": 90
+  },
+  {
+   "n": 25,
+   "area": "pittsburgh-homestead",
+   "km": 7.09,
+   "lat": 40.400669,
+   "lon": -79.922866,
+   "r": 90
+  }
  ]
 }

@@ -6,7 +6,7 @@
 //   node tools/repair_city.mjs                         every Pittsburgh area
 //   node tools/repair_city.mjs pittsburgh-westend      one area (catalog ids)
 //   options: --dry (report, write nothing)   --near 300 (only ends / pieces within m of the area's route)
-//            --rules interchange,near-miss,stub,dead-end,end-step,deck-end,highways,route-stub,route-service,route-leftover,route-copy
+//            --rules interchange,near-miss,stub,dead-end,end-step,deck-end,highways,route-deck,route-stub,route-service,route-leftover,route-copy
 //                    (only these rules; default: all)
 //            --json out.json (every repair, what was left and why, the tunnel approaches)
 //
@@ -351,7 +351,7 @@ export function thinPass({ streets, city, proj, ground, index, rides, near }) {
  * Never a deck (bridges keep their own structure); never a street another street would be left ending on nothing by.
  */
 export const SITES_FILE = 'tools/city/pittsburgh-route-sites.json';
-export const SITE = { leftMax: 80, leftR: 40, stubMax: 30, svcClose: 25, svcShort: 60, orphanR: 60, copyGap: 3, copyShare: .6, copyMin: 20, copyOff: 2, copyAngle: .94 };
+export const SITE = { deckLow: 5, deckMax: 200, deckShare: .5, leftMax: 80, leftR: 40, stubMax: 30, svcClose: 25, svcShort: 60, orphanR: 60, copyGap: 3, copyShare: .6, copyMin: 20, copyOff: 2, copyAngle: .94 };
 export const routeSites = () => JSON.parse(read(SITES_FILE)).sites;
 
 export function routeSitePass({ streets, city, proj, ground, rides, sites, rules = null }) {
@@ -398,6 +398,23 @@ export function routeSitePass({ streets, city, proj, ground, rides, sites, rules
     return false;
   };
   const scope = (g) => !g.bridge && !ride.has(g.k) && g.pts.some(inZone);
+
+  // A/B. route-deck (sites marked decks: true): low city decks at the route — short "bridges" a few metres over the ground
+  // that copy the route's own road (it is a ground road there, carved to its own level) are dropped; the others, laid
+  // on the ground. They drew as wedge slabs and shards around the road (#1 Fort Pitt, #12 Allegheny, #21 West End Bridge)
+  if (on('route-deck')) {
+    const DZ = sites.filter((s) => s.decks).map((s) => ({ ...proj.toLocal(s.lat, s.lon), r: s.r }));
+    const inDZ = (p) => DZ.some((z) => Math.hypot(p.x - z.x, p.z - z.z) <= z.r);
+    for (const g of G) {
+      if (!g.bridge || g.cls === 8 || g.len >= SITE.deckMax || drop.has(g.k) || !g.pts.some(inDZ)) continue;
+      if (g.pts.some((p, i) => g.h[i] - ground(p.x, p.z) >= SITE.deckLow)) continue;
+      const reach = ROAD_WIDTH / 2 + g.w / 2 + 3, S = samples(g);
+      const along = S.filter((p) => routeAt(p, reach)).reduce((a, p) => a + p.l, 0);
+      if (g.cls >= 2 && along >= g.len * SITE.deckShare) { drop.add(g.k); log('route-deck', g, `${g.len.toFixed(0)} m low deck along the route's road dropped`); continue; }
+      const raw = streets[g.k]; raw.meta = [raw.meta[0], raw.meta[1] & ~1, 8]; raw.deck = raw.deck.map(() => 0);
+      log('route-deck', g, `${g.len.toFixed(0)} m low deck laid on the ground`);
+    }
+  }
 
   // C. route-stub
   if (on('route-stub')) for (const g of G) {
