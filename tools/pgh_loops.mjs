@@ -7,7 +7,7 @@
 //   squiggle a way that turns more than 540° in 100 m (zigzags)
 // Each: where, how big, whether a route rides it, and the fix (drop it, or cut the curl/spike out of the line).
 //   node tools/pgh_loops.mjs → tools/.cache/pgh-loops.json
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodeGraph } from '../js/graph.js';
@@ -66,6 +66,7 @@ for (const es of pairs.values()) {
   const drop = ridden.has(a.id) && !ridden.has(b.id) ? b : a;
   add('eye', drop, Math.floor(drop.n / 2), a.n * 10 + b.n * 10, `${a.name} & ${b.name}: two ways between the same junctions (${a.n * 10} m and ${b.n * 10} m) — a little ring, ${Math.round(apart)} m apart at most`, ridden.has(drop.id) ? 'Both ridden: keep the one the routes ride, re-map' : `Drop ${drop.name} (${drop.n * 10} m)`, line(drop));
 }
+mkdirSync(resolve(root, 'tools/.cache'), { recursive: true });
 writeFileSync(resolve(root, 'tools/.cache/pgh-loops.json'), JSON.stringify(out));
 const c = {};
 for (const o of out) { c[o.kind] ||= [0, 0]; c[o.kind][0]++; if (o.ridden) c[o.kind][1]++; }

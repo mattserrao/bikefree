@@ -11,7 +11,7 @@
 // …and junction kinks: a junction whose height pulls a way off its line (> 12 % over its first 20 m where the way
 // beyond runs under 6 %): a junction set to a bridge's height, or the road under it.
 //   node tools/pgh_crossings.mjs → tools/.cache/pgh-crossings.json
-import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodeGraph } from '../js/graph.js';
@@ -19,7 +19,8 @@ import { routeUse } from './pgh_usage.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const json = JSON.parse(readFileSync(resolve(root, 'routes/cities/pgh.json'), 'utf8'));
-const lines = JSON.parse(readFileSync(resolve(root, 'tools/.cache/pgh-routes.json'), 'utf8')).map((r) => r.line);
+const routesFile = resolve(root, 'tools/.cache/pgh-routes.json');
+const lines = existsSync(routesFile) ? JSON.parse(readFileSync(routesFile, 'utf8')).map((r) => r.line) : [];   // (none: a fresh checkout — the routes' area is empty)
 const G = decodeGraph(json);
 const { use } = routeUse(json, lines);
 const W = json.widths;
@@ -32,7 +33,7 @@ const decks = new Map(G.edges.map((e) => [e.id, deckOf(e)]));
 const osmGrid = new Map();
 {
   const dir = resolve(root, 'tools/.cache/osm-pgh');
-  for (const f of readdirSync(dir)) {
+  for (const f of existsSync(dir) ? readdirSync(dir) : []) {   // (no OSM cache: what the real way is goes unsaid)
     if (!f.endsWith('.osm')) continue;
     const txt = readFileSync(resolve(dir, f), 'utf8');
     const nodes = new Map();
@@ -135,6 +136,7 @@ for (const [nid, n] of N) {
 }
 const count = {};
 for (const o of out) count[o.kind] = (count[o.kind] || 0) + 1;
+mkdirSync(resolve(root, 'tools/.cache'), { recursive: true });
 writeFileSync(resolve(root, 'tools/.cache/pgh-crossings.json'), JSON.stringify(out));
 console.log('grade separations and junction kinks:', count, '· on a route:', out.filter((o) => o.ridden).length);
 for (const k of ['level', 'no-deck', 'clash', 'low', 'tunnel', 'kink']) for (const o of out.filter((x) => x.kind === k).slice(0, 4))

@@ -76,3 +76,15 @@ test('the Pittsburgh routes mapped onto PGH: each a closed plan over PGH\'s own 
     assert.ok(Math.abs(r.lapM - p.lengthM) < 50, `${p.name}: ${r.lapM} vs ${p.lengthM}`);
   }
 });
+
+test('no GPS loops, rings, curls or spikes, and every overpass a deck ≥ 4.5 m over the way under it (tools/pgh_loops.mjs, tools/pgh_crossings.mjs)', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const root = new URL('../', import.meta.url);
+  execFileSync(process.execPath, ['tools/pgh_loops.mjs'], { cwd: root });
+  execFileSync(process.execPath, ['tools/pgh_crossings.mjs'], { cwd: root });
+  const loops = JSON.parse(readFileSync(new URL('../tools/.cache/pgh-loops.json', import.meta.url), 'utf8'));
+  const cross = JSON.parse(readFileSync(new URL('../tools/.cache/pgh-crossings.json', import.meta.url), 'utf8'));
+  assert.deepEqual(loops.map((o) => `${o.kind}: ${o.msg}`), []);
+  assert.deepEqual(cross.filter((o) => o.kind !== 'ok').map((o) => `${o.kind}: ${o.upper} / ${o.lower}`), []);
+  assert.ok(cross.length > 20, `${cross.length} grade separations`);
+});

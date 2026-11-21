@@ -1,7 +1,8 @@
 // Remove stubs found by tools/pgh_stubs.mjs (user, 21 Nov: "remove orange" — the real dead ends: cul-de-sacs, trail
 // ends, driveways), never one a route rides. Junctions left with two ways are joined through (not where a route starts
 // or turns round). Run tools/map_pgh_routes.mjs --write after.
-//   node tools/remove_stubs_pgh.mjs [--why osm,trimmed]     (default: osm)
+//   node tools/remove_stubs_pgh.mjs [--why osm,trimmed] [--max-m 150]     (default: osm, any length)
+// (21 Nov, "proceed" with the suggestions: the trim's side-street stubs under 150 m go too — the longer ones read as streets)
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +10,7 @@ import { load, save, joinThrough, len } from './pgh_graph_edit.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const args = process.argv.slice(2);
+const maxM = args.includes('--max-m') ? +args[args.indexOf('--max-m') + 1] : Infinity;
 const why = new Set((args.includes('--why') ? args[args.indexOf('--why') + 1] : 'osm').split(','));
 const file = resolve(root, 'routes/cities/pgh.json');
 const json = JSON.parse(readFileSync(file, 'utf8'));
@@ -24,7 +26,7 @@ const ridden = new Set((json.presets || []).flatMap((p) => p.path.map((k) => k.s
 const gone = new Set();
 let n = 0, m = 0;
 for (const s of stubs) {
-  if (!why.has(s.why) || s.ridden || s.ways.some((id) => ridden.has(id))) continue;
+  if (!why.has(s.why) || s.m >= maxM || s.ridden || s.ways.some((id) => ridden.has(id))) continue;
   for (const id of s.ways) gone.add(id);
   n++; m += s.m;
 }
