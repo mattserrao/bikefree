@@ -134,7 +134,7 @@ function geometry(streets, city, proj, ground) {
 }
 
 /** Which streets lie along a Pittsburgh route (the ride network: any area's route) — never touched. */
-function rideStreets(G, rides, ownIndex) {
+export function rideStreets(G, rides, ownIndex) {
   const out = new Set();
   for (const g of G) {
     if (g.cls > 7) continue;
