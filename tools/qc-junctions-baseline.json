@@ -15,7 +15,7 @@
   "kerb-road": 0,
   "sliver": 5,
   "overlap": 2,
-  "bridge-end": 2
+  "bridge-end": 1
  },
  "pittsburgh-westend": {
   "oversize": 0,
@@ -69,7 +69,7 @@
   "kerb-road": 0,
   "sliver": 2,
   "overlap": 2,
-  "bridge-end": 2
+  "bridge-end": 1
  },
  "pittsburgh-slopes": {
   "oversize": 9,

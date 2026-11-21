@@ -402,6 +402,12 @@ export function* planJunctionsJob(streets, ctx, options = {}) {
       t = Math.min(t, A.route ? 40 : A.shared ? A.avail * .45 : Math.max(1.5, A.avail - 4));
       A.t = t;
     }
+    // [junction-check] (user, 20 Nov: junctions at bridge ends, #12, #18) a route junction stops short of a bridge the route
+    // draws: its route arms are trimmed no further than 2 m before the deck, so the surface stays on the ground
+    if (isRoute && ctx.onRouteBridge) for (const A of ring) {
+      if (!A.route) continue;
+      for (let d = 0; d <= A.t; d += 1) if (ctx.onRouteBridge(rq.s + A.dir * d, 0)) { A.t = Math.max(1.5, d - 2); A.bridgeCut = true; break; }
+    }
     for (const a of arms) if (a.alongRoute) a.t = Math.min(a.alongRoute.t + 2, a.avail);
     for (const cr of corners) if (cr.arc && (cr.tA > cr.A.t + .01 || cr.tB > cr.B.t + .01)) cr.arc = null;   // clamped short: straight corner
 
