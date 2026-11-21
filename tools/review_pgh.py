@@ -91,7 +91,7 @@ def main():
 
     # ---------------------------------------------------------------- disconnected pieces (left out by the build)
     pieces = []
-    for es in B.REVIEW.get('pieces', []):
+    for es in []:   # (user, 21 Nov: pieces not in the network are removed, not reported — the build already leaves them out)
         L = sum(e['len'] for e in es)
         names = Counter(e['name'] for e in es if e['name']).most_common(2)
         pieces.append({'km': round(L / 1000, 2), 'names': [n for n, _ in names], 'kinds': dict(Counter(e['hw'] for e in es)),

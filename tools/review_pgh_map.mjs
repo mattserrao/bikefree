@@ -85,7 +85,7 @@ function compare(){
   const row=(l,b,a)=>'<tr><td>'+l+'</td><td>'+b+'</td><td><b>'+a+'</b></td></tr>';
   return '<table class="cmp"><tr><th></th><th>Before</th><th>Now</th></tr>'
     + row('Network', B.network.km+' km', A.network.km+' km') + row('Junctions', B.network.junctions.toLocaleString(), A.network.junctions.toLocaleString())
-    + row('Dead ends', B.deadEnds.junctions, A.deadEnds.junctions) + row('Not connected (left out)', B.disconnected.pieces, A.disconnected.pieces)
+    + row('Dead ends', B.deadEnds.junctions, A.deadEnds.junctions) + row('Not connected', B.disconnected.pieces, 'removed')
     + row('Dense clusters', B.dense.clusters, A.dense.clusters) + row('Alleys', B.alleys.edges, A.alleys.edges === 0 ? 'removed' : A.alleys.edges)
     + row('River problems (bridge rules off)', ['in-river','crossing','river-dip'].reduce((s,k)=>s+(B.river[k]||0),0), rv(A))
     + ['in-river','crossing','river-dip'].map(k=>row('&nbsp;· '+({'low-deck':'Low decks','deck-kink':'Deck kinks','in-river':'On the river','crossing':'Near-level crossings','river-dip':'Dips by the river'})[k], B.river[k]||0, A.river[k]||0)).join('')
@@ -102,7 +102,6 @@ function legend(){
     ['deadend','sw','<b>Dead ends left</b> (bridges only)', cnt('deadend')+' ways · '+km('deadend')+' km'],
     ['simplify','sw','<b>Simplify</b>: still to remove', cnt('simplify')+' · '+km('simplify')+' km'],
     ['alley','sw','Alleys still in', cnt('alley')+' · '+km('alley')+' km'],
-    ['piece','sw','<b>Not connected</b> to the network', D.P.length+' pieces · '+S.disconnected.km+' km'],
     ['dense','dot','Dense junction clusters', S.dense.clusters+''],
     ['river','dot','<b>River problems</b>', rv+''],
   ];
