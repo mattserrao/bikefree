@@ -58,6 +58,7 @@ export async function buildGraphHeroes(world, json) {
   return {
     claimed,
     group: host.group, heroes, landmarks,
+    addGlows: (list, name) => host.addGlows(list, name),
     tick(time, dt) { host.uniforms.uTime.value = time; heroes.tick?.(time, dt); landmarks.tick(time); },
     setNight(v) { host.night.value = v; for (const m of host.nightOnly || []) m.visible = v > 0.01; heroes.setNight?.(v); },
     dispose() { host.group.removeFromParent(); for (const d of host.disposables) d.dispose?.(); },

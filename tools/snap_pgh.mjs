@@ -2,6 +2,8 @@
 //
 //   node tools/snap_pgh.mjs <name>@<lat>,<lon>[,<dir +|->][@<metres>] …  [--software] [--size 1280x720] [--time midday] [--out tools/snapshots]
 //   node tools/snap_pgh.mjs point@40.4413,-80.0105 hotmetal@40.4300,-79.9605,+@60
+//   name@lat,lon@at#eyeLat,eyeLon,eyeUp,lookLat,lookLon,lookUp   a free camera: eye and target by lat/lon, each so
+//                  many metres above the ground (or the water) there
 //   --view 60,40   an overview: the camera 60 m behind and 40 m above the rider (writes pgh-<name>-view.png)
 //
 // Each shot starts the free ride on the edge nearest the spot (dir: which way along it) and places the rider
@@ -38,16 +40,21 @@ page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 await mkdir(resolve(ROOT, out), { recursive: true });
 for (const spec of args) {
-  const [name, where, at] = spec.split('@');
+  const [main, cam] = spec.split('#');
+  const [name, where, at] = main.split('@');
   const [lat, lon, dir] = where.split(',');
   errors.length = 0;
   const t0 = Date.now();
   await page.goto(`${base}/tools/pgh-preview.html?${new URLSearchParams({ graph, lat, lon, dir: dir || '+', at: at || 40, time })}`);
   await page.waitForFunction(() => window.world && window.world.readiness().ready, null, { timeout: 240000, polling: 500 });
-  const stats = await page.evaluate((view) => {
+  const stats = await page.evaluate(([view, cam]) => {
     const w = window.world;
     w.stop();
-    if (view) {
+    if (cam) {
+      const [ea, eo, eu, la, lo, lu] = cam.split(',').map(Number), y = (p) => Math.max(w._groundH(p.x, p.z), w.poolAt(p.x, p.z));
+      const e = w.proj.toLocal(ea, eo), t = w.proj.toLocal(la, lo);
+      w.camera.position.set(e.x, y(e) + eu, e.z); w.camera.lookAt(t.x, y(t) + lu, t.z);
+    } else if (view) {
       const [back, up] = view.split(',').map(Number), r = w.rider.group.position, f = w._pose.flat;
       w.camera.position.set(r.x - f.x * back, r.y + up, r.z - f.z * back); w.camera.lookAt(r.x + f.x * back * 0.6, r.y, r.z + f.z * back * 0.6);
     }
@@ -56,11 +63,11 @@ for (const spec of args) {
     w.renderer.render(w.scene, w.camera);
     const i = w.renderer.info.render;
     const up = window.route.netRide.upcoming(w.p);
-    return { calls: i.calls, triangles: i.triangles, tiles: [...w.tiles.values()].filter((t) => t.built).length, next: `${up.node.name} in ${Math.round(up.distTo)} m: ${up.options.map((o) => o.label).join(' / ')}` };
-  }, view);
-  const file = resolve(ROOT, out, `pgh-${name}${view ? '-view' : ''}.png`);
+    return { bridges: `${w._bridgesState} ${w.bridges?.count ?? ''}`, calls: i.calls, triangles: i.triangles, tiles: [...w.tiles.values()].filter((t) => t.built).length, next: `${up.node.name} in ${Math.round(up.distTo)} m: ${up.options.map((o) => o.label).join(' / ')}` };
+  }, [view, cam]);
+  const file = resolve(ROOT, out, `pgh-${name}${view || cam ? '-view' : ''}.png`);
   await page.screenshot({ path: file });
-  console.log(`${name}: ${stats.calls} draw calls, ${(stats.triangles / 1e6).toFixed(2)} M triangles, ${stats.tiles} tiles · next ${stats.next} · ${((Date.now() - t0) / 1000).toFixed(1)} s → ${file.slice(ROOT.length)}${errors.length ? `\n  errors: ${errors.slice(0, 3).join(' | ')}` : ''}`);
+  console.log(`${name}: bridges ${stats.bridges}, ${stats.calls} draw calls, ${(stats.triangles / 1e6).toFixed(2)} M triangles, ${stats.tiles} tiles · next ${stats.next} · ${((Date.now() - t0) / 1000).toFixed(1)} s → ${file.slice(ROOT.length)}${errors.length ? `\n  errors: ${errors.slice(0, 3).join(' | ')}` : ''}`);
 }
 await browser.close();
 server.close();

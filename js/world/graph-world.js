@@ -246,7 +246,7 @@ export class GraphWorld {
           this._heroesState = 'loading';
           fetch(new URL(`../../${this.json.heroes}`, import.meta.url)).then((r) => r.json())
             .then((hj) => import('./graph-heroes.js').then(({ buildGraphHeroes }) => buildGraphHeroes(this, hj)))
-            .then((h) => { if (this.disposed) { h.dispose(); return; } this.heroes = h; this.scene.add(h.group); h.setNight(this.timeKey === 'night' ? 1 : 0); this._heroesState = 'ok'; })
+            .then((h) => { if (this.disposed) { h.dispose(); return; } this.heroes = h; this.scene.add(h.group); h.setNight(this.timeKey === 'night' ? 1 : 0); this._heroesState = 'ok'; this._loadBridges(); })
             .catch((err) => { this._heroesState = 'failed'; this.log('3d', `PGH landmarks: ${err.message} ${(err.stack || '').split('\n').slice(0, 4).join(' | ')}`, 'error'); });
         }
         for (const t of this.tiles.values()) if (t.built && !t.groundMesh) t.needsGround = true;
@@ -333,6 +333,7 @@ export class GraphWorld {
     add('ground', 'Ground', ground);
     add('riders', 'Rider', this._riderModel !== 'loading' ? 1 : 0);
     if (this.json.heroes) add('landmarks', 'Landmarks', this._heroesState && this._heroesState !== 'loading' ? 1 : 0);
+    if (this.json.bridges && this._heroesState === 'ok') add('bridges', 'Bridges', this._bridgesState && this._bridgesState !== 'loading' ? 1 : 0);
     return { ready: steps.every((s) => s.done), failed: this.groundFailed, progress: steps.reduce((a, s) => a + s.p, 0) / steps.length, steps };
   }
   get loading() { return (this._queued || 0) > 6 ? 4 : 0; }
@@ -344,6 +345,7 @@ export class GraphWorld {
     for (const t of this.tiles.values()) this._release(t);
     for (const m of Object.values(this.mats)) { if (m.dispose) m.dispose(); else for (const x of Object.values(m)) x.dispose?.(); }
     this.heroes?.dispose();
+    this.bridges?.dispose();
     this.water.geometry.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
@@ -437,6 +439,24 @@ export class GraphWorld {
   }
 
   // ---------- streaming ----------
+  /** PGH's bridge models (js/world/graph-bridges.js, tools/pgh_bridges.mjs): built once; the tiles they stand in are
+   *  rebuilt without the world's plain piers (and a ridden roadway's parapets) where a model stands. */
+  _loadBridges() {
+    if (!this.json.bridges || this._bridgesState) return;
+    this._bridgesState = 'loading';
+    fetch(new URL(`../../${this.json.bridges}`, import.meta.url)).then((r) => r.json())
+      .then((bj) => import('./graph-bridges.js').then(({ buildGraphBridges }) => buildGraphBridges(this, bj)))
+      .then((b) => {
+        if (this.disposed) { b.dispose(); return; }
+        this.bridges = b; this.bridgeMask = b.mask; this.scene.add(b.group);
+        this.heroes?.addGlows?.(b.glows, 'Bridge lamps');
+        for (const t of this.tiles.values()) if (t.built) this._release(t);
+        this._bridgesState = 'ok';
+        this.log('3d', `PGH bridges: ${b.count} models`, 'debug');
+      })
+      .catch((err) => { this._bridgesState = 'failed'; this.log('3d', `PGH bridges: ${err.message} ${(err.stack || '').split('\n').slice(0, 3).join(' | ')}`, 'error'); });
+  }
+
   _stream(cx, cz, budgetMs) {
     const t0 = performance.now();
     const ci = Math.floor(cx / TILE), cj = Math.floor(cz / TILE), r = Math.ceil(NEAR_M / TILE);
@@ -492,14 +512,14 @@ export class GraphWorld {
       }
       R.strip(L, Rt, c);
       // sides: down to the ground on an embankment (a skirt), a deck with parapets on a bridge
-      const side = col('side'), deckC = col('deck'), rail = col('rail'), under = col('under');
+      const side = col('side'), deckC = col('deck'), rail = col('rail'), under = col('under'), bm = this.bridgeMask?.get(e.id);
       for (let i = a; i < b; i++) {
         const k = i - a, br = deck[i] && deck[i + 1];
         const drop = br ? 1.0 : 3.5;
         for (const [S, flip] of [[L, false], [Rt, true]]) {
           const p0 = S[k], p1 = S[k + 1];
           R.wall(p0, p1, -drop, 0, br ? deckC : side, flip);
-          if (br) R.wall(p0, p1, 0, 0.9, rail, flip);
+          if (br && !(bm && (bm[i] & 2) && (bm[i + 1] & 2))) R.wall(p0, p1, 0, 0.9, rail, flip);
         }
         if (br) R.quad([L[k][0], L[k][1] - 1, L[k][2]], [Rt[k][0], Rt[k][1] - 1, Rt[k][2]], [Rt[k + 1][0], Rt[k + 1][1] - 1, Rt[k + 1][2]], [L[k + 1][0], L[k + 1][1] - 1, L[k + 1][2]], under, true);
       }
@@ -704,9 +724,10 @@ export class GraphWorld {
       for (let i = 0; i <= e.n; i++) if (!deck[i]) toEnd[i] = 0;
       for (let i = 1; i <= e.n; i++) toEnd[i] = Math.min(toEnd[i], toEnd[i - 1] + 10);
       for (let i = e.n - 1; i >= 0; i--) toEnd[i] = Math.min(toEnd[i], toEnd[i + 1] + 10);
-      const half = (this.widths[e.kind] || 7) / 2 - 0.4;
+      const half = (this.widths[e.kind] || 7) / 2 - 0.4, pm = this.bridgeMask?.get(e.id);
       for (let i = Math.max(a, 1); i <= Math.min(b, e.n - 1); i++) {
         if (!deck[i] || toEnd[i] < 20 || i % PIER_STEP) continue;
+        if (pm && pm[i] & 1) continue;   // a bridge model stands here (its own piers)
         const gy = this._groundH(e.x[i], e.z[i]), top = e.ele[i] - 1.0;
         if (top - gy < 3) continue;   // (low over the ground: the fill and the abutments are enough)
         let dx = e.x[i + 1] - e.x[i - 1], dz = e.z[i + 1] - e.z[i - 1]; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
