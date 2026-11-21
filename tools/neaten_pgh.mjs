@@ -59,7 +59,7 @@ const tryUnion = (list) => {
   if (live.length < 2) return false;
   const all = new Set(live.flatMap((n) => (gid.has(n) ? [...groups.get(gid.get(n))] : [n])));
   const pts = [...all].map((n) => nodes.get(n));
-  for (const a of pts) for (const b of pts) if (dist(a, b) > 50) return false;
+  for (const a of pts) for (const b of pts) if (dist(a, b) > 50 || Math.abs(a.ele - b.ele) > 2.5) return false;   // (never a junction on a bridge with the road under it)
   if ([...all].filter(onBridge).length > 1) return false;
   for (const n of all) if (gid.has(n)) groups.delete(gid.get(n));
   const g = ++gseq; groups.set(g, all);
