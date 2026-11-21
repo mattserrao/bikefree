@@ -11,6 +11,7 @@
     "qc:clipping": "node tools/qc_clipping.mjs",
     "qc:network": "node tools/qc_network.mjs",
     "qc:map": "node tools/qc_map.mjs",
+    "qc:junctions": "node tools/qc_junctions.mjs",
     "qc:interchanges": "node tools/qc_interchanges.mjs",
     "qc:highways": "node tools/qc_highways.mjs",
     "repair:city": "node tools/repair_city.mjs",
