@@ -11,8 +11,8 @@ const json = JSON.parse(readFileSync(new URL('../routes/cities/pgh.json', import
 test('PGH is rideable: every edge both ways through every junction, one connected piece, no jumps or steps (tools/qc_pgh.mjs)', () => {
   const r = qcGraph(json, { rides: 60, km: 20 });
   assert.deepEqual(r.fails.slice(0, 5), [], `${r.fails.length} rideability failures`);
-  assert.ok(r.summary.km > 600, `the routes' streets: ${r.summary.km} km`);   // (648 km once the ways no route touches went)
-  assert.ok(r.summary.waysChecked > 25000);   // (fewer since the cleanup, and since the ways no route touches went: user, 21 Nov)
+  assert.ok(r.summary.km > 550, `the routes' streets: ${r.summary.km} km`);   // (~595 km after the trim, the junction tidy and the dead ends' removal)
+  assert.ok(r.summary.waysChecked > 20000);   // (fewer since the cleanup, and since the ways no route touches went: user, 21 Nov)
 });
 
 test('the graph rides on the network machinery: edges on the synthetic base line, mirrored for the way back', () => {
