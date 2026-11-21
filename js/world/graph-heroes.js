@@ -8,7 +8,8 @@
 import * as THREE from '../../vendor/three.module.min.js';
 
 export async function buildGraphHeroes(world, json) {
-  const [{ CityScene }, { buildHeroes }] = await Promise.all([import('./toolbox/city/city.js'), import('./toolbox/city/heroes.js')]);
+  const [{ CityScene }, { buildHeroes }, { buildPghLandmarks }, { frameOf, orient }] = await Promise.all([import('./toolbox/city/city.js'), import('./toolbox/city/heroes.js'),
+    import('./toolbox/city/pgh-landmarks.js'), import('./toolbox/city/hero-geom.js')]);
   const proj = world.proj;
   const host = Object.create(CityScene.prototype);
   host.group = new THREE.Group(); host.group.name = 'PGH landmarks';
@@ -18,6 +19,15 @@ export async function buildGraphHeroes(world, json) {
   host.qualityKey = world.qualityKey || 'balanced';
   host.route = { scene: { heroes: json.heroes.map((h) => ({ ...h })) }, dist: [0], turnIdx: 0 };   // (no views, overlooks or fountain: PGH has its own Point)
   host.D = { proj };
+  // Saint Josaphat (twin towers, copper domes, buff brick) and the Union Project (the old Union Baptist: Gothic stone,
+  // one square corner tower) are churches: the map's church builder, sized and turned from their OSM outlines
+  const CHURCHES = { josaphat: { look: 'ihm', style: { wall: '#c7a873', towerM: 40, crown: 'onion', crownM: 12 } },
+    unionproject: { look: 'holyname', style: { wall: '#8a8274', roof: '#4b4f52', crown: 'pinnacles', crownM: 4, towerM: 26 } } };
+  for (const l of json.landmarks || []) {
+    const c = CHURCHES[l.model]; if (!c || !l.ring) continue;
+    const F = frameOf(orient(l.ring.map(([a, o]) => proj.toLocal(a, o))));
+    host.route.scene.heroes.push({ model: 'church', name: l.label, ...c, lat: l.center[0], lon: l.center[1], lengthM: F.hl * 2, widthM: F.hw * 2, axisDeg: Math.atan2(F.u.x, -F.u.z) * 180 / Math.PI });
+  }
   host.index = { nearest: () => null, xs: [], zs: [] };
   host.streets = [];
   const pool = () => world.waterY - 0.35;
@@ -41,12 +51,14 @@ export async function buildGraphHeroes(world, json) {
   }
   host._materials();
   const heroes = buildHeroes(host);
+  let landmarks = { count: 0, tick() {} };
+  try { landmarks = buildPghLandmarks(host, json); } catch (err) { console.warn(`PGH landmarks: ${err.message}`); }
   // the footprints the heroes stand on (claimed) — for the clash check: a PGH way through one is a conflict
   const claimed = host.buildings.filter((b) => b.hero);
   return {
     claimed,
-    group: host.group, heroes,
-    tick(time, dt) { host.uniforms.uTime.value = time; heroes.tick?.(time, dt); },
+    group: host.group, heroes, landmarks,
+    tick(time, dt) { host.uniforms.uTime.value = time; heroes.tick?.(time, dt); landmarks.tick(time); },
     setNight(v) { host.night.value = v; for (const m of host.nightOnly || []) m.visible = v > 0.01; heroes.setNight?.(v); },
     dispose() { host.group.removeFromParent(); for (const d of host.disposables) d.dispose?.(); },
   };

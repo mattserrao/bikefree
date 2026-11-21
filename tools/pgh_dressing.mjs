@@ -30,6 +30,10 @@ const kindOf = (t) => t.amenity === 'fountain' ? 'fountain' : t.water === 'refle
   : t.landuse === 'grass' ? 'lawn' : t.leisure === 'garden' ? 'garden' : t.natural === 'wood' ? 'wood' : t.natural === 'scrub' ? 'scrub'
   : t.leisure === 'park' ? 'park' : null;
 const out = { format: 'bikefree-dressing-1', note: 'tools/pgh_dressing.mjs: OSM areas, lines and points of the dressed places (Point State Park)', places: AREAS.map((a) => a.name), areas: [], lines: [], trees: [] };
+// the fort model (js/world/toolbox/city/heroes.js 'fort': the bastions round 40.44098, -80.00895, ~70 m) draws Fort
+// Pitt's own walls: OSM's walls and retaining walls inside it would double them (user, 21 Nov: "fort model, trim dressing")
+const FORT = { la: 40.44098, lo: -80.00895, r: 75 };
+const inFort = ([la, lo]) => Math.hypot((la - FORT.la) * 111320, (lo - FORT.lo) * 111320 * Math.cos(FORT.la * Math.PI / 180)) < FORT.r;
 const r6 = ([la, lo]) => [+la.toFixed(6), +lo.toFixed(6)];
 // PGH's own ways (a walkway PGH already rides is drawn by the world as a road)
 const pghPts = new Set();
@@ -42,6 +46,7 @@ for (const a of AREAS) {
     const t = w.tags, closed = w.refs[0] === w.refs[w.refs.length - 1];
     const k = closed ? kindOf(t) : null;
     if (k) { out.areas.push({ kind: k, name: t.name || '', pts: pts.map(r6) }); continue; }
+    if ((t.barrier === 'retaining_wall' || t.barrier === 'wall') && pts.filter(inFort).length > pts.length / 2) { out.trimmed = (out.trimmed || 0) + 1; continue; }
     if (t.barrier === 'retaining_wall') out.lines.push({ kind: 'retaining_wall', pts: pts.map(r6) });
     else if (t.barrier === 'wall') out.lines.push({ kind: 'wall', pts: pts.map(r6) });
     else if (['footway', 'path', 'pedestrian', 'steps', 'cycleway'].includes(t.highway) && t.area !== 'yes') {
@@ -53,4 +58,4 @@ for (const a of AREAS) {
 }
 writeFileSync(resolve(root, 'routes/cities/pgh-dressing.json'), JSON.stringify(out));
 const c = (arr, k) => arr.filter((x) => x.kind === k).length;
-console.log(`dressing (${out.places.join(', ')}): areas ${out.areas.length} (${['park', 'lawn', 'garden', 'wood', 'scrub', 'plaza', 'fountain', 'pool'].map((k) => `${k} ${c(out.areas, k)}`).join(', ')}), lines ${out.lines.length} (${['retaining_wall', 'wall', 'walk', 'steps'].map((k) => `${k} ${c(out.lines, k)}`).join(', ')}), trees ${out.trees.length}`);
+console.log(`dressing (${out.places.join(', ')}): areas ${out.areas.length} (${['park', 'lawn', 'garden', 'wood', 'scrub', 'plaza', 'fountain', 'pool'].map((k) => `${k} ${c(out.areas, k)}`).join(', ')}), lines ${out.lines.length} (${['retaining_wall', 'wall', 'walk', 'steps'].map((k) => `${k} ${c(out.lines, k)}`).join(', ')}), trees ${out.trees.length}, fort walls trimmed ${out.trimmed || 0}`);

@@ -48,7 +48,84 @@ for (const [key, h] of heroes) {
   }
 }
 const list = [...heroes.values()];
-writeFileSync(resolve(root, 'routes/cities/pgh-heroes.json'), JSON.stringify({ format: 'bikefree-heroes-1', note: 'tools/pgh_heroes.mjs: the Pittsburgh scenes\' hero landmarks within PGH, with the map footprints round them', heroes: list, buildings: out }));
+
+// ---- the rest of PGH's landmarks (user, 21 Nov: "work through them all"): each with its outline and height for the
+// bespoke models of js/world/toolbox/city/pgh-landmarks.js
+const LM = JSON.parse(readFileSync(resolve(root, 'routes/cities/pgh-landmarks.json'), 'utf8')).landmarks;
+const MODEL = {
+  'Koppers Tower': 'koppers', 'Frick Building': 'frick', 'Mellon National Bank Building': 'mellonbank', 'Tower at PNC Plaza': 'pncplaza',
+  'EQT Plaza': 'eqt', 'Heinz Hall': 'heinzhall', 'Benedum Center': 'benedum', 'Allegheny County Jail & Courthouse': 'courthouse',
+  'Engine Company No. 1': 'engine1', 'Station Square P&LE terminal': 'pleterminal', 'Carnegie Library, Allegheny': 'carnegielib',
+  "Children's Museum (Buhl Planetarium)": 'buhl', 'Andy Warhol Museum': 'warhol', 'Mattress Factory': 'mattress',
+  'Soldiers and Sailors Monument (Allegheny Commons)': 'column', 'Korean War Veterans Memorial': 'korean', '"Point of View" (Washington & Guyasuta)': 'pointofview',
+  'The Doughboy': 'statue', 'Troy Hill WWI Monument': 'obelisk', 'Vietnam Veterans Memorial': 'vietnam', 'Steelworkers Monument': 'steelworkers',
+  'The Hiker': 'statue', 'Christopher Columbus statue': 'columbus', 'Edward Manning Bigelow statue': 'statue', 'George Washington memorial': 'statue',
+  'Millennium Panther': 'panther', 'Heinz History Center': 'history', 'Produce Terminal': 'produce', 'Penn Brewery': 'brewery',
+  'Hamerschlag Hall': 'hamerschlag', 'Forbes Field wall': 'forbes', 'Stephen Foster Memorial': 'foster', 'Mellon Institute': 'melloninst',
+  'Frick Fine Arts': 'frickarts', 'Saint Josaphat': 'josaphat', 'Pittsburgh Zoo entrance': 'zoo', 'Union Project': 'unionproject',
+  'Sandcastle': 'sandcastle', 'Randyland': 'randyland', 'National Aviary': 'aviary', 'Allegheny Observatory': 'observatory',
+  'Station Square': 'stationsquare', 'Highland Park reservoirs': 'reservoir', 'Fort Pitt Museum': 'fortmuseum',
+};
+const FIX = { 'Carnegie Library, Allegheny': [40.45263, -80.00617] };   // (matched the wrong library: the Allegheny branch is on Federal Street)
+// every area's footprints (for the heights)
+const allB = [];
+for (const file of new Set(scenes.map((f) => JSON.parse(readFileSync(resolve(root, 'routes/scenes', f), 'utf8')).cityData).filter(Boolean))) {
+  if (!cache.has(file)) {
+    const d = JSON.parse(readFileSync(resolve(root, file), 'utf8')), B = d.buildings;
+    const ab = (t, T) => { const buf = b64(t); return new T(buf.buffer, buf.byteOffset, buf.byteLength / T.BYTES_PER_ELEMENT); };
+    cache.set(file, { d, h: ab(B.h, Uint16Array), mh: ab(B.mh, Uint16Array), starts: ab(B.starts, Uint32Array), xy: ab(B.xy, Int16Array), B });
+  }
+  const C = cache.get(file), [o0, o1] = C.d.origin, u = C.d.unit;
+  for (let k = 0; k < C.B.count; k++) { const ring = []; for (let i = C.starts[k]; i < C.starts[k + 1]; i++) ring.push([o0 + C.xy[i * 2] * u, o1 + C.xy[i * 2 + 1] * u]); allB.push({ ring, h: C.h[k] / 10, name: C.B.names[k] || '' }); }
+}
+const inRing = (ring, la, lo) => { let c = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const [ai, oi] = ring[i], [aj, oj] = ring[j]; if ((ai > la) !== (aj > la) && lo < ((oj - oi) * (la - ai)) / (aj - ai) + oi) c = !c; } return c; };
+const landmarks = [];
+for (const l of LM) {
+  const model = MODEL[l.label];
+  if (!model) continue;
+  const center = FIX[l.label] || l.center;
+  let ring = l.footprint === 'OSM outline' && !FIX[l.label] ? l.poly : null;
+  // the map footprint under it: its outline (if OSM had none) and its height
+  const under = allB.filter((b) => inRing(b.ring, center[0], center[1]) || (ring && ring.some(([a, o]) => inRing(b.ring, a, o))));
+  const tall = under.sort((a, b) => b.h - a.h)[0];
+  if (!ring && tall && ['building'].includes(l.type)) ring = tall.ring;
+  landmarks.push({ label: l.label, model, type: l.type, center, ring: ring ? ring.map(([a, o]) => [+a.toFixed(7), +o.toFixed(7)]) : null, h: tall ? tall.h : null });
+}
+// the stadiums, as closed bowls (user, 21 Nov): their OSM outlines
+const stadiums = LM.filter((l) => /PNC Park|Acrisure/.test(l.label)).map((l) => ({ name: l.label, ring: l.poly, center: l.center,
+  seats: /PNC/.test(l.label) ? '#1d3f6e' : '#c9a227', open: true, heightM: /PNC/.test(l.label) ? 28 : 42 }));
+// the inclines: the map's funicular rails
+const inclines = [];
+{
+  const seenR = new Set();
+  for (const [file, C] of cache) for (const r of C.d.rails || []) {
+    if (r.kind !== 'funicular') continue;
+    const key = (r.name || '') + r.path.length;
+    if (seenR.has(key)) continue; seenR.add(key);
+    inclines.push({ name: r.name || 'Incline', path: r.path.map(([a, o]) => [+(C.d.origin[0] + a * C.d.unit).toFixed(7), +(C.d.origin[1] + o * C.d.unit).toFixed(7)]) });
+  }
+}
+// Phipps: the Oakland scene's glasshouse plan
+const phipps = (() => { try { return JSON.parse(readFileSync(resolve(root, 'routes/scenes/pittsburgh-oakland.json'), 'utf8')).glasshouses?.[0] || null; } catch { return null; } })();
+// Grandview's overlooks and the subway's entrances, from OSM
+const osmPts = [];
+for (const f of readdirSync(resolve(root, 'tools/.cache/osm-pgh'))) {
+  if (!f.endsWith('.osm')) continue;
+  const txt = readFileSync(resolve(root, 'tools/.cache/osm-pgh', f), 'utf8');
+  for (const m of txt.matchAll(/<node id="(\d+)"[^>]*lat="([-\d.]+)" lon="([-\d.]+)"[^>]*>([\s\S]*?)<\/node>/g)) {
+    if (/k="tourism" v="viewpoint"/.test(m[4])) osmPts.push({ kind: 'viewpoint', id: m[1], p: [+m[2], +m[3]], name: (m[4].match(/k="name" v="([^"]*)"/) || [])[1] || '' });
+    if (/k="railway" v="subway_entrance"|k="railway" v="train_station_entrance"/.test(m[4])) osmPts.push({ kind: 'entrance', id: m[1], p: [+m[2], +m[3]], name: (m[4].match(/k="name" v="([^"]*)"/) || [])[1] || '' });
+  }
+}
+const uniq = (a) => { const s2 = new Set(); return a.filter((x) => (s2.has(x.id) ? false : s2.add(x.id))); };
+const overlooks = uniq(osmPts.filter((o) => o.kind === 'viewpoint' && o.p[0] > 40.428 && o.p[0] < 40.442 && o.p[1] > -80.026 && o.p[1] < -80.000)).map((o) => ({ name: o.name, p: o.p }));
+const stationNames = ['Allegheny', 'North Side', 'Gateway', 'Wood Street', 'Steel Plaza', 'First Avenue'];
+const entrances = uniq(osmPts.filter((o) => o.kind === 'entrance')).map((o) => ({ name: o.name, p: o.p }));
+const stations = LM.filter((l) => stationNames.includes(l.label)).map((l) => {
+  const near = entrances.filter((e) => Math.hypot((e.p[1] - l.center[1]) * kx, (e.p[0] - l.center[0]) * ky) < 180);
+  return { name: l.label, center: l.center, entrances: near.length ? near.map((e) => e.p) : [l.center] };
+});
+writeFileSync(resolve(root, 'routes/cities/pgh-heroes.json'), JSON.stringify({ format: 'bikefree-heroes-1', note: 'tools/pgh_heroes.mjs: the Pittsburgh scenes\' hero landmarks within PGH, with the map footprints round them; the other landmarks for the bespoke models; stadiums, inclines, Phipps, overlooks and subway entrances', heroes: list, buildings: out, landmarks, stadiums, inclines, phipps, overlooks, stations }));
 const by = {}; for (const h of list) by[h.model] = (by[h.model] || 0) + 1;
 console.log(`heroes: ${list.length} (${Object.entries(by).map(([k, v]) => `${k}${v > 1 ? ' ×' + v : ''}`).join(', ')}) · ${out.length} footprints round them`);
-for (const h of list) console.log(`  ${h.model.padEnd(11)} ${h.name}`);
+console.log(`landmarks to model: ${landmarks.length} (${landmarks.filter((l) => l.ring).length} with an outline, ${landmarks.filter((l) => l.h).length} with a height) · stadiums ${stadiums.length} · inclines ${inclines.length} (${inclines.map((i) => i.name).join(', ')}) · Phipps ${phipps ? 'yes' : 'no'} · overlooks ${overlooks.length} · stations ${stations.length} (${stations.reduce((s2, x) => s2 + x.entrances.length, 0)} entrances)`);
