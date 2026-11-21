@@ -91,7 +91,7 @@ export function graphNetwork(json, { name } = {}) {
   // where a free ride starts: the configured spot's nearest edge, ridden forward from its start
   const at = json.start ? nearestEdge(G, json.start.lat, json.start.lon) : { e: G.edges[0] };
   const network = { format: 'bikefree-network-1', id: json.id, graph: true, legM: L,
-    nodes: json.nodes.map((n) => ({ id: n.id, name: n.name, lat: n.lat, lon: n.lon, ele: n.ele })), edges: netEdges, presets: [],
+    nodes: json.nodes.map((n) => ({ id: n.id, name: n.name, lat: n.lat, lon: n.lon, ele: n.ele })), edges: netEdges, presets: (json.presets || []).map((p) => ({ ...p })),
     freeRide: { name: 'Free ride', first: `${at.e.id}+`, note: 'Every street, trail and bridge: straight on at every junction unless you choose a turn. Ride until you stop' } };
   return { base, network, graph: G };
 }

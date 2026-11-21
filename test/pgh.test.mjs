@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { graphNetwork, decodeGraph, nearestEdge } from '../js/graph.js';
-import { loadNetwork, makePathRoute, optionsAt } from '../js/network.js';
+import { loadNetwork, makePathRoute, optionsAt, planCloses } from '../js/network.js';
 import { qcGraph } from '../tools/qc_pgh.mjs';
 
 const json = JSON.parse(readFileSync(new URL('../routes/cities/pgh.json', import.meta.url), 'utf8'));
@@ -62,4 +62,17 @@ test('the start is the configured spot (PNC Park / the North Shore) and junction
   const long = net.network.edges.filter((e) => /Parkway|Interstate|I-376|I-279/.test(e.name));
   assert.deepEqual(long.map((e) => e.name), []);
   assert.ok(optionsAt(loadNetwork(net.network, net.base), { e: loadNetwork(net.network, net.base).edges.get('e0'), dir: 1 }).length >= 1);
+});
+
+test('the Pittsburgh routes mapped onto PGH: each a closed plan over PGH\'s own ways, listed in pgh-presets.json', () => {
+  const list = JSON.parse(readFileSync(new URL('../routes/cities/pgh-presets.json', import.meta.url), 'utf8'));
+  const { base, network } = graphNetwork(json);
+  const net = loadNetwork(network, base);
+  assert.equal(net.presets.length, list.length);
+  assert.ok(list.length >= 40);
+  for (const p of net.presets) {
+    assert.ok(planCloses(net, p.path), `${p.name} does not close`);
+    const r = makePathRoute(net, p);
+    assert.ok(Math.abs(r.lapM - p.lengthM) < 50, `${p.name}: ${r.lapM} vs ${p.lengthM}`);
+  }
 });

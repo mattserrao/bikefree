@@ -1488,6 +1488,13 @@ async function loadParks() {
   }
   // [pgh] free-ride road graphs: listed as routes of their own (their data loads only when picked)
   for (const g of GRAPH_ITEMS) netItems.push({ ...g });
+  // …and the Pittsburgh routes mapped onto PGH (rough drafts while PGH is a test map)
+  try {
+    const list = await (await fetch('routes/cities/pgh-presets.json')).json();
+    for (const pr of list) netItems.push({ id: `builtin-graph-${pr.id}`, routeId: pr.id, kind: 'route', name: `PGH · ${pr.name}`, park: 'Pittsburgh, PA',
+      group: 'Scenic routes — 3D', stage: 'draft', network: 'routes/cities/pgh.json', graph: true, preset: pr.id, tags: pr.tags || [],
+      note: pr.note || '', lengthM: pr.lengthM, climbM: pr.climbM });
+  } catch { /* (no PGH routes yet) */ }
   await manifest;
   return parkItems;
 }
@@ -1580,7 +1587,7 @@ function renderRouteCards() {
         <div class="city-text"><b>${escapeHtml(it.name)}</b><div class="rsub">${escapeHtml(sub)}</div>${sel ? `<div class="rsel">Selected · ${escapeHtml(shortName(sel.name))}</div>` : '<div class="rsel muted">Pick a route on the map</div>'}</div>${CHEVRON}</button>`;
     }
     const r = routeStats(it);
-    const sub = !r ? (it.graph ? 'every street, trail and bridge · free ride' : routesLoadedYet ? 'Could not load' : '…') : r.stageRoute && r.oneWay
+    const sub = !r ? (it.graph ? (it.preset ? `${fmtDist(it.lengthM, 1)} ${distUnit()} · ${fmtElev(it.climbM).toLocaleString()} ${elevUnit()} · choose your turns` : 'every street, trail and bridge · free ride') : routesLoadedYet ? 'Could not load' : '…') : r.stageRoute && r.oneWay
       ? `${fmtDist(r.turnS, 1)} ${distUnit()} to the finish · ${fmtElev(r.oneWay.ascent).toLocaleString()} ${elevUnit()}`
       : r.free ? `${r.network.nodes.size} junctions · choose every turn`
       : r.netRide ? `${fmtDist(r.lapM, 1)} ${distUnit()} ${r.netOpen ? 'one way' : 'loop'} · ${fmtElev(r.lapClimbM).toLocaleString()} ${elevUnit()} · choose your turns`
@@ -1947,17 +1954,29 @@ function buildNetwork(base, url) {
   }
   return netBuilds.get(url);
 }
+const graphNets = new Map();   // [pgh] a road graph's network by URL: its free ride and its routes share one
+function graphNet(url, name) {
+  if (!graphNets.has(url)) {
+    graphNets.set(url, Promise.all([fetch(url).then((r) => r.json()), import('./graph.js')]).then(([json, { graphNetwork }]) => {
+      const { base, network } = graphNetwork(json, { name });
+      return loadNetwork(network, base);
+    }).catch((err) => { graphNets.delete(url); throw err; }));
+  }
+  return graphNets.get(url);
+}
 async function loadRouteItemNow(item) {
   if (item.graph) {
-    // [pgh] a free-ride road graph (js/graph.js): every edge on a synthetic base line, ridden by the network machinery
-    const [json, { graphNetwork }] = await Promise.all([fetch(item.network).then((r) => r.json()), import('./graph.js')]);
-    const { base, network } = graphNetwork(json, { name: item.name });
-    const net = loadNetwork(network, base);
-    const route = makePathRoute(net, { id: item.routeId, name: item.name, path: null, first: network.freeRide.first }, { id: item.routeId, name: item.name, park: item.park });
+    // [pgh] a free-ride road graph (js/graph.js): every edge on a synthetic base line, ridden by the network machinery;
+    // its routes (the Pittsburgh routes mapped onto it: tools/map_pgh_routes.mjs) are presets of the same network
+    const net = await graphNet(item.network, 'PGH');
+    const preset = item.preset ? net.json.presets.find((x) => x.id === item.preset) : null;
+    if (item.preset && !preset) throw new Error(`${item.name} is not in the PGH map any more`);
+    const route = makePathRoute(net, preset ? { ...preset, id: item.routeId } : { id: item.routeId, name: item.name, path: null, first: net.json.freeRide.first },
+      { id: item.routeId, name: item.name, park: item.park });
     route.note = item.note || '';
     route.scene = null;
     route.graph = true;
-    route.stops = route.stops.slice(0, 8);   // (a free ride over a whole city: its first few junctions as start points, not hundreds)
+    if (!preset) route.stops = route.stops.slice(0, 8);   // (a free ride over a whole city: its first few junctions as start points, not hundreds)
     route.netRide.addEventListener('change', () => { if (session.route === route && world?.path === route.netRide) world.setCourseMarks(courseMarks()); });
     routeCache.set(item.id, route);
     return route;

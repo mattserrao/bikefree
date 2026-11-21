@@ -11,7 +11,7 @@
     "qc:clipping": "node tools/qc_clipping.mjs",
     "qc:network": "node tools/qc_network.mjs",
     "qc:pgh": "node tools/qc_pgh.mjs",
-    "pgh:build": "python3 tools/build_pgh.py",
+    "pgh:build": "python3 tools/build_pgh.py && node tools/map_pgh_routes.mjs --write",
     "snap:pgh": "node tools/snap_pgh.mjs",
     "network:build": "node tools/build_network.mjs",
     "snap": "node tools/snap_scene.mjs",

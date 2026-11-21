@@ -221,7 +221,48 @@ def main():
             PB = [XY(p) for p in b['poly']]
             if any(point_in(PA, *p) for p in PB) or any(point_in(PB, *p) for p in PA):
                 a['overlaps'].append(b['label']); b.setdefault('overlaps', []).append(a['label'])
+    # resolutions (user, 21 Nov: "use judgement, there may be areas where the answer differs")
+    def clearance(x, y):
+        d = 1e9
+        for gx in range(int(x // 50) - 2, int(x // 50) + 3):
+            for gy in range(int(y // 50) - 2, int(y // 50) + 3):
+                for k, i in egrid.get((gx, gy), ()):
+                    e = edges[k]
+                    if i + 1 < len(e['pts']): d = min(d, seg_dist(x, y, *e['pts'][i], *e['pts'][i + 1]) - e['half'])
+        return d
+    def move(rec, r):
+        cx, cy = XY(rec['center'])
+        for ring in range(0, 60):   # 2 m rings out to 120 m: the nearest spot whose circle clears every road by 2 m
+            rr = ring * 2
+            for a in range(max(1, ring * 6)):
+                x, y = cx + rr * math.cos(a * 2 * math.pi / max(1, ring * 6)), cy + rr * math.sin(a * 2 * math.pi / max(1, ring * 6))
+                if clearance(x, y) >= r + 2:
+                    rec['center'] = [round(lat0 + y / ky, 6), round(pgh['origin']['lon'] + x / kx, 6)]
+                    rec['poly'] = [[round(lat0 + (y + r * math.sin(t * math.pi / 12)) / ky, 6), round(pgh['origin']['lon'] + (x + r * math.cos(t * math.pi / 12)) / kx, 6)] for t in range(24)]
+                    return rr
+        return None
+    SPANS = {'Mon Incline'}                    # an incline climbs over the roads at its foot (McArdle Roadway): it spans them
+    GROUNDS = {'Phipps', 'PNC Park'}           # an outline that holds its own paths (the conservatory's gardens, the riverwalk at the ballpark's edge)
+    MERGE = {'Duquesne Incline upper station': 'Duquesne Incline'}
+    out = [r for r in out if r['label'] not in MERGE]
+    for r in out:
+        r['overlaps'] = [o for o in r.get('overlaps', []) if o not in MERGE]
+        if r['label'] in MERGE.values(): r['note'] = 'includes ' + ', '.join(k for k, v in MERGE.items() if v == r['label'])
+        if not r.get('found'): r['resolution'] = 'not found'; continue
+        if not r['collides']: r['resolution'] = 'clear' if not r['ways'] else 'underground: the ways above stay' if r['type'] == 'underground' else 'open space: its ways stay'; continue
+        if r['label'] in SPANS: r['resolution'] = 'spans ' + ', '.join(sorted({w['name'] for w in r['ways']})); continue
+        if r['label'] in GROUNDS: r['resolution'] = 'grounds: ' + ', '.join(sorted({w['name'] for w in r['ways']})) + ' stay'; continue
+        rad = None if r['footprint'] == 'OSM outline' else RADIUS[r['type']]
+        moved = move(r, rad) if rad else None
+        if moved is not None:
+            r['resolution'] = f'moved {moved} m off {", ".join(sorted({w["name"] for w in r["ways"]}))}'
+            r['footprint'] = f'circle {rad} m'
+        else: r['resolution'] = 'flagged: ' + ', '.join(sorted({w['name'] for w in r['ways']}))
     json.dump(out, open(os.path.join(CACHE, 'pgh-landmarks.json'), 'w'))
+    keep = ('label', 'type', 'list', 'osm', 'center', 'poly', 'footprint', 'resolution', 'note')
+    with open(os.path.join(ROOT, 'routes', 'cities', 'pgh-landmarks.json'), 'w') as f:
+        json.dump({'format': 'bikefree-landmarks-1', 'map': 'pgh', 'note': 'Locations only (not built): tools/pgh_landmarks.py',
+                   'landmarks': [{k: r[k] for k in keep if r.get(k) is not None} for r in out if r.get('found')]}, f, separators=(',', ':'))
     found = [r for r in out if r['found']]
     print(f'  {len(out)} landmarks: {len(found)} placed ({sum(1 for r in found if r["footprint"] == "OSM outline")} with an OSM outline), {len(out) - len(found)} not found')
     for r in out:
@@ -229,7 +270,7 @@ def main():
         flag = 'COLLIDES' if r['collides'] else ('ways through (open)' if r['ways'] else '')
         ov = f' · overlaps {", ".join(r["overlaps"])}' if r['overlaps'] else ''
         ways = ', '.join(f'{w["name"]} {w["m"]} m' for w in r['ways'][:3])
-        print(f'    {r["label"][:40]:40} {r["type"]:11} {r["footprint"]:14} near {r["nearestRoad"]["name"]} {r["nearestRoad"]["m"]} m  {flag} {ways}{ov}')
+        if r['resolution'] != 'clear': print(f'    {r["label"][:40]:40} {r["type"]:11} {r["footprint"]:14} → {r["resolution"]}{ov}')
 
 
 if __name__ == '__main__':

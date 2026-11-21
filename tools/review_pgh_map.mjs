@@ -32,7 +32,7 @@ const data = {
   removed: B ? B.edges.filter((e) => e.status === 'simplify' || e.status === 'alley' || e.status === 'deadend').map((e) => [e.name || '', e.why || '', e.L, enc(e.line), e.hw]) : [],
   before: B ? B.summary : null,
   routes: ROUTES.map((r) => [r.name, r.oldM, r.pghM, r.followPct, enc(r.oldLine), enc(r.line), r.detours.map((d) => [...P([d.lat, d.lon]), d.routeM, d.pghM, d.via.join(', ')])]),
-  marks: MARKS.filter((m) => m.found).map((m) => [m.label, m.type, m.list, enc(m.poly), ...P(m.center), m.collides ? 1 : 0, (m.ways || []).map((w) => w.name + ' ' + w.m + ' m').join(', '), (m.overlaps || []).join(', '), m.footprint, m.nearestRoad ? m.nearestRoad.name + ' ' + m.nearestRoad.m + ' m' : '', m.osm || '']),
+  marks: MARKS.filter((m) => m.found).map((m) => [m.label, m.type, m.list, enc(m.poly), ...P(m.center), (m.resolution || '').startsWith('flagged') ? 1 : 0, (m.ways || []).map((w) => w.name + ' ' + w.m + ' m').join(', '), (m.overlaps || []).join(', '), m.footprint, m.nearestRoad ? m.nearestRoad.name + ' ' + m.nearestRoad.m + ' m' : '', m.osm || '', m.collides ? m.resolution : '']),
   parallels: (R.parallels || []).map((o) => [enc(o.segA), enc(o.segB), o.names.join(' & '), o.m, o.gap, o.remove == null ? null : enc(R.edges[o.remove].line), o.remove == null ? '' : (R.edges[o.remove].name || R.edges[o.remove].kind), o.why, o.kinds.join(' + ')]),
   jagged: (R.jagged || []).map((j) => [j.name, Object.entries(j.types).map(([k, v]) => k + ' ' + v).join(', '), enc(j.line), j.spots.map((s) => [...P([s[0], s[1]]), s[2], s[3]])]),
   overlaps: (R.overlaps || []).map((o) => [enc(o.segA), enc(o.segB), o.names.join(' & '), o.m, o.removable ? 1 : 0, enc(R.edges[o.remove].line), R.edges[o.remove].name || R.edges[o.remove].kind, o.kinds.join(' + ')]),
@@ -85,7 +85,7 @@ fetch('data.json').then(r=>r.json()).then(d=>{
   const bbx=(p)=>{ let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(let i=0;i<p.length;i+=2){x0=Math.min(x0,p[i]);x1=Math.max(x1,p[i]);y0=Math.min(y0,p[i+1]);y1=Math.max(y1,p[i+1]);} return [x0,y0,x1,y1]; };
   D.RT = (d.routes||[]).map(r=>({ name:r[0], oldM:r[1], pghM:r[2], follow:r[3], old:lines(r[4]), line:lines(r[5]), det:r[6] }));
   D.cur = 0;
-  D.M = (d.marks||[]).map(m=>({ label:m[0], type:m[1], list:m[2], poly:lines(m[3]), x:m[4], y:m[5], bad:!!m[6], ways:m[7], ov:m[8], fp:m[9], near:m[10], osm:m[11] }));
+  D.M = (d.marks||[]).map(m=>({ label:m[0], type:m[1], list:m[2], poly:lines(m[3]), x:m[4], y:m[5], bad:!!m[6], ways:m[7], ov:m[8], fp:m[9], near:m[10], osm:m[11], fix:m[12]||'' }));
   D.PA = (d.parallels||[]).map(o=>{ const r={ a:lines(o[0]), b:lines(o[1]), name:o[2], m:o[3], gap:o[4], p:o[5]?lines(o[5]):null, cutName:o[6], why:o[7], kinds:o[8] }; r.bb=bbx(r.a.concat(r.b)); if(r.p){ r.pbb=bbx(r.p); let L=0; for(let i=2;i<r.p.length;i+=2) L+=Math.hypot(r.p[i]-r.p[i-2],r.p[i+1]-r.p[i-1]); r.L=L; } else r.L=0; return r; });
   D.J = (d.jagged||[]).map(j=>{ const r={ name:j[0], types:j[1], p:lines(j[2]), spots:j[3] }; r.bb=bbx(r.p); return r; });
   D.O = (d.overlaps||[]).map(o=>{ const r={ a:lines(o[0]), b:lines(o[1]), name:o[2], m:o[3], ok:!!o[4], p:lines(o[5]), cutName:o[6], kinds:o[7] }; let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(let i=0;i<r.p.length;i+=2){x0=Math.min(x0,r.p[i]);x1=Math.max(x1,r.p[i]);y0=Math.min(y0,r.p[i+1]);y1=Math.max(y1,r.p[i+1]);} r.bb=[x0,y0,x1,y1]; return r; });
@@ -115,7 +115,7 @@ function legend(){
   const nbad=D.M.filter(m=>m.bad||m.ov).length;
   const rows=[
     ['routes','sw','<b>Pittsburgh routes on PGH</b>: red = the route, blue = mapped on PGH, ● = detour', D.RT.length+' routes'],
-    ['marks','dot','<b>Landmarks</b>: green = clear, red = collides, blue = open space', D.M.length+' placed · '+nbad+' clash'],
+    ['marks','dot','<b>Landmarks</b>: green = clear, amber = clash resolved, red = clash left, blue = open space', D.M.length+' placed · '+D.M.filter(m=>m.fix).length+' resolved · '+nbad+' left'],
     ['par','sw','<b>Similar roads close by</b> (parallel, ≤ 30 m apart)', D.PA.length+' pairs'],
     ['parcut','sw','<b>Keep one</b>: the way suggested to go', D.PA.filter(p=>p.p).length+' · '+(D.PA.filter(p=>p.p).reduce((s,p)=>s+p.L,0)/1000).toFixed(1)+' km'],
     ['jag','dot','<b>Jagged</b>: zigzags, kinks, bends at junctions', D.J.filter(j=>j.spots.some(s=>s[2]!=='bump')).length+' roads'],
@@ -155,7 +155,7 @@ function draw(){
   if(on.deadend&&cam.s>0.25){ g.fillStyle=COL.leaf; for(const l of D.leaves){ g.beginPath(); g.arc(sx(l[0]),sy(l[1]),2.2,0,7); g.fill(); } }
   if(on.routes&&D.RT.length){ const r=D.RT[D.cur]; g.lineWidth=z*4; g.strokeStyle=COL.rold; g.globalAlpha=.55; path(r.old); g.globalAlpha=1; g.lineWidth=z*2; g.strokeStyle=COL.rnew; path(r.line);
     for(const dd of r.det){ g.beginPath(); g.arc(sx(dd[0]),sy(dd[1]),7,0,7); g.fillStyle='#ff9f1a'; g.fill(); g.lineWidth=2; g.strokeStyle='#fff'; g.stroke(); } }
-  if(on.marks){ for(const m of D.M){ const c=m.bad||m.ov?COL.markbad:m.type==='open'?COL.markopen:COL.mark; g.fillStyle=c+'55'; g.strokeStyle=c; g.lineWidth=1.5; g.beginPath(); for(let i=0;i<m.poly.length;i+=2){ const X=sx(m.poly[i]),Y=sy(m.poly[i+1]); i?g.lineTo(X,Y):g.moveTo(X,Y);} g.closePath(); g.fill(); g.stroke();
+  if(on.marks){ for(const m of D.M){ const c=m.bad||m.ov?COL.markbad:m.fix?'#e0a020':m.type==='open'?COL.markopen:COL.mark; g.fillStyle=c+'55'; g.strokeStyle=c; g.lineWidth=1.5; g.beginPath(); for(let i=0;i<m.poly.length;i+=2){ const X=sx(m.poly[i]),Y=sy(m.poly[i+1]); i?g.lineTo(X,Y):g.moveTo(X,Y);} g.closePath(); g.fill(); g.stroke();
       g.beginPath(); g.arc(sx(m.x),sy(m.y),3.5,0,7); g.fillStyle=c; g.fill(); if(cam.s>0.6){ g.fillStyle=dark?'#fff':'#222'; g.font='11px sans-serif'; g.fillText(m.label, sx(m.x)+5, sy(m.y)-5); } } }
   if(on.parcut){ g.strokeStyle=COL.parcut; g.lineWidth=z*2; for(const o of D.PA) if(o.p&&vis(o.pbb,v)) path(o.p); }
   if(on.par){ g.strokeStyle=COL.par; g.lineWidth=z*2.6; g.globalAlpha=.8; for(const o of D.PA) if(vis(o.bb,v)){ path(o.a); path(o.b); } g.globalAlpha=1; }
@@ -194,7 +194,7 @@ function show(h){
   const el=document.getElementById('info'); sel=null;
   if(!h){ el.style.display='none'; draw(); return; }
   let t='';
-  if(h.t==='mark'){ const m=h.m; t='<b>'+m.label+' — '+(m.bad?'collides with a road':m.ov?'overlaps '+m.ov:m.type==='open'?'open space':'clear')+'</b><span class="m">'+m.type+' · '+m.list+' · footprint: '+m.fp+(m.osm?' ('+m.osm+')':'')+' · nearest road: '+m.near+(m.ways?' · ways through: '+m.ways:'')+'</span>'; }
+  if(h.t==='mark'){ const m=h.m; t='<b>'+m.label+' — '+(m.bad?'collides with a road':m.fix?m.fix:m.ov?'overlaps '+m.ov:m.type==='open'?'open space':'clear')+'</b><span class="m">'+m.type+' · '+m.list+' · footprint: '+m.fp+(m.osm?' ('+m.osm+')':'')+' · nearest road: '+m.near+(m.ways?' · ways through: '+m.ways:'')+'</span>'; }
   else if(h.t==='detour'){ const dd=h.dd; t='<b>Detour</b><span class="m">The route rode '+dd[2]+' m here; PGH takes '+dd[3]+' m (via '+dd[4]+') — a road it used is not in PGH.</span>'; }
   else if(h.t==='jag'){ sel={p:h.j.p}; t='<b>Jagged: '+h.j.name+'</b><span class="m">'+h.s[3]+' · this road: '+h.j.types+'</span>'; }
   else if(h.t==='par'){ const o=h.o.o; sel={ls:[o.a,o.b]}; t='<b>Similar roads: '+o.name+'</b><span class="m">'+o.m+' m side by side, '+o.gap+' m apart ('+o.kinds+'). '+(o.p?'Suggest removing <b>'+o.cutName+'</b> (orange) — '+o.why+'.':o.why+'.')+'</span>'; }

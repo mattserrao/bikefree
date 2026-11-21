@@ -126,6 +126,9 @@ def load_osm(cfg, cor):
         for wy in root.iter('way'):
             t = {x.get('k'): x.get('v') for x in wy.iter('tag')}
             if 'highway' in t: ways[wy.get('id')] = ([x.get('ref') for x in wy.iter('nd')], t)
+            elif t.get('railway') in ('abandoned', 'disused'):
+                # (an old rail bed is never ridden on its own — only where a Pittsburgh route rode it, as a trail)
+                ways[wy.get('id')] = ([x.get('ref') for x in wy.iter('nd')], dict(t, highway='rail_bed'))
     print(f'  OSM: {len(nodes)} nodes, {len(ways)} highway ways')
     return nodes, ways
 
@@ -177,6 +180,67 @@ def elevation(lat, lon):
 
 
 # ------------------------------------------------------------------ the graph
+class RouteLines:
+    """The Pittsburgh routes' lines (tools/city/pgh-route-lines.json, from tools/map_pgh_routes.mjs --lines) on a 20 m hash:
+    the ways they ride are kept through the cleanup (real mapped ways, never new ones), so the routes map onto PGH."""
+    def __init__(self, path, reach):
+        self.reach, self.grid = reach, defaultdict(list)
+        self.kx, self.ky = 111320 * math.cos(math.radians(40.44)), 110540
+        try: lines = json.load(open(path))
+        except FileNotFoundError: lines = []
+        for r in lines:
+            pts = r['line']
+            for (a, b), (c, d) in zip(pts, pts[1:]):   # (every ~5 m)
+                k = max(1, int(hv((a, b), (c, d)) / 5))
+                for i in range(k):
+                    la, lo = a + (c - a) * i / k, b + (d - b) * i / k
+                    self.grid[(int(lo * self.kx / 20), int(la * self.ky / 20))].append((lo * self.kx, la * self.ky))
+        self.n = len(lines)
+
+    def near(self, la, lo):
+        x, y = lo * self.kx, la * self.ky
+        cx, cy = int(x / 20), int(y / 20)
+        return any(math.hypot(px - x, py - y) < self.reach for i in (-1, 0, 1) for j in (-1, 0, 1) for px, py in self.grid.get((cx + i, cy + j), ()))
+
+    def dist(self, la, lo, cap=30):
+        x, y = lo * self.kx, la * self.ky
+        cx, cy = int(x / 20), int(y / 20)
+        best = cap
+        for i in (-2, -1, 0, 1, 2):
+            for j in (-2, -1, 0, 1, 2):
+                for px, py in self.grid.get((cx + i, cy + j), ()):
+                    d = math.hypot(px - x, py - y)
+                    if d < best: best = d
+        return best
+
+    def follows(self, pts, share=0.6):
+        """Do the routes ride along this line (≥ share of its points)?"""
+        if not self.n or not pts: return False
+        step = max(1, len(pts) // 25)
+        sample = pts[::step]
+        return sum(1 for p in sample if self.near(*p)) >= share * len(sample)
+
+
+ROUTES = None
+
+
+def route_share(e):
+    """How much of an edge the routes ride (0–1, cached)."""
+    if ROUTES is None or not ROUTES.n: return 0.0
+    if e.get('rshare') is None:
+        # (closeness, not just nearness: two ways 15 m apart are both "near" a route that rides one of them)
+        pts = list(zip(e['lat'], e['lon'])); step = max(1, len(pts) // 25); sample = pts[::step]
+        e['rshare'] = 1 - sum(ROUTES.dist(*p) for p in sample) / max(1, len(sample)) / 30
+    return e['rshare']
+
+
+def protected(e):
+    """An edge the Pittsburgh routes ride: never removed by the cleanup (cached; merged and cut edges are measured again)."""
+    if ROUTES is None or not ROUTES.n: return False
+    if e.get('prot') is None: e['prot'] = ROUTES.follows(list(zip(e['lat'], e['lon'])))
+    return e['prot']
+
+
 def build(cfg):
     cor_pts = area_lines()
     cor = Corridor(cor_pts, cfg['corridorM'])
@@ -187,19 +251,64 @@ def build(cfg):
     # 1. the rideable ways, inside the corridor (a way is kept where its points are; cut at the corridor's edge)
     kept = []   # (refs, tags, kind)
     dropped = defaultdict(int)
+    global ROUTES
+    ROUTES = RouteLines(os.path.join(ROOT, 'tools', 'city', 'pgh-route-lines.json'), cfg['routeKeepM'])
+    kept_for_routes = 0
+    # the rideable ways' points (a way the routes ride is only added where none of these carries the route already)
+    rgrid = defaultdict(list)
+    kxr = 111320 * math.cos(math.radians(40.44))
+    for refs, t in ways.values():
+        if rideable(t, cfg) is None: continue
+        for a, b in zip(refs, refs[1:]):
+            if a not in nodes or b not in nodes: continue
+            L = hv(nodes[a], nodes[b]); k = max(1, int(L / 8))
+            for i in range(k + 1):
+                la = nodes[a][0] + (nodes[b][0] - nodes[a][0]) * i / k; lo = nodes[a][1] + (nodes[b][1] - nodes[a][1]) * i / k
+                rgrid[(int(lo * kxr / 15), int(la * 110540 / 15))].append((lo * kxr, la * 110540))
+    def carried(la, lo, r=14):
+        x, y = lo * kxr, la * 110540; cx, cy = int(x / 15), int(y / 15)
+        return any(math.hypot(px - x, py - y) < r for i in (-1, 0, 1) for j in (-1, 0, 1) for px, py in rgrid.get((cx + i, cy + j), ()))
     for wid, (refs, t) in ways.items():
         kind = rideable(t, cfg)
-        if kind is None: dropped[t.get('highway')] += 1; continue
-        refs = [r for r in refs if r in nodes]
-        if len(refs) < 2: continue
-        if t.get('tunnel') not in (None, 'no') and sum(hv(nodes[a], nodes[b]) for a, b in zip(refs, refs[1:])) > cfg['maxTunnelM']: dropped['tunnel'] += 1; continue
-        run = []
-        for r in refs:
-            if cor.inside(*nodes[r]): run.append(r)
-            else:
-                if len(run) > 1: kept.append((run, t, kind, wid))
-                run = []
-        if len(run) > 1: kept.append((run, t, kind, wid))
+        pieces = [refs]
+        if kind is None:
+            # the stretches of a way the Pittsburgh routes ride are kept whatever its class (a sidewalk path, a plaza, a
+            # boulevard), never a motorway, steps or a way bikes may not use — and not a sidewalk beside the street the
+            # route rides (that street carries it)
+            h = t.get('highway')
+            if h in ('motorway', 'motorway_link', 'steps', 'construction', 'proposed', 'elevator') or t.get('bicycle') == 'no' or t.get('area') == 'yes': dropped[h] += 1; continue
+            rr = [r for r in refs if r in nodes]
+            pieces, run = [], []
+            for r in rr:
+                if ROUTES.near(*nodes[r]): run.append(r)
+                else:
+                    if len(run) > 1: pieces.append(run)
+                    run = []
+            if len(run) > 1: pieces.append(run)
+            good = []
+            for pc in pieces:
+                pts = [nodes[r] for r in pc]
+                wl = sum(hv(p, q) for p, q in zip(pts, pts[1:]))
+                step = max(1, len(pts) // 20)
+                if wl > 60 and sum(1 for p in pts[::step] if carried(*p)) > 0.4 * len(pts[::step]): continue
+                if wl < 8: continue
+                good.append(pc)
+            if not good: dropped[h] += 1; continue
+            pieces = good
+            kind = 'primary' if h in ('trunk', 'trunk_link') else cfg['roads'].get(h) or 'path'
+            kept_for_routes += len(pieces)
+        for refs in pieces:
+            refs = [r for r in refs if r in nodes]
+            if len(refs) < 2: continue
+            if t.get('tunnel') not in (None, 'no') and sum(hv(nodes[a], nodes[b]) for a, b in zip(refs, refs[1:])) > cfg['maxTunnelM']: dropped['tunnel'] += 1; continue
+            run = []
+            for r in refs:
+                if cor.inside(*nodes[r]): run.append(r)
+                else:
+                    if len(run) > 1: kept.append((run, t, kind, wid))
+                    run = []
+            if len(run) > 1: kept.append((run, t, kind, wid))
+    print(f'  ways kept for the Pittsburgh routes ({ROUTES.n} routes): {kept_for_routes}')
     print(f'  ways kept: {len(kept)} pieces; not rideable: ' + ', '.join(f'{k} {v}' for k, v in sorted(dropped.items(), key=lambda x: -x[1])[:12]))
 
     # 2. split at shared nodes → edges (lists of OSM node ids)
@@ -220,7 +329,7 @@ def build(cfg):
                 cur = [r]
     for e in edges: e['len'] = sum(hv(nodes[a], nodes[b]) for a, b in zip(e['refs'], e['refs'][1:]))
     n0 = len(edges)
-    edges = [e for e in edges if e['kind'] != 'connector' or e['len'] <= cfg['connectorM']]
+    edges = [e for e in edges if e['kind'] != 'connector' or e['len'] <= cfg['connectorM'] or ROUTES.follows([nodes[r] for r in e['refs']], 0.7)]
     for e in edges:
         if e['kind'] == 'connector': e['kind'] = 'primary'
     print(f'  raw edges: {len(edges)} ({n0 - len(edges)} boulevard stretches longer than {cfg["connectorM"]} m left out)')
@@ -274,7 +383,7 @@ def build(cfg):
         g = build_graph(edges)
         drop = set()
         for n, ks in g.items():
-            if len(ks) == 1 and edges[ks[0]]['len'] < cfg['spurM']: drop.add(ks[0])
+            if len(ks) == 1 and edges[ks[0]]['len'] < cfg['spurM'] and not ROUTES.follows([nodes[r] for r in edges[ks[0]]['refs']]): drop.add(ks[0])
         edges = [e for k, e in enumerate(edges) if k not in drop]
     g = build_graph(edges)
     seen, comps = set(), []
@@ -539,8 +648,9 @@ class Graph:
                     if y not in seen: seen.add(y); st.append(y)
         return False
 
-    def can_remove(self, k):
+    def can_remove(self, k, force=False):
         e = self.E[k]
+        if protected(e) and not force: return False   # (a way the Pittsburgh routes ride)
         return k not in self.gone and self.deg[e['a']] >= 3 and self.deg[e['b']] >= 3 and self.connected_without(k)
 
     def remove(self, k):
@@ -703,7 +813,7 @@ def merge_through(E):
             if s1 == 0: e1 = flip(e1)   # e1 now ends at n
             if s2 == 1: e2 = flip(e2)   # e2 now starts at n
             big = e1 if e1['L'] >= e2['L'] else e2
-            merged.append({**big, 'a': e1['a'], 'b': e2['b'], 'lat': e1['lat'] + e2['lat'][1:], 'lon': e1['lon'] + e2['lon'][1:],
+            merged.append({**big, 'prot': None, 'rshare': None, 'a': e1['a'], 'b': e2['b'], 'lat': e1['lat'] + e2['lat'][1:], 'lon': e1['lon'] + e2['lon'][1:],
                            'ele': e1['ele'] + e2['ele'][1:], 'br': e1['br'] + e2['br'][1:], 'n': e1['n'] + e2['n'], 'L': e1['L'] + e2['L']})
         if not merged: return E
         E = [e for k, e in enumerate(E) if k not in used] + merged
@@ -841,7 +951,7 @@ def prune_dead_ends(E, keep_bridges=True):
         n = stack.pop()
         if G.deg.get(n, 0) != 1: continue
         k = next((k for k in G.adj[n] if k not in G.gone and E[k]['a'] != E[k]['b']), None)
-        if k is None or (keep_bridges and any(E[k]['br'])): continue
+        if k is None or (keep_bridges and any(E[k]['br'])) or protected(E[k]): continue
         G.remove(k); removed += 1
         for end in (E[k]['a'], E[k]['b']):
             if G.deg.get(end, 0) == 1: stack.append(end)
@@ -967,7 +1077,7 @@ def connect_dead_bridges(cfg, E, jpos, jh):
             for i, nid in ((a, na), (b, nb)):
                 if nid.startswith('cut:') if isinstance(nid, str) else False:
                     jpos[nid] = (e['lat'][i], e['lon'][i]); jh[nid] = e['ele'][i]
-            out.append({**e, 'a': na, 'b': nb, 'lat': e['lat'][a:b + 1], 'lon': e['lon'][a:b + 1], 'ele': e['ele'][a:b + 1], 'br': e['br'][a:b + 1],
+            out.append({**e, 'prot': None, 'rshare': None, 'a': na, 'b': nb, 'lat': e['lat'][a:b + 1], 'lon': e['lon'][a:b + 1], 'ele': e['ele'][a:b + 1], 'br': e['br'][a:b + 1],
                         'n': b - a, 'L': e['L'] * (b - a) / e['n']})
     g = cfg['maxGradePct'] / 100 * STEP
     bridges = {id(E[c['k']]): c for c in connectors}
@@ -1055,7 +1165,13 @@ def overlap_pick(E, G, ka, kb):
     """Which of two overlapping ways goes: the minor one (trail < alley < street < … < primary; then the shorter), else
     the other, so long as no junction is left with < 2 ways and the network stays whole. None: neither can go."""
     a, b = sorted((ka, kb), key=lambda k: (RANK.get(E[k]['kind'], 2), E[k]['L']))
-    return a if G.can_remove(a) else b if G.can_remove(b) else None
+    both = protected(E[ka]) and protected(E[kb])
+    sa, sb = route_share(E[ka]), route_share(E[kb])
+    # (a route rides near one or both — authored lines sit a few metres off the street: the one farther from it goes)
+    if max(sa, sb) > 0.3 and abs(sa - sb) > 0.05:
+        a, b = (ka, kb) if sa < sb else (kb, ka)
+        return a if G.can_remove(a, both) else None   # (never the closer one instead: both stay)
+    return a if G.can_remove(a, both) else b if G.can_remove(b, both) else None
 
 
 def remove_overlaps(cfg, E):
@@ -1221,10 +1337,102 @@ def smooth_heights(cfg, E, jh):
     return E
 
 
+def route_links(cfg, E, jpos, jh):
+    """Where a Pittsburgh route steps from one PGH way straight onto another that PGH doesn't join there (the old map had a
+    link: a ramp, a crossing, a gap in the mapping), add the one short link the route rode — only ≤ routeLinkMaxM long,
+    no steeper than 12 %, and only where both ways are held by the route for ≥ 30 m either side (not a corner's noise).
+    Returns (E, links added, metres)."""
+    if not ROUTES or not ROUTES.n: return E, 0, 0
+    lines = json.load(open(os.path.join(ROOT, 'tools', 'city', 'pgh-route-lines.json')))
+    kx, ky = 111320 * math.cos(math.radians(40.44)), 110540
+    grid = defaultdict(list)
+    for k, e in enumerate(E):
+        for i in range(e['n'] + 1): grid[(int(e['lon'][i] * kx / 20), int(e['lat'][i] * ky / 20))].append((k, i))
+    def match(la, lo):
+        x, y = lo * kx, la * ky; cx, cy = int(x / 20), int(y / 20)
+        best, bd = None, 18
+        for a in (-1, 0, 1):
+            for b in (-1, 0, 1):
+                for k, i in grid.get((cx + a, cy + b), ()):
+                    d = math.hypot(E[k]['lon'][i] * kx - x, E[k]['lat'][i] * ky - y)
+                    if d < bd: bd, best = d, (k, i)
+        return best
+    adjn = defaultdict(set)
+    for k, e in enumerate(E): adjn[e['a']].add(k); adjn[e['b']].add(k)
+    def joined(k1, k2, hops=3):
+        """Are two ways joined within a few ways (a junction or two apart)?"""
+        e1 = E[k1]; frontier = {e1['a'], e1['b']}; seen = set(frontier)
+        for _ in range(hops):
+            if any(k2 in adjn[n] for n in frontier): return True
+            nxt = set()
+            for n in frontier:
+                for k in adjn[n]:
+                    if E[k]['L'] > 150: continue
+                    for m in (E[k]['a'], E[k]['b']):
+                        if m not in seen: seen.add(m); nxt.add(m)
+            frontier = nxt
+        return False
+    cands = {}
+    for r in lines:
+        pts = []
+        for (a, b), (c, d) in zip(r['line'], r['line'][1:]):
+            k_ = max(1, int(hv((a, b), (c, d)) / 10))
+            pts += [(a + (c - a) * t / k_, b + (d - b) * t / k_) for t in range(k_)]
+        seq = [match(*p) for p in pts]
+        # runs of the same way
+        runs = []
+        for idx, m in enumerate(seq):
+            if m is None: continue
+            if runs and runs[-1]['k'] == m[0] and idx - runs[-1]['last'] <= 3: runs[-1]['last'] = idx; runs[-1]['i1'] = m[1]; runs[-1]['n'] += 1
+            else: runs.append({'k': m[0], 'first': idx, 'last': idx, 'i0': m[1], 'i1': m[1], 'n': 1})
+        runs = [x for x in runs if x['n'] >= 3]
+        for r1, r2 in zip(runs, runs[1:]):
+            if r1['k'] == r2['k'] or r2['first'] - r1['last'] > 6: continue
+            if joined(r1['k'], r2['k']): continue
+            e1, e2 = E[r1['k']], E[r2['k']]
+            p1, p2 = (e1['lat'][r1['i1']], e1['lon'][r1['i1']]), (e2['lat'][r2['i0']], e2['lon'][r2['i0']])
+            L = hv(p1, p2)
+            if L > cfg['routeLinkMaxM'] or L < 2: continue
+            if abs(e1['ele'][r1['i1']] - e2['ele'][r2['i0']]) > 0.12 * max(L, 10): continue
+            key = (round(p1[0], 4), round(p1[1], 4), round(p2[0], 4), round(p2[1], 4))
+            cands[key] = (r1['k'], r1['i1'], r2['k'], r2['i0'])
+    if not cands: return E, 0, 0
+    # cut the ways at the link ends, then add the links
+    cuts = defaultdict(set)
+    for k1, i1, k2, i2 in cands.values(): cuts[k1].add(i1); cuts[k2].add(i2)
+    node_at = {}
+    out = []
+    for k, e in enumerate(E):
+        cs = sorted(i for i in cuts.get(k, ()) if 0 < i < e['n'])
+        for i in cuts.get(k, ()):
+            node_at[(k, i)] = e['a'] if i == 0 else e['b'] if i == e['n'] else f'link:{k}:{i}'
+        if not cs: out.append(e); continue
+        bounds = [0] + cs + [e['n']]
+        for a, b in zip(bounds, bounds[1:]):
+            na = e['a'] if a == 0 else f'link:{k}:{a}'; nb = e['b'] if b == e['n'] else f'link:{k}:{b}'
+            for i, nid in ((a, na), (b, nb)):
+                if str(nid).startswith('link:'): jpos[nid] = (e['lat'][i], e['lon'][i]); jh[nid] = e['ele'][i]
+            out.append({**e, 'prot': None, 'rshare': None, 'a': na, 'b': nb, 'lat': e['lat'][a:b + 1], 'lon': e['lon'][a:b + 1], 'ele': e['ele'][a:b + 1],
+                        'br': e['br'][a:b + 1], 'n': b - a, 'L': e['L'] * (b - a) / e['n']})
+    total = 0
+    for k1, i1, k2, i2 in cands.values():
+        a, b = node_at[(k1, i1)], node_at[(k2, i2)]
+        if a == b: continue
+        p1, p2 = jpos[a], jpos[b]
+        samples, L, n = resample([p1, p2])
+        h1, h2 = jh[a], jh[b]
+        out.append({'a': a, 'b': b, 'lat': [x[0] for x in samples], 'lon': [x[1] for x in samples], 'ele': [h1 + (h2 - h1) * t / n for t in range(n + 1)],
+                    'br': [0] * (n + 1), 'n': n, 'L': L, 'name': 'Route link', 'kind': 'path', 'hw': 'path', 'names': [], 'refs': [], 'bridge': [], 'prot': True})
+        total += L
+    return out, len(cands), total
+
+
 def build_all(cfg):
     """The whole graph as written: built, heights, simplified, crossings cleared, joined, too-steep edges dropped."""
     nodes, chains, jpos, cor = build(cfg)
     E, jh = heights(cfg, nodes, chains, jpos)
+    E, nl, ml = route_links(cfg, E, jpos, jh)
+    print(f'  route links: {nl} short links the Pittsburgh routes rode between ways PGH did not join ({ml:.0f} m)')
     E = finish(cfg, E)
     E, n_dead, km_dead = prune_dead_ends(E)
     print(f'  dead ends: removed {n_dead} ways ({km_dead:.1f} km) in dead-end branches (bridges kept)')
