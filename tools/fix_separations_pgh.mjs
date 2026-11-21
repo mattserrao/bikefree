@@ -51,7 +51,7 @@ for (const x of X) {
     done.push(`${up.name}: deck over ${lo.name} now ${(b - a + 1) * 10} m, ${(up.ele[ui] - lo.ele[li]).toFixed(1)} m clear`);
   } else if (x.kind === 'low' || x.kind === 'clash') {
     const ui = near(up, x.lat, x.lon), li = near(lo, x.lat, x.lon), n = lo.lat.length - 1;
-    const need = lo.ele[li] - (up.ele[ui] - CLEAR);
+    const need = Math.max(...[li - 1, li, li + 1].filter((k) => k > 0 && k < n).map((k) => lo.ele[k])) - (Math.min(...[ui - 1, ui, ui + 1].filter((k) => k >= 0 && k < up.lat.length).map((k) => up.ele[k])) - CLEAR - 0.2);
     if (need <= 0) continue;
     for (let i = 0; i <= n; i++) { const d = Math.abs(i - li) * 10; if (d >= 60 || i === 0 || i === n) continue; const w = 1 - d / 60; lo.ele[i] -= need * w * w * (3 - 2 * w); }
     done.push(`${lo.name}: dipped ${need.toFixed(1)} m under ${up.name} (${(up.ele[ui] - lo.ele[li]).toFixed(1)} m clear)`);
