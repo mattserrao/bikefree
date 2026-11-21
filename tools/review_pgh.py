@@ -112,16 +112,7 @@ def main():
                 runs.append((i, j)); i = j + 1
             else: i += 1
         if runs: bridge_edges += 1
-        for a, b in runs:
-            over = [i for i in range(a, b + 1) if is_water(e['lat'][i], e['lon'][i])]
-            if len(over) >= 4:   # (a deck across the river, not a boardwalk on the bank)
-                clear = min(ele[i] for i in over) - pool
-                if clear < CLEAR_M: add('low-deck', e, over[len(over) // 2], f'deck {clear:.1f} m above the river (want ≥ {CLEAR_M} m)')
-            for end, inner, outer in ((a, a + 1, a - 1), (b, b - 1, b + 1)):
-                if 0 <= outer <= n and 0 <= inner <= n:
-                    g_in = (ele[inner] - ele[end]) * (1 if inner > end else -1) * 10
-                    g_out = (ele[end] - ele[outer]) * (1 if end > outer else -1) * 10
-                    if abs(g_in - g_out) > STEP_JUMP: add('deck-kink', e, end, f'grade changes {abs(g_in - g_out):.0f} % where the deck meets the street')
+        # (bridge decks: no rules for now — the user, 21 Nov: bridges are fine)
         # streets on the river / dips beside it (not on decks)
         for i in range(n + 1):
             if br[i]: continue
@@ -151,6 +142,8 @@ def main():
                   'remove': {w: {'edges': n, 'km': km([k for k, x in simplify if x == w])} for w, n in by_why.items()}},
         'alleys': {'edges': len(alleys), 'km': km([k for k, _ in alleys])},
         'river': dict(Counter(r['kind'] for r in river)), 'bridgeEdges': bridge_edges,
+        'deadBridges': {'connected': sum(1 for r in B.REVIEW.get('bridges', []) if r['ok']), 'left': sum(1 for r in B.REVIEW.get('bridges', []) if not r['ok']),
+                        'worstKinkPct': max((r.get('kinkPct', 0) for r in B.REVIEW.get('bridges', [])), default=0)},
     }
     after = set(range(len(E))) - dead - {k for k, _ in simplify}
     deg_after = defaultdict(int)
@@ -168,7 +161,7 @@ def main():
                       'why': whys.get(e['k']), 'line': line(e)} for e in E],
            'leaves': [[round(jpos[n][0], 6), round(jpos[n][1], 6)] for n in leaves],
            'dense': [[[round(jpos[n][0], 6), round(jpos[n][1], 6)] for n in c] for c in dense],
-           'pieces': pieces, 'river': river}
+           'pieces': pieces, 'river': river, 'bridges': B.REVIEW.get('bridges', [])}
     os.makedirs(os.path.join(ROOT, 'tools', '.cache'), exist_ok=True)
     json.dump(out, open(os.path.join(ROOT, 'tools', '.cache', 'pgh-review.json'), 'w'), separators=(',', ':'))
     print(json.dumps(summary, indent=1, ensure_ascii=False))

@@ -27,8 +27,9 @@ const data = {
   dense: R.dense.map((c) => { const xs = c.map(P); const cx = xs.reduce((s, p) => s + p[0], 0) / xs.length, cy = xs.reduce((s, p) => s + p[1], 0) / xs.length; return [Math.round(cx), Math.round(cy), c.length, Math.round(Math.max(...xs.map((p) => Math.hypot(p[0] - cx, p[1] - cy))) + 12)]; }),
   river: R.river.map((r) => [...P([r.lat, r.lon]), r.kind, r.name || '', r.msg]),
   leaves: R.leaves.map(P),
-  removed: B ? B.edges.filter((e) => e.status === 'simplify' || e.status === 'alley').map((e) => [e.name || '', e.why || '', e.L, enc(e.line), e.hw]) : [],
+  removed: B ? B.edges.filter((e) => e.status === 'simplify' || e.status === 'alley' || e.status === 'deadend').map((e) => [e.name || '', e.why || '', e.L, enc(e.line), e.hw]) : [],
   before: B ? B.summary : null,
+  bridges: (R.bridges || []).map((b) => [...P([b.lat, b.lon]), b.ok ? 1 : 0, b.name, b.msg, b.line ? enc(b.line) : null]),
 };
 mkdirSync(out, { recursive: true });
 writeFileSync(resolve(out, 'data.json'), JSON.stringify(data));
@@ -56,14 +57,14 @@ table.cmp{border-collapse:collapse;width:100%;margin-top:6px;font-size:12px}tabl
 </style></head><body>
 <canvas id="c"></canvas>
 <div class="panel" id="panel"><button id="tog">Hide</button>
-<h1>PGH road review — after the cleanup</h1><div class="sub">Dashed = removed this pass. Red = dead ends (flagged, not changed). Tap anything for details.</div>
+<h1>PGH road review — dead ends removed</h1><div class="sub">Dashed = removed since the first review. Green = new bridge connectors. Tap anything for details.</div>
 <div class="body" id="legend"></div></div>
 <div id="info"></div>
 <script>
-const COL = { removed:'#5b6470', keep:'#9aa1ab', deadend:'#e0332f', simplify:'#f08a00', alley:'#d9b300', piece:'#8b3fd1', dense:'#ff4fa3', river:'#1673e6', leaf:'#e0332f' };
+const COL = { conn:'#12a150', deadbr:'#e0332f', removed:'#5b6470', keep:'#9aa1ab', deadend:'#e0332f', simplify:'#f08a00', alley:'#d9b300', piece:'#8b3fd1', dense:'#ff4fa3', river:'#1673e6', leaf:'#e0332f' };
 const KIND = { 'low-deck':'Bridge deck too low over the river', 'deck-kink':'Kink where a deck meets the street', 'in-river':'Street on the river (river wall read as water)', 'crossing':'Ways cross at nearly the same height, no junction', 'river-dip':'Dip beside the river' };
 let D, cam = { x: 0, y: 0, s: 0.08 }, sel = null;
-const on = { removed:true, keep:true, deadend:true, simplify:true, alley:false, piece:true, dense:true, river:true };
+const on = { bridges:true, removed:true, keep:true, deadend:true, simplify:true, alley:false, piece:true, dense:true, river:true };
 const c = document.getElementById('c'), g = c.getContext('2d');
 function lines(arr){ const out=[]; let x=0,y=0; for(let i=0;i<arr.length;i+=2){ x+=arr[i]; y+=arr[i+1]; out.push(x,y);} return out; }
 fetch('data.json').then(r=>r.json()).then(d=>{
@@ -73,6 +74,7 @@ fetch('data.json').then(r=>r.json()).then(d=>{
   for (const o of [...D.W, ...D.P.flatMap(p=>p.ls.map(l=>({p:l,piece:p})))]) { let a=1e9,b=1e9,cc=-1e9,dd=-1e9; for(let i=0;i<o.p.length;i+=2){a=Math.min(a,o.p[i]);cc=Math.max(cc,o.p[i]);b=Math.min(b,o.p[i+1]);dd=Math.max(dd,o.p[i+1]);} o.bb=[a,b,cc,dd]; }
   D.R = (d.removed||[]).map(w=>({ st:'removed', name:w[0], why:w[1], L:w[2], p:lines(w[3]), hw:w[4] }));
   for (const o of D.R) { let a=1e9,b=1e9,cc=-1e9,dd=-1e9; for(let i=0;i<o.p.length;i+=2){a=Math.min(a,o.p[i]);cc=Math.max(cc,o.p[i]);b=Math.min(b,o.p[i+1]);dd=Math.max(dd,o.p[i+1]);} o.bb=[a,b,cc,dd]; }
+  D.BR = (d.bridges||[]).map(b=>({ x:b[0], y:b[1], ok:!!b[2], name:b[3], msg:b[4], p:b[5]?lines(b[5]):null }));
   D.PL = D.P.flatMap(p=>p.ls.map(l=>({p:l,piece:p})));
   for (const o of D.PL) { let a=1e9,b=1e9,cc=-1e9,dd=-1e9; for(let i=0;i<o.p.length;i+=2){a=Math.min(a,o.p[i]);cc=Math.max(cc,o.p[i]);b=Math.min(b,o.p[i+1]);dd=Math.max(dd,o.p[i+1]);} o.bb=[a,b,cc,dd]; }
   legend(); fit(); draw();
@@ -83,10 +85,10 @@ function compare(){
   const row=(l,b,a)=>'<tr><td>'+l+'</td><td>'+b+'</td><td><b>'+a+'</b></td></tr>';
   return '<table class="cmp"><tr><th></th><th>Before</th><th>Now</th></tr>'
     + row('Network', B.network.km+' km', A.network.km+' km') + row('Junctions', B.network.junctions.toLocaleString(), A.network.junctions.toLocaleString())
-    + row('Dead ends (not changed)', B.deadEnds.junctions, A.deadEnds.junctions) + row('Not connected (left out)', B.disconnected.pieces, A.disconnected.pieces)
+    + row('Dead ends', B.deadEnds.junctions, A.deadEnds.junctions) + row('Not connected (left out)', B.disconnected.pieces, A.disconnected.pieces)
     + row('Dense clusters', B.dense.clusters, A.dense.clusters) + row('Alleys', B.alleys.edges, A.alleys.edges === 0 ? 'removed' : A.alleys.edges)
-    + row('River &amp; bridge problems', rv(B), rv(A))
-    + ['low-deck','deck-kink','in-river','crossing','river-dip'].map(k=>row('&nbsp;· '+({'low-deck':'Low decks','deck-kink':'Deck kinks','in-river':'On the river','crossing':'Near-level crossings','river-dip':'Dips by the river'})[k], B.river[k]||0, A.river[k]||0)).join('')
+    + row('River problems (bridge rules off)', ['in-river','crossing','river-dip'].reduce((s,k)=>s+(B.river[k]||0),0), rv(A))
+    + ['in-river','crossing','river-dip'].map(k=>row('&nbsp;· '+({'low-deck':'Low decks','deck-kink':'Deck kinks','in-river':'On the river','crossing':'Near-level crossings','river-dip':'Dips by the river'})[k], B.river[k]||0, A.river[k]||0)).join('')
     + '</table>';
 }
 function km(st){ return (D.W.filter(w=>w.st===st).reduce((s,w)=>s+w.L,0)/1000).toFixed(1); }
@@ -94,14 +96,15 @@ function legend(){
   const S=D.summary, rv=D.river.length, cnt=(st)=>D.W.filter(w=>w.st===st).length;
   const rkm=(D.R.reduce((s,w)=>s+w.L,0)/1000).toFixed(1);
   const rows=[
-    ...(D.R.length?[['removed','dash','<b>Removed in this pass</b>', D.R.length+' ways · '+rkm+' km']]:[]),
+    ['bridges','sw','<b>Dead-end bridges</b>: green = new connector, red dot = not connected', (D.BR.filter(b=>b.ok).length)+' connected · '+(D.BR.filter(b=>!b.ok).length)+' left'],
+    ...(D.R.length?[['removed','dash','<b>Removed</b> (dead ends, slips, alleys…)', D.R.length+' ways · '+rkm+' km']]:[]),
     ['keep','sw','Through roads (on a loop)', km('keep')+' km'],
-    ['deadend','sw','<b>Dead-end branches</b> (U-turn only)', cnt('deadend')+' ways · '+km('deadend')+' km'],
+    ['deadend','sw','<b>Dead ends left</b> (bridges only)', cnt('deadend')+' ways · '+km('deadend')+' km'],
     ['simplify','sw','<b>Simplify</b>: still to remove', cnt('simplify')+' · '+km('simplify')+' km'],
     ['alley','sw','Alleys still in', cnt('alley')+' · '+km('alley')+' km'],
     ['piece','sw','<b>Not connected</b> to the network', D.P.length+' pieces · '+S.disconnected.km+' km'],
     ['dense','dot','Dense junction clusters', S.dense.clusters+''],
-    ['river','dot','<b>River &amp; bridge problems</b>', rv+''],
+    ['river','dot','<b>River problems</b>', rv+''],
   ];
   document.getElementById('legend').innerHTML = rows.map(([k,t,l,n])=>'<label class="lg"><input type="checkbox" data-k="'+k+'" '+(on[k]?'checked':'')+'><span class="'+t+'" style="background:'+COL[k]+'"></span><span>'+l+'</span><span class="n">'+n+'</span></label>').join('')
     + compare();
@@ -123,12 +126,14 @@ function draw(){
   for (const st of ['keep','alley','simplify','deadend']) { if(!on[st]) continue; g.strokeStyle=COL[st]; g.lineWidth=st==='keep'?Math.max(0.6,z*0.5):z*1.4; for(const w of D.W) if(w.st===st&&vis(w.bb,v)) path(w.p); }
   if(on.piece){ g.strokeStyle=COL.piece; g.lineWidth=z*1.4; for(const o of D.PL) if(vis(o.bb,v)) path(o.p); }
   if(on.deadend&&cam.s>0.25){ g.fillStyle=COL.leaf; for(const l of D.leaves){ g.beginPath(); g.arc(sx(l[0]),sy(l[1]),2.2,0,7); g.fill(); } }
+  if(on.bridges){ g.strokeStyle=COL.conn; g.lineWidth=z*2.2; for(const b of D.BR) if(b.p) path(b.p); for(const b of D.BR) if(!b.ok){ g.beginPath(); g.arc(sx(b.x),sy(b.y),6,0,7); g.fillStyle=COL.deadbr; g.fill(); g.lineWidth=2; g.strokeStyle='#fff'; g.stroke(); g.strokeStyle=COL.conn; } }
   if(on.river){ for(const r of D.river){ g.beginPath(); g.arc(sx(r[0]),sy(r[1]),5,0,7); g.fillStyle=COL.river; g.fill(); g.lineWidth=1.5; g.strokeStyle='#fff'; g.stroke(); } }
   if(sel){ g.strokeStyle=dark?'#fff':'#000'; g.lineWidth=z*2.6; g.globalAlpha=.5; if(sel.p) path(sel.p); else if(sel.ls) sel.ls.forEach(path); g.globalAlpha=1; }
 }
 function segd(px,py,ax,ay,bx,by){ const dx=bx-ax,dy=by-ay,l=dx*dx+dy*dy||1; let t=((px-ax)*dx+(py-ay)*dy)/l; t=Math.max(0,Math.min(1,t)); return Math.hypot(px-ax-t*dx,py-ay-t*dy); }
 function pick(px,py){
   const x=(px-innerWidth/2)/cam.s+cam.x, y=-(py-innerHeight/2)/cam.s+cam.y, tol=14/cam.s; let best=null,bd=tol;
+  if(on.bridges) for(const b of D.BR){ const d=Math.hypot(b.x-x,b.y-y); if(d<bd*1.2){bd=d; best={t:'bridge',b};} }
   if(on.river) for(const r of D.river){ const d=Math.hypot(r[0]-x,r[1]-y); if(d<bd*1.2){bd=d; best={t:'river',r};} }
   if(best) return best;
   const test=(o,t)=>{ if(o.bb[0]-tol>x||o.bb[2]+tol<x||o.bb[1]-tol>y||o.bb[3]+tol<y) return; for(let i=2;i<o.p.length;i+=2){ const d=segd(x,y,o.p[i-2],o.p[i-1],o.p[i],o.p[i+1]); if(d<bd){bd=d;best={t,o};} } };
@@ -141,7 +146,8 @@ function show(h){
   const el=document.getElementById('info'); sel=null;
   if(!h){ el.style.display='none'; draw(); return; }
   let t='';
-  if(h.t==='river'){ t='<b>'+(KIND[h.r[2]]||h.r[2])+'</b>'+(h.r[3]?h.r[3]+' · ':'')+'<span class="m">'+h.r[4]+'</span>'; }
+  if(h.t==='bridge'){ sel=h.b.p?{p:h.b.p}:null; t='<b>Dead-end bridge — '+(h.b.ok?'connected':'not connected')+'</b>'+h.b.name+' · <span class="m">'+h.b.msg+'</span>'; }
+  else if(h.t==='river'){ t='<b>'+(KIND[h.r[2]]||h.r[2])+'</b>'+(h.r[3]?h.r[3]+' · ':'')+'<span class="m">'+h.r[4]+'</span>'; }
   else if(h.t==='piece'){ sel=h.o.piece; t='<b>Not connected to the network</b>'+(h.o.piece.name||'Unnamed ways')+' · <span class="m">'+h.o.piece.km+' km, left out of PGH</span>'; }
   else { const w=h.o; sel=w; const lab={removed:'Removed in this pass',keep:'Ridden',deadend:'Dead-end branch (U-turn only) — flagged, not changed',simplify:'Simplify — remove',alley:'Alley — optional remove'}[w.st];
     t='<b>'+lab+'</b>'+(w.name||'Unnamed')+' <span class="m">('+(w.hw||'')+', '+w.L+' m)'+(w.why?' · '+w.why:'')+'</span>'; }

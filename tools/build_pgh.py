@@ -182,6 +182,7 @@ def build(cfg):
     cor = Corridor(cor_pts, cfg['corridorM'])
     cor.pts_all = cor_pts
     nodes, ways = load_osm(cfg, cor)
+    REVIEW['osm'] = (nodes, ways)   # (every highway way: the dead-end bridges' connectors look through them)
 
     # 1. the rideable ways, inside the corridor (a way is kept where its points are; cut at the corridor's edge)
     kept = []   # (refs, tags, kind)
@@ -830,13 +831,208 @@ def write_ground(cfg, E):
     print(f'  wrote {cfg["groundFile"]}: {nx} × {ny} at {cell} m, {os.path.getsize(path) / 1e6:.2f} MB')
 
 
+def prune_dead_ends(E):
+    """Peel every dead-end branch off the graph (a junction with one way in, then the one it leaves, …), except a bridge:
+    peeling stops at an edge with a deck on it. Returns (edges kept, removed count, km)."""
+    G = Graph(E)
+    stack = [n for n, d in G.deg.items() if d == 1]
+    removed = 0
+    while stack:
+        n = stack.pop()
+        if G.deg.get(n, 0) != 1: continue
+        k = next((k for k in G.adj[n] if k not in G.gone and E[k]['a'] != E[k]['b']), None)
+        if k is None or any(E[k]['br']): continue
+        G.remove(k); removed += 1
+        for end in (E[k]['a'], E[k]['b']):
+            if G.deg.get(end, 0) == 1: stack.append(end)
+    km = sum(E[k]['L'] for k in G.gone) / 1000
+    keep = [e for k, e in enumerate(E) if k not in G.gone]
+    # a loop left hanging on its own (a lollipop whose stem went) is dropped with the smaller pieces later
+    return keep, removed, km
+
+
+def resample(P, step=STEP):
+    cum = [0.0]
+    for a, b in zip(P, P[1:]): cum.append(cum[-1] + hv(a, b))
+    L = cum[-1]; n = max(1, round(L / step)); out, j = [], 0
+    for i in range(n + 1):
+        d = L * i / n
+        while j < len(P) - 2 and cum[j + 1] < d: j += 1
+        f = 0 if cum[j + 1] == cum[j] else min(1, max(0, (d - cum[j]) / (cum[j + 1] - cum[j])))
+        out.append((P[j][0] + (P[j + 1][0] - P[j][0]) * f, P[j][1] + (P[j + 1][1] - P[j][1]) * f, j))
+    return out, L, n
+
+
+def connect_dead_bridges(cfg, E, jpos, jh):
+    """A bridge left as a dead end gets one connector: the shortest way (≤ connectMaxM) through any mapped highway that a
+    bike could use (sidewalks and footways included; no motorways, steps or private ways) from its loose end to the
+    nearest other way of the network. The connector's heights run from the deck's end to the way it meets, smoothed and
+    capped, and it is joined onto the bridge as one edge with the corner rounded (no kink). Returns (E, report)."""
+    import heapq
+    nodes, ways = REVIEW['osm']
+    pool, rfloor = cfg['waterLevelM'], cfg['riverFloorM']
+    G = Graph(E)
+    dead = []   # (bridge edge index, loose end node)
+    for k, e in enumerate(E):
+        if not any(e['br']) or e['a'] == e['b']: continue
+        for end in (e['a'], e['b']):
+            if G.deg.get(end, 0) == 1: dead.append((k, end))
+    # the bikeable highway graph (wider than the ridden one)
+    bad = {'motorway', 'motorway_link', 'steps', 'construction', 'proposed', 'raceway', 'elevator', 'bus_stop', 'platform', 'corridor'}
+    adj = defaultdict(list)
+    for refs, t in ways.values():
+        if t.get('highway') in bad or t.get('bicycle') == 'no' or t.get('access') in ('private', 'no') or t.get('area') == 'yes': continue
+        refs = [r for r in refs if r in nodes]
+        for a, b in zip(refs, refs[1:]):
+            d = hv(nodes[a], nodes[b]); adj[a].append((b, d)); adj[b].append((a, d))
+    # every sample of the network on a ~40 m hash, to find where a search reaches the network
+    hsh = defaultdict(list)
+    cell = lambda la, lo: (int(la * 2760), int(lo * 2100))
+    for k, e in enumerate(E):
+        for i in range(e['n'] + 1): hsh[cell(e['lat'][i], e['lon'][i])].append((k, i))
+    def hit(la, lo, skip):
+        c, best, bd = cell(la, lo), None, cfg['connectSnapM']
+        for a in (-1, 0, 1):
+            for b in (-1, 0, 1):
+                for k, i in hsh.get((c[0] + a, c[1] + b), ()):
+                    if k in skip: continue
+                    d = hv((la, lo), (E[k]['lat'][i], E[k]['lon'][i]))
+                    if d < bd: bd, best = d, (k, i)
+        return best
+    report, connectors, gone_bridges, splits = [], [], set(), defaultdict(list)
+    for k, end in dead:
+        e = E[k]
+        p0 = jpos[end]
+        name = e['name'] or 'Unnamed bridge'
+        # the OSM node nearest the loose end
+        near = min((r for r in adj if abs(nodes[r][0] - p0[0]) < 3e-4 and abs(nodes[r][1] - p0[1]) < 4e-4), key=lambda r: hv(nodes[r], p0), default=None)
+        if near is None or hv(nodes[near], p0) > 15:
+            report.append({'name': name, 'lat': p0[0], 'lon': p0[1], 'ok': False, 'msg': 'no mapped way at its loose end'}); continue
+        h0 = e['ele'][-1] if e['b'] == end else e['ele'][0]   # (the deck's own end, not the junction's average)
+        dist, prev, heap, found = {near: 0.0}, {}, [(0.0, near)], None
+        while heap:
+            d, x = heapq.heappop(heap)
+            if d > dist[x] or d > cfg['connectMaxM']: continue
+            if d > 12:
+                h = hit(*nodes[x], {k})
+                # a connector no steeper on average than connectMaxGradePct (else look further: no ramp up a cliff)
+                if h and abs(E[h[0]]['ele'][h[1]] - h0) <= cfg['connectMaxGradePct'] / 100 * max(d, 1): found = (x, h); break
+            for y, w in adj[x]:
+                nd = d + w
+                if nd < dist.get(y, 1e18): dist[y] = nd; prev[y] = x; heapq.heappush(heap, (nd, y))
+        if not found:
+            report.append({'name': name, 'lat': p0[0], 'lon': p0[1], 'ok': False, 'msg': f'no way to the network within {cfg["connectMaxM"]} m'}); continue
+        x, (kt, it) = found
+        path = [x]
+        while path[-1] != near: path.append(prev[path[-1]])
+        path = path[::-1]
+        et = E[kt]
+        P = [p0] + [nodes[r] for r in path[1:-1]] + [(et['lat'][it], et['lon'][it])]
+        samples, L, n = resample(P)
+        h1 = et['ele'][it]
+        ele = []
+        for la, lo, _ in samples:
+            h = elevation(la, lo)
+            ele.append(max(h, pool + rfloor) if water_dist(la, lo, pool, cfg['riversideM']) <= cfg['riversideM'] else h)
+        w = max(1, round(cfg['smoothM'] / (L / n))) if n > 2 else 0
+        for _ in range(3):
+            src = ele[:]
+            for i in range(1, n):
+                a, b = max(0, i - w), min(n, i + w); ele[i] = sum(src[a:b + 1]) / (b - a + 1)
+        d0, d1 = h0 - ele[0], h1 - ele[n]
+        ele = [ele[i] + d0 * (1 - i / n) + d1 * (i / n) for i in range(n + 1)]
+        # leave the deck at the deck's own grade, easing into the connector's profile over its first ~60 m (no kink)
+        spe, sp = e['L'] / e['n'], L / n
+        g_d = ((e['ele'][-1] - e['ele'][-2]) if e['b'] == end else (e['ele'][0] - e['ele'][1])) / spe if e['n'] >= 1 else 0
+        m = min(10, n - 1)
+        for i in range(1, m + 1):
+            w = (i / (m + 1)) ** 2 * (3 - 2 * i / (m + 1))
+            ele[i] = (h0 + g_d * i * sp) * (1 - w) + ele[i] * w
+        connectors.append({'from': end, 'k': k, 'kt': kt, 'it': it, 'lat': [s_[0] for s_ in samples], 'lon': [s_[1] for s_ in samples],
+                           'ele': ele, 'n': n, 'L': L, 'name': name})
+        report.append({'name': name, 'lat': p0[0], 'lon': p0[1], 'ok': True, 'msg': f'connected to {et["name"] or "a way"} ({L:.0f} m)',
+                       'line': [[round(a, 6), round(b, 6)] for a, b, _ in samples]})
+    # split the ways the connectors meet (at the sample they meet), then add each connector joined onto its bridge
+    for c in connectors: splits[c['kt']].append(c)
+    out = []
+    for k, e in enumerate(E):
+        cs = splits.get(k)
+        if not cs: out.append(e); continue
+        cuts = sorted({c['it'] for c in cs if 0 < c['it'] < e['n']})
+        for c in cs:
+            c['to'] = e['a'] if c['it'] == 0 else e['b'] if c['it'] == e['n'] else f'cut:{k}:{c["it"]}'
+        bounds = [0] + cuts + [e['n']]
+        for a, b in zip(bounds, bounds[1:]):
+            na = e['a'] if a == 0 else f'cut:{k}:{a}'; nb = e['b'] if b == e['n'] else f'cut:{k}:{b}'
+            for i, nid in ((a, na), (b, nb)):
+                if nid.startswith('cut:') if isinstance(nid, str) else False:
+                    jpos[nid] = (e['lat'][i], e['lon'][i]); jh[nid] = e['ele'][i]
+            out.append({**e, 'a': na, 'b': nb, 'lat': e['lat'][a:b + 1], 'lon': e['lon'][a:b + 1], 'ele': e['ele'][a:b + 1], 'br': e['br'][a:b + 1],
+                        'n': b - a, 'L': e['L'] * (b - a) / e['n']})
+    g = cfg['maxGradePct'] / 100 * STEP
+    bridges = {id(E[c['k']]): c for c in connectors}
+    final = []
+    for e in out:
+        c = bridges.get(id(e))
+        if not c: final.append(e); continue
+        if e['b'] != c['from']: e = {**e, 'a': e['b'], 'b': e['a'], 'lat': e['lat'][::-1], 'lon': e['lon'][::-1], 'ele': e['ele'][::-1], 'br': e['br'][::-1]}
+        j = e['n']
+        m = {**e, 'b': c['to'], 'lat': e['lat'] + c['lat'][1:], 'lon': e['lon'] + c['lon'][1:], 'ele': e['ele'] + c['ele'][1:],
+             'br': e['br'] + [0] * c['n'], 'n': e['n'] + c['n'], 'L': e['L'] + c['L']}
+        sm, n = m['ele'], m['n']
+        # round the corner where the bridge meets its connector, then the grade cap (the deck stays where it is)
+        for _ in range(8):
+            src = sm[:]
+            for i in range(max(1, j - 3), min(n - 1, j + 12) + 1):
+                if m['br'][i]: continue
+                a0, a1 = max(0, i - 2), min(n, i + 2); sm[i] = sum(src[a0:a1 + 1]) / (a1 - a0 + 1)
+        gg = max(g, abs(sm[n] - sm[0]) / n * 1.02)
+        for _ in range(2):
+            for i in range(1, n):
+                if not m['br'][i]: sm[i] = min(max(sm[i], sm[i - 1] - gg), sm[i - 1] + gg)
+            for i in range(n - 1, 0, -1):
+                if not m['br'][i]: sm[i] = min(max(sm[i], sm[i + 1] - gg), sm[i + 1] + gg)
+        worst = max((abs((sm[i + 1] - sm[i]) - (sm[i] - sm[i - 1])) / (m['L'] / n) * 100 for i in range(max(1, j), min(n - 1, j + 7))), default=0)   # (from the deck's end on: the connector)
+        r = next(r for r in report if r.get('line') and r['name'] == c['name'] and abs(r['lat'] - c['lat'][0]) < 1e-9)
+        r['kinkPct'] = round(worst, 1); r['msg'] += f', joins with a {worst:.0f} % grade change'
+        final.append(m)
+    return final, report
+
+
+def enforce_grades(cfg, E):
+    """Last word on grades: no 10 m step steeper than maxGradePct (or the edge's own average), decks included, ends fixed."""
+    for e in E:
+        n, sm = e['n'], e['ele']
+        if n < 2: continue
+        g = max(cfg['maxGradePct'] / 100 * (e['L'] / n), abs(sm[n] - sm[0]) / n * 1.02)
+        if all(abs(sm[i] - sm[i - 1]) <= g + 1e-6 for i in range(1, n + 1)): continue
+        for _ in range(3):
+            for i in range(1, n):
+                sm[i] = min(max(sm[i], sm[i - 1] - g), sm[i - 1] + g)
+            for i in range(n - 1, 0, -1):
+                sm[i] = min(max(sm[i], sm[i + 1] - g), sm[i + 1] + g)
+    return E
+
+
 def build_all(cfg):
     """The whole graph as written: built, heights, simplified, crossings cleared, joined, too-steep edges dropped."""
     nodes, chains, jpos, cor = build(cfg)
     E, jh = heights(cfg, nodes, chains, jpos)
     E = finish(cfg, E)
+    E, n_dead, km_dead = prune_dead_ends(E)
+    print(f'  dead ends: removed {n_dead} ways ({km_dead:.1f} km) in dead-end branches (bridges kept)')
+    E, rep_ = connect_dead_bridges(cfg, E, jpos, jh)
+    REVIEW['bridges'] = rep_
+    print(f'  dead-end bridges: {sum(r["ok"] for r in rep_)} connected, {sum(not r["ok"] for r in rep_)} left')
+    for r in rep_: print(f'    {"✓" if r["ok"] else "✗"} {r["name"]}: {r["msg"]}')
+    for _ in range(4):   # the dead ends gone, a few more short ways can go by the same rules
+        G = Graph(E)
+        plan = simplify_plan(cfg, E, G)
+        E = merge_through([e for k, e in enumerate(E) if k not in G.gone])
+        if not plan: break
+        print(f'  after the dead ends: removed {len(plan)} more')
     E = drop_unrideable(cfg, E)
-    E = merge_through(E)
+    E = enforce_grades(cfg, merge_through(E))
     used = {e['a'] for e in E} | {e['b'] for e in E}
     jpos = {n: p for n, p in jpos.items() if n in used}
     return nodes, E, jpos, jh, cor

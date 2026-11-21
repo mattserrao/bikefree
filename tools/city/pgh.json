@@ -81,5 +81,8 @@
  "riversideM": 25,
  "denseM": 40,
  "removeAlleys": true,
- "overpassClearM": 4.5
+ "overpassClearM": 4.5,
+ "connectMaxM": 350,
+ "connectSnapM": 8,
+ "connectMaxGradePct": 12
 }
