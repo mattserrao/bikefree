@@ -33,6 +33,9 @@ export const DEFAULTS = {
   sidewalkLift: .06,  // corner sidewalks above the junction's height line (the streets' sidewalks: city.js, .06)
   crosswalkW: 3,      // crosswalk depth along the arm
   maxSlope: .1,       // a street-only junction's plane is never steeper than this
+  curbMinGap: Math.PI / 4,      // [junction-check] corner kerbs only between arms 45°…
+  curbMaxGap: Math.PI * 5 / 6,  //   …to 150° apart,
+  curbMinM: 1.5,                //   at least this long
 };
 
 import { denseRoad } from '../../road-align.js';
@@ -57,6 +60,25 @@ const meet = (p, u, q, v) => {
   return [(w.x * v.z - w.z * v.x) / den, (w.x * u.z - w.z * u.x) / den];
 };
 const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+/** [junction-check] Convex hull, counter-clockwise in x/z (monotone chain); the points themselves (not copies). */
+function hull(pts) {
+  const P = pts.slice().sort((a, b) => a.x - b.x || a.z - b.z), cr = (o, a, b) => (a.x - o.x) * (b.z - o.z) - (a.z - o.z) * (b.x - o.x);
+  const lo = [], up = [];
+  for (const p of P) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  for (let i = P.length - 1; i >= 0; i--) { const p = P[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+/** [junction-check] Does a closed outline cross itself (two edges that aren't neighbours)? */
+function selfCrosses(P) {
+  const o = (p, q, r) => (q.x - p.x) * (r.z - p.z) - (q.z - p.z) * (r.x - p.x), n = P.length;
+  for (let i = 0; i < n; i++) for (let j = i + 2; j < n; j++) {
+    if (i === 0 && j === n - 1) continue;
+    const a = P[i], b = P[(i + 1) % n], c = P[j], d = P[(j + 1) % n];
+    const d1 = o(a, b, c), d2 = o(a, b, d), d3 = o(c, d, a), d4 = o(c, d, b);
+    if (((d1 > 1e-9 && d2 < -1e-9) || (d1 < -1e-9 && d2 > 1e-9)) && ((d3 > 1e-9 && d4 < -1e-9) || (d3 < -1e-9 && d4 > 1e-9))) return true;
+  }
+  return false;
+}
 export const LIFT_BLEND_M = 6;   // a trimmed ribbon's lift blends to the junction surface's over this from the cut
 /** Highest a street point can be drawn above its line, given the street ribbons' highest lift (QC). */
 export const drawnLiftMax = (p, plan, maxLift) => (p.jd != null && plan ? plan.options.lift + (maxLift - plan.options.lift) * smooth(p.jd / LIFT_BLEND_M) : maxLift);
@@ -439,10 +461,24 @@ export function* planJunctionsJob(streets, ctx, options = {}) {
       for (let s = 1; s < curb.length - 1; s++) poly.push(curb[s]);
       // a corner with a sidewalk on either side gets one wrapping round it (the route's road: its 2 m shoulder)
       const swA = A.route ? 2 : SIDEWALK(A.cls) ? O.sidewalkW : 0, swB = B.route ? 2 : SIDEWALK(B.cls) ? O.sidewalkW : 0;
-      if (cr.gap < Math.PI * .95 && (swA || swB)) curbs.push({ pts: curb, wA: swA || swB, wB: swB || swA, arc: !!cr.arc });
+      // [junction-check] (user, 20 Nov: kerb wedges and shards at the route's junctions) a corner kerb only between two arms
+      // that both carry a sidewalk (or the route's shoulder), meeting at 45–150°, at least 1.5 m long, and clear of the
+      // route's road — anything else drew as a wedge, a sliver, or a kerb in the bike lane
+      let curbLen = 0; for (let s = 1; s < curb.length; s++) curbLen += Math.hypot(curb[s].x - curb[s - 1].x, curb[s].z - curb[s - 1].z);
+      const onRouteRoad = curb.some((p) => { const r = routeDist(p.x, p.z); return r && r.d < RW / 2 - .5; });
+      if (cr.gap > O.curbMinGap && cr.gap < O.curbMaxGap && swA && swB && curbLen >= O.curbMinM && !onRouteRoad) curbs.push({ pts: curb, wA: swA, wB: swB, arc: !!cr.arc });
+    }
+    // [junction-check] an outline that crosses itself (arms overlapping at awkward angles: a torn, shard-like surface) is
+    // replaced by the convex hull of its outline, without kerbs: plain asphalt where the arms meet — when the hull keeps
+    // every arm's mouth corners (the street ribbons end exactly on them; a mouth inside the hull would leave its ribbon's
+    // end off the outline)
+    let fallback = false;
+    if (selfCrosses(poly)) {
+      const h = hull(poly), keep = new Set(h);
+      if (h.length >= 3 && ring.every((A) => A.mouth.every((m) => keep.has(m)))) { poly.length = 0; poly.push(...h); curbs.length = 0; fallback = true; }
     }
     const id = list.length;
-    const jn = { id, x: C.x, z: C.z, route: isRoute, s: rq?.s ?? null, arms: ring, extra: arms.filter((a) => a.alongRoute), poly, curbs, J, lift: O.lift,
+    const jn = { id, x: C.x, z: C.z, route: isRoute, s: rq?.s ?? null, fallback, arms: ring, extra: arms.filter((a) => a.alongRoute), poly, curbs, J, lift: O.lift,
       deck: arms.some((a) => !a.route && streets[a.k].bridge) };   // [road meets] (a junction of decks: the ground doesn't rise to it)
     list.push(jn); clusterToJn.set(c, id);
 
