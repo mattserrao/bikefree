@@ -84,5 +84,10 @@
  "overpassClearM": 4.5,
  "connectMaxM": 350,
  "connectSnapM": 8,
- "connectMaxGradePct": 12
+ "connectMaxGradePct": 12,
+ "parallelM": 30,
+ "parallelMinM": 60,
+ "smoothMaxShiftM": 8,
+ "smoothPasses": 8,
+ "junctionEaseM": 30
 }

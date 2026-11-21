@@ -61,7 +61,7 @@ table.cmp{border-collapse:collapse;width:100%;margin-top:6px;font-size:12px}tabl
 </style></head><body>
 <canvas id="c"></canvas>
 <div class="panel" id="panel"><button id="tog">Hide</button>
-<h1>PGH road review — similar roads &amp; jagged roads</h1><div class="sub">Blue pairs = similar roads side by side; orange = the one to remove. Purple dots = jagged spots to smooth. Nothing changed yet. Tap for details.</div>
+<h1>PGH road review — simplified &amp; smoothed</h1><div class="sub">What is left: blue pairs = similar roads that can't go without a dead end; purple dots = sharp corners left (hairpins). Tap for details.</div>
 <div class="body" id="legend"></div></div>
 <div id="info"></div>
 <script>

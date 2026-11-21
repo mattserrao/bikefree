@@ -1075,6 +1075,152 @@ def remove_overlaps(cfg, E):
     return E
 
 
+def find_parallels(cfg, E):
+    """Similar ways close by: running side by side (headings within 20°) ≤ parallelM apart, within 8 m in height, for
+    ≥ parallelMinM on both, away from their own junctions (20 m). [(ka, kb, metres)]."""
+    PM, kx, ky = cfg['parallelM'], 111320 * math.cos(math.radians(E[0]['lat'][0])), 110540
+    def heading(e, i):
+        a, b = max(0, i - 1), min(e['n'], i + 1)
+        return math.atan2((e['lat'][b] - e['lat'][a]) * ky, (e['lon'][b] - e['lon'][a]) * kx)
+    grid = defaultdict(list)
+    for k, e in enumerate(E):
+        for i in range(e['n'] + 1): grid[(int(e['lon'][i] * kx / PM), int(e['lat'][i] * ky / PM))].append((k, i))
+    near = defaultdict(lambda: (set(), set()))
+    for k, e in enumerate(E):
+        sp = e['L'] / max(1, e['n'])
+        for i in range(e['n'] + 1):
+            if min(i, e['n'] - i) * sp < 20: continue
+            x, y = e['lon'][i] * kx, e['lat'][i] * ky
+            cx, cy, ha = int(x / PM), int(y / PM), heading(e, i)
+            for a in (-1, 0, 1):
+                for b in (-1, 0, 1):
+                    for k2, j in grid.get((cx + a, cy + b), ()):
+                        if k2 <= k: continue
+                        o = E[k2]
+                        if min(j, o['n'] - j) * o['L'] / max(1, o['n']) < 20: continue
+                        if math.hypot(o['lon'][j] * kx - x, o['lat'][j] * ky - y) > PM or abs(o['ele'][j] - e['ele'][i]) > 8: continue
+                        dh = abs((heading(o, j) - ha + math.pi) % (2 * math.pi) - math.pi)
+                        if math.radians(20) < dh < math.radians(160): continue
+                        r = near[(k, k2)]; r[0].add(i); r[1].add(j)
+    out = []
+    for (ka, kb), (sa, sb) in near.items():
+        m = min(len(sa) * E[ka]['L'] / max(1, E[ka]['n']), len(sb) * E[kb]['L'] / max(1, E[kb]['n']))
+        if m >= cfg['parallelMinM']: out.append((ka, kb, m))
+    return out
+
+
+def remove_parallels(cfg, E):
+    """Keep one of every pair of similar ways close by (biggest pairs first; the minor way goes, else the other; never
+    a dead end or a split network), join through, again until none can go."""
+    total, km = 0, 0.0
+    for _ in range(6):
+        G = Graph(E)
+        for ka, kb, m in sorted(find_parallels(cfg, E), key=lambda x: -x[2]):
+            if ka in G.gone or kb in G.gone: continue
+            k = overlap_pick(E, G, ka, kb)
+            if k is not None: G.remove(k); total += 1; km += E[k]['L'] / 1000
+        if not G.gone: break
+        E = merge_through([e for k, e in enumerate(E) if k not in G.gone])
+    print(f'  similar ways close by: removed {total} ways ({km:.1f} km), {len(find_parallels(cfg, E))} pairs left')
+    return E
+
+
+def smooth_lines(cfg, E):
+    """Round the bends: a few passes of a 3-point average on every way's inner points (its junction ends stay), each point
+    kept within smoothMaxShiftM of where it was mapped; zigzags go, sharp corners round, the last metres into a junction
+    straighten. Lengths are measured again."""
+    kx, ky = 111320 * math.cos(math.radians(E[0]['lat'][0])), 110540
+    lim = cfg['smoothMaxShiftM']
+    for e in E:
+        n = e['n']
+        if n < 2: continue
+        la0, lo0 = e['lat'][:], e['lon'][:]
+        la, lo = la0[:], lo0[:]
+        for _ in range(cfg['smoothPasses']):
+            pla, plo = la[:], lo[:]
+            for i in range(1, n):
+                nla = (pla[i - 1] + 2 * pla[i] + pla[i + 1]) / 4; nlo = (plo[i - 1] + 2 * plo[i] + plo[i + 1]) / 4
+                dx, dy = (nlo - lo0[i]) * kx, (nla - la0[i]) * ky
+                d = math.hypot(dx, dy)
+                if d > lim: nla, nlo = la0[i] + (nla - la0[i]) * lim / d, lo0[i] + (nlo - lo0[i]) * lim / d
+                la[i], lo[i] = nla, nlo
+        e['lat'], e['lon'] = la, lo
+        e['L'] = sum(math.hypot((lo[i + 1] - lo[i]) * kx, (la[i + 1] - la[i]) * ky) for i in range(n))
+    return E
+
+
+def smooth_heights(cfg, E, jh):
+    """Junctions as little sloped plates: each junction gets the plane that best fits the first ~30 m of every way into it
+    (least squares, its slope capped at maxGradePct); a way follows that plane for its first 20 m out of the junction,
+    then eases into its own profile (smoothstep, long enough that the ease bends the grade ≤ ~8 % a step). So every way
+    leaves a junction at the grade the ground there has in its direction — no slope break where ways meet. Then a light
+    5-point average along each way (not on decks) and the grade cap."""
+    kx, ky = 111320 * math.cos(math.radians(E[0]['lat'][0])), 110540
+    pts = defaultdict(list)
+    for e in E:
+        n = e['n']
+        for end, idx in ((e['a'], range(1, min(n, 4))), (e['b'], range(n - 1, max(0, n - 4), -1))):
+            for i in idx: pts[end].append((e['lon'][i], e['lat'][i], e['ele'][i]))
+    gmax = cfg['maxGradePct'] / 100
+    planes = {}
+    for nd, P in pts.items():
+        e0 = next(e for e in E if e['a'] == nd or e['b'] == nd)
+        lo0, la0 = (e0['lon'][0], e0['lat'][0]) if e0['a'] == nd else (e0['lon'][-1], e0['lat'][-1])
+        # normal equations with a little ridge on the slopes (two ways in a straight line fix only one slope)
+        S = [[0.0] * 3 for _ in range(3)]; r = [0.0] * 3
+        for lo, la, z in P:
+            v = (1.0, (lo - lo0) * kx, (la - la0) * ky)
+            for i in range(3):
+                r[i] += v[i] * z
+                for j in range(3): S[i][j] += v[i] * v[j]
+        S[1][1] += 200.0; S[2][2] += 200.0
+        try:
+            import numpy as np
+            a, b, c = np.linalg.solve(np.array(S), np.array(r))
+        except Exception:
+            a, b, c = sum(p[2] for p in P) / len(P), 0.0, 0.0
+        sl = math.hypot(b, c)
+        if sl > gmax: b, c = b * gmax / sl, c * gmax / sl
+        planes[nd] = (lo0, la0, float(a), float(b), float(c))
+        jh[nd] = float(a)
+    g = cfg['maxGradePct'] / 100
+    for e in E:
+        n, sm, br = e['n'], e['ele'], e['br']
+        sp = e['L'] / max(1, n)
+        orig = sm[:]
+        for end in ('a', 'b'):
+            pl = planes.get(e[end])
+            if not pl: continue
+            lo0, la0, a, b, c = pl
+            idx = (lambda t: t) if end == 'a' else (lambda t: n - t)
+            k = min(2, n // 2)
+            d = abs(a - orig[idx(0)])
+            m = max(k + 1, min(n // 2, max(round(cfg['junctionEaseM'] / max(sp, 1)), k + math.ceil(math.sqrt(7.5 * d + 1)))))
+            for t in range(0, m + 1):
+                i = idx(t)
+                if br[i] and t > 0: break
+                target = a + b * (e['lon'][i] - lo0) * kx + c * (e['lat'][i] - la0) * ky
+                w = 0.0 if t <= k else min(1.0, (t - k) / max(1, m - k))
+                w = w * w * (3 - 2 * w)
+                sm[i] = target * (1 - w) + orig[i] * w
+        sm[0], sm[n] = jh[e['a']], jh[e['b']]
+        for _ in range(2):
+            src = sm[:]
+            for i in range(1, n):
+                if br[i]: continue
+                a_, b_ = max(0, i - 2), min(n, i + 2); sm[i] = sum(src[a_:b_ + 1]) / (b_ - a_ + 1)
+        ends = sorted(set(list(range(1, min(n, 6))) + list(range(max(1, n - 5), n))))
+        for _ in range(10):   # spread whatever break is left where the way meets its junction over its first ~50 m
+            src = sm[:]
+            for i in ends:
+                if not br[i]: sm[i] = (src[i - 1] + src[i] + src[i + 1]) / 3
+        gg = max(g * sp, abs(sm[n] - sm[0]) / max(1, n) * 1.02)
+        for _ in range(2):
+            for i in range(1, n): sm[i] = min(max(sm[i], sm[i - 1] - gg), sm[i - 1] + gg)
+            for i in range(n - 1, 0, -1): sm[i] = min(max(sm[i], sm[i + 1] - gg), sm[i + 1] + gg)
+    return E
+
+
 def build_all(cfg):
     """The whole graph as written: built, heights, simplified, crossings cleared, joined, too-steep edges dropped."""
     nodes, chains, jpos, cor = build(cfg)
@@ -1095,8 +1241,16 @@ def build_all(cfg):
         if not plan: break
         print(f'  after the dead ends: removed {len(plan)} more')
     E = remove_overlaps(cfg, E)
+    E = remove_parallels(cfg, E)
     E = drop_unrideable(cfg, E)
-    E = enforce_grades(cfg, merge_through(E))
+    E = merge_through(E)
+    E = smooth_heights(cfg, smooth_lines(cfg, E), jh)
+    E = remove_parallels(cfg, remove_overlaps(cfg, E))   # (rounded bends can bring two ways together: once more)
+    G = Graph(E)
+    fixed, removed, left = fix_crossings(cfg, E, G)   # (…and new heights can bring a crossing too close: clear them again)
+    print(f'  crossings after smoothing: {fixed} cleared, {len(removed)} removed, {len(left)} left')
+    E = [e for k, e in enumerate(E) if k not in G.gone]
+    E = enforce_grades(cfg, merge_through(drop_unrideable(cfg, E)))
     used = {e['a'] for e in E} | {e['b'] for e in E}
     jpos = {n: p for n, p in jpos.items() if n in used}
     return nodes, E, jpos, jh, cor
