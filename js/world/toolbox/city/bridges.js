@@ -5,6 +5,7 @@ import * as THREE from '../../../../vendor/three.module.min.js';
 import { MeshBuilder, resample, makePath, hash } from '../core/mesh-builder.js';
 import { drain, due, each } from '../core/jobs.js';   // [F30]
 import { ROAD_WIDTH } from '../../pose.js';
+import { releaseAfterUpload } from '../core/release.js';   // [perf-1] final meshes: the GPU keeps the only copy
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -276,7 +277,7 @@ export function* buildBridgesJob(city) {
     superstructure(M, city, path, b.style, width, lights);
   }
   yield* M.keepOutOfJob(city.landscape.inRouteTube, { whole: true });   // decks, ramps and members the data puts in the rider's space (whole members: no cut stubs)
-  const mesh = new THREE.Mesh(city.own(M.geometry()), city.solidMaterial);
+  const mesh = new THREE.Mesh(city.own(releaseAfterUpload(M.geometry())), city.solidMaterial);
   mesh.castShadow = mesh.receiveShadow = true; mesh.name = 'Bridges';
   city.group.add(mesh);
   city.addGlows(lights, 'Bridge lights');
@@ -407,7 +408,7 @@ export function buildStadiums(city) {
     }
   }
   if (!M.count) return null;
-  const mesh = new THREE.Mesh(city.own(M.geometry()), city.solidMaterial);
+  const mesh = new THREE.Mesh(city.own(releaseAfterUpload(M.geometry())), city.solidMaterial);
   mesh.castShadow = mesh.receiveShadow = true; mesh.name = 'Stadiums';
   city.group.add(mesh);
   city.addGlows(lights, 'Stadium lights');
@@ -447,7 +448,7 @@ export function buildLandmarks(city) {
     for (let k = 0; k < 48; k++) for (const f of [0, .35, .7, 1, 1.12]) { const a = k / 48 * Math.PI * 2, g = L.heightAt(p.x + Math.cos(a) * r * f, p.z + Math.sin(a) * r * f); y = Math.max(y, g); low = Math.min(low, g); }
     const M = new MeshBuilder();
     fountainBasin(M, p.x, y, p.z, r, { footY: low - .3 });   // [w2-polish] granite basin, coping, apron, centre pedestal and the jet's core
-    const rim = new THREE.Mesh(city.own(M.geometry()), city.solidMaterial); rim.receiveShadow = true; city.group.add(rim);
+    const rim = new THREE.Mesh(city.own(releaseAfterUpload(M.geometry())), city.solidMaterial); rim.receiveShadow = true; city.group.add(rim);
     const pool = new THREE.Mesh(city.own(new THREE.CircleGeometry(r - .5, 48)), city.own(new THREE.MeshStandardMaterial({ color: '#4f8fa0', roughness: .15, metalness: .1, emissive: '#1b4f6e', emissiveIntensity: 0 })));
     pool.rotation.x = -Math.PI / 2; pool.position.set(p.x, y + .35, p.z); city.group.add(pool);
     out.poolMat = pool.material;
@@ -505,7 +506,7 @@ export function buildLandmarks(city) {
     }
     M.color('#2f3438'); M.box(cx + f.x * len * .08, y + 2.6, cz + f.z * len * .08, 2.6, 5.5, 11, yaw);
     M.color('#8a8f92'); M.box(cx, y + 2.65, cz, 2.2, .15, len * .8, yaw);
-    const sub = new THREE.Mesh(city.own(M.geometry()), city.solidMaterial); sub.castShadow = sub.receiveShadow = true; sub.name = 'USS Requin';
+    const sub = new THREE.Mesh(city.own(releaseAfterUpload(M.geometry())), city.solidMaterial); sub.castShadow = sub.receiveShadow = true; sub.name = 'USS Requin';
     city.group.add(sub);
   }
 
@@ -556,9 +557,9 @@ export function buildLandmarks(city) {
     }
     if (A.count) {
       A.keepOutOf(city.landscape.inRouteTube); S.keepOutOf(city.landscape.inRouteTube);
-      const am = new THREE.Mesh(city.own(A.geometry()), city.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9, side: THREE.DoubleSide })));
+      const am = new THREE.Mesh(city.own(releaseAfterUpload(A.geometry())), city.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9, side: THREE.DoubleSide })));
       am.castShadow = am.receiveShadow = true; am.name = 'Awnings'; city.group.add(am);
-      const sm = new THREE.Mesh(city.own(S.geometry()), signMat); sm.name = 'Shop signs'; city.group.add(sm);
+      const sm = new THREE.Mesh(city.own(releaseAfterUpload(S.geometry())), signMat); sm.name = 'Shop signs'; city.group.add(sm);
     }
   }
 

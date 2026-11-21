@@ -1129,7 +1129,7 @@ export class CityLife {
       const behind = (rider.out - a.s) * rider.dir, turn = this.city.route.turnS || this.city.route.total;
       const left = Math.abs(rider.out - a.s) > 900;
       if (left ? this._outOfView(a.x, a.z, cam, 160, false) || a.s < 0 || a.s > turn
-        : behind > 80 || a.s < 0 || a.s > turn || (behind > 10 && (this.city.landscape.routeKindAt(a.s) !== 'road' || this._oneWayIn(a.s, a.s)))) { a.alive = false; a.wait = 2 + this.rand() * 6; a.lx = null; continue; }
+        : a.s < 0 || a.s > turn || ((behind > 80 || (behind > 10 && (this.city.landscape.routeKindAt(a.s) !== 'road' || this._oneWayIn(a.s, a.s)))) && this._outOfView(a.x, a.z, cam, 160, false) /* (never while still in view: a bend can show it) */)) { a.alive = false; a.wait = 2 + this.rand() * 6; a.lx = null; continue; }
       // its lane: a fixed offset from the centre line, square to the street's smoothed heading (no step at the GPS points)
       this._routeAt(a.s + 5, q); this._routeAt(a.s - 5, p);
       let hx = q.x - p.x, hz = q.z - p.z; const hl = Math.hypot(hx, hz) || 1; hx /= hl; hz /= hl;

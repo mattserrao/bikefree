@@ -29,7 +29,7 @@ import { decodeStreets, withStreets, rideStreets, loadRides } from './repair_cit
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(join(ROOT, p), 'utf8');
-export const SIMPLIFY = { keepClearM: 15, divMin: 5, divMax: 20, divShare: .6, divAngle: .94, snapEnd: 3, snapLine: 4, stubLoose: 60, stubBoth: 150, overlapRun: 15, overlapShare: .5, overlapK: .8, passes: 6 };
+export const SIMPLIFY = { keepClearM: 15, divMin: 5, divMax: 20, divShare: .6, divAngle: .94, snapEnd: 3, snapLine: 4, gapM: 30, gapDeg: 30, stubLoose: 60, stubBoth: 150, overlapRun: 15, overlapShare: .5, overlapK: .8, passes: 6 };
 
 const ONEWAY = (s) => (s.meta[1] >> 1) & 3;           // 0 two-way, else one-way
 const BRIDGE = (s) => s.meta[1] & 1;
@@ -84,24 +84,25 @@ export function simplifyArea({ streets, city, proj, rides }) {
   let ride;
   // (no street point within keepClearM of a route moves: the ground and the junctions there are shaped round the route)
   const byRoute = (x, z) => rides.some(({ index }) => { const q = index.nearest(x, z, SIMPLIFY.keepClearM + 4); return q && q.d < SIMPLIFY.keepClearM + 4; });
+  const near40 = (x, z) => rides.some(({ index }) => index.nearest(x, z, 40));
   const protect = () => { build(); ride = rideStreets(G.map((g) => ({ ...g })), rides, null); };
   const remove = (drop) => { if (!drop.size) return; S = S.filter((_, k) => !drop.has(k)); };
 
   // 1 footpaths
   protect();
-  if (!SKIP.has('footpaths')) { const drop = new Set(); for (const g of G) if (g.cls === 8 && !g.bridge && !ride.has(g.k) && !g.pts.some((p) => byRoute(p.x, p.z))) drop.add(g.k); say('footpaths', `${drop.size} dropped`); remove(drop); }
+  if (!SKIP.has('footpaths')) { const drop = new Set(); for (const g of G) if (g.cls === 8 && !g.bridge && !ride.has(g.k) && !g.pts.some((p) => near40(p.x, p.z))) drop.add(g.k); say('footpaths', `${drop.size} dropped`); remove(drop); }
 
   // 2 divided roads → one road (not highways)
   protect();
   if (!SKIP.has('divided')) {
     const drop = new Set(), moved = new Map();   // k → partner list
-    const order = G.filter((g) => ONEWAY(g.s) && g.cls >= 1 && g.cls <= 7 && !g.bridge && !ride.has(g.k) && !g.pts.some((p) => byRoute(p.x, p.z))).sort((a, b) => a.len - b.len);
+    const order = G.filter((g) => ONEWAY(g.s) && g.cls >= 2 && g.cls <= 7 && !g.bridge && !ride.has(g.k) && !g.pts.some((p) => near40(p.x, p.z))).sort((a, b) => a.len - b.len);   // (40 m: the junctions at the route reach that far)
     for (const g of order) {
       if (drop.has(g.k)) continue;
       let par = 0; const partners = new Map();
       for (const p of samples(g)) {
         const hit = near(p.x, p.z, SIMPLIFY.divMax, new Set([g.k, ...drop])).find((q) => { const h = G[q.k];
-          return q.d >= SIMPLIFY.divMin && ONEWAY(h.s) && !h.bridge && h.cls >= 1 && Math.abs(h.cls - g.cls) <= 1 && Math.abs(q.ux * p.ux + q.uz * p.uz) > SIMPLIFY.divAngle; });
+          return q.d >= SIMPLIFY.divMin && ONEWAY(h.s) && !h.bridge && h.cls >= 2 && Math.abs(h.cls - g.cls) <= 1 && Math.abs(q.ux * p.ux + q.uz * p.uz) > SIMPLIFY.divAngle; });
         if (hit) { par += p.l; partners.set(hit.k, true); }
       }
       if (par < 20 || par < g.len * SIMPLIFY.divShare) continue;
@@ -112,7 +113,7 @@ export function simplifyArea({ streets, city, proj, rides }) {
     for (const [k, ps] of moved) for (const pk of ps) {
       if (drop.has(pk)) continue;
       const P = G[pk];
-      P.pts.forEach((p, i) => { if (byRoute(p.x, p.z)) return; const q = near(p.x, p.z, SIMPLIFY.divMax, null).find((h) => h.k === k); if (q) { const m = shift.get(pk) || new Map(); m.set(i, { x: (p.x + q.x) / 2, z: (p.z + q.z) / 2 }); shift.set(pk, m); } });
+      P.pts.forEach((p, i) => { if (near40(p.x, p.z)) return; const q = near(p.x, p.z, SIMPLIFY.divMax, null).find((h) => h.k === k); if (q) { const m = shift.get(pk) || new Map(); m.set(i, { x: (p.x + q.x) / 2, z: (p.z + q.z) / 2 }); shift.set(pk, m); } });
     }
     // (and every other street's point that was that point moves with it: they still meet there)
     const remap = new Map();
@@ -156,6 +157,18 @@ export function simplifyArea({ streets, city, proj, rides }) {
         if (endHit) { S[g.k].xy[j] = S[endHit.k].xy[endHit.j].slice(); n++; continue; }
         const line = near(e.x, e.z, SIMPLIFY.snapLine, new Set([g.k])).find((q) => G[q.k].bridge === g.bridge);
         if (line) { const q = quant(line.x, line.z); S[g.k].xy[j] = q; insertPoint(line.k, line.i, q); n++; }
+        else if (g.cls <= 7 && !rides.some(({ index }) => index.nearest(e.x, e.z, 40))) {   // (not at the route: its junctions are shaped round what is there)
+          // a road that stops short of one it heads straight into (up to gapM ahead, within gapDeg of its own line):
+          // carried on to meet it (a point added at the end) — the gaps a dropped piece or the map left
+          const o = g.pts[j === 0 ? 1 : g.pts.length - 2], ux = e.x - o.x, uz = e.z - o.z, ul = Math.hypot(ux, uz) || 1;
+          const ahead = near(e.x, e.z, SIMPLIFY.gapM, new Set([g.k])).find((q) => G[q.k].bridge === g.bridge && G[q.k].cls <= 7 && q.d > .3
+            && ((q.x - e.x) * ux + (q.z - e.z) * uz) / ul / q.d > Math.cos(SIMPLIFY.gapDeg * Math.PI / 180));
+          if (ahead) {
+            const q = quant(ahead.x, ahead.z), dk = S[g.k].deck[j];
+            if (j === 0) { S[g.k].xy.unshift(q); S[g.k].deck.unshift(dk); } else { S[g.k].xy.push(q); S[g.k].deck.push(dk); }
+            insertPoint(ahead.k, ahead.i, q); n++;
+          }
+        }
       }
       if (n) { say('snap', `${n} street ends joined`); changed += n; }
     }
@@ -168,6 +181,7 @@ export function simplifyArea({ streets, city, proj, rides }) {
           if (u.length !== 2 || !u[0].end || !u[1].end || u[0].k === u[1].k) continue;
           const A = S[u[0].k], B = S[u[1].k];
           if (A.meta[0] !== B.meta[0] || A.meta[1] !== B.meta[1] || A.meta[2] !== B.meta[2] || A.meta[0] === 0) continue;
+          { const p = local(A.xy[u[0].i]); if (rides.some(({ index }) => index.nearest(p.x, p.z, 40))) continue; }   // (not at the route: the ribbons there are fitted to the pieces as they are)
           if (ONEWAY(A)) { // one-way: only head to tail (their directions run on)
             if (!((u[0].i === A.xy.length - 1 && u[1].i === 0) || (u[1].i === B.xy.length - 1 && u[0].i === 0))) continue;
           }
@@ -192,7 +206,7 @@ export function simplifyArea({ streets, city, proj, rides }) {
     if (!SKIP.has('stubs')) {
       const use = pointUse(), drop = new Set();
       for (const g of G) {
-        if (g.cls === 0 || ride.has(g.k)) continue;
+        if (g.cls === 0 || ride.has(g.k) || g.pts.some((p) => near40(p.x, p.z))) continue;   // (the route's junctions and street grades are fitted to what is there)
         const loose = [0, g.pts.length - 1].map((j) => !(use.get(key(S[g.k].xy[j])) || []).some((o) => o.k !== g.k));
         if ((loose[0] && loose[1] && g.len < SIMPLIFY.stubBoth) || ((loose[0] || loose[1]) && g.len < SIMPLIFY.stubLoose)) drop.add(g.k);
       }
@@ -205,7 +219,7 @@ export function simplifyArea({ streets, city, proj, rides }) {
       const shared = (a, b) => S[a].xy.some((p) => (use.get(key(p)) || []).some((o) => o.k === b));
       const rank = (g) => (ride.has(g.k) ? 1e9 : 0) + (9 - g.cls) * 1e5 + g.len;
       for (const g of G.slice().sort((a, b) => rank(a) - rank(b))) {
-        if (g.cls === 0 || ride.has(g.k) || drop.has(g.k)) continue;
+        if (g.cls === 0 || ride.has(g.k) || drop.has(g.k) || g.pts.some((p) => near40(p.x, p.z))) continue;
         const over = new Map();
         // (sharing ≥ 3 of its points with another street: drawn on top of it)
         const sharedPts = new Map(); S[g.k].xy.forEach((p) => (use.get(key(p)) || []).forEach((o) => { if (o.k !== g.k && !drop.has(o.k)) sharedPts.set(o.k, (sharedPts.get(o.k) || 0) + 1); }));

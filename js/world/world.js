@@ -270,7 +270,8 @@ export class World {
       // the areas a planned ride (a preset, your own route) goes through are built once, at the start behind the
       // loader, and kept; off the plan (a free ride, a turn of your own) an area is built when the path reaches 1.5 km
       // of it. [F30] Either way the build runs in frame slices (_runAreaJobs): seconds of main-thread work spread thin
-      for (const id of this._planAreas()) need.add(id);
+      // [perf-2] a planned ride's areas are no longer all built at the start and kept: like any other, an area is built
+      // when the path reaches 1.5 km of it and released once the path has left it (memory stays bounded on a long ride)
       for (const id of this.path.areasReachable?.(this.p) || []) need.add(id);   // [F220] where a choice at the junctions ahead could go
       const pacer = this.pacerSource?.()?.path;
       if (pacer?.own) for (const id of pacer.own.areasNear(this.ps ?? this.p, 300, 0)) need.add(id);   // (the pacer, on its own way)
@@ -362,9 +363,13 @@ export class World {
    */
   _runAreaJobs(want, waiting, rush = false) {
     let left = null;
-    for (const rec of [...this.areas.values()].sort((a, b) => (b.id === want) - (a.id === want))) {
+    // [perf-2] one area builds at a time: the one the swap waits for, then one the path enters within 500 m, then the
+    // rest (two builds at once held two areas' planning data at the peak and halved each one's frame budget)
+    const rank = (r) => (r.id === want ? 2 : this._soon?.has(r.id) ? 1 : 0);
+    for (const rec of [...this.areas.values()].sort((a, b) => rank(b) - rank(a))) {
       if (!rec.job || rec.wait) continue;
-      const urgent = (waiting && rec.id === want) || (!this._planBuilt && this._planAreas().includes(rec.id));
+      if (left != null) break;
+      const urgent = waiting && rec.id === want;
       const B = this.areaBudget || AREA_BUDGET;   // (tools may set world.areaBudget: Infinity = all at once, the old way)
       let budget = rush && rec.id === want ? Math.max(B.urgent, AREA_RUSH_MS) : urgent ? B.urgent : this._soon?.has(rec.id) ? B.soon : B.ahead;   // [F220] rush
       if (this._preload && (rec.id === want || this._soon?.has(rec.id))) budget = Math.max(budget, PRELOAD_AREA_MS);   // [phase 8] (behind the loading screen)
@@ -953,7 +958,7 @@ export class World {
     return { ready: steps.every((s) => s.done), failed, progress: steps.reduce((a, s) => a + s.p, 0) / steps.length, steps };
   }
 
-  get loading() { return this.terrain.loadingCount + (this.baked?.preparing ? 4 : 0) + (this._waitingArea || (this._multi && this._planAreas().some((id) => !this.areas.get(id)?.ready)) ? 4 : 0); }   // [w2-bake] (4: the app's loading bar shows from 4)
+  get loading() { return this.terrain.loadingCount + (this.baked?.preparing ? 4 : 0) + (this._waitingArea || (this._multi && [...(this._soon || [])].some((id) => !this.areas.get(id)?.ready && !this._areaFailed(id))) ? 4 : 0); }   // [w2-bake] (4: the app's loading bar shows from 4)
 
   /** [w2-bake] "Preparing scenery" over the view while the first bake runs behind it. */
   _bakeLoader() {

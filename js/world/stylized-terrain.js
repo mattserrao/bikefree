@@ -7,6 +7,7 @@ import { scenePacks, PACK_META } from './toolbox/packs/index.js';
 import { normalizeScene, lifeKit } from './toolbox/scene-schema.js';
 import { ForestPlanner, TILE_M, makeClearings } from './toolbox/vegetation/forest.js';
 import { GroundBlocks, InstancePool, packMatrices, proxyGroup } from './toolbox/core/pools.js';
+import { geometryReleaseOn } from './toolbox/core/release.js';   // [perf-1]
 import { Subway } from './toolbox/structures/subway.js';   // [subway]
 import { MountainRoad } from './toolbox/structures/mountain-road.js';
 import { planSettlement, Settlement } from './toolbox/structures/settlement.js';
@@ -1076,6 +1077,8 @@ export class StylizedTerrain {
         const all = [...this.patches].map(([k, m]) => [k, { ...m.userData.patch, geometry: m.geometry }]);
         if (this.groundPool) this.groundPool.set(new Map(all.filter(([, p]) => !p.fine)));
         if (this.groundPoolFine) this.groundPoolFine.set(new Map(all.filter(([, p]) => p.fine)));
+        // [perf-1] the pool holds the patch's vertices now: the stand-in's own copy goes (the app only; QC tools read it)
+        if (geometryReleaseOn()) for (const m of this.patches.values()) { const g = m.geometry; if (g.userData.pooled) continue; g.userData.pooled = true; for (const a of Object.values(g.attributes)) a.array = new a.array.constructor(0); if (g.index) g.index.array = new g.index.array.constructor(0); }
       } else {
         const map = layer === 'forest' ? this.forestTiles : layer === 'far' ? this.farTrees : this[layer];
         for (const key of [...map.keys()]) if (!wanted.has(key)) map.delete(key);

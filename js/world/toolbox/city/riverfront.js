@@ -15,6 +15,7 @@ import * as THREE from '../../../../vendor/three.module.min.js';
 import { drain, due, mapJob } from '../core/jobs.js';   // [F30] planned as a job (in frame slices on the ride)
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { ROAD_WIDTH, routePoint } from '../../pose.js';
+import { releaseAfterUpload } from '../core/release.js';   // [perf-1] final meshes: the GPU keeps the only copy
 
 export const RIVERFRONT_DEFAULTS = {
   stepM: 2,          // sample spacing along the route (m)
@@ -274,7 +275,7 @@ export function buildRiverfront(city) {
       }
       M.keepOutOf(L.inRouteTube);
       tris += M.i.length / 3;
-      const mesh = new THREE.Mesh(city.own(M.geometry()), city.solidMaterial);
+      const mesh = new THREE.Mesh(city.own(releaseAfterUpload(M.geometry())), city.solidMaterial);
       mesh.name = 'Riverfront'; mesh.receiveShadow = true; mesh.castShadow = true;
       city.group.add(mesh); meshes.push(mesh);
     }
@@ -307,7 +308,7 @@ function waterStepsMesh(city, S) {
     for (const o of [-S.width / 2 - .4, S.width / 2 + .4]) { const p = at((t.t0 + t.t1) / 2, o); M.color(cheek); M.box(p.x, level - 1.4, p.z, .8, t.y - level + 1.9, l, yaw); }
   });
   M.keepOutOf(L.inRouteTube);
-  const mesh = new THREE.Mesh(city.own(M.geometry()), city.solidMaterial);
+  const mesh = new THREE.Mesh(city.own(releaseAfterUpload(M.geometry())), city.solidMaterial);
   mesh.name = 'Water steps'; mesh.receiveShadow = mesh.castShadow = true;
   city.group.add(mesh);
   return mesh;

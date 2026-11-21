@@ -23,6 +23,7 @@ import { MeshBuilder } from '../core/mesh-builder.js';
 import { routePoint } from '../../pose.js';
 import { randomSequence } from '../core/random.js';
 import { figureMaterial, staticCrowdMesh, randomLook, CLIP, Crowd, clipRate } from '../life/figures/people.js';
+import { releaseAfterUpload } from '../core/release.js';   // [perf-1] final meshes: the GPU keeps the only copy
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const TAU = Math.PI * 2;
@@ -171,7 +172,7 @@ export function buildStadiumKit(city) {
       const c = b.ring.reduce((a, p) => ({ x: a.x + p.x / b.ring.length, z: a.z + p.z / b.ring.length }), { x: 0, z: 0 });
       if (inPoly(ring, c.x, c.z)) b.hero = true;
     }
-    const add = (B, mat, name, shadow = true, geo = null) => { if (!geo && !B.count) return null; const m = new THREE.Mesh(geo || city.own(B.geometry()), mat); m.name = name; m.castShadow = shadow; m.receiveShadow = true; city.group.add(m); return m; };
+    const add = (B, mat, name, shadow = true, geo = null) => { if (!geo && !B.count) return null; const m = new THREE.Mesh(geo || city.own(releaseAfterUpload(B.geometry())), mat); m.name = name; m.castShadow = shadow; m.receiveShadow = true; city.group.add(m); return m; };
     if (!full) {
       // a far shell: shared with the other areas resident that see it from the same field level
       const key = `${st.name}|${Math.round(gField * 2)}`;

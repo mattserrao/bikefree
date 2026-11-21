@@ -26,7 +26,10 @@
     "gallery": "node tools/snap_gallery.mjs",
     "figures": "node tools/build_figures.mjs",
     "snap:figures": "node tools/snap_figures.mjs",
-    "gallery:buildings": "node tools/snap_buildings.mjs"
+    "gallery:buildings": "node tools/snap_buildings.mjs",
+    "perf:budget": "node tools/perf_budget.mjs",
+    "perf:long": "node tools/long_ride.mjs",
+    "qc:streets": "node tools/qc_streets.mjs"
   },
   "devDependencies": {
     "@garmin/fitsdk": "^21.221.0",

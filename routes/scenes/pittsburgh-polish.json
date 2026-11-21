@@ -654,6 +654,7 @@
   },
   "realHorizon": false,
   "timeOfDay": "golden",
+  "look": "gentle",
   "lighting": {
     "baked": "golden"
   },

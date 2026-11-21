@@ -16,12 +16,12 @@
 // 10 + 2 in view). Everything uses the one facade material (facade-material.js).
 import * as THREE from '../../../../../vendor/three.module.min.js';
 import { planBuildingsJob, ROAD_HALF } from './recipe.js';
-import { drain, due } from '../../core/jobs.js';   // [F30]
+import { drain, due, runSlice } from '../../core/jobs.js';   // [F30]
 import { assemble, Writer, NullWriter } from './assemble.js';
 import { planDressing } from './dressing.js';
 import { makeFacadeMaterial } from './facade-material.js';
 import { S } from './presets.js';
-import { releaseAfterUpload } from '../../core/release.js';   // [F399]
+import { releaseAfterUpload, geometryReleaseOn } from '../../core/release.js';   // [F399]
 
 // colours stay in sRGB here (the shader linearises them): no colour-space conversion
 const SRGB = new Map();
@@ -212,7 +212,7 @@ export class CityBuildingKit {
     this.group = new THREE.Group(); this.group.name = 'Buildings (building kit)'; city.group.add(this.group);
     this.material = city.own(makeFacadeMaterial(city.uniforms));
     const { plan, streets } = yield* planCityHomesJob(city, this.cfg);
-    this.plan = plan; this.streets = streets;
+    this.plan = plan;   // [perf-1] (the planner's street index isn't kept: nothing reads it after the plan)
     this.byKey = new Map(this.plan.buildings.map((R) => [R.key, R]));
     // what the kit adds outside the footprints (eaves, porches, steps, dressing), for the city's lamps and trees
     this.extents = new Map();
@@ -254,20 +254,17 @@ export class CityBuildingKit {
   /** chunkBuilt as a job ([F30]): pauses between homes when its slice is used up. */
   *chunkBuiltJob(key, sk, S) {
     const list = this.chunks.get(key);
-    let T = this.sectors.get(sk); if (!T) this.sectors.set(sk, (T = { parts: [], mesh: null, sk }));
+    let T = this.sectors.get(sk); if (!T) this.sectors.set(sk, (T = { parts: [], mesh: null, sk, recipes: [] }));
     if (list?.length) {
-      const w = new Writer(8192), d = new Writer(4096);
-      for (const R of list) { if (due()) yield; const res = assemble(R, w, d, this.L); if (R.dressing?.length) for (const it of R.dressing) dress(d, it, R, this.L, res); }
+      // [perf-3] the main meshes only: the near detail (canopies, steps, dressing) is built per sector when the camera
+      // comes within reach and dropped when it leaves (it was built for every chunk at once and kept: ~60 MB)
+      const w = new Writer(8192), nul = new NullWriter();
+      for (const R of list) { if (due()) yield; assemble(R, w, nul, this.L); T.recipes.push(R); }
       if (w.n) {
         const m = new THREE.Mesh(this.city.own(w.geometry()), this.material);
         m.name = `Buildings ${key}`; m.castShadow = m.receiveShadow = true;
         this.group.add(m); T.parts.push(m); this.stats.tris += w.triangles;
-      }
-      if (d.n) {
-        const dm = new THREE.Mesh(this.city.own(d.geometry()), this.material);
-        dm.name = `Building detail ${key}`; dm.castShadow = false; dm.receiveShadow = true; dm.userData.bake = false;
-        dm.userData.box = dm.geometry.boundingBox; dm.visible = this._near(dm);
-        this.group.add(dm); T.dparts = T.dparts || []; T.dparts.push(dm); this.details.push(dm); this.stats.detailTris += d.triangles;
+        const bb = m.geometry.boundingBox; T.box = T.box ? T.box.union(bb) : bb.clone();
       }
       this.stats.drawn += list.length;
       this.chunks.delete(key);
@@ -282,16 +279,6 @@ export class CityBuildingKit {
    */
   _completeSector(T) {
     if (T.done) return;
-    if (T.dparts?.length) {
-      // the sector's near detail: one mesh, shown near the camera
-      const parts = T.dparts;
-      const geo = releaseAfterUpload(parts.length > 1 ? this.city.own(mergeKit(parts.map((m) => m.geometry))) : parts[0].geometry);   // [F399] (final)
-      if (parts.length > 1) for (const m of parts) { this.group.remove(m); m.geometry.dispose(); this.city.disposables.delete(m.geometry); this.details.splice(this.details.indexOf(m), 1); }
-      const dm = parts.length > 1 ? new THREE.Mesh(geo, this.material) : parts[0];
-      if (parts.length > 1) { dm.name = `Building detail ${T.sk}`; dm.castShadow = false; dm.receiveShadow = true; dm.userData.bake = false; this.group.add(dm); }
-      if (!geo.boundingBox) geo.computeBoundingBox();
-      dm.userData.box = geo.boundingBox; dm.visible = this._near(dm); if (parts.length > 1) this.details.push(dm); T.dparts = null;
-    }
     if (T.parts.length > 1) {
       const geo = this.city.own(releaseAfterUpload(mergeKit(T.parts.map((m) => m.geometry))));   // [F399] (final)
       for (const m of T.parts) { this.group.remove(m); m.geometry.dispose(); this.city.disposables.delete(m.geometry); }
@@ -301,17 +288,63 @@ export class CityBuildingKit {
     } else if (T.parts.length === 1) releaseAfterUpload(T.parts[0].geometry);   // [F399] (a sector of one chunk: final as it is)
     T.done = true;
   }
-  finishAll() { for (const T of this.sectors.values()) this._completeSector(T); }
-
-  /** Near detail (canopies, steps, porches' rails, dressing) only near the camera. */
-  tick(camera) {
-    this._cam = this._cam || new THREE.Vector3(); this._cam.set(camera.x, camera.y, camera.z);
-    if ((this._f = (this._f || 0) + 1) % 10 !== 1) return;
-    for (const m of this.details) m.visible = this._near(m);
+  /** [perf-1] Every chunk is in: the planning maps (recipes by key, the eaves/porch extents for lamps and trees) go. */
+  finishAll() {
+    for (const T of this.sectors.values()) this._completeSector(T);
+    if (!this.chunks.size) { this.byKey = new Map(); this.extents = new Map(); this.plan = { buildings: [], duplicates: this.plan?.duplicates }; }
   }
 
+  /**
+   * [perf-3] Near detail per sector, near the camera only: built in small slices (DETAIL_MS a frame) when a complete
+   * sector comes within detailReachM, disposed once it is DETAIL_DROP_M beyond it. One sector builds at a time.
+   */
+  tick(camera) {
+    this._cam = this._cam || new THREE.Vector3(); this._cam.set(camera.x, camera.y, camera.z);
+    const reach = this.cfg.detailReachM;
+    if (this._dj) {
+      const r = runSlice(this._dj.job, this._warm ? DETAIL_MS : 1e9);
+      if (r.done) this._dj = null;
+    }
+    if ((this._f = (this._f || 0) + 1) % 10 !== 1 && this._warm) return;
+    let best = null, bd = Infinity;
+    for (const T of this.sectors.values()) {
+      if (!T.done || !T.box || !T.recipes?.length) continue;
+      const d = T.box.distanceToPoint(this._cam);
+      if (T.detail && d > reach + DETAIL_DROP_M && this._dj?.T !== T) this._dropDetail(T);
+      if (T.detail) T.detail.visible = d < reach;
+      else if (!T.building && d < reach && d < bd) { bd = d; best = T; }
+    }
+    if (best && !this._dj) {
+      best.building = true;
+      this._dj = { T: best, job: this._detailJob(best) };
+      if (!this._warm) { drain(this._dj.job); this._dj = null; }   // (the first time: what's in reach at once)
+    }
+    this._warm = true;
+  }
+  *_detailJob(T) {
+    const d = new Writer(4096), nul = new NullWriter();
+    for (const R of T.recipes) {
+      const res = assemble(R, nul, d, this.L);
+      if (R.dressing?.length) for (const it of R.dressing) dress(d, it, R, this.L, res);
+      yield;
+    }
+    T.building = false;
+    if (!this.group.parent) return;   // (released meanwhile)
+    if (!d.n) { T.detail = null; T.recipes = []; return; }   // nothing to draw: never again
+    const geo = releaseAfterUpload(this.city.own(d.geometry()));
+    const dm = new THREE.Mesh(geo, this.material);
+    dm.name = `Building detail ${T.sk}`; dm.castShadow = false; dm.receiveShadow = true; dm.userData.bake = false;
+    dm.userData.box = geo.boundingBox; dm.matrixAutoUpdate = false; dm.updateMatrix();
+    this.group.add(dm); this.details.push(dm); T.detail = dm; this.stats.detailTris += d.triangles;
+  }
+  _dropDetail(T) {
+    const dm = T.detail; T.detail = null;
+    this.group.remove(dm); dm.geometry.dispose(); this.city.disposables.delete(dm.geometry);
+    this.details.splice(this.details.indexOf(dm), 1);
+  }
   _near(m) { return !this._cam || m.userData.box.distanceToPoint(this._cam) < this.cfg.detailReachM; }
 }
+const DETAIL_MS = 2, DETAIL_DROP_M = 250;
 
 /** One geometry from several kit geometries (same attributes; 32-bit index). */
 function mergeKit(list) {

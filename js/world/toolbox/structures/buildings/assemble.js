@@ -106,7 +106,9 @@ export class Writer {
     g.setAttribute('color', new THREE.BufferAttribute(this.col.slice(0, n * 3), 3, true));
     g.setAttribute('aSurf', new THREE.BufferAttribute(this.surf.slice(0, n * 4), 4));
     g.setAttribute('aWin', new THREE.BufferAttribute(this.win.slice(0, n * 4), 4));
-    g.setAttribute('aB', new THREE.BufferAttribute(this.bb.slice(0, n * 2), 2));
+    // [perf-3] seed and wear (both 0..1) as 16-bit normalized: half the bytes, the shader reads the same floats
+    const bb = new Uint16Array(n * 2); for (let i = 0; i < n * 2; i++) bb[i] = Math.round(Math.min(1, Math.max(0, this.bb[i])) * 65535);
+    g.setAttribute('aB', new THREE.BufferAttribute(bb, 2, true));
     g.setAttribute('aTrim', new THREE.BufferAttribute(this.trim.slice(0, n * 4), 4, true));
     g.setAttribute('aAcc', new THREE.BufferAttribute(this.acc.slice(0, n * 4), 4, true));
     g.setIndex(new THREE.BufferAttribute(this.idx.slice(0, this.ni), 1));

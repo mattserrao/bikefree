@@ -1,0 +1,82 @@
+{
+ "pittsburgh": {
+  "pieces": 1226,
+  "short": 223,
+  "loose": 227,
+  "stub": 63,
+  "splice": 203,
+  "overlap": 64
+ },
+ "pittsburgh-allegheny": {
+  "pieces": 703,
+  "short": 110,
+  "loose": 111,
+  "stub": 31,
+  "splice": 109,
+  "overlap": 40
+ },
+ "pittsburgh-westend": {
+  "pieces": 143,
+  "short": 18,
+  "loose": 42,
+  "stub": 5,
+  "splice": 18,
+  "overlap": 5
+ },
+ "pittsburgh-oakland": {
+  "pieces": 364,
+  "short": 111,
+  "loose": 103,
+  "stub": 38,
+  "splice": 75,
+  "overlap": 17
+ },
+ "pittsburgh-polish": {
+  "pieces": 501,
+  "short": 88,
+  "loose": 86,
+  "stub": 29,
+  "splice": 58,
+  "overlap": 13
+ },
+ "pittsburgh-homestead": {
+  "pieces": 643,
+  "short": 159,
+  "loose": 131,
+  "stub": 44,
+  "splice": 113,
+  "overlap": 18
+ },
+ "pittsburgh-northside": {
+  "pieces": 898,
+  "short": 106,
+  "loose": 192,
+  "stub": 36,
+  "splice": 96,
+  "overlap": 18
+ },
+ "pittsburgh-eastend": {
+  "pieces": 838,
+  "short": 100,
+  "loose": 203,
+  "stub": 59,
+  "splice": 70,
+  "overlap": 12
+ },
+ "pittsburgh-slopes": {
+  "pieces": 869,
+  "short": 118,
+  "loose": 171,
+  "stub": 41,
+  "splice": 110,
+  "overlap": 29
+ },
+ "pittsburgh-subway": {
+  "pieces": 168,
+  "short": 22,
+  "loose": 28,
+  "stub": 5,
+  "splice": 25,
+  "overlap": 13
+ }
+}

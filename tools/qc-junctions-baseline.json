@@ -1,11 +1,11 @@
 {
  "pittsburgh": {
-  "oversize": 0,
+  "oversize": 1,
   "self-cross": 0,
   "sharp-arm": 0,
   "kerb-road": 0,
-  "sliver": 1,
-  "overlap": 12,
+  "sliver": 2,
+  "overlap": 13,
   "bridge-end": 0
  },
  "pittsburgh-allegheny": {
@@ -54,12 +54,12 @@
   "bridge-end": 0
  },
  "pittsburgh-northside": {
-  "oversize": 5,
+  "oversize": 8,
   "self-cross": 1,
   "sharp-arm": 2,
   "kerb-road": 0,
   "sliver": 0,
-  "overlap": 14,
+  "overlap": 13,
   "bridge-end": 0
  },
  "pittsburgh-eastend": {

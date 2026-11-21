@@ -26,6 +26,7 @@ import { releaseAfterUpload } from '../core/release.js';   // [F399]
 
 export { STREET_W };
 const CHUNK = 320;
+const TREE_LOD_M = 260;   // [perf-7] rounded street-tree crowns within this of the camera
 // [w2-budget] Static city meshes (buildings, streets, sidewalks, paths, lamps, street trees) are merged per sector of
 // SECTOR × SECTOR chunks (960 m): a sector is one draw call per material wherever it is seen. Buildings stream in per
 // chunk (nearest first) and fold into their sector's mesh once the sector's last chunk is built.
@@ -663,7 +664,7 @@ export class CityScene {
     }
     if (!n) return;
     yield* B.keepOutOfJob(L.inRouteTube);
-    const m = new THREE.Mesh(this.own(B.geometry()), this.solidMaterial);
+    const m = new THREE.Mesh(this.own(releaseAfterUpload(B.geometry())), this.solidMaterial);   // [perf-1]
     m.name = 'River walls'; m.receiveShadow = true; this.group.add(m);
   }
 
@@ -1414,28 +1415,37 @@ export class CityScene {
         }
       }
     }
-    // a light street tree: trunk + two lumpy crowns (~40 triangles), coloured per instance
+    // a light street tree: trunk + one lumpy crown, coloured per instance
+    // [perf-7] a rounded crown (a subdivided icosahedron, gently lumped, normals out from its centre: soft cartoon shading,
+    // not 20 flat facets that read as a hexagon in the gentle look): 80 triangles, near the camera only (_treeLod)
+    const crownGeo = (detail) => {
     const M = new MeshBuilder();
-    M.color('#5b4636');   // [w2-budget] the trunk: no cap (it ends inside the crown); [finish] four sides: 8 triangles (was 10, then 15)
+    M.color('#5b4636');
     for (let k = 0; k < 4; k++) {
       const p = (a, r, y) => new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r), a0 = k / 4 * Math.PI * 2 + .4, a1 = (k + 1) / 4 * Math.PI * 2 + .4;
       M.quad(p(a0, .16, 0), p(a0, .12, 3.2), p(a1, .12, 3.2), p(a1, .16, 0));
     }
-    const trunkVerts = M.count;   // [finish] (the trunk's vertices come first: bark; the crown's after: foliage)
-    const crown = new THREE.IcosahedronGeometry(1, 0).toNonIndexed(), pos = crown.attributes.position;
-    for (const [ox, oy, oz, r] of [[0, 4.8, 0, 2.4]]) {
+    const trunkVerts = M.count;
+    const crown = new THREE.IcosahedronGeometry(1, detail).toNonIndexed(), pos = crown.attributes.position;
+    const CROWN = [0, 4.8, 0, 2.4], lump = (x, y, z) => 1 + .09 * Math.sin(x * 5.1 + z * 3.7) * Math.cos(y * 4.3 - x * 2.1);
+    for (const [ox, oy, oz, r] of [CROWN]) {
       M.color('#ffffff');
       for (let k = 0; k < pos.count; k += 3) {
-        const v = [0, 1, 2].map((j) => new THREE.Vector3(pos.getX(k + j) * r + ox, pos.getY(k + j) * r * .9 + oy, pos.getZ(k + j) * r + oz));
+        const v = [0, 1, 2].map((j) => { const x = pos.getX(k + j), y = pos.getY(k + j), z = pos.getZ(k + j), l = lump(x, y, z); return new THREE.Vector3(x * r * l + ox, y * r * .9 * l + oy, z * r * l + oz); });
         M.triangle(v[0], v[1], v[2]);
       }
     }
     crown.dispose();
     const geo = this.own(M.geometry());
+    { const P = geo.attributes.position, N = geo.attributes.normal, c = new THREE.Vector3(CROWN[0], CROWN[1], CROWN[2]), v = new THREE.Vector3();
+      for (let k = trunkVerts; k < P.count; k++) { v.set(P.getX(k), P.getY(k), P.getZ(k)).sub(c); v.y /= .81; v.normalize(); N.setXYZ(k, v.x, v.y, v.z); } }
     // [finish] the toolbox foliage shader (packs/northern-rockies.js decorateTreeMaterial): leafy clumps with sunlit
     // tips and dark hollows on the crowns, bark on the trunks. aTree: 0 foliage, 1 bark.
     geo.setAttribute('aTree', new THREE.Float32BufferAttribute(Array.from({ length: M.count }, (_, k) => (k < trunkVerts ? 1 : 0)), 1));
-    const mat = this.own(decorateTreeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95, flatShading: true }), { uTime: this.treeTime ||= { value: 0 } }));
+    return geo;
+    };
+    const geo = crownGeo(1), geoLo = crownGeo(0);
+    const mat = this.own(decorateTreeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 }), { uTime: this.treeTime ||= { value: 0 } })   /* [perf-7] smooth crowns */);
     const greens = ['#5f8a3e', '#6f9a45', '#557d38', '#7a9b4a', '#4f7434', '#8aa452'].map((c) => new THREE.Color(c));
     const lists = new Map();
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0);
@@ -1459,6 +1469,11 @@ export class CityScene {
       list.forEach((t, i) => { im.setMatrixAt(i, t.m); im.setColorAt(i, greens[Math.floor(t.seed * 997) % greens.length]); });
       im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere();
       im.castShadow = im.receiveShadow = true; im.name = 'Street trees'; this.group.add(im);
+      // [perf-7] the same trees with 20-facet crowns, drawn instead beyond TREE_LOD_M (one of the two is shown)
+      const lo = new THREE.InstancedMesh(geoLo, mat, list.length);
+      lo.instanceMatrix = im.instanceMatrix; lo.instanceColor = im.instanceColor; lo.boundingSphere = im.boundingSphere.clone();
+      lo.castShadow = false; lo.receiveShadow = true; lo.userData.bake = false; lo.name = 'Street trees · far'; lo.visible = false; this.group.add(lo);   // (the near set casts the baked shadows)
+      (this._treeLods ||= []).push([im, lo]);
     }
     this.treeCount = spots.length;
   }
@@ -1478,10 +1493,15 @@ export class CityScene {
     if (!this._pending.length) return;
     const t0 = performance.now();
     // ([F30] a chunk half built carries on first: the next is picked, nearest first, once it is done)
-    if (!this._chunk) this._pending.sort((a, b) => {
-      const [ax, az] = a.split(',').map(Number), [bx, bz] = b.split(',').map(Number);
-      return Math.hypot((bx + .5) * CHUNK - cx, (bz + .5) * CHUNK - cz) - Math.hypot((ax + .5) * CHUNK - cx, (az + .5) * CHUNK - cz);
-    });
+    // [perf-1] a sector at a time (nearest sector first, then its nearest chunk): a sector's buildings merge into their
+    // final mesh — and drop their CPU copy — as soon as its last chunk is in, not after chunks all round the city
+    if (!this._chunk) {
+      const dist = (k) => { const [x, z] = k.split(',').map(Number); return Math.hypot((x + .5) * CHUNK - cx, (z + .5) * CHUNK - cz); };
+      const sd = new Map();
+      for (const k of this._pending) { const sk = sectorOf(k), d = dist(k); if (!(sd.get(sk) <= d)) sd.set(sk, d); }
+      const near = (k) => { const d = dist(k); return d < 500 ? d - 1e6 : this.sectors?.has(sectorOf(k)) ? sd.get(sectorOf(k)) : d; };   // (the chunks round the camera first, as before)
+      this._pending.sort((a, b) => near(b) - near(a) || dist(b) - dist(a));
+    }
     if (this.streetKit) this.streetKit.deferred = !!this._warm;   // [street-kit] while riding, its chunk work runs in its own frame budget
     // [F30] each chunk is a job, run within the budget (it pauses between buildings), so one big chunk doesn't stall a frame
     while (this._pending.length && performance.now() - t0 < budgetMs) {
@@ -1502,6 +1522,8 @@ export class CityScene {
     this._finished = true;
     for (const [sk, S] of this.sectors) if (S.parts.length) { S.left.clear(); this._mergeSector(S, sk); }
     this.buildingKit?.finishAll?.();
+    // [perf-1] build-only indexes go once every chunk is in (the city's queries — buildingNear, the landscape's — stay)
+    this.buildingChunks = new Map(); this._overhead = null;
   }
 
   tick(camera, dt, time, rider) {
@@ -1513,7 +1535,7 @@ export class CityScene {
     this.stadiums?.tick?.(time, dt, camera);   // [7.8] the game on the field
     this.streetKit?.tick(camera);   // [street-kit] LOD
     this.buildingKit?.tick(camera);   // [buildings] near detail
-    if ((this._lodFrame = (this._lodFrame || 0) + 1) % 10 === 1) this._lampLod(camera);   // [w2-budget]
+    if ((this._lodFrame = (this._lodFrame || 0) + 1) % 10 === 1) { this._lampLod(camera); this._treeLod(camera); }   // [w2-budget] [perf-7]
   }
 
   /** [w2-budget] Lamp posts: drawn only in sectors within LAMP_LOD of the camera. */
@@ -1532,6 +1554,15 @@ export class CityScene {
     for (const m of this.nightOnly || []) m.visible = v > 0.01;
   }
 
+  /** [perf-7] Street trees: the rounded crowns within TREE_LOD_M of the camera, the 20-facet ones beyond. */
+  _treeLod(camera) {
+    for (const [hi, lo] of this._treeLods || []) {
+      const b = hi.boundingSphere, near = Math.hypot(b.center.x - camera.x, b.center.z - camera.z) - b.radius < TREE_LOD_M;
+      // (the near set by layer, not .visible: the bake's static set doesn't change, so no re-bake; the far set never bakes)
+      if (near) hi.layers.set(0); else hi.layers.disableAll();
+      lo.visible = !near;
+    }
+  }
   setQuality(key) { this.qualityKey = key; this.life.setQuality(key); this.streetKit?.setQuality(key); this._lodFrame = 0; }   // [street-kit] [w2-budget] (lamp LOD on the next tick)
 
   dispose() {
