@@ -831,7 +831,7 @@ def write_ground(cfg, E):
     print(f'  wrote {cfg["groundFile"]}: {nx} × {ny} at {cell} m, {os.path.getsize(path) / 1e6:.2f} MB')
 
 
-def prune_dead_ends(E):
+def prune_dead_ends(E, keep_bridges=True):
     """Peel every dead-end branch off the graph (a junction with one way in, then the one it leaves, …), except a bridge:
     peeling stops at an edge with a deck on it. Returns (edges kept, removed count, km)."""
     G = Graph(E)
@@ -841,7 +841,7 @@ def prune_dead_ends(E):
         n = stack.pop()
         if G.deg.get(n, 0) != 1: continue
         k = next((k for k in G.adj[n] if k not in G.gone and E[k]['a'] != E[k]['b']), None)
-        if k is None or any(E[k]['br']): continue
+        if k is None or (keep_bridges and any(E[k]['br'])): continue
         G.remove(k); removed += 1
         for end in (E[k]['a'], E[k]['b']):
             if G.deg.get(end, 0) == 1: stack.append(end)
@@ -1025,6 +1025,8 @@ def build_all(cfg):
     REVIEW['bridges'] = rep_
     print(f'  dead-end bridges: {sum(r["ok"] for r in rep_)} connected, {sum(not r["ok"] for r in rep_)} left')
     for r in rep_: print(f'    {"✓" if r["ok"] else "✗"} {r["name"]}: {r["msg"]}')
+    E, n_left, km_left = prune_dead_ends(E, keep_bridges=False)   # (user, 21 Nov: the bridges that couldn't be connected go too)
+    print(f'  dead-end bridges not connected: removed {n_left} ways ({km_left:.1f} km)')
     for _ in range(4):   # the dead ends gone, a few more short ways can go by the same rules
         G = Graph(E)
         plan = simplify_plan(cfg, E, G)

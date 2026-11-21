@@ -96,10 +96,10 @@ function legend(){
   const S=D.summary, rv=D.river.length, cnt=(st)=>D.W.filter(w=>w.st===st).length;
   const rkm=(D.R.reduce((s,w)=>s+w.L,0)/1000).toFixed(1);
   const rows=[
-    ['bridges','sw','<b>Dead-end bridges</b>: green = new connector, red dot = not connected', (D.BR.filter(b=>b.ok).length)+' connected · '+(D.BR.filter(b=>!b.ok).length)+' left'],
+    ['bridges','sw','<b>Bridge connectors</b> (new)', D.BR.length+' connected'],
     ...(D.R.length?[['removed','dash','<b>Removed</b> (dead ends, slips, alleys…)', D.R.length+' ways · '+rkm+' km']]:[]),
     ['keep','sw','Through roads (on a loop)', km('keep')+' km'],
-    ['deadend','sw','<b>Dead ends left</b> (bridges only)', cnt('deadend')+' ways · '+km('deadend')+' km'],
+    ['deadend','sw','<b>Dead ends left</b>', cnt('deadend')+' ways · '+km('deadend')+' km'],
     ['simplify','sw','<b>Simplify</b>: still to remove', cnt('simplify')+' · '+km('simplify')+' km'],
     ['alley','sw','Alleys still in', cnt('alley')+' · '+km('alley')+' km'],
     ['dense','dot','Dense junction clusters', S.dense.clusters+''],
