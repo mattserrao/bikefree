@@ -84,7 +84,7 @@ fetch('data.json').then(r=>r.json()).then(d=>{
   for (const o of D.R) { let a=1e9,b=1e9,cc=-1e9,dd=-1e9; for(let i=0;i<o.p.length;i+=2){a=Math.min(a,o.p[i]);cc=Math.max(cc,o.p[i]);b=Math.min(b,o.p[i+1]);dd=Math.max(dd,o.p[i+1]);} o.bb=[a,b,cc,dd]; }
   const bbx=(p)=>{ let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(let i=0;i<p.length;i+=2){x0=Math.min(x0,p[i]);x1=Math.max(x1,p[i]);y0=Math.min(y0,p[i+1]);y1=Math.max(y1,p[i+1]);} return [x0,y0,x1,y1]; };
   D.RT = (d.routes||[]).map(r=>({ name:r[0], oldM:r[1], pghM:r[2], follow:r[3], old:lines(r[4]), line:lines(r[5]), det:r[6] }));
-  D.cur = 0;
+  D.cur = -1;   // (all routes at once; the list picks one)
   D.M = (d.marks||[]).map(m=>({ label:m[0], type:m[1], list:m[2], poly:lines(m[3]), x:m[4], y:m[5], bad:!!m[6], ways:m[7], ov:m[8], fp:m[9], near:m[10], osm:m[11], fix:m[12]||'' }));
   D.PA = (d.parallels||[]).map(o=>{ const r={ a:lines(o[0]), b:lines(o[1]), name:o[2], m:o[3], gap:o[4], p:o[5]?lines(o[5]):null, cutName:o[6], why:o[7], kinds:o[8] }; r.bb=bbx(r.a.concat(r.b)); if(r.p){ r.pbb=bbx(r.p); let L=0; for(let i=2;i<r.p.length;i+=2) L+=Math.hypot(r.p[i]-r.p[i-2],r.p[i+1]-r.p[i-1]); r.L=L; } else r.L=0; return r; });
   D.J = (d.jagged||[]).map(j=>{ const r={ name:j[0], types:j[1], p:lines(j[2]), spots:j[3] }; r.bb=bbx(r.p); return r; });
@@ -111,7 +111,7 @@ function km(st){ return (D.W.filter(w=>w.st===st).reduce((s,w)=>s+w.L,0)/1000).t
 function legend(){
   const S=D.summary, rv=D.river.length, cnt=(st)=>D.W.filter(w=>w.st===st).length;
   const rkm=(D.R.reduce((s,w)=>s+w.L,0)/1000).toFixed(1);
-  const rsel='<select id="rsel" style="width:100%;margin:4px 0;font:inherit">'+D.RT.map((r,i)=>'<option value="'+i+'">'+r.name+' — '+r.follow+' % followed'+(r.det.length?' · '+r.det.length+' detour'+(r.det.length>1?'s':''):'')+'</option>').join('')+'</select>';
+  const rsel='<select id="rsel" style="width:100%;margin:4px 0;font:inherit"><option value="-1">All routes ('+D.RT.length+')</option>'+D.RT.map((r,i)=>'<option value="'+i+'">'+r.name+' — '+r.follow+' % followed'+(r.det.length?' · '+r.det.length+' detour'+(r.det.length>1?'s':''):'')+'</option>').join('')+'</select>';
   const nbad=D.M.filter(m=>m.bad||m.ov).length;
   const rows=[
     ['routes','sw','<b>Pittsburgh routes on PGH</b>: red = the route, blue = mapped on PGH, ● = detour', D.RT.length+' routes'],
@@ -137,7 +137,8 @@ function legend(){
   const rs=document.getElementById('rsel'); rs.value=String(D.cur); rs.onchange=()=>{ D.cur=+rs.value; fitRoute(); draw(); };
 }
 document.getElementById('tog').onclick=()=>{ const p=document.getElementById('panel'); p.classList.toggle('collapsed'); document.getElementById('tog').textContent=p.classList.contains('collapsed')?'Show':'Hide'; };
-function fitRoute(){ const r=D.RT[D.cur]; if(!r) return; let a=1e9,b=1e9,cc=-1e9,dd=-1e9; for(const p of [r.old,r.line]) for(let i=0;i<p.length;i+=2){a=Math.min(a,p[i]);cc=Math.max(cc,p[i]);b=Math.min(b,p[i+1]);dd=Math.max(dd,p[i+1]);} cam.x=(a+cc)/2; cam.y=(b+dd)/2; cam.s=Math.min(innerWidth/(cc-a+200),innerHeight/(dd-b+200))*0.9; }
+const shownRoutes=()=>D.cur<0?D.RT:D.RT[D.cur]?[D.RT[D.cur]]:[];
+function fitRoute(){ const rs=shownRoutes(); if(!rs.length) return; let a=1e9,b=1e9,cc=-1e9,dd=-1e9; for(const p of rs.flatMap(r=>[r.old,r.line])) for(let i=0;i<p.length;i+=2){a=Math.min(a,p[i]);cc=Math.max(cc,p[i]);b=Math.min(b,p[i+1]);dd=Math.max(dd,p[i+1]);} cam.x=(a+cc)/2; cam.y=(b+dd)/2; cam.s=Math.min(innerWidth/(cc-a+200),innerHeight/(dd-b+200))*0.9; }
 function fit(){ let a=1e9,b=1e9,cc=-1e9,dd=-1e9; for(const w of D.W){a=Math.min(a,w.bb[0]);b=Math.min(b,w.bb[1]);cc=Math.max(cc,w.bb[2]);dd=Math.max(dd,w.bb[3]);} cam.x=(a+cc)/2; cam.y=(b+dd)/2; cam.s=Math.min(innerWidth/(cc-a),innerHeight/(dd-b))*0.95; }
 function sx(x){ return (x-cam.x)*cam.s+innerWidth/2; } function sy(y){ return -(y-cam.y)*cam.s+innerHeight/2; }
 function view(){ const hw=innerWidth/2/cam.s, hh=innerHeight/2/cam.s; return [cam.x-hw-50,cam.y-hh-50,cam.x+hw+50,cam.y+hh+50]; }
@@ -153,8 +154,10 @@ function draw(){
   for (const st of ['keep','alley','simplify','deadend']) { if(!on[st]) continue; g.strokeStyle=COL[st]; g.lineWidth=st==='keep'?Math.max(0.6,z*0.5):z*1.4; for(const w of D.W) if(w.st===st&&vis(w.bb,v)) path(w.p); }
   if(on.piece){ g.strokeStyle=COL.piece; g.lineWidth=z*1.4; for(const o of D.PL) if(vis(o.bb,v)) path(o.p); }
   if(on.deadend&&cam.s>0.25){ g.fillStyle=COL.leaf; for(const l of D.leaves){ g.beginPath(); g.arc(sx(l[0]),sy(l[1]),2.2,0,7); g.fill(); } }
-  if(on.routes&&D.RT.length){ const r=D.RT[D.cur]; g.lineWidth=z*4; g.strokeStyle=COL.rold; g.globalAlpha=.55; path(r.old); g.globalAlpha=1; g.lineWidth=z*2; g.strokeStyle=COL.rnew; path(r.line);
-    for(const dd of r.det){ g.beginPath(); g.arc(sx(dd[0]),sy(dd[1]),7,0,7); g.fillStyle='#ff9f1a'; g.fill(); g.lineWidth=2; g.strokeStyle='#fff'; g.stroke(); } }
+  if(on.routes&&D.RT.length){ const rs=shownRoutes(), all=rs.length>1;
+    g.lineWidth=z*(all?3:4); g.strokeStyle=COL.rold; g.globalAlpha=all?.3:.55; for(const r of rs) path(r.old);
+    g.globalAlpha=all?.6:1; g.lineWidth=z*2; g.strokeStyle=COL.rnew; for(const r of rs) path(r.line); g.globalAlpha=1;
+    for(const dd of rs.flatMap(r=>r.det)){ g.beginPath(); g.arc(sx(dd[0]),sy(dd[1]),7,0,7); g.fillStyle='#ff9f1a'; g.fill(); g.lineWidth=2; g.strokeStyle='#fff'; g.stroke(); } }
   if(on.marks){ for(const m of D.M){ const c=m.bad||m.ov?COL.markbad:m.fix?'#e0a020':m.type==='open'?COL.markopen:COL.mark; g.fillStyle=c+'55'; g.strokeStyle=c; g.lineWidth=1.5; g.beginPath(); for(let i=0;i<m.poly.length;i+=2){ const X=sx(m.poly[i]),Y=sy(m.poly[i+1]); i?g.lineTo(X,Y):g.moveTo(X,Y);} g.closePath(); g.fill(); g.stroke();
       g.beginPath(); g.arc(sx(m.x),sy(m.y),3.5,0,7); g.fillStyle=c; g.fill(); if(cam.s>0.6){ g.fillStyle=dark?'#fff':'#222'; g.font='11px sans-serif'; g.fillText(m.label, sx(m.x)+5, sy(m.y)-5); } } }
   if(on.parcut){ g.strokeStyle=COL.parcut; g.lineWidth=z*2; for(const o of D.PA) if(o.p&&vis(o.pbb,v)) path(o.p); }
@@ -171,7 +174,7 @@ function segd(px,py,ax,ay,bx,by){ const dx=bx-ax,dy=by-ay,l=dx*dx+dy*dy||1; let 
 function pick(px,py){
   const x=(px-innerWidth/2)/cam.s+cam.x, y=-(py-innerHeight/2)/cam.s+cam.y, tol=14/cam.s; let best=null,bd=tol;
   if(on.marks) for(const m of D.M){ const d=Math.hypot(m.x-x,m.y-y); if(d<bd){bd=d; best={t:'mark',m};} }
-  if(on.routes&&D.RT.length) for(const dd of D.RT[D.cur].det){ const d=Math.hypot(dd[0]-x,dd[1]-y); if(d<bd){bd=d; best={t:'detour',dd};} }
+  if(on.routes&&D.RT.length) for(const r of shownRoutes()) for(const dd of r.det){ const d=Math.hypot(dd[0]-x,dd[1]-y); if(d<bd){bd=d; best={t:'detour',dd,r:r.name};} }
   if(best) return best;
   if(on.jag||on.jagb) for(const j of D.J) for(const s of j.spots){ if(s[2]==='bump'?!on.jagb:!on.jag) continue; const d=Math.hypot(s[0]-x,s[1]-y); if(d<bd){bd=d; best={t:'jag',j,s};} }
   if(best) return best;
@@ -195,7 +198,7 @@ function show(h){
   if(!h){ el.style.display='none'; draw(); return; }
   let t='';
   if(h.t==='mark'){ const m=h.m; t='<b>'+m.label+' — '+(m.bad?'collides with a road':m.fix?m.fix:m.ov?'overlaps '+m.ov:m.type==='open'?'open space':'clear')+'</b><span class="m">'+m.type+' · '+m.list+' · footprint: '+m.fp+(m.osm?' ('+m.osm+')':'')+' · nearest road: '+m.near+(m.ways?' · ways through: '+m.ways:'')+'</span>'; }
-  else if(h.t==='detour'){ const dd=h.dd; t='<b>Detour</b><span class="m">The route rode '+dd[2]+' m here; PGH takes '+dd[3]+' m (via '+dd[4]+') — a road it used is not in PGH.</span>'; }
+  else if(h.t==='detour'){ const dd=h.dd; t='<b>Detour'+(h.r?' — '+h.r:'')+'</b><span class="m">The route rode '+dd[2]+' m here; PGH takes '+dd[3]+' m (via '+dd[4]+') — a road it used is not in PGH.</span>'; }
   else if(h.t==='jag'){ sel={p:h.j.p}; t='<b>Jagged: '+h.j.name+'</b><span class="m">'+h.s[3]+' · this road: '+h.j.types+'</span>'; }
   else if(h.t==='par'){ const o=h.o.o; sel={ls:[o.a,o.b]}; t='<b>Similar roads: '+o.name+'</b><span class="m">'+o.m+' m side by side, '+o.gap+' m apart ('+o.kinds+'). '+(o.p?'Suggest removing <b>'+o.cutName+'</b> (orange) — '+o.why+'.':o.why+'.')+'</span>'; }
   else if(h.t==='oarea'){ t='<b>Overlap area: '+h.a.n+' pair'+(h.a.n>1?'s':'')+', '+h.a.m+' m</b>'+h.a.names; }
