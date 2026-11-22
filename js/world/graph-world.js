@@ -18,6 +18,7 @@ import { loadTerrainGrid } from '../terrain-grid.js';
 import { CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean, ROAD_LIFT } from './pose.js';
 import { loadRider } from './rider.js';
 import { PerfMonitor } from './perf.js';
+import { drain, runSlice, due } from './toolbox/core/jobs.js';
 import { makeParkMaterial } from './toolbox/materials/park-surfaces.js';
 import { makeMasonryMaterial } from './toolbox/materials/stonework.js';
 
@@ -66,6 +67,14 @@ const _v = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
 
 /** Spatial hash of road samples, for shaping the ground: cell → [x, z, top, halfWidth, fill, …] (top: the highest the ground may be at the
  *  road's edge; fill: the lowest — an embankment under a road above the ground, an abutment under a deck's end; NaN: none). */
+/** An object that never moves: its matrices set now, never recomputed per frame. */
+export function freezeMatrix(o) {
+  o.updateMatrixWorld(true);
+  o.traverse((c) => { c.matrixAutoUpdate = false; c.matrixWorldAutoUpdate = false; });
+  return o;
+}
+/** A grid cell's number (Map keys: numbers, not strings — these lookups run millions of times as tiles build). */
+export const cellKey = (i, j) => (i + 0x8000) * 0x10000 + (j + 0x8000);
 export function roadHash(edges, widths, cell = 32) {
   const grid = new Map(), wf = typeof widths === 'function' ? widths : (e) => widths[e.kind] || 7;
   for (const e of edges) {
@@ -84,24 +93,27 @@ export function roadHash(edges, widths, cell = 32) {
       const pts = [[e.x[i], e.z[i], e.ele[i] - below(i), fillAt(i)]];
       if (i < e.n) pts.push([(e.x[i] + e.x[i + 1]) / 2, (e.z[i] + e.z[i + 1]) / 2, (e.ele[i] + e.ele[i + 1]) / 2 - Math.max(below(i), below(i + 1)), (fillAt(i) + fillAt(i + 1)) / 2]);
       for (const [x, z, y, f] of pts) {
-        const key = `${Math.floor(x / cell)},${Math.floor(z / cell)}`;
+        const key = cellKey(Math.floor(x / cell), Math.floor(z / cell));
         let arr = grid.get(key);
         if (!arr) grid.set(key, (arr = []));
         arr.push(x, z, y, half, f);
       }
     }
   }
+  for (const [k, a] of grid) grid.set(k, Float64Array.from(a));
   return {
     cell, grid,
+    /** The samples in cell (i, j): [x, z, y, half, fill, …] or undefined. */
+    cellAt: (i, j) => grid.get(cellKey(i, j)),
     /** The highest the ground may be at (x, z): under every road near it (Infinity: no road near). */
     cap(x, z, reach = CUT_REACH) {
       const r = Math.ceil(reach / cell), cx = Math.floor(x / cell), cz = Math.floor(z / cell);
       let cap = Infinity;
       for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
-        const arr = grid.get(`${cx + i},${cz + j}`);
+        const arr = grid.get(cellKey(cx + i, cz + j));
         if (!arr) continue;
         for (let k = 0; k < arr.length; k += 5) {
-          const d = Math.hypot(arr[k] - x, arr[k + 1] - z) - arr[k + 3];
+          const dx = arr[k] - x, dz = arr[k + 1] - z, d = Math.sqrt(dx * dx + dz * dz) - arr[k + 3];
           if (d > reach) continue;
           const c = arr[k + 2] + Math.max(0, d - SHELF) * CUT_EASE;
           if (c < cap) cap = c;
@@ -114,12 +126,12 @@ export function roadHash(edges, widths, cell = 32) {
       const r = Math.ceil(FILL_REACH / cell), cx = Math.floor(x / cell), cz = Math.floor(z / cell);
       let fill = -Infinity;
       for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
-        const arr = grid.get(`${cx + i},${cz + j}`);
+        const arr = grid.get(cellKey(cx + i, cz + j));
         if (!arr) continue;
         for (let k = 0; k < arr.length; k += 5) {
           const f0 = arr[k + 4];
           if (!(f0 > -Infinity)) continue;
-          const d = Math.hypot(arr[k] - x, arr[k + 1] - z) - arr[k + 3];
+          const dx = arr[k] - x, dz = arr[k + 1] - z, d = Math.sqrt(dx * dx + dz * dz) - arr[k + 3];
           if (d > FILL_REACH) continue;
           const f = f0 - Math.max(0, d) * FILL_SLOPE;
           if (f > fill) fill = f;
@@ -195,14 +207,17 @@ export class GraphWorld {
     this.pools = (this.json.pools || []).map((p) => { const a = this.proj.toLocal(p.box[0], p.box[1]), b = this.proj.toLocal(p.box[2], p.box[3]); return { level: p.level, x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), z0: Math.min(a.z, b.z), z1: Math.max(a.z, b.z), west: a.x }; });
 
     // renderer, scene, light
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance' });
+    // (no logarithmic depth: it writes gl_FragDepth, which turns off a phone GPU's early depth test and hidden-surface
+    // removal — every layer of overdraw shaded in full; the near and far planes below keep plain depth precise enough.
+    // No MSAA on Low: phones. Both are fixed for the renderer's life: a quality change applies from the next ride.)
+    this.renderer = new THREE.WebGLRenderer({ antialias: this.qualityKey !== 'low', powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.qualityKey === 'low' ? 1 : 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     container.prepend(this.renderer.domElement);
     this.renderer.domElement.className = 'world-canvas';
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(60, 1, 0.3, 20000);
+    this.camera = new THREE.PerspectiveCamera(60, 1, 0.6, 9000);   // (the fog ends at 2.6 km; the farthest tile 3.2 km)
     this.camTarget = new THREE.Vector3();
     this._camInit = false;
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
@@ -213,8 +228,8 @@ export class GraphWorld {
     this.mats = {
       road: new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
       paint: new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
-      ground: groundMaterial(),
-      roadSurface: roadSurfaceMaterial(),
+      ground: groundMaterial(this.qualityKey === 'low'),
+      roadSurface: roadSurfaceMaterial(this.qualityKey === 'low'),
       water: new THREE.MeshLambertMaterial({ color: '#4f7f97', transparent: true, opacity: 0.92 }),
       // the dressed places and the river walls: textured from world position (toolbox/materials)
       park: Object.fromEntries(['lawn', 'plaza', 'granite', 'walk', 'garden', 'wood', 'scrub'].map((k) => [k, makeParkMaterial(k)])),
@@ -240,6 +255,9 @@ export class GraphWorld {
     }
     this.group = new THREE.Group();
     this.scene.add(this.group);
+    // the tiles' meshes never move: their matrices are set once, not recomputed every frame (850 objects: a few ms a
+    // frame on a phone)
+    { const add = this.group.add.bind(this.group); this.group.add = (...objs) => { for (const o of objs) freezeMatrix(o); return add(...objs); }; }
 
     // the ground grid (fetched; the roads stream without it and the ground follows)
     this.ground = null;
@@ -400,8 +418,10 @@ export class GraphWorld {
       this.rider.setLean?.(this._lean);
     }
     this._updateCamera(out.pos, out.flat, out.fwd, dt);
-    this._stream(this.camera.position.x, this.camera.position.z, this._preload ? PRELOAD_BUDGET_MS : BUDGET_MS);
-    this.city?.stream(this.camera.position.x, this.camera.position.z, this._preload ? 30 : 4);
+    // building as you ride: a few ms a frame (less on Light: phones, whose frames are tighter), all of it while loading
+    const low = this.qualityKey === 'low';
+    this._stream(this.camera.position.x, this.camera.position.z, this._preload ? PRELOAD_BUDGET_MS : low ? 3 : BUDGET_MS);
+    this.city?.stream(this.camera.position.x, this.camera.position.z, this._preload ? 30 : low ? 2.5 : 4);
     this.water.position.x = Math.round(this.camera.position.x / 100) * 100;
     this.water.position.z = Math.round(this.camera.position.z / 100) * 100;
     this.sun.position.copy(this.camera.position).addScaledVector(this.sunDir, 5000);
@@ -549,22 +569,33 @@ export class GraphWorld {
     }
     want.sort((a, b) => a.d - b.d);
     this._nearTiles = want.filter((w) => w.d < 700).map((w) => w.t);
-    let queued = 0;
-    for (const { t } of want) {
-      const todo = !t.built || (this.ground && !t.groundMesh);
-      if (!todo) continue;
-      if (performance.now() - t0 > budgetMs) { queued++; continue; }
-      if (!t.built) this._buildRoads(t);
-      if (this.ground && !t.groundMesh) this._buildGround(t);
+    // one tile at a time, as a job run in this frame's slice (a tile's roads, then its ground, banks and dressed
+    // places), nearest first; it carries on next frame where it paused
+    const todo = (t) => !t.built || (this.ground && !t.groundMesh);
+    for (;;) {
+      const left = budgetMs - (performance.now() - t0);
+      if (left <= 0) break;
+      if (!this._tjob) {
+        const w = want.find((q) => todo(q.t));
+        if (!w) break;
+        this._tjob = { t: w.t, gen: this._tileWork(w.t) };
+      }
+      if (runSlice(this._tjob.gen, left).done) this._tjob = null; else break;
     }
-    this._queued = queued;
+    this._queued = want.reduce((n, q) => n + (todo(q.t) ? 1 : 0), 0);
     // release far tiles (a few a frame)
     if (this._frames % 30 === 0) for (const t of this.tiles.values()) {
-      if (t.built && Math.hypot(t.cx - cx, t.cz - cz) > (this.farM || FAR_M)) this._release(t);
+      if (t.built && t !== this._tjob?.t && Math.hypot(t.cx - cx, t.cz - cz) > (this.farM || FAR_M)) this._release(t);
     }
   }
 
+  *_tileWork(t) {
+    if (!t.built) yield* this._roadsJob(t);
+    if (this.ground && !t.groundMesh) yield* this._groundJob(t);
+  }
+
   _release(t) {
+    if (this._tjob?.t === t) this._tjob = null;   // (a tile released while building: started again when it's wanted)
     for (const m of [t.roadMesh, t.paintMesh, t.groundMesh, t.bankMesh, ...(t.extra || []), ...(t.extraRoad || [])]) if (m) { this.group.remove(m); m.geometry.dispose(); }
     t.roadMesh = t.paintMesh = t.groundMesh = t.bankMesh = null; t.extra = []; t.extraRoad = [];
     t.built = false;
@@ -603,7 +634,9 @@ export class GraphWorld {
     return { centre: null, edges: false, lanes: 0 };
   }
 
-  _buildRoads(t) {
+  _buildRoads(t) { drain(this._roadsJob(t)); }
+  /** A tile's roads as a job: pauses between ways when its slice is used up (no stall on a phone). */
+  *_roadsJob(t) {
     t.built = true;
     if (!t.pieces.length && !t.nodes.length) return;
     const R = new Mesher(true), P = new Mesher(), W = new Mesher();
@@ -611,6 +644,7 @@ export class GraphWorld {
     const side = col('side'), deckC = col('deck'), rail = col('rail'), under = col('under');
     const verge = new THREE.Color('#7b8556'), gravelC = new THREE.Color('#a59b84'), walkC = new THREE.Color('#b4afa4'), curbC = new THREE.Color('#c3beb3'), walkSide = new THREE.Color('#9d988e');
     for (const { e, a, b } of t.pieces) {
+      if (due()) yield;
       const half = this.wOf(e) / 2, path = e.kind === 'path', walk = this.walkOf(e);
       const base = e._rw ? new THREE.Color('#a9a59c') : col(e.kind), lift = ROAD_LIFT + (path ? -0.03 : 0);
       const deck = new Uint8Array(e.n + 1);
@@ -687,6 +721,7 @@ export class GraphWorld {
     // where a main street meets two or more others among the buildings
     const white = new THREE.Color('#ece9de');
     for (const nd of t.nodes) {
+      if (due()) yield;
       const w = this.nodeWidth.get(nd.id) || 7, r = w / 2 * 1.15, y = nd.y + ROAD_LIFT + 0.01;
       R.discX(nd.x, y, nd.z, r, col('residential'));
       const arms = (this.arms.get(nd.id) || []).filter((a) => a.e.kind !== 'path' && a.e.kind !== 'plaza');
@@ -708,11 +743,14 @@ export class GraphWorld {
     if (sm) { this.group.add(sm); (t.extraRoad ||= []).push(sm); }
   }
 
-  _buildGround(t) {
+  _buildGround(t) { drain(this._groundJob(t)); }
+  /** A tile's ground, its river banks and the dressed places in it, as a job (row by row, a shore at a time). */
+  *_groundJob(t) {
     const nx = Math.round(TILE / GROUND_CELL), x0 = t.i * TILE, z0 = t.j * TILE, cell = TILE / nx, n1 = nx + 1;
     const pos = new Float32Array(n1 * n1 * 3), color = new Float32Array(n1 * n1 * 3), landW = new Float32Array(n1 * n1);
     const grass = new THREE.Color('#89a868'), dry = new THREE.Color('#a7a27a'), bed = new THREE.Color('#6f6a58'), tmp = new THREE.Color();
     for (let j = 0, k = 0; j <= nx; j++) for (let i = 0; i <= nx; i++, k++) {
+      if (i === 0 && due()) yield;
       const x = x0 + i * cell, z = z0 + j * cell, h = this._groundH(x, z), pool = this.poolAt(x, z);
       pos[3 * k] = x; pos[3 * k + 1] = h; pos[3 * k + 2] = z;
       const raw = this.ground.at(x, z), cutDepth = Math.max(0, raw - h);
@@ -736,12 +774,13 @@ export class GraphWorld {
     g.computeVertexNormals();
     t.groundMesh = new THREE.Mesh(g, this.mats.ground);
     this.group.add(t.groundMesh);
-    this._buildBank(t);
+    yield* this._bankJob(t);
   }
 
   /** The dressed places' ground in this tile (toolbox/materials/park-surfaces.js): lawns, beds, woods, plazas and walks
    *  draped on the ground; the fountain and pools; retaining walls and low walls in dressed stone; the trees. */
-  _buildDressing(t) {
+  _buildDressing(t) { drain(this._dressingJob(t)); }
+  *_dressingJob(t) {
     const D = this.dressing, key = `${t.i},${t.j}`;
     const areas = D.areas.get(key) || [], lines = D.lines.get(key) || [], trees = D.trees.get(key) || [];
     if (!areas.length && !lines.length && !trees.length) return;
@@ -772,6 +811,7 @@ export class GraphWorld {
     };
     const LIFT = { park: 0.22, wood: 0.25, scrub: 0.25, lawn: 0.28, garden: 0.31, plaza: 0.34 };   // (over the 12.8 m ground mesh's facets)
     for (const A of areas) {
+      if (due()) yield;
       if (A.kind === 'fountain' || A.kind === 'pool') {
         // a basin: water a little under its granite rim, the rim a low dressed-stone kerb round it
         const h = Math.max(...A.pts.map(([x, z]) => surf(x, z))) + 0.2;   // (over the lawns draped round it)
@@ -790,9 +830,10 @@ export class GraphWorld {
         continue;
       }
       const mat = A.kind === 'park' ? 'lawn' : A.kind;
-      for (const tri of A.tris) drape(mesher(mat), tri, LIFT[A.kind] ?? 0.06);
+      for (const tri of A.tris) { drape(mesher(mat), tri, LIFT[A.kind] ?? 0.06); if (due()) yield; }
     }
     for (const Ln of lines) {
+      if (due()) yield;
       const P = Ln.pts;
       if (Ln.kind === 'walk' || Ln.kind === 'steps') {
         const half = Ln.width / 2, M = mesher(Ln.kind === 'steps' ? 'granite' : 'walk');
@@ -841,13 +882,15 @@ export class GraphWorld {
   }
 
   /** The riverbank along the shore lines in this tile: a stone face and a promenade where walled, a firm slope elsewhere. */
-  _buildBank(t) {
-    const x0 = t.i * TILE, z0 = t.j * TILE, M = new Mesher(), Face = new Mesher(), Prom = new Mesher(), Rail = new Mesher(), iron = new THREE.Color('#202325');
+  _buildBank(t) { drain(this._bankJob(t)); }
+  *_bankJob(t) {
+    const x0 = t.i * TILE, z0 = t.j * TILE, M = new Mesher(), Face = new Mesher(), Prom = new Mesher(), Rail = M, iron = new THREE.Color('#202325');
     const grass = new THREE.Color('#89a868'), stone = new THREE.Color('#8f8a80'), bed = new THREE.Color('#6f6a58');
     const capY = (x, z, y) => Math.min(y, this.cut.cap(x, z) + 0.12);   // (under a road's cut: just over the ground there, under the road)
     for (const L of this.shore ? this.shore.lines : []) {
       const pool = L.pool, waterY = pool + WATER_ABOVE;
       for (let i = 0; i + 1 < L.n; i++) {
+        if ((i & 63) === 0 && due()) yield;
         const mx = (L.x[i] + L.x[i + 1]) / 2, mz = (L.z[i] + L.z[i + 1]) / 2;
         if (mx < x0 || mx >= x0 + TILE || mz < z0 || mz >= z0 + TILE) continue;
         const row = (k, s, y) => { const x = L.x[k] + L.nx[k] * s, z = L.z[k] + L.nz[k] * s; return [x, capY(x, z, y), z]; };
@@ -903,9 +946,9 @@ export class GraphWorld {
     }
     t.bankMesh = M.mesh(this.mats.road);
     if (t.bankMesh) this.group.add(t.bankMesh);
-    t.extra = [Face.mesh(this.mats.riverWall), Prom.mesh(this.mats.park.granite), Rail.mesh(this.mats.road)].filter(Boolean);
+    t.extra = [Face.mesh(this.mats.riverWall), Prom.mesh(this.mats.park.granite)].filter(Boolean);   // (the railings: in the bank's mesh, the same material)
     for (const m of t.extra) this.group.add(m);
-    if (this.dressing) this._buildDressing(t);
+    if (this.dressing) yield* this._dressingJob(t);
   }
 }
 
@@ -994,7 +1037,7 @@ export function decodeShore(json, proj) {
   });
   // NB: the builder's x/z come from the same projection (the graph's origin), so its sides hold here
   const C = 25, grid = new Map();
-  lines.forEach((L, li) => { for (let i = 0; i + 1 < L.n; i++) { const k = `${Math.floor((L.x[i] + L.x[i + 1]) / 2 / C)},${Math.floor((L.z[i] + L.z[i + 1]) / 2 / C)}`; (grid.get(k) || grid.set(k, []).get(k)).push(li, i); } });
+  lines.forEach((L, li) => { for (let i = 0; i + 1 < L.n; i++) { const k = cellKey(Math.floor((L.x[i] + L.x[i + 1]) / 2 / C), Math.floor((L.z[i] + L.z[i + 1]) / 2 / C)); (grid.get(k) || grid.set(k, []).get(k)).push(li, i); } });
   return {
     lines,
     /** { s (m: + land, − river), top, walled, d } of the nearest shore within 30 m, or null. */
@@ -1002,13 +1045,13 @@ export function decodeShore(json, proj) {
       const cx = Math.floor(x / C), cz = Math.floor(z / C);
       let best = null, bd = 30;
       for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) {
-        const arr = grid.get(`${cx + a},${cz + b}`);
+        const arr = grid.get(cellKey(cx + a, cz + b));
         if (!arr) continue;
         for (let k = 0; k < arr.length; k += 2) {
           const L = lines[arr[k]], i = arr[k + 1];
           const ax = L.x[i], az = L.z[i], bx = L.x[i + 1], bz = L.z[i + 1], dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1;
           const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2));
-          const px = ax + dx * t, pz = az + dz * t, d = Math.hypot(x - px, z - pz);
+          const px = ax + dx * t, pz = az + dz * t, ex = x - px, ez = z - pz, d = Math.sqrt(ex * ex + ez * ez);
           if (d < bd) {
             bd = d;
             const nx = L.nx[i] * (1 - t) + L.nx[i + 1] * t, nz = L.nz[i] * (1 - t) + L.nz[i + 1] * t;
@@ -1060,8 +1103,10 @@ const NOISE_GLSL = /* glsl */`
  * brick in running bond laid across the street; granite setts (Belgian block); concrete slabs with joints; pavers;
  * gravel and dirt. Patterns fade to their average when a brick is a few pixels, so nothing shimmers far off.
  */
-function roadSurfaceMaterial() {
+/** low (Light, phones): the patterns only up close (brick, setts, slabs, pavers), plain asphalt with one noise. */
+function roadSurfaceMaterial(low = false) {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  if (low) m.defines = { LOWQ: '' };
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aRd; varying vec4 vRd; varying vec3 vGW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRd = aRd; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
@@ -1074,6 +1119,10 @@ function roadSurfaceMaterial() {
           float px = max(fwidth(q.y), fwidth(q.x)) + 1e-4, det = 1. - smoothstep(.015, .07, px);
           float wear = .25 + .65 * gwN(vGW.xz * .004 + 3.1);
           float track = 1. - smoothstep(0., .45, abs(abs(abs(q.x) - vRd.w * .5) - .85));
+          #ifdef LOWQ
+          if (det < .02 && sf >= 1 && sf <= 4) sf = sf == 1 ? 11 : 0;   // far off: brick as its plain colour, the others as asphalt
+          if (sf == 11) c = pow(vec3(.38, .2, .15), vec3(2.2)); else
+          #endif
           if (sf == 1) {           // red paving brick, running bond, laid across
             float row = floor(q.y / .105), u = q.x / .215 + .5 * mod(row, 2.);
             vec2 cell = vec2(floor(u), row), f = vec2(fract(u), fract(q.y / .105));
@@ -1102,6 +1151,9 @@ function roadSurfaceMaterial() {
             vec3 g = sf == 5 ? vec3(.55, .51, .44) : vec3(.43, .36, .27);
             c = pow(g * (.8 + .35 * gwH(floor(vGW.xz * 14.)) * det + .15 * gwN(vGW.xz * 1.3)), vec3(2.2));
           } else {                 // asphalt
+            #ifdef LOWQ
+            c *= (.94 + .12 * wear) * (1. - wear * .1 * track);
+            #else
             float g = gwN(vGW.xz * 4.1) * .5 + gwN(vGW.xz * 19.) * .5;
             c *= .9 + .2 * mix(.5, g, det);
             c *= 1. - wear * .1 * track;                                                     // polished wheel tracks
@@ -1110,11 +1162,12 @@ function roadSurfaceMaterial() {
             float cr = abs(gwN(vGW.xz * .55 + 11.) - .5);
             c *= 1. - wear * .22 * step(.62, gwN(vGW.xz * .05 + 2.)) * (1. - smoothstep(.0, .01, cr)) * det;   // sealed cracks (in the worn places)
             c *= 1. - .08 * (1. - smoothstep(0., .5, vRd.w - abs(q.x)));                     // the edge, darker
+            #endif
           }
           diffuseColor.rgb = c;
         }`);
   };
-  m.customProgramCacheKey = () => 'pgh-road-surface-1';
+  m.customProgramCacheKey = () => `pgh-road-surface-1${low ? '-low' : ''}`;
   return m;
 }
 
@@ -1123,8 +1176,10 @@ function roadSurfaceMaterial() {
  * from a texture of codes (js/world/graph-city.js LAND): paved lots and yards, lawns and parks, the woods' floor,
  * plazas, sand — with a little noise in the edges so they aren't the grid's.
  */
-function groundMaterial() {
+/** low (Light, phones): one noise for the land cover's shading, no wobble on its edges. */
+function groundMaterial(low = false) {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true });
+  if (low) m.defines = { LOWQ: '' };
   const blank = new THREE.DataTexture(new Uint8Array([1]), 1, 1, THREE.RedFormat); blank.needsUpdate = true;
   const U = { uLand: { value: blank }, uLandBox: { value: new THREE.Vector4(0, 0, 1, 1) }, uLandOn: { value: 0 } };
   m.userData.land = U;
@@ -1136,9 +1191,15 @@ function groundMaterial() {
       .replace('#include <color_fragment>', `#include <color_fragment>
         if (uLandOn > .5 && vLandW > .01) {
           vec2 size = uLandBox.zw - uLandBox.xy;
+          #ifdef LOWQ
+          vec2 uv = (vGW.xz - uLandBox.xy) / size;
+          float k = floor(texture2D(uLand, uv).r * 255. + .5);
+          float n = gwN(vGW.xz * .35);
+          #else
           vec2 uv = (vGW.xz - uLandBox.xy) / size + (vec2(gwN(vGW.xz * .21), gwN(vGW.xz * .21 + 19.)) - .5) * 4. / size;
           float k = floor(texture2D(uLand, uv).r * 255. + .5);
           float n = gwN(vGW.xz * .35) * .6 + gwN(vGW.xz * 2.3) * .4;
+          #endif
           vec3 lc = vec3(-1.);
           if (k < .5) lc = mix(vec3(.43, .42, .4), vec3(.52, .5, .47), n);                   // paved: lots, yards of the works
           else if (k < 1.5) lc = mix(vec3(.38, .52, .24), vec3(.47, .6, .3), n);             // grass, parks
@@ -1151,6 +1212,6 @@ function groundMaterial() {
           if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vLandW * .85);
         }`);
   };
-  m.customProgramCacheKey = () => 'pgh-ground-land-1';
+  m.customProgramCacheKey = () => `pgh-ground-land-1${low ? '-low' : ''}`;
   return m;
 }

@@ -37,7 +37,7 @@ export async function buildGraphHeroes(world, json) {
     heightAt: H, terrainAt: H,
     waterAt: (x, z) => (H(x, z) < world.poolAt(x, z) ? 1 : 0),
     // a PGH way within r of (x, z) (its edge): monuments and dressing keep off the ways
-    wayNear: (x, z, r = 1) => { const g = world.cut, c = g.cell, k = Math.ceil((r + 8) / c); for (let i = -k; i <= k; i++) for (let j = -k; j <= k; j++) { const a = g.grid.get(`${Math.floor(x / c) + i},${Math.floor(z / c) + j}`); if (!a) continue; for (let q = 0; q < a.length; q += 5) if (Math.hypot(a[q] - x, a[q + 1] - z) - a[q + 3] < r) return true; } return false; },
+    wayNear: (x, z, r = 1) => { const g = world.cut, c = g.cell, k = Math.ceil((r + 8) / c); for (let i = -k; i <= k; i++) for (let j = -k; j <= k; j++) { const a = g.cellAt(Math.floor(x / c) + i, Math.floor(z / c) + j); if (!a) continue; for (let q = 0; q < a.length; q += 5) if (Math.hypot(a[q] - x, a[q + 1] - z) - a[q + 3] < r) return true; } return false; },
     routeDist: () => 1e9, streetsNear: () => [], onStreet: () => false, inRouteTube: () => false, sheltered: () => false,
   };
   // the footprints round the heroes, as the city decodes them
@@ -56,7 +56,8 @@ export async function buildGraphHeroes(world, json) {
   host.windowNight = { value: 0 };
   // the city's facades (brick, stone, metal, window frames, sills) as the Pittsburgh map draws them: they come with a
   // building kit in the scene (js/world/graph-city.js plans PGH's homes with it)
-  host.route.scene.buildingKit = { detailM: 150, dressingM: 80, styles: [{ preset: 'pittsburgh-rowhouse', kinds: ['rowhouse'] }, { preset: 'pittsburgh-frame', kinds: ['house'] }] };
+  // (Light / phones: the city's plain window shader, not the brick-and-frames facade shader — a third of a frame's GPU time)
+  host.route.scene.buildingKit = { cityFacades: world.qualityKey !== 'low', detailM: 150, dressingM: 80, styles: [{ preset: 'pittsburgh-rowhouse', kinds: ['rowhouse'] }, { preset: 'pittsburgh-frame', kinds: ['house'] }] };
   host._materials();
   const heroes = buildHeroes(host);
   let landmarks = { count: 0, tick() {} };

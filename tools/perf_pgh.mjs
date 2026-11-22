@@ -1,6 +1,7 @@
 // PGH frame-time breakdown (CPU): rides the free ride at a steady speed for a while in headless Chrome and times each
 // part of GraphWorld._frame (and the city's pieces), the long frames and what they were doing.
 //   node tools/perf_pgh.mjs [--lat 40.4469 --lon -80.0058] [--quality balanced] [--seconds 20] [--speed 9] [--software]
+//   --profile  also a CPU profile: the functions with the most time of their own
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -20,10 +21,13 @@ const chrome = opt('--chrome', process.env.CHROME || ['/usr/bin/google-chrome', 
 const { chromium } = await import('playwright-core');
 const software = args.includes('--software');
 const browser = await chromium.launch({ executablePath: chrome, args: software ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : ['--ignore-gpu-blocklist', '--enable-gpu'] });
-const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
+const [VW, VH] = opt('--size', '640x360').split('x').map(Number);
+const page = await browser.newPage({ viewport: { width: VW, height: VH } });
 const q = new URLSearchParams({ lat: opt('--lat', '40.4469'), lon: opt('--lon', '-80.0058'), quality: opt('--quality', 'balanced') });
 await page.goto(`${base}/tools/pgh-preview.html?${q}`);
 await page.waitForFunction(() => window.world && window.world.readiness().ready, null, { timeout: 300000, polling: 500 });
+const cdp = args.includes('--profile') ? await page.context().newCDPSession(page) : null;
+if (cdp) { await cdp.send('Profiler.enable'); await cdp.send('Profiler.setSamplingInterval', { interval: 200 }); await cdp.send('Profiler.start'); }
 const res = await page.evaluate(async ({ seconds, speed }) => {
   const w = window.world, T = {}, frames = [];
   let cur = null;
@@ -38,9 +42,9 @@ const res = await page.evaluate(async ({ seconds, speed }) => {
   };
   w.setPreload(false);
   const c = w.city;
-  wrap(w, '_stream', 'world._stream'); wrap(w, '_buildRoads', '  roads tile'); wrap(w, '_buildGround', '  ground tile'); wrap(w, '_release', '  world release');
-  wrap(c, 'stream', 'city.stream'); wrap(c, 'tick', 'city.tick'); wrap(c, '_poolTrees', '  poolTrees'); wrap(c, '_addSector', '  addSector');
-  wrap(c, '_trees', '  tile trees'); wrap(c, '_furniture', '  tile furniture'); wrap(c, '_storefronts', '  tile storefronts'); wrap(c, '_lots', '  tile lots'); wrap(c, '_lines', '  tile lines'); wrap(c, '_release', '  city release');
+  wrap(w, '_stream', 'world._stream'); wrap(w, '_release', '  world release'); wrap(w, '_nodeWidths', '  nodeWidths');
+  wrap(c, 'stream', 'city.stream'); wrap(c.kit, 'planned', '  kit.planned'); wrap(c, '_carMeshes', '  carMeshes'); wrap(c.host, 'addGlows', '  addGlows'); wrap(c, '_frontsOf', '  frontsOf'); wrap(c, 'tick', 'city.tick'); wrap(c, '_poolTrees', '  poolTrees'); 
+  wrap(c, '_release', '  city release');
   wrap(w.heroes, 'tick', 'heroes.tick'); if (w.bridges) wrap(w.bridges, 'tick', 'bridges.tick');
   wrap(w.rider, 'update', 'rider.update'); wrap(w, '_updateCamera', 'camera'); wrap(w.renderer, 'render', 'render (CPU)');
   const pos0 = w.p, t0 = performance.now();
@@ -64,5 +68,11 @@ const res = await page.evaluate(async ({ seconds, speed }) => {
     long, scene, programs: info.programs.length, geometries: info.memory.geometries, textures: info.memory.textures, calls: info.render.calls, pixelRatio: w.renderer.getPixelRatio(),
     tiles: w.tiles.size, cityTiles: c.tiles.size, sectors: c.sectors.size };
 }, { seconds: +opt('--seconds', 20), speed: +opt('--speed', 9) });
+if (cdp) {
+  // the functions with the most time of their own (--profile): what the long frames were doing
+  const { profile } = await cdp.send('Profiler.stop'), self = new Map(), dt = profile.timeDeltas, byId = new Map(profile.nodes.map((n) => [n.id, n]));
+  profile.samples.forEach((id, k) => { const n = byId.get(id), f = n.callFrame, key = `${f.functionName || '(anon)'} ${f.url.split('/').pop()}:${f.lineNumber + 1}`; self.set(key, (self.get(key) || 0) + (dt[k] || 0) / 1000); });
+  res.profile = [...self].filter(([k]) => !/\(idle\)|\(program\)|\(garbage/.test(k)).sort((a, b) => b[1] - a[1]).slice(0, 25).map(([k, v]) => `${v.toFixed(0)} ms  ${k}`);
+}
 console.log(JSON.stringify(res, null, 1));
 await browser.close(); server.close();

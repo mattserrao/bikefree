@@ -16,6 +16,8 @@
 //   const c = new GraphCity(world, heroes, index); await c.loadLand()   → c.stream(cx, cz, ms) (sectors fetched as the rider nears them), c.tick(cam)
 import * as THREE from '../../vendor/three.module.min.js';
 import { MeshBuilder, hash } from './toolbox/core/mesh-builder.js';
+import { staticVehicle } from './toolbox/life/figures/vehicles.js';
+import { cellKey, freezeMatrix } from './graph-world.js';
 import { drain, runSlice, due } from './toolbox/core/jobs.js';
 import { planBuildingKitJob, makeStreetIndex, dress } from './toolbox/structures/buildings/kit.js';
 import { assemble, Writer } from './toolbox/structures/buildings/assemble.js';
@@ -69,7 +71,7 @@ export class GraphCity {
     this._segGrid = new Map();
     for (const e of world.G.edges) {
       for (let i = 0; i < e.n; i++) {
-        const k = `${Math.floor((e.x[i] + e.x[i + 1]) / 2 / 20)},${Math.floor((e.z[i] + e.z[i + 1]) / 2 / 20)}`;
+        const k = cellKey(Math.floor((e.x[i] + e.x[i + 1]) / 2 / 20), Math.floor((e.z[i] + e.z[i + 1]) / 2 / 20));
         let a = this._segGrid.get(k); if (!a) this._segGrid.set(k, (a = [])); a.push(e, i);
       }
     }
@@ -142,11 +144,12 @@ export class GraphCity {
 
   /** A sector's data in: its buildings into the lists (hidden under landmarks and decks), its trees and furniture by
    *  tile, and its homes' plan started (a job, run in the stream's slices). */
-  _addSector(key, st) {
+  *_addSector(key, st) {
     const d = st.data, host = this.host;
     const B = d.buildings, h = new Uint16Array(u8(B.h)), mh = new Uint16Array(u8(B.mh)), starts = new Uint32Array(u8(B.starts)), xy = new Int16Array(u8(B.xy));
     const mine = [];
     for (let q = 0; q < B.count; q++) {
+      if ((q & 31) === 0 && due()) yield;
       const ring = []; for (let i = starts[q]; i < starts[q + 1]; i++) ring.push(this.local(xy[2 * i], xy[2 * i + 1]));
       let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity, cx = 0, cz = 0;
       for (const p of ring) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); cx += p.x; cz += p.z; }
@@ -185,6 +188,7 @@ export class GraphCity {
     // the homes' plan: rowhouses and houses (the kit's), the rest as neighbours
     const kinds = { 0: 'rowhouse', 1: 'house' }, homes = [], neighbours = [];
     for (const b of mine) {
+      if (due()) yield;
       if (b.kind === 12 || b.hidden) continue;
       const pts = b.ring.map((p) => [p.x, p.z]);
       let r = 0; for (const [px, pz] of pts) r = Math.max(r, Math.hypot(px - b.cx, pz - b.cz));
@@ -262,10 +266,10 @@ export class GraphCity {
     let best = null;
     const gx = Math.floor(x / 20), gz = Math.floor(z / 20), w = this.world;
     for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
-      const arr = this._segGrid.get(`${gx + a},${gz + b}`); if (!arr) continue;
+      const arr = this._segGrid.get(cellKey(gx + a, gz + b)); if (!arr) continue;
       for (let k = 0; k < arr.length; k += 2) {
         const e = arr[k], i = arr[k + 1], ax = e.x[i], az = e.z[i], dx = e.x[i + 1] - ax, dz = e.z[i + 1] - az, l2 = dx * dx + dz * dz || 1;
-        const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), px = ax + dx * t, pz = az + dz * t, d = Math.hypot(x - px, z - pz);
+        const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), px = ax + dx * t, pz = az + dz * t, ex = x - px, ez = z - pz, d = Math.sqrt(ex * ex + ez * ez);
         const half = (w.wOf ? w.wOf(e) : 7) / 2;
         if (d - half > r) continue;
         if (!best || d - half < best.d - best.half) { const l = Math.sqrt(l2); best = { e, i, t, d, half, y: e.ele[i] + (e.ele[i + 1] - e.ele[i]) * t, dx: dx / l, dz: dz / l, px, pz }; }
@@ -391,7 +395,8 @@ export class GraphCity {
     // sectors: decode one that came in, then plan (its homes) in slices
     for (const [key, st] of this.sectors) {
       if (performance.now() - t0 > ms) return;
-      if (st.state === 'decode') this._addSector(key, st);
+      if (st.state === 'decode') { st.state = 'adding'; st.add = this._addSector(key, st); }
+      if (st.state === 'adding') { if (!runSlice(st.add, Math.max(0.5, ms - (performance.now() - t0))).done) return; st.add = null; }
       if (st.state === 'planning') {
         const res = runSlice(st.job, Math.max(0.5, ms - (performance.now() - t0)));
         if (res.done) { this.kit.planned(res.value); st.job = null; st.state = 'ready'; } else return;
@@ -435,10 +440,14 @@ export class GraphCity {
       this.stats.buildings += host.buildingChunks.get(key).length;
     }
     yield;
-    this._trees(t); yield;
-    this._furniture(t); yield;
-    this._storefronts(t); yield;
-    this._lots(t); this._lines(t);
+    yield* this._trees(t); yield;
+    yield* this._furniture(t); yield;
+    yield* this._storefronts(t); yield;
+    yield* this._lots(t); yield* this._lines(t);
+    // the street furniture, fences and walls: one mesh (one draw call) for the tile
+    if (t.kitM.count) { const m = new THREE.Mesh(t.kitM.geometry(), this.kitMaterial); m.name = `Street furniture ${t.key}`; m.castShadow = true; m.receiveShadow = true; this._add(t, m); }
+    t.kitM = null;
+    for (const { m } of t.meshes) freezeMatrix(m);   // (static: no per-frame matrix work)
     t.building = false;
   }
 
@@ -463,7 +472,7 @@ export class GraphCity {
   tick(cam, time) {
     this.treeTime.value = time;
     this.glassNight.value = this.host.night.value * 0.05;
-    if (!this._poolAt || this._poolAt.distanceTo(cam) > 15) this._poolTrees(cam);
+    if (!this._poolAt || this._poolAt.distanceTo(cam) > 25) this._poolTrees(cam);
     if ((this._lf = (this._lf || 0) + 1) % 8) return;
     for (const t of this.tiles.values()) {
       const d = Math.hypot(t.cx - cam.x, t.cz - cam.z) - TILE * 0.71;
@@ -474,7 +483,7 @@ export class GraphCity {
   }
 
   // ------------------------------------------------------------------ trees
-  _trees(t) {
+  *_trees(t) {
     const W = this.world, x0 = t.i * TILE, z0 = t.j * TILE, spots = [];
     const ok = (x, z, wall = 1.4, road = 2) => !this.inWater(x, z) && !this.onRoad(x, z, road) && !this.host.buildingNear(x, z, wall)
       && !this.heroes.heroes?.covers?.(x, z, 2) && !this.kit.occupied(x, z, 0.8) && !this._inDressing(x, z);
@@ -482,6 +491,7 @@ export class GraphCity {
     for (const p of this.osmTrees.get(t.key) || []) if (ok(p.x, p.z, 1.2, 1.2)) spots.push({ x: p.x, z: p.z, seed: hash(Math.round(p.x * 7 + p.z * 13)) });
     // street trees: every ~15 m along the urban streets, on one side or both, in the sidewalk or the verge
     for (const piece of W.tiles.get(t.key)?.pieces || []) {
+      if (due()) yield;
       const e = piece.e;
       if (!ROADS.has(e.kind) || e.kind === 'alley') continue;
       const half = W.wOf(e) / 2, info = this.edgeInfo(e), walk = W.walkOf ? W.walkOf(e) : 0;
@@ -501,6 +511,7 @@ export class GraphCity {
     // the land cover: woods dense, yards and parks sparse
     const step = 9;
     for (let x = x0 + step / 2; x < x0 + TILE; x += step) for (let z = z0 + step / 2; z < z0 + TILE; z += step) {
+      if (z === z0 + step / 2 && due()) yield;
       const h1 = hash(Math.round(x * 3.1) * 92821 + Math.round(z * 1.7)), jx = x + (h1 - 0.5) * step * 0.9, jz = z + (hash(Math.round(x * 5.3) + Math.round(z * 7.9) * 31) - 0.5) * step * 0.9;
       const c = this.landAt(jx, jz);
       const p = c === LAND.woods ? 0.85 : c === LAND.outside ? 0.45 : c === LAND.yards ? 0.1 : c === LAND.grass ? 0.06 : c === LAND.paved ? 0.008 : 0;
@@ -531,14 +542,14 @@ export class GraphCity {
   /** One pool: a species at one level of detail, as many instances as the trees near the camera need. */
   _pool(geo, tier, n) {
     const im = new THREE.InstancedMesh(geo, this.treeMaterial, n);
-    im.count = 0; im.frustumCulled = false; im.castShadow = tier < 2; im.receiveShadow = true;
+    im.count = 0; im.castShadow = tier < 2; im.receiveShadow = true;
     im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); im.setColorAt(0, this.tints[0]);
     im.name = `Trees ${geo.name || ''} ${['full', 'lod', 'far'][tier]}`;
     this.host.group.add(im);
     return im;
   }
   /** The trees of the tiles within reach, each in its species' pool for its distance: the full model close by, the
-   *  simpler ones further out (tiles beyond the reach show their cards). Re-sorted when the camera has moved 15 m. */
+   *  simpler ones further out (tiles beyond the reach show their cards). Re-sorted when the camera has moved 25 m. */
   _poolTrees(cam) {
     const fullM = TREE_FULL[this.world.qualityKey] || 90, lodM = TREE_LOD[this.world.qualityKey] || 300;
     const lists = this.pools.map((tiers) => tiers.map(() => []));
@@ -558,18 +569,23 @@ export class GraphCity {
         q.setFromAxisAngle(Y, r.rot); p.set(r.x, r.y, r.z); sc.set(r.g, r.gy, r.g);
         im.setMatrixAt(k, m.compose(p, q, sc)); im.setColorAt(k, this.tints[r.tint]);
       });
-      im.count = list.length; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
+      // only the used part goes to the GPU; the pool's bounds kept, so one behind the camera isn't drawn
+      im.count = list.length;
+      im.instanceMatrix.clearUpdateRanges(); im.instanceMatrix.addUpdateRange(0, list.length * 16); im.instanceMatrix.needsUpdate = true;
+      if (im.instanceColor) { im.instanceColor.clearUpdateRanges(); im.instanceColor.addUpdateRange(0, list.length * 3); im.instanceColor.needsUpdate = true; }
+      if (list.length) im.computeBoundingSphere();
     }));
     this._poolAt = cam.clone();
   }
   /** The main streets' buildings dressed as the Pittsburgh map's are: shop fronts with their signs (lit at night),
    *  awnings and blade signs, belt courses, cornices and sills (FACADE_STYLES: the victorian rows on the main streets,
    *  masonry blocks, tower bases, glass). Mid detail to 700 m, near detail (signs, pilasters, brackets) to 260 m. */
-  _storefronts(t) {
+  *_storefronts(t) {
     const host = this.host, L = host.landscape, C = this.facades.builders();
     this._lampPts = t.lampPts || null;
     let n = 0;
     for (const b of host.buildingChunks.get(t.key) || []) {
+      if (due()) yield;
       if (b.hidden || b.onRoute || b.hero || b.kind === 12 || this.kit.plans.has(b.k)) continue;
       const style = b.kind === 2 ? (b.h < 22 ? 'victorian' : 'masonry') : b.kind === 0 ? (b.shopRow ? 'victorian' : 'rowhouse') : b.kind === 4 ? 'tower' : b.kind === 5 ? 'glass' : b.kind === 7 || b.kind === 11 ? 'masonry' : null;
       if (!style || b.h < 4) continue;
@@ -615,12 +631,13 @@ export class GraphCity {
   _inDressing(x, z) { const D = this.world.dressing; return !!D && !!D.inside?.(x, z); }
 
   // ------------------------------------------------------------------ furniture, lamps, parked cars
-  _furniture(t) {
-    const W = this.world, M = new MeshBuilder({ aGlow: 1 }), Mc = new MeshBuilder({ aGlow: 1 }), Mf = new MeshBuilder({ aGlow: 1 });
+  *_furniture(t) {
+    const W = this.world, M = (t.kitM = new MeshBuilder({ aGlow: 1 })), Mc = [], Mf = new MeshBuilder({ aGlow: 1 });   // (Mc: the near cars, instanced: _carMeshes)
     const lamps = [], acorns = [], glows = [];
     const frame = (x, y, z, yaw) => ({ x, y, z, yaw, c: Math.cos(yaw), s: Math.sin(yaw) });
     // OSM's furniture: off the carriageway (a signal mapped on the road goes to the corner), facing the road
     for (const p of this.points.get(t.key) || []) {
+      if (due()) yield;
       const fn = FURNITURE[POINT_FN[p.kind]]; if (!fn) continue;
       let { x, z } = p;
       const r = this.roadNear(x, z, 8);
@@ -639,6 +656,7 @@ export class GraphCity {
     }
     // along the urban streets: lamps every ~32 m, alternating sides; parked cars on the main streets
     for (const piece of W.tiles.get(t.key)?.pieces || []) {
+      if (due()) yield;
       const e = piece.e, half = W.wOf(e) / 2, walk = W.walkOf ? W.walkOf(e) : 0;
       const riverwalk = W.isRiverwalk?.(e);
       if (!ROADS.has(e.kind) && !riverwalk) continue;
@@ -666,7 +684,7 @@ export class GraphCity {
               const k0 = i, k1 = i + 1, x = e.x[k0] + (e.x[k1] - e.x[k0]) * f + nx * (half - 1.15) * side, z = e.z[k0] + (e.z[k1] - e.z[k0]) * f + nz * (half - 1.15) * side;
               const y = e.ele[k0] + (e.ele[k1] - e.ele[k0]) * f + 0.02;
               const yaw = Math.atan2(dx * side, dz * side);
-              FURNITURE.car(Mc, frame(x, y, z, yaw), { seed: h0 });
+              Mc.push({ f: frame(x, y, z, yaw), seed: h0 });
               carLo(Mf, frame(x, y, z, yaw), h0);
               this.stats.cars++;
             }
@@ -698,7 +716,7 @@ export class GraphCity {
       }
     }
     // a car park's cars (in the lots of this tile)
-    for (const ring of this.lots.get(t.key) || []) this._lotCars(ring, Mc, Mf, frame);
+    for (const ring of this.lots.get(t.key) || []) { this._lotCars(ring, Mc, Mf, frame); if (due()) yield; }
     const mesh = (B, name, lod) => {
       if (!B.count) return;
       const g = B.geometry(); const m = new THREE.Mesh(g, this.kitMaterial); m.name = `${name} ${t.key}`; m.castShadow = true; m.receiveShadow = true;
@@ -707,7 +725,7 @@ export class GraphCity {
       if (lod === 'near') m.visible = d < CAR_NEAR; else if (lod === 'far') m.visible = d >= CAR_NEAR;
       this._add(t, m, lod);
     };
-    mesh(M, 'Street furniture'); mesh(Mc, 'Parked cars', 'near'); mesh(Mf, 'Parked cars far', 'far');
+    this._carMeshes(t, Mc); mesh(Mf, 'Parked cars far', 'far');
     const lampMesh = (list, geo, name, head) => {
       if (!list.length) return;
       const im = new THREE.InstancedMesh(geo, this.lampMaterial, list.length), m4 = new THREE.Matrix4(), q = new THREE.Quaternion();
@@ -721,6 +739,37 @@ export class GraphCity {
     if (glows.length) { const g = this.host.addGlows(glows, `Lamp glows ${t.key}`); if (g) t.meshes.push({ m: g, parent: this.host.group }); }
   }
 
+  /** The near parked cars: one instanced mesh per kind of car (hatch, sedan, SUV), the paint per instance (the body
+   *  only: aBody), instead of copying each car's ~1,000 vertices into a mesh. */
+  _carMeshes(t, cars) {
+    if (!cars.length) return;
+    if (!this.carGeos) {
+      this.carGeos = {};
+      for (const kind of ['hatch', 'sedan', 'suv']) {
+        const g = staticVehicle(kind, '#ffffff'), A = vehicleBodyOf(kind);
+        g.setAttribute('aBody', A);
+        this.carGeos[kind] = g;
+      }
+      const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.05 });
+      m.onBeforeCompile = (shader) => {
+        shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aBody;')
+          .replace('#include <color_vertex>', '#include <color_vertex>\n#ifdef USE_INSTANCING_COLOR\nvColor.xyz = color.xyz * mix(vec3(1.), instanceColor.xyz, aBody);\n#endif');
+      };
+      m.customProgramCacheKey = () => 'pgh-car-body-1';
+      this.carMaterial = m;
+    }
+    const by = { hatch: [], sedan: [], suv: [] };
+    for (const c of cars) by[c.seed > 0.85 ? 'suv' : c.seed < 0.2 ? 'hatch' : 'sedan'].push(c);
+    const m4 = new THREE.Matrix4(), col = new THREE.Color(), d = Math.hypot(t.cx - this.world.camera.position.x, t.cz - this.world.camera.position.z) - TILE * 0.71;
+    for (const [kind, list] of Object.entries(by)) {
+      if (!list.length) continue;
+      const im = new THREE.InstancedMesh(this.carGeos[kind], this.carMaterial, list.length);
+      list.forEach((c, k) => { im.setMatrixAt(k, m4.makeRotationY(c.f.yaw).setPosition(c.f.x, c.f.y, c.f.z)); im.setColorAt(k, col.set(CAR_COLORS[Math.floor(c.seed * 997) % CAR_COLORS.length])); });
+      im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); im.userData.shared = true; im.userData.lodM = CAR_NEAR; im.receiveShadow = true;
+      im.name = `Parked cars ${kind} ${t.key}`; im.visible = d < CAR_NEAR;
+      this._add(t, im, 'near');
+    }
+  }
   _lotCars(ring, Mc, Mf, frame) {
     // rows along the lot's longest side, 2.7 m stalls, 5.5 m rows, ~55% taken
     let best = 0, ux = 1, uz = 0;
@@ -738,19 +787,20 @@ export class GraphCity {
       const corners = [[1.1, 2.4], [-1.1, 2.4], [1.1, -2.4], [-1.1, -2.4]].map(([s, l]) => [x + ux * s + vx * l, z + uz * s + vz * l]);
       if (!corners.every(([cx, cz]) => pip(cx, cz)) || this.onRoad(x, z, 2) || this.host.buildingNear(x, z, 1.2)) continue;
       const y = W._groundH(x, z) + 0.06, yaw = Math.atan2(vx, vz) + (h0 > 0.27 ? Math.PI : 0);
-      FURNITURE.car(Mc, frame(x, y, z, yaw), { seed: h0 * 1.8 % 1 });
+      Mc.push({ f: frame(x, y, z, yaw), seed: h0 * 1.8 % 1 });
       carLo(Mf, frame(x, y, z, yaw), h0 * 1.8 % 1);
       this.stats.cars++;
     }
   }
 
   // ------------------------------------------------------------------ car parks' paving
-  _lots(t) {
+  *_lots(t) {
     const list = this.lots.get(t.key); if (!list) return;
     const W = this.world, pos = [], col = [], c1 = new THREE.Color('#5a5b5e'), c2 = new THREE.Color('#e9e6dc');
     const tri = (a, b, c, color) => { for (const p of [a, b, c]) { pos.push(p[0], p[1], p[2]); col.push(color.r, color.g, color.b); } };
     const surf = (x, z) => Math.min(W._groundH(x, z) + 0.06, W.cut.cap(x, z) + 0.25);
     for (const ring of list) {
+      if (due()) yield;
       let tris; try { tris = THREE.ShapeUtils.triangulateShape(ring.map((p) => new THREE.Vector2(p.x, p.z)), []); } catch { continue; }
       for (const [i, j, k] of tris) {
         const split = (a, b, c, depth) => {
@@ -787,11 +837,12 @@ export class GraphCity {
   }
 
   // ------------------------------------------------------------------ fences, walls, hedges, rails
-  _lines(t) {
+  *_lines(t) {
     const list = this.lines.get(t.key); if (!list) return;
-    const W = this.world, M = new MeshBuilder({ aGlow: 1 });
+    const W = this.world, M = t.kitM;
     const gy = (x, z) => W._groundH(x, z);
     for (const ln of list) {
+      if (due()) yield;
       const pts = ln.pts;
       for (let k = 1; k < pts.length; k++) {
         const a = pts[k - 1], b = pts[k], len = Math.hypot(b.x - a.x, b.z - a.z); if (len < 0.3) continue;
@@ -817,9 +868,6 @@ export class GraphCity {
         }
       }
     }
-    if (!M.count) return;
-    const m = new THREE.Mesh(M.geometry(), this.kitMaterial); m.name = `Fences and walls ${t.key}`; m.castShadow = true; m.receiveShadow = true;
-    this._add(t, m);
   }
 
   dispose() {
@@ -829,12 +877,20 @@ export class GraphCity {
     for (const T of this.treeGeos) for (const g of T.tiers) g.dispose();
     for (const tiers of this.pools) for (const im of tiers) im.dispose();
     this.cards.dispose(); this.facades.dispose();
+    if (this.carGeos) { for (const g of Object.values(this.carGeos)) g.dispose(); this.carMaterial.dispose(); }
     for (const g of [this.lampGeo, this.acornGeo]) g.dispose();
     for (const m of [this.kitMaterial, this.treeMaterial, this.lampMaterial, this.lotMaterial]) m.dispose();
     this.landTexture?.dispose();
   }
 }
 
+/** Which of a car's vertices are its paint (staticVehicle: aVeh < .5): 1, else 0. */
+function vehicleBodyOf(kind) {
+  const g = staticVehicle(kind, '#ff00ff'), h = staticVehicle(kind, '#00ff00'), A = g.attributes.color, B = h.attributes.color, out = new Float32Array(A.count);
+  for (let k = 0; k < A.count; k++) out[k] = Math.abs(A.getX(k) - B.getX(k)) + Math.abs(A.getY(k) - B.getY(k)) > 1e-4 ? 1 : 0;
+  g.dispose(); h.dispose();
+  return new THREE.BufferAttribute(out, 1);
+}
 /** The plain parked car for distance: two blocks (as the street kit's carLo). */
 const CAR_COLORS = ['#8c1f1f', '#1f3f6e', '#2c2c2e', '#d9d6cf', '#6b6f73', '#a9adb0', '#2f4f3a', '#7a5a2c', '#3c3f6b', '#b8a46a'];
 function carLo(M, f, seed) {

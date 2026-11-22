@@ -21,8 +21,9 @@ const opt = (k, d) => { const i = args.indexOf(k); if (i < 0) return d; const v 
 const flag = (k) => { const i = args.indexOf(k); if (i < 0) return false; args.splice(i, 1); return true; };
 const software = flag('--software');
 const [width, height] = opt('--size', '1280x720').split('x').map(Number);
-const view = opt('--view', null);
-const evalJs = opt('--eval', null);   // run in the page after the frame (the world as `w`, THREE as `T`): its result is printed   // "<back>,<up>": an overview camera this far behind and above the rider
+const view = opt('--view', null);   // "<back>,<up>": an overview camera this far behind and above the rider
+const evalJs = opt('--eval', null);   // run in the page after the frame (the world as `w`, THREE as `T`): its result is printed
+const preJs = opt('--pre', null);   // run in the page before the frame is drawn (the world as `w`)
 const quality = opt('--quality', 'balanced');
 const time = opt('--time', 'midday'), out = opt('--out', 'tools/snapshots'), graph = opt('--graph', 'routes/cities/pgh.json');
 const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/chromium'].find(existsSync));
@@ -52,9 +53,10 @@ for (const spec of args) {
   const t0 = Date.now();
   await page.goto(`${base}/tools/pgh-preview.html?${new URLSearchParams({ graph, lat, lon, dir: dir || '+', at: at || 40, time, quality })}`);
   await page.waitForFunction(() => window.world && window.world.readiness().ready, null, { timeout: 240000, polling: 500 });
-  const stats = await page.evaluate(([view, cam]) => {
+  const stats = await page.evaluate(([view, cam, pre]) => {
     const w = window.world;
     w.stop();
+    if (pre) (0, eval)(`(w) => { ${pre} }`)(w);
     if (cam) {
       const [ea, eo, eu, la, lo, lu] = cam.split(',').map(Number), y = (p) => Math.max(w._groundH(p.x, p.z), w.poolAt(p.x, p.z));
       const e = w.proj.toLocal(ea, eo), t = w.proj.toLocal(la, lo);
@@ -69,7 +71,7 @@ for (const spec of args) {
     const i = w.renderer.info.render;
     const up = window.route.netRide.upcoming(w.p);
     return { bridges: `${w._bridgesState} ${w.bridges?.count ?? ''}`, calls: i.calls, triangles: i.triangles, tiles: [...w.tiles.values()].filter((t) => t.built).length, next: `${up.node.name} in ${Math.round(up.distTo)} m: ${up.options.map((o) => o.label).join(' / ')}` };
-  }, [view, cam]);
+  }, [view, cam, preJs]);
   if (evalJs) console.log('  eval:', JSON.stringify(await page.evaluate(async (code) => { const w = window.world; const T = await import('/vendor/three.module.min.js'); return eval(code); }, evalJs)));
   const file = resolve(ROOT, out, `pgh-${name}${view || cam ? '-view' : ''}.png`);
   await page.screenshot({ path: file });

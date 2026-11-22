@@ -14,7 +14,7 @@ export const DEFAULT_SETTINGS = {
   startGear: 12,
   ftp: 200,               // watts, for % FTP workouts
   worldTime: 'auto',      // 3D time of day: auto (the route's default) | morning | midday | golden | night
-  worldQuality: 'balanced', // stylized scenery: low | balanced | high
+  worldQuality: 'balanced', // stylized scenery: low | balanced | high (phones: low, set once in loadSettings)
   camera: 'closest',      // chase camera: closest (back wheel at the bottom of the view, default) | close (speed feel) | classic (4.5 m back, fixed)
   hudSize: 'small',       // ride-screen power bar: small (default) | medium | large (the original size)
   minimap: 'follow',      // ride-screen minimap: follow (zoomed in, ~3 km across: the default) | course (whole route) | off
@@ -34,10 +34,21 @@ export function loadSettings() {
     // 19 Nov (PLAN 6.10): the Closest camera is the default, so a saved 'close' (the old default) becomes 'closest' once;
     // a choice made after that (Close included) is kept
     if (!s.camClosest) { if (s.camera === 'close') s.camera = 'closest'; s.camClosest = true; }
+    // 21 Nov: phones ride on Light scenery (no antialiasing, pixel ratio 1, the simpler shaders, a nearer horizon) — set
+    // once, so a phone already saved on Balanced moves to Light; a choice made after that is kept
+    if (!s.phoneQuality) { if (isPhone()) s.worldQuality = 'low'; s.phoneQuality = true; }
     return s;
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
+}
+
+/** A phone (a touch screen as the main pointer and a small screen, or a phone's browser). */
+export function isPhone() {
+  try {
+    if (/iPhone|iPod|Android.+Mobile|Mobile.+Firefox/i.test(navigator.userAgent)) return true;
+    return matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 600;
+  } catch { return false; }
 }
 
 export function saveSettings(s) {
