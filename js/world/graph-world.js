@@ -25,6 +25,7 @@ export const TILE = 400;            // m: a streaming tile
 export const PIECE = 32;            // samples: an edge is cut into pieces of at most this many (320 m) for the tiles
 export const NEAR_M = 2400;         // tiles whose centre is within this of the camera are built…
 export const FAR_M = 3200;          // …and released beyond this
+const REACH_LOW = { near: 1700, far: 2300 };   // Low (phones): fewer tiles, the fog nearer
 const GROUND_CELL = 12.8;           // m: the ground mesh's spacing (TILE / 31.25)
 const BUDGET_MS = 6, PRELOAD_BUDGET_MS = 40;
 const RIDER_LANE = 0.22;
@@ -208,6 +209,7 @@ export class GraphWorld {
     this.sun = new THREE.DirectionalLight(0xffffff, 1.6);
     this.scene.add(this.hemi, this.sun, this.sun.target);
     this.scene.fog = new THREE.Fog(0xcfdde8, 900, NEAR_M + 200);
+    this._reach();
     this.mats = {
       road: new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
       paint: new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
@@ -303,6 +305,7 @@ export class GraphWorld {
   timeOptions() { return Object.entries(TIMES).map(([key, t]) => ({ key, label: t.label })); }
   setQuality(key) {
     this.qualityKey = key || 'balanced';
+    this._reach();
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.qualityKey === 'low' ? 1 : 2));
     this._resize();
   }
@@ -346,7 +349,7 @@ export class GraphWorld {
     add('riders', 'Rider', this._riderModel !== 'loading' ? 1 : 0);
     if (this.json.heroes) add('landmarks', 'Landmarks', this._heroesState && this._heroesState !== 'loading' ? 1 : 0);
     if (this.json.bridges && this._heroesState === 'ok') add('bridges', 'Bridges', this._bridgesState && this._bridgesState !== 'loading' ? 1 : 0);
-    if (this.json.city && this._heroesState === 'ok') {
+    if (this.json.cityData && this._heroesState === 'ok') {
       const c = this.city, p = this._cityState === 'failed' ? 1 : !c ? 0 : !c.ready ? 0.3 : c.pendingNear(this.camera.position.x, this.camera.position.z, 900) ? 0.7 : 1;
       add('city', 'Buildings and trees', p);
     }
@@ -389,6 +392,7 @@ export class GraphWorld {
     this.crank += ((src.cadence || 0) / 60) * Math.PI * 2 * dt;
     this.heroes?.tick(now / 1000, dt);
     this.city?.tick(this.camera.position, now / 1000);
+    if ((this._frames & 15) === 0) this.bridges?.tick(this.camera.position, this.qualityKey === 'low' ? 3000 : 4500);
     this.rider.update(out.pos, out.fwd, this.crank, src.speed || 0, Math.min(dt, 0.1), src);
     if (this.path) {
       const tmp = this._leanTmp ||= { pos: new THREE.Vector3(), fwd: new THREE.Vector3(), flat: new THREE.Vector3() };
@@ -463,12 +467,19 @@ export class GraphWorld {
     for (const e of this.G.edges) for (const id of [e.from, e.to]) this.nodeWidth.set(id, Math.max(this.nodeWidth.get(id) || 0, this.wOf(e)));
   }
 
+  /** How far the tiles are built and the fog closes in, by quality (Low: phones). */
+  _reach() {
+    const low = this.qualityKey === 'low';
+    this.nearM = low ? REACH_LOW.near : NEAR_M; this.farM = low ? REACH_LOW.far : FAR_M;
+    if (this.scene?.fog) { this.scene.fog.near = low ? 700 : 900; this.scene.fog.far = this.nearM + 200; }
+  }
+
   /** PGH's city (js/world/graph-city.js, tools/pgh_city.py): buildings, trees, furniture, the land cover and what each
    *  edge is made of. Once it's in, the edges take their widths and sidewalks and the tiles are rebuilt. */
   _loadCity() {
-    if (!this.json.city || this._cityState || !this.heroes) return;
+    if (!this.json.cityData || this._cityState || !this.heroes) return;
     this._cityState = 'loading';
-    fetch(new URL(`../../${this.json.city}`, import.meta.url)).then((r) => r.json())
+    fetch(new URL(`../../${this.json.cityData}`, import.meta.url)).then((r) => r.json())
       .then((cj) => import('./graph-city.js').then(({ GraphCity }) => {
         if (this.disposed) return;
         const c = new GraphCity(this, this.heroes, cj);
@@ -476,11 +487,14 @@ export class GraphWorld {
         this._classify(c);
         this.cut = roadHash(this.G.edges, this.wOf);
         this._nodeWidths();
-        const b = c.landBox, U = this.mats.ground.userData.land;
-        if (U) { U.uLand.value = c.landTexture; U.uLandBox.value.set(b.x0, b.z0, b.x1, b.z1); U.uLandOn.value = 1; }
-        for (const t of this.tiles.values()) if (t.built) this._release(t);
-        this._cityState = 'ok';
-        this.log('3d', `PGH city: ${c.buildings.length} buildings`, 'debug');
+        return c.loadLand().then(() => {
+          if (this.disposed) return;
+          const b = c.landBox, U = this.mats.ground.userData.land;
+          if (U) { U.uLand.value = c.landTexture; U.uLandBox.value.set(b.x0, b.z0, b.x1, b.z1); U.uLandOn.value = 1; }
+          for (const t of this.tiles.values()) if (t.built) this._release(t);
+          this._cityState = 'ok';
+          this.log('3d', `PGH city: ${Object.keys(cj.sectors.list).length} sectors, streamed`, 'debug');
+        });
       }))
       .catch((err) => { this._cityState = 'failed'; this.log('3d', `PGH city: ${err.message} ${(err.stack || '').split('\n').slice(0, 3).join(' | ')}`, 'error'); });
   }
@@ -490,54 +504,16 @@ export class GraphWorld {
    * paved walk along the water: 5.5 m of concrete or pavers), a street's sidewalks (in built-up places: 3.2 m on the
    * main streets among shops, 2.4 m elsewhere on them, 1.8 m on residential streets; none where OSM says none), and
    * its surface sample by sample (OSM's, plus the Pittsburgh map's rule: a residential street of 7 % or more,
-   * 25 m or longer, among the houses, is red brick).
+   * 25 m or longer, among the houses, is red brick). Worked out once by tools/pgh_city.py; read from the index here.
    */
   _classify(c) {
-    const MAIN_TRAIL = /Heritage|Allegheny Passage|Eliza Furnace|North Shore Trail|South Side Trail|Station Square Trail|Strip District Trail|Hot Metal|Mon Wharf|^Trail$|Riverwalk|Riverfront/i;
-    const wet = (x, z) => this.ground.at(x, z) < this.poolAt(x, z) + 0.5;
     for (const e of this.G.edges) {
-      const info = c.edgeInfo(e), half = (this.widths[e.kind] || 7) / 2;
+      const d = c.edgeData[e.id] || {}, info = c.edgeInfo(e);
       e._surf = new Array(e.n + 1);
       for (let i = 0; i <= e.n; i++) e._surf[i] = info.surf(i);
-      if (e.kind === 'path') {
-        let river = 0, n = 0, paved = 0;
-        for (let i = 0; i <= e.n; i += 2) {
-          const i0 = Math.max(0, i - 1), i1 = Math.min(e.n, i + 1), dx = e.x[i1] - e.x[i0], dz = e.z[i1] - e.z[i0], l = Math.hypot(dx, dz) || 1;
-          n++; if ([-22, -12, 12, 22].some((o) => wet(e.x[i] - dz / l * o, e.z[i] + dx / l * o))) river++;
-          if (e._surf[i] === 'concrete' || e._surf[i] === 'paving') paved++;
-        }
-        const onDeck = e.bridges.reduce((a, [p, q]) => a + q - p, 0) > e.n * 0.5;
-        const riverside = river / n > 0.4 && !onDeck;
-        if (riverside && (paved / n > 0.5 || /Riverwalk|Riverfront/i.test(e.name || ''))) { e._w = 5.5; e._rw = true; }
-        else if (riverside || MAIN_TRAIL.test(e.name || '')) e._w = 3.6;
-        else e._w = 2.6;
-        continue;
-      }
-      if (e.kind === 'plaza' || e.kind === 'alley') continue;
-      // sidewalks: in built-up places (land cover and buildings near), unless OSM says none
-      let urban = 0, shops = 0, n = 0;
-      for (let i = 0; i <= e.n; i += 2) {
-        const i0 = Math.max(0, i - 1), i1 = Math.min(e.n, i + 1), dx = e.x[i1] - e.x[i0], dz = e.z[i1] - e.z[i0], l = Math.hypot(dx, dz) || 1;
-        for (const sd of [-1, 1]) {
-          const x = e.x[i] - dz / l * (half + 6) * sd, z = e.z[i] + dx / l * (half + 6) * sd;
-          n++;
-          const b = c.host.buildingNear(x, z, 18);
-          if (b && c.urban(x, z)) { urban++; if (b.kind === 2 || b.kind === 4 || b.kind === 5) shops++; }
-        }
-      }
-      if (info.walk !== 0 && !e.bridges.some(([a, b]) => b - a > e.n * 0.8) && urban / n > 0.45) {
-        e._walk = e.kind === 'residential' ? 1.8 : shops / n > 0.3 ? 3.2 : 2.4;
-      }
-      // brick: a steep residential street among houses
-      if (e.kind === 'residential') {
-        let run = 0;
-        for (let i = 0; i <= e.n; i++) {
-          const i0 = Math.max(0, i - 1), i1 = Math.min(e.n, i + 1), g = Math.abs(e.ele[i1] - e.ele[i0]) / ((i1 - i0) * 10 || 1);
-          const steep = g >= 0.07 && c.landAt(e.x[i], e.z[i]) !== LAND_PAVED;
-          run = steep ? run + 1 : 0;
-          if (run >= 3) for (let k = i - run + 1; k <= i; k++) if (e._surf[k] === 'asphalt') e._surf[k] = 'brick';
-        }
-      }
+      if (d.w) e._w = d.w;
+      if (d.rw) e._rw = true;
+      if (d.walk > 0) e._walk = d.walk;
     }
   }
 
@@ -550,7 +526,7 @@ export class GraphWorld {
       .then((bj) => import('./graph-bridges.js').then(({ buildGraphBridges }) => buildGraphBridges(this, bj)))
       .then((b) => {
         if (this.disposed) { b.dispose(); return; }
-        this.bridges = b; this.bridgeMask = b.mask; this.scene.add(b.group);
+        this.bridges = b; this.bridgeMask = b.mask; this.scene.add(b.group); b.tick(this.camera.position, this.qualityKey === 'low' ? 3000 : 4500);
         this.heroes?.addGlows?.(b.glows, 'Bridge lamps');
         for (const t of this.tiles.values()) if (t.built) this._release(t);
         this._bridgesState = 'ok';
@@ -561,11 +537,11 @@ export class GraphWorld {
 
   _stream(cx, cz, budgetMs) {
     const t0 = performance.now();
-    const ci = Math.floor(cx / TILE), cj = Math.floor(cz / TILE), r = Math.ceil(NEAR_M / TILE);
+    const NEAR = this.nearM || NEAR_M, ci = Math.floor(cx / TILE), cj = Math.floor(cz / TILE), r = Math.ceil(NEAR / TILE);
     const want = [];
     for (let i = ci - r; i <= ci + r; i++) for (let j = cj - r; j <= cj + r; j++) {
       const d = Math.hypot((i + 0.5) * TILE - cx, (j + 0.5) * TILE - cz);
-      if (d > NEAR_M) continue;
+      if (d > NEAR) continue;
       const key = `${i},${j}`;
       let t = this.tiles.get(key);
       if (!t) this.tiles.set(key, (t = { key, pieces: [], nodes: [], built: false, cx: (i + 0.5) * TILE, cz: (j + 0.5) * TILE, i, j }));
@@ -584,7 +560,7 @@ export class GraphWorld {
     this._queued = queued;
     // release far tiles (a few a frame)
     if (this._frames % 30 === 0) for (const t of this.tiles.values()) {
-      if (t.built && Math.hypot(t.cx - cx, t.cz - cz) > FAR_M) this._release(t);
+      if (t.built && Math.hypot(t.cx - cx, t.cz - cz) > (this.farM || FAR_M)) this._release(t);
     }
   }
 

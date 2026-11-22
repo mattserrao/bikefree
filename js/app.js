@@ -1448,9 +1448,12 @@ let routeItems = [];
 let parkItems = null;
 let netItems = [];          // network presets (choose your turns): listed as routes, not as scenery
 // [pgh] free-ride road graphs (tools/build_pgh.py → js/graph.js, js/world/graph-world.js): every street, trail and bridge
-const GRAPH_ITEMS = [{ id: 'builtin-graph-pgh', routeId: 'pgh-free', kind: 'route', name: 'PGH · Free ride', park: 'Pittsburgh, PA',
+// PGH is one city card (as the Pittsburgh map was): its routes and free ride are in the card's panel, not the menu
+const PGH_BASE = 'builtin-graph-pgh';
+const GRAPH_ITEMS = [{ id: 'builtin-graph-pgh', routeId: 'pgh-free', kind: 'route', name: 'PGH · Free ride', park: 'Pittsburgh, PA', baseId: PGH_BASE,
   group: 'Scenic routes — 3D', network: 'routes/cities/pgh.json', graph: true, free: true, tags: ['varied'],
   note: 'Every street, trail and bridge in the Pittsburgh corridor. No traffic and no set route: straight on at every junction unless you choose a turn' }];
+const HIDDEN_PARKS = /^pittsburgh(-|$)/;
 const routeCache = new Map();
 const netCache = new Map();   // network JSON by URL
 let previewRoute = null;
@@ -1461,7 +1464,9 @@ async function loadParks() {
   const manifest = loadPreviewManifest();   // (alongside the catalog, not before it: PLAN 7.11)
   try {
     const list = await (await fetch('routes/parks/index.json')).json();
-    parkItems = list.map((p) => ({ ...p, routeId: p.id, id: `builtin-park-${p.id}`, kind: 'route', url: p.file, group: 'Scenic routes — 3D' }));
+    // (the pgh-test branch: the Pittsburgh map — the city loop and its areas — is off the list; PGH replaces it. Its
+    // files stay: PGH's tools build from them (tools/map_pgh_routes.mjs, pgh_heroes.mjs, pgh_city.py) and the tests use them)
+    parkItems = list.filter((p) => !HIDDEN_PARKS.test(p.id)).map((p) => ({ ...p, routeId: p.id, id: `builtin-park-${p.id}`, kind: 'route', url: p.file, group: 'Scenic routes — 3D' }));
   } catch {
     parkItems = [];
   }
@@ -1495,7 +1500,7 @@ async function loadParks() {
     const list = await (await fetch('routes/cities/pgh-presets.json')).json();
     for (const pr of list) {
       const good = (pr.followPct ?? 0) >= 90;
-      netItems.push({ id: `builtin-graph-${pr.id}`, routeId: pr.id, kind: 'route', name: `PGH · ${pr.name}${good ? '' : ' (approximate)'}`, park: 'Pittsburgh, PA',
+      netItems.push({ id: `builtin-graph-${pr.id}`, routeId: pr.id, kind: 'route', name: `PGH · ${pr.name}${good ? '' : ' (approximate)'}`, park: 'Pittsburgh, PA', baseId: PGH_BASE,
         group: 'Scenic routes — 3D', ...(good ? {} : { stage: 'draft' }), network: 'routes/cities/pgh.json', graph: true, preset: pr.id, tags: pr.tags || [],
         note: (good ? '' : `Approximate: follows ${pr.followPct}% of the original route (PGH lacks some of its roads). `) + (pr.note || ''), lengthM: pr.lengthM, climbM: pr.climbM });
     }
@@ -1643,6 +1648,14 @@ const cityRivers = new Map();   // baseId → rivers (the city's scenes: each ar
 const cityMaps = new Map();     // baseId → the network's baked map (F101: river banks, labels), when it has one
 async function loadCityRivers(card) {
   if (cityRivers.has(card.baseId)) return false;
+  if (card.baseId === PGH_BASE) {
+    // PGH: its graph's network (the card's map and the panel's lines) and its baked map (rivers, labels)
+    cityRivers.set(card.baseId, []);
+    await graphNet(card.network, 'PGH');
+    const mapUrl = graphMaps.get(card.network);
+    if (mapUrl) try { cityMaps.set(card.baseId, await (await fetch(mapUrl)).json()); } catch { /* lines only */ }
+    return true;
+  }
   const base = routeCache.get(card.baseId);
   const lists = [base?.scene?.rivers];
   cityRivers.set(card.baseId, mergeRivers(lists));
@@ -1655,7 +1668,7 @@ async function loadCityRivers(card) {
   cityRivers.set(card.baseId, mergeRivers(lists));
   return true;
 }
-const cityNet = (card) => routeCache.get(card.baseId)?.networks?.get(card.network) || null;
+const cityNet = (card) => routeCache.get(card.baseId)?.networks?.get(card.network) || graphNetsDone.get(card.network) || null;
 /** A city route's traversal keys (a preset's path; your own route's, from its saved segment names). */
 function cityPath(net, it) {
   if (it.preset) return net.presets.find((x) => x.id === it.preset)?.path || [];
@@ -1960,11 +1973,14 @@ function buildNetwork(base, url) {
   return netBuilds.get(url);
 }
 const graphNets = new Map();   // [pgh] a road graph's network by URL: its free ride and its routes share one
+const graphNetsDone = new Map(), graphMaps = new Map();   // (loaded: for the city card's map, which draws synchronously)
 function graphNet(url, name) {
   if (!graphNets.has(url)) {
     graphNets.set(url, Promise.all([fetch(url).then((r) => r.json()), import('./graph.js')]).then(([json, { graphNetwork }]) => {
       const { base, network } = graphNetwork(json, { name });
-      return loadNetwork(network, base);
+      const net = loadNetwork(network, base);
+      graphNetsDone.set(url, net); if (json.map) graphMaps.set(url, json.map);
+      return net;
     }).catch((err) => { graphNets.delete(url); throw err; }));
   }
   return graphNets.get(url);

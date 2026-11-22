@@ -5,6 +5,7 @@
 //   name@lat,lon@at#eyeLat,eyeLon,eyeUp,lookLat,lookLon,lookUp   a free camera: eye and target by lat/lon, each so
 //                  many metres above the ground (or the water) there
 //   --view 60,40   an overview: the camera 60 m behind and 40 m above the rider (writes pgh-<name>-view.png)
+//   --quality low  the world at a quality tier (low | balanced | high)
 //
 // Each shot starts the free ride on the edge nearest the spot (dir: which way along it) and places the rider
 // <metres> along the path (default 40). Writes <out>/pgh-<name>.png and prints frame stats.
@@ -22,6 +23,7 @@ const software = flag('--software');
 const [width, height] = opt('--size', '1280x720').split('x').map(Number);
 const view = opt('--view', null);
 const evalJs = opt('--eval', null);   // run in the page after the frame (the world as `w`, THREE as `T`): its result is printed   // "<back>,<up>": an overview camera this far behind and above the rider
+const quality = opt('--quality', 'balanced');
 const time = opt('--time', 'midday'), out = opt('--out', 'tools/snapshots'), graph = opt('--graph', 'routes/cities/pgh.json');
 const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/chromium'].find(existsSync));
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.gz': 'application/octet-stream', '.png': 'image/png', '.jpg': 'image/jpeg' };
@@ -29,7 +31,7 @@ const server = createServer(async (req, res) => {
   const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^([/\\])+/, '');
   if (path.startsWith('..')) { res.writeHead(403).end(); return; }
   try { const body = await readFile(join(ROOT, path)); res.writeHead(200, { 'content-type': TYPES[extname(path)] || 'application/octet-stream' }).end(body); }
-  catch { res.writeHead(404).end(); }
+  catch { if (process.env.SNAP_DEBUG) console.log('404', path); res.writeHead(404).end(); }
 });
 await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
 const base = `http://127.0.0.1:${server.address().port}`;
@@ -39,6 +41,8 @@ const page = await browser.newPage({ viewport: { width, height } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+page.on('console', (m) => { if (process.env.SNAP_DEBUG && ['error', 'warning'].includes(m.type())) console.log('  console:', m.text().slice(0, 300)); });
+page.on('pageerror', (e) => { if (process.env.SNAP_DEBUG) console.log('  pageerror:', e.message, (e.stack || '').split('\n').slice(0, 3).join(' | ')); });
 await mkdir(resolve(ROOT, out), { recursive: true });
 for (const spec of args) {
   const [main, cam] = spec.split('#');
@@ -46,7 +50,7 @@ for (const spec of args) {
   const [lat, lon, dir] = where.split(',');
   errors.length = 0;
   const t0 = Date.now();
-  await page.goto(`${base}/tools/pgh-preview.html?${new URLSearchParams({ graph, lat, lon, dir: dir || '+', at: at || 40, time })}`);
+  await page.goto(`${base}/tools/pgh-preview.html?${new URLSearchParams({ graph, lat, lon, dir: dir || '+', at: at || 40, time, quality })}`);
   await page.waitForFunction(() => window.world && window.world.readiness().ready, null, { timeout: 240000, polling: 500 });
   const stats = await page.evaluate(([view, cam]) => {
     const w = window.world;

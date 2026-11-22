@@ -27,7 +27,7 @@ const STONE = '#b7ab95', STONE_DARK = '#7f776b', GRANITE = '#cdc5b4', CONCRETE =
 const shade = (c, f) => new THREE.Color(c).multiplyScalar(f);
 
 export function buildGraphBridges(world, json) {
-  const M = new MeshBuilder();
+  let M = new MeshBuilder();   // (one per bridge: each model is its own mesh, drawn by distance)
   const glows = [], mask = new Map(), proj = world.proj, qc = [], qcPier = [];
   const G = world.G, edges = G.edges;
   const groundH = (x, z) => world._groundH(x, z), pool = (x, z) => world.poolAt(x, z);
@@ -731,13 +731,27 @@ export function buildGraphBridges(world, json) {
     return [w0 - 6, w1 + 6];
   }
 
-  let count = 0;
-  for (const b of json.bridges || []) {
-    try { if (build(b)) count++; } catch (err) { console.warn(`PGH bridge ${b.name}: ${err.message}`); }
-  }
-
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0.22, side: THREE.DoubleSide });
   const group = new THREE.Group(); group.name = 'PGH bridges';
-  if (M.count) { const mesh = new THREE.Mesh(M.geometry(), mat); mesh.name = 'PGH bridge models'; mesh.castShadow = mesh.receiveShadow = true; group.add(mesh); }
-  return { group, glows, mask, count, qc, qcPier, dispose() { for (const m of group.children) m.geometry.dispose(); mat.dispose(); } };
+  const models = [];
+  let count = 0;
+  for (const b of json.bridges || []) {
+    M = new MeshBuilder();
+    try { if (build(b)) count++; } catch (err) { console.warn(`PGH bridge ${b.name}: ${err.message}`); }
+    if (!M.count) continue;
+    const mesh = new THREE.Mesh(M.geometry(), mat); mesh.name = `PGH bridge: ${b.name}`; mesh.castShadow = mesh.receiveShadow = true;
+    mesh.geometry.computeBoundingSphere();
+    models.push({ mesh, sphere: mesh.geometry.boundingSphere, shown: false });
+  }
+  /** Each model in the scene only within `reach` of the camera (its GPU copy made when it first comes near, dropped
+   *  when it goes far): a rider downtown has the three sisters and the Point's bridges; one in Homestead, the Glenwood. */
+  function tick(cam, reach = 4500) {
+    for (const m of models) {
+      const want = cam.distanceTo(m.sphere.center) - m.sphere.radius < reach;
+      if (want === m.shown) continue;
+      m.shown = want;
+      if (want) group.add(m.mesh); else { group.remove(m.mesh); m.mesh.geometry.dispose(); }   // (dispose: the GPU copy; the arrays stay for next time)
+    }
+  }
+  return { group, glows, mask, count, qc, qcPier, models, tick, dispose() { for (const m of models) m.mesh.geometry.dispose(); mat.dispose(); } };
 }

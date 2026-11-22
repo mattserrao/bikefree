@@ -336,28 +336,148 @@ def main():
         if rec: edges[e['id']] = rec
     print(f'  edge surfaces (km): {", ".join(f"{k} {v / 1000:.1f}" for k, v in scount.most_common())}; one-way edges {sum(1 for r in edges.values() if r.get("ow"))}')
 
+    # ---- what each edge is, decided here once (the world used to work it out at start, over every building):
+    # a trail's width, a riverwalk, a street's sidewalks, and the Pittsburgh map's brick rule
+    pools = [(p['level'], p['box']) for p in pgh.get('pools', [])]
+    def pool_at(la, lo):
+        for lev, bx in pools:
+            if bx[0] <= la <= bx[2] and bx[1] <= lo <= bx[3]: return lev
+        return pgh.get('waterLevelM', 216.6)
+    wet = lambda la, lo: elevation(la, lo) < pool_at(la, lo) + 0.5
+    bgrid = defaultdict(list)
+    for bi, bb in enumerate(kept):
+        ll = [(lat0 + qa * UNIT, lon0 + qo * UNIT) for qa, qo in bb['ring']]
+        cla = sum(p[0] for p in ll) / len(ll); clo = sum(p[1] for p in ll) / len(ll)
+        x, y = loc(cla, clo); r = max(math.hypot(*(a - c for a, c in zip(loc(*p), (x, y)))) for p in ll)
+        bb['c'] = (x, y, r); bgrid[(int(x // 40), int(y // 40))].append(bi)
+    def building_near(x, y, d):
+        for i in range(int((x - d - 60) // 40), int((x + d + 60) // 40) + 1):
+            for j in range(int((y - d - 60) // 40), int((y + d + 60) // 40) + 1):
+                for bi in bgrid.get((i, j), ()):
+                    cx, cy, r = kept[bi]['c']
+                    if math.hypot(cx - x, cy - y) - r < d: return kept[bi]
+        return None
+    Larr = np.asarray(img)
+    def land_at(la, lo):
+        px_, py_ = pix(la, lo); i, j = int(round(px_)), int(round(py_))
+        return int(Larr[j, i]) if 0 <= i < lx and 0 <= j < ly else 7
+    import re
+    MAIN_TRAIL = re.compile(r'Heritage|Allegheny Passage|Eliza Furnace|North Shore Trail|South Side Trail|Station Square Trail|Strip District Trail|Hot Metal|Mon Wharf|^Trail$|Riverwalk|Riverfront', re.I)
+    widths = pgh.get('widths', {})
+    ke = pgh.get('unit', {}).get('ele', 0.1)
+    for e, pe in zip(E, pgh['edges']):
+        ele = [v * ke for v in itertools.accumulate(pe['ele'])]
+        rec = edges.setdefault(e['id'], {})
+        n = len(e['lat']) - 1
+        nrm = []
+        for i in range(n + 1):
+            i0, i1 = max(0, i - 1), min(n, i + 1)
+            x0, y0 = loc(e['lat'][i0], e['lon'][i0]); x1, y1 = loc(e['lat'][i1], e['lon'][i1]); l = math.hypot(x1 - x0, y1 - y0) or 1
+            nrm.append((-(y1 - y0) / l, (x1 - x0) / l))
+        off = lambda i, d: ((e['lat'][i] + nrm[i][1] * d / ky), (e['lon'][i] + nrm[i][0] * d / kx))
+        runs = rec.get('s') or [[0, n, 0]]
+        code = [0] * (n + 1)
+        for r0, r1, c in runs:
+            for i in range(r0, r1 + 1): code[i] = c
+        if e['kind'] == 'path':
+            deck = sum(q - p for p, q in e['bridges'])
+            river = sum(1 for i in range(0, n + 1, 2) if any(wet(*off(i, d)) for d in (-22, -12, 12, 22)))
+            cnt = len(range(0, n + 1, 2))
+            paved = sum(1 for i in range(0, n + 1, 2) if code[i] in (3, 4))
+            riverside = river / cnt > 0.4 and deck <= n * 0.5
+            if riverside and (paved / cnt > 0.5 or re.search(r'Riverwalk|Riverfront', e['name'] or '', re.I)): rec['w'] = 5.5; rec['rw'] = 1
+            elif riverside or MAIN_TRAIL.search(e['name'] or ''): rec['w'] = 3.6
+            else: rec['w'] = 2.6
+            continue
+        if e['kind'] in ('plaza', 'alley'): continue
+        half = widths.get(e['kind'], 7) / 2
+        urban = shops = cnt = 0
+        for i in range(0, n + 1, 2):
+            for sd in (-1, 1):
+                la, lo = off(i, sd * (half + 6)); cnt += 1
+                bb = building_near(*loc(la, lo), 18)
+                if bb and land_at(la, lo) in (0, 4, 6, 8):
+                    urban += 1
+                    if bb['kind'] in (2, 4, 5): shops += 1
+        long_deck = any(q - p > n * 0.8 for p, q in e['bridges'])
+        if rec.get('walk', -1) != 0 and not long_deck and urban / cnt > 0.45:
+            rec['walk'] = 1.8 if e['kind'] == 'residential' else 3.2 if shops / cnt > 0.3 else 2.4
+        else: rec.pop('walk', None)
+        if e['kind'] == 'residential':
+            run = 0
+            for i in range(n + 1):
+                i0, i1 = max(0, i - 1), min(n, i + 1)
+                g = abs(ele[i1] - ele[i0]) / ((i1 - i0) * 10 or 1)
+                run = run + 1 if g >= 0.07 and land_at(e['lat'][i], e['lon'][i]) != 0 else 0
+                if run >= 3:
+                    for k in range(i - run + 1, i + 1):
+                        if code[k] == 0: code[k] = 1
+            merged = []
+            for i, c in enumerate(code):
+                if merged and merged[-1][2] == c: merged[-1][1] = i
+                else: merged.append([i, i, c])
+            if merged != [[0, n, 0]]: rec['s'] = merged
+    for k in [k for k, v in edges.items() if not v]: del edges[k]
+    print(f"  edges: {sum(1 for v in edges.values() if v.get('walk'))} with sidewalks, {sum(1 for v in edges.values() if v.get('rw'))} riverwalks, "
+          f"{sum(r[1] - r[0] + 1 for v in edges.values() for r in v.get('s', []) if r[2] == 1) * 10 / 1000:.1f} km of brick")
+
+    # ---- by sector (~1.6 km): the world fetches a sector's buildings, trees and furniture as the rider nears it
+    DLAT, DLON = 0.0144, 0.019
+    sec = lambda la, lo: f'{int((la - gs) // DLAT)}_{int((lo - gw) // DLON)}'
+    S = defaultdict(lambda: {'b': [], 't': [], 'p': [], 'l': [], 'n': []})
+    for bb in kept:
+        ll = [(lat0 + qa * UNIT, lon0 + qo * UNIT) for qa, qo in bb['ring']]
+        S[sec(sum(p[0] for p in ll) / len(ll), sum(p[1] for p in ll) / len(ll))]['b'].append(bb)
+    for k in range(0, len(trees), 2): S[sec(lat0 + trees[k] * UNIT, lon0 + trees[k + 1] * UNIT)]['t'] += [trees[k], trees[k + 1]]
+    un16 = lambda t: list(__import__('struct').unpack(f'<{len(__import__("base64").b64decode(t)) // 2}h', __import__('base64').b64decode(t)))
+    un32 = lambda t: list(__import__('struct').unpack(f'<{len(__import__("base64").b64decode(t)) // 4}I', __import__('base64').b64decode(t)))
+    if kit.get('points'):
+        xy = un16(kit['points']['xy'])
+        for i, c in enumerate(kit['points']['kind']): S[sec(lat0 + xy[2 * i] * UNIT, lon0 + xy[2 * i + 1] * UNIT)]['p'] += [c, xy[2 * i], xy[2 * i + 1]]
+    if kit.get('lots'):
+        st, xy = un32(kit['lots']['starts']), un16(kit['lots']['xy'])
+        for k in range(len(st) - 1):
+            ring = [(xy[2 * i], xy[2 * i + 1]) for i in range(st[k], st[k + 1])]
+            if ring: S[sec(lat0 + sum(p[0] for p in ring) / len(ring) * UNIT, lon0 + sum(p[1] for p in ring) / len(ring) * UNIT)]['l'].append(ring)
+    if kit.get('lines'):
+        st, xy = un32(kit['lines']['starts']), un16(kit['lines']['xy'])
+        for k, c in enumerate(kit['lines']['kind']):
+            pts = [(xy[2 * i], xy[2 * i + 1]) for i in range(st[k], st[k + 1])]
+            if pts: m = pts[len(pts) // 2]; S[sec(lat0 + m[0] * UNIT, lon0 + m[1] * UNIT)]['n'].append((c, pts))
+    folder = os.path.join(ROOT, 'routes/cities/pgh-city')
+    os.makedirs(folder, exist_ok=True)
+    for f in glob.glob(os.path.join(folder, '*.json')): os.remove(f)
+    sectors = {}
+    for key, d in S.items():
+        bl = d['b']
+        out_s = {
+            'buildings': {'count': len(bl), 'h': pack_uint16([b['h'] * 10 for b in bl]), 'mh': pack_uint16([b['mh'] * 10 for b in bl]), 'kind': [b['kind'] for b in bl],
+                          'starts': pack_uint32([0] + list(itertools.accumulate(len(b['ring']) for b in bl))), 'xy': pack_int16([v for b in bl for p in b['ring'] for v in p]),
+                          'names': {str(k): b['name'] for k, b in enumerate(bl) if b['name']}},
+            'trees': pack_int16(d['t']),
+            'points': {'kind': d['p'][0::3], 'xy': pack_int16([v for i in range(0, len(d['p']), 3) for v in d['p'][i + 1:i + 3]])},
+            'lots': {'starts': pack_uint32([0] + list(itertools.accumulate(len(r) for r in d['l']))), 'xy': pack_int16([v for r in d['l'] for p in r for v in p])},
+            'lines': {'kind': [c for c, _ in d['n']], 'starts': pack_uint32([0] + list(itertools.accumulate(len(p) for _, p in d['n']))), 'xy': pack_int16([v for _, pts in d['n'] for p in pts for v in p])},
+        }
+        json.dump(out_s, open(os.path.join(folder, f's_{key}.json'), 'w'), separators=(',', ':'))
+        sectors[key] = len(bl)
+    # the land cover: raw codes, gzipped (the world inflates it: DecompressionStream)
+    import gzip
+    open(os.path.join(ROOT, 'routes/cities/pgh-land.bin.gz'), 'wb').write(gzip.compress(img.tobytes(), 9))
     out = {
-        'format': 'bikefree-pgh-city-1',
+        'format': 'bikefree-pgh-city-2',
         'attribution': 'Map data © OpenStreetMap contributors (ODbL)',
-        'note': 'tools/pgh_city.py: the Pittsburgh map\'s city data over PGH (within 250 m of its ways)',
+        'note': 'tools/pgh_city.py: the Pittsburgh map\'s city data over PGH (within 250 m of its ways), in sectors fetched as the rider nears them',
         'origin': [lat0, lon0], 'unit': UNIT, 'surfaces': SURF,
-        'land': {'west': gw, 'south': gs, 'east': ge, 'north': gn, 'nx': lx, 'ny': ly, 'm': LAND_M, 'rle': rle(list(img.tobytes()))},
-        'buildings': {
-            'count': len(kept),
-            'h': pack_uint16([b['h'] * 10 for b in kept]), 'mh': pack_uint16([b['mh'] * 10 for b in kept]),
-            'kind': [b['kind'] for b in kept],
-            'starts': pack_uint32([0] + list(itertools.accumulate(len(b['ring']) for b in kept))),
-            'xy': pack_int16([v for b in kept for p in b['ring'] for v in p]),
-            'names': {str(k): b['name'] for k, b in enumerate(kept) if b['name']},
-        },
-        'trees': pack_int16(trees),
-        'streetKit': kit,
+        'land': {'west': gw, 'south': gs, 'east': ge, 'north': gn, 'nx': lx, 'ny': ly, 'm': LAND_M, 'file': 'routes/cities/pgh-land.bin.gz'},
+        'sectors': {'south': gs, 'west': gw, 'dlat': DLAT, 'dlon': DLON, 'folder': 'routes/cities/pgh-city', 'pointKinds': kit.get('pointKinds', []), 'lineKinds': kit.get('lineKinds', []), 'list': sectors},
         'edges': edges,
     }
     path = os.path.join(ROOT, 'routes/cities/pgh-city.json')
     json.dump(out, open(path, 'w'), separators=(',', ':'))
-    print(f'  wrote routes/cities/pgh-city.json ({os.path.getsize(path) / 1e6:.1f} MB): {len(kept)} buildings, {len(trees) // 2} trees, '
-          f'land {lx}×{ly} @ {LAND_M} m, {len(edges)} edges described')
+    tot = sum(os.path.getsize(f) for f in glob.glob(os.path.join(folder, '*.json')))
+    print(f'  wrote routes/cities/pgh-city.json ({os.path.getsize(path) / 1e3:.0f} KB), {len(sectors)} sectors ({tot / 1e6:.1f} MB), '
+          f'pgh-land.bin.gz ({os.path.getsize(os.path.join(ROOT, "routes/cities/pgh-land.bin.gz")) / 1e3:.0f} KB): {len(kept)} buildings, {len(trees) // 2} trees')
 
 
 if __name__ == '__main__':

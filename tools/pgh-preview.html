@@ -16,7 +16,7 @@ if (q.has('edge')) first = q.get('edge');
 const net = loadNetwork(network, base);
 const route = makePathRoute(net, { id: 'preview', name: 'PGH', path: null, first });
 const at = +(q.get('at') || 40);
-const world = new GraphWorld(document.getElementById('v'), base, { path: route.netRide, log: (a, m, l) => console.log(a, m, l || '') });
+const world = new GraphWorld(document.getElementById('v'), base, { path: route.netRide, quality: q.get('quality') || 'balanced', log: (a, m, l) => console.log(a, m, l || '') });
 world.setTimeOfDay(q.get('time') || 'midday');
 world.setCamera(q.get('camera') || 'closest');
 world.setSource(() => ({ pos: at, speed: 0, cadence: 0, riding: true }));
