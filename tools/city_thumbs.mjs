@@ -1,11 +1,9 @@
-// Build side of the road-graph cities' menu cards (PGH, CNY, SKAN): a small baked outline of its main roads, its water and each
+// Build side of the road-graph cities' menu cards (PGH, CNY, SKAN): a small baked outline of all its roads, its water and each
 // preset route, so the menu draws the card without downloading and building the whole graph (about 2 MB for the
 // three cities). Used by tools/build_routes.mjs to write routes/cities/index.json; the app draws it with js/city-thumbs.js thumbLines.
 import { graphNetwork } from '../js/graph.js';
 import { loadNetwork, edgeLines } from '../js/network.js';
 
-/** Road kinds the thumbnail draws (the rest, residential streets and alleys, are left out at card size). */
-export const THUMB_KINDS = new Set(['primary', 'secondary', 'path']);
 const TOLERANCE_M = 12;
 
 /** Douglas–Peucker on [lat, lon] points (metres from a local flat projection); returns the kept points, rounded. */
@@ -46,7 +44,7 @@ export function cityThumb(json, map = null, name = json.name) {
   // the whole network's box (side streets too): the card frames the city as the full map does
   let s = 90, w = 180, n = -90, e = -180;
   for (const L of lines) for (let i = 0; i < L.lat.length; i++) { s = Math.min(s, L.lat[i]); n = Math.max(n, L.lat[i]); w = Math.min(w, L.lon[i]); e = Math.max(e, L.lon[i]); }
-  const out = { lines: lines.filter((L) => THUMB_KINDS.has(L.e.kind)).map((L) => simplifyLatLon(pts(L))), box: [s, w, n, e].map((v) => Math.round(v * 1e5) / 1e5), water: map?.water || null, routes: {} };
+  const out = { lines: lines.map((L) => simplifyLatLon(pts(L))), box: [s, w, n, e].map((v) => Math.round(v * 1e5) / 1e5), water: map?.water || null, routes: {} };
   for (const pr of net.presets || []) {
     const path = [];
     for (const k of pr.path || []) {

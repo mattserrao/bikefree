@@ -418,7 +418,7 @@ export function drawCityMap(canvas, { lines, rivers = [], waterAreas = null, lab
     const pts = [], n = L.lat.length, step = Math.max(1, Math.floor(n / 80));
     for (let i = 0; i < n; i += step) pts.push([X(L.lon[i]), Y(L.lat[i])]);
     pts.push([X(L.lon[n - 1]), Y(L.lat[n - 1])]);
-    return { id: L.id, pts, minor: L.minor === 2 };   // (a thumbnail shows main and secondary roads alike)
+    return { id: L.id, pts, minor: L.minor === 2, frame: !!L.frame };   // (frame: sizes the view, not drawn as a road)
   });
   const byId = new Map(out.map((L) => [L.id, L]));
   // the tapped segment: a soft halo under everything
@@ -427,12 +427,21 @@ export function drawCityMap(canvas, { lines, rivers = [], waterAreas = null, lab
   // highlighted (menu-simplify-test: the cards used to draw only main roads and trails, dark, and a goal brightened
   // its routes' roads — both looked like chosen routes). Side streets (L.minor 2) thinner, and not on a thumbnail;
   // `lit` (a goal's roads) no longer changes the look.
-  void lit; void muted;
-  ctx.globalAlpha = thumb ? 0.85 : 0.5;
-  for (const L of out) if (L.minor && !thumb) stroke(L.pts, faint, 1 * k);
-  ctx.globalAlpha = thumb ? 0.85 : 0.8;
-  for (const L of out) if (!L.minor) stroke(L.pts, faint, thumb ? 1.25 : 1.5 * k);
-  ctx.globalAlpha = 1;
+  void lit;
+  if (thumb) {
+    // a menu card: every road, one solid dark line (light mode; a mid grey on the dark theme, where dark wouldn't
+    // show), stroked as one path so joins don't stack into dots
+    ctx.strokeStyle = light ? '#555550' : muted; ctx.lineWidth = 1; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (const L of out) if (!L.frame) L.pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.stroke();
+  } else {
+    ctx.globalAlpha = 0.5;
+    for (const L of out) if (L.minor) stroke(L.pts, faint, 1 * k);
+    ctx.globalAlpha = 0.8;
+    for (const L of out) if (!L.minor) stroke(L.pts, faint, 1.5 * k);
+    ctx.globalAlpha = 1;
+  }
   // landmarks (PLAN 7.9): a dot in its kind's colour, ringed (the T's stations: a square), under the map's labels;
   // their own short labels where they fit, over the network, under the route's highlight (taps go to the lines
   // first: js/app.js). Rank 3 (the T's stations, the ones beside another) only once zoomed in
