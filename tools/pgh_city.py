@@ -35,6 +35,8 @@ from build_city import elevation, rings_of, parse_m, simplify, point_in, pack_in
 UNIT = 3e-6          # coordinate unit (degrees): PGH is bigger than one city scene (±0.098° in Int16)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# the city (user, 22 Nov: CNY, "following the guide used for PGH"): routes/cities/<id>.json and its files; PGH by default
+CITY = sys.argv[sys.argv.index('--city') + 1] if '--city' in sys.argv else 'pgh'
 REACH = 250          # m from a PGH way: buildings, trees, the street kit
 TALL = 40            # towers this tall are kept anywhere in the box
 LAND_M = 6
@@ -55,7 +57,7 @@ def decode_edges(pgh):
 
 
 def main():
-    pgh = json.load(open(os.path.join(ROOT, 'routes/cities/pgh.json')))
+    pgh = json.load(open(os.path.join(ROOT, f'routes/cities/{CITY}.json')))
     E = decode_edges(pgh)
     la_all = [v for e in E for v in e['lat']]; lo_all = [v for e in E for v in e['lon']]
     pad = 0.004
@@ -84,7 +86,7 @@ def main():
 
     # OSM (the tiles are big: parse each one and keep only what's needed)
     nodes, ntags, ways, rels = {}, {}, {}, {}
-    files = sorted(glob.glob(os.path.join(ROOT, 'tools/.cache/osm-pgh/*.osm')))
+    files = sorted(glob.glob(os.path.join(ROOT, f'tools/.cache/osm-{CITY}/*.osm')))
     for k, f in enumerate(files):
         for ev, el in ET.iterparse(f, events=('end',)):
             if el.tag == 'node':
@@ -103,7 +105,7 @@ def main():
 
     # the Pittsburgh map's settings, gathered from its scenes
     special, res_boxes, drop_b = {}, [], set()
-    for f in glob.glob(os.path.join(ROOT, 'tools/city/pittsburgh*.json')):
+    for f in (glob.glob(os.path.join(ROOT, 'tools/city/pittsburgh*.json')) if CITY == 'pgh' else []):   # (the Pittsburgh map's own settings: PGH only)
         try: c = json.load(open(f))
         except Exception: continue
         special.update(c.get('specialBuildings', {})); res_boxes += c.get('residentialBoxes', [])
@@ -140,6 +142,17 @@ def main():
             except Exception: pass
     for code in (8, 9, 1, 2, 5, 6, 3):
         for pts in layers[code]: poly(pts, 0 if code == 9 else code)
+    # the waterways OSM draws as lines (no area): CNY's Erie Canal, Nine Mile Creek — water at their width (PGH's rivers
+    # are areas, under its water plane)
+    if CITY != 'pgh':
+        WIDE = {'canal': 14, 'river': 16, 'stream': 4}
+        nw_ = 0
+        for wid, (nd, t) in ways.items():
+            w_m = WIDE.get(t.get('waterway')); 
+            if not w_m or t.get('tunnel') in ('culvert', 'yes'): continue
+            pts = [nodes[r] for r in nd if r in nodes]
+            if len(pts) > 1: dr.line([pix(*q) for q in pts], fill=3, width=max(1, round(w_m / LAND_M))); nw_ += 1
+        print(f'  waterways drawn as water: {nw_}')
 
     # 2. buildings (as build_city.py)
     def height_of(t):
@@ -210,7 +223,8 @@ def main():
             px_, py_ = pix(clat, clon)
             res = 0 <= px_ < lx and 0 <= py_ < ly and img.getpixel((int(px_), int(py_))) in (8, UNTAGGED)
             area_m2 = abs(sum(a[1] * b_[0] - b_[1] * a[0] for a, b_ in zip(pts, pts[1:] + pts[:1])) / 2 * kx * ky)
-            if res and area_m2 < 220: kind = 0 if (clat < 40.4335 and clon > -79.997) or (int(''.join(ch for ch in wid if ch.isdigit()) or 0) % 3 == 0) else 1
+            if CITY != 'pgh': kind = 1 if res and area_m2 < 400 else 2   # (a suburb: detached houses among the homes, not rowhouses)
+            elif res and area_m2 < 220: kind = 0 if (clat < 40.4335 and clon > -79.997) or (int(''.join(ch for ch in wid if ch.isdigit()) or 0) % 3 == 0) else 1
             else: kind = 0 if clat < 40.4335 and clon > -79.997 else 2
         lp = [loc(*p) for p in pts]
         if lp[0] == lp[-1]: lp = lp[:-1]
@@ -362,7 +376,7 @@ def main():
         px_, py_ = pix(la, lo); i, j = int(round(px_)), int(round(py_))
         return int(Larr[j, i]) if 0 <= i < lx and 0 <= j < ly else 7
     import re
-    MAIN_TRAIL = re.compile(r'Heritage|Allegheny Passage|Eliza Furnace|North Shore Trail|South Side Trail|Station Square Trail|Strip District Trail|Hot Metal|Mon Wharf|^Trail$|Riverwalk|Riverfront', re.I)
+    MAIN_TRAIL = re.compile(r'Canalway|Heritage|Allegheny Passage|Eliza Furnace|North Shore Trail|South Side Trail|Station Square Trail|Strip District Trail|Hot Metal|Mon Wharf|^Trail$|Riverwalk|Riverfront', re.I)
     widths = pgh.get('widths', {})
     ke = pgh.get('unit', {}).get('ele', 0.1)
     for e, pe in zip(E, pgh['edges']):
@@ -403,7 +417,7 @@ def main():
         if rec.get('walk', -1) != 0 and not long_deck and urban / cnt > 0.45:
             rec['walk'] = 1.8 if e['kind'] == 'residential' else 3.2 if shops / cnt > 0.3 else 2.4
         else: rec.pop('walk', None)
-        if e['kind'] == 'residential':
+        if e['kind'] == 'residential' and CITY == 'pgh':   # (the Pittsburgh map's brick rule: steep side streets)
             run = 0
             for i in range(n + 1):
                 i0, i1 = max(0, i - 1), min(n, i + 1)
@@ -444,7 +458,7 @@ def main():
         for k, c in enumerate(kit['lines']['kind']):
             pts = [(xy[2 * i], xy[2 * i + 1]) for i in range(st[k], st[k + 1])]
             if pts: m = pts[len(pts) // 2]; S[sec(lat0 + m[0] * UNIT, lon0 + m[1] * UNIT)]['n'].append((c, pts))
-    folder = os.path.join(ROOT, 'routes/cities/pgh-city')
+    folder = os.path.join(ROOT, f'routes/cities/{CITY}-city')
     os.makedirs(folder, exist_ok=True)
     for f in glob.glob(os.path.join(folder, '*.json')): os.remove(f)
     sectors = {}
@@ -463,21 +477,21 @@ def main():
         sectors[key] = len(bl)
     # the land cover: raw codes, gzipped (the world inflates it: DecompressionStream)
     import gzip
-    open(os.path.join(ROOT, 'routes/cities/pgh-land.bin.gz'), 'wb').write(gzip.compress(img.tobytes(), 9))
+    open(os.path.join(ROOT, f'routes/cities/{CITY}-land.bin.gz'), 'wb').write(gzip.compress(img.tobytes(), 9))
     out = {
         'format': 'bikefree-pgh-city-2',
         'attribution': 'Map data © OpenStreetMap contributors (ODbL)',
         'note': 'tools/pgh_city.py: the Pittsburgh map\'s city data over PGH (within 250 m of its ways), in sectors fetched as the rider nears them',
         'origin': [lat0, lon0], 'unit': UNIT, 'surfaces': SURF,
-        'land': {'west': gw, 'south': gs, 'east': ge, 'north': gn, 'nx': lx, 'ny': ly, 'm': LAND_M, 'file': 'routes/cities/pgh-land.bin.gz'},
-        'sectors': {'south': gs, 'west': gw, 'dlat': DLAT, 'dlon': DLON, 'folder': 'routes/cities/pgh-city', 'pointKinds': kit.get('pointKinds', []), 'lineKinds': kit.get('lineKinds', []), 'list': sectors},
+        'land': {'west': gw, 'south': gs, 'east': ge, 'north': gn, 'nx': lx, 'ny': ly, 'm': LAND_M, 'file': f'routes/cities/{CITY}-land.bin.gz'},
+        'sectors': {'south': gs, 'west': gw, 'dlat': DLAT, 'dlon': DLON, 'folder': f'routes/cities/{CITY}-city', 'pointKinds': kit.get('pointKinds', []), 'lineKinds': kit.get('lineKinds', []), 'list': sectors},
         'edges': edges,
     }
-    path = os.path.join(ROOT, 'routes/cities/pgh-city.json')
+    path = os.path.join(ROOT, f'routes/cities/{CITY}-city.json')
     json.dump(out, open(path, 'w'), separators=(',', ':'))
     tot = sum(os.path.getsize(f) for f in glob.glob(os.path.join(folder, '*.json')))
-    print(f'  wrote routes/cities/pgh-city.json ({os.path.getsize(path) / 1e3:.0f} KB), {len(sectors)} sectors ({tot / 1e6:.1f} MB), '
-          f'pgh-land.bin.gz ({os.path.getsize(os.path.join(ROOT, "routes/cities/pgh-land.bin.gz")) / 1e3:.0f} KB): {len(kept)} buildings, {len(trees) // 2} trees')
+    print(f'  wrote routes/cities/{CITY}-city.json ({os.path.getsize(path) / 1e3:.0f} KB), {len(sectors)} sectors ({tot / 1e6:.1f} MB), '
+          f'{CITY}-land.bin.gz ({os.path.getsize(os.path.join(ROOT, f"routes/cities/{CITY}-land.bin.gz")) / 1e3:.0f} KB): {len(kept)} buildings, {len(trees) // 2} trees')
 
 
 if __name__ == '__main__':

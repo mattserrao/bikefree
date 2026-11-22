@@ -503,12 +503,12 @@ function load(json, name) {
   toast(`${M.edges.length} ways loaded`);
 }
 function loadLayers(base) {
-  fetch(base + 'pgh-shore.json').then((r) => r.json()).then((s) => {
+  fetch(base + `${MAP}-shore.json`).then((r) => r.json()).then((s) => {
     const k = s.unit?.latlon ?? 1e-6, ks = s.unit?.side ?? 0.001;
     shore = s.lines.map((l) => { const la = undelta(l.lat, k), lo = undelta(l.lon, k), side = undelta(l.side, ks); return { P: la.map((a, i) => proj.to(a, lo[i])), N: side.map((t) => [Math.cos(t), Math.sin(t)]) }; });
     draw();
   }).catch(() => {});
-  fetch(base + 'pgh-bridges.json').then((r) => r.json()).then((b) => { bridges = b.bridges.map((x) => ({ P: x.path.map(([la, lo]) => proj.to(la, lo)), w: x.width || 10 })); draw(); }).catch(() => {});
+  fetch(base + `${MAP}-bridges.json`).then((r) => r.json()).then((b) => { bridges = b.bridges.map((x) => ({ P: x.path.map(([la, lo]) => proj.to(la, lo)), w: x.width || 10 })); draw(); }).catch(() => {});
 }
 async function openFile() {
   if (window.showOpenFilePicker) {
@@ -527,8 +527,8 @@ async function save() {
   if (fileHandle?.createWritable) {
     try { const w = await fileHandle.createWritable(); await w.write(text); await w.close(); dirty = false; showSide(); toast(`Saved ${fileName}${note}`); return; } catch (err) { if (err.name === 'AbortError') return; }
   }
-  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' })); a.download = 'pgh.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-  dirty = false; showSide(); toast(`Downloaded pgh.json — put it at routes/cities/pgh.json${note}`);
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' })); a.download = fileName; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  dirty = false; showSide(); toast(`Downloaded ${fileName} — put it at routes/cities/${fileName}${note}`);
 }
 addEventListener('beforeunload', (ev) => { if (dirty) { ev.preventDefault(); ev.returnValue = ''; } });
 addEventListener('dragover', (ev) => { ev.preventDefault(); document.getElementById('drop').style.display = 'flex'; });
@@ -541,8 +541,11 @@ window.ED = { get M() { return M; }, get deg() { return deg; }, proj: () => proj
 
 resize(); setTool('select');
 // opened from the repo (a local server, githack): the map loads by itself; from disk: Open
+// which map: ?map=cny (CNY), else PGH
+const MAP = (new URLSearchParams(location.search).get('map') || 'pgh').replace(/[^a-z0-9-]/gi, '');
+document.title = `${MAP.toUpperCase()} map editor`;
 const base = new URL('../routes/cities/', location.href).href;
-fetch(base + 'pgh.json').then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).then((j) => { load(j, 'pgh.json'); loadLayers(base); })
+fetch(base + `${MAP}.json`).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).then((j) => { load(j, `${MAP}.json`); loadLayers(base); })
   .catch(() => { document.getElementById('start').hidden = false; });
 </script>
 </body>

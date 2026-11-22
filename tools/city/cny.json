@@ -1,0 +1,150 @@
+{
+ "id": "cny",
+ "name": "CNY",
+ "cityName": "Camillus, NY",
+ "note": "CNY free-ride graph (tools/build_pgh.py --city cny; user, 22 Nov: \"create a new map CNY following the guide used for PGH. Establish the map inside the red circle\"). The area: the circle the user drew round Warners, Camillus and Amboy (area.circle: centre lat, lon and radius in metres). Every street and trail you can bike inside it; trunk roads (NY 5, NY 690) only as pieces of at most connectorM, to cross them; motorways (I-90) never.",
+ "area": {
+  "circle": [
+   43.0643,
+   -76.321,
+   4800
+  ],
+  "marginM": 1500
+ },
+ "corridorM": 0,
+ "osmTile": [
+  0.01,
+  0.008
+ ],
+ "osmOrigin": [
+  -76.4,
+  43.0
+ ],
+ "roads": {
+  "primary": "primary",
+  "primary_link": "primary",
+  "secondary": "secondary",
+  "secondary_link": "secondary",
+  "tertiary": "tertiary",
+  "tertiary_link": "tertiary",
+  "unclassified": "residential",
+  "residential": "residential",
+  "living_street": "residential",
+  "service": "alley",
+  "track": "path",
+  "busway": null
+ },
+ "serviceKinds": [
+  "alley"
+ ],
+ "skipService": [
+  "driveway",
+  "parking_aisle",
+  "drive-through",
+  "emergency_access"
+ ],
+ "paths": {
+  "cycleway": "path",
+  "path": "path",
+  "footway": "path",
+  "bridleway": "path",
+  "pedestrian": "plaza"
+ },
+ "skipSurfaces": [
+  "stairs"
+ ],
+ "maxTunnelM": 120,
+ "mergeM": 15,
+ "snapM": 4,
+ "dupM": 25,
+ "minLoopM": 40,
+ "spurM": 30,
+ "smoothM": 35,
+ "widths": {
+  "primary": 12,
+  "secondary": 10,
+  "tertiary": 8.5,
+  "residential": 7,
+  "alley": 4.5,
+  "path": 3.2,
+  "plaza": 6
+ },
+ "waterLevelM": 100,
+ "pools": [],
+ "groundCellM": 20,
+ "groundMarginM": 1500,
+ "groundFile": "routes/cities/cny-ground.grid.bin.gz",
+ "start": {
+  "lat": 43.0392,
+  "lon": -76.3041,
+  "note": "Camillus village, Main Street"
+ },
+ "connectors": [
+  "trunk",
+  "trunk_link"
+ ],
+ "connectorM": 180,
+ "maxGradePct": 30,
+ "maxAvgGradePct": 34,
+ "bridgeClearM": 11,
+ "bridgeRampPct": 6,
+ "riverFloorM": 2.5,
+ "riversideM": 25,
+ "denseM": 40,
+ "removeAlleys": true,
+ "overpassClearM": 4.5,
+ "connectMaxM": 350,
+ "connectSnapM": 8,
+ "connectMaxGradePct": 12,
+ "parallelM": 30,
+ "parallelMinM": 60,
+ "smoothMaxShiftM": 8,
+ "smoothPasses": 8,
+ "junctionEaseM": 30,
+ "routeKeepM": 18,
+ "routeLinkMaxM": 50,
+ "files": {
+  "ground": "routes/cities/cny-ground.grid.bin.gz",
+  "heroes": "routes/cities/cny-heroes.json",
+  "cityData": "routes/cities/cny-city.json"
+ },
+ "mapLabels": [
+  [
+   "Camillus",
+   43.0392,
+   -76.3041,
+   1
+  ],
+  [
+   "Warners",
+   43.0853,
+   -76.3291,
+   1
+  ],
+  [
+   "Amboy",
+   43.0695,
+   -76.2724,
+   1
+  ],
+  [
+   "Fairmount",
+   43.0465,
+   -76.256,
+   2
+  ],
+  [
+   "Erie Canal Park",
+   43.058,
+   -76.3105,
+   2
+  ],
+  [
+   "Martisco",
+   43.0173,
+   -76.3347,
+   2
+  ]
+ ],
+ "keepParallelTrails": true
+}

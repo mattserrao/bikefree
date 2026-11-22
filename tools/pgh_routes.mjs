@@ -15,23 +15,25 @@ import { decodeGraph, graphNetwork } from '../js/graph.js';
 import { loadNetwork, makePathRoute, planCloses } from '../js/network.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const pghPath = resolve(root, 'routes/cities/pgh.json');
-const json = JSON.parse(readFileSync(pghPath, 'utf8'));
-const city = JSON.parse(readFileSync(resolve(root, 'routes/cities/pgh-city.json'), 'utf8'));
-const G = decodeGraph(json);
 const args = process.argv.slice(2), only = args.includes('--only') ? args[args.indexOf('--only') + 1] : null;
+// the city (user, 22 Nov: CNY, "following the guide used for PGH"): routes/cities/<id>.json; PGH by default
+const CITY = args.includes('--city') ? args[args.indexOf('--city') + 1] : 'pgh';
+const pghPath = resolve(root, `routes/cities/${CITY}.json`);
+const json = JSON.parse(readFileSync(pghPath, 'utf8'));
+let city = { edges: {} }; try { city = JSON.parse(readFileSync(resolve(root, `routes/cities/${CITY}-city.json`), 'utf8')); } catch { /* (no city data yet: no one-ways) */ }
+const G = decodeGraph(json);
 
 // ---------------------------------------------------------------- the routes
 // A waypoint: { near: [lat, lon] } — the junction nearest the spot (by position, not node id: ids change when PGH
 // is rebuilt); { near, on: street } — the junction on that street nearest it; { at: [street, street], near } — the
 // two's junction. `prefer`: ways to favour on the way to it (by name); `avoid`: ways to keep off (by name or edge id).
-const TRAILS = ['Trail', 'Three Rivers Heritage Trail', 'North Shore Trail', 'Strip District Trail', 'Eliza Furnace Trail', 'South Side Trail',
+const PGH_TRAILS = ['Trail', 'Three Rivers Heritage Trail', 'North Shore Trail', 'Strip District Trail', 'Eliza Furnace Trail', 'South Side Trail',
   'Station Square Trail', 'Great Allegheny Passage', 'Hot Metal Bike/Pedestrian Bridge', 'Junction Hollow Trail', 'Fort Duquesne Bridge'];
-const ROUTES = [
+const PGH_ROUTES = [
   {
     id: 'pgh-three-rivers', name: 'Three Rivers Loop', tags: ['flat', 'trail', 'classic'],
     note: 'The Three Rivers Heritage Trail from the Point: along the Mon and over the Smithfield Street Bridge to Station Square, through the South Side to the Hot Metal Bridge, back into town on the Eliza Furnace Trail, then along the Allegheny and round the Point',
-    prefer: TRAILS,
+    prefer: PGH_TRAILS,
     way: [
       { near: [40.44023, -80.00700] },                                                                   // the Point (its Mon side)
       { near: [40.43219, -80.00377], prefer: ['Fort Pitt Boulevard', 'Three Rivers Heritage Trail'] },   // along the Mon, over the Smithfield Street Bridge
@@ -56,7 +58,7 @@ const ROUTES = [
   {
     id: 'pgh-oakland-schenley', name: 'Oakland & Schenley Park', tags: ['hilly', 'park', 'trail'],
     note: 'From the Hot Metal Bridge along the river to Hazelwood and up Junction Hollow into Schenley Park, round Panther Hollow Lake, along Forbes Avenue past Carnegie Mellon, the Carnegie Museums and the Cathedral of Learning, then down Bates Street to the river',
-    prefer: TRAILS,
+    prefer: PGH_TRAILS,
     way: [
       { near: [40.42971, -79.95838] },                                                                   // the Hot Metal Bridge's north end
       { near: [40.42774, -79.94910], prefer: ['Hazelwood Trail', 'Great Allegheny Passage', 'Trail'] },
@@ -65,7 +67,7 @@ const ROUTES = [
       { near: [40.43952, -79.94335], prefer: ['Lower Panther Hollow Trail'], avoid: ['Schenley Drive'] },   // down round Panther Hollow Lake
       { near: [40.43967, -79.95237], prefer: ['Schenley Drive', 'Forbes Avenue', 'South Bouquet Street'] },   // Forbes Avenue past the museums and the Cathedral of Learning
       { near: [40.43057, -79.95971], prefer: ['Bates Street'] },                               // down Bates Street
-      { near: [40.42971, -79.95838], prefer: TRAILS },
+      { near: [40.42971, -79.95838], prefer: PGH_TRAILS },
     ],
   },
   {
@@ -98,8 +100,85 @@ const ROUTES = [
   },
 ];
 
+// ---------------------------------------------------------------- CNY (Camillus, Warners, Amboy: tools/city/cny.json)
+const CNY_TRAILS = ['Erie Canalway Trail', 'Trail'];
+const CNY_ROUTES = [
+  {
+    id: 'cny-erie-canal', name: 'Erie Canal Towpath', tags: ['flat', 'trail', 'classic'],
+    note: 'From the Erie Canal Park on Devoe Road along the old towpath past Warners to West Sorrell Hill Road, back through Warners on Warners Road and down Newport Road',
+    prefer: CNY_TRAILS,
+    way: [
+      { near: [43.05264, -76.30381] },                                                       // Erie Canal Park: the trail at Devoe Road
+      { near: [43.07648, -76.32820], prefer: CNY_TRAILS },                                   // the towpath to Newport Road at Warners
+      { near: [43.09499, -76.35938], prefer: CNY_TRAILS },                                   // …on to West Sorrell Hill Road
+      { near: [43.08489, -76.32878], prefer: ['Warners Road'] },                             // back through Warners
+      { near: [43.05053, -76.30594], prefer: ['Newport Road'] },                             // down Newport Road past Canal Road
+      { near: [43.05264, -76.30381], prefer: ['Devoe Road'] },
+    ],
+  },
+  {
+    id: 'cny-amboy', name: 'Canal Park & Amboy', tags: ['flat', 'trail', 'neighbourhoods'],
+    note: 'From Camillus village out Milton Avenue and Bennett Road to Amboy, back along the Erie Canalway Trail beside Thompson Road to the Erie Canal Park and down Newport Road',
+    way: [
+      { near: [43.03906, -76.30396] },                                                       // Camillus: Genesee Street at Milton Avenue
+      { near: [43.05270, -76.27846], prefer: ['Milton Avenue'] },                            // Milton Avenue to Knowell and Bennett Roads
+      { near: [43.06122, -76.26744], prefer: ['Bennett Road'] },                             // Bennett Road to Warners Road
+      { near: [43.06337, -76.26883], prefer: ['Warners Road'] },                             // Amboy: the trail at Warners Road
+      { near: [43.05264, -76.30381], prefer: CNY_TRAILS },                                   // the trail west to the Erie Canal Park
+      { near: [43.05053, -76.30594], prefer: ['Devoe Road'] },
+      { near: [43.03899, -76.30760], prefer: ['Newport Road'] },                             // down Newport Road into the village
+      { near: [43.03906, -76.30396], prefer: ['Genesee Street'] },
+    ],
+  },
+  {
+    id: 'cny-warners-pottery', name: 'Warners & Pottery Road', tags: ['long', 'varied', 'rural'],
+    note: 'From the Erie Canal Park over the Devoe Road hill, up Herman Road through the farms, down Pottery Road, back across Warners Road to Warners and home on the towpath',
+    way: [
+      { near: [43.05396, -76.30238] },                                                       // Erie Canal Park: Devoe Road at Van Alstine Road
+      { near: [43.08320, -76.30955], prefer: ['Devoe Road'] },                               // over the Devoe Road hill
+      { near: [43.10227, -76.29593], prefer: ['Herman Road'] },                              // up Herman Road
+      { near: [43.07575, -76.28274], prefer: ['Pottery Road'] },                             // down Pottery Road
+      { near: [43.08320, -76.30955], prefer: ['Warners Road'] },                             // Warners Road west
+      { near: [43.08489, -76.32878], prefer: ['Warners Road'] },                             // …to Warners
+      { near: [43.07648, -76.32820], prefer: ['Newport Road'] },
+      { near: [43.05264, -76.30381], prefer: CNY_TRAILS },                                   // home on the towpath
+      { near: [43.05396, -76.30238], prefer: ['Devoe Road'] },
+    ],
+  },
+  {
+    id: 'cny-howlett-hill', name: 'Howlett Hill', tags: ['hilly', 'climb', 'short'],
+    note: 'From Camillus village along West Genesee Street to Howlett Hill Road, the climb to the top of Howlett Hill, and down Munro Road',
+    way: [
+      { near: [43.03825, -76.30276] },                                                       // Camillus: West Genesee Street at Munro Road
+      { near: [43.04107, -76.27451], prefer: ['West Genesee Street'] },                      // West Genesee Street to Howlett Hill Road
+      { near: [43.03012, -76.30426], prefer: ['Howlett Hill Road'] },                        // up Howlett Hill
+      { near: [43.03825, -76.30276], prefer: ['Munro Road'] },                               // down Munro Road
+    ],
+  },
+  {
+    id: 'cny-camillus-hills', name: 'Camillus Hills', tags: ['hilly', 'views', 'climb'],
+    note: 'From the Erie Canal Park up Scenic Drive and Rolling Meadows Way to the top at Vista Way (the highest ground in the circle), along Falling Star Way and Ike Dixon Road, over Hunt Road and down Breed Road to the canal, home on Canal Road and Newport Road',
+    way: [
+      { near: [43.05053, -76.30594] },                                                       // Erie Canal Park: Newport Road at Devoe Road and Scenic Drive
+      { near: [43.04326, -76.31409], prefer: ['Scenic Drive'] },                             // up Scenic Drive
+      { near: [43.03710, -76.32659], prefer: ['Scenic Drive'] },
+      { near: [43.04188, -76.32916], prefer: ['Rolling Meadows Way'] },                      // Rolling Meadows Way to the top
+      { near: [43.04360, -76.32930], prefer: ['Vista Way'] },
+      { near: [43.04460, -76.33750], prefer: ['Falling Star Way'] },                         // Falling Star Way
+      { near: [43.05450, -76.34555], prefer: ['Ike Dixon Road'] },                           // Ike Dixon Road north
+      { near: [43.05702, -76.33643], prefer: ['Hunt Road'] },                                // Hunt Road
+      { near: [43.07481, -76.33785], prefer: ['Breed Road'] },                               // down Breed Road to the canal
+      { near: [43.07409, -76.32941], prefer: ['Canal Road'] },                               // Canal Road
+      { near: [43.05053, -76.30594], prefer: ['Newport Road'] },                             // Newport Road home
+    ],
+  },
+];
+
+const TRAILS = CITY === 'cny' ? CNY_TRAILS : PGH_TRAILS;
+const ROUTES = CITY === 'cny' ? CNY_ROUTES : CITY === 'pgh' ? PGH_ROUTES : [];
+
 // ---------------------------------------------------------------- the graph as a router
-const M_LAT = 111320, mLon = M_LAT * Math.cos(40.44 * Math.PI / 180);
+const M_LAT = 111320, mLon = M_LAT * Math.cos(json.origin.lat * Math.PI / 180);
 const dist = (a, b) => Math.hypot((a[0] - b[0]) * M_LAT, (a[1] - b[1]) * mLon);
 const arms = new Map();   // node → [{ e, dir }] (dir 1: from the node along the edge)
 for (const e of G.edges) {
@@ -230,6 +309,6 @@ if (args.includes('--write')) {
   if (only) throw new Error('--write builds every route: leave out --only');
   json.presets = results.map((x) => x.preset);
   writeFileSync(pghPath, JSON.stringify(json));
-  writeFileSync(resolve(root, 'routes/cities/pgh-presets.json'), JSON.stringify(results.map(({ preset: p }) => ({ id: p.id, name: p.name, tags: p.tags, note: p.note, lengthM: p.lengthM, climbM: p.climbM })), null, 1));
-  console.log(`\nwrote ${results.length} routes → routes/cities/pgh.json (presets), routes/cities/pgh-presets.json`);
+  writeFileSync(resolve(root, `routes/cities/${CITY}-presets.json`), JSON.stringify(results.map(({ preset: p }) => ({ id: p.id, name: p.name, tags: p.tags, note: p.note, lengthM: p.lengthM, climbM: p.climbM })), null, 1));
+  console.log(`\nwrote ${results.length} routes → routes/cities/${CITY}.json (presets), routes/cities/${CITY}-presets.json`);
 }
