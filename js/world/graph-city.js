@@ -85,6 +85,7 @@ export class GraphCity {
     // ---- sectors (~1.6 km): fetched as the rider nears them; their buildings join the stand-in's lists
     this.sectors = new Map();   // key → { state: 'loading' | 'planning' | 'ready' | 'failed', job }
     this.buildings = [];
+    this._railZones = this._railApproaches();
     this.covered = this._landmarkCover();
     this._deckGrid = this._deckIndex();
     host.buildings = this.buildings; host.buildingChunks = new Map(); host.buildingGrid = new Map();
@@ -309,6 +310,28 @@ export class GraphCity {
   inWater(x, z) { const w = this.world; return w._groundH(x, z) < w.poolAt(x, z) + 0.3; }
 
   // ------------------------------------------------------------------ setup helpers
+  /** CNY's rail bridge approaches (cny-landmarks.js railbridge): the embankments' strips along the bridge's axis, so
+   *  no house, tree, fence or verge stands on them; their ends, where a stand of trees takes the line. */
+  _railApproaches() {
+    const out = [], proj = this.world.proj;
+    for (const l of this.heroes.json?.landmarks || []) {
+      if (l.model !== 'railbridge' || !l.path) continue;
+      const p0 = proj.toLocal(...l.path[0]), p1 = proj.toLocal(...l.path[l.path.length - 1]), len = Math.hypot(p1.x - p0.x, p1.z - p0.z) || 20;
+      const u = { x: (p1.x - p0.x) / len, z: (p1.z - p0.z) / len }, v = { x: -u.z, z: u.x }, c = { x: (p0.x + p1.x) / 2, z: (p0.z + p1.z) / 2 };
+      const hl = Math.max(11, len / 2 + 2), [A0, A1] = l.approachM || [150, 60];
+      out.push({ c, u, v, a0: -(hl + A0), a1: hl + A1, hw: 9, ends: [{ x: c.x + u.x * -(hl + A0), z: c.z + u.z * -(hl + A0), s: -1 }, { x: c.x + u.x * (hl + A1), z: c.z + u.z * (hl + A1), s: 1 }] });
+    }
+    return out;
+  }
+  /** Is (x, z) on a rail approach's strip (within pad)? */
+  _railCovers(x, z, pad = 0) {
+    for (const R of this._railZones || []) {
+      const dx = x - R.c.x, dz = z - R.c.z, a = dx * R.u.x + dz * R.u.z, b = dx * R.v.x + dz * R.v.z;
+      if (a > R.a0 - pad && a < R.a1 + pad && Math.abs(b) < R.hw + pad) return true;
+    }
+    return false;
+  }
+
   /** Footprints the landmarks stand on: the heroes' claimed ones and zones, the PGH landmarks' outlines, the stadiums. */
   _landmarkCover() {
     const rings = [], proj = this.world.proj, hj = this.heroes.json || {};
@@ -321,6 +344,7 @@ export class GraphCity {
     const covers = this.heroes.heroes?.covers;
     return (b) => {
       if (covers && covers(b.cx, b.cz, 2)) return true;
+      if (this._railCovers(b.cx, b.cz, 1) || b.ring.some((p) => this._railCovers(p.x, p.z, 0))) return true;   // (on a rail approach)
       for (const q of boxes) {
         if (b.cx < q.x0 - 4 || b.cx > q.x1 + 4 || b.cz < q.z0 - 4 || b.cz > q.z1 + 4) continue;
         if (pip(q.r, b.cx, b.cz) || q.r.some((p) => pip(b.ring, p.x, p.z))) return true;
@@ -522,7 +546,7 @@ export class GraphCity {
     const edgeOf = (x, z) => { const r = this.roadNear(x, z, 30); return r ? r.d - r.half : 99; };
     const clearOf = (x, z, crown) => !this.inWater(x, z) && !this.inWater(x + 3, z) && !this.inWater(x - 3, z) && !this.inWater(x, z + 3) && !this.inWater(x, z - 3)
       && !this.heroes.heroes?.covers?.(x, z, 3) && !this.host.buildingNear(x, z, crown) && !this.kit.occupied(x, z, Math.min(crown, 3)) && !this._inDressing(x, z)
-      && !this._drivewayNear?.(x, z, 2.5);
+      && !this._drivewayNear?.(x, z, 2.5) && !this._railCovers(x, z, crown * .6);
     const pick = (mix, r) => { let a = 0, tot = 0; for (const [, w] of mix) tot += w; for (const [n, w] of mix) { a += w / tot; if (r <= a) return n; } return mix[mix.length - 1][0]; };
     const MIX = {
       woods: [['sugarmaple', 28], ['redoak', 15], ['beech', 10], ['whiteash', 12], ['blackcherry', 8], ['redmaple', 10], ['whitepine', 8], ['hemlock', 6], ['birch', 3]],
@@ -553,6 +577,17 @@ export class GraphCity {
       if (edgeOf(x, z) < 2.5 || !clearOf(x, z, 1.5)) return;
       out.push({ x, z, y: W._groundH(x, z) - .05, sp: name, v: 0, s: s * (.8 + hash(seed) * .5), rot: seed * 23 % 6.283, tint: .9 + hash(seed * 3) * .2 });
     };
+    // a stand of trees round each rail approach's end: the line runs off into the woods
+    for (const R of this._railZones) for (const E of R.ends) {
+      if (E.x < x0 - 30 || E.x >= x0 + TILE + 30 || E.z < z0 - 30 || E.z >= z0 + TILE + 30) continue;
+      for (let k = 0; k < 26; k++) {
+        const h = hash(k * 7.7 + E.x), along = E.s * (2 + hash(k * 3.1 + E.z) * 30), across = (hash(k * 5.3 + E.x * .1) - .5) * 26;
+        const x = E.x + R.u.x * along + R.v.x * across, z = E.z + R.u.z * along + R.v.z * across;
+        if (x < x0 || x >= x0 + TILE || z < z0 || z >= z0 + TILE) continue;
+        // (past the end the strip is clear: trees may stand on the line's continuation, in front of it)
+        if (h < .2) under(x, z, h < .1 ? 'buckthorn' : 'sapling', k + E.x); else tree(x, z, 'woods', Math.round(x * 13 + z * 7) + k, .7 + h * .4);
+      }
+    }
     // OSM's mapped trees
     for (const p of this.osmTrees.get(t.key) || []) tree(p.x, p.z, this.urban(p.x, p.z) ? 'yard' : 'woods', Math.round(p.x * 7 + p.z * 13));
     // street trees in the villages (the urban streets with a sidewalk or a verge)
@@ -648,7 +683,7 @@ export class GraphCity {
   *_planHomesteads(t) {
     const ctx = {
       roadNear: (x, z, r) => this._roadNearFar(x, z, r),
-      free: (x, z, pad) => !this.host.buildingNear(x, z, pad) && !this.kit.occupied(x, z, pad) && !this.onRoad(x, z, pad + 1) && !this.inWater(x, z),
+      free: (x, z, pad) => !this.host.buildingNear(x, z, pad) && !this.kit.occupied(x, z, pad) && !this.onRoad(x, z, pad + 1) && !this.inWater(x, z) && !this._railCovers(x, z, pad),
     };
     t.homes = [];
     for (const b of this.host.buildingChunks.get(t.key) || []) {
@@ -718,7 +753,7 @@ export class GraphCity {
             const t0 = f / 5, sx = e.x[i] + dx * t0, sz = e.z[i] + dz * t0;
             for (let r = 0; r < 3; r++) {
               const off = half + .7 + r * 1.2 + hash(i * 13 + f * 3 + r + side) * .6, x = sx + nx * off * side, z = sz + nz * off * side;
-              if (this.urban(x, z) || this.onRoad(x, z, .3) || this.inWater(x, z) || this._drivewayNear(x, z, .5)) continue;
+              if (this.urban(x, z) || this.onRoad(x, z, .3) || this.inWater(x, z) || this._drivewayNear(x, z, .5) || this._railCovers(x, z)) continue;
               const hs = hash(x * 1.3 + z * 2.1), fl = hash(Math.floor(x / 9) * 3 + Math.floor(z / 9)) < .35 && hs < .45;
               verge(N, x, g(x, z), z, hs, fl);
             }
@@ -730,7 +765,7 @@ export class GraphCity {
           const lc = this.landAt(m.x + nx * side * 4, m.z + nz * side * 4), cr = this._cropAt(m.x + nx * side * 4, m.z + nz * side * 4);
           const pasture = lc === LAND.pasture || cr?.crop === 'hay', woodsOrCrop = lc === LAND.woods || (cr && cr.crop !== 'hay');
           const kind = pasture ? (hb < .55 ? 'wire' : hb < .7 ? 'board' : null) : woodsOrCrop ? (hb < .3 ? 'stone' : null) : null;
-          if (!kind || this.urban(m.x, m.z) || this.inWater(m.x, m.z) || this.host.buildingNear(m.x, m.z, 2) || this._drivewayNear(m.x, m.z, 2) || this.onRoad(m.x, m.z, 1)) continue;
+          if (!kind || this._railCovers(m.x, m.z, 1) || this.urban(m.x, m.z) || this.inWater(m.x, m.z) || this.host.buildingNear(m.x, m.z, 2) || this._drivewayNear(m.x, m.z, 2) || this.onRoad(m.x, m.z, 1)) continue;
           bay(M, kind, a, b, g(a.x, a.z), g(b.x, b.z), hb * 1000 + i);
           if (kind !== 'stone') { const mm = at(i, o), q = at(i + 1, o); bay(M, kind, { x: (mm.x + q.x) / 2, z: (mm.z + q.z) / 2 }, q, g((mm.x + q.x) / 2, (mm.z + q.z) / 2), g(q.x, q.z), hb); }
         }

@@ -336,6 +336,40 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L }) {
       }
       S.color('#4a3a2c'); for (let a = -hl; a <= hl; a += .6) { const q = F.at(a, 0); S.box(q.x, top - .1, q.z, 2.6, .18, .22, F.yawU); }
       S.color('#6b6e70'); for (const b of [-.72, .72]) { const a0 = F.at(-hl, b), a1 = F.at(hl, b); S.beam(V(a0.x, top + .12, a0.z), V(a1.x, top + .12, a1.z), .08, .14); }
+      // the approaches (user, 22 Nov: "a railroad bridge with nothing attached"; chose short approaches): the line runs
+      // on from each abutment along the bridge's axis — l.approachM [south-west, north-east] — on a grassed
+      // embankment with a ballast top, ties and rails, easing down at a railway's ~1.2 % to sit just above the
+      // ground, and ending in the trees (graph-city plants a stand round each end; nothing else stands on it)
+      const [A0, A1] = l.approachM || [150, 60];
+      const railY = (a) => { const q = F.at(a, 0), g = L.heightAt(q.x, q.z); return Math.min(top, Math.max(g + .9, top - .012 * (Math.abs(a) - hl))); };
+      const TOP = 2.4, SLOPE = 1.5;
+      for (const [s, A] of [[-1, A0], [1, A1]]) {
+        if (!(A > 4)) continue;
+        const STEP = 4;
+        for (let d = hl - 1; d < hl + A; d += STEP) {
+          const a0 = s * d, a1 = s * Math.min(hl + A, d + STEP);
+          const y0 = railY(a0), y1 = railY(a1), fade = Math.max(0, (d - (hl + A - 25)) / 25);   // the last 25 m sink into the ground
+          const yb0 = y0 - .35 - fade * .6, yb1 = y1 - .35 - fade * .6;
+          for (const side of [-1, 1]) {
+            // the bank: from the ballast shoulder down at 1 : 1.5 to the ground (and a little below it)
+            const toe = (a, yb) => { const q0 = F.at(a, side * TOP); const g = L.heightAt(q0.x, q0.z); const w = TOP + Math.max(.4, (yb - g) * SLOPE); const q = F.at(a, side * w); return V(q.x, L.heightAt(q.x, q.z) - .25, q.z); };
+            const p0 = F.at(a0, side * TOP), p1 = F.at(a1, side * TOP);
+            const A_ = V(p0.x, yb0, p0.z), B_ = V(p1.x, yb1, p1.z), C_ = toe(a1, yb1), D_ = toe(a0, yb0);
+            S.color(hsh(d * 3.1 + side) < .5 ? '#647d43' : '#6d8448');
+            S.quad(A_, D_, C_, B_); S.quad(A_, B_, C_, D_);   // (both faces: the bank's seen from either side)
+          }
+          // the ballast top
+          const q0l = F.at(a0, -TOP), q0r = F.at(a0, TOP), q1l = F.at(a1, -TOP), q1r = F.at(a1, TOP);
+          S.color('#8d877c');
+          if (s > 0) S.quad(V(q0l.x, yb0, q0l.z), V(q0r.x, yb0, q0r.z), V(q1r.x, yb1, q1r.z), V(q1l.x, yb1, q1l.z));
+          else S.quad(V(q0r.x, yb0, q0r.z), V(q0l.x, yb0, q0l.z), V(q1l.x, yb1, q1l.z), V(q1r.x, yb1, q1r.z));
+          // ties every 0.6 m, and the rails (spiked down; weathered brown)
+          S.color('#4a3a2c');
+          for (let k = 0; k < STEP / .6; k++) { const f = k * .6 / STEP, a = a0 + (a1 - a0) * f, q = F.at(a, 0); S.box(q.x, yb0 + (yb1 - yb0) * f + .1, q.z, 2.6, .16, .22, F.yawU); }
+          S.color('#6b5e52');
+          for (const b of [-.72, .72]) { const r0 = F.at(a0, b), r1 = F.at(a1, b); S.beam(V(r0.x, yb0 + .38, r0.z), V(r1.x, yb1 + .38, r1.z), .08, .14); }
+        }
+      }
     },
 
     library(l) {
