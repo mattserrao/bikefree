@@ -28,6 +28,7 @@ import { decorateTreeMaterial } from './toolbox/packs/northern-rockies.js';
 import { makeAlpsPack } from './toolbox/packs/alps.js';
 import { makeNortheastPack } from './toolbox/packs/northeast.js';
 import { makeTreeCards } from './toolbox/vegetation/tree-cards.js';
+import { GraphLife } from './toolbox/city/graph-life.js';
 
 // (9 is the toolbox's pond; 10–12: a rural map's fields from WorldCover — tools/pgh_city.py rural_land, SKAN;
 // 20–29: CNY's fields — 20-23 corn and 24-27 grain by the rows' heading, 28 hay, 29 farmyard: pgh_city.py "the country")
@@ -118,6 +119,9 @@ export class GraphCity {
     this.kit = this._kitAdapter();
     host.buildingKit = this.kit;
     this._materials();
+    // the rural maps (CNY, SKAN; user, 22 Nov): no cars — other cyclists and people walking instead
+    this.rural = !!world.rural;
+    if (this.rural) this.life = new GraphLife(world, host.group, { quality: world.qualityKey, uTime: this.treeTime });
   }
 
   /** The land cover's codes (a gzipped file of nx × ny bytes): then the ground shader and landAt have them. */
@@ -479,8 +483,9 @@ export class GraphCity {
   }
 
   /** LOD: detailed trees and cars near the camera, crowns and plain cars beyond; the kit's near detail. */
-  tick(cam, time) {
+  tick(cam, time, rider = null, dt = 0) {
     this.treeTime.value = time;
+    this.life?.tick(cam, rider?.pos || null, rider?.fwd || null, dt);
     this.glassNight.value = this.host.night.value * 0.05;
     if (!this._poolAt || this._poolAt.distanceTo(cam) > 25) this._poolTrees(cam);
     if ((this._lf = (this._lf || 0) + 1) % 8) return;
@@ -698,7 +703,7 @@ export class GraphCity {
           }
         }
         // parked cars: main streets with sidewalks, both sides (one side on a one-way), away from junctions and decks
-        if (MAIN.has(e.kind) && walk && !deck && !nearEnd && i % 2 === 0 && half >= 4.2) {
+        if (!this.rural && MAIN.has(e.kind) && walk && !deck && !nearEnd && i % 2 === 0 && half >= 4.2) {
           const ow = this.edgeInfo(e).ow;
           for (const side of ow ? [ow > 0 ? 1 : -1] : [-1, 1]) {
             for (const f of [0.15, 0.8]) {
@@ -739,7 +744,7 @@ export class GraphCity {
       }
     }
     // a car park's cars (in the lots of this tile)
-    for (const ring of this.lots.get(t.key) || []) { this._lotCars(ring, Mc, Mf, frame); if (due()) yield; }
+    if (!this.rural) for (const ring of this.lots.get(t.key) || []) { this._lotCars(ring, Mc, Mf, frame); if (due()) yield; }
     const mesh = (B, name, lod) => {
       if (!B.count) return;
       const g = B.geometry(); const m = new THREE.Mesh(g, this.kitMaterial); m.name = `${name} ${t.key}`; m.castShadow = true; m.receiveShadow = true;
@@ -899,7 +904,7 @@ export class GraphCity {
     this.kit.material.dispose();
     for (const T of this.treeGeos) for (const g of T.tiers) g.dispose();
     for (const tiers of this.pools) for (const im of tiers) im.dispose();
-    this.cards.dispose(); this.facades.dispose();
+    this.cards.dispose(); this.facades.dispose(); this.life?.dispose();
     if (this.carGeos) { for (const g of Object.values(this.carGeos)) g.dispose(); this.carMaterial.dispose(); }
     for (const g of [this.lampGeo, this.acornGeo]) g.dispose();
     for (const m of [this.kitMaterial, this.treeMaterial, this.lampMaterial, this.lotMaterial]) m.dispose();
