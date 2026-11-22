@@ -10,6 +10,9 @@
     "qc": "node tools/qc_course.mjs",
     "qc:clipping": "node tools/qc_clipping.mjs",
     "qc:network": "node tools/qc_network.mjs",
+    "qc:pgh": "node tools/qc_pgh.mjs",
+    "pgh:build": "node tools/pgh_pipeline.mjs",
+    "snap:pgh": "node tools/snap_pgh.mjs",
     "network:build": "node tools/build_network.mjs",
     "snap": "node tools/snap_scene.mjs",
     "snap:cam": "node tools/snap_cam.mjs",
@@ -21,7 +24,9 @@
     "gallery": "node tools/snap_gallery.mjs",
     "figures": "node tools/build_figures.mjs",
     "snap:figures": "node tools/snap_figures.mjs",
-    "gallery:buildings": "node tools/snap_buildings.mjs"
+    "gallery:buildings": "node tools/snap_buildings.mjs",
+    "pgh:edit": "echo 'PGH map editor: http://localhost:8000/tools/pgh-editor.html' && python3 -m http.server 8000",
+    "pgh:after-edit": "node tools/pgh_after_edit.mjs"
   },
   "devDependencies": {
     "@garmin/fitsdk": "^21.221.0",

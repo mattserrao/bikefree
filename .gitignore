@@ -4,3 +4,4 @@ __pycache__/
 tools/qc-report.html
 tools/qc-clipping-report.html
 tools/snapshots/
+tools/qc-pgh-report.json

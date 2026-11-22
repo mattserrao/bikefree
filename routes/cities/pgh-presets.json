@@ -1,0 +1,62 @@
+[
+ {
+  "id": "pgh-three-rivers",
+  "name": "Three Rivers Loop",
+  "tags": [
+   "flat",
+   "trail",
+   "classic"
+  ],
+  "note": "The Three Rivers Heritage Trail from the Point: along the Mon and over the Smithfield Street Bridge to Station Square, through the South Side to the Hot Metal Bridge, back into town on the Eliza Furnace Trail, then along the Allegheny and round the Point",
+  "lengthM": 13180,
+  "climbM": 76
+ },
+ {
+  "id": "pgh-mt-washington",
+  "name": "Mount Washington",
+  "tags": [
+   "hilly",
+   "views",
+   "climb"
+  ],
+  "note": "From Station Square along East Carson Street and up P J McArdle Roadway onto Mount Washington, along Grandview Avenue past the overlooks above the Point, over the top through Allentown and down Brosville Street to the South Side, home on its back streets",
+  "lengthM": 10070,
+  "climbM": 208
+ },
+ {
+  "id": "pgh-oakland-schenley",
+  "name": "Oakland & Schenley Park",
+  "tags": [
+   "hilly",
+   "park",
+   "trail"
+  ],
+  "note": "From the Hot Metal Bridge along the river to Hazelwood and up Junction Hollow into Schenley Park, round Panther Hollow Lake, along Forbes Avenue past Carnegie Mellon, the Carnegie Museums and the Cathedral of Learning, then down Bates Street to the river",
+  "lengthM": 11500,
+  "climbM": 153
+ },
+ {
+  "id": "pgh-north-side",
+  "name": "North Shore & North Side",
+  "tags": [
+   "flat",
+   "stadiums",
+   "neighbourhoods"
+  ],
+  "note": "From PNC Park along the North Shore Trail past Acrisure Stadium, up Allegheny Avenue to Ridge Avenue's old mansions, up Arch Street beside West Park into the Mexican War Streets, and back down round Allegheny Commons to the river",
+  "lengthM": 5500,
+  "climbM": 51
+ },
+ {
+  "id": "pgh-strip-lawrenceville",
+  "name": "Strip District & Lawrenceville",
+  "tags": [
+   "flat",
+   "neighbourhoods",
+   "trail"
+  ],
+  "note": "Along the Strip District Trail, up Smallman Street through the Strip and Butler Street through Lawrenceville, over the 40th Street Bridge, back down the Allegheny on the North Shore Trail past Washington's Landing, and over the David McCullough (16th Street) Bridge",
+  "lengthM": 9440,
+  "climbM": 58
+ }
+]

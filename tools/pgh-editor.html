@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>PGH map editor</title>
+<!--
+  PGH's map editor (user, 22 Nov: "create a tool so I can edit the map offline, SimCity style"). One file, no
+  imports: open it from the repo with a local server (it loads ../routes/cities/pgh.json itself), from a githack link,
+  or straight from disk (file://) and pick the map with Open. Edits routes/cities/pgh.json ("bikefree-graph-1"):
+  junctions and the ways between them (10 m samples, delta-coded), decks (bridges) as runs of samples.
+
+  Tools: Select (inspect, rename, change kind, deck), Move (drag a junction; drop it on another junction or a way to
+  join them), Road (draw a way, click by click), Bridge (a way's middle as a deck, or not), Split, Bulldoze.
+  Undo/redo. Issues: dead ends, decks that end at nothing, two ways side by side over a bridge.
+  Save writes the file back (Chrome/Edge, when opened with Open) or downloads it; then rebuild the rest:
+    node tools/pgh_after_edit.mjs
+-->
+<style>
+  :root { --bg: #1b1d1f; --panel: #26292c; --line: #3a3e42; --text: #e8e6e1; --dim: #9a9890; --acc: #f0b429; --bad: #ff5a4f; --ok: #59c37a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.35 system-ui, -apple-system, Segoe UI, sans-serif; overflow: hidden; }
+  #map { position: fixed; inset: 0; touch-action: none; cursor: crosshair; }
+  #bar { position: fixed; top: 8px; left: 8px; right: 8px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; pointer-events: none; }
+  #bar > * { pointer-events: auto; }
+  .grp { display: flex; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+  button, select, input { font: inherit; color: var(--text); background: transparent; border: 0; border-radius: 7px; }
+  button { padding: 7px 10px; cursor: pointer; white-space: nowrap; }
+  button:hover { background: #33373b; }
+  button.on { background: var(--acc); color: #1b1d1f; font-weight: 600; }
+  button:disabled { opacity: .35; cursor: default; }
+  select, input[type=text], input[type=number] { background: #1f2224; border: 1px solid var(--line); padding: 6px 8px; }
+  #side { position: fixed; top: 64px; right: 8px; width: 300px; max-height: calc(100% - 80px); overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  #side h3 { margin: 4px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); }
+  #side .row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+  #side .row label { width: 70px; color: var(--dim); }
+  #side .row > input, #side .row > select { flex: 1; min-width: 0; }
+  #side .facts { color: var(--dim); font-size: 12.5px; }
+  #side .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  #side .acts button { background: #33373b; }
+  #side .acts button.danger { background: #5a2420; }
+  .issue { padding: 5px 6px; border-radius: 6px; cursor: pointer; font-size: 12.5px; }
+  .issue:hover { background: #33373b; }
+  .issue b { color: var(--bad); font-weight: 600; }
+  #hint { position: fixed; left: 8px; bottom: 8px; right: 320px; color: var(--dim); font-size: 12.5px; pointer-events: none; text-shadow: 0 1px 2px #000; }
+  #toast { position: fixed; left: 50%; bottom: 36px; transform: translateX(-50%); background: #111; border: 1px solid var(--line); padding: 8px 14px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90%; }
+  #toast.show { opacity: 1; }
+  #drop { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: #000a; font-size: 20px; }
+  #start { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  #start[hidden] { display: none; }
+  #start div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; max-width: 420px; }
+  #start button { background: var(--acc); color: #1b1d1f; font-weight: 600; margin-top: 10px; }
+  .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  @media (max-width: 700px) {
+    #toast { bottom: auto; top: 130px; }
+    #side { top: auto; bottom: 8px; left: 8px; right: 8px; width: auto; max-height: 40%; }
+    #hint { display: none; }
+    button { padding: 8px 9px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="map"></canvas>
+<div id="bar">
+  <div class="grp" id="tools">
+    <button data-tool="select" class="on" title="Select (S): inspect and edit a way or a junction">Select</button>
+    <button data-tool="move" title="Move (M): drag a junction; drop it on another junction or a way to join them">Move</button>
+    <button data-tool="road" title="Road (R): click to draw a way; click a junction or a way to end it there">Road</button>
+    <button data-tool="bridge" title="Bridge (B): click a way to make its middle a deck (or not)">Bridge</button>
+    <button data-tool="split" title="Split (X): click a way to put a junction there">Split</button>
+    <button data-tool="bulldoze" title="Bulldoze (D): click a way or a junction to remove it">Bulldoze</button>
+  </div>
+  <div class="grp">
+    <select id="kind" title="The kind of way the Road tool draws"></select>
+  </div>
+  <div class="grp">
+    <button id="undo" title="Undo (Ctrl+Z)">Undo</button>
+    <button id="redo" title="Redo (Ctrl+Shift+Z)">Redo</button>
+  </div>
+  <div class="grp">
+    <button id="open" title="Open a pgh.json">Open</button>
+    <button id="save" title="Save (Ctrl+S): write the file back, or download it">Save</button>
+  </div>
+  <div class="grp">
+    <button id="issuesBtn" title="Dead ends, bridges with loose ends, side-by-side ways over a bridge">Issues</button>
+    <button id="layers" title="Show the river and the bridge models">Layers</button>
+  </div>
+</div>
+<div id="side"></div>
+<div id="hint"></div>
+<div id="toast"></div>
+<div id="drop">Drop pgh.json to open it</div>
+<div id="start" hidden><div>
+  <b>PGH map editor</b>
+  <p class="facts">Couldn't load <code>routes/cities/pgh.json</code> by itself (opened from disk). Pick the file: it's in your copy of the repo at <code>routes/cities/pgh.json</code>.</p>
+  <button id="open2">Open pgh.json…</button>
+</div></div>
+<input type="file" id="file" accept=".json,application/json" hidden>
+<script>
+'use strict';
+// ------------------------------------------------------------------ the model
+// nodes: Map id → { id, name, lat, lon, ele }; edges: [{ id, from, to, name, kind, lat[], lon[], ele[], br[] }]
+// (br: per sample, a deck). Edits replace objects (copy on write), so an undo step is just the two containers.
+const STEP = 10, KINDS = ['path', 'residential', 'alley', 'service', 'tertiary', 'secondary', 'primary', 'plaza'];
+const COLOR = { path: '#7fc98a', residential: '#d8d4c8', alley: '#a9a59a', service: '#a9a59a', tertiary: '#f2d27a', secondary: '#f5a45d', primary: '#ef7a5a', plaza: '#c9b8e8' };
+let J = null, fileHandle = null, fileName = 'pgh.json';
+let M = { nodes: new Map(), edges: [] };
+let proj = null, nextNode = 0, nextEdge = 0;
+const touched = new Set();   // edge ids whose route-path meaning changed (deleted, split): presets through them are dropped on save
+let dirty = false;
+
+const undelta = (a, k) => { const o = new Array(a.length); let s = 0; for (let i = 0; i < a.length; i++) { s += a[i]; o[i] = s * k; } return o; };
+const delta = (a) => a.map((v, i) => (i ? v - a[i - 1] : v));
+function decode(json) {
+  if (json.format !== 'bikefree-graph-1') throw new Error('not a bikefree-graph-1 file');
+  const kl = json.unit?.latlon ?? 1e-6, ke = json.unit?.ele ?? 0.1;
+  const nodes = new Map(json.nodes.map((n) => [n.id, { ...n }]));
+  const edges = json.edges.map((e) => {
+    const lat = undelta(e.lat, kl), lon = undelta(e.lon, kl), ele = undelta(e.ele, ke), n = lat.length - 1;
+    const br = Array.from({ length: n + 1 }, (_, i) => (e.bridges || []).some(([a, b]) => i > a && i < b));
+    return { id: e.id, from: e.from, to: e.to, name: e.name || '', kind: e.kind, lat, lon, ele, br };
+  });
+  return { nodes, edges };
+}
+function encode() {
+  const kl = J.unit?.latlon ?? 1e-6, ke = J.unit?.ele ?? 0.1;
+  const used = new Set(M.edges.flatMap((e) => [e.from, e.to]));
+  const out = { ...J };
+  out.nodes = [...M.nodes.values()].filter((n) => used.has(n.id)).map((n) => ({ id: n.id, name: n.name || '', lat: +n.lat.toFixed(6), lon: +n.lon.toFixed(6), ele: +(+n.ele).toFixed(1) }));
+  out.edges = M.edges.map((e) => {
+    const n = e.lat.length - 1;
+    const rec = { id: e.id, from: e.from, to: e.to, name: e.name, kind: e.kind,
+      lat: delta(e.lat.map((v) => Math.round(v / kl))), lon: delta(e.lon.map((v) => Math.round(v / kl))), ele: delta(e.ele.map((v) => Math.round(v / ke))) };
+    const runs = [];
+    for (let k = 0; k <= n;) { if (!e.br[k]) { k++; continue; } let j = k; while (j + 1 <= n && e.br[j + 1]) j++; runs.push([Math.max(0, k - 1), Math.min(n, j + 1)]); k = j + 1; }
+    if (runs.length) rec.bridges = runs;
+    return rec;
+  });
+  // routes through an edge that was split or removed would break: dropped (tools/pgh_after_edit.mjs lays them again)
+  const ids = new Set(M.edges.map((e) => e.id));
+  const dropped = [];
+  if (J.presets) out.presets = J.presets.filter((p) => { const ok = p.path.every((k) => { const id = k.slice(0, -1); return ids.has(id) && !touched.has(id); }); if (!ok) dropped.push(p.name); return ok; });
+  return { out, dropped };
+}
+
+// geometry: local metres (x east, z south) about the map's origin
+function makeProj(lat0, lon0) { const k = 6371000 * Math.PI / 180, kx = k * Math.cos(lat0 * Math.PI / 180); return { to: (lat, lon) => [(lon - lon0) * kx, -(lat - lat0) * k], from: (x, z) => [lat0 - z / k, lon0 + x / kx] }; }
+const lenOf = (e) => { let s = 0; for (let i = 1; i < e.lat.length; i++) { const a = proj.to(e.lat[i - 1], e.lon[i - 1]), b = proj.to(e.lat[i], e.lon[i]); s += Math.hypot(b[0] - a[0], b[1] - a[1]); } return s; };
+/** e's samples back on 10 m steps (heights and decks carried). */
+function resample(e) {
+  const P = e.lat.map((la, i) => proj.to(la, e.lon[i])), d = [0];
+  for (let i = 1; i < P.length; i++) d.push(d[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]));
+  const L = d[d.length - 1], n = Math.max(1, Math.round(L / STEP)), lat = [], lon = [], ele = [], br = [];
+  let j = 0;
+  for (let k = 0; k <= n; k++) {
+    const s = (k / n) * L; while (j < d.length - 2 && d[j + 1] < s) j++;
+    const t = d[j + 1] > d[j] ? (s - d[j]) / (d[j + 1] - d[j]) : 0;
+    lat.push(e.lat[j] + (e.lat[j + 1] - e.lat[j]) * t); lon.push(e.lon[j] + (e.lon[j + 1] - e.lon[j]) * t); ele.push(e.ele[j] + (e.ele[j + 1] - e.ele[j]) * t);
+    br.push(t < 0.5 ? e.br[j] : e.br[j + 1]);
+  }
+  br[0] = br[n] = false;
+  return { ...e, lat, lon, ele, br };
+}
+/** Move one end of e (0: start, 1: end) to node, easing the shift and the height over `reach` m. → a new edge. */
+function moveEnd(e, end, node, reach = 40) {
+  e = { ...e, lat: [...e.lat], lon: [...e.lon], ele: [...e.ele], br: [...e.br] };
+  reach = Math.min(reach, lenOf(e) / 2 || 1);
+  const n = e.lat.length - 1, idx = (i) => (end ? n - i : i), i0 = idx(0);
+  const dla = node.lat - e.lat[i0], dlo = node.lon - e.lon[i0], dh = node.ele - e.ele[i0];
+  let s = 0;
+  for (let i = 0; i <= n; i++) {
+    if (i) { const a = proj.to(e.lat[idx(i - 1)], e.lon[idx(i - 1)]), b = proj.to(e.lat[idx(i)], e.lon[idx(i)]); s += Math.hypot(b[0] - a[0], b[1] - a[1]); }
+    const w = Math.max(0, 1 - s / reach), f = w * w * (3 - 2 * w); if (f <= 0) break;
+    e.lat[idx(i)] += dla * f; e.lon[idx(i)] += dlo * f; e.ele[idx(i)] += dh * f;
+  }
+  e.lat[i0] = node.lat; e.lon[i0] = node.lon; e.ele[i0] = node.ele;
+  if (end) e.to = node.id; else e.from = node.id;
+  return resample(e);
+}
+
+// ------------------------------------------------------------------ undo
+const past = [], future = [];
+function commit(label) { past.push({ nodes: M.nodes, edges: M.edges, touched: new Set(touched), label }); if (past.length > 200) past.shift(); future.length = 0; M = { nodes: new Map(M.nodes), edges: [...M.edges] }; dirty = true; }
+function undo() { if (!past.length) return; future.push({ nodes: M.nodes, edges: M.edges, touched: new Set(touched) }); const s = past.pop(); M = { nodes: new Map(s.nodes), edges: [...s.edges] }; touched.clear(); s.touched.forEach((x) => touched.add(x)); sel = null; changed(); toast(`Undid: ${s.label}`); }
+function redo() { if (!future.length) return; past.push({ nodes: M.nodes, edges: M.edges, touched: new Set(touched), label: 'redo' }); const s = future.pop(); M = { nodes: new Map(s.nodes), edges: [...s.edges] }; touched.clear(); s.touched.forEach((x) => touched.add(x)); sel = null; changed(); }
+
+// ------------------------------------------------------------------ spatial index (local metres, 40 m cells)
+let grid = new Map(), deg = new Map(), XY = new Map();   // XY: edge → [[x, z], …]
+const CELL = 40, ck = (x, z) => `${Math.floor(x / CELL)},${Math.floor(z / CELL)}`;
+function reindex() {
+  grid = new Map(); deg = new Map(); XY = new Map();
+  for (const e of M.edges) {
+    const P = e.lat.map((la, i) => proj.to(la, e.lon[i])); XY.set(e, P);
+    for (let i = 0; i + 1 < P.length; i++) { const k = ck((P[i][0] + P[i + 1][0]) / 2, (P[i][1] + P[i + 1][1]) / 2); (grid.get(k) || grid.set(k, []).get(k)).push([e, i]); }
+    for (const v of [e.from, e.to]) deg.set(v, (deg.get(v) || 0) + 1);
+  }
+}
+/** Nearest way to (x, z) within r m: { e, i (segment), t, d, x, z }. */
+function edgeAt(x, z, r) {
+  let best = null; const c0 = Math.floor((x - r) / CELL) - 1, c1 = Math.floor((x + r) / CELL) + 1, r0 = Math.floor((z - r) / CELL) - 1, r1 = Math.floor((z + r) / CELL) + 1;
+  for (let a = c0; a <= c1; a++) for (let b = r0; b <= r1; b++) for (const [e, i] of grid.get(`${a},${b}`) || []) {
+    const P = XY.get(e), p = P[i], q = P[i + 1], dx = q[0] - p[0], dz = q[1] - p[1], L2 = dx * dx + dz * dz || 1;
+    const t = Math.max(0, Math.min(1, ((x - p[0]) * dx + (z - p[1]) * dz) / L2)), px = p[0] + dx * t, pz = p[1] + dz * t, d = Math.hypot(px - x, pz - z);
+    if (d < r && (!best || d < best.d)) best = { e, i, t, d, x: px, z: pz };
+  }
+  return best;
+}
+function nodeAt(x, z, r) { let best = null; for (const n of M.nodes.values()) { if (!deg.get(n.id)) continue; const [nx, nz] = proj.to(n.lat, n.lon), d = Math.hypot(nx - x, nz - z); if (d < r && (!best || d < best.d)) best = { n, d }; } return best?.n || null; }
+
+// ------------------------------------------------------------------ edits
+const newNodeId = () => { while (M.nodes.has(`n${nextNode}`)) nextNode++; return `n${nextNode++}`; };
+const newEdgeId = () => { const ids = new Set(M.edges.map((e) => e.id)); while (ids.has(`e${nextEdge}`)) nextEdge++; return `e${nextEdge++}`; };
+function addNode(lat, lon, ele, name = '') { const n = { id: newNodeId(), name, lat, lon, ele }; M.nodes.set(n.id, n); return n; }
+/** Split edge e at sample/segment hit → the new junction (an end junction if the hit is within 12 m of one). */
+function splitAt(hit) {
+  const e = hit.e, P = XY.get(e), n = e.lat.length - 1;
+  const atEnd = (k) => { const v = M.nodes.get(k ? e.to : e.from); const [x, z] = proj.to(v.lat, v.lon); return Math.hypot(x - hit.x, z - hit.z) < 12 ? v : null; };
+  const near = atEnd(0) || atEnd(1); if (near) return near;
+  // a sample at the hit point
+  const [la, lo] = proj.from(hit.x, hit.z), i = hit.i, y = e.ele[i] + (e.ele[i + 1] - e.ele[i]) * hit.t;
+  const v = addNode(la, lo, y, e.name);
+  const A = { ...e, to: v.id, lat: [...e.lat.slice(0, i + 1), la], lon: [...e.lon.slice(0, i + 1), lo], ele: [...e.ele.slice(0, i + 1), y], br: [...e.br.slice(0, i + 1), e.br[i] && e.br[i + 1]] };
+  const B = { ...e, id: newEdgeId(), from: v.id, lat: [la, ...e.lat.slice(i + 1)], lon: [lo, ...e.lon.slice(i + 1)], ele: [y, ...e.ele.slice(i + 1)], br: [e.br[i] && e.br[i + 1], ...e.br.slice(i + 1)] };
+  touched.add(e.id);
+  M.edges.splice(M.edges.indexOf(e), 1, resample(A), resample(B));
+  void P; void n;
+  return v;
+}
+/** Join junction a into b: every way at a now ends at b (eased). a goes. A way between them goes too. */
+function joinNodes(a, b) {
+  if (a === b) return;
+  M.edges = M.edges.filter((e) => { const between = (e.from === a.id && e.to === b.id) || (e.from === b.id && e.to === a.id); if (between) touched.add(e.id); return !between; });
+  M.edges = M.edges.map((e) => { let f = e; if (f.from === a.id) f = moveEnd(f, 0, b); if (f.to === a.id) f = moveEnd(f, 1, b); return f; });
+  M.nodes.delete(a.id);
+}
+function deleteEdge(e) { touched.add(e.id); M.edges = M.edges.filter((x) => x !== e); }
+function deleteNode(n) { for (const e of M.edges) if (e.from === n.id || e.to === n.id) touched.add(e.id); M.edges = M.edges.filter((e) => e.from !== n.id && e.to !== n.id); M.nodes.delete(n.id); }
+function replaceEdge(e, f) { M.edges[M.edges.indexOf(e)] = f; return f; }
+
+// ------------------------------------------------------------------ view
+const cv = document.getElementById('map'), cx = cv.getContext('2d');
+let view = { x: 0, z: 0, s: 0.25 }, dpr = 1, W = 0, H = 0;
+const toScreen = (x, z) => [(x - view.x) * view.s + W / 2, (z - view.z) * view.s + H / 2];
+const toWorld = (sx, sy) => [(sx - W / 2) / view.s + view.x, (sy - H / 2) / view.s + view.z];
+function resize() { dpr = window.devicePixelRatio || 1; W = innerWidth; H = innerHeight; cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px'; draw(); }
+let shore = null, bridges = null, showLayers = true, sel = null, hover = null, drawing = null, dragging = null, issues = null;
+let pending = false; function draw() { if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; paint(); }); } }
+
+function paint() {
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cx.fillStyle = '#2c3b2e'; cx.fillRect(0, 0, W, H);
+  if (!J) return;
+  const [wx0, wz0] = toWorld(0, 0), [wx1, wz1] = toWorld(W, H), pad = 60 / view.s;
+  const inView = (P) => P.some(([x, z]) => x > wx0 - pad && x < wx1 + pad && z > wz0 - pad && z < wz1 + pad);
+  // the river: the shore lines, their water side washed blue
+  if (shore && showLayers) {
+    cx.lineJoin = cx.lineCap = 'round';
+    for (const L of shore) { cx.beginPath(); L.P.forEach(([x, z], i) => { const [sx, sy] = toScreen(x - L.N[i][0] * 60, z - L.N[i][1] * 60); i ? cx.lineTo(sx, sy) : cx.moveTo(sx, sy); }); cx.strokeStyle = '#2f6f8f'; cx.lineWidth = Math.max(2, 120 * view.s); cx.stroke(); }
+    for (const L of shore) { cx.beginPath(); L.P.forEach(([x, z], i) => { const [sx, sy] = toScreen(x, z); i ? cx.lineTo(sx, sy) : cx.moveTo(sx, sy); }); cx.strokeStyle = '#7fb6cc'; cx.lineWidth = 1.2; cx.stroke(); }
+  }
+  // the bridge models (scenery and ridden): their OSM lines, faint gold
+  if (bridges && showLayers) for (const b of bridges) { if (!inView(b.P)) continue; cx.beginPath(); b.P.forEach(([x, z], i) => { const [sx, sy] = toScreen(x, z); i ? cx.lineTo(sx, sy) : cx.moveTo(sx, sy); }); cx.strokeStyle = 'rgba(240,180,41,.35)'; cx.lineWidth = Math.max(3, b.w * view.s); cx.stroke(); }
+  // the ways: decks first (a dark casing), then by kind, minor first
+  const vis = M.edges.filter((e) => inView([XY.get(e)[0], XY.get(e)[XY.get(e).length >> 1], XY.get(e).at(-1)]));
+  const wOf = (e) => Math.max(e.kind === 'path' ? 1.2 : 1.6, (J.widths[e.kind] || 6) * view.s);
+  const stroke = (e, from = 0, to = Infinity) => { const P = XY.get(e); let on = false; for (let i = Math.max(0, from); i <= Math.min(P.length - 1, to); i++) { const [sx, sy] = toScreen(...P[i]); on ? cx.lineTo(sx, sy) : (cx.moveTo(sx, sy), on = true); } };
+  cx.lineCap = 'round'; cx.lineJoin = 'round';
+  for (const e of vis) { if (!e.br.some(Boolean)) continue; cx.beginPath(); for (let i = 0; i < e.br.length; i++) if (e.br[i]) { let j = i; while (j + 1 < e.br.length && e.br[j + 1]) j++; stroke(e, i - 1, j + 1); i = j; } cx.strokeStyle = '#111'; cx.lineWidth = wOf(e) + Math.max(4, 3 * view.s); cx.stroke(); cx.strokeStyle = '#f0b429'; cx.lineWidth = wOf(e) + Math.max(2, 1.5 * view.s); cx.stroke(); }
+  for (const k of ['path', 'alley', 'service', 'residential', 'plaza', 'tertiary', 'secondary', 'primary']) {
+    cx.beginPath(); for (const e of vis) if (e.kind === k) stroke(e);
+    cx.strokeStyle = COLOR[k] || '#ccc'; cx.lineWidth = Math.max(k === 'path' ? 1.2 : 1.6, (J.widths[k] || 6) * view.s); cx.stroke();
+  }
+  // selection, hover
+  const hl = (e, c, w) => { cx.beginPath(); stroke(e); cx.strokeStyle = c; cx.lineWidth = wOf(e) + w; cx.stroke(); };
+  if (hover?.e && hover.e !== sel?.e) hl(hover.e, 'rgba(255,255,255,.35)', 4);
+  if (sel?.e) { hl(sel.e, '#4fc3ff', 5); for (const k of [sel.e.from, sel.e.to]) dot(M.nodes.get(k), 5, '#4fc3ff'); }
+  // junctions (zoomed in), dead ends always (red rings)
+  if (view.s > 0.8) for (const n of M.nodes.values()) { const d = deg.get(n.id); if (d > 1) dot(n, 2.5, '#fff'); }
+  for (const n of M.nodes.values()) if (deg.get(n.id) === 1) ring(n, Math.max(4, 6 * Math.min(1, view.s * 2)), '#ff5a4f');
+  if (sel?.n) dot(sel.n, 6, '#4fc3ff');
+  if (hover?.n && hover.n !== sel?.n) ring(hover.n, 8, '#fff');
+  // the road being drawn
+  if (drawing) {
+    cx.beginPath(); drawing.pts.forEach(([x, z], i) => { const [sx, sy] = toScreen(x, z); i ? cx.lineTo(sx, sy) : cx.moveTo(sx, sy); });
+    if (drawing.cursor) cx.lineTo(...toScreen(...drawing.cursor));
+    cx.setLineDash([6, 5]); cx.strokeStyle = drawing.deck ? '#f0b429' : COLOR[drawing.kind]; cx.lineWidth = Math.max(2, (J.widths[drawing.kind] || 4) * view.s); cx.stroke(); cx.setLineDash([]);
+  }
+  if (dragging?.moved) { const [sx, sy] = toScreen(dragging.x, dragging.z); cx.beginPath(); cx.arc(sx, sy, 8, 0, 7); cx.fillStyle = dragging.target ? '#59c37a' : '#4fc3ff'; cx.fill(); }
+  // scale bar
+  const m = [10, 20, 50, 100, 200, 500, 1000, 2000].find((v) => v * view.s > 70) || 5000;
+  cx.fillStyle = '#ddd'; cx.fillRect(W - 330 - m * view.s, H - 18, m * view.s, 3); cx.font = '11px system-ui'; cx.fillText(m >= 1000 ? `${m / 1000} km` : `${m} m`, W - 330 - m * view.s, H - 24);
+}
+function dot(n, r, c) { if (!n) return; const [sx, sy] = toScreen(...proj.to(n.lat, n.lon)); cx.beginPath(); cx.arc(sx, sy, r, 0, 7); cx.fillStyle = c; cx.fill(); }
+function ring(n, r, c) { const [sx, sy] = toScreen(...proj.to(n.lat, n.lon)); cx.beginPath(); cx.arc(sx, sy, r, 0, 7); cx.strokeStyle = c; cx.lineWidth = 2; cx.stroke(); }
+
+// ------------------------------------------------------------------ the side panel
+const side = document.getElementById('side'), esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+let panel = 'info';
+function showSide() {
+  if (drawing) {
+    side.innerHTML = `<h3>Drawing a ${drawing.deck ? 'bridge' : esc(drawing.kind === 'path' ? 'trail' : drawing.kind)}</h3><p class="facts">${drawing.pts.length} point${drawing.pts.length === 1 ? '' : 's'}. Tap a junction or a way to end it there.</p>
+      <div class="acts"><button id="aFin">Finish here</button><button id="aCan" class="danger">Cancel</button></div>`;
+    document.getElementById('aFin').onclick = () => finishRoad(null);
+    document.getElementById('aCan').onclick = () => { drawing = null; changed(false); };
+    return;
+  }
+  if (panel === 'issues') return showIssues();
+  if (sel?.e && M.edges.includes(sel.e)) {
+    const e = sel.e, L = lenOf(e), decks = e.br.filter(Boolean).length;
+    let g = 0; for (let i = 1; i < e.ele.length; i++) g = Math.max(g, Math.abs(e.ele[i] - e.ele[i - 1]) / STEP);
+    side.innerHTML = `<h3>Way ${esc(e.id)}</h3>
+      <div class="row"><label>Name</label><input type="text" id="fName" value="${esc(e.name)}"></div>
+      <div class="row"><label>Kind</label><select id="fKind">${KINDS.map((k) => `<option ${k === e.kind ? 'selected' : ''}>${k}</option>`).join('')}</select></div>
+      <div class="row"><label>Bridge</label><input type="checkbox" id="fDeck" ${decks ? 'checked' : ''}> <span class="facts">${decks ? `deck over ${decks * STEP} m` : 'on the ground'}</span></div>
+      <p class="facts">${Math.round(L)} m · ${e.ele[0].toFixed(1)} → ${e.ele.at(-1).toFixed(1)} m high · steepest ${(g * 100).toFixed(0)} %<br>
+      from ${esc(M.nodes.get(e.from)?.name || e.from)} (${deg.get(e.from)} ways) to ${esc(M.nodes.get(e.to)?.name || e.to)} (${deg.get(e.to)} ways)</p>
+      <div class="acts"><button id="aSplit">Split in the middle</button><button id="aRev">Reverse</button><button class="danger" id="aDel">Bulldoze</button></div>`;
+    document.getElementById('fName').onchange = (ev) => { commit('rename'); sel.e = replaceEdge(e, { ...e, name: ev.target.value.trim() }); changed(); };
+    document.getElementById('fKind').onchange = (ev) => { commit('kind'); sel.e = replaceEdge(e, { ...e, kind: ev.target.value }); changed(); };
+    document.getElementById('fDeck').onchange = (ev) => { commit('deck'); sel.e = replaceEdge(e, { ...e, br: e.br.map((_, i) => ev.target.checked && i > 0 && i < e.br.length - 1) }); changed(); };
+    document.getElementById('aDel').onclick = () => { commit('bulldoze'); deleteEdge(e); sel = null; changed(); };
+    document.getElementById('aRev').onclick = () => { commit('reverse'); touched.add(e.id); sel.e = replaceEdge(e, { ...e, from: e.to, to: e.from, lat: [...e.lat].reverse(), lon: [...e.lon].reverse(), ele: [...e.ele].reverse(), br: [...e.br].reverse() }); changed(); };
+    document.getElementById('aSplit').onclick = () => { commit('split'); const P = XY.get(e), i = P.length >> 1; const v = splitAt({ e, i: Math.max(0, i - 1), t: 1, x: P[i][0], z: P[i][1] }); sel = { n: v }; changed(); };
+    return;
+  }
+  if (sel?.n && M.nodes.has(sel.n.id)) {
+    const n = sel.n, ways = M.edges.filter((e) => e.from === n.id || e.to === n.id);
+    side.innerHTML = `<h3>Junction ${esc(n.id)}</h3>
+      <div class="row"><label>Name</label><input type="text" id="fName" value="${esc(n.name)}"></div>
+      <div class="row"><label>Height</label><input type="number" step="0.5" id="fEle" value="${(+n.ele).toFixed(1)}"> m</div>
+      <p class="facts">${n.lat.toFixed(6)}, ${n.lon.toFixed(6)}<br>${ways.length} way${ways.length === 1 ? ' — a dead end' : 's'}: ${ways.map((e) => esc(e.name || e.kind)).join(', ')}</p>
+      <div class="acts"><button class="danger" id="aDel">Bulldoze (and its ways)</button></div>`;
+    document.getElementById('fName').onchange = (ev) => { commit('rename'); const m = { ...n, name: ev.target.value.trim() }; M.nodes.set(n.id, m); sel.n = m; changed(); };
+    document.getElementById('fEle').onchange = (ev) => { commit('height'); const m = { ...n, ele: +ev.target.value }; M.nodes.set(n.id, m); M.edges = M.edges.map((e) => { let f = e; if (f.from === n.id) f = moveEnd(f, 0, m); if (f.to === n.id) f = moveEnd(f, 1, m); return f; }); sel.n = m; changed(); };
+    document.getElementById('aDel').onclick = () => { commit('bulldoze'); deleteNode(n); sel = null; changed(); };
+    return;
+  }
+  const dead = [...deg.values()].filter((d) => d === 1).length;
+  side.innerHTML = `<h3>PGH</h3><p class="facts">${M.edges.length} ways · ${[...deg.keys()].length} junctions · <b style="color:var(--bad)">${dead}</b> dead ends (red rings)<br>${dirty ? 'Unsaved changes.' : 'No changes.'}</p>
+    <p class="facts"><span class="sw" style="background:${COLOR.primary}"></span>primary <span class="sw" style="background:${COLOR.secondary}"></span>secondary <span class="sw" style="background:${COLOR.tertiary}"></span>tertiary <span class="sw" style="background:${COLOR.residential}"></span>street <span class="sw" style="background:${COLOR.path}"></span>trail <span class="sw" style="background:#f0b429"></span>deck</p>
+    <p class="facts">Drag to pan, wheel or pinch to zoom. Tools: <b>S</b>elect, <b>M</b>ove, <b>R</b>oad, <b>B</b>ridge, <b>X</b> split, <b>D</b> bulldoze. Esc cancels; Enter ends a road.</p>`;
+}
+
+// ------------------------------------------------------------------ issues
+function findIssues() {
+  const out = [];
+  for (const e of M.edges) for (const [v, i] of [[e.from, 0], [e.to, e.lat.length - 1]]) if (deg.get(v) === 1) out.push({ kind: e.br.some(Boolean) ? 'bridge loose end' : 'dead end', what: e.name || e.kind, x: XY.get(e)[i][0], z: XY.get(e)[i][1], e });
+  // two decks side by side (within 9 m, same heading) for 30 m or more: two ways over one bridge
+  const seen = new Set();
+  for (const e of M.edges) {
+    if (!e.br.some(Boolean)) continue;
+    const P = XY.get(e); let run = 0;
+    for (let i = 1; i < P.length; i++) {
+      if (!e.br[i]) { run = 0; continue; }
+      const hx = P[i][0] - P[i - 1][0], hz = P[i][1] - P[i - 1][1], hl = Math.hypot(hx, hz) || 1;
+      const c0 = Math.floor((P[i][0] - 9) / CELL), c1 = Math.floor((P[i][0] + 9) / CELL), r0 = Math.floor((P[i][1] - 9) / CELL), r1 = Math.floor((P[i][1] + 9) / CELL);
+      let other = null;
+      for (let a = c0; a <= c1 && !other; a++) for (let b = r0; b <= r1 && !other; b++) for (const [f, j] of grid.get(`${a},${b}`) || []) {
+        if (f === e || !f.br[j] || !f.br[j + 1]) continue;
+        const Q = XY.get(f), qx = Q[j + 1][0] - Q[j][0], qz = Q[j + 1][1] - Q[j][1], ql = Math.hypot(qx, qz) || 1;
+        if (Math.abs((hx * qx + hz * qz) / hl / ql) < 0.9) continue;
+        const d = Math.hypot(Q[j][0] - P[i][0], Q[j][1] - P[i][1]); if (d < 9 && Math.abs(f.ele[j] - e.ele[i]) < 4) { other = f; break; }
+      }
+      run = other ? run + STEP : 0;
+      if (run >= 30 && other) { const key = [e.id, other.id].sort().join('|'); if (!seen.has(key)) { seen.add(key); out.push({ kind: 'side-by-side over a bridge', what: `${e.name || e.kind} & ${other.name || other.kind}`, x: P[i][0], z: P[i][1], e }); } }
+    }
+  }
+  return out;
+}
+function showIssues() {
+  issues = findIssues();
+  const by = (k) => issues.filter((q) => q.kind === k);
+  const sec = (k) => by(k).length ? `<p class="facts"><b style="color:var(--bad)">${by(k).length}</b> ${k}${by(k).length === 1 ? '' : 's'}</p>` + by(k).slice(0, 200).map((q) => `<div class="issue" data-i="${issues.indexOf(q)}"><b>●</b> ${esc(q.what)}</div>`).join('') : '';
+  side.innerHTML = `<h3>Issues</h3>${issues.length ? '' : '<p class="facts" style="color:var(--ok)">None.</p>'}${sec('bridge loose end')}${sec('side-by-side over a bridge')}${sec('dead end')}`;
+  side.querySelectorAll('.issue').forEach((el) => (el.onclick = () => { const q = issues[+el.dataset.i]; view.x = q.x; view.z = q.z; view.s = Math.max(view.s, 1.2); sel = { e: q.e }; draw(); }));
+}
+
+// ------------------------------------------------------------------ input
+let tool = 'select';
+const hint = document.getElementById('hint');
+const HINT = { select: 'Click a way or a junction to inspect it.', move: 'Drag a junction. Drop it on another junction or a way to join them (fixes a dead end).',
+  road: 'Click to start (on a junction or a way to join it), click to bend, click a junction or a way to finish there. Enter ends it in the open; Esc cancels.',
+  bridge: 'Click a way: its middle becomes a deck (or back to the ground).', split: 'Click a way to put a junction there.', bulldoze: 'Click a way or a junction to remove it.' };
+function setTool(t) { tool = t; drawing = null; document.querySelectorAll('#tools button').forEach((b) => b.classList.toggle('on', b.dataset.tool === t)); hint.textContent = HINT[t]; draw(); }
+document.querySelectorAll('#tools button').forEach((b) => (b.onclick = () => setTool(b.dataset.tool)));
+const kindSel = document.getElementById('kind');
+kindSel.innerHTML = KINDS.map((k) => `<option value="${k}">${k === 'path' ? 'trail' : k}</option>`).join('') + '<option value="deck:path">trail bridge</option><option value="deck:residential">street bridge</option>';
+kindSel.value = 'path';
+
+const ptrs = new Map(); let pinch = null, panStart = null, downAt = null;
+const R = () => 12 / view.s;   // pick radius: 12 px in metres
+cv.addEventListener('pointerdown', (ev) => {
+  cv.setPointerCapture(ev.pointerId); ptrs.set(ev.pointerId, [ev.offsetX, ev.offsetY]);
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), s: view.s, mid: toWorld((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) }; panStart = null; dragging = null; return; }
+  downAt = [ev.offsetX, ev.offsetY];
+  const [x, z] = toWorld(ev.offsetX, ev.offsetY);
+  if (tool === 'move') { const n = nodeAt(x, z, R()); if (n) { dragging = { n, x, z, moved: false }; return; } }
+  panStart = { sx: ev.offsetX, sy: ev.offsetY, x: view.x, z: view.z };
+});
+cv.addEventListener('pointermove', (ev) => {
+  if (ptrs.has(ev.pointerId)) ptrs.set(ev.pointerId, [ev.offsetX, ev.offsetY]);
+  if (pinch && ptrs.size === 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); view.s = Math.min(40, Math.max(0.02, pinch.s * d / pinch.d)); const m = toWorld((a[0] + b[0]) / 2, (a[1] + b[1]) / 2); view.x += pinch.mid[0] - m[0]; view.z += pinch.mid[1] - m[1]; draw(); return; }
+  const [x, z] = toWorld(ev.offsetX, ev.offsetY);
+  if (dragging) {
+    dragging.x = x; dragging.z = z; dragging.moved = true;
+    const n = nodeAt(x, z, R()); dragging.target = n && n.id !== dragging.n.id ? { n } : null;
+    if (!dragging.target) { const h = edgeAt(x, z, R()); if (h && h.e.from !== dragging.n.id && h.e.to !== dragging.n.id) dragging.target = { h }; }
+    draw(); return;
+  }
+  if (panStart && (Math.abs(ev.offsetX - panStart.sx) > 4 || Math.abs(ev.offsetY - panStart.sy) > 4 || panStart.moving)) { panStart.moving = true; view.x = panStart.x - (ev.offsetX - panStart.sx) / view.s; view.z = panStart.z - (ev.offsetY - panStart.sy) / view.s; draw(); return; }
+  // hover
+  const n = tool === 'move' || tool === 'road' || tool === 'select' || tool === 'bulldoze' ? nodeAt(x, z, R()) : null;
+  hover = n ? { n } : (() => { const h = edgeAt(x, z, R()); return h ? { e: h.e } : null; })();
+  if (drawing) drawing.cursor = snapPoint(x, z).p;
+  draw();
+});
+const endPtr = (ev) => {
+  ptrs.delete(ev.pointerId);
+  if (pinch) { if (ptrs.size < 2) pinch = null; return; }
+  const [x, z] = toWorld(ev.offsetX, ev.offsetY);
+  if (dragging) { finishDrag(x, z); dragging = null; return; }
+  const click = panStart && !panStart.moving; panStart = null;
+  if (click) onClick(x, z);
+};
+cv.addEventListener('pointerup', endPtr); cv.addEventListener('pointercancel', (ev) => { ptrs.delete(ev.pointerId); pinch = null; panStart = null; dragging = null; });
+cv.addEventListener('wheel', (ev) => { ev.preventDefault(); const before = toWorld(ev.offsetX, ev.offsetY); view.s = Math.min(40, Math.max(0.02, view.s * Math.exp(-ev.deltaY * 0.0015))); const after = toWorld(ev.offsetX, ev.offsetY); view.x += before[0] - after[0]; view.z += before[1] - after[1]; draw(); }, { passive: false });
+cv.addEventListener('dblclick', () => { if (drawing) finishRoad(null); });
+
+/** What a click at (x, z) lands on: a junction, a way (where), or open ground. */
+function snapPoint(x, z) {
+  const n = nodeAt(x, z, R()); if (n) return { n, p: proj.to(n.lat, n.lon) };
+  const h = edgeAt(x, z, R()); if (h) return { h, p: [h.x, h.z] };
+  return { p: [x, z] };
+}
+function onClick(x, z) {
+  if (tool === 'select') { const n = nodeAt(x, z, R()); if (n) sel = { n }; else { const h = edgeAt(x, z, R()); sel = h ? { e: h.e } : null; } panel = 'info'; changed(false); return; }
+  if (tool === 'bulldoze') { const n = nodeAt(x, z, R() * 0.6); if (n) { commit('bulldoze junction'); deleteNode(n); changed(); return; } const h = edgeAt(x, z, R()); if (h) { commit('bulldoze way'); deleteEdge(h.e); sel = null; changed(); } return; }
+  if (tool === 'bridge') { const h = edgeAt(x, z, R()); if (!h) return; const e = h.e, on = !e.br.some(Boolean); commit(on ? 'deck' : 'no deck'); sel = { e: replaceEdge(e, { ...e, br: e.br.map((_, i) => on && i > 0 && i < e.br.length - 1) }) }; changed(); toast(on ? 'A deck (bridge) now' : 'On the ground now'); return; }
+  if (tool === 'split') { const h = edgeAt(x, z, R()); if (!h) return; commit('split'); sel = { n: splitAt(h) }; changed(); return; }
+  if (tool === 'road') {
+    const s = snapPoint(x, z), [kd, kk] = kindSel.value.startsWith('deck:') ? [true, kindSel.value.slice(5)] : [false, kindSel.value];
+    if (!drawing) { drawing = { start: s, pts: [s.p], kind: kk, deck: kd }; toast('Click to bend; click a junction or a way to finish'); showSide(); draw(); return; }
+    if (s.n || s.h) finishRoad(s); else { drawing.pts.push(s.p); showSide(); draw(); }
+  }
+}
+function finishRoad(endSnap) {
+  const d = drawing; drawing = null;
+  if (!d) return;
+  const pts = endSnap ? [...d.pts, endSnap.p] : d.pts;
+  if (pts.length < 2) { changed(false); return; }
+  commit('road');
+  const toNode = (s, p, refEle) => { if (s?.n) return M.nodes.get(s.n.id); if (s?.h) { reindex(); const h = edgeAt(s.h.x, s.h.z, 1) || s.h; return splitAt(h); } const [la, lo] = proj.from(p[0], p[1]); return addNode(la, lo, refEle); };
+  const a = toNode(d.start, pts[0], null);
+  reindex();
+  const nearEle = (p) => { const h = edgeAt(p[0], p[1], 200); return h ? h.e.ele[h.i] : a?.ele ?? 230; };
+  const A = a.ele == null ? Object.assign(a, { ele: nearEle(pts[0]) }) : a;
+  const b = toNode(endSnap, pts.at(-1), A.ele);
+  // heights: from end to end, eased (a deck straight between them)
+  const P = pts.map((p) => proj.from(p[0], p[1])); P[0] = [A.lat, A.lon]; P[P.length - 1] = [b.lat, b.lon];
+  let L = 0; const D = [0]; for (let i = 1; i < pts.length; i++) { L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); D.push(L); }
+  const e = { id: newEdgeId(), from: A.id, to: b.id, name: '', kind: d.kind, lat: P.map((p) => p[0]), lon: P.map((p) => p[1]),
+    ele: D.map((s) => { const t = L ? s / L : 0, f = d.deck ? t : t * t * (3 - 2 * t); return A.ele + (b.ele - A.ele) * f; }), br: P.map((_, i) => d.deck && i > 0 && i < P.length - 1) };
+  let f = resample(e); if (d.deck) f = { ...f, br: f.br.map((_, i) => i > 0 && i < f.br.length - 1) };
+  M.edges.push(f); sel = { e: f }; changed();
+  if ((b.ele - A.ele) / Math.max(L, 1) > 0.12) toast(`Steep: ${Math.round(Math.abs(b.ele - A.ele) / L * 100)} % — set the junctions' heights in Select`);
+}
+function finishDrag(x, z) {
+  const g = dragging; if (!g.moved) { sel = { n: g.n }; changed(false); return; }
+  commit('move');
+  if (g.target?.n) { joinNodes(g.n, M.nodes.get(g.target.n.id)); sel = { n: M.nodes.get(g.target.n.id) }; toast('Joined'); }
+  else if (g.target?.h) { const v = splitAt(g.target.h); joinNodes(g.n, v); sel = { n: M.nodes.get(v.id) }; toast('Joined onto the way'); }
+  else { const [la, lo] = proj.from(x, z), m = { ...g.n, lat: la, lon: lo }; M.nodes.set(m.id, m); M.edges = M.edges.map((e) => { let f = e; if (f.from === m.id) f = moveEnd(f, 0, m, 60); if (f.to === m.id) f = moveEnd(f, 1, m, 60); return f; }); sel = { n: m }; }
+  changed();
+}
+addEventListener('keydown', (ev) => {
+  if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT') return;
+  const k = ev.key.toLowerCase();
+  if ((ev.ctrlKey || ev.metaKey) && k === 'z') { ev.preventDefault(); ev.shiftKey ? redo() : undo(); return; }
+  if ((ev.ctrlKey || ev.metaKey) && k === 'y') { ev.preventDefault(); redo(); return; }
+  if ((ev.ctrlKey || ev.metaKey) && k === 's') { ev.preventDefault(); save(); return; }
+  if (k === 'escape') { drawing = null; sel = null; changed(false); return; }
+  if (k === 'enter' && drawing) { finishRoad(null); return; }
+  if ((k === 'delete' || k === 'backspace') && sel) { commit('bulldoze'); sel.e ? deleteEdge(sel.e) : deleteNode(sel.n); sel = null; changed(); return; }
+  const t = { s: 'select', m: 'move', r: 'road', b: 'bridge', x: 'split', d: 'bulldoze' }[k]; if (t) setTool(t);
+});
+function changed(edit = true) { if (edit) reindex(); document.getElementById('undo').disabled = !past.length; document.getElementById('redo').disabled = !future.length; showSide(); draw(); }
+document.getElementById('undo').onclick = undo; document.getElementById('redo').onclick = redo;
+document.getElementById('issuesBtn').onclick = () => { panel = panel === 'issues' ? 'info' : 'issues'; showSide(); };
+document.getElementById('layers').onclick = () => { showLayers = !showLayers; draw(); };
+
+// ------------------------------------------------------------------ files
+const toastEl = document.getElementById('toast'); let toastT = 0;
+function toast(s) { toastEl.textContent = s; toastEl.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove('show'), 2600); }
+function load(json, name) {
+  J = json; fileName = name || 'pgh.json';
+  const d = decode(json); M = d; past.length = future.length = 0; touched.clear(); dirty = false; sel = null;
+  proj = makeProj(json.origin.lat, json.origin.lon);
+  nextNode = Math.max(0, ...[...M.nodes.keys()].map((k) => +k.slice(1) || 0)) + 1;
+  nextEdge = Math.max(0, ...M.edges.map((e) => +e.id.slice(1) || 0)) + 1;
+  reindex();
+  if (json.start) { const [x, z] = proj.to(json.start.lat, json.start.lon); view = { x, z, s: 0.35 }; } else view = { x: 0, z: 0, s: 0.2 };
+  document.getElementById('start').hidden = true; setTool(tool); changed(false);
+  toast(`${M.edges.length} ways loaded`);
+}
+function loadLayers(base) {
+  fetch(base + 'pgh-shore.json').then((r) => r.json()).then((s) => {
+    const k = s.unit?.latlon ?? 1e-6, ks = s.unit?.side ?? 0.001;
+    shore = s.lines.map((l) => { const la = undelta(l.lat, k), lo = undelta(l.lon, k), side = undelta(l.side, ks); return { P: la.map((a, i) => proj.to(a, lo[i])), N: side.map((t) => [Math.cos(t), Math.sin(t)]) }; });
+    draw();
+  }).catch(() => {});
+  fetch(base + 'pgh-bridges.json').then((r) => r.json()).then((b) => { bridges = b.bridges.map((x) => ({ P: x.path.map(([la, lo]) => proj.to(la, lo)), w: x.width || 10 })); draw(); }).catch(() => {});
+}
+async function openFile() {
+  if (window.showOpenFilePicker) {
+    try { const [h] = await showOpenFilePicker({ types: [{ description: 'PGH map', accept: { 'application/json': ['.json'] } }] }); fileHandle = h; const f = await h.getFile(); load(JSON.parse(await f.text()), f.name); return; }
+    catch (err) { if (err.name === 'AbortError') return; }
+  }
+  document.getElementById('file').click();
+}
+document.getElementById('file').onchange = async (ev) => { const f = ev.target.files[0]; if (f) { fileHandle = null; load(JSON.parse(await f.text()), f.name); } };
+document.getElementById('open').onclick = openFile; document.getElementById('open2').onclick = openFile;
+document.getElementById('save').onclick = () => save();
+async function save() {
+  if (!J) return;
+  const { out, dropped } = encode(), text = JSON.stringify(out);
+  const note = dropped.length ? ` · ${dropped.length} route${dropped.length === 1 ? '' : 's'} through changed ways dropped (node tools/pgh_after_edit.mjs lays them again)` : '';
+  if (fileHandle?.createWritable) {
+    try { const w = await fileHandle.createWritable(); await w.write(text); await w.close(); dirty = false; showSide(); toast(`Saved ${fileName}${note}`); return; } catch (err) { if (err.name === 'AbortError') return; }
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' })); a.download = 'pgh.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  dirty = false; showSide(); toast(`Downloaded pgh.json — put it at routes/cities/pgh.json${note}`);
+}
+addEventListener('beforeunload', (ev) => { if (dirty) { ev.preventDefault(); ev.returnValue = ''; } });
+addEventListener('dragover', (ev) => { ev.preventDefault(); document.getElementById('drop').style.display = 'flex'; });
+addEventListener('dragleave', () => (document.getElementById('drop').style.display = 'none'));
+addEventListener('drop', async (ev) => { ev.preventDefault(); document.getElementById('drop').style.display = 'none'; const it = [...ev.dataTransfer.items][0]; if (!it) return; fileHandle = it.getAsFileSystemHandle ? await it.getAsFileSystemHandle().catch(() => null) : null; const f = it.getAsFile(); load(JSON.parse(await f.text()), f.name); });
+addEventListener('resize', resize);
+
+// for tools/test: the model and the edits, scriptable
+window.ED = { get M() { return M; }, get deg() { return deg; }, proj: () => proj, encode, load, onClick, setTool, finishRoad, splitAt, joinNodes, edgeAt, nodeAt, commit, undo, redo, findIssues, toScreen, toWorld, view: () => view, reindex };
+
+resize(); setTool('select');
+// opened from the repo (a local server, githack): the map loads by itself; from disk: Open
+const base = new URL('../routes/cities/', location.href).href;
+fetch(base + 'pgh.json').then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).then((j) => { load(j, 'pgh.json'); loadLayers(base); })
+  .catch(() => { document.getElementById('start').hidden = false; });
+</script>
+</body>
+</html>

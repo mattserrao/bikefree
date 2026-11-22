@@ -1540,3 +1540,46 @@ function carBand(B) {
   for (let k = 0; k < B.p.length; k += 3) box.expandByPoint(V(B.p[k], B.p[k + 1], B.p[k + 2]));
   return { box, on: null };
 }
+
+/**
+ * The street kit's facade dressing on its own, for a city drawn without a route (PGH, js/world/graph-city.js): the
+ * shop fronts (glass lit at night, fascia, pilasters, doors, signs, awnings, blade signs), belt courses, cornices
+ * with brackets and the sills, in a FACADE_STYLES style, on fronts the caller has found ({ i, a, c, len, tx, tz, nx,
+ * nz, mx, mz, yaw, base }). `night`: the night uniform; `lampNear(x, z, r)`: a lamp post there (no awning over it);
+ * `glassNight`: a dimmer night uniform for the shop glass.
+ *   const F = makeFacadeDresser(night, { lampNear }); const C = F.builders(); F.dress(C, b, fronts, ground, y1, 'victorian');
+ *   → C.mid (with F.material), C.near (with F.nearMaterial: the signs)
+ */
+export function makeFacadeDresser(night, { lampNear = () => false, glassNight = null } = {}) {
+  const sk = Object.create(StreetKit.prototype);
+  sk.city = { own: (x) => x, night };
+  sk._materials();
+  sk.walkMaterial.dispose();
+  if (glassNight) {   // the glass (and the rest of the mid detail) under its own night level; the signs keep `night`
+    const near = sk.nearMaterial; sk.city.night = glassNight; sk.material.dispose(); sk._materials(); sk.walkMaterial.dispose(); sk.nearMaterial.map.dispose(); sk.nearMaterial.dispose(); sk.nearMaterial = near;
+  }
+  sk.lampNear = lampNear;
+  return {
+    material: sk.material, nearMaterial: sk.nearMaterial,
+    builders: () => ({ near: new KitBuilder({ aGlow: 1 }), mid: new KitBuilder({ aGlow: 1 }) }),
+    /** Dress building b's street fronts; returns whether it has shops. */
+    dress(C, b, fronts, ground, y1, styleKey) {
+      const style = FACADE_STYLES[styleKey]; if (!style || !fronts.length) return false;
+      const rnd = (n) => hash(b.k * 9973 + n * 131), H = y1 - ground;
+      const fh = b.kind === 0 || b.kind === 1 ? 3.1 : b.kind === 5 ? 3.9 : 3.6;
+      const shops = H > 5.5 && rnd(4) < style.store;
+      const storeTop = shops ? Math.max(...fronts.map((f) => f.base)) + Math.min(style.storeH, H * 0.45) : null;
+      const trim = new THREE.Color(style.trim[Math.floor(rnd(1) * style.trim.length)]), frame = new THREE.Color(style.frame[Math.floor(rnd(2) * style.frame.length)]);
+      for (const f of fronts) {
+        if (shops) sk._storefront(C, f, f.base, storeTop, style, frame, trim, b, rnd);
+        if (style.belt && storeTop && y1 - storeTop > 2) C.mid.color(trim).band(f.a.x, f.a.z, f.c.x, f.c.z, f.nx, f.nz, 0.22, storeTop, 0.28);
+        if (style.baseCornice && H > style.baseCornice + 6) C.mid.color(trim).band(f.a.x, f.a.z, f.c.x, f.c.z, f.nx, f.nz, style.cornice.d, f.base + style.baseCornice, 0.5);
+        if (style.cornice && H > 4) sk._cornice(C, f, y1, style, trim);
+        if (style.sills && H > 5) sk._sills(C, f, ground, fh, y1, storeTop, trim);   // (the facade shader's window rows start at the ground here)
+        if (style.canopy && storeTop && rnd(6) < style.canopy) C.mid.color(frame).band(f.a.x + f.tx * f.len * 0.2, f.a.z + f.tz * f.len * 0.2, f.c.x - f.tx * f.len * 0.2, f.c.z - f.tz * f.len * 0.2, f.nx, f.nz, 2.4, storeTop - 0.3, 0.18);
+      }
+      return shops;
+    },
+    dispose() { sk.material.dispose(); sk.nearMaterial.map?.dispose(); sk.nearMaterial.dispose(); },
+  };
+}

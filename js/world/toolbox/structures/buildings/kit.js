@@ -365,7 +365,7 @@ function cylinder(d, f, a0, a1, r, yc, seg = 8) {
 }
 const cr = (t) => { const [a, b, c] = t; return [(b[1] - a[1]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[1] - a[1]), (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]), (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])]; };
 
-function dress(d, it, R, L, res) {
+export function dress(d, it, R, L, res) {
   const g = it.porch && res?.gv != null ? res.gv - .08 : L.heightAt(it.x, it.z);
   const f = { cx: it.x, cz: it.z, ux: Math.cos(it.yaw), uz: Math.sin(it.yaw), vx: -Math.sin(it.yaw), vz: Math.cos(it.yaw) };
   const [len, dep, hgt] = it.size;

@@ -20,7 +20,7 @@ import { northShoreModels } from './heroes-northshore.js';   // [7.7] PPG Place,
 function neonMaterial(city) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .55, metalness: .1 });
   m.onBeforeCompile = (shader) => {
-    shader.uniforms.uNight = city.night;
+    shader.uniforms.uNight = city.windowNight || city.night;   // (windowNight: a host's softer night light — js/world/graph-heroes.js)
     shader.uniforms.uPulse = city.heroPulse;
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 aGlow; varying vec3 vGlow;')
       .replace('#include <fog_vertex>', '#include <fog_vertex>\nvGlow = aGlow;');

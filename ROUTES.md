@@ -544,6 +544,21 @@ washed out; that's the renderer, not the scene.
 rails, inclines and shop fronts as they're built (`MeshBuilder.keepOutOf`). Objects placed beside streets go
 through `CityScene._clearSpot` (true distance to the route's road, every street's carriageway, building footprints).
 
+## Free-ride road graphs: PGH (every street, no buildings)
+
+PGH is a whole road network rather than a route: every street, trail and bridge you can bike in the Pittsburgh corridor, ridden as a free ride (straight on at every junction unless you choose a turn with ◀ ▶ or A / D).
+
+| What | Command |
+|---|---|
+| Build the graph and its ground (fetches OSM tiles and terrain tiles once, cached in `tools/.cache/`) | `npm run pgh:build` (`python3 tools/build_pgh.py [--offline] [--no-ground]`) |
+| Rideability QC (must be 0 fails) | `npm run qc:pgh` (`node tools/qc_pgh.mjs [--rides 200] [--km 25] [--json] [--list 30]`) |
+| Look at a spot | `npm run snap:pgh -- point@40.4413,-80.0105 slopes@40.4245,-79.9790@100 [--view 60,40] [--software]` |
+
+- **Config** `tools/city/pgh.json`: `corridorM` (round the existing areas' lines), the way classes (`roads`, `paths`, `connectors` with `connectorM`), `mergeM` / `snapM` / `dupM` / `spurM` (graph clean-up), `smoothM`, `maxGradePct`, `maxAvgGradePct`, `widths` (drawn road widths by kind), `start`.
+- **Output** `routes/cities/pgh.json` ("bikefree-graph-1": junctions with names and heights; edges with 10 m samples, delta-coded) and `routes/cities/pgh-ground.grid.bin.gz`.
+- **QC fails**: structure, connected (one piece), end-gap / end-step (an edge's end off its junction), gap (a jump along an edge), grade (> 40 % over 10 m), ways (a way through a junction not offered), ride (a simulated ride's path jumps). Warnings: grades over 32 %, near-level crossings with no junction, dead ends (info).
+- **How it rides**: `js/graph.js` lays every edge end to end on a synthetic base line so the ride-network code (`js/network.js`) works unchanged; `js/world/graph-world.js` draws the graph itself in 400 m tiles round the camera.
+
 ## Rendering performance (perf-test)
 
 How the stylized scenes are drawn, for anyone adding scenery:

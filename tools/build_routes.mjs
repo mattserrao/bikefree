@@ -177,7 +177,9 @@ const files = [...new Set(['./', 'index.html', 'css/style.css', 'sw-assets.js',
   ...walk('js').filter((p) => p.endsWith('.js')), 'vendor/three.module.min.js', 'models/rider.json', 'models/rider-atlas.png', 'models/pacer-atlas.png',
   'routes/demo-hills.gpx', 'routes/scenes/demo-hills.json', 'routes/parks/index.json', 'routes/ideas.json', 'tools/world-preview.html',
   // route pictures (PLAN 6.8): the manifest is precached; the pictures themselves are cached on first view (sw.js)
-  ...(existsSync(resolve(root, 'routes/previews/index.json')) ? ['routes/previews/index.json'] : []), ...paths])].sort();
+  ...(existsSync(resolve(root, 'routes/previews/index.json')) ? ['routes/previews/index.json'] : []), ...paths,
+  // built-in city graphs (PGH) aren't catalog entries: hash their data too, so a data-only change makes a new cache
+  ...(existsSync(resolve(root, 'routes/cities')) ? walk('routes/cities') : [])])].sort();
 const hash = createHash('sha256');
 for (const file of files.filter((p) => !['./', 'sw-assets.js'].includes(p))) hash.update(file).update(file === 'routes/parks/index.json' ? index : readFileSync(resolve(root, file)));
 // [F391] precache only the app (code, styles, the catalog and manifests, the demo route: ~3 MB). The route data (GPX,

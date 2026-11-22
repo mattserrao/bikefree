@@ -1,0 +1,96 @@
+{
+ "id": "pgh",
+ "note": "PGH free-ride graph (tools/build_pgh.py). Corridor: corridorM around the existing Pittsburgh areas' lines. Trunk boulevards (connectors) are kept only as pieces of at most connectorM between streets: crossing them, not riding along them. Motorways never.",
+ "corridorM": 900,
+ "osmTile": [
+  0.01,
+  0.008
+ ],
+ "osmOrigin": [
+  -80.07,
+  40.37
+ ],
+ "roads": {
+  "primary": "primary",
+  "primary_link": "primary",
+  "secondary": "secondary",
+  "secondary_link": "secondary",
+  "tertiary": "tertiary",
+  "tertiary_link": "tertiary",
+  "unclassified": "residential",
+  "residential": "residential",
+  "living_street": "residential",
+  "service": "alley",
+  "track": "path",
+  "busway": null
+ },
+ "serviceKinds": [
+  "alley"
+ ],
+ "skipService": [
+  "driveway",
+  "parking_aisle",
+  "drive-through",
+  "emergency_access"
+ ],
+ "paths": {
+  "cycleway": "path",
+  "path": "path",
+  "footway": "path",
+  "bridleway": "path",
+  "pedestrian": "plaza"
+ },
+ "skipSurfaces": [
+  "stairs"
+ ],
+ "maxTunnelM": 120,
+ "mergeM": 15,
+ "snapM": 4,
+ "dupM": 25,
+ "minLoopM": 40,
+ "spurM": 30,
+ "smoothM": 35,
+ "widths": {
+  "primary": 12,
+  "secondary": 10,
+  "tertiary": 8.5,
+  "residential": 7,
+  "alley": 4.5,
+  "path": 3.2,
+  "plaza": 6
+ },
+ "waterLevelM": 216.6,
+  "pools": [{ "name": "Allegheny Pool 2 (above Lock & Dam 2, Highland Park)", "level": 219.9, "box": [40.474, -79.9143, 40.52, -79.85], "note": "USACE project pool 721 ft; the terrain tiles put its surface at ~220.2 m (the main pool at ~216.9). West edge: the dam (40.4898, -79.9143)" }],
+ "groundCellM": 20,
+ "groundMarginM": 1500,
+ "groundFile": "routes/cities/pgh-ground.grid.bin.gz",
+ "start": {
+  "lat": 40.4469,
+  "lon": -80.0061,
+  "note": "PNC Park / the North Shore (nearest junction)"
+ },
+ "connectors": [
+  "trunk",
+  "trunk_link"
+ ],
+ "connectorM": 180,
+ "maxGradePct": 30,
+ "maxAvgGradePct": 34,
+ "bridgeClearM": 11,
+ "bridgeRampPct": 6,
+ "riverFloorM": 2.5,
+ "riversideM": 25,
+ "denseM": 40,
+ "removeAlleys": true,
+ "overpassClearM": 4.5,
+ "connectMaxM": 350,
+ "connectSnapM": 8,
+ "connectMaxGradePct": 12,
+ "parallelM": 30,
+ "parallelMinM": 60,
+ "smoothMaxShiftM": 8,
+ "smoothPasses": 8,
+ "junctionEaseM": 30,
+ "routeKeepM": 18,
+ "routeLinkMaxM": 50
+}
