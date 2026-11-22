@@ -65,3 +65,45 @@ test('the app lists CNY as its own card beside PGH (js/app.js GRAPH_CITIES)', ()
   assert.match(app, /\{ id: 'cny', name: 'CNY', park: 'Camillus, NY'/);
   assert.match(app, /routes\/cities\/\$\{c\.id\}-presets\.json/);
 });
+
+test('CNY\'s landmarks (tools/cny_heroes.py): the aqueduct, Sims\' Store, the Octagon House, the churches, the canal\'s water', async () => {
+  const h = JSON.parse(readFileSync(new URL('../routes/cities/cny-heroes.json', import.meta.url), 'utf8'));
+  const models = new Set(h.landmarks.map((l) => l.model));
+  for (const m of ['aqueduct', 'canalstore', 'octagon', 'railbridge', 'canal']) assert.ok(models.has(m), m);
+  assert.ok(h.heroes.filter((x) => x.model === 'church').length >= 3);
+  const { cnyLandmarkModels } = await import('../js/world/toolbox/city/cny-landmarks.js');
+  const M = cnyLandmarkModels({ S: {}, N: {}, glows: [], plan: () => ({}), ground: () => 0, local: () => ({ x: 0, z: 0 }), L: {} });
+  for (const l of h.landmarks) assert.equal(typeof M[l.model], 'function', `no model for ${l.model}`);
+});
+
+test('CNY\'s houses: the suburban style (fewer windows, ranches and colonials) and building heights from their size', async () => {
+  const { STYLE_PRESETS } = await import('../js/world/toolbox/structures/buildings/presets.js');
+  const { bays } = await import('../js/world/toolbox/structures/buildings/recipe.js');
+  const st = STYLE_PRESETS['cny-suburban'];
+  assert.ok(st.bayM >= 4 && st.maxFloors === 2 && st.ranch > 0);
+  assert.ok(bays(13.2, 7, st.bayM).n < bays(13.2, 7).n, 'fewer windows along a wall than the default sash bay');
+  assert.equal(bays(13.2, 7).n, 5);   // (PGH's houses unchanged)
+});
+
+test('CNY\'s country (user, 22 Nov: "villages, suburbs, and farms … farmland requires new texture and models"): fields, barns, farmhouses, village houses', async () => {
+  const { gunzipSync } = await import('node:zlib');
+  const land = gunzipSync(readFileSync(new URL('../routes/cities/cny-land.bin.gz', import.meta.url)));
+  const n = (a, b) => land.reduce((s, c) => s + (c >= a && c <= b ? 1 : 0), 0);
+  assert.ok(n(20, 28) / land.length > 0.25, 'fields cover much of the land');
+  for (const [a, b] of [[20, 23], [24, 27], [28, 28], [29, 29]]) assert.ok(n(a, b) > 1000, `land codes ${a}-${b}`);
+  const idx = JSON.parse(readFileSync(new URL('../routes/cities/cny-city.json', import.meta.url), 'utf8'));
+  const kinds = new Map();
+  for (const k of Object.keys(idx.sectors.list)) for (const c of JSON.parse(readFileSync(new URL(`../routes/cities/cny-city/s_${k}.json`, import.meta.url), 'utf8')).buildings.kind) kinds.set(c, (kinds.get(c) || 0) + 1);
+  for (const k of [20, 21, 23, 24]) assert.ok(kinds.get(k) > 20, `kind ${k}: ${kinds.get(k)}`);
+  const { STYLE_PRESETS } = await import('../js/world/toolbox/structures/buildings/presets.js');
+  assert.ok(STYLE_PRESETS['cny-village'] && STYLE_PRESETS['cny-farmhouse']);
+  const { KIT_STYLES } = await import('../js/world/graph-city.js');
+  assert.deepEqual(KIT_STYLES.cny.map((s) => s.preset), ['cny-village', 'cny-farmhouse', 'cny-suburban']);
+  const { MeshBuilder } = await import('../js/world/toolbox/core/mesh-builder.js');
+  const { farmBuilding, fitRect } = await import('../js/world/toolbox/city/cny-farms.js');
+  const ring = [{ x: 0, z: 0 }, { x: 4, z: 30 }, { x: 18, z: 28 }, { x: 14, z: -2 }];
+  const r = fitRect(ring); assert.ok(r.hu > r.hv && Math.abs(r.hu - 15.1) < 0.3);
+  let silos = 0;
+  for (const kind of [21, 22, 24]) for (let k = 0; k < 20; k++) { const M = new MeshBuilder({ aGlow: 1 }); silos += farmBuilding(M, { k, kind, ring }, { heightAt: () => 120 }); assert.ok(M.count > 40); }
+  assert.ok(silos > 5, 'silos by many barns');
+});

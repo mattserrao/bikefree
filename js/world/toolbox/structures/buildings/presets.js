@@ -184,6 +184,70 @@ export const STYLE_PRESETS = {
     sundial: 0, shops: 0, ivy: .06, age: [.3, 1], upkeep: [.3, .95], stone: '#a9a294',
     dressing: { steps: 1, shrubs: .5, bins: .55, bench: .15, pots: .4, garden: .08, fence: .3, laundry: .03, dish: .25, hay: 0, bikes: .12, trough: 0 },
   },
+  // CNY's suburbs (user, 22 Nov: "houses are also too generic and have far too many windows"): Camillus, Fairmount and
+  // Warners — ranches and two-storey colonials of vinyl siding in the usual pale colours, some brick fronts, shutters,
+  // attached garages, low gable and hip roofs of asphalt shingle; a window every ~4.4 m, not every 2.6 m
+  'cny-suburban': {
+    archetypes: { cottage: 1, village: .12, farmhouse: .2, chalet: 0, mazot: 0, block: 0, shed: .5 },
+    schemes: [
+      { wall: '#eceae3', trim: '#2f3a44', frame: '#f6f5f0', accent: '#f6f5f0' },   // white, black shutters
+      { wall: '#d9cfb8', trim: '#5b4636', frame: '#f6f5f0', accent: '#f1ece0' },   // almond
+      { wall: '#c6c9c7', trim: '#2b3a4c', frame: '#f6f5f0', accent: '#f6f5f0' },   // light grey
+      { wall: '#aab9c5', trim: '#f2f0ea', frame: '#f6f5f0', accent: '#f2f0ea' },   // pale blue
+      { wall: '#bcc4a9', trim: '#3f4a36', frame: '#f6f5f0', accent: '#f6f5f0' },   // sage
+      { wall: '#e3d7a9', trim: '#3d4f3a', frame: '#f6f5f0', accent: '#f6f5f0' },   // butter yellow
+      { wall: '#8494a3', trim: '#f2f0ea', frame: '#f6f5f0', accent: '#f2f0ea' },   // slate blue
+      { wall: '#c8b394', trim: '#4a3b30', frame: '#f6f5f0', accent: '#efe8da' },   // tan
+      { wall: '#7d8a7c', trim: '#f2f0ea', frame: '#f6f5f0', accent: '#f2f0ea' },   // dark sage
+    ],
+    walls: { lap: .78, brick: .1, shingle: .07, render: .05 }, plinth: .3, gable: { lap: .2, shingle: .1 }, barn: { boards: 1 },
+    roofs: { asphalt: .95, seam: .05 }, forms: { gable: .6, hip: .34, halfHip: .06 }, pitch: 27, pitchJitter: 7, eaveM: .4, rakeM: .3,
+    windows: 'sash', bayM: 4.4, ranch: .45, maxFloors: 2,
+    shutters: .5, surrounds: 0, lintels: 0, quoins: 0, flowerBoxes: .02, genoise: 0, frontEnd: .15,
+    balconies: 0, galleries: 0, dormers: .1, chimneys: .35, solar: .06, leanTo: .05, garage: .55, porch: .25, frontPorch: .35, stair: 0, woodpile: .03,
+    sundial: 0, shops: 0, ivy: .02, age: [.1, .7], upkeep: [.55, 1], stone: '#b9b4a8',
+    dressing: { steps: 1, shrubs: .7, bins: .5, bench: .05, pots: .2, garden: .12, fence: .15, laundry: 0, dish: .2, hay: 0, bikes: .1, trough: 0 },
+  },
+  // CNY's village cores (Camillus, Warners, Amboy, Memphis…; tools/pgh_city.py "the country", kind 16): houses of the
+  // 1850s-1920s — two storeys of clapboard, the gable to the street, a front porch on most, steeper roofs, no garages
+  'cny-village': {
+    archetypes: { cottage: 1, village: .3, farmhouse: 0, chalet: 0, mazot: 0, block: 0, shed: .4 },
+    schemes: [
+      { wall: '#f1efe8', trim: '#2f3a44', frame: '#f6f5f0', accent: '#f6f5f0' },   // white, black shutters
+      { wall: '#e7d9a6', trim: '#f4f1e8', frame: '#f6f5f0', accent: '#f4f1e8' },   // yellow, white trim
+      { wall: '#9fb09a', trim: '#f4f1e8', frame: '#f6f5f0', accent: '#f4f1e8' },   // sage
+      { wall: '#b9c4cc', trim: '#f4f1e8', frame: '#f6f5f0', accent: '#f4f1e8' },   // pale blue
+      { wall: '#c9a77e', trim: '#4a3427', frame: '#f6f5f0', accent: '#f0e6d4' },   // tan, brown trim
+      { wall: '#8c3f34', trim: '#f2efe6', frame: '#f6f5f0', accent: '#f2efe6' },   // red brick colour
+      { wall: '#e9e4da', trim: '#3c5a3e', frame: '#f6f5f0', accent: '#f6f5f0' },   // white, green shutters
+    ],
+    walls: { lap: .82, brick: .1, shingle: .08 }, plinth: .5, gable: { lap: .15, shingle: .2 }, barn: { boards: 1 },
+    roofs: { asphalt: .8, slate: .15, seam: .05 }, forms: { gable: .82, hip: .14, halfHip: .04 }, pitch: 38, pitchJitter: 5, eaveM: .35, rakeM: .25,
+    windows: 'sash', bayM: 3.6, ranch: 0, maxFloors: 2,
+    shutters: .45, surrounds: .1, lintels: 0, quoins: 0, flowerBoxes: .03, genoise: 0, frontEnd: .6,
+    balconies: 0, galleries: 0, dormers: .15, chimneys: .55, solar: .03, leanTo: .2, garage: .08, porch: .3, frontPorch: .72, stair: 0, woodpile: .05,
+    sundial: 0, shops: 0, ivy: .05, age: [.35, .9], upkeep: [.5, 1], stone: '#b9b4a8',
+    dressing: { steps: 1, shrubs: .6, bins: .5, bench: .1, pots: .35, garden: .15, fence: .35, laundry: 0, dish: .15, hay: 0, bikes: .1, trough: 0 },
+  },
+  // CNY's farmhouses (kind 13: a house with a barn by it): white clapboard, two storeys, a steep side gable, a wing at
+  // the back (the lean-to), a porch across the front; a woodpile, a garden, laundry
+  'cny-farmhouse': {
+    archetypes: { cottage: 1, village: 0, farmhouse: 0, chalet: 0, mazot: 0, block: 0, shed: .2 },
+    schemes: [
+      { wall: '#f3f1ea', trim: '#2f3a44', frame: '#f6f5f0', accent: '#f6f5f0' },
+      { wall: '#efece3', trim: '#3c5a3e', frame: '#f6f5f0', accent: '#f6f5f0' },
+      { wall: '#f1eee6', trim: '#7a2a22', frame: '#f6f5f0', accent: '#f6f5f0' },
+      { wall: '#e8dfc4', trim: '#f4f1e8', frame: '#f6f5f0', accent: '#f4f1e8' },
+      { wall: '#d8d6cf', trim: '#2f3a44', frame: '#f6f5f0', accent: '#f6f5f0' },
+    ],
+    walls: { lap: .92, shingle: .08 }, plinth: .6, gable: { lap: .1 }, barn: { boards: 1 },
+    roofs: { asphalt: .6, seam: .4 }, forms: { gable: .92, hip: .08 }, pitch: 40, pitchJitter: 4, eaveM: .3, rakeM: .2,
+    windows: 'sash', bayM: 3.8, ranch: 0, maxFloors: 2,
+    shutters: .3, surrounds: 0, lintels: 0, quoins: 0, flowerBoxes: .02, genoise: 0, frontEnd: .2,
+    balconies: 0, galleries: 0, dormers: .05, chimneys: .7, solar: .04, leanTo: .55, garage: .1, porch: .3, frontPorch: .7, stair: 0, woodpile: .4,
+    sundial: 0, shops: 0, ivy: .03, age: [.4, .95], upkeep: [.45, .95], stone: '#b5ad9c',
+    dressing: { steps: 1, shrubs: .4, bins: .5, bench: .1, pots: .15, garden: .4, fence: .2, laundry: .2, dish: .2, hay: .2, bikes: .05, trough: .1 },
+  },
 };
 
 /** The style for one stretch: defaults ← preset ← the scene's own keys. */

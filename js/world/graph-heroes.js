@@ -39,6 +39,36 @@ export async function buildGraphHeroes(world, json) {
     // a PGH way within r of (x, z) (its edge): monuments and dressing keep off the ways
     wayNear: (x, z, r = 1) => { const g = world.cut, c = g.cell, k = Math.ceil((r + 8) / c); for (let i = -k; i <= k; i++) for (let j = -k; j <= k; j++) { const a = g.cellAt(Math.floor(x / c) + i, Math.floor(z / c) + j); if (!a) continue; for (let q = 0; q < a.length; q += 5) if (Math.hypot(a[q] - x, a[q + 1] - z) - a[q + 3] < r) return true; } return false; },
     routeDist: () => 1e9, streetsNear: () => [], onStreet: () => false, inRouteTube: () => false, sheltered: () => false,
+    /** How far (x, z) is from the edge of the nearest way, up to r (segments, not samples: CNY's canal banks keep off
+     *  the towpath between its samples too). */
+    wayDist: (x, z, r = 10) => {
+      const G = host._segGrid ||= (() => {
+        const m = new Map();
+        for (const e of world.G.edges) for (let i = 0; i + 1 < e.x.length; i++) {
+          const k = `${Math.floor((e.x[i] + e.x[i + 1]) / 40)},${Math.floor((e.z[i] + e.z[i + 1]) / 40)}`;
+          if (!m.has(k)) m.set(k, []); m.get(k).push(e, i);
+        }
+        return m;
+      })();
+      let best = r;
+      const gx = Math.floor(x / 20), gz = Math.floor(z / 20), k = Math.ceil((r + 12) / 20);
+      for (let a = -k; a <= k; a++) for (let b = -k; b <= k; b++) {
+        const arr = G.get(`${gx + a},${gz + b}`); if (!arr) continue;
+        for (let q = 0; q < arr.length; q += 2) {
+          const e = arr[q], i = arr[q + 1], ax = e.x[i], az = e.z[i], dx = e.x[i + 1] - ax, dz = e.z[i + 1] - az, l2 = dx * dx + dz * dz || 1;
+          const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2));
+          const d = Math.hypot(x - ax - dx * t, z - az - dz * t) - (world.wOf ? world.wOf(e) : 7) / 2;
+          if (d < best) best = d;
+        }
+      }
+      return best;
+    },
+    /** The nearest ridden deck (a way's bridge run) within r of (x, z): { x, z, y, e } — CNY's aqueduct carries the trail's. */
+    deckNear: (x, z, r = 30) => {
+      let best = null;
+      for (const e of world.G.edges) for (const [a, b] of e.bridges || []) for (let i = a + 1; i < b; i++) { const d = Math.hypot(e.x[i] - x, e.z[i] - z); if (d < r && (!best || d < best.d)) best = { d, x: e.x[i], z: e.z[i], y: e.ele[i], e }; }
+      return best;
+    },
   };
   // the footprints round the heroes, as the city decodes them
   host.buildings = json.buildings.map((b, k) => {
@@ -57,7 +87,7 @@ export async function buildGraphHeroes(world, json) {
   // the city's facades (brick, stone, metal, window frames, sills) as the Pittsburgh map draws them: they come with a
   // building kit in the scene (js/world/graph-city.js plans PGH's homes with it)
   // (Light / phones: the city's plain window shader, not the brick-and-frames facade shader — a third of a frame's GPU time)
-  host.route.scene.buildingKit = { cityFacades: world.qualityKey !== 'low', detailM: 150, dressingM: 80, styles: [{ preset: 'pittsburgh-rowhouse', kinds: ['rowhouse'] }, { preset: 'pittsburgh-frame', kinds: ['house', 'barn', 'shed'] }] };
+  host.route.scene.buildingKit = { cityFacades: world.qualityKey !== 'low', detailM: 150, dressingM: 80, styles: world.json?.id === 'cny' ? [{ preset: 'cny-suburban', kinds: ['house', 'rowhouse'] }] : [{ preset: 'pittsburgh-rowhouse', kinds: ['rowhouse'] }, { preset: 'pittsburgh-frame', kinds: ['house', 'barn', 'shed'] }] };
   host._materials();
   const heroes = buildHeroes(host);
   let landmarks = { count: 0, tick() {} };

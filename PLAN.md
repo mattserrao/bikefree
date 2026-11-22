@@ -1683,6 +1683,56 @@ Branch `cny-test` (PGH's PR #42 merged first). Built with PGH's own tools, now t
 - App: `GRAPH_CITIES` in js/app.js — PGH and CNY each a card. `npm run cny:build` rebuilds it all;
   `tools/pgh-editor.html?map=cny` edits it. Tests: test/cny.test.mjs.
 
+### CNY landmarks and houses *(user, 22 Nov: "Generate a list of landmarks in CNY. Then, work through improving these. In general, houses are also too generic and have far too many windows")*
+- `tools/cny_heroes.py` → `routes/cities/cny-heroes.json` (each on its OSM outline); `js/world/toolbox/city/cny-landmarks.js`
+  (merged into the landmark builder): the Nine Mile Creek Aqueduct (four Roman arches of stone, segmental where the
+  ground's grid is shallow; the timber trunk with water; the trail's own deck as the towpath — `deckNear` in
+  js/world/graph-heroes.js), Sims' Store and the steam engine house, the Wilcox Octagon House, the canal boat, the
+  Finger Lakes Railway bridge over Genesee Street, the Maxwell Memorial Library, the Warners firehouse; the churches
+  (Camillus First Baptist, Warners United Methodist, Our Lady of Good Counsel) by the church builder; the Erie Canal's
+  water as ribbons along OSM's line (user: "the water in the canal … is cutting out" — the land cover's wobble broke
+  narrow water into pools: water is no longer wobbled, and the canal is its own surface).
+- Houses: preset `cny-suburban` (vinyl siding colours, shutters, garages, low gable and hip roofs; `bayM` 4.4 m between
+  windows instead of 2.6 m; `ranch` share of one storey, `maxFloors` 2 — new style keys in recipe.js). CNY building
+  heights from footprint size (sheds 3.2 m, small 4.6 m, stores 6.5 m), untagged buildings under 300 m² as houses.
+- Done next (below): villages, suburbs and farms.
+
+### CNY villages, suburbs and farms *(user, 22 Nov: "find which areas are villages, suburbs, and farms. A lot of land is farmland and requires new texture and models")*
+- `tools/pgh_city.py` "the country" (`tools/city/cny.json` `rural`): villages are the old cores (Camillus, Warners,
+  Amboy, Memphis, Martisco, Marcellus Falls, Newport, Bennetts Corners: centre and radius); farms where there are few
+  roads (< 60 m/ha within 250 m) and few houses along them (< 2.2 per 100 m); the rest suburbs. Share of the map:
+  village 2 %, suburb 36 %, farm 62 %.
+- Fields: the farms' open flat land (and OSM's farmland and meadows anywhere), split by roads into blocks, each cut
+  along its long axis into fields of 170-330 m (strips offset, not a chequerboard), some with a hedgerow between
+  (woods, one cell: trees). Land codes 20-23 corn and 24-27 grain stubble (the code gives the rows' heading), 28 hay
+  and pasture, 29 farmyard (SKAN's WorldCover fields are 10-12). The ground shader draws crop rows across each field, faded with distance; ~47 % of the land.
+- Buildings: farmsteads (buildings within 70 m of each other in the farm zone): the house (tagged, or house-sized and
+  nearest the road) a farmhouse (kind 20, preset `cny-farmhouse`: white clapboard, steep gable, porch, lean-to) when it
+  has a barn; the rest barns (21), long free-stall barns (22, over 900 m²) or sheds (24, under 90 m²). Village houses
+  (23, preset `cny-village`: two storeys, gable to the street, front porches, older colours). 58 farmhouses, 120
+  barns, 107 sheds, 751 village houses.
+- `js/world/toolbox/city/cny-farms.js`: barns on their footprints — barn red boards (some grey or white), white corner
+  boards, gambrel or gable roofs of metal or shingle, doors with a white X and a hay door, cupolas; concrete stave or
+  blue Harvestore silos beside many; free-stall barns with curtain sides and a ridge vent; small board sheds.
+
+### CNY's Erie Canal *(user, 22 Nov: "The aqueduct water is not attached on both sides … find references for how the Erie Canal looks in Camillus. The feeling is off")*
+- References: the park keeps the first enlargement (70 ft by 7 ft prism) for 7 miles, wooded, between Nine Mile Creek
+  and a hillside; the towpath trail on one side, the South Towpath (berm) on the other; Sims' Store at Devoe Road.
+- User's answers: narrower than the real 21 m (kept 12 m); wooded with a few open stretches; green duckweed, no
+  reflections, cheap; the water set below the towpath in a cut; the berm path as scenery; a little more life, not the
+  lock; a gravel texture for the path.
+- Done: the aqueduct trunk's water meets the canal at both ends (level held 25 m, earth banks); duckweed water in lime
+  greens with patches of dark open water and dark edges; grass banks rising 0.85 m from the water (lower where the trail
+  runs close); the berm path in gravel on the far bank with benches; lily pads; the corridor wooded to 70 m (open in a
+  fifth of it, tools/pgh_city.py); Nine Mile Creek and the brooks as ribbons (were 6 m land cells, a chain of
+  diamonds); CNY's trails stone dust (surface gravel: packed in the wheel line, loose at the edges, pebbles) with no
+  centre line.
+- Revised (user, 22 Nov: "the slope of the bank - it's too wide. It should be 1m, steeper, and the canal wider. The
+  color is also too green. A murky blue green black"): banks rise 0.85 m over 1 m; the water reaches to 1.1 m from the
+  towpath (up to 16 m from OSM's line, the canal at most 19 m), its level taken over its real width (the trail's fill
+  had hidden the near water); murky blue-green-black water with a little scum. graph-heroes.js `landscape.wayDist`:
+  distance to the nearest way by segments.
+
 ### SKAN — a third free-ride map: Skaneateles, Marcellus and the two lakes *(user, 22 Nov: a map "focused around Skaneateles and Marcellus", then "extend so there is a route down and around Skaneatles lake, with the map extending right so there is a route around Otisco lake as well"; "There is a lot of farmland, forests, rural housing, then villages / towns. Ensure these are accurate")*
 Branch `skan-test`. Plan and review maps in the Project doc claude/skan-map.md. Built with PGH's tools (`--city skan`):
 - `tools/city/skan.json`: the area is a 6 km circle round Skaneateles and Marcellus **plus 800 m corridors** along the

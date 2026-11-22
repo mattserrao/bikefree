@@ -23,13 +23,16 @@ import { planBuildingKitJob, makeStreetIndex, dress } from './toolbox/structures
 import { assemble, Writer } from './toolbox/structures/buildings/assemble.js';
 import { makeFacadeMaterial } from './toolbox/structures/buildings/facade-material.js';
 import { FURNITURE, makeFacadeDresser } from './toolbox/city/street-kit.js';
+import { farmBuilding } from './toolbox/city/cny-farms.js';
 import { decorateTreeMaterial } from './toolbox/packs/northern-rockies.js';
 import { makeAlpsPack } from './toolbox/packs/alps.js';
 import { makeNortheastPack } from './toolbox/packs/northeast.js';
 import { makeTreeCards } from './toolbox/vegetation/tree-cards.js';
 
-// (9 is the toolbox's pond; 10–12: a rural map's fields from WorldCover — tools/pgh_city.py rural_land, SKAN)
-export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand: 5, plaza: 6, outside: 7, yards: 8, crops: 10, pasture: 11, wetland: 12 };
+// (9 is the toolbox's pond; 10–12: a rural map's fields from WorldCover — tools/pgh_city.py rural_land, SKAN;
+// 20–29: CNY's fields — 20-23 corn and 24-27 grain by the rows' heading, 28 hay, 29 farmyard: pgh_city.py "the country")
+export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand: 5, plaza: 6, outside: 7, yards: 8, crops: 10, pasture: 11, wetland: 12,
+  corn: 20, grain: 24, hay: 28, farmyard: 29 };
 const TILE = 400;
 // how far the city is built, by quality (Low: phones)
 const REACH = { low: { near: 1300, far: 1800, trees: 0.6, treeNear: 450 }, balanced: { near: 2300, far: 3100, trees: 1, treeNear: 750 }, high: { near: 2300, far: 3100, trees: 1.2, treeNear: 900 } };
@@ -43,6 +46,10 @@ const TREE_FULL = { low: 60, balanced: 90, high: 130 }, TREE_LOD = { low: 200, b
 const CAR_NEAR = 320;           // m: detailed parked cars within this
 const KIT_CFG = { detailM: 150, dressingM: 80, detailReachM: 550,
   styles: [{ preset: 'pittsburgh-rowhouse', kinds: ['rowhouse'] }, { preset: 'pittsburgh-frame', kinds: ['house', 'barn', 'shed'] }] };
+/** Each road-graph city's homes (CNY: the suburbs' ranches and colonials, the villages' older houses, the farmhouses:
+ *  presets.js cny-*; tools/pgh_city.py's zones give kinds 23 and 20). */
+export const KIT_STYLES = { cny: [{ preset: 'cny-village', kinds: ['village-house'] }, { preset: 'cny-farmhouse', kinds: ['farmhouse-ny'] },
+  { preset: 'cny-suburban', kinds: ['house', 'rowhouse'] }] };
 const ROADS = new Set(['primary', 'secondary', 'tertiary', 'residential', 'alley']);
 const MAIN = new Set(['primary', 'secondary', 'tertiary']);
 const POINT_FN = { signal: 'signal', bus_stop: 'busSign', bench: 'bench', hydrant: 'hydrant', bike_rack: 'bikeRack', waste: 'waste', picnic: 'picnic',
@@ -107,7 +114,7 @@ export class GraphCity {
     }
     host.index = { xs: Float64Array.from(xs), zs: Float64Array.from(zs), nearest: () => null };
     this.kitStreets = makeStreetIndex(lines);
-    this.kitScene = { ...host.route.scene, buildingKit: KIT_CFG };
+    this.kitScene = { ...host.route.scene, buildingKit: { ...KIT_CFG, styles: KIT_STYLES[world.json?.id] || KIT_CFG.styles } };
     this.kit = this._kitAdapter();
     host.buildingKit = this.kit;
     this._materials();
@@ -157,6 +164,7 @@ export class GraphCity {
       cx /= ring.length; cz /= ring.length;
       const b = { k: this.buildings.length, ring, h: h[q] / 10, mh: mh[q] / 10, kind: B.kind[q], name: B.names[q] || '', bb: [x0, x1, z0, z1], cx, cz, sector: key };
       if (this.covered(b) || this._underDeck(b)) b.hidden = true;
+      if (b.kind === 21 || b.kind === 22 || b.kind === 24) b.ownModel = 'farm';   // CNY's barns: js/world/toolbox/city/cny-farms.js (_farms), not boxes
       this.buildings.push(b); mine.push(b);
       const tk = `${Math.floor(cx / TILE)},${Math.floor(cz / TILE)}`;
       if (!host.buildingChunks.has(tk)) host.buildingChunks.set(tk, []); host.buildingChunks.get(tk).push(b);
@@ -187,7 +195,7 @@ export class GraphCity {
       });
     }
     // the homes' plan: rowhouses and houses (the kit's), the rest as neighbours
-    const kinds = { 0: 'rowhouse', 1: 'house', 13: 'barn', 14: 'shed' }, homes = [], neighbours = [];   // (13, 14: a rural map's barns and sheds)
+    const kinds = { 0: 'rowhouse', 1: 'house', 13: 'barn', 14: 'shed', 20: 'farmhouse-ny', 23: 'village-house' }, homes = [], neighbours = [];   // (13, 14: a rural map's barns and sheds, SKAN; 20, 23: CNY's farmhouses and village houses)
     for (const b of mine) {
       if (due()) yield;
       if (b.kind === 12 || b.hidden) continue;
@@ -443,6 +451,7 @@ export class GraphCity {
     yield;
     yield* this._trees(t); yield;
     yield* this._furniture(t); yield;
+    yield* this._farms(t); yield;
     yield* this._storefronts(t); yield;
     yield* this._lots(t); yield* this._lines(t);
     // the street furniture, fences and walls: one mesh (one draw call) for the tile
@@ -580,6 +589,16 @@ export class GraphCity {
       if (list.length) im.computeBoundingSphere();
     }));
     this._poolAt = cam.clone();
+  }
+  /** CNY's barns and silos (cny-farms.js) into the tile's street-kit mesh. */
+  *_farms(t) {
+    let n = 0;
+    for (const b of this.host.buildingChunks.get(t.key) || []) {
+      if (b.ownModel !== 'farm' || b.hidden) continue;
+      if (due()) yield;
+      this.stats.silos = (this.stats.silos || 0) + farmBuilding(t.kitM, b, this.host.landscape); n++;
+    }
+    this.stats.barns = (this.stats.barns || 0) + n;
   }
   /** The main streets' buildings dressed as the Pittsburgh map's are: shop fronts with their signs (lit at night),
    *  awnings and blade signs, belt courses, cornices and sills (FACADE_STYLES: the victorian rows on the main streets,

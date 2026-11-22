@@ -245,6 +245,11 @@ export function* planBuildingsJob(plan, config, index, opts = {}, tierIndex = nu
     R.floorH = archetype === 'block' ? 2.85 : archetype === 'village' || archetype === 'public' ? 3.15 : archetype === 'church' ? 9 + rand() * 3
       : archetype === 'chapel' ? 5 : archetype === 'shed' ? 2.5 + rand() * .5 : archetype === 'mazot' ? 2.4 : 3;
     if (b.height && b.height > 2) R.floors = Math.max(1, Math.round(b.height * .8 / R.floorH));
+    // a style's storeys (CNY's suburbs: ranches and two-storey colonials, never the village's three): a share of one
+    // storey (ranch), and a cap
+    if (style.ranch && ['cottage', 'village', 'farmhouse'].includes(archetype) && rand() < style.ranch) R.floors = 1;
+    if (style.maxFloors && !['block', 'church', 'public', 'works'].includes(archetype)) R.floors = Math.min(R.floors, style.maxFloors);
+    R.bayM = style.bayM || 0;
     // colours: a scheme no neighbour within 30 m already has (with the same archetype), then a small jitter
     const schemes = style.schemes;
     const used = new Set();
@@ -370,8 +375,8 @@ const sum = (o) => Object.values(o || {}).reduce((a, v) => a + v, 0);
 const pickArr = (arr, r) => arr[Math.floor(r * arr.length) % arr.length];
 
 /** Window bays along a wall: the count and exact bay width, so windows sit symmetrically. */
-export function bays(len, set) {
-  const bw = (WINDOW_BAY[set] || WINDOW_BAY[W.FRENCH])[1];
+export function bays(len, set, bayM = 0) {
+  const bw = bayM || (WINDOW_BAY[set] || WINDOW_BAY[W.FRENCH])[1];   // (a style's own bay: CNY's suburban houses, fewer windows)
   const n = Math.max(1, Math.floor(len / bw + .25));
   return { n, w: len / n };
 }

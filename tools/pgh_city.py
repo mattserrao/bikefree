@@ -23,7 +23,7 @@ routes/cities/pgh-city.json ("bikefree-pgh-city-1"):
                                  edge's direction), lanes, sidewalks (0 none, 1 one side, 2 both)
 Data © OpenStreetMap contributors, ODbL.
 """
-import json, math, os, sys, glob, itertools
+import json, math, os, re, sys, glob, itertools
 import xml.etree.ElementTree as ET
 import numpy as np
 from scipy import ndimage
@@ -218,7 +218,8 @@ def main():
     # the waterways OSM draws as lines (no area): CNY's Erie Canal, Nine Mile Creek — water at their width (PGH's rivers
     # are areas, under its water plane)
     if CITY != 'pgh':
-        WIDE = {'canal': 14, 'river': 16, 'stream': 4}
+        # (CNY: the canal and the creeks are ribbons of water of their own, tools/cny_heroes.py — as cells they were a chain of diamonds)
+        WIDE = {} if CITY == 'cny' else {'canal': 14, 'river': 16, 'stream': 4}
         nw_ = 0
         for wid, (nd, t) in ways.items():
             w_m = WIDE.get(t.get('waterway')); 
@@ -283,6 +284,11 @@ def main():
             h = {'house': 8.5, 'detached': 8.5, 'semidetached_house': 9, 'terrace': 10, 'residential': 10.5, 'apartments': 14,
                  'garage': 3.2, 'garages': 3.2, 'shed': 3, 'commercial': 9, 'retail': 7.5, 'industrial': 9.5, 'warehouse': 10,
                  'church': 16, 'school': 11, 'hospital': 20, 'office': 18, 'parking': 12, 'hotel': 24}.get(b, 9.5)
+            if CITY != 'pgh' and b in ('yes', 'roof', 'shed', 'garage', 'garages', 'service', 'industrial', 'warehouse', 'commercial', 'retail', 'barn', 'farm_auxiliary'):
+                # (a suburb: an untagged shed or pavilion is one low storey, a store one tall one — not Pittsburgh's 9.5 m)
+                pts_ = pts
+                a_ = abs(sum(pts_[i][1] * kx * pts_[i - 1][0] * ky - pts_[i - 1][1] * kx * pts_[i][0] * ky for i in range(len(pts_)))) / 2 if len(pts_) > 2 else 0
+                h = 3.2 if a_ < 60 else 4.6 if a_ < 400 else 6.5 if a_ < 2500 else 8
             h *= 0.9 + (int(wid.strip('r').split('_')[0]) % 7) * 0.04
         if name in special: kind = special[name]
         elif b in ('church', 'cathedral', 'chapel') or t.get('amenity') == 'place_of_worship': kind = 7
@@ -296,7 +302,7 @@ def main():
             px_, py_ = pix(clat, clon)
             res = 0 <= px_ < lx and 0 <= py_ < ly and img.getpixel((int(px_), int(py_))) in (8, UNTAGGED)
             area_m2 = abs(sum(a[1] * b_[0] - b_[1] * a[0] for a, b_ in zip(pts, pts[1:] + pts[:1])) / 2 * kx * ky)
-            if CITY != 'pgh': kind = 1 if res and area_m2 < 400 else 2   # (a suburb: detached houses among the homes, not rowhouses)
+            if CITY != 'pgh': kind = 1 if area_m2 < 300 or (res and area_m2 < 400) else 2   # (a suburb or a village: detached houses, not rowhouses or blocks)
             elif res and area_m2 < 220: kind = 0 if (clat < 40.4335 and clon > -79.997) or (int(''.join(ch for ch in wid if ch.isdigit()) or 0) % 3 == 0) else 1
             else: kind = 0 if clat < 40.4335 and clon > -79.997 else 2
         lp = [loc(*p) for p in pts]
@@ -308,7 +314,7 @@ def main():
         if abs(area) < 12: why['small'] += 1; continue
         ll = [((y / ky) + lat0, (x / kx) + lon0) for x, y in sp]
         kept.append({'h': h, 'mh': min_h(t), 'kind': kind, 'ring': [q(*p) for p in ll], 'name': name if name in special or h >= TALL else '',
-                     '_b': b, '_a': abs(area), '_c': (clat, clon), '_h': t.get('height') or t.get('building:levels'), '_res': t.get('landuse')})
+                     '_b': b, 'bt': b, '_a': abs(area), '_c': (clat, clon), '_h': t.get('height') or t.get('building:levels'), '_res': t.get('landuse')})
         if not RURAL: poly(ll, 4)   # (a rural map's 10 m cells: a house would stand on a grey block twice its size — its lawn instead)
     if RURAL:
         # rural housing (user, 22 Nov, SKAN): a village is where the buildings stand close (12+ within 90 m); out in the
@@ -348,12 +354,180 @@ def main():
     win = int(round(36 / LAND_M)) * 2 + 1
     res_n = ndimage.uniform_filter(np.asarray(bm[0], dtype=np.float32), win)
     com_n = ndimage.uniform_filter(np.asarray(bm[1], dtype=np.float32), win)
+    img0 = np.asarray(img).copy()   # (the land as OSM tags it: CNY's country takes only what it leaves untagged)
     if RURAL:
         L = rural_land(np.asarray(img).copy(), UNTAGGED, res_n, com_n, kept, pix, lx, ly, gs, gw, gn, ge, lat0, lon0)
         img = Image.fromarray(L)
     else:
         img = urban_land(img, UNTAGGED, res_n, com_n, lx, ly, gs, gw, gn, ge, E, pix)
-    L = np.asarray(img)
+    L = np.asarray(img).copy()
+    un = img0 == UNTAGGED
+    # slope from the terrain tiles on a 24 m lattice (as urban_land)
+    sx, sy = max(2, int(lx * LAND_M / 24)), max(2, int(ly * LAND_M / 24))
+    H = np.array([[elevation(gn - (gn - gs) * j / (sy - 1), gw + (ge - gw) * i / (sx - 1)) for i in range(sx)] for j in range(sy)], dtype=np.float32) if CITY != 'pgh' and not RURAL else None
+    slope = ndimage.zoom(np.hypot(*np.gradient(H, 24.0)), (ly / sy, lx / sx), order=1)[:ly, :lx] if H is not None else None
+    # the country (CNY: tools/city/<id>.json "rural"; user, 22 Nov: "find which areas are villages, suburbs, and farms. A
+    # lot of land is farmland and requires new texture and models"): villages are the old cores, farms where buildings are
+    # sparse; there the open flat land is fields — OSM's farmland and meadows anywhere — cut into fields of corn, grain
+    # and hay along their long axis, some with hedgerows between; the barns and farmhouses by their footprints (below)
+    cfg_p = os.path.join(ROOT, f'tools/city/{CITY}.json')
+    COUNTRY = json.load(open(cfg_p)).get('rural') if CITY != 'pgh' and os.path.exists(cfg_p) else None
+    zone = None
+    if COUNTRY:
+        fimg = Image.new('L', (lx, ly), 0); fd = ImageDraw.Draw(fimg)
+        FARM = {'farmland': 1, 'orchard': 1, 'meadow': 2, 'farmyard': 3}
+        def fpoly(t, rings):
+            c = FARM.get(t.get('landuse'))
+            for pts in rings:
+                if c and len(pts) > 2: fd.polygon([pix(*p) for p in pts], fill=c)
+        for nd, t in ways.values():
+            if t.get('landuse') in FARM and nd and nd[0] == nd[-1]: fpoly(t, [[nodes[i] for i in nd if i in nodes]])
+        for rel in rels.values():
+            if rel[1].get('landuse') in FARM and rel[1].get('type') == 'multipolygon':
+                try: fpoly(rel[1], rings_of(rel, ways, nodes))
+                except Exception: pass
+        F = np.asarray(fimg)
+        bf = np.asarray(bm[0], dtype=np.float32) + np.asarray(bm[1], dtype=np.float32)
+        Rc = int(COUNTRY.get('farmR', 180) / LAND_M)
+        dens = ndimage.uniform_filter(bf, 2 * Rc + 1)
+        yy, xx = np.mgrid[0:ly, 0:lx]
+        vil = np.zeros((ly, lx), bool)
+        for la, lo, r, _n in COUNTRY.get('villages', []):
+            px_, py_ = pix(la, lo); vil |= np.hypot(xx - px_, yy - py_) * LAND_M < r
+        rm = Image.new('L', (lx, ly), 0); rd = ImageDraw.Draw(rm)
+        for e in E: rd.line([pix(a, o) for a, o in zip(e['lat'], e['lon'])], fill=1, width=1)
+        # a suburb is a net of streets (a subdivision) or a road lined with houses; a farm road has a house every few
+        # hundred metres and the land between is open (the old test, built share alone, made every road with a few
+        # houses on it a suburb)
+        W2 = int(250 / LAND_M) * 2 + 1
+        road_f = ndimage.uniform_filter(np.asarray(rm, dtype=np.float32), W2)
+        hc = np.zeros((ly, lx), np.float32)
+        for b in kept:
+            P = [pix(lat0 + qa * UNIT, lon0 + qo * UNIT) for qa, qo in b['ring']]
+            hx, hy = int(sum(p[0] for p in P) / len(P)), int(sum(p[1] for p in P) / len(P))
+            if 0 <= hx < lx and 0 <= hy < ly and b['kind'] == 1: hc[hy, hx] += 1
+        house_f = ndimage.uniform_filter(hc, W2)
+        road_mha = road_f * 1e4 / LAND_M ** 2 * LAND_M   # m of road per hectare
+        per100 = house_f / np.maximum(road_f, 1e-6) / LAND_M * 100   # houses per 100 m of road
+        farm = (road_mha < COUNTRY.get('farmRoadMHa', 60)) & (per100 < COUNTRY.get('farmHousesPer100m', 2.2)) & (dens < .03)
+        farm = ndimage.binary_closing(ndimage.binary_opening(farm, iterations=4), iterations=4) & ~vil
+        zone = np.where(vil, 1, np.where(farm, 3, 2)).astype(np.uint8)   # 1 village, 2 suburb, 3 farm
+        d_road = ndimage.distance_transform_edt(np.asarray(rm) == 0) * LAND_M
+        d_bld = ndimage.distance_transform_edt(bf == 0) * LAND_M
+        fields = farm & np.isin(L, (1, 7)) & un & (slope <= .12)   # (un: land OSM leaves untagged — not a park or a lawn)
+        fields = (fields | ((F == 1) | (F == 2)) & ~np.isin(L, (3, 4))) & (d_road > 9) & (d_bld > 12)
+        lab, nlab = ndimage.label(fields)
+        rng = np.random.default_rng(7)
+        min_cells = COUNTRY.get('fieldMinHa', .6) * 1e4 / LAND_M ** 2
+        fmin, fmax = COUNTRY.get('fieldM', [170, 330])
+        nf = Counter()
+        for k, sl in enumerate(ndimage.find_objects(lab), 1):
+            if sl is None: continue
+            m = lab[sl] == k
+            if m.sum() < min_cells: continue
+            ys, xs = np.nonzero(m); E_ = xs.astype(np.float64); N_ = -ys.astype(np.float64)
+            cov = np.cov(np.vstack([E_ - E_.mean(), N_ - N_.mean()])) if len(xs) > 2 else np.eye(2)
+            w_, v_ = np.linalg.eigh(cov); ax = v_[:, 1]
+            th = math.atan2(ax[1], ax[0])
+            u = (E_ * ax[0] + N_ * ax[1]) * LAND_M; v = (-E_ * ax[1] + N_ * ax[0]) * LAND_M
+            A, B = rng.uniform(fmin, fmax), rng.uniform(fmin, fmax) * 1.3
+            iv = np.floor((v - v.min()) / B).astype(int)
+            shift = rng.uniform(0, A, iv.max() + 2)   # each strip's fields offset from the next (not a chequerboard)
+            iu = np.floor((u - u.min() + shift[iv]) / A).astype(int)
+            # a field too thin at the end of the strip joins its neighbour
+            if (u.max() - u.min()) % A < A * .4: iu = np.minimum(iu, max(0, iu.max() - 1))
+            if (v.max() - v.min()) % B < B * .4: iv = np.minimum(iv, max(0, iv.max() - 1))
+            fid = iu * 1000 + iv
+            d4 = int(round(math.degrees(th) / 45)) % 4   # rows along the long axis: 0 east-west, 1 NE, 2 north-south, 3 NW
+            sub = L[sl]
+            for f in np.unique(fid):
+                sel = fid == f
+                hay = bool(np.mean(F[sl][ys[sel], xs[sel]] == 2) > .5)
+                r_ = rng.random()
+                code = 28 if hay or r_ < .35 else 20 + d4 if r_ < .73 else 24 + d4   # (20-29: CNY's; SKAN's WorldCover fields are 10-12)
+                sub[ys[sel], xs[sel]] = code; nf['hay' if code == 28 else 'corn' if code < 24 else 'grain'] += 1
+            # hedgerows on some of the lines between fields (trees: the woods' code, one cell wide)
+            for axis, idx in ((0, iu), (1, iv)):
+                for line in np.unique(idx)[1:]:
+                    if rng.random() > .45: continue
+                    edge = idx == line
+                    # the first cells of the next field along this line
+                    if axis == 0: edge &= ((u - u.min() + shift[iv]) - line * A) < LAND_M * 1.1
+                    else: edge &= ((v - v.min()) - line * B) < LAND_M * 1.1
+                    sub[ys[edge], xs[edge]] = 2; nf['hedgerows'] += 1
+        print(f'  country: zones village {np.mean(zone == 1) * 100:.0f}%, suburb {np.mean(zone == 2) * 100:.0f}%, farm {np.mean(zone == 3) * 100:.0f}%; '
+              f'fields {dict(nf)} ({np.isin(L, list(range(20, 29))).mean() * 100:.0f}% of the land)')
+        # the buildings by zone: in the farms a mid-size outbuilding is a barn (21; a long modern one, 22), a house with a
+        # barn within 120 m a farmhouse (20); in the villages' cores a house is a village house (23: older, two storeys)
+        def b_info(b):
+            ll = [(lat0 + qa * UNIT, lon0 + qo * UNIT) for qa, qo in b['ring']]
+            P = [pix(*p) for p in ll]
+            ar = abs(sum(P[i][0] * P[i - 1][1] - P[i - 1][0] * P[i][1] for i in range(len(P)))) / 2 * LAND_M ** 2
+            cx_, cy_ = sum(p[0] for p in P) / len(P), sum(p[1] for p in P) / len(P)
+            return P, ar, min(lx - 1, max(0, int(cx_))), min(ly - 1, max(0, int(cy_)))
+        barns, kc = [], Counter()
+        # farmsteads: the farm zone's buildings within 70 m of each other; the house is the one tagged a house, else the
+        # house-sized one nearest the road; the rest barns (21; over 900 m², a long modern barn, 22), or sheds (24) under 90 m²
+        info = [b_info(b) for b in kept]
+        fz = [k for k, b in enumerate(kept) if b['kind'] in (1, 2, 3) and zone[info[k][3], info[k][2]] == 3 and kept[k]['h'] < 12]
+        par = {k: k for k in fz}
+        def root(k):
+            while par[k] != k: par[k] = par[par[k]]; k = par[k]
+            return k
+        cg = defaultdict(list)
+        for k in fz: cg[(info[k][2] // 12, info[k][3] // 12)].append(k)
+        for k in fz:
+            ix, iy = info[k][2], info[k][3]
+            for a_ in (-1, 0, 1):
+                for c_ in (-1, 0, 1):
+                    for j in cg.get((ix // 12 + a_, iy // 12 + c_), ()):
+                        if j > k and math.hypot(info[j][2] - ix, info[j][3] - iy) * LAND_M < 70: par[root(j)] = root(k)
+        groups = defaultdict(list)
+        for k in fz: groups[root(k)].append(k)
+        for g in groups.values():
+            if len(g) == 1:
+                k = g[0]
+                if info[k][1] > 400: kept[k]['kind'] = 21 if info[k][1] <= 900 else 22; barns.append((info[k][2], info[k][3], info[k][0]))
+                continue
+            homes = [k for k in g if kept[k]['bt'] == 'house'] or [k for k in g if 70 <= info[k][1] <= 320]
+            house = min(homes, key=lambda k: d_road[info[k][3], info[k][2]]) if homes else None
+            got = False
+            for k in g:
+                if k == house: continue
+                ar = info[k][1]
+                if ar >= 90 and kept[k]['bt'] != 'house':
+                    kept[k]['kind'] = 21 if ar <= 900 else 22; barns.append((info[k][2], info[k][3], info[k][0])); got = True
+                elif ar < 90: kept[k]['kind'] = 24   # a shed (cny-farms.js: a small gable of boards)
+            if house is not None:
+                kept[house]['kind'] = 20 if got else 1
+        for b, (P, ar, ix, iy) in zip(kept, info):
+            if b['kind'] == 1 and zone[iy, ix] == 1: b['kind'] = 23
+        kc = Counter(b['kind'] for b in kept)
+        # farmyards: gravel and packed earth round the barns
+        ym = Image.new('L', (lx, ly), 0); yd = ImageDraw.Draw(ym)
+        for _, _, P in barns: yd.polygon(P, fill=1)
+        yard = ndimage.binary_dilation(np.asarray(ym) > 0, iterations=int(10 / LAND_M)) & ~np.isin(L, (3, 4)) & (d_road > 5)
+        L[yard] = 29
+        # the Erie Canal's corridor (user, 22 Nov: "wooded, with a few stretches open into fields"): grass banks to 14 m
+        # from its line (the towpath, the berm), woods beyond to 70 m — but for a stretch in five or so, open to the
+        # fields; yards, buildings and water left as they are
+        cm = Image.new('L', (lx, ly), 0); cd_ = ImageDraw.Draw(cm)
+        for nd, t in ways.values():
+            if t.get('waterway') == 'canal' and t.get('bridge') != 'aqueduct' and not t.get('tunnel'):
+                pts = [nodes[r] for r in nd if r in nodes]
+                if len(pts) > 1: cd_.line([pix(*q_) for q_ in pts], fill=1, width=1)
+        if np.asarray(cm).any():
+            d_can = ndimage.distance_transform_edt(np.asarray(cm) == 0) * LAND_M
+            yy2, xx2 = np.mgrid[0:ly, 0:lx]
+            # open stretches: a smooth noise along the land (cells of ~500 m), the top fifth of it
+            rs = np.random.default_rng(11).random((ly // 80 + 3, lx // 80 + 3)).astype(np.float32)
+            op = ndimage.zoom(rs, (ly / (rs.shape[0] - 2), lx / (rs.shape[1] - 2)), order=3)[:ly, :lx]
+            soft = np.isin(L, (1, 7, 28) + tuple(range(20, 28)))
+            L[(d_can < 14) & (soft | (L == 2))] = 1
+            L[(d_can >= 14) & (d_can < 70) & soft & (op < .78)] = 2
+            print(f'  canal corridor: woods {np.mean((d_can >= 14) & (d_can < 70) & (L == 2)) / max(np.mean((d_can >= 14) & (d_can < 70)), 1e-9) * 100:.0f}% of its band')
+        print(f'  country buildings: farmhouses {kc[20]}, barns {kc[21]}, long barns {kc[22]}, sheds {kc[24]}, village houses {kc[23]}')
+    img = Image.fromarray(L)
     print(f'  land (share): ' + ', '.join(f'{n} {np.mean(L == c) * 100:.0f}%' for c, n in [(0, 'paved'), (1, 'grass'), (2, 'woods'), (3, 'water'), (4, 'building'), (6, 'plaza'), (8, 'yards'), (10, 'crops'), (11, 'pasture/hay'), (12, 'wetland')] if np.any(L == c)))
 
     # 3. trees, the street kit
@@ -397,6 +571,9 @@ def main():
             t = ways[hit[1]][1]
             s = t.get('surface')
             code = SURF_OF.get(s, 0 if e['kind'] != 'path' or not s else 0)
+            # CNY's trails: the Erie Canalway Trail is stone dust through Camillus (user, 22 Nov: "gravel" for the path),
+            # and a trail OSM gives no surface is gravel in the country, not asphalt
+            if CITY != 'pgh' and e['kind'] == 'path' and (not s or re.search(r'Canalway|Towpath', e['name'] or '', re.I)): code = 5
             codes.append(code)
             # one-way, against or along this edge's direction
             if t.get('oneway') in ('yes', '1', '-1') or t.get('highway') in ('motorway', 'motorway_link'):
@@ -460,7 +637,6 @@ def main():
     def land_at(la, lo):
         px_, py_ = pix(la, lo); i, j = int(round(px_)), int(round(py_))
         return int(Larr[j, i]) if 0 <= i < lx and 0 <= j < ly else 7
-    import re
     MAIN_TRAIL = re.compile(r'Canalway|Heritage|Allegheny Passage|Eliza Furnace|North Shore Trail|South Side Trail|Station Square Trail|Strip District Trail|Hot Metal|Mon Wharf|^Trail$|Riverwalk|Riverfront', re.I)
     widths = pgh.get('widths', {})
     ke = pgh.get('unit', {}).get('ele', 0.1)

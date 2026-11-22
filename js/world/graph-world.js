@@ -723,7 +723,11 @@ export class GraphWorld {
   /** How a way is painted: centre line, lane lines, edge lines (one-ways and lanes from the city data). */
   _paintOf(e) {
     const ow = this.city?.edgeInfo(e).ow || 0, lanes = this.city?.edgeInfo(e).lanes || 0;
-    if (e.kind === 'path') return { centre: !e._rw && (e._w || 3) >= 3.4 ? 'dash-yellow' : null, edges: false, lanes: 0 };
+    if (e.kind === 'path') {
+      // (a gravel or dirt trail has no paint: CNY's stone-dust towpath)
+      const loose = this.city && ['gravel', 'dirt'].includes(this.city.edgeInfo(e).surf(e.n >> 1));
+      return { centre: !e._rw && !loose && (e._w || 3) >= 3.4 ? 'dash-yellow' : null, edges: false, lanes: 0 };
+    }
     if (e.kind === 'plaza' || e.kind === 'alley') return { centre: null, edges: false, lanes: 0 };
     if (ow) return { centre: null, edges: e.kind !== 'residential', lanes: Math.max(1, lanes), oneway: true };
     if (e.kind === 'primary' || e.kind === 'secondary') return { centre: 'double', edges: true, lanes: 0 };
@@ -1297,8 +1301,15 @@ function roadSurfaceMaterial(low = false) {
             float jt = max(1. - smoothstep(0., .06, f.x) * smoothstep(0., .06, 1. - f.x), 1. - smoothstep(0., .06, f.y) * smoothstep(0., .06, 1. - f.y));
             c = mix(c, c * (.82 + .3 * gwH(cell)) * (1. - .4 * jt), det);
           } else if (sf == 5 || sf == 6) {   // gravel, dirt
-            vec3 g = sf == 5 ? vec3(.55, .51, .44) : vec3(.43, .36, .27);
-            c = pow(g * (.8 + .35 * gwH(floor(vGW.xz * 14.)) * det + .15 * gwN(vGW.xz * 1.3)), vec3(2.2));
+            // (user, 22 Nov: a "gravel" texture for the towpath): stone dust packed smooth where the wheels run, loose
+            // and darker toward the edges, with pebbles; fades to its mean far off
+            vec3 g = sf == 5 ? vec3(.62, .57, .48) : vec3(.43, .36, .27);
+            float edge = smoothstep(.35, .5, abs(q.x) / max(vRd.w, 1.)), worn = 1. - smoothstep(.2, .6, abs(abs(q.x) - vRd.w * .18));
+            float grain = gwN(vGW.xz * 22.) * .6 + gwN(vGW.xz * 47.) * .4, peb = step(.96, gwH(floor(vGW.xz * 11.) + 17.)) * gwH(floor(vGW.xz * 11.) + 3.);
+            float tone = .9 + .22 * (grain - .5) * det + .14 * gwN(vGW.xz * 1.3) - .14 * edge + .07 * worn * (sf == 5 ? 1. : 0.);
+            vec3 col = g * tone;
+            col = mix(col, col * mix(.62, 1.25, peb), step(.001, peb) * det * (.4 + .6 * edge));
+            c = pow(col, vec3(2.2));
           } else {                 // asphalt
             #ifdef LOWQ
             c *= (.94 + .12 * wear) * (1. - wear * .1 * track);
@@ -1345,8 +1356,12 @@ function groundMaterial(low = false) {
           float k = floor(texture2D(uLand, uv).r * 255. + .5);
           float n = gwN(vGW.xz * .35);
           #else
-          vec2 uv = (vGW.xz - uLandBox.xy) / size + (vec2(gwN(vGW.xz * .21), gwN(vGW.xz * .21 + 19.)) - .5) * 4. / size;
+          vec2 uv0 = (vGW.xz - uLandBox.xy) / size, uv = uv0 + (vec2(gwN(vGW.xz * .21), gwN(vGW.xz * .21 + 19.)) - .5) * 4. / size;
           float k = floor(texture2D(uLand, uv).r * 255. + .5);
+          // water isn't wobbled: a canal or a creek is only a few cells wide, and the wobble broke it into pools
+          // (user, 22 Nov: "the water in the canal … is cutting out")
+          float k0 = floor(texture2D(uLand, uv0).r * 255. + .5);
+          if (k0 > 2.5 && k0 < 3.5) k = 3.; else if (k > 2.5 && k < 3.5) k = k0;
           float n = gwN(vGW.xz * .35) * .6 + gwN(vGW.xz * 2.3) * .4;
           #endif
           vec3 lc = vec3(-1.);
@@ -1381,9 +1396,30 @@ function groundMaterial(low = false) {
             #endif
           }
           else if (k > 11.5 && k < 12.5) lc = mix(vec3(.3, .37, .2), vec3(.4, .42, .25), n);  // wetland: sedge and brush
-          if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vLandW * .85);
+          else if (k > 19.5 && k < 27.5) {
+            // CNY's fields (tools/pgh_city.py "the country"): crop rows along the field's long axis (20-23 corn, 24-27
+            // grain stubble; the code's last two bits the rows' heading, 0 east-west … 3 north-west), faded to their
+            // mean far off so they don't shimmer
+            float dIx = mod(k - 20., 4.), a = dIx * .7853982, ns = sign(uLandBox.y - uLandBox.w);
+            vec2 rowN = vec2(-ns * sin(a), cos(a));   // across the rows (world x, z; the rows run (cos a, ns sin a), ns: north's sign in z)
+            float corn = step(k, 23.5), per = mix(.55, .9, corn), q = dot(vGW.xz, rowN) / per;
+            float fw = fwidth(q), row = mix(.5 + .5 * sin(q * 6.2831853), .5, clamp(fw * 1.6, 0., 1.));
+            float field = gwN(vGW.xz * .013 + k * 3.1);   // a field's own shade (and the swaths of a mower)
+            float swath = mix(.5 + .5 * sin(dot(vGW.xz, rowN) * .785), .5, clamp(fwidth(dot(vGW.xz, rowN) * .125) * 1.6, 0., 1.));
+            vec3 leaf = mix(vec3(.2, .38, .1), vec3(.3, .47, .13), field), soil = vec3(.38, .3, .2);
+            vec3 stub = mix(vec3(.76, .62, .34), vec3(.84, .72, .42), field), stubD = vec3(.6, .49, .3);
+            lc = corn > .5 ? mix(soil, leaf, .55 + .45 * row) * (.94 + n * .12) : mix(stubD, stub, row * .6 + swath * .4) * (.95 + n * .1);
+          }
+          else if (k < 28.5 && k > 27.5) {
+            // hay and pasture: mottled grass, mown in broad lighter swaths
+            float sw = .5 + .5 * sin(vGW.x * .45 + gwN(vGW.xz * .02) * 9.);
+            sw = mix(sw, .5, clamp(fwidth(vGW.x * .45) * .6, 0., 1.));
+            lc = mix(vec3(.5, .58, .26), vec3(.64, .66, .32), n * .6 + sw * .4);
+          }
+          else if (k < 29.5 && k > 28.5) lc = mix(vec3(.5, .43, .32), vec3(.6, .53, .41), n * .7 + gwN(vGW.xz * .09) * .3);   // farmyard: gravel and packed earth
+          if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * mix(clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vec3(1.), step(19.5, k) * .7), vLandW * (k > 19.5 ? .95 : .85));   // (CNY's fields: their own colour, less of the ground's tint)
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-3${low ? '-low' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-4${low ? '-low' : ''}`;
   return m;
 }
