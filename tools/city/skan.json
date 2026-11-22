@@ -1,0 +1,379 @@
+{
+ "id": "skan",
+ "name": "SKAN",
+ "cityName": "Skaneateles, NY",
+ "note": "SKAN free-ride graph (tools/build_pgh.py --city skan; user, 22 Nov: a map \"focused around Skaneateles and Marcellus\", then \"extend so there is a route down and around Skaneateles lake, with the map extending right so there is a route around Otisco lake as well\"; plan in the Project doc claude/skan-map.md). The area: a circle round Skaneateles and Marcellus (area.circle) plus area.corridorM either side of the two lake loops and the Marcellus\u2013Otisco link (area.lines). Every street and trail you can bike inside it, US 20 included (the villages' main street); motorways never. Land cover: ESA WorldCover 10 m for the fields, pasture, forest and wetland (landCover), OSM for the rest.",
+ "area": {
+  "circle": [
+   42.978,
+   -76.387,
+   6000
+  ],
+  "lines": "skan-area-lines.json",
+  "corridorM": 800,
+  "marginM": 1200
+ },
+ "corridorM": 0,
+ "osmTile": [
+  0.02,
+  0.016
+ ],
+ "osmOrigin": [
+  -76.6,
+  42.6
+ ],
+ "roads": {
+  "primary": "primary",
+  "primary_link": "primary",
+  "secondary": "secondary",
+  "secondary_link": "secondary",
+  "tertiary": "tertiary",
+  "tertiary_link": "tertiary",
+  "unclassified": "residential",
+  "residential": "residential",
+  "living_street": "residential",
+  "service": "alley",
+  "track": "path",
+  "busway": null,
+  "trunk": "primary",
+  "trunk_link": "primary"
+ },
+ "serviceKinds": [
+  "alley"
+ ],
+ "skipService": [
+  "driveway",
+  "parking_aisle",
+  "drive-through",
+  "emergency_access"
+ ],
+ "paths": {
+  "cycleway": "path",
+  "path": "path",
+  "footway": "path",
+  "bridleway": "path",
+  "pedestrian": "plaza"
+ },
+ "skipSurfaces": [
+  "stairs"
+ ],
+ "maxTunnelM": 120,
+ "mergeM": 15,
+ "snapM": 4,
+ "dupM": 25,
+ "minLoopM": 40,
+ "spurM": 30,
+ "smoothM": 35,
+ "widths": {
+  "primary": 12,
+  "secondary": 10,
+  "tertiary": 8.5,
+  "residential": 7,
+  "alley": 4.5,
+  "path": 3.2,
+  "plaza": 6
+ },
+ "waterLevelM": 100,
+ "pools": [
+  {
+   "name": "Skaneateles Lake (42.764\u201342.784)",
+   "level": 263.0,
+   "box": [
+    42.76262,
+    -76.2874,
+    42.78382,
+    -76.26652
+   ],
+   "dam": false
+  },
+  {
+   "name": "Skaneateles Lake (42.784\u201342.804)",
+   "level": 263.0,
+   "box": [
+    42.78382,
+    -76.30622,
+    42.80382,
+    -76.2701
+   ],
+   "dam": false
+  },
+  {
+   "name": "Skaneateles Lake (42.804\u201342.824)",
+   "level": 263.0,
+   "box": [
+    42.80382,
+    -76.33363,
+    42.82382,
+    -76.28545
+   ],
+   "dam": false
+  },
+  {
+   "name": "Skaneateles Lake (42.824\u201342.844)",
+   "level": 263.0,
+   "box": [
+    42.82382,
+    -76.36627,
+    42.84382,
+    -76.30841
+   ],
+   "dam": false
+  },
+  {
+   "name": "Skaneateles Lake (42.844\u201342.864)",
+   "level": 263.0,
+   "box": [
+    42.84382,
+    -76.40216,
+    42.86382,
+    -76.33696
+   ],
+   "dam": false
+  },
+  {
+   "name": "Skaneateles Lake (42.864\u201342.884)",
+   "level": 263.0,
+   "box": [
+    42.86382,
+    -76.40997,
+    42.88382,
+    -76.35902
+   ],
+   "dam": false
+  },
+  {
+   "name": "Skaneateles Lake (42.884\u201342.904)",
+   "level": 263.0,
+   "box": [
+    42.88382,
+    -76.41985,
+    42.90382,
+    -76.38113
+   ],
+   "dam": false
+  },
+  {
+   "name": "Skaneateles Lake (42.904\u201342.924)",
+   "level": 263.0,
+   "box": [
+    42.90382,
+    -76.43212,
+    42.92382,
+    -76.39333
+   ],
+   "dam": false
+  },
+  {
+   "name": "Skaneateles Lake (42.924\u201342.944)",
+   "level": 263.0,
+   "box": [
+    42.92382,
+    -76.43492,
+    42.94382,
+    -76.40569
+   ],
+   "dam": false
+  },
+  {
+   "name": "Skaneateles Lake (42.944\u201342.945)",
+   "level": 263.0,
+   "box": [
+    42.94382,
+    -76.43413,
+    42.9458,
+    -76.42101
+   ],
+   "dam": false
+  },
+  {
+   "name": "Otisco Lake (42.836\u201342.848)",
+   "level": 240.0,
+   "box": [
+    42.8343,
+    -76.2727,
+    42.8475,
+    -76.24288
+   ],
+   "dam": false
+  },
+  {
+   "name": "Otisco Lake (42.848\u201342.860)",
+   "level": 240.0,
+   "box": [
+    42.8475,
+    -76.29106,
+    42.8595,
+    -76.25219
+   ],
+   "dam": false
+  },
+  {
+   "name": "Otisco Lake (42.860\u201342.872)",
+   "level": 240.0,
+   "box": [
+    42.8595,
+    -76.30549,
+    42.8715,
+    -76.26945
+   ],
+   "dam": false
+  },
+  {
+   "name": "Otisco Lake (42.872\u201342.884)",
+   "level": 240.0,
+   "box": [
+    42.8715,
+    -76.31365,
+    42.8835,
+    -76.28392
+   ],
+   "dam": false
+  },
+  {
+   "name": "Otisco Lake (42.884\u201342.896)",
+   "level": 240.0,
+   "box": [
+    42.8835,
+    -76.3152,
+    42.8955,
+    -76.29096
+   ],
+   "dam": false
+  },
+  {
+   "name": "Otisco Lake (42.896\u201342.904)",
+   "level": 240.0,
+   "box": [
+    42.8955,
+    -76.31521,
+    42.90489,
+    -76.30391
+   ],
+   "dam": false
+  }
+ ],
+ "groundCellM": 24,
+ "groundMarginM": 1200,
+ "groundFile": "routes/cities/skan-ground.grid.bin.gz",
+ "start": {
+  "lat": 42.9468,
+  "lon": -76.4291,
+  "note": "Skaneateles village, Genesee Street at Jordan Street"
+ },
+ "connectors": [],
+ "connectorM": 180,
+ "maxGradePct": 30,
+ "maxAvgGradePct": 34,
+ "bridgeClearM": 11,
+ "bridgeRampPct": 6,
+ "riverFloorM": 2.5,
+ "riversideM": 25,
+ "denseM": 40,
+ "removeAlleys": true,
+ "overpassClearM": 4.5,
+ "connectMaxM": 350,
+ "connectSnapM": 8,
+ "connectMaxGradePct": 12,
+ "parallelM": 30,
+ "parallelMinM": 60,
+ "smoothMaxShiftM": 8,
+ "smoothPasses": 8,
+ "junctionEaseM": 30,
+ "routeKeepM": 18,
+ "routeLinkMaxM": 50,
+ "files": {
+  "ground": "routes/cities/skan-ground.grid.bin.gz",
+  "heroes": "routes/cities/skan-heroes.json",
+  "cityData": "routes/cities/skan-city.json"
+ },
+ "mapLabels": [
+  [
+   "Skaneateles",
+   42.947,
+   -76.4291,
+   1
+  ],
+  [
+   "Marcellus",
+   42.9825,
+   -76.34,
+   1
+  ],
+  [
+   "Skaneateles Lake",
+   42.86,
+   -76.372,
+   1
+  ],
+  [
+   "Otisco Lake",
+   42.865,
+   -76.283,
+   1
+  ],
+  [
+   "Mottville",
+   42.9737,
+   -76.4424,
+   2
+  ],
+  [
+   "Skaneateles Falls",
+   42.9931,
+   -76.456,
+   2
+  ],
+  [
+   "Marcellus Falls",
+   43.0051,
+   -76.338,
+   2
+  ],
+  [
+   "Glen Haven",
+   42.7656,
+   -76.278,
+   2
+  ],
+  [
+   "Spafford",
+   42.8045,
+   -76.2649,
+   2
+  ],
+  [
+   "Borodino",
+   42.859,
+   -76.338,
+   2
+  ],
+  [
+   "Mandana",
+   42.8656,
+   -76.4035,
+   2
+  ],
+  [
+   "Amber",
+   42.8867,
+   -76.2959,
+   2
+  ],
+  [
+   "Marietta",
+   42.9091,
+   -76.3232,
+   2
+  ],
+  [
+   "Otisco Valley",
+   42.8287,
+   -76.2319,
+   2
+  ]
+ ],
+ "landCover": "worldcover",
+ "landM": 10,
+ "cityUnit": 5e-06,
+ "keepParallelTrails": true
+}

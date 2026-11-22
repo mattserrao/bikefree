@@ -1,0 +1,87 @@
+[
+ {
+  "id": "skan-lakeshore",
+  "name": "Skaneateles Lakeshore",
+  "tags": [
+   "flat",
+   "lake",
+   "short"
+  ],
+  "note": "From Skaneateles village out East Lake Road along the lake to Pork Street, over to Rickard Road and home on US 20 into the village",
+  "lengthM": 12000,
+  "climbM": 157
+ },
+ {
+  "id": "skan-charlie-major",
+  "name": "Charlie Major Trail & Skaneateles Falls",
+  "tags": [
+   "trail",
+   "creek",
+   "rural"
+  ],
+  "note": "From Skaneateles down Fennell Street to the Charlie Major Nature Trail along Skaneateles Creek, through Mottville to Skaneateles Falls, back over Stump Road and the Old Seneca Turnpike",
+  "lengthM": 14010,
+  "climbM": 121
+ },
+ {
+  "id": "skan-seneca-turnpike",
+  "name": "Seneca Turnpike: Skaneateles to Marcellus",
+  "tags": [
+   "long",
+   "hilly",
+   "villages"
+  ],
+  "note": "From Skaneateles over the hills on the Old Seneca Turnpike to Marcellus, south over Bishop Hill and home along Lawrence Road, the New Seneca Turnpike and US 20",
+  "lengthM": 21060,
+  "climbM": 353
+ },
+ {
+  "id": "skan-marcellus-falls",
+  "name": "Marcellus Falls & Nine Mile Creek",
+  "tags": [
+   "short",
+   "creek",
+   "climb"
+  ],
+  "note": "From Marcellus village down North Street beside Nine Mile Creek to Marcellus Falls, up Falls Road and Howlett Hill Road and back down Dublin Road",
+  "lengthM": 6050,
+  "climbM": 88
+ },
+ {
+  "id": "skan-bishop-hill",
+  "name": "Bishop Hill Climb",
+  "tags": [
+   "hilly",
+   "climb",
+   "rural"
+  ],
+  "note": "From Marcellus up South Street Road and Bishop Hill Road over the top, along Masters Road and back down Rockwell and Slate Hill Roads",
+  "lengthM": 11030,
+  "climbM": 219
+ },
+ {
+  "id": "skan-lake-loop",
+  "name": "Skaneateles Lake Loop",
+  "tags": [
+   "long",
+   "hilly",
+   "lake",
+   "classic"
+  ],
+  "note": "Round Skaneateles Lake: south on West Lake Road and NY 41A high above the west shore, round the south end at Glen Haven, and home along East Lake Road (NY 41) on the east shore",
+  "lengthM": 58120,
+  "climbM": 814
+ },
+ {
+  "id": "skan-otisco-loop",
+  "name": "Otisco Lake Loop",
+  "tags": [
+   "hilly",
+   "lake",
+   "rural"
+  ],
+  "note": "From Amber at the north end of Otisco Lake down Otisco Valley Road on the east shore, round the south end at Otisco Valley, and back up the west side on Willowdale Road and NY 174",
+  "lengthM": 26630,
+  "climbM": 374
+ }
+]

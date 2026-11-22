@@ -174,8 +174,121 @@ const CNY_ROUTES = [
   },
 ];
 
-const TRAILS = CITY === 'cny' ? CNY_TRAILS : PGH_TRAILS;
-const ROUTES = CITY === 'cny' ? CNY_ROUTES : CITY === 'pgh' ? PGH_ROUTES : [];
+// ---------------------------------------------------------------- SKAN (Skaneateles, Marcellus and the two lakes: tools/city/skan.json)
+// (user, 22 Nov: the seven rides of the Project doc claude/skan-map.md, routed on OSM over the real roads; the waypoints
+// follow those lines: a junction on them every 1.5 km (2.5 km on the lake loops) so the router keeps to them)
+const SKAN_TRAILS = ['Charlie Major Nature Trail'];
+const SKAN_ROUTES = [
+  {
+    id: "skan-lakeshore", name: "Skaneateles Lakeshore", tags: ["flat", "lake", "short"],
+    note: "From Skaneateles village out East Lake Road along the lake to Pork Street, over to Rickard Road and home on US 20 into the village",
+    way: [
+      { near: [42.94583, -76.42906] },
+      { near: [42.94758, -76.41762], prefer: ["Jordan Street", "East Elizabeth Street", "East Street", "Onondaga Street"], avoid: ["East Genesee Street", "West Genesee Street"] },
+      { near: [42.93007, -76.40760], prefer: ["East Lake Street"] },
+      { near: [42.93118, -76.37560], prefer: ["Pork Street"] },
+      { near: [42.93844, -76.37409], prefer: ["Rickard Road"] },
+      { near: [42.94427, -76.41599], prefer: ["Cherry Valley Turnpike"] },
+      { near: [42.94583, -76.42906], prefer: ["East Genesee Street"] },
+    ],
+  },
+  {
+    id: "skan-charlie-major", name: "Charlie Major Trail & Skaneateles Falls", tags: ["trail", "creek", "rural"],
+    note: "From Skaneateles down Fennell Street to the Charlie Major Nature Trail along Skaneateles Creek, through Mottville to Skaneateles Falls, back over Stump Road and the Old Seneca Turnpike",
+    prefer: SKAN_TRAILS,
+    way: [
+      { near: [42.94658, -76.42922] },
+      { near: [42.96138, -76.43958], prefer: ["Fennell Street"] },
+      { near: [42.97519, -76.44513], prefer: ["Mill Road", "Charlie Major Nature Trail", "Crow Hill Road", "Railroad Street"] },
+      { near: [42.99280, -76.45617], prefer: ["Railroad Street", "Sheldon Road", "Jordan Road"] },
+      { near: [42.99585, -76.43993], prefer: ["School Street", "Stump Road"] },
+      { near: [42.97606, -76.42766], prefer: ["Stump Road", "State Street Road"] },
+      { near: [42.96365, -76.43555], prefer: ["State Street Road", "Old Seneca Turnpike"] },
+      { near: [42.94658, -76.42922], prefer: ["Old Seneca Turnpike", "Jordan Road", "Jordan Street"] },
+    ],
+  },
+  {
+    id: "skan-seneca-turnpike", name: "Seneca Turnpike: Skaneateles to Marcellus", tags: ["long", "hilly", "villages"],
+    note: "From Skaneateles over the hills on the Old Seneca Turnpike to Marcellus, south over Bishop Hill and home along Lawrence Road, the New Seneca Turnpike and US 20",
+    way: [
+      { near: [42.94583, -76.42906] },
+      { near: [42.96007, -76.43449], prefer: ["Jordan Street", "Jordan Road"] },
+      { near: [42.97234, -76.42728], prefer: ["Jordan Road", "Old Seneca Turnpike"] },
+      { near: [42.98015, -76.39978], prefer: ["Old Seneca Turnpike"] },
+      { near: [42.98130, -76.36732], prefer: ["Old Seneca Turnpike"] },
+      { near: [42.98218, -76.34660], prefer: ["Old Seneca Turnpike"] },
+      { near: [42.97375, -76.33984], prefer: ["New Seneca Turnpike", "West Main Street", "South Street", "South Street Road"] },
+      { near: [42.95880, -76.34818], prefer: ["South Street Road", "Bishop Hill Road"] },
+      { near: [42.95715, -76.37531], prefer: ["Lawrence Road", "New Seneca Turnpike"] },
+      { near: [42.94552, -76.39033], prefer: ["New Seneca Turnpike", "Fisher Road"] },
+      { near: [42.94427, -76.41599], prefer: ["Cherry Valley Turnpike"] },
+      { near: [42.94583, -76.42906], prefer: ["East Genesee Street"] },
+    ],
+  },
+  {
+    id: "skan-marcellus-falls", name: "Marcellus Falls & Nine Mile Creek", tags: ["short", "creek", "climb"],
+    note: "From Marcellus village down North Street beside Nine Mile Creek to Marcellus Falls, up Falls Road and Howlett Hill Road and back down Dublin Road",
+    way: [
+      { near: [42.98245, -76.34004] },
+      { near: [42.99640, -76.34009], prefer: ["North Street"] },
+      { near: [43.00326, -76.32997], prefer: ["North Street", "Falls Road"] },
+      { near: [42.98493, -76.33196], prefer: ["Howlett Hill Road", "Dublin Road"] },
+      { near: [42.98245, -76.34004], prefer: ["East Maple Street", "Limerick Street", "East Main Street"] },
+    ],
+  },
+  {
+    id: "skan-bishop-hill", name: "Bishop Hill Climb", tags: ["hilly", "climb", "rural"],
+    note: "From Marcellus up South Street Road and Bishop Hill Road over the top, along Masters Road and back down Rockwell and Slate Hill Roads",
+    way: [
+      { near: [42.98245, -76.34004] },
+      { near: [42.96849, -76.34229], prefer: ["West Main Street", "South Street", "South Street Road", "Bishop Hill Road"] },
+      { near: [42.95155, -76.35204], prefer: ["Bishop Hill Road", "Lawrence Road"] },
+      { near: [42.94980, -76.33332], prefer: ["Bishop Hill Road", "Masters Road"] },
+      { near: [42.97304, -76.32751], prefer: ["South Street Road", "Seal Road", "Rockwell Road"] },
+      { near: [42.98245, -76.34004], prefer: ["Slate Hill Road", "West Seneca Turnpike", "East Main Street"] },
+    ],
+  },
+  {
+    id: "skan-lake-loop", name: "Skaneateles Lake Loop", tags: ["long", "hilly", "lake", "classic"],
+    note: "Round Skaneateles Lake: south on West Lake Road and NY 41A high above the west shore, round the south end at Glen Haven, and home along East Lake Road (NY 41) on the east shore",
+    way: [
+      { near: [42.94583, -76.42906] },
+      { near: [42.92328, -76.43679], prefer: ["Jordan Street", "West Genesee Street", "West Lake Street", "West Lake Road"] },
+      { near: [42.89539, -76.41803], prefer: ["West Lake Road"] },
+      { near: [42.87234, -76.40778], prefer: ["West Lake Road"] },
+      { near: [42.83983, -76.38071], prefer: ["West Lake Road", "State Highway 41A"] },
+      { near: [42.82983, -76.35116], prefer: ["State Highway 41A", "NY 41A"] },
+      { near: [42.79792, -76.34695], prefer: ["NY 41A"] },
+      { near: [42.77219, -76.25334], prefer: ["Glen Haven Road", "Vincent Hill Road"] },
+      { near: [42.80413, -76.26476], prefer: ["East Lake Road", "State Route 41"] },
+      { near: [42.83796, -76.29531], prefer: ["State Route 41"] },
+      { near: [42.85875, -76.33788], prefer: ["State Route 41", "East Lake Road"] },
+      { near: [42.87435, -76.36406], prefer: ["East Lake Road"] },
+      { near: [42.91716, -76.40051], prefer: ["East Lake Road"] },
+      { near: [42.94427, -76.41599], prefer: ["East Lake Road", "East Lake Street"] },
+      { near: [42.94427, -76.41599], prefer: ["East Lake Street"] },
+      { near: [42.94583, -76.42906], prefer: ["East Lake Road", "East Lake Street", "East Genesee Street"] },
+    ],
+  },
+  {
+    id: "skan-otisco-loop", name: "Otisco Lake Loop", tags: ["hilly", "lake", "rural"],
+    note: "From Amber at the north end of Otisco Lake down Otisco Valley Road on the east shore, round the south end at Otisco Valley, and back up the west side on Willowdale Road and NY 174",
+    way: [
+      { near: [42.88489, -76.29332] },
+      { near: [42.85182, -76.25834], prefer: ["Otisco Valley Road"] },
+      { near: [42.82829, -76.23176], prefer: ["Otisco Valley Road"] },
+      { near: [42.82447, -76.25212], prefer: ["Sawmill Road", "Moon Hill Road"] },
+      { near: [42.83653, -76.26584], prefer: ["Moon Hill Road", "Willowdale Road"] },
+      { near: [42.86109, -76.30742], prefer: ["Willowdale Road"] },
+      { near: [42.87028, -76.31904], prefer: ["Willowdale Road"] },
+      { near: [42.90559, -76.31497], prefer: ["Howe Road", "Willowdale Road", "West Lake Road", "State Route 174"] },
+      { near: [42.88489, -76.29332], prefer: ["Otisco Valley Road"] },
+    ],
+  },
+];
+
+const TRAILS = CITY === 'cny' ? CNY_TRAILS : CITY === 'skan' ? SKAN_TRAILS : PGH_TRAILS;
+const ROUTES = CITY === 'cny' ? CNY_ROUTES : CITY === 'skan' ? SKAN_ROUTES : CITY === 'pgh' ? PGH_ROUTES : [];
 
 // ---------------------------------------------------------------- the graph as a router
 const M_LAT = 111320, mLon = M_LAT * Math.cos(json.origin.lat * Math.PI / 180);
