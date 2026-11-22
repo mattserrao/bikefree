@@ -1,0 +1,20 @@
+[
+ {
+  "id": "pgh",
+  "name": "PGH",
+  "park": "Pittsburgh, PA",
+  "note": "Every street, trail and bridge in the Pittsburgh corridor. No traffic and no set route: straight on at every junction unless you choose a turn"
+ },
+ {
+  "id": "cny",
+  "name": "CNY",
+  "park": "Camillus, NY",
+  "note": "Every street and trail round Camillus, Warners and Amboy, with the Erie Canalway Trail. No traffic and no set route: straight on at every junction unless you choose a turn"
+ },
+ {
+  "id": "skan",
+  "name": "SKAN",
+  "park": "Skaneateles, NY",
+  "note": "Every road and trail round Skaneateles and Marcellus, and all the way round Skaneateles and Otisco lakes: villages, farms and woods. No traffic and no set route: straight on at every junction unless you choose a turn"
+ }
+]

@@ -81,7 +81,9 @@ test('SKAN\'s seven routes (tools/pgh_routes.mjs --city skan): closed plans over
   assert.ok(otisco.lengthM > 20000, 'round Otisco Lake');
 });
 
-test('the app lists SKAN as its own card beside PGH and CNY (js/app.js GRAPH_CITIES)', () => {
-  const app = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
-  assert.match(app, /\{ id: 'skan', name: 'SKAN', park: 'Skaneateles, NY'/);
+test('the app lists SKAN as its own card beside PGH and CNY (routes/cities/graph-cities.json)', () => {
+  const cities = JSON.parse(readFileSync(new URL('../routes/cities/graph-cities.json', import.meta.url), 'utf8'));
+  const skan = cities.find((c) => c.id === 'skan');
+  assert.equal(skan.name, 'SKAN');
+  assert.equal(skan.park, 'Skaneateles, NY');
 });
