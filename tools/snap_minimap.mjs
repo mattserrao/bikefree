@@ -106,7 +106,7 @@ try {
     if (only.includes('net')) {
       // a Pittsburgh network ride, just before its second junction: the next options are up
       const { page, errors } = await open();
-      await page.click('.mode[data-mode="route"]');
+      await page.click('.ride-tab[data-mode="route"]');
       await page.waitForSelector('.city-card', { timeout: 120000 });
       await page.click('#demoBtn');
       await page.click('.city-card');
@@ -130,7 +130,7 @@ try {
     }
     if (only.includes('park')) {
       const { page, errors } = await open();
-      await page.click('.mode[data-mode="route"]');
+      await page.click('.ride-tab[data-mode="route"]');
       await page.waitForSelector('#routeCards .rcard[data-id="builtin-park-yosemite"]', { timeout: 120000 });
       await page.click('#routeCards .rcard[data-id="builtin-park-yosemite"]');
       await page.click('#demoBtn');
@@ -144,7 +144,7 @@ try {
     }
     if (only.includes('free')) {
       const { page, errors } = await open();
-      await page.click('#freeRideLink');   // (no tab of its own, PLAN 6.9)
+      await page.click('.ride-tab[data-mode="free"]');   // (no tab of its own, PLAN 6.9)
       await page.waitForSelector('#sceneCards .rcard', { timeout: 120000 });
       await page.click('#demoBtn');
       await page.click('#startBtn');

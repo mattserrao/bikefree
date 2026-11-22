@@ -46,7 +46,7 @@ try {
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
     await page.addInitScript((t) => { localStorage.setItem('bikefree.theme', t); }, theme);
     await page.goto(`${base}/index.html`);
-    await page.click('.mode[data-mode="route"]');
+    await page.click('.ride-tab[data-mode="route"]');
     await page.waitForSelector('.city-card', { timeout: 120000 });
     await page.waitForTimeout(600);
     const shot = async (name, full = false) => { const f = join(out, `${tag}-${name}.png`); await page.screenshot({ path: f, fullPage: full }); saved.push(f); };
@@ -164,7 +164,7 @@ try {
     page.on('pageerror', (e) => errors.push(e.message));
     await page.addInitScript((t) => { localStorage.setItem('bikefree.theme', t); }, theme);
     await page.goto(`${base}/index.html`);
-    await page.click('.mode[data-mode="route"]');
+    await page.click('.ride-tab[data-mode="route"]');
     await page.waitForSelector('.city-card', { timeout: 120000 });
     await page.click('#demoBtn');
     await page.click('.city-card');
@@ -189,7 +189,7 @@ try {
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
     await page.addInitScript((t) => { localStorage.setItem('bikefree.theme', t); }, theme);
     await page.goto(`${base}/index.html`);
-    await page.click('#freeRideLink');   // (the free ride where you set the grade: no tab of its own, PLAN 6.9)
+    await page.click('.ride-tab[data-mode="free"]');   // (the free ride where you set the grade: no tab of its own, PLAN 6.9)
     await page.waitForSelector('#sceneCards .rcard[data-id="builtin-park-pittsburgh"]', { timeout: 120000 });
     await page.click('#sceneCards .rcard[data-id="builtin-park-pittsburgh"]');
     await page.waitForTimeout(300);

@@ -582,3 +582,48 @@ dialog .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .devices, .modes { grid-template-columns: 1fr; }
   .sum-grid { grid-template-columns: repeat(3, 1fr); }
 }
+
+/* ---------- menu-simplify-test: a lighter main menu ---------- */
+/* devices: one slim strip of pills instead of three big cards */
+.devices.compact { display: flex; flex-wrap: wrap; gap: 8px; }
+.devices.compact .device { flex: 1 1 0; min-width: 0; gap: 8px; padding: 6px 10px 6px 6px; border-radius: 999px; }
+.devices.compact .dev-icon { width: 28px; height: 28px; border-radius: 50%; }
+.devices.compact .dev-icon .ic { width: 16px; height: 16px; }
+.devices.compact .dev-text { display: flex; align-items: baseline; gap: 6px; }
+.devices.compact .dev-text b { font-size: 13.5px; flex: none; }
+.devices.compact .dev-text span { font-size: 12px; }
+.devices.compact .badge:empty { display: none; }
+.devices-sec .notice { margin-top: 8px; }
+@media (max-width: 760px) { .devices.compact .device { flex: 1 1 100%; } }
+/* ride type: one tab row */
+.ride-tabs { margin: -8px 0 -10px; }
+.ride-tabs button { padding: 9px 8px; font-size: 14px; font-weight: 600; }
+.mode-pane .h2row select { font-size: 13px; }
+/* the closed "More routes" fold: drafts, deprecated and ideas */
+.more-routes { grid-column: 1 / -1; margin-top: 8px; }
+.more-routes > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; }
+.more-routes > summary::-webkit-details-marker { display: none; }
+.more-routes > summary::before { content: '▸'; font-size: 11px; transition: transform .15s; }
+.more-routes[open] > summary::before { transform: rotate(90deg); }
+.more-routes > summary .muted { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.more-routes > .cards { margin-top: 12px; }
+/* the preview's "Ride options" fold */
+.ride-opts { border: 1px solid var(--line); border-radius: 12px; background: var(--hover); }
+.ride-opts > summary b { flex: none; }
+.ride-opts > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 8px; padding: 10px 12px; font-size: 13.5px; }
+.ride-opts > summary::-webkit-details-marker { display: none; }
+.ride-opts > summary::before { content: '▸'; font-size: 11px; color: var(--muted); transition: transform .15s; }
+.ride-opts[open] > summary::before { transform: rotate(90deg); }
+.ride-opts .ro-sum { color: var(--muted); font-size: 12.5px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ride-opts[open] .ro-sum { display: none; }
+.ride-opts .ro-body { display: grid; gap: 10px; padding: 0 12px 12px; }
+/* a phone: the header's buttons as icons (with Demo's label), so the menu fits the screen width */
+@media (max-width: 560px) {
+  header .hbtn > span:not(.avatar):not(.tdot):not(#demoLabel), header .pb-text { display: none; }
+  header .hbtn { padding-inline: 10px; }
+}
+.col { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 1080px) { .setup-grid { grid-template-columns: minmax(0, 1fr); } }
+.devices.compact .dev-text span { min-width: 0; }
+.ride-tabs button { min-width: 0; white-space: nowrap; }
+.preview { grid-template-columns: minmax(0, 1fr); }

@@ -171,13 +171,13 @@ test('the route selected when the app opens is the city\'s first preset, else th
   assert.equal(defaultRouteId([]), null);
 });
 
-test('the main menu: two ride-type tabs (Route, the default, and Workout); the free ride is a link under the routes', () => {
+test('the main menu: one ride-type tab row (Routes, the default, Workouts, Free ride)', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const tabs = [...html.matchAll(/<button role="tab" data-mode="(\w+)" class="mode( on)?" aria-selected="(\w+)"/g)].map((m) => [m[1], !!m[2], m[3]]);
-  assert.deepEqual(tabs, [['route', true, 'true'], ['workout', false, 'false']]);
+  const tabs = [...html.matchAll(/<button type="button" role="tab" data-mode="(\w+)" class="ride-tab( on)?" aria-selected="(\w+)"/g)].map((m) => [m[1], !!m[2], m[3]]);
+  assert.deepEqual(tabs, [['route', true, 'true'], ['workout', false, 'false'], ['free', false, 'false']]);
   assert.match(html, /<section class="mode-pane" data-pane="route">/, 'the route pane shows at first');
   assert.match(html, /<section class="mode-pane" data-pane="free" hidden>/);
-  assert.match(html, /id="freeRideLink"[^>]*>Ride without a route/);
+  assert.match(html, /<details class="ride-opts" id="rideOpts">/, 'ride options folded');
   const app = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
   assert.match(app, /^let chosen = 'route';/m);
   assert.match(app, /selectedRouteId = selectId \|\| defaultRouteId\(routeItems\)/);

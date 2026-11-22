@@ -26,7 +26,7 @@ await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
 const cdp = await ctx.newCDPSession(page);
 await cdp.send('HeapProfiler.enable');
 await cdp.send('HeapProfiler.startSampling', { samplingInterval: 32768 });
-await page.click('.mode[data-mode="route"]');
+await page.click('.ride-tab[data-mode="route"]');
 await page.waitForSelector('.city-card'); await page.click('#demoBtn'); await page.click('.city-card'); await page.waitForSelector('#cityDlg[open]');
 await page.locator('.city-row-btn', { has: page.locator('.cr-name', { hasText: new RegExp(`^${name}$`) }) }).first().click();
 await page.evaluate(() => { setInterval(() => { const w = window.bikefree?.world; if (w && !w.__nd) { w.__nd = 1; w._render = () => {}; } }, 20); });
