@@ -145,7 +145,7 @@ def main():
     # the waterways OSM draws as lines (no area): CNY's Erie Canal, Nine Mile Creek — water at their width (PGH's rivers
     # are areas, under its water plane)
     if CITY != 'pgh':
-        WIDE = {'river': 16, 'stream': 4}   # (the canal: a ribbon of water of its own, tools/cny_heroes.py)
+        WIDE = {}   # (the canal and the creeks: ribbons of water of their own, tools/cny_heroes.py — as cells they were a chain of diamonds)
         nw_ = 0
         for wid, (nd, t) in ways.items():
             w_m = WIDE.get(t.get('waterway')); 
@@ -316,7 +316,8 @@ def main():
         zone = np.where(vil, 1, np.where(farm, 3, 2)).astype(np.uint8)   # 1 village, 2 suburb, 3 farm
         d_road = ndimage.distance_transform_edt(np.asarray(rm) == 0) * LAND_M
         d_bld = ndimage.distance_transform_edt(bf == 0) * LAND_M
-        fields = ((farm & (L == 1) & (slope <= .12)) | ((F == 1) | (F == 2)) & ~np.isin(L, (3, 4))) & (d_road > 9) & (d_bld > 12)
+        fields = farm & (L == 1) & un & (slope <= .12)   # (un: land OSM leaves untagged — not a park or a lawn)
+        fields = (fields | ((F == 1) | (F == 2)) & ~np.isin(L, (3, 4))) & (d_road > 9) & (d_bld > 12)
         lab, nlab = ndimage.label(fields)
         rng = np.random.default_rng(7)
         min_cells = RURAL.get('fieldMinHa', .6) * 1e4 / LAND_M ** 2

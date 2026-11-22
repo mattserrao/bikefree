@@ -23,6 +23,9 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L }) {
     N.color('#2c3238').set({ aGlow: [1, .78, .45] }); N.box(q.x + n.x * .14, y + .05, q.z + n.z * .14, .02, h - .1, w - .1, yaw);
   };
 
+  // the aqueduct's trunk, for the canal's water to meet it (set by aqueduct(), built before the ribbons: cny_heroes.py
+  // lists it first)
+  const shared = { aq: null };
   return {
     // the canal's water: a ribbon along OSM's line, just over the ground across its width (the land cover's 6 m cells
     // gave it stepped edges and the ground's grid hid it where the grid stands higher)
@@ -39,11 +42,43 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L }) {
       });
       // a gentle smoothing of the level along it (no steps)
       for (let pass = 0; pass < 3; pass++) for (let i = 1; i + 1 < S2.length; i++) S2[i].y = Math.max(S2[i].y - .3, (S2[i - 1].y + S2[i].y * 2 + S2[i + 1].y) / 4);
-      S.color('#3d6b7c');
-      const up = V(0, 1, 0);
+      // at the aqueduct (user, 22 Nov: "the aqueduct water is not attached on both sides"): the ribbon runs on into the
+      // trunk's end at the trunk's water level and width, and keeps that level for 25 m before it eases back to the
+      // ground's; where that holds it over the ground, earth banks down to it
+      for (const W of [0, 1].map((k) => shared.aq?.ends[k])) {
+        if (!W) continue;
+        const iEnd = Math.hypot(S2[0].x - W.x, S2[0].z - W.z) < Math.hypot(S2[S2.length - 1].x - W.x, S2[S2.length - 1].z - W.z) ? 0 : S2.length - 1;
+        const E = S2[iEnd]; if (Math.hypot(E.x - W.x, E.z - W.z) > 30) continue;
+        const pt = { x: W.x, z: W.z, nx: E.nx, nz: E.nz, y: shared.aq.y, w: shared.aq.w / 2 };
+        if (iEnd === 0) S2.unshift(pt); else S2.push(pt);
+        let acc = 0;
+        const order = iEnd === 0 ? S2.map((_, i) => i) : S2.map((_, i) => S2.length - 1 - i);
+        for (let k = 0; k < order.length; k++) {
+          const q = S2[order[k]];
+          if (k) { const pq = S2[order[k - 1]]; acc += Math.hypot(q.x - pq.x, q.z - pq.z); }
+          const f = acc < 25 ? 0 : acc > 70 ? 1 : (acc - 25) / 45;
+          q.y = shared.aq.y + (q.y - shared.aq.y) * f * f * (3 - 2 * f);
+          if (acc < 10) q.w = shared.aq.w / 2 + (hw - shared.aq.w / 2) * acc / 10;
+        }
+      }
+      S.color(l.creek ? '#4b6f6c' : '#3d6b7c');   // (a creek a little greener and browner than the canal)
+      const up = V(0, 1, 0), wOf = (p) => p.w ?? hw;
       for (let i = 0; i + 1 < S2.length; i++) {
-        const a = S2[i], b = S2[i + 1];
-        faceOut(S, [V(a.x + a.nx * hw, a.y, a.z + a.nz * hw), V(b.x + b.nx * hw, b.y, b.z + b.nz * hw), V(b.x - b.nx * hw, b.y, b.z - b.nz * hw), V(a.x - a.nx * hw, a.y, a.z - a.nz * hw)], up);
+        const a = S2[i], b = S2[i + 1], wa = wOf(a), wb = wOf(b);
+        faceOut(S, [V(a.x + a.nx * wa, a.y, a.z + a.nz * wa), V(b.x + b.nx * wb, b.y, b.z + b.nz * wb), V(b.x - b.nx * wb, b.y, b.z - b.nz * wb), V(a.x - a.nx * wa, a.y, a.z - a.nz * wa)], up);
+      }
+      // the banks where the water stands over the ground (its level held at the aqueduct)
+      S.color('#7b7255');
+      for (let i = 0; i + 1 < S2.length; i++) {
+        const a = S2[i], b = S2[i + 1], wa = wOf(a) + .3, wb = wOf(b) + .3;
+        for (const sd of [1, -1]) {
+          const pa = { x: a.x + a.nx * wa * sd, z: a.z + a.nz * wa * sd }, pb = { x: b.x + b.nx * wb * sd, z: b.z + b.nz * wb * sd };
+          const ga = L.heightAt(pa.x, pa.z), gb = L.heightAt(pb.x, pb.z);
+          if (a.y - ga < .25 && b.y - gb < .25) continue;
+          const out = V(a.nx * sd, 0, a.nz * sd), sp = 1.6;   // (a sloped bank, 1.6 m out at its foot)
+          faceOut(S, [V(pa.x, a.y + .05, pa.z), V(pb.x, b.y + .05, pb.z), V(pb.x + b.nx * sd * sp, Math.min(gb, b.y) - .4, pb.z + b.nz * sd * sp), V(pa.x + a.nx * sd * sp, Math.min(ga, a.y) - .4, pa.z + a.nz * sd * sp)], out);
+          faceOut(S, [V(pa.x - a.nx * sd * .3, a.y + .05, pa.z - a.nz * sd * .3), V(pb.x - b.nx * sd * .3, b.y + .05, pb.z - b.nz * sd * .3), V(pb.x, b.y + .05, pb.z), V(pa.x, a.y + .05, pa.z)], up);
+        }
       }
     },
 
@@ -95,6 +130,7 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L }) {
       // the posts along the trunk's walls (the restored timber frame)
       S.color('#5d4630'); for (let x = -hl; x <= hl; x += 2.4) for (const b of [t0 - .45, t1 + .35]) S.box(F.at(x, b).x, deck, F.at(x, b).z, .3, yW + .75 - deck, .3, F.yawU);
       S.color('#3d6b7c'); prism(S, F.rect(-hl - .5, hl + .5, t0, t1), yW - .02, yW); cap(S, F.rect(-hl - .5, hl + .5, t0, t1), yW);
+      { const m = (t0 + t1) / 2; shared.aq = { ends: [F.at(-hl - .5, m), F.at(hl + .5, m)], y: yW, w: t1 - t0 }; }
       // the towpath: gravel on the stone (where the world draws no trail deck), a wooden rail on its outer edge
       if (!tow) { S.color('#b9ad94'); block(S, F.rect(-hl - 1, hl + 1, -hw, t0 - .35), deck, deck + .35); }
       S.color('#6b5137');

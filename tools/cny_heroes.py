@@ -85,7 +85,7 @@ def main():
         for ev, el in ET.iterparse(f, events=('end',)):
             if el.tag == 'way':
                 t = {x.get('k'): x.get('v') for x in el.iter('tag')}
-                if t.get('waterway') == 'canal': tags['w' + el.get('id')] = t
+                if t.get('waterway') in ('canal', 'river', 'stream'): tags['w' + el.get('id')] = t
                 el.clear()
             elif el.tag == 'node': el.clear()
     lat0, lon0, R0 = 43.0643, -76.3210, 6300
@@ -94,8 +94,12 @@ def main():
         if t.get('bridge') == 'aqueduct' or t.get('tunnel'): continue
         P = [[round(nodes[r][0], 7), round(nodes[r][1], 7)] for r in ways[wid] if r in nodes]
         if len(P) < 2 or not any(math.hypot((lo - lon0) * KX, (la - lat0) * 110540) < R0 for la, lo in P): continue
-        out['landmarks'].append({'label': t.get('name') or 'Erie Canal', 'model': 'canal', 'path': P, 'widthM': 12}); nc += 1
-    print(f'  canal: {nc} ways of water')
+        # (the creeks too: Nine Mile Creek and its brooks were the land cover's 6 m cells, a chain of diamonds)
+        w_ = {'canal': 12, 'river': 14, 'stream': 4}[t['waterway']]
+        e = {'label': t.get('name') or ('Erie Canal' if t['waterway'] == 'canal' else 'creek'), 'model': 'canal', 'path': P, 'widthM': w_}
+        if t['waterway'] != 'canal': e['creek'] = 1
+        out['landmarks'].append(e); nc += 1
+    print(f'  water: {nc} ways (canal and creeks)')
     path = os.path.join(ROOT, 'routes/cities/cny-heroes.json')
     json.dump(out, open(path, 'w'), separators=(',', ':'))
     print(f"  wrote routes/cities/cny-heroes.json: {len(out['landmarks'])} landmarks, {len(out['heroes'])} churches")
