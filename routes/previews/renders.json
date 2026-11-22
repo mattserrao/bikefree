@@ -71,35 +71,6 @@
   }
  },
  "checks": {
-  "acadia-17820-jordan-pond.webp": {
-   "park": "acadia",
-   "world": "5aae8f222210ccd7",
-   "ok": true,
-   "frac": 1,
-   "seen": "1/2"
-  },
-  "craterlake-6990-wizard-island.webp": {
-   "park": "craterlake",
-   "world": "edca13012efa67b6",
-   "ok": true,
-   "frac": 0.253,
-   "seen": "2/2"
-  },
-  "monumentvalley-26310-east-mitten.webp": {
-   "park": "monumentvalley",
-   "world": "8a7e03db1374090a",
-   "ok": false,
-   "frac": 0.151,
-   "seen": "0/2",
-   "why": "hidden (by the ground)"
-  },
-  "teton-66660-mount-moran.webp": {
-   "park": "teton",
-   "world": "8871b88b56c35dc9",
-   "ok": true,
-   "frac": 0.338,
-   "seen": "2/2"
-  },
   "yosemite-2550-el-capitan.webp": {
    "park": "yosemite",
    "world": "a417047f362f937e",

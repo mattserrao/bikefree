@@ -1,8 +1,8 @@
 {
  "format": "bikefree-previews-1",
  "size": "480x270",
- "images": 12,
- "bytes": 243702,
+ "images": 9,
+ "bytes": 120604,
  "routes": {
   "bigsur": [
    {
