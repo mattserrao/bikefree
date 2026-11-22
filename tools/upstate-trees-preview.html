@@ -1,0 +1,36 @@
+<!doctype html><html><body style="margin:0;background:#cfe0ee">
+<script type="module">
+// Preview of the upstate trees (js/world/toolbox/vegetation/upstate-trees.js): every species' variants, near model in
+// the front row, mid and far behind. ?lod=0|1|2 shows one level only. Triangle counts in window.stats.
+import * as THREE from '../vendor/three.module.min.js';
+import { makeUpstateTrees, makeLeafTexture } from '../js/world/toolbox/vegetation/upstate-trees.js';
+import { decorateTreeMaterial } from '../js/world/toolbox/packs/northern-rockies.js';
+const P = new URLSearchParams(location.search), only = P.has('lod') ? +P.get('lod') : null;
+const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(innerWidth, innerHeight); document.body.appendChild(r.domElement);
+r.shadowMap.enabled = true;
+const s = new THREE.Scene(); s.background = new THREE.Color('#bcd4e8');
+const cam = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 1, 2000);
+s.add(new THREE.HemisphereLight('#dfefff', '#4a5a3a', 1.1));
+const sun = new THREE.DirectionalLight('#fff3dc', 2.2); sun.position.set(-60, 90, 50); sun.castShadow = true; Object.assign(sun.shadow.camera, { left: -150, right: 150, top: 80, bottom: -80, far: 400 }); sun.shadow.mapSize.set(2048, 2048); s.add(sun);
+const g = new THREE.Mesh(new THREE.PlaneGeometry(800, 400), new THREE.MeshLambertMaterial({ color: '#6f9147' })); g.rotation.x = -Math.PI / 2; g.receiveShadow = true; s.add(g);
+const mat = decorateTreeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 }), { uTime: { value: 0 } });
+const kit = makeUpstateTrees(), stats = {};
+const leafMat = new THREE.MeshStandardMaterial({ vertexColors: true, map: makeLeafTexture(), alphaTest: .45, side: THREE.DoubleSide, roughness: .9 });
+let x = 0;
+for (const [name, sp] of Object.entries(kit.species)) {
+  sp.variants.forEach((tiers, v) => {
+    tiers.forEach((geo, lod) => {
+      if (only != null && lod !== only) return;
+      const parts = geo.isBufferGeometry ? [[geo, mat]] : [[geo.wood, mat], [geo.leaves, leafMat]];
+      let n = 0;
+      for (const [gg, mm] of parts) { if (!gg) continue; const m = new THREE.Mesh(gg, mm); m.position.set(x, 0, only != null ? 0 : -lod * 22); m.castShadow = m.receiveShadow = true; s.add(m); n += gg.attributes.position.count / 3; }
+      stats[`${name}${v}-${lod}`] = n;
+    });
+    x += sp.r * 2 + 3;
+  });
+}
+let ux = 0; for (const [n, geo] of Object.entries(kit.understory)) { for (const [gg, mm] of geo.isBufferGeometry ? [[geo, mat]] : [[geo.wood, mat], [geo.leaves, leafMat]]) { const m = new THREE.Mesh(gg, mm); m.position.set(ux, 0, 16); m.castShadow = true; s.add(m); } ux += 5; stats[n] = 1; }
+s.position.x = -x / 2;
+const W = +(P.get('w') || 0); if (W) { s.position.x = -W; cam.position.set(0, 9, 45); cam.lookAt(0, 10, 0); } else { cam.position.set(0, P.has('lod') ? 25 : 30, P.has('lod') ? 260 : 150); cam.lookAt(0, 10, 0); }
+r.render(s, cam); window.stats = stats; window.ready = true;
+</script></body></html>

@@ -29,6 +29,8 @@ import { makeAlpsPack } from './toolbox/packs/alps.js';
 import { makeNortheastPack } from './toolbox/packs/northeast.js';
 import { makeTreeCards } from './toolbox/vegetation/tree-cards.js';
 import { GraphLife } from './toolbox/city/graph-life.js';
+import { TreeEngine } from './toolbox/vegetation/tree-engine.js';
+import { makeUpstateTrees, fallVariant } from './toolbox/vegetation/upstate-trees.js';
 
 // (9 is the toolbox's pond; 10–12: a rural map's fields from WorldCover — tools/pgh_city.py rural_land, SKAN;
 // 20–29: CNY's fields — 20-23 corn and 24-27 grain by the rows' heading, 28 hay, 29 farmyard: pgh_city.py "the country")
@@ -121,7 +123,12 @@ export class GraphCity {
     this._materials();
     // the rural maps (CNY, SKAN; user, 22 Nov): no cars — other cyclists and people walking instead
     this.rural = !!world.rural;
-    if (this.rural) this.life = new GraphLife(world, host.group, { quality: world.qualityKey, uTime: this.treeTime });
+    if (this.rural) {
+      this.life = new GraphLife(world, host.group, { quality: world.qualityKey, uTime: this.treeTime });
+      // the tree engine (one for the game: toolbox/vegetation/tree-engine.js) with the upstate kit
+      this.treeKit = makeUpstateTrees();
+      this.forest = new TreeEngine({ renderer: world.renderer, parent: host.group, quality: world.qualityKey, uTime: this.treeTime, lights: { hemi: world.hemi, sun: world.sun }, kit: this.treeKit });
+    }
   }
 
   /** The land cover's codes (a gzipped file of nx × ny bytes): then the ground shader and landAt have them. */
@@ -473,6 +480,7 @@ export class GraphCity {
     }
     this.host.chunks.delete(key);
     this.tiles.delete(key);
+    this.forest?.removeTile(key);
     if (t.trees) this._poolAt = null;
   }
 
@@ -487,7 +495,8 @@ export class GraphCity {
     this.treeTime.value = time;
     this.life?.tick(cam, rider?.pos || null, rider?.fwd || null, dt);
     this.glassNight.value = this.host.night.value * 0.05;
-    if (!this._poolAt || this._poolAt.distanceTo(cam) > 25) this._poolTrees(cam);
+    if (this.forest) this.forest.tick(this.world.camera);
+    else if (!this._poolAt || this._poolAt.distanceTo(cam) > 25) this._poolTrees(cam);
     if ((this._lf = (this._lf || 0) + 1) % 8) return;
     for (const t of this.tiles.values()) {
       const d = Math.hypot(t.cx - cam.x, t.cz - cam.z) - TILE * 0.71;
@@ -499,6 +508,7 @@ export class GraphCity {
 
   // ------------------------------------------------------------------ trees
   *_trees(t) {
+    if (this.forest) { yield* this._ruralTrees(t); return; }
     const W = this.world, x0 = t.i * TILE, z0 = t.j * TILE, spots = [];
     const ok = (x, z, wall = 1.4, road = 2) => !this.inWater(x, z) && !this.onRoad(x, z, road) && !this.host.buildingNear(x, z, wall)
       && !this.heroes.heroes?.covers?.(x, z, 2) && !this.kit.occupied(x, z, 0.8) && !this._inDressing(x, z);
@@ -555,6 +565,127 @@ export class GraphCity {
     this._add(t, cards, 'far');
     this._poolAt = null;   // (the pools take this tile's trees)
     this.stats.trees += spots.length;
+  }
+
+  /**
+   * The rural maps' trees (CNY, SKAN; user, 22 Nov 2026), drawn by the tree engine. Placed sensibly: never on or in
+   * a house (no crown over a roof), a road (trunks ≥ 4 m from its edge; crowns near it kept clear of the camera), a
+   * driveway, the water (≥ 3 m from it) or a field or farmyard. Where:
+   *   woods       dense (a tree every ~8 m), the full upstate mix, an age mix (saplings to old giants); the woodlot's
+   *               edge graded through younger trees, shrubs, sumac and saplings into the open
+   *   hedgerows   along the boundaries between fields (ash, cherry, maples, a willow where it's wet) with shrubs
+   *   yards       one to four trees beside or behind each house — maples, an oak, a birch, a pine or spruce
+   *   streets     the villages' street trees (maples, oak)
+   *   pasture     a lone shade tree now and then; wetland: red maple, willow, ash
+   *   understory  near the road in the woods: ferns, logs and stumps
+   */
+  *_ruralTrees(t) {
+    const W = this.world, x0 = t.i * TILE, z0 = t.j * TILE, out = [], kit = this.treeKit.species;
+    const FIELD = (c) => c === LAND.crops || c === LAND.pasture || (c >= 20 && c <= 29);
+    const edgeOf = (x, z) => { const r = this.roadNear(x, z, 30); return r ? r.d - r.half : 99; };
+    const clearOf = (x, z, crown) => !this.inWater(x, z) && !this.inWater(x + 3, z) && !this.inWater(x - 3, z) && !this.inWater(x, z + 3) && !this.inWater(x, z - 3)
+      && !this.heroes.heroes?.covers?.(x, z, 3) && !this.host.buildingNear(x, z, crown) && !this.kit.occupied(x, z, Math.min(crown, 3)) && !this._inDressing(x, z)
+      && !this._drivewayNear?.(x, z, 2.5);
+    const pick = (mix, r) => { let a = 0, tot = 0; for (const [, w] of mix) tot += w; for (const [n, w] of mix) { a += w / tot; if (r <= a) return n; } return mix[mix.length - 1][0]; };
+    const MIX = {
+      woods: [['sugarmaple', 28], ['redoak', 15], ['beech', 10], ['whiteash', 12], ['blackcherry', 8], ['redmaple', 10], ['whitepine', 8], ['hemlock', 6], ['birch', 3]],
+      wet: [['redmaple', 40], ['willow', 28], ['whiteash', 20], ['birch', 12]],
+      hedge: [['whiteash', 20], ['blackcherry', 25], ['redmaple', 15], ['sugarmaple', 15], ['redoak', 10], ['hemlock', 5]],
+      yard: [['sugarmaple', 35], ['redmaple', 20], ['redoak', 10], ['birch', 10], ['whitepine', 10], ['spruce', 10], ['blackcherry', 5]],
+      street: [['sugarmaple', 40], ['redmaple', 30], ['whiteash', 10], ['redoak', 20]],
+      pasture: [['sugarmaple', 40], ['redoak', 35], ['whiteash', 15], ['willow', 10]],
+    };
+    /** A tree of `role` at (x, z) if it fits (shrunk to clear a roof or the road if it must): true if placed. */
+    const tree = (x, z, role, seed, age = null) => {
+      const r1 = hash(seed * 7.13 + 1), r2 = hash(seed * 3.71 + 2), r3 = hash(seed * 9.17 + 3), r4 = hash(seed * 1.93 + 4);
+      const name = pick(MIX[role], r1), sp = kit[name];
+      // the age mix: saplings and young trees, mostly mature, a few old giants away from the road
+      let k = age ?? (r2 < .08 ? .3 + r2 * 2.5 : r2 < .22 ? .55 + (r2 - .08) * 1.8 : r2 > .95 ? 1.15 + (r2 - .95) * 3 : .85 + (r2 - .22) * .32);
+      k *= .92 + r3 * .16;
+      const de = edgeOf(x, z);
+      if (de < 4) return false;   // trunks ≥ 4 m from the road's edge
+      if (k > 1.1 && de < 25) k = 1;
+      // a crown reaching over the road: smaller, so it clears the chase camera
+      if (sp.r * k > de + 1.5) k = Math.max(.45, (de + 1.5) / sp.r);
+      let crown = sp.r * k * .85;
+      if (!clearOf(x, z, crown)) { k *= .6; crown = sp.r * k * .85; if (k < .35 || !clearOf(x, z, crown)) return false; }
+      out.push({ x, z, y: W._groundH(x, z) - .15, sp: name, v: fallVariant(sp, r4), s: k, sy: k * (.94 + r3 * .12), rot: seed * 40 % 6.283, tint: .9 + r3 * .18 });
+      return true;
+    };
+    const under = (x, z, name, seed, s = 1) => {
+      if (edgeOf(x, z) < 2.5 || !clearOf(x, z, 1.5)) return;
+      out.push({ x, z, y: W._groundH(x, z) - .05, sp: name, v: 0, s: s * (.8 + hash(seed) * .5), rot: seed * 23 % 6.283, tint: .9 + hash(seed * 3) * .2 });
+    };
+    // OSM's mapped trees
+    for (const p of this.osmTrees.get(t.key) || []) tree(p.x, p.z, this.urban(p.x, p.z) ? 'yard' : 'woods', Math.round(p.x * 7 + p.z * 13));
+    // street trees in the villages (the urban streets with a sidewalk or a verge)
+    for (const piece of W.tiles.get(t.key)?.pieces || []) {
+      if (due()) yield;
+      const e = piece.e;
+      if (!ROADS.has(e.kind) || e.kind === 'alley') continue;
+      const half = W.wOf(e) / 2, walk = W.walkOf ? W.walkOf(e) : 0;
+      for (let i = Math.max(piece.a, 2); i < Math.min(piece.b, e.n - 1); i += 2) {
+        if (e._deck?.[i] || hash(e.id.length * 977 + i * 131 + e.n) < .4) continue;
+        const dx = e.x[i + 1] - e.x[i - 1], dz = e.z[i + 1] - e.z[i - 1], l = Math.hypot(dx, dz) || 1;
+        for (const side of [-1, 1]) {
+          const off = half + (walk ? walk + 1.6 : 4.5), x = e.x[i] - dz / l * off * side, z = e.z[i] + dx / l * off * side;
+          if (!this.urban(x, z) || hash(i * 17 + side * 5 + e.n * 3) < .5) continue;
+          tree(x, z, 'street', i * 7 + side + e.n * 11, .7 + hash(i * 3 + side) * .3);
+        }
+      }
+    }
+    // yard trees: beside or behind each house (its front faces the road), rarely in front
+    for (const b of this.host.buildingChunks.get(t.key) || []) {
+      const R = this.kit.plans.get(b.k); if (!R || b.hidden) continue;
+      const r = R.rects?.[0] ?? R.rects?.get?.(0); if (!r) continue;
+      const back = [[0, 1], [-1, 0], [0, -1], [1, 0]][R.front] || [0, 1];   // (front 0: −v, 1: +u, 2: +v, 3: −u)
+      const n = 1 + Math.floor(hash(b.k * 1.7) * 3.2);
+      for (let q = 0; q < n; q++) {
+        const h = hash(b.k * 5.3 + q * 11), sideways = q % 2 === 1;
+        const [au, av] = sideways ? [back[1] === 0 ? 0 : (h < .5 ? -1 : 1), 0] : back;
+        const du = sideways ? (h < .5 ? -1 : 1) * (r.hu + 4 + h * 4) : au * (r.hu + 5 + h * 8) + (hash(q + b.k) - .5) * r.hu * 1.6;
+        const dv = sideways ? (hash(q * 3 + b.k) - .5) * r.hv : av * (r.hv + 5 + h * 8) + (hash(q * 7 + b.k) - .5) * r.hv * 1.4;
+        const x = r.cx + r.ux * du + r.vx * dv, z = r.cz + r.uz * du + r.vz * dv;
+        tree(x, z, 'yard', b.k * 13 + q, .65 + h * .45);
+      }
+      if ((b.k & 7) === 0) yield;
+    }
+    // the land cover: woods (edges graded), wetland, hedgerows between fields, the odd pasture tree
+    const step = 8;
+    for (let x = x0 + step / 2; x < x0 + TILE; x += step) for (let z = z0 + step / 2; z < z0 + TILE; z += step) {
+      if (z === z0 + step / 2 && due()) yield;
+      const h1 = hash(Math.round(x * 3.1) * 92821 + Math.round(z * 1.7)), jx = x + (h1 - .5) * step * .9, jz = z + (hash(Math.round(x * 5.3) + Math.round(z * 7.9) * 31) - .5) * step * .9;
+      const c = this.landAt(jx, jz), seed = Math.round(jx * 11) + Math.round(jz * 13) * 7, h2 = hash(seed * 1.31);
+      if (c === LAND.woods || c === LAND.outside) {
+        // how open it is round here: the woodlot's edge
+        let open = 0; for (const [ox, oz] of [[11, 0], [-11, 0], [0, 11], [0, -11]]) if (this.landAt(jx + ox, jz + oz) !== c) open++;
+        const de = edgeOf(jx, jz);
+        if (open >= 1 && h2 < .45) {
+          // the graded edge: shrubs, sumac (scarlet now), saplings, goldenrod
+          const r = hash(seed * 2.9);
+          if (r < .3) under(jx, jz, r < .15 ? 'dogwood' : 'buckthorn', seed);
+          else if (r < .45) under(jx, jz, r < .38 ? 'sumac' : 'sumac2', seed);
+          else if (r < .65) under(jx, jz, 'sapling', seed, .9);
+          else if (r < .8) tree(jx, jz, 'woods', seed, .4 + r * .3);
+          else under(jx, jz, 'goldenrod', seed);
+          continue;
+        }
+        if (h1 < (c === LAND.woods ? .82 : .45) * this.q.trees) { if (!tree(jx, jz, this.world.nearWater?.(jx, jz) ? 'wet' : 'woods', seed) && de < 60 && h2 > .8) under(jx, jz, 'fern', seed); }
+        else if (de < 60 && de > 4) { const r = hash(seed * 4.1); if (r < .25) under(jx, jz, 'fern', seed); else if (r < .3) under(jx, jz, r < .28 ? 'log' : 'stump', seed); }
+      } else if (c === LAND.wetland) {
+        if (h1 < .25) tree(jx, jz, 'wet', seed); else if (h1 < .4) under(jx, jz, 'dogwood', seed);
+      } else if (FIELD(c) && c !== LAND.farmyard) {
+        // a hedgerow where this field meets another (a different crop, rows, or the woods)
+        let edge = false; for (const [ox, oz] of [[6, 0], [-6, 0], [0, 6], [0, -6]]) { const n = this.landAt(jx + ox, jz + oz); if (n !== c && (FIELD(n) || n === LAND.woods)) { edge = true; break; } }
+        if (edge) { if (h1 < .32) tree(jx, jz, 'hedge', seed); else if (h1 < .55) under(jx, jz, h1 < .45 ? 'buckthorn' : 'sumac', seed); }
+        else if (c === LAND.pasture && h1 < .006) tree(jx, jz, 'pasture', seed, 1.05 + h2 * .2);
+      } else if (c === LAND.yards || c === LAND.grass) {
+        if (h1 < (c === LAND.yards ? .02 : .008)) tree(jx, jz, 'yard', seed);
+      }
+    }
+    this.forest.setTile(t.key, out);
+    t.trees = out;
+    this.stats.trees += out.length;
   }
 
   /** One pool: a species at one level of detail, as many instances as the trees near the camera need. */
@@ -904,7 +1035,7 @@ export class GraphCity {
     this.kit.material.dispose();
     for (const T of this.treeGeos) for (const g of T.tiers) g.dispose();
     for (const tiers of this.pools) for (const im of tiers) im.dispose();
-    this.cards.dispose(); this.facades.dispose(); this.life?.dispose();
+    this.cards.dispose(); this.facades.dispose(); this.life?.dispose(); this.forest?.dispose();
     if (this.carGeos) { for (const g of Object.values(this.carGeos)) g.dispose(); this.carMaterial.dispose(); }
     for (const g of [this.lampGeo, this.acornGeo]) g.dispose();
     for (const m of [this.kitMaterial, this.treeMaterial, this.lampMaterial, this.lotMaterial]) m.dispose();
