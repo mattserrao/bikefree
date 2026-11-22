@@ -1805,7 +1805,13 @@ Goal: a lighter main menu, and fix the PGH / CNY / SKAN map cards that looked as
 
 *Open*
 - [ ] The scatter-layer scenes (Big Sur, Yosemite, Zion, Pittsburgh's authored city) still place their trees through the scatter pools and far cards: move their tree names onto the engine next (rocks and shrubs stay in the scatter).
-- [ ] Push the branch and open the PR (this session had no write access to the repo).
+- [x] Push the branch and open the PR (#49).
+- [x] Trees: inner shell removed (it read as a dense ball at the core); sparse sprays on the inner limbs instead, lighter interior shading.
+- [x] Trees: trunks and limbs twice as thick, foliage unchanged (user: "around 100% beefier").
+- [ ] Roadsides (CNY): a mowed strip about 2 m wide, then tall brush (goldenrod, chicory, Queen Anne's lace, sumac thickets); ditches with culverts at driveways; wooden utility poles with sagging wires along one side; no street lamps on rural roads (villages and suburbs keep them).
+- [ ] House engine (CNY + SKAN): suburbs Cape Cod / ranch / raised ranch / split-level; villages Greek Revival / Italianate; farms upright-and-wing. Full detail near (porches, trim, shutters, chimneys, dormers, foundations), simplified beyond about 150 m.
+- [ ] Trees: distracting pop-in (tier swaps, re-pool steps, tile streaming, frustum edge).
+- [ ] Last: Going-to-the-Sun has a low framerate in practice (other maps fine): find the cause.
 
 ## Running it
 
