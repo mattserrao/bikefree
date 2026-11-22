@@ -29,6 +29,8 @@ import { TreeEngine } from './toolbox/vegetation/tree-engine.js';
 import { planHomestead, drawHomestead, driveStrips, nearDrive } from './toolbox/city/homesteads.js';
 import { skanCrop, cropMaterial, cropCards, bale, verge, bay, farmStand } from './toolbox/landscape/farm-kit.js';
 import { makeUpstateTrees, fallVariant } from './toolbox/vegetation/upstate-trees.js';
+import { profileY, ditchFits, ditchGeometry, culvertEnd, goldenrod, laceAndChicory, tallGrass, cattails, utilityPole, wires } from './toolbox/landscape/roadside-ny.js';
+import { ROAD_LIFT } from './pose.js';
 
 // (9 is the toolbox's pond; 10–12: a rural map's fields from WorldCover — tools/pgh_city.py rural_land, SKAN;
 // 20–29: CNY's fields — 20-23 corn and 24-27 grain by the rows' heading, 28 hay, 29 farmyard: pgh_city.py "the country")
@@ -306,6 +308,12 @@ export class GraphCity {
   }
   /** Is (x, z) on a way (within `margin` of its edge)? */
   onRoad(x, z, margin = 0.5) { const r = this.roadNear(x, z, margin); return !!r && r.d < r.half + margin; }
+  /** Rural maps: built up enough for street lamps (a village or a suburban street): houses all round within ~40 m. */
+  _suburb(x, z) {
+    let n = 0;
+    for (let k = 0; k < 8; k++) { const a = k * .785; if (this.host.buildingNear(x + Math.cos(a) * 32, z + Math.sin(a) * 32, 9)) n++; }
+    return n >= 5;
+  }
   urban(x, z) { const c = this.landAt(x, z); return c === LAND.paved || c === LAND.yards || c === LAND.building || c === LAND.plaza; }
   inWater(x, z) { const w = this.world; return w._groundH(x, z) < w.poolAt(x, z) + 0.3; }
 
@@ -657,6 +665,23 @@ export class GraphCity {
         if (h1 < .008) tree(jx, jz, 'street', seed, .8);
       }
     }
+    // roadside thickets: sumac (scarlet now), dogwood and buckthorn in clumps behind the brush, every so often
+    if (this.rural) for (const piece of W.tiles.get(t.key)?.pieces || []) {
+      const e = piece.e; if (!ROADS.has(e.kind) || e.kind === 'alley' || (W.walkOf && W.walkOf(e))) continue;
+      const half = W.wOf(e) / 2;
+      for (let i = Math.max(piece.a, 1); i < Math.min(piece.b, e.n - 1); i += 2) for (const side of [-1, 1]) {
+        const h = hash(e.x[i] * .173 + e.z[i] * .291 + side * 3.7); if (h > .22) continue;
+        const dx = e.x[i + 1] - e.x[i], dz = e.z[i + 1] - e.z[i], l = Math.hypot(dx, dz) || 1, nx = -dz / l * side, nz = dx / l * side;
+        const lc = this.landAt(e.x[i] + nx * (half + 7), e.z[i] + nz * (half + 7));
+        if (lc === LAND.yards || lc === LAND.paved || lc === LAND.building || lc === LAND.plaza) continue;
+        const n = 3 + Math.floor(h * 14);
+        for (let k = 0; k < n; k++) {
+          const r = hash(h * 97 + k * 3.3), along = (r - .5) * 9, d = half + 5.8 + hash(h * 13 + k) * 3;
+          const x = e.x[i] + dx / l * along + nx * d, z = e.z[i] + dz / l * along + nz * d, seed = Math.round(x * 7 + z * 13) + k;
+          under(x, z, r < .55 ? (r < .3 ? 'sumac' : 'sumac2') : r < .8 ? 'buckthorn' : 'dogwood', seed);
+        }
+      }
+    }
     this.forest.setTile(t.key, out);
     t.trees = out;
     this.stats.trees += out.length;
@@ -736,8 +761,9 @@ export class GraphCity {
       for (let k = 0; k < n; k++) bale(M, jx + k * 2.1 * Math.cos(h * 9), g(jx, jz), jz + k * 2.1 * Math.sin(h * 9), h * 9 + k * .2, hash(h * 5) < .3, hash(h * 17 + k));
     }
     yield;
-    // the country roads' edges: fence and wall runs, the verge's tufts and wildflowers
+    // the country roads' edges: the ditch, its grass and brush, the poles (_roadsides); then fence and wall runs
     const N = new MeshBuilder({ aGlow: 1 });
+    yield* this._roadsides(t, N, M);
     for (const piece of W.tiles.get(t.key)?.pieces || []) {
       if (due()) yield;
       const e = piece.e; if (!ROADS.has(e.kind) || e.kind === 'alley') continue;
@@ -748,16 +774,6 @@ export class GraphCity {
         const dx = e.x[i + 1] - e.x[i], dz = e.z[i + 1] - e.z[i], l = Math.hypot(dx, dz) || 1, nx = -dz / l, nz = dx / l;
         for (const side of [-1, 1]) {
           const at = (k, off) => ({ x: e.x[k] + nx * off * side, z: e.z[k] + nz * off * side });
-          // the verge: every ~2 m, two or three tufts or a flower clump between the road and the fence line
-          for (let f = 0; f < 5; f++) {
-            const t0 = f / 5, sx = e.x[i] + dx * t0, sz = e.z[i] + dz * t0;
-            for (let r = 0; r < 3; r++) {
-              const off = half + .7 + r * 1.2 + hash(i * 13 + f * 3 + r + side) * .6, x = sx + nx * off * side, z = sz + nz * off * side;
-              if (this.urban(x, z) || this.onRoad(x, z, .3) || this.inWater(x, z) || this._drivewayNear(x, z, .5) || this._railCovers(x, z)) continue;
-              const hs = hash(x * 1.3 + z * 2.1), fl = hash(Math.floor(x / 9) * 3 + Math.floor(z / 9)) < .35 && hs < .45;
-              verge(N, x, g(x, z), z, hs, fl);
-            }
-          }
           // fences and walls, in runs of ~60 m chosen by what's beside the road
           if (i < 2 || i > e.n - 3) continue;
           const blk = Math.floor(i / 6), hb = hash(e.n * 1.31 + blk * 7.7 + side * 3.3 + e.x[0] * .01);
@@ -771,7 +787,7 @@ export class GraphCity {
         }
       }
     }
-    if (N.count) { const m = new THREE.Mesh(N.geometry(), this.kitMaterial); m.name = `Verge ${t.key}`; m.userData.lodM = 220; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 220; this._add(t, m, 'near'); }
+    if (N.count) { const m = new THREE.Mesh(N.geometry(), this.kitMaterial); m.name = `Verge ${t.key}`; m.userData.lodM = 240; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 240; this._add(t, m, 'near'); }
     // a farm stand by some farmhouses' drives (pumpkins and squash: it's September)
     for (const H of t.homes || []) {
       if (H.kind !== 'farmhouse-ny' || hash(H.key * 3.7) > .3) continue;
@@ -781,6 +797,103 @@ export class GraphCity {
     }
   }
 
+  /**
+   * The country roads' edges (roadside-ny.js), every ~2 m along both sides of each road without sidewalks:
+   *   the ditch strip (where the ground is a shelf under the road; broken by driveways, a culvert's ends showing),
+   *   a mowed strip of short grass and the odd wildflower to ~2.5 m, then unmowed brush on the berm and out to the
+   *   fence line (goldenrod, Queen Anne's lace, chicory, tall grass; cattails in the wet bottoms) — lawns stay mowed,
+   *   and now and then the crew mowed farther; utility poles every ~40 m along one side, wires between them.
+   */
+  *_roadsides(t, N, M) {
+    const W = this.world, sH = (x, z) => W.surfaceH(x, z), runs = [];
+    const STEP = 5;   // stations per 10 m sample
+    for (const piece of W.tiles.get(t.key)?.pieces || []) {
+      if (due()) yield;
+      const e = piece.e; if (!ROADS.has(e.kind) || e.kind === 'alley') continue;
+      const half = W.wOf(e) / 2, walk = W.walkOf ? W.walkOf(e) : 0;
+      if (walk) continue;
+      const i0 = Math.max(piece.a, 1), i1 = Math.min(piece.b, e.n - 1);
+      if (i1 <= i0) continue;
+      // the normal at a sample (from its neighbours: mitred at the bends)
+      const nAt = (k) => { const a = Math.max(0, k - 1), b = Math.min(e.n, k + 1), dx = e.x[b] - e.x[a], dz = e.z[b] - e.z[a], l = Math.hypot(dx, dz) || 1; return [-dz / l, dx / l, dx / l, dz / l]; };
+      const poleSide = hash(e.n * .71 + e.x[0] * .013 + e.z[0] * .007) < .5 ? -1 : 1;
+      for (const side of [-1, 1]) {
+        let run = [], prevDrive = false, last = null;
+        const close = () => { if (run.length > 1) runs.push(run); run = []; };
+        for (let i = i0; i < i1; i++) {
+          const deck = e._deck?.[i] || e._deck?.[i + 1];
+          const nA = nAt(i), nB = nAt(i + 1);
+          for (let f = 0; f <= (i === i1 - 1 ? STEP : STEP - 1); f++) {
+            const u = f / STEP, px = e.x[i] + (e.x[i + 1] - e.x[i]) * u, pz = e.z[i] + (e.z[i + 1] - e.z[i]) * u;
+            let nx = nA[0] + (nB[0] - nA[0]) * u, nz = nA[1] + (nB[1] - nA[1]) * u; const nl = Math.hypot(nx, nz) || 1; nx = nx / nl * side; nz = nz / nl * side;
+            const tx = nA[2], tz = nA[3];
+            const rY = e.ele[i] + (e.ele[i + 1] - e.ele[i]) * u + ROAD_LIFT;
+            const at = (d) => [px + nx * (half + d), pz + nz * (half + d)];
+            const [bx, bz] = at(2.5), [ox, oz] = at(4.8), lc = this.landAt(bx, bz);
+            const base = Math.min(sH(bx, bz), sH(ox, oz));
+            const drive = this._drivewayNear(bx, bz, .6);
+            const hard = deck || lc === LAND.paved || lc === LAND.building || lc === LAND.plaza || this.inWater(bx, bz) || this._railCovers(bx, bz, 1)
+              || this.onRoad(bx, bz, .2) || this.onRoad(ox, oz, 0) || this.host.buildingNear(ox, oz, .8);
+            const ok = !hard && !drive && ditchFits(rY, base);
+            const seed = hash(px * .913 + pz * .377 + side * 5.1);
+            // the ditch run (and a culvert's ends where a driveway breaks it)
+            if (ok) {
+              if (prevDrive && last) { culvertEnd(M, bx - tx * .2, base, bz - tz * .2, tx, tz, seed); }
+              const row = { x: px + nx * half, z: pz + nz * half, nx, nz, rY, base, side };
+              run.push(row); last = row;
+            } else {
+              if (drive && run.length) { const r = run[run.length - 1]; const cx = r.x + r.nx * 2.5, cz = r.z + r.nz * 2.5; culvertEnd(M, cx + tx * .2, r.base, cz + tz * .2, -tx, -tz, seed); }
+              close();
+            }
+            prevDrive = drive;
+            if (hard || drive) continue;
+            const yAt = (d) => { const [x, z] = at(d); return ok && d <= 4.8 ? profileY(d, rY, base) : sH(x, z); };
+            // the mowed strip: tufts and the odd wildflower
+            for (let r = 0; r < 2; r++) {
+              const d = .5 + r * 1.1 + hash(seed * 13 + r) * .5, [x, z] = at(d);
+              const hs = hash(x * 1.3 + z * 2.1), fl = hash(Math.floor(x / 9) * 3 + Math.floor(z / 9)) < .3 && hs < .35;
+              verge(N, x, yAt(d), z, hs, fl);
+            }
+            // the ditch bottom: cattails where it stays wet, else grass
+            if (ok && hash(Math.floor((px + pz) / 31) * 7.7 + side) < .14 && seed < .45) { const [x, z] = at(2.5 + (seed - .25) * .6); cattails(N, x, profileY(2.5, rY, base), z, seed); }
+            // the brush: berm out to the fence line, unless it's a lawn, or the crew mowed farther here
+            const lawn = lc === LAND.yards || this.host.buildingNear(...at(10), 6);
+            const mowed = hash(Math.floor((px * .7 + pz * .3) / 35) * 3.3 + e.n + side) < .18;
+            if (lawn || mowed) continue;
+            for (let r = 0; r < 4; r++) {
+              const h = hash(seed * 31 + r * 7), d = 3.3 + r * .85 + h * .8, [x, z] = at(d);
+              if (this.onRoad(x, z, .5) || this._drivewayNear(x, z, 1)) continue;
+              const y = yAt(d), k = hash(seed * 17 + r * 3);
+              // goldenrod in drifts (a low-frequency patchiness), tall grass between
+              const drift = hash(Math.floor(x / 14) * 5.1 + Math.floor(z / 14) * 2.3);
+              if (k < .2 + drift * .35) goldenrod(N, x, y, z, h);
+              else if (k < .82) tallGrass(N, x, y, z, h);
+              else laceAndChicory(N, x, y, z, h);
+            }
+          }
+        }
+        close();
+        // utility poles along one side, every 40 m; wires to the next pole (drawn by the tile with this one)
+        if (side !== poleSide) continue;
+        const pole = (k) => {
+          if (k < 1 || k > e.n - 1 || e._deck?.[k]) return null;
+          const n = nAt(k), nx = n[0] * side, nz = n[1] * side, x = e.x[k] + nx * (half + 4.4), z = e.z[k] + nz * (half + 4.4);
+          if (this.onRoad(x, z, 1) || this.host.buildingNear(x, z, 1.5) || this._drivewayNear(x, z, 1) || this.inWater(x, z) || this._railCovers(x, z, 1)) return null;
+          const lc = this.landAt(x, z); if (lc === LAND.paved || lc === LAND.plaza || lc === LAND.building) return null;
+          return { x, z, y: sH(x, z), yaw: Math.atan2(-nz, nx), seed: hash(x * .31 + z * .77) };
+        };
+        for (let i = Math.ceil(i0 / 4) * 4; i < i1; i += 4) {
+          const P = pole(i); if (!P) continue;
+          const A = utilityPole(M, P.x, P.y, P.z, P.yaw, P.seed);
+          const Q = pole(i + 4); if (!Q) continue;
+          const tmp = new MeshBuilder();   // (the next pole's attach points, without drawing it twice)
+          wires(M, A, utilityPole(tmp, Q.x, Q.y, Q.z, Q.yaw, Q.seed));
+        }
+      }
+    }
+    const geo = ditchGeometry(runs);
+    if (geo) { const m = new THREE.Mesh(geo, this.ditchMat ||= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 })); m.name = `Ditches ${t.key}`; m.receiveShadow = true; m.userData.lodM = 700; this._add(t, m); }
+  }
   /** CNY's barns and silos (cny-farms.js) into the tile's street-kit mesh. */
   *_farms(t) {
     let n = 0;
@@ -879,7 +992,7 @@ export class GraphCity {
         const deck = e._deck?.[i];
         const nearEnd = i < 2 || i > e.n - 2;
         // lamps
-        if (riverwalk ? i % 3 === 0 : (i % 3 === 0 && (walk || this.urban(e.x[i], e.z[i])) && e.kind !== 'alley')) {
+        if (riverwalk ? i % 3 === 0 : (i % 3 === 0 && (walk || (this.rural ? this._suburb(e.x[i], e.z[i]) : this.urban(e.x[i], e.z[i]))) && e.kind !== 'alley')) {
           const side = riverwalk ? 1 : ((i / 3) % 2 ? 1 : -1), off = half + (riverwalk ? 0.6 : walk ? walk - 0.5 : 1.2);
           const x = e.x[i] + nx * off * side, z = e.z[i] + nz * off * side;
           if (!this.onRoad(x, z, 0.3) && !this.host.buildingNear(x, z, 0.6) && !this.inWater(x, z) && !deck) {
@@ -1091,7 +1204,7 @@ export class GraphCity {
     this.facades.dispose(); this.life?.dispose(); this.forest.dispose();
     if (this.carGeos) { for (const g of Object.values(this.carGeos)) g.dispose(); this.carMaterial.dispose(); }
     for (const g of [this.lampGeo, this.acornGeo]) g.dispose();
-    for (const m of [this.kitMaterial, this.lampMaterial, this.lotMaterial, this.cropMat].filter(Boolean)) m.dispose();
+    for (const m of [this.kitMaterial, this.lampMaterial, this.lotMaterial, this.cropMat, this.ditchMat].filter(Boolean)) m.dispose();
     this.landTexture?.dispose();
   }
 }

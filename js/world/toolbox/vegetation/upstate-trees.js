@@ -279,14 +279,31 @@ function shrubClump(seed, colors, n, r, h) {
   return b.build();
 }
 function sumac(seed) {
-  // staghorn sumac: a few bare, forked stems with long pinnate fronds held up and out — scarlet and orange in September
-  const rand = randomSequence(seed), b = new Builder();
-  for (let s = 0; s < 4; s++) {
-    const a = rand() * 6.28, base = new THREE.Vector3(Math.cos(a) * .6 * rand(), 0, Math.sin(a) * .6 * rand()), h = 2 + rand() * 1.4;
-    b.as(BARK); limb(b, base, dirOf(a, 1.25), h, .06, .03, 4, '#6a5646');
+  // staghorn sumac: a clump of bare, leaning stems, each topped by a spray of long pinnate fronds that arch out and
+  // droop, their narrow leaflets in pairs — scarlet and orange in September, a few still green; a dark red seed cone
+  const rand = randomSequence(seed), b = new Builder(), Q = new THREE.Quaternion(), S = new THREE.Vector3(.75, 1, .28);
+  const leaflet = (p, dir, len, col) => { Q.setFromUnitVectors(Y, dir); b.add(cone(.05, len, 3), new THREE.Matrix4().compose(p, Q, S), col, 0, rand); };
+  const stems = 5 + Math.floor(rand() * 3);
+  for (let s = 0; s < stems; s++) {
+    const a = rand() * 6.28, r0 = .2 + rand() * .7, base = new THREE.Vector3(Math.cos(a) * r0, 0, Math.sin(a) * r0), h = 1.6 + rand() * 1.8;
+    const lean = dirOf(a, 1.2 + rand() * .2), top = base.clone().addScaledVector(lean, h);
+    b.as(BARK); limb(b, base, lean, h, .055, .03, 4, '#6a5646');
     b.as(SHRUB);
-    for (let f = 0; f < 4; f++) { const az = a + f * 1.57 + rand() * .4; b.add(cone(.22, 1.5, 4), M(base.x + Math.cos(a) * .3, h * .95, base.z + Math.sin(a) * .3, 1, 1, .35, -az, 0, 1.1), ['#c2321e', '#d9542a', '#e07a2e', '#8a8a38'][(s + f) % 4], 0, rand); }
-    b.add(cone(.07, .35, 4), M(base.x + Math.cos(a) * .3, h * .95, base.z + Math.sin(a) * .3), '#7a2418');   // the dark red seed cone
+    const hue = rand(), tones = hue < .55 ? ['#c62f1c', '#d8432a', '#b52619'] : hue < .85 ? ['#df6a2a', '#e5862f', '#c9502a'] : ['#8a9a3c', '#a39a3a', '#7d8c38'];
+    const fronds = 5 + Math.floor(rand() * 3);
+    for (let f = 0; f < fronds; f++) {
+      const az = a + f * (6.28 / fronds) + rand() * .5, d0 = dirOf(az, .35 + rand() * .35), L = .7 + rand() * .4;
+      const side = new THREE.Vector3().crossVectors(d0, Y).normalize();
+      const pairs = 6;
+      for (let j = 0; j < pairs; j++) {
+        const t = (j + 1) / (pairs + 1), p = top.clone().addScaledVector(d0, t * L); p.y -= .4 * t * t;
+        const len = .28 * (1 - t * .45), col = tones[(j + f) % 3];
+        for (const sg of [-1, 1]) leaflet(p, side.clone().multiplyScalar(sg).addScaledVector(d0, .45).add(new THREE.Vector3(0, -.3, 0)).normalize(), len, col);
+      }
+      const tip = top.clone().addScaledVector(d0, L); tip.y -= .4;
+      leaflet(tip, d0.clone().add(new THREE.Vector3(0, -.4, 0)).normalize(), .24, tones[f % 3]);
+    }
+    if (rand() < .6) b.add(cone(.07, .32, 4), M(top.x, top.y - .05, top.z), '#7a2418');   // the seed cone
   }
   return b.build();
 }

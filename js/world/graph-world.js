@@ -451,6 +451,15 @@ export class GraphWorld {
     for (const p of this.pools || []) if (x >= p.x0 && x <= p.x1 && z >= p.z0 && z <= p.z1) return p.level;
     return this.waterY - WATER_ABOVE;
   }
+  /** The ground as its mesh draws it here (the 12.8 m grid's triangles), or the raw height where that tile isn't built. */
+  surfaceH(x, z) {
+    const tt = this.tiles.get(`${Math.floor(x / TILE)},${Math.floor(z / TILE)}`);
+    if (!tt || !tt.gridH) return this._groundH(x, z);
+    const c = tt.gridCell, n1 = Math.round(TILE / c) + 1, u = (x - tt.i * TILE) / c, v = (z - tt.j * TILE) / c;
+    const i = Math.min(n1 - 2, Math.max(0, Math.floor(u))), j = Math.min(n1 - 2, Math.max(0, Math.floor(v))), fu = u - i, fv = v - j;
+    const H = tt.gridH, a0 = H[j * n1 + i], b0 = H[j * n1 + i + 1], c0 = H[(j + 1) * n1 + i], d0 = H[(j + 1) * n1 + i + 1];
+    return fu + fv <= 1 ? a0 + (b0 - a0) * fu + (c0 - a0) * fv : d0 + (c0 - d0) * (1 - fu) + (b0 - d0) * (1 - fv);
+  }
   _groundH(x, z) {
     const raw = this.ground.at(x, z);
     let h = raw;
@@ -744,7 +753,7 @@ export class GraphWorld {
     const R = new Mesher(true), P = new Mesher(), W = new Mesher(), P_ = P;
     const col = (k) => new THREE.Color(COLORS[k] || COLORS.residential);
     const side = col('side'), deckC = col('deck'), rail = col('rail'), under = col('under');
-    const verge = new THREE.Color('#7b8556'), gravelC = new THREE.Color('#a59b84'), walkC = new THREE.Color('#b4afa4'), curbC = new THREE.Color('#c3beb3'), walkSide = new THREE.Color('#9d988e');
+    const verge = new THREE.Color(this.rural ? '#78974a' : '#7b8556'), gravelC = new THREE.Color('#a59b84'), walkC = new THREE.Color('#b4afa4'), curbC = new THREE.Color('#c3beb3'), walkSide = new THREE.Color('#9d988e');
     for (const { e, a, b } of t.pieces) {
       if (due()) yield;
       const half = this.wOf(e) / 2, path = e.kind === 'path', walk = this.walkOf(e);
