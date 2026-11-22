@@ -23,7 +23,7 @@ routes/cities/pgh-city.json ("bikefree-pgh-city-1"):
                                  edge's direction), lanes, sidewalks (0 none, 1 one side, 2 both)
 Data © OpenStreetMap contributors, ODbL.
 """
-import json, math, os, sys, glob, itertools
+import json, math, os, re, sys, glob, itertools
 import xml.etree.ElementTree as ET
 import numpy as np
 from scipy import ndimage
@@ -410,6 +410,24 @@ def main():
         for _, _, P in barns: yd.polygon(P, fill=1)
         yard = ndimage.binary_dilation(np.asarray(ym) > 0, iterations=int(10 / LAND_M)) & ~np.isin(L, (3, 4)) & (d_road > 5)
         L[yard] = 19
+        # the Erie Canal's corridor (user, 22 Nov: "wooded, with a few stretches open into fields"): grass banks to 14 m
+        # from its line (the towpath, the berm), woods beyond to 70 m — but for a stretch in five or so, open to the
+        # fields; yards, buildings and water left as they are
+        cm = Image.new('L', (lx, ly), 0); cd_ = ImageDraw.Draw(cm)
+        for nd, t in ways.values():
+            if t.get('waterway') == 'canal' and t.get('bridge') != 'aqueduct' and not t.get('tunnel'):
+                pts = [nodes[r] for r in nd if r in nodes]
+                if len(pts) > 1: cd_.line([pix(*q_) for q_ in pts], fill=1, width=1)
+        if np.asarray(cm).any():
+            d_can = ndimage.distance_transform_edt(np.asarray(cm) == 0) * LAND_M
+            yy2, xx2 = np.mgrid[0:ly, 0:lx]
+            # open stretches: a smooth noise along the land (cells of ~500 m), the top fifth of it
+            rs = np.random.default_rng(11).random((ly // 80 + 3, lx // 80 + 3)).astype(np.float32)
+            op = ndimage.zoom(rs, (ly / (rs.shape[0] - 2), lx / (rs.shape[1] - 2)), order=3)[:ly, :lx]
+            soft = np.isin(L, (1, 7, 18) + tuple(range(10, 18)))
+            L[(d_can < 14) & (soft | (L == 2))] = 1
+            L[(d_can >= 14) & (d_can < 70) & soft & (op < .78)] = 2
+            print(f'  canal corridor: woods {np.mean((d_can >= 14) & (d_can < 70) & (L == 2)) / max(np.mean((d_can >= 14) & (d_can < 70)), 1e-9) * 100:.0f}% of its band')
         print(f'  country buildings: farmhouses {kc[13]}, barns {kc[14]}, long barns {kc[15]}, sheds {kc[17]}, village houses {kc[16]}')
     # beyond the band PGH's buildings reach (no footprints kept there): 7, "outside" — suburbs and hills seen from afar
     wm = Image.new('L', (lx, ly), 0); wd = ImageDraw.Draw(wm)
@@ -460,6 +478,9 @@ def main():
             t = ways[hit[1]][1]
             s = t.get('surface')
             code = SURF_OF.get(s, 0 if e['kind'] != 'path' or not s else 0)
+            # CNY's trails: the Erie Canalway Trail is stone dust through Camillus (user, 22 Nov: "gravel" for the path),
+            # and a trail OSM gives no surface is gravel in the country, not asphalt
+            if CITY != 'pgh' and e['kind'] == 'path' and (not s or re.search(r'Canalway|Towpath', e['name'] or '', re.I)): code = 5
             codes.append(code)
             # one-way, against or along this edge's direction
             if t.get('oneway') in ('yes', '1', '-1') or t.get('highway') in ('motorway', 'motorway_link'):
@@ -523,7 +544,6 @@ def main():
     def land_at(la, lo):
         px_, py_ = pix(la, lo); i, j = int(round(px_)), int(round(py_))
         return int(Larr[j, i]) if 0 <= i < lx and 0 <= j < ly else 7
-    import re
     MAIN_TRAIL = re.compile(r'Canalway|Heritage|Allegheny Passage|Eliza Furnace|North Shore Trail|South Side Trail|Station Square Trail|Strip District Trail|Hot Metal|Mon Wharf|^Trail$|Riverwalk|Riverfront', re.I)
     widths = pgh.get('widths', {})
     ke = pgh.get('unit', {}).get('ele', 0.1)

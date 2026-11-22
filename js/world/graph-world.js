@@ -722,7 +722,11 @@ export class GraphWorld {
   /** How a way is painted: centre line, lane lines, edge lines (one-ways and lanes from the city data). */
   _paintOf(e) {
     const ow = this.city?.edgeInfo(e).ow || 0, lanes = this.city?.edgeInfo(e).lanes || 0;
-    if (e.kind === 'path') return { centre: !e._rw && (e._w || 3) >= 3.4 ? 'dash-yellow' : null, edges: false, lanes: 0 };
+    if (e.kind === 'path') {
+      // (a gravel or dirt trail has no paint: CNY's stone-dust towpath)
+      const loose = this.city && ['gravel', 'dirt'].includes(this.city.edgeInfo(e).surf(e.n >> 1));
+      return { centre: !e._rw && !loose && (e._w || 3) >= 3.4 ? 'dash-yellow' : null, edges: false, lanes: 0 };
+    }
     if (e.kind === 'plaza' || e.kind === 'alley') return { centre: null, edges: false, lanes: 0 };
     if (ow) return { centre: null, edges: e.kind !== 'residential', lanes: Math.max(1, lanes), oneway: true };
     if (e.kind === 'primary' || e.kind === 'secondary') return { centre: 'double', edges: true, lanes: 0 };
@@ -1296,8 +1300,15 @@ function roadSurfaceMaterial(low = false) {
             float jt = max(1. - smoothstep(0., .06, f.x) * smoothstep(0., .06, 1. - f.x), 1. - smoothstep(0., .06, f.y) * smoothstep(0., .06, 1. - f.y));
             c = mix(c, c * (.82 + .3 * gwH(cell)) * (1. - .4 * jt), det);
           } else if (sf == 5 || sf == 6) {   // gravel, dirt
-            vec3 g = sf == 5 ? vec3(.55, .51, .44) : vec3(.43, .36, .27);
-            c = pow(g * (.8 + .35 * gwH(floor(vGW.xz * 14.)) * det + .15 * gwN(vGW.xz * 1.3)), vec3(2.2));
+            // (user, 22 Nov: a "gravel" texture for the towpath): stone dust packed smooth where the wheels run, loose
+            // and darker toward the edges, with pebbles; fades to its mean far off
+            vec3 g = sf == 5 ? vec3(.62, .57, .48) : vec3(.43, .36, .27);
+            float edge = smoothstep(.35, .5, abs(q.x) / max(vRd.w, 1.)), worn = 1. - smoothstep(.2, .6, abs(abs(q.x) - vRd.w * .18));
+            float grain = gwN(vGW.xz * 22.) * .6 + gwN(vGW.xz * 47.) * .4, peb = step(.96, gwH(floor(vGW.xz * 11.) + 17.)) * gwH(floor(vGW.xz * 11.) + 3.);
+            float tone = .9 + .22 * (grain - .5) * det + .14 * gwN(vGW.xz * 1.3) - .14 * edge + .07 * worn * (sf == 5 ? 1. : 0.);
+            vec3 col = g * tone;
+            col = mix(col, col * mix(.62, 1.25, peb), step(.001, peb) * det * (.4 + .6 * edge));
+            c = pow(col, vec3(2.2));
           } else {                 // asphalt
             #ifdef LOWQ
             c *= (.94 + .12 * wear) * (1. - wear * .1 * track);

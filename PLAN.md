@@ -1715,6 +1715,19 @@ Branch `cny-test` (PGH's PR #42 merged first). Built with PGH's own tools, now t
   boards, gambrel or gable roofs of metal or shingle, doors with a white X and a hay door, cupolas; concrete stave or
   blue Harvestore silos beside many; free-stall barns with curtain sides and a ridge vent; small board sheds.
 
+### CNY's Erie Canal *(user, 22 Nov: "The aqueduct water is not attached on both sides … find references for how the Erie Canal looks in Camillus. The feeling is off")*
+- References: the park keeps the first enlargement (70 ft by 7 ft prism) for 7 miles, wooded, between Nine Mile Creek
+  and a hillside; the towpath trail on one side, the South Towpath (berm) on the other; Sims' Store at Devoe Road.
+- User's answers: narrower than the real 21 m (kept 12 m); wooded with a few open stretches; green duckweed, no
+  reflections, cheap; the water set below the towpath in a cut; the berm path as scenery; a little more life, not the
+  lock; a gravel texture for the path.
+- Done: the aqueduct trunk's water meets the canal at both ends (level held 25 m, earth banks); duckweed water in lime
+  greens with patches of dark open water and dark edges; grass banks rising 0.85 m from the water (lower where the trail
+  runs close); the berm path in gravel on the far bank with benches; lily pads; the corridor wooded to 70 m (open in a
+  fifth of it, tools/pgh_city.py); Nine Mile Creek and the brooks as ribbons (were 6 m land cells, a chain of
+  diamonds); CNY's trails stone dust (surface gravel: packed in the wheel line, loose at the edges, pebbles) with no
+  centre line.
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)
