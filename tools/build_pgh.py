@@ -20,6 +20,7 @@ bridge decks (and short tunnels) interpolated between their ground ends; smoothe
 pinned to its junctions' heights, so every way through a junction meets at one height.
 Data © OpenStreetMap contributors (ODbL); elevation: AWS Terrain Tiles (USGS 3DEP and others).
 """
+PGH_MAP_LABELS = [["Downtown", 40.4413, -79.9985, 1], ["North Side", 40.459, -80.01, 1], ["Strip District", 40.4525, -79.98, 2], ["Lawrenceville", 40.469, -79.96, 1], ["Oakland", 40.442, -79.9555, 1], ["Shadyside", 40.4545, -79.933, 2], ["East Liberty", 40.4625, -79.9245, 2], ["Squirrel Hill", 40.433, -79.9225, 1], ["South Side", 40.4265, -79.974, 1], ["Mt Washington", 40.4265, -80.016, 2], ["Homestead", 40.4045, -79.91, 1]]   # [text, lat, lon, rank: 1 on every map, 2 not on a phone's until zoomed]
 import base64, gzip, json, math, os, re, struct, sys, time, urllib.error, urllib.request
 import xml.etree.ElementTree as ET
 from collections import defaultdict, Counter
@@ -900,7 +901,9 @@ def write(cfg, E, jpos, jh, cor):
            'attribution': 'Map data © OpenStreetMap contributors (ODbL); elevation: AWS Terrain Tiles (USGS 3DEP)',
            'origin': {'lat': round(lat0, 6), 'lon': round(lon0, 6)}, 'unit': {'latlon': 1e-6, 'ele': 0.1},
            'widths': cfg['widths'], 'waterLevelM': cfg['waterLevelM'], 'map': 'routes/cities/pittsburgh-map.json',
-           'ground': 'routes/cities/pgh-ground.grid.bin.gz', 'shore': 'routes/cities/pgh-shore.json', 'dressing': 'routes/cities/pgh-dressing.json', 'heroes': 'routes/cities/pgh-heroes.json', 'bridges': 'routes/cities/pgh-bridges.json', 'cityData': 'routes/cities/pgh-city.json', 'pools': cfg.get('pools', []), 'start': cfg.get('start'),
+           'ground': 'routes/cities/pgh-ground.grid.bin.gz', 'shore': 'routes/cities/pgh-shore.json', 'dressing': 'routes/cities/pgh-dressing.json', 'heroes': 'routes/cities/pgh-heroes.json', 'bridges': 'routes/cities/pgh-bridges.json', 'cityData': 'routes/cities/pgh-city.json',
+           # the card's map (js/app.js): a few neighbourhoods named, no landmark dots (user, 21 Nov: "greatly simplify")
+           'mapLabels': [{'text': t, 'lat': la, 'lon': lo, 'kind': 'area', 'rank': r} for t, la, lo, r in PGH_MAP_LABELS], 'pools': cfg.get('pools', []), 'start': cfg.get('start'),
            'nodes': nodes_out, 'edges': edges_out}
     path = os.path.join(ROOT, 'routes', 'cities', 'pgh.json')
     open(path, 'w').write(json.dumps(out, separators=(',', ':')))

@@ -1679,11 +1679,15 @@ function cityMapData(card) {
   const net = cityNet(card);
   if (!net) return null;
   const paths = new Map(card.routes.map((it) => [it.id, cityPath(net, it)]));
-  const lines = edgeLines(net).map((L) => ({ id: L.id, lat: L.lat, lon: L.lon })), map = cityMaps.get(card.baseId);
+  // a road graph's network (PGH: thousands of streets) is drawn simply (minor: 0 primary roads and trails, 1 secondary
+  // roads — both drawn in full, the thumbnail only 0 — 2 the rest, faint, not on the thumbnail), no junction dots, no landmarks; a few neighbourhoods named and the rivers
+  const simple = graphMapLabels.has(card.network);
+  const lines = edgeLines(net).map((L) => ({ id: L.id, lat: L.lat, lon: L.lon, minor: !simple ? 0 : L.e.kind === 'primary' || L.e.kind === 'path' ? 0 : L.e.kind === 'secondary' ? 1 : 2 })), map = cityMaps.get(card.baseId);
   return { net, paths, index: segmentRoutes(card.routes.map((it) => ({ id: it.id, path: paths.get(it.id) }))),
-    lines, rivers: cityRivers.get(card.baseId) || [], waterAreas: map?.water || null,
-    labels: map ? [...(map.labels || []), ...areaLabelSpots(lines, (id) => net.edges.get(id)?.area, map.areaLabels)] : [],
-    landmarks: map?.landmarks || [] };
+    lines, rivers: cityRivers.get(card.baseId) || [], waterAreas: map?.water || null, simple,
+    labels: simple ? [...(map?.labels || []).filter((lb) => lb.kind === 'river'), ...graphMapLabels.get(card.network)]
+      : map ? [...(map.labels || []), ...areaLabelSpots(lines, (id) => net.edges.get(id)?.area, map.areaLabels)] : [],
+    landmarks: simple ? [] : map?.landmarks || [] };
 }
 function drawCityThumb(canvas, card) {
   const d = card && cityMapData(card);
@@ -1767,7 +1771,7 @@ function renderCityMap() {
   $('cityLm').hidden = !d.landmarks.length;
   $('cityLm').setAttribute('aria-pressed', String(showLm));
   $('cityLm').title = showLm ? 'Hide the landmarks' : 'Show the landmarks';
-  city.lines = drawCityMap($('cityMap'), { lines: d.lines, rivers: d.rivers, waterAreas: d.waterAreas, labels: d.labels, nodes: [...d.net.nodes.values()],
+  city.lines = drawCityMap($('cityMap'), { lines: d.lines, rivers: d.rivers, waterAreas: d.waterAreas, labels: d.labels.filter((lb) => !(lb.rank > 1) || $('cityMap').clientWidth >= 520 || (city.view?.k || 1) >= 1.5), nodes: d.simple ? [] : [...d.net.nodes.values()],
     landmarks: showLm ? d.landmarks : null, landmarkRank: landmarkRank(city.view?.k || 1, $('cityMap').clientWidth < 520),
     lit: city.goal === 'all' ? null : lit, route: city.sel ? d.paths.get(city.sel) : null, marked: city.seg, focus: city.focus,
     project: (lines, w, h, pad) => zoomProjection(fitProjection(lines, w, h, pad), w, h, city.view) });
@@ -1973,13 +1977,13 @@ function buildNetwork(base, url) {
   return netBuilds.get(url);
 }
 const graphNets = new Map();   // [pgh] a road graph's network by URL: its free ride and its routes share one
-const graphNetsDone = new Map(), graphMaps = new Map();   // (loaded: for the city card's map, which draws synchronously)
+const graphNetsDone = new Map(), graphMaps = new Map(), graphMapLabels = new Map();   // (loaded: for the city card's map, which draws synchronously)
 function graphNet(url, name) {
   if (!graphNets.has(url)) {
     graphNets.set(url, Promise.all([fetch(url).then((r) => r.json()), import('./graph.js')]).then(([json, { graphNetwork }]) => {
       const { base, network } = graphNetwork(json, { name });
       const net = loadNetwork(network, base);
-      graphNetsDone.set(url, net); if (json.map) graphMaps.set(url, json.map);
+      graphNetsDone.set(url, net); if (json.map) graphMaps.set(url, json.map); if (json.mapLabels) graphMapLabels.set(url, json.mapLabels);
       return net;
     }).catch((err) => { graphNets.delete(url); throw err; }));
   }
