@@ -29,8 +29,10 @@ import { makeAlpsPack } from './toolbox/packs/alps.js';
 import { makeNortheastPack } from './toolbox/packs/northeast.js';
 import { makeTreeCards } from './toolbox/vegetation/tree-cards.js';
 
-export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand: 5, plaza: 6, outside: 7, yards: 8,
-  corn: 10, grain: 14, hay: 18, farmyard: 19 };   // (CNY's fields: 10-13 corn and 14-17 grain, by the rows' heading)
+// (9 is the toolbox's pond; 10–12: a rural map's fields from WorldCover — tools/pgh_city.py rural_land, SKAN;
+// 20–29: CNY's fields — 20-23 corn and 24-27 grain by the rows' heading, 28 hay, 29 farmyard: pgh_city.py "the country")
+export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand: 5, plaza: 6, outside: 7, yards: 8, crops: 10, pasture: 11, wetland: 12,
+  corn: 20, grain: 24, hay: 28, farmyard: 29 };
 const TILE = 400;
 // how far the city is built, by quality (Low: phones)
 const REACH = { low: { near: 1300, far: 1800, trees: 0.6, treeNear: 450 }, balanced: { near: 2300, far: 3100, trees: 1, treeNear: 750 }, high: { near: 2300, far: 3100, trees: 1.2, treeNear: 900 } };
@@ -43,9 +45,9 @@ const TREE_MIX = {
 const TREE_FULL = { low: 60, balanced: 90, high: 130 }, TREE_LOD = { low: 200, balanced: 300, high: 380 };   // m: full model, then the 84-triangle one, then the 28
 const CAR_NEAR = 320;           // m: detailed parked cars within this
 const KIT_CFG = { detailM: 150, dressingM: 80, detailReachM: 550,
-  styles: [{ preset: 'pittsburgh-rowhouse', kinds: ['rowhouse'] }, { preset: 'pittsburgh-frame', kinds: ['house'] }] };
+  styles: [{ preset: 'pittsburgh-rowhouse', kinds: ['rowhouse'] }, { preset: 'pittsburgh-frame', kinds: ['house', 'barn', 'shed'] }] };
 /** Each road-graph city's homes (CNY: the suburbs' ranches and colonials, the villages' older houses, the farmhouses:
- *  presets.js cny-*; tools/pgh_city.py's zones give kinds 16 and 13). */
+ *  presets.js cny-*; tools/pgh_city.py's zones give kinds 23 and 20). */
 export const KIT_STYLES = { cny: [{ preset: 'cny-village', kinds: ['village-house'] }, { preset: 'cny-farmhouse', kinds: ['farmhouse-ny'] },
   { preset: 'cny-suburban', kinds: ['house', 'rowhouse'] }] };
 const ROADS = new Set(['primary', 'secondary', 'tertiary', 'residential', 'alley']);
@@ -162,7 +164,7 @@ export class GraphCity {
       cx /= ring.length; cz /= ring.length;
       const b = { k: this.buildings.length, ring, h: h[q] / 10, mh: mh[q] / 10, kind: B.kind[q], name: B.names[q] || '', bb: [x0, x1, z0, z1], cx, cz, sector: key };
       if (this.covered(b) || this._underDeck(b)) b.hidden = true;
-      if (b.kind === 14 || b.kind === 15 || b.kind === 17) b.ownModel = 'farm';   // CNY's barns: js/world/toolbox/city/cny-farms.js (_farms), not boxes
+      if (b.kind === 21 || b.kind === 22 || b.kind === 24) b.ownModel = 'farm';   // CNY's barns: js/world/toolbox/city/cny-farms.js (_farms), not boxes
       this.buildings.push(b); mine.push(b);
       const tk = `${Math.floor(cx / TILE)},${Math.floor(cz / TILE)}`;
       if (!host.buildingChunks.has(tk)) host.buildingChunks.set(tk, []); host.buildingChunks.get(tk).push(b);
@@ -193,7 +195,7 @@ export class GraphCity {
       });
     }
     // the homes' plan: rowhouses and houses (the kit's), the rest as neighbours
-    const kinds = { 0: 'rowhouse', 1: 'house', 13: 'farmhouse-ny', 16: 'village-house' }, homes = [], neighbours = [];
+    const kinds = { 0: 'rowhouse', 1: 'house', 13: 'barn', 14: 'shed', 20: 'farmhouse-ny', 23: 'village-house' }, homes = [], neighbours = [];   // (13, 14: a rural map's barns and sheds, SKAN; 20, 23: CNY's farmhouses and village houses)
     for (const b of mine) {
       if (due()) yield;
       if (b.kind === 12 || b.hidden) continue;
@@ -522,7 +524,10 @@ export class GraphCity {
       if (z === z0 + step / 2 && due()) yield;
       const h1 = hash(Math.round(x * 3.1) * 92821 + Math.round(z * 1.7)), jx = x + (h1 - 0.5) * step * 0.9, jz = z + (hash(Math.round(x * 5.3) + Math.round(z * 7.9) * 31) - 0.5) * step * 0.9;
       const c = this.landAt(jx, jz);
-      const p = c === LAND.woods ? 0.85 : c === LAND.outside ? 0.45 : c === LAND.yards ? 0.1 : c === LAND.grass ? 0.06 : c === LAND.paved ? 0.008 : 0;
+      // (a rural map: no trees in the crops, a lone one in the pasture, scrub in the wetland — the hedgerows and woodlots
+      // are WorldCover's own tree cover, so the woods code)
+      const p = c === LAND.woods ? 0.85 : c === LAND.outside ? 0.45 : c === LAND.yards ? 0.1 : c === LAND.grass ? 0.06 : c === LAND.paved ? 0.008
+        : c === LAND.wetland ? 0.22 : c === LAND.pasture ? 0.01 : 0;
       if (h1 >= p * this.q.trees) continue;
       if (!ok(jx, jz, 2.2, 3)) continue;
       spots.push({ x: jx, z: jz, seed: hash(Math.round(jx * 11) + Math.round(jz * 13) * 7), wood: c === LAND.woods || c === LAND.outside });

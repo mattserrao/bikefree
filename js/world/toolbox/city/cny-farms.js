@@ -1,13 +1,13 @@
 // CNY's farms (user, 22 Nov: "find which areas are villages, suburbs, and farms. A lot of land is farmland and requires
-// new texture and models"): the barns and silos tools/pgh_city.py finds in the farm zone (kinds 14, 15), built on their
+// new texture and models"): the barns and silos tools/pgh_city.py finds in the farm zone (kinds 21, 22, 24), built on their
 // OSM footprints into a tile's street-kit mesh (js/world/graph-city.js _farms).
 //
-//   barn (14)       a dairy barn of central New York: boards painted barn red (some weathered grey, a few white), white
+//   barn (21)       a dairy barn of central New York: boards painted barn red (some weathered grey, a few white), white
 //                   corner boards, a gambrel roof (a gable on the narrow ones) of grey metal or dark shingle, big doors
 //                   with a white X on the gable end and a hay door above, a cupola on the long ones; beside many, one or
 //                   two silos — concrete staves with a domed cap, or a blue glass-lined Harvestore
-//   shed (17)       a farm's small outbuilding: a low gable of boards, red or grey
-//   long barn (15)  a free-stall barn: long and low, white metal, a shallow roof with a ridge vent, the curtain sides
+//   shed (24)       a farm's small outbuilding: a low gable of boards, red or grey
+//   long barn (22)  a free-stall barn: long and low, white metal, a shallow roof with a ridge vent, the curtain sides
 //                   a dark band
 import * as THREE from '../../../../vendor/three.module.min.js';
 import { hash } from '../core/mesh-builder.js';
@@ -49,7 +49,7 @@ const ROOFS = ['#6e7275', '#5d6266', '#4a4d50', '#3f4a3f', '#7a7f82'];
 const TRIM = '#efece4';
 
 /**
- * Barn (kind 14) or long barn (kind 15) on footprint b (its ring in world x, z), standing on the ground L.heightAt.
+ * Barn (kind 21), long barn (kind 22) or shed (kind 24) on footprint b (its ring in world x, z), standing on the ground L.heightAt.
  * Returns the number of silos drawn.
  */
 export function farmBuilding(M, b, L) {
@@ -64,7 +64,7 @@ export function farmBuilding(M, b, L) {
   for (const [a, c] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) g0 = Math.min(g0, L.heightAt(F.at(a * R.hu, c * R.hv, 0).x, F.at(a * R.hu, c * R.hv, 0).z));
   const y0 = g0 - 0.4;
   M.set({ aGlow: [0] });
-  const long = b.kind === 15, shed = b.kind === 17;
+  const long = b.kind === 22, shed = b.kind === 24;
   const hu = R.hu, hv = R.hv, W = hv * 2;
   // walls
   const wallH = shed ? 2.5 + s2 * .6 : long ? 3.4 + s2 * .6 : Math.min(6.2, Math.max(3.6, W * .34 + s2 * .8));

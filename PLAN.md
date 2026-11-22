@@ -1704,12 +1704,12 @@ Branch `cny-test` (PGH's PR #42 merged first). Built with PGH's own tools, now t
   village 2 %, suburb 36 %, farm 62 %.
 - Fields: the farms' open flat land (and OSM's farmland and meadows anywhere), split by roads into blocks, each cut
   along its long axis into fields of 170-330 m (strips offset, not a chequerboard), some with a hedgerow between
-  (woods, one cell: trees). Land codes 10-13 corn and 14-17 grain stubble (the code gives the rows' heading), 18 hay
-  and pasture, 19 farmyard. The ground shader draws crop rows across each field, faded with distance; ~47 % of the land.
+  (woods, one cell: trees). Land codes 20-23 corn and 24-27 grain stubble (the code gives the rows' heading), 28 hay
+  and pasture, 29 farmyard (SKAN's WorldCover fields are 10-12). The ground shader draws crop rows across each field, faded with distance; ~47 % of the land.
 - Buildings: farmsteads (buildings within 70 m of each other in the farm zone): the house (tagged, or house-sized and
-  nearest the road) a farmhouse (kind 13, preset `cny-farmhouse`: white clapboard, steep gable, porch, lean-to) when it
-  has a barn; the rest barns (14), long free-stall barns (15, over 900 m²) or sheds (17, under 90 m²). Village houses
-  (16, preset `cny-village`: two storeys, gable to the street, front porches, older colours). 58 farmhouses, 120
+  nearest the road) a farmhouse (kind 20, preset `cny-farmhouse`: white clapboard, steep gable, porch, lean-to) when it
+  has a barn; the rest barns (21), long free-stall barns (22, over 900 m²) or sheds (24, under 90 m²). Village houses
+  (23, preset `cny-village`: two storeys, gable to the street, front porches, older colours). 58 farmhouses, 120
   barns, 107 sheds, 751 village houses.
 - `js/world/toolbox/city/cny-farms.js`: barns on their footprints — barn red boards (some grey or white), white corner
   boards, gambrel or gable roofs of metal or shingle, doors with a white X and a hay door, cupolas; concrete stave or
@@ -1732,6 +1732,31 @@ Branch `cny-test` (PGH's PR #42 merged first). Built with PGH's own tools, now t
   towpath (up to 16 m from OSM's line, the canal at most 19 m), its level taken over its real width (the trail's fill
   had hidden the near water); murky blue-green-black water with a little scum. graph-heroes.js `landscape.wayDist`:
   distance to the nearest way by segments.
+
+### SKAN — a third free-ride map: Skaneateles, Marcellus and the two lakes *(user, 22 Nov: a map "focused around Skaneateles and Marcellus", then "extend so there is a route down and around Skaneatles lake, with the map extending right so there is a route around Otisco lake as well"; "There is a lot of farmland, forests, rural housing, then villages / towns. Ensure these are accurate")*
+Branch `skan-test`. Plan and review maps in the Project doc claude/skan-map.md. Built with PGH's tools (`--city skan`):
+- `tools/city/skan.json`: the area is a 6 km circle round Skaneateles and Marcellus **plus 800 m corridors** along the
+  Skaneateles Lake loop, the Otisco Lake loop and the Marcellus–Otisco link (`area.lines` →
+  `tools/city/skan-area-lines.json`; `ShapeArea` in tools/build_pgh.py, a 20 m distance raster; `trim_to_circle` trims
+  to the whole shape). US 20 (trunk) is ridden as the villages' main street (`roads.trunk`, no `connectors`); the
+  "turn slip / link" rule no longer cuts a ridden trunk's short pieces. The lakes are `pools` (Skaneateles 263 m,
+  Otisco 240 m) in non-overlapping bands along each lake, `dam: false` (graph-world.js draws no dam face for them).
+- `python3 tools/build_pgh.py --city skan` → `routes/cities/skan.json` (320 junctions, 503 ways, 443 km), `skan-ground`
+  (24 m). QC (`node tools/qc_pgh.mjs routes/cities/skan.json --rides 200`): 0 fails, 0 warnings, 0 dead ends.
+- `python3 tools/pgh_city.py --city skan` → 12,326 buildings and the land cover, **rural**: `landCover: worldcover`
+  (tools/citylib/landcover.py: ESA WorldCover 10 m 2021, cached in tools/.cache/worldcover) decides fields, pasture and
+  hay, forest and wetland (OSM's own homes, works, parks and water on top; its coarse farmland/wood areas ignored).
+  New land codes 10 crops, 11 pasture/hay, 12 wetland (graph-city.js LAND; the ground shader draws crops field by field
+  — corn, soybeans, hay, stubble, ploughed — with their rows; no trees in crops, a lone one in pasture). Villages are
+  where houses stand close (yards, sidewalks, street trees and lamps); out in the country a footprint is a farmhouse
+  (lawn round it), a barn (kind 13, a farmyard round it) or a shed (kind 14), by size — barns and sheds now go through
+  the building kit. `landM` 10 and `cityUnit` 5e-6 (the 33 km box: a phone's 4096-texel limit, Int16 coordinates).
+- `node tools/pgh_routes.mjs --city skan --write` → seven routes, all checks ok: Skaneateles Lakeshore (12.0 km, 157 m),
+  Charlie Major Trail & Skaneateles Falls (14.0 km, 121 m), Seneca Turnpike: Skaneateles to Marcellus (21.1 km, 353 m),
+  Marcellus Falls & Nine Mile Creek (6.0 km, 88 m), Bishop Hill Climb (11.0 km, 219 m), Skaneateles Lake Loop
+  (58.1 km, 814 m), Otisco Lake Loop (26.6 km, 374 m).
+- App: `GRAPH_CITIES` — SKAN a card beside PGH and CNY. `npm run skan:build` rebuilds it all; `tools/pgh-editor.html?map=skan`
+  edits it. Tests: test/skan.test.mjs.
 
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
