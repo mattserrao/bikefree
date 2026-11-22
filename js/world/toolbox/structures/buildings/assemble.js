@@ -202,7 +202,7 @@ function body(ctx, r, k) {
       const barn = sg.barn || endIsBarn;
       const sl = Math.hypot(sg.q[0] - sg.p[0], sg.q[1] - sg.p[1]);
       const ws = barn ? W.BARN : set;
-      const bb = bays(sl, ws);
+      const bb = bays(sl, ws, ws === set ? R.bayM : 0);
       // the door: the middle bay of the front (village houses: any bay), barns: the middle
       const doorBay = doorBayOf(R, bb.n, barn, isFront, i);
       let flags = 0;
@@ -294,7 +294,7 @@ export function frontSegment(R) {
   const sg = segs.find((x) => !x.barn) || segs[0];
   const len = Math.hypot(sg.q[0] - sg.p[0], sg.q[1] - sg.p[1]);
   const t = [(sg.q[0] - sg.p[0]) / len, (sg.q[1] - sg.p[1]) / len];
-  return { p: sg.p, q: sg.q, len, t, n: [-t[1], t[0]], bays: bays(len, R.windows) };
+  return { p: sg.p, q: sg.q, len, t, n: [-t[1], t[0]], bays: bays(len, R.windows, R.bayM) };
 }
 
 function gable(ctx, r, p, q, len, k, i) {
@@ -691,8 +691,8 @@ function parts(ctx) {
     const along = i % 2 === 0 ? r.hu : r.hv, out = (i % 2 === 0 ? r.hv : r.hu) + .04;
     const wS = 1.5, hS = 1.8, y0 = top - hS - .35;
     const c = R.seed * 9.1 % 1 > .5 ? .5 : -.5;   // between two windows
-    const bw = bays(2 * along, R.windows).w;
-    const a = Math.round(c) * bw * .5 + (Math.floor(bays(2 * along, R.windows).n / 2) % 2 ? bw * .5 : 0);
+    const bw = bays(2 * along, R.windows, R.bayM).w;
+    const a = Math.round(c) * bw * .5 + (Math.floor(bays(2 * along, R.windows, R.bayM).n / 2) % 2 ? bw * .5 : 0);
     const A = Math.max(-along + wS / 2 + .2, Math.min(along - wS / 2 - .2, a));
     const pa = i % 2 === 0 ? corner(r, A - wS / 2, s * out) : corner(r, s * out, A - wS / 2), pb = i % 2 === 0 ? corner(r, A + wS / 2, s * out) : corner(r, s * out, A + wS / 2);
     let p = pa, q = pb; if (!outward(p, q, r.cx, r.cz)) [p, q] = [q, p];
@@ -779,7 +779,7 @@ function outlineBuilding(R, w, L, wall, roofC, st) {
     let p = pts[i], q = pts[(i + 1) % pts.length];
     if (!outward(p, q, cx, cz)) [p, q] = [q, p];
     const len = Math.hypot(q[0] - p[0], q[1] - p[1]);
-    const bb = bays(len, R.windows);
+    const bb = bays(len, R.windows, R.bayM);
     w.set({ code: R.wall, col: toU8(wall), win: len > 2 ? [R.floorH, bb.w, gv - lo, R.windows + 16 * 15 + 256 * ((R.shutters ? F.SHUTTERS : 0) | F.SPARSE)] : [0, 0, 0, 0], L: len });
     w.wall(p, q, lo, top, 0, lo);
   }

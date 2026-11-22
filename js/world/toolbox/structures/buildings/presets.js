@@ -184,6 +184,30 @@ export const STYLE_PRESETS = {
     sundial: 0, shops: 0, ivy: .06, age: [.3, 1], upkeep: [.3, .95], stone: '#a9a294',
     dressing: { steps: 1, shrubs: .5, bins: .55, bench: .15, pots: .4, garden: .08, fence: .3, laundry: .03, dish: .25, hay: 0, bikes: .12, trough: 0 },
   },
+  // CNY's suburbs (user, 22 Nov: "houses are also too generic and have far too many windows"): Camillus, Fairmount and
+  // Warners — ranches and two-storey colonials of vinyl siding in the usual pale colours, some brick fronts, shutters,
+  // attached garages, low gable and hip roofs of asphalt shingle; a window every ~4.4 m, not every 2.6 m
+  'cny-suburban': {
+    archetypes: { cottage: 1, village: .12, farmhouse: .2, chalet: 0, mazot: 0, block: 0, shed: .5 },
+    schemes: [
+      { wall: '#eceae3', trim: '#2f3a44', frame: '#f6f5f0', accent: '#f6f5f0' },   // white, black shutters
+      { wall: '#d9cfb8', trim: '#5b4636', frame: '#f6f5f0', accent: '#f1ece0' },   // almond
+      { wall: '#c6c9c7', trim: '#2b3a4c', frame: '#f6f5f0', accent: '#f6f5f0' },   // light grey
+      { wall: '#aab9c5', trim: '#f2f0ea', frame: '#f6f5f0', accent: '#f2f0ea' },   // pale blue
+      { wall: '#bcc4a9', trim: '#3f4a36', frame: '#f6f5f0', accent: '#f6f5f0' },   // sage
+      { wall: '#e3d7a9', trim: '#3d4f3a', frame: '#f6f5f0', accent: '#f6f5f0' },   // butter yellow
+      { wall: '#8494a3', trim: '#f2f0ea', frame: '#f6f5f0', accent: '#f2f0ea' },   // slate blue
+      { wall: '#c8b394', trim: '#4a3b30', frame: '#f6f5f0', accent: '#efe8da' },   // tan
+      { wall: '#7d8a7c', trim: '#f2f0ea', frame: '#f6f5f0', accent: '#f2f0ea' },   // dark sage
+    ],
+    walls: { lap: .78, brick: .1, shingle: .07, render: .05 }, plinth: .3, gable: { lap: .2, shingle: .1 }, barn: { boards: 1 },
+    roofs: { asphalt: .95, seam: .05 }, forms: { gable: .6, hip: .34, halfHip: .06 }, pitch: 27, pitchJitter: 7, eaveM: .4, rakeM: .3,
+    windows: 'sash', bayM: 4.4, ranch: .45, maxFloors: 2,
+    shutters: .5, surrounds: 0, lintels: 0, quoins: 0, flowerBoxes: .02, genoise: 0, frontEnd: .15,
+    balconies: 0, galleries: 0, dormers: .1, chimneys: .35, solar: .06, leanTo: .05, garage: .55, porch: .25, frontPorch: .35, stair: 0, woodpile: .03,
+    sundial: 0, shops: 0, ivy: .02, age: [.1, .7], upkeep: [.55, 1], stone: '#b9b4a8',
+    dressing: { steps: 1, shrubs: .7, bins: .5, bench: .05, pots: .2, garden: .12, fence: .15, laundry: 0, dish: .2, hay: 0, bikes: .1, trough: 0 },
+  },
 };
 
 /** The style for one stretch: defaults ← preset ← the scene's own keys. */

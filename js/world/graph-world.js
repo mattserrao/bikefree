@@ -1344,8 +1344,12 @@ function groundMaterial(low = false) {
           float k = floor(texture2D(uLand, uv).r * 255. + .5);
           float n = gwN(vGW.xz * .35);
           #else
-          vec2 uv = (vGW.xz - uLandBox.xy) / size + (vec2(gwN(vGW.xz * .21), gwN(vGW.xz * .21 + 19.)) - .5) * 4. / size;
+          vec2 uv0 = (vGW.xz - uLandBox.xy) / size, uv = uv0 + (vec2(gwN(vGW.xz * .21), gwN(vGW.xz * .21 + 19.)) - .5) * 4. / size;
           float k = floor(texture2D(uLand, uv).r * 255. + .5);
+          // water isn't wobbled: a canal or a creek is only a few cells wide, and the wobble broke it into pools
+          // (user, 22 Nov: "the water in the canal … is cutting out")
+          float k0 = floor(texture2D(uLand, uv0).r * 255. + .5);
+          if (k0 > 2.5 && k0 < 3.5) k = 3.; else if (k > 2.5 && k < 3.5) k = k0;
           float n = gwN(vGW.xz * .35) * .6 + gwN(vGW.xz * 2.3) * .4;
           #endif
           vec3 lc = vec3(-1.);
@@ -1361,6 +1365,6 @@ function groundMaterial(low = false) {
           if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vLandW * .85);
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-2${low ? '-low' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-3${low ? '-low' : ''}`;
   return m;
 }

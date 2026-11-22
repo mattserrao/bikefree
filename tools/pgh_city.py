@@ -145,7 +145,7 @@ def main():
     # the waterways OSM draws as lines (no area): CNY's Erie Canal, Nine Mile Creek — water at their width (PGH's rivers
     # are areas, under its water plane)
     if CITY != 'pgh':
-        WIDE = {'canal': 14, 'river': 16, 'stream': 4}
+        WIDE = {'river': 16, 'stream': 4}   # (the canal: a ribbon of water of its own, tools/cny_heroes.py)
         nw_ = 0
         for wid, (nd, t) in ways.items():
             w_m = WIDE.get(t.get('waterway')); 
@@ -210,6 +210,11 @@ def main():
             h = {'house': 8.5, 'detached': 8.5, 'semidetached_house': 9, 'terrace': 10, 'residential': 10.5, 'apartments': 14,
                  'garage': 3.2, 'garages': 3.2, 'shed': 3, 'commercial': 9, 'retail': 7.5, 'industrial': 9.5, 'warehouse': 10,
                  'church': 16, 'school': 11, 'hospital': 20, 'office': 18, 'parking': 12, 'hotel': 24}.get(b, 9.5)
+            if CITY != 'pgh' and b in ('yes', 'roof', 'shed', 'garage', 'garages', 'service', 'industrial', 'warehouse', 'commercial', 'retail', 'barn', 'farm_auxiliary'):
+                # (a suburb: an untagged shed or pavilion is one low storey, a store one tall one — not Pittsburgh's 9.5 m)
+                pts_ = pts
+                a_ = abs(sum(pts_[i][1] * kx * pts_[i - 1][0] * ky - pts_[i - 1][1] * kx * pts_[i][0] * ky for i in range(len(pts_)))) / 2 if len(pts_) > 2 else 0
+                h = 3.2 if a_ < 60 else 4.6 if a_ < 400 else 6.5 if a_ < 2500 else 8
             h *= 0.9 + (int(wid.strip('r').split('_')[0]) % 7) * 0.04
         if name in special: kind = special[name]
         elif b in ('church', 'cathedral', 'chapel') or t.get('amenity') == 'place_of_worship': kind = 7
@@ -223,7 +228,7 @@ def main():
             px_, py_ = pix(clat, clon)
             res = 0 <= px_ < lx and 0 <= py_ < ly and img.getpixel((int(px_), int(py_))) in (8, UNTAGGED)
             area_m2 = abs(sum(a[1] * b_[0] - b_[1] * a[0] for a, b_ in zip(pts, pts[1:] + pts[:1])) / 2 * kx * ky)
-            if CITY != 'pgh': kind = 1 if res and area_m2 < 400 else 2   # (a suburb: detached houses among the homes, not rowhouses)
+            if CITY != 'pgh': kind = 1 if area_m2 < 300 or (res and area_m2 < 400) else 2   # (a suburb or a village: detached houses, not rowhouses or blocks)
             elif res and area_m2 < 220: kind = 0 if (clat < 40.4335 and clon > -79.997) or (int(''.join(ch for ch in wid if ch.isdigit()) or 0) % 3 == 0) else 1
             else: kind = 0 if clat < 40.4335 and clon > -79.997 else 2
         lp = [loc(*p) for p in pts]

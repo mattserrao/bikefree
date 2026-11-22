@@ -1683,6 +1683,20 @@ Branch `cny-test` (PGH's PR #42 merged first). Built with PGH's own tools, now t
 - App: `GRAPH_CITIES` in js/app.js — PGH and CNY each a card. `npm run cny:build` rebuilds it all;
   `tools/pgh-editor.html?map=cny` edits it. Tests: test/cny.test.mjs.
 
+### CNY landmarks and houses *(user, 22 Nov: "Generate a list of landmarks in CNY. Then, work through improving these. In general, houses are also too generic and have far too many windows")*
+- `tools/cny_heroes.py` → `routes/cities/cny-heroes.json` (each on its OSM outline); `js/world/toolbox/city/cny-landmarks.js`
+  (merged into the landmark builder): the Nine Mile Creek Aqueduct (four Roman arches of stone, segmental where the
+  ground's grid is shallow; the timber trunk with water; the trail's own deck as the towpath — `deckNear` in
+  js/world/graph-heroes.js), Sims' Store and the steam engine house, the Wilcox Octagon House, the canal boat, the
+  Finger Lakes Railway bridge over Genesee Street, the Maxwell Memorial Library, the Warners firehouse; the churches
+  (Camillus First Baptist, Warners United Methodist, Our Lady of Good Counsel) by the church builder; the Erie Canal's
+  water as ribbons along OSM's line (user: "the water in the canal … is cutting out" — the land cover's wobble broke
+  narrow water into pools: water is no longer wobbled, and the canal is its own surface).
+- Houses: preset `cny-suburban` (vinyl siding colours, shutters, garages, low gable and hip roofs; `bayM` 4.4 m between
+  windows instead of 2.6 m; `ranch` share of one storey, `maxFloors` 2 — new style keys in recipe.js). CNY building
+  heights from footprint size (sheds 3.2 m, small 4.6 m, stores 6.5 m), untagged buildings under 300 m² as houses.
+- Next (user, 22 Nov): **which areas are villages, suburbs and farms**; farmland needs its own texture and models.
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

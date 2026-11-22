@@ -10,6 +10,7 @@ import { MeshBuilder } from '../core/mesh-builder.js';
 import { V, TAU, centroid, scaleRing, orient, prism, cap, block, chamfer, frameOf, makeFrame, lathe, disc, gable } from './hero-geom.js';
 import { buildStadiums } from './bridges.js';
 import { glasshouseFrame } from '../structures/glasshouse.js';
+import { cnyLandmarkModels } from './cny-landmarks.js';   // (CNY's: the aqueduct, Sims' Store, the Octagon House…)
 
 export function buildPghLandmarks(host, data) {
   const L = host.landscape, proj = host.D.proj;
@@ -326,6 +327,7 @@ export function buildPghLandmarks(host, data) {
     },
   };
 
+  Object.assign(M, cnyLandmarkModels({ S, N, glows, plan, ground, local, L }));
   for (const l of data.landmarks || []) {
     const f = M[l.model];
     if (!f) continue;

@@ -65,3 +65,22 @@ test('the app lists CNY as its own card beside PGH (js/app.js GRAPH_CITIES)', ()
   assert.match(app, /\{ id: 'cny', name: 'CNY', park: 'Camillus, NY'/);
   assert.match(app, /routes\/cities\/\$\{c\.id\}-presets\.json/);
 });
+
+test('CNY\'s landmarks (tools/cny_heroes.py): the aqueduct, Sims\' Store, the Octagon House, the churches, the canal\'s water', async () => {
+  const h = JSON.parse(readFileSync(new URL('../routes/cities/cny-heroes.json', import.meta.url), 'utf8'));
+  const models = new Set(h.landmarks.map((l) => l.model));
+  for (const m of ['aqueduct', 'canalstore', 'octagon', 'railbridge', 'canal']) assert.ok(models.has(m), m);
+  assert.ok(h.heroes.filter((x) => x.model === 'church').length >= 3);
+  const { cnyLandmarkModels } = await import('../js/world/toolbox/city/cny-landmarks.js');
+  const M = cnyLandmarkModels({ S: {}, N: {}, glows: [], plan: () => ({}), ground: () => 0, local: () => ({ x: 0, z: 0 }), L: {} });
+  for (const l of h.landmarks) assert.equal(typeof M[l.model], 'function', `no model for ${l.model}`);
+});
+
+test('CNY\'s houses: the suburban style (fewer windows, ranches and colonials) and building heights from their size', async () => {
+  const { STYLE_PRESETS } = await import('../js/world/toolbox/structures/buildings/presets.js');
+  const { bays } = await import('../js/world/toolbox/structures/buildings/recipe.js');
+  const st = STYLE_PRESETS['cny-suburban'];
+  assert.ok(st.bayM >= 4 && st.maxFloors === 2 && st.ranch > 0);
+  assert.ok(bays(13.2, 7, st.bayM).n < bays(13.2, 7).n, 'fewer windows along a wall than the default sash bay');
+  assert.equal(bays(13.2, 7).n, 5);   // (PGH's houses unchanged)
+});

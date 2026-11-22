@@ -42,6 +42,8 @@ const TREE_FULL = { low: 60, balanced: 90, high: 130 }, TREE_LOD = { low: 200, b
 const CAR_NEAR = 320;           // m: detailed parked cars within this
 const KIT_CFG = { detailM: 150, dressingM: 80, detailReachM: 550,
   styles: [{ preset: 'pittsburgh-rowhouse', kinds: ['rowhouse'] }, { preset: 'pittsburgh-frame', kinds: ['house'] }] };
+/** Each road-graph city's homes (CNY: the suburbs' ranches and colonials, presets.js cny-suburban). */
+export const KIT_STYLES = { cny: [{ preset: 'cny-suburban', kinds: ['house', 'rowhouse'] }] };
 const ROADS = new Set(['primary', 'secondary', 'tertiary', 'residential', 'alley']);
 const MAIN = new Set(['primary', 'secondary', 'tertiary']);
 const POINT_FN = { signal: 'signal', bus_stop: 'busSign', bench: 'bench', hydrant: 'hydrant', bike_rack: 'bikeRack', waste: 'waste', picnic: 'picnic',
@@ -106,7 +108,7 @@ export class GraphCity {
     }
     host.index = { xs: Float64Array.from(xs), zs: Float64Array.from(zs), nearest: () => null };
     this.kitStreets = makeStreetIndex(lines);
-    this.kitScene = { ...host.route.scene, buildingKit: KIT_CFG };
+    this.kitScene = { ...host.route.scene, buildingKit: { ...KIT_CFG, styles: KIT_STYLES[world.json?.id] || KIT_CFG.styles } };
     this.kit = this._kitAdapter();
     host.buildingKit = this.kit;
     this._materials();
