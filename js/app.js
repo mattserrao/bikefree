@@ -1493,13 +1493,12 @@ async function loadParks() {
   }
   // [pgh] free-ride road graphs: listed as routes of their own (their data loads only when picked)
   for (const g of GRAPH_ITEMS) netItems.push({ ...g });
-  // …and the Pittsburgh routes mapped onto PGH: those that follow their original ≥ 90 % of the way are listed with the
-  // routes; the rest stay in Rough Drafts, marked approximate (they lean on roads PGH doesn't have: the subway, the
-  // West End Bridge and Point approaches)
+  // …and PGH's routes (tools/pgh_routes.mjs: a few laid out on PGH itself). A route mapped from elsewhere that follows
+  // its original less than 90 % of the way (followPct) stays in Rough Drafts, marked approximate
   try {
     const list = await (await fetch('routes/cities/pgh-presets.json')).json();
     for (const pr of list) {
-      const good = (pr.followPct ?? 0) >= 90;
+      const good = pr.followPct == null || pr.followPct >= 90;
       netItems.push({ id: `builtin-graph-${pr.id}`, routeId: pr.id, kind: 'route', name: `PGH · ${pr.name}${good ? '' : ' (approximate)'}`, park: 'Pittsburgh, PA', baseId: PGH_BASE,
         group: 'Scenic routes — 3D', ...(good ? {} : { stage: 'draft' }), network: 'routes/cities/pgh.json', graph: true, preset: pr.id, tags: pr.tags || [],
         note: (good ? '' : `Approximate: follows ${pr.followPct}% of the original route (PGH lacks some of its roads). `) + (pr.note || ''), lengthM: pr.lengthM, climbM: pr.climbM });
@@ -1992,7 +1991,7 @@ function graphNet(url, name) {
 async function loadRouteItemNow(item) {
   if (item.graph) {
     // [pgh] a free-ride road graph (js/graph.js): every edge on a synthetic base line, ridden by the network machinery;
-    // its routes (the Pittsburgh routes mapped onto it: tools/map_pgh_routes.mjs) are presets of the same network
+    // its routes (laid out on it: tools/pgh_routes.mjs) are presets of the same network
     const net = await graphNet(item.network, 'PGH');
     const preset = item.preset ? net.json.presets.find((x) => x.id === item.preset) : null;
     if (item.preset && !preset) throw new Error(`${item.name} is not in the PGH map any more`);

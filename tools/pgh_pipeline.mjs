@@ -15,7 +15,7 @@ const run = (cmd, quiet = false) => {
   console.log(`· ${cmd.replace(/^node tools\/|^python3 tools\//, '')} (${((Date.now() - t0) / 1000).toFixed(0)} s)${quiet ? '' : '\n    ' + lines.slice(-2).join('\n    ')}`);
   return out;
 };
-const map = () => run('node tools/map_pgh_routes.mjs --write', true);
+const map = () => run('node tools/pgh_routes.mjs --write', true);   // (PGH's routes, laid out on PGH: tools/pgh_routes.mjs)
 const separations = () => {
   for (let k = 0; k < 4; k++) {
     const out = run('node tools/pgh_crossings.mjs');

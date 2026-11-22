@@ -64,12 +64,12 @@ test('the start is the configured spot (PNC Park / the North Shore) and junction
   assert.ok(optionsAt(loadNetwork(net.network, net.base), { e: loadNetwork(net.network, net.base).edges.get('e0'), dir: 1 }).length >= 1);
 });
 
-test('the Pittsburgh routes mapped onto PGH: each a closed plan over PGH\'s own ways, listed in pgh-presets.json', () => {
+test('PGH\'s routes (tools/pgh_routes.mjs): each a closed plan over PGH\'s own ways, listed in pgh-presets.json', () => {
   const list = JSON.parse(readFileSync(new URL('../routes/cities/pgh-presets.json', import.meta.url), 'utf8'));
   const { base, network } = graphNetwork(json);
   const net = loadNetwork(network, base);
   assert.equal(net.presets.length, list.length);
-  assert.ok(list.length >= 40);
+  assert.ok(list.length >= 5);
   for (const p of net.presets) {
     assert.ok(planCloses(net, p.path), `${p.name} does not close`);
     const r = makePathRoute(net, p);
