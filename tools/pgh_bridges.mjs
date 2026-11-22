@@ -23,7 +23,7 @@ const BRIDGES = [
   { name: 'Roberto Clemente Bridge', style: 'sister', color: GOLD, width: 11, lengthM: 269, mainM: 131, note: 'Sixth Street, 1928: self-anchored eyebar suspension, three spans (68.5 + 131 + 68.5 m)' },
   { name: 'Andy Warhol Bridge', style: 'sister', color: GOLD, width: 11, lengthM: 269, mainM: 131, note: 'Seventh Street, 1926' },
   { name: 'Rachel Carson Bridge', style: 'sister', color: GOLD, width: 11, lengthM: 256, mainM: 131, note: 'Ninth Street, 1927' },
-  { name: 'Fort Duquesne Bridge', style: 'tied-arch', color: GOLD, width: 22, decks: 2, riseM: 32, note: '1969: double-deck steel tied (bowstring) arch, 130 m' },
+  { name: 'Fort Duquesne Bridge', style: 'tied-arch', color: GOLD, width: 22, riseM: 32, note: '1969: double-deck steel tied (bowstring) arch, 130 m; drawn single-deck (user, 22 Nov: "the lower deck removed")' },
   { name: 'Veterans Bridge', style: 'girder', color: '#6f8796', width: 26, note: '1987: continuous steel girders on concrete piers' },
   { name: 'David McCullough Bridge', style: 'through-arch', color: GOLD, width: 14, pylons: 'sphere', note: '16th Street, 1923: steel arches, granite pylons with bronze armillary spheres and winged horses' },
   { name: '31st Street Bridge', style: 'through-arch', color: GOLD, width: 13, note: '1928: steel through arch' },
