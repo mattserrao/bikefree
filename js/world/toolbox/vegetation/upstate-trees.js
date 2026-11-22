@@ -71,6 +71,8 @@ function tube(pts, radii, seg) {
  *   lod 2: trunk + crown masses
  * o (species): H, R, trunkR, levels' children / angle / length, gnarl, up (gravitropism), droop, leader, flat, stems.
  */
+// wood thickness: trunks and limbs twice the old build (user: ~100% beefier); foliage unchanged
+const BEEF = 2;
 function grow(seed, o, lod, turn, lodScale = 1) {
   const rand = randomSequence(seed), H = o.H, R = o.R;
   const wood = new Builder(); wood.as(o.bark);
@@ -82,8 +84,8 @@ function grow(seed, o, lod, turn, lodScale = 1) {
   const stems = o.stems || 1;
   for (let s = 0; s < stems; s++) {
     const a = s * 2.4 + rand(), tilt = stems > 1 ? .12 + rand() * .08 : rand() * .04;
-    queue.push({ level: 0, p: new THREE.Vector3(stems > 1 ? Math.cos(a) * .3 : 0, 0, stems > 1 ? Math.sin(a) * .3 : 0), d: new THREE.Vector3(Math.cos(a) * Math.sin(tilt), Math.cos(tilt), Math.sin(a) * Math.sin(tilt)),
-      len: H * (o.leader ? .86 : o.fork + .08) * (stems > 1 ? .95 : 1), r: o.trunkR * (stems > 1 ? .75 : 1) });
+    queue.push({ level: 0, p: new THREE.Vector3(stems > 1 ? Math.cos(a) * .45 : 0, 0, stems > 1 ? Math.sin(a) * .45 : 0), d: new THREE.Vector3(Math.cos(a) * Math.sin(tilt), Math.cos(tilt), Math.sin(a) * Math.sin(tilt)),
+      len: H * (o.leader ? .86 : o.fork + .08) * (stems > 1 ? .95 : 1), r: o.trunkR * BEEF * (stems > 1 ? .75 : 1) });
   }
   const L = o.levels;   // per level (1..3): [children, start (0–1 up the parent), angle (rad from the parent), length ratio]
   while (queue.length) {
@@ -94,7 +96,7 @@ function grow(seed, o, lod, turn, lodScale = 1) {
     const step = br.len / sections;
     for (let i = 1; i <= sections; i++) {
       // gnarliness: thin branches wander more; gravitropism: pulled toward the light (or hanging: willow)
-      const g = o.gnarl * (lv ? 1 : .35) / Math.max(.25, br.r * 4);
+      const g = o.gnarl * (lv ? 1 : .35) / Math.max(.25, br.r / BEEF * 4);
       d.x += (rand() - .5) * g; d.z += (rand() - .5) * g; d.y += (rand() - .5) * g * .5;
       d.lerp(o.droop && lv >= 2 ? new THREE.Vector3(d.x, -1, d.z).normalize() : up, (o.droop && lv >= 2 ? .18 : o.up) * (lv ? 1 : .3)).normalize();
       p = p.clone().addScaledVector(d, step);
@@ -118,7 +120,7 @@ function grow(seed, o, lod, turn, lodScale = 1) {
         const ang = angle * (.8 + rand() * .4);
         const nd = cd.clone().multiplyScalar(Math.cos(ang)).addScaledVector(out, Math.sin(ang)).normalize();
         const len = H * ratio * (1 - (t - start) * .4) * (.8 + rand() * .4);
-        queue.push({ level: lv + 1, p: cp, d: nd, len, r: Math.max(.025, cr * (lv ? .55 : .62)) });
+        queue.push({ level: lv + 1, p: cp, d: nd, len, r: Math.max(.04, cr * (lv ? .55 : .62)) });
       }
     }
     // leaf clusters along the outer branches (and at the tip of every branch at the last level)
