@@ -36,8 +36,13 @@ const steps = [
     for (let k = 0; k < 2; k++) { run('node tools/pgh_loops.mjs'); run('node tools/fix_loops_pgh.mjs'); map(); }   // (joining through can close a loop)
     separations();
   }],
+  // the gaps found laying out the routes (tools/fix_gaps_pgh.mjs: the Rachel Carson Bridge's north end, the David
+  // McCullough Bridge, the North Shore Trail at Millvale and past Acrisure Stadium); then the bridge models and the city
+  // data on the final edges, and the routes again (they read the city data's one-way streets)
+  ['gaps', () => { run('node tools/fix_gaps_pgh.mjs'); map(); separations(); run('node tools/pgh_bridges.mjs'); run('python3 tools/pgh_city.py'); map(); }],
   ['report', () => {
     run('node tools/pgh_shore.mjs'); run('node tools/riverside_pgh.mjs'); map(); separations();
+    run('node tools/pgh_bridges.mjs'); run('python3 tools/pgh_city.py'); map();   // (the city data is keyed by edge id: again after any renumbering)
     for (const c of ['node tools/pgh_junctions.mjs', 'node tools/pgh_stubs.mjs', 'node tools/pgh_loops.mjs', 'node tools/pgh_crossings.mjs', 'python3 tools/pgh_landmarks.py', 'python3 tools/pgh_riverbank.py', 'node tools/pgh_riverbank_check.mjs', 'node tools/qc_pgh.mjs', 'node tools/pgh_map_page.mjs']) run(c);
   }],
 ];

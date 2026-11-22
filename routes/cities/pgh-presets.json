@@ -43,9 +43,9 @@
    "stadiums",
    "neighbourhoods"
   ],
-  "note": "From PNC Park along North Shore Drive past Acrisure Stadium, up Allegheny Avenue to Ridge Avenue's old mansions, up Arch Street beside West Park into the Mexican War Streets, and back down round Allegheny Commons to the river",
-  "lengthM": 5230,
-  "climbM": 44
+  "note": "From PNC Park along the North Shore Trail past Acrisure Stadium, up Allegheny Avenue to Ridge Avenue's old mansions, up Arch Street beside West Park into the Mexican War Streets, and back down round Allegheny Commons to the river",
+  "lengthM": 5500,
+  "climbM": 51
  },
  {
   "id": "pgh-strip-lawrenceville",
@@ -55,8 +55,8 @@
    "neighbourhoods",
    "trail"
   ],
-  "note": "Along the Strip District Trail, up Smallman Street through the Strip and Butler Street through Lawrenceville, over the 40th Street Bridge, back down the Allegheny on the North Shore Trail past Washington's Landing, and over the Roberto Clemente Bridge",
-  "lengthM": 11580,
-  "climbM": 80
+  "note": "Along the Strip District Trail, up Smallman Street through the Strip and Butler Street through Lawrenceville, over the 40th Street Bridge, back down the Allegheny on the North Shore Trail past Washington's Landing, and over the David McCullough (16th Street) Bridge",
+  "lengthM": 9440,
+  "climbM": 58
  }
 ]

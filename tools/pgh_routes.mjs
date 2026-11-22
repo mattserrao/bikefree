@@ -70,11 +70,11 @@ const ROUTES = [
   },
   {
     id: 'pgh-north-side', name: 'North Shore & North Side', tags: ['flat', 'stadiums', 'neighbourhoods'],
-    note: 'From PNC Park along North Shore Drive past Acrisure Stadium, up Allegheny Avenue to Ridge Avenue\'s old mansions, up Arch Street beside West Park into the Mexican War Streets, and back down round Allegheny Commons to the river',
+    note: 'From PNC Park along the North Shore Trail past Acrisure Stadium, up Allegheny Avenue to Ridge Avenue\'s old mansions, up Arch Street beside West Park into the Mexican War Streets, and back down round Allegheny Commons to the river',
     prefer: ['North Shore Trail', 'Trail', 'Ridge Avenue', 'Federal Street'],
     way: [
       { near: [40.44926, -80.00462] },                                           // PNC Park: Federal Street at Lacock
-      { near: [40.44514, -80.01673], prefer: ['North Shore Drive'], avoid: ['e1235'] },   // North Shore Drive past Acrisure Stadium (the trail doubles back there)
+      { near: [40.44514, -80.01673], prefer: ['North Shore Trail', 'Trail'] },   // the North Shore Trail past Acrisure Stadium
       { near: [40.44971, -80.01835], prefer: ['Allegheny Avenue'] },
       { near: [40.45198, -80.00866], prefer: ['Ridge Avenue'] },                               // Ridge Avenue's mansions
       { near: [40.45881, -80.00983], prefer: ['Arch Street'] },                                // up Arch Street beside West Park into the Mexican War Streets
@@ -84,16 +84,16 @@ const ROUTES = [
   },
   {
     id: 'pgh-strip-lawrenceville', name: 'Strip District & Lawrenceville', tags: ['flat', 'neighbourhoods', 'trail'],
-    note: 'Along the Strip District Trail, up Smallman Street through the Strip and Butler Street through Lawrenceville, over the 40th Street Bridge, back down the Allegheny on the North Shore Trail past Washington\'s Landing, and over the Roberto Clemente Bridge',
+    note: 'Along the Strip District Trail, up Smallman Street through the Strip and Butler Street through Lawrenceville, over the 40th Street Bridge, back down the Allegheny on the North Shore Trail past Washington\'s Landing, and over the David McCullough (16th Street) Bridge',
     prefer: ['Smallman Street', 'Butler Street', 'North Shore Trail', 'Strip District Trail', 'Trail'],
     way: [
       { near: [40.45028, -79.98889] },                                                                   // the Strip District Trail's west end, by Waterfront Drive
       { near: [40.45528, -79.98152], prefer: ['Strip District Trail'] },                       // along the Allegheny
       { near: [40.46290, -79.96695], prefer: ['Smallman Street', 'Penn Avenue'] },             // Smallman Street up the Strip, Penn Avenue to Butler
-      { near: [40.46878, -79.96224], prefer: ['Butler Street'] },                              // Butler Street, Lawrenceville
+      { near: [40.46835, -79.96277], prefer: ['Butler Street', 'Trail'], avoid: ['Penn Avenue'] },                              // Butler Street, Lawrenceville
       { near: [40.46446, -79.97951], prefer: ['40th Street', '40th Street Bridge'] },          // over the 40th Street Bridge to Millvale
-      { near: [40.44701, -80.00374], prefer: ['North Shore Trail', 'Trail'] },                 // down the Allegheny on the North Shore Trail
-      { near: [40.45028, -79.98889], prefer: ['Roberto Clemente Bridge', 'Route link', '10th Street Bypass', 'Fort Duquesne Boulevard', 'Smallman Street', 'Waterfront Drive'] },   // over the Roberto Clemente Bridge
+      { near: [40.45319, -79.99269], prefer: ['North Shore Trail', 'Trail', 'Progress Street'] },   // down the Allegheny on the North Shore Trail
+      { near: [40.45028, -79.98889], prefer: ['David McCullough Bridge', '16th Street', 'Smallman Street', 'Waterfront Drive'] },   // over the David McCullough (16th Street) Bridge
     ],
   },
 ];
