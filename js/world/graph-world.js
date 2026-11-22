@@ -229,7 +229,7 @@ export class GraphWorld {
     this.mats = {
       road: new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
       paint: this.rural ? wornPaintMaterial() : new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
-      ground: groundMaterial(this.qualityKey === 'low'),
+      ground: groundMaterial(this.qualityKey === 'low', this.rural),
       roadSurface: roadSurfaceMaterial(this.qualityKey === 'low', this.rural),
       water: new THREE.MeshLambertMaterial({ color: '#4f7f97', transparent: true, opacity: 0.92 }),
       // the dressed places and the river walls: textured from world position (toolbox/materials)
@@ -1249,7 +1249,7 @@ export function decodeDressing(json, proj, tile) {
 export const RURAL_MAPS = new Set(['cny', 'skan']);
 /**
  * Upstate New York asphalt after a lot of winters (user, 22 Nov: "Upstate NY roads wear a lot due to the winter"):
- * the base oxidised to a pale blue-grey, with stretches of fresh black where a road was repaved; narrow country roads
+ * the base oxidised to a pale blue-grey, varying by place (by world position, so overlapping surfaces agree); narrow country roads
  * in chip seal (pale, speckled with aggregate, smoothed and darker in the wheel paths); tar-snake crack sealing — a
  * meandering seam down the centre joint and along the wheel paths, and transverse frost cracks across the lanes every
  * 8–20 m; alligator cracking in the wheel paths where it's worst; cut-in rectangular patches and round cold-patched
@@ -1274,8 +1274,8 @@ const NY_ROAD_GLSL = /* glsl */`
     // which kind of stretch: fresh blacktop (repaved) / old oxidised hot-mix / chip seal (narrow country roads)
     // (by world position only, so overlapping surfaces — a junction's fan over a ribbon's end — agree exactly)
     float stretch = fract(gwN(w.xz * .0011) * 1.7 + gwN(w.xz * .0037 + 5.) * .9);
-    float chip = junc ? 0. : step(hw, 3.35) * step(.3, stretch);
-    float fresh = step(.86, stretch) * (1. - chip);
+    float chip = junc ? 0. : step(hw, 3.35);   // (the narrow country roads: chip seal end to end)
+    float fresh = 0.;   // (a repaved stretch would need lane-aligned ends: left out)
     float age = (1. - fresh) * (.55 + .45 * gwN(w.xz * .006 + 1.7));
     vec3 lin = pow(c, vec3(1. / 2.2));                       // (work in the gamma colour, as the other surfaces do)
     vec3 oxid = lin * vec3(1.3, 1.33, 1.38), black = lin * .74;
@@ -1462,9 +1462,11 @@ function roadSurfaceMaterial(low = false, ny = false) {
  * plazas, sand — with a little noise in the edges so they aren't the grid's.
  */
 /** low (Light, phones): one noise for the land cover's shading, no wobble on its edges. */
-function groundMaterial(low = false) {
+function groundMaterial(low = false, rural = false) {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true });
-  if (low) m.defines = { LOWQ: '' };
+  m.defines = {};
+  if (low) m.defines.LOWQ = '';
+  if (rural) m.defines.NYGRASS = '';
   const blank = new THREE.DataTexture(new Uint8Array([1]), 1, 1, THREE.RedFormat); blank.needsUpdate = true;
   const U = { uLand: { value: blank }, uLandBox: { value: new THREE.Vector4(0, 0, 1, 1) }, uLandOn: { value: 0 } };
   m.userData.land = U;
@@ -1542,9 +1544,29 @@ function groundMaterial(low = false) {
             lc = mix(vec3(.5, .58, .26), vec3(.64, .66, .32), n * .6 + sw * .4);
           }
           else if (k < 29.5 && k > 28.5) lc = mix(vec3(.5, .43, .32), vec3(.6, .53, .41), n * .7 + gwN(vGW.xz * .09) * .3);   // farmyard: gravel and packed earth
+          #ifdef NYGRASS
+          // the rural maps in early fall (user, 22 Nov: "grass + farms need to improve"): corn gone tan, soybeans gold,
+          // and the grass close by with blades in it — lawns mown in stripes, pastures and hay tufted, with dry patches
+          if (k > 19.5 && k < 23.5) lc = mix(lc, lc.g > .3 ? vec3(.5, .46, .25) : lc, .55);
+          if (k > 9.5 && k < 10.5) {
+            vec2 fc = floor((vGW.xz + (vec2(gwN(vGW.xz * .004), gwN(vGW.xz * .004 + 9.)) - .5) * 90.) / vec2(165., 120.));
+            float f = gwH(fc + 7.3);
+            if (f < .3) lc = mix(lc, vec3(.5, .46, .25), .6); else if (f < .48) lc = mix(lc, vec3(.62, .55, .24), .7);
+          }
+          bool grassy = (k > .5 && k < 1.5) || (k > 6.5 && k < 8.5) || (k > 10.5 && k < 11.5) || (k > 27.5 && k < 28.5);
+          if (lc.x >= 0. && grassy) {
+            float gd = 1. - smoothstep(.02, .16, max(fwidth(vGW.x), fwidth(vGW.z)));   // near: blades; far: their mean
+            float bl = gwN(vGW.xz * 7.3) * .55 + gwN(vGW.xz * 21.) * .45;
+            lc *= 1. + (bl - .5) * .28 * gd;
+            float dry = smoothstep(.62, .8, gwN(vGW.xz * .045 + 13.)) * (k > 7.5 && k < 8.5 ? .35 : 1.);
+            lc = mix(lc, vec3(.6, .57, .34), dry * .45);                                   // dry, gone-over patches
+            if (k > 7.5 && k < 8.5) lc *= 1. + .05 * sign(sin(vGW.x * 2.6 + vGW.z * .4)) * gd;   // a lawn's mown stripes
+            if (k > 10.5 && k < 11.5 || k > 27.5) lc = mix(lc, lc * vec3(1.05, .98, .85), smoothstep(.55, .75, gwN(vGW.xz * .5)) * .5);   // tussocks, seed heads
+          }
+          #endif
           if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * mix(clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vec3(1.), step(19.5, k) * .7), vLandW * (k > 19.5 ? .95 : .85));   // (CNY's fields: their own colour, less of the ground's tint)
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-4${low ? '-low' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-4${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
   return m;
 }

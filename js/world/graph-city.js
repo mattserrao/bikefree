@@ -31,6 +31,7 @@ import { makeTreeCards } from './toolbox/vegetation/tree-cards.js';
 import { GraphLife } from './toolbox/city/graph-life.js';
 import { TreeEngine } from './toolbox/vegetation/tree-engine.js';
 import { planHomestead, drawHomestead, driveStrips, nearDrive } from './toolbox/city/homesteads.js';
+import { skanCrop, cropMaterial, cropCards, bale, verge, bay, farmStand } from './toolbox/landscape/farm-kit.js';
 import { makeUpstateTrees, fallVariant } from './toolbox/vegetation/upstate-trees.js';
 
 // (9 is the toolbox's pond; 10–12: a rural map's fields from WorldCover — tools/pgh_city.py rural_land, SKAN;
@@ -479,7 +480,7 @@ export class GraphCity {
     if (this.rural) { yield* this._planHomesteads(t); yield; }
     yield* this._trees(t); yield;
     yield* this._furniture(t); yield;
-    if (this.rural) { this._drawHomesteads(t); yield; }
+    if (this.rural) { this._drawHomesteads(t); yield; yield* this._farmland(t); yield; }
     yield* this._farms(t); yield;
     yield* this._storefronts(t); yield;
     yield* this._lots(t); yield* this._lines(t);
@@ -747,6 +748,82 @@ export class GraphCity {
     const geo = driveStrips(t.homes, g);
     if (geo) { const m = new THREE.Mesh(geo, this.lotMaterial); m.name = `Driveways ${t.key}`; m.receiveShadow = true; this._add(t, m); }
     this.stats.driveways = (this.stats.driveways || 0) + t.homes.length;
+  }
+
+  // ------------------------------------------------------------------ fields and roadsides (rural maps)
+  /** The crop at (x, z) for the 3D rows: CNY's corn fields (codes 20–23, their rows' heading in the code), SKAN's
+   *  WorldCover cropland (code 10: the ground shader's own field pick, js/world/toolbox/landscape/farm-kit.js). */
+  _cropAt(x, z) {
+    const c = this.landAt(x, z);
+    if (c >= 20 && c <= 23) {
+      const a = (c - 20) * Math.PI / 4, ns = Math.sign(this.landBox.z0 - this.landBox.z1) || 1;
+      return { crop: 'corn', heading: Math.atan2(ns * Math.sin(a), Math.cos(a)), per: .9 };
+    }
+    if (c === LAND.crops) { const k = skanCrop(x, z); return { crop: k.crop, heading: k.heading + Math.PI / 2 }; }
+    if (c === 28) return { crop: 'hay', heading: 0 };
+    if (c >= 24 && c <= 27) return { crop: 'stubble', heading: 0 };
+    return null;
+  }
+  *_farmland(t) {
+    const W = this.world, x0 = t.i * TILE, z0 = t.j * TILE, g = (x, z) => W._groundH(x, z), M = t.kitM;
+    // standing corn and soybeans: row cards, near the camera only
+    this.cropMat ||= cropMaterial(this.treeTime);
+    const geo = cropCards(x0, z0, TILE, (x, z) => this._cropAt(x, z), g);
+    if (geo) { const m = new THREE.Mesh(geo, this.cropMat); m.name = `Crops ${t.key}`; m.userData.lodM = 300; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 300; this._add(t, m, 'near'); }
+    yield;
+    // round bales on the hay and the stubble
+    for (let x = x0 + 11; x < x0 + TILE; x += 22) for (let z = z0 + 11; z < z0 + TILE; z += 22) {
+      const h = hash(Math.round(x) * 7.1 + Math.round(z) * 3.3), jx = x + (h - .5) * 16, jz = z + (hash(h * 91) - .5) * 16;
+      const c = this._cropAt(jx, jz), lc = this.landAt(jx, jz);
+      const p = c?.crop === 'hay' ? .3 : c?.crop === 'stubble' ? .12 : lc === LAND.pasture ? .03 : 0;
+      if (h >= p || this.onRoad(jx, jz, 6) || this.host.buildingNear(jx, jz, 4) || this.inWater(jx, jz)) continue;
+      const n = 1 + Math.floor(hash(h * 13) * 3);   // ones and twos and threes, as the baler dropped them
+      for (let k = 0; k < n; k++) bale(M, jx + k * 2.1 * Math.cos(h * 9), g(jx, jz), jz + k * 2.1 * Math.sin(h * 9), h * 9 + k * .2, hash(h * 5) < .3, hash(h * 17 + k));
+    }
+    yield;
+    // the country roads' edges: fence and wall runs, the verge's tufts and wildflowers
+    const N = new MeshBuilder({ aGlow: 1 });
+    for (const piece of W.tiles.get(t.key)?.pieces || []) {
+      if (due()) yield;
+      const e = piece.e; if (!ROADS.has(e.kind) || e.kind === 'alley') continue;
+      const half = W.wOf(e) / 2, walk = W.walkOf ? W.walkOf(e) : 0;
+      if (walk) continue;   // (a village street with sidewalks: no fences, no verge)
+      for (let i = Math.max(piece.a, 1); i < Math.min(piece.b, e.n - 1); i++) {
+        if (e._deck?.[i] || e._deck?.[i + 1]) continue;
+        const dx = e.x[i + 1] - e.x[i], dz = e.z[i + 1] - e.z[i], l = Math.hypot(dx, dz) || 1, nx = -dz / l, nz = dx / l;
+        for (const side of [-1, 1]) {
+          const at = (k, off) => ({ x: e.x[k] + nx * off * side, z: e.z[k] + nz * off * side });
+          // the verge: every ~2 m, two or three tufts or a flower clump between the road and the fence line
+          for (let f = 0; f < 5; f++) {
+            const t0 = f / 5, sx = e.x[i] + dx * t0, sz = e.z[i] + dz * t0;
+            for (let r = 0; r < 3; r++) {
+              const off = half + .7 + r * 1.2 + hash(i * 13 + f * 3 + r + side) * .6, x = sx + nx * off * side, z = sz + nz * off * side;
+              if (this.urban(x, z) || this.onRoad(x, z, .3) || this.inWater(x, z) || this._drivewayNear(x, z, .5)) continue;
+              const hs = hash(x * 1.3 + z * 2.1), fl = hash(Math.floor(x / 9) * 3 + Math.floor(z / 9)) < .35 && hs < .45;
+              verge(N, x, g(x, z), z, hs, fl);
+            }
+          }
+          // fences and walls, in runs of ~60 m chosen by what's beside the road
+          if (i < 2 || i > e.n - 3) continue;
+          const blk = Math.floor(i / 6), hb = hash(e.n * 1.31 + blk * 7.7 + side * 3.3 + e.x[0] * .01);
+          const o = half + 5.5, a = at(i, o), b = at(i + 1, o), m = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+          const lc = this.landAt(m.x + nx * side * 4, m.z + nz * side * 4), cr = this._cropAt(m.x + nx * side * 4, m.z + nz * side * 4);
+          const pasture = lc === LAND.pasture || cr?.crop === 'hay', woodsOrCrop = lc === LAND.woods || (cr && cr.crop !== 'hay');
+          const kind = pasture ? (hb < .55 ? 'wire' : hb < .7 ? 'board' : null) : woodsOrCrop ? (hb < .3 ? 'stone' : null) : null;
+          if (!kind || this.urban(m.x, m.z) || this.inWater(m.x, m.z) || this.host.buildingNear(m.x, m.z, 2) || this._drivewayNear(m.x, m.z, 2) || this.onRoad(m.x, m.z, 1)) continue;
+          bay(M, kind, a, b, g(a.x, a.z), g(b.x, b.z), hb * 1000 + i);
+          if (kind !== 'stone') { const mm = at(i, o), q = at(i + 1, o); bay(M, kind, { x: (mm.x + q.x) / 2, z: (mm.z + q.z) / 2 }, q, g((mm.x + q.x) / 2, (mm.z + q.z) / 2), g(q.x, q.z), hb); }
+        }
+      }
+    }
+    if (N.count) { const m = new THREE.Mesh(N.geometry(), this.kitMaterial); m.name = `Verge ${t.key}`; m.userData.lodM = 220; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 220; this._add(t, m, 'near'); }
+    // a farm stand by some farmhouses' drives (pumpkins and squash: it's September)
+    for (const H of t.homes || []) {
+      if (H.kind !== 'farmhouse-ny' || hash(H.key * 3.7) > .3) continue;
+      const r = H.road, x = r.px + r.ox * (W.wOf ? 6 : 6) + r.dx * 6, z = r.pz + r.oz * 6 + r.dz * 6;
+      if (this.onRoad(x, z, 1.5) || this.host.buildingNear(x, z, 2) || this._drivewayNear(x, z, 1)) continue;
+      farmStand(M, x, g(x, z), z, Math.atan2(r.ox, r.oz));
+    }
   }
 
   /** One pool: a species at one level of detail, as many instances as the trees near the camera need. */

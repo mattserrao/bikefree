@@ -30,7 +30,7 @@ export function planHomestead(R, ctx) {
   if (gar) { const s = sideSign(gar.end); [sx, sz] = corner(r, s * (r.hu + 1.6), fs * (Math.min(r.hv, 1.9) + 1.2)); }
   else if (front % 2 === 0) { const s = h(1) < .5 ? -1 : 1; [sx, sz] = corner(r, s * (r.hu + 2.2), fs * (r.hv - 1.5)); pad = true; }
   else { const s = h(1) < .5 ? -1 : 1; [sx, sz] = corner(r, sideSign(front) * (r.hu - 1.5), s * (r.hv + 2.2)); pad = true; }
-  const road = ctx.roadNear(sx, sz, farm ? 260 : 90);
+  const road = ctx.roadNear(sx, sz, farm ? 160 : 70);
   if (!road) return null;
   const ox = sx - road.px, oz = sz - road.pz, od = Math.hypot(ox, oz) || 1;
   const ex = road.px + ox / od * (road.half + .15), ez = road.pz + oz / od * (road.half + .15);
@@ -43,7 +43,7 @@ export function planHomestead(R, ctx) {
   }
   pts.push([ex, ez]);
   const gravel = farm ? h(2) < .85 : village ? h(2) < .2 : h(2) < .12;
-  const drive = { pts, w: farm ? 3.2 : 3, gravel, pad: pad ? { x: sx, z: sz, yaw: Math.atan2(r.ux, r.uz), w: 3.4, l: 6 } : null, roadY: road.y };
+  const drive = { pts, w: farm ? 2.8 : 2.8, gravel, pad: pad ? { x: sx, z: sz, yaw: Math.atan2(r.ux, r.uz), w: 3.4, l: 6 } : null, roadY: road.y };
   // the mailbox: at the road end, a step to the side, facing the road
   const tx = road.dx, tz = road.dz, side = h(3) < .5 ? -1 : 1;
   const mailbox = { x: ex + tx * side * 2 + ox / od * .7, z: ez + tz * side * 2 + oz / od * .7, yaw: Math.atan2(-ox / od, -oz / od) };
@@ -74,7 +74,7 @@ export function planHomestead(R, ctx) {
     P.push([ex, ez]);
     drive.pts = P; drive.pad = null;
   }
-  return { drive, mailbox, extras, key: R.key };
+  return { drive, mailbox, extras, key: R.key, kind: R.kind, road: { px: road.px, pz: road.pz, dx: road.dx, dz: road.dz, ox: ox / od, oz: oz / od } };
 }
 
 /** A small gable-roofed building into M: walls w × l (l along yaw), eaves at h, ridge `rise` above them. */
@@ -128,7 +128,7 @@ export function drawHomestead(M, H, groundH) {
 /** The driveways (and pads) as draped strips: one geometry for a tile. */
 export function driveStrips(list, groundH) {
   const pos = [], col = [];
-  const asphalt = new THREE.Color('#3f4042'), gravel = new THREE.Color('#b0a690');
+  const asphalt = new THREE.Color('#55565a'), gravel = new THREE.Color('#a89e88');
   const push = (a, b, c, k) => { for (const p of [a, b, c]) pos.push(p[0], p[1], p[2]); for (let i = 0; i < 3; i++) col.push(k.r, k.g, k.b); };
   for (const H of list) {
     const d = H.drive, base = d.gravel ? gravel : asphalt, w = d.w / 2;
