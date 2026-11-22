@@ -88,6 +88,55 @@ class CircleArea:
     def inside(self, la, lo): return math.hypot((lo - self.lon0) * self.kx, (la - self.lat0) * self.ky) < self.r
 
 
+class ShapeArea:
+    """A city drawn as circles plus corridors along lines (config "area": {"circle": [lat, lon, radiusM], "lines": file,
+    "corridorM": m}; SKAN, user 22 Nov: the Skaneateles–Marcellus circle "extend so there is a route down and around
+    Skaneateles lake … and a route around Otisco lake"): the corridor's interface, `dist` the metres beyond the shape
+    (0 inside it), as CircleArea's — from a 20 m distance raster. `grow` widens it all (the build margin)."""
+    CELL = 20.0
+    def __init__(self, circles, lines, corridor, grow=0.0):
+        import numpy as np
+        from scipy import ndimage
+        self.circles, self.cm, self.grow = circles, corridor, grow
+        self.lat0 = circles[0][0] if circles else lines[0][0][0]
+        self.kx, self.ky = 111320 * math.cos(math.radians(self.lat0)), 110540
+        self.r = grow + max([c[2] for c in circles] + [corridor])   # (load_osm's pad)
+        pts = []
+        for ln in lines:   # every 10 m along each line
+            for a, b in zip(ln, ln[1:]):
+                L = hv(a, b); k = max(1, int(L / 10))
+                pts += [(a[0] + (b[0] - a[0]) * i / k, a[1] + (b[1] - a[1]) * i / k) for i in range(k)]
+            pts.append(tuple(ln[-1]))
+        self.pts_all = pts + [(la + s_ * r / self.ky, lo + t_ * r / self.kx) for la, lo, r in circles for s_ in (-1, 1) for t_ in (-1, 1)]
+        pad = corridor + grow + 6000
+        self.s = min(p[0] for p in self.pts_all) - pad / self.ky; self.w = min(p[1] for p in self.pts_all) - pad / self.kx
+        n_ = max(p[0] for p in self.pts_all) + pad / self.ky; e_ = max(p[1] for p in self.pts_all) + pad / self.kx
+        self.nx, self.ny = int((e_ - self.w) * self.kx / self.CELL) + 1, int((n_ - self.s) * self.ky / self.CELL) + 1
+        on = np.ones((self.ny, self.nx), bool)
+        for la, lo in pts: on[int((la - self.s) * self.ky / self.CELL), int((lo - self.w) * self.kx / self.CELL)] = False
+        d = ndimage.distance_transform_edt(on) * self.CELL - corridor if pts else np.full((self.ny, self.nx), 1e9)
+        yy, xx = np.mgrid[0:self.ny, 0:self.nx]
+        for la, lo, r in circles:
+            cy, cx = (la - self.s) * self.ky / self.CELL, (lo - self.w) * self.kx / self.CELL
+            d = np.minimum(d, np.hypot(yy - cy, xx - cx) * self.CELL - r)
+        self.d = d - grow
+    def dist(self, la, lo, reach):
+        i, j = int((la - self.s) * self.ky / self.CELL), int((lo - self.w) * self.kx / self.CELL)
+        if not (0 <= i < self.ny and 0 <= j < self.nx): return reach
+        return min(reach, max(0.0, float(self.d[i, j])))
+    def inside(self, la, lo): return self.dist(la, lo, 1.0) <= 0.0
+
+
+def shape_of(cfg, grow=0.0):
+    """The area's ShapeArea when it has corridor lines (else None: a plain circle)."""
+    A = cfg.get('area', {})
+    if not A.get('lines'): return None
+    lines = json.load(open(os.path.join(ROOT, 'tools', 'city', A['lines'])))
+    lines = [ln['pts'] if isinstance(ln, dict) else ln for ln in (lines['lines'] if isinstance(lines, dict) else lines)]
+    circles = [tuple(A['circle'])] if A.get('circle') else []
+    return ShapeArea(circles, lines, A.get('corridorM', 800), grow)
+
+
 def area_lines():
     pts = []
     for name in sorted(os.listdir(os.path.join(ROOT, 'routes', 'cities'))):
@@ -123,7 +172,7 @@ def load_osm(cfg, cor):
     pts = cor.pts_all
     la0, la1 = min(p[0] for p in pts), max(p[0] for p in pts)
     lo0, lo1 = min(p[1] for p in pts), max(p[1] for p in pts)
-    reach = 0 if isinstance(cor, CircleArea) else cfg['corridorM']   # (a circle: its own edge is the reach)
+    reach = 0 if isinstance(cor, (CircleArea, ShapeArea)) else cfg['corridorM']   # (a circle: its own edge is the reach)
     pad_la, pad_lo = (reach or cor.r) / 110540 + dy, (reach or cor.r) / cor.kx + dx
     files, tiles = [], []
     for x in range(math.floor((lo0 - pad_lo - w0) / dx), math.ceil((lo1 + pad_lo - w0) / dx)):
@@ -258,7 +307,9 @@ def protected(e):
 
 
 def build(cfg):
-    if cfg.get('area', {}).get('circle'):
+    if cfg.get('area', {}).get('lines'):
+        cor = shape_of(cfg, cfg['area'].get('marginM', 0))   # (built over the margin too: trim_to_circle)
+    elif cfg.get('area', {}).get('circle'):
         la_, lo_, r_ = cfg['area']['circle']
         cor = CircleArea(la_, lo_, r_ + cfg['area'].get('marginM', 0))   # (built over the margin too: trim_to_circle)
     else:
@@ -716,7 +767,9 @@ def simplify_plan(cfg, E, G=None):
             if any(decks.get((ky[0] + a, ky[1] + b)) for a in (-1, 0, 1) for b in (-1, 0, 1)): hits += 1
         return total >= 3 and hits >= 0.7 * total
     rules = [
-        ('turn slip / link', lambda e: e['hw'] in LINKS and e['L'] < 150),
+        # (a trunk road is a link only where the city keeps trunks as crossings — SKAN rides US 20 as its villages' main
+        # street, whose short pieces between junctions are not slips)
+        ('turn slip / link', lambda e: e['hw'] in LINKS and e['L'] < 150 and (e['hw'] not in ('trunk',) or 'trunk' in cfg['connectors'])),
         ('short trail or crosswalk piece', lambda e: e['kind'] == 'path' and e['L'] < cfg['denseM']),
         ('short minor way in a dense cluster', lambda e: e['L'] < cfg['denseM'] and (e['hw'] in MINOR or e['kind'] == 'alley') and (e['a'] in in_dense or e['b'] in in_dense)),
         ('very short link inside a dense cluster', lambda e: e['L'] < 25 and e['a'] in in_dense and e['b'] in in_dense),
@@ -991,9 +1044,14 @@ def trim_to_circle(cfg, E):
     inside — the circle's rim left empty. Here the ways wholly outside the circle go again, farthest first, each only if
     taking it (and peeling the dead ends it leaves) costs no way inside: what's left outside closes a loop that serves
     the inside. Returns (edges, removed, km)."""
-    lat0, lon0, R = cfg['area']['circle']
-    kx, ky = 111320 * math.cos(math.radians(lat0)), 110540
-    near = lambda e: min(math.hypot((lo - lon0) * kx, (la - lat0) * ky) for la, lo in zip(e['lat'], e['lon']))
+    shape = shape_of(cfg)
+    if shape:   # (circle + corridors: the metres beyond the shape, 0 inside)
+        R = 0.0
+        near = lambda e: min(shape.dist(la, lo, 1e9) for la, lo in zip(e['lat'], e['lon']))
+    else:
+        lat0, lon0, R = cfg['area']['circle']
+        kx, ky = 111320 * math.cos(math.radians(lat0)), 110540
+        near = lambda e: min(math.hypot((lo - lon0) * kx, (la - lat0) * ky) for la, lo in zip(e['lat'], e['lon']))
     for e in E: e['_in'] = near(e)
     alive = set(range(len(E)))
     adj = defaultdict(set)
@@ -1524,8 +1582,11 @@ def build_all(cfg):
     if cfg.get('area', {}).get('circle') and cfg['area'].get('marginM'):
         E, nt, kt = trim_to_circle(cfg, E)
         E = merge_through(E)
-        la0_, lo0_, r0_ = cfg['area']['circle']; kx_ = 111320 * math.cos(math.radians(la0_))
-        out_km = sum(STEP for e in E for la, lo in zip(e['lat'], e['lon']) if math.hypot((lo - lo0_) * kx_, (la - la0_) * 110540) > r0_) / 1000
+        shape_ = shape_of(cfg)
+        if shape_: out_km = sum(STEP for e in E for la, lo in zip(e['lat'], e['lon']) if shape_.dist(la, lo, 50) > 0) / 1000
+        else:
+            la0_, lo0_, r0_ = cfg['area']['circle']; kx_ = 111320 * math.cos(math.radians(la0_))
+            out_km = sum(STEP for e in E for la, lo in zip(e['lat'], e['lon']) if math.hypot((lo - lo0_) * kx_, (la - la0_) * 110540) > r0_) / 1000
         print(f'  outside the circle: removed {nt} ways ({kt:.1f} km); {out_km:.1f} km left outside it, closing loops')
     used = {e['a'] for e in E} | {e['b'] for e in E}
     jpos = {n: p for n, p in jpos.items() if n in used}

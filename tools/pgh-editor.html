@@ -541,7 +541,7 @@ window.ED = { get M() { return M; }, get deg() { return deg; }, proj: () => proj
 
 resize(); setTool('select');
 // opened from the repo (a local server, githack): the map loads by itself; from disk: Open
-// which map: ?map=cny (CNY), else PGH
+// which map: ?map=cny (CNY), ?map=skan (SKAN), else PGH
 const MAP = (new URLSearchParams(location.search).get('map') || 'pgh').replace(/[^a-z0-9-]/gi, '');
 document.title = `${MAP.toUpperCase()} map editor`;
 const base = new URL('../routes/cities/', location.href).href;

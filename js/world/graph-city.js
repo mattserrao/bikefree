@@ -28,7 +28,8 @@ import { makeAlpsPack } from './toolbox/packs/alps.js';
 import { makeNortheastPack } from './toolbox/packs/northeast.js';
 import { makeTreeCards } from './toolbox/vegetation/tree-cards.js';
 
-export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand: 5, plaza: 6, outside: 7, yards: 8 };
+// (9 is the toolbox's pond; 10–12: a rural map's fields from WorldCover — tools/pgh_city.py rural_land, SKAN)
+export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand: 5, plaza: 6, outside: 7, yards: 8, crops: 10, pasture: 11, wetland: 12 };
 const TILE = 400;
 // how far the city is built, by quality (Low: phones)
 const REACH = { low: { near: 1300, far: 1800, trees: 0.6, treeNear: 450 }, balanced: { near: 2300, far: 3100, trees: 1, treeNear: 750 }, high: { near: 2300, far: 3100, trees: 1.2, treeNear: 900 } };
@@ -41,7 +42,7 @@ const TREE_MIX = {
 const TREE_FULL = { low: 60, balanced: 90, high: 130 }, TREE_LOD = { low: 200, balanced: 300, high: 380 };   // m: full model, then the 84-triangle one, then the 28
 const CAR_NEAR = 320;           // m: detailed parked cars within this
 const KIT_CFG = { detailM: 150, dressingM: 80, detailReachM: 550,
-  styles: [{ preset: 'pittsburgh-rowhouse', kinds: ['rowhouse'] }, { preset: 'pittsburgh-frame', kinds: ['house'] }] };
+  styles: [{ preset: 'pittsburgh-rowhouse', kinds: ['rowhouse'] }, { preset: 'pittsburgh-frame', kinds: ['house', 'barn', 'shed'] }] };
 const ROADS = new Set(['primary', 'secondary', 'tertiary', 'residential', 'alley']);
 const MAIN = new Set(['primary', 'secondary', 'tertiary']);
 const POINT_FN = { signal: 'signal', bus_stop: 'busSign', bench: 'bench', hydrant: 'hydrant', bike_rack: 'bikeRack', waste: 'waste', picnic: 'picnic',
@@ -186,7 +187,7 @@ export class GraphCity {
       });
     }
     // the homes' plan: rowhouses and houses (the kit's), the rest as neighbours
-    const kinds = { 0: 'rowhouse', 1: 'house' }, homes = [], neighbours = [];
+    const kinds = { 0: 'rowhouse', 1: 'house', 13: 'barn', 14: 'shed' }, homes = [], neighbours = [];   // (13, 14: a rural map's barns and sheds)
     for (const b of mine) {
       if (due()) yield;
       if (b.kind === 12 || b.hidden) continue;
@@ -514,7 +515,10 @@ export class GraphCity {
       if (z === z0 + step / 2 && due()) yield;
       const h1 = hash(Math.round(x * 3.1) * 92821 + Math.round(z * 1.7)), jx = x + (h1 - 0.5) * step * 0.9, jz = z + (hash(Math.round(x * 5.3) + Math.round(z * 7.9) * 31) - 0.5) * step * 0.9;
       const c = this.landAt(jx, jz);
-      const p = c === LAND.woods ? 0.85 : c === LAND.outside ? 0.45 : c === LAND.yards ? 0.1 : c === LAND.grass ? 0.06 : c === LAND.paved ? 0.008 : 0;
+      // (a rural map: no trees in the crops, a lone one in the pasture, scrub in the wetland — the hedgerows and woodlots
+      // are WorldCover's own tree cover, so the woods code)
+      const p = c === LAND.woods ? 0.85 : c === LAND.outside ? 0.45 : c === LAND.yards ? 0.1 : c === LAND.grass ? 0.06 : c === LAND.paved ? 0.008
+        : c === LAND.wetland ? 0.22 : c === LAND.pasture ? 0.01 : 0;
       if (h1 >= p * this.q.trees) continue;
       if (!ok(jx, jz, 2.2, 3)) continue;
       spots.push({ x: jx, z: jz, seed: hash(Math.round(jx * 11) + Math.round(jz * 13) * 7), wood: c === LAND.woods || c === LAND.outside });

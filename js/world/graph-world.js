@@ -204,7 +204,7 @@ export class GraphWorld {
     this.cut = roadHash(this.G.edges, this.widths);
     this.waterY = (this.json.waterLevelM ?? 216.6) + WATER_ABOVE;
     // upper pools (above a dam: the Allegheny above Lock & Dam 2) — their own water level inside their box
-    this.pools = (this.json.pools || []).map((p) => { const a = this.proj.toLocal(p.box[0], p.box[1]), b = this.proj.toLocal(p.box[2], p.box[3]); return { level: p.level, x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), z0: Math.min(a.z, b.z), z1: Math.max(a.z, b.z), west: a.x }; });
+    this.pools = (this.json.pools || []).map((p) => { const a = this.proj.toLocal(p.box[0], p.box[1]), b = this.proj.toLocal(p.box[2], p.box[3]); return { level: p.level, x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), z0: Math.min(a.z, b.z), z1: Math.max(a.z, b.z), west: a.x, dam: p.dam !== false }; });
 
     // renderer, scene, light
     // (no logarithmic depth: it writes gl_FragDepth, which turns off a phone GPU's early depth test and hidden-surface
@@ -247,6 +247,7 @@ export class GraphWorld {
       const w = new THREE.Mesh(new THREE.PlaneGeometry(p.x1 - p.x0, p.z1 - p.z0).rotateX(-Math.PI / 2), this.mats.water);
       w.position.set((p.x0 + p.x1) / 2, p.level + WATER_ABOVE, (p.z0 + p.z1) / 2);
       this.scene.add(w);
+      if (!p.dam) continue;   // (a lake's pieces: SKAN's Skaneateles and Otisco lakes — no dam)
       // the dam: a concrete face across the box's downstream edge, from the lower pool's bed to the upper water
       const lowY = this.waterY - WATER_ABOVE - 3, topY = p.level + WATER_ABOVE + 0.6;
       const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(p.west, lowY, p.z0), new THREE.Vector3(p.west, lowY, p.z1), new THREE.Vector3(p.west, topY, p.z1), new THREE.Vector3(p.west, topY, p.z0)]);
@@ -1357,10 +1358,32 @@ function groundMaterial(low = false) {
           else if (k < 5.5 && k > 4.5) lc = vec3(.66, .6, .46);                               // sand, bare rock
           else if (k < 6.5 && k > 5.5) lc = mix(vec3(.62, .59, .54), vec3(.68, .65, .6), n);  // plaza
           else if (k < 7.5 && k > 6.5) lc = mix(vec3(.3, .42, .22), vec3(.38, .44, .25), n);  // beyond: suburbs and hills
-          else if (k > 7.5) lc = mix(vec3(.4, .54, .27), vec3(.5, .58, .33), n);             // yards: lawns
+          else if (k > 7.5 && k < 8.5) lc = mix(vec3(.4, .54, .27), vec3(.5, .58, .33), n);  // yards: lawns
+          else if (k > 9.5 && k < 10.5) {
+            // crops (a rural map's WorldCover cropland, SKAN): field by field — corn, soybeans, a hay cutting, wheat
+            // stubble, a ploughed field — each a ~150 m patch, with its rows
+            vec2 fc = floor((vGW.xz + (vec2(gwN(vGW.xz * .004), gwN(vGW.xz * .004 + 9.)) - .5) * 90.) / vec2(165., 120.));
+            float f = gwH(fc + 7.3), g = step(.5, gwH(fc - 2.7)) * .5;
+            vec3 c1 = f < .3 ? vec3(.31, .42, .17) : f < .48 ? vec3(.42, .5, .21) : f < .62 ? vec3(.36, .47, .19) : f < .78 ? vec3(.6, .55, .33) : vec3(.47, .4, .28);
+            #ifdef LOWQ
+            lc = c1 * (.93 + .12 * n);
+            #else
+            float a = g * 3.1416, row = sin(dot(vGW.xz, vec2(cos(a), sin(a))) * 2.4);
+            lc = c1 * (.92 + .1 * n) * (1. + row * (f < .62 ? .07 : .04));
+            #endif
+          }
+          else if (k > 10.5 && k < 11.5) {
+            // pasture and hay: brighter grass, a mown field's swaths here and there
+            float f = gwH(floor((vGW.xz + (vec2(gwN(vGW.xz * .004 + 3.), gwN(vGW.xz * .004 + 5.)) - .5) * 90.) / vec2(150., 130.)) - 4.1);
+            lc = mix(vec3(.41, .54, .24), vec3(.49, .58, .29), n) * (f > .72 ? 1.05 : f < .25 ? .93 : 1.);
+            #ifndef LOWQ
+            if (f > .82) lc *= 1. + .025 * sin(dot(vGW.xz, f > .91 ? vec2(1., 0.) : vec2(0., 1.)) * 1.1);
+            #endif
+          }
+          else if (k > 11.5 && k < 12.5) lc = mix(vec3(.3, .37, .2), vec3(.4, .42, .25), n);  // wetland: sedge and brush
           if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vLandW * .85);
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-2${low ? '-low' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-3${low ? '-low' : ''}`;
   return m;
 }

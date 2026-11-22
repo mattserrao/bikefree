@@ -178,7 +178,7 @@ export function makeStreetIndex(lines, cell = 40) {
  */
 export function planCityHomes(...args) { return drain(planCityHomesJob(...args)); }
 export function* planCityHomesJob(city, cfg) {
-  const kinds = { 0: 'rowhouse', 1: 'house' };
+  const kinds = { 0: 'rowhouse', 1: 'house', 13: 'barn', 14: 'shed' };
   const homes = [], neighbours = [];
   for (const b of city.buildings) {
     if (b.kind === 12 || b.hidden) continue;
