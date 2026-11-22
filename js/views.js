@@ -436,11 +436,15 @@ export function drawCityMap(canvas, { lines, rivers = [], waterAreas = null, lab
     for (const L of out) if (!L.frame) L.pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
     ctx.stroke();
   } else {
-    ctx.globalAlpha = 0.5;
-    for (const L of out) if (L.minor) stroke(L.pts, faint, 1 * k);
-    ctx.globalAlpha = 0.8;
-    for (const L of out) if (!L.minor) stroke(L.pts, faint, 1.5 * k);
-    ctx.globalAlpha = 1;
+    // side streets thinner, then the rest; each kind stroked as one path, so joins don't stack into dots
+    const tier = (minor, width, alpha) => {
+      ctx.globalAlpha = alpha; ctx.strokeStyle = faint; ctx.lineWidth = width; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.beginPath();
+      for (const L of out) if (!L.frame && L.minor === minor) L.pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      ctx.stroke(); ctx.globalAlpha = 1;
+    };
+    tier(true, 1 * k, 0.5);
+    tier(false, 1.5 * k, 0.8);
   }
   // landmarks (PLAN 7.9): a dot in its kind's colour, ringed (the T's stations: a square), under the map's labels;
   // their own short labels where they fit, over the network, under the route's highlight (taps go to the lines
