@@ -189,13 +189,12 @@ $('demoBtn').addEventListener('click', () => setDemo(!trainer.demo));
 $('demoOff').addEventListener('click', () => setDemo(false));
 
 // ---------- Ride type picker ----------
-// Two tabs, Route (the default: Pittsburgh is selected when the app opens) and Workout. The free ride where you
-// set the grade has no tab of its own any more (PLAN 6.9): a small link under the route list opens its pane
-// ('free': the scenery cards), and it rides exactly as before. (The mode isn't saved, so nothing to migrate.)
+// One tab row (menu-simplify-test): Routes (the default), Workouts and Free ride (you set the grade; its pane is
+// the scenery cards). (The mode isn't saved, so nothing to migrate.)
 let chosen = 'route';
 function showPane(p) {
   chosen = p;
-  for (const t of document.querySelectorAll('.mode')) {
+  for (const t of document.querySelectorAll('.ride-tab')) {
     t.classList.toggle('on', t.dataset.mode === p);
     t.setAttribute('aria-selected', String(t.dataset.mode === p));
   }
@@ -203,9 +202,7 @@ function showPane(p) {
   drawThumbs();
   renderPreview();
 }
-for (const t of document.querySelectorAll('.mode')) t.addEventListener('click', () => showPane(t.dataset.mode));
-$('freeRideLink').addEventListener('click', () => { showPane('free'); $('freeBack').focus({ preventScroll: true }); });
-$('freeBack').addEventListener('click', () => { showPane('route'); $('freeRideLink').focus({ preventScroll: true }); });
+for (const t of document.querySelectorAll('.ride-tab')) t.addEventListener('click', () => showPane(t.dataset.mode));
 
 // (a ride held while the world loads the streets ahead, phase 8, isn't one you paused — unless you paused it meanwhile)
 const pausedByUser = () => !session.running && session.movingS > 0 && !session.autoPaused && !(session.held && session._resumeAfterHold);
@@ -319,6 +316,26 @@ $('dirSeg').addEventListener('click', (e) => { const b = e.target.closest('butto
 $('startStops').addEventListener('click', (e) => { const b = e.target.closest('button[data-off]'); if (b) setStart(previewRoute, { offsetM: Number(b.dataset.off) }); });
 $('endlessSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setRouteChoice({ endless: b.dataset.endless === '1' }); });
 
+/** A few start chips, not one per junction (menu-simplify-test: PGH's loop had ~60): named places first (a stop
+ *  whose name isn't a junction "A & B"), else evenly spread along the leg; in riding order. Anywhere else: drag
+ *  the start on the profile. */
+function namedChips(list, max) {
+  const seen = new Set();
+  list = list.filter((c) => !seen.has(c.name) && seen.add(c.name));   // (a loop passes some places twice)
+  if (list.length <= max) return list;
+  const places = list.filter((c) => !/ & /.test(c.name));
+  const pool = places.length >= 2 ? places : list;
+  if (pool.length <= max) return pool;
+  const pick = new Set();
+  for (let i = 0; i < max; i++) pick.add(pool[Math.round((i * (pool.length - 1)) / Math.max(1, max - 1))]);
+  return pool.filter((c) => pick.has(c));
+}
+/** The closed "Ride options" fold's one-line summary of what's chosen (the route's choices, then the pacer). */
+let optsRouteParts = [];
+function renderOptsSummary() {
+  const route = $('routeOpts').hidden ? [] : optsRouteParts;
+  $('rideOptsSum').textContent = [...route, pacer.watts ? `pacer ${pacer.watts} W` : 'no pacer'].filter(Boolean).join(' · ');
+}
 /** The route-selector controls for a route: direction, start chips, length, and the plan's estimate. */
 function renderRouteSelector(r, cp) {
   const { st, startM, p2p, plan, len } = cp;
@@ -329,7 +346,7 @@ function renderRouteSelector(r, cp) {
   const list = stopsForDirection(r, r.stops, st.reverse);
   const chips = [];
   if (!list.length || list[0].offsetM > 150) chips.push({ name: st.reverse ? 'Far end' : 'Beginning', offsetM: 0 });
-  chips.push(...list);
+  chips.push(...namedChips(list, 6 - chips.length));
   const onChip = chips.find((c) => Math.abs(c.offsetM - st.offsetM) <= 60);
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   $('startStops').innerHTML = chips.map((c) => `<button type="button" data-off="${c.offsetM}" class="${c === onChip ? 'on' : ''}">${esc(c.name)}</button>`).join('')
@@ -365,6 +382,11 @@ function renderRouteSelector(r, cp) {
       : p2p ? 'Turns at the finish and rides it back, endlessly.' : 'Rides on until you stop, turning at each end.';
   }
   $('planNote').innerHTML = note;
+  const lenName = { time: 'min', dist: distUnit(), climb: `${elevUnit()} climb` };
+  optsRouteParts = [r.netRide ? null : st.reverse ? 'Reverse' : 'Forward',
+    `from ${onChip ? onChip.name : `${fmtDist(st.offsetM, 1)} ${distUnit()} in`}`,
+    len.mode === 'open' ? (p2p ? 'full length' : 'open length') : `${lenUnits[len.mode].toShow(rideLength[len.mode])} ${lenName[len.mode]}`];
+  renderOptsSummary();
 }
 
 // Drag the start along the profile (snaps to a named stop when you're close)
@@ -558,6 +580,7 @@ function pacerPath(route) {
 }
 function renderPacerChoice() {
   for (const b of $('pacerSeg').children) b.classList.toggle('on', Number(b.dataset.w) === pacer.watts);
+  renderOptsSummary();
 }
 function setPacer(watts) {
   const wasOn = pacer.on;
@@ -598,6 +621,7 @@ const fact = (v, label) => `<div class="fact"><b>${v}</b><small>${label}</small>
 function renderPreview() {
   const map = $('pvMap'), chart = $('pvChart');
   $('routeOpts').hidden = true;
+  renderOptsSummary();
   $('pvHint').hidden = true;
   chart.classList.remove('pickable');
   $('offlineStatus').hidden = chosen !== 'route';
@@ -729,16 +753,23 @@ function setScenery(id) {
   renderScenery();
   renderPreview();
 }
-// Routes are listed in sections: In Progress, Rough Drafts (catalog "stage": "draft") and
-// Deprecated ("stage": "deprecated"). The route list ends with a collapsible Ideas section.
+// Routes are listed in sections: In Progress, then one closed "More routes" fold (menu-simplify-test) holding
+// Rough Drafts (catalog "stage": "draft"), Deprecated ("stage": "deprecated") and the Ideas list. The fold opens
+// by itself while the selected item is in it.
 const STAGES = [['progress', 'In Progress'], ['draft', 'Rough Drafts'], ['deprecated', 'Deprecated']];
 const stageOf = (it) => (['draft', 'deprecated'].includes(it.stage) ? it.stage : 'progress');
-function groupedCards(items, card) {
-  return STAGES.map(([key, label]) => {
+const moreOpen = {};   // by list (route cards, scenery cards): opened by hand
+function groupedCards(items, card, selectedId = null, list = 'routeCards') {
+  const block = ([key, label]) => {
     const list = items.filter((it) => stageOf(it) === key);
     return list.length ? `<h3 class="cards-group">${label}</h3>${list.map(card).join('')}` : '';
-  }).join('');
+  };
+  const folded = items.filter((it) => stageOf(it) !== 'progress');
+  const open = moreOpen[list] || folded.some((it) => it.id === selectedId);
+  const inner = STAGES.slice(1).map(block).join('') + ideasSection();
+  return block(STAGES[0]) + (inner ? `<details class="more-routes" ${open ? 'open' : ''}${open && !moreOpen[list] ? ' data-auto="1"' : ''}><summary class="cards-group">More routes <span class="muted">· ${folded.length} drafts &amp; older${routeIdeas?.length ? ' · ideas' : ''}</span></summary><div class="cards">${inner}</div></details>` : '');
 }
+const watchMore = (list) => list.querySelector('details.more-routes')?.addEventListener('toggle', (e) => { if (!(e.target.dataset.auto && e.target.open)) moreOpen[list.id] = e.target.open; /* (not when opened for the selection) */ drawThumbs(); });
 
 // Route ideas (routes/ideas.json): not rideable yet, listed in a collapsible section at the bottom.
 let routeIdeas = null;
@@ -767,8 +798,8 @@ function renderScenery() {
     <button class="rcard ${p.id === 'none' ? 'none' : ''} ${p.id === settings.scenery ? 'on' : ''}" data-id="${p.id}">
       ${p.id === 'none' ? '<div class="blank">No 3D</div>' : '<canvas></canvas>'}
       <div><b>${escapeHtml(p.name)}</b><div class="rsub">${escapeHtml(p.park || '')}</div></div>
-    </button>`) + ideasSection();
-  watchIdeas($('sceneCards'));
+    </button>`, settings.scenery, 'sceneCards');
+  watchIdeas($('sceneCards')); watchMore($('sceneCards'));
   drawThumbs();
   const sel = $('sceneSelect');
   sel.innerHTML = '';
@@ -1570,13 +1601,13 @@ function goalTags(it) {
   return GOALS.map(([k]) => k).filter((k) => tags.has(k));
 }
 let routeGoal = GOALS.some(([k]) => k === settings.routeGoal) ? settings.routeGoal : 'all';
+// (a small "Show" dropdown in the Routes heading, menu-simplify-test; the city panels keep their chip row)
 function renderGoalSeg() {
-  $('goalSeg').innerHTML = GOALS.map(([k, label]) => `<button type="button" data-goal="${k}" class="${k === routeGoal ? 'on' : ''}">${label}</button>`).join('');
+  $('goalSel').innerHTML = GOALS.map(([k, label]) => `<option value="${k}">${k === 'all' ? 'All routes' : label}</option>`).join('');
+  $('goalSel').value = routeGoal;
 }
-$('goalSeg').addEventListener('click', (e) => {
-  const b = e.target.closest('button[data-goal]');
-  if (!b) return;
-  routeGoal = b.dataset.goal;
+$('goalSel').addEventListener('change', (e) => {
+  routeGoal = e.target.value;
   settings.routeGoal = routeGoal;
   saveSettings(settings);
   renderRouteCards();
@@ -1615,8 +1646,8 @@ function renderRouteCards() {
     return `<button class="rcard ${it.id === selectedRouteId ? 'on' : ''}" data-id="${it.id}"><canvas></canvas>
       <div><b>${escapeHtml(it.name.replace(' (built-in)', ''))}</b><div class="rsub">${escapeHtml(it.park || it.group)} · ${sub}</div>${tags.length ? `<div class="rtags">${tags.map((t) => `<span>${label[t]}</span>`).join('')}</div>` : ''}</div></button>`;
   };
-  $('routeCards').innerHTML = (shown.length ? '' : '<p class="muted">No routes for that goal yet.</p>') + top.map(card).join('') + groupedCards(rest, card) + ideasSection();
-  watchIdeas($('routeCards'));
+  $('routeCards').innerHTML = (shown.length ? '' : '<p class="muted">No routes for that goal yet.</p>') + top.map(card).join('') + groupedCards(rest, card, selectedRouteId);
+  watchIdeas($('routeCards')); watchMore($('routeCards'));
   drawThumbs();
   for (const c of routeCards.filter((x) => x.city)) loadCityRivers(c).then((fresh) => { if (fresh) drawThumbs(); });
 }
@@ -1689,7 +1720,7 @@ function cityMapData(card) {
   if (!net) return null;
   const paths = new Map(card.routes.map((it) => [it.id, cityPath(net, it)]));
   // a road graph's network (PGH: thousands of streets) is drawn simply (minor: 0 primary roads and trails, 1 secondary
-  // roads — both drawn in full, the thumbnail only 0 — 2 the rest, faint, not on the thumbnail), no junction dots, no landmarks; a few neighbourhoods named and the rivers
+  // roads — both drawn in full, the thumbnail too — 2 the rest, thinner, not on the thumbnail; all in one faint style), no junction dots, no landmarks; a few neighbourhoods named and the rivers
   const simple = graphMapLabels.has(card.network);
   const lines = edgeLines(net).map((L) => ({ id: L.id, lat: L.lat, lon: L.lon, minor: !simple ? 0 : L.e.kind === 'primary' || L.e.kind === 'path' ? 0 : L.e.kind === 'secondary' ? 1 : 2 })), map = cityMaps.get(card.baseId);
   return { net, paths, index: segmentRoutes(card.routes.map((it) => ({ id: it.id, path: paths.get(it.id) }))),

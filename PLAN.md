@@ -1758,6 +1758,21 @@ Branch `skan-test`. Plan and review maps in the Project doc claude/skan-map.md. 
 - App: `GRAPH_CITIES` — SKAN a card beside PGH and CNY. `npm run skan:build` rebuilds it all; `tools/pgh-editor.html?map=skan`
   edits it. Tests: test/skan.test.mjs.
 
+### Menu simplify (test branch `menu-simplify-test`)
+Goal: a lighter main menu, and fix the PGH / CNY / SKAN map cards that looked as if roads or routes were highlighted.
+- [x] Bug: the city map thumbnails drew only main roads and trails, dark grey (secondary roads hidden), so the network
+  read as a highlighted route; the panel map drew main roads darker and a goal brightened its routes' roads. Now every
+  road is one faint style (side streets thinner) and only the selected route is drawn in blue (js/views.js drawCityMap).
+- [x] Devices: a slim strip of pills (Trainer · Handlebars · Heart rate), no heading.
+- [x] Ride type: one tab row Routes · Workouts · Free ride (the "Ride without a route" link and its Back link gone).
+- [x] Goal filter: a small "Show" dropdown in the Routes heading (the city panels keep their chips).
+- [x] Rough Drafts, Deprecated and Ideas in one closed "More routes" fold (opens by itself while its route is selected).
+- [x] Preview: Start right under the facts; direction, start, length, end and pacer in a closed "Ride options" fold with
+  a one-line summary.
+- [x] Start chips: at most 6 (named places first, else spread along the leg, no repeats) — drag the profile for anywhere
+  else. (PGH's loop had ~60 junction chips: that was the clutter, not duplicate routes — PGH has 5.)
+- [x] Phone: the header's buttons show icons only under 560 px; the menu no longer scrolls sideways.
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

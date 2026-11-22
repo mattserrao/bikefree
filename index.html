@@ -28,9 +28,8 @@
           <button class="primary" id="welcomeBtn">Create profile</button>
         </section>
 
-        <section>
-          <h2>Devices</h2>
-          <div class="devices">
+        <section class="devices-sec" aria-label="Devices">
+          <div class="devices compact">
           <button class="device" id="trainerBtn">
             <span class="dev-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17" r="3.5"/><circle cx="18.5" cy="17" r="3.5"/><path d="M5.5 17 10 8h5l3.5 9M10 8 8 5H6M15 8l-3 9h-3"/></svg></span>
             <span class="dev-text"><b>Trainer</b><span id="trainerLabel">Tap to pair</span></span>
@@ -55,20 +54,11 @@
           </div>
         </section>
 
-        <section>
-          <h2>Ride type</h2>
-          <div class="modes" role="tablist" aria-label="Ride type">
-          <button role="tab" data-mode="route" class="mode on" aria-selected="true"><span class="mode-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></svg></span><span class="mode-text"><b>Route</b><span>Parks in 3D or your GPX</span></span><span class="tick"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"><path d="m5 12 5 5 9-10"/></svg></span></button>
-          <button role="tab" data-mode="workout" class="mode" aria-selected="false"><span class="mode-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><rect x="4" y="12" width="3.5" height="6" rx="1"/><rect x="10" y="7" width="3.5" height="11" rx="1"/><rect x="16" y="10" width="3.5" height="8" rx="1"/></svg></span><span class="mode-text"><b>Workout</b><span>Trainer holds the watts</span></span><span class="tick"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"><path d="m5 12 5 5 9-10"/></svg></span></button>
-          </div>
-        </section>
+        <div class="seg ride-tabs" role="tablist" aria-label="Ride type">
+          <button type="button" role="tab" data-mode="route" class="ride-tab on" aria-selected="true">Routes</button><button type="button" role="tab" data-mode="workout" class="ride-tab" aria-selected="false" title="Trainer holds the watts">Workouts</button><button type="button" role="tab" data-mode="free" class="ride-tab" aria-selected="false" title="No route: you set the grade with ▲ ▼">Free ride</button>
+        </div>
 
         <section class="mode-pane" data-pane="free" hidden>
-          <div class="h2row">
-            <h2>Ride without a route</h2>
-            <div class="spacer"></div>
-            <button type="button" class="link" id="freeBack">Back to routes</button>
-          </div>
           <p class="free-note">You set the grade with ▲ ▼ while you ride. Pick the scenery:</p>
           <div class="cards" id="sceneCards"></div>
         </section>
@@ -84,10 +74,10 @@
                 <button type="button" class="menu-item danger" id="routeDelete">Remove this route</button>
               </div>
             </details>
+            <div class="spacer"></div>
+            <label class="pick-label">Show <select id="goalSel" aria-label="Ride goal"></select></label>
           </div>
-          <div class="seg goal-seg" id="goalSeg" role="group" aria-label="Ride goal"></div>
           <div class="cards" id="routeCards"></div>
-          <p class="free-link"><button type="button" class="link" id="freeRideLink">Ride without a route (you set the grade)</button></p>
         </section>
 
         <section class="mode-pane" data-pane="workout" hidden>
@@ -112,7 +102,12 @@
         <h3 class="pv-title" id="pvTitle">—</h3>
         <div class="pv-sub" id="pvSub"></div>
         <div class="facts" id="pvFacts"></div>
+        <button id="startBtn" class="primary start">Start riding</button>
+        <div class="start-note" id="startNote"></div>
         <div class="pv-shots" id="pvShots" hidden></div>
+        <details class="ride-opts" id="rideOpts">
+        <summary><b>Ride options</b><span class="ro-sum" id="rideOptsSum"></span></summary>
+        <div class="ro-body">
         <div class="route-opts" id="routeOpts" hidden>
           <div class="seg" id="dirSeg" role="group" aria-label="Direction">
             <button type="button" data-dir="fwd" class="on">Forward</button><button type="button" data-dir="rev" title="Start from the far end">Reverse</button>
@@ -147,14 +142,14 @@
             <button type="button" data-w="0" class="on">Off</button><button type="button" data-w="75">75</button><button type="button" data-w="100">100</button><button type="button" data-w="125">125</button><button type="button" data-w="150">150</button><button type="button" data-w="175">175</button><button type="button" data-w="200">200 W</button>
           </div>
         </div>
+        </div>
+        </details>
         <canvas id="pvMap" class="pv-map"></canvas>
         <canvas id="pvChart" class="pv-chart"></canvas>
         <div class="pv-hint" id="pvHint" hidden></div>
         <p class="pv-desc" id="pvDesc"></p>
         <button type="button" class="link plan-open" id="planOpen" hidden>Plan your own route on the map…</button>
         <div class="offline-status" id="offlineStatus"></div>
-        <button id="startBtn" class="primary start">Start riding</button>
-        <div class="start-note" id="startNote"></div>
       </aside>
     </div>
     <div class="ver" id="ver"></div>

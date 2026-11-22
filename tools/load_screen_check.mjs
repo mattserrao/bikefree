@@ -52,7 +52,7 @@ async function run(name) {
   page.on('pageerror', (e) => errors.push((e.stack || e.message).split('\n').slice(0, 4).join(' | ')));
   page.on('console', (m) => { const t = m.text(); if (m.type() === 'error') errors.push(t); else if (/Start ready|Loading screen|Ride anyway|clock runs on/.test(t)) logs.push(t); });
   await page.goto(`${base}/index.html`);
-  await page.click('.mode[data-mode="route"]');
+  await page.click('.ride-tab[data-mode="route"]');
   const park = !/ /.test(name);
   if (park) {
     const card = `#routeCards .rcard[data-id="builtin-park-${name}"]`;
