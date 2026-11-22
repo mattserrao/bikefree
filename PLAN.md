@@ -1727,6 +1727,11 @@ Branch `cny-test` (PGH's PR #42 merged first). Built with PGH's own tools, now t
   fifth of it, tools/pgh_city.py); Nine Mile Creek and the brooks as ribbons (were 6 m land cells, a chain of
   diamonds); CNY's trails stone dust (surface gravel: packed in the wheel line, loose at the edges, pebbles) with no
   centre line.
+- Revised (user, 22 Nov: "the slope of the bank - it's too wide. It should be 1m, steeper, and the canal wider. The
+  color is also too green. A murky blue green black"): banks rise 0.85 m over 1 m; the water reaches to 1.1 m from the
+  towpath (up to 16 m from OSM's line, the canal at most 19 m), its level taken over its real width (the trail's fill
+  had hidden the near water); murky blue-green-black water with a little scum. graph-heroes.js `landscape.wayDist`:
+  distance to the nearest way by segments.
 
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
