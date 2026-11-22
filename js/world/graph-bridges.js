@@ -213,6 +213,7 @@ export function buildGraphBridges(world, json) {
         markMask(e, i, 1 | (ridden && e === ridden.e && e.kind !== 'path' ? 2 : 0));
       }
     }
+    ends.push({ name: b.name, a: path.at(0, {}), z: path.at(len, {}) });   // (the approaches start at these: their heights)
     return true;
   }
 
@@ -733,15 +734,112 @@ export function buildGraphBridges(world, json) {
 
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0.22, side: THREE.DoubleSide });
   const group = new THREE.Group(); group.name = 'PGH bridges';
-  const models = [];
+  const models = [], ends = [];
   let count = 0;
+  const addModel = (name) => {
+    if (!M.count) return;
+    const mesh = new THREE.Mesh(M.geometry(), mat); mesh.name = name; mesh.castShadow = mesh.receiveShadow = true;
+    mesh.geometry.computeBoundingSphere();
+    models.push({ mesh, sphere: mesh.geometry.boundingSphere, shown: false });
+  };
   for (const b of json.bridges || []) {
     M = new MeshBuilder();
     try { if (build(b)) count++; } catch (err) { console.warn(`PGH bridge ${b.name}: ${err.message}`); }
-    if (!M.count) continue;
-    const mesh = new THREE.Mesh(M.geometry(), mat); mesh.name = `PGH bridge: ${b.name}`; mesh.castShadow = mesh.receiveShadow = true;
-    mesh.geometry.computeBoundingSphere();
-    models.push({ mesh, sphere: mesh.geometry.boundingSphere, shown: false });
+    addModel(`PGH bridge: ${b.name}`);
+  }
+  // ---------------------------------------------------------------- the approaches (tools/pgh_bridges.mjs)
+  // (user, 21 Nov: "bridge near the point that isn't connected to anything") The viaducts and ramps that carry a
+  // scenery bridge's road on to the ground (the Fort Duquesne's to the Point's interchange and the North Side's, the
+  // Fort Pitt's, Veterans', …): a concrete deck on girders with parapets, on column bents; then the road on at grade.
+  // Heights: a bridge's end at its deck, a stretch at grade on the ground, between them as near the viaduct's own
+  // clearance (layer by layer over the ground, 12 m over the river) as a 6 % grade allows.
+  const AP = { count: 0, viaductM: 0, gradeM: 0, qc: [] };
+  if (json.approaches?.ways?.length) {
+    const A = json.approaches, P0 = A.nodes.map(([la, lo, fixed]) => { const q = proj.toLocal(la, lo); return { x: q.x, z: q.z, fixed, adj: [] }; });
+    const wayBridge = new Map();   // node → on a viaduct (the clearance it wants)
+    for (const w of A.ways) for (let i = 0; i < w.n.length; i++) {
+      const k = w.n[i], p = P0[k];
+      if (w.bridge) wayBridge.set(k, Math.max(wayBridge.get(k) ?? 0, w.layer || 1));
+      if (i) { const q = P0[w.n[i - 1]], d = Math.hypot(p.x - q.x, p.z - q.z); p.adj.push([w.n[i - 1], d]); q.adj.push([k, d]); }
+    }
+    const roadY = (x, z) => { let best = null; for (const { e, i } of near(x, z, 12)) { if (e.kind === 'path' || e._deck[i]) continue; const d = Math.hypot(e.x[i] - x, e.z[i] - z); if (!best || d < best.d) best = { d, y: e.ele[i] }; } return best && best.d < 10 ? best.y : groundH(x, z); };
+    // the fixed heights
+    const fixedY = P0.map((p, k) => {
+      if (p.fixed === 1) {
+        let best = null;
+        for (const E of ends) for (const q of [E.a, E.z]) { const d = Math.hypot(q.x - p.x, q.z - p.z); if (d < 60 && (!best || d < best.d)) best = { d, y: q.y }; }
+        if (best) return best.y;
+      }
+      if (p.fixed === 2 || !wayBridge.has(k)) return roadY(p.x, p.z) + 0.05;
+      return null;
+    });
+    const want = P0.map((p, k) => {
+      if (fixedY[k] != null) return fixedY[k];
+      const g = groundH(p.x, p.z), w = pool(p.x, p.z);
+      return Math.max(g + 6.5 + 5.5 * Math.max(0, (wayBridge.get(k) || 1) - 1), w > g ? w + 12 : -Infinity);
+    });
+    // the envelope a 6 % grade allows from the fixed heights (shortest paths along the ways)
+    const env = (sign) => {
+      const val = P0.map((_, k) => (fixedY[k] != null ? fixedY[k] : sign * Infinity)), done = new Uint8Array(P0.length);
+      for (;;) {
+        let k = -1; for (let q = 0; q < P0.length; q++) if (!done[q] && Number.isFinite(val[q]) && (k < 0 || sign * val[q] < sign * val[k])) k = q;
+        if (k < 0) break;
+        done[k] = 1;
+        for (const [q, d] of P0[k].adj) { const v = val[k] + sign * 0.06 * d; if (sign * v < sign * val[q]) val[q] = v; }
+      }
+      return val;
+    };
+    const hi = env(1), lo = env(-1);
+    const Y = want.map((y, k) => (fixedY[k] != null ? y : Math.max(Number.isFinite(lo[k]) ? lo[k] : -Infinity, Math.min(Number.isFinite(hi[k]) ? hi[k] : Infinity, y))));
+    // and clear of PGH's ways under a viaduct (6.5 m)
+    for (let k = 0; k < P0.length; k++) if (fixedY[k] == null) for (const { e, i } of near(P0[k].x, P0[k].z, 14)) if (e.ele[i] > Y[k] - 9 && e.ele[i] < Y[k] + 1 && !e._deck[i]) Y[k] = Math.max(Y[k], e.ele[i] + 6.5);
+    const byBridge = new Map();
+    for (const w of A.ways) { if (!byBridge.has(w.bridgeName)) byBridge.set(w.bridgeName, []); byBridge.get(w.bridgeName).push(w); }
+    const deckC = shade(CONCRETE, 0.92), under = shade(CONCRETE, 0.72), rail = shade(CONCRETE, 1.06), asphalt = new THREE.Color(ASPHALT), line = new THREE.Color('#e9e4d6');
+    for (const [name, list] of byBridge) {
+      M = new MeshBuilder();
+      for (const w of list) {
+        const raw = w.n.map((k) => ({ x: P0[k].x, y: Y[k], z: P0[k].z }));
+        const path = makePath(resample(raw, w.bridge ? 6 : 4)), L = path.length; if (L < 2) continue;
+        const half = (w.lanes || 1) * 1.8 + (w.link ? 0.9 : 1.2);
+        const N = Math.max(1, Math.ceil(L / (w.bridge ? 6 : 4))), S = [];
+        for (let k = 0; k <= N; k++) {
+          const p = path.at(L * k / N, {});
+          let y = p.y;
+          if (!w.bridge) y = Math.max(groundH(p.x, p.z), Math.min(p.y, roadY(p.x, p.z))) + 0.06;   // (at grade: on the ground, under a PGH road it meets)
+          S.push({ x: p.x, y, z: p.z, rx: -p.dz, rz: p.dx });
+        }
+        const at = (q, v, dy = 0) => V(q.x + q.rx * v, q.y + dy, q.z + q.rz * v);
+        for (let k = 0; k < N; k++) {
+          const a = S[k], b = S[k + 1];
+          M.color(asphalt); M.quad(at(a, -half), at(b, -half), at(b, half), at(a, half));
+          if (!w.link && k % 3 === 0) { M.color(line); M.quad(at(a, -0.08, 0.01), at(b, -0.08, 0.01).lerp(at(a, -0.08, 0.01), 0.55), at(b, 0.08, 0.01).lerp(at(a, 0.08, 0.01), 0.55), at(a, 0.08, 0.01)); }
+          if (!w.bridge) continue;
+          for (const sd of [-1, 1]) {
+            M.color(deckC); M.quad(at(a, sd * half, -1.7), at(b, sd * half, -1.7), at(b, sd * half, 0), at(a, sd * half, 0));   // the slab's edge
+            M.color(rail); M.quad(at(a, sd * (half + 0.3), -1.7), at(b, sd * (half + 0.3), -1.7), at(b, sd * (half + 0.3), 0.9), at(a, sd * (half + 0.3), 0.9));   // the parapet, outside
+            M.quad(at(a, sd * half, 0), at(b, sd * half, 0), at(b, sd * half, 0.9), at(a, sd * half, 0.9));   // …inside
+            M.quad(at(a, sd * half, 0.9), at(b, sd * half, 0.9), at(b, sd * (half + 0.3), 0.9), at(a, sd * (half + 0.3), 0.9));   // …its top
+          }
+          M.color(under); M.quad(at(a, -half - 0.3, -1.7), at(b, -half - 0.3, -1.7), at(b, half + 0.3, -1.7), at(a, half + 0.3, -1.7));
+          // a bent every ~30 m: two columns and a cap beam (one column on a ramp), down to the ground or the river bed;
+          // never on a way PGH rides
+          if (k % 5 === 2) {
+            const g = groundH(a.x, a.z), wet = pool(a.x, a.z) > g, bed = wet ? Math.min(g, pool(a.x, a.z) - 5) : g - 0.5, top = a.y - 1.7;
+            if (top - bed < 2) continue;
+            const yaw = Math.atan2(a.rz, -a.rx), cols = half > 3 ? [-half + 1.4, half - 1.4] : [0];
+            let ok = true;
+            for (const { e, i } of near(a.x, a.z, half + 10)) if (!e._deck[i] && e.ele[i] < top - 2 && Math.hypot(e.x[i] - a.x, e.z[i] - a.z) < half + halfOf(e) + 1) { ok = false; AP.qc.push({ bridge: name, way: e.name || e.id }); break; }
+            if (!ok) continue;
+            M.color(CONCRETE);
+            for (const v of cols) { const q = at(a, v); M.box(q.x, bed, q.z, 1.5, top - bed, 1.5, yaw); }
+            M.color(shade(CONCRETE, 1.05)); M.box(a.x, top - 1.2, a.z, half * 2 + 0.6, 1.2, 1.8, yaw);
+          }
+        }
+        AP.count++; if (w.bridge) AP.viaductM += L; else AP.gradeM += L;
+      }
+      addModel(`PGH bridge approaches: ${name}`);
+    }
   }
   /** Each model in the scene only within `reach` of the camera (its GPU copy made when it first comes near, dropped
    *  when it goes far): a rider downtown has the three sisters and the Point's bridges; one in Homestead, the Glenwood. */
@@ -753,5 +851,5 @@ export function buildGraphBridges(world, json) {
       if (want) group.add(m.mesh); else { group.remove(m.mesh); m.mesh.geometry.dispose(); }   // (dispose: the GPU copy; the arrays stay for next time)
     }
   }
-  return { group, glows, mask, count, qc, qcPier, models, tick, dispose() { for (const m of models) m.mesh.geometry.dispose(); mat.dispose(); } };
+  return { group, glows, mask, count, qc, qcPier, models, tick, approaches: AP, dispose() { for (const m of models) m.mesh.geometry.dispose(); mat.dispose(); } };
 }

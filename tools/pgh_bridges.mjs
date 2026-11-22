@@ -54,8 +54,9 @@ const BRIDGES = [
   { name: 'Davis Avenue Bridge', style: 'girder', color: '#8a8e91', width: 5, note: 'footbridge over Riverview Park' },
 ];
 
-// OSM: the bridge ways (and the man_made=bridge outlines)
-const nodes = new Map(), ways = [];
+// OSM: the bridge ways (and the man_made=bridge outlines); the main roads (the bridges' approaches: below)
+const nodes = new Map(), ways = [], roads = new Map();
+const ROAD_KINDS = /^(motorway|trunk|primary|secondary)(_link)?$/;
 const dir = resolve(root, 'tools/.cache/osm-pgh');
 for (const f of readdirSync(dir)) {
   if (!f.endsWith('.osm')) continue;
@@ -63,8 +64,10 @@ for (const f of readdirSync(dir)) {
   for (const m of txt.matchAll(/<node id="(\d+)"[^>]*lat="([-\d.]+)" lon="([-\d.]+)"/g)) nodes.set(m[1], [+m[2], +m[3]]);
   for (const m of txt.matchAll(/<way id="(\d+)"[^>]*>([\s\S]*?)<\/way>/g)) {
     const tags = {}; for (const t of m[2].matchAll(/k="([^"]*)" v="([^"]*)"/g)) tags[t[1]] = t[2];
+    const refs = [...m[2].matchAll(/<nd ref="(\d+)"/g)].map((x) => x[1]);
+    if (ROAD_KINDS.test(tags.highway || '') && !roads.has(m[1])) roads.set(m[1], { id: m[1], tags, refs });
     if (!tags.bridge || tags.bridge === 'no') continue;
-    ways.push({ id: m[1], tags, refs: [...m[2].matchAll(/<nd ref="(\d+)"/g)].map((x) => x[1]) });
+    ways.push({ id: m[1], tags, refs });
   }
 }
 const seen = new Set();
@@ -121,6 +124,81 @@ for (const b of BRIDGES) {
   const extra = mine.filter((w) => !used.has(w.id)).map((w) => ({ kind: w.tags.highway || w.tags.railway || '', pts: w.pts.map(([la, lo]) => [+la.toFixed(6), +lo.toFixed(6)]) }));
   out.bridges.push({ ...b, path: chain.map(([la, lo]) => [+la.toFixed(6), +lo.toFixed(6)]), lengthOsm: Math.round(lenOf(chain)), extra });
   console.log(`  ${b.name}: ${b.style}, ${Math.round(lenOf(chain))} m (${used.size} way${used.size > 1 ? 's' : ''}, +${extra.length} beside)`);
+}
+// ---------------------------------------------------------------- approaches
+// (user, 21 Nov: "bridge near the point that isn't connected to anything") A bridge PGH doesn't ride (the Fort Duquesne,
+// the Fort Pitt: interstates) stopped where OSM's bridge way stops — mid-river at the Fort Duquesne, whose viaducts carry
+// on to the Point's interchange. The approaches: from each such bridge's ends, the main roads joined to it (motorways,
+// trunks, their ramps; primary and secondary roads PGH doesn't have) followed out while they are bridges (viaducts,
+// ramps), then on at grade until they meet a road PGH has (or 300 m, or a tunnel's mouth). js/world/graph-bridges.js
+// draws the viaducts (decks on girders and bents) and the stretches at grade (asphalt on the ground).
+{
+  // PGH's ways (where an approach lands): every 10 m sample, gridded
+  const G = new Map(), gk = (la, lo) => `${Math.floor(la * 2000)},${Math.floor(lo * 2000)}`;
+  for (const e of pgh.edges) {
+    if (e.kind === 'path') continue;
+    let la = 0, lo = 0;
+    for (let i = 0; i < e.lat.length; i++) { la += e.lat[i]; lo += e.lon[i]; const p = [la * 1e-6, lo * 1e-6], k = gk(...p); if (!G.has(k)) G.set(k, []); G.get(k).push(p, e.name || ''); }
+  }
+  const pghNear = (p, r = 9) => { const [a, b] = gk(...p).split(',').map(Number); for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const L = G.get(`${a + i},${b + j}`); if (L) for (let q = 0; q < L.length; q += 2) if (dist(L[q], p) < r) return L[q + 1] || true; } return null; };
+  const isPgh = (w) => { const pts = w.refs.map((r) => nodes.get(r)).filter(Boolean); if (pts.length < 2) return false; let hit = 0; for (const p of pts) if (pghNear(p, 6)) hit++; return hit >= pts.length * 0.7; };
+  const byNode = new Map();
+  for (const w of roads.values()) for (const r of w.refs) { if (!byNode.has(r)) byNode.set(r, []); byNode.get(r).push(w); }
+  const bridgeWayIds = new Set(), bridgeNodes = new Map();   // node → the bridge it ends (its chain's ways' nodes)
+  for (const b of out.bridges) {
+    const names = new Set([b.name, ...(b.alias || [])]);
+    for (const w of uniq) if (names.has(w.tags['bridge:name']) || names.has(w.tags.name)) { bridgeWayIds.add(w.id); for (const r of w.refs) bridgeNodes.set(r, b.name); }
+  }
+  // seeds: the main roads leaving a scenery bridge's ways (a bridge PGH rides is reached by PGH's own roads)
+  const ridden = new Set(out.bridges.filter((b) => pgh.edges.some((e) => e.name === b.name && e.kind !== 'path' && e.bridges?.length)).map((b) => b.name));
+  const nodeIdx = new Map(), nodesOut = [], waysOut = [], taken = new Set();
+  const nodeOf = (r, fixed) => { if (!nodeIdx.has(r)) { const [la, lo] = nodes.get(r); nodeIdx.set(r, nodesOut.length); nodesOut.push([+la.toFixed(6), +lo.toFixed(6), fixed || 0]); } const k = nodeIdx.get(r); if (fixed) nodesOut[k][2] = fixed; return k; };
+  const queue = [];
+  // (only a bridge whose ends don't already meet PGH's roads: one an approach must carry on from)
+  const loose = new Set(out.bridges.filter((b) => !ridden.has(b.name) && [b.path[0], b.path[b.path.length - 1]].some((p) => !pghNear(p, 25))).map((b) => b.name));
+  for (const [r, name] of bridgeNodes) {
+    if (!loose.has(name)) continue;
+    for (const w of byNode.get(r) || []) if (!bridgeWayIds.has(w.id)) queue.push({ w, from: r, run: 0, grade: 0, bridge: name });
+  }
+  const lanesOf = (t) => +t.lanes || (/link/.test(t.highway) ? 1 : t.oneway === 'yes' ? 2 : 2);
+  while (queue.length) {
+    const { w, from, run, grade, bridge } = queue.shift();
+    if (taken.has(w.id) || bridgeWayIds.has(w.id)) continue;
+    if (w.tags.tunnel && w.tags.tunnel !== 'no') continue;
+    if (isPgh(w)) continue;   // (a road PGH has: the approach has landed)
+    const onBridge0 = w.tags.bridge && w.tags.bridge !== 'no';
+    if (!onBridge0 && grade > 0) continue;   // (at grade: one way on from the last viaduct, no further)
+    if (!onBridge0 && !/^(motorway|trunk)/.test(w.tags.highway) && !(w.tags.layer > 0)) continue;   // (a street at grade: left to the city)
+    taken.add(w.id);
+    // walk the way from the node it was reached at
+    const refs = w.refs[0] === from ? w.refs : w.refs[w.refs.length - 1] === from ? w.refs.slice().reverse() : w.refs;
+    const onBridge = w.tags.bridge && w.tags.bridge !== 'no';
+    let d = 0, cut = refs.length, landed = false;
+    for (let i = 1; i < refs.length; i++) {
+      const a = nodes.get(refs[i - 1]), z = nodes.get(refs[i]); if (!a || !z) { cut = i; break; }
+      d += dist(a, z);
+      if (!onBridge && pghNear(z, 9)) { cut = i + 1; landed = true; break; }
+      if (!onBridge && grade + d > 160) { cut = i + 1; break; }
+    }
+    const use = refs.slice(0, cut).filter((r) => nodes.has(r));
+    if (use.length < 2) continue;
+    const ks = use.map((r, i) => nodeOf(r, bridgeNodes.has(r) && !bridgeWayIds.has(w.id) && i === 0 ? 1 : 0));
+    if (!onBridge) nodesOut[ks[ks.length - 1]][2] = landed || cut < refs.length ? 2 : nodesOut[ks[ks.length - 1]][2];   // (2: on the ground)
+    if (bridgeNodes.has(use[0])) nodesOut[ks[0]][2] = 1;   // (1: on a bridge's end: its deck's height)
+    waysOut.push({ n: ks, bridge: onBridge ? 1 : 0, lanes: lanesOf(w.tags), link: /link/.test(w.tags.highway) ? 1 : 0, layer: +w.tags.layer || 0, bridgeName: bridge });
+    if (run + d > 3000 || !onBridge) continue;   // (a viaduct is followed to the ground: cut short it would hang in the air)
+    const end = use[use.length - 1];
+    for (const v of byNode.get(end) || []) if (!taken.has(v.id)) queue.push({ w: v, from: end, run: run + d, grade: onBridge ? 0 : grade + d, bridge });
+  }
+  // a node where a viaduct meets a stretch at grade sits on the ground
+  const touch = new Map();
+  waysOut.forEach((w) => { for (const k of [w.n[0], w.n[w.n.length - 1]]) { if (!touch.has(k)) touch.set(k, []); touch.get(k).push(w); } });
+  for (const [k, list] of touch) if (!nodesOut[k][2] && list.some((w) => !w.bridge) && list.some((w) => w.bridge)) nodesOut[k][2] = 2;
+  out.approaches = { note: 'the scenery bridges\' approaches: nodes [lat, lon, fixed (1: a bridge end, 2: on the ground)], ways (n: node indices; bridge: a viaduct)', nodes: nodesOut, ways: waysOut };
+  const lenOfWay = (w) => w.n.reduce((a, k, i) => a + (i ? dist(nodesOut[w.n[i - 1]], nodesOut[k]) : 0), 0);
+  const per = new Map(); for (const w of waysOut) per.set(w.bridgeName, (per.get(w.bridgeName) || 0) + lenOfWay(w));
+  for (const [k, v] of per) console.log(`    ${k}: ${Math.round(v)} m`);
+  console.log(`  approaches: ${waysOut.length} ways, ${Math.round(waysOut.filter((w) => w.bridge).reduce((a, w) => a + lenOfWay(w), 0))} m of viaduct, ${Math.round(waysOut.filter((w) => !w.bridge).reduce((a, w) => a + lenOfWay(w), 0))} m at grade`);
 }
 writeFileSync(resolve(root, 'routes/cities/pgh-bridges.json'), JSON.stringify(out));
 console.log(`bridges: ${out.bridges.length} → routes/cities/pgh-bridges.json`);

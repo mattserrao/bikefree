@@ -44,7 +44,6 @@ const BANK_CAP = 22;                // m: a walled bank's promenade, from the wa
 const BANK_SLOPE = 14;
 const PIER_STEP = 7;
 const PROM_M = 6;                   // m of granite paving along the top of a river wall                // samples (70 m) between a deck's piers              // m: a natural bank, from the water's edge to its top
-const PAINT_GAP = 9;
 const LAND_PAVED = 0;
 const ZERO4 = [0, 0, 0, 3];
 const SUB = 3;                      // a drawn way: each 10 m sample span in this many pieces (a Catmull-Rom curve through the samples)
@@ -65,8 +64,6 @@ const TIMES = {
 
 const _v = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
 
-/** Spatial hash of road samples, for shaping the ground: cell → [x, z, top, halfWidth, fill, …] (top: the highest the ground may be at the
- *  road's edge; fill: the lowest — an embankment under a road above the ground, an abutment under a deck's end; NaN: none). */
 /** An object that never moves: its matrices set now, never recomputed per frame. */
 export function freezeMatrix(o) {
   o.updateMatrixWorld(true);
@@ -75,6 +72,8 @@ export function freezeMatrix(o) {
 }
 /** A grid cell's number (Map keys: numbers, not strings — these lookups run millions of times as tiles build). */
 export const cellKey = (i, j) => (i + 0x8000) * 0x10000 + (j + 0x8000);
+/** Spatial hash of road samples, for shaping the ground: cell → [x, z, top, halfWidth, fill, …] (top: the highest the ground may be at the
+ *  road's edge; fill: the lowest — an embankment under a road above the ground, an abutment under a deck's end; NaN: none). */
 export function roadHash(edges, widths, cell = 32) {
   const grid = new Map(), wf = typeof widths === 'function' ? widths : (e) => widths[e.kind] || 7;
   for (const e of edges) {
@@ -196,6 +195,7 @@ export class GraphWorld {
     // the ways into each junction (crosswalks)
     this.arms = new Map();
     for (const e of this.G.edges) for (const [id, end] of [[e.from, 0], [e.to, 1]]) { if (!this.arms.has(id)) this.arms.set(id, []); this.arms.get(id).push({ e, end }); }
+    this._planJunctions();
     for (const nd of this.G.nodes.values()) {
       const q = this.proj.toLocal(nd.lat, nd.lon);
       slot(tileOf(q.x, q.z)).nodes.push({ id: nd.id, x: q.x, z: q.z, y: nd.ele });
@@ -485,6 +485,102 @@ export class GraphWorld {
   _nodeWidths() {
     this.nodeWidth = new Map();
     for (const e of this.G.edges) for (const id of [e.from, e.to]) this.nodeWidth.set(id, Math.max(this.nodeWidth.get(id) || 0, this.wOf(e)));
+    if (this.arms) this._planJunctions();
+  }
+
+  /** A point on edge e's drawn centre line (the Catmull-Rom curve _curve draws) at fractional sample f:
+   *  {x, y, z, dx, dz} (dx, dz: unit, along increasing f). */
+  _curvePoint(e, f) {
+    f = Math.max(0, Math.min(e.n, f));
+    const at = (g) => {
+      const i = Math.min(e.n - 1, Math.floor(g)), t = g - i, P = (k) => Math.max(0, Math.min(e.n, k)), i0 = P(i - 1), i2 = P(i + 1), i3 = P(i + 2);
+      const cr = (v) => { const p0 = v[i0], p1 = v[i], p2 = v[i2], p3 = v[i3]; return 0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t); };
+      return { x: cr(e.x), z: cr(e.z), y: e.ele[i] + (e.ele[i2] - e.ele[i]) * t };
+    };
+    const p = at(f), a = at(Math.max(0, f - 0.05)), b = at(Math.min(e.n, f + 0.05)), l = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    return { x: p.x, y: p.y, z: p.z, dx: (b.x - a.x) / l, dz: (b.z - a.z) / l };
+  }
+
+  /**
+   * Junctions (user, 21 Nov: "the way intersections connect is poor and jarring"), as the Pittsburgh map's
+   * (js/world/toolbox/city/junctions.js) on PGH's graph: where three or more ways meet, each way's ribbon stops at
+   * its mouth, square to it; between neighbouring ways a curb return (a fillet, its radius by the ways' class); the
+   * surface is one polygon — the mouths joined by the curb returns — on a plane through the mouths' heights (each
+   * mouth exactly at its ribbon's end); the sidewalks wrap round the corners, the verges where there are none.
+   * → this.jn (node id → { x, z, y, poly, corners, arms, J }), this.trim (edge id → [m cut at from, m cut at to]).
+   */
+  _planJunctions() {
+    const CURB = { primary: 7, secondary: 6, tertiary: 5, residential: 4, alley: 2.5, plaza: 2, path: 1.5 };
+    const left = (u) => ({ x: -u.z, z: u.x }), along = (p, u, t) => ({ x: p.x + u.x * t, z: p.z + u.z * t }), dot = (a, b) => a.x * b.x + a.z * b.z;
+    const meet = (p, u, q, v) => { const den = u.x * v.z - u.z * v.x; if (Math.abs(den) < 1e-6) return null; const wx = q.x - p.x, wz = q.z - p.z; return [(wx * v.z - wz * v.x) / den, (wx * u.z - wz * u.x) / den]; };
+    this.jn = new Map(); this.trim = new Map();
+    const deckEnd = (e, end) => e.bridges.some(([a, b]) => (end ? b >= e.n - 1 : a <= 1));
+    for (const [id, list] of this.arms) {
+      if (list.length < 3 || list.some(({ e, end }) => deckEnd(e, end))) continue;
+      const e0 = list[0].e, N = { x: list[0].end ? e0.x[e0.n] : e0.x[0], z: list[0].end ? e0.z[e0.n] : e0.z[0] };
+      // the arms, round the node
+      const arms = list.map(({ e, end }) => {
+        const len = e.n * 10, d = Math.min(8, len * 0.5), p = this._curvePoint(e, end ? e.n - d / 10 : d / 10);
+        const ux = p.x - N.x, uz = p.z - N.z, l = Math.hypot(ux, uz) || 1;
+        const other = this.arms.get(end ? e.from : e.to)?.length >= 3;
+        return { e, end, u: { x: ux / l, z: uz / l }, h: this.wOf(e) / 2, walk: this.walkOf(e) || 0, r: CURB[e.kind] || 4, len, other, theta: Math.atan2(uz, ux) };
+      }).sort((a, b) => a.theta - b.theta);
+      const n = arms.length, corners = [];
+      for (let q = 0; q < n; q++) {
+        const A = arms[q], B = arms[(q + 1) % n];
+        let gap = B.theta - A.theta; if (gap <= 0) gap += Math.PI * 2;
+        const nA = left(A.u), nB = left(B.u), c = { A, B, gap, arc: null, tA: 0, tB: 0 };
+        if (gap < Math.PI * 0.86 && gap > 0.3) {
+          const r = Math.min(A.r, B.r), pA = along(N, nA, A.h + r), pB = along(N, nB, -(B.h + r)), m = meet(pA, A.u, pB, B.u);
+          if (m && m[0] > 0 && m[1] > 0 && m[0] < 26 && m[1] < 26) { const O = along(pA, A.u, m[0]); c.tA = dot({ x: O.x - N.x, z: O.z - N.z }, A.u); c.tB = dot({ x: O.x - N.x, z: O.z - N.z }, B.u); c.arc = { O, r }; }
+        }
+        if (!c.arc && gap < Math.PI * 0.95) {   // sharp or awkward: where the two edges cross
+          const m = meet(along(N, nA, A.h), A.u, along(N, nB, -B.h), B.u);
+          if (m && m[0] > 0 && m[1] > 0) { c.tA = Math.min(26, m[0]); c.tB = Math.min(26, m[1]); }
+        }
+        corners.push(c);
+      }
+      for (let q = 0; q < n; q++) {
+        const A = arms[q];
+        A.t = Math.min(Math.max(corners[(q - 1 + n) % n].tB, corners[q].tA, 1.5), 26, A.other ? A.len * 0.45 : Math.max(1.5, A.len - 4));
+      }
+      for (const c of corners) if (c.arc && (c.tA > c.A.t + 0.01 || c.tB > c.B.t + 0.01)) c.arc = null;   // (clamped short: a straight corner)
+      // each mouth: where its ribbon ends, square to it, at the ribbon's height
+      for (const A of arms) {
+        const f = A.end ? A.e.n - A.t / 10 : A.t / 10, p = this._curvePoint(A.e, f), sg = A.end ? -1 : 1, ud = { x: p.dx * sg, z: p.dz * sg }, L = left(ud);
+        A.cut = { x: p.x, y: p.y, z: p.z }; A.ud = ud;
+        A.mouth = [{ x: p.x - L.x * A.h, z: p.z - L.z * A.h, y: p.y }, { x: p.x + L.x * A.h, z: p.z + L.z * A.h, y: p.y }];
+        const tr = this.trim.get(A.e.id) || [0, 0]; tr[A.end] = A.t; this.trim.set(A.e.id, tr);
+      }
+      // the surface's plane: least squares through the mouths' heights (never steeper than 10 %)
+      let sx = 0, sz = 0, sy = 0, sxx = 0, szz = 0, sxz = 0, sxy = 0, szy = 0;
+      for (const A of arms) { const x = A.cut.x - N.x, z = A.cut.z - N.z, y = A.cut.y; sx += x; sz += z; sy += y; sxx += x * x; szz += z * z; sxz += x * z; sxy += x * y; szy += z * y; }
+      const mx = sx / n, mz = sz / n, my = sy / n, cxx = sxx / n - mx * mx, czz = szz / n - mz * mz, cxz = sxz / n - mx * mz, cxy = sxy / n - mx * my, czy = szy / n - mz * my, det = cxx * czz - cxz * cxz;
+      let gx = 0, gz = 0; if (Math.abs(det) > 1e-3) { gx = (cxy * czz - czy * cxz) / det; gz = (czy * cxx - cxy * cxz) / det; }
+      const g = Math.hypot(gx, gz); if (g > 0.1) { gx *= 0.1 / g; gz *= 0.1 / g; }
+      const c0 = my - gx * mx - gz * mz, J = (x, z) => c0 + gx * (x - N.x) + gz * (z - N.z);
+      // the polygon (counter-clockwise in x/z): each mouth, then the curb round to the next
+      const poly = [];
+      const edge = (A, side, t) => { const p = along(along(N, A.u, t), left(A.u), side * A.h); return { x: p.x, z: p.z, y: J(p.x, p.z) }; };
+      for (let q = 0; q < n; q++) {
+        const A = arms[q], c = corners[q], B = c.B;
+        poly.push(A.mouth[0], A.mouth[1]);
+        const curb = [A.mouth[1]];
+        if (c.arc) {
+          if (c.tA < A.t - 0.05) curb.push(edge(A, 1, c.tA));
+          const { O, r } = c.arc, last = curb[curb.length - 1], a0 = Math.atan2(last.z - O.z, last.x - O.x);
+          const pB = c.tB < B.t - 0.05 ? edge(B, -1, c.tB) : B.mouth[0];
+          let da = Math.atan2(pB.z - O.z, pB.x - O.x) - a0; while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
+          const steps = Math.max(2, Math.ceil(Math.abs(da) / (Math.PI / 12)));
+          for (let k = 1; k < steps; k++) { const x = O.x + Math.cos(a0 + da * k / steps) * r, z = O.z + Math.sin(a0 + da * k / steps) * r; curb.push({ x, z, y: J(x, z) }); }
+          curb.push(pB);
+          if (c.tB < B.t - 0.05) curb.push(B.mouth[0]);
+        } else curb.push(B.mouth[0]);
+        for (let k = 1; k < curb.length - 1; k++) poly.push(curb[k]);
+        c.curb = curb;
+      }
+      this.jn.set(id, { x: N.x, z: N.z, y: J(N.x, N.z), J, poly, corners, arms });
+    }
   }
 
   /** How far the tiles are built and the fog closes in, by quality (Low: phones). */
@@ -639,7 +735,7 @@ export class GraphWorld {
   *_roadsJob(t) {
     t.built = true;
     if (!t.pieces.length && !t.nodes.length) return;
-    const R = new Mesher(true), P = new Mesher(), W = new Mesher();
+    const R = new Mesher(true), P = new Mesher(), W = new Mesher(), P_ = P;
     const col = (k) => new THREE.Color(COLORS[k] || COLORS.residential);
     const side = col('side'), deckC = col('deck'), rail = col('rail'), under = col('under');
     const verge = new THREE.Color('#7b8556'), gravelC = new THREE.Color('#a59b84'), walkC = new THREE.Color('#b4afa4'), curbC = new THREE.Color('#c3beb3'), walkSide = new THREE.Color('#9d988e');
@@ -650,9 +746,21 @@ export class GraphWorld {
       const deck = new Uint8Array(e.n + 1);
       for (const [p, q] of e.bridges) for (let i = p; i <= q; i++) deck[i] = 1;
       const bm = this.bridgeMask?.get(e.id);
-      const C = this._curve(e, a, b), n = C.length;
-      // the ends at a junction: no sidewalk, paint or shoulder inside the junction's disc
-      const lenM = e.n * 10, r0 = (this.nodeWidth.get(e.from) || 7) / 2 * 1.15 + 0.6, r1 = (this.nodeWidth.get(e.to) || 7) / 2 * 1.15 + 0.6;
+      // the ribbon stops at a junction's mouth (_planJunctions), its end exactly on the mouth
+      const tr = this.trim?.get(e.id) || [0, 0], f0 = tr[0] / 10, f1 = e.n - tr[1] / 10;
+      if (f0 >= b || f1 <= a) continue;
+      let C = this._curve(e, a, b);
+      if (f0 > a || f1 < b) {
+        const keep = C.filter((c) => c.i > f0 + 1e-6 && c.i < f1 - 1e-6);
+        if (f0 > a) keep.unshift({ ...this._curvePoint(e, f0), i: f0 });
+        if (f1 < b) keep.push({ ...this._curvePoint(e, f1), i: f1 });
+        for (let k = 0; k < keep.length; k++) keep[k].s = k ? keep[k - 1].s + Math.hypot(keep[k].x - keep[k - 1].x, keep[k].z - keep[k - 1].z) : (C[0].s || 0);
+        C = keep;
+      }
+      const n = C.length;
+      if (n < 2) continue;
+      // paint: clear of the junctions' mouths and their crosswalks
+      const lenM = e.n * 10, r0 = tr[0] > 0 ? tr[0] + 3.4 : 0, r1 = tr[1] > 0 ? tr[1] + 3.4 : 0;
       const atS = (c) => c.i * 10;
       const L = [], Rt = [], cols = [], ext = [];
       for (const c of C) {
@@ -671,7 +779,6 @@ export class GraphWorld {
       for (let k = 0; k + 1 < n; k++) {
         const c0 = C[k], c1 = C[k + 1], i0 = Math.floor(c0.i), i1 = Math.min(e.n, Math.ceil(c1.i));
         const br = deck[i0] && deck[i1];
-        const inJn = atS(c0) < r0 || atS(c1) > lenM - r1;
         for (const [S, flip, sgn] of [[L, false, 1], [Rt, true, -1]]) {
           const p0 = S[k], p1 = S[k + 1];
           const o0 = [c0.dz * sgn, -c0.dx * sgn], o1 = [c1.dz * sgn, -c1.dx * sgn];   // outward
@@ -681,7 +788,7 @@ export class GraphWorld {
             if (!(bm && (bm[i0] & 2) && (bm[i1] & 2))) W.wall(p0, p1, 0, 0.9, rail, flip);
             continue;
           }
-          if (walk && !inJn) {
+          if (walk) {
             W.wall(p0, p1, -0.05, 0.15, curbC, flip);                                                            // the curb's face
             W.quad(out(p0, o0, 0, 0.15), out(p1, o1, 0, 0.15), out(p1, o1, walk, 0.15), out(p0, o0, walk, 0.15), walkC, !flip);   // the sidewalk
             W.quad(out(p0, o0, walk, 0.15), out(p1, o1, walk, 0.15), out(p1, o1, walk, -1.4), out(p0, o0, walk, -1.4), walkSide, flip);
@@ -705,7 +812,7 @@ export class GraphWorld {
       const line = (off, w, dashM, gapM, color) => {
         for (let k = 0; k + 1 < n; k++) {
           const c0 = C[k], c1 = C[k + 1], s0 = atS(c0), s1 = atS(c1);
-          if (s0 < Math.max(PAINT_GAP, r0 + 1) || s1 > lenM - Math.max(PAINT_GAP, r1 + 1)) continue;
+          if (s0 < r0 || s1 > lenM - r1) continue;
           if (ext[k] === 1 || ext[k] === 2) continue;   // (no paint on brick or setts)
           if (dashM && (c0.s % (dashM + gapM)) > dashM) continue;
           const A = { x: c0.x - c0.dz * off, y: c0.y + lift + 0.02, z: c0.z + c0.dx * off }, B = { x: c1.x - c1.dz * off, y: c1.y + lift + 0.02, z: c1.z + c1.dx * off };
@@ -717,21 +824,62 @@ export class GraphWorld {
       if (paint.edges) { line(half - 0.35, 0.07, 0, 0, white); line(-(half - 0.35), 0.07, 0, 0, paint.oneway ? yellow : white); }
       if (paint.oneway && paint.lanes >= 2) for (let q = 1; q < paint.lanes; q++) line(-half + (2 * half) * q / paint.lanes, 0.06, 3, 9, white);
     }
-    // junctions: a disc as wide as the widest way into it, a hair above the roads (one colour: no seams); crosswalks
-    // where a main street meets two or more others among the buildings
-    const white = new THREE.Color('#ece9de');
+    // junctions (_planJunctions): the surface — the mouths joined by the curb returns, a fan from the centre — the
+    // sidewalks round the corners (the verges where neither way has one); a crosswalk across each arm just outside its
+    // mouth where a main street meets two or more others among the buildings. Two ways meeting: a disc as wide as the
+    // narrower, filling the bend's outside; a dead end: rounded.
+    const white = new THREE.Color('#ece9de'), asphalt = col('residential');
+    const facing = (a, b, c, d, color, dx, dy, dz, M = W) => {   // a quad whose normal points along (dx, dy, dz)
+      const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+      M.quad(a, b, c, d, color, nx * dx + ny * dy + nz * dz < 0);
+    };
     for (const nd of t.nodes) {
       if (due()) yield;
-      const w = this.nodeWidth.get(nd.id) || 7, r = w / 2 * 1.15, y = nd.y + ROAD_LIFT + 0.01;
-      R.discX(nd.x, y, nd.z, r, col('residential'));
-      const arms = (this.arms.get(nd.id) || []).filter((a) => a.e.kind !== 'path' && a.e.kind !== 'plaza');
-      if (arms.length < 3 || !arms.some((a) => a.e.kind === 'primary' || a.e.kind === 'secondary' || a.e.kind === 'tertiary') || !arms.some((a) => a.e._walk)) continue;
-      for (const { e, end } of arms) {
-        const i0 = end ? e.n : 0, i1 = end ? e.n - 1 : 1, dx = e.x[i1] - e.x[i0], dz = e.z[i1] - e.z[i0], l = Math.hypot(dx, dz) || 1, ux = dx / l, uz = dz / l;
-        const half = this.wOf(e) / 2, d = r + 1.6, cx = nd.x + ux * d, cz = nd.z + uz * d, yy = y + 0.015;
+      const J = this.jn?.get(nd.id);
+      if (!J) {
+        const list = this.arms.get(nd.id) || [];
+        const r = list.length ? Math.max(0.5, (list.length >= 3 ? Math.max : Math.min)(...list.map(({ e }) => this.wOf(e) / 2))) : 3.5;
+        R.discX(nd.x, nd.y + ROAD_LIFT + 0.004, nd.z, r, asphalt, 16);
+        continue;
+      }
+      const P = J.poly, cy = J.y + ROAD_LIFT, RD = [0, 0, 0, 40];
+      for (let k = 0; k < P.length; k++) {
+        const p = P[k], q = P[(k + 1) % P.length];
+        R._tri([J.x, cy, J.z], [q.x, q.y + ROAD_LIFT, q.z], [p.x, p.y + ROAD_LIFT, p.z], asphalt, RD, RD, RD);
+      }
+      for (const c of J.corners) {
+        const pts = c.curb; if (!pts || pts.length < 2 || c.gap < 0.3) continue;   // (a straight side too: the sidewalk runs on across the mouth of the way opposite)
+        // each vertex's outward normal (away from the junction: the polygon is counter-clockwise, its inside on the left)
+        const nrm = pts.map((p, k) => {
+          let nx = 0, nz = 0;
+          for (const [u, v] of [[pts[k - 1], p], [p, pts[k + 1]]]) { if (!u || !v) continue; const dx = v.x - u.x, dz = v.z - u.z, l = Math.hypot(dx, dz) || 1; nx += dz / l; nz += -dx / l; }
+          const l = Math.hypot(nx, nz) || 1; return [nx / l, nz / l];
+        });
+        const wA = c.A.walk, wB = c.B.walk;
+        for (let k = 0; k + 1 < pts.length; k++) {
+          const p = pts[k], q = pts[k + 1], yp = p.y + ROAD_LIFT, yq = q.y + ROAD_LIFT, [nxp, nzp] = nrm[k], [nxq, nzq] = nrm[k + 1];
+          const mdx = q.z - p.z, mdz = -(q.x - p.x);   // (this piece's outward direction)
+          if (wA || wB) {
+            const w0 = (wA || wB) + ((wB || wA) - (wA || wB)) * k / (pts.length - 1), w1 = (wA || wB) + ((wB || wA) - (wA || wB)) * (k + 1) / (pts.length - 1);
+            const i0 = [p.x, yp + 0.15, p.z], i1 = [q.x, yq + 0.15, q.z], o0 = [p.x + nxp * w0, yp + 0.15, p.z + nzp * w0], o1 = [q.x + nxq * w1, yq + 0.15, q.z + nzq * w1];
+            facing(i0, i1, o1, o0, walkC, 0, 1, 0);                                                                                         // the sidewalk
+            facing([p.x, yp - 0.05, p.z], [q.x, yq - 0.05, q.z], i1, i0, curbC, -mdx, 0, -mdz);                                             // the curb's face
+            facing(o0, o1, [o1[0], yq - 1.4, o1[2]], [o0[0], yp - 1.4, o0[2]], walkSide, mdx, 0, mdz);                                       // its outer side
+          } else {
+            const i0 = [p.x, yp - 0.01, p.z], i1 = [q.x, yq - 0.01, q.z], o0 = [p.x + nxp * 1.6, yp - 0.9, p.z + nzp * 1.6], o1 = [q.x + nxq * 1.6, yq - 0.9, q.z + nzq * 1.6];
+            facing(i0, i1, o1, o0, verge, 0, 1, 0);                                                                                          // the verge
+            facing([p.x, yp - 0.6, p.z], [q.x, yq - 0.6, q.z], i1, i0, side, -mdx, 0, -mdz);
+          }
+        }
+      }
+      const main = J.arms.filter((A) => A.e.kind !== 'path' && A.e.kind !== 'plaza');
+      if (main.length < 3 || !main.some((A) => A.e.kind === 'primary' || A.e.kind === 'secondary' || A.e.kind === 'tertiary') || !main.some((A) => A.walk)) continue;
+      for (const A of main) {
+        const ux = A.ud.x, uz = A.ud.z, half = A.h, cx = A.cut.x + ux * 1.6, cz = A.cut.z + uz * 1.6, yy = A.cut.y + ROAD_LIFT + 0.035;
         for (let v = -half + 0.4; v < half - 0.3; v += 1.1) {
           const px = cx - uz * v, pz = cz + ux * v, qx = px - uz * 0.55, qz = pz + ux * 0.55;
-          P.quad([px - ux * 1.4, yy, pz - uz * 1.4], [px + ux * 1.4, yy, pz + uz * 1.4], [qx + ux * 1.4, yy, qz + uz * 1.4], [qx - ux * 1.4, yy, qz - uz * 1.4], white);
+          facing([px - ux * 1.4, yy, pz - uz * 1.4], [px + ux * 1.4, yy, pz + uz * 1.4], [qx + ux * 1.4, yy, qz + uz * 1.4], [qx - ux * 1.4, yy, qz - uz * 1.4], white, 0, 1, 0, P_);
         }
       }
     }
