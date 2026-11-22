@@ -66,7 +66,7 @@ function tube(pts, radii, seg) {
  * tube built section by section — each section tilted a little at random (gnarliness, more on thin branches), pulled
  * toward the light (or down: willow), the children spread up the parent at the golden angle, splayed out, each much
  * thinner than its parent (the pipe model). Leaves hang in clusters along the outer branches.
- *   lod 0: trunk + 3 levels, leaf-cluster cards (returned apart: { wood, leaves, crown }) and a hidden inner shell
+ *   lod 0: trunk + 3 levels, leaf-cluster cards (returned apart: { wood, leaves, crown }); sparse sprays on inner limbs, no solid core
  *   lod 1: trunk + 2 levels, solid foliage clumps round the crown
  *   lod 2: trunk + crown masses
  * o (species): H, R, trunkR, levels' children / angle / length, gnarl, up (gravitropism), droop, leader, flat, stems.
@@ -122,6 +122,14 @@ function grow(seed, o, lod, turn, lodScale = 1) {
       }
     }
     // leaf clusters along the outer branches (and at the tip of every branch at the last level)
+    // inner limbs: a few small sprays where light gets in (keeps the crown from reading hollow, without a solid core)
+    if (lv === 1 && maxLevel > 1 && !o.droop) {
+      const n = lod ? 1 : 2;
+      for (let k = 0; k < n; k++) {
+        const i = Math.min(pts.length - 1, Math.round((.5 + .4 * rand()) * (pts.length - 1)));
+        if (rand() < .7) clusters.push({ p: pts[i].clone(), size: .55 + rand() * .2 });
+      }
+    }
     if (lv >= maxLevel - (lod ? 0 : 1) && lv > 0) {
       const per = lod ? (lv === maxLevel ? 3 : 1) : 2;
       for (let k = 0; k < per; k++) {
@@ -151,12 +159,12 @@ function grow(seed, o, lod, turn, lodScale = 1) {
   }
   // near and mid: a hidden inner shell (darker: the canopy's shaded inside — keeps the crown from reading see-through),
   // then leaf-cluster cards — three crossed quads near, two larger ones mid — normals spherized from the crown's centre
-  const shell = Math.min(rad, radY * 1.3) * .42;
-  wood.as(leafKind).add(blob(1), M(cc.x, cc.y - radY * .12, cc.z, shell * 1.1, shell * .8, shell * 1.1), shadeHex(o.greens[0], .42), 0, rand);
+  // (no inner shell any more: it read as a dense ball at the core. Sparse small sprays on the inner limbs fill instead.)
+  wood.as(leafKind);
   const pos = [], nor = [], uv = [], col = [], tw = [];
   const v = new THREE.Vector3(), qn = new THREE.Vector3();
   for (const c of clusters) {
-    const { c: hex, out } = colourAt(c.p), k = new THREE.Color(hex).multiplyScalar((lod ? .84 : .72) + out * (lod ? .26 : .34));   // depth: darker inside
+    const { c: hex, out } = colourAt(c.p), k = new THREE.Color(hex).multiplyScalar((lod ? .86 : .8) + out * (lod ? .24 : .28));   // depth: darker inside
     const size = (lod ? 2.3 : 1.75) * c.size * (o.droop ? .9 : 1), quads = lod ? 2 : 3;
     for (let q = 0; q < quads; q++) {
       const yaw = rand() * Math.PI, pitch = q === 2 || (lod && q === 1) ? Math.PI / 2 - .3 + rand() * .3 : (rand() - .5) * .6;
