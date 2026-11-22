@@ -5,8 +5,8 @@
 //   buildings   CityScene._chunkJob — the facade shader (brick, stone, metal, windows lit at night, shop rows), the
 //               rooftops — and the building kit (planned sector by sector: the pittsburgh-rowhouse and pittsburgh-frame homes,
 //               their porches, steps and yards near the rider)
-//   trees       the city's street tree (trunk and lumpy crown, the toolbox foliage shader), on the map's trees, along
-//               the streets, in the yards and parks, and as woods on the steep ground the land cover marks
+//   trees       the tree engine (toolbox/vegetation/tree-engine.js, the northeastern hardwood kit): on the map's trees,
+//               along the streets, in the yards and parks, in the woods and hedgerows (_ruralTrees)
 //   furniture   the street kit's pieces (FURNITURE: signals, bus stops and shelters, benches, hydrants, bike racks,
 //               bins, bollards, stop signs…) where OSM maps them; the city's street lamps along the urban streets and
 //               the riverwalks; car parks with parked cars; parked cars along the main streets; fences, walls,
@@ -24,10 +24,6 @@ import { assemble, Writer } from './toolbox/structures/buildings/assemble.js';
 import { makeFacadeMaterial } from './toolbox/structures/buildings/facade-material.js';
 import { FURNITURE, makeFacadeDresser } from './toolbox/city/street-kit.js';
 import { farmBuilding } from './toolbox/city/cny-farms.js';
-import { decorateTreeMaterial } from './toolbox/packs/northern-rockies.js';
-import { makeAlpsPack } from './toolbox/packs/alps.js';
-import { makeNortheastPack } from './toolbox/packs/northeast.js';
-import { makeTreeCards } from './toolbox/vegetation/tree-cards.js';
 import { GraphLife } from './toolbox/city/graph-life.js';
 import { TreeEngine } from './toolbox/vegetation/tree-engine.js';
 import { planHomestead, drawHomestead, driveStrips, nearDrive } from './toolbox/city/homesteads.js';
@@ -41,13 +37,6 @@ export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand:
 const TILE = 400;
 // how far the city is built, by quality (Low: phones)
 const REACH = { low: { near: 1300, far: 1800, trees: 0.6, treeNear: 450 }, balanced: { near: 2300, far: 3100, trees: 1, treeNear: 750 }, high: { near: 2300, far: 3100, trees: 1.2, treeNear: 900 } };
-// the trees: western Pennsylvania's broadleaves (the alps and northeast packs' models), by where they stand; height range m
-const TREE_MIX = {
-  street: { mix: [['fieldmaple0', 3], ['oak0', 2], ['maple0', 2], ['ash0', 1]], h: [7, 11] },
-  yard: { mix: [['maple0', 3], ['maple1', 2], ['oak0', 2], ['ash0', 1], ['walnut0', 1], ['beech0', 1], ['fieldmaple0', 1]], h: [10, 18] },
-  woods: { mix: [['oak0', 3], ['maple1', 3], ['beech0', 2], ['beech1', 1], ['ash1', 2], ['walnut0', 1], ['birch0', 1]], h: [15, 24] },
-};
-const TREE_FULL = { low: 60, balanced: 90, high: 130 }, TREE_LOD = { low: 200, balanced: 300, high: 380 };   // m: full model, then the 84-triangle one, then the 28
 const CAR_NEAR = 320;           // m: detailed parked cars within this
 const KIT_CFG = { detailM: 150, dressingM: 80, detailReachM: 550,
   styles: [{ preset: 'pittsburgh-rowhouse', kinds: ['rowhouse'] }, { preset: 'pittsburgh-frame', kinds: ['house', 'barn', 'shed'] }] };
@@ -129,12 +118,12 @@ export class GraphCity {
     this._materials();
     // the rural maps (CNY, SKAN; user, 22 Nov): no cars — other cyclists and people walking instead
     this.rural = !!world.rural;
-    if (this.rural) {
-      this.life = new GraphLife(world, host.group, { quality: world.qualityKey, uTime: this.treeTime });
-      // the tree engine (one for the game: toolbox/vegetation/tree-engine.js) with the upstate kit
-      this.treeKit = makeUpstateTrees();
-      this.forest = new TreeEngine({ renderer: world.renderer, parent: host.group, quality: world.qualityKey, uTime: this.treeTime, lights: { hemi: world.hemi, sun: world.sun }, kit: this.treeKit });
-    }
+    if (this.rural) this.life = new GraphLife(world, host.group, { quality: world.qualityKey, uTime: this.treeTime });
+    // the tree engine (one for the game: toolbox/vegetation/tree-engine.js) with the northeastern hardwood kit — every
+    // road-graph map (PGH's western Pennsylvania has the same trees); the rural maps in early fall, PGH in summer
+    this.treeKit = makeUpstateTrees();
+    this.fall = this.rural;
+    this.forest = new TreeEngine({ renderer: world.renderer, parent: host.group, quality: world.qualityKey, uTime: this.treeTime, lights: { hemi: world.hemi, sun: world.sun }, kit: this.treeKit });
   }
 
   /** The land cover's codes (a gzipped file of nx × ny bytes): then the ground shader and landAt have them. */
@@ -372,23 +361,12 @@ export class GraphCity {
     };
     m.customProgramCacheKey = () => 'pgh-street-kit-1';
     this.kitMaterial = m;
-    // the trees: each species in three levels of detail, drawn from pools round the camera (_poolTrees); far tiles: cards
-    const packs = { ...makeAlpsPack(), ...makeNortheastPack() };
-    this.species = [...new Set(Object.values(TREE_MIX).flatMap((r) => r.mix.map(([n]) => n)))];
-    this.treeGeos = this.species.map((n) => { const g = packs[n]; g.computeBoundingBox(); return { name: n, h: g.boundingBox.max.y, tiers: [packs[n], packs[`${n}-lod`], packs[`${n}-far`]] }; });
-    for (const k of Object.keys(packs)) if (!this.treeGeos.some((t) => t.tiers.includes(packs[k]))) packs[k].dispose?.();
-    for (const r of Object.values(TREE_MIX)) { const t = r.mix.reduce((a, [, w]) => a + w, 0); let c = 0; r.table = r.mix.map(([n, w]) => [this.species.indexOf(n), (c += w / t)]); }
+    // the trees: the tree engine (constructor); its wind clock
     this.treeTime = { value: 0 };
-    this.treeMaterial = decorateTreeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }), { uTime: this.treeTime });
-    this.cards = makeTreeCards({ uTime: this.treeTime });
-    this.tints = ['#ffffff', '#f1f6e8', '#e4ecd6', '#fbf3df', '#dfe7d2', '#f6fbef'].map((c) => new THREE.Color(c));
-    this.cardGreens = ['#5f8a3e', '#6f9a45', '#557d38', '#7a9b4a', '#4f7434', '#678c40'].map((c) => new THREE.Color(c));
-    this.pools = this.treeGeos.map((T) => T.tiers.map((g, tier) => this._pool(g, tier, 256)));
     // the street kit's facade dressing (shop fronts, signs, awnings, cornices, belt courses, sills)
     this.glassNight = { value: 0 };   // (the shop glass: lit, not floodlit; follows the night in tick; the signs: the windows' night)
     this.facades = makeFacadeDresser(this.host.windowNight || night, { glassNight: this.glassNight,
       lampNear: (x, z, r) => { const a = this._lampPts; if (a) for (let k = 0; k < a.length; k += 2) if (Math.hypot(a[k] - x, a[k + 1] - z) < r) return true; return false; } });
-    this._poolAt = null;
     // the city's street lamp: pole, arm, head (its lens lit at night)
     const P = new MeshBuilder();
     P.color('#3a3d40'); P.cylinder(0, 0, 0, 0.1, 7.2, 6, 0.07); P.beam(V(0, 7.1, 0), V(0, 7.25, 1.6), 0.1, 0.1);
@@ -500,7 +478,6 @@ export class GraphCity {
     this.host.chunks.delete(key);
     this.tiles.delete(key);
     this.forest?.removeTile(key);
-    if (t.trees) this._poolAt = null;
   }
 
   _add(t, mesh, lod = null) {
@@ -514,8 +491,7 @@ export class GraphCity {
     this.treeTime.value = time;
     this.life?.tick(cam, rider?.pos || null, rider?.fwd || null, dt);
     this.glassNight.value = this.host.night.value * 0.05;
-    if (this.forest) this.forest.tick(this.world.camera);
-    else if (!this._poolAt || this._poolAt.distanceTo(cam) > 25) this._poolTrees(cam);
+    this.forest.tick(this.world.camera);
     if ((this._lf = (this._lf || 0) + 1) % 8) return;
     for (const t of this.tiles.values()) {
       const d = Math.hypot(t.cx - cam.x, t.cz - cam.z) - TILE * 0.71;
@@ -526,65 +502,7 @@ export class GraphCity {
   }
 
   // ------------------------------------------------------------------ trees
-  *_trees(t) {
-    if (this.forest) { yield* this._ruralTrees(t); return; }
-    const W = this.world, x0 = t.i * TILE, z0 = t.j * TILE, spots = [];
-    const ok = (x, z, wall = 1.4, road = 2) => !this.inWater(x, z) && !this.onRoad(x, z, road) && !this.host.buildingNear(x, z, wall)
-      && !this.heroes.heroes?.covers?.(x, z, 2) && !this.kit.occupied(x, z, 0.8) && !this._inDressing(x, z);
-    // the map's trees
-    for (const p of this.osmTrees.get(t.key) || []) if (ok(p.x, p.z, 1.2, 1.2)) spots.push({ x: p.x, z: p.z, seed: hash(Math.round(p.x * 7 + p.z * 13)) });
-    // street trees: every ~15 m along the urban streets, on one side or both, in the sidewalk or the verge
-    for (const piece of W.tiles.get(t.key)?.pieces || []) {
-      if (due()) yield;
-      const e = piece.e;
-      if (!ROADS.has(e.kind) || e.kind === 'alley') continue;
-      const half = W.wOf(e) / 2, info = this.edgeInfo(e), walk = W.walkOf ? W.walkOf(e) : 0;
-      for (let i = Math.max(piece.a, 2); i < Math.min(piece.b, e.n - 1); i++) {
-        if (e._deck?.[i]) continue;
-        const h0 = hash(e.id.length * 977 + i * 131 + e.n);
-        if (h0 < 0.35) continue;
-        const dx = e.x[i + 1] - e.x[i - 1], dz = e.z[i + 1] - e.z[i - 1], l = Math.hypot(dx, dz) || 1;
-        for (const side of [-1, 1]) {
-          if (hash(i * 17 + side * 5 + e.n * 3) < (MAIN.has(e.kind) ? 0.35 : 0.55)) continue;
-          const off = half + (walk ? walk - 0.9 : 2.6), x = e.x[i] - dz / l * off * side, z = e.z[i] + dx / l * off * side;
-          if (!this.urban(x, z) || !ok(x, z, 1.6, 0.9)) continue;
-          spots.push({ x, z, seed: hash(i * 7 + side + e.n * 11), role: 'street' });
-        }
-      }
-    }
-    // the land cover: woods dense, yards and parks sparse
-    const step = 9;
-    for (let x = x0 + step / 2; x < x0 + TILE; x += step) for (let z = z0 + step / 2; z < z0 + TILE; z += step) {
-      if (z === z0 + step / 2 && due()) yield;
-      const h1 = hash(Math.round(x * 3.1) * 92821 + Math.round(z * 1.7)), jx = x + (h1 - 0.5) * step * 0.9, jz = z + (hash(Math.round(x * 5.3) + Math.round(z * 7.9) * 31) - 0.5) * step * 0.9;
-      const c = this.landAt(jx, jz);
-      // (a rural map: no trees in the crops, a lone one in the pasture, scrub in the wetland — the hedgerows and woodlots
-      // are WorldCover's own tree cover, so the woods code)
-      const p = c === LAND.woods ? 0.85 : c === LAND.outside ? 0.45 : c === LAND.yards ? 0.1 : c === LAND.grass ? 0.06 : c === LAND.paved ? 0.008
-        : c === LAND.wetland ? 0.22 : c === LAND.pasture ? 0.01 : 0;
-      if (h1 >= p * this.q.trees) continue;
-      if (!ok(jx, jz, 2.2, 3)) continue;
-      spots.push({ x: jx, z: jz, seed: hash(Math.round(jx * 11) + Math.round(jz * 13) * 7), wood: c === LAND.woods || c === LAND.outside });
-    }
-    if (!spots.length) return;
-    // each spot's species and size (by where it stands); the tile keeps the list for the pools, and draws cards for far off
-    const cards = new THREE.InstancedMesh(this.cards.geometry, this.cards.broadleaf.material, spots.length), m = new THREE.Matrix4(), q = new THREE.Quaternion();
-    t.trees = spots.map((s, k) => {
-      const R = TREE_MIX[s.role || (s.wood ? 'woods' : 'yard')], r1 = hash(s.seed * 7919 + 1), r2 = hash(s.seed * 104729 + 3);
-      let sp = R.table[R.table.length - 1][0]; for (const [i, c] of R.table) if (r1 <= c) { sp = i; break; }
-      const H = (R.h[0] + (R.h[1] - R.h[0]) * r2) * (s.wood ? 1 : this.q.trees > 1 ? 1.05 : 1), g = H / this.treeGeos[sp].h;
-      const y = W._groundH(s.x, s.z) - 0.1, rot = s.seed * 40, tint = Math.floor(hash(s.seed * 31 + 5) * this.tints.length);
-      m.compose(V(s.x, y, s.z), q, V(H * 0.78, H, 1)); cards.setMatrixAt(k, m);
-      cards.setColorAt(k, this.cardGreens[Math.floor(s.seed * 997) % this.cardGreens.length]);
-      return { x: s.x, y, z: s.z, sp, g, gy: g * (0.92 + r2 * 0.14), rot, tint };
-    });
-    cards.instanceMatrix.needsUpdate = true; cards.computeBoundingSphere(); cards.userData.shared = true; cards.name = `Tree cards ${t.key}`;
-    const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * 0.71;
-    cards.visible = d >= this.q.treeNear;
-    this._add(t, cards, 'far');
-    this._poolAt = null;   // (the pools take this tile's trees)
-    this.stats.trees += spots.length;
-  }
+  *_trees(t) { yield* this._ruralTrees(t); }
 
   /**
    * The rural maps' trees (CNY, SKAN; user, 22 Nov 2026), drawn by the tree engine. Placed sensibly: never on or in
@@ -628,7 +546,7 @@ export class GraphCity {
       if (sp.r * k > de + 1.5) k = Math.max(.45, (de + 1.5) / sp.r);
       let crown = sp.r * k * .85;
       if (!clearOf(x, z, crown)) { k *= .6; crown = sp.r * k * .85; if (k < .35 || !clearOf(x, z, crown)) return false; }
-      out.push({ x, z, y: W._groundH(x, z) - .15, sp: name, v: fallVariant(sp, r4), s: k, sy: k * (.94 + r3 * .12), rot: seed * 40 % 6.283, tint: .9 + r3 * .18 });
+      out.push({ x, z, y: W._groundH(x, z) - .15, sp: name, v: this.fall ? fallVariant(sp, r4) : 0, s: k, sy: k * (.94 + r3 * .12), rot: seed * 40 % 6.283, tint: .9 + r3 * .18 });
       return true;
     };
     const under = (x, z, name, seed, s = 1) => {
@@ -699,7 +617,9 @@ export class GraphCity {
         if (edge) { if (h1 < .32) tree(jx, jz, 'hedge', seed); else if (h1 < .55) under(jx, jz, h1 < .45 ? 'buckthorn' : 'sumac', seed); }
         else if (c === LAND.pasture && h1 < .006) tree(jx, jz, 'pasture', seed, 1.05 + h2 * .2);
       } else if (c === LAND.yards || c === LAND.grass) {
-        if (h1 < (c === LAND.yards ? .02 : .008)) tree(jx, jz, 'yard', seed);
+        if (h1 < (c === LAND.yards ? (this.rural ? .02 : .1) : this.rural ? .008 : .06)) tree(jx, jz, 'yard', seed);
+      } else if (!this.rural && c === LAND.paved) {
+        if (h1 < .008) tree(jx, jz, 'street', seed, .8);
       }
     }
     this.forest.setTile(t.key, out);
@@ -826,44 +746,6 @@ export class GraphCity {
     }
   }
 
-  /** One pool: a species at one level of detail, as many instances as the trees near the camera need. */
-  _pool(geo, tier, n) {
-    const im = new THREE.InstancedMesh(geo, this.treeMaterial, n);
-    im.count = 0; im.castShadow = tier < 2; im.receiveShadow = true;
-    im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); im.setColorAt(0, this.tints[0]);
-    im.name = `Trees ${geo.name || ''} ${['full', 'lod', 'far'][tier]}`;
-    this.host.group.add(im);
-    return im;
-  }
-  /** The trees of the tiles within reach, each in its species' pool for its distance: the full model close by, the
-   *  simpler ones further out (tiles beyond the reach show their cards). Re-sorted when the camera has moved 25 m. */
-  _poolTrees(cam) {
-    const fullM = TREE_FULL[this.world.qualityKey] || 90, lodM = TREE_LOD[this.world.qualityKey] || 300;
-    const lists = this.pools.map((tiers) => tiers.map(() => []));
-    for (const t of this.tiles.values()) {
-      if (!t.trees) continue;
-      if (Math.hypot(t.cx - cam.x, t.cz - cam.z) - TILE * 0.71 >= this.q.treeNear) continue;
-      for (const r of t.trees) { const d = Math.hypot(r.x - cam.x, r.z - cam.z); lists[r.sp][d < fullM ? 0 : d < lodM ? 1 : 2].push(r); }
-    }
-    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = V(0, 1, 0), p = V(0, 0, 0), sc = V(1, 1, 1);
-    lists.forEach((tiers, i) => tiers.forEach((list, tier) => {
-      let im = this.pools[i][tier];
-      if (list.length > im.instanceMatrix.count) {
-        this.host.group.remove(im); im.dispose();
-        im = this.pools[i][tier] = this._pool(this.treeGeos[i].tiers[tier], tier, Math.ceil(list.length * 1.5));
-      }
-      list.forEach((r, k) => {
-        q.setFromAxisAngle(Y, r.rot); p.set(r.x, r.y, r.z); sc.set(r.g, r.gy, r.g);
-        im.setMatrixAt(k, m.compose(p, q, sc)); im.setColorAt(k, this.tints[r.tint]);
-      });
-      // only the used part goes to the GPU; the pool's bounds kept, so one behind the camera isn't drawn
-      im.count = list.length;
-      im.instanceMatrix.clearUpdateRanges(); im.instanceMatrix.addUpdateRange(0, list.length * 16); im.instanceMatrix.needsUpdate = true;
-      if (im.instanceColor) { im.instanceColor.clearUpdateRanges(); im.instanceColor.addUpdateRange(0, list.length * 3); im.instanceColor.needsUpdate = true; }
-      if (list.length) im.computeBoundingSphere();
-    }));
-    this._poolAt = cam.clone();
-  }
   /** CNY's barns and silos (cny-farms.js) into the tile's street-kit mesh. */
   *_farms(t) {
     let n = 0;
@@ -1171,12 +1053,10 @@ export class GraphCity {
     this.disposed = true;
     for (const [key, t] of this.tiles) this._release(key, t);
     this.kit.material.dispose();
-    for (const T of this.treeGeos) for (const g of T.tiers) g.dispose();
-    for (const tiers of this.pools) for (const im of tiers) im.dispose();
-    this.cards.dispose(); this.facades.dispose(); this.life?.dispose(); this.forest?.dispose();
+    this.facades.dispose(); this.life?.dispose(); this.forest.dispose();
     if (this.carGeos) { for (const g of Object.values(this.carGeos)) g.dispose(); this.carMaterial.dispose(); }
     for (const g of [this.lampGeo, this.acornGeo]) g.dispose();
-    for (const m of [this.kitMaterial, this.treeMaterial, this.lampMaterial, this.lotMaterial]) m.dispose();
+    for (const m of [this.kitMaterial, this.lampMaterial, this.lotMaterial, this.cropMat].filter(Boolean)) m.dispose();
     this.landTexture?.dispose();
   }
 }

@@ -1780,6 +1780,32 @@ Goal: a lighter main menu, and fix the PGH / CNY / SKAN map cards that looked as
 - Native trainer virtual shifting via Zwift Protocol (most realistic, most work)
 - Ramp/FTP test with automatic FTP estimate
 
+### CNY + SKAN detail pass *(test branch `cny-skan-detail-test`; user, 22 Nov: "The detail level is lacking … use level of detail from Going to the Sun road as a guide")*
+
+*Decisions (user)*
+- Trees: real sizes + age mix, upstate NY species + variety, smooth pop-in, forest edge + understory, a mix of fall colour (early fall, ~25 % turning); then (after a research pass on Three.js tree methods) "redo trees in the Going-to-the-Sun style … branches, varied texture, shape and size, lifelike full-size trees, LOD changes by distance, placed sensibly (not on or in houses, roads, rivers)": full upstate mix, lifelike heights (crowns near the road capped), tiered LOD with no pop, clear margins + hedgerows + yard trees beside/behind homes + graded woodlot edges; follow the best methods found.
+- Traffic: no cars; other cyclists and walkers.
+- Homes: driveways + mailboxes, clean upstate shapes, facing and set back from the road, outbuildings.
+- Grass + farms: grass near the rider, 3D crops near the road, fences + stone walls, roadside verge.
+- Road surfaces: upstate winter wear. Camera: locked distance behind the rider at all speeds.
+- Budget: Going-to-the-Sun level (≤ ~2.5 M triangles / ~450 draw calls on Balanced; Low safe for phones).
+- Final task: when all is done, one tree engine for the whole game (every other map onto it).
+
+*Done*
+- [x] **Camera** (`pose.js lockedChase`, both worlds): eases only the offset's swing and height; the level distance is exactly `back` at any speed (was ~speed/3.5 m extra).
+- [x] **Roads** (`graph-world.js` NY_ROAD_GLSL, rural maps only): oxidised blue-grey asphalt, chip seal on narrow roads, tar-snake crack sealing, transverse frost cracks, alligator cracking in the worst wheel paths, cut-in patches, cold-patched potholes, crumbling edges into the shoulder, winter grit; worn paint (`wornPaintMaterial`). Tone by world position so a junction's fan and a ribbon agree (no z-fight speckle).
+- [x] **Life** (`toolbox/city/graph-life.js`): parked and lot cars off; cyclists (solo, in bends leaning) on roads and trails, walkers (some with dogs) on sidewalks, residential streets and trails; spawned round the camera, never on the rider.
+- [x] **Tree engine** (`toolbox/vegetation/tree-engine.js` + `upstate-trees.js`): trees grown as skeletons (curved tapered tubes, pipe-model forks, golden-angle children, gravitropism), leaf-cluster cards (procedural leaf texture, spherized normals, depth shading, mip-aware alpha), inner shell; 11 species × variants (green / turning / turned); near + mid instanced pools re-sorted round the camera with per-tree frustum culling; stochastic LOD swaps (per-tree distance, no pop ring, no dither); an impostor atlas (8 sides per model, lit as the world) for all far trees in one draw call; wind (3 sines × height², leaf flutter). Placement (`graph-city.js _ruralTrees`): woods with age mix, graded edges (shrubs, sumac, saplings, goldenrod), hedgerows between fields, yard trees beside/behind homes, village street trees, wet-ground species; off roofs, roads (≥ 4 m), driveways, water (≥ 3 m), fields. Preview: `tools/upstate-trees-preview.html`.
+- [x] **Homes** (`recipe.js cleanShape`, presets `cleanShapes`; `toolbox/city/homesteads.js`): tidy rectangles of house proportions squared to the road, set back ≥ ~7 m, an occasional wing; driveways (asphalt / gravel, round the house, to a detached garage), mailboxes, sheds, detached garages, above-ground pools, swing sets; SKAN houses sorted into farmhouse / village / suburban styles at load.
+- [x] **Grass + farms** (ground shader NYGRASS; `toolbox/landscape/farm-kit.js`): grass blades and dry patches near the rider, mown lawn stripes, tan corn and gold soybeans; 3D corn/soy row cards along each field's rows (near), round bales (straw / wrapped) on hay and stubble, wire and board fences by pastures and fieldstone walls by woods and crops along the country roads, verge tufts and wildflowers, farm stands with pumpkins.
+- [x] Budget (headless, Balanced): 0.4–1.1 M triangles, 130–235 draw calls; Low 0.31 M / ~155.
+
+- [x] **One tree engine** (user: "use the tree engine to update all other maps; one tree engine for the game"): every road-graph map (PGH, CNY, SKAN) now draws its trees with `tree-engine.js` (the old pools and cards in `graph-city.js` are gone; PGH stays summer-green); the forest scenes (Going-to-the-Sun, Route 28, Alpe d'Huez) hand their `ForestPlanner` stands to the engine through `packKit` (their own pack models and tuned materials, the engine's LOD swaps, impostors, wind, near-tier shadows). Going-to-the-Sun at 45 km: 269 → 193 draw calls, 2.01 → 1.77 M triangles.
+
+*Open*
+- [ ] The scatter-layer scenes (Big Sur, Yosemite, Zion, Pittsburgh's authored city) still place their trees through the scatter pools and far cards: move their tree names onto the engine next (rocks and shrubs stay in the scatter).
+- [ ] Push the branch and open the PR (this session had no write access to the repo).
+
 ## Running it
 
 Web Bluetooth needs Chrome and either `localhost` or HTTPS.

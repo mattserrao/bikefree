@@ -743,6 +743,7 @@ export class World {
       if (U != null) { const w = this.path.worldAt(Math.max(0, U - 1), this.area?.id ?? null); if (w.area === (this.area?.id ?? w.area)) rider.uturn = w.s > turn ? total - w.s : w.s; }
       // [6.10] the pacer where it's drawn: the city's riders on the route keep out of its line too
       if (this.pacer?.group.visible && this._pacerPose) rider.pacer = { x: this._pacerPose.pos.x, z: this._pacerPose.pos.z, speed: this._pacerSpeed ?? src.speed };
+      this.terrain.camera = this.camera;   // (the tree engine's per-tree view test)
       this.terrain.tick(this.camera.position, dt, rider);
     }
     if (this.headlight?.visible) {

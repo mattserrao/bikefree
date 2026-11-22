@@ -38,10 +38,14 @@ function engineMaterial(material, band, uTime, leaf, key) {
   material.onBeforeCompile = (shader, r) => {
     prev?.call(material, shader, r);
     shader.uniforms.uTime = uTime; shader.uniforms.uBand = uBand; shader.uniforms.uLeaf = { value: leaf ? 1 : 0 };
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>\n${WIND_GLSL}${leaf ? '\nuniform float uTime;' : ''}`)
+    shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>\n${WIND_GLSL}${leaf || !/uniform float uTime/.test(shader.vertexShader) ? '\nuniform float uTime;' : ''}`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         {
+          #ifdef USE_INSTANCING
           vec3 teO = (modelMatrix * instanceMatrix * vec4(0., 0., 0., 1.)).xyz;
+          #else
+          vec3 teO = (modelMatrix * vec4(0., 0., 0., 1.)).xyz;
+          #endif
           float teD = length(teO.xz - cameraPosition.xz);
           vKeep0 = teLin(teD, uBand.x, uBand.y);           // fading in
           vKeep1 = 1. - teLin(teD, uBand.z, uBand.w);      // fading out
@@ -86,8 +90,8 @@ function leafMaterial(map) {
 }
 
 export class TreeEngine {
-  constructor({ renderer, parent, quality = 'balanced', uTime, lights, kit }) {
-    this.renderer = renderer; this.parent = parent; this.uTime = uTime; this.kit = kit;
+  constructor({ renderer, parent, quality = 'balanced', uTime, lights, kit, shadows = false }) {
+    this.renderer = renderer; this.shadows = shadows; this.parent = parent; this.uTime = uTime; this.kit = kit;
     const [b0, b1] = BANDS[quality] || BANDS.balanced;
     this.b0 = b0; this.b1 = b1;
     this.group = new THREE.Group(); this.group.name = 'Trees (tree engine)'; parent.add(this.group);
@@ -98,7 +102,7 @@ export class TreeEngine {
     const near = [-2, -1, 1e8, 1e9], mid = [-2, -1, 1e8, 1e9];   // (the swaps are per tree: see tick)
     this.mats = [{ wood: wood(near, 'w0'), leaves: leaves(near, 'l0') }, { wood: wood(mid, 'w1'), leaves: leaves(mid, 'l1') }];
     // the models: every (species, variant) an entry; the understory near-only entries
-    this.entries = []; this.index = new Map();
+    this.entries = []; this.index = new Map(); this._own = new Map();
     for (const [name, sp] of Object.entries(kit.species)) sp.variants.forEach((tiers, v) => this._entry(`${name}:${v}`, [tiers[0], tiers[1]], false));
     for (const [name, g] of Object.entries(kit.understory)) this._entry(`${name}:0`, [g.isBufferGeometry ? { wood: g, leaves: null } : g], true);
     this.tiles = new Map();
@@ -115,8 +119,12 @@ export class TreeEngine {
       const parts = [];
       for (const [part, geo] of [['wood', t.wood], ['leaves', t.leaves]]) {
         if (!geo) continue;
-        const im = new THREE.InstancedMesh(geo, this.mats[tier][part], 16);
+        // a kit can bring its own material (a scene pack's tuned look): wrapped once with the engine's wind
+        let mat = this.mats[tier][part];
+        if (part === 'wood' && t.material) { mat = this._own.get(t.material); if (!mat) this._own.set(t.material, (mat = engineMaterial(t.material, [-2, -1, 1e8, 1e9], this.uTime, false, `own${this._own.size}`))); }
+        const im = new THREE.InstancedMesh(geo, mat, 16);
         im.count = 0; im.visible = false; im.frustumCulled = false; im.name = `Trees ${key} ${part} ${tier ? 'mid' : 'near'}`;
+        im.castShadow = this.shadows && tier === 0 && !nearOnly; im.receiveShadow = this.shadows;
         im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); im.setColorAt(0, new THREE.Color(1, 1, 1));
         this.group.add(im); parts.push(im);
       }
@@ -144,7 +152,7 @@ export class TreeEngine {
     const cam = new THREE.OrthographicCamera(-1, 1, 1, 0, .1, 400);
     list.forEach((e, row) => {
       const t = e.pools[0], g = [], b = e.box, half = Math.max(-b.min.x, b.max.x, -b.min.z, b.max.z) * 1.02, top = b.max.y * 1.01;
-      for (const im of t) { const m = new THREE.Mesh(im.geometry, im.material.map ? leafM : woodM); g.push(m); scene.add(m); }
+      for (const im of t) { const m = new THREE.Mesh(im.geometry, im.material.map ? leafM : im.material === this.mats[0].wood || im.material === this.mats[1].wood ? woodM : im.material); g.push(m); scene.add(m); }
       e.imp = { row, half, top };
       cam.left = -half; cam.right = half; cam.top = top; cam.bottom = 0; cam.updateProjectionMatrix();
       for (let k = 0; k < ANGLES; k++) {
@@ -273,7 +281,7 @@ export class TreeEngine {
         let im = e.pools[tier][pi];
         if (list.length > im.instanceMatrix.count) {
           const nim = new THREE.InstancedMesh(im.geometry, im.material, Math.ceil(list.length * 1.5));
-          nim.name = im.name; nim.frustumCulled = false; nim.instanceMatrix.setUsage(THREE.DynamicDrawUsage); nim.setColorAt(0, c.set(1, 1, 1));
+          nim.name = im.name; nim.frustumCulled = false; nim.castShadow = im.castShadow; nim.receiveShadow = im.receiveShadow; nim.instanceMatrix.setUsage(THREE.DynamicDrawUsage); nim.setColorAt(0, c.set(1, 1, 1));
           this.group.remove(im); im.dispose(); this.group.add(nim); e.pools[tier][pi] = im = nim;
         }
         list.forEach((t, k) => { q.setFromAxisAngle(Y, t.rot); p.set(t.x, t.y, t.z); s.set(t.s, t.sy, t.s); im.setMatrixAt(k, m.compose(p, q, s)); im.setColorAt(k, c.setScalar(t.tint)); });
@@ -289,6 +297,25 @@ export class TreeEngine {
     this.group.removeFromParent();
     for (const e of this.entries) for (const tier of e.pools) for (const im of tier || []) im.dispose();
     for (const t of this.mats) { t.wood.dispose(); t.leaves.dispose(); }
+    // (own materials belong to their kit)
     this.impGeo.dispose(); this.impMat.dispose(); this.atlas.dispose(); this.leafTexture.dispose();
   }
+}
+
+/**
+ * A tree-engine kit from a scene's regional pack assets (toolbox/packs: name, name-lod, name-far; each { geometry,
+ * material }): every model with a -lod twin is a tree (its near and mid tiers, the scene's own materials); the rest
+ * (logs, flowers, stones, shrubs) near-only understory.
+ */
+export function packKit(assets, isTree = (name) => !!assets[`${name}-lod`]) {
+  const species = {}, understory = {};
+  for (const [name, a] of Object.entries(assets)) {
+    if (/-(lod|far)$/.test(name) || !a?.geometry?.isBufferGeometry) continue;
+    if (isTree(name)) {
+      const lod = assets[`${name}-lod`];
+      a.geometry.computeBoundingBox();
+      species[name] = { h: a.geometry.boundingBox.max.y, r: Math.max(a.geometry.boundingBox.max.x, a.geometry.boundingBox.max.z), variants: [[{ wood: a.geometry, leaves: null, material: a.material }, { wood: lod.geometry, leaves: null, material: lod.material }]], turn: [0] };
+    } else understory[name] = { wood: a.geometry, leaves: null, material: a.material };
+  }
+  return { species, understory };
 }
