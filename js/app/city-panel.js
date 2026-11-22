@@ -141,7 +141,7 @@ function renderCityMap() {
   $('cityLm').hidden = !d.landmarks.length;
   $('cityLm').setAttribute('aria-pressed', String(showLm));
   $('cityLm').title = showLm ? 'Hide the landmarks' : 'Show the landmarks';
-  city.lines = drawCityMap($('cityMap'), { lines: d.lines, rivers: d.rivers, waterAreas: d.waterAreas, labels: d.labels.filter((lb) => !(lb.rank > 1) || $('cityMap').clientWidth >= 520 || (city.view?.k || 1) >= 1.5), nodes: d.simple ? [] : [...d.net.nodes.values()],
+  city.lines = drawCityMap($('cityMap'), { lines: d.lines, rivers: d.rivers, waterAreas: d.waterAreas, labels: d.labels.filter((lb) => !(lb.rank > 1) || $('cityMap').clientWidth >= 520 || (city.view?.k || 1) >= 1.5),   // (no junction dots: the roads alone)
     landmarks: showLm ? d.landmarks : null, landmarkRank: landmarkRank(city.view?.k || 1, $('cityMap').clientWidth < 520),
     lit: city.goal === 'all' ? null : lit, route: city.sel ? d.paths.get(city.sel) : null, marked: city.seg, focus: city.focus,
     project: (lines, w, h, pad) => zoomProjection(fitProjection(lines, w, h, pad), w, h, city.view) });
