@@ -190,8 +190,9 @@ export function* planBuildingsJob(plan, config, index, opts = {}, tierIndex = nu
     const rand = randomSequence(seed0 ^ Math.imul(Math.round(b.x * 10) | 0, 73856093) ^ Math.imul(Math.round(b.z * 10) | 0, 19349663));
     const style = styleAt(b.s, b.kind);
     const area = Math.abs(polyArea(b.pts));
-    const dec = decompose(b.pts);
+    let dec = decompose(b.pts);
     if (!dec) continue;
+    if (style.cleanShapes && ['house', 'village-house', 'farmhouse-ny', 'rowhouse'].includes(b.kind)) dec = cleanShape(b, dec, area, index, rand) || dec;
     let dens = 0; around(b.x, b.z, 35, () => dens++); dens--;
     const near = index.nearest(b.x, b.z, 60) || index.nearest(b.x, b.z, 200) || index.nearest(b.x, b.z, 600);
     const d = near ? near.d : 600;
@@ -356,6 +357,46 @@ export function* planBuildingsJob(plan, config, index, opts = {}, tierIndex = nu
     done.set(b, R);
   }
   return { buildings: out, styles, kit, duplicates: dup.size };
+}
+
+/**
+ * A house's clean shape (the rural upstate styles, user 22 Nov: "detail of homes is wrong — awkward shapes"): mapped
+ * footprints come out ragged (traced roofs, merged porches and decks). An upstate house is a tidy rectangle — a ranch
+ * or a colonial, its long side to the street — sometimes with one wing at the back (an L). So: the footprint's area
+ * kept, its main block a rectangle of a house's proportions (1.3–2.1 : 1), squared to the nearest road (its long
+ * axis along it, so it faces the street), set back at least ~7 m from the road's edge; a wing when the map shows
+ * one (a second block of a fifth of the area or more) or now and then on a big house.
+ */
+function cleanShape(b, dec, area, index, rand) {
+  const near = index.nearest(b.x, b.z, 80);
+  let ux = dec.box.ux, uz = dec.box.uz;
+  let cx = b.x, cz = b.z;
+  if (near) {
+    // the road's direction there: from the nearest centre-line point to its neighbours along the same line
+    const i = near.i, xs = index.xs, zs = index.zs;
+    let tx = 0, tz = 0;
+    for (const j of [i - 1, i + 1]) if (j >= 0 && j < xs.length && Math.hypot(xs[j] - xs[i], zs[j] - zs[i]) < 30) { const s = j < i ? -1 : 1; tx += (xs[j] - xs[i]) * s; tz += (zs[j] - zs[i]) * s; }
+    const L = Math.hypot(tx, tz);
+    if (L > .5) { ux = tx / L; uz = tz / L; }
+  }
+  const box = dec.box, aspect = Math.max(1.3, Math.min(2.1, box.hu / Math.max(.5, box.hv)));
+  const wingShown = dec.rects.length > 1 && dec.rects[1].hu * dec.rects[1].hv * 4 > area * .2;
+  const wing = (wingShown || (area > 130 && rand() < .3)) && area > 70;
+  const mainA = area * (wing ? .74 : 1), hu = Math.sqrt(mainA * aspect) / 2, hv = Math.sqrt(mainA / aspect) / 2;
+  let vx = -uz, vz = ux;
+  // v points away from the road (the back)
+  if (near) { const toR = { x: index.xs[near.i] - cx, z: index.zs[near.i] - cz }; if (toR.x * vx + toR.z * vz > 0) { vx = -vx; vz = -vz; } }
+  // the setback: the front wall at least ~7 m from the road's edge (near.d counts from a 3.5 m half width)
+  if (near) { const front = near.d - 3.5 - hv; if (front < 7) { const push = Math.min(5, 7 - front); cx += vx * push; cz += vz * push; } }
+  const rects = [{ cx, cz, ux, uz, vx, vz, hu, hv }];
+  if (wing) {
+    const whu = Math.max(2.2, Math.min(hu * .42, Math.sqrt(area * .26 * .8) / 2)), whv = (area * .26) / (4 * whu) / 2 + .6, end = rand() < .5 ? -1 : 1;
+    // the wing runs back from one end of the main block (its ridge across the main one's: a cross gable)
+    const wx = cx + ux * end * (hu - whu) + vx * (hv + whv - .4), wz = cz + uz * end * (hu - whu) + vz * (hv + whv - .4);
+    // (the long side along u, as every rect)
+    rects.push(whv >= whu ? { cx: wx, cz: wz, ux: vx, uz: vz, vx: -ux, vz: -uz, hu: whv, hv: whu } : { cx: wx, cz: wz, ux, uz, vx, vz, hu: whu, hv: whv });
+  }
+  return { rects, cover: 1, box: rects[0] };
 }
 
 /** Which wall of the main block faces the road: 0 (−v long side), 1 (+u end), 2 (+v long side), 3 (−u end). */

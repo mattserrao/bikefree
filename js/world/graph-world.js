@@ -1272,8 +1272,9 @@ const NY_ROAD_GLSL = /* glsl */`
     if (junc) { q = w.xz; hw = 60.; track = 0.; det = 1. - smoothstep(.015, .07, max(fwidth(w.x), fwidth(w.z))); }
     float along = q.y, ax = junc ? 0. : abs(q.x);
     // which kind of stretch: fresh blacktop (repaved) / old oxidised hot-mix / chip seal (narrow country roads)
-    float stretch = fract(gwH(vec2(floor(along / 420.) * 1.37 + 3.1, hw * 7.3 + 11.)) * 7.31 + gwN(w.xz * .0011) * 1.7);
-    float chip = step(hw, 3.35) * step(.3, stretch);
+    // (by world position only, so overlapping surfaces — a junction's fan over a ribbon's end — agree exactly)
+    float stretch = fract(gwN(w.xz * .0011) * 1.7 + gwN(w.xz * .0037 + 5.) * .9);
+    float chip = junc ? 0. : step(hw, 3.35) * step(.3, stretch);
     float fresh = step(.86, stretch) * (1. - chip);
     float age = (1. - fresh) * (.55 + .45 * gwN(w.xz * .006 + 1.7));
     vec3 lin = pow(c, vec3(1. / 2.2));                       // (work in the gamma colour, as the other surfaces do)
@@ -1288,6 +1289,8 @@ const NY_ROAD_GLSL = /* glsl */`
       lin = mix(cs, cs * .8, track * .8);
       lin = mix(lin, base * .8, smoothstep(.6, .9, gwN(w.xz * .03 + 4.)) * .35);   // bleeding tar in the hot spots
     }
+    // a junction's fan (or a far, plain ribbon): no lane-aligned features, just the tone and the odd pothole
+    if (junc) return pow(lin * (.96 + .08 * gwN(w.xz * .3)), vec3(2.2));
     float worn = smoothstep(.35, .8, gwN(w.xz * .012 + 9.)) * (1. - fresh);
     // tar snakes: the centre joint, and the wheel paths' edges, wandering
     float wob = (gwN(vec2(along * .12, 3.)) - .5) * .35 + (gwN(vec2(along * 1.3, 9.)) - .5) * .1;
@@ -1308,9 +1311,9 @@ const NY_ROAD_GLSL = /* glsl */`
     lin = mix(lin, base * .38, snake * .92 * det);
     lin *= 1. - trans * (1. - sealed) * .45 * det;
     // alligator cracking in the wheel paths, in the worst stretches
-    vec2 cell = nyCell(vec2(q.x, along) * 3.4);
-    float gator = (1. - smoothstep(.015, .05, cell.x)) * track * smoothstep(.5, .9, worn) * (1. - chip);
-    lin *= 1. - gator * .45 * det;
+    vec2 cell = nyCell(vec2(q.x, along) * 4.2);
+    float gator = (1. - smoothstep(.012, .04, cell.x)) * track * smoothstep(.65, .95, worn) * (1. - chip);
+    lin *= 1. - gator * .35 * det;
     lin *= 1. + (cell.y - .5) * .08 * track * worn * det;   // the broken pieces, each a shade apart
     // patches: cut-in rectangles of newer, darker asphalt (a lane's width or less), and round cold-patched potholes
     float pb = floor(along / 23.), ph = gwH(vec2(pb, 21.));

@@ -151,8 +151,8 @@ function grow(seed, o, lod, turn, lodScale = 1) {
   }
   // near and mid: a hidden inner shell (darker: the canopy's shaded inside — keeps the crown from reading see-through),
   // then leaf-cluster cards — three crossed quads near, two larger ones mid — normals spherized from the crown's centre
-  const shell = Math.min(rad, radY * 1.3) * .5;
-  wood.as(leafKind).add(blob(1), M(cc.x, cc.y + radY * .05, cc.z, shell * 1.15, shell * .9, shell * 1.15), shadeHex(o.greens[0], .42), 0, rand);
+  const shell = Math.min(rad, radY * 1.3) * .42;
+  wood.as(leafKind).add(blob(1), M(cc.x, cc.y - radY * .12, cc.z, shell * 1.1, shell * .8, shell * 1.1), shadeHex(o.greens[0], .42), 0, rand);
   const pos = [], nor = [], uv = [], col = [], tw = [];
   const v = new THREE.Vector3(), qn = new THREE.Vector3();
   for (const c of clusters) {

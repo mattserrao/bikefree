@@ -188,6 +188,7 @@ export const STYLE_PRESETS = {
   // Warners — ranches and two-storey colonials of vinyl siding in the usual pale colours, some brick fronts, shutters,
   // attached garages, low gable and hip roofs of asphalt shingle; a window every ~4.4 m, not every 2.6 m
   'cny-suburban': {
+    cleanShapes: true,   // (recipe.js cleanShape: tidy rectangles squared to the road, set back, an occasional wing)
     archetypes: { cottage: 1, village: .12, farmhouse: .2, chalet: 0, mazot: 0, block: 0, shed: .5 },
     schemes: [
       { wall: '#eceae3', trim: '#2f3a44', frame: '#f6f5f0', accent: '#f6f5f0' },   // white, black shutters
@@ -211,6 +212,7 @@ export const STYLE_PRESETS = {
   // CNY's village cores (Camillus, Warners, Amboy, Memphis…; tools/pgh_city.py "the country", kind 16): houses of the
   // 1850s-1920s — two storeys of clapboard, the gable to the street, a front porch on most, steeper roofs, no garages
   'cny-village': {
+    cleanShapes: true,   // (recipe.js cleanShape: tidy rectangles squared to the road, set back, an occasional wing)
     archetypes: { cottage: 1, village: .3, farmhouse: 0, chalet: 0, mazot: 0, block: 0, shed: .4 },
     schemes: [
       { wall: '#f1efe8', trim: '#2f3a44', frame: '#f6f5f0', accent: '#f6f5f0' },   // white, black shutters
@@ -232,6 +234,7 @@ export const STYLE_PRESETS = {
   // CNY's farmhouses (kind 13: a house with a barn by it): white clapboard, two storeys, a steep side gable, a wing at
   // the back (the lean-to), a porch across the front; a woodpile, a garden, laundry
   'cny-farmhouse': {
+    cleanShapes: true,   // (recipe.js cleanShape: tidy rectangles squared to the road, set back, an occasional wing)
     archetypes: { cottage: 1, village: 0, farmhouse: 0, chalet: 0, mazot: 0, block: 0, shed: .2 },
     schemes: [
       { wall: '#f3f1ea', trim: '#2f3a44', frame: '#f6f5f0', accent: '#f6f5f0' },

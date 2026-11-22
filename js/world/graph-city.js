@@ -30,6 +30,7 @@ import { makeNortheastPack } from './toolbox/packs/northeast.js';
 import { makeTreeCards } from './toolbox/vegetation/tree-cards.js';
 import { GraphLife } from './toolbox/city/graph-life.js';
 import { TreeEngine } from './toolbox/vegetation/tree-engine.js';
+import { planHomestead, drawHomestead, driveStrips, nearDrive } from './toolbox/city/homesteads.js';
 import { makeUpstateTrees, fallVariant } from './toolbox/vegetation/upstate-trees.js';
 
 // (9 is the toolbox's pond; 10–12: a rural map's fields from WorldCover — tools/pgh_city.py rural_land, SKAN;
@@ -51,8 +52,12 @@ const KIT_CFG = { detailM: 150, dressingM: 80, detailReachM: 550,
   styles: [{ preset: 'pittsburgh-rowhouse', kinds: ['rowhouse'] }, { preset: 'pittsburgh-frame', kinds: ['house', 'barn', 'shed'] }] };
 /** Each road-graph city's homes (CNY: the suburbs' ranches and colonials, the villages' older houses, the farmhouses:
  *  presets.js cny-*; tools/pgh_city.py's zones give kinds 23 and 20). */
-export const KIT_STYLES = { cny: [{ preset: 'cny-village', kinds: ['village-house'] }, { preset: 'cny-farmhouse', kinds: ['farmhouse-ny'] },
-  { preset: 'cny-suburban', kinds: ['house', 'rowhouse'] }] };
+export const KIT_STYLES = { cny: [{ preset: 'cny-village', kinds: ['village-house'] }, { preset: 'cny-farmhouse', kinds: ['farmhouse-ny', 'barn', 'shed'] },
+  { preset: 'cny-suburban', kinds: ['house', 'rowhouse'] }],
+  // SKAN: the same upstate styles; its houses are sorted at load (_addSector: a house by a barn is a farmhouse, one
+  // among many close neighbours a village house)
+  skan: [{ preset: 'cny-village', kinds: ['village-house'] }, { preset: 'cny-farmhouse', kinds: ['farmhouse-ny', 'barn', 'shed'] },
+    { preset: 'cny-suburban', kinds: ['house', 'rowhouse'] }] };
 const ROADS = new Set(['primary', 'secondary', 'tertiary', 'residential', 'alley']);
 const MAIN = new Set(['primary', 'secondary', 'tertiary']);
 const POINT_FN = { signal: 'signal', bus_stop: 'busSign', bench: 'bench', hydrant: 'hydrant', bike_rack: 'bikeRack', waste: 'waste', picnic: 'picnic',
@@ -204,6 +209,17 @@ export class GraphCity {
         const pts = []; for (let i = st2[k]; i < st2[k + 1]; i++) pts.push(this.local(nxy[2 * i], nxy[2 * i + 1]));
         if (pts.length >= 2) put(this.lines, by(pts[pts.length >> 1].x, pts[pts.length >> 1].z), { kind: S.lineKinds[c], pts });
       });
+    }
+    // SKAN's houses (all kind 1 in its data): one with a barn within 120 m is a farmhouse, one with a dozen buildings
+    // within 90 m a village house — the CNY presets then dress them as CNY's are
+    if (this.world.json?.id === 'skan') {
+      const barns = mine.filter((b) => b.kind === 13), all = mine;
+      for (const b of mine) {
+        if (b.kind !== 1) continue;
+        if (barns.some((o) => Math.hypot(o.cx - b.cx, o.cz - b.cz) < 120)) { b.kind = 20; continue; }
+        let n = 0; for (const o of all) if (Math.abs(o.cx - b.cx) < 90 && Math.abs(o.cz - b.cz) < 90 && Math.hypot(o.cx - b.cx, o.cz - b.cz) < 90) n++;
+        if (n >= 13) b.kind = 23;
+      }
     }
     // the homes' plan: rowhouses and houses (the kit's), the rest as neighbours
     const kinds = { 0: 'rowhouse', 1: 'house', 13: 'barn', 14: 'shed', 20: 'farmhouse-ny', 23: 'village-house' }, homes = [], neighbours = [];   // (13, 14: a rural map's barns and sheds, SKAN; 20, 23: CNY's farmhouses and village houses)
@@ -460,8 +476,10 @@ export class GraphCity {
       this.stats.buildings += host.buildingChunks.get(key).length;
     }
     yield;
+    if (this.rural) { yield* this._planHomesteads(t); yield; }
     yield* this._trees(t); yield;
     yield* this._furniture(t); yield;
+    if (this.rural) { this._drawHomesteads(t); yield; }
     yield* this._farms(t); yield;
     yield* this._storefronts(t); yield;
     yield* this._lots(t); yield* this._lines(t);
@@ -686,6 +704,49 @@ export class GraphCity {
     this.forest.setTile(t.key, out);
     t.trees = out;
     this.stats.trees += out.length;
+  }
+
+  // ------------------------------------------------------------------ homesteads (rural maps)
+  /** The nearest way of a kind a driveway meets (not a trail), searched out to maxR. */
+  _roadNearFar(x, z, maxR) {
+    let best = null; const R = Math.ceil(maxR / 20), gx = Math.floor(x / 20), gz = Math.floor(z / 20), w = this.world;
+    for (let a = -R; a <= R; a++) for (let b = -R; b <= R; b++) {
+      const arr = this._segGrid.get(cellKey(gx + a, gz + b)); if (!arr) continue;
+      for (let k = 0; k < arr.length; k += 2) {
+        const e = arr[k], i = arr[k + 1];
+        if (e.kind === 'path' || e._deck?.[i]) continue;
+        const ax = e.x[i], az = e.z[i], dx = e.x[i + 1] - ax, dz = e.z[i + 1] - az, l2 = dx * dx + dz * dz || 1;
+        const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), px = ax + dx * t, pz = az + dz * t, d = Math.hypot(x - px, z - pz);
+        if (d > maxR || (best && d >= best.d)) continue;
+        const l = Math.sqrt(l2); best = { e, i, d, px, pz, half: w.wOf(e) / 2, y: e.ele[i] + (e.ele[i + 1] - e.ele[i]) * t, dx: dx / l, dz: dz / l };
+      }
+    }
+    return best;
+  }
+  /** Each house's driveway, mailbox and outbuildings (toolbox/city/homesteads.js), planned before the trees. */
+  *_planHomesteads(t) {
+    const ctx = {
+      roadNear: (x, z, r) => this._roadNearFar(x, z, r),
+      free: (x, z, pad) => !this.host.buildingNear(x, z, pad) && !this.kit.occupied(x, z, pad) && !this.onRoad(x, z, pad + 1) && !this.inWater(x, z),
+    };
+    t.homes = [];
+    for (const b of this.host.buildingChunks.get(t.key) || []) {
+      const R = this.kit.plans.get(b.k);
+      if (!R || b.hidden || !['house', 'village-house', 'farmhouse-ny'].includes(R.kind)) continue;
+      const H = planHomestead(R, ctx);
+      if (H) t.homes.push(H);
+      if (due()) yield;
+    }
+    this._curHomes = t.homes;
+  }
+  _drivewayNear(x, z, r) { return nearDrive(this._curHomes || [], x, z, r); }
+  _drawHomesteads(t) {
+    if (!t.homes?.length) return;
+    const g = (x, z) => this.world._groundH(x, z);
+    for (const H of t.homes) drawHomestead(t.kitM, H, g);
+    const geo = driveStrips(t.homes, g);
+    if (geo) { const m = new THREE.Mesh(geo, this.lotMaterial); m.name = `Driveways ${t.key}`; m.receiveShadow = true; this._add(t, m); }
+    this.stats.driveways = (this.stats.driveways || 0) + t.homes.length;
   }
 
   /** One pool: a species at one level of detail, as many instances as the trees near the camera need. */
