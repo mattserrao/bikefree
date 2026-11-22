@@ -1689,7 +1689,7 @@ function cityMapData(card) {
   if (!net) return null;
   const paths = new Map(card.routes.map((it) => [it.id, cityPath(net, it)]));
   // a road graph's network (PGH: thousands of streets) is drawn simply (minor: 0 primary roads and trails, 1 secondary
-  // roads — both drawn in full, the thumbnail only 0 — 2 the rest, faint, not on the thumbnail), no junction dots, no landmarks; a few neighbourhoods named and the rivers
+  // roads — both drawn in full, the thumbnail too — 2 the rest, thinner, not on the thumbnail; all in one faint style), no junction dots, no landmarks; a few neighbourhoods named and the rivers
   const simple = graphMapLabels.has(card.network);
   const lines = edgeLines(net).map((L) => ({ id: L.id, lat: L.lat, lon: L.lon, minor: !simple ? 0 : L.e.kind === 'primary' || L.e.kind === 'path' ? 0 : L.e.kind === 'secondary' ? 1 : 2 })), map = cityMaps.get(card.baseId);
   return { net, paths, index: segmentRoutes(card.routes.map((it) => ({ id: it.id, path: paths.get(it.id) }))),

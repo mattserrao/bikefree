@@ -418,19 +418,20 @@ export function drawCityMap(canvas, { lines, rivers = [], waterAreas = null, lab
     const pts = [], n = L.lat.length, step = Math.max(1, Math.floor(n / 80));
     for (let i = 0; i < n; i += step) pts.push([X(L.lon[i]), Y(L.lat[i])]);
     pts.push([X(L.lon[n - 1]), Y(L.lat[n - 1])]);
-    return { id: L.id, pts, minor: L.minor === 2 || (thumb && L.minor === 1) };
+    return { id: L.id, pts, minor: L.minor === 2 };   // (a thumbnail shows main and secondary roads alike)
   });
   const byId = new Map(out.map((L) => [L.id, L]));
   // the tapped segment: a soft halo under everything
   if (marked && byId.has(marked)) { ctx.globalAlpha = 0.3; stroke(byId.get(marked).pts, accent, 18 * k); ctx.globalAlpha = 1; }
-  // the network: faint; with a goal, its routes' segments brighter and the rest dimmer still
-  // (minor lines — a road graph's side streets (L.minor 2; on a thumbnail 1 too) — thin and faint, under the rest; not on a thumbnail)
-  ctx.globalAlpha = 0.45;
-  for (const L of out) if (L.minor && !thumb) stroke(L.pts, faint, (lit && lit.has(L.id) ? 1.6 : 1) * k);
-  ctx.globalAlpha = 1;
-  for (const L of out) if (!L.minor && lit && !lit.has(L.id)) stroke(L.pts, faint, thumb ? 1.5 : 1.5 * k);
-  ctx.globalAlpha = lit ? 1 : 0.75;
-  for (const L of out) if (!L.minor && (!lit || lit.has(L.id))) stroke(L.pts, lit ? tok('--ink-2', '#c2c0b6') : muted, thumb ? 2 : 2.5 * k);
+  // the network: one faint style for every road, so nothing but the selected route (drawn below) reads as
+  // highlighted (menu-simplify-test: the cards used to draw only main roads and trails, dark, and a goal brightened
+  // its routes' roads — both looked like chosen routes). Side streets (L.minor 2) thinner, and not on a thumbnail;
+  // `lit` (a goal's roads) no longer changes the look.
+  void lit; void muted;
+  ctx.globalAlpha = thumb ? 0.85 : 0.5;
+  for (const L of out) if (L.minor && !thumb) stroke(L.pts, faint, 1 * k);
+  ctx.globalAlpha = thumb ? 0.85 : 0.8;
+  for (const L of out) if (!L.minor) stroke(L.pts, faint, thumb ? 1.25 : 1.5 * k);
   ctx.globalAlpha = 1;
   // landmarks (PLAN 7.9): a dot in its kind's colour, ringed (the T's stations: a square), under the map's labels;
   // their own short labels where they fit, over the network, under the route's highlight (taps go to the lines
