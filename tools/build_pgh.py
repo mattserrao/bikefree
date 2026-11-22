@@ -30,6 +30,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(ROOT, 'tools', '.cache')
 UA = {'User-Agent': 'bikefree-graph-builder/0.1 (personal project)'}
 OFFLINE = '--offline' in sys.argv
+# (user, 22 Nov: "create a new map CNY following the guide used for PGH") the city: tools/city/<id>.json; PGH by default
+CITY = sys.argv[sys.argv.index('--city') + 1] if '--city' in sys.argv else 'pgh'
 STEP = 10
 REVIEW = {}   # what the build left out, for tools/review_pgh.py
 
@@ -74,6 +76,18 @@ class Corridor:
     def inside(self, la, lo): return self.dist(la, lo, self.r) < self.r
 
 
+class CircleArea:
+    """A city drawn as a circle (config "area": {"circle": [lat, lon, radiusM]}): the corridor's interface."""
+    def __init__(self, lat, lon, r):
+        self.lat0, self.lon0, self.r = lat, lon, r
+        self.kx, self.ky = 111320 * math.cos(math.radians(lat)), 110540
+        self.pts_all = [(lat, lon)]
+    def dist(self, la, lo, reach):
+        d = max(0.0, math.hypot((lo - self.lon0) * self.kx, (la - self.lat0) * self.ky) - self.r)
+        return d if d < reach else reach
+    def inside(self, la, lo): return math.hypot((lo - self.lon0) * self.kx, (la - self.lat0) * self.ky) < self.r
+
+
 def area_lines():
     pts = []
     for name in sorted(os.listdir(os.path.join(ROOT, 'routes', 'cities'))):
@@ -102,20 +116,21 @@ def fetch_box(folder, s, w, n, e, depth=0):
 
 
 def load_osm(cfg, cor):
-    folder = os.path.join(CACHE, 'osm-pgh')
+    folder = os.path.join(CACHE, f'osm-{CITY}')
     os.makedirs(folder, exist_ok=True)
     dx, dy = cfg['osmTile']
     w0, s0 = cfg['osmOrigin']
     pts = cor.pts_all
     la0, la1 = min(p[0] for p in pts), max(p[0] for p in pts)
     lo0, lo1 = min(p[1] for p in pts), max(p[1] for p in pts)
-    pad_la, pad_lo = cfg['corridorM'] / 110540 + dy, cfg['corridorM'] / cor.kx + dx
+    reach = 0 if isinstance(cor, CircleArea) else cfg['corridorM']   # (a circle: its own edge is the reach)
+    pad_la, pad_lo = (reach or cor.r) / 110540 + dy, (reach or cor.r) / cor.kx + dx
     files, tiles = [], []
     for x in range(math.floor((lo0 - pad_lo - w0) / dx), math.ceil((lo1 + pad_lo - w0) / dx)):
         for y in range(math.floor((la0 - pad_la - s0) / dy), math.ceil((la1 + pad_la - s0) / dy)):
             w, s = w0 + x * dx, s0 + y * dy
             half = 0.5 * math.hypot(dx * cor.kx, dy * 110540)
-            if cor.dist(s + dy / 2, w + dx / 2, cfg['corridorM'] + half + 50) < cfg['corridorM'] + half: tiles.append((s, w))
+            if cor.dist(s + dy / 2, w + dx / 2, reach + half + 50) < reach + half: tiles.append((s, w))
     print(f'  OSM: {len(tiles)} tiles of {dx}° × {dy}° touch the corridor')
     for k, (s, w) in enumerate(tiles):
         files += fetch_box(folder, round(s, 4), round(w, 4), round(s + dy, 4), round(w + dx, 4))
@@ -243,9 +258,13 @@ def protected(e):
 
 
 def build(cfg):
-    cor_pts = area_lines()
-    cor = Corridor(cor_pts, cfg['corridorM'])
-    cor.pts_all = cor_pts
+    if cfg.get('area', {}).get('circle'):
+        la_, lo_, r_ = cfg['area']['circle']
+        cor = CircleArea(la_, lo_, r_ + cfg['area'].get('marginM', 0))   # (built over the margin too: trim_to_circle)
+    else:
+        cor_pts = area_lines()
+        cor = Corridor(cor_pts, cfg['corridorM'])
+        cor.pts_all = cor_pts
     nodes, ways = load_osm(cfg, cor)
     REVIEW['osm'] = (nodes, ways)   # (every highway way: the dead-end bridges' connectors look through them)
 
@@ -253,7 +272,7 @@ def build(cfg):
     kept = []   # (refs, tags, kind)
     dropped = defaultdict(int)
     global ROUTES
-    ROUTES = RouteLines(os.path.join(ROOT, 'tools', 'city', 'pgh-route-lines.json'), cfg['routeKeepM'])
+    ROUTES = RouteLines(os.path.join(ROOT, 'tools', 'city', f'{CITY}-route-lines.json'), cfg['routeKeepM'])
     kept_for_routes = 0
     # the rideable ways' points (a way the routes ride is only added where none of these carries the route already)
     rgrid = defaultdict(list)
@@ -897,15 +916,17 @@ def write(cfg, E, jpos, jh, cor):
                 else: k += 1
             rec['bridges'] = runs
         edges_out.append(rec)
-    out = {'format': 'bikefree-graph-1', 'id': 'pgh', 'name': 'PGH', 'city': 'Pittsburgh, PA',
+    files = cfg.get('files') or {'map': 'routes/cities/pittsburgh-map.json', 'ground': 'routes/cities/pgh-ground.grid.bin.gz', 'shore': 'routes/cities/pgh-shore.json', 'dressing': 'routes/cities/pgh-dressing.json',
+             'heroes': 'routes/cities/pgh-heroes.json', 'bridges': 'routes/cities/pgh-bridges.json', 'cityData': 'routes/cities/pgh-city.json'}
+    labels = cfg.get('mapLabels') or PGH_MAP_LABELS
+    out = {'format': 'bikefree-graph-1', 'id': CITY, 'name': cfg.get('name', 'PGH'), 'city': cfg.get('cityName', 'Pittsburgh, PA'),
            'attribution': 'Map data © OpenStreetMap contributors (ODbL); elevation: AWS Terrain Tiles (USGS 3DEP)',
            'origin': {'lat': round(lat0, 6), 'lon': round(lon0, 6)}, 'unit': {'latlon': 1e-6, 'ele': 0.1},
-           'widths': cfg['widths'], 'waterLevelM': cfg['waterLevelM'], 'map': 'routes/cities/pittsburgh-map.json',
-           'ground': 'routes/cities/pgh-ground.grid.bin.gz', 'shore': 'routes/cities/pgh-shore.json', 'dressing': 'routes/cities/pgh-dressing.json', 'heroes': 'routes/cities/pgh-heroes.json', 'bridges': 'routes/cities/pgh-bridges.json', 'cityData': 'routes/cities/pgh-city.json',
+           'widths': cfg['widths'], 'waterLevelM': cfg['waterLevelM'], **files,
            # the card's map (js/app.js): a few neighbourhoods named, no landmark dots (user, 21 Nov: "greatly simplify")
-           'mapLabels': [{'text': t, 'lat': la, 'lon': lo, 'kind': 'area', 'rank': r} for t, la, lo, r in PGH_MAP_LABELS], 'pools': cfg.get('pools', []), 'start': cfg.get('start'),
+           'mapLabels': [{'text': t, 'lat': la, 'lon': lo, 'kind': 'area', 'rank': r} for t, la, lo, r in labels], 'pools': cfg.get('pools', []), 'start': cfg.get('start'),
            'nodes': nodes_out, 'edges': edges_out}
-    path = os.path.join(ROOT, 'routes', 'cities', 'pgh.json')
+    path = os.path.join(ROOT, 'routes', 'cities', f'{CITY}.json')
     open(path, 'w').write(json.dumps(out, separators=(',', ':')))
     km = sum(e['n'] * STEP for e in E) / 1000
     print(f'  wrote {os.path.relpath(path, ROOT)}: {len(nodes_out)} junctions, {len(edges_out)} edges, {km:.0f} km of rideable way, {os.path.getsize(path) / 1e6:.1f} MB')
@@ -962,6 +983,40 @@ def prune_dead_ends(E, keep_bridges=True):
     keep = [e for k, e in enumerate(E) if k not in G.gone]
     # a loop left hanging on its own (a lollipop whose stem went) is dropped with the smaller pieces later
     return keep, removed, km
+
+
+def trim_to_circle(cfg, E):
+    """A city drawn as a circle is built over the circle plus a margin (area.marginM), so a road that leaves it can loop
+    back: cut at the circle's edge, every through road would be a dead end, and pruning peels it back to the last junction
+    inside — the circle's rim left empty. Here the ways wholly outside the circle go again, farthest first, each only if
+    taking it (and peeling the dead ends it leaves) costs no way inside: what's left outside closes a loop that serves
+    the inside. Returns (edges, removed, km)."""
+    lat0, lon0, R = cfg['area']['circle']
+    kx, ky = 111320 * math.cos(math.radians(lat0)), 110540
+    near = lambda e: min(math.hypot((lo - lon0) * kx, (la - lat0) * ky) for la, lo in zip(e['lat'], e['lon']))
+    for e in E: e['_in'] = near(e)
+    alive = set(range(len(E)))
+    adj = defaultdict(set)
+    for k, e in enumerate(E): adj[e['a']].add(k); adj[e['b']].add(k)
+    def peel(start, alive):
+        gone, st = set(), list(start)
+        while st:
+            n = st.pop()
+            live = [k for k in adj[n] if k in alive and k not in gone and E[k]['a'] != E[k]['b']]
+            if len(live) != 1: continue
+            k = live[0]; gone.add(k)
+            st += [E[k]['a'], E[k]['b']]
+        return gone
+    removed = 0
+    for k in sorted((k for k, e in enumerate(E) if e['_in'] > R), key=lambda k: -E[k]['_in']):
+        if k not in alive: continue
+        trial = alive - {k}
+        lost = {k} | peel([E[k]['a'], E[k]['b']], trial)
+        if any(E[j]['_in'] <= R for j in lost): continue
+        alive -= lost; removed += len(lost)
+    out = [e for k, e in enumerate(E) if k in alive]
+    km = sum(e['L'] for k, e in enumerate(E) if k not in alive) / 1000
+    return out, removed, km
 
 
 def resample(P, step=STEP):
@@ -1186,7 +1241,8 @@ def remove_overlaps(cfg, E):
         for ka, kb, m, _, _ in xs:
             if ka in G.gone or kb in G.gone: continue
             k = overlap_pick(E, G, ka, kb)
-            if k is not None: G.remove(k); total += 1; km += E[k]['L'] / 1000
+            if k is not None:
+                G.remove(k); total += 1; km += E[k]['L'] / 1000
         if not G.gone: break
         E = merge_through([e for k, e in enumerate(E) if k not in G.gone])
     left = len(find_overlaps(cfg, E))
@@ -1236,8 +1292,11 @@ def remove_parallels(cfg, E):
         G = Graph(E)
         for ka, kb, m in sorted(find_parallels(cfg, E), key=lambda x: -x[2]):
             if ka in G.gone or kb in G.gone: continue
+            # (keepParallelTrails: a trail beside a road is the ride, not a duplicate — CNY's Erie Canalway Trail by Thompson Road)
+            if cfg.get('keepParallelTrails') and (E[ka]['kind'] == 'path') != (E[kb]['kind'] == 'path'): continue
             k = overlap_pick(E, G, ka, kb)
-            if k is not None: G.remove(k); total += 1; km += E[k]['L'] / 1000
+            if k is not None:
+                G.remove(k); total += 1; km += E[k]['L'] / 1000
         if not G.gone: break
         E = merge_through([e for k, e in enumerate(E) if k not in G.gone])
     print(f'  similar ways close by: removed {total} ways ({km:.1f} km), {len(find_parallels(cfg, E))} pairs left')
@@ -1346,7 +1405,7 @@ def route_links(cfg, E, jpos, jh):
     no steeper than 12 %, and only where both ways are held by the route for ≥ 30 m either side (not a corner's noise).
     Returns (E, links added, metres)."""
     if not ROUTES or not ROUTES.n: return E, 0, 0
-    lines = json.load(open(os.path.join(ROOT, 'tools', 'city', 'pgh-route-lines.json')))
+    lines = json.load(open(os.path.join(ROOT, 'tools', 'city', f'{CITY}-route-lines.json')))
     kx, ky = 111320 * math.cos(math.radians(40.44)), 110540
     grid = defaultdict(list)
     for k, e in enumerate(E):
@@ -1462,13 +1521,19 @@ def build_all(cfg):
     print(f'  crossings after smoothing: {fixed} cleared, {len(removed)} removed, {len(left)} left')
     E = [e for k, e in enumerate(E) if k not in G.gone]
     E = enforce_grades(cfg, merge_through(drop_unrideable(cfg, E)))
+    if cfg.get('area', {}).get('circle') and cfg['area'].get('marginM'):
+        E, nt, kt = trim_to_circle(cfg, E)
+        E = merge_through(E)
+        la0_, lo0_, r0_ = cfg['area']['circle']; kx_ = 111320 * math.cos(math.radians(la0_))
+        out_km = sum(STEP for e in E for la, lo in zip(e['lat'], e['lon']) if math.hypot((lo - lo0_) * kx_, (la - la0_) * 110540) > r0_) / 1000
+        print(f'  outside the circle: removed {nt} ways ({kt:.1f} km); {out_km:.1f} km left outside it, closing loops')
     used = {e['a'] for e in E} | {e['b'] for e in E}
     jpos = {n: p for n, p in jpos.items() if n in used}
     return nodes, E, jpos, jh, cor
 
 
 def main():
-    cfg = json.load(open(os.path.join(ROOT, 'tools', 'city', 'pgh.json')))
+    cfg = json.load(open(os.path.join(ROOT, 'tools', 'city', f'{CITY}.json')))
     nodes, E, jpos, jh, cor = build_all(cfg)
     write(cfg, E, jpos, jh, cor)
     if '--no-ground' not in sys.argv: write_ground(cfg, E)

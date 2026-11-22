@@ -1665,6 +1665,24 @@ still fits; a route over a way that was split or removed is dropped. Then `npm r
 crossings check, the app's cache key. An unedited save is byte-identical to the file.
 The unfinished bridge audit pass (audit tool, approach cleanup, reconnected dead ends) is in `git stash` on pgh-test.
 
+### CNY — a second free-ride map: Camillus, Warners and Amboy *(user, 22 Nov: "Create a new map CNY following the guide used for PGH. Establish the map inside the red circle. Build ~5 high quality bike rides")*
+Branch `cny-test` (PGH's PR #42 merged first). Built with PGH's own tools, now taking `--city <id>`:
+- `tools/city/cny.json`: the area is the circle the user drew (centre 43.0643, −76.3210, radius 4.8 km), built over a
+  1.5 km margin; `trim_to_circle` (tools/build_pgh.py) then takes the ways outside back off unless they close a loop
+  for the inside — cut at the circle, every through road was a dead end and the rim emptied. `keepParallelTrails`: the
+  Erie Canalway Trail beside Thompson Road is the ride, not a duplicate. No river level (waterLevelM 100: below all of it).
+- `python3 tools/build_pgh.py --city cny` → `routes/cities/cny.json` (237 junctions, 364 ways, 194 km), `cny-ground`.
+  QC (`node tools/qc_pgh.mjs routes/cities/cny.json --rides 200`): 0 fails, 0 warnings, 0 dead ends.
+- `python3 tools/pgh_city.py --city cny` → `cny-city.json`, `cny-city/` (52 sectors), `cny-land.bin.gz`: 8,127
+  buildings (detached houses among the homes, not Pittsburgh's rowhouses; no brick rule), the Erie Canal, Nine Mile
+  Creek and the other waterways drawn as water (OSM has them as lines). `cny-heroes.json`: no landmarks, the host the
+  city data stands on. The ground shader now colours land code 3 (water) as water.
+- `node tools/pgh_routes.mjs --city cny --write` → five routes, all checks ok:
+  Erie Canal Towpath (18.5 km, 61 m), Canal Park & Amboy (9.5 km, 59 m), Warners & Pottery Road (18.3 km, 199 m),
+  Howlett Hill (9.9 km, 178 m), Camillus Hills (12.9 km, 204 m).
+- App: `GRAPH_CITIES` in js/app.js — PGH and CNY each a card. `npm run cny:build` rebuilds it all;
+  `tools/pgh-editor.html?map=cny` edits it. Tests: test/cny.test.mjs.
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

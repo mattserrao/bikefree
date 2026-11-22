@@ -1352,6 +1352,7 @@ function groundMaterial(low = false) {
           if (k < .5) lc = mix(vec3(.43, .42, .4), vec3(.52, .5, .47), n);                   // paved: lots, yards of the works
           else if (k < 1.5) lc = mix(vec3(.38, .52, .24), vec3(.47, .6, .3), n);             // grass, parks
           else if (k < 2.5) lc = mix(vec3(.25, .3, .17), vec3(.36, .35, .22), n);            // the woods' floor
+          else if (k < 3.5 && k > 2.5) lc = mix(vec3(.17, .31, .38), vec3(.22, .37, .44), n);  // water: a canal or a pond at its own level (CNY's Erie Canal; PGH's rivers are under the water plane anyway)
           else if (k < 4.5 && k > 3.5) lc = vec3(.42, .4, .36);                               // under a building
           else if (k < 5.5 && k > 4.5) lc = vec3(.66, .6, .46);                               // sand, bare rock
           else if (k < 6.5 && k > 5.5) lc = mix(vec3(.62, .59, .54), vec3(.68, .65, .6), n);  // plaza
@@ -1360,6 +1361,6 @@ function groundMaterial(low = false) {
           if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vLandW * .85);
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-1${low ? '-low' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-2${low ? '-low' : ''}`;
   return m;
 }

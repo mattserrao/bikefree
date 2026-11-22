@@ -26,7 +26,9 @@
     "snap:figures": "node tools/snap_figures.mjs",
     "gallery:buildings": "node tools/snap_buildings.mjs",
     "pgh:edit": "echo 'PGH map editor: http://localhost:8000/tools/pgh-editor.html' && python3 -m http.server 8000",
-    "pgh:after-edit": "node tools/pgh_after_edit.mjs"
+    "pgh:after-edit": "node tools/pgh_after_edit.mjs",
+    "cny:build": "python3 tools/build_pgh.py --city cny && python3 tools/pgh_city.py --city cny && node tools/pgh_routes.mjs --city cny --write && node tools/qc_pgh.mjs routes/cities/cny.json --rides 200",
+    "cny:routes": "node tools/pgh_routes.mjs --city cny"
   },
   "devDependencies": {
     "@garmin/fitsdk": "^21.221.0",

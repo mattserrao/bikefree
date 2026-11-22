@@ -1449,10 +1449,17 @@ let parkItems = null;
 let netItems = [];          // network presets (choose your turns): listed as routes, not as scenery
 // [pgh] free-ride road graphs (tools/build_pgh.py → js/graph.js, js/world/graph-world.js): every street, trail and bridge
 // PGH is one city card (as the Pittsburgh map was): its routes and free ride are in the card's panel, not the menu
-const PGH_BASE = 'builtin-graph-pgh';
-const GRAPH_ITEMS = [{ id: 'builtin-graph-pgh', routeId: 'pgh-free', kind: 'route', name: 'PGH · Free ride', park: 'Pittsburgh, PA', baseId: PGH_BASE,
-  group: 'Scenic routes — 3D', network: 'routes/cities/pgh.json', graph: true, free: true, tags: ['varied'],
-  note: 'Every street, trail and bridge in the Pittsburgh corridor. No traffic and no set route: straight on at every junction unless you choose a turn' }];
+// (user, 22 Nov: CNY, "a new map following the guide used for PGH": each road-graph city is its own card, its routes in
+// routes/cities/<id>-presets.json, built by tools/build_pgh.py --city <id>)
+const GRAPH_CITIES = [
+  { id: 'pgh', name: 'PGH', park: 'Pittsburgh, PA', note: 'Every street, trail and bridge in the Pittsburgh corridor. No traffic and no set route: straight on at every junction unless you choose a turn' },
+  { id: 'cny', name: 'CNY', park: 'Camillus, NY', note: 'Every street and trail round Camillus, Warners and Amboy, with the Erie Canalway Trail. No traffic and no set route: straight on at every junction unless you choose a turn' },
+];
+const graphBase = (id) => `builtin-graph-${id}`;
+const GRAPH_BASES = new Set(GRAPH_CITIES.map((c) => graphBase(c.id)));
+const graphCityOf = (baseId) => GRAPH_CITIES.find((c) => graphBase(c.id) === baseId);
+const GRAPH_ITEMS = GRAPH_CITIES.map((c) => ({ id: graphBase(c.id), routeId: `${c.id}-free`, kind: 'route', name: `${c.name} · Free ride`, park: c.park, baseId: graphBase(c.id),
+  group: 'Scenic routes — 3D', network: `routes/cities/${c.id}.json`, graph: true, free: true, tags: ['varied'], note: c.note }));
 const HIDDEN_PARKS = /^pittsburgh(-|$)/;
 const routeCache = new Map();
 const netCache = new Map();   // network JSON by URL
@@ -1493,17 +1500,19 @@ async function loadParks() {
   }
   // [pgh] free-ride road graphs: listed as routes of their own (their data loads only when picked)
   for (const g of GRAPH_ITEMS) netItems.push({ ...g });
-  // …and PGH's routes (tools/pgh_routes.mjs: a few laid out on PGH itself). A route mapped from elsewhere that follows
-  // its original less than 90 % of the way (followPct) stays in Rough Drafts, marked approximate
-  try {
-    const list = await (await fetch('routes/cities/pgh-presets.json')).json();
-    for (const pr of list) {
-      const good = pr.followPct == null || pr.followPct >= 90;
-      netItems.push({ id: `builtin-graph-${pr.id}`, routeId: pr.id, kind: 'route', name: `PGH · ${pr.name}${good ? '' : ' (approximate)'}`, park: 'Pittsburgh, PA', baseId: PGH_BASE,
-        group: 'Scenic routes — 3D', ...(good ? {} : { stage: 'draft' }), network: 'routes/cities/pgh.json', graph: true, preset: pr.id, tags: pr.tags || [],
-        note: (good ? '' : `Approximate: follows ${pr.followPct}% of the original route (PGH lacks some of its roads). `) + (pr.note || ''), lengthM: pr.lengthM, climbM: pr.climbM });
-    }
-  } catch { /* (no PGH routes yet) */ }
+  // …and each graph city's routes (tools/pgh_routes.mjs [--city <id>]: a few laid out on the graph itself). A route mapped
+  // from elsewhere that follows its original less than 90 % of the way (followPct) stays in Rough Drafts, marked approximate
+  await Promise.all(GRAPH_CITIES.map(async (c) => {
+    try {
+      const list = await (await fetch(`routes/cities/${c.id}-presets.json`)).json();
+      for (const pr of list) {
+        const good = pr.followPct == null || pr.followPct >= 90;
+        netItems.push({ id: `builtin-graph-${pr.id}`, routeId: pr.id, kind: 'route', name: `${c.name} · ${pr.name}${good ? '' : ' (approximate)'}`, park: c.park, baseId: graphBase(c.id),
+          group: 'Scenic routes — 3D', ...(good ? {} : { stage: 'draft' }), network: `routes/cities/${c.id}.json`, graph: true, preset: pr.id, tags: pr.tags || [],
+          note: (good ? '' : `Approximate: follows ${pr.followPct}% of the original route (${c.name} lacks some of its roads). `) + (pr.note || ''), lengthM: pr.lengthM, climbM: pr.climbM });
+      }
+    } catch { /* (no routes for this city yet) */ }
+  }));
   await manifest;
   return parkItems;
 }
@@ -1647,10 +1656,10 @@ const cityRivers = new Map();   // baseId → rivers (the city's scenes: each ar
 const cityMaps = new Map();     // baseId → the network's baked map (F101: river banks, labels), when it has one
 async function loadCityRivers(card) {
   if (cityRivers.has(card.baseId)) return false;
-  if (card.baseId === PGH_BASE) {
-    // PGH: its graph's network (the card's map and the panel's lines) and its baked map (rivers, labels)
+  if (GRAPH_BASES.has(card.baseId)) {
+    // a road graph (PGH, CNY): its network (the card's map and the panel's lines) and its baked map (rivers, labels)
     cityRivers.set(card.baseId, []);
-    await graphNet(card.network, 'PGH');
+    await graphNet(card.network, graphCityOf(card.baseId).name);
     const mapUrl = graphMaps.get(card.network);
     if (mapUrl) try { cityMaps.set(card.baseId, await (await fetch(mapUrl)).json()); } catch { /* lines only */ }
     return true;
@@ -1992,9 +2001,10 @@ async function loadRouteItemNow(item) {
   if (item.graph) {
     // [pgh] a free-ride road graph (js/graph.js): every edge on a synthetic base line, ridden by the network machinery;
     // its routes (laid out on it: tools/pgh_routes.mjs) are presets of the same network
-    const net = await graphNet(item.network, 'PGH');
-    const preset = item.preset ? net.json.presets.find((x) => x.id === item.preset) : null;
-    if (item.preset && !preset) throw new Error(`${item.name} is not in the PGH map any more`);
+    const cityName = graphCityOf(item.baseId)?.name || 'PGH';
+    const net = await graphNet(item.network, cityName);
+    const preset = item.preset ? (net.json.presets || []).find((x) => x.id === item.preset) : null;
+    if (item.preset && !preset) throw new Error(`${item.name} is not in the ${cityName} map any more`);
     const route = makePathRoute(net, preset ? { ...preset, id: item.routeId } : { id: item.routeId, name: item.name, path: null, first: net.json.freeRide.first },
       { id: item.routeId, name: item.name, park: item.park });
     route.note = item.note || '';

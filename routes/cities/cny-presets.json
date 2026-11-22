@@ -1,0 +1,62 @@
+[
+ {
+  "id": "cny-erie-canal",
+  "name": "Erie Canal Towpath",
+  "tags": [
+   "flat",
+   "trail",
+   "classic"
+  ],
+  "note": "From the Erie Canal Park on Devoe Road along the old towpath past Warners to West Sorrell Hill Road, back through Warners on Warners Road and down Newport Road",
+  "lengthM": 18510,
+  "climbM": 61
+ },
+ {
+  "id": "cny-amboy",
+  "name": "Canal Park & Amboy",
+  "tags": [
+   "flat",
+   "trail",
+   "neighbourhoods"
+  ],
+  "note": "From Camillus village out Milton Avenue and Bennett Road to Amboy, back along the Erie Canalway Trail beside Thompson Road to the Erie Canal Park and down Newport Road",
+  "lengthM": 9500,
+  "climbM": 59
+ },
+ {
+  "id": "cny-warners-pottery",
+  "name": "Warners & Pottery Road",
+  "tags": [
+   "long",
+   "varied",
+   "rural"
+  ],
+  "note": "From the Erie Canal Park over the Devoe Road hill, up Herman Road through the farms, down Pottery Road, back across Warners Road to Warners and home on the towpath",
+  "lengthM": 18250,
+  "climbM": 199
+ },
+ {
+  "id": "cny-howlett-hill",
+  "name": "Howlett Hill",
+  "tags": [
+   "hilly",
+   "climb",
+   "short"
+  ],
+  "note": "From Camillus village along West Genesee Street to Howlett Hill Road, the climb to the top of Howlett Hill, and down Munro Road",
+  "lengthM": 9910,
+  "climbM": 178
+ },
+ {
+  "id": "cny-camillus-hills",
+  "name": "Camillus Hills",
+  "tags": [
+   "hilly",
+   "views",
+   "climb"
+  ],
+  "note": "From the Erie Canal Park up Scenic Drive and Rolling Meadows Way to the top at Vista Way (the highest ground in the circle), along Falling Star Way and Ike Dixon Road, over Hunt Road and down Breed Road to the canal, home on Canal Road and Newport Road",
+  "lengthM": 12860,
+  "climbM": 204
+ }
+]
