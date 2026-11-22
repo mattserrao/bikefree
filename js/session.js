@@ -13,6 +13,8 @@ export const CARRY_SIM_GRADE = -5;
 import { segmentIndexAt, targetWatts } from './workout.js';
 
 export const TICK_MS = 250;
+/** Longest gap the clock catches up after (a hidden tab ticks about once a second; a sleeping laptop is not riding). */
+export const MAX_CATCHUP_MS = 2000;
 const DATA_STALE_MS = 2500;
 const HR_STALE_MS = 5000;
 const AUTO_PAUSE_MS = 3000;
@@ -44,7 +46,22 @@ export class Session extends EventTarget {
 
     ride.addEventListener('press', (e) => this._onPress(e.detail));
     trainer.addEventListener('reconnected', () => { this._lastSent = null; });
-    this._timer = setInterval(() => this._tick(), TICK_MS);
+    this._clockAt = performance.now();
+    this._clockDebt = 0;
+    this._timer = setInterval(() => this._clock(), TICK_MS);
+  }
+
+  /**
+   * The timer: one fixed 0.25 s step per TICK_MS of real time. Late timers (a hidden tab is throttled to about once a
+   * second; a long frame while scenery builds) run the missed steps, so time and distance follow the wall clock.
+   */
+  _clock(now = performance.now()) {
+    this._clockDebt += Math.min(MAX_CATCHUP_MS, Math.max(0, now - this._clockAt));
+    this._clockAt = now;
+    let steps = 0;
+    // (rounded to the nearest step, the remainder carried: a timer 1 ms early or late neither drops nor doubles a step)
+    while (this._clockDebt >= TICK_MS / 2) { this._clockDebt -= TICK_MS; this._tick(); steps++; }
+    return steps;
   }
 
   _resetRideState() {

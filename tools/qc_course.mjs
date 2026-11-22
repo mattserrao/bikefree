@@ -2,7 +2,7 @@
 // Course QC: ride the full length of each route, metre by metre, and flag discontinuities.
 //
 //   node tools/qc_course.mjs                  every scenic route (+ Demo Hills)
-//   node tools/qc_course.mjs teton zion       just these
+//   node tools/qc_course.mjs zion bigsur       just these
 //   node tools/qc_course.mjs --gpx my.gpx     your own GPX (path checks only, no scenery)
 //   options: --step 1  --html tools/qc-report.html  --json out.json  --strict (warnings also fail)
 //

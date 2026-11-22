@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { groupCityItems, cityCardsFirst, defaultRouteId, citySubline, filterByGoal, segmentRoutes, pickOnSegment, pathEdges, nearestLine, fitProjection, mergeRivers, shortName, cityName, isNetItem } from '../js/city-routes.js';
+import { appSource } from './app-source.mjs';
 
 const json = JSON.parse(readFileSync(new URL('../routes/cities/pittsburgh-network.json', import.meta.url), 'utf8'));
 const base = { kind: 'route', park: 'Pittsburgh, Pennsylvania', stage: 'draft', baseId: 'builtin-park-pittsburgh', network: 'routes/cities/pittsburgh-network.json' };
@@ -178,7 +179,7 @@ test('the main menu: one ride-type tab row (Routes, the default, Workouts, Free 
   assert.match(html, /<section class="mode-pane" data-pane="route">/, 'the route pane shows at first');
   assert.match(html, /<section class="mode-pane" data-pane="free" hidden>/);
   assert.match(html, /<details class="ride-opts" id="rideOpts">/, 'ride options folded');
-  const app = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
+  const app = appSource();
   assert.match(app, /^let chosen = 'route';/m);
   assert.match(app, /selectedRouteId = selectId \|\| defaultRouteId\(routeItems\)/);
 });

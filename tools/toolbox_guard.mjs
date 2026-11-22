@@ -24,11 +24,6 @@ export const GUARD_SHOTS = {
   pittsburgh: ['pittsburgh@1500', 'pittsburgh@8000', 'pittsburgh@13100:golden'],
   zion: ['zion@2500', 'zion@6700'],
   yosemite: ['yosemite@7610'],
-  acadia: ['acadia@8460'],
-  teton: ['teton@5500'],
-  craterlake: ['craterlake@10500'],
-  monumentvalley: ['monumentvalley@250'],
-  sevenmile: ['sevenmile@7000'],
   alpedhuez: ['alpedhuez@24480', 'alpedhuez@98300', 'alpedhuez@120800', 'alpedhuez@126700'],
 };
 

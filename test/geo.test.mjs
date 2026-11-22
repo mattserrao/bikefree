@@ -32,8 +32,8 @@ test('terrarium decode', () => {
 });
 
 test('route index finds the road', () => {
-  const r = buildRoute(parseGpx(readFileSync(new URL('../routes/parks/teton.gpx', import.meta.url), 'utf8')));
-  const p = makeProjection(43.75, -110.65);
+  const r = buildRoute(parseGpx(readFileSync(new URL('../routes/parks/zion.gpx', import.meta.url), 'utf8')));
+  const p = makeProjection(r.lat[0], r.lon[0]);
   const idx = makeRouteIndex(r, p);
   const on = p.toLocal(r.lat[500], r.lon[500]);
   const hit = idx.nearest(on.x + 3, on.z, 40);

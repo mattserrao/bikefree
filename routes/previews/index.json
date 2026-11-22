@@ -1,32 +1,9 @@
 {
  "format": "bikefree-previews-1",
  "size": "480x270",
- "images": 20,
- "bytes": 243702,
+ "images": 9,
+ "bytes": 120604,
  "routes": {
-  "acadia": [
-   {
-    "file": "acadia-20.webp",
-    "caption": "Start · Acadia Park Loop Road",
-    "role": "start",
-    "atM": 20,
-    "v": "021e52dd"
-   },
-   {
-    "file": "acadia-17820-jordan-pond.webp",
-    "caption": "Highlight · Jordan Pond",
-    "role": "highlight",
-    "atM": 17820,
-    "v": "abcb671d"
-   },
-   {
-    "file": "acadia-5120.webp",
-    "caption": "Highlight · Sand Beach",
-    "role": "highlight",
-    "atM": 5120,
-    "v": "21ecc362"
-   }
-  ],
   "bigsur": [
    {
     "file": "bigsur-20.webp",
@@ -48,45 +25,6 @@
     "role": "highlight",
     "atM": 20850,
     "v": "78f5a649"
-   }
-  ],
-  "craterlake": [
-   {
-    "file": "craterlake-20.webp",
-    "caption": "Start · Crater Lake Rim Drive",
-    "role": "start",
-    "atM": 20,
-    "v": "1f871cbd"
-   },
-   {
-    "file": "craterlake-6990-wizard-island.webp",
-    "caption": "Highlight · Wizard Island",
-    "role": "highlight",
-    "atM": 6990,
-    "v": "895334c4"
-   },
-   {
-    "file": "craterlake-39390.webp",
-    "caption": "Climb · the high point, 8 %",
-    "role": "climb",
-    "atM": 39390,
-    "v": "f2d8a094"
-   }
-  ],
-  "monumentvalley": [
-   {
-    "file": "monumentvalley-20.webp",
-    "caption": "Start · Forrest Gump Point",
-    "role": "start",
-    "atM": 20,
-    "v": "711d362e"
-   },
-   {
-    "file": "monumentvalley-3400.webp",
-    "caption": "Climb · 8 %",
-    "role": "climb",
-    "atM": 3400,
-    "v": "52cdd634"
    }
   ],
   "pgh-allegheny-east-end": [
@@ -139,29 +77,6 @@
     "role": "highlight",
     "atM": 4950,
     "v": "126d2668"
-   }
-  ],
-  "teton": [
-   {
-    "file": "teton-20.webp",
-    "caption": "Start · Grand Teton Loop",
-    "role": "start",
-    "atM": 20,
-    "v": "9dcb085d"
-   },
-   {
-    "file": "teton-66660-mount-moran.webp",
-    "caption": "Highlight · Mount Moran",
-    "role": "highlight",
-    "atM": 66660,
-    "v": "e2f1c54b"
-   },
-   {
-    "file": "teton-46810.webp",
-    "caption": "Highlight · Moran Junction",
-    "role": "highlight",
-    "atM": 46810,
-    "v": "da5dd9be"
    }
   ],
   "yosemite": [

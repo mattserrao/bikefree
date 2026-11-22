@@ -60,10 +60,10 @@ test('CNY\'s five routes (tools/pgh_routes.mjs --city cny): closed plans over it
   }
 });
 
-test('the app lists CNY as its own card beside PGH (js/app.js GRAPH_CITIES)', () => {
-  const app = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
-  assert.match(app, /\{ id: 'cny', name: 'CNY', park: 'Camillus, NY'/);
-  assert.match(app, /routes\/cities\/\$\{c\.id\}-presets\.json/);
+test('the app lists CNY as its own card beside PGH (routes/cities/graph-cities.json)', () => {
+  const cities = JSON.parse(readFileSync(new URL('../routes/cities/graph-cities.json', import.meta.url), 'utf8'));
+  assert.deepEqual(cities.find((c) => c.id === 'cny'), { ...cities.find((c) => c.id === 'cny'), name: 'CNY', park: 'Camillus, NY' });
+  assert.ok(cities.findIndex((c) => c.id === 'cny') > cities.findIndex((c) => c.id === 'pgh'));
 });
 
 test('CNY\'s landmarks (tools/cny_heroes.py): the aqueduct, Sims\' Store, the Octagon House, the churches, the canal\'s water', async () => {

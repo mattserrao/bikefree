@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { titleCase, pickSpots, steepestClimb, caption, imageName, loadSources, planRoutes, SCORE } from '../tools/preview_spots.mjs';
 import { previewShots, shotsHtml, PREVIEW_INDEX } from '../js/route-previews.js';
+import { appSource } from './app-source.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), 'utf8');
@@ -144,7 +145,7 @@ test('the manifest lists menu routes with their pictures, within the size budget
 });
 
 test('a route with no pictures shows none', () => {
-  const app = read('js/app.js');
+  const app = appSource();
   assert.match(app, /box\.hidden = !shownShots\.length/);
   assert.deepEqual(previewShots({ format: 'bikefree-previews-1', routes: {} }, 'pgh-long'), []);
   assert.equal(shotsHtml([]), '');
@@ -170,10 +171,10 @@ test('previewShots: riding order, cache-busting URL, caption split, bad entries 
 });
 
 test('the menu shows them: preview pane strip, enlarge dialog, offline cache', () => {
-  const html = read('index.html'), app = read('js/app.js'), sw = read('sw.js'), assets = read('sw-assets.js');
+  const html = read('index.html'), app = appSource(), sw = read('sw.js'), assets = read('sw-assets.js');
   assert.match(html, /id="pvShots"/);
   assert.match(html, /<dialog id="shotDlg"/);
-  assert.match(app, /from '\.\/route-previews\.js'/);
+  assert.match(app, /from '\.\.\/route-previews\.js'/);
   assert.match(app, /renderShots\(r\)/);
   assert.match(sw, /PREVIEW_CACHE/);
   assert.match(sw, /routes\/previews\//);
@@ -183,7 +184,7 @@ test('the menu shows them: preview pane strip, enlarge dialog, offline cache', (
 });
 
 test('the full-screen city panel shows the selected route\'s pictures below its map (7.1)', () => {
-  const html = read('index.html'), app = read('js/app.js'), css = read('css/style.css');
+  const html = read('index.html'), app = appSource(), css = read('css/style.css');
   // in the panel's body, after the map column (below the map), before the route list
   const body = html.slice(html.indexOf('<div class="city-body">'), html.indexOf('<ul class="city-list"'));
   assert.ok(body.indexOf('id="cityShots"') > body.indexOf('id="cityMapHint"'), 'below the map');

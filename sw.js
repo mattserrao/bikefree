@@ -9,6 +9,13 @@ const TILE_HOSTS = ['s3.amazonaws.com', 'basemap.nationalmap.gov'];
 const MAX_TILES = 40000;
 
 const APP_FILES = self.BIKEFREE_APP_FILES;
+// Route data and models by content (sw-assets.js): a file is kept until its own content changes, not until the next
+// deploy. Its cache key is the path plus its hash; activate drops the keys no longer listed.
+const DATA_CACHE = 'bikefree-data-v1';
+const DATA_FILES = self.BIKEFREE_DATA_FILES || {};
+const scope = new URL(self.registration?.scope || self.location.href);
+const dataPath = (url) => (url.origin === self.location.origin && url.pathname.startsWith(scope.pathname) ? decodeURIComponent(url.pathname.slice(scope.pathname.length)) : null);
+const dataKey = (path) => new URL(`${path}?h=${DATA_FILES[path]}`, scope).href;
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(APP_CACHE).then((c) => c.addAll(APP_FILES)).then(() => self.skipWaiting()));
@@ -19,6 +26,10 @@ self.addEventListener('activate', (e) => {
     for (const key of await caches.keys()) {
       if (key.startsWith('bikefree-app-') && key !== APP_CACHE) await caches.delete(key);
     }
+    // data files whose content changed (or that are gone): their old copies go
+    const data = await caches.open(DATA_CACHE);
+    const keep = new Set(Object.keys(DATA_FILES).map(dataKey));
+    for (const req of await data.keys()) if (!keep.has(req.url)) await data.delete(req);
     await self.clients.claim();
   })());
 });
@@ -63,7 +74,22 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // [F391] Route data and models (GPX, scenes, terrain, city files, the rider): cache first, in this revision's cache
+  // Route data and models listed with a content hash: cache first, kept across deploys while the content is the same
+  const path = dataPath(url);
+  if (path && DATA_FILES[path]) {
+    e.respondWith((async () => {
+      const c = await caches.open(DATA_CACHE);
+      const key = dataKey(path);
+      const hit = await c.match(key);
+      if (hit) return hit;
+      const res = await fetch(e.request);
+      if (res.ok && res.status === 200) c.put(key, res.clone()).catch(() => {});
+      return res;
+    })());
+    return;
+  }
+
+  // [F391] Other route data and models (not listed): cache first, in this revision's cache
   // (a new build is a new cache, so nothing stale is served); fetched and kept the first time a ride needs them
   if (url.origin === self.location.origin && /\/(routes\/(scenes|parks|cities|presets)|models)\//.test(url.pathname)) {
     e.respondWith((async () => {
