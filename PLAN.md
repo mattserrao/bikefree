@@ -1695,7 +1695,25 @@ Branch `cny-test` (PGH's PR #42 merged first). Built with PGH's own tools, now t
 - Houses: preset `cny-suburban` (vinyl siding colours, shutters, garages, low gable and hip roofs; `bayM` 4.4 m between
   windows instead of 2.6 m; `ranch` share of one storey, `maxFloors` 2 — new style keys in recipe.js). CNY building
   heights from footprint size (sheds 3.2 m, small 4.6 m, stores 6.5 m), untagged buildings under 300 m² as houses.
-- Next (user, 22 Nov): **which areas are villages, suburbs and farms**; farmland needs its own texture and models.
+- Done next (below): villages, suburbs and farms.
+
+### CNY villages, suburbs and farms *(user, 22 Nov: "find which areas are villages, suburbs, and farms. A lot of land is farmland and requires new texture and models")*
+- `tools/pgh_city.py` "the country" (`tools/city/cny.json` `rural`): villages are the old cores (Camillus, Warners,
+  Amboy, Memphis, Martisco, Marcellus Falls, Newport, Bennetts Corners: centre and radius); farms where there are few
+  roads (< 60 m/ha within 250 m) and few houses along them (< 2.2 per 100 m); the rest suburbs. Share of the map:
+  village 2 %, suburb 36 %, farm 62 %.
+- Fields: the farms' open flat land (and OSM's farmland and meadows anywhere), split by roads into blocks, each cut
+  along its long axis into fields of 170-330 m (strips offset, not a chequerboard), some with a hedgerow between
+  (woods, one cell: trees). Land codes 10-13 corn and 14-17 grain stubble (the code gives the rows' heading), 18 hay
+  and pasture, 19 farmyard. The ground shader draws crop rows across each field, faded with distance; ~47 % of the land.
+- Buildings: farmsteads (buildings within 70 m of each other in the farm zone): the house (tagged, or house-sized and
+  nearest the road) a farmhouse (kind 13, preset `cny-farmhouse`: white clapboard, steep gable, porch, lean-to) when it
+  has a barn; the rest barns (14), long free-stall barns (15, over 900 m²) or sheds (17, under 90 m²). Village houses
+  (16, preset `cny-village`: two storeys, gable to the street, front porches, older colours). 58 farmhouses, 120
+  barns, 107 sheds, 751 village houses.
+- `js/world/toolbox/city/cny-farms.js`: barns on their footprints — barn red boards (some grey or white), white corner
+  boards, gambrel or gable roofs of metal or shingle, doors with a white X and a hay door, cupolas; concrete stave or
+  blue Harvestore silos beside many; free-stall barns with curtain sides and a ridge vent; small board sheds.
 
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)

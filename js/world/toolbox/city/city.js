@@ -892,7 +892,7 @@ export class CityScene {
     const roofTint = new THREE.Color();
     for (const b of list) {
       if (due()) yield;
-      if (b.kind === 12 || b.hero || b.hidden) continue;   // the submarine and the hero landmarks are drawn on their own; duplicates not at all
+      if (b.kind === 12 || b.hero || b.hidden || b.ownModel) continue;   // (ownModel: a CNY barn, drawn by graph-city's _farms) the submarine and the hero landmarks are drawn on their own; duplicates not at all
       if (b.onRoute ??= this._onRoute(b)) continue;   // OSM footprints that overlap the ride's road: not drawn
       if (b.crossed ??= this._crossed(b)) continue;   // a ramp, incline or raised railway runs through it: not drawn
       let ring = b.ring;

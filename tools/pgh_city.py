@@ -239,7 +239,7 @@ def main():
         area = sum(sp[i][0] * sp[i - 1][1] - sp[i - 1][0] * sp[i][1] for i in range(len(sp))) / 2
         if abs(area) < 12: why['small'] += 1; continue
         ll = [((y / ky) + lat0, (x / kx) + lon0) for x, y in sp]
-        kept.append({'h': h, 'mh': min_h(t), 'kind': kind, 'ring': [q(*p) for p in ll], 'name': name if name in special or h >= TALL else ''})
+        kept.append({'h': h, 'mh': min_h(t), 'kind': kind, 'ring': [q(*p) for p in ll], 'name': name if name in special or h >= TALL else '', 'bt': b})
         poly(ll, 4)
     print(f'  buildings: {len(kept)} kept ({sum(1 for b in kept if b["h"] >= TALL)} tall); left out: {dict(why)}')
     print(f'  kinds: {dict(Counter(b["kind"] for b in kept))}')
@@ -268,6 +268,148 @@ def main():
     rest = un & ~built
     L[rest & (slope > 0.16)] = 2
     L[rest & (slope <= 0.16)] = 1
+    # the country (CNY: tools/city/<id>.json "rural"; user, 22 Nov: "find which areas are villages, suburbs, and farms. A
+    # lot of land is farmland and requires new texture and models"): villages are the old cores, farms where buildings are
+    # sparse; there the open flat land is fields — OSM's farmland and meadows anywhere — cut into fields of corn, grain
+    # and hay along their long axis, some with hedgerows between; the barns and farmhouses by their footprints (below)
+    cfg_p = os.path.join(ROOT, f'tools/city/{CITY}.json')
+    RURAL = json.load(open(cfg_p)).get('rural') if CITY != 'pgh' and os.path.exists(cfg_p) else None
+    zone = None
+    if RURAL:
+        fimg = Image.new('L', (lx, ly), 0); fd = ImageDraw.Draw(fimg)
+        FARM = {'farmland': 1, 'orchard': 1, 'meadow': 2, 'farmyard': 3}
+        def fpoly(t, rings):
+            c = FARM.get(t.get('landuse'))
+            for pts in rings:
+                if c and len(pts) > 2: fd.polygon([pix(*p) for p in pts], fill=c)
+        for nd, t in ways.values():
+            if t.get('landuse') in FARM and nd and nd[0] == nd[-1]: fpoly(t, [[nodes[i] for i in nd if i in nodes]])
+        for rel in rels.values():
+            if rel[1].get('landuse') in FARM and rel[1].get('type') == 'multipolygon':
+                try: fpoly(rel[1], rings_of(rel, ways, nodes))
+                except Exception: pass
+        F = np.asarray(fimg)
+        bf = np.asarray(bm[0], dtype=np.float32) + np.asarray(bm[1], dtype=np.float32)
+        Rc = int(RURAL.get('farmR', 180) / LAND_M)
+        dens = ndimage.uniform_filter(bf, 2 * Rc + 1)
+        yy, xx = np.mgrid[0:ly, 0:lx]
+        vil = np.zeros((ly, lx), bool)
+        for la, lo, r, _n in RURAL.get('villages', []):
+            px_, py_ = pix(la, lo); vil |= np.hypot(xx - px_, yy - py_) * LAND_M < r
+        rm = Image.new('L', (lx, ly), 0); rd = ImageDraw.Draw(rm)
+        for e in E: rd.line([pix(a, o) for a, o in zip(e['lat'], e['lon'])], fill=1, width=1)
+        # a suburb is a net of streets (a subdivision) or a road lined with houses; a farm road has a house every few
+        # hundred metres and the land between is open (the old test, built share alone, made every road with a few
+        # houses on it a suburb)
+        W2 = int(250 / LAND_M) * 2 + 1
+        road_f = ndimage.uniform_filter(np.asarray(rm, dtype=np.float32), W2)
+        hc = np.zeros((ly, lx), np.float32)
+        for b in kept:
+            P = [pix(lat0 + qa * UNIT, lon0 + qo * UNIT) for qa, qo in b['ring']]
+            hx, hy = int(sum(p[0] for p in P) / len(P)), int(sum(p[1] for p in P) / len(P))
+            if 0 <= hx < lx and 0 <= hy < ly and b['kind'] == 1: hc[hy, hx] += 1
+        house_f = ndimage.uniform_filter(hc, W2)
+        road_mha = road_f * 1e4 / LAND_M ** 2 * LAND_M   # m of road per hectare
+        per100 = house_f / np.maximum(road_f, 1e-6) / LAND_M * 100   # houses per 100 m of road
+        farm = (road_mha < RURAL.get('farmRoadMHa', 60)) & (per100 < RURAL.get('farmHousesPer100m', 2.2)) & (dens < .03)
+        farm = ndimage.binary_closing(ndimage.binary_opening(farm, iterations=4), iterations=4) & ~vil
+        zone = np.where(vil, 1, np.where(farm, 3, 2)).astype(np.uint8)   # 1 village, 2 suburb, 3 farm
+        d_road = ndimage.distance_transform_edt(np.asarray(rm) == 0) * LAND_M
+        d_bld = ndimage.distance_transform_edt(bf == 0) * LAND_M
+        fields = ((farm & (L == 1) & (slope <= .12)) | ((F == 1) | (F == 2)) & ~np.isin(L, (3, 4))) & (d_road > 9) & (d_bld > 12)
+        lab, nlab = ndimage.label(fields)
+        rng = np.random.default_rng(7)
+        min_cells = RURAL.get('fieldMinHa', .6) * 1e4 / LAND_M ** 2
+        fmin, fmax = RURAL.get('fieldM', [170, 330])
+        nf = Counter()
+        for k, sl in enumerate(ndimage.find_objects(lab), 1):
+            if sl is None: continue
+            m = lab[sl] == k
+            if m.sum() < min_cells: continue
+            ys, xs = np.nonzero(m); E_ = xs.astype(np.float64); N_ = -ys.astype(np.float64)
+            cov = np.cov(np.vstack([E_ - E_.mean(), N_ - N_.mean()])) if len(xs) > 2 else np.eye(2)
+            w_, v_ = np.linalg.eigh(cov); ax = v_[:, 1]
+            th = math.atan2(ax[1], ax[0])
+            u = (E_ * ax[0] + N_ * ax[1]) * LAND_M; v = (-E_ * ax[1] + N_ * ax[0]) * LAND_M
+            A, B = rng.uniform(fmin, fmax), rng.uniform(fmin, fmax) * 1.3
+            iv = np.floor((v - v.min()) / B).astype(int)
+            shift = rng.uniform(0, A, iv.max() + 2)   # each strip's fields offset from the next (not a chequerboard)
+            iu = np.floor((u - u.min() + shift[iv]) / A).astype(int)
+            # a field too thin at the end of the strip joins its neighbour
+            if (u.max() - u.min()) % A < A * .4: iu = np.minimum(iu, max(0, iu.max() - 1))
+            if (v.max() - v.min()) % B < B * .4: iv = np.minimum(iv, max(0, iv.max() - 1))
+            fid = iu * 1000 + iv
+            d4 = int(round(math.degrees(th) / 45)) % 4   # rows along the long axis: 0 east-west, 1 NE, 2 north-south, 3 NW
+            sub = L[sl]
+            for f in np.unique(fid):
+                sel = fid == f
+                hay = bool(np.mean(F[sl][ys[sel], xs[sel]] == 2) > .5)
+                r_ = rng.random()
+                code = 18 if hay or r_ < .35 else 10 + d4 if r_ < .73 else 14 + d4
+                sub[ys[sel], xs[sel]] = code; nf['hay' if code == 18 else 'corn' if code < 14 else 'grain'] += 1
+            # hedgerows on some of the lines between fields (trees: the woods' code, one cell wide)
+            for axis, idx in ((0, iu), (1, iv)):
+                for line in np.unique(idx)[1:]:
+                    if rng.random() > .45: continue
+                    edge = idx == line
+                    # the first cells of the next field along this line
+                    if axis == 0: edge &= ((u - u.min() + shift[iv]) - line * A) < LAND_M * 1.1
+                    else: edge &= ((v - v.min()) - line * B) < LAND_M * 1.1
+                    sub[ys[edge], xs[edge]] = 2; nf['hedgerows'] += 1
+        print(f'  country: zones village {np.mean(zone == 1) * 100:.0f}%, suburb {np.mean(zone == 2) * 100:.0f}%, farm {np.mean(zone == 3) * 100:.0f}%; '
+              f'fields {dict(nf)} ({np.isin(L, list(range(10, 19))).mean() * 100:.0f}% of the land)')
+        # the buildings by zone: in the farms a mid-size outbuilding is a barn (14; a long modern one, 15), a house with a
+        # barn within 120 m a farmhouse (13); in the villages' cores a house is a village house (16: older, two storeys)
+        def b_info(b):
+            ll = [(lat0 + qa * UNIT, lon0 + qo * UNIT) for qa, qo in b['ring']]
+            P = [pix(*p) for p in ll]
+            ar = abs(sum(P[i][0] * P[i - 1][1] - P[i - 1][0] * P[i][1] for i in range(len(P)))) / 2 * LAND_M ** 2
+            cx_, cy_ = sum(p[0] for p in P) / len(P), sum(p[1] for p in P) / len(P)
+            return P, ar, min(lx - 1, max(0, int(cx_))), min(ly - 1, max(0, int(cy_)))
+        barns, kc = [], Counter()
+        # farmsteads: the farm zone's buildings within 70 m of each other; the house is the one tagged a house, else the
+        # house-sized one nearest the road; the rest barns (14; over 900 m², a long modern barn, 15), or sheds under 90 m²
+        info = [b_info(b) for b in kept]
+        fz = [k for k, b in enumerate(kept) if b['kind'] in (1, 2, 3) and zone[info[k][3], info[k][2]] == 3 and kept[k]['h'] < 12]
+        par = {k: k for k in fz}
+        def root(k):
+            while par[k] != k: par[k] = par[par[k]]; k = par[k]
+            return k
+        cg = defaultdict(list)
+        for k in fz: cg[(info[k][2] // 12, info[k][3] // 12)].append(k)
+        for k in fz:
+            ix, iy = info[k][2], info[k][3]
+            for a_ in (-1, 0, 1):
+                for c_ in (-1, 0, 1):
+                    for j in cg.get((ix // 12 + a_, iy // 12 + c_), ()):
+                        if j > k and math.hypot(info[j][2] - ix, info[j][3] - iy) * LAND_M < 70: par[root(j)] = root(k)
+        groups = defaultdict(list)
+        for k in fz: groups[root(k)].append(k)
+        for g in groups.values():
+            if len(g) == 1:
+                k = g[0]
+                if info[k][1] > 400: kept[k]['kind'] = 14 if info[k][1] <= 900 else 15; barns.append((info[k][2], info[k][3], info[k][0]))
+                continue
+            homes = [k for k in g if kept[k]['bt'] == 'house'] or [k for k in g if 70 <= info[k][1] <= 320]
+            house = min(homes, key=lambda k: d_road[info[k][3], info[k][2]]) if homes else None
+            got = False
+            for k in g:
+                if k == house: continue
+                ar = info[k][1]
+                if ar >= 90 and kept[k]['bt'] != 'house':
+                    kept[k]['kind'] = 14 if ar <= 900 else 15; barns.append((info[k][2], info[k][3], info[k][0])); got = True
+                elif ar < 90: kept[k]['kind'] = 17   # a shed (cny-farms.js: a small gable of boards)
+            if house is not None:
+                kept[house]['kind'] = 13 if got else 1
+        for b, (P, ar, ix, iy) in zip(kept, info):
+            if b['kind'] == 1 and zone[iy, ix] == 1: b['kind'] = 16
+        kc = Counter(b['kind'] for b in kept)
+        # farmyards: gravel and packed earth round the barns
+        ym = Image.new('L', (lx, ly), 0); yd = ImageDraw.Draw(ym)
+        for _, _, P in barns: yd.polygon(P, fill=1)
+        yard = ndimage.binary_dilation(np.asarray(ym) > 0, iterations=int(10 / LAND_M)) & ~np.isin(L, (3, 4)) & (d_road > 5)
+        L[yard] = 19
+        print(f'  country buildings: farmhouses {kc[13]}, barns {kc[14]}, long barns {kc[15]}, sheds {kc[17]}, village houses {kc[16]}')
     # beyond the band PGH's buildings reach (no footprints kept there): 7, "outside" — suburbs and hills seen from afar
     wm = Image.new('L', (lx, ly), 0); wd = ImageDraw.Draw(wm)
     for e in E: wd.line([pix(a, o) for a, o in zip(e['lat'], e['lon'])], fill=1, width=1)

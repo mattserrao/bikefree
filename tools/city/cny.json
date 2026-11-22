@@ -146,5 +146,65 @@
    2
   ]
  ],
- "keepParallelTrails": true
+ "keepParallelTrails": true,
+ "rural": {
+  "note": "user, 22 Nov: \"find which areas are villages, suburbs, and farms. A lot of land is farmland and requires new texture and models\". tools/pgh_city.py: villages are the old cores (centre lat, lon, radius m); farms are where buildings are sparse (built share within farmR m under farmDensity); fields the open flat land there, and OSM's farmland and meadows anywhere",
+  "villages": [
+   [
+    43.0392,
+    -76.3041,
+    650,
+    "Camillus"
+   ],
+   [
+    43.0853,
+    -76.3291,
+    380,
+    "Warners"
+   ],
+   [
+    43.0695,
+    -76.2724,
+    260,
+    "Amboy"
+   ],
+   [
+    43.0828,
+    -76.3772,
+    300,
+    "Memphis"
+   ],
+   [
+    43.0173,
+    -76.3347,
+    220,
+    "Martisco"
+   ],
+   [
+    43.0051,
+    -76.338,
+    250,
+    "Marcellus Falls"
+   ],
+   [
+    43.0787,
+    -76.3285,
+    200,
+    "Newport"
+   ],
+   [
+    43.0348,
+    -76.3649,
+    160,
+    "Bennetts Corners"
+   ]
+  ],
+  "farmR": 180,
+  "farmDensity": 0.012,
+  "fieldMinHa": 0.6,
+  "fieldM": [
+   170,
+   330
+  ]
+ }
 }

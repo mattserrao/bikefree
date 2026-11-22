@@ -52,7 +52,8 @@ for (const spec of args) {
   errors.length = 0;
   const t0 = Date.now();
   await page.goto(`${base}/tools/pgh-preview.html?${new URLSearchParams({ graph, lat, lon, dir: dir || '+', at: at || 40, time, quality })}`);
-  await page.waitForFunction(() => window.world && window.world.readiness().ready, null, { timeout: 240000, polling: 500 });
+  await page.waitForFunction(() => window.world && window.world.readiness().ready, null, { timeout: +(process.env.SNAP_WAIT || 240000), polling: 500 })
+    .catch(async (e) => { console.log('  not ready:', await page.evaluate(() => JSON.stringify([window.world?._frames, window.world?._nearTiles?.length, window.world?.tiles?.size, window.world?.readiness?.()?.steps?.map((s) => s.p)])).catch(() => '?'), errors.slice(0, 3)); throw e; });
   const stats = await page.evaluate(([view, cam, pre]) => {
     const w = window.world;
     w.stop();

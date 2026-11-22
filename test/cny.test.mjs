@@ -84,3 +84,26 @@ test('CNY\'s houses: the suburban style (fewer windows, ranches and colonials) a
   assert.ok(bays(13.2, 7, st.bayM).n < bays(13.2, 7).n, 'fewer windows along a wall than the default sash bay');
   assert.equal(bays(13.2, 7).n, 5);   // (PGH's houses unchanged)
 });
+
+test('CNY\'s country (user, 22 Nov: "villages, suburbs, and farms … farmland requires new texture and models"): fields, barns, farmhouses, village houses', async () => {
+  const { gunzipSync } = await import('node:zlib');
+  const land = gunzipSync(readFileSync(new URL('../routes/cities/cny-land.bin.gz', import.meta.url)));
+  const n = (a, b) => land.reduce((s, c) => s + (c >= a && c <= b ? 1 : 0), 0);
+  assert.ok(n(10, 18) / land.length > 0.25, 'fields cover much of the land');
+  for (const [a, b] of [[10, 13], [14, 17], [18, 18], [19, 19]]) assert.ok(n(a, b) > 1000, `land codes ${a}-${b}`);
+  const idx = JSON.parse(readFileSync(new URL('../routes/cities/cny-city.json', import.meta.url), 'utf8'));
+  const kinds = new Map();
+  for (const k of Object.keys(idx.sectors.list)) for (const c of JSON.parse(readFileSync(new URL(`../routes/cities/cny-city/s_${k}.json`, import.meta.url), 'utf8')).buildings.kind) kinds.set(c, (kinds.get(c) || 0) + 1);
+  for (const k of [13, 14, 16, 17]) assert.ok(kinds.get(k) > 20, `kind ${k}: ${kinds.get(k)}`);
+  const { STYLE_PRESETS } = await import('../js/world/toolbox/structures/buildings/presets.js');
+  assert.ok(STYLE_PRESETS['cny-village'] && STYLE_PRESETS['cny-farmhouse']);
+  const { KIT_STYLES } = await import('../js/world/graph-city.js');
+  assert.deepEqual(KIT_STYLES.cny.map((s) => s.preset), ['cny-village', 'cny-farmhouse', 'cny-suburban']);
+  const { MeshBuilder } = await import('../js/world/toolbox/core/mesh-builder.js');
+  const { farmBuilding, fitRect } = await import('../js/world/toolbox/city/cny-farms.js');
+  const ring = [{ x: 0, z: 0 }, { x: 4, z: 30 }, { x: 18, z: 28 }, { x: 14, z: -2 }];
+  const r = fitRect(ring); assert.ok(r.hu > r.hv && Math.abs(r.hu - 15.1) < 0.3);
+  let silos = 0;
+  for (const kind of [14, 15, 17]) for (let k = 0; k < 20; k++) { const M = new MeshBuilder({ aGlow: 1 }); silos += farmBuilding(M, { k, kind, ring }, { heightAt: () => 120 }); assert.ok(M.count > 40); }
+  assert.ok(silos > 5, 'silos by many barns');
+});

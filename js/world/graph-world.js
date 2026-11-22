@@ -1361,10 +1361,31 @@ function groundMaterial(low = false) {
           else if (k < 5.5 && k > 4.5) lc = vec3(.66, .6, .46);                               // sand, bare rock
           else if (k < 6.5 && k > 5.5) lc = mix(vec3(.62, .59, .54), vec3(.68, .65, .6), n);  // plaza
           else if (k < 7.5 && k > 6.5) lc = mix(vec3(.3, .42, .22), vec3(.38, .44, .25), n);  // beyond: suburbs and hills
-          else if (k > 7.5) lc = mix(vec3(.4, .54, .27), vec3(.5, .58, .33), n);             // yards: lawns
-          if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vLandW * .85);
+          else if (k < 8.5) lc = mix(vec3(.4, .54, .27), vec3(.5, .58, .33), n);             // yards: lawns
+          else if (k > 9.5 && k < 17.5) {
+            // CNY's fields (tools/pgh_city.py "the country"): crop rows along the field's long axis (10-13 corn, 14-17
+            // grain stubble; the code's last two bits the rows' heading, 0 east-west … 3 north-west), faded to their
+            // mean far off so they don't shimmer
+            float dIx = mod(k - 10., 4.), a = dIx * .7853982, ns = sign(uLandBox.y - uLandBox.w);
+            vec2 rowN = vec2(-ns * sin(a), cos(a));   // across the rows (world x, z; the rows run (cos a, ns sin a), ns: north's sign in z)
+            float corn = step(k, 13.5), per = mix(.55, .9, corn), q = dot(vGW.xz, rowN) / per;
+            float fw = fwidth(q), row = mix(.5 + .5 * sin(q * 6.2831853), .5, clamp(fw * 1.6, 0., 1.));
+            float field = gwN(vGW.xz * .013 + k * 3.1);   // a field's own shade (and the swaths of a mower)
+            float swath = mix(.5 + .5 * sin(dot(vGW.xz, rowN) * .785), .5, clamp(fwidth(dot(vGW.xz, rowN) * .125) * 1.6, 0., 1.));
+            vec3 leaf = mix(vec3(.2, .38, .1), vec3(.3, .47, .13), field), soil = vec3(.38, .3, .2);
+            vec3 stub = mix(vec3(.76, .62, .34), vec3(.84, .72, .42), field), stubD = vec3(.6, .49, .3);
+            lc = corn > .5 ? mix(soil, leaf, .55 + .45 * row) * (.94 + n * .12) : mix(stubD, stub, row * .6 + swath * .4) * (.95 + n * .1);
+          }
+          else if (k < 18.5 && k > 17.5) {
+            // hay and pasture: mottled grass, mown in broad lighter swaths
+            float sw = .5 + .5 * sin(vGW.x * .45 + gwN(vGW.xz * .02) * 9.);
+            sw = mix(sw, .5, clamp(fwidth(vGW.x * .45) * .6, 0., 1.));
+            lc = mix(vec3(.5, .58, .26), vec3(.64, .66, .32), n * .6 + sw * .4);
+          }
+          else if (k < 19.5 && k > 18.5) lc = mix(vec3(.5, .43, .32), vec3(.6, .53, .41), n * .7 + gwN(vGW.xz * .09) * .3);   // farmyard: gravel and packed earth
+          if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * mix(clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vec3(1.), step(9.5, k) * .7), vLandW * (k > 9.5 ? .95 : .85));   // (fields: their own colour, less of the ground's tint)
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-3${low ? '-low' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-4${low ? '-low' : ''}`;
   return m;
 }
