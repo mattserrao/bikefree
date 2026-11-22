@@ -1652,6 +1652,19 @@ The user: the final overview before a **public launch** of the game.
 - [ ] No clipping anywhere: road, sidewalk and other graphics never through one another (includes the saved clipping round 2, 6.1b, and the deferred F336)
 - [ ] Also fold in: F270 (render all preview images once the scenes are final), F261 hero detail passes
 
+### PGH map editor *(user, 22 Nov: "create a tool so I can edit the map offline, SimCity style")*
+`tools/pgh-editor.html`: one file, no imports, works offline. `npm run pgh:edit` serves the repo and the editor
+loads `routes/cities/pgh.json` itself; opened from disk it asks for the file (Open). Top-down map of every way (by
+kind), decks gold, dead ends as red rings, the river and the bridge models as a guide (Layers). Tools: Select
+(rename, kind, deck, junction height), Move (drag a junction; drop it on a junction or a way to join — fixes a dead
+end), Road (draw a way; ends snap to junctions and ways, splitting them), Bridge (a way's middle as a deck), Split,
+Bulldoze; undo/redo; Issues (dead ends, bridges with a loose end, two ways side by side over a bridge). Save writes the
+file back (Chrome/Edge, opened with Open) or downloads it. Way ids are kept (new ways get new ones), so the city data
+still fits; a route over a way that was split or removed is dropped. Then `npm run pgh:after-edit`
+(`tools/pgh_after_edit.mjs`): routes laid out again, city data and bridge models (with the OSM cache), the
+crossings check, the app's cache key. An unedited save is byte-identical to the file.
+The unfinished bridge audit pass (audit tool, approach cleanup, reconnected dead ends) is in `git stash` on pgh-test.
+
 ### Later ideas
 - Street-level photos alongside the 3D view (Panoramax / Mapillary)
 - Route builder (click points → BRouter route → elevation)

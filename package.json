@@ -24,7 +24,9 @@
     "gallery": "node tools/snap_gallery.mjs",
     "figures": "node tools/build_figures.mjs",
     "snap:figures": "node tools/snap_figures.mjs",
-    "gallery:buildings": "node tools/snap_buildings.mjs"
+    "gallery:buildings": "node tools/snap_buildings.mjs",
+    "pgh:edit": "echo 'PGH map editor: http://localhost:8000/tools/pgh-editor.html' && python3 -m http.server 8000",
+    "pgh:after-edit": "node tools/pgh_after_edit.mjs"
   },
   "devDependencies": {
     "@garmin/fitsdk": "^21.221.0",
