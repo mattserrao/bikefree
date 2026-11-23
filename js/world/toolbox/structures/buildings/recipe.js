@@ -207,7 +207,7 @@ export function* planBuildingsJob(plan, config, index, opts = {}, tierIndex = nu
     const dTier = tierIndex ? (tn ? tn.d : 1e4) : d;
     const full = dTier < kit.detailM;
     const R = {
-      id: n, x: b.x, z: b.z, s: b.s, d, dTier, r: b.r, pts: b.pts, area, dens, toRoad, archetype, kind: b.kind, name: b.name, full, key: b.key,
+      id: n, x: b.x, z: b.z, s: b.s, d, dTier, r: b.r, pts: b.pts, area, dens, toRoad, archetype, kind: b.kind, name: b.name, full, key: b.key, force: b.force,
       rects: dec.cover >= .74 ? dec.rects : [], outline: dec.cover < .74, seed: rand(),
     };
     // rows: which walls of the main block stand against a neighbour (no windows there); the ridge runs along the street

@@ -42,6 +42,7 @@ const TILE = 400;
 // how far the city is built, by quality (Low: phones)
 const REACH = { low: { near: 1300, far: 1800, trees: 0.6, treeNear: 450 }, balanced: { near: 2300, far: 3100, trees: 1, treeNear: 750 }, high: { near: 2300, far: 3100, trees: 1.2, treeNear: 900 } };
 const CAR_NEAR = 320;           // m: detailed parked cars within this
+const pipXZ = (r, x, z) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) c = !c; } return c; };
 const HOUSE_CLOSE_M = 160;
 const PROXY_MAT = new THREE.MeshStandardMaterial({ color: '#000000' });
 /** One mesh of every tree's crown (an ellipsoid; a cone for the conifers) and trunk, for the bake only: on no camera
@@ -64,6 +65,8 @@ function treeProxies(trees, kit) {
   mesh.name = 'Tree shadow proxies'; mesh.layers.mask = 0; mesh.userData.bake = true; mesh.castShadow = false; mesh.frustumCulled = false;
   return mesh;
 }   // the house engine's close detail (casings, rails, brackets) drawn this far
+/** The landscape as a lakefront house reads it: never lower than `floor` (its footings go down into the water). */
+const dryLand = (L, floor) => { const o = Object.create(L); o.heightAt = (x, z) => Math.max(L.heightAt(x, z), floor); return o; };
 const KIT_CFG = { detailM: 150, dressingM: 80, detailReachM: 550,
   styles: [{ preset: 'pittsburgh-rowhouse', kinds: ['rowhouse'] }, { preset: 'pittsburgh-frame', kinds: ['house', 'barn', 'shed'] }] };
 /** Each road-graph city's homes (CNY: the suburbs' ranches and colonials, the villages' older houses, the farmhouses:
@@ -197,6 +200,7 @@ export class GraphCity {
       cx /= ring.length; cz /= ring.length;
       const b = { k: this.buildings.length, ring, h: h[q] / 10, mh: mh[q] / 10, kind: B.kind[q], name: B.names[q] || '', bb: [x0, x1, z0, z1], cx, cz, sector: key };
       if (this.covered(b) || this._underDeck(b)) b.hidden = true;
+      if (this.world.json?.id === 'skan' && this.world.ground && this.inWater(cx, cz)) b.hidden = true;   // (a lakefront footprint past the drawn shore)
       if (b.kind === 21 || b.kind === 22 || b.kind === 24) b.ownModel = 'farm';   // CNY's barns: js/world/toolbox/city/cny-farms.js (_farms), not boxes
       this.buildings.push(b); mine.push(b);
       const tk = `${Math.floor(cx / TILE)},${Math.floor(cz / TILE)}`;
@@ -230,9 +234,19 @@ export class GraphCity {
     // SKAN's houses (all kind 1 in its data): one with a barn within 120 m is a farmhouse, one with a dozen buildings
     // within 90 m a village house — the CNY presets then dress them as CNY's are
     if (this.world.json?.id === 'skan') {
+      // the village cores' commercial buildings (tools/skan_heroes.py: their OSM outlines along Genesee, Jordan and
+      // Fennell Streets, Marcellus's Main and North Streets): storefront rows; the historic houses the house engine
+      // builds as their real type
+      const V = this._villageData ||= this._skanVillages();
+      for (const b of mine) {
+        const s = V.shops.find((q) => b.cx > q.bb[0] && b.cx < q.bb[1] && b.cz > q.bb[2] && b.cz < q.bb[3] && pipXZ(q.ring, b.cx, b.cz));
+        if (s) { b.kind = 0; b.h = Math.max(b.h, s.h); b.shop = true; continue; }
+        const f = V.styles.find((q) => Math.hypot(q.x - b.cx, q.z - b.cz) < 7);
+        if (f) { b.force = f; b.kind = 23; }
+      }
       const barns = mine.filter((b) => b.kind === 13), all = mine;
       for (const b of mine) {
-        if (b.kind !== 1) continue;
+        if (b.kind !== 1 || b.force) continue;
         if (barns.some((o) => Math.hypot(o.cx - b.cx, o.cz - b.cz) < 120)) { b.kind = 20; continue; }
         let n = 0; for (const o of all) if (Math.abs(o.cx - b.cx) < 90 && Math.abs(o.cz - b.cz) < 90 && Math.hypot(o.cx - b.cx, o.cz - b.cz) < 90) n++;
         if (n >= 13) b.kind = 23;
@@ -246,8 +260,9 @@ export class GraphCity {
       const pts = b.ring.map((p) => [p.x, p.z]);
       let r = 0; for (const [px, pz] of pts) r = Math.max(r, Math.hypot(px - b.cx, pz - b.cz));
       // a brick row on a main street (East Carson, Butler, Penn…): a shop row, dressed by _storefronts, not a home
-      if (b.kind === 0 && b.h >= 6.5 && this._frontsOf(b, b.ring, null, true).length) b.shopRow = true;
-      const e = { x: b.cx, z: b.cz, pts, levels: 0, kind: b.shopRow ? 'other' : kinds[b.kind] || 'other', roof: -1, height: b.h, s: 0, r, name: b.name || '', key: b.k };
+      if (b.kind === 0 && b.h >= 6.5 && this._frontsOf(b, b.ring, null, !b.shop).length) b.shopRow = true;
+      if (b.shop && !b.shopRow) { b.shopRow = true; }   // (a village core's: a storefront row even round a corner)
+      const e = { x: b.cx, z: b.cz, pts, levels: 0, kind: b.shopRow ? 'other' : kinds[b.kind] || 'other', roof: -1, height: b.h, s: 0, r, name: b.name || '', key: b.k, force: b.force };
       (kinds[b.kind] && !b.shopRow ? homes : neighbours).push(e);
     }
     st.job = planBuildingKitJob({ buildings: homes, neighbours }, this.kitScene, this.kitStreets, this.host.index);
@@ -268,6 +283,16 @@ export class GraphCity {
         // (none in the canal: a footprint OSM puts in the channel, or a house the clean shape pushed into it)
         for (const R of plan.buildings) R.inCanal = (R.rects.length ? R.rects : [{ cx: R.x, cz: R.z, ux: 1, uz: 0, vx: 0, vz: 1, hu: 1, hv: 1 }])
           .some((r) => [[0, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]].some(([a, b]) => canalAt(r.cx + r.ux * a * r.hu + r.vx * b * r.hv, r.cz + r.uz * a * r.hu + r.vz * b * r.hv, .5)));
+        // (a lakefront house whose footprint runs past the drawn shore: stood on its floor above the water, not in it;
+        //  one whose middle is in the lake is left out)
+        if (self.world.ground) for (const R of plan.buildings) {
+          if (R.inCanal) continue;
+          const pts = (R.rects.length ? R.rects : [{ cx: R.x, cz: R.z, ux: 1, uz: 0, vx: 0, vz: 1, hu: 1, hv: 1 }]).flatMap((r) => [[0, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]].map(([a, b]) => [r.cx + r.ux * a * r.hu + r.vx * b * r.hv, r.cz + r.uz * a * r.hu + r.vz * b * r.hv]));
+          const wet = pts.filter(([x, z]) => self.inWater(x, z)).length;
+          if (!wet) continue;
+          if (self.inWater(R.x, R.z) || wet > pts.length / 2) { R.inCanal = true; continue; }
+          R.floorAbove = self.world.poolAt(R.x, R.z) + 0.9;
+        }
         for (const R of plan.buildings) {
           plans.set(R.key, R);
           if (R.inCanal) continue;   // (taken, never drawn)
@@ -299,7 +324,8 @@ export class GraphCity {
         for (const R of list) {
           if (due()) yield;
           if (R.inCanal) continue;
-          const res = R.house ? buildHouse(R, R.house, w, d, closeOf(R), L) : assemble(R, w, d, L);
+          const LR = R.floorAbove ? dryLand(L, R.floorAbove) : L;
+          const res = R.house ? buildHouse(R, R.house, w, d, closeOf(R), LR) : assemble(R, w, d, LR);
           if (R.dressing?.length) for (const it of R.dressing) dress(d, it, R, L, res);
         }
         if (w.n) { const m = new THREE.Mesh(w.geometry(), material); m.name = `Homes ${key}`; m.castShadow = m.receiveShadow = true; group.add(m); }
@@ -376,6 +402,17 @@ export class GraphCity {
     return false;
   }
 
+  /** SKAN's village data (graph-heroes' json: shops' outlines and styled houses), in the local frame. */
+  _skanVillages() {
+    const hj = this.heroes.json || {}, proj = this.world.proj;
+    const shops = (hj.shops || []).map((q) => {
+      const ring = q.ring.map(([a, o]) => proj.toLocal(a, o));
+      let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; for (const p of ring) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); }
+      return { ring, h: q.h, bb: [x0, x1, z0, z1] };
+    });
+    const styles = (hj.styles || []).map((q) => ({ ...proj.toLocal(q.center[0], q.center[1]), type: q.type, wall: q.wall }));
+    return { shops, styles };
+  }
   /** Footprints the landmarks stand on: the heroes' claimed ones and zones, the PGH landmarks' outlines, the stadiums. */
   _landmarkCover() {
     const rings = [], proj = this.world.proj, hj = this.heroes.json || {};

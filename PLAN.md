@@ -1813,7 +1813,17 @@ Goal: a lighter main menu, and fix the PGH / CNY / SKAN map cards that looked as
 - [x] Trees: pop-in (tree-engine.js): each tree swaps tier at its own distance (position jitter, 3 m hysteresis) and dissolves into the other tier over 0.6 s (per-instance swap time, complementary screen-door dither; only trees that just swapped are dithered); re-sort every 2.5 m or ~3.5°; frustum test with an ~8° margin; a new tile's impostors dissolve in over 1.5 s.
 - [x] Golden hour, baked (user: "set the time of day to golden hour and remove the option…; pre-baked shadows for the one time of day"): CNY and SKAN fixed at an upstate golden hour (sun 16° from 250°), no time-of-day menu on these maps; toolbox/atmosphere/baked-light.js on the road-graph world (a 3.2 km window round the rider, re-baked as it moves 700 m; ground, roads, houses, barns, the trees' crown/trunk proxies); the live shadow map only for moving things (rider, cyclists) in a 40 m box.
 - [x] One tree engine for the game: the scatter scenes (Big Sur, Yosemite, Zion, …) send their trees to the engine (near/mid tiers, impostors), and their far planting becomes engine impostors (no more tree cards), standing aside inside the square of real trees. (Pittsburgh's authored city keeps its street-kit trees.)
-- [ ] Skaneateles and Marcellus villages: landmarks and more real-world copies (Skaneateles: sidewalks, the long pier, lakeside mansions, the golf course, other landmarks); accuracy. Research, then questions.
+- [x] Skaneateles and Marcellus villages: landmarks and more real-world copies (Skaneateles: sidewalks, the long pier, lakeside mansions, the golf course, other landmarks); accuracy. *(user answers: all four Skaneateles groups, all four Marcellus groups, sidewalks on every village street, real footprints + styles)*
+  - `tools/skan_heroes.py` (OSM API): 10 churches by look, 86 storefront footprints (Genesee/Jordan/Fennell; Marcellus Main/North),
+    4 Marcellus historic houses forced to their type, the village circles, and `skan-dressing.json` (the country club's
+    fairways, greens, bunkers; the parks' walks).
+  - `toolbox/city/skan-landmarks.js`: Clift Park's pier (deck held 1.4 m above the lake, piles, rails, lamps, benches) and
+    gazebo; the Sherwood Inn (blue clapboard, porch toward the lake, dormers); nine lakefront mansions (Queen Anne, Shingle,
+    Classical Revival, Second Empire) on their OSM footprints; the clubhouse (hip roof, lake-side pavilion), docks, pins;
+    the Marcellus Falls stone mill and stack.
+  - Village sidewalks on every street inside the circles; park surfaces gain fairway / green / sand.
+  - Lakefront footprints past the drawn shore: kit houses stand on their floor above the lake (`dryLand`), ones mostly in
+    the water and boxes centred in it are left out; landmark mansions in the water get a stone sea wall and lawn terrace.
 - [ ] CNY canal: small shrubs and scrub on the inside slope down to the water; no trees or buildings in the channel.
 - [ ] → later test branch (user, 22 Nov: "push Going to the Sun task to a later test branch"): Going-to-the-Sun has a low framerate in practice (other maps fine). First numbers (headless, @45000): 28,438 trees in 67 tiles; re-sort 1.8 ms; near 136, mid 670, impostors 10,889 (all loaded tiles, no distance cap); near trees cast shadows. Suspects to measure on a real GPU against main: the impostor cards' overdraw, the near pools in the shadow pass, full impostor rebuilds on every tile swap.
 

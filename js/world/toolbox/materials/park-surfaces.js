@@ -16,8 +16,10 @@ import * as THREE from '../../../../vendor/three.module.min.js';
 const BASE = {
   lawn: ['#5f8f43', '#6e9d4c'], plaza: ['#b8b2a6', '#a9a397'], granite: ['#9b958a', '#8a847a'], walk: ['#c2bdb2', '#b5afa3'],
   garden: ['#5b4434', '#5e7a3c'], wood: ['#4d5a33', '#5c4b35'], scrub: ['#7a8a4c', '#6b7a43'],
+  // a golf course (SKAN: the Skaneateles Country Club): fairways in wide mowing stripes, greens close-cut, bunkers' sand
+  fairway: ['#5d9a3f', '#6fae4a'], green: ['#67b04a', '#74bd55'], sand: ['#e4d8b4', '#d7c9a2'],
 };
-const PATTERN = { lawn: 0, plaza: 1, granite: 2, walk: 3, garden: 4, wood: 5, scrub: 5 };
+const PATTERN = { lawn: 0, plaza: 1, granite: 2, walk: 3, garden: 4, wood: 5, scrub: 5, fairway: 0, green: 0, sand: 6 };
 
 const GLSL = `
 float pkHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -55,6 +57,9 @@ export function makeParkMaterial(kind) {
           c = mix(pkA, pkB, mix(stripe, .5, far * .7));
           c *= .92 + .16 * mix(n, .5, far);
           c = mix(c, vec3(.55, .5, .36), smoothstep(.78, .95, pkNoise(p * .35)) * .25);
+        } else if (pkKind == 6) {   // sand: raked, a fine speckle
+          c = mix(pkA, pkB, n) * (.95 + .08 * pkHash(floor(p * 9.)));
+          c *= 1. - (1. - far) * .06 * step(.5, fract(p.x * 1.6 + sin(p.y * .9) * .5));
         } else if (pkKind == 1) {   // concrete pavers
           float j = pkJoint(p, vec2(.6, .6), 1., .025, cell);
           c = mix(pkA, pkB, pkHash(cell)) * (.95 + .1 * n);

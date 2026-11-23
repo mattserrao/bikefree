@@ -250,7 +250,7 @@ export class GraphWorld {
       roadSurface: roadSurfaceMaterial(this.qualityKey === 'low', this.rural),
       water: new THREE.MeshLambertMaterial({ color: '#4f7f97', transparent: true, opacity: 0.92 }),
       // the dressed places and the river walls: textured from world position (toolbox/materials)
-      park: Object.fromEntries(['lawn', 'plaza', 'granite', 'walk', 'garden', 'wood', 'scrub'].map((k) => [k, makeParkMaterial(k)])),
+      park: Object.fromEntries(['lawn', 'plaza', 'granite', 'walk', 'garden', 'wood', 'scrub', 'fairway', 'green', 'sand'].map((k) => [k, makeParkMaterial(k)])),
       riverWall: makeMasonryMaterial({ stones: ['#8f897d', '#9b9487', '#857f74', '#a29b8e', '#8a8376', '#7f796f'], mortar: '#b3ada1', courseM: 0.45, moss: '#4f5a3c', mossM: 1.2 }),
       parkWall: makeMasonryMaterial({ stones: ['#a39a8a', '#958c7c', '#ab9f8c', '#8f8576', '#9c9282', '#b0a693'], mortar: '#c2b9a8', courseM: 0.3, mossM: 0.4 }),
       fountainWater: new THREE.MeshLambertMaterial({ color: '#5d93ad', transparent: true, opacity: 0.88 }),
@@ -694,6 +694,16 @@ export class GraphWorld {
       if (d.rw) e._rw = true;
       if (d.walk > 0) e._walk = d.walk;
     }
+    // the villages (SKAN: Skaneateles, Marcellus — user, 22 Nov: "full village"): a sidewalk along every street inside
+    const V = this.heroes?.json?.villages;
+    if (V?.length) {
+      const C = V.map((v) => ({ ...this.proj.toLocal(v.center[0], v.center[1]), r: v.r }));
+      for (const e of this.G.edges) {
+        if (e._walk || !['primary', 'secondary', 'tertiary', 'residential'].includes(e.kind)) continue;
+        const m = e.n >> 1, x = e.x[m], z = e.z[m];
+        if (C.some((c) => Math.hypot(x - c.x, z - c.z) < c.r)) e._walk = e.kind === 'residential' ? 1.6 : 2.2;
+      }
+    }
   }
 
   /** PGH's bridge models (js/world/graph-bridges.js, tools/pgh_bridges.mjs): built once; the tiles they stand in are
@@ -1024,7 +1034,7 @@ export class GraphWorld {
       };
       split(tri[0], tri[1], tri[2], 0);
     };
-    const LIFT = { park: 0.22, wood: 0.25, scrub: 0.25, lawn: 0.28, garden: 0.31, plaza: 0.34 };   // (over the 12.8 m ground mesh's facets)
+    const LIFT = { park: 0.22, wood: 0.25, scrub: 0.25, lawn: 0.28, fairway: 0.3, green: 0.32, sand: 0.32, garden: 0.31, plaza: 0.34 };   // (over the 12.8 m ground mesh's facets)
     for (const A of areas) {
       if (due()) yield;
       if (A.kind === 'fountain' || A.kind === 'pool') {
@@ -1285,7 +1295,7 @@ export function decodeShore(json, proj) {
 export function decodeDressing(json, proj, tile) {
   const P = (p) => { const q = proj.toLocal(p[0], p[1]); return [q.x, q.z]; };
   const put = (map, x, z, item) => { const k = `${Math.floor(x / tile)},${Math.floor(z / tile)}`; (map.get(k) || map.set(k, []).get(k)).push(item); };
-  const ORDER = ['park', 'wood', 'scrub', 'lawn', 'garden', 'plaza', 'pool', 'fountain'];
+  const ORDER = ['park', 'wood', 'scrub', 'lawn', 'fairway', 'green', 'sand', 'garden', 'plaza', 'pool', 'fountain'];
   const areas = new Map(), lines = new Map(), trees = new Map();
   for (const a of [...json.areas].sort((p, q) => ORDER.indexOf(p.kind) - ORDER.indexOf(q.kind))) {
     let pts = a.pts.map(P);
