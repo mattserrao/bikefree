@@ -121,10 +121,16 @@ function ownCopy(m) {
   return c;
 }
 
-function leafMaterial(map) {
-  // alpha to coverage: under MSAA the cut-out edges get the multisample's soft coverage, not a stair-stepped cut (free
-  // with MSAA on; a plain alpha test without it)
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, map, alphaTest: .45, alphaToCoverage: true, side: THREE.DoubleSide, roughness: .9 });
+/** Is the screen multisampled? Alpha to coverage only where it is: without MSAA some GPUs (Apple's, so every
+ *  iPhone on Light) dither the coverage into a speckle of see-through pixels all over the leaves. */
+function hasMSAA(renderer) {
+  try { const gl = renderer?.getContext(); return !!gl && gl.getParameter(gl.SAMPLES) > 1; } catch { return false; }
+}
+
+function leafMaterial(map, a2c = false) {
+  // alpha to coverage: under MSAA the cut-out edges get the multisample's soft coverage, not a stair-stepped cut (only
+  // with MSAA on — see hasMSAA; a plain alpha test without it, and in the impostor atlas's bake)
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, map, alphaTest: .45, alphaToCoverage: a2c, side: THREE.DoubleSide, roughness: .9 });
   const size = map.image?.width || 512;
   m.onBeforeCompile = (shader) => {
     shader.fragmentShader = shader.fragmentShader.replace('#include <alphatest_fragment>', `
@@ -148,7 +154,8 @@ export class TreeEngine {
     this.leafTexture = makeLeafTexture(quality === 'low' ? 256 : 512);
     // materials: per tier, wood and leaves; the near tier also for the understory (fading out at the near end)
     const wood = (key) => engineMaterial(decorateTreeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 }), { uTime }), uTime, false, key);
-    const leaves = (key) => engineMaterial(leafMaterial(this.leafTexture), uTime, true, key);
+    this.msaa = hasMSAA(renderer);
+    const leaves = (key) => engineMaterial(leafMaterial(this.leafTexture, this.msaa), uTime, true, key);
     this.mats = [{ wood: wood('w0'), leaves: leaves('l0') }, { wood: wood('w1'), leaves: leaves('l1') }];
     // the models: every (species, variant) an entry; the understory near-only entries
     this.entries = []; this.index = new Map(); this._own = new Map();
@@ -282,7 +289,7 @@ export class TreeEngine {
     // (the atlas after the merge: UniformsUtils.merge won't clone a render target's texture — it set uAtlas to null,
     //  and the impostors drew nothing: every tree past the mid band was missing)
     this.impMat.uniforms.uAtlas.value = rt.texture;
-    this.impMat.alphaToCoverage = true;
+    this.impMat.alphaToCoverage = !!this.msaa;
     this.impMat.customProgramCacheKey = () => 'tree-engine-impostor-5';
     this.impMesh = new THREE.Mesh(geo, this.impMat);
     this.impMesh.frustumCulled = false; this.impMesh.name = 'Trees (impostors)';
