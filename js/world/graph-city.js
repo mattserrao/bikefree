@@ -559,7 +559,7 @@ export class GraphCity {
   }
 
   *_tileJob(key, i, j) {
-    const t = { key, i, j, cx: (i + 0.5) * TILE, cz: (j + 0.5) * TILE, built: true, building: true, meshes: [], near: [], far: [] };
+    const t = { key, i, j, cx: (i + 0.5) * TILE, cz: (j + 0.5) * TILE, built: true, building: true, meshes: [], near: [], far: [], spots: [] };
     this.tiles.set(key, t);
     const host = this.host, kitGroup = this.kit.group;
     // buildings: the city's chunk builder (and the building kit's homes) for this tile
@@ -582,10 +582,12 @@ export class GraphCity {
     if (t.kitM.count) { const m = new THREE.Mesh(t.kitM.geometry(), this.kitMaterial); m.name = `Street furniture ${t.key}`; m.castShadow = true; m.receiveShadow = true; this._add(t, m); }
     t.kitM = null;
     for (const { m } of t.meshes) freezeMatrix(m);   // (static: no per-frame matrix work)
+    if (t.spots.length) this.world.tileSpots?.set(key, t.spots);
     t.building = false;
   }
 
   _release(key, t) {
+    this.world.tileSpots?.delete(key);
     for (const { m, parent, kit } of t.meshes) {
       parent.remove(m);
       if (m.geometry && !m.userData.shared) m.geometry.dispose();
@@ -896,6 +898,9 @@ export class GraphCity {
       const r = H.road, x = r.px + r.ox * (W.wOf ? 6 : 6) + r.dx * 6, z = r.pz + r.oz * 6 + r.dz * 6;
       if (this.onRoad(x, z, 1.5) || this.host.buildingNear(x, z, 2) || this._drivewayNear(x, z, 1)) continue;
       farmStand(M, x, g(x, z), z, Math.atan2(r.ox, r.oz));
+      // a customer or two at the stand, and now and then the farmer behind it
+      { const yaw = Math.atan2(r.ox, r.oz), fx = Math.sin(yaw), fz = Math.cos(yaw); for (let q = 0; q < 1 + (hash(H.key * 1.9) < .5 ? 1 : 0); q++) { const sx = x - fx * 1.6 + r.dx * (q - .5) * .9, sz = z - fz * 1.6 + r.dz * (q - .5) * .9; t.spots.push({ x: sx, z: sz, y: g(sx, sz), yaw, kind: 'stand' }); }
+        if (hash(H.key * 4.1) < .5) t.spots.push({ x: x + fx * 1.2, z: z + fz * 1.2, y: g(x + fx * 1.2, z + fz * 1.2), yaw: yaw + Math.PI, kind: 'idle' }); }
     }
   }
 
@@ -1067,7 +1072,13 @@ export class GraphCity {
       const fronts = this._frontsOf(b, ring, ground, style === 'rowhouse');
       if (fronts.length && (this.facades.dress(C, b, fronts, ground, y1, style) || style !== 'rowhouse')) n++;
       // a village main street's sidewalk furniture along the shop fronts (the "village" effect: toolbox/city/village-street.js)
-      if (this.world.villageStreets && b.shopRow && t.kitM) furniture += villageFurniture(t.kitM, fronts, 0, b.k, this.world.villageStreets);
+      if (this.world.villageStreets && b.shopRow && t.kitM) furniture += villageFurniture(t.kitM, fronts, 0, b.k, { ...this.world.villageStreets, spots: t.spots });
+      // a few people talking in twos and threes on the shop fronts' sidewalks
+      if (this.world.villageStreets && b.shopRow) for (const f of fronts) {
+        if (!(f.walk >= 1.4) || f.base == null || hash(b.k * 3.3 + f.i * 7.1) > .5) continue;
+        const u = f.len * (.3 + .4 * hash(b.k + f.i)), d = Math.min(f.walk * .45, 1.2), cx = f.a.x + f.tx * u + f.nx * d, cz = f.a.z + f.tz * u + f.nz * d, n = 2 + (hash(b.k * 9 + f.i) < .4 ? 1 : 0);
+        for (let q = 0; q < n; q++) { const a = q / n * Math.PI * 2 + hash(b.k * 5 + q) * .6, r = .45; const px = cx + Math.sin(a) * r, pz = cz + Math.cos(a) * r; t.spots.push({ x: px, z: pz, y: f.base, yaw: Math.atan2(cx - px, cz - pz), kind: 'chat' }); }
+      }
     }
     this._lampPts = null;
     this.stats.storefronts = (this.stats.storefronts || 0) + n;

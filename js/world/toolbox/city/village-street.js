@@ -44,7 +44,7 @@ function flag(B, x, y, z, f, yn) {
 }
 
 /** Furniture along `fronts` (shop walls on a sidewalk `walkW` m wide). Returns how many pieces it set. */
-export function villageFurniture(B, fronts, walkW, seed, { flags = true } = {}) {
+export function villageFurniture(B, fronts, walkW, seed, { flags = true, spots = null } = {}) {
   let n = 0;
   for (const f of fronts) {
     const W = f.walk ?? walkW;   // (the front's own sidewalk when it knows it)
@@ -54,7 +54,11 @@ export function villageFurniture(B, fronts, walkW, seed, { flags = true } = {}) 
     for (let u = 2.5 + 3 * hash(seed * 3 + f.i); u < f.len - 1.5; u += step) {
       const k = seed * 131 + f.i * 17 + Math.round(u), r = hash(k);
       const x = f.a.x + f.tx * u + f.nx * kerb, z = f.a.z + f.tz * u + f.nz * kerb, y = f.base;
-      if (r < 0.3) bench(B, x - f.nx * 0.2, y, z - f.nz * 0.2, f, yn);
+      if (r < 0.3) {
+        bench(B, x - f.nx * 0.2, y, z - f.nz * 0.2, f, yn);
+        // someone sitting on about half of them (two on some), facing the street
+        if (spots && hash(k * 1.7) < .5) for (const u2 of hash(k * 2.3) < .3 ? [-.45, .45] : [(hash(k) - .5) * .8]) spots.push({ x: x - f.nx * .22 + f.tx * u2, z: z - f.nz * .22 + f.tz * u2, y: y - .08, yaw: yn, kind: 'sit' });
+      }
       else if (r < 0.62) barrel(B, x, y, z, k);
       else if (r < 0.74) rack(B, x, y, z, f, yn);
       else if (r < 0.84) bin(B, x, y, z);

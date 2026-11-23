@@ -264,6 +264,9 @@ export class GraphWorld {
     };
     // the graphics effects this map asks for (toolbox/effects: the JSON's "effects" block; none when absent)
     this.TILE = TILE;
+    // where people stay put (fishing, benches, groups, farm stands: toolbox/city/graph-life.js): the landmarks' (fixed)
+    // and the city tiles' (keyed by tile)
+    this.lifeSpots = []; this.tileSpots = new Map();
     this.effects = installEffects(this, this.json.effects);
     this.water = new THREE.Mesh(new THREE.PlaneGeometry(2 * FAR_M + 4000, 2 * FAR_M + 4000).rotateX(-Math.PI / 2), this.mats.water);
     this.water.position.y = this.waterY;

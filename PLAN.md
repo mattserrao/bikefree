@@ -1940,3 +1940,9 @@ Every effect is its own module under `js/world/toolbox/effects/`, switched on pe
       goats on hillside pasture, chickens in farmyards, a barn cat, geese and ducks on farm ponds. Kept at a medium
       distance from the road; minimal animation (grazing head bob, tail swish, a few walking slowly), no reaction to
       the rider; the same realistic style as the new people.
+- [x] People placed in CNY / SKAN (graph-life's "locals", world.lifeSpots / tileSpots): fishing off the Skaneateles pier,
+      the mansions' docks and new CNY canal docks; sitting on the village benches; chatting in twos and threes on the
+      shop fronts' sidewalks; customers and the farmer at the farm stands.
+- [~] CNY canal docks *(user, 23 Nov)*: plank docks (posts, ladder, a bench on the big one) built at OSM's pier and canoe
+      launches (Erie Canal Park by Sims' Store, by the aqueduct, Munro Park, two east); fishers on them. Waiting on the
+      user for the docks they saw.

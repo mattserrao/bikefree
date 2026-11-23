@@ -159,6 +159,7 @@ export function skanLandmarkModels({ S, N, glows, plan: plan0, ground, local, L,
     S.color('#5d5346'); for (let a = -len / 2 + 1; a < len / 2; a += 3) for (const sd of [-1, 1]) { const q = { x: m.x + sh.dx * a + sh.dz * sd * .8, z: m.z + sh.dz * a - sh.dx * sd * .8 }; S.cylinder(q.x, y - 3.5, q.z, .12, 3.5, 6); wake(q.x, q.z, .12); }
     const end = { x: sh.x + sh.dx * (len - 3) + sh.dz * 2.2, z: sh.z + sh.dz * (len - 3) - sh.dx * 2.2 };
     boat(end, yaw, seed < .5 ? 'run' : 'sail', seed * 3 % 1);
+    if (L.lifeSpots && seed > .35) { const q = { x: sh.x + sh.dx * (len - 1.4), z: sh.z + sh.dz * (len - 1.4) }; L.lifeSpots.push({ x: q.x, z: q.z, y, yaw, kind: 'fish' }); }
     if (seed > .6) {
       // a boathouse at the root: a little gable-roofed shed half over the water, the boat door to the lake
       const b = { x: sh.x + sh.dx * 1.5 - sh.dz * 5, z: sh.z + sh.dz * 1.5 + sh.dx * 5 };
@@ -197,6 +198,11 @@ export function skanLandmarkModels({ S, N, glows, plan: plan0, ground, local, L,
           S.color('#6b5137'); S.box(bq.x, y + .42, bq.z, .45, .06, 1.6, F.yawU); S.box(bq.x - F.v.x * sd * .2, y + .48, bq.z - F.v.z * sd * .2, .06, .45, 1.6, F.yawU);
         }
       }
+      // people fishing off the pier's outer two thirds, at the rail, facing out over the water (graph-life's locals)
+      if (L.lifeSpots) { const A = P[0], B = P[P.length - 1], len = Math.hypot(B.x - A.x, B.z - A.z), u = { x: (B.x - A.x) / len, z: (B.z - A.z) / len };
+        for (let k = 0, s2 = len * .35; s2 < len - 2; s2 += 9 + hsh(k) * 8, k++) { const sd = k % 2 ? 1 : -1, n = { x: -u.z * sd, z: u.x * sd };
+          if (hsh(k * 3.7) < .7) L.lifeSpots.push({ x: A.x + u.x * s2 + n.x * (w - .55), z: A.z + u.z * s2 + n.z * (w - .55), y, yaw: Math.atan2(n.x, n.z), kind: 'fish' }); }
+        { const n = u; L.lifeSpots.push({ x: B.x - u.x * .8, z: B.z - u.z * .8, y, yaw: Math.atan2(n.x, n.z), kind: 'fish' }); } }
       // the boats: the tour boat tied up along the pier's outer half, and sloops moored off Clift Park either side
       { const A = P[0], B = P[P.length - 1], len = Math.hypot(B.x - A.x, B.z - A.z), u = { x: (B.x - A.x) / len, z: (B.z - A.z) / len }, n = { x: -u.z, z: u.x };
         const yaw = Math.atan2(u.x, u.z), t = { x: A.x + u.x * len * .7 + n.x * (w + 3.3), z: A.z + u.z * len * .7 + n.z * (w + 3.3) };
