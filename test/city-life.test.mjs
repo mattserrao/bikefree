@@ -248,7 +248,7 @@ export function simulate(reverse, { span = null, watch = null, plan = null, spee
           R.closestRouteRider = Math.min(R.closestRouteRider, gap);
           if (gap < .25) { bad = true; if (flag(a, 'rr')) { R.routeRiderClose++; note('route rider close', a, t); } }
         }
-        if (pacerBox && Math.hypot(a.x - pacerBox.x, a.z - pacerBox.z) < 6 && boxGap(pacerBox, box) < .25) { bad = true; if (flag(a, 'rp')) { R.pacerClose++; note('route rider at the pacer', a, t); } }
+        if (pacerBox && Math.abs(a.y - pose.pos.y) < 2 && Math.hypot(a.x - pacerBox.x, a.z - pacerBox.z) < 6 && boxGap(pacerBox, box) < .25)   /* (the same level: not a rider on a bridge overhead — v0.14, the High Level Bridge over the GAP trail) */ { bad = true; if (flag(a, 'rp')) { R.pacerClose++; note('route rider at the pacer', a, t); } }
         if (!bad) episode.delete(a);
         continue;
       }

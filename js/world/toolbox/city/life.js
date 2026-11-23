@@ -491,7 +491,8 @@ export class CityLife {
     const r = this._rider;
     if (!r) return false;
     const fx = r.x - cam.x, fz = r.z - cam.z, fl = Math.hypot(fx, fz) || 1;
-    return (dx * fx + dz * fz) / fl < -.2 * d;
+    // (v0.14: a couple of metres clear behind the camera's plane, not just past it — one step earlier it was in view)
+    return (dx * fx + dz * fz) / fl < -.2 * d - 2;
   }
 
   /** A spot on a network to start from, [way, s], clear of the route's road. */
@@ -654,7 +655,11 @@ export class CityLife {
       riderLat = (rider.x - p.x) * -p.hz + (rider.z - p.z) * p.hx;   // m right of the line (+s)
       if (rider.pacer) {
         pacerG = (rider.pacer.x - rider.x) * fx + (rider.pacer.z - rider.z) * fz; pacerV = rider.pacer.speed ?? rider.speed ?? 0;
-        pacerLat = (rider.pacer.x - p.x) * -p.hz + (rider.pacer.z - p.z) * p.hx;
+        // (v0.14) across the road at the pacer's own place along it: measured at yours, a bend's curve skewed it
+        const q = this._tmpRRp || (this._tmpRRp = {});
+        this._routeRiderAt(Math.max(0, rider.out + pacerG * rider.dir), q);
+        pacerLat = (rider.pacer.x - q.x) * -q.hz + (rider.pacer.z - q.z) * q.hx;
+        this._routeRiderAt(rider.out, p);
       }
     }
     // oncoming cars on the route near: no going over the centre line round the pacer while one comes

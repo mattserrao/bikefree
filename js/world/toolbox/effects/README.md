@@ -35,3 +35,17 @@ node tools/bench/bench.mjs --compare before after
 
 Run the bench from a frozen copy of the tree (it reads files per view), on a quiet machine, and compare only runs
 made on the same machine.
+
+## Rolling out to another map
+
+- **Graph maps** (`routes/cities/*.json`, e.g. PGH): add the `effects` block to `tools/city/<map>.json` and rebuild
+  with `tools/build_pgh.py`. Start with `sky` and `water` (shader only), then `shoreline` (needs water in the map),
+  then `village` and `frontYards` (they need the building kit's shop rows and houses). Bench each step.
+- **Scene maps** (`routes/scenes/*.json`, e.g. Big Sur) don't run this module yet. Port an effect by calling
+  `installEffects(world, cfg)` from the scene world with the hooks listed in `index.js`.
+- **Shared kits that every map already uses** (no switch needed):
+  - parked cars: `toolbox/life/figures/cars.js` (`ParkedCars`, `pickCar`, `staticCar`)
+  - farm animals: `toolbox/life/figures/animals.js` (`Herds`; placed by `graph-city.js _animals` on rural graph
+    maps)
+  - shader warm-up: `toolbox/core/shader-warm.js` (`ShaderWarmer`; graph worlds; a scene world can add one the
+    same way)
