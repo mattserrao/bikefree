@@ -26,7 +26,8 @@ import { MeshBuilder, hash } from '../core/mesh-builder.js';
 import { drain, due, clock, each } from '../core/jobs.js';   // [F30]
 import { ROAD_WIDTH, ROAD_LIFT } from '../../pose.js';
 import { LAND } from './landscape.js';
-import { appendToMeshBuilder, parkedVehicle } from '../life/figures/vehicles.js';
+import { appendToMeshBuilder } from '../life/figures/vehicles.js';
+import { staticCar, pickCar } from '../life/figures/cars.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 /** Quad a-b-c-d wound so its face points along `want` (any vector with the right sign). */
@@ -114,7 +115,6 @@ export const FACADE_STYLES = {
 /** Building kind (tools/build_city.py) → facade style outside a zone; null: left plain. */
 export const AUTO_STYLE = { 0: 'rowhouse', 1: null, 2: 'masonry', 3: 'industrial', 4: 'tower', 5: 'glass', 7: 'masonry', 8: 'industrial', 11: 'masonry' };
 
-const CAR_COLORS = ['#8b1e1e', '#20344f', '#d9d9d4', '#2b2b2d', '#6b7176', '#a8adb1', '#3c5a3a', '#7a6248', '#b9a27a', '#1d4e6e', '#5a1f33', '#c7c2b2'];
 const SHOP_LABELS = {
   food: ['PIZZA', 'TACOS', 'DINER', 'NOODLES', 'BBQ', 'DELI', 'PIEROGIES', 'RAMEN', 'BURGERS', 'THAI'],
   bar: ['BAR', 'BREWPUB', 'TAVERN', 'LIVE MUSIC', 'WINE BAR', 'SALOON'],
@@ -1523,19 +1523,17 @@ export const FURNITURE = {
    * the same soft cartoon models as the moving traffic (the plain stand-in, carLo, is 20 triangles); local +z is the front.
    */
   car(M, f, o = {}) {
-    const h = o.seed ?? .5, kind = h > .85 ? 'suv' : h < .2 ? 'hatch' : 'sedan';
-    appendToMeshBuilder(M, parkedVehicle(kind, CAR_COLORS[Math.floor(h * 997) % CAR_COLORS.length]), new THREE.Matrix4().makeRotationY(f.yaw).setPosition(f.x, f.y, f.z));
+    const c = pickCar(seededCar(o.seed ?? .5), 'city', 'street');
+    appendToMeshBuilder(M, staticCar(c.kind, c.paint, 'lo', { rack: c.rack }), new THREE.Matrix4().makeRotationY(f.yaw).setPosition(f.x, f.y, f.z));
   },
 };
 
-/** [w2-polish] The plain parked car for distance: two blocks (20 triangles). */
+/** [w2-polish] The parked car for distance: the same car (pickCar by seed) at the car kit's far LOD (~110 triangles). */
 function carLo(M, f, o = {}) {
-  const h = o.seed ?? .5, col = CAR_COLORS[Math.floor(h * 997) % CAR_COLORS.length], suv = h > .85, L = suv ? 4.7 : h < .2 ? 4.0 : h > .7 ? 4.8 : 4.45, lift = suv ? .14 : 0;
-  // (a few cm inside the detailed car's faces: the two are never drawn together, but tools see both)
-  M.color(col); bxBlock(M, f, 0, .12, 0, (suv ? 1.86 : 1.78) - .05, .71 + lift, L - .08);
-  M.color('#2e3a44'); bxBlock(M, f, 0, .83 + lift, -L * .08, 1.47, suv ? .58 : .46, L * (suv ? .6 : .46));
+  const c = pickCar(seededCar(o.seed ?? .5), 'city', 'street');
+  appendToMeshBuilder(M, staticCar(c.kind, c.paint, 'far'), new THREE.Matrix4().makeRotationY(f.yaw).setPosition(f.x, f.y, f.z));
 }
-function bxBlock(M, f, dx, dy, dz, w, h, l) { const [x, z] = at(f, dx, dz); M.block(x, f.y + dy, z, w, h, l, f.yaw); }
+function seededCar(h) { let x = Math.floor(h * 2147483646) + 1; return () => ((x = (x * 16807) % 2147483647) / 2147483647); }
 /** [w2-polish] One builder from several (same attributes), in order. */
 function joinBuilders(list) {
   const out = new KitBuilder({ aGlow: 1 });

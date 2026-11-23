@@ -19,7 +19,7 @@ export const PAINTS = ['#b23a2e', '#1f3a5f', '#e9ecee', '#2b2b2b', '#7f8c8d', '#
 export const PART = { PAINT: 0, FIXED: 1, GLASS: 2, HEAD: 10, TAIL: 11, GLOW: 12 };
 const GLASS = '#2a3742', TYRE = '#1b1b1d', HUB = '#b9bec4', TRIM = '#3a3d42', CHROME = '#d9dde0';
 
-class VehBuilder {
+export class VehBuilder {
   constructor(lite = false) { this.lite = lite; this._init(); }
   _init() { this.p = []; this.n = []; this.c = []; this.a = []; this.i = []; this.st = { color: [1, 1, 1], part: 0, wheel: [0, 0, 0] }; }
   set(color, part = PART.FIXED) { const c = new THREE.Color(color); this.st = { color: [c.r, c.g, c.b], part, wheel: [0, 0, 0] }; return this; }
@@ -130,7 +130,7 @@ class VehBuilder {
   /** A wheel turning about X: tyre (rounded cylinder), hub cap on the outside. side: +1 left (+X) / −1 right. */
   wheel(x, cy, cz, r, w, side, seg = 10) {
     const save = this.st;
-    if (this.lite) seg = 8;
+    if (this.lite) seg = Math.min(seg, 8);
     const ring = (rad, xx, nx, nr) => { const ids = []; for (let k = 0; k <= seg; k++) { const a = k / seg * Math.PI * 2, y = Math.cos(a), z = Math.sin(a); ids.push(this.v(xx, cy + y * rad, cz + z * rad, nx, y * nr, z * nr)); } return ids; };
     const strip = (A, Bv) => { for (let k = 0; k < seg; k++) side > 0 ? (this.tri(A[k], A[k + 1], Bv[k + 1]), this.tri(A[k], Bv[k + 1], Bv[k])) : (this.tri(A[k], Bv[k + 1], A[k + 1]), this.tri(A[k], Bv[k], Bv[k + 1])); };
     this.set(TYRE); this.st.wheel = [1, cy, cz];

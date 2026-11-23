@@ -24,6 +24,7 @@ import { MeshBuilder } from '../core/mesh-builder.js';
 import { Builder, M, box, cyl, cone } from '../core/model-builder.js';
 import { Crowd, CLIP, FIT, randomLook, clipRate, figureMaterial, staticCrowdMesh, posedFigure } from './figures/people.js';
 import { staticVehicle, appendToBuilder, PAINTS } from './figures/vehicles.js';
+import { staticCar } from './figures/cars.js';
 
 const ROAD_HALF = 3.5;
 const CHUNK_M = 100;          // crowd people per 100 m of road (each chunk draws its people at one detail level)
@@ -261,7 +262,7 @@ export class RaceDay {
       this._chunk(mesh, 'cards', g);
     }
     // camps: motorhomes, camper vans, tents, cars, chairs (some with people in them), parasols — merged per 2 km
-    let rvGeo = null; const vanGeo = [], carGeo = {};
+    let rvGeo = null; const vanGeo = [];
     for (const [key, list] of camps) {
       const b = new Builder();
       for (const c of list) {
@@ -283,7 +284,7 @@ export class RaceDay {
         } else if (c.kind < .9) {
           // a parked car
           const kind = ['sedan', 'hatch', 'suv', 'van'][Math.floor(c.c * 4)], paint = PAINTS[Math.floor(c.c * 97) % PAINTS.length];
-          appendToBuilder(b, (carGeo[kind + paint] ||= staticVehicle(kind, paint)), m(0, 0, 0));
+          appendToBuilder(b, staticCar(kind, paint, 'lo'), m(0, 0, 0));
         } else {
           // a parasol and two chairs
           b.add(cyl(.03, .03, 2.2, 4), m(0, 0, 0), '#777');

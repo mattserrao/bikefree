@@ -22,6 +22,7 @@ const CAR_MIX = [['sedan', .34], ['hatch', .2], ['suv', .22], ['pickup', .07], [
 // `routeRiders` ride the route's own road with you (ROUTE_RIDE below)
 export const COUNTS = { low: { people: 35, cars: 20, cyclists: 6, routeRiders: 5 }, balanced: { people: 80, cars: 42, cyclists: 12, routeRiders: 8 }, high: { people: 130, cars: 70, cyclists: 18, routeRiders: 10 } };
 const ONCOMING = 2;
+export const MOVING_TRAFFIC = false;   // (cars and buses driving the streets: off — parked cars only)
 // [6.10] riders on the route with you (_updateRouteRiders): their lanes (m right of the centre line, riding their way:
 // the shoulder, its outer `edge`, passing, passing wide round the pacer; `clear` between lines, `clearNear` beside you), how fast they move across (m/s), a pass
 // about `every` s, the next planned no sooner than `soonest` s and no further off than `horizon` s (`behindLead` s for one
@@ -981,6 +982,10 @@ export class CityLife {
 
   // -------------------------------------------------------------- cars and buses
   _traffic() {
+    // no moving traffic (user, 23 Nov 2026: "cars should be stationary only"; "remove all moving traffic"): the
+    // city's cars are parked (graph-city / the street kit, from the shared car kit life/figures/cars.js). The
+    // driving code stays (MOVING_TRAFFIC turns it back on).
+    if (!MOVING_TRAFFIC) { this.carAgents = []; this.busAgents = []; this.oncoming = []; this.carMeshes = {}; return; }
     const n = this.counts.cars, buses = Math.max(2, Math.round(n / 12));
     // every car keeps its model and paint for good (one instanced mesh per model)
     const pickModel = () => { let r = this.rand(); for (const [k, w] of CAR_MIX) { r -= w; if (r <= 0) return k; } return 'sedan'; };

@@ -19,6 +19,7 @@ import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean, ROAD_
 import { loadRider } from './rider.js';
 import { PerfMonitor } from './perf.js';
 import { BakedLighting } from './toolbox/atmosphere/baked-light.js';
+import { ShaderWarmer } from './toolbox/core/shader-warm.js';
 import { drain, runSlice, due } from './toolbox/core/jobs.js';
 import { installEffects } from './toolbox/effects/index.js';
 import { makeParkMaterial } from './toolbox/materials/park-surfaces.js';
@@ -268,6 +269,8 @@ export class GraphWorld {
     // and the city tiles' (keyed by tile)
     this.lifeSpots = []; this.tileSpots = new Map();
     this.effects = installEffects(this, this.json.effects);
+    // shader programs compiled behind the loader, then again as new things stream in (no first-draw hitches)
+    this.shaders = new ShaderWarmer(this.renderer, this.scene, this.camera);
     this.water = new THREE.Mesh(new THREE.PlaneGeometry(2 * FAR_M + 4000, 2 * FAR_M + 4000).rotateX(-Math.PI / 2), this.mats.water);
     this.water.position.y = this.waterY;
     this.scene.add(this.water);
@@ -425,6 +428,9 @@ export class GraphWorld {
       add('city', 'Buildings and trees', p);
     }
     if (this.baked && this.running) add('light', 'Lighting', this.baked.preparing ? this.baked.progress : this.baked.ready || !this.baked.preparing ? 1 : 0);
+    // last: the shader programs, once everything above is in the scene
+    if (steps.every((s) => s.done)) this._warmStart = true;
+    if (this.shaders && this.running) add('shaders', 'Shaders', this._warmStart ? this.shaders.progress : 0);
     return { ready: steps.every((s) => s.done), failed: this.groundFailed, progress: steps.reduce((a, s) => a + s.p, 0) / steps.length, steps };
   }
   get loading() { return (this._queued || 0) > 6 || this.baked?.preparing ? 4 : 0; }
@@ -492,6 +498,7 @@ export class GraphWorld {
       if ((this._frames % 30) === 0) for (const g of [this.group, this.heroes?.group]) g?.traverse((o) => { if (o.isMesh && !o.userData._rs) { o.userData._rs = 1; o.receiveShadow = true; } });
       if (this.baked.preparing) { this.perf?.end(performance.now()); return; }   // (nothing drawn behind the loader: the bake has the GPU)
     }
+    this.shaders?.tick(dt, this._warmStart || this._frames > 600);
     if (this._preload && this._frames % 4) return;
     this.renderer.render(this.scene, this.camera);
     this.perf?.end(performance.now());

@@ -75,7 +75,17 @@ export function planHomestead(R, ctx) {
     P.push([ex, ez]);
     drive.pts = P; drive.pad = null;
   }
-  return { drive, mailbox, extras, key: R.key, kind: R.kind, road: { px: road.px, pz: road.pz, dx: road.dx, dz: road.dz, ox: ox / od, oz: oz / od } };
+  // a parked car (user, 23 Nov: parked cars everywhere, from the shared car kit): on the drive by the house, nose
+  // in (a few backed in); most homes have one, a farm more often a truck (life/figures/cars.js pickCar 'farm')
+  let car = null;
+  if (h(60) < (farm ? .8 : .62) && drive.pts.length > 1) {
+    const [ax, az] = drive.pts[0], [bx, bz] = drive.pts[1], dl = Math.hypot(bx - ax, bz - az);
+    if (dl > 7) {
+      const dx = (bx - ax) / dl, dz = (bz - az) / dl, off = 3.3 + h(61) * 1.5, x = ax + dx * off, z = az + dz * off;
+      if (ctx.free(x, z, 1.1)) car = { x, z, yaw: Math.atan2(-dx, -dz) + (h(62) < .25 ? Math.PI : 0), seed: h(63), setting: farm ? 'farm' : 'driveway' };
+    }
+  }
+  return { drive, mailbox, extras, car, key: R.key, kind: R.kind, road: { px: road.px, pz: road.pz, dx: road.dx, dz: road.dz, ox: ox / od, oz: oz / od } };
 }
 
 /** A small gable-roofed building into M: walls w × l (l along yaw), eaves at h, ridge `rise` above them. */

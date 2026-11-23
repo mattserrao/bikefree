@@ -1,4 +1,8 @@
-// Toolbox: traffic kit, any stylized scene with a "traffic" block. First built for Big Sur:
+// Toolbox: traffic kit, any stylized scene with a "traffic" block. First built for Big Sur.
+//
+// v0.14 (user, 23 Nov 2026: "cars should be stationary only"; "remove all moving traffic"): nothing motorised
+// moves any more. The road carries other cyclists only; the cars, campers and Red Jammers stand parked at the
+// overlooks (the cars from the shared parked-car kit, life/figures/cars.js). Below, as first written:
 //
 // Light, realistic traffic on a two-lane highway (Big Sur's Highway 1): cars, hatchbacks, pickups and SUVs,
 // rental RVs and campervans, motorcycles and other cyclists, both ways. Models from the figures kit (wheels
@@ -8,6 +12,9 @@
 import * as THREE from '../../../../vendor/three.module.min.js';
 import { ROAD_WIDTH } from '../../pose.js';
 import { vehicleMesh, vehicleMaterial, setPaint, setMove, PAINTS } from './figures/vehicles.js';
+import { carGeometry, carMaterial, PALETTES } from './figures/cars.js';
+// the traffic kinds → the parked-car kit's (the jammer keeps its own model)
+const KIT = { car: 'sedan', hatch: 'hatch', suv: 'suv', pickup: 'pickup', camper: 'van', rv: 'van' };
 import { Crowd, CLIP, randomLook, clipRate } from './figures/people.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -35,6 +42,7 @@ export class HighwayTraffic {
     this.group = new THREE.Group(); this.group.name = 'Highway traffic'; parent.add(this.group);
     this.night = { value: 0 };
     this.mat = vehicleMaterial(this.night);
+    this.carMat = carMaterial({ dirt: .15, rust: .03, night: this.night });
     this.turn = route.turnS || route.total;
     this.seed = 9137; this.rand = () => ((this.seed = (this.seed * 16807) % 2147483647) / 2147483647);
     this.meshes = {};
@@ -45,6 +53,9 @@ export class HighwayTraffic {
       const k = this.kinds.find((x) => x.kind === name) || (EXTRA_KINDS[name] && this.kinds.push({ ...EXTRA_KINDS[name] }) && this.kinds.at(-1));
       if (k) k.w = w;
     }
+    // (moving: cyclists only — the motor kinds only park)
+    for (const k of this.kinds) if (k.kind !== 'bike') k.w = 0;
+    if (!this.kinds.some((k) => k.w > 0)) this.kinds.find((k) => k.kind === 'bike').w = 1;
     for (const k of this.kinds) {
       if (k.kind === 'bike') {
         // other road cyclists: pedalling figures (people kit), one draw
@@ -52,8 +63,17 @@ export class HighwayTraffic {
         this.bikeLooks = Array.from({ length: this.n }, () => randomLook(this.rand, { kids: 0, helmet: true }));
         continue;
       }
-      const mesh = vehicleMesh(k.model || k.kind, this.mat, this.n, `Traffic · ${k.kind}`);
-      for (let i = 0; i < this.n; i++) if (k.color || k.kind !== 'rv') setPaint(mesh, i, k.color || PAINTS[Math.floor(this.rand() * PAINTS.length)]);
+      if (k.kind === 'moto') continue;   // (no parked motorbikes)
+      let mesh;
+      if (KIT[k.kind]) {
+        mesh = new THREE.InstancedMesh(carGeometry(KIT[k.kind], 'hi', { rack: k.kind === 'suv' }), this.carMat, this.n);
+        const c = new THREE.Color();
+        for (let i = 0; i < this.n; i++) mesh.setColorAt(i, c.set(k.kind === 'rv' ? '#f2efe6' : PALETTES.city[Math.floor(this.rand() * PALETTES.city.length)][0]));
+        mesh.frustumCulled = false; mesh.castShadow = true; mesh.receiveShadow = true; mesh.name = `Parked · ${k.kind}`; mesh.count = 0; mesh.userData.kit = true;
+      } else {
+        mesh = vehicleMesh(k.model || k.kind, this.mat, this.n, `Parked · ${k.kind}`);
+        for (let i = 0; i < this.n; i++) if (k.color || k.kind !== 'rv') setPaint(mesh, i, k.color || PAINTS[Math.floor(this.rand() * PAINTS.length)]);
+      }
       this.meshes[k.kind] = mesh; this.group.add(mesh);
     }
     this.agents = Array.from({ length: this.n }, (_, id) => ({ id, alive: false }));
@@ -243,8 +263,9 @@ export class HighwayTraffic {
       if (kind === 'bike') { this.bikes.add(this.bikeLooks[id], x, p.y + .12, z, yaw, CLIP.cycle, (id * .37) % 1, a && a.v > .3 ? clipRate(CLIP.cycle, a.v) : 0); return; }
       this.e.set(pitchOn ? -Math.atan(p.dy) * dir : 0, yaw, 0);
       this.q.setFromEuler(this.e);
-      this.meshes[kind].setMatrixAt(id, this.m.compose(V(x, p.y + .12, z), this.q, this.one));
-      setMove(this.meshes[kind], id, a ? a.dist : 0, a ? a.brake : 0);
+      const mesh = this.meshes[kind]; if (!mesh) return;
+      mesh.setMatrixAt(id, this.m.compose(V(x, p.y + .12, z), this.q, this.one));
+      if (!mesh.userData.kit) setMove(mesh, id, a ? a.dist : 0, a ? a.brake : 0);
     };
     const next = {}, assigned = {};
     for (const k of this.kinds) { next[k.kind] = 0; assigned[k.kind] = new Set(); }
@@ -263,13 +284,14 @@ export class HighwayTraffic {
       if (!mesh) continue;
       const count = ids.size ? Math.max(...ids) + 1 : 0;
       for (let i = 0; i < count; i++) if (!ids.has(i)) mesh.setMatrixAt(i, this.zero);
-      mesh.count = count; mesh.instanceMatrix.needsUpdate = true; mesh.geometry.attributes.iMove.needsUpdate = true;
+      mesh.count = count; mesh.instanceMatrix.needsUpdate = true; if (mesh.geometry.attributes.iMove) mesh.geometry.attributes.iMove.needsUpdate = true;
     }
   }
 
   dispose() {
     this.group.removeFromParent();
-    for (const m of Object.values(this.meshes)) { m.geometry.dispose(); m.dispose(); }
+    for (const m of Object.values(this.meshes)) { if (!m.userData.kit) m.geometry.dispose(); m.dispose(); }
+    this.carMat.dispose();
     this.bikes?.dispose();
     this.mat.dispose();
   }

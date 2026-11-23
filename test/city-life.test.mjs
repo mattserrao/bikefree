@@ -350,7 +350,8 @@ for (const [areaId, reverse] of process.env.NO_TESTS ? [] : Object.keys(BUSY).fl
     const R = simulate(reverse, { area: areaId });
     if (process.env.LIFE_SIM_REPORT) console.log(areaId, reverse ? 'Reverse' : 'Forward', JSON.stringify(R));
     // still a busy city: about as many people and vehicles near the rider as before (the whole 40 km tour: ~180k / ~50k agent-steps)
-    assert.ok(R.seen.person > BUSY[areaId][0] && R.seen.vehicle > BUSY[areaId][1], `life near the rider: ${JSON.stringify(R.seen)}`);
+    // (v0.14: no moving traffic — the city's cars are parked: nothing drives)
+    assert.ok(R.seen.person > BUSY[areaId][0] && R.seen.vehicle === 0, `life near the rider: ${JSON.stringify(R.seen)}`);
     assert.equal(R.jumps, 0, `jumps (worst ${R.worstJump.toFixed(2)} m in one step)`);
     assert.equal(R.personInRoad, 0, 'people in the carriageway near the rider');
     assert.equal(R.vehicleInLane, 0, "vehicles in the rider's lane ahead");

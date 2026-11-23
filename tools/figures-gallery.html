@@ -2,13 +2,15 @@
 <html><head><meta charset="utf-8"><title>bikefree · figures</title>
 <style>body{margin:0;background:#cfe0ea;font:13px system-ui;color:#223}#hud{position:fixed;left:8px;top:6px;background:#fffc;padding:4px 8px;border-radius:6px}
 #hud select,#hud button{font:inherit}</style></head>
-<body><div id="hud"><b>Figures</b> · <select id="view"><option>people</option><option>local</option><option>fishing</option><option>clips</option><option>clips2</option><option>variety</option><option>vehicles</option><option>cars</option><option>parked</option><option>close</option><option>street</option><option>crowd</option></select>
+<body><div id="hud"><b>Figures</b> · <select id="view"><option>people</option><option>local</option><option>fishing</option><option>clips</option><option>clips2</option><option>variety</option><option>vehicles</option><option>cars</option><option>parked</option><option>close</option><option>farm</option><option>farmclose</option><option>farmbirds</option><option>farmwalk</option><option>carkit</option><option>carclose</option><option>carworn</option><option>carrear</option><option>carlod</option><option>street</option><option>crowd</option></select>
 <label><input type="checkbox" id="lo"> far detail</label> <button id="pause">pause</button> <span id="stat"></span></div>
 <script type="module">
 // The figures kit (js/world/toolbox/life/figures): every clip, outfits and body types, dogs, strollers, cyclists and
 // every vehicle kind. ?view=people|variety|vehicles|close|street|crowd&t=<seconds>&lo=1 — tools/snap_figures.mjs renders it.
 import * as THREE from '../vendor/three.module.min.js';
 import { Crowd, CLIP, CLIP_META, randomLook, dogLook, clipRate, FIT, figureStats, PALETTES } from '../js/world/toolbox/life/figures/people.js';
+import { Herds, ANIMALS, animalStats } from '../js/world/toolbox/life/figures/animals.js';
+import { ParkedCars, carMaterial, CAR_KINDS, carStats, PALETTES as CAR_PALETTES } from '../js/world/toolbox/life/figures/cars.js';
 import { vehicleMesh, vehicleMaterial, setPaint, setMove, VEHICLE_KINDS, VEHICLE_INFO, vehicleStats, PAINTS, staticVehicle } from '../js/world/toolbox/life/figures/vehicles.js';
 
 const q = new URLSearchParams(location.search);
@@ -85,7 +87,41 @@ for (let k = 0; k < 18; k++) {
   people.push({ look, x: 64 + rand() * 50, z: 4 + rand() * 2.5, yaw: rand() < .5 ? Math.PI / 2 : -Math.PI / 2, clip: look.dog ? CLIP.leash : clip, phase: rand(), walker: true });
 }
 
+// the parked-car kit (toolbox/life/figures/cars.js), at z +30…+52: a row per LOD / wear — city paint near (hi),
+// rural paint with wear and racks (hi), then the lo and far LODs
+{
+  const rows = [['hi', 'city', 30, false], ['hi', 'rural', 37, true], ['lo', 'rural', 44, true], ['far', 'city', 51, false]];
+  for (const [lod, region, z, worn] of rows) {
+    const P = new ParkedCars();
+    CAR_KINDS.forEach((k, i) => { const pal = CAR_PALETTES[k === 'farmtruck' ? 'farm' : region]; P.add(-18 + i * 6, 0, z, worn ? Math.PI : 0, { kind: k, paint: pal[(i * 3 + (worn ? 1 : 0)) % pal.length][0], rack: worn && (k === 'suv' || k === 'wagon' || k === 'hatch') }); });
+    const mat = carMaterial(worn ? { dirt: .5, rust: .6 } : { dirt: 0, rust: 0 });
+    for (const im of P.meshes(mat, lod, `Kit ${lod} ${region}`)) scene.add(im);
+  }
+}
+// farm animals (toolbox/life/figures/animals.js) at x +100, z +30…: every breed in a row (standing, grazing), then a
+// few walking their circles; a pond strip for the swimmers
+{
+  const H = new Herds(), kinds = Object.keys(ANIMALS);
+  const pond = new THREE.Mesh(new THREE.PlaneGeometry(14, 6).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#4f7f97', roughness: .3 })); pond.position.set(108, .02, 40); scene.add(pond);
+  let x = 88;
+  for (const k of kinds) {
+    const sw = ANIMALS[k].swim, w = k.startsWith('horse') || k === 'holstein' || k === 'jersey' ? 2.6 : k.startsWith('sheep') || k.startsWith('goat') ? 1.4 : .8;
+    if (sw) H.add(k, 103 + (k.length % 5) * 2.2, 0, 39 + (k.length % 3), Math.PI * .8, { phase: x * .13 % 1 });
+    else { H.add(k, x, 0, 30, Math.PI, { phase: (x * .37) % 1 }); x += w; }
+  }
+  for (const [k, r, px] of [['holstein', 4, 92], ['horseBay', 5, 104], ['sheep', 3, 112], ['chickenRed', 1.5, 118], ['duckMallard', 1.6, 108]]) H.add(k, px, 0, px === 108 ? 40 : 46, 0, { walk: true, radius: r, phase: .2 });
+  for (const im of H.meshes(new Map(), uTime, 'Gallery animals')) scene.add(im);
+}
 const views = {
+  farm: { pos: [100, 3.2, 21], at: [100, .6, 33], fov: 55 },
+  farmclose: { pos: [92, 1.6, 26.5], at: [91.5, .8, 30], fov: 50 },
+  farmbirds: { pos: [113, 1.4, 34], at: [112, .3, 38.5], fov: 50 },
+  farmwalk: { pos: [104, 6, 34], at: [104, .5, 46], fov: 55 },
+  carkit: { pos: [-1, 3.2, 21.5], at: [-1, .7, 31], fov: 55 },
+  carclose: { pos: [-9.5, 1.7, 25.5], at: [-11.5, .8, 30], fov: 45 },
+  carworn: { pos: [-1, 3.2, 28.5], at: [-1, .7, 38], fov: 55 },
+  carrear: { pos: [-1, 2.4, 44], at: [-1, .7, 37], fov: 55 },
+  carlod: { pos: [-1, 7, 30], at: [-1, .5, 48], fov: 55 },
   people: { pos: [0, 2.6, 9.5], at: [0, 1, 0], fov: 50 },
   local: { pos: [-37, 2.4, -6.5], at: [-36, .9, 1], fov: 55 },
   fishing: { pos: [-41.5, 1.9, 6], at: [-40, 1.2, 1.5], fov: 50 },
@@ -105,7 +141,7 @@ const setView = () => { const v = views[sel.value]; cam.fov = v.fov; cam.positio
 sel.onchange = setView; setView();
 document.getElementById('lo').checked = lo; document.getElementById('lo').onchange = (e) => { q.set('lo', e.target.checked ? 1 : 0); location.search = q; };
 let paused = q.has('t'); document.getElementById('pause').onclick = () => { paused = !paused; };
-const fs = figureStats(), vs = vehicleStats();
+const fs = { ...figureStats(), ...animalStats() }, vs = { ...vehicleStats(), ...Object.fromEntries(Object.entries(carStats('hi')).map(([k, n]) => ['kit ' + k, n])) };
 document.getElementById('stat').textContent = `person ${fs.personHi}/${fs.personLo} tris · cyclist ${fs.cyclistHi} · dog ${fs.dog} · stroller ${fs.stroller} · ` + Object.entries(vs).map(([k, n]) => `${k} ${n}`).join(' · ');
 window.stats = { figures: fs, vehicles: vs };
 

@@ -2,7 +2,7 @@
   "preset": {
     "id": "city",
     "name": "City",
-    "description": "City streets from OpenStreetMap: buildings, facades and street furniture (street kit), junctions, rivers and riverfront, bridges, hero landmarks, people and traffic, baked lighting.",
+    "description": "City streets from OpenStreetMap: buildings, facades and street furniture (street kit), junctions, rivers and riverfront, bridges, hero landmarks, people, cyclists and parked cars, baked lighting.",
     "from": "pittsburgh",
     "terrainTool": "python3 tools/build_city.py <id>  (city data) and python3 tools/build_terrain_grid.py <id>"
   },
@@ -11,7 +11,7 @@
     "style": "stylized",
     "title": "",
     "region": "",
-    "description": "City streets from OpenStreetMap: buildings, facades and street furniture (street kit), junctions, rivers and riverfront, bridges, hero landmarks, people and traffic, baked lighting.",
+    "description": "City streets from OpenStreetMap: buildings, facades and street furniture (street kit), junctions, rivers and riverfront, bridges, hero landmarks, people, cyclists and parked cars, baked lighting.",
     "seed": 1101,
     "terrain": "authored-city",
     "realHorizon": false,

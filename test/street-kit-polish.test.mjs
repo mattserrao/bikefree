@@ -31,13 +31,14 @@ test('a mapped shop gives its kind of sign', () => {
   for (let um = 3; um < 120; um += 6.5) assert.ok(['COFFEE', 'CAFE', 'BAKERY', 'DONUTS', 'TEA'].includes(StreetKit.prototype.shopLabel.call(kit, f, um, 6)));
 });
 
-// [w2-polish] parked cars: wheels, cabin and glass, still a few hundred triangles at most
+// [w2-polish] parked cars: wheels, cabin and glass, still a few hundred triangles at most (v0.14: the shared car
+// kit's lo LOD, life/figures/cars.js — a loft body with arches, so ~450–550)
 test('the parked car has wheels, a glass cabin and stays low-poly', () => {
   for (const seed of [.1, .5, .75, .9]) {
     const M = new MeshBuilder();
     FURNITURE.car(M, { x: 0, y: 0, z: 0, yaw: 0, c: 1, s: 0 }, { seed });
     const tris = M.i.length / 3;
-    assert.ok(tris > 60 && tris < 200, `car ${seed}: ${tris} triangles`);
+    assert.ok(tris > 60 && tris < 600, `car ${seed}: ${tris} triangles`);
     let low = 0; for (let k = 1; k < M.p.length; k += 3) if (M.p[k] < .05) low++;
     assert.ok(low >= 8, 'wheels reach the ground');
     for (let k = 0; k < M.n.length; k += 3) assert.ok(Math.abs(Math.hypot(M.n[k], M.n[k + 1], M.n[k + 2]) - 1) < 1e-3, 'unit normals');

@@ -2,7 +2,7 @@
   "preset": {
     "id": "coast",
     "name": "Coast highway",
-    "description": "Real coast: surf on the real shoreline, shallows from the sea floor, cliffs and golden grass, arch bridges over the gorges, marine-layer weather, sea birds, light highway traffic.",
+    "description": "Real coast: surf on the real shoreline, shallows from the sea floor, cliffs and golden grass, arch bridges over the gorges, marine-layer weather, sea birds, other cyclists, cars parked at the overlooks.",
     "from": "bigsur",
     "terrainTool": "python3 tools/build_terrain_grid.py <id>  (real ground and sea floor out to the horizon)"
   },
@@ -11,7 +11,7 @@
     "style": "stylized",
     "title": "",
     "region": "",
-    "description": "Real coast: surf on the real shoreline, shallows from the sea floor, cliffs and golden grass, arch bridges over the gorges, marine-layer weather, sea birds, light highway traffic.",
+    "description": "Real coast: surf on the real shoreline, shallows from the sea floor, cliffs and golden grass, arch bridges over the gorges, marine-layer weather, sea birds, other cyclists, cars parked at the overlooks.",
     "seed": 1101,
     "terrain": "real-coast",
     "realHorizon": false,
