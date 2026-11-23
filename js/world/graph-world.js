@@ -18,6 +18,7 @@ import { loadTerrainGrid } from '../terrain-grid.js';
 import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean, ROAD_LIFT } from './pose.js';
 import { loadRider } from './rider.js';
 import { PerfMonitor } from './perf.js';
+import { BakedLighting } from './toolbox/atmosphere/baked-light.js';
 import { drain, runSlice, due } from './toolbox/core/jobs.js';
 import { makeParkMaterial } from './toolbox/materials/park-surfaces.js';
 import { makeMasonryMaterial } from './toolbox/materials/stonework.js';
@@ -61,6 +62,10 @@ const TIMES = {
   golden: { label: 'Golden hour', elev: 8, az: 258, sky: '#7d8fbf', fog: '#f0c290', hemiSky: '#ffe6c8', hemiGround: '#8a7a64', sun: '#ffc27a', sunI: 1.6, hemiI: 1.2, exposure: 1.05 },
   night: { label: 'Night', elev: 40, az: 150, sky: '#0d1730', fog: '#1c2440', hemiSky: '#7d8fbf', hemiGround: '#2b2b35', sun: '#b4c6ea', sunI: 0.35, hemiI: 0.55, exposure: 1.2, night: true },
 };
+
+// CNY, SKAN's golden hour (fixed, baked): the sun a little higher than the generic golden (16°, not 8°) so it still
+// lights the fields and its baked shadows read, stronger and warmer against a softer sky light; long shadows to the ENE
+const GOLDEN_UPSTATE = { label: 'Golden hour', elev: 16, az: 250, sky: '#a3b6d6', fog: '#efd3b0', hemiSky: '#ffe8cf', hemiGround: '#7d725e', sun: '#ffcf92', sunI: 2.7, hemiI: 1.12, exposure: 1.14 };
 
 const _v = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
 
@@ -225,6 +230,18 @@ export class GraphWorld {
     this.sun = new THREE.DirectionalLight(0xffffff, 1.6);
     this.scene.add(this.hemi, this.sun, this.sun.target);
     this.scene.fog = new THREE.Fog(0xcfdde8, 900, NEAR_M + 200);
+    // CNY, SKAN (user, 22 Nov: "set the time of day to golden hour and remove the option…; pre-baked shadows for the
+    // one time of day"): the sun fixed low in the west-southwest, its shadows baked (toolbox/atmosphere/baked-light.js)
+    // for the static scenery — ground, roads, houses, barns, trees (each tile's crown proxies) — in a window round the
+    // rider that re-bakes as the ride moves on; the live shadow map keeps only the moving things near the rider
+    this.fixedTime = this.rural ? 'golden' : null;
+    if (this.rural) {
+      this.baked = BakedLighting.create(this._bakeView(), { baked: 'golden', windowM: 3200, windowMoveM: 700, reachM: 900, cellM: 2, marginM: 0, dynamicSpanM: 40,
+        prepTimeoutS: 45, groundAt: (x, z) => (this.ground ? this._groundH(x, z) : 0) }, { golden: GOLDEN_UPSTATE });
+      if (this.baked) {
+        const sh = this.sun.shadow; sh.mapSize.set(1024, 1024); sh.bias = -0.0006; sh.normalBias = 0.04; sh.camera.near = 1; sh.camera.far = 12000;
+      }
+    }
     this._reach();
     this.mats = {
       road: new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
@@ -322,7 +339,7 @@ export class GraphWorld {
   get waitingForArea() { return false; }
   weatherOptions() { return []; }
   setWeather(key) { this.weatherKey = key; }
-  timeOptions() { return Object.entries(TIMES).map(([key, t]) => ({ key, label: t.label })); }
+  timeOptions() { return Object.entries(TIMES).filter(([key]) => !this.fixedTime || key === this.fixedTime).map(([key, t]) => ({ key, label: t.label })); }
   setQuality(key) {
     this.qualityKey = key || 'balanced';
     this._reach();
@@ -331,8 +348,9 @@ export class GraphWorld {
   }
   setCamera(key) { this.camKey = CAMERAS[key] ? key : DEFAULT_CAMERA; this._camInit = false; }
   setTimeOfDay(key) {
+    if (this.fixedTime) key = this.fixedTime;   // (CNY, SKAN: golden hour only, its shadows baked)
     if (!TIMES[key]) key = 'midday';
-    const t = TIMES[key];
+    const t = this.rural && key === 'golden' ? GOLDEN_UPSTATE : TIMES[key];
     this.timeKey = key;
     const el = THREE.MathUtils.degToRad(t.elev), az = THREE.MathUtils.degToRad(t.az);
     this.sunDir = new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)).normalize();
@@ -342,11 +360,13 @@ export class GraphWorld {
     this.scene.background = new THREE.Color(t.sky);
     this.scene.fog.color.set(t.fog);
     this.heroes?.setNight(t.night ? 1 : 0);
+    if (this.baked) { this.baked.setLight(t); this.sun.castShadow = !!this.baked.world.terrain.quality.shadows; }
   }
 
   start() {
     if (this.running) return;
     this.running = true;
+    this.baked?.prepare();   // the first bake behind the loader
     this._last = performance.now();
     this._raf = requestAnimationFrame(this._frame);
   }
@@ -356,6 +376,27 @@ export class GraphWorld {
   togglePerf(on, place) {
     this.perf ||= new PerfMonitor(this.renderer, this.container, () => ({ route: this.json.name, quality: this.qualityKey, time: this.timeKey }), place);
     return this.perf.toggle(on);
+  }
+
+  /** What the baked lighting reads of a world (toolbox/atmosphere/baked-light.js), for this road graph: the tiles and
+   *  the city (two roots), a window round the camera (the whole map's extent as the 'route'), the loading state. */
+  _bakeView() {
+    const self = this, big = 1e6;
+    const terrain = {
+      get group() { return self.group; },
+      kit: true,
+      city: { _pending: [] },
+      stats: { get loading() { const c = self.city; return !self.ground || (self.json.cityData && (!c || !c.ready || c.pendingNear(self.camera.position.x, self.camera.position.z, 900))) ? 1 : 0; } },
+      get quality() { return { shadows: self.qualityKey !== 'low' }; },
+      heightAt: (x, z) => (self.ground ? self._groundH(x, z) : 0),
+    };
+    return {
+      get renderer() { return self.renderer; }, get scene() { return self.scene; }, get camera() { return self.camera; },
+      log: (...a) => self.log(...a), area: null, terrain,
+      get road() { return self.heroes?.group || null; }, shoulder: null,
+      index: { xs: [-big, big], zs: [-big, big] }, route: { minEle: (self.json.waterLevelM ?? 100) - 5 },
+      heroPost: false, post: null, get qualityKey() { return self.qualityKey; },
+    };
   }
 
   /** The loading screen: ground, roads round the start, the rider. */
@@ -373,9 +414,10 @@ export class GraphWorld {
       const c = this.city, p = this._cityState === 'failed' ? 1 : !c ? 0 : !c.ready ? 0.3 : c.pendingNear(this.camera.position.x, this.camera.position.z, 900) ? 0.7 : 1;
       add('city', 'Buildings and trees', p);
     }
+    if (this.baked && this.running) add('light', 'Lighting', this.baked.preparing ? this.baked.progress : this.baked.ready || !this.baked.preparing ? 1 : 0);
     return { ready: steps.every((s) => s.done), failed: this.groundFailed, progress: steps.reduce((a, s) => a + s.p, 0) / steps.length, steps };
   }
-  get loading() { return (this._queued || 0) > 6 ? 4 : 0; }
+  get loading() { return (this._queued || 0) > 6 || this.baked?.preparing ? 4 : 0; }
 
   dispose() {
     this.stop();
@@ -390,6 +432,7 @@ export class GraphWorld {
     this.renderer.dispose();
     this.renderer.domElement.remove();
     this.perf?.dispose?.();
+    this.baked?.dispose();
   }
 
   // ---------- the frame ----------
@@ -428,6 +471,15 @@ export class GraphWorld {
     this.water.position.z = Math.round(this.camera.position.z / 100) * 100;
     this.sun.position.copy(this.camera.position).addScaledVector(this.sunDir, 5000);
     this.sun.target.position.copy(this.camera.position);
+    if (this.baked) {
+      this.baked.tick(dt);
+      // the live shadow map: the moving things in a small box round the rider (the bake has the rest)
+      const c = this.sun.shadow.camera, span = this.baked.dynamicSpan;
+      if (c.right !== span) { c.left = -span; c.right = span; c.top = span; c.bottom = -span; c.updateProjectionMatrix(); }
+      this.sun.position.copy(this.rider.group.position).addScaledVector(this.sunDir, 2000); this.sun.target.position.copy(this.rider.group.position);
+      if ((this._frames % 30) === 0) for (const g of [this.group, this.heroes?.group]) g?.traverse((o) => { if (o.isMesh && !o.userData._rs) { o.userData._rs = 1; o.receiveShadow = true; } });
+      if (this.baked.preparing) { this.perf?.end(performance.now()); return; }   // (nothing drawn behind the loader: the bake has the GPU)
+    }
     if (this._preload && this._frames % 4) return;
     this.renderer.render(this.scene, this.camera);
     this.perf?.end(performance.now());

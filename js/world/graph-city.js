@@ -41,7 +41,28 @@ const TILE = 400;
 // how far the city is built, by quality (Low: phones)
 const REACH = { low: { near: 1300, far: 1800, trees: 0.6, treeNear: 450 }, balanced: { near: 2300, far: 3100, trees: 1, treeNear: 750 }, high: { near: 2300, far: 3100, trees: 1.2, treeNear: 900 } };
 const CAR_NEAR = 320;           // m: detailed parked cars within this
-const HOUSE_CLOSE_M = 160;   // the house engine's close detail (casings, rails, brackets) drawn this far
+const HOUSE_CLOSE_M = 160;
+const PROXY_MAT = new THREE.MeshStandardMaterial({ color: '#000000' });
+/** One mesh of every tree's crown (an ellipsoid; a cone for the conifers) and trunk, for the bake only: on no camera
+ *  layer (the bake draws it on its own), static (bake: true). */
+function treeProxies(trees, kit) {
+  const blob = new THREE.IcosahedronGeometry(1, 0), cone = new THREE.ConeGeometry(1, 1, 6).translate(0, .5, 0), box = new THREE.BoxGeometry(1, 1, 1).translate(0, .5, 0);
+  const parts = [], m = new THREE.Matrix4();
+  for (const t of trees) {
+    const sp = kit[t.sp]; if (!sp) continue;   // (the understory: too low to matter)
+    const h = sp.h * (t.sy ?? t.s), r = sp.r * t.s, con = /pine|hemlock|spruce/.test(t.sp);
+    if (con) parts.push(cone.clone().applyMatrix4(m.makeScale(r * .8, h * .92, r * .8).setPosition(t.x, t.y + h * .08, t.z)));
+    else parts.push(blob.clone().applyMatrix4(m.makeScale(r * .82, h * .3, r * .82).setPosition(t.x, t.y + h * .62, t.z)));
+    parts.push(box.clone().applyMatrix4(m.makeScale(Math.max(.35, r * .1), h * .5, Math.max(.35, r * .1)).setPosition(t.x, t.y, t.z)));
+  }
+  if (!parts.length) return null;
+  const pos = [];
+  for (const g of parts) { const ng = g.index ? g.toNonIndexed() : g; pos.push(...ng.attributes.position.array); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals(); geo.computeBoundingBox(); geo.computeBoundingSphere();
+  const mesh = new THREE.Mesh(geo, PROXY_MAT);
+  mesh.name = 'Tree shadow proxies'; mesh.layers.mask = 0; mesh.userData.bake = true; mesh.castShadow = false; mesh.frustumCulled = false;
+  return mesh;
+}   // the house engine's close detail (casings, rails, brackets) drawn this far
 const KIT_CFG = { detailM: 150, dressingM: 80, detailReachM: 550,
   styles: [{ preset: 'pittsburgh-rowhouse', kinds: ['rowhouse'] }, { preset: 'pittsburgh-frame', kinds: ['house', 'barn', 'shed'] }] };
 /** Each road-graph city's homes (CNY: the suburbs' ranches and colonials, the villages' older houses, the farmhouses:
@@ -276,8 +297,8 @@ export class GraphCity {
           if (R.dressing?.length) for (const it of R.dressing) dress(d, it, R, L, res);
         }
         if (w.n) { const m = new THREE.Mesh(w.geometry(), material); m.name = `Homes ${key}`; m.castShadow = m.receiveShadow = true; group.add(m); }
-        if (d.n) { const dm = new THREE.Mesh(d.geometry(), material); dm.name = `Home detail ${key}`; dm.receiveShadow = true; dm.geometry.computeBoundingBox(); dm.userData.box = dm.geometry.boundingBox; group.add(dm); details.push(dm); }
-        for (const c of close.values()) if (c.n) { const cm = new THREE.Mesh(c.geometry(), material); cm.name = `House close detail ${key}`; cm.receiveShadow = true; cm.geometry.computeBoundingBox(); cm.userData.box = cm.geometry.boundingBox; cm.userData.reach = HOUSE_CLOSE_M; group.add(cm); details.push(cm); }
+        if (d.n) { const dm = new THREE.Mesh(d.geometry(), material); dm.userData.bake = false; dm.name = `Home detail ${key}`; dm.receiveShadow = true; dm.geometry.computeBoundingBox(); dm.userData.box = dm.geometry.boundingBox; group.add(dm); details.push(dm); }
+        for (const c of close.values()) if (c.n) { const cm = new THREE.Mesh(c.geometry(), material); cm.userData.bake = false; cm.name = `House close detail ${key}`; cm.receiveShadow = true; cm.geometry.computeBoundingBox(); cm.userData.box = cm.geometry.boundingBox; cm.userData.reach = HOUSE_CLOSE_M; group.add(cm); details.push(cm); }
       },
       tick(cam) { for (const m of details) m.visible = m.userData.box.distanceToPoint(cam) < (m.userData.reach || KIT_CFG.detailReachM); },
     };
@@ -522,6 +543,7 @@ export class GraphCity {
   }
 
   _add(t, mesh, lod = null) {
+    if (lod) mesh.userData.bake = false;   // (near / far detail comes and goes with the camera: the bake leaves it out)
     this.host.group.add(mesh);
     t.meshes.push({ m: mesh, parent: this.host.group });
     if (lod === 'near') t.near.push(mesh); else if (lod === 'far') t.far.push(mesh);
@@ -693,6 +715,8 @@ export class GraphCity {
     }
     this.forest.setTile(t.key, out);
     t.trees = out;
+    // the trees' stand-ins for the baked shadows (graph-world: golden hour baked): a crown and a trunk each, never drawn
+    if (this.world.baked) { const px = treeProxies(out, kit); if (px) this._add(t, px); }
     this.stats.trees += out.length;
   }
 

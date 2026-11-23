@@ -22,6 +22,8 @@ let shownTime = null;
 function timeMenu(select) {
   const offered = onRideScreen ? world?.timeOptions?.().map((o) => o.key) : null;   // the route being ridden
   for (const opt of select.options) { const off = offered && opt.value !== 'auto' && !offered.includes(opt.value); opt.hidden = off; opt.disabled = off; }
+  // a route with one fixed time (CNY, SKAN: golden hour, its shadows baked): no choice to offer, so no menu
+  const label = select.closest('label'); if (label) label.hidden = !!(offered && offered.length <= 1);
   let key = settings.worldTime;
   if (offered && key !== 'auto' && !offered.includes(key)) key = offered.includes(world.timeKey) ? world.timeKey : 'auto';
   return (shownTime = key);
