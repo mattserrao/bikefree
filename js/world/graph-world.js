@@ -894,8 +894,21 @@ export class GraphWorld {
           }
           // a shoulder: a gravel edge on a trail, then the verge sloping down to the ground, then a short face
           const band = path ? 0.35 : 0.2;
+          if (ext[k] === 5 || ext[k] === 6) {
+            // a gravel or dirt way (the towpath): its shoulder in the path's own surface — the same stone dust and
+            // tone running down the side, not a green verge (user, 23 Nov: "the side of the towpath should carry the
+            // same color and texture of the path")
+            const ring = (d, dy) => [out(p0, o0, d, dy), out(p1, o1, d, dy)], x = (d) => -sgn * (half + d);
+            const uvs = (d) => [[ext[k], x(d), c0.s, half], [ext[k], x(d), c1.s, half]];
+            for (const [d0, y0, d1, y1] of [[0, -0.01, band, -0.06], [band, -0.06, 1.6, -0.9]]) {
+              const [i0, i1] = ring(d0, y0), [e0, e1] = ring(d1, y1), [u0, u1] = uvs(d0), [v0, v1] = uvs(d1);
+              if (sgn > 0) R.quadX(e0, i0, i1, e1, cols[k], [v0, u0, u1, v1]);
+              else R.quadX(i0, e0, e1, i1, cols[k], [u0, v0, v1, u1]);
+            }
+          } else {
           W.quad(out(p0, o0, 0, -0.01), out(p1, o1, 0, -0.01), out(p1, o1, band, -0.06), out(p0, o0, band, -0.06), path ? gravelC : verge, !flip);
           W.quad(out(p0, o0, band, -0.06), out(p1, o1, band, -0.06), out(p1, o1, 1.6, -0.9), out(p0, o0, 1.6, -0.9), verge, !flip);
+          }
           // on an embankment, the slope runs on down (1 : 1.5) to meet the ground, then a short face below it
           const toe = (p, o) => { const q = out(p, o, 1.6, -0.9), gy = this.ground ? this._groundH(q[0], q[2]) : q[1] - 2; const drop = Math.max(0, q[1] - 0.2 - gy); const d = Math.min(9, drop * 1.5); return [out(p, o, 1.6 + d, -0.9 - d / 1.5), gy]; };
           const [ta, ga] = toe(p0, o0), [tb, gb] = toe(p1, o1);
@@ -1536,8 +1549,8 @@ function roadSurfaceMaterial(low = false, ny = false) {
             col = mix(col, col * vec3(.68, .66, .6), pDamp * .8);
             float litter = smoothstep(.55, .75, gwN(vGW.xz * .05 + 27.)) * (.4 + .6 * edge), leafF = step(.92, gwH(floor(vGW.xz * 9.) + 61.));
             col = mix(col, mix(vec3(.55, .33, .16), vec3(.62, .5, .22), gwH(floor(vGW.xz * 7.) + 5.)), leafF * litter * det);
-            // grass creeping in at the ragged edges
-            col = mix(col, vec3(.33, .4, .2), smoothstep(.82, .98, abs(q.x) / w + rag * .3) * .7);
+            // (no grass creeping in at the edges: user, 23 Nov — the side carries the path's colour and texture; the
+            // shoulder is drawn in this surface too, its across past the half-width: loose, a little darker)
             // puddles: in the worn line, a few per hundred metres; muddy rims, the sky's grey-blue in the middle
             float pn = gwN(vec2(q.y * .42, (q.x - wan) * .62) + 53.) * step(.55, gwN(vec2(q.y * .03, 7.7))), pud = smoothstep(.8, .83, pn) * worn * (1. - edge);
             float rim = smoothstep(.75, .8, pn) * worn * (1. - pud);
@@ -1564,7 +1577,7 @@ function roadSurfaceMaterial(low = false, ny = false) {
           diffuseColor.rgb = c;
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-road-surface-3${low ? '-low' : ''}${ny ? '-ny1' : ''}`;
+  m.customProgramCacheKey = () => `pgh-road-surface-4${low ? '-low' : ''}${ny ? '-ny1' : ''}`;
   return m;
 }
 

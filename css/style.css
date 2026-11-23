@@ -426,6 +426,10 @@ body.idle .hud-buttons { opacity: 0; }
 .turn-sel { font-size: 11px; text-align: center; line-height: 1.25; text-transform: none; letter-spacing: 0; padding: 0 3px; }
 .turn-sel em { font-style: normal; font-size: 9.5px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--accent-ink); }
 .turn-hint { font-size: 10px; text-align: center; opacity: .6; }
+/* Touch: swipe across the ride screen (or tap a way) to choose — user, 23 Nov */
+.world-view { touch-action: none; }
+.turn-prompt { pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; }
+.turn-opt { cursor: pointer; }
 .turn-hint kbd { font-size: 9px; }
 .hud-title { font-weight: 700; font-size: clamp(18px, 2.6vh, 26px); text-shadow: var(--title-shadow); opacity: 0; transition: opacity 1.2s; white-space: nowrap; }
 .hud-title.show { opacity: 1; }

@@ -151,6 +151,34 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
       if (hsh(i + 4) < .3) { S.color('#efe6d8'); S.cylinder(p.x + p.nx * sd * (w - 1.2), p.y + .03, p.z + p.nz * sd * (w - 1.2), .09, .08, 5, .03); }   // a flower
     }
   };
+  const nearestOn = (l, S2) => { const q = local(l.center[0], l.center[1]); let d = 1e9; for (const p of S2) d = Math.min(d, Math.hypot(p.x - q.x, p.z - q.z)); return d; };
+  const mooredBoat = (l, S2, wOf) => {
+    const q = local(l.center[0], l.center[1]);
+    let bi = -1, bd = 30; S2.forEach((p, i) => { const d = Math.hypot(p.x - q.x, p.z - q.z); if (d < bd) { bd = d; bi = i; } });
+    if (bi < 0) return false;
+    const p0 = S2[bi], sd = ((q.x - p0.x) * p0.nx + (q.z - p0.z) * p0.nz) >= 0 ? 1 : -1;
+    // just past the dock along the canal (the dock 3 m wide, the hull 18 m), the way with more channel
+    const at = (i) => S2[Math.max(0, Math.min(S2.length - 1, i))], HALF = 9, BEAM = 2.1, CLEAR = 1.4;
+    const room = (c) => { let w = 1e9; for (let k = -3; k <= 3; k++) w = Math.min(w, wOf(at(c + k), sd)); return w; };
+    const ci = [3, -3, 4, -4, 2, -2].map((k) => bi + k).filter((i) => i > 2 && i < S2.length - 3).sort((a, b) => room(b) - room(a))[0] ?? bi;
+    const p = S2[ci], a = S2[Math.max(0, ci - 2)], b = S2[Math.min(S2.length - 1, ci + 2)];
+    const ul = Math.hypot(b.x - a.x, b.z - a.z) || 1, u = { x: (b.x - a.x) / ul, z: (b.z - a.z) / ul };
+    // across: against the bank on the dock's side, the far side kept in the water too (each sample along the hull)
+    let o = 1e9, lo = -1e9;
+    for (let k = -3; k <= 3; k++) { const s = at(ci + k); o = Math.min(o, wOf(s, sd) - BEAM - CLEAR); lo = Math.max(lo, -wOf(s, -sd) + BEAM + CLEAR); }
+    if (o < lo) o = (o + lo) / 2;
+    const c = { x: p.x + p.nx * sd * o, z: p.z + p.nz * sd * o }, g = p.y - .32;   // (the waterline .4 m up the hull: a little under the deck's red band)
+    const F = makeFrame(c, u, undefined, HALF, BEAM);
+    const hull = [F.at(-9, -1.6), F.at(7.5, -2.1), F.at(9, 0), F.at(7.5, 2.1), F.at(-9, 1.6)];
+    S.color('#2f4a3a'); block(S, hull, g - .5, g + .7);
+    S.color('#b33a2e'); prism(S, scaleRing(hull, 1.01, c), g + .45, g + .7);
+    S.color(TRIM); block(S, F.rect(-6.5, 4.5, -1.5, 1.5), g + .7, g + 2.6);
+    S.color('#2c3238'); for (let k = 0; k < 6; k++) for (const s of [-1, 1]) { const w = F.at(-5.8 + k * 1.8, s * 1.52); S.box(w.x, g + 1.5, w.z, .06, .7, 1.1, F.yawU); }
+    S.color('#6b2f28'); block(S, F.rect(-6.8, 4.8, -1.75, 1.75), g + 2.6, g + 2.8);
+    // two mooring lines to the bank
+    S.color('#d8cfb8'); for (const e of [-7, 6]) { const h = F.at(e, sd * 0), bk = { x: h.x + p.nx * sd * (wOf(p, sd) - o + .6), z: h.z + p.nz * sd * (wOf(p, sd) - o + .6) }; S.beam(V(h.x + p.nx * sd * BEAM, g + .7, h.z + p.nz * sd * BEAM), V(bk.x, p.y + .75, bk.z), .03, .03); }
+    return true;
+  };
   const up0 = V(0, 1, 0);
   return {
     // the canal's water: a ribbon along OSM's line, just over the ground across its width (the land cover's 6 m cells
@@ -221,6 +249,8 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
         }
         canalBanks(S2, wOf, trailSide);
         registerCanal(S2, wOf, GAP, trailSide);   // (the channel, for the planters)
+        (shared.canals ||= []).push([S2, wOf]);
+        if (shared.boats) shared.boats = shared.boats.filter((b) => !mooredBoat(b, S2, wOf));   // (the tour boat, on its canal)
         // the docks (OSM's pier and canoe launches on the canal — Camillus Erie Canal Park by Sims' Store, the aqueduct,
         // Munro Park and the launches east): a plank dock out from the bank, posts, a ladder, a bench at the root;
         // people fishing off them (graph-life's locals; user, 23 Nov: "locations where people should be fishing from")
@@ -404,15 +434,12 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
       S.color('#5b5f5c'); block(S, Fp.rect(-fl / 2 - .7, fl / 2 + .7, -.1, 2.7), g + 3.3, g + 3.5);
     },
 
+    // the tour boat at the park's dock: moored in the canal's water (user, 23 Nov: "ensure the riverboat on the canal
+    // doesn't clip into land") — set on the canal's samples once its ribbon is built (before or after the canals, whichever
+    // are built first): along the channel, against the dock's bank just past the dock, its hull inside the water's edge all along
     canalboat(l) {
-      const c = local(l.center[0], l.center[1]), g = L.heightAt(c.x, c.z), deg = l.axisDeg ?? 312, r = deg * Math.PI / 180;
-      const F = makeFrame(c, { x: Math.sin(r), z: -Math.cos(r) }, undefined, 9, 2.1);
-      const hull = [F.at(-9, -1.6), F.at(7.5, -2.1), F.at(9, 0), F.at(7.5, 2.1), F.at(-9, 1.6)];
-      S.color('#2f4a3a'); block(S, hull, g - .5, g + .7);
-      S.color('#b33a2e'); prism(S, scaleRing(hull, 1.01, c), g + .45, g + .7);
-      S.color(TRIM); block(S, F.rect(-6.5, 4.5, -1.5, 1.5), g + .7, g + 2.6);
-      S.color('#2c3238'); for (let k = 0; k < 6; k++) for (const s of [-1, 1]) { const q = F.at(-5.8 + k * 1.8, s * 1.52); S.box(q.x, g + 1.5, q.z, .06, .7, 1.1, F.yawU); }
-      S.color('#6b2f28'); block(S, F.rect(-6.8, 4.8, -1.75, 1.75), g + 2.6, g + 2.8);
+      const best = (shared.canals || []).map((C) => [nearestOn(l, C[0]), C]).sort((a, b) => a[0] - b[0])[0];
+      if (!best || !mooredBoat(l, best[1][0], best[1][1])) (shared.boats ||= []).push(l);
     },
 
     railbridge(l) {

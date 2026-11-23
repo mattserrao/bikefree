@@ -247,6 +247,31 @@ document.addEventListener('keydown', (e) => {
   else return;
   e.preventDefault();
 });
+// Touch: while the turn prompt is up, swipe left / right anywhere on the ride screen to change the way (user, 23 Nov),
+// or tap a way in the prompt.
+let swipe = null;
+const turnUp = () => onRideScreen && session.turnRide && !$('hTurn').hidden;
+const pickTurn = (dir) => { if (session.turn(dir)) renderTurnPrompt(true); };
+document.addEventListener('pointerdown', (e) => {
+  swipe = null;
+  if (e.pointerType === 'mouse' || !turnUp() || document.querySelector('dialog[open]')) return;
+  if (e.target.closest('button, a, input, select, textarea, .hud-buttons')) return;
+  swipe = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now() };
+}, { passive: true });
+document.addEventListener('pointerup', (e) => {
+  const s = swipe; swipe = null;
+  if (!s || s.id !== e.pointerId || !turnUp()) return;
+  const dx = e.clientX - s.x, dy = e.clientY - s.y;
+  if (Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy) * 1.5 && performance.now() - s.t < 800) { pickTurn(dx < 0 ? -1 : 1); return; }
+  if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {   // a tap on one of the ways
+    const opt = e.target.closest('#hTurn .turn-opt'), up = opt && session.turnRide.prompt(session.turnPos, session.speedMps);
+    if (!up || up.locked) return;
+    const j = [...opt.parentNode.children].indexOf(opt), step = j - up.selected;
+    for (let i = 0; i < Math.abs(step); i++) if (!session.turn(Math.sign(step))) break;
+    renderTurnPrompt(true);
+  }
+}, { passive: true });
+document.addEventListener('pointercancel', () => { swipe = null; });
 function toggleFullscreen() {
   if (document.fullscreenElement) document.exitFullscreen();
   else document.documentElement.requestFullscreen().catch((err) => log('3d', err.message, 'debug'));
