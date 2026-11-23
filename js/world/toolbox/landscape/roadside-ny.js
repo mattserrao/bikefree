@@ -96,15 +96,15 @@ const blade = (M, x, y, z, a, h, w, lean, colour) => {
 };
 /** Goldenrod: a clump of stiff stems, each with an arching yellow plume (in bloom: it's September). */
 export function goldenrod(M, x, y, z, seed) {
-  const n = 7 + Math.floor(seed * 5);
+  const n = 5 + Math.floor(seed * 3);   // (lighter: phones ran out of memory on the verges — user, 23 Nov)
   for (let k = 0; k < n; k++) {
     const a = k * 2.4 + seed * 9, d = hash(seed * 7 + k) * .45, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
     const h = .85 + hash(seed * 3 + k) * .55, [tx, ty, tz] = blade(M, px, y, pz, a, h, .025, .08 + hash(k + seed) * .12, k % 3 ? '#5f7238' : '#6d7a3e');
     // the plume: small yellow sprays arching out and over from the top of the stem (a few going over, browner)
     const going = hash(seed * 11 + k) < .2;
-    for (let j = 0; j < 4; j++) {
-      const t = j / 3, ax = tx + Math.cos(a) * (.04 + t * .16), az = tz + Math.sin(a) * (.04 + t * .16), ay = ty - .06 - t * t * .14;
-      M.color(going ? '#9c8840' : j % 2 ? '#c9ae46' : '#b89d3e').pyramid(ax, ay - .1, az, .11, .14, .11, a + j);
+    for (let j = 0; j < 2; j++) {
+      const t = j, ax = tx + Math.cos(a) * (.06 + t * .14), az = tz + Math.sin(a) * (.06 + t * .14), ay = ty - .06 - t * t * .14;
+      M.color(going ? '#9c8840' : j % 2 ? '#c9ae46' : '#b89d3e').pyramid(ax, ay - .12, az, .16, .2, .14, a + j);
     }
   }
 }
@@ -121,12 +121,12 @@ export function laceAndChicory(M, x, y, z, seed) {
 }
 /** Tall unmowed grass (orchard grass, timothy): blades past the knee, tan seed heads. */
 export function tallGrass(M, x, y, z, seed) {
-  const n = 12;
+  const n = 8;
   for (let k = 0; k < n; k++) {
     const a = k * 2.4 + seed * 6, d = hash(seed * 9 + k) * .4;
     const h = .55 + hash(seed * 4 + k) * .5, tone = ['#7f9446', '#8e9a52', '#a8a064', '#6f8c40', '#b3a46c'][k % 5];
     const [tx, ty, tz] = blade(M, x + Math.cos(a) * d, y, z + Math.sin(a) * d, a, h, .045, .18 + hash(seed + k) * .15, tone);
-    if (k % 3 === 0) M.color('#b5a676').pyramid(tx, ty - .14, tz, .04, .16, .04, a);
+    if (k % 4 === 0) M.color('#b5a676').pyramid(tx, ty - .14, tz, .04, .16, .04, a);
   }
 }
 /** Cattails in a wet ditch bottom: straps and a brown head or two. */

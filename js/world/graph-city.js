@@ -43,6 +43,7 @@ export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand:
   corn: 20, grain: 24, hay: 28, farmyard: 29 };
 const TILE = 400;
 // how far the city is built, by quality (Low: phones)
+const VERGE_IN = 260, VERGE_OUT = 420;   // the verges' grass and brush: built within, dropped beyond (m from a tile's edge)
 const REACH = { low: { near: 1300, far: 1800, trees: 0.6, treeNear: 450 }, balanced: { near: 2300, far: 3100, trees: 1, treeNear: 750 }, high: { near: 2300, far: 3100, trees: 1.2, treeNear: 900 } };
 const CAR_NEAR = 340;           // m: parked cars (the kit's lo LOD) within this, its far LOD beyond
 const CAR_HI = 110;
@@ -550,6 +551,19 @@ export class GraphCity {
       if (left <= 0) break;
       if (runSlice(this._job, left).done) this._job = null; else break;
     }
+    // verges: the nearest tile waiting for its grass, as a job in the frame's slice; far ones dropped
+    while (performance.now() - t0 < ms) {
+      if (!this._vjob) {
+        let best = null, bd = VERGE_IN;
+        for (const t of this.tiles.values()) if (t.vergePending && !t.building) { const d = Math.hypot(t.cx - cx, t.cz - cz) - TILE * .71; if (d < bd) { bd = d; best = t; } }
+        if (!best) break;
+        this._vjob = { t: best, gen: this._vergeJob(best) };
+      }
+      const left = ms - (performance.now() - t0);
+      if (left <= 0) break;
+      if (runSlice(this._vjob.gen, left).done) this._vjob = null; else break;
+    }
+    if ((this._f || 0) % 30 === 15) for (const t of this.tiles.values()) if (t.vergeMesh && t !== this._vjob?.t && Math.hypot(t.cx - cx, t.cz - cz) - TILE * .71 > VERGE_OUT) this._dropVerge(t);
     if ((this._f = (this._f || 0) + 1) % 30 === 0) for (const [key, t] of this.tiles) if (t.built && !t.building && Math.hypot(t.cx - cx, t.cz - cz) > this.q.far) this._release(key, t);
   }
   /** Tiles within r of (x, z) not yet built (the loading screen waits for the start's). */
@@ -593,6 +607,7 @@ export class GraphCity {
   }
 
   _release(key, t) {
+    if (this._vjob?.t === t) this._vjob = null;
     this.world.tileSpots?.delete(key);
     for (const { m, parent, kit } of t.meshes) {
       parent.remove(m);
@@ -894,8 +909,11 @@ export class GraphCity {
     }
     yield;
     // the country roads' edges: the ditch, its grass and brush, the poles (_roadsides); then fence and wall runs
-    const N = new MeshBuilder({ aGlow: 1 });
-    yield* this._roadsides(t, N, M);
+    // (the grass and brush only for a tile near the camera — drawn to 240 m, built within VERGE_IN, dropped beyond
+    // VERGE_OUT: user, 23 Nov, phones reloading — every loaded tile's verge to 1.3 km was 270–420 MB of geometry)
+    const N = new MeshBuilder({ aGlow: 1 }), vNear = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71 < VERGE_IN;
+    yield* this._roadsides(t, N, M, vNear ? 'all' : 'struct');
+    if (!vNear) t.vergePending = true;
     for (const piece of W.tiles.get(t.key)?.pieces || []) {
       if (due()) yield;
       const e = piece.e; if (!ROADS.has(e.kind) || e.kind === 'alley') continue;
@@ -919,11 +937,11 @@ export class GraphCity {
         }
       }
     }
-    yield* this._canalScrub(t, N);
+    if (vNear) yield* this._canalScrub(t, N);
     // the wires: no shadow, baked or live (a 2.5 cm wire's shadow drew as a thick black line across the road)
     if (t.wireM?.count) { const m = new THREE.Mesh(t.wireM.geometry(), this.kitMaterial); m.name = `Wires ${t.key}`; m.castShadow = false; m.userData.bake = false; this._add(t, m); }
     t.wireM = null;
-    if (N.count) { const m = new THREE.Mesh(N.geometry(), this.kitMaterial); m.name = `Verge ${t.key}`; m.userData.lodM = 240; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 240; this._add(t, m, 'near'); }
+    if (N.count) { const m = new THREE.Mesh(N.geometry(), this.kitMaterial); m.name = `Verge ${t.key}`; m.userData.lodM = 240; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 240; this._add(t, this._gpuOnly(m), 'near'); t.vergeMesh = m; }
     // a farm stand by some farmhouses' drives (pumpkins and squash: it's September)
     for (const H of t.homes || []) {
       if (H.kind !== 'farmhouse-ny' || hash(H.key * 3.7) > .3) continue;
@@ -936,6 +954,26 @@ export class GraphCity {
     }
   }
 
+  /** A tile's verge grass and brush (and the canal's bank scrub), built when the camera comes near it. */
+  *_vergeJob(t) {
+    const W = this.world, N = new MeshBuilder({ aGlow: 1 });
+    yield* this._roadsides(t, N, new MeshBuilder(), 'grass');
+    yield* this._canalScrub(t, N);
+    t.vergePending = false;
+    if (!N.count) return;
+    const m = new THREE.Mesh(N.geometry(), this.kitMaterial); m.name = `Verge ${t.key}`; m.userData.lodM = 240;
+    m.visible = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71 < 240;
+    this._add(t, this._gpuOnly(m), 'near'); t.vergeMesh = m;
+  }
+  /** The verge's arrays let go once they're on the GPU (no second copy in the page's memory: phones). */
+  _gpuOnly(m) { m.geometry.computeBoundingSphere(); for (const a of Object.values(m.geometry.attributes)) a.onUpload(function () { this.array = null; }); if (m.geometry.index) m.geometry.index.onUpload(function () { this.array = null; }); return m; }
+  /** A far tile's verge dropped (built again when the camera comes back). */
+  _dropVerge(t) {
+    const m = t.vergeMesh; if (!m) return;
+    this.host.group.remove(m); m.geometry.dispose();
+    t.meshes = t.meshes.filter((r) => r.m !== m); t.near = t.near.filter((x) => x !== m);
+    t.vergeMesh = null; t.vergePending = true;
+  }
   /**
    * The country roads' edges (roadside-ny.js), every ~2 m along both sides of each road without sidewalks:
    *   the ditch strip (where the ground is a shelf under the road; broken by driveways, a culvert's ends showing),
@@ -943,8 +981,10 @@ export class GraphCity {
    *   fence line (goldenrod, Queen Anne's lace, chicory, tall grass; cattails in the wet bottoms) — lawns stay mowed,
    *   and now and then the crew mowed farther; utility poles every ~40 m along one side, wires between them.
    */
-  *_roadsides(t, N, M) {
-    const W = this.world, sH = (x, z) => W.surfaceH(x, z), runs = [];
+  *_roadsides(t, N, M, mode = 'all') {
+    // mode: 'all'; 'struct' — the ditches, culverts, poles and wires only (a tile built far off: its grass and brush
+    // come later, _vergeJob); 'grass' — the grass and brush only
+    const W = this.world, sH = (x, z) => W.surfaceH(x, z), runs = [], grass = mode !== 'struct', struct = mode !== 'grass';
     const STEP = 5;   // stations per 10 m sample
     for (const piece of W.tiles.get(t.key)?.pieces || []) {
       if (due()) yield;
@@ -978,15 +1018,15 @@ export class GraphCity {
             const seed = hash(px * .913 + pz * .377 + side * 5.1);
             // the ditch run (and a culvert's ends where a driveway breaks it)
             if (ok) {
-              if (prevDrive && last) { culvertEnd(M, bx - tx * .2, base, bz - tz * .2, tx, tz, seed); }
+              if (prevDrive && last && struct) { culvertEnd(M, bx - tx * .2, base, bz - tz * .2, tx, tz, seed); }
               const row = { x: px + nx * half, z: pz + nz * half, nx, nz, rY, base, side };
               run.push(row); last = row;
             } else {
-              if (drive && run.length) { const r = run[run.length - 1]; const cx = r.x + r.nx * 2.5, cz = r.z + r.nz * 2.5; culvertEnd(M, cx + tx * .2, r.base, cz + tz * .2, -tx, -tz, seed); }
+              if (drive && run.length && struct) { const r = run[run.length - 1]; const cx = r.x + r.nx * 2.5, cz = r.z + r.nz * 2.5; culvertEnd(M, cx + tx * .2, r.base, cz + tz * .2, -tx, -tz, seed); }
               close();
             }
             prevDrive = drive;
-            if (hard || drive) continue;
+            if (hard || drive || !grass) continue;
             const yAt = (d) => { const [x, z] = at(d); return ok && d <= 4.8 ? profileY(d, rY, base) : sH(x, z); };
             // the mowed strip: tufts and the odd wildflower
             for (let r = 0; r < 2; r++) {
@@ -1017,7 +1057,7 @@ export class GraphCity {
         }
         close();
         // utility poles along one side, every 40 m; wires to the next pole (drawn by the tile with this one)
-        if (side !== poleSide) continue;
+        if (side !== poleSide || !struct) continue;
         const pole = (k) => {
           if (k < 1 || k > e.n - 1 || e._deck?.[k]) return null;
           const n = nAt(k), nx = n[0] * side, nz = n[1] * side, x = e.x[k] + nx * (half + 4.4), z = e.z[k] + nz * (half + 4.4);
@@ -1034,7 +1074,7 @@ export class GraphCity {
         }
       }
     }
-    const geo = ditchGeometry(runs);
+    const geo = struct ? ditchGeometry(runs) : null;
     if (geo) { const m = new THREE.Mesh(geo, this.ditchMat ||= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 })); m.name = `Ditches ${t.key}`; m.receiveShadow = true; m.userData.lodM = 700; this._add(t, m); }
   }
   /**

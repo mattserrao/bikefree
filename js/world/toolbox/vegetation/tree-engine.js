@@ -36,7 +36,7 @@ const BANDS = { low: [55, 150], balanced: [100, 210], high: [130, 280] };
 // near and mid 3D tiers unused); the shrubs too (user: "shrubs need the same 2D"), within their own reach. Sharper
 // photos for the close-up cards.
 export const TREES_2D = true;
-const CELL_2D = { low: 160, balanced: 192, high: 256 };
+const CELL_2D = { low: 128, balanced: 192, high: 256 };   // (low: phones — the atlas 88 → 56 MB with its mipmaps, user 23 Nov)
 const DEEP = [.55, .6];  // band scale for a tree > 30 m from any road (t.deep): seen only through the trees in front
 const FADE = [15, 50];   // m: each tree swaps at its own distance within ± this of the band's edge
 const HYST = 3;          // m: hysteresis at each band's edge

@@ -553,7 +553,9 @@ export class GraphWorld {
     } else if (h < pool + BED_BELOW) h = Math.min(h, pool - 2.5);
     // under the canal (CNY, once its water is built): the ground cut down below the water, so the coarse grid's
     // triangles — and the raised towpath's fill — never show through it as green streaks (user, 23 Nov)
-    if (this._canalCut) { const c = canalAt(x, z, 5); if (c && !c.creek) h = Math.min(h, c.y - .45); }
+    // (the grid's 12.8 m triangles span the water's edge: the ground rises from under the water gently — 12 cm a metre
+    // out to 14 m past the edge — so no triangle from a bank vertex reaches up through the water)
+    if (this._canalCut) { const c = canalAt(x, z, 14); if (c && !c.creek) { const o = (x - c.x) * c.nx + (z - c.z) * c.nz, s = Math.max(0, o > 0 ? o - c.w1 : -o - c.w2); h = Math.min(h, c.y - .45 + s * .12); } }
     return Math.min(h, this.cut.cap(x, z));
   }
   /** The canal's built (the landmarks): cut the ground under it, and again in the tiles already built. */
@@ -562,7 +564,7 @@ export class GraphWorld {
     this._canalCut = true;
     for (const t of this.tiles.values()) {
       const m = t.groundMesh; if (!m || !t.gridH) continue;
-      const near = CANAL.samples.some((p) => !p.creek && p.x > t.i * TILE - 30 && p.x < (t.i + 1) * TILE + 30 && p.z > t.j * TILE - 30 && p.z < (t.j + 1) * TILE + 30);
+      const near = CANAL.samples.some((p) => !p.creek && p.x > t.i * TILE - 40 && p.x < (t.i + 1) * TILE + 40 && p.z > t.j * TILE - 40 && p.z < (t.j + 1) * TILE + 40);
       if (!near) continue;
       const P = m.geometry.attributes.position;
       for (let k = 0; k < P.count; k++) { const y = this._groundH(P.getX(k), P.getZ(k)); P.setY(k, y); t.gridH[k] = y; }
