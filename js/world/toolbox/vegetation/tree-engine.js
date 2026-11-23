@@ -31,6 +31,11 @@ import { makeLeafTexture } from './upstate-trees.js';
 //  the photographed cards take over much sooner than they did (480 m), and a tree deep in the woods, away from every
 //  road, sooner still: DEEP of each band)
 const BANDS = { low: [55, 150], balanced: [100, 210], high: [130, 280] };
+// trees-2d-test (user, 23 Nov: "test trees as 2D … use the tree engine as today"; chose every tree, turned to face
+// the camera, always on this branch, every tree-engine map): every tree is its photographed card at any distance (the
+// near and mid 3D tiers unused); the understory (near-only shrubs) stays 3D. Sharper photos for the close-up cards.
+export const TREES_2D = true;
+const CELL_2D = { low: 160, balanced: 192, high: 256 };
 const DEEP = [.55, .6];  // band scale for a tree > 30 m from any road (t.deep): seen only through the trees in front
 const FADE = [15, 50];   // m: each tree swaps at its own distance within ± this of the band's edge
 const HYST = 3;          // m: hysteresis at each band's edge
@@ -207,7 +212,8 @@ export class TreeEngine {
   // ------------------------------------------------------------------ impostors
   /** Photograph every tree entry from ANGLES sides (lit as the world) into one atlas: a row per entry. */
   _impostors(lights, quality) {
-    const list = this.entries.filter((e) => !e.nearOnly), cell = quality === 'low' ? 64 : quality === 'high' ? 160 : 128;
+    const list = this.entries.filter((e) => !e.nearOnly), max = this.renderer.capabilities?.maxTextureSize || 4096;
+    const cell = TREES_2D ? Math.min(CELL_2D[quality] || 192, Math.floor(max / Math.max(1, list.length)), Math.floor(max / ANGLES)) : quality === 'low' ? 64 : quality === 'high' ? 160 : 128;
     const W = cell * ANGLES, H = cell * list.length;
     const rt = new THREE.WebGLRenderTarget(W, H, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, samples: 0 });
     const scene = new THREE.Scene();
@@ -375,7 +381,7 @@ export class TreeEngine {
         const hf = this.hideFar, hidden = t.farOnly && hf && t.x > hf[0] && t.x < hf[2] && t.z > hf[1] && t.z < hf[3];
         const B0 = t.deep ? b0 * DEEP[0] : b0, B1 = t.deep ? b1 * DEEP[1] : b1;
         const want = hidden ? -1 : t.e.nearOnly ? (d0 < B0 * .8 + (cur === 0 ? HYST : -HYST) ? 0 : -1)
-          : d0 < B0 + (cur === 0 ? HYST : -HYST) ? 0 : d1 < B1 + (cur === 1 ? HYST : -HYST) ? 1 : 2;
+          : TREES_2D ? 2 : d0 < B0 + (cur === 0 ? HYST : -HYST) ? 0 : d1 < B1 + (cur === 1 ? HYST : -HYST) ? 1 : 2;
         if (cur === undefined) { t.tier = want; t.from = -1; t.ts = -1e9; }
         else if (want !== cur) { t.from = cur; t.tier = want; t.ts = now; }
         const fading = now - t.ts < FT;
