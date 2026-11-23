@@ -25,8 +25,10 @@ function fill() {
   const weathers = world?.weatherOptions?.() || [];
   $('pWeatherBox').hidden = !!world && weathers.length <= 1;
   options($('pWeather'), weathers.length ? weathers.map((w) => [w.key, w.label]) : WEATHER, world?.weatherKey ?? settings.worldWeather ?? 'clear');
-  $('pCamera').value = settings.camera || 'closest';
-  $('pMinimap').value = settings.minimap;
+  $('pCamera').value = settings.camera || 'close';
+  $('pMinimapOn').checked = settings.minimap !== 'off';
+  $('pMinimap').value = settings.minimap !== 'off' ? settings.minimap : (settings.minimapView || 'follow');
+  $('pMinimap').disabled = settings.minimap === 'off';
   $('pHudSize').value = settings.hudSize;
   note();
 }
@@ -48,7 +50,15 @@ $('pQuality').addEventListener('change', (e) => {
 $('pTime').addEventListener('change', (e) => { settings.worldTime = e.target.value; world?.setTimeOfDay(settings.worldTime); save(`time ${settings.worldTime}`); });
 $('pWeather').addEventListener('change', (e) => { settings.worldWeather = e.target.value; world?.setWeather(settings.worldWeather); save(`weather ${settings.worldWeather}`); });
 $('pCamera').addEventListener('change', (e) => { settings.camera = e.target.value; world?.setCamera?.(settings.camera); save(`camera ${settings.camera}`); });
-$('pMinimap').addEventListener('change', (e) => { settings.minimap = e.target.value; applyHudPrefs(); save(`minimap ${settings.minimap}`); });
+const setMap = () => {
+  const on = $('pMinimapOn').checked;
+  settings.minimapView = $('pMinimap').value;
+  settings.minimap = on ? settings.minimapView : 'off';
+  $('pMinimap').disabled = !on;
+  applyHudPrefs(); save(`minimap ${settings.minimap}`);
+};
+$('pMinimapOn').addEventListener('change', setMap);
+$('pMinimap').addEventListener('change', setMap);
 $('pHudSize').addEventListener('change', (e) => { settings.hudSize = e.target.value; applyHudPrefs(); save(`power bar ${settings.hudSize}`); });
 
 // fill it whenever the overlay opens

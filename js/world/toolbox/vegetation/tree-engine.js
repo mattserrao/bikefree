@@ -62,7 +62,7 @@ function tileBounds(list) {
   return { cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, hx: (x1 - x0) / 2, hz: (z1 - z0) / 2 };
 }
 /** A tier's swap dissolve (per tree: aFade) and the wind, patched into a material. */
-function engineMaterial(material, uTime, leaf, key) {
+function engineMaterial(material, uTime, leaf, key, ft = FT) {
   const prev = material.onBeforeCompile, prevKey = material.customProgramCacheKey ? material.customProgramCacheKey() : '';
   material.onBeforeCompile = (shader, r) => {
     prev?.call(material, shader, r);
@@ -78,7 +78,7 @@ function engineMaterial(material, uTime, leaf, key) {
           float teD = length(teO.xz - cameraPosition.xz);
           vKeep0 = 1.; vKeep1 = 1.;
           #ifdef USE_INSTANCING
-          float teK = clamp((uTime - aFade.x) / ${FT.toFixed(2)}, 0., 1.);
+          float teK = clamp((uTime - aFade.x) / ${ft.toFixed(2)}, 0., 1.);
           if (aFade.y > 2.5) vKeep1 = 1. - teK; else if (aFade.y > 1.5) vKeep0 = teK;   // dissolving out / in
           #endif
           // wind: three sines, rising in frequency, the tops moving most (height² over the model's ~20 m)
@@ -96,7 +96,7 @@ function engineMaterial(material, uTime, leaf, key) {
           if (vKeep0 <= 1. - teDz || vKeep1 <= teDz) discard;
         }`);
   };
-  material.customProgramCacheKey = () => `${prevKey}|tree-engine-4-${key}`;
+  material.customProgramCacheKey = () => `${prevKey}|tree-engine-4-${key}-${ft}`;
   return material;
 }
 
@@ -124,10 +124,14 @@ function ownCopy(m) {
 /** Is the screen multisampled? Alpha to coverage only where it is: without MSAA some GPUs (Apple's, so every
  *  iPhone on Light) dither the coverage into a speckle of see-through pixels all over the leaves. */
 function hasMSAA(renderer) {
+  // (and never on iPhone / iPad: even under MSAA their GPUs dither alpha to coverage — user, 23 Nov: "static looking
+  //  foliage", see-through dots all over the near leaves)
+  const nav = globalThis.navigator, ios = !!nav && (/iPhone|iPad|iPod/.test(nav.userAgent || '') || (/Macintosh/.test(nav.userAgent || '') && nav.maxTouchPoints > 1));
+  if (ios) return false;
   try { const gl = renderer?.getContext(); return !!gl && gl.getParameter(gl.SAMPLES) > 1; } catch { return false; }
 }
 
-function leafMaterial(map, a2c = false) {
+function leafMaterial(map, a2c = false, opaque = false) {
   // alpha to coverage: under MSAA the cut-out edges get the multisample's soft coverage, not a stair-stepped cut (only
   // with MSAA on — see hasMSAA; a plain alpha test without it, and in the impostor atlas's bake)
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, map, alphaTest: .45, alphaToCoverage: a2c, side: THREE.DoubleSide, roughness: .9 });
@@ -140,8 +144,11 @@ function leafMaterial(map, a2c = false) {
         diffuseColor.a = min(1., diffuseColor.a * (1. + teLod * .35));
       #endif
       #include <alphatest_fragment>`);
+    // (the impostor atlas: a leaf that passes the test is fully opaque there, so the cards' edges un-premultiply to
+    //  the leaf's own colour — a part-alpha texel had come out brightened: a glowing outline on the far trees)
+    if (opaque) shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', 'diffuseColor.a = 1.0;\n#include <opaque_fragment>');
   };
-  m.customProgramCacheKey = () => `tree-engine-leaf-${size}`;
+  m.customProgramCacheKey = () => `tree-engine-leaf-${size}${opaque ? '-opaque' : ''}`;
   return m;
 }
 
@@ -153,9 +160,12 @@ export class TreeEngine {
     this.group = new THREE.Group(); this.group.name = 'Trees (tree engine)'; parent.add(this.group);
     this.leafTexture = makeLeafTexture(quality === 'low' ? 256 : 512);
     // materials: per tier, wood and leaves; the near tier also for the understory (fading out at the near end)
-    const wood = (key) => engineMaterial(decorateTreeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 }), { uTime }), uTime, false, key);
+    // without MSAA (Light: every phone) the screen-door dissolves read as speckle round the trees' edges (user, 23 Nov:
+    // "speckled tree edges"): far shorter there — a swap in 0.2 s, a new tile's cards in 0.35 s
     this.msaa = hasMSAA(renderer);
-    const leaves = (key) => engineMaterial(leafMaterial(this.leafTexture, this.msaa), uTime, true, key);
+    this.ft = this.msaa ? FT : .2; this.tileIn = this.msaa ? 1.5 : .35;
+    const wood = (key) => engineMaterial(decorateTreeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 }), { uTime }), uTime, false, key, this.ft);
+    const leaves = (key) => engineMaterial(leafMaterial(this.leafTexture, this.msaa), uTime, true, key, this.ft);
     this.mats = [{ wood: wood('w0'), leaves: leaves('l0') }, { wood: wood('w1'), leaves: leaves('l1') }];
     // the models: every (species, variant) an entry; the understory near-only entries
     this.entries = []; this.index = new Map(); this._own = new Map();
@@ -179,7 +189,7 @@ export class TreeEngine {
         let mat = this.mats[tier][part];
         if (part === 'wood' && t.material) {
           // a kit's own material: wrapped once (a copy: the original stays as the kit made it, for the impostor photos)
-          mat = this._own.get(t.material.uuid); if (!mat) this._own.set(t.material.uuid, (mat = engineMaterial(ownCopy(t.material), this.uTime, false, `own${this._own.size}`)));
+          mat = this._own.get(t.material.uuid); if (!mat) this._own.set(t.material.uuid, (mat = engineMaterial(ownCopy(t.material), this.uTime, false, `own${this._own.size}`, this.ft)));
         }
         const im = new THREE.InstancedMesh(geo, mat, 16);
         im.count = 0; im.visible = false; im.frustumCulled = false; im.name = `Trees ${key} ${part} ${tier ? 'mid' : 'near'}`;
@@ -206,7 +216,7 @@ export class TreeEngine {
     scene.add(hemi, sun, sun.target);
     const sunDir = lights?.sun ? lights.sun.position.clone().sub(lights.sun.target.position).normalize() : new THREE.Vector3(.3, .8, .4).normalize();
     const woodM = decorateTreeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 }), { uTime: { value: 0 } });
-    const leafM = leafMaterial(this.leafTexture);
+    const leafM = leafMaterial(this.leafTexture, false, true);
     const r = this.renderer, prev = { target: r.getRenderTarget(), autoClear: r.autoClear, color: r.getClearColor(new THREE.Color()), alpha: r.getClearAlpha(), scissor: r.getScissorTest() };
     r.setRenderTarget(rt); r.setClearColor(0x000000, 0); r.clear(); r.autoClear = false; r.setScissorTest(true);
     const cam = new THREE.OrthographicCamera(-1, 1, 1, 0, .1, 400);
@@ -248,9 +258,9 @@ export class TreeEngine {
           vec3 o = iA.xyz; vec2 to = o.xz - cameraPosition.xz; float d = length(to);
           // shown when the engine says (iS: the tree's tier), dissolving in or out as it swaps with the mid tier, and
           // in over 1.5 s after its tile comes
-          float k = clamp((uNow - iS.x) / ${FT.toFixed(2)}, 0., 1.);
+          float k = clamp((uNow - iS.x) / ${this.ft.toFixed(2)}, 0., 1.);
           vOut = iS.y > 2.5 ? 1. : 0.;
-          vKeep = (iS.y > 2.5 ? 1. - k : iS.y > 1.5 ? k : 1.) * clamp((uNow - iT) / 1.5, 0., 1.);
+          vKeep = (iS.y > 2.5 ? 1. - k : iS.y > 1.5 ? k : 1.) * clamp((uNow - iT) / ${this.tileIn.toFixed(2)}, 0., 1.);
           if (iS.y < .5 || vKeep <= 0. || iB.x <= 0.) { gl_Position = vec4(2., 2., 2., 1.); return; }
           vec2 dir = to / max(d, 1e-3);
           vec3 right = normalize(vec3(-dir.y, 0., dir.x));
@@ -290,7 +300,7 @@ export class TreeEngine {
     //  and the impostors drew nothing: every tree past the mid band was missing)
     this.impMat.uniforms.uAtlas.value = rt.texture;
     this.impMat.alphaToCoverage = !!this.msaa;
-    this.impMat.customProgramCacheKey = () => 'tree-engine-impostor-5';
+    this.impMat.customProgramCacheKey = () => `tree-engine-impostor-6-${this.ft}`;
     this.impMesh = new THREE.Mesh(geo, this.impMat);
     this.impMesh.frustumCulled = false; this.impMesh.name = 'Trees (impostors)';
     this.group.add(this.impMesh);

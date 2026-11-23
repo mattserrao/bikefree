@@ -1998,3 +1998,17 @@ for change to graphics (both desktop and mobile same menus)")*
 - [x] Trees on phones *(user, 23 Nov: "very strange artifacting in trees on mobile")*: alpha to coverage only where the
       screen has MSAA (Light has none; Apple GPUs dithered it into speckles); the impostor atlas bakes without it.
 
+
+### Phone polish, round 2 *(user, 23 Nov, from phone screenshots)*
+- [x] Default camera is Close again (`DEFAULT_CAMERA`, settings; a saved Chase moves to Close once — `camClose`).
+- [x] The power bar fits a phone at any numbers (1,500 W, 126 rpm, 153 bpm): sized to the screen width in a 4-column grid.
+- [x] Minimap: an on/off switch beside its view (Zoomed in / Whole course) in Settings and the pause menu; phones start
+      with it off (once: `phoneMap`; the view is remembered in `minimapView`).
+- [x] Turn prompt about half the size everywhere; on a phone only the junction, the distance and small chips (the
+      chosen way named), no destination line or key hint.
+- [x] CNY canal: no lighter "scum" patches (they read as flat slabs floating on the water).
+- [x] Trees on phones: the impostor atlas's leaves are fully opaque where they pass the cut (part-alpha texels
+      un-premultiplied brighter: a glowing outline on the far trees); dissolves 0.2 s (a new tile's cards 0.35 s)
+      without MSAA; alpha to coverage never on iPhone / iPad (their GPUs dither it: "static looking foliage").
+- [x] City life (found by the tests once the camera changed): a walker about to step into the route's carriageway
+      with the rider within 80 m turns back at the kerb; a crossing's clearance counts its own length.

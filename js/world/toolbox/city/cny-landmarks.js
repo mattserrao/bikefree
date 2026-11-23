@@ -183,7 +183,8 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
       if (l.creek) WB.color('#4b6f6c');
       for (let i = 0; i + 1 < S2.length; i++) {
         const a = S2[i], b = S2[i + 1], wa = wOf(a, 1), wb = wOf(b, 1), va = wOf(a, -1), vb = wOf(b, -1);
-        if (!l.creek) S.color(hsh(Math.floor(i / 3) * 17 + 3) < .14 ? '#36442f' : MURK[((i * 7919) ^ (i >> 2) * 31) % MURK.length]);   // (patches of scum)
+        // (no scum patches: user, 23 Nov — the lighter-green slabs read as flat boards floating on the canal)
+        if (!l.creek) S.color(MURK[((i * 7919) ^ (i >> 2) * 31) % MURK.length]);
         faceOut(WB, [V(a.x + a.nx * wa, a.y, a.z + a.nz * wa), V(b.x + b.nx * wb, b.y, b.z + b.nz * wb), V(b.x - b.nx * vb, b.y, b.z - b.nz * vb), V(a.x - a.nx * va, a.y, a.z - a.nz * va)], up);
       }
       // open dark water along the edges, where the duckweed thins
