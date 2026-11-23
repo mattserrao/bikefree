@@ -83,5 +83,78 @@
   "note": "From Amber at the north end of Otisco Lake down Otisco Valley Road on the east shore, round the south end at Otisco Valley, and back up the west side on Willowdale Road and NY 174",
   "lengthM": 26630,
   "climbM": 374
+ },
+ {
+  "id": "skan-vinegar-hill",
+  "name": "Vinegar Hill & Kingston Road",
+  "tags": [
+   "hilly",
+   "creek",
+   "rural"
+  ],
+  "note": "From Skaneateles out Jordan Road to Mottville, along Vinegar Hill Road above Skaneateles Creek, back up Kingston Road and home on State Street Road",
+  "lengthM": 22400,
+  "climbM": 304
+ },
+ {
+  "id": "skan-south-end-climb",
+  "name": "South End Climb: NY 41 & Nunnery Road",
+  "tags": [
+   "hilly",
+   "climb",
+   "views"
+  ],
+  "note": "From East Lake Road at the lake the long climb of NY 41 onto the high ground at the south end (about 530 m), across on Woodworth Road and down Nunnery Road to the lake (Ridge Road is a dead end in the map, so the loop keeps north of it)",
+  "lengthM": 14010,
+  "climbM": 237
+ },
+ {
+  "id": "skan-spafford",
+  "name": "Spafford Highlands",
+  "tags": [
+   "hilly",
+   "views",
+   "rural"
+  ],
+  "note": "The ridge between Skaneateles and Otisco Lakes: up Willow Hill Road, along Becker Road over the top and back down Willowdale Road",
+  "lengthM": 14380,
+  "climbM": 251
+ },
+ {
+  "id": "skan-creek-valley",
+  "name": "Skaneateles Creek & County Line",
+  "tags": [
+   "creek",
+   "rural",
+   "easy"
+  ],
+  "note": "From Skaneateles north on Jordan Road down the creek valley to Skaneateles Falls, across Sheldon Road and back south on County Line Road and West Lake Road",
+  "lengthM": 21320,
+  "climbM": 251
+ },
+ {
+  "id": "skan-limeledge",
+  "name": "Slate Hill & Limeledge",
+  "tags": [
+   "hilly",
+   "climb",
+   "rural"
+  ],
+  "note": "From Marcellus west on Limeledge Road, down to Stump Road and back over the hills to Marcellus by Slate Hill Road",
+  "lengthM": 14010,
+  "climbM": 230
+ },
+ {
+  "id": "skan-two-lakes",
+  "name": "Two Lakes Grand Tour",
+  "tags": [
+   "long",
+   "hilly",
+   "lake",
+   "classic"
+  ],
+  "note": "The longest ride: down the west shore of Skaneateles Lake, round Glen Haven, up NY 41, over Stanton Road to Otisco Lake, up its east shore to Amber, and home by Marietta and the Cherry Valley Turnpike",
+  "lengthM": 71570,
+  "climbM": 1195
  }
 ]
