@@ -30,7 +30,8 @@ import { TreeEngine } from './toolbox/vegetation/tree-engine.js';
 import { planHomestead, drawHomestead, driveStrips, nearDrive } from './toolbox/city/homesteads.js';
 import { skanCrop, cropMaterial, cropCards, bale, verge, bay, farmStand } from './toolbox/landscape/farm-kit.js';
 import { makeUpstateTrees, fallVariant } from './toolbox/vegetation/upstate-trees.js';
-import { profileY, ditchFits, ditchGeometry, culvertEnd, goldenrod, laceAndChicory, tallGrass, cattails, utilityPole, wires } from './toolbox/landscape/roadside-ny.js';
+import { profileY, ditchFits, ditchGeometry, culvertEnd, goldenrod, laceAndChicory, tallGrass, cattails, utilityPole, wires, scrubClump } from './toolbox/landscape/roadside-ny.js';
+import { CANAL, canalAt } from './toolbox/city/cny-landmarks.js';
 import { ROAD_LIFT } from './pose.js';
 
 // (9 is the toolbox's pond; 10–12: a rural map's fields from WorldCover — tools/pgh_city.py rural_land, SKAN;
@@ -264,8 +265,12 @@ export class GraphCity {
       group, material, details, plans,
       /** A sector's plan is in: its homes, and what they add outside their footprints (for the trees and lamps). */
       planned(plan) {
+        // (none in the canal: a footprint OSM puts in the channel, or a house the clean shape pushed into it)
+        for (const R of plan.buildings) R.inCanal = (R.rects.length ? R.rects : [{ cx: R.x, cz: R.z, ux: 1, uz: 0, vx: 0, vz: 1, hu: 1, hv: 1 }])
+          .some((r) => [[0, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]].some(([a, b]) => canalAt(r.cx + r.ux * a * r.hu + r.vx * b * r.hv, r.cz + r.uz * a * r.hu + r.vz * b * r.hv, .5)));
         for (const R of plan.buildings) {
           plans.set(R.key, R);
+          if (R.inCanal) continue;   // (taken, never drawn)
           for (const [k, r] of R.rects.entries()) {
             const front = k === 0 ? R.front : -1, porch = R.parts.frontPorch ? R.parts.frontPorch.depth + 0.3 : R.parts.porch || R.dress ? 1.2 : 0;
             const ea = R.form === 'flat' ? 0.3 : (R.form === 'hip' ? R.eave : R.rake) + 0.2, eb = R.form === 'flat' ? 0.3 : R.eave + 0.2;
@@ -293,6 +298,7 @@ export class GraphCity {
         const close = new Map(), closeOf = (R) => { const k = Math.floor(R.x / 120) * 100003 + Math.floor(R.z / 120); let c = close.get(k); if (!c) close.set(k, (c = new Writer(4096))); return c; };
         for (const R of list) {
           if (due()) yield;
+          if (R.inCanal) continue;
           const res = R.house ? buildHouse(R, R.house, w, d, closeOf(R), L) : assemble(R, w, d, L);
           if (R.dressing?.length) for (const it of R.dressing) dress(d, it, R, L, res);
         }
@@ -583,7 +589,7 @@ export class GraphCity {
     const W = this.world, x0 = t.i * TILE, z0 = t.j * TILE, out = [], kit = this.treeKit.species;
     const FIELD = (c) => c === LAND.crops || c === LAND.pasture || (c >= 20 && c <= 29);
     const edgeOf = (x, z) => { const r = this.roadNear(x, z, 30); return r ? r.d - r.half : 99; };
-    const clearOf = (x, z, crown) => !this.inWater(x, z) && !this.inWater(x + 3, z) && !this.inWater(x - 3, z) && !this.inWater(x, z + 3) && !this.inWater(x, z - 3)
+    const clearOf = (x, z, crown) => !this.inWater(x, z) && !canalAt(x, z, Math.max(1.5, crown * .5)) && !this.inWater(x + 3, z) && !this.inWater(x - 3, z) && !this.inWater(x, z + 3) && !this.inWater(x, z - 3)
       && !this.heroes.heroes?.covers?.(x, z, 3) && !this.host.buildingNear(x, z, crown) && !this.kit.occupied(x, z, Math.min(crown, 3)) && !this._inDressing(x, z)
       && !this._drivewayNear?.(x, z, 2.5) && !this._railCovers(x, z, crown * .6);
     const pick = (mix, r) => { let a = 0, tot = 0; for (const [, w] of mix) tot += w; for (const [n, w] of mix) { a += w / tot; if (r <= a) return n; } return mix[mix.length - 1][0]; };
@@ -647,7 +653,7 @@ export class GraphCity {
     }
     // yard trees: beside or behind each house (its front faces the road), rarely in front
     for (const b of this.host.buildingChunks.get(t.key) || []) {
-      const R = this.kit.plans.get(b.k); if (!R || b.hidden) continue;
+      const R = this.kit.plans.get(b.k); if (!R || b.hidden || R.inCanal) continue;
       const r = R.rects?.[0] ?? R.rects?.get?.(0); if (!r) continue;
       const back = [[0, 1], [-1, 0], [0, -1], [1, 0]][R.front] || [0, 1];   // (front 0: −v, 1: +u, 2: +v, 3: −u)
       const n = 1 + Math.floor(hash(b.k * 1.7) * 3.2);
@@ -741,12 +747,12 @@ export class GraphCity {
   *_planHomesteads(t) {
     const ctx = {
       roadNear: (x, z, r) => this._roadNearFar(x, z, r),
-      free: (x, z, pad) => !this.host.buildingNear(x, z, pad) && !this.kit.occupied(x, z, pad) && !this.onRoad(x, z, pad + 1) && !this.inWater(x, z) && !this._railCovers(x, z, pad),
+      free: (x, z, pad) => !canalAt(x, z, pad + 1) && !this.host.buildingNear(x, z, pad) && !this.kit.occupied(x, z, pad) && !this.onRoad(x, z, pad + 1) && !this.inWater(x, z) && !this._railCovers(x, z, pad),
     };
     t.homes = [];
     for (const b of this.host.buildingChunks.get(t.key) || []) {
       const R = this.kit.plans.get(b.k);
-      if (!R || b.hidden || !['house', 'village-house', 'farmhouse-ny'].includes(R.kind)) continue;
+      if (!R || b.hidden || R.inCanal || !['house', 'village-house', 'farmhouse-ny'].includes(R.kind)) continue;
       const H = planHomestead(R, ctx);
       if (H) t.homes.push(H);
       if (due()) yield;
@@ -820,6 +826,7 @@ export class GraphCity {
         }
       }
     }
+    yield* this._canalScrub(t, N);
     if (N.count) { const m = new THREE.Mesh(N.geometry(), this.kitMaterial); m.name = `Verge ${t.key}`; m.userData.lodM = 240; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 240; this._add(t, m, 'near'); }
     // a farm stand by some farmhouses' drives (pumpkins and squash: it's September)
     for (const H of t.homes || []) {
@@ -865,7 +872,7 @@ export class GraphCity {
             const [bx, bz] = at(2.5), [ox, oz] = at(4.8), lc = this.landAt(bx, bz);
             const base = Math.min(sH(bx, bz), sH(ox, oz));
             const drive = this._drivewayNear(bx, bz, .6);
-            const hard = deck || lc === LAND.paved || lc === LAND.building || lc === LAND.plaza || this.inWater(bx, bz) || this._railCovers(bx, bz, 1)
+            const hard = deck || canalAt(bx, bz, 1) || lc === LAND.paved || lc === LAND.building || lc === LAND.plaza || this.inWater(bx, bz) || this._railCovers(bx, bz, 1)
               || this.onRoad(bx, bz, .2) || this.onRoad(ox, oz, 0) || this.host.buildingNear(ox, oz, .8);
             const ok = !hard && !drive && ditchFits(rY, base);
             const seed = hash(px * .913 + pz * .377 + side * 5.1);
@@ -927,6 +934,43 @@ export class GraphCity {
     const geo = ditchGeometry(runs);
     if (geo) { const m = new THREE.Mesh(geo, this.ditchMat ||= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 })); m.name = `Ditches ${t.key}`; m.receiveShadow = true; m.userData.lodM = 700; this._add(t, m); }
   }
+  /**
+   * The canal's banks (user, 22 Nov: "the inside slope down to the water is covered with shrubs and scrubby plants"):
+   * along both sides, every ~2 m, scrub clumps (dogwood, willow), tall grass and goldenrod from the water's edge up the
+   * bank and over its top to the towpath (where the towpath runs right at the edge, grass only), cattails at the
+   * waterline now and then. Into the tile's near mesh (drawn to 240 m).
+   */
+  *_canalScrub(t, N) {
+    if (!CANAL.samples.length) return;
+    const x0 = t.i * TILE, z0 = t.j * TILE;
+    for (let k = 0; k < CANAL.samples.length; k++) {
+      const p = CANAL.samples[k];
+      if (p.x < x0 || p.x >= x0 + TILE || p.z < z0 || p.z >= z0 + TILE) continue;
+      if (k % 40 === 0 && due()) yield;
+      for (const sd of [1, -1]) {
+        const w = sd > 0 ? p.w1 : p.w2, g = sd > 0 ? p.g1 : p.g2, top = Math.min(.85, Math.max(.12, (g - .2) * .6));
+        // up the bank and over its top, short of the towpath; on the far side's berm path (gravel on the bank's top),
+        // the inside slope only
+        const berm = sd !== p.trail && g >= 6, room = berm ? 1.15 : Math.min(3.2, g - .7);
+        for (let f = 0; f < 3; f++) {
+          const along = (f - 1) * 1.35 + (hash(k * 7 + f + sd) - .5) * .7;
+          for (let r = 0; r < 4; r++) {
+            const h = hash(k * 13 + f * 5 + r * 3 + sd * 7), o = w - .35 + h * Math.max(.4, room + .35);
+            const x = p.x + p.nx * sd * o + p.dx * along, z = p.z + p.nz * sd * o + p.dz * along;
+            if (this.onRoad(x, z, .3) || this._railCovers(x, z)) continue;
+            const y = p.y - .05 + Math.max(0, Math.min(1, (o - w + .2) / 1.2)) * top, kind = hash(h * 31 + k);
+            if (o < w + .1) { if (kind < .35) cattails(N, x, p.y - .02, z, h); else if (kind < .7) tallGrass(N, x, p.y, z, h); continue; }
+            if (room < 1) { tallGrass(N, x, y, z, h); continue; }
+            if (kind < .45) scrubClump(N, x, y, z, h);
+            else if (kind < .75) tallGrass(N, x, y, z, h);
+            else if (kind < .9) goldenrod(N, x, y, z, h);
+            else laceAndChicory(N, x, y, z, h);
+          }
+        }
+      }
+    }
+  }
+
   /** CNY's barns and silos (cny-farms.js) into the tile's street-kit mesh. */
   *_farms(t) {
     let n = 0;

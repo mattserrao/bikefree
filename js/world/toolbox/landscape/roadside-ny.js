@@ -163,3 +163,16 @@ export function wires(M, A, B) {
   for (let k = 0; k < 3; k++) span(V(A.attach[k][0], A.top - (k === 1 ? 0 : .38), A.attach[k][1]), V(B.attach[k][0], B.top - (k === 1 ? 0 : .38), B.attach[k][1]), .7);
   span(V(...A.neutral), V(...B.neutral), .9);
 }
+
+/** A low scrub clump on a canal bank (red osier dogwood, willow scrub, a sapling or two): a few leafy masses on
+ *  thin stems, 0.6–1.6 m, greens with the first reds and yellows of September. */
+export function scrubClump(M, x, y, z, seed) {
+  const n = 3 + Math.floor(seed * 3), tones = ['#4f6b33', '#5a7538', '#62773a', '#7d2f24', '#8f7a35', '#45612f'];
+  for (let k = 0; k < n; k++) {
+    const a = k * 2.3 + seed * 7, d = .15 + hash(seed * 11 + k) * .45, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
+    const h = .6 + hash(seed * 5 + k) * 1, w = .45 + hash(seed * 3 + k) * .4;
+    M.color(hash(seed * 13 + k) < .5 ? '#7a3328' : '#5e4a36').beam(V(px, y - .05, pz), V(px + Math.cos(a) * .08, y + h * .55, pz + Math.sin(a) * .08), .03, .03);
+    M.color(tones[Math.floor(hash(seed * 17 + k) * tones.length)]).pyramid(px, y + h * .35, pz, w, h * .7, w * .85, a);
+    M.pyramid(px, y + h * .25, pz, w * .9, h * .45, w * .75, a + .8);   // (a second, lower mass: fuller)
+  }
+}

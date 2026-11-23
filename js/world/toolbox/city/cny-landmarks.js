@@ -13,6 +13,32 @@
 //   firehouse    the Warners Volunteer Fire Department: the apparatus bays and a hose tower
 import { V, centroid, scaleRing, orient, prism, cap, block, frameOf, makeFrame, lathe, gable, faceOut } from './hero-geom.js';
 
+/**
+ * The canal's channel, for the planters (graph-city: no tree, house or brush in it; scrub on its banks): its samples
+ * every 4 m with the water's width each side and the room to the nearest way (the towpath). canalAt(x, z, pad): the
+ * sample it's in (within pad of the water), or null.
+ */
+export const CANAL = { samples: [], grid: new Map() };
+const CG = 24, cgKey = (i, j) => i * 100003 + j;
+export function canalAt(x, z, pad = 0) {
+  const i0 = Math.floor(x / CG), j0 = Math.floor(z / CG);
+  for (let i = i0 - 1; i <= i0 + 1; i++) for (let j = j0 - 1; j <= j0 + 1; j++) for (const p of CANAL.grid.get(cgKey(i, j)) || []) {
+    const ex = x - p.x, ez = z - p.z, along = ex * p.dx + ez * p.dz;
+    if (Math.abs(along) > 2.6) continue;
+    const o = ex * p.nx + ez * p.nz;
+    if (o <= p.w1 + pad && o >= -p.w2 - pad) return p;
+  }
+  return null;
+}
+function registerCanal(S2, wOf, gap, trailSide) {
+  for (const p of S2) {
+    const q = { x: p.x, z: p.z, y: p.y, nx: p.nx, nz: p.nz, dx: p.dx, dz: p.dz, w1: wOf(p, 1), w2: wOf(p, -1), trail: trailSide };
+    q.g1 = gap(p, 1, q.w1); q.g2 = gap(p, -1, q.w2);
+    CANAL.samples.push(q);
+    const k = cgKey(Math.floor(q.x / CG), Math.floor(q.z / CG)); let a = CANAL.grid.get(k); if (!a) CANAL.grid.set(k, (a = [])); a.push(q);
+  }
+}
+
 export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L }) {
   const TRIM = '#f3f1ea';
   /** A window (dark glass, a white frame) on the wall of frame F at (a, b), facing out along n (±1 on v, or the u end). */
@@ -167,6 +193,7 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L }) {
           }
         }
         canalBanks(S2, wOf, trailSide);
+        registerCanal(S2, wOf, GAP, trailSide);   // (the channel, for the planters)
       }
       // the banks where the water stands over the ground (its level held at the aqueduct)
       S.color('#7b7255');
