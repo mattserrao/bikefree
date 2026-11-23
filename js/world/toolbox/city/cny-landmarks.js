@@ -32,6 +32,8 @@ export function canalAt(x, z, pad = 0) {
   }
   return null;
 }
+/** Forget the last map's canals (a new graph world: CNY and SKAN share this module, in different frames). */
+export function resetCanal() { CANAL.samples.length = 0; CANAL.grid.clear(); }
 function registerCanal(S2, wOf, gap, trailSide, creek = false) {
   for (const p of S2) {
     const q = { x: p.x, z: p.z, y: p.y, nx: p.nx, nz: p.nz, dx: p.dx, dz: p.dz, w1: wOf(p, 1), w2: wOf(p, -1), trail: trailSide, creek };

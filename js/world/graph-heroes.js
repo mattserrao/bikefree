@@ -10,6 +10,7 @@ import * as THREE from '../../vendor/three.module.min.js';
 export async function buildGraphHeroes(world, json) {
   const [{ CityScene }, { buildHeroes }, { buildPghLandmarks }, { frameOf, orient }] = await Promise.all([import('./toolbox/city/city.js'), import('./toolbox/city/heroes.js'),
     import('./toolbox/city/pgh-landmarks.js'), import('./toolbox/city/hero-geom.js')]);
+  (await import('./toolbox/city/cny-landmarks.js')).resetCanal();
   const proj = world.proj;
   const host = Object.create(CityScene.prototype);
   host.group = new THREE.Group(); host.group.name = 'PGH landmarks';

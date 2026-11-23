@@ -14,6 +14,7 @@
 import * as THREE from '../../vendor/three.module.min.js';
 import { makeProjection } from './geo.js';
 import { decodeTerrain } from './toolbox/landscape/real-terrain.js';
+import { CANAL, canalAt } from './toolbox/city/cny-landmarks.js';
 import { loadTerrainGrid } from '../terrain-grid.js';
 import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean, ROAD_LIFT } from './pose.js';
 import { loadRider } from './rider.js';
@@ -310,7 +311,7 @@ export class GraphWorld {
           this._heroesState = 'loading';
           fetch(new URL(`../../${this.json.heroes}`, import.meta.url)).then((r) => r.json())
             .then((hj) => import('./graph-heroes.js').then(({ buildGraphHeroes }) => buildGraphHeroes(this, hj)))
-            .then((h) => { if (this.disposed) { h.dispose(); return; } this.heroes = h; this.scene.add(h.group); h.setNight(this.timeKey === 'night' ? 1 : 0); this._heroesState = 'ok'; this._loadBridges(); this._loadCity(); })
+            .then((h) => { if (this.disposed) { h.dispose(); return; } this.heroes = h; this.scene.add(h.group); h.setNight(this.timeKey === 'night' ? 1 : 0); this._heroesState = 'ok'; this._cutCanal(); this._loadBridges(); this._loadCity(); })
             .catch((err) => { this._heroesState = 'failed'; this.log('3d', `PGH landmarks: ${err.message} ${(err.stack || '').split('\n').slice(0, 4).join(' | ')}`, 'error'); });
         }
         for (const t of this.tiles.values()) if (t.built && !t.groundMesh) t.needsGround = true;
@@ -550,7 +551,23 @@ export class GraphWorld {
       } else if (sh.s < 0) h = Math.min(h, pool - 2.5);
       else h = bankProfile(sh.s, sh.top, sh.pool + WATER_ABOVE, sh.pool) - 0.15;
     } else if (h < pool + BED_BELOW) h = Math.min(h, pool - 2.5);
+    // under the canal (CNY, once its water is built): the ground cut down below the water, so the coarse grid's
+    // triangles — and the raised towpath's fill — never show through it as green streaks (user, 23 Nov)
+    if (this._canalCut) { const c = canalAt(x, z, 5); if (c && !c.creek) h = Math.min(h, c.y - .45); }
     return Math.min(h, this.cut.cap(x, z));
+  }
+  /** The canal's built (the landmarks): cut the ground under it, and again in the tiles already built. */
+  _cutCanal() {
+    if (!CANAL.samples.some((p) => !p.creek)) return;
+    this._canalCut = true;
+    for (const t of this.tiles.values()) {
+      const m = t.groundMesh; if (!m || !t.gridH) continue;
+      const near = CANAL.samples.some((p) => !p.creek && p.x > t.i * TILE - 30 && p.x < (t.i + 1) * TILE + 30 && p.z > t.j * TILE - 30 && p.z < (t.j + 1) * TILE + 30);
+      if (!near) continue;
+      const P = m.geometry.attributes.position;
+      for (let k = 0; k < P.count; k++) { const y = this._groundH(P.getX(k), P.getZ(k)); P.setY(k, y); t.gridH[k] = y; }
+      P.needsUpdate = true; m.geometry.computeVertexNormals(); m.geometry.computeBoundingSphere();
+    }
   }
 
   _updateCamera(riderPos, flat, fwd, dt) {
