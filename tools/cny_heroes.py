@@ -24,7 +24,9 @@ LANDMARKS = [
     ('Steam engine house', 'enginehouse', 'w1060859265', {'note': 'the park\'s steam engine exhibit, beside the store'}),
     ('Wilcox Octagon House', 'octagon', 'w1060868478', {'note': '1856, NRHP: an octagon house of Orson Fowler\'s kind, with a cupola'}),
     ('Canal boat', 'canalboat', None, {'at': [43.05248, -76.30335], 'note': 'the tour boat at the Camillus Erie Canal Park dock'}),
-    ('Finger Lakes Railway bridge', 'railbridge', None, {'rail': 'w52869851', 'note': 'the Auburn Secondary over Genesee Street in the village'}),
+    # (approachM: the line's approaches south-west and north-east of the bridge — user, 22 Nov: "short approaches only";
+    # the north-east one stops short of the houses the straight line would reach)
+    ('Finger Lakes Railway bridge', 'railbridge', None, {'rail': 'w52869851', 'approachM': [150, 60], 'note': 'the Auburn Secondary over Genesee Street in the village'}),
     ('Maxwell Memorial Library', 'library', 'w1061140314', {}),
     ('Warners Volunteer Fire Department', 'firehouse', 'w1060864163', {}),
 ]

@@ -7,7 +7,7 @@ import { Weather } from './toolbox/atmosphere/weather.js';
 import { PostFX } from './toolbox/atmosphere/post.js';
 import { Look, LOOKS } from './toolbox/atmosphere/look.js';
 import { StylizedTerrain, SCENERY_QUALITY } from './stylized-terrain.js';
-import { riderPose, routePoint, ROAD_WIDTH, CHASE, CHASE_CLOSE, CAMERAS, DEFAULT_CAMERA, PACER_LANE, leanAlong, stepLean } from './pose.js';
+import { lockedChase, riderPose, routePoint, ROAD_WIDTH, CHASE, CHASE_CLOSE, CAMERAS, DEFAULT_CAMERA, PACER_LANE, leanAlong, stepLean } from './pose.js';
 import { loadRider } from './rider.js';
 import { PerfMonitor } from './perf.js';
 import { HAZE, AERIAL, AERIAL_COLOR, installHaze } from './toolbox/atmosphere/haze.js';
@@ -743,6 +743,7 @@ export class World {
       if (U != null) { const w = this.path.worldAt(Math.max(0, U - 1), this.area?.id ?? null); if (w.area === (this.area?.id ?? w.area)) rider.uturn = w.s > turn ? total - w.s : w.s; }
       // [6.10] the pacer where it's drawn: the city's riders on the route keep out of its line too
       if (this.pacer?.group.visible && this._pacerPose) rider.pacer = { x: this._pacerPose.pos.x, z: this._pacerPose.pos.z, speed: this._pacerSpeed ?? src.speed };
+      this.terrain.camera = this.camera;   // (the tree engine's per-tree view test)
       this.terrain.tick(this.camera.position, dt, rider);
     }
     if (this.headlight?.visible) {
@@ -853,10 +854,8 @@ export class World {
       this.camera.position.copy(pos);
       this.camTarget.copy(look);
       this._camInit = true;
-    } else {
-      this.camera.position.lerp(pos, 1 - Math.exp(-dt * 3.5));
-      this.camTarget.lerp(look, 1 - Math.exp(-dt * 5));
-    }
+      this._chaseOff = null;
+    } else lockedChase(this, riderPos, pos, look, dt, back + pull, this._underS ? null : (x, z) => { const h = this.terrain.heightAt(x, z); return h == null ? null : h + K.ground; });
     // road buzz: a centimetre or less, two out-of-step frequencies so it never looks like a regular bounce
     if (K.buzz && speed > 1) {
       const amp = K.buzz * Math.min(1, speed / 12);

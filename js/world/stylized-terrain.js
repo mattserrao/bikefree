@@ -6,6 +6,7 @@ import { makeGroundMaterial, setGroundHandoff, makeSeaMaterial, makeLakeWaterMat
 import { scenePacks, PACK_META } from './toolbox/packs/index.js';
 import { normalizeScene, lifeKit } from './toolbox/scene-schema.js';
 import { ForestPlanner, TILE_M, makeClearings } from './toolbox/vegetation/forest.js';
+import { TreeEngine, packKit } from './toolbox/vegetation/tree-engine.js';
 import { GroundBlocks, InstancePool, packMatrices, proxyGroup } from './toolbox/core/pools.js';
 import { Subway } from './toolbox/structures/subway.js';   // [subway]
 import { MountainRoad } from './toolbox/structures/mountain-road.js';
@@ -76,6 +77,7 @@ export class StylizedTerrain {
     this.quality = SCENERY_QUALITY[opts.quality] || SCENERY_QUALITY.balanced;
     this.qualityKey = SCENERY_QUALITY[opts.quality] ? opts.quality : 'balanced';
     this.lookKey = opts.look || null;   // cartoon look test: the kit is built with smooth shading
+    this.renderer = opts.renderer || null;   // (the tree engine photographs its impostors with it)
     // [F30] the build is a job (js/world/toolbox/core/jobs.js): run at once here, or — opts.deferred, an area the world
     // builds on the ride — handed to the caller as `this.job` to run in frame slices (same steps, same order, same result)
     const job = this._initJob(scene, proj, routeIndex, opts);
@@ -1041,7 +1043,8 @@ export class StylizedTerrain {
     if (layer === 'scatter') return this.scatter.has(key);
     if (layer === 'cover') return this.cover.has(key);
     if (layer === 'far') return this.farTrees.has(key);
-    return this.forestTiles.get(key)?.tier === w.tier;
+    const ft = this.forestTiles.get(key);
+    return !!ft && (ft.engine || ft.tier === w.tier);
   }
 
   _build(deadline) {
@@ -1078,8 +1081,8 @@ export class StylizedTerrain {
         if (this.groundPoolFine) this.groundPoolFine.set(new Map(all.filter(([, p]) => p.fine)));
       } else {
         const map = layer === 'forest' ? this.forestTiles : layer === 'far' ? this.farTrees : this[layer];
-        for (const key of [...map.keys()]) if (!wanted.has(key)) map.delete(key);
-        this._pool(layer).set(map.values(), cx, cz);
+        for (const key of [...map.keys()]) if (!wanted.has(key)) { if (map.get(key)?.engine) this._te?.removeTile(key); map.delete(key); }
+        if (!(layer === 'forest' && this._te)) this._pool(layer).set(map.values(), cx, cz);
         // the tree cards step aside where the real trees are (the scatter square around the camera)
         if (layer === 'far' && this.farCards) this.farCards.reach.value = this.farOn ? this.farUniform.value.x - this.farUniform.value.y * .5 - 60 : 1e9;
         if (layer === 'scatter' && this.farCards) {
@@ -1204,7 +1207,31 @@ export class StylizedTerrain {
     return want;
   }
 
+  /**
+   * The tree engine (one for the game: toolbox/vegetation/tree-engine.js) for a forest scene, made when the kit's
+   * assets are in: the scene's own pack models and materials (packKit), its near and mid tiers, the impostors past
+   * them, the engine's per-tree LOD swaps and wind. Lit for the impostor photos by the world's own lights.
+   */
+  _treeEngine() {
+    if (this._te !== undefined) return this._te;
+    if (!this.renderer) return (this._te = null);
+    const lights = { hemi: this.scene.children.find((o) => o.isHemisphereLight), sun: this.scene.children.find((o) => o.isDirectionalLight) };
+    this._te = new TreeEngine({ renderer: this.renderer, parent: this.group, quality: this.qualityKey, uTime: this.uniforms.uTime, lights, kit: packKit(this.kit.assets), shadows: !!this.quality.shadows });
+    return this._te;
+  }
+
   _makeForestTile(w) {
+    const te = this._treeEngine();
+    if (te) {
+      // the engine draws every tier itself: the planner's full (near-tier) stand, once per tile
+      const lists = this.forest.tile(w.x, w.z, 0), trees = [], p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), e = new THREE.Euler();
+      for (const [name, matrices] of Object.entries(lists)) {
+        if (!this.kit.assets[name]) continue;
+        for (const m of matrices) { m.decompose(p, q, sc); e.setFromQuaternion(q, 'YXZ'); trees.push({ x: p.x, y: p.y, z: p.z, sp: name, v: 0, s: sc.x, sy: sc.y, rot: e.y }); }
+      }
+      te.setTile(`${w.x}/${w.z}`, trees);
+      return { x: w.x * TILE_M, z: w.z * TILE_M, size: TILE_M, tier: w.tier, engine: true, lists: {}, group: new THREE.Group() };
+    }
     const lists = this.forest.tile(w.x, w.z, w.tier), packed = {};
     for (const [name, matrices] of Object.entries(lists)) if (this.kit.assets[name] && matrices.length) packed[name] = { matrices: packMatrices(matrices), colors: null };
     return { x: w.x * TILE_M, z: w.z * TILE_M, size: TILE_M, tier: w.tier, lists: packed, group: proxyGroup(packed, (n) => this._asset(n)) };
@@ -1271,6 +1298,7 @@ export class StylizedTerrain {
 
   /** Every frame (the city's traffic, people and boats move continuously). */
   tick(camera, dt, rider) {
+    if (this._te && this.camera) this._te.tick(this.camera);
     this.city?.tick(camera, dt, this.uniforms.uTime.value, rider);
     this.traffic?.tick(dt, rider);
     this.life?.tick(dt, camera);
@@ -1289,7 +1317,7 @@ export class StylizedTerrain {
     this.quality = SCENERY_QUALITY[key] || SCENERY_QUALITY.balanced;
     this.qualityKey = SCENERY_QUALITY[key] ? key : 'balanced';
     this.city?.setQuality(this.qualityKey);
-    if (this.forestTiles) { this.forestTiles.clear(); this.forestQueue = []; this._setCanopyStart(); }
+    if (this.forestTiles) { this.forestTiles.clear(); this.forestQueue = []; this._setCanopyStart(); if (this._te) { this._te.dispose(); this._te = undefined; } }
     this.scatter.clear(); this.cover.clear(); this.farTrees.clear();
     for (const pool of Object.values(this.pools || {})) pool.clear();
     // rebuild at once at the new detail (no budget), so the scenery doesn't vanish for a few frames
@@ -1299,6 +1327,7 @@ export class StylizedTerrain {
   }
   get loadingCount() { return this.stats.loading; }
   dispose() {
+    this._te?.dispose(); this._te = null;
     this.disposed = true;
     if (!this.group) return;   // [F30] (a build released before it began)
     this.scene.remove(this.group);

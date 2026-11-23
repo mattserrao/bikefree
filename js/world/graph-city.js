@@ -5,8 +5,8 @@
 //   buildings   CityScene._chunkJob — the facade shader (brick, stone, metal, windows lit at night, shop rows), the
 //               rooftops — and the building kit (planned sector by sector: the pittsburgh-rowhouse and pittsburgh-frame homes,
 //               their porches, steps and yards near the rider)
-//   trees       the city's street tree (trunk and lumpy crown, the toolbox foliage shader), on the map's trees, along
-//               the streets, in the yards and parks, and as woods on the steep ground the land cover marks
+//   trees       the tree engine (toolbox/vegetation/tree-engine.js, the northeastern hardwood kit): on the map's trees,
+//               along the streets, in the yards and parks, in the woods and hedgerows (_ruralTrees)
 //   furniture   the street kit's pieces (FURNITURE: signals, bus stops and shelters, benches, hydrants, bike racks,
 //               bins, bollards, stop signs…) where OSM maps them; the city's street lamps along the urban streets and
 //               the riverwalks; car parks with parked cars; parked cars along the main streets; fences, walls,
@@ -21,13 +21,17 @@ import { cellKey, freezeMatrix } from './graph-world.js';
 import { drain, runSlice, due } from './toolbox/core/jobs.js';
 import { planBuildingKitJob, makeStreetIndex, dress } from './toolbox/structures/buildings/kit.js';
 import { assemble, Writer } from './toolbox/structures/buildings/assemble.js';
+import { buildHouse } from './toolbox/structures/houses/house-engine.js';
 import { makeFacadeMaterial } from './toolbox/structures/buildings/facade-material.js';
 import { FURNITURE, makeFacadeDresser } from './toolbox/city/street-kit.js';
 import { farmBuilding } from './toolbox/city/cny-farms.js';
-import { decorateTreeMaterial } from './toolbox/packs/northern-rockies.js';
-import { makeAlpsPack } from './toolbox/packs/alps.js';
-import { makeNortheastPack } from './toolbox/packs/northeast.js';
-import { makeTreeCards } from './toolbox/vegetation/tree-cards.js';
+import { GraphLife } from './toolbox/city/graph-life.js';
+import { TreeEngine } from './toolbox/vegetation/tree-engine.js';
+import { planHomestead, drawHomestead, driveStrips, nearDrive } from './toolbox/city/homesteads.js';
+import { skanCrop, cropMaterial, cropCards, bale, verge, bay, farmStand } from './toolbox/landscape/farm-kit.js';
+import { makeUpstateTrees, fallVariant } from './toolbox/vegetation/upstate-trees.js';
+import { profileY, ditchFits, ditchGeometry, culvertEnd, goldenrod, laceAndChicory, tallGrass, cattails, utilityPole, wires } from './toolbox/landscape/roadside-ny.js';
+import { ROAD_LIFT } from './pose.js';
 
 // (9 is the toolbox's pond; 10–12: a rural map's fields from WorldCover — tools/pgh_city.py rural_land, SKAN;
 // 20–29: CNY's fields — 20-23 corn and 24-27 grain by the rows' heading, 28 hay, 29 farmyard: pgh_city.py "the country")
@@ -36,20 +40,18 @@ export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand:
 const TILE = 400;
 // how far the city is built, by quality (Low: phones)
 const REACH = { low: { near: 1300, far: 1800, trees: 0.6, treeNear: 450 }, balanced: { near: 2300, far: 3100, trees: 1, treeNear: 750 }, high: { near: 2300, far: 3100, trees: 1.2, treeNear: 900 } };
-// the trees: western Pennsylvania's broadleaves (the alps and northeast packs' models), by where they stand; height range m
-const TREE_MIX = {
-  street: { mix: [['fieldmaple0', 3], ['oak0', 2], ['maple0', 2], ['ash0', 1]], h: [7, 11] },
-  yard: { mix: [['maple0', 3], ['maple1', 2], ['oak0', 2], ['ash0', 1], ['walnut0', 1], ['beech0', 1], ['fieldmaple0', 1]], h: [10, 18] },
-  woods: { mix: [['oak0', 3], ['maple1', 3], ['beech0', 2], ['beech1', 1], ['ash1', 2], ['walnut0', 1], ['birch0', 1]], h: [15, 24] },
-};
-const TREE_FULL = { low: 60, balanced: 90, high: 130 }, TREE_LOD = { low: 200, balanced: 300, high: 380 };   // m: full model, then the 84-triangle one, then the 28
 const CAR_NEAR = 320;           // m: detailed parked cars within this
+const HOUSE_CLOSE_M = 160;   // the house engine's close detail (casings, rails, brackets) drawn this far
 const KIT_CFG = { detailM: 150, dressingM: 80, detailReachM: 550,
   styles: [{ preset: 'pittsburgh-rowhouse', kinds: ['rowhouse'] }, { preset: 'pittsburgh-frame', kinds: ['house', 'barn', 'shed'] }] };
 /** Each road-graph city's homes (CNY: the suburbs' ranches and colonials, the villages' older houses, the farmhouses:
  *  presets.js cny-*; tools/pgh_city.py's zones give kinds 23 and 20). */
-export const KIT_STYLES = { cny: [{ preset: 'cny-village', kinds: ['village-house'] }, { preset: 'cny-farmhouse', kinds: ['farmhouse-ny'] },
-  { preset: 'cny-suburban', kinds: ['house', 'rowhouse'] }] };
+export const KIT_STYLES = { cny: [{ preset: 'cny-village', kinds: ['village-house'] }, { preset: 'cny-farmhouse', kinds: ['farmhouse-ny', 'barn', 'shed'] },
+  { preset: 'cny-suburban', kinds: ['house', 'rowhouse'] }],
+  // SKAN: the same upstate styles; its houses are sorted at load (_addSector: a house by a barn is a farmhouse, one
+  // among many close neighbours a village house)
+  skan: [{ preset: 'cny-village', kinds: ['village-house'] }, { preset: 'cny-farmhouse', kinds: ['farmhouse-ny', 'barn', 'shed'] },
+    { preset: 'cny-suburban', kinds: ['house', 'rowhouse'] }] };
 const ROADS = new Set(['primary', 'secondary', 'tertiary', 'residential', 'alley']);
 const MAIN = new Set(['primary', 'secondary', 'tertiary']);
 const POINT_FN = { signal: 'signal', bus_stop: 'busSign', bench: 'bench', hydrant: 'hydrant', bike_rack: 'bikeRack', waste: 'waste', picnic: 'picnic',
@@ -87,6 +89,7 @@ export class GraphCity {
     // ---- sectors (~1.6 km): fetched as the rider nears them; their buildings join the stand-in's lists
     this.sectors = new Map();   // key → { state: 'loading' | 'planning' | 'ready' | 'failed', job }
     this.buildings = [];
+    this._railZones = this._railApproaches();
     this.covered = this._landmarkCover();
     this._deckGrid = this._deckIndex();
     host.buildings = this.buildings; host.buildingChunks = new Map(); host.buildingGrid = new Map();
@@ -118,6 +121,14 @@ export class GraphCity {
     this.kit = this._kitAdapter();
     host.buildingKit = this.kit;
     this._materials();
+    // the rural maps (CNY, SKAN; user, 22 Nov): no cars — other cyclists and people walking instead
+    this.rural = !!world.rural;
+    if (this.rural) this.life = new GraphLife(world, host.group, { quality: world.qualityKey, uTime: this.treeTime });
+    // the tree engine (one for the game: toolbox/vegetation/tree-engine.js) with the northeastern hardwood kit — every
+    // road-graph map (PGH's western Pennsylvania has the same trees); the rural maps in early fall, PGH in summer
+    this.treeKit = makeUpstateTrees();
+    this.fall = this.rural;
+    this.forest = new TreeEngine({ renderer: world.renderer, parent: host.group, quality: world.qualityKey, uTime: this.treeTime, lights: { hemi: world.hemi, sun: world.sun }, kit: this.treeKit });
   }
 
   /** The land cover's codes (a gzipped file of nx × ny bytes): then the ground shader and landAt have them. */
@@ -194,6 +205,17 @@ export class GraphCity {
         if (pts.length >= 2) put(this.lines, by(pts[pts.length >> 1].x, pts[pts.length >> 1].z), { kind: S.lineKinds[c], pts });
       });
     }
+    // SKAN's houses (all kind 1 in its data): one with a barn within 120 m is a farmhouse, one with a dozen buildings
+    // within 90 m a village house — the CNY presets then dress them as CNY's are
+    if (this.world.json?.id === 'skan') {
+      const barns = mine.filter((b) => b.kind === 13), all = mine;
+      for (const b of mine) {
+        if (b.kind !== 1) continue;
+        if (barns.some((o) => Math.hypot(o.cx - b.cx, o.cz - b.cz) < 120)) { b.kind = 20; continue; }
+        let n = 0; for (const o of all) if (Math.abs(o.cx - b.cx) < 90 && Math.abs(o.cz - b.cz) < 90 && Math.hypot(o.cx - b.cx, o.cz - b.cz) < 90) n++;
+        if (n >= 13) b.kind = 23;
+      }
+    }
     // the homes' plan: rowhouses and houses (the kit's), the rest as neighbours
     const kinds = { 0: 'rowhouse', 1: 'house', 13: 'barn', 14: 'shed', 20: 'farmhouse-ny', 23: 'village-house' }, homes = [], neighbours = [];   // (13, 14: a rural map's barns and sheds, SKAN; 20, 23: CNY's farmhouses and village houses)
     for (const b of mine) {
@@ -246,11 +268,18 @@ export class GraphCity {
         const list = lists.get(key); lists.delete(key);
         if (!list?.length) return;
         const w = new Writer(8192), d = new Writer(4096), L = self.host.landscape;
-        for (const R of list) { if (due()) yield; const res = assemble(R, w, d, L); if (R.dressing?.length) for (const it of R.dressing) dress(d, it, R, L, res); }
+        // the house engine's close detail (casings, rails, brackets, gutters): one writer per 120 m cell, drawn to ~160 m
+        const close = new Map(), closeOf = (R) => { const k = Math.floor(R.x / 120) * 100003 + Math.floor(R.z / 120); let c = close.get(k); if (!c) close.set(k, (c = new Writer(4096))); return c; };
+        for (const R of list) {
+          if (due()) yield;
+          const res = R.house ? buildHouse(R, R.house, w, d, closeOf(R), L) : assemble(R, w, d, L);
+          if (R.dressing?.length) for (const it of R.dressing) dress(d, it, R, L, res);
+        }
         if (w.n) { const m = new THREE.Mesh(w.geometry(), material); m.name = `Homes ${key}`; m.castShadow = m.receiveShadow = true; group.add(m); }
         if (d.n) { const dm = new THREE.Mesh(d.geometry(), material); dm.name = `Home detail ${key}`; dm.receiveShadow = true; dm.geometry.computeBoundingBox(); dm.userData.box = dm.geometry.boundingBox; group.add(dm); details.push(dm); }
+        for (const c of close.values()) if (c.n) { const cm = new THREE.Mesh(c.geometry(), material); cm.name = `House close detail ${key}`; cm.receiveShadow = true; cm.geometry.computeBoundingBox(); cm.userData.box = cm.geometry.boundingBox; cm.userData.reach = HOUSE_CLOSE_M; group.add(cm); details.push(cm); }
       },
-      tick(cam) { for (const m of details) m.visible = m.userData.box.distanceToPoint(cam) < KIT_CFG.detailReachM; },
+      tick(cam) { for (const m of details) m.visible = m.userData.box.distanceToPoint(cam) < (m.userData.reach || KIT_CFG.detailReachM); },
     };
   }
 
@@ -288,10 +317,38 @@ export class GraphCity {
   }
   /** Is (x, z) on a way (within `margin` of its edge)? */
   onRoad(x, z, margin = 0.5) { const r = this.roadNear(x, z, margin); return !!r && r.d < r.half + margin; }
+  /** Rural maps: built up enough for street lamps (a village or a suburban street): houses all round within ~40 m. */
+  _suburb(x, z) {
+    let n = 0;
+    for (let k = 0; k < 8; k++) { const a = k * .785; if (this.host.buildingNear(x + Math.cos(a) * 32, z + Math.sin(a) * 32, 9)) n++; }
+    return n >= 5;
+  }
   urban(x, z) { const c = this.landAt(x, z); return c === LAND.paved || c === LAND.yards || c === LAND.building || c === LAND.plaza; }
   inWater(x, z) { const w = this.world; return w._groundH(x, z) < w.poolAt(x, z) + 0.3; }
 
   // ------------------------------------------------------------------ setup helpers
+  /** CNY's rail bridge approaches (cny-landmarks.js railbridge): the embankments' strips along the bridge's axis, so
+   *  no house, tree, fence or verge stands on them; their ends, where a stand of trees takes the line. */
+  _railApproaches() {
+    const out = [], proj = this.world.proj;
+    for (const l of this.heroes.json?.landmarks || []) {
+      if (l.model !== 'railbridge' || !l.path) continue;
+      const p0 = proj.toLocal(...l.path[0]), p1 = proj.toLocal(...l.path[l.path.length - 1]), len = Math.hypot(p1.x - p0.x, p1.z - p0.z) || 20;
+      const u = { x: (p1.x - p0.x) / len, z: (p1.z - p0.z) / len }, v = { x: -u.z, z: u.x }, c = { x: (p0.x + p1.x) / 2, z: (p0.z + p1.z) / 2 };
+      const hl = Math.max(11, len / 2 + 2), [A0, A1] = l.approachM || [150, 60];
+      out.push({ c, u, v, a0: -(hl + A0), a1: hl + A1, hw: 9, ends: [{ x: c.x + u.x * -(hl + A0), z: c.z + u.z * -(hl + A0), s: -1 }, { x: c.x + u.x * (hl + A1), z: c.z + u.z * (hl + A1), s: 1 }] });
+    }
+    return out;
+  }
+  /** Is (x, z) on a rail approach's strip (within pad)? */
+  _railCovers(x, z, pad = 0) {
+    for (const R of this._railZones || []) {
+      const dx = x - R.c.x, dz = z - R.c.z, a = dx * R.u.x + dz * R.u.z, b = dx * R.v.x + dz * R.v.z;
+      if (a > R.a0 - pad && a < R.a1 + pad && Math.abs(b) < R.hw + pad) return true;
+    }
+    return false;
+  }
+
   /** Footprints the landmarks stand on: the heroes' claimed ones and zones, the PGH landmarks' outlines, the stadiums. */
   _landmarkCover() {
     const rings = [], proj = this.world.proj, hj = this.heroes.json || {};
@@ -304,6 +361,7 @@ export class GraphCity {
     const covers = this.heroes.heroes?.covers;
     return (b) => {
       if (covers && covers(b.cx, b.cz, 2)) return true;
+      if (this._railCovers(b.cx, b.cz, 1) || b.ring.some((p) => this._railCovers(p.x, p.z, 0))) return true;   // (on a rail approach)
       for (const q of boxes) {
         if (b.cx < q.x0 - 4 || b.cx > q.x1 + 4 || b.cz < q.z0 - 4 || b.cz > q.z1 + 4) continue;
         if (pip(q.r, b.cx, b.cz) || q.r.some((p) => pip(b.ring, p.x, p.z))) return true;
@@ -344,23 +402,12 @@ export class GraphCity {
     };
     m.customProgramCacheKey = () => 'pgh-street-kit-1';
     this.kitMaterial = m;
-    // the trees: each species in three levels of detail, drawn from pools round the camera (_poolTrees); far tiles: cards
-    const packs = { ...makeAlpsPack(), ...makeNortheastPack() };
-    this.species = [...new Set(Object.values(TREE_MIX).flatMap((r) => r.mix.map(([n]) => n)))];
-    this.treeGeos = this.species.map((n) => { const g = packs[n]; g.computeBoundingBox(); return { name: n, h: g.boundingBox.max.y, tiers: [packs[n], packs[`${n}-lod`], packs[`${n}-far`]] }; });
-    for (const k of Object.keys(packs)) if (!this.treeGeos.some((t) => t.tiers.includes(packs[k]))) packs[k].dispose?.();
-    for (const r of Object.values(TREE_MIX)) { const t = r.mix.reduce((a, [, w]) => a + w, 0); let c = 0; r.table = r.mix.map(([n, w]) => [this.species.indexOf(n), (c += w / t)]); }
+    // the trees: the tree engine (constructor); its wind clock
     this.treeTime = { value: 0 };
-    this.treeMaterial = decorateTreeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }), { uTime: this.treeTime });
-    this.cards = makeTreeCards({ uTime: this.treeTime });
-    this.tints = ['#ffffff', '#f1f6e8', '#e4ecd6', '#fbf3df', '#dfe7d2', '#f6fbef'].map((c) => new THREE.Color(c));
-    this.cardGreens = ['#5f8a3e', '#6f9a45', '#557d38', '#7a9b4a', '#4f7434', '#678c40'].map((c) => new THREE.Color(c));
-    this.pools = this.treeGeos.map((T) => T.tiers.map((g, tier) => this._pool(g, tier, 256)));
     // the street kit's facade dressing (shop fronts, signs, awnings, cornices, belt courses, sills)
     this.glassNight = { value: 0 };   // (the shop glass: lit, not floodlit; follows the night in tick; the signs: the windows' night)
     this.facades = makeFacadeDresser(this.host.windowNight || night, { glassNight: this.glassNight,
       lampNear: (x, z, r) => { const a = this._lampPts; if (a) for (let k = 0; k < a.length; k += 2) if (Math.hypot(a[k] - x, a[k + 1] - z) < r) return true; return false; } });
-    this._poolAt = null;
     // the city's street lamp: pole, arm, head (its lens lit at night)
     const P = new MeshBuilder();
     P.color('#3a3d40'); P.cylinder(0, 0, 0, 0.1, 7.2, 6, 0.07); P.beam(V(0, 7.1, 0), V(0, 7.25, 1.6), 0.1, 0.1);
@@ -449,8 +496,10 @@ export class GraphCity {
       this.stats.buildings += host.buildingChunks.get(key).length;
     }
     yield;
+    if (this.rural) { yield* this._planHomesteads(t); yield; }
     yield* this._trees(t); yield;
     yield* this._furniture(t); yield;
+    if (this.rural) { this._drawHomesteads(t); yield; yield* this._farmland(t); yield; }
     yield* this._farms(t); yield;
     yield* this._storefronts(t); yield;
     yield* this._lots(t); yield* this._lines(t);
@@ -469,7 +518,7 @@ export class GraphCity {
     }
     this.host.chunks.delete(key);
     this.tiles.delete(key);
-    if (t.trees) this._poolAt = null;
+    this.forest?.removeTile(key);
   }
 
   _add(t, mesh, lod = null) {
@@ -479,10 +528,11 @@ export class GraphCity {
   }
 
   /** LOD: detailed trees and cars near the camera, crowns and plain cars beyond; the kit's near detail. */
-  tick(cam, time) {
+  tick(cam, time, rider = null, dt = 0) {
     this.treeTime.value = time;
+    this.life?.tick(cam, rider?.pos || null, rider?.fwd || null, dt);
     this.glassNight.value = this.host.night.value * 0.05;
-    if (!this._poolAt || this._poolAt.distanceTo(cam) > 25) this._poolTrees(cam);
+    this.forest.tick(this.world.camera);
     if ((this._lf = (this._lf || 0) + 1) % 8) return;
     for (const t of this.tiles.values()) {
       const d = Math.hypot(t.cx - cam.x, t.cz - cam.z) - TILE * 0.71;
@@ -493,102 +543,365 @@ export class GraphCity {
   }
 
   // ------------------------------------------------------------------ trees
-  *_trees(t) {
-    const W = this.world, x0 = t.i * TILE, z0 = t.j * TILE, spots = [];
-    const ok = (x, z, wall = 1.4, road = 2) => !this.inWater(x, z) && !this.onRoad(x, z, road) && !this.host.buildingNear(x, z, wall)
-      && !this.heroes.heroes?.covers?.(x, z, 2) && !this.kit.occupied(x, z, 0.8) && !this._inDressing(x, z);
-    // the map's trees
-    for (const p of this.osmTrees.get(t.key) || []) if (ok(p.x, p.z, 1.2, 1.2)) spots.push({ x: p.x, z: p.z, seed: hash(Math.round(p.x * 7 + p.z * 13)) });
-    // street trees: every ~15 m along the urban streets, on one side or both, in the sidewalk or the verge
+  *_trees(t) { yield* this._ruralTrees(t); }
+
+  /**
+   * The rural maps' trees (CNY, SKAN; user, 22 Nov 2026), drawn by the tree engine. Placed sensibly: never on or in
+   * a house (no crown over a roof), a road (trunks ≥ 4 m from its edge; crowns near it kept clear of the camera), a
+   * driveway, the water (≥ 3 m from it) or a field or farmyard. Where:
+   *   woods       dense (a tree every ~8 m), the full upstate mix, an age mix (saplings to old giants); the woodlot's
+   *               edge graded through younger trees, shrubs, sumac and saplings into the open
+   *   hedgerows   along the boundaries between fields (ash, cherry, maples, a willow where it's wet) with shrubs
+   *   yards       one to four trees beside or behind each house — maples, an oak, a birch, a pine or spruce
+   *   streets     the villages' street trees (maples, oak)
+   *   pasture     a lone shade tree now and then; wetland: red maple, willow, ash
+   *   understory  near the road in the woods: ferns, logs and stumps
+   */
+  *_ruralTrees(t) {
+    const W = this.world, x0 = t.i * TILE, z0 = t.j * TILE, out = [], kit = this.treeKit.species;
+    const FIELD = (c) => c === LAND.crops || c === LAND.pasture || (c >= 20 && c <= 29);
+    const edgeOf = (x, z) => { const r = this.roadNear(x, z, 30); return r ? r.d - r.half : 99; };
+    const clearOf = (x, z, crown) => !this.inWater(x, z) && !this.inWater(x + 3, z) && !this.inWater(x - 3, z) && !this.inWater(x, z + 3) && !this.inWater(x, z - 3)
+      && !this.heroes.heroes?.covers?.(x, z, 3) && !this.host.buildingNear(x, z, crown) && !this.kit.occupied(x, z, Math.min(crown, 3)) && !this._inDressing(x, z)
+      && !this._drivewayNear?.(x, z, 2.5) && !this._railCovers(x, z, crown * .6);
+    const pick = (mix, r) => { let a = 0, tot = 0; for (const [, w] of mix) tot += w; for (const [n, w] of mix) { a += w / tot; if (r <= a) return n; } return mix[mix.length - 1][0]; };
+    const MIX = {
+      woods: [['sugarmaple', 28], ['redoak', 15], ['beech', 10], ['whiteash', 12], ['blackcherry', 8], ['redmaple', 10], ['whitepine', 8], ['hemlock', 6], ['birch', 3]],
+      wet: [['redmaple', 40], ['willow', 28], ['whiteash', 20], ['birch', 12]],
+      hedge: [['whiteash', 20], ['blackcherry', 25], ['redmaple', 15], ['sugarmaple', 15], ['redoak', 10], ['hemlock', 5]],
+      yard: [['sugarmaple', 35], ['redmaple', 20], ['redoak', 10], ['birch', 10], ['whitepine', 10], ['spruce', 10], ['blackcherry', 5]],
+      street: [['sugarmaple', 40], ['redmaple', 30], ['whiteash', 10], ['redoak', 20]],
+      pasture: [['sugarmaple', 40], ['redoak', 35], ['whiteash', 15], ['willow', 10]],
+    };
+    /** A tree of `role` at (x, z) if it fits (shrunk to clear a roof or the road if it must): true if placed. */
+    const tree = (x, z, role, seed, age = null) => {
+      const r1 = hash(seed * 7.13 + 1), r2 = hash(seed * 3.71 + 2), r3 = hash(seed * 9.17 + 3), r4 = hash(seed * 1.93 + 4);
+      const name = pick(MIX[role], r1), sp = kit[name];
+      // the age mix: saplings and young trees, mostly mature, a few old giants away from the road
+      let k = age ?? (r2 < .08 ? .3 + r2 * 2.5 : r2 < .22 ? .55 + (r2 - .08) * 1.8 : r2 > .95 ? 1.15 + (r2 - .95) * 3 : .85 + (r2 - .22) * .32);
+      k *= .92 + r3 * .16;
+      const de = edgeOf(x, z);
+      if (de < 4) return false;   // trunks ≥ 4 m from the road's edge
+      if (k > 1.1 && de < 25) k = 1;
+      // a crown reaching over the road: smaller, so it clears the chase camera
+      if (sp.r * k > de + 1.5) k = Math.max(.45, (de + 1.5) / sp.r);
+      let crown = sp.r * k * .85;
+      if (!clearOf(x, z, crown)) { k *= .6; crown = sp.r * k * .85; if (k < .35 || !clearOf(x, z, crown)) return false; }
+      out.push({ x, z, y: W._groundH(x, z) - .15, sp: name, v: this.fall ? fallVariant(sp, r4) : 0, s: k, sy: k * (.94 + r3 * .12), rot: seed * 40 % 6.283, tint: .9 + r3 * .18 });
+      return true;
+    };
+    const under = (x, z, name, seed, s = 1) => {
+      if (edgeOf(x, z) < 2.5 || !clearOf(x, z, 1.5)) return;
+      out.push({ x, z, y: W._groundH(x, z) - .05, sp: name, v: 0, s: s * (.8 + hash(seed) * .5), rot: seed * 23 % 6.283, tint: .9 + hash(seed * 3) * .2 });
+    };
+    // a stand of trees round each rail approach's end: the line runs off into the woods
+    for (const R of this._railZones) for (const E of R.ends) {
+      if (E.x < x0 - 30 || E.x >= x0 + TILE + 30 || E.z < z0 - 30 || E.z >= z0 + TILE + 30) continue;
+      for (let k = 0; k < 26; k++) {
+        const h = hash(k * 7.7 + E.x), along = E.s * (2 + hash(k * 3.1 + E.z) * 30), across = (hash(k * 5.3 + E.x * .1) - .5) * 26;
+        const x = E.x + R.u.x * along + R.v.x * across, z = E.z + R.u.z * along + R.v.z * across;
+        if (x < x0 || x >= x0 + TILE || z < z0 || z >= z0 + TILE) continue;
+        // (past the end the strip is clear: trees may stand on the line's continuation, in front of it)
+        if (h < .2) under(x, z, h < .1 ? 'buckthorn' : 'sapling', k + E.x); else tree(x, z, 'woods', Math.round(x * 13 + z * 7) + k, .7 + h * .4);
+      }
+    }
+    // OSM's mapped trees
+    for (const p of this.osmTrees.get(t.key) || []) tree(p.x, p.z, this.urban(p.x, p.z) ? 'yard' : 'woods', Math.round(p.x * 7 + p.z * 13));
+    // street trees in the villages (the urban streets with a sidewalk or a verge)
     for (const piece of W.tiles.get(t.key)?.pieces || []) {
       if (due()) yield;
       const e = piece.e;
       if (!ROADS.has(e.kind) || e.kind === 'alley') continue;
-      const half = W.wOf(e) / 2, info = this.edgeInfo(e), walk = W.walkOf ? W.walkOf(e) : 0;
-      for (let i = Math.max(piece.a, 2); i < Math.min(piece.b, e.n - 1); i++) {
-        if (e._deck?.[i]) continue;
-        const h0 = hash(e.id.length * 977 + i * 131 + e.n);
-        if (h0 < 0.35) continue;
+      const half = W.wOf(e) / 2, walk = W.walkOf ? W.walkOf(e) : 0;
+      for (let i = Math.max(piece.a, 2); i < Math.min(piece.b, e.n - 1); i += 2) {
+        if (e._deck?.[i] || hash(e.id.length * 977 + i * 131 + e.n) < .4) continue;
         const dx = e.x[i + 1] - e.x[i - 1], dz = e.z[i + 1] - e.z[i - 1], l = Math.hypot(dx, dz) || 1;
         for (const side of [-1, 1]) {
-          if (hash(i * 17 + side * 5 + e.n * 3) < (MAIN.has(e.kind) ? 0.35 : 0.55)) continue;
-          const off = half + (walk ? walk - 0.9 : 2.6), x = e.x[i] - dz / l * off * side, z = e.z[i] + dx / l * off * side;
-          if (!this.urban(x, z) || !ok(x, z, 1.6, 0.9)) continue;
-          spots.push({ x, z, seed: hash(i * 7 + side + e.n * 11), role: 'street' });
+          const off = half + (walk ? walk + 1.6 : 4.5), x = e.x[i] - dz / l * off * side, z = e.z[i] + dx / l * off * side;
+          if (!this.urban(x, z) || hash(i * 17 + side * 5 + e.n * 3) < .5) continue;
+          tree(x, z, 'street', i * 7 + side + e.n * 11, .7 + hash(i * 3 + side) * .3);
         }
       }
     }
-    // the land cover: woods dense, yards and parks sparse
-    const step = 9;
+    // yard trees: beside or behind each house (its front faces the road), rarely in front
+    for (const b of this.host.buildingChunks.get(t.key) || []) {
+      const R = this.kit.plans.get(b.k); if (!R || b.hidden) continue;
+      const r = R.rects?.[0] ?? R.rects?.get?.(0); if (!r) continue;
+      const back = [[0, 1], [-1, 0], [0, -1], [1, 0]][R.front] || [0, 1];   // (front 0: −v, 1: +u, 2: +v, 3: −u)
+      const n = 1 + Math.floor(hash(b.k * 1.7) * 3.2);
+      for (let q = 0; q < n; q++) {
+        const h = hash(b.k * 5.3 + q * 11), sideways = q % 2 === 1;
+        const [au, av] = sideways ? [back[1] === 0 ? 0 : (h < .5 ? -1 : 1), 0] : back;
+        const du = sideways ? (h < .5 ? -1 : 1) * (r.hu + 4 + h * 4) : au * (r.hu + 5 + h * 8) + (hash(q + b.k) - .5) * r.hu * 1.6;
+        const dv = sideways ? (hash(q * 3 + b.k) - .5) * r.hv : av * (r.hv + 5 + h * 8) + (hash(q * 7 + b.k) - .5) * r.hv * 1.4;
+        const x = r.cx + r.ux * du + r.vx * dv, z = r.cz + r.uz * du + r.vz * dv;
+        tree(x, z, 'yard', b.k * 13 + q, .65 + h * .45);
+      }
+      if ((b.k & 7) === 0) yield;
+    }
+    // the land cover: woods (edges graded), wetland, hedgerows between fields, the odd pasture tree
+    const step = 8;
     for (let x = x0 + step / 2; x < x0 + TILE; x += step) for (let z = z0 + step / 2; z < z0 + TILE; z += step) {
       if (z === z0 + step / 2 && due()) yield;
-      const h1 = hash(Math.round(x * 3.1) * 92821 + Math.round(z * 1.7)), jx = x + (h1 - 0.5) * step * 0.9, jz = z + (hash(Math.round(x * 5.3) + Math.round(z * 7.9) * 31) - 0.5) * step * 0.9;
-      const c = this.landAt(jx, jz);
-      // (a rural map: no trees in the crops, a lone one in the pasture, scrub in the wetland — the hedgerows and woodlots
-      // are WorldCover's own tree cover, so the woods code)
-      const p = c === LAND.woods ? 0.85 : c === LAND.outside ? 0.45 : c === LAND.yards ? 0.1 : c === LAND.grass ? 0.06 : c === LAND.paved ? 0.008
-        : c === LAND.wetland ? 0.22 : c === LAND.pasture ? 0.01 : 0;
-      if (h1 >= p * this.q.trees) continue;
-      if (!ok(jx, jz, 2.2, 3)) continue;
-      spots.push({ x: jx, z: jz, seed: hash(Math.round(jx * 11) + Math.round(jz * 13) * 7), wood: c === LAND.woods || c === LAND.outside });
+      const h1 = hash(Math.round(x * 3.1) * 92821 + Math.round(z * 1.7)), jx = x + (h1 - .5) * step * .9, jz = z + (hash(Math.round(x * 5.3) + Math.round(z * 7.9) * 31) - .5) * step * .9;
+      const c = this.landAt(jx, jz), seed = Math.round(jx * 11) + Math.round(jz * 13) * 7, h2 = hash(seed * 1.31);
+      if (c === LAND.woods || c === LAND.outside) {
+        // how open it is round here: the woodlot's edge
+        let open = 0; for (const [ox, oz] of [[11, 0], [-11, 0], [0, 11], [0, -11]]) if (this.landAt(jx + ox, jz + oz) !== c) open++;
+        const de = edgeOf(jx, jz);
+        if (open >= 1 && h2 < .45) {
+          // the graded edge: shrubs, sumac (scarlet now), saplings, goldenrod
+          const r = hash(seed * 2.9);
+          if (r < .3) under(jx, jz, r < .15 ? 'dogwood' : 'buckthorn', seed);
+          else if (r < .45) under(jx, jz, r < .38 ? 'sumac' : 'sumac2', seed);
+          else if (r < .65) under(jx, jz, 'sapling', seed, .9);
+          else if (r < .8) tree(jx, jz, 'woods', seed, .4 + r * .3);
+          else under(jx, jz, 'goldenrod', seed);
+          continue;
+        }
+        if (h1 < (c === LAND.woods ? .82 : .45) * this.q.trees) { if (!tree(jx, jz, this.world.nearWater?.(jx, jz) ? 'wet' : 'woods', seed) && de < 60 && h2 > .8) under(jx, jz, 'fern', seed); }
+        else if (de < 60 && de > 4) { const r = hash(seed * 4.1); if (r < .25) under(jx, jz, 'fern', seed); else if (r < .3) under(jx, jz, r < .28 ? 'log' : 'stump', seed); }
+      } else if (c === LAND.wetland) {
+        if (h1 < .25) tree(jx, jz, 'wet', seed); else if (h1 < .4) under(jx, jz, 'dogwood', seed);
+      } else if (FIELD(c) && c !== LAND.farmyard) {
+        // a hedgerow where this field meets another (a different crop, rows, or the woods)
+        let edge = false; for (const [ox, oz] of [[6, 0], [-6, 0], [0, 6], [0, -6]]) { const n = this.landAt(jx + ox, jz + oz); if (n !== c && (FIELD(n) || n === LAND.woods)) { edge = true; break; } }
+        if (edge) { if (h1 < .32) tree(jx, jz, 'hedge', seed); else if (h1 < .55) under(jx, jz, h1 < .45 ? 'buckthorn' : 'sumac', seed); }
+        else if (c === LAND.pasture && h1 < .006) tree(jx, jz, 'pasture', seed, 1.05 + h2 * .2);
+      } else if (c === LAND.yards || c === LAND.grass) {
+        if (h1 < (c === LAND.yards ? (this.rural ? .02 : .1) : this.rural ? .008 : .06)) tree(jx, jz, 'yard', seed);
+      } else if (!this.rural && c === LAND.paved) {
+        if (h1 < .008) tree(jx, jz, 'street', seed, .8);
+      }
     }
-    if (!spots.length) return;
-    // each spot's species and size (by where it stands); the tile keeps the list for the pools, and draws cards for far off
-    const cards = new THREE.InstancedMesh(this.cards.geometry, this.cards.broadleaf.material, spots.length), m = new THREE.Matrix4(), q = new THREE.Quaternion();
-    t.trees = spots.map((s, k) => {
-      const R = TREE_MIX[s.role || (s.wood ? 'woods' : 'yard')], r1 = hash(s.seed * 7919 + 1), r2 = hash(s.seed * 104729 + 3);
-      let sp = R.table[R.table.length - 1][0]; for (const [i, c] of R.table) if (r1 <= c) { sp = i; break; }
-      const H = (R.h[0] + (R.h[1] - R.h[0]) * r2) * (s.wood ? 1 : this.q.trees > 1 ? 1.05 : 1), g = H / this.treeGeos[sp].h;
-      const y = W._groundH(s.x, s.z) - 0.1, rot = s.seed * 40, tint = Math.floor(hash(s.seed * 31 + 5) * this.tints.length);
-      m.compose(V(s.x, y, s.z), q, V(H * 0.78, H, 1)); cards.setMatrixAt(k, m);
-      cards.setColorAt(k, this.cardGreens[Math.floor(s.seed * 997) % this.cardGreens.length]);
-      return { x: s.x, y, z: s.z, sp, g, gy: g * (0.92 + r2 * 0.14), rot, tint };
-    });
-    cards.instanceMatrix.needsUpdate = true; cards.computeBoundingSphere(); cards.userData.shared = true; cards.name = `Tree cards ${t.key}`;
-    const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * 0.71;
-    cards.visible = d >= this.q.treeNear;
-    this._add(t, cards, 'far');
-    this._poolAt = null;   // (the pools take this tile's trees)
-    this.stats.trees += spots.length;
+    // roadside thickets: sumac (scarlet now), dogwood and buckthorn in clumps behind the brush, every so often
+    if (this.rural) for (const piece of W.tiles.get(t.key)?.pieces || []) {
+      const e = piece.e; if (!ROADS.has(e.kind) || e.kind === 'alley' || (W.walkOf && W.walkOf(e))) continue;
+      const half = W.wOf(e) / 2;
+      for (let i = Math.max(piece.a, 1); i < Math.min(piece.b, e.n - 1); i += 2) for (const side of [-1, 1]) {
+        const h = hash(e.x[i] * .173 + e.z[i] * .291 + side * 3.7); if (h > .22) continue;
+        const dx = e.x[i + 1] - e.x[i], dz = e.z[i + 1] - e.z[i], l = Math.hypot(dx, dz) || 1, nx = -dz / l * side, nz = dx / l * side;
+        const lc = this.landAt(e.x[i] + nx * (half + 7), e.z[i] + nz * (half + 7));
+        if (lc === LAND.yards || lc === LAND.paved || lc === LAND.building || lc === LAND.plaza) continue;
+        const n = 3 + Math.floor(h * 14);
+        for (let k = 0; k < n; k++) {
+          const r = hash(h * 97 + k * 3.3), along = (r - .5) * 9, d = half + 5.8 + hash(h * 13 + k) * 3;
+          const x = e.x[i] + dx / l * along + nx * d, z = e.z[i] + dz / l * along + nz * d, seed = Math.round(x * 7 + z * 13) + k;
+          under(x, z, r < .55 ? (r < .3 ? 'sumac' : 'sumac2') : r < .8 ? 'buckthorn' : 'dogwood', seed);
+        }
+      }
+    }
+    this.forest.setTile(t.key, out);
+    t.trees = out;
+    this.stats.trees += out.length;
   }
 
-  /** One pool: a species at one level of detail, as many instances as the trees near the camera need. */
-  _pool(geo, tier, n) {
-    const im = new THREE.InstancedMesh(geo, this.treeMaterial, n);
-    im.count = 0; im.castShadow = tier < 2; im.receiveShadow = true;
-    im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); im.setColorAt(0, this.tints[0]);
-    im.name = `Trees ${geo.name || ''} ${['full', 'lod', 'far'][tier]}`;
-    this.host.group.add(im);
-    return im;
-  }
-  /** The trees of the tiles within reach, each in its species' pool for its distance: the full model close by, the
-   *  simpler ones further out (tiles beyond the reach show their cards). Re-sorted when the camera has moved 25 m. */
-  _poolTrees(cam) {
-    const fullM = TREE_FULL[this.world.qualityKey] || 90, lodM = TREE_LOD[this.world.qualityKey] || 300;
-    const lists = this.pools.map((tiers) => tiers.map(() => []));
-    for (const t of this.tiles.values()) {
-      if (!t.trees) continue;
-      if (Math.hypot(t.cx - cam.x, t.cz - cam.z) - TILE * 0.71 >= this.q.treeNear) continue;
-      for (const r of t.trees) { const d = Math.hypot(r.x - cam.x, r.z - cam.z); lists[r.sp][d < fullM ? 0 : d < lodM ? 1 : 2].push(r); }
-    }
-    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = V(0, 1, 0), p = V(0, 0, 0), sc = V(1, 1, 1);
-    lists.forEach((tiers, i) => tiers.forEach((list, tier) => {
-      let im = this.pools[i][tier];
-      if (list.length > im.instanceMatrix.count) {
-        this.host.group.remove(im); im.dispose();
-        im = this.pools[i][tier] = this._pool(this.treeGeos[i].tiers[tier], tier, Math.ceil(list.length * 1.5));
+  // ------------------------------------------------------------------ homesteads (rural maps)
+  /** The nearest way of a kind a driveway meets (not a trail), searched out to maxR. */
+  _roadNearFar(x, z, maxR) {
+    let best = null; const R = Math.ceil(maxR / 20), gx = Math.floor(x / 20), gz = Math.floor(z / 20), w = this.world;
+    for (let a = -R; a <= R; a++) for (let b = -R; b <= R; b++) {
+      const arr = this._segGrid.get(cellKey(gx + a, gz + b)); if (!arr) continue;
+      for (let k = 0; k < arr.length; k += 2) {
+        const e = arr[k], i = arr[k + 1];
+        if (e.kind === 'path' || e._deck?.[i]) continue;
+        const ax = e.x[i], az = e.z[i], dx = e.x[i + 1] - ax, dz = e.z[i + 1] - az, l2 = dx * dx + dz * dz || 1;
+        const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), px = ax + dx * t, pz = az + dz * t, d = Math.hypot(x - px, z - pz);
+        if (d > maxR || (best && d >= best.d)) continue;
+        const l = Math.sqrt(l2); best = { e, i, d, px, pz, half: w.wOf(e) / 2, y: e.ele[i] + (e.ele[i + 1] - e.ele[i]) * t, dx: dx / l, dz: dz / l };
       }
-      list.forEach((r, k) => {
-        q.setFromAxisAngle(Y, r.rot); p.set(r.x, r.y, r.z); sc.set(r.g, r.gy, r.g);
-        im.setMatrixAt(k, m.compose(p, q, sc)); im.setColorAt(k, this.tints[r.tint]);
-      });
-      // only the used part goes to the GPU; the pool's bounds kept, so one behind the camera isn't drawn
-      im.count = list.length;
-      im.instanceMatrix.clearUpdateRanges(); im.instanceMatrix.addUpdateRange(0, list.length * 16); im.instanceMatrix.needsUpdate = true;
-      if (im.instanceColor) { im.instanceColor.clearUpdateRanges(); im.instanceColor.addUpdateRange(0, list.length * 3); im.instanceColor.needsUpdate = true; }
-      if (list.length) im.computeBoundingSphere();
-    }));
-    this._poolAt = cam.clone();
+    }
+    return best;
+  }
+  /** Each house's driveway, mailbox and outbuildings (toolbox/city/homesteads.js), planned before the trees. */
+  *_planHomesteads(t) {
+    const ctx = {
+      roadNear: (x, z, r) => this._roadNearFar(x, z, r),
+      free: (x, z, pad) => !this.host.buildingNear(x, z, pad) && !this.kit.occupied(x, z, pad) && !this.onRoad(x, z, pad + 1) && !this.inWater(x, z) && !this._railCovers(x, z, pad),
+    };
+    t.homes = [];
+    for (const b of this.host.buildingChunks.get(t.key) || []) {
+      const R = this.kit.plans.get(b.k);
+      if (!R || b.hidden || !['house', 'village-house', 'farmhouse-ny'].includes(R.kind)) continue;
+      const H = planHomestead(R, ctx);
+      if (H) t.homes.push(H);
+      if (due()) yield;
+    }
+    this._curHomes = t.homes;
+  }
+  _drivewayNear(x, z, r) { return nearDrive(this._curHomes || [], x, z, r); }
+  _drawHomesteads(t) {
+    if (!t.homes?.length) return;
+    const g = (x, z) => this.world._groundH(x, z);
+    for (const H of t.homes) drawHomestead(t.kitM, H, g);
+    const geo = driveStrips(t.homes, g);
+    if (geo) { const m = new THREE.Mesh(geo, this.lotMaterial); m.name = `Driveways ${t.key}`; m.receiveShadow = true; this._add(t, m); }
+    this.stats.driveways = (this.stats.driveways || 0) + t.homes.length;
+  }
+
+  // ------------------------------------------------------------------ fields and roadsides (rural maps)
+  /** The crop at (x, z) for the 3D rows: CNY's corn fields (codes 20–23, their rows' heading in the code), SKAN's
+   *  WorldCover cropland (code 10: the ground shader's own field pick, js/world/toolbox/landscape/farm-kit.js). */
+  _cropAt(x, z) {
+    const c = this.landAt(x, z);
+    if (c >= 20 && c <= 23) {
+      const a = (c - 20) * Math.PI / 4, ns = Math.sign(this.landBox.z0 - this.landBox.z1) || 1;
+      return { crop: 'corn', heading: Math.atan2(ns * Math.sin(a), Math.cos(a)), per: .9 };
+    }
+    if (c === LAND.crops) { const k = skanCrop(x, z); return { crop: k.crop, heading: k.heading + Math.PI / 2 }; }
+    if (c === 28) return { crop: 'hay', heading: 0 };
+    if (c >= 24 && c <= 27) return { crop: 'stubble', heading: 0 };
+    return null;
+  }
+  *_farmland(t) {
+    const W = this.world, x0 = t.i * TILE, z0 = t.j * TILE, g = (x, z) => W._groundH(x, z), M = t.kitM;
+    // standing corn and soybeans: row cards, near the camera only
+    this.cropMat ||= cropMaterial(this.treeTime);
+    const geo = cropCards(x0, z0, TILE, (x, z) => this._cropAt(x, z), g);
+    if (geo) { const m = new THREE.Mesh(geo, this.cropMat); m.name = `Crops ${t.key}`; m.userData.lodM = 300; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 300; this._add(t, m, 'near'); }
+    yield;
+    // round bales on the hay and the stubble
+    for (let x = x0 + 11; x < x0 + TILE; x += 22) for (let z = z0 + 11; z < z0 + TILE; z += 22) {
+      const h = hash(Math.round(x) * 7.1 + Math.round(z) * 3.3), jx = x + (h - .5) * 16, jz = z + (hash(h * 91) - .5) * 16;
+      const c = this._cropAt(jx, jz), lc = this.landAt(jx, jz);
+      const p = c?.crop === 'hay' ? .3 : c?.crop === 'stubble' ? .12 : lc === LAND.pasture ? .03 : 0;
+      if (h >= p || this.onRoad(jx, jz, 6) || this.host.buildingNear(jx, jz, 4) || this.inWater(jx, jz)) continue;
+      const n = 1 + Math.floor(hash(h * 13) * 3);   // ones and twos and threes, as the baler dropped them
+      for (let k = 0; k < n; k++) bale(M, jx + k * 2.1 * Math.cos(h * 9), g(jx, jz), jz + k * 2.1 * Math.sin(h * 9), h * 9 + k * .2, hash(h * 5) < .3, hash(h * 17 + k));
+    }
+    yield;
+    // the country roads' edges: the ditch, its grass and brush, the poles (_roadsides); then fence and wall runs
+    const N = new MeshBuilder({ aGlow: 1 });
+    yield* this._roadsides(t, N, M);
+    for (const piece of W.tiles.get(t.key)?.pieces || []) {
+      if (due()) yield;
+      const e = piece.e; if (!ROADS.has(e.kind) || e.kind === 'alley') continue;
+      const half = W.wOf(e) / 2, walk = W.walkOf ? W.walkOf(e) : 0;
+      if (walk) continue;   // (a village street with sidewalks: no fences, no verge)
+      for (let i = Math.max(piece.a, 1); i < Math.min(piece.b, e.n - 1); i++) {
+        if (e._deck?.[i] || e._deck?.[i + 1]) continue;
+        const dx = e.x[i + 1] - e.x[i], dz = e.z[i + 1] - e.z[i], l = Math.hypot(dx, dz) || 1, nx = -dz / l, nz = dx / l;
+        for (const side of [-1, 1]) {
+          const at = (k, off) => ({ x: e.x[k] + nx * off * side, z: e.z[k] + nz * off * side });
+          // fences and walls, in runs of ~60 m chosen by what's beside the road
+          if (i < 2 || i > e.n - 3) continue;
+          const blk = Math.floor(i / 6), hb = hash(e.n * 1.31 + blk * 7.7 + side * 3.3 + e.x[0] * .01);
+          const o = half + 5.5, a = at(i, o), b = at(i + 1, o), m = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+          const lc = this.landAt(m.x + nx * side * 4, m.z + nz * side * 4), cr = this._cropAt(m.x + nx * side * 4, m.z + nz * side * 4);
+          const pasture = lc === LAND.pasture || cr?.crop === 'hay', woodsOrCrop = lc === LAND.woods || (cr && cr.crop !== 'hay');
+          const kind = pasture ? (hb < .55 ? 'wire' : hb < .7 ? 'board' : null) : woodsOrCrop ? (hb < .3 ? 'stone' : null) : null;
+          if (!kind || this._railCovers(m.x, m.z, 1) || this.urban(m.x, m.z) || this.inWater(m.x, m.z) || this.host.buildingNear(m.x, m.z, 2) || this._drivewayNear(m.x, m.z, 2) || this.onRoad(m.x, m.z, 1)) continue;
+          bay(M, kind, a, b, g(a.x, a.z), g(b.x, b.z), hb * 1000 + i);
+          if (kind !== 'stone') { const mm = at(i, o), q = at(i + 1, o); bay(M, kind, { x: (mm.x + q.x) / 2, z: (mm.z + q.z) / 2 }, q, g((mm.x + q.x) / 2, (mm.z + q.z) / 2), g(q.x, q.z), hb); }
+        }
+      }
+    }
+    if (N.count) { const m = new THREE.Mesh(N.geometry(), this.kitMaterial); m.name = `Verge ${t.key}`; m.userData.lodM = 240; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 240; this._add(t, m, 'near'); }
+    // a farm stand by some farmhouses' drives (pumpkins and squash: it's September)
+    for (const H of t.homes || []) {
+      if (H.kind !== 'farmhouse-ny' || hash(H.key * 3.7) > .3) continue;
+      const r = H.road, x = r.px + r.ox * (W.wOf ? 6 : 6) + r.dx * 6, z = r.pz + r.oz * 6 + r.dz * 6;
+      if (this.onRoad(x, z, 1.5) || this.host.buildingNear(x, z, 2) || this._drivewayNear(x, z, 1)) continue;
+      farmStand(M, x, g(x, z), z, Math.atan2(r.ox, r.oz));
+    }
+  }
+
+  /**
+   * The country roads' edges (roadside-ny.js), every ~2 m along both sides of each road without sidewalks:
+   *   the ditch strip (where the ground is a shelf under the road; broken by driveways, a culvert's ends showing),
+   *   a mowed strip of short grass and the odd wildflower to ~2.5 m, then unmowed brush on the berm and out to the
+   *   fence line (goldenrod, Queen Anne's lace, chicory, tall grass; cattails in the wet bottoms) — lawns stay mowed,
+   *   and now and then the crew mowed farther; utility poles every ~40 m along one side, wires between them.
+   */
+  *_roadsides(t, N, M) {
+    const W = this.world, sH = (x, z) => W.surfaceH(x, z), runs = [];
+    const STEP = 5;   // stations per 10 m sample
+    for (const piece of W.tiles.get(t.key)?.pieces || []) {
+      if (due()) yield;
+      const e = piece.e; if (!ROADS.has(e.kind) || e.kind === 'alley') continue;
+      const half = W.wOf(e) / 2, walk = W.walkOf ? W.walkOf(e) : 0;
+      if (walk) continue;
+      const i0 = Math.max(piece.a, 1), i1 = Math.min(piece.b, e.n - 1);
+      if (i1 <= i0) continue;
+      // the normal at a sample (from its neighbours: mitred at the bends)
+      const nAt = (k) => { const a = Math.max(0, k - 1), b = Math.min(e.n, k + 1), dx = e.x[b] - e.x[a], dz = e.z[b] - e.z[a], l = Math.hypot(dx, dz) || 1; return [-dz / l, dx / l, dx / l, dz / l]; };
+      const poleSide = hash(e.n * .71 + e.x[0] * .013 + e.z[0] * .007) < .5 ? -1 : 1;
+      for (const side of [-1, 1]) {
+        let run = [], prevDrive = false, last = null;
+        const close = () => { if (run.length > 1) runs.push(run); run = []; };
+        for (let i = i0; i < i1; i++) {
+          const deck = e._deck?.[i] || e._deck?.[i + 1];
+          const nA = nAt(i), nB = nAt(i + 1);
+          for (let f = 0; f <= (i === i1 - 1 ? STEP : STEP - 1); f++) {
+            const u = f / STEP, px = e.x[i] + (e.x[i + 1] - e.x[i]) * u, pz = e.z[i] + (e.z[i + 1] - e.z[i]) * u;
+            let nx = nA[0] + (nB[0] - nA[0]) * u, nz = nA[1] + (nB[1] - nA[1]) * u; const nl = Math.hypot(nx, nz) || 1; nx = nx / nl * side; nz = nz / nl * side;
+            const tx = nA[2], tz = nA[3];
+            const rY = e.ele[i] + (e.ele[i + 1] - e.ele[i]) * u + ROAD_LIFT;
+            const at = (d) => [px + nx * (half + d), pz + nz * (half + d)];
+            const [bx, bz] = at(2.5), [ox, oz] = at(4.8), lc = this.landAt(bx, bz);
+            const base = Math.min(sH(bx, bz), sH(ox, oz));
+            const drive = this._drivewayNear(bx, bz, .6);
+            const hard = deck || lc === LAND.paved || lc === LAND.building || lc === LAND.plaza || this.inWater(bx, bz) || this._railCovers(bx, bz, 1)
+              || this.onRoad(bx, bz, .2) || this.onRoad(ox, oz, 0) || this.host.buildingNear(ox, oz, .8);
+            const ok = !hard && !drive && ditchFits(rY, base);
+            const seed = hash(px * .913 + pz * .377 + side * 5.1);
+            // the ditch run (and a culvert's ends where a driveway breaks it)
+            if (ok) {
+              if (prevDrive && last) { culvertEnd(M, bx - tx * .2, base, bz - tz * .2, tx, tz, seed); }
+              const row = { x: px + nx * half, z: pz + nz * half, nx, nz, rY, base, side };
+              run.push(row); last = row;
+            } else {
+              if (drive && run.length) { const r = run[run.length - 1]; const cx = r.x + r.nx * 2.5, cz = r.z + r.nz * 2.5; culvertEnd(M, cx + tx * .2, r.base, cz + tz * .2, -tx, -tz, seed); }
+              close();
+            }
+            prevDrive = drive;
+            if (hard || drive) continue;
+            const yAt = (d) => { const [x, z] = at(d); return ok && d <= 4.8 ? profileY(d, rY, base) : sH(x, z); };
+            // the mowed strip: tufts and the odd wildflower
+            for (let r = 0; r < 2; r++) {
+              const d = .5 + r * 1.1 + hash(seed * 13 + r) * .5, [x, z] = at(d);
+              const hs = hash(x * 1.3 + z * 2.1), fl = hash(Math.floor(x / 9) * 3 + Math.floor(z / 9)) < .3 && hs < .35;
+              verge(N, x, yAt(d), z, hs, fl);
+            }
+            // the ditch bottom: cattails where it stays wet, else grass
+            if (ok && hash(Math.floor((px + pz) / 31) * 7.7 + side) < .14 && seed < .45) { const [x, z] = at(2.5 + (seed - .25) * .6); cattails(N, x, profileY(2.5, rY, base), z, seed); }
+            // the brush: berm out to the fence line, unless it's a lawn, or the crew mowed farther here
+            const lawn = lc === LAND.yards || this.host.buildingNear(...at(10), 6);
+            const mowed = hash(Math.floor((px * .7 + pz * .3) / 35) * 3.3 + e.n + side) < .18;
+            if (lawn || mowed) continue;
+            for (let r = 0; r < 4; r++) {
+              const h = hash(seed * 31 + r * 7), d = 3.3 + r * .85 + h * .8, [x, z] = at(d);
+              if (this.onRoad(x, z, .5) || this._drivewayNear(x, z, 1)) continue;
+              const y = yAt(d), k = hash(seed * 17 + r * 3);
+              // goldenrod in drifts (a low-frequency patchiness), tall grass between
+              const drift = hash(Math.floor(x / 14) * 5.1 + Math.floor(z / 14) * 2.3);
+              if (k < .2 + drift * .35) goldenrod(N, x, y, z, h);
+              else if (k < .82) tallGrass(N, x, y, z, h);
+              else laceAndChicory(N, x, y, z, h);
+            }
+          }
+        }
+        close();
+        // utility poles along one side, every 40 m; wires to the next pole (drawn by the tile with this one)
+        if (side !== poleSide) continue;
+        const pole = (k) => {
+          if (k < 1 || k > e.n - 1 || e._deck?.[k]) return null;
+          const n = nAt(k), nx = n[0] * side, nz = n[1] * side, x = e.x[k] + nx * (half + 4.4), z = e.z[k] + nz * (half + 4.4);
+          if (this.onRoad(x, z, 1) || this.host.buildingNear(x, z, 1.5) || this._drivewayNear(x, z, 1) || this.inWater(x, z) || this._railCovers(x, z, 1)) return null;
+          const lc = this.landAt(x, z); if (lc === LAND.paved || lc === LAND.plaza || lc === LAND.building) return null;
+          return { x, z, y: sH(x, z), yaw: Math.atan2(-nz, nx), seed: hash(x * .31 + z * .77) };
+        };
+        for (let i = Math.ceil(i0 / 4) * 4; i < i1; i += 4) {
+          const P = pole(i); if (!P) continue;
+          const A = utilityPole(M, P.x, P.y, P.z, P.yaw, P.seed);
+          const Q = pole(i + 4); if (!Q) continue;
+          const tmp = new MeshBuilder();   // (the next pole's attach points, without drawing it twice)
+          wires(M, A, utilityPole(tmp, Q.x, Q.y, Q.z, Q.yaw, Q.seed));
+        }
+      }
+    }
+    const geo = ditchGeometry(runs);
+    if (geo) { const m = new THREE.Mesh(geo, this.ditchMat ||= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 })); m.name = `Ditches ${t.key}`; m.receiveShadow = true; m.userData.lodM = 700; this._add(t, m); }
   }
   /** CNY's barns and silos (cny-farms.js) into the tile's street-kit mesh. */
   *_farms(t) {
@@ -688,7 +1001,7 @@ export class GraphCity {
         const deck = e._deck?.[i];
         const nearEnd = i < 2 || i > e.n - 2;
         // lamps
-        if (riverwalk ? i % 3 === 0 : (i % 3 === 0 && (walk || this.urban(e.x[i], e.z[i])) && e.kind !== 'alley')) {
+        if (riverwalk ? i % 3 === 0 : (i % 3 === 0 && (walk || (this.rural ? this._suburb(e.x[i], e.z[i]) : this.urban(e.x[i], e.z[i]))) && e.kind !== 'alley')) {
           const side = riverwalk ? 1 : ((i / 3) % 2 ? 1 : -1), off = half + (riverwalk ? 0.6 : walk ? walk - 0.5 : 1.2);
           const x = e.x[i] + nx * off * side, z = e.z[i] + nz * off * side;
           if (!this.onRoad(x, z, 0.3) && !this.host.buildingNear(x, z, 0.6) && !this.inWater(x, z) && !deck) {
@@ -698,7 +1011,7 @@ export class GraphCity {
           }
         }
         // parked cars: main streets with sidewalks, both sides (one side on a one-way), away from junctions and decks
-        if (MAIN.has(e.kind) && walk && !deck && !nearEnd && i % 2 === 0 && half >= 4.2) {
+        if (!this.rural && MAIN.has(e.kind) && walk && !deck && !nearEnd && i % 2 === 0 && half >= 4.2) {
           const ow = this.edgeInfo(e).ow;
           for (const side of ow ? [ow > 0 ? 1 : -1] : [-1, 1]) {
             for (const f of [0.15, 0.8]) {
@@ -739,7 +1052,7 @@ export class GraphCity {
       }
     }
     // a car park's cars (in the lots of this tile)
-    for (const ring of this.lots.get(t.key) || []) { this._lotCars(ring, Mc, Mf, frame); if (due()) yield; }
+    if (!this.rural) for (const ring of this.lots.get(t.key) || []) { this._lotCars(ring, Mc, Mf, frame); if (due()) yield; }
     const mesh = (B, name, lod) => {
       if (!B.count) return;
       const g = B.geometry(); const m = new THREE.Mesh(g, this.kitMaterial); m.name = `${name} ${t.key}`; m.castShadow = true; m.receiveShadow = true;
@@ -897,12 +1210,10 @@ export class GraphCity {
     this.disposed = true;
     for (const [key, t] of this.tiles) this._release(key, t);
     this.kit.material.dispose();
-    for (const T of this.treeGeos) for (const g of T.tiers) g.dispose();
-    for (const tiers of this.pools) for (const im of tiers) im.dispose();
-    this.cards.dispose(); this.facades.dispose();
+    this.facades.dispose(); this.life?.dispose(); this.forest.dispose();
     if (this.carGeos) { for (const g of Object.values(this.carGeos)) g.dispose(); this.carMaterial.dispose(); }
     for (const g of [this.lampGeo, this.acornGeo]) g.dispose();
-    for (const m of [this.kitMaterial, this.treeMaterial, this.lampMaterial, this.lotMaterial]) m.dispose();
+    for (const m of [this.kitMaterial, this.lampMaterial, this.lotMaterial, this.cropMat, this.ditchMat].filter(Boolean)) m.dispose();
     this.landTexture?.dispose();
   }
 }

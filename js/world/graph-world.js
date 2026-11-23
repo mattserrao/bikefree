@@ -15,7 +15,7 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { makeProjection } from './geo.js';
 import { decodeTerrain } from './toolbox/landscape/real-terrain.js';
 import { loadTerrainGrid } from '../terrain-grid.js';
-import { CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean, ROAD_LIFT } from './pose.js';
+import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean, ROAD_LIFT } from './pose.js';
 import { loadRider } from './rider.js';
 import { PerfMonitor } from './perf.js';
 import { drain, runSlice, due } from './toolbox/core/jobs.js';
@@ -152,6 +152,7 @@ export class GraphWorld {
     this.route = base;
     this.G = base.graph;
     this.json = this.G.json;
+    this.rural = RURAL_MAPS.has(this.json?.id);   // CNY, SKAN: upstate roads, countryside dressing (graph-city.js)
     this.log = opts.log || (() => {});
     this.path = opts.path || null;
     this.areaSet = null;
@@ -227,9 +228,9 @@ export class GraphWorld {
     this._reach();
     this.mats = {
       road: new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
-      paint: new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
-      ground: groundMaterial(this.qualityKey === 'low'),
-      roadSurface: roadSurfaceMaterial(this.qualityKey === 'low'),
+      paint: this.rural ? wornPaintMaterial() : new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+      ground: groundMaterial(this.qualityKey === 'low', this.rural),
+      roadSurface: roadSurfaceMaterial(this.qualityKey === 'low', this.rural),
       water: new THREE.MeshLambertMaterial({ color: '#4f7f97', transparent: true, opacity: 0.92 }),
       // the dressed places and the river walls: textured from world position (toolbox/materials)
       park: Object.fromEntries(['lawn', 'plaza', 'granite', 'walk', 'garden', 'wood', 'scrub'].map((k) => [k, makeParkMaterial(k)])),
@@ -410,7 +411,7 @@ export class GraphWorld {
     }
     this.crank += ((src.cadence || 0) / 60) * Math.PI * 2 * dt;
     this.heroes?.tick(now / 1000, dt);
-    this.city?.tick(this.camera.position, now / 1000);
+    this.city?.tick(this.camera.position, now / 1000, this.path ? out : null, dt);
     if ((this._frames & 15) === 0) this.bridges?.tick(this.camera.position, this.qualityKey === 'low' ? 3000 : 4500);
     this.rider.update(out.pos, out.fwd, this.crank, src.speed || 0, Math.min(dt, 0.1), src);
     if (this.path) {
@@ -450,6 +451,15 @@ export class GraphWorld {
     for (const p of this.pools || []) if (x >= p.x0 && x <= p.x1 && z >= p.z0 && z <= p.z1) return p.level;
     return this.waterY - WATER_ABOVE;
   }
+  /** The ground as its mesh draws it here (the 12.8 m grid's triangles), or the raw height where that tile isn't built. */
+  surfaceH(x, z) {
+    const tt = this.tiles.get(`${Math.floor(x / TILE)},${Math.floor(z / TILE)}`);
+    if (!tt || !tt.gridH) return this._groundH(x, z);
+    const c = tt.gridCell, n1 = Math.round(TILE / c) + 1, u = (x - tt.i * TILE) / c, v = (z - tt.j * TILE) / c;
+    const i = Math.min(n1 - 2, Math.max(0, Math.floor(u))), j = Math.min(n1 - 2, Math.max(0, Math.floor(v))), fu = u - i, fv = v - j;
+    const H = tt.gridH, a0 = H[j * n1 + i], b0 = H[j * n1 + i + 1], c0 = H[(j + 1) * n1 + i], d0 = H[(j + 1) * n1 + i + 1];
+    return fu + fv <= 1 ? a0 + (b0 - a0) * fu + (c0 - a0) * fv : d0 + (c0 - d0) * (1 - fu) + (b0 - d0) * (1 - fv);
+  }
   _groundH(x, z) {
     const raw = this.ground.at(x, z);
     let h = raw;
@@ -477,8 +487,8 @@ export class GraphWorld {
     const g = this.heightAt(pos.x, pos.z);
     if (g != null && pos.y < g + K.ground) pos.y = g + K.ground;
     if (Math.abs(this.camera.fov - K.fov) > 0.01) { this.camera.fov = K.fov; this.camera.updateProjectionMatrix(); }
-    if (!this._camInit) { this.camera.position.copy(pos); this.camTarget.copy(look); this._camInit = true; }
-    else { this.camera.position.lerp(pos, 1 - Math.exp(-dt * 3.5)); this.camTarget.lerp(look, 1 - Math.exp(-dt * 5)); }
+    if (!this._camInit) { this.camera.position.copy(pos); this.camTarget.copy(look); this._camInit = true; this._chaseOff = null; }
+    else lockedChase(this, riderPos, pos, look, dt, K.back, (x, z) => { const h = this.heightAt(x, z); return h == null ? null : h + K.ground; });
     this.camera.lookAt(this.camTarget);
   }
 
@@ -743,7 +753,7 @@ export class GraphWorld {
     const R = new Mesher(true), P = new Mesher(), W = new Mesher(), P_ = P;
     const col = (k) => new THREE.Color(COLORS[k] || COLORS.residential);
     const side = col('side'), deckC = col('deck'), rail = col('rail'), under = col('under');
-    const verge = new THREE.Color('#7b8556'), gravelC = new THREE.Color('#a59b84'), walkC = new THREE.Color('#b4afa4'), curbC = new THREE.Color('#c3beb3'), walkSide = new THREE.Color('#9d988e');
+    const verge = new THREE.Color(this.rural ? '#78974a' : '#7b8556'), gravelC = new THREE.Color('#a59b84'), walkC = new THREE.Color('#b4afa4'), curbC = new THREE.Color('#c3beb3'), walkSide = new THREE.Color('#9d988e');
     for (const { e, a, b } of t.pieces) {
       if (due()) yield;
       const half = this.wOf(e) / 2, path = e.kind === 'path', walk = this.walkOf(e);
@@ -1244,6 +1254,125 @@ export function decodeDressing(json, proj, tile) {
 }
 
 // ---------------------------------------------------------------- surfaces
+/** The rural upstate maps (CNY, SKAN): winter-worn roads, worn paint, the countryside's trees, homes and fields. */
+export const RURAL_MAPS = new Set(['cny', 'skan']);
+/**
+ * Upstate New York asphalt after a lot of winters (user, 22 Nov: "Upstate NY roads wear a lot due to the winter"):
+ * the base oxidised to a pale blue-grey, varying by place (by world position, so overlapping surfaces agree); narrow country roads
+ * in chip seal (pale, speckled with aggregate, smoothed and darker in the wheel paths); tar-snake crack sealing — a
+ * meandering seam down the centre joint and along the wheel paths, and transverse frost cracks across the lanes every
+ * 8–20 m; alligator cracking in the wheel paths where it's worst; cut-in rectangular patches and round cold-patched
+ * potholes; the edge breaking up into the shoulder; a dusting of winter sand and salt along the edges. q: metres
+ * (across from the centre, along); hw: half width; det: 1 close, 0 where the detail would shimmer.
+ */
+const NY_ROAD_GLSL = /* glsl */`
+  vec2 nyCell(vec2 p) {   // distance to the nearest edge of a jittered cell net (alligator cracking): x edge, y cell id
+    vec2 i = floor(p), f = fract(p); float d1 = 9., d2 = 9.; float id = 0.;
+    for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+      vec2 g = vec2(float(x), float(y)), o = vec2(gwH(i + g), gwH(i + g + 31.)) * .8 + .1, r = g + o - f;
+      float d = dot(r, r);
+      if (d < d1) { d2 = d1; d1 = d; id = gwH(i + g + 7.); } else if (d < d2) d2 = d;
+    }
+    return vec2(sqrt(d2) - sqrt(d1), id);
+  }
+  vec3 nyWinterRoad(vec3 c, vec2 q, float hw, float det, float track, vec3 w) {
+    // a junction's fan or disc has no running coordinates: its wear by world position, no edge, no wheel paths
+    bool junc = hw < .5 || fwidth(q.x) + fwidth(q.y) < 1e-6;
+    if (junc) { q = w.xz; hw = 60.; track = 0.; det = 1. - smoothstep(.015, .07, max(fwidth(w.x), fwidth(w.z))); }
+    float along = q.y, ax = junc ? 0. : abs(q.x);
+    // which kind of stretch: fresh blacktop (repaved) / old oxidised hot-mix / chip seal (narrow country roads)
+    // (by world position only, so overlapping surfaces — a junction's fan over a ribbon's end — agree exactly)
+    float stretch = fract(gwN(w.xz * .0011) * 1.7 + gwN(w.xz * .0037 + 5.) * .9);
+    float chip = junc ? 0. : step(hw, 3.35);   // (the narrow country roads: chip seal end to end)
+    float fresh = 0.;   // (a repaved stretch would need lane-aligned ends: left out)
+    float age = (1. - fresh) * (.55 + .45 * gwN(w.xz * .006 + 1.7));
+    vec3 lin = pow(c, vec3(1. / 2.2));                       // (work in the gamma colour, as the other surfaces do)
+    vec3 oxid = lin * vec3(1.3, 1.33, 1.38), black = lin * .74;
+    vec3 base = lin;                                            // (the road's own tone: everything is relative to it)
+    lin = mix(black, oxid, age);
+    if (chip > .5) {
+      // chip seal: pale aggregate pressed into tar, the stones' speckle; the wheel paths ground smooth and darker
+      float sp = gwH(floor(w.xz * 34.)), sp2 = gwH(floor(w.xz * 61.) + 5.);
+      vec3 cs = base * vec3(1.5, 1.48, 1.44) * (.88 + .24 * gwN(w.xz * .8));
+      cs *= mix(1., .82 + .36 * sp * .6 + .2 * sp2, det * det);
+      lin = mix(cs, cs * .8, track * .8);
+      lin = mix(lin, base * .8, smoothstep(.6, .9, gwN(w.xz * .03 + 4.)) * .35);   // bleeding tar in the hot spots
+    }
+    // a junction's fan (or a far, plain ribbon): no lane-aligned features, just the tone and the odd pothole
+    if (junc) return pow(lin * (.96 + .08 * gwN(w.xz * .3)), vec3(2.2));
+    float worn = smoothstep(.35, .8, gwN(w.xz * .012 + 9.)) * (1. - fresh);
+    // tar snakes: the centre joint, and the wheel paths' edges, wandering
+    float wob = (gwN(vec2(along * .12, 3.)) - .5) * .35 + (gwN(vec2(along * 1.3, 9.)) - .5) * .1;
+    float tarW = .022 + .025 * gwN(vec2(along * .2, 1.));
+    float snake = (1. - smoothstep(tarW * .6, tarW, abs(q.x - wob))) * step(.3, gwN(vec2(along * .025, 5.)));
+    for (int s = 0; s < 2; s++) {
+      float lane = (float(s) * 2. - 1.) * (hw * .5 + .55);
+      float on = step(.62, gwN(vec2(along * .03, float(s) * 13. + 2.)));
+      float wl = (gwN(vec2(along * .15, float(s) * 7. + 5.)) - .5) * .9 + (gwN(vec2(along * 1.7, float(s) * 3.)) - .5) * .12;
+      snake = max(snake, on * (1. - smoothstep(tarW * .6, tarW, abs(q.x - lane - wl))));
+    }
+    // transverse frost cracks: every 8–20 m, across the whole width, kinked
+    float seg = floor(along / 13.), sp = 13. * (.5 + .4 * (gwH(vec2(seg, 2.)) - .5));
+    float tx = along - seg * 13. - sp - (gwN(vec2(q.x * .9, seg)) - .5) * .9 - q.x * (gwH(vec2(seg, 4.)) - .5) * .25;
+    float trans = (1. - smoothstep(.03, .06, abs(tx))) * step(.25, gwH(vec2(seg, 6.))) * step(ax, hw - .15 * gwH(vec2(seg, 8.)) * hw);
+    float sealed = step(.4, gwH(vec2(seg, 11.)));             // most are sealed (black tar), some are open hairlines
+    snake = max(snake * step(.25, age + worn), trans * sealed);
+    lin = mix(lin, base * .38, snake * .92 * det);
+    lin *= 1. - trans * (1. - sealed) * .45 * det;
+    // alligator cracking in the wheel paths, in the worst stretches
+    vec2 cell = nyCell(vec2(q.x, along) * 4.2);
+    float gator = (1. - smoothstep(.012, .04, cell.x)) * track * smoothstep(.65, .95, worn) * (1. - chip);
+    lin *= 1. - gator * .35 * det;
+    lin *= 1. + (cell.y - .5) * .08 * track * worn * det;   // the broken pieces, each a shade apart
+    // patches: cut-in rectangles of newer, darker asphalt (a lane's width or less), and round cold-patched potholes
+    float pb = floor(along / 23.), ph = gwH(vec2(pb, 21.));
+    if (ph > .62) {
+      float p0 = pb * 23. + gwH(vec2(pb, 22.)) * 10., p1 = p0 + 2. + gwH(vec2(pb, 23.)) * 9.;
+      float side = gwH(vec2(pb, 24.)) < .5 ? -1. : 1., wide = gwH(vec2(pb, 25.)) < .35 ? hw : hw * (.45 + .3 * gwH(vec2(pb, 26.)));
+      float cx = side * (hw - wide * .5) * step(wide, hw - .01);
+      float inP = step(p0, along) * step(along, p1) * step(abs(q.x - cx), wide * .5);
+      vec3 pc = base * mix(.72, 1.05, gwH(vec2(pb, 27.)));
+      float rim = 1. - smoothstep(0., .06, min(min(along - p0, p1 - along), wide * .5 - abs(q.x - cx)));
+      lin = mix(lin, pc * (.92 + .12 * gwN(w.xz * 6.)), inP * (.4 + .6 * det));
+      lin = mix(lin, base * .35, inP * rim * .7 * det);   // the sealed saw cut round it
+    }
+    vec2 hp = vec2(floor(along / 7.), floor((q.x + hw) / 1.6));
+    if (gwH(hp + 40.) > .93 - worn * .06) {
+      vec2 hc = vec2((hp.y + .5) * 1.6 - hw + (gwH(hp + 41.) - .5) * .8, (hp.x + .5) * 7. + (gwH(hp + 42.) - .5) * 4.);
+      float r = .25 + gwH(hp + 43.) * .4, d = length((vec2(q.x, along) - hc) * vec2(1., .8)) + (gwN(vec2(q.x, along) * 4.) - .5) * .12;
+      float pot = 1. - smoothstep(r - .05, r, d);
+      lin = mix(lin, base * .6 * (.9 + .25 * gwN(w.xz * 9.)), pot * step(ax, hw - .2) * det);
+    }
+    // the edge breaking up into the shoulder: ragged, crumbled, gravel showing through
+    float rag = hw - ax - .35 * gwN(vec2(along * .8, 3.)) - .25 * gwN(vec2(along * 3.1, 7.)) * (1. - fresh);
+    float crumble = 1. - smoothstep(0., .18, rag);
+    lin = mix(lin, vec3(.47, .44, .39) * (.85 + .3 * gwH(floor(w.xz * 20.))), crumble * .85);
+    lin = mix(lin, lin * .78, (1. - smoothstep(.15, .5, rag)) * (1. - crumble) * .6 * det);   // the broken lip
+    // winter's sand and salt along the edges and in the crown between the wheel paths, washed out by fall
+    float grit = (1. - smoothstep(.3, 1.4, hw - ax)) * .5 + (1. - smoothstep(.2, .9, ax)) * .18 * (1. - track);
+    lin = mix(lin, base * 1.9, grit * .22 * (.6 + .4 * gwN(w.xz * .5)));
+    return pow(lin, vec3(2.2));
+  }
+`;
+/** Rural maps' road paint: worn by plows and salt — faded, scuffed through in the wheel paths, patchy by stretch. */
+function wornPaintMaterial() {
+  const m = new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vPW;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPW = (modelMatrix * vec4(transformed, 1.)).xyz;');
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vPW;\n' + NOISE_GLSL)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        {
+          float stretch = gwN(vPW.xz * .004 + 2.), fade = .25 + .55 * stretch;         // some stretches freshly painted
+          float scuff = smoothstep(.45, .75, gwN(vPW.xz * 1.7)) * .7 + smoothstep(.6, .9, gwN(vPW.xz * 9.)) * .3;
+          float gone = clamp(fade * .7 + scuff * fade, 0., .92);
+          vec3 road = pow(vec3(.36, .37, .38), vec3(2.2));
+          diffuseColor.rgb = mix(diffuseColor.rgb * (.82 + .1 * stretch), road, gone);
+        }`);
+  };
+  m.customProgramCacheKey = () => 'graph-paint-worn-1';
+  return m;
+}
 const NOISE_GLSL = /* glsl */`
   float gwH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float gwN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
@@ -1257,13 +1386,15 @@ const NOISE_GLSL = /* glsl */`
  * gravel and dirt. Patterns fade to their average when a brick is a few pixels, so nothing shimmers far off.
  */
 /** low (Light, phones): the patterns only up close (brick, setts, slabs, pavers), plain asphalt with one noise. */
-function roadSurfaceMaterial(low = false) {
+function roadSurfaceMaterial(low = false, ny = false) {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
-  if (low) m.defines = { LOWQ: '' };
+  m.defines = {};
+  if (low) m.defines.LOWQ = '';
+  if (ny) m.defines.NYWEAR = '';
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aRd; varying vec4 vRd; varying vec3 vGW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRd = aRd; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vRd; varying vec3 vGW;\n' + NOISE_GLSL)
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vRd; varying vec3 vGW;\n' + NOISE_GLSL + (ny ? NY_ROAD_GLSL : ''))
       .replace('#include <color_fragment>', `#include <color_fragment>
         {
           vec3 c = diffuseColor.rgb;
@@ -1323,11 +1454,14 @@ function roadSurfaceMaterial(low = false) {
             c *= 1. - wear * .22 * step(.62, gwN(vGW.xz * .05 + 2.)) * (1. - smoothstep(.0, .01, cr)) * det;   // sealed cracks (in the worn places)
             c *= 1. - .08 * (1. - smoothstep(0., .5, vRd.w - abs(q.x)));                     // the edge, darker
             #endif
+            #ifdef NYWEAR
+            c = nyWinterRoad(c, q, vRd.w, det, track, vGW);
+            #endif
           }
           diffuseColor.rgb = c;
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-road-surface-1${low ? '-low' : ''}`;
+  m.customProgramCacheKey = () => `pgh-road-surface-1${low ? '-low' : ''}${ny ? '-ny1' : ''}`;
   return m;
 }
 
@@ -1337,9 +1471,11 @@ function roadSurfaceMaterial(low = false) {
  * plazas, sand — with a little noise in the edges so they aren't the grid's.
  */
 /** low (Light, phones): one noise for the land cover's shading, no wobble on its edges. */
-function groundMaterial(low = false) {
+function groundMaterial(low = false, rural = false) {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true });
-  if (low) m.defines = { LOWQ: '' };
+  m.defines = {};
+  if (low) m.defines.LOWQ = '';
+  if (rural) m.defines.NYGRASS = '';
   const blank = new THREE.DataTexture(new Uint8Array([1]), 1, 1, THREE.RedFormat); blank.needsUpdate = true;
   const U = { uLand: { value: blank }, uLandBox: { value: new THREE.Vector4(0, 0, 1, 1) }, uLandOn: { value: 0 } };
   m.userData.land = U;
@@ -1417,9 +1553,29 @@ function groundMaterial(low = false) {
             lc = mix(vec3(.5, .58, .26), vec3(.64, .66, .32), n * .6 + sw * .4);
           }
           else if (k < 29.5 && k > 28.5) lc = mix(vec3(.5, .43, .32), vec3(.6, .53, .41), n * .7 + gwN(vGW.xz * .09) * .3);   // farmyard: gravel and packed earth
+          #ifdef NYGRASS
+          // the rural maps in early fall (user, 22 Nov: "grass + farms need to improve"): corn gone tan, soybeans gold,
+          // and the grass close by with blades in it — lawns mown in stripes, pastures and hay tufted, with dry patches
+          if (k > 19.5 && k < 23.5) lc = mix(lc, lc.g > .3 ? vec3(.5, .46, .25) : lc, .55);
+          if (k > 9.5 && k < 10.5) {
+            vec2 fc = floor((vGW.xz + (vec2(gwN(vGW.xz * .004), gwN(vGW.xz * .004 + 9.)) - .5) * 90.) / vec2(165., 120.));
+            float f = gwH(fc + 7.3);
+            if (f < .3) lc = mix(lc, vec3(.5, .46, .25), .6); else if (f < .48) lc = mix(lc, vec3(.62, .55, .24), .7);
+          }
+          bool grassy = (k > .5 && k < 1.5) || (k > 6.5 && k < 8.5) || (k > 10.5 && k < 11.5) || (k > 27.5 && k < 28.5);
+          if (lc.x >= 0. && grassy) {
+            float gd = 1. - smoothstep(.02, .16, max(fwidth(vGW.x), fwidth(vGW.z)));   // near: blades; far: their mean
+            float bl = gwN(vGW.xz * 7.3) * .55 + gwN(vGW.xz * 21.) * .45;
+            lc *= 1. + (bl - .5) * .28 * gd;
+            float dry = smoothstep(.62, .8, gwN(vGW.xz * .045 + 13.)) * (k > 7.5 && k < 8.5 ? .35 : 1.);
+            lc = mix(lc, vec3(.6, .57, .34), dry * .45);                                   // dry, gone-over patches
+            if (k > 7.5 && k < 8.5) lc *= 1. + .05 * sign(sin(vGW.x * 2.6 + vGW.z * .4)) * gd;   // a lawn's mown stripes
+            if (k > 10.5 && k < 11.5 || k > 27.5) lc = mix(lc, lc * vec3(1.05, .98, .85), smoothstep(.55, .75, gwN(vGW.xz * .5)) * .5);   // tussocks, seed heads
+          }
+          #endif
           if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * mix(clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vec3(1.), step(19.5, k) * .7), vLandW * (k > 19.5 ? .95 : .85));   // (CNY's fields: their own colour, less of the ground's tint)
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-4${low ? '-low' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-4${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
   return m;
 }
