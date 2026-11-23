@@ -33,7 +33,8 @@ import { makeLeafTexture } from './upstate-trees.js';
 const BANDS = { low: [55, 150], balanced: [100, 210], high: [130, 280] };
 // trees-2d-test (user, 23 Nov: "test trees as 2D … use the tree engine as today"; chose every tree, turned to face
 // the camera, always on this branch, every tree-engine map): every tree is its photographed card at any distance (the
-// near and mid 3D tiers unused); the understory (near-only shrubs) stays 3D. Sharper photos for the close-up cards.
+// near and mid 3D tiers unused); the shrubs too (user: "shrubs need the same 2D"), within their own reach. Sharper
+// photos for the close-up cards.
 export const TREES_2D = true;
 const CELL_2D = { low: 160, balanced: 192, high: 256 };
 const DEEP = [.55, .6];  // band scale for a tree > 30 m from any road (t.deep): seen only through the trees in front
@@ -212,7 +213,7 @@ export class TreeEngine {
   // ------------------------------------------------------------------ impostors
   /** Photograph every tree entry from ANGLES sides (lit as the world) into one atlas: a row per entry. */
   _impostors(lights, quality) {
-    const list = this.entries.filter((e) => !e.nearOnly), max = this.renderer.capabilities?.maxTextureSize || 4096;
+    const list = this.entries.filter((e) => TREES_2D || !e.nearOnly), max = this.renderer.capabilities?.maxTextureSize || 4096;
     const cell = TREES_2D ? Math.min(CELL_2D[quality] || 192, Math.floor(max / Math.max(1, list.length)), Math.floor(max / ANGLES)) : quality === 'low' ? 64 : quality === 'high' ? 160 : 128;
     const W = cell * ANGLES, H = cell * list.length;
     const rt = new THREE.WebGLRenderTarget(W, H, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, samples: 0 });
@@ -294,9 +295,12 @@ export class TreeEngine {
           // the edge's coverage over about a pixel (alpha to coverage under MSAA: soft silhouettes, no sorting)
           float cov = clamp((c.a - .5) / max(fwidth(c.a), 1e-4) + .5, 0., 1.);
           if (cov <= 0.) discard;
+          ${this.msaa ? '' : `// no alpha to coverage (phones): a plain cut at half alpha. The card's faint edge texels, drawn solid with their
+          // colour un-premultiplied from a few levels of 8-bit, came out near white: the light halo round the trees.
+          if (c.a < .5) discard;`}
           float teDz = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(.06711056, .00583715))));
           if (vOut > .5 ? vKeep <= teDz : vKeep <= 1. - teDz) discard;   // the complement of the mid tier's dissolve
-          gl_FragColor = vec4(c.rgb / max(c.a, 1e-3) * vTint, cov);
+          gl_FragColor = vec4(c.rgb / max(c.a, .3) * vTint, cov);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
           #include <fog_fragment>
@@ -306,7 +310,7 @@ export class TreeEngine {
     //  and the impostors drew nothing: every tree past the mid band was missing)
     this.impMat.uniforms.uAtlas.value = rt.texture;
     this.impMat.alphaToCoverage = !!this.msaa;
-    this.impMat.customProgramCacheKey = () => `tree-engine-impostor-6-${this.ft}`;
+    this.impMat.customProgramCacheKey = () => `tree-engine-impostor-7-${this.ft}-${this.msaa ? 1 : 0}`;
     this.impMesh = new THREE.Mesh(geo, this.impMat);
     this.impMesh.frustumCulled = false; this.impMesh.name = 'Trees (impostors)';
     this.group.add(this.impMesh);
@@ -380,7 +384,8 @@ export class TreeEngine {
         // (a far-only tree — a scene's far planting — stands aside inside the square of its real trees: hideFar)
         const hf = this.hideFar, hidden = t.farOnly && hf && t.x > hf[0] && t.x < hf[2] && t.z > hf[1] && t.z < hf[3];
         const B0 = t.deep ? b0 * DEEP[0] : b0, B1 = t.deep ? b1 * DEEP[1] : b1;
-        const want = hidden ? -1 : t.e.nearOnly ? (d0 < B0 * .8 + (cur === 0 ? HYST : -HYST) ? 0 : -1)
+        // (2D: the shrubs too — their card within their own reach, none beyond)
+        const want = hidden ? -1 : t.e.nearOnly ? (d0 < B0 * .8 + (cur === 0 || cur === 2 ? HYST : -HYST) ? (TREES_2D ? 2 : 0) : -1)
           : TREES_2D ? 2 : d0 < B0 + (cur === 0 ? HYST : -HYST) ? 0 : d1 < B1 + (cur === 1 ? HYST : -HYST) ? 1 : 2;
         if (cur === undefined) { t.tier = want; t.from = -1; t.ts = -1e9; }
         else if (want !== cur) { t.from = cur; t.tier = want; t.ts = now; }
