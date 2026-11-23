@@ -2012,3 +2012,21 @@ for change to graphics (both desktop and mobile same menus)")*
       without MSAA; alpha to coverage never on iPhone / iPad (their GPUs dither it: "static looking foliage").
 - [x] City life (found by the tests once the camera changed): a walker about to step into the route's carriageway
       with the rider within 80 m turns back at the kerb; a crossing's clearance counts its own length.
+
+### Trees as 2D, and a detail pass — branch `trees-2d-test` *(user, 23 Nov: "I'd like to test trees as 2D. Use the tree engine as today"; then "Brainstorm additional detail")*
+- [x] Every tree-engine tree (and shrub) drawn as its camera-facing impostor card at every distance (`TREES_2D`); the
+      atlas cell 160/192/256 px by quality; no light halo on medium and far trees (a hard alpha cut without MSAA).
+- [x] Shrubs load in like the trees (their own fade distance, not all at once).
+- [x] Yards: fall displays, flags, birdbaths, gnomes, planters, signs, house numbers, bales, fire pits with chairs,
+      trampolines, woodpiles, bikes, wheelbarrows, lawn tractors; ornamental trees (Japanese maple, crabapple, blue
+      spruce, arborvitae rows, birch clumps).
+- [x] Dead trees ~6% (woods, roadsides, hedgerows): broken tops, tall snags, leaning.
+- [x] Roadsides: patchy scrub on rural roads (villages kept tidy); wildflowers sparse, clumped and muted.
+- [x] Towpath: a wandering worn line, ragged edges, fresh-gravel / damp / leaf-litter patches, round puddles; its sides
+      in the path's own gravel, no green verge *(user, 23 Nov)*.
+- [x] Atmosphere effect (CNY, SKAN): sun beams through the crowns when the sun is low, ground mist over water and
+      wetland, drifting leaves, dust motes.
+- [x] Canal embankment: a slowly drifting muted palette (no banding), a muddier water's edge, grass tufts, smaller
+      lily pads.
+- [x] The canal tour boat moored in the water beside the park's dock, tied off (it stood on the bank).
+- [x] Touch: swipe left / right on the ride screen while the turn prompt is up to change the way; tap a way to pick it.
