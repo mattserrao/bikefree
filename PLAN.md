@@ -1927,3 +1927,16 @@ Every effect is its own module under `js/world/toolbox/effects/`, switched on pe
       same random draws at every level; mid draws levels 0–2 on every other ring) and `mergeClusters` (mid foliage:
       ~⅓ the cards, each reaching its members' near-card edges). Near and mid now share trunk, limbs and outline; the
       cards are photographed from the near model, so they share it too.
+
+### People, cars and farm animals — branch `graphics-polish-test` (v0.14.0) *(user, 23 Nov: "Rework people models / Rework car models / Animal models - farmland"; answers below)*
+- [ ] People (every map, the shared figures kit): more realistic proportions; more detail and variety (faces, hair,
+      clothes, body types, ages); better animation (walk, jog, idle, sitting on benches, standing in groups); local
+      activities (joggers, dog walkers, people fishing off the pier, farmers, farm-stand customers).
+- [ ] Cars (every map): one shared car kit for all cars; rounded, realistic shapes (wheel arches, glass, lights,
+      bumpers); paint and wear variety (regional colours, dirt and rust on farm trucks, roof racks). **Stationary
+      only: all moving traffic removed** (the city life's cars and the scene routes' traffic kit, e.g. Big Sur);
+      parked cars everywhere use the new kit.
+- [ ] Farm animals (CNY, SKAN): dairy cows (Holsteins, some Jerseys), horses in paddocks (some blanketed), sheep and
+      goats on hillside pasture, chickens in farmyards, a barn cat, geese and ducks on farm ponds. Kept at a medium
+      distance from the road; minimal animation (grazing head bob, tail swish, a few walking slowly), no reaction to
+      the rider; the same realistic style as the new people.
