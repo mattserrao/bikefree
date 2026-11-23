@@ -67,9 +67,11 @@ for (const spec of args) {
       w.camera.position.set(r.x - f.x * back, r.y + up, r.z - f.z * back); w.camera.lookAt(r.x + f.x * back * 0.6, r.y, r.z + f.z * back * 0.6);
     }
     for (let k = 0; k < 400; k++) w._stream(w.camera.position.x, w.camera.position.z, 1e9);
+    // the baked light (CNY, SKAN: golden hour) for this view, at once
+    if (w.baked) { w.baked.bakeNow(); w.baked.tick(1); w.baked.tick(1); }
     // the tree engine sorts its trees round the camera it last ticked with: once more for this (moved) camera
     w.camera.updateMatrixWorld();
-    if (w.city?.forest) { w.city.forest._at = null; w.city.forest.tick(w.camera); }
+    if (w.city?.forest) { w.city.forest._at = null; w.city.forest.tick(w.camera); w.city.forest.impMat.uniforms.uNow.value = 1e9; }   // (every tile's impostors in: no dissolve in a still)
     w.renderer.info.autoReset = false; w.renderer.info.reset();
     w.renderer.render(w.scene, w.camera);
     const i = w.renderer.info.render;

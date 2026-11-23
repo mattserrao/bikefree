@@ -8,9 +8,12 @@
 //   - beyond the mid tier, impostors: each model photographed from eight sides into one atlas at load (lit as the
 //     world is), drawn as camera-facing cards that pick the photo for the side they're seen from — one draw call
 //     for every far tree on the map;
-//   - stochastic LOD between tiers: each tree swaps at its own distance within a band, so the swaps are spread out
-//     (no ring of popping, no dither pattern). The tier materials keep a complementary screen-door fade (uBand) for
-//     kits that want a dithered crossfade instead; the rural maps leave it open;
+//   - LOD without pop-in (user, 22 Nov: "pop-in for trees is distracting"): each tree crosses from tier to tier at
+//     its own distance (a jitter from its position, so the swaps are spread out, no ring; a few metres of hysteresis,
+//     so a rider stopped at the line doesn't flicker), and when it crosses it dissolves into the other tier over
+//     0.6 s — both drawn together with complementary screen-door dither, timed per tree (an instanced attribute:
+//     when it swapped, which way), so only the trees that have just swapped are ever dithered. The frustum test has
+//     a margin (a turn doesn't uncover gaps); a new tile's impostors dissolve in over a second and a half;
 //   - wind in the vertex shader: three sines of rising frequency, scaled by height (tops move most), and a leaf
 //     flutter near by; nothing far off.
 //
@@ -25,19 +28,33 @@ import { makeLeafTexture } from './upstate-trees.js';
 // tiles beyond are released anyway)
 const BANDS = { low: [60, 260], balanced: [120, 480], high: [160, 620] };
 const FADE = [15, 50];   // m: each tree swaps at its own distance within ± this of the band's edge
+const HYST = 3;          // m: hysteresis at each band's edge
+const FT = .6;           // s: a swap's dissolve
+const STEP = 2.5;        // m: the camera moves this far between re-sorts (or turns ~3.5°)
+/** A tree's swap jitter (0–1) from its position — the same in the shaders (teJ). */
+// (a hash of the position on a 25 cm grid, small numbers only: the GPU's float maths gives the same answer for the
+// instanced trees, whose position comes out of their matrices, and the impostors, whose position is an attribute)
+const fr = (v) => v - Math.floor(v);
+export const treeJitter = (x, z) => {
+  const qx = Math.floor(x * 4 + .5), qz = Math.floor(z * 4 + .5);
+  let a = fr(qx * .1031), b = fr(qz * .1031), c = fr(qx * .1031);
+  const d = a * (b + 33.33) + b * (c + 33.33) + c * (a + 33.33); a += d; b += d; c += d;
+  return fr((a + b) * c);
+};
 const ANGLES = 8;
 
 const WIND_GLSL = /* glsl */`
-  uniform vec4 uBand; uniform float uLeaf;
+  uniform float uLeaf;
+  attribute vec2 aFade;   // (instanced) when this tree swapped tier (the world clock), and 1 steady / 2 fading in / 3 fading out
   varying float vKeep0; varying float vKeep1;
-  float teLin(float d, float a, float b) { return clamp((d - a) / max(b - a, 1e-3), 0., 1.); }`;
-/** A tier's fade (uBand: in start, in end, out start, out end) and the wind, patched into a material. */
-function engineMaterial(material, band, uTime, leaf, key) {
+  float teLin(float d, float a, float b) { return clamp((d - a) / max(b - a, 1e-3), 0., 1.); }
+  float teJ(vec2 p) { vec2 q = floor(p * 4. + .5); vec3 p3 = fract(vec3(q.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }`;
+/** A tier's swap dissolve (per tree: aFade) and the wind, patched into a material. */
+function engineMaterial(material, uTime, leaf, key) {
   const prev = material.onBeforeCompile, prevKey = material.customProgramCacheKey ? material.customProgramCacheKey() : '';
-  const uBand = { value: new THREE.Vector4(...band) };
   material.onBeforeCompile = (shader, r) => {
     prev?.call(material, shader, r);
-    shader.uniforms.uTime = uTime; shader.uniforms.uBand = uBand; shader.uniforms.uLeaf = { value: leaf ? 1 : 0 };
+    shader.uniforms.uTime = uTime; shader.uniforms.uLeaf = { value: leaf ? 1 : 0 };
     shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>\n${WIND_GLSL}${leaf || !/uniform float uTime/.test(shader.vertexShader) ? '\nuniform float uTime;' : ''}`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         {
@@ -47,8 +64,11 @@ function engineMaterial(material, band, uTime, leaf, key) {
           vec3 teO = (modelMatrix * vec4(0., 0., 0., 1.)).xyz;
           #endif
           float teD = length(teO.xz - cameraPosition.xz);
-          vKeep0 = teLin(teD, uBand.x, uBand.y);           // fading in
-          vKeep1 = 1. - teLin(teD, uBand.z, uBand.w);      // fading out
+          vKeep0 = 1.; vKeep1 = 1.;
+          #ifdef USE_INSTANCING
+          float teK = clamp((uTime - aFade.x) / ${FT.toFixed(2)}, 0., 1.);
+          if (aFade.y > 2.5) vKeep1 = 1. - teK; else if (aFade.y > 1.5) vKeep0 = teK;   // dissolving out / in
+          #endif
           // wind: three sines, rising in frequency, the tops moving most (height² over the model's ~20 m)
           float hk = clamp(position.y / 20., 0., 1.4); hk *= hk;
           float ph = teO.x * .05 + teO.z * .043;
@@ -64,8 +84,7 @@ function engineMaterial(material, band, uTime, leaf, key) {
           if (vKeep0 <= 1. - teDz || vKeep1 <= teDz) discard;
         }`);
   };
-  material.customProgramCacheKey = () => `${prevKey}|tree-engine-1-${key}`;
-  material.userData.band = uBand;
+  material.customProgramCacheKey = () => `${prevKey}|tree-engine-4-${key}`;
   return material;
 }
 
@@ -73,6 +92,23 @@ function engineMaterial(material, band, uTime, leaf, key) {
  * The leaf-cluster cards' material: the leaf texture alpha-tested, two-sided. Its alpha is scaled up with the mip
  * level (as the far tree cards do), so a far cluster keeps its fill instead of thinning to a speckle of dots.
  */
+/** The per-instance swap attribute (aFade) on a pool's geometry, sized to its instances. */
+function fadeAttr(im, n) {
+  const g = im.geometry, a = g.attributes.aFade;
+  if (a && a.count >= n) return;
+  const at = new THREE.InstancedBufferAttribute(new Float32Array(n * 2), 2); at.setUsage(THREE.DynamicDrawUsage);
+  g.setAttribute('aFade', at);
+}
+
+/** A copy of a kit's own material to wrap per tier (its shader hooks kept), remembering the original (the
+ *  impostor photos use the original: no fade). */
+function ownCopy(m) {
+  const c = m.clone();
+  c.onBeforeCompile = m.onBeforeCompile; if (m.customProgramCacheKey) c.customProgramCacheKey = m.customProgramCacheKey;
+  c.userData.orig = m;
+  return c;
+}
+
 function leafMaterial(map) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, map, alphaTest: .45, side: THREE.DoubleSide, roughness: .9 });
   const size = map.image?.width || 512;
@@ -97,15 +133,14 @@ export class TreeEngine {
     this.group = new THREE.Group(); this.group.name = 'Trees (tree engine)'; parent.add(this.group);
     this.leafTexture = makeLeafTexture(quality === 'low' ? 256 : 512);
     // materials: per tier, wood and leaves; the near tier also for the understory (fading out at the near end)
-    const wood = (band, key) => engineMaterial(decorateTreeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 }), { uTime }), band, uTime, false, key);
-    const leaves = (band, key) => engineMaterial(leafMaterial(this.leafTexture), band, uTime, true, key);
-    const near = [-2, -1, 1e8, 1e9], mid = [-2, -1, 1e8, 1e9];   // (the swaps are per tree: see tick)
-    this.mats = [{ wood: wood(near, 'w0'), leaves: leaves(near, 'l0') }, { wood: wood(mid, 'w1'), leaves: leaves(mid, 'l1') }];
+    const wood = (key) => engineMaterial(decorateTreeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 }), { uTime }), uTime, false, key);
+    const leaves = (key) => engineMaterial(leafMaterial(this.leafTexture), uTime, true, key);
+    this.mats = [{ wood: wood('w0'), leaves: leaves('l0') }, { wood: wood('w1'), leaves: leaves('l1') }];
     // the models: every (species, variant) an entry; the understory near-only entries
     this.entries = []; this.index = new Map(); this._own = new Map();
     for (const [name, sp] of Object.entries(kit.species)) sp.variants.forEach((tiers, v) => this._entry(`${name}:${v}`, [tiers[0], tiers[1]], false));
     for (const [name, g] of Object.entries(kit.understory)) this._entry(`${name}:0`, [g.isBufferGeometry ? { wood: g, leaves: null } : g], true);
-    this.tiles = new Map();
+    this.tiles = new Map(); this._born = new Map();
     this._impostors(lights, quality);
     this.stats = { near: 0, mid: 0, far: 0 };
     this._at = null; this._dir = new THREE.Vector3();
@@ -121,11 +156,15 @@ export class TreeEngine {
         if (!geo) continue;
         // a kit can bring its own material (a scene pack's tuned look): wrapped once with the engine's wind
         let mat = this.mats[tier][part];
-        if (part === 'wood' && t.material) { mat = this._own.get(t.material); if (!mat) this._own.set(t.material, (mat = engineMaterial(t.material, [-2, -1, 1e8, 1e9], this.uTime, false, `own${this._own.size}`))); }
+        if (part === 'wood' && t.material) {
+          // a kit's own material: wrapped once (a copy: the original stays as the kit made it, for the impostor photos)
+          mat = this._own.get(t.material.uuid); if (!mat) this._own.set(t.material.uuid, (mat = engineMaterial(ownCopy(t.material), this.uTime, false, `own${this._own.size}`)));
+        }
         const im = new THREE.InstancedMesh(geo, mat, 16);
         im.count = 0; im.visible = false; im.frustumCulled = false; im.name = `Trees ${key} ${part} ${tier ? 'mid' : 'near'}`;
         im.castShadow = this.shadows && tier === 0 && !nearOnly; im.receiveShadow = this.shadows;
         im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); im.setColorAt(0, new THREE.Color(1, 1, 1));
+        fadeAttr(im, 16);
         this.group.add(im); parts.push(im);
       }
       e.pools[tier] = parts;
@@ -152,7 +191,7 @@ export class TreeEngine {
     const cam = new THREE.OrthographicCamera(-1, 1, 1, 0, .1, 400);
     list.forEach((e, row) => {
       const t = e.pools[0], g = [], b = e.box, half = Math.max(-b.min.x, b.max.x, -b.min.z, b.max.z) * 1.02, top = b.max.y * 1.01;
-      for (const im of t) { const m = new THREE.Mesh(im.geometry, im.material.map ? leafM : im.material === this.mats[0].wood || im.material === this.mats[1].wood ? woodM : im.material); g.push(m); scene.add(m); }
+      for (const im of t) { const m = new THREE.Mesh(im.geometry, im.material.map ? leafM : im.material.userData.orig || woodM); g.push(m); scene.add(m); }
       e.imp = { row, half, top };
       cam.left = -half; cam.right = half; cam.top = top; cam.bottom = 0; cam.updateProjectionMatrix();
       for (let k = 0; k < ANGLES; k++) {
@@ -178,17 +217,20 @@ export class TreeEngine {
     const [b0, b1] = [this.b0, this.b1];
     this.impMat = new THREE.ShaderMaterial({
       fog: true,
-      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uAtlas: { value: rt.texture }, uRows: { value: this.rows }, uBand: { value: new THREE.Vector2(b1 - FADE[1], b1 + FADE[1]) } }]),
+      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uAtlas: { value: rt.texture }, uRows: { value: this.rows }, uNow: { value: 0 } }]),
       vertexShader: /* glsl */`
-        attribute vec4 iA; attribute vec4 iB;   // iA: x, y, z, rotation; iB: width, height, row, tint
-        uniform float uRows; uniform vec2 uBand;
-        varying vec2 vUv; varying float vKeep; varying float vTint;
+        attribute vec4 iA; attribute vec4 iB; attribute float iT; attribute vec2 iS;   // iA: x, y, z, rotation; iB: width, height, row, tint; iT: when its tile came; iS: its swap (when, 0 hidden / 1 shown / 2 in / 3 out)
+        uniform float uRows; uniform float uNow;
+        varying vec2 vUv; varying float vKeep; varying float vOut; varying float vTint;
         #include <fog_pars_vertex>
         void main() {
           vec3 o = iA.xyz; vec2 to = o.xz - cameraPosition.xz; float d = length(to);
-          float j = fract(fract(iA.w * 7.31) + 1.);
-          vKeep = 1.;
-          if (d < mix(uBand.x, uBand.y, j) || iB.x <= 0.) { gl_Position = vec4(2., 2., 2., 1.); return; }
+          // shown when the engine says (iS: the tree's tier), dissolving in or out as it swaps with the mid tier, and
+          // in over 1.5 s after its tile comes
+          float k = clamp((uNow - iS.x) / ${FT.toFixed(2)}, 0., 1.);
+          vOut = iS.y > 2.5 ? 1. : 0.;
+          vKeep = (iS.y > 2.5 ? 1. - k : iS.y > 1.5 ? k : 1.) * clamp((uNow - iT) / 1.5, 0., 1.);
+          if (iS.y < .5 || vKeep <= 0. || iB.x <= 0.) { gl_Position = vec4(2., 2., 2., 1.); return; }
           vec2 dir = to / max(d, 1e-3);
           vec3 right = normalize(vec3(-dir.y, 0., dir.x));
           // the side it's seen from, in the tree's own frame (its rotation about y), → one of the photos
@@ -204,19 +246,21 @@ export class TreeEngine {
           #include <fog_vertex>
         }`,
       fragmentShader: /* glsl */`
-        uniform sampler2D uAtlas; varying vec2 vUv; varying float vKeep; varying float vTint;
+        uniform sampler2D uAtlas; varying vec2 vUv; varying float vKeep; varying float vOut; varying float vTint;
         #include <common>
         #include <fog_pars_fragment>
         void main() {
           vec4 c = texture2D(uAtlas, vUv);
           if (c.a < .5) discard;
+          float teDz = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(.06711056, .00583715))));
+          if (vOut > .5 ? vKeep <= teDz : vKeep <= 1. - teDz) discard;   // the complement of the mid tier's dissolve
           gl_FragColor = vec4(c.rgb / max(c.a, 1e-3) * vTint, 1.);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
           #include <fog_fragment>
         }`,
     });
-    this.impMat.customProgramCacheKey = () => 'tree-engine-impostor-1';
+    this.impMat.customProgramCacheKey = () => 'tree-engine-impostor-4';
     this.impMesh = new THREE.Mesh(geo, this.impMat);
     this.impMesh.frustumCulled = false; this.impMesh.name = 'Trees (impostors)';
     this.group.add(this.impMesh);
@@ -226,16 +270,22 @@ export class TreeEngine {
     let n = 0; for (const t of this.tiles.values()) n += t.length;
     if (n > this.impCap) {
       this.impCap = Math.ceil(n * 1.3);
-      this.iA = new Float32Array(this.impCap * 4); this.iB = new Float32Array(this.impCap * 4);
-      this.impGeo.setAttribute('iA', new THREE.InstancedBufferAttribute(this.iA, 4)); this.impGeo.setAttribute('iB', new THREE.InstancedBufferAttribute(this.iB, 4));
+      this.iA = new Float32Array(this.impCap * 4); this.iB = new Float32Array(this.impCap * 4); this.iT = new Float32Array(this.impCap); this.iS = new Float32Array(this.impCap * 2);
+      this.impGeo.setAttribute('iA', new THREE.InstancedBufferAttribute(this.iA, 4)); this.impGeo.setAttribute('iB', new THREE.InstancedBufferAttribute(this.iB, 4)); this.impGeo.setAttribute('iT', new THREE.InstancedBufferAttribute(this.iT, 1));
+      this.impGeo.setAttribute('iS', new THREE.InstancedBufferAttribute(this.iS, 2)); this.impGeo.attributes.iS.setUsage(THREE.DynamicDrawUsage);
     }
     let k = 0;
-    for (const list of this.tiles.values()) for (const t of list) {
-      const e = t.e; if (!e.imp) continue;
-      this.iA.set([t.x, t.y, t.z, t.rot], k * 4); this.iB.set([e.imp.half * 2 * t.s, e.imp.top * t.sy, e.imp.row, t.tint], k * 4); k++;
+    for (const [key, list] of this.tiles) {
+      const born = this._born.get(key) ?? -99;
+      for (const t of list) {
+        const e = t.e; if (!e.imp) continue;
+        this.iA.set([t.x, t.y, t.z, t.rot], k * 4); this.iB.set([e.imp.half * 2 * t.s, e.imp.top * t.sy, e.imp.row, t.tint], k * 4); this.iT[k] = born;
+        this.iS[k * 2] = t.ts ?? -1e9; this.iS[k * 2 + 1] = t.tier === 2 ? 1 : 0; t.ik = k; k++;
+      }
     }
     this.impGeo.instanceCount = k;
-    this.impGeo.attributes.iA.needsUpdate = true; this.impGeo.attributes.iB.needsUpdate = true;
+    this.impGeo.attributes.iA.needsUpdate = true; this.impGeo.attributes.iB.needsUpdate = true; this.impGeo.attributes.iT.needsUpdate = true; this.impGeo.attributes.iS.needsUpdate = true;
+    this._at = null;   // (the tiers: a re-sort now)
     this.stats.far = k;
   }
 
@@ -244,37 +294,59 @@ export class TreeEngine {
     const list = [];
     for (const t of trees) {
       const e = this.index.get(`${t.sp}:${t.v || 0}`); if (!e) continue;
-      const j = ((t.rot * 7.31) % 1 + 1) % 1;
-      list.push({ ...t, e, j0: (j - .5) * 2 * FADE[0], j1: (j - .5) * 2 * FADE[1], sy: t.sy ?? t.s, tint: t.tint ?? 1, r: Math.max(e.box.max.x - e.box.min.x, e.box.max.z - e.box.min.z) * .5 * t.s, h: e.box.max.y * (t.sy ?? t.s) });
+      const j = treeJitter(t.x, t.z);
+      list.push({ ...t, e, ik: -1, j0: (j - .5) * 2 * FADE[0], j1: (j - .5) * 2 * FADE[1], sy: t.sy ?? t.s, tint: t.tint ?? 1, r: Math.max(e.box.max.x - e.box.min.x, e.box.max.z - e.box.min.z) * .5 * t.s, h: e.box.max.y * (t.sy ?? t.s) });
     }
+    // a tile that comes while the ride is under way dissolves in (its impostors; the first tiles are there at once)
+    this._born.set(key, this._started && this.uTime.value > 3 ? this.uTime.value : -99);
     this.tiles.set(key, list);
     this._dirty = true; this._at = null;
   }
-  removeTile(key) { if (this.tiles.delete(key)) { this._dirty = true; this._at = null; } }
+  removeTile(key) { this._born.delete(key); if (this.tiles.delete(key)) { this._dirty = true; this._at = null; } }
 
-  /** Re-sort the trees round the camera when it has moved ~12 m or turned ~6°; impostors when tiles changed. */
+  /** Re-sort the trees round the camera when it has moved STEP m or turned ~3.5°; impostors when tiles changed. */
   tick(camera) {
+    this.impMat.uniforms.uNow.value = this.uTime.value;
+    if (!this._started && this.tiles.size) this._started = true;
     if (this._dirty) { this._dirty = false; this._rebuildImpostors(); }
     camera.getWorldDirection(this._dir);
-    if (this._at && this._at.distanceTo(camera.position) < 12 && this._dir.dot(this._lastDir) > .995) return;
+    if (this._at && this._at.distanceTo(camera.position) < STEP && this._dir.dot(this._lastDir) > .998 && !(this._fadeUntil && this.uTime.value > this._fadeUntil)) return;
+    this._fadeUntil = 0;
     this._at = camera.position.clone(); this._lastDir = this._dir.clone();
     this._m.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); this._frustum.setFromProjectionMatrix(this._m);
-    const reach = this.b1 + FADE[1], b0 = this.b0, cx = camera.position.x, cz = camera.position.z;
+    const b0 = this.b0, b1 = this.b1, cx = camera.position.x, cz = camera.position.z, now = this.uTime.value;
     const lists = this.entries.map(() => [[], []]);
-    let near = 0, mid = 0;
+    let near = 0, mid = 0, impDirty = false;
+    const iS = this.iS;
     for (const list of this.tiles.values()) {
       for (const t of list) {
         const d = Math.hypot(t.x - cx, t.z - cz);
-        if (d > reach) continue;
-        // in view (with a margin), or right beside the camera
-        if (d > 25) { this._sphere.center.set(t.x, t.y + t.h * .5, t.z); this._sphere.radius = Math.max(t.r, t.h * .6) + 2; if (!this._frustum.intersectsSphere(this._sphere)) continue; }
+        // the tier (each tree at its own distance, with hysteresis): 0 near, 1 mid, 2 impostor (-1: none, the understory)
+        const cur = t.tier, d0 = d - t.j0, d1 = d - t.j1;
+        // (a far-only tree — a scene's far planting — stands aside inside the square of its real trees: hideFar)
+        const hf = this.hideFar, hidden = t.farOnly && hf && t.x > hf[0] && t.x < hf[2] && t.z > hf[1] && t.z < hf[3];
+        const want = hidden ? -1 : t.e.nearOnly ? (d0 < b0 * .8 + (cur === 0 ? HYST : -HYST) ? 0 : -1)
+          : d0 < b0 + (cur === 0 ? HYST : -HYST) ? 0 : d1 < b1 + (cur === 1 ? HYST : -HYST) ? 1 : 2;
+        if (cur === undefined) { t.tier = want; t.from = -1; t.ts = -1e9; }
+        else if (want !== cur) { t.from = cur; t.tier = want; t.ts = now; }
+        const fading = now - t.ts < FT;
+        // the impostor's state (only written when it changes)
+        if (t.ik >= 0 && iS) {
+          const mode = t.tier === 2 ? (fading ? 2 : 1) : fading && t.from === 2 ? 3 : 0;
+          if (iS[t.ik * 2 + 1] !== mode || iS[t.ik * 2] !== t.ts) { iS[t.ik * 2] = t.ts; iS[t.ik * 2 + 1] = mode; impDirty = true; }
+        }
+        const inNear = t.tier === 0 || (fading && t.from === 0), inMid = t.tier === 1 || (fading && t.from === 1);
+        if (!inNear && !inMid) continue;
+        // in view (with a margin, ~8° and a few metres: a turn between re-sorts doesn't uncover gaps), or right beside
+        if (d > 25) { this._sphere.center.set(t.x, t.y + t.h * .5, t.z); this._sphere.radius = Math.max(t.r, t.h * .6) + 4 + d * .14; if (!this._frustum.intersectsSphere(this._sphere)) continue; }
         const L = lists[t.e.i];
-        // each tree swaps at its own distance within the band (stochastic LOD: the swaps are spread out, so no ring
-        // of popping and no dither pattern), the same distances the impostor shader uses
-        if (d < b0 + t.j0) { L[0].push(t); near++; }
-        else if (!t.e.nearOnly && d < this.b1 + t.j1) { L[1].push(t); mid++; }
+        if (inNear) { L[0].push(t); near++; t._m0 = t.tier === 0 ? (fading ? 2 : 1) : 3; }
+        if (inMid) { L[1].push(t); mid++; t._m1 = t.tier === 1 ? (fading ? 2 : 1) : 3; }
       }
     }
+    if (impDirty) this.impGeo.attributes.iS.needsUpdate = true;
+    // dissolves under way: re-sort again once they're done (so the ones dissolved out leave the lists)
+    this._fadeUntil = now + FT + .05;
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), p = new THREE.Vector3(), s = new THREE.Vector3(), c = new THREE.Color();
     this.entries.forEach((e, i) => lists[i].forEach((list, tier) => {
       for (let pi = 0; pi < (e.pools[tier] || []).length; pi++) {
@@ -282,9 +354,12 @@ export class TreeEngine {
         if (list.length > im.instanceMatrix.count) {
           const nim = new THREE.InstancedMesh(im.geometry, im.material, Math.ceil(list.length * 1.5));
           nim.name = im.name; nim.frustumCulled = false; nim.castShadow = im.castShadow; nim.receiveShadow = im.receiveShadow; nim.instanceMatrix.setUsage(THREE.DynamicDrawUsage); nim.setColorAt(0, c.set(1, 1, 1));
+          fadeAttr(nim, nim.instanceMatrix.count);
           this.group.remove(im); im.dispose(); this.group.add(nim); e.pools[tier][pi] = im = nim;
         }
-        list.forEach((t, k) => { q.setFromAxisAngle(Y, t.rot); p.set(t.x, t.y, t.z); s.set(t.s, t.sy, t.s); im.setMatrixAt(k, m.compose(p, q, s)); im.setColorAt(k, c.setScalar(t.tint)); });
+        const fa = im.geometry.attributes.aFade, fd = fa.array, mk = tier ? '_m1' : '_m0';
+        list.forEach((t, k) => { q.setFromAxisAngle(Y, t.rot); p.set(t.x, t.y, t.z); s.set(t.s, t.sy, t.s); im.setMatrixAt(k, m.compose(p, q, s)); im.setColorAt(k, c.setScalar(t.tint)); fd[k * 2] = t.ts; fd[k * 2 + 1] = t[mk]; });
+        fa.clearUpdateRanges(); fa.addUpdateRange(0, list.length * 2); fa.needsUpdate = true;
         im.count = list.length; im.visible = list.length > 0;
         im.instanceMatrix.clearUpdateRanges(); im.instanceMatrix.addUpdateRange(0, list.length * 16); im.instanceMatrix.needsUpdate = true;
         if (im.instanceColor) { im.instanceColor.clearUpdateRanges(); im.instanceColor.addUpdateRange(0, list.length * 3); im.instanceColor.needsUpdate = true; }
@@ -297,7 +372,7 @@ export class TreeEngine {
     this.group.removeFromParent();
     for (const e of this.entries) for (const tier of e.pools) for (const im of tier || []) im.dispose();
     for (const t of this.mats) { t.wood.dispose(); t.leaves.dispose(); }
-    // (own materials belong to their kit)
+    for (const m of this._own.values()) m.dispose();   // (clones of the kit's own materials)
     this.impGeo.dispose(); this.impMat.dispose(); this.atlas.dispose(); this.leafTexture.dispose();
   }
 }

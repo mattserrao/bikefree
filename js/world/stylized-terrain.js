@@ -779,10 +779,13 @@ export class StylizedTerrain {
         && Math.abs(dx * l.forward.x + dz * l.forward.z) < l.lengthM / 2 + .8;
     });
     const matrix = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), scale = new THREE.Vector3();
+    // the trees go to the tree engine (one for the game: its tiers, impostors and swaps), the rest to the pools
+    const te = coverOnly ? null : this._treeEngine(), engineTrees = te ? [] : null;
     const add = (name, x, y, z, width, height = width) => {
       if (!this.kit.assets[name] && name !== 'shadow') return;
       const turn = rand() * Math.PI * 2;
       if (thin && fract(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) < .5) return;
+      if (te) { const sp = name.replace(/-lod$/, ''); if (te.index.has(`${sp}:0`)) { engineTrees.push({ x, y, z, sp, v: 0, s: width, sy: height, rot: turn }); return; } }
       q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), turn);
       p.set(x, y, z); scale.set(width, height, width);
       (lists[name] ||= []).push(matrix.compose(p, q, scale).clone());
@@ -970,7 +973,7 @@ export class StylizedTerrain {
       packed[name] = { matrices: packMatrices(matrices), colors };
     }
     // drawn by the instance pools; the group is an unrendered stand-in for QC tools
-    return { x: cx * size, z: cz * size, size, detailed, lists: packed, group: proxyGroup(packed, (n) => this._asset(n)) };
+    return { x: cx * size, z: cz * size, size, detailed, lists: packed, group: proxyGroup(packed, (n) => this._asset(n)), engineTrees };
   }
 
   _asset(name) { return name === 'shadow' ? this.shadowAsset : this.kit.assets[name]; }
@@ -1081,8 +1084,11 @@ export class StylizedTerrain {
         if (this.groundPoolFine) this.groundPoolFine.set(new Map(all.filter(([, p]) => p.fine)));
       } else {
         const map = layer === 'forest' ? this.forestTiles : layer === 'far' ? this.farTrees : this[layer];
-        for (const key of [...map.keys()]) if (!wanted.has(key)) { if (map.get(key)?.engine) this._te?.removeTile(key); map.delete(key); }
-        if (!(layer === 'forest' && this._te)) this._pool(layer).set(map.values(), cx, cz);
+        for (const key of [...map.keys()]) if (!wanted.has(key)) { const tl = map.get(key); if (tl?.engine) this._te?.removeTile(tl.engineKey ?? key); map.delete(key); }
+        // the scatter's and far tiles' trees go into the tree engine as their tiles swap in (not before: no doubles)
+        if (this._te) for (const [key, tl] of map) if (tl.engineTrees && !tl.engine) { tl.engineKey = `${layer}:${key}`; tl.engine = true; this._te.setTile(tl.engineKey, tl.engineTrees); }
+        if (!(layer === 'forest' && this._te) && !(layer === 'far' && this._te)) this._pool(layer).set(map.values(), cx, cz);
+        if (layer === 'scatter' && this._te) { const [sx, sz, r] = want.scatterSquare; this._te.hideFar = [(sx - r) * 192, (sz - r) * 192, (sx + r + 1) * 192, (sz + r + 1) * 192]; this._te._at = null; }
         // the tree cards step aside where the real trees are (the scatter square around the camera)
         if (layer === 'far' && this.farCards) this.farCards.reach.value = this.farOn ? this.farUniform.value.x - this.farUniform.value.y * .5 - 60 : 1e9;
         if (layer === 'scatter' && this.farCards) {
@@ -1131,7 +1137,10 @@ export class StylizedTerrain {
     const lists = { conifer: [], broadleaf: [] }, colors = { conifer: [], broadleaf: [] };
     const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
     const count = this.quality.candidates * (T / 192) ** 2 * FAR_TREE_DENSITY * (vegetation.density || 1);
+    const te = this._treeEngine(), engineTrees = te ? [] : null;
     const add = (name, x, y, z, width, tall) => {
+      // with the tree engine: its impostors (the same photos as the near trees), only beyond the real trees
+      if (te) { if (te.index.has(`${name}:0`)) engineTrees.push({ x, y, z, sp: name, v: 0, s: width, sy: width * tall, rot: rand() * 6.283, farOnly: true }); return; }
       const kind = /^(broadleaf|palm)/.test(name) ? 'broadleaf' : 'conifer', size = this._farCardSize(name);
       if (!size) return;
       p.set(x, y - .3, z); sc.set(size.w * width * 1.1, size.h * width * tall, 1);
@@ -1161,7 +1170,7 @@ export class StylizedTerrain {
     }
     const packed = {};
     for (const kind of ['conifer', 'broadleaf']) if (lists[kind].length) packed[kind] = { matrices: packMatrices(lists[kind]), colors: Float32Array.from(colors[kind]) };
-    return { x: tx * T, z: tz * T, size: T, lists: packed };
+    return { x: tx * T, z: tz * T, size: T, lists: packed, engineTrees };
   }
 
   /** Card width, height and colour for a tree model (from the model's own size and mean vertex colour). */
