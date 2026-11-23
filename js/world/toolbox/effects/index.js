@@ -15,8 +15,9 @@ import { shoreline } from './shoreline.js';
 import { village } from './village.js';
 import { frontYards } from './front-yards.js';
 import { sky } from './sky.js';
+import { atmosphere } from './atmosphere.js';
 
-export const EFFECTS = { water: waterSurface, shoreline, village, frontYards, sky };
+export const EFFECTS = { water: waterSurface, shoreline, village, frontYards, sky, atmosphere };
 
 /** Install the effects a map asks for; returns one handle that fans out to them. */
 export function installEffects(world, cfg = {}) {

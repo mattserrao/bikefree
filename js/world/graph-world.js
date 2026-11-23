@@ -1539,8 +1539,8 @@ function roadSurfaceMaterial(low = false, ny = false) {
             // grass creeping in at the ragged edges
             col = mix(col, vec3(.33, .4, .2), smoothstep(.82, .98, abs(q.x) / w + rag * .3) * .7);
             // puddles: in the worn line, a few per hundred metres; muddy rims, the sky's grey-blue in the middle
-            float pn = gwN(vec2(q.y * .16, (q.x - wan) * .55) + 53.), pud = smoothstep(.76, .8, pn) * worn * (1. - edge);
-            float rim = smoothstep(.7, .76, pn) * worn * (1. - pud);
+            float pn = gwN(vec2(q.y * .42, (q.x - wan) * .62) + 53.) * step(.55, gwN(vec2(q.y * .03, 7.7))), pud = smoothstep(.8, .83, pn) * worn * (1. - edge);
+            float rim = smoothstep(.75, .8, pn) * worn * (1. - pud);
             col = mix(col, col * vec3(.62, .58, .52), rim * .8);
             col = mix(col, vec3(.46, .5, .55) * (.85 + .2 * gwN(vGW.xz * 3.)), pud * .9);
             c = pow(col, vec3(2.2));
@@ -1564,7 +1564,7 @@ function roadSurfaceMaterial(low = false, ny = false) {
           diffuseColor.rgb = c;
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-road-surface-2${low ? '-low' : ''}${ny ? '-ny1' : ''}`;
+  m.customProgramCacheKey = () => `pgh-road-surface-3${low ? '-low' : ''}${ny ? '-ny1' : ''}`;
   return m;
 }
 

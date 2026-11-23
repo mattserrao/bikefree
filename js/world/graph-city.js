@@ -393,6 +393,8 @@ export class GraphCity {
   }
   urban(x, z) { const c = this.landAt(x, z); return c === LAND.paved || c === LAND.yards || c === LAND.building || c === LAND.plaza; }
   inWater(x, z) { const w = this.world; return w._groundH(x, z) < w.poolAt(x, z) + 0.3; }
+  /** Water or wet ground here: a pond or lake, the canal, a creek's line, a marsh (the atmosphere effect's mist). */
+  waterNear(x, z) { const c = this.landAt(x, z); return c === LAND.water || c === LAND.wetland || canalAt(x, z, 0) || this.inWater(x, z); }
 
   // ------------------------------------------------------------------ setup helpers
   /** CNY's rail bridge approaches (cny-landmarks.js railbridge): the embankments' strips along the bridge's axis, so

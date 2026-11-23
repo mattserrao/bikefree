@@ -11,6 +11,7 @@
 //   railbridge   the Finger Lakes Railway over Genesee Street: two steel plate girders on stone abutments
 //   library      the Maxwell Memorial Library: one storey of brick, a gabled entrance
 //   firehouse    the Warners Volunteer Fire Department: the apparatus bays and a hose tower
+import * as THREE from '../../../../vendor/three.module.min.js';
 import { V, centroid, scaleRing, orient, prism, cap, block, frameOf, makeFrame, lathe, gable, faceOut } from './hero-geom.js';
 
 /**
@@ -85,7 +86,8 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
     return ts;
   };
   const canalBanks = (P, wOf, trailSide) => {
-    const GRASS = '#5f773b', GRASS2 = '#687f41', GRAVEL = '#a99e86', H = .85, gap = GAP;
+    const GRAVEL = '#a99e86', H = .85, gap = GAP;
+    const BANK = ['#5a6c3a', '#64733f', '#6e7745', '#5f6b3d', '#77774a', '#566638'];
     const Q = P.filter((_, i) => i % 2 === 0 || i === P.length - 1);
     for (const sd of [1, -1]) {
       const berm = sd !== trailSide;
@@ -106,9 +108,28 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
       for (let i = 0; i + 1 < Q.length; i++) {
         const a = Q[i], b = Q[i + 1], A = prof[i], B = prof[i + 1], m = Math.min(A.length, B.length);
         for (let k = 0; k + 1 < m; k++) {
-          S.color(berm && k === 2 && A.length > 4 && B.length > 4 ? GRAVEL : (i + k) % 3 ? GRASS : GRASS2);
+          // (user, 23 Nov: "the green embankment … a bit jarring"): no per-strip banding — the grass's tone drifts slowly
+          // along the bank (a low-frequency mix of a few muted autumn greens and straw), the water's-edge face darker and
+          // muddier, the top a little drier
+          const drift = (hsh(Math.floor(i / 7) * 3 + sd) * .6 + hsh(Math.floor(i / 17) * 5 + sd + 1) * .4);
+          const tone = BANK[Math.floor(drift * BANK.length) % BANK.length], next = BANK[(Math.floor(drift * BANK.length) + 1) % BANK.length];
+          const col = new THREE.Color(tone).lerp(new THREE.Color(next), (drift * BANK.length) % 1);
+          if (k === 0) col.lerp(new THREE.Color('#4a4d33'), .55);
+          else if (k === 1) col.lerp(new THREE.Color('#8f8a5c'), .12 + hsh(i * 3 + sd) * .1);
+          S.color(berm && k === 2 && A.length > 4 && B.length > 4 ? GRAVEL : col);
           const pt = (p, o, y) => V(p.x + p.nx * sd * o, y, p.z + p.nz * sd * o);
           faceOut(S, [pt(a, A[k][0], A[k][1]), pt(b, B[k][0], B[k][1]), pt(b, B[k + 1][0], B[k + 1][1]), pt(a, A[k + 1][0], A[k + 1][1])], up0);
+        }
+        // tufts of longer grass and the odd straw-coloured clump along the bank's top edge (breaks its clean line)
+        if (A.length > 2 && hsh(i * 11 + sd * 3) < .55) {
+          const o = A[1][0] + (hsh(i * 5 + sd) - .5) * .5, y = A[1][1], cx = a.x + a.nx * sd * o, cz = a.z + a.nz * sd * o;
+          const tc = hsh(i * 7 + sd) < .3 ? '#9a9260' : hsh(i * 9 + sd) < .5 ? '#6f7a44' : '#5e6c3a';
+          S.color(tc);
+          for (let q = 0; q < 5; q++) {
+            const an = q * 1.3 + hsh(i + q) * 2, len = .35 + hsh(i * 3 + q) * .4, bx = cx + Math.cos(an) * .12, bz = cz + Math.sin(an) * .12;
+            S.triangle(V(bx - .04, y - .02, bz), V(bx + .04, y - .02, bz), V(bx + Math.cos(an) * .18, y + len, bz + Math.sin(an) * .18));
+            S.triangle(V(bx + .04, y - .02, bz), V(bx - .04, y - .02, bz), V(bx + Math.cos(an) * .18, y + len, bz + Math.sin(an) * .18));
+          }
         }
         // a bench on the berm every ~300 m, facing the water
         if (berm && A.length > 4 && B.length > 4 && hsh(i * 13 + 5) < .028) {
@@ -122,10 +143,10 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
     for (let i = 0; i < P.length; i += 3) {
       if (hsh(i * 7 + 1) > .22) continue;
       const p = P[i], sd = hsh(i) < .5 ? 1 : -1, w = wOf(p, sd), n = 4 + Math.floor(hsh(i + 9) * 6);
-      S.color(hsh(i + 2) < .5 ? '#3e5f2b' : '#466a30');
+      S.color(hsh(i + 2) < .5 ? '#34482a' : '#3b5030');
       for (let k = 0; k < n; k++) {
         const o = w - .6 - hsh(i * 3 + k) * 2.2, al = (hsh(i * 5 + k) - .5) * 5;
-        S.cylinder(p.x + p.nx * sd * o + p.dx * al, p.y + .01, p.z + p.nz * sd * o + p.dz * al, .35 + hsh(k + i) * .35, .03, 6);
+        S.cylinder(p.x + p.nx * sd * o + p.dx * al, p.y + .01, p.z + p.nz * sd * o + p.dz * al, .16 + hsh(k + i) * .16, .015, 9);   // (smaller, rounder: the big hexagons read as slabs)
       }
       if (hsh(i + 4) < .3) { S.color('#efe6d8'); S.cylinder(p.x + p.nx * sd * (w - 1.2), p.y + .03, p.z + p.nz * sd * (w - 1.2), .09, .08, 5, .03); }   // a flower
     }

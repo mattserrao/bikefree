@@ -49,3 +49,5 @@ made on the same machine.
     maps)
   - shader warm-up: `toolbox/core/shader-warm.js` (`ShaderWarmer`; graph worlds; a scene world can add one the
     same way)
+
+| `atmosphere` | Sun beams slanting through the crowns when the sun is low, ground mist over water and wet ground, drifting leaves, dust motes catching the light. One draw call each, animated in the vertex shader; beams and mist re-placed every ~35 m. | `beams` 1, `mist` 1, `leaves` 1, `motes` 1 (0 = off) | 4 draw calls, a few hundred tiny quads/points. |
