@@ -372,7 +372,7 @@ export class TreeEngine {
     const iS = this.iS;
     // (the stutter, 23 Nov: every re-sort walked every tree on the map — 65–90 k, every 2.5 m of riding: tens of ms.
     //  A tile wholly past the mid band whose trees are all settled cards is skipped: nothing in it can change)
-    const farEdge = b1 + FADE[1] + HYST + 10;
+    const farEdge = b1 * (TREES_2D ? 1.6 : 1) + FADE[1] + HYST + 10;   // (2D: the shrubs reach past the mid band)
     for (const list of this.tiles.values()) {
       const bb = list._bb || (list._bb = tileBounds(list));
       if (list._settled && bb && Math.hypot(Math.max(0, Math.abs(cx - bb.cx) - bb.hx), Math.max(0, Math.abs(cz - bb.cz) - bb.hz)) > farEdge && now > list._settled) continue;
@@ -384,8 +384,9 @@ export class TreeEngine {
         // (a far-only tree — a scene's far planting — stands aside inside the square of its real trees: hideFar)
         const hf = this.hideFar, hidden = t.farOnly && hf && t.x > hf[0] && t.x < hf[2] && t.z > hf[1] && t.z < hf[3];
         const B0 = t.deep ? b0 * DEEP[0] : b0, B1 = t.deep ? b1 * DEEP[1] : b1;
-        // (2D: the shrubs too — their card within their own reach, none beyond)
-        const want = hidden ? -1 : t.e.nearOnly ? (d0 < B0 * .8 + (cur === 0 || cur === 2 ? HYST : -HYST) ? (TREES_2D ? 2 : 0) : -1)
+        // (2D: the shrubs too, as the trees — user, 23 Nov: "they appear all at once … behaviour and detail mimics trees":
+        //  their card out to well past the mid band, each at its own distance, dissolving in and out as a tree's does)
+        const want = hidden ? -1 : t.e.nearOnly ? (TREES_2D ? (d1 < B1 * 1.6 + (cur === 2 ? HYST : -HYST) ? 2 : -1) : d0 < B0 * .8 + (cur === 0 ? HYST : -HYST) ? 0 : -1)
           : TREES_2D ? 2 : d0 < B0 + (cur === 0 ? HYST : -HYST) ? 0 : d1 < B1 + (cur === 1 ? HYST : -HYST) ? 1 : 2;
         if (cur === undefined) { t.tier = want; t.from = -1; t.ts = -1e9; }
         else if (want !== cur) { t.from = cur; t.tier = want; t.ts = now; }
