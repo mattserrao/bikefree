@@ -20,6 +20,7 @@ import { loadRider } from './rider.js';
 import { PerfMonitor } from './perf.js';
 import { BakedLighting } from './toolbox/atmosphere/baked-light.js';
 import { drain, runSlice, due } from './toolbox/core/jobs.js';
+import { installEffects } from './toolbox/effects/index.js';
 import { makeParkMaterial } from './toolbox/materials/park-surfaces.js';
 import { makeMasonryMaterial } from './toolbox/materials/stonework.js';
 
@@ -258,6 +259,9 @@ export class GraphWorld {
       trunk: new THREE.MeshLambertMaterial({ color: '#5b4636' }),
       crown: new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true }),
     };
+    // the graphics effects this map asks for (toolbox/effects: the JSON's "effects" block; none when absent)
+    this.TILE = TILE;
+    this.effects = installEffects(this, this.json.effects);
     this.water = new THREE.Mesh(new THREE.PlaneGeometry(2 * FAR_M + 4000, 2 * FAR_M + 4000).rotateX(-Math.PI / 2), this.mats.water);
     this.water.position.y = this.waterY;
     this.scene.add(this.water);
@@ -420,6 +424,7 @@ export class GraphWorld {
   get loading() { return (this._queued || 0) > 6 || this.baked?.preparing ? 4 : 0; }
 
   dispose() {
+    this.effects?.dispose();
     this.stop();
     this.disposed = true;
     this._ro?.disconnect();
@@ -454,6 +459,7 @@ export class GraphWorld {
     }
     this.crank += ((src.cadence || 0) / 60) * Math.PI * 2 * dt;
     this.heroes?.tick(now / 1000, dt);
+    this.effects.tick(now / 1000, dt);
     this.city?.tick(this.camera.position, now / 1000, this.path ? out : null, dt);
     if ((this._frames & 15) === 0) this.bridges?.tick(this.camera.position, this.qualityKey === 'low' ? 3000 : 4500);
     this.rider.update(out.pos, out.fwd, this.crank, src.speed || 0, Math.min(dt, 0.1), src);
@@ -503,6 +509,8 @@ export class GraphWorld {
     for (const p of this.pools || []) if (x >= p.x0 && x <= p.x1 && z >= p.z0 && z <= p.z1) return p.level;
     return this.waterY - WATER_ABOVE;
   }
+  /** The water's surface here (the pool level and the plane's lift above it). */
+  waterTop(x, z) { return this.poolAt(x, z) + WATER_ABOVE; }
   /** The ground as its mesh draws it here (the 12.8 m grid's triangles), or the raw height where that tile isn't built. */
   surfaceH(x, z) {
     const tt = this.tiles.get(`${Math.floor(x / TILE)},${Math.floor(z / TILE)}`);
@@ -1000,6 +1008,7 @@ export class GraphWorld {
     t.groundMesh = new THREE.Mesh(g, this.mats.ground);
     this.group.add(t.groundMesh);
     yield* this._bankJob(t);
+    yield* this.effects.tileJob(t);
   }
 
   /** The dressed places' ground in this tile (toolbox/materials/park-surfaces.js): lawns, beds, woods, plazas and walks
@@ -1379,7 +1388,7 @@ const NY_ROAD_GLSL = /* glsl */`
     float trans = (1. - smoothstep(.03, .06, abs(tx))) * step(.25, gwH(vec2(seg, 6.))) * step(ax, hw - .15 * gwH(vec2(seg, 8.)) * hw);
     float sealed = step(.4, gwH(vec2(seg, 11.)));             // most are sealed (black tar), some are open hairlines
     snake = max(snake * step(.25, age + worn), trans * sealed);
-    lin = mix(lin, base * .38, snake * .92 * det);
+    lin = mix(lin, base * .5, snake * .85 * det);   // (tar: dark, not black — close up they read as cracks, not lines)
     lin *= 1. - trans * (1. - sealed) * .45 * det;
     // alligator cracking in the wheel paths, in the worst stretches
     vec2 cell = nyCell(vec2(q.x, along) * 4.2);

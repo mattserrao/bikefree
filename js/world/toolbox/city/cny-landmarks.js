@@ -15,7 +15,8 @@ import { V, centroid, scaleRing, orient, prism, cap, block, frameOf, makeFrame, 
 
 /**
  * The canal's channel, for the planters (graph-city: no tree, house or brush in it; scrub on its banks): its samples
- * every 4 m with the water's width each side and the room to the nearest way (the towpath). canalAt(x, z, pad): the
+ * every 4 m with the water's width each side and the room to the nearest way (the towpath); the creeks' channels
+ * too (`creek`: no room measured, no canal scrub). canalAt(x, z, pad): the
  * sample it's in (within pad of the water), or null.
  */
 export const CANAL = { samples: [], grid: new Map() };
@@ -30,10 +31,10 @@ export function canalAt(x, z, pad = 0) {
   }
   return null;
 }
-function registerCanal(S2, wOf, gap, trailSide) {
+function registerCanal(S2, wOf, gap, trailSide, creek = false) {
   for (const p of S2) {
-    const q = { x: p.x, z: p.z, y: p.y, nx: p.nx, nz: p.nz, dx: p.dx, dz: p.dz, w1: wOf(p, 1), w2: wOf(p, -1), trail: trailSide };
-    q.g1 = gap(p, 1, q.w1); q.g2 = gap(p, -1, q.w2);
+    const q = { x: p.x, z: p.z, y: p.y, nx: p.nx, nz: p.nz, dx: p.dx, dz: p.dz, w1: wOf(p, 1), w2: wOf(p, -1), trail: trailSide, creek };
+    if (!creek) { q.g1 = gap(p, 1, q.w1); q.g2 = gap(p, -1, q.w2); }
     CANAL.samples.push(q);
     const k = cgKey(Math.floor(q.x / CG), Math.floor(q.z / CG)); let a = CANAL.grid.get(k); if (!a) CANAL.grid.set(k, (a = [])); a.push(q);
   }
@@ -195,6 +196,9 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L }) {
         canalBanks(S2, wOf, trailSide);
         registerCanal(S2, wOf, GAP, trailSide);   // (the channel, for the planters)
       }
+      // a creek's channel too, for the planters: no tree or house in its water (user, 23 Nov: "trees spawning in canal
+      // water is still an issue" — they stood in Nine Mile Creek, drawn as the canal is); no canal scrub along it
+      if (l.creek) registerCanal(S2, wOf, null, 0, true);
       // the banks where the water stands over the ground (its level held at the aqueduct)
       S.color('#7b7255');
       for (let i = 0; i + 1 < S2.length; i++) {

@@ -976,6 +976,8 @@ def write(cfg, E, jpos, jh, cor):
            'attribution': 'Map data © OpenStreetMap contributors (ODbL); elevation: AWS Terrain Tiles (USGS 3DEP)',
            'origin': {'lat': round(lat0, 6), 'lon': round(lon0, 6)}, 'unit': {'latlon': 1e-6, 'ele': 0.1},
            'widths': cfg['widths'], 'waterLevelM': cfg['waterLevelM'], **files,
+           # the graphics effects the map switches on (js/world/toolbox/effects)
+           **({'effects': cfg['effects']} if cfg.get('effects') else {}),
            # the card's map (js/app.js): a few neighbourhoods named, no landmark dots (user, 21 Nov: "greatly simplify")
            'mapLabels': [{'text': t, 'lat': la, 'lon': lo, 'kind': 'area', 'rank': r} for t, la, lo, r in labels], 'pools': cfg.get('pools', []), 'start': cfg.get('start'),
            'nodes': nodes_out, 'edges': edges_out}

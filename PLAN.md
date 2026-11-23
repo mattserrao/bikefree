@@ -1853,3 +1853,36 @@ From the group ride: screen sleeps, a 1% hill "felt like a truck", shifts feel s
 - [x] Camera setting: Close (default, 3.3 m back and lower, ~1.3× bigger rider, FOV widens with speed, slight pull-back on acceleration, faint road buzz) or Classic (old fixed 4.5 m)
 - [x] Diagnostics show "Trainer feels X% (road Y%, hill feel Z%)"
 - [ ] Gear spacing: no change for now (revisit after riders try Hill feel + momentum)
+
+### Graphics polish for CNY and SKAN — branch `graphics-polish-test` *(user, 23 Nov: "Create tasks from the list above. Begin work on a new test bench. Measure performance before / after effects. Ensure development is modular so once changes are done, the effects and tools can be rolled out to other maps")*
+Every effect is its own module under `js/world/toolbox/effects/`, switched on per map by the graph JSON's `"effects"` block
+(off when absent), so a map elsewhere (PGH, scene routes) opts in with one line. Each is measured with the bench before and after.
+- [x] Bench: `node tools/bench/bench.mjs --label <name>` (fixed views in `tools/bench/views.json`: calls, triangles, GPU ms
+      of one frame, geometries / textures, load time, a 30 s ride's frame times; screenshots) and
+      `--compare <a> <b>` (a table, also written to `tools/bench/results/<a>-vs-<b>.md`). Baseline: `baseline`.
+- [~] Water: shoreline blend (wet band, pebble beach, reeds), lake ripples and golden-hour glint, wakes at piles, flowing
+      creeks, white water at the dams.
+      Done: `effects/water-surface.js` (ripple trains, gust patches, Fresnel sky, sparkling sun path) and
+      `effects/shoreline.js` (marching-squares contour of ground − water top per tile: beach and lapping bands that share
+      their edges, reeds on gentle shores). To do: wakes at piles, the CNY canal's and creeks' surfaces (drawn by
+      cny-landmarks, not the water planes), white water at the dams.
+- [~] Villages: storefront awnings, signs, cornices; benches, planters, bike racks, crosswalks, parked cars, flags; hedges,
+      picket fences, porch furniture, mailboxes; varied roof colours.
+      Done: the `village` facade style (street-kit: more awnings, striped canvas, painted fronts) on the village cores'
+      shop rows (kit buildings included; fronts found across a wide street's parking lane), `village-street.js`
+      furniture (benches, flower barrels, racks, bins, flags), `front-yards.js` (picket fences, hedges, foundation
+      shrubs, beds). To do: parked cars, porch furniture, roof colours; more fences reach the lot line.
+- [ ] Landmarks: clubhouse dormers / cross gables / lake terrace; moored sailboats and the tour boat; mansion boathouses,
+      docks, lawn chairs.
+- [ ] Countryside: crop rows, hay bales, stubble, field fences, weathered silos; forest-edge understory; stone walls and
+      hedgerows on field lines.
+- [ ] Atmosphere: aerial haze over the lakes, long soft low-sun shadows and lit foliage, valley mist, a few lit clouds.
+- [ ] Performance: forest tree budget (the Marcellus Falls valley ~5 M triangles).
+- [ ] Roll-out: a guide to the `effects` switches for other maps; the bench report in the PR.
+- [x] CNY canal: trees still spawn in the canal water *(user, 23 Nov: "trees spawning in canal water is still an issue")*.
+      The canal itself was clear (0 of ~23k trees in its channel at 4 spots); the trees stood in the creeks drawn the
+      canal's way (Nine Mile Creek and the brooks: 85 near the aqueduct). The creeks' channels are now registered with
+      the canal's (`creek`: kept clear, no canal scrub); the planters also keep off the land cover's own water.
+- [ ] CNY canal "on Thompson Road" *(user, 23 Nov)*: checked against the National Register (aqueduct 43.05887,
+      −76.28596) and the Erie Canalway (Sims' Store 43.05258, −76.30299): the OSM canal the game draws matches both;
+      Thompson Road runs 25–180 m north of it. Waiting on the user for where it looks wrong before changing anything.

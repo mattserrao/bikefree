@@ -23,6 +23,8 @@ import { planBuildingKitJob, makeStreetIndex, dress } from './toolbox/structures
 import { assemble, Writer } from './toolbox/structures/buildings/assemble.js';
 import { buildHouse } from './toolbox/structures/houses/house-engine.js';
 import { makeFacadeMaterial } from './toolbox/structures/buildings/facade-material.js';
+import { villageFurniture } from './toolbox/city/village-street.js';
+import { planFrontYard, drawFrontYard } from './toolbox/city/front-yards.js';
 import { FURNITURE, makeFacadeDresser } from './toolbox/city/street-kit.js';
 import { farmBuilding } from './toolbox/city/cny-farms.js';
 import { GraphLife } from './toolbox/city/graph-life.js';
@@ -626,7 +628,10 @@ export class GraphCity {
     const W = this.world, x0 = t.i * TILE, z0 = t.j * TILE, out = [], kit = this.treeKit.species;
     const FIELD = (c) => c === LAND.crops || c === LAND.pasture || (c >= 20 && c <= 29);
     const edgeOf = (x, z) => { const r = this.roadNear(x, z, 30); return r ? r.d - r.half : 99; };
-    const clearOf = (x, z, crown) => !this.inWater(x, z) && !canalAt(x, z, Math.max(1.5, crown * .5)) && !this.inWater(x + 3, z) && !this.inWater(x - 3, z) && !this.inWater(x, z + 3) && !this.inWater(x, z - 3)
+    // (the land cover's own water too: the canal and the ponds the ground draws as water, OSM's canal line or not —
+    //  user, 23 Nov: "trees spawning in canal water is still an issue")
+    const wetLand = (x, z, r) => this.landAt(x, z) === LAND.water || this.landAt(x + r, z) === LAND.water || this.landAt(x - r, z) === LAND.water || this.landAt(x, z + r) === LAND.water || this.landAt(x, z - r) === LAND.water;
+    const clearOf = (x, z, crown) => !this.inWater(x, z) && !canalAt(x, z, Math.max(1.5, crown * .5)) && !wetLand(x, z, Math.max(1.5, crown * .5)) && !this.inWater(x + 3, z) && !this.inWater(x - 3, z) && !this.inWater(x, z + 3) && !this.inWater(x, z - 3)
       && !this.heroes.heroes?.covers?.(x, z, 3) && !this.host.buildingNear(x, z, crown) && !this.kit.occupied(x, z, Math.min(crown, 3)) && !this._inDressing(x, z)
       && !this._drivewayNear?.(x, z, 2.5) && !this._railCovers(x, z, crown * .6);
     const pick = (mix, r) => { let a = 0, tot = 0; for (const [, w] of mix) tot += w; for (const [n, w] of mix) { a += w / tot; if (r <= a) return n; } return mix[mix.length - 1][0]; };
@@ -801,6 +806,13 @@ export class GraphCity {
     if (!t.homes?.length) return;
     const g = (x, z) => this.world._groundH(x, z);
     for (const H of t.homes) drawHomestead(t.kitM, H, g);
+    // front yards (the "frontYards" effect: toolbox/city/front-yards.js): fences, hedges, foundation shrubs, beds
+    if (this.world.frontYards) {
+      const ctx = { free: (x, z, pad) => !canalAt(x, z, pad + 1) && !this.host.buildingNear(x, z, pad) && !this.kit.occupied(x, z, pad) && !this.onRoad(x, z, pad + 1) && !this.inWater(x, z), driveNear: (x, z, r) => this._drivewayNear(x, z, r) };
+      let n = 0;
+      for (const H of t.homes) { const R = this.kit.plans.get(H.key); if (R && drawFrontYard(t.kitM, planFrontYard(R, H, ctx, this.world.frontYards), g)) n++; }
+      this.stats.frontYards = (this.stats.frontYards || 0) + n;
+    }
     const geo = driveStrips(t.homes, g);
     if (geo) { const m = new THREE.Mesh(geo, this.lotMaterial); m.name = `Driveways ${t.key}`; m.receiveShadow = true; this._add(t, m); }
     this.stats.driveways = (this.stats.driveways || 0) + t.homes.length;
@@ -864,6 +876,9 @@ export class GraphCity {
       }
     }
     yield* this._canalScrub(t, N);
+    // the wires: no shadow, baked or live (a 2.5 cm wire's shadow drew as a thick black line across the road)
+    if (t.wireM?.count) { const m = new THREE.Mesh(t.wireM.geometry(), this.kitMaterial); m.name = `Wires ${t.key}`; m.castShadow = false; m.userData.bake = false; this._add(t, m); }
+    t.wireM = null;
     if (N.count) { const m = new THREE.Mesh(N.geometry(), this.kitMaterial); m.name = `Verge ${t.key}`; m.userData.lodM = 240; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 240; this._add(t, m, 'near'); }
     // a farm stand by some farmhouses' drives (pumpkins and squash: it's September)
     for (const H of t.homes || []) {
@@ -909,7 +924,7 @@ export class GraphCity {
             const [bx, bz] = at(2.5), [ox, oz] = at(4.8), lc = this.landAt(bx, bz);
             const base = Math.min(sH(bx, bz), sH(ox, oz));
             const drive = this._drivewayNear(bx, bz, .6);
-            const hard = deck || canalAt(bx, bz, 1) || lc === LAND.paved || lc === LAND.building || lc === LAND.plaza || this.inWater(bx, bz) || this._railCovers(bx, bz, 1)
+            const hard = deck || canalAt(bx, bz, 1) || lc === LAND.water || lc === LAND.paved || lc === LAND.building || lc === LAND.plaza || this.inWater(bx, bz) || this._railCovers(bx, bz, 1)
               || this.onRoad(bx, bz, .2) || this.onRoad(ox, oz, 0) || this.host.buildingNear(ox, oz, .8);
             const ok = !hard && !drive && ditchFits(rY, base);
             const seed = hash(px * .913 + pz * .377 + side * 5.1);
@@ -964,7 +979,7 @@ export class GraphCity {
           const A = utilityPole(M, P.x, P.y, P.z, P.yaw, P.seed);
           const Q = pole(i + 4); if (!Q) continue;
           const tmp = new MeshBuilder();   // (the next pole's attach points, without drawing it twice)
-          wires(M, A, utilityPole(tmp, Q.x, Q.y, Q.z, Q.yaw, Q.seed));
+          wires(t.wireM ||= new MeshBuilder({ aGlow: 1 }), A, utilityPole(tmp, Q.x, Q.y, Q.z, Q.yaw, Q.seed));   // (their own mesh: no shadow)
         }
       }
     }
@@ -982,6 +997,7 @@ export class GraphCity {
     const x0 = t.i * TILE, z0 = t.j * TILE;
     for (let k = 0; k < CANAL.samples.length; k++) {
       const p = CANAL.samples[k];
+      if (p.creek) continue;   // (a creek's channel: kept clear, not dressed as the canal's banks)
       if (p.x < x0 || p.x >= x0 + TILE || p.z < z0 || p.z >= z0 + TILE) continue;
       if (k % 40 === 0 && due()) yield;
       for (const sd of [1, -1]) {
@@ -1024,11 +1040,12 @@ export class GraphCity {
   *_storefronts(t) {
     const host = this.host, L = host.landscape, C = this.facades.builders();
     this._lampPts = t.lampPts || null;
-    let n = 0;
+    let n = 0, furniture = 0;
     for (const b of host.buildingChunks.get(t.key) || []) {
       if (due()) yield;
-      if (b.hidden || b.onRoute || b.hero || b.kind === 12 || this.kit.plans.has(b.k)) continue;
-      const style = b.kind === 2 ? (b.h < 22 ? 'victorian' : 'masonry') : b.kind === 0 ? (b.shopRow ? 'victorian' : 'rowhouse') : b.kind === 4 ? 'tower' : b.kind === 5 ? 'glass' : b.kind === 7 || b.kind === 11 ? 'masonry' : null;
+      // (a kit building is dressed by the kit, except a village shop row's: its awnings, signs and sidewalk furniture)
+      if (b.hidden || b.onRoute || b.hero || b.kind === 12 || (this.kit.plans.has(b.k) && !(this.world.villageStreets && b.shopRow))) continue;
+      const style = b.kind === 2 ? (b.h < 22 ? 'victorian' : 'masonry') : b.kind === 0 ? (b.shopRow ? this.world.shopStyle || 'victorian' : 'rowhouse') : b.kind === 4 ? 'tower' : b.kind === 5 ? 'glass' : b.kind === 7 || b.kind === 11 ? 'masonry' : null;
       if (!style || b.h < 4) continue;
       let ring = b.ring, area = 0;
       for (let i = 0; i < ring.length; i++) { const a = ring[i], c = ring[(i + 1) % ring.length]; area += a.x * c.z - c.x * a.z; }
@@ -1038,9 +1055,12 @@ export class GraphCity {
       const y1 = b.h < 20 ? Math.max(ground + b.h, top + b.h * 0.7) : ground + b.h;
       const fronts = this._frontsOf(b, ring, ground, style === 'rowhouse');
       if (fronts.length && (this.facades.dress(C, b, fronts, ground, y1, style) || style !== 'rowhouse')) n++;
+      // a village main street's sidewalk furniture along the shop fronts (the "village" effect: toolbox/city/village-street.js)
+      if (this.world.villageStreets && b.shopRow && t.kitM) furniture += villageFurniture(t.kitM, fronts, 0, b.k, this.world.villageStreets);
     }
     this._lampPts = null;
     this.stats.storefronts = (this.stats.storefronts || 0) + n;
+    this.stats.villageFurniture = (this.stats.villageFurniture || 0) + furniture;
     for (const [B, mat, m] of [[C.mid, this.facades.material, 700], [C.near, this.facades.nearMaterial, 260]]) {
       if (!B.i.length) continue;
       const mesh = new THREE.Mesh(B.geometry(), mat); mesh.name = `Storefronts ${t.key}`; mesh.receiveShadow = true; mesh.castShadow = m > 300;
@@ -1059,12 +1079,12 @@ export class GraphCity {
       if (len < 4) continue;
       const tx = (c.x - a.x) / len, tz = (c.z - a.z) / len, mx = (a.x + c.x) / 2, mz = (a.z + c.z) / 2;
       let nx = tz, nz = -tx; if ((mx - b.cx) * nx + (mz - b.cz) * nz < 0) { nx = -nx; nz = -nz; }
-      const r = this.roadNear(mx + nx * 3, mz + nz * 3, 6);
+      const r = this.roadNear(mx + nx * 3, mz + nz * 3, b.shop ? 12 : 6);   // (a village core's fronts: set back over a wide street's parking lane)
       if (!r || !ROADS.has(r.e.kind) || r.e.kind === 'alley' || r.e._deck?.[r.i] || (main && !MAIN.has(r.e.kind))) continue;
       const walk = this.world.walkOf ? this.world.walkOf(r.e) : 0;
-      if (Math.hypot(mx - r.px, mz - r.pz) - r.half > walk + 4 || Math.abs(r.dx * tx + r.dz * tz) < 0.6 || (ground != null && Math.abs(r.y - ground) > 4)) continue;
+      if (Math.hypot(mx - r.px, mz - r.pz) - r.half > walk + (b.shop ? 7 : 4) || Math.abs(r.dx * tx + r.dz * tz) < 0.6 || (ground != null && Math.abs(r.y - ground) > 4)) continue;
       if (this.host.buildingNear(mx + nx * 1.2, mz + nz * 1.2, 0)) continue;
-      out.push({ i, a, c, len, tx, tz, nx, nz, mx, mz, yaw: Math.atan2(nx, nz), base: walk && ground != null ? Math.max(ground, r.y + 0.15) : ground });
+      out.push({ i, a, c, len, tx, tz, nx, nz, mx, mz, yaw: Math.atan2(nx, nz), walk, base: walk && ground != null ? Math.max(ground, r.y + 0.15) : ground });
     }
     return out;
   }
