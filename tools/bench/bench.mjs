@@ -93,7 +93,7 @@ for (const map of maps) {
       for (let k = 0; k < 400; k++) w._stream(w.camera.position.x, w.camera.position.z, 1e9);
       if (w.baked) { w.baked.bakeNow(); w.baked.tick(1); w.baked.tick(1); }
       w.camera.updateMatrixWorld();
-      if (w.city?.forest) { w.city.forest._at = null; w.city.forest.tick(w.camera); w.city.forest.impMat.uniforms.uNow.value = 1e9; }
+      if (w.city?.forest) { w.city.forest._at = null; w.city.forest._lastRebuild = -99; w.city.forest.tick(w.camera); w.city.forest.impMat.uniforms.uNow.value = 1e9; }
       const r = w.renderer, gl = r.getContext(), px = new Uint8Array(4);
       r.info.autoReset = false; r.info.reset(); r.render(w.scene, w.camera);
       const calls = r.info.render.calls, triangles = r.info.render.triangles;

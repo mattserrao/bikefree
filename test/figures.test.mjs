@@ -13,8 +13,8 @@ test('figures/clips.js is baked from rig.js (run npm run figures)', () => {
 
 test('people stay inside their triangle budgets', () => {
   const s = figureStats();
-  assert.ok(s.personHi <= 800, `near person ${s.personHi}`);
-  assert.ok(s.personLo <= 240, `mid person ${s.personLo}`);
+  assert.ok(s.personHi <= 1300, `near person ${s.personHi}`);
+  assert.ok(s.personLo <= 500, `mid person ${s.personLo}`);
   assert.ok(s.personFar <= 100, `far person ${s.personFar}`);
   assert.ok(s.dog <= 300 && s.stroller <= 350, `dog ${s.dog}, stroller ${s.stroller}`);
 });

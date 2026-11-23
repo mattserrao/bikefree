@@ -1904,3 +1904,39 @@ Every effect is its own module under `js/world/toolbox/effects/`, switched on pe
       the canal's (`creek`: kept clear, no canal scrub); the planters also keep off the land cover's own water.
 - [x] CNY canal "on Thompson Road" *(user, 23 Nov)*: checked against the National Register and the Erie Canalway — the
       canal is right; cancelled *(user: "Cancel the canal task you're correct")*.
+- [x] Stutter on CNY and SKAN *(user, 23 Nov: "the game on CNY and SKAN seems to have a stutter")*. Measured with
+      `tools/perf_pgh.mjs --graph routes/cities/skan.json --profile` (40 s ride at 10 m/s). Before: worst frames 120–260 ms.
+      Causes and fixes:
+      - the tree engine re-sorted every tree on the map (65–90 k) every 2.5 m: tiles wholly past the mid band whose
+        trees are settled cards are now skipped; no re-sort every 0.65 s when nothing is dissolving;
+      - the impostor data was rewritten for every tile that arrived (~30 ms each): at most once a second;
+      - the roadside verge of a long country road was built in one block (100–180 ms): yields every 10 m;
+      - the baked-shadow tree proxies cloned geometry per tree (up to ~100 ms a tile): written straight into one array,
+        as a job;
+      - the corn and soybean row cards were one block per tile (up to ~65 ms): a job, yielding per 12 m cell;
+      - front yards / homesteads drawn in one block: yield per house.
+      After: SKAN worst frame 53 ms (city streaming ≤ 16 ms a frame), CNY 66 ms. The remaining spikes are the first
+      draw of a new material (shader compile) and the software GPU here; on a real GPU, render is far cheaper.
+      Next if it's still felt: pre-compile the effects' and kit's materials during loading (renderer.compileAsync).
+- [x] Tree LOD keeps its silhouette *(user, 23 Nov)*. Answers: same outline, fewer parts; main limbs kept at mid, twigs
+      dropped; keep the 0.6 s dissolve. Method: grow one skeleton per tree (the near model's) and make mid / far by
+      pruning it (keep trunk + main limbs, drop level-3 twigs) and merging its leaf clusters into fewer, larger cards
+      that sit inside the same crown hull (k-means on the near clusters, each mid card sized to cover its members);
+      the far tier and the photo cards come from the same skeleton. Today each tier grows its own (the random
+      sequence diverges with the level), hence the shape change. Done in upstate-trees.js `grow` (one skeleton, the
+      same random draws at every level; mid draws levels 0–2 on every other ring) and `mergeClusters` (mid foliage:
+      ~⅓ the cards, each reaching its members' near-card edges). Near and mid now share trunk, limbs and outline; the
+      cards are photographed from the near model, so they share it too.
+
+### People, cars and farm animals — branch `graphics-polish-test` (v0.14.0) *(user, 23 Nov: "Rework people models / Rework car models / Animal models - farmland"; answers below)*
+- [ ] People (every map, the shared figures kit): more realistic proportions; more detail and variety (faces, hair,
+      clothes, body types, ages); better animation (walk, jog, idle, sitting on benches, standing in groups); local
+      activities (joggers, dog walkers, people fishing off the pier, farmers, farm-stand customers).
+- [ ] Cars (every map): one shared car kit for all cars; rounded, realistic shapes (wheel arches, glass, lights,
+      bumpers); paint and wear variety (regional colours, dirt and rust on farm trucks, roof racks). **Stationary
+      only: all moving traffic removed** (the city life's cars and the scene routes' traffic kit, e.g. Big Sur);
+      parked cars everywhere use the new kit.
+- [ ] Farm animals (CNY, SKAN): dairy cows (Holsteins, some Jerseys), horses in paddocks (some blanketed), sheep and
+      goats on hillside pasture, chickens in farmyards, a barn cat, geese and ducks on farm ponds. Kept at a medium
+      distance from the road; minimal animation (grazing head bob, tail swish, a few walking slowly), no reaction to
+      the rider; the same realistic style as the new people.

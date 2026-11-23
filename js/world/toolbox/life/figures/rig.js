@@ -185,6 +185,8 @@ function stand(P, t, o = {}) {
 
 // ---------------------------------------------------------------- clips
 // each: frames(t) poses the skeleton; seconds: natural loop length; stride: metres per loop (locomotion)
+/** Where a fisher's hands hold the rod (chest bone's rest frame; people.js builds the rod from here). */
+export const FISH_HAND = [-.06, 1.08, .34];
 export const CLIPS = [
   { name: 'idle', seconds: 5, pose(P, t) {
     stand(P, t);
@@ -288,6 +290,22 @@ export const CLIPS = [
     for (const side of [1, -1]) arm(P, side, V(side * .17, .60, .22), V(side * .7, -.2, -.6));
   } },
   // ---- dog clips (dog rig)
+  { name: 'fish', seconds: 7, pose(P, t) {
+    // standing at the rail or the bank with a rod held out over the water (the rod: the figure's ROD part, on the
+    // chest bone, from the hands at FISH_HAND), the line watched; now and then a small twitch of the tip
+    const tw = Math.max(0, Math.sin(TAU * t * 2)) ** 8 * .04;
+    stand(P, t, { sway: .006, headYaw: 4, nod: 14, breathe: 1, feetZ: [.06, -.06] });
+    const h = P.at(BONE.CHEST, FISH_HAND);
+    arm(P, -1, V(h.x, h.y + tw, h.z), V(-.6, -.6, -.4));
+    arm(P, 1, V(h.x + .1, h.y - .1 + tw * .5, h.z - .12), V(.7, -.7, -.2));
+  } },
+  { name: 'chat', seconds: 6, pose(P, t) {
+    // standing in a group, talking: the weight shifting, one hand gesturing now and then, the head turning between the others
+    const g = Math.max(0, Math.sin(TAU * t * 1.5)) ** 2;
+    stand(P, t, { sway: .014, headYawFn: (u) => 25 * Math.sin(TAU * u * 1.5 + 1), nod: -2 + 4 * Math.sin(TAU * t * 3), chestYaw: 5 * Math.sin(TAU * t) });
+    armAngles(P, -1, 4, 7, 14);
+    arm(P, 1, P.at(BONE.CHEST, [.12 + .06 * g, 1.0 + .12 * g, .2 + .1 * g]), V(.8, -.5, -.3));
+  } },
   { name: 'dog-walk', rig: 'dog', seconds: .6, stride: .8, pose(P, t) {
     const th = TAU * t;
     P.pelvis([0, .42 + .012 * Math.cos(2 * th), 0], 1.5 * deg * Math.sin(2 * th), 3 * deg * Math.sin(th), 2 * deg * Math.sin(th));

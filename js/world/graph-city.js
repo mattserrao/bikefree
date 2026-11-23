@@ -30,7 +30,7 @@ import { farmBuilding } from './toolbox/city/cny-farms.js';
 import { GraphLife } from './toolbox/city/graph-life.js';
 import { TreeEngine } from './toolbox/vegetation/tree-engine.js';
 import { planHomestead, drawHomestead, driveStrips, nearDrive } from './toolbox/city/homesteads.js';
-import { skanCrop, cropMaterial, cropCards, bale, verge, bay, farmStand } from './toolbox/landscape/farm-kit.js';
+import { skanCrop, cropMaterial, cropCardsJob, bale, verge, bay, farmStand } from './toolbox/landscape/farm-kit.js';
 import { makeUpstateTrees, fallVariant } from './toolbox/vegetation/upstate-trees.js';
 import { profileY, ditchFits, ditchGeometry, culvertEnd, goldenrod, laceAndChicory, tallGrass, cattails, utilityPole, wires, scrubClump } from './toolbox/landscape/roadside-ny.js';
 import { CANAL, canalAt } from './toolbox/city/cny-landmarks.js';
@@ -49,23 +49,32 @@ const HOUSE_CLOSE_M = 160;
 const PROXY_MAT = new THREE.MeshStandardMaterial({ color: '#000000' });
 /** One mesh of every tree's crown (an ellipsoid; a cone for the conifers) and trunk, for the bake only: on no camera
  *  layer (the bake draws it on its own), static (bake: true). */
-function treeProxies(trees, kit) {
-  const blob = new THREE.IcosahedronGeometry(1, 0), cone = new THREE.ConeGeometry(1, 1, 6).translate(0, .5, 0), box = new THREE.BoxGeometry(1, 1, 1).translate(0, .5, 0);
-  const parts = [], m = new THREE.Matrix4();
-  for (const t of trees) {
-    const sp = kit[t.sp]; if (!sp) continue;   // (the understory: too low to matter)
-    const h = sp.h * (t.sy ?? t.s), r = sp.r * t.s, con = /pine|hemlock|spruce/.test(t.sp);
-    if (con) parts.push(cone.clone().applyMatrix4(m.makeScale(r * .8, h * .92, r * .8).setPosition(t.x, t.y + h * .08, t.z)));
-    else parts.push(blob.clone().applyMatrix4(m.makeScale(r * .82, h * .3, r * .82).setPosition(t.x, t.y + h * .62, t.z)));
-    parts.push(box.clone().applyMatrix4(m.makeScale(Math.max(.35, r * .1), h * .5, Math.max(.35, r * .1)).setPosition(t.x, t.y, t.z)));
+// (the stutter, 23 Nov: it cloned three geometries per tree and spread their arrays into one — up to ~100 ms a tile in
+//  one go; now it writes straight into one array from the shapes' own triangles, and yields as it goes)
+const PROXY_SHAPES = (() => {
+  const tris = (g) => (g.index ? g.toNonIndexed() : g).attributes.position.array;
+  return { blob: tris(new THREE.IcosahedronGeometry(1, 0)), cone: tris(new THREE.ConeGeometry(1, 1, 6).translate(0, .5, 0)), box: tris(new THREE.BoxGeometry(1, 1, 1).translate(0, .5, 0)) };
+})();
+function* treeProxiesJob(trees, kit, out) {
+  const S = PROXY_SHAPES;
+  let n = 0;
+  for (const t of trees) if (kit[t.sp]) n += (/pine|hemlock|spruce/.test(t.sp) ? S.cone.length : S.blob.length) + S.box.length;
+  if (!n) return;
+  const pos = new Float32Array(n);
+  let k = 0;
+  const put = (src, sx, sy, sz, x, y, z) => { for (let q = 0; q < src.length; q += 3) { pos[k++] = src[q] * sx + x; pos[k++] = src[q + 1] * sy + y; pos[k++] = src[q + 2] * sz + z; } };
+  for (let i = 0; i < trees.length; i++) {
+    if ((i & 255) === 0 && due()) yield;
+    const t = trees[i], sp = kit[t.sp]; if (!sp) continue;   // (the understory: too low to matter)
+    const h = sp.h * (t.sy ?? t.s), r = sp.r * t.s;
+    if (/pine|hemlock|spruce/.test(t.sp)) put(S.cone, r * .8, h * .92, r * .8, t.x, t.y + h * .08, t.z);
+    else put(S.blob, r * .82, h * .3, r * .82, t.x, t.y + h * .62, t.z);
+    const w = Math.max(.35, r * .1); put(S.box, w, h * .5, w, t.x, t.y, t.z);
   }
-  if (!parts.length) return null;
-  const pos = [];
-  for (const g of parts) { const ng = g.index ? g.toNonIndexed() : g; pos.push(...ng.attributes.position.array); }
-  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals(); geo.computeBoundingBox(); geo.computeBoundingSphere();
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.computeVertexNormals(); geo.computeBoundingBox(); geo.computeBoundingSphere();
   const mesh = new THREE.Mesh(geo, PROXY_MAT);
   mesh.name = 'Tree shadow proxies'; mesh.layers.mask = 0; mesh.userData.bake = true; mesh.castShadow = false; mesh.frustumCulled = false;
-  return mesh;
+  out.mesh = mesh;
 }   // the house engine's close detail (casings, rails, brackets) drawn this far
 /** The landscape as a lakefront house reads it: never lower than `floor` (its footings go down into the water). */
 const dryLand = (L, floor) => { const o = Object.create(L); o.heightAt = (x, z) => Math.max(L.heightAt(x, z), floor); return o; };
@@ -565,7 +574,7 @@ export class GraphCity {
     if (this.rural) { yield* this._planHomesteads(t); yield; }
     yield* this._trees(t); yield;
     yield* this._furniture(t); yield;
-    if (this.rural) { this._drawHomesteads(t); yield; yield* this._farmland(t); yield; }
+    if (this.rural) { yield* this._drawHomesteads(t); yield; yield* this._farmland(t); yield; }
     yield* this._farms(t); yield;
     yield* this._storefronts(t); yield;
     yield* this._lots(t); yield* this._lines(t);
@@ -761,10 +770,11 @@ export class GraphCity {
         }
       }
     }
+    yield;
     this.forest.setTile(t.key, out);
     t.trees = out;
     // the trees' stand-ins for the baked shadows (graph-world: golden hour baked): a crown and a trunk each, never drawn
-    if (this.world.baked) { const px = treeProxies(out, kit); if (px) this._add(t, px); }
+    if (this.world.baked) { const px = {}; yield; yield* treeProxiesJob(out, kit, px); if (px.mesh) this._add(t, px.mesh); }
     this.stats.trees += out.length;
   }
 
@@ -802,15 +812,15 @@ export class GraphCity {
     this._curHomes = t.homes;
   }
   _drivewayNear(x, z, r) { return nearDrive(this._curHomes || [], x, z, r); }
-  _drawHomesteads(t) {
+  *_drawHomesteads(t) {
     if (!t.homes?.length) return;
     const g = (x, z) => this.world._groundH(x, z);
-    for (const H of t.homes) drawHomestead(t.kitM, H, g);
+    for (const H of t.homes) { drawHomestead(t.kitM, H, g); if (due()) yield; }
     // front yards (the "frontYards" effect: toolbox/city/front-yards.js): fences, hedges, foundation shrubs, beds
     if (this.world.frontYards) {
       const ctx = { free: (x, z, pad) => !canalAt(x, z, pad + 1) && !this.host.buildingNear(x, z, pad) && !this.kit.occupied(x, z, pad) && !this.onRoad(x, z, pad + 1) && !this.inWater(x, z), driveNear: (x, z, r) => this._drivewayNear(x, z, r) };
       let n = 0;
-      for (const H of t.homes) { const R = this.kit.plans.get(H.key); if (R && drawFrontYard(t.kitM, planFrontYard(R, H, ctx, this.world.frontYards), g)) n++; }
+      for (const H of t.homes) { if (due()) yield; const R = this.kit.plans.get(H.key); if (R && drawFrontYard(t.kitM, planFrontYard(R, H, ctx, this.world.frontYards), g)) n++; }
       this.stats.frontYards = (this.stats.frontYards || 0) + n;
     }
     const geo = driveStrips(t.homes, g);
@@ -836,7 +846,7 @@ export class GraphCity {
     const W = this.world, x0 = t.i * TILE, z0 = t.j * TILE, g = (x, z) => W._groundH(x, z), M = t.kitM;
     // standing corn and soybeans: row cards, near the camera only
     this.cropMat ||= cropMaterial(this.treeTime);
-    const geo = cropCards(x0, z0, TILE, (x, z) => this._cropAt(x, z), g);
+    const cc = {}; yield* cropCardsJob(x0, z0, TILE, (x, z) => this._cropAt(x, z), g, cc); const geo = cc.geo;
     if (geo) { const m = new THREE.Mesh(geo, this.cropMat); m.name = `Crops ${t.key}`; m.userData.lodM = 300; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 300; this._add(t, m, 'near'); }
     yield;
     // round bales on the hay and the stubble
@@ -913,6 +923,7 @@ export class GraphCity {
         let run = [], prevDrive = false, last = null;
         const close = () => { if (run.length > 1) runs.push(run); run = []; };
         for (let i = i0; i < i1; i++) {
+          if (due()) yield;   // (each 10 m: a long country road's verge was one 100–180 ms block — the stutter, 23 Nov)
           const deck = e._deck?.[i] || e._deck?.[i + 1];
           const nA = nAt(i), nB = nAt(i + 1);
           for (let f = 0; f <= (i === i1 - 1 ? STEP : STEP - 1); f++) {

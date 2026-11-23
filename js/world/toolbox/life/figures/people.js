@@ -11,14 +11,29 @@
 //   crowd.begin(camera.position); crowd.add(look, x, y, z, yaw, CLIP.walk, phase, walkRate(1.3, look)); crowd.end();
 import * as THREE from '../../../../../vendor/three.module.min.js';
 import { FRAMES, BONES, CLIP_META, CLIP_DATA } from './clips.js';
-import { PERSON, BIKE, HOLD } from './rig.js';
+import { PERSON, BIKE, HOLD, FISH_HAND } from './rig.js';
 
 export const CLIP = Object.fromEntries(CLIP_META.map((c, i) => [c.name, i]));
 export { CLIP_META };
 // outfit bits (iLook.z)
-export const FIT = { SLEEVES: 1, LONG_PANTS: 2, SKIRT: 4, LONG_HAIR: 8, CAP: 16, PACK: 32, PROP: 64, HELMET: 128 };
+export const FIT = { SLEEVES: 1, LONG_PANTS: 2, SKIRT: 4, LONG_HAIR: 8, CAP: 16, PACK: 32, PROP: 64, HELMET: 128,
+  JACKET: 256, HOOD: 512, BEANIE: 1024, ROD: 2048, STYLE: 4096 };
+// hair styles (three bits at FIT.STYLE: look.bits += style × FIT.STYLE); long hair stays its own bit
+export const HAIR_STYLE = { SHORT: 0, PONYTAIL: 1, BUN: 2, CURLY: 3, BUZZ: 4 };
 // vertex selectors (aSkin.w): what a vertex belongs to, for the outfit
-const SEL = { ALWAYS: 0, FOREARM: 1, SHIN: 2, SKIRT: 3, THIGH: 4, LONG_HAIR: 5, CAP: 6, PACK: 7, PROP: 8, HELMET: 9, HAIR: 10 };
+const SEL = { ALWAYS: 0, FOREARM: 1, SHIN: 2, SKIRT: 3, THIGH: 4, LONG_HAIR: 5, CAP: 6, PACK: 7, PROP: 8, HELMET: 9, HAIR: 10,
+  PONYTAIL: 11, BUN: 12, CURLY: 13, JACKET: 14, HOOD: 15, BEANIE: 16, ROD: 17 };
+/** Whether a part (sel) is left out for an outfit (bits) — the CPU twin of the shader's test (GLSL_HIDE). */
+function selHidden(sel, bits) {
+  const helmet = bits & FIT.HELMET, style = (bits / FIT.STYLE | 0) & 7, hat = bits & (FIT.CAP | FIT.BEANIE);
+  return (sel === SEL.SKIRT && !(bits & FIT.SKIRT)) || (sel === SEL.LONG_HAIR && (!(bits & FIT.LONG_HAIR) || helmet)) ||
+    (sel === SEL.CAP && (!(bits & FIT.CAP) || helmet)) || (sel === SEL.PACK && !(bits & FIT.PACK)) || (sel === SEL.PROP && !(bits & FIT.PROP)) ||
+    (sel === SEL.HELMET && !helmet) || (sel === SEL.HAIR && helmet) ||
+    (sel === SEL.PONYTAIL && (style !== HAIR_STYLE.PONYTAIL || helmet || (bits & FIT.LONG_HAIR))) ||
+    (sel === SEL.BUN && (style !== HAIR_STYLE.BUN || helmet || hat)) || (sel === SEL.CURLY && (style !== HAIR_STYLE.CURLY || helmet || hat)) ||
+    (sel === SEL.JACKET && !(bits & FIT.JACKET)) || (sel === SEL.HOOD && (!(bits & FIT.HOOD) || (bits & FIT.PACK))) ||
+    (sel === SEL.BEANIE && (!(bits & FIT.BEANIE) || helmet || (bits & FIT.CAP))) || (sel === SEL.ROD && !(bits & FIT.ROD));
+}
 const HAIR = ['#1f1a16', '#3a2417', '#6a4126', '#8f3e1e', '#cfa862', '#a8a39b', '#e2ddd3'];   // + 7 = bald (skin)
 export const PALETTES = {
   shirts: ['#c0392b', '#2e86c1', '#f1c40f', '#27ae60', '#ecf0f1', '#34495e', '#8e44ad', '#e67e22', '#16a085', '#d35400', '#1b1b1b', '#f5b7b1', '#5d6d7e', '#e84393', '#7fb3d5', '#a3c585'],
@@ -157,6 +172,8 @@ class FigBuilder {
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.c, 3));
     g.setAttribute('aSkin', new THREE.Float32BufferAttribute(this.s, 4));
     g.setAttribute('aMask', new THREE.Float32BufferAttribute(this.m, 4));
+    // baked occlusion (1 open … darker in the folds): set by bakeFigureAO for people, open everywhere else
+    g.setAttribute('aAO', new THREE.Float32BufferAttribute(Array.from({ length: this.p.length / 3 }, (_, k) => this.ao?.[k] ?? 1), 1));
     g.setIndex(this.i);
     g.computeBoundingSphere();
     return g;
@@ -172,55 +189,72 @@ const B = { ...Object.fromEntries(Object.entries({ ROOT: 0, PELVIS: 1, CHEST: 2,
  * instead of caps and long hair.
  */
 function buildPerson(M, lod = 'hi', cyclist = false) {
+  // (draft, 23 Nov — user: "more realistic proportions, more detail and variety": about 7½ heads tall instead of
+  //  6¼; a smaller head with a jaw, ears, brows and a proper nose; a neck; shoulders, chest, waist and hips shaped;
+  //  tapered limbs with elbows, knees and calves; hands with a thumb; shoes with a toe and a heel. Same rig, same joints.)
   const hi = lod === 'hi', far = lod === 'far';
-  const sg = hi ? 8 : far ? 4 : 6, lim = hi ? 6 : far ? 3 : 4;
+  const sg = hi ? 10 : far ? 4 : 7, lim = hi ? 7 : far ? 3 : 5;
   const one = (b, mask, sel = 0, color = '#ffffff') => M.set({ b0: b, b1: b, w: 1, mask, sel, color });
-  // head, face, hair, hats
-  one(B.HEAD, SKIN).ellipsoid([0, 1.615, .01], [.122, .138, .13], hi ? 6 : far ? 2 : 3, hi ? 10 : far ? 5 : 6);
+  // ---- head: cranium, jaw and chin, ears; the face close up
+  const HY = 1.64;   // the head's centre
+  one(B.HEAD, SKIN).ellipsoid([0, HY, .0], [.082, .106, .098], hi ? 6 : far ? 2 : 4, hi ? 10 : far ? 5 : 7);
+  if (!far) one(B.HEAD, SKIN).ellipsoid([0, HY - .055, .012], [.064, .05, .07], hi ? 3 : 2, hi ? 8 : 5);   // jaw, chin
   if (hi) {
-    one(B.HEAD, SKIN).ellipsoid([0, 1.6, .134], [.02, .02, .02], 2, 6);   // nose
-    one(B.HEAD, FIXED, 0, '#17161c');
-    for (const s of [1, -1]) M.ellipsoid([s * .044, 1.632, .118], [.015, .023, .012], 3, 5);
+    one(B.HEAD, SKIN);
+    M.ellipsoid([0, HY - .014, .096], [.013, .024, .016], 2, 5);                      // nose
+    for (const s of [1, -1]) M.ellipsoid([s * .083, HY - .005, -.005], [.012, .026, .018], 2, 4);   // ears
+    one(B.HEAD, FIXED, 0, '#1c1a1d');
+    for (const s of [1, -1]) M.ellipsoid([s * .031, HY + .014, .087], [.011, .008, .006], 2, 4);   // eyes
+    one(B.HEAD, HAIRM, SEL.HAIR);
+    for (const s of [1, -1]) M.ellipsoid([s * .032, HY + .031, .088], [.019, .005, .007], 2, 3);   // brows
+    one(B.HEAD, FIXED, 0, '#8a4a44').ellipsoid([0, HY - .05, .077], [.021, .005, .008], 2, 4);     // mouth
   }
-  one(B.HEAD, HAIRM, SEL.HAIR).ellipsoid([0, 1.655, -.008], [.131, .119, .138], hi ? 4 : 2, hi ? 8 : far ? 4 : 5);
-  if (cyclist) one(B.HEAD, SHIRT, SEL.HELMET).ellipsoid([0, 1.675, -.012], [.143, .108, .165], hi ? 3 : 2, hi ? 8 : 6);
+  // hair: a close cap over the cranium (and the back of the head); long hair down the back; caps, the helmet
+  one(B.HEAD, HAIRM, SEL.HAIR).ellipsoid([0, HY + .022, -.02], [.092, .102, .104], hi ? 4 : far ? 2 : 3, hi ? 9 : far ? 4 : 6);
+  if (cyclist) one(B.HEAD, SHIRT, SEL.HELMET).ellipsoid([0, HY + .045, -.01], [.098, .078, .12], hi ? 3 : 2, hi ? 9 : 6);
   else if (!far) {
-    one(B.HEAD, HAIRM, SEL.LONG_HAIR).ellipsoid([0, 1.53, -.075], [.118, .155, .066], hi ? 3 : 2, hi ? 6 : 4);
-    one(B.HEAD, PANTS, SEL.CAP).ellipsoid([0, 1.695, -.004], [.134, .086, .141], hi ? 3 : 2, hi ? 8 : 6);
-    M.ellipsoid([0, 1.70, .12], [.10, .014, .085], 2, hi ? 6 : 4);
+    one(B.HEAD, HAIRM, SEL.LONG_HAIR).ellipsoid([0, HY - .07, -.07], [.082, .14, .045], hi ? 3 : 2, hi ? 7 : 4);
+    one(B.HEAD, PANTS, SEL.CAP).ellipsoid([0, HY + .05, -.004], [.088, .06, .098], hi ? 3 : 2, hi ? 10 : 6);
+    M.ellipsoid([0, HY + .05, .09], [.07, .01, .06], 2, hi ? 6 : 4);   // the bill
   }
-  // neck and torso
-  if (hi) M.set({ b0: B.HEAD, b1: B.CHEST, w: .5, mask: SKIN, sel: 0, color: '#ffffff' })
-    .tube([{ y: 1.44, rx: .05, rz: .048, st: { b0: B.CHEST, b1: B.CHEST, w: 1 } }, { y: 1.53, rx: .046, rz: .046, st: { b0: B.HEAD, b1: B.HEAD, w: 1 } }], 6);
+  // ---- neck and torso: hips, waist, ribcage, chest, the shoulders' line (the collar)
+  if (!far) M.set({ b0: B.HEAD, b1: B.CHEST, w: .5, mask: SKIN, sel: 0, color: '#ffffff' })
+    .tube([{ y: 1.43, rx: .052, rz: .05, st: { b0: B.CHEST, b1: B.CHEST, w: 1 } }, { y: 1.56, rx: .043, rz: .045, z: -.008, st: { b0: B.HEAD, b1: B.HEAD, w: 1 } }], hi ? 8 : 5);
   const sh = (b0, b1, w) => ({ b0, b1, w, mask: SHIRT }), pa = (b0, b1, w) => ({ b0, b1, w, mask: PANTS });
   M.set({ sel: 0, color: '#ffffff' }).tube([
-    ...(hi ? [{ y: .80, rx: .125, rz: .095, st: pa(B.PELVIS, B.PELVIS, 1) }] : []),
-    { y: .90, rx: .156, rz: .106, st: pa(B.PELVIS, B.PELVIS, 1) },
-    { y: .975, rx: .156, rz: .106, st: pa(B.PELVIS, B.PELVIS, 1) },
-    { y: .975, rx: .156, rz: .106, st: sh(B.PELVIS, B.PELVIS, 1), brk: true },
-    ...(hi ? [{ y: 1.10, rx: .150, rz: .100, st: sh(B.CHEST, B.PELVIS, .75) }] : []),
-    ...(far ? [] : [{ y: 1.27, rx: .165, rz: .106, st: sh(B.CHEST, B.CHEST, 1) }]),
-    ...(hi ? [{ y: 1.38, rx: .182, rz: .106, st: sh(B.CHEST, B.CHEST, 1) }] : []),
-    { y: 1.445, rx: far ? .17 : .125, rz: far ? .1 : .082, st: sh(B.CHEST, B.CHEST, 1) },
-    ...(far ? [] : [{ y: 1.48, rx: .055, rz: .05, st: sh(B.CHEST, B.CHEST, 1) }]),
+    ...(hi ? [{ y: .80, rx: .128, rz: .098, st: pa(B.PELVIS, B.PELVIS, 1) }] : []),
+    { y: .88, rx: .162, rz: .112, z: -.006, st: pa(B.PELVIS, B.PELVIS, 1) },           // the seat, the hips
+    { y: .985, rx: .148, rz: .1, st: pa(B.PELVIS, B.PELVIS, 1) },                       // the waistband
+    { y: .985, rx: .148, rz: .1, st: sh(B.PELVIS, B.PELVIS, 1), brk: true },
+    ...(far ? [] : [{ y: 1.07, rx: .14, rz: .094, st: sh(B.CHEST, B.PELVIS, .6) }]),     // the waist
+    ...(hi ? [{ y: 1.18, rx: .152, rz: .1, z: .004, st: sh(B.CHEST, B.PELVIS, .85) }] : []),
+    ...(far ? [] : [{ y: 1.29, rx: .17, rz: .112, z: .01, st: sh(B.CHEST, B.CHEST, 1) }]),   // the chest
+    ...(hi ? [{ y: 1.37, rx: .188, rz: .108, z: .004, st: sh(B.CHEST, B.CHEST, 1) }] : []),
+    { y: 1.425, rx: far ? .18 : .185, rz: far ? .1 : .092, st: sh(B.CHEST, B.CHEST, 1) },   // the shoulders' line
+    ...(far ? [] : [{ y: 1.46, rx: .075, rz: .062, st: sh(B.CHEST, B.CHEST, 1) }]),          // the collar
   ], sg, { capBottom: true, capTop: far });
-  // arms
+  // ---- arms: a rounded shoulder (deltoid), the upper arm tapering to the elbow, the forearm (fuller below the
+  // elbow) to a slim wrist; a hand with a thumb
   for (const s of [1, -1]) {
     const up = s > 0 ? B.L_UPPER : B.R_UPPER, fo = s > 0 ? B.L_FORE : B.R_FORE;
+    if (!far) one(up, SHIRT).ellipsoid([s * .186, 1.398, 0], [.058, .056, .06], hi ? 3 : 2, hi ? 7 : 5);   // the shoulder
     M.set({ sel: 0, color: '#ffffff' }).tube(far ? [
       { y: 1.42, x: s * .19, rx: .06, rz: .06, st: { b0: up, b1: B.CHEST, w: .8, mask: SHIRT } },
       { y: .86, x: s * .218, rx: .045, rz: .045, st: { b0: fo, b1: up, w: .7, mask: SKIN } },
     ] : [
-      { y: 1.44, x: s * .18, rx: .064, rz: .064, st: { b0: up, b1: B.CHEST, w: .8, mask: SHIRT } },
-      ...(hi ? [{ y: 1.30, x: s * .197, rx: .06, rz: .058, st: { b0: up, b1: up, w: 1, mask: SHIRT } }] : []),
-      { y: 1.15, x: s * .205, rx: .053, rz: .052, st: { b0: up, b1: fo, w: .5, mask: SHIRT } },
-      { y: 1.15, x: s * .205, rx: .053, rz: .052, st: { b0: up, b1: fo, w: .5, mask: SHIRT, sel: SEL.FOREARM }, brk: true },
-      ...(hi ? [{ y: 1.02, x: s * .212, rx: .047, rz: .046, st: { b0: fo, b1: fo, w: 1, mask: SHIRT, sel: SEL.FOREARM } }] : []),
-      { y: .885, x: s * .218, rx: .038, rz: .037, st: { b0: fo, b1: fo, w: 1, mask: SHIRT, sel: SEL.FOREARM } },
+      { y: 1.40, x: s * .193, rx: .058, rz: .06, st: { b0: up, b1: B.CHEST, w: .85, mask: SHIRT } },
+      ...(hi ? [{ y: 1.29, x: s * .2, rx: .055, rz: .058, st: { b0: up, b1: up, w: 1, mask: SHIRT } }] : []),
+      { y: 1.14, x: s * .205, rx: .043, rz: .045, st: { b0: up, b1: fo, w: .5, mask: SHIRT } },   // the elbow
+      { y: 1.14, x: s * .205, rx: .043, rz: .045, st: { b0: up, b1: fo, w: .5, mask: SHIRT, sel: SEL.FOREARM }, brk: true },
+      ...(hi ? [{ y: 1.06, x: s * .21, rx: .047, rz: .044, st: { b0: fo, b1: fo, w: 1, mask: SHIRT, sel: SEL.FOREARM } }] : []),
+      { y: .895, x: s * .216, rx: .028, rz: .024, st: { b0: fo, b1: fo, w: 1, mask: SHIRT, sel: SEL.FOREARM } },   // the wrist
     ], lim, { capBottom: !hi && !far });
-    if (hi) one(fo, SKIN).ellipsoid([s * .22, .835, .015], [.037, .056, .029], 3, 5);
+    if (!far) {
+      one(fo, SKIN).ellipsoid([s * .218, .835, .006], [.024, .058, .04], hi ? 3 : 2, hi ? 6 : 4);   // the hand
+      if (hi) M.ellipsoid([s * .212, .86, .042], [.012, .028, .012], 2, 4);                     // the thumb
+    }
   }
-  // legs
+  // ---- legs: the thigh tapering to the knee, the calf's swell behind, a slim ankle; a shoe with a toe and a heel
   for (const s of [1, -1]) {
     const th = s > 0 ? B.L_THIGH : B.R_THIGH, sn = s > 0 ? B.L_SHIN : B.R_SHIN, ft = s > 0 ? B.L_FOOT : B.R_FOOT;
     M.set({ sel: 0, color: '#ffffff' }).tube(far ? [
@@ -228,28 +262,71 @@ function buildPerson(M, lod = 'hi', cyclist = false) {
       { y: .52, x: s * .10, rx: .058, rz: .061, st: { b0: th, b1: sn, w: .5, mask: PANTS, sel: SEL.SHIN } },
       { y: .02, x: s * .10, rx: .045, rz: .07, st: { b0: ft, b1: sn, w: .7, mask: FIXED, color: '#2a2522' } },
     ] : [
-      { y: .93, x: s * .088, rx: .08, rz: .085, st: { b0: th, b1: B.PELVIS, w: .5, mask: PANTS, sel: SEL.THIGH } },
-      ...(hi ? [{ y: .76, x: s * .095, rx: .077, rz: .08, st: { b0: th, b1: th, w: 1, mask: PANTS, sel: SEL.THIGH } }] : []),
-      { y: .52, x: s * .10, rx: .058, rz: .061, st: { b0: th, b1: sn, w: .5, mask: PANTS, sel: SEL.THIGH } },
-      { y: .52, x: s * .10, rx: .058, rz: .061, st: { b0: th, b1: sn, w: .5, mask: PANTS, sel: SEL.SHIN }, brk: true },
-      ...(hi ? [{ y: .36, x: s * .10, rx: .055, rz: .06, st: { b0: sn, b1: sn, w: 1, mask: PANTS, sel: SEL.SHIN } }] : []),
-      { y: .13, x: s * .10, rx: .038, rz: .04, st: { b0: sn, b1: ft, w: .8, mask: PANTS, sel: SEL.SHIN } },
+      { y: .92, x: s * .085, rx: .088, rz: .094, st: { b0: th, b1: B.PELVIS, w: .5, mask: PANTS, sel: SEL.THIGH } },
+      ...(hi ? [{ y: .77, x: s * .092, rx: .078, rz: .082, st: { b0: th, b1: th, w: 1, mask: PANTS, sel: SEL.THIGH } }] : []),
+      { y: .53, x: s * .098, rx: .05, rz: .054, st: { b0: th, b1: sn, w: .5, mask: PANTS, sel: SEL.THIGH } },   // the knee
+      { y: .53, x: s * .098, rx: .05, rz: .054, st: { b0: th, b1: sn, w: .5, mask: PANTS, sel: SEL.SHIN }, brk: true },
+      ...(hi ? [{ y: .40, x: s * .1, rx: .055, rz: .062, z: -.014, st: { b0: sn, b1: sn, w: 1, mask: PANTS, sel: SEL.SHIN } }] : []),   // the calf
+      { y: .14, x: s * .1, rx: .03, rz: .033, st: { b0: sn, b1: ft, w: .8, mask: PANTS, sel: SEL.SHIN } },   // the ankle
     ], lim);
-    if (!far) one(ft, FIXED, 0, '#2a2522').ellipsoid([s * .10, .055, .035], [.052, .058, .118], hi ? 3 : 2, hi ? 6 : 4);
+    if (!far) {
+      one(ft, FIXED, 0, '#2a2522');
+      M.ellipsoid([s * .1, .052, .04], [.043, .05, .118], hi ? 3 : 2, hi ? 8 : 5);                 // the shoe
+      if (hi) one(ft, FIXED, 0, '#d9d4c8').ellipsoid([s * .1, .012, .04], [.045, .012, .118], 2, 6);   // heel; the sole
+    }
   }
   if (far || cyclist) return M;
+  // ---- hair styles (each shown by its bits: selHidden), hats, outerwear, the fishing rod
+  one(B.HEAD, HAIRM, SEL.PONYTAIL).ellipsoid([0, HY - .055, -.118], [.03, .085, .032], hi ? 3 : 2, hi ? 6 : 4);
+  M.ellipsoid([0, HY + .005, -.1], [.024, .02, .022], 2, 4);                                            // (its tie)
+  one(B.HEAD, HAIRM, SEL.BUN).ellipsoid([0, HY + .085, -.07], [.046, .04, .046], hi ? 3 : 2, hi ? 7 : 5);
+  one(B.HEAD, HAIRM, SEL.CURLY).ellipsoid([0, HY + .035, -.016], [.112, .112, .12], hi ? 4 : 3, hi ? 9 : 6);
+  one(B.HEAD, PANTS, SEL.BEANIE).ellipsoid([0, HY + .052, -.012], [.097, .078, .108], hi ? 3 : 2, hi ? 9 : 6);
+  // a jacket: a longer hem over the hips, a raised collar (the shirt's colour; sleeves forced long)
+  M.set({ b0: B.PELVIS, b1: B.CHEST, w: .5, mask: SHIRT, sel: SEL.JACKET, color: '#ffffff' })
+    .tube([{ y: .82, rx: .172, rz: .122, st: { b0: B.PELVIS, b1: B.PELVIS, w: 1 } }, { y: 1.02, rx: .158, rz: .108, st: { b0: B.CHEST, b1: B.PELVIS, w: .5 } }], hi ? 10 : 6, { capBottom: false });
+  M.set({ b0: B.CHEST, b1: B.CHEST, w: 1, mask: SHIRT, sel: SEL.JACKET }).tube([{ y: 1.43, rx: .092, rz: .08 }, { y: 1.5, rx: .078, rz: .07, z: -.008 }], hi ? 8 : 5);
+  // a hoodie's hood, lying on the back of the shoulders
+  one(B.CHEST, SHIRT, SEL.HOOD).ellipsoid([0, 1.45, -.1], [.105, .07, .065], hi ? 3 : 2, hi ? 7 : 5);
+  // the rod: from the hands (FISH_HAND, chest frame) out and up 2.4 m, tapering; a reel under the grip
+  one(B.CHEST, FIXED, SEL.ROD, '#2b2622').rod([FISH_HAND[0], FISH_HAND[1] - .25, FISH_HAND[2] - .3], [FISH_HAND[0] - .05, FISH_HAND[1] + .95, FISH_HAND[2] + 2.1], [.012, .004], 4);
+  M.set({ color: '#9aa0a6' }).ellipsoid([FISH_HAND[0], FISH_HAND[1] - .07, FISH_HAND[2] - .06], [.025, .035, .03], 2, 5);
   // a skirt (pelvis), a day pack (chest), a phone in the right hand
   M.set({ b0: B.PELVIS, b1: B.PELVIS, w: 1, mask: PANTS, sel: SEL.SKIRT, color: '#ffffff' })
-    .tube([{ y: .99, rx: .16, rz: .112 }, { y: .58, rx: .235, rz: .205 }], hi ? 10 : 6);
-  one(B.CHEST, FIXED, SEL.PACK, '#2b3b46').ellipsoid([0, 1.21, -.158], [.13, .17, .07], hi ? 3 : 2, hi ? 6 : 4);
-  if (hi) one(B.R_FORE, FIXED, SEL.PROP, '#222428').box([-.222, .80, .052], [.075, .14, .014]);
+    .tube([{ y: .995, rx: .152, rz: .106 }, { y: .58, rx: .225, rz: .195 }], hi ? 12 : 6);
+  one(B.CHEST, FIXED, SEL.PACK, '#2b3b46').ellipsoid([0, 1.21, -.15], [.125, .165, .065], hi ? 3 : 2, hi ? 7 : 4);
+  if (hi) one(B.R_FORE, FIXED, SEL.PROP, '#222428').box([-.222, .80, .052], [.07, .135, .012]);
   return M;
 }
-export function personGeometry(lod = 'hi') { return buildPerson(new FigBuilder(), lod).geometry(); }
+/**
+ * Ambient occlusion baked into the vertices (free at draw time — the colour is scaled in the vertex shader): the
+ * folds and the shade a body casts on itself — under the chin, the armpits and the torso's sides by the arms, between
+ * the thighs, the crotch, the inside of the arms — and a light top-to-toe falloff (the ground's bounce is weaker
+ * than the sky's). Read off the rest pose.
+ */
+function bakeFigureAO(M) {
+  const ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  const bell = (x, c, w) => 1 - ss(0, w, Math.abs(x - c));
+  const n = M.p.length / 3, ao = new Array(n);
+  for (let k = 0; k < n; k++) {
+    const x = M.p[3 * k], y = M.p[3 * k + 1], z = M.p[3 * k + 2], ax = Math.abs(x), nx = M.n[3 * k] * Math.sign(x || 1), ny = M.n[3 * k + 1];
+    let o = .84 + .16 * ss(0, 1.6, y);                                                     // top to toe
+    o *= 1 - .3 * bell(y, 1.47, .06) * (ax < .07 ? 1 : 0) * ss(-.2, .4, -ny);             // under the chin, the neck
+    o *= 1 - .28 * bell(y, 1.3, .14) * ss(.1, .2, ax) * (ax < .16 ? 1 : 0);                // the torso's sides by the arms
+    o *= 1 - .26 * bell(y, 1.28, .14) * (ax > .15 && ax < .26 ? ss(0, .8, -nx) : 0);       // the inside of the arms
+    o *= 1 - .3 * bell(y, .8, .16) * (ax < .14 && y < .95 ? ss(0, .8, -nx) : 0);           // between the thighs
+    o *= 1 - .22 * bell(y, .9, .05) * (ax < .05 ? 1 : 0);                                  // the crotch
+    o *= 1 - .18 * bell(y, 1.0, .03) * ss(-.3, .5, -ny);                                   // under the shirt's hem
+    ao[k] = o;
+  }
+  M.ao = ao;
+  return M;
+}
+export function personGeometry(lod = 'hi') { return bakeFigureAO(buildPerson(new FigBuilder(), lod)).geometry(); }
 
 /** A road cyclist on a bike: the person (helmet, jersey) plus frame, wheels and cranks on their own bones. */
 export function cyclistGeometry(lod = 'hi') {
-  const M = buildPerson(new FigBuilder(), lod, true), hi = lod === 'hi';
+  const M = bakeFigureAO(buildPerson(new FigBuilder(), lod, true)), hi = lod === 'hi';
   const [, bby, bbz] = BIKE.bb, R = BIKE.wheelR;
   const fixed = (b, color, mask = FIXED) => M.set({ b0: b, b1: b, w: 1, mask, sel: 0, color });
   fixed(0, '#ffffff', SHIRT);   // frame in the jersey's colour (team kit)
@@ -328,7 +405,7 @@ export function strollerGeometry() {
 const lin = (hex) => { const c = new THREE.Color(hex); return `vec3(${c.r.toFixed(4)}, ${c.g.toFixed(4)}, ${c.b.toFixed(4)})`; };
 const GLSL_COMMON = `
   uniform float uTime; uniform highp sampler2D uClips; uniform vec4 uNear; uniform float uMid;
-  attribute vec4 aSkin; attribute vec4 aMask; attribute vec3 iA; attribute vec3 iB; attribute vec3 iC; attribute vec4 iAnim; attribute vec4 iLook;
+  attribute vec4 aSkin; attribute vec4 aMask; attribute float aAO; attribute vec3 iA; attribute vec3 iB; attribute vec3 iC; attribute vec4 iAnim; attribute vec4 iLook;
   vec3 figP; vec3 figN; float figHide;
   const vec3 FIG_HAIR[7] = vec3[7](${HAIR.map(lin).join(', ')});
   vec3 figRot(vec4 q, vec3 v) { return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v); }
@@ -350,11 +427,15 @@ const GLSL_COMMON = `
     float gz = mix(1., g, .6);
     figP = vec3(P.x * g, P.y * h, P.z * gz); figN = normalize(vec3(N.x / g, N.y / h, N.z / gz));
     int bits = int(iLook.z + .5), sel = int(aSkin.w + .5);
-    bool helmet = (bits & ${FIT.HELMET}) != 0;
+    bool helmet = (bits & ${FIT.HELMET}) != 0; int style = (bits / ${FIT.STYLE}) & 7; bool hat = (bits & ${FIT.CAP | FIT.BEANIE}) != 0;
     figHide = 0.;
     if ((sel == ${SEL.SKIRT} && (bits & ${FIT.SKIRT}) == 0) || (sel == ${SEL.LONG_HAIR} && ((bits & ${FIT.LONG_HAIR}) == 0 || helmet)) ||
         (sel == ${SEL.CAP} && ((bits & ${FIT.CAP}) == 0 || helmet)) || (sel == ${SEL.PACK} && (bits & ${FIT.PACK}) == 0) ||
-        (sel == ${SEL.PROP} && (bits & ${FIT.PROP}) == 0) || (sel == ${SEL.HELMET} && !helmet) || (sel == ${SEL.HAIR} && helmet)) figHide = 1.;
+        (sel == ${SEL.PROP} && (bits & ${FIT.PROP}) == 0) || (sel == ${SEL.HELMET} && !helmet) || (sel == ${SEL.HAIR} && helmet) ||
+        (sel == ${SEL.PONYTAIL} && (style != ${HAIR_STYLE.PONYTAIL} || helmet || (bits & ${FIT.LONG_HAIR}) != 0)) ||
+        (sel == ${SEL.BUN} && (style != ${HAIR_STYLE.BUN} || helmet || hat)) || (sel == ${SEL.CURLY} && (style != ${HAIR_STYLE.CURLY} || helmet || hat)) ||
+        (sel == ${SEL.JACKET} && (bits & ${FIT.JACKET}) == 0) || (sel == ${SEL.HOOD} && ((bits & ${FIT.HOOD}) == 0 || (bits & ${FIT.PACK}) != 0)) ||
+        (sel == ${SEL.BEANIE} && ((bits & ${FIT.BEANIE}) == 0 || helmet || (bits & ${FIT.CAP}) != 0)) || (sel == ${SEL.ROD} && (bits & ${FIT.ROD}) == 0)) figHide = 1.;
   #ifdef FIG_NEAR
     vec3 wo = (modelMatrix * instanceMatrix * vec4(0., 0., 0., 1.)).xyz;
     float nd = distance(wo, uNear.xyz);
@@ -372,7 +453,7 @@ const GLSL_COLOR = `
       if ((sel == ${SEL.FOREARM} && (bits & ${FIT.SLEEVES}) == 0) || (sel == ${SEL.SHIN} && (bits & ${FIT.LONG_PANTS}) == 0) || (sel == ${SEL.THIGH} && (bits & ${FIT.SKIRT}) != 0)) mk = vec4(0., 0., 1., 0.);
       int hi = int(iLook.w + .5);
       vec3 hair = hi >= 7 ? iC * .92 : FIG_HAIR[hi];
-      vColor.rgb = color * clamp(1. - mk.x - mk.y - mk.z - mk.w, 0., 1.) + iA * mk.x + iB * mk.y + iC * mk.z + hair * mk.w;
+      vColor.rgb = (color * clamp(1. - mk.x - mk.y - mk.z - mk.w, 0., 1.) + iA * mk.x + iB * mk.y + iC * mk.z + hair * mk.w) * aAO;
     }`;
 
 function patch(shader, uniforms, depth) {
@@ -385,6 +466,10 @@ function patch(shader, uniforms, depth) {
       .replace('#include <beginnormal_vertex>', 'figSkin(position, normal);\nvec3 objectNormal = figN;')
       .replace('#include <begin_vertex>', 'vec3 transformed = figHide > .5 ? vec3(0.) : figP;')
       .replace('#include <color_vertex>', `#include <color_vertex>\n${GLSL_COLOR}`);
+    // a soft rim of sky light on the edges turned from the camera: reads the shape (shoulders, head, limbs) against
+    // the background at no geometry cost — a few instructions a fragment
+    shader.fragmentShader = shader.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      { float rim = 1. - max(dot(normalize(normal), normalize(vViewPosition)), 0.); totalEmissiveRadiance += diffuseColor.rgb * .35 * rim * rim; }`);
   }
 }
 
@@ -398,7 +483,7 @@ export function figureMaterial(uTime, { near = null, mid = null, nearMode = 0 } 
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .8 });
   if (nearMode) m.defines = { FIG_NEAR: nearMode };
   m.onBeforeCompile = (s) => patch(s, uniforms, false);
-  m.customProgramCacheKey = () => `bf-figures-1-${nearMode}`;
+  m.customProgramCacheKey = () => `bf-figures-2-${nearMode}`;
   const d = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
   if (nearMode) d.defines = { FIG_NEAR: nearMode };
   d.onBeforeCompile = (s) => patch(s, uniforms, true);
@@ -431,7 +516,7 @@ const pick = (rand, a) => a[Math.floor(rand() * a.length) % a.length];
 export function randomLook(rand, opts = {}) {
   const kid = rand() < (opts.kids ?? .12);
   const h = kid ? .6 + rand() * .22 : .93 + rand() * .13;
-  const g = kid ? .9 + rand() * .1 : .86 + rand() * rand() * .42;
+  const g = kid ? .9 + rand() * .1 : rand() < .12 ? 1.15 + rand() * .18 : .86 + rand() * rand() * .42;   // (a few heavier builds)
   let bits = 0;
   const sporty = !!opts.sporty, cyclist = !!opts.helmet;
   if (!sporty && !cyclist && rand() < (opts.sleeves ?? .45)) bits |= FIT.SLEEVES;
@@ -442,6 +527,22 @@ export function randomLook(rand, opts = {}) {
   if (!cyclist && rand() < (opts.caps ?? .14)) bits |= FIT.CAP;
   if (!cyclist && rand() < (opts.packs ?? .1)) bits |= FIT.PACK;
   if (cyclist) bits |= FIT.HELMET;
+  // outerwear (it's September upstate: a few jackets and hoodies), hats; the hair's style
+  if (!sporty && !cyclist) {
+    const o = rand();
+    if (o < (opts.jackets ?? .14)) bits |= FIT.JACKET | FIT.SLEEVES | FIT.LONG_PANTS;
+    else if (o < (opts.jackets ?? .14) + (opts.hoodies ?? .1)) bits |= FIT.HOOD | FIT.SLEEVES;
+    if (!(bits & FIT.CAP) && rand() < (opts.beanies ?? .05)) bits |= FIT.BEANIE;
+  }
+  if (bits & FIT.JACKET && bits & FIT.SKIRT) bits &= ~FIT.JACKET;
+  if (opts.rod) bits |= FIT.ROD;
+  {
+    const r2 = rand();
+    const style = longHair ? (r2 < .3 ? HAIR_STYLE.BUN : HAIR_STYLE.SHORT) : r2 < .16 ? HAIR_STYLE.PONYTAIL : r2 < .26 ? HAIR_STYLE.CURLY : r2 < .36 ? HAIR_STYLE.BUZZ : r2 < .42 ? HAIR_STYLE.BUN : HAIR_STYLE.SHORT;
+    // (a bun with long hair: the long hair put up — the long part goes)
+    if (longHair && style === HAIR_STYLE.BUN) bits &= ~FIT.LONG_HAIR;
+    bits += style * FIT.STYLE;
+  }
   const grey = !kid && rand() < .12, bald = !kid && !longHair && rand() < .06;
   const hair = bald ? 7 : grey ? 5 + Math.floor(rand() * 2) : Math.floor(rand() * 5);
   const shirts = opts.shirts || PALETTES.shirts;
@@ -565,9 +666,8 @@ export function posedFigure(look, clip, { frame = 0, lod = 'lo', geometry = null
   const kid = Math.max(0, Math.min(1, (.93 - look.h) / .33)), gz = 1 + (look.g - 1) * .6;
   const hair = look.hair >= 7 ? look.skin.clone().multiplyScalar(.92) : col(HAIR[look.hair]);
   for (let i = 0; i < P.count; i++) {
-    const sel = Math.round(S.getW(i)), bits = look.bits, helmet = bits & FIT.HELMET;
-    if ((sel === SEL.SKIRT && !(bits & FIT.SKIRT)) || (sel === SEL.LONG_HAIR && (!(bits & FIT.LONG_HAIR) || helmet)) || (sel === SEL.CAP && (!(bits & FIT.CAP) || helmet)) ||
-        (sel === SEL.PACK && !(bits & FIT.PACK)) || (sel === SEL.PROP && !(bits & FIT.PROP)) || (sel === SEL.HELMET && !helmet) || (sel === SEL.HAIR && helmet)) continue;
+    const sel = Math.round(S.getW(i)), bits = look.bits;
+    if (selHidden(sel, bits)) continue;
     const b0 = Math.round(S.getX(i)), b1 = Math.round(S.getY(i)), w = S.getZ(i);
     v.fromBufferAttribute(P, i); n.fromBufferAttribute(N, i);
     bone(b0); const p0 = v.clone().applyQuaternion(qv).add(tv), n0 = n.clone().applyQuaternion(qv);

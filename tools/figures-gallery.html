@@ -2,7 +2,7 @@
 <html><head><meta charset="utf-8"><title>bikefree · figures</title>
 <style>body{margin:0;background:#cfe0ea;font:13px system-ui;color:#223}#hud{position:fixed;left:8px;top:6px;background:#fffc;padding:4px 8px;border-radius:6px}
 #hud select,#hud button{font:inherit}</style></head>
-<body><div id="hud"><b>Figures</b> · <select id="view"><option>people</option><option>clips</option><option>clips2</option><option>variety</option><option>vehicles</option><option>cars</option><option>parked</option><option>close</option><option>street</option><option>crowd</option></select>
+<body><div id="hud"><b>Figures</b> · <select id="view"><option>people</option><option>local</option><option>fishing</option><option>clips</option><option>clips2</option><option>variety</option><option>vehicles</option><option>cars</option><option>parked</option><option>close</option><option>street</option><option>crowd</option></select>
 <label><input type="checkbox" id="lo"> far detail</label> <button id="pause">pause</button> <span id="stat"></span></div>
 <script type="module">
 // The figures kit (js/world/toolbox/life/figures): every clip, outfits and body types, dogs, strollers, cyclists and
@@ -57,6 +57,18 @@ for (let k = 0; k < 120; k++) {
   if (clip === CLIP.photo) look.bits |= FIT.PROP;
   people.push({ look, x: 40 + (k % 20) * .75 + rand() * .3, z: -10 - Math.floor(k / 20) * .8, yaw: Math.PI + (rand() - .5) * .6, clip, phase: rand() });
 }
+// local activities (the "local" view, x −40): fishers at a pier rail facing the water (+z), a group of four chatting
+// in a ring, two sitting on a bench
+{
+  const L = -40;
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(9, .2, 2.4), new THREE.MeshStandardMaterial({ color: '#a08c70' })); deck.position.set(L, -.1, 1.2); deck.receiveShadow = true; scene.add(deck);
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(9, .08, .08), new THREE.MeshStandardMaterial({ color: '#f3f1ea' })); rail.position.set(L, 1.02, 2.35); scene.add(rail);
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(30, 20).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#4f7f97' })); water.position.set(L, -.6, 12); scene.add(water);
+  for (let k = 0; k < 3; k++) { const look = randomLook(rand, { kids: 0, rod: true, caps: .5 }); people.push({ look, x: L - 3 + k * 2.6, z: 1.9, yaw: 0, clip: CLIP.fish, phase: rand() }); }
+  for (let k = 0; k < 4; k++) { const a = k / 4 * Math.PI * 2 + .3, look = randomLook(rand, { kids: .1 }); people.push({ look, x: L + 8 + Math.sin(a) * .8, z: Math.cos(a) * .8, yaw: a + Math.PI, clip: CLIP.chat, phase: rand() }); }
+  const bench = new THREE.Mesh(new THREE.BoxGeometry(1.7, .06, .45), new THREE.MeshStandardMaterial({ color: '#6a4a2e' })); bench.position.set(L + 8, .45, -3); scene.add(bench);
+  for (let k = 0; k < 2; k++) people.push({ look: randomLook(rand, { kids: 0 }), x: L + 7.6 + k * .8, z: -3.05, yaw: 0, clip: CLIP.sit, phase: rand() });
+}
 const riders = [0, 1, 2].map((k) => ({ look: randomLook(rand, { kids: 0, helmet: true }), x: -4 + k * 2.4, z: -13, yaw: Math.PI / 2, clip: CLIP.cycle, phase: rand() }));
 
 // the light (parked) versions in a row behind
@@ -75,6 +87,8 @@ for (let k = 0; k < 18; k++) {
 
 const views = {
   people: { pos: [0, 2.6, 9.5], at: [0, 1, 0], fov: 50 },
+  local: { pos: [-37, 2.4, -6.5], at: [-36, .9, 1], fov: 55 },
+  fishing: { pos: [-41.5, 1.9, 6], at: [-40, 1.2, 1.5], fov: 50 },
   clips: { pos: [-5.6, 1.5, 5.2], at: [-5.6, .95, 0], fov: 50 },
   clips2: { pos: [5.6, 1.5, 5.2], at: [5.6, .95, 0], fov: 50 },
   variety: { pos: [0, 3.2, 6], at: [0, .9, -6.5], fov: 55 },

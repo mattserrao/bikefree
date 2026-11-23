@@ -9,6 +9,7 @@
 //               (chicory, Queen Anne's lace, goldenrod, asters); the odd farm stand with pumpkins by a farmhouse
 // Everything is built once per tile (static), the small near things in a mesh shown only near the camera.
 import * as THREE from '../../../../vendor/three.module.min.js';
+import { due } from '../core/jobs.js';
 import { hash } from '../core/mesh-builder.js';
 
 // ------------------------------------------------------------------ the GLSL noise, in JS (to agree with the ground)
@@ -72,7 +73,14 @@ export function cropMaterial(uTime) {
  * The tile's crop cards: rows `per` m apart along the field's heading, one card every ~4 m of row, within the tile
  * (x0, z0, size). crop(x, z) → { crop: 'corn' | 'soy' | …, heading (rad, the rows' direction), per } | null.
  */
-export function cropCards(x0, z0, size, crop, groundH) {
+/** cropCards as a job (yields between the 12 m grid's columns when the frame's slice is used up): out.geo. */
+export function* cropCardsJob(x0, z0, size, crop, groundH, out) {
+  const it = cropCardsGen(x0, z0, size, crop, groundH);
+  let r = it.next(); while (!r.done) { if (due()) yield; r = it.next(); }
+  out.geo = r.value;
+}
+export function cropCards(x0, z0, size, crop, groundH) { const it = cropCardsGen(x0, z0, size, crop, groundH); let r = it.next(); while (!r.done) r = it.next(); return r.value; }
+function* cropCardsGen(x0, z0, size, crop, groundH) {
   const pos = [], uv = [], nrm = [];
   const seen = new Map();
   const quad = (ax, az, bx, bz, ya, yb, h, u0) => {
@@ -82,6 +90,7 @@ export function cropCards(x0, z0, size, crop, groundH) {
   };
   // sample the tile on a 12 m grid for fields; each field's rows are laid on its own lattice
   for (let gx = x0; gx < x0 + size; gx += 12) for (let gz = z0; gz < z0 + size; gz += 12) {
+    yield;   // (a 12 m cell: the job checks its slice here)
     const c = crop(gx + 6, gz + 6); if (!c || (c.crop !== 'corn' && c.crop !== 'soy')) continue;
     const ux = Math.cos(c.heading), uz = Math.sin(c.heading), vx = -uz, vz = ux, per = c.per || (c.crop === 'corn' ? .9 : .76);
     const corn = c.crop === 'corn', h = corn ? 2.5 : .75, seg = corn ? 4 : 3;
