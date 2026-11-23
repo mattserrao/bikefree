@@ -54,6 +54,13 @@ const WIND_GLSL = /* glsl */`
   varying float vKeep0; varying float vKeep1;
   float teLin(float d, float a, float b) { return clamp((d - a) / max(b - a, 1e-3), 0., 1.); }
   float teJ(vec2 p) { vec2 q = floor(p * 4. + .5); vec3 p3 = fract(vec3(q.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }`;
+/** A tile's trees' bounding box (centre and half sizes in x, z), for the re-sort's skip test. */
+function tileBounds(list) {
+  if (!list.length) return null;
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const t of list) { if (t.x < x0) x0 = t.x; if (t.x > x1) x1 = t.x; if (t.z < z0) z0 = t.z; if (t.z > z1) z1 = t.z; }
+  return { cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, hx: (x1 - x0) / 2, hz: (z1 - z0) / 2 };
+}
 /** A tier's swap dissolve (per tree: aFade) and the wind, patched into a material. */
 function engineMaterial(material, uTime, leaf, key) {
   const prev = material.onBeforeCompile, prevKey = material.customProgramCacheKey ? material.customProgramCacheKey() : '';
@@ -324,7 +331,9 @@ export class TreeEngine {
   tick(camera) {
     this.impMat.uniforms.uNow.value = this.uTime.value;
     if (!this._started && this.tiles.size) this._started = true;
-    if (this._dirty) { this._dirty = false; this._rebuildImpostors(); }
+    // (tiles arriving while riding: at most one rebuild a second — each one rewrites every card's data, ~30 ms; the new
+    //  tile's cards dissolve in anyway)
+    if (this._dirty && (!this._started || this.uTime.value - (this._lastRebuild ?? -9) > 1)) { this._dirty = false; this._lastRebuild = this.uTime.value; this._rebuildImpostors(); }
     camera.getWorldDirection(this._dir);
     if (this._at && this._at.distanceTo(camera.position) < STEP && this._dir.dot(this._lastDir) > .998 && !(this._fadeUntil && this.uTime.value > this._fadeUntil)) return;
     this._fadeUntil = 0;
@@ -332,9 +341,15 @@ export class TreeEngine {
     this._m.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); this._frustum.setFromProjectionMatrix(this._m);
     const b0 = this.b0, b1 = this.b1, cx = camera.position.x, cz = camera.position.z, now = this.uTime.value;
     const lists = this.entries.map(() => [[], []]);
-    let near = 0, mid = 0, impDirty = false;
+    let near = 0, mid = 0, impDirty = false, anyFade = false;
     const iS = this.iS;
+    // (the stutter, 23 Nov: every re-sort walked every tree on the map — 65–90 k, every 2.5 m of riding: tens of ms.
+    //  A tile wholly past the mid band whose trees are all settled cards is skipped: nothing in it can change)
+    const farEdge = b1 + FADE[1] + HYST + 10;
     for (const list of this.tiles.values()) {
+      const bb = list._bb || (list._bb = tileBounds(list));
+      if (list._settled && bb && Math.hypot(Math.max(0, Math.abs(cx - bb.cx) - bb.hx), Math.max(0, Math.abs(cz - bb.cz) - bb.hz)) > farEdge && now > list._settled) continue;
+      let allFar = true;
       for (const t of list) {
         const d = Math.hypot(t.x - cx, t.z - cz);
         // the tier (each tree at its own distance, with hysteresis): 0 near, 1 mid, 2 impostor (-1: none, the understory)
@@ -352,6 +367,8 @@ export class TreeEngine {
           const mode = t.tier === 2 ? (fading ? 2 : 1) : fading && t.from === 2 ? 3 : 0;
           if (iS[t.ik * 2 + 1] !== mode || iS[t.ik * 2] !== t.ts) { iS[t.ik * 2] = t.ts; iS[t.ik * 2 + 1] = mode; impDirty = true; }
         }
+        if (fading) anyFade = true;
+        if (t.tier !== 2 && t.tier !== -1 || fading) allFar = false;
         const inNear = t.tier === 0 || (fading && t.from === 0), inMid = t.tier === 1 || (fading && t.from === 1);
         if (!inNear && !inMid) continue;
         // in view (with a margin, ~8° and a few metres: a turn between re-sorts doesn't uncover gaps), or right beside
@@ -360,10 +377,12 @@ export class TreeEngine {
         if (inNear) { L[0].push(t); near++; t._m0 = t.tier === 0 ? (fading ? 2 : 1) : 3; }
         if (inMid) { L[1].push(t); mid++; t._m1 = t.tier === 1 ? (fading ? 2 : 1) : 3; }
       }
+      // settled: every tree a card (or none), no dissolve under way — skipped while the tile stays far (after FT)
+      list._settled = allFar ? now + FT : 0;
     }
     if (impDirty) this.impGeo.attributes.iS.needsUpdate = true;
     // dissolves under way: re-sort again once they're done (so the ones dissolved out leave the lists)
-    this._fadeUntil = now + FT + .05;
+    this._fadeUntil = anyFade ? now + FT + .05 : 0;   // (only when a dissolve is under way: not a re-sort every 0.65 s standing still)
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), p = new THREE.Vector3(), s = new THREE.Vector3(), c = new THREE.Color();
     this.entries.forEach((e, i) => lists[i].forEach((list, tier) => {
       for (let pi = 0; pi < (e.pools[tier] || []).length; pi++) {

@@ -23,7 +23,7 @@ const software = args.includes('--software');
 const browser = await chromium.launch({ executablePath: chrome, args: software ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : ['--ignore-gpu-blocklist', '--enable-gpu'] });
 const [VW, VH] = opt('--size', '640x360').split('x').map(Number);
 const page = await browser.newPage({ viewport: { width: VW, height: VH } });
-const q = new URLSearchParams({ lat: opt('--lat', '40.4469'), lon: opt('--lon', '-80.0058'), quality: opt('--quality', 'balanced') });
+const q = new URLSearchParams({ graph: opt('--graph', 'routes/cities/pgh.json'), lat: opt('--lat', '40.4469'), lon: opt('--lon', '-80.0058'), quality: opt('--quality', 'balanced') });   // (--graph: another map, e.g. routes/cities/skan.json)
 await page.goto(`${base}/tools/pgh-preview.html?${q}`);
 await page.waitForFunction(() => window.world && window.world.readiness().ready, null, { timeout: 300000, polling: 500 });
 const cdp = args.includes('--profile') ? await page.context().newCDPSession(page) : null;

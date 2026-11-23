@@ -79,7 +79,11 @@ function grow(seed, o, lod, turn, lodScale = 1) {
   const clusters = [];   // leaf cluster spots { p, d (outward dir), size }
   const crown = { y: H * (o.fork + (1 - o.fork) * .52), ry: H * (1 - o.fork) * (o.flat ? .42 : .5) };
   const up = new THREE.Vector3(0, 1, 0);
-  const maxLevel = lod === 0 ? 3 : lod === 1 ? 2 : 1;   // (lod 1: the clusters sit on the second level's branches)
+  // one skeleton for every level of detail (user, 23 Nov: "the shape of the tree changes as you get closer"): the
+  // branches are always grown in full — the same random draws whatever the level — and a lower level draws fewer of
+  // them (mid: the trunk and main limbs, no twigs) and merges the near model's leaf clusters into fewer, larger cards
+  // that cover the same crown. So the outline and the limbs stay put as the tiers swap; only the detail changes.
+  const maxLevel = 3, woodLevel = lod === 0 ? 3 : lod === 1 ? 2 : 1;
   const queue = [];
   const stems = o.stems || 1;
   for (let s = 0; s < stems; s++) {
@@ -90,7 +94,7 @@ function grow(seed, o, lod, turn, lodScale = 1) {
   const L = o.levels;   // per level (1..3): [children, start (0–1 up the parent), angle (rad from the parent), length ratio]
   while (queue.length) {
     const br = queue.shift(), lv = br.level;
-    const sections = Math.max(2, (lod ? [5, 3, 2, 2] : [8, 5, 3, 2])[lv]), seg = lod ? [5, 4, 3, 3][lv] : [8, 6, 4, 3][lv];
+    const sections = Math.max(2, [8, 5, 3, 2][lv]), seg = lod ? [5, 4, 3, 3][lv] : [8, 6, 4, 3][lv];
     const pts = [br.p.clone()], radii = [br.r], dirs = [br.d.clone()];
     let p = br.p.clone(), d = br.d.clone();
     const step = br.len / sections;
@@ -103,12 +107,16 @@ function grow(seed, o, lod, turn, lodScale = 1) {
       pts.push(p); dirs.push(d.clone());
       radii.push(br.r * Math.max(.06, 1 - (i / sections) * (lv === 0 && !o.leader ? .45 : .9)));
     }
-    wood.add(tube(pts, radii, seg), new THREE.Matrix4(), lv ? o.trunk : o.trunk);
-    if (lv === 0 && !lod && !o.stems) for (let k = 0; k < 5; k++) { const a = k * 1.26 + rand() * .4; wood.add(cone(br.r * .5, 1.3, 3), M(Math.cos(a) * br.r * .6, 0, Math.sin(a) * br.r * .6, 1, 1, 1, -a, 0, .32), o.trunk); }
+    if (lv <= woodLevel) {
+      // (a lower level: every other point of the same branch — the same curve, fewer rings)
+      const keep = lod ? pts.map((_, i) => i).filter((i) => i % 2 === 0 || i === pts.length - 1) : null;
+      wood.add(keep ? tube(keep.map((i) => pts[i]), keep.map((i) => radii[i]), seg) : tube(pts, radii, seg), new THREE.Matrix4(), o.trunk);
+    }
+    if (lv === 0 && !o.stems) for (let k = 0; k < 5; k++) { const a = k * 1.26 + rand() * .4; if (!lod) wood.add(cone(br.r * .5, 1.3, 3), M(Math.cos(a) * br.r * .6, 0, Math.sin(a) * br.r * .6, 1, 1, 1, -a, 0, .32), o.trunk); }
     // children
     if (lv < maxLevel) {
       const [nc, start, angle, ratio] = L[lv];
-      const count = lod && lv ? Math.max(2, Math.round(nc * .6)) : nc;
+      const count = nc;
       for (let c = 0; c < count; c++) {
         const t = start + (1 - start) * (count > 1 ? c / (count - 1) : .5) * .94, fi = t * (pts.length - 1), i0 = Math.min(pts.length - 2, Math.floor(fi)), f = fi - i0;
         const cp = pts[i0].clone().lerp(pts[i0 + 1], f), cd = dirs[i0].clone().lerp(dirs[i0 + 1], f).normalize(), cr = radii[i0] + (radii[i0 + 1] - radii[i0]) * f;
@@ -126,14 +134,14 @@ function grow(seed, o, lod, turn, lodScale = 1) {
     // leaf clusters along the outer branches (and at the tip of every branch at the last level)
     // inner limbs: a few small sprays where light gets in (keeps the crown from reading hollow, without a solid core)
     if (lv === 1 && maxLevel > 1 && !o.droop) {
-      const n = lod ? 1 : 2;
+      const n = 2;
       for (let k = 0; k < n; k++) {
         const i = Math.min(pts.length - 1, Math.round((.5 + .4 * rand()) * (pts.length - 1)));
         if (rand() < .7) clusters.push({ p: pts[i].clone(), size: .55 + rand() * .2 });
       }
     }
-    if (lv >= maxLevel - (lod ? 0 : 1) && lv > 0) {
-      const per = lod ? (lv === maxLevel ? 3 : 1) : 2;
+    if (lv >= maxLevel - 1 && lv > 0) {
+      const per = 2;
       for (let k = 0; k < per; k++) {
         const t = lv === maxLevel ? .45 + .55 * (k + 1) / per : .55 + .45 * (k + 1) / per, i = Math.min(pts.length - 1, Math.round(t * (pts.length - 1)));
         clusters.push({ p: pts[i].clone(), size: (lv === maxLevel ? 1 : 1.25) * (.8 + rand() * .4) });
@@ -152,6 +160,9 @@ function grow(seed, o, lod, turn, lodScale = 1) {
     let c = u < turn * (.75 + top * .35 + out * .3) ? (rand() < .7 ? hue : mixHex(hue, hue2, .5)) : u < turn * 1.4 ? mixHex(g, hue, .4) : g;
     return { c, out };
   };
+  // every cluster's colour from the full set (so a merged card keeps the colour its part of the crown has near)
+  for (const c of clusters) c.col = colourAt(c.p);
+  if (lod === 1) mergeClusters(clusters, rand);
   const leafKind = o.droop ? SHRUB : LEAF;
   if (lod === 2) {
     // far: crown masses over the clusters' extent
@@ -166,8 +177,8 @@ function grow(seed, o, lod, turn, lodScale = 1) {
   const pos = [], nor = [], uv = [], col = [], tw = [];
   const v = new THREE.Vector3(), qn = new THREE.Vector3();
   for (const c of clusters) {
-    const { c: hex, out } = colourAt(c.p), k = new THREE.Color(hex).multiplyScalar((lod ? .86 : .8) + out * (lod ? .24 : .28));   // depth: darker inside
-    const size = (lod ? 2.3 : 1.75) * c.size * (o.droop ? .9 : 1), quads = lod ? 2 : 3;
+    const { c: hex, out } = c.col, k = new THREE.Color(hex).multiplyScalar((lod ? .86 : .8) + out * (lod ? .24 : .28));   // depth: darker inside
+    const size = (lod ? c.half ?? 2.3 * c.size : 1.75 * c.size) * (o.droop ? .9 : 1), quads = lod ? 2 : 3;
     for (let q = 0; q < quads; q++) {
       const yaw = rand() * Math.PI, pitch = q === 2 || (lod && q === 1) ? Math.PI / 2 - .3 + rand() * .3 : (rand() - .5) * .6;
       const ax = new THREE.Vector3(Math.cos(yaw), 0, Math.sin(yaw)), ay = new THREE.Vector3(0, Math.cos(pitch), 0).addScaledVector(new THREE.Vector3(-Math.sin(yaw), 0, Math.cos(yaw)), Math.sin(pitch));
@@ -190,6 +201,31 @@ function grow(seed, o, lod, turn, lodScale = 1) {
   leaves.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); leaves.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   leaves.computeBoundingSphere(); leaves.computeBoundingBox();
   return { wood: wood.build(), leaves };
+}
+/**
+ * The mid tier's foliage from the near tier's: the clusters gathered into about a third as many (k-means, seeded from
+ * every third), each new card centred on its members and sized to reach the outer edge of their near cards — so the
+ * crown's outline is the near model's, in fewer, larger cards. In place; sets c.half (the card's half size).
+ */
+function mergeClusters(list, rand) {
+  const k = Math.max(3, Math.round(list.length / 3)), near = (m) => 1.75 * m.size;
+  let seeds = list.filter((_, i) => i % 3 === 0).slice(0, k).map((c) => c.p.clone());
+  let groups;
+  for (let it = 0; it < 4; it++) {
+    groups = seeds.map(() => []);
+    for (const c of list) { let bi = 0, bd = Infinity; seeds.forEach((s, i) => { const d = s.distanceToSquared(c.p); if (d < bd) { bd = d; bi = i; } }); groups[bi].push(c); }
+    seeds = groups.map((g, i) => g.length ? g.reduce((a, c) => a.add(c.p), new THREE.Vector3()).divideScalar(g.length) : seeds[i]);
+  }
+  const out = [];
+  groups.forEach((g, i) => {
+    if (!g.length) return;
+    const p = seeds[i];
+    // its reach: the farthest member's card edge, a little in (the crossed cards overlap); its colour: the biggest member's
+    let half = 0, big = g[0];
+    for (const m of g) { half = Math.max(half, p.distanceTo(m.p) + near(m) * .95); if (m.size > big.size) big = m; }
+    out.push({ p, size: big.size, half: Math.max(half, near(big)), col: big.col });
+  });
+  list.length = 0; list.push(...out);
 }
 const shadeHex = (hex, k) => '#' + new THREE.Color(hex).multiplyScalar(k).getHexString();
 
