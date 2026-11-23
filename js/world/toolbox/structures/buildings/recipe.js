@@ -8,6 +8,7 @@
 import { randomSequence } from '../../core/random.js';
 import { drain, due } from '../../core/jobs.js';   // [F30]
 import { resolveStyle, pick, WALLS, ROOFS, WINDOW_SETS, W, WINDOW_BAY, ROOF_COLORS, S } from './presets.js';
+import { planHouse } from '../houses/house-plan.js';
 
 export const ROAD_HALF = 3.5;
 const polyArea = (pts) => { let a = 0; for (let i = 0; i < pts.length; i++) { const [x0, z0] = pts[i], [x1, z1] = pts[(i + 1) % pts.length]; a += x0 * z1 - x1 * z0; } return a / 2; };
@@ -352,6 +353,19 @@ export function* planBuildingsJob(plan, config, index, opts = {}, tierIndex = nu
     if (P.stair && !clear(sideBox(R.front, 1.4))) delete P.stair;
     // a porch may come up to the sidewalk
     if (P.frontPorch && !clear(sideBox(R.front, P.frontPorch.depth + .3), .3)) { delete P.frontPorch; if (can && rand() < style.porch) P.porch = true; }
+    // the house engine (structures/houses): the regional house types, in place of the generic kit's house
+    if (style.houseEngine) {
+      const H = planHouse(R);
+      if (H) {
+        R.house = H; R.rects = H.rects; R.front = frontWall(R.rects[0], toRoad, false);
+        R.floors = H.vols[0].floors; R.floorH = H.vols[0].fh;
+        const pp = H.parts, body = H.vols[0];
+        // what the town's other planners read: a porch's depth (clearances), no kit garage (the drive goes to the house's own)
+        R.parts = { frontPorch: pp.porch ? { depth: pp.porch.d } : pp.portico ? { depth: pp.portico.d } : pp.stoop ? { depth: pp.stoop.d } : null };
+        if (!R.parts.frontPorch) delete R.parts.frontPorch;
+        if (pp.garageDoor) R.house.drive = { s: pp.garageDoor.s, t: (pp.garageDoor.t ?? body.t0) - 1.5 };
+      }
+    }
     R.dress = dTier < kit.dressingM && !['works', 'ruin'].includes(archetype);
     out.push(R);
     done.set(b, R);

@@ -21,6 +21,7 @@ import { cellKey, freezeMatrix } from './graph-world.js';
 import { drain, runSlice, due } from './toolbox/core/jobs.js';
 import { planBuildingKitJob, makeStreetIndex, dress } from './toolbox/structures/buildings/kit.js';
 import { assemble, Writer } from './toolbox/structures/buildings/assemble.js';
+import { buildHouse } from './toolbox/structures/houses/house-engine.js';
 import { makeFacadeMaterial } from './toolbox/structures/buildings/facade-material.js';
 import { FURNITURE, makeFacadeDresser } from './toolbox/city/street-kit.js';
 import { farmBuilding } from './toolbox/city/cny-farms.js';
@@ -40,6 +41,7 @@ const TILE = 400;
 // how far the city is built, by quality (Low: phones)
 const REACH = { low: { near: 1300, far: 1800, trees: 0.6, treeNear: 450 }, balanced: { near: 2300, far: 3100, trees: 1, treeNear: 750 }, high: { near: 2300, far: 3100, trees: 1.2, treeNear: 900 } };
 const CAR_NEAR = 320;           // m: detailed parked cars within this
+const HOUSE_CLOSE_M = 160;   // the house engine's close detail (casings, rails, brackets) drawn this far
 const KIT_CFG = { detailM: 150, dressingM: 80, detailReachM: 550,
   styles: [{ preset: 'pittsburgh-rowhouse', kinds: ['rowhouse'] }, { preset: 'pittsburgh-frame', kinds: ['house', 'barn', 'shed'] }] };
 /** Each road-graph city's homes (CNY: the suburbs' ranches and colonials, the villages' older houses, the farmhouses:
@@ -266,11 +268,18 @@ export class GraphCity {
         const list = lists.get(key); lists.delete(key);
         if (!list?.length) return;
         const w = new Writer(8192), d = new Writer(4096), L = self.host.landscape;
-        for (const R of list) { if (due()) yield; const res = assemble(R, w, d, L); if (R.dressing?.length) for (const it of R.dressing) dress(d, it, R, L, res); }
+        // the house engine's close detail (casings, rails, brackets, gutters): one writer per 120 m cell, drawn to ~160 m
+        const close = new Map(), closeOf = (R) => { const k = Math.floor(R.x / 120) * 100003 + Math.floor(R.z / 120); let c = close.get(k); if (!c) close.set(k, (c = new Writer(4096))); return c; };
+        for (const R of list) {
+          if (due()) yield;
+          const res = R.house ? buildHouse(R, R.house, w, d, closeOf(R), L) : assemble(R, w, d, L);
+          if (R.dressing?.length) for (const it of R.dressing) dress(d, it, R, L, res);
+        }
         if (w.n) { const m = new THREE.Mesh(w.geometry(), material); m.name = `Homes ${key}`; m.castShadow = m.receiveShadow = true; group.add(m); }
         if (d.n) { const dm = new THREE.Mesh(d.geometry(), material); dm.name = `Home detail ${key}`; dm.receiveShadow = true; dm.geometry.computeBoundingBox(); dm.userData.box = dm.geometry.boundingBox; group.add(dm); details.push(dm); }
+        for (const c of close.values()) if (c.n) { const cm = new THREE.Mesh(c.geometry(), material); cm.name = `House close detail ${key}`; cm.receiveShadow = true; cm.geometry.computeBoundingBox(); cm.userData.box = cm.geometry.boundingBox; cm.userData.reach = HOUSE_CLOSE_M; group.add(cm); details.push(cm); }
       },
-      tick(cam) { for (const m of details) m.visible = m.userData.box.distanceToPoint(cam) < KIT_CFG.detailReachM; },
+      tick(cam) { for (const m of details) m.visible = m.userData.box.distanceToPoint(cam) < (m.userData.reach || KIT_CFG.detailReachM); },
     };
   }
 

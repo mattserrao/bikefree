@@ -27,7 +27,8 @@ export function planHomestead(R, ctx) {
   // where the car stands: the garage door, else a pad beside the house at its front corner
   const gar = R.parts?.garage;
   let sx, sz, pad = false;
-  if (gar) { const s = sideSign(gar.end); [sx, sz] = corner(r, s * (r.hu + 1.6), fs * (Math.min(r.hv, 1.9) + 1.2)); }
+  if (R.house?.drive) { const H = R.house, d = H.drive; sx = H.o[0] + H.a[0] * d.s + H.b[0] * d.t; sz = H.o[1] + H.a[1] * d.s + H.b[1] * d.t; }
+  else if (gar) { const s = sideSign(gar.end); [sx, sz] = corner(r, s * (r.hu + 1.6), fs * (Math.min(r.hv, 1.9) + 1.2)); }
   else if (front % 2 === 0) { const s = h(1) < .5 ? -1 : 1; [sx, sz] = corner(r, s * (r.hu + 2.2), fs * (r.hv - 1.5)); pad = true; }
   else { const s = h(1) < .5 ? -1 : 1; [sx, sz] = corner(r, sideSign(front) * (r.hu - 1.5), s * (r.hv + 2.2)); pad = true; }
   const road = ctx.roadNear(sx, sz, farm ? 160 : 70);

@@ -800,3 +800,5 @@ function outlineBuilding(R, w, L, wall, roofC, st) {
 
 const crossN = (t) => { const [a, b, c] = t; return [(b[1] - a[1]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[1] - a[1]), (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]), (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])]; };
 const range = (a, b) => { const o = []; for (let i = a; i < b; i++) o.push(i); return o; };
+
+export { roof as kitRoof, srgb, toU8, frameIndex, outward };

@@ -18,7 +18,7 @@ import * as THREE from '../../../../../vendor/three.module.min.js';
 
 export const FRAMES = ['#efebe2', '#e4dac4', '#6b4a32', '#3b3d3f', '#9ea4a8'];
 /** Flags (aWin.w / 256). */
-export const F = { SHUTTERS: 1, SURROUNDS: 2, QUOINS: 4, FLOWERS: 8, SHOP: 16, GABLE: 32, SPARSE: 64, BARN: 128, IVY: 256, NOGROUND: 512, UPPERDOOR: 1024, LINTELS: 2048 };
+export const F = { SHUTTERS: 1, SURROUNDS: 2, QUOINS: 4, FLOWERS: 8, SHOP: 16, GABLE: 32, SPARSE: 64, BARN: 128, IVY: 256, NOGROUND: 512, UPPERDOOR: 1024, LINTELS: 2048, OPEN: 4096 };
 
 const GLSL_COMMON = /* glsl */`
   attribute vec4 aSurf; attribute vec4 aWin; attribute vec2 aB; attribute vec4 aTrim; attribute vec4 aAcc;
@@ -168,6 +168,7 @@ const GLSL_FRAG = /* glsl */`
     bool shop = mod(floor(flags / 16.), 2.) > .5, gable = mod(floor(flags / 32.), 2.) > .5, sparse = mod(floor(flags / 64.), 2.) > .5;
     bool barn = mod(floor(flags / 128.), 2.) > .5, noGround = mod(floor(flags / 512.), 2.) > .5, upperDoor = mod(floor(flags / 1024.), 2.) > .5;
     bool lintels = mod(floor(flags / 2048.), 2.) > .5;
+    bool openOnly = mod(floor(flags / 4096.), 2.) > .5;   // shutters always open (the house engine: lived-in houses)
     float vv = v - gv;
     if (vv < 0. || fh <= 0.) return vec4(wall, 0.);
     float bi = floor(u / bw), fi = floor(vv / fh);
@@ -182,6 +183,9 @@ const GLSL_FRAG = /* glsl */`
     else if (ws == 5) { hw = vec2(.42, (fh * .82 - 2.6) * .5); y0 = 2.6; }
     else if (ws == 6) { hw = vec2(.09, .4); y0 = 1.2; }
     else if (ws == 7) { hw = vec2(.45, .72); y0 = .8; }
+    else if (ws == 9) { hw = vec2(1.15, .72); y0 = .8; }      // a ranch's picture window (a fixed pane between two narrow sashes)
+    else if (ws == 10) { hw = vec2(.4, 1.); y0 = .62; }       // tall 2-over-2 sash (Greek Revival, Italianate: 3.4 m storeys)
+    else if (ws == 11) { hw = vec2(.55, .3); y0 = 1.55; }     // a raised ranch's lower level / a basement: short, high
     if (gable) { hw = ws == 6 ? vec2(.75, .8) : vec2(.32, .38); y0 = ws == 6 ? .3 : .55; }
     vec3 c = wall; float a = 0.;
     vec3 frameC = bkLin(vFrame < .5 ? vec3(.94, .92, .89) : vFrame < 1.5 ? vec3(.89, .85, .77) : vFrame < 2.5 ? vec3(.42, .29, .2) : vFrame < 3.5 ? vec3(.23, .24, .25) : vec3(.62, .64, .66));
@@ -260,6 +264,9 @@ const GLSL_FRAG = /* glsl */`
     else if (ws == 4) m = max(bkLine(q.x, 100., .06, px), bkLine(q.y - hw.y * .62, 100., .05, px));
     else if (ws == 5) m = bkLine(q.x, 100., .04, px) + bkLine(q.y, .45, .03, px) * .7;
     else if (ws == 7) m = max(bkLine(q.y, 100., .07, px), bkLine(q.x, hw.x, .04, px) * step(abs(q.x), hw.x - .05));
+    else if (ws == 9) m = max(bkLine(abs(q.x) - hw.x * .5, 100., .07, px) * step(abs(q.x), hw.x * .55), bkLine(q.y, 100., .05, px) * step(hw.x * .5, abs(q.x)));
+    else if (ws == 10) m = max(bkLine(q.y, 100., .07, px), bkLine(q.x, 100., .04, px));
+    else if (ws == 11) m = bkLine(q.x, 100., .05, px);
     g = mix(g, frameC, clamp(m, 0., 1.) * (1. - open));
     c = mix(c, frameC, inF);
     c = mix(c, g, inW);
@@ -276,8 +283,8 @@ const GLSL_FRAG = /* glsl */`
     }
     // shutters: open beside the window, closed over it, the odd one half shut or missing
     if (shutters && !gable && ws != 4 && ws != 5) {
-      float st = bkH(vec2(bi, fi) * 3.7 + seed);
-      float miss = step(1. - wear * .25, bkH(vec2(fi, bi) + seed * 5.));
+      float st = openOnly ? 0. : bkH(vec2(bi, fi) * 3.7 + seed);
+      float miss = openOnly ? 0. : step(1. - wear * .25, bkH(vec2(fi, bi) + seed * 5.));
       vec3 sc = trim * (.92 + .16 * h2);
       sc = mix(sc, mix(sc, vec3(dot(sc, vec3(.33))), .5) * 1.25, wear * .5);   // sun-faded
       float sw = hw.x + .02, sh = hw.y + .04;
