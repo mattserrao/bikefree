@@ -271,6 +271,17 @@ const SPECIES = {
   willow: { H: 15, R: 6.5, fork: .3, trunkR: .5, trunk: '#5b5046', bark: BARK, droop: true, gnarl: .3, up: .04,
     levels: [[5, .7, .8, .45], [4, .3, .7, .28], [3, .3, .5, .16]],
     greens: ['#8aab52', '#7d9c48', '#96b45c'], fall: ['#c2b347'], turn: [0, .15, .35] },
+  // ornamentals for the yards (user, 23 Nov): Japanese maple (small, low and spreading, deep red), flowering crab (a
+  // small round crown on a short trunk, rust and red in fall), a clump of white birches
+  jmaple: { H: 5, R: 3.2, fork: .18, trunkR: .12, trunk: '#4d3f36', bark: BARK, stems: 2, flat: true, gnarl: .35, up: .02,
+    levels: [[5, .3, .95, .42], [3, .3, .7, .22], [3, .35, .6, .12]],
+    greens: ['#7a2a24', '#8a3128', '#6a2420'], fall: ['#b0281c', '#c43a22', '#9e2218'], turn: [.55, .9] },
+  crabapple: { H: 6.5, R: 3.6, fork: .3, trunkR: .16, trunk: '#4a3d33', bark: BARK, gnarl: .4, up: .04, flat: true,
+    levels: [[5, .55, .8, .42], [3, .3, .7, .24], [3, .35, .6, .12]],
+    greens: ['#4e7434', '#57803a', '#4a6c31'], fall: ['#b8562a', '#c9722e', '#a83a22'], turn: [.3, .65] },
+  birchclump: { H: 12, R: 3.2, fork: .5, trunkR: .13, trunk: '#e6e2d6', bark: WHITE, leader: true, stems: 3, gnarl: .18, up: .08,
+    levels: [[4, .45, .7, .26], [3, .3, .6, .16], [3, .4, .55, .09]],
+    greens: ['#6f9a48', '#7ca452', '#668f43'], fall: ['#e2c548', '#d8b13a', '#ecd469'], turn: [.2, .7] },
   // a dead tree (snag; user, 23 Nov: "interspersed dead trees", ~6%, more visible): a grey, barkless trunk and a few
   // bare limbs, no leaves. Variants (turn = the variant): 0 broken off at two-thirds, 1 tall with its main limbs,
   // 2 leaning, its top snapped
@@ -383,6 +394,11 @@ export function makeUpstateTrees() {
     species.whitepine = { h: 30, r: 5.5, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => whitePine(v, lod))), turn: [0, 0] };
     species.hemlock = { h: 22, r: 4.2, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => hemlock(v, lod))), turn: [0, 0] };
     species.spruce = { h: 20, r: 3.6, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => spruce(v, lod))), turn: [0, 0] };
+    // yard evergreens: Colorado blue spruce (a blue-grey cone) and arborvitae (a narrow dark-green column)
+    species.bluespruce = { h: 10, r: 2.8, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => MOUNTAIN_BUILDERS.conifer(5401 + v, { H: 9 + v * 2, R: 2.8, colors: ['#62818a', '#6d8d94', '#57747c'], trunk: '#4d3b2e',
+      trunkBase: .22, droop: .25, jag: .25, seg: 7, layers: 9, crown: .02, top: 'leader', under: 3 }, lod))), turn: [0, 0] };
+    species.arborvitae = { h: 6, r: 1.1, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => MOUNTAIN_BUILDERS.conifer(5501 + v, { H: 5.5 + v, R: 1.1, colors: ['#3f5f33', '#4a6b3a', '#36552e'], trunk: '#4d3b2e',
+      trunkBase: .1, droop: .05, jag: .15, seg: 6, layers: 8, crown: .3, top: 'leader', under: 2 }, lod))), turn: [0, 0] };
     // every species' near and mid tiers as { wood, leaves } (leaves: the leaf-cluster cards, null for the conifers)
     for (const s of Object.values(species)) for (const t of s.variants) for (const k of [0, 1]) if (t[k].isBufferGeometry) t[k] = { wood: t[k], leaves: null };
     const understory = {

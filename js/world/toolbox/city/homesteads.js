@@ -75,6 +75,30 @@ export function planHomestead(R, ctx) {
     P.push([ex, ez]);
     drive.pts = P; drive.pad = null;
   }
+  // yard decorations (user, 23 Nov: "garden & lawn items, seasonal (fall), flags & signs, play & work"): by the front
+  // steps, out on the front lawn, and round the back — each a few metres clear of everything
+  const props = [];
+  const fu = -back[0], fv = -back[1];   // the front, in the rect's (u, v)
+  const at = (outF, along) => fu ? corner(r, fu * (r.hu + outF), along) : corner(r, along, fv * (r.hv + outF));
+  const faceRoad = Math.atan2(fu * r.ux + fv * r.vx, fu * r.uz + fv * r.vz);
+  const tryPut = (kind, outF, along, pad, q) => {
+    const [x, z] = at(outF, along);
+    if (!ctx.free(x, z, pad)) return false;
+    if (drive.pts.some(([dx, dz]) => Math.hypot(dx - x, dz - z) < 2.2)) return false;
+    props.push({ kind, x, z, yaw: faceRoad + (h(80 + q) - .5) * .6, seed: h(90 + q) });
+    return true;
+  };
+  const span = fu ? r.hv : r.hu;
+  // by the front steps: the fall display (pumpkins, mums, a corn-stalk bundle), often
+  if (h(70) < (farm ? .55 : .75)) for (const o of [1.8, 2.6, 3.4]) if (tryPut('fall', o, (h(71) - .5) * span * .6, .3, 1)) break;
+  // a porch flag on the front wall, now and then
+  if (h(72) < .3) props.push({ kind: 'flag', ...(() => { const [x, z] = at(.15, (h(73) - .5) * span * 1.2); return { x, z }; })(), yaw: faceRoad, seed: h(74) });
+  // out front: a birdbath, a gnome and planters, a lawn sign, a house-number post, a hay-bale display
+  const FRONT = [['birdbath', .25], ['gnome', .2], ['sign', .18], ['number', .25], ['bale', farm ? .3 : .12], ['planter', .25]];
+  FRONT.forEach(([kind, p], q) => { if (h(100 + q) < p) for (let tries = 0; tries < 3; tries++) if (tryPut(kind, 3 + h(110 + q * 3 + tries) * 6, (h(120 + q * 3 + tries) - .5) * span * 2, .6, 10 + q)) break; });
+  // round the back: Adirondack chairs and a firepit, a trampoline, a woodpile, a kids' bike, a wheelbarrow, a lawn tractor
+  const BACK = [['firepit', village ? .2 : .32], ['trampoline', village ? .1 : .16], ['woodpile', farm ? .5 : .28], ['bike', .2], ['wheelbarrow', farm ? .35 : .18], ['tractor', farm ? .3 : .14]];
+  BACK.forEach(([kind, p], q) => { if (h(130 + q) < p) for (let tries = 0; tries < 3; tries++) if (tryPut(kind, -((fu ? r.hu : r.hv) * 2 + 3 + h(140 + q * 3 + tries) * 8), (h(150 + q * 3 + tries) - .5) * span * 2.2, kind === 'trampoline' ? 2.2 : 1, 30 + q)) break; });
   // a parked car (user, 23 Nov: parked cars everywhere, from the shared car kit): on the drive by the house, nose
   // in (a few backed in); most homes have one, a farm more often a truck (life/figures/cars.js pickCar 'farm')
   let car = null;
@@ -85,7 +109,7 @@ export function planHomestead(R, ctx) {
       if (ctx.free(x, z, 1.1)) car = { x, z, yaw: Math.atan2(-dx, -dz) + (h(62) < .25 ? Math.PI : 0), seed: h(63), setting: farm ? 'farm' : 'driveway' };
     }
   }
-  return { drive, mailbox, extras, car, key: R.key, kind: R.kind, road: { px: road.px, pz: road.pz, dx: road.dx, dz: road.dz, ox: ox / od, oz: oz / od } };
+  return { drive, mailbox, extras, car, props, key: R.key, kind: R.kind, road: { px: road.px, pz: road.pz, dx: road.dx, dz: road.dz, ox: ox / od, oz: oz / od } };
 }
 
 /** A small gable-roofed building into M: walls w × l (l along yaw), eaves at h, ridge `rise` above them. */
@@ -105,8 +129,52 @@ function gableHut(M, x, y, z, w, l, h, rise, yaw, wall, roof, door) {
 const SHEDS = [['#c9c2ae', '#5b4c42'], ['#8c3a2f', '#3e3a37'], ['#e4e1d8', '#4a4f55'], ['#9fae9a', '#3e4a44'], ['#a98d6d', '#4b4038']];
 const POOLS = ['#4f86b3', '#6c95b8', '#3d73a3'];
 
+const PUMPKIN = ['#d9701f', '#e07d24', '#c9651c'], MUMS = ['#b0372f', '#d6a12b', '#8a3f78', '#c8642a'];
+/** One yard decoration (a homestead's props) into M. */
+function drawProp(M, p, groundH) {
+  const y = groundH(p.x, p.z), c = Math.cos(p.yaw), s = Math.sin(p.yaw), S = p.seed;
+  const at = (a, b) => [p.x + a * c + b * s, p.z - a * s + b * c];   // a: across, b: toward the road
+  const pumpkin = (a, b, r) => { const [x, z] = at(a, b); M.color(PUMPKIN[Math.floor(S * 7 + a * 3 + 3) % 3]).cylinder(x, y, z, r, r * 1.4, 8, r * .8); M.color('#4e5a2c').cylinder(x, y + r * 1.4, z, .03, .08, 4); };
+  const mum = (a, b) => { const [x, z] = at(a, b); M.color('#6b4a33').cylinder(x, y, z, .17, .22, 6, .2); M.color(MUMS[Math.floor(S * 11 + a * 5 + 4) % 4]).cylinder(x, y + .22, z, .24, .2, 8, .12); };
+  switch (p.kind) {
+    case 'fall': {
+      pumpkin(-.45, 0, .2); pumpkin(-.1, .15, .15); if (S < .6) pumpkin(.3, .05, .24);
+      mum(.75, -.1); if (S > .4) mum(-.85, -.05);
+      if (S < .45) { const [x, z] = at(1.25, -.2); M.color('#c8b06a'); for (let k = 0; k < 6; k++) { const a = k * 1.05; M.beam(new THREE.Vector3(x, y, z), new THREE.Vector3(x + Math.cos(a) * .18, y + 1.7, z + Math.sin(a) * .18), .05, .05); } M.color('#7a5a2e').cylinder(x, y + .7, z, .12, .08, 6); }
+      break;
+    }
+    case 'flag': {
+      const [bx, bz] = at(0, .05), [tx, tz] = at(0, .95);
+      M.color('#8a8a86').beam(new THREE.Vector3(bx, y + 2.1, bz), new THREE.Vector3(tx, y + 2.6, tz), .03, .03);
+      const fl = [['#b22234', '#f2f2f0'], ['#d0782a', '#5b3a22'], ['#2f5a8a', '#e9e4d6']][Math.floor(S * 3)];
+      M.color(fl[0]).box(tx + s * -.02, y + 2.05, tz, .05, .6, .9, p.yaw + Math.PI / 2);
+      M.color(fl[1]).box(tx, y + 2.15, tz, .06, .18, .88, p.yaw + Math.PI / 2);
+      break;
+    }
+    case 'birdbath': M.color('#b9b5aa').cylinder(p.x, y, p.z, .14, .65, 8, .1); M.color('#c4c0b5').cylinder(p.x, y + .65, p.z, .38, .1, 12, .4); M.color('#7d97a3').cylinder(p.x, y + .74, p.z, .32, .02, 12); break;
+    case 'gnome': M.color('#3d6fa8').cylinder(p.x, y, p.z, .1, .2, 6, .08); M.color('#e6c9a8').cylinder(p.x, y + .2, p.z, .07, .08, 6); M.color('#f1efe8').pyramid(p.x, y + .17, p.z, .14, .1, .1); M.color('#c0302a').pyramid(p.x, y + .28, p.z, .14, .2, .14); break;
+    case 'planter': M.color(S < .5 ? '#7a5a3e' : '#9a4a30').box(p.x, y, p.z, .6, .45, .6, p.yaw); M.color(MUMS[Math.floor(S * 4) % 4]).cylinder(p.x, y + .45, p.z, .32, .22, 8, .14); break;
+    case 'sign': { const [x, z] = at(0, 0); M.color('#6a6a66').box(x - c * .3, y, z + s * .3, .02, .7, .02, p.yaw).box(x + c * .3, y, z - s * .3, .02, .7, .02, p.yaw); M.color(['#1f4f8c', '#2f6b3a', '#f2f2ef', '#b23a2e'][Math.floor(S * 4)]).box(x, y + .45, z, .7, .45, .03, p.yaw); break; }
+    case 'number': M.color('#e8e5dc').box(p.x, y, p.z, .14, 1.0, .14, p.yaw); M.color('#2b2b2b').box(p.x + s * .075, y + .7, p.z + c * .075, .1, .22, .01, p.yaw); M.color('#9c7a3a').box(p.x, y + 1.0, p.z, .2, .06, .2, p.yaw); break;
+    case 'bale': { M.color('#c9b06a').box(p.x, y, p.z, 1.0, .45, .5, p.yaw); pumpkin(-.25, .05, .17); const [x, z] = at(.3, .05); M.color(MUMS[Math.floor(S * 4) % 4]).cylinder(x, y + .45, z, .2, .18, 8, .1); break; }
+    case 'firepit': {
+      M.color('#7d7b76').cylinder(p.x, y, p.z, .6, .3, 10, .58); M.color('#2b2724').cylinder(p.x, y + .28, p.z, .45, .03, 10);
+      for (let k = 0; k < 3; k++) { const a = p.yaw + k * 2.1 + .4, x = p.x + Math.sin(a) * 1.7, z = p.z + Math.cos(a) * 1.7, col = ['#2f6b8c', '#c0302a', '#efece4', '#3f6b3a'][Math.floor(S * 4 + k) % 4];
+        M.color(col).box(x, y + .3, z, .7, .08, .7, a).box(x - Math.sin(a) * .35, y + .3, z - Math.cos(a) * .35, .7, .8, .08, a);
+        M.box(x + Math.cos(a) * .35, y, z - Math.sin(a) * .35, .06, .55, .7, a).box(x - Math.cos(a) * .35, y, z + Math.sin(a) * .35, .06, .55, .7, a); }
+      break;
+    }
+    case 'trampoline': M.color('#5c6166').cylinder(p.x, y, p.z, 1.9, .8, 14, 1.9); M.color('#1d1f22').cylinder(p.x, y + .8, p.z, 1.75, .02, 14); M.color(S < .5 ? '#2f5f9c' : '#3c7a3a').cylinder(p.x, y + .78, p.z, 1.95, .06, 14); break;
+    case 'woodpile': for (let k = 0; k < 3; k++) M.color(['#7a5a3a', '#8a6a46', '#6d5034'][k]).box(p.x, y + k * .32, p.z, 2.4 - k * .3, .32, .5, p.yaw); M.color('#4b4c4f').box(p.x, y + .96, p.z, 2.5, .03, .7, p.yaw); break;
+    case 'bike': { const [x, z] = at(0, 0); M.color(['#c0302a', '#2f6b8c', '#d8a12b', '#8a3f78'][Math.floor(S * 4)]).beam(new THREE.Vector3(x - s * .4, y + .3, z - c * .4), new THREE.Vector3(x + s * .4, y + .3, z + c * .4), .04, .04); M.color('#1d1d1d'); for (const e of [-.4, .4]) M.cylinder(x + s * e, y + .05, z + c * e, .25, .04, 10); break; }
+    case 'wheelbarrow': M.color(S < .5 ? '#2f6b3a' : '#b23a2e').box(p.x, y + .35, p.z, .6, .3, .9, p.yaw); M.color('#1d1d1d').cylinder(p.x + Math.sin(p.yaw) * .55, y + .02, p.z + Math.cos(p.yaw) * .55, .18, .08, 8); break;
+    case 'tractor': M.color(S < .6 ? '#3a7a34' : '#c0302a').box(p.x, y + .3, p.z, .9, .5, 1.6, p.yaw); M.color('#262626').box(p.x - Math.sin(p.yaw) * .2, y + .75, p.z - Math.cos(p.yaw) * .2, .45, .35, .35, p.yaw); M.color('#d6b02a').box(p.x + Math.sin(p.yaw) * .5, y + .55, p.z + Math.cos(p.yaw) * .5, .85, .25, .5, p.yaw); M.color('#1d1d1d'); for (const e of [-.55, .55]) M.cylinder(p.x - Math.sin(p.yaw) * .5 + Math.cos(p.yaw) * e, y, p.z - Math.cos(p.yaw) * .5 - Math.sin(p.yaw) * e, .3, .2, 8); break;
+  }
+}
+
 /** The mailboxes and outbuildings of a homestead into the street-kit mesh M. groundH(x, z) → y. */
 export function drawHomestead(M, H, groundH) {
+  for (const p of H.props || []) drawProp(M, p, groundH);
   const mb = H.mailbox;
   if (mb && Number.isFinite(mb.x)) {
     const y = groundH(mb.x, mb.z), c = Math.cos(mb.yaw), s = Math.sin(mb.yaw);

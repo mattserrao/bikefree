@@ -657,6 +657,8 @@ export class GraphCity {
       yard: [['sugarmaple', 35], ['redmaple', 20], ['redoak', 10], ['birch', 10], ['whitepine', 10], ['spruce', 10], ['blackcherry', 5]],
       street: [['sugarmaple', 40], ['redmaple', 30], ['whiteash', 10], ['redoak', 20]],
       pasture: [['sugarmaple', 40], ['redoak', 35], ['whiteash', 15], ['willow', 10]],
+      orn: [['jmaple', 22], ['crabapple', 22], ['bluespruce', 18], ['arborvitae', 16], ['birchclump', 22]],
+      arbor: [['arborvitae', 1]],
     };
     /** A tree of `role` at (x, z) if it fits (shrunk to clear a roof or the road if it must): true if placed. */
     const tree = (x, z, role, seed, age = null) => {
@@ -723,6 +725,24 @@ export class GraphCity {
         const dv = sideways ? (hash(q * 3 + b.k) - .5) * r.hv : av * (r.hv + 5 + h * 8) + (hash(q * 7 + b.k) - .5) * r.hv * 1.4;
         const x = r.cx + r.ux * du + r.vx * dv, z = r.cz + r.uz * du + r.vz * dv;
         tree(x, z, 'yard', b.k * 13 + q, .65 + h * .45);
+      }
+      // ornamentals (user, 23 Nov): by the front corners or a step out in the side yard — a Japanese maple, a crab, a blue
+      // spruce, arborvitae, a birch clump; now and then a row of arborvitae along a side lot line
+      if (hash(b.k * 2.9) < .75 && (R.kind === 'house' || R.kind === 'village-house' || R.kind === 'farmhouse-ny')) {
+        const fu = -back[0], fv = -back[1], m = 1 + (hash(b.k * 4.1) < .45 ? 1 : 0);
+        for (let q = 0; q < m; q++) {
+          const h = hash(b.k * 6.7 + q * 3.3), side = (q === 0) === (h < .5) ? -1 : 1, out = 2.5 + h * 3.5;
+          const du = fu ? fu * (r.hu + out) : side * (r.hu + 1.5 + h * 2), dv = fv ? fv * (r.hv + out) : side * (r.hv + 1.5 + h * 2);
+          const x = r.cx + r.ux * du + r.vx * dv, z = r.cz + r.uz * du + r.vz * dv;
+          tree(x, z, 'orn', b.k * 17 + q, .8 + h * .3);
+        }
+        if (hash(b.k * 8.3) < .12) {   // an arborvitae row down one side
+          const sg = hash(b.k * 9.1) < .5 ? -1 : 1;
+          for (let q = 0; q < 5; q++) {
+            const along = (q / 4 - .5) * 2 * (fu ? r.hv : r.hu) * 1.2, du = fu ? sg * (r.hu + 4) : along, dv = fu ? along : sg * (r.hv + 4);
+            tree(r.cx + r.ux * du + r.vx * dv, r.cz + r.uz * du + r.vz * dv, 'arbor', b.k * 19 + q, .9);
+          }
+        }
       }
       if ((b.k & 7) === 0) yield;
     }
