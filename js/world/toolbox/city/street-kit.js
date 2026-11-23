@@ -16,7 +16,7 @@
 //   "streetKit": { "fromM": 0, "toM": 1e9, "rangeM": 220,
 //                  "zones": [{ "name", "style": "victorian", "fromM", "toM", "widthM": 80, "parking": true }] }
 //                  (a zone with "sidewalks": false lays no sidewalk along the route: a park drive, PLAN 6.6)
-// Facade styles: FACADE_STYLES (victorian, rowhouse, masonry, industrial, tower, glass). Outside a zone a
+// Facade styles: FACADE_STYLES (victorian, rowhouse, masonry, industrial, tower, glass, village). Outside a zone a
 // building's style comes from its kind (AUTO_STYLE). OSM details (signals, bus stops, benches, hydrants,
 // shops, car parks, fences) come from the city data's `streetKit` block (tools/citylib/street_kit.py); the
 // kit's own spacing rules fill in the rest. See docs/pittsburgh/detail/s3.md.
@@ -101,6 +101,12 @@ export const FACADE_STYLES = {
   // a tower's base: shopfronts and a cornice line over the second floor
   tower: { store: .8, storeH: 5, unitM: [7, 11], awning: .1, blade: 0, cornice: { h: .8, d: .7, frieze: 0, brackets: false }, baseCornice: 9,
     belt: true, bays: 0, parapet: 1, pediment: 0, sills: false, roof: ['#9d9a94'], trim: ['#cfc7b5', '#9a958b'], frame: ['#2a2d30'] },
+  // a small-town main street (Skaneateles' Genesee Street, Marcellus): 2–3 storey brick and painted fronts, most shops
+  // under a canvas awning (striped on some), painted fascia signs, bracketed cornices
+  village: { store: .95, storeH: 4, unitM: [5, 9], awning: .7, stripes: .45, blade: .25, cornice: { h: .7, d: .5, frieze: 1, brackets: true },
+    belt: true, bays: .15, parapet: .6, pediment: .3, sills: true, roof: ['#8f8a82', '#6f6a64', '#a39d92'],
+    trim: ['#efe6cf', '#2f4a3c', '#6b2a26', '#2a3340', '#d9c9a0', '#f4f1ea'], frame: ['#1f3a2e', '#5a1f1c', '#1e2a3a', '#3a3a3a', '#f0ebe0'],
+    awnings: ['#1f4d3a', '#7a1f24', '#1f3b57', '#3a3a3a', '#8a6a2a', '#5a2a4a'] },
   // glass towers: a dark glazed base and a thin canopy
   glass: { store: .9, storeH: 5, unitM: [8, 12], awning: 0, canopy: .5, blade: 0, cornice: null, belt: false, bays: 0, parapet: 1, pediment: 0,
     sills: false, roof: ['#8e9296'], trim: ['#9aa4ab'], frame: ['#1f2428'] },
@@ -794,12 +800,18 @@ export class StreetKit {
       // [finish] (not where a lamp post stands under it: the awning or the blade sign would hang through the post)
       const [ax, az] = at(um, .9), lampHere = this.lampNear(ax, az, Math.max(1.4, uw / 2));
       if (r > 1 - style.awning && !lampHere) {
-        const col = new THREE.Color(SIGN_COLORS[Math.floor(r * 97) % SIGN_COLORS.length][0]).lerp(new THREE.Color('#b33a3a'), r > .9 ? .6 : 0);
-        N.color(col);
+        const col = style.awnings ? new THREE.Color(style.awnings[Math.floor(r * 89) % style.awnings.length])
+          : new THREE.Color(SIGN_COLORS[Math.floor(r * 97) % SIGN_COLORS.length][0]).lerp(new THREE.Color('#b33a3a'), r > .9 ? .6 : 0);
         const [a0x, a0z] = at(u0 + .35, .1), [a1x, a1z] = at(u0 + uw - .35, .1), yA = base + h - 1.05;
-        const p0 = V(a0x, yA, a0z), p1 = V(a1x, yA, a1z), p2 = V(a1x + f.nx * 1.3, yA - .65, a1z + f.nz * 1.3), p3 = V(a0x + f.nx * 1.3, yA - .65, a0z + f.nz * 1.3);
-        face(N, p0, p1, p2, p3, UP); face(N, p0, p1, p2, p3, V(0, -1, 0));
-        face(N, p3, p2, V(p2.x, p2.y - .25, p2.z), V(p3.x, p3.y - .25, p3.z), V(f.nx, 0, f.nz));
+        // a striped canvas (style.stripes of them): ~.45 m stripes, the colour and cream in turn
+        const ns = style.stripes && hash(r * 977 + 3) < style.stripes ? Math.max(3, Math.round((uw - .7) / .45)) : 1, cream = new THREE.Color('#efe9da');
+        for (let q = 0; q < ns; q++) {
+          N.color(ns > 1 && q % 2 ? cream : col);
+          const f0 = q / ns, f1 = (q + 1) / ns, lx = (t) => a0x + (a1x - a0x) * t, lz = (t) => a0z + (a1z - a0z) * t;
+          const p0 = V(lx(f0), yA, lz(f0)), p1 = V(lx(f1), yA, lz(f1)), p2 = V(lx(f1) + f.nx * 1.3, yA - .65, lz(f1) + f.nz * 1.3), p3 = V(lx(f0) + f.nx * 1.3, yA - .65, lz(f0) + f.nz * 1.3);
+          face(N, p0, p1, p2, p3, UP); face(N, p0, p1, p2, p3, V(0, -1, 0));
+          face(N, p3, p2, V(p2.x, p2.y - .25, p2.z), V(p3.x, p3.y - .25, p3.z), V(f.nx, 0, f.nz));   // (the valance)
+        }
       } else if (r < style.blade && h > 3 && !this.lampNear(...at(u0 + .5, .6), 1.2)) {
         const [bx, bz] = at(u0 + .5, .1), y = base + h + .3;
         N.color('#2a2a2a').block(bx + f.nx * .45, y + 1.25, bz + f.nz * .45, .05, .05, .9, f.yaw);

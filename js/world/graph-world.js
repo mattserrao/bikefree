@@ -20,6 +20,7 @@ import { loadRider } from './rider.js';
 import { PerfMonitor } from './perf.js';
 import { BakedLighting } from './toolbox/atmosphere/baked-light.js';
 import { drain, runSlice, due } from './toolbox/core/jobs.js';
+import { installEffects } from './toolbox/effects/index.js';
 import { makeParkMaterial } from './toolbox/materials/park-surfaces.js';
 import { makeMasonryMaterial } from './toolbox/materials/stonework.js';
 
@@ -33,6 +34,9 @@ const BUDGET_MS = 6, PRELOAD_BUDGET_MS = 40;
 const RIDER_LANE = 0.22;
 const WATER_ABOVE = 0.35;           // the water plane this far above the pool level
 const BED_BELOW = 1.2;              // ground this close above the pool (or under it) is pushed down to river bed
+// the drawing buffer's pixel ratio by quality: with 4× MSAA on, 1.5 on a 2× (Retina) screen looks all but the same as 2
+// and shades 44% fewer pixels — the anti-aliasing review (23 Nov): edges are the multisample's job, not resolution's
+const PIXEL_RATIO = { low: 1, balanced: 1.5, high: 2 };
 const KERB = 0.35;                  // the ground's top this far under the road beside it…
 const SHELF = 13;                   // …for this far beyond its edge (a ground cell: no triangle reaches over the road)…
 const CUT_EASE = 0.75;              // …then back up at this slope (m per m)
@@ -217,7 +221,7 @@ export class GraphWorld {
     // removal — every layer of overdraw shaded in full; the near and far planes below keep plain depth precise enough.
     // No MSAA on Low: phones. Both are fixed for the renderer's life: a quality change applies from the next ride.)
     this.renderer = new THREE.WebGLRenderer({ antialias: this.qualityKey !== 'low', powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.qualityKey === 'low' ? 1 : 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[this.qualityKey] ?? 1.5));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     container.prepend(this.renderer.domElement);
@@ -250,7 +254,7 @@ export class GraphWorld {
       roadSurface: roadSurfaceMaterial(this.qualityKey === 'low', this.rural),
       water: new THREE.MeshLambertMaterial({ color: '#4f7f97', transparent: true, opacity: 0.92 }),
       // the dressed places and the river walls: textured from world position (toolbox/materials)
-      park: Object.fromEntries(['lawn', 'plaza', 'granite', 'walk', 'garden', 'wood', 'scrub'].map((k) => [k, makeParkMaterial(k)])),
+      park: Object.fromEntries(['lawn', 'plaza', 'granite', 'walk', 'garden', 'wood', 'scrub', 'fairway', 'green', 'sand'].map((k) => [k, makeParkMaterial(k)])),
       riverWall: makeMasonryMaterial({ stones: ['#8f897d', '#9b9487', '#857f74', '#a29b8e', '#8a8376', '#7f796f'], mortar: '#b3ada1', courseM: 0.45, moss: '#4f5a3c', mossM: 1.2 }),
       parkWall: makeMasonryMaterial({ stones: ['#a39a8a', '#958c7c', '#ab9f8c', '#8f8576', '#9c9282', '#b0a693'], mortar: '#c2b9a8', courseM: 0.3, mossM: 0.4 }),
       fountainWater: new THREE.MeshLambertMaterial({ color: '#5d93ad', transparent: true, opacity: 0.88 }),
@@ -258,6 +262,9 @@ export class GraphWorld {
       trunk: new THREE.MeshLambertMaterial({ color: '#5b4636' }),
       crown: new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true }),
     };
+    // the graphics effects this map asks for (toolbox/effects: the JSON's "effects" block; none when absent)
+    this.TILE = TILE;
+    this.effects = installEffects(this, this.json.effects);
     this.water = new THREE.Mesh(new THREE.PlaneGeometry(2 * FAR_M + 4000, 2 * FAR_M + 4000).rotateX(-Math.PI / 2), this.mats.water);
     this.water.position.y = this.waterY;
     this.scene.add(this.water);
@@ -343,7 +350,7 @@ export class GraphWorld {
   setQuality(key) {
     this.qualityKey = key || 'balanced';
     this._reach();
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.qualityKey === 'low' ? 1 : 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[this.qualityKey] ?? 1.5));
     this._resize();
   }
   setCamera(key) { this.camKey = CAMERAS[key] ? key : DEFAULT_CAMERA; this._camInit = false; }
@@ -420,6 +427,7 @@ export class GraphWorld {
   get loading() { return (this._queued || 0) > 6 || this.baked?.preparing ? 4 : 0; }
 
   dispose() {
+    this.effects?.dispose();
     this.stop();
     this.disposed = true;
     this._ro?.disconnect();
@@ -454,6 +462,7 @@ export class GraphWorld {
     }
     this.crank += ((src.cadence || 0) / 60) * Math.PI * 2 * dt;
     this.heroes?.tick(now / 1000, dt);
+    this.effects.tick(now / 1000, dt);
     this.city?.tick(this.camera.position, now / 1000, this.path ? out : null, dt);
     if ((this._frames & 15) === 0) this.bridges?.tick(this.camera.position, this.qualityKey === 'low' ? 3000 : 4500);
     this.rider.update(out.pos, out.fwd, this.crank, src.speed || 0, Math.min(dt, 0.1), src);
@@ -503,6 +512,8 @@ export class GraphWorld {
     for (const p of this.pools || []) if (x >= p.x0 && x <= p.x1 && z >= p.z0 && z <= p.z1) return p.level;
     return this.waterY - WATER_ABOVE;
   }
+  /** The water's surface here (the pool level and the plane's lift above it). */
+  waterTop(x, z) { return this.poolAt(x, z) + WATER_ABOVE; }
   /** The ground as its mesh draws it here (the 12.8 m grid's triangles), or the raw height where that tile isn't built. */
   surfaceH(x, z) {
     const tt = this.tiles.get(`${Math.floor(x / TILE)},${Math.floor(z / TILE)}`);
@@ -693,6 +704,16 @@ export class GraphWorld {
       if (d.w) e._w = d.w;
       if (d.rw) e._rw = true;
       if (d.walk > 0) e._walk = d.walk;
+    }
+    // the villages (SKAN: Skaneateles, Marcellus — user, 22 Nov: "full village"): a sidewalk along every street inside
+    const V = this.heroes?.json?.villages;
+    if (V?.length) {
+      const C = V.map((v) => ({ ...this.proj.toLocal(v.center[0], v.center[1]), r: v.r }));
+      for (const e of this.G.edges) {
+        if (e._walk || !['primary', 'secondary', 'tertiary', 'residential'].includes(e.kind)) continue;
+        const m = e.n >> 1, x = e.x[m], z = e.z[m];
+        if (C.some((c) => Math.hypot(x - c.x, z - c.z) < c.r)) e._walk = e.kind === 'residential' ? 1.6 : 2.2;
+      }
     }
   }
 
@@ -990,6 +1011,7 @@ export class GraphWorld {
     t.groundMesh = new THREE.Mesh(g, this.mats.ground);
     this.group.add(t.groundMesh);
     yield* this._bankJob(t);
+    yield* this.effects.tileJob(t);
   }
 
   /** The dressed places' ground in this tile (toolbox/materials/park-surfaces.js): lawns, beds, woods, plazas and walks
@@ -1024,7 +1046,7 @@ export class GraphWorld {
       };
       split(tri[0], tri[1], tri[2], 0);
     };
-    const LIFT = { park: 0.22, wood: 0.25, scrub: 0.25, lawn: 0.28, garden: 0.31, plaza: 0.34 };   // (over the 12.8 m ground mesh's facets)
+    const LIFT = { park: 0.22, wood: 0.25, scrub: 0.25, lawn: 0.28, fairway: 0.3, green: 0.32, sand: 0.32, garden: 0.31, plaza: 0.34 };   // (over the 12.8 m ground mesh's facets)
     for (const A of areas) {
       if (due()) yield;
       if (A.kind === 'fountain' || A.kind === 'pool') {
@@ -1285,7 +1307,7 @@ export function decodeShore(json, proj) {
 export function decodeDressing(json, proj, tile) {
   const P = (p) => { const q = proj.toLocal(p[0], p[1]); return [q.x, q.z]; };
   const put = (map, x, z, item) => { const k = `${Math.floor(x / tile)},${Math.floor(z / tile)}`; (map.get(k) || map.set(k, []).get(k)).push(item); };
-  const ORDER = ['park', 'wood', 'scrub', 'lawn', 'garden', 'plaza', 'pool', 'fountain'];
+  const ORDER = ['park', 'wood', 'scrub', 'lawn', 'fairway', 'green', 'sand', 'garden', 'plaza', 'pool', 'fountain'];
   const areas = new Map(), lines = new Map(), trees = new Map();
   for (const a of [...json.areas].sort((p, q) => ORDER.indexOf(p.kind) - ORDER.indexOf(q.kind))) {
     let pts = a.pts.map(P);
@@ -1369,7 +1391,7 @@ const NY_ROAD_GLSL = /* glsl */`
     float trans = (1. - smoothstep(.03, .06, abs(tx))) * step(.25, gwH(vec2(seg, 6.))) * step(ax, hw - .15 * gwH(vec2(seg, 8.)) * hw);
     float sealed = step(.4, gwH(vec2(seg, 11.)));             // most are sealed (black tar), some are open hairlines
     snake = max(snake * step(.25, age + worn), trans * sealed);
-    lin = mix(lin, base * .38, snake * .92 * det);
+    lin = mix(lin, base * .6, snake * .65 * det);   // (tar: dark, not black — close up they read as cracks, not lines)
     lin *= 1. - trans * (1. - sealed) * .45 * det;
     // alligator cracking in the wheel paths, in the worst stretches
     vec2 cell = nyCell(vec2(q.x, along) * 4.2);

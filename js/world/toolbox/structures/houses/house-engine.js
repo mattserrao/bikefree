@@ -296,6 +296,26 @@ function porch(ctx, o) {
   }
   if (o.brackets) for (let k = 0; k < np; k++) { const s = s0 + .15 + (s1 - s0 - .3) * (k / (np - 1)); for (const sg of [-1, 1]) n.box(F0, s + sg * .08, s + sg * .32, t0 - dd + .14, t0 - dd + .24, beam - .3, beam); }
   steps(ctx, F0, mid, t0 - dd, floor, 1.6);
+  // porch furniture (close detail): a pair of rocking chairs, or chairs and a porch swing, in one paint
+  const hs = (k) => { const x = Math.sin((ctx.R.seed || 1) * 91.7 + k * 12.9898) * 43758.5453; return x - Math.floor(x); };
+  if (dd >= 1.6 && s1 - s0 >= 3.2 && hs(1) < .75) {
+    const paint = ['#f1efe8', '#2f4a3c', '#6b4a32', '#8a2f28', '#2f3c4a'][Math.floor(hs(2) * 5)];
+    n.set({ code: S.PLAIN, col: C(srgb(paint)), win: [0, 0, 0, 0] });
+    const tc = t0 - dd * .45, chair = (sc) => {
+      n.box(F0, sc - .27, sc + .27, tc - .25, tc + .25, floor + .38, floor + .44);   // (the seat)
+      n.box(F0, sc - .27, sc + .27, tc + .2, tc + .26, floor + .44, floor + 1.02);   // (the back, against the wall)
+      for (const a of [-.25, .25]) n.box(F0, sc + a - .03, sc + a + .03, tc - .25, tc + .25, floor + .58, floor + .62);   // (arms)
+      for (const a of [-.24, .24]) n.box(F0, sc + a - .025, sc + a + .025, tc - .3, tc + .3, floor, floor + .06);   // (rockers)
+    };
+    chair(s0 + .75); if (hs(3) < .7) chair(s0 + 1.45);
+    if (hs(4) < .35 && s1 - s0 > 5) {
+      // a porch swing at the far end: a bench hung from the beam on two chains
+      const sm = s1 - 1.2;
+      n.box(F0, sm - .7, sm + .7, tc - .2, tc + .2, floor + .45, floor + .5); n.box(F0, sm - .7, sm + .7, tc + .16, tc + .2, floor + .5, floor + .95);
+      n.set({ code: S.PLAIN, col: C(srgb('#3a3a3a')), win: [0, 0, 0, 0] });
+      for (const a of [-.65, .65]) n.box(F0, sm + a - .01, sm + a + .01, tc - .01, tc + .01, floor + .5, beam);
+    }
+  }
 }
 function portico(ctx, o) {
   const { P, w, C, lo } = ctx;

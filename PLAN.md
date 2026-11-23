@@ -1813,7 +1813,17 @@ Goal: a lighter main menu, and fix the PGH / CNY / SKAN map cards that looked as
 - [x] Trees: pop-in (tree-engine.js): each tree swaps tier at its own distance (position jitter, 3 m hysteresis) and dissolves into the other tier over 0.6 s (per-instance swap time, complementary screen-door dither; only trees that just swapped are dithered); re-sort every 2.5 m or ~3.5°; frustum test with an ~8° margin; a new tile's impostors dissolve in over 1.5 s.
 - [x] Golden hour, baked (user: "set the time of day to golden hour and remove the option…; pre-baked shadows for the one time of day"): CNY and SKAN fixed at an upstate golden hour (sun 16° from 250°), no time-of-day menu on these maps; toolbox/atmosphere/baked-light.js on the road-graph world (a 3.2 km window round the rider, re-baked as it moves 700 m; ground, roads, houses, barns, the trees' crown/trunk proxies); the live shadow map only for moving things (rider, cyclists) in a 40 m box.
 - [x] One tree engine for the game: the scatter scenes (Big Sur, Yosemite, Zion, …) send their trees to the engine (near/mid tiers, impostors), and their far planting becomes engine impostors (no more tree cards), standing aside inside the square of real trees. (Pittsburgh's authored city keeps its street-kit trees.)
-- [ ] Skaneateles and Marcellus villages: landmarks and more real-world copies (Skaneateles: sidewalks, the long pier, lakeside mansions, the golf course, other landmarks); accuracy. Research, then questions.
+- [x] Skaneateles and Marcellus villages: landmarks and more real-world copies (Skaneateles: sidewalks, the long pier, lakeside mansions, the golf course, other landmarks); accuracy. *(user answers: all four Skaneateles groups, all four Marcellus groups, sidewalks on every village street, real footprints + styles)*
+  - `tools/skan_heroes.py` (OSM API): 10 churches by look, 86 storefront footprints (Genesee/Jordan/Fennell; Marcellus Main/North),
+    4 Marcellus historic houses forced to their type, the village circles, and `skan-dressing.json` (the country club's
+    fairways, greens, bunkers; the parks' walks).
+  - `toolbox/city/skan-landmarks.js`: Clift Park's pier (deck held 1.4 m above the lake, piles, rails, lamps, benches) and
+    gazebo; the Sherwood Inn (blue clapboard, porch toward the lake, dormers); nine lakefront mansions (Queen Anne, Shingle,
+    Classical Revival, Second Empire) on their OSM footprints; the clubhouse (hip roof, lake-side pavilion), docks, pins;
+    the Marcellus Falls stone mill and stack.
+  - Village sidewalks on every street inside the circles; park surfaces gain fairway / green / sand.
+  - Lakefront footprints past the drawn shore: kit houses stand on their floor above the lake (`dryLand`), ones mostly in
+    the water and boxes centred in it are left out; landmark mansions in the water get a stone sea wall and lawn terrace.
 - [ ] CNY canal: small shrubs and scrub on the inside slope down to the water; no trees or buildings in the channel.
 - [ ] → later test branch (user, 22 Nov: "push Going to the Sun task to a later test branch"): Going-to-the-Sun has a low framerate in practice (other maps fine). First numbers (headless, @45000): 28,438 trees in 67 tiles; re-sort 1.8 ms; near 136, mid 670, impostors 10,889 (all loaded tiles, no distance cap); near trees cast shadows. Suspects to measure on a real GPU against main: the impostor cards' overdraw, the near pools in the shadow pass, full impostor rebuilds on every tile swap.
 
@@ -1843,3 +1853,54 @@ From the group ride: screen sleeps, a 1% hill "felt like a truck", shifts feel s
 - [x] Camera setting: Close (default, 3.3 m back and lower, ~1.3× bigger rider, FOV widens with speed, slight pull-back on acceleration, faint road buzz) or Classic (old fixed 4.5 m)
 - [x] Diagnostics show "Trainer feels X% (road Y%, hill feel Z%)"
 - [ ] Gear spacing: no change for now (revisit after riders try Hill feel + momentum)
+
+### Graphics polish for CNY and SKAN — branch `graphics-polish-test` *(user, 23 Nov: "Create tasks from the list above. Begin work on a new test bench. Measure performance before / after effects. Ensure development is modular so once changes are done, the effects and tools can be rolled out to other maps")*
+Every effect is its own module under `js/world/toolbox/effects/`, switched on per map by the graph JSON's `"effects"` block
+(off when absent), so a map elsewhere (PGH, scene routes) opts in with one line. Each is measured with the bench before and after.
+- [x] Bench: `node tools/bench/bench.mjs --label <name>` (fixed views in `tools/bench/views.json`: calls, triangles, GPU ms
+      of one frame, geometries / textures, load time, a 30 s ride's frame times; screenshots) and
+      `--compare <a> <b>` (a table, also written to `tools/bench/results/<a>-vs-<b>.md`). Baseline: `baseline`.
+- [x] Water: shoreline blend (wet band, pebble beach, reeds), lake ripples and golden-hour glint, wakes at piles, flowing
+      creeks, white water at the dams.
+      Done: `effects/water-surface.js` (ripple trains, gust patches, Fresnel sky, sparkling sun path) and
+      `effects/shoreline.js` (marching-squares contour of ground − water top per tile: beach and lapping bands that share
+      their edges, reeds on gentle shores); foam rings at the pier's and docks' piles; the creeks' surfaces in the world's
+      water material (ripples, glints); white water where a creek drops ≥ 0.9 m (Marcellus Falls, the dams).
+- [x] Villages: storefront awnings, signs, cornices; benches, planters, bike racks, crosswalks, parked cars, flags; hedges,
+      picket fences, porch furniture, mailboxes; varied roof colours.
+      Done: the `village` facade style (street-kit: more awnings, striped canvas, painted fronts) on the village cores'
+      shop rows (kit buildings included; fronts found across a wide street's parking lane), `village-street.js`
+      furniture (benches, flower barrels, racks, bins, flags), `front-yards.js` (picket fences, hedges, foundation
+      shrubs, beds; the lot line past the sidewalk); parked cars along the village shop rows; porch rocking chairs and
+      swings (house engine, close detail); more asphalt and standing-seam roof colours.
+- [x] Landmarks: clubhouse dormers / cross gables / lake terrace; moored sailboats and the tour boat; mansion boathouses,
+      docks, lawn chairs. (Clubhouse: dormers on both slopes, a flagstone terrace with umbrella tables; the tour boat
+      along the pier and nine moored boats off Clift Park; each lakefront mansion: Adirondack chairs facing the water, a
+      private dock with a boat, a boathouse on some.)
+- [x] Countryside: crop rows, hay bales, stubble, field fences, weathered silos; forest-edge understory; stone walls and
+      hedgerows on field lines. (Already in from the CNY/SKAN detail pass — crop cards, bales, roadside wire / board /
+      stone runs, graded woods edges, hedgerows; the visible gap was the forest itself, fixed under Performance.)
+- [x] Atmosphere: aerial haze over the lakes, long soft low-sun shadows and lit foliage, valley mist, a few lit clouds.
+      `effects/sky.js`: a sky dome (zenith to the fog's haze at the horizon, a warm glow round the sun, drifting clouds lit
+      warm on the sun's side). Valley mist left out: it is golden hour, not morning, on these maps.
+- [x] Performance: forest tree budget (the Marcellus Falls valley ~5 M triangles). With the user's tree review (23 Nov:
+      "trees can effectively be 2D"): the impostor cards had never drawn — `UniformsUtils.merge` drops a render
+      target's texture, so `uAtlas` was null and every tree past the mid band was missing (bare hills behind the
+      woods). Fixed; cards now from 210 m (was 480 m), 126 m for trees > 30 m from any road (`deep`); 12 photos per
+      tree, blended; MS anti-aliased edges (alpha to coverage). Marcellus Falls 5.0 M → 1.8 M triangles, with the
+      whole valley wooded.
+- [x] Anti-aliasing review *(user, 23 Nov)*: MSAA (4×) was already on except Low. Added alpha to coverage on the leaf
+      cards and the impostors (their cut-out edges were stair-stepped under MSAA), and the drawing buffer at 1.5× on
+      Balanced (2× on High) — on a Retina screen MSAA at 1.5× looks all but the same and shades 44% fewer pixels.
+      FXAA/SMAA/TAA not added: post passes blur the line art and TAA ghosts on the moving rider.
+- [x] Shrubs in the new tree generation *(user, 23 Nov: an old-style 3D shrub in the martisco-rural shot)*: the dogwood
+      and buckthorn were still the old solid blobs (`shrubClump`) inside the engine; now grown as the trees are
+      (`SHRUBS` in upstate-trees.js: several thin stems, short twiggy branching, leaf-cluster cards).
+- Before/after (bench, baseline b93b3270 vs final): `tools/bench/results/baseline-vs-final.md`.
+- [ ] Roll-out: a guide to the `effects` switches for other maps; the bench report in the PR.
+- [x] CNY canal: trees still spawn in the canal water *(user, 23 Nov: "trees spawning in canal water is still an issue"; then cancelled — the creek fix below was already in)*.
+      The canal itself was clear (0 of ~23k trees in its channel at 4 spots); the trees stood in the creeks drawn the
+      canal's way (Nine Mile Creek and the brooks: 85 near the aqueduct). The creeks' channels are now registered with
+      the canal's (`creek`: kept clear, no canal scrub); the planters also keep off the land cover's own water.
+- [x] CNY canal "on Thompson Road" *(user, 23 Nov)*: checked against the National Register and the Erie Canalway — the
+      canal is right; cancelled *(user: "Cancel the canal task you're correct")*.

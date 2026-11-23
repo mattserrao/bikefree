@@ -281,10 +281,12 @@
  "junctionEaseM": 30,
  "routeKeepM": 18,
  "routeLinkMaxM": 50,
+ "effects": {"water": {}, "shoreline": {}, "village": {}, "frontYards": {}, "sky": {}},
  "files": {
   "ground": "routes/cities/skan-ground.grid.bin.gz",
   "heroes": "routes/cities/skan-heroes.json",
-  "cityData": "routes/cities/skan-city.json"
+  "cityData": "routes/cities/skan-city.json",
+  "dressing": "routes/cities/skan-dressing.json"
  },
  "mapLabels": [
   [

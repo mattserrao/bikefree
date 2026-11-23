@@ -1,0 +1,28 @@
+{
+  "note": "The graphics bench's fixed viewpoints. Each map: stills (the rider's own camera unless `cam` is given: eyeLat,eyeLon,eyeUp,lookLat,lookLon,lookUp) and one steady ride. Add a map by adding its key; the same views are measured before and after a change.",
+  "cny": {
+    "graph": "routes/cities/cny.json",
+    "stills": [
+      { "name": "camillus-main", "at": "43.0392,-76.3041" },
+      { "name": "canal-park", "at": "43.0525,-76.3030" },
+      { "name": "aqueduct", "at": "43.0590,-76.2857" },
+      { "name": "warners-farms", "at": "43.0830,-76.3284" },
+      { "name": "martisco-rural", "at": "43.0173,-76.3347" },
+      { "name": "village-overview", "at": "43.0392,-76.3041", "cam": "43.03740,-76.30650,45,43.04050,-76.30300,0" }
+    ],
+    "ride": { "at": "43.0392,-76.3041", "seconds": 30, "speed": 9 }
+  },
+  "skan": {
+    "graph": "routes/cities/skan.json",
+    "stills": [
+      { "name": "genesee-st", "at": "42.9458,-76.4300" },
+      { "name": "clift-pier", "at": "42.9455,-76.4300", "cam": "42.945062,-76.429652,6,42.944700,-76.429100,1" },
+      { "name": "east-lake-mansions", "at": "42.9440,-76.4228", "cam": "42.943982,-76.424286,5,42.944389,-76.423857,5" },
+      { "name": "country-club", "at": "42.9300,-76.4330" },
+      { "name": "marcellus-main", "at": "42.9825,-76.3400" },
+      { "name": "marcellus-falls", "at": "43.0051,-76.3385", "cam": "43.004659,-76.339288,8,43.005157,-76.338552,5" },
+      { "name": "lake-loop-rural", "at": "42.9000,-76.4100" }
+    ],
+    "ride": { "at": "42.9458,-76.4300", "seconds": 30, "speed": 9 }
+  }
+}

@@ -18,7 +18,8 @@
 //     flutter near by; nothing far off.
 //
 //   const E = new TreeEngine({ renderer, parent, quality, uTime, lights: { hemi, sun }, kit })
-//   E.setTile(key, trees)   trees: [{ x, y, z, sp, v, s, rot, tint }]  (sp: species name in kit, v: variant, s: scale)
+//   E.setTile(key, trees)   trees: [{ x, y, z, sp, v, s, rot, tint, deep }]  (sp: species name in kit, v: variant, s: scale;
+//                           deep: > 30 m from any road — the cards take it sooner)
 //   E.removeTile(key); E.tick(camera); E.stats; E.dispose()
 import * as THREE from '../../../../vendor/three.module.min.js';
 import { decorateTreeMaterial } from '../packs/northern-rockies.js';
@@ -26,7 +27,11 @@ import { makeLeafTexture } from './upstate-trees.js';
 
 // m: [near end, mid end] per quality; FADE: the crossfade's half width; IMP_END: where the impostors stop (the
 // tiles beyond are released anyway)
-const BANDS = { low: [60, 260], balanced: [120, 480], high: [160, 620] };
+// (user, 23 Nov: "trees can effectively be 2D" — a rider on a fixed road sees the woods past ~100 m from one side only:
+//  the photographed cards take over much sooner than they did (480 m), and a tree deep in the woods, away from every
+//  road, sooner still: DEEP of each band)
+const BANDS = { low: [55, 150], balanced: [100, 210], high: [130, 280] };
+const DEEP = [.55, .6];  // band scale for a tree > 30 m from any road (t.deep): seen only through the trees in front
 const FADE = [15, 50];   // m: each tree swaps at its own distance within ± this of the band's edge
 const HYST = 3;          // m: hysteresis at each band's edge
 const FT = .6;           // s: a swap's dissolve
@@ -41,7 +46,7 @@ export const treeJitter = (x, z) => {
   const d = a * (b + 33.33) + b * (c + 33.33) + c * (a + 33.33); a += d; b += d; c += d;
   return fr((a + b) * c);
 };
-const ANGLES = 8;
+const ANGLES = 12;   // photos round each tree (cross-blended in the card: no snap as the angle changes)
 
 const WIND_GLSL = /* glsl */`
   uniform float uLeaf;
@@ -110,7 +115,9 @@ function ownCopy(m) {
 }
 
 function leafMaterial(map) {
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, map, alphaTest: .45, side: THREE.DoubleSide, roughness: .9 });
+  // alpha to coverage: under MSAA the cut-out edges get the multisample's soft coverage, not a stair-stepped cut (free
+  // with MSAA on; a plain alpha test without it)
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, map, alphaTest: .45, alphaToCoverage: true, side: THREE.DoubleSide, roughness: .9 });
   const size = map.image?.width || 512;
   m.onBeforeCompile = (shader) => {
     shader.fragmentShader = shader.fragmentShader.replace('#include <alphatest_fragment>', `
@@ -176,7 +183,7 @@ export class TreeEngine {
   // ------------------------------------------------------------------ impostors
   /** Photograph every tree entry from ANGLES sides (lit as the world) into one atlas: a row per entry. */
   _impostors(lights, quality) {
-    const list = this.entries.filter((e) => !e.nearOnly), cell = quality === 'low' ? 64 : 128;
+    const list = this.entries.filter((e) => !e.nearOnly), cell = quality === 'low' ? 64 : quality === 'high' ? 160 : 128;
     const W = cell * ANGLES, H = cell * list.length;
     const rt = new THREE.WebGLRenderTarget(W, H, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, samples: 0 });
     const scene = new THREE.Scene();
@@ -221,7 +228,7 @@ export class TreeEngine {
       vertexShader: /* glsl */`
         attribute vec4 iA; attribute vec4 iB; attribute float iT; attribute vec2 iS;   // iA: x, y, z, rotation; iB: width, height, row, tint; iT: when its tile came; iS: its swap (when, 0 hidden / 1 shown / 2 in / 3 out)
         uniform float uRows; uniform float uNow;
-        varying vec2 vUv; varying float vKeep; varying float vOut; varying float vTint;
+        varying vec2 vUv; varying vec2 vUv2; varying float vBlend; varying float vKeep; varying float vOut; varying float vTint;
         #include <fog_pars_vertex>
         void main() {
           vec3 o = iA.xyz; vec2 to = o.xz - cameraPosition.xz; float d = length(to);
@@ -237,8 +244,11 @@ export class TreeEngine {
           float cr = cos(iA.w), sr = sin(iA.w);
           vec2 vl = vec2(-dir.x * cr + dir.y * sr, -dir.x * sr - dir.y * cr);
           float a = atan(vl.x, vl.y); if (a < 0.) a += 6.2831853;
-          float frame = mod(floor(a / 6.2831853 * ${ANGLES}. + .5), ${ANGLES}.);
-          vUv = vec2((frame + uv.x) / ${ANGLES}., (iB.z + uv.y) / uRows);
+          // the two photos either side of the view, and how far between (the card blends them)
+          float fa = a / 6.2831853 * ${ANGLES}., f0 = mod(floor(fa), ${ANGLES}.), f1 = mod(f0 + 1., ${ANGLES}.);
+          vBlend = fract(fa);
+          vUv = vec2((f0 + uv.x) / ${ANGLES}., (iB.z + uv.y) / uRows);
+          vUv2 = vec2((f1 + uv.x) / ${ANGLES}., (iB.z + uv.y) / uRows);
           vTint = iB.w;
           vec3 p = o + right * position.x * iB.x + vec3(0., position.y * iB.y, 0.);
           vec4 mvPosition = viewMatrix * vec4(p, 1.);
@@ -246,21 +256,27 @@ export class TreeEngine {
           #include <fog_vertex>
         }`,
       fragmentShader: /* glsl */`
-        uniform sampler2D uAtlas; varying vec2 vUv; varying float vKeep; varying float vOut; varying float vTint;
+        uniform sampler2D uAtlas; varying vec2 vUv; varying vec2 vUv2; varying float vBlend; varying float vKeep; varying float vOut; varying float vTint;
         #include <common>
         #include <fog_pars_fragment>
         void main() {
-          vec4 c = texture2D(uAtlas, vUv);
-          if (c.a < .5) discard;
+          vec4 c0 = texture2D(uAtlas, vUv), c1 = texture2D(uAtlas, vUv2), c = mix(c0, c1, vBlend);
+          // the edge's coverage over about a pixel (alpha to coverage under MSAA: soft silhouettes, no sorting)
+          float cov = clamp((c.a - .5) / max(fwidth(c.a), 1e-4) + .5, 0., 1.);
+          if (cov <= 0.) discard;
           float teDz = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(.06711056, .00583715))));
           if (vOut > .5 ? vKeep <= teDz : vKeep <= 1. - teDz) discard;   // the complement of the mid tier's dissolve
-          gl_FragColor = vec4(c.rgb / max(c.a, 1e-3) * vTint, 1.);
+          gl_FragColor = vec4(c.rgb / max(c.a, 1e-3) * vTint, cov);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
           #include <fog_fragment>
         }`,
     });
-    this.impMat.customProgramCacheKey = () => 'tree-engine-impostor-4';
+    // (the atlas after the merge: UniformsUtils.merge won't clone a render target's texture — it set uAtlas to null,
+    //  and the impostors drew nothing: every tree past the mid band was missing)
+    this.impMat.uniforms.uAtlas.value = rt.texture;
+    this.impMat.alphaToCoverage = true;
+    this.impMat.customProgramCacheKey = () => 'tree-engine-impostor-5';
     this.impMesh = new THREE.Mesh(geo, this.impMat);
     this.impMesh.frustumCulled = false; this.impMesh.name = 'Trees (impostors)';
     this.group.add(this.impMesh);
@@ -325,8 +341,9 @@ export class TreeEngine {
         const cur = t.tier, d0 = d - t.j0, d1 = d - t.j1;
         // (a far-only tree — a scene's far planting — stands aside inside the square of its real trees: hideFar)
         const hf = this.hideFar, hidden = t.farOnly && hf && t.x > hf[0] && t.x < hf[2] && t.z > hf[1] && t.z < hf[3];
-        const want = hidden ? -1 : t.e.nearOnly ? (d0 < b0 * .8 + (cur === 0 ? HYST : -HYST) ? 0 : -1)
-          : d0 < b0 + (cur === 0 ? HYST : -HYST) ? 0 : d1 < b1 + (cur === 1 ? HYST : -HYST) ? 1 : 2;
+        const B0 = t.deep ? b0 * DEEP[0] : b0, B1 = t.deep ? b1 * DEEP[1] : b1;
+        const want = hidden ? -1 : t.e.nearOnly ? (d0 < B0 * .8 + (cur === 0 ? HYST : -HYST) ? 0 : -1)
+          : d0 < B0 + (cur === 0 ? HYST : -HYST) ? 0 : d1 < B1 + (cur === 1 ? HYST : -HYST) ? 1 : 2;
         if (cur === undefined) { t.tier = want; t.from = -1; t.ts = -1e9; }
         else if (want !== cur) { t.from = cur; t.tier = want; t.ts = now; }
         const fading = now - t.ts < FT;
