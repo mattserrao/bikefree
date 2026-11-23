@@ -15,6 +15,7 @@ For the generated maps, put the block in `tools/city/<map>.json`. `tools/build_p
 | `water` | Lake surface: travelling ripples, gusty patches, sky reflection at grazing angles, sun glitter. It patches the world's own water material, so it covers every water plane. | `ripple` 1, `glint` 1, `sky` 0.4 | Shader only (no geometry). |
 | `shoreline` | Wet-sand and pebble band on land, a pale lapping band on the water, reeds on gentle shores. Built per tile from the ground-meets-water contour. | `cell` 2 m, `beach` [1.5, 4] m, `shallows` 9 m, `reeds` 0.35 | Only tiles with a shore: 2 meshes plus 1 instanced reed mesh. |
 | `village` | Shop rows in the `village` facade style (awnings, some striped; painted fronts; signs) and sidewalk furniture (benches, flower barrels, racks, bins, flags). | `style` 'village', `flags` true | Goes into the tile's existing meshes. |
+| `sky` | Sky dome: zenith-to-haze gradient, glow round the sun, drifting lit clouds. Follows the scene's background, fog and sun. | `clouds` 0.42, `glow` 1, `speed` 1 | 1 draw call, shader only. |
 | `frontYards` | Kit houses get picket fences or hedges on the front lot line, foundation shrubs and flower beds. | `fence` 0.22, `hedge` 0.2, `shrubs` 0.8 | Goes into the tile's street-kit mesh. |
 
 ## Adding one

@@ -38,11 +38,13 @@ export const ROOF_COLORS = {
   scale: ['#87503e', '#965e48', '#7a4a3c', '#6b5a50'],
   slate: ['#4e5258', '#5a5e63', '#45484d'],
   lauze: ['#7e7a72', '#8d877c', '#6f6c66', '#938a7a'],
-  seam: ['#5f6164', '#6d5b4f', '#4c5156', '#7b7f80', '#4f5e52'],
+  // standing seam: galvanised, weathered, and the upstate farm colours (barn red, forest green, a faded blue)
+  seam: ['#5f6164', '#6d5b4f', '#4c5156', '#7b7f80', '#4f5e52', '#7a2f28', '#8e3b2f', '#3f5e47', '#4a5f6e', '#9a9c9a'],
   corrugated: ['#8a8d8f', '#7a6250', '#6e7476'],
   shingle: ['#7d7266', '#8a7c6a', '#6c645a'],
   flat: ['#8f8b84', '#7f7c76'],
-  asphalt: ['#4b4d50', '#5c5752', '#3f4244', '#6a5f55', '#4d5547', '#5a4640'],
+  // asphalt shingle: the greys and browns of real lots (weathered light grey, charcoal, driftwood, a muted green, a red)
+  asphalt: ['#4b4d50', '#5c5752', '#3f4244', '#6a5f55', '#4d5547', '#5a4640', '#77736c', '#33363a', '#7f7464', '#4f5a4e', '#5a3e38', '#66686b'],
 };
 
 /** Every key a style can have, with generic defaults (a plain rendered village, pitched tile roofs). */

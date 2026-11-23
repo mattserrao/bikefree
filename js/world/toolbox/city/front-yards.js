@@ -33,12 +33,12 @@ export function planFrontYard(R, H, ctx, opts = {}) {
       if (ctx.free(x, z, 0.3) && !ctx.driveNear(x, z, 1)) Y.shrubs.push({ x, z, s: 0.6 + h(10 + k) * 0.5, c: h(20 + k) });
     }
   }
-  // the front lot line: parallel to the road, ~2.2 m in from the road's edge (the drive's road end is on the edge)
+  // the front lot line: parallel to the road, ~3.4 m in from the road's edge (past a sidewalk) (the drive's road end is on the edge)
   const roll = h(4);
   const kind = roll < pFence ? 'picket' : roll < pFence + pHedge ? 'hedge' : null;
   if (kind) {
     const E = H.drive.pts[H.drive.pts.length - 1], o = { x: H.road.ox, z: H.road.oz }, t = { x: H.road.dx, z: H.road.dz };
-    const inset = 2.2 + h(5) * 0.8, bx = E[0] + o.x * inset, bz = E[1] + o.z * inset;
+    const inset = 3.4 + h(5) * 0.8, bx = E[0] + o.x * inset, bz = E[1] + o.z * inset;
     // the house's frontage on that line: its centre's projection, ± its width and a few metres
     const c0 = (r.cx - bx) * t.x + (r.cz - bz) * t.z, span = Math.max(r.hu, r.hv) + 3 + h(6) * 3;
     // the house must be behind the line (and not on it)

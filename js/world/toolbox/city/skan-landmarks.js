@@ -18,7 +18,9 @@
 //   mill        the old Crown Mill at Marcellus Falls: four storeys of stone, rows of windows, a belfry, a stack
 import { V, centroid, orient, prism, cap, block, frameOf, makeFrame, lathe, gable, faceOut } from './hero-geom.js';
 
-export function skanLandmarkModels({ S, N, glows, plan: plan0, ground, local, L }) {
+export function skanLandmarkModels({ S, N, glows, plan: plan0, ground, local, L, Wa = null }) {
+  // a pile's wake: a ring of pale foam where it stands in the water (the lake moving past it)
+  const wake = (x, z, r) => { const p = L.poolAt?.(x, z); if (p == null || !(L.heightAt(x, z) < p)) return; S.color('#c3d0cc'); S.cylinder(x, p + .38, z, r + .1, .012, 10); S.color('#90a8a5'); S.cylinder(x, p + .365, z, r + .28, .01, 10); };
   // (a lakefront footprint past the drawn shore: the floor stays a metre above the lake, its foundation down into it)
   //  and one standing in the water gets its stone sea wall and a lawn terrace round it
   const plan = (l, a, b) => {
@@ -95,6 +97,77 @@ export function skanLandmarkModels({ S, N, glows, plan: plan0, ground, local, L 
   };
   const chimney = (q, y0, y1, col = '#8a4b3b') => { S.color(col); S.box(q.x, y0, q.z, .9, y1 - y0, .7); S.color('#5f5a54'); S.box(q.x, y1, q.z, 1.05, .15, .85); };
 
+  const hsh = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+  // ---- shared bits for the lake front: boats, dormers, lawn chairs, a private dock
+  /** A boat on the water at q (yaw along its length): 'sail' (a moored sloop, mast and furled sail), 'run' (a runabout),
+   *  'tour' (the two-deck tour boat, white with a dark band), 'canoe'. Its waterline at the lake's level. */
+  const boat = (q, yaw, kind, seed = 0) => {
+    const p = L.poolAt?.(q.x, q.z); if (p == null) return;
+    const y = p + .35, c = Math.cos(yaw), sn = Math.sin(yaw), at = (a, b) => ({ x: q.x + sn * a + c * b, z: q.z + c * a - sn * b });
+    if (kind === 'tour') {
+      S.color('#f2f0ea'); S.box(q.x, y - .6, q.z, 5.2, 1.7, 22, yaw);
+      S.color('#2f3e4c'); S.box(q.x, y + .75, q.z, 5.25, .35, 22.05, yaw);
+      S.color('#f2f0ea'); S.box(q.x, y + 1.1, q.z, 4.6, 2.2, 17, yaw);
+      S.color('#2c3238'); for (const sd of [-1, 1]) { const w2 = at(0, sd * 2.31); S.box(w2.x, y + 1.6, w2.z, .05, 1, 15, yaw); }
+      S.color('#e9e5da'); S.box(q.x, y + 3.3, q.z, 4.8, .15, 18, yaw);   // (the upper deck)
+      S.color('#f2f0ea'); { const b2 = at(-4, 0); S.box(b2.x, y + 3.45, b2.z, 3, 1.8, 4, yaw); }   // (the wheelhouse)
+      S.color('#9a2f28'); { const f = at(9, 0); S.cylinder(f.x, y + 3.45, f.z, .05, 3, 5); S.box(f.x, y + 5.7, f.z, .03, .6, 1, yaw); }
+      return;
+    }
+    if (kind === 'canoe') { S.color(['#b8402f', '#2f6b4f', '#d8b04a'][Math.floor(seed * 3)]); S.box(q.x, y - .25, q.z, .85, .4, 5, yaw); return; }
+    const hull = ['#f2f0ea', '#24384f', '#f2f0ea', '#8a2f28'][Math.floor(seed * 4)];
+    // the hull: a body with freeboard and a narrowing bow, a boot stripe at the waterline
+    const L0 = kind === 'sail' ? 7 : 4.8, B0 = kind === 'sail' ? 2.6 : 2.2;
+    S.color(hull); { const m = at(-.6, 0); S.box(m.x, y - .4, m.z, B0, 1.2, L0, yaw); }
+    { const b = at(L0 / 2 - .6 + .8, 0); S.box(b.x, y - .3, b.z, B0 * .62, 1.1, 1.6, yaw); const b2 = at(L0 / 2 - .6 + 1.9, 0); S.box(b2.x, y - .1, b2.z, B0 * .25, .9, .8, yaw); }   // (the bow, narrowing)
+    S.color('#2b2f33'); { const m = at(-.6, 0); S.box(m.x, y - .02, m.z, B0 + .02, .1, L0 + .02, yaw); }
+    S.color('#e8e3d6'); { const m = at(-.9, 0); S.box(m.x, y + .8, m.z, kind === 'sail' ? 1.8 : 1.5, .45, kind === 'sail' ? 3 : 2, yaw); }   // (the cabin)
+    if (kind === 'sail') {
+      S.color('#d9d6cf'); S.cylinder(q.x, y + .8, q.z, .07, 11, 6, .04);
+      S.color('#2b4a6b'); { const m = at(-1.5, 0); S.box(m.x, y + 2, m.z, .3, .3, 3.2, yaw); }   // (the furled main on its boom, in its blue cover)
+    }
+  };
+  /** A shed dormer on a hip/gable slope of frame F: centre a along u, the wall at b (±hw), base y, w wide. */
+  const dormer = (F, a, b, sd, yB, w, wallCol, roofCol) => {
+    const q = F.at(a, b - sd * 1.6), yaw = F.yawU;
+    S.color(wallCol); S.box(q.x, yB, q.z, 2.2, 1.6, w, yaw);
+    S.color(roofCol); S.box(q.x, yB + 1.6, q.z, 2.6, .18, w + .4, yaw);
+    win(F, a, b - sd * .48, yB + .3, Math.min(1, w - .6), 1, false, sd, '#ffffff');
+  };
+  /** An Adirondack chair at q facing yaw (toward the water), in one of the lake-house colours. */
+  const adirondack = (q, yaw, seed) => {
+    const y = ground([q]), c = Math.cos(yaw), sn = Math.sin(yaw), at = (a, b) => ({ x: q.x + sn * a + c * b, z: q.z + c * a - sn * b });
+    S.color(['#f1efe8', '#2f5d8a', '#c2412f', '#3f6b45', '#e0b236'][Math.floor(seed * 5)]);
+    S.box(q.x, y + .32, q.z, .7, .06, .8, yaw);
+    { const b = at(-.45, 0); S.box(b.x, y + .35, b.z, .68, .9, .08, yaw); }
+    for (const sd of [-1, 1]) { const a = at(0, sd * .38); S.box(a.x, y + .55, a.z, .12, .05, .85, yaw); S.box(a.x, y, a.z, .06, .55, .7, yaw); }
+  };
+  /** The nearest lake edge to c within r (a step out past it into the water, and the direction out), or null. */
+  const shoreFrom = (c, r = 90) => {
+    let best = null;
+    for (let k = 0; k < 24; k++) {
+      const a = (k / 24) * Math.PI * 2, dx = Math.sin(a), dz = Math.cos(a);
+      for (let d = 4; d < r; d += 2) { if (L.waterAt?.(c.x + dx * d, c.z + dz * d)) { if (!best || d < best.d) best = { d, x: c.x + dx * d, z: c.z + dz * d, dx, dz }; break; } }
+    }
+    return best;
+  };
+  /** A private dock from the shore at s straight out along (dx, dz), with a boat tied up; a boathouse on some. */
+  const privateDock = (sh, seed) => {
+    const p = L.poolAt?.(sh.x, sh.z); if (p == null) return;
+    const len = 12 + seed * 10, y = p + .9, yaw = Math.atan2(sh.dx, sh.dz), m = { x: sh.x + sh.dx * (len / 2 - 1), z: sh.z + sh.dz * (len / 2 - 1) };
+    S.color('#9d8a6e'); S.box(m.x, y - .25, m.z, 1.8, .25, len, yaw);
+    S.color('#5d5346'); for (let a = -len / 2 + 1; a < len / 2; a += 3) for (const sd of [-1, 1]) { const q = { x: m.x + sh.dx * a + sh.dz * sd * .8, z: m.z + sh.dz * a - sh.dx * sd * .8 }; S.cylinder(q.x, y - 3.5, q.z, .12, 3.5, 6); wake(q.x, q.z, .12); }
+    const end = { x: sh.x + sh.dx * (len - 3) + sh.dz * 2.2, z: sh.z + sh.dz * (len - 3) - sh.dx * 2.2 };
+    boat(end, yaw, seed < .5 ? 'run' : 'sail', seed * 3 % 1);
+    if (seed > .6) {
+      // a boathouse at the root: a little gable-roofed shed half over the water, the boat door to the lake
+      const b = { x: sh.x + sh.dx * 1.5 - sh.dz * 5, z: sh.z + sh.dz * 1.5 + sh.dx * 5 };
+      S.color(['#7a2f28', '#e9e4d6', '#3f5e47'][Math.floor(seed * 7) % 3]); S.box(b.x, p - .2, b.z, 4.5, 3.4, 7, yaw);
+      S.color('#41464b'); S.box(b.x, p + 3.2, b.z, 5.1, .5, 7.6, yaw); S.box(b.x, p + 3.7, b.z, 2.6, .55, 7.6, yaw);
+      S.color('#2a2c2e'); { const d2 = { x: b.x + sh.dx * 3.52, z: b.z + sh.dz * 3.52 }; S.box(d2.x, p + .3, d2.z, 3, 2, .06, yaw); }
+    }
+  };
+
   return {
     // ---------------------------------------------------------------- Clift Park
     pier(l) {
@@ -108,7 +181,7 @@ export function skanLandmarkModels({ S, N, glows, plan: plan0, ground, local, L 
         // planks: thin dark seams across the deck
         S.color('#7f6c55'); for (let s = -len / 2 + .3; s < len / 2; s += .9) { const q = F.at(s, 0); S.box(q.x, y + .005, q.z, .04, .01, 2 * w - .1, F.yawV); }
         // piles every 3 m, both sides, down into the lake
-        S.color('#5d5346'); for (let s = -len / 2 + 1; s < len / 2; s += 3) for (const sd of [-1, 1]) { const q = F.at(s, sd * (w - .15)); S.cylinder(q.x, y - 4.5, q.z, .16, 4.4, 6); }
+        for (let s = -len / 2 + 1; s < len / 2; s += 3) for (const sd of [-1, 1]) { const q = F.at(s, sd * (w - .15)); S.color('#5d5346'); S.cylinder(q.x, y - 4.5, q.z, .16, 4.4, 6); wake(q.x, q.z, .16); }
         // the railings: posts, a top rail and a mid rail, white
         S.color(TRIM);
         for (const sd of [-1, 1]) {
@@ -122,6 +195,16 @@ export function skanLandmarkModels({ S, N, glows, plan: plan0, ground, local, L 
           glows.push({ x: q.x, y: y + 3.6, z: q.z, size: 2.4, color: '#ffe2b0' });
           const bq = F.at(s + 7, -sd * (w - .6));
           S.color('#6b5137'); S.box(bq.x, y + .42, bq.z, .45, .06, 1.6, F.yawU); S.box(bq.x - F.v.x * sd * .2, y + .48, bq.z - F.v.z * sd * .2, .06, .45, 1.6, F.yawU);
+        }
+      }
+      // the boats: the tour boat tied up along the pier's outer half, and sloops moored off Clift Park either side
+      { const A = P[0], B = P[P.length - 1], len = Math.hypot(B.x - A.x, B.z - A.z), u = { x: (B.x - A.x) / len, z: (B.z - A.z) / len }, n = { x: -u.z, z: u.x };
+        const yaw = Math.atan2(u.x, u.z), t = { x: A.x + u.x * len * .7 + n.x * (w + 3.3), z: A.z + u.z * len * .7 + n.z * (w + 3.3) };
+        if (L.waterAt?.(t.x, t.z)) boat(t, yaw, 'tour');
+        for (let k = 0; k < 9; k++) {
+          const along = len * (.25 + .7 * hsh(k * 3.1 + 1)), side = (k % 2 ? 1 : -1) * (25 + 110 * hsh(k * 5.7 + 2));
+          const q = { x: A.x + u.x * along + n.x * side, z: A.z + u.z * along + n.z * side };
+          if (L.waterAt?.(q.x, q.z) && L.waterAt?.(q.x + 6, q.z) && L.waterAt?.(q.x - 6, q.z)) boat(q, hsh(k * 9.3) * 6.28, k % 3 === 2 ? 'run' : 'sail', hsh(k * 2.2));
         }
       }
     },
@@ -256,6 +339,16 @@ export function skanLandmarkModels({ S, N, glows, plan: plan0, ground, local, L 
         porch(F, -hl + 1, hl - 1, hw, 1, g + .4, { depth: 2.6, h: 3, posts: 6, columns: true, col: '#f4f0e6', roofCol: '#4b4f55' });
         chimney(F.at(-hl * .6, 0), yC, yC + 4.8); chimney(F.at(hl * .6, 0), yC, yC + 4.8);
       }
+      // the grounds down to the lake: Adirondack chairs on the lawn facing the water, a private dock (a boathouse on some)
+      const sh = shoreFrom(F.c, 110);
+      if (sh) {
+        const yaw = Math.atan2(sh.dx, sh.dz), d = Math.max(4, sh.d - 7);
+        for (let k = 0; k < 2 + Math.floor(h(31) * 2); k++) {
+          const q = { x: F.c.x + sh.dx * d + sh.dz * (k - 1) * 1.3, z: F.c.z + sh.dz * d - sh.dx * (k - 1) * 1.3 };
+          if (!L.waterAt?.(q.x, q.z)) adirondack(q, yaw, h(40 + k));
+        }
+        privateDock(sh, h(33));
+      }
     },
     // ---------------------------------------------------------------- the country club
     clubhouse(l) {
@@ -274,6 +367,18 @@ export function skanLandmarkModels({ S, N, glows, plan: plan0, ground, local, L 
         for (let k = -1; k <= 1; k++) win(P2, 4.6, k * 2.6, g + 1.4, 1.5, 2.4, true, 1, '#ffffff');
         for (let k = -1; k <= 1; k++) win(P2, 4.6, k * 2.6, g + .8 + fh + .7, 1.1, 1.6, true, 1, '#ffffff'); }
       for (const s of [-1, 1]) porch(F, -hl + 1.5, hl - 1.5, s * hw, s, g + .3, { depth: 4, h: 3, posts: 10, roofCol: '#41584b' });
+      // dormers along both slopes (the long roof broken up), and the lake-side terrace: flagstones, tables under umbrellas
+      for (const sd of [-1, 1]) for (let a = -hl + 4; a <= hl - 4; a += 6.5) if (Math.abs(a) > 6) dormer(F, a, sd * hw, sd, yE + .4, 2.2, '#f1eee6', '#41584b');
+      { const wet = (sd) => { const q = F.at(0, sd * (hw + 12)); return L.waterAt?.(q.x, q.z) ? 1 : 0; }, sd = wet(1) >= wet(-1) ? 1 : -1;
+        const T = makeFrame(F.at(0, sd * (hw + 4 + 6)), F.u, F.v, hl * .7, 5);
+        S.color('#a59d8e'); block(S, T.rect(-hl * .7, hl * .7, -5, 5), g - .3, g + .35);
+        for (let a = -hl * .7 + 3; a < hl * .7 - 2; a += 5.5) for (const b of [-2.2, 2.2]) {
+          const q = T.at(a, b), k = hsh(a * 3 + b);
+          S.color('#f1efe8'); S.cylinder(q.x, g + .35, q.z, .55, .75, 8);   // (a round table)
+          S.color('#d8d4cc'); S.cylinder(q.x, g + .35, q.z, .04, 2.4, 5);
+          S.color(k < .5 ? '#2f5d4a' : '#f1efe8'); S.cylinder(q.x, g + 2.3, q.z, 1.5, .55, 8, .08);   // (the umbrella)
+        }
+      }
       chimney(F.at(-hl * .5, 0), yR - 2, yR + 1.5, '#7b7468'); chimney(F.at(hl * .5, 0), yR - 2, yR + 1.5, '#7b7468');
       // a flagpole
       { const q = F.at(hl + 6, hw + 4); S.color('#f3f1ea'); S.cylinder(q.x, g, q.z, .08, 11, 6, .05); S.color('#a33a32'); S.box(q.x + .9, g + 9.6, q.z, 1.8, 1.1, .03); }
@@ -281,7 +386,7 @@ export function skanLandmarkModels({ S, N, glows, plan: plan0, ground, local, L 
     dock(l) {
       const ring = orient(l.ring.map(([a, o]) => local(a, o))), c = centroid(ring), y = ground([c]) + .5;
       S.color('#9d8a6e'); block(S, ring, y - .25, y);
-      S.color('#5d5346'); for (let i = 0; i < ring.length; i++) { const p = ring[i]; S.cylinder(p.x, y - 3.5, p.z, .14, 3.6, 6); }
+      for (let i = 0; i < ring.length; i++) { const p = ring[i]; S.color('#5d5346'); S.cylinder(p.x, y - 3.5, p.z, .14, 3.6, 6); wake(p.x, p.z, .14); }
       // a couple of boats along it: a runabout and a sailboat
       const F = frameOf(ring);
       for (const [a, sd, kind] of [[-F.hl * .4, 1, 'run'], [F.hl * .3, -1, 'sail']]) {

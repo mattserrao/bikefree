@@ -657,7 +657,7 @@ export class GraphCity {
       if (sp.r * k > de + 1.5) k = Math.max(.45, (de + 1.5) / sp.r);
       let crown = sp.r * k * .85;
       if (!clearOf(x, z, crown)) { k *= .6; crown = sp.r * k * .85; if (k < .35 || !clearOf(x, z, crown)) return false; }
-      out.push({ x, z, y: W._groundH(x, z) - .15, sp: name, v: this.fall ? fallVariant(sp, r4) : 0, s: k, sy: k * (.94 + r3 * .12), rot: seed * 40 % 6.283, tint: .9 + r3 * .18 });
+      out.push({ x, z, y: W._groundH(x, z) - .15, sp: name, v: this.fall ? fallVariant(sp, r4) : 0, s: k, sy: k * (.94 + r3 * .12), rot: seed * 40 % 6.283, tint: .9 + r3 * .18, deep: de > 30 });
       return true;
     };
     const under = (x, z, name, seed, s = 1) => {
@@ -1088,6 +1088,13 @@ export class GraphCity {
     }
     return out;
   }
+  /** A village core's shop (b.shop) within r of (x, z)? */
+  _shopNear(x, z, r) {
+    const G = this.host.buildingGrid;
+    for (let gx = Math.floor((x - r) / 40); gx <= Math.floor((x + r) / 40); gx++) for (let gz = Math.floor((z - r) / 40); gz <= Math.floor((z + r) / 40); gz++)
+      for (const b of G.get(`${gx},${gz}`) || []) if (b.shop && !b.hidden && x > b.bb[0] - r && x < b.bb[1] + r && z > b.bb[2] - r && z < b.bb[3] + r) return true;
+    return false;
+  }
   /** Inside the dressed Point (its own lawns and trees)? */
   _inDressing(x, z) { const D = this.world.dressing; return !!D && !!D.inside?.(x, z); }
 
@@ -1136,7 +1143,8 @@ export class GraphCity {
           }
         }
         // parked cars: main streets with sidewalks, both sides (one side on a one-way), away from junctions and decks
-        if (!this.rural && MAIN.has(e.kind) && walk && !deck && !nearEnd && i % 2 === 0 && half >= 4.2) {
+        // (a rural map's village main streets too, with the "village" effect: their sidewalks are only in the villages)
+        if ((!this.rural || this.world.villageStreets) && MAIN.has(e.kind) && walk && !deck && !nearEnd && i % 2 === 0 && half >= 4.2) {
           const ow = this.edgeInfo(e).ow;
           for (const side of ow ? [ow > 0 ? 1 : -1] : [-1, 1]) {
             for (const f of [0.15, 0.8]) {
@@ -1145,6 +1153,8 @@ export class GraphCity {
               const k0 = i, k1 = i + 1, x = e.x[k0] + (e.x[k1] - e.x[k0]) * f + nx * (half - 1.15) * side, z = e.z[k0] + (e.z[k1] - e.z[k0]) * f + nz * (half - 1.15) * side;
               const y = e.ele[k0] + (e.ele[k1] - e.ele[k0]) * f + 0.02;
               const yaw = Math.atan2(dx * side, dz * side);
+              // (a rural map's village: only along its shop rows — the side with a shop within 14 m)
+              if (this.rural && !this._shopNear(x, z, 14)) continue;
               Mc.push({ f: frame(x, y, z, yaw), seed: h0 });
               carLo(Mf, frame(x, y, z, yaw), h0);
               this.stats.cars++;

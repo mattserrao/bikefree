@@ -40,7 +40,7 @@ function registerCanal(S2, wOf, gap, trailSide, creek = false) {
   }
 }
 
-export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L }) {
+export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = null }) {
   const TRIM = '#f3f1ea';
   /** A window (dark glass, a white frame) on the wall of frame F at (a, b), facing out along n (±1 on v, or the u end). */
   const window = (F, a, b, y, w, h, onEnd = false, s = 1) => {
@@ -176,11 +176,13 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L }) {
         for (const p of S2) if (p.ws) for (const sd of [1, -1]) { const o = wOf(p, sd) - .4; p.y = Math.max(p.y, L.heightAt(p.x + p.nx * sd * o, p.z + p.nz * sd * o) + .08); }
         for (let pass = 0; pass < 2; pass++) for (let i = 1; i + 1 < S2.length; i++) if (S2[i].ws) S2[i].y = Math.max(S2[i].y - .2, (S2[i - 1].y + S2[i].y * 2 + S2[i + 1].y) / 4);
       }
-      if (l.creek) S.color('#4b6f6c');
+      // a creek's water: the world's water material when there is one (its ripples and glints: the "water" effect)
+      const WB = l.creek && Wa ? Wa : S;
+      if (l.creek) WB.color('#4b6f6c');
       for (let i = 0; i + 1 < S2.length; i++) {
         const a = S2[i], b = S2[i + 1], wa = wOf(a, 1), wb = wOf(b, 1), va = wOf(a, -1), vb = wOf(b, -1);
         if (!l.creek) S.color(hsh(Math.floor(i / 3) * 17 + 3) < .14 ? '#36442f' : MURK[((i * 7919) ^ (i >> 2) * 31) % MURK.length]);   // (patches of scum)
-        faceOut(S, [V(a.x + a.nx * wa, a.y, a.z + a.nz * wa), V(b.x + b.nx * wb, b.y, b.z + b.nz * wb), V(b.x - b.nx * vb, b.y, b.z - b.nz * vb), V(a.x - a.nx * va, a.y, a.z - a.nz * va)], up);
+        faceOut(WB, [V(a.x + a.nx * wa, a.y, a.z + a.nz * wa), V(b.x + b.nx * wb, b.y, b.z + b.nz * wb), V(b.x - b.nx * vb, b.y, b.z - b.nz * vb), V(a.x - a.nx * va, a.y, a.z - a.nz * va)], up);
       }
       // open dark water along the edges, where the duckweed thins
       if (!l.creek) {
@@ -195,6 +197,25 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L }) {
         }
         canalBanks(S2, wOf, trailSide);
         registerCanal(S2, wOf, GAP, trailSide);   // (the channel, for the planters)
+      }
+      // white water where a creek drops (a dam, a falls, a riffle over a ledge: Marcellus Falls, Skaneateles Falls):
+      // a pale cascade face down the step and a churned patch at its foot
+      let lastFoam = -99;
+      if (l.creek) for (let i = 0; i + 1 < S2.length; i++) {
+        const a = S2[i], b = S2[i + 1], drop = a.y - b.y;
+        if (Math.abs(drop) < .9 || i - lastFoam < 4) continue;   // (a real step, not the stepped bed of a steep run)
+        lastFoam = i;
+        const [hi, lo] = drop > 0 ? [a, b] : [b, a], wh = wOf(hi, 1) + .3, wl = wOf(lo, 1) + .3, vh = wOf(hi, -1) + .3, vl = wOf(lo, -1) + .3;
+        S.color('#e6eeeb');
+        faceOut(S, [V(hi.x + hi.nx * wh, hi.y + .03, hi.z + hi.nz * wh), V(lo.x + lo.nx * wl, lo.y + .05, lo.z + lo.nz * wl), V(lo.x - lo.nx * vl, lo.y + .05, lo.z - lo.nz * vl), V(hi.x - hi.nx * vh, hi.y + .03, hi.z - hi.nz * vh)], up);
+        // the foam at its foot: a few metres on down the creek, thinning
+        const k = S2.indexOf(lo), dir = lo === b ? 1 : -1;
+        for (let q = 0; q < 3; q++) {
+          const p = S2[k + dir * q], p2 = S2[k + dir * (q + 1)]; if (!p || !p2) break;
+          S.color(q === 0 ? '#d9e4e1' : q === 1 ? '#b8cbc8' : '#93aba8');
+          const w1 = wOf(p, 1) * (.9 - q * .2), w2 = wOf(p2, 1) * (.9 - q * .2), v1 = wOf(p, -1) * (.9 - q * .2), v2 = wOf(p2, -1) * (.9 - q * .2);
+          faceOut(S, [V(p.x + p.nx * w1, p.y + .04, p.z + p.nz * w1), V(p2.x + p2.nx * w2, p2.y + .04, p2.z + p2.nz * w2), V(p2.x - p2.nx * v2, p2.y + .04, p2.z - p2.nz * v2), V(p.x - p.nx * v1, p.y + .04, p.z - p.nz * v1)], up);
+        }
       }
       // a creek's channel too, for the planters: no tree or house in its water (user, 23 Nov: "trees spawning in canal
       // water is still an issue" — they stood in Nine Mile Creek, drawn as the canal is); no canal scrub along it

@@ -270,6 +270,15 @@ const hemlock = (v, lod) => MOUNTAIN_BUILDERS.conifer(5201 + v, { H: 22 + v * 3,
 const spruce = (v, lod) => MOUNTAIN_BUILDERS.conifer(5301 + v, { H: 20 + v * 3, R: 3.6, colors: ['#25412f', '#2d4b37', '#345440'], trunk: '#4d3b2e',
   trunkBase: .36, droop: .5, jag: .3, seg: 7, layers: 10, crown: .03, top: 'leader', under: 5 }, lod);
 
+// shrubs as small multi-stemmed 'trees' for grow(): H and R at model size, a low fork, short dense branching
+const SHRUBS = {
+  dogwood: { H: 2.6, R: 1.5, fork: .25, trunkR: .035, trunk: '#7a3328', bark: BARK, stems: 5, gnarl: .3, up: .1,
+    levels: [[4, .35, .55, .45], [3, .3, .6, .25], [2, .4, .6, .12]],
+    greens: ['#5a7d3a', '#6a8740', '#55763a'], fall: ['#8a3a34', '#a3473c', '#7a2f2c'], turn: [.55] },
+  buckthorn: { H: 3.4, R: 1.9, fork: .22, trunkR: .045, trunk: '#4f4339', bark: BARK, stems: 4, gnarl: .35, up: .08,
+    levels: [[5, .3, .6, .45], [3, .3, .6, .25], [2, .4, .6, .12]],
+    greens: ['#4d7232', '#557a36', '#62843d'], fall: ['#8a9a3c'], turn: [.15] },
+};
 // ---- understory: forest-edge and hedgerow shrubs, sumac (scarlet in early fall), saplings, ferns, logs and stumps
 function shrubClump(seed, colors, n, r, h) {
   const rand = randomSequence(seed), b = new Builder();
@@ -328,8 +337,10 @@ export function makeUpstateTrees() {
     // every species' near and mid tiers as { wood, leaves } (leaves: the leaf-cluster cards, null for the conifers)
     for (const s of Object.values(species)) for (const t of s.variants) for (const k of [0, 1]) if (t[k].isBufferGeometry) t[k] = { wood: t[k], leaves: null };
     const understory = {
-      dogwood: shrubClump(6101, ['#5a7d3a', '#6a8740', '#8a4a3a'], 5, 2.2, 2.4),          // red-osier dogwood / honeysuckle
-      buckthorn: shrubClump(6111, ['#4d7232', '#557a36', '#62843d'], 6, 2.8, 3.2),
+      // the shrubs grown as the trees are (user, 23 Nov: "confirm shrubs are included in the new tree generating"): several
+      // thin stems from the ground, short twiggy branching, leaf-cluster cards — not the old solid blobs
+      dogwood: grow(6101, SHRUBS.dogwood, 0, .55),          // red-osier dogwood / honeysuckle: red stems, wine-red turning
+      buckthorn: grow(6111, SHRUBS.buckthorn, 0, .15),      // buckthorn / honeysuckle thicket: stays green late
       goldenrod: MOUNTAIN_BUILDERS.spikes ? MOUNTAIN_BUILDERS.spikes(6121, 9, .9, '#6f8650', '#e2b931', '#d9a92c', .35) : shrubClump(6121, ['#d9b334'], 3, .6, .9),
       sumac: sumac(6131), sumac2: sumac(6132),
       fern: fern(6141),

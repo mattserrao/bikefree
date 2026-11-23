@@ -103,7 +103,7 @@
  "junctionEaseM": 30,
  "routeKeepM": 18,
  "routeLinkMaxM": 50,
- "effects": {"water": {}, "shoreline": {}, "village": {}, "frontYards": {}},
+ "effects": {"water": {}, "shoreline": {}, "village": {}, "frontYards": {}, "sky": {}},
  "files": {
   "ground": "routes/cities/cny-ground.grid.bin.gz",
   "heroes": "routes/cities/cny-heroes.json",

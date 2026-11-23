@@ -34,6 +34,9 @@ const BUDGET_MS = 6, PRELOAD_BUDGET_MS = 40;
 const RIDER_LANE = 0.22;
 const WATER_ABOVE = 0.35;           // the water plane this far above the pool level
 const BED_BELOW = 1.2;              // ground this close above the pool (or under it) is pushed down to river bed
+// the drawing buffer's pixel ratio by quality: with 4× MSAA on, 1.5 on a 2× (Retina) screen looks all but the same as 2
+// and shades 44% fewer pixels — the anti-aliasing review (23 Nov): edges are the multisample's job, not resolution's
+const PIXEL_RATIO = { low: 1, balanced: 1.5, high: 2 };
 const KERB = 0.35;                  // the ground's top this far under the road beside it…
 const SHELF = 13;                   // …for this far beyond its edge (a ground cell: no triangle reaches over the road)…
 const CUT_EASE = 0.75;              // …then back up at this slope (m per m)
@@ -218,7 +221,7 @@ export class GraphWorld {
     // removal — every layer of overdraw shaded in full; the near and far planes below keep plain depth precise enough.
     // No MSAA on Low: phones. Both are fixed for the renderer's life: a quality change applies from the next ride.)
     this.renderer = new THREE.WebGLRenderer({ antialias: this.qualityKey !== 'low', powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.qualityKey === 'low' ? 1 : 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[this.qualityKey] ?? 1.5));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     container.prepend(this.renderer.domElement);
@@ -347,7 +350,7 @@ export class GraphWorld {
   setQuality(key) {
     this.qualityKey = key || 'balanced';
     this._reach();
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.qualityKey === 'low' ? 1 : 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[this.qualityKey] ?? 1.5));
     this._resize();
   }
   setCamera(key) { this.camKey = CAMERAS[key] ? key : DEFAULT_CAMERA; this._camInit = false; }
@@ -1388,7 +1391,7 @@ const NY_ROAD_GLSL = /* glsl */`
     float trans = (1. - smoothstep(.03, .06, abs(tx))) * step(.25, gwH(vec2(seg, 6.))) * step(ax, hw - .15 * gwH(vec2(seg, 8.)) * hw);
     float sealed = step(.4, gwH(vec2(seg, 11.)));             // most are sealed (black tar), some are open hairlines
     snake = max(snake * step(.25, age + worn), trans * sealed);
-    lin = mix(lin, base * .5, snake * .85 * det);   // (tar: dark, not black — close up they read as cracks, not lines)
+    lin = mix(lin, base * .6, snake * .65 * det);   // (tar: dark, not black — close up they read as cracks, not lines)
     lin *= 1. - trans * (1. - sealed) * .45 * det;
     // alligator cracking in the wheel paths, in the worst stretches
     vec2 cell = nyCell(vec2(q.x, along) * 4.2);
