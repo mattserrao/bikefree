@@ -218,7 +218,8 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
       // the water: a creek blue-brown; the canal still and green with duckweed (user, 22 Nov: "green duckweed - no
       // reflections, keep render cost low"): flat quads in a few greens, patchy
       // (user, 22 Nov: "too green. A murky blue green black would appear better"): dark murky greens, a little scum
-      const MURK = ['#25342f', '#2a3933', '#212f2a', '#2e3c34', '#27362f'];
+      // (user, 23 Nov: "Water in the canal should be an inky blue / black. The green was too much")
+      const MURK = ['#121c2e', '#142033', '#101827', '#162236', '#131d30'];
       const up = V(0, 1, 0), wOf = (p, sd = 1) => p.ws?.[sd] ?? p.w ?? hw;
       const trailSide = l.creek ? 1 : canalSides(S2, hw);
       // the level over the water's real width (widened toward the towpath, where the ground rises to the trail's fill:
@@ -226,6 +227,9 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
       if (!l.creek) {
         for (const p of S2) if (p.ws) for (const sd of [1, -1]) { const o = wOf(p, sd) - .4; p.y = Math.max(p.y, L.heightAt(p.x + p.nx * sd * o, p.z + p.nz * sd * o) + .08); }
         for (let pass = 0; pass < 2; pass++) for (let i = 1; i + 1 < S2.length; i++) if (S2[i].ws) S2[i].y = Math.max(S2[i].y - .2, (S2[i - 1].y + S2[i].y * 2 + S2[i + 1].y) / 4);
+        // the water keeps its towpath's height below it (traditionally about a metre; tools/towpath_lift.mjs raised the
+        // towpath where the ground had it under the canal): the trail's fill no longer lifts the water to the trail
+        if (L.pathY) for (const p of S2) { if (!p.ws) continue; const o = wOf(p, trailSide) + 4, ty = L.pathY(p.x + p.nx * trailSide * o, p.z + p.nz * trailSide * o, 14); if (ty != null) p.y = Math.min(p.y, ty - .9); }
       }
       // a creek's water: the world's water material when there is one (its ripples and glints: the "water" effect)
       const WB = l.creek && Wa ? Wa : S;
@@ -238,7 +242,7 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
       }
       // open dark water along the edges, where the duckweed thins
       if (!l.creek) {
-        S.color('#151d1a');
+        S.color('#0a0f19');
         for (let i = 0; i + 1 < S2.length; i++) {
           const a = S2[i], b = S2[i + 1];
           for (const sd of [1, -1]) {
@@ -355,7 +359,7 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
       for (const b of [t0 - .35, t1]) { S.color('#7a5c3e'); block(S, F.rect(-hl - .5, hl + .5, b, b + .35), deck + .3, yW + .55); }
       // the posts along the trunk's walls (the restored timber frame)
       S.color('#5d4630'); for (let x = -hl; x <= hl; x += 2.4) for (const b of [t0 - .45, t1 + .35]) S.box(F.at(x, b).x, deck, F.at(x, b).z, .3, yW + .75 - deck, .3, F.yawU);
-      S.color('#27362f'); prism(S, F.rect(-hl - .5, hl + .5, t0, t1), yW - .02, yW); cap(S, F.rect(-hl - .5, hl + .5, t0, t1), yW);   // (murky, as the canal)
+      S.color('#131b25'); prism(S, F.rect(-hl - .5, hl + .5, t0, t1), yW - .02, yW); cap(S, F.rect(-hl - .5, hl + .5, t0, t1), yW);   // (murky, as the canal)
       { const m = (t0 + t1) / 2; shared.aq = { ends: [F.at(-hl - .5, m), F.at(hl + .5, m)], y: yW, w: t1 - t0 }; }
       // the towpath: gravel on the stone (where the world draws no trail deck), a wooden rail on its outer edge
       if (!tow) { S.color('#b9ad94'); block(S, F.rect(-hl - 1, hl + 1, -hw, t0 - .35), deck, deck + .35); }

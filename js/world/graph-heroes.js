@@ -66,6 +66,23 @@ export async function buildGraphHeroes(world, json) {
       }
       return best;
     },
+    /** The height of the nearest trail (a path edge) within r of (x, z), or null: the canal's water keeps under its
+     *  towpath (user, 23 Nov: "Raise the towpath so it sits at its traditional height above the canal"). */
+    pathY: (x, z, r = 30) => {
+      let best = null, bd = r;
+      const gx = Math.floor(x / 20), gz = Math.floor(z / 20), k = Math.ceil(r / 20) + 1;
+      host.landscape.wayDist(x, z, 0);   // (builds the segment grid)
+      for (let a = -k; a <= k; a++) for (let b = -k; b <= k; b++) {
+        const arr = host._segGrid.get(`${gx + a},${gz + b}`); if (!arr) continue;
+        for (let q = 0; q < arr.length; q += 2) {
+          const e = arr[q], i = arr[q + 1]; if (e.kind !== 'path') continue;
+          const ax = e.x[i], az = e.z[i], dx = e.x[i + 1] - ax, dz = e.z[i + 1] - az, l2 = dx * dx + dz * dz || 1;
+          const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), d = Math.hypot(x - ax - dx * t, z - az - dz * t);
+          if (d < bd) { bd = d; best = e.ele[i] + (e.ele[i + 1] - e.ele[i]) * t; }
+        }
+      }
+      return best;
+    },
     /** The nearest ridden deck (a way's bridge run) within r of (x, z): { x, z, y, e } — CNY's aqueduct carries the trail's. */
     deckNear: (x, z, r = 30) => {
       let best = null;
