@@ -124,7 +124,7 @@ export function bale(M, x, y, z, yaw, wrapped, seed) {
   M.color(body).beam(A, B, r * 1.85, r * 1.85);
   M.color(end).beam(A.clone().lerp(B, -.01), A.clone().lerp(B, .04), r * 1.5, r * 1.5).beam(B.clone().lerp(A, .04), B.clone().lerp(A, -.01), r * 1.5, r * 1.5);
 }
-const FLOWERS = ['#6f8fd8', '#f1efe6', '#e2b931', '#9a7fc2', '#e8e4dc', '#d9a92c'];
+const FLOWERS = ['#8090b8', '#d9d5c8', '#c2a444', '#8a7aa6', '#cfcabc', '#a98a3e'];   // (muted, September: user, 23 Nov)
 /** A clump of roadside wildflowers (chicory blue, Queen Anne's lace white, goldenrod, asters), or a grass tuft. */
 export function verge(M, x, y, z, seed, flower) {
   // grass: a tuft of thin blades (both faces), leaning out; a flower clump: stems with a head each

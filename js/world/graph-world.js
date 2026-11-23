@@ -1516,14 +1516,33 @@ function roadSurfaceMaterial(low = false, ny = false) {
             float jt = max(1. - smoothstep(0., .06, f.x) * smoothstep(0., .06, 1. - f.x), 1. - smoothstep(0., .06, f.y) * smoothstep(0., .06, 1. - f.y));
             c = mix(c, c * (.82 + .3 * gwH(cell)) * (1. - .4 * jt), det);
           } else if (sf == 5 || sf == 6) {   // gravel, dirt
-            // (user, 22 Nov: a "gravel" texture for the towpath): stone dust packed smooth where the wheels run, loose
-            // and darker toward the edges, with pebbles; fades to its mean far off
+            // (user, 22 Nov: a "gravel" texture for the towpath): stone dust, loose and darker toward the edges, pebbles.
+            // (23 Nov: "too uniform … needs ruts, wandering, puddles"): the worn line wanders side to side along the
+            // path, packed and a little darker; the edges are ragged into the grass; patches of fresh grey gravel, damp
+            // dark spots and leaf litter come and go; now and then a shallow puddle in the worn line, the sky in it
             vec3 g = sf == 5 ? vec3(.62, .57, .48) : vec3(.43, .36, .27);
-            float edge = smoothstep(.35, .5, abs(q.x) / max(vRd.w, 1.)), worn = 1. - smoothstep(.2, .6, abs(abs(q.x) - vRd.w * .18));
+            float w = max(vRd.w, 1.);
+            float wan = (gwN(vec2(q.y * .021, 3.7)) - .5) * w * .5 + (gwN(vec2(q.y * .09, 8.1)) - .5) * w * .14;
+            float lineD = abs(q.x - wan), worn = 1. - smoothstep(w * .2, w * .5, lineD);
+            float rag = (gwN(vec2(q.y * .35, 9.3)) - .5) * .5 + (gwN(vec2(q.y * 1.7, 4.4)) - .5) * .18;
+            float edge = smoothstep(.55, .85, abs(q.x) / w + rag * .3);
             float grain = gwN(vGW.xz * 22.) * .6 + gwN(vGW.xz * 47.) * .4, peb = step(.96, gwH(floor(vGW.xz * 11.) + 17.)) * gwH(floor(vGW.xz * 11.) + 3.);
-            float tone = .9 + .22 * (grain - .5) * det + .14 * gwN(vGW.xz * 1.3) - .14 * edge + .07 * worn * (sf == 5 ? 1. : 0.);
+            float tone = .9 + .22 * (grain - .5) * det + .16 * (gwN(vGW.xz * 1.3) - .5) - .14 * edge - .09 * worn;
             vec3 col = g * tone;
             col = mix(col, col * mix(.62, 1.25, peb), step(.001, peb) * det * (.4 + .6 * edge));
+            // patches: fresh gravel (grey, lighter), damp ground (darker, browner), leaf litter (rust and ochre flecks)
+            float pFresh = smoothstep(.66, .74, gwN(vGW.xz * .07 + 12.3)), pDamp = smoothstep(.62, .72, gwN(vGW.xz * .11 + 41.7));
+            col = mix(col, vec3(.66, .65, .62) * (.92 + .16 * grain), pFresh * .7);
+            col = mix(col, col * vec3(.68, .66, .6), pDamp * .8);
+            float litter = smoothstep(.55, .75, gwN(vGW.xz * .05 + 27.)) * (.4 + .6 * edge), leafF = step(.92, gwH(floor(vGW.xz * 9.) + 61.));
+            col = mix(col, mix(vec3(.55, .33, .16), vec3(.62, .5, .22), gwH(floor(vGW.xz * 7.) + 5.)), leafF * litter * det);
+            // grass creeping in at the ragged edges
+            col = mix(col, vec3(.33, .4, .2), smoothstep(.82, .98, abs(q.x) / w + rag * .3) * .7);
+            // puddles: in the worn line, a few per hundred metres; muddy rims, the sky's grey-blue in the middle
+            float pn = gwN(vec2(q.y * .16, (q.x - wan) * .55) + 53.), pud = smoothstep(.76, .8, pn) * worn * (1. - edge);
+            float rim = smoothstep(.7, .76, pn) * worn * (1. - pud);
+            col = mix(col, col * vec3(.62, .58, .52), rim * .8);
+            col = mix(col, vec3(.46, .5, .55) * (.85 + .2 * gwN(vGW.xz * 3.)), pud * .9);
             c = pow(col, vec3(2.2));
           } else {                 // asphalt
             #ifdef LOWQ
@@ -1545,7 +1564,7 @@ function roadSurfaceMaterial(low = false, ny = false) {
           diffuseColor.rgb = c;
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-road-surface-1${low ? '-low' : ''}${ny ? '-ny1' : ''}`;
+  m.customProgramCacheKey = () => `pgh-road-surface-2${low ? '-low' : ''}${ny ? '-ny1' : ''}`;
   return m;
 }
 

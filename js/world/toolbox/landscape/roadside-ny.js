@@ -104,7 +104,7 @@ export function goldenrod(M, x, y, z, seed) {
     const going = hash(seed * 11 + k) < .2;
     for (let j = 0; j < 4; j++) {
       const t = j / 3, ax = tx + Math.cos(a) * (.04 + t * .16), az = tz + Math.sin(a) * (.04 + t * .16), ay = ty - .06 - t * t * .14;
-      M.color(going ? '#a88f3e' : j % 2 ? '#e0c240' : '#cfae34').pyramid(ax, ay - .1, az, .11, .14, .11, a + j);
+      M.color(going ? '#9c8840' : j % 2 ? '#c9ae46' : '#b89d3e').pyramid(ax, ay - .1, az, .11, .14, .11, a + j);
     }
   }
 }
@@ -115,8 +115,8 @@ export function laceAndChicory(M, x, y, z, seed) {
     const a = k * 2.1 + seed * 7, d = hash(seed * 5 + k) * .35, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
     const chicory = hash(seed * 13 + k) < .35, h = (chicory ? .55 : .7) + hash(seed + k * 3) * .4;
     const [tx, ty, tz] = blade(M, px, y, pz, a, h, .018, .06, '#6a7d45');
-    if (chicory) { M.color('#7b97d9'); for (let j = 0; j < 3; j++) M.pyramid(tx + Math.cos(a + j) * .04, ty - .1 - j * .14, tz + Math.sin(a + j) * .04, .07, .04, .07, a); }
-    else { const nest = hash(seed * 17 + k) < .3; M.color(nest ? '#8b7552' : '#f0eee4').pyramid(tx, ty - .03, tz, .22, .05, .22, a); }
+    if (chicory) { M.color('#8395c0'); for (let j = 0; j < 3; j++) M.pyramid(tx + Math.cos(a + j) * .04, ty - .1 - j * .14, tz + Math.sin(a + j) * .04, .07, .04, .07, a); }
+    else { const nest = hash(seed * 17 + k) < .3; M.color(nest ? '#8b7552' : '#dedbd0').pyramid(tx, ty - .03, tz, .22, .05, .22, a); }
   }
 }
 /** Tall unmowed grass (orchard grass, timothy): blades past the knee, tan seed heads. */
@@ -167,7 +167,7 @@ export function wires(M, A, B) {
 /** A low scrub clump on a canal bank (red osier dogwood, willow scrub, a sapling or two): a few leafy masses on
  *  thin stems, 0.6–1.6 m, greens with the first reds and yellows of September. */
 export function scrubClump(M, x, y, z, seed) {
-  const n = 3 + Math.floor(seed * 3), tones = ['#4f6b33', '#5a7538', '#62773a', '#7d2f24', '#8f7a35', '#45612f'];
+  const n = 3 + Math.floor(seed * 3), tones = ['#4f6b33', '#5a7538', '#62773a', '#7d2f24', '#8f7a35', '#45612f', '#6e3a2a', '#77703a'];
   for (let k = 0; k < n; k++) {
     const a = k * 2.3 + seed * 7, d = .15 + hash(seed * 11 + k) * .45, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
     const h = .6 + hash(seed * 5 + k) * 1, w = .45 + hash(seed * 3 + k) * .4;

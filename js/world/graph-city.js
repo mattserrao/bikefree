@@ -966,7 +966,8 @@ export class GraphCity {
             // the mowed strip: tufts and the odd wildflower
             for (let r = 0; r < 2; r++) {
               const d = .5 + r * 1.1 + hash(seed * 13 + r) * .5, [x, z] = at(d);
-              const hs = hash(x * 1.3 + z * 2.1), fl = hash(Math.floor(x / 9) * 3 + Math.floor(z / 9)) < .3 && hs < .35;
+              // (wildflowers sparse and clumped: a few 14 m cells have a clump, most none — user, 23 Nov)
+              const hs = hash(x * 1.3 + z * 2.1), fl = hash(Math.floor(x / 14) * 3 + Math.floor(z / 14)) < .16 && hs < .3;
               verge(N, x, yAt(d), z, hs, fl);
             }
             // the ditch bottom: cattails where it stays wet, else grass
@@ -979,10 +980,12 @@ export class GraphCity {
               const h = hash(seed * 31 + r * 7), d = 3.3 + r * .85 + h * .8, [x, z] = at(d);
               if (this.onRoad(x, z, .5) || this._drivewayNear(x, z, 1)) continue;
               const y = yAt(d), k = hash(seed * 17 + r * 3);
-              // goldenrod in drifts (a low-frequency patchiness), tall grass between
-              const drift = hash(Math.floor(x / 14) * 5.1 + Math.floor(z / 14) * 2.3);
-              if (k < .2 + drift * .35) goldenrod(N, x, y, z, h);
-              else if (k < .82) tallGrass(N, x, y, z, h);
+              // patches of scrubby brush (sumac, dogwood, raspberry canes: user, 23 Nov "more scrubby brush"), goldenrod in
+              // sparser drifts, tall grass between, the odd lace or chicory
+              const drift = hash(Math.floor(x / 14) * 5.1 + Math.floor(z / 14) * 2.3), scrub = hash(Math.floor(x / 22) * 1.7 + Math.floor(z / 22) * 4.3 + side) < .38;
+              if (scrub && k < .45) scrubClump(N, x, y, z, h);
+              else if (k < .08 + drift * .22) goldenrod(N, x, y, z, h);
+              else if (k < .9) tallGrass(N, x, y, z, h);
               else laceAndChicory(N, x, y, z, h);
             }
           }
