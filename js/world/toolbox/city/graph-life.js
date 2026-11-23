@@ -8,6 +8,11 @@
 // another arm at random. Figures are kept round the camera: one that falls more than DROP_M behind is placed again
 // on a way ahead or to the side (never within CLEAR_M of the rider, so nobody appears under the camera's nose).
 //
+// And people staying put where the map has a place for them (world.lifeSpots: the landmarks', fixed; world.tileSpots:
+// the city tiles', with the tile): fishing off the Skaneateles pier, the club's docks and the canal's docks; sitting
+// on the village benches; chatting in twos and threes on the shop fronts' sidewalks; at the farm stands. Each spot
+// keeps its own look; drawn within LOCAL_M of the camera (user, 23 Nov: "groups, sitting on benches, … fishing").
+//
 //   const life = new GraphLife(world, parent, { quality, uTime }); life.tick(cam, riderPos, dt); life.dispose()
 import { Crowd, CLIP, randomLook, dogLook, clipRate } from '../life/figures/people.js';
 import { randomSequence } from '../core/random.js';
@@ -16,6 +21,8 @@ const COUNT = { low: { bikes: 8, walkers: 8 }, balanced: { bikes: 18, walkers: 1
 const SPAWN_MIN = 160, SPAWN_MAX = 900, DROP_M = 1100, CLEAR_M = 90;
 const BIKE_PATHS = new Set(['primary', 'secondary', 'tertiary', 'residential', 'path']);
 const LIFT = 0.1;
+const LOCAL_M = 260;   // locals drawn this close
+const LOCAL_CLIP = { fish: 'fish', chat: 'chat', sit: 'sit', stand: 'look', idle: 'idle' };
 
 export class GraphLife {
   constructor(world, parent, { quality = 'balanced', uTime }) {
@@ -30,6 +37,8 @@ export class GraphLife {
     this.mid = grid(this.edges); this.walkMid = grid(this.walkEdges);
     this.bikes = new Crowd(parent, { uTime, name: 'Cyclists', kind: 'cyclist', capacity: N.bikes + 4, nearM: quality === 'low' ? 30 : 60 });
     this.walkers = new Crowd(parent, { uTime, name: 'Walkers', capacity: N.walkers + 2, nearM: quality === 'low' ? 25 : 45, dogs: Math.ceil(N.walkers * 0.35) });
+    this.locals = new Crowd(parent, { uTime, name: 'Locals', capacity: quality === 'low' ? 40 : 90, nearM: quality === 'low' ? 25 : 45 });
+    this.localCap = quality === 'low' ? 40 : 90;
     this.agents = [];
     for (let k = 0; k < N.bikes; k++) this.agents.push(this._agent('bike'));
     for (let k = 0; k < N.walkers; k++) this.agents.push(this._agent('walk'));
@@ -104,7 +113,29 @@ export class GraphLife {
     }
     this.started = true;
     this.bikes.end(); this.walkers.end();
+    this._locals(cam);
   }
 
-  dispose() { this.bikes.dispose(); this.walkers.dispose(); }
+  /** The people at their places round the camera (nearest first, up to the crowd's capacity). */
+  _locals(cam) {
+    const W = this.W, near = [];
+    const take = (list) => { for (const sp of list) { const d = Math.hypot(sp.x - cam.x, sp.z - cam.z); if (d < LOCAL_M) near.push([d, sp]); } };
+    take(W.lifeSpots || []);
+    for (const list of W.tileSpots?.values() || []) take(list);
+    near.sort((a, b) => a[0] - b[0]);
+    this.locals.begin(cam);
+    for (let k = 0; k < Math.min(near.length, this.localCap); k++) {
+      const sp = near[k][1];
+      if (!sp.look) {
+        const r = randomSequence(Math.floor(Math.abs(sp.x * 7.31 + sp.z * 3.17)) + 17);
+        sp.look = randomLook(r, sp.kind === 'fish' ? { kids: .08, rod: true, caps: .45, jackets: .25 } : sp.kind === 'sit' ? { kids: .05 } : { kids: .12 });
+        sp.phase = r(); sp.clip = CLIP[LOCAL_CLIP[sp.kind] || 'idle'];
+        sp.rate = clipRate(sp.clip, 0, sp.look) * (.85 + r() * .3);
+      }
+      this.locals.add(sp.look, sp.x, sp.y, sp.z, sp.yaw, sp.clip, sp.phase, sp.rate, 0);
+    }
+    this.locals.end();
+  }
+
+  dispose() { this.bikes.dispose(); this.walkers.dispose(); this.locals.dispose(); }
 }

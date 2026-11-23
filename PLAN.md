@@ -1897,7 +1897,13 @@ Every effect is its own module under `js/world/toolbox/effects/`, switched on pe
       and buckthorn were still the old solid blobs (`shrubClump`) inside the engine; now grown as the trees are
       (`SHRUBS` in upstate-trees.js: several thin stems, short twiggy branching, leaf-cluster cards).
 - Before/after (bench, baseline b93b3270 vs final): `tools/bench/results/baseline-vs-final.md`.
-- [ ] Roll-out: a guide to the `effects` switches for other maps; the bench report in the PR.
+- After cars, animals and pre-compile (v0.14.0): `tools/bench/results/final-vs-v014.md` and `baseline-vs-v014.md`.
+  Draw calls up 7–33% (parked cars and animals are one instanced mesh per kind per tile), triangles up 4–21%; GPU
+  time within ±12% on most views; the ride's median and p95 frame unchanged; heap down 11–16%. Martisco rural +136%
+  GPU: the new leaf-card shrubs close to the camera (alpha to coverage), not the cars. Follow-up: one instanced
+  mesh per tile for all car kinds (and for the animals) to bring the draw calls back down.
+- [x] Roll-out: a guide to the `effects` switches for other maps (`js/world/toolbox/effects/README.md`, "Rolling out
+      to another map"); the bench report in the PR.
 - [x] CNY canal: trees still spawn in the canal water *(user, 23 Nov: "trees spawning in canal water is still an issue"; then cancelled — the creek fix below was already in)*.
       The canal itself was clear (0 of ~23k trees in its channel at 4 spots); the trees stood in the creeks drawn the
       canal's way (Nine Mile Creek and the brooks: 85 near the aqueduct). The creeks' channels are now registered with
@@ -1929,14 +1935,50 @@ Every effect is its own module under `js/world/toolbox/effects/`, switched on pe
       cards are photographed from the near model, so they share it too.
 
 ### People, cars and farm animals — branch `graphics-polish-test` (v0.14.0) *(user, 23 Nov: "Rework people models / Rework car models / Animal models - farmland"; answers below)*
-- [ ] People (every map, the shared figures kit): more realistic proportions; more detail and variety (faces, hair,
+- [x] People (every map, the shared figures kit): more realistic proportions; more detail and variety (faces, hair,
       clothes, body types, ages); better animation (walk, jog, idle, sitting on benches, standing in groups); local
       activities (joggers, dog walkers, people fishing off the pier, farmers, farm-stand customers).
-- [ ] Cars (every map): one shared car kit for all cars; rounded, realistic shapes (wheel arches, glass, lights,
+- [x] Cars (every map): one shared car kit for all cars; rounded, realistic shapes (wheel arches, glass, lights,
       bumpers); paint and wear variety (regional colours, dirt and rust on farm trucks, roof racks). **Stationary
       only: all moving traffic removed** (the city life's cars and the scene routes' traffic kit, e.g. Big Sur);
-      parked cars everywhere use the new kit.
-- [ ] Farm animals (CNY, SKAN): dairy cows (Holsteins, some Jerseys), horses in paddocks (some blanketed), sheep and
+      parked cars everywhere use the new kit. Done: `toolbox/life/figures/cars.js` — lofted bodies (rounded sections
+      along the car, arches cut into the sill, nose and tail tucked), a glasshouse loft (windscreen, side glass, rear
+      window, roof and pillars in paint), lights, grille, bumpers with a dark lip (chrome bars on the farm truck),
+      plates, mirrors, door lines; kinds hatch, sedan, wagon, SUV, pickup, van, farm truck (stake bed); roof racks;
+      LODs hi ≈ 1,200–1,400 / lo ≈ 450–650 / far ≈ 110 triangles. Paint by region (`PALETTES` city / rural / farm,
+      `pickCar(rand, region, setting)`); dirt and rust worked out in the shader from the wear class (farm truck), the
+      region and a hash of the spot. Used by graph worlds (streets, car parks; CNY/SKAN village shop rows and now
+      house driveways, a truck on most farms), the street kit (near: lo, far: far LOD), mountain-road car parks, race
+      day and the overlooks. Moving traffic off: `life.js MOVING_TRAFFIC = false` (no cars or buses drive; the code
+      stays); `traffic.js` keeps only other cyclists on the road and parks its cars, campers and Red Jammers at the
+      overlooks. Gallery: `tools/figures-gallery.html?view=carkit|carclose|carworn|carrear|carlod`.
+- [x] Farm animals (CNY, SKAN): dairy cows (Holsteins, some Jerseys), horses in paddocks (some blanketed), sheep and
       goats on hillside pasture, chickens in farmyards, a barn cat, geese and ducks on farm ponds. Kept at a medium
       distance from the road; minimal animation (grazing head bob, tail swish, a few walking slowly), no reaction to
-      the rider; the same realistic style as the new people.
+      the rider; the same realistic style as the new people. Done: `toolbox/life/figures/animals.js` (19 breeds and
+      coats, 80–610 triangles; Holstein patches from a noise in the shader; a soft contact shadow; the head, tail and
+      legs animated in the vertex shader from uTime, walkers going slowly round a small circle, pond birds drifting;
+      the shadow-depth material animates too). Placed by `graph-city.js _animals`: herds on pasture and hay meadows
+      (CNY's grass fields are its hay code) within 600 m of a barn or farmhouse and ≥ 25 m from a road — cows near
+      the barns, horses, sheep, goats; chickens and a cat by a barn; geese or ducks on a pond within 250 m of a barn.
+      Drawn within 480 m. Gallery: `?view=farm|farmclose|farmbirds|farmwalk`.
+- [x] People placed in CNY / SKAN (graph-life's "locals", world.lifeSpots / tileSpots): fishing off the Skaneateles pier,
+      the mansions' docks and new CNY canal docks; sitting on the village benches; chatting in twos and threes on the
+      shop fronts' sidewalks; customers and the farmer at the farm stands.
+- [x] CNY canal docks *(user, 23 Nov)*: plank docks (posts, ladder, a bench on the big one) built at OSM's pier and canoe
+      launches (Erie Canal Park by Sims' Store, by the aqueduct, Munro Park, two east); fishers on them. The user
+      confirmed these are the right spots.
+- [x] More routes *(user, 23 Nov: "Review CNY and SKAN and propose several more routes"; chose all 11)*: CNY Bennetts
+      Corners, Three Climbs, Grand Tour, Canal TT, Martisco; SKAN Vinegar Hill, South End Climb (NY 41 & Nunnery Rd —
+      Ridge Rd is a dead end), Spafford, Skaneateles Creek & County Line, Slate Hill & Limeledge, Two Lakes Grand Tour
+      (71.6 km). CNY 10 presets, SKAN 13 (`tools/pgh_routes.mjs`).
+- [x] Grades smoothed to real values *(user chose "smooth to real grades")*: `tools/grade_cap.py` relaxes junction
+      heights and clamps each edge's profile to 18 % over 20 m windows (bridge decks kept). The real worst was 19 %
+      (Moon Hill, SKAN), now 18 %; CNY's worst 15 % unchanged.
+- [x] Life fixes found by the tests once the traffic was gone (the random stream changed): route riders read the
+      pacer's lane at the pacer's own place along the road (read at yours, a bend skewed it and one brushed past the
+      pacer); one is put away only a couple of metres clear behind the camera's plane (just past it, it had been in view
+      a step earlier: a pop-out after the U-turn at the Water Steps). Tests count no moving vehicles now.
+- [x] Shader pre-compile *(user: yes)*: `toolbox/core/shader-warm.js` — `renderer.compileAsync(scene, camera)` once
+      everything else is loaded (a "Shaders" loading step in graph worlds), then again whenever the scene has grown
+      (new meshes or materials streamed in; checked every 1.5 s), so a new material compiles before its first draw.

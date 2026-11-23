@@ -58,5 +58,65 @@
   "note": "From the Erie Canal Park up Scenic Drive and Rolling Meadows Way to the top at Vista Way (the highest ground in the circle), along Falling Star Way and Ike Dixon Road, over Hunt Road and down Breed Road to the canal, home on Canal Road and Newport Road",
   "lengthM": 12860,
   "climbM": 204
+ },
+ {
+  "id": "cny-bennetts-corners",
+  "name": "Bennetts Corners Loop",
+  "tags": [
+   "rural",
+   "varied",
+   "farms"
+  ],
+  "note": "From the Erie Canal Park out the towpath to its west end, south down Bennetts Corners Road through the farms to Martisco, and back through Camillus village",
+  "lengthM": 34630,
+  "climbM": 272
+ },
+ {
+  "id": "cny-three-climbs",
+  "name": "Three Little Climbs",
+  "tags": [
+   "hilly",
+   "climb",
+   "short"
+  ],
+  "note": "Over the Devoe Road hill and down Van Alstine Road to the canal, then the climbs of Breed Road and Ike Dixon Road and down Scenic Drive to the park",
+  "lengthM": 15790,
+  "climbM": 267
+ },
+ {
+  "id": "cny-grand-tour",
+  "name": "Camillus Grand Tour",
+  "tags": [
+   "long",
+   "hilly",
+   "classic"
+  ],
+  "note": "The whole map: from Camillus out Newport Road to the towpath, to Warners, Canton Street and Brickyard Road, the towpath west, Bennetts Corners Road south into Camillus, up Munro Road, over Howlett Hill, out to Amboy and home on the towpath",
+  "lengthM": 53100,
+  "climbM": 518
+ },
+ {
+  "id": "cny-canal-tt",
+  "name": "Canal Time Trial",
+  "tags": [
+   "flat",
+   "trail",
+   "short"
+  ],
+  "note": "Flat and steady: the towpath from the Erie Canal Park to Warners Road and back down Newport Road",
+  "lengthM": 7440,
+  "climbM": 21
+ },
+ {
+  "id": "cny-martisco",
+  "name": "Martisco & Nine Mile Creek",
+  "tags": [
+   "creek",
+   "rural",
+   "short"
+  ],
+  "note": "From Camillus village down the Nine Mile Creek valley to Martisco, up Bennetts Corners Road and over Ike Dixon Road and Scenic Drive back to the village",
+  "lengthM": 20220,
+  "climbM": 292
  }
 ]

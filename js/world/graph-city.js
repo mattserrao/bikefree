@@ -16,7 +16,8 @@
 //   const c = new GraphCity(world, heroes, index); await c.loadLand()   → c.stream(cx, cz, ms) (sectors fetched as the rider nears them), c.tick(cam)
 import * as THREE from '../../vendor/three.module.min.js';
 import { MeshBuilder, hash } from './toolbox/core/mesh-builder.js';
-import { staticVehicle } from './toolbox/life/figures/vehicles.js';
+import { ParkedCars, pickCar, carMaterial } from './toolbox/life/figures/cars.js';
+import { Herds } from './toolbox/life/figures/animals.js';
 import { cellKey, freezeMatrix } from './graph-world.js';
 import { drain, runSlice, due } from './toolbox/core/jobs.js';
 import { planBuildingKitJob, makeStreetIndex, dress } from './toolbox/structures/buildings/kit.js';
@@ -43,7 +44,9 @@ export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand:
 const TILE = 400;
 // how far the city is built, by quality (Low: phones)
 const REACH = { low: { near: 1300, far: 1800, trees: 0.6, treeNear: 450 }, balanced: { near: 2300, far: 3100, trees: 1, treeNear: 750 }, high: { near: 2300, far: 3100, trees: 1.2, treeNear: 900 } };
-const CAR_NEAR = 320;           // m: detailed parked cars within this
+const CAR_NEAR = 340;           // m: parked cars (the kit's lo LOD) within this, its far LOD beyond
+const CAR_HI = 110;
+const ANIMAL_M = 480;           // m: farm animals drawn within this             // m: the kit's detailed cars within this
 const pipXZ = (r, x, z) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) c = !c; } return c; };
 const HOUSE_CLOSE_M = 160;
 const PROXY_MAT = new THREE.MeshStandardMaterial({ color: '#000000' });
@@ -559,7 +562,7 @@ export class GraphCity {
   }
 
   *_tileJob(key, i, j) {
-    const t = { key, i, j, cx: (i + 0.5) * TILE, cz: (j + 0.5) * TILE, built: true, building: true, meshes: [], near: [], far: [] };
+    const t = { key, i, j, cx: (i + 0.5) * TILE, cz: (j + 0.5) * TILE, built: true, building: true, meshes: [], near: [], far: [], spots: [] };
     this.tiles.set(key, t);
     const host = this.host, kitGroup = this.kit.group;
     // buildings: the city's chunk builder (and the building kit's homes) for this tile
@@ -574,7 +577,7 @@ export class GraphCity {
     if (this.rural) { yield* this._planHomesteads(t); yield; }
     yield* this._trees(t); yield;
     yield* this._furniture(t); yield;
-    if (this.rural) { yield* this._drawHomesteads(t); yield; yield* this._farmland(t); yield; }
+    if (this.rural) { yield* this._drawHomesteads(t); yield; yield* this._farmland(t); yield; yield* this._animals(t); yield; }
     yield* this._farms(t); yield;
     yield* this._storefronts(t); yield;
     yield* this._lots(t); yield* this._lines(t);
@@ -582,10 +585,12 @@ export class GraphCity {
     if (t.kitM.count) { const m = new THREE.Mesh(t.kitM.geometry(), this.kitMaterial); m.name = `Street furniture ${t.key}`; m.castShadow = true; m.receiveShadow = true; this._add(t, m); }
     t.kitM = null;
     for (const { m } of t.meshes) freezeMatrix(m);   // (static: no per-frame matrix work)
+    if (t.spots.length) this.world.tileSpots?.set(key, t.spots);
     t.building = false;
   }
 
   _release(key, t) {
+    this.world.tileSpots?.delete(key);
     for (const { m, parent, kit } of t.meshes) {
       parent.remove(m);
       if (m.geometry && !m.userData.shared) m.geometry.dispose();
@@ -612,7 +617,7 @@ export class GraphCity {
     if ((this._lf = (this._lf || 0) + 1) % 8) return;
     for (const t of this.tiles.values()) {
       const d = Math.hypot(t.cx - cam.x, t.cz - cam.z) - TILE * 0.71;
-      for (const m of t.near) m.visible = d < (m.userData.lodM || this.q.treeNear);
+      for (const m of t.near) m.visible = d < (m.userData.lodM || this.q.treeNear) && !(d < m.userData.lodMin);
       for (const m of t.far) m.visible = d >= (m.userData.lodM || this.q.treeNear);
     }
     this.kit.tick(cam);
@@ -816,6 +821,10 @@ export class GraphCity {
     if (!t.homes?.length) return;
     const g = (x, z) => this.world._groundH(x, z);
     for (const H of t.homes) { drawHomestead(t.kitM, H, g); if (due()) yield; }
+    // the homes' parked cars (on the drive by the house; a farm's often a truck)
+    const P = new ParkedCars();
+    for (const H of t.homes) if (H.car) { const c = H.car; P.add(c.x, g(c.x, c.z) + 0.03, c.z, c.yaw, pickCar(seeded(c.seed), 'rural', c.setting)); this.stats.cars++; }
+    this._parked(t, P);
     // front yards (the "frontYards" effect: toolbox/city/front-yards.js): fences, hedges, foundation shrubs, beds
     if (this.world.frontYards) {
       const ctx = { free: (x, z, pad) => !canalAt(x, z, pad + 1) && !this.host.buildingNear(x, z, pad) && !this.kit.occupied(x, z, pad) && !this.onRoad(x, z, pad + 1) && !this.inWater(x, z), driveNear: (x, z, r) => this._drivewayNear(x, z, r) };
@@ -896,6 +905,9 @@ export class GraphCity {
       const r = H.road, x = r.px + r.ox * (W.wOf ? 6 : 6) + r.dx * 6, z = r.pz + r.oz * 6 + r.dz * 6;
       if (this.onRoad(x, z, 1.5) || this.host.buildingNear(x, z, 2) || this._drivewayNear(x, z, 1)) continue;
       farmStand(M, x, g(x, z), z, Math.atan2(r.ox, r.oz));
+      // a customer or two at the stand, and now and then the farmer behind it
+      { const yaw = Math.atan2(r.ox, r.oz), fx = Math.sin(yaw), fz = Math.cos(yaw); for (let q = 0; q < 1 + (hash(H.key * 1.9) < .5 ? 1 : 0); q++) { const sx = x - fx * 1.6 + r.dx * (q - .5) * .9, sz = z - fz * 1.6 + r.dz * (q - .5) * .9; t.spots.push({ x: sx, z: sz, y: g(sx, sz), yaw, kind: 'stand' }); }
+        if (hash(H.key * 4.1) < .5) t.spots.push({ x: x + fx * 1.2, z: z + fz * 1.2, y: g(x + fx * 1.2, z + fz * 1.2), yaw: yaw + Math.PI, kind: 'idle' }); }
     }
   }
 
@@ -1035,6 +1047,93 @@ export class GraphCity {
     }
   }
 
+  /**
+   * Farm animals (rural maps; toolbox/life/figures/animals.js; user, 23 Nov 2026): herds in the pastures — dairy
+   * cows (Holsteins, some Jerseys) near the barns, horses (some blanketed), sheep and goats; chickens and a barn cat
+   * by the barns; geese and ducks on the farm ponds. Kept at a medium distance from the road (≥ ~25 m; the birds by
+   * a barn ≥ 12 m); a few walk slowly round a small circle, the rest graze. Drawn within ANIMAL_M of the camera.
+   */
+  *_animals(t) {
+    const W = this.world, H = new Herds(), x0 = t.i * TILE, z0 = t.j * TILE;
+    const R = (k) => hash(t.i * 7919.3 + t.j * 104729.7 + k * 13.37);
+    // the barns here and round about (a herd's kind follows how near a barn is)
+    const barns = [];
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const o of this.host.buildingChunks.get(`${t.i + a},${t.j + b}`) || []) if (o.kind === 13 || o.kind === 21 || o.kind === 22) barns.push(o);
+    const barnD = (x, z) => { let d = Infinity; for (const o of barns) d = Math.min(d, Math.hypot(o.cx - x, o.cz - z)); return d; };
+    const clear = (x, z, road, pad) => !this.roadNear(x, z, road) && !this.inWater(x, z) && !this.host.buildingNear(x, z, pad) && !canalAt(x, z, 2);
+    // (the land cover's pasture, and its hay meadows: upstate, hay and pasture are the same grass, grazed by turns)
+    const pasture = (x, z) => { const c = this.landAt(x, z); return c === LAND.pasture || c === LAND.hay; };
+    let k = 0;
+    const put = (kind, x, z, y, walk, radius) => { H.add(kind, x, y ?? W._groundH(x, z), z, R(k++) * 6.283, { walk, radius, phase: R(k++) }); };
+    // pastures: a herd seed every so often on a 40 m lattice
+    for (let gx = 20; gx < TILE; gx += 40) for (let gz = 20; gz < TILE; gz += 40) {
+      if (due()) yield;
+      const cx = x0 + gx + (R(gx * 3 + gz) - .5) * 30, cz = z0 + gz + (R(gx + gz * 5) - .5) * 30;
+      if (!pasture(cx, cz) || R(gx * 11 + gz * 17) > .12 || !clear(cx, cz, 25, 6)) continue;
+      // (a farm's stock stays near the farm: a barn or farmhouse within 600 m)
+      const dB = barnD(cx, cz), r = R(gx * 13 + gz * 7);
+      if (dB > 600) continue;
+      let kinds, n, spread;
+      if (dB < 450 && r < .55) { kinds = R(gx + gz) < .8 ? ['holstein', 'holstein', 'holstein', 'jersey'] : ['jersey']; n = 4 + Math.floor(R(gx * 5 + gz) * 8); spread = 16; }
+      else if (r < .78) { kinds = R(gx * 2 + gz) < .35 ? ['horseBlanket', 'horseBlanketGreen', 'horseBay'] : ['horseBay', 'horseChestnut', 'horseGrey', 'horseBay']; n = 2 + Math.floor(R(gx + gz * 3) * 3); spread = 12; }
+      else if (r < .92) { kinds = R(gx * 7 + gz) < .4 ? ['sheepSuffolk', 'sheep', 'sheep'] : ['sheep']; n = 5 + Math.floor(R(gx * 9 + gz) * 8); spread = 10; }
+      else { kinds = ['goatWhite', 'goatBrown', 'goatWhite']; n = 3 + Math.floor(R(gx * 3 + gz * 9) * 4); spread = 8; }
+      for (let q = 0; q < n; q++) {
+        const a = R(k++) * 6.283, d = Math.sqrt(R(k++)) * spread, x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d;
+        if (!pasture(x, z) || !clear(x, z, 25, 4)) continue;
+        const walk = R(k++) < .15, radius = 3 + R(k++) * 4;
+        if (walk && !(pasture(x + radius, z) && pasture(x - radius, z) && pasture(x, z + radius) && pasture(x, z - radius) && clear(x + radius, z, 22, 3) && clear(x - radius, z, 22, 3) && clear(x, z + radius, 22, 3) && clear(x, z - radius, 22, 3))) { put(kinds[q % kinds.length], x, z, null, false, 0); continue; }
+        put(kinds[q % kinds.length], x, z, null, walk, radius);
+      }
+    }
+    // the barns in this tile: chickens scratching about, a cat by the wall, geese and ducks on a pond near by
+    for (const o of this.host.buildingChunks.get(t.key) || []) {
+      if (!(o.kind === 13 || o.kind === 21 || o.kind === 22)) continue;
+      if (due()) yield;
+      const s0 = Math.round(o.cx * 3.1 + o.cz * 1.7);
+      if (hash(s0) < .6) {
+        const n = 4 + Math.floor(hash(s0 + 1) * 6), a0 = hash(s0 + 2) * 6.283, kind = hash(s0 + 3) < .5 ? 'chickenRed' : 'chickenWhite';
+        for (let q = 0; q < n; q++) {
+          const a = a0 + (hash(s0 + 10 + q) - .5) * 1.4, d = 9 + hash(s0 + 20 + q) * 9, x = o.cx + Math.cos(a) * d, z = o.cz + Math.sin(a) * d;
+          if (!clear(x, z, 12, 1.5)) continue;
+          put(q % 3 === 0 ? (kind === 'chickenRed' ? 'chickenWhite' : 'chickenRed') : kind, x, z, null, hash(s0 + 30 + q) < .3, 1 + hash(s0 + 40 + q) * 1.5);
+        }
+      }
+      if (hash(s0 + 5) < .5) {
+        for (let tries = 0; tries < 6; tries++) {
+          const a = hash(s0 + 50 + tries) * 6.283, d = 7 + hash(s0 + 60 + tries) * 4, x = o.cx + Math.cos(a) * d, z = o.cz + Math.sin(a) * d;
+          if (clear(x, z, 12, .5)) { put('cat', x, z, null, false, 0); break; }
+        }
+      }
+      // a farm pond within 250 m: its shore found along a few rays from the barn
+      if (hash(s0 + 7) < .7) {
+        let pond = null;
+        for (let ray = 0; ray < 12 && !pond; ray++) {
+          const a = ray / 12 * 6.283 + hash(s0 + 8) ;
+          for (let d = 20; d < 250; d += 10) { const x = o.cx + Math.cos(a) * d, z = o.cz + Math.sin(a) * d; if (this.inWater(x, z) && this.landAt(x, z) === LAND.water) { pond = { x, z, a }; break; } }
+        }
+        if (pond && !this.roadNear(pond.x, pond.z, 25)) {
+          const n = 3 + Math.floor(hash(s0 + 9) * 5), geese = hash(s0 + 11) < .5;
+          for (let q = 0; q < n; q++) {
+            const x = pond.x + Math.cos(pond.a) * (4 + q * 1.8) + (hash(s0 + 70 + q) - .5) * 5, z = pond.z + Math.sin(pond.a) * (4 + q * 1.8) + (hash(s0 + 80 + q) - .5) * 5;
+            if (this.inWater(x, z)) {
+              const kind = geese ? (q % 3 === 2 ? 'gooseGrey' : 'goose') : (q % 2 ? 'duckMallard' : 'duckPekin'), r = 1.5 + hash(s0 + 90 + q) * 2;
+              const ok = this.inWater(x + r, z) && this.inWater(x - r, z) && this.inWater(x, z + r) && this.inWater(x, z - r);
+              put(kind, x, z, W.poolAt(x, z) + 0.02, ok && hash(s0 + 95 + q) < .6, r);
+            } else if (geese && clear(x, z, 15, 1)) put('gooseShore', x, z, null, false, 0);
+          }
+        }
+      }
+    }
+    if (!H.count) return;
+    this.animalMats ||= new Map();
+    const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * 0.71;
+    for (const im of H.meshes(this.animalMats, this.treeTime, 'Animals')) {
+      im.name += ` ${t.key}`; im.userData.lodM = ANIMAL_M; im.visible = d < ANIMAL_M;
+      this._add(t, im, 'near');
+    }
+    this.stats.animals = (this.stats.animals || 0) + H.count;
+  }
   /** CNY's barns and silos (cny-farms.js) into the tile's street-kit mesh. */
   *_farms(t) {
     let n = 0;
@@ -1067,7 +1166,13 @@ export class GraphCity {
       const fronts = this._frontsOf(b, ring, ground, style === 'rowhouse');
       if (fronts.length && (this.facades.dress(C, b, fronts, ground, y1, style) || style !== 'rowhouse')) n++;
       // a village main street's sidewalk furniture along the shop fronts (the "village" effect: toolbox/city/village-street.js)
-      if (this.world.villageStreets && b.shopRow && t.kitM) furniture += villageFurniture(t.kitM, fronts, 0, b.k, this.world.villageStreets);
+      if (this.world.villageStreets && b.shopRow && t.kitM) furniture += villageFurniture(t.kitM, fronts, 0, b.k, { ...this.world.villageStreets, spots: t.spots });
+      // a few people talking in twos and threes on the shop fronts' sidewalks
+      if (this.world.villageStreets && b.shopRow) for (const f of fronts) {
+        if (!(f.walk >= 1.4) || f.base == null || hash(b.k * 3.3 + f.i * 7.1) > .5) continue;
+        const u = f.len * (.3 + .4 * hash(b.k + f.i)), d = Math.min(f.walk * .45, 1.2), cx = f.a.x + f.tx * u + f.nx * d, cz = f.a.z + f.tz * u + f.nz * d, n = 2 + (hash(b.k * 9 + f.i) < .4 ? 1 : 0);
+        for (let q = 0; q < n; q++) { const a = q / n * Math.PI * 2 + hash(b.k * 5 + q) * .6, r = .45; const px = cx + Math.sin(a) * r, pz = cz + Math.cos(a) * r; t.spots.push({ x: px, z: pz, y: f.base, yaw: Math.atan2(cx - px, cz - pz), kind: 'chat' }); }
+      }
     }
     this._lampPts = null;
     this.stats.storefronts = (this.stats.storefronts || 0) + n;
@@ -1111,7 +1216,7 @@ export class GraphCity {
 
   // ------------------------------------------------------------------ furniture, lamps, parked cars
   *_furniture(t) {
-    const W = this.world, M = (t.kitM = new MeshBuilder({ aGlow: 1 })), Mc = [], Mf = new MeshBuilder({ aGlow: 1 });   // (Mc: the near cars, instanced: _carMeshes)
+    const W = this.world, M = (t.kitM = new MeshBuilder({ aGlow: 1 })), Mc = new ParkedCars();   // (the parked cars: _parked)
     const lamps = [], acorns = [], glows = [];
     const frame = (x, y, z, yaw) => ({ x, y, z, yaw, c: Math.cos(yaw), s: Math.sin(yaw) });
     // OSM's furniture: off the carriageway (a signal mapped on the road goes to the corner), facing the road
@@ -1166,8 +1271,7 @@ export class GraphCity {
               const yaw = Math.atan2(dx * side, dz * side);
               // (a rural map's village: only along its shop rows — the side with a shop within 14 m)
               if (this.rural && !this._shopNear(x, z, 14)) continue;
-              Mc.push({ f: frame(x, y, z, yaw), seed: h0 });
-              carLo(Mf, frame(x, y, z, yaw), h0);
+              Mc.add(x, y, z, yaw, pickCar(seeded(h0), this.rural ? 'rural' : 'city', 'street'));
               this.stats.cars++;
             }
           }
@@ -1198,16 +1302,8 @@ export class GraphCity {
       }
     }
     // a car park's cars (in the lots of this tile)
-    if (!this.rural) for (const ring of this.lots.get(t.key) || []) { this._lotCars(ring, Mc, Mf, frame); if (due()) yield; }
-    const mesh = (B, name, lod) => {
-      if (!B.count) return;
-      const g = B.geometry(); const m = new THREE.Mesh(g, this.kitMaterial); m.name = `${name} ${t.key}`; m.castShadow = true; m.receiveShadow = true;
-      if (lod) m.userData.lodM = CAR_NEAR;
-      const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * 0.71;
-      if (lod === 'near') m.visible = d < CAR_NEAR; else if (lod === 'far') m.visible = d >= CAR_NEAR;
-      this._add(t, m, lod);
-    };
-    this._carMeshes(t, Mc); mesh(Mf, 'Parked cars far', 'far');
+    if (!this.rural) for (const ring of this.lots.get(t.key) || []) { this._lotCars(ring, Mc); if (due()) yield; }
+    this._parked(t, Mc);
     const lampMesh = (list, geo, name, head) => {
       if (!list.length) return;
       const im = new THREE.InstancedMesh(geo, this.lampMaterial, list.length), m4 = new THREE.Matrix4(), q = new THREE.Quaternion();
@@ -1221,38 +1317,20 @@ export class GraphCity {
     if (glows.length) { const g = this.host.addGlows(glows, `Lamp glows ${t.key}`); if (g) t.meshes.push({ m: g, parent: this.host.group }); }
   }
 
-  /** The near parked cars: one instanced mesh per kind of car (hatch, sedan, SUV), the paint per instance (the body
-   *  only: aBody), instead of copying each car's ~1,000 vertices into a mesh. */
-  _carMeshes(t, cars) {
-    if (!cars.length) return;
-    if (!this.carGeos) {
-      this.carGeos = {};
-      for (const kind of ['hatch', 'sedan', 'suv']) {
-        const g = staticVehicle(kind, '#ffffff'), A = vehicleBodyOf(kind);
-        g.setAttribute('aBody', A);
-        this.carGeos[kind] = g;
-      }
-      const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.05 });
-      m.onBeforeCompile = (shader) => {
-        shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aBody;')
-          .replace('#include <color_vertex>', '#include <color_vertex>\n#ifdef USE_INSTANCING_COLOR\nvColor.xyz = color.xyz * mix(vec3(1.), instanceColor.xyz, aBody);\n#endif');
-      };
-      m.customProgramCacheKey = () => 'pgh-car-body-1';
-      this.carMaterial = m;
-    }
-    const by = { hatch: [], sedan: [], suv: [] };
-    for (const c of cars) by[c.seed > 0.85 ? 'suv' : c.seed < 0.2 ? 'hatch' : 'sedan'].push(c);
-    const m4 = new THREE.Matrix4(), col = new THREE.Color(), d = Math.hypot(t.cx - this.world.camera.position.x, t.cz - this.world.camera.position.z) - TILE * 0.71;
-    for (const [kind, list] of Object.entries(by)) {
-      if (!list.length) continue;
-      const im = new THREE.InstancedMesh(this.carGeos[kind], this.carMaterial, list.length);
-      list.forEach((c, k) => { im.setMatrixAt(k, m4.makeRotationY(c.f.yaw).setPosition(c.f.x, c.f.y, c.f.z)); im.setColorAt(k, col.set(CAR_COLORS[Math.floor(c.seed * 997) % CAR_COLORS.length])); });
-      im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); im.userData.shared = true; im.userData.lodM = CAR_NEAR; im.receiveShadow = true;
-      im.name = `Parked cars ${kind} ${t.key}`; im.visible = d < CAR_NEAR;
-      this._add(t, im, 'near');
+  /** Parked cars (toolbox/life/figures/cars.js, the shared kit): instanced by kind, the detailed LOD within CAR_HI,
+   *  the lo LOD to CAR_NEAR, the far LOD beyond. */
+  _parked(t, P) {
+    if (!P.count) return;
+    this.carMat ||= carMaterial({ dirt: this.rural ? 0.35 : 0.12, rust: this.rural ? 0.22 : 0.05, night: this.host.night });
+    const d = Math.hypot(t.cx - this.world.camera.position.x, t.cz - this.world.camera.position.z) - TILE * 0.71;
+    const bands = [['hi', 'near', 0, CAR_HI], ['lo', 'near', CAR_HI, CAR_NEAR], ['far', 'far', 0, CAR_NEAR]];
+    for (const [lod, set, lo, hi] of bands) for (const im of P.meshes(this.carMat, lod, `Parked cars ${lod}`)) {
+      im.name += ` ${t.key}`; im.userData.lodM = hi; if (lo) im.userData.lodMin = lo;
+      im.visible = set === 'far' ? d >= hi : d < hi && !(lo && d < lo);
+      this._add(t, im, set);
     }
   }
-  _lotCars(ring, Mc, Mf, frame) {
+  _lotCars(ring, Mc) {
     // rows along the lot's longest side, 2.7 m stalls, 5.5 m rows, ~55% taken
     let best = 0, ux = 1, uz = 0;
     for (let i = 0; i < ring.length; i++) { const a = ring[i], b = ring[(i + 1) % ring.length], l = Math.hypot(b.x - a.x, b.z - a.z); if (l > best) { best = l; ux = (b.x - a.x) / l; uz = (b.z - a.z) / l; } }
@@ -1269,8 +1347,7 @@ export class GraphCity {
       const corners = [[1.1, 2.4], [-1.1, 2.4], [1.1, -2.4], [-1.1, -2.4]].map(([s, l]) => [x + ux * s + vx * l, z + uz * s + vz * l]);
       if (!corners.every(([cx, cz]) => pip(cx, cz)) || this.onRoad(x, z, 2) || this.host.buildingNear(x, z, 1.2)) continue;
       const y = W._groundH(x, z) + 0.06, yaw = Math.atan2(vx, vz) + (h0 > 0.27 ? Math.PI : 0);
-      Mc.push({ f: frame(x, y, z, yaw), seed: h0 * 1.8 % 1 });
-      carLo(Mf, frame(x, y, z, yaw), h0 * 1.8 % 1);
+      Mc.add(x, y, z, yaw, pickCar(seeded(h0 * 1.8 % 1), 'city', 'lot'));
       this.stats.cars++;
     }
   }
@@ -1357,25 +1434,13 @@ export class GraphCity {
     for (const [key, t] of this.tiles) this._release(key, t);
     this.kit.material.dispose();
     this.facades.dispose(); this.life?.dispose(); this.forest.dispose();
-    if (this.carGeos) { for (const g of Object.values(this.carGeos)) g.dispose(); this.carMaterial.dispose(); }
+    this.carMat?.dispose();
+    for (const m of this.animalMats?.values() || []) { m.userData.depth.dispose(); m.dispose(); }
     for (const g of [this.lampGeo, this.acornGeo]) g.dispose();
     for (const m of [this.kitMaterial, this.lampMaterial, this.lotMaterial, this.cropMat, this.ditchMat].filter(Boolean)) m.dispose();
     this.landTexture?.dispose();
   }
 }
 
-/** Which of a car's vertices are its paint (staticVehicle: aVeh < .5): 1, else 0. */
-function vehicleBodyOf(kind) {
-  const g = staticVehicle(kind, '#ff00ff'), h = staticVehicle(kind, '#00ff00'), A = g.attributes.color, B = h.attributes.color, out = new Float32Array(A.count);
-  for (let k = 0; k < A.count; k++) out[k] = Math.abs(A.getX(k) - B.getX(k)) + Math.abs(A.getY(k) - B.getY(k)) > 1e-4 ? 1 : 0;
-  g.dispose(); h.dispose();
-  return new THREE.BufferAttribute(out, 1);
-}
-/** The plain parked car for distance: two blocks (as the street kit's carLo). */
-const CAR_COLORS = ['#8c1f1f', '#1f3f6e', '#2c2c2e', '#d9d6cf', '#6b6f73', '#a9adb0', '#2f4f3a', '#7a5a2c', '#3c3f6b', '#b8a46a'];
-function carLo(M, f, seed) {
-  const col = CAR_COLORS[Math.floor(seed * 997) % CAR_COLORS.length], suv = seed > 0.85, L = suv ? 4.7 : seed < 0.2 ? 4.0 : 4.45, lift = suv ? 0.14 : 0;
-  const at = (dx, dz) => [f.x + dx * f.c + dz * f.s, f.z - dx * f.s + dz * f.c];
-  M.color(col); { const [x, z] = at(0, 0); M.box(x, f.y + 0.12, z, (suv ? 1.86 : 1.78) - 0.05, 0.71 + lift, L - 0.08, f.yaw); }
-  M.color('#2e3a44'); { const [x, z] = at(0, -L * 0.08); M.box(x, f.y + 0.83 + lift, z, 1.47, suv ? 0.58 : 0.46, L * (suv ? 0.6 : 0.46), f.yaw); }
-}
+/** A small deterministic random source from a 0–1 seed (a parked car's kind, paint and rack). */
+function seeded(h) { let x = Math.floor(h * 2147483646) + 1; return () => ((x = (x * 16807) % 2147483647) / 2147483647); }

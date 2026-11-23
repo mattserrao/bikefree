@@ -45,12 +45,12 @@ test('CNY starts in Camillus village and has its own files (ground, city data, a
   assert.deepEqual(net.network.edges.filter((e) => /Interstate|I-90|Thruway|I-690/.test(e.name)).map((e) => e.name), []);
 });
 
-test('CNY\'s five routes (tools/pgh_routes.mjs --city cny): closed plans over its own ways, no way twice, in cny-presets.json', () => {
+test('CNY\'s ten routes (tools/pgh_routes.mjs --city cny): closed plans over its own ways, no way twice, in cny-presets.json', () => {
   const list = JSON.parse(readFileSync(new URL('../routes/cities/cny-presets.json', import.meta.url), 'utf8'));
   const { base, network } = graphNetwork(json);
   const net = loadNetwork(network, base);
   assert.equal(net.presets.length, list.length);
-  assert.equal(list.length, 5);
+  assert.equal(list.length, 10);
   for (const p of net.presets) {
     assert.ok(planCloses(net, p.path), `${p.name} does not close`);
     const ids = p.path.map((k) => k.slice(0, -1));

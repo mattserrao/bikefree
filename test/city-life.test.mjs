@@ -248,7 +248,7 @@ export function simulate(reverse, { span = null, watch = null, plan = null, spee
           R.closestRouteRider = Math.min(R.closestRouteRider, gap);
           if (gap < .25) { bad = true; if (flag(a, 'rr')) { R.routeRiderClose++; note('route rider close', a, t); } }
         }
-        if (pacerBox && Math.hypot(a.x - pacerBox.x, a.z - pacerBox.z) < 6 && boxGap(pacerBox, box) < .25) { bad = true; if (flag(a, 'rp')) { R.pacerClose++; note('route rider at the pacer', a, t); } }
+        if (pacerBox && Math.abs(a.y - pose.pos.y) < 2 && Math.hypot(a.x - pacerBox.x, a.z - pacerBox.z) < 6 && boxGap(pacerBox, box) < .25)   /* (the same level: not a rider on a bridge overhead — v0.14, the High Level Bridge over the GAP trail) */ { bad = true; if (flag(a, 'rp')) { R.pacerClose++; note('route rider at the pacer', a, t); } }
         if (!bad) episode.delete(a);
         continue;
       }
@@ -350,7 +350,8 @@ for (const [areaId, reverse] of process.env.NO_TESTS ? [] : Object.keys(BUSY).fl
     const R = simulate(reverse, { area: areaId });
     if (process.env.LIFE_SIM_REPORT) console.log(areaId, reverse ? 'Reverse' : 'Forward', JSON.stringify(R));
     // still a busy city: about as many people and vehicles near the rider as before (the whole 40 km tour: ~180k / ~50k agent-steps)
-    assert.ok(R.seen.person > BUSY[areaId][0] && R.seen.vehicle > BUSY[areaId][1], `life near the rider: ${JSON.stringify(R.seen)}`);
+    // (v0.14: no moving traffic — the city's cars are parked: nothing drives)
+    assert.ok(R.seen.person > BUSY[areaId][0] && R.seen.vehicle === 0, `life near the rider: ${JSON.stringify(R.seen)}`);
     assert.equal(R.jumps, 0, `jumps (worst ${R.worstJump.toFixed(2)} m in one step)`);
     assert.equal(R.personInRoad, 0, 'people in the carriageway near the rider');
     assert.equal(R.vehicleInLane, 0, "vehicles in the rider's lane ahead");

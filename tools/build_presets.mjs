@@ -31,7 +31,7 @@ const PRESETS = {
   mountain: {
     from: 'goingtothesun',
     name: 'Mountain pass',
-    description: 'Real-elevation mountain road: forest by elevation zone up to treeline and snow, rock faces with ribs and ledges, aerial haze, ridge ink and cartoon cumulus (vista kit), roadside verge, worn alpine road surface, light traffic.',
+    description: 'Real-elevation mountain road: forest by elevation zone up to treeline and snow, rock faces with ribs and ledges, aerial haze, ridge ink and cartoon cumulus (vista kit), roadside verge, worn alpine road surface, other cyclists, cars parked at the overlooks.',
     terrainTool: 'python3 tools/build_terrain_grid.py <id>  (AWS Terrain Tiles: 10 m near the road, 40 m out to the horizon)',
     keys: ['terrain', 'realHorizon', 'assets', 'extraAssets', 'biome', 'palette', 'snowLineM', 'treelineM', 'vegetation', 'vista', 'atmosphere', 'weather', 'water', 'packs', 'post', 'bridgeColors'],
     tidy: (s) => {
@@ -47,7 +47,7 @@ const PRESETS = {
   coast: {
     from: 'bigsur',
     name: 'Coast highway',
-    description: 'Real coast: surf on the real shoreline, shallows from the sea floor, cliffs and golden grass, arch bridges over the gorges, marine-layer weather, sea birds, light highway traffic.',
+    description: 'Real coast: surf on the real shoreline, shallows from the sea floor, cliffs and golden grass, arch bridges over the gorges, marine-layer weather, sea birds, other cyclists, cars parked at the overlooks.',
     terrainTool: 'python3 tools/build_terrain_grid.py <id>  (real ground and sea floor out to the horizon)',
     keys: ['terrain', 'realHorizon', 'assets', 'extraAssets', 'palette', 'vegetation', 'post'],
     tidy: (s) => { s.biome = 'coast'; s.traffic = { perMinute: 4 }; s.life = { kit: 'coast' }; s.weather = { presets: ['clear', 'marine', 'clouds', 'rain'] }; },
@@ -56,7 +56,7 @@ const PRESETS = {
   city: {
     from: 'pittsburgh',
     name: 'City',
-    description: 'City streets from OpenStreetMap: buildings, facades and street furniture (street kit), junctions, rivers and riverfront, bridges, hero landmarks, people and traffic, baked lighting.',
+    description: 'City streets from OpenStreetMap: buildings, facades and street furniture (street kit), junctions, rivers and riverfront, bridges, hero landmarks, people, cyclists and parked cars, baked lighting.',
     terrainTool: 'python3 tools/build_city.py <id>  (city data) and python3 tools/build_terrain_grid.py <id>',
     keys: ['terrain', 'realHorizon', 'assets', 'extraAssets', 'biome', 'palette', 'vegetation', 'weather', 'post', 'roadAlign', 'riverfront', 'packs', 'brickStreets'],
     // (roadAlign.turns is tuned to the route's own corners: a new city route switches it on once it has its road)

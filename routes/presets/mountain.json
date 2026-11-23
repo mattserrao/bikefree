@@ -2,7 +2,7 @@
   "preset": {
     "id": "mountain",
     "name": "Mountain pass",
-    "description": "Real-elevation mountain road: forest by elevation zone up to treeline and snow, rock faces with ribs and ledges, aerial haze, ridge ink and cartoon cumulus (vista kit), roadside verge, worn alpine road surface, light traffic.",
+    "description": "Real-elevation mountain road: forest by elevation zone up to treeline and snow, rock faces with ribs and ledges, aerial haze, ridge ink and cartoon cumulus (vista kit), roadside verge, worn alpine road surface, other cyclists, cars parked at the overlooks.",
     "from": "goingtothesun",
     "terrainTool": "python3 tools/build_terrain_grid.py <id>  (AWS Terrain Tiles: 10 m near the road, 40 m out to the horizon)"
   },
@@ -11,7 +11,7 @@
     "style": "stylized",
     "title": "",
     "region": "",
-    "description": "Real-elevation mountain road: forest by elevation zone up to treeline and snow, rock faces with ribs and ledges, aerial haze, ridge ink and cartoon cumulus (vista kit), roadside verge, worn alpine road surface, light traffic.",
+    "description": "Real-elevation mountain road: forest by elevation zone up to treeline and snow, rock faces with ribs and ledges, aerial haze, ridge ink and cartoon cumulus (vista kit), roadside verge, worn alpine road surface, other cyclists, cars parked at the overlooks.",
     "seed": 1101,
     "terrain": "real-mountain",
     "realHorizon": false,

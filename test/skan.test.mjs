@@ -63,11 +63,11 @@ test('SKAN starts in Skaneateles village and has its own files (ground, city dat
   assert.equal(cfg.area.lines, 'skan-area-lines.json');
 });
 
-test('SKAN\'s seven routes (tools/pgh_routes.mjs --city skan): closed plans over its own ways, no way twice, in skan-presets.json', () => {
+test('SKAN\'s thirteen routes (tools/pgh_routes.mjs --city skan): closed plans over its own ways, no way twice, in skan-presets.json', () => {
   const list = JSON.parse(readFileSync(new URL('../routes/cities/skan-presets.json', import.meta.url), 'utf8'));
   const { base, network } = graphNetwork(json);
   const net = loadNetwork(network, base);
-  assert.equal(list.length, 7);
+  assert.equal(list.length, 13);
   assert.equal(net.presets.length, list.length);
   for (const p of net.presets) {
     assert.ok(planCloses(net, p.path), `${p.name} does not close`);

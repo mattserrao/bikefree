@@ -28,9 +28,10 @@ test('city life: people and traffic about half of what they were (19 Nov), more 
   }
   const life = makeLife();
   assert.equal(life.walkers.length, COUNTS.balanced.people);
-  assert.equal(life.carAgents.length, COUNTS.balanced.cars);
-  assert.equal(life.busAgents.length, 4);
-  assert.equal(life.oncoming.length, 2);
+  // (v0.14: no moving traffic — the city's cars are parked; COUNTS.cars stays for MOVING_TRAFFIC)
+  assert.equal(life.carAgents.length, 0);
+  assert.equal(life.busAgents.length, 0);
+  assert.equal(life.oncoming.length, 0);
   assert.equal(life.riders.length, COUNTS.balanced.cyclists);   // (the side streets' and trails' cyclists, as before)
   assert.equal(life.routeRiders.length, COUNTS.balanced.routeRiders);
   life.dispose();

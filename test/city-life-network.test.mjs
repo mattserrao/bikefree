@@ -16,7 +16,7 @@ for (const id of ['pgh-oakland-south', 'pgh-mt-washington']) {
   test(`pittsburgh life on the network, ${id}: no jumps, people off the road, cross traffic clear of the rider, no pop-in`, () => {
     const R = simulate(false, { plan: net.presets.find((p) => p.id === id).path });
     if (process.env.LIFE_SIM_REPORT) console.log(id, JSON.stringify(R));
-    assert.ok(R.seen.person > 40000 && R.seen.vehicle > 10000,   // (7.4: no corner slowdowns, so less time beside people; 6.10 halved them)
+    assert.ok(R.seen.person > 40000 && R.seen.vehicle === 0,   // (7.4: no corner slowdowns, so less time beside people; 6.10 halved them; v0.14: no moving traffic)
       `life near the rider: ${JSON.stringify(R.seen)}`);
     assert.equal(R.jumps, 0, `jumps (worst ${R.worstJump.toFixed(2)} m in one step)`);
     assert.equal(R.personInRoad, 0, 'people in the carriageway near the rider');

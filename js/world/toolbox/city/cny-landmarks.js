@@ -40,6 +40,8 @@ function registerCanal(S2, wOf, gap, trailSide, creek = false) {
   }
 }
 
+// the canal's docks: OSM's pier at the park (by Sims' Store) and its canoe launches (lat, lon, the big one)
+const CANAL_DOCKS = [[43.0524797, -76.3033467, true], [43.0527185, -76.3041786, false], [43.0586097, -76.2871116, false], [43.0410047, -76.3066247, false], [43.0695503, -76.2734663, false], [43.0776320, -76.2634238, false]];
 export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = null }) {
   const TRIM = '#f3f1ea';
   /** A window (dark glass, a white frame) on the wall of frame F at (a, b), facing out along n (±1 on v, or the u end). */
@@ -197,6 +199,24 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
         }
         canalBanks(S2, wOf, trailSide);
         registerCanal(S2, wOf, GAP, trailSide);   // (the channel, for the planters)
+        // the docks (OSM's pier and canoe launches on the canal — Camillus Erie Canal Park by Sims' Store, the aqueduct,
+        // Munro Park and the launches east): a plank dock out from the bank, posts, a ladder, a bench at the root;
+        // people fishing off them (graph-life's locals; user, 23 Nov: "locations where people should be fishing from")
+        for (const [la, lo, big] of CANAL_DOCKS) {
+          const q = local(la, lo); let best = null, bd = 25;
+          for (const p of S2) { const d = Math.hypot(p.x - q.x, p.z - q.z); if (d < bd) { bd = d; best = p; } }
+          if (!best) continue;
+          const sd = ((q.x - best.x) * best.nx + (q.z - best.z) * best.nz) >= 0 ? 1 : -1, w = wOf(best, sd), n = { x: best.nx * sd, z: best.nz * sd }, t = { x: best.dx, z: best.dz };
+          const L0 = big ? 4.5 : 3, W0 = big ? 3 : 2, yD = best.y + .45, yaw = Math.atan2(-n.x, -n.z);
+          const at = (a, b) => ({ x: best.x + n.x * (w + .6 - a) + t.x * b, z: best.z + n.z * (w + .6 - a) + t.z * b });   // a: out from the bank over the water
+          const c = at(L0 / 2, 0);
+          S.color('#9b8668'); S.box(c.x, yD - .18, c.z, W0, .18, L0 + .6, yaw);
+          S.color('#7f6c55'); for (let a = -.1; a < L0; a += .55) { const p = at(a, 0); S.box(p.x, yD + .002, p.z, W0 - .05, .01, .04, yaw); }
+          S.color('#5d5346'); for (const a of [.2, L0 - .2]) for (const b of [-W0 / 2 + .1, W0 / 2 - .1]) { const p = at(a, b); S.cylinder(p.x, best.y - 1.6, p.z, .1, 2.1, 6); }
+          { const p = at(L0 - .1, W0 / 2 - .3); S.color('#9aa0a6'); for (const b of [-.2, .2]) { const r = at(L0 - .1, W0 / 2 - .3 + b); S.box(r.x, best.y - .6, r.z, .04, 1.25, .04, yaw); } for (let h = 0; h < 3; h++) S.box(p.x, best.y - .4 + h * .3, p.z, .44, .03, .03, yaw); }
+          if (big) { const p = at(-.9, 0); S.color('#6b5137'); S.box(p.x, yD + .38, p.z, 1.6, .06, .45, yaw); }
+          if (L.lifeSpots) for (let k = 0; k < (big ? 2 : 1); k++) { const p = at(L0 - .55, (k - (big ? .5 : 0)) * 1.1); L.lifeSpots.push({ x: p.x, z: p.z, y: yD, yaw: Math.atan2(-n.x, -n.z), kind: 'fish' }); }
+        }
       }
       // white water where a creek drops (a dam, a falls, a riffle over a ledge: Marcellus Falls, Skaneateles Falls):
       // a pale cascade face down the step and a churned patch at its foot

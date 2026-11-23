@@ -1,0 +1,187 @@
+{
+ "label": "v014",
+ "when": "2026-11-23T18:04:39.507Z",
+ "commit": "?",
+ "effects": "as the maps set them",
+ "size": "640x360",
+ "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+ "maps": {
+  "cny": {
+   "loadS": 46.5,
+   "stills": {
+    "camillus-main": {
+     "calls": 235,
+     "triangles": 923868,
+     "gpuMs": 2186.7,
+     "programs": 35,
+     "geometries": 558,
+     "textures": 13,
+     "heapMB": 728,
+     "loadS": 46.5,
+     "errors": 0
+    },
+    "canal-park": {
+     "calls": 263,
+     "triangles": 1291803,
+     "gpuMs": 2003.8,
+     "programs": 34,
+     "geometries": 599,
+     "textures": 13,
+     "heapMB": 858,
+     "loadS": 43.6,
+     "errors": 0
+    },
+    "aqueduct": {
+     "calls": 264,
+     "triangles": 1292667,
+     "gpuMs": 2019.8,
+     "programs": 34,
+     "geometries": 586,
+     "textures": 13,
+     "heapMB": 919,
+     "loadS": 44.6,
+     "errors": 0
+    },
+    "warners-farms": {
+     "calls": 229,
+     "triangles": 855161,
+     "gpuMs": 1652.8,
+     "programs": 36,
+     "geometries": 529,
+     "textures": 12,
+     "heapMB": 651,
+     "loadS": 38.8,
+     "errors": 0
+    },
+    "martisco-rural": {
+     "calls": 142,
+     "triangles": 915192,
+     "gpuMs": 5000.6,
+     "programs": 34,
+     "geometries": 413,
+     "textures": 13,
+     "heapMB": 552,
+     "loadS": 44.7,
+     "errors": 0
+    },
+    "village-overview": {
+     "calls": 384,
+     "triangles": 1660507,
+     "gpuMs": 3249.6,
+     "programs": 35,
+     "geometries": 663,
+     "textures": 13,
+     "heapMB": 737,
+     "loadS": 40.5,
+     "errors": 0
+    }
+   },
+   "ride": {
+    "frames": 25,
+    "fps": 0.8,
+    "medianMs": 1243.8,
+    "p95Ms": 1557.1,
+    "worstMs": 1683.5,
+    "over16": 24,
+    "cpuMedianMs": 24.8,
+    "cpuP95Ms": 40.5,
+    "rodeM": 271,
+    "heapMB": 782
+   }
+  },
+  "skan": {
+   "loadS": 41.5,
+   "stills": {
+    "genesee-st": {
+     "calls": 321,
+     "triangles": 973784,
+     "gpuMs": 1926.4,
+     "programs": 44,
+     "geometries": 651,
+     "textures": 13,
+     "heapMB": 702,
+     "loadS": 41.5,
+     "errors": 0
+    },
+    "clift-pier": {
+     "calls": 210,
+     "triangles": 698822,
+     "gpuMs": 989.1,
+     "programs": 44,
+     "geometries": 671,
+     "textures": 13,
+     "heapMB": 709,
+     "loadS": 41.7,
+     "errors": 0
+    },
+    "east-lake-mansions": {
+     "calls": 360,
+     "triangles": 1253541,
+     "gpuMs": 3472.5,
+     "programs": 44,
+     "geometries": 698,
+     "textures": 12,
+     "heapMB": 667,
+     "loadS": 42.4,
+     "errors": 0
+    },
+    "country-club": {
+     "calls": 199,
+     "triangles": 810432,
+     "gpuMs": 1549.2,
+     "programs": 44,
+     "geometries": 476,
+     "textures": 13,
+     "heapMB": 593,
+     "loadS": 39.5,
+     "errors": 0
+    },
+    "marcellus-main": {
+     "calls": 222,
+     "triangles": 867891,
+     "gpuMs": 1823.9,
+     "programs": 38,
+     "geometries": 540,
+     "textures": 13,
+     "heapMB": 721,
+     "loadS": 41.5,
+     "errors": 0
+    },
+    "marcellus-falls": {
+     "calls": 311,
+     "triangles": 2045886,
+     "gpuMs": 6241.7,
+     "programs": 34,
+     "geometries": 609,
+     "textures": 12,
+     "heapMB": 666,
+     "loadS": 50.8,
+     "errors": 0
+    },
+    "lake-loop-rural": {
+     "calls": 223,
+     "triangles": 875175,
+     "gpuMs": 2305.9,
+     "programs": 37,
+     "geometries": 469,
+     "textures": 12,
+     "heapMB": 502,
+     "loadS": 40.9,
+     "errors": 0
+    }
+   },
+   "ride": {
+    "frames": 21,
+    "fps": 0.7,
+    "medianMs": 1573.4,
+    "p95Ms": 1890.1,
+    "worstMs": 1890.1,
+    "over16": 20,
+    "cpuMedianMs": 26.7,
+    "cpuP95Ms": 69.9,
+    "rodeM": 282,
+    "heapMB": 668
+   }
+  }
+ }
+}
