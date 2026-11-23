@@ -456,7 +456,7 @@ body[data-hud-size="large"] { --hs: 1; }
 .zbar u { position: absolute; top: -4px; bottom: -4px; width: 3px; margin-left: -1.5px; background: var(--ink); border-radius: 2px; box-shadow: 0 0 0 1px var(--glass); }
 .pw-sub { text-align: center; font-size: max(12px, calc(15px * var(--hs))); color: var(--ink-2); margin-top: calc(6px * var(--hs)); }
 /* Minimap (Settings): bottom-left, above the elevation profile */
-.minimap { position: absolute; left: 20px; bottom: 92px; width: clamp(150px, 22vh, 220px); aspect-ratio: 1; padding: 0; overflow: hidden; border-radius: 16px; }
+.minimap { position: absolute; left: 20px; bottom: max(92px, calc(var(--hud-bottom-h, 0px) - 64px)); width: clamp(150px, 22vh, 220px); aspect-ratio: 1; padding: 0; overflow: hidden; border-radius: 16px; }
 .minimap canvas { width: 100%; height: 100%; display: block; }
 canvas.hud-profile { width: 100%; height: 76px; display: block; background: linear-gradient(transparent, var(--glass)); }
 
@@ -490,6 +490,88 @@ canvas.hud-profile { width: 100%; height: 76px; display: block; background: line
 .controls dt { color: var(--muted); }
 .controls dd { margin: 0; }
 .credit { margin: 16px 0 0; font-size: 11px; color: var(--muted); }
+/* the pause menu's Graphics panel (js/app/pause-graphics.js): the same on desktop and phone */
+.pause-card { max-height: calc(100dvh - 32px); overflow: auto; }
+.pause-gfx { border-top: 1px solid var(--line); padding-top: 14px; margin-bottom: 18px; }
+.pause-gfx h3 { margin: 0 0 10px; font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.gfx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px 12px; }
+.gfx-grid label { display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.gfx-grid label[hidden] { display: none; }
+.gfx-grid select { font-size: 14px; color: var(--text); width: 100%; }
+.gfx-note { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+/* touch screens: no keyboard, so no key list */
+@media (hover: none) and (pointer: coarse) { .pause-card .controls { display: none; } }
+
+/* ---------- the ride HUD on a phone (portrait): a full-width top row (time · distance · speed), the grade card on
+   the right under it, the pills and turn prompt on the left, the power bar full width over the profile, the minimap
+   just above it on the left; the rider keeps the middle of the screen. Safe areas respected. ---------- */
+@media (max-width: 600px) {
+  .hud { --sl: max(10px, env(safe-area-inset-left)); --sr: max(10px, env(safe-area-inset-right)); --st: max(8px, env(safe-area-inset-top)); }
+  .hud small { font-size: 10px; letter-spacing: .6px; }
+  .glass { border-radius: 14px; }
+  .hud-tl { left: var(--sl); right: var(--sr); top: var(--st); padding: 6px 2px; justify-content: space-around; }
+  .hud-tl .cell { flex: 1; padding: 0 8px; text-align: center; }
+  .hud-tl b { font-size: 22px; }
+  .hud-right { right: var(--sr); top: calc(var(--hud-tl-bottom, 64px) + 8px); gap: 8px; }
+  .hud-tr { padding: 8px 12px; min-width: 0; }
+  .tr-main b { font-size: 30px; letter-spacing: -.5px; }
+  .tr-main b.carry { font-size: 18px; }
+  .tr-rows { margin-top: 5px; padding-top: 5px; gap: 2px; }
+  .tr-row { gap: 10px; }
+  .tr-row small { font-size: 9.5px; }
+  .tr-row b { font-size: 16px; }
+  .hud-btn { width: 40px; height: 40px; }
+  .hud-top { left: var(--sl); right: calc(var(--sr) + 150px); top: calc(var(--hud-tl-bottom, 64px) + 8px); transform: none; justify-items: start; gap: 6px; }
+  .hud-top .pill { font-size: 12px; padding: 5px 10px; white-space: normal; }
+  .hud-top .pill.big { font-size: 14px; padding: 7px 12px; }
+  .pill.demo-ctl { gap: 6px; padding: 4px 6px 4px 10px; font-size: 10.5px; }
+  .pill.demo-ctl span { min-width: 0; white-space: nowrap; }
+  .pill.demo-ctl .demo-range { width: 72px; }
+  .hud-title { font-size: 15px; white-space: normal; }
+  .turn-prompt { min-width: 0; max-width: 100%; }
+  .turn-opt b { font-size: 11px; }
+  .turn-opt i { font-size: 18px; }
+  .turn-hint { display: none; }
+  .hud-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .strip { width: calc(100% - var(--sl) - var(--sr)); box-sizing: border-box; margin-bottom: 6px; padding: 8px 12px 10px; }
+  .cells { justify-content: space-between; gap: 6px; }
+  .strip .side { min-width: 0; }
+  .strip .side b { font-size: calc(30px + 10px * var(--hs)); }
+  .strip .gear { padding-left: 10px; }
+  .strip .gear b { font-size: calc(24px + 8px * var(--hs)); }
+  .power { min-width: 0; padding: 0; }
+  .pw b { font-size: calc(46px + 22px * var(--hs)); letter-spacing: -1px; }
+  .pw-unit { font-size: 16px; }
+  .zbadge { font-size: 10px; padding: 1px 5px; }
+  .zbar { height: 5px; margin-top: 6px; }
+  canvas.hud-profile { height: 52px; }
+  .minimap { left: var(--sl); bottom: calc(var(--hud-bottom-h, 150px) + 6px); width: 30vw; max-width: 130px; border-radius: 12px; }
+  .pause-overlay { padding: 12px; }
+  .pause-card { padding: 18px 16px; }
+  .pause-title { font-size: 22px; margin-bottom: 12px; }
+  .pause-actions { margin-bottom: 14px; }
+  .pause-actions button { flex: 1; }
+  .gfx-grid { grid-template-columns: 1fr 1fr; }
+}
+/* a phone on its side (short screen): smaller cards, the power bar narrower */
+@media (max-height: 500px) and (orientation: landscape) {
+  .hud small { font-size: 9.5px; }
+  .hud-tl { left: max(10px, env(safe-area-inset-left)); top: 8px; padding: 4px 2px; }
+  .hud-tl .cell { padding: 0 10px; }
+  .hud-tl b { font-size: 20px; }
+  .hud-right { right: max(10px, env(safe-area-inset-right)); top: 8px; }
+  .hud-tr { padding: 6px 10px; min-width: 0; }
+  .tr-main b { font-size: 26px; }
+  .tr-row b { font-size: 15px; }
+  .hud-top { top: 8px; gap: 4px; }
+  .pill.big { font-size: 14px; padding: 6px 12px; }
+  .strip { margin-bottom: 4px; padding: 6px 16px 8px; }
+  .strip .side b { font-size: 28px; }
+  .strip .gear b { font-size: 24px; }
+  .pw b { font-size: 48px; }
+  canvas.hud-profile { height: 40px; }
+  .minimap { left: max(10px, env(safe-area-inset-left)); bottom: calc(var(--hud-bottom-h, 110px) - 30px); width: 110px; }
+}
 
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 50; background: var(--overlay); border: 1px solid var(--attn-line); box-shadow: var(--shadow-pop);
   color: var(--ink); padding: 10px 16px; border-radius: 12px; font-size: 14px; max-width: 80vw; }

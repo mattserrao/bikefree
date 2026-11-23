@@ -1982,3 +1982,19 @@ Every effect is its own module under `js/world/toolbox/effects/`, switched on pe
 - [x] Shader pre-compile *(user: yes)*: `toolbox/core/shader-warm.js` — `renderer.compileAsync(scene, camera)` once
       everything else is loaded (a "Shaders" loading step in graph worlds), then again whenever the scene has grown
       (new meshes or materials streamed in; checked every 1.5 s), so a new material compiles before its first draw.
+
+### Phone layout and pause-menu graphics *(user, 23 Nov: "Please work on the layout for phones" — a screenshot with the
+demo pill over the time card, the grade card over the distance, the minimap over the power bar; "in pausing … allow
+for change to graphics (both desktop and mobile same menus)")*
+- [x] Ride HUD on a phone (≤ 600 px wide): a full-width top row (time · distance · speed); the grade card right under it,
+      compact; the demo pill, state pill and turn prompt on the left under the top row; the power bar full width over a
+      shorter profile; the minimap just above the power bar on the left (`js/app/hud-layout.js` measures the bottom bar
+      and top row: `--hud-bottom-h`, `--hud-tl-bottom`); safe areas (`viewport-fit=cover`). A phone on its side gets
+      smaller cards. Desktop unchanged (its minimap also now stays clear of a large power bar).
+- [x] Pause menu Graphics panel (`js/app/pause-graphics.js`, the same on desktop and phone): scenery detail, time of day
+      (hidden where the route has one), weather (where the route offers any), camera, minimap, power bar size — applied
+      at once and saved. Scenery detail changes draw distance and sharpness now; anti-aliasing and ground detail on the
+      next ride (a note says so). On touch screens the keyboard list is hidden.
+- [x] Trees on phones *(user, 23 Nov: "very strange artifacting in trees on mobile")*: alpha to coverage only where the
+      screen has MSAA (Light has none; Apple GPUs dithered it into speckles); the impostor atlas bakes without it.
+
