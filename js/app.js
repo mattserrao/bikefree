@@ -18,6 +18,8 @@ import './app/city-panel.js';
 import './app/route-loading.js';
 import './app/offline-ui.js';
 import './app/settings-ui.js';
+import './app/pause-graphics.js';
+import './app/hud-layout.js';
 
 // ---------- Boot ----------
 renderPacerChoice();

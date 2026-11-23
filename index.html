@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>bikefree</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ccircle cx=%2250%22 cy=%2250%22 r=%2240%22 fill=%22%23ff7a1a%22/%3E%3C/svg%3E">
   <script src="js/theme.js"></script>
@@ -237,6 +237,42 @@
           <button id="resumeBtn" class="primary">Resume</button>
           <button id="finishBtn">Finish ride</button>
         </div>
+        <section class="pause-gfx" aria-labelledby="pGfxTitle">
+          <h3 id="pGfxTitle">Graphics</h3>
+          <div class="gfx-grid">
+            <label>Scenery detail
+              <select id="pQuality">
+                <option value="low">Light</option>
+                <option value="balanced">Balanced</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+            <label id="pTimeBox">Time of day <select id="pTime"></select></label>
+            <label id="pWeatherBox">Weather <select id="pWeather"></select></label>
+            <label>Camera
+              <select id="pCamera">
+                <option value="closest">Chase</option>
+                <option value="close">Close</option>
+                <option value="classic">Classic</option>
+              </select>
+            </label>
+            <label>Minimap
+              <select id="pMinimap">
+                <option value="follow">Zoomed in</option>
+                <option value="course">Whole course</option>
+                <option value="off">Off</option>
+              </select>
+            </label>
+            <label>Power bar
+              <select id="pHudSize">
+                <option value="small">Small</option>
+                <option value="medium">Medium</option>
+                <option value="large">Large</option>
+              </select>
+            </label>
+          </div>
+          <p class="gfx-note" id="pGfxNote" hidden></p>
+        </section>
         <dl class="controls">
           <dt>Shift</dt><dd>Left / right hood buttons · <kbd>←</kbd> <kbd>→</kbd></dd>
           <dt>Grade or intensity</dt><dd>▲ ▼ · <kbd>↑</kbd> <kbd>↓</kbd></dd>
