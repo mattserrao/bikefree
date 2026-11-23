@@ -83,13 +83,14 @@ function grow(seed, o, lod, turn, lodScale = 1) {
   // branches are always grown in full — the same random draws whatever the level — and a lower level draws fewer of
   // them (mid: the trunk and main limbs, no twigs) and merges the near model's leaf clusters into fewer, larger cards
   // that cover the same crown. So the outline and the limbs stay put as the tiers swap; only the detail changes.
-  const maxLevel = 3, woodLevel = lod === 0 ? 3 : lod === 1 ? 2 : 1;
+  const maxLevel = o.dead ? 2 : 3, woodLevel = lod === 0 ? 3 : lod === 1 ? 2 : 1;
+  const snapped = o.dead && turn !== 1 ? .55 + rand() * .15 : 1;   // (a snag: its top broken off)
   const queue = [];
   const stems = o.stems || 1;
   for (let s = 0; s < stems; s++) {
     const a = s * 2.4 + rand(), tilt = stems > 1 ? .12 + rand() * .08 : rand() * .04;
     queue.push({ level: 0, p: new THREE.Vector3(stems > 1 ? Math.cos(a) * .45 : 0, 0, stems > 1 ? Math.sin(a) * .45 : 0), d: new THREE.Vector3(Math.cos(a) * Math.sin(tilt), Math.cos(tilt), Math.sin(a) * Math.sin(tilt)),
-      len: H * (o.leader ? .86 : o.fork + .08) * (stems > 1 ? .95 : 1), r: o.trunkR * BEEF * (stems > 1 ? .75 : 1) });
+      len: H * (o.leader ? .86 : o.fork + .08) * (stems > 1 ? .95 : 1) * snapped, r: o.trunkR * BEEF * (stems > 1 ? .75 : 1) });
   }
   const L = o.levels;   // per level (1..3): [children, start (0–1 up the parent), angle (rad from the parent), length ratio]
   while (queue.length) {
@@ -147,6 +148,12 @@ function grow(seed, o, lod, turn, lodScale = 1) {
         clusters.push({ p: pts[i].clone(), size: (lv === maxLevel ? 1 : 1.25) * (.8 + rand() * .4) });
       }
     }
+  }
+  if (o.dead) {
+    // bare: no leaves; the leaning one tipped over ~12° (the base stays put)
+    const g = wood.build();
+    if (turn === 2) g.rotateZ(.21);
+    return lod === 2 ? g : { wood: g, leaves: null };
   }
   // the crown's centre (for spherized normals and depth shading): the clusters' mean
   const cc = new THREE.Vector3(); for (const c of clusters) cc.add(c.p); if (clusters.length) cc.divideScalar(clusters.length); else cc.set(0, crown.y, 0);
@@ -264,6 +271,12 @@ const SPECIES = {
   willow: { H: 15, R: 6.5, fork: .3, trunkR: .5, trunk: '#5b5046', bark: BARK, droop: true, gnarl: .3, up: .04,
     levels: [[5, .7, .8, .45], [4, .3, .7, .28], [3, .3, .5, .16]],
     greens: ['#8aab52', '#7d9c48', '#96b45c'], fall: ['#c2b347'], turn: [0, .15, .35] },
+  // a dead tree (snag; user, 23 Nov: "interspersed dead trees", ~6%, more visible): a grey, barkless trunk and a few
+  // bare limbs, no leaves. Variants (turn = the variant): 0 broken off at two-thirds, 1 tall with its main limbs,
+  // 2 leaning, its top snapped
+  snag: { H: 19, R: 4, fork: .45, trunkR: .4, trunk: '#8c877c', bark: DEAD, leader: true, gnarl: .35, up: .03, dead: true,
+    levels: [[4, .45, .85, .3], [2, .3, .7, .16], [1, .4, .6, .08]],
+    greens: ['#6e6a60'], fall: ['#6e6a60'], turn: [0, 1, 2] },
 };
 
 /** Eastern white pine: tall, with long horizontal limbs carrying flat, layered sprays; a ragged, often flagged top. */

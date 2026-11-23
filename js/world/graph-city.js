@@ -71,6 +71,7 @@ function* treeProxiesJob(trees, kit, out) {
     const t = trees[i], sp = kit[t.sp]; if (!sp) continue;   // (the understory: too low to matter)
     const h = sp.h * (t.sy ?? t.s), r = sp.r * t.s;
     if (/pine|hemlock|spruce/.test(t.sp)) put(S.cone, r * .8, h * .92, r * .8, t.x, t.y + h * .08, t.z);
+    else if (t.sp === 'snag') put(S.blob, r * .2, h * .2, r * .2, t.x, t.y + h * .5, t.z);   // (a dead tree: its bare limbs, a little shade)
     else put(S.blob, r * .82, h * .3, r * .82, t.x, t.y + h * .62, t.z);
     const w = Math.max(.35, r * .1); put(S.box, w, h * .5, w, t.x, t.y, t.z);
   }
@@ -660,7 +661,9 @@ export class GraphCity {
     /** A tree of `role` at (x, z) if it fits (shrunk to clear a roof or the road if it must): true if placed. */
     const tree = (x, z, role, seed, age = null) => {
       const r1 = hash(seed * 7.13 + 1), r2 = hash(seed * 3.71 + 2), r3 = hash(seed * 9.17 + 3), r4 = hash(seed * 1.93 + 4);
-      const name = pick(MIX[role], r1), sp = kit[name];
+      // ~6% dead (user, 23 Nov): snags in the woods, wet ground, hedgerows and pastures, a few by the road; none in yards or on streets
+      const dead = role !== 'yard' && role !== 'street' && kit.snag && hash(seed * 5.37 + 9) < .06;
+      const name = dead ? 'snag' : pick(MIX[role], r1), sp = kit[name];
       // the age mix: saplings and young trees, mostly mature, a few old giants away from the road
       let k = age ?? (r2 < .08 ? .3 + r2 * 2.5 : r2 < .22 ? .55 + (r2 - .08) * 1.8 : r2 > .95 ? 1.15 + (r2 - .95) * 3 : .85 + (r2 - .22) * .32);
       k *= .92 + r3 * .16;
