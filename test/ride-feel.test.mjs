@@ -45,12 +45,12 @@ test('momentum lets the hill through more slowly when the bike is faster', () =>
   assert.equal(momentumGrade(null, 2, 7, 0.25), 2);
 });
 
-test('closest (now the Zwift-style chase, 7.2b) camera is the default (PLAN 6.10); close is nearer than classic', () => {
-  assert.equal(DEFAULT_CAMERA, 'closest');
-  assert.equal(CHASE, CAMERAS.closest);
-  assert.equal(CHASE, CHASE_CLOSEST);
+test('close is the default camera again (user, 23 Nov); closest is the Zwift-style chase (7.2b); close is nearer than classic', () => {
+  assert.equal(DEFAULT_CAMERA, 'close');
+  assert.equal(CHASE, CAMERAS.close);
+  assert.equal(CHASE, CHASE_CLOSE);
   assert.deepEqual(Object.keys(CAMERAS).sort(), ['classic', 'close', 'closest']);
-  assert.equal(DEFAULT_SETTINGS.camera, 'closest');
+  assert.equal(DEFAULT_SETTINGS.camera, 'close');
   const d = (c) => Math.hypot(c.back, c.up);
   assert.ok(d(CHASE_CLASSIC) / d(CHASE_CLOSE) > 1.25);
   assert.ok(d(CHASE_CLOSEST) > d(CHASE_CLASSIC), `7.2b: the Zwift-style chase sits further back than classic (${d(CHASE_CLOSEST)})`);
@@ -68,35 +68,32 @@ test('closest (now the Zwift-style chase, 7.2b) camera is the default (PLAN 6.10
   // Close and Classic unchanged
   assert.deepEqual(CHASE_CLOSE, { back: 3.3, up: 1.8, ahead: 7, lookUp: -0.4, ground: 1.6, fov: 58, speedFov: 10, pull: 0.25, buzz: 0.01 });
   assert.deepEqual(CHASE_CLASSIC, { back: 4.5, up: 2.1, ahead: 8, lookUp: -0.6, ground: 1.6, fov: 62, speedFov: 0, pull: 0, buzz: 0 });
-  // Settings → Camera offers all three, Closest first and marked the default
+  // Settings → Camera offers all three, Close first and marked the default
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const opts = [...html.match(/<select name="camera">([\s\S]*?)<\/select>/)[1].matchAll(/value="(\w+)"[^>]*>([^<]*)/g)].map((m) => [m[1], m[2]]);
-  assert.deepEqual(opts.map((o) => o[0]), ['closest', 'close', 'classic']);
+  assert.deepEqual(opts.map((o) => o[0]), ['close', 'closest', 'classic']);
   assert.match(opts[0][1], /default/);
   assert.ok(!/default/.test(opts[1][1]) && !/default/.test(opts[2][1]));
 });
 
-test('saved camera settings: the old default "close" moves to "closest" once; a later choice is kept', () => {
+test('saved camera settings: "closest" moves to the default "close" once (23 Nov); a later choice is kept', () => {
   const store = new Map();
   globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) };
   const KEY = 'bikefree.settings.v1';
   const save = (o) => localStorage.setItem(KEY, JSON.stringify(o));
   try {
     // nothing saved: the default
-    assert.equal(loadSettings().camera, 'closest');
-    // saved before 6.10 with the old default
-    save({ camera: 'close', units: 'metric' });
-    let s = loadSettings();
-    assert.equal(s.camera, 'closest');
-    assert.equal(s.units, 'metric');
-    // … once: Close chosen again afterwards (saved with the migration's mark) stays Close
-    save({ ...s, camera: 'close' });
     assert.equal(loadSettings().camera, 'close');
-    // Classic saved before 6.10 is kept
+    // saved with the 19 Nov default
+    save({ camera: 'closest', camClosest: true, units: 'metric' });
+    let s = loadSettings();
+    assert.equal(s.camera, 'close');
+    assert.equal(s.units, 'metric');
+    // … once: Chase chosen again afterwards (saved with the migration's mark) stays Chase
+    save({ ...s, camera: 'closest' });
+    assert.equal(loadSettings().camera, 'closest');
+    // Classic is kept
     save({ camera: 'classic' });
     assert.equal(loadSettings().camera, 'classic');
-    // Closest saved stays
-    save({ camera: 'closest', camClosest: true });
-    assert.equal(loadSettings().camera, 'closest');
   } finally { delete globalThis.localStorage; }
 });

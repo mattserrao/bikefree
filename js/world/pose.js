@@ -23,7 +23,7 @@ export const CHASE_CLASSIC = { back: 4.5, up: 2.1, ahead: 8, lookUp: -0.6, groun
 export const CHASE_CLOSE = { back: 3.3, up: 1.8, ahead: 7, lookUp: -0.4, ground: 1.6, fov: 58, speedFov: 10, pull: 0.25, buzz: 0.01 };
 export const CHASE_CLOSEST = { back: 6.3, up: 2.35, ahead: 8, lookUp: 1.05, ground: 1.4, fov: 50, speedFov: 0, pull: 0, buzz: 0 };   // (user, 19 Nov: the distance stays the same as you speed up — no pull-back, no speed-widened view — and no road shake)
 export const CAMERAS = { closest: CHASE_CLOSEST, close: CHASE_CLOSE, classic: CHASE_CLASSIC };
-export const DEFAULT_CAMERA = 'closest';
+export const DEFAULT_CAMERA = 'close';   // (user, 23 Nov: "ensure the default camera is close")
 export const CHASE = CAMERAS[DEFAULT_CAMERA];
 
 /**

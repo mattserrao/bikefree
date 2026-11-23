@@ -303,6 +303,7 @@ function applyHudPrefs() {
 function cycleMinimap() {
   const order = ['follow', 'course', 'off'];
   settings.minimap = order[(order.indexOf(settings.minimap) + 1) % order.length];
+  if (settings.minimap !== 'off') settings.minimapView = settings.minimap;
   saveSettings(settings);
   renderMinimap(performance.now(), true);
   toast(settings.minimap === 'off' ? 'Minimap off' : settings.minimap === 'follow' ? 'Minimap: zoomed in' : 'Minimap: whole course');

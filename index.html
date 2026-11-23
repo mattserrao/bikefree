@@ -251,17 +251,19 @@
             <label id="pWeatherBox">Weather <select id="pWeather"></select></label>
             <label>Camera
               <select id="pCamera">
-                <option value="closest">Chase</option>
                 <option value="close">Close</option>
+                <option value="closest">Chase</option>
                 <option value="classic">Classic</option>
               </select>
             </label>
             <label>Minimap
-              <select id="pMinimap">
-                <option value="follow">Zoomed in</option>
-                <option value="course">Whole course</option>
-                <option value="off">Off</option>
-              </select>
+              <span class="map-set">
+                <input type="checkbox" id="pMinimapOn" aria-label="Minimap on">
+                <select id="pMinimap" aria-label="Minimap view">
+                  <option value="follow">Zoomed in</option>
+                  <option value="course">Whole course</option>
+                </select>
+              </span>
             </label>
             <label>Power bar
               <select id="pHudSize">
@@ -343,13 +345,13 @@
             <option value="large">Large (original)</option>
           </select>
         </label>
-        <label>Minimap
-          <select name="minimap">
+        <div class="map-set">
+          <label class="check"><input type="checkbox" name="minimapOn"> Minimap</label>
+          <select name="minimap" aria-label="Minimap view">
             <option value="follow">Zoomed in — follows you</option>
             <option value="course">Whole course</option>
-            <option value="off">Off</option>
           </select>
-        </label>
+        </div>
       </div>
       <div class="two">
         <label>Hill feel
@@ -362,8 +364,8 @@
         </label>
         <label>Camera
           <select name="camera">
-            <option value="closest">Chase — Zwift-style, back wheel at the power bar (default)</option>
-            <option value="close">Close — speed feel</option>
+            <option value="close">Close — speed feel (default)</option>
+            <option value="closest">Chase — Zwift-style, back wheel at the power bar</option>
             <option value="classic">Classic — 4.5 m back</option>
           </select>
         </label>

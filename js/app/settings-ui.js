@@ -45,11 +45,14 @@ function fillSettings() {
   f.worldSound.checked = settings.worldSound !== false;
   f.hudSize.value = settings.hudSize;
   f.hillFeel.value = String(settings.hillFeel ?? 50);
-  f.camera.value = settings.camera || 'closest';
-  f.minimap.value = settings.minimap;
+  f.camera.value = settings.camera || 'close';
+  f.minimapOn.checked = settings.minimap !== 'off';
+  f.minimap.value = settings.minimap !== 'off' ? settings.minimap : (settings.minimapView || 'follow');
+  f.minimap.disabled = !f.minimapOn.checked;
   f.startGear.value = settings.startGear;
   for (const el of dlg.querySelectorAll('.u-weight')) el.textContent = imp ? 'lb' : 'kg';
 }
+form.elements.minimapOn.addEventListener('change', (e) => { form.elements.minimap.disabled = !e.target.checked; });
 form.elements.difficulty.addEventListener('input', (e) => { $('diffOut').textContent = `${e.target.value}%`; });
 form.elements.units.addEventListener('change', (e) => {
   const toImp = e.target.value === 'imperial';
@@ -79,7 +82,8 @@ dlg.addEventListener('close', () => {
     hudSize: f.hudSize.value,
     hillFeel: Number(f.hillFeel.value) || 50,
     camera: f.camera.value,
-    minimap: f.minimap.value,
+    minimap: f.minimapOn.checked ? f.minimap.value : 'off',
+    minimapView: f.minimap.value,
     startGear: Math.min(24, Math.max(1, Math.round(Number(f.startGear.value) || 12))),
   });
   saveSettings(settings);

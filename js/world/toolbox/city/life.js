@@ -814,8 +814,12 @@ export class CityLife {
   _clear(c, rider, t) {
     if (!rider) return true;
     const past = rider.dir > 0 ? rider.out - c.hi : c.lo - rider.out;
-    if (past > 70 && past < 400) return true;
-    return Math.hypot(rider.x - c.rx, rider.z - c.rz) - c.half > Math.max(rider.speed || 0, 3) * (t + 5) + 40;
+    // (behind you along the line — and really away from you: where the line comes back past the same street, the
+    //  crossing "behind" on one pass can be just ahead on the other; v0.14, a jogger on Homestead's crossing)
+    if (past > 70 && past < 400 && Math.hypot(rider.x - c.rx, rider.z - c.rz) - c.half > 60) return true;
+    // (v0.14: the room ahead of you counts the crossing's own length too — a long diagonal one, walked slowly, was
+    //  still being crossed when you came up on it)
+    return Math.hypot(rider.x - c.rx, rider.z - c.rz) - c.half > Math.max(rider.speed || 0, 3) * (t + 5) + 40 + c.half * 2;
   }
 
   /**
@@ -943,6 +947,13 @@ export class CityLife {
     // [6.1] (F180) a walker beside a riverside trail keeps out of the river: where their side of the trail is the
     // water's edge they turn back, rather than walk on over the water
     if (kind === 'walk' && w.trail && a.x != null && this._wet(tx, tz)) { a.dir = -a.dir; a.nx = undefined; a.v = 0; return w; }
+    // (v0.14) a last guard: a walker about to step into the route's carriageway with you close by (a sidewalk drawn
+    // wide of its street, or a crossing cleared when you were further off) waits at the kerb and turns back; one
+    // already out in the road carries on across
+    if (kind === 'walk' && !w.trail && rider && a.x != null && Math.hypot(tx - rider.x, tz - rider.z) < 80) {
+      const L = this.city.landscape, inRoad = (x, z) => { const r = L.routeDist(x, z); return r && r.d < HALF + .3 && Math.abs(p.y - r.y) < 3; };
+      if (inRoad(tx, tz) && !inRoad(a.x, a.z)) { a.s = Math.max(0, Math.min(w.path.length, a.s - a.dir * a.v * dt)); a.dir = -a.dir; a.nx = undefined; a.go = null; a.v = 0; return w; }
+    }
     a.pitch = Math.atan(p.dy || 0) * a.dir;
     if (a.x == null) { a.x = tx; a.z = tz; a.y = p.y; a.yaw = Math.atan2(p.tx * a.dir, p.tz * a.dir); return w; }
     const dx = tx - a.x, dz = tz - a.z, d = Math.hypot(dx, dz), max = (a.v * 1.25 + K.catch) * dt, f = d > max ? max / d : 1;
