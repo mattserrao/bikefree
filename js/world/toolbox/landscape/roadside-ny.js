@@ -87,53 +87,55 @@ export function culvertEnd(M, x, y, z, dx, dz, seed) {
 }
 
 // ------------------------------------------------------------------ brush (into a MeshBuilder)
+// (user, 23 Nov: "simplify their models"): every blade, stem and head is one triangle — the verge's material draws
+// both faces (graph-city vergeMat) — and every plant takes a height scale `s` (the placement varies it).
 const blade = (M, x, y, z, a, h, w, lean, colour) => {
   const ca = Math.cos(a + 1.57) * w, sa = Math.sin(a + 1.57) * w, tx = x + Math.cos(a) * lean, tz = z + Math.sin(a) * lean;
   M.color(colour);
-  const A = V(x - ca, y - .03, z - sa), B = V(x + ca, y - .03, z + sa), C = V(tx, y + h, tz);
-  M.triangle(A, B, C); M.triangle(B, A, C);
+  M.triangle(V(x - ca, y - .03, z - sa), V(x + ca, y - .03, z + sa), V(tx, y + h, tz));
   return [tx, y + h, tz];
 };
+/** A small head: two crossed triangles (a plume, a seed head, a flower). */
+const head = (M, x, y, z, a, w, h, colour) => {
+  M.color(colour);
+  for (const b of [a, a + 1.57]) { const c = Math.cos(b) * w / 2, d = Math.sin(b) * w / 2; M.triangle(V(x - c, y, z - d), V(x + c, y, z + d), V(x, y + h, z)); }
+};
 /** Goldenrod: a clump of stiff stems, each with an arching yellow plume (in bloom: it's September). */
-export function goldenrod(M, x, y, z, seed) {
-  const n = 5 + Math.floor(seed * 3);   // (lighter: phones ran out of memory on the verges — user, 23 Nov)
+export function goldenrod(M, x, y, z, seed, s = 1) {
+  const n = 4 + Math.floor(seed * 4);
   for (let k = 0; k < n; k++) {
-    const a = k * 2.4 + seed * 9, d = hash(seed * 7 + k) * .45, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
-    const h = .85 + hash(seed * 3 + k) * .55, [tx, ty, tz] = blade(M, px, y, pz, a, h, .025, .08 + hash(k + seed) * .12, k % 3 ? '#5f7238' : '#6d7a3e');
-    // the plume: small yellow sprays arching out and over from the top of the stem (a few going over, browner)
+    const a = k * 2.4 + seed * 9, d = hash(seed * 7 + k) * .5, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
+    const h = (.7 + hash(seed * 3 + k) * .65) * s, [tx, ty, tz] = blade(M, px, y, pz, a, h, .03, .08 + hash(k + seed) * .14, k % 3 ? '#5f7238' : '#6d7a3e');
     const going = hash(seed * 11 + k) < .2;
-    for (let j = 0; j < 2; j++) {
-      const t = j, ax = tx + Math.cos(a) * (.06 + t * .14), az = tz + Math.sin(a) * (.06 + t * .14), ay = ty - .06 - t * t * .14;
-      M.color(going ? '#9c8840' : j % 2 ? '#c9ae46' : '#b89d3e').pyramid(ax, ay - .12, az, .16, .2, .14, a + j);
-    }
+    head(M, tx + Math.cos(a) * .07, ty - .24, tz + Math.sin(a) * .07, a, .2, .28, going ? '#9c8840' : k % 2 ? '#c9ae46' : '#b89d3e');
   }
 }
 /** Queen Anne's lace (white, flat-topped umbels; some curled into brown bird's nests by now) and chicory (blue). */
-export function laceAndChicory(M, x, y, z, seed) {
-  const n = 3 + Math.floor(seed * 3);
+export function laceAndChicory(M, x, y, z, seed, s = 1) {
+  const n = 2 + Math.floor(seed * 3);
   for (let k = 0; k < n; k++) {
-    const a = k * 2.1 + seed * 7, d = hash(seed * 5 + k) * .35, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
-    const chicory = hash(seed * 13 + k) < .35, h = (chicory ? .55 : .7) + hash(seed + k * 3) * .4;
-    const [tx, ty, tz] = blade(M, px, y, pz, a, h, .018, .06, '#6a7d45');
-    if (chicory) { M.color('#8395c0'); for (let j = 0; j < 3; j++) M.pyramid(tx + Math.cos(a + j) * .04, ty - .1 - j * .14, tz + Math.sin(a + j) * .04, .07, .04, .07, a); }
-    else { const nest = hash(seed * 17 + k) < .3; M.color(nest ? '#8b7552' : '#dedbd0').pyramid(tx, ty - .03, tz, .22, .05, .22, a); }
+    const a = k * 2.1 + seed * 7, d = hash(seed * 5 + k) * .4, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
+    const chicory = hash(seed * 13 + k) < .35, h = ((chicory ? .5 : .65) + hash(seed + k * 3) * .45) * s;
+    const [tx, ty, tz] = blade(M, px, y, pz, a, h, .02, .06, '#6a7d45');
+    if (chicory) head(M, tx, ty - .22, tz, a, .09, .2, '#8395c0');
+    else { const nest = hash(seed * 17 + k) < .3; M.color(nest ? '#8b7552' : '#dedbd0'); const r = .12; M.triangle(V(tx - r, ty - .02, tz), V(tx + r * .5, ty - .02, tz + r * .87), V(tx + r * .5, ty - .02, tz - r * .87)); }
   }
 }
 /** Tall unmowed grass (orchard grass, timothy): blades past the knee, tan seed heads. */
-export function tallGrass(M, x, y, z, seed) {
-  const n = 8;
+export function tallGrass(M, x, y, z, seed, s = 1) {
+  const n = 6 + Math.floor(seed * 6);
   for (let k = 0; k < n; k++) {
-    const a = k * 2.4 + seed * 6, d = hash(seed * 9 + k) * .4;
-    const h = .55 + hash(seed * 4 + k) * .5, tone = ['#7f9446', '#8e9a52', '#a8a064', '#6f8c40', '#b3a46c'][k % 5];
-    const [tx, ty, tz] = blade(M, x + Math.cos(a) * d, y, z + Math.sin(a) * d, a, h, .045, .18 + hash(seed + k) * .15, tone);
-    if (k % 4 === 0) M.color('#b5a676').pyramid(tx, ty - .14, tz, .04, .16, .04, a);
+    const a = k * 2.4 + seed * 6, d = hash(seed * 9 + k) * .45;
+    const h = (.4 + hash(seed * 4 + k) * .6) * s, tone = ['#7f9446', '#8e9a52', '#a8a064', '#6f8c40', '#b3a46c'][(k + Math.floor(seed * 5)) % 5];
+    const [tx, ty, tz] = blade(M, x + Math.cos(a) * d, y, z + Math.sin(a) * d, a, h, .05 + hash(seed * 2 + k) * .03, .16 + hash(seed + k) * .2, tone);
+    if (k % 3 === 0) blade(M, tx, ty - .16, tz, a, .18, .025, .02, '#b5a676');
   }
 }
 /** Cattails in a wet ditch bottom: straps and a brown head or two. */
-export function cattails(M, x, y, z, seed) {
-  for (let k = 0; k < 7; k++) {
-    const a = k * 2.4 + seed * 5, d = hash(seed * 3 + k) * .2;
-    const h = 1.1 + hash(seed * 7 + k) * .5, [tx, ty, tz] = blade(M, x + Math.cos(a) * d, y, z + Math.sin(a) * d, a, h, .03, .1, k % 2 ? '#6b7a3c' : '#7e8648');
+export function cattails(M, x, y, z, seed, s = 1) {
+  for (let k = 0; k < 6; k++) {
+    const a = k * 2.4 + seed * 5, d = hash(seed * 3 + k) * .25;
+    const h = (1 + hash(seed * 7 + k) * .6) * s, [tx, ty, tz] = blade(M, x + Math.cos(a) * d, y, z + Math.sin(a) * d, a, h, .035, .1, k % 2 ? '#6b7a3c' : '#7e8648');
     if (k === 0) M.color('#5a3e27').cylinder(tx, ty - .45, tz, .05, .22, 5);
   }
 }
@@ -166,13 +168,12 @@ export function wires(M, A, B) {
 
 /** A low scrub clump on a canal bank (red osier dogwood, willow scrub, a sapling or two): a few leafy masses on
  *  thin stems, 0.6–1.6 m, greens with the first reds and yellows of September. */
-export function scrubClump(M, x, y, z, seed) {
-  const n = 3 + Math.floor(seed * 3), tones = ['#4f6b33', '#5a7538', '#62773a', '#7d2f24', '#8f7a35', '#45612f', '#6e3a2a', '#77703a'];
+export function scrubClump(M, x, y, z, seed, s = 1) {
+  const n = 2 + Math.floor(seed * 3), tones = ['#4f6b33', '#5a7538', '#62773a', '#7d2f24', '#8f7a35', '#45612f', '#6e3a2a', '#77703a'];
   for (let k = 0; k < n; k++) {
-    const a = k * 2.3 + seed * 7, d = .15 + hash(seed * 11 + k) * .45, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
-    const h = .6 + hash(seed * 5 + k) * 1, w = .45 + hash(seed * 3 + k) * .4;
-    M.color(hash(seed * 13 + k) < .5 ? '#7a3328' : '#5e4a36').beam(V(px, y - .05, pz), V(px + Math.cos(a) * .08, y + h * .55, pz + Math.sin(a) * .08), .03, .03);
-    M.color(tones[Math.floor(hash(seed * 17 + k) * tones.length)]).pyramid(px, y + h * .35, pz, w, h * .7, w * .85, a);
-    M.pyramid(px, y + h * .25, pz, w * .9, h * .45, w * .75, a + .8);   // (a second, lower mass: fuller)
+    const a = k * 2.3 + seed * 7, d = .15 + hash(seed * 11 + k) * .55, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
+    const h = (.5 + hash(seed * 5 + k) * 1.1) * s, w = (.4 + hash(seed * 3 + k) * .45) * Math.min(1.2, s);
+    blade(M, px, y, pz, a, h * .55, .03, .08, hash(seed * 13 + k) < .5 ? '#7a3328' : '#5e4a36');   // (a stem)
+    M.color(tones[Math.floor(hash(seed * 17 + k) * tones.length)]).pyramid(px, y + h * .3, pz, w, h * .7, w * .8, a);
   }
 }

@@ -43,7 +43,13 @@ export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand:
   corn: 20, grain: 24, hay: 28, farmyard: 29 };
 const TILE = 400;
 // how far the city is built, by quality (Low: phones)
-const VERGE_IN = 260, VERGE_OUT = 420;   // the verges' grass and brush: built within, dropped beyond (m from a tile's edge)
+const VERGE_IN = 260, VERGE_OUT = 420;
+/** Smooth value noise in [0, 1] (the verges' slow patches). */
+const vnoise = (x, z) => {
+  const i = Math.floor(x), j = Math.floor(z), u = x - i, v = z - j, f = (t) => t * t * (3 - 2 * t), H = (a, b) => hash(a * 127.1 + b * 311.7);
+  const a = H(i, j), b = H(i + 1, j), c = H(i, j + 1), d = H(i + 1, j + 1), fu = f(u), fv = f(v);
+  return a + (b - a) * fu + (c - a) * fv + (a - b - c + d) * fu * fv;
+};   // the verges' grass and brush: built within, dropped beyond (m from a tile's edge)
 const REACH = { low: { near: 1300, far: 1800, trees: 0.6, treeNear: 450 }, balanced: { near: 2300, far: 3100, trees: 1, treeNear: 750 }, high: { near: 2300, far: 3100, trees: 1.2, treeNear: 900 } };
 const CAR_NEAR = 340;           // m: parked cars (the kit's lo LOD) within this, its far LOD beyond
 const CAR_HI = 110;
@@ -484,6 +490,8 @@ export class GraphCity {
     };
     m.customProgramCacheKey = () => 'pgh-street-kit-1';
     this.kitMaterial = m;
+    // the verges' grass and brush: one-triangle blades, both faces drawn
+    this.vergeMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9, metalness: 0, side: THREE.DoubleSide });
     // the trees: the tree engine (constructor); its wind clock
     this.treeTime = { value: 0 };
     // the street kit's facade dressing (shop fronts, signs, awnings, cornices, belt courses, sills)
@@ -941,7 +949,7 @@ export class GraphCity {
     // the wires: no shadow, baked or live (a 2.5 cm wire's shadow drew as a thick black line across the road)
     if (t.wireM?.count) { const m = new THREE.Mesh(t.wireM.geometry(), this.kitMaterial); m.name = `Wires ${t.key}`; m.castShadow = false; m.userData.bake = false; this._add(t, m); }
     t.wireM = null;
-    if (N.count) { const m = new THREE.Mesh(N.geometry(), this.kitMaterial); m.name = `Verge ${t.key}`; m.userData.lodM = 240; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 240; this._add(t, this._gpuOnly(m), 'near'); t.vergeMesh = m; }
+    if (N.count) { const m = new THREE.Mesh(N.geometry(), this.vergeMat); m.name = `Verge ${t.key}`; m.userData.lodM = 240; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 240; this._add(t, this._gpuOnly(m), 'near'); t.vergeMesh = m; }
     // a farm stand by some farmhouses' drives (pumpkins and squash: it's September)
     for (const H of t.homes || []) {
       if (H.kind !== 'farmhouse-ny' || hash(H.key * 3.7) > .3) continue;
@@ -961,7 +969,7 @@ export class GraphCity {
     yield* this._canalScrub(t, N);
     t.vergePending = false;
     if (!N.count) return;
-    const m = new THREE.Mesh(N.geometry(), this.kitMaterial); m.name = `Verge ${t.key}`; m.userData.lodM = 240;
+    const m = new THREE.Mesh(N.geometry(), this.vergeMat); m.name = `Verge ${t.key}`; m.userData.lodM = 240;
     m.visible = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71 < 240;
     this._add(t, this._gpuOnly(m), 'near'); t.vergeMesh = m;
   }
@@ -1028,30 +1036,39 @@ export class GraphCity {
             prevDrive = drive;
             if (hard || drive || !grass) continue;
             const yAt = (d) => { const [x, z] = at(d); return ok && d <= 4.8 ? profileY(d, rY, base) : sH(x, z); };
+            // (user, 23 Nov: "more randomization to their placement and height to appear more natural"): each plant
+            // jittered along the road and out from it, the stand's density and height following slow patches (a lush
+            // run, a thin one, shorter where the mower last reached), each plant's own height varied on top
+            const lush = vnoise(px / 23 + side * 7.1, pz / 23), tall = vnoise(px / 11 + 3.3, pz / 11 - side * 4.4);
             // the mowed strip: tufts and the odd wildflower
-            for (let r = 0; r < 2; r++) {
-              const d = .5 + r * 1.1 + hash(seed * 13 + r) * .5, [x, z] = at(d);
+            const tufts = 2 + Math.floor(hash(seed * 23) * (1 + lush * 2.5));
+            for (let r = 0; r < tufts; r++) {
+              const j = (hash(seed * 29 + r) - .5) * 1.9, d = .3 + hash(seed * 13 + r * 5) * 2.1, [x0, z0] = at(d), x = x0 + tx * j, z = z0 + tz * j;
               // (wildflowers sparse and clumped: a few 14 m cells have a clump, most none — user, 23 Nov)
               const hs = hash(x * 1.3 + z * 2.1), fl = hash(Math.floor(x / 14) * 3 + Math.floor(z / 14)) < .16 && hs < .3;
-              verge(N, x, yAt(d), z, hs, fl);
+              verge(N, x, yAt(d), z, hs, fl, .6 + tall * .7 + hash(seed * 37 + r) * .35);
             }
             // the ditch bottom: cattails where it stays wet, else grass
-            if (ok && hash(Math.floor((px + pz) / 31) * 7.7 + side) < .14 && seed < .45) { const [x, z] = at(2.5 + (seed - .25) * .6); cattails(N, x, profileY(2.5, rY, base), z, seed); }
+            if (ok && hash(Math.floor((px + pz) / 31) * 7.7 + side) < .14 && seed < .45) { const [x, z] = at(2.5 + (seed - .25) * .6); cattails(N, x, profileY(2.5, rY, base), z, seed, .75 + hash(seed * 41) * .5); }
             // the brush: berm out to the fence line, unless it's a lawn, or the crew mowed farther here
             const lawn = lc === LAND.yards || this.host.buildingNear(...at(10), 6);
             const mowed = hash(Math.floor((px * .7 + pz * .3) / 35) * 3.3 + e.n + side) < .18;
             if (lawn || mowed) continue;
-            for (let r = 0; r < 4; r++) {
-              const h = hash(seed * 31 + r * 7), d = 3.3 + r * .85 + h * .8, [x, z] = at(d);
+            const reach = 3 + hash(Math.floor((px + pz * .6) / 17) * 2.9 + side) * 3.5, count = 2 + Math.floor(hash(seed * 43) * (1 + lush * 5.5));
+            for (let r = 0; r < count; r++) {
+              const h = hash(seed * 31 + r * 7), j = (hash(seed * 47 + r) - .5) * 2.2, d = 2.9 + Math.pow(hash(seed * 53 + r * 3), .8) * reach;
+              const [x0, z0] = at(d), x = x0 + tx * j, z = z0 + tz * j;
               if (this.onRoad(x, z, .5) || this._drivewayNear(x, z, 1)) continue;
-              const y = yAt(d), k = hash(seed * 17 + r * 3);
+              const y = d <= 4.8 ? yAt(d) : sH(x, z), k = hash(seed * 17 + r * 3);
+              // taller farther from the road and where the stand is lush; each its own
+              const sc = (.55 + tall * .55 + lush * .25) * (.85 + Math.min(1, (d - 2.9) / 4) * .3) * (.75 + hash(seed * 59 + r) * .5);
               // patches of scrubby brush (sumac, dogwood, raspberry canes: user, 23 Nov "more scrubby brush"), goldenrod in
               // sparser drifts, tall grass between, the odd lace or chicory
               const drift = hash(Math.floor(x / 14) * 5.1 + Math.floor(z / 14) * 2.3), scrub = hash(Math.floor(x / 22) * 1.7 + Math.floor(z / 22) * 4.3 + side) < .38;
-              if (scrub && k < .45) scrubClump(N, x, y, z, h);
-              else if (k < .08 + drift * .22) goldenrod(N, x, y, z, h);
-              else if (k < .9) tallGrass(N, x, y, z, h);
-              else laceAndChicory(N, x, y, z, h);
+              if (scrub && k < .45) scrubClump(N, x, y, z, h, sc);
+              else if (k < .08 + drift * .22) goldenrod(N, x, y, z, h, sc);
+              else if (k < .9) tallGrass(N, x, y, z, h, sc);
+              else laceAndChicory(N, x, y, z, h, sc);
             }
           }
         }
@@ -1102,13 +1119,13 @@ export class GraphCity {
             const h = hash(k * 13 + f * 5 + r * 3 + sd * 7), o = w - .35 + h * Math.max(.4, room + .35);
             const x = p.x + p.nx * sd * o + p.dx * along, z = p.z + p.nz * sd * o + p.dz * along;
             if (this.onRoad(x, z, .3) || this._railCovers(x, z)) continue;
-            const y = p.y - .05 + Math.max(0, Math.min(1, (o - w + .2) / 1.2)) * top, kind = hash(h * 31 + k);
-            if (o < w + .1) { if (kind < .35) cattails(N, x, p.y - .02, z, h); else if (kind < .7) tallGrass(N, x, p.y, z, h); continue; }
-            if (room < 1) { tallGrass(N, x, y, z, h); continue; }
-            if (kind < .45) scrubClump(N, x, y, z, h);
-            else if (kind < .75) tallGrass(N, x, y, z, h);
-            else if (kind < .9) goldenrod(N, x, y, z, h);
-            else laceAndChicory(N, x, y, z, h);
+            const y = p.y - .05 + Math.max(0, Math.min(1, (o - w + .2) / 1.2)) * top, kind = hash(h * 31 + k), sc = .6 + vnoise(x / 13, z / 13) * .6 + hash(h * 7) * .35;
+            if (o < w + .1) { if (kind < .35) cattails(N, x, p.y - .02, z, h, sc); else if (kind < .7) tallGrass(N, x, p.y, z, h, sc); continue; }
+            if (room < 1) { tallGrass(N, x, y, z, h, sc); continue; }
+            if (kind < .45) scrubClump(N, x, y, z, h, sc);
+            else if (kind < .75) tallGrass(N, x, y, z, h, sc);
+            else if (kind < .9) goldenrod(N, x, y, z, h, sc);
+            else laceAndChicory(N, x, y, z, h, sc);
           }
         }
       }
@@ -1505,7 +1522,7 @@ export class GraphCity {
     this.carMat?.dispose();
     for (const m of this.animalMats?.values() || []) { m.userData.depth.dispose(); m.dispose(); }
     for (const g of [this.lampGeo, this.acornGeo]) g.dispose();
-    for (const m of [this.kitMaterial, this.lampMaterial, this.lotMaterial, this.cropMat, this.ditchMat].filter(Boolean)) m.dispose();
+    for (const m of [this.kitMaterial, this.vergeMat, this.lampMaterial, this.lotMaterial, this.cropMat, this.ditchMat].filter(Boolean)) m.dispose();
     this.landTexture?.dispose();
   }
 }

@@ -126,17 +126,17 @@ export function bale(M, x, y, z, yaw, wrapped, seed) {
 }
 const FLOWERS = ['#8090b8', '#d9d5c8', '#c2a444', '#8a7aa6', '#cfcabc', '#a98a3e'];   // (muted, September: user, 23 Nov)
 /** A clump of roadside wildflowers (chicory blue, Queen Anne's lace white, goldenrod, asters), or a grass tuft. */
-export function verge(M, x, y, z, seed, flower) {
-  // grass: a tuft of thin blades (both faces), leaning out; a flower clump: stems with a head each
-  const n = flower ? 4 : 7, V = THREE.Vector3;
+export function verge(M, x, y, z, seed, flower, s = 1) {
+  // grass: a tuft of thin blades, leaning out; a flower clump: stems with a head each (one triangle each: the verge's
+  // material draws both faces — user, 23 Nov: "simplify their models")
+  const n = flower ? 3 : 3 + Math.floor(seed * 4), V = THREE.Vector3;
   for (let k = 0; k < n; k++) {
-    const a = k * 2.4 + seed * 6, d = .05 + hash(seed * 9 + k) * .14, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
-    const h = flower ? .45 + hash(seed * 3 + k) * .5 : .2 + hash(seed * 5 + k) * .22, w = flower ? .02 : .035, lean = .12 + hash(seed + k) * .12;
+    const a = k * 2.4 + seed * 6, d = .05 + hash(seed * 9 + k) * .2, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
+    const h = (flower ? .4 + hash(seed * 3 + k) * .5 : .15 + hash(seed * 5 + k) * .3) * s, w = flower ? .02 : .04, lean = .1 + hash(seed + k) * .16;
     const ca = Math.cos(a + 1.57) * w, sa = Math.sin(a + 1.57) * w, tx = px + Math.cos(a) * lean, tz = pz + Math.sin(a) * lean;
-    M.color(flower ? '#6f8650' : ['#5a7a3c', '#6a8644', '#7e8f4a', '#9a9a5a'][k % 4]);
-    const A = new V(px - ca, y - .02, pz - sa), B = new V(px + ca, y - .02, pz + sa), C = new V(tx, y + h, tz);
-    M.triangle(A, B, C); M.triangle(B, A, C);
-    if (flower) M.color(FLOWERS[Math.floor(hash(seed * 7) * FLOWERS.length + (k % 2)) % FLOWERS.length]).pyramid(tx, y + h - .06, tz, .13, .06, .13, a);
+    M.color(flower ? '#6f8650' : ['#5a7a3c', '#6a8644', '#7e8f4a', '#9a9a5a'][(k + Math.floor(seed * 4)) % 4]);
+    M.triangle(new V(px - ca, y - .02, pz - sa), new V(px + ca, y - .02, pz + sa), new V(tx, y + h, tz));
+    if (flower) { M.color(FLOWERS[Math.floor(hash(seed * 7) * FLOWERS.length + (k % 2)) % FLOWERS.length]); const r = .07; M.triangle(new V(tx - r, y + h - .03, tz), new V(tx + r * .5, y + h - .03, tz + r * .87), new V(tx + r * .5, y + h - .03, tz - r * .87)); }
   }
 }
 /** One fence or wall bay from a to b (ground heights ya, yb): 'wire' | 'board' | 'stone'. */
