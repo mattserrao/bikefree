@@ -20,6 +20,7 @@ import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean, ROAD_
 import { loadRider, RIDER_RIM } from './rider.js';
 import { makeSkyDome } from './toolbox/atmosphere/sky-dome.js';
 import { PostFX } from './toolbox/atmosphere/post.js';
+import { SURFACE, SURFACE_SUN, SURFACE_GLSL, loadSurfaceDetail, withSurfaceDetail } from './toolbox/materials/surface-detail.js';
 import { MOBILE } from './graph-city.js';
 /** The clouds' clock (their shadows drifting over the ground and the roads; puddles' glints): seconds. */
 const CLOUD_T = { value: 0 };
@@ -256,7 +257,7 @@ export class GraphWorld {
     }
     this._reach();
     this.mats = {
-      road: new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
+      road: sideMaterial(this.qualityKey === 'low'),
       paint: this.rural ? wornPaintMaterial() : new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
       ground: groundMaterial(this.qualityKey === 'low', this.rural),
       roadSurface: roadSurfaceMaterial(this.qualityKey === 'low', this.rural),
@@ -408,6 +409,8 @@ export class GraphWorld {
     this.scene.background = new THREE.Color(t.sky);
     if (!this.sky) { this.sky = makeSkyDome({ radius: 8500 }); this.scene.add(this.sky.mesh); }
     this.sky.set(t, this.sunDir, this.rural ? .5 : .35);
+    SURFACE_SUN.value.copy(this.sunDir);
+    if (this.qualityKey !== 'low') loadSurfaceDetail(this.renderer);
     this.scene.fog.color.set(t.fog);
     this.heroes?.setNight(t.night ? 1 : 0);
     if (this.baked) { this.baked.setLight(t); this.sun.castShadow = (this.gfx?.shadows ?? true) && !!this.baked.world.terrain.quality.shadows; }
@@ -1661,10 +1664,10 @@ function roadSurfaceMaterial(low = false, ny = false, spill = false) {
   if (low) m.defines.LOWQ = '';
   if (ny) m.defines.NYWEAR = '';
   m.onBeforeCompile = (shader) => {
-    shader.uniforms.uCloudT = CLOUD_T;
+    shader.uniforms.uCloudT = CLOUD_T; shader.uniforms.uSurf = SURFACE; shader.uniforms.uSurfSun = SURFACE_SUN;
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aRd; varying vec4 vRd; varying vec3 vGW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRd = aRd; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vRd; varying vec3 vGW; uniform float uCloudT;\n' + NOISE_GLSL + (ny ? NY_ROAD_GLSL : ''))
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vRd; varying vec3 vGW; uniform float uCloudT;\n' + NOISE_GLSL + SURFACE_GLSL + (ny ? NY_ROAD_GLSL : ''))
       .replace('#include <color_fragment>', `#include <color_fragment>
         {
           vec3 c = diffuseColor.rgb;
@@ -1759,13 +1762,17 @@ function roadSurfaceMaterial(low = false, ny = false, spill = false) {
             c = nyWinterRoad(c, q, vRd.w, det, track, vGW);
             #endif
           }
+          #ifndef LOWQ
+          // the surface's texture near the camera (asphalt aggregate; a trail's gravel): user, 24 Nov — Zwift parity
+          { float sdist = length(vGW - cameraPosition); c *= (sf == 5 || sf == 6) ? surfaceDetail(vGW.xz, 1, 3.5, sdist, .9) : surfaceDetail(vGW.xz, 0, 5., sdist, .75); }
+          #endif
           diffuseColor.rgb = c * (1. - .2 * smoothstep(.55, .75, gwN((vGW.xz + uCloudT * vec2(3., 1.2)) * .0025)));   // (a cloud's shadow drifting over)
           #ifdef SPILL
           diffuseColor.rgb *= .84;   // (thin over the ground: a shade darker, so it doesn't read as a pale band)
           #endif
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-road-surface-7${low ? '-low' : ''}${ny ? '-ny1' : ''}${spill ? '-spill' : ''}`;
+  m.customProgramCacheKey = () => `pgh-road-surface-8${low ? '-low' : ''}${ny ? '-ny1' : ''}${spill ? '-spill' : ''}`;
   return m;
 }
 
@@ -1775,6 +1782,13 @@ function roadSurfaceMaterial(low = false, ny = false, spill = false) {
  * plazas, sand — with a little noise in the edges so they aren't the grid's.
  */
 /** low (Light, phones): one noise for the land cover's shading, no wobble on its edges. */
+/** The ways' sides (verges, shoulders, kerbs, embankments): vertex colour, and near the camera the surface texture
+ *  (user, 24 Nov — Zwift parity). */
+function sideMaterial(low = false) {
+  const m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  return low ? m : withSurfaceDetail(m, 'graph-side');
+}
+
 function groundMaterial(low = false, rural = false) {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true });
   m.defines = {};
@@ -1784,11 +1798,12 @@ function groundMaterial(low = false, rural = false) {
   const U = { uLand: { value: blank }, uLandBox: { value: new THREE.Vector4(0, 0, 1, 1) }, uLandOn: { value: 0 } };
   m.userData.land = U;
   m.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, U); shader.uniforms.uCloudT = CLOUD_T;
+    Object.assign(shader.uniforms, U); shader.uniforms.uCloudT = CLOUD_T; shader.uniforms.uSurf = SURFACE; shader.uniforms.uSurfSun = SURFACE_SUN;
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aLandW; varying float vLandW; varying vec3 vGW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLandW = aLandW; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLand; uniform vec4 uLandBox; uniform float uLandOn; uniform float uCloudT; varying float vLandW; varying vec3 vGW;\n' + NOISE_GLSL)
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLand; uniform vec4 uLandBox; uniform float uLandOn; uniform float uCloudT; varying float vLandW; varying vec3 vGW;\n' + NOISE_GLSL + SURFACE_GLSL)
       .replace('#include <color_fragment>', `#include <color_fragment>
+        int sdCh = 2;
         if (uLandOn > .5 && vLandW > .01) {
           vec2 size = uLandBox.zw - uLandBox.xy;
           #ifdef LOWQ
@@ -1892,12 +1907,17 @@ function groundMaterial(low = false, rural = false) {
             if (k > 10.5 && k < 11.5 || k > 27.5) lc = mix(lc, lc * vec3(1.05, .98, .85), smoothstep(.55, .75, gwN(vGW.xz * .5)) * .5);   // tussocks, seed heads
           }
           #endif
+          if (k > 1.5 && k < 2.5) sdCh = 1;   // (the woods' floor: stone dust and grit, not turf)
           if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * mix(clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vec3(1.), step(19.5, k) * .7), vLandW * (k > 19.5 || (k > 1.5 && k < 2.5) ? .95 : .85));   // (CNY's fields: their own colour, less of the ground's tint)
         }
+        #ifndef LOWQ
+        // the ground's texture near the camera: turf, or the woods' floor's grit (user, 24 Nov — Zwift parity)
+        diffuseColor.rgb *= surfaceDetail(vGW.xz, sdCh, sdCh == 1 ? 5. : 3., length(vGW - cameraPosition), sdCh == 1 ? .6 : .8);
+        #endif
         #ifdef NYGRASS
         diffuseColor.rgb *= 1. - .2 * smoothstep(.55, .75, gwN((vGW.xz + uCloudT * vec2(3., 1.2)) * .0025));   // a cloud's shadow drifting over (user, 23 Nov)
         #endif`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-8${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-9${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
   return m;
 }

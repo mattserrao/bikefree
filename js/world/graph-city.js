@@ -22,6 +22,7 @@ import { cellKey, freezeMatrix } from './graph-world.js';
 import { drain, runSlice, due } from './toolbox/core/jobs.js';
 import { planBuildingKitJob, makeStreetIndex, dress } from './toolbox/structures/buildings/kit.js';
 import { assemble, Writer } from './toolbox/structures/buildings/assemble.js';
+import { withSurfaceDetail } from './toolbox/materials/surface-detail.js';
 import { buildHouse } from './toolbox/structures/houses/house-engine.js';
 import { makeFacadeMaterial } from './toolbox/structures/buildings/facade-material.js';
 import { villageFurniture } from './toolbox/city/village-street.js';
@@ -1198,7 +1199,7 @@ export class GraphCity {
       }
     }
     const geo = struct ? ditchGeometry(runs) : null;
-    if (geo) { const m = new THREE.Mesh(geo, this.ditchMat ||= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 })); m.name = `Ditches ${t.key}`; m.receiveShadow = true; m.userData.lodM = 700; this._add(t, m); }
+    if (geo) { const m = new THREE.Mesh(geo, this.ditchMat ||= (this.world.qualityKey === 'low' ? (x) => x : withSurfaceDetail)(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }), 'ditch')); m.name = `Ditches ${t.key}`; m.receiveShadow = true; m.userData.lodM = 700; this._add(t, m); }
   }
   /**
    * The canal's banks (user, 22 Nov: "the inside slope down to the water is covered with shrubs and scrubby plants"):
