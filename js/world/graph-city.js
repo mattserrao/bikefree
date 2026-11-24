@@ -56,6 +56,15 @@ const CAR_HI = 110;
 const ANIMAL_M = 480;           // m: farm animals drawn within this             // m: the kit's detailed cars within this
 const pipXZ = (r, x, z) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) c = !c; } return c; };
 const HOUSE_CLOSE_M = 160;
+/** A static mesh's arrays let go once they're on the GPU (no second copy in the page's memory: phones, user 23 Nov —
+ *  "even on high … should not run out of memory"); its bounds kept first. Not for anything read back later. */
+function gpuOnly(m) {
+  const g = m.geometry; g.computeBoundingSphere(); if (!g.boundingBox) g.computeBoundingBox();
+  const drop = function () { this.array = null; };
+  for (const a of Object.values(g.attributes)) a.onUpload(drop);
+  g.index?.onUpload(drop);
+  return m;
+}
 const PROXY_MAT = new THREE.MeshStandardMaterial({ color: '#000000' });
 /** One mesh of every tree's crown (an ellipsoid; a cone for the conifers) and trunk, for the bake only: on no camera
  *  layer (the bake draws it on its own), static (bake: true). */
@@ -351,9 +360,9 @@ export class GraphCity {
           const res = R.house ? buildHouse(R, R.house, w, d, closeOf(R), LR) : assemble(R, w, d, LR);
           if (R.dressing?.length) for (const it of R.dressing) dress(d, it, R, L, res);
         }
-        if (w.n) { const m = new THREE.Mesh(w.geometry(), material); m.name = `Homes ${key}`; m.castShadow = m.receiveShadow = true; group.add(m); }
-        if (d.n) { const dm = new THREE.Mesh(d.geometry(), material); dm.userData.bake = false; dm.name = `Home detail ${key}`; dm.receiveShadow = true; dm.geometry.computeBoundingBox(); dm.userData.box = dm.geometry.boundingBox; group.add(dm); details.push(dm); }
-        for (const c of close.values()) if (c.n) { const cm = new THREE.Mesh(c.geometry(), material); cm.userData.bake = false; cm.name = `House close detail ${key}`; cm.receiveShadow = true; cm.geometry.computeBoundingBox(); cm.userData.box = cm.geometry.boundingBox; cm.userData.reach = HOUSE_CLOSE_M; group.add(cm); details.push(cm); }
+        if (w.n) { const m = gpuOnly(new THREE.Mesh(w.geometry(), material)); m.name = `Homes ${key}`; m.castShadow = m.receiveShadow = true; group.add(m); }
+        if (d.n) { const dm = gpuOnly(new THREE.Mesh(d.geometry(), material)); dm.userData.bake = false; dm.name = `Home detail ${key}`; dm.receiveShadow = true; dm.geometry.computeBoundingBox(); dm.userData.box = dm.geometry.boundingBox; group.add(dm); details.push(dm); }
+        for (const c of close.values()) if (c.n) { const cm = gpuOnly(new THREE.Mesh(c.geometry(), material)); cm.userData.bake = false; cm.name = `House close detail ${key}`; cm.receiveShadow = true; cm.geometry.computeBoundingBox(); cm.userData.box = cm.geometry.boundingBox; cm.userData.reach = HOUSE_CLOSE_M; group.add(cm); details.push(cm); }
       },
       tick(cam) { for (const m of details) m.visible = m.userData.box.distanceToPoint(cam) < (m.userData.reach || KIT_CFG.detailReachM); },
     };
@@ -608,7 +617,7 @@ export class GraphCity {
     yield* this._storefronts(t); yield;
     yield* this._lots(t); yield* this._lines(t);
     // the street furniture, fences and walls: one mesh (one draw call) for the tile
-    if (t.kitM.count) { const m = new THREE.Mesh(t.kitM.geometry(), this.kitMaterial); m.name = `Street furniture ${t.key}`; m.castShadow = true; m.receiveShadow = true; this._add(t, m); }
+    if (t.kitM.count) { const m = gpuOnly(new THREE.Mesh(t.kitM.geometry(), this.kitMaterial)); m.name = `Street furniture ${t.key}`; m.castShadow = true; m.receiveShadow = true; this._add(t, m); }
     t.kitM = null;
     for (const { m } of t.meshes) freezeMatrix(m);   // (static: no per-frame matrix work)
     if (t.spots.length) this.world.tileSpots?.set(key, t.spots);
@@ -915,7 +924,7 @@ export class GraphCity {
     // standing corn and soybeans: row cards, near the camera only
     this.cropMat ||= cropMaterial(this.treeTime);
     const cc = {}; yield* cropCardsJob(x0, z0, TILE, (x, z) => this._cropAt(x, z), g, cc); const geo = cc.geo;
-    if (geo) { const m = new THREE.Mesh(geo, this.cropMat); m.name = `Crops ${t.key}`; m.userData.lodM = 300; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 300; this._add(t, m, 'near'); }
+    if (geo) { const m = gpuOnly(new THREE.Mesh(geo, this.cropMat)); m.name = `Crops ${t.key}`; m.userData.lodM = 300; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 300; this._add(t, m, 'near'); }
     yield;
     // round bales on the hay and the stubble
     for (let x = x0 + 11; x < x0 + TILE; x += 22) for (let z = z0 + 11; z < z0 + TILE; z += 22) {
@@ -960,7 +969,7 @@ export class GraphCity {
     }
     if (vNear) yield* this._canalScrub(t, N);
     // the wires: no shadow, baked or live (a 2.5 cm wire's shadow drew as a thick black line across the road)
-    if (t.wireM?.count) { const m = new THREE.Mesh(t.wireM.geometry(), this.kitMaterial); m.name = `Wires ${t.key}`; m.castShadow = false; m.userData.bake = false; this._add(t, m); }
+    if (t.wireM?.count) { const m = gpuOnly(new THREE.Mesh(t.wireM.geometry(), this.kitMaterial)); m.name = `Wires ${t.key}`; m.castShadow = false; m.userData.bake = false; this._add(t, m); }
     t.wireM = null;
     if (N.count) { const m = new THREE.Mesh(N.geometry(), this.vergeMat); m.name = `Verge ${t.key}`; m.userData.lodM = 240; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 240; this._add(t, this._gpuOnly(m), 'near'); t.vergeMesh = m; }
     // a farm stand by some farmhouses' drives (pumpkins and squash: it's September)

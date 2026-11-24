@@ -41,6 +41,7 @@ const BED_BELOW = 1.2;              // ground this close above the pool (or unde
 // the drawing buffer's pixel ratio by quality: with 4× MSAA on, 1.5 on a 2× (Retina) screen looks all but the same as 2
 // and shades 44% fewer pixels — the anti-aliasing review (23 Nov): edges are the multisample's job, not resolution's
 const PIXEL_RATIO = { low: 1, balanced: 1.5, high: 2 };
+const SPILL_IN = 350, SPILL_OUT = 550;   // the ways' spill strips: built within, dropped past (m from a tile's edge)
 const KERB = 0.35;                  // the ground's top this far under the road beside it…
 const SHELF = 13;                   // …for this far beyond its edge (a ground cell: no triangle reaches over the road)…
 const CUT_EASE = 0.75;              // …then back up at this slope (m per m)
@@ -828,6 +829,20 @@ export class GraphWorld {
       if (runSlice(this._tjob.gen, left).done) this._tjob = null; else break;
     }
     this._queued = want.reduce((n, q) => n + (todo(q.t) ? 1 : 0), 0);
+    // the ways' spill (_spillJob): only near the camera — within SPILL_IN of a tile's edge, dropped past SPILL_OUT
+    // (it's a fine detail; built for every tile out to 2.3 km it was ~34 MB on High)
+    while (performance.now() - t0 < budgetMs) {
+      if (!this._sjob) {
+        let best = null, bd = SPILL_IN;
+        for (const t of this.tiles.values()) if (t.spillPending && t.groundMesh) { const d = Math.hypot(t.cx - cx, t.cz - cz) - TILE * .71; if (d < bd) { bd = d; best = t; } }
+        if (!best) break;
+        best.spillPending = false; this._sjob = { t: best, gen: this._spillJob(best) };
+      }
+      if (runSlice(this._sjob.gen, budgetMs - (performance.now() - t0)).done) this._sjob = null; else break;
+    }
+    if (this._frames % 30 === 15) for (const t of this.tiles.values()) if (t.spillMesh && t !== this._sjob?.t && Math.hypot(t.cx - cx, t.cz - cz) - TILE * .71 > SPILL_OUT) {
+      this.group.remove(t.spillMesh); t.spillMesh.geometry.dispose(); t.spillMesh = null; t.spillPending = true;
+    }
     // release far tiles (a few a frame)
     if (this._frames % 30 === 0) for (const t of this.tiles.values()) {
       if (t.built && t !== this._tjob?.t && Math.hypot(t.cx - cx, t.cz - cz) > (this.farM || FAR_M)) this._release(t);
@@ -841,8 +856,9 @@ export class GraphWorld {
 
   _release(t) {
     if (this._tjob?.t === t) this._tjob = null;   // (a tile released while building: started again when it's wanted)
-    for (const m of [t.roadMesh, t.paintMesh, t.groundMesh, t.bankMesh, ...(t.extra || []), ...(t.extraRoad || [])]) if (m) { this.group.remove(m); m.geometry.dispose(); }
-    t.roadMesh = t.paintMesh = t.groundMesh = t.bankMesh = null; t.extra = []; t.extraRoad = [];
+    if (this._sjob?.t === t) this._sjob = null;
+    for (const m of [t.roadMesh, t.paintMesh, t.groundMesh, t.bankMesh, t.spillMesh, ...(t.extra || []), ...(t.extraRoad || [])]) if (m) { this.group.remove(m); m.geometry.dispose(); }
+    t.roadMesh = t.paintMesh = t.groundMesh = t.bankMesh = t.spillMesh = null; t.spillPending = false; t.extra = []; t.extraRoad = [];
     t.built = false;
   }
 
@@ -1097,7 +1113,7 @@ export class GraphWorld {
     g.computeVertexNormals();
     t.groundMesh = new THREE.Mesh(g, this.mats.ground);
     this.group.add(t.groundMesh);
-    yield* this._spillJob(t);
+    t.spillPending = !!(t.spills?.length || t.endSpills?.length);   // (built when the camera comes near: _stream)
     yield* this._bankJob(t);
     yield* this.effects.tileJob(t);
   }
@@ -1132,7 +1148,7 @@ export class GraphWorld {
       }
     }
     const m = R.mesh(this.mats.spill);
-    if (m) { m.name = 'Spill'; m.receiveShadow = true; (t.extra ||= []).push(m); this.group.add(m); }
+    if (m) { m.name = 'Spill'; m.receiveShadow = true; t.spillMesh = m; this.group.add(m); }
   }
 
   /** The dressed places' ground in this tile (toolbox/materials/park-surfaces.js): lawns, beds, woods, plazas and walks
