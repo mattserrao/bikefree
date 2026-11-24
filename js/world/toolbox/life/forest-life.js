@@ -19,25 +19,58 @@ const V = (x, y, z) => new THREE.Vector3(x, y, z);
 /** A white-tailed deer (a doe; +z forward, 0 at the hooves): fall's grey-brown coat, white throat, belly and tail's
  *  underside, black nose; the head and neck carry aHead = 1 (they swing down to graze about the withers). */
 function deerGeometry() {
+  // (user, 24 Nov: "the deer are blocky" → "Smoother, better-proportioned deer"): smooth ellipsoids and tapered round
+  // limbs instead of square beams — a deep chest and slimmer waist, slender jointed legs, a long neck, a tapering muzzle,
+  // big cupped ears, the white flag of a tail
   const M = new MeshBuilder({ aHead: 1 });
   const H = (h) => M.set({ aHead: [h] });
+  // an ellipsoid at c (radii rx, ry, rz), tipped by `pitch` about x
+  const ell = (c, rx, ry, rz, pitch = 0, seg = 10, rings = 6) => {
+    const cp = Math.cos(pitch), sp = Math.sin(pitch), base = M.count;
+    for (let r = 0; r <= rings; r++) {
+      const th = r / rings * Math.PI, st = Math.sin(th), ct = Math.cos(th);
+      for (let k = 0; k <= seg; k++) {
+        const ph = k / seg * Math.PI * 2, x = st * Math.cos(ph), y = ct, z = st * Math.sin(ph);
+        const py = y * ry, pz = z * rz, ny = y / ry, nz = z / rz, nx = x / rx, l = Math.hypot(nx, ny, nz);
+        M.vertex(c.x + x * rx, c.y + py * cp - pz * sp, c.z + py * sp + pz * cp, nx / l, (ny * cp - nz * sp) / l, (ny * sp + nz * cp) / l);
+      }
+    }
+    for (let r = 0; r < rings; r++) for (let k = 0; k < seg; k++) {
+      const i0 = base + r * (seg + 1) + k, i1 = i0 + seg + 1;
+      M.tri(i0, i0 + 1, i1); M.tri(i0 + 1, i1 + 1, i1);
+    }
+  };
+  // a tapered round limb from a (radius ra) to b (radius rb)
+  const limb = (a, b, ra, rb, seg = 8) => {
+    const d = b.clone().sub(a), L = d.length(); d.normalize();
+    const side = Math.abs(d.x) < .9 ? V(1, 0, 0) : V(0, 0, 1), n1 = side.cross(d).normalize(), n2 = d.clone().cross(n1);
+    const base = M.count;
+    for (const [p, r] of [[a, ra], [b, rb]]) for (let k = 0; k <= seg; k++) {
+      const ph = k / seg * Math.PI * 2, n = n1.clone().multiplyScalar(Math.cos(ph)).addScaledVector(n2, Math.sin(ph));
+      M.vertex(p.x + n.x * r, p.y + n.y * r, p.z + n.z * r, n.x, n.y + (ra - rb) / L, n.z);
+    }
+    for (let k = 0; k < seg; k++) { const i0 = base + k, i1 = base + seg + 1 + k; M.tri(i0, i0 + 1, i1); M.tri(i0 + 1, i1 + 1, i1); }
+  };
   H(0);
-  M.color('#7a634e'); M.beam(V(0, 1.02, -.5), V(0, 1.06, .48), .42, .46);            // the barrel
-  M.color('#857059'); M.beam(V(0, 1.12, .38), V(0, 1.12, .58), .38, .34);             // the shoulders
-  M.color('#efe9de'); M.beam(V(0, .86, -.35), V(0, .88, .3), .3, .08);                 // the belly
-  M.color('#7a634e'); M.beam(V(0, 1.12, -.55), V(0, 1.0, -.72), .14, .1);              // the tail…
-  M.color('#f4f1ea'); M.beam(V(0, 1.06, -.6), V(0, .96, -.74), .12, .05);              // …its white underside
-  for (const [x, z] of [[-.14, .45], [.14, .45], [-.14, -.42], [.14, -.42]]) {
-    M.color('#6e5a46'); M.beam(V(x, .9, z), V(x, .45, z + (z > 0 ? .02 : -.04)), .09, .09);
-    M.color('#5c4b3b'); M.beam(V(x, .45, z + (z > 0 ? .02 : -.04)), V(x, .04, z), .055, .055);
-    M.color('#2a2420'); M.box(x, 0, z, .06, .06, .08);
+  M.color('#7d6650'); ell(V(0, 1.03, .22), .25, .3, .42, -.05);                 // the chest and shoulders
+  M.color('#786049'); ell(V(0, 1.0, -.3), .23, .26, .4, .06);                   // the barrel and haunch
+  M.color('#efe9de'); ell(V(0, .84, -.02), .15, .1, .42);                       // the white belly
+  M.color('#f4f1ea'); ell(V(0, 1.02, -.72), .07, .12, .06, .5);                 // the tail's white underside
+  M.color('#7a634e'); ell(V(0, 1.08, -.7), .06, .1, .05, .5);                   // the tail's brown top
+  for (const [x, z, front] of [[-.13, .34, 1], [.13, .34, 1], [-.12, -.42, 0], [.12, -.42, 0]]) {
+    const top = V(x, .95, z), knee = front ? V(x, .5, z + .02) : V(x, .58, z - .1), hock = front ? V(x, .3, z + .01) : V(x, .38, z + .02), foot = V(x, .03, z + .02);
+    M.color('#735c47'); limb(top, knee, front ? .075 : .1, .045);
+    M.color('#6a5442'); limb(knee, hock, .045, .035); limb(hock, foot, .035, .03);
+    M.color('#24201c'); ell(V(x, .03, z + .04), .035, .035, .05);
   }
   H(1);   // the neck and head
-  M.color('#7f6852'); M.beam(V(0, 1.18, .55), V(0, 1.58, .78), .2, .22);
-  M.color('#ece6da'); M.beam(V(0, 1.22, .66), V(0, 1.5, .84), .1, .08);               // the throat patch
-  M.color('#806a54'); M.beam(V(0, 1.62, .74), V(0, 1.5, 1.06), .17, .2);              // the head
-  M.color('#1d1a18'); M.box(0, 1.47, 1.04, .07, .06, .06);                             // the nose
-  M.color('#7b6550'); for (const s of [-1, 1]) M.beam(V(s * .06, 1.7, .78), V(s * .18, 1.86, .74), .07, .03);   // ears
+  M.color('#806953'); limb(V(0, 1.13, .45), V(0, 1.5, .72), .14, .085, 10);
+  M.color('#ece6da'); ell(V(0, 1.33, .64), .06, .13, .05, -.7);                 // the throat patch
+  M.color('#826b55'); ell(V(0, 1.58, .82), .085, .085, .12, .35);               // the head
+  M.color('#7a634e'); limb(V(0, 1.55, .88), V(0, 1.47, 1.04), .065, .04, 8);    // the muzzle
+  M.color('#1d1a18'); ell(V(0, 1.47, 1.05), .03, .025, .02);                    // the nose
+  M.color('#1d1a18'); for (const sx of [-1, 1]) ell(V(sx * .07, 1.62, .88), .016, .016, .016);   // the eyes
+  M.color('#7b6550'); for (const sx of [-1, 1]) ell(V(sx * .13, 1.7, .76), .035, .085, .02, 0);  // the ears
   return M.geometry();
 }
 

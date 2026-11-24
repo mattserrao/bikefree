@@ -1887,19 +1887,22 @@ function sideMaterial(low = false) {
   return low ? m : withSurfaceDetail(m, 'graph-side');
 }
 
+const ROOTS_N = 24;
 function groundMaterial(low = false, rural = false) {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true });
   m.defines = {};
   if (low) m.defines.LOWQ = '';
   if (rural) m.defines.NYGRASS = '';
   const blank = new THREE.DataTexture(new Uint8Array([1]), 1, 1, THREE.RedFormat); blank.needsUpdate = true;
-  const U = { uLand: { value: blank }, uLandBox: { value: new THREE.Vector4(0, 0, 1, 1) }, uLandOn: { value: 0 } };
+  const U = { uLand: { value: blank }, uLandBox: { value: new THREE.Vector4(0, 0, 1, 1) }, uLandOn: { value: 0 },
+    // a hero area's big trees near the camera (old-growth.js): x, z, trunk radius, seed — their root tops and bare soil
+    uRoots: { value: Array.from({ length: ROOTS_N }, () => new THREE.Vector4()) }, uRootN: { value: 0 } };
   m.userData.land = U;
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, U); shader.uniforms.uCloudT = CLOUD_T; shader.uniforms.uSurf = SURFACE; shader.uniforms.uSurfSun = SURFACE_SUN;
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aLandW; attribute float aTread; varying float vLandW; varying vec3 vGW; varying float vTread;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLandW = aLandW; vTread = aTread; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLand; uniform vec4 uLandBox; uniform float uLandOn; uniform float uCloudT; varying float vLandW; varying vec3 vGW; varying float vTread;\n' + NOISE_GLSL + SURFACE_GLSL)
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLand; uniform vec4 uLandBox; uniform float uLandOn; uniform float uCloudT; uniform vec4 uRoots[24]; uniform float uRootN; varying float vLandW; varying vec3 vGW; varying float vTread;\n' + NOISE_GLSL + SURFACE_GLSL)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         #ifndef LOWQ
         {
@@ -2086,6 +2089,24 @@ function groundMaterial(low = false, rural = false) {
           diffuseColor.rgb *= 1. - groove * wear * .25;
           // the leaves and straw pushed aside by the tires, banked a little lighter along the edges
           diffuseColor.rgb *= 1. + .14 * smoothstep(.45, .65, ad) * (1. - smoothstep(.7, 1.1, ad));
+          // a big tree's foot (user, 24 Nov: "trees disturb the ground with their growth … the tops of exposed roots …
+          // the ground swollen slightly near their base" → "Root tops breaking the litter", "Bare soil between roots"):
+          // round each one near the camera, the tops of its roots running out through the leaves, bare earth between
+          // them close in; the swelling itself is the skirt's (old-growth.js floorH)
+          for (int i = 0; i < ${ROOTS_N}; i++) {
+            if (float(i) >= uRootN) break;
+            vec4 f = uRoots[i]; vec2 dv = vGW.xz - f.xy; float r = length(dv) / f.z;
+            if (r > 4.4) continue;
+            float a = atan(dv.y, dv.x) + (.25 * sin(r * 1.7 + f.w) + (gwN(vGW.xz * 3.) - .5) * .35) * smoothstep(1.6, 3., r);   // (true to the 3D roots' bearings close in)
+            float ridge = pow(abs(cos(a * 3. + f.w)), 10. + r * 4.) + .6 * pow(abs(cos(a * 5. + f.w * 1.7)), 26.) * (1. - smoothstep(1.8, 2.8, r));
+            float reach = 1. - smoothstep(2.2, 3.6 + .7 * sin(a * 2. + f.w), r);
+            float soil = (1. - smoothstep(1.7, 3.1 + .6 * gwN(vGW.xz * 1.3 + f.w), r)) * (1. - min(1., ridge));
+            vec3 dirt = pow(mix(vec3(.24, .18, .13), vec3(.33, .25, .17), gwN(vGW.xz * 5.)), vec3(2.2));
+            vec3 bark = pow(mix(vec3(.36, .31, .26), vec3(.45, .4, .34), gwN(vGW.xz * 9. + f.w)), vec3(2.2));
+            diffuseColor.rgb = mix(diffuseColor.rgb, dirt, soil * .7 * (1. - step(.86, gwH(floor(vGW.xz * 6.5) + 31.))));
+            diffuseColor.rgb = mix(diffuseColor.rgb, bark, min(1., ridge) * reach * .85);
+            diffuseColor.rgb *= 1. - .18 * smoothstep(.5, 1.2, ridge) * reach * (1. - smoothstep(0., .9, abs(cos(a * 3. + f.w + .25))));
+          }
         }
         #ifndef LOWQ
         // the ground's texture near the camera: turf, or the woods' floor's grit (user, 24 Nov — Zwift parity)
@@ -2095,6 +2116,6 @@ function groundMaterial(low = false, rural = false) {
         diffuseColor.rgb *= 1. - .2 * smoothstep(.55, .75, gwN((vGW.xz + uCloudT * vec2(3., 1.2)) * .0025));   // a cloud's shadow drifting over (user, 23 Nov)
         #endif`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-15${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-17${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
   return m;
 }

@@ -290,7 +290,7 @@ const SPECIES = {
     levels: [[5, .45, .75, .3], [3, .3, .7, .19], [3, .4, .6, .1]],
     greens: ['#4c7233', '#557b38'], fall: ['#d08a33', '#c25f2a', '#d9ac3e'], turn: [0, .3, .7] },
   // American beech: smooth silver-grey trunk, long limbs from low down, a broad low crown; golden-bronze late
-  beech: { H: 21, R: 7, fork: .22, trunkR: .45, trunk: '#9a9890', bark: BARK, leader: true, flat: true, gnarl: .2, up: .03,
+  beech: { H: 21, R: 7, fork: .22, trunkR: .45, trunk: '#86837b', bark: BARK, leader: true, flat: true, gnarl: .2, up: .03,
     levels: [[7, .2, 1.05, .4], [4, .3, .65, .22], [3, .35, .6, .11]],
     greens: ['#5a843c', '#628c42', '#527a37'], fall: ['#c9a440', '#b9893a'], turn: [0, .1, .4] },
   // paper birch: white stems (two or three from the base), a light airy crown, yellow in fall
@@ -333,7 +333,7 @@ const FOREST_FORMS = {
     levels: [[7, .58, .6, .25], [4, .3, .62, .15], [3, .35, .6, .085]],
     greens: ['#6b8a34', '#77913a', '#5f7f31'], fall: ['#e2a62a', '#d98c24', '#eab838', '#cf7522'], turn: [.82, .96] },
   // American beech: the smooth elephant-grey bole, longer limbs a little lower, a broad top; bronze late
-  beechF: { H: 26, R: 6.2, fork: .5, trunkR: .48, trunk: '#a19f97', bark: BARK, leader: true, gnarl: .18, up: .06,
+  beechF: { H: 26, R: 6.2, fork: .5, trunkR: .48, trunk: '#7f7c75', bark: BARK, leader: true, gnarl: .18, up: .06,
     levels: [[7, .5, .82, .29], [4, .3, .65, .17], [3, .35, .6, .095]],
     greens: ['#7a8c3a', '#86923e'], fall: ['#d4a83a', '#c99434', '#e0b848'], turn: [.72, .9] },
   // bitternut hickory: tall and straight, a smallish crown of stout ascending limbs; bright yellow early
@@ -356,8 +356,16 @@ function bigLog(seed, { L = 15, r = .5, nurse = false, tipup = false } = {}) {
   const rand = randomSequence(seed), b = new Builder();
   b.as(nurse ? DEAD : BARK).add(cyl(r * .62, r, L, 8), M(L / 2, r * .85, 0, 1, 1, 1, 0, 0, Math.PI / 2), nurse ? '#7d7266' : '#5a4838');
   // moss: a soft green mat along the top, thicker on an old log
-  b.as(SHRUB).add(cyl(r * .5, r * .78, L * .8, 6), M(L * .48, r * 1.5, 0, 1, nurse ? .45 : .22, 1, 0, 0, Math.PI / 2), nurse ? '#5d7a3c' : '#56713a');
-  for (let k = 0; k < (nurse ? 7 : 3); k++) b.add(blob(0), M(L * (.12 + rand() * .76), r * (1.5 + rand() * .2), (rand() - .5) * r, r * (.6 + rand() * .4), r * .3, r * (.5 + rand() * .3)), ['#5f7d3d', '#4f6c35', '#6a8644'][k % 3], .15, rand);
+  // moss in patches (user, 24 Nov: "Moss: patchy, textured" — it was one flat green slab): cushions of differing size
+  // and green along the top and down the shaded side, thicker on an old nurse log, bare bark showing between
+  b.as(SHRUB);
+  const patches = nurse ? 18 : 10;
+  for (let k = 0; k < patches; k++) {
+    const x = L * (.05 + rand() * .9), side = (rand() - .5) * 2.2, sz = r * (.18 + rand() * .32) * (nurse ? 1.2 : 1);
+    const a = side * .9, y = r * .85 + Math.cos(a) * r * .98, z = Math.sin(a) * r * .98;
+    b.add(blob(0), M(x, y, z, sz * (1.2 + rand()), sz * .35, sz, rand() * 6, a, 0), ['#5f7d3d', '#4f6c35', '#6a8644', '#7a8a46', '#55703a'][Math.floor(rand() * 5)], .2, rand);
+    if (rand() < .4) b.add(blob(0), M(x + (rand() - .5) * sz, y + sz * .12, z, sz * .45, sz * .22, sz * .45), '#87964c', .2, rand);
+  }
   b.as(DEAD);
   for (let k = 0; k < 5; k++) b.add(cyl(.03, .08, .7 + rand() * 1.2, 3), M(L * (.25 + rand() * .7), r * 1.4, (rand() - .5) * r, 1, 1, 1, rand() * 6.28, 0, .5 + rand() * .9), '#857e72');
   if (nurse) {
@@ -388,10 +396,19 @@ function bigLog(seed, { L = 15, r = .5, nurse = false, tipup = false } = {}) {
 /** Spring ephemerals gone to summer leaf (waterleaf, blue cohosh, touch-me-not; DEC's commonest understory plants): a
  *  low, soft clump of broad leaves, yellowing a little in September. */
 function herb(seed) {
+  // (user, 24 Nov: herbs "softer, yellowing"): a loose clump of broad, soft leaves on short stalks, held out and up, the
+  // edges curling — waterleaf and touch-me-not in late September, more yellow than green now
   const rand = randomSequence(seed), b = new Builder(); b.as(SHRUB);
-  for (let k = 0; k < 9; k++) {
-    const a = k * 2.4 + rand(), d = rand() * .35, h = .18 + rand() * .3;
-    b.add(blob(0), M(Math.cos(a) * d, h, Math.sin(a) * d, .16 + rand() * .1, .05, .14 + rand() * .08, rand() * 6), ['#5b8a3a', '#6b9442', '#7c9a48', '#a5a548'][k % 4], .1, rand);
+  const n = 9 + Math.floor(rand() * 4);
+  for (let k = 0; k < n; k++) {
+    const a = k * 2.4 + rand() * .6, tilt = 1. + rand() * .45, len = .14 + rand() * .1, h = .05 + rand() * .16;
+    const col = ['#8f9c46', '#a8a44c', '#bfa64e', '#c9b25a', '#7f9442', '#b08a3c'][Math.floor(rand() * 6)];
+    const out = new THREE.Vector3(Math.cos(a), 0, Math.sin(a)), base = out.clone().multiplyScalar(.04 + rand() * .08).setY(h);
+    // the stalk
+    b.add(cyl(.006, .008, h + .02, 3), M(base.x * .5, 0, base.z * .5), '#7d8a3e', 0, rand);
+    const dir = out.clone().multiplyScalar(Math.sin(tilt)).setY(Math.cos(tilt)).normalize(), side = new THREE.Vector3(-out.z, 0, out.x);
+    const face = new THREE.Vector3().crossVectors(side, dir).normalize();
+    b.add(bladeGeo(.4), new THREE.Matrix4().makeBasis(side.clone().multiplyScalar(len * .85), dir.clone().multiplyScalar(len), face).setPosition(base), col, 0, rand);
   }
   return b.build();
 }
@@ -482,25 +499,55 @@ function sumac(seed) {
   }
   return b.build();
 }
+// a flat leaf blade, both faces: base at the origin, tip at +y (length 1), widest at `at` up it, width 1
+function bladeGeo(at = .4) {
+  const P = [0, 0, 0, -.5, at, 0, -.18, .82, 0, 0, 1, 0, .18, .82, 0, .5, at, 0], N = [], I = [];
+  const pos = [...P, ...P];
+  for (let k = 0; k < 6; k++) N.push(0, 0, 1); for (let k = 0; k < 6; k++) N.push(0, 0, -1);
+  for (const [a, b, c] of [[0, 5, 4], [0, 4, 3], [0, 3, 2], [0, 2, 1]]) { I.push(a, b, c); I.push(c + 6, b + 6, a + 6); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); g.setIndex(I);
+  return g;
+}
 function fern(seed) {
-  // (user, 23 Nov: "2D sprite ferns" — photographed into the tree atlas as the rest are): a crown of arching fronds,
-  // each a rachis with paired leaflets tapering to the tip; September greens, a few yellowing, one gone brown
-  const rand = randomSequence(seed), b = new Builder(), Q = new THREE.Quaternion(), S = new THREE.Vector3(.9, 1, .22);
-  const leaf = (p, dir, len, col) => { Q.setFromUnitVectors(Y, dir); b.add(cone(.045, len, 3), new THREE.Matrix4().compose(p, Q, S), col, 0, rand); };
+  // (user, 24 Nov: "green paper strips" → "Real fern fronds"): a crown of arching, twice-divided fronds — each a
+  // rachis with paired pinnae, long in the middle and tapering to a fine tip, each pinna a row of little lobes — the
+  // fronds of late September: most still green, some gone yellow, a few bronze and drooping. Drawn in 3D near the path
+  // (near-trunks.js NearPlants), its card farther off.
+  const rand = randomSequence(seed), b = new Builder(), Q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
+  const lobe = (p, dir, up, len, w, col) => {
+    // a blade along dir, its face turned toward `up` (the frond's own top)
+    const x = new THREE.Vector3().crossVectors(dir, up).normalize(), zN = new THREE.Vector3().crossVectors(x, dir).normalize();
+    const m = new THREE.Matrix4().makeBasis(x.multiplyScalar(w), dir.clone().multiplyScalar(len), zN).setPosition(p);
+    b.add(bladeGeo(.45), m, col, 0, rand);
+  };
   b.as(SHRUB);
-  const fronds = 9 + Math.floor(rand() * 5);
+  const fronds = 7 + Math.floor(rand() * 3);
   for (let f = 0; f < fronds; f++) {
-    const a = f * 2.4 + rand() * .5, L = .65 + rand() * .45, up = .55 + rand() * .35, out = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
-    const side = new THREE.Vector3(-out.z, 0, out.x), col = rand() < .08 ? '#8a6a3a' : rand() < .2 ? '#a69443' : ['#4f7a34', '#5c8a3c', '#679244'][f % 3];
-    const at = (t) => out.clone().multiplyScalar(L * t + .04).add(new THREE.Vector3(0, up * Math.sin(Math.PI * t * .75) - .1 * t * t, 0));
-    const N = 9;
+    const a = f * 2.4 + rand() * .5, L = .75 + rand() * .45, up = .45 + rand() * .3, out = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+    const r = rand(), col = r < .1 ? '#8a5a2c' : r < .3 ? '#b49a46' : r < .4 ? '#9c9a44' : ['#4c7432', '#587f37', '#62893d'][f % 3];
+    const droop = r < .1 ? .35 : 0;
+    const at = (t) => out.clone().multiplyScalar(L * t + .03).add(new THREE.Vector3(0, Math.max(.02, (up - droop) * Math.sin(Math.PI * t * .7) - (.12 + droop) * t * t), 0));
+    const N = 10;
     for (let k = 1; k <= N; k++) {
-      const t = k / N, p = at(t), q = at(Math.min(1, t + .08)), d = q.clone().sub(p).normalize();
-      leaf(at(t - 1 / N), at(t).sub(at(t - 1 / N)).normalize(), at(t).distanceTo(at(t - 1 / N)) * 1.05, col);   // (the rachis)
-      const len = .2 * Math.sin(Math.PI * Math.min(1, t * 1.15)) + .03;
-      for (const sg of [-1, 1]) leaf(p, side.clone().multiplyScalar(sg).addScaledVector(d, .35).add(new THREE.Vector3(0, -.15, 0)).normalize(), len, col);
+      const t = k / N, p0 = at(t - 1 / N), p = at(t), d = p.clone().sub(p0), dl = d.length(); d.normalize();
+      const side = new THREE.Vector3().crossVectors(d, Y).normalize(), top = new THREE.Vector3().crossVectors(side, d).normalize();
+      lobe(p0, d, top, dl * 1.05, .018, col);   // the rachis
+      const plen = (.22 * Math.sin(Math.PI * Math.min(1, t * 1.1)) + .025) * (.9 + rand() * .2);
+      for (const sg of [-1, 1]) {
+        const pd = side.clone().multiplyScalar(sg).addScaledVector(d, .45).addScaledVector(top, -.12).normalize();
+        // a pinna: lobes along it, shrinking to its tip
+        const lobes = Math.max(1, Math.min(2, Math.round(plen / .09)));
+        for (let q = 0; q < lobes; q++) {
+          const u = (q + .5) / lobes, c = p.clone().addScaledVector(pd, plen * u);
+          const ld = d.clone().addScaledVector(pd, .4).normalize(), lw = plen * .5 * (1 - u * .6);
+          lobe(c, ld, top, Math.max(.02, lw), lw * .55, col);
+        }
+        lobe(p, pd, top, plen, .02, col);   // its midrib
+      }
     }
   }
+  void Q; void Z;
   return b.build();
 }
 function rock(seed, w, h) {

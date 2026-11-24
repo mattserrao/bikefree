@@ -31,8 +31,8 @@ import { due } from '../core/jobs.js';
 import { grassAtlas } from '../landscape/grass-cards.js';
 import { decorateTreeMaterial } from '../packs/northern-rockies.js';
 import { ForestLife } from '../life/forest-life.js';
-import { NearTrunks } from './near-trunks.js';
-import { NEAR_TRUNK } from './tree-engine.js';
+import { NearTrunks, NearPlants, flareGeometry, flareMaterial } from './near-trunks.js';
+import { NEAR_TRUNK, NEAR_PLANT } from './tree-engine.js';
 
 export const OG = { old: 30, forest: 31, meadow: 32, blow: 33 };
 const isWood = (c) => c === OG.old || c === OG.forest || c === OG.blow;
@@ -86,7 +86,13 @@ const mixedAt = (x, z) => vnoise(x * .011 + 4.2, z * .011 - 1.3) > .62;
 // the dominants within this of a trail (m) get a near 3D bark trunk (the camera rides the trail: NEAR_TRUNK's far end
 // and a margin for the bends)
 const TRUNK_D = NEAR_TRUNK[1] + 10;
-const TRUNK = { sugarmapleF: '#5a4d42', beechF: '#a19f97', hickory: '#6a6259', basswood: '#655c52', whiteash: '#6b6259' };
+// a dominant's trunk radius at 1.3 m, its butt swell in (upstate-trees FOREST_FORMS trunkR × BEEF 2, tapered ~5 % by
+// 1.3 m; near-trunks.js's swell ×1.06): the root flares, the ground's mound and its root tops all sized by it
+const TRUNK_R = { sugarmapleF: .5, beechF: .48, hickory: .42, basswood: .46, whiteash: .42 };
+const baseR = (t) => (TRUNK_R[t.name] || .45) * 2 * .95 * 1.06 * t.k;
+// a foot's colour against the maple bark it's drawn in (beech greyer and paler, hickory warmer)
+const FLARE_TONE = (name) => new THREE.Color(name === 'beechF' ? '#c4c6c8' : name === 'hickory' ? '#ffffff' : '#ffffff').multiplyScalar(name === 'beechF' ? 1.1 : 1);
+const TRUNK = { sugarmapleF: '#5a4d42', beechF: '#7f7c75', hickory: '#6a6259', basswood: '#655c52', whiteash: '#6b6259' };
 
 export class OldGrowth {
   constructor({ world, city, data }) {
@@ -203,10 +209,49 @@ export class OldGrowth {
     const nat = W.ground.at(x, z), surf = W.surfaceH(x, z);
     // out toward the band's edge: the coarse mesh's own height (no step where the skirt ends)
     const toEdge = sstep(BAND - 8, BAND, r.d);
-    let y = nat + (surf - nat) * toEdge + this.relief(x, z, code) * (1 - toEdge);
+    let y = nat + (surf - nat) * toEdge + (this.relief(x, z, code) + this.mound(x, z)) * (1 - toEdge);
     const w = sstep(this.half + .6, this.half + 5, r.d);
     y = (r.y + TREAD) + (y - (r.y + TREAD)) * w;
     return Math.max(y, surf + .04);
+  }
+  /**
+   * The ground swollen round a big tree's foot (user, 24 Nov: "the ground swollen slightly near their base" → big trees
+   * near the trail, "Scaled to trunk size"): a rise ~0.26 × the trunk's radius high, out to ~3.2 radii, for each
+   * dominant within 16 m of a trail. The trees, flares and trunks stand on it (groundY).
+   */
+  mound(x, z) {
+    if (!this.city.land) return 0;   // (not before the land is in: the dominants need it)
+    const G = this._moundGrid || this._buildMounds(), S = 12;
+    const l = G.get(Math.floor(x / S) * 100003 + Math.floor(z / S)); if (!l) return 0;
+    let h = 0;
+    for (const m of l) {
+      const d = Math.hypot(x - m.x, z - m.z) / (m.R * 3.2); if (d >= 1) continue;
+      const f = 1 - d * d; h = Math.max(h, m.R * .26 * f * f);
+    }
+    return h;
+  }
+  _buildMounds() {
+    const G = new Map(), S = 12;
+    this._mounds = [];
+    for (const t of this.dominants()) {
+      if (t.snag || t.d > 16 || !TRUNK[t.name]) continue;
+      const R = baseR(t);
+      // (seed: the shader's ridges on the 3D roots' own bearings)
+      const m = { x: t.x, z: t.z, R, seed: 3 * t.rot }; this._mounds.push(m);
+      const reach = R * 3.2;
+      for (let i = Math.floor((m.x - reach) / S); i <= Math.floor((m.x + reach) / S); i++) for (let j = Math.floor((m.z - reach) / S); j <= Math.floor((m.z + reach) / S); j++) {
+        const k = i * 100003 + j; (G.get(k) || G.set(k, []).get(k)).push(m);
+      }
+    }
+    return (this._moundGrid = G);
+  }
+  /** The ground shader's root tops and bare soil round the big trees nearest the camera (graph-world uRoots). */
+  _drawRootGround(cx, cz) {
+    const U = this.world.mats?.ground?.userData?.land; if (!U?.uRoots || !this.city.land) return;
+    if (!this._mounds) this._buildMounds();
+    const near = this._mounds.map((m) => ({ m, d: Math.hypot(m.x - cx, m.z - cz) })).filter((a) => a.d < 90).sort((a, b) => a.d - b.d).slice(0, U.uRoots.value.length);
+    near.forEach(({ m }, i) => U.uRoots.value[i].set(m.x, m.z, m.R, m.seed));
+    U.uRootN.value = near.length;
   }
   /** A spot's floor: the skirt's where it is, else the world's ground. */
   groundY(x, z) { return this.floorH(x, z) ?? this.world._groundH(x, z); }
@@ -219,6 +264,7 @@ export class OldGrowth {
    */
   dominants() {
     if (this._doms) return this._doms;
+    if (!this.city.land) return [];   // (not cached: the stands come from the land)
     const out = [], b = this.box, half = this.half, kit = this.city.treeKit?.species || {};
     const variantOf = (name, r) => (kit[name]?.variants.length > 1 ? (r < .7 ? 0 : 1) : 0);
     for (const code of [OG.old, OG.forest, OG.blow]) {
@@ -258,11 +304,15 @@ export class OldGrowth {
   *treesJob(x0, z0, size, out, kit, clear = () => true) {
     const self = this, sp = kit.species, us = kit.understory, half = this.half;
     const inTile = (x, z) => x >= x0 && x < x0 + size && z >= z0 && z < z0 + size;
-    const trunks = [], nt = self.nearTrunks();
+    const trunks = [], plants = [], nt = self.nearTrunks(), np = self.nearPlants();
     const put = (x, z, name, s, rot, seed, { sy = s, v = 0, deep = false, under = false } = {}) => {
       if (!(sp[name] || us[name])) return false;
       const rd = self.roadNear(x, z); if (rd && rd.d - rd.half < (under ? 2.5 : 4)) return false;   // (Thompson Road: the city's own rules)
       const tr = { x, y: self.groundY(x, z) - (under ? .04 : .12), z, sp: name, v, s, sy, rot, tint: .9 + h2(seed, 3, 9) * .18, deep };
+      // the hero woods' colour grade (tree-engine.js TREE_GRADE): its trees even gold, shaded below; the understory muted
+      tr.grade = under ? 2 : isWood(self.land(x, z)) ? 1 : 0;
+      // a fern or herb near a trail: 3D near the camera, its card farther off (near-trunks.js NearPlants)
+      if (under && np.has(name) && (name.startsWith('fern') || name === 'herb')) { const r = self.trailNear(x, z, 24); if (r && r.d < 24) { tr.cut = -1; plants.push({ x, y: tr.y, z, rot, s, name, tint: tr.tint }); } }
       // a canopy tree or a pole near a trail: its card's trunk below the cut gives way to a 3D one near the camera
       // (near-trunks.js); the trunk listed for drawing
       const cut = under || name === 'snag' ? 0 : nt.cutOf(name, v);
@@ -294,18 +344,20 @@ export class OldGrowth {
         let edge = false;
         if (isWood(code)) for (const [ox, oz] of [[12, 0], [-12, 0], [0, 12], [0, -12]]) if (self.land(x + ox, z + oz) === OG.meadow) { edge = true; break; }
         if (edge) {
+          // (fewer shrubs — user, 24 Nov: bushes "mute colours, smoother, fewer bushes")
           for (let q = 0; q < 3; q++) {
+            if (q === 2 && h2(i, j, 59) < .7) continue;
             const qx = x + (h2(i, j, 60 + q) - .5) * S2, qz = z + (h2(i, j, 63 + q) - .5) * S2, rr = h2(i, j, 66 + q);
             if (!inTile(qx, qz) || !trailOk(qx, qz, 10) || !clear(qx, qz, 1.5)) continue;
             if (rr < .45) put(qx, qz, pick(YOUNG, h2(i, j, 70 + q)), .4 + h2(i, j, 73 + q) * .4, h2(i, j, 76 + q) * 6.28, seed + q, { v: variantOf('sugarmaple', h2(i, j, 79 + q)) });
-            else put(qx, qz, rr < .65 ? 'buckthorn' : rr < .82 ? 'dogwood' : rr < .92 ? 'sumac' : 'sapling', .8 + h2(i, j, 82 + q) * .5, h2(i, j, 85 + q) * 6.28, seed + q, { under: true });
+            else if (rr < .8) put(qx, qz, rr < .66 ? 'buckthorn' : rr < .76 ? 'dogwood' : 'sumac', .8 + h2(i, j, 82 + q) * .5, h2(i, j, 85 + q) * 6.28, seed + q, { under: true });
           }
           continue;
         }
         if (code === OG.meadow) {
           // the meadow side of a woods' edge: brush creeping out; goldenrod in drifts away from the trail
           let near = false; for (const [ox, oz] of [[5, 0], [-5, 0], [0, 5], [0, -5]]) if (isWood(self.land(x + ox, z + oz))) { near = true; break; }
-          if (near && h2(i, j, 90) < .45 && trailOk(x, z, 9)) put(x, z, h2(i, j, 91) < .5 ? 'goldenrod' : 'dogwood', .8 + h2(i, j, 92) * .4, h2(i, j, 93) * 6.28, seed, { under: true });
+          if (near && h2(i, j, 90) < .3 && trailOk(x, z, 9)) put(x, z, h2(i, j, 91) < .65 ? 'goldenrod' : 'dogwood', .8 + h2(i, j, 92) * .4, h2(i, j, 93) * 6.28, seed, { under: true });
           else if (d > 9 && vnoise(x * .05, z * .05) > .66 && h2(i, j, 94) < .35) put(x, z, 'goldenrod', 1.1 + h2(i, j, 95) * .4, h2(i, j, 96) * 6.28, seed, { under: true });
           continue;
         }
@@ -318,7 +370,7 @@ export class OldGrowth {
             if (rr >= .3 && !trailOk(qx, qz, 9)) continue;
             if (rr < .3) { if (trailOk(qx, qz, 2.6)) put(qx, qz, h2(i, j, 112 + q) < .7 ? 'sugarmapleF' : 'beechF', .36 + h2(i, j, 116 + q) * .16, h2(i, j, 120 + q) * 6.28, seed + q, { v: h2(i, j, 124 + q) < .75 ? 0 : 1 }); }
             else if (rr < .62) put(qx, qz, rr < .48 ? 'sapling' : 'beechSapling', .7 + h2(i, j, 128 + q) * .6, h2(i, j, 132 + q) * 6.28, seed + q, { under: true });
-            else if (rr < .85) put(qx, qz, rr < .74 ? 'buckthorn' : 'dogwood', .7 + h2(i, j, 136 + q) * .5, h2(i, j, 140 + q) * 6.28, seed + q, { under: true });
+            else if (rr < .72) put(qx, qz, rr < .68 ? 'buckthorn' : 'dogwood', .7 + h2(i, j, 136 + q) * .5, h2(i, j, 140 + q) * 6.28, seed + q, { under: true });
           }
           continue;
         }
@@ -379,6 +431,7 @@ export class OldGrowth {
       put(a.x, a.z, 'crabapple', k, h2(Math.round(a.x), 1, 171) * 6.28, Math.round(a.x * 3), { sy: k * 1.05, v: h2(Math.round(a.z), 1, 172) < .7 ? 0 : 1 });
     }
     (this._tileTrunks ||= new Map()).set(`${x0},${z0}`, trunks); this._trunks = null; this._trunkAt = null;
+    (this._tilePlants ||= new Map()).set(`${x0},${z0}`, plants); this._plants = null;
   }
   /** A 9 m cell's chance of a fallen trunk: the blowdown's many, the mixed woods' some, the cathedral's few. */
   _logP(x, z, code) { return code === OG.blow ? .5 : mixedAt(x, z) ? (code === OG.old ? .32 : .2) : .06; }
@@ -399,9 +452,10 @@ export class OldGrowth {
       const p = this._logP(x, z, code), q = h2(i, j, 153);
       if (q >= p) continue;
       const t = h2(i, j, 154);
-      const name = code === OG.blow ? (t < .55 ? 'tipup' : 'bigLog') : code === OG.old ? (t < .45 ? 'bigLog' : t < .8 ? 'nurseLog' : 'tipup') : (t < .5 ? 'bigLog' : t < .75 ? 'log' : 'nurseLog');
+      // (no tip-ups: their root plates read as tents from some angles — user, 24 Nov: "Remove tip-ups")
+      const name = code === OG.blow ? 'bigLog' : code === OG.old ? (t < .55 ? 'bigLog' : 'nurseLog') : (t < .5 ? 'bigLog' : t < .75 ? 'log' : 'nurseLog');
       const s = name === 'log' ? 1.2 : .8 + h2(i, j, 155) * .4;
-      const rot = (code === OG.blow || name === 'tipup') ? FALL_YAW + (h2(i, j, 156) - .5) * .8 : h2(i, j, 156) * 6.28;
+      const rot = code === OG.blow ? FALL_YAW + (h2(i, j, 156) - .5) * .8 : h2(i, j, 156) * 6.28;
       const L = (name === 'log' ? 7 : name === 'nurseLog' ? 13 : name === 'tipup' ? 17 : 16) * s, cx = Math.cos(rot), cz = -Math.sin(rot);
       // (the log model 'log' lies centred on its origin; the others run out along +x from the root end)
       const a0 = name === 'log' ? -.5 : 0;
@@ -448,6 +502,15 @@ export class OldGrowth {
     if (!this._trunks) { this._trunks = []; for (const l of (this._tileTrunks ||= new Map()).values()) this._trunks.push(...l); }
     return this._trunks;
   }
+  nearPlants() { return (this._np ||= new NearPlants(this.group, this.city.treeKit)); }
+  plantList() {
+    if (!this._plants) { this._plants = []; for (const l of (this._tilePlants ||= new Map()).values()) this._plants.push(...l); }
+    return this._plants;
+  }
+  _drawPlants(cx, cz) {
+    const R = NEAR_PLANT[1] + 3;
+    this.stats.plants = this.nearPlants().draw(this.plantList().filter((t) => Math.abs(t.x - cx) < R && Math.abs(t.z - cz) < R && Math.hypot(t.x - cx, t.z - cz) < R));
+  }
   _drawTrunks(cx, cz) {
     const R = NEAR_TRUNK[1] + 6;
     this.stats.trunks = this.nearTrunks().draw(this.trunkList().filter((t) => Math.abs(t.x - cx) < R && Math.abs(t.z - cz) < R && Math.hypot(t.x - cx, t.z - cz) < R));
@@ -468,8 +531,10 @@ export class OldGrowth {
     // the roots: tapered, bending down into the ground as they go out
     const rand = (k) => hash(k * 97 + 13);
     for (let k = 0; k < 6; k++) {
-      const a = k / 6 * 6.283 + rand(k) * .6, L = 1.5 + rand(k + 7) * 1.7, ca = Math.cos(a), sa = Math.sin(a);
-      const p0 = new THREE.Vector3(ca * .85, .5, sa * .85), p1 = new THREE.Vector3(ca * (1.2 + L * .4), .3, sa * (1.2 + L * .4)), p2 = new THREE.Vector3(ca * (1.2 + L), -.08, sa * (1.2 + L));
+      // (every 60°: the ground shader's root tops run on out along the same bearings — graph-world uRoots; the roots
+      //  low, their tops just breaking through the litter)
+      const a = k / 6 * 6.283, L = 1.1 + rand(k + 7) * 1.2, ca = Math.cos(a), sa = Math.sin(a);
+      const p0 = new THREE.Vector3(ca * .85, .42, sa * .85), p1 = new THREE.Vector3(ca * (1.2 + L * .4), .16, sa * (1.2 + L * .4)), p2 = new THREE.Vector3(ca * (1.2 + L), -.14, sa * (1.2 + L));
       M.color('#e6dfd3'); M.beam(p0, p1, .55, .45); M.color('#ddd6ca'); M.beam(p1, p2, .38, .3);
     }
     return M.geometry();
@@ -482,9 +547,8 @@ export class OldGrowth {
       const sp = this.city.treeKit?.species?.[t.name]; if (!sp) continue;
       // the card's trunk: the species' base radius (upstate-trees: trunkR) at this tree's scale
       // (the 3D trunk's radius at 1.3 m, swell and all — near-trunks.js — so the flare meets the bark it grows from)
-      const T = sp.variants[t.v]?.[0]?.trunk, r13 = T ? T.radii[0] + (T.radii[1] - T.radii[0]) * Math.min(1, 1.3 / Math.max(.1, T.pts[1].y)) : .9;
-      const R = r13 * 1.06 * t.k;
-      out.push({ x: t.x, z: t.z, y: this.groundY(t.x, t.z) - .08, R, rot: t.rot, color: new THREE.Color(TRUNK[t.name]).multiplyScalar(.82 + h2(t.seed, 1, 5) * .14) });
+      const R = baseR(t);
+      out.push({ x: t.x, z: t.z, y: this.groundY(t.x, t.z) - .08, R, rot: t.rot, color: FLARE_TONE(t.name).multiplyScalar(.92 + h2(t.seed, 1, 5) * .14) });   // (the bark texture's tone carries the colour)
     }
     void half;
     return (this._flares = out);
@@ -493,8 +557,8 @@ export class OldGrowth {
     const RR = 170, list = this.flares().filter((f) => Math.abs(f.x - cx) < RR && Math.abs(f.z - cz) < RR && Math.hypot(f.x - cx, f.z - cz) < RR);
     if (!this.flareMesh || this.flareMesh.instanceMatrix.count < list.length) {
       if (this.flareMesh) { this.group.remove(this.flareMesh); this.flareMesh.dispose(); }
-      this.flareGeo ||= this._flareGeometry();
-      this.flareMat ||= new THREE.MeshLambertMaterial({ vertexColors: true });
+      this.flareGeo ||= flareGeometry();
+      this.flareMat ||= flareMaterial();
       const im = new THREE.InstancedMesh(this.flareGeo, this.flareMat, Math.max(64, Math.ceil(list.length * 1.4)));
       im.name = 'Old growth root flares'; im.frustumCulled = false; im.receiveShadow = true; im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       this.group.add(im); this.flareMesh = im;
@@ -560,7 +624,8 @@ export class OldGrowth {
       if (this.canopy) this._dropCanopy();
       for (const B of this.blocks.values()) { this._dropSkirt(B); this._dropFins(B); }
       if (this.blades) for (const im of Object.values(this.blades)) im.count = 0;
-      this._nt?.hide(); this._trunkAt = null;
+      { const U = this.world.mats?.ground?.userData?.land; if (U?.uRootN) U.uRootN.value = 0; }
+      this._nt?.hide(); this._np?.hide(); this._trunkAt = null;
       return;
     }
     const ready = this.world.ground && this.city.land;
@@ -568,9 +633,9 @@ export class OldGrowth {
     if (!this.canopy) this._buildCanopy();
     if (!this.life) this._placeLife();
     this.life.tick(time);
-    if (!this._logAt || Math.hypot(cx - this._logAt.x, cz - this._logAt.z) > 20) { this._logAt = { x: cx, z: cz }; this._logs(cx, cz); this._drawFlares(cx, cz); }
+    if (!this._logAt || Math.hypot(cx - this._logAt.x, cz - this._logAt.z) > 20) { this._logAt = { x: cx, z: cz }; this._logs(cx, cz); this._drawFlares(cx, cz); this._drawRootGround(cx, cz); }
     if (!this._bladeAt || Math.hypot(cx - this._bladeAt.x, cz - this._bladeAt.z) > 5) { this._bladeAt = { x: cx, z: cz }; this._drawBlades(cx, cz); }
-    if (!this._trunkAt || Math.hypot(cx - this._trunkAt.x, cz - this._trunkAt.z) > 3) { this._trunkAt = { x: cx, z: cz }; this._drawTrunks(cx, cz); }
+    if (!this._trunkAt || Math.hypot(cx - this._trunkAt.x, cz - this._trunkAt.z) > 2) { this._trunkAt = { x: cx, z: cz }; this._drawTrunks(cx, cz); this._drawPlants(cx, cz); }
     // all at once while loading, or when the camera has jumped (a new ride, a snapshot); else a piece a frame
     const jumped = !this._last || Math.hypot(cx - this._last.x, cz - this._last.z) > 150;
     this._last = { x: cx, z: cz };
@@ -831,8 +896,10 @@ export class OldGrowth {
           // the colour: the woods at peak, lit through from above (user, 24 Nov, photos of a golden beech–maple stand):
           // gold and yellow mostly, orange here and there, a few crowns still yellow-green or green
           const t = h2(gi, gj, 322 + q);
-          const hex = t < .34 ? '#d9a326' : t < .56 ? '#e3b83c' : t < .68 ? '#cf7f22' : t < .76 ? '#c2621d' : t < .9 ? '#a6a03c' : '#6f8a34';
-          const c = tmpC.set(hex).multiplyScalar(.85 + h2(gi, gj, 330 + q) * .3).toArray();
+          // (matched to the crowns' even gold, no greens: user, 24 Nov — "Match overhead leaf layer"; a crown's underside,
+          //  a shade deeper than its sunlit top)
+          const hex = t < .4 ? '#c99428' : t < .66 ? '#d6a634' : t < .82 ? '#be7a26' : t < .92 ? '#b58a2e' : '#a8682a';
+          const c = tmpC.set(hex).multiplyScalar(.82 + h2(gi, gj, 330 + q) * .22).toArray();
           const ax = Math.cos(yaw), az = Math.sin(yaw), bx = -az * Math.cos(tilt), by = Math.sin(tilt), bz = ax * Math.cos(tilt);
           const base = P.length / 3, u0 = Math.floor(h2(gi, gj, 324 + q) * 2) * .5, v0 = Math.floor(h2(gi, gj, 326 + q) * 2) * .5;
           for (const [s, tt] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
@@ -863,9 +930,14 @@ export class OldGrowth {
           float cdz = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(.06711056, .00583715))));
           if (smoothstep(140., 185., vCanD) > cdz) discard;
           #include <alphatest_fragment>
-          diffuseColor.rgb *= .78 + .3 * diffuseColor.a;`);
+          diffuseColor.rgb *= .78 + .3 * diffuseColor.a;`)
+        // (the leaf texture's own colour dropped — its greens read as specks on the gold: only its light and shade kept)
+        .replace('#include <map_fragment>', `
+          vec4 texelColor = texture2D(map, vMapUv);
+          diffuseColor.rgb *= vec3(.4 + 1.1 * dot(texelColor.rgb, vec3(.3, .59, .11)));
+          diffuseColor.a *= texelColor.a;`);
     };
-    mat.customProgramCacheKey = () => 'old-growth-canopy-2';
+    mat.customProgramCacheKey = () => 'old-growth-canopy-3';
     this.canopy = new THREE.Mesh(g, mat); this.canopy.name = 'Old growth canopy'; this.canopy.frustumCulled = false; this.canopy.userData.bake = false; this.canopy.castShadow = false;
     this.group.add(this.canopy);
     this.stats.canopyCards = I.length / 6;
