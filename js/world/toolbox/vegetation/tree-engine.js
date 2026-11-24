@@ -214,7 +214,11 @@ export class TreeEngine {
   /** Photograph every tree entry from ANGLES sides (lit as the world) into one atlas: a row per entry. */
   _impostors(lights, quality) {
     const list = this.entries.filter((e) => TREES_2D || !e.nearOnly), max = this.renderer.capabilities?.maxTextureSize || 4096;
-    const cell = TREES_2D ? Math.min(CELL_2D[quality] || 192, Math.floor(max / Math.max(1, list.length)), Math.floor(max / ANGLES)) : quality === 'low' ? 64 : quality === 'high' ? 160 : 128;
+    // (user, 23 Nov: "On high, still have the same crashing issues" — High's 256 px cells made a 3072 × 13824 atlas,
+    // ~226 MB with its mipmaps, on a phone): the atlas kept to a memory budget, a phone's or tablet's far smaller
+    const nav = globalThis.navigator, ua = nav?.userAgent || '', mobile = /iPhone|iPad|iPod|Android|Mobile/.test(ua) || (/Macintosh/.test(ua) && nav.maxTouchPoints > 1);
+    const budgetPx = (mobile ? 56e6 : 140e6) / (4 * 1.34), fit = Math.floor(Math.sqrt(budgetPx / (ANGLES * Math.max(1, list.length))) / 8) * 8;
+    const cell = TREES_2D ? Math.max(64, Math.min(CELL_2D[quality] || 192, fit, Math.floor(max / Math.max(1, list.length)), Math.floor(max / ANGLES))) : quality === 'low' ? 64 : quality === 'high' ? 160 : 128;
     const W = cell * ANGLES, H = cell * list.length;
     const rt = new THREE.WebGLRenderTarget(W, H, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, samples: 0 });
     const scene = new THREE.Scene();
