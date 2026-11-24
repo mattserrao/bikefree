@@ -71,7 +71,7 @@ const TIMES = {
 
 // CNY, SKAN's golden hour (fixed, baked): the sun a little higher than the generic golden (16°, not 8°) so it still
 // lights the fields and its baked shadows read, stronger and warmer against a softer sky light; long shadows to the ENE
-const GOLDEN_UPSTATE = { label: 'Golden hour', elev: 16, az: 250, sky: '#a3b6d6', fog: '#efd3b0', hemiSky: '#ffe8cf', hemiGround: '#7d725e', sun: '#ffcf92', sunI: 2.7, hemiI: 1.12, exposure: 1.14 };
+const GOLDEN_UPSTATE = { label: 'Golden hour', elev: 16, az: 250, sky: '#a3b6d6', fog: '#cfd3d4', hemiSky: '#ffe8cf', hemiGround: '#7d725e', sun: '#ffcf92', sunI: 2.7, hemiI: 1.12, exposure: 1.14 };
 
 const _v = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
 
@@ -1498,6 +1498,12 @@ const NY_ROAD_GLSL = /* glsl */`
     // winter's sand and salt along the edges and in the crown between the wheel paths, washed out by fall
     float grit = (1. - smoothstep(.3, 1.4, hw - ax)) * .5 + (1. - smoothstep(.2, .9, ax)) * .18 * (1. - track);
     lin = mix(lin, base * 1.9, grit * .22 * (.6 + .4 * gwN(w.xz * .5)));
+    // fall leaves blown to the edges (user, 23 Nov: cheap wins): drifts in the last half metre, a few strays on
+    // the lane, more where the woods come down to the road (by stretch)
+    float drift = (1. - smoothstep(.2, .75, hw - ax)) * smoothstep(.35, .75, gwN(w.xz * .05 + 13.)) + .06;
+    vec2 lq = mat2(.8, -.6, .6, .8) * w.xz * 6.5, lf = floor(lq);
+    float leaf = step(1. - drift * .35, gwH(lf + 91.)) * (1. - smoothstep(.22, .34, length(fract(lq) - .5)));
+    lin = mix(lin, mix(vec3(.55, .27, .1), vec3(.7, .52, .18), gwH(lf + 92.)) * (.75 + .3 * gwH(lf + 93.)), leaf * det * .85);
     return pow(lin, vec3(2.2));
   }
 `;
@@ -1627,7 +1633,7 @@ function roadSurfaceMaterial(low = false, ny = false) {
           diffuseColor.rgb = c;
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-road-surface-4${low ? '-low' : ''}${ny ? '-ny1' : ''}`;
+  m.customProgramCacheKey = () => `pgh-road-surface-5${low ? '-low' : ''}${ny ? '-ny1' : ''}`;
   return m;
 }
 
@@ -1668,7 +1674,7 @@ function groundMaterial(low = false, rural = false) {
           #endif
           vec3 lc = vec3(-1.);
           if (k < .5) lc = mix(vec3(.43, .42, .4), vec3(.52, .5, .47), n);                   // paved: lots, yards of the works
-          else if (k < 1.5) lc = mix(vec3(.38, .52, .24), vec3(.47, .6, .3), n);             // grass, parks
+          else if (k < 1.5) lc = mix(vec3(.38, .52, .24), vec3(.47, .6, .3), n) * (1. - .16 * smoothstep(.62, .8, gwN(vGW.xz * .025 + 3.)));   // grass, parks (darker damp hollows)
           else if (k < 2.5) {
             // the woods' floor (user, 23 Nov: "areas under trees should be more brown dirt, with leaf litter texture"):
             // brown earth under last year's leaves, patches of moss, a light scatter of this fall's colour
@@ -1680,6 +1686,7 @@ function groundMaterial(low = false, rural = false) {
             float lr = length(fract(lq) - .5 + (vec2(gwH(lf + 2.), gwH(lf + 3.)) - .5) * .3);
             lc = mix(lc, mix(vec3(.6, .3, .12), vec3(.7, .55, .2), gwH(lf + 5.)), step(.93, gwH(lf + 13.)) * (1. - smoothstep(.18, .3, lr)) * .55);
             lc = mix(lc, vec3(.2, .15, .1), step(.95, gwH(floor(vGW.xz * 3.) + 71.)) * .4);   // (a dark twig, a damp hollow)
+            lc *= 1. + .45 * smoothstep(.72, .8, gwN(vGW.xz * .45 + 17.)) * smoothstep(.4, .6, gwN(vGW.xz * .07 + 5.));   // (dappled sun through the crowns)
             #endif
           }
           else if (k < 3.5 && k > 2.5) lc = mix(vec3(.17, .31, .38), vec3(.22, .37, .44), n);  // water: a canal or a pond at its own level (CNY's Erie Canal; PGH's rivers are under the water plane anyway)
@@ -1687,7 +1694,9 @@ function groundMaterial(low = false, rural = false) {
           else if (k < 5.5 && k > 4.5) lc = vec3(.66, .6, .46);                               // sand, bare rock
           else if (k < 6.5 && k > 5.5) lc = mix(vec3(.62, .59, .54), vec3(.68, .65, .6), n);  // plaza
           else if (k < 7.5 && k > 6.5) lc = mix(vec3(.3, .42, .22), vec3(.38, .44, .25), n);  // beyond: suburbs and hills
-          else if (k > 7.5 && k < 8.5) lc = mix(vec3(.4, .54, .27), vec3(.5, .58, .33), n);  // yards: lawns
+          else if (k > 7.5 && k < 8.5) {
+            lc = mix(vec3(.4, .54, .27), vec3(.5, .58, .33), n);  // yards: lawns
+          }
           else if (k > 9.5 && k < 10.5) {
             // crops (a rural map's WorldCover cropland, SKAN): field by field — corn, soybeans, a hay cutting, wheat
             // stubble, a ploughed field — each a ~150 m patch, with its rows
@@ -1747,13 +1756,13 @@ function groundMaterial(low = false, rural = false) {
             lc *= 1. + (bl - .5) * .28 * gd;
             float dry = smoothstep(.62, .8, gwN(vGW.xz * .045 + 13.)) * (k > 7.5 && k < 8.5 ? .35 : 1.);
             lc = mix(lc, vec3(.6, .57, .34), dry * .45);                                   // dry, gone-over patches
-            if (k > 7.5 && k < 8.5) lc *= 1. + .05 * sign(sin(vGW.x * 2.6 + vGW.z * .4)) * gd;   // a lawn's mown stripes
+            if (k > 7.5 && k < 8.5) { vec2 yc = floor(vGW.xz / 30.); float ya = gwH(yc + 3.) * 3.1416; lc *= 1. + .07 * sign(sin(dot(vGW.xz, vec2(cos(ya), sin(ya))) * 3.4)) * gd * step(.25, gwH(yc + 4.)); }   // a lawn's mown stripes, each yard its own way
             if (k > 10.5 && k < 11.5 || k > 27.5) lc = mix(lc, lc * vec3(1.05, .98, .85), smoothstep(.55, .75, gwN(vGW.xz * .5)) * .5);   // tussocks, seed heads
           }
           #endif
           if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * mix(clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vec3(1.), step(19.5, k) * .7), vLandW * (k > 19.5 || (k > 1.5 && k < 2.5) ? .95 : .85));   // (CNY's fields: their own colour, less of the ground's tint)
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-6${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-7${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
   return m;
 }
