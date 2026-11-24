@@ -254,6 +254,7 @@ export class GraphWorld {
       paint: this.rural ? wornPaintMaterial() : new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
       ground: groundMaterial(this.qualityKey === 'low', this.rural),
       roadSurface: roadSurfaceMaterial(this.qualityKey === 'low', this.rural),
+      spill: roadSurfaceMaterial(this.qualityKey === 'low', this.rural, true),
       water: new THREE.MeshLambertMaterial({ color: '#4f7f97', transparent: true, opacity: 0.92 }),
       // the dressed places and the river walls: textured from world position (toolbox/materials)
       park: Object.fromEntries(['lawn', 'plaza', 'granite', 'walk', 'garden', 'wood', 'scrub', 'fairway', 'green', 'sand'].map((k) => [k, makeParkMaterial(k)])),
@@ -881,7 +882,7 @@ export class GraphWorld {
   _buildRoads(t) { drain(this._roadsJob(t)); }
   /** A tile's roads as a job: pauses between ways when its slice is used up (no stall on a phone). */
   *_roadsJob(t) {
-    t.built = true;
+    t.built = true; t.spills = []; t.endSpills = [];
     if (!t.pieces.length && !t.nodes.length) return;
     const R = new Mesher(true), P = new Mesher(), W = new Mesher(), P_ = P;
     const col = (k) => new THREE.Color(COLORS[k] || COLORS.residential);
@@ -923,6 +924,12 @@ export class GraphWorld {
         const uv = (c, x) => [ext[k], x, c.s, half];
         R.quadX(L[k], Rt[k], Rt[k + 1], L[k + 1], cols[k], [uv(C[k], -half), uv(C[k], half), uv(C[k + 1], half), uv(C[k + 1], -half)]);
       }
+      // a trail's gravel or dirt carried out onto the road where it meets one (its end at a junction's mouth)
+      if (this.rural) for (const [end, trimmed] of [[0, f0 > a], [n - 1, f1 < b]]) {
+        const sf = ext[end]; if (!trimmed || (sf !== 5 && sf !== 6)) continue;
+        const c = C[end], dir = end ? 1 : -1;
+        t.endSpills.push({ x: c.x, y: c.y + lift, z: c.z, dx: c.dx * dir, dz: c.dz * dir, half, surf: sf, s: c.s });
+      }
       // the sides: a deck's slab and parapets; on the ground a curb and sidewalk, or a shoulder down to the ground
       for (let k = 0; k + 1 < n; k++) {
         const c0 = C[k], c1 = C[k + 1], i0 = Math.floor(c0.i), i1 = Math.min(e.n, Math.ceil(c1.i));
@@ -962,6 +969,9 @@ export class GraphWorld {
           // on an embankment, the slope runs on down (1 : 1.5) to meet the ground, then a short face below it
           const toe = (p, o) => { const q = out(p, o, 1.6, -0.9), gy = this.ground ? this._groundH(q[0], q[2]) : q[1] - 2; const drop = Math.max(0, q[1] - 0.2 - gy); const d = Math.min(9, drop * 1.5); return [out(p, o, 1.6 + d, -0.9 - d / 1.5), gy]; };
           const [ta, ga] = toe(p0, o0), [tb, gb] = toe(p1, o1);
+          // the spill beyond the shoulder's foot (user, 23 Nov: "texture blending … gravel dust blowing onto a road"):
+          // drawn with the tile's ground (_spillJob), draped on it
+          if (this.rural) t.spills.push({ a: ta, b: tb, o0, o1, s0: c0.s, s1: c1.s, half, sgn, surf: ext[k] === 5 || ext[k] === 6 ? ext[k] : 5 });
           W.quad(out(p0, o0, 1.6, -0.9), out(p1, o1, 1.6, -0.9), tb, ta, verge, !flip);
           W.quad(ta, tb, [tb[0], Math.min(tb[1], gb) - 1.5, tb[2]], [ta[0], Math.min(ta[1], ga) - 1.5, ta[2]], verge, flip);
           W.wall(p0, p1, -0.6, -0.01, side, flip);
@@ -1083,8 +1093,42 @@ export class GraphWorld {
     g.computeVertexNormals();
     t.groundMesh = new THREE.Mesh(g, this.mats.ground);
     this.group.add(t.groundMesh);
+    yield* this._spillJob(t);
     yield* this._bankJob(t);
     yield* this.effects.tileJob(t);
+  }
+
+  /**
+   * The blend where a way's surface meets the ground (user, 23 Nov: "where two textures meet … a zone where the two
+   * blend together"): a strip 1.5 m out from each shoulder's foot, draped on the ground, in the way's own surface
+   * (a trail's gravel or dirt; a road's shoulder gravel) — the shader thins it to scattered grains, its width and
+   * strength wandering along the edge (aRd.x + 20: the spill; across past half + 3 m: how far out).
+   */
+  *_spillJob(t) {
+    if (!t.spills?.length && !t.endSpills?.length) return;
+    const R = new Mesher(true), white = new THREE.Color(1, 1, 1), STEPS = 3, OUT = 1.5;
+    for (let i = 0; i < (t.spills || []).length; i++) {
+      if ((i & 63) === 0 && due()) yield;
+      const S = t.spills[i], pt = (p, o, f) => { const x = p[0] + o[0] * OUT * f, z = p[2] + o[1] * OUT * f; return [x, Math.max(this.surfaceH(x, z), p[1] - .3) + .03, z]; };
+      const rd = (s, f) => [S.surf + 20, -S.sgn * (S.half + 3 + f * OUT), s, S.half];
+      for (let j = 0; j < STEPS; j++) {
+        const f0 = j / STEPS, f1 = (j + 1) / STEPS;
+        const a0 = pt(S.a, S.o0, f0), b0 = pt(S.b, S.o1, f0), a1 = pt(S.a, S.o0, f1), b1 = pt(S.b, S.o1, f1);
+        if (S.sgn > 0) R.quadX(a1, a0, b0, b1, white, [rd(S.s0, f1), rd(S.s0, f0), rd(S.s1, f0), rd(S.s1, f1)]);
+        else R.quadX(a0, a1, b1, b0, white, [rd(S.s0, f0), rd(S.s0, f1), rd(S.s1, f1), rd(S.s1, f0)]);
+      }
+    }
+    // onto the road at a trail's end: 3 m out over the junction, as wide as the trail
+    for (const E of t.endSpills || []) {
+      const OUTE = 3, nx = E.dz, nz = -E.dx, p = (u, f) => [E.x + nx * u + E.dx * OUTE * f, E.y + .012, E.z + nz * u + E.dz * OUTE * f];
+      const rd = (f) => [E.surf + 20, E.half + 3 + f * 1.5, E.s + f * OUTE, E.half];
+      for (let j = 0; j < STEPS; j++) {
+        const f0 = j / STEPS, f1 = (j + 1) / STEPS, w = E.half + .4;
+        R.quadX(p(-w, f0), p(w, f0), p(w, f1), p(-w, f1), white, [rd(f0), rd(f0), rd(f1), rd(f1)]);
+      }
+    }
+    const m = R.mesh(this.mats.spill);
+    if (m) { m.name = 'Spill'; m.receiveShadow = true; (t.extra ||= []).push(m); this.group.add(m); }
   }
 
   /** The dressed places' ground in this tile (toolbox/materials/park-surfaces.js): lawns, beds, woods, plazas and walks
@@ -1539,9 +1583,10 @@ const NOISE_GLSL = /* glsl */`
  * gravel and dirt. Patterns fade to their average when a brick is a few pixels, so nothing shimmers far off.
  */
 /** low (Light, phones): the patterns only up close (brick, setts, slabs, pavers), plain asphalt with one noise. */
-function roadSurfaceMaterial(low = false, ny = false) {
-  const m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+function roadSurfaceMaterial(low = false, ny = false, spill = false) {
+  const m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: spill, polygonOffsetFactor: spill ? -1 : 0, polygonOffsetUnits: spill ? -3 : 0 });
   m.defines = {};
+  if (spill) m.defines.SPILL = '';
   if (low) m.defines.LOWQ = '';
   if (ny) m.defines.NYWEAR = '';
   m.onBeforeCompile = (shader) => {
@@ -1553,6 +1598,17 @@ function roadSurfaceMaterial(low = false, ny = false) {
           vec3 c = diffuseColor.rgb;
           int sf = int(vRd.x + .5);
           vec2 q = vRd.yz;
+          #ifdef SPILL
+          sf -= 20;
+          {
+            // the spill (_spillJob): dense by the shoulder's foot, scattered grains farther out; how far it reaches and
+            // how thick it lies wander along the edge (q.y: metres along) and in patches
+            float t = clamp((abs(q.x) - vRd.w - 3.) / 1.5, 0., 1.);
+            float reach = .25 + .75 * gwN(vec2(q.y * .07, 3.3 + sign(q.x) * 5.)), thick = .45 + .55 * gwN(vGW.xz * .15 + 8.);
+            float solid = (1. - smoothstep(reach * .3, reach, t)) * thick;
+            if (gwH(floor(vGW.xz * 16.)) > solid * 1.1 + .02 || t > reach) discard;
+          }
+          #endif
           float px = max(fwidth(q.y), fwidth(q.x)) + 1e-4, det = 1. - smoothstep(.015, .07, px);
           float wear = .25 + .65 * gwN(vGW.xz * .004 + 3.1);
           float track = 1. - smoothstep(0., .45, abs(abs(abs(q.x) - vRd.w * .5) - .85));
@@ -1631,9 +1687,12 @@ function roadSurfaceMaterial(low = false, ny = false) {
             #endif
           }
           diffuseColor.rgb = c;
+          #ifdef SPILL
+          diffuseColor.rgb *= .84;   // (thin over the ground: a shade darker, so it doesn't read as a pale band)
+          #endif
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-road-surface-5${low ? '-low' : ''}${ny ? '-ny1' : ''}`;
+  m.customProgramCacheKey = () => `pgh-road-surface-6${low ? '-low' : ''}${ny ? '-ny1' : ''}${spill ? '-spill' : ''}`;
   return m;
 }
 
