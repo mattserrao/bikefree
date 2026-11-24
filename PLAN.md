@@ -2030,3 +2030,18 @@ for change to graphics (both desktop and mobile same menus)")*
       lily pads.
 - [x] The canal tour boat moored in the water beside the park's dock, tied off (it stood on the bank).
 - [x] Touch: swipe left / right on the ride screen while the turn prompt is up to change the way; tap a way to pick it.
+- [x] Canal: the towpath raised to ~1 m above the water (tools/towpath_lift.mjs, up to 2.3 m), the water under its
+      towpath, inky blue-black; the ground cut under it (a gentle rise 14 m past its edges); the tour boat moored in it.
+- [x] Phones reloading (memory) *(user, 23 Nov)*: verge grass and brush built only near the camera (it was every
+      loaded tile's: 270–420 MB) and one triangle a blade; the ways' spill likewise; static city meshes' arrays freed
+      once on the GPU; the tree atlas kept to ~56 MB on phones and tablets at any quality (High was ~226 MB).
+- [x] Verge: placement jittered, density and height in slow patches, each plant its own height.
+- [x] Forest understory: the woods' floor brown earth with light leaf litter, moss, dappled sun; ferns in clumps, logs,
+      stumps, mossy rocks.
+- [x] More graphics (pause menu, laptops): fps cap, battery saver, draw distance, tree density; live shadows, sun beams
+      & mist, roadside grass, people & cars on or off.
+- [x] Ground blending: a spill strip beyond each way's shoulder (gravel grains thinning out), a trail's gravel onto the
+      road where it meets one.
+- [x] Cheap wins: road-edge leaves, lawns mown each their own way, damp hollows, a cooler haze; rim light on the rider,
+      cloud shadows, puddle glints, chimney smoke; road signs, hay wagons, bale wrap colours, wash lines, split-rail
+      fences, crows over the fields.
