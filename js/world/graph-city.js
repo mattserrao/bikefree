@@ -35,6 +35,7 @@ import { TreeEngine } from './toolbox/vegetation/tree-engine.js';
 import { planHomestead, drawHomestead, driveStrips, nearDrive } from './toolbox/city/homesteads.js';
 import { skanCrop, cropMaterial, cropCardsJob, bale, verge, bay, farmStand, hayWagon } from './toolbox/landscape/farm-kit.js';
 import { makeUpstateTrees, fallVariant } from './toolbox/vegetation/upstate-trees.js';
+import { OldGrowth } from './toolbox/vegetation/old-growth.js';
 import { profileY, ditchFits, ditchGeometry, culvertEnd, goldenrod, laceAndChicory, tallGrass, cattails, utilityPole, wires, scrubClump, roadSign } from './toolbox/landscape/roadside-ny.js';
 import { CANAL, canalAt } from './toolbox/city/cny-landmarks.js';
 import { ROAD_LIFT } from './pose.js';
@@ -42,7 +43,10 @@ import { ROAD_LIFT } from './pose.js';
 // (9 is the toolbox's pond; 10–12: a rural map's fields from WorldCover — tools/pgh_city.py rural_land, SKAN;
 // 20–29: CNY's fields — 20-23 corn and 24-27 grain by the rows' heading, 28 hay, 29 farmyard: pgh_city.py "the country")
 export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand: 5, plaza: 6, outside: 7, yards: 8, crops: 10, pasture: 11, wetland: 12,
-  corn: 20, grain: 24, hay: 28, farmyard: 29 };
+  corn: 20, grain: 24, hay: 28, farmyard: 29,
+  // 30–33: an old-growth hero area's own (tools/cny_forest.py: Camillus Forest Unique Area) — old growth, its woods,
+  // its tall meadows, the blowdown; dressed by toolbox/vegetation/old-growth.js
+  oldGrowth: 30, ogForest: 31, ogMeadow: 32, ogBlowdown: 33 };
 const TILE = 400;
 // how far the city is built, by quality (Low: phones)
 const VERGE_IN = 260, VERGE_OUT = 420;
@@ -192,7 +196,7 @@ export class GraphCity {
     if (this.rural) this.life = new GraphLife(world, host.group, { quality: world.qualityKey, uTime: this.treeTime });
     // the tree engine (one for the game: toolbox/vegetation/tree-engine.js) with the northeastern hardwood kit — every
     // road-graph map (PGH's western Pennsylvania has the same trees); the rural maps in early fall, PGH in summer
-    this.treeKit = makeUpstateTrees();
+    this.treeKit = makeUpstateTrees({ oldGrowth: !!world.json?.oldGrowth });
     this.fall = this.rural;
     this.forest = new TreeEngine({ renderer: world.renderer, parent: host.group, quality: world.qualityKey, uTime: this.treeTime, lights: { hemi: world.hemi, sun: world.sun }, kit: this.treeKit });
   }
@@ -206,6 +210,12 @@ export class GraphCity {
     const L = this.landBox, tex = new THREE.DataTexture(bytes, L.nx, L.ny, THREE.RedFormat, THREE.UnsignedByteType);
     tex.magFilter = tex.minFilter = THREE.NearestFilter; tex.generateMipmaps = false; tex.unpackAlignment = 1; tex.needsUpdate = true;
     this.landTexture = tex;
+    // an old-growth hero area (CNY: the Camillus Forest Unique Area): its data, then its dressing
+    const ogFile = this.world.json?.oldGrowth;
+    if (ogFile) {
+      try { const data = await (await fetch(new URL(`../../${ogFile}`, import.meta.url))).json(); this.oldGrowth = new OldGrowth({ world: this.world, city: this, data }); }
+      catch (err) { console.warn('old growth: not loaded', err); }
+    }
     this.ready = true;
   }
 
@@ -710,6 +720,7 @@ export class GraphCity {
     if (this.gfx.life) this.life?.tick(cam, rider?.pos || null, rider?.fwd || null, dt);
     this.glassNight.value = this.host.night.value * 0.05;
     this.forest.tick(this.world.camera);
+    this.oldGrowth?.tick(this.world.camera, time);
     if ((this._lf = (this._lf || 0) + 1) % 8) return;
     for (const t of this.tiles.values()) {
       const d = Math.hypot(t.cx - cam.x, t.cz - cam.z) - TILE * 0.71;
@@ -756,7 +767,11 @@ export class GraphCity {
       arbor: [['arborvitae', 1]],
     };
     /** A tree of `role` at (x, z) if it fits (shrunk to clear a roof or the road if it must): true if placed. */
+    // (a hero area's singletrack — narrow, so the camera rides close to everything beside it: no low crown or brush
+    //  card within 10 m, where it would be all magnified blur)
+    const nearCf = (x, z) => { const r = this.roadNear(x, z, 11); return !!(r && r.e._cf && r.d - r.half < 10); };
     const tree = (x, z, role, seed, age = null) => {
+      if (nearCf(x, z)) return false;
       const r1 = hash(seed * 7.13 + 1), r2 = hash(seed * 3.71 + 2), r3 = hash(seed * 9.17 + 3), r4 = hash(seed * 1.93 + 4);
       // ~6% dead (user, 23 Nov): snags in the woods, wet ground, hedgerows and pastures, a few by the road; none in yards or on streets
       const dead = role !== 'yard' && role !== 'street' && kit.snag && hash(seed * 5.37 + 9) < .06;
@@ -775,7 +790,7 @@ export class GraphCity {
       return true;
     };
     const under = (x, z, name, seed, s = 1) => {
-      if (edgeOf(x, z) < 2.5 || !clearOf(x, z, 1.5)) return;
+      if (edgeOf(x, z) < 2.5 || !clearOf(x, z, 1.5) || (!/fern|rock|stump|log/.test(name) && nearCf(x, z))) return;
       out.push({ x, z, y: W._groundH(x, z) - .05, sp: name, v: 0, s: s * (.8 + hash(seed) * .5), rot: seed * 23 % 6.283, tint: .9 + hash(seed * 3) * .2 });
     };
     // a stand of trees round each rail approach's end: the line runs off into the woods
@@ -841,12 +856,16 @@ export class GraphCity {
       }
       if ((b.k & 7) === 0) yield;
     }
+    // the old-growth hero area's own stands, floor and debris (toolbox/vegetation/old-growth.js), on its own codes
+    const og = this.oldGrowth;
+    if (og?.touches(x0, z0, TILE)) yield* og.treesJob(x0, z0, TILE, out, this.treeKit, (x, z, r) => clearOf(x, z, r));
     // the land cover: woods (edges graded), wetland, hedgerows between fields, the odd pasture tree
     const step = 8;
     for (let x = x0 + step / 2; x < x0 + TILE; x += step) for (let z = z0 + step / 2; z < z0 + TILE; z += step) {
       if (z === z0 + step / 2 && due()) yield;
       const h1 = hash(Math.round(x * 3.1) * 92821 + Math.round(z * 1.7)), jx = x + (h1 - .5) * step * .9, jz = z + (hash(Math.round(x * 5.3) + Math.round(z * 7.9) * 31) - .5) * step * .9;
       const c = this.landAt(jx, jz), seed = Math.round(jx * 11) + Math.round(jz * 13) * 7, h2 = hash(seed * 1.31);
+      if (c >= LAND.oldGrowth && c <= LAND.ogBlowdown) continue;   // (the hero area's: placed above)
       if (c === LAND.woods || c === LAND.outside) {
         // how open it is round here: the woodlot's edge
         let open = 0; for (const [ox, oz] of [[11, 0], [-11, 0], [0, 11], [0, -11]]) if (this.landAt(jx + ox, jz + oz) !== c) open++;

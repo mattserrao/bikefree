@@ -1848,17 +1848,35 @@ Goal: a lighter main menu, and fix the PGH / CNY / SKAN map cards that looked as
 6. 3.65–5.25 North woods: rolling drumlin ground and ferns (#8/#4).
 7. 5.25–5.8 East meadow home (#3/#2), then Thompson Road.
 
-*Tasks* (planned, awaiting go-ahead)
-- [ ] Graph: add the loop's trails to `tools/city/cny.json` (narrow dirt singletrack kind), joined to Thompson Road at the lot entrance; rebuild with `npm run cny:build`; QC 0 fails.
-- [ ] Named ride "Camillus Forest" on CNY.
-- [ ] Unique Area land: forest stands from WorldCover + the DEC land-use units (old forest, mature, moderately aged, old fields, apple orchard, riparian); the boundary as a zone.
-- [ ] Tree engine, forest-ecology placement: age classes (old canopy 25–32 m, mature, poles), sugar maple ~83 % / beech ~13 % / bitternut hickory, basswood, ash; spacing by crown competition; sparse saplings in the shade, dense in the blowdown gap; snags.
-- [ ] Forest floor: litter shader (brown, leaves, twigs), dead logs and nurse logs (moss, seedlings in rows), Christmas fern and understory herbs, old-growth pit-and-mound micro-relief.
-- [ ] Canopy ceiling over the trail: closed crowns overhead, holes for light.
-- [ ] God rays: baked golden-hour light shafts (sun 16° from 250°) in canopy gaps, cheap cards/volumes, High tier only for the extras.
-- [ ] Meadows: tall hay-coloured grass (≈1–1.5 m) swaying, mown narrow strip, tree-wall edges, green tunnels, old apple trees.
-- [ ] Narrow trail ribbon (~0.6–0.9 m tread, worn dirt with roots in the woods).
-- [ ] QC: course, clipping (nothing on the tread), snapshots of each section, budgets (Balanced ≤ GTTS level; phones must not run out of memory).
+*Tasks* (user, 24 Nov: "Proceed as planned include overhead leaf layer")
+- [x] **Graph** (`tools/cny_forest.py`):
+  - The Unique Area's trails #1–#8 are 22 edges and 8.6 km of narrow dirt singletrack: kind `path`, with `w 0.9`, dirt and `cf` in the city data.
+  - Their heights follow the ground grid, smoothed and held to ≤ 16 %.
+  - Thompson Road (`e178`) is split at the lot to make junction `n237`.
+  - `npm run cny:build` runs the tool. A second run gives the same files.
+  - QC: 0 fails, 0 warnings, 0 dead ends.
+- [x] **Named ride** `cny-camillus-forest` "Camillus Forest": 5.6 km, 159 m of climbing, in and out on Trail #1 from Thompson Road. The other ten rides are unchanged.
+- [x] **Land:** codes 30 old growth (30 ac), 31 woods (187 ac), 32 tall meadow (112 ac) and 33 the 1998 blowdown (11 ac, on Trail #5). The data file is `routes/cities/cny-oldgrowth.json`.
+- [x] **Tree engine placement** (`toolbox/vegetation/old-growth.js`):
+  - Dominants sit on a jittered grid by stand: 12.5 m in the old growth, 10 m in the woods, 34 m for the blowdown's survivors.
+  - Intermediates grow only where no dominant is near.
+  - There are shade saplings, a pole thicket in the blowdown, ~6 % snags, tree walls at the meadow edges, the green tunnel's two rows on Trail #2, and 26 old apple trees.
+  - New forest-grown forms (`makeUpstateTrees({ oldGrowth: true })`): `sugarmapleF`, `beechF`, `hickory`, `basswood`.
+  - Nothing leafy stands within ~9–10 m of the singletrack, because a 2D card that close is all magnified blur. Cards dissolve within ~3 m of the camera.
+- [x] **Forest floor:**
+  - A floor skirt (2 m cells) runs along the trails with pit-and-mound relief.
+  - The ground shader has a litter look (codes 30, 31, 33) and a hay meadow (32).
+  - Fallen trunks, nurse logs with seedlings and tip-ups with root plates are 3D instanced models, never across the tread.
+  - Ferns, herbs, seedlings, stumps and rocks; roots and stones across the tread.
+- [x] **Overhead leaf layer:** leaf-cluster cards 20–30 m up over the woods' trails, with gaps; one draw call, faded past ~150 m.
+- [x] **God rays:** additive shafts from the gaps at ~38° on the sun's azimuth, with warm sun pools on the floor. Off on Low.
+- [x] **Meadows:** tall, swaying, hay-tinted grass cards (1–1.6 m) out to 26 m either side, with a mown turf slit at the tread.
+- [x] **Narrow trail:** a 0.9 m tread of packed earth with a soft edge, no shoulder or spill. The rider rides its middle (`_laneScale`), and junctions where only singletracks meet have no junction slab.
+- [x] **Bushes** (user, 24 Nov: "Bushes remain a weak spot visually … fluff them with 2D vertical sheets … a lighting bug … makes them too light"):
+  - Upright leaf sheets in three nested shells (`fluff`) on dogwood, buckthorn and the saplings.
+  - A small plant's leaf clusters now scale with it (they were tree-sized).
+  - The lighting fix: impostor cards un-premultiplied by the roughened alpha brightened every part-covered texel up to 3×. They now use the photo's own alpha.
+- [x] **Checks:** tests (`cny.test.mjs`: eleven rides, a Camillus Forest test), `routes:build`, `qc_pgh`. Snapshots of each section with `snap_pgh.mjs`, which builds the hero area's near pieces for the shot. Headless Balanced numbers: 123–200 draw calls and 0.6–0.8 M triangles, within the GTTS budget.
 
 ## Running it
 

@@ -45,16 +45,19 @@ test('CNY starts in Camillus village and has its own files (ground, city data, a
   assert.deepEqual(net.network.edges.filter((e) => /Interstate|I-90|Thruway|I-690/.test(e.name)).map((e) => e.name), []);
 });
 
-test('CNY\'s ten routes (tools/pgh_routes.mjs --city cny): closed plans over its own ways, no way twice, in cny-presets.json', () => {
+test('CNY\'s eleven routes (tools/pgh_routes.mjs --city cny): closed plans over its own ways, no way twice, in cny-presets.json', () => {
   const list = JSON.parse(readFileSync(new URL('../routes/cities/cny-presets.json', import.meta.url), 'utf8'));
   const { base, network } = graphNetwork(json);
   const net = loadNetwork(network, base);
   assert.equal(net.presets.length, list.length);
-  assert.equal(list.length, 10);
+  assert.equal(list.length, 11);
   for (const p of net.presets) {
     assert.ok(planCloses(net, p.path), `${p.name} does not close`);
     const ids = p.path.map((k) => k.slice(0, -1));
-    assert.equal(new Set(ids).size, ids.length, `${p.name} rides a way twice`);
+    // (Camillus Forest: in and out on the one trail from Thompson Road — its first way is its last)
+    const stem = p.id === 'cny-camillus-forest' ? 1 : 0;
+    if (stem) assert.equal(ids[0], ids[ids.length - 1]);
+    assert.equal(new Set(ids).size, ids.length - stem, `${p.name} rides a way twice`);
     const r = makePathRoute(net, p);
     assert.ok(Math.abs(r.lapM - list.find((x) => x.id === p.id).lengthM) < 50);
   }
@@ -106,4 +109,27 @@ test('CNY\'s country (user, 22 Nov: "villages, suburbs, and farms … farmland r
   let silos = 0;
   for (const kind of [21, 22, 24]) for (let k = 0; k < 20; k++) { const M = new MeshBuilder({ aGlow: 1 }); silos += farmBuilding(M, { k, kind, ring }, { heightAt: () => 120 }); assert.ok(M.count > 40); }
   assert.ok(silos > 5, 'silos by many barns');
+});
+
+test('Camillus Forest Unique Area (tools/cny_forest.py): its trails joined at Thompson Road, narrow dirt, its land, the hero data', () => {
+  const city = JSON.parse(readFileSync(new URL('../routes/cities/cny-city.json', import.meta.url), 'utf8'));
+  const og = JSON.parse(readFileSync(new URL(`../${json.oldGrowth}`, import.meta.url), 'utf8'));
+  assert.equal(og.format, 'bikefree-oldgrowth-1');
+  const G = decodeGraph(json);
+  const trails = og.trails.map((id) => G.byId.get(id));
+  assert.ok(trails.length >= 20 && trails.every(Boolean));
+  for (const e of trails) {
+    const d = city.edges[e.id];
+    assert.ok(d.cf && d.w < 1.2 && city.surfaces[d.s[0][2]] === 'dirt', `${e.id} narrow dirt`);
+    assert.match(e.name, /^Camillus Forest Trail #[1-8]$/);
+  }
+  // the junction on Thompson Road: two halves of the road and the trail in
+  const arms = G.edges.filter((e) => e.from === og.junction || e.to === og.junction);
+  assert.deepEqual(arms.map((e) => e.name).sort(), ['Camillus Forest Trail #1', 'Thompson Road', 'Thompson Road']);
+  // the ride: ~5.6 km, mostly the trails, through the old growth (#5, #6) and the north woods (#4, #8)
+  const p = json.presets.find((x) => x.id === 'cny-camillus-forest');
+  assert.ok(p.lengthM > 5000 && p.lengthM < 6500 && p.climbM > 120, `${p.lengthM} m, ${p.climbM} m`);
+  const names = new Set(p.path.map((k) => G.byId.get(k.slice(0, -1)).name));
+  for (const n of ['#1', '#2', '#3', '#4', '#5', '#6', '#8']) assert.ok(names.has(`Camillus Forest Trail ${n}`), n);
+  assert.ok(G.byId.get(p.path[0].slice(0, -1)).from === og.junction || G.byId.get(p.path[0].slice(0, -1)).to === og.junction);
 });

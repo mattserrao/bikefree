@@ -276,6 +276,9 @@ export class TreeEngine {
           float k = clamp((uNow - iS.x) / ${this.ft.toFixed(2)}, 0., 1.);
           vOut = iS.y > 2.5 ? 1. : 0.;
           vKeep = (iS.y > 2.5 ? 1. - k : iS.y > 1.5 ? k : 1.) * clamp((uNow - iT) / ${this.tileIn.toFixed(2)}, 0., 1.);
+          // a card the camera is about to pass through (a sapling at the trail's edge, a trunk at a bend): gone in a
+          // dither inside ~3 m — a card that close is all magnified blur (Camillus Forest's narrow trails, 24 Nov)
+          vKeep *= smoothstep(1.4, 3.4, d);
           if (iS.y < .5 || vKeep <= 0. || iB.x <= 0.) { gl_Position = vec4(2., 2., 2., 1.); return; }
           vec2 dir = to / max(d, 1e-3);
           vec3 right = normalize(vec3(-dir.y, 0., dir.x));
@@ -312,6 +315,10 @@ export class TreeEngine {
           vec4 c0, c1;
           if (mag > 0.) { c0 = cubic(vUv); c1 = cubic(vUv2); } else { c0 = texture2D(uAtlas, vUv); c1 = texture2D(uAtlas, vUv2); }
           vec4 c = mix(c0, c1, vBlend);
+          // (the photo's colour, un-premultiplied from its own alpha before the edge is roughened below: dividing by the
+          //  roughened alpha brightened every part-covered texel up to 3× — the washed-out, too-light bushes, user 24 Nov,
+          //  whose small, magnified cards are mostly part-covered edge)
+          float a0 = c.a;
           // a near card, magnified past its photo's texels (user, 24 Nov: "softening the pixelation", trees staying 2D):
           // leaf clusters from the detail texture break up the blocks of colour and roughen the silhouette's staircase
           if (mag > 0.) {
@@ -327,7 +334,7 @@ export class TreeEngine {
           if (c.a < .5) discard;`}
           float teDz = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(.06711056, .00583715))));
           if (vOut > .5 ? vKeep <= teDz : vKeep <= 1. - teDz) discard;   // the complement of the mid tier's dissolve
-          gl_FragColor = vec4(c.rgb / max(c.a, .3) * vTint, cov);
+          gl_FragColor = vec4(c.rgb / max(a0, .3) * vTint, cov);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
           #include <fog_fragment>
@@ -338,7 +345,7 @@ export class TreeEngine {
     this.impMat.uniforms.uAtlas.value = rt.texture;
     this.impMat.uniforms.uSurf = SURFACE;   // (the shared detail texture: a blank until loaded)
     this.impMat.alphaToCoverage = !!this.msaa;
-    this.impMat.customProgramCacheKey = () => `tree-engine-impostor-9-${this.ft}-${this.msaa ? 1 : 0}`;
+    this.impMat.customProgramCacheKey = () => `tree-engine-impostor-11-${this.ft}-${this.msaa ? 1 : 0}`;
     this.impMesh = new THREE.Mesh(geo, this.impMat);
     this.impMesh.frustumCulled = false; this.impMesh.name = 'Trees (impostors)';
     this.group.add(this.impMesh);

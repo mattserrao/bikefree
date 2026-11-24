@@ -559,6 +559,19 @@ PGH is a whole road network rather than a route: every street, trail and bridge 
 - **QC fails**: structure, connected (one piece), end-gap / end-step (an edge's end off its junction), gap (a jump along an edge), grade (> 40 % over 10 m), ways (a way through a junction not offered), ride (a simulated ride's path jumps). Warnings: grades over 32 %, near-level crossings with no junction, dead ends (info).
 - **How it rides**: `js/graph.js` lays every edge end to end on a synthetic base line so the ride-network code (`js/network.js`) works unchanged; `js/world/graph-world.js` draws the graph itself in 400 m tiles round the camera.
 
+### An old-growth hero area on a graph map: Camillus Forest (CNY)
+
+- **Command:** `python3 tools/cny_forest.py [--check] [-v]`. `npm run cny:build` runs it after `cny_heroes.py` and before the routes.
+- **What it does:**
+  - Adds the Unique Area's numbered trails as narrow dirt singletrack. These are kind `path`, and the city edge data gives them `w: 0.9`, dirt and `cf: 1`. Their heights follow the ground grid, smoothed and held to ≤ 16 % a sample.
+  - Splits Thompson Road at the lot to make the junction, and patches the presets that ride it.
+  - Paints land codes 30–33 inside the boundary into `cny-land.bin.gz`.
+  - Writes `routes/cities/cny-oldgrowth.json`, named in `cny.json` as `oldGrowth`.
+- **Running it again:** it first takes out the trails and junction it added, so a second run gives the same files.
+- **The ride:** `cny-camillus-forest` in `tools/pgh_routes.mjs`, 5.6 km with 159 m of climbing. It goes in and out on Trail #1 from Thompson Road. The test allows that one way twice.
+- **Drawing it:** `js/world/toolbox/vegetation/old-growth.js` (see TOOLBOX.md). `graph-world.js` draws `cf` edges as a narrow tread with a soft edge, with no shoulder or spill, and keeps the coarse ground 0.6 m under them. The area's floor skirt covers that cut. The rider rides the middle of any way narrower than 2 m.
+- **Snapshots:** `node tools/snap_pgh.mjs --graph routes/cities/cny.json north@43.07264,-76.2846,+@300`. The tool calls `oldGrowth.prepare(camera)`, so the near pieces are built for the shot.
+
 ## Rendering performance (perf-test)
 
 How the stylized scenes are drawn, for anyone adding scenery:
