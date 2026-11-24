@@ -44,6 +44,10 @@ export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand:
 const TILE = 400;
 // how far the city is built, by quality (Low: phones)
 const VERGE_IN = 260, VERGE_OUT = 420;
+/** Phones and tablets (user, 23 Nov: "even on high performance on mobile, the game should not run out of memory"):
+ *  the city's tiles built no farther than Light's at any quality — the fog closes in a little sooner. */
+export const MOBILE = (() => { try { const ua = navigator.userAgent || ''; return /iPhone|iPad|iPod|Android|Mobile/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1); } catch { return false; } })();
+const capReach = (q) => (MOBILE ? { ...q, near: Math.min(q.near, 1300), far: Math.min(q.far, 1800) } : q);
 /** Smooth value noise in [0, 1] (the verges' slow patches). */
 const vnoise = (x, z) => {
   const i = Math.floor(x), j = Math.floor(z), u = x - i, v = z - j, f = (t) => t * t * (3 - 2 * t), H = (a, b) => hash(a * 127.1 + b * 311.7);
@@ -72,7 +76,10 @@ const PROXY_MAT = new THREE.MeshStandardMaterial({ color: '#000000' });
 //  one go; now it writes straight into one array from the shapes' own triangles, and yields as it goes)
 const PROXY_SHAPES = (() => {
   const tris = (g) => (g.index ? g.toNonIndexed() : g).attributes.position.array;
-  return { blob: tris(new THREE.IcosahedronGeometry(1, 0)), cone: tris(new THREE.ConeGeometry(1, 1, 6).translate(0, .5, 0)), box: tris(new THREE.BoxGeometry(1, 1, 1).translate(0, .5, 0)) };
+  // (lighter, user 23 Nov — "should not run out of memory": an octahedron crown, a 4-sided cone, a trunk with no top or bottom;
+  //  no normals — the bake reads only where they stand: ~110 MB on High, streamed out to 2.3 km, now about a third)
+  const trunk = new THREE.CylinderGeometry(.6, .6, 1, 4, 1, true).translate(0, .5, 0);
+  return { blob: tris(new THREE.OctahedronGeometry(1, 0)), cone: tris(new THREE.ConeGeometry(1, 1, 4).translate(0, .5, 0)), box: tris(trunk) };
 })();
 function* treeProxiesJob(trees, kit, out) {
   const S = PROXY_SHAPES;
@@ -91,7 +98,7 @@ function* treeProxiesJob(trees, kit, out) {
     else put(S.blob, r * .82, h * .3, r * .82, t.x, t.y + h * .62, t.z);
     const w = Math.max(.35, r * .1); put(S.box, w, h * .5, w, t.x, t.y, t.z);
   }
-  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.computeVertexNormals(); geo.computeBoundingBox(); geo.computeBoundingSphere();
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.computeBoundingBox(); geo.computeBoundingSphere();
   const mesh = new THREE.Mesh(geo, PROXY_MAT);
   mesh.name = 'Tree shadow proxies'; mesh.layers.mask = 0; mesh.userData.bake = true; mesh.castShadow = false; mesh.frustumCulled = false;
   out.mesh = mesh;
@@ -122,7 +129,7 @@ export class GraphCity {
     const proj = world.proj, host = this.host;
     const [lat0, lon0] = index.origin, U = index.unit;
     this.local = (qa, qo) => proj.toLocal(lat0 + qa * U, lon0 + qo * U);
-    this.q = REACH[world.qualityKey] || REACH.balanced;
+    this.q = capReach(REACH[world.qualityKey] || REACH.balanced);
     this.gfx = { distance: 1, trees: 1, verge: true, life: true };   // (the graphics menu: setGfx)
     this.tiles = new Map(); this.stats = { buildings: 0, trees: 0, furniture: 0, cars: 0, lamps: 0, sectors: 0 };
     this.ready = false;   // (the land cover is in)
@@ -307,6 +314,10 @@ export class GraphCity {
     const self = this, material = makeFacadeMaterial(this.host.uniforms), group = new THREE.Group();
     group.name = 'Buildings (building kit)'; this.host.group.add(group);
     const plans = new Map(), lists = new Map(), extents = new Map(), details = [];
+    // the houses' close detail, per 120 m cell: built when the camera comes within reach, dropped past it (user, 23 Nov:
+    // "even on high … should not run out of memory" — built up front it was 50–65 MB in the villages)
+    const closeCells = new Map();   // cell key → { tile, houses: [R], box, mesh, pending }
+    let closeJob = null;
     const addExt = (e) => { for (let i = Math.floor((e.x - e.r) / 20); i <= Math.floor((e.x + e.r) / 20); i++) for (let j = Math.floor((e.z - e.r) / 20); j <= Math.floor((e.z + e.r) / 20); j++) { const k = i * 100003 + j; let a = extents.get(k); if (!a) extents.set(k, (a = [])); a.push(e); } };
     return {
       group, material, details, plans,
@@ -351,8 +362,13 @@ export class GraphCity {
         const list = lists.get(key); lists.delete(key);
         if (!list?.length) return;
         const w = new Writer(8192), d = new Writer(4096), L = self.host.landscape;
-        // the house engine's close detail (casings, rails, brackets, gutters): one writer per 120 m cell, drawn to ~160 m
-        const close = new Map(), closeOf = (R) => { const k = Math.floor(R.x / 120) * 100003 + Math.floor(R.z / 120); let c = close.get(k); if (!c) close.set(k, (c = new Writer(4096))); return c; };
+        // the house engine's close detail (casings, rails, brackets, gutters): one mesh per 120 m cell, drawn to ~160 m,
+        // built later when the camera nears the cell (_closeJob); here a writer that's thrown away
+        const scrap = new Writer(4096), closeOf = (R) => {
+          const k = `${key}|${Math.floor(R.x / 120)},${Math.floor(R.z / 120)}`; let c = closeCells.get(k);
+          if (!c) closeCells.set(k, (c = { tile: key, houses: [], box: new THREE.Box3(), mesh: null }));
+          c.houses.push(R); c.box.expandByPoint(new THREE.Vector3(R.x, (L.heightAt?.(R.x, R.z) ?? 0), R.z)); scrap.n = 0; scrap.ni = 0; return scrap;
+        };
         for (const R of list) {
           if (due()) yield;
           if (R.inCanal) continue;
@@ -362,9 +378,35 @@ export class GraphCity {
         }
         if (w.n) { const m = gpuOnly(new THREE.Mesh(w.geometry(), material)); m.name = `Homes ${key}`; m.castShadow = m.receiveShadow = true; group.add(m); }
         if (d.n) { const dm = gpuOnly(new THREE.Mesh(d.geometry(), material)); dm.userData.bake = false; dm.name = `Home detail ${key}`; dm.receiveShadow = true; dm.geometry.computeBoundingBox(); dm.userData.box = dm.geometry.boundingBox; group.add(dm); details.push(dm); }
-        for (const c of close.values()) if (c.n) { const cm = gpuOnly(new THREE.Mesh(c.geometry(), material)); cm.userData.bake = false; cm.name = `House close detail ${key}`; cm.receiveShadow = true; cm.geometry.computeBoundingBox(); cm.userData.box = cm.geometry.boundingBox; cm.userData.reach = HOUSE_CLOSE_M; group.add(cm); details.push(cm); }
+        for (const c of closeCells.values()) if (c.tile === key) c.box.expandByScalar(18);   // (the houses' own size round their centres)
       },
-      tick(cam) { for (const m of details) m.visible = m.userData.box.distanceToPoint(cam) < (m.userData.reach || KIT_CFG.detailReachM); },
+      tick(cam) {
+        for (const m of details) m.visible = m.userData.box.distanceToPoint(cam) < (m.userData.reach || KIT_CFG.detailReachM);
+        for (const c of closeCells.values()) {
+          const d = c.box.distanceToPoint(cam);
+          if (c.mesh) { c.mesh.visible = d < HOUSE_CLOSE_M; if (d > HOUSE_CLOSE_M + 140 && closeJob?.c !== c) { group.remove(c.mesh); c.mesh.geometry.dispose(); c.mesh = null; } }
+        }
+      },
+      /** The nearest cell within reach whose close detail isn't built, built as a job (sliced: graph-city stream). */
+      *closeJob(cam) {
+        let best = null, bd = HOUSE_CLOSE_M + 60;
+        for (const c of closeCells.values()) if (!c.mesh) { const d = c.box.distanceToPoint(cam); if (d < bd) { bd = d; best = c; } }
+        if (!best) return false;
+        closeJob = { c: best };
+        const W = new Writer(8192), D = new Writer(4096), C = new Writer(4096), L = self.host.landscape;
+        for (const R of best.houses) {
+          if (due()) yield;
+          if (!closeCells.has(`${best.tile}|${Math.floor(R.x / 120)},${Math.floor(R.z / 120)}`)) { closeJob = null; return true; }   // (its tile released meanwhile)
+          W.n = W.ni = 0; D.n = D.ni = 0;
+          buildHouse(R, R.house, W, D, C, R.floorAbove ? dryLand(L, R.floorAbove) : L);
+        }
+        if (C.n) { const cm = gpuOnly(new THREE.Mesh(C.geometry(), material)); cm.userData.bake = false; cm.name = `House close detail ${best.tile}`; cm.receiveShadow = true; cm.visible = best.box.distanceToPoint(cam) < HOUSE_CLOSE_M; group.add(cm); best.mesh = cm; }
+        else best.mesh = new THREE.Object3D();   // (nothing to draw: marked done)
+        closeJob = null;
+        return true;
+      },
+      /** A tile's cells forgotten (graph-city _release). */
+      releaseTile(key) { for (const [k, c] of closeCells) if (c.tile === key) { if (c.mesh) { group.remove(c.mesh); c.mesh.geometry?.dispose(); } closeCells.delete(k); } },
     };
   }
 
@@ -569,19 +611,33 @@ export class GraphCity {
       if (left <= 0) break;
       if (runSlice(this._job, left).done) this._job = null; else break;
     }
+    // the houses' close detail near the camera (the building kit's cells), as a job in the frame's slice
+    while (performance.now() - t0 < ms) {
+      if (!this._cjob) this._cjob = this.kit.closeJob?.(this.world.camera.position);
+      if (!this._cjob) break;
+      const r = runSlice(this._cjob, ms - (performance.now() - t0));
+      if (!r.done) break;
+      this._cjob = null;
+      if (r.value === false) break;
+    }
     // verges: the nearest tile waiting for its grass, as a job in the frame's slice; far ones dropped
     while (performance.now() - t0 < ms) {
       if (!this._vjob) {
         let best = null, bd = VERGE_IN;
-        if (this.gfx.verge) for (const t of this.tiles.values()) if (t.vergePending && !t.building) { const d = Math.hypot(t.cx - cx, t.cz - cz) - TILE * .71; if (d < bd) { bd = d; best = t; } }
+        let crops = false;
+        for (const t of this.tiles.values()) if (!t.building && ((this.gfx.verge && t.vergePending) || t.cropsPending)) { const d = Math.hypot(t.cx - cx, t.cz - cz) - TILE * .71; if (d < bd + (t.cropsPending ? 80 : 0)) { bd = d - (t.cropsPending ? 80 : 0); best = t; crops = !!t.cropsPending; } }
         if (!best) break;
-        this._vjob = { t: best, gen: this._vergeJob(best) };
+        this._vjob = { t: best, gen: crops ? this._cropsJob(best) : this._vergeJob(best) };
       }
       const left = ms - (performance.now() - t0);
       if (left <= 0) break;
       if (runSlice(this._vjob.gen, left).done) this._vjob = null; else break;
     }
-    if ((this._f || 0) % 30 === 15) for (const t of this.tiles.values()) if (t.vergeMesh && t !== this._vjob?.t && Math.hypot(t.cx - cx, t.cz - cz) - TILE * .71 > VERGE_OUT) this._dropVerge(t);
+    if ((this._f || 0) % 30 === 15) for (const t of this.tiles.values()) if (t !== this._vjob?.t) {
+      const d = Math.hypot(t.cx - cx, t.cz - cz) - TILE * .71;
+      if (t.vergeMesh && d > VERGE_OUT) this._dropVerge(t);
+      if (t.cropsMesh && d > VERGE_OUT + 120) { const m = t.cropsMesh; this.host.group.remove(m); m.geometry.dispose(); t.meshes = t.meshes.filter((r) => r.m !== m); t.near = t.near.filter((x) => x !== m); t.cropsMesh = null; t.cropsPending = true; }
+    }
     if ((this._f = (this._f || 0) + 1) % 30 === 0) for (const [key, t] of this.tiles) if (t.built && !t.building && Math.hypot(t.cx - cx, t.cz - cz) > this.q.far) this._release(key, t);
   }
   /** Tiles within r of (x, z) not yet built (the loading screen waits for the start's). */
@@ -626,6 +682,7 @@ export class GraphCity {
 
   _release(key, t) {
     if (this._vjob?.t === t) this._vjob = null;
+    this.kit.releaseTile?.(key);
     this.world.tileSpots?.delete(key);
     for (const { m, parent, kit } of t.meshes) {
       parent.remove(m);
@@ -923,8 +980,9 @@ export class GraphCity {
     const W = this.world, x0 = t.i * TILE, z0 = t.j * TILE, g = (x, z) => W._groundH(x, z), M = t.kitM;
     // standing corn and soybeans: row cards, near the camera only
     this.cropMat ||= cropMaterial(this.treeTime);
-    const cc = {}; yield* cropCardsJob(x0, z0, TILE, (x, z) => this._cropAt(x, z), g, cc); const geo = cc.geo;
-    if (geo) { const m = gpuOnly(new THREE.Mesh(geo, this.cropMat)); m.name = `Crops ${t.key}`; m.userData.lodM = 300; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 300; this._add(t, m, 'near'); }
+    // (the standing crops only near the camera, as the verges: drawn to 300 m, built within VERGE_IN + 80; ~136 MB on
+    //  High when every loaded tile's were built)
+    if (Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71 < VERGE_IN + 80) yield* this._cropsJob(t); else t.cropsPending = true;
     yield;
     // round bales on the hay and the stubble
     for (let x = x0 + 11; x < x0 + TILE; x += 22) for (let z = z0 + 11; z < z0 + TILE; z += 22) {
@@ -984,6 +1042,13 @@ export class GraphCity {
     }
   }
 
+  /** A tile's standing crops (row cards), built when the camera comes near it. */
+  *_cropsJob(t) {
+    const W = this.world, x0 = t.i * TILE, z0 = t.j * TILE, g = (x, z) => W._groundH(x, z);
+    t.cropsPending = false;
+    const cc = {}; yield* cropCardsJob(x0, z0, TILE, (x, z) => this._cropAt(x, z), g, cc); const geo = cc.geo;
+    if (geo) { const m = gpuOnly(new THREE.Mesh(geo, this.cropMat)); m.name = `Crops ${t.key}`; m.userData.lodM = 300; m.userData.bake = false; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 300; this._add(t, m, 'near'); t.cropsMesh = m; }
+  }
   /** A tile's verge grass and brush (and the canal's bank scrub), built when the camera comes near it. */
   *_vergeJob(t) {
     const W = this.world, N = new MeshBuilder({ aGlow: 1 });
@@ -998,14 +1063,14 @@ export class GraphCity {
   /** The graphics menu (laptops; user, 23 Nov): how far the city's tiles reach, how many trees new tiles plant, the
    *  verges' grass and brush, and the people, parked cars and farm animals. */
   setGfx({ distance = 1, trees = 1, verge = true, life = true } = {}) {
-    const base = REACH[this.world.qualityKey] || REACH.balanced;
+    const base = capReach(REACH[this.world.qualityKey] || REACH.balanced);
     this.q = { ...base, near: base.near * distance, far: base.far * distance, trees: base.trees * trees };
     this.gfx = { distance, trees, verge, life };
     if (!verge) { for (const t of this.tiles.values()) this._dropVerge(t); this._vjob = null; }
     for (const c of [this.life?.bikes, this.life?.walkers, this.life?.locals]) for (const m of c?.meshes || []) m.visible = life;
   }
   /** The verge's arrays let go once they're on the GPU (no second copy in the page's memory: phones). */
-  _gpuOnly(m) { m.geometry.computeBoundingSphere(); for (const a of Object.values(m.geometry.attributes)) a.onUpload(function () { this.array = null; }); if (m.geometry.index) m.geometry.index.onUpload(function () { this.array = null; }); return m; }
+  _gpuOnly(m) { m.geometry.computeBoundingSphere(); m.geometry.computeBoundingBox(); for (const a of Object.values(m.geometry.attributes)) a.onUpload(function () { this.array = null; }); if (m.geometry.index) m.geometry.index.onUpload(function () { this.array = null; }); return m; }
   /** A far tile's verge dropped (built again when the camera comes back). */
   _dropVerge(t) {
     const m = t.vergeMesh; if (!m) return;

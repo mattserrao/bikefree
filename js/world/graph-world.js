@@ -725,8 +725,10 @@ export class GraphWorld {
   _reach() {
     const low = this.qualityKey === 'low';
     const k = this.gfx?.distance || 1;
-    this.nearM = (low ? REACH_LOW.near : NEAR_M) * k; this.farM = (low ? REACH_LOW.far : FAR_M) * k;
-    if (this.scene?.fog) { this.scene.fog.near = low ? 700 : 900; this.scene.fog.far = this.nearM + 200; }
+    const mobile = (() => { try { const ua = navigator.userAgent || ''; return /iPhone|iPad|iPod|Android|Mobile/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1); } catch { return false; } })();
+    const lowReach = low || mobile;   // (phones and tablets: Light's reach at any quality — memory, user 23 Nov)
+    this.nearM = (lowReach ? REACH_LOW.near : NEAR_M) * k; this.farM = (lowReach ? REACH_LOW.far : FAR_M) * k;
+    if (this.scene?.fog) { this.scene.fog.near = lowReach ? 700 : 900; this.scene.fog.far = this.nearM + 200; }
   }
 
   /** PGH's city (js/world/graph-city.js, tools/pgh_city.py): buildings, trees, furniture, the land cover and what each
@@ -841,8 +843,9 @@ export class GraphWorld {
       if (runSlice(this._sjob.gen, budgetMs - (performance.now() - t0)).done) this._sjob = null; else break;
     }
     if (this._frames % 30 === 15) for (const t of this.tiles.values()) if (t.spillMesh && t !== this._sjob?.t && Math.hypot(t.cx - cx, t.cz - cz) - TILE * .71 > SPILL_OUT) {
-      this.group.remove(t.spillMesh); t.spillMesh.geometry.dispose(); t.spillMesh = null; t.spillPending = true;
+      t.spillMesh.geometry.dispose(); t.spillMesh = null; t.spillPending = true; this._spillDirty = true;
     }
+    if (this._spillDirty && !this._sjob && this._frames % 20 === 0) this._mergeSpill();
     // release far tiles (a few a frame)
     if (this._frames % 30 === 0) for (const t of this.tiles.values()) {
       if (t.built && t !== this._tjob?.t && Math.hypot(t.cx - cx, t.cz - cz) > (this.farM || FAR_M)) this._release(t);
@@ -857,6 +860,7 @@ export class GraphWorld {
   _release(t) {
     if (this._tjob?.t === t) this._tjob = null;   // (a tile released while building: started again when it's wanted)
     if (this._sjob?.t === t) this._sjob = null;
+    if (t.spillMesh) this._spillDirty = true;
     for (const m of [t.roadMesh, t.paintMesh, t.groundMesh, t.bankMesh, t.spillMesh, ...(t.extra || []), ...(t.extraRoad || [])]) if (m) { this.group.remove(m); m.geometry.dispose(); }
     t.roadMesh = t.paintMesh = t.groundMesh = t.bankMesh = t.spillMesh = null; t.spillPending = false; t.extra = []; t.extraRoad = [];
     t.built = false;
@@ -1148,7 +1152,24 @@ export class GraphWorld {
       }
     }
     const m = R.mesh(this.mats.spill);
-    if (m) { m.name = 'Spill'; m.receiveShadow = true; t.spillMesh = m; this.group.add(m); }
+    if (m) { t.spillMesh = m; this._spillDirty = true; }   // (drawn merged with the other near tiles': _mergeSpill)
+  }
+
+  /** The near tiles' spill strips as one mesh (one draw call, not one a tile), rebuilt when the set changes. */
+  _mergeSpill() {
+    this._spillDirty = false;
+    const parts = [...this.tiles.values()].map((t) => t.spillMesh?.geometry).filter(Boolean);
+    if (this.spillAll) { this.group.remove(this.spillAll); this.spillAll.geometry.dispose(); this.spillAll = null; }
+    if (!parts.length) return;
+    const g = new THREE.BufferGeometry(), drop = function () { this.array = null; };
+    for (const [name, size] of [['position', 3], ['normal', 3], ['color', 3], ['aRd', 4]]) {
+      const n = parts.reduce((a, p) => a + p.attributes[name].array.length, 0), out = new Float32Array(n);
+      let o = 0; for (const p of parts) { out.set(p.attributes[name].array, o); o += p.attributes[name].array.length; }
+      const attr = new THREE.BufferAttribute(out, size); attr.onUpload(drop); g.setAttribute(name, attr);
+    }
+    g.computeBoundingSphere(); g.computeBoundingBox();
+    const m = new THREE.Mesh(g, this.mats.spill); m.name = 'Spill'; m.receiveShadow = true; m.frustumCulled = false;
+    this.spillAll = m; this.group.add(m);
   }
 
   /** The dressed places' ground in this tile (toolbox/materials/park-surfaces.js): lawns, beds, woods, plazas and walks
