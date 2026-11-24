@@ -19,6 +19,8 @@ import { loadTerrainGrid } from '../terrain-grid.js';
 import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean, ROAD_LIFT } from './pose.js';
 import { loadRider, RIDER_RIM } from './rider.js';
 import { makeSkyDome } from './toolbox/atmosphere/sky-dome.js';
+import { PostFX } from './toolbox/atmosphere/post.js';
+import { MOBILE } from './graph-city.js';
 /** The clouds' clock (their shadows drifting over the ground and the roads; puddles' glints): seconds. */
 const CLOUD_T = { value: 0 };
 import { PerfMonitor } from './perf.js';
@@ -339,6 +341,7 @@ export class GraphWorld {
     this._resize = () => {
       const w = container.clientWidth || 1, h = container.clientHeight || 1;
       this.renderer.setSize(w, h, false);
+      this.post?.setSize(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
       this.camera.aspect = w / h;
       this.camera.updateProjectionMatrix();
     };
@@ -380,7 +383,7 @@ export class GraphWorld {
    *   atmosphere  sun beams, mist, leaves, motes;  verge  roadside grass and brush;  life  people, parked cars, animals
    */
   setGfx(g = {}) {
-    this.gfx = { fps: 0, battery: 'off', distance: 1, trees: 1, shadows: true, atmosphere: true, verge: true, life: true, ...g };
+    this.gfx = { fps: 0, battery: 'off', distance: 1, trees: 1, shadows: true, atmosphere: true, verge: true, life: true, post: true, ...g };
     this._reach();
     if (this.baked) this.sun.castShadow = this.gfx.shadows && !!this.baked.world.terrain.quality.shadows; else { this._sunCasts ??= this.sun.castShadow; this.sun.castShadow = this.gfx.shadows && this._sunCasts; }
     this.effects?.set?.('atmosphere', this.gfx.atmosphere);
@@ -470,6 +473,7 @@ export class GraphWorld {
   get loading() { return (this._queued || 0) > 6 || this.baked?.preparing ? 4 : 0; }
 
   dispose() {
+    this.post?.dispose(); this.post = null; this.sky?.dispose();
     this.effects?.dispose();
     this.stop();
     this.disposed = true;
@@ -540,8 +544,30 @@ export class GraphWorld {
     }
     this.shaders?.tick(dt, this._warmStart || this._frames > 600);
     if (this._preload && this._frames % 4) return;
-    this.renderer.render(this.scene, this.camera);
+    this._draw();
     this.perf?.end(performance.now());
+  }
+
+  /**
+   * Post-processing (user, 24 Nov — Zwift parity, item 3): on High, on a laptop or desktop, and unless switched off in
+   * More graphics, the scene draws into an HDR target with 4× MSAA, then the final pass adds contact shading (a
+   * depth-only SSAO), a soft bloom on the brightest light and a light grade, and tone-maps. Phones and the other
+   * levels draw straight to the canvas as before.
+   */
+  _postOn() { return this.qualityKey === 'high' && !MOBILE && (this.gfx?.post ?? true); }
+  _draw() {
+    if (this._postOn()) {
+      if (!this.post) {
+        this.post = new PostFX(this.renderer, { samples: 4 });
+        this.post.setAO({ strength: .7, radiusM: .7 });
+        const w = this.container?.clientWidth || this.renderer.domElement.clientWidth || 1, h = this.container?.clientHeight || this.renderer.domElement.clientHeight || 1;
+        this.post.setSize(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
+      }
+      this.post.render(this.scene, this.camera, { bloom: .22, threshold: 1.15, warm: this.timeKey === 'golden' ? 1 : 0 });
+    } else {
+      if (this.post) { this.post.dispose(); this.post = null; }
+      this.renderer.render(this.scene, this.camera);
+    }
   }
 
   _place(p, lane, out) {

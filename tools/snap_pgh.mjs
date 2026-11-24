@@ -74,7 +74,7 @@ for (const spec of args) {
     w.camera.updateMatrixWorld();
     if (w.city?.forest) { w.city.forest._at = null; w.city.forest._lastRebuild = -99; w.city.forest.tick(w.camera); w.city.forest.impMat.uniforms.uNow.value = 1e9; }   // (every tile's impostors in: no dissolve in a still)
     w.renderer.info.autoReset = false; w.renderer.info.reset();
-    w.renderer.render(w.scene, w.camera);
+    if (w._draw) w._draw(); else w.renderer.render(w.scene, w.camera);   // (the world's own draw: its post pass on High)
     const i = w.renderer.info.render;
     const up = window.route.netRide.upcoming(w.p);
     return { bridges: `${w._bridgesState} ${w.bridges?.count ?? ''}`, calls: i.calls, triangles: i.triangles, tiles: [...w.tiles.values()].filter((t) => t.built).length, next: `${up.node.name} in ${Math.round(up.distTo)} m: ${up.options.map((o) => o.label).join(' / ')}` };
