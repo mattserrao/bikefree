@@ -230,6 +230,7 @@ export const atmosphere = {
         if (beams) beams.material.uniforms.uLow.value = THREE.MathUtils.smoothstep(el, -.02, .08) * (1 - THREE.MathUtils.smoothstep(el, .45, .7));
         if (!placedAt || placedAt.distanceTo(world.camera.position) > 35 || t - lastPlace > 20) place(t);
       },
+      setVisible(v) { group.visible = v; },
       dispose() { for (const m of parts) { m.geometry.dispose(); m.material.dispose(); } group.removeFromParent(); },
     };
   },

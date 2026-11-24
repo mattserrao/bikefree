@@ -383,6 +383,7 @@ async function openWorld(route) {
   world.setTimeOfDay(settings.worldTime);
   world.setWeather(settings.worldWeather || 'clear', true);
   world.setCamera(settings.camera);
+  world.setGfx?.(settings.gfx);
   wireWorld(route);
   watchGpu(world);
   world.start();

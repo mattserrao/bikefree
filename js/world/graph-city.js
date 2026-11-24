@@ -114,6 +114,7 @@ export class GraphCity {
     const [lat0, lon0] = index.origin, U = index.unit;
     this.local = (qa, qo) => proj.toLocal(lat0 + qa * U, lon0 + qo * U);
     this.q = REACH[world.qualityKey] || REACH.balanced;
+    this.gfx = { distance: 1, trees: 1, verge: true, life: true };   // (the graphics menu: setGfx)
     this.tiles = new Map(); this.stats = { buildings: 0, trees: 0, furniture: 0, cars: 0, lamps: 0, sectors: 0 };
     this.ready = false;   // (the land cover is in)
 
@@ -563,7 +564,7 @@ export class GraphCity {
     while (performance.now() - t0 < ms) {
       if (!this._vjob) {
         let best = null, bd = VERGE_IN;
-        for (const t of this.tiles.values()) if (t.vergePending && !t.building) { const d = Math.hypot(t.cx - cx, t.cz - cz) - TILE * .71; if (d < bd) { bd = d; best = t; } }
+        if (this.gfx.verge) for (const t of this.tiles.values()) if (t.vergePending && !t.building) { const d = Math.hypot(t.cx - cx, t.cz - cz) - TILE * .71; if (d < bd) { bd = d; best = t; } }
         if (!best) break;
         this._vjob = { t: best, gen: this._vergeJob(best) };
       }
@@ -637,13 +638,13 @@ export class GraphCity {
   /** LOD: detailed trees and cars near the camera, crowns and plain cars beyond; the kit's near detail. */
   tick(cam, time, rider = null, dt = 0) {
     this.treeTime.value = time;
-    this.life?.tick(cam, rider?.pos || null, rider?.fwd || null, dt);
+    if (this.gfx.life) this.life?.tick(cam, rider?.pos || null, rider?.fwd || null, dt);
     this.glassNight.value = this.host.night.value * 0.05;
     this.forest.tick(this.world.camera);
     if ((this._lf = (this._lf || 0) + 1) % 8) return;
     for (const t of this.tiles.values()) {
       const d = Math.hypot(t.cx - cam.x, t.cz - cam.z) - TILE * 0.71;
-      for (const m of t.near) m.visible = d < (m.userData.lodM || this.q.treeNear) && !(d < m.userData.lodMin);
+      for (const m of t.near) m.visible = d < (m.userData.lodM || this.q.treeNear) && !(d < m.userData.lodMin) && (this.gfx.life || !/^(Parked cars|Animals)/.test(m.name));
       for (const m of t.far) m.visible = d >= (m.userData.lodM || this.q.treeNear);
     }
     this.kit.tick(cam);
@@ -929,7 +930,7 @@ export class GraphCity {
     // the country roads' edges: the ditch, its grass and brush, the poles (_roadsides); then fence and wall runs
     // (the grass and brush only for a tile near the camera — drawn to 240 m, built within VERGE_IN, dropped beyond
     // VERGE_OUT: user, 23 Nov, phones reloading — every loaded tile's verge to 1.3 km was 270–420 MB of geometry)
-    const N = new MeshBuilder({ aGlow: 1 }), vNear = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71 < VERGE_IN;
+    const N = new MeshBuilder({ aGlow: 1 }), vNear = this.gfx.verge && Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71 < VERGE_IN;
     yield* this._roadsides(t, N, M, vNear ? 'all' : 'struct');
     if (!vNear) t.vergePending = true;
     for (const piece of W.tiles.get(t.key)?.pieces || []) {
@@ -982,6 +983,15 @@ export class GraphCity {
     const m = new THREE.Mesh(N.geometry(), this.vergeMat); m.name = `Verge ${t.key}`; m.userData.lodM = 240;
     m.visible = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71 < 240;
     this._add(t, this._gpuOnly(m), 'near'); t.vergeMesh = m;
+  }
+  /** The graphics menu (laptops; user, 23 Nov): how far the city's tiles reach, how many trees new tiles plant, the
+   *  verges' grass and brush, and the people, parked cars and farm animals. */
+  setGfx({ distance = 1, trees = 1, verge = true, life = true } = {}) {
+    const base = REACH[this.world.qualityKey] || REACH.balanced;
+    this.q = { ...base, near: base.near * distance, far: base.far * distance, trees: base.trees * trees };
+    this.gfx = { distance, trees, verge, life };
+    if (!verge) { for (const t of this.tiles.values()) this._dropVerge(t); this._vjob = null; }
+    for (const c of [this.life?.bikes, this.life?.walkers, this.life?.locals]) for (const m of c?.meshes || []) m.visible = life;
   }
   /** The verge's arrays let go once they're on the GPU (no second copy in the page's memory: phones). */
   _gpuOnly(m) { m.geometry.computeBoundingSphere(); for (const a of Object.values(m.geometry.attributes)) a.onUpload(function () { this.array = null; }); if (m.geometry.index) m.geometry.index.onUpload(function () { this.array = null; }); return m; }

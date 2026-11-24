@@ -357,8 +357,33 @@ export class GraphWorld {
   setQuality(key) {
     this.qualityKey = key || 'balanced';
     this._reach();
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[this.qualityKey] ?? 1.5));
+    this._pixelRatio();
+    if (this.city && this.gfx) this.city.setGfx(this.gfx);
+  }
+  _pixelRatio() {
+    const scale = this._saving ? .75 : 1;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[this.qualityKey] ?? 1.5) * scale);
     this._resize();
+  }
+  /**
+   * The graphics menu's finer settings (user, 23 Nov: "additional graphic settings specially for laptops"):
+   *   fps       a frame-rate cap: 0 (none), 60 or 30
+   *   battery   'off' | 'on' | 'auto' (on while unplugged, where the browser says): 30 fps and 75 % resolution
+   *   distance  how far the scenery's built, × (0.7 near, 1 normal, 1.3 far)
+   *   trees     how many trees new tiles plant, × (0.6, 1, 1.4)
+   *   shadows   the live shadows of moving things (the scenery's are baked)
+   *   atmosphere  sun beams, mist, leaves, motes;  verge  roadside grass and brush;  life  people, parked cars, animals
+   */
+  setGfx(g = {}) {
+    this.gfx = { fps: 0, battery: 'off', distance: 1, trees: 1, shadows: true, atmosphere: true, verge: true, life: true, ...g };
+    this._reach();
+    if (this.baked) this.sun.castShadow = this.gfx.shadows && !!this.baked.world.terrain.quality.shadows; else { this._sunCasts ??= this.sun.castShadow; this.sun.castShadow = this.gfx.shadows && this._sunCasts; }
+    this.effects?.set?.('atmosphere', this.gfx.atmosphere);
+    this.city?.setGfx(this.gfx);
+    const apply = (saving) => { if (saving !== this._saving) { this._saving = saving; this._pixelRatio(); } };
+    if (this.gfx.battery === 'auto' && globalThis.navigator?.getBattery) {
+      navigator.getBattery().then((b) => { const f = () => apply(this.gfx.battery === 'auto' && !b.charging); f(); if (!this._batteryHooked) { this._batteryHooked = true; b.addEventListener('chargingchange', f); } }).catch(() => apply(false));
+    } else apply(this.gfx.battery === 'on');
   }
   setCamera(key) { this.camKey = CAMERAS[key] ? key : DEFAULT_CAMERA; this._camInit = false; }
   setTimeOfDay(key) {
@@ -374,7 +399,7 @@ export class GraphWorld {
     this.scene.background = new THREE.Color(t.sky);
     this.scene.fog.color.set(t.fog);
     this.heroes?.setNight(t.night ? 1 : 0);
-    if (this.baked) { this.baked.setLight(t); this.sun.castShadow = !!this.baked.world.terrain.quality.shadows; }
+    if (this.baked) { this.baked.setLight(t); this.sun.castShadow = (this.gfx?.shadows ?? true) && !!this.baked.world.terrain.quality.shadows; }
   }
 
   start() {
@@ -457,6 +482,10 @@ export class GraphWorld {
   _frame(now) {
     if (!this.running) return;
     this._raf = requestAnimationFrame(this._frame);
+    // a frame-rate cap (the graphics menu; battery saver: 30): skip the display's frames between ours
+    const cap = this._saving ? 30 : this.gfx?.fps || 0;
+    if (cap && now - (this._lastDraw || 0) < 1000 / cap - 2) return;
+    this._lastDraw = now;
     this._frames = (this._frames || 0) + 1;
     this.perf?.begin(now);
     const dt = Math.min(1.0, (now - this._last) / 1000);
@@ -689,7 +718,8 @@ export class GraphWorld {
   /** How far the tiles are built and the fog closes in, by quality (Low: phones). */
   _reach() {
     const low = this.qualityKey === 'low';
-    this.nearM = low ? REACH_LOW.near : NEAR_M; this.farM = low ? REACH_LOW.far : FAR_M;
+    const k = this.gfx?.distance || 1;
+    this.nearM = (low ? REACH_LOW.near : NEAR_M) * k; this.farM = (low ? REACH_LOW.far : FAR_M) * k;
     if (this.scene?.fog) { this.scene.fog.near = low ? 700 : 900; this.scene.fog.far = this.nearM + 200; }
   }
 
@@ -703,6 +733,7 @@ export class GraphWorld {
         if (this.disposed) return;
         const c = new GraphCity(this, this.heroes, cj);
         this.city = c;
+        if (this.gfx) c.setGfx(this.gfx);
         this._classify(c);
         this.cut = roadHash(this.G.edges, this.wOf);
         this._nodeWidths();

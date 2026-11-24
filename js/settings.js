@@ -22,12 +22,17 @@ export const DEFAULT_SETTINGS = {
   worldWeather: 'clear',  // 3D weather: clear | marine | clouds | rain
   scenery: 'builtin-park-yosemite', // 3D loop shown behind free rides and workouts
   mapLandmarks: true,     // the city panel's map shows its landmarks (PLAN 7.9; the toggle at the map's bottom right)
+  // the graphics menu's finer settings (laptops; user, 23 Nov): fps cap (0 none, 60, 30), battery saver (off | on |
+  // auto: while unplugged), draw distance and tree density (×), and on/off for live shadows, atmosphere (sun beams,
+  // mist), roadside grass and brush, and people & cars
+  gfx: { fps: 0, battery: 'off', distance: 1, trees: 1, shadows: true, atmosphere: true, verge: true, life: true },
 };
 
 export function loadSettings() {
   try {
     const raw = localStorage.getItem(KEY);
     const s = { ...DEFAULT_SETTINGS, ...(raw ? JSON.parse(raw) : {}) };
+    s.gfx = { ...DEFAULT_SETTINGS.gfx, ...(s.gfx || {}) };
     // v0.13: 'midday' was the old default, so a saved 'midday' becomes "Route's default" once.
     if (!s.timeAuto) { if (s.worldTime === 'midday') s.worldTime = 'auto'; s.timeAuto = true; }
     // 18 Nov: the minimap zooms in and follows you by default, so a saved 'course' (the old default) becomes 'follow' once.
