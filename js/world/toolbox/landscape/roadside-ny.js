@@ -177,3 +177,22 @@ export function scrubClump(M, x, y, z, seed, s = 1) {
     M.color(tones[Math.floor(hash(seed * 17 + k) * tones.length)]).pyramid(px, y + h * .3, pz, w, h * .7, w * .8, a);
   }
 }
+
+/** A road sign on its post (user, 23 Nov: cheap wins): 'speed' (a white plate, its black figures), 'curve' or 'deer'
+ *  (a yellow diamond, a black symbol). yaw: the way it faces (toward the traffic it's for). */
+export function roadSign(M, x, y, z, yaw, kind) {
+  const c = Math.cos(yaw), s = Math.sin(yaw), fx = s * .05, fz = c * .05;   // (a nudge out of the plate's face)
+  M.color('#8e9092').box(x, y, z, .07, 2.3, .07, yaw);
+  if (kind === 'speed') {
+    M.color('#f1f1ec').box(x, y + 1.75, z, .62, .78, .03, yaw);
+    M.color('#1d1d1d').box(x + fx, y + 2.33, z + fz, .5, .08, .01, yaw).box(x + fx - c * .12, y + 1.9, z + fz + s * .12, .14, .26, .01, yaw).box(x + fx + c * .12, y + 1.9, z + fz - s * .12, .14, .26, .01, yaw);
+    return;
+  }
+  // the diamond: a square turned 45° in the plate's plane (four triangles both ways), its black border and symbol
+  const C = (u, v, d = 0) => new THREE.Vector3(x + c * u + fx * d, y + 1.95 + v, z - s * u + fz * d);
+  M.color('#e8b923');
+  for (const [a, b] of [[[0, .42], [.42, 0]], [[.42, 0], [0, -.42]], [[0, -.42], [-.42, 0]], [[-.42, 0], [0, .42]]]) { M.triangle(C(0, 0), C(...a), C(...b)); M.triangle(C(0, 0), C(...b), C(...a)); }
+  M.color('#1d1d1d');
+  if (kind === 'curve') { M.triangle(C(-.05, -.25, 1), C(.05, -.25, 1), C(.05, .1, 1)); M.triangle(C(-.05, -.25, 1), C(.05, .1, 1), C(-.05, .1, 1)); M.triangle(C(-.05, .1, 1), C(.18, .18, 1), C(.05, .25, 1)); }
+  else { M.triangle(C(-.2, -.05, 1), C(.18, -.05, 1), C(.12, .08, 1)); M.triangle(C(-.2, -.05, 1), C(.12, .08, 1), C(-.15, .08, 1)); M.triangle(C(.12, .08, 1), C(.22, .25, 1), C(.16, .08, 1)); for (const u of [-.15, .1]) M.triangle(C(u, -.25, 1), C(u + .04, -.25, 1), C(u + .02, -.05, 1)); }
+}

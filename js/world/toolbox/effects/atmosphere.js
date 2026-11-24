@@ -8,6 +8,7 @@
 //           drifting a little), strongest at golden hour
 //   leaves  falling leaves in a box round the camera: fluttering, spinning, drifting with the wind, wrapping round
 //   motes   tiny dust and pollen points floating in the air, catching the light when you look toward the sun
+//   birds   a few crows wheeling over the open fields near you, wings flapping
 //   smoke   a thin plume from some of the farmhouses' chimneys near you (user, 23 Nov: cheap wins)
 // Options: { beams: 1, mist: 1, leaves: 1, motes: 1 } (each a strength; 0 turns it off).
 // The world it needs: scene, camera, sunDir, sun, and (for beams and mist) city.forest.tiles, city.landAt / LAND codes,
@@ -15,7 +16,7 @@
 import * as THREE from '../../../../vendor/three.module.min.js';
 import { CHIMNEYS } from '../structures/houses/house-engine.js';
 
-const BEAMS = 14, MIST = 22, LEAVES = 160, MOTES = 420, SMOKERS = 12, PUFFS = 9;
+const BEAMS = 14, MIST = 22, LEAVES = 160, MOTES = 420, SMOKERS = 12, PUFFS = 9, FLOCKS = 3, BIRDS = 9;
 
 export const atmosphere = {
   install(world, opts = {}) {
@@ -149,6 +150,42 @@ export const atmosphere = {
       group.add(smoke); parts.push(smoke);
     }
 
+    // ---------------------------------------------------------------- birds
+    let birds = null;
+    if (on('birds')) {
+      const g = new THREE.InstancedBufferGeometry();
+      // a crow: a body and two wings (x across, z along), the wings' tips flap (position.y marks a tip: 1)
+      g.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, .35, -.07, 0, -.3, .07, 0, -.3,   0, 0, .12, -.55, 1, -.05, 0, 0, -.12,   0, 0, .12, 0, 0, -.12, .55, 1, -.05], 3));
+      const iF = new THREE.InstancedBufferAttribute(new Float32Array(FLOCKS * BIRDS * 4), 4); iF.setUsage(THREE.DynamicDrawUsage);
+      g.setAttribute('iF', iF); g.instanceCount = 0;
+      const mat = new THREE.ShaderMaterial({
+        uniforms: { uTime, ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog) }, side: THREE.DoubleSide, fog: true,
+        vertexShader: /* glsl */`
+          attribute vec4 iF;   // the flock's centre x, y, z; w: the bird's phase
+          uniform float uTime;
+          #include <fog_pars_vertex>
+          void main() {
+            float a = uTime * (.22 + fract(iF.w * 7.) * .08) + iF.w * 6.283, r = 14. + fract(iF.w * 13.) * 16.;
+            vec3 c = iF.xyz + vec3(cos(a) * r, sin(uTime * .4 + iF.w * 9.) * 2.5 + fract(iF.w * 3.) * 6., sin(a) * r);
+            vec3 fwd = normalize(vec3(-sin(a), 0., cos(a))), side = vec3(fwd.z, 0., -fwd.x);
+            float flap = sin(uTime * 9. + iF.w * 40.) * .35 * step(.3, fract(uTime * .15 + iF.w));   // (flap, then glide)
+            vec3 p = position * 1.3;
+            vec3 w = c + side * p.x + fwd * p.z + vec3(0., position.y * flap * 1.3, 0.);
+            vec4 mvPosition = viewMatrix * vec4(w, 1.);
+            gl_Position = projectionMatrix * mvPosition;
+            #include <fog_vertex>
+          }`,
+        fragmentShader: /* glsl */`
+          #include <fog_pars_fragment>
+          void main() {
+            gl_FragColor = vec4(.07, .07, .08, 1.);
+            #include <fog_fragment>
+          }`,
+      });
+      birds = new THREE.Mesh(g, mat); birds.frustumCulled = false; birds.name = 'Birds'; birds.userData.bake = false;
+      group.add(birds); parts.push(birds);
+    }
+
     // ---------------------------------------------------------------- drifting leaves
     if (on('leaves')) {
       const g = new THREE.InstancedBufferGeometry();
@@ -260,6 +297,18 @@ export const atmosphere = {
           A.setXYZW(k, x, y, z, 7 + Math.random() * 10); B.setXY(k, t, Math.random()); k++;
         }
         mist.geometry.instanceCount = k; A.needsUpdate = true; B.needsUpdate = true;
+      }
+      if (birds && world.city?.landAt) {
+        // flocks over open land 50–160 m off: fields, pasture (LAND codes ≥ 10), 25–45 m up
+        const A = birds.geometry.attributes.iF; let k = 0, f = 0;
+        for (let tries = 0; tries < 60 && f < FLOCKS; tries++) {
+          const a = Math.random() * 6.283, r = 50 + Math.random() * 110, x = cam.x + Math.cos(a) * r, z = cam.z + Math.sin(a) * r, c = world.city.landAt(x, z);
+          if (!(c >= 10 && c !== 12)) continue;
+          const y = (world.surfaceH?.(x, z) ?? cam.y) + 25 + Math.random() * 20, n = 4 + Math.floor(Math.random() * (BIRDS - 3)), ph = Math.random();
+          for (let j = 0; j < n; j++) A.setXYZW(k++, x, y, z, ph + j * .037 + Math.random() * .01);
+          f++;
+        }
+        birds.geometry.instanceCount = k; A.needsUpdate = true;
       }
       if (smoke) {
         // the nearest chimneys within 300 m, two in five of them lit (by position: the same houses every time)

@@ -96,9 +96,11 @@ export function planHomestead(R, ctx) {
   // out front: a birdbath, a gnome and planters, a lawn sign, a house-number post, a hay-bale display
   const FRONT = [['birdbath', .25], ['gnome', .2], ['sign', .18], ['number', .25], ['bale', farm ? .3 : .12], ['planter', .25]];
   FRONT.forEach(([kind, p], q) => { if (h(100 + q) < p) for (let tries = 0; tries < 3; tries++) if (tryPut(kind, 3 + h(110 + q * 3 + tries) * 6, (h(120 + q * 3 + tries) - .5) * span * 2, .6, 10 + q)) break; });
+  // a split-rail fence along the front lawn now and then (rural homes; user, 23 Nov cheap wins)
+  if (!village && h(160) < .2) { const [x, z] = at(7 + h(161) * 3, (h(162) - .5) * span); if (ctx.free(x, z, 3)) props.push({ kind: 'rails', x, z, yaw: faceRoad, seed: h(163) }); }
   // round the back: Adirondack chairs and a firepit, a trampoline, a woodpile, a kids' bike, a wheelbarrow, a lawn tractor
-  const BACK = [['firepit', village ? .2 : .32], ['trampoline', village ? .1 : .16], ['woodpile', farm ? .5 : .28], ['bike', .2], ['wheelbarrow', farm ? .35 : .18], ['tractor', farm ? .3 : .14]];
-  BACK.forEach(([kind, p], q) => { if (h(130 + q) < p) for (let tries = 0; tries < 3; tries++) if (tryPut(kind, -((fu ? r.hu : r.hv) * 2 + 3 + h(140 + q * 3 + tries) * 8), (h(150 + q * 3 + tries) - .5) * span * 2.2, kind === 'trampoline' ? 2.2 : 1, 30 + q)) break; });
+  const BACK = [['laundry', village ? .12 : .22], ['firepit', village ? .2 : .32], ['trampoline', village ? .1 : .16], ['woodpile', farm ? .5 : .28], ['bike', .2], ['wheelbarrow', farm ? .35 : .18], ['tractor', farm ? .3 : .14]];
+  BACK.forEach(([kind, p], q) => { if (h(130 + q) < p) for (let tries = 0; tries < 3; tries++) if (tryPut(kind, -((fu ? r.hu : r.hv) * 2 + 3 + h(140 + q * 3 + tries) * 8), (h(150 + q * 3 + tries) - .5) * span * 2.2, kind === 'trampoline' ? 2.2 : kind === 'laundry' ? 2.6 : 1, 30 + q)) break; });
   // a parked car (user, 23 Nov: parked cars everywhere, from the shared car kit): on the drive by the house, nose
   // in (a few backed in); most homes have one, a farm more often a truck (life/figures/cars.js pickCar 'farm')
   let car = null;
@@ -165,6 +167,24 @@ function drawProp(M, p, groundH) {
       break;
     }
     case 'trampoline': M.color('#5c6166').cylinder(p.x, y, p.z, 1.9, .8, 14, 1.9); M.color('#1d1f22').cylinder(p.x, y + .8, p.z, 1.75, .02, 14); M.color(S < .5 ? '#2f5f9c' : '#3c7a3a').cylinder(p.x, y + .78, p.z, 1.95, .06, 14); break;
+    case 'laundry': {
+      // a wash line between two T-posts, sheets and shirts pegged on it
+      const [ax, az] = at(-1.3, 0), [bx, bz] = at(1.3, 0);
+      M.color('#8a8a86'); for (const [x, z] of [[ax, az], [bx, bz]]) { M.box(x, y, z, .07, 1.9, .07, p.yaw); M.box(x, y + 1.85, z, .07, .06, .7, p.yaw); }
+      M.color('#d8d6cf').beam(new THREE.Vector3(ax, y + 1.83, az), new THREE.Vector3(bx, y + 1.83, bz), .01, .01);
+      const cloth = ['#f2f1ec', '#9ab7d3', '#e8d9a0', '#c95a4a', '#f0eee8', '#6f8a5a'];
+      for (let k = 0; k < 4; k++) { const f = -.95 + k * .62, [x, z] = at(f, 0), tall = .45 + ((S * 7 + k) % 1) * .4; M.color(cloth[Math.floor(S * 6 + k * 2) % 6]).box(x, y + 1.83 - tall, z, .5, tall, .02, p.yaw + Math.PI / 2); }
+      break;
+    }
+    case 'rails': {
+      // a split-rail (zigzag) fence: rails laid crib-fashion, stacked three high
+      M.color('#8b7a66');
+      for (let k = -3; k < 3; k++) {
+        const [x0, z0] = at(.35 * (k % 2 ? 1 : -1), k * 2.2), [x1, z1] = at(.35 * (k % 2 ? -1 : 1), (k + 1) * 2.2);
+        for (let r = 0; r < 3; r++) M.beam(new THREE.Vector3(x0, y + .25 + r * .32, z0), new THREE.Vector3(x1, y + .3 + r * .32, z1), .08, .07);
+      }
+      break;
+    }
     case 'woodpile': for (let k = 0; k < 3; k++) M.color(['#7a5a3a', '#8a6a46', '#6d5034'][k]).box(p.x, y + k * .32, p.z, 2.4 - k * .3, .32, .5, p.yaw); M.color('#4b4c4f').box(p.x, y + .96, p.z, 2.5, .03, .7, p.yaw); break;
     case 'bike': { const [x, z] = at(0, 0); M.color(['#c0302a', '#2f6b8c', '#d8a12b', '#8a3f78'][Math.floor(S * 4)]).beam(new THREE.Vector3(x - s * .4, y + .3, z - c * .4), new THREE.Vector3(x + s * .4, y + .3, z + c * .4), .04, .04); M.color('#1d1d1d'); for (const e of [-.4, .4]) M.cylinder(x + s * e, y + .05, z + c * e, .25, .04, 10); break; }
     case 'wheelbarrow': M.color(S < .5 ? '#2f6b3a' : '#b23a2e').box(p.x, y + .35, p.z, .6, .3, .9, p.yaw); M.color('#1d1d1d').cylinder(p.x + Math.sin(p.yaw) * .55, y + .02, p.z + Math.cos(p.yaw) * .55, .18, .08, 8); break;

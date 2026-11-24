@@ -31,9 +31,9 @@ import { farmBuilding } from './toolbox/city/cny-farms.js';
 import { GraphLife } from './toolbox/city/graph-life.js';
 import { TreeEngine } from './toolbox/vegetation/tree-engine.js';
 import { planHomestead, drawHomestead, driveStrips, nearDrive } from './toolbox/city/homesteads.js';
-import { skanCrop, cropMaterial, cropCardsJob, bale, verge, bay, farmStand } from './toolbox/landscape/farm-kit.js';
+import { skanCrop, cropMaterial, cropCardsJob, bale, verge, bay, farmStand, hayWagon } from './toolbox/landscape/farm-kit.js';
 import { makeUpstateTrees, fallVariant } from './toolbox/vegetation/upstate-trees.js';
-import { profileY, ditchFits, ditchGeometry, culvertEnd, goldenrod, laceAndChicory, tallGrass, cattails, utilityPole, wires, scrubClump } from './toolbox/landscape/roadside-ny.js';
+import { profileY, ditchFits, ditchGeometry, culvertEnd, goldenrod, laceAndChicory, tallGrass, cattails, utilityPole, wires, scrubClump, roadSign } from './toolbox/landscape/roadside-ny.js';
 import { CANAL, canalAt } from './toolbox/city/cny-landmarks.js';
 import { ROAD_LIFT } from './pose.js';
 
@@ -925,6 +925,8 @@ export class GraphCity {
       if (h >= p || this.onRoad(jx, jz, 6) || this.host.buildingNear(jx, jz, 4) || this.inWater(jx, jz)) continue;
       const n = 1 + Math.floor(hash(h * 13) * 3);   // ones and twos and threes, as the baler dropped them
       for (let k = 0; k < n; k++) bale(M, jx + k * 2.1 * Math.cos(h * 9), g(jx, jz), jz + k * 2.1 * Math.sin(h * 9), h * 9 + k * .2, hash(h * 5) < .3, hash(h * 17 + k));
+      // now and then a hay wagon left out by the bales, half loaded
+      if (c?.crop === 'hay' && hash(h * 23) < .12) { const wx = jx + Math.cos(h * 9 + 1.6) * 5, wz = jz + Math.sin(h * 9 + 1.6) * 5; if (!this.onRoad(wx, wz, 4) && !this.host.buildingNear(wx, wz, 4)) hayWagon(M, wx, g(wx, wz), wz, h * 9 + .4, hash(h * 29)); }
     }
     yield;
     // the country roads' edges: the ditch, its grass and brush, the poles (_roadsides); then fence and wall runs
@@ -1102,6 +1104,16 @@ export class GraphCity {
           const lc = this.landAt(x, z); if (lc === LAND.paved || lc === LAND.plaza || lc === LAND.building) return null;
           return { x, z, y: sH(x, z), yaw: Math.atan2(-nz, nx), seed: hash(x * .31 + z * .77) };
         };
+        // road signs (user, 23 Nov cheap wins): every ~400 m or so on a through road — a speed limit, a curve ahead
+        // where it bends within the next 80 m, the odd deer crossing — on this side, facing the traffic coming
+        if (e.kind !== 'path' && e.kind !== 'track' && e.kind !== 'service') for (let i = Math.ceil(i0 / 37) * 37 + 5; i < i1 - 1; i += 37) {
+          const hs = hash(e.x[i] * .37 + e.z[i] * .91 + side); if (hs > .55) continue;
+          const n = nAt(i), nx = n[0] * side, nz = n[1] * side, x = e.x[i] + nx * (half + 3), z = e.z[i] + nz * (half + 3);
+          if (this.onRoad(x, z, .8) || this._drivewayNear(x, z, 1.5) || this.host.buildingNear(x, z, 1.5) || this.inWater(x, z)) continue;
+          const j = Math.min(e.n, i + 8), turn = Math.abs(Math.atan2(n[3], n[2]) - Math.atan2(nAt(j)[3], nAt(j)[2]));
+          const kind = Math.min(turn, Math.PI * 2 - turn) > .35 ? 'curve' : hs < .14 ? 'deer' : 'speed';
+          roadSign(M, x, sH(x, z), z, Math.atan2(-n[2] * side, -n[3] * side), kind);
+        }
         for (let i = Math.ceil(i0 / 4) * 4; i < i1; i += 4) {
           const P = pole(i); if (!P) continue;
           const A = utilityPole(M, P.x, P.y, P.z, P.yaw, P.seed);
