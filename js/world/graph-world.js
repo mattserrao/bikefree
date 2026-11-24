@@ -1793,7 +1793,7 @@ function roadSurfaceMaterial(low = false, ny = false, spill = false) {
             // (23 Nov: "too uniform … needs ruts, wandering, puddles"): the worn line wanders side to side along the
             // path, packed and a little darker; the edges are ragged into the grass; patches of fresh grey gravel, damp
             // dark spots and leaf litter come and go; now and then a shallow puddle in the worn line, the sky in it
-            vec3 g = sf == 5 ? vec3(.62, .57, .48) : vec3(.43, .36, .27);
+            vec3 g = sf == 5 ? vec3(.62, .57, .48) : vec3(.54, .42, .28);
             float w = max(rdw.w, 1.);
             float wan = (gwN(vec2(q.y * .021, 3.7)) - .5) * w * .5 + (gwN(vec2(q.y * .09, 8.1)) - .5) * w * .14;
             float lineD = abs(q.x - wan), worn = 1. - smoothstep(w * .2, w * .5, lineD);
@@ -1805,7 +1805,7 @@ function roadSurfaceMaterial(low = false, ny = false, spill = false) {
             col = mix(col, col * mix(.62, 1.25, peb), step(.001, peb) * det * (.4 + .6 * edge));
             // patches: fresh gravel (grey, lighter), damp ground (darker, browner), leaf litter (rust and ochre flecks)
             float pFresh = smoothstep(.66, .74, gwN(vGW.xz * .07 + 12.3)), pDamp = smoothstep(.62, .72, gwN(vGW.xz * .11 + 41.7));
-            col = mix(col, vec3(.66, .65, .62) * (.92 + .16 * grain), pFresh * .7);
+            col = mix(col, vec3(.66, .65, .62) * (.92 + .16 * grain), pFresh * (sf == 5 ? .7 : 0.));   // (fresh grey gravel: the gravel ways only — a dirt singletrack stays earth-brown)
             col = mix(col, col * vec3(.68, .66, .6), pDamp * .8);
             float litter = smoothstep(.55, .75, gwN(vGW.xz * .05 + 27.)) * (.4 + .6 * edge), leafF = step(.92, gwH(floor(vGW.xz * 9.) + 61.));
             col = mix(col, mix(vec3(.55, .33, .16), vec3(.62, .5, .22), gwH(floor(vGW.xz * 7.) + 5.)), leafF * litter * det);
@@ -1864,7 +1864,7 @@ function roadSurfaceMaterial(low = false, ny = false, spill = false) {
           #endif
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-road-surface-10${low ? '-low' : ''}${ny ? '-ny1' : ''}${spill ? '-spill' : ''}`;
+  m.customProgramCacheKey = () => `pgh-road-surface-11${low ? '-low' : ''}${ny ? '-ny1' : ''}${spill ? '-spill' : ''}`;
   return m;
 }
 
@@ -1920,7 +1920,11 @@ function groundMaterial(low = false, rural = false) {
           // the cover read through a wander (±3.5 m) and a scatter of grains (±3 m, 0.4 m grains): the edge between two
           // covers a ragged, feathered strip where each creeps into the other, not a 6 m staircase (user, 24 Nov)
           vec2 gr = floor(vGW.xz * 2.5);
-          vec2 uv0 = (vGW.xz - uLandBox.xy) / size, uv = uv0 + ((vec2(gwN(vGW.xz * .21), gwN(vGW.xz * .21 + 19.)) - .5) * 7. + (vec2(gwH(gr + 3.1), gwH(gr + 8.7)) - .5) * 6. * (1. - smoothstep(60., 220., length(vGW - cameraPosition)))) / size;
+          vec2 uv0 = (vGW.xz - uLandBox.xy) / size;
+          // (an old-growth hero area's covers — dark litter beside bright hay — read the grains as a checker up close:
+          //  there the edge only wanders, a soft ragged line, no scatter)
+          float kh = floor(texture2D(uLand, uv0).r * 255. + .5), grains = kh > 29.5 && kh < 33.5 ? 0. : 6.;
+          vec2 uv = uv0 + ((vec2(gwN(vGW.xz * .21), gwN(vGW.xz * .21 + 19.)) - .5) * 7. + (vec2(gwN(vGW.xz * .9 + 5.), gwN(vGW.xz * .9 + 23.)) - .5) * (6. - grains) * .5 + (vec2(gwH(gr + 3.1), gwH(gr + 8.7)) - .5) * grains * (1. - smoothstep(60., 220., length(vGW - cameraPosition)))) / size;
           float k = floor(texture2D(uLand, uv).r * 255. + .5);
           // water isn't wobbled: a canal or a creek is only a few cells wide, and the wobble broke it into pools
           // (user, 22 Nov: "the water in the canal … is cutting out")
@@ -2059,6 +2063,6 @@ function groundMaterial(low = false, rural = false) {
         diffuseColor.rgb *= 1. - .2 * smoothstep(.55, .75, gwN((vGW.xz + uCloudT * vec2(3., 1.2)) * .0025));   // a cloud's shadow drifting over (user, 23 Nov)
         #endif`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-12${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-13${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
   return m;
 }

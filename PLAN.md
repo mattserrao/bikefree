@@ -1876,6 +1876,9 @@ Goal: a lighter main menu, and fix the PGH / CNY / SKAN map cards that looked as
   - Upright leaf sheets in three nested shells (`fluff`) on dogwood, buckthorn and the saplings.
   - A small plant's leaf clusters now scale with it (they were tree-sized).
   - The lighting fix: impostor cards un-premultiplied by the roughened alpha brightened every part-covered texel up to 3×. They now use the photo's own alpha.
+- [x] **Follow-ups** (user, 24 Nov: "Complete any remaining items"):
+  - The dirt tread is now warm earth-brown, without the gravel's fresh grey patches.
+  - Inside the hero area the woods/meadow edge only wanders softly, with no grain scatter, so the up-close checker is gone.
 - [x] **Checks:** tests (`cny.test.mjs`: eleven rides, a Camillus Forest test), `routes:build`, `qc_pgh`. Snapshots of each section with `snap_pgh.mjs`, which builds the hero area's near pieces for the shot. Headless Balanced numbers: 123–200 draw calls and 0.6–0.8 M triangles, within the GTTS budget.
 
 ## Running it
