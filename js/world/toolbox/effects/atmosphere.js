@@ -16,7 +16,7 @@
 import * as THREE from '../../../../vendor/three.module.min.js';
 import { CHIMNEYS } from '../structures/houses/house-engine.js';
 
-const BEAMS = 14, MIST = 22, LEAVES = 160, MOTES = 420, SMOKERS = 12, PUFFS = 9, FLOCKS = 3, BIRDS = 9;
+const BEAMS = 14, MIST = 12, LEAVES = 160, MOTES = 420, SMOKERS = 12, PUFFS = 9, FLOCKS = 3, BIRDS = 9;
 
 export const atmosphere = {
   install(world, opts = {}) {
@@ -98,9 +98,10 @@ export const atmosphere = {
           varying vec2 vUv; varying float vA;
           #include <fog_pars_fragment>
           void main() {
+            // wisps, not a sheet (user, 24 Nov: the canal read whitewashed — the cards overlapped into a pale floor)
             float r = length(vUv), a = (1. - smoothstep(.2, 1., r));
-            a *= .75 + .25 * sin(vUv.x * 3. + uTime * .2) * sin(vUv.y * 2.4 - uTime * .17);
-            gl_FragColor = vec4(mix(vec3(.86, .88, .9), uSunCol, .35), a * vA * uK * .2);
+            a *= smoothstep(.15, .75, .5 + .5 * sin(vUv.x * 4.1 + uTime * .2 + sin(vUv.y * 3.3) * 1.7) * sin(vUv.y * 3.4 - uTime * .17 + vUv.x * 1.3));
+            gl_FragColor = vec4(mix(vec3(.86, .88, .9), uSunCol, .35), a * vA * uK * .085);
             #include <fog_fragment>
           }`,
       });

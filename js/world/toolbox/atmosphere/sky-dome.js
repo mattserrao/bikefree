@@ -5,6 +5,8 @@
 // "the sky is one flat colour".)
 import * as THREE from '../../../../vendor/three.module.min.js';
 
+/** The sky's colours, for things that reflect it (the canal): the horizon's and overhead (linear), the sun's. */
+export const SKY_REFLECT = { horizon: { value: new THREE.Color('#cfdde8') }, zenith: { value: new THREE.Color('#5d8fd0') }, sun: { value: new THREE.Color('#ffffff') }, sunDir: { value: new THREE.Vector3(0, 1, 0) } };
 export function makeSkyDome({ radius = 8000 } = {}) {
   const uniforms = {
     uZenith: { value: new THREE.Color('#5d8fd0') },
@@ -71,6 +73,7 @@ export function makeSkyDome({ radius = 8000 } = {}) {
       uniforms.uSunDir.value.copy(sunDir);
       uniforms.uNight.value = t.night ? 1 : 0;
       uniforms.uCloud.value = cloud;
+      SKY_REFLECT.horizon.value.copy(uniforms.uHorizon.value); SKY_REFLECT.zenith.value.copy(uniforms.uZenith.value); SKY_REFLECT.sun.value.copy(uniforms.uSunCol.value); SKY_REFLECT.sunDir.value.copy(sunDir);
     },
     tick(cam, seconds) { uniforms.uTime.value = seconds; },
     dispose() { mesh.geometry.dispose(); material.dispose(); },

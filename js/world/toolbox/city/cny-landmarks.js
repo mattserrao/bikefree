@@ -12,6 +12,7 @@
 //   library      the Maxwell Memorial Library: one storey of brick, a gabled entrance
 //   firehouse    the Warners Volunteer Fire Department: the apparatus bays and a hose tower
 import * as THREE from '../../../../vendor/three.module.min.js';
+import { SKY_REFLECT } from '../atmosphere/sky-dome.js';
 import { V, centroid, scaleRing, orient, prism, cap, block, frameOf, makeFrame, lathe, gable, faceOut } from './hero-geom.js';
 
 /**
@@ -45,7 +46,42 @@ function registerCanal(S2, wOf, gap, trailSide, creek = false) {
 
 // the canal's docks: OSM's pier at the park (by Sims' Store) and its canoe launches (lat, lon, the big one)
 const CANAL_DOCKS = [[43.0524797, -76.3033467, true], [43.0527185, -76.3041786, false], [43.0586097, -76.2871116, false], [43.0410047, -76.3066247, false], [43.0695503, -76.2734663, false], [43.0776320, -76.2634238, false]];
-export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = null }) {
+/**
+ * The canal's still water (user, 24 Nov — Zwift parity: "a canal reflection that stays inky"): its own dark colour,
+ * and on top a Fresnel reflection of the sky — little looking down, more toward the far bank — with the trees'
+ * dark band along the banks, slow ripples breaking it up, and the low sun's glint.
+ */
+export function canalWaterMaterial(uTime) {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
+  m.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, { uHor: SKY_REFLECT.horizon, uZen: SKY_REFLECT.zenith, uSunC: SKY_REFLECT.sun, uSunD: SKY_REFLECT.sunDir, uTime });
+    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWW;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWW = (modelMatrix * vec4(transformed, 1.)).xyz;');
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>
+        varying vec3 vWW; uniform vec3 uHor, uZen, uSunC, uSunD; uniform float uTime;
+        float cwH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float cwN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(cwH(i), cwH(i + vec2(1, 0)), f.x), mix(cwH(i + vec2(0, 1)), cwH(i + vec2(1, 1)), f.x), f.y); }`)
+      .replace('#include <opaque_fragment>', `
+        {
+          vec3 V = normalize(cameraPosition - vWW);
+          // ripples: a slow wobble in the surface's normal
+          vec2 rp = vWW.xz * .9 + uTime * vec2(.25, .1);
+          vec3 Nw = normalize(vec3((cwN(rp) - .5) * .06 + (cwN(rp * 2.7 + 5.) - .5) * .04, 1., (cwN(rp + 9.) - .5) * .06));
+          float cosV = max(dot(V, Nw), 0.), fres = .02 + .98 * pow(1. - cosV, 5.);
+          vec3 R = reflect(-V, Nw);
+          // the sky it mirrors, and the dark band of the trees on the far bank (low in the reflection)
+          vec3 sky = mix(uHor, uZen, smoothstep(0., .5, R.y));
+          sky = mix(sky * .18, sky, smoothstep(.05, .22, R.y));
+          float glint = pow(max(dot(R, uSunD), 0.), 400.) * 6. * (.5 + cwN(rp * 6.));
+          outgoingLight = mix(outgoingLight, sky * .4, clamp(fres * .7, 0., .38)) + uSunC * glint;   // (inky: a dim mirror)
+        }
+        #include <opaque_fragment>`);
+  };
+  m.customProgramCacheKey = () => 'cny-canal-water-1';
+  return m;
+}
+
+export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = null, Ca = null }) {
   const TRIM = '#f3f1ea';
   /** A window (dark glass, a white frame) on the wall of frame F at (a, b), facing out along n (±1 on v, or the u end). */
   const window = (F, a, b, y, w, h, onEnd = false, s = 1) => {
@@ -234,12 +270,12 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
         if (L.pathY) for (const p of S2) { if (!p.ws) continue; const o = wOf(p, trailSide) + 4, ty = L.pathY(p.x + p.nx * trailSide * o, p.z + p.nz * trailSide * o, 14); if (ty != null) p.y = Math.min(p.y, ty - .9); }
       }
       // a creek's water: the world's water material when there is one (its ripples and glints: the "water" effect)
-      const WB = l.creek && Wa ? Wa : S;   // (the canal stays its own inky still water: the water material read sky-blue on it)
+      const WB = l.creek && Wa ? Wa : l.creek ? S : (Ca || S);   // (the canal: its own still inky water, canalWaterMaterial)
       if (l.creek) WB.color('#4b6f6c');
       for (let i = 0; i + 1 < S2.length; i++) {
         const a = S2[i], b = S2[i + 1], wa = wOf(a, 1), wb = wOf(b, 1), va = wOf(a, -1), vb = wOf(b, -1);
         // (no scum patches: user, 23 Nov — the lighter-green slabs read as flat boards floating on the canal)
-        if (!l.creek) S.color(MURK[((i * 7919) ^ (i >> 2) * 31) % MURK.length]);
+        if (!l.creek) WB.color(MURK[((i * 7919) ^ (i >> 2) * 31) % MURK.length]);
         faceOut(WB, [V(a.x + a.nx * wa, a.y, a.z + a.nz * wa), V(b.x + b.nx * wb, b.y, b.z + b.nz * wb), V(b.x - b.nx * vb, b.y, b.z - b.nz * vb), V(a.x - a.nx * va, a.y, a.z - a.nz * va)], up);
       }
       // open dark water along the edges, where the duckweed thins

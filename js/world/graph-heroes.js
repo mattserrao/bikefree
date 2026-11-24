@@ -21,7 +21,7 @@ export async function buildGraphHeroes(world, json) {
   host.qualityKey = world.qualityKey || 'balanced';
   host.route = { scene: { heroes: json.heroes.map((h) => ({ ...h })) }, dist: [0], turnIdx: 0 };   // (no views, overlooks or fountain: PGH has its own Point)
   host.D = { proj };
-  host.waterMaterial = world.mats.water;   // (the creeks' surfaces: the water effect's ripples and glints)
+  host.waterMaterial = world.mats.water; host.waterTime = world.cloudTime;   // (the creeks' surfaces: the water effect's ripples and glints)
   // Saint Josaphat (twin towers, copper domes, buff brick) and the Union Project (the old Union Baptist: Gothic stone,
   // one square corner tower) are churches: the map's church builder, sized and turned from their OSM outlines
   const CHURCHES = { josaphat: { look: 'ihm', style: { wall: '#c7a873', towerM: 40, crown: 'onion', crownM: 12 } },

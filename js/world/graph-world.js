@@ -167,6 +167,7 @@ export class GraphWorld {
    */
   constructor(container, base, opts = {}) {
     this.container = container;
+    this.cloudTime = CLOUD_T;   // (seconds: the clouds, ripples)
     this.route = base;
     this.G = base.graph;
     this.json = this.G.json;
