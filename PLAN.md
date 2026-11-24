@@ -2013,6 +2013,18 @@ for change to graphics (both desktop and mobile same menus)")*
 - [x] City life (found by the tests once the camera changed): a walker about to step into the route's carriageway
       with the rider within 80 m turns back at the kerb; a crossing's clearance counts its own length.
 
+### Zwift parity — branch `zwift-parity-test` *(user, 24 Nov: "Work on 2-6. Do not change trees to 3D"; project doc claude/zwift-parity.md)*
+- [x] Sky dome: horizon haze to deep blue, sun disc and glow, soft drifting cumulus (one draw, no textures).
+- [x] Post effects on High, laptops and desktops (More graphics toggle): depth-only contact shading, soft bloom, grade.
+- [x] Surface textures (rule relaxed by the user): one 512 px detail tile (tools/make_surface_textures.py) — asphalt,
+      gravel, turf, siding channels — on roads, trails, ground, verges and ditch banks near the camera; not on Light.
+- [x] Soft roadside plants: alpha-cut picture cards (canvas atlas), crossed, swaying; scrub and cattails stay geometry.
+- [x] Softer 2D trees: near cards sampled bicubic, leaf-cluster detail, atlas photographed with MSAA on desktop.
+- [x] Canal: inky water with a dim Fresnel sky mirror, tree band, ripples, glint; ground mist as faint wisps.
+- [x] Ground: feathered cover edges, small relief in the light near the camera; road patches worn in, not dark slabs.
+- [x] Buildings: windows recessed 12 cm (reveal in shade), glass mirroring the sky.
+- [x] Wires never under a pixel (no crawl); near trees' leafy live shadows on desktop High; rider fabric knit and dither.
+
 ### Trees as 2D, and a detail pass — branch `trees-2d-test` *(user, 23 Nov: "I'd like to test trees as 2D. Use the tree engine as today"; then "Brainstorm additional detail")*
 - [x] Every tree-engine tree (and shrub) drawn as its camera-facing impostor card at every distance (`TREES_2D`); the
       atlas cell 160/192/256 px by quality; no light halo on medium and far trees (a hard alpha cut without MSAA).
