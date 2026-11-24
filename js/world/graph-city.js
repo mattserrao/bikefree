@@ -1030,7 +1030,7 @@ export class GraphCity {
     }
     if (vNear) yield* this._canalScrub(t, N);
     // the wires: no shadow, baked or live (a 2.5 cm wire's shadow drew as a thick black line across the road)
-    if (t.wireM?.count) { const m = gpuOnly(new THREE.Mesh(t.wireM.geometry(), this.kitMaterial)); m.name = `Wires ${t.key}`; m.castShadow = false; m.userData.bake = false; this._add(t, m); }
+    if (t.wireM?.count) { const m = gpuOnly(new THREE.Mesh(t.wireM.geometry(), this._wireMat())); m.name = `Wires ${t.key}`; m.castShadow = false; m.userData.bake = false; this._add(t, m); }
     t.wireM = null;
     if (N.count) { const m = new THREE.Mesh(N.geometry(), this.vergeMat); m.name = `Verge ${t.key}`; m.userData.lodM = 240; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 240; this._add(t, this._gpuOnly(m), 'near'); t.vergeMesh = m; }
     // a farm stand by some farmhouses' drives (pumpkins and squash: it's September)
@@ -1050,6 +1050,27 @@ export class GraphCity {
     const SZ = [[.75, .38], [1.05, .95], [1.15, 1.3], [.95, 1.05]][cell], k = hash(seed * 7.7 + 3.1);
     const tint = (this._tint ||= new THREE.Color()).setRGB(.62 + k * .18, .66 + hash(seed * 5.3) * .16, .58 + hash(seed * 2.9) * .14);
     grassCard(N, x, y, z, cell, SZ[0] * (.8 + k * .4) * Math.min(1.3, sc), SZ[1] * sc, seed * 6.283, tint);
+  }
+  /**
+   * The wires' material (user, 24 Nov — Zwift parity: "less shimmer on wires"): a wire 5 cm thick is under a pixel
+   * past ~40 m and crawls as it comes and goes between pixels; here each vertex is pushed out along its normal so the
+   * wire is never thinner than about a pixel on screen, and fades to the sky's colour as it thins further (no flicker).
+   */
+  _wireMat() {
+    if (this.wireMat) return this.wireMat;
+    const m = new THREE.MeshLambertMaterial({ color: '#2a2a28' });
+    m.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying float vThin;')
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+          { vec4 wp = modelMatrix * vec4(position, 1.); float d = length(wp.xyz - cameraPosition);
+            float px = d * 2. / (projectionMatrix[1][1] * 900.);   // ~a pixel's size at that distance (a 900 px tall view)
+            float r = .025, want = max(r, px * .7);
+            transformed += normal * (want - r); vThin = r / want; }`);
+      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vThin;')
+        .replace('#include <opaque_fragment>', 'outgoingLight = mix(outgoingLight * 1.9 + vec3(.25), outgoingLight, clamp(vThin * 1.6, 0., 1.));\n#include <opaque_fragment>');
+    };
+    m.customProgramCacheKey = () => 'graph-wires-1';
+    return (this.wireMat = m);
   }
   /** A tile's standing crops (row cards), built when the camera comes near it. */
   *_cropsJob(t) {
@@ -1637,7 +1658,7 @@ export class GraphCity {
     this.carMat?.dispose();
     for (const m of this.animalMats?.values() || []) { m.userData.depth.dispose(); m.dispose(); }
     for (const g of [this.lampGeo, this.acornGeo]) g.dispose();
-    for (const m of [this.kitMaterial, this.vergeMat, this.lampMaterial, this.lotMaterial, this.cropMat, this.ditchMat].filter(Boolean)) m.dispose();
+    for (const m of [this.kitMaterial, this.vergeMat, this.wireMat, this.lampMaterial, this.lotMaterial, this.cropMat, this.ditchMat].filter(Boolean)) m.dispose();
     this.landTexture?.dispose();
   }
 }

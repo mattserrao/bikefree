@@ -343,6 +343,32 @@ export class TreeEngine {
     this.impMesh.frustumCulled = false; this.impMesh.name = 'Trees (impostors)';
     this.group.add(this.impMesh);
   }
+  /**
+   * Leafy live shadows from the near trees (user, 24 Nov — Zwift parity, desktop High: "scenery shadows near the
+   * rider"): the impostors drawn into the sun's shadow map too, each card turned to face the light (in the shadow pass
+   * cameraPosition is the light's) and cut by its photo's alpha, so the dappled shade under the crowns falls on the
+   * rider and the road. The shadow box is the world's small live one round the rider.
+   */
+  castShadows(on) {
+    if (!this.impMesh) return;
+    this.impMesh.castShadow = !!on;
+    this.impMesh.userData.dynamic = !!on;   // (the bake's sweep leaves dynamic things casting live)
+    this.impMesh.userData.bake = false;
+    if (!on || this.impMesh.customDepthMaterial) return;
+    const src = this.impMat;
+    const vs = src.vertexShader.replace('#include <fog_pars_vertex>', '').replace('#include <fog_vertex>', '');
+    this.impMesh.customDepthMaterial = new THREE.ShaderMaterial({
+      uniforms: src.uniforms, vertexShader: vs,
+      fragmentShader: /* glsl */`
+        #include <packing>
+        uniform sampler2D uAtlas; varying vec2 vUv; varying vec2 vUv2; varying float vBlend; varying float vKeep; varying float vOut; varying float vTint;
+        void main() {
+          vec4 c = mix(texture2D(uAtlas, vUv), texture2D(uAtlas, vUv2), vBlend);
+          if (c.a < .5 || vKeep < .5) discard;
+          gl_FragColor = packDepthToRGBA(gl_FragCoord.z);
+        }`,
+    });
+  }
   /** Rebuild the impostors' instance data from every tile's trees (on tile changes only: the data is static). */
   _rebuildImpostors() {
     let n = 0; for (const t of this.tiles.values()) n += t.length;

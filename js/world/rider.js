@@ -100,11 +100,21 @@ function riderMaterial(map) {
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvShade = aShade;');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying vec2 vShade;\nuniform vec3 uRim;')
-      .replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.rgb *= vShade.x;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        diffuseColor.rgb *= vShade.x;
+        // (user, 24 Nov — Zwift parity: "higher-resolution kit"): the atlas is 256 colours; fabric (low specular)
+        // gets a fine knit and a soft dither that hides the palette's banding, close up only
+        if (vShade.y < .25) {
+          vec2 kq = vMapUv * vec2(2048., 1536.) * .9;
+          float knit = sin(kq.x * 3.1) * sin(kq.y * 2.3 + sin(kq.x * 1.7)) * .5 + .5;
+          float dith = fract(sin(dot(floor(kq * 1.7), vec2(12.9898, 78.233))) * 43758.5);
+          float near = 1. - smoothstep(4., 14., length(vViewPosition));
+          diffuseColor.rgb *= 1. + ((knit - .5) * .07 + (dith - .5) * .035) * near;
+        }`)
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n{ float rim = pow(1. - clamp(dot(normal, normalize(vViewPosition)), 0., 1.), 3.); totalEmissiveRadiance += uRim * rim * .38 * vShade.x; }')
       .replace('#include <specularmap_fragment>', 'float specularStrength = vShade.y;');
   };
-  m.customProgramCacheKey = () => 'bf-rider-3';
+  m.customProgramCacheKey = () => 'bf-rider-4';
   return m;
 }
 
@@ -136,7 +146,8 @@ function loadAtlas(file) {
     new THREE.TextureLoader().load(atlasUrl(file).href, (t) => {
       t.colorSpace = THREE.SRGBColorSpace;
       t.flipY = false;
-      t.anisotropy = 4;
+      t.anisotropy = 8;
+      t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true;
       resolve(t);
     }, undefined, () => { delete atlases[file]; reject(new Error(`rider atlas ${file} failed to load`)); });
   });

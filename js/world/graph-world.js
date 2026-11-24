@@ -389,6 +389,7 @@ export class GraphWorld {
     this._reach();
     if (this.baked) this.sun.castShadow = this.gfx.shadows && !!this.baked.world.terrain.quality.shadows; else { this._sunCasts ??= this.sun.castShadow; this.sun.castShadow = this.gfx.shadows && this._sunCasts; }
     this.effects?.set?.('atmosphere', this.gfx.atmosphere);
+    this._treeShadows();
     this.city?.setGfx(this.gfx);
     const apply = (saving) => { if (saving !== this._saving) { this._saving = saving; this._pixelRatio(); } };
     if (this.gfx.battery === 'auto' && globalThis.navigator?.getBattery) {
@@ -543,6 +544,7 @@ export class GraphWorld {
       const c = this.sun.shadow.camera, span = this.baked.dynamicSpan;
       if (c.right !== span) { c.left = -span; c.right = span; c.top = span; c.bottom = -span; c.updateProjectionMatrix(); }
       this.sun.position.copy(this.rider.group.position).addScaledVector(this.sunDir, 2000); this.sun.target.position.copy(this.rider.group.position);
+      if ((this._frames % 120) === 7) this._treeShadows();
       if ((this._frames % 30) === 0) for (const g of [this.group, this.heroes?.group]) g?.traverse((o) => { if (o.isMesh && !o.userData._rs) { o.userData._rs = 1; o.receiveShadow = true; } });
       if (this.baked.preparing) { this.perf?.end(performance.now()); return; }   // (nothing drawn behind the loader: the bake has the GPU)
     }
@@ -558,6 +560,12 @@ export class GraphWorld {
    * depth-only SSAO), a soft bloom on the brightest light and a light grade, and tone-maps. Phones and the other
    * levels draw straight to the canvas as before.
    */
+  /** Desktop High with live shadows on: the near trees' leafy shadows in the live map (2048 px, 60 m box). */
+  _treeShadows() {
+    const on = this._postOn() && (this.gfx?.shadows ?? true) && !!this.baked;
+    this.city?.forest?.castShadows(on);
+    if (this.baked) { this.baked.dynamicSpan = on ? 60 : this.baked.opts.dynamicSpanM; const sz = on ? 2048 : 1024; if (this.sun.shadow.mapSize.x !== sz) { this.sun.shadow.mapSize.set(sz, sz); this.sun.shadow.map?.dispose(); this.sun.shadow.map = null; } }
+  }
   _postOn() { return this.qualityKey === 'high' && !MOBILE && (this.gfx?.post ?? true); }
   _draw() {
     if (this._postOn()) {
