@@ -377,8 +377,31 @@ function sumac(seed) {
   return b.build();
 }
 function fern(seed) {
-  const rand = randomSequence(seed), b = new Builder(); b.as(SHRUB);
-  for (let k = 0; k < 7; k++) { const a = k * .9 + rand() * .4; b.add(cone(.14, .9, 3), M(Math.cos(a) * .15, .05, Math.sin(a) * .15, 1, 1, .3, -a, 0, 1.05), ['#5f8a3c', '#6c9444', '#a69443'][k % 3], 0, rand); }
+  // (user, 23 Nov: "2D sprite ferns" — photographed into the tree atlas as the rest are): a crown of arching fronds,
+  // each a rachis with paired leaflets tapering to the tip; September greens, a few yellowing, one gone brown
+  const rand = randomSequence(seed), b = new Builder(), Q = new THREE.Quaternion(), S = new THREE.Vector3(.9, 1, .22);
+  const leaf = (p, dir, len, col) => { Q.setFromUnitVectors(Y, dir); b.add(cone(.045, len, 3), new THREE.Matrix4().compose(p, Q, S), col, 0, rand); };
+  b.as(SHRUB);
+  const fronds = 9 + Math.floor(rand() * 5);
+  for (let f = 0; f < fronds; f++) {
+    const a = f * 2.4 + rand() * .5, L = .65 + rand() * .45, up = .55 + rand() * .35, out = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+    const side = new THREE.Vector3(-out.z, 0, out.x), col = rand() < .08 ? '#8a6a3a' : rand() < .2 ? '#a69443' : ['#4f7a34', '#5c8a3c', '#679244'][f % 3];
+    const at = (t) => out.clone().multiplyScalar(L * t + .04).add(new THREE.Vector3(0, up * Math.sin(Math.PI * t * .75) - .1 * t * t, 0));
+    const N = 9;
+    for (let k = 1; k <= N; k++) {
+      const t = k / N, p = at(t), q = at(Math.min(1, t + .08)), d = q.clone().sub(p).normalize();
+      leaf(at(t - 1 / N), at(t).sub(at(t - 1 / N)).normalize(), at(t).distanceTo(at(t - 1 / N)) * 1.05, col);   // (the rachis)
+      const len = .2 * Math.sin(Math.PI * Math.min(1, t * 1.15)) + .03;
+      for (const sg of [-1, 1]) leaf(p, side.clone().multiplyScalar(sg).addScaledVector(d, .35).add(new THREE.Vector3(0, -.15, 0)).normalize(), len, col);
+    }
+  }
+  return b.build();
+}
+function rock(seed, w, h) {
+  // a fieldstone: a lichen-grey boulder half sunk, a moss cap on top
+  const rand = randomSequence(seed), b = new Builder(); b.as(BARK);
+  b.add(blob(1), M(0, h * .35, 0, w, h, w * (.7 + rand() * .3), rand() * 6), ['#8a8a82', '#7d7c74', '#95938a'][Math.floor(rand() * 3)], 0, rand);
+  b.add(blob(1), M(w * .1, h * .8, 0, w * .6, h * .25, w * .5, rand() * 6), '#5f6f3c', 0, rand);
   return b.build();
 }
 
@@ -408,7 +431,8 @@ export function makeUpstateTrees() {
       buckthorn: grow(6111, SHRUBS.buckthorn, 0, .15),      // buckthorn / honeysuckle thicket: stays green late
       goldenrod: MOUNTAIN_BUILDERS.spikes ? MOUNTAIN_BUILDERS.spikes(6121, 9, .9, '#6f8650', '#e2b931', '#d9a92c', .35) : shrubClump(6121, ['#d9b334'], 3, .6, .9),
       sumac: sumac(6131), sumac2: sumac(6132),
-      fern: fern(6141),
+      fern: fern(6141), fern2: fern(6142),
+      rock: rock(6161, .55, .4), rock2: rock(6162, .9, .55),
       sapling: grow(6151, { ...SPECIES.sugarmaple, H: 5, R: 1.6, trunkR: .07 }, 1, .3),
       saplingPine: whitePine(0, 1).scale(.24, .2, .24),
       log: MOUNTAIN_BUILDERS.log(0), stump: MOUNTAIN_BUILDERS.stump(0), stump2: MOUNTAIN_BUILDERS.stump(1),

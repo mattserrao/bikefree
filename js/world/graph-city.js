@@ -791,8 +791,18 @@ export class GraphCity {
           else under(jx, jz, 'goldenrod', seed);
           continue;
         }
-        if (h1 < (c === LAND.woods ? .82 : .45) * this.q.trees) { if (!tree(jx, jz, this.world.nearWater?.(jx, jz) ? 'wet' : 'woods', seed) && de < 60 && h2 > .8) under(jx, jz, 'fern', seed); }
-        else if (de < 60 && de > 4) { const r = hash(seed * 4.1); if (r < .25) under(jx, jz, 'fern', seed); else if (r < .3) under(jx, jz, r < .28 ? 'log' : 'stump', seed); }
+        // the forest floor near the road (user, 23 Nov: "forest understory … 2D sprite ferns", with logs, stumps and rocks):
+        // ferns in clumps where the ground's damp and shaded (a slow patchiness), a fallen log, a stump, a mossy rock
+        const ferny = vnoise(jx / 17 + 4.1, jz / 17 - 2.7), fernAt = (fx, fz, k) => { if (hash(seed * 7.3 + k) < ferny * 1.1 - .15) under(fx, fz, hash(seed * 9.1 + k) < .5 ? 'fern' : 'fern2', seed * 3.7 + k, .75 + ferny * .5); };
+        if (h1 < (c === LAND.woods ? .82 : .45) * this.q.trees) { if (!tree(jx, jz, this.world.nearWater?.(jx, jz) ? 'wet' : 'woods', seed) && de < 90) fernAt(jx, jz, 0); }
+        else if (de < 90 && de > 4) {
+          const r = hash(seed * 4.1);
+          if (r < .06) under(jx, jz, r < .035 ? 'log' : r < .05 ? 'stump' : 'stump2', seed);
+          else if (r < .1) under(jx, jz, r < .085 ? 'rock' : 'rock2', seed);
+          else fernAt(jx, jz, 1);
+        }
+        // a second fern in a clump, a step off
+        if (c === LAND.woods && de < 90 && de > 4 && ferny > .4) for (let q = 0; q < 3; q++) fernAt(jx + (hash(seed * 5.1 + q) - .5) * 6, jz + (hash(seed * 5.5 + q) - .5) * 6, 2 + q);
       } else if (c === LAND.wetland) {
         if (h1 < .25) tree(jx, jz, 'wet', seed); else if (h1 < .4) under(jx, jz, 'dogwood', seed);
       } else if (FIELD(c) && c !== LAND.farmyard) {

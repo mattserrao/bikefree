@@ -1638,7 +1638,19 @@ function groundMaterial(low = false, rural = false) {
           vec3 lc = vec3(-1.);
           if (k < .5) lc = mix(vec3(.43, .42, .4), vec3(.52, .5, .47), n);                   // paved: lots, yards of the works
           else if (k < 1.5) lc = mix(vec3(.38, .52, .24), vec3(.47, .6, .3), n);             // grass, parks
-          else if (k < 2.5) lc = mix(vec3(.25, .3, .17), vec3(.36, .35, .22), n);            // the woods' floor
+          else if (k < 2.5) {
+            // the woods' floor (user, 23 Nov: "areas under trees should be more brown dirt, with leaf litter texture"):
+            // brown earth under last year's leaves, patches of moss, a light scatter of this fall's colour
+            lc = mix(vec3(.29, .22, .14), vec3(.39, .3, .19), n);
+            lc = mix(lc, vec3(.27, .31, .17), smoothstep(.6, .78, gwN(vGW.xz * .08 + 31.)) * .75);
+            #ifndef LOWQ
+            lc *= .86 + .26 * gwN(vGW.xz * 4.3);
+            vec2 lq = mat2(.82, -.57, .57, .82) * vGW.xz * 5. + (vec2(gwN(vGW.xz * 1.7), gwN(vGW.xz * 1.7 + 7.)) - .5) * 1.6, lf = floor(lq);
+            float lr = length(fract(lq) - .5 + (vec2(gwH(lf + 2.), gwH(lf + 3.)) - .5) * .3);
+            lc = mix(lc, mix(vec3(.6, .3, .12), vec3(.7, .55, .2), gwH(lf + 5.)), step(.93, gwH(lf + 13.)) * (1. - smoothstep(.18, .3, lr)) * .55);
+            lc = mix(lc, vec3(.2, .15, .1), step(.95, gwH(floor(vGW.xz * 3.) + 71.)) * .4);   // (a dark twig, a damp hollow)
+            #endif
+          }
           else if (k < 3.5 && k > 2.5) lc = mix(vec3(.17, .31, .38), vec3(.22, .37, .44), n);  // water: a canal or a pond at its own level (CNY's Erie Canal; PGH's rivers are under the water plane anyway)
           else if (k < 4.5 && k > 3.5) lc = vec3(.42, .4, .36);                               // under a building
           else if (k < 5.5 && k > 4.5) lc = vec3(.66, .6, .46);                               // sand, bare rock
@@ -1708,9 +1720,9 @@ function groundMaterial(low = false, rural = false) {
             if (k > 10.5 && k < 11.5 || k > 27.5) lc = mix(lc, lc * vec3(1.05, .98, .85), smoothstep(.55, .75, gwN(vGW.xz * .5)) * .5);   // tussocks, seed heads
           }
           #endif
-          if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * mix(clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vec3(1.), step(19.5, k) * .7), vLandW * (k > 19.5 ? .95 : .85));   // (CNY's fields: their own colour, less of the ground's tint)
+          if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * mix(clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vec3(1.), step(19.5, k) * .7), vLandW * (k > 19.5 || (k > 1.5 && k < 2.5) ? .95 : .85));   // (CNY's fields: their own colour, less of the ground's tint)
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-4${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-6${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
   return m;
 }
