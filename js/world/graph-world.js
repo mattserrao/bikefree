@@ -2018,7 +2018,7 @@ function groundMaterial(low = false, rural = false) {
             lc = mix(vec3(.5, .34, .15), vec3(.62, .45, .2), n);
             lc = mix(lc, vec3(.36, .25, .13), smoothstep(.6, .8, gwN(vGW.xz * .05 + 11.)) * .4);   // last year's brown, where the new fall is thin
             lc = mix(lc, vec3(.3, .33, .15), blow * smoothstep(.45, .7, gwN(vGW.xz * .08 + 3.)) * .5);
-            #ifndef LOWQ
+            // (on Low too — phones' default: the floor was a flat orange there, user 24 Nov: "Full detail on Low too")
             lc *= .86 + .26 * gwN(vGW.xz * 3.7);
             for (int q = 0; q < 3; q++) {
               float sc = q == 0 ? 3.6 : q == 1 ? 6.3 : 10.1;
@@ -2033,7 +2033,6 @@ function groundMaterial(low = false, rural = false) {
             vec2 sunA = vec2(-.94, .34), sunP = vec2(.34, .94);
             float bar = gwN(vec2(dot(vGW.xz, sunP) * .42, dot(vGW.xz, sunA) * .018 + 5.)) * .7 + gwN(vec2(dot(vGW.xz, sunP) * 1.1, dot(vGW.xz, sunA) * .05)) * .3;
             lc *= mix(.62, 1.12, smoothstep(.42, .58, bar));
-            #endif
             lc *= mix(.92, 1.05, blow);
           }
           else if (k > 31.5 && k < 32.5) {
@@ -2045,9 +2044,7 @@ function groundMaterial(low = false, rural = false) {
             lc = mix(vec3(.6, .52, .33), vec3(.74, .66, .44), n * .5 + swirl * .5);
             lc = mix(lc, vec3(.5, .52, .3), smoothstep(.62, .82, gwN(vGW.xz * .05 + 4.)) * .3);
             lc *= .88 + .16 * comb;
-            #ifndef LOWQ
             lc *= .9 + .18 * gwN(vec2(dot(vGW.xz, vec2(.7, .7)) * 3.5, dot(vGW.xz, vec2(-.7, .7)) * .6));   // the matted blades' streaks
-            #endif
           }
           #ifdef NYGRASS
           // the rural maps in early fall (user, 22 Nov: "grass + farms need to improve"): corn gone tan, soybeans gold,
@@ -2111,11 +2108,13 @@ function groundMaterial(low = false, rural = false) {
         #ifndef LOWQ
         // the ground's texture near the camera: turf, or the woods' floor's grit (user, 24 Nov — Zwift parity)
         diffuseColor.rgb *= surfaceDetail(vGW.xz, sdCh, sdCh == 1 ? 5. : 3., length(vGW - cameraPosition), sdCh == 1 ? .6 : .8);
+        #else
+        if (vTread > 10.) diffuseColor.rgb *= surfaceDetail(vGW.xz, sdCh, sdCh == 1 ? 5. : 3., length(vGW - cameraPosition), sdCh == 1 ? .6 : .8);   // (a hero area's floor: on Low too)
         #endif
         #ifdef NYGRASS
         diffuseColor.rgb *= 1. - .2 * smoothstep(.55, .75, gwN((vGW.xz + uCloudT * vec2(3., 1.2)) * .0025));   // a cloud's shadow drifting over (user, 23 Nov)
         #endif`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-17${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-18${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
   return m;
 }
