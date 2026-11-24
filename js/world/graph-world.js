@@ -1596,10 +1596,10 @@ const NY_ROAD_GLSL = /* glsl */`
       float side = gwH(vec2(pb, 24.)) < .5 ? -1. : 1., wide = gwH(vec2(pb, 25.)) < .35 ? hw : hw * (.45 + .3 * gwH(vec2(pb, 26.)));
       float cx = side * (hw - wide * .5) * step(wide, hw - .01);
       float inP = step(p0, along) * step(along, p1) * step(abs(q.x - cx), wide * .5);
-      vec3 pc = base * mix(.72, 1.05, gwH(vec2(pb, 27.)));
+      vec3 pc = base * mix(.86, 1.04, gwH(vec2(pb, 27.)));   // (a shade off the road round it, not a dark slab: user, 24 Nov)
       float rim = 1. - smoothstep(0., .06, min(min(along - p0, p1 - along), wide * .5 - abs(q.x - cx)));
-      lin = mix(lin, pc * (.92 + .12 * gwN(w.xz * 6.)), inP * (.4 + .6 * det));
-      lin = mix(lin, base * .35, inP * rim * .7 * det);   // the sealed saw cut round it
+      lin = mix(lin, pc * (.92 + .12 * gwN(w.xz * 6.)), inP * (.3 + .45 * det) * (.55 + .45 * gwN(w.xz * .6 + pb)));   // (worn into the road: patchy)
+      lin = mix(lin, base * .55, inP * rim * .45 * det);   // the sealed saw cut round it
     }
     vec2 hp = vec2(floor(along / 7.), floor((q.x + hw) / 1.6));
     if (gwH(hp + 40.) > .93 - worn * .06) {
@@ -1772,7 +1772,7 @@ function roadSurfaceMaterial(low = false, ny = false, spill = false) {
           #endif
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-road-surface-8${low ? '-low' : ''}${ny ? '-ny1' : ''}${spill ? '-spill' : ''}`;
+  m.customProgramCacheKey = () => `pgh-road-surface-9${low ? '-low' : ''}${ny ? '-ny1' : ''}${spill ? '-spill' : ''}`;
   return m;
 }
 
