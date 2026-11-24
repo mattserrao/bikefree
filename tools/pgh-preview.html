@@ -21,7 +21,7 @@ world.setTimeOfDay(q.get('time') || 'midday');
 world.setCamera(q.get('camera') || 'closest');
 world.setSource(() => ({ pos: at, speed: 0, cadence: 0, riding: true }));
 world.p = at;
-window.world = world; window.route = route;
+window.bfWorld = world; window.route = route;
 world.setPreload(true);
 world.start();
 </script></body></html>

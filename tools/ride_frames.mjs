@@ -62,10 +62,10 @@ for (const [from, to] of stretches) {
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); else if (m.text().startsWith('progress')) console.error(`  ${from}-${to} ${m.text()}`); else if (/bak/i.test(m.text())) logs.push(m.text()); });
   const q = new URLSearchParams({ park, clean: '1', quality, pos: String(from), ...(time ? { time } : {}), ...(cam ? { cam } : {}) });
   await page.goto(`${base}/tools/world-preview.html?${q}`);
-  await page.waitForFunction(() => window.world, null, { polling: 50 });
+  await page.waitForFunction(() => window.bfWorld, null, { polling: 50 });
   const run = await page.evaluate(async ({ from, to, mpf, dtRide, rebake, noDraw }) => {
     const forced = new Set();
-    const w = window.world, gl = w.renderer.getContext();
+    const w = window.bfWorld, gl = w.renderer.getContext();
     // wait for the GPU (gl.finish only flushes in Chrome): a 1-pixel read from a tiny target of our own
     const tex = gl.createTexture(), fb = gl.createFramebuffer(), px = new Uint8Array(4);
     { const pt = gl.getParameter(gl.TEXTURE_BINDING_2D), pr = gl.getParameter(gl.READ_FRAMEBUFFER_BINDING);

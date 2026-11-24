@@ -279,7 +279,7 @@ export async function load(park, quality = 'balanced') {
   if (world.terrain.roadside) world.terrain.roadside.traverse((o) => { if (o.isMesh) o.name ||= 'Roadside rails'; });
   for (const [name, a] of Object.entries(world.terrain.kit?.assets || {})) if (a.geometry) assetNames.set(a.geometry, name);
   indexScene(); indexBuildings();
-  window.world = world;
+  window.bfWorld = world;
   return { name: route.scene?.title || route.name, total: route.total, oneWay: route.turnS || route.total, city: !!city,
     buildings: city?.buildings.length || 0, meshes: entries.filter((e) => !e.instance).length, instances: entries.filter((e) => e.instance).length,
     triangles: entries.filter((e) => !e.instance).reduce((n, e) => n + (e.mesh.geometry.index ? e.mesh.geometry.index.count : e.mesh.geometry.attributes.position.count) / 3, 0) };

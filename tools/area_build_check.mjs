@@ -58,10 +58,10 @@ for (const id of areas) {
   // a network ride on the city's first area (horizon off: no streamed tiles), the world stopped once it stands
   // (the world opens in another area: the core's first segment, or — checking the core — the Allegheny's)
   await page.goto(`${base}/tools/world-preview.html?${new URLSearchParams({ park, clean: '1', quality, path: id === 'core' ? 'e13+' : 'e1+', pos: '0', horizon: '0' })}`);
-  await page.waitForFunction(() => window.world?.terrain?.kit && window.world.rider?.triangles && window.world.areaSet, null, { timeout: 300000, polling: 500 });
+  await page.waitForFunction(() => window.bfWorld?.terrain?.kit && window.bfWorld.rider?.triangles && window.bfWorld.areaSet, null, { timeout: 300000, polling: 500 });
   await page.waitForTimeout(1500);
   const r = await page.evaluate(async ({ id, budget }) => {
-    const w = window.world;
+    const w = window.bfWorld;
     w.stop();
     if (w.area.id === id) throw new Error(`${id} is the area drawn`);
     for (const a of [...w.areas.values()]) if (a !== w.area && a.id === id) w._releaseArea(a);

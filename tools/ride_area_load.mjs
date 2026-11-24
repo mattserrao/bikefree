@@ -61,16 +61,16 @@ const q = new URLSearchParams({ park, clean: '1', quality, pos: String(from), fr
 const t0 = Date.now();
 await page.goto(`${base}/tools/world-preview.html?${q}`);
 // (a slow open: say where it is every minute, and any page errors)
-const status = setInterval(async () => { try { console.error(`waiting ${Math.round((Date.now() - t0) / 1000)} s:`, JSON.stringify(await page.evaluate(() => { const w = window.world; return w ? { kit: !!w.terrain?.kit, cam: !!w._camInit, rider: !!w.rider?.triangles, areas: [...(w.areas?.values() || [])].map((a) => `${a.id}:${a.ready ? 'ready' : 'building'}`), bake: w.baked?.preparing ? Math.round(w.baked.progress * 100) : null } : 'no world'; })), errors.slice(-3)); } catch { /* navigating */ } }, 60000);
-await page.waitForFunction(() => window.world?.terrain?.kit && window.world._camInit && window.world.rider?.triangles, null, { timeout: 1200000, polling: 500 });
+const status = setInterval(async () => { try { console.error(`waiting ${Math.round((Date.now() - t0) / 1000)} s:`, JSON.stringify(await page.evaluate(() => { const w = window.bfWorld; return w ? { kit: !!w.terrain?.kit, cam: !!w._camInit, rider: !!w.rider?.triangles, areas: [...(w.areas?.values() || [])].map((a) => `${a.id}:${a.ready ? 'ready' : 'building'}`), bake: w.baked?.preparing ? Math.round(w.baked.progress * 100) : null } : 'no world'; })), errors.slice(-3)); } catch { /* navigating */ } }, 60000);
+await page.waitForFunction(() => window.bfWorld?.terrain?.kit && window.bfWorld._camInit && window.bfWorld.rider?.triangles, null, { timeout: 1200000, polling: 500 });
 // (no draw while the start's areas build either: on a software GPU a drawn frame takes seconds, and the build gets
 // its 40 ms slice once a frame — the core took over 10 minutes)
-if (!draw) await page.evaluate(() => { const w = window.world; w._render = () => { w.perf?.end(performance.now()); }; });
+if (!draw) await page.evaluate(() => { const w = window.bfWorld; w._render = () => { w.perf?.end(performance.now()); }; });
 // the areas within reach at the start are built (as behind the app's loader), then a few quiet seconds
-await page.waitForFunction(() => { const w = window.world; return !w._multi || (w._resT != null && [...w.areas.values()].every((a) => a.ready) && !w.baked?.preparing); }, null, { timeout: 1200000, polling: 500 });
+await page.waitForFunction(() => { const w = window.bfWorld; return !w._multi || (w._resT != null && [...w.areas.values()].every((a) => a.ready) && !w.baked?.preparing); }, null, { timeout: 1200000, polling: 500 });
 await page.waitForTimeout(3000);
 clearInterval(status);
-const startAreas = await page.evaluate(() => [...window.world.areas.keys()]);
+const startAreas = await page.evaluate(() => [...window.bfWorld.areas.keys()]);
 console.error(`opened at ${from} m in ${((Date.now() - t0) / 1000).toFixed(0)} s, areas built: ${startAreas.join(', ')}`);
 let cdp = null;
 if (profile) { cdp = await context.newCDPSession(page); await cdp.send('Profiler.enable'); await cdp.send('Profiler.setSamplingInterval', { interval: 500 }); await cdp.send('Profiler.start'); }
@@ -82,10 +82,10 @@ if (trace) await page.evaluate(async () => {
   wrap(ST.prototype, ['_plan', '_build', 'prepare', 'update', 'tick'], 'terrain');
   wrap(CS.prototype, ['_stream', '_buildChunk', 'tick'], 'city');
   wrap(P.GroundBlocks.prototype, ['set'], 'groundBlocks'); wrap(P.InstancePool.prototype, ['set'], 'pool');
-  const W = window.world; wrap(Object.getPrototypeOf(W), ['_areaTick', '_useArea', '_releaseArea'], 'world');
+  const W = window.bfWorld; wrap(Object.getPrototypeOf(W), ['_areaTick', '_useArea', '_releaseArea'], 'world');
 });
 const run = await page.evaluate(async ({ from, to, speed, draw, picks }) => {
-  const w = window.world;
+  const w = window.bfWorld;
   if (!draw) w._render = () => { w.perf?.end(performance.now()); };
   w.areaWork = {};   // (the start's building isn't the ride's)
   const heap = () => (performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null);

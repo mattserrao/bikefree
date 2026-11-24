@@ -53,10 +53,10 @@ for (const spec of args) {
   errors.length = 0;
   const t0 = Date.now();
   await page.goto(`${base}/tools/pgh-preview.html?${new URLSearchParams({ graph, lat, lon, dir: dir || '+', at: at || 40, time, quality })}`);
-  await page.waitForFunction(() => window.world && window.world.readiness().ready, null, { timeout: +(process.env.SNAP_WAIT || 240000), polling: 500 })
-    .catch(async (e) => { console.log('  not ready:', await page.evaluate(() => JSON.stringify([window.world?._frames, window.world?._nearTiles?.length, window.world?.tiles?.size, window.world?.readiness?.()?.steps?.map((s) => s.p)])).catch(() => '?'), errors.slice(0, 3)); throw e; });
+  await page.waitForFunction(() => window.bfWorld && window.bfWorld.readiness().ready, null, { timeout: +(process.env.SNAP_WAIT || 240000), polling: 500 })
+    .catch(async (e) => { console.log('  not ready:', await page.evaluate(() => JSON.stringify([window.bfWorld?._frames, window.bfWorld?._nearTiles?.length, window.bfWorld?.tiles?.size, window.bfWorld?.readiness?.()?.steps?.map((s) => s.p)])).catch(() => '?'), errors.slice(0, 3)); throw e; });
   const stats = await page.evaluate(([view, cam, pre]) => {
-    const w = window.world;
+    const w = window.bfWorld;
     w.stop();
     if (pre) (0, eval)(`(w) => { ${pre} }`)(w);
     if (cam) {
@@ -79,7 +79,7 @@ for (const spec of args) {
     const up = window.route.netRide.upcoming(w.p);
     return { bridges: `${w._bridgesState} ${w.bridges?.count ?? ''}`, calls: i.calls, triangles: i.triangles, tiles: [...w.tiles.values()].filter((t) => t.built).length, next: `${up.node.name} in ${Math.round(up.distTo)} m: ${up.options.map((o) => o.label).join(' / ')}` };
   }, [view, cam, preJs]);
-  if (evalJs) console.log('  eval:', JSON.stringify(await page.evaluate(async (code) => { const w = window.world; const T = await import('/vendor/three.module.min.js'); return eval(code); }, evalJs)));
+  if (evalJs) console.log('  eval:', JSON.stringify(await page.evaluate(async (code) => { const w = window.bfWorld; const T = await import('/vendor/three.module.min.js'); return eval(code); }, evalJs)));
   const file = resolve(ROOT, out, `pgh-${name}${view || cam ? '-view' : ''}.png`);
   await page.screenshot({ path: file });
   console.log(`${name}: bridges ${stats.bridges}, ${stats.calls} draw calls, ${(stats.triangles / 1e6).toFixed(2)} M triangles, ${stats.tiles} tiles · next ${stats.next} · ${((Date.now() - t0) / 1000).toFixed(1)} s → ${file.slice(ROOT.length)}${errors.length ? `\n  errors: ${errors.slice(0, 3).join(' | ')}` : ''}`);
