@@ -1803,6 +1803,20 @@ function groundMaterial(low = false, rural = false) {
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aLandW; varying float vLandW; varying vec3 vGW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLandW = aLandW; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
     shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLand; uniform vec4 uLandBox; uniform float uLandOn; uniform float uCloudT; varying float vLandW; varying vec3 vGW;\n' + NOISE_GLSL + SURFACE_GLSL)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        #ifndef LOWQ
+        {
+          // the ground's small relief near the camera (the height grid is 12.8 m: hummocks, ruts and hollows of 1–6 m
+          // in the light alone, no vertices — user, 24 Nov: "finer ground near the road")
+          float rd = 1. - smoothstep(40., 160., length(vGW - cameraPosition));
+          if (rd > 0.) {
+            vec2 p = vGW.xz * .32; float e = .35;
+            float h0 = gwN(p) + gwN(p * 2.7 + 7.) * .45, hx = gwN(p + vec2(e, 0.)) + gwN((p + vec2(e, 0.)) * 2.7 + 7.) * .45, hz = gwN(p + vec2(0., e)) + gwN((p + vec2(0., e)) * 2.7 + 7.) * .45;
+            vec3 g = vec3(h0 - hx, 0., h0 - hz) * .55 * rd;
+            normal = normalize(normal + (viewMatrix * vec4(g, 0.)).xyz);
+          }
+        }
+        #endif`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         int sdCh = 2;
         if (uLandOn > .5 && vLandW > .01) {
@@ -1812,7 +1826,10 @@ function groundMaterial(low = false, rural = false) {
           float k = floor(texture2D(uLand, uv).r * 255. + .5);
           float n = gwN(vGW.xz * .35);
           #else
-          vec2 uv0 = (vGW.xz - uLandBox.xy) / size, uv = uv0 + (vec2(gwN(vGW.xz * .21), gwN(vGW.xz * .21 + 19.)) - .5) * 4. / size;
+          // the cover read through a wander (±3.5 m) and a scatter of grains (±3 m, 0.4 m grains): the edge between two
+          // covers a ragged, feathered strip where each creeps into the other, not a 6 m staircase (user, 24 Nov)
+          vec2 gr = floor(vGW.xz * 2.5);
+          vec2 uv0 = (vGW.xz - uLandBox.xy) / size, uv = uv0 + ((vec2(gwN(vGW.xz * .21), gwN(vGW.xz * .21 + 19.)) - .5) * 7. + (vec2(gwH(gr + 3.1), gwH(gr + 8.7)) - .5) * 6. * (1. - smoothstep(60., 220., length(vGW - cameraPosition)))) / size;
           float k = floor(texture2D(uLand, uv).r * 255. + .5);
           // water isn't wobbled: a canal or a creek is only a few cells wide, and the wobble broke it into pools
           // (user, 22 Nov: "the water in the canal … is cutting out")
@@ -1919,6 +1936,6 @@ function groundMaterial(low = false, rural = false) {
         diffuseColor.rgb *= 1. - .2 * smoothstep(.55, .75, gwN((vGW.xz + uCloudT * vec2(3., 1.2)) * .0025));   // a cloud's shadow drifting over (user, 23 Nov)
         #endif`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-9${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-11${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
   return m;
 }
