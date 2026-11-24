@@ -1827,6 +1827,39 @@ Goal: a lighter main menu, and fix the PGH / CNY / SKAN map cards that looked as
 - [ ] CNY canal: small shrubs and scrub on the inside slope down to the water; no trees or buildings in the channel.
 - [ ] → later test branch (user, 22 Nov: "push Going to the Sun task to a later test branch"): Going-to-the-Sun has a low framerate in practice (other maps fine). First numbers (headless, @45000): 28,438 trees in 67 tiles; re-sort 1.8 ms; near 136, mid 670, impostors 10,889 (all loaded tiles, no distance cap); near trees cast shadows. Suspects to measure on a real GPU against main: the impostor cards' overdraw, the near pools in the shadow pass, full impostor rebuilds on every tile swap.
 
+### Camillus Forest Unique Area: hero area on CNY. Branch `camillus-forest-test` *(user, 24 Nov: "Camillus unique area - captured in the understory - riding through lush meadows … push the tree engine here … Plan the route through the unique area with me before creating the route"; project doc claude/camillus-forest.md)*
+*Decisions (user, 24 Nov)*
+- **Route:** loop B, "Meadows & Old Growth". It starts and ends at a junction on Thompson Road, so a rider on another CNY route can turn in. It's 5.8 km with ~150 m of climbing and is ~70 % under canopy and ~30 % meadow. The trails, in order: #1 → #6 → #5 → #1 → #2 → #8 → #4 → #3 → #2 → #1.
+- **Access:** the trails join the CNY free-ride network, and the loop is also a named CNY ride.
+- **Trees:** 2D cards stay, as on the rest of CNY; the hero work goes into the engine's species, ages and placement rules.
+- **Season:** early fall, matching CNY. Meadows are hay-coloured and tall, with only the bike path mown, and that path stays narrow.
+- **Feel:** the trail is narrow throughout.
+  - **Woods:** tall, mature trees, so the rider is in the understory: brown ground, dead logs, twigs, leaf litter, ferns, and a closed canopy overhead. A few saplings push through, there are nurse logs, and the ground undulates as in old growth. God rays come through the overstory.
+  - **Meadows:** tall swaying grass bordered by thick tree stands, with the path a narrow slit through it.
+
+*Sources:* DEC Unit Management Plan (camumpone.pdf), the DEC map (camillusforestmap.pdf), OSM trails #1–#8 and boundary way 429408002, ESA WorldCover 10 m, and Terrarium DEM.
+
+*Sections* (km along the loop)
+1. 0.0–1.3 Lower woods climb: mature maple–beech beside the creek ravine (#1/#6).
+2. 1.3–1.75 Field-edge climb: meadow against a thick tree wall (#6).
+3. 1.75–2.7 Old-growth crown at ~213 m: the biggest trunks (to 42″ DBH), the 1998 blowdown gap with nurse logs and saplings, and god rays (#6/#5).
+4. 2.7–3.35 High meadow descent: tall hay grass, a mown slit, views north (#5/#1).
+5. 3.35–3.65 Green tunnel between tree rows (#2).
+6. 3.65–5.25 North woods: rolling drumlin ground and ferns (#8/#4).
+7. 5.25–5.8 East meadow home (#3/#2), then Thompson Road.
+
+*Tasks* (planned, awaiting go-ahead)
+- [ ] Graph: add the loop's trails to `tools/city/cny.json` (narrow dirt singletrack kind), joined to Thompson Road at the lot entrance; rebuild with `npm run cny:build`; QC 0 fails.
+- [ ] Named ride "Camillus Forest" on CNY.
+- [ ] Unique Area land: forest stands from WorldCover + the DEC land-use units (old forest, mature, moderately aged, old fields, apple orchard, riparian); the boundary as a zone.
+- [ ] Tree engine, forest-ecology placement: age classes (old canopy 25–32 m, mature, poles), sugar maple ~83 % / beech ~13 % / bitternut hickory, basswood, ash; spacing by crown competition; sparse saplings in the shade, dense in the blowdown gap; snags.
+- [ ] Forest floor: litter shader (brown, leaves, twigs), dead logs and nurse logs (moss, seedlings in rows), Christmas fern and understory herbs, old-growth pit-and-mound micro-relief.
+- [ ] Canopy ceiling over the trail: closed crowns overhead, holes for light.
+- [ ] God rays: baked golden-hour light shafts (sun 16° from 250°) in canopy gaps, cheap cards/volumes, High tier only for the extras.
+- [ ] Meadows: tall hay-coloured grass (≈1–1.5 m) swaying, mown narrow strip, tree-wall edges, green tunnels, old apple trees.
+- [ ] Narrow trail ribbon (~0.6–0.9 m tread, worn dirt with roots in the woods).
+- [ ] QC: course, clipping (nothing on the tread), snapshots of each section, budgets (Balanced ≤ GTTS level; phones must not run out of memory).
+
 ## Running it
 
 Web Bluetooth needs Chrome and either `localhost` or HTTPS.
