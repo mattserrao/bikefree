@@ -1017,6 +1017,10 @@ export class GraphWorld {
           }
           // a shoulder: a gravel edge on a trail, then the verge sloping down to the ground, then a short face
           const band = path ? 0.35 : 0.2;
+          // a raised trail (user, 24 Nov: "smooth the hard edge drop off"): a rounded embankment 3–5 m wide down to the
+          // ground — its crest curving over, its foot easing in, its width wandering along the trail — in the trail's
+          // own surface, the gravel thinning to ground cover down the slope (the shader: _bankJob's codes + 0.5 m)
+          if (this.rural && (ext[k] === 5 || ext[k] === 6) && this._trailBank(R, t, p0, p1, o0, o1, c0, c1, sgn, half, ext[k])) { W.wall(p0, p1, -0.6, -0.01, side, flip); continue; }
           if (ext[k] === 5 || ext[k] === 6) {
             // a gravel or dirt way (the towpath): its shoulder in the path's own surface — the same stone dust and
             // tone running down the side, not a green verge (user, 23 Nov: "the side of the towpath should carry the
@@ -1195,6 +1199,40 @@ export class GraphWorld {
     }
     const m = R.mesh(this.mats.spill);
     if (m) { t.spillMesh = m; this._spillDirty = true; }   // (drawn merged with the other near tiles': _mergeSpill)
+  }
+
+  /**
+   * A raised trail's side as a rounded embankment (see the call): rings out from the trail's edge to a foot 3–5 m out
+   * (wandering along the trail), each ring's height eased from the crest down to the ground there. Returns false where
+   * the trail isn't above the ground beside it (it keeps its short shoulder), or the canal's at its side.
+   */
+  _trailBank(R, t, p0, p1, o0, o1, c0, c1, sgn, half, surf) {
+    const width = (s) => 3 + 2 * (.5 + .5 * Math.sin(s * .043 + 1.3) * Math.cos(s * .017 + .4));
+    const w0 = width(c0.s), w1 = width(c1.s);
+    const at = (p, o, d) => [p[0] + o[0] * d, p[2] + o[1] * d];
+    const gA = this._groundH(...at(p0, o0, w0)), gB = this._groundH(...at(p1, o1, w1));
+    const dropA = p0[1] - gA, dropB = p1[1] - gB;
+    if (Math.max(dropA, dropB) < .35) return false;
+    for (const [p, o, w] of [[p0, o0, w0], [p1, o1, w1]]) { const [x, z] = at(p, o, w * .6); const c = canalAt(x, z, 1); if (c && !c.creek) return false; }
+    // the ground cover at the foot: woods (litter, roots) or open grass — the colour the slope's lower part takes
+    const lc = this.city?.landAt?.(...at(p0, o0, w0 + 1));
+    const woods = lc === 2, cover = woods ? new THREE.Color('#54432e') : new THREE.Color('#5d7539');
+    const RINGS = [0, .08, .2, .36, .55, .74, .9, 1];
+    const ring = (p, o, w, g, f) => {
+      // the profile: a smootherstep from the crest to the ground (convex at the top, concave at the foot)
+      const e = f * f * f * (f * (f * 6 - 15) + 10), d = w * f, [x, z] = at(p, o, d);
+      const y = Math.max(p[1] + (g - p[1]) * e, this._groundH(x, z) + .02 * (1 - f)) - (f === 0 ? .01 : 0);
+      return [x, f === 1 ? Math.min(y, this._groundH(x, z) - .02) : y, z];
+    };
+    for (let j = 0; j + 1 < RINGS.length; j++) {
+      const fa = RINGS[j], fb = RINGS[j + 1];
+      const a0 = ring(p0, o0, w0, gA, fa), a1 = ring(p1, o1, w1, gB, fa), b0 = ring(p0, o0, w0, gA, fb), b1 = ring(p1, o1, w1, gB, fb);
+      // aRd: the surface + .5 (a bank: the shader's code), across (m past the edge, signed as the trail's), along, half (+ 100 under woods)
+      const rd = (c, f, w) => [surf + .5, -sgn * (half + f * w), c.s, half + (woods ? 100 : 0)];
+      if (sgn > 0) R.quadX(b0, a0, a1, b1, cover, [rd(c0, fb, w0), rd(c0, fa, w0), rd(c1, fa, w1), rd(c1, fb, w1)]);
+      else R.quadX(a0, b0, b1, a1, cover, [rd(c0, fa, w0), rd(c0, fb, w0), rd(c1, fb, w1), rd(c1, fa, w1)]);
+    }
+    return true;
   }
 
   /** The near tiles' spill strips as one mesh (one draw call, not one a tile), rebuilt when the set changes. */
@@ -1680,14 +1718,18 @@ function roadSurfaceMaterial(low = false, ny = false, spill = false) {
       .replace('#include <color_fragment>', `#include <color_fragment>
         {
           vec3 c = diffuseColor.rgb;
-          int sf = int(vRd.x + .5);
+          int sf = int(vRd.x + .25);
+          bool bank = fract(vRd.x) > .25 && fract(vRd.x) < .75;   // a raised trail's embankment (_trailBank)
+          bool bankWoods = vRd.w > 50.;
+          vec4 rdw = vRd; if (bankWoods) rdw.w -= 100.;
+          vec3 cover = c; float bankG = 1.;
           vec2 q = vRd.yz;
           #ifdef SPILL
           sf -= 20;
           {
             // the spill (_spillJob): dense by the shoulder's foot, scattered grains farther out; how far it reaches and
             // how thick it lies wander along the edge (q.y: metres along) and in patches
-            float t = clamp((abs(q.x) - vRd.w - 3.) / 1.5, 0., 1.);
+            float t = clamp((abs(q.x) - rdw.w - 3.) / 1.5, 0., 1.);
             float reach = .25 + .75 * gwN(vec2(q.y * .07, 3.3 + sign(q.x) * 5.)), thick = .45 + .55 * gwN(vGW.xz * .15 + 8.);
             float solid = (1. - smoothstep(reach * .3, reach, t)) * thick;
             if (gwH(floor(vGW.xz * 16.)) > solid * 1.1 + .02 || t > reach) discard;
@@ -1695,7 +1737,7 @@ function roadSurfaceMaterial(low = false, ny = false, spill = false) {
           #endif
           float px = max(fwidth(q.y), fwidth(q.x)) + 1e-4, det = 1. - smoothstep(.015, .07, px);
           float wear = .25 + .65 * gwN(vGW.xz * .004 + 3.1);
-          float track = 1. - smoothstep(0., .45, abs(abs(abs(q.x) - vRd.w * .5) - .85));
+          float track = 1. - smoothstep(0., .45, abs(abs(abs(q.x) - rdw.w * .5) - .85));
           #ifdef LOWQ
           if (det < .02 && sf >= 1 && sf <= 4) sf = sf == 1 ? 11 : 0;   // far off: brick as its plain colour, the others as asphalt
           if (sf == 11) c = pow(vec3(.38, .2, .15), vec3(2.2)); else
@@ -1730,7 +1772,7 @@ function roadSurfaceMaterial(low = false, ny = false, spill = false) {
             // path, packed and a little darker; the edges are ragged into the grass; patches of fresh grey gravel, damp
             // dark spots and leaf litter come and go; now and then a shallow puddle in the worn line, the sky in it
             vec3 g = sf == 5 ? vec3(.62, .57, .48) : vec3(.43, .36, .27);
-            float w = max(vRd.w, 1.);
+            float w = max(rdw.w, 1.);
             float wan = (gwN(vec2(q.y * .021, 3.7)) - .5) * w * .5 + (gwN(vec2(q.y * .09, 8.1)) - .5) * w * .14;
             float lineD = abs(q.x - wan), worn = 1. - smoothstep(w * .2, w * .5, lineD);
             float rag = (gwN(vec2(q.y * .35, 9.3)) - .5) * .5 + (gwN(vec2(q.y * 1.7, 4.4)) - .5) * .18;
@@ -1754,6 +1796,25 @@ function roadSurfaceMaterial(low = false, ny = false, spill = false) {
             col = mix(col, vec3(.46, .5, .55) * (.85 + .2 * gwN(vGW.xz * 3.)), pud * .9);
             col += vec3(1., .9, .7) * pud * step(.985, gwH(floor(vGW.xz * 24.) + floor(uCloudT * 3.) * 7.)) * 1.6 * det;   // (the low sun glinting on it)
             c = pow(col, vec3(2.2));
+            if (bank) {
+              // the embankment (user, 24 Nov): the trail's gravel spills over the crest and thins out in grains (how far
+              // wanders), then the ground cover — grass, or under the woods the litter — darker toward the foot;
+              // stones bedded in the slope here and there, and under the woods roots crossing it
+              float o = abs(q.x) - w;
+              float crest = .45 + .9 * gwN(vec2(q.y * .09, 13.1)) + .3 * gwN(vec2(q.y * .4, 2.7));
+              float gm = 1. - smoothstep(crest * .4, crest, o);
+              gm = smoothstep(-.08, .08, gm * 1.15 - .05 - gwH(floor(vGW.xz * 24.)) * mix(1., .6, det));   // (fine grains: 4 cm)
+              vec3 gc = cover * (.85 + .3 * gwN(vGW.xz * .8)) * (1. - .18 * smoothstep(1.5, 4.5, o));
+              if (bankWoods) { vec2 lq = mat2(.8, -.6, .6, .8) * vGW.xz * 5.5, lf = floor(lq); gc = mix(gc, pow(mix(vec3(.55, .33, .16), vec3(.62, .5, .22), gwH(lf + 5.)), vec3(2.2)) * .8, step(.9, gwH(lf + 33.)) * (1. - smoothstep(.2, .32, length(fract(lq) - .5))) * det * .6); }
+              float stone = gwH(floor(vGW.xz * 1.6) + 77.), sr = length(fract(vGW.xz * 1.6) - .5 - (vec2(gwH(floor(vGW.xz * 1.6) + 2.), gwH(floor(vGW.xz * 1.6) + 9.)) - .5) * .3);
+              float st = step(.9, stone) * (1. - smoothstep(.16, .24, sr)) * smoothstep(.6, 1.2, o);
+              vec3 stc = pow(vec3(.5, .49, .45), vec3(2.2)) * (.8 + .4 * gwH(floor(vGW.xz * 1.6) + 5.)) * (1.15 - sr * 1.6);
+              float rt = 0.;
+              if (bankWoods) { float rq = q.y * .8 + sin(o * 2.1 + q.y * .3) * .25; rt = (1. - smoothstep(.02, .06, abs(fract(rq * .35) - .5))) * step(.55, gwN(vec2(floor(rq * .35), 4.))) * smoothstep(.5, 1., o) * (1. - smoothstep(3.5, 5., o)); }
+              c = mix(gc, c, gm); bankG = gm;
+              c = mix(c, stc, st * det);
+              c = mix(c, pow(vec3(.27, .2, .14), vec3(2.2)), rt * det * .85);
+            }
           } else {                 // asphalt
             #ifdef LOWQ
             c *= (.94 + .12 * wear) * (1. - wear * .1 * track);
@@ -1765,15 +1826,15 @@ function roadSurfaceMaterial(low = false, ny = false, spill = false) {
             c = mix(c, c * 1.16, step(.74 - wear * .12, pa) * .7);                           // patches
             float cr = abs(gwN(vGW.xz * .55 + 11.) - .5);
             c *= 1. - wear * .22 * step(.62, gwN(vGW.xz * .05 + 2.)) * (1. - smoothstep(.0, .01, cr)) * det;   // sealed cracks (in the worn places)
-            c *= 1. - .08 * (1. - smoothstep(0., .5, vRd.w - abs(q.x)));                     // the edge, darker
+            c *= 1. - .08 * (1. - smoothstep(0., .5, rdw.w - abs(q.x)));                     // the edge, darker
             #endif
             #ifdef NYWEAR
-            c = nyWinterRoad(c, q, vRd.w, det, track, vGW);
+            c = nyWinterRoad(c, q, rdw.w, det, track, vGW);
             #endif
           }
           #ifndef LOWQ
           // the surface's texture near the camera (asphalt aggregate; a trail's gravel): user, 24 Nov — Zwift parity
-          { float sdist = length(vGW - cameraPosition); c *= (sf == 5 || sf == 6) ? surfaceDetail(vGW.xz, 1, 3.5, sdist, .9) : surfaceDetail(vGW.xz, 0, 5., sdist, .75); }
+          { float sdist = length(vGW - cameraPosition); c *= (bank && bankG < .5) ? surfaceDetail(vGW.xz, bankWoods ? 1 : 2, bankWoods ? 5. : 3., sdist, .8) : (sf == 5 || sf == 6) ? surfaceDetail(vGW.xz, 1, 3.5, sdist, .9) : surfaceDetail(vGW.xz, 0, 5., sdist, .75); }
           #endif
           diffuseColor.rgb = c * (1. - .2 * smoothstep(.55, .75, gwN((vGW.xz + uCloudT * vec2(3., 1.2)) * .0025)));   // (a cloud's shadow drifting over)
           #ifdef SPILL
@@ -1781,7 +1842,7 @@ function roadSurfaceMaterial(low = false, ny = false, spill = false) {
           #endif
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-road-surface-9${low ? '-low' : ''}${ny ? '-ny1' : ''}${spill ? '-spill' : ''}`;
+  m.customProgramCacheKey = () => `pgh-road-surface-10${low ? '-low' : ''}${ny ? '-ny1' : ''}${spill ? '-spill' : ''}`;
   return m;
 }
 
