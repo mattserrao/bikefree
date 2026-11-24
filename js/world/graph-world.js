@@ -18,6 +18,7 @@ import { CANAL, canalAt } from './toolbox/city/cny-landmarks.js';
 import { loadTerrainGrid } from '../terrain-grid.js';
 import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean, ROAD_LIFT } from './pose.js';
 import { loadRider, RIDER_RIM } from './rider.js';
+import { makeSkyDome } from './toolbox/atmosphere/sky-dome.js';
 /** The clouds' clock (their shadows drifting over the ground and the roads; puddles' glints): seconds. */
 const CLOUD_T = { value: 0 };
 import { PerfMonitor } from './perf.js';
@@ -402,6 +403,8 @@ export class GraphWorld {
     this.renderer.toneMappingExposure = t.exposure;
     RIDER_RIM.value.set(t.sun).multiplyScalar(t.night ? .08 : 1);
     this.scene.background = new THREE.Color(t.sky);
+    if (!this.sky) { this.sky = makeSkyDome({ radius: 8500 }); this.scene.add(this.sky.mesh); }
+    this.sky.set(t, this.sunDir, this.rural ? .5 : .35);
     this.scene.fog.color.set(t.fog);
     this.heroes?.setNight(t.night ? 1 : 0);
     if (this.baked) { this.baked.setLight(t); this.sun.castShadow = (this.gfx?.shadows ?? true) && !!this.baked.world.terrain.quality.shadows; }
@@ -506,6 +509,7 @@ export class GraphWorld {
     }
     this.crank += ((src.cadence || 0) / 60) * Math.PI * 2 * dt;
     CLOUD_T.value = now / 1000;
+    this.sky?.tick(this.camera, now / 1000);
     this.heroes?.tick(now / 1000, dt);
     this.effects.tick(now / 1000, dt);
     this.city?.tick(this.camera.position, now / 1000, this.path ? out : null, dt);
