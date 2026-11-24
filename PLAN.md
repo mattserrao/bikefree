@@ -1900,6 +1900,8 @@ Goal: a lighter main menu, and fix the PGH / CNY / SKAN map cards that looked as
 - [x] **Tree feet:** the ground swells round each big tree within 16 m of a trail (height ~0.26 × trunk radius, out to ~3.2 radii: `old-growth.js mound`); the root flares rebuilt — a lobed, bark-textured foot and six round roots diving under the litter — and the ground shader carries their root tops on out through the leaves, bare earth between (`graph-world uRoots`: the 24 nearest).
 - [x] **Deer:** smooth ellipsoid body, slender jointed legs, long neck, muzzle, ears and white tail.
 - [x] **Version:** v0.15.0.
+- [x] **Phones' forest floor** (user, 24 Nov: "no forest floor texture … on mobile"): phones default to Low, and Low skipped the hero floor's leaf layers, twigs, sun bars and grit — a flat orange floor. "Full detail on Low too": they now run on Low.
+- [x] **Grass pop-in** (user: "The pop-in for grass is distracting. On mobile, with no anti-aliasing, it's also jarring"; after a look at how games and three.js demos do it — clumps shrink before they hide, fixed world tiles with a distance fade, a grass-coloured floor where the blades end, wider blades where there's no anti-aliasing — the user chose "Fixed tiles + grow-in + floor blend", "~40 m, fade from 25 m"): the clumps are fixed in the world; each grows up out of the floor between ~25 and 40 m (at its own distance) and its blades thin out from ~12 m, so none appears at height (`old-growth.js GRASS_FADE`); the meadow floor along the trail is painted with the tall grass's tops beyond, so the field reads as grass all the way out. Phones (no MSAA): fewer clumps of ~2.3× wider blades, which don't break up into a shimmer (mipmapped picture cards were tried: dark and blotchy up close).
 
 ## Running it
 

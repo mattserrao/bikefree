@@ -2044,6 +2044,15 @@ function groundMaterial(low = false, rural = false) {
             lc = mix(vec3(.6, .52, .33), vec3(.74, .66, .44), n * .5 + swirl * .5);
             lc = mix(lc, vec3(.5, .52, .3), smoothstep(.62, .82, gwN(vGW.xz * .05 + 4.)) * .3);
             lc *= .88 + .16 * comb;
+            // the tall grass's own colour along the trail where its 3D clumps have faded out (past ~25–40 m: old-growth.js
+            // GRASS_FADE — user, 24 Nov: "Fixed tiles + grow-in + floor blend"): the hay tops seen from above, combed by
+            // the wind, so the field reads as grass all the way out and a clump grows up out of its own colour
+            if (vTread > 10. && vTread < 69.) {
+              float gtd = abs(vTread - 50.), gcd = length(vGW - cameraPosition);
+              float tallG = smoothstep(.7, 1.3, gtd) * (1. - smoothstep(7.5, 9.5, gtd)) * smoothstep(18., 34., gcd);
+              vec3 tops = mix(vec3(.6, .5, .3), vec3(.72, .62, .4), gwN(vGW.xz * 1.7) * .6 + comb * .4) * (.86 + .2 * gwN(vec2(dot(vGW.xz, vec2(.94, .34)) * 3., dot(vGW.xz, vec2(-.34, .94)) * .4)));
+              lc = mix(lc, tops, tallG * .85);
+            }
             lc *= .9 + .18 * gwN(vec2(dot(vGW.xz, vec2(.7, .7)) * 3.5, dot(vGW.xz, vec2(-.7, .7)) * .6));   // the matted blades' streaks
           }
           #ifdef NYGRASS
@@ -2115,6 +2124,6 @@ function groundMaterial(low = false, rural = false) {
         diffuseColor.rgb *= 1. - .2 * smoothstep(.55, .75, gwN((vGW.xz + uCloudT * vec2(3., 1.2)) * .0025));   // a cloud's shadow drifting over (user, 23 Nov)
         #endif`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-18${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-19${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
   return m;
 }

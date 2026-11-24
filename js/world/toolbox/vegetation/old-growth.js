@@ -42,7 +42,9 @@ const CELL = 2;             // m: the skirt's cells
 const BLOCK = 128;          // m: the near pieces are built in squares this size
 const SKIRT_NEAR = 420, SKIRT_FAR = 620;   // m: build within, drop beyond
 const FIN_NEAR = 300, FIN_FAR = 420;     // m: the meadow's far grass (fins) built within, dropped beyond
-const BLADE_R = { low: 32, balanced: 55, high: 70 };   // m: the meadow's near grass (3D blade clumps) drawn within
+// m: the meadow's near grass grows up out of the floor between these camera distances (each clump at its own), and the
+// floor's painted tall grass takes over beyond (graph-world: the hero meadow's floor)
+export const GRASS_FADE = [25, 40];
 const CANOPY_LO = { [OG.old]: 25, [OG.forest]: 20.5, [OG.blow]: 23 };
 // the 1998 Labor Day storm came out of the west-north-west: its windthrow lies toward the east-south-east
 const FALL_YAW = -0.35;     // radians about +y: +x turned this far (three.js: +x → (cos, 0, −sin))
@@ -133,7 +135,7 @@ export class OldGrowth {
     this.uTime = city.treeTime;
     this.stats = { skirtBlocks: 0, finBlocks: 0, blades: 0, canopyCards: 0, rays: 0 };
     const q = world.qualityKey;
-    this.q = { cell: q === 'low' ? 2.5 : CELL, rays: q !== 'low', bladeS: q === 'low' ? .68 : q === 'high' ? .46 : .52, bladeR: BLADE_R[q] || BLADE_R.balanced };
+    this.q = { cell: q === 'low' ? 2.5 : CELL, rays: q !== 'low', bladeS: q === 'low' ? .68 : q === 'high' ? .46 : .52, };
   }
 
   /** Inside the hero area (its boundary, with a margin). */
@@ -617,13 +619,13 @@ export class OldGrowth {
 
   // ------------------------------------------------------------------ the near pieces
   /** Everything near the camera built now (a snapshot; the first frame of a ride). */
-  prepare(camera) { this._last = null; this._logAt = null; this._bladeAt = null; this.tick(camera, this.uTime?.value ?? 0); }
+  prepare(camera) { this._last = null; this._logAt = null; this._bladeSig = null; this._bladeAt = null; this.tick(camera, this.uTime?.value ?? 0); }
   tick(camera, time) {
     const cx = camera.position.x, cz = camera.position.z;
     if (!this.contains(cx, cz, 900)) {
       if (this.canopy) this._dropCanopy();
       for (const B of this.blocks.values()) { this._dropSkirt(B); this._dropFins(B); }
-      if (this.blades) for (const im of Object.values(this.blades)) im.count = 0;
+      if (this.blades) { for (const im of Object.values(this.blades)) im.count = 0; this._bladeSig = null; }
       { const U = this.world.mats?.ground?.userData?.land; if (U?.uRootN) U.uRootN.value = 0; }
       this._nt?.hide(); this._np?.hide(); this._trunkAt = null;
       return;
@@ -634,7 +636,7 @@ export class OldGrowth {
     if (!this.life) this._placeLife();
     this.life.tick(time);
     if (!this._logAt || Math.hypot(cx - this._logAt.x, cz - this._logAt.z) > 20) { this._logAt = { x: cx, z: cz }; this._logs(cx, cz); this._drawFlares(cx, cz); this._drawRootGround(cx, cz); }
-    if (!this._bladeAt || Math.hypot(cx - this._bladeAt.x, cz - this._bladeAt.z) > 5) { this._bladeAt = { x: cx, z: cz }; this._drawBlades(cx, cz); }
+    this._drawBlades(cx, cz);   // (cheap: only a change in the set of tiles does any work)
     if (!this._trunkAt || Math.hypot(cx - this._trunkAt.x, cz - this._trunkAt.z) > 2) { this._trunkAt = { x: cx, z: cz }; this._drawTrunks(cx, cz); this._drawPlants(cx, cz); }
     // all at once while loading, or when the camera has jumped (a new ride, a snapshot); else a piece a frame
     const jumped = !this._last || Math.hypot(cx - this._last.x, cz - this._last.z) > 150;
@@ -710,25 +712,26 @@ export class OldGrowth {
    * The tall grass right at the path (user, 24 Nov: "Grass should be closer in to the bike path and taller … Grass
    * area has poor performance" → "Near wall + far shell", 1.4–1.8 m, from 0.3 m off the tread): 3D clumps of real
    * blades — no see-through cards, so no overdraw — on a jittered 0.5 m grid from 0.3 m off the tread out to 8 m,
-   * instanced (one draw call a detail level: a fuller clump within 22 m, a sparser one out to BLADE_R), refilled as
+   * instanced in fixed tiles, grown in between GRASS_FADE's distances (_drawBlades), refilled as
    * the camera moves. Swaying, gusts rolling over from the west.
    */
-  _bladeGeometry(blades, segs) {
-    const P = [], N = [], C = [], H = [], I = [];
+  _bladeGeometry(blades, segs, wMul = 1) {
+    const P = [], N = [], C = [], H = [], B = [], I = [];
     // hay at the end of September: olive-brown at the foot, tan and straw above, a few blades still dull green
     const PAL = [['#5d5a32', '#9c8a55', '#cdb67e'], ['#655c35', '#a78e58', '#c9a96c'], ['#4f5a2e', '#7f8746', '#aba468'], ['#6a5f3a', '#b09a66', '#dcc897']];
     const tmp = new THREE.Color();
     for (let b = 0; b < blades; b++) {
       const a = b * 2.39996, d = .03 + (b % 4) * .05, bx = Math.cos(a) * d, bz = Math.sin(a) * d;
       const pal = PAL[Math.floor(h2(b, blades, 5) * PAL.length)].map((c) => new THREE.Color(c)), [base, mid, tip] = pal;
-      const yaw = h2(b, blades, 1) * 6.28, lean = .12 + h2(b, blades, 2) * .32, hgt = .62 + h2(b, blades, 3) * .38, w = .011 + h2(b, blades, 4) * .009;
+      const yaw = h2(b, blades, 1) * 6.28, lean = .12 + h2(b, blades, 2) * .32, hgt = .62 + h2(b, blades, 3) * .38, w = (.011 + h2(b, blades, 4) * .009) * wMul;
       const ox = Math.cos(a), oz = Math.sin(a), sx = Math.cos(yaw), sz = Math.sin(yaw), v0 = P.length / 3;
+      const rank = ((b * 7) % blades + .5) / blades;   // (aB: the order the blades thin out with distance, spread round the clump)
       for (let k = 0; k <= segs; k++) {
         const t = k / segs, y = hgt * t, out = lean * t * t, ww = w * (1 - t * .85);
         const cx = bx + ox * out, cz = bz + oz * out;
         for (const s of [-1, 1]) {
           P.push(cx + sx * ww * s, y, cz + sz * ww * s); N.push(ox * .3, 1, oz * .3);
-          tmp.copy(t < .5 ? base : mid).lerp(t < .5 ? mid : tip, t < .5 ? t * 2 : (t - .5) * 2); C.push(tmp.r, tmp.g, tmp.b); H.push(t);
+          tmp.copy(t < .5 ? base : mid).lerp(t < .5 ? mid : tip, t < .5 ? t * 2 : (t - .5) * 2); C.push(tmp.r, tmp.g, tmp.b); H.push(t); B.push(rank);
         }
         if (k) { const q = v0 + (k - 1) * 2; I.push(q, q + 1, q + 3, q, q + 3, q + 2); }
       }
@@ -736,35 +739,47 @@ export class OldGrowth {
       if (b % 3 === 0) {
         const t = 1, cx = bx + ox * lean, cz = bz + oz * lean, q = P.length / 3, hc = tmp.set(h2(b, 7, 6) < .5 ? '#a8895a' : '#8f7a55');
         for (const [px, py, pz] of [[cx - sx * .012, hgt - .03, cz - sz * .012], [cx + sx * .012, hgt - .03, cz + sz * .012], [cx + ox * .04 + sx * .008, hgt + .14, cz + oz * .04 + sz * .008], [cx + ox * .04 - sx * .008, hgt + .14, cz + oz * .04 - sz * .008]]) {
-          P.push(px, py, pz); N.push(ox * .3, 1, oz * .3); C.push(hc.r, hc.g, hc.b); H.push(t);
+          P.push(px, py, pz); N.push(ox * .3, 1, oz * .3); C.push(hc.r, hc.g, hc.b); H.push(t); B.push(rank);
         }
         I.push(q, q + 1, q + 2, q, q + 2, q + 3);
       }
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
-    g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); g.setAttribute('aH', new THREE.Float32BufferAttribute(H, 1)); g.setIndex(I);
+    g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); g.setAttribute('aH', new THREE.Float32BufferAttribute(H, 1)); g.setAttribute('aB', new THREE.Float32BufferAttribute(B, 1)); g.setIndex(I);
     g.computeBoundingSphere();
     return g;
   }
   _bladeMat() {
     if (this.bladeMat) return this.bladeMat;
+    const r = this.world.renderer, msaa = !!(r.getContextAttributes?.()?.antialias);
+    // (a phone, no MSAA: the same blades, fewer and ~2.3× wider — a blade over a pixel wide doesn't break up and
+    //  shimmer as a hair-thin one does; picture cards were tried and read as dark, blotchy clumps up close)
     const m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    this.bladeThick = !msaa;
     m.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = this.uTime;
-      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; attribute float aH;')
+      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; attribute float aH; attribute float aB;')
         .replace('#include <begin_vertex>', `#include <begin_vertex>
-          // the blade bends from its foot: its own sway, and gusts rolling over the field from the west
           vec3 ip = vec3(0.);
           #ifdef USE_INSTANCING
             ip = instanceMatrix[3].xyz;
           #endif
+          // (user, 24 Nov: "The pop-in for grass is distracting" → fixed tiles, grown in, blended into the floor):
+          // nothing appears or vanishes at full height — a clump grows up out of the hay floor between ~25 and 40 m
+          // (each at its own distance), and its blades thin out from ~12 m (half gone by 30 m), each shrinking down
+          float gd = length(ip.xz - cameraPosition.xz), gr = fract(sin(dot(ip.xz, vec2(12.9898, 78.233))) * 43758.5453);
+          float grow = 1. - smoothstep(${GRASS_FADE[0].toFixed(1)} + gr * 6., ${GRASS_FADE[1].toFixed(1)} - (1. - gr) * 2., gd);
+          float keep = mix(1.02, .5, smoothstep(12., 30., gd));
+          float gs = grow * (1. - smoothstep(keep - .1, keep, aB));
+          transformed.y *= gs; transformed.xz *= mix(.4, 1., gs);
+          // the blade bends from its foot: its own sway, and gusts rolling over the field from the west
           float k = aH * aH;
           float gust = .5 + .5 * sin(dot(ip.xz, vec2(.09, .03)) - uTime * 1.3) * sin(dot(ip.xz, vec2(.021, -.05)) - uTime * .55);
           vec2 sw = vec2(sin(uTime * 1.9 + ip.x * .53 + ip.z * .31 + aH * 1.3), cos(uTime * 1.4 + ip.z * .47)) * .06 + vec2(.2, .07) * gust;
           transformed.xz += sw * k; transformed.y -= dot(sw, sw) * k * 1.2;`);
     };
-    m.customProgramCacheKey = () => 'old-growth-blades-2';
+    m.customProgramCacheKey = () => `old-growth-blades-3-${msaa}`;
     return (this.bladeMat = m);
   }
   /** The clumps of one 32 m cell along the meadow trails (computed once): Float32Array of [x, y, z, yaw, scale, tint]. */
@@ -776,6 +791,7 @@ export class OldGrowth {
       const x = (i + h2(i, j, 401)) * S, z = (j + h2(i, j, 402)) * S;
       if (x < x0 || x >= x0 + 32 || z < z0 || z >= z0 + 32) continue;
       const r = this.trailNear(x, z, 8.5); if (!r || r.d < half + .3 || r.d > 8.5) continue;
+      if (this.bladeThick && h2(i, j, 406) < .25) continue;   // (a phone's: fewer clumps, of wider blades)
       if (this.land(x, z) !== OG.meadow) continue;
       // taller with distance from the tread's edge (the edge brushed down a little by passing bikes)
       const sc = (1.4 + h2(i, j, 403) * .4) * (r.d < half + .9 ? .82 : 1);
@@ -783,34 +799,48 @@ export class OldGrowth {
     }
     const a = new Float32Array(out); cache.set(key, a); return a;
   }
+  /**
+   * The near grass in fixed 32 m tiles (user, 24 Nov: "The pop-in for grass is distracting" → "Fixed tiles + grow-in +
+   * floor blend", "~40 m, fade from 25 m"): the clumps are fixed in the world (each tile's computed once); those within
+   * GRASS_FADE's far end + 4 m are drawn, and one coming in is still flat in the floor (the shader grows them in, each
+   * at its own distance, and thins the blades), so no blade appears at height.
+   */
   _drawBlades(cx, cz) {
-    const R = this.q.bladeR, NEAR = 22;
+    const R = GRASS_FADE[1] + 8, S = 32;
     if (!this.blades) {
-      const mat = this._bladeMat(), mk = (g, name) => { const im = new THREE.InstancedMesh(g, mat, 512); im.count = 0; im.name = name; im.frustumCulled = false; im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.group.add(im); return im; };
-      this.blades = { near: mk(this._bladeGeometry(16, 3), 'Old growth meadow grass (near)'), far: mk(this._bladeGeometry(7, 2), 'Old growth meadow grass (mid)') };
+      const mat = this._bladeMat(), g = this.bladeThick ? this._bladeGeometry(10, 2, 2.3) : this._bladeGeometry(16, 3);
+      const im = new THREE.InstancedMesh(g, mat, 512); im.count = 0; im.name = 'Old growth meadow grass'; im.frustumCulled = false; im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      this.group.add(im); this.blades = { near: im };
     }
-    const near = [], far = [];
-    for (let ci = Math.floor((cx - R) / 32); ci <= Math.floor((cx + R) / 32); ci++) for (let cj = Math.floor((cz - R) / 32); cj <= Math.floor((cz + R) / 32); cj++) {
-      if (!this.contains((ci + .5) * 32, (cj + .5) * 32, 40)) continue;
-      const a = this._bladeCell(ci, cj);
-      for (let k = 0; k < a.length; k += 6) { const d = Math.hypot(a[k] - cx, a[k + 2] - cz); if (d < NEAR) near.push(k, a); else if (d < R) far.push(k, a); }
+    const keys = [];
+    for (let ci = Math.floor((cx - R) / S); ci <= Math.floor((cx + R) / S); ci++) for (let cj = Math.floor((cz - R) / S); cj <= Math.floor((cz + R) / S); cj++) {
+      const nx = Math.max(ci * S, Math.min(cx, ci * S + S)), nz = Math.max(cj * S, Math.min(cz, cj * S + S));
+      if (Math.hypot(nx - cx, nz - cz) > R || !this.contains((ci + .5) * S, (cj + .5) * S, 40)) continue;
+      keys.push(`${ci},${cj}`);
     }
-    const fill = (name, list) => {
-      let im = this.blades[name]; const n = list.length / 2;
-      if (n > im.instanceMatrix.count) {
-        const nim = new THREE.InstancedMesh(im.geometry, im.material, Math.ceil(n * 1.3)); nim.name = im.name; nim.frustumCulled = false; nim.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-        this.group.remove(im); im.dispose(); this.group.add(nim); this.blades[name] = im = nim;
-      }
-      const m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), p = new THREE.Vector3(), sc = new THREE.Vector3(), c = new THREE.Color();
-      for (let i = 0; i < n; i++) {
-        const k = list[2 * i], a = list[2 * i + 1];
-        q.setFromAxisAngle(Y, a[k + 3]); p.set(a[k], a[k + 1], a[k + 2]); sc.set(1, a[k + 4], 1);
-        im.setMatrixAt(i, m.compose(p, q, sc)); im.setColorAt(i, c.setScalar(a[k + 5]));
-      }
-      im.count = n; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
-    };
-    fill('near', near); fill('far', far);
-    this.stats.blades = (near.length + far.length) / 2;
+    // (refilled when the set of tiles changes or the camera has gone 4 m: the clumps within GRASS_FADE's far end + 4 m —
+    //  one coming in is still flat in the floor there, so nothing appears)
+    const sig = keys.join('|'), moved = !this._bladeAt || Math.hypot(cx - this._bladeAt.x, cz - this._bladeAt.z) > 4;
+    if (sig === this._bladeSig && !moved) return;
+    this._bladeSig = sig; this._bladeAt = { x: cx, z: cz };
+    const RR = GRASS_FADE[1] + 4;
+    const cells = keys.map((k) => { const [ci, cj] = k.split(',').map(Number); return this._bladeCell(ci, cj); });
+    const pick = [];
+    for (const a of cells) for (let k = 0; k < a.length; k += 6) if (Math.abs(a[k] - cx) < RR && Math.abs(a[k + 2] - cz) < RR && Math.hypot(a[k] - cx, a[k + 2] - cz) < RR) pick.push(a, k);
+    const n = pick.length / 2;
+    let im = this.blades.near;
+    if (n > im.instanceMatrix.count) {
+      const nim = new THREE.InstancedMesh(im.geometry, im.material, Math.ceil(n * 1.3)); nim.name = im.name; nim.frustumCulled = false; nim.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      this.group.remove(im); im.dispose(); this.group.add(nim); this.blades.near = im = nim;
+    }
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), p = new THREE.Vector3(), sc = new THREE.Vector3(), c = new THREE.Color();
+    for (let i = 0; i < n; i++) {
+      const a = pick[2 * i], k = pick[2 * i + 1];
+      q.setFromAxisAngle(Y, a[k + 3]); p.set(a[k], a[k + 1], a[k + 2]); sc.set(1, a[k + 4], 1);
+      im.setMatrixAt(i, m.compose(p, q, sc)); im.setColorAt(i, c.setScalar(a[k + 5]));
+    }
+    im.count = n; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    this.stats.blades = n;
   }
 
   /** The meadow's grass beyond the near clumps (8–30 m from a trail): fins — long picture cards of the tall grass,
