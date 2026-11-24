@@ -232,6 +232,26 @@ const CNY_ROUTES = [
     ],
   },
   {
+    // (user, 24 Nov: loop B "Meadows & Old Growth" through the Camillus Forest Unique Area — tools/cny_forest.py adds
+    //  its trails; starts and ends on Thompson Road so a rider can turn in from another ride. Each waypoint a trail
+    //  junction, in order: up Trail #1 and #6 through the lower woods and along the field edge, the old growth on
+    //  #6 / #5 (the blowdown), down the high meadow on #1, the green tunnel (#2), the north woods (#8, #4), #3 and #2 home)
+    id: 'cny-camillus-forest', name: 'Camillus Forest', tags: ['trail', 'hilly', 'short', 'views'],
+    note: 'From Thompson Road into the Camillus Forest Unique Area: narrow singletrack under the old sugar maples and beeches and through the tall-grass meadows, then back out to Thompson Road',
+    way: [
+      { near: [43.069987, -76.276865] },                                                     // Thompson Road at the Unique Area's lot
+      { near: [43.069439, -76.279092] }, { near: [43.068986, -76.281314] },                 // Trail #1 into the woods
+      { near: [43.064049, -76.291232], prefer: ['Camillus Forest Trail #6'], avoid: ['Camillus Forest Trail #1', 'Camillus Forest Trail #5', 'Camillus Forest Trail #7'] },   // up Trail #6 by the field edge…
+      { near: [43.065602, -76.292232], prefer: ['Camillus Forest Trail #6'], avoid: ['Camillus Forest Trail #7'] },   // …to the old growth
+      { near: [43.068069, -76.291702] }, { near: [43.068604, -76.290797] },                 // Trail #5 through the old growth and the blowdown
+      { near: [43.067644, -76.287783] }, { near: [43.068062, -76.283542] },                 // down the high meadow on #5 and #1
+      { near: [43.070299, -76.283966] },                                                     // the green tunnel (#2)
+      { near: [43.072539, -76.288766] }, { near: [43.072632, -76.280513] },                 // the north woods: #8, #4
+      { near: [43.071169, -76.281091] }, { near: [43.069768, -76.27899] },                  // #3 and #2 across the east meadow
+      { near: [43.069439, -76.279092] }, { near: [43.069987, -76.276865] },                 // #1 back out to Thompson Road
+    ],
+  },
+  {
     id: 'cny-martisco', name: 'Martisco & Nine Mile Creek', tags: ['creek', 'rural', 'short'],
     note: 'From Camillus village down the Nine Mile Creek valley to Martisco, up Bennetts Corners Road and over Ike Dixon Road and Scenic Drive back to the village',
     way: [

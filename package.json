@@ -27,7 +27,7 @@
     "gallery:buildings": "node tools/snap_buildings.mjs",
     "pgh:edit": "echo 'PGH map editor: http://localhost:8000/tools/pgh-editor.html' && python3 -m http.server 8000",
     "pgh:after-edit": "node tools/pgh_after_edit.mjs",
-    "cny:build": "python3 tools/build_pgh.py --city cny && python3 tools/pgh_city.py --city cny && python3 tools/cny_heroes.py && node tools/pgh_routes.mjs --city cny --write && node tools/qc_pgh.mjs routes/cities/cny.json --rides 200",
+    "cny:build": "python3 tools/build_pgh.py --city cny && python3 tools/pgh_city.py --city cny && python3 tools/cny_heroes.py && python3 tools/cny_forest.py && node tools/pgh_routes.mjs --city cny --write && node tools/qc_pgh.mjs routes/cities/cny.json --rides 200",
     "cny:routes": "node tools/pgh_routes.mjs --city cny",
     "skan:build": "python3 tools/build_pgh.py --city skan && python3 tools/pgh_city.py --city skan && node tools/pgh_routes.mjs --city skan --write && node tools/qc_pgh.mjs routes/cities/skan.json --rides 200",
     "skan:routes": "node tools/pgh_routes.mjs --city skan"
