@@ -87,20 +87,24 @@ function buildGeometry(m) {
   return g;
 }
 
+/** The rider's rim light (user, 23 Nov: cheap wins — "rim light on rider"): the sun's colour, set by the world. */
+export const RIDER_RIM = { value: new THREE.Color('#ffcf92') };
 /** Semi-realistic shading: the atlas, baked AO, per-vertex specular. The cartoon look leaves it alone. */
 function riderMaterial(map) {
   const m = new THREE.MeshPhongMaterial({ map, shininess: 36, specular: new THREE.Color(0.3, 0.3, 0.3) });
   m.userData.keepShading = true;
   m.onBeforeCompile = (sh) => {
+    sh.uniforms.uRim = RIDER_RIM;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nattribute vec2 aShade;\nvarying vec2 vShade;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvShade = aShade;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec2 vShade;')
+      .replace('#include <common>', '#include <common>\nvarying vec2 vShade;\nuniform vec3 uRim;')
       .replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.rgb *= vShade.x;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n{ float rim = pow(1. - clamp(dot(normal, normalize(vViewPosition)), 0., 1.), 3.); totalEmissiveRadiance += uRim * rim * .38 * vShade.x; }')
       .replace('#include <specularmap_fragment>', 'float specularStrength = vShade.y;');
   };
-  m.customProgramCacheKey = () => 'bf-rider-2';
+  m.customProgramCacheKey = () => 'bf-rider-3';
   return m;
 }
 

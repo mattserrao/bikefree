@@ -83,13 +83,14 @@ function grow(seed, o, lod, turn, lodScale = 1) {
   // branches are always grown in full — the same random draws whatever the level — and a lower level draws fewer of
   // them (mid: the trunk and main limbs, no twigs) and merges the near model's leaf clusters into fewer, larger cards
   // that cover the same crown. So the outline and the limbs stay put as the tiers swap; only the detail changes.
-  const maxLevel = 3, woodLevel = lod === 0 ? 3 : lod === 1 ? 2 : 1;
+  const maxLevel = o.dead ? 2 : 3, woodLevel = lod === 0 ? 3 : lod === 1 ? 2 : 1;
+  const snapped = o.dead && turn !== 1 ? .55 + rand() * .15 : 1;   // (a snag: its top broken off)
   const queue = [];
   const stems = o.stems || 1;
   for (let s = 0; s < stems; s++) {
     const a = s * 2.4 + rand(), tilt = stems > 1 ? .12 + rand() * .08 : rand() * .04;
     queue.push({ level: 0, p: new THREE.Vector3(stems > 1 ? Math.cos(a) * .45 : 0, 0, stems > 1 ? Math.sin(a) * .45 : 0), d: new THREE.Vector3(Math.cos(a) * Math.sin(tilt), Math.cos(tilt), Math.sin(a) * Math.sin(tilt)),
-      len: H * (o.leader ? .86 : o.fork + .08) * (stems > 1 ? .95 : 1), r: o.trunkR * BEEF * (stems > 1 ? .75 : 1) });
+      len: H * (o.leader ? .86 : o.fork + .08) * (stems > 1 ? .95 : 1) * snapped, r: o.trunkR * BEEF * (stems > 1 ? .75 : 1) });
   }
   const L = o.levels;   // per level (1..3): [children, start (0–1 up the parent), angle (rad from the parent), length ratio]
   while (queue.length) {
@@ -147,6 +148,12 @@ function grow(seed, o, lod, turn, lodScale = 1) {
         clusters.push({ p: pts[i].clone(), size: (lv === maxLevel ? 1 : 1.25) * (.8 + rand() * .4) });
       }
     }
+  }
+  if (o.dead) {
+    // bare: no leaves; the leaning one tipped over ~12° (the base stays put)
+    const g = wood.build();
+    if (turn === 2) g.rotateZ(.21);
+    return lod === 2 ? g : { wood: g, leaves: null };
   }
   // the crown's centre (for spherized normals and depth shading): the clusters' mean
   const cc = new THREE.Vector3(); for (const c of clusters) cc.add(c.p); if (clusters.length) cc.divideScalar(clusters.length); else cc.set(0, crown.y, 0);
@@ -264,6 +271,23 @@ const SPECIES = {
   willow: { H: 15, R: 6.5, fork: .3, trunkR: .5, trunk: '#5b5046', bark: BARK, droop: true, gnarl: .3, up: .04,
     levels: [[5, .7, .8, .45], [4, .3, .7, .28], [3, .3, .5, .16]],
     greens: ['#8aab52', '#7d9c48', '#96b45c'], fall: ['#c2b347'], turn: [0, .15, .35] },
+  // ornamentals for the yards (user, 23 Nov): Japanese maple (small, low and spreading, deep red), flowering crab (a
+  // small round crown on a short trunk, rust and red in fall), a clump of white birches
+  jmaple: { H: 5, R: 3.2, fork: .18, trunkR: .12, trunk: '#4d3f36', bark: BARK, stems: 2, flat: true, gnarl: .35, up: .02,
+    levels: [[5, .3, .95, .42], [3, .3, .7, .22], [3, .35, .6, .12]],
+    greens: ['#7a2a24', '#8a3128', '#6a2420'], fall: ['#b0281c', '#c43a22', '#9e2218'], turn: [.55, .9] },
+  crabapple: { H: 6.5, R: 3.6, fork: .3, trunkR: .16, trunk: '#4a3d33', bark: BARK, gnarl: .4, up: .04, flat: true,
+    levels: [[5, .55, .8, .42], [3, .3, .7, .24], [3, .35, .6, .12]],
+    greens: ['#4e7434', '#57803a', '#4a6c31'], fall: ['#b8562a', '#c9722e', '#a83a22'], turn: [.3, .65] },
+  birchclump: { H: 12, R: 3.2, fork: .5, trunkR: .13, trunk: '#e6e2d6', bark: WHITE, leader: true, stems: 3, gnarl: .18, up: .08,
+    levels: [[4, .45, .7, .26], [3, .3, .6, .16], [3, .4, .55, .09]],
+    greens: ['#6f9a48', '#7ca452', '#668f43'], fall: ['#e2c548', '#d8b13a', '#ecd469'], turn: [.2, .7] },
+  // a dead tree (snag; user, 23 Nov: "interspersed dead trees", ~6%, more visible): a grey, barkless trunk and a few
+  // bare limbs, no leaves. Variants (turn = the variant): 0 broken off at two-thirds, 1 tall with its main limbs,
+  // 2 leaning, its top snapped
+  snag: { H: 19, R: 4, fork: .45, trunkR: .4, trunk: '#8c877c', bark: DEAD, leader: true, gnarl: .35, up: .03, dead: true,
+    levels: [[4, .45, .85, .3], [2, .3, .7, .16], [1, .4, .6, .08]],
+    greens: ['#6e6a60'], fall: ['#6e6a60'], turn: [0, 1, 2] },
 };
 
 /** Eastern white pine: tall, with long horizontal limbs carrying flat, layered sprays; a ragged, often flagged top. */
@@ -353,8 +377,31 @@ function sumac(seed) {
   return b.build();
 }
 function fern(seed) {
-  const rand = randomSequence(seed), b = new Builder(); b.as(SHRUB);
-  for (let k = 0; k < 7; k++) { const a = k * .9 + rand() * .4; b.add(cone(.14, .9, 3), M(Math.cos(a) * .15, .05, Math.sin(a) * .15, 1, 1, .3, -a, 0, 1.05), ['#5f8a3c', '#6c9444', '#a69443'][k % 3], 0, rand); }
+  // (user, 23 Nov: "2D sprite ferns" — photographed into the tree atlas as the rest are): a crown of arching fronds,
+  // each a rachis with paired leaflets tapering to the tip; September greens, a few yellowing, one gone brown
+  const rand = randomSequence(seed), b = new Builder(), Q = new THREE.Quaternion(), S = new THREE.Vector3(.9, 1, .22);
+  const leaf = (p, dir, len, col) => { Q.setFromUnitVectors(Y, dir); b.add(cone(.045, len, 3), new THREE.Matrix4().compose(p, Q, S), col, 0, rand); };
+  b.as(SHRUB);
+  const fronds = 9 + Math.floor(rand() * 5);
+  for (let f = 0; f < fronds; f++) {
+    const a = f * 2.4 + rand() * .5, L = .65 + rand() * .45, up = .55 + rand() * .35, out = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+    const side = new THREE.Vector3(-out.z, 0, out.x), col = rand() < .08 ? '#8a6a3a' : rand() < .2 ? '#a69443' : ['#4f7a34', '#5c8a3c', '#679244'][f % 3];
+    const at = (t) => out.clone().multiplyScalar(L * t + .04).add(new THREE.Vector3(0, up * Math.sin(Math.PI * t * .75) - .1 * t * t, 0));
+    const N = 9;
+    for (let k = 1; k <= N; k++) {
+      const t = k / N, p = at(t), q = at(Math.min(1, t + .08)), d = q.clone().sub(p).normalize();
+      leaf(at(t - 1 / N), at(t).sub(at(t - 1 / N)).normalize(), at(t).distanceTo(at(t - 1 / N)) * 1.05, col);   // (the rachis)
+      const len = .2 * Math.sin(Math.PI * Math.min(1, t * 1.15)) + .03;
+      for (const sg of [-1, 1]) leaf(p, side.clone().multiplyScalar(sg).addScaledVector(d, .35).add(new THREE.Vector3(0, -.15, 0)).normalize(), len, col);
+    }
+  }
+  return b.build();
+}
+function rock(seed, w, h) {
+  // a fieldstone: a lichen-grey boulder half sunk, a moss cap on top
+  const rand = randomSequence(seed), b = new Builder(); b.as(BARK);
+  b.add(blob(1), M(0, h * .35, 0, w, h, w * (.7 + rand() * .3), rand() * 6), ['#8a8a82', '#7d7c74', '#95938a'][Math.floor(rand() * 3)], 0, rand);
+  b.add(blob(1), M(w * .1, h * .8, 0, w * .6, h * .25, w * .5, rand() * 6), '#5f6f3c', 0, rand);
   return b.build();
 }
 
@@ -370,6 +417,11 @@ export function makeUpstateTrees() {
     species.whitepine = { h: 30, r: 5.5, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => whitePine(v, lod))), turn: [0, 0] };
     species.hemlock = { h: 22, r: 4.2, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => hemlock(v, lod))), turn: [0, 0] };
     species.spruce = { h: 20, r: 3.6, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => spruce(v, lod))), turn: [0, 0] };
+    // yard evergreens: Colorado blue spruce (a blue-grey cone) and arborvitae (a narrow dark-green column)
+    species.bluespruce = { h: 10, r: 2.8, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => MOUNTAIN_BUILDERS.conifer(5401 + v, { H: 9 + v * 2, R: 2.8, colors: ['#62818a', '#6d8d94', '#57747c'], trunk: '#4d3b2e',
+      trunkBase: .22, droop: .25, jag: .25, seg: 7, layers: 9, crown: .02, top: 'leader', under: 3 }, lod))), turn: [0, 0] };
+    species.arborvitae = { h: 6, r: 1.1, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => MOUNTAIN_BUILDERS.conifer(5501 + v, { H: 5.5 + v, R: 1.1, colors: ['#3f5f33', '#4a6b3a', '#36552e'], trunk: '#4d3b2e',
+      trunkBase: .1, droop: .05, jag: .15, seg: 6, layers: 8, crown: .3, top: 'leader', under: 2 }, lod))), turn: [0, 0] };
     // every species' near and mid tiers as { wood, leaves } (leaves: the leaf-cluster cards, null for the conifers)
     for (const s of Object.values(species)) for (const t of s.variants) for (const k of [0, 1]) if (t[k].isBufferGeometry) t[k] = { wood: t[k], leaves: null };
     const understory = {
@@ -379,7 +431,8 @@ export function makeUpstateTrees() {
       buckthorn: grow(6111, SHRUBS.buckthorn, 0, .15),      // buckthorn / honeysuckle thicket: stays green late
       goldenrod: MOUNTAIN_BUILDERS.spikes ? MOUNTAIN_BUILDERS.spikes(6121, 9, .9, '#6f8650', '#e2b931', '#d9a92c', .35) : shrubClump(6121, ['#d9b334'], 3, .6, .9),
       sumac: sumac(6131), sumac2: sumac(6132),
-      fern: fern(6141),
+      fern: fern(6141), fern2: fern(6142),
+      rock: rock(6161, .55, .4), rock2: rock(6162, .9, .55),
       sapling: grow(6151, { ...SPECIES.sugarmaple, H: 5, R: 1.6, trunkR: .07 }, 1, .3),
       saplingPine: whitePine(0, 1).scale(.24, .2, .24),
       log: MOUNTAIN_BUILDERS.log(0), stump: MOUNTAIN_BUILDERS.stump(0), stump2: MOUNTAIN_BUILDERS.stump(1),

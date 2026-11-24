@@ -10,6 +10,8 @@ import * as THREE from '../../vendor/three.module.min.js';
 export async function buildGraphHeroes(world, json) {
   const [{ CityScene }, { buildHeroes }, { buildPghLandmarks }, { frameOf, orient }] = await Promise.all([import('./toolbox/city/city.js'), import('./toolbox/city/heroes.js'),
     import('./toolbox/city/pgh-landmarks.js'), import('./toolbox/city/hero-geom.js')]);
+  (await import('./toolbox/city/cny-landmarks.js')).resetCanal();
+  (await import('./toolbox/structures/houses/house-engine.js')).CHIMNEYS.clear();
   const proj = world.proj;
   const host = Object.create(CityScene.prototype);
   host.group = new THREE.Group(); host.group.name = 'PGH landmarks';
@@ -62,6 +64,23 @@ export async function buildGraphHeroes(world, json) {
           const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2));
           const d = Math.hypot(x - ax - dx * t, z - az - dz * t) - (world.wOf ? world.wOf(e) : 7) / 2;
           if (d < best) best = d;
+        }
+      }
+      return best;
+    },
+    /** The height of the nearest trail (a path edge) within r of (x, z), or null: the canal's water keeps under its
+     *  towpath (user, 23 Nov: "Raise the towpath so it sits at its traditional height above the canal"). */
+    pathY: (x, z, r = 30) => {
+      let best = null, bd = r;
+      const gx = Math.floor(x / 20), gz = Math.floor(z / 20), k = Math.ceil(r / 20) + 1;
+      host.landscape.wayDist(x, z, 0);   // (builds the segment grid)
+      for (let a = -k; a <= k; a++) for (let b = -k; b <= k; b++) {
+        const arr = host._segGrid.get(`${gx + a},${gz + b}`); if (!arr) continue;
+        for (let q = 0; q < arr.length; q += 2) {
+          const e = arr[q], i = arr[q + 1]; if (e.kind !== 'path') continue;
+          const ax = e.x[i], az = e.z[i], dx = e.x[i + 1] - ax, dz = e.z[i + 1] - az, l2 = dx * dx + dz * dz || 1;
+          const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), d = Math.hypot(x - ax - dx * t, z - az - dz * t);
+          if (d < bd) { bd = d; best = e.ele[i] + (e.ele[i + 1] - e.ele[i]) * t; }
         }
       }
       return best;

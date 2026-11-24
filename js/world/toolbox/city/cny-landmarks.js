@@ -11,6 +11,7 @@
 //   railbridge   the Finger Lakes Railway over Genesee Street: two steel plate girders on stone abutments
 //   library      the Maxwell Memorial Library: one storey of brick, a gabled entrance
 //   firehouse    the Warners Volunteer Fire Department: the apparatus bays and a hose tower
+import * as THREE from '../../../../vendor/three.module.min.js';
 import { V, centroid, scaleRing, orient, prism, cap, block, frameOf, makeFrame, lathe, gable, faceOut } from './hero-geom.js';
 
 /**
@@ -31,6 +32,8 @@ export function canalAt(x, z, pad = 0) {
   }
   return null;
 }
+/** Forget the last map's canals (a new graph world: CNY and SKAN share this module, in different frames). */
+export function resetCanal() { CANAL.samples.length = 0; CANAL.grid.clear(); }
 function registerCanal(S2, wOf, gap, trailSide, creek = false) {
   for (const p of S2) {
     const q = { x: p.x, z: p.z, y: p.y, nx: p.nx, nz: p.nz, dx: p.dx, dz: p.dz, w1: wOf(p, 1), w2: wOf(p, -1), trail: trailSide, creek };
@@ -85,7 +88,8 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
     return ts;
   };
   const canalBanks = (P, wOf, trailSide) => {
-    const GRASS = '#5f773b', GRASS2 = '#687f41', GRAVEL = '#a99e86', H = .85, gap = GAP;
+    const GRAVEL = '#a99e86', H = .85, gap = GAP;
+    const BANK = ['#5a6c3a', '#64733f', '#6e7745', '#5f6b3d', '#77774a', '#566638'];
     const Q = P.filter((_, i) => i % 2 === 0 || i === P.length - 1);
     for (const sd of [1, -1]) {
       const berm = sd !== trailSide;
@@ -106,9 +110,28 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
       for (let i = 0; i + 1 < Q.length; i++) {
         const a = Q[i], b = Q[i + 1], A = prof[i], B = prof[i + 1], m = Math.min(A.length, B.length);
         for (let k = 0; k + 1 < m; k++) {
-          S.color(berm && k === 2 && A.length > 4 && B.length > 4 ? GRAVEL : (i + k) % 3 ? GRASS : GRASS2);
+          // (user, 23 Nov: "the green embankment … a bit jarring"): no per-strip banding — the grass's tone drifts slowly
+          // along the bank (a low-frequency mix of a few muted autumn greens and straw), the water's-edge face darker and
+          // muddier, the top a little drier
+          const drift = (hsh(Math.floor(i / 7) * 3 + sd) * .6 + hsh(Math.floor(i / 17) * 5 + sd + 1) * .4);
+          const tone = BANK[Math.floor(drift * BANK.length) % BANK.length], next = BANK[(Math.floor(drift * BANK.length) + 1) % BANK.length];
+          const col = new THREE.Color(tone).lerp(new THREE.Color(next), (drift * BANK.length) % 1);
+          if (k === 0) col.lerp(new THREE.Color('#4a4d33'), .55);
+          else if (k === 1) col.lerp(new THREE.Color('#8f8a5c'), .12 + hsh(i * 3 + sd) * .1);
+          S.color(berm && k === 2 && A.length > 4 && B.length > 4 ? GRAVEL : col);
           const pt = (p, o, y) => V(p.x + p.nx * sd * o, y, p.z + p.nz * sd * o);
           faceOut(S, [pt(a, A[k][0], A[k][1]), pt(b, B[k][0], B[k][1]), pt(b, B[k + 1][0], B[k + 1][1]), pt(a, A[k + 1][0], A[k + 1][1])], up0);
+        }
+        // tufts of longer grass and the odd straw-coloured clump along the bank's top edge (breaks its clean line)
+        if (A.length > 2 && hsh(i * 11 + sd * 3) < .55) {
+          const o = A[1][0] + (hsh(i * 5 + sd) - .5) * .5, y = A[1][1], cx = a.x + a.nx * sd * o, cz = a.z + a.nz * sd * o;
+          const tc = hsh(i * 7 + sd) < .3 ? '#9a9260' : hsh(i * 9 + sd) < .5 ? '#6f7a44' : '#5e6c3a';
+          S.color(tc);
+          for (let q = 0; q < 5; q++) {
+            const an = q * 1.3 + hsh(i + q) * 2, len = .35 + hsh(i * 3 + q) * .4, bx = cx + Math.cos(an) * .12, bz = cz + Math.sin(an) * .12;
+            S.triangle(V(bx - .04, y - .02, bz), V(bx + .04, y - .02, bz), V(bx + Math.cos(an) * .18, y + len, bz + Math.sin(an) * .18));
+            S.triangle(V(bx + .04, y - .02, bz), V(bx - .04, y - .02, bz), V(bx + Math.cos(an) * .18, y + len, bz + Math.sin(an) * .18));
+          }
         }
         // a bench on the berm every ~300 m, facing the water
         if (berm && A.length > 4 && B.length > 4 && hsh(i * 13 + 5) < .028) {
@@ -122,13 +145,41 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
     for (let i = 0; i < P.length; i += 3) {
       if (hsh(i * 7 + 1) > .22) continue;
       const p = P[i], sd = hsh(i) < .5 ? 1 : -1, w = wOf(p, sd), n = 4 + Math.floor(hsh(i + 9) * 6);
-      S.color(hsh(i + 2) < .5 ? '#3e5f2b' : '#466a30');
+      S.color(hsh(i + 2) < .5 ? '#34482a' : '#3b5030');
       for (let k = 0; k < n; k++) {
         const o = w - .6 - hsh(i * 3 + k) * 2.2, al = (hsh(i * 5 + k) - .5) * 5;
-        S.cylinder(p.x + p.nx * sd * o + p.dx * al, p.y + .01, p.z + p.nz * sd * o + p.dz * al, .35 + hsh(k + i) * .35, .03, 6);
+        S.cylinder(p.x + p.nx * sd * o + p.dx * al, p.y + .01, p.z + p.nz * sd * o + p.dz * al, .16 + hsh(k + i) * .16, .015, 9);   // (smaller, rounder: the big hexagons read as slabs)
       }
       if (hsh(i + 4) < .3) { S.color('#efe6d8'); S.cylinder(p.x + p.nx * sd * (w - 1.2), p.y + .03, p.z + p.nz * sd * (w - 1.2), .09, .08, 5, .03); }   // a flower
     }
+  };
+  const nearestOn = (l, S2) => { const q = local(l.center[0], l.center[1]); let d = 1e9; for (const p of S2) d = Math.min(d, Math.hypot(p.x - q.x, p.z - q.z)); return d; };
+  const mooredBoat = (l, S2, wOf) => {
+    const q = local(l.center[0], l.center[1]);
+    let bi = -1, bd = 30; S2.forEach((p, i) => { const d = Math.hypot(p.x - q.x, p.z - q.z); if (d < bd) { bd = d; bi = i; } });
+    if (bi < 0) return false;
+    const p0 = S2[bi], sd = ((q.x - p0.x) * p0.nx + (q.z - p0.z) * p0.nz) >= 0 ? 1 : -1;
+    // just past the dock along the canal (the dock 3 m wide, the hull 18 m), the way with more channel
+    const at = (i) => S2[Math.max(0, Math.min(S2.length - 1, i))], HALF = 9, BEAM = 2.1, CLEAR = 1.4;
+    const room = (c) => { let w = 1e9; for (let k = -3; k <= 3; k++) w = Math.min(w, wOf(at(c + k), sd)); return w; };
+    const ci = [3, -3, 4, -4, 2, -2].map((k) => bi + k).filter((i) => i > 2 && i < S2.length - 3).sort((a, b) => room(b) - room(a))[0] ?? bi;
+    const p = S2[ci], a = S2[Math.max(0, ci - 2)], b = S2[Math.min(S2.length - 1, ci + 2)];
+    const ul = Math.hypot(b.x - a.x, b.z - a.z) || 1, u = { x: (b.x - a.x) / ul, z: (b.z - a.z) / ul };
+    // across: against the bank on the dock's side, the far side kept in the water too (each sample along the hull)
+    let o = 1e9, lo = -1e9;
+    for (let k = -3; k <= 3; k++) { const s = at(ci + k); o = Math.min(o, wOf(s, sd) - BEAM - CLEAR); lo = Math.max(lo, -wOf(s, -sd) + BEAM + CLEAR); }
+    if (o < lo) o = (o + lo) / 2;
+    const c = { x: p.x + p.nx * sd * o, z: p.z + p.nz * sd * o }, g = p.y - .32;   // (the waterline .4 m up the hull: a little under the deck's red band)
+    const F = makeFrame(c, u, undefined, HALF, BEAM);
+    const hull = [F.at(-9, -1.6), F.at(7.5, -2.1), F.at(9, 0), F.at(7.5, 2.1), F.at(-9, 1.6)];
+    S.color('#2f4a3a'); block(S, hull, g - .5, g + .7);
+    S.color('#b33a2e'); prism(S, scaleRing(hull, 1.01, c), g + .45, g + .7);
+    S.color(TRIM); block(S, F.rect(-6.5, 4.5, -1.5, 1.5), g + .7, g + 2.6);
+    S.color('#2c3238'); for (let k = 0; k < 6; k++) for (const s of [-1, 1]) { const w = F.at(-5.8 + k * 1.8, s * 1.52); S.box(w.x, g + 1.5, w.z, .06, .7, 1.1, F.yawU); }
+    S.color('#6b2f28'); block(S, F.rect(-6.8, 4.8, -1.75, 1.75), g + 2.6, g + 2.8);
+    // two mooring lines to the bank
+    S.color('#d8cfb8'); for (const e of [-7, 6]) { const h = F.at(e, sd * 0), bk = { x: h.x + p.nx * sd * (wOf(p, sd) - o + .6), z: h.z + p.nz * sd * (wOf(p, sd) - o + .6) }; S.beam(V(h.x + p.nx * sd * BEAM, g + .7, h.z + p.nz * sd * BEAM), V(bk.x, p.y + .75, bk.z), .03, .03); }
+    return true;
   };
   const up0 = V(0, 1, 0);
   return {
@@ -169,7 +220,8 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
       // the water: a creek blue-brown; the canal still and green with duckweed (user, 22 Nov: "green duckweed - no
       // reflections, keep render cost low"): flat quads in a few greens, patchy
       // (user, 22 Nov: "too green. A murky blue green black would appear better"): dark murky greens, a little scum
-      const MURK = ['#25342f', '#2a3933', '#212f2a', '#2e3c34', '#27362f'];
+      // (user, 23 Nov: "Water in the canal should be an inky blue / black. The green was too much")
+      const MURK = ['#121c2e', '#142033', '#101827', '#162236', '#131d30'];
       const up = V(0, 1, 0), wOf = (p, sd = 1) => p.ws?.[sd] ?? p.w ?? hw;
       const trailSide = l.creek ? 1 : canalSides(S2, hw);
       // the level over the water's real width (widened toward the towpath, where the ground rises to the trail's fill:
@@ -177,9 +229,12 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
       if (!l.creek) {
         for (const p of S2) if (p.ws) for (const sd of [1, -1]) { const o = wOf(p, sd) - .4; p.y = Math.max(p.y, L.heightAt(p.x + p.nx * sd * o, p.z + p.nz * sd * o) + .08); }
         for (let pass = 0; pass < 2; pass++) for (let i = 1; i + 1 < S2.length; i++) if (S2[i].ws) S2[i].y = Math.max(S2[i].y - .2, (S2[i - 1].y + S2[i].y * 2 + S2[i + 1].y) / 4);
+        // the water keeps its towpath's height below it (traditionally about a metre; tools/towpath_lift.mjs raised the
+        // towpath where the ground had it under the canal): the trail's fill no longer lifts the water to the trail
+        if (L.pathY) for (const p of S2) { if (!p.ws) continue; const o = wOf(p, trailSide) + 4, ty = L.pathY(p.x + p.nx * trailSide * o, p.z + p.nz * trailSide * o, 14); if (ty != null) p.y = Math.min(p.y, ty - .9); }
       }
       // a creek's water: the world's water material when there is one (its ripples and glints: the "water" effect)
-      const WB = l.creek && Wa ? Wa : S;
+      const WB = l.creek && Wa ? Wa : S;   // (the canal stays its own inky still water: the water material read sky-blue on it)
       if (l.creek) WB.color('#4b6f6c');
       for (let i = 0; i + 1 < S2.length; i++) {
         const a = S2[i], b = S2[i + 1], wa = wOf(a, 1), wb = wOf(b, 1), va = wOf(a, -1), vb = wOf(b, -1);
@@ -189,7 +244,7 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
       }
       // open dark water along the edges, where the duckweed thins
       if (!l.creek) {
-        S.color('#151d1a');
+        S.color('#0a0f19');
         for (let i = 0; i + 1 < S2.length; i++) {
           const a = S2[i], b = S2[i + 1];
           for (const sd of [1, -1]) {
@@ -200,6 +255,8 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
         }
         canalBanks(S2, wOf, trailSide);
         registerCanal(S2, wOf, GAP, trailSide);   // (the channel, for the planters)
+        (shared.canals ||= []).push([S2, wOf]);
+        if (shared.boats) shared.boats = shared.boats.filter((b) => !mooredBoat(b, S2, wOf));   // (the tour boat, on its canal)
         // the docks (OSM's pier and canoe launches on the canal — Camillus Erie Canal Park by Sims' Store, the aqueduct,
         // Munro Park and the launches east): a plank dock out from the bank, posts, a ladder, a bench at the root;
         // people fishing off them (graph-life's locals; user, 23 Nov: "locations where people should be fishing from")
@@ -304,7 +361,7 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
       for (const b of [t0 - .35, t1]) { S.color('#7a5c3e'); block(S, F.rect(-hl - .5, hl + .5, b, b + .35), deck + .3, yW + .55); }
       // the posts along the trunk's walls (the restored timber frame)
       S.color('#5d4630'); for (let x = -hl; x <= hl; x += 2.4) for (const b of [t0 - .45, t1 + .35]) S.box(F.at(x, b).x, deck, F.at(x, b).z, .3, yW + .75 - deck, .3, F.yawU);
-      S.color('#27362f'); prism(S, F.rect(-hl - .5, hl + .5, t0, t1), yW - .02, yW); cap(S, F.rect(-hl - .5, hl + .5, t0, t1), yW);   // (murky, as the canal)
+      S.color('#131b25'); prism(S, F.rect(-hl - .5, hl + .5, t0, t1), yW - .02, yW); cap(S, F.rect(-hl - .5, hl + .5, t0, t1), yW);   // (murky, as the canal)
       { const m = (t0 + t1) / 2; shared.aq = { ends: [F.at(-hl - .5, m), F.at(hl + .5, m)], y: yW, w: t1 - t0 }; }
       // the towpath: gravel on the stone (where the world draws no trail deck), a wooden rail on its outer edge
       if (!tow) { S.color('#b9ad94'); block(S, F.rect(-hl - 1, hl + 1, -hw, t0 - .35), deck, deck + .35); }
@@ -383,15 +440,12 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
       S.color('#5b5f5c'); block(S, Fp.rect(-fl / 2 - .7, fl / 2 + .7, -.1, 2.7), g + 3.3, g + 3.5);
     },
 
+    // the tour boat at the park's dock: moored in the canal's water (user, 23 Nov: "ensure the riverboat on the canal
+    // doesn't clip into land") — set on the canal's samples once its ribbon is built (before or after the canals, whichever
+    // are built first): along the channel, against the dock's bank just past the dock, its hull inside the water's edge all along
     canalboat(l) {
-      const c = local(l.center[0], l.center[1]), g = L.heightAt(c.x, c.z), deg = l.axisDeg ?? 312, r = deg * Math.PI / 180;
-      const F = makeFrame(c, { x: Math.sin(r), z: -Math.cos(r) }, undefined, 9, 2.1);
-      const hull = [F.at(-9, -1.6), F.at(7.5, -2.1), F.at(9, 0), F.at(7.5, 2.1), F.at(-9, 1.6)];
-      S.color('#2f4a3a'); block(S, hull, g - .5, g + .7);
-      S.color('#b33a2e'); prism(S, scaleRing(hull, 1.01, c), g + .45, g + .7);
-      S.color(TRIM); block(S, F.rect(-6.5, 4.5, -1.5, 1.5), g + .7, g + 2.6);
-      S.color('#2c3238'); for (let k = 0; k < 6; k++) for (const s of [-1, 1]) { const q = F.at(-5.8 + k * 1.8, s * 1.52); S.box(q.x, g + 1.5, q.z, .06, .7, 1.1, F.yawU); }
-      S.color('#6b2f28'); block(S, F.rect(-6.8, 4.8, -1.75, 1.75), g + 2.6, g + 2.8);
+      const best = (shared.canals || []).map((C) => [nearestOn(l, C[0]), C]).sort((a, b) => a[0] - b[0])[0];
+      if (!best || !mooredBoat(l, best[1][0], best[1][1])) (shared.boats ||= []).push(l);
     },
 
     railbridge(l) {

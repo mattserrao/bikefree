@@ -14,9 +14,12 @@
 import * as THREE from '../../vendor/three.module.min.js';
 import { makeProjection } from './geo.js';
 import { decodeTerrain } from './toolbox/landscape/real-terrain.js';
+import { CANAL, canalAt } from './toolbox/city/cny-landmarks.js';
 import { loadTerrainGrid } from '../terrain-grid.js';
 import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean, ROAD_LIFT } from './pose.js';
-import { loadRider } from './rider.js';
+import { loadRider, RIDER_RIM } from './rider.js';
+/** The clouds' clock (their shadows drifting over the ground and the roads; puddles' glints): seconds. */
+const CLOUD_T = { value: 0 };
 import { PerfMonitor } from './perf.js';
 import { BakedLighting } from './toolbox/atmosphere/baked-light.js';
 import { ShaderWarmer } from './toolbox/core/shader-warm.js';
@@ -38,6 +41,7 @@ const BED_BELOW = 1.2;              // ground this close above the pool (or unde
 // the drawing buffer's pixel ratio by quality: with 4× MSAA on, 1.5 on a 2× (Retina) screen looks all but the same as 2
 // and shades 44% fewer pixels — the anti-aliasing review (23 Nov): edges are the multisample's job, not resolution's
 const PIXEL_RATIO = { low: 1, balanced: 1.5, high: 2 };
+const SPILL_IN = 350, SPILL_OUT = 550;   // the ways' spill strips: built within, dropped past (m from a tile's edge)
 const KERB = 0.35;                  // the ground's top this far under the road beside it…
 const SHELF = 13;                   // …for this far beyond its edge (a ground cell: no triangle reaches over the road)…
 const CUT_EASE = 0.75;              // …then back up at this slope (m per m)
@@ -70,7 +74,7 @@ const TIMES = {
 
 // CNY, SKAN's golden hour (fixed, baked): the sun a little higher than the generic golden (16°, not 8°) so it still
 // lights the fields and its baked shadows read, stronger and warmer against a softer sky light; long shadows to the ENE
-const GOLDEN_UPSTATE = { label: 'Golden hour', elev: 16, az: 250, sky: '#a3b6d6', fog: '#efd3b0', hemiSky: '#ffe8cf', hemiGround: '#7d725e', sun: '#ffcf92', sunI: 2.7, hemiI: 1.12, exposure: 1.14 };
+const GOLDEN_UPSTATE = { label: 'Golden hour', elev: 16, az: 250, sky: '#a3b6d6', fog: '#cfd3d4', hemiSky: '#ffe8cf', hemiGround: '#7d725e', sun: '#ffcf92', sunI: 2.7, hemiI: 1.12, exposure: 1.14 };
 
 const _v = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
 
@@ -253,6 +257,7 @@ export class GraphWorld {
       paint: this.rural ? wornPaintMaterial() : new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
       ground: groundMaterial(this.qualityKey === 'low', this.rural),
       roadSurface: roadSurfaceMaterial(this.qualityKey === 'low', this.rural),
+      spill: roadSurfaceMaterial(this.qualityKey === 'low', this.rural, true),
       water: new THREE.MeshLambertMaterial({ color: '#4f7f97', transparent: true, opacity: 0.92 }),
       // the dressed places and the river walls: textured from world position (toolbox/materials)
       park: Object.fromEntries(['lawn', 'plaza', 'granite', 'walk', 'garden', 'wood', 'scrub', 'fairway', 'green', 'sand'].map((k) => [k, makeParkMaterial(k)])),
@@ -310,7 +315,7 @@ export class GraphWorld {
           this._heroesState = 'loading';
           fetch(new URL(`../../${this.json.heroes}`, import.meta.url)).then((r) => r.json())
             .then((hj) => import('./graph-heroes.js').then(({ buildGraphHeroes }) => buildGraphHeroes(this, hj)))
-            .then((h) => { if (this.disposed) { h.dispose(); return; } this.heroes = h; this.scene.add(h.group); h.setNight(this.timeKey === 'night' ? 1 : 0); this._heroesState = 'ok'; this._loadBridges(); this._loadCity(); })
+            .then((h) => { if (this.disposed) { h.dispose(); return; } this.heroes = h; this.scene.add(h.group); h.setNight(this.timeKey === 'night' ? 1 : 0); this._heroesState = 'ok'; this._cutCanal(); this._loadBridges(); this._loadCity(); })
             .catch((err) => { this._heroesState = 'failed'; this.log('3d', `PGH landmarks: ${err.message} ${(err.stack || '').split('\n').slice(0, 4).join(' | ')}`, 'error'); });
         }
         for (const t of this.tiles.values()) if (t.built && !t.groundMesh) t.needsGround = true;
@@ -356,8 +361,33 @@ export class GraphWorld {
   setQuality(key) {
     this.qualityKey = key || 'balanced';
     this._reach();
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[this.qualityKey] ?? 1.5));
+    this._pixelRatio();
+    if (this.city && this.gfx) this.city.setGfx(this.gfx);
+  }
+  _pixelRatio() {
+    const scale = this._saving ? .75 : 1;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[this.qualityKey] ?? 1.5) * scale);
     this._resize();
+  }
+  /**
+   * The graphics menu's finer settings (user, 23 Nov: "additional graphic settings specially for laptops"):
+   *   fps       a frame-rate cap: 0 (none), 60 or 30
+   *   battery   'off' | 'on' | 'auto' (on while unplugged, where the browser says): 30 fps and 75 % resolution
+   *   distance  how far the scenery's built, × (0.7 near, 1 normal, 1.3 far)
+   *   trees     how many trees new tiles plant, × (0.6, 1, 1.4)
+   *   shadows   the live shadows of moving things (the scenery's are baked)
+   *   atmosphere  sun beams, mist, leaves, motes;  verge  roadside grass and brush;  life  people, parked cars, animals
+   */
+  setGfx(g = {}) {
+    this.gfx = { fps: 0, battery: 'off', distance: 1, trees: 1, shadows: true, atmosphere: true, verge: true, life: true, ...g };
+    this._reach();
+    if (this.baked) this.sun.castShadow = this.gfx.shadows && !!this.baked.world.terrain.quality.shadows; else { this._sunCasts ??= this.sun.castShadow; this.sun.castShadow = this.gfx.shadows && this._sunCasts; }
+    this.effects?.set?.('atmosphere', this.gfx.atmosphere);
+    this.city?.setGfx(this.gfx);
+    const apply = (saving) => { if (saving !== this._saving) { this._saving = saving; this._pixelRatio(); } };
+    if (this.gfx.battery === 'auto' && globalThis.navigator?.getBattery) {
+      navigator.getBattery().then((b) => { const f = () => apply(this.gfx.battery === 'auto' && !b.charging); f(); if (!this._batteryHooked) { this._batteryHooked = true; b.addEventListener('chargingchange', f); } }).catch(() => apply(false));
+    } else apply(this.gfx.battery === 'on');
   }
   setCamera(key) { this.camKey = CAMERAS[key] ? key : DEFAULT_CAMERA; this._camInit = false; }
   setTimeOfDay(key) {
@@ -370,10 +400,11 @@ export class GraphWorld {
     this.sun.color.set(t.sun); this.sun.intensity = t.sunI;
     this.hemi.color.set(t.hemiSky); this.hemi.groundColor.set(t.hemiGround); this.hemi.intensity = t.hemiI;
     this.renderer.toneMappingExposure = t.exposure;
+    RIDER_RIM.value.set(t.sun).multiplyScalar(t.night ? .08 : 1);
     this.scene.background = new THREE.Color(t.sky);
     this.scene.fog.color.set(t.fog);
     this.heroes?.setNight(t.night ? 1 : 0);
-    if (this.baked) { this.baked.setLight(t); this.sun.castShadow = !!this.baked.world.terrain.quality.shadows; }
+    if (this.baked) { this.baked.setLight(t); this.sun.castShadow = (this.gfx?.shadows ?? true) && !!this.baked.world.terrain.quality.shadows; }
   }
 
   start() {
@@ -456,6 +487,10 @@ export class GraphWorld {
   _frame(now) {
     if (!this.running) return;
     this._raf = requestAnimationFrame(this._frame);
+    // a frame-rate cap (the graphics menu; battery saver: 30): skip the display's frames between ours
+    const cap = this._saving ? 30 : this.gfx?.fps || 0;
+    if (cap && now - (this._lastDraw || 0) < 1000 / cap - 2) return;
+    this._lastDraw = now;
     this._frames = (this._frames || 0) + 1;
     this.perf?.begin(now);
     const dt = Math.min(1.0, (now - this._last) / 1000);
@@ -470,6 +505,7 @@ export class GraphWorld {
       this._place(this.p, RIDER_LANE, out);
     }
     this.crank += ((src.cadence || 0) / 60) * Math.PI * 2 * dt;
+    CLOUD_T.value = now / 1000;
     this.heroes?.tick(now / 1000, dt);
     this.effects.tick(now / 1000, dt);
     this.city?.tick(this.camera.position, now / 1000, this.path ? out : null, dt);
@@ -550,7 +586,25 @@ export class GraphWorld {
       } else if (sh.s < 0) h = Math.min(h, pool - 2.5);
       else h = bankProfile(sh.s, sh.top, sh.pool + WATER_ABOVE, sh.pool) - 0.15;
     } else if (h < pool + BED_BELOW) h = Math.min(h, pool - 2.5);
+    // under the canal (CNY, once its water is built): the ground cut down below the water, so the coarse grid's
+    // triangles — and the raised towpath's fill — never show through it as green streaks (user, 23 Nov)
+    // (the grid's 12.8 m triangles span the water's edge: the ground rises from under the water gently — 12 cm a metre
+    // out to 14 m past the edge — so no triangle from a bank vertex reaches up through the water)
+    if (this._canalCut) { const c = canalAt(x, z, 14); if (c && !c.creek) { const o = (x - c.x) * c.nx + (z - c.z) * c.nz, s = Math.max(0, o > 0 ? o - c.w1 : -o - c.w2); h = Math.min(h, c.y - .45 + s * .12); } }
     return Math.min(h, this.cut.cap(x, z));
+  }
+  /** The canal's built (the landmarks): cut the ground under it, and again in the tiles already built. */
+  _cutCanal() {
+    if (!CANAL.samples.some((p) => !p.creek)) return;
+    this._canalCut = true;
+    for (const t of this.tiles.values()) {
+      const m = t.groundMesh; if (!m || !t.gridH) continue;
+      const near = CANAL.samples.some((p) => !p.creek && p.x > t.i * TILE - 40 && p.x < (t.i + 1) * TILE + 40 && p.z > t.j * TILE - 40 && p.z < (t.j + 1) * TILE + 40);
+      if (!near) continue;
+      const P = m.geometry.attributes.position;
+      for (let k = 0; k < P.count; k++) { const y = this._groundH(P.getX(k), P.getZ(k)); P.setY(k, y); t.gridH[k] = y; }
+      P.needsUpdate = true; m.geometry.computeVertexNormals(); m.geometry.computeBoundingSphere();
+    }
   }
 
   _updateCamera(riderPos, flat, fwd, dt) {
@@ -670,8 +724,11 @@ export class GraphWorld {
   /** How far the tiles are built and the fog closes in, by quality (Low: phones). */
   _reach() {
     const low = this.qualityKey === 'low';
-    this.nearM = low ? REACH_LOW.near : NEAR_M; this.farM = low ? REACH_LOW.far : FAR_M;
-    if (this.scene?.fog) { this.scene.fog.near = low ? 700 : 900; this.scene.fog.far = this.nearM + 200; }
+    const k = this.gfx?.distance || 1;
+    const mobile = (() => { try { const ua = navigator.userAgent || ''; return /iPhone|iPad|iPod|Android|Mobile/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1); } catch { return false; } })();
+    const lowReach = low || mobile;   // (phones and tablets: Light's reach at any quality — memory, user 23 Nov)
+    this.nearM = (lowReach ? REACH_LOW.near : NEAR_M) * k; this.farM = (lowReach ? REACH_LOW.far : FAR_M) * k;
+    if (this.scene?.fog) { this.scene.fog.near = lowReach ? 700 : 900; this.scene.fog.far = this.nearM + 200; }
   }
 
   /** PGH's city (js/world/graph-city.js, tools/pgh_city.py): buildings, trees, furniture, the land cover and what each
@@ -684,6 +741,7 @@ export class GraphWorld {
         if (this.disposed) return;
         const c = new GraphCity(this, this.heroes, cj);
         this.city = c;
+        if (this.gfx) c.setGfx(this.gfx);
         this._classify(c);
         this.cut = roadHash(this.G.edges, this.wOf);
         this._nodeWidths();
@@ -773,6 +831,21 @@ export class GraphWorld {
       if (runSlice(this._tjob.gen, left).done) this._tjob = null; else break;
     }
     this._queued = want.reduce((n, q) => n + (todo(q.t) ? 1 : 0), 0);
+    // the ways' spill (_spillJob): only near the camera — within SPILL_IN of a tile's edge, dropped past SPILL_OUT
+    // (it's a fine detail; built for every tile out to 2.3 km it was ~34 MB on High)
+    while (performance.now() - t0 < budgetMs) {
+      if (!this._sjob) {
+        let best = null, bd = SPILL_IN;
+        for (const t of this.tiles.values()) if (t.spillPending && t.groundMesh) { const d = Math.hypot(t.cx - cx, t.cz - cz) - TILE * .71; if (d < bd) { bd = d; best = t; } }
+        if (!best) break;
+        best.spillPending = false; this._sjob = { t: best, gen: this._spillJob(best) };
+      }
+      if (runSlice(this._sjob.gen, budgetMs - (performance.now() - t0)).done) this._sjob = null; else break;
+    }
+    if (this._frames % 30 === 15) for (const t of this.tiles.values()) if (t.spillMesh && t !== this._sjob?.t && Math.hypot(t.cx - cx, t.cz - cz) - TILE * .71 > SPILL_OUT) {
+      t.spillMesh.geometry.dispose(); t.spillMesh = null; t.spillPending = true; this._spillDirty = true;
+    }
+    if (this._spillDirty && !this._sjob && this._frames % 20 === 0) this._mergeSpill();
     // release far tiles (a few a frame)
     if (this._frames % 30 === 0) for (const t of this.tiles.values()) {
       if (t.built && t !== this._tjob?.t && Math.hypot(t.cx - cx, t.cz - cz) > (this.farM || FAR_M)) this._release(t);
@@ -786,8 +859,10 @@ export class GraphWorld {
 
   _release(t) {
     if (this._tjob?.t === t) this._tjob = null;   // (a tile released while building: started again when it's wanted)
-    for (const m of [t.roadMesh, t.paintMesh, t.groundMesh, t.bankMesh, ...(t.extra || []), ...(t.extraRoad || [])]) if (m) { this.group.remove(m); m.geometry.dispose(); }
-    t.roadMesh = t.paintMesh = t.groundMesh = t.bankMesh = null; t.extra = []; t.extraRoad = [];
+    if (this._sjob?.t === t) this._sjob = null;
+    if (t.spillMesh) this._spillDirty = true;
+    for (const m of [t.roadMesh, t.paintMesh, t.groundMesh, t.bankMesh, t.spillMesh, ...(t.extra || []), ...(t.extraRoad || [])]) if (m) { this.group.remove(m); m.geometry.dispose(); }
+    t.roadMesh = t.paintMesh = t.groundMesh = t.bankMesh = t.spillMesh = null; t.spillPending = false; t.extra = []; t.extraRoad = [];
     t.built = false;
   }
 
@@ -831,7 +906,7 @@ export class GraphWorld {
   _buildRoads(t) { drain(this._roadsJob(t)); }
   /** A tile's roads as a job: pauses between ways when its slice is used up (no stall on a phone). */
   *_roadsJob(t) {
-    t.built = true;
+    t.built = true; t.spills = []; t.endSpills = [];
     if (!t.pieces.length && !t.nodes.length) return;
     const R = new Mesher(true), P = new Mesher(), W = new Mesher(), P_ = P;
     const col = (k) => new THREE.Color(COLORS[k] || COLORS.residential);
@@ -873,6 +948,12 @@ export class GraphWorld {
         const uv = (c, x) => [ext[k], x, c.s, half];
         R.quadX(L[k], Rt[k], Rt[k + 1], L[k + 1], cols[k], [uv(C[k], -half), uv(C[k], half), uv(C[k + 1], half), uv(C[k + 1], -half)]);
       }
+      // a trail's gravel or dirt carried out onto the road where it meets one (its end at a junction's mouth)
+      if (this.rural) for (const [end, trimmed] of [[0, f0 > a], [n - 1, f1 < b]]) {
+        const sf = ext[end]; if (!trimmed || (sf !== 5 && sf !== 6)) continue;
+        const c = C[end], dir = end ? 1 : -1;
+        t.endSpills.push({ x: c.x, y: c.y + lift, z: c.z, dx: c.dx * dir, dz: c.dz * dir, half, surf: sf, s: c.s });
+      }
       // the sides: a deck's slab and parapets; on the ground a curb and sidewalk, or a shoulder down to the ground
       for (let k = 0; k + 1 < n; k++) {
         const c0 = C[k], c1 = C[k + 1], i0 = Math.floor(c0.i), i1 = Math.min(e.n, Math.ceil(c1.i));
@@ -894,11 +975,27 @@ export class GraphWorld {
           }
           // a shoulder: a gravel edge on a trail, then the verge sloping down to the ground, then a short face
           const band = path ? 0.35 : 0.2;
+          if (ext[k] === 5 || ext[k] === 6) {
+            // a gravel or dirt way (the towpath): its shoulder in the path's own surface — the same stone dust and
+            // tone running down the side, not a green verge (user, 23 Nov: "the side of the towpath should carry the
+            // same color and texture of the path")
+            const ring = (d, dy) => [out(p0, o0, d, dy), out(p1, o1, d, dy)], x = (d) => -sgn * (half + d);
+            const uvs = (d) => [[ext[k], x(d), c0.s, half], [ext[k], x(d), c1.s, half]];
+            for (const [d0, y0, d1, y1] of [[0, -0.01, band, -0.06], [band, -0.06, 1.6, -0.9]]) {
+              const [i0, i1] = ring(d0, y0), [e0, e1] = ring(d1, y1), [u0, u1] = uvs(d0), [v0, v1] = uvs(d1);
+              if (sgn > 0) R.quadX(e0, i0, i1, e1, cols[k], [v0, u0, u1, v1]);
+              else R.quadX(i0, e0, e1, i1, cols[k], [u0, v0, v1, u1]);
+            }
+          } else {
           W.quad(out(p0, o0, 0, -0.01), out(p1, o1, 0, -0.01), out(p1, o1, band, -0.06), out(p0, o0, band, -0.06), path ? gravelC : verge, !flip);
           W.quad(out(p0, o0, band, -0.06), out(p1, o1, band, -0.06), out(p1, o1, 1.6, -0.9), out(p0, o0, 1.6, -0.9), verge, !flip);
+          }
           // on an embankment, the slope runs on down (1 : 1.5) to meet the ground, then a short face below it
           const toe = (p, o) => { const q = out(p, o, 1.6, -0.9), gy = this.ground ? this._groundH(q[0], q[2]) : q[1] - 2; const drop = Math.max(0, q[1] - 0.2 - gy); const d = Math.min(9, drop * 1.5); return [out(p, o, 1.6 + d, -0.9 - d / 1.5), gy]; };
           const [ta, ga] = toe(p0, o0), [tb, gb] = toe(p1, o1);
+          // the spill beyond the shoulder's foot (user, 23 Nov: "texture blending … gravel dust blowing onto a road"):
+          // drawn with the tile's ground (_spillJob), draped on it
+          if (this.rural) t.spills.push({ a: ta, b: tb, o0, o1, s0: c0.s, s1: c1.s, half, sgn, surf: ext[k] === 5 || ext[k] === 6 ? ext[k] : 5 });
           W.quad(out(p0, o0, 1.6, -0.9), out(p1, o1, 1.6, -0.9), tb, ta, verge, !flip);
           W.quad(ta, tb, [tb[0], Math.min(tb[1], gb) - 1.5, tb[2]], [ta[0], Math.min(ta[1], ga) - 1.5, ta[2]], verge, flip);
           W.wall(p0, p1, -0.6, -0.01, side, flip);
@@ -1020,8 +1117,59 @@ export class GraphWorld {
     g.computeVertexNormals();
     t.groundMesh = new THREE.Mesh(g, this.mats.ground);
     this.group.add(t.groundMesh);
+    t.spillPending = !!(t.spills?.length || t.endSpills?.length);   // (built when the camera comes near: _stream)
     yield* this._bankJob(t);
     yield* this.effects.tileJob(t);
+  }
+
+  /**
+   * The blend where a way's surface meets the ground (user, 23 Nov: "where two textures meet … a zone where the two
+   * blend together"): a strip 1.5 m out from each shoulder's foot, draped on the ground, in the way's own surface
+   * (a trail's gravel or dirt; a road's shoulder gravel) — the shader thins it to scattered grains, its width and
+   * strength wandering along the edge (aRd.x + 20: the spill; across past half + 3 m: how far out).
+   */
+  *_spillJob(t) {
+    if (!t.spills?.length && !t.endSpills?.length) return;
+    const R = new Mesher(true), white = new THREE.Color(1, 1, 1), STEPS = 3, OUT = 1.5;
+    for (let i = 0; i < (t.spills || []).length; i++) {
+      if ((i & 63) === 0 && due()) yield;
+      const S = t.spills[i], pt = (p, o, f) => { const x = p[0] + o[0] * OUT * f, z = p[2] + o[1] * OUT * f; return [x, Math.max(this.surfaceH(x, z), p[1] - .3) + .03, z]; };
+      const rd = (s, f) => [S.surf + 20, -S.sgn * (S.half + 3 + f * OUT), s, S.half];
+      for (let j = 0; j < STEPS; j++) {
+        const f0 = j / STEPS, f1 = (j + 1) / STEPS;
+        const a0 = pt(S.a, S.o0, f0), b0 = pt(S.b, S.o1, f0), a1 = pt(S.a, S.o0, f1), b1 = pt(S.b, S.o1, f1);
+        if (S.sgn > 0) R.quadX(a1, a0, b0, b1, white, [rd(S.s0, f1), rd(S.s0, f0), rd(S.s1, f0), rd(S.s1, f1)]);
+        else R.quadX(a0, a1, b1, b0, white, [rd(S.s0, f0), rd(S.s0, f1), rd(S.s1, f1), rd(S.s1, f0)]);
+      }
+    }
+    // onto the road at a trail's end: 3 m out over the junction, as wide as the trail
+    for (const E of t.endSpills || []) {
+      const OUTE = 3, nx = E.dz, nz = -E.dx, p = (u, f) => [E.x + nx * u + E.dx * OUTE * f, E.y + .012, E.z + nz * u + E.dz * OUTE * f];
+      const rd = (f) => [E.surf + 20, E.half + 3 + f * 1.5, E.s + f * OUTE, E.half];
+      for (let j = 0; j < STEPS; j++) {
+        const f0 = j / STEPS, f1 = (j + 1) / STEPS, w = E.half + .4;
+        R.quadX(p(-w, f0), p(w, f0), p(w, f1), p(-w, f1), white, [rd(f0), rd(f0), rd(f1), rd(f1)]);
+      }
+    }
+    const m = R.mesh(this.mats.spill);
+    if (m) { t.spillMesh = m; this._spillDirty = true; }   // (drawn merged with the other near tiles': _mergeSpill)
+  }
+
+  /** The near tiles' spill strips as one mesh (one draw call, not one a tile), rebuilt when the set changes. */
+  _mergeSpill() {
+    this._spillDirty = false;
+    const parts = [...this.tiles.values()].map((t) => t.spillMesh?.geometry).filter(Boolean);
+    if (this.spillAll) { this.group.remove(this.spillAll); this.spillAll.geometry.dispose(); this.spillAll = null; }
+    if (!parts.length) return;
+    const g = new THREE.BufferGeometry(), drop = function () { this.array = null; };
+    for (const [name, size] of [['position', 3], ['normal', 3], ['color', 3], ['aRd', 4]]) {
+      const n = parts.reduce((a, p) => a + p.attributes[name].array.length, 0), out = new Float32Array(n);
+      let o = 0; for (const p of parts) { out.set(p.attributes[name].array, o); o += p.attributes[name].array.length; }
+      const attr = new THREE.BufferAttribute(out, size); attr.onUpload(drop); g.setAttribute(name, attr);
+    }
+    g.computeBoundingSphere(); g.computeBoundingBox();
+    const m = new THREE.Mesh(g, this.mats.spill); m.name = 'Spill'; m.receiveShadow = true; m.frustumCulled = false;
+    this.spillAll = m; this.group.add(m);
   }
 
   /** The dressed places' ground in this tile (toolbox/materials/park-surfaces.js): lawns, beds, woods, plazas and walks
@@ -1435,6 +1583,12 @@ const NY_ROAD_GLSL = /* glsl */`
     // winter's sand and salt along the edges and in the crown between the wheel paths, washed out by fall
     float grit = (1. - smoothstep(.3, 1.4, hw - ax)) * .5 + (1. - smoothstep(.2, .9, ax)) * .18 * (1. - track);
     lin = mix(lin, base * 1.9, grit * .22 * (.6 + .4 * gwN(w.xz * .5)));
+    // fall leaves blown to the edges (user, 23 Nov: cheap wins): drifts in the last half metre, a few strays on
+    // the lane, more where the woods come down to the road (by stretch)
+    float drift = (1. - smoothstep(.2, .75, hw - ax)) * smoothstep(.35, .75, gwN(w.xz * .05 + 13.)) + .06;
+    vec2 lq = mat2(.8, -.6, .6, .8) * w.xz * 6.5, lf = floor(lq);
+    float leaf = step(1. - drift * .35, gwH(lf + 91.)) * (1. - smoothstep(.22, .34, length(fract(lq) - .5)));
+    lin = mix(lin, mix(vec3(.55, .27, .1), vec3(.7, .52, .18), gwH(lf + 92.)) * (.75 + .3 * gwH(lf + 93.)), leaf * det * .85);
     return pow(lin, vec3(2.2));
   }
 `;
@@ -1470,20 +1624,33 @@ const NOISE_GLSL = /* glsl */`
  * gravel and dirt. Patterns fade to their average when a brick is a few pixels, so nothing shimmers far off.
  */
 /** low (Light, phones): the patterns only up close (brick, setts, slabs, pavers), plain asphalt with one noise. */
-function roadSurfaceMaterial(low = false, ny = false) {
-  const m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+function roadSurfaceMaterial(low = false, ny = false, spill = false) {
+  const m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: spill, polygonOffsetFactor: spill ? -1 : 0, polygonOffsetUnits: spill ? -3 : 0 });
   m.defines = {};
+  if (spill) m.defines.SPILL = '';
   if (low) m.defines.LOWQ = '';
   if (ny) m.defines.NYWEAR = '';
   m.onBeforeCompile = (shader) => {
+    shader.uniforms.uCloudT = CLOUD_T;
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aRd; varying vec4 vRd; varying vec3 vGW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRd = aRd; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vRd; varying vec3 vGW;\n' + NOISE_GLSL + (ny ? NY_ROAD_GLSL : ''))
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vRd; varying vec3 vGW; uniform float uCloudT;\n' + NOISE_GLSL + (ny ? NY_ROAD_GLSL : ''))
       .replace('#include <color_fragment>', `#include <color_fragment>
         {
           vec3 c = diffuseColor.rgb;
           int sf = int(vRd.x + .5);
           vec2 q = vRd.yz;
+          #ifdef SPILL
+          sf -= 20;
+          {
+            // the spill (_spillJob): dense by the shoulder's foot, scattered grains farther out; how far it reaches and
+            // how thick it lies wander along the edge (q.y: metres along) and in patches
+            float t = clamp((abs(q.x) - vRd.w - 3.) / 1.5, 0., 1.);
+            float reach = .25 + .75 * gwN(vec2(q.y * .07, 3.3 + sign(q.x) * 5.)), thick = .45 + .55 * gwN(vGW.xz * .15 + 8.);
+            float solid = (1. - smoothstep(reach * .3, reach, t)) * thick;
+            if (gwH(floor(vGW.xz * 16.)) > solid * 1.1 + .02 || t > reach) discard;
+          }
+          #endif
           float px = max(fwidth(q.y), fwidth(q.x)) + 1e-4, det = 1. - smoothstep(.015, .07, px);
           float wear = .25 + .65 * gwN(vGW.xz * .004 + 3.1);
           float track = 1. - smoothstep(0., .45, abs(abs(abs(q.x) - vRd.w * .5) - .85));
@@ -1516,14 +1683,34 @@ function roadSurfaceMaterial(low = false, ny = false) {
             float jt = max(1. - smoothstep(0., .06, f.x) * smoothstep(0., .06, 1. - f.x), 1. - smoothstep(0., .06, f.y) * smoothstep(0., .06, 1. - f.y));
             c = mix(c, c * (.82 + .3 * gwH(cell)) * (1. - .4 * jt), det);
           } else if (sf == 5 || sf == 6) {   // gravel, dirt
-            // (user, 22 Nov: a "gravel" texture for the towpath): stone dust packed smooth where the wheels run, loose
-            // and darker toward the edges, with pebbles; fades to its mean far off
+            // (user, 22 Nov: a "gravel" texture for the towpath): stone dust, loose and darker toward the edges, pebbles.
+            // (23 Nov: "too uniform … needs ruts, wandering, puddles"): the worn line wanders side to side along the
+            // path, packed and a little darker; the edges are ragged into the grass; patches of fresh grey gravel, damp
+            // dark spots and leaf litter come and go; now and then a shallow puddle in the worn line, the sky in it
             vec3 g = sf == 5 ? vec3(.62, .57, .48) : vec3(.43, .36, .27);
-            float edge = smoothstep(.35, .5, abs(q.x) / max(vRd.w, 1.)), worn = 1. - smoothstep(.2, .6, abs(abs(q.x) - vRd.w * .18));
+            float w = max(vRd.w, 1.);
+            float wan = (gwN(vec2(q.y * .021, 3.7)) - .5) * w * .5 + (gwN(vec2(q.y * .09, 8.1)) - .5) * w * .14;
+            float lineD = abs(q.x - wan), worn = 1. - smoothstep(w * .2, w * .5, lineD);
+            float rag = (gwN(vec2(q.y * .35, 9.3)) - .5) * .5 + (gwN(vec2(q.y * 1.7, 4.4)) - .5) * .18;
+            float edge = smoothstep(.55, .85, abs(q.x) / w + rag * .3);
             float grain = gwN(vGW.xz * 22.) * .6 + gwN(vGW.xz * 47.) * .4, peb = step(.96, gwH(floor(vGW.xz * 11.) + 17.)) * gwH(floor(vGW.xz * 11.) + 3.);
-            float tone = .9 + .22 * (grain - .5) * det + .14 * gwN(vGW.xz * 1.3) - .14 * edge + .07 * worn * (sf == 5 ? 1. : 0.);
+            float tone = .9 + .22 * (grain - .5) * det + .16 * (gwN(vGW.xz * 1.3) - .5) - .14 * edge - .09 * worn;
             vec3 col = g * tone;
             col = mix(col, col * mix(.62, 1.25, peb), step(.001, peb) * det * (.4 + .6 * edge));
+            // patches: fresh gravel (grey, lighter), damp ground (darker, browner), leaf litter (rust and ochre flecks)
+            float pFresh = smoothstep(.66, .74, gwN(vGW.xz * .07 + 12.3)), pDamp = smoothstep(.62, .72, gwN(vGW.xz * .11 + 41.7));
+            col = mix(col, vec3(.66, .65, .62) * (.92 + .16 * grain), pFresh * .7);
+            col = mix(col, col * vec3(.68, .66, .6), pDamp * .8);
+            float litter = smoothstep(.55, .75, gwN(vGW.xz * .05 + 27.)) * (.4 + .6 * edge), leafF = step(.92, gwH(floor(vGW.xz * 9.) + 61.));
+            col = mix(col, mix(vec3(.55, .33, .16), vec3(.62, .5, .22), gwH(floor(vGW.xz * 7.) + 5.)), leafF * litter * det);
+            // (no grass creeping in at the edges: user, 23 Nov — the side carries the path's colour and texture; the
+            // shoulder is drawn in this surface too, its across past the half-width: loose, a little darker)
+            // puddles: in the worn line, a few per hundred metres; muddy rims, the sky's grey-blue in the middle
+            float pn = gwN(vec2(q.y * .42, (q.x - wan) * .62) + 53.) * step(.55, gwN(vec2(q.y * .03, 7.7))), pud = smoothstep(.8, .83, pn) * worn * (1. - edge);
+            float rim = smoothstep(.75, .8, pn) * worn * (1. - pud);
+            col = mix(col, col * vec3(.62, .58, .52), rim * .8);
+            col = mix(col, vec3(.46, .5, .55) * (.85 + .2 * gwN(vGW.xz * 3.)), pud * .9);
+            col += vec3(1., .9, .7) * pud * step(.985, gwH(floor(vGW.xz * 24.) + floor(uCloudT * 3.) * 7.)) * 1.6 * det;   // (the low sun glinting on it)
             c = pow(col, vec3(2.2));
           } else {                 // asphalt
             #ifdef LOWQ
@@ -1542,10 +1729,13 @@ function roadSurfaceMaterial(low = false, ny = false) {
             c = nyWinterRoad(c, q, vRd.w, det, track, vGW);
             #endif
           }
-          diffuseColor.rgb = c;
+          diffuseColor.rgb = c * (1. - .2 * smoothstep(.55, .75, gwN((vGW.xz + uCloudT * vec2(3., 1.2)) * .0025)));   // (a cloud's shadow drifting over)
+          #ifdef SPILL
+          diffuseColor.rgb *= .84;   // (thin over the ground: a shade darker, so it doesn't read as a pale band)
+          #endif
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-road-surface-1${low ? '-low' : ''}${ny ? '-ny1' : ''}`;
+  m.customProgramCacheKey = () => `pgh-road-surface-7${low ? '-low' : ''}${ny ? '-ny1' : ''}${spill ? '-spill' : ''}`;
   return m;
 }
 
@@ -1564,10 +1754,10 @@ function groundMaterial(low = false, rural = false) {
   const U = { uLand: { value: blank }, uLandBox: { value: new THREE.Vector4(0, 0, 1, 1) }, uLandOn: { value: 0 } };
   m.userData.land = U;
   m.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, U);
+    Object.assign(shader.uniforms, U); shader.uniforms.uCloudT = CLOUD_T;
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aLandW; varying float vLandW; varying vec3 vGW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLandW = aLandW; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLand; uniform vec4 uLandBox; uniform float uLandOn; varying float vLandW; varying vec3 vGW;\n' + NOISE_GLSL)
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLand; uniform vec4 uLandBox; uniform float uLandOn; uniform float uCloudT; varying float vLandW; varying vec3 vGW;\n' + NOISE_GLSL)
       .replace('#include <color_fragment>', `#include <color_fragment>
         if (uLandOn > .5 && vLandW > .01) {
           vec2 size = uLandBox.zw - uLandBox.xy;
@@ -1586,14 +1776,29 @@ function groundMaterial(low = false, rural = false) {
           #endif
           vec3 lc = vec3(-1.);
           if (k < .5) lc = mix(vec3(.43, .42, .4), vec3(.52, .5, .47), n);                   // paved: lots, yards of the works
-          else if (k < 1.5) lc = mix(vec3(.38, .52, .24), vec3(.47, .6, .3), n);             // grass, parks
-          else if (k < 2.5) lc = mix(vec3(.25, .3, .17), vec3(.36, .35, .22), n);            // the woods' floor
+          else if (k < 1.5) lc = mix(vec3(.38, .52, .24), vec3(.47, .6, .3), n) * (1. - .16 * smoothstep(.62, .8, gwN(vGW.xz * .025 + 3.)));   // grass, parks (darker damp hollows)
+          else if (k < 2.5) {
+            // the woods' floor (user, 23 Nov: "areas under trees should be more brown dirt, with leaf litter texture"):
+            // brown earth under last year's leaves, patches of moss, a light scatter of this fall's colour
+            lc = mix(vec3(.29, .22, .14), vec3(.39, .3, .19), n);
+            lc = mix(lc, vec3(.27, .31, .17), smoothstep(.6, .78, gwN(vGW.xz * .08 + 31.)) * .75);
+            #ifndef LOWQ
+            lc *= .86 + .26 * gwN(vGW.xz * 4.3);
+            vec2 lq = mat2(.82, -.57, .57, .82) * vGW.xz * 5. + (vec2(gwN(vGW.xz * 1.7), gwN(vGW.xz * 1.7 + 7.)) - .5) * 1.6, lf = floor(lq);
+            float lr = length(fract(lq) - .5 + (vec2(gwH(lf + 2.), gwH(lf + 3.)) - .5) * .3);
+            lc = mix(lc, mix(vec3(.6, .3, .12), vec3(.7, .55, .2), gwH(lf + 5.)), step(.93, gwH(lf + 13.)) * (1. - smoothstep(.18, .3, lr)) * .55);
+            lc = mix(lc, vec3(.2, .15, .1), step(.95, gwH(floor(vGW.xz * 3.) + 71.)) * .4);   // (a dark twig, a damp hollow)
+            lc *= 1. + .45 * smoothstep(.72, .8, gwN(vGW.xz * .45 + 17.)) * smoothstep(.4, .6, gwN(vGW.xz * .07 + 5.));   // (dappled sun through the crowns)
+            #endif
+          }
           else if (k < 3.5 && k > 2.5) lc = mix(vec3(.17, .31, .38), vec3(.22, .37, .44), n);  // water: a canal or a pond at its own level (CNY's Erie Canal; PGH's rivers are under the water plane anyway)
           else if (k < 4.5 && k > 3.5) lc = vec3(.42, .4, .36);                               // under a building
           else if (k < 5.5 && k > 4.5) lc = vec3(.66, .6, .46);                               // sand, bare rock
           else if (k < 6.5 && k > 5.5) lc = mix(vec3(.62, .59, .54), vec3(.68, .65, .6), n);  // plaza
           else if (k < 7.5 && k > 6.5) lc = mix(vec3(.3, .42, .22), vec3(.38, .44, .25), n);  // beyond: suburbs and hills
-          else if (k > 7.5 && k < 8.5) lc = mix(vec3(.4, .54, .27), vec3(.5, .58, .33), n);  // yards: lawns
+          else if (k > 7.5 && k < 8.5) {
+            lc = mix(vec3(.4, .54, .27), vec3(.5, .58, .33), n);  // yards: lawns
+          }
           else if (k > 9.5 && k < 10.5) {
             // crops (a rural map's WorldCover cropland, SKAN): field by field — corn, soybeans, a hay cutting, wheat
             // stubble, a ploughed field — each a ~150 m patch, with its rows
@@ -1653,13 +1858,16 @@ function groundMaterial(low = false, rural = false) {
             lc *= 1. + (bl - .5) * .28 * gd;
             float dry = smoothstep(.62, .8, gwN(vGW.xz * .045 + 13.)) * (k > 7.5 && k < 8.5 ? .35 : 1.);
             lc = mix(lc, vec3(.6, .57, .34), dry * .45);                                   // dry, gone-over patches
-            if (k > 7.5 && k < 8.5) lc *= 1. + .05 * sign(sin(vGW.x * 2.6 + vGW.z * .4)) * gd;   // a lawn's mown stripes
+            if (k > 7.5 && k < 8.5) { vec2 yc = floor(vGW.xz / 30.); float ya = gwH(yc + 3.) * 3.1416; lc *= 1. + .07 * sign(sin(dot(vGW.xz, vec2(cos(ya), sin(ya))) * 3.4)) * gd * step(.25, gwH(yc + 4.)); }   // a lawn's mown stripes, each yard its own way
             if (k > 10.5 && k < 11.5 || k > 27.5) lc = mix(lc, lc * vec3(1.05, .98, .85), smoothstep(.55, .75, gwN(vGW.xz * .5)) * .5);   // tussocks, seed heads
           }
           #endif
-          if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * mix(clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vec3(1.), step(19.5, k) * .7), vLandW * (k > 19.5 ? .95 : .85));   // (CNY's fields: their own colour, less of the ground's tint)
-        }`);
+          if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * mix(clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vec3(1.), step(19.5, k) * .7), vLandW * (k > 19.5 || (k > 1.5 && k < 2.5) ? .95 : .85));   // (CNY's fields: their own colour, less of the ground's tint)
+        }
+        #ifdef NYGRASS
+        diffuseColor.rgb *= 1. - .2 * smoothstep(.55, .75, gwN((vGW.xz + uCloudT * vec2(3., 1.2)) * .0025));   // a cloud's shadow drifting over (user, 23 Nov)
+        #endif`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-4${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-8${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
   return m;
 }

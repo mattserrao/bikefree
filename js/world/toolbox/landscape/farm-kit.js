@@ -119,24 +119,26 @@ function* cropCardsGen(x0, z0, size, crop, groundH) {
 /** A round bale lying on its side: straw (rolled rings at the ends) or wrapped in white plastic. */
 export function bale(M, x, y, z, yaw, wrapped, seed) {
   const c = Math.cos(yaw), s = Math.sin(yaw), r = .75, L = 1.2;
-  const body = wrapped ? (seed < .5 ? '#eceeea' : '#dfe3e0') : seed < .5 ? '#c8a964' : '#b9995a', end = wrapped ? '#d4d8d5' : '#a8884c';
+  // (wrap: mostly white, some green or black — user, 23 Nov cheap wins)
+  const wrapC = seed < .55 ? '#eceeea' : seed < .7 ? '#dfe3e0' : seed < .85 ? '#4f6b45' : '#25282a';
+  const body = wrapped ? wrapC : seed < .5 ? '#c8a964' : '#b9995a', end = wrapped ? wrapC : '#a8884c';
   const A = new THREE.Vector3(x - c * L / 2, y + r - .05, z + s * L / 2), B = new THREE.Vector3(x + c * L / 2, y + r - .05, z - s * L / 2);
   M.color(body).beam(A, B, r * 1.85, r * 1.85);
   M.color(end).beam(A.clone().lerp(B, -.01), A.clone().lerp(B, .04), r * 1.5, r * 1.5).beam(B.clone().lerp(A, .04), B.clone().lerp(A, -.01), r * 1.5, r * 1.5);
 }
-const FLOWERS = ['#6f8fd8', '#f1efe6', '#e2b931', '#9a7fc2', '#e8e4dc', '#d9a92c'];
+const FLOWERS = ['#8090b8', '#d9d5c8', '#c2a444', '#8a7aa6', '#cfcabc', '#a98a3e'];   // (muted, September: user, 23 Nov)
 /** A clump of roadside wildflowers (chicory blue, Queen Anne's lace white, goldenrod, asters), or a grass tuft. */
-export function verge(M, x, y, z, seed, flower) {
-  // grass: a tuft of thin blades (both faces), leaning out; a flower clump: stems with a head each
-  const n = flower ? 4 : 7, V = THREE.Vector3;
+export function verge(M, x, y, z, seed, flower, s = 1) {
+  // grass: a tuft of thin blades, leaning out; a flower clump: stems with a head each (one triangle each: the verge's
+  // material draws both faces — user, 23 Nov: "simplify their models")
+  const n = flower ? 3 : 3 + Math.floor(seed * 4), V = THREE.Vector3;
   for (let k = 0; k < n; k++) {
-    const a = k * 2.4 + seed * 6, d = .05 + hash(seed * 9 + k) * .14, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
-    const h = flower ? .45 + hash(seed * 3 + k) * .5 : .2 + hash(seed * 5 + k) * .22, w = flower ? .02 : .035, lean = .12 + hash(seed + k) * .12;
+    const a = k * 2.4 + seed * 6, d = .05 + hash(seed * 9 + k) * .2, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
+    const h = (flower ? .4 + hash(seed * 3 + k) * .5 : .15 + hash(seed * 5 + k) * .3) * s, w = flower ? .02 : .04, lean = .1 + hash(seed + k) * .16;
     const ca = Math.cos(a + 1.57) * w, sa = Math.sin(a + 1.57) * w, tx = px + Math.cos(a) * lean, tz = pz + Math.sin(a) * lean;
-    M.color(flower ? '#6f8650' : ['#5a7a3c', '#6a8644', '#7e8f4a', '#9a9a5a'][k % 4]);
-    const A = new V(px - ca, y - .02, pz - sa), B = new V(px + ca, y - .02, pz + sa), C = new V(tx, y + h, tz);
-    M.triangle(A, B, C); M.triangle(B, A, C);
-    if (flower) M.color(FLOWERS[Math.floor(hash(seed * 7) * FLOWERS.length + (k % 2)) % FLOWERS.length]).pyramid(tx, y + h - .06, tz, .13, .06, .13, a);
+    M.color(flower ? '#6f8650' : ['#5a7a3c', '#6a8644', '#7e8f4a', '#9a9a5a'][(k + Math.floor(seed * 4)) % 4]);
+    M.triangle(new V(px - ca, y - .02, pz - sa), new V(px + ca, y - .02, pz + sa), new V(tx, y + h, tz));
+    if (flower) { M.color(FLOWERS[Math.floor(hash(seed * 7) * FLOWERS.length + (k % 2)) % FLOWERS.length]); const r = .07; M.triangle(new V(tx - r, y + h - .03, tz), new V(tx + r * .5, y + h - .03, tz + r * .87), new V(tx + r * .5, y + h - .03, tz - r * .87)); }
   }
 }
 /** One fence or wall bay from a to b (ground heights ya, yb): 'wire' | 'board' | 'stone'. */
@@ -174,4 +176,15 @@ export function farmStand(M, x, y, z, yaw) {
     const h0 = hash(x * 3 + k), [px, pz] = at((h0 - .5) * 2.2, k < 4 ? 0 : -.9 - hash(z + k) * .5), on = k < 4 ? .83 : 0, r = .2 + hash(k + z) * .14;
     M.color(h0 < .7 ? '#d9772a' : h0 < .85 ? '#e9dcb2' : '#5b7a3a').cylinder(px, y + on, pz, r, r * 1.3, 8, r * .8);
   }
+}
+
+/** A hay wagon: a flat rack on four wheels, a tongue, a few square bales stacked on it (user, 23 Nov: cheap wins). */
+export function hayWagon(M, x, y, z, yaw, seed) {
+  const c = Math.cos(yaw), s = Math.sin(yaw), at = (u, v) => [x + s * u + c * v, z + c * u - s * v];
+  M.color('#7a6048').box(x, y + .75, z, 2.2, .12, 4.6, yaw);
+  M.color('#6b5340'); for (const v of [-1.05, 1.05]) { const [ax, az] = at(-2.3, v); M.box(ax, y + .85, az, .1, 1.4, .1, yaw); const [bx, bz] = at(2.3, v); M.box(bx, y + .85, bz, .1, 1.4, .1, yaw); }
+  M.color('#2a2a2a'); for (const u of [-1.6, 1.6]) for (const v of [-1, 1]) { const [wx, wz] = at(u, v); M.cylinder(wx, y + .05, wz, .35, .15, 10); }
+  M.color('#5a4a3a'); { const [tx, tz] = at(3.3, 0); M.box(tx, y + .4, tz, .1, .1, 1.6, yaw); }
+  const n = 3 + Math.floor(seed * 5);
+  for (let k = 0; k < n; k++) { const [bx, bz] = at(-1.6 + (k % 3) * 1.1, (Math.floor(k / 3) % 2 ? .5 : -.5)); M.color(k % 2 ? '#c8ad68' : '#bfa25e').box(bx, y + .81 + Math.floor(k / 6) * .4, bz, .9, .4, .45, yaw); }
 }

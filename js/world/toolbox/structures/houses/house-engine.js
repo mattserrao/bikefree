@@ -26,6 +26,8 @@ const WHITE = '#f3f1ea';
  * Build house plan P (on recipe R) into w (main), d (near detail), n (close detail). L: the landscape (heightAt).
  * Returns { lo, gv, top } like the kit's assemble, and the door point for the dressing.
  */
+/** Chimney tops of the houses built (world x, y, z), for the atmosphere's chimney smoke; keyed by position. */
+export const CHIMNEYS = new Map();
 export function buildHouse(R, P, w, d, n, L) {
   const sc = R.scheme, rs = rnd(R.seed * 7919);
   const old = ['greek', 'greekfarm', 'italianate', 'upright', 'gablefront', 'ihouse'].includes(P.type);
@@ -196,6 +198,7 @@ function parts(ctx) {
     if (ch.exterior) w.box(F0, ch.s - ch.w / 2 - .12, ch.s + ch.w / 2 + .12, ch.t - ch.d / 2 - .1, ch.t + ch.d / 2 + .1, lo, v.top - .4);   // the wider base up to the eaves
     n.set({ code: S.CONCRETE, col: C(srgb('#77736c')), win: [0, 0, 0, 0] });
     n.box(F0, ch.s - ch.w / 2 - .07, ch.s + ch.w / 2 + .07, ch.t - ch.d / 2 - .07, ch.t + ch.d / 2 + .07, yTop, yTop + .1);
+    { const x = F0.cx + F0.ux * ch.s + F0.vx * ch.t, z = F0.cz + F0.uz * ch.s + F0.vz * ch.t; if (CHIMNEYS.size < 4000) CHIMNEYS.set(`${Math.round(x)},${Math.round(z)}`, { x, y: yTop + .1, z }); }
   }
   // dormers on the front slope (a Cape): small gabled boxes, a window each
   if (pp.dormers) {

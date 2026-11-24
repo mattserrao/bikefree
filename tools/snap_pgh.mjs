@@ -25,6 +25,7 @@ const view = opt('--view', null);   // "<back>,<up>": an overview camera this fa
 const evalJs = opt('--eval', null);   // run in the page after the frame (the world as `w`, THREE as `T`): its result is printed
 const preJs = opt('--pre', null);   // run in the page before the frame is drawn (the world as `w`)
 const quality = opt('--quality', 'balanced');
+const ua = opt('--ua', null);   // a user agent (e.g. an iPhone's: the phones' memory caps)
 const time = opt('--time', 'midday'), out = opt('--out', 'tools/snapshots'), graph = opt('--graph', 'routes/cities/pgh.json');
 const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/chromium'].find(existsSync));
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.gz': 'application/octet-stream', '.png': 'image/png', '.jpg': 'image/jpeg' };
@@ -38,7 +39,7 @@ await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
 const base = `http://127.0.0.1:${server.address().port}`;
 const { chromium } = await import('playwright-core');
 const browser = await chromium.launch({ executablePath: chrome, args: software ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : ['--ignore-gpu-blocklist', '--enable-gpu'] });
-const page = await browser.newPage({ viewport: { width, height } });
+const page = await browser.newPage({ viewport: { width, height }, ...(ua ? { userAgent: ua } : {}) });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });

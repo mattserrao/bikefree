@@ -15,8 +15,9 @@ import { shoreline } from './shoreline.js';
 import { village } from './village.js';
 import { frontYards } from './front-yards.js';
 import { sky } from './sky.js';
+import { atmosphere } from './atmosphere.js';
 
-export const EFFECTS = { water: waterSurface, shoreline, village, frontYards, sky };
+export const EFFECTS = { water: waterSurface, shoreline, village, frontYards, sky, atmosphere };
 
 /** Install the effects a map asks for; returns one handle that fans out to them. */
 export function installEffects(world, cfg = {}) {
@@ -25,7 +26,9 @@ export function installEffects(world, cfg = {}) {
   }).filter(Boolean);
   return {
     names: on.map((e) => e.name),
-    tick(t, dt) { for (const e of on) e.h.tick?.(t, dt); },
+    tick(t, dt) { for (const e of on) if (!e.off) e.h.tick?.(t, dt); },
+    /** Turn one effect off or on (the graphics menu): it stops ticking and hides what it draws. */
+    set(name, v) { for (const e of on) if (e.name === name) { e.off = !v; e.h.setVisible?.(!!v); } },
     *tileJob(tile) { for (const e of on) if (e.h.tileJob) yield* e.h.tileJob(tile); },
     dispose() { for (const e of on) e.h.dispose?.(); },
   };

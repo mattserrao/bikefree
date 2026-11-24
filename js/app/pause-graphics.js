@@ -30,6 +30,9 @@ function fill() {
   $('pMinimap').value = settings.minimap !== 'off' ? settings.minimap : (settings.minimapView || 'follow');
   $('pMinimap').disabled = settings.minimap === 'off';
   $('pHudSize').value = settings.hudSize;
+  const g = settings.gfx;
+  $('pFps').value = String(g.fps); $('pBattery').value = g.battery; $('pDistance').value = String(g.distance); $('pTrees').value = String(g.trees);
+  $('pShadows').checked = g.shadows; $('pAtmos').checked = g.atmosphere; $('pVerge').checked = g.verge; $('pLife').checked = g.life;
   note();
 }
 
@@ -60,6 +63,14 @@ const setMap = () => {
 $('pMinimapOn').addEventListener('change', setMap);
 $('pMinimap').addEventListener('change', setMap);
 $('pHudSize').addEventListener('change', (e) => { settings.hudSize = e.target.value; applyHudPrefs(); save(`power bar ${settings.hudSize}`); });
+
+// the finer settings (laptops): applied at once, saved
+const setGfx = () => {
+  settings.gfx = { fps: Number($('pFps').value), battery: $('pBattery').value, distance: Number($('pDistance').value), trees: Number($('pTrees').value),
+    shadows: $('pShadows').checked, atmosphere: $('pAtmos').checked, verge: $('pVerge').checked, life: $('pLife').checked };
+  world?.setGfx?.(settings.gfx); save(`graphics ${JSON.stringify(settings.gfx)}`);
+};
+for (const id of ['pFps', 'pBattery', 'pDistance', 'pTrees', 'pShadows', 'pAtmos', 'pVerge', 'pLife']) $(id).addEventListener('change', setGfx);
 
 // fill it whenever the overlay opens
 const overlay = $('pauseOverlay');

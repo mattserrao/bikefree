@@ -31,9 +31,9 @@ import { farmBuilding } from './toolbox/city/cny-farms.js';
 import { GraphLife } from './toolbox/city/graph-life.js';
 import { TreeEngine } from './toolbox/vegetation/tree-engine.js';
 import { planHomestead, drawHomestead, driveStrips, nearDrive } from './toolbox/city/homesteads.js';
-import { skanCrop, cropMaterial, cropCardsJob, bale, verge, bay, farmStand } from './toolbox/landscape/farm-kit.js';
+import { skanCrop, cropMaterial, cropCardsJob, bale, verge, bay, farmStand, hayWagon } from './toolbox/landscape/farm-kit.js';
 import { makeUpstateTrees, fallVariant } from './toolbox/vegetation/upstate-trees.js';
-import { profileY, ditchFits, ditchGeometry, culvertEnd, goldenrod, laceAndChicory, tallGrass, cattails, utilityPole, wires, scrubClump } from './toolbox/landscape/roadside-ny.js';
+import { profileY, ditchFits, ditchGeometry, culvertEnd, goldenrod, laceAndChicory, tallGrass, cattails, utilityPole, wires, scrubClump, roadSign } from './toolbox/landscape/roadside-ny.js';
 import { CANAL, canalAt } from './toolbox/city/cny-landmarks.js';
 import { ROAD_LIFT } from './pose.js';
 
@@ -43,12 +43,32 @@ export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand:
   corn: 20, grain: 24, hay: 28, farmyard: 29 };
 const TILE = 400;
 // how far the city is built, by quality (Low: phones)
+const VERGE_IN = 260, VERGE_OUT = 420;
+/** Phones and tablets (user, 23 Nov: "even on high performance on mobile, the game should not run out of memory"):
+ *  the city's tiles built no farther than Light's at any quality — the fog closes in a little sooner. */
+export const MOBILE = (() => { try { const ua = navigator.userAgent || ''; return /iPhone|iPad|iPod|Android|Mobile/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1); } catch { return false; } })();
+const capReach = (q) => (MOBILE ? { ...q, near: Math.min(q.near, 1300), far: Math.min(q.far, 1800) } : q);
+/** Smooth value noise in [0, 1] (the verges' slow patches). */
+const vnoise = (x, z) => {
+  const i = Math.floor(x), j = Math.floor(z), u = x - i, v = z - j, f = (t) => t * t * (3 - 2 * t), H = (a, b) => hash(a * 127.1 + b * 311.7);
+  const a = H(i, j), b = H(i + 1, j), c = H(i, j + 1), d = H(i + 1, j + 1), fu = f(u), fv = f(v);
+  return a + (b - a) * fu + (c - a) * fv + (a - b - c + d) * fu * fv;
+};   // the verges' grass and brush: built within, dropped beyond (m from a tile's edge)
 const REACH = { low: { near: 1300, far: 1800, trees: 0.6, treeNear: 450 }, balanced: { near: 2300, far: 3100, trees: 1, treeNear: 750 }, high: { near: 2300, far: 3100, trees: 1.2, treeNear: 900 } };
 const CAR_NEAR = 340;           // m: parked cars (the kit's lo LOD) within this, its far LOD beyond
 const CAR_HI = 110;
 const ANIMAL_M = 480;           // m: farm animals drawn within this             // m: the kit's detailed cars within this
 const pipXZ = (r, x, z) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) c = !c; } return c; };
 const HOUSE_CLOSE_M = 160;
+/** A static mesh's arrays let go once they're on the GPU (no second copy in the page's memory: phones, user 23 Nov —
+ *  "even on high … should not run out of memory"); its bounds kept first. Not for anything read back later. */
+function gpuOnly(m) {
+  const g = m.geometry; g.computeBoundingSphere(); if (!g.boundingBox) g.computeBoundingBox();
+  const drop = function () { this.array = null; };
+  for (const a of Object.values(g.attributes)) a.onUpload(drop);
+  g.index?.onUpload(drop);
+  return m;
+}
 const PROXY_MAT = new THREE.MeshStandardMaterial({ color: '#000000' });
 /** One mesh of every tree's crown (an ellipsoid; a cone for the conifers) and trunk, for the bake only: on no camera
  *  layer (the bake draws it on its own), static (bake: true). */
@@ -56,7 +76,10 @@ const PROXY_MAT = new THREE.MeshStandardMaterial({ color: '#000000' });
 //  one go; now it writes straight into one array from the shapes' own triangles, and yields as it goes)
 const PROXY_SHAPES = (() => {
   const tris = (g) => (g.index ? g.toNonIndexed() : g).attributes.position.array;
-  return { blob: tris(new THREE.IcosahedronGeometry(1, 0)), cone: tris(new THREE.ConeGeometry(1, 1, 6).translate(0, .5, 0)), box: tris(new THREE.BoxGeometry(1, 1, 1).translate(0, .5, 0)) };
+  // (lighter, user 23 Nov — "should not run out of memory": an octahedron crown, a 4-sided cone, a trunk with no top or bottom;
+  //  no normals — the bake reads only where they stand: ~110 MB on High, streamed out to 2.3 km, now about a third)
+  const trunk = new THREE.CylinderGeometry(.6, .6, 1, 4, 1, true).translate(0, .5, 0);
+  return { blob: tris(new THREE.OctahedronGeometry(1, 0)), cone: tris(new THREE.ConeGeometry(1, 1, 4).translate(0, .5, 0)), box: tris(trunk) };
 })();
 function* treeProxiesJob(trees, kit, out) {
   const S = PROXY_SHAPES;
@@ -71,10 +94,11 @@ function* treeProxiesJob(trees, kit, out) {
     const t = trees[i], sp = kit[t.sp]; if (!sp) continue;   // (the understory: too low to matter)
     const h = sp.h * (t.sy ?? t.s), r = sp.r * t.s;
     if (/pine|hemlock|spruce/.test(t.sp)) put(S.cone, r * .8, h * .92, r * .8, t.x, t.y + h * .08, t.z);
+    else if (t.sp === 'snag') put(S.blob, r * .2, h * .2, r * .2, t.x, t.y + h * .5, t.z);   // (a dead tree: its bare limbs, a little shade)
     else put(S.blob, r * .82, h * .3, r * .82, t.x, t.y + h * .62, t.z);
     const w = Math.max(.35, r * .1); put(S.box, w, h * .5, w, t.x, t.y, t.z);
   }
-  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.computeVertexNormals(); geo.computeBoundingBox(); geo.computeBoundingSphere();
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.computeBoundingBox(); geo.computeBoundingSphere();
   const mesh = new THREE.Mesh(geo, PROXY_MAT);
   mesh.name = 'Tree shadow proxies'; mesh.layers.mask = 0; mesh.userData.bake = true; mesh.castShadow = false; mesh.frustumCulled = false;
   out.mesh = mesh;
@@ -105,7 +129,8 @@ export class GraphCity {
     const proj = world.proj, host = this.host;
     const [lat0, lon0] = index.origin, U = index.unit;
     this.local = (qa, qo) => proj.toLocal(lat0 + qa * U, lon0 + qo * U);
-    this.q = REACH[world.qualityKey] || REACH.balanced;
+    this.q = capReach(REACH[world.qualityKey] || REACH.balanced);
+    this.gfx = { distance: 1, trees: 1, verge: true, life: true };   // (the graphics menu: setGfx)
     this.tiles = new Map(); this.stats = { buildings: 0, trees: 0, furniture: 0, cars: 0, lamps: 0, sectors: 0 };
     this.ready = false;   // (the land cover is in)
 
@@ -289,6 +314,10 @@ export class GraphCity {
     const self = this, material = makeFacadeMaterial(this.host.uniforms), group = new THREE.Group();
     group.name = 'Buildings (building kit)'; this.host.group.add(group);
     const plans = new Map(), lists = new Map(), extents = new Map(), details = [];
+    // the houses' close detail, per 120 m cell: built when the camera comes within reach, dropped past it (user, 23 Nov:
+    // "even on high … should not run out of memory" — built up front it was 50–65 MB in the villages)
+    const closeCells = new Map();   // cell key → { tile, houses: [R], box, mesh, pending }
+    let closeJob = null;
     const addExt = (e) => { for (let i = Math.floor((e.x - e.r) / 20); i <= Math.floor((e.x + e.r) / 20); i++) for (let j = Math.floor((e.z - e.r) / 20); j <= Math.floor((e.z + e.r) / 20); j++) { const k = i * 100003 + j; let a = extents.get(k); if (!a) extents.set(k, (a = [])); a.push(e); } };
     return {
       group, material, details, plans,
@@ -333,8 +362,13 @@ export class GraphCity {
         const list = lists.get(key); lists.delete(key);
         if (!list?.length) return;
         const w = new Writer(8192), d = new Writer(4096), L = self.host.landscape;
-        // the house engine's close detail (casings, rails, brackets, gutters): one writer per 120 m cell, drawn to ~160 m
-        const close = new Map(), closeOf = (R) => { const k = Math.floor(R.x / 120) * 100003 + Math.floor(R.z / 120); let c = close.get(k); if (!c) close.set(k, (c = new Writer(4096))); return c; };
+        // the house engine's close detail (casings, rails, brackets, gutters): one mesh per 120 m cell, drawn to ~160 m,
+        // built later when the camera nears the cell (_closeJob); here a writer that's thrown away
+        const scrap = new Writer(4096), closeOf = (R) => {
+          const k = `${key}|${Math.floor(R.x / 120)},${Math.floor(R.z / 120)}`; let c = closeCells.get(k);
+          if (!c) closeCells.set(k, (c = { tile: key, houses: [], box: new THREE.Box3(), mesh: null }));
+          c.houses.push(R); c.box.expandByPoint(new THREE.Vector3(R.x, (L.heightAt?.(R.x, R.z) ?? 0), R.z)); scrap.n = 0; scrap.ni = 0; return scrap;
+        };
         for (const R of list) {
           if (due()) yield;
           if (R.inCanal) continue;
@@ -342,11 +376,37 @@ export class GraphCity {
           const res = R.house ? buildHouse(R, R.house, w, d, closeOf(R), LR) : assemble(R, w, d, LR);
           if (R.dressing?.length) for (const it of R.dressing) dress(d, it, R, L, res);
         }
-        if (w.n) { const m = new THREE.Mesh(w.geometry(), material); m.name = `Homes ${key}`; m.castShadow = m.receiveShadow = true; group.add(m); }
-        if (d.n) { const dm = new THREE.Mesh(d.geometry(), material); dm.userData.bake = false; dm.name = `Home detail ${key}`; dm.receiveShadow = true; dm.geometry.computeBoundingBox(); dm.userData.box = dm.geometry.boundingBox; group.add(dm); details.push(dm); }
-        for (const c of close.values()) if (c.n) { const cm = new THREE.Mesh(c.geometry(), material); cm.userData.bake = false; cm.name = `House close detail ${key}`; cm.receiveShadow = true; cm.geometry.computeBoundingBox(); cm.userData.box = cm.geometry.boundingBox; cm.userData.reach = HOUSE_CLOSE_M; group.add(cm); details.push(cm); }
+        if (w.n) { const m = gpuOnly(new THREE.Mesh(w.geometry(), material)); m.name = `Homes ${key}`; m.castShadow = m.receiveShadow = true; group.add(m); }
+        if (d.n) { const dm = gpuOnly(new THREE.Mesh(d.geometry(), material)); dm.userData.bake = false; dm.name = `Home detail ${key}`; dm.receiveShadow = true; dm.geometry.computeBoundingBox(); dm.userData.box = dm.geometry.boundingBox; group.add(dm); details.push(dm); }
+        for (const c of closeCells.values()) if (c.tile === key) c.box.expandByScalar(18);   // (the houses' own size round their centres)
       },
-      tick(cam) { for (const m of details) m.visible = m.userData.box.distanceToPoint(cam) < (m.userData.reach || KIT_CFG.detailReachM); },
+      tick(cam) {
+        for (const m of details) m.visible = m.userData.box.distanceToPoint(cam) < (m.userData.reach || KIT_CFG.detailReachM);
+        for (const c of closeCells.values()) {
+          const d = c.box.distanceToPoint(cam);
+          if (c.mesh) { c.mesh.visible = d < HOUSE_CLOSE_M; if (d > HOUSE_CLOSE_M + 140 && closeJob?.c !== c) { group.remove(c.mesh); c.mesh.geometry.dispose(); c.mesh = null; } }
+        }
+      },
+      /** The nearest cell within reach whose close detail isn't built, built as a job (sliced: graph-city stream). */
+      *closeJob(cam) {
+        let best = null, bd = HOUSE_CLOSE_M + 60;
+        for (const c of closeCells.values()) if (!c.mesh) { const d = c.box.distanceToPoint(cam); if (d < bd) { bd = d; best = c; } }
+        if (!best) return false;
+        closeJob = { c: best };
+        const W = new Writer(8192), D = new Writer(4096), C = new Writer(4096), L = self.host.landscape;
+        for (const R of best.houses) {
+          if (due()) yield;
+          if (!closeCells.has(`${best.tile}|${Math.floor(R.x / 120)},${Math.floor(R.z / 120)}`)) { closeJob = null; return true; }   // (its tile released meanwhile)
+          W.n = W.ni = 0; D.n = D.ni = 0;
+          buildHouse(R, R.house, W, D, C, R.floorAbove ? dryLand(L, R.floorAbove) : L);
+        }
+        if (C.n) { const cm = gpuOnly(new THREE.Mesh(C.geometry(), material)); cm.userData.bake = false; cm.name = `House close detail ${best.tile}`; cm.receiveShadow = true; cm.visible = best.box.distanceToPoint(cam) < HOUSE_CLOSE_M; group.add(cm); best.mesh = cm; }
+        else best.mesh = new THREE.Object3D();   // (nothing to draw: marked done)
+        closeJob = null;
+        return true;
+      },
+      /** A tile's cells forgotten (graph-city _release). */
+      releaseTile(key) { for (const [k, c] of closeCells) if (c.tile === key) { if (c.mesh) { group.remove(c.mesh); c.mesh.geometry?.dispose(); } closeCells.delete(k); } },
     };
   }
 
@@ -392,6 +452,8 @@ export class GraphCity {
   }
   urban(x, z) { const c = this.landAt(x, z); return c === LAND.paved || c === LAND.yards || c === LAND.building || c === LAND.plaza; }
   inWater(x, z) { const w = this.world; return w._groundH(x, z) < w.poolAt(x, z) + 0.3; }
+  /** Water or wet ground here: a pond or lake, the canal, a creek's line, a marsh (the atmosphere effect's mist). */
+  waterNear(x, z) { const c = this.landAt(x, z); return c === LAND.water || c === LAND.wetland || canalAt(x, z, 0) || this.inWater(x, z); }
 
   // ------------------------------------------------------------------ setup helpers
   /** CNY's rail bridge approaches (cny-landmarks.js railbridge): the embankments' strips along the bridge's axis, so
@@ -480,6 +542,8 @@ export class GraphCity {
     };
     m.customProgramCacheKey = () => 'pgh-street-kit-1';
     this.kitMaterial = m;
+    // the verges' grass and brush: one-triangle blades, both faces drawn
+    this.vergeMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9, metalness: 0, side: THREE.DoubleSide });
     // the trees: the tree engine (constructor); its wind clock
     this.treeTime = { value: 0 };
     // the street kit's facade dressing (shop fronts, signs, awnings, cornices, belt courses, sills)
@@ -547,6 +611,33 @@ export class GraphCity {
       if (left <= 0) break;
       if (runSlice(this._job, left).done) this._job = null; else break;
     }
+    // the houses' close detail near the camera (the building kit's cells), as a job in the frame's slice
+    while (performance.now() - t0 < ms) {
+      if (!this._cjob) this._cjob = this.kit.closeJob?.(this.world.camera.position);
+      if (!this._cjob) break;
+      const r = runSlice(this._cjob, ms - (performance.now() - t0));
+      if (!r.done) break;
+      this._cjob = null;
+      if (r.value === false) break;
+    }
+    // verges: the nearest tile waiting for its grass, as a job in the frame's slice; far ones dropped
+    while (performance.now() - t0 < ms) {
+      if (!this._vjob) {
+        let best = null, bd = VERGE_IN;
+        let crops = false;
+        for (const t of this.tiles.values()) if (!t.building && ((this.gfx.verge && t.vergePending) || t.cropsPending)) { const d = Math.hypot(t.cx - cx, t.cz - cz) - TILE * .71; if (d < bd + (t.cropsPending ? 80 : 0)) { bd = d - (t.cropsPending ? 80 : 0); best = t; crops = !!t.cropsPending; } }
+        if (!best) break;
+        this._vjob = { t: best, gen: crops ? this._cropsJob(best) : this._vergeJob(best) };
+      }
+      const left = ms - (performance.now() - t0);
+      if (left <= 0) break;
+      if (runSlice(this._vjob.gen, left).done) this._vjob = null; else break;
+    }
+    if ((this._f || 0) % 30 === 15) for (const t of this.tiles.values()) if (t !== this._vjob?.t) {
+      const d = Math.hypot(t.cx - cx, t.cz - cz) - TILE * .71;
+      if (t.vergeMesh && d > VERGE_OUT) this._dropVerge(t);
+      if (t.cropsMesh && d > VERGE_OUT + 120) { const m = t.cropsMesh; this.host.group.remove(m); m.geometry.dispose(); t.meshes = t.meshes.filter((r) => r.m !== m); t.near = t.near.filter((x) => x !== m); t.cropsMesh = null; t.cropsPending = true; }
+    }
     if ((this._f = (this._f || 0) + 1) % 30 === 0) for (const [key, t] of this.tiles) if (t.built && !t.building && Math.hypot(t.cx - cx, t.cz - cz) > this.q.far) this._release(key, t);
   }
   /** Tiles within r of (x, z) not yet built (the loading screen waits for the start's). */
@@ -582,7 +673,7 @@ export class GraphCity {
     yield* this._storefronts(t); yield;
     yield* this._lots(t); yield* this._lines(t);
     // the street furniture, fences and walls: one mesh (one draw call) for the tile
-    if (t.kitM.count) { const m = new THREE.Mesh(t.kitM.geometry(), this.kitMaterial); m.name = `Street furniture ${t.key}`; m.castShadow = true; m.receiveShadow = true; this._add(t, m); }
+    if (t.kitM.count) { const m = gpuOnly(new THREE.Mesh(t.kitM.geometry(), this.kitMaterial)); m.name = `Street furniture ${t.key}`; m.castShadow = true; m.receiveShadow = true; this._add(t, m); }
     t.kitM = null;
     for (const { m } of t.meshes) freezeMatrix(m);   // (static: no per-frame matrix work)
     if (t.spots.length) this.world.tileSpots?.set(key, t.spots);
@@ -590,6 +681,8 @@ export class GraphCity {
   }
 
   _release(key, t) {
+    if (this._vjob?.t === t) this._vjob = null;
+    this.kit.releaseTile?.(key);
     this.world.tileSpots?.delete(key);
     for (const { m, parent, kit } of t.meshes) {
       parent.remove(m);
@@ -611,13 +704,13 @@ export class GraphCity {
   /** LOD: detailed trees and cars near the camera, crowns and plain cars beyond; the kit's near detail. */
   tick(cam, time, rider = null, dt = 0) {
     this.treeTime.value = time;
-    this.life?.tick(cam, rider?.pos || null, rider?.fwd || null, dt);
+    if (this.gfx.life) this.life?.tick(cam, rider?.pos || null, rider?.fwd || null, dt);
     this.glassNight.value = this.host.night.value * 0.05;
     this.forest.tick(this.world.camera);
     if ((this._lf = (this._lf || 0) + 1) % 8) return;
     for (const t of this.tiles.values()) {
       const d = Math.hypot(t.cx - cam.x, t.cz - cam.z) - TILE * 0.71;
-      for (const m of t.near) m.visible = d < (m.userData.lodM || this.q.treeNear) && !(d < m.userData.lodMin);
+      for (const m of t.near) m.visible = d < (m.userData.lodM || this.q.treeNear) && !(d < m.userData.lodMin) && (this.gfx.life || !/^(Parked cars|Animals)/.test(m.name));
       for (const m of t.far) m.visible = d >= (m.userData.lodM || this.q.treeNear);
     }
     this.kit.tick(cam);
@@ -656,11 +749,15 @@ export class GraphCity {
       yard: [['sugarmaple', 35], ['redmaple', 20], ['redoak', 10], ['birch', 10], ['whitepine', 10], ['spruce', 10], ['blackcherry', 5]],
       street: [['sugarmaple', 40], ['redmaple', 30], ['whiteash', 10], ['redoak', 20]],
       pasture: [['sugarmaple', 40], ['redoak', 35], ['whiteash', 15], ['willow', 10]],
+      orn: [['jmaple', 22], ['crabapple', 22], ['bluespruce', 18], ['arborvitae', 16], ['birchclump', 22]],
+      arbor: [['arborvitae', 1]],
     };
     /** A tree of `role` at (x, z) if it fits (shrunk to clear a roof or the road if it must): true if placed. */
     const tree = (x, z, role, seed, age = null) => {
       const r1 = hash(seed * 7.13 + 1), r2 = hash(seed * 3.71 + 2), r3 = hash(seed * 9.17 + 3), r4 = hash(seed * 1.93 + 4);
-      const name = pick(MIX[role], r1), sp = kit[name];
+      // ~6% dead (user, 23 Nov): snags in the woods, wet ground, hedgerows and pastures, a few by the road; none in yards or on streets
+      const dead = role !== 'yard' && role !== 'street' && kit.snag && hash(seed * 5.37 + 9) < .06;
+      const name = dead ? 'snag' : pick(MIX[role], r1), sp = kit[name];
       // the age mix: saplings and young trees, mostly mature, a few old giants away from the road
       let k = age ?? (r2 < .08 ? .3 + r2 * 2.5 : r2 < .22 ? .55 + (r2 - .08) * 1.8 : r2 > .95 ? 1.15 + (r2 - .95) * 3 : .85 + (r2 - .22) * .32);
       k *= .92 + r3 * .16;
@@ -721,6 +818,24 @@ export class GraphCity {
         const x = r.cx + r.ux * du + r.vx * dv, z = r.cz + r.uz * du + r.vz * dv;
         tree(x, z, 'yard', b.k * 13 + q, .65 + h * .45);
       }
+      // ornamentals (user, 23 Nov): by the front corners or a step out in the side yard — a Japanese maple, a crab, a blue
+      // spruce, arborvitae, a birch clump; now and then a row of arborvitae along a side lot line
+      if (hash(b.k * 2.9) < .75 && (R.kind === 'house' || R.kind === 'village-house' || R.kind === 'farmhouse-ny')) {
+        const fu = -back[0], fv = -back[1], m = 1 + (hash(b.k * 4.1) < .45 ? 1 : 0);
+        for (let q = 0; q < m; q++) {
+          const h = hash(b.k * 6.7 + q * 3.3), side = (q === 0) === (h < .5) ? -1 : 1, out = 2.5 + h * 3.5;
+          const du = fu ? fu * (r.hu + out) : side * (r.hu + 1.5 + h * 2), dv = fv ? fv * (r.hv + out) : side * (r.hv + 1.5 + h * 2);
+          const x = r.cx + r.ux * du + r.vx * dv, z = r.cz + r.uz * du + r.vz * dv;
+          tree(x, z, 'orn', b.k * 17 + q, .8 + h * .3);
+        }
+        if (hash(b.k * 8.3) < .12) {   // an arborvitae row down one side
+          const sg = hash(b.k * 9.1) < .5 ? -1 : 1;
+          for (let q = 0; q < 5; q++) {
+            const along = (q / 4 - .5) * 2 * (fu ? r.hv : r.hu) * 1.2, du = fu ? sg * (r.hu + 4) : along, dv = fu ? along : sg * (r.hv + 4);
+            tree(r.cx + r.ux * du + r.vx * dv, r.cz + r.uz * du + r.vz * dv, 'arbor', b.k * 19 + q, .9);
+          }
+        }
+      }
       if ((b.k & 7) === 0) yield;
     }
     // the land cover: woods (edges graded), wetland, hedgerows between fields, the odd pasture tree
@@ -743,8 +858,18 @@ export class GraphCity {
           else under(jx, jz, 'goldenrod', seed);
           continue;
         }
-        if (h1 < (c === LAND.woods ? .82 : .45) * this.q.trees) { if (!tree(jx, jz, this.world.nearWater?.(jx, jz) ? 'wet' : 'woods', seed) && de < 60 && h2 > .8) under(jx, jz, 'fern', seed); }
-        else if (de < 60 && de > 4) { const r = hash(seed * 4.1); if (r < .25) under(jx, jz, 'fern', seed); else if (r < .3) under(jx, jz, r < .28 ? 'log' : 'stump', seed); }
+        // the forest floor near the road (user, 23 Nov: "forest understory … 2D sprite ferns", with logs, stumps and rocks):
+        // ferns in clumps where the ground's damp and shaded (a slow patchiness), a fallen log, a stump, a mossy rock
+        const ferny = vnoise(jx / 17 + 4.1, jz / 17 - 2.7), fernAt = (fx, fz, k) => { if (hash(seed * 7.3 + k) < ferny * 1.1 - .15) under(fx, fz, hash(seed * 9.1 + k) < .5 ? 'fern' : 'fern2', seed * 3.7 + k, .75 + ferny * .5); };
+        if (h1 < (c === LAND.woods ? .82 : .45) * this.q.trees) { if (!tree(jx, jz, this.world.nearWater?.(jx, jz) ? 'wet' : 'woods', seed) && de < 90) fernAt(jx, jz, 0); }
+        else if (de < 90 && de > 4) {
+          const r = hash(seed * 4.1);
+          if (r < .06) under(jx, jz, r < .035 ? 'log' : r < .05 ? 'stump' : 'stump2', seed);
+          else if (r < .1) under(jx, jz, r < .085 ? 'rock' : 'rock2', seed);
+          else fernAt(jx, jz, 1);
+        }
+        // a second fern in a clump, a step off
+        if (c === LAND.woods && de < 90 && de > 4 && ferny > .4) for (let q = 0; q < 3; q++) fernAt(jx + (hash(seed * 5.1 + q) - .5) * 6, jz + (hash(seed * 5.5 + q) - .5) * 6, 2 + q);
       } else if (c === LAND.wetland) {
         if (h1 < .25) tree(jx, jz, 'wet', seed); else if (h1 < .4) under(jx, jz, 'dogwood', seed);
       } else if (FIELD(c) && c !== LAND.farmyard) {
@@ -855,8 +980,9 @@ export class GraphCity {
     const W = this.world, x0 = t.i * TILE, z0 = t.j * TILE, g = (x, z) => W._groundH(x, z), M = t.kitM;
     // standing corn and soybeans: row cards, near the camera only
     this.cropMat ||= cropMaterial(this.treeTime);
-    const cc = {}; yield* cropCardsJob(x0, z0, TILE, (x, z) => this._cropAt(x, z), g, cc); const geo = cc.geo;
-    if (geo) { const m = new THREE.Mesh(geo, this.cropMat); m.name = `Crops ${t.key}`; m.userData.lodM = 300; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 300; this._add(t, m, 'near'); }
+    // (the standing crops only near the camera, as the verges: drawn to 300 m, built within VERGE_IN + 80; ~136 MB on
+    //  High when every loaded tile's were built)
+    if (Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71 < VERGE_IN + 80) yield* this._cropsJob(t); else t.cropsPending = true;
     yield;
     // round bales on the hay and the stubble
     for (let x = x0 + 11; x < x0 + TILE; x += 22) for (let z = z0 + 11; z < z0 + TILE; z += 22) {
@@ -866,11 +992,16 @@ export class GraphCity {
       if (h >= p || this.onRoad(jx, jz, 6) || this.host.buildingNear(jx, jz, 4) || this.inWater(jx, jz)) continue;
       const n = 1 + Math.floor(hash(h * 13) * 3);   // ones and twos and threes, as the baler dropped them
       for (let k = 0; k < n; k++) bale(M, jx + k * 2.1 * Math.cos(h * 9), g(jx, jz), jz + k * 2.1 * Math.sin(h * 9), h * 9 + k * .2, hash(h * 5) < .3, hash(h * 17 + k));
+      // now and then a hay wagon left out by the bales, half loaded
+      if (c?.crop === 'hay' && hash(h * 23) < .12) { const wx = jx + Math.cos(h * 9 + 1.6) * 5, wz = jz + Math.sin(h * 9 + 1.6) * 5; if (!this.onRoad(wx, wz, 4) && !this.host.buildingNear(wx, wz, 4)) hayWagon(M, wx, g(wx, wz), wz, h * 9 + .4, hash(h * 29)); }
     }
     yield;
     // the country roads' edges: the ditch, its grass and brush, the poles (_roadsides); then fence and wall runs
-    const N = new MeshBuilder({ aGlow: 1 });
-    yield* this._roadsides(t, N, M);
+    // (the grass and brush only for a tile near the camera — drawn to 240 m, built within VERGE_IN, dropped beyond
+    // VERGE_OUT: user, 23 Nov, phones reloading — every loaded tile's verge to 1.3 km was 270–420 MB of geometry)
+    const N = new MeshBuilder({ aGlow: 1 }), vNear = this.gfx.verge && Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71 < VERGE_IN;
+    yield* this._roadsides(t, N, M, vNear ? 'all' : 'struct');
+    if (!vNear) t.vergePending = true;
     for (const piece of W.tiles.get(t.key)?.pieces || []) {
       if (due()) yield;
       const e = piece.e; if (!ROADS.has(e.kind) || e.kind === 'alley') continue;
@@ -894,11 +1025,11 @@ export class GraphCity {
         }
       }
     }
-    yield* this._canalScrub(t, N);
+    if (vNear) yield* this._canalScrub(t, N);
     // the wires: no shadow, baked or live (a 2.5 cm wire's shadow drew as a thick black line across the road)
-    if (t.wireM?.count) { const m = new THREE.Mesh(t.wireM.geometry(), this.kitMaterial); m.name = `Wires ${t.key}`; m.castShadow = false; m.userData.bake = false; this._add(t, m); }
+    if (t.wireM?.count) { const m = gpuOnly(new THREE.Mesh(t.wireM.geometry(), this.kitMaterial)); m.name = `Wires ${t.key}`; m.castShadow = false; m.userData.bake = false; this._add(t, m); }
     t.wireM = null;
-    if (N.count) { const m = new THREE.Mesh(N.geometry(), this.kitMaterial); m.name = `Verge ${t.key}`; m.userData.lodM = 240; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 240; this._add(t, m, 'near'); }
+    if (N.count) { const m = new THREE.Mesh(N.geometry(), this.vergeMat); m.name = `Verge ${t.key}`; m.userData.lodM = 240; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 240; this._add(t, this._gpuOnly(m), 'near'); t.vergeMesh = m; }
     // a farm stand by some farmhouses' drives (pumpkins and squash: it's September)
     for (const H of t.homes || []) {
       if (H.kind !== 'farmhouse-ny' || hash(H.key * 3.7) > .3) continue;
@@ -911,6 +1042,42 @@ export class GraphCity {
     }
   }
 
+  /** A tile's standing crops (row cards), built when the camera comes near it. */
+  *_cropsJob(t) {
+    const W = this.world, x0 = t.i * TILE, z0 = t.j * TILE, g = (x, z) => W._groundH(x, z);
+    t.cropsPending = false;
+    const cc = {}; yield* cropCardsJob(x0, z0, TILE, (x, z) => this._cropAt(x, z), g, cc); const geo = cc.geo;
+    if (geo) { const m = gpuOnly(new THREE.Mesh(geo, this.cropMat)); m.name = `Crops ${t.key}`; m.userData.lodM = 300; m.userData.bake = false; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 300; this._add(t, m, 'near'); t.cropsMesh = m; }
+  }
+  /** A tile's verge grass and brush (and the canal's bank scrub), built when the camera comes near it. */
+  *_vergeJob(t) {
+    const W = this.world, N = new MeshBuilder({ aGlow: 1 });
+    yield* this._roadsides(t, N, new MeshBuilder(), 'grass');
+    yield* this._canalScrub(t, N);
+    t.vergePending = false;
+    if (!N.count) return;
+    const m = new THREE.Mesh(N.geometry(), this.vergeMat); m.name = `Verge ${t.key}`; m.userData.lodM = 240;
+    m.visible = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71 < 240;
+    this._add(t, this._gpuOnly(m), 'near'); t.vergeMesh = m;
+  }
+  /** The graphics menu (laptops; user, 23 Nov): how far the city's tiles reach, how many trees new tiles plant, the
+   *  verges' grass and brush, and the people, parked cars and farm animals. */
+  setGfx({ distance = 1, trees = 1, verge = true, life = true } = {}) {
+    const base = capReach(REACH[this.world.qualityKey] || REACH.balanced);
+    this.q = { ...base, near: base.near * distance, far: base.far * distance, trees: base.trees * trees };
+    this.gfx = { distance, trees, verge, life };
+    if (!verge) { for (const t of this.tiles.values()) this._dropVerge(t); this._vjob = null; }
+    for (const c of [this.life?.bikes, this.life?.walkers, this.life?.locals]) for (const m of c?.meshes || []) m.visible = life;
+  }
+  /** The verge's arrays let go once they're on the GPU (no second copy in the page's memory: phones). */
+  _gpuOnly(m) { m.geometry.computeBoundingSphere(); m.geometry.computeBoundingBox(); for (const a of Object.values(m.geometry.attributes)) a.onUpload(function () { this.array = null; }); if (m.geometry.index) m.geometry.index.onUpload(function () { this.array = null; }); return m; }
+  /** A far tile's verge dropped (built again when the camera comes back). */
+  _dropVerge(t) {
+    const m = t.vergeMesh; if (!m) return;
+    this.host.group.remove(m); m.geometry.dispose();
+    t.meshes = t.meshes.filter((r) => r.m !== m); t.near = t.near.filter((x) => x !== m);
+    t.vergeMesh = null; t.vergePending = true;
+  }
   /**
    * The country roads' edges (roadside-ny.js), every ~2 m along both sides of each road without sidewalks:
    *   the ditch strip (where the ground is a shelf under the road; broken by driveways, a culvert's ends showing),
@@ -918,8 +1085,10 @@ export class GraphCity {
    *   fence line (goldenrod, Queen Anne's lace, chicory, tall grass; cattails in the wet bottoms) — lawns stay mowed,
    *   and now and then the crew mowed farther; utility poles every ~40 m along one side, wires between them.
    */
-  *_roadsides(t, N, M) {
-    const W = this.world, sH = (x, z) => W.surfaceH(x, z), runs = [];
+  *_roadsides(t, N, M, mode = 'all') {
+    // mode: 'all'; 'struct' — the ditches, culverts, poles and wires only (a tile built far off: its grass and brush
+    // come later, _vergeJob); 'grass' — the grass and brush only
+    const W = this.world, sH = (x, z) => W.surfaceH(x, z), runs = [], grass = mode !== 'struct', struct = mode !== 'grass';
     const STEP = 5;   // stations per 10 m sample
     for (const piece of W.tiles.get(t.key)?.pieces || []) {
       if (due()) yield;
@@ -953,43 +1122,55 @@ export class GraphCity {
             const seed = hash(px * .913 + pz * .377 + side * 5.1);
             // the ditch run (and a culvert's ends where a driveway breaks it)
             if (ok) {
-              if (prevDrive && last) { culvertEnd(M, bx - tx * .2, base, bz - tz * .2, tx, tz, seed); }
+              if (prevDrive && last && struct) { culvertEnd(M, bx - tx * .2, base, bz - tz * .2, tx, tz, seed); }
               const row = { x: px + nx * half, z: pz + nz * half, nx, nz, rY, base, side };
               run.push(row); last = row;
             } else {
-              if (drive && run.length) { const r = run[run.length - 1]; const cx = r.x + r.nx * 2.5, cz = r.z + r.nz * 2.5; culvertEnd(M, cx + tx * .2, r.base, cz + tz * .2, -tx, -tz, seed); }
+              if (drive && run.length && struct) { const r = run[run.length - 1]; const cx = r.x + r.nx * 2.5, cz = r.z + r.nz * 2.5; culvertEnd(M, cx + tx * .2, r.base, cz + tz * .2, -tx, -tz, seed); }
               close();
             }
             prevDrive = drive;
-            if (hard || drive) continue;
+            if (hard || drive || !grass) continue;
             const yAt = (d) => { const [x, z] = at(d); return ok && d <= 4.8 ? profileY(d, rY, base) : sH(x, z); };
+            // (user, 23 Nov: "more randomization to their placement and height to appear more natural"): each plant
+            // jittered along the road and out from it, the stand's density and height following slow patches (a lush
+            // run, a thin one, shorter where the mower last reached), each plant's own height varied on top
+            const lush = vnoise(px / 23 + side * 7.1, pz / 23), tall = vnoise(px / 11 + 3.3, pz / 11 - side * 4.4);
             // the mowed strip: tufts and the odd wildflower
-            for (let r = 0; r < 2; r++) {
-              const d = .5 + r * 1.1 + hash(seed * 13 + r) * .5, [x, z] = at(d);
-              const hs = hash(x * 1.3 + z * 2.1), fl = hash(Math.floor(x / 9) * 3 + Math.floor(z / 9)) < .3 && hs < .35;
-              verge(N, x, yAt(d), z, hs, fl);
+            const tufts = 2 + Math.floor(hash(seed * 23) * (1 + lush * 2.5));
+            for (let r = 0; r < tufts; r++) {
+              const j = (hash(seed * 29 + r) - .5) * 1.9, d = .3 + hash(seed * 13 + r * 5) * 2.1, [x0, z0] = at(d), x = x0 + tx * j, z = z0 + tz * j;
+              // (wildflowers sparse and clumped: a few 14 m cells have a clump, most none — user, 23 Nov)
+              const hs = hash(x * 1.3 + z * 2.1), fl = hash(Math.floor(x / 14) * 3 + Math.floor(z / 14)) < .16 && hs < .3;
+              verge(N, x, yAt(d), z, hs, fl, .6 + tall * .7 + hash(seed * 37 + r) * .35);
             }
             // the ditch bottom: cattails where it stays wet, else grass
-            if (ok && hash(Math.floor((px + pz) / 31) * 7.7 + side) < .14 && seed < .45) { const [x, z] = at(2.5 + (seed - .25) * .6); cattails(N, x, profileY(2.5, rY, base), z, seed); }
+            if (ok && hash(Math.floor((px + pz) / 31) * 7.7 + side) < .14 && seed < .45) { const [x, z] = at(2.5 + (seed - .25) * .6); cattails(N, x, profileY(2.5, rY, base), z, seed, .75 + hash(seed * 41) * .5); }
             // the brush: berm out to the fence line, unless it's a lawn, or the crew mowed farther here
             const lawn = lc === LAND.yards || this.host.buildingNear(...at(10), 6);
             const mowed = hash(Math.floor((px * .7 + pz * .3) / 35) * 3.3 + e.n + side) < .18;
             if (lawn || mowed) continue;
-            for (let r = 0; r < 4; r++) {
-              const h = hash(seed * 31 + r * 7), d = 3.3 + r * .85 + h * .8, [x, z] = at(d);
+            const reach = 3 + hash(Math.floor((px + pz * .6) / 17) * 2.9 + side) * 3.5, count = 2 + Math.floor(hash(seed * 43) * (1 + lush * 5.5));
+            for (let r = 0; r < count; r++) {
+              const h = hash(seed * 31 + r * 7), j = (hash(seed * 47 + r) - .5) * 2.2, d = 2.9 + Math.pow(hash(seed * 53 + r * 3), .8) * reach;
+              const [x0, z0] = at(d), x = x0 + tx * j, z = z0 + tz * j;
               if (this.onRoad(x, z, .5) || this._drivewayNear(x, z, 1)) continue;
-              const y = yAt(d), k = hash(seed * 17 + r * 3);
-              // goldenrod in drifts (a low-frequency patchiness), tall grass between
-              const drift = hash(Math.floor(x / 14) * 5.1 + Math.floor(z / 14) * 2.3);
-              if (k < .2 + drift * .35) goldenrod(N, x, y, z, h);
-              else if (k < .82) tallGrass(N, x, y, z, h);
-              else laceAndChicory(N, x, y, z, h);
+              const y = d <= 4.8 ? yAt(d) : sH(x, z), k = hash(seed * 17 + r * 3);
+              // taller farther from the road and where the stand is lush; each its own
+              const sc = (.55 + tall * .55 + lush * .25) * (.85 + Math.min(1, (d - 2.9) / 4) * .3) * (.75 + hash(seed * 59 + r) * .5);
+              // patches of scrubby brush (sumac, dogwood, raspberry canes: user, 23 Nov "more scrubby brush"), goldenrod in
+              // sparser drifts, tall grass between, the odd lace or chicory
+              const drift = hash(Math.floor(x / 14) * 5.1 + Math.floor(z / 14) * 2.3), scrub = hash(Math.floor(x / 22) * 1.7 + Math.floor(z / 22) * 4.3 + side) < .38;
+              if (scrub && k < .45) scrubClump(N, x, y, z, h, sc);
+              else if (k < .08 + drift * .22) goldenrod(N, x, y, z, h, sc);
+              else if (k < .9) tallGrass(N, x, y, z, h, sc);
+              else laceAndChicory(N, x, y, z, h, sc);
             }
           }
         }
         close();
         // utility poles along one side, every 40 m; wires to the next pole (drawn by the tile with this one)
-        if (side !== poleSide) continue;
+        if (side !== poleSide || !struct) continue;
         const pole = (k) => {
           if (k < 1 || k > e.n - 1 || e._deck?.[k]) return null;
           const n = nAt(k), nx = n[0] * side, nz = n[1] * side, x = e.x[k] + nx * (half + 4.4), z = e.z[k] + nz * (half + 4.4);
@@ -997,6 +1178,16 @@ export class GraphCity {
           const lc = this.landAt(x, z); if (lc === LAND.paved || lc === LAND.plaza || lc === LAND.building) return null;
           return { x, z, y: sH(x, z), yaw: Math.atan2(-nz, nx), seed: hash(x * .31 + z * .77) };
         };
+        // road signs (user, 23 Nov cheap wins): every ~400 m or so on a through road — a speed limit, a curve ahead
+        // where it bends within the next 80 m, the odd deer crossing — on this side, facing the traffic coming
+        if (e.kind !== 'path' && e.kind !== 'track' && e.kind !== 'service') for (let i = Math.ceil(i0 / 37) * 37 + 5; i < i1 - 1; i += 37) {
+          const hs = hash(e.x[i] * .37 + e.z[i] * .91 + side); if (hs > .55) continue;
+          const n = nAt(i), nx = n[0] * side, nz = n[1] * side, x = e.x[i] + nx * (half + 3), z = e.z[i] + nz * (half + 3);
+          if (this.onRoad(x, z, .8) || this._drivewayNear(x, z, 1.5) || this.host.buildingNear(x, z, 1.5) || this.inWater(x, z)) continue;
+          const j = Math.min(e.n, i + 8), turn = Math.abs(Math.atan2(n[3], n[2]) - Math.atan2(nAt(j)[3], nAt(j)[2]));
+          const kind = Math.min(turn, Math.PI * 2 - turn) > .35 ? 'curve' : hs < .14 ? 'deer' : 'speed';
+          roadSign(M, x, sH(x, z), z, Math.atan2(-n[2] * side, -n[3] * side), kind);
+        }
         for (let i = Math.ceil(i0 / 4) * 4; i < i1; i += 4) {
           const P = pole(i); if (!P) continue;
           const A = utilityPole(M, P.x, P.y, P.z, P.yaw, P.seed);
@@ -1006,7 +1197,7 @@ export class GraphCity {
         }
       }
     }
-    const geo = ditchGeometry(runs);
+    const geo = struct ? ditchGeometry(runs) : null;
     if (geo) { const m = new THREE.Mesh(geo, this.ditchMat ||= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 })); m.name = `Ditches ${t.key}`; m.receiveShadow = true; m.userData.lodM = 700; this._add(t, m); }
   }
   /**
@@ -1034,13 +1225,13 @@ export class GraphCity {
             const h = hash(k * 13 + f * 5 + r * 3 + sd * 7), o = w - .35 + h * Math.max(.4, room + .35);
             const x = p.x + p.nx * sd * o + p.dx * along, z = p.z + p.nz * sd * o + p.dz * along;
             if (this.onRoad(x, z, .3) || this._railCovers(x, z)) continue;
-            const y = p.y - .05 + Math.max(0, Math.min(1, (o - w + .2) / 1.2)) * top, kind = hash(h * 31 + k);
-            if (o < w + .1) { if (kind < .35) cattails(N, x, p.y - .02, z, h); else if (kind < .7) tallGrass(N, x, p.y, z, h); continue; }
-            if (room < 1) { tallGrass(N, x, y, z, h); continue; }
-            if (kind < .45) scrubClump(N, x, y, z, h);
-            else if (kind < .75) tallGrass(N, x, y, z, h);
-            else if (kind < .9) goldenrod(N, x, y, z, h);
-            else laceAndChicory(N, x, y, z, h);
+            const y = p.y - .05 + Math.max(0, Math.min(1, (o - w + .2) / 1.2)) * top, kind = hash(h * 31 + k), sc = .6 + vnoise(x / 13, z / 13) * .6 + hash(h * 7) * .35;
+            if (o < w + .1) { if (kind < .35) cattails(N, x, p.y - .02, z, h, sc); else if (kind < .7) tallGrass(N, x, p.y, z, h, sc); continue; }
+            if (room < 1) { tallGrass(N, x, y, z, h, sc); continue; }
+            if (kind < .45) scrubClump(N, x, y, z, h, sc);
+            else if (kind < .75) tallGrass(N, x, y, z, h, sc);
+            else if (kind < .9) goldenrod(N, x, y, z, h, sc);
+            else laceAndChicory(N, x, y, z, h, sc);
           }
         }
       }
@@ -1437,7 +1628,7 @@ export class GraphCity {
     this.carMat?.dispose();
     for (const m of this.animalMats?.values() || []) { m.userData.depth.dispose(); m.dispose(); }
     for (const g of [this.lampGeo, this.acornGeo]) g.dispose();
-    for (const m of [this.kitMaterial, this.lampMaterial, this.lotMaterial, this.cropMat, this.ditchMat].filter(Boolean)) m.dispose();
+    for (const m of [this.kitMaterial, this.vergeMat, this.lampMaterial, this.lotMaterial, this.cropMat, this.ditchMat].filter(Boolean)) m.dispose();
     this.landTexture?.dispose();
   }
 }
