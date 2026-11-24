@@ -8,12 +8,14 @@
 //           drifting a little), strongest at golden hour
 //   leaves  falling leaves in a box round the camera: fluttering, spinning, drifting with the wind, wrapping round
 //   motes   tiny dust and pollen points floating in the air, catching the light when you look toward the sun
+//   smoke   a thin plume from some of the farmhouses' chimneys near you (user, 23 Nov: cheap wins)
 // Options: { beams: 1, mist: 1, leaves: 1, motes: 1 } (each a strength; 0 turns it off).
 // The world it needs: scene, camera, sunDir, sun, and (for beams and mist) city.forest.tiles, city.landAt / LAND codes,
 // poolAt(x, z), surfaceH(x, z).
 import * as THREE from '../../../../vendor/three.module.min.js';
+import { CHIMNEYS } from '../structures/houses/house-engine.js';
 
-const BEAMS = 14, MIST = 22, LEAVES = 160, MOTES = 420;
+const BEAMS = 14, MIST = 22, LEAVES = 160, MOTES = 420, SMOKERS = 12, PUFFS = 9;
 
 export const atmosphere = {
   install(world, opts = {}) {
@@ -103,6 +105,48 @@ export const atmosphere = {
       });
       mist = new THREE.Mesh(g, mat); mist.frustumCulled = false; mist.name = 'Ground mist'; mist.renderOrder = 4; mist.userData.bake = false;
       group.add(mist); parts.push(mist);
+    }
+
+    // ---------------------------------------------------------------- chimney smoke
+    let smoke = null;
+    if (on('smoke')) {
+      const g = new THREE.InstancedBufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute([-.5, -.5, 0, .5, -.5, 0, .5, .5, 0, -.5, .5, 0], 3));
+      g.setIndex([0, 1, 2, 0, 2, 3]);
+      const iA = new THREE.InstancedBufferAttribute(new Float32Array(SMOKERS * PUFFS * 4), 4); iA.setUsage(THREE.DynamicDrawUsage);
+      g.setAttribute('iA', iA); g.instanceCount = 0;
+      const mat = new THREE.ShaderMaterial({
+        uniforms: { uTime, uSunCol, ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog) },
+        transparent: true, depthWrite: false, fog: true,
+        vertexShader: /* glsl */`
+          attribute vec4 iA;   // the chimney's top x, y, z; w: the puff's phase (its chimney's seed + its place in the plume)
+          uniform float uTime;
+          varying vec2 vUv; varying float vA;
+          #include <fog_pars_vertex>
+          void main() {
+            float life = fract(uTime * .06 + iA.w);
+            vec3 c = iA.xyz + vec3(life * life * 7. + sin(uTime * .3 + iA.w * 9.) * .3 * life, life * 8., life * 2.5);   // up, and leaning off with the breeze
+            float size = .45 + life * 2.6;
+            vec4 mvPosition = viewMatrix * vec4(c, 1.);
+            mvPosition.xy += position.xy * size;
+            vUv = position.xy;
+            vA = smoothstep(0., .08, life) * (1. - life) * .32;
+            gl_Position = projectionMatrix * mvPosition;
+            #include <fog_vertex>
+          }`,
+        fragmentShader: /* glsl */`
+          uniform vec3 uSunCol;
+          varying vec2 vUv; varying float vA;
+          #include <fog_pars_fragment>
+          void main() {
+            float a = (1. - smoothstep(.15, .5, length(vUv))) * vA;
+            if (a < .004) discard;
+            gl_FragColor = vec4(mix(vec3(.62, .62, .64), uSunCol, .3), a);
+            #include <fog_fragment>
+          }`,
+      });
+      smoke = new THREE.Mesh(g, mat); smoke.frustumCulled = false; smoke.name = 'Chimney smoke'; smoke.renderOrder = 5; smoke.userData.bake = false;
+      group.add(smoke); parts.push(smoke);
     }
 
     // ---------------------------------------------------------------- drifting leaves
@@ -216,6 +260,15 @@ export const atmosphere = {
           A.setXYZW(k, x, y, z, 7 + Math.random() * 10); B.setXY(k, t, Math.random()); k++;
         }
         mist.geometry.instanceCount = k; A.needsUpdate = true; B.needsUpdate = true;
+      }
+      if (smoke) {
+        // the nearest chimneys within 300 m, two in five of them lit (by position: the same houses every time)
+        const near = [];
+        for (const c of CHIMNEYS.values()) { const d = Math.hypot(c.x - cam.x, c.z - cam.z); if (d < 300 && (Math.abs(Math.sin(c.x * 12.9898 + c.z * 78.233) * 43758.5453) % 1) < .4) near.push([d, c]); }
+        near.sort((a, b) => a[0] - b[0]);
+        const A = smoke.geometry.attributes.iA; let k = 0;
+        for (const [, c] of near.slice(0, SMOKERS)) { const sd = (c.x * .37 + c.z * .11) % 1; for (let j = 0; j < PUFFS; j++) A.setXYZW(k++, c.x, c.y, c.z, sd + j / PUFFS); }
+        smoke.geometry.instanceCount = k; A.needsUpdate = true;
       }
       placedAt = cam.clone(); lastPlace = t;
     };

@@ -234,7 +234,7 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
         if (L.pathY) for (const p of S2) { if (!p.ws) continue; const o = wOf(p, trailSide) + 4, ty = L.pathY(p.x + p.nx * trailSide * o, p.z + p.nz * trailSide * o, 14); if (ty != null) p.y = Math.min(p.y, ty - .9); }
       }
       // a creek's water: the world's water material when there is one (its ripples and glints: the "water" effect)
-      const WB = l.creek && Wa ? Wa : S;
+      const WB = l.creek && Wa ? Wa : S;   // (the canal stays its own inky still water: the water material read sky-blue on it)
       if (l.creek) WB.color('#4b6f6c');
       for (let i = 0; i + 1 < S2.length; i++) {
         const a = S2[i], b = S2[i + 1], wa = wOf(a, 1), wb = wOf(b, 1), va = wOf(a, -1), vb = wOf(b, -1);

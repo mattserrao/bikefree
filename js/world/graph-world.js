@@ -17,7 +17,9 @@ import { decodeTerrain } from './toolbox/landscape/real-terrain.js';
 import { CANAL, canalAt } from './toolbox/city/cny-landmarks.js';
 import { loadTerrainGrid } from '../terrain-grid.js';
 import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean, ROAD_LIFT } from './pose.js';
-import { loadRider } from './rider.js';
+import { loadRider, RIDER_RIM } from './rider.js';
+/** The clouds' clock (their shadows drifting over the ground and the roads; puddles' glints): seconds. */
+const CLOUD_T = { value: 0 };
 import { PerfMonitor } from './perf.js';
 import { BakedLighting } from './toolbox/atmosphere/baked-light.js';
 import { ShaderWarmer } from './toolbox/core/shader-warm.js';
@@ -397,6 +399,7 @@ export class GraphWorld {
     this.sun.color.set(t.sun); this.sun.intensity = t.sunI;
     this.hemi.color.set(t.hemiSky); this.hemi.groundColor.set(t.hemiGround); this.hemi.intensity = t.hemiI;
     this.renderer.toneMappingExposure = t.exposure;
+    RIDER_RIM.value.set(t.sun).multiplyScalar(t.night ? .08 : 1);
     this.scene.background = new THREE.Color(t.sky);
     this.scene.fog.color.set(t.fog);
     this.heroes?.setNight(t.night ? 1 : 0);
@@ -501,6 +504,7 @@ export class GraphWorld {
       this._place(this.p, RIDER_LANE, out);
     }
     this.crank += ((src.cadence || 0) / 60) * Math.PI * 2 * dt;
+    CLOUD_T.value = now / 1000;
     this.heroes?.tick(now / 1000, dt);
     this.effects.tick(now / 1000, dt);
     this.city?.tick(this.camera.position, now / 1000, this.path ? out : null, dt);
@@ -1590,9 +1594,10 @@ function roadSurfaceMaterial(low = false, ny = false, spill = false) {
   if (low) m.defines.LOWQ = '';
   if (ny) m.defines.NYWEAR = '';
   m.onBeforeCompile = (shader) => {
+    shader.uniforms.uCloudT = CLOUD_T;
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aRd; varying vec4 vRd; varying vec3 vGW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRd = aRd; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vRd; varying vec3 vGW;\n' + NOISE_GLSL + (ny ? NY_ROAD_GLSL : ''))
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vRd; varying vec3 vGW; uniform float uCloudT;\n' + NOISE_GLSL + (ny ? NY_ROAD_GLSL : ''))
       .replace('#include <color_fragment>', `#include <color_fragment>
         {
           vec3 c = diffuseColor.rgb;
@@ -1668,6 +1673,7 @@ function roadSurfaceMaterial(low = false, ny = false, spill = false) {
             float rim = smoothstep(.75, .8, pn) * worn * (1. - pud);
             col = mix(col, col * vec3(.62, .58, .52), rim * .8);
             col = mix(col, vec3(.46, .5, .55) * (.85 + .2 * gwN(vGW.xz * 3.)), pud * .9);
+            col += vec3(1., .9, .7) * pud * step(.985, gwH(floor(vGW.xz * 24.) + floor(uCloudT * 3.) * 7.)) * 1.6 * det;   // (the low sun glinting on it)
             c = pow(col, vec3(2.2));
           } else {                 // asphalt
             #ifdef LOWQ
@@ -1686,13 +1692,13 @@ function roadSurfaceMaterial(low = false, ny = false, spill = false) {
             c = nyWinterRoad(c, q, vRd.w, det, track, vGW);
             #endif
           }
-          diffuseColor.rgb = c;
+          diffuseColor.rgb = c * (1. - .2 * smoothstep(.55, .75, gwN((vGW.xz + uCloudT * vec2(3., 1.2)) * .0025)));   // (a cloud's shadow drifting over)
           #ifdef SPILL
           diffuseColor.rgb *= .84;   // (thin over the ground: a shade darker, so it doesn't read as a pale band)
           #endif
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-road-surface-6${low ? '-low' : ''}${ny ? '-ny1' : ''}${spill ? '-spill' : ''}`;
+  m.customProgramCacheKey = () => `pgh-road-surface-7${low ? '-low' : ''}${ny ? '-ny1' : ''}${spill ? '-spill' : ''}`;
   return m;
 }
 
@@ -1711,10 +1717,10 @@ function groundMaterial(low = false, rural = false) {
   const U = { uLand: { value: blank }, uLandBox: { value: new THREE.Vector4(0, 0, 1, 1) }, uLandOn: { value: 0 } };
   m.userData.land = U;
   m.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, U);
+    Object.assign(shader.uniforms, U); shader.uniforms.uCloudT = CLOUD_T;
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aLandW; varying float vLandW; varying vec3 vGW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLandW = aLandW; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLand; uniform vec4 uLandBox; uniform float uLandOn; varying float vLandW; varying vec3 vGW;\n' + NOISE_GLSL)
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLand; uniform vec4 uLandBox; uniform float uLandOn; uniform float uCloudT; varying float vLandW; varying vec3 vGW;\n' + NOISE_GLSL)
       .replace('#include <color_fragment>', `#include <color_fragment>
         if (uLandOn > .5 && vLandW > .01) {
           vec2 size = uLandBox.zw - uLandBox.xy;
@@ -1820,8 +1826,11 @@ function groundMaterial(low = false, rural = false) {
           }
           #endif
           if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * mix(clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vec3(1.), step(19.5, k) * .7), vLandW * (k > 19.5 || (k > 1.5 && k < 2.5) ? .95 : .85));   // (CNY's fields: their own colour, less of the ground's tint)
-        }`);
+        }
+        #ifdef NYGRASS
+        diffuseColor.rgb *= 1. - .2 * smoothstep(.55, .75, gwN((vGW.xz + uCloudT * vec2(3., 1.2)) * .0025));   // a cloud's shadow drifting over (user, 23 Nov)
+        #endif`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-7${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-8${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
   return m;
 }
