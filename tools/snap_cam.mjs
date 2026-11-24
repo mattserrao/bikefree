@@ -58,10 +58,10 @@ const SHOTS = views
     cam: [v.cam.lat, v.cam.lon, v.cam.abs ?? null], camUp: v.cam.up ?? 30, look: [v.look.lat, v.look.lon, v.look.abs ?? null], lookUp: v.look.up ?? 0, time: viewTime }))
   : JSON.parse(process.env.SHOTS || readFileSync(shotsFile, 'utf8'));
 await page.goto(`${base}/tools/world-preview.html?park=${park}&clean=1&quality=${quality}&pos=4300`);
-await page.waitForFunction(() => window.world?.terrain && (window.world.terrain.city || !window.world.terrain.landscape?.city) && window.world.terrain.kit && window.world._camInit, null, { timeout: 300000, polling: 500 });
+await page.waitForFunction(() => window.bfWorld?.terrain && (window.bfWorld.terrain.city || !window.bfWorld.terrain.landscape?.city) && window.bfWorld.terrain.kit && window.bfWorld._camInit, null, { timeout: 300000, polling: 500 });
 for (const sh of SHOTS) {
   const r = await page.evaluate(async (sh) => {
-    const w = window.world, t = w.terrain, city = t.city, P = w.proj;
+    const w = window.bfWorld, t = w.terrain, city = t.city, P = w.proj;
     w.stop();
     if (sh.time) w.setTimeOfDay(sh.time);
     const a = P.toLocal(sh.cam[0], sh.cam[1]), b = P.toLocal(sh.look[0], sh.look[1]);

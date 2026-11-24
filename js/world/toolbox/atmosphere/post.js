@@ -33,7 +33,31 @@ const inkChunk = /* glsl */`
     float ridge = smoothstep(uInkFar.y, uInkFar.y * 1.8, jump) * smoothstep(uInkFar.z * .6, uInkFar.z, zMin);
     return mix(col, col * .62, ridge * uInkFar.x);
   }`;
-const inkUniforms = () => ({ tDepth: { value: null }, uInkTexel: { value: new THREE.Vector2() }, uInk: { value: new THREE.Vector4() }, uInkFar: { value: new THREE.Vector3() }, uNearFar: { value: new THREE.Vector2() } });
+// Contact shading (graph worlds, High on laptops and desktops: user, 24 Nov — Zwift parity): a screen-space ambient
+// occlusion from the depth alone — 8 taps in a ring sized to ~0.7 m in the world, a neighbour that stands nearer by
+// 0.1–2 m shades the pixel. Read in the final pass (no extra pass); fades out by 160 m.
+const aoChunk = /* glsl */`
+  uniform vec2 uAO;   // strength, world radius (m)
+  uniform float uFocal;   // the projection's y scale (px per unit at 1 m: × half the target height)
+  float contactAO(vec2 uv, float z) {
+    if (uAO.x <= 0. || z > 160.) return 1.;
+    float r = uAO.y * uFocal / max(z, 1.);   // the radius in uv
+    // pairs of opposite taps: 1/z is linear across a plane on screen, so a flat surface (the road seen low) has the
+    // centre on the line between them and shades nothing; a crease (the ground meeting a wall, a car, a kerb) has the
+    // centre farther than that line: shaded by how much (0.05–1.5 m)
+    float occ = 0., rot = fract(sin(dot(uv, vec2(12.9898, 78.233))) * 43758.5) * .785;
+    for (int i = 0; i < 4; i++) {
+      float a = float(i) * .785398 + rot;
+      for (int j = 1; j <= 2; j++) {
+        vec2 o = vec2(cos(a), sin(a) * uInkTexel.x / uInkTexel.y) * r * float(j) * .5;
+        float wa = 1. / max(inkZ(uv + o), .1), wb = 1. / max(inkZ(uv - o), .1);
+        float dz = z - 1. / max((wa + wb) * .5, 1e-4);
+        occ += smoothstep(.04, .3, dz) * (1. - smoothstep(.8, 1.6, dz));
+      }
+    }
+    return 1. - uAO.x * occ / 8. * (1. - smoothstep(90., 160., z));
+  }`;
+const inkUniforms = () => ({ uAO: { value: new THREE.Vector2() }, uFocal: { value: 1 }, tDepth: { value: null }, uInkTexel: { value: new THREE.Vector2() }, uInk: { value: new THREE.Vector4() }, uInkFar: { value: new THREE.Vector3() }, uNearFar: { value: new THREE.Vector2() } });
 
 const quadVertex = /* glsl */`
   varying vec2 vUv;
@@ -91,8 +115,11 @@ export class PostFX {
         #include <packing>
         uniform sampler2D tScene; uniform sampler2D tBloom; uniform float uBloom; uniform float uVignette; uniform float uWarm; varying vec2 vUv;
         ${inkChunk}
+        ${aoChunk}
         void main() {
-          vec3 c = applyInk(texture2D(tScene, vUv).rgb, vUv) + texture2D(tBloom, vUv).rgb * uBloom;
+          vec3 c = texture2D(tScene, vUv).rgb;
+          if (uAO.x > 0.) c *= contactAO(vUv, inkZ(vUv));
+          c = applyInk(c, vUv) + texture2D(tBloom, vUv).rgb * uBloom;
           // grade: a touch more contrast and colour, warm highlights in low sun
           float l = dot(c, vec3(.2126, .7152, .0722));
           c = mix(vec3(l), c, 1.08);
@@ -127,7 +154,7 @@ export class PostFX {
         type: hdr ? THREE.HalfFloatType : THREE.UnsignedByteType, depthBuffer: true, samples: this.samples,
         // 32-bit float depth: what makes the reversed depth buffer precise out to the horizon
         depthTexture: new THREE.DepthTexture(this._size[0], this._size[1], THREE.FloatType) });
-      t.resolveDepthBuffer = !!this.ink;   // read back only for the cartoon outlines
+      t.resolveDepthBuffer = !!this.ink || !!this.ao;   // read back only for the cartoon outlines and the contact shading
       if (!hdr) {
         t.isXRRenderTarget = true; t.texture.colorSpace = THREE.SRGBColorSpace;
         t.texture.internalFormat = 'RGBA8';   // holds the already-encoded values as they are: no decode on the blit
@@ -146,8 +173,18 @@ export class PostFX {
     this.ink = ink || null;
   }
 
+  /** Contact shading: { strength, radiusM }, or null. */
+  setAO(ao) {
+    if (!!ao !== !!this.ao) for (const key of ['scene', 'plain']) if (this[key]) { this[key].depthTexture?.dispose(); this[key].dispose(); this[key] = null; }
+    this.ao = ao || null;
+  }
+
   _inkUniforms(material, target, camera) {
     const u = material.uniforms, ink = this.ink;
+    if (this.ao) {
+      u.tDepth.value = target.depthTexture; u.uInkTexel.value.set(1 / this._size[0], 1 / this._size[1]); u.uNearFar.value.set(camera.near, camera.far);
+      u.uAO.value.set(this.ao.strength, this.ao.radiusM); u.uFocal.value = camera.projectionMatrix.elements[5] * .5;
+    } else u.uAO.value.set(0, 1);
     if (!ink) { u.uInk.value.set(0, 0, 1, 1); u.uInkFar.value.set(0, 1, 1); return; }
     const ratio = this.renderer.getPixelRatio();
     u.tDepth.value = target.depthTexture;

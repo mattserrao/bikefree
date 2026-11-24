@@ -22,6 +22,8 @@ import { cellKey, freezeMatrix } from './graph-world.js';
 import { drain, runSlice, due } from './toolbox/core/jobs.js';
 import { planBuildingKitJob, makeStreetIndex, dress } from './toolbox/structures/buildings/kit.js';
 import { assemble, Writer } from './toolbox/structures/buildings/assemble.js';
+import { withSurfaceDetail } from './toolbox/materials/surface-detail.js';
+import { grassCard, grassMaterial, CARD } from './toolbox/landscape/grass-cards.js';
 import { buildHouse } from './toolbox/structures/houses/house-engine.js';
 import { makeFacadeMaterial } from './toolbox/structures/buildings/facade-material.js';
 import { villageFurniture } from './toolbox/city/village-street.js';
@@ -543,9 +545,10 @@ export class GraphCity {
     m.customProgramCacheKey = () => 'pgh-street-kit-1';
     this.kitMaterial = m;
     // the verges' grass and brush: one-triangle blades, both faces drawn
-    this.vergeMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9, metalness: 0, side: THREE.DoubleSide });
     // the trees: the tree engine (constructor); its wind clock
     this.treeTime = { value: 0 };
+    this.vergeMat = grassMaterial(this.world.renderer, this.treeTime, this.world.renderer.getContextAttributes?.()?.antialias || this.world.qualityKey === 'high');   // (soft picture cards: grass-cards.js)
+
     // the street kit's facade dressing (shop fronts, signs, awnings, cornices, belt courses, sills)
     this.glassNight = { value: 0 };   // (the shop glass: lit, not floodlit; follows the night in tick; the signs: the windows' night)
     this.facades = makeFacadeDresser(this.host.windowNight || night, { glassNight: this.glassNight,
@@ -1027,7 +1030,7 @@ export class GraphCity {
     }
     if (vNear) yield* this._canalScrub(t, N);
     // the wires: no shadow, baked or live (a 2.5 cm wire's shadow drew as a thick black line across the road)
-    if (t.wireM?.count) { const m = gpuOnly(new THREE.Mesh(t.wireM.geometry(), this.kitMaterial)); m.name = `Wires ${t.key}`; m.castShadow = false; m.userData.bake = false; this._add(t, m); }
+    if (t.wireM?.count) { const m = gpuOnly(new THREE.Mesh(t.wireM.geometry(), this._wireMat())); m.name = `Wires ${t.key}`; m.castShadow = false; m.userData.bake = false; this._add(t, m); }
     t.wireM = null;
     if (N.count) { const m = new THREE.Mesh(N.geometry(), this.vergeMat); m.name = `Verge ${t.key}`; m.userData.lodM = 240; const d = Math.hypot(t.cx - W.camera.position.x, t.cz - W.camera.position.z) - TILE * .71; m.visible = d < 240; this._add(t, this._gpuOnly(m), 'near'); t.vergeMesh = m; }
     // a farm stand by some farmhouses' drives (pumpkins and squash: it's September)
@@ -1042,6 +1045,33 @@ export class GraphCity {
     }
   }
 
+  /** A soft plant card (grass-cards.js): its size by kind and scale, a per-plant tint and turn. */
+  _card(N, x, y, z, seed, cell, sc) {
+    const SZ = [[.75, .38], [1.05, .95], [1.15, 1.3], [.95, 1.05]][cell], k = hash(seed * 7.7 + 3.1);
+    const tint = (this._tint ||= new THREE.Color()).setRGB(.62 + k * .18, .66 + hash(seed * 5.3) * .16, .58 + hash(seed * 2.9) * .14);
+    grassCard(N, x, y, z, cell, SZ[0] * (.8 + k * .4) * Math.min(1.3, sc), SZ[1] * sc, seed * 6.283, tint);
+  }
+  /**
+   * The wires' material (user, 24 Nov — Zwift parity: "less shimmer on wires"): a wire 5 cm thick is under a pixel
+   * past ~40 m and crawls as it comes and goes between pixels; here each vertex is pushed out along its normal so the
+   * wire is never thinner than about a pixel on screen, and fades to the sky's colour as it thins further (no flicker).
+   */
+  _wireMat() {
+    if (this.wireMat) return this.wireMat;
+    const m = new THREE.MeshLambertMaterial({ color: '#2a2a28' });
+    m.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying float vThin;')
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+          { vec4 wp = modelMatrix * vec4(position, 1.); float d = length(wp.xyz - cameraPosition);
+            float px = d * 2. / (projectionMatrix[1][1] * 900.);   // ~a pixel's size at that distance (a 900 px tall view)
+            float r = .025, want = max(r, px * .7);
+            transformed += normal * (want - r); vThin = r / want; }`);
+      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vThin;')
+        .replace('#include <opaque_fragment>', 'outgoingLight = mix(outgoingLight * 1.9 + vec3(.25), outgoingLight, clamp(vThin * 1.6, 0., 1.));\n#include <opaque_fragment>');
+    };
+    m.customProgramCacheKey = () => 'graph-wires-1';
+    return (this.wireMat = m);
+  }
   /** A tile's standing crops (row cards), built when the camera comes near it. */
   *_cropsJob(t) {
     const W = this.world, x0 = t.i * TILE, z0 = t.j * TILE, g = (x, z) => W._groundH(x, z);
@@ -1142,7 +1172,7 @@ export class GraphCity {
               const j = (hash(seed * 29 + r) - .5) * 1.9, d = .3 + hash(seed * 13 + r * 5) * 2.1, [x0, z0] = at(d), x = x0 + tx * j, z = z0 + tz * j;
               // (wildflowers sparse and clumped: a few 14 m cells have a clump, most none — user, 23 Nov)
               const hs = hash(x * 1.3 + z * 2.1), fl = hash(Math.floor(x / 14) * 3 + Math.floor(z / 14)) < .16 && hs < .3;
-              verge(N, x, yAt(d), z, hs, fl, .6 + tall * .7 + hash(seed * 37 + r) * .35);
+              this._card(N, x, yAt(d), z, hs, fl ? CARD.lace : CARD.turf, .6 + tall * .7 + hash(seed * 37 + r) * .35);
             }
             // the ditch bottom: cattails where it stays wet, else grass
             if (ok && hash(Math.floor((px + pz) / 31) * 7.7 + side) < .14 && seed < .45) { const [x, z] = at(2.5 + (seed - .25) * .6); cattails(N, x, profileY(2.5, rY, base), z, seed, .75 + hash(seed * 41) * .5); }
@@ -1162,9 +1192,9 @@ export class GraphCity {
               // sparser drifts, tall grass between, the odd lace or chicory
               const drift = hash(Math.floor(x / 14) * 5.1 + Math.floor(z / 14) * 2.3), scrub = hash(Math.floor(x / 22) * 1.7 + Math.floor(z / 22) * 4.3 + side) < .38;
               if (scrub && k < .45) scrubClump(N, x, y, z, h, sc);
-              else if (k < .08 + drift * .22) goldenrod(N, x, y, z, h, sc);
-              else if (k < .9) tallGrass(N, x, y, z, h, sc);
-              else laceAndChicory(N, x, y, z, h, sc);
+              else if (k < .08 + drift * .22) this._card(N, x, y, z, h, CARD.goldenrod, sc);
+              else if (k < .9) this._card(N, x, y, z, h, CARD.tall, sc);
+              else this._card(N, x, y, z, h, CARD.lace, sc);
             }
           }
         }
@@ -1198,7 +1228,7 @@ export class GraphCity {
       }
     }
     const geo = struct ? ditchGeometry(runs) : null;
-    if (geo) { const m = new THREE.Mesh(geo, this.ditchMat ||= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 })); m.name = `Ditches ${t.key}`; m.receiveShadow = true; m.userData.lodM = 700; this._add(t, m); }
+    if (geo) { const m = new THREE.Mesh(geo, this.ditchMat ||= (this.world.qualityKey === 'low' ? (x) => x : withSurfaceDetail)(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }), 'ditch')); m.name = `Ditches ${t.key}`; m.receiveShadow = true; m.userData.lodM = 700; this._add(t, m); }
   }
   /**
    * The canal's banks (user, 22 Nov: "the inside slope down to the water is covered with shrubs and scrubby plants"):
@@ -1226,12 +1256,12 @@ export class GraphCity {
             const x = p.x + p.nx * sd * o + p.dx * along, z = p.z + p.nz * sd * o + p.dz * along;
             if (this.onRoad(x, z, .3) || this._railCovers(x, z)) continue;
             const y = p.y - .05 + Math.max(0, Math.min(1, (o - w + .2) / 1.2)) * top, kind = hash(h * 31 + k), sc = .6 + vnoise(x / 13, z / 13) * .6 + hash(h * 7) * .35;
-            if (o < w + .1) { if (kind < .35) cattails(N, x, p.y - .02, z, h, sc); else if (kind < .7) tallGrass(N, x, p.y, z, h, sc); continue; }
-            if (room < 1) { tallGrass(N, x, y, z, h, sc); continue; }
+            if (o < w + .1) { if (kind < .35) cattails(N, x, p.y - .02, z, h, sc); else if (kind < .7) this._card(N, x, p.y, z, h, CARD.tall, sc); continue; }
+            if (room < 1) { this._card(N, x, y, z, h, CARD.tall, sc); continue; }
             if (kind < .45) scrubClump(N, x, y, z, h, sc);
-            else if (kind < .75) tallGrass(N, x, y, z, h, sc);
-            else if (kind < .9) goldenrod(N, x, y, z, h, sc);
-            else laceAndChicory(N, x, y, z, h, sc);
+            else if (kind < .75) this._card(N, x, y, z, h, CARD.tall, sc);
+            else if (kind < .9) this._card(N, x, y, z, h, CARD.goldenrod, sc);
+            else this._card(N, x, y, z, h, CARD.lace, sc);
           }
         }
       }
@@ -1628,7 +1658,7 @@ export class GraphCity {
     this.carMat?.dispose();
     for (const m of this.animalMats?.values() || []) { m.userData.depth.dispose(); m.dispose(); }
     for (const g of [this.lampGeo, this.acornGeo]) g.dispose();
-    for (const m of [this.kitMaterial, this.vergeMat, this.lampMaterial, this.lotMaterial, this.cropMat, this.ditchMat].filter(Boolean)) m.dispose();
+    for (const m of [this.kitMaterial, this.vergeMat, this.wireMat, this.lampMaterial, this.lotMaterial, this.cropMat, this.ditchMat].filter(Boolean)) m.dispose();
     this.landTexture?.dispose();
   }
 }

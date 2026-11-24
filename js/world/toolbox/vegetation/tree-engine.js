@@ -24,6 +24,7 @@
 import * as THREE from '../../../../vendor/three.module.min.js';
 import { decorateTreeMaterial } from '../packs/northern-rockies.js';
 import { makeLeafTexture } from './upstate-trees.js';
+import { SURFACE } from '../materials/surface-detail.js';
 
 // m: [near end, mid end] per quality; FADE: the crossfade's half width; IMP_END: where the impostors stop (the
 // tiles beyond are released anyway)
@@ -220,7 +221,10 @@ export class TreeEngine {
     const budgetPx = (mobile ? 56e6 : 140e6) / (4 * 1.34), fit = Math.floor(Math.sqrt(budgetPx / (ANGLES * Math.max(1, list.length))) / 8) * 8;
     const cell = TREES_2D ? Math.max(64, Math.min(CELL_2D[quality] || 192, fit, Math.floor(max / Math.max(1, list.length)), Math.floor(max / ANGLES))) : quality === 'low' ? 64 : quality === 'high' ? 160 : 128;
     const W = cell * ANGLES, H = cell * list.length;
-    const rt = new THREE.WebGLRenderTarget(W, H, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, samples: 0 });
+    // (laptops and desktops: the photos taken with 4× MSAA — smoother leaf edges in the atlas, so a near card's
+    //  crown isn't a staircase of texels: user, 24 Nov)
+    const rt = new THREE.WebGLRenderTarget(W, H, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, samples: mobile ? 0 : 4 });
+    this.atlasSize = [W, H];
     const scene = new THREE.Scene();
     const hemi = new THREE.HemisphereLight(lights?.hemi?.color || 0xffffff, lights?.hemi?.groundColor || 0x666655, lights?.hemi?.intensity ?? 1.2);
     const sun = new THREE.DirectionalLight(lights?.sun?.color || 0xffffff, lights?.sun?.intensity ?? 1.6);
@@ -259,7 +263,7 @@ export class TreeEngine {
     const [b0, b1] = [this.b0, this.b1];
     this.impMat = new THREE.ShaderMaterial({
       fog: true,
-      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uAtlas: { value: rt.texture }, uRows: { value: this.rows }, uNow: { value: 0 } }]),
+      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uAtlas: { value: rt.texture }, uRows: { value: this.rows }, uNow: { value: 0 }, uAtlasSize: { value: new THREE.Vector2(W, H) } }]),
       vertexShader: /* glsl */`
         attribute vec4 iA; attribute vec4 iB; attribute float iT; attribute vec2 iS;   // iA: x, y, z, rotation; iB: width, height, row, tint; iT: when its tile came; iS: its swap (when, 0 hidden / 1 shown / 2 in / 3 out)
         uniform float uRows; uniform float uNow;
@@ -291,11 +295,30 @@ export class TreeEngine {
           #include <fog_vertex>
         }`,
       fragmentShader: /* glsl */`
-        uniform sampler2D uAtlas; varying vec2 vUv; varying vec2 vUv2; varying float vBlend; varying float vKeep; varying float vOut; varying float vTint;
+        uniform sampler2D uAtlas; uniform sampler2D uSurf; uniform vec2 uAtlasSize; varying vec2 vUv; varying vec2 vUv2; varying float vBlend; varying float vKeep; varying float vOut; varying float vTint;
         #include <common>
         #include <fog_pars_fragment>
+        // a cubic B-spline sample from four bilinear taps: smooth, no blocks, when the card's magnified
+        vec4 cubic(vec2 uv) {
+          vec2 st = uv * uAtlasSize - .5, i = floor(st), f = st - i;
+          vec2 w0 = (1. - f) * (1. - f) * (1. - f) / 6., w1 = (4. - 6. * f * f + 3. * f * f * f) / 6., w3 = f * f * f / 6., w2 = 1. - w0 - w1 - w3;
+          vec2 s0 = w0 + w1, s1 = w2 + w3, o0 = i - .5 + w1 / s0, o1 = i + 1.5 + w3 / s1;
+          return (texture2D(uAtlas, vec2(o0.x, o0.y) / uAtlasSize) * s0.x + texture2D(uAtlas, vec2(o1.x, o0.y) / uAtlasSize) * s1.x) * s0.y
+               + (texture2D(uAtlas, vec2(o0.x, o1.y) / uAtlasSize) * s0.x + texture2D(uAtlas, vec2(o1.x, o1.y) / uAtlasSize) * s1.x) * s1.y;
+        }
         void main() {
-          vec4 c0 = texture2D(uAtlas, vUv), c1 = texture2D(uAtlas, vUv2), c = mix(c0, c1, vBlend);
+          vec2 tpx = fwidth(vUv) * uAtlasSize;
+          float mag = clamp(1.25 - max(tpx.x, tpx.y) * 1.25, 0., 1.);
+          vec4 c0, c1;
+          if (mag > 0.) { c0 = cubic(vUv); c1 = cubic(vUv2); } else { c0 = texture2D(uAtlas, vUv); c1 = texture2D(uAtlas, vUv2); }
+          vec4 c = mix(c0, c1, vBlend);
+          // a near card, magnified past its photo's texels (user, 24 Nov: "softening the pixelation", trees staying 2D):
+          // leaf clusters from the detail texture break up the blocks of colour and roughen the silhouette's staircase
+          if (mag > 0.) {
+            float lf = texture2D(uSurf, vUv * uAtlasSize / 22.).g, lf2 = texture2D(uSurf, vUv * uAtlasSize / 9. + .37).g;
+            c.rgb *= 1. + (lf * .6 + lf2 * .4 - .5) * .75 * mag;
+            c.a = clamp(c.a + (lf2 - .5) * .55 * mag * smoothstep(.15, .85, c.a) * (1. - smoothstep(.85, 1., c.a)) * 2., 0., 1.);
+          }
           // the edge's coverage over about a pixel (alpha to coverage under MSAA: soft silhouettes, no sorting)
           float cov = clamp((c.a - .5) / max(fwidth(c.a), 1e-4) + .5, 0., 1.);
           if (cov <= 0.) discard;
@@ -313,11 +336,38 @@ export class TreeEngine {
     // (the atlas after the merge: UniformsUtils.merge won't clone a render target's texture — it set uAtlas to null,
     //  and the impostors drew nothing: every tree past the mid band was missing)
     this.impMat.uniforms.uAtlas.value = rt.texture;
+    this.impMat.uniforms.uSurf = SURFACE;   // (the shared detail texture: a blank until loaded)
     this.impMat.alphaToCoverage = !!this.msaa;
-    this.impMat.customProgramCacheKey = () => `tree-engine-impostor-7-${this.ft}-${this.msaa ? 1 : 0}`;
+    this.impMat.customProgramCacheKey = () => `tree-engine-impostor-9-${this.ft}-${this.msaa ? 1 : 0}`;
     this.impMesh = new THREE.Mesh(geo, this.impMat);
     this.impMesh.frustumCulled = false; this.impMesh.name = 'Trees (impostors)';
     this.group.add(this.impMesh);
+  }
+  /**
+   * Leafy live shadows from the near trees (user, 24 Nov — Zwift parity, desktop High: "scenery shadows near the
+   * rider"): the impostors drawn into the sun's shadow map too, each card turned to face the light (in the shadow pass
+   * cameraPosition is the light's) and cut by its photo's alpha, so the dappled shade under the crowns falls on the
+   * rider and the road. The shadow box is the world's small live one round the rider.
+   */
+  castShadows(on) {
+    if (!this.impMesh) return;
+    this.impMesh.castShadow = !!on;
+    this.impMesh.userData.dynamic = !!on;   // (the bake's sweep leaves dynamic things casting live)
+    this.impMesh.userData.bake = false;
+    if (!on || this.impMesh.customDepthMaterial) return;
+    const src = this.impMat;
+    const vs = src.vertexShader.replace('#include <fog_pars_vertex>', '').replace('#include <fog_vertex>', '');
+    this.impMesh.customDepthMaterial = new THREE.ShaderMaterial({
+      uniforms: src.uniforms, vertexShader: vs,
+      fragmentShader: /* glsl */`
+        #include <packing>
+        uniform sampler2D uAtlas; varying vec2 vUv; varying vec2 vUv2; varying float vBlend; varying float vKeep; varying float vOut; varying float vTint;
+        void main() {
+          vec4 c = mix(texture2D(uAtlas, vUv), texture2D(uAtlas, vUv2), vBlend);
+          if (c.a < .5 || vKeep < .5) discard;
+          gl_FragColor = packDepthToRGBA(gl_FragCoord.z);
+        }`,
+    });
   }
   /** Rebuild the impostors' instance data from every tile's trees (on tile changes only: the data is static). */
   _rebuildImpostors() {

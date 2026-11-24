@@ -15,6 +15,7 @@
 // quoins, ivy and weathering (damp at the foot, drips under sills, sun fade, moss on shady roofs) are all
 // drawn here. Every detail fades to its average once it's a couple of pixels, so nothing shimmers far off.
 import * as THREE from '../../../../../vendor/three.module.min.js';
+import { SKY_REFLECT } from '../../atmosphere/sky-dome.js';
 
 export const FRAMES = ['#efebe2', '#e4dac4', '#6b4a32', '#3b3d3f', '#9ea4a8'];
 /** Flags (aWin.w / 256). */
@@ -153,6 +154,9 @@ const GLSL_FRAG = /* glsl */`
   varying vec4 vSurf; flat varying vec4 vWin; flat varying vec2 vB; flat varying vec3 vTrim; flat varying float vFrame; flat varying vec3 vAcc;
   varying vec3 vWN; varying vec3 vWP;
   // ---- windows: returns the window's colour over 'wall' (a = coverage)
+  #ifdef BK_SKY
+  uniform vec3 uBkHor, uBkZen;
+  #endif
   vec3 bkGlass(vec2 q, vec2 hw, float h, float px) {
     vec3 g = bkLin(vec3(.2, .25, .3));
     float streak = smoothstep(.15, .5, fract((q.x + q.y * .7) * .6 + h * 3.)) * (1. - smoothstep(.5, .85, fract((q.x + q.y * .7) * .6 + h * 3.)));
@@ -269,7 +273,26 @@ const GLSL_FRAG = /* glsl */`
     else if (ws == 11) m = bkLine(q.x, 100., .05, px);
     g = mix(g, frameC, clamp(m, 0., 1.) * (1. - open));
     c = mix(c, frameC, inF);
+    #ifdef BK_SKY
+    {
+      // (user, 24 Nov — Zwift parity: "recessed windows with sky-reflecting glass"): the glass set 12 cm back in the
+      // wall — seen at an angle, a strip of the reveal (the jamb in shade) shows on one side and over the top — and the
+      // glass mirrors the sky, more at a glancing angle (Fresnel), the ground's dark below the horizon
+      vec3 Vw = normalize(cameraPosition - vWP), tW = normalize(vec3(vWN.z, 0., -vWN.x) + 1e-5);
+      float dn = max(dot(Vw, vWN), .2);
+      vec2 shift = vec2(dot(Vw, tW), Vw.y) / dn * .12;
+      float inG = bkBox(q + shift, -hw, hw, px) * inW;
+      vec3 R = reflect(-Vw, vWN);
+      vec3 sky = mix(uBkHor, uBkZen, smoothstep(0., .55, R.y));
+      sky = mix(sky * .22, sky, smoothstep(-.04, .08, R.y));
+      float fres = .06 + .94 * pow(1. - dn, 4.);
+      g = mix(g, sky, clamp(.18 + fres * .6, 0., .75) * (1. - open) * (1. - clamp(m, 0., 1.)));
+      c = mix(c, g, inG);
+      c = mix(c, trim * .42 + frameC * .1, max(inW - inG, 0.));   // the reveal, in shade
+    }
+    #else
     c = mix(c, g, inW);
+    #endif
     a = inF;
     // flower boxes (geraniums)
     if (flowers && (fi > .5 || ws == 3) && h2 > .25 && !gable) {
@@ -436,8 +459,10 @@ const GLSL_MAIN = /* glsl */`
 export function makeFacadeMaterial(uniforms = {}) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9, metalness: 0 });
   const sun = uniforms.uSunDir || { value: new THREE.Vector3(.3, .8, .2) };
+  m.defines = { ...(m.defines || {}), BK_SKY: '' };
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uSunDir = sun;
+    shader.uniforms.uBkHor = SKY_REFLECT.horizon; shader.uniforms.uBkZen = SKY_REFLECT.zenith;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${GLSL_COMMON}`)
       .replace('#include <color_vertex>', `#include <color_vertex>
@@ -451,7 +476,7 @@ export function makeFacadeMaterial(uniforms = {}) {
       .replace('#include <common>', `#include <common>\n${FACADE_GLSL}\n${GLSL_FRAG}`)
       .replace('#include <color_fragment>', `#include <color_fragment>\n${GLSL_MAIN}`);
   };
-  m.customProgramCacheKey = () => 'bf-building-kit-1';
+  m.customProgramCacheKey = () => 'bf-building-kit-2';
   m.userData.buildingKit = true;
   return m;
 }

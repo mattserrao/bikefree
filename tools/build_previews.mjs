@@ -156,23 +156,23 @@ async function renderPark(park, files) {
   const q = new URLSearchParams({ park, clean: '1', quality, pos: String(first.s ?? 0), time: RENDER.time, weather: RENDER.weather });
   const tp = Date.now();
   await page.goto(`${base}/tools/world-preview.html?${q}`);
-  await page.waitForFunction(() => window.world?.terrain && (window.world.terrain.kit || !window.world.stylized) && window.world._camInit && window.world.rider?.triangles, null, { timeout: 240000, polling: 500 });
-  await page.evaluate(async (cam) => { const pose = await import('/js/world/pose.js'); pose.CAMERAS.postcard = cam; window.world.camKey = 'postcard'; window.world._camInit = false; }, RENDER.camera);
+  await page.waitForFunction(() => window.bfWorld?.terrain && (window.bfWorld.terrain.kit || !window.bfWorld.stylized) && window.bfWorld._camInit && window.bfWorld.rider?.triangles, null, { timeout: 240000, polling: 500 });
+  await page.evaluate(async (cam) => { const pose = await import('/js/world/pose.js'); pose.CAMERAS.postcard = cam; window.bfWorld.camKey = 'postcard'; window.bfWorld._camInit = false; }, RENDER.camera);
   console.log(`  ${park}: world ready in ${Math.round((Date.now() - tp) / 1000)} s`);
   for (const file of files) {
     const r0 = Date.now(), { render } = images.get(file);
     errors.length = 0;
     try {
-      if (render.s != null) await page.evaluate((s) => { const w = window.world; window.preview.seek(s); w._camInit = false; if (!w.running) w.start(); }, render.s);
-      else await page.evaluate(() => { const w = window.world; if (!w.running) w.start(); });
+      if (render.s != null) await page.evaluate((s) => { const w = window.bfWorld; window.preview.seek(s); w._camInit = false; if (!w.running) w.start(); }, render.s);
+      else await page.evaluate(() => { const w = window.bfWorld; if (!w.running) w.start(); });
       // let the world follow (camera, terrain and city chunks streamed in frames), then build what's queued
-      await page.waitForFunction(() => window.world._camInit, null, { timeout: 60000, polling: 100 });
+      await page.waitForFunction(() => window.bfWorld._camInit, null, { timeout: 60000, polling: 100 });
       await page.waitForTimeout(1200);
       const t1 = Date.now();
-      await page.waitForFunction(() => { const w = window.world; if (w.stylized) return !w.loading; const c = w.camera.position; w.terrain.update(c.x, c.z); return w.terrain.loadingCount === 0 && w.terrain.stats.ready > 4; }, null, { timeout: 180000, polling: 500 });
+      await page.waitForFunction(() => { const w = window.bfWorld; if (w.stylized) return !w.loading; const c = w.camera.position; w.terrain.update(c.x, c.z); return w.terrain.loadingCount === 0 && w.terrain.stats.ready > 4; }, null, { timeout: 180000, polling: 500 });
       const t2 = Date.now();
       const shot = await page.evaluate(async ({ render, W, H, out, webp }) => {
-        const w = window.world, t = w.terrain, city = t.city;
+        const w = window.bfWorld, t = w.terrain, city = t.city;
         w.stop();
         const cam = w.camera, P = w.proj;
         if (render.view) {

@@ -25,11 +25,11 @@ const [VW, VH] = opt('--size', '640x360').split('x').map(Number);
 const page = await browser.newPage({ viewport: { width: VW, height: VH } });
 const q = new URLSearchParams({ graph: opt('--graph', 'routes/cities/pgh.json'), lat: opt('--lat', '40.4469'), lon: opt('--lon', '-80.0058'), quality: opt('--quality', 'balanced') });   // (--graph: another map, e.g. routes/cities/skan.json)
 await page.goto(`${base}/tools/pgh-preview.html?${q}`);
-await page.waitForFunction(() => window.world && window.world.readiness().ready, null, { timeout: 300000, polling: 500 });
+await page.waitForFunction(() => window.bfWorld && window.bfWorld.readiness().ready, null, { timeout: 300000, polling: 500 });
 const cdp = args.includes('--profile') ? await page.context().newCDPSession(page) : null;
 if (cdp) { await cdp.send('Profiler.enable'); await cdp.send('Profiler.setSamplingInterval', { interval: 200 }); await cdp.send('Profiler.start'); }
 const res = await page.evaluate(async ({ seconds, speed }) => {
-  const w = window.world, T = {}, frames = [];
+  const w = window.bfWorld, T = {}, frames = [];
   let cur = null;
   const wrap = (obj, name, label) => {
     const f = obj[name]; if (typeof f !== 'function') return;

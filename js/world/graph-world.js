@@ -18,6 +18,10 @@ import { CANAL, canalAt } from './toolbox/city/cny-landmarks.js';
 import { loadTerrainGrid } from '../terrain-grid.js';
 import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean, ROAD_LIFT } from './pose.js';
 import { loadRider, RIDER_RIM } from './rider.js';
+import { makeSkyDome } from './toolbox/atmosphere/sky-dome.js';
+import { PostFX } from './toolbox/atmosphere/post.js';
+import { SURFACE, SURFACE_SUN, SURFACE_GLSL, loadSurfaceDetail, withSurfaceDetail } from './toolbox/materials/surface-detail.js';
+import { MOBILE } from './graph-city.js';
 /** The clouds' clock (their shadows drifting over the ground and the roads; puddles' glints): seconds. */
 const CLOUD_T = { value: 0 };
 import { PerfMonitor } from './perf.js';
@@ -163,6 +167,7 @@ export class GraphWorld {
    */
   constructor(container, base, opts = {}) {
     this.container = container;
+    this.cloudTime = CLOUD_T;   // (seconds: the clouds, ripples)
     this.route = base;
     this.G = base.graph;
     this.json = this.G.json;
@@ -253,7 +258,7 @@ export class GraphWorld {
     }
     this._reach();
     this.mats = {
-      road: new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
+      road: sideMaterial(this.qualityKey === 'low'),
       paint: this.rural ? wornPaintMaterial() : new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
       ground: groundMaterial(this.qualityKey === 'low', this.rural),
       roadSurface: roadSurfaceMaterial(this.qualityKey === 'low', this.rural),
@@ -338,6 +343,7 @@ export class GraphWorld {
     this._resize = () => {
       const w = container.clientWidth || 1, h = container.clientHeight || 1;
       this.renderer.setSize(w, h, false);
+      this.post?.setSize(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
       this.camera.aspect = w / h;
       this.camera.updateProjectionMatrix();
     };
@@ -379,10 +385,11 @@ export class GraphWorld {
    *   atmosphere  sun beams, mist, leaves, motes;  verge  roadside grass and brush;  life  people, parked cars, animals
    */
   setGfx(g = {}) {
-    this.gfx = { fps: 0, battery: 'off', distance: 1, trees: 1, shadows: true, atmosphere: true, verge: true, life: true, ...g };
+    this.gfx = { fps: 0, battery: 'off', distance: 1, trees: 1, shadows: true, atmosphere: true, verge: true, life: true, post: true, ...g };
     this._reach();
     if (this.baked) this.sun.castShadow = this.gfx.shadows && !!this.baked.world.terrain.quality.shadows; else { this._sunCasts ??= this.sun.castShadow; this.sun.castShadow = this.gfx.shadows && this._sunCasts; }
     this.effects?.set?.('atmosphere', this.gfx.atmosphere);
+    this._treeShadows();
     this.city?.setGfx(this.gfx);
     const apply = (saving) => { if (saving !== this._saving) { this._saving = saving; this._pixelRatio(); } };
     if (this.gfx.battery === 'auto' && globalThis.navigator?.getBattery) {
@@ -402,6 +409,10 @@ export class GraphWorld {
     this.renderer.toneMappingExposure = t.exposure;
     RIDER_RIM.value.set(t.sun).multiplyScalar(t.night ? .08 : 1);
     this.scene.background = new THREE.Color(t.sky);
+    if (!this.sky) { this.sky = makeSkyDome({ radius: 8500 }); this.scene.add(this.sky.mesh); }
+    this.sky.set(t, this.sunDir, this.rural ? .5 : .35);
+    SURFACE_SUN.value.copy(this.sunDir);
+    if (this.qualityKey !== 'low') loadSurfaceDetail(this.renderer);
     this.scene.fog.color.set(t.fog);
     this.heroes?.setNight(t.night ? 1 : 0);
     if (this.baked) { this.baked.setLight(t); this.sun.castShadow = (this.gfx?.shadows ?? true) && !!this.baked.world.terrain.quality.shadows; }
@@ -467,6 +478,7 @@ export class GraphWorld {
   get loading() { return (this._queued || 0) > 6 || this.baked?.preparing ? 4 : 0; }
 
   dispose() {
+    this.post?.dispose(); this.post = null; this.sky?.dispose();
     this.effects?.dispose();
     this.stop();
     this.disposed = true;
@@ -506,6 +518,7 @@ export class GraphWorld {
     }
     this.crank += ((src.cadence || 0) / 60) * Math.PI * 2 * dt;
     CLOUD_T.value = now / 1000;
+    this.sky?.tick(this.camera, now / 1000);
     this.heroes?.tick(now / 1000, dt);
     this.effects.tick(now / 1000, dt);
     this.city?.tick(this.camera.position, now / 1000, this.path ? out : null, dt);
@@ -531,13 +544,42 @@ export class GraphWorld {
       const c = this.sun.shadow.camera, span = this.baked.dynamicSpan;
       if (c.right !== span) { c.left = -span; c.right = span; c.top = span; c.bottom = -span; c.updateProjectionMatrix(); }
       this.sun.position.copy(this.rider.group.position).addScaledVector(this.sunDir, 2000); this.sun.target.position.copy(this.rider.group.position);
+      if ((this._frames % 120) === 7) this._treeShadows();
       if ((this._frames % 30) === 0) for (const g of [this.group, this.heroes?.group]) g?.traverse((o) => { if (o.isMesh && !o.userData._rs) { o.userData._rs = 1; o.receiveShadow = true; } });
       if (this.baked.preparing) { this.perf?.end(performance.now()); return; }   // (nothing drawn behind the loader: the bake has the GPU)
     }
     this.shaders?.tick(dt, this._warmStart || this._frames > 600);
     if (this._preload && this._frames % 4) return;
-    this.renderer.render(this.scene, this.camera);
+    this._draw();
     this.perf?.end(performance.now());
+  }
+
+  /**
+   * Post-processing (user, 24 Nov — Zwift parity, item 3): on High, on a laptop or desktop, and unless switched off in
+   * More graphics, the scene draws into an HDR target with 4× MSAA, then the final pass adds contact shading (a
+   * depth-only SSAO), a soft bloom on the brightest light and a light grade, and tone-maps. Phones and the other
+   * levels draw straight to the canvas as before.
+   */
+  /** Desktop High with live shadows on: the near trees' leafy shadows in the live map (2048 px, 60 m box). */
+  _treeShadows() {
+    const on = this._postOn() && (this.gfx?.shadows ?? true) && !!this.baked;
+    this.city?.forest?.castShadows(on);
+    if (this.baked) { this.baked.dynamicSpan = on ? 60 : this.baked.opts.dynamicSpanM; const sz = on ? 2048 : 1024; if (this.sun.shadow.mapSize.x !== sz) { this.sun.shadow.mapSize.set(sz, sz); this.sun.shadow.map?.dispose(); this.sun.shadow.map = null; } }
+  }
+  _postOn() { return this.qualityKey === 'high' && !MOBILE && (this.gfx?.post ?? true); }
+  _draw() {
+    if (this._postOn()) {
+      if (!this.post) {
+        this.post = new PostFX(this.renderer, { samples: 4 });
+        this.post.setAO({ strength: .7, radiusM: .7 });
+        const w = this.container?.clientWidth || this.renderer.domElement.clientWidth || 1, h = this.container?.clientHeight || this.renderer.domElement.clientHeight || 1;
+        this.post.setSize(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
+      }
+      this.post.render(this.scene, this.camera, { bloom: .22, threshold: 1.15, warm: this.timeKey === 'golden' ? 1 : 0 });
+    } else {
+      if (this.post) { this.post.dispose(); this.post = null; }
+      this.renderer.render(this.scene, this.camera);
+    }
   }
 
   _place(p, lane, out) {
@@ -975,6 +1017,10 @@ export class GraphWorld {
           }
           // a shoulder: a gravel edge on a trail, then the verge sloping down to the ground, then a short face
           const band = path ? 0.35 : 0.2;
+          // a raised trail (user, 24 Nov: "smooth the hard edge drop off"): a rounded embankment 3–5 m wide down to the
+          // ground — its crest curving over, its foot easing in, its width wandering along the trail — in the trail's
+          // own surface, the gravel thinning to ground cover down the slope (the shader: _bankJob's codes + 0.5 m)
+          if (this.rural && (ext[k] === 5 || ext[k] === 6) && this._trailBank(R, t, p0, p1, o0, o1, c0, c1, sgn, half, ext[k])) { W.wall(p0, p1, -0.6, -0.01, side, flip); continue; }
           if (ext[k] === 5 || ext[k] === 6) {
             // a gravel or dirt way (the towpath): its shoulder in the path's own surface — the same stone dust and
             // tone running down the side, not a green verge (user, 23 Nov: "the side of the towpath should carry the
@@ -1153,6 +1199,40 @@ export class GraphWorld {
     }
     const m = R.mesh(this.mats.spill);
     if (m) { t.spillMesh = m; this._spillDirty = true; }   // (drawn merged with the other near tiles': _mergeSpill)
+  }
+
+  /**
+   * A raised trail's side as a rounded embankment (see the call): rings out from the trail's edge to a foot 3–5 m out
+   * (wandering along the trail), each ring's height eased from the crest down to the ground there. Returns false where
+   * the trail isn't above the ground beside it (it keeps its short shoulder), or the canal's at its side.
+   */
+  _trailBank(R, t, p0, p1, o0, o1, c0, c1, sgn, half, surf) {
+    const width = (s) => 3 + 2 * (.5 + .5 * Math.sin(s * .043 + 1.3) * Math.cos(s * .017 + .4));
+    const w0 = width(c0.s), w1 = width(c1.s);
+    const at = (p, o, d) => [p[0] + o[0] * d, p[2] + o[1] * d];
+    const gA = this._groundH(...at(p0, o0, w0)), gB = this._groundH(...at(p1, o1, w1));
+    const dropA = p0[1] - gA, dropB = p1[1] - gB;
+    if (Math.max(dropA, dropB) < .35) return false;
+    for (const [p, o, w] of [[p0, o0, w0], [p1, o1, w1]]) { const [x, z] = at(p, o, w * .6); const c = canalAt(x, z, 1); if (c && !c.creek) return false; }
+    // the ground cover at the foot: woods (litter, roots) or open grass — the colour the slope's lower part takes
+    const lc = this.city?.landAt?.(...at(p0, o0, w0 + 1));
+    const woods = lc === 2, cover = woods ? new THREE.Color('#54432e') : new THREE.Color('#5d7539');
+    const RINGS = [0, .08, .2, .36, .55, .74, .9, 1];
+    const ring = (p, o, w, g, f) => {
+      // the profile: a smootherstep from the crest to the ground (convex at the top, concave at the foot)
+      const e = f * f * f * (f * (f * 6 - 15) + 10), d = w * f, [x, z] = at(p, o, d);
+      const y = Math.max(p[1] + (g - p[1]) * e, this._groundH(x, z) + .02 * (1 - f)) - (f === 0 ? .01 : 0);
+      return [x, f === 1 ? Math.min(y, this._groundH(x, z) - .02) : y, z];
+    };
+    for (let j = 0; j + 1 < RINGS.length; j++) {
+      const fa = RINGS[j], fb = RINGS[j + 1];
+      const a0 = ring(p0, o0, w0, gA, fa), a1 = ring(p1, o1, w1, gB, fa), b0 = ring(p0, o0, w0, gA, fb), b1 = ring(p1, o1, w1, gB, fb);
+      // aRd: the surface + .5 (a bank: the shader's code), across (m past the edge, signed as the trail's), along, half (+ 100 under woods)
+      const rd = (c, f, w) => [surf + .5, -sgn * (half + f * w), c.s, half + (woods ? 100 : 0)];
+      if (sgn > 0) R.quadX(b0, a0, a1, b1, cover, [rd(c0, fb, w0), rd(c0, fa, w0), rd(c1, fa, w1), rd(c1, fb, w1)]);
+      else R.quadX(a0, b0, b1, a1, cover, [rd(c0, fa, w0), rd(c0, fb, w0), rd(c1, fb, w1), rd(c1, fa, w1)]);
+    }
+    return true;
   }
 
   /** The near tiles' spill strips as one mesh (one draw call, not one a tile), rebuilt when the set changes. */
@@ -1563,10 +1643,10 @@ const NY_ROAD_GLSL = /* glsl */`
       float side = gwH(vec2(pb, 24.)) < .5 ? -1. : 1., wide = gwH(vec2(pb, 25.)) < .35 ? hw : hw * (.45 + .3 * gwH(vec2(pb, 26.)));
       float cx = side * (hw - wide * .5) * step(wide, hw - .01);
       float inP = step(p0, along) * step(along, p1) * step(abs(q.x - cx), wide * .5);
-      vec3 pc = base * mix(.72, 1.05, gwH(vec2(pb, 27.)));
+      vec3 pc = base * mix(.86, 1.04, gwH(vec2(pb, 27.)));   // (a shade off the road round it, not a dark slab: user, 24 Nov)
       float rim = 1. - smoothstep(0., .06, min(min(along - p0, p1 - along), wide * .5 - abs(q.x - cx)));
-      lin = mix(lin, pc * (.92 + .12 * gwN(w.xz * 6.)), inP * (.4 + .6 * det));
-      lin = mix(lin, base * .35, inP * rim * .7 * det);   // the sealed saw cut round it
+      lin = mix(lin, pc * (.92 + .12 * gwN(w.xz * 6.)), inP * (.3 + .45 * det) * (.55 + .45 * gwN(w.xz * .6 + pb)));   // (worn into the road: patchy)
+      lin = mix(lin, base * .55, inP * rim * .45 * det);   // the sealed saw cut round it
     }
     vec2 hp = vec2(floor(along / 7.), floor((q.x + hw) / 1.6));
     if (gwH(hp + 40.) > .93 - worn * .06) {
@@ -1631,21 +1711,25 @@ function roadSurfaceMaterial(low = false, ny = false, spill = false) {
   if (low) m.defines.LOWQ = '';
   if (ny) m.defines.NYWEAR = '';
   m.onBeforeCompile = (shader) => {
-    shader.uniforms.uCloudT = CLOUD_T;
+    shader.uniforms.uCloudT = CLOUD_T; shader.uniforms.uSurf = SURFACE; shader.uniforms.uSurfSun = SURFACE_SUN;
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aRd; varying vec4 vRd; varying vec3 vGW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRd = aRd; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vRd; varying vec3 vGW; uniform float uCloudT;\n' + NOISE_GLSL + (ny ? NY_ROAD_GLSL : ''))
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vRd; varying vec3 vGW; uniform float uCloudT;\n' + NOISE_GLSL + SURFACE_GLSL + (ny ? NY_ROAD_GLSL : ''))
       .replace('#include <color_fragment>', `#include <color_fragment>
         {
           vec3 c = diffuseColor.rgb;
-          int sf = int(vRd.x + .5);
+          int sf = int(vRd.x + .25);
+          bool bank = fract(vRd.x) > .25 && fract(vRd.x) < .75;   // a raised trail's embankment (_trailBank)
+          bool bankWoods = vRd.w > 50.;
+          vec4 rdw = vRd; if (bankWoods) rdw.w -= 100.;
+          vec3 cover = c; float bankG = 1.;
           vec2 q = vRd.yz;
           #ifdef SPILL
           sf -= 20;
           {
             // the spill (_spillJob): dense by the shoulder's foot, scattered grains farther out; how far it reaches and
             // how thick it lies wander along the edge (q.y: metres along) and in patches
-            float t = clamp((abs(q.x) - vRd.w - 3.) / 1.5, 0., 1.);
+            float t = clamp((abs(q.x) - rdw.w - 3.) / 1.5, 0., 1.);
             float reach = .25 + .75 * gwN(vec2(q.y * .07, 3.3 + sign(q.x) * 5.)), thick = .45 + .55 * gwN(vGW.xz * .15 + 8.);
             float solid = (1. - smoothstep(reach * .3, reach, t)) * thick;
             if (gwH(floor(vGW.xz * 16.)) > solid * 1.1 + .02 || t > reach) discard;
@@ -1653,7 +1737,7 @@ function roadSurfaceMaterial(low = false, ny = false, spill = false) {
           #endif
           float px = max(fwidth(q.y), fwidth(q.x)) + 1e-4, det = 1. - smoothstep(.015, .07, px);
           float wear = .25 + .65 * gwN(vGW.xz * .004 + 3.1);
-          float track = 1. - smoothstep(0., .45, abs(abs(abs(q.x) - vRd.w * .5) - .85));
+          float track = 1. - smoothstep(0., .45, abs(abs(abs(q.x) - rdw.w * .5) - .85));
           #ifdef LOWQ
           if (det < .02 && sf >= 1 && sf <= 4) sf = sf == 1 ? 11 : 0;   // far off: brick as its plain colour, the others as asphalt
           if (sf == 11) c = pow(vec3(.38, .2, .15), vec3(2.2)); else
@@ -1688,7 +1772,7 @@ function roadSurfaceMaterial(low = false, ny = false, spill = false) {
             // path, packed and a little darker; the edges are ragged into the grass; patches of fresh grey gravel, damp
             // dark spots and leaf litter come and go; now and then a shallow puddle in the worn line, the sky in it
             vec3 g = sf == 5 ? vec3(.62, .57, .48) : vec3(.43, .36, .27);
-            float w = max(vRd.w, 1.);
+            float w = max(rdw.w, 1.);
             float wan = (gwN(vec2(q.y * .021, 3.7)) - .5) * w * .5 + (gwN(vec2(q.y * .09, 8.1)) - .5) * w * .14;
             float lineD = abs(q.x - wan), worn = 1. - smoothstep(w * .2, w * .5, lineD);
             float rag = (gwN(vec2(q.y * .35, 9.3)) - .5) * .5 + (gwN(vec2(q.y * 1.7, 4.4)) - .5) * .18;
@@ -1712,6 +1796,25 @@ function roadSurfaceMaterial(low = false, ny = false, spill = false) {
             col = mix(col, vec3(.46, .5, .55) * (.85 + .2 * gwN(vGW.xz * 3.)), pud * .9);
             col += vec3(1., .9, .7) * pud * step(.985, gwH(floor(vGW.xz * 24.) + floor(uCloudT * 3.) * 7.)) * 1.6 * det;   // (the low sun glinting on it)
             c = pow(col, vec3(2.2));
+            if (bank) {
+              // the embankment (user, 24 Nov): the trail's gravel spills over the crest and thins out in grains (how far
+              // wanders), then the ground cover — grass, or under the woods the litter — darker toward the foot;
+              // stones bedded in the slope here and there, and under the woods roots crossing it
+              float o = abs(q.x) - w;
+              float crest = .45 + .9 * gwN(vec2(q.y * .09, 13.1)) + .3 * gwN(vec2(q.y * .4, 2.7));
+              float gm = 1. - smoothstep(crest * .4, crest, o);
+              gm = smoothstep(-.08, .08, gm * 1.15 - .05 - gwH(floor(vGW.xz * 24.)) * mix(1., .6, det));   // (fine grains: 4 cm)
+              vec3 gc = cover * (.85 + .3 * gwN(vGW.xz * .8)) * (1. - .18 * smoothstep(1.5, 4.5, o));
+              if (bankWoods) { vec2 lq = mat2(.8, -.6, .6, .8) * vGW.xz * 5.5, lf = floor(lq); gc = mix(gc, pow(mix(vec3(.55, .33, .16), vec3(.62, .5, .22), gwH(lf + 5.)), vec3(2.2)) * .8, step(.9, gwH(lf + 33.)) * (1. - smoothstep(.2, .32, length(fract(lq) - .5))) * det * .6); }
+              float stone = gwH(floor(vGW.xz * 1.6) + 77.), sr = length(fract(vGW.xz * 1.6) - .5 - (vec2(gwH(floor(vGW.xz * 1.6) + 2.), gwH(floor(vGW.xz * 1.6) + 9.)) - .5) * .3);
+              float st = step(.9, stone) * (1. - smoothstep(.16, .24, sr)) * smoothstep(.6, 1.2, o);
+              vec3 stc = pow(vec3(.5, .49, .45), vec3(2.2)) * (.8 + .4 * gwH(floor(vGW.xz * 1.6) + 5.)) * (1.15 - sr * 1.6);
+              float rt = 0.;
+              if (bankWoods) { float rq = q.y * .8 + sin(o * 2.1 + q.y * .3) * .25; rt = (1. - smoothstep(.02, .06, abs(fract(rq * .35) - .5))) * step(.55, gwN(vec2(floor(rq * .35), 4.))) * smoothstep(.5, 1., o) * (1. - smoothstep(3.5, 5., o)); }
+              c = mix(gc, c, gm); bankG = gm;
+              c = mix(c, stc, st * det);
+              c = mix(c, pow(vec3(.27, .2, .14), vec3(2.2)), rt * det * .85);
+            }
           } else {                 // asphalt
             #ifdef LOWQ
             c *= (.94 + .12 * wear) * (1. - wear * .1 * track);
@@ -1723,19 +1826,23 @@ function roadSurfaceMaterial(low = false, ny = false, spill = false) {
             c = mix(c, c * 1.16, step(.74 - wear * .12, pa) * .7);                           // patches
             float cr = abs(gwN(vGW.xz * .55 + 11.) - .5);
             c *= 1. - wear * .22 * step(.62, gwN(vGW.xz * .05 + 2.)) * (1. - smoothstep(.0, .01, cr)) * det;   // sealed cracks (in the worn places)
-            c *= 1. - .08 * (1. - smoothstep(0., .5, vRd.w - abs(q.x)));                     // the edge, darker
+            c *= 1. - .08 * (1. - smoothstep(0., .5, rdw.w - abs(q.x)));                     // the edge, darker
             #endif
             #ifdef NYWEAR
-            c = nyWinterRoad(c, q, vRd.w, det, track, vGW);
+            c = nyWinterRoad(c, q, rdw.w, det, track, vGW);
             #endif
           }
+          #ifndef LOWQ
+          // the surface's texture near the camera (asphalt aggregate; a trail's gravel): user, 24 Nov — Zwift parity
+          { float sdist = length(vGW - cameraPosition); c *= (bank && bankG < .5) ? surfaceDetail(vGW.xz, bankWoods ? 1 : 2, bankWoods ? 5. : 3., sdist, .8) : (sf == 5 || sf == 6) ? surfaceDetail(vGW.xz, 1, 3.5, sdist, .9) : surfaceDetail(vGW.xz, 0, 5., sdist, .75); }
+          #endif
           diffuseColor.rgb = c * (1. - .2 * smoothstep(.55, .75, gwN((vGW.xz + uCloudT * vec2(3., 1.2)) * .0025)));   // (a cloud's shadow drifting over)
           #ifdef SPILL
           diffuseColor.rgb *= .84;   // (thin over the ground: a shade darker, so it doesn't read as a pale band)
           #endif
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-road-surface-7${low ? '-low' : ''}${ny ? '-ny1' : ''}${spill ? '-spill' : ''}`;
+  m.customProgramCacheKey = () => `pgh-road-surface-10${low ? '-low' : ''}${ny ? '-ny1' : ''}${spill ? '-spill' : ''}`;
   return m;
 }
 
@@ -1745,6 +1852,13 @@ function roadSurfaceMaterial(low = false, ny = false, spill = false) {
  * plazas, sand — with a little noise in the edges so they aren't the grid's.
  */
 /** low (Light, phones): one noise for the land cover's shading, no wobble on its edges. */
+/** The ways' sides (verges, shoulders, kerbs, embankments): vertex colour, and near the camera the surface texture
+ *  (user, 24 Nov — Zwift parity). */
+function sideMaterial(low = false) {
+  const m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  return low ? m : withSurfaceDetail(m, 'graph-side');
+}
+
 function groundMaterial(low = false, rural = false) {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true });
   m.defines = {};
@@ -1754,11 +1868,26 @@ function groundMaterial(low = false, rural = false) {
   const U = { uLand: { value: blank }, uLandBox: { value: new THREE.Vector4(0, 0, 1, 1) }, uLandOn: { value: 0 } };
   m.userData.land = U;
   m.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, U); shader.uniforms.uCloudT = CLOUD_T;
+    Object.assign(shader.uniforms, U); shader.uniforms.uCloudT = CLOUD_T; shader.uniforms.uSurf = SURFACE; shader.uniforms.uSurfSun = SURFACE_SUN;
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aLandW; varying float vLandW; varying vec3 vGW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLandW = aLandW; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLand; uniform vec4 uLandBox; uniform float uLandOn; uniform float uCloudT; varying float vLandW; varying vec3 vGW;\n' + NOISE_GLSL)
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLand; uniform vec4 uLandBox; uniform float uLandOn; uniform float uCloudT; varying float vLandW; varying vec3 vGW;\n' + NOISE_GLSL + SURFACE_GLSL)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        #ifndef LOWQ
+        {
+          // the ground's small relief near the camera (the height grid is 12.8 m: hummocks, ruts and hollows of 1–6 m
+          // in the light alone, no vertices — user, 24 Nov: "finer ground near the road")
+          float rd = 1. - smoothstep(40., 160., length(vGW - cameraPosition));
+          if (rd > 0.) {
+            vec2 p = vGW.xz * .32; float e = .35;
+            float h0 = gwN(p) + gwN(p * 2.7 + 7.) * .45, hx = gwN(p + vec2(e, 0.)) + gwN((p + vec2(e, 0.)) * 2.7 + 7.) * .45, hz = gwN(p + vec2(0., e)) + gwN((p + vec2(0., e)) * 2.7 + 7.) * .45;
+            vec3 g = vec3(h0 - hx, 0., h0 - hz) * .55 * rd;
+            normal = normalize(normal + (viewMatrix * vec4(g, 0.)).xyz);
+          }
+        }
+        #endif`)
       .replace('#include <color_fragment>', `#include <color_fragment>
+        int sdCh = 2;
         if (uLandOn > .5 && vLandW > .01) {
           vec2 size = uLandBox.zw - uLandBox.xy;
           #ifdef LOWQ
@@ -1766,7 +1895,10 @@ function groundMaterial(low = false, rural = false) {
           float k = floor(texture2D(uLand, uv).r * 255. + .5);
           float n = gwN(vGW.xz * .35);
           #else
-          vec2 uv0 = (vGW.xz - uLandBox.xy) / size, uv = uv0 + (vec2(gwN(vGW.xz * .21), gwN(vGW.xz * .21 + 19.)) - .5) * 4. / size;
+          // the cover read through a wander (±3.5 m) and a scatter of grains (±3 m, 0.4 m grains): the edge between two
+          // covers a ragged, feathered strip where each creeps into the other, not a 6 m staircase (user, 24 Nov)
+          vec2 gr = floor(vGW.xz * 2.5);
+          vec2 uv0 = (vGW.xz - uLandBox.xy) / size, uv = uv0 + ((vec2(gwN(vGW.xz * .21), gwN(vGW.xz * .21 + 19.)) - .5) * 7. + (vec2(gwH(gr + 3.1), gwH(gr + 8.7)) - .5) * 6. * (1. - smoothstep(60., 220., length(vGW - cameraPosition)))) / size;
           float k = floor(texture2D(uLand, uv).r * 255. + .5);
           // water isn't wobbled: a canal or a creek is only a few cells wide, and the wobble broke it into pools
           // (user, 22 Nov: "the water in the canal … is cutting out")
@@ -1862,12 +1994,17 @@ function groundMaterial(low = false, rural = false) {
             if (k > 10.5 && k < 11.5 || k > 27.5) lc = mix(lc, lc * vec3(1.05, .98, .85), smoothstep(.55, .75, gwN(vGW.xz * .5)) * .5);   // tussocks, seed heads
           }
           #endif
+          if (k > 1.5 && k < 2.5) sdCh = 1;   // (the woods' floor: stone dust and grit, not turf)
           if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * mix(clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vec3(1.), step(19.5, k) * .7), vLandW * (k > 19.5 || (k > 1.5 && k < 2.5) ? .95 : .85));   // (CNY's fields: their own colour, less of the ground's tint)
         }
+        #ifndef LOWQ
+        // the ground's texture near the camera: turf, or the woods' floor's grit (user, 24 Nov — Zwift parity)
+        diffuseColor.rgb *= surfaceDetail(vGW.xz, sdCh, sdCh == 1 ? 5. : 3., length(vGW - cameraPosition), sdCh == 1 ? .6 : .8);
+        #endif
         #ifdef NYGRASS
         diffuseColor.rgb *= 1. - .2 * smoothstep(.55, .75, gwN((vGW.xz + uCloudT * vec2(3., 1.2)) * .0025));   // a cloud's shadow drifting over (user, 23 Nov)
         #endif`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-8${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-11${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
   return m;
 }

@@ -72,7 +72,7 @@ const open = async (graph, at, w = VW, h = VH) => {
   const [lat, lon] = at.split(',');
   const t0 = Date.now();
   await page.goto(`${base}/tools/pgh-preview.html?${new URLSearchParams({ graph, lat, lon, dir: '+', at: 40, quality: opt('--quality', 'balanced') })}`);
-  await page.waitForFunction(() => window.world && window.world.readiness().ready, null, { timeout: 300000, polling: 250 });
+  await page.waitForFunction(() => window.bfWorld && window.bfWorld.readiness().ready, null, { timeout: 300000, polling: 250 });
   return { page, errors, loadS: +((Date.now() - t0) / 1000).toFixed(1) };
 };
 
@@ -84,7 +84,7 @@ for (const map of maps) {
     const { page, errors, loadS } = await open(M.graph, v.at);
     R.loadS ??= loadS;
     const s = await page.evaluate(async (cam) => {
-      const w = window.world; w.stop();
+      const w = window.bfWorld; w.stop();
       if (cam) {
         const [ea, eo, eu, la, lo, lu] = cam.split(',').map(Number), y = (p) => Math.max(w._groundH(p.x, p.z), w.poolAt(p.x, p.z));
         const e = w.proj.toLocal(ea, eo), t = w.proj.toLocal(la, lo);
@@ -115,7 +115,7 @@ for (const map of maps) {
   if (M.ride && (!only || only.includes('ride'))) {
     const { page } = await open(M.graph, M.ride.at, RW, RH);
     R.ride = await page.evaluate(async ({ seconds, speed }) => {
-      const w = window.world, frames = [];
+      const w = window.bfWorld, frames = [];
       w.setPreload?.(false);
       const pos0 = w.p, t0 = performance.now();
       w.setSource(() => ({ pos: pos0 + ((performance.now() - t0) / 1000) * speed, speed, cadence: 85, riding: true }));

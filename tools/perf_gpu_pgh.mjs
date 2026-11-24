@@ -22,9 +22,9 @@ const browser = await chromium.launch({ executablePath: chrome, args: software ?
 const [W, H] = opt('--size', '640x360').split('x').map(Number);
 const page = await browser.newPage({ viewport: { width: W, height: H } });
 await page.goto(`${base}/tools/pgh-preview.html?${new URLSearchParams({ lat: opt('--lat', '40.42855'), lon: opt('--lon', '-79.9845'), quality: opt('--quality', 'balanced') })}`);
-await page.waitForFunction(() => window.world && window.world.readiness().ready, null, { timeout: 300000, polling: 500 });
+await page.waitForFunction(() => window.bfWorld && window.bfWorld.readiness().ready, null, { timeout: 300000, polling: 500 });
 const out = await page.evaluate(async () => {
-  const w = window.world; w.stop();
+  const w = window.bfWorld; w.stop();
   const THREE = await import('/vendor/three.module.min.js');
   for (let k = 0; k < 400; k++) w._stream(w.camera.position.x, w.camera.position.z, 1e9);
   const time = (r = w.renderer, n = 3) => { const gl = r.getContext(), px = new Uint8Array(4); r.render(w.scene, w.camera); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); const t0 = performance.now(); for (let i = 0; i < n; i++) { r.render(w.scene, w.camera); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); } return +((performance.now() - t0) / n).toFixed(1); };

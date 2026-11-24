@@ -82,7 +82,7 @@ try {
  $('weather').value = q.get('weather') || 'clear'; world.setWeather($('weather').value, true);
  $('weather').addEventListener('change', (e) => world.setWeather(e.target.value)); $('quality').value = world.qualityKey;
  world.setSource(() => { const now = performance.now(); pos = (pos + speed * (now - last) / 1000) % span; last = now; return { pos, speed, cadence: speed ? 84 : 0, riding: true }; });
- window.world = world;
+ window.bfWorld = world;
  // course arches (the app's start / finish): ?arches=<m>[:TITLE[:sub]],<m>[:TITLE[:sub]] — start, then finish (snap --arches)
  if (q.get('arches')) {
    const [a, b] = q.get('arches').split(',');

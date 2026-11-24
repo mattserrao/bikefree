@@ -25,7 +25,7 @@ export const DEFAULT_SETTINGS = {
   // the graphics menu's finer settings (laptops; user, 23 Nov): fps cap (0 none, 60, 30), battery saver (off | on |
   // auto: while unplugged), draw distance and tree density (×), and on/off for live shadows, atmosphere (sun beams,
   // mist), roadside grass and brush, and people & cars
-  gfx: { fps: 0, battery: 'off', distance: 1, trees: 1, shadows: true, atmosphere: true, verge: true, life: true },
+  gfx: { fps: 0, battery: 'off', distance: 1, trees: 1, shadows: true, atmosphere: true, verge: true, life: true, post: true },
 };
 
 export function loadSettings() {

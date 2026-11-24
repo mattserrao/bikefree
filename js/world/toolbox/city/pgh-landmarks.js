@@ -10,12 +10,12 @@ import { MeshBuilder } from '../core/mesh-builder.js';
 import { V, TAU, centroid, scaleRing, orient, prism, cap, block, chamfer, frameOf, makeFrame, lathe, disc, gable } from './hero-geom.js';
 import { buildStadiums } from './bridges.js';
 import { glasshouseFrame } from '../structures/glasshouse.js';
-import { cnyLandmarkModels } from './cny-landmarks.js';
+import { cnyLandmarkModels, canalWaterMaterial } from './cny-landmarks.js';
 import { skanLandmarkModels } from './skan-landmarks.js';   // (SKAN's: Clift Park's pier and gazebo, the Sherwood Inn, mansions…)   // (CNY's: the aqueduct, Sims' Store, the Octagon House…)
 
 export function buildPghLandmarks(host, data) {
   const L = host.landscape, proj = host.D.proj;
-  const W = new MeshBuilder({ aBld: 4 }), S = new MeshBuilder(), N = new MeshBuilder({ aGlow: 3 }), Wa = new MeshBuilder();   // (Wa: water surfaces, in the world's water material)
+  const W = new MeshBuilder({ aBld: 4 }), S = new MeshBuilder(), N = new MeshBuilder({ aGlow: 3 }), Wa = new MeshBuilder(), Ca = new MeshBuilder();   // (Wa: water surfaces, in the world's water material; Ca: the canal's)
   const glows = [], beacons = [];
   const local = (la, lo) => proj.toLocal(la, lo);
   const ground = (ring) => { let g = Infinity; for (const p of ring) g = Math.min(g, L.heightAt(p.x, p.z)); return g; };
@@ -328,7 +328,7 @@ export function buildPghLandmarks(host, data) {
     },
   };
 
-  Object.assign(M, cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa }));
+  Object.assign(M, cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa, Ca }));
   Object.assign(M, skanLandmarkModels({ S, N, glows, plan, ground, local, L, Wa }));
   for (const l of data.landmarks || []) {
     const f = M[l.model];
@@ -418,6 +418,7 @@ export function buildPghLandmarks(host, data) {
   add(W, host.buildingMaterial, 'PGH landmark towers');
   add(S, host.solidMaterial, 'PGH landmarks');
   if (Wa.count) add(Wa, host.waterMaterial || host.solidMaterial, 'Landmark water');
+  if (Ca.count) add(Ca, host.own(canalWaterMaterial(host.waterTime || { value: 0 })), 'Canal water');
   if (N.count) { const nm = host.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .5 })); nm.onBeforeCompile = (shader) => { shader.uniforms.uNight = host.night; shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 aGlow; varying vec3 vGlow;').replace('#include <fog_vertex>', '#include <fog_vertex>\nvGlow = aGlow;'); shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight; varying vec3 vGlow;').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vGlow * uNight * 2.;'); }; nm.customProgramCacheKey = () => 'pgh-landmark-neon'; add(N, nm, 'PGH landmark lights'); }
   host.addGlows(glows, 'PGH landmark lamps');
   host.addGlows(beacons.map((b) => ({ ...b, size: 6, color: '#ff3b2e' })), 'PGH tower beacons');
