@@ -929,7 +929,9 @@ export class GraphWorld {
     for (let i = a; i < b || (i === b && true); i++) {
       for (let q = 0; q < (i === b ? 1 : SUB); q++) {
         const t = q / SUB, i0 = P(i - 1), i1 = i, i2 = P(i + 1), i3 = P(i + 2);
-        const cr = (v) => { const p0 = v[i0], p1 = v[i1], p2 = v[i2], p3 = v[i3]; return 0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t); };
+        // (past an end, the end's own line carried on — as js/graph.js pads the base line the rider rides, so the
+        //  drawn curve and the ridden one are the same)
+        const cr = (v) => { const p0 = i - 1 < 0 ? 2 * v[0] - v[Math.min(1, e.n)] : v[i0], p1 = v[i1], p2 = v[i2], p3 = i + 2 > e.n ? 2 * v[e.n] - v[Math.max(0, e.n - 1)] : v[i3]; return 0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t); };
         const x = i === b ? e.x[b] : cr(e.x), z = i === b ? e.z[b] : cr(e.z), y = i === b ? e.ele[b] : e.ele[i1] + (e.ele[i2] - e.ele[i1]) * t;
         if (px !== null) s += Math.hypot(x - px, z - pz);
         out.push({ x, z, y, i: i + t, s }); px = x; pz = z;
@@ -969,6 +971,10 @@ export class GraphWorld {
     const verge = new THREE.Color(this.rural ? '#78974a' : '#7b8556'), gravelC = new THREE.Color('#a59b84'), walkC = new THREE.Color('#b4afa4'), curbC = new THREE.Color('#c3beb3'), walkSide = new THREE.Color('#9d988e');
     for (const { e, a, b } of t.pieces) {
       if (due()) yield;
+      // (a hero area's singletrack has no ribbon of its own: its path is the area's floor worn through where the tires go
+      //  — old-growth.js draws it — user, 24 Nov: "Start with the ground material and almost overlay wear from a bike
+      //  passing over")
+      if (e._cf && this.json?.oldGrowth) continue;
       const half = this.wOf(e) / 2, path = e.kind === 'path', walk = this.walkOf(e);
       const base = e._rw ? new THREE.Color('#a9a59c') : e._cf ? new THREE.Color('#6e553c') : col(e.kind), lift = e._cf ? 0.05 : ROAD_LIFT + (path ? -0.03 : 0);   // (a singletrack: packed, lighter earth, right on the floor)
       const deck = new Uint8Array(e.n + 1);
@@ -1891,9 +1897,9 @@ function groundMaterial(low = false, rural = false) {
   m.userData.land = U;
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, U); shader.uniforms.uCloudT = CLOUD_T; shader.uniforms.uSurf = SURFACE; shader.uniforms.uSurfSun = SURFACE_SUN;
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aLandW; varying float vLandW; varying vec3 vGW;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLandW = aLandW; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLand; uniform vec4 uLandBox; uniform float uLandOn; uniform float uCloudT; varying float vLandW; varying vec3 vGW;\n' + NOISE_GLSL + SURFACE_GLSL)
+    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aLandW; attribute float aTread; varying float vLandW; varying vec3 vGW; varying float vTread;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLandW = aLandW; vTread = aTread; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLand; uniform vec4 uLandBox; uniform float uLandOn; uniform float uCloudT; varying float vLandW; varying vec3 vGW; varying float vTread;\n' + NOISE_GLSL + SURFACE_GLSL)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         #ifndef LOWQ
         {
@@ -2001,36 +2007,44 @@ function groundMaterial(low = false, rural = false) {
           }
           else if (k < 29.5 && k > 28.5) lc = mix(vec3(.5, .43, .32), vec3(.6, .53, .41), n * .7 + gwN(vGW.xz * .09) * .3);   // farmyard: gravel and packed earth
           else if ((k > 29.5 && k < 31.5) || (k > 32.5 && k < 33.5)) {
-            // an old-growth hero area's floor (user, 24 Nov: "you're in the understory and see brown ground, dead logs
-            // twigs leaf litter ferns"): last year's leaves matted brown, this fall's first ones fallen on them — maple
-            // orange and gold, beech tan — twigs, green patches of the summer's herbs, damp dark hollows; in shade under
-            // the closed canopy (the blowdown, open to the sky: lighter, greener with its brambles and seedlings)
+            // an old-growth hero area's floor (user, 24 Nov, with photos of a golden beech–maple stand): a thick carpet of
+            // this fall's leaves — gold, tan, orange, a few still green — over last year's brown; twigs; lit in long bars
+            // of low sun between the trunks' shadows (the golden-hour sun from the west-south-west: the bars run along it);
+            // the blowdown greener with its brambles and seedlings
             float blow = step(32.5, k);
-            lc = mix(vec3(.3, .22, .13), vec3(.42, .31, .18), n);
-            lc = mix(lc, vec3(.24, .3, .14), smoothstep(.6, .78, gwN(vGW.xz * .06 + 11.)) * (.45 + blow * .35));
+            lc = mix(vec3(.5, .34, .15), vec3(.62, .45, .2), n);
+            lc = mix(lc, vec3(.36, .25, .13), smoothstep(.6, .8, gwN(vGW.xz * .05 + 11.)) * .4);   // last year's brown, where the new fall is thin
+            lc = mix(lc, vec3(.3, .33, .15), blow * smoothstep(.45, .7, gwN(vGW.xz * .08 + 3.)) * .5);
             #ifndef LOWQ
-            lc *= .84 + .3 * gwN(vGW.xz * 3.7);
-            for (int q = 0; q < 2; q++) {
-              float sc = q == 0 ? 4.2 : 7.1;
+            lc *= .86 + .26 * gwN(vGW.xz * 3.7);
+            for (int q = 0; q < 3; q++) {
+              float sc = q == 0 ? 3.6 : q == 1 ? 6.3 : 10.1;
               vec2 lq = mat2(.82, -.57, .57, .82) * vGW.xz * sc + (vec2(gwN(vGW.xz * 1.3 + float(q) * 5.), gwN(vGW.xz * 1.3 + 7.)) - .5) * 1.8, lf = floor(lq);
               float lr = length(fract(lq) - .5 + (vec2(gwH(lf + 2.), gwH(lf + 3.)) - .5) * .35), hl = gwH(lf + 5. + float(q) * 9.);
-              vec3 leaf = hl < .35 ? vec3(.72, .36, .12) : hl < .6 ? vec3(.74, .58, .22) : hl < .8 ? vec3(.55, .42, .26) : vec3(.42, .3, .18);
-              lc = mix(lc, leaf, step(.78 - float(q) * .1, gwH(lf + 13.)) * (1. - smoothstep(.16, .3, lr)) * .6);
+              vec3 leaf = hl < .3 ? vec3(.86, .6, .18) : hl < .55 ? vec3(.8, .48, .14) : hl < .75 ? vec3(.66, .5, .28) : hl < .9 ? vec3(.5, .32, .16) : vec3(.5, .52, .2);
+              lc = mix(lc, leaf, step(.55 - float(q) * .08, gwH(lf + 13.)) * (1. - smoothstep(.2, .34, lr)) * .7);
             }
             vec2 tw = mat2(.6, -.8, .8, .6) * vGW.xz; float tl = abs(fract(tw.x * .9 + gwN(tw * .4) * 2.) - .5);
-            lc = mix(lc, vec3(.17, .12, .08), step(.965, gwH(floor(vec2(tw.x * .9, tw.y * 3.)) + 41.)) * (1. - smoothstep(.0, .05, tl)) * .7);   // twigs
-            lc *= 1. - .25 * smoothstep(.55, .72, gwN(vGW.xz * .11 + 23.));   // damp hollows
+            lc = mix(lc, vec3(.2, .13, .08), step(.97, gwH(floor(vec2(tw.x * .9, tw.y * 3.)) + 41.)) * (1. - smoothstep(.0, .05, tl)) * .7);   // twigs
+            // the sun in bars between the trunks' long shadows (along the sun's azimuth, 250°: local (−.94, .34))
+            vec2 sunA = vec2(-.94, .34), sunP = vec2(.34, .94);
+            float bar = gwN(vec2(dot(vGW.xz, sunP) * .42, dot(vGW.xz, sunA) * .018 + 5.)) * .7 + gwN(vec2(dot(vGW.xz, sunP) * 1.1, dot(vGW.xz, sunA) * .05)) * .3;
+            lc *= mix(.62, 1.12, smoothstep(.42, .58, bar));
             #endif
-            lc *= mix(.86, 1.08, blow);   // (the shade of the closed canopy; the gap open to the sun)
+            lc *= mix(.92, 1.05, blow);
           }
           else if (k > 31.5 && k < 32.5) {
-            // the hero area's old fields: tall grass gone to hay in September (user: "Meadows should be hay colored but
-            // high height") — straw and tan, green at the foot, combed into streaks by the wind, darker gaps between
+            // the hero area's old fields under the tall grass (user, 24 Nov: "Ground color in meadows should be trampled
+            // straw/grass color"): last year's grass laid flat — pale straw and tan, matted in swirls, a little green
+            // coming through at the foot, darker hollows where it's thick
             float comb = gwN(vec2(dot(vGW.xz, vec2(.94, .34)) * .5, dot(vGW.xz, vec2(-.34, .94)) * 4.));
-            lc = mix(vec3(.5, .43, .24), vec3(.66, .57, .33), n * .55 + comb * .45);
-            lc = mix(lc, vec3(.38, .42, .2), smoothstep(.58, .78, gwN(vGW.xz * .04 + 4.)) * .45);
-            lc = mix(lc, vec3(.62, .46, .24), smoothstep(.7, .86, gwN(vGW.xz * .03 - 9.)) * .35);   // rust of the little bluestem
-            lc *= .9 + .14 * comb;
+            float swirl = gwN(vGW.xz * .21 + vec2(comb * 1.5));
+            lc = mix(vec3(.6, .52, .33), vec3(.74, .66, .44), n * .5 + swirl * .5);
+            lc = mix(lc, vec3(.5, .52, .3), smoothstep(.62, .82, gwN(vGW.xz * .05 + 4.)) * .3);
+            lc *= .88 + .16 * comb;
+            #ifndef LOWQ
+            lc *= .9 + .18 * gwN(vec2(dot(vGW.xz, vec2(.7, .7)) * 3.5, dot(vGW.xz, vec2(-.7, .7)) * .6));   // the matted blades' streaks
+            #endif
           }
           #ifdef NYGRASS
           // the rural maps in early fall (user, 22 Nov: "grass + farms need to improve"): corn gone tan, soybeans gold,
@@ -2055,6 +2069,24 @@ function groundMaterial(low = false, rural = false) {
           if ((k > 1.5 && k < 2.5) || (k > 29.5 && k < 31.5) || (k > 32.5 && k < 33.5)) sdCh = 1;   // (the woods' floor: stone dust and grit, not turf)
           if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * mix(clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vec3(1.), step(19.5, k) * .7), vLandW * (k > 19.5 || (k > 1.5 && k < 2.5) ? .95 : .85));   // (CNY's fields: their own colour, less of the ground's tint)
         }
+        // a hero area's singletrack, worn into the floor (old-growth.js: aTread = its signed distance from the line the
+        // tires take, + 50; 0 on every other ground): user, 24 Nov — "Start with the ground material and almost overlay
+        // wear from a bike passing over": the litter or straw packed down to earth along a ragged, wandering band, the
+        // tire's own groove down its middle, leaves drifted back over it here and there
+        if (vTread > 10.) {
+          float td = vTread - 50.;
+          float wob = (gwN(vGW.xz * .35) - .5) * .3 + (gwN(vGW.xz * 2.3) - .5) * .14;
+          float ad = abs(td + wob * .35);
+          float wear = 1. - smoothstep(.22, .62 + wob * .4, ad);
+          float groove = 1. - smoothstep(.015, .08, abs(td + (gwN(vGW.xz * .6 + 7.) - .5) * .16));
+          float drift = step(.86, gwH(floor(vGW.xz * 6.5) + 31.)) * (1. - wear * .6);
+          // packed earth: darker and duller than the leaves or straw it's worn through, fine grit in it
+          vec3 earth = pow(mix(vec3(.3, .22, .15), vec3(.4, .31, .21), gwN(vGW.xz * 4.) * .6 + gwN(vGW.xz * 19.) * .4), vec3(2.2));
+          diffuseColor.rgb = mix(diffuseColor.rgb, earth, wear * (1. - drift) * .95);
+          diffuseColor.rgb *= 1. - groove * wear * .25;
+          // the leaves and straw pushed aside by the tires, banked a little lighter along the edges
+          diffuseColor.rgb *= 1. + .14 * smoothstep(.45, .65, ad) * (1. - smoothstep(.7, 1.1, ad));
+        }
         #ifndef LOWQ
         // the ground's texture near the camera: turf, or the woods' floor's grit (user, 24 Nov — Zwift parity)
         diffuseColor.rgb *= surfaceDetail(vGW.xz, sdCh, sdCh == 1 ? 5. : 3., length(vGW - cameraPosition), sdCh == 1 ? .6 : .8);
@@ -2063,6 +2095,6 @@ function groundMaterial(low = false, rural = false) {
         diffuseColor.rgb *= 1. - .2 * smoothstep(.55, .75, gwN((vGW.xz + uCloudT * vec2(3., 1.2)) * .0025));   // a cloud's shadow drifting over (user, 23 Nov)
         #endif`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-13${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-15${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
   return m;
 }

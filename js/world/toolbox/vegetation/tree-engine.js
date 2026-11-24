@@ -37,6 +37,8 @@ const BANDS = { low: [55, 150], balanced: [100, 210], high: [130, 280] };
 // near and mid 3D tiers unused); the shrubs too (user: "shrubs need the same 2D"), within their own reach. Sharper
 // photos for the close-up cards.
 export const TREES_2D = true;
+/** A card's trunk cut (a tree given `cut`): the 3D trunk in, the card's trunk out, between these distances (m). */
+export const NEAR_TRUNK = [24, 32];
 const CELL_2D = { low: 128, balanced: 192, high: 256 };   // (low: phones — the atlas 88 → 56 MB with its mipmaps, user 23 Nov)
 const DEEP = [.55, .6];  // band scale for a tree > 30 m from any road (t.deep): seen only through the trees in front
 const FADE = [15, 50];   // m: each tree swaps at its own distance within ± this of the band's edge
@@ -266,8 +268,10 @@ export class TreeEngine {
       uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uAtlas: { value: rt.texture }, uRows: { value: this.rows }, uNow: { value: 0 }, uAtlasSize: { value: new THREE.Vector2(W, H) } }]),
       vertexShader: /* glsl */`
         attribute vec4 iA; attribute vec4 iB; attribute float iT; attribute vec2 iS;   // iA: x, y, z, rotation; iB: width, height, row, tint; iT: when its tile came; iS: its swap (when, 0 hidden / 1 shown / 2 in / 3 out)
+        attribute float iC;   // a trunk cut (m above the base; 0: none): below it, near the camera, a 3D trunk stands in
         uniform float uRows; uniform float uNow;
         varying vec2 vUv; varying vec2 vUv2; varying float vBlend; varying float vKeep; varying float vOut; varying float vTint;
+        varying float vH; varying float vCut; varying float vTrunk;
         #include <fog_pars_vertex>
         void main() {
           vec3 o = iA.xyz; vec2 to = o.xz - cameraPosition.xz; float d = length(to);
@@ -293,12 +297,16 @@ export class TreeEngine {
           vUv2 = vec2((f1 + uv.x) / ${ANGLES}., (iB.z + uv.y) / uRows);
           vTint = iB.w;
           vec3 p = o + right * position.x * iB.x + vec3(0., position.y * iB.y, 0.);
+          // (a tree beside the path, inside ~30 m: its card's trunk gives way to a 3D bark trunk, in the same dither as
+          //  the trunk's own — old-growth.js NEAR_TRUNK — the crown stays the card: user, 24 Nov)
+          vH = position.y * iB.y; vCut = iC; vTrunk = iC > 0. ? 1. - smoothstep(${NEAR_TRUNK[0].toFixed(1)}, ${NEAR_TRUNK[1].toFixed(1)}, d) : 0.;
           vec4 mvPosition = viewMatrix * vec4(p, 1.);
           gl_Position = projectionMatrix * mvPosition;
           #include <fog_vertex>
         }`,
       fragmentShader: /* glsl */`
         uniform sampler2D uAtlas; uniform sampler2D uSurf; uniform vec2 uAtlasSize; varying vec2 vUv; varying vec2 vUv2; varying float vBlend; varying float vKeep; varying float vOut; varying float vTint;
+        varying float vH; varying float vCut; varying float vTrunk;
         #include <common>
         #include <fog_pars_fragment>
         // a cubic B-spline sample from four bilinear taps: smooth, no blocks, when the card's magnified
@@ -334,6 +342,7 @@ export class TreeEngine {
           if (c.a < .5) discard;`}
           float teDz = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(.06711056, .00583715))));
           if (vOut > .5 ? vKeep <= teDz : vKeep <= 1. - teDz) discard;   // the complement of the mid tier's dissolve
+          if (vH < vCut && vTrunk > teDz) discard;   // the 3D trunk's place (its own dither the exact complement)
           gl_FragColor = vec4(c.rgb / max(a0, .3) * vTint, cov);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
@@ -345,7 +354,7 @@ export class TreeEngine {
     this.impMat.uniforms.uAtlas.value = rt.texture;
     this.impMat.uniforms.uSurf = SURFACE;   // (the shared detail texture: a blank until loaded)
     this.impMat.alphaToCoverage = !!this.msaa;
-    this.impMat.customProgramCacheKey = () => `tree-engine-impostor-11-${this.ft}-${this.msaa ? 1 : 0}`;
+    this.impMat.customProgramCacheKey = () => `tree-engine-impostor-12-${this.ft}-${this.msaa ? 1 : 0}`;
     this.impMesh = new THREE.Mesh(geo, this.impMat);
     this.impMesh.frustumCulled = false; this.impMesh.name = 'Trees (impostors)';
     this.group.add(this.impMesh);
@@ -381,7 +390,8 @@ export class TreeEngine {
     let n = 0; for (const t of this.tiles.values()) n += t.length;
     if (n > this.impCap) {
       this.impCap = Math.ceil(n * 1.3);
-      this.iA = new Float32Array(this.impCap * 4); this.iB = new Float32Array(this.impCap * 4); this.iT = new Float32Array(this.impCap); this.iS = new Float32Array(this.impCap * 2);
+      this.iA = new Float32Array(this.impCap * 4); this.iB = new Float32Array(this.impCap * 4); this.iT = new Float32Array(this.impCap); this.iS = new Float32Array(this.impCap * 2); this.iC = new Float32Array(this.impCap);
+      this.impGeo.setAttribute('iC', new THREE.InstancedBufferAttribute(this.iC, 1));
       this.impGeo.setAttribute('iA', new THREE.InstancedBufferAttribute(this.iA, 4)); this.impGeo.setAttribute('iB', new THREE.InstancedBufferAttribute(this.iB, 4)); this.impGeo.setAttribute('iT', new THREE.InstancedBufferAttribute(this.iT, 1));
       this.impGeo.setAttribute('iS', new THREE.InstancedBufferAttribute(this.iS, 2)); this.impGeo.attributes.iS.setUsage(THREE.DynamicDrawUsage);
     }
@@ -390,12 +400,12 @@ export class TreeEngine {
       const born = this._born.get(key) ?? -99;
       for (const t of list) {
         const e = t.e; if (!e.imp) continue;
-        this.iA.set([t.x, t.y, t.z, t.rot], k * 4); this.iB.set([e.imp.half * 2 * t.s, e.imp.top * t.sy, e.imp.row, t.tint], k * 4); this.iT[k] = born;
+        this.iA.set([t.x, t.y, t.z, t.rot], k * 4); this.iB.set([e.imp.half * 2 * t.s, e.imp.top * t.sy, e.imp.row, t.tint], k * 4); this.iT[k] = born; this.iC[k] = t.cut || 0;
         this.iS[k * 2] = t.ts ?? -1e9; this.iS[k * 2 + 1] = t.tier === 2 ? 1 : 0; t.ik = k; k++;
       }
     }
     this.impGeo.instanceCount = k;
-    this.impGeo.attributes.iA.needsUpdate = true; this.impGeo.attributes.iB.needsUpdate = true; this.impGeo.attributes.iT.needsUpdate = true; this.impGeo.attributes.iS.needsUpdate = true;
+    this.impGeo.attributes.iA.needsUpdate = true; this.impGeo.attributes.iB.needsUpdate = true; this.impGeo.attributes.iT.needsUpdate = true; this.impGeo.attributes.iS.needsUpdate = true; this.impGeo.attributes.iC.needsUpdate = true;
     this._at = null;   // (the tiers: a re-sort now)
     this.stats.far = k;
   }

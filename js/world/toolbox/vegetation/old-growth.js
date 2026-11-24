@@ -26,18 +26,23 @@
 //   yield* og.treesJob(x0, z0, size, out, kit)   a tile's trees and understory for the tree engine
 //   og.tick(camera, time)          builds / drops the near pieces as the rider moves
 import * as THREE from '../../../../vendor/three.module.min.js';
-import { hash } from '../core/mesh-builder.js';
+import { hash, MeshBuilder } from '../core/mesh-builder.js';
 import { due } from '../core/jobs.js';
 import { grassAtlas } from '../landscape/grass-cards.js';
 import { decorateTreeMaterial } from '../packs/northern-rockies.js';
+import { ForestLife } from '../life/forest-life.js';
+import { NearTrunks } from './near-trunks.js';
+import { NEAR_TRUNK } from './tree-engine.js';
 
 export const OG = { old: 30, forest: 31, meadow: 32, blow: 33 };
 const isWood = (c) => c === OG.old || c === OG.forest || c === OG.blow;
 const BAND = 30;            // m: the skirt reaches this far from a trail's centre
+const TREAD = .11;          // m: the floor at the trail's line, over its height (the rider rides ROAD_LIFT .12 over it)
 const CELL = 2;             // m: the skirt's cells
 const BLOCK = 128;          // m: the near pieces are built in squares this size
 const SKIRT_NEAR = 420, SKIRT_FAR = 620;   // m: build within, drop beyond
-const GRASS_NEAR = 230, GRASS_FAR = 330;
+const FIN_NEAR = 300, FIN_FAR = 420;     // m: the meadow's far grass (fins) built within, dropped beyond
+const BLADE_R = { low: 32, balanced: 55, high: 70 };   // m: the meadow's near grass (3D blade clumps) drawn within
 const CANOPY_LO = { [OG.old]: 25, [OG.forest]: 20.5, [OG.blow]: 23 };
 // the 1998 Labor Day storm came out of the west-north-west: its windthrow lies toward the east-south-east
 const FALL_YAW = -0.35;     // radians about +y: +x turned this far (three.js: +x → (cos, 0, −sin))
@@ -53,6 +58,17 @@ function vnoise(x, z) {
 const pick = (mix, r) => { let a = 0, tot = 0; for (const [, w] of mix) tot += w; for (const [n, w] of mix) { a += w / tot; if (r <= a) return n; } return mix[mix.length - 1][0]; };
 const pip = (ring, x, z) => { let c = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], b = ring[j]; if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) c = !c; } return c; };
 
+/** A way's curve (Catmull-Rom through its samples, the ends' own line carried on: as graph-world draws it and the
+ *  rider rides it), `sub` points a sample: { e, n, x, z, y } (heights straight between samples, as the rider's). */
+function curveOf(e, sub) {
+  const X = [], Z = [], Y = [], n = e.n;
+  const at = (v, k) => (k < 0 ? 2 * v[0] - v[Math.min(1, n)] : k > n ? 2 * v[n] - v[Math.max(0, n - 1)] : v[k]);
+  const cr = (v, i, t) => { const p0 = at(v, i - 1), p1 = v[i], p2 = at(v, i + 1), p3 = at(v, i + 2); return 0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t); };
+  for (let i = 0; i < n; i++) for (let q = 0; q < sub; q++) { const t = q / sub; X.push(cr(e.x, i, t)); Z.push(cr(e.z, i, t)); Y.push(e.ele[i] + (e.ele[i + 1] - e.ele[i]) * t); }
+  X.push(e.x[n]); Z.push(e.z[n]); Y.push(e.ele[n]);
+  return { e, n: X.length - 1, x: X, z: Z, y: Y };
+}
+
 // the stands' make-up (DEC: the old stand ~83 % sugar maple and ~13 % beech; the mature and younger woods ~90 % maple by
 // count with beech, bitternut hickory, white ash and basswood)
 const MIX = {
@@ -62,7 +78,15 @@ const MIX = {
 };
 const MID = [['sugarmapleF', 55], ['beechF', 35], ['hickory', 10]];
 const YOUNG = [['sugarmaple', 30], ['redmaple', 20], ['whiteash', 20], ['blackcherry', 20], ['birch', 10]];
-const SPACING = { [OG.old]: 12.5, [OG.forest]: 10, [OG.blow]: 34 };
+// the dominants' spacing (user, 24 Nov, with a photo of an open beech–maple stand: "Tree density should be lower in the
+// forest portion. More cathedral like"): big trunks ~16–20 m apart, the floor almost bare between them; in a few
+// stretches (MIXED) the woods of their other photo — poles, a snag, logs, some brush away from the path
+const SPACING = { [OG.old]: 18, [OG.forest]: 15.5, [OG.blow]: 34 };
+const mixedAt = (x, z) => vnoise(x * .011 + 4.2, z * .011 - 1.3) > .62;
+// the dominants within this of a trail (m) get a near 3D bark trunk (the camera rides the trail: NEAR_TRUNK's far end
+// and a margin for the bends)
+const TRUNK_D = NEAR_TRUNK[1] + 10;
+const TRUNK = { sugarmapleF: '#5a4d42', beechF: '#a19f97', hickory: '#6a6259', basswood: '#655c52', whiteash: '#6b6259' };
 
 export class OldGrowth {
   constructor({ world, city, data }) {
@@ -74,15 +98,20 @@ export class OldGrowth {
     this.box = { x0: x0 - 60, x1: x1 + 60, z0: z0 - 60, z1: z1 + 60 };
     this.trails = data.trails.map((id) => world.G.byId.get(id)).filter(Boolean);
     this.half = this.trails.length ? world.wOf(this.trails[0]) / 2 : .45;
-    // a grid of the trails' segments (16 m cells) for "the trail near here"
+    // each trail as the curve it's drawn and ridden on (graph-world _curve, pose.js routePoint: Catmull-Rom through the
+    // 10 m samples, the ends' own line carried on), at 1 m; and a grid of its segments (16 m cells) for "the trail
+    // near here" — so the floor, the wear and everything kept clear of the tread follow the very line the bike rides
+    this.curves = this.trails.map((e) => curveOf(e, 10));
     this.grid = new Map();
     const C = 16;
-    for (const e of this.trails) for (let i = 0; i < e.n; i++) {
-      const ax = Math.min(e.x[i], e.x[i + 1]), bx = Math.max(e.x[i], e.x[i + 1]), az = Math.min(e.z[i], e.z[i + 1]), bz = Math.max(e.z[i], e.z[i + 1]);
+    for (const c of this.curves) for (let i = 0; i < c.n; i++) {
+      const ax = Math.min(c.x[i], c.x[i + 1]), bx = Math.max(c.x[i], c.x[i + 1]), az = Math.min(c.z[i], c.z[i + 1]), bz = Math.max(c.z[i], c.z[i + 1]);
       for (let gx = Math.floor(ax / C); gx <= Math.floor(bx / C); gx++) for (let gz = Math.floor(az / C); gz <= Math.floor(bz / C); gz++) {
-        const k = `${gx},${gz}`; let a = this.grid.get(k); if (!a) this.grid.set(k, (a = [])); a.push(e, i);
+        const k = `${gx},${gz}`; let a = this.grid.get(k); if (!a) this.grid.set(k, (a = [])); a.push(c, i);
       }
     }
+    // the god rays' few places (user, 24 Nov: "Reduce the number of areas with god rays" → 3–5 hero spots)
+    this.raySpots = (data.rays || []).map(([la, lo, r = 16]) => ({ ...P.toLocal(la, lo), r }));
     this.tunnel = data.tunnel?.edge ? world.G.byId.get(data.tunnel.edge) : null;
     this.apples = (data.apples || []).map(([la, lo]) => P.toLocal(la, lo));
     // the blocks the trails pass through (the near pieces)
@@ -90,15 +119,15 @@ export class OldGrowth {
     for (const e of this.trails) for (let i = 0; i <= e.n; i++) {
       for (const [ox, oz] of [[-BAND, -BAND], [BAND, -BAND], [-BAND, BAND], [BAND, BAND], [0, 0]]) {
         const k = `${Math.floor((e.x[i] + ox) / BLOCK)},${Math.floor((e.z[i] + oz) / BLOCK)}`;
-        if (!this.blocks.has(k)) { const [bi, bj] = k.split(',').map(Number); this.blocks.set(k, { key: k, i: bi, j: bj, cx: (bi + .5) * BLOCK, cz: (bj + .5) * BLOCK, skirt: null, grass: null, meadow: false }); }
+        if (!this.blocks.has(k)) { const [bi, bj] = k.split(',').map(Number); this.blocks.set(k, { key: k, i: bi, j: bj, cx: (bi + .5) * BLOCK, cz: (bj + .5) * BLOCK, skirt: null, fins: null }); }
       }
     }
     this.group = new THREE.Group(); this.group.name = 'Old growth (hero area)';
     city.host.group.add(this.group);
     this.uTime = city.treeTime;
-    this.stats = { skirtBlocks: 0, grassBlocks: 0, canopyCards: 0, rays: 0 };
+    this.stats = { skirtBlocks: 0, finBlocks: 0, blades: 0, canopyCards: 0, rays: 0 };
     const q = world.qualityKey;
-    this.q = { grass: q === 'low' ? .5 : q === 'high' ? 1.15 : 1, cell: q === 'low' ? 2.5 : CELL, rays: q !== 'low' };
+    this.q = { cell: q === 'low' ? 2.5 : CELL, rays: q !== 'low', bladeS: q === 'low' ? .68 : q === 'high' ? .46 : .52, bladeR: BLADE_R[q] || BLADE_R.balanced };
   }
 
   /** Inside the hero area (its boundary, with a margin). */
@@ -116,11 +145,12 @@ export class OldGrowth {
     for (let a = -R; a <= R; a++) for (let b = -R; b <= R; b++) {
       const arr = this.grid.get(`${gx + a},${gz + b}`); if (!arr) continue;
       for (let k = 0; k < arr.length; k += 2) {
-        const e = arr[k], i = arr[k + 1], ax = e.x[i], az = e.z[i], dx = e.x[i + 1] - ax, dz = e.z[i + 1] - az, l2 = dx * dx + dz * dz || 1;
+        const c = arr[k], i = arr[k + 1], ax = c.x[i], az = c.z[i], dx = c.x[i + 1] - ax, dz = c.z[i + 1] - az, l2 = dx * dx + dz * dz || 1;
         const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), px = ax + dx * t, pz = az + dz * t, d = Math.hypot(x - px, z - pz);
         if (d > r || (best && d >= best.d)) continue;
         const l = Math.sqrt(l2);
-        best = { d, y: e.ele[i] + (e.ele[i + 1] - e.ele[i]) * t, e, i, t, dx: dx / l, dz: dz / l, px, pz };
+        // side: + to the right of the way's own direction
+        best = { d, y: c.y[i] + (c.y[i + 1] - c.y[i]) * t, e: c.e, c, i, t, dx: dx / l, dz: dz / l, px, pz, side: Math.sign((x - px) * -dz / l + (z - pz) * dx / l) || 1 };
       }
     }
     return best;
@@ -175,7 +205,7 @@ export class OldGrowth {
     const toEdge = sstep(BAND - 8, BAND, r.d);
     let y = nat + (surf - nat) * toEdge + this.relief(x, z, code) * (1 - toEdge);
     const w = sstep(this.half + .6, this.half + 5, r.d);
-    y = (r.y + .02) + (y - (r.y + .02)) * w;
+    y = (r.y + TREAD) + (y - (r.y + TREAD)) * w;
     return Math.max(y, surf + .04);
   }
   /** A spot's floor: the skirt's where it is, else the world's ground. */
@@ -183,52 +213,74 @@ export class OldGrowth {
 
   // ------------------------------------------------------------------ placement (the tree engine's trees)
   /**
+   * The area's dominant trees, all of them (they're needed whole for the root flares): one per cell of each stand's
+   * grid — the cell's land must be the stand's — jittered within the middle of the cell, so the big trunks stand
+   * evenly apart as in a cathedral stand. { x, z, name, k, sy, v, rot, seed, snag, code, d (from the trail) }.
+   */
+  dominants() {
+    if (this._doms) return this._doms;
+    const out = [], b = this.box, half = this.half, kit = this.city.treeKit?.species || {};
+    const variantOf = (name, r) => (kit[name]?.variants.length > 1 ? (r < .7 ? 0 : 1) : 0);
+    for (const code of [OG.old, OG.forest, OG.blow]) {
+      const S = SPACING[code];
+      for (let i = Math.floor(b.x0 / S); i <= Math.ceil(b.x1 / S); i++) for (let j = Math.floor(b.z0 / S); j <= Math.ceil(b.z1 / S); j++) {
+        const x = (i + .3 + h2(i, j, code) * .4) * S, z = (j + .3 + h2(i, j, code + 50) * .4) * S;
+        if (this.land(x, z) !== code) continue;
+        const r = this.trailNear(x, z, 30), d = r ? r.d : 99;
+        if (d < half + 1.0 || (d < 3.5 && h2(i, j, 31) > .4)) continue;   // a few right at the tread's edge, most a step back
+        const r1 = h2(i, j, 21), r2 = h2(i, j, 22), r3 = h2(i, j, 23), mixed = mixedAt(x, z);
+        const snag = r3 < (mixed ? .08 : .03);
+        const name = snag ? 'snag' : pick(MIX[code], r1);
+        const k = snag ? 1.2 + r2 * .35 : code === OG.old ? 1.02 + r2 * .26 : code === OG.blow ? .95 + r2 * .2 : .9 + r2 * .22;
+        out.push({ x, z, name, k, sy: k * (.95 + r3 * .1), v: snag ? Math.floor(r1 * 3) % 3 : variantOf(name, h2(i, j, 25)), rot: h2(i, j, 24) * 6.283, seed: i * 7919 + j * 131 + code, snag, code, d });
+      }
+    }
+    return (this._doms = out);
+  }
+  domNear(x, z, R) {
+    for (const code of [OG.old, OG.forest, OG.blow]) {
+      const S = SPACING[code], ci = Math.floor(x / S), cj = Math.floor(z / S);
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+        const i = ci + a, j = cj + b, px = (i + .3 + h2(i, j, code) * .4) * S, pz = (j + .3 + h2(i, j, code + 50) * .4) * S;
+        if (Math.hypot(px - x, pz - z) < R && this.land(px, pz) === code) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * A tile's trees and understory in the hero area, pushed onto out as the tree engine takes them
    * ({ x, y, z, sp, v, s, sy, rot, tint, deep }). `clear(x, z, r)`: the city's own test (water, buildings, …).
+   * The cathedral stand mostly (big trunks far apart, a bare floor of leaves, now and then a pole or a fern), the mixed
+   * woods in stretches (poles, snags, saplings and ferns away from the path, more logs), the blowdown's thicket, the
+   * meadows' edges.
    */
   *treesJob(x0, z0, size, out, kit, clear = () => true) {
     const self = this, sp = kit.species, us = kit.understory, half = this.half;
     const inTile = (x, z) => x >= x0 && x < x0 + size && z >= z0 && z < z0 + size;
+    const trunks = [], nt = self.nearTrunks();
     const put = (x, z, name, s, rot, seed, { sy = s, v = 0, deep = false, under = false } = {}) => {
       if (!(sp[name] || us[name])) return false;
       const rd = self.roadNear(x, z); if (rd && rd.d - rd.half < (under ? 2.5 : 4)) return false;   // (Thompson Road: the city's own rules)
-      out.push({ x, y: self.groundY(x, z) - (under ? .04 : .12), z, sp: name, v, s, sy, rot, tint: .9 + h2(seed, 3, 9) * .18, deep });
+      const tr = { x, y: self.groundY(x, z) - (under ? .04 : .12), z, sp: name, v, s, sy, rot, tint: .9 + h2(seed, 3, 9) * .18, deep };
+      // a canopy tree or a pole near a trail: its card's trunk below the cut gives way to a 3D one near the camera
+      // (near-trunks.js); the trunk listed for drawing
+      const cut = under || name === 'snag' ? 0 : nt.cutOf(name, v);
+      if (cut && s > .45) { const r = self.trailNear(x, z, TRUNK_D); if (r && r.d < TRUNK_D) { tr.cut = cut * sy; trunks.push({ x, y: tr.y, z, rot, s, sy, name, v, tint: tr.tint }); } }
+      out.push(tr);
       return true;
     };
-    // a trunk's clearance from the tread (and a crown card mustn't hide the trail at the rider's eye: the forest-grown
-    // forms carry their crowns high, so they may stand close; a younger tree keeps a little farther off)
+    // (nothing leafy at eye level within ~9–10 m of the tread: a 2D card that close is all magnified blur; a forest-
+    //  grown tree, its crown high, may stand close)
     const trailOk = (x, z, minD) => { const r = self.trailNear(x, z, minD + 1); return !r || r.d >= half + minD; };
     const variantOf = (name, r) => (sp[name]?.variants.length > 1 ? (sp[name].forest ? (r < .7 ? 0 : 1) : (r < .66 ? 0 : r < .86 ? 1 : 2)) % sp[name].variants.length : 0);
-    // ---- the dominants: one per cell of each stand's grid (the cell's code must be the stand's), jittered within it
-    const dom = (S, code, i, j) => {
-      const x = (i + .2 + h2(i, j, code) * .6) * S, z = (j + .2 + h2(i, j, code + 50) * .6) * S;
-      return self.land(x, z) === code ? { x, z } : null;
-    };
-    const domNear = (x, z, R) => {
-      for (const code of [OG.old, OG.forest, OG.blow]) {
-        const S = SPACING[code], ci = Math.floor(x / S), cj = Math.floor(z / S);
-        for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const p = dom(S, code, ci + a, cj + b); if (p && Math.hypot(p.x - x, p.z - z) < R) return true; }
-      }
-      return false;
-    };
-    for (const code of [OG.old, OG.forest, OG.blow]) {
-      const S = SPACING[code];
-      for (let i = Math.floor(x0 / S) - 1; i <= Math.floor((x0 + size) / S) + 1; i++) {
-        if (due()) yield;
-        for (let j = Math.floor(z0 / S) - 1; j <= Math.floor((z0 + size) / S) + 1; j++) {
-          const p = dom(S, code, i, j); if (!p || !inTile(p.x, p.z) || !clear(p.x, p.z, 3)) continue;
-          const r = self.trailNear(p.x, p.z, 4);
-          if (r && (r.d < half + 1.0 || (r.d < 3.5 && h2(i, j, 31) > .4))) continue;   // a few right at the tread's edge, most a step back
-          const seed = i * 7919 + j * 131 + code, r1 = h2(i, j, 21), r2 = h2(i, j, 22), r3 = h2(i, j, 23);
-          const snag = r3 < .06;
-          const name = snag ? 'snag' : pick(MIX[code], r1);
-          const k = snag ? 1.2 + r2 * .35 : code === OG.old ? .98 + r2 * .27 : code === OG.blow ? .95 + r2 * .2 : .82 + r2 * .22;
-          put(p.x, p.z, name, k, h2(i, j, 24) * 6.283, seed, { sy: k * (.95 + r3 * .1), v: snag ? Math.floor(r1 * 3) % 3 : variantOf(name, h2(i, j, 25)), deep: !self.trailNear(p.x, p.z, 30) });
-        }
-      }
+    // ---- the dominants
+    for (const t of this.dominants()) {
+      if (!inTile(t.x, t.z) || !clear(t.x, t.z, 3)) continue;
+      put(t.x, t.z, t.name, t.k, t.rot, t.seed, { sy: t.sy, v: t.v, deep: t.d > 30 });
     }
-    // ---- intermediates (younger trees of the shade-tolerant kinds, where no dominant's crown is over them), saplings,
-    // seedlings, the floor's plants and the coarse woody debris; the woods' edge against the meadows
+    if (due()) yield;
+    // ---- poles, saplings, the floor's plants; the woods' edge against the meadows
     const S2 = 6.5;
     for (let i = Math.floor(x0 / S2); i < Math.ceil((x0 + size) / S2); i++) {
       if (due()) yield;
@@ -237,14 +289,14 @@ export class OldGrowth {
         if (!inTile(x, z)) continue;
         const code = self.land(x, z);
         if (!isWood(code) && code !== OG.meadow) continue;
-        const r = self.trailNear(x, z, 70), d = r ? r.d : 99, seed = i * 6151 + j * 89;
+        const r = self.trailNear(x, z, 70), d = r ? r.d : 99, seed = i * 6151 + j * 89, mixed = mixedAt(x, z);
         // the woods' edge against a meadow: a thick wall of young trees and shrubs (user: "meadows, bordered by thick tree stands")
         let edge = false;
         if (isWood(code)) for (const [ox, oz] of [[12, 0], [-12, 0], [0, 12], [0, -12]]) if (self.land(x + ox, z + oz) === OG.meadow) { edge = true; break; }
         if (edge) {
           for (let q = 0; q < 3; q++) {
             const qx = x + (h2(i, j, 60 + q) - .5) * S2, qz = z + (h2(i, j, 63 + q) - .5) * S2, rr = h2(i, j, 66 + q);
-            if (!inTile(qx, qz) || !trailOk(qx, qz, 10) || !clear(qx, qz, 1.5)) continue;   // (a low crown never right over the tread)
+            if (!inTile(qx, qz) || !trailOk(qx, qz, 10) || !clear(qx, qz, 1.5)) continue;
             if (rr < .45) put(qx, qz, pick(YOUNG, h2(i, j, 70 + q)), .4 + h2(i, j, 73 + q) * .4, h2(i, j, 76 + q) * 6.28, seed + q, { v: variantOf('sugarmaple', h2(i, j, 79 + q)) });
             else put(qx, qz, rr < .65 ? 'buckthorn' : rr < .82 ? 'dogwood' : rr < .92 ? 'sumac' : 'sapling', .8 + h2(i, j, 82 + q) * .5, h2(i, j, 85 + q) * 6.28, seed + q, { under: true });
           }
@@ -254,37 +306,34 @@ export class OldGrowth {
           // the meadow side of a woods' edge: brush creeping out; goldenrod in drifts away from the trail
           let near = false; for (const [ox, oz] of [[5, 0], [-5, 0], [0, 5], [0, -5]]) if (isWood(self.land(x + ox, z + oz))) { near = true; break; }
           if (near && h2(i, j, 90) < .45 && trailOk(x, z, 9)) put(x, z, h2(i, j, 91) < .5 ? 'goldenrod' : 'dogwood', .8 + h2(i, j, 92) * .4, h2(i, j, 93) * 6.28, seed, { under: true });
-          else if (d > 5 && vnoise(x * .05, z * .05) > .66 && h2(i, j, 94) < .35) put(x, z, 'goldenrod', .9 + h2(i, j, 95) * .4, h2(i, j, 96) * 6.28, seed, { under: true });
+          else if (d > 9 && vnoise(x * .05, z * .05) > .66 && h2(i, j, 94) < .35) put(x, z, 'goldenrod', 1.1 + h2(i, j, 95) * .4, h2(i, j, 96) * 6.28, seed, { under: true });
           continue;
         }
         if (!clear(x, z, 1.5)) continue;
-        // intermediates: under no dominant's crown
-        if (code !== OG.blow && h2(i, j, 43) < .5 && !domNear(x, z, SPACING[code] * .5) && trailOk(x, z, 1.6)) {
-          const name = pick(MID, h2(i, j, 44)), k = .55 + h2(i, j, 45) * .27;
-          put(x, z, name, k, h2(i, j, 46) * 6.28, seed, { sy: k * (1 + h2(i, j, 47) * .12), v: variantOf(name, h2(i, j, 48)), deep: d > 30 });
-          continue;
-        }
         if (code === OG.blow) {
-          // the blowdown's sun: a thicket of saplings and young trees fighting up through raspberry and brush
+          // the blowdown's sun: a thicket of poles and saplings fighting up through raspberry and brush
           for (let q = 0; q < 4; q++) {
             const qx = x + (h2(i, j, 100 + q) - .5) * S2, qz = z + (h2(i, j, 104 + q) - .5) * S2, rr = h2(i, j, 108 + q);
             if (!inTile(qx, qz)) continue;
-            // (28 years on, the regrowth is a stand of poles 10–15 m tall, their crowns over the rider's head; the
-            //  saplings and brambles under them)
-            // (nothing leafy at eye level within ~9 m of the tread: a 2D card that close is all magnified blur — the poles,
-            //  their crowns overhead, may stand nearer)
             if (rr >= .3 && !trailOk(qx, qz, 9)) continue;
             if (rr < .3) { if (trailOk(qx, qz, 2.6)) put(qx, qz, h2(i, j, 112 + q) < .7 ? 'sugarmapleF' : 'beechF', .36 + h2(i, j, 116 + q) * .16, h2(i, j, 120 + q) * 6.28, seed + q, { v: h2(i, j, 124 + q) < .75 ? 0 : 1 }); }
             else if (rr < .62) put(qx, qz, rr < .48 ? 'sapling' : 'beechSapling', .7 + h2(i, j, 128 + q) * .6, h2(i, j, 132 + q) * 6.28, seed + q, { under: true });
             else if (rr < .85) put(qx, qz, rr < .74 ? 'buckthorn' : 'dogwood', .7 + h2(i, j, 136 + q) * .5, h2(i, j, 140 + q) * 6.28, seed + q, { under: true });
           }
-        } else if (d < 45 && h2(i, j, 49) < .22 && trailOk(x, z, 9)) {
-          // the shade: a few saplings trying to break through (user: "a few, small saplings trying to break their way through")
-          put(x, z, h2(i, j, 50) < .55 ? 'beechSapling' : 'sapling', .55 + h2(i, j, 51) * .6, h2(i, j, 52) * 6.28, seed, { under: true });
+          continue;
         }
+        // poles: a few in the cathedral, more in the mixed woods — under no dominant's crown
+        if (h2(i, j, 43) < (mixed ? .45 : .07) && !self.domNear(x, z, SPACING[code] * .45) && trailOk(x, z, 1.6)) {
+          const name = pick(MID, h2(i, j, 44)), k = .55 + h2(i, j, 45) * .27;
+          put(x, z, name, k, h2(i, j, 46) * 6.28, seed, { sy: k * (1 + h2(i, j, 47) * .12), v: variantOf(name, h2(i, j, 48)), deep: d > 30 });
+          continue;
+        }
+        // the shade: saplings trying to break through (user: "a few, small saplings") — the mixed woods mostly
+        if (d < 45 && h2(i, j, 49) < (mixed ? .22 : .03) && trailOk(x, z, 9)) put(x, z, h2(i, j, 50) < .55 ? 'beechSapling' : 'sapling', .55 + h2(i, j, 51) * .6, h2(i, j, 52) * 6.28, seed, { under: true });
       }
     }
-    // ---- the floor near the trails: plants and seedlings (3 m grid), and the coarse woody debris (9 m grid)
+    // ---- the floor near the trails: ferns and herbs in the mixed woods and damp spots (the cathedral's floor is mostly
+    // bare leaves), seedlings; stumps and stones
     const S3 = 3;
     for (let i = Math.floor(x0 / S3); i < Math.ceil((x0 + size) / S3); i++) {
       if (due()) yield;
@@ -293,9 +342,9 @@ export class OldGrowth {
         if (!inTile(x, z)) continue;
         const code = self.land(x, z); if (!isWood(code)) continue;
         const r = self.trailNear(x, z, 40); if (!r || r.d < half + .7) continue;
-        const damp = vnoise(x * .07 + 9, z * .07 - 4), q = h2(i, j, 143), seed = i * 3301 + j * 17;
-        if (q < damp * .7 - .1) put(x, z, h2(i, j, 144) < .55 ? (h2(i, j, 145) < .5 ? 'fern' : 'fern2') : 'herb', .7 + damp * .6, h2(i, j, 146) * 6.28, seed, { under: true });
-        else if (r.d < 22 && q > .9) put(x, z, 'seedling', .45 + h2(i, j, 147) * .35, h2(i, j, 148) * 6.28, seed, { under: true });
+        const damp = vnoise(x * .07 + 9, z * .07 - 4), q = h2(i, j, 143), seed = i * 3301 + j * 17, m = mixedAt(x, z) || code === OG.blow ? 1 : .25;
+        if (q < (damp * .7 - .1) * m) put(x, z, h2(i, j, 144) < .55 ? (h2(i, j, 145) < .5 ? 'fern' : 'fern2') : 'herb', .7 + damp * .6, h2(i, j, 146) * 6.28, seed, { under: true });
+        else if (r.d < 22 && q > (m < 1 ? .97 : .9)) put(x, z, 'seedling', .45 + h2(i, j, 147) * .35, h2(i, j, 148) * 6.28, seed, { under: true });
       }
     }
     const S4 = 9;
@@ -306,16 +355,14 @@ export class OldGrowth {
         if (!inTile(x, z)) continue;
         const code = self.land(x, z); if (!isWood(code)) continue;
         const r = self.trailNear(x, z, 75); if (!r) continue;
-        // (the logs themselves are 3D, not cards: _logs — a 16 m log turned to face the camera swung across the view)
-        const p = code === OG.blow ? .5 : code === OG.old ? .3 : .14, q = h2(i, j, 153);
-        if (q < p) { /* a log: _logs */ } else if (q < p + .08 && r.d > 2) put(x, z, q < p + .04 ? 'stump2' : 'rock2', .8 + h2(i, j, 157) * .5, h2(i, j, 158) * 6.28, i * 31 + j, { under: true });
+        const p = this._logP(x, z, code), q = h2(i, j, 153);
+        if (q < p) { /* a log: _logs */ } else if (q < p + .04 && r.d > 2) put(x, z, q < p + .02 ? 'stump2' : 'rock2', .8 + h2(i, j, 157) * .5, h2(i, j, 158) * 6.28, i * 31 + j, { under: true });
       }
     }
     // ---- the green tunnel: two rows of trees along the trail across the meadow, their crowns meeting over it
     if (this.tunnel) {
       const e = this.tunnel;
       for (let i = 1; i < e.n; i++) for (const side of [-1, 1]) {
-        if (i % 1 !== 0) continue;
         const dx = e.x[i + 1] - e.x[i - 1], dz = e.z[i + 1] - e.z[i - 1], l = Math.hypot(dx, dz) || 1;
         for (const f of [0, .5]) {
           const x = e.x[i] + (e.x[i + 1] - e.x[i]) * f - dz / l * side * (3.3 + h2(i, side, 160) * .9), z = e.z[i] + (e.z[i + 1] - e.z[i]) * f + dx / l * side * (3.3 + h2(i, side, 161) * .9);
@@ -331,7 +378,10 @@ export class OldGrowth {
       const k = 1.2 + h2(Math.round(a.x), Math.round(a.z), 170) * .35;
       put(a.x, a.z, 'crabapple', k, h2(Math.round(a.x), 1, 171) * 6.28, Math.round(a.x * 3), { sy: k * 1.05, v: h2(Math.round(a.z), 1, 172) < .7 ? 0 : 1 });
     }
+    (this._tileTrunks ||= new Map()).set(`${x0},${z0}`, trunks); this._trunks = null; this._trunkAt = null;
   }
+  /** A 9 m cell's chance of a fallen trunk: the blowdown's many, the mixed woods' some, the cathedral's few. */
+  _logP(x, z, code) { return code === OG.blow ? .5 : mixedAt(x, z) ? (code === OG.old ? .32 : .2) : .06; }
 
   // ------------------------------------------------------------------ the coarse woody debris (3D)
   /**
@@ -346,7 +396,7 @@ export class OldGrowth {
       const x = (i + .1 + h2(i, j, 151) * .8) * S4, z = (j + .1 + h2(i, j, 152) * .8) * S4;
       const code = this.land(x, z); if (!isWood(code)) continue;
       const r = this.trailNear(x, z, 75); if (!r) continue;
-      const p = code === OG.blow ? .5 : code === OG.old ? .3 : .14, q = h2(i, j, 153);
+      const p = this._logP(x, z, code), q = h2(i, j, 153);
       if (q >= p) continue;
       const t = h2(i, j, 154);
       const name = code === OG.blow ? (t < .55 ? 'tipup' : 'bigLog') : code === OG.old ? (t < .45 ? 'bigLog' : t < .8 ? 'nurseLog' : 'tipup') : (t < .5 ? 'bigLog' : t < .75 ? 'log' : 'nurseLog');
@@ -390,50 +440,165 @@ export class OldGrowth {
     this.stats.logs = Object.values(near).reduce((a, l) => a + l.length, 0);
   }
 
+  // ------------------------------------------------------------------ near bark trunks (3D)
+  nearTrunks() { return (this._nt ||= new NearTrunks(this.group, this.city.treeKit)); }
+  /** The trees that get a near 3D trunk, { x, y, z, rot, s, sy, name, v, tint } as their cards stand: each tile's, as
+   *  treesJob placed them (a tile placed again replaces its own). */
+  trunkList() {
+    if (!this._trunks) { this._trunks = []; for (const l of (this._tileTrunks ||= new Map()).values()) this._trunks.push(...l); }
+    return this._trunks;
+  }
+  _drawTrunks(cx, cz) {
+    const R = NEAR_TRUNK[1] + 6;
+    this.stats.trunks = this.nearTrunks().draw(this.trunkList().filter((t) => Math.abs(t.x - cx) < R && Math.abs(t.z - cz) < R && Math.hypot(t.x - cx, t.z - cz) < R));
+  }
+
+  // ------------------------------------------------------------------ root flares (3D)
+  /**
+   * The big trees' feet near the path (user, 24 Nov, with an illustration of two trunks on splayed roots: "Yes, 3D root
+   * flares"): a dominant within 16 m of a trail gets a 3D base — the trunk swelling into the ground, five or six roots
+   * running out over the leaves and diving in — in its bark's colour; the card stands above it. A handful cross the tread.
+   */
+  _flareGeometry() {
+    // unit: the trunk's radius 1 at 1.3 m up (the card's trunk), +y up, roots out in all directions
+    const M = new MeshBuilder();
+    const seg = 14;
+    // the swelling foot: a flared cylinder, three rings
+    for (const [y0, y1, r0, r1, c] of [[-.25, .15, 1.75, 1.45, '#e8e2d8'], [.15, .55, 1.45, 1.15, '#efe9df'], [.55, 1.35, 1.15, 1.02, '#f6f2ea']]) { M.color(c); M.cylinder(0, y0, 0, r0, y1 - y0, seg, r1); }
+    // the roots: tapered, bending down into the ground as they go out
+    const rand = (k) => hash(k * 97 + 13);
+    for (let k = 0; k < 6; k++) {
+      const a = k / 6 * 6.283 + rand(k) * .6, L = 1.5 + rand(k + 7) * 1.7, ca = Math.cos(a), sa = Math.sin(a);
+      const p0 = new THREE.Vector3(ca * .85, .5, sa * .85), p1 = new THREE.Vector3(ca * (1.2 + L * .4), .3, sa * (1.2 + L * .4)), p2 = new THREE.Vector3(ca * (1.2 + L), -.08, sa * (1.2 + L));
+      M.color('#e6dfd3'); M.beam(p0, p1, .55, .45); M.color('#ddd6ca'); M.beam(p1, p2, .38, .3);
+    }
+    return M.geometry();
+  }
+  flares() {
+    if (this._flares) return this._flares;
+    const out = [], half = this.half;
+    for (const t of this.dominants()) {
+      if (t.snag || t.d > 16 || !TRUNK[t.name]) continue;
+      const sp = this.city.treeKit?.species?.[t.name]; if (!sp) continue;
+      // the card's trunk: the species' base radius (upstate-trees: trunkR) at this tree's scale
+      // (the 3D trunk's radius at 1.3 m, swell and all — near-trunks.js — so the flare meets the bark it grows from)
+      const T = sp.variants[t.v]?.[0]?.trunk, r13 = T ? T.radii[0] + (T.radii[1] - T.radii[0]) * Math.min(1, 1.3 / Math.max(.1, T.pts[1].y)) : .9;
+      const R = r13 * 1.06 * t.k;
+      out.push({ x: t.x, z: t.z, y: this.groundY(t.x, t.z) - .08, R, rot: t.rot, color: new THREE.Color(TRUNK[t.name]).multiplyScalar(.82 + h2(t.seed, 1, 5) * .14) });
+    }
+    void half;
+    return (this._flares = out);
+  }
+  _drawFlares(cx, cz) {
+    const RR = 170, list = this.flares().filter((f) => Math.abs(f.x - cx) < RR && Math.abs(f.z - cz) < RR && Math.hypot(f.x - cx, f.z - cz) < RR);
+    if (!this.flareMesh || this.flareMesh.instanceMatrix.count < list.length) {
+      if (this.flareMesh) { this.group.remove(this.flareMesh); this.flareMesh.dispose(); }
+      this.flareGeo ||= this._flareGeometry();
+      this.flareMat ||= new THREE.MeshLambertMaterial({ vertexColors: true });
+      const im = new THREE.InstancedMesh(this.flareGeo, this.flareMat, Math.max(64, Math.ceil(list.length * 1.4)));
+      im.name = 'Old growth root flares'; im.frustumCulled = false; im.receiveShadow = true; im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      this.group.add(im); this.flareMesh = im;
+    }
+    const im = this.flareMesh, m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), p = new THREE.Vector3(), sc = new THREE.Vector3();
+    list.forEach((f, k) => { q.setFromAxisAngle(Y, f.rot); p.set(f.x, f.y, f.z); sc.set(f.R, Math.max(.75, f.R * .9), f.R); im.setMatrixAt(k, m.compose(p, q, sc)); im.setColorAt(k, f.color); });
+    im.count = list.length; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    this.stats.flares = list.length;
+  }
+
+  // ------------------------------------------------------------------ wildlife
+  /**
+   * The woods' and fields' life (user, 24 Nov: no hikers — "Wildlife instead"): a doe and yearlings among the trunks
+   * a little way off the path, two more at a woods' edge, a flock of turkeys out in a meadow, chipmunks on the logs by
+   * the path, crows circling over the high fields. Fixed spots, picked once along the trails.
+   */
+  _placeLife() {
+    if (this.life) return;
+    this.life = new ForestLife(this.group, { uTime: this.uTime });
+    const list = [], circles = [];
+    let deerGroups = 0, turkeyFlocks = 0, along = 0;
+    for (const c of this.curves) for (let i = 30; i < c.n - 30; i += 25) {
+      along += 25;
+      if (along % 400 > 25) continue;   // a spot every ~400 m of trail
+      const dx = c.x[i + 1] - c.x[i], dz = c.z[i + 1] - c.z[i], l = Math.hypot(dx, dz) || 1, nx = -dz / l, nz = dx / l, side = h2(i, c.n, 3) < .5 ? -1 : 1;
+      const off = 22 + h2(i, c.n, 4) * 14, x = c.x[i] + nx * off * side, z = c.z[i] + nz * off * side, code = this.land(x, z);
+      if (isWood(code) && deerGroups < 3) {
+        deerGroups++;
+        for (let k = 0; k < 2 + (deerGroups % 2); k++) {
+          const px = x + (h2(i, k, 5) - .5) * 7, pz = z + (h2(i, k, 6) - .5) * 7, r = this.trailNear(px, pz, 12);
+          if (r && r.d < 12) continue;
+          list.push({ kind: 'deer', x: px, y: this.groundY(px, pz), z: pz, yaw: h2(i, k, 7) * 6.28, s: k ? .8 + h2(i, k, 8) * .12 : 1 });
+        }
+      } else if (code === OG.meadow && turkeyFlocks < 2) {
+        turkeyFlocks++;
+        for (let k = 0; k < 7; k++) {
+          const px = x + (h2(i, k, 9) - .5) * 9, pz = z + (h2(i, k, 10) - .5) * 9;
+          if (this.land(px, pz) !== OG.meadow) continue;
+          list.push({ kind: 'turkey', x: px, y: this.groundY(px, pz) + .25, z: pz, yaw: h2(i, k, 11) * 6.28, s: .9 + h2(i, k, 12) * .2 });
+        }
+        circles.push({ x, y: this.world.ground.at(x, z) + 34, z, r: 28, n: 3 });
+      }
+    }
+    // chipmunks on the logs nearest the paths
+    let chips = 0;
+    for (const L of this._logList()) {
+      if (chips >= 10) break;
+      const r = this.trailNear(L.x, L.z, 10); if (!r || h2(Math.round(L.x), Math.round(L.z), 13) > .5) continue;
+      const f = .35 + h2(Math.round(L.x), 2, 14) * .3, len = (L.name === 'log' ? 0 : (L.name === 'nurseLog' ? 13 : 16) * L.s * f);
+      const px = L.x + Math.cos(L.rot) * len, pz = L.z - Math.sin(L.rot) * len, top = (L.name === 'nurseLog' ? .6 : .52) * L.s * 1.8;
+      list.push({ kind: 'chipmunk', x: px, y: L.y + top, z: pz, yaw: h2(Math.round(L.x), 3, 15) * 6.28, s: 1 }); chips++;
+    }
+    this.life.place(list, circles);
+    this.stats.life = list.length;
+  }
+
   // ------------------------------------------------------------------ the near pieces
   /** Everything near the camera built now (a snapshot; the first frame of a ride). */
-  prepare(camera) { this._last = null; this._logAt = null; this.tick(camera, this.uTime?.value ?? 0); }
+  prepare(camera) { this._last = null; this._logAt = null; this._bladeAt = null; this.tick(camera, this.uTime?.value ?? 0); }
   tick(camera, time) {
     const cx = camera.position.x, cz = camera.position.z;
     if (!this.contains(cx, cz, 900)) {
       if (this.canopy) this._dropCanopy();
-      for (const B of this.blocks.values()) { this._dropSkirt(B); this._dropGrass(B); }
+      for (const B of this.blocks.values()) { this._dropSkirt(B); this._dropFins(B); }
+      if (this.blades) for (const im of Object.values(this.blades)) im.count = 0;
+      this._nt?.hide(); this._trunkAt = null;
       return;
     }
-    if (!this.canopy && this.world.ground && this.city.land) this._buildCanopy();
-    if (this.world.ground && this.city.land && (!this._logAt || Math.hypot(cx - this._logAt.x, cz - this._logAt.z) > 20)) { this._logAt = { x: cx, z: cz }; this._logs(cx, cz); }
+    const ready = this.world.ground && this.city.land;
+    if (!ready) return;
+    if (!this.canopy) this._buildCanopy();
+    if (!this.life) this._placeLife();
+    this.life.tick(time);
+    if (!this._logAt || Math.hypot(cx - this._logAt.x, cz - this._logAt.z) > 20) { this._logAt = { x: cx, z: cz }; this._logs(cx, cz); this._drawFlares(cx, cz); }
+    if (!this._bladeAt || Math.hypot(cx - this._bladeAt.x, cz - this._bladeAt.z) > 5) { this._bladeAt = { x: cx, z: cz }; this._drawBlades(cx, cz); }
+    if (!this._trunkAt || Math.hypot(cx - this._trunkAt.x, cz - this._trunkAt.z) > 3) { this._trunkAt = { x: cx, z: cz }; this._drawTrunks(cx, cz); }
     // all at once while loading, or when the camera has jumped (a new ride, a snapshot); else a piece a frame
     const jumped = !this._last || Math.hypot(cx - this._last.x, cz - this._last.z) > 150;
     this._last = { x: cx, z: cz };
     let budget = this.world._preload || jumped ? 999 : 1;
-    // nearest first
     const list = [...this.blocks.values()].map((B) => ({ B, d: Math.hypot(B.cx - cx, B.cz - cz) - BLOCK * .71 })).sort((a, b) => a.d - b.d);
     for (const { B, d } of list) {
-      if (d > SKIRT_FAR) this._dropSkirt(B); else if (d < SKIRT_NEAR && !B.skirt && budget > 0 && this.world.ground) { this._buildSkirt(B); budget--; }
-      if (d > GRASS_FAR) this._dropGrass(B); else if (d < GRASS_NEAR && !B.grass && budget > 0 && this.city.land) { this._buildGrass(B); budget--; }
+      if (d > SKIRT_FAR) this._dropSkirt(B); else if (d < SKIRT_NEAR && !B.skirt && budget > 0) { this._buildSkirt(B); budget--; }
+      if (d > FIN_FAR) this._dropFins(B); else if (d < FIN_NEAR && !B.fins && budget > 0) { this._buildFins(B); budget--; }
     }
     if (this.rayMat) this.rayMat.uniforms.uTime.value = time;
   }
 
-  /** The skirt: a fine ground along the trails (BAND either side), the land shader's own material; and the roots
-   *  across the tread in the woods. */
+  /** The skirt: a fine ground along the trails (BAND either side), the land shader's own material, with the trail worn
+   *  into it (aTread: each vertex's signed distance from the line the bike rides, + 50 — the ground shader wears the
+   *  floor through to packed earth along it); and the roots across the tread in the woods. */
   _buildSkirt(B) {
     const W = this.world, cell = this.q.cell, n = Math.round(BLOCK / cell), n1 = n + 1, x0 = B.i * BLOCK, z0 = B.j * BLOCK;
-    const pos = new Float32Array(n1 * n1 * 3), col = new Float32Array(n1 * n1 * 3), lw = new Float32Array(n1 * n1), inside = new Uint8Array(n1 * n1);
-    const grass = new THREE.Color('#89a868'), earth = new THREE.Color('#7a6248'), mown = new THREE.Color('#93ad62'), tmp = new THREE.Color();
+    const pos = new Float32Array(n1 * n1 * 3), col = new Float32Array(n1 * n1 * 3), lw = new Float32Array(n1 * n1), tr = new Float32Array(n1 * n1), inside = new Uint8Array(n1 * n1);
+    const grass = new THREE.Color('#89a868');
     for (let j = 0, k = 0; j <= n; j++) for (let i = 0; i <= n; i++, k++) {
       const x = x0 + i * cell, z = z0 + j * cell, r = this.trailNear(x, z, BAND + 1);
       const rd = r && this.roadNear(x, z);   // (not over a road the trail meets: the road keeps its own ground)
       if (!r || r.d > BAND || (rd && rd.d < rd.half + 7)) { pos[3 * k] = x; pos[3 * k + 2] = z; continue; }
       inside[k] = 1;
-      const y = this.floorH(x, z, r), code = this.land(x, z);
-      pos[3 * k] = x; pos[3 * k + 1] = y; pos[3 * k + 2] = z;
-      // the tread's worn edge: bare earth in the woods, a mown strip in the meadow (the vertex colour shows through the
-      // land's colour there)
-      const wear = 1 - sstep(this.half + .3, this.half + 1.3, r.d);
-      tmp.copy(grass); let w = 1;
-      if (wear > 0) { if (code === OG.meadow) { tmp.lerp(mown, wear); w = 1 - wear * .8; } else if (isWood(code)) { tmp.lerp(earth, wear); w = 1 - wear * .6; } }
-      col[3 * k] = tmp.r; col[3 * k + 1] = tmp.g; col[3 * k + 2] = tmp.b; lw[k] = w;
+      pos[3 * k] = x; pos[3 * k + 1] = this.floorH(x, z, r); pos[3 * k + 2] = z;
+      col[3 * k] = grass.r; col[3 * k + 1] = grass.g; col[3 * k + 2] = grass.b; lw[k] = 1;
+      // (the trail's end at a road: its wear fades out into the road's mouth)
+      tr[k] = 50 + Math.max(-BAND, Math.min(BAND, r.d * r.side)) + (rd && rd.d < rd.half + 9 ? 20 : 0);
     }
     const idx = [];
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
@@ -442,31 +607,29 @@ export class OldGrowth {
     }
     if (!idx.length) { B.skirt = new THREE.Object3D(); return; }
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.setAttribute('aLandW', new THREE.BufferAttribute(lw, 1));
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    g.setAttribute('aLandW', new THREE.BufferAttribute(lw, 1)); g.setAttribute('aTread', new THREE.BufferAttribute(tr, 1));
     g.setIndex(idx); g.computeVertexNormals(); g.computeBoundingSphere();
     const m = new THREE.Mesh(g, W.mats.ground); m.name = `Old growth floor ${B.key}`; m.receiveShadow = true;
     this.group.add(m); B.skirt = m;
-    // roots across the tread (the woods): a dark, half-buried root every so often, and a stone
+    // roots across the tread in the woods: a half-buried root now and then, askew, and a stone
     const P = [], C = [], I = [];
     const root = new THREE.Color('#5e4a37'), stone = new THREE.Color('#8b897f');
     const box = (cx, cy, cz, ux, uz, len, wid, hgt, c) => {
       const vx = -uz, vz = ux, base = P.length / 3;
       for (const [s, t, h] of [[-1, -1, 0], [1, -1, 0], [1, 1, 0], [-1, 1, 0], [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]]) {
-        P.push(cx + ux * s * len / 2 + vx * t * wid / 2, cy + h * hgt - .02, cz + uz * s * len / 2 + vz * t * wid / 2); C.push(c.r, c.g, c.b);
+        P.push(cx + ux * s * len / 2 + vx * t * wid / 2, cy + h * hgt - .03, cz + uz * s * len / 2 + vz * t * wid / 2); C.push(c.r, c.g, c.b);
       }
       for (const q of [[4, 5, 6, 4, 6, 7], [0, 1, 5, 0, 5, 4], [1, 2, 6, 1, 6, 5], [2, 3, 7, 2, 7, 6], [3, 0, 4, 3, 4, 7]]) for (const v of q) I.push(base + v);
     };
-    for (const e of this.trails) for (let i = 0; i < e.n; i++) {
-      const mx = (e.x[i] + e.x[i + 1]) / 2, mz = (e.z[i] + e.z[i + 1]) / 2;
-      if (mx < x0 || mx >= x0 + BLOCK || mz < z0 || mz >= z0 + BLOCK || !isWood(this.land(mx, mz))) continue;
-      const dx = e.x[i + 1] - e.x[i], dz = e.z[i + 1] - e.z[i], l = Math.hypot(dx, dz) || 1, ux = dx / l, uz = dz / l;
-      for (let q = 0; q < 3; q++) {
-        const r = h2(i, e.n + q, e.id.length * 7); if (r > .45) continue;
-        const f = (q + h2(i, q, 3)) / 3, x = e.x[i] + dx * f, z = e.z[i] + dz * f, y = e.ele[i] + (e.ele[i + 1] - e.ele[i]) * f + .02;
-        const a = (h2(i, q, 4) - .5) * .9, cx_ = Math.cos(a) * -uz - Math.sin(a) * ux, cz_ = Math.cos(a) * ux + Math.sin(a) * -uz;   // across the tread, askew
-        if (r < .36) box(x, y, z, cx_, cz_, this.half * 2 + .5, .08 + r * .1, .06 + r * .05, root);
-        else box(x + ux * .1, y, z + uz * .1, ux, uz, .22, .18, .07, stone);
-      }
+    for (const c of this.curves) for (let i = 0; i < c.n; i += 3) {
+      const x = c.x[i], z = c.z[i];
+      if (x < x0 || x >= x0 + BLOCK || z < z0 || z >= z0 + BLOCK || !isWood(this.land(x, z))) continue;
+      const r = h2(i, c.n, c.e.id.length * 7); if (r > .1) continue;   // (a root every ~30 m)
+      const dx = c.x[i + 1] - x, dz = c.z[i + 1] - z, l = Math.hypot(dx, dz) || 1, ux = dx / l, uz = dz / l, y = c.y[i] + TREAD;
+      const a = (h2(i, 1, 4) - .5) * .9, ax = Math.cos(a) * -uz - Math.sin(a) * ux, az = Math.cos(a) * ux + Math.sin(a) * -uz;   // across the tread, askew
+      if (r < .08) box(x, y, z, ax, az, this.half * 2 + .6, .09 + r, .05 + r * .3, root);
+      else box(x + ux * .1, y, z + uz * .1, ux, uz, .2, .16, .06, stone);
     }
     if (I.length) {
       const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); rg.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); rg.setIndex(I); rg.computeVertexNormals();
@@ -475,76 +638,161 @@ export class OldGrowth {
     }
     this.stats.skirtBlocks++;
   }
-  _dropSkirt(B) {
-    for (const k of ['skirt', 'roots']) { const m = B[k]; if (!m) continue; this.group.remove(m); m.geometry?.dispose(); B[k] = null; }
-    if (B.skirt === null && this.stats.skirtBlocks > 0) {}
-  }
+  _dropSkirt(B) { for (const k of ['skirt', 'roots']) { const m = B[k]; if (!m) continue; this.group.remove(m); m.geometry?.dispose(); B[k] = null; } }
 
-  /** The meadow's tall grass along the trails: hay-coloured, past the knee to the hip, swaying, right to the mown slit
-   *  the trail cuts through it (user: "the grass is tall and swaying … the bike path is a narrow slit through the
-   *  grasses"). Two crossed picture cards a plant (grass-cards.js's atlas: the tall-grass and turf cells). */
-  _buildGrass(B) {
-    const x0 = B.i * BLOCK, z0 = B.j * BLOCK, half = this.half, dens = this.q.grass;
-    const P = [], U = [], C = [], K = [], I = [];
-    const W = 1024, CW = 256;
-    const card = (x, y, z, cell, w, h, yaw, r, g, b) => {
-      const u0 = (cell * CW + 8) / W, u1 = ((cell + 1) * CW - 3) / W;
-      for (const a of [yaw, yaw + Math.PI / 2]) {
-        const c = Math.cos(a) * w / 2, s = Math.sin(a) * w / 2, base = P.length / 3;
-        P.push(x - c, y - .05, z - s, x + c, y - .05, z + s, x + c, y + h, z + s, x - c, y + h, z - s);
-        U.push(u0, .03, u1, .03, u1, .99, u0, .99);
-        for (let q = 0; q < 4; q++) { C.push(r, g, b); K.push(q < 2 ? 0 : h); }
-        I.push(base, base + 1, base + 2, base, base + 2, base + 3);
-      }
-    };
-    // the hay's tints over the atlas's greens: straw, tan, olive, a dull green at the foot of the stand
-    const TINT = [[1.08, .9, .62], [.98, .8, .55], [.86, .82, .55], [.74, .78, .5], [1.1, .96, .7]];
-    for (const [S, d0, d1, cellK] of [[.75 / Math.sqrt(dens), 0, 7, 1], [1.15 / Math.sqrt(dens), 7, 15, 1], [1.7 / Math.sqrt(dens), 15, 26, 1]]) {
-      const n = Math.ceil(BLOCK / S);
-      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
-        const gi = Math.floor(x0 / S) + i, gj = Math.floor(z0 / S) + j;
-        const x = (gi + h2(gi, gj, 201)) * S, z = (gj + h2(gi, gj, 202)) * S;
-        if (x < x0 || x >= x0 + BLOCK || z < z0 || z >= z0 + BLOCK) continue;
-        if (this.land(x, z) !== OG.meadow) continue;
-        const r = this.trailNear(x, z, d1 + 1); if (!r || r.d < d0 || r.d >= d1) continue;
-        const y = this.floorH(x, z, r) ?? this.world._groundH(x, z);
-        if (r.d < half + .08) continue;
-        const t = TINT[Math.floor(h2(gi, gj, 203) * TINT.length)], v = .9 + h2(gi, gj, 204) * .2;
-        if (r.d < half + .95) {   // the mown strip: low turf either side of the tread
-          card(x, y, z, 0, .5 + h2(gi, gj, 205) * .2, .22 + h2(gi, gj, 206) * .12, h2(gi, gj, 207) * 6.28, .78 * v, .86 * v, .62 * v);
-          continue;
+  // ------------------------------------------------------------------ the meadows' grass
+  /**
+   * The tall grass right at the path (user, 24 Nov: "Grass should be closer in to the bike path and taller … Grass
+   * area has poor performance" → "Near wall + far shell", 1.4–1.8 m, from 0.3 m off the tread): 3D clumps of real
+   * blades — no see-through cards, so no overdraw — on a jittered 0.5 m grid from 0.3 m off the tread out to 8 m,
+   * instanced (one draw call a detail level: a fuller clump within 22 m, a sparser one out to BLADE_R), refilled as
+   * the camera moves. Swaying, gusts rolling over from the west.
+   */
+  _bladeGeometry(blades, segs) {
+    const P = [], N = [], C = [], H = [], I = [];
+    // hay at the end of September: olive-brown at the foot, tan and straw above, a few blades still dull green
+    const PAL = [['#5d5a32', '#9c8a55', '#cdb67e'], ['#655c35', '#a78e58', '#c9a96c'], ['#4f5a2e', '#7f8746', '#aba468'], ['#6a5f3a', '#b09a66', '#dcc897']];
+    const tmp = new THREE.Color();
+    for (let b = 0; b < blades; b++) {
+      const a = b * 2.39996, d = .03 + (b % 4) * .05, bx = Math.cos(a) * d, bz = Math.sin(a) * d;
+      const pal = PAL[Math.floor(h2(b, blades, 5) * PAL.length)].map((c) => new THREE.Color(c)), [base, mid, tip] = pal;
+      const yaw = h2(b, blades, 1) * 6.28, lean = .12 + h2(b, blades, 2) * .32, hgt = .62 + h2(b, blades, 3) * .38, w = .011 + h2(b, blades, 4) * .009;
+      const ox = Math.cos(a), oz = Math.sin(a), sx = Math.cos(yaw), sz = Math.sin(yaw), v0 = P.length / 3;
+      for (let k = 0; k <= segs; k++) {
+        const t = k / segs, y = hgt * t, out = lean * t * t, ww = w * (1 - t * .85);
+        const cx = bx + ox * out, cz = bz + oz * out;
+        for (const s of [-1, 1]) {
+          P.push(cx + sx * ww * s, y, cz + sz * ww * s); N.push(ox * .3, 1, oz * .3);
+          tmp.copy(t < .5 ? base : mid).lerp(t < .5 ? mid : tip, t < .5 ? t * 2 : (t - .5) * 2); C.push(tmp.r, tmp.g, tmp.b); H.push(t);
         }
-        // the stand: taller away from the edge (a mown edge's regrowth is shorter), leaning a little over the slit
-        const tall = 1.0 + h2(gi, gj, 208) * .55 - (r.d < half + 2 ? .25 : 0);
-        card(x, y, z, cellK, 1.05 + h2(gi, gj, 209) * .4, tall, h2(gi, gj, 210) * 6.28, t[0] * v, t[1] * v, t[2] * v);
+        if (k) { const q = v0 + (k - 1) * 2; I.push(q, q + 1, q + 3, q, q + 3, q + 2); }
+      }
+      // a seed head on every other blade: a short, pale plume
+      if (b % 3 === 0) {
+        const t = 1, cx = bx + ox * lean, cz = bz + oz * lean, q = P.length / 3, hc = tmp.set(h2(b, 7, 6) < .5 ? '#a8895a' : '#8f7a55');
+        for (const [px, py, pz] of [[cx - sx * .012, hgt - .03, cz - sz * .012], [cx + sx * .012, hgt - .03, cz + sz * .012], [cx + ox * .04 + sx * .008, hgt + .14, cz + oz * .04 + sz * .008], [cx + ox * .04 - sx * .008, hgt + .14, cz + oz * .04 - sz * .008]]) {
+          P.push(px, py, pz); N.push(ox * .3, 1, oz * .3); C.push(hc.r, hc.g, hc.b); H.push(t);
+        }
+        I.push(q, q + 1, q + 2, q, q + 2, q + 3);
       }
     }
-    if (!I.length) { B.grass = new THREE.Object3D(); return; }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); g.setAttribute('aH', new THREE.Float32BufferAttribute(H, 1)); g.setIndex(I);
+    g.computeBoundingSphere();
+    return g;
+  }
+  _bladeMat() {
+    if (this.bladeMat) return this.bladeMat;
+    const m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    m.onBeforeCompile = (shader) => {
+      shader.uniforms.uTime = this.uTime;
+      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; attribute float aH;')
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+          // the blade bends from its foot: its own sway, and gusts rolling over the field from the west
+          vec3 ip = vec3(0.);
+          #ifdef USE_INSTANCING
+            ip = instanceMatrix[3].xyz;
+          #endif
+          float k = aH * aH;
+          float gust = .5 + .5 * sin(dot(ip.xz, vec2(.09, .03)) - uTime * 1.3) * sin(dot(ip.xz, vec2(.021, -.05)) - uTime * .55);
+          vec2 sw = vec2(sin(uTime * 1.9 + ip.x * .53 + ip.z * .31 + aH * 1.3), cos(uTime * 1.4 + ip.z * .47)) * .06 + vec2(.2, .07) * gust;
+          transformed.xz += sw * k; transformed.y -= dot(sw, sw) * k * 1.2;`);
+    };
+    m.customProgramCacheKey = () => 'old-growth-blades-2';
+    return (this.bladeMat = m);
+  }
+  /** The clumps of one 32 m cell along the meadow trails (computed once): Float32Array of [x, y, z, yaw, scale, tint]. */
+  _bladeCell(ci, cj) {
+    const key = `${ci},${cj}`, cache = (this._bladeCells ||= new Map());
+    if (cache.has(key)) return cache.get(key);
+    const out = [], S = this.q.bladeS, x0 = ci * 32, z0 = cj * 32, half = this.half;
+    for (let i = Math.floor(x0 / S); i < Math.ceil((x0 + 32) / S); i++) for (let j = Math.floor(z0 / S); j < Math.ceil((z0 + 32) / S); j++) {
+      const x = (i + h2(i, j, 401)) * S, z = (j + h2(i, j, 402)) * S;
+      if (x < x0 || x >= x0 + 32 || z < z0 || z >= z0 + 32) continue;
+      const r = this.trailNear(x, z, 8.5); if (!r || r.d < half + .3 || r.d > 8.5) continue;
+      if (this.land(x, z) !== OG.meadow) continue;
+      // taller with distance from the tread's edge (the edge brushed down a little by passing bikes)
+      const sc = (1.4 + h2(i, j, 403) * .4) * (r.d < half + .9 ? .82 : 1);
+      out.push(x, this.groundY(x, z) - .03, z, h2(i, j, 404) * 6.28, sc, .86 + h2(i, j, 405) * .26);
+    }
+    const a = new Float32Array(out); cache.set(key, a); return a;
+  }
+  _drawBlades(cx, cz) {
+    const R = this.q.bladeR, NEAR = 22;
+    if (!this.blades) {
+      const mat = this._bladeMat(), mk = (g, name) => { const im = new THREE.InstancedMesh(g, mat, 512); im.count = 0; im.name = name; im.frustumCulled = false; im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.group.add(im); return im; };
+      this.blades = { near: mk(this._bladeGeometry(16, 3), 'Old growth meadow grass (near)'), far: mk(this._bladeGeometry(7, 2), 'Old growth meadow grass (mid)') };
+    }
+    const near = [], far = [];
+    for (let ci = Math.floor((cx - R) / 32); ci <= Math.floor((cx + R) / 32); ci++) for (let cj = Math.floor((cz - R) / 32); cj <= Math.floor((cz + R) / 32); cj++) {
+      if (!this.contains((ci + .5) * 32, (cj + .5) * 32, 40)) continue;
+      const a = this._bladeCell(ci, cj);
+      for (let k = 0; k < a.length; k += 6) { const d = Math.hypot(a[k] - cx, a[k + 2] - cz); if (d < NEAR) near.push(k, a); else if (d < R) far.push(k, a); }
+    }
+    const fill = (name, list) => {
+      let im = this.blades[name]; const n = list.length / 2;
+      if (n > im.instanceMatrix.count) {
+        const nim = new THREE.InstancedMesh(im.geometry, im.material, Math.ceil(n * 1.3)); nim.name = im.name; nim.frustumCulled = false; nim.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.group.remove(im); im.dispose(); this.group.add(nim); this.blades[name] = im = nim;
+      }
+      const m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), p = new THREE.Vector3(), sc = new THREE.Vector3(), c = new THREE.Color();
+      for (let i = 0; i < n; i++) {
+        const k = list[2 * i], a = list[2 * i + 1];
+        q.setFromAxisAngle(Y, a[k + 3]); p.set(a[k], a[k + 1], a[k + 2]); sc.set(1, a[k + 4], 1);
+        im.setMatrixAt(i, m.compose(p, q, sc)); im.setColorAt(i, c.setScalar(a[k + 5]));
+      }
+      im.count = n; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    };
+    fill('near', near); fill('far', far);
+    this.stats.blades = (near.length + far.length) / 2;
+  }
+
+  /** The meadow's grass beyond the near clumps (8–30 m from a trail): fins — long picture cards of the tall grass,
+   *  stood in rows along the trail, staggered, so from the path the field reads as a deep wall of hay-coloured grass
+   *  at a fraction of the cost; swaying with the blades. Built per block. */
+  _buildFins(B) {
+    const x0 = B.i * BLOCK, z0 = B.j * BLOCK, half = this.half;
+    const P = [], U = [], C = [], K = [], I = [];
+    const u0 = (256 + 8) / 1024, u1 = (512 - 3) / 1024;
+    const S = 2.2;
+    for (let i = Math.floor(x0 / S); i < Math.ceil((x0 + BLOCK) / S); i++) for (let j = Math.floor(z0 / S); j < Math.ceil((z0 + BLOCK) / S); j++) {
+      const x = (i + h2(i, j, 501)) * S, z = (j + h2(i, j, 502)) * S;
+      if (x < x0 || x >= x0 + BLOCK || z < z0 || z >= z0 + BLOCK) continue;
+      const r = this.trailNear(x, z, 30); if (!r || r.d < 7 + half || r.d > 30) continue;
+      if (this.land(x, z) !== OG.meadow) continue;
+      const y = this.groundY(x, z), w = 2.4 + h2(i, j, 503) * 1.4, h = 1.45 + h2(i, j, 504) * .4;
+      const yaw = Math.atan2(r.dz, r.dx) + (h2(i, j, 505) - .5) * .5, c = Math.cos(yaw) * w / 2, s = Math.sin(yaw) * w / 2;
+      const t = .84 + h2(i, j, 506) * .3, base = P.length / 3;
+      P.push(x - c, y - .05, z - s, x + c, y - .05, z + s, x + c, y + h, z + s, x - c, y + h, z - s);
+      U.push(u0, .03, u1, .03, u1, .99, u0, .99);
+      for (let q = 0; q < 4; q++) { C.push(1.1 * t, .96 * t, .68 * t); K.push(q < 2 ? 0 : h); }
+      I.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    }
+    if (!I.length) { B.fins = new THREE.Object3D(); return; }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
     g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); g.setAttribute('aTall', new THREE.Float32BufferAttribute(K, 1));
-    g.setIndex(I); g.computeVertexNormals(); g.computeBoundingSphere();
-    const m = new THREE.Mesh(g, this._grassMat()); m.name = `Old growth meadow ${B.key}`; m.userData.bake = false;
-    this.group.add(m); B.grass = m; this.stats.grassBlocks++;
+    g.setIndex(I); g.computeBoundingSphere();
+    const m = new THREE.Mesh(g, this._grassMat()); m.name = `Old growth meadow fins ${B.key}`; m.userData.bake = false;
+    this.group.add(m); B.fins = m; this.stats.finBlocks = (this.stats.finBlocks || 0) + 1;
   }
-  _dropGrass(B) { const m = B.grass; if (!m) return; this.group.remove(m); m.geometry?.dispose(); B.grass = null; }
+  _dropFins(B) { const m = B.fins; if (!m) return; this.group.remove(m); m.geometry?.dispose(); B.fins = null; }
   _grassMat() {
     if (this.grassMat) return this.grassMat;
     const r = this.world.renderer, msaa = !!(r.getContextAttributes?.()?.antialias);
-    const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95, side: THREE.DoubleSide, map: grassAtlas(r), alphaTest: msaa ? .35 : .5, alphaToCoverage: msaa });
+    const m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, map: grassAtlas(r), alphaTest: msaa ? .35 : .5, alphaToCoverage: msaa });
     m.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = this.uTime;
       shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; attribute float aTall;')
         .replace('#include <begin_vertex>', `#include <begin_vertex>
-          // tall grass swaying (user: "the grass is tall and swaying"): each plant on its own, and gusts rolling across
-          // the meadow in waves from the west; the top moves, the foot stays
-          if (aTall > 0.) { vec3 wp = (modelMatrix * vec4(position, 1.)).xyz; float k = aTall * aTall;
+          if (aTall > 0.) { vec3 wp = (modelMatrix * vec4(position, 1.)).xyz; float k = aTall * aTall / 2.5;
             float gust = .5 + .5 * sin(dot(wp.xz, vec2(.09, .03)) - uTime * 1.3) * sin(dot(wp.xz, vec2(.021, -.05)) - uTime * .55);
-            vec2 sw = vec2(sin(uTime * 1.7 + wp.x * .41 + wp.z * .23), cos(uTime * 1.3 + wp.z * .37)) * .07 + vec2(.17, .06) * gust;
-            transformed.xz += sw * k; transformed.y -= length(sw) * k * .25; }`)
+            vec2 sw = vec2(sin(uTime * 1.7 + wp.x * .41 + wp.z * .23), cos(uTime * 1.3 + wp.z * .37)) * .07 + vec2(.2, .07) * gust;
+            transformed.xz += sw * k; }`)
         .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nobjectNormal = vec3(0., 1., 0.);');
     };
-    m.customProgramCacheKey = () => `old-growth-grass-1-${msaa}`;
+    m.customProgramCacheKey = () => `old-growth-grass-2-${msaa}`;
     return (this.grassMat = m);
   }
 
@@ -567,18 +815,23 @@ export class OldGrowth {
         const code = this.land(x, z); if (!isWood(code)) continue;
         const nat = this.world.ground.at(x, z), y0 = nat + CANOPY_LO[code];
         // a gap: patches of open sky (~12 % in the stands, most of the blowdown), the light coming down through them
-        const gap = code === OG.blow ? h2(gi, gj, 301) < .72 : vnoise(x * .045 + 2.3, z * .045 - 7.1) > .7 || h2(gi, gj, 302) < .03;
+        // (god rays only at a few hero spots — user, 24 Nov: "Reduce the number of areas with god rays": the data's
+        //  `rays` places; the canopy opens over each, and its light comes down there and nowhere else)
+        const spot = this.raySpots.find((q) => Math.hypot(q.x - x, q.z - z) < q.r);
+        const gap = spot ? Math.hypot(spot.x - x, spot.z - z) < spot.r * .75 || h2(gi, gj, 301) < .5
+          : code === OG.blow ? h2(gi, gj, 301) < .6 : vnoise(x * .045 + 2.3, z * .045 - 7.1) > .74 || h2(gi, gj, 302) < .02;
         if (gap) {
-          if (r.d < 24 && h2(gi, gj, 303) < (code === OG.blow ? .25 : .55)) rays.push({ x: x + (h2(gi, gj, 304) - .5) * 3, z: z + (h2(gi, gj, 305) - .5) * 3, y: y0 + 2, w: 1.2 + h2(gi, gj, 306) * 2.2, code });
+          if (spot && r.d < 22 && h2(gi, gj, 303) < .8) rays.push({ x: x + (h2(gi, gj, 304) - .5) * 3, z: z + (h2(gi, gj, 305) - .5) * 3, y: y0 + 2, w: 1.6 + h2(gi, gj, 306) * 2.4, code });
           continue;
         }
         const cards = code === OG.old ? 2 : 1 + (h2(gi, gj, 307) < .5 ? 1 : 0);
         for (let q = 0; q < cards; q++) {
           const cx = x + (h2(gi, gj, 310 + q) - .5) * S * .8, cz = z + (h2(gi, gj, 312 + q) - .5) * S * .8, cy = y0 + q * 2.8 + h2(gi, gj, 314 + q) * 3;
           const hs = 3 + h2(gi, gj, 316 + q) * 1.8, yaw = h2(gi, gj, 318 + q) * 6.28, tilt = (h2(gi, gj, 320 + q) - .5) * .7;
-          // the colour: a canopy's greens lit through, here and there a maple's crown turning (CNY's early fall)
+          // the colour: the woods at peak, lit through from above (user, 24 Nov, photos of a golden beech–maple stand):
+          // gold and yellow mostly, orange here and there, a few crowns still yellow-green or green
           const t = h2(gi, gj, 322 + q);
-          const hex = t < .12 ? '#c8651e' : t < .19 ? '#c99a2c' : t < .23 ? '#a3401b' : t < .5 ? '#4e6f2c' : t < .78 ? '#5b7d31' : '#6b8a38';
+          const hex = t < .34 ? '#d9a326' : t < .56 ? '#e3b83c' : t < .68 ? '#cf7f22' : t < .76 ? '#c2621d' : t < .9 ? '#a6a03c' : '#6f8a34';
           const c = tmpC.set(hex).multiplyScalar(.85 + h2(gi, gj, 330 + q) * .3).toArray();
           const ax = Math.cos(yaw), az = Math.sin(yaw), bx = -az * Math.cos(tilt), by = Math.sin(tilt), bz = ax * Math.cos(tilt);
           const base = P.length / 3, u0 = Math.floor(h2(gi, gj, 324 + q) * 2) * .5, v0 = Math.floor(h2(gi, gj, 326 + q) * 2) * .5;
@@ -612,7 +865,7 @@ export class OldGrowth {
           #include <alphatest_fragment>
           diffuseColor.rgb *= .78 + .3 * diffuseColor.a;`);
     };
-    mat.customProgramCacheKey = () => 'old-growth-canopy-1';
+    mat.customProgramCacheKey = () => 'old-growth-canopy-2';
     this.canopy = new THREE.Mesh(g, mat); this.canopy.name = 'Old growth canopy'; this.canopy.frustumCulled = false; this.canopy.userData.bake = false; this.canopy.castShadow = false;
     this.group.add(this.canopy);
     this.stats.canopyCards = I.length / 6;
@@ -621,6 +874,7 @@ export class OldGrowth {
   _dropCanopy() {
     for (const k of ['canopy', 'rays', 'pools']) { const m = this[k]; if (!m) continue; this.group.remove(m); m.geometry.dispose(); m.material.dispose(); this[k] = null; }
     for (const im of Object.values(this.logMeshes || {})) im.count = 0;
+    if (this.flareMesh) this.flareMesh.count = 0;
     this._logAt = null;
   }
 
@@ -673,7 +927,7 @@ export class OldGrowth {
           float across = 1. - abs(vS); across *= across;
           float along = smoothstep(0., .12, vU) * (1. - smoothstep(.45, 1., vU));
           float shimmer = .75 + .25 * sin(uTime * .8 + vSeed + vU * 3.) * sin(uTime * 1.3 + vSeed * 1.7);
-          float a = across * along * shimmer * vFade * .28;
+          float a = across * along * shimmer * vFade * .42;
           if (a < .004) discard;
           gl_FragColor = vec4(uColor * a, 1.);
         }`,
@@ -686,7 +940,7 @@ export class OldGrowth {
     const pm = new THREE.ShaderMaterial({
       uniforms: { uColor: { value: new THREE.Color(1, .82, .52) } },
       vertexShader: 'attribute vec2 aP; varying vec2 vP; varying float vD; void main() { vP = aP; vec4 w = modelMatrix * vec4(position, 1.); vD = length(w.xyz - cameraPosition); gl_Position = projectionMatrix * viewMatrix * w; }',
-      fragmentShader: 'uniform vec3 uColor; varying vec2 vP; varying float vD; void main() { float r = dot(vP, vP); float a = (1. - smoothstep(.15, 1., r)) * .28 * (1. - smoothstep(120., 200., vD)); if (a < .003) discard; gl_FragColor = vec4(uColor * a, 1.); }',
+      fragmentShader: 'uniform vec3 uColor; varying vec2 vP; varying float vD; void main() { float r = dot(vP, vP); float a = (1. - smoothstep(.15, 1., r)) * .4 * (1. - smoothstep(120., 200., vD)); if (a < .003) discard; gl_FragColor = vec4(uColor * a, 1.); }',
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
     });
     this.pools = new THREE.Mesh(pg, pm); this.pools.name = 'Old growth sun pools'; this.pools.userData.bake = false; this.pools.renderOrder = 4;

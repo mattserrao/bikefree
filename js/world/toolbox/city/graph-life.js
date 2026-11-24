@@ -28,7 +28,9 @@ export class GraphLife {
   constructor(world, parent, { quality = 'balanced', uTime }) {
     this.W = world; this.rand = randomSequence(2211);
     const N = COUNT[quality] || COUNT.balanced;
-    this.edges = world.G.edges.filter((e) => e.n >= 2 && BIKE_PATHS.has(e.kind) && !e.bridges.some(([a, b]) => b - a >= e.n - 1));
+    // (not an old-growth hero area's singletrack — user, 24 Nov: "No hikers in the Camillus woods"; its life is wildlife:
+    //  toolbox/vegetation/old-growth.js)
+    this.edges = world.G.edges.filter((e) => e.n >= 2 && BIKE_PATHS.has(e.kind) && !e._cf && !e.bridges.some(([a, b]) => b - a >= e.n - 1));
     // walkers: the ways with a sidewalk (the villages) and the trails
     this.walkEdges = this.edges.filter((e) => (world.walkOf(e) || 0) > 0.8 || e.kind === 'path' || e.kind === 'residential');
     this.bikeSet = new Set(this.edges); this.walkSet = new Set(this.walkEdges);

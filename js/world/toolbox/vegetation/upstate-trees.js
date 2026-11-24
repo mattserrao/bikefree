@@ -87,6 +87,7 @@ function grow(seed, o, lod, turn, lodScale = 1) {
   const snapped = o.dead && turn !== 1 ? .55 + rand() * .15 : 1;   // (a snag: its top broken off)
   const queue = [];
   const stems = o.stems || 1;
+  let trunk = null;   // the first stem's skeleton (a near 3D trunk can be built along it: old-growth.js)
   for (let s = 0; s < stems; s++) {
     const a = s * 2.4 + rand(), tilt = stems > 1 ? .12 + rand() * .08 : rand() * .04;
     queue.push({ level: 0, p: new THREE.Vector3(stems > 1 ? Math.cos(a) * .45 : 0, 0, stems > 1 ? Math.sin(a) * .45 : 0), d: new THREE.Vector3(Math.cos(a) * Math.sin(tilt), Math.cos(tilt), Math.sin(a) * Math.sin(tilt)),
@@ -108,6 +109,7 @@ function grow(seed, o, lod, turn, lodScale = 1) {
       pts.push(p); dirs.push(d.clone());
       radii.push(br.r * Math.max(.06, 1 - (i / sections) * (lv === 0 && !o.leader ? .45 : .9)));
     }
+    if (lv === 0 && !trunk) trunk = { pts: pts.map((q) => q.clone()), radii: radii.slice(), fork: L ? L[0][1] : 1 };
     if (lv <= woodLevel) {
       // (a lower level: every other point of the same branch — the same curve, fewer rings)
       const keep = lod ? pts.map((_, i) => i).filter((i) => i % 2 === 0 || i === pts.length - 1) : null;
@@ -233,7 +235,9 @@ function grow(seed, o, lod, turn, lodScale = 1) {
   leaves.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); leaves.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   leaves.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); leaves.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   leaves.computeBoundingSphere(); leaves.computeBoundingBox();
-  return { wood: wood.build(), leaves };
+  // (the crown's underside: the lowest leaves, a few strays aside — a near 3D trunk is cut a little below it)
+  if (trunk) { const ys = clusters.map((c) => c.p.y).sort((a, b) => a - b); trunk.crown = ys.length ? ys[Math.floor(ys.length * .03)] : H * .5; }
+  return { wood: wood.build(), leaves, trunk };
 }
 /**
  * The mid tier's foliage from the near tier's: the clusters gathered into about a third as many (k-means, seeded from
@@ -316,6 +320,8 @@ const SPECIES = {
     greens: ['#6e6a60'], fall: ['#6e6a60'], turn: [0, 1, 2] },
 };
 
+// (user, 24 Nov, with photos of a golden beech–maple stand: the forest-grown forms — the Camillus woods only — at peak:
+//  gold and yellow with some orange and the odd green crown; the rest of CNY stays early fall)
 // forest-grown forms (Camillus Forest Unique Area, user 24 Nov: "when hiking through wooded areas, the trees are tall
 // and mature … the tops of the trees extend high and cover the sky"): grown in a closed stand, each reaches for the
 // light — a long, clean bole (the lower limbs shaded out and shed long ago), a narrow, high crown in the top third or
@@ -325,19 +331,19 @@ const FOREST_FORMS = {
   // sugar maple: a straight grey-brown bole to ~60 % of its height, a tall, rounded crown of ascending limbs
   sugarmapleF: { H: 29, R: 5.4, fork: .6, trunkR: .5, trunk: '#5a4d42', bark: PLATED, leader: true, gnarl: .15, up: .1,
     levels: [[7, .58, .6, .25], [4, .3, .62, .15], [3, .35, .6, .085]],
-    greens: ['#4e7a37', '#57833c', '#476f33', '#5d8a40'], fall: ['#e07b22', '#d8641f', '#eaa232', '#c94b1d'], turn: [0, .38] },
+    greens: ['#6b8a34', '#77913a', '#5f7f31'], fall: ['#e2a62a', '#d98c24', '#eab838', '#cf7522'], turn: [.82, .96] },
   // American beech: the smooth elephant-grey bole, longer limbs a little lower, a broad top; bronze late
   beechF: { H: 26, R: 6.2, fork: .5, trunkR: .48, trunk: '#a19f97', bark: BARK, leader: true, gnarl: .18, up: .06,
     levels: [[7, .5, .82, .29], [4, .3, .65, .17], [3, .35, .6, .095]],
-    greens: ['#5a843c', '#628c42', '#527a37'], fall: ['#c9a440', '#b9893a'], turn: [0, .14] },
+    greens: ['#7a8c3a', '#86923e'], fall: ['#d4a83a', '#c99434', '#e0b848'], turn: [.72, .9] },
   // bitternut hickory: tall and straight, a smallish crown of stout ascending limbs; bright yellow early
   hickory: { H: 27, R: 4.8, fork: .58, trunkR: .42, trunk: '#6a6259', bark: PLATED, leader: true, gnarl: .2, up: .09,
     levels: [[6, .56, .58, .25], [3, .3, .6, .15], [3, .4, .55, .085]],
-    greens: ['#5a7f3a', '#64883f', '#557a36'], fall: ['#d9b83a', '#e3c64c', '#c9a536'], turn: [.3] },
+    greens: ['#7a8a38', '#84923c'], fall: ['#e4c43c', '#d9b42e', '#ecd050'], turn: [.95] },
   // basswood: a tall bole often with sprouts at its foot, a dense, broad crown of big heart-shaped leaves; yellowing
   basswood: { H: 27, R: 6, fork: .52, trunkR: .46, trunk: '#655c52', bark: BARK, leader: true, gnarl: .17, up: .07,
     levels: [[7, .52, .72, .27], [4, .3, .65, .16], [3, .35, .6, .09]],
-    greens: ['#5e8a3f', '#68923f', '#577f3a'], fall: ['#c8b552', '#b7a548'], turn: [.2] },
+    greens: ['#76903e', '#80983f'], fall: ['#d6c24e', '#c9b048'], turn: [.78] },
 };
 
 /**
@@ -365,9 +371,13 @@ function bigLog(seed, { L = 15, r = .5, nurse = false, tipup = false } = {}) {
   if (tipup) {
     // the root plate on end: a ragged disc of soil and roots 2.5–3.5 m across, a stone or two caught in it
     const R = 1.3 + rand() * .5;
-    b.as(BARK).add(blob(1), M(-.25, R * .9, 0, .45, R, R * 1.05), '#4b3a2b', .25, rand);
-    b.add(blob(0), M(-.05, R * .9, 0, .3, R * .82, R * .86), '#3d2f23', .2, rand);
-    for (let k = 0; k < 14; k++) { const a = k / 14 * 6.28 + rand() * .3; b.add(cyl(.02, .07, R * (.5 + rand() * .5), 3), M(-.2, R * .9 + Math.sin(a) * R * .85, Math.cos(a) * R * .9, 1, 1, 1, 0, a, Math.PI / 2 + (rand() - .5) * .6), '#5a4836'); }
+    // (ragged, not a dome: three lobes of torn earth, a pale mineral-soil face, a lip of leaf litter on top —
+    //  the plain dark disc read as a black ball against the litter: user's snapshots, 24 Nov)
+    b.as(BARK).add(blob(1), M(-.25, R * .9, 0, .4, R, R * 1.05), '#6e5640', .35, rand);
+    for (let k = 0; k < 3; k++) { const a = k * 2.1 + rand(); b.add(blob(1), M(-.25, R * .9 + Math.sin(a) * R * .55, Math.cos(a) * R * .6, .32, R * .55, R * .5), ['#7a6146', '#66503b', '#84694c'][k], .35, rand); }
+    b.add(blob(0), M(-.02, R * .85, 0, .22, R * .7, R * .75), '#9a8264', .25, rand);
+    b.as(SHRUB).add(blob(0), M(-.3, R * 1.85, 0, .5, .22, R * .8), '#a8782e', .2, rand);
+    for (let k = 0; k < 14; k++) { const a = k / 14 * 6.28 + rand() * .3; b.add(cyl(.02, .07, R * (.5 + rand() * .5), 3), M(-.2, R * .9 + Math.sin(a) * R * .85, Math.cos(a) * R * .9, 1, 1, 1, 0, a, Math.PI / 2 + (rand() - .5) * .6), '#6f5a44'); }
     b.as(DEAD).add(blob(1), M(-.35, R * .5, R * .35, .35, .3, .4), '#8d8c84', .2, rand);
   } else {
     // a snapped end: splintered, pale

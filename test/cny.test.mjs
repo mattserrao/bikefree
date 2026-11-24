@@ -132,4 +132,12 @@ test('Camillus Forest Unique Area (tools/cny_forest.py): its trails joined at Th
   const names = new Set(p.path.map((k) => G.byId.get(k.slice(0, -1)).name));
   for (const n of ['#1', '#2', '#3', '#4', '#5', '#6', '#8']) assert.ok(names.has(`Camillus Forest Trail ${n}`), n);
   assert.ok(G.byId.get(p.path[0].slice(0, -1)).from === og.junction || G.byId.get(p.path[0].slice(0, -1)).to === og.junction);
+  // smooth (user, 24 Nov: "Bike is sliding … turns on the bike path smoother and not jagged"): no sample turns more than ~22°
+  for (const e of trails) for (let i = 1; i < e.n; i++) {
+    const k = Math.cos(e.lat[i] * Math.PI / 180), a = Math.atan2(e.lat[i] - e.lat[i - 1], (e.lon[i] - e.lon[i - 1]) * k), b = Math.atan2(e.lat[i + 1] - e.lat[i], (e.lon[i + 1] - e.lon[i]) * k);
+    const t = Math.abs(((b - a + 3 * Math.PI) % (2 * Math.PI)) - Math.PI) * 180 / Math.PI;
+    assert.ok(t < 23.5, `${e.id} turns ${t.toFixed(0)}° at sample ${i}`);
+  }
+  // god rays at a few hero spots only
+  assert.ok(og.rays.length >= 3 && og.rays.length <= 5);
 });

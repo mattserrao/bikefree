@@ -50,6 +50,10 @@ OLD, FOREST, MEADOW, BLOW = 30, 31, 32, 33
 BLOWDOWN = {'center': (43.0664, -76.2928), 'r': (150, 95), 'rot': 1.35}
 # the green tunnel (user's loop, section ⑤: Trail #2 between two rows of trees across the meadow)
 TUNNEL = {'trail': '2', 'from': '13112735580', 'to': '1627091229'}
+# the god rays' places (user, 24 Nov: "Reduce the number of areas with god rays" → 3–5 hero spots): the blowdown's gap,
+# and four openings in the canopy over the ride — up Trail #6 into the old growth, the far west and the east of the north
+# woods on #4, and the lower woods on #1. [lat, lon, radius m]
+RAYS = [[43.0664, -76.2928, 30], [43.064294, -76.28807, 18], [43.070462, -76.295364, 18], [43.072805, -76.284297, 18], [43.069379, -76.280387, 16]]
 # the old apple orchard (DEC: ~100 old apple trees on 5 acres): scattered on the high meadow by Trails #5 / #1
 ORCHARD = {'center': (43.0682, -76.2852), 'r': 85, 'n': 26}
 CHECK = '--check' in sys.argv
@@ -90,10 +94,46 @@ def ground_sampler():
     return at
 
 
-def resample(P):
+def ease_turns(P, limit=22, rounds=4):
+    """No corner sharper than `limit`° a 10 m sample (a ~26 m radius: a hairpin is drawn and ridden as a curve, not a
+    kink): a too-sharp sample is drawn toward its neighbours' middle, again and again, then the line is resampled."""
+    def turn(P, k):
+        a = math.atan2((P[k][1] - P[k - 1][1]) * KX, (P[k][0] - P[k - 1][0]) * KY); b = math.atan2((P[k + 1][1] - P[k][1]) * KX, (P[k + 1][0] - P[k][0]) * KY)
+        return abs((b - a + math.pi) % (2 * math.pi) - math.pi) * 180 / math.pi
+    for _ in range(rounds):
+        P = list(P)
+        for _ in range(40):
+            moved = False
+            for k in range(1, len(P) - 1):
+                if turn(P, k) > limit:
+                    P[k] = (P[k][0] * .5 + (P[k - 1][0] + P[k + 1][0]) * .25, P[k][1] * .5 + (P[k - 1][1] + P[k + 1][1]) * .25); moved = True
+            if not moved: break
+        P = resample(P)
+    return P
+
+
+def gauss_smooth(P, sigma=7.0):
+    """The mapped line's wiggles (GPS traces zig-zag every few metres) taken out: a Gaussian along the line (σ in m;
+    P evenly spaced), the ends held — so on the 10 m samples a singletrack turns a few degrees a sample, not 20–40°
+    (user, 24 Nov: "Bike is sliding. Ensure turns on the bike path are smoother and not jagged")."""
+    n = len(P)
+    if n < 5: return P
+    step = dist(P[0], P[1]) or 2.0
+    r = max(1, int(round(3 * sigma / step))); w = [math.exp(-0.5 * (k * step / sigma) ** 2) for k in range(-r, r + 1)]
+    out = [P[0]]
+    for i in range(1, n - 1):
+        # the window shrinks toward the ends (symmetric), so an end and its tangent stay put
+        rr = min(r, i, n - 1 - i); ws = w[r - rr:r + rr + 1]; t = sum(ws)
+        out.append((sum(P[i + k][0] * ws[k + rr] for k in range(-rr, rr + 1)) / t, sum(P[i + k][1] * ws[k + rr] for k in range(-rr, rr + 1)) / t))
+    out.append(P[-1])
+    return out
+
+
+def resample(P, step=None):
+    STEP_ = step or STEP
     cum = [0.0]
     for a, b in zip(P, P[1:]): cum.append(cum[-1] + dist(a, b))
-    L = cum[-1]; n = max(1, round(L / STEP)); out, j = [], 0
+    L = cum[-1]; n = max(1, round(L / STEP_)); out, j = [], 0
     for i in range(n + 1):
         d = L * i / n
         while j < len(P) - 2 and cum[j + 1] < d: j += 1
@@ -268,7 +308,7 @@ def main():
         if refs[-1] == TRAILHEAD: refs, P = refs[::-1], P[::-1]
         a = jid if refs[0] == TRAILHEAD else node_for(refs[0]); b = node_for(refs[-1])
         if refs[0] == TRAILHEAD: P = lot + P
-        P = resample(chaikin(P))
+        P = ease_turns(resample(gauss_smooth(resample(chaikin(P), 2.0), sigma=7.0)))
         ele = smooth_ele([at(la, lo) for la, lo in P])
         num = nums.most_common(1)[0][0]
         eid = next(eids)
@@ -277,14 +317,17 @@ def main():
         C['edges'][eid] = {'lanes': 0, 'walk': 0, 'w': TRAIL_W, 's': [[0, n, C['surfaces'].index('dirt')]], 'cf': 1}
         g = max(abs(ele[k + 1] - ele[k]) / STEP for k in range(n)) * 100
         cf_edges.append({'id': eid, 'trail': num, 'len': n * STEP, 'maxGrade': round(g, 1)})
-        if '-v' in sys.argv: print(f'    {eid} #{num} {a}→{b} {n * STEP} m, {ele[0]:.0f}→{ele[-1]:.0f} m, steepest {g:.1f} %, max off ground {max(abs(x - at(*q)) for x, q in zip(ele, P)):.1f} m')
+        hd = [math.atan2((P[k + 1][1] - P[k][1]) * KX, (P[k + 1][0] - P[k][0]) * KY) for k in range(n)]
+        turn = max([abs((hd[k + 1] - hd[k] + math.pi) % (2 * math.pi) - math.pi) for k in range(n - 1)] or [0]) * 180 / math.pi
+        cf_edges[-1]['maxTurn'] = round(turn, 1)
+        if '-v' in sys.argv: print(f'    {eid} #{num} {a}→{b} {n * STEP} m, sharpest {turn:.0f}°/sample, {ele[0]:.0f}→{ele[-1]:.0f} m, steepest {g:.1f} %, max off ground {max(abs(x - at(*q)) for x, q in zip(ele, P)):.1f} m')
     for ref, k in nid.items():
         la, lo = nodes[ref]
         new_nodes.append({'id': k, 'name': 'Camillus Forest trail junction', 'lat': round(la, 6), 'lon': round(lo, 6), 'ele': round(at(la, lo), 1), 'cf': 'trail'})
     # (the graph's nodes get no extra fields beyond these: decodeGraph keeps what it needs)
     G['nodes'] += [jn] + new_nodes
     G['edges'] += [eb] + new_edges
-    print(f'  {len(new_edges)} trail edges, {sum(e["len"] for e in cf_edges) / 1000:.2f} km, steepest {max(e["maxGrade"] for e in cf_edges)} %')
+    print(f'  {len(new_edges)} trail edges, {sum(e["len"] for e in cf_edges) / 1000:.2f} km, steepest {max(e["maxGrade"] for e in cf_edges)} %, sharpest turn {max(e["maxTurn"] for e in cf_edges)}°/10 m')
 
     # ---- 3. the land inside the boundary
     land = C['land']; lx, ly = land['nx'], land['ny']
@@ -331,7 +374,7 @@ def main():
         if all(dist(p, q) > 9 for q in apples): apples.append((round(p[0], 6), round(p[1], 6)))
     og = {'format': 'bikefree-oldgrowth-1', 'note': 'tools/cny_forest.py: Camillus Forest Unique Area (DEC) — the hero area\'s trails, boundary, green tunnel and orchard (js/world/toolbox/vegetation/old-growth.js)',
           'name': 'Camillus Forest Unique Area', 'boundary': [[round(a, 6), round(b, 6)] for a, b in ring], 'trails': [e['id'] for e in new_edges],
-          'junction': jid, 'tunnel': {'edge': tun_edge}, 'apples': apples,
+          'junction': jid, 'tunnel': {'edge': tun_edge}, 'apples': apples, 'rays': RAYS,
           'blowdown': {'center': BLOWDOWN['center'], 'r': BLOWDOWN['r'], 'rot': BLOWDOWN['rot']},
           'codes': {'oldGrowth': OLD, 'forest': FOREST, 'meadow': MEADOW, 'blowdown': BLOW},
           'sources': ['DEC Camillus Forest Unique Area Unit Management Plan', 'OpenStreetMap (ODbL)', 'ESA WorldCover 2021 (CC BY 4.0)']}
