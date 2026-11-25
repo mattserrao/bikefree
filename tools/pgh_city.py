@@ -213,11 +213,33 @@ def main():
         if c and rel[1].get('type') == 'multipolygon':
             try: layers[c] += rings_of(rel, ways, nodes)
             except Exception: pass
+    if CFG.get('landWater') == 'pools':
+        # (NYC: the cover draws water only under the map's pools — they have their own water planes; a fountain's
+        #  basin or a pool that isn't one is paved (the landmarks draw the fountains), a larger one left to the grass:
+        #  as cover cells they were blocky teal patches at ground level — the review, 25 Nov)
+        from shapely.geometry import Polygon as _P, Point as _Pt
+        rings_ = [_P([(lo, la) for la, lo in q['ring']]) for q in CFG.get('pools', []) if q.get('ring')]
+        kx_ = 111320 * math.cos(math.radians((gn + gs) / 2))
+        keep, moved = [], 0
+        for pts in layers[3]:
+            if len(pts) < 3: continue
+            P_ = _P([(lo, la) for la, lo in pts])
+            if not P_.is_valid: P_ = P_.buffer(0)
+            if any(r.contains(P_.representative_point()) for r in rings_):
+                # (drawn 5 m inside its outline: the 4 m cells spilled a teal band onto the graded bank — under the
+                #  water plane the bed's colour barely shows anyway)
+                Q = P_.buffer(-CFG.get('landWaterInsetM', 0) / 100000) if CFG.get('landWaterInsetM') else P_
+                for g_ in getattr(Q, 'geoms', [Q]):
+                    if not g_.is_empty and g_.geom_type == 'Polygon': keep.append([(la, lo) for lo, la in g_.exterior.coords])
+            elif P_.area * kx_ * 110540 < 600: layers[6].append(pts); moved += 1
+            else: moved += 1
+        layers[3] = keep
+        print(f'  water cover: {len(keep)} pools kept, {moved} small waters paved or left to the grass')
     for code in (8, 9, 1, 2, 5, 6, 3):
         for pts in layers[code]: poly(pts, 0 if code == 9 else code)
     # the waterways OSM draws as lines (no area): CNY's Erie Canal, Nine Mile Creek — water at their width (PGH's rivers
     # are areas, under its water plane)
-    if CITY != 'pgh':
+    if CITY != 'pgh' and CFG.get('landWaterLines', True):
         # (CNY: the canal and the creeks are ribbons of water of their own, tools/cny_heroes.py — as cells they were a chain of diamonds)
         WIDE = {} if CITY == 'cny' else {'canal': 14, 'river': 16, 'stream': 4}
         nw_ = 0
@@ -548,11 +570,12 @@ def main():
                     la, lo = a[0] + (b[0] - a[0]) * j / k, a[1] + (b[1] - a[1]) * j / k
                     if gs < la < gn and gw < lo < ge and way_dist(la, lo, REACH) < REACH: trees += q(la, lo); nrow += 1
         print(f'  tree rows: {nrow} trees')
+    allee_pts = []
     for al in CFG.get('allees', []):
         # (NYC: the Mall — four rows of American elms over Literary Walk; a tree every everyM at each offset, both sides)
         nal = 0
-        for nd, t in ways.values():
-            if t.get('name') != al['name'] or 'highway' not in t: continue
+        for wid_, (nd, t) in ways.items():
+            if ('way' in al and str(wid_) != al['way']) or ('way' not in al and t.get('name') != al['name']) or 'highway' not in t: continue
             pts = [nodes[i] for i in nd if i in nodes]
             for a, b in zip(pts, pts[1:]):
                 dy, dx = (b[0] - a[0]) * ky, (b[1] - a[1]) * kx; L = math.hypot(dx, dy)
@@ -560,8 +583,8 @@ def main():
                 k = max(1, round(L / al.get('everyM', 8))); ny, nx = dx / L, -dy / L
                 for j in range(k):
                     la, lo = a[0] + (b[0] - a[0]) * (j + .5) / k, a[1] + (b[1] - a[1]) * (j + .5) / k
-                    for off in al['offsetsM']: trees += q(la + ny * off / ky, lo + nx * off / kx); nal += 1
-        print(f"  allée {al['name']}: {nal} trees")
+                    for off in al['offsetsM']: trees += q(la + ny * off / ky, lo + nx * off / kx); allee_pts.append([round(la + ny * off / ky, 6), round(lo + nx * off / kx, 6)]); nal += 1
+        print(f"  allée {al.get('name', al.get('way'))}: {nal} trees")
     kit = street_kit.extract(nodes, ntags, ways, q, way_dist, radius=REACH)
 
     # 4. what each PGH edge is made of: the nearest OSM highway (same name preferred) at each sample
@@ -774,6 +797,7 @@ def main():
         'sectors': {'south': gs, 'west': gw, 'dlat': DLAT, 'dlon': DLON, 'folder': f'routes/cities/{CITY}-city', 'pointKinds': kit.get('pointKinds', []), 'lineKinds': kit.get('lineKinds', []), 'list': sectors},
         'edges': edges,
     }
+    if allee_pts: out['allee'] = allee_pts   # (the allées' planned trees: tools/qc-park.js counts how many stand)
     path = os.path.join(ROOT, f'routes/cities/{CITY}-city.json')
     json.dump(out, open(path, 'w'), separators=(',', ':'))
     tot = sum(os.path.getsize(f) for f in glob.glob(os.path.join(folder, '*.json')))

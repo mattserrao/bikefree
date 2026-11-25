@@ -17,13 +17,14 @@
 //
 //   Object.assign(M, nycLandmarkModels(ctx)); … nycPark(ctx, data.park) → { tick(time) }
 import * as THREE from '../../../../vendor/three.module.min.js';
-import { V, TAU, centroid, scaleRing, orient, prism, cap, block, frameOf, makeFrame, lathe, gable } from './hero-geom.js';
+import { V, TAU, centroid, scaleRing, orient, inPoly, prism, cap, block, frameOf, makeFrame, lathe, gable } from './hero-geom.js';
 
 const SCHIST = '#7c7870', SANDSTONE = '#c8b48d', LIMESTONE = '#d8ccb2', BRONZE = '#5d7a68', IRON = '#2c3a33', GILT = '#d2a634', BRICK = '#8c5a45';
 const hsh = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 
 export function nycLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = null }) {
   const H = (x, z) => L.heightAt(x, z);
+  const QC = (L.qc ||= { basins: [], benches: [], bridges: [], views: [] });   // (what tools/qc-map.js checks)
   /** A bronze figure (a standing person, roughly) on a plinth at q. */
   const figure = (q, g, { plinth = 2, h = 2.2, color = BRONZE, stone = LIMESTONE, wings = false, yaw = 0 } = {}) => {
     S.color(stone); S.box(q.x, g, q.z, 1.8, .4, 1.8, yaw); S.box(q.x, g + .4, q.z, 1.3, plinth, 1.3, yaw);
@@ -38,7 +39,8 @@ export function nycLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
     for (let k = 1; k < n; k++) { const t = k / n; S.cylinder(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t + .17, a.z + (b.z - a.z) * t, .08, h - .17, 5, .06); }
   };
   /** A basin of water (a fountain's): a stone rim r round q, water a little below its lip. */
-  const basin = (q, y, r, rim = .6, color = SANDSTONE) => {
+  const basin = (q, y, r, rim = .6, color = SANDSTONE, name = 'basin') => {
+    QC.basins.push({ x: q.x, z: q.z, name, water: !!Wa });
     S.color(color); lathe(S, q.x, y, q.z, [[r + .35, 0], [r + .35, rim], [r, rim], [r, .1], [0, .1]], 28);
     if (Wa) { Wa.color('#4f7f8c'); lathe(Wa, q.x, y + rim - .15, q.z, [[r - .02, 0], [0, 0.001]], 28); }
   };
@@ -54,94 +56,142 @@ export function nycLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
     const l = Math.hypot(best.x, best.z) || 1; return { x: best.x / l, z: best.z / l };
   };
   const lakeward = (q) => lakewardOf(q);
+  /** The way's own bridge deck nearest the landmark (within r m): its line every ~2 m, at the road's surface, with
+   *  its normal — a bridge model is built on it and the world draws no deck of its own there (profile.modelBridges). */
+  const deckOf = (l, r) => {
+    const c = local(l.center[0], l.center[1]);
+    let best = null;
+    for (const e of L.edges || []) for (const [a, b] of e.bridges || []) for (let i = a; i <= b; i++) { const d = Math.hypot(e.x[i] - c.x, e.z[i] - c.z); if (d < r && (!best || d < best.d)) best = { d, e, a, b }; }
+    if (!best) return null;
+    const { e, a, b } = best, pts = [];
+    let s0 = 0;
+    for (let i = a; i < b; i++) for (let k = 0; k < 5; k++) {
+      const f = k / 5, x = e.x[i] + (e.x[i + 1] - e.x[i]) * f, z = e.z[i] + (e.z[i + 1] - e.z[i]) * f, y = e.ele[i] + (e.ele[i + 1] - e.ele[i]) * f + .12;
+      if (pts.length) s0 += Math.hypot(x - pts[pts.length - 1].x, z - pts[pts.length - 1].z);
+      pts.push({ x, y, z, s: s0 });
+    }
+    { const x = e.x[b], z = e.z[b]; s0 += Math.hypot(x - pts[pts.length - 1].x, z - pts[pts.length - 1].z); pts.push({ x, y: e.ele[b] + .12, z, s: s0 }); }
+    for (let k = 0; k < pts.length; k++) { const p = pts[Math.max(0, k - 1)], q = pts[Math.min(pts.length - 1, k + 1)], dx = q.x - p.x, dz = q.z - p.z, dl = Math.hypot(dx, dz) || 1; Object.assign(pts[k], { dx: dx / dl, dz: dz / dl, nx: -dz / dl, nz: dx / dl }); }
+    return { e, pts, half: (L.wOf ? L.wOf(e) : 3.4) / 2 };
+  };
 
   return {
     // Bethesda Terrace and Fountain (1873): the lower terrace round the fountain by the Lake — the Angel of the Waters
     // on two basins in a broad pool; the arcade under the drive (seven arches, the Minton tile ceiling in shadow) and the
-    // grand stairs down either side of it; balustrades round the terrace and along the Lake
+    // Bethesda Terrace and Fountain (1873): the lower terrace, a level pad cut into the slope below Terrace Drive (the
+    // world grades the ground to it: the map's pads); the arcade under the drive at its far edge — seven arches in the
+    // face, the drive running over it; the grand stairs down either side of the arcade from the drive's level; sandstone
+    // walls and balustrades round the cut; the fountain — the Angel of the Waters on two basins, water in both, falling
+    // all round into the pool — by the Lake
     bethesda(l) {
       const ring = orient(l.ring.map(([a, o]) => local(a, o))), c = centroid(ring);
       let R = 0; for (const p of ring) R = Math.max(R, Math.hypot(p.x - c.x, p.z - c.z));
       R = Math.max(8, Math.min(16, R));
-      const u = lakeward(c), F = makeFrame(c, u), g = H(c.x, c.z);
-      // the lower terrace: sandstone paving, 70 × 48 m, a step above the grass where the ground falls away
-      S.color('#bfae8e'); block(S, F.rect(-30, 26, -34, 34), g - 1.2, g + .06);
-      S.color('#a89878'); for (let a = -26; a <= 22; a += 6) S.box(F.at(a, 0).x, g + .065, F.at(a, 0).z, .18, .01, 68, F.yawV);   // (paving joints)
-      // the fountain: the pool, the lower basin on its pedestal, the upper basin, the Angel
-      basin(c, g + .06, R, .65);
-      S.color(SANDSTONE); lathe(S, c.x, g + .5, c.z, [[2.6, 0], [2.2, .8], [1.4, 1.2], [1.2, 2.6]], 16);
+      const T = l.terrace;
+      const g = T ? T.y : H(c.x, c.z);
+      // the terrace frame: u from the drive toward the fountain
+      let u = lakeward(c), Dr = null;
+      if (T) { const d = local(T.drive[0], T.drive[1]), dx = c.x - d.x, dz = c.z - d.z, dl = Math.hypot(dx, dz) || 1; u = { x: dx / dl, z: dz / dl }; Dr = { ...d, y: T.drive[2], hw: T.drive[3], dist: dl }; }
+      const F = makeFrame(c, u), v = F.v;
+      // the terrace: paving over the pad, its joints, sandstone walls up the cut round its three landward sides
+      if (T) {
+        const P = T.ring.map(([a, o]) => local(a, o));
+        S.color('#bfae8e'); block(S, P, g - .4, g + .05);
+        S.color('#a89878'); for (let k = 1; k < 12; k++) { const t = k / 12, a = { x: P[0].x + (P[1].x - P[0].x) * t, z: P[0].z + (P[1].z - P[0].z) * t }, b = { x: P[3].x + (P[2].x - P[3].x) * t, z: P[3].z + (P[2].z - P[3].z) * t }; S.beam(V(a.x, g + .055, a.z), V(b.x, g + .055, b.z), .12, .01); }
+        // walls where the ground stands above the terrace: up the cut, a balustrade on top
+        for (let i = 0; i < P.length; i++) {
+          const A = P[i], B = P[(i + 1) % P.length], len = Math.hypot(B.x - A.x, B.z - A.z), nx = (B.z - A.z) / len, nz = -(B.x - A.x) / len;
+          const out = inPoly(P, (A.x + B.x) / 2 + nx * 2, (A.z + B.z) / 2 + nz * 2) ? -1 : 1;
+          for (let t = 0; t < len; t += 4) {
+            const t1 = Math.min(len, t + 4), a = { x: A.x + (B.x - A.x) * t / len, z: A.z + (B.z - A.z) * t / len }, b = { x: A.x + (B.x - A.x) * t1 / len, z: A.z + (B.z - A.z) * t1 / len };
+            const m = { x: (a.x + b.x) / 2 + nx * out * 11.5, z: (a.z + b.z) / 2 + nz * out * 11.5 }, top = H(m.x, m.z);   // (past the cut the map grades behind the wall)
+            if (i === 1 && Math.abs(t + 2 - len / 2) > 6) balustrade(V(a.x, g + .05, a.z), V(b.x, g + .05, b.z));   // (the lakeward edge: a balustrade, open at the middle to the water)
+            if (top - g < .5 || L.poolAt?.(m.x, m.z) > -1e3) continue;
+            S.color(SANDSTONE); S.beam(V(a.x, (g + top) / 2 - .2, a.z), V(b.x, (g + top) / 2 - .2, b.z), .7, top - g + .4);
+            balustrade(V(a.x, top, a.z), V(b.x, top, b.z), SANDSTONE, .9);
+          }
+        }
+      } else { S.color('#bfae8e'); block(S, F.rect(-R - 10, R + 4, -R - 12, R + 12), g - .4, g + .05); }
+      // the fountain: the pool, the lower basin on its pedestal, the upper basin, the Angel — water in every basin
+      basin(c, g + .05, R, .65, SANDSTONE, 'Bethesda pool');
+      S.color(SANDSTONE); lathe(S, c.x, g + .5, c.z, [[2.6, 0], [2.2, .8], [1.4, 1.2], [1.2, 2.6], [0, 2.62]], 16);
       S.color(BRONZE); lathe(S, c.x, g + 3.1, c.z, [[.9, 0], [3.4, .55], [3.5, .8], [3.1, .85], [.6, .6]], 20);
-      lathe(S, c.x, g + 3.9, c.z, [[.5, 0], [.4, 1.6], [1.9, 2.1], [2, 2.35], [.4, 2.2]], 16);
-      if (Wa) { Wa.color('#5c8c96'); lathe(Wa, c.x, g + 3.75, c.z, [[3.35, 0], [0, .001]], 20); }
-      // falling water (a pale curtain from each basin)
-      S.color('#cfe0e2'); lathe(S, c.x, g + .55, c.z, [[3.45, 0], [3.4, 3.2], [3.3, 3.2]], 20);
+      if (Wa) { Wa.color('#5c8c96'); lathe(Wa, c.x, g + 3.8, c.z, [[3.35, 0], [0, .001]], 20); }
+      lathe(S, c.x, g + 3.7, c.z, [[.5, 0], [.4, 1.6], [1.9, 2.1], [2, 2.35], [.4, 2.2], [0, 2.21]], 16);
+      if (Wa) { Wa.color('#5c8c96'); lathe(Wa, c.x, g + 5.95, c.z, [[1.9, 0], [0, .001]], 16); }
+      QC.basins.push({ x: c.x + .01, z: c.z, name: 'Bethesda upper basin', water: !!Wa });
+      // falling water: a sheet all the way round each basin's lip, down to the next
+      S.color('#d7e6e8'); lathe(S, c.x, g + 3.95, c.z, [[3.55, 0], [3.62, -.8], [3.7, -3.2], [3.6, -3.25]].map(([r, y]) => [r, y + 0]), 28);
+      lathe(S, c.x, g + 6.05, c.z, [[2.05, 0], [2.12, -.5], [2.3, -2.05]], 20);
       // the Angel: robed, wings up, one hand blessing the water
-      const y = g + 6.3;
+      const y = g + 5.9;
       S.color(BRONZE); S.cylinder(c.x, y, c.z, .55, 1.6, 10, .32); S.cylinder(c.x, y + 1.6, c.z, .3, .65, 10, .22); S.cylinder(c.x, y + 2.25, c.z, .18, .32, 8, .14);
       for (const s of [-1, 1]) {
-        const w = V(F.v.x * s, 0, F.v.z * s);
+        const w = V(v.x * s, 0, v.z * s);
         S.beam(V(c.x, y + 1.9, c.z), V(c.x + w.x * 1.6 - u.x * .4, y + 3.2, c.z + w.z * 1.6 - u.z * .4), .1, .85);
         S.beam(V(c.x + w.x * .3, y + 1.8, c.z + w.z * .3), V(c.x + w.x * 1.2 - u.x * .3, y + 2.4, c.z + w.z * 1.2 - u.z * .3), .08, .7);
       }
-      S.beam(V(c.x, y + 1.9, c.z), V(c.x + u.x * .9, y + 2.3, c.z + u.z * .9), .14, .14);   // the blessing hand
-      // the arcade under the drive, across the terrace's far side (away from the Lake)
-      const top = Math.max(g + 6.2, H(F.at(-38, 0).x, F.at(-38, 0).z) + .4), A = F.at(-30, 0);
-      S.color(SANDSTONE); S.box(A.x - u.x * 4, g - 1, A.z - u.z * 4, 8, top - g + 1, 30, F.yawV);   // the arcade's mass, under the road
-      S.color('#b39f7c'); S.box(A.x - u.x * 4, top - .5, A.z - u.z * 4, 9, .5, 31, F.yawV);   // its cornice
-      S.color('#4b4a48'); S.box(A.x - u.x * 7, top, A.z - u.z * 7, 13, .08, 44, F.yawV);   // Terrace Drive over it
-      S.color('#c9b58f'); for (let k = -4; k <= 3; k++) { const q = F.at(-29.9, k * 3.8 + 1.9); S.box(q.x, g, q.z, .5, top - g - .6, .8, F.yawV); }   // the piers between the arches
-      S.color('#2b2622'); for (let k = -3; k <= 3; k++) { const q = F.at(-30.05, k * 3.8); S.box(q.x, g + .1, q.z, .4, 4.1, 2.4, F.yawV); }   // the arches' dark openings
-      S.color('#b2a07c'); for (let k = -3; k <= 3; k++) { const q = F.at(-30.2, k * 3.8); S.cylinder(q.x, g + 4.1, q.z, 1.25, .25, 8, .9); }
-      // the upper terrace's balustrade along the drive, and the grand stairs down each side
-      balustrade(V(F.at(-30, -17).x, top, F.at(-30, -17).z), V(F.at(-30, 17).x, top, F.at(-30, 17).z));
-      for (const s of [-1, 1]) {
-        const steps = Math.max(6, Math.round((top - g) / .17));
-        S.color('#bba886');
-        for (let k = 0; k < steps; k++) { const a = -29 + k * (12 / steps), q = F.at(a, s * 21); S.box(q.x, g + (top - g) * (1 - (k + 1) / steps), q.z, 7, (top - g) / steps + .02, 12 / steps + .02, F.yawU); }
-        // the stairs' carved newels and their balustrades
-        balustrade(V(F.at(-29, s * 17.3).x, top, F.at(-29, s * 17.3).z), V(F.at(-17, s * 17.3).x, g, F.at(-17, s * 17.3).z));
-        balustrade(V(F.at(-29, s * 24.7).x, top, F.at(-29, s * 24.7).z), V(F.at(-17, s * 24.7).x, g, F.at(-17, s * 24.7).z));
-        S.color(SANDSTONE); S.box(F.at(-17, s * 21).x, g, F.at(-17, s * 21).z, 1.2, 1.6, 1.2, F.yawU);
-      }
-      // along the Lake: the terrace's edge, a balustrade with gaps for the boat landing
-      for (const [b0, b1] of [[-34, -6], [6, 34]]) balustrade(V(F.at(26, b0).x, g + .06, F.at(26, b0).z), V(F.at(26, b1).x, g + .06, F.at(26, b1).z));
-      // lamps round the fountain
-      for (let k = 0; k < 6; k++) { const a = k / 6 * TAU, q = { x: c.x + Math.cos(a) * (R + 6), z: c.z + Math.sin(a) * (R + 6) }; S.color(IRON); S.cylinder(q.x, g, q.z, .1, 3.6, 6, .07); glows.push({ x: q.x, y: g + 3.8, z: q.z, size: 1.4, color: '#ffe2b0' }); }
-      L.lifeSpots?.push(...[0, 1, 2, 3, 4, 5, 6, 7].map((k) => { const a = k / 8 * TAU + .2; return { x: c.x + Math.cos(a) * (R + .2), z: c.z + Math.sin(a) * (R + .2), y: g + .7, yaw: a + Math.PI, kind: k % 3 ? 'sit' : 'stand' }; }).filter((q) => (L.wayDist?.(q.x, q.z, 3) ?? 3) > 1.2));   // (on the basin's rim, off the way round it)
-    },
-
-    // Bow Bridge (1862): a low cast-iron arch, cream, with a scrolled railing of interlaced circles and planting urns
-    bowbridge(l) {
-      const { F, g: g0 } = plan(l, 14, 3);
-      const hl = Math.max(12, F.hl), hw = Math.min(3.2, Math.max(2.2, F.hw));
-      const e0 = H(F.at(-hl, 0).x, F.at(-hl, 0).z), e1 = H(F.at(hl, 0).x, F.at(hl, 0).z), base = Math.max(e0, e1, (L.poolAt?.(F.c.x, F.c.z) ?? g0) + .5);
-      const yAt = (a) => base + .25 + 1.1 * Math.cos(Math.PI * a / (2 * hl)) ** 1.2 - .2 * Math.abs(a) / hl;
-      const n = 24;
-      for (let k = 0; k < n; k++) {
-        const a0 = -hl + 2 * hl * k / n, a1 = -hl + 2 * hl * (k + 1) / n, p0 = F.at(a0, 0), p1 = F.at(a1, 0);
-        S.color('#d9cfb6'); S.beam(V(p0.x, yAt(a0), p0.z), V(p1.x, yAt(a1), p1.z), hw * 2, .22);   // the deck
-        for (const s of [-1, 1]) {
-          const q0 = F.at(a0, s * (hw - .1)), q1 = F.at(a1, s * (hw - .1));
-          S.color('#efe7d2'); S.beam(V(q0.x, yAt(a0) + 1.05, q0.z), V(q1.x, yAt(a1) + 1.05, q1.z), .12, .12);   // the handrail
-          S.beam(V(q0.x, yAt(a0) + .2, q0.z), V(q1.x, yAt(a1) + .2, q1.z), .08, .1);
-          // the railing's interlaced rings: a small hoop per panel
-          const m = F.at((a0 + a1) / 2, s * (hw - .1)), ym = (yAt(a0) + yAt(a1)) / 2 + .62;
-          for (const d of [-.3, .3]) { const t = V(m.x + F.u.x * d, ym, m.z + F.u.z * d); S.beam(V(t.x, t.y - .32, t.z), V(t.x, t.y + .32, t.z), .05, .05); S.beam(V(t.x - F.u.x * .3, t.y, t.z - F.u.z * .3), V(t.x + F.u.x * .3, t.y, t.z + F.u.z * .3), .05, .05); }
-          // the arch rib under the deck, springing from the banks
-          const r0 = F.at(a0, s * (hw - .4)), r1 = F.at(a1, s * (hw - .4)), d0 = 1.3 * (1 - Math.abs(a0) / hl), d1 = 1.3 * (1 - Math.abs(a1) / hl);
-          S.color('#e4dcc6'); S.beam(V(r0.x, yAt(a0) - .25 - d0, r0.z), V(r1.x, yAt(a1) - .25 - d1, r1.z), .25, .45);
+      S.beam(V(c.x, y + 1.9, c.z), V(c.x + u.x * .9, y + 2.3, c.z + u.z * .9), .14, .14);
+      // the arcade under the drive: its face on the terrace's far edge, its mass under the road (the drive is its roof)
+      if (Dr) {
+        const face = Dr.hw + 1, top = Dr.y - .18, A = F.at(-(Dr.dist - face), 0), depth = Dr.hw * 2 + 2;
+        if (top - g > 2.5) {
+          S.color(SANDSTONE); S.box(A.x - u.x * depth / 2, g - .4, A.z - u.z * depth / 2, depth, top - g + .4, 30, F.yawV);
+          S.color('#b39f7c'); S.box(A.x + u.x * .25, top - .55, A.z + u.z * .25, .5, .5, 30.4, F.yawV);   // the cornice
+          const archH = Math.min(4.6, top - g - 1.2);
+          S.color('#2b2622'); for (let k = -3; k <= 3; k++) { const q = F.at(-(Dr.dist - face) + .03, k * 3.8); S.box(q.x, g + .05, q.z, .08, archH, 2.5, F.yawV); }
+          S.color('#c9b58f'); for (let k = -4; k <= 3; k++) { const q = F.at(-(Dr.dist - face) + .2, k * 3.8 + 1.9); S.box(q.x, g + .05, q.z, .4, archH + .3, .8, F.yawV); }
+          // the grand stairs: down from the drive's level beside the arcade to the terrace, toward the fountain
+          const rise = top - g, run = rise * 2, steps = Math.max(6, Math.round(rise / .17));
+          for (const sd of [-1, 1]) {
+            const lat = sd * 20;
+            S.color('#bba886');
+            for (let k = 0; k < steps; k++) { const a = -(Dr.dist - face) + k * run / steps, q = F.at(a + run / steps / 2, lat), h = rise * (1 - (k + 1) / steps); S.box(q.x, g - .1, q.z, run / steps + .02, h + .1 + .17, 6.5, F.yawU); }
+            for (const e of [-3.6, 3.6]) {
+              const a0 = -(Dr.dist - face), q0 = F.at(a0, lat + e), q1 = F.at(a0 + run, lat + e);
+              S.color(SANDSTONE); S.beam(V(q0.x, g + rise / 2, q0.z), V(q1.x, g + .1, q1.z), .6, rise);   // the stair's cheek walls
+              balustrade(V(q0.x, top, q0.z), V(q1.x, g + .05, q1.z));
+            }
+            S.color(SANDSTONE); S.box(F.at(-(Dr.dist - face) + run, lat).x, g, F.at(-(Dr.dist - face) + run, lat).z, 1.2, 1.6, 1.2, F.yawU);
+          }
         }
       }
-      // the urns: at each corner and at the crown
-      for (const [a, s] of [[-hl, -1], [-hl, 1], [hl, -1], [hl, 1], [0, -1], [0, 1]]) {
-        const q = F.at(a * .98, s * (hw - .1)), y = yAt(a * .98) + 1.1;
-        S.color('#d9cfb6'); lathe(S, q.x, y, q.z, [[.18, 0], [.3, .25], [.42, .55], [.36, .7], [0, .72]], 10);
-        S.color('#7a3b2a'); S.cylinder(q.x, y + .7, q.z, .3, .25, 8, .1);   // geraniums gone over
-      }
-      // stone abutments into the banks
-      S.color(SCHIST); for (const a of [-hl, hl]) { const q = F.at(a, 0); S.box(q.x, base - 2.5, q.z, hw * 2 + 1.2, 2.9, 2.4, F.yawU); }
+      // lamps round the fountain
+      for (let k = 0; k < 6; k++) { const a = k / 6 * TAU, q = { x: c.x + Math.cos(a) * (R + 6), z: c.z + Math.sin(a) * (R + 6) }; S.color(IRON); S.cylinder(q.x, g, q.z, .1, 3.6, 6, .07); glows.push({ x: q.x, y: g + 3.8, z: q.z, size: 1.4, color: '#ffe2b0' }); }
+      L.lifeSpots?.push(...[0, 1, 2, 3, 4, 5, 6, 7].map((k) => { const a = k / 8 * TAU + .2; return { x: c.x + Math.cos(a) * (R + .2), z: c.z + Math.sin(a) * (R + .2), y: g + .7, yaw: a + Math.PI, kind: k % 3 ? 'sit' : 'stand' }; }).filter((q) => (L.wayDist?.(q.x, q.z, 3) ?? 3) > 1.2));
     },
 
+    // Bow Bridge (1862): a low cast-iron arch, cream, its railing a run of interlaced circles, planting urns at the ends
+    // and the crown — built on the path's own deck (its line and height), which then draws no deck of its own
+    bowbridge(l) {
+      const D = deckOf(l, 30);
+      if (!D) return;
+      const { pts, half } = D, n = pts.length - 1, span = pts[n].s, water = (L.poolAt?.(pts[n >> 1].x, pts[n >> 1].z) ?? pts[0].y - 3) + .35;
+      (QC.onWay ||= []).push(l.label);
+      const CREAM = '#e8e0cb', RAIL = '#f2ecdc';
+      for (let k = 0; k < n; k++) {
+        const p = pts[k], q = pts[k + 1], t0 = p.s / span, t1 = q.s / span;
+        S.color('#cfc4a8'); S.beam(V(p.x, p.y - .085, p.z), V(q.x, q.y - .085, q.z), half * 2 + .3, .14);   // the deck, over the path's
+        for (const sd of [-1, 1]) {
+          const o = (r, d, dy) => V(r.x + r.nx * sd * d, r.y + dy, r.z + r.nz * sd * d);
+          S.color(RAIL); S.beam(o(p, half + .05, 1.05), o(q, half + .05, 1.05), .1, .1); S.beam(o(p, half + .05, .12), o(q, half + .05, .12), .08, .08);
+          // the interlaced circles: a hoop every 0.75 m (four bars round it)
+          for (let u = 0; u < q.s - p.s; u += .75) {
+            const f = u / (q.s - p.s), c = V(p.x + (q.x - p.x) * f + p.nx * sd * (half + .05), p.y + (q.y - p.y) * f + .58, p.z + (q.z - p.z) * f + p.nz * sd * (half + .05)), dx = q.x - p.x, dz = q.z - p.z, dl = Math.hypot(dx, dz) || 1, ux = dx / dl * .34, uz = dz / dl * .34;
+            S.beam(V(c.x - ux, c.y, c.z - uz), V(c.x, c.y + .34, c.z), .035, .035); S.beam(V(c.x, c.y + .34, c.z), V(c.x + ux, c.y, c.z + uz), .035, .035);
+            S.beam(V(c.x + ux, c.y, c.z + uz), V(c.x, c.y - .34, c.z), .035, .035); S.beam(V(c.x, c.y - .34, c.z), V(c.x - ux, c.y, c.z - uz), .035, .035);
+          }
+          // the arch's ribs: springing low at the banks, rising to the deck at the crown
+          const drop = (t) => Math.max(.3, 1.6 * (1 - Math.sin(Math.PI * Math.min(1, Math.max(0, t))))), y0 = p.y - .2 - drop(t0) / 2, y1 = q.y - .2 - drop(t1) / 2;
+          S.color(CREAM); S.beam(o(p, half - .1, 0).setY(Math.max(water, y0)), o(q, half - .1, 0).setY(Math.max(water, y1)), .3, Math.max(.3, Math.min(drop(t0), p.y - water)));
+        }
+      }
+      // urns: at the four ends and the crown (0.6 m, on the rail's posts)
+      const urn = (r, sd) => { const x = r.x + r.nx * sd * (half + .05), z = r.z + r.nz * sd * (half + .05), y = r.y + 1.1; S.color(CREAM); S.cylinder(x, r.y, z, .09, 1.1, 6); lathe(S, x, y, z, [[.12, 0], [.2, .14], [.26, .32], [.2, .42], [0, .44]], 10); S.color('#7a3b2a'); S.cylinder(x, y + .42, z, .18, .14, 8, .06); };
+      for (const r of [pts[0], pts[n >> 1], pts[n]]) for (const sd of [-1, 1]) urn(r, sd);
+      // the abutments: schist into the banks at each end
+      S.color(SCHIST); for (const r of [pts[0], pts[n]]) { const g = Math.min(H(r.x, r.z), water - .3); S.box(r.x, g - .5, r.z, half * 2 + 1.4, r.y - g + .38, 2.4, Math.atan2(r.dx, r.dz)); }
+    },
     // the Loeb Boathouse (1954): long and low, buff brick, a deep flat roof over the lakeside terrace, the rowboat dock
     boathouse(l) {
       const { ring, F, g } = plan(l, 30, 12);
@@ -209,19 +259,32 @@ export function nycLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
       S.color('#9a6d58'); S.pyramid(c.x, g + 23.2, c.z, 1.45, 1.6, 1.45, Math.PI / 4);
     },
 
-    // Gapstow Bridge (1896): a rough Manhattan-schist arch over the Pond's neck
+    // Gapstow Bridge (1896): a rough Manhattan-schist arch over the Pond's neck — on the path's own deck
     gapstow(l) {
-      const { F, g: g0 } = plan(l, 12, 3), hl = Math.max(11, F.hl), hw = Math.max(2.4, Math.min(3.4, F.hw));
-      const e = Math.max(H(F.at(-hl, 0).x, F.at(-hl, 0).z), H(F.at(hl, 0).x, F.at(hl, 0).z), g0);
-      const yAt = (a) => e + .2 + 1.4 * Math.cos(Math.PI * a / (2 * hl));
-      for (let k = 0; k < 16; k++) {
-        const a0 = -hl + 2 * hl * k / 16, a1 = -hl + 2 * hl * (k + 1) / 16, p0 = F.at(a0, 0), p1 = F.at(a1, 0), arch = (a) => yAt(a) - 1 - 2.6 * Math.cos(Math.PI * a / (2 * hl)) ** .7;
-        S.color(k % 3 ? '#6e6a62' : '#7a756c');
-        S.beam(V(p0.x, (yAt(a0) + arch(a0)) / 2, p0.z), V(p1.x, (yAt(a1) + arch(a1)) / 2, p1.z), hw * 2, Math.max(.8, yAt(a0) - arch(a0)));
-        for (const s of [-1, 1]) { const q0 = F.at(a0, s * (hw - .25)), q1 = F.at(a1, s * (hw - .25)); S.color('#67635b'); S.beam(V(q0.x, yAt(a0) + .45, q0.z), V(q1.x, yAt(a1) + .45, q1.z), .5, 1); }
+      const D = deckOf(l, 30);
+      if (!D) return;
+      (QC.onWay ||= []).push(l.label);
+      const { pts, half } = D, n = pts.length - 1, span = pts[n].s, water = (L.poolAt?.(pts[n >> 1].x, pts[n >> 1].z) ?? pts[0].y - 3) + .35;
+      for (let k = 0; k < n; k++) {
+        const p = pts[k], q = pts[k + 1];
+        // the arch's underside: from the water at the ends (or the bank) up under the crown
+        const soffit = (r) => Math.min(r.y - .9, water + .4 + Math.max(0, r.y - 1.1 - water - .4) * Math.sin(Math.PI * Math.min(1, Math.max(0, r.s / span))));
+        S.color(k % 3 ? '#7f796f' : '#8a8478');
+        for (const sd of [-1, 1]) {
+          // the spandrel and parapet: a wall face per piece, from the arch's curve up to the parapet's top (no steps)
+          const o = (r, d) => ({ x: r.x + r.nx * sd * d, z: r.z + r.nz * sd * d });
+          for (const d of [half, half + .6]) {
+            const a = o(p, d), b = o(q, d), ya = soffit(p), yb = soffit(q), ta = p.y + .85, tb = q.y + .85;
+            const A = V(a.x, ya, a.z), B = V(b.x, yb, b.z), C = V(b.x, tb, b.z), D = V(a.x, ta, a.z);
+            S.quad(A, B, C, D); S.quad(A, D, C, B);
+          }
+          const a = o(p, half + .3), b = o(q, half + .3);
+          S.beam(V(a.x, p.y + .9, a.z), V(b.x, q.y + .9, b.z), .7, .12);   // the coping
+        }
+        S.color('#5f5b54'); S.beam(V(p.x, soffit(p) - .15, p.z), V(q.x, soffit(q) - .15, q.z), half * 2 + .6, .3);   // the barrel's underside
+        S.color('#8b857a'); S.beam(V(p.x, p.y - .065, p.z), V(q.x, q.y - .065, q.z), half * 2 + .05, .1);   // the walk (stone flags)
       }
     },
-
     // Wollman Rink: the ice (white under the late sun), its boards, the rink house; skaters round it
     wollman(l) {
       const { ring, F, g } = plan(l, 50, 30), g0 = g;
@@ -254,7 +317,7 @@ export function nycLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
       }
       S.color('#f0ece2'); lathe(S, c.x, g, c.z, [[1.1, 0], [0, .005]], 24); S.color('#2e2c2a'); S.box(c.x, g + .006, c.z, 1.5, .004, .22, 0);
       S.color('#9b9488'); lathe(S, c.x, g - .03, c.z, [[R + 1.6, 0], [R + 1.6, .02], [R, .02]], 32);
-      for (let k = 0; k < 10; k++) { const a = k / 10 * TAU, q = { x: c.x + Math.cos(a) * (R + 3), z: c.z + Math.sin(a) * (R + 3) }; S.color('#6a4a32'); S.box(q.x, g + .42, q.z, 1.9, .08, .5, -a); S.box(q.x + Math.cos(a) * .25, g + .5, q.z + Math.sin(a) * .25, 1.9, .5, .08, -a); S.color(IRON); S.box(q.x, g, q.z, 1.7, .42, .4, -a);
+      for (let k = 0; k < 10; k++) { const a = k / 10 * TAU, q = { x: c.x + Math.cos(a) * (R + 3), z: c.z + Math.sin(a) * (R + 3) }, g = H(q.x, q.z); S.color('#6a4a32'); S.box(q.x, g + .42, q.z, 1.9, .08, .5, -a); S.box(q.x + Math.cos(a) * .25, g + .5, q.z + Math.sin(a) * .25, 1.9, .5, .08, -a); S.color(IRON); S.box(q.x, g, q.z, 1.7, .42, .4, -a);
         if (k % 3 === 0) L.lifeSpots?.push({ x: q.x, z: q.z, y: g + .45, yaw: a + Math.PI, kind: 'sit' }); }
       L.lifeSpots?.push({ x: c.x + R + 1, z: c.z, y: g, yaw: Math.PI, kind: 'stand' }, { x: c.x - R - 1, z: c.z + 1, y: g, yaw: 0, kind: 'stand' });
     },
@@ -337,7 +400,9 @@ export function nycLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
     reservoir(l) {
       const ring = l.ring.map(([a, o]) => local(a, o)), c = centroid(ring);
       // out from the water's edge 2.5 m
-      const out = ring.map((p) => { const dx = p.x - c.x, dz = p.z - c.z, d = Math.hypot(dx, dz) || 1; return { x: p.x + dx / d * 2.5, z: p.z + dz / d * 2.5 }; });
+      // (1.2 m out from the water's edge along the shore's own normal — the review: radially from the middle it wandered
+      //  onto the track and into the water)
+      const out = ring.map((p, i) => { const q0 = ring[(i - 1 + ring.length) % ring.length], q1 = ring[(i + 1) % ring.length], dx = q1.x - q0.x, dz = q1.z - q0.z, d = Math.hypot(dx, dz) || 1; let nx = dz / d, nz = -dx / d; if (inPoly(ring, p.x + nx * 2, p.z + nz * 2)) { nx = -nx; nz = -nz; } return { x: p.x + nx * 1.2, z: p.z + nz * 1.2 }; });
       S.color(IRON);
       for (let i = 0; i < out.length; i++) {
         const a = out[i], b = out[(i + 1) % out.length], len = Math.hypot(b.x - a.x, b.z - a.z), ya = H(a.x, a.z), yb = H(b.x, b.z);
@@ -418,6 +483,8 @@ export function nycLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
  */
 export function nycPark({ S, N, glows, local, L, host }, park) {
   const H = (x, z) => L.heightAt(x, z);
+  const QC = (L.qc ||= { basins: [], benches: [], bridges: [], views: [] });
+  if (QC.prims) QC.prims.cur = 'the park';
   let made = 0;
   // the wall: Manhattan schist and brownstone coping, knee high, round the park's outline; at each entrance two piers
   // and a closed iron gate between them (the gates are closed: the ride stays in the park)
@@ -453,7 +520,7 @@ export function nycPark({ S, N, glows, local, L, host }, park) {
       const h = hsh(e.x[i] * .37 + e.z[i] * .91), dx = e.x[i + 1] - e.x[i - 1], dz = e.z[i + 1] - e.z[i - 1], l = Math.hypot(dx, dz) || 1, nx = -dz / l, nz = dx / l;
       if (lamp && i % lamp === 0) {
         const s = (i / lamp) % 2 ? 1 : -1, x = e.x[i] + nx * s * (half + .9), z = e.z[i] + nz * s * (half + .9);
-        if ((L.wayDist?.(x, z, 2) ?? 2) < .5) continue;
+        if ((L.wayDist?.(x, z, 2) ?? 2) < .6) continue;
         const y = H(x, z);
         S.color('#25332c'); S.cylinder(x, y, z, .16, .6, 8, .1); S.cylinder(x, y + .6, z, .08, 3, 6, .06); S.cylinder(x, y + 3.6, z, .14, .12, 8);
         S.color('#e8e2cf'); lathe(S, x, y + 3.72, z, [[.12, 0], [.24, .25], [.2, .55], [0, .62]], 8);
@@ -462,12 +529,15 @@ export function nycPark({ S, N, glows, local, L, host }, park) {
         lampN++;
       }
       if (bench && i % bench === 2 && h < .55) {
-        const s = h < .27 ? 1 : -1, x = e.x[i] + nx * s * (half + .75), z = e.z[i] + nz * s * (half + .75);
-        if ((L.wayDist?.(x, z, 2) ?? 2) < .4) continue;
+        // (set back off the edge — the review: benches overlapped the paths' edges — clear of every other way, and not
+        //  within 12 m of a junction)
+        const s = h < .27 ? 1 : -1, x = e.x[i] + nx * s * (half + 1.15), z = e.z[i] + nz * s * (half + 1.15);
+        if ((L.wayDist?.(x, z, 3) ?? 3) < .85 || i < 2 || i > e.n - 2) continue;
         const y = H(x, z), yaw = Math.atan2(dx, dz);
         S.color('#203029'); S.box(x, y, z, .5, .42, 1.9, yaw);
         S.color('#7a5a3a'); S.box(x + nx * s * .05, y + .42, z + nz * s * .05, .5, .06, 1.9, yaw);
         S.box(x + nx * s * .3, y + .5, z + nz * s * .3, .06, .45, 1.9, yaw);
+        QC.benches.push({ x, z, kind: e.kind, facing: true });
         if (h < .09) L.lifeSpots?.push({ x: x - nx * s * .05, z: z - nz * s * .05, y: y + .45, yaw: Math.atan2(-nx * s, -nz * s), kind: 'sit' });
         benchN++;
       }

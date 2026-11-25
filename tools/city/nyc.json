@@ -140,6 +140,28 @@
      15
     ]
    ]
+  },
+  "pathPaint": false,
+  "drivePaint": "park",
+  "modelBridges": [
+   [
+    40.77578,
+    -73.97178,
+    30
+   ],
+   [
+    40.76693,
+    -73.97381,
+    30
+   ]
+  ],
+  "softCover": true,
+  "edgeFlush": true,
+  "junctionCurbs": {
+   "path": 4,
+   "plaza": 4,
+   "bridle": 3,
+   "drive": 9
   }
  },
  "id": "nyc",
@@ -210,7 +232,7 @@
  "pools": [
   {
    "name": "Jacqueline Kennedy Onassis Reservoir",
-   "level": 37.17,
+   "level": 35.0,
    "box": [
     40.78201,
     -73.966668,
@@ -536,7 +558,7 @@
   },
   {
    "name": "The Lake",
-   "level": 16.67,
+   "level": 16.3,
    "box": [
     40.77447,
     -73.973893,
@@ -1486,7 +1508,7 @@
   },
   {
    "name": "Harlem Meer",
-   "level": 5.66,
+   "level": 4.6,
    "box": [
     40.794638,
     -73.954315,
@@ -1932,7 +1954,7 @@
   },
   {
    "name": "The Pond",
-   "level": 7.21,
+   "level": 6.6,
    "box": [
     40.765229,
     -73.97575,
@@ -2516,7 +2538,7 @@
   },
   {
    "name": "Conservatory Water",
-   "level": 13.69,
+   "level": 12.8,
    "box": [
     40.773638,
     -73.96769,
@@ -2654,7 +2676,7 @@
   },
   {
    "name": "The Pool",
-   "level": 16.55,
+   "level": 15.6,
    "box": [
     40.794301,
     -73.961749,
@@ -2888,7 +2910,7 @@
   },
   {
    "name": "water",
-   "level": 5.95,
+   "level": 3.5,
    "box": [
     40.795832,
     -73.955614,
@@ -3076,7 +3098,7 @@
   },
   {
    "name": "water",
-   "level": 11.77,
+   "level": 10.9,
    "box": [
     40.767727,
     -73.971893,
@@ -3152,7 +3174,6 @@
  "routeLinkMaxM": 50,
  "effects": {
   "water": {},
-  "shoreline": {},
   "sky": {},
   "atmosphere": {}
  },
@@ -3221,14 +3242,19 @@
  ],
  "allees": [
   {
-   "name": "Literary Walk",
+   "name": "The Mall",
+   "way": "1315433305",
    "offsetsM": [
-    -6,
-    6,
-    -12,
-    12
+    -7,
+    7,
+    -13,
+    13
    ],
-   "everyM": 8
+   "everyM": 8,
+   "note": "the Mall and Literary Walk: the four rows of American elms (OSM way 1315433305, the Mall's centre line)"
   }
- ]
+ ],
+ "landWater": "pools",
+ "landWaterLines": false,
+ "landWaterInsetM": 5
 }

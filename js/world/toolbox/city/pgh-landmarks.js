@@ -12,7 +12,8 @@ import { buildStadiums } from './bridges.js';
 import { glasshouseFrame } from '../structures/glasshouse.js';
 import { cnyLandmarkModels, canalWaterMaterial } from './cny-landmarks.js';
 import { skanLandmarkModels } from './skan-landmarks.js';
-import { nycLandmarkModels, nycPark } from './nyc-landmarks.js';   // (NYC's: Central Park — Bethesda, Bow Bridge, Belvedere…, the wall and its gates)   // (SKAN's: Clift Park's pier and gazebo, the Sherwood Inn, mansions…)   // (CNY's: the aqueduct, Sims' Store, the Octagon House…)
+import { nycLandmarkModels, nycPark } from './nyc-landmarks.js';
+import { qcOn, qcProbe } from './qc-probe.js';   // (a QC run: tools/qc_map.mjs)   // (NYC's: Central Park — Bethesda, Bow Bridge, Belvedere…, the wall and its gates)   // (SKAN's: Clift Park's pier and gazebo, the Sherwood Inn, mansions…)   // (CNY's: the aqueduct, Sims' Store, the Octagon House…)
 
 export function buildPghLandmarks(host, data) {
   const L = host.landscape, proj = host.D.proj;
@@ -329,13 +330,15 @@ export function buildPghLandmarks(host, data) {
     },
   };
 
+  if (qcOn()) qcProbe(S, (L.qc ||= { basins: [], benches: [], bridges: [], views: [] }));
   Object.assign(M, cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa, Ca }));
   Object.assign(M, skanLandmarkModels({ S, N, glows, plan, ground, local, L, Wa }));
   for (const [k, f] of Object.entries(nycLandmarkModels({ S, N, glows, plan, ground, local, L, Wa }))) M[`nyc_${k}`] = f;   // (prefixed: PGH has its own obelisk, statue, reservoir…)
   for (const l of data.landmarks || []) {
     const f = M[l.model];
     if (!f) continue;
-    try { f(l); made++; } catch (err) { console.warn(`PGH landmark ${l.label}: ${err.message}`); }
+    if (L.qc?.prims) L.qc.prims.cur = l.label;
+    try { f(l); made++; if (L.qc && !/lawn|reservoir|view|conservatory/.test(l.model) && l.center) { const c = local(l.center[0], l.center[1]); L.qc.views.push({ x: c.x, z: c.z, name: l.label }); if (/bowbridge|gapstow/.test(l.model)) L.qc.bridges.push({ x: c.x, z: c.z, name: l.label, onWay: !!L.qc.onWay?.includes(l.label) }); } } catch (err) { console.warn(`PGH landmark ${l.label}: ${err.message}`); }
   }
 
   // the stadiums, closed (user, 21 Nov): the map's bowl builder, on their OSM outlines
@@ -427,7 +430,7 @@ export function buildPghLandmarks(host, data) {
   host.addGlows(glows, 'PGH landmark lamps');
   host.addGlows(beacons.map((b) => ({ ...b, size: 6, color: '#ff3b2e' })), 'PGH tower beacons');
   return {
-    count: made,
+    count: made, qc: L.qc || null,
     tick(time) {
       park?.tick(time);
       for (const c of cars) {

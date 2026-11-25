@@ -31,7 +31,12 @@ export const ringDist = (ring, x, z) => {
   return best;
 };
 
+/** The QC probe's hook (js/world/toolbox/city/qc-probe.js; off unless a QC run turns it on): each solid piece built
+ *  in a builder it watches is reported, so tools/qc-map.js can find pieces standing on nothing. */
+export const QC_HOOK = { rec: null };
+const ringExt = (ring) => { const c = centroid(ring); let R = 0; for (const q of ring) R = Math.max(R, Math.hypot(q.x - c.x, q.z - c.z)); return { c, R }; };
 export function prism(B, ring, y0, y1) {
+  if (B.__qc && QC_HOOK.rec) { const { c, R } = ringExt(ring); QC_HOOK.rec({ x: c.x, z: c.z, y: Math.min(y0, y1), top: Math.max(y0, y1), r: R, what: 'walls' }); }
   ring = orient(ring);
   for (let i = 0; i < ring.length; i++) {
     const a = ring[i], c = ring[(i + 1) % ring.length];
@@ -114,6 +119,7 @@ export function makeFrame(c, u, v = { x: -u.z, z: u.x }, hl = 0, hw = 0) {
 // ---------------------------------------------------------------- shapes
 /** A solid of revolution round (x, z): `prof` [[r, dy], …] from the bottom up (r 0 closes it at the top). */
 export function lathe(B, x, y, z, prof, seg = 10) {
+  if (B.__qc && QC_HOOK.rec) { const ys = prof.map((p) => p[1]); QC_HOOK.rec({ x, z, y: y + Math.min(...ys), top: y + Math.max(...ys), r: Math.max(...prof.map((p) => p[0])), what: 'turned' }); }
   for (let k = 0; k < seg; k++) {
     const a0 = k / seg * TAU, a1 = (k + 1) / seg * TAU;
     for (let j = 0; j + 1 < prof.length; j++) {
@@ -138,6 +144,7 @@ export function disc(B, c, n, r, seg = 12) {
  * past the walls. The gable ends are filled in `endColor` (the walls'), the slopes in the builder's colour.
  */
 export function gable(B, F, a0, a1, hw, yE, yR, { over = .5, endColor = null, ends = [true, true] } = {}) {
+  if (B.__qc && QC_HOOK.rec) QC_HOOK.rec({ x: F.c.x, z: F.c.z, y: yE, top: yR, r: Math.max(Math.abs(a0), Math.abs(a1), hw), what: 'roof' });
   const P = (a, b, y) => { const q = F.at(a, b); return V(q.x, y, q.z); };
   const roof = B.cur.color.slice(), drop = over * (yR - yE) / Math.max(hw, .1);
   for (const s of [-1, 1]) faceOut(B, [P(a0, s * (hw + over), yE - drop), P(a1, s * (hw + over), yE - drop), P(a1, 0, yR), P(a0, 0, yR)], V(F.v.x * s, 1, F.v.z * s));

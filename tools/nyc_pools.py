@@ -62,6 +62,25 @@ for name, pts in rings:
     ring = [[round(la, 6), round(lo, 6)] for lo, la in P.simplify(1.2 / 111320).exterior.coords][:-1]
     pools.append({'name': name or 'water', 'level': level, 'box': [round(s, 6), round(w, 6), round(n, 6), round(e, 6)], 'dam': False, 'areaM2': round(area), 'ring': ring})
     print(f'  {name or "(unnamed)":36s} {area / 1e4:6.2f} ha  level {level:5.1f} m')
+# a pool's level under the ways along its shore: the Reservoir's DEM surface stood above its running track (the water
+# would flood the path — the review, 25 Nov); its water 0.9 m under the lowest way within 6 m of its outline
+net_path = os.path.join(ROOT, 'routes/cities/nyc.json')
+if os.path.exists(net_path):
+    net = json.load(open(net_path)); u = net['unit']['latlon']; ue = net['unit']['ele']; o = net['origin']
+    def B_way_samples(net):
+        import itertools
+        for e in net['edges']:
+            la, lo, el = itertools.accumulate(e['lat']), itertools.accumulate(e['lon']), itertools.accumulate(e['ele'])
+            for a_, o_, h_ in zip(la, lo, el): yield a_ * u, o_ * u, h_ * ue
+    for p in pools:
+        P = Polygon([(lo, la) for la, lo in p['ring']]); ring = P.exterior
+        low = None
+        for la, lo, el in B_way_samples(net):
+            if abs(la - (p['box'][0] + p['box'][2]) / 2) > 0.01: continue
+            d = ring.distance(Point(lo, la)) * 100000
+            if d < 6 and not P.contains(Point(lo, la)) and (low is None or el < low): low = el
+        if low is not None and p['level'] > low - 0.9:
+            print(f"  {p['name']}: level {p['level']} → {round(low - 0.9, 2)} (under the way along its shore)"); p['level'] = round(low - 0.9, 2)
 pools.sort(key=lambda p: -p['areaM2'])
 cfg['pools'] = pools
 json.dump(cfg, open(cfg_path, 'w'), indent=1)

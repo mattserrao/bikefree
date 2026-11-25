@@ -535,11 +535,15 @@ export class GraphCity {
       const r = l.ring && l.ring.length >= 3 ? l.ring.map(([a, o]) => proj.toLocal(a, o)) : [proj.toLocal(l.center[0], l.center[1])];
       let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; for (const p of r) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); }
       const m = l.clearM; list.push({ r, m, x0: x0 - m, x1: x1 + m, z0: z0 - m, z1: z1 + m });
+      // its view corridors: from a way to it, trees kept viewM off the line
+      const c = proj.toLocal(l.center[0], l.center[1]), vm = l.viewM || 3.5;
+      for (const [la, lo] of l.views || []) { const a = proj.toLocal(la, lo), seg = [a, c]; list.push({ r: seg, m: vm, view: true, x0: Math.min(a.x, c.x) - vm, x1: Math.max(a.x, c.x) + vm, z0: Math.min(a.z, c.z) - vm, z1: Math.max(a.z, c.z) + vm }); }
     }
     if (!list.length) return () => false;
     const pip = (r, x, z) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) c = !c; } return c; };
     const near = (r, x, z, m) => { for (let i = 0; i < r.length; i++) { const a = r[i], b = r[(i + 1) % r.length], dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / l2)); if (Math.hypot(a.x + dx * t - x, a.z + dz * t - z) < m) return true; } return false; };
-    return (x, z) => list.some((q) => x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1 && ((q.r.length >= 3 && pip(q.r, x, z)) || near(q.r, x, z, q.m)));
+    // (margin false: only inside an outline or a view corridor — a mapped tree stands in a landmark's margin)
+    return (x, z, margin = true) => list.some((q) => x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1 && ((q.r.length >= 3 && pip(q.r, x, z)) || ((margin || q.view) && near(q.r, x, z, q.m))));
   }
   _deckIndex() {
     const grid = new Map();
@@ -772,9 +776,9 @@ export class GraphCity {
     // (the land cover's own water too: the canal and the ponds the ground draws as water, OSM's canal line or not —
     //  user, 23 Nov: "trees spawning in canal water is still an issue")
     const wetLand = (x, z, r) => this.landAt(x, z) === LAND.water || this.landAt(x + r, z) === LAND.water || this.landAt(x - r, z) === LAND.water || this.landAt(x, z + r) === LAND.water || this.landAt(x, z - r) === LAND.water;
-    const clearOf = (x, z, crown) => !this.inWater(x, z) && !canalAt(x, z, Math.max(1.5, crown * .5)) && !wetLand(x, z, Math.max(1.5, crown * .5)) && !this.inWater(x + 3, z) && !this.inWater(x - 3, z) && !this.inWater(x, z + 3) && !this.inWater(x, z - 3)
+    const clearOf = (x, z, crown, mapped = false) => !this.inWater(x, z) && !canalAt(x, z, Math.max(1.5, crown * .5)) && !wetLand(x, z, Math.max(1.5, crown * .5)) && !this.inWater(x + 3, z) && !this.inWater(x - 3, z) && !this.inWater(x, z + 3) && !this.inWater(x, z - 3)
       && !this.heroes.heroes?.covers?.(x, z, 3) && !this.host.buildingNear(x, z, crown) && !this.kit.occupied(x, z, Math.min(crown, 3)) && !this._inDressing(x, z)
-      && !this._drivewayNear?.(x, z, 2.5) && !this._railCovers(x, z, crown * .6) && !this.landmarkClear?.(x, z);
+      && !this._drivewayNear?.(x, z, 2.5) && !this._railCovers(x, z, crown * .6) && !this.landmarkClear?.(x, z, !mapped);
     const pick = (mix, r) => { let a = 0, tot = 0; for (const [, w] of mix) tot += w; for (const [n, w] of mix) { a += w / tot; if (r <= a) return n; } return mix[mix.length - 1][0]; };
     const MIX = {
       woods: [['sugarmaple', 28], ['redoak', 15], ['beech', 10], ['whiteash', 12], ['blackcherry', 8], ['redmaple', 10], ['whitepine', 8], ['hemlock', 6], ['birch', 3]],
@@ -801,12 +805,13 @@ export class GraphCity {
       let k = age ?? (r2 < .08 ? .3 + r2 * 2.5 : r2 < .22 ? .55 + (r2 - .08) * 1.8 : r2 > .95 ? 1.15 + (r2 - .95) * 3 : .85 + (r2 - .22) * .32);
       k *= .92 + r3 * .16;
       const de = edgeOf(x, z);
-      if (de < 4) return false;   // trunks ≥ 4 m from the road's edge
+      const mapped = role === 'osm';   // (a map's own mapped trees — NYC's Mall elms: where OSM puts them, close to the walk, the crowns over it)
+      if (de < (mapped ? 1.5 : 4)) return false;   // trunks ≥ 4 m from the road's edge
       if (k > 1.1 && de < 25) k = 1;
       // a crown reaching over the road: smaller, so it clears the chase camera
-      if (sp.r * k > de + 1.5) k = Math.max(.45, (de + 1.5) / sp.r);
+      if (sp.r * k > de + 1.5 && !mapped) k = Math.max(.45, (de + 1.5) / sp.r);
       let crown = sp.r * k * .85;
-      if (!clearOf(x, z, crown)) { k *= .6; crown = sp.r * k * .85; if (k < .35 || !clearOf(x, z, crown)) return false; }
+      if (!clearOf(x, z, crown, mapped)) { k *= .6; crown = sp.r * k * .85; if (k < .35 || !clearOf(x, z, crown, mapped)) return false; }
       out.push({ x, z, y: W._groundH(x, z) - .15, sp: name, v: this.fall ? fallVariant(sp, r4, this.peak) : 0, s: k, sy: k * (.94 + r3 * .12), rot: seed * 40 % 6.283, tint: .9 + r3 * .18, deep: de > 30 });
       return true;
     };

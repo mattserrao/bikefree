@@ -339,3 +339,16 @@ The full review, with duplicates and follow-ups, is in `docs/toolbox/INVENTORY.m
 - Pools with a `ring` draw on their outline (`graph-world.js`); `tools/nyc_pools.py` makes them from OSM water.
 - Profile keys: `season: "peak-fall"`, `cars: false`, `openLawns`, `parkTrees`, `life: "park"`, `treeMix`.
 - Landmarks: `js/world/toolbox/city/nyc-landmarks.js` (`nyc_*` models) and `nycPark` (the wall and gates from the heroes JSON's `park`, lamps, benches, boats, ducks, squirrels).
+
+## Map QC (any graph map)
+- `npm run qc:map -- <map> [site …] [--auto N] [--sites f] [--json f] [--baseline f] [--out dir]` (tools/qc_map.mjs): at each site the preview page builds the world with the landmarks' QC probes on (`?qc=1`), tools/qc-map.js counts the visual faults round the camera, and the shot is saved. `npm run qc:nyc` = NYC's twelve review sites.
+- Sites: `tools/qc/sites/<map>.json` (`{ name: "lat,lon[,dir][@m][#eye lat,eye lon,up,look lat,look lon,up]" }`, snap_pgh's shot spec); without one (or with `--auto N`), N rider spots spread through the map's ways and a look at its first landmarks.
+- Checks: strayWater, bankShard, bankCliff, dryBasin, bridgeDup, floating, waterOverWay, pathPaint, edgeLip, edgeDitch, joinGap, sharpCorner, alleeTrees, gritEdges, benchOnWay, viewBlocked (and trees counted). A check needing data a map doesn't have counts nothing there.
+- `--baseline before.json` prints each count as before→after; keep a baseline before a visual pass.
+- The probes: `js/world/toolbox/city/qc-probe.js` (builders' boxes, cylinders, pyramids, beams; hero-geom's prisms, turned pieces and gables through `QC_HOOK`) — off unless `globalThis.BF_QC`, so the game pays nothing. Landmark models may report `L.qc.basins`, `benches`, `bridges` (with `onWay`), and `views` are added per landmark.
+
+## NYC visual pass (25 Nov) — profile and config keys
+- Profile: `pathPaint: false`, `drivePaint: "park"` (edge lines and a bike lane), `modelBridges: [[lat, lon, r]]` (a landmark model draws the deck there: no slab, parapet, underside or piers of the world's own), `softCover` (no grain scatter at cover edges), `edgeFlush` (kerb 5 cm, a stone edging, lawns flush), `junctionCurbs` (curb radii by kind; smaller ones tried until the return fits; joins and junction surfaces in the widest way's colour and surface).
+- Map JSON `pads`: `[{ ring, y, blendM }]` — level ground (after the roads' fill): Bethesda's lower terrace. tools/nyc_sync.py copies profile, pools, effects and pads into the built map.
+- Pools with a `ring`: banks graded through the water's edge (`_ringBank`), never a drop under the water plane's rim; tools/nyc_pools.py sets a pool's level 0.9 m under the lowest way along its shore.
+- City config: `landWater: "pools"` (cover water only under the pools, small waters paved), `landWaterInsetM`, `landWaterLines: false`, `allees: [{ way | name, offsetsM, everyM }]` (written to the city data as `allee`); `treeMix.osm` for mapped trees, which may stand 1.5 m off a way and in a landmark's margin. Landmarks' `views` (two way points each) keep trees `viewM` off the sight line.

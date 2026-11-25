@@ -78,6 +78,53 @@ for model, label, (kind, oid), note in L:
 for model, label, nid, note in STATUES:
     if nid in nodes: out.append({'label': label, 'model': f'nyc_{model}', 'osm': f'n{nid}', 'note': note, 'center': R6(nodes[nid]), 'clearM': 8})
 
+# Bethesda's lower terrace: a level pad cut into the slope between the fountain and Terrace Drive (the world grades
+# the ground to it — the map's "pads"), the arcade under the drive at its far edge (the review, 25 Nov: "a plain block
+# on the open lawn, with its stairs pointing sideways")
+import itertools
+net = json.load(open(os.path.join(ROOT, 'routes/cities/nyc.json')))
+U, UE, KY = net['unit']['latlon'], net['unit']['ele'], 110540
+KX = 111320 * math.cos(math.radians(40.78))
+def way_samples(pred):
+    for e in net['edges']:
+        if not pred(e): continue
+        for la, lo, h in zip(itertools.accumulate(e['lat']), itertools.accumulate(e['lon']), itertools.accumulate(e['ele'])): yield e, la * U, lo * U, h * UE
+pads = []
+beth = next((l for l in out if l['model'] == 'nyc_bethesda'), None)
+if beth:
+    fy, fx = beth['center']
+    dist = lambda la, lo: math.hypot((la - fy) * KY, (lo - fx) * KX)
+    drive = min(((dist(la, lo), la, lo, h, e) for e, la, lo, h in way_samples(lambda e: 'Terrace Drive' in (e.get('name') or ''))), default=None, key=lambda q: q[0])
+    ring_y = min((h for e, la, lo, h in way_samples(lambda e: e['kind'] == 'path') if dist(la, lo) < 18), default=None)
+    if drive and ring_y is not None:
+        d, dla, dlo, dh, de = drive
+        ux, uz = (fx - dlo) * KX / d, (fy - dla) * KY / d          # (east, north) from the drive toward the fountain
+        vx, vz = -uz, ux
+        hw = net['widths'].get(de['kind'], 8) / 2
+        a0, a1, b = hw + 1.0, d + 14, 30                              # the pad: from the arcade's face to past the fountain
+        def at(a, c): return [round(dla + (uz * a + vz * c) / KY, 7), round(dlo + (ux * a + vx * c) / KX, 7)]
+        ring = [at(a0, -b), at(a1, -b), at(a1, b), at(a0, b)]
+        y = round(ring_y - 0.05, 2)
+        beth['terrace'] = {'ring': ring, 'y': y, 'drive': [round(dla, 7), round(dlo, 7), round(dh + 0.12, 2), hw], 'face': at(a0, 0)}
+        # (graded 8 m past the terrace's landward edges — a ground cell: the coarse ground's triangles across the edge
+        #  rose over the paving; the terrace's walls and the arcade stand in front of the cut)
+        grade = [at(a0 - 8, -b - 8), at(a1, -b - 8), at(a1, b + 8), at(a0 - 8, b + 8)]
+        pads.append({'name': 'Bethesda Terrace', 'ring': grade, 'y': y, 'blendM': 2.5})
+        print(f'  Bethesda terrace: {d:.0f} m from Terrace Drive, terrace {y} m, drive {dh:.1f} m')
+
+# view corridors: from the two nearest ways (25-160 m off, on different ways) to each landmark, trees kept 3.5 m off
+# the line (graph-city: a landmark's views) — the review: Belvedere, the Carousel, the Pulitzer Fountain hidden from the
+# paths behind single trees
+NOVIEW = ('nyc_lawn', 'nyc_reservoir', 'nyc_conservatory', 'nyc_view')
+for l in out:
+    if l['model'] in NOVIEW: continue
+    fy, fx = l['center']; best = {}
+    for e, la, lo, h in way_samples(lambda e: True):
+        d = math.hypot((la - fy) * KY, (lo - fx) * KX)
+        if 25 < d < 160 and (e['id'] not in best or d < best[e['id']][0]): best[e['id']] = (d, la, lo)
+    near2 = sorted(best.values())[:2]
+    if near2: l['views'] = [[round(la, 7), round(lo, 7)] for d, la, lo in near2]; l['viewM'] = 3.5
+
 # views: ground kept clear of trees so a landmark is seen across the water (Belvedere over Turtle Pond); no model
 cfg = json.load(open(os.path.join(ROOT, 'tools/city/nyc.json')))
 for name, m in [('Turtle Pond', 9)]:
@@ -102,6 +149,6 @@ gates_out = [{'at': q, 'kind': k} for q, k in gates]
 print(f'  landmarks: {len(out)}; entrances in the wall: {len(gates_out)}')
 json.dump({'format': 'bikefree-heroes-1', 'note': 'NYC landmarks (tools/nyc_heroes.py from OSM; models js/world/toolbox/city/nyc-landmarks.js). Data © OpenStreetMap contributors (ODbL).',
            'heroes': [], 'buildings': [], 'landmarks': out, 'stadiums': [], 'inclines': [], 'overlooks': [], 'stations': [],
-           'park': {'outline': poly, 'gates': gates_out}},
+           'park': {'outline': poly, 'gates': gates_out}, 'pads': pads},
           open(os.path.join(ROOT, 'routes/cities/nyc-heroes.json'), 'w'), separators=(',', ':'))
 print('wrote routes/cities/nyc-heroes.json')
