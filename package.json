@@ -30,6 +30,7 @@
     "cny:build": "python3 tools/build_pgh.py --city cny && python3 tools/pgh_city.py --city cny && python3 tools/cny_heroes.py && python3 tools/cny_forest.py && node tools/pgh_routes.mjs --city cny --write && node tools/qc_pgh.mjs routes/cities/cny.json --rides 200",
     "cny:routes": "node tools/pgh_routes.mjs --city cny",
     "skan:build": "python3 tools/build_pgh.py --city skan && python3 tools/pgh_city.py --city skan && node tools/pgh_routes.mjs --city skan --write && node tools/qc_pgh.mjs routes/cities/skan.json --rides 200",
+    "nyc:build": "python3 tools/build_pgh.py --city nyc && python3 tools/nyc_pools.py && python3 tools/pgh_city.py --city nyc && python3 tools/nyc_heroes.py && node tools/pgh_routes.mjs --city nyc --write && node tools/qc_pgh.mjs routes/cities/nyc.json --rides 200",
     "skan:routes": "node tools/pgh_routes.mjs --city skan"
   },
   "devDependencies": {

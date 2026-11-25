@@ -11,7 +11,8 @@ import { V, TAU, centroid, scaleRing, orient, prism, cap, block, chamfer, frameO
 import { buildStadiums } from './bridges.js';
 import { glasshouseFrame } from '../structures/glasshouse.js';
 import { cnyLandmarkModels, canalWaterMaterial } from './cny-landmarks.js';
-import { skanLandmarkModels } from './skan-landmarks.js';   // (SKAN's: Clift Park's pier and gazebo, the Sherwood Inn, mansions…)   // (CNY's: the aqueduct, Sims' Store, the Octagon House…)
+import { skanLandmarkModels } from './skan-landmarks.js';
+import { nycLandmarkModels, nycPark } from './nyc-landmarks.js';   // (NYC's: Central Park — Bethesda, Bow Bridge, Belvedere…, the wall and its gates)   // (SKAN's: Clift Park's pier and gazebo, the Sherwood Inn, mansions…)   // (CNY's: the aqueduct, Sims' Store, the Octagon House…)
 
 export function buildPghLandmarks(host, data) {
   const L = host.landscape, proj = host.D.proj;
@@ -330,6 +331,7 @@ export function buildPghLandmarks(host, data) {
 
   Object.assign(M, cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa, Ca }));
   Object.assign(M, skanLandmarkModels({ S, N, glows, plan, ground, local, L, Wa }));
+  for (const [k, f] of Object.entries(nycLandmarkModels({ S, N, glows, plan, ground, local, L, Wa }))) M[`nyc_${k}`] = f;   // (prefixed: PGH has its own obelisk, statue, reservoir…)
   for (const l of data.landmarks || []) {
     const f = M[l.model];
     if (!f) continue;
@@ -413,6 +415,8 @@ export function buildPghLandmarks(host, data) {
     made++;
   }
 
+  let park = null;
+  if (data.park) { try { park = nycPark({ S, N, glows, local, L, host }, data.park); made += park.count; } catch (err) { console.warn(`park: ${err.message}`); } }
   // into the scene, as the heroes are
   const add = (B, mat, name) => { if (!B.count) return; const m = new THREE.Mesh(host.own(B.geometry()), mat); m.name = name; host.group.add(m); };
   add(W, host.buildingMaterial, 'PGH landmark towers');
@@ -425,6 +429,7 @@ export function buildPghLandmarks(host, data) {
   return {
     count: made,
     tick(time) {
+      park?.tick(time);
       for (const c of cars) {
         const t = (Math.sin((time / 90 + c.phase) * TAU) + 1) / 2;   // up and down, a trip every 45 s
         const p = c.a.clone().addScaledVector(c.dir, t * c.len);

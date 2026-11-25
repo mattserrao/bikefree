@@ -332,3 +332,10 @@ Styles can be picked by map kind (`kinds`) instead of by stretch. **Added for ci
 | Post (bloom, grade) | – | ✓ | ✓ | ✓ | – | ✓ |
 
 The full review, with duplicates and follow-ups, is in `docs/toolbox/INVENTORY.md`.
+
+## Park maps (NYC)
+- `tools/build_pgh.py` area `{"polygon": "<file>.json", "fetchM": m}`: a ring (lat, lon) instead of lines; the network stays inside it.
+- Config keys (opt-in): `footwaysRideable`, `nameKinds` (a name part → way kind), `keepParallelKinds`, `protectKinds`, `groundBaseM`, `bothWays`, `treeRows`/`treeRowM`, `cityReachM`, `cityPadM`.
+- Pools with a `ring` draw on their outline (`graph-world.js`); `tools/nyc_pools.py` makes them from OSM water.
+- Profile keys: `season: "peak-fall"`, `cars: false`, `openLawns`, `parkTrees`, `life: "park"`, `treeMix`.
+- Landmarks: `js/world/toolbox/city/nyc-landmarks.js` (`nyc_*` models) and `nycPark` (the wall and gates from the heroes JSON's `park`, lamps, benches, boats, ducks, squirrels).

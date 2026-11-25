@@ -38,7 +38,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # the city (user, 22 Nov: CNY, "following the guide used for PGH"): routes/cities/<id>.json and its files; PGH by default
 CITY = sys.argv[sys.argv.index('--city') + 1] if '--city' in sys.argv else 'pgh'
 CFG = json.load(open(os.path.join(ROOT, 'tools', 'city', f'{CITY}.json'))) if os.path.exists(os.path.join(ROOT, 'tools', 'city', f'{CITY}.json')) else {}
-REACH = 250          # m from a PGH way: buildings, trees, the street kit
+REACH = CFG.get('cityReachM', 250)   # m from a PGH way: buildings, trees, the street kit
 TALL = 40            # towers this tall are kept anywhere in the box
 LAND_M = CFG.get('landM', 6)            # (SKAN: 10 — its long box at 6 m would pass the 4096 texels a phone allows)
 UNIT = CFG.get('cityUnit', UNIT)        # (SKAN: 5e-6 — 33 km north to south passes Int16 at 3e-6)
@@ -130,7 +130,7 @@ def main():
     pgh = json.load(open(os.path.join(ROOT, f'routes/cities/{CITY}.json')))
     E = decode_edges(pgh)
     la_all = [v for e in E for v in e['lat']]; lo_all = [v for e in E for v in e['lon']]
-    pad = 0.004
+    pad = CFG.get('cityPadM', 444) / 111000   # (NYC: 900 m — the skyline round the park)
     gs, gn, gw, ge = min(la_all) - pad, max(la_all) + pad, min(lo_all) - pad * 1.3, max(lo_all) + pad * 1.3
     lat0, lon0 = (gs + gn) / 2, (gw + ge) / 2
     kx, ky = 111319.49 * math.cos(math.radians(lat0)), 111319.49
@@ -536,6 +536,32 @@ def main():
         if t.get('natural') == 'tree' and i in nodes:
             la, lo = nodes[i]
             if gs < la < gn and gw < lo < ge and way_dist(la, lo, REACH) < REACH: trees += q(la, lo)
+    if CFG.get('treeRows'):
+        # (NYC: OSM's tree rows — the Mall's elms, the allées — a tree every treeRowM along each)
+        step, nrow = CFG.get('treeRowM', 9), 0
+        for nd, t in ways.values():
+            if t.get('natural') != 'tree_row': continue
+            pts = [nodes[i] for i in nd if i in nodes]
+            for a, b in zip(pts, pts[1:]):
+                L = math.hypot((b[0] - a[0]) * ky, (b[1] - a[1]) * kx); k = max(1, round(L / step))
+                for j in range(k):
+                    la, lo = a[0] + (b[0] - a[0]) * j / k, a[1] + (b[1] - a[1]) * j / k
+                    if gs < la < gn and gw < lo < ge and way_dist(la, lo, REACH) < REACH: trees += q(la, lo); nrow += 1
+        print(f'  tree rows: {nrow} trees')
+    for al in CFG.get('allees', []):
+        # (NYC: the Mall — four rows of American elms over Literary Walk; a tree every everyM at each offset, both sides)
+        nal = 0
+        for nd, t in ways.values():
+            if t.get('name') != al['name'] or 'highway' not in t: continue
+            pts = [nodes[i] for i in nd if i in nodes]
+            for a, b in zip(pts, pts[1:]):
+                dy, dx = (b[0] - a[0]) * ky, (b[1] - a[1]) * kx; L = math.hypot(dx, dy)
+                if L < 1: continue
+                k = max(1, round(L / al.get('everyM', 8))); ny, nx = dx / L, -dy / L
+                for j in range(k):
+                    la, lo = a[0] + (b[0] - a[0]) * (j + .5) / k, a[1] + (b[1] - a[1]) * (j + .5) / k
+                    for off in al['offsetsM']: trees += q(la + ny * off / ky, lo + nx * off / kx); nal += 1
+        print(f"  allée {al['name']}: {nal} trees")
     kit = street_kit.extract(nodes, ntags, ways, q, way_dist, radius=REACH)
 
     # 4. what each PGH edge is made of: the nearest OSM highway (same name preferred) at each sample
@@ -576,7 +602,7 @@ def main():
             if CITY != 'pgh' and e['kind'] == 'path' and (not s or re.search(r'Canalway|Towpath', e['name'] or '', re.I)): code = 5
             codes.append(code)
             # one-way, against or along this edge's direction
-            if t.get('oneway') in ('yes', '1', '-1') or t.get('highway') in ('motorway', 'motorway_link'):
+            if not CFG.get('bothWays') and (t.get('oneway') in ('yes', '1', '-1') or t.get('highway') in ('motorway', 'motorway_link')):   # (NYC, user 25 Nov: the drives free both ways)
                 i1 = min(n - 1, i + 1); i0 = max(0, i - 1)
                 ex, ey = (e['lon'][i1] - e['lon'][i0]) * kx, (e['lat'][i1] - e['lat'][i0]) * ky
                 along = ex * hit[2][0] + ey * hit[2][1]

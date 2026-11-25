@@ -230,7 +230,8 @@ export class GraphWorld {
     this.cut = roadHash(this.G.edges, this.widths);
     this.waterY = (this.json.waterLevelM ?? 216.6) + WATER_ABOVE;
     // upper pools (above a dam: the Allegheny above Lock & Dam 2) — their own water level inside their box
-    this.pools = (this.json.pools || []).map((p) => { const a = this.proj.toLocal(p.box[0], p.box[1]), b = this.proj.toLocal(p.box[2], p.box[3]); return { level: p.level, x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), z0: Math.min(a.z, b.z), z1: Math.max(a.z, b.z), west: a.x, dam: p.dam !== false }; });
+    // (a pool may carry its outline — "ring": NYC's park lakes — and then it's water only inside it, drawn by its shape)
+    this.pools = (this.json.pools || []).map((p) => { const a = this.proj.toLocal(p.box[0], p.box[1]), b = this.proj.toLocal(p.box[2], p.box[3]); const ring = p.ring ? p.ring.map(([la, lo]) => this.proj.toLocal(la, lo)) : null; return { level: p.level, x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), z0: Math.min(a.z, b.z), z1: Math.max(a.z, b.z), west: a.x, dam: p.dam !== false, ring, name: p.name }; });
 
     // renderer, scene, light
     // (no logarithmic depth: it writes gl_FragDepth, which turns off a phone GPU's early depth test and hidden-surface
@@ -292,6 +293,15 @@ export class GraphWorld {
     this.water.position.y = this.waterY;
     this.scene.add(this.water);
     for (const p of this.pools) {
+      if (p.ring) {   // its shape, grown 2 m (the ground rises from under it at the edge)
+        const sh = new THREE.Shape(p.ring.map((q) => new THREE.Vector2(q.x, -q.z)));
+        const g = new THREE.ShapeGeometry(sh).rotateX(-Math.PI / 2), cx = (p.x0 + p.x1) / 2, cz = (p.z0 + p.z1) / 2;
+        const pos = g.attributes.position;
+        for (let i = 0; i < pos.count; i++) { const dx = pos.getX(i) - cx, dz = pos.getZ(i) - cz, d = Math.hypot(dx, dz) || 1; pos.setXYZ(i, pos.getX(i) + dx / d * 2, 0, pos.getZ(i) + dz / d * 2); }
+        g.computeVertexNormals();
+        const w = new THREE.Mesh(g, this.mats.water); w.name = p.name || 'Pool'; w.position.y = p.level + WATER_ABOVE; this.scene.add(w);
+        continue;
+      }
       const w = new THREE.Mesh(new THREE.PlaneGeometry(p.x1 - p.x0, p.z1 - p.z0).rotateX(-Math.PI / 2), this.mats.water);
       w.position.set((p.x0 + p.x1) / 2, p.level + WATER_ABOVE, (p.z0 + p.z1) / 2);
       this.scene.add(w);
@@ -612,7 +622,7 @@ export class GraphWorld {
   }
   /** The pool level at (x, z): an upper pool inside its box, else the main one. */
   poolAt(x, z) {
-    for (const p of this.pools || []) if (x >= p.x0 && x <= p.x1 && z >= p.z0 && z <= p.z1) return p.level;
+    for (const p of this.pools || []) if (x >= p.x0 && x <= p.x1 && z >= p.z0 && z <= p.z1 && (!p.ring || inRing(p.ring, x, z, 3))) return p.level;
     return this.waterY - WATER_ABOVE;
   }
   /** The water's surface here (the pool level and the plane's lift above it). */
@@ -1522,6 +1532,13 @@ function makeStandIn() {
 
 /** A natural bank's height s metres in from the water's edge (− out in the river): under the water to the edge, then
  *  ≥ 1.5 m up within 5 m (no mud ramp), easing to the bank's top by BANK_SLOPE. */
+/** Inside a ring of local points (or within `grow` m of it, roughly: its edge tested at a few offsets). */
+function inRing(ring, x, z, grow = 0) {
+  const inside = (px, pz) => { let c = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], b = ring[j]; if ((a.z > pz) !== (b.z > pz) && px < ((b.x - a.x) * (pz - a.z)) / (b.z - a.z) + a.x) c = !c; } return c; };
+  if (inside(x, z)) return true;
+  return grow > 0 && (inside(x + grow, z) || inside(x - grow, z) || inside(x, z + grow) || inside(x, z - grow));
+}
+
 export function bankProfile(s, top, waterY, pool) {
   const T = Math.max(top, waterY + 1.6), y5 = waterY + Math.max(1.5, 0.5 * (T - waterY));
   if (s <= -4) return pool - 2;

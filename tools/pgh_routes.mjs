@@ -457,8 +457,76 @@ const SKAN_ROUTES = [
   },
 ];
 
-const TRAILS = CITY === 'cny' ? CNY_TRAILS : CITY === 'skan' ? SKAN_TRAILS : PGH_TRAILS;
-const ROUTES = CITY === 'cny' ? CNY_ROUTES : CITY === 'skan' ? SKAN_ROUTES : CITY === 'pgh' ? PGH_ROUTES : [];
+// ---------------------------------------------------------------- NYC (Central Park: tools/city/nyc.json)
+// (user, 25 Nov: "routes that follow the paths there"; chose the Full Loop, the Lower Loop, a landmarks tour and the
+// bridle path + Harlem Hill. The drives counter-clockwise, as the park rides them: up the East Drive, down the West)
+const NYC_DRIVES = ['East Drive', 'West Drive', 'Center Drive', 'Terrace Drive', '102nd Street Crossing'];
+const NYC_ROUTES = [
+  {
+    id: 'nyc-full-loop', name: 'Central Park Full Loop', tags: ['classic', 'hilly', 'loop'],
+    note: 'The 6.1-mile Park Drive loop, counter-clockwise as the park rides it: from Columbus Circle past the Pond and up the East Drive by the Met and Cat Hill, round the north end over Harlem Hill, and down the West Drive past the Great Hill and Strawberry Fields',
+    prefer: NYC_DRIVES, kindCost: { path: 4, bridle: 4, plaza: 4 },
+    way: [
+      { near: [40.76760, -73.97900], on: 'West Drive' },     // Merchants' Gate, Columbus Circle
+      { near: [40.77160, -73.96960], on: 'East Drive' },      // the East Drive at 72nd St (by the Center Drive past the Pond)
+      { near: [40.77950, -73.96290], kind: 'drive' },         // Cat Hill, by the Met
+      { near: [40.78700, -73.95750], kind: 'drive' },         // Engineers' Gate (90th St)
+      { near: [40.79500, -73.95300], kind: 'drive' },         // 106th St, by the Meer
+      { near: [40.79875, -73.95860], kind: 'drive' },         // Harlem Hill
+      { near: [40.79100, -73.96350], kind: 'drive' },         // the West Drive at 96th St
+      { near: [40.76760, -73.97900], on: 'West Drive' },      // past Strawberry Fields to Columbus Circle
+    ],
+  },
+  {
+    id: 'nyc-lower-loop', name: 'Lower Loop', tags: ['flat', 'short', 'loop'],
+    note: 'The south end in 1.7 miles: up the East Drive past the Wollman Rink and the Mall, across the park on the 72nd Street cross drive above Bethesda Terrace, and down the West Drive past Sheep Meadow to Columbus Circle',
+    prefer: NYC_DRIVES, kindCost: { path: 4, bridle: 4, plaza: 4 },
+    way: [
+      { near: [40.76760, -73.97900], on: 'West Drive' },
+      { near: [40.77160, -73.96960], on: 'East Drive' },
+      { near: [40.77410, -73.97180], on: 'Terrace Drive' },   // above Bethesda Terrace
+      { near: [40.77620, -73.97570], on: 'West Drive' },      // the West Drive at 72nd St
+      { near: [40.76760, -73.97900], on: 'West Drive' },
+    ],
+  },
+  {
+    id: 'nyc-landmarks', name: 'Central Park Landmarks', tags: ['scenic', 'paths', 'easy'],
+    note: 'The park on its paths: the Mall and Literary Walk to Bethesda Terrace and the fountain, along the Lake to Bow Bridge, past Belvedere Castle and Turtle Pond to the Great Lawn, round the Reservoir, up to the Conservatory Garden and Harlem Meer, and home down the West Drive',
+    way: [
+      { near: [40.76760, -73.97900], on: 'West Drive' },
+      { near: [40.77010, -73.97370] },                        // the Mall's foot (Literary Walk)
+      { near: [40.77390, -73.97080] },                        // Bethesda Terrace
+      { near: [40.77560, -73.97170] },                        // Bow Bridge
+      { near: [40.77920, -73.96900] },                        // Belvedere Castle / Turtle Pond
+      { near: [40.78250, -73.96780] },                        // the Great Lawn's north end
+      { near: [40.78560, -73.96650] },                        // the Reservoir (south-west)
+      { near: [40.79040, -73.95810] },                        // the Reservoir (north-east)
+      { near: [40.79380, -73.95230] },                        // the Conservatory Garden
+      { near: [40.79680, -73.95330] },                        // Harlem Meer
+      { near: [40.79760, -73.95980] },                        // Harlem Hill
+      { near: [40.78100, -73.97130], on: 'West Drive' },
+      { near: [40.76760, -73.97900], on: 'West Drive' },
+    ],
+  },
+  {
+    id: 'nyc-bridle-harlem-hill', name: 'Bridle Path & Harlem Hill', tags: ['hilly', 'gravel', 'loop'],
+    note: 'Round the Reservoir on the bridle path\'s fine gravel, then the north end the hard way: up the East Drive to the Meer and over Harlem Hill, the park\'s biggest climb, and down the West Drive back to the Reservoir',
+    kindCost: { path: 3 },
+    way: [
+      { near: [40.78400, -73.96300], kind: 'bridle' },        // the bridle path at the Reservoir's south end
+      { near: [40.78852, -73.96462], kind: 'bridle' },        // its west side
+      { near: [40.79144, -73.95830], kind: 'bridle' },        // its north end
+      { near: [40.78727, -73.95744], kind: 'drive' },         // Engineers' Gate, onto the East Drive
+      { near: [40.79500, -73.95300], kind: 'drive' },         // the Meer
+      { near: [40.79875, -73.95860], kind: 'drive' },         // Harlem Hill
+      { near: [40.79100, -73.96350], kind: 'drive' },         // the West Drive at 96th St
+      { near: [40.78400, -73.96300], kind: 'bridle' },
+    ],
+  },
+];
+
+const TRAILS = CITY === 'cny' ? CNY_TRAILS : CITY === 'skan' ? SKAN_TRAILS : CITY === 'nyc' ? [] : PGH_TRAILS;
+const ROUTES = CITY === 'cny' ? CNY_ROUTES : CITY === 'skan' ? SKAN_ROUTES : CITY === 'nyc' ? NYC_ROUTES : CITY === 'pgh' ? PGH_ROUTES : [];
 
 // ---------------------------------------------------------------- the graph as a router
 const M_LAT = 111320, mLon = M_LAT * Math.cos(json.origin.lat * Math.PI / 180);
@@ -472,7 +540,7 @@ const lenOf = (e) => e.n * 10;
 const ow = (e) => city.edges?.[e.id]?.ow || 0;   // 1: only along the edge; -1: only against it
 const nodeLL = (id) => { const n = G.nodes.get(id); return [n.lat, n.lon]; };
 const named = (id, name) => (arms.get(id) || []).some(({ e }) => e.name === name);
-const KIND = { path: 0.8, residential: 1, tertiary: 1.05, secondary: 1.25, primary: 1.6, alley: 1.6, plaza: 1.3 };
+const KIND = { path: 0.8, residential: 1, tertiary: 1.05, secondary: 1.25, primary: 1.6, alley: 1.6, plaza: 1.3, drive: 0.9, bridle: 0.85 };   // (NYC: the park drives, the bridle path)
 
 function snap(wp) {
   if (typeof wp === 'string') return wp;
@@ -481,6 +549,7 @@ function snap(wp) {
   for (const [id] of arms) {
     if (wp.at && !(named(id, wp.at[0]) && named(id, wp.at[1]))) continue;
     if (wp.on && !named(id, wp.on)) continue;
+    if (wp.kind && !(arms.get(id) || []).some(({ e }) => e.kind === wp.kind)) continue;   // (NYC: a junction on the Park Drive)
     const d = wp.near ? dist(nodeLL(id), wp.near) : 0;
     if (!best || d < best.d) best = { id, d };
   }
@@ -506,11 +575,11 @@ function turnCost(a, b) {
 
 /** The best way from a to b: Dijkstra over (edge, direction) — the cost of each way by its kind, its climb, whether
  *  it's preferred or avoided, whether this lap has ridden it already, and the turn onto it. → [{ e, dir }] */
-function route(a, b, used, prefer = [], avoid = [], arriveHeading = null) {
+function route(a, b, used, prefer = [], avoid = [], arriveHeading = null, kindCost = {}) {
   const D = new Map(), prev = new Map(), Q = [];
   const push = (key, d, from, step) => { if (d < (D.get(key) ?? Infinity)) { D.set(key, d); prev.set(key, { from, step }); Q.push([d, key]); } };
   const stepCost = (e, dir) => {
-    let c = lenOf(e) * (KIND[e.kind] ?? 1.2);
+    let c = lenOf(e) * (KIND[e.kind] ?? 1.2) * (kindCost[e.kind] ?? 1);   // (a route's own kind costs: NYC's loops keep to the drives)
     const up = Math.max(0, dir > 0 ? e.ele[e.n] - e.ele[0] : e.ele[0] - e.ele[e.n]); c += up * 4;
     if (prefer.includes(e.name)) c *= 0.75;
     if (avoid.includes(e.name)) c *= 8;
@@ -553,7 +622,7 @@ for (const R of ROUTES) {
   for (let k = 0; k + 1 < ids.length; k++) {
     if (ids[k] === ids[k + 1]) continue;
     const last = steps[steps.length - 1];
-    const leg = route(ids[k], ids[k + 1], used, (typeof R.way[k + 1] === 'object' && R.way[k + 1].prefer) || R.prefer || [], (typeof R.way[k + 1] === 'object' && R.way[k + 1].avoid) || R.avoid || [], last ? heading(last.e, last.dir, true) : null);
+    const leg = route(ids[k], ids[k + 1], used, (typeof R.way[k + 1] === 'object' && R.way[k + 1].prefer) || R.prefer || [], (typeof R.way[k + 1] === 'object' && R.way[k + 1].avoid) || R.avoid || [], last ? heading(last.e, last.dir, true) : null, R.kindCost || {});
     if (args.includes('--legs')) console.log(`  leg ${ids[k]}→${ids[k + 1]}: ${leg.map((x) => `${x.e.name}(${x.e.id}${x.dir > 0 ? '+' : '-'})`).join(' ')}`);
     for (const s of leg) { steps.push(s); used.add(s.e.id); }
   }
