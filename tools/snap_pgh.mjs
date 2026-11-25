@@ -25,6 +25,8 @@ const view = opt('--view', null);   // "<back>,<up>": an overview camera this fa
 const evalJs = opt('--eval', null);   // run in the page after the frame (the world as `w`, THREE as `T`): its result is printed
 const preJs = opt('--pre', null);   // run in the page before the frame is drawn (the world as `w`)
 const quality = opt('--quality', 'balanced');
+const frozen = flag('--frozen');   // [blocks] seeded Math.random + a frozen clock (the refactor guard: tools/toolbox_guard.mjs)
+const jsonOut = opt('--json', null);   // [blocks] write the shots' stats here (the guard reads it)
 const ua = opt('--ua', null);   // a user agent (e.g. an iPhone's: the phones' memory caps)
 const time = opt('--time', 'midday'), out = opt('--out', 'tools/snapshots'), graph = opt('--graph', 'routes/cities/pgh.json');
 const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/chromium'].find(existsSync));
@@ -40,6 +42,13 @@ const base = `http://127.0.0.1:${server.address().port}`;
 const { chromium } = await import('playwright-core');
 const browser = await chromium.launch({ executablePath: chrome, args: software ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : ['--ignore-gpu-blocklist', '--enable-gpu'] });
 const page = await browser.newPage({ viewport: { width, height }, ...(ua ? { userAgent: ua } : {}) });
+if (frozen) await page.addInitScript(() => {
+  let s = 0x9e3779b9; Math.random = () => { s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const T0 = 1767268800000; let tick = 0; window.__tick = (ms) => { tick += ms; };
+  // the clock creeps 1 ms per read so time-sliced builds still finish; the same reads give the same times every run
+  performance.now = () => 1000 + (tick += 0.001); Date.now = () => T0 + Math.floor(tick);
+});
+const rows = [];
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -83,7 +92,9 @@ for (const spec of args) {
   if (evalJs) console.log('  eval:', JSON.stringify(await page.evaluate(async (code) => { const w = window.bfWorld; const T = await import('/vendor/three.module.min.js'); return eval(code); }, evalJs)));
   const file = resolve(ROOT, out, `pgh-${name}${view || cam ? '-view' : ''}.png`);
   await page.screenshot({ path: file });
+  rows.push({ shot: spec, file: file.slice(ROOT.length), calls: stats.calls, triangles: stats.triangles, errors: [...errors] });
   console.log(`${name}: bridges ${stats.bridges}, ${stats.calls} draw calls, ${(stats.triangles / 1e6).toFixed(2)} M triangles, ${stats.tiles} tiles · next ${stats.next} · ${((Date.now() - t0) / 1000).toFixed(1)} s → ${file.slice(ROOT.length)}${errors.length ? `\n  errors: ${errors.slice(0, 3).join(' | ')}` : ''}`);
 }
+if (jsonOut) { const { writeFile } = await import('node:fs/promises'); await writeFile(resolve(ROOT, jsonOut), JSON.stringify({ rows }, null, 1)); }
 await browser.close();
 server.close();

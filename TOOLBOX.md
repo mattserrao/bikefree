@@ -31,6 +31,25 @@ The six routes made before the toolbox keep their own look for now. The linter l
 
 ---
 
+## The common rules (building blocks, 24 Nov 2026)
+
+Every map, route scenes and free-ride graph maps alike, draws through the same blocks. When the two worlds disagreed,
+CNY's and SKAN's rules won and became the defaults; the other maps pin what they had, so they look the same.
+
+| Block | Module | How a map uses it |
+| --- | --- | --- |
+| Map profile | `toolbox/map-profile.js` | A graph map's `"profile"`: `"upstate"` (the default: golden light baked round the rider, worn roads, upstate ground, cyclists and walkers, country dressing, early fall) or `"city"` (PGH), or `{ "preset", …overrides }` (SKAN pins `hideInWater`, `classifyHomes`, `buildingStyles`). No rule is keyed by a map id. |
+| Effects | `toolbox/effects/index.js` | One registry for both worlds: a graph map's `"effects"`, a scene's `"effects"`. `NEEDS` lists the world methods each effect calls; one a world can't host is skipped with a warning. |
+| Building engine | `toolbox/structures/building-engine.js` | The front door for every building: `GENERATORS` (house engine, building kit, farm, city facades, footprints, settlement, named models), `MAP_KINDS` / `kindOfCode` (graph footprint codes), `buildBuilding()` (draws a planned building through its generator). |
+| Planting | `toolbox/vegetation/planting.js` | The one record every planner hands the tree engine (`treeRecord`, `recordsFromMatrices`, `plantTile`); `PLANNERS` lists rural, forest-edge, scatter and old-growth. |
+| Shared GLSL | `toolbox/materials/glsl-noise.js` | `NOISE_GLSL` (h21, vn, fbm) for every shader that needs value noise. |
+
+`npm run guard` now covers the graph maps too (`GRAPH_SHOTS`: PGH, CNY, SKAN through `tools/snap_pgh.mjs --frozen`). Their tiles
+stream in async order, so they are compared within `GRAPH_TOLERANCE` (pixels off by > 32 levels ≤ 1 %, draw calls ±8 %,
+triangles ±5 %); route scenes stay byte for byte.
+
+---
+
 ## Start a route
 
 ```sh

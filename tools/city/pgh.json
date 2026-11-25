@@ -1,4 +1,5 @@
 {
+ "profile": "city",
  "id": "pgh",
  "note": "PGH free-ride graph (tools/build_pgh.py). Corridor: corridorM around the existing Pittsburgh areas' lines. Trunk boulevards (connectors) are kept only as pieces of at most connectorM between streets: crossing them, not riding along them. Motorways never.",
  "corridorM": 900,

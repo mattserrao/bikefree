@@ -57,6 +57,7 @@ export const SCENE_FIELDS = {
   sites: { type: 'array', keys: ['name', 'lat', 'lon', 'widthM', 'lengthM', 'angle', 'atRoad'], doc: 'flat built pads (lodges, car parks, visitor centres): cleared of trees' },
 
   // look
+  effects: { type: 'object', tool: T + 'effects/index.js', keys: ['water', 'shoreline', 'village', 'frontYards', 'sky', 'atmosphere'], doc: '[blocks] the shared graphics effects, as the free-ride maps use them: a key present turns one on, its object holds options; effects the route world can\'t host (needs) are skipped' },
   palette: { type: 'object', required: true, tool: T + 'materials/surfaces.js', keys: ['grass', 'meadow', 'rock', 'cliff', 'water', 'shallowWater', 'sand', 'forest', 'forestFloor', 'canopy', 'snow', 'ice', 'scree', 'cutRock', 'burn', 'fireweed', 'shrub', 'bluff', 'argillite', 'farTint', 'farTintAmount', 'hay', 'farmland', 'village'], doc: '6–10 muted colours (hay, farmland, village: mapped land cover)' },
   look: { type: 'string', tool: T + 'atmosphere/look.js', doc: 'cartoon look: "gentle" (the standard) | "bold"' },
   timeOfDay: { type: 'string', doc: 'default time: midday | morning | afternoon | golden | night' },
@@ -143,4 +144,23 @@ export function normalizeScene(scene) {
 export function lifeKit(scene, landscape) {
   if (!scene.life) return null;
   return scene.life.kit || (landscape.mountain ? 'wildlife' : landscape.real ? 'coast' : null);
+}
+
+// [blocks] The free-ride road-graph maps' JSON ("bikefree-graph-1": routes/cities/<id>.json, written by
+// tools/build_pgh.py from tools/city/<id>.json) shares the toolbox's rules: its "profile" (toolbox/map-profile.js:
+// CNY's and SKAN's rules are the defaults) and its "effects" (the same registry as a scene's "effects").
+export const GRAPH_FIELDS = {
+  profile: { type: 'any', tool: T + 'map-profile.js', doc: 'the map\'s rules: a preset ("upstate" — the default — or "city") or { preset, …overrides }' },
+  effects: { type: 'object', tool: T + 'effects/index.js', keys: SCENE_FIELDS.effects.keys, doc: 'the shared graphics effects' },
+};
+
+/** Problems with a graph map's toolbox fields (empty: fine). */
+export function lintGraphMap(json, { presets, effects }) {
+  const out = [];
+  const p = json.profile;
+  const preset = typeof p === 'string' ? p : p?.preset;
+  if (p != null && typeof p !== 'string' && typeof p !== 'object') out.push('profile: must be a preset name or an object');
+  if (preset && !presets[preset]) out.push(`profile: unknown preset "${preset}"`);
+  for (const k of Object.keys(json.effects || {})) if (!effects[k]) out.push(`effects: unknown effect "${k}"`);
+  return out;
 }

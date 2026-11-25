@@ -24,7 +24,7 @@ import { planBuildingKitJob, makeStreetIndex, dress } from './toolbox/structures
 import { assemble, Writer } from './toolbox/structures/buildings/assemble.js';
 import { withSurfaceDetail } from './toolbox/materials/surface-detail.js';
 import { grassCard, grassMaterial, CARD } from './toolbox/landscape/grass-cards.js';
-import { buildHouse } from './toolbox/structures/houses/house-engine.js';
+import { buildBuilding, MAP_KINDS, FARM_CODES } from './toolbox/structures/building-engine.js';   // [blocks] one front door
 import { makeFacadeMaterial } from './toolbox/structures/buildings/facade-material.js';
 import { villageFurniture } from './toolbox/city/village-street.js';
 import { planFrontYard, drawFrontYard } from './toolbox/city/front-yards.js';
@@ -32,6 +32,7 @@ import { FURNITURE, makeFacadeDresser } from './toolbox/city/street-kit.js';
 import { farmBuilding } from './toolbox/city/cny-farms.js';
 import { GraphLife } from './toolbox/city/graph-life.js';
 import { TreeEngine } from './toolbox/vegetation/tree-engine.js';
+import { plantTile } from './toolbox/vegetation/planting.js';   // [blocks]
 import { planHomestead, drawHomestead, driveStrips, nearDrive } from './toolbox/city/homesteads.js';
 import { skanCrop, cropMaterial, cropCardsJob, bale, verge, bay, farmStand, hayWagon } from './toolbox/landscape/farm-kit.js';
 import { makeUpstateTrees, fallVariant } from './toolbox/vegetation/upstate-trees.js';
@@ -192,12 +193,13 @@ export class GraphCity {
     host.buildingKit = this.kit;
     this._materials();
     // the rural maps (CNY, SKAN; user, 22 Nov): no cars — other cyclists and people walking instead
-    this.rural = !!world.rural;
-    if (this.rural) this.life = new GraphLife(world, host.group, { quality: world.qualityKey, uTime: this.treeTime });
+    this.rural = !!world.rural;   // (the profile's country dressing: toolbox/map-profile.js)
+    this.profile = world.profile;
+    if (this.profile.life === 'cyclists') this.life = new GraphLife(world, host.group, { quality: world.qualityKey, uTime: this.treeTime });
     // the tree engine (one for the game: toolbox/vegetation/tree-engine.js) with the northeastern hardwood kit — every
     // road-graph map (PGH's western Pennsylvania has the same trees); the rural maps in early fall, PGH in summer
     this.treeKit = makeUpstateTrees({ oldGrowth: !!world.json?.oldGrowth });
-    this.fall = this.rural;
+    this.fall = this.profile.season === 'early-fall';
     this.forest = new TreeEngine({ renderer: world.renderer, parent: host.group, quality: world.qualityKey, uTime: this.treeTime, lights: { hemi: world.hemi, sun: world.sun }, kit: this.treeKit });
   }
 
@@ -251,8 +253,8 @@ export class GraphCity {
       cx /= ring.length; cz /= ring.length;
       const b = { k: this.buildings.length, ring, h: h[q] / 10, mh: mh[q] / 10, kind: B.kind[q], name: B.names[q] || '', bb: [x0, x1, z0, z1], cx, cz, sector: key };
       if (this.covered(b) || this._underDeck(b)) b.hidden = true;
-      if (this.world.json?.id === 'skan' && this.world.ground && this.inWater(cx, cz)) b.hidden = true;   // (a lakefront footprint past the drawn shore)
-      if (b.kind === 21 || b.kind === 22 || b.kind === 24) b.ownModel = 'farm';   // CNY's barns: js/world/toolbox/city/cny-farms.js (_farms), not boxes
+      if (this.profile.hideInWater && this.world.ground && this.inWater(cx, cz)) b.hidden = true;   // (a lakefront footprint past the drawn shore)
+      if (FARM_CODES.has(b.kind)) b.ownModel = 'farm';   // CNY's barns: js/world/toolbox/city/cny-farms.js (_farms), not boxes
       this.buildings.push(b); mine.push(b);
       const tk = `${Math.floor(cx / TILE)},${Math.floor(cz / TILE)}`;
       if (!host.buildingChunks.has(tk)) host.buildingChunks.set(tk, []); host.buildingChunks.get(tk).push(b);
@@ -284,7 +286,7 @@ export class GraphCity {
     }
     // SKAN's houses (all kind 1 in its data): one with a barn within 120 m is a farmhouse, one with a dozen buildings
     // within 90 m a village house — the CNY presets then dress them as CNY's are
-    if (this.world.json?.id === 'skan') {
+    if (this.profile.classifyHomes === 'by-neighbours') {
       // the village cores' commercial buildings (tools/skan_heroes.py: their OSM outlines along Genesee, Jordan and
       // Fennell Streets, Marcellus's Main and North Streets): storefront rows; the historic houses the house engine
       // builds as their real type
@@ -304,7 +306,7 @@ export class GraphCity {
       }
     }
     // the homes' plan: rowhouses and houses (the kit's), the rest as neighbours
-    const kinds = { 0: 'rowhouse', 1: 'house', 13: 'barn', 14: 'shed', 20: 'farmhouse-ny', 23: 'village-house' }, homes = [], neighbours = [];   // (13, 14: a rural map's barns and sheds, SKAN; 20, 23: CNY's farmhouses and village houses)
+    const kinds = MAP_KINDS, homes = [], neighbours = [];   // [blocks] the building engine's codes   // (13, 14: a rural map's barns and sheds, SKAN; 20, 23: CNY's farmhouses and village houses)
     for (const b of mine) {
       if (due()) yield;
       if (b.kind === 12 || b.hidden) continue;
@@ -385,7 +387,7 @@ export class GraphCity {
           if (due()) yield;
           if (R.inCanal) continue;
           const LR = R.floorAbove ? dryLand(L, R.floorAbove) : L;
-          const res = R.house ? buildHouse(R, R.house, w, d, closeOf(R), LR) : assemble(R, w, d, LR);
+          const res = buildBuilding(R, w, d, R.house ? closeOf(R) : null, LR);   // [blocks] (closeOf only for the house engine's)
           if (R.dressing?.length) for (const it of R.dressing) dress(d, it, R, L, res);
         }
         if (w.n) { const m = gpuOnly(new THREE.Mesh(w.geometry(), material)); m.name = `Homes ${key}`; m.castShadow = m.receiveShadow = true; group.add(m); }
@@ -410,7 +412,7 @@ export class GraphCity {
           if (due()) yield;
           if (!closeCells.has(`${best.tile}|${Math.floor(R.x / 120)},${Math.floor(R.z / 120)}`)) { closeJob = null; return true; }   // (its tile released meanwhile)
           W.n = W.ni = 0; D.n = D.ni = 0;
-          buildHouse(R, R.house, W, D, C, R.floorAbove ? dryLand(L, R.floorAbove) : L);
+          buildBuilding(R, W, D, C, R.floorAbove ? dryLand(L, R.floorAbove) : L);
         }
         if (C.n) { const cm = gpuOnly(new THREE.Mesh(C.geometry(), material)); cm.userData.bake = false; cm.name = `House close detail ${best.tile}`; cm.receiveShadow = true; cm.visible = best.box.distanceToPoint(cam) < HOUSE_CLOSE_M; group.add(cm); best.mesh = cm; }
         else best.mesh = new THREE.Object3D();   // (nothing to draw: marked done)
@@ -923,7 +925,7 @@ export class GraphCity {
       }
     }
     yield;
-    this.forest.setTile(t.key, out);
+    plantTile(this.forest, t.key, out);   // [blocks] the planting API
     t.trees = out;
     // the trees' stand-ins for the baked shadows (graph-world: golden hour baked): a crown and a trunk each, never drawn
     if (this.world.baked) { const px = {}; yield; yield* treeProxiesJob(out, kit, px); if (px.mesh) this._add(t, px.mesh); }

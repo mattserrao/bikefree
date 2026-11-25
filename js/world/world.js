@@ -1,6 +1,7 @@
 // The 3D ride view: real terrain + aerial imagery, the road, a pedalling rider, sky and cameras.
 import { cutRouteRibbon, junctionPlan } from './toolbox/city/junction-mesh.js';   // [junctions] (the road's overlay: city.js)
 import * as THREE from '../../vendor/three.module.min.js';
+import { installEffects } from './toolbox/effects/index.js';   // [blocks]
 import { makeProjection, makeRouteIndex } from './geo.js';
 import { Terrain } from './terrain.js';
 import { Weather } from './toolbox/atmosphere/weather.js';
@@ -189,6 +190,9 @@ export class World {
     // every stylized scene goes through it; only hero scenes (scene.post) get the bloom, grade and vignette
     if (this.stylized) this.post = new PostFX(this.renderer, { samples: SCENERY_QUALITY[this.qualityKey].samples });
     this.heroPost = !!(this.stylized && route.scene.post);
+    // [blocks] the shared graphics effects (toolbox/effects, the same registry the free-ride maps use): a scene's
+    // "effects" field; none when absent, so a scene without it draws exactly as before
+    this.effects = this.stylized && route.scene.effects ? installEffects(this, route.scene.effects) : null;
     // vista kit: faint outlines on the far ridges (with or without the cartoon look's near outlines)
     this.vista = this.stylized ? vistaConfig(route.scene) : null;
     const ridge = this.vista?.ridgeInk || null;
@@ -732,6 +736,7 @@ export class World {
     this._updateCamera(riderPos, flat, fwd, dt, src.speed || 0);
     this.terrain.uniforms.uTime.value = now / 1000;
     this.weather?.tick(dt);
+    this.effects?.tick(now / 1000, dt);   // [blocks]
     this._underground(riderPos, dt);   // [subway]
     this.terrain.update(this.camera.position.x, this.camera.position.z, this._preload ? PRELOAD_MS : this.terrain.quality?.buildMs);
     if (this._preload) this.terrain.city?._stream?.(this.camera.position.x, this.camera.position.z, PRELOAD_MS);   // [phase 8] the start's city, nearest first
@@ -975,6 +980,7 @@ export class World {
     this.stop();
     this._ro.disconnect();
     this.weather?.dispose();
+    this.effects?.dispose();   // [blocks]
     this.baked?.dispose();   // [baked-light]
     this._bakeEl?.remove();   // [w2-bake]
     this.post?.dispose();

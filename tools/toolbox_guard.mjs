@@ -27,6 +27,16 @@ export const GUARD_SHOTS = {
   alpedhuez: ['alpedhuez@24480', 'alpedhuez@98300', 'alpedhuez@120800', 'alpedhuez@126700'],
 };
 
+// [blocks] The free-ride road-graph maps (graph world: tools/snap_pgh.mjs with a seeded, frozen clock). Their tiles
+// stream in async load order, so two runs of the same code differ in a few pixels (~0.2 %): these shots are compared
+// with a tolerance (GRAPH_TOLERANCE), not byte for byte.
+export const GRAPH_SHOTS = {
+  pgh: ['north-shore@40.4469,-80.0061', 'oakland@40.442,-79.9555'],
+  cny: ['village@43.0392,-76.3041', 'farms@43.0465,-76.256', 'south@43.0173,-76.3347'],
+  skan: ['village@42.9468,-76.4291', 'country@42.9825,-76.34'],
+};
+export const GRAPH_TOLERANCE = { pixels: 0.01, calls: 0.08, triangles: 0.05 };   // share of pixels off by > 32 levels; relative change
+
 // Objects seeded from Math.random in async load order (they differ run to run on the same code): reported,
 // not failed.
 export const NOISY = ['Point State Park fountain', 'Buses', 'Cars', 'People', 'Cyclists'];
@@ -40,7 +50,8 @@ if (cmd === 'record') {
   const [out, ...routes] = rest;
   if (!out) usage();
   const all = { ...GUARD_SHOTS, ...LIVE_SHOTS };
-  const shots = (routes.length ? routes : Object.keys(all)).flatMap((r) => all[r] || [r]);
+  const graphs = (routes.length ? routes : Object.keys(GRAPH_SHOTS)).filter((r) => GRAPH_SHOTS[r]);
+  const shots = (routes.length ? routes : Object.keys(all)).filter((r) => !GRAPH_SHOTS[r]).flatMap((r) => all[r] || [r]);
   // one browser page per route, so a route's result never depends on which routes ran before it
   let failed = false;
   const rows = [];
@@ -52,6 +63,12 @@ if (cmd === 'record') {
     if (r.status) failed = true;
     if (existsSync(join(dir, 'snapshots.json'))) rows.push(...JSON.parse(readFileSync(join(dir, 'snapshots.json'))).rows.map((x) => ({ ...x, route })));
   }
+  for (const g of graphs) {
+    const dir = join(out, g);
+    const r = spawnSync('node', [join(ROOT, 'tools/snap_pgh.mjs'), '--frozen', '--software', '--size', '640x360', '--graph', `routes/cities/${g}.json`, '--out', dir, '--json', join(dir, 'snapshots.json'), ...GRAPH_SHOTS[g]], { cwd: ROOT, stdio: 'inherit' });
+    if (r.status) failed = true;
+    if (existsSync(join(dir, 'snapshots.json'))) rows.push(...JSON.parse(readFileSync(join(dir, 'snapshots.json'))).rows.map((x) => ({ ...x, shot: `${g}:${x.shot}`, route: g })));
+  }
   console.log(`\n${rows.length} shots recorded in ${out}${failed ? ' (with errors)' : ''}`);
   process.exitCode = failed ? 1 : 0;
 } else if (cmd === 'compare') {
@@ -59,9 +76,9 @@ if (cmd === 'record') {
   if (!a || !b) usage();
   const load = (d) => {
     const m = new Map();
-    for (const route of [...Object.keys(GUARD_SHOTS), ...Object.keys(LIVE_SHOTS)]) {
+    for (const route of [...Object.keys(GUARD_SHOTS), ...Object.keys(LIVE_SHOTS), ...Object.keys(GRAPH_SHOTS)]) {
       const f = join(d, route, 'snapshots.json');
-      if (existsSync(f)) for (const r of JSON.parse(readFileSync(f)).rows) m.set(r.shot, { ...r, dir: join(d, route) });
+      if (existsSync(f)) for (const r of JSON.parse(readFileSync(f)).rows) m.set(GRAPH_SHOTS[route] ? `${route}:${r.shot}` : r.shot, { ...r, dir: join(d, route), graph: !!GRAPH_SHOTS[route] });
     }
     return m;
   };
@@ -70,6 +87,14 @@ if (cmd === 'record') {
   for (const [shot, ra] of A) {
     const rb = B.get(shot);
     if (!rb) { console.log(`missing  ${shot}`); diffs++; continue; }
+    if (ra.graph) {   // [blocks] a graph map's shot: within tolerance
+      const px = spawnSync('python3', [join(ROOT, 'tools/png_diff.py'), resolve(ROOT, ra.file), resolve(ROOT, rb.file)], { encoding: 'utf8' });
+      const share = +px.stdout.trim(), rel = (x, y) => Math.abs(y - x) / Math.max(1, x), T = GRAPH_TOLERANCE;
+      const ok = share <= T.pixels && rel(ra.calls, rb.calls) <= T.calls && rel(ra.triangles, rb.triangles) <= T.triangles && !rb.errors?.filter((e) => !/404/.test(e)).length;
+      if (!ok) diffs++;
+      console.log(`${ok ? 'within  ' : 'CHANGED '} ${shot.padEnd(36)} pixels ${(share * 100).toFixed(2)} %  calls ${ra.calls}→${rb.calls}  tris ${ra.triangles}→${rb.triangles}`);
+      continue;
+    }
     if (!ra.fingerprint) {   // live shot: both must render without errors
       const ok = !ra.errors?.length && !rb.errors?.length;
       if (!ok) diffs++;

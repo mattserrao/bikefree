@@ -1,4 +1,5 @@
 {
+ "profile": {"preset":"upstate","hideInWater":true,"classifyHomes":"by-neighbours","buildingStyles":[{"preset":"pittsburgh-rowhouse","kinds":["rowhouse"]},{"preset":"pittsburgh-frame","kinds":["house","barn","shed"]}]},
  "id": "skan",
  "name": "SKAN",
  "cityName": "Skaneateles, NY",
