@@ -17,7 +17,8 @@
 import * as THREE from '../../../../../vendor/three.module.min.js';
 import { planBuildingsJob, ROAD_HALF } from './recipe.js';
 import { drain, due } from '../../core/jobs.js';   // [F30]
-import { assemble, Writer, NullWriter } from './assemble.js';
+import { Writer, NullWriter } from './assemble.js';
+import { buildBuilding } from '../building-engine.js';   // [blocks] one front door for every building
 import { planDressing } from './dressing.js';
 import { makeFacadeMaterial } from './facade-material.js';
 import { S } from './presets.js';

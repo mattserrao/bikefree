@@ -48,6 +48,8 @@ test('the building engine: one front door, every graph code has a kind', async (
   for (const f of ['../js/world/graph-city.js', '../js/world/toolbox/structures/buildings/kit.js']) {
     const src = readFileSync(new URL(f, import.meta.url), 'utf8');
     assert.doesNotMatch(src, /[^.]\bassemble\(R|buildHouse\(R/, f);
+    // (and the front door is imported where it's called)
+    if (/buildBuilding\(/.test(src)) assert.match(src, /import \{[^}]*\bbuildBuilding\b[^}]*\} from '[^']*building-engine\.js'/, f);
   }
 });
 
