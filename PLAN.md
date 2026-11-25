@@ -1905,6 +1905,32 @@ Goal: a lighter main menu, and fix the PGH / CNY / SKAN map cards that looked as
 - [x] **Bare woods on desktop** (user, 24 Nov, on a Mac: "large portions of the trees of the forest don't load … right from the start … not present on mobile"): three.js caps an instanced geometry's draw at the instance count its attributes had the first time it was drawn (`_maxInstanceCount`, set once); the tree engine's card buffers grow as tiles stream in, so every tree past the first build's count went undrawn. Worst on a laptop or desktop, whose 2.3 km of tiles keep streaming in after the start. Fixed in `tree-engine.js _rebuildImpostors` (the cap cleared when the buffers grow). Found by rendering the cards alone: a fresh geometry drew them all.
 - [x] **Stutter** (same report): the area's 3D pieces' materials (bark, ferns and herbs, root flares) are now put in the scene on empty meshes at the start, so the world's shader warmer compiles them behind the loading screen instead of mid-ride; the ground's root-top loop only runs within 110 m of the camera. Still to confirm on the Mac.
 
+### Building blocks — one set of rules for every map — test branch `building-blocks-test` (24 Nov 2026)
+
+*User:* "Perform a code review to update all maps to the same 'rules'. Modernize all maps to use the same common building
+blocks. When conflicts arise, CNY and SKAN should win and be defaults. These maps should not visually change due to this
+process. The Pittsburgh map contains a lot of buildings. It may be a building engine needs to be created so the city
+retains its realism level." Chose: all active maps; CNY/SKAN defaults with the other maps pinned, small diffs allowed;
+one building-engine front door; shared blocks (two renderers stay). Review: bikefree Project doc
+`claude/building-blocks-review.md`.
+
+- [x] **Map profiles** (`toolbox/map-profile.js`): the graph maps' rules as data — light, roads, ground, life, dressing,
+      season, clouds, verge, building styles, lakefront hiding, home classes. The defaults are CNY's and SKAN's; PGH pins
+      `"city"`; SKAN pins what it drew (`hideInWater`, `classifyHomes`, the Pittsburgh styles). No rule keyed by a map id.
+- [x] **Effects:** one registry for both worlds — a scene's `"effects"` field installs the same effects as a graph map's;
+      `NEEDS` lists the world methods each calls (a world without them skips it with a warning).
+- [x] **Building engine** (`toolbox/structures/building-engine.js`): the generators (house engine, building kit, farm,
+      city facades, footprints, settlement, named models), the graph maps' footprint codes, `buildBuilding()` — GraphCity
+      and both building kits draw through it.
+- [x] **Planting API** (`toolbox/vegetation/planting.js`): one tree record for every planner (`treeRecord`,
+      `recordsFromMatrices`, `plantTile`); the route scenes and the graph maps plant through it.
+- [x] **Shared GLSL** (`toolbox/materials/glsl-noise.js`): the sky domes' noise from one chunk.
+- [x] **Guard:** `npm run guard` covers PGH, CNY and SKAN (`snap_pgh.mjs --frozen`, compared within tolerance: the graph
+      tiles stream in async order); `SNAP_WAIT` for slow machines.
+- [x] **Checks:** `test/blocks.test.mjs`; schema lint for the graph maps; `npm test`.
+- [ ] Next: move SKAN onto the CNY building styles (it still draws its homes with the Pittsburgh presets — pinned so it
+      doesn't change); merge the two sky domes; Pittsburgh's own house plans in the house engine (realism up a step).
+
 ## Running it
 
 Web Bluetooth needs Chrome and either `localhost` or HTTPS.

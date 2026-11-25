@@ -96,13 +96,13 @@ for (const shot of shots) {
   const q = new URLSearchParams({ park: shot.park, clean: '1', quality, ...(shot.pos ? { pos: shot.pos } : {}), ...(pathKeys ? { path: pathKeys } : {}), ...(areaId ? { area: areaId } : {}), ...(shot.time ? { time: shot.time } : {}), ...(shot.season ? { season: shot.season } : {}), ...(shot.weather ? { weather: shot.weather } : {}), ...(shot.look === 'standard' ? { standard: '1' } : shot.look ? { look: shot.look === 'current' ? 'none' : shot.look } : {}), ...(fingerprint ? { horizon: '0' } : {}), ...(arches ? { arches } : {}) });
   await page.goto(`${base}/tools/world-preview.html?${q}`);
   if (breakdown) await page.evaluate(() => { window.__breakdown = true; });
-  if (areasNow) { await page.waitForFunction(() => window.bfWorld, null, { timeout: 180000, polling: 200 }); await page.evaluate(() => { window.bfWorld.areaBudget = { urgent: Infinity, soon: Infinity, ahead: Infinity }; }); }
+  if (areasNow) { await page.waitForFunction(() => window.bfWorld, null, { timeout: +(process.env.SNAP_WAIT || 180000), polling: 200 }); await page.evaluate(() => { window.bfWorld.areaBudget = { urgent: Infinity, soon: Infinity, ahead: Infinity }; }); }
   await page.evaluate(([p, f]) => { window.__png = p; window.__fingerprint = f; }, [png, fingerprint]);   // [toolbox]
-  await page.waitForFunction(() => window.bfWorld?.terrain && (window.bfWorld.terrain.kit || !window.bfWorld.stylized) && window.bfWorld._camInit && window.bfWorld.rider?.triangles, null, { timeout: 180000, polling: 500 });
+  await page.waitForFunction(() => window.bfWorld?.terrain && (window.bfWorld.terrain.kit || !window.bfWorld.stylized) && window.bfWorld._camInit && window.bfWorld.rider?.triangles, null, { timeout: +(process.env.SNAP_WAIT || 180000), polling: 500 });
   // a city of areas: wait until the areas the path reaches soon are built too (resident, hidden), as at a portal
-  await page.waitForFunction(() => { const w = window.bfWorld; return !w._multi || (w._resT != null && [...w.path.areasNear(w.p)].every((id) => w.areas.get(id)?.ready) && [...w.areas.values()].every((a) => a.ready)); }, null, { timeout: 180000, polling: 500 });
+  await page.waitForFunction(() => { const w = window.bfWorld; return !w._multi || (w._resT != null && [...w.path.areasNear(w.p)].every((id) => w.areas.get(id)?.ready) && [...w.areas.values()].every((a) => a.ready)); }, null, { timeout: +(process.env.SNAP_WAIT || 180000), polling: 500 });
   // streamed terrain (non-stylized and wireframe scenes): wait until the visible tiles are in
-  await page.waitForFunction(() => { const w = window.bfWorld; if (w.stylized) return true; const c = w.camera.position; w.terrain.update(c.x, c.z); return w.terrain.loadingCount === 0 && w.terrain.stats.ready > 4; }, null, { timeout: 180000, polling: 1000 });
+  await page.waitForFunction(() => { const w = window.bfWorld; if (w.stylized) return true; const c = w.camera.position; w.terrain.update(c.x, c.z); return w.terrain.loadingCount === 0 && w.terrain.stats.ready > 4; }, null, { timeout: +(process.env.SNAP_WAIT || 180000), polling: 1000 });
   if (waitFar) await page.waitForFunction(() => { const w = window.bfWorld; return !w.farTerrain || w._farOn; }, null, { timeout: 120000, polling: 1000 }).catch(() => console.warn(`${shot.spec}: no real far horizon after 2 min (offline?)`));
   // stop the loop, let every queued scenery tile build, then draw one frame and read it back
   const r = await page.evaluate(async (evalJs) => {
