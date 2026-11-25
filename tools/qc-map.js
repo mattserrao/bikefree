@@ -158,7 +158,9 @@ export function runMapQC(w, T, { radius = 420, heroes = null } = {}) {
     //  outside the probe, PGH's towers, hold their roofs)
     let under = held;
     if (!under) for (const [dx, dz] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const k = (p.foot ?? p.r) * 0.5; rc.set(new T.Vector3(p.x + dx * k, p.y - 0.02, p.z + dz * k), down); rc.far = 0.6;
+      // (from just over the foot: a flush top — a tower's roof under its pinnacles — is caught; the piece's own
+      //  underside faces down and isn't hit from above)
+      const k = (p.foot ?? p.r) * 0.5; rc.set(new T.Vector3(p.x + dx * k, p.y + 0.05, p.z + dz * k), down); rc.far = 0.65;
       for (const o of meshes) { try { if (rc.intersectObject(o, false).length) { under = true; break; } } catch {} }
       if (under) break;
     }

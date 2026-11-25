@@ -5,8 +5,8 @@
 //
 //   roadHole       no road surface at the road's centre line, or one at the wrong height (a gap between chunks)
 //   edgeLip        anything 12 cm over the road just beside its edge
-//   edgeDitch      a step down at the road's edge (30 cm within 0.4 m, 80 cm within 1.2 m) — the shallow ditch the
-//                  world draws starts 4.8 m out, so this is a fault, not the ditch
+//   edgeDitch      a step down at the road's edge (60 cm within 0.4 m, 90 cm within 1.2 m) — past the world's own
+//                  gravel shoulder, which falls 0.3–0.5 m over its first 1.5 m
 //   treeOnRoad     a tree (or understory) standing on the road or its shoulder (within 1.5 m of the edge)
 //   waterOverRoad  a lake's water or the sea at or above the road beside it
 //   floating       a home's piece standing over the ground (its lowest point 0.4 m up at its middle)
@@ -24,10 +24,14 @@ export function runEndlessQC(w, T, { radius = 600 } = {}) {
   // the road: its centre every 10 m, its edges every 30 m
   for (let i = ia; i <= ib; i++) {
     const h = C.heading[i], rx = Math.cos(h), rz = -Math.sin(h), y = C.ele[i] + 0.06, s = i * STEP;
-    const hit = topAt(C.x[i], C.z[i], y);
-    if (!hit || Math.abs(hit.point.y - y) > 0.12) add('roadHole', s, hit ? `${(hit.point.y - y).toFixed(2)} m (${hit.object.name || 'mesh'})` : 'nothing');
+    // (a chunk not streamed yet, or dropped behind, is not a hole; nor a chunk's first row with the chunk before it not
+    //  built — the ray lands exactly on the mesh's open edge)
+    const built = w.roads?.get?.(Math.floor(i / 20)) && (i % 20 || w.roads.get(i / 20 - 1));
+    const hit = built ? topAt(C.x[i], C.z[i], y) : null;
+    if (built && (!hit || Math.abs(hit.point.y - y) > 0.12)) add('roadHole', s, hit ? `${(hit.point.y - y).toFixed(2)} m (${hit.object.name || 'mesh'})` : 'nothing');
     if (i % 3) continue;
-    for (const side of [-1, 1]) for (const [d, lim] of [[0.4, 0.3], [1.2, 0.8]]) {
+    // (the world's gravel shoulder falls ~0.3–0.5 m over its first 1.5 m by design: a ditch is a drop past that)
+    for (const side of [-1, 1]) for (const [d, lim] of [[0.4, 0.6], [1.2, 0.9]]) {
       const x = C.x[i] + rx * (HALF + d) * side, z = C.z[i] + rz * (HALF + d) * side, q = topAt(x, z, y);
       if (!q || /^Road/.test(q.object.name)) continue;
       if (q.point.y > y + 0.12) { add('edgeLip', s, `+${(q.point.y - y).toFixed(2)} m (${q.object.name || 'mesh'})`); break; }

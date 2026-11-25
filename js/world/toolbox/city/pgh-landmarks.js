@@ -266,6 +266,7 @@ export function buildPghLandmarks(host, data) {
     melloninst(l) {
       const { F, c, g } = plan(l, 50, 40), H = 32, R = F.rect(-F.hl * .92, F.hl * .92, -F.hw * .92, F.hw * .92);
       S.color('#d4ccb9'); block(S, R, g - 1, g + H);
+      S.color('#cfc7b4'); block(S, F.rect(-F.hl, F.hl, -F.hw, F.hw), g - 1, g + 3);   // (the podium the colonnade stands on — QC, 25 Nov: the columns hung 3 m up)
       for (const b of [-F.hw, F.hw]) colonnade(F, -F.hl * .95, F.hl * .95, b, 18, g + 3, 13, .7, '#ddd5c3');
       for (const a of [-F.hl, F.hl]) colonnade(makeFrame(F.at(a, 0), F.v), -F.hw * .9, F.hw * .9, 0, 13, g + 3, 13, .7, '#ddd5c3');
       S.color('#d9d1be'); block(S, F.rect(-F.hl, F.hl, -F.hw, F.hw), g + 16, g + 18.5);

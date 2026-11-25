@@ -69,7 +69,8 @@ export function report(res, base = null) {
   const names = Object.keys(res), lines = [];
   // (the graph maps' checks, else whatever the map's checks counted — the endless map's own)
   const seen = new Set(names.flatMap((n) => Object.keys(res[n]?.counts || {})));
-  const KEYS = KEYS_ALL.some((k) => seen.has(k)) || !seen.size ? KEYS_ALL : [...seen];
+  const AUX = ['edgeSamples', 'skewCorner'];   // (counted alongside, not checks)
+  const KEYS = [...seen].every((k) => KEYS_ALL.includes(k) || AUX.includes(k)) ? KEYS_ALL : [...seen].filter((k) => !AUX.includes(k));
   lines.push(`${'site'.padEnd(14)} ${KEYS.map((k) => k.slice(0, 9).padStart(9)).join(' ')}`);
   const cell = (v, b) => String(b !== undefined && b !== v ? `${b}→${v}` : v).padStart(9);
   for (const n of names) { const c = res[n]?.counts || {}; lines.push(`${n.slice(0, 14).padEnd(14)} ${KEYS.map((k) => cell(c[k] ?? '-', base?.[n]?.counts?.[k])).join(' ')}`); }

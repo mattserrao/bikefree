@@ -463,6 +463,7 @@ export function cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
       S.color('#5b5f5c');
       const top = oct(R * .3), eave = oct(R * 1.08);
       for (let k = 0; k < 8; k++) { const a = eave[k], b = eave[(k + 1) % 8], p = top[k], q = top[(k + 1) % 8]; S.quad(V(a.x, yE - .25, a.z), V(b.x, yE - .25, b.z), V(q.x, yE + 2.4, q.z), V(p.x, yE + 2.4, p.z)); }
+      cap(S, orient(top), yE + 2.4);   // (the roof's flat top under the cupola — QC, 25 Nov: a ring of open roof showed round it)
       const cup = oct(R * .26);
       S.color(WALL); prism(S, cup, yE + 2.4, yE + 4.2);
       S.color('#2c3238'); prism(S, scaleRing(cup, 1.01, c), yE + 2.8, yE + 3.8);
