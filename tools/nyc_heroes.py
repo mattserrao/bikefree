@@ -124,6 +124,11 @@ for l in out:
         if 25 < d < 160 and (e['id'] not in best or d < best[e['id']][0]): best[e['id']] = (d, la, lo)
     near2 = sorted(best.values())[:2]
     if near2: l['views'] = [[round(la, 7), round(lo, 7)] for d, la, lo in near2]; l['viewM'] = 3.5
+# view corridors the QC fixer added (tools/qc_fix.mjs viewBlocked, verified by a re-run): kept on a rebuild
+QC_VIEWS = {'Belvedere Castle': [[40.7802, -73.96936]]}   # (25 Nov sweep: 2 trees from the way north of it)
+for l in out:
+    for v in QC_VIEWS.get(l['label'], []):
+        if v not in l.get('views', []): l.setdefault('views', []).append(v); l.setdefault('viewM', 3.5)
 
 # views: ground kept clear of trees so a landmark is seen across the water (Belvedere over Turtle Pond); no model
 cfg = json.load(open(os.path.join(ROOT, 'tools/city/nyc.json')))

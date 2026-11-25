@@ -9,6 +9,7 @@
 // time midday|morning|afternoon|golden|night, season summer|fall, weather clear|marine|clouds|rain|smoke,
 // look gentle|bold|current (default: the scene's own look; current = no cartoon).
 // No @metres = the scene's preview spot.
+// --post <js>: run after the frame on the world (w) with THREE (T), its result printed as '  eval: <json>'.
 // Options: --out <dir> (default tools/snapshots), --quality low|balanced|high, --size 1280x720, --dpr 2 (a Retina screen),
 // --arches 22350:START:Avalanche Creek,47310:FINISH:Logan Pass (the start / finish arches),
 // --path e1+,e3+ (a route with a ride network: follow that path through its junctions; @metres along the path),
@@ -38,6 +39,7 @@ const software = flag('--software');
 const breakdown = flag('--breakdown');   // list draw calls by object
 const png = flag('--png');   // [toolbox] lossless PNG instead of JPEG (pixel-exact refactor checks)
 const fingerprint = flag('--fingerprint');   // [toolbox] hash of every mesh, matrix, attribute and material in the scene
+const postJs = opt('--post', null);   // run in the page after the frame (the world as `w`, THREE as `T`; may return a promise): printed as '  eval: <json>' (tools/qc.mjs: the GPU check)
 const evalJs = opt('--eval', null);   // JavaScript run on the stopped world (as `w`) before each frame, e.g. to set the subway trains' clock
 const waitFar = flag('--far');   // stylized scenes: wait (up to 2 min) for the real far horizon to stream in, so the ~1.5 km hand-off is drawn
 const areasNow = flag('--areas-now');   // a city of areas: build the other areas at once (world.areaBudget Infinity), not in frame slices — headless frames can be slow enough that a second area takes minutes
@@ -176,6 +178,7 @@ for (const shot of shots) {
   const file = join(out, `${shot.name}.${png ? 'png' : 'jpg'}`);
   await writeFile(resolve(ROOT, file), Buffer.from(r.url.split(',')[1], 'base64'));
   rows.push({ shot: shot.spec, file, calls: r.calls, triangles: r.triangles, seconds: Math.round((Date.now() - t0) / 1000), errors: [...errors], ...(r.areas ? { areas: r.areas } : {}), memory: r.memory, ...(r.bake ? { bake: r.bake } : {}), ...(r.fp ? { fingerprint: r.fp } : {}) });   // [baked-light] bake stats
+  if (postJs) console.log('  eval:', JSON.stringify(await page.evaluate(async (code) => { const w = window.bfWorld; const T = await import('/vendor/three.module.min.js'); return eval(code); }, postJs)));
   if (r.breakdown) console.log(r.breakdown.map(([k, n, t]) => `   ${String(n).padStart(4)}  ${String(Math.round(t / 1000)).padStart(5)} k  ${k}`).join('\n'));   // [w2-budget] calls, triangles
   console.log(`${errors.length ? 'ERR ' : 'ok  '} ${shot.spec.padEnd(34)} ${String(r.calls).padStart(5)} calls ${(r.triangles / 1e6).toFixed(2).padStart(6)} M tris${r.areas ? ` · areas ${r.areas}` : ''} · ${r.memory.geometries} geometries, ${r.memory.textures} textures, heap ${r.memory.heapMB} MB  → ${file}`);
   for (const e of errors) console.log(`       ${e.slice(0, 200)}`);

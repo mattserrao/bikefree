@@ -21,11 +21,19 @@
 //   gritEdges      the land cover's grain scatter on (blocky stipple at cover edges)
 //   benchOnWay     a bench overlapping a way, beside the bridle path or a drive, or facing away from its way
 //   viewBlocked    trees between a landmark and the nearest way it should be seen from
-export function runMapQC(w, T, { radius = 420, heroes = null } = {}) {
+import { bvhCaster } from './qc-bvh.js';
+import { defectId } from './qc-defects.js';
+
+export async function runMapQC(w, T, { radius = 420, heroes = null } = {}) {
   const cx = w.camera.position.x, cz = w.camera.position.z, near = (x, z, r = radius) => Math.hypot(x - cx, z - cz) < r;
   const ll = (x, z) => { const p = w.proj.toLatLon(x, z); return [+p.lat.toFixed(5), +p.lon.toFixed(5)]; };
-  const out = {}, ex = {};
-  const add = (k, x, z, note = '') => { out[k] = (out[k] || 0) + 1; (ex[k] ||= []).length < 6 && ex[k].push([...ll(x, z), note].filter((v) => v !== '')); };
+  const out = {}, ex = {}, defects = [];
+  // (every fault also goes in the defect list, with a stable id — the check and a 4 m cell — and its spot, for the
+  //  close-up shots and the fixers: tools/qc-defects.js)
+  const add = (k, x, z, note = '', y = null, more = null) => {
+    out[k] = (out[k] || 0) + 1; (ex[k] ||= []).length < 6 && ex[k].push([...ll(x, z), note].filter((v) => v !== ''));
+    if (defects.length < 400) defects.push({ id: defectId(k, x, z), check: k, at: ll(x, z), x: +x.toFixed(2), y: +(y ?? G(x, z)).toFixed(2), z: +z.toFixed(2), note, ...more });
+  };
   const zero = (...ks) => { for (const k of ks) out[k] ||= 0; };
   zero('strayWater', 'bankShard', 'bankCliff', 'dryBasin', 'bridgeDup', 'floating', 'waterOverWay', 'pathPaint', 'edgeLip', 'edgeDitch', 'joinGap', 'sharpCorner', 'benchOnWay', 'viewBlocked');
   const E = w.G.edges.filter((e) => { for (let i = 0; i <= e.n; i += 3) if (near(e.x[i], e.z[i])) return true; return false; });
@@ -74,8 +82,9 @@ export function runMapQC(w, T, { radius = 420, heroes = null } = {}) {
   if (w.profile?.pathPaint === false) for (const e of E) if (['path', 'bridle'].includes(e.kind) && w._paintOf(e).centre) add('pathPaint', e.x[e.n >> 1], e.z[e.n >> 1], e.name || e.kind);
   // 9 edges: rays down at 0.4, 1.2 and 2.5 m beyond each way's edge, against everything drawn there
   const meshes = []; w.scene.traverseVisible((o) => { if (o.isMesh && !o.isInstancedMesh && o.geometry?.attributes?.position?.array && !/rider|Rowboats|Ducks|Squirrels|sky/i.test(o.name)) meshes.push(o); });
-  const rc = new T.Raycaster(), down = new T.Vector3(0, -1, 0);
-  const topAt = (x, z, y0) => { rc.set(new T.Vector3(x, y0 + 6, z), down); rc.far = 30; let best = null; for (const o of meshes) { const bs = o.geometry.boundingSphere; if (bs) { const c = bs.center.clone().applyMatrix4(o.matrixWorld); if (Math.hypot(c.x - x, c.z - z) > bs.radius + 1) continue; } try { const h = rc.intersectObject(o, false)[0]; if (h && (!best || h.distance < best.distance)) best = h; } catch {} } return best; };
+  // (BVH raycasts over a grid of the meshes' bounds: tools/qc-bvh.js)
+  const cast = await bvhCaster(T, meshes);
+  const topAt = (x, z, y0) => cast.down(x, y0 + 6, z, 30);
   let edgeN = 0;
   for (const e of E) for (let i = 1; i < e.n; i += 4) {
     if (!near(e.x[i], e.z[i], radius * 0.6) || e.bridges.some(([a, b]) => i >= a - 1 && i <= b + 1)) continue;
@@ -160,11 +169,10 @@ export function runMapQC(w, T, { radius = 420, heroes = null } = {}) {
     if (!under) for (const [dx, dz] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
       // (from just over the foot: a flush top — a tower's roof under its pinnacles — is caught; the piece's own
       //  underside faces down and isn't hit from above)
-      const k = (p.foot ?? p.r) * 0.5; rc.set(new T.Vector3(p.x + dx * k, p.y + 0.05, p.z + dz * k), down); rc.far = 0.65;
-      for (const o of meshes) { try { if (rc.intersectObject(o, false).length) { under = true; break; } } catch {} }
-      if (under) break;
+      const k = (p.foot ?? p.r) * 0.5;
+      if (cast.any(p.x + dx * k, p.y + 0.05, p.z + dz * k, 0.65)) { under = true; break; }
     }
-    if (!under) add('floating', p.x, p.z, `${p.lm} ${p.what} ${(p.y - g).toFixed(1)} m up`);
+    if (!under) add('floating', p.x, p.z, `${p.lm} ${p.what} ${(p.y - g).toFixed(1)} m up`, p.y);
   }
   function wayY(x, z) { let best = null; for (const e of E) for (let i = 0; i <= e.n; i++) { const d = Math.hypot(e.x[i] - x, e.z[i] - z); if (d < w.wOf(e) / 2 + 2 && (!best || d < best.d)) best = { d, y: e.ele[i] + 0.12 }; } return best?.y; }
   // 14 views: trees between each landmark and the nearest way sample (40–160 m off)
@@ -175,9 +183,10 @@ export function runMapQC(w, T, { radius = 420, heroes = null } = {}) {
     if (!best) continue;
     const dx = v.x - best.x, dz = v.z - best.z, L = Math.hypot(dx, dz);
     const block = trees.filter((q) => { const t = ((q.x - best.x) * dx + (q.z - best.z) * dz) / (L * L); if (t < 0.08 || t > 0.85) return false; return Math.hypot(best.x + dx * t - q.x, best.z + dz * t - q.z) < 3; }).length;
-    if (block) add('viewBlocked', v.x, v.z, `${v.name}: ${block} trees`);
+    // (the landmark and the way spot it's seen from: what the fixer needs to open a view corridor, tools/qc_fix.mjs)
+    if (block) add('viewBlocked', v.x, v.z, `${v.name}: ${block} trees`, null, { landmark: v.name, from: ll(best.x, best.z) });
   }
-  return { at: ll(cx, cz), counts: out, examples: ex };
+  return { at: ll(cx, cz), counts: out, examples: ex, defects, rays: cast.stats };
 }
 
 export const runParkQC = runMapQC;   // (the first name, NYC)

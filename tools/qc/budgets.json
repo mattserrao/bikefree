@@ -1,0 +1,9 @@
+{
+  "_doc": "Per-map frame budgets for the GPU QC (tools/qc-gpu.js; npm run qc:map -- <map> --gpu, tools/qc.mjs): one frame at a QC site, Balanced quality, 1280x720. Over budget = a failing check. Set from the 25 Nov measurements with headroom; '*' is the default for any map not listed.",
+  "*":        { "calls": 1200, "triangles": 5000000, "geometries": 2500, "textures": 160, "programs": 160, "heapMB": 1000 },
+  "skan":     { "calls": 600,  "triangles": 3000000 },
+  "endless":  { "calls": 600,  "triangles": 3000000 },
+  "bigsur":   { "calls": 300,  "triangles": 2000000 },
+  "goingtothesun": { "calls": 400, "triangles": 3000000 },
+  "alpedhuez": { "calls": 400, "triangles": 4500000, "heapMB": 900 }
+}

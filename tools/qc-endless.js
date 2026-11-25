@@ -11,16 +11,22 @@
 //   waterOverRoad  a lake's water or the sea at or above the road beside it
 //   floating       a home's piece standing over the ground (its lowest point 0.4 m up at its middle)
 //   buried         a home sunk 1.5 m or more into the ground at its middle (its door under the ground)
-export function runEndlessQC(w, T, { radius = 600 } = {}) {
+import { bvhCaster } from './qc-bvh.js';
+import { defectId } from './qc-defects.js';
+
+export async function runEndlessQC(w, T, { radius = 600 } = {}) {
   const C = w.course, STEP = 10, HALF = 3.3;
-  const out = {}, ex = {};
-  const add = (k, s, note = '') => { out[k] = (out[k] || 0) + 1; (ex[k] ||= []).length < 6 && ex[k].push([`${Math.round(s)} m`, note].filter((v) => v !== '')); };
+  const out = {}, ex = {}, defects = [];
+  // (each fault also a defect with a stable id: its check and where along the course, 4 m cells — tools/qc-defects.js)
+  const add = (k, s, note = '') => {
+    out[k] = (out[k] || 0) + 1; (ex[k] ||= []).length < 6 && ex[k].push([`${Math.round(s)} m`, note].filter((v) => v !== ''));
+    if (defects.length < 400) defects.push({ id: defectId(k, s, 0), check: k, at: [`${Math.round(s)} m`], s: Math.round(s), note });
+  };
   for (const k of ['roadHole', 'edgeLip', 'edgeDitch', 'treeOnRoad', 'waterOverRoad', 'floating', 'buried']) out[k] = 0;
   const r = w.rider?.group?.position || w.camera.position, i0 = w._near(r.x, r.z).i;
   const ia = Math.max(0, i0 - Math.round(radius / STEP)), ib = Math.min(C.n - 1, i0 + Math.round(radius / STEP));
   const meshes = []; w.scene.traverseVisible((o) => { if (o.isMesh && !o.isInstancedMesh && o.geometry?.attributes?.position?.array && !/rider|sky/i.test(o.name)) meshes.push(o); });
-  const rc = new T.Raycaster(), down = new T.Vector3(0, -1, 0);
-  const topAt = (x, z, y0) => { rc.set(new T.Vector3(x, y0 + 6, z), down); rc.far = 30; let best = null; for (const o of meshes) { const bs = o.geometry.boundingSphere; if (bs) { const c = bs.center.clone().applyMatrix4(o.matrixWorld); if (Math.hypot(c.x - x, c.z - z) > bs.radius + 1) continue; } try { const h = rc.intersectObject(o, false)[0]; if (h && (!best || h.distance < best.distance)) best = h; } catch {} } return best; };
+  const cast = await bvhCaster(T, meshes), topAt = (x, z, y0) => cast.down(x, y0 + 6, z, 30);   // (BVH: tools/qc-bvh.js)
   // the road: its centre every 10 m, its edges every 30 m
   for (let i = ia; i <= ib; i++) {
     const h = C.heading[i], rx = Math.cos(h), rz = -Math.sin(h), y = C.ele[i] + 0.06, s = i * STEP;
@@ -63,5 +69,5 @@ export function runEndlessQC(w, T, { radius = 600 } = {}) {
     if (box.min.y < g - 1.5 && box.max.y < g + 2) add('buried', nr.s, `${(g - box.min.y).toFixed(1)} m down`);
   }
   const st = window.route?.endlessRide?.stateAt?.(w.p);
-  return { at: [`${Math.round(i0 * STEP)} m`, st?.biome || ''], counts: out, examples: ex };
+  return { at: [`${Math.round(i0 * STEP)} m`, st?.biome || ''], counts: out, examples: ex, defects, rays: cast.stats };
 }
