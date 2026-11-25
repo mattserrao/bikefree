@@ -11,7 +11,9 @@ import { V, TAU, centroid, scaleRing, orient, prism, cap, block, chamfer, frameO
 import { buildStadiums } from './bridges.js';
 import { glasshouseFrame } from '../structures/glasshouse.js';
 import { cnyLandmarkModels, canalWaterMaterial } from './cny-landmarks.js';
-import { skanLandmarkModels } from './skan-landmarks.js';   // (SKAN's: Clift Park's pier and gazebo, the Sherwood Inn, mansions…)   // (CNY's: the aqueduct, Sims' Store, the Octagon House…)
+import { skanLandmarkModels } from './skan-landmarks.js';
+import { nycLandmarkModels, nycPark } from './nyc-landmarks.js';
+import { qcOn, qcProbe } from './qc-probe.js';   // (a QC run: tools/qc_map.mjs)   // (NYC's: Central Park — Bethesda, Bow Bridge, Belvedere…, the wall and its gates)   // (SKAN's: Clift Park's pier and gazebo, the Sherwood Inn, mansions…)   // (CNY's: the aqueduct, Sims' Store, the Octagon House…)
 
 export function buildPghLandmarks(host, data) {
   const L = host.landscape, proj = host.D.proj;
@@ -264,6 +266,7 @@ export function buildPghLandmarks(host, data) {
     melloninst(l) {
       const { F, c, g } = plan(l, 50, 40), H = 32, R = F.rect(-F.hl * .92, F.hl * .92, -F.hw * .92, F.hw * .92);
       S.color('#d4ccb9'); block(S, R, g - 1, g + H);
+      S.color('#cfc7b4'); block(S, F.rect(-F.hl, F.hl, -F.hw, F.hw), g - 1, g + 3);   // (the podium the colonnade stands on — QC, 25 Nov: the columns hung 3 m up)
       for (const b of [-F.hw, F.hw]) colonnade(F, -F.hl * .95, F.hl * .95, b, 18, g + 3, 13, .7, '#ddd5c3');
       for (const a of [-F.hl, F.hl]) colonnade(makeFrame(F.at(a, 0), F.v), -F.hw * .9, F.hw * .9, 0, 13, g + 3, 13, .7, '#ddd5c3');
       S.color('#d9d1be'); block(S, F.rect(-F.hl, F.hl, -F.hw, F.hw), g + 16, g + 18.5);
@@ -328,12 +331,15 @@ export function buildPghLandmarks(host, data) {
     },
   };
 
+  if (qcOn()) qcProbe(S, (L.qc ||= { basins: [], benches: [], bridges: [], views: [] }));
   Object.assign(M, cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa, Ca }));
   Object.assign(M, skanLandmarkModels({ S, N, glows, plan, ground, local, L, Wa }));
+  for (const [k, f] of Object.entries(nycLandmarkModels({ S, N, glows, plan, ground, local, L, Wa }))) M[`nyc_${k}`] = f;   // (prefixed: PGH has its own obelisk, statue, reservoir…)
   for (const l of data.landmarks || []) {
     const f = M[l.model];
     if (!f) continue;
-    try { f(l); made++; } catch (err) { console.warn(`PGH landmark ${l.label}: ${err.message}`); }
+    if (L.qc?.prims) L.qc.prims.cur = l.label;
+    try { f(l); made++; if (L.qc && !/lawn|reservoir|view|conservatory/.test(l.model) && l.center) { const c = local(l.center[0], l.center[1]); L.qc.views.push({ x: c.x, z: c.z, name: l.label }); if (/bowbridge|gapstow/.test(l.model)) L.qc.bridges.push({ x: c.x, z: c.z, name: l.label, onWay: !!L.qc.onWay?.includes(l.label) }); } } catch (err) { console.warn(`PGH landmark ${l.label}: ${err.message}`); }
   }
 
   // the stadiums, closed (user, 21 Nov): the map's bowl builder, on their OSM outlines
@@ -413,6 +419,8 @@ export function buildPghLandmarks(host, data) {
     made++;
   }
 
+  let park = null;
+  if (data.park) { try { park = nycPark({ S, N, glows, local, L, host }, data.park); made += park.count; } catch (err) { console.warn(`park: ${err.message}`); } }
   // into the scene, as the heroes are
   const add = (B, mat, name) => { if (!B.count) return; const m = new THREE.Mesh(host.own(B.geometry()), mat); m.name = name; host.group.add(m); };
   add(W, host.buildingMaterial, 'PGH landmark towers');
@@ -423,8 +431,9 @@ export function buildPghLandmarks(host, data) {
   host.addGlows(glows, 'PGH landmark lamps');
   host.addGlows(beacons.map((b) => ({ ...b, size: 6, color: '#ff3b2e' })), 'PGH tower beacons');
   return {
-    count: made,
+    count: made, qc: L.qc || null,
     tick(time) {
+      park?.tick(time);
       for (const c of cars) {
         const t = (Math.sin((time / 90 + c.phase) * TAU) + 1) / 2;   // up and down, a trip every 45 s
         const p = c.a.clone().addScaledVector(c.dir, t * c.len);

@@ -1930,6 +1930,34 @@ one building-engine front door; shared blocks (two renderers stay). Review: bike
 - [x] **Checks:** `test/blocks.test.mjs`; schema lint for the graph maps; `npm test`.
 - [ ] Next: move SKAN onto the CNY building styles (it still draws its homes with the Pittsburgh presets — pinned so it
       doesn't change); merge the two sky domes; Pittsburgh's own house plans in the house engine (realism up a step).
+### Endless map — test branch `endless-map-test` (24 Nov 2026)
+
+*User:* "use the building blocks to create an endless map. Every mile the user should be prompted if they'd like to change
+the terrain type, using the turn mechanism (do nothing, stay the same. Options of flat, rolling, climb, descend). The map
+should progress through different biomes and utilize high quality post processing and lighting effects." Chose: biomes
+upstate farmland, northern forest + lakes, alpine mountains, coast / desert canyon, and arctic; a seeded biome sequence;
+moderate grades; a slow day cycle. Built on the building-blocks branch.
+
+- [x] **Course** (`js/endless/course.js`): 10 m samples generated ahead; a bounded, biome-twisted heading (the road never
+      turns back); grades by terrain type — flat 0–1 %, rolling ±3 %, climb 5–7 %, descend −4 to −6 % — eased in over 250 m;
+      never below the sea (a coast keeps its own sea level 110 m under the road where it starts) or above 4,500 m.
+- [x] **Biomes:** a seeded sequence (always the farmland first), 3–5 miles each, half a mile of blend, never the same twice
+      in a row.
+- [x] **Mile prompt** (`EndlessRide`): the turn prompt ~15 s before each mile mark — Flat / Rolling / Climb / Descend, the
+      current one picked; ◀ ▶, A / D, swipe or tap; locks 30 m before; doing nothing keeps the terrain.
+- [x] **World** (`js/world/endless-world.js`): ground tiles (8 m near, 21 m far, skirts) shaped round the road by the
+      biome's relief (hills, peaks with snow, canyon walls with ledges, the sea's bluffs and cliffs, lakes, frozen lakes);
+      the road and its worn paint (passing dashes, double yellow on climbs and descents); trees and understory through the
+      planting API; homesteads (farmhouse, barn, shed) through the building engine; a choice eases what's in view to its
+      new shape over 1.5 s.
+- [x] **Light:** a 100-minute day — dawn, morning, midday, afternoon, CNY's golden hour, sunset, dusk, a new dawn — with a
+      live sun and a shadow map round the rider; the biome tints the haze and the clouds; desktop High: contact shading,
+      bloom, the golden grade; the atmosphere effect (sun beams, mist, leaves) in the farmland and the forest.
+- [x] **App:** the Endless card first in Routes; preview facts; no finish (a distance goal or open); HUD "next mile" row and
+      a moving profile window; the minimap draws the road as it grows.
+- [x] **Checks:** `test/endless-map.test.mjs`, `tools/snap_endless.mjs`, `tools/endless_app_check.mjs`.
+- [ ] Look on a real GPU and a phone (High's post, the shadows, phone memory).
+- [ ] Later: mile posts by the road, cyclists and walkers (graph-life needs a road graph), villages in the farmland.
 
 ## Running it
 
@@ -2161,3 +2189,24 @@ for change to graphics (both desktop and mobile same menus)")*
 - [x] Cheap wins: road-edge leaves, lawns mown each their own way, damp hollows, a cooler haze; rim light on the rider,
       cloud shadows, puddle glints, chimney smoke; road signs, hay wagons, bale wrap colours, wash lines, split-rail
       fences, crows over the fields.
+
+### NYC — Central Park — branch `nyc-test` (from `building-blocks-test`) *(user, 25 Nov: "Create a new map called "NYC". This map should focus on a very detailed recreation of Central Park, with routes that follow the paths there. The map should have building shells that surround that park, but the player cannot freeplay navigate outside it. Ensure high detailed landmarks are made and visible so the park is immediately familiar"; project doc claude/nyc-map.md)*
+Answers: the drives and the main paths (paved; stairs and dirt trails left out); all the landmark groups (the heart, the middle, the south end, the north and the Reservoir); OSM building shells round the park plus the skyline; peak fall foliage, low afternoon light; four rides (the Full Loop, the Lower Loop, a Landmarks tour, the Bridle path and Harlem Hill), named rides counter-clockwise, free both ways otherwise; cyclists and runners, walkers and lawn crowds, rowboats and wildlife; the gates closed; a CNY-level budget; empty streets outside; mapped woods and the real tree rows.
+- [x] **The network** (`tools/city/nyc.json`, `npm run nyc:build`): the shared builder with new opt-in keys — `area.polygon` (the park's own OSM outline, 339 ha), `footwaysRideable`, `nameKinds` (the drives are mapped `highway=pedestrian`), `keepParallelKinds` and `protectKinds` (the drives survive the clean-up passes), `groundBaseM`. 60 km: drives 13, paths 40, bridle 6.8. QC clean, no dead ends, both ways (`bothWays`)
+- [x] **The waters** as ring pools (`tools/nyc_pools.py`): the Reservoir, the Lake, the Harlem Meer, the Pond, Turtle Pond, Conservatory Water, the Pool — drawn on their outlines, at their own levels (`js/world/graph-world.js`: pools with a `ring`)
+- [x] **The landmarks** (`tools/nyc_heroes.py` → `routes/cities/nyc-heroes.json`; models `js/world/toolbox/city/nyc-landmarks.js`, registered `nyc_*` in `pgh-landmarks.js`): Bethesda Terrace and Fountain (the Angel, the arcade, the stairs), Bow Bridge, the Loeb Boathouse, Belvedere Castle, the Delacorte, Cleopatra's Needle, Gapstow Bridge, Wollman Rink, the Carousel, Strawberry Fields' Imagine, the Bandshell, the Dairy, the Swedish Cottage, the Dana Center, Blockhouse No. 1, the Conservatory Garden and the Vanderbilt Gate, the Reservoir's fence, Columbus Circle, the Maine Monument, the Pulitzer Fountain, Cherry Hill, Alice, Hans Christian Andersen
+- [x] **The park** (`nycPark`): the stone wall round it with 69 entrances, each closed by an iron gate; Bacon lampposts and settee benches along the ways; rowboats on the Lake, ducks on every pond, squirrels by the paths; picnickers on Sheep Meadow and the Great Lawn, skaters on Wollman
+- [x] **The look** (profile): `season: peak-fall`, `cars: false`, `openLawns`, `parkTrees` (London plane, elm, pin oak, tupelo added to the upstate tree engine, opt-in), `life: park` (jogging walkers), `treeMix`; OSM building shells round the park from `pgh_city.py` (`cityReachM`, `cityPadM`), tree rows from OSM
+- [x] **Rides** (`tools/pgh_routes.mjs`, `kind` waypoints and `kindCost`): the Full Loop 10.1 km, the Lower Loop 2.8 km, Landmarks 14.4 km, Bridle path + Harlem Hill 6.5 km
+- [x] Tests: `test/nyc.test.mjs`. Budget in snapshots: 70–220 draw calls, 0.6–0.9 M triangles
+
+### NYC visual QC pass — branch `nyc-test` *(user, 25 Nov: "Preview the map as a critical, QC tester for visual issues … free floating structures. Poor intersections, lack of smoothing of turns / roads"; approved the 14 items; "Create tools which will work to address all 14"; then "standardize the QC tools in the project so they can be deployed on various maps")*
+- [x] **The tool:** `npm run qc:map -- <map>` (tools/qc_map.mjs + tools/qc-map.js; the landmarks' probes js/world/toolbox/city/qc-probe.js, on with `?qc=1`) — 16 checks per site, before→after against a baseline. NYC's sites: tools/qc/sites/nyc.json; baselines tools/qc/nyc-qc-before.json → nyc-qc-after.json. Any other map: `--auto N` sites (tried on SKAN).
+- [x] Totals over the twelve sites, before → after: stray water 1522→0, bank shards 258→32, bank cliffs 2877→164, dry basins 5→0, double bridges 7→0, floating pieces 20→1, water over a way 161→0, path paint 398→0, edge lips 3→0, bend gaps 10→0, sharp corners 78→49, cover grain 12→0, benches on ways 3→0, blocked views 5→0; the Mall's elms 190/200 standing.
+- [x] Fixes: fountain water off the ground cover (`landWater: pools`, small waters paved), banks graded through the water's edge, the pools' levels under their shore ways (the Reservoir 37.2→35.0 m), no shoreline slabs; Bethesda on a graded terrace pad with its arcade under Terrace Drive, the grand stairs, water in both basins and falling all round; Bow Bridge and Gapstow built on the path's own deck (`modelBridges`); the Reservoir fence on the shore's normal; paths unpainted, the drives' edge lines and bike lane; lawns flush with the paths (`edgeFlush`); round, colour-matched joins and junctions (`junctionCurbs`); the Mall's four elm rows (`allees`, mapped trees close to the walk); soft cover edges; benches set back; view corridors to the landmarks.
+- [ ] Left: 49 junction corners still without a curb return (near-straight 140–155° and sliver 17–30° corners); 32 bank shards / 164 bank cliffs, mostly under bridge decks (the deck's ground cut) and the Lake's narrow arms; Gapstow's walls read heavy; SKAN's Clift Park pier and gazebo flagged floating (3) — not looked at.
+
+### Production — branch `production-test` (nyc-test + endless-map-test) *(user, 25 Nov: "PGH, CNY, SKAN, endless should be QC checked by the end of this run. They should be moved to a new status on the main page 'production'. The other maps should be removed"; then "Big Sur, road to the sun, alp d'huez should all be in production after completion of this round. QC reviewed also")*
+- [x] A new first section on the main page, **Production** (js/app/preview.js STAGES; catalog / graph-cities `"stage": "production"`; Endless's card): PGH, CNY, SKAN, Endless, Big Sur, Going-to-the-Sun, Alpe d'Huez. In Progress keeps NYC (not named either way — left in progress).
+- [x] Off the app (catalog `"retired": true`, files kept for the tools and tests): Yosemite, Zion, Route 28 (and the old Pittsburgh map, already retired); Demo Hills off the route list.
+- [x] QC'd: the graph maps with `npm run qc:map -- <map> --auto 4`, Endless with `npm run qc:map -- endless` (tools/qc-endless.js: road holes, edge lips/ditches, trees on the road, water over the road, floating/buried homes), the scenic routes with `qc:course` and `qc:clipping`. Results in claude/production-qc.md.

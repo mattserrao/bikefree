@@ -19,20 +19,24 @@ import { randomSequence } from '../core/random.js';
 
 const COUNT = { low: { bikes: 8, walkers: 8 }, balanced: { bikes: 18, walkers: 18 }, high: { bikes: 26, walkers: 26 } };
 const SPAWN_MIN = 160, SPAWN_MAX = 900, DROP_M = 1100, CLEAR_M = 90;
-const BIKE_PATHS = new Set(['primary', 'secondary', 'tertiary', 'residential', 'path']);
+const ROAD_PATHS = new Set(['primary', 'secondary', 'tertiary', 'residential', 'path']);
+const PARK_PATHS = new Set(['drive', 'path', 'bridle', 'plaza']);
 const LIFT = 0.1;
 const LOCAL_M = 260;   // locals drawn this close
 const LOCAL_CLIP = { fish: 'fish', chat: 'chat', sit: 'sit', stand: 'look', idle: 'idle' };
 
 export class GraphLife {
-  constructor(world, parent, { quality = 'balanced', uTime }) {
-    this.W = world; this.rand = randomSequence(2211);
+  constructor(world, parent, { quality = 'balanced', uTime, park = false }) {
+    this.W = world; this.rand = randomSequence(2211); this.park = park;
     const N = COUNT[quality] || COUNT.balanced;
+    // (park — NYC's Central Park, user 25 Nov: "cyclists + runners", "walkers": on the drives and the bridle path too, and a
+    //  good share of the people on foot running)
+    const BIKE_PATHS = park ? PARK_PATHS : ROAD_PATHS;
     // (not an old-growth hero area's singletrack — user, 24 Nov: "No hikers in the Camillus woods"; its life is wildlife:
     //  toolbox/vegetation/old-growth.js)
     this.edges = world.G.edges.filter((e) => e.n >= 2 && BIKE_PATHS.has(e.kind) && !e._cf && !e.bridges.some(([a, b]) => b - a >= e.n - 1));
     // walkers: the ways with a sidewalk (the villages) and the trails
-    this.walkEdges = this.edges.filter((e) => (world.walkOf(e) || 0) > 0.8 || e.kind === 'path' || e.kind === 'residential');
+    this.walkEdges = this.edges.filter((e) => (world.walkOf(e) || 0) > 0.8 || e.kind === 'path' || e.kind === 'residential' || (park && e.kind !== 'plaza'));
     this.bikeSet = new Set(this.edges); this.walkSet = new Set(this.walkEdges);
     // every ~50 m of each way, in 500 m cells: a spot is picked from the cells round the camera
     const grid = (list) => { const g = new Map(); for (const e of list) for (let k = 1; k < e.n; k += 5) { const c = `${Math.floor(e.x[k] / 500)},${Math.floor(e.z[k] / 500)}`; (g.get(c) || g.set(c, []).get(c)).push({ e, k, x: e.x[k], z: e.z[k] }); } return g; };
@@ -51,8 +55,10 @@ export class GraphLife {
     const r = this.rand, bike = kind === 'bike';
     const look = randomLook(r, bike ? { helmet: true, sporty: true, kids: 0 } : { kids: 0.1, packs: 0.15, caps: 0.2 });
     let clip = bike ? CLIP.cycle : CLIP.walk;
-    if (!bike && !look.kid && r() < 0.35) { look.dog = dogLook(r); clip = CLIP.leash; }
-    const speed = bike ? 6 + r() * 3.5 : look.kid ? 1 : 1.15 + r() * 0.35;
+    const jog = !bike && this.park && !look.kid && r() < 0.45;
+    if (jog) clip = CLIP.jog;
+    else if (!bike && !look.kid && r() < 0.35) { look.dog = dogLook(r); clip = CLIP.leash; }
+    const speed = bike ? 6 + r() * 3.5 : jog ? 2.6 + r() * 0.8 : look.kid ? 1 : 1.15 + r() * 0.35;
     return { kind, bike, look, clip, speed, rate: clipRate(clip, speed, look), phase: r(), e: null, f: 0, dir: 1, side: 0.5 + r() * 0.3, x: 0, y: 0, z: 0, yaw: 0, roll: 0 };
   }
 

@@ -127,9 +127,41 @@ class ShapeArea:
     def inside(self, la, lo): return self.dist(la, lo, 1.0) <= 0.0
 
 
+class PolygonArea:
+    """A city drawn as a polygon (config "area": {"polygon": file}; NYC, user 25 Nov: Central Park, "the player cannot
+    freeplay navigate outside it"): the corridor's interface, `dist` the metres outside the polygon (0 inside it), from
+    a 4 m distance raster. `grow` widens it (the build margin); `fetch` the OSM tiles fetched round it (the skyline)."""
+    CELL = 4.0
+    def __init__(self, poly, grow=0.0, fetch=0.0):
+        import numpy as np
+        from scipy import ndimage
+        from PIL import Image, ImageDraw
+        self.poly, self.grow = poly, grow
+        self.lat0 = sum(p[0] for p in poly) / len(poly)
+        self.kx, self.ky = 111320 * math.cos(math.radians(self.lat0)), 110540
+        self.r = grow + fetch   # (load_osm's pad)
+        self.pts_all = [tuple(p) for p in poly]
+        pad = grow + fetch + 400
+        self.s = min(p[0] for p in poly) - pad / self.ky; self.w = min(p[1] for p in poly) - pad / self.kx
+        n_ = max(p[0] for p in poly) + pad / self.ky; e_ = max(p[1] for p in poly) + pad / self.kx
+        self.nx, self.ny = int((e_ - self.w) * self.kx / self.CELL) + 1, int((n_ - self.s) * self.ky / self.CELL) + 1
+        img = Image.new('L', (self.nx, self.ny), 0)
+        ImageDraw.Draw(img).polygon([((lo - self.w) * self.kx / self.CELL, (la - self.s) * self.ky / self.CELL) for la, lo in poly], fill=1)
+        inside = np.array(img, bool)
+        self.d = ndimage.distance_transform_edt(~inside) * self.CELL - grow
+    def dist(self, la, lo, reach):
+        i, j = int((la - self.s) * self.ky / self.CELL), int((lo - self.w) * self.kx / self.CELL)
+        if not (0 <= i < self.ny and 0 <= j < self.nx): return reach
+        return min(reach, max(0.0, float(self.d[i, j])))
+    def inside(self, la, lo): return self.dist(la, lo, 1.0) <= 0.0
+
+
 def shape_of(cfg, grow=0.0):
     """The area's ShapeArea when it has corridor lines (else None: a plain circle)."""
     A = cfg.get('area', {})
+    if A.get('polygon'):
+        poly = json.load(open(os.path.join(ROOT, 'tools', 'city', A['polygon'])))['polygon']
+        return PolygonArea(poly, grow, A.get('fetchM', 0))
     if not A.get('lines'): return None
     lines = json.load(open(os.path.join(ROOT, 'tools', 'city', A['lines'])))
     lines = [ln['pts'] if isinstance(ln, dict) else ln for ln in (lines['lines'] if isinstance(lines, dict) else lines)]
@@ -172,7 +204,7 @@ def load_osm(cfg, cor):
     pts = cor.pts_all
     la0, la1 = min(p[0] for p in pts), max(p[0] for p in pts)
     lo0, lo1 = min(p[1] for p in pts), max(p[1] for p in pts)
-    reach = 0 if isinstance(cor, (CircleArea, ShapeArea)) else cfg['corridorM']   # (a circle: its own edge is the reach)
+    reach = 0 if isinstance(cor, (CircleArea, ShapeArea)) else cfg.get('area', {}).get('fetchM', 0) if isinstance(cor, PolygonArea) else cfg['corridorM']   # (a circle: its own edge is the reach; a polygon: its fetch margin, the skyline)
     pad_la, pad_lo = (reach or cor.r) / 110540 + dy, (reach or cor.r) / cor.kx + dx
     files, tiles = [], []
     for x in range(math.floor((lo0 - pad_lo - w0) / dx), math.ceil((lo1 + pad_lo - w0) / dx)):
@@ -202,17 +234,22 @@ def rideable(t, cfg):
     h = t.get('highway')
     yes = ('yes', 'designated', 'permissive')
     if t.get('area') == 'yes' or t.get('indoor') == 'yes': return None
-    if t.get('bicycle') in ('no', 'dismount', 'use_sidepath'): return None
+    # (NYC, user 25 Nov: "routes that follow the paths" of Central Park — its footways and bridle path ride, whatever
+    # their bicycle tag: config footwaysRideable)
+    fw = cfg.get('footwaysRideable') and h in cfg['paths']
+    if t.get('bicycle') in ('no', 'dismount', 'use_sidepath') and not fw: return None
     if t.get('access') in ('private', 'no') and t.get('bicycle') not in yes: return None
     if t.get('service') in cfg['skipService'] and t.get('bicycle') not in yes: return None
     if h in cfg['connectors']: return 'connector'   # a boulevard (trunk): only short pieces between streets are kept (crossing it)
+    for part, kind in cfg.get('nameKinds', {}).items():   # (NYC: the park drives, mapped as pedestrian ways, ride as drives)
+        if part in t.get('name', '') and h in ('pedestrian', 'unclassified', 'service', 'cycleway', 'path', 'footway') and t.get('footway') != 'sidewalk': return kind
     if h in cfg['roads']:
         if h == 'service' and t.get('service') not in cfg['serviceKinds'] and t.get('bicycle') not in yes: return None
         return cfg['roads'][h]
     if h in cfg['paths']:
         if t.get('footway') == 'crossing' or t.get('path') == 'crossing': return 'path'   # a crosswalk: links a trail across a street
         if t.get('footway') in ('sidewalk', 'traffic_island') or t.get('path') == 'sidewalk': return None
-        if h in ('footway', 'bridleway', 'pedestrian') and t.get('bicycle') not in yes and h != 'pedestrian': return None
+        if h in ('footway', 'bridleway', 'pedestrian') and t.get('bicycle') not in yes and h != 'pedestrian' and not fw: return None
         if t.get('surface') in cfg['skipSurfaces']: return None
         return cfg['paths'][h]
     return None
@@ -307,7 +344,7 @@ def protected(e):
 
 
 def build(cfg):
-    if cfg.get('area', {}).get('lines'):
+    if cfg.get('area', {}).get('lines') or cfg.get('area', {}).get('polygon'):
         cor = shape_of(cfg, cfg['area'].get('marginM', 0))   # (built over the margin too: trim_to_circle)
     elif cfg.get('area', {}).get('circle'):
         la_, lo_, r_ = cfg['area']['circle']
@@ -779,7 +816,7 @@ def simplify_plan(cfg, E, G=None):
     out = []
     for why, rule in rules:
         for k in order:
-            if k in G.gone or not rule(E[k]): continue
+            if k in G.gone or not rule(E[k]) or E[k]['kind'] in cfg.get('protectKinds', ()): continue   # (NYC: the Park Drive never goes)
             if G.can_remove(k): G.remove(k); out.append((k, why))
     return out
 
@@ -856,7 +893,7 @@ def fix_crossings(cfg, E, G):
                 if done: break
             if done: fixed += 1
             else:
-                cand = sorted((ko, ku), key=lambda k: (E[k]['kind'] not in ('path', 'alley'), E[k]['L']))
+                cand = [k for k in sorted((ko, ku), key=lambda k: (E[k]['kind'] not in ('path', 'alley'), E[k]['L'])) if E[k]['kind'] not in cfg.get('protectKinds', ())]
                 k = next((k for k in cand if G.can_remove(k)), None)
                 if k is not None: G.remove(k); removed.append((k, 'way under or over a crossing that cannot clear'))
                 else: left.append((ko, ku))
@@ -866,6 +903,9 @@ def fix_crossings(cfg, E, G):
 def _h(e, s):
     sp = e['L'] / e['n']; i = min(e['n'] - 1, int(s / sp)); f = s / sp - i
     return e['ele'][i] + (e['ele'][i + 1] - e['ele'][i]) * f
+
+
+KEEP_KINDS = False   # (keepParallelKinds: set by build_all — ways of two kinds are never joined into one)
 
 
 def merge_through(E):
@@ -881,6 +921,7 @@ def merge_through(E):
             if len(l) != 2 or l[0][0] == l[1][0]: continue
             (k1, s1), (k2, s2) = l
             if k1 in used or k2 in used: continue
+            if KEEP_KINDS and E[k1].get('kind') != E[k2].get('kind'): continue   # (NYC: a drive never becomes a path)
             used.update((k1, k2))
             e1, e2 = E[k1], E[k2]
             if s1 == 0: e1 = flip(e1)   # e1 now ends at n
@@ -1000,7 +1041,7 @@ def write_ground(cfg, E):
     nx = int(math.ceil((east - west) * kx / cell)) + 1
     ny = int(math.ceil((north - south) * ky / cell)) + 1
     east = west + (nx - 1) * cell / kx; south = north - (ny - 1) * cell / ky
-    base, scale = 100.0, 0.1
+    base, scale = cfg.get('groundBaseM', 100.0), 0.1   # (NYC: −20 — Central Park lies 5–45 m up)
     rows = bytearray()
     for j in range(ny):
         acc = 0
@@ -1242,7 +1283,7 @@ def enforce_grades(cfg, E):
     return E
 
 
-RANK = {'path': 0, 'plaza': 0, 'alley': 1, 'residential': 2, 'tertiary': 3, 'secondary': 4, 'primary': 5}
+RANK = {'path': 0, 'plaza': 0, 'bridle': 0, 'alley': 1, 'residential': 2, 'drive': 3, 'tertiary': 3, 'secondary': 4, 'primary': 5}
 
 
 def find_overlaps(cfg, E):
@@ -1354,6 +1395,8 @@ def remove_parallels(cfg, E):
             if ka in G.gone or kb in G.gone: continue
             # (keepParallelTrails: a trail beside a road is the ride, not a duplicate — CNY's Erie Canalway Trail by Thompson Road)
             if cfg.get('keepParallelTrails') and (E[ka]['kind'] == 'path') != (E[kb]['kind'] == 'path'): continue
+            # (keepParallelKinds — NYC: the Park Drive, the bridle path and the paths beside them are each their own ride)
+            if cfg.get('keepParallelKinds') and E[ka]['kind'] != E[kb]['kind']: continue
             k = overlap_pick(E, G, ka, kb)
             if k is not None:
                 G.remove(k); total += 1; km += E[k]['L'] / 1000
@@ -1551,6 +1594,8 @@ def route_links(cfg, E, jpos, jh):
 
 def build_all(cfg):
     """The whole graph as written: built, heights, simplified, crossings cleared, joined, too-steep edges dropped."""
+    global KEEP_KINDS
+    KEEP_KINDS = bool(cfg.get('keepParallelKinds'))
     nodes, chains, jpos, cor = build(cfg)
     E, jh = heights(cfg, nodes, chains, jpos)
     E, nl, ml = route_links(cfg, E, jpos, jh)

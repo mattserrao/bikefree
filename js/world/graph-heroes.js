@@ -41,6 +41,7 @@ export async function buildGraphHeroes(world, json) {
     waterAt: (x, z) => (H(x, z) < world.poolAt(x, z) ? 1 : 0),
     poolAt: (x, z) => world.poolAt(x, z),
     lifeSpots: world.lifeSpots,
+    pools: world.pools || [], edges: world.G.edges, wOf: world.wOf ? (e) => world.wOf(e) : null,   // (NYC's park: its ponds' rings, the ways for the lamps and benches)
     // a PGH way within r of (x, z) (its edge): monuments and dressing keep off the ways
     wayNear: (x, z, r = 1) => { const g = world.cut, c = g.cell, k = Math.ceil((r + 8) / c); for (let i = -k; i <= k; i++) for (let j = -k; j <= k; j++) { const a = g.cellAt(Math.floor(x / c) + i, Math.floor(z / c) + j); if (!a) continue; for (let q = 0; q < a.length; q += 5) if (Math.hypot(a[q] - x, a[q + 1] - z) - a[q + 3] < r) return true; } return false; },
     routeDist: () => 1e9, streetsNear: () => [], onStreet: () => false, inRouteTube: () => false, sheltered: () => false,

@@ -53,11 +53,13 @@
    }
   },
   "scene": "routes/scenes/yosemite.json",
-  "stage": "draft"
+  "stage": "draft",
+  "retired": true,
+  "retiredNote": "Off the app (user, 25 Nov): only PGH, CNY, SKAN and Endless in Production; files kept for the tools and tests"
  },
  {
   "id": "bigsur",
-  "name": "Big Sur \u00b7 Bixby Bridge & Hurricane Point",
+  "name": "Big Sur · Bixby Bridge & Hurricane Point",
   "park": "California Highway 1, Big Sur",
   "file": "routes/parks/bigsur.gpx",
   "outAndBack": true,
@@ -108,7 +110,8 @@
     ]
    }
   },
-  "scene": "routes/scenes/bigsur.json"
+  "scene": "routes/scenes/bigsur.json",
+  "stage": "production"
  },
  {
   "id": "goingtothesun",
@@ -192,7 +195,8 @@
     "smooth_m": 400
    }
   },
-  "scene": "routes/scenes/goingtothesun.json"
+  "scene": "routes/scenes/goingtothesun.json",
+  "stage": "production"
  },
  {
   "id": "zion",
@@ -236,11 +240,13 @@
    }
   },
   "scene": "routes/scenes/zion.json",
-  "stage": "draft"
+  "stage": "draft",
+  "retired": true,
+  "retiredNote": "Off the app (user, 25 Nov): only PGH, CNY, SKAN and Endless in Production; files kept for the tools and tests"
  },
  {
   "id": "route28",
-  "name": "Route 28 \u00b7 Old Forge to Eighth Lake",
+  "name": "Route 28 · Old Forge to Eighth Lake",
   "park": "Fulton Chain of Lakes, Adirondacks, New York",
   "file": "routes/parks/route28.gpx",
   "outAndBack": true,
@@ -300,11 +306,13 @@
    }
   },
   "scene": "routes/scenes/route28.json",
-  "stage": "draft"
+  "stage": "draft",
+  "retired": true,
+  "retiredNote": "Off the app (user, 25 Nov): only PGH, CNY, SKAN and Endless in Production; files kept for the tools and tests"
  },
  {
   "id": "pittsburgh",
-  "name": "Pittsburgh \u00b7 Three Rivers Loop",
+  "name": "Pittsburgh · Three Rivers Loop",
   "park": "Pittsburgh, Pennsylvania",
   "file": "routes/cities/pittsburgh.gpx",
   "outAndBack": false,
@@ -319,7 +327,7 @@
  },
  {
   "id": "pittsburgh-allegheny",
-  "name": "Pittsburgh \u00b7 The Allegheny & Troy Hill",
+  "name": "Pittsburgh · The Allegheny & Troy Hill",
   "park": "Pittsburgh, Pennsylvania",
   "file": "routes/cities/pittsburgh-allegheny.gpx",
   "outAndBack": false,
@@ -334,7 +342,7 @@
  },
  {
   "id": "pittsburgh-westend",
-  "name": "Pittsburgh \u00b7 The West End & Elliott",
+  "name": "Pittsburgh · The West End & Elliott",
   "park": "Pittsburgh, Pennsylvania",
   "file": "routes/cities/pittsburgh-westend.gpx",
   "outAndBack": false,
@@ -349,7 +357,7 @@
  },
  {
   "id": "pittsburgh-oakland",
-  "name": "Pittsburgh \u00b7 Oakland & Schenley Park",
+  "name": "Pittsburgh · Oakland & Schenley Park",
   "park": "Pittsburgh, Pennsylvania",
   "file": "routes/cities/pittsburgh-oakland.gpx",
   "outAndBack": false,
@@ -364,7 +372,7 @@
  },
  {
   "id": "pittsburgh-polish",
-  "name": "Pittsburgh \u00b7 Polish Hill, Bloomfield & the Oakland crosstown",
+  "name": "Pittsburgh · Polish Hill, Bloomfield & the Oakland crosstown",
   "park": "Pittsburgh, Pennsylvania",
   "file": "routes/cities/pittsburgh-polish.gpx",
   "outAndBack": false,
@@ -379,7 +387,7 @@
  },
  {
   "id": "pittsburgh-homestead",
-  "name": "Pittsburgh \u00b7 The Great Allegheny Passage & Homestead",
+  "name": "Pittsburgh · The Great Allegheny Passage & Homestead",
   "park": "Pittsburgh, Pennsylvania",
   "file": "routes/cities/pittsburgh-homestead.gpx",
   "outAndBack": false,
@@ -394,7 +402,7 @@
  },
  {
   "id": "pittsburgh-northside",
-  "name": "Pittsburgh \u00b7 The North Side",
+  "name": "Pittsburgh · The North Side",
   "park": "Pittsburgh, Pennsylvania",
   "file": "routes/cities/pittsburgh-northside.gpx",
   "outAndBack": false,
@@ -409,7 +417,7 @@
  },
  {
   "id": "pittsburgh-eastend",
-  "name": "Pittsburgh \u00b7 The East End: Highland Park, East Liberty & Squirrel Hill",
+  "name": "Pittsburgh · The East End: Highland Park, East Liberty & Squirrel Hill",
   "park": "Pittsburgh, Pennsylvania",
   "file": "routes/cities/pittsburgh-eastend.gpx",
   "outAndBack": false,
@@ -424,7 +432,7 @@
  },
  {
   "id": "pittsburgh-slopes",
-  "name": "Pittsburgh \u00b7 The South Side Slopes, Mount Washington & the Dirty Dozen south",
+  "name": "Pittsburgh · The South Side Slopes, Mount Washington & the Dirty Dozen south",
   "park": "Pittsburgh, Pennsylvania",
   "file": "routes/cities/pittsburgh-slopes.gpx",
   "outAndBack": false,
@@ -439,7 +447,7 @@
  },
  {
   "id": "pittsburgh-subway",
-  "name": "Pittsburgh \u00b7 The subway: North Side to Gateway",
+  "name": "Pittsburgh · The subway: North Side to Gateway",
   "park": "Pittsburgh, Pennsylvania",
   "file": "routes/cities/pittsburgh-subway.gpx",
   "outAndBack": false,
@@ -454,8 +462,8 @@
  },
  {
   "id": "alpedhuez",
-  "name": "Alpe d'Huez \u00b7 Tour Stage 19",
-  "park": "Gap \u2192 Alpe d'Huez, French Alps (Tour de France 2026)",
+  "name": "Alpe d'Huez · Tour Stage 19",
+  "park": "Gap → Alpe d'Huez, French Alps (Tour de France 2026)",
   "file": "routes/parks/alpedhuez.gpx",
   "outAndBack": false,
   "oneWay": true,
@@ -744,7 +752,7 @@
      44.69289,
      5.98379
     ],
-    "Le P\u00e9rier": [
+    "Le Périer": [
      44.93684,
      5.97398
     ],
@@ -766,6 +774,7 @@
     "max_grade": 13
    }
   },
-  "scene": "routes/scenes/alpedhuez.json"
+  "scene": "routes/scenes/alpedhuez.json",
+  "stage": "production"
  }
 ]

@@ -7,6 +7,7 @@
     "climbM": 134,
     "file": "routes/parks/yosemite.gpx",
     "stage": "draft",
+    "retired": true,
     "stops": [
       {
         "name": "El Capitan Meadow",
@@ -32,6 +33,7 @@
     "climbM": 707,
     "file": "routes/parks/bigsur.gpx",
     "outAndBack": true,
+    "stage": "production",
     "stops": [
       {
         "name": "Bixby Bridge",
@@ -62,6 +64,7 @@
     "climbM": 1882,
     "file": "routes/parks/goingtothesun.gpx",
     "outAndBack": true,
+    "stage": "production",
     "stops": [
       {
         "name": "Apgar",
@@ -113,6 +116,7 @@
     "file": "routes/parks/zion.gpx",
     "outAndBack": true,
     "stage": "draft",
+    "retired": true,
     "stops": [
       {
         "name": "Zion Lodge",
@@ -140,6 +144,7 @@
     "file": "routes/parks/route28.gpx",
     "outAndBack": true,
     "stage": "draft",
+    "retired": true,
     "stops": [
       {
         "name": "Old Forge",
@@ -307,6 +312,7 @@
     "climbM": 3358,
     "file": "routes/parks/alpedhuez.gpx",
     "oneWay": true,
+    "stage": "production",
     "stops": [
       {
         "name": "Col Bayard",

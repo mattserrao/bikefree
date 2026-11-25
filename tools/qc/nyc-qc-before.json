@@ -1,0 +1,2433 @@
+{
+ "bethesda": {
+  "at": [
+   40.7738,
+   -73.9706
+  ],
+  "counts": {
+   "strayWater": 196,
+   "bankShard": 12,
+   "bankCliff": 367,
+   "dryBasin": 1,
+   "bridgeDup": 1,
+   "floating": 2,
+   "waterOverWay": 12,
+   "pathPaint": 67,
+   "edgeLip": 0,
+   "edgeDitch": 0,
+   "joinGap": 1,
+   "sharpCorner": 12,
+   "benchOnWay": 0,
+   "viewBlocked": 0,
+   "edgeSamples": 118,
+   "trees": 1598,
+   "gritEdges": 1
+  },
+  "examples": {
+   "strayWater": [
+    [
+     40.7766,
+     -73.97387
+    ],
+    [
+     40.77635,
+     -73.97378
+    ],
+    [
+     40.77632,
+     -73.97378
+    ],
+    [
+     40.77628,
+     -73.97378
+    ],
+    [
+     40.77624,
+     -73.97378
+    ],
+    [
+     40.77621,
+     -73.97378
+    ]
+   ],
+   "bankCliff": [
+    [
+     40.77646,
+     -73.9738,
+     "The Lake 2.9 m (cap 0.7)"
+    ],
+    [
+     40.77642,
+     -73.97378,
+     "The Lake 2.9 m (cap 0.6)"
+    ],
+    [
+     40.77639,
+     -73.97377,
+     "The Lake 2.9 m (cap 0.6)"
+    ],
+    [
+     40.77635,
+     -73.97375,
+     "The Lake 2.9 m (cap 0.6)"
+    ],
+    [
+     40.77635,
+     -73.97375,
+     "The Lake 2.9 m (cap 0.6)"
+    ],
+    [
+     40.77632,
+     -73.97375,
+     "The Lake 2.9 m (cap 0.5)"
+    ]
+   ],
+   "bankShard": [
+    [
+     40.77522,
+     -73.97371,
+     "The Lake"
+    ],
+    [
+     40.77518,
+     -73.97371,
+     "The Lake"
+    ],
+    [
+     40.77514,
+     -73.9737,
+     "The Lake"
+    ],
+    [
+     40.77511,
+     -73.9737,
+     "The Lake"
+    ],
+    [
+     40.77507,
+     -73.97369,
+     "The Lake"
+    ],
+    [
+     40.77478,
+     -73.97325,
+     "The Lake"
+    ]
+   ],
+   "waterOverWay": [
+    [
+     40.77378,
+     -73.96764,
+     "Trail water 0.0 m over"
+    ],
+    [
+     40.77369,
+     -73.96751,
+     "Trail water -0.2 m over"
+    ],
+    [
+     40.77369,
+     -73.96751,
+     "Trail water -0.2 m over"
+    ],
+    [
+     40.77438,
+     -73.96657,
+     "Trail water -0.1 m over"
+    ],
+    [
+     40.77422,
+     -73.96666,
+     "Trail water 0.1 m over"
+    ],
+    [
+     40.77406,
+     -73.96677,
+     "Trail water 0.3 m over"
+    ]
+   ],
+   "pathPaint": [
+    [
+     40.76976,
+     -73.9702,
+     "Trail"
+    ],
+    [
+     40.77019,
+     -73.97245,
+     "Trail"
+    ],
+    [
+     40.77009,
+     -73.97194,
+     "Trail"
+    ],
+    [
+     40.77157,
+     -73.9719,
+     "Trail"
+    ],
+    [
+     40.77064,
+     -73.97289,
+     "Trail"
+    ],
+    [
+     40.77088,
+     -73.97254,
+     "Trail"
+    ]
+   ],
+   "sharpCorner": [
+    [
+     40.77231,
+     -73.96912,
+     "24° path/drive"
+    ],
+    [
+     40.77231,
+     -73.96912,
+     "142° drive/path"
+    ],
+    [
+     40.77263,
+     -73.96944,
+     "132° drive/path"
+    ],
+    [
+     40.77245,
+     -73.96892,
+     "28° drive/drive"
+    ],
+    [
+     40.77282,
+     -73.96804,
+     "26° drive/drive"
+    ],
+    [
+     40.77304,
+     -73.9688,
+     "143° path/drive"
+    ]
+   ],
+   "joinGap": [
+    [
+     40.77345,
+     -73.9714,
+     "21° path/plaza -0.80"
+    ]
+   ],
+   "dryBasin": [
+    [
+     40.77432,
+     -73.97082,
+     "Bethesda upper basin"
+    ]
+   ],
+   "bridgeDup": [
+    [
+     40.77578,
+     -73.97178,
+     "Bow Bridge: Bow Bridge deck drawn too"
+    ]
+   ],
+   "floating": [
+    [
+     40.77593,
+     -73.9719,
+     "Bow Bridge box 3.5 m up"
+    ],
+    [
+     40.77559,
+     -73.97163,
+     "Bow Bridge box 3.9 m up"
+    ]
+   ]
+  }
+ },
+ "columbus": {
+  "at": [
+   40.7684,
+   -73.9814
+  ],
+  "counts": {
+   "strayWater": 100,
+   "bankShard": 0,
+   "bankCliff": 0,
+   "dryBasin": 0,
+   "bridgeDup": 0,
+   "floating": 0,
+   "waterOverWay": 0,
+   "pathPaint": 9,
+   "edgeLip": 0,
+   "edgeDitch": 0,
+   "joinGap": 0,
+   "sharpCorner": 1,
+   "benchOnWay": 0,
+   "viewBlocked": 1,
+   "edgeSamples": 22,
+   "trees": 874,
+   "gritEdges": 1
+  },
+  "examples": {
+   "strayWater": [
+    [
+     40.76703,
+     -73.98429
+    ],
+    [
+     40.76711,
+     -73.98425
+    ],
+    [
+     40.76707,
+     -73.98425
+    ],
+    [
+     40.76703,
+     -73.98425
+    ],
+    [
+     40.76711,
+     -73.9842
+    ],
+    [
+     40.76815,
+     -73.98216
+    ]
+   ],
+   "pathPaint": [
+    [
+     40.7676,
+     -73.97802,
+     "Trail"
+    ],
+    [
+     40.76822,
+     -73.97823,
+     "Trail"
+    ],
+    [
+     40.7683,
+     -73.97686,
+     "Trail"
+    ],
+    [
+     40.76896,
+     -73.97661,
+     "Trail"
+    ],
+    [
+     40.76974,
+     -73.97539,
+     "Trail"
+    ],
+    [
+     40.76955,
+     -73.97731,
+     "Trail"
+    ]
+   ],
+   "sharpCorner": [
+    [
+     40.77044,
+     -73.97905,
+     "150° path/drive"
+    ]
+   ],
+   "viewBlocked": [
+    [
+     40.76807,
+     -73.9819,
+     "Columbus Monument: 1 trees"
+    ]
+   ]
+  }
+ },
+ "pulitzer": {
+  "at": [
+   40.7645,
+   -73.973
+  ],
+  "counts": {
+   "strayWater": 63,
+   "bankShard": 67,
+   "bankCliff": 141,
+   "dryBasin": 0,
+   "bridgeDup": 1,
+   "floating": 0,
+   "waterOverWay": 10,
+   "pathPaint": 6,
+   "edgeLip": 0,
+   "edgeDitch": 0,
+   "joinGap": 1,
+   "sharpCorner": 0,
+   "benchOnWay": 0,
+   "viewBlocked": 1,
+   "edgeSamples": 32,
+   "trees": 813,
+   "gritEdges": 1
+  },
+  "examples": {
+   "strayWater": [
+    [
+     40.7668,
+     -73.9757
+    ],
+    [
+     40.76684,
+     -73.97566
+    ],
+    [
+     40.76612,
+     -73.97552
+    ],
+    [
+     40.76619,
+     -73.97537
+    ],
+    [
+     40.76619,
+     -73.97533
+    ],
+    [
+     40.76619,
+     -73.97528
+    ]
+   ],
+   "bankShard": [
+    [
+     40.76622,
+     -73.97369,
+     "The Pond"
+    ],
+    [
+     40.76624,
+     -73.97366,
+     "The Pond"
+    ],
+    [
+     40.76627,
+     -73.97364,
+     "The Pond"
+    ],
+    [
+     40.7663,
+     -73.97362,
+     "The Pond"
+    ],
+    [
+     40.76633,
+     -73.97359,
+     "The Pond"
+    ],
+    [
+     40.76634,
+     -73.97359,
+     "The Pond"
+    ]
+   ],
+   "bankCliff": [
+    [
+     40.76648,
+     -73.97363,
+     "The Pond 2.8 m (cap 2.0)"
+    ],
+    [
+     40.76649,
+     -73.97367,
+     "The Pond 2.8 m (cap 2.0)"
+    ],
+    [
+     40.76647,
+     -73.97368,
+     "The Pond 2.8 m (cap 2.0)"
+    ],
+    [
+     40.76648,
+     -73.97368,
+     "The Pond 2.8 m (cap 2.0)"
+    ],
+    [
+     40.76651,
+     -73.97365,
+     "The Pond 2.8 m (cap 2.0)"
+    ],
+    [
+     40.76653,
+     -73.97362,
+     "The Pond 2.8 m (cap 2.0)"
+    ]
+   ],
+   "waterOverWay": [
+    [
+     40.76776,
+     -73.97188,
+     "Trail water 0.2 m over"
+    ],
+    [
+     40.7677,
+     -73.97183,
+     "Trail water 0.3 m over"
+    ],
+    [
+     40.7679,
+     -73.97164,
+     "Trail water -0.1 m over"
+    ],
+    [
+     40.76779,
+     -73.97171,
+     "Trail water 0.1 m over"
+    ],
+    [
+     40.76779,
+     -73.97171,
+     "Trail water 0.1 m over"
+    ],
+    [
+     40.76619,
+     -73.97579,
+     "Trail water -0.0 m over"
+    ]
+   ],
+   "pathPaint": [
+    [
+     40.76583,
+     -73.97327,
+     "Trail"
+    ],
+    [
+     40.76676,
+     -73.973,
+     "Trail"
+    ],
+    [
+     40.76628,
+     -73.97579,
+     "Trail"
+    ],
+    [
+     40.76647,
+     -73.97355,
+     "Trail"
+    ],
+    [
+     40.76794,
+     -73.97375,
+     "Trail"
+    ],
+    [
+     40.76728,
+     -73.97488,
+     "Trail"
+    ]
+   ],
+   "joinGap": [
+    [
+     40.76655,
+     -73.97266,
+     "77° drive/path -3.83"
+    ]
+   ],
+   "bridgeDup": [
+    [
+     40.76693,
+     -73.97381,
+     "Gapstow Bridge: Trail deck drawn too"
+    ]
+   ],
+   "viewBlocked": [
+    [
+     40.76407,
+     -73.9736,
+     "Pulitzer Fountain: 2 trees"
+    ]
+   ]
+  }
+ },
+ "cherryhill": {
+  "at": [
+   40.775,
+   -73.9722
+  ],
+  "counts": {
+   "strayWater": 162,
+   "bankShard": 33,
+   "bankCliff": 504,
+   "dryBasin": 1,
+   "bridgeDup": 1,
+   "floating": 5,
+   "waterOverWay": 8,
+   "pathPaint": 67,
+   "edgeLip": 0,
+   "edgeDitch": 0,
+   "joinGap": 1,
+   "sharpCorner": 11,
+   "benchOnWay": 0,
+   "viewBlocked": 0,
+   "edgeSamples": 78,
+   "trees": 2189,
+   "gritEdges": 1
+  },
+  "examples": {
+   "strayWater": [
+    [
+     40.77672,
+     -73.97391
+    ],
+    [
+     40.77737,
+     -73.97381
+    ],
+    [
+     40.77561,
+     -73.97377
+    ],
+    [
+     40.77766,
+     -73.97348
+    ],
+    [
+     40.77784,
+     -73.97286
+    ],
+    [
+     40.77823,
+     -73.97277
+    ]
+   ],
+   "bankCliff": [
+    [
+     40.77842,
+     -73.97213,
+     "The Lake 2.9 m (cap 24.5)"
+    ],
+    [
+     40.77844,
+     -73.97217,
+     "The Lake 2.9 m (cap 21.6)"
+    ],
+    [
+     40.77843,
+     -73.97216,
+     "The Lake 2.9 m (cap 22.2)"
+    ],
+    [
+     40.77847,
+     -73.97218,
+     "The Lake 2.9 m (cap 19.2)"
+    ],
+    [
+     40.7785,
+     -73.9724,
+     "The Lake 2.9 m (cap 9.5)"
+    ],
+    [
+     40.77849,
+     -73.97239,
+     "The Lake 2.9 m (cap 10.1)"
+    ]
+   ],
+   "bankShard": [
+    [
+     40.77851,
+     -73.97228,
+     "The Lake"
+    ],
+    [
+     40.77853,
+     -73.97228,
+     "The Lake"
+    ],
+    [
+     40.77856,
+     -73.97232,
+     "The Lake"
+    ],
+    [
+     40.77858,
+     -73.97235,
+     "The Lake"
+    ],
+    [
+     40.77859,
+     -73.97231,
+     "The Lake"
+    ],
+    [
+     40.77856,
+     -73.97235,
+     "The Lake"
+    ]
+   ],
+   "waterOverWay": [
+    [
+     40.77378,
+     -73.96764,
+     "Trail water 0.0 m over"
+    ],
+    [
+     40.77369,
+     -73.96751,
+     "Trail water -0.2 m over"
+    ],
+    [
+     40.77369,
+     -73.96751,
+     "Trail water -0.2 m over"
+    ],
+    [
+     40.77432,
+     -73.96761,
+     "Wallach Walk water -0.2 m over"
+    ],
+    [
+     40.77446,
+     -73.96749,
+     "Wallach Walk water -0.3 m over"
+    ],
+    [
+     40.7746,
+     -73.96734,
+     "Wallach Walk water -0.3 m over"
+    ]
+   ],
+   "pathPaint": [
+    [
+     40.7787,
+     -73.97014,
+     "Trail"
+    ],
+    [
+     40.77827,
+     -73.97075,
+     "Trail"
+    ],
+    [
+     40.77859,
+     -73.97124,
+     "Trail"
+    ],
+    [
+     40.77907,
+     -73.97167,
+     "Trail"
+    ],
+    [
+     40.77875,
+     -73.97282,
+     "Trail"
+    ],
+    [
+     40.7793,
+     -73.97274,
+     "Trail"
+    ]
+   ],
+   "sharpCorner": [
+    [
+     40.77737,
+     -73.97411,
+     "30° drive/drive"
+    ],
+    [
+     40.77231,
+     -73.96912,
+     "24° path/drive"
+    ],
+    [
+     40.77231,
+     -73.96912,
+     "142° drive/path"
+    ],
+    [
+     40.77263,
+     -73.96944,
+     "132° drive/path"
+    ],
+    [
+     40.77245,
+     -73.96892,
+     "28° drive/drive"
+    ],
+    [
+     40.77304,
+     -73.9688,
+     "143° path/drive"
+    ]
+   ],
+   "joinGap": [
+    [
+     40.77345,
+     -73.9714,
+     "21° path/plaza -0.80"
+    ]
+   ],
+   "dryBasin": [
+    [
+     40.77432,
+     -73.97082,
+     "Bethesda upper basin"
+    ]
+   ],
+   "bridgeDup": [
+    [
+     40.77578,
+     -73.97178,
+     "Bow Bridge: Bow Bridge deck drawn too"
+    ]
+   ],
+   "floating": [
+    [
+     40.77593,
+     -73.9719,
+     "Bow Bridge box 3.5 m up"
+    ],
+    [
+     40.77559,
+     -73.97163,
+     "Bow Bridge box 3.9 m up"
+    ],
+    [
+     40.77571,
+     -73.97528,
+     "Strawberry Fields — Imagine box 0.6 m up"
+    ],
+    [
+     40.77574,
+     -73.9753,
+     "Strawberry Fields — Imagine box 1.6 m up"
+    ],
+    [
+     40.77578,
+     -73.97528,
+     "Strawberry Fields — Imagine box 1.5 m up"
+    ]
+   ]
+  }
+ },
+ "bowbridge": {
+  "at": [
+   40.77575,
+   -73.97174
+  ],
+  "counts": {
+   "strayWater": 230,
+   "bankShard": 33,
+   "bankCliff": 524,
+   "dryBasin": 1,
+   "bridgeDup": 1,
+   "floating": 5,
+   "waterOverWay": 8,
+   "pathPaint": 71,
+   "edgeLip": 0,
+   "edgeDitch": 0,
+   "joinGap": 2,
+   "sharpCorner": 8,
+   "benchOnWay": 0,
+   "viewBlocked": 0,
+   "edgeSamples": 84,
+   "trees": 2936,
+   "gritEdges": 1
+  },
+  "examples": {
+   "strayWater": [
+    [
+     40.77712,
+     -73.97392
+    ],
+    [
+     40.7768,
+     -73.97392
+    ],
+    [
+     40.77676,
+     -73.97392
+    ],
+    [
+     40.77672,
+     -73.97392
+    ],
+    [
+     40.77658,
+     -73.97387
+    ],
+    [
+     40.77737,
+     -73.97383
+    ]
+   ],
+   "bankCliff": [
+    [
+     40.77842,
+     -73.97213,
+     "The Lake 2.9 m (cap 24.5)"
+    ],
+    [
+     40.77844,
+     -73.97217,
+     "The Lake 2.9 m (cap 21.6)"
+    ],
+    [
+     40.77843,
+     -73.97216,
+     "The Lake 2.9 m (cap 22.2)"
+    ],
+    [
+     40.77847,
+     -73.97218,
+     "The Lake 2.9 m (cap 19.2)"
+    ],
+    [
+     40.7785,
+     -73.9724,
+     "The Lake 2.9 m (cap 9.5)"
+    ],
+    [
+     40.77849,
+     -73.97239,
+     "The Lake 2.9 m (cap 10.1)"
+    ]
+   ],
+   "bankShard": [
+    [
+     40.77851,
+     -73.97228,
+     "The Lake"
+    ],
+    [
+     40.77853,
+     -73.97228,
+     "The Lake"
+    ],
+    [
+     40.77856,
+     -73.97232,
+     "The Lake"
+    ],
+    [
+     40.77858,
+     -73.97235,
+     "The Lake"
+    ],
+    [
+     40.77859,
+     -73.97231,
+     "The Lake"
+    ],
+    [
+     40.77856,
+     -73.97235,
+     "The Lake"
+    ]
+   ],
+   "waterOverWay": [
+    [
+     40.77378,
+     -73.96764,
+     "Trail water 0.0 m over"
+    ],
+    [
+     40.77369,
+     -73.96751,
+     "Trail water -0.2 m over"
+    ],
+    [
+     40.77369,
+     -73.96751,
+     "Trail water -0.2 m over"
+    ],
+    [
+     40.77432,
+     -73.96761,
+     "Wallach Walk water -0.2 m over"
+    ],
+    [
+     40.77446,
+     -73.96749,
+     "Wallach Walk water -0.3 m over"
+    ],
+    [
+     40.7746,
+     -73.96734,
+     "Wallach Walk water -0.3 m over"
+    ]
+   ],
+   "pathPaint": [
+    [
+     40.7787,
+     -73.97014,
+     "Trail"
+    ],
+    [
+     40.77827,
+     -73.97075,
+     "Trail"
+    ],
+    [
+     40.77835,
+     -73.96929,
+     "Trail"
+    ],
+    [
+     40.77859,
+     -73.97124,
+     "Trail"
+    ],
+    [
+     40.77907,
+     -73.97167,
+     "Trail"
+    ],
+    [
+     40.77782,
+     -73.9688,
+     "Trail"
+    ]
+   ],
+   "sharpCorner": [
+    [
+     40.77737,
+     -73.97411,
+     "30° drive/drive"
+    ],
+    [
+     40.77263,
+     -73.96944,
+     "132° drive/path"
+    ],
+    [
+     40.77304,
+     -73.9688,
+     "143° path/drive"
+    ],
+    [
+     40.77286,
+     -73.97391,
+     "149° path/path"
+    ],
+    [
+     40.77325,
+     -73.96888,
+     "25° drive/drive"
+    ],
+    [
+     40.7747,
+     -73.97483,
+     "29° drive/drive"
+    ]
+   ],
+   "joinGap": [
+    [
+     40.77891,
+     -73.97281,
+     "51° plaza/path -2.21"
+    ],
+    [
+     40.77345,
+     -73.9714,
+     "21° path/plaza -0.80"
+    ]
+   ],
+   "dryBasin": [
+    [
+     40.77432,
+     -73.97082,
+     "Bethesda upper basin"
+    ]
+   ],
+   "bridgeDup": [
+    [
+     40.77578,
+     -73.97178,
+     "Bow Bridge: Bow Bridge deck drawn too"
+    ]
+   ],
+   "floating": [
+    [
+     40.77593,
+     -73.9719,
+     "Bow Bridge box 3.5 m up"
+    ],
+    [
+     40.77559,
+     -73.97163,
+     "Bow Bridge box 3.9 m up"
+    ],
+    [
+     40.77571,
+     -73.97528,
+     "Strawberry Fields — Imagine box 0.6 m up"
+    ],
+    [
+     40.77574,
+     -73.9753,
+     "Strawberry Fields — Imagine box 1.6 m up"
+    ],
+    [
+     40.77578,
+     -73.97528,
+     "Strawberry Fields — Imagine box 1.5 m up"
+    ]
+   ]
+  }
+ },
+ "gapstow": {
+  "at": [
+   40.76698,
+   -73.97367
+  ],
+  "counts": {
+   "strayWater": 80,
+   "bankShard": 68,
+   "bankCliff": 147,
+   "dryBasin": 0,
+   "bridgeDup": 1,
+   "floating": 0,
+   "waterOverWay": 10,
+   "pathPaint": 23,
+   "edgeLip": 0,
+   "edgeDitch": 0,
+   "joinGap": 1,
+   "sharpCorner": 4,
+   "benchOnWay": 0,
+   "viewBlocked": 1,
+   "edgeSamples": 124,
+   "trees": 1240,
+   "gritEdges": 1
+  },
+  "examples": {
+   "strayWater": [
+    [
+     40.76655,
+     -73.97438
+    ],
+    [
+     40.76652,
+     -73.97438
+    ],
+    [
+     40.76648,
+     -73.97438
+    ],
+    [
+     40.76644,
+     -73.97438
+    ],
+    [
+     40.76641,
+     -73.97438
+    ],
+    [
+     40.76637,
+     -73.97438
+    ]
+   ],
+   "bankShard": [
+    [
+     40.76622,
+     -73.97369,
+     "The Pond"
+    ],
+    [
+     40.76624,
+     -73.97366,
+     "The Pond"
+    ],
+    [
+     40.76627,
+     -73.97364,
+     "The Pond"
+    ],
+    [
+     40.7663,
+     -73.97362,
+     "The Pond"
+    ],
+    [
+     40.76633,
+     -73.97359,
+     "The Pond"
+    ],
+    [
+     40.76634,
+     -73.97359,
+     "The Pond"
+    ]
+   ],
+   "bankCliff": [
+    [
+     40.76648,
+     -73.97363,
+     "The Pond 2.8 m (cap 2.0)"
+    ],
+    [
+     40.76649,
+     -73.97367,
+     "The Pond 2.8 m (cap 2.0)"
+    ],
+    [
+     40.76647,
+     -73.97368,
+     "The Pond 2.8 m (cap 2.0)"
+    ],
+    [
+     40.76648,
+     -73.97368,
+     "The Pond 2.8 m (cap 2.0)"
+    ],
+    [
+     40.76651,
+     -73.97365,
+     "The Pond 2.8 m (cap 2.0)"
+    ],
+    [
+     40.76653,
+     -73.97362,
+     "The Pond 2.8 m (cap 2.0)"
+    ]
+   ],
+   "waterOverWay": [
+    [
+     40.76776,
+     -73.97188,
+     "Trail water 0.2 m over"
+    ],
+    [
+     40.7677,
+     -73.97183,
+     "Trail water 0.3 m over"
+    ],
+    [
+     40.7679,
+     -73.97164,
+     "Trail water -0.1 m over"
+    ],
+    [
+     40.76779,
+     -73.97171,
+     "Trail water 0.1 m over"
+    ],
+    [
+     40.76779,
+     -73.97171,
+     "Trail water 0.1 m over"
+    ],
+    [
+     40.76619,
+     -73.97579,
+     "Trail water -0.0 m over"
+    ]
+   ],
+   "pathPaint": [
+    [
+     40.76583,
+     -73.97327,
+     "Trail"
+    ],
+    [
+     40.76676,
+     -73.973,
+     "Trail"
+    ],
+    [
+     40.7676,
+     -73.97802,
+     "Trail"
+    ],
+    [
+     40.76822,
+     -73.97823,
+     "Trail"
+    ],
+    [
+     40.76827,
+     -73.97551,
+     "Trail"
+    ],
+    [
+     40.76863,
+     -73.97603,
+     "Trail"
+    ]
+   ],
+   "joinGap": [
+    [
+     40.76655,
+     -73.97266,
+     "77° drive/path -3.83"
+    ]
+   ],
+   "sharpCorner": [
+    [
+     40.7698,
+     -73.97297,
+     "17° path/drive"
+    ],
+    [
+     40.76943,
+     -73.97241,
+     "18° path/drive"
+    ],
+    [
+     40.76953,
+     -73.97224,
+     "133° path/drive"
+    ],
+    [
+     40.76953,
+     -73.97224,
+     "41° drive/drive"
+    ]
+   ],
+   "bridgeDup": [
+    [
+     40.76693,
+     -73.97381,
+     "Gapstow Bridge: Trail deck drawn too"
+    ]
+   ],
+   "viewBlocked": [
+    [
+     40.76407,
+     -73.9736,
+     "Pulitzer Fountain: 2 trees"
+    ]
+   ]
+  }
+ },
+ "westdrive": {
+  "at": [
+   40.77003,
+   -73.97939
+  ],
+  "counts": {
+   "strayWater": 95,
+   "bankShard": 0,
+   "bankCliff": 0,
+   "dryBasin": 0,
+   "bridgeDup": 0,
+   "floating": 0,
+   "waterOverWay": 5,
+   "pathPaint": 14,
+   "edgeLip": 0,
+   "edgeDitch": 0,
+   "joinGap": 0,
+   "sharpCorner": 6,
+   "benchOnWay": 0,
+   "viewBlocked": 1,
+   "edgeSamples": 60,
+   "trees": 926,
+   "gritEdges": 1
+  },
+  "examples": {
+   "strayWater": [
+    [
+     40.76816,
+     -73.98219
+    ],
+    [
+     40.76812,
+     -73.98219
+    ],
+    [
+     40.76809,
+     -73.98219
+    ],
+    [
+     40.76805,
+     -73.98219
+    ],
+    [
+     40.76802,
+     -73.98219
+    ],
+    [
+     40.76823,
+     -73.98214
+    ]
+   ],
+   "waterOverWay": [
+    [
+     40.76619,
+     -73.97579,
+     "Trail water -0.0 m over"
+    ],
+    [
+     40.76602,
+     -73.97575,
+     "Trail water 0.1 m over"
+    ],
+    [
+     40.76587,
+     -73.97566,
+     "Trail water -0.0 m over"
+    ],
+    [
+     40.76575,
+     -73.9755,
+     "Trail water -0.1 m over"
+    ],
+    [
+     40.76565,
+     -73.9753,
+     "Trail water -0.2 m over"
+    ]
+   ],
+   "pathPaint": [
+    [
+     40.7676,
+     -73.97802,
+     "Trail"
+    ],
+    [
+     40.76822,
+     -73.97823,
+     "Trail"
+    ],
+    [
+     40.76827,
+     -73.97551,
+     "Trail"
+    ],
+    [
+     40.76863,
+     -73.97603,
+     "Trail"
+    ],
+    [
+     40.7683,
+     -73.97686,
+     "Trail"
+    ],
+    [
+     40.76896,
+     -73.97661,
+     "Trail"
+    ]
+   ],
+   "sharpCorner": [
+    [
+     40.77044,
+     -73.97905,
+     "150° path/drive"
+    ],
+    [
+     40.77259,
+     -73.97694,
+     "38° bridle/drive"
+    ],
+    [
+     40.77259,
+     -73.97694,
+     "48° drive/bridle"
+    ],
+    [
+     40.77239,
+     -73.97675,
+     "49° drive/drive"
+    ],
+    [
+     40.77288,
+     -73.9766,
+     "57° drive/bridle"
+    ],
+    [
+     40.77272,
+     -73.97662,
+     "45° drive/drive"
+    ]
+   ],
+   "viewBlocked": [
+    [
+     40.76807,
+     -73.9819,
+     "Columbus Monument: 1 trees"
+    ]
+   ]
+  }
+ },
+ "lakeshore": {
+  "at": [
+   40.77556,
+   -73.97383
+  ],
+  "counts": {
+   "strayWater": 284,
+   "bankShard": 33,
+   "bankCliff": 485,
+   "dryBasin": 1,
+   "bridgeDup": 1,
+   "floating": 5,
+   "waterOverWay": 2,
+   "pathPaint": 53,
+   "edgeLip": 0,
+   "edgeDitch": 0,
+   "joinGap": 2,
+   "sharpCorner": 7,
+   "benchOnWay": 0,
+   "viewBlocked": 0,
+   "edgeSamples": 100,
+   "trees": 2009,
+   "gritEdges": 1
+  },
+  "examples": {
+   "strayWater": [
+    [
+     40.77362,
+     -73.97744
+    ],
+    [
+     40.77358,
+     -73.97744
+    ],
+    [
+     40.77355,
+     -73.97744
+    ],
+    [
+     40.77362,
+     -73.97739
+    ],
+    [
+     40.77358,
+     -73.97739
+    ],
+    [
+     40.77355,
+     -73.97739
+    ]
+   ],
+   "bankCliff": [
+    [
+     40.77842,
+     -73.97213,
+     "The Lake 2.9 m (cap 24.5)"
+    ],
+    [
+     40.77844,
+     -73.97217,
+     "The Lake 2.9 m (cap 21.6)"
+    ],
+    [
+     40.77843,
+     -73.97216,
+     "The Lake 2.9 m (cap 22.2)"
+    ],
+    [
+     40.77847,
+     -73.97218,
+     "The Lake 2.9 m (cap 19.2)"
+    ],
+    [
+     40.7785,
+     -73.9724,
+     "The Lake 2.9 m (cap 9.5)"
+    ],
+    [
+     40.77849,
+     -73.97239,
+     "The Lake 2.9 m (cap 10.1)"
+    ]
+   ],
+   "bankShard": [
+    [
+     40.77851,
+     -73.97228,
+     "The Lake"
+    ],
+    [
+     40.77853,
+     -73.97228,
+     "The Lake"
+    ],
+    [
+     40.77856,
+     -73.97232,
+     "The Lake"
+    ],
+    [
+     40.77858,
+     -73.97235,
+     "The Lake"
+    ],
+    [
+     40.77859,
+     -73.97231,
+     "The Lake"
+    ],
+    [
+     40.77856,
+     -73.97235,
+     "The Lake"
+    ]
+   ],
+   "waterOverWay": [
+    [
+     40.77542,
+     -73.97222,
+     "Trail water -0.2 m over"
+    ],
+    [
+     40.7754,
+     -73.97245,
+     "Trail water -0.3 m over"
+    ]
+   ],
+   "pathPaint": [
+    [
+     40.7787,
+     -73.97014,
+     "Trail"
+    ],
+    [
+     40.77827,
+     -73.97075,
+     "Trail"
+    ],
+    [
+     40.77859,
+     -73.97124,
+     "Trail"
+    ],
+    [
+     40.77907,
+     -73.97167,
+     "Trail"
+    ],
+    [
+     40.77875,
+     -73.97282,
+     "Trail"
+    ],
+    [
+     40.7793,
+     -73.97274,
+     "Trail"
+    ]
+   ],
+   "sharpCorner": [
+    [
+     40.77737,
+     -73.97411,
+     "30° drive/drive"
+    ],
+    [
+     40.77288,
+     -73.9766,
+     "57° drive/bridle"
+    ],
+    [
+     40.77272,
+     -73.97662,
+     "45° drive/drive"
+    ],
+    [
+     40.77286,
+     -73.97391,
+     "149° path/path"
+    ],
+    [
+     40.7747,
+     -73.97483,
+     "29° drive/drive"
+    ],
+    [
+     40.7747,
+     -73.97483,
+     "28° drive/drive"
+    ]
+   ],
+   "joinGap": [
+    [
+     40.77891,
+     -73.97281,
+     "51° plaza/path -2.21"
+    ],
+    [
+     40.77345,
+     -73.9714,
+     "21° path/plaza -0.80"
+    ]
+   ],
+   "dryBasin": [
+    [
+     40.77432,
+     -73.97082,
+     "Bethesda upper basin"
+    ]
+   ],
+   "bridgeDup": [
+    [
+     40.77578,
+     -73.97178,
+     "Bow Bridge: Bow Bridge deck drawn too"
+    ]
+   ],
+   "floating": [
+    [
+     40.77593,
+     -73.9719,
+     "Bow Bridge box 3.5 m up"
+    ],
+    [
+     40.77559,
+     -73.97163,
+     "Bow Bridge box 3.9 m up"
+    ],
+    [
+     40.77571,
+     -73.97528,
+     "Strawberry Fields — Imagine box 0.6 m up"
+    ],
+    [
+     40.77574,
+     -73.9753,
+     "Strawberry Fields — Imagine box 1.6 m up"
+    ],
+    [
+     40.77578,
+     -73.97528,
+     "Strawberry Fields — Imagine box 1.5 m up"
+    ]
+   ]
+  }
+ },
+ "reservoir": {
+  "at": [
+   40.78407,
+   -73.95951
+  ],
+  "counts": {
+   "strayWater": 0,
+   "bankShard": 0,
+   "bankCliff": 54,
+   "dryBasin": 0,
+   "bridgeDup": 0,
+   "floating": 0,
+   "waterOverWay": 79,
+   "pathPaint": 7,
+   "edgeLip": 2,
+   "edgeDitch": 0,
+   "joinGap": 0,
+   "sharpCorner": 0,
+   "benchOnWay": 0,
+   "viewBlocked": 0,
+   "edgeSamples": 66,
+   "trees": 324,
+   "gritEdges": 1
+  },
+  "examples": {
+   "bankCliff": [
+    [
+     40.78757,
+     -73.95776,
+     "Jacqueline Kennedy Onassis Reservoir 2.9 m (cap -1.9)"
+    ],
+    [
+     40.78756,
+     -73.95776,
+     "Jacqueline Kennedy Onassis Reservoir 2.9 m (cap -1.9)"
+    ],
+    [
+     40.78752,
+     -73.95777,
+     "Jacqueline Kennedy Onassis Reservoir 2.9 m (cap -1.9)"
+    ],
+    [
+     40.78748,
+     -73.95777,
+     "Jacqueline Kennedy Onassis Reservoir 2.9 m (cap -2.0)"
+    ],
+    [
+     40.78745,
+     -73.95777,
+     "Jacqueline Kennedy Onassis Reservoir 2.9 m (cap -2.0)"
+    ],
+    [
+     40.78741,
+     -73.95778,
+     "Jacqueline Kennedy Onassis Reservoir 2.9 m (cap -2.0)"
+    ]
+   ],
+   "waterOverWay": [
+    [
+     40.7838,
+     -73.95972,
+     "Trail water 1.3 m over"
+    ],
+    [
+     40.7838,
+     -73.95972,
+     "Stephanie and Fred Shuman Reservoir Running Track water 1.3 m over"
+    ],
+    [
+     40.78396,
+     -73.95961,
+     "Stephanie and Fred Shuman Reservoir Running Track water 1.3 m over"
+    ],
+    [
+     40.78413,
+     -73.95949,
+     "Stephanie and Fred Shuman Reservoir Running Track water 1.2 m over"
+    ],
+    [
+     40.78429,
+     -73.95938,
+     "Stephanie and Fred Shuman Reservoir Running Track water 1.2 m over"
+    ],
+    [
+     40.78445,
+     -73.95926,
+     "Stephanie and Fred Shuman Reservoir Running Track water 1.3 m over"
+    ]
+   ],
+   "pathPaint": [
+    [
+     40.78202,
+     -73.96254,
+     "Trail"
+    ],
+    [
+     40.78277,
+     -73.96449,
+     "Trail"
+    ],
+    [
+     40.78261,
+     -73.96412,
+     "Trail"
+    ],
+    [
+     40.78325,
+     -73.96503,
+     "Trail"
+    ],
+    [
+     40.78399,
+     -73.95947,
+     "Trail"
+    ],
+    [
+     40.78475,
+     -73.95889,
+     "Trail"
+    ]
+   ],
+   "edgeLip": [
+    [
+     40.78224,
+     -73.96092,
+     "path +1.11 m (shore shallows)"
+    ],
+    [
+     40.78284,
+     -73.96039,
+     "path +1.51 m (shore shallows)"
+    ]
+   ]
+  }
+ },
+ "meer": {
+  "at": [
+   40.79538,
+   -73.95317
+  ],
+  "counts": {
+   "strayWater": 117,
+   "bankShard": 0,
+   "bankCliff": 350,
+   "dryBasin": 0,
+   "bridgeDup": 0,
+   "floating": 1,
+   "waterOverWay": 14,
+   "pathPaint": 16,
+   "edgeLip": 1,
+   "edgeDitch": 0,
+   "joinGap": 1,
+   "sharpCorner": 3,
+   "benchOnWay": 3,
+   "viewBlocked": 0,
+   "edgeSamples": 130,
+   "trees": 3110,
+   "gritEdges": 1
+  },
+  "examples": {
+   "strayWater": [
+    [
+     40.79459,
+     -73.95801
+    ],
+    [
+     40.79456,
+     -73.95796
+    ],
+    [
+     40.79456,
+     -73.95791
+    ],
+    [
+     40.79423,
+     -73.95791
+    ],
+    [
+     40.79456,
+     -73.95787
+    ],
+    [
+     40.79427,
+     -73.95787
+    ]
+   ],
+   "bankCliff": [
+    [
+     40.79674,
+     -73.95405,
+     "Harlem Meer 2.8 m (cap -0.5)"
+    ],
+    [
+     40.79672,
+     -73.95401,
+     "Harlem Meer 2.8 m (cap -0.5)"
+    ],
+    [
+     40.79671,
+     -73.95397,
+     "Harlem Meer 2.8 m (cap -0.5)"
+    ],
+    [
+     40.7967,
+     -73.95392,
+     "Harlem Meer 2.8 m (cap -0.5)"
+    ],
+    [
+     40.79669,
+     -73.95388,
+     "Harlem Meer 2.8 m (cap -0.4)"
+    ],
+    [
+     40.79668,
+     -73.95384,
+     "Harlem Meer 2.8 m (cap -0.4)"
+    ]
+   ],
+   "waterOverWay": [
+    [
+     40.79644,
+     -73.95233,
+     "Trail water 0.0 m over"
+    ],
+    [
+     40.79659,
+     -73.95226,
+     "Trail water 0.1 m over"
+    ],
+    [
+     40.79665,
+     -73.95374,
+     "Trail water -0.2 m over"
+    ],
+    [
+     40.79582,
+     -73.95552,
+     "North Woods water 1.3 m over"
+    ],
+    [
+     40.79654,
+     -73.95479,
+     "Trail water 0.6 m over"
+    ],
+    [
+     40.79748,
+     -73.95218,
+     "Trail water 0.2 m over"
+    ]
+   ],
+   "pathPaint": [
+    [
+     40.79154,
+     -73.95649,
+     "Trail"
+    ],
+    [
+     40.79333,
+     -73.95371,
+     "Trail"
+    ],
+    [
+     40.79339,
+     -73.95282,
+     "Trail"
+    ],
+    [
+     40.79349,
+     -73.95294,
+     "Trail"
+    ],
+    [
+     40.7944,
+     -73.95209,
+     "Trail"
+    ],
+    [
+     40.79544,
+     -73.95375,
+     "Trail"
+    ]
+   ],
+   "edgeLip": [
+    [
+     40.79716,
+     -73.95147,
+     "path +0.21 m (shore shallows)"
+    ]
+   ],
+   "sharpCorner": [
+    [
+     40.7951,
+     -73.95369,
+     "141° drive/path"
+    ],
+    [
+     40.79651,
+     -73.95677,
+     "154° drive/path"
+    ],
+    [
+     40.7983,
+     -73.95613,
+     "150° path/path"
+    ]
+   ],
+   "joinGap": [
+    [
+     40.79807,
+     -73.95258,
+     "138° drive/path -0.45"
+    ]
+   ],
+   "benchOnWay": [
+    [
+     40.79606,
+     -73.95456,
+     "on path"
+    ],
+    [
+     40.79638,
+     -73.9542,
+     "on path"
+    ],
+    [
+     40.79635,
+     -73.95488,
+     "on path"
+    ]
+   ],
+   "floating": [
+    [
+     40.79328,
+     -73.95281,
+     "Conservatory Garden box 3.4 m up"
+    ]
+   ]
+  }
+ },
+ "mall": {
+  "at": [
+   40.77273,
+   -73.972
+  ],
+  "counts": {
+   "strayWater": 90,
+   "bankShard": 12,
+   "bankCliff": 305,
+   "dryBasin": 1,
+   "bridgeDup": 1,
+   "floating": 2,
+   "waterOverWay": 8,
+   "pathPaint": 51,
+   "edgeLip": 0,
+   "edgeDitch": 0,
+   "joinGap": 1,
+   "sharpCorner": 20,
+   "benchOnWay": 0,
+   "viewBlocked": 0,
+   "edgeSamples": 110,
+   "trees": 813,
+   "gritEdges": 1
+  },
+  "examples": {
+   "strayWater": [
+    [
+     40.77564,
+     -73.97376
+    ],
+    [
+     40.77571,
+     -73.97371
+    ],
+    [
+     40.77481,
+     -73.97328
+    ],
+    [
+     40.77474,
+     -73.97276
+    ],
+    [
+     40.7747,
+     -73.97276
+    ],
+    [
+     40.77478,
+     -73.97272
+    ]
+   ],
+   "bankCliff": [
+    [
+     40.77617,
+     -73.97375,
+     "The Lake 2.9 m (cap 0.4)"
+    ],
+    [
+     40.77614,
+     -73.97375,
+     "The Lake 2.9 m (cap 0.4)"
+    ],
+    [
+     40.77611,
+     -73.97373,
+     "The Lake 2.9 m (cap 0.4)"
+    ],
+    [
+     40.77608,
+     -73.97371,
+     "The Lake 2.9 m (cap 0.4)"
+    ],
+    [
+     40.77604,
+     -73.97369,
+     "The Lake 2.9 m (cap 0.6)"
+    ],
+    [
+     40.77601,
+     -73.97367,
+     "The Lake 2.9 m (cap 1.9)"
+    ]
+   ],
+   "bankShard": [
+    [
+     40.77522,
+     -73.97371,
+     "The Lake"
+    ],
+    [
+     40.77518,
+     -73.97371,
+     "The Lake"
+    ],
+    [
+     40.77514,
+     -73.9737,
+     "The Lake"
+    ],
+    [
+     40.77511,
+     -73.9737,
+     "The Lake"
+    ],
+    [
+     40.77507,
+     -73.97369,
+     "The Lake"
+    ],
+    [
+     40.77478,
+     -73.97325,
+     "The Lake"
+    ]
+   ],
+   "waterOverWay": [
+    [
+     40.77378,
+     -73.96764,
+     "Trail water 0.0 m over"
+    ],
+    [
+     40.77369,
+     -73.96751,
+     "Trail water -0.2 m over"
+    ],
+    [
+     40.77369,
+     -73.96751,
+     "Trail water -0.2 m over"
+    ],
+    [
+     40.77432,
+     -73.96761,
+     "Wallach Walk water -0.2 m over"
+    ],
+    [
+     40.77446,
+     -73.96749,
+     "Wallach Walk water -0.3 m over"
+    ],
+    [
+     40.7746,
+     -73.96734,
+     "Wallach Walk water -0.3 m over"
+    ]
+   ],
+   "pathPaint": [
+    [
+     40.76913,
+     -73.97268,
+     "Trail"
+    ],
+    [
+     40.76976,
+     -73.9702,
+     "Trail"
+    ],
+    [
+     40.76964,
+     -73.97265,
+     "Trail"
+    ],
+    [
+     40.77019,
+     -73.97295,
+     "Trail"
+    ],
+    [
+     40.77004,
+     -73.9736,
+     "Trail"
+    ],
+    [
+     40.77019,
+     -73.97245,
+     "Trail"
+    ]
+   ],
+   "sharpCorner": [
+    [
+     40.7698,
+     -73.97297,
+     "17° path/drive"
+    ],
+    [
+     40.76943,
+     -73.97241,
+     "18° path/drive"
+    ],
+    [
+     40.76953,
+     -73.97224,
+     "133° path/drive"
+    ],
+    [
+     40.76953,
+     -73.97224,
+     "41° drive/drive"
+    ],
+    [
+     40.77231,
+     -73.96912,
+     "24° path/drive"
+    ],
+    [
+     40.77231,
+     -73.96912,
+     "142° drive/path"
+    ]
+   ],
+   "joinGap": [
+    [
+     40.77345,
+     -73.9714,
+     "21° path/plaza -0.80"
+    ]
+   ],
+   "dryBasin": [
+    [
+     40.77432,
+     -73.97082,
+     "Bethesda upper basin"
+    ]
+   ],
+   "bridgeDup": [
+    [
+     40.77578,
+     -73.97178,
+     "Bow Bridge: Bow Bridge deck drawn too"
+    ]
+   ],
+   "floating": [
+    [
+     40.77593,
+     -73.9719,
+     "Bow Bridge box 3.5 m up"
+    ],
+    [
+     40.77559,
+     -73.97163,
+     "Bow Bridge box 3.9 m up"
+    ]
+   ]
+  }
+ },
+ "bridle": {
+  "at": [
+   40.77045,
+   -73.9792
+  ],
+  "counts": {
+   "strayWater": 105,
+   "bankShard": 0,
+   "bankCliff": 0,
+   "dryBasin": 0,
+   "bridgeDup": 0,
+   "floating": 0,
+   "waterOverWay": 5,
+   "pathPaint": 14,
+   "edgeLip": 0,
+   "edgeDitch": 0,
+   "joinGap": 0,
+   "sharpCorner": 6,
+   "benchOnWay": 0,
+   "viewBlocked": 1,
+   "edgeSamples": 58,
+   "trees": 926,
+   "gritEdges": 1
+  },
+  "examples": {
+   "strayWater": [
+    [
+     40.76815,
+     -73.98219
+    ],
+    [
+     40.76811,
+     -73.98219
+    ],
+    [
+     40.76808,
+     -73.98219
+    ],
+    [
+     40.76804,
+     -73.98219
+    ],
+    [
+     40.768,
+     -73.98219
+    ],
+    [
+     40.76822,
+     -73.98214
+    ]
+   ],
+   "waterOverWay": [
+    [
+     40.76619,
+     -73.97579,
+     "Trail water -0.0 m over"
+    ],
+    [
+     40.76602,
+     -73.97575,
+     "Trail water 0.1 m over"
+    ],
+    [
+     40.76587,
+     -73.97566,
+     "Trail water -0.0 m over"
+    ],
+    [
+     40.76575,
+     -73.9755,
+     "Trail water -0.1 m over"
+    ],
+    [
+     40.76565,
+     -73.9753,
+     "Trail water -0.2 m over"
+    ]
+   ],
+   "pathPaint": [
+    [
+     40.7676,
+     -73.97802,
+     "Trail"
+    ],
+    [
+     40.76822,
+     -73.97823,
+     "Trail"
+    ],
+    [
+     40.76827,
+     -73.97551,
+     "Trail"
+    ],
+    [
+     40.76863,
+     -73.97603,
+     "Trail"
+    ],
+    [
+     40.7683,
+     -73.97686,
+     "Trail"
+    ],
+    [
+     40.76896,
+     -73.97661,
+     "Trail"
+    ]
+   ],
+   "sharpCorner": [
+    [
+     40.77044,
+     -73.97905,
+     "150° path/drive"
+    ],
+    [
+     40.77259,
+     -73.97694,
+     "38° bridle/drive"
+    ],
+    [
+     40.77259,
+     -73.97694,
+     "48° drive/bridle"
+    ],
+    [
+     40.77239,
+     -73.97675,
+     "49° drive/drive"
+    ],
+    [
+     40.77288,
+     -73.9766,
+     "57° drive/bridle"
+    ],
+    [
+     40.77272,
+     -73.97662,
+     "45° drive/drive"
+    ]
+   ],
+   "viewBlocked": [
+    [
+     40.76807,
+     -73.9819,
+     "Columbus Monument: 1 trees"
+    ]
+   ]
+  }
+ }
+}

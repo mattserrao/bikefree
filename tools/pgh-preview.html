@@ -8,6 +8,7 @@ import { graphNetwork, nearestEdge } from '../js/graph.js';
 import { loadNetwork, makePathRoute } from '../js/network.js';
 import { GraphWorld } from '../js/world/graph-world.js';
 const q = new URLSearchParams(location.search);
+if (q.has('qc')) globalThis.BF_QC = 1;   // (a QC run, tools/qc_map.mjs: the landmarks' probes on)
 const json = await (await fetch('../' + (q.get('graph') || 'routes/cities/pgh.json'))).json();
 const { base, network, graph } = graphNetwork(json);
 let first = network.freeRide.first;

@@ -1,0 +1,50 @@
+[
+ {
+  "id": "nyc-full-loop",
+  "name": "Central Park Full Loop",
+  "tags": [
+   "classic",
+   "hilly",
+   "loop"
+  ],
+  "note": "The 6.1-mile Park Drive loop, counter-clockwise as the park rides it: from Columbus Circle past the Pond and up the East Drive by the Met and Cat Hill, round the north end over Harlem Hill, and down the West Drive past the Great Hill and Strawberry Fields",
+  "lengthM": 10070,
+  "climbM": 116
+ },
+ {
+  "id": "nyc-lower-loop",
+  "name": "Lower Loop",
+  "tags": [
+   "flat",
+   "short",
+   "loop"
+  ],
+  "note": "The south end in 1.7 miles: up the East Drive past the Wollman Rink and the Mall, across the park on the 72nd Street cross drive above Bethesda Terrace, and down the West Drive past Sheep Meadow to Columbus Circle",
+  "lengthM": 2840,
+  "climbM": 28
+ },
+ {
+  "id": "nyc-landmarks",
+  "name": "Central Park Landmarks",
+  "tags": [
+   "scenic",
+   "paths",
+   "easy"
+  ],
+  "note": "The park on its paths: the Mall and Literary Walk to Bethesda Terrace and the fountain, along the Lake to Bow Bridge, past Belvedere Castle and Turtle Pond to the Great Lawn, round the Reservoir, up to the Conservatory Garden and Harlem Meer, and home down the West Drive",
+  "lengthM": 14430,
+  "climbM": 134
+ },
+ {
+  "id": "nyc-bridle-harlem-hill",
+  "name": "Bridle Path & Harlem Hill",
+  "tags": [
+   "hilly",
+   "gravel",
+   "loop"
+  ],
+  "note": "Round the Reservoir on the bridle path's fine gravel, then the north end the hard way: up the East Drive to the Meer and over Harlem Hill, the park's biggest climb, and down the West Drive back to the Reservoir",
+  "lengthM": 6490,
+  "climbM": 61
+ }
+]
