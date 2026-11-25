@@ -154,7 +154,15 @@ export function runMapQC(w, T, { radius = 420, heroes = null } = {}) {
     if (p.y - g < 0.35) continue;
     if (E.some((e) => wayNear(e, p.x, p.z, 0.3)) && p.y - (wayY(p.x, p.z) ?? -1e9) < 0.4) continue;
     const held = prims.some((q) => q !== p && q.top >= p.y - 0.45 && (q.beam ? q.bot <= p.y + 0.02 : q.y <= p.y + 0.02) && (q.beam ? segD(q.a, q.b, p.x, p.z) <= q.w / 2 + (p.foot ?? p.r) + 0.3 : Math.hypot(q.x - p.x, q.z - p.z) <= Math.max(q.r, p.r) + 0.3));   // (either over the other: a rail on its posts, a deck on its piles)
-    if (!held) add('floating', p.x, p.z, `${p.lm} ${p.what} ${(p.y - g).toFixed(1)} m up`);
+    // (else a ray down from under its foot — its middle and four points round it — onto anything drawn: walls built
+    //  outside the probe, PGH's towers, hold their roofs)
+    let under = held;
+    if (!under) for (const [dx, dz] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const k = (p.foot ?? p.r) * 0.5; rc.set(new T.Vector3(p.x + dx * k, p.y - 0.02, p.z + dz * k), down); rc.far = 0.6;
+      for (const o of meshes) { try { if (rc.intersectObject(o, false).length) { under = true; break; } } catch {} }
+      if (under) break;
+    }
+    if (!under) add('floating', p.x, p.z, `${p.lm} ${p.what} ${(p.y - g).toFixed(1)} m up`);
   }
   function wayY(x, z) { let best = null; for (const e of E) for (let i = 0; i <= e.n; i++) { const d = Math.hypot(e.x[i] - x, e.z[i] - z); if (d < w.wOf(e) / 2 + 2 && (!best || d < best.d)) best = { d, y: e.ele[i] + 0.12 }; } return best?.y; }
   // 14 views: trees between each landmark and the nearest way sample (40–160 m off)

@@ -152,21 +152,23 @@ function setScenery(id) {
   renderScenery();
   renderPreview();
 }
-// Routes are listed in sections: In Progress, then one closed "More routes" fold (menu-simplify-test) holding
+// Routes are listed in sections: Production, In Progress, then one closed "More routes" fold (menu-simplify-test) holding
 // Rough Drafts (catalog "stage": "draft") and the Ideas list. The fold opens
 // by itself while the selected item is in it.
-const STAGES = [['progress', 'In Progress'], ['draft', 'Rough Drafts']];
-const stageOf = (it) => (it.stage === 'draft' ? 'draft' : 'progress');
+// (user, 25 Nov: PGH, CNY, SKAN and Endless — QC checked — in a new first section, Production)
+const STAGES = [['production', 'Production'], ['progress', 'In Progress'], ['draft', 'Rough Drafts']];
+const OPEN_STAGES = 2;   // (Production and In Progress open; the rest in the "More routes" fold)
+const stageOf = (it) => (it.stage === 'draft' ? 'draft' : it.stage === 'production' ? 'production' : 'progress');
 const moreOpen = {};   // by list (route cards, scenery cards): opened by hand
 function groupedCards(items, card, selectedId = null, list = 'routeCards') {
   const block = ([key, label]) => {
     const list = items.filter((it) => stageOf(it) === key);
     return list.length ? `<h3 class="cards-group">${label}</h3>${list.map(card).join('')}` : '';
   };
-  const folded = items.filter((it) => stageOf(it) !== 'progress');
+  const folded = items.filter((it) => !STAGES.slice(0, OPEN_STAGES).some(([k]) => k === stageOf(it)));
   const open = moreOpen[list] || folded.some((it) => it.id === selectedId);
-  const inner = STAGES.slice(1).map(block).join('') + ideasSection();
-  return block(STAGES[0]) + (inner ? `<details class="more-routes" ${open ? 'open' : ''}${open && !moreOpen[list] ? ' data-auto="1"' : ''}><summary class="cards-group">More routes <span class="muted">· ${folded.length} drafts &amp; older${routeIdeas?.length ? ' · ideas' : ''}</span></summary><div class="cards">${inner}</div></details>` : '');
+  const inner = STAGES.slice(OPEN_STAGES).map(block).join('') + ideasSection();
+  return STAGES.slice(0, OPEN_STAGES).map(block).join('') + (inner ? `<details class="more-routes" ${open ? 'open' : ''}${open && !moreOpen[list] ? ' data-auto="1"' : ''}><summary class="cards-group">More routes <span class="muted">· ${folded.length} drafts &amp; older${routeIdeas?.length ? ' · ideas' : ''}</span></summary><div class="cards">${inner}</div></details>` : '');
 }
 const watchMore = (list) => list.querySelector('details.more-routes')?.addEventListener('toggle', (e) => { if (!(e.target.dataset.auto && e.target.open)) moreOpen[list.id] = e.target.open; /* (not when opened for the selection) */ drawThumbs(); });
 

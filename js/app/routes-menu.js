@@ -18,7 +18,7 @@ const DEMO_ROUTE = { id: 'builtin-demo-hills', kind: 'route', name: 'Demo Hills 
 // [endless] the endless map (js/endless/course.js, js/world/endless-world.js): a world generated as you ride, six biomes in a
 // seeded sequence; every mile choose flat, rolling, climb or descend with ◀ ▶
 const ENDLESS_ROUTE = { id: 'builtin-endless', routeId: 'endless', kind: 'route', name: 'Endless', park: 'Six biomes · choose the terrain every mile', group: 'Scenic routes — 3D',
-  endless: true, free: true, tags: ['varied'], note: 'A world without end: farmland, northern forest and lakes, alpine mountains, the coast, desert canyons and arctic tundra' };
+  endless: true, free: true, stage: 'production', tags: ['varied'], note: 'A world without end: farmland, northern forest and lakes, alpine mountains, the coast, desert canyons and arctic tundra' };
 let routeItems = [];
 let parkItems = null;
 let netItems = [];          // network presets (choose your turns): listed as routes, not as scenery
@@ -29,7 +29,7 @@ let graphCities = [];   // [{id, name, park, note, thumb}]
 const graphBase = (id) => `builtin-graph-${id}`;
 const graphCityOf = (baseId) => graphCities.find((c) => graphBase(c.id) === baseId);
 const graphItem = (c) => ({ id: graphBase(c.id), routeId: `${c.id}-free`, kind: 'route', name: `${c.name} · Free ride`, park: c.park, baseId: graphBase(c.id),
-  group: 'Scenic routes — 3D', network: `routes/cities/${c.id}.json`, graph: true, free: true, tags: ['varied'], note: c.note });
+  group: 'Scenic routes — 3D', network: `routes/cities/${c.id}.json`, graph: true, free: true, tags: ['varied'], note: c.note, ...(c.stage ? { stage: c.stage } : {}) });
 const routeCache = new Map();
 let selectedRouteId = null;
 const setSelectedRouteId = (id) => { selectedRouteId = id; };
@@ -82,7 +82,7 @@ async function refreshRouteList(selectId) {
   const [library, parks] = await Promise.all([store.listLibrary('route').catch(() => []), loadParks(), loadIdeas()]);
   const mine = library.map((r) => ({ ...r, group: 'My routes' }));
   // a city loop with a network is listed as its presets (the loop itself is one of them); it stays a scenery choice
-  routeItems = [ENDLESS_ROUTE, ...parks, ...netItems, ...mine, DEMO_ROUTE];
+  routeItems = [ENDLESS_ROUTE, ...parks, ...netItems, ...mine];   // (Demo Hills off the list — user, 25 Nov: "The other maps should be removed"; its files stay for the tests)
   if (selectId || !routeItems.some((r) => r.id === selectedRouteId)) selectedRouteId = selectId || defaultRouteId(routeItems);
   // The list shows straight from the catalog (PLAN 7.11): a park's numbers and outline are baked into it
   // (tools/build_routes.mjs), so no GPX or scenery is fetched first. Scenery loads when a ride starts (openWorld).
@@ -169,7 +169,7 @@ function renderRouteCards() {
     return `<button class="rcard ${it.id === selectedRouteId ? 'on' : ''}" data-id="${it.id}"><canvas></canvas>
       <div><b>${escapeHtml(it.name.replace(' (built-in)', ''))}</b><div class="rsub">${escapeHtml(it.park || it.group)} · ${sub}</div>${tags.length ? `<div class="rtags">${tags.map((t) => `<span>${label[t]}</span>`).join('')}</div>` : ''}</div></button>`;
   };
-  $('routeCards').innerHTML = (shown.length ? '' : '<p class="muted">No routes for that goal yet.</p>') + top.map(card).join('') + groupedCards(rest, card, selectedRouteId);
+  $('routeCards').innerHTML = (shown.length ? '' : '<p class="muted">No routes for that goal yet.</p>') + groupedCards([...top, ...rest], card, selectedRouteId)   /* (the city cards first in their section: Production or In Progress) */;
   watchIdeas($('routeCards')); watchMore($('routeCards'));
   drawThumbs();
 }

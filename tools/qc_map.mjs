@@ -21,12 +21,15 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-export const KEYS = ['strayWater', 'bankShard', 'bankCliff', 'dryBasin', 'bridgeDup', 'floating', 'waterOverWay', 'pathPaint', 'edgeLip', 'edgeDitch', 'joinGap', 'sharpCorner', 'alleeTrees', 'gritEdges', 'benchOnWay', 'viewBlocked', 'trees'];
+export const KEYS_ALL = ['strayWater', 'bankShard', 'bankCliff', 'dryBasin', 'bridgeDup', 'floating', 'waterOverWay', 'pathPaint', 'edgeLip', 'edgeDitch', 'joinGap', 'sharpCorner', 'alleeTrees', 'gritEdges', 'benchOnWay', 'viewBlocked', 'trees'];
+export const KEYS = KEYS_ALL;
 
 /** The sites of a map: its site file, else spread over its ways and landmarks. */
 export async function sitesOf(map, { file = null, auto = 0 } = {}) {
   const f = file || resolve(ROOT, `tools/qc/sites/${map}.json`);
   if (!auto && existsSync(f)) return JSON.parse(await readFile(f, 'utf8'));
+  // (the endless map: metres along its course, spread through its biomes — tools/snap_endless.mjs's spec)
+  if (map === 'endless') { const n = auto || 6, out = {}; for (let k = 0; k < n; k++) out[`km${Math.round((800 + k * 6000) / 1000)}`] = `${800 + k * 6000}`; return out; }
   const n = auto || 8, net = JSON.parse(await readFile(resolve(ROOT, `routes/cities/${map}.json`), 'utf8'));
   const { decodeGraph } = await import('../js/graph.js');
   const G = decodeGraph(net), edges = G.edges.filter((e) => e.n >= 4), out = {};
@@ -43,14 +46,16 @@ export async function sitesOf(map, { file = null, auto = 0 } = {}) {
 
 /** Runs the QC at the sites: { [site]: { at, counts, examples } } (and the shots in out). */
 export async function runQC(map, sites, { out = `/tmp/qc/${map}`, radius = 420, log = (s) => process.stderr.write(s) } = {}) {
-  const net = JSON.parse(await readFile(resolve(ROOT, `routes/cities/${map}.json`), 'utf8'));
+  const endless = map === 'endless';
+  const net = endless ? {} : JSON.parse(await readFile(resolve(ROOT, `routes/cities/${map}.json`), 'utf8'));
   const city = net.cityData ? `/${net.cityData}` : null;
-  const EVAL = `import('/tools/qc-map.js').then((m) => (${city ? `fetch('${city}').then((r) => r.json())` : 'Promise.resolve({})'}).then((cd) => m.runMapQC(w, T, { radius: ${radius}, heroes: { allee: cd.allee || null } })))`;
+  const EVAL = endless ? `import('/tools/qc-endless.js').then((m) => m.runEndlessQC(w, T, { radius: ${Math.max(radius, 600)} }))` : `import('/tools/qc-map.js').then((m) => (${city ? `fetch('${city}').then((r) => r.json())` : 'Promise.resolve({})'}).then((cd) => m.runMapQC(w, T, { radius: ${radius}, heroes: { allee: cd.allee || null } })))`;
   await mkdir(out, { recursive: true });
   const names = Object.keys(sites);
   const text = await new Promise((ok, bad) => {
-    const p = spawn('node', ['tools/snap_pgh.mjs', '--software', '--qc', '--size', '1280x720', '--graph', `routes/cities/${map}.json`, '--out', out, '--time', 'afternoon',
-      ...names.map((n) => `${n}@${sites[n]}`), '--eval', EVAL], { cwd: ROOT });
+    const p = spawn('node', endless ? ['tools/snap_endless.mjs', '--software', '--size', '1280x720', '--out', out, ...names.map((n) => `${n}@${sites[n]}`), '--eval', EVAL]
+      : ['tools/snap_pgh.mjs', '--software', '--qc', '--size', '1280x720', '--graph', `routes/cities/${map}.json`, '--out', out, '--time', 'afternoon',
+        ...names.map((n) => `${n}@${sites[n]}`), '--eval', EVAL], { cwd: ROOT });
     let buf = ''; p.stdout.on('data', (d) => { buf += d; log('.'); }); p.stderr.on('data', (d) => { buf += d; });
     p.on('close', (code) => (code ? bad(new Error(buf.slice(-2000))) : ok(buf)));
   });
@@ -62,6 +67,9 @@ export async function runQC(map, sites, { out = `/tmp/qc/${map}`, radius = 420, 
 /** The table: a row per site, a column per check (before→after with a baseline), and the totals. */
 export function report(res, base = null) {
   const names = Object.keys(res), lines = [];
+  // (the graph maps' checks, else whatever the map's checks counted — the endless map's own)
+  const seen = new Set(names.flatMap((n) => Object.keys(res[n]?.counts || {})));
+  const KEYS = KEYS_ALL.some((k) => seen.has(k)) || !seen.size ? KEYS_ALL : [...seen];
   lines.push(`${'site'.padEnd(14)} ${KEYS.map((k) => k.slice(0, 9).padStart(9)).join(' ')}`);
   const cell = (v, b) => String(b !== undefined && b !== v ? `${b}→${v}` : v).padStart(9);
   for (const n of names) { const c = res[n]?.counts || {}; lines.push(`${n.slice(0, 14).padEnd(14)} ${KEYS.map((k) => cell(c[k] ?? '-', base?.[n]?.counts?.[k])).join(' ')}`); }

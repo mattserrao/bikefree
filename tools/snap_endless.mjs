@@ -14,6 +14,7 @@ const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf(k); if (i < 0) return d; const v = args[i + 1]; args.splice(i, 2); return v; };
 const flag = (k) => { const i = args.indexOf(k); if (i < 0) return false; args.splice(i, 1); return true; };
+const evalJs = opt('--eval', null);   // run in the page after the frame (the world as `w`, THREE as `T`): its result is printed (tools/qc_map.mjs endless)
 const software = flag('--software'), seed = opt('--seed', '1'), quality = opt('--quality', 'balanced'), out = opt('--out', 'tools/snapshots'), view = opt('--view', null);
 const [width, height] = opt('--size', '1280x720').split('x').map(Number);
 const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/chromium'].find(existsSync));
@@ -51,6 +52,7 @@ for (const spec of args) {
     const i = w.renderer.info.render, st = window.route.endlessRide.stateAt(w.p);
     return { calls: i.calls, triangles: i.triangles, tiles: w.tiles.size, biome: st.biome, mode: st.mode, day: w.dayAt.toFixed(2) };
   }, view);
+  if (evalJs) console.log('  eval:', JSON.stringify(await page.evaluate(async (code) => { const w = window.bfWorld; const T = await import('/vendor/three.module.min.js'); return eval(code); }, evalJs)));
   const file = resolve(ROOT, out, `endless-${name}.png`);
   await page.screenshot({ path: file });
   console.log(`${name}: ${stats.biome}, ${stats.mode}, day ${stats.day} · ${stats.calls} draw calls, ${(stats.triangles / 1e6).toFixed(2)} M triangles, ${stats.tiles} tiles · ${((Date.now() - t0) / 1000).toFixed(1)} s → ${file.slice(ROOT.length)}${errors.length ? `\n  errors: ${errors.slice(0, 4).join(' | ')}` : ''}`);
