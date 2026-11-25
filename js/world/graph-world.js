@@ -2099,7 +2099,7 @@ function groundMaterial(low = false, rural = false) {
           // the ground swollen slightly near their base" → "Root tops breaking the litter", "Bare soil between roots"):
           // round each one near the camera, the tops of its roots running out through the leaves, bare earth between
           // them close in; the swelling itself is the skirt's (old-growth.js floorH)
-          for (int i = 0; i < ${ROOTS_N}; i++) {
+          if (length(vGW.xz - cameraPosition.xz) < 110.) for (int i = 0; i < ${ROOTS_N}; i++) {   // (the trees round the camera only: no loop for the far floor)
             if (float(i) >= uRootN) break;
             vec4 f = uRoots[i]; vec2 dv = vGW.xz - f.xy; float r = length(dv) / f.z;
             if (r > 4.4) continue;
@@ -2124,6 +2124,6 @@ function groundMaterial(low = false, rural = false) {
         diffuseColor.rgb *= 1. - .2 * smoothstep(.55, .75, gwN((vGW.xz + uCloudT * vec2(3., 1.2)) * .0025));   // a cloud's shadow drifting over (user, 23 Nov)
         #endif`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-19${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-20${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
   return m;
 }

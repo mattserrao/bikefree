@@ -166,6 +166,16 @@ export class NearTrunks {
     return n;
   }
   hide() { for (const im of this.meshes.values()) im.count = 0; }
+  /** Every bark's material on an empty mesh in the scene now (the world's shader warmer compiles it behind the loading
+   *  screen: on a Mac a first compile mid-ride is a visible hitch). */
+  warm() {
+    if (this._warm) return; this._warm = [];
+    const g = new THREE.BoxGeometry(.01, .01, .01);
+    for (const bark of ['maple', 'beech', 'hickory']) {
+      const im = new THREE.InstancedMesh(g, this.mats[bark] ||= barkMaterial(bark), 1); im.count = 0; im.frustumCulled = false; im.name = `Near bark warm ${bark}`;
+      this.group.add(im); this._warm.push(im);
+    }
+  }
   dispose() {
     for (const im of this.meshes.values()) { this.group.remove(im); im.geometry.dispose(); im.dispose(); }
     for (const m of Object.values(this.mats)) m.dispose();
@@ -233,6 +243,12 @@ export class NearPlants {
     return n;
   }
   hide() { for (const im of this.meshes.values()) im.count = 0; }
+  /** Its material on an empty mesh in the scene now (compiled behind the loading screen: see NearTrunks.warm). */
+  warm() {
+    if (this._warm) return;
+    const im = new THREE.InstancedMesh(new THREE.BoxGeometry(.01, .01, .01), this._material(), 1); im.count = 0; im.frustumCulled = false; im.name = 'Near plants warm';
+    this.group.add(im); this._warm = im;
+  }
 }
 
 /**

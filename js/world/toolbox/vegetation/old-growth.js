@@ -632,7 +632,13 @@ export class OldGrowth {
     }
     const ready = this.world.ground && this.city.land;
     if (!ready) return;
-    if (!this.canopy) this._buildCanopy();
+    if (!this.canopy) {
+      this._buildCanopy();
+      // the area's 3D pieces' materials in the scene now, on empty meshes: compiled behind the loading screen by the
+      // world's shader warmer, not mid-ride (user, 24 Nov, on a Mac: "lots of stuttering")
+      this.nearTrunks().warm(); this.nearPlants().warm();
+      if (!this.flareMesh) this._drawFlares(cx, cz);
+    }
     if (!this.life) this._placeLife();
     this.life.tick(time);
     if (!this._logAt || Math.hypot(cx - this._logAt.x, cz - this._logAt.z) > 20) { this._logAt = { x: cx, z: cz }; this._logs(cx, cz); this._drawFlares(cx, cz); this._drawRootGround(cx, cz); }

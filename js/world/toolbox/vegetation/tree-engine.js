@@ -439,6 +439,11 @@ export class TreeEngine {
       this.impGeo.setAttribute('iC', new THREE.InstancedBufferAttribute(this.iC, 1));
       this.impGeo.setAttribute('iA', new THREE.InstancedBufferAttribute(this.iA, 4)); this.impGeo.setAttribute('iB', new THREE.InstancedBufferAttribute(this.iB, 4)); this.impGeo.setAttribute('iT', new THREE.InstancedBufferAttribute(this.iT, 1));
       this.impGeo.setAttribute('iS', new THREE.InstancedBufferAttribute(this.iS, 2)); this.impGeo.attributes.iS.setUsage(THREE.DynamicDrawUsage);
+      // (three.js caps an instanced geometry's draw at the instance count its attributes had the first time it was
+      //  drawn — geometry._maxInstanceCount, set once — so after the buffers grew, every tree past the first build's
+      //  count went undrawn: whole woods bare, worst where the most tiles stream in after the start — a laptop's or
+      //  desktop's 2.3 km — user, 24 Nov: "large portions of the trees of the forest don't load")
+      delete this.impGeo._maxInstanceCount;
     }
     let k = 0;
     for (const [key, list] of this.tiles) {
