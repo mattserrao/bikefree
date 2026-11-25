@@ -3,6 +3,7 @@
 // across it, lit warm on the sun's side and cool-grey under. One draw call, drawn first, never fogged.
 // Options: { clouds: 0.42 (cover), glow: 1, speed: 1 }.
 import * as THREE from '../../../../vendor/three.module.min.js';
+import { NOISE_GLSL } from '../materials/glsl-noise.js';   // [blocks] shared GLSL
 
 const VERT = /* glsl */`
   varying vec3 vDir;
@@ -15,10 +16,7 @@ const FRAG = /* glsl */`
   uniform vec3 uZenith, uHorizon, uSunCol, uSunDir;
   uniform float uTime, uCover, uGlow;
   varying vec3 vDir;
-  float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
-  float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
-    return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y); }
-  float fbm(vec2 p) { float a = .5, s = 0.; for (int k = 0; k < 5; k++) { s += a * vn(p); p = p * 2.03 + 17.1; a *= .5; } return s; }
+  ${NOISE_GLSL}
   void main() {
     vec3 d = normalize(vDir);
     float el = max(d.y, 0.);

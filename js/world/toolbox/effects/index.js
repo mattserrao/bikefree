@@ -10,6 +10,11 @@
 //   dispose()
 // The world it is given needs: scene, group, mats, sun, sunDir, camera, poolAt(x, z), surfaceH(x, z), waterTop(x, z)
 // and (for tiles) TILE.
+//
+// [blocks] One registry for both worlds (user, 24 Nov 2026: "modernize all maps to use the same common building
+// blocks"): the free-ride graph maps read their JSON's "effects" block, the route scenes their scene JSON's
+// "effects" field (scene-schema.js). Each effect lists what it needs from the world (NEEDS); one asked for in a world
+// that lacks a need is skipped with a warning, never half-installed.
 import { waterSurface } from './water-surface.js';
 import { shoreline } from './shoreline.js';
 import { village } from './village.js';
@@ -19,9 +24,26 @@ import { atmosphere } from './atmosphere.js';
 
 export const EFFECTS = { water: waterSurface, shoreline, village, frontYards, sky, atmosphere };
 
-/** Install the effects a map asks for; returns one handle that fans out to them. */
+/** The world methods each effect calls (checked at install; the properties they read — group, sun, sunDir, mats,
+ *  TILE — may be set after the effects are installed, so they're read per frame and not checked here). */
+export const NEEDS = {
+  water: [],
+  shoreline: ['surfaceH', 'waterTop'],
+  village: [],
+  frontYards: [],
+  sky: [],
+  atmosphere: ['surfaceH'],
+};
+
+/** The methods an effect calls that this world doesn't have (empty: it can be installed). */
+export function missingNeeds(world, name) { return (NEEDS[name] || []).filter((k) => typeof world[k] !== 'function'); }
+
 export function installEffects(world, cfg = {}) {
-  const on = Object.entries(cfg || {}).filter(([k, v]) => EFFECTS[k] && v !== false).map(([k, v]) => {
+  const on = Object.entries(cfg || {}).filter(([k, v]) => EFFECTS[k] && v !== false).filter(([k]) => {
+    const miss = missingNeeds(world, k);
+    if (miss.length) console.warn(`effect ${k}: skipped, the world has no ${miss.join(', ')}`);
+    return !miss.length;
+  }).map(([k, v]) => {
     try { return { name: k, h: EFFECTS[k].install(world, v === true ? {} : v) || {} }; } catch (e) { console.warn(`effect ${k}:`, e); return null; }
   }).filter(Boolean);
   return {

@@ -972,7 +972,7 @@ def write(cfg, E, jpos, jh, cor):
     files = cfg.get('files') or {'map': 'routes/cities/pittsburgh-map.json', 'ground': 'routes/cities/pgh-ground.grid.bin.gz', 'shore': 'routes/cities/pgh-shore.json', 'dressing': 'routes/cities/pgh-dressing.json',
              'heroes': 'routes/cities/pgh-heroes.json', 'bridges': 'routes/cities/pgh-bridges.json', 'cityData': 'routes/cities/pgh-city.json'}
     labels = cfg.get('mapLabels') or PGH_MAP_LABELS
-    out = {'format': 'bikefree-graph-1', 'id': CITY, 'name': cfg.get('name', 'PGH'), 'city': cfg.get('cityName', 'Pittsburgh, PA'),
+    out = {'format': 'bikefree-graph-1', **({'profile': cfg['profile']} if cfg.get('profile') else {}), 'id': CITY, 'name': cfg.get('name', 'PGH'), 'city': cfg.get('cityName', 'Pittsburgh, PA'),
            'attribution': 'Map data © OpenStreetMap contributors (ODbL); elevation: AWS Terrain Tiles (USGS 3DEP)',
            'origin': {'lat': round(lat0, 6), 'lon': round(lon0, 6)}, 'unit': {'latlon': 1e-6, 'ele': 0.1},
            'widths': cfg['widths'], 'waterLevelM': cfg['waterLevelM'], **files,

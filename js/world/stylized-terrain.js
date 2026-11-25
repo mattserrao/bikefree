@@ -7,6 +7,7 @@ import { scenePacks, PACK_META } from './toolbox/packs/index.js';
 import { normalizeScene, lifeKit } from './toolbox/scene-schema.js';
 import { ForestPlanner, TILE_M, makeClearings } from './toolbox/vegetation/forest.js';
 import { TreeEngine, packKit } from './toolbox/vegetation/tree-engine.js';
+import { recordsFromMatrices, plantTile } from './toolbox/vegetation/planting.js';   // [blocks]
 import { GroundBlocks, InstancePool, packMatrices, proxyGroup } from './toolbox/core/pools.js';
 import { Subway } from './toolbox/structures/subway.js';   // [subway]
 import { MountainRoad } from './toolbox/structures/mountain-road.js';
@@ -1086,7 +1087,7 @@ export class StylizedTerrain {
         const map = layer === 'forest' ? this.forestTiles : layer === 'far' ? this.farTrees : this[layer];
         for (const key of [...map.keys()]) if (!wanted.has(key)) { const tl = map.get(key); if (tl?.engine) this._te?.removeTile(tl.engineKey ?? key); map.delete(key); }
         // the scatter's and far tiles' trees go into the tree engine as their tiles swap in (not before: no doubles)
-        if (this._te) for (const [key, tl] of map) if (tl.engineTrees && !tl.engine) { tl.engineKey = `${layer}:${key}`; tl.engine = true; this._te.setTile(tl.engineKey, tl.engineTrees); }
+        if (this._te) for (const [key, tl] of map) if (tl.engineTrees && !tl.engine) { tl.engineKey = `${layer}:${key}`; tl.engine = true; plantTile(this._te, tl.engineKey, tl.engineTrees); }
         if (!(layer === 'forest' && this._te) && !(layer === 'far' && this._te)) this._pool(layer).set(map.values(), cx, cz);
         if (layer === 'scatter' && this._te) { const [sx, sz, r] = want.scatterSquare; this._te.hideFar = [(sx - r) * 192, (sz - r) * 192, (sx + r + 1) * 192, (sz + r + 1) * 192]; this._te._at = null; }
         // the tree cards step aside where the real trees are (the scatter square around the camera)
@@ -1233,12 +1234,8 @@ export class StylizedTerrain {
     const te = this._treeEngine();
     if (te) {
       // the engine draws every tier itself: the planner's full (near-tier) stand, once per tile
-      const lists = this.forest.tile(w.x, w.z, 0), trees = [], p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), e = new THREE.Euler();
-      for (const [name, matrices] of Object.entries(lists)) {
-        if (!this.kit.assets[name]) continue;
-        for (const m of matrices) { m.decompose(p, q, sc); e.setFromQuaternion(q, 'YXZ'); trees.push({ x: p.x, y: p.y, z: p.z, sp: name, v: 0, s: sc.x, sy: sc.y, rot: e.y }); }
-      }
-      te.setTile(`${w.x}/${w.z}`, trees);
+      const trees = recordsFromMatrices(this.forest.tile(w.x, w.z, 0), (name) => !!this.kit.assets[name]);   // [blocks] the planting API
+      plantTile(te, `${w.x}/${w.z}`, trees);
       return { x: w.x * TILE_M, z: w.z * TILE_M, size: TILE_M, tier: w.tier, engine: true, lists: {}, group: new THREE.Group() };
     }
     const lists = this.forest.tile(w.x, w.z, w.tier), packed = {};

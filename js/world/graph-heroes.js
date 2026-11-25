@@ -109,7 +109,7 @@ export async function buildGraphHeroes(world, json) {
   // the city's facades (brick, stone, metal, window frames, sills) as the Pittsburgh map draws them: they come with a
   // building kit in the scene (js/world/graph-city.js plans PGH's homes with it)
   // (Light / phones: the city's plain window shader, not the brick-and-frames facade shader — a third of a frame's GPU time)
-  host.route.scene.buildingKit = { cityFacades: world.qualityKey !== 'low', detailM: 150, dressingM: 80, styles: world.json?.id === 'cny' ? [{ preset: 'cny-suburban', kinds: ['house', 'rowhouse'] }] : [{ preset: 'pittsburgh-rowhouse', kinds: ['rowhouse'] }, { preset: 'pittsburgh-frame', kinds: ['house', 'barn', 'shed'] }] };
+  host.route.scene.buildingKit = { cityFacades: world.qualityKey !== 'low', detailM: 150, dressingM: 80, styles: world.profile.buildingStyles };   // (the map profile: toolbox/map-profile.js)
   host._materials();
   const heroes = buildHeroes(host);
   let landmarks = { count: 0, tick() {} };

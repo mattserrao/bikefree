@@ -29,6 +29,7 @@ import { BakedLighting } from './toolbox/atmosphere/baked-light.js';
 import { ShaderWarmer } from './toolbox/core/shader-warm.js';
 import { drain, runSlice, due } from './toolbox/core/jobs.js';
 import { installEffects } from './toolbox/effects/index.js';
+import { mapProfile } from './toolbox/map-profile.js';
 import { makeParkMaterial } from './toolbox/materials/park-surfaces.js';
 import { makeMasonryMaterial } from './toolbox/materials/stonework.js';
 
@@ -174,7 +175,9 @@ export class GraphWorld {
     this.route = base;
     this.G = base.graph;
     this.json = this.G.json;
-    this.rural = RURAL_MAPS.has(this.json?.id);   // CNY, SKAN: upstate roads, countryside dressing (graph-city.js)
+    // the map's rules, from its data (toolbox/map-profile.js: CNY's and SKAN's are the defaults; PGH pins "city")
+    this.profile = mapProfile(this.json);
+    this.rural = this.profile.dressing === 'country';   // (countryside dressing: graph-city.js)
     this.log = opts.log || (() => {});
     this.path = opts.path || null;
     this.areaSet = null;
@@ -251,8 +254,9 @@ export class GraphWorld {
     // one time of day"): the sun fixed low in the west-southwest, its shadows baked (toolbox/atmosphere/baked-light.js)
     // for the static scenery — ground, roads, houses, barns, trees (each tile's crown proxies) — in a window round the
     // rider that re-bakes as the ride moves on; the live shadow map keeps only the moving things near the rider
-    this.fixedTime = this.rural ? 'golden' : null;
-    if (this.rural) {
+    const goldenUpstate = this.profile.light === 'golden-upstate';
+    this.fixedTime = goldenUpstate ? 'golden' : null;
+    if (goldenUpstate) {
       this.baked = BakedLighting.create(this._bakeView(), { baked: 'golden', windowM: 3200, windowMoveM: 700, reachM: 900, cellM: 2, marginM: 0, dynamicSpanM: 40,
         prepTimeoutS: 45, groundAt: (x, z) => (this.ground ? this._groundH(x, z) : 0) }, { golden: GOLDEN_UPSTATE });
       if (this.baked) {
@@ -262,10 +266,10 @@ export class GraphWorld {
     this._reach();
     this.mats = {
       road: sideMaterial(this.qualityKey === 'low'),
-      paint: this.rural ? wornPaintMaterial() : new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
-      ground: groundMaterial(this.qualityKey === 'low', this.rural),
-      roadSurface: roadSurfaceMaterial(this.qualityKey === 'low', this.rural),
-      spill: roadSurfaceMaterial(this.qualityKey === 'low', this.rural, true),
+      paint: this.profile.roads === 'worn' ? wornPaintMaterial() : new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+      ground: groundMaterial(this.qualityKey === 'low', this.profile.ground === 'upstate'),
+      roadSurface: roadSurfaceMaterial(this.qualityKey === 'low', this.profile.roads === 'worn'),
+      spill: roadSurfaceMaterial(this.qualityKey === 'low', this.profile.roads === 'worn', true),
       water: new THREE.MeshLambertMaterial({ color: '#4f7f97', transparent: true, opacity: 0.92 }),
       // the dressed places and the river walls: textured from world position (toolbox/materials)
       park: Object.fromEntries(['lawn', 'plaza', 'granite', 'walk', 'garden', 'wood', 'scrub', 'fairway', 'green', 'sand'].map((k) => [k, makeParkMaterial(k)])),
@@ -403,7 +407,7 @@ export class GraphWorld {
   setTimeOfDay(key) {
     if (this.fixedTime) key = this.fixedTime;   // (CNY, SKAN: golden hour only, its shadows baked)
     if (!TIMES[key]) key = 'midday';
-    const t = this.rural && key === 'golden' ? GOLDEN_UPSTATE : TIMES[key];
+    const t = this.profile.light === 'golden-upstate' && key === 'golden' ? GOLDEN_UPSTATE : TIMES[key];
     this.timeKey = key;
     const el = THREE.MathUtils.degToRad(t.elev), az = THREE.MathUtils.degToRad(t.az);
     this.sunDir = new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)).normalize();
@@ -413,7 +417,7 @@ export class GraphWorld {
     RIDER_RIM.value.set(t.sun).multiplyScalar(t.night ? .08 : 1);
     this.scene.background = new THREE.Color(t.sky);
     if (!this.sky) { this.sky = makeSkyDome({ radius: 8500 }); this.scene.add(this.sky.mesh); }
-    this.sky.set(t, this.sunDir, this.rural ? .5 : .35);
+    this.sky.set(t, this.sunDir, this.profile.clouds);
     SURFACE_SUN.value.copy(this.sunDir);
     if (this.qualityKey !== 'low') loadSurfaceDetail(this.renderer);
     this.scene.fog.color.set(t.fog);
@@ -968,7 +972,7 @@ export class GraphWorld {
     const R = new Mesher(true), P = new Mesher(), W = new Mesher(), P_ = P;
     const col = (k) => new THREE.Color(COLORS[k] || COLORS.residential);
     const side = col('side'), deckC = col('deck'), rail = col('rail'), under = col('under');
-    const verge = new THREE.Color(this.rural ? '#78974a' : '#7b8556'), gravelC = new THREE.Color('#a59b84'), walkC = new THREE.Color('#b4afa4'), curbC = new THREE.Color('#c3beb3'), walkSide = new THREE.Color('#9d988e');
+    const verge = new THREE.Color(this.profile.verge), gravelC = new THREE.Color('#a59b84'), walkC = new THREE.Color('#b4afa4'), curbC = new THREE.Color('#c3beb3'), walkSide = new THREE.Color('#9d988e');
     for (const { e, a, b } of t.pieces) {
       if (due()) yield;
       // (a hero area's singletrack has no ribbon of its own: its path is the area's floor worn through where the tires go
@@ -1010,7 +1014,7 @@ export class GraphWorld {
         R.quadX(L[k], Rt[k], Rt[k + 1], L[k + 1], cols[k], [uv(C[k], -half), uv(C[k], half), uv(C[k + 1], half), uv(C[k + 1], -half)]);
       }
       // a trail's gravel or dirt carried out onto the road where it meets one (its end at a junction's mouth)
-      if (this.rural && !e._cf) for (const [end, trimmed] of [[0, f0 > a], [n - 1, f1 < b]]) {
+      if (this.profile.roads === 'worn' && !e._cf) for (const [end, trimmed] of [[0, f0 > a], [n - 1, f1 < b]]) {
         const sf = ext[end]; if (!trimmed || (sf !== 5 && sf !== 6)) continue;
         const c = C[end], dir = end ? 1 : -1;
         t.endSpills.push({ x: c.x, y: c.y + lift, z: c.z, dx: c.dx * dir, dz: c.dz * dir, half, surf: sf, s: c.s });
@@ -1048,7 +1052,7 @@ export class GraphWorld {
           // a raised trail (user, 24 Nov: "smooth the hard edge drop off"): a rounded embankment 3–5 m wide down to the
           // ground — its crest curving over, its foot easing in, its width wandering along the trail — in the trail's
           // own surface, the gravel thinning to ground cover down the slope (the shader: _bankJob's codes + 0.5 m)
-          if (this.rural && (ext[k] === 5 || ext[k] === 6) && this._trailBank(R, t, p0, p1, o0, o1, c0, c1, sgn, half, ext[k])) { W.wall(p0, p1, -0.6, -0.01, side, flip); continue; }
+          if (this.profile.roads === 'worn' && (ext[k] === 5 || ext[k] === 6) && this._trailBank(R, t, p0, p1, o0, o1, c0, c1, sgn, half, ext[k])) { W.wall(p0, p1, -0.6, -0.01, side, flip); continue; }
           if (ext[k] === 5 || ext[k] === 6) {
             // a gravel or dirt way (the towpath): its shoulder in the path's own surface — the same stone dust and
             // tone running down the side, not a green verge (user, 23 Nov: "the side of the towpath should carry the
@@ -1069,7 +1073,7 @@ export class GraphWorld {
           const [ta, ga] = toe(p0, o0), [tb, gb] = toe(p1, o1);
           // the spill beyond the shoulder's foot (user, 23 Nov: "texture blending … gravel dust blowing onto a road"):
           // drawn with the tile's ground (_spillJob), draped on it
-          if (this.rural) t.spills.push({ a: ta, b: tb, o0, o1, s0: c0.s, s1: c1.s, half, sgn, surf: ext[k] === 5 || ext[k] === 6 ? ext[k] : 5 });
+          if (this.profile.roads === 'worn') t.spills.push({ a: ta, b: tb, o0, o1, s0: c0.s, s1: c1.s, half, sgn, surf: ext[k] === 5 || ext[k] === 6 ? ext[k] : 5 });
           W.quad(out(p0, o0, 1.6, -0.9), out(p1, o1, 1.6, -0.9), tb, ta, verge, !flip);
           W.quad(ta, tb, [tb[0], Math.min(tb[1], gb) - 1.5, tb[2]], [ta[0], Math.min(ta[1], ga) - 1.5, ta[2]], verge, flip);
           W.wall(p0, p1, -0.6, -0.01, side, flip);
@@ -1594,7 +1598,7 @@ export function decodeDressing(json, proj, tile) {
 }
 
 // ---------------------------------------------------------------- surfaces
-/** The rural upstate maps (CNY, SKAN): winter-worn roads, worn paint, the countryside's trees, homes and fields. */
+/** @deprecated the rules are data now (toolbox/map-profile.js); kept for old imports: the maps on the upstate preset. */
 export const RURAL_MAPS = new Set(['cny', 'skan']);
 /**
  * Upstate New York asphalt after a lot of winters (user, 22 Nov: "Upstate NY roads wear a lot due to the winter"):

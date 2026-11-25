@@ -80,7 +80,7 @@ export class BuildingKit {
       const key = Math.floor(R.s / opts.chunkM);
       if (!chunks.has(key)) chunks.set(key, { key, w: new Writer(8192), list: [], box: { x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity }, n: 0 });
       const ch = chunks.get(key);
-      assemble(R, ch.w, nul, landscape);
+      buildBuilding(R, ch.w, nul, nul, landscape);   // [blocks] the building engine's front door
       ch.list.push(R);
       const b = ch.box; b.x0 = Math.min(b.x0, R.x - R.r - 6); b.x1 = Math.max(b.x1, R.x + R.r + 6); b.z0 = Math.min(b.z0, R.z - R.r - 6); b.z1 = Math.max(b.z1, R.z + R.r + 6); ch.n++;
     }
@@ -106,7 +106,7 @@ export class BuildingKit {
   *_detail(ch) {
     const d = new Writer(4096), nul = new NullWriter();
     for (const R of ch.list) {
-      const res = assemble(R, nul, d, this.L);
+      const res = buildBuilding(R, nul, d, nul, this.L);
       if (R.dressing?.length) for (const it of R.dressing) dress(d, it, R, this.L, res);
       yield;
     }
@@ -257,7 +257,7 @@ export class CityBuildingKit {
     let T = this.sectors.get(sk); if (!T) this.sectors.set(sk, (T = { parts: [], mesh: null, sk }));
     if (list?.length) {
       const w = new Writer(8192), d = new Writer(4096);
-      for (const R of list) { if (due()) yield; const res = assemble(R, w, d, this.L); if (R.dressing?.length) for (const it of R.dressing) dress(d, it, R, this.L, res); }
+      for (const R of list) { if (due()) yield; const res = buildBuilding(R, w, d, new NullWriter(), this.L); if (R.dressing?.length) for (const it of R.dressing) dress(d, it, R, this.L, res); }
       if (w.n) {
         const m = new THREE.Mesh(this.city.own(w.geometry()), this.material);
         m.name = `Buildings ${key}`; m.castShadow = m.receiveShadow = true;
