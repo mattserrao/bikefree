@@ -48,6 +48,21 @@ CNY's and SKAN's rules won and became the defaults; the other maps pin what they
 stream in async order, so they are compared within `GRAPH_TOLERANCE` (pixels off by > 32 levels ≤ 1 %, draw calls ±8 %,
 triangles ±5 %); route scenes stay byte for byte.
 
+### The endless map (endless-map-test)
+
+The first map built only from the common blocks: `js/endless/course.js` (the course, the mile prompts) and
+`js/world/endless-world.js` (the world). It uses the profile's defaults, the road surface and worn paint, the tree engine
+through the planting API, the building engine through the kit's recipe planner, the sky dome, the shared effects and the
+post pipeline. Two new pieces are toolbox parts any map can use:
+
+| Module | What it gives you |
+| --- | --- |
+| `landscape/biomes.js` | `BIOME_DEFS`: six biomes as recipes of the shared blocks (ground colours, relief, lakes, sea, canyon walls, species and cover, understory, homes, snow, sky), `pickWeighted`. |
+| `vegetation/endless-trees.js` | `makeEndlessTrees()`: the upstate kit plus subalpine fir, Engelmann spruce, larch, black spruce, tamarack, Monterey cypress, shore pine, pinyon and juniper, and krummholz, sage, yucca, cholla and rocks. |
+
+Look at it with `node tools/snap_endless.mjs farm@800 alpine@13500:0.45 …` (`tools/endless-preview.html`); check the app with
+`node tools/endless_app_check.mjs`.
+
 ---
 
 ## Start a route

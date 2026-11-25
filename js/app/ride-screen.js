@@ -359,6 +359,7 @@ async function openWorld(route) {
   let WorldClass;
   try {
     if (base.graph) WorldClass = (await import('../world/graph-world.js')).GraphWorld;   // [pgh] a free-ride road graph: its own light world
+    else if (base.endless) WorldClass = (await import('../world/endless-world.js')).EndlessWorld;   // [endless] generated as you ride
     else {
       worldModule = worldModule || await import('../world/world.js');
       // [F399] static city meshes keep no CPU copy once on the GPU (~300 MB less on a Pittsburgh start); ?keepGeometry=1 keeps it

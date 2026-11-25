@@ -23,7 +23,7 @@ import { PostFX } from './toolbox/atmosphere/post.js';
 import { SURFACE, SURFACE_SUN, SURFACE_GLSL, loadSurfaceDetail, withSurfaceDetail } from './toolbox/materials/surface-detail.js';
 import { MOBILE } from './graph-city.js';
 /** The clouds' clock (their shadows drifting over the ground and the roads; puddles' glints): seconds. */
-const CLOUD_T = { value: 0 };
+export const CLOUD_T = { value: 0 };
 import { PerfMonitor } from './perf.js';
 import { BakedLighting } from './toolbox/atmosphere/baked-light.js';
 import { ShaderWarmer } from './toolbox/core/shader-warm.js';
@@ -1509,7 +1509,7 @@ class Mesher {
 }
 
 /** A simple rider until the model loads. */
-function makeStandIn() {
+export function makeStandIn() {
   const group = new THREE.Group();
   const body = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.5, 1.6), new THREE.MeshLambertMaterial({ color: '#ff7a1a' }));
   body.position.y = 0.75;
@@ -1705,7 +1705,7 @@ const NY_ROAD_GLSL = /* glsl */`
   }
 `;
 /** Rural maps' road paint: worn by plows and salt — faded, scuffed through in the wheel paths, patchy by stretch. */
-function wornPaintMaterial() {
+export function wornPaintMaterial() {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vPW;')
@@ -1736,7 +1736,7 @@ const NOISE_GLSL = /* glsl */`
  * gravel and dirt. Patterns fade to their average when a brick is a few pixels, so nothing shimmers far off.
  */
 /** low (Light, phones): the patterns only up close (brick, setts, slabs, pavers), plain asphalt with one noise. */
-function roadSurfaceMaterial(low = false, ny = false, spill = false) {
+export function roadSurfaceMaterial(low = false, ny = false, spill = false) {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: spill, polygonOffsetFactor: spill ? -1 : 0, polygonOffsetUnits: spill ? -3 : 0 });
   m.defines = {};
   if (spill) m.defines.SPILL = '';

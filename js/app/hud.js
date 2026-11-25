@@ -72,6 +72,7 @@ const redrawRideProfile = () => { lastProfileDraw = 0; };
 let finishView = null;
 function hudProfileView() {
   const r = session.route, net = r.netRide;
+  if (r.endlessRide) { const p = session.routePos, k = Math.floor(p / 400); return { key: `e${r.endlessRide.version}:${k}`, span: [Math.max(0, k * 400 - 800), k * 400 + 3200], eleRange: null }; }   // [endless] the road around you
   if (!net) return { key: '', span: session.routeFinishM != null ? legSpan(r, session.routeStart) : null, eleRange: null };
   if (session.routeFinishM != null) {
     // a planned finish: the start to the finish line, on the path as it is now
@@ -153,7 +154,11 @@ function renderHud() {
       const toFinish = session.routeFinishM != null;
       showRow(2, (r.closed || (r.netRide && !r.free && !r.netOpen)) && !toFinish ? String(session.routeLap) : null, 'lap');
       const toGoal = !toFinish && session.routeGoalM != null && !session.routeGoalHit;
-      if (r.netRide && !toFinish && !toGoal) {
+      if (r.endlessRide && !toGoal) {
+        // [endless] the mile ahead: how far to the next terrain choice, what you're riding now
+        const st = r.endlessRide.stateAt(session.routePos);
+        showRow(3, `${fmtDist(Math.max(0, st.toMark), 1)} ${distUnit()}`, `${st.label} · next mile`);
+      } else if (r.netRide && !toFinish && !toGoal) {
         // a network route: the rest of this lap on the plan, else the way to the next junction
         // (the lap as the path rides it now — with the turns chosen — PLAN F150; off it, or the chosen way
         // leaving it: the next junction)

@@ -30,7 +30,9 @@ function renderPreview() {
     // point to point (a one-way stage like Alpe d'Huez, or your own GPX): distance and climbing start to finish
     const p2p = cp.p2p;
     const netKm = r.netRide ? [...r.network.edges.values()].reduce((t, e) => t + e.len, 0) : 0;
-    $('pvFacts').innerHTML = r.free
+    $('pvFacts').innerHTML = r.endless
+      ? fact('∞', `${distUnit()} — it never ends`) + fact('6', 'biomes in turn') + '<div class="fact tag">Endless · choose the terrain every mile</div>'
+      : r.free
       ? fact(`${fmtDist(netKm, 1)}`, `${distUnit()} of streets & trails`) + fact(String(r.network.nodes.size), 'junctions') +
         '<div class="fact tag">Free ride · choose every turn</div>'
       : r.netRide
@@ -45,7 +47,8 @@ function renderPreview() {
     renderShots(r);
     $('planOpen').hidden = !r.netRide;
     if (r.netRide) $('pvDesc').innerHTML = `${r.note ? `${escapeHtml(r.note)}. ` : ''}At each junction choose left, straight, right or back with ◀ ▶ on the handlebars (or <kbd>A</kbd> <kbd>D</kbd>) — or follow the plan.`;
-    if (!r.netRide) $('pvDesc').innerHTML = r.hasElevation ? '' : '<span class="warn">No elevation in this file — it will ride flat.</span>';
+    if (!r.netRide) $('pvDesc').innerHTML = r.endless ? `${escapeHtml(r.note)}. Every mile choose flat, rolling, climb or descend with ◀ ▶ on the handlebars (or <kbd>A</kbd> <kbd>D</kbd>) — do nothing to keep the terrain.`
+      : r.hasElevation ? '' : '<span class="warn">No elevation in this file — it will ride flat.</span>';
     map.hidden = false; chart.hidden = false;
     $('routeOpts').hidden = false;
     renderRouteSelector(r, cp);

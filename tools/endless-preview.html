@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Endless preview</title>
+<style>html,body{margin:0;height:100%;background:#000}#v{position:absolute;inset:0}#v canvas{width:100%;height:100%;display:block}</style></head>
+<body><div id="v"></div>
+<script type="module">
+// The endless map's world on its own (tools/snap_endless.mjs): ?seed=1&at=<metres>&day=0.4&quality=balanced&modes=rolling,climb,…
+// (modes: the terrain type of each mile from the first; day: the time of day, 0–1 through the cycle)
+import { makeEndlessRoute } from '../js/endless/course.js';
+import { EndlessWorld } from '../js/world/endless-world.js';
+const q = new URLSearchParams(location.search);
+const route = makeEndlessRoute({ seed: +(q.get('seed') || 1), startMode: 'rolling' });
+const at = +(q.get('at') || 60);
+const modes = (q.get('modes') || '').split(',').filter(Boolean);
+modes.forEach((m, k) => route.course.setMode(k, m));
+route.endlessRide._fill(at + 6000); route.endlessRide.update(at);
+const world = new EndlessWorld(document.getElementById('v'), route, { quality: q.get('quality') || 'balanced', log: (a, m, l) => console.log(a, m, l || '') });
+world.setCamera(q.get('camera') || 'closest');
+world.setSource(() => ({ pos: at, speed: 0, cadence: 0, riding: true }));
+world.p = at;
+if (q.has('day')) { const d = +q.get('day'); world._t0 = performance.now() - (d - 0.12) * 100 * 60 * 1000; }
+window.bfWorld = world; window.route = route;
+world.setPreload(true);
+world.start();
+</script></body></html>
