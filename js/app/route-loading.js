@@ -33,6 +33,14 @@ function graphNet(url, name) {
   return graphNets.get(url);
 }
 async function loadRouteItemNow(item) {
+  if (item.endless) {
+    // [endless] generated as you ride (js/endless/course.js); its world: js/world/endless-world.js
+    const { makeEndlessRoute } = await import('../endless/course.js');
+    const route = makeEndlessRoute({ id: item.routeId, name: item.name, seed: 1 });
+    route.park = item.park; route.note = item.note || route.note; route.scene = null;
+    routeCache.set(item.id, route);
+    return route;
+  }
   if (item.graph) {
     // [pgh] a free-ride road graph (js/graph.js): every edge on a synthetic base line, ridden by the network machinery;
     // its routes (laid out on it: tools/pgh_routes.mjs) are presets of the same network

@@ -1930,6 +1930,34 @@ one building-engine front door; shared blocks (two renderers stay). Review: bike
 - [x] **Checks:** `test/blocks.test.mjs`; schema lint for the graph maps; `npm test`.
 - [ ] Next: move SKAN onto the CNY building styles (it still draws its homes with the Pittsburgh presets — pinned so it
       doesn't change); merge the two sky domes; Pittsburgh's own house plans in the house engine (realism up a step).
+### Endless map — test branch `endless-map-test` (24 Nov 2026)
+
+*User:* "use the building blocks to create an endless map. Every mile the user should be prompted if they'd like to change
+the terrain type, using the turn mechanism (do nothing, stay the same. Options of flat, rolling, climb, descend). The map
+should progress through different biomes and utilize high quality post processing and lighting effects." Chose: biomes
+upstate farmland, northern forest + lakes, alpine mountains, coast / desert canyon, and arctic; a seeded biome sequence;
+moderate grades; a slow day cycle. Built on the building-blocks branch.
+
+- [x] **Course** (`js/endless/course.js`): 10 m samples generated ahead; a bounded, biome-twisted heading (the road never
+      turns back); grades by terrain type — flat 0–1 %, rolling ±3 %, climb 5–7 %, descend −4 to −6 % — eased in over 250 m;
+      never below the sea (a coast keeps its own sea level 110 m under the road where it starts) or above 4,500 m.
+- [x] **Biomes:** a seeded sequence (always the farmland first), 3–5 miles each, half a mile of blend, never the same twice
+      in a row.
+- [x] **Mile prompt** (`EndlessRide`): the turn prompt ~15 s before each mile mark — Flat / Rolling / Climb / Descend, the
+      current one picked; ◀ ▶, A / D, swipe or tap; locks 30 m before; doing nothing keeps the terrain.
+- [x] **World** (`js/world/endless-world.js`): ground tiles (8 m near, 21 m far, skirts) shaped round the road by the
+      biome's relief (hills, peaks with snow, canyon walls with ledges, the sea's bluffs and cliffs, lakes, frozen lakes);
+      the road and its worn paint (passing dashes, double yellow on climbs and descents); trees and understory through the
+      planting API; homesteads (farmhouse, barn, shed) through the building engine; a choice eases what's in view to its
+      new shape over 1.5 s.
+- [x] **Light:** a 100-minute day — dawn, morning, midday, afternoon, CNY's golden hour, sunset, dusk, a new dawn — with a
+      live sun and a shadow map round the rider; the biome tints the haze and the clouds; desktop High: contact shading,
+      bloom, the golden grade; the atmosphere effect (sun beams, mist, leaves) in the farmland and the forest.
+- [x] **App:** the Endless card first in Routes; preview facts; no finish (a distance goal or open); HUD "next mile" row and
+      a moving profile window; the minimap draws the road as it grows.
+- [x] **Checks:** `test/endless-map.test.mjs`, `tools/snap_endless.mjs`, `tools/endless_app_check.mjs`.
+- [ ] Look on a real GPU and a phone (High's post, the shadows, phone memory).
+- [ ] Later: mile posts by the road, cyclists and walkers (graph-life needs a road graph), villages in the farmland.
 
 ## Running it
 

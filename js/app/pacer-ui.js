@@ -19,7 +19,7 @@ const riderDist = () => (onRoute() ? session.routeRidden : session.distanceM);
 const rideKey = () => (onRoute() ? `r:${session.route.name}:${session.routeStart}:${session.routeFinishM ?? 'endless'}`
   : `${session.mode === 'workout' ? `w:${session.workout?.id ?? session.workout?.name}` : 'free'}${session.sceneryRoute ? `:s:${session.sceneryRoute.id}` : ''}`);
 /** A network path the ride follows (a network route's, or a free ride's / workout's network scenery: F37), and the pacer's metre on it. */
-const turnPath = () => session.turnRide;
+const turnPath = () => (session.turnRide?.entries ? session.turnRide : null);   // ([endless] the mile prompts aren't a path to follow)
 const pacerPathPos = () => (onRoute() ? session.routeStart + pacer.dist : Math.max(0, pacer.dist - session.sceneryOffset));
 function resetPacer() {
   pacer.reset(riderDist());

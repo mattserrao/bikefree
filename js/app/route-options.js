@@ -96,6 +96,10 @@ const planWatts = () => (Number(settings.planWatts) > 0 ? Number(settings.planWa
 const lengthGoal = () => ({ mode: rideLength.mode, value: rideLength.mode === 'open' ? 0 : rideLength[rideLength.mode] });
 /** Everything the Start button would ride on a route: start, the planned ride, its finish or goal. */
 function chosenPlan(r) {
+  if (r?.endless) {   // [endless] no finish line: a distance goal, or ride until you stop
+    const len = lengthGoal(), goalM = len.mode === 'dist' ? len.value : null;
+    return { st: { reverse: false, offsetM: 0 }, startM: 0, p2p: false, len, plan: { distM: goalM, endM: goalM }, finishM: null, goalM };
+  }
   const st = startOf(r), startM = startPosition(r, st), p2p = isPointToPoint(r) || !!r.netOpen, keep = routeChoice.endless;
   const len = lengthGoal();
   const plan = planRide(r, startM, len, { watts: planWatts(), params: session.physicsParams(), pointToPoint: p2p, stopAtEnd: !keep });
@@ -164,7 +168,7 @@ function renderRouteSelector(r, cp) {
   const { st, startM, p2p, plan, len } = cp;
   const leg = legLength(r);
   for (const b of $('dirSeg').children) b.classList.toggle('on', (b.dataset.dir === 'rev') === st.reverse);
-  $('dirSeg').hidden = !!r.netRide;   // a network preset has its own direction (and turns of your choosing)
+  $('dirSeg').hidden = !!r.netRide || !!r.endless;   // a network preset has its own direction (and turns of your choosing)
   // start chips: the beginning of the leg, then the named stops in riding order
   const list = stopsForDirection(r, r.stops, st.reverse);
   const chips = [];
@@ -185,7 +189,7 @@ function renderRouteSelector(r, cp) {
     $('lenUnit').textContent = u.unit();
   }
   if (document.activeElement !== $('planWatts')) $('planWatts').value = planWatts();
-  $('endlessSeg').hidden = !p2p && len.mode === 'open';
+  $('endlessSeg').hidden = (!p2p && len.mode === 'open') || !!r.endless;
   for (const b of $('endlessSeg').children) b.classList.toggle('on', (b.dataset.endless === '1') === routeChoice.endless);
   // the estimate
   let note = '';
