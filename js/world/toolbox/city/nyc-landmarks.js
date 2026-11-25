@@ -269,7 +269,7 @@ export function nycLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
         const p = pts[k], q = pts[k + 1];
         // the arch's underside: from the water at the ends (or the bank) up under the crown
         const soffit = (r) => Math.min(r.y - .9, water + .4 + Math.max(0, r.y - 1.1 - water - .4) * Math.sin(Math.PI * Math.min(1, Math.max(0, r.s / span))));
-        S.color(k % 3 ? '#7f796f' : '#8a8478');
+        S.color(k % 3 ? '#968f83' : '#a39b8e');   // (schist in sun: lighter — it read heavy)
         for (const sd of [-1, 1]) {
           // the spandrel and parapet: a wall face per piece, from the arch's curve up to the parapet's top (no steps)
           const o = (r, d) => ({ x: r.x + r.nx * sd * d, z: r.z + r.nz * sd * d });
@@ -282,6 +282,7 @@ export function nycLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
           S.beam(V(a.x, p.y + .9, a.z), V(b.x, q.y + .9, b.z), .7, .12);   // the coping
         }
         S.color('#5f5b54'); S.beam(V(p.x, soffit(p) - .15, p.z), V(q.x, soffit(q) - .15, q.z), half * 2 + .6, .3);   // the barrel's underside
+        for (const sd of [-1, 1]) { const o = (r) => ({ x: r.x + r.nx * sd * (half + .62), z: r.z + r.nz * sd * (half + .62) }), a2 = o(p), b2 = o(q); S.color('#b3ab9c'); S.beam(V(a2.x, soffit(p) + .3, a2.z), V(b2.x, soffit(q) + .3, b2.z), .06, .6); }   // the arch ring's dressed voussoirs
         S.color('#8b857a'); S.beam(V(p.x, p.y - .065, p.z), V(q.x, q.y - .065, q.z), half * 2 + .05, .1);   // the walk (stone flags)
       }
     },

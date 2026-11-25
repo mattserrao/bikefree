@@ -113,7 +113,9 @@ export function runMapQC(w, T, { radius = 420, heroes = null } = {}) {
     } else {
       const J = w.jn?.get(id);
       if (!J) continue;
-      for (const c of J.corners) if (!c.arc && c.gap < Math.PI * 0.86 && c.gap > 0.3) add('sharpCorner', x, z, `${(c.gap * 57.3).toFixed(0)}° ${c.A.e.kind}/${c.B.e.kind}`);
+      // (a corner under 35° or over 140° wants no curb return — a sliver or a near-straight side: counted apart, not a fault)
+      for (const c of J.corners) if (!c.arc && c.gap < Math.PI * 0.86 && c.gap > 0.3 && (c.gap < 0.61 || c.gap > 2.44)) out.skewCorner = (out.skewCorner || 0) + 1;
+      for (const c of J.corners) if (!c.arc && c.gap >= 0.61 && c.gap <= 2.44) add('sharpCorner', x, z, `${(c.gap * 57.3).toFixed(0)}° ${c.A.e.kind}/${c.B.e.kind}`);
     }
   }
   // 11 the allée's trees, 12 the ground's grain
@@ -151,7 +153,7 @@ export function runMapQC(w, T, { radius = 420, heroes = null } = {}) {
     const g = Math.max(G(p.x, p.z), w.poolAt(p.x, p.z) + WATER_ABOVE);
     if (p.y - g < 0.35) continue;
     if (E.some((e) => wayNear(e, p.x, p.z, 0.3)) && p.y - (wayY(p.x, p.z) ?? -1e9) < 0.4) continue;
-    const held = prims.some((q) => q !== p && q.top >= p.y - 0.45 && (q.beam ? q.bot <= p.y + 0.02 : q.y <= p.y + 0.02) && (q.beam ? segD(q.a, q.b, p.x, p.z) <= q.w / 2 + (p.foot ?? p.r) + 0.3 : Math.hypot(q.x - p.x, q.z - p.z) <= q.r + 0.3));
+    const held = prims.some((q) => q !== p && q.top >= p.y - 0.45 && (q.beam ? q.bot <= p.y + 0.02 : q.y <= p.y + 0.02) && (q.beam ? segD(q.a, q.b, p.x, p.z) <= q.w / 2 + (p.foot ?? p.r) + 0.3 : Math.hypot(q.x - p.x, q.z - p.z) <= Math.max(q.r, p.r) + 0.3));   // (either over the other: a rail on its posts, a deck on its piles)
     if (!held) add('floating', p.x, p.z, `${p.lm} ${p.what} ${(p.y - g).toFixed(1)} m up`);
   }
   function wayY(x, z) { let best = null; for (const e of E) for (let i = 0; i <= e.n; i++) { const d = Math.hypot(e.x[i] - x, e.z[i] - z); if (d < w.wOf(e) / 2 + 2 && (!best || d < best.d)) best = { d, y: e.ele[i] + 0.12 }; } return best?.y; }

@@ -713,7 +713,11 @@ export class GraphWorld {
     // (the grid's 12.8 m triangles span the water's edge: the ground rises from under the water gently — 12 cm a metre
     // out to 14 m past the edge — so no triangle from a bank vertex reaches up through the water)
     if (this._canalCut) { const c = canalAt(x, z, 14); if (c && !c.creek) { const o = (x - c.x) * c.nx + (z - c.z) * c.nz, s = Math.max(0, o > 0 ? o - c.w1 : -o - c.w2); h = Math.min(h, c.y - .45 + s * .12); } }
-    return Math.min(h, this.cut.cap(x, z));
+    h = Math.min(h, this.cut.cap(x, z));
+    // (a bridge's ground cut beside a pool drawn on its outline: the bank still rises to the water's edge, so the water
+    //  plane's rim never hangs over the cut — the deck stands well over the water anyway)
+    if (rb && rb.s > -0.5 && rb.s < 2.5) h = Math.max(h, Math.min(rb.p.level + WATER_ABOVE + (rb.s - 1) * 0.45, rb.p.level + WATER_ABOVE + 0.2));
+    return h;
   }
   /** The canal's built (the landmarks): cut the ground under it, and again in the tiles already built. */
   _cutCanal() {
