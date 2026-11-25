@@ -37,6 +37,37 @@ const BANDS = { low: [55, 150], balanced: [100, 210], high: [130, 280] };
 // near and mid 3D tiers unused); the shrubs too (user: "shrubs need the same 2D"), within their own reach. Sharper
 // photos for the close-up cards.
 export const TREES_2D = true;
+/**
+ * The hero woods' colour grade (Camillus Forest, user 24 Nov: "tree tops lighting … not quite right" → "Even, rich
+ * gold", "Shaded below, sunlit tops", bushes "mute colours"): a crown's bleached, sun-facing photo held to the same
+ * rich gold as the rest (bright texels compressed, the colour put back), the stand's lower storeys darker and a little
+ * cooler under the closed canopy, the tops in sun; the understory's reds and greens muted toward the litter's golds and
+ * browns. `h`: m above the tree's base. Shared by the 3D bark trunks (near-trunks.js), so a card's trunk and its 3D
+ * trunk stay one shade.
+ */
+export const TREE_GRADE = /* glsl */`
+  float treeShade(float h) { return mix(.76, 1., smoothstep(7., 24., h)); }
+  vec3 treeCool(float h) { return mix(vec3(.9, .95, 1.05), vec3(1.), smoothstep(7., 24., h)); }
+  vec3 treeGrade(vec3 c, float grade, float h) {
+    float l = dot(c, vec3(.3, .59, .11));
+    if (grade > 1.5) {
+      // the understory's reds and greens turned toward the litter's gold and brown (not greyed: greyed, a red bush read pink)
+      vec3 g = vec3(1., .7, .34) * l * 1.32;
+      c = mix(c, g, .58); l = dot(c, vec3(.3, .59, .11)); c = mix(vec3(l), c, .9);
+      return c * .92;
+    }
+    // (a red maple's or cherry's crown at the woods' edge turned toward the stand's gold, not left a muted pink)
+    float redness = clamp((c.r - c.g) * 2.2, 0., 1.) * clamp((c.r - c.b) * 2., 0., 1.);
+    c = mix(c, vec3(1., .7, .32) * l * 1.3, .45 * redness);
+    c *= mix(1., clamp(.5 / max(l, 1e-3), .58, 1.), smoothstep(.42, .66, l));
+    float l2 = dot(c, vec3(.3, .59, .11));
+    c = max(vec3(0.), vec3(l2) + (c - vec3(l2)) * 1.22);
+    return c * treeShade(h) * treeCool(h);
+  }`;
+/** A card's trunk cut (a tree given `cut`): the 3D trunk in, the card's trunk out, between these distances (m). */
+export const NEAR_TRUNK = [55, 60];
+/** A whole card swapped for a 3D model near the camera (a tree given a negative `cut`: the floor's ferns and herbs). */
+export const NEAR_PLANT = [11, 14];
 const CELL_2D = { low: 128, balanced: 192, high: 256 };   // (low: phones — the atlas 88 → 56 MB with its mipmaps, user 23 Nov)
 const DEEP = [.55, .6];  // band scale for a tree > 30 m from any road (t.deep): seen only through the trees in front
 const FADE = [15, 50];   // m: each tree swaps at its own distance within ± this of the band's edge
@@ -266,8 +297,10 @@ export class TreeEngine {
       uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uAtlas: { value: rt.texture }, uRows: { value: this.rows }, uNow: { value: 0 }, uAtlasSize: { value: new THREE.Vector2(W, H) } }]),
       vertexShader: /* glsl */`
         attribute vec4 iA; attribute vec4 iB; attribute float iT; attribute vec2 iS;   // iA: x, y, z, rotation; iB: width, height, row, tint; iT: when its tile came; iS: its swap (when, 0 hidden / 1 shown / 2 in / 3 out)
+        attribute float iC;   // a trunk cut (m above the base; 0: none): below it, near the camera, a 3D trunk stands in
         uniform float uRows; uniform float uNow;
         varying vec2 vUv; varying vec2 vUv2; varying float vBlend; varying float vKeep; varying float vOut; varying float vTint;
+        varying float vH; varying float vCut; varying float vTrunk; varying float vGrade; varying vec3 vWP;
         #include <fog_pars_vertex>
         void main() {
           vec3 o = iA.xyz; vec2 to = o.xz - cameraPosition.xz; float d = length(to);
@@ -276,6 +309,9 @@ export class TreeEngine {
           float k = clamp((uNow - iS.x) / ${this.ft.toFixed(2)}, 0., 1.);
           vOut = iS.y > 2.5 ? 1. : 0.;
           vKeep = (iS.y > 2.5 ? 1. - k : iS.y > 1.5 ? k : 1.) * clamp((uNow - iT) / ${this.tileIn.toFixed(2)}, 0., 1.);
+          // a card the camera is about to pass through (a sapling at the trail's edge, a trunk at a bend): gone in a
+          // dither inside ~3 m — a card that close is all magnified blur (Camillus Forest's narrow trails, 24 Nov)
+          vKeep *= smoothstep(1.4, 3.4, d);
           if (iS.y < .5 || vKeep <= 0. || iB.x <= 0.) { gl_Position = vec4(2., 2., 2., 1.); return; }
           vec2 dir = to / max(d, 1e-3);
           vec3 right = normalize(vec3(-dir.y, 0., dir.x));
@@ -288,16 +324,25 @@ export class TreeEngine {
           vBlend = fract(fa);
           vUv = vec2((f0 + uv.x) / ${ANGLES}., (iB.z + uv.y) / uRows);
           vUv2 = vec2((f1 + uv.x) / ${ANGLES}., (iB.z + uv.y) / uRows);
-          vTint = iB.w;
+          // (iB.w: the tint, plus 10 × a colour grade — 1 a hero woods' tree, 2 its understory: old-growth.js)
+          vGrade = floor(iB.w / 10.); vTint = iB.w - vGrade * 10.;
           vec3 p = o + right * position.x * iB.x + vec3(0., position.y * iB.y, 0.);
+          // (a tree beside the path, inside ~30 m: its card's trunk gives way to a 3D bark trunk, in the same dither as
+          //  the trunk's own — old-growth.js NEAR_TRUNK — the crown stays the card: user, 24 Nov)
+          vH = position.y * iB.y; vWP = p;
+          // (a negative cut: the whole card gives way, nearer — a fern, a herb: near-trunks.js NearPlants)
+          vCut = iC < 0. ? 1e4 : iC;
+          vTrunk = iC > 0. ? 1. - smoothstep(${NEAR_TRUNK[0].toFixed(1)}, ${NEAR_TRUNK[1].toFixed(1)}, d) : iC < 0. ? 1. - smoothstep(${NEAR_PLANT[0].toFixed(1)}, ${NEAR_PLANT[1].toFixed(1)}, d) : 0.;
           vec4 mvPosition = viewMatrix * vec4(p, 1.);
           gl_Position = projectionMatrix * mvPosition;
           #include <fog_vertex>
         }`,
       fragmentShader: /* glsl */`
         uniform sampler2D uAtlas; uniform sampler2D uSurf; uniform vec2 uAtlasSize; varying vec2 vUv; varying vec2 vUv2; varying float vBlend; varying float vKeep; varying float vOut; varying float vTint;
+        varying float vH; varying float vCut; varying float vTrunk; varying float vGrade; varying vec3 vWP;
         #include <common>
         #include <fog_pars_fragment>
+        ${TREE_GRADE}
         // a cubic B-spline sample from four bilinear taps: smooth, no blocks, when the card's magnified
         vec4 cubic(vec2 uv) {
           vec2 st = uv * uAtlasSize - .5, i = floor(st), f = st - i;
@@ -312,6 +357,10 @@ export class TreeEngine {
           vec4 c0, c1;
           if (mag > 0.) { c0 = cubic(vUv); c1 = cubic(vUv2); } else { c0 = texture2D(uAtlas, vUv); c1 = texture2D(uAtlas, vUv2); }
           vec4 c = mix(c0, c1, vBlend);
+          // (the photo's colour, un-premultiplied from its own alpha before the edge is roughened below: dividing by the
+          //  roughened alpha brightened every part-covered texel up to 3× — the washed-out, too-light bushes, user 24 Nov,
+          //  whose small, magnified cards are mostly part-covered edge)
+          float a0 = c.a;
           // a near card, magnified past its photo's texels (user, 24 Nov: "softening the pixelation", trees staying 2D):
           // leaf clusters from the detail texture break up the blocks of colour and roughen the silhouette's staircase
           if (mag > 0.) {
@@ -320,14 +369,26 @@ export class TreeEngine {
             c.a = clamp(c.a + (lf2 - .5) * .55 * mag * smoothstep(.15, .85, c.a) * (1. - smoothstep(.85, 1., c.a)) * 2., 0., 1.);
           }
           // the edge's coverage over about a pixel (alpha to coverage under MSAA: soft silhouettes, no sorting)
-          float cov = clamp((c.a - .5) / max(fwidth(c.a), 1e-4) + .5, 0., 1.);
+          // (a hero woods' crown against the sky: its edge feathered over ~2.5 px, not a stepped cut-out — user, 24 Nov)
+          float cov = clamp((c.a - .5) / max(fwidth(c.a) * (vGrade > .5 ? 2.5 : 1.), 1e-4) + .5, 0., 1.);
           if (cov <= 0.) discard;
           ${this.msaa ? '' : `// no alpha to coverage (phones): a plain cut at half alpha. The card's faint edge texels, drawn solid with their
           // colour un-premultiplied from a few levels of 8-bit, came out near white: the light halo round the trees.
           if (c.a < .5) discard;`}
           float teDz = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(.06711056, .00583715))));
           if (vOut > .5 ? vKeep <= teDz : vKeep <= 1. - teDz) discard;   // the complement of the mid tier's dissolve
-          gl_FragColor = vec4(c.rgb / max(c.a, .3) * vTint, cov);
+          if (vH < vCut && vTrunk > teDz) discard;   // the 3D trunk's place (its own dither the exact complement)
+          vec3 col = c.rgb / max(a0, .3);
+          if (vGrade > .5) {
+            // a hero woods' tree seen from below: its side photo gives way, in a dither, to the overhead leaf layer (the
+            // crowns' undersides: old-growth.js canopy) as it comes overhead — user, 24 Nov: "Underside view"
+            vec3 dv = vWP - cameraPosition;
+            float up = vGrade < 1.5 ? smoothstep(.72, .92, dv.y / max(length(dv), 1e-3)) : 0.;
+            // (under MSAA a smooth fade in the edge's coverage — a fixed stipple overhead read as a screen; phones: the dither)
+            ${this.msaa ? 'cov *= 1. - up; if (cov <= 0.) discard;' : 'if (up > teDz) discard;'}
+            col = treeGrade(col, vGrade, vH);
+          }
+          gl_FragColor = vec4(col * vTint, cov);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
           #include <fog_fragment>
@@ -338,7 +399,7 @@ export class TreeEngine {
     this.impMat.uniforms.uAtlas.value = rt.texture;
     this.impMat.uniforms.uSurf = SURFACE;   // (the shared detail texture: a blank until loaded)
     this.impMat.alphaToCoverage = !!this.msaa;
-    this.impMat.customProgramCacheKey = () => `tree-engine-impostor-9-${this.ft}-${this.msaa ? 1 : 0}`;
+    this.impMat.customProgramCacheKey = () => `tree-engine-impostor-15-${this.ft}-${this.msaa ? 1 : 0}`;
     this.impMesh = new THREE.Mesh(geo, this.impMat);
     this.impMesh.frustumCulled = false; this.impMesh.name = 'Trees (impostors)';
     this.group.add(this.impMesh);
@@ -374,21 +435,27 @@ export class TreeEngine {
     let n = 0; for (const t of this.tiles.values()) n += t.length;
     if (n > this.impCap) {
       this.impCap = Math.ceil(n * 1.3);
-      this.iA = new Float32Array(this.impCap * 4); this.iB = new Float32Array(this.impCap * 4); this.iT = new Float32Array(this.impCap); this.iS = new Float32Array(this.impCap * 2);
+      this.iA = new Float32Array(this.impCap * 4); this.iB = new Float32Array(this.impCap * 4); this.iT = new Float32Array(this.impCap); this.iS = new Float32Array(this.impCap * 2); this.iC = new Float32Array(this.impCap);
+      this.impGeo.setAttribute('iC', new THREE.InstancedBufferAttribute(this.iC, 1));
       this.impGeo.setAttribute('iA', new THREE.InstancedBufferAttribute(this.iA, 4)); this.impGeo.setAttribute('iB', new THREE.InstancedBufferAttribute(this.iB, 4)); this.impGeo.setAttribute('iT', new THREE.InstancedBufferAttribute(this.iT, 1));
       this.impGeo.setAttribute('iS', new THREE.InstancedBufferAttribute(this.iS, 2)); this.impGeo.attributes.iS.setUsage(THREE.DynamicDrawUsage);
+      // (three.js caps an instanced geometry's draw at the instance count its attributes had the first time it was
+      //  drawn — geometry._maxInstanceCount, set once — so after the buffers grew, every tree past the first build's
+      //  count went undrawn: whole woods bare, worst where the most tiles stream in after the start — a laptop's or
+      //  desktop's 2.3 km — user, 24 Nov: "large portions of the trees of the forest don't load")
+      delete this.impGeo._maxInstanceCount;
     }
     let k = 0;
     for (const [key, list] of this.tiles) {
       const born = this._born.get(key) ?? -99;
       for (const t of list) {
         const e = t.e; if (!e.imp) continue;
-        this.iA.set([t.x, t.y, t.z, t.rot], k * 4); this.iB.set([e.imp.half * 2 * t.s, e.imp.top * t.sy, e.imp.row, t.tint], k * 4); this.iT[k] = born;
+        this.iA.set([t.x, t.y, t.z, t.rot], k * 4); this.iB.set([e.imp.half * 2 * t.s, e.imp.top * t.sy, e.imp.row, t.tint + 10 * (t.grade || 0)], k * 4); this.iT[k] = born; this.iC[k] = t.cut || 0;
         this.iS[k * 2] = t.ts ?? -1e9; this.iS[k * 2 + 1] = t.tier === 2 ? 1 : 0; t.ik = k; k++;
       }
     }
     this.impGeo.instanceCount = k;
-    this.impGeo.attributes.iA.needsUpdate = true; this.impGeo.attributes.iB.needsUpdate = true; this.impGeo.attributes.iT.needsUpdate = true; this.impGeo.attributes.iS.needsUpdate = true;
+    this.impGeo.attributes.iA.needsUpdate = true; this.impGeo.attributes.iB.needsUpdate = true; this.impGeo.attributes.iT.needsUpdate = true; this.impGeo.attributes.iS.needsUpdate = true; this.impGeo.attributes.iC.needsUpdate = true;
     this._at = null;   // (the tiers: a re-sort now)
     this.stats.far = k;
   }

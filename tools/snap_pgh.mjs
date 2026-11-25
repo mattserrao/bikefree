@@ -72,6 +72,7 @@ for (const spec of args) {
     if (w.baked) { w.baked.bakeNow(); w.baked.tick(1); w.baked.tick(1); }
     // the tree engine sorts its trees round the camera it last ticked with: once more for this (moved) camera
     w.camera.updateMatrixWorld();
+    w.city?.oldGrowth?.prepare(w.camera);   // (an old-growth hero area's near pieces: built now for this camera)
     if (w.city?.forest) { w.city.forest._at = null; w.city.forest._lastRebuild = -99; w.city.forest.tick(w.camera); w.city.forest.impMat.uniforms.uNow.value = 1e9; }   // (every tile's impostors in: no dissolve in a still)
     w.renderer.info.autoReset = false; w.renderer.info.reset();
     if (w._draw) w._draw(); else w.renderer.render(w.scene, w.camera);   // (the world's own draw: its post pass on High)

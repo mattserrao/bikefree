@@ -9,7 +9,7 @@
   ],
   "note": "From the Erie Canal Park on Devoe Road along the old towpath past Warners to West Sorrell Hill Road, back through Warners on Warners Road and down Newport Road",
   "lengthM": 18510,
-  "climbM": 61
+  "climbM": 72
  },
  {
   "id": "cny-amboy",
@@ -21,7 +21,7 @@
   ],
   "note": "From Camillus village out Milton Avenue and Bennett Road to Amboy, back along the Erie Canalway Trail beside Thompson Road to the Erie Canal Park and down Newport Road",
   "lengthM": 9500,
-  "climbM": 59
+  "climbM": 62
  },
  {
   "id": "cny-warners-pottery",
@@ -33,7 +33,7 @@
   ],
   "note": "From the Erie Canal Park over the Devoe Road hill, up Herman Road through the farms, down Pottery Road, back across Warners Road to Warners and home on the towpath",
   "lengthM": 18250,
-  "climbM": 199
+  "climbM": 209
  },
  {
   "id": "cny-howlett-hill",
@@ -69,7 +69,7 @@
   ],
   "note": "From the Erie Canal Park out the towpath to its west end, south down Bennetts Corners Road through the farms to Martisco, and back through Camillus village",
   "lengthM": 34630,
-  "climbM": 272
+  "climbM": 283
  },
  {
   "id": "cny-three-climbs",
@@ -81,7 +81,7 @@
   ],
   "note": "Over the Devoe Road hill and down Van Alstine Road to the canal, then the climbs of Breed Road and Ike Dixon Road and down Scenic Drive to the park",
   "lengthM": 15790,
-  "climbM": 267
+  "climbM": 269
  },
  {
   "id": "cny-grand-tour",
@@ -93,7 +93,7 @@
   ],
   "note": "The whole map: from Camillus out Newport Road to the towpath, to Warners, Canton Street and Brickyard Road, the towpath west, Bennetts Corners Road south into Camillus, up Munro Road, over Howlett Hill, out to Amboy and home on the towpath",
   "lengthM": 53100,
-  "climbM": 518
+  "climbM": 532
  },
  {
   "id": "cny-canal-tt",
@@ -105,7 +105,20 @@
   ],
   "note": "Flat and steady: the towpath from the Erie Canal Park to Warners Road and back down Newport Road",
   "lengthM": 7440,
-  "climbM": 21
+  "climbM": 31
+ },
+ {
+  "id": "cny-camillus-forest",
+  "name": "Camillus Forest",
+  "tags": [
+   "trail",
+   "hilly",
+   "short",
+   "views"
+  ],
+  "note": "From Thompson Road into the Camillus Forest Unique Area: narrow singletrack under the old sugar maples and beeches and through the tall-grass meadows, then back out to Thompson Road",
+  "lengthM": 5450,
+  "climbM": 158
  },
  {
   "id": "cny-martisco",

@@ -1827,6 +1827,84 @@ Goal: a lighter main menu, and fix the PGH / CNY / SKAN map cards that looked as
 - [ ] CNY canal: small shrubs and scrub on the inside slope down to the water; no trees or buildings in the channel.
 - [ ] → later test branch (user, 22 Nov: "push Going to the Sun task to a later test branch"): Going-to-the-Sun has a low framerate in practice (other maps fine). First numbers (headless, @45000): 28,438 trees in 67 tiles; re-sort 1.8 ms; near 136, mid 670, impostors 10,889 (all loaded tiles, no distance cap); near trees cast shadows. Suspects to measure on a real GPU against main: the impostor cards' overdraw, the near pools in the shadow pass, full impostor rebuilds on every tile swap.
 
+### Camillus Forest Unique Area: hero area on CNY. Branch `camillus-forest-test` *(user, 24 Nov: "Camillus unique area - captured in the understory - riding through lush meadows … push the tree engine here … Plan the route through the unique area with me before creating the route"; project doc claude/camillus-forest.md)*
+*Decisions (user, 24 Nov)*
+- **Route:** loop B, "Meadows & Old Growth". It starts and ends at a junction on Thompson Road, so a rider on another CNY route can turn in. It's 5.8 km with ~150 m of climbing and is ~70 % under canopy and ~30 % meadow. The trails, in order: #1 → #6 → #5 → #1 → #2 → #8 → #4 → #3 → #2 → #1.
+- **Access:** the trails join the CNY free-ride network, and the loop is also a named CNY ride.
+- **Trees:** 2D cards stay, as on the rest of CNY; the hero work goes into the engine's species, ages and placement rules.
+- **Season:** early fall, matching CNY. Meadows are hay-coloured and tall, with only the bike path mown, and that path stays narrow.
+- **Feel:** the trail is narrow throughout.
+  - **Woods:** tall, mature trees, so the rider is in the understory: brown ground, dead logs, twigs, leaf litter, ferns, and a closed canopy overhead. A few saplings push through, there are nurse logs, and the ground undulates as in old growth. God rays come through the overstory.
+  - **Meadows:** tall swaying grass bordered by thick tree stands, with the path a narrow slit through it.
+
+*Sources:* DEC Unit Management Plan (camumpone.pdf), the DEC map (camillusforestmap.pdf), OSM trails #1–#8 and boundary way 429408002, ESA WorldCover 10 m, and Terrarium DEM.
+
+*Sections* (km along the loop)
+1. 0.0–1.3 Lower woods climb: mature maple–beech beside the creek ravine (#1/#6).
+2. 1.3–1.75 Field-edge climb: meadow against a thick tree wall (#6).
+3. 1.75–2.7 Old-growth crown at ~213 m: the biggest trunks (to 42″ DBH), the 1998 blowdown gap with nurse logs and saplings, and god rays (#6/#5).
+4. 2.7–3.35 High meadow descent: tall hay grass, a mown slit, views north (#5/#1).
+5. 3.35–3.65 Green tunnel between tree rows (#2).
+6. 3.65–5.25 North woods: rolling drumlin ground and ferns (#8/#4).
+7. 5.25–5.8 East meadow home (#3/#2), then Thompson Road.
+
+*Tasks* (user, 24 Nov: "Proceed as planned include overhead leaf layer")
+- [x] **Graph** (`tools/cny_forest.py`):
+  - The Unique Area's trails #1–#8 are 22 edges and 8.6 km of narrow dirt singletrack: kind `path`, with `w 0.9`, dirt and `cf` in the city data.
+  - Their heights follow the ground grid, smoothed and held to ≤ 16 %.
+  - Thompson Road (`e178`) is split at the lot to make junction `n237`.
+  - `npm run cny:build` runs the tool. A second run gives the same files.
+  - QC: 0 fails, 0 warnings, 0 dead ends.
+- [x] **Named ride** `cny-camillus-forest` "Camillus Forest": 5.6 km, 159 m of climbing, in and out on Trail #1 from Thompson Road. The other ten rides are unchanged.
+- [x] **Land:** codes 30 old growth (30 ac), 31 woods (187 ac), 32 tall meadow (112 ac) and 33 the 1998 blowdown (11 ac, on Trail #5). The data file is `routes/cities/cny-oldgrowth.json`.
+- [x] **Tree engine placement** (`toolbox/vegetation/old-growth.js`):
+  - Dominants sit on a jittered grid by stand: 12.5 m in the old growth, 10 m in the woods, 34 m for the blowdown's survivors.
+  - Intermediates grow only where no dominant is near.
+  - There are shade saplings, a pole thicket in the blowdown, ~6 % snags, tree walls at the meadow edges, the green tunnel's two rows on Trail #2, and 26 old apple trees.
+  - New forest-grown forms (`makeUpstateTrees({ oldGrowth: true })`): `sugarmapleF`, `beechF`, `hickory`, `basswood`.
+  - Nothing leafy stands within ~9–10 m of the singletrack, because a 2D card that close is all magnified blur. Cards dissolve within ~3 m of the camera.
+- [x] **Forest floor:**
+  - A floor skirt (2 m cells) runs along the trails with pit-and-mound relief.
+  - The ground shader has a litter look (codes 30, 31, 33) and a hay meadow (32).
+  - Fallen trunks, nurse logs with seedlings and tip-ups with root plates are 3D instanced models, never across the tread.
+  - Ferns, herbs, seedlings, stumps and rocks; roots and stones across the tread.
+- [x] **Overhead leaf layer:** leaf-cluster cards 20–30 m up over the woods' trails, with gaps; one draw call, faded past ~150 m.
+- [x] **God rays:** additive shafts from the gaps at ~38° on the sun's azimuth, with warm sun pools on the floor. Off on Low.
+- [x] **Meadows:** tall, swaying, hay-tinted grass cards (1–1.6 m) out to 26 m either side, with a mown turf slit at the tread.
+- [x] **Narrow trail:** a 0.9 m tread of packed earth with a soft edge, no shoulder or spill. The rider rides its middle (`_laneScale`), and junctions where only singletracks meet have no junction slab.
+- [x] **Bushes** (user, 24 Nov: "Bushes remain a weak spot visually … fluff them with 2D vertical sheets … a lighting bug … makes them too light"):
+  - Upright leaf sheets in three nested shells (`fluff`) on dogwood, buckthorn and the saplings.
+  - A small plant's leaf clusters now scale with it (they were tree-sized).
+  - The lighting fix: impostor cards un-premultiplied by the roughened alpha brightened every part-covered texel up to 3×. They now use the photo's own alpha.
+- [x] **Follow-ups** (user, 24 Nov: "Complete any remaining items"):
+  - The dirt tread is now warm earth-brown, without the gravel's fresh grey patches.
+  - Inside the hero area the woods/meadow edge only wanders softly, with no grain scatter, so the up-close checker is gone.
+- [x] **Checks:** tests (`cny.test.mjs`: eleven rides, a Camillus Forest test), `routes:build`, `qc_pgh`. Snapshots of each section with `snap_pgh.mjs`, which builds the hero area's near pieces for the shot. Headless Balanced numbers: 123–200 draw calls and 0.6–0.8 M triangles, within the GTTS budget.
+
+*Round 2* (user, 24 Nov, with three reference photos — an open golden beech–maple stand, a flared trunk foot with roots and ferns, mixed woods with logs and a snag. Answers: grass "Near wall + far shell", 1.4–1.8 m from 0.3 m off the tread; "Golden peak, forest only"; density "Photo 1 mostly, photo 3 in places"; god rays "3–5 hero spots"; path "Flush wear overlay"; "Yes, 3D root flares"; "Wildlife instead"; trunks "3D trunk, crown stays card", "~30 m", "Small bark textures", "Camillus Forest first")
+- [x] **Grass:** yes, it was 2D crossed cards. Now the near wall is instanced 3D blades — thin, four hay palettes, tan seed plumes, 1.4–1.8 m tall, starting 0.3 m off the tread — in 16-blade clumps within 22 m and 7-blade clumps to 55 m (Balanced; 32 / 70 m Low / High), refilled every 5 m. Past that a cheap shell of grass fins 7–30 m out, along the trail. The meadow floor is trampled straw.
+- [x] **Sliding / jagged turns:** graph-map riders now ride the drawn Catmull-Rom curve (`road-align.js curveOn`), and `cny_forest.py` smooths the trails (Chaikin, Gaussian, then any turn over 22° per 10 m eased). Sharpest turn now 21.9° / 10 m; `cny.test.mjs` holds it under 23.5°.
+- [x] **Path colour:** the trail is no longer its own strip on the woods' floor: the skirt carries each vertex's distance from the ridden line (`aTread`) and the ground shader wears the floor through to packed earth along it — a groove, drifted leaves, lighter banked edges.
+- [x] **No hikers** on the singletracks (`graph-life.js`). **Wildlife instead** (`toolbox/life/forest-life.js`): deer groups among the trunks 22–36 m off the trail, turkeys out in the meadows, chipmunks on the logs by the path, crows circling over the high fields.
+- [x] **Cathedral stand:** dominants 15.5–18 m apart, few poles, saplings and ferns, a bare floor of golden litter; photo 3's mixed woods (poles, snags, logs, brush) only in stretches (`mixedAt`). The forest forms at golden peak (CNY's other trees stay early fall).
+- [x] **God rays:** five hero spots (`RAYS` in `cny_forest.py`), the canopy opened over each.
+- [x] **Root flares:** a 3D foot — the trunk swelling into the ground, six roots diving into the litter — on every dominant within 16 m of a trail, sized to the 3D trunk.
+- [x] **Bark trunks** (`toolbox/vegetation/near-trunks.js`): inside ~48–62 m of the camera (user: "fade in occurs too close" — was 24–32 m), a tree near a trail swaps its card's trunk for a 3D one built on the very skeleton its card was photographed from (`grow()` now keeps the first stem's points and radii), cut just under the crown — the crown stays the card. Three tiled 512 px bark textures with normal maps (`tools/make_bark.py`: maple's plates, beech's smooth grey, hickory's strips; ~0.3 MB), moss on the north side, a damp dark foot. Card and trunk dissolve in the same screen dither, each the other's complement (`tree-engine.js NEAR_TRUNK`, impostor attribute `iC`). Tip-up root plates lightened and made ragged (they read as black balls).
+- [x] **Checks:** tests, `routes:build` (bark textures precached), `qc_pgh` 0 / 0. Headless Balanced: 132–200 draw calls, 0.56–0.9 M triangles.
+
+*Round 3 — v0.15.0* (user, 24 Nov: "tree tops lighting in the woods is not quite right", "3D trunk fade in occurs too close", then answers: crowns "Even, rich gold", "Shaded below, sunlit tops", no backlit glow; from below "Soften edges vs sky", "Underside view for overhead crowns", "Match overhead leaf layer"; "Remove tip-ups"; beech "Darken to mid grey + bark detail"; "Real fern fronds", herbs "softer, yellowing", moss "patchy, textured"; bushes "mute colours, smoother, fewer"; "Shorter, cleaner swap"; "Smoother, better-proportioned deer"; added: "trees disturb the ground with their growth … the ground swollen slightly near their base" → "Big trees only, near trail", "Scaled to trunk size", "Root tops breaking the litter", "Bare soil between roots")
+- [x] **Crown grade** (`tree-engine.js TREE_GRADE`, cards flagged by old-growth.js `grade`): bleached sun-side photos compressed to the stand's even gold and re-saturated; edge reds turned toward gold; lower storeys darker and a little cooler, tops in sun. The understory muted toward the litter's golds and browns. The 3D bark, flares and plants take the same grade, so card and 3D stay one shade.
+- [x] **From below:** a woods crown's card dissolves as it comes overhead (smooth in the edge coverage under MSAA, dithered on phones), leaving the overhead leaf layer as its underside; that layer's palette now matches the crowns (no greens; the leaf texture's own colour dropped). Crown edges against the sky feathered over ~2.5 px.
+- [x] **Trunks:** the 3D trunk swap now at 55–60 m (was 24–32 m, then 48–62 m). Beech trunks mid-grey.
+- [x] **Floor:** tip-ups removed (fallen logs only). Ferns rebuilt as arching twice-divided fronds (bronze, yellowing, green) and herbs as soft yellowing broad leaves — both 3D within ~14 m of the camera (`near-trunks.js NearPlants`, the card swapped by a negative cut), cards farther off. Moss on logs in patches. Fewer edge shrubs and blowdown brush.
+- [x] **Tree feet:** the ground swells round each big tree within 16 m of a trail (height ~0.26 × trunk radius, out to ~3.2 radii: `old-growth.js mound`); the root flares rebuilt — a lobed, bark-textured foot and six round roots diving under the litter — and the ground shader carries their root tops on out through the leaves, bare earth between (`graph-world uRoots`: the 24 nearest).
+- [x] **Deer:** smooth ellipsoid body, slender jointed legs, long neck, muzzle, ears and white tail.
+- [x] **Version:** v0.15.0.
+- [x] **Phones' forest floor** (user, 24 Nov: "no forest floor texture … on mobile"): phones default to Low, and Low skipped the hero floor's leaf layers, twigs, sun bars and grit — a flat orange floor. "Full detail on Low too": they now run on Low.
+- [x] **Grass pop-in** (user: "The pop-in for grass is distracting. On mobile, with no anti-aliasing, it's also jarring"; after a look at how games and three.js demos do it — clumps shrink before they hide, fixed world tiles with a distance fade, a grass-coloured floor where the blades end, wider blades where there's no anti-aliasing — the user chose "Fixed tiles + grow-in + floor blend", "~40 m, fade from 25 m"): the clumps are fixed in the world; each grows up out of the floor between ~25 and 40 m (at its own distance) and its blades thin out from ~12 m, so none appears at height (`old-growth.js GRASS_FADE`); the meadow floor along the trail is painted with the tall grass's tops beyond, so the field reads as grass all the way out. Phones (no MSAA): fewer clumps of ~2.3× wider blades, which don't break up into a shimmer (mipmapped picture cards were tried: dark and blotchy up close).
+- [x] **Bare woods on desktop** (user, 24 Nov, on a Mac: "large portions of the trees of the forest don't load … right from the start … not present on mobile"): three.js caps an instanced geometry's draw at the instance count its attributes had the first time it was drawn (`_maxInstanceCount`, set once); the tree engine's card buffers grow as tiles stream in, so every tree past the first build's count went undrawn. Worst on a laptop or desktop, whose 2.3 km of tiles keep streaming in after the start. Fixed in `tree-engine.js _rebuildImpostors` (the cap cleared when the buffers grow). Found by rendering the cards alone: a fresh geometry drew them all.
+- [x] **Stutter** (same report): the area's 3D pieces' materials (bark, ferns and herbs, root flares) are now put in the scene on empty meshes at the start, so the world's shader warmer compiles them behind the loading screen instead of mid-ride; the ground's root-top loop only runs within 110 m of the camera. Still to confirm on the Mac.
+
 ## Running it
 
 Web Bluetooth needs Chrome and either `localhost` or HTTPS.

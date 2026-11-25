@@ -87,6 +87,7 @@ function grow(seed, o, lod, turn, lodScale = 1) {
   const snapped = o.dead && turn !== 1 ? .55 + rand() * .15 : 1;   // (a snag: its top broken off)
   const queue = [];
   const stems = o.stems || 1;
+  let trunk = null;   // the first stem's skeleton (a near 3D trunk can be built along it: old-growth.js)
   for (let s = 0; s < stems; s++) {
     const a = s * 2.4 + rand(), tilt = stems > 1 ? .12 + rand() * .08 : rand() * .04;
     queue.push({ level: 0, p: new THREE.Vector3(stems > 1 ? Math.cos(a) * .45 : 0, 0, stems > 1 ? Math.sin(a) * .45 : 0), d: new THREE.Vector3(Math.cos(a) * Math.sin(tilt), Math.cos(tilt), Math.sin(a) * Math.sin(tilt)),
@@ -108,6 +109,7 @@ function grow(seed, o, lod, turn, lodScale = 1) {
       pts.push(p); dirs.push(d.clone());
       radii.push(br.r * Math.max(.06, 1 - (i / sections) * (lv === 0 && !o.leader ? .45 : .9)));
     }
+    if (lv === 0 && !trunk) trunk = { pts: pts.map((q) => q.clone()), radii: radii.slice(), fork: L ? L[0][1] : 1 };
     if (lv <= woodLevel) {
       // (a lower level: every other point of the same branch — the same curve, fewer rings)
       const keep = lod ? pts.map((_, i) => i).filter((i) => i % 2 === 0 || i === pts.length - 1) : null;
@@ -170,7 +172,7 @@ function grow(seed, o, lod, turn, lodScale = 1) {
   // every cluster's colour from the full set (so a merged card keeps the colour its part of the crown has near)
   for (const c of clusters) c.col = colourAt(c.p);
   if (lod === 1) mergeClusters(clusters, rand);
-  const leafKind = o.droop ? SHRUB : LEAF;
+  const leafKind = o.droop ? SHRUB : LEAF, leafScale = Math.min(1, Math.max(.24, H / 12));
   if (lod === 2) {
     // far: crown masses over the clusters' extent
     wood.as(leafKind);
@@ -185,7 +187,10 @@ function grow(seed, o, lod, turn, lodScale = 1) {
   const v = new THREE.Vector3(), qn = new THREE.Vector3();
   for (const c of clusters) {
     const { c: hex, out } = c.col, k = new THREE.Color(hex).multiplyScalar((lod ? .86 : .8) + out * (lod ? .24 : .28));   // depth: darker inside
-    const size = (lod ? c.half ?? 2.3 * c.size : 1.75 * c.size) * (o.droop ? .9 : 1), quads = lod ? 2 : 3;
+    // (a leaf cluster's size is a tree's: on a small plant — a shrub, a sapling, a seedling — scaled down with it, so a
+    //  1.4 m seedling isn't a 4 m ball of leaf cards and a bush isn't a few huge blobs: user, 24 Nov, "bushes remain a
+    //  weak spot"; their fullness comes from the fluff sheets below)
+    const size = (lod ? c.half ?? 2.3 * c.size : 1.75 * c.size) * (o.droop ? .9 : 1) * leafScale, quads = lod ? 2 : 3;
     for (let q = 0; q < quads; q++) {
       const yaw = rand() * Math.PI, pitch = q === 2 || (lod && q === 1) ? Math.PI / 2 - .3 + rand() * .3 : (rand() - .5) * .6;
       const ax = new THREE.Vector3(Math.cos(yaw), 0, Math.sin(yaw)), ay = new THREE.Vector3(0, Math.cos(pitch), 0).addScaledVector(new THREE.Vector3(-Math.sin(yaw), 0, Math.cos(yaw)), Math.sin(pitch));
@@ -203,11 +208,36 @@ function grow(seed, o, lod, turn, lodScale = 1) {
       });
     }
   }
+  // a bush's fluff (user, 24 Nov: "Bushes remain a weak spot visually … fluff them with 2D vertical sheets over various
+  // size to intermediate layers"): upright leaf sheets in three nested shells round the crown's middle — small and dark
+  // deep inside, middling halfway, large and lit at the rim — each turned to face out (give or take), so the bush reads
+  // as a full, soft mass with depth from any side, not a scatter of clusters on twigs
+  if (o.fluff && lod === 0) {
+    const shells = [[.3, 7, .32, .55], [.62, 11, .42, .74], [.92, 15, .5, .96]];   // [radius fraction, sheets, size (× crown radius), shade]
+    for (const [fr, n, sz, shade] of shells) for (let q = 0; q < n * o.fluff; q++) {
+      const a = q * 2.39996 + rand() * .7, hf = rand() * 2 - 1, ring = Math.sqrt(Math.max(0, 1 - hf * hf * .8));
+      const size = rad * sz * (.75 + rand() * .5);
+      const p = new THREE.Vector3(cc.x + Math.cos(a) * rad * fr * ring, Math.max(size * .85, cc.y + hf * radY * fr * .9), cc.z + Math.sin(a) * rad * fr * ring);
+      const yaw = a + Math.PI / 2 + (rand() - .5) * 1.1;
+      const ax = new THREE.Vector3(Math.cos(yaw), 0, Math.sin(yaw)), ay = new THREE.Vector3(0, 1, 0);
+      const { c: hex } = colourAt(p), k = new THREE.Color(hex).multiplyScalar(shade * (.9 + rand() * .2));
+      const corner = (sx, sy) => p.clone().addScaledVector(ax, sx * size).addScaledVector(ay, sy * size * .85);
+      const P = [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, -1), corner(1, 1), corner(-1, 1)], U = [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]];
+      const u0 = Math.floor(rand() * 2) * .5, v0 = Math.floor(rand() * 2) * .5;
+      P.forEach((pp, i) => {
+        pos.push(pp.x, pp.y, pp.z);
+        qn.set((pp.x - cc.x) / rad, (pp.y - cc.y) / radY + .1, (pp.z - cc.z) / rad).normalize();
+        nor.push(qn.x, qn.y, qn.z); uv.push(u0 + U[i][0] * .5, v0 + U[i][1] * .5); col.push(k.r, k.g, k.b); tw.push(Math.min(1, Math.max(0, pp.y / H)));
+      });
+    }
+  }
   const leaves = new THREE.BufferGeometry();
   leaves.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); leaves.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   leaves.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); leaves.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   leaves.computeBoundingSphere(); leaves.computeBoundingBox();
-  return { wood: wood.build(), leaves };
+  // (the crown's underside: the lowest leaves, a few strays aside — a near 3D trunk is cut a little below it)
+  if (trunk) { const ys = clusters.map((c) => c.p.y).sort((a, b) => a - b); trunk.crown = ys.length ? ys[Math.floor(ys.length * .03)] : H * .5; }
+  return { wood: wood.build(), leaves, trunk };
 }
 /**
  * The mid tier's foliage from the near tier's: the clusters gathered into about a third as many (k-means, seeded from
@@ -260,7 +290,7 @@ const SPECIES = {
     levels: [[5, .45, .75, .3], [3, .3, .7, .19], [3, .4, .6, .1]],
     greens: ['#4c7233', '#557b38'], fall: ['#d08a33', '#c25f2a', '#d9ac3e'], turn: [0, .3, .7] },
   // American beech: smooth silver-grey trunk, long limbs from low down, a broad low crown; golden-bronze late
-  beech: { H: 21, R: 7, fork: .22, trunkR: .45, trunk: '#9a9890', bark: BARK, leader: true, flat: true, gnarl: .2, up: .03,
+  beech: { H: 21, R: 7, fork: .22, trunkR: .45, trunk: '#86837b', bark: BARK, leader: true, flat: true, gnarl: .2, up: .03,
     levels: [[7, .2, 1.05, .4], [4, .3, .65, .22], [3, .35, .6, .11]],
     greens: ['#5a843c', '#628c42', '#527a37'], fall: ['#c9a440', '#b9893a'], turn: [0, .1, .4] },
   // paper birch: white stems (two or three from the base), a light airy crown, yellow in fall
@@ -289,6 +319,99 @@ const SPECIES = {
     levels: [[4, .45, .85, .3], [2, .3, .7, .16], [1, .4, .6, .08]],
     greens: ['#6e6a60'], fall: ['#6e6a60'], turn: [0, 1, 2] },
 };
+
+// (user, 24 Nov, with photos of a golden beech–maple stand: the forest-grown forms — the Camillus woods only — at peak:
+//  gold and yellow with some orange and the odd green crown; the rest of CNY stays early fall)
+// forest-grown forms (Camillus Forest Unique Area, user 24 Nov: "when hiking through wooded areas, the trees are tall
+// and mature … the tops of the trees extend high and cover the sky"): grown in a closed stand, each reaches for the
+// light — a long, clean bole (the lower limbs shaded out and shed long ago), a narrow, high crown in the top third or
+// so, limbs ascending. Only for a map with old growth (makeUpstateTrees({ oldGrowth: true })): the DEC's inventory —
+// the old stand ~83 % sugar maple and ~13 % beech; bitternut hickory, basswood and white ash in the younger woods.
+const FOREST_FORMS = {
+  // sugar maple: a straight grey-brown bole to ~60 % of its height, a tall, rounded crown of ascending limbs
+  sugarmapleF: { H: 29, R: 5.4, fork: .6, trunkR: .5, trunk: '#5a4d42', bark: PLATED, leader: true, gnarl: .15, up: .1,
+    levels: [[7, .58, .6, .25], [4, .3, .62, .15], [3, .35, .6, .085]],
+    greens: ['#6b8a34', '#77913a', '#5f7f31'], fall: ['#e2a62a', '#d98c24', '#eab838', '#cf7522'], turn: [.82, .96] },
+  // American beech: the smooth elephant-grey bole, longer limbs a little lower, a broad top; bronze late
+  beechF: { H: 26, R: 6.2, fork: .5, trunkR: .48, trunk: '#7f7c75', bark: BARK, leader: true, gnarl: .18, up: .06,
+    levels: [[7, .5, .82, .29], [4, .3, .65, .17], [3, .35, .6, .095]],
+    greens: ['#7a8c3a', '#86923e'], fall: ['#d4a83a', '#c99434', '#e0b848'], turn: [.72, .9] },
+  // bitternut hickory: tall and straight, a smallish crown of stout ascending limbs; bright yellow early
+  hickory: { H: 27, R: 4.8, fork: .58, trunkR: .42, trunk: '#6a6259', bark: PLATED, leader: true, gnarl: .2, up: .09,
+    levels: [[6, .56, .58, .25], [3, .3, .6, .15], [3, .4, .55, .085]],
+    greens: ['#7a8a38', '#84923c'], fall: ['#e4c43c', '#d9b42e', '#ecd050'], turn: [.95] },
+  // basswood: a tall bole often with sprouts at its foot, a dense, broad crown of big heart-shaped leaves; yellowing
+  basswood: { H: 27, R: 6, fork: .52, trunkR: .46, trunk: '#655c52', bark: BARK, leader: true, gnarl: .17, up: .07,
+    levels: [[7, .52, .72, .27], [4, .3, .65, .16], [3, .35, .6, .09]],
+    greens: ['#76903e', '#80983f'], fall: ['#d6c24e', '#c9b048'], turn: [.78] },
+};
+
+/**
+ * A big fallen trunk (old growth's coarse woody debris, user: "dead logs … nurse logs and life"), lying along +x from
+ * its root end: bark sloughing to grey wood, moss along the top, broken limb stubs; a nurse log carries a row of
+ * seedlings (hemlock and maple) rooted in its rotting top. A tip-up's trunk keeps its root plate standing on end at the
+ * foot (the pit-and-mound's mound — the hollow the plate tore up is the ground's own relief, old-growth.js).
+ */
+function bigLog(seed, { L = 15, r = .5, nurse = false, tipup = false } = {}) {
+  const rand = randomSequence(seed), b = new Builder();
+  b.as(nurse ? DEAD : BARK).add(cyl(r * .62, r, L, 8), M(L / 2, r * .85, 0, 1, 1, 1, 0, 0, Math.PI / 2), nurse ? '#7d7266' : '#5a4838');
+  // moss: a soft green mat along the top, thicker on an old log
+  // moss in patches (user, 24 Nov: "Moss: patchy, textured" — it was one flat green slab): cushions of differing size
+  // and green along the top and down the shaded side, thicker on an old nurse log, bare bark showing between
+  b.as(SHRUB);
+  const patches = nurse ? 18 : 10;
+  for (let k = 0; k < patches; k++) {
+    const x = L * (.05 + rand() * .9), side = (rand() - .5) * 2.2, sz = r * (.18 + rand() * .32) * (nurse ? 1.2 : 1);
+    const a = side * .9, y = r * .85 + Math.cos(a) * r * .98, z = Math.sin(a) * r * .98;
+    b.add(blob(0), M(x, y, z, sz * (1.2 + rand()), sz * .35, sz, rand() * 6, a, 0), ['#5f7d3d', '#4f6c35', '#6a8644', '#7a8a46', '#55703a'][Math.floor(rand() * 5)], .2, rand);
+    if (rand() < .4) b.add(blob(0), M(x + (rand() - .5) * sz, y + sz * .12, z, sz * .45, sz * .22, sz * .45), '#87964c', .2, rand);
+  }
+  b.as(DEAD);
+  for (let k = 0; k < 5; k++) b.add(cyl(.03, .08, .7 + rand() * 1.2, 3), M(L * (.25 + rand() * .7), r * 1.4, (rand() - .5) * r, 1, 1, 1, rand() * 6.28, 0, .5 + rand() * .9), '#857e72');
+  if (nurse) {
+    // the seedlings along its back: little hemlocks (dark cones) and maples (a stem, a tuft of leaves)
+    for (let k = 0; k < 8; k++) {
+      const x = L * (.12 + k * .1 + rand() * .05), h = .35 + rand() * .7, y = r * 1.65;
+      if (rand() < .5) { b.as(BARK).add(cyl(.015, .025, h, 3), M(x, y, (rand() - .5) * r * .6), '#5b4a3a'); b.as(LEAF).add(cone(h * .32, h * .8, 5), M(x, y + h * .25, (rand() - .5) * r * .4), '#2f4f37'); }
+      else { b.as(BARK).add(cyl(.012, .02, h, 3), M(x, y, (rand() - .5) * r * .6), '#6a5646'); b.as(SHRUB).add(blob(0), M(x, y + h, (rand() - .5) * r * .5, h * .35, h * .2, h * .35), ['#5f8a3d', '#d68a2c', '#6c9342'][k % 3], .1, rand); }
+    }
+  }
+  if (tipup) {
+    // the root plate on end: a ragged disc of soil and roots 2.5–3.5 m across, a stone or two caught in it
+    const R = 1.3 + rand() * .5;
+    // (ragged, not a dome: three lobes of torn earth, a pale mineral-soil face, a lip of leaf litter on top —
+    //  the plain dark disc read as a black ball against the litter: user's snapshots, 24 Nov)
+    b.as(BARK).add(blob(1), M(-.25, R * .9, 0, .4, R, R * 1.05), '#6e5640', .35, rand);
+    for (let k = 0; k < 3; k++) { const a = k * 2.1 + rand(); b.add(blob(1), M(-.25, R * .9 + Math.sin(a) * R * .55, Math.cos(a) * R * .6, .32, R * .55, R * .5), ['#7a6146', '#66503b', '#84694c'][k], .35, rand); }
+    b.add(blob(0), M(-.02, R * .85, 0, .22, R * .7, R * .75), '#9a8264', .25, rand);
+    b.as(SHRUB).add(blob(0), M(-.3, R * 1.85, 0, .5, .22, R * .8), '#a8782e', .2, rand);
+    for (let k = 0; k < 14; k++) { const a = k / 14 * 6.28 + rand() * .3; b.add(cyl(.02, .07, R * (.5 + rand() * .5), 3), M(-.2, R * .9 + Math.sin(a) * R * .85, Math.cos(a) * R * .9, 1, 1, 1, 0, a, Math.PI / 2 + (rand() - .5) * .6), '#6f5a44'); }
+    b.as(DEAD).add(blob(1), M(-.35, R * .5, R * .35, .35, .3, .4), '#8d8c84', .2, rand);
+  } else {
+    // a snapped end: splintered, pale
+    b.as(DEAD).add(cone(r * .9, r * 1.4, 6), M(L + r * .4, r * .85, 0, 1, 1, 1, 0, 0, -Math.PI / 2), '#b4a68e', .3, rand);
+  }
+  return b.build();
+}
+/** Spring ephemerals gone to summer leaf (waterleaf, blue cohosh, touch-me-not; DEC's commonest understory plants): a
+ *  low, soft clump of broad leaves, yellowing a little in September. */
+function herb(seed) {
+  // (user, 24 Nov: herbs "softer, yellowing"): a loose clump of broad, soft leaves on short stalks, held out and up, the
+  // edges curling — waterleaf and touch-me-not in late September, more yellow than green now
+  const rand = randomSequence(seed), b = new Builder(); b.as(SHRUB);
+  const n = 9 + Math.floor(rand() * 4);
+  for (let k = 0; k < n; k++) {
+    const a = k * 2.4 + rand() * .6, tilt = 1. + rand() * .45, len = .14 + rand() * .1, h = .05 + rand() * .16;
+    const col = ['#8f9c46', '#a8a44c', '#bfa64e', '#c9b25a', '#7f9442', '#b08a3c'][Math.floor(rand() * 6)];
+    const out = new THREE.Vector3(Math.cos(a), 0, Math.sin(a)), base = out.clone().multiplyScalar(.04 + rand() * .08).setY(h);
+    // the stalk
+    b.add(cyl(.006, .008, h + .02, 3), M(base.x * .5, 0, base.z * .5), '#7d8a3e', 0, rand);
+    const dir = out.clone().multiplyScalar(Math.sin(tilt)).setY(Math.cos(tilt)).normalize(), side = new THREE.Vector3(-out.z, 0, out.x);
+    const face = new THREE.Vector3().crossVectors(side, dir).normalize();
+    b.add(bladeGeo(.4), new THREE.Matrix4().makeBasis(side.clone().multiplyScalar(len * .85), dir.clone().multiplyScalar(len), face).setPosition(base), col, 0, rand);
+  }
+  return b.build();
+}
 
 /** Eastern white pine: tall, with long horizontal limbs carrying flat, layered sprays; a ragged, often flagged top. */
 function whitePine(v, lod) {
@@ -332,10 +455,10 @@ const spruce = (v, lod) => MOUNTAIN_BUILDERS.conifer(5301 + v, { H: 20 + v * 3, 
 
 // shrubs as small multi-stemmed 'trees' for grow(): H and R at model size, a low fork, short dense branching
 const SHRUBS = {
-  dogwood: { H: 2.6, R: 1.5, fork: .25, trunkR: .035, trunk: '#7a3328', bark: BARK, stems: 5, gnarl: .3, up: .1,
+  dogwood: { H: 2.6, R: 1.5, fluff: 1, fork: .25, trunkR: .035, trunk: '#7a3328', bark: BARK, stems: 5, gnarl: .3, up: .1,
     levels: [[4, .35, .55, .45], [3, .3, .6, .25], [2, .4, .6, .12]],
     greens: ['#5a7d3a', '#6a8740', '#55763a'], fall: ['#8a3a34', '#a3473c', '#7a2f2c'], turn: [.55] },
-  buckthorn: { H: 3.4, R: 1.9, fork: .22, trunkR: .045, trunk: '#4f4339', bark: BARK, stems: 4, gnarl: .35, up: .08,
+  buckthorn: { H: 3.4, R: 1.9, fluff: 1, fork: .22, trunkR: .045, trunk: '#4f4339', bark: BARK, stems: 4, gnarl: .35, up: .08,
     levels: [[5, .3, .6, .45], [3, .3, .6, .25], [2, .4, .6, .12]],
     greens: ['#4d7232', '#557a36', '#62843d'], fall: ['#8a9a3c'], turn: [.15] },
 };
@@ -376,25 +499,55 @@ function sumac(seed) {
   }
   return b.build();
 }
+// a flat leaf blade, both faces: base at the origin, tip at +y (length 1), widest at `at` up it, width 1
+function bladeGeo(at = .4) {
+  const P = [0, 0, 0, -.5, at, 0, -.18, .82, 0, 0, 1, 0, .18, .82, 0, .5, at, 0], N = [], I = [];
+  const pos = [...P, ...P];
+  for (let k = 0; k < 6; k++) N.push(0, 0, 1); for (let k = 0; k < 6; k++) N.push(0, 0, -1);
+  for (const [a, b, c] of [[0, 5, 4], [0, 4, 3], [0, 3, 2], [0, 2, 1]]) { I.push(a, b, c); I.push(c + 6, b + 6, a + 6); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); g.setIndex(I);
+  return g;
+}
 function fern(seed) {
-  // (user, 23 Nov: "2D sprite ferns" — photographed into the tree atlas as the rest are): a crown of arching fronds,
-  // each a rachis with paired leaflets tapering to the tip; September greens, a few yellowing, one gone brown
-  const rand = randomSequence(seed), b = new Builder(), Q = new THREE.Quaternion(), S = new THREE.Vector3(.9, 1, .22);
-  const leaf = (p, dir, len, col) => { Q.setFromUnitVectors(Y, dir); b.add(cone(.045, len, 3), new THREE.Matrix4().compose(p, Q, S), col, 0, rand); };
+  // (user, 24 Nov: "green paper strips" → "Real fern fronds"): a crown of arching, twice-divided fronds — each a
+  // rachis with paired pinnae, long in the middle and tapering to a fine tip, each pinna a row of little lobes — the
+  // fronds of late September: most still green, some gone yellow, a few bronze and drooping. Drawn in 3D near the path
+  // (near-trunks.js NearPlants), its card farther off.
+  const rand = randomSequence(seed), b = new Builder(), Q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
+  const lobe = (p, dir, up, len, w, col) => {
+    // a blade along dir, its face turned toward `up` (the frond's own top)
+    const x = new THREE.Vector3().crossVectors(dir, up).normalize(), zN = new THREE.Vector3().crossVectors(x, dir).normalize();
+    const m = new THREE.Matrix4().makeBasis(x.multiplyScalar(w), dir.clone().multiplyScalar(len), zN).setPosition(p);
+    b.add(bladeGeo(.45), m, col, 0, rand);
+  };
   b.as(SHRUB);
-  const fronds = 9 + Math.floor(rand() * 5);
+  const fronds = 7 + Math.floor(rand() * 3);
   for (let f = 0; f < fronds; f++) {
-    const a = f * 2.4 + rand() * .5, L = .65 + rand() * .45, up = .55 + rand() * .35, out = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
-    const side = new THREE.Vector3(-out.z, 0, out.x), col = rand() < .08 ? '#8a6a3a' : rand() < .2 ? '#a69443' : ['#4f7a34', '#5c8a3c', '#679244'][f % 3];
-    const at = (t) => out.clone().multiplyScalar(L * t + .04).add(new THREE.Vector3(0, up * Math.sin(Math.PI * t * .75) - .1 * t * t, 0));
-    const N = 9;
+    const a = f * 2.4 + rand() * .5, L = .75 + rand() * .45, up = .45 + rand() * .3, out = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+    const r = rand(), col = r < .1 ? '#8a5a2c' : r < .3 ? '#b49a46' : r < .4 ? '#9c9a44' : ['#4c7432', '#587f37', '#62893d'][f % 3];
+    const droop = r < .1 ? .35 : 0;
+    const at = (t) => out.clone().multiplyScalar(L * t + .03).add(new THREE.Vector3(0, Math.max(.02, (up - droop) * Math.sin(Math.PI * t * .7) - (.12 + droop) * t * t), 0));
+    const N = 10;
     for (let k = 1; k <= N; k++) {
-      const t = k / N, p = at(t), q = at(Math.min(1, t + .08)), d = q.clone().sub(p).normalize();
-      leaf(at(t - 1 / N), at(t).sub(at(t - 1 / N)).normalize(), at(t).distanceTo(at(t - 1 / N)) * 1.05, col);   // (the rachis)
-      const len = .2 * Math.sin(Math.PI * Math.min(1, t * 1.15)) + .03;
-      for (const sg of [-1, 1]) leaf(p, side.clone().multiplyScalar(sg).addScaledVector(d, .35).add(new THREE.Vector3(0, -.15, 0)).normalize(), len, col);
+      const t = k / N, p0 = at(t - 1 / N), p = at(t), d = p.clone().sub(p0), dl = d.length(); d.normalize();
+      const side = new THREE.Vector3().crossVectors(d, Y).normalize(), top = new THREE.Vector3().crossVectors(side, d).normalize();
+      lobe(p0, d, top, dl * 1.05, .018, col);   // the rachis
+      const plen = (.22 * Math.sin(Math.PI * Math.min(1, t * 1.1)) + .025) * (.9 + rand() * .2);
+      for (const sg of [-1, 1]) {
+        const pd = side.clone().multiplyScalar(sg).addScaledVector(d, .45).addScaledVector(top, -.12).normalize();
+        // a pinna: lobes along it, shrinking to its tip
+        const lobes = Math.max(1, Math.min(2, Math.round(plen / .09)));
+        for (let q = 0; q < lobes; q++) {
+          const u = (q + .5) / lobes, c = p.clone().addScaledVector(pd, plen * u);
+          const ld = d.clone().addScaledVector(pd, .4).normalize(), lw = plen * .5 * (1 - u * .6);
+          lobe(c, ld, top, Math.max(.02, lw), lw * .55, col);
+        }
+        lobe(p, pd, top, plen, .02, col);   // its midrib
+      }
     }
   }
+  void Q; void Z;
   return b.build();
 }
 function rock(seed, w, h) {
@@ -406,13 +559,18 @@ function rock(seed, w, h) {
 }
 
 /** The kit: every species' variants in three levels of detail, and the understory pieces. */
-export function makeUpstateTrees() {
+export function makeUpstateTrees({ oldGrowth = false } = {}) {
   return withSmooth(true, () => {
     const species = {};
     for (const [name, o] of Object.entries(SPECIES)) {
       const k = Object.keys(SPECIES).indexOf(name);
       const variants = o.turn.map((turn, v) => [0, 1, 2].map((lod) => grow(4001 + k * 37 + v * 7, o, lod, turn)));
       species[name] = { h: o.H, r: o.R, variants, turn: o.turn, wet: !!o.droop };
+    }
+    // the forest-grown forms: only where a map has old growth (each variant a row in the impostor atlas)
+    if (oldGrowth) for (const [name, o] of Object.entries(FOREST_FORMS)) {
+      const k = Object.keys(FOREST_FORMS).indexOf(name);
+      species[name] = { h: o.H, r: o.R, variants: o.turn.map((turn, v) => [0, 1, 2].map((lod) => grow(4701 + k * 41 + v * 9, o, lod, turn))), turn: o.turn, forest: true };
     }
     species.whitepine = { h: 30, r: 5.5, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => whitePine(v, lod))), turn: [0, 0] };
     species.hemlock = { h: 22, r: 4.2, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => hemlock(v, lod))), turn: [0, 0] };
@@ -433,11 +591,17 @@ export function makeUpstateTrees() {
       sumac: sumac(6131), sumac2: sumac(6132),
       fern: fern(6141), fern2: fern(6142),
       rock: rock(6161, .55, .4), rock2: rock(6162, .9, .55),
-      sapling: grow(6151, { ...SPECIES.sugarmaple, H: 5, R: 1.6, trunkR: .07 }, 1, .3),
+      sapling: grow(6151, { ...SPECIES.sugarmaple, H: 5, R: 1.6, trunkR: .07, fluff: .6 }, 0, .3),
       saplingPine: whitePine(0, 1).scale(.24, .2, .24),
       log: MOUNTAIN_BUILDERS.log(0), stump: MOUNTAIN_BUILDERS.stump(0), stump2: MOUNTAIN_BUILDERS.stump(1),
     };
-    return { species, understory };
+    if (oldGrowth) Object.assign(understory, {
+      herb: herb(6231), seedling: grow(6241, { ...SPECIES.sugarmaple, H: 1.4, R: .5, trunkR: .02 }, 1, .2),
+      beechSapling: grow(6251, { ...FOREST_FORMS.beechF, H: 4.5, R: 1.5, trunkR: .06, fork: .3, fluff: .6 }, 0, .1),
+    });
+    // the old growth's fallen trunks: 3D models drawn by old-growth.js (not cards, so not in the engine's atlas)
+    const logs = oldGrowth ? { bigLog: bigLog(6201, { L: 16, r: .52 }), nurseLog: bigLog(6211, { L: 13, r: .6, nurse: true }), tipup: bigLog(6221, { L: 17, r: .5, tipup: true }), log: MOUNTAIN_BUILDERS.log(1) } : {};
+    return { species, understory, logs };
   });
 }
 

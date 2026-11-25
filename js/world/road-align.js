@@ -36,7 +36,10 @@
 import { drain, each, mapJob, mapGen, due } from './toolbox/core/jobs.js';   // [F30] street profiles run as a job (in frame slices on the ride)
 import { ghostMask } from './ghost.js';   // [pittsburgh-network] no eased turn across a ghost
 /** Is the curved centre line on for this route? (`turns` implies it.) */
-export const curveOn = (route) => !!(route.scene?.roadAlign?.curve || route.scene?.roadAlign?.turns);
+// (a road-graph map's base line — PGH, CNY, SKAN: its ways are drawn as Catmull-Rom curves through their 10 m samples
+//  (graph-world _curve), so the rider rides that same curve, not the chords: on a narrow singletrack the chords cut
+//  each bend off the tread and the heading snapped at every sample — "the bike is sliding", user 24 Nov)
+export const curveOn = (route) => !!(route.scene?.roadAlign?.curve || route.scene?.roadAlign?.turns || route.graph);
 
 export const TURN_DEFAULTS = {
   minRadiusM: 8,     // the centre line is eased until it turns no tighter than this…
