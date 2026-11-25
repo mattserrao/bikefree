@@ -2,6 +2,7 @@
 // riding and scenic camera distances. Everything is procedural and offline.
 import * as THREE from '../../../../vendor/three.module.min.js';
 import { vistaGroundGLSL, vistaCanopyGLSL } from '../atmosphere/vista.js';
+import { SURFACE, SURFACE_SUN, SURFACE_GLSL } from './surface-detail.js';   // [suite]
 
 const noise = /* glsl */`
   float bfHash(vec2 p) {
@@ -24,7 +25,9 @@ export function makeGroundMaterial(palette, config = {}, farUniform = null, cano
   const canopy = !!canopyUniform;
   // vista kit (js/world/toolbox/atmosphere/vista.js): mountain faces, snow, meadows and canopy that hold up at a distance
   const vk = vistaGroundGLSL(vista, palette, vkAttr), vkCanopy = canopy ? vistaCanopyGLSL(vista, vkAttr) : null;
-  if (vk || vkCanopy) material.customProgramCacheKey = () => `bf-ground-vista-${!!vk}-${!!vkCanopy}-${vkAttr}`;
+  // [suite] the common scenery suite's ground: the shared surface detail (turf on the grass, stone dust on the rock)
+  const sd = config.suite?.kit === 'common';
+  if (vk || vkCanopy || sd) material.customProgramCacheKey = () => `bf-ground-vista-${!!vk}-${!!vkCanopy}-${vkAttr}-${sd}`;
   // [subway] holes in the ground (a station's escalator shaft opening): up to 4 rectangles, each {a: (centre x, z,
   // along x, z), b: (half length, half width, on, 0)}, set by the kit that draws what is under them
   const holes = material.userData.holes = { a: { value: Array.from({ length: 4 }, () => new THREE.Vector4()) }, b: { value: Array.from({ length: 4 }, () => new THREE.Vector4()) } };
@@ -72,6 +75,7 @@ export function makeGroundMaterial(palette, config = {}, farUniform = null, cano
     shader.uniforms.uTime = uniforms.uTime || { value: 0 };
     shader.uniforms.bfCloud = uniforms.bfCloud || { value: new THREE.Vector4(0, 0, 0, 0) };
     shader.uniforms.bfWet = uniforms.bfWet || { value: 0 };
+    if (sd) { shader.uniforms.uSurf = SURFACE; shader.uniforms.uSurfSun = SURFACE_SUN; shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>\n${SURFACE_GLSL}`); }
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vBfGround; varying vec3 vBfGroundNormal;\nattribute float aRealH; uniform vec4 bfFar;')
       // Approaching the hand-off, the stylized ground eases onto the real terrain's height so the two meet without a step.
@@ -134,6 +138,7 @@ export function makeGroundMaterial(palette, config = {}, farUniform = null, cano
           bfStone = bfForm * (.7 + bfWeather * .42 + bfStrata * .14) * (1. - bfSeams * .16);
         #endif
         diffuseColor.rgb = mix(diffuseColor.rgb, bfStone, bfCliff * .88);
+        ${sd ? `diffuseColor.rgb *= mix(surfaceDetail(bp.xz, 2, 2.6, bfDistance, 1.), surfaceDetail(bp.xz, 1, 3.4, bfDistance, .8), bfCliff);` : ''}
         diffuseColor.rgb *= 1. + (bfFine - .5) * .12 * bfNear;
         float bfSnow = smoothstep(bfSnowLine, bfSnowLine + 240., bp.y) * smoothstep(.15, .65, abs(normalize(vBfGroundNormal).y));
         #ifdef BF_FORMATIONS

@@ -59,7 +59,7 @@ const CELL = 64;
 // city life, plus highway traffic and birds on the real-coast scenes (Big Sur)
 const lifeNames = /^(People|Cyclists|Dogs|Strollers|Cars|Buses|Light rail|Locomotives|Freight cars|Incline cars|Boats · |Traffic · |Birds · )/;
 const surfaceNames = /^(Streets|Sidewalks|Paths|Rivers|Route road|Route shoulder|Sea$|Lakes?\b)|water$/;
-const skipNames = /(Glows|lights|Light$|beacons|Clouds|clouds|Sky)/i;
+const skipNames = /(Glows|lights|Light$|beacons|Clouds|clouds|Sky|^Verge cards)/i;   // verge cards: soft grass, nothing solid
 
 const visible = (o) => { for (let x = o; x; x = x.parent) if (!x.visible) return false; return true; };
 const named = (o) => { for (let x = o; x; x = x.parent) if (x.name && !x.isScene) return x.name; return ''; };

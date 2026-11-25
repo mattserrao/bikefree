@@ -7,6 +7,9 @@ import { scenePacks, PACK_META } from './toolbox/packs/index.js';
 import { normalizeScene, lifeKit } from './toolbox/scene-schema.js';
 import { ForestPlanner, TILE_M, makeClearings } from './toolbox/vegetation/forest.js';
 import { TreeEngine, packKit } from './toolbox/vegetation/tree-engine.js';
+import { makeEndlessTrees } from './toolbox/vegetation/endless-trees.js';   // [suite]
+import { grassCard, grassMaterial, CARD } from './toolbox/landscape/grass-cards.js';   // [suite]
+import { MeshBuilder } from './toolbox/core/mesh-builder.js';   // [suite]
 import { recordsFromMatrices, plantTile } from './toolbox/vegetation/planting.js';   // [blocks]
 import { GroundBlocks, InstancePool, packMatrices, proxyGroup } from './toolbox/core/pools.js';
 import { Subway } from './toolbox/structures/subway.js';   // [subway]
@@ -963,6 +966,39 @@ export class StylizedTerrain {
         }
       }
     }
+    // [suite] soft grass cards along the verge (the free-ride maps' grass-cards.js): two crossed picture cards a
+    // plant, swaying, on a jittered grid from the shoulder out to vergeCards.outM, thinning outward; none on water,
+    // creeks, lookouts, steep ground or over the snow line
+    let cards = null;
+    const VC = this.config.suite?.kit === 'common' ? this.config.suite.vergeCards : null;
+    if (coverOnly && !thin && VC && !this.landscape.city) {
+      const M = new MeshBuilder(), g = VC.gridM ?? .8, outM = VC.outM ?? 9, tints = (VC.tint || ['#8e9a56', '#a3a65f', '#7d8d4a']).map((c) => new THREE.Color(c)), snow = this.config.snowLineM ?? 1e9;
+      const tint = new THREE.Color();
+      for (let gx = 0; gx < size / g; gx++) {
+        if (gx % 8 === 7) yield;
+        for (let gz = 0; gz < size / g; gz++) {
+          const x = cx * size + (gx + rand()) * g, z = cz * size + (gz + rand()) * g, r = rand();
+          const road = this.index.nearest(x, z, outM + 40);
+          if (!road) continue;
+          road.d = segDist(this.index, road.i, x, z);   // to the road line, not the nearest (sparse) route point
+          if (road.d < 4.6 || road.d > outM) continue;
+          if (r > (VC.density ?? .8) * (1 - (road.d - 4.6) / (outM - 4.6) * .6)) continue;
+          const y = this.heightAt(x, z);
+          if (y > snow || Math.abs(y - road.ele) > 2.5 || this.landscape.isWater?.(x, z, y) || this.landscape.creekAt(x, z) || onLookout(x, z) || this.landscape.bridgeAt(x, z, 8)) continue;
+          if ((this.landscape.burnAt?.(x, z) || 0) > .6) continue;
+          const k = vnoise(x / 9, z / 9), c = tints[Math.floor(vhash(Math.floor(x / 6), Math.floor(z / 6)) * tints.length) % tints.length];
+          tint.copy(c).multiplyScalar(.88 + k * .24);
+          const cell = r < (VC.flowers ?? .04) ? (r < (VC.flowers ?? .04) / 2 ? CARD.goldenrod : CARD.lace) : road.d > outM * .6 && k > .55 ? CARD.tall : CARD.turf;
+          const SZ = [[.75, .38], [1.05, .95], [1.15, 1.3], [.95, 1.05]][cell], sc = .8 + k * .5;
+          grassCard(M, x, y - .02, z, cell, SZ[0] * sc, SZ[1] * sc, r * 40, [tint.r, tint.g, tint.b]);
+        }
+      }
+      if (M.count) {
+        this._vergeMat ||= grassMaterial(this.renderer, this.uniforms.uTime, this.renderer?.getContextAttributes?.()?.antialias || this.qualityKey === 'high');
+        cards = new THREE.Mesh(M.geometry(), this._vergeMat); cards.name = `Verge cards ${cx},${cz}`; cards.frustumCulled = true; cards.receiveShadow = true;
+        this.group.add(cards);
+      }
+    }
     const packed = {};
     for (const [name, matrices] of Object.entries(lists)) {
       let colors = null;
@@ -974,7 +1010,7 @@ export class StylizedTerrain {
       packed[name] = { matrices: packMatrices(matrices), colors };
     }
     // drawn by the instance pools; the group is an unrendered stand-in for QC tools
-    return { x: cx * size, z: cz * size, size, detailed, lists: packed, group: proxyGroup(packed, (n) => this._asset(n)), engineTrees };
+    return { x: cx * size, z: cz * size, size, detailed, lists: packed, group: proxyGroup(packed, (n) => this._asset(n)), engineTrees, cards };
   }
 
   _asset(name) { return name === 'shadow' ? this.shadowAsset : this.kit.assets[name]; }
@@ -1085,7 +1121,7 @@ export class StylizedTerrain {
         if (this.groundPoolFine) this.groundPoolFine.set(new Map(all.filter(([, p]) => p.fine)));
       } else {
         const map = layer === 'forest' ? this.forestTiles : layer === 'far' ? this.farTrees : this[layer];
-        for (const key of [...map.keys()]) if (!wanted.has(key)) { const tl = map.get(key); if (tl?.engine) this._te?.removeTile(tl.engineKey ?? key); map.delete(key); }
+        for (const key of [...map.keys()]) if (!wanted.has(key)) { const tl = map.get(key); if (tl?.engine) this._te?.removeTile(tl.engineKey ?? key); if (tl?.cards) { tl.cards.removeFromParent(); tl.cards.geometry.dispose(); } map.delete(key); }
         // the scatter's and far tiles' trees go into the tree engine as their tiles swap in (not before: no doubles)
         if (this._te) for (const [key, tl] of map) if (tl.engineTrees && !tl.engine) { tl.engineKey = `${layer}:${key}`; tl.engine = true; plantTile(this._te, tl.engineKey, tl.engineTrees); }
         if (!(layer === 'forest' && this._te) && !(layer === 'far' && this._te)) this._pool(layer).set(map.values(), cx, cz);
@@ -1226,7 +1262,12 @@ export class StylizedTerrain {
     if (this._te !== undefined) return this._te;
     if (!this.renderer) return (this._te = null);
     const lights = { hemi: this.scene.children.find((o) => o.isHemisphereLight), sun: this.scene.children.find((o) => o.isDirectionalLight) };
-    this._te = new TreeEngine({ renderer: this.renderer, parent: this.group, quality: this.qualityKey, uTime: this.uniforms.uTime, lights, kit: packKit(this.kit.assets), shadows: !!this.quality.shadows });
+    const kit = packKit(this.kit.assets);
+    // [suite] the common tree kit (the Endless map's species — grown, not modelled): a scene's suite.trees maps its
+    // pack models' names onto them, so the planners keep their names and the engine draws the common species
+    const swap = this.config.suite?.kit === 'common' ? this.config.suite.trees : null;
+    if (swap) { const common = makeEndlessTrees(); for (const [name, sp] of Object.entries(swap)) if (common.species[sp]) kit.species[name] = common.species[sp]; }
+    this._te = new TreeEngine({ renderer: this.renderer, parent: this.group, quality: this.qualityKey, uTime: this.uniforms.uTime, lights, kit, shadows: !!this.quality.shadows });
     return this._te;
   }
 
@@ -1357,4 +1398,17 @@ export class StylizedTerrain {
     this.groundMaterial?.dispose(); this.kit?.dispose();
     this.patches.clear(); this.scatter.clear(); this.cover.clear();
   }
+}
+
+/** Distance from (x, z) to the route polyline around point i (the segments either side). */
+function segDist(index, i, x, z) {
+  const { xs, zs } = index, n = xs.length;
+  let best = Math.hypot(xs[i] - x, zs[i] - z);
+  for (const j of [i - 1, i]) {
+    if (j < 0 || j + 1 >= n) continue;
+    const ax = xs[j], az = zs[j], bx = xs[j + 1] - ax, bz = zs[j + 1] - az, L = bx * bx + bz * bz;
+    const t = L ? Math.max(0, Math.min(1, ((x - ax) * bx + (z - az) * bz) / L)) : 0;
+    best = Math.min(best, Math.hypot(ax + bx * t - x, az + bz * t - z));
+  }
+  return best;
 }

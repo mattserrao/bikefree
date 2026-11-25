@@ -38,13 +38,13 @@
       "atM": 15445,
       "side": "ocean",
       "label": "BIXBY CREEK BRIDGE",
-      "subtitle": "HIGHWAY 1 \u00b7 BIG SUR"
+      "subtitle": "HIGHWAY 1 · BIG SUR"
     },
     {
       "atM": 15190,
       "side": "ocean",
       "label": "COASTAL OVERLOOK",
-      "subtitle": "PACIFIC COAST \u00b7 BIG SUR"
+      "subtitle": "PACIFIC COAST · BIG SUR"
     },
     {
       "atM": 15870,
@@ -57,20 +57,20 @@
       "atM": 14470,
       "side": "ocean",
       "label": "ROCKY CREEK BRIDGE",
-      "subtitle": "HIGHWAY 1 \u00b7 BIG SUR"
+      "subtitle": "HIGHWAY 1 · BIG SUR"
     },
     {
       "atM": 17300,
       "side": "ocean",
       "label": "HURRICANE POINT",
-      "subtitle": "ELEV 550 FT \u00b7 VISTA POINT",
+      "subtitle": "ELEV 550 FT · VISTA POINT",
       "lateralM": 6.9
     },
     {
       "atM": 23450,
       "side": "ocean",
       "label": "POINT SUR",
-      "subtitle": "STATE HISTORIC PARK \u00b7 LIGHTHOUSE"
+      "subtitle": "STATE HISTORIC PARK · LIGHTHOUSE"
     },
     {
       "atM": 20900,
@@ -212,5 +212,37 @@
       }
     ]
   },
-  "post": true
+  "post": true,
+  "suite": {
+    "kit": "common",
+    "note": "user, 25 Nov: the common scenery suite (as CNY, SKAN, Endless); golden light over the sea",
+    "clouds": 0.3,
+    "trees": {
+      "cypress0": "cypress",
+      "cypress1": "cypress",
+      "cypress2": "cypress",
+      "pine0": "shorepine",
+      "pine1": "shorepine",
+      "fir0": "fir",
+      "fir1": "fir",
+      "broadleaf0": "redoak",
+      "broadleaf1": "redoak"
+    },
+    "vergeCards": {
+      "density": 0.75,
+      "outM": 9,
+      "tint": [
+        "#b9a565",
+        "#a89a58",
+        "#c2ae6e",
+        "#8f9452"
+      ],
+      "flowers": 0.03
+    }
+  },
+  "lighting": {
+    "baked": "golden",
+    "windowM": 6000
+  },
+  "timeOfDay": "golden"
 }

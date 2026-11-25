@@ -69,7 +69,7 @@ export function lintScene(scene, name = 'scene') {
   if (scene.style && !['stylized', 'wireframe'].includes(scene.style)) errors.push(`${name}: style must be "stylized" or "wireframe"`);
   if (scene.life?.kit && !['wildlife', 'coast'].includes(scene.life.kit)) errors.push(`${name}: life.kit must be "wildlife" or "coast"`);
   if (scene.style === 'stylized' && scene.terrain !== 'authored-city') {
-    if (!scene.look) warnings.push(`${name}: no "look" — the toolbox standard is "gentle"`);
+    if (!scene.look && scene.suite?.kit !== 'common') warnings.push(`${name}: no "look" — the toolbox standard is "gentle"`);   // ([suite] the common suite draws no cartoon look)
     if (!scene.lighting?.baked) warnings.push(`${name}: no baked lighting — the toolbox standard is "lighting": { "baked": "<time>" }`);
   }
   return { errors, warnings };

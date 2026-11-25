@@ -398,7 +398,13 @@
     "northern-rockies"
   ],
   "timeOfDay": "midday",
-  "look": "gentle",
+  "suite": {
+    "kit": "common",
+    "note": "user, 25 Nov: the common scenery suite; midday for the mountain views",
+    "clouds": 0.35,
+    "vergeCards": { "density": 0.7, "outM": 8, "tint": ["#7f9a4e", "#8fa357", "#6f8a45", "#9aa35c"], "flowers": 0.05 }
+  },
+  "lighting": { "baked": "midday", "windowM": 6000 },
   "post": true,
   "weather": {
     "presets": [

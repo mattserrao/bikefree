@@ -14,6 +14,7 @@ import { PerfMonitor } from './perf.js';
 import { HAZE, AERIAL, AERIAL_COLOR, installHaze } from './toolbox/atmosphere/haze.js';
 import { vistaConfig } from './toolbox/atmosphere/vista.js';
 import { decorateRoad, frenchMarkings } from './toolbox/materials/road-surface.js';
+import { SURFACE, SURFACE_SUN, SURFACE_GLSL, loadSurfaceDetail } from './toolbox/materials/surface-detail.js';   // [suite]
 import { denseRoad, ribbonSections, apronFades } from './road-align.js';   // [road-align] [smooth-turns] [F133]
 import { ghostAt, undergroundAt } from './ghost.js';   // [road-align]
 import { BakedLighting } from './toolbox/atmosphere/baked-light.js';   // [baked-light]
@@ -116,7 +117,12 @@ export class World {
     container.prepend(this.renderer.domElement);
     this.renderer.domElement.className = 'world-canvas';
     // cartoon look: the scene's "look" (Route 28: gentle), or ?look=gentle|bold|none in the preview
-    const lookKey = opts.look ?? route.scene?.look;
+    // [suite] the common scenery suite (user, 25 Nov: "Migrate the scenery for Big Sur, Going to the sun, and Alpe
+    // d'huez to the new, common scenery suite" — the blocks CNY, SKAN and Endless are drawn with): a scene's
+    // "suite": { "kit": "common", … } — no cartoon look, the shared sky dome, the surface detail on the ground and the
+    // road, the common tree kit's species, soft grass cards along the verge (stylized-terrain.js)
+    this.suite = this.stylized && route.scene?.suite?.kit === 'common' ? route.scene.suite : null;
+    const lookKey = opts.look ?? (this.suite ? null : route.scene?.look);
     this.look = this.stylized && Object.hasOwn(LOOKS, lookKey) ? new Look(this, lookKey) : null;
 
     this.scene = new THREE.Scene();
@@ -192,10 +198,12 @@ export class World {
     this.heroPost = !!(this.stylized && route.scene.post);
     // [blocks] the shared graphics effects (toolbox/effects, the same registry the free-ride maps use): a scene's
     // "effects" field; none when absent, so a scene without it draws exactly as before
-    this.effects = this.stylized && route.scene.effects ? installEffects(this, route.scene.effects) : null;
+    const fx = this.suite ? { sky: { clouds: this.suite.clouds ?? 0.4 }, ...(route.scene.effects || {}) } : route.scene.effects;
+    this.effects = this.stylized && fx ? installEffects(this, fx) : null;
+    if (this.suite) loadSurfaceDetail(this.renderer);   // [suite] the shared detail tile (ground, road)
     // vista kit: faint outlines on the far ridges (with or without the cartoon look's near outlines)
     this.vista = this.stylized ? vistaConfig(route.scene) : null;
-    const ridge = this.vista?.ridgeInk || null;
+    const ridge = this.suite ? null : this.vista?.ridgeInk || null;   // ([suite] no ink: the common suite draws no outlines)
     if (this.look || ridge) this.post.setInk({ ...(this.look?.ink || { px: 1, strength: 0, thresh: 1, fadeM: 1 }), ridge });
     // Simple stand-in until the Blender model loads
     this.rider = makeRider();
@@ -674,6 +682,9 @@ export class World {
     for (const tu of [this.terrain?.uniforms, this.farTerrain?.uniforms]) {
       if (tu?.uSunDir) { tu.uSunDir.value.copy(dir); tu.uSkyTop.value.set(t.top); tu.uSkyHorizon.value.set(t.horizon); }
     }
+    // [suite] the shared sky dome in place of the scene's own sky (its zenith from the scene background, its haze the
+    // fog's); at night the scene's sky (its stars) comes back
+    if (this.suite && this.effects) { (this.scene.background ||= new THREE.Color()).set(t.top); this.sky.visible = !!t.night; SURFACE_SUN.value.copy(dir); }
     this.baked?.setLight(t);   // [baked-light]
     this.look?.applyLight();
   }
@@ -1133,6 +1144,7 @@ function makeRoad(route, index, opts = {}) {
   // road surface by area and condition (js/world/toolbox/materials/road-surface.js): the scene's "road" block
   const marks = stylized && route.scene.road?.markings === 'fr' ? frenchMarkings(route.scene.road, route, index, { widthM: ROAD_WIDTH, boards: route.scene.boards || [] }) : null;
   if (stylized && route.scene.road) decorateRoad(mat, route.scene.road, { widthM: ROAD_WIDTH, repeatM: 24, marks });
+  if (stylized && route.scene?.suite?.kit === 'common') addSurfaceDetail(mat, 0, 3.2);   // [suite] the asphalt's aggregate, lit by the sun (the free-ride maps' road detail)
   if (stylized) {
     const data = new Uint8Array(128 * 128 * 4);
     for (let k = 0; k < data.length; k += 4) { const v = 105 + Math.random() * 45; data.set([v, v, v, 255], k); }
@@ -1363,4 +1375,20 @@ function makeRider() {
     });
   }
   return { group, update };
+}
+
+/** [suite] The shared surface detail (surface-detail.js) on a material: its colour × the detail channel (0 asphalt,
+ *  1 gravel, 2 grass turf) near the camera, lit from the sun — kept with whatever the material's own hook does. */
+export function addSurfaceDetail(mat, channel, tileM, k = 1) {
+  const prev = mat.onBeforeCompile, prevKey = mat.customProgramCacheKey;
+  mat.onBeforeCompile = (shader, renderer) => {
+    prev?.call(mat, shader, renderer);
+    shader.uniforms.uSurf = SURFACE; shader.uniforms.uSurfSun = SURFACE_SUN;
+    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vSdW;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvSdW = (modelMatrix * vec4(transformed, 1.)).xyz;');
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>\nvarying vec3 vSdW;\n${SURFACE_GLSL}`)
+      .replace('#include <color_fragment>', `#include <color_fragment>\ndiffuseColor.rgb *= surfaceDetail(vSdW.xz, ${channel}, ${tileM.toFixed(2)}, length(cameraPosition - vSdW), ${k.toFixed(2)});`);
+  };
+  mat.customProgramCacheKey = () => `${prevKey ? prevKey.call(mat) : ''}|sd${channel}`;
+  return mat;
 }
