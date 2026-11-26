@@ -21,6 +21,8 @@ import { loadRider, RIDER_RIM } from './rider.js';
 import { makeSkyDome } from './toolbox/atmosphere/sky-dome.js';
 import { PostFX } from './toolbox/atmosphere/post.js';
 import { createRenderer, pixelRatioFor, QualityGovernor, GpuTimer } from './render-core.js';
+import { litMaterial } from './toolbox/materials/lit.js';
+import { SkyEnvironment } from './toolbox/atmosphere/environment.js';
 import { resolveMapDefinition } from './toolbox/map-definition.js';
 import { SURFACE, SURFACE_SUN, SURFACE_GLSL, loadSurfaceDetail, withSurfaceDetail } from './toolbox/materials/surface-detail.js';
 import { MOBILE } from './graph-city.js';
@@ -298,19 +300,19 @@ export class GraphWorld {
     this._reach();
     this.mats = {
       road: sideMaterial(this.qualityKey === 'low'),
-      paint: this.profile.roads === 'worn' ? wornPaintMaterial() : new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+      paint: this.profile.roads === 'worn' ? wornPaintMaterial() : litMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }, 'paint'),
       ground: groundMaterial(this.qualityKey === 'low', this.profile.ground === 'upstate', !!this.profile.softCover),
       roadSurface: roadSurfaceMaterial(this.qualityKey === 'low', this.profile.roads === 'worn'),
       spill: roadSurfaceMaterial(this.qualityKey === 'low', this.profile.roads === 'worn', true),
-      water: new THREE.MeshLambertMaterial({ color: '#4f7f97', transparent: true, opacity: 0.92 }),
+      water: litMaterial({ color: '#4f7f97', transparent: true, opacity: 0.92 }, 'water'),
       // the dressed places and the river walls: textured from world position (toolbox/materials)
       park: Object.fromEntries(['lawn', 'plaza', 'granite', 'walk', 'garden', 'wood', 'scrub', 'fairway', 'green', 'sand'].map((k) => [k, makeParkMaterial(k)])),
       riverWall: makeMasonryMaterial({ stones: ['#8f897d', '#9b9487', '#857f74', '#a29b8e', '#8a8376', '#7f796f'], mortar: '#b3ada1', courseM: 0.45, moss: '#4f5a3c', mossM: 1.2 }),
       parkWall: makeMasonryMaterial({ stones: ['#a39a8a', '#958c7c', '#ab9f8c', '#8f8576', '#9c9282', '#b0a693'], mortar: '#c2b9a8', courseM: 0.3, mossM: 0.4 }),
-      fountainWater: new THREE.MeshLambertMaterial({ color: '#5d93ad', transparent: true, opacity: 0.88 }),
-      spray: new THREE.MeshLambertMaterial({ color: '#f4f8fb', transparent: true, opacity: 0.55, depthWrite: false }),
-      trunk: new THREE.MeshLambertMaterial({ color: '#5b4636' }),
-      crown: new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true }),
+      fountainWater: litMaterial({ color: '#5d93ad', transparent: true, opacity: 0.88 }, 'water'),
+      spray: litMaterial({ color: '#f4f8fb', transparent: true, opacity: 0.55, depthWrite: false }),
+      trunk: litMaterial({ color: '#5b4636' }, 'wood'),
+      crown: litMaterial({ color: '#ffffff', flatShading: true }, 'foliage'),
     };
     // the graphics effects this map asks for (toolbox/effects: the JSON's "effects" block; none when absent)
     this.TILE = TILE;
@@ -341,7 +343,7 @@ export class GraphWorld {
       const lowY = this.waterY - WATER_ABOVE - 3, topY = p.level + WATER_ABOVE + 0.6;
       const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(p.west, lowY, p.z0), new THREE.Vector3(p.west, lowY, p.z1), new THREE.Vector3(p.west, topY, p.z1), new THREE.Vector3(p.west, topY, p.z0)]);
       g.setIndex([0, 1, 2, 0, 2, 3]); g.computeVertexNormals();
-      this.scene.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: '#a09c92', side: THREE.DoubleSide })));
+      this.scene.add(new THREE.Mesh(g, litMaterial({ color: '#a09c92', side: THREE.DoubleSide }, 'concrete')));
     }
     this.group = new THREE.Group();
     this.scene.add(this.group);
@@ -465,6 +467,12 @@ export class GraphWorld {
     this.scene.background = new THREE.Color(t.sky);
     if (!this.sky) { this.sky = makeSkyDome({ radius: 8500 }); this.scene.add(this.sky.mesh); }
     this.sky.set(t, this.sunDir, this.profile.clouds);
+    // [lighting] the sky as environment light (toolbox/atmosphere/environment.js): the PBR scenery's ambient and its
+    // reflections come from the sky above and the ground below; the hemisphere light stays as a small fill
+    this.env ||= new SkyEnvironment(this.renderer);
+    this.scene.environment = this.env.update(this.sky, t.hemiGround);
+    this.scene.environmentIntensity = t.hemiI * (t.night ? .4 : .75);   // (tuned against the Lambert look: the sun-to-shade contrast kept, the shade a little cooler)
+    this.hemi.intensity = t.hemiI * .3;
     SURFACE_SUN.value.copy(this.sunDir);
     if (this.qualityKey !== 'low') loadSurfaceDetail(this.renderer);
     this.scene.fog.color.set(t.fog);
@@ -532,7 +540,7 @@ export class GraphWorld {
   get loading() { return (this._queued || 0) > 6 || this.baked?.preparing ? 4 : 0; }
 
   dispose() {
-    this.post?.dispose(); this.post = null; this.sky?.dispose();
+    this.post?.dispose(); this.post = null; this.env?.dispose(); this.sky?.dispose();
     this.effects?.dispose();
     this.stop();
     this.disposed = true;
@@ -1845,7 +1853,7 @@ const NY_ROAD_GLSL = /* glsl */`
 `;
 /** Rural maps' road paint: worn by plows and salt — faded, scuffed through in the wheel paths, patchy by stretch. */
 export function wornPaintMaterial() {
-  const m = new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const m = litMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }, 'paint');
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vPW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPW = (modelMatrix * vec4(transformed, 1.)).xyz;');
@@ -1876,7 +1884,7 @@ const NOISE_GLSL = /* glsl */`
  */
 /** low (Light, phones): the patterns only up close (brick, setts, slabs, pavers), plain asphalt with one noise. */
 export function roadSurfaceMaterial(low = false, ny = false, spill = false) {
-  const m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: spill, polygonOffsetFactor: spill ? -1 : 0, polygonOffsetUnits: spill ? -3 : 0 });
+  const m = litMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: spill, polygonOffsetFactor: spill ? -1 : 0, polygonOffsetUnits: spill ? -3 : 0 }, 'asphalt');
   m.defines = {};
   if (spill) m.defines.SPILL = '';
   if (low) m.defines.LOWQ = '';
@@ -2071,13 +2079,13 @@ export function roadSurfaceMaterial(low = false, ny = false, spill = false) {
 /** The ways' sides (verges, shoulders, kerbs, embankments): vertex colour, and near the camera the surface texture
  *  (user, 24 Nov — Zwift parity). */
 function sideMaterial(low = false) {
-  const m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  const m = litMaterial({ vertexColors: true, side: THREE.DoubleSide }, 'asphalt');
   return low ? m : withSurfaceDetail(m, 'graph-side');
 }
 
 const ROOTS_N = 24;
 function groundMaterial(low = false, rural = false, soft = false) {
-  const m = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const m = litMaterial({ vertexColors: true }, 'ground');
   m.defines = {};
   if (soft) m.defines.SOFTCOVER = '';   // (NYC: the covers' edges only wander — no scatter of grains, read as a blocky stipple)
   if (low) m.defines.LOWQ = '';

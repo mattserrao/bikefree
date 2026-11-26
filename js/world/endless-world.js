@@ -14,6 +14,7 @@
 // The course (js/endless/course.js) is generated ahead of the rider; a terrain change at a mile mark regenerates the road
 // past it, and the tiles out there ease to their new shape over a second and a half.
 import * as THREE from '../../vendor/three.js';
+import { litMaterial } from './toolbox/materials/lit.js';
 import { createRenderer, pixelRatioFor, QualityGovernor } from './render-core.js';
 import { resolveMapDefinition } from './toolbox/map-definition.js';
 import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean } from './pose.js';
@@ -121,9 +122,9 @@ export class EndlessWorld {
     this.mats = {
       ground: groundMaterial(low),
       road: roadSurfaceMaterial(low, this.profile.roads === 'worn'),
-      paint: this.profile.roads === 'worn' ? wornPaintMaterial() : new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
-      water: new THREE.MeshLambertMaterial({ color: '#3f6f86', transparent: true, opacity: 0.93 }),
-      ice: new THREE.MeshLambertMaterial({ color: '#dfeaf0' }),
+      paint: this.profile.roads === 'worn' ? wornPaintMaterial() : litMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+      water: litMaterial({ color: '#3f6f86', transparent: true, opacity: 0.93 }),
+      ice: litMaterial({ color: '#dfeaf0' }),
       facade: makeFacadeMaterial(this.uniforms),
     };
     if (!low) loadSurfaceDetail(this.renderer);
@@ -708,7 +709,7 @@ const _cA = new THREE.Color(), _cB = new THREE.Color(), _cC = new THREE.Color(),
 
 /** The ground: vertex colours (the biomes' blend, computed per vertex) with fine noise detail near and a broad mottle. */
 function groundMaterial(low) {
-  const m = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const m = litMaterial({ vertexColors: true });
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vEW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvEW = (modelMatrix * vec4(transformed, 1.)).xyz;');

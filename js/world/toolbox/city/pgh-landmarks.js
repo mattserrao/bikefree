@@ -6,6 +6,7 @@
 //
 //   buildPghLandmarks(host, data) → { tick(time), count }      (host: the CityScene stand-in of js/world/graph-heroes.js)
 import * as THREE from '../../../../vendor/three.js';
+import { litMaterial } from '../materials/lit.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { V, TAU, centroid, scaleRing, orient, prism, cap, block, chamfer, frameOf, makeFrame, lathe, disc, gable } from './hero-geom.js';
 import { buildStadiums } from './bridges.js';
@@ -290,7 +291,7 @@ export function buildPghLandmarks(host, data) {
     reservoir(l) {
       const ring = orient(l.ring.map(([a, o]) => local(a, o))), c = centroid(ring), g = ground(ring);
       S.color('#a8a294'); prism(S, scaleRing(ring, 1.01, c), g - 1.5, g + .4);
-      const w = new THREE.Mesh(host.own(new THREE.ShapeGeometry(new THREE.Shape(ring.map((p) => new THREE.Vector2(p.x, -p.z))))), host.own(new THREE.MeshLambertMaterial({ color: '#4f8aa3' })));
+      const w = new THREE.Mesh(host.own(new THREE.ShapeGeometry(new THREE.Shape(ring.map((p) => new THREE.Vector2(p.x, -p.z))))), host.own(litMaterial({ color: '#4f8aa3' })));
       w.rotation.x = -Math.PI / 2; w.position.y = g - .2; host.group.add(w);
     },
     // Randyland: a three-storey corner house painted every colour there is
@@ -387,7 +388,7 @@ export function buildPghLandmarks(host, data) {
     S.color('#8a5a3c'); S.box(a.x - dir.x * 7, a.y - 1.5, a.z - dir.z * 7, 9, 6, 10, yaw); S.color('#6b3d26'); S.pyramid(a.x - dir.x * 7, a.y + 4.5, a.z - dir.z * 7, 10, 2.5, 11, yaw);
     S.color('#8a5a3c'); S.box(b.x + dir.x * 6, b.y - 1.5, b.z + dir.z * 6, 10, 7, 11, yaw); S.color('#6b3d26'); S.pyramid(b.x + dir.x * 6, b.y + 5.5, b.z + dir.z * 6, 11, 2.5, 12, yaw);
     for (const side of [-1.7, 1.7]) {
-      const car = new THREE.Mesh(host.own(new THREE.BoxGeometry(3, 3, 6)), host.own(new THREE.MeshLambertMaterial({ color: /Mon/.test(inc.name) ? '#c9b02e' : '#a2372b' })));
+      const car = new THREE.Mesh(host.own(new THREE.BoxGeometry(3, 3, 6)), host.own(litMaterial({ color: /Mon/.test(inc.name) ? '#c9b02e' : '#a2372b' })));
       host.group.add(car); cars.push({ car, a: a.clone().addScaledVector(right, side), dir, len, phase: side > 0 ? 0 : .5, pitch: Math.atan2(b.y - a.y, Math.hypot(b.x - a.x, b.z - a.z)), yaw });
     }
     made++;

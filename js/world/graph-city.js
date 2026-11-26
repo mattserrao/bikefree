@@ -15,6 +15,7 @@
 //
 //   const c = new GraphCity(world, heroes, index); await c.loadLand()   → c.stream(cx, cz, ms) (sectors fetched as the rider nears them), c.tick(cam)
 import * as THREE from '../../vendor/three.js';
+import { litMaterial } from './toolbox/materials/lit.js';
 import { MeshBuilder, hash } from './toolbox/core/mesh-builder.js';
 import { ParkedCars, pickCar, carMaterial } from './toolbox/life/figures/cars.js';
 import { Herds } from './toolbox/life/figures/animals.js';
@@ -1136,7 +1137,7 @@ export class GraphCity {
    */
   _wireMat() {
     if (this.wireMat) return this.wireMat;
-    const m = new THREE.MeshLambertMaterial({ color: '#2a2a28' });
+    const m = litMaterial({ color: '#2a2a28' }, 'asphalt');
     m.onBeforeCompile = (shader) => {
       shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying float vThin;')
         .replace('#include <begin_vertex>', `#include <begin_vertex>

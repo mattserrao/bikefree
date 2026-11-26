@@ -26,6 +26,7 @@
 //   yield* og.treesJob(x0, z0, size, out, kit)   a tile's trees and understory for the tree engine
 //   og.tick(camera, time)          builds / drops the near pieces as the rider moves
 import * as THREE from '../../../../vendor/three.js';
+import { litMaterial } from '../materials/lit.js';
 import { hash, MeshBuilder } from '../core/mesh-builder.js';
 import { due } from '../core/jobs.js';
 import { grassAtlas } from '../landscape/grass-cards.js';
@@ -706,7 +707,7 @@ export class OldGrowth {
     }
     if (I.length) {
       const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); rg.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); rg.setIndex(I); rg.computeVertexNormals();
-      this.rootMat ||= new THREE.MeshLambertMaterial({ vertexColors: true });
+      this.rootMat ||= litMaterial({ vertexColors: true });
       const rm = new THREE.Mesh(rg, this.rootMat); rm.name = `Old growth roots ${B.key}`; rm.receiveShadow = true; this.group.add(rm); B.roots = rm;
     }
     this.stats.skirtBlocks++;
@@ -761,7 +762,7 @@ export class OldGrowth {
     const r = this.world.renderer, msaa = !!(r.getContextAttributes?.()?.antialias);
     // (a phone, no MSAA: the same blades, fewer and ~2.3× wider — a blade over a pixel wide doesn't break up and
     //  shimmer as a hair-thin one does; picture cards were tried and read as dark, blotchy clumps up close)
-    const m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    const m = litMaterial({ vertexColors: true, side: THREE.DoubleSide });
     this.bladeThick = !msaa;
     m.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = this.uTime;
@@ -882,7 +883,7 @@ export class OldGrowth {
   _grassMat() {
     if (this.grassMat) return this.grassMat;
     const r = this.world.renderer, msaa = !!(r.getContextAttributes?.()?.antialias);
-    const m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, map: grassAtlas(r), alphaTest: msaa ? .35 : .5, alphaToCoverage: msaa });
+    const m = litMaterial({ vertexColors: true, side: THREE.DoubleSide, map: grassAtlas(r), alphaTest: msaa ? .35 : .5, alphaToCoverage: msaa });
     m.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = this.uTime;
       shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; attribute float aTall;')

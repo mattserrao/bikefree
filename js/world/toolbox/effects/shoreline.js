@@ -7,6 +7,7 @@
 // field's own gradient, so neighbouring pieces share their edges (no seams, no overlaps).
 // Options: { cell: 2 (m), beach: [1.5, 4] (m inland), shallows: 9 (m out), reeds: 0.35 (clumps per 10 m of gentle shore) }
 import * as THREE from '../../../../vendor/three.js';
+import { litMaterial } from '../materials/lit.js';
 import { due } from '../core/jobs.js';
 
 const hash = (x, z) => { const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return s - Math.floor(s); };
@@ -54,9 +55,9 @@ export const shoreline = {
       return m;
     };
     const mats = {
-      beach: new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }),
-      shallows: lap(new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })),
-      reed: new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
+      beach: litMaterial({ vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }),
+      shallows: lap(litMaterial({ vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })),
+      reed: litMaterial({ vertexColors: true, side: THREE.DoubleSide }),
     };
     const reed = reedClump();
     const top = (x, z) => world.waterTop(x, z);

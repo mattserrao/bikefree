@@ -1,6 +1,7 @@
 // Toolbox: far tree cards — the flat, camera-facing silhouettes that carry a forest out past the real trees
 // (Balanced and High). Used by every stylized scene with trees.
 import * as THREE from '../../../../vendor/three.js';
+import { litMaterial } from '../materials/lit.js';
 
 /**
  * The tree-card materials: an alpha-tested silhouette (conifer or broadleaf) on a quad that turns about
@@ -24,7 +25,7 @@ export function makeTreeCards(uniforms) {
   const geometry = new THREE.PlaneGeometry(1, 1); geometry.translate(0, .5, 0);
   const hide = { value: new THREE.Vector4(0, 0, 0, 0) }, reach = { value: 1e9 };
   const make = (u0) => {
-    const material = new THREE.MeshLambertMaterial({ map: texture, alphaTest: .3, side: THREE.DoubleSide });
+    const material = litMaterial({ map: texture, alphaTest: .3, side: THREE.DoubleSide });
     // 7.3b: no alpha-to-coverage — a far card is a few pixels tall, all edge, and Apple GPUs resolve partial
     // coverage as a dither pattern (a fine speckle over the distant forest). A plain alpha test instead, with
     // the mip-blurred alpha scaled up by mip level so distant cards keep their size rather than thinning out.
