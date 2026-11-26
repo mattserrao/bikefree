@@ -14,7 +14,7 @@
 // The ground parts are GLSL added to the scene's ground material (coastal-materials.js); they use the real
 // landform's own normals and heights, so they follow the real place. Haze lives in the shared fog chunk
 // (haze.js), ridge ink in post.js's final pass, and the clouds replace the soft cloud ring (one draw call).
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 
 const DEFAULTS = {
   rock: { ribs: .9, ledges: .7, scree: .6, cuts: 0, ribWidthM: 30, ribLengthM: 170, reliefM: 22, ledgeM: 30 },

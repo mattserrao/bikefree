@@ -3,7 +3,7 @@
 // canopy map as the camera moves on, and turns the shared uniforms on. Drawn by every material the baked lighting
 // patches (a map with baked light: the upstate profile's golden hour — CNY, SKAN, NYC).
 // Options: { strength: 1 (0–1: how dark the shade), lift: 7 (m: the canopy plane above the rider) }.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { CanopyShade } from '../atmosphere/canopy-shade.js';
 
 const _sd = new THREE.Vector3();

@@ -18,7 +18,7 @@
 //
 // Lean cartoon style: vertex colours, merged meshes. Budget per stadium: ~10 draws, ~0.25 M triangles (mostly the
 // crowd's far figures, drawn only within ~1.5 km; the near rows and the players only within ~300 m).
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { routePoint } from '../../pose.js';
 import { randomSequence } from '../core/random.js';

@@ -3,7 +3,7 @@
 // Children" on its old bridge pier, and USS Requin moored by the Science Center. Stylised, at their real spots (the
 // scene's `heroes`: model, lat, lon; the OSM node or footprint they stand on), built into the heroes kit's builders
 // (js/world/toolbox/city/heroes.js registers them).
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { posedFigure, CLIP } from '../life/figures/people.js';
 import { appendToMeshBuilder } from '../life/figures/vehicles.js';
 

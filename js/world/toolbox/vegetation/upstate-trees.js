@@ -13,7 +13,7 @@
 //
 //   const kit = makeUpstateTrees()  → { species: { name: { h, r, kind, variants: [[g0, g1, g2], …], turn: [p0, p1, p2] } },
 //                                       understory: { name: geometry } }
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { randomSequence } from '../core/random.js';
 import { Builder, M, cyl, cone, blob, withSmooth } from '../core/model-builder.js';
 import { MOUNTAIN_BUILDERS } from '../packs/northern-rockies.js';

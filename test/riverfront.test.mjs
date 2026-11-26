@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { buildCatalogRoute } from '../js/routes.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
 import { makeCityLandscape, cityStreets } from '../js/world/toolbox/city/landscape.js';
-import * as THREE from '../vendor/three.module.min.js';
+import * as THREE from '../vendor/three.js';
 import { planRiverfront, riverfrontField, buildRiverfront } from '../js/world/toolbox/city/riverfront.js';
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');

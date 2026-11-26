@@ -3,7 +3,7 @@
 // lodgepole pine and aspen on the dry east side — plus treeline krummholz and the subalpine ground cover:
 // beargrass, Indian paintbrush, glacier lilies, huckleberry and Sitka alder in the avalanche chutes.
 // Low-poly, vertex-coloured, built once per scene — no extra downloads. Unit height scale is metres.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { randomSequence } from '../core/random.js';
 import { PACK_META } from './meta.js';
 import { Builder, M, cyl, cone, blob, withSmooth } from '../core/model-builder.js';

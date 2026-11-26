@@ -10,7 +10,7 @@
 //     "debris":  [{ "fromM": 30000, "toM": 56500, "density": 0.7 }],       // fallen rock below the road cuts
 //     "reachM": 1300
 //   }
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { randomSequence } from '../core/random.js';
 

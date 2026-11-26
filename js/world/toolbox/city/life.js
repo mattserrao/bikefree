@@ -4,7 +4,7 @@
 // Agents live near the camera and are recycled as you ride; all draw calls are instanced. People, cyclists, dogs,
 // strollers, cars and buses come from the figures kit (life/figures): soft cartoon models, baked walk cycles.
 import { ghostAt, offStreetAt } from '../../ghost.js';
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { Crowd, CLIP, FIT, randomLook, dogLook, clipRate, PALETTES } from '../life/figures/people.js';
 import { vehicleMesh, vehicleMaterial, setPaint, setMove } from '../life/figures/vehicles.js';
 import { MeshBuilder, makePath, hash, ribbon } from '../core/mesh-builder.js';

@@ -1,6 +1,6 @@
 // Toolbox: post-and-rail guardrail along stretches of road (a scene's "roadside": [{ fromM, toM, side }]).
 // Two instanced meshes for the whole route; gaps at overlook entrances and on bridges.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 
 export function buildGuardrail(config, route, index, landscape) {
   const posts = [], rails = [];

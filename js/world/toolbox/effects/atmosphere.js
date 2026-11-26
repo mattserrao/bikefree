@@ -13,7 +13,7 @@
 // Options: { beams: 1, mist: 1, leaves: 1, motes: 1 } (each a strength; 0 turns it off).
 // The world it needs: scene, camera, sunDir, sun, and (for beams and mist) city.forest.tiles, city.landAt / LAND codes,
 // poolAt(x, z), surfaceH(x, z).
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { CHIMNEYS } from '../structures/houses/house-engine.js';
 
 const BEAMS = 14, MIST = 12, LEAVES = 160, MOTES = 420, SMOKERS = 12, PUFFS = 9, FLOCKS = 3, BIRDS = 9;

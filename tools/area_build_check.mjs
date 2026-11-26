@@ -99,7 +99,7 @@ for (const id of areas) {
     t.city?._stream(cx, cz, Infinity);
     t.city?.streetKit?.flush();
     // fingerprint (as tools/snap_scene.mjs --fingerprint)
-    const THREE = await import('/vendor/three.module.min.js');
+    const THREE = await import('/vendor/three.js');
     const H = (h, bytes) => { for (let i = 0; i < bytes.length; i++) h = Math.imul(h ^ bytes[i], 16777619) >>> 0; return h; };
     const num = (h, v) => H(h, new Uint8Array(new Float64Array([Math.round(v * 1e4) / 1e4]).buffer));
     const str = (h, s) => H(h, new TextEncoder().encode(String(s)));

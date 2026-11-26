@@ -6,7 +6,7 @@
 //   light   the sun and the sky light scaled (sun ×, sky ×): a stronger key against a softer fill — the shade reads
 //           as shade, the sun as sun; exposure ×
 // Options: { saturation: 1.15, contrast: .16, warm: .4, lift: .015, sun: 1.12, sky: .9, exposure: 1 }. Shader only.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 
 const ORIG = THREE.ShaderChunk.tonemapping_pars_fragment;
 const DEFAULT = 'vec3 CustomToneMapping( vec3 color ) { return color; }';

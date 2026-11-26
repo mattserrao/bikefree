@@ -138,7 +138,7 @@ for (const shot of shots) {
     // [toolbox] --fingerprint: one hash per object of its geometry, transforms and material settings, so a refactor
     // can prove the scene is built identically (pixels alone miss off-screen changes)
     let fp = null;
-    const THREE = window.__fingerprint ? await import('/vendor/three.module.min.js') : null;
+    const THREE = window.__fingerprint ? await import('/vendor/three.js') : null;
     if (window.__fingerprint) {
       const H = (h, bytes) => { for (let i = 0; i < bytes.length; i++) h = Math.imul(h ^ bytes[i], 16777619) >>> 0; return h; };
       const num = (h, v) => H(h, new Uint8Array(new Float64Array([Math.round(v * 1e4) / 1e4]).buffer));
@@ -179,7 +179,7 @@ for (const shot of shots) {
   const file = join(out, `${shot.name}.${png ? 'png' : 'jpg'}`);
   await writeFile(resolve(ROOT, file), Buffer.from(r.url.split(',')[1], 'base64'));
   rows.push({ shot: shot.spec, file, calls: r.calls, triangles: r.triangles, seconds: Math.round((Date.now() - t0) / 1000), errors: [...errors], ...(r.areas ? { areas: r.areas } : {}), memory: r.memory, ...(r.bake ? { bake: r.bake } : {}), ...(r.fp ? { fingerprint: r.fp } : {}) });   // [baked-light] bake stats
-  if (postJs) console.log('  eval:', JSON.stringify(await page.evaluate(async (code) => { const w = window.bfWorld; const T = await import('/vendor/three.module.min.js'); return eval(code); }, postJs)));
+  if (postJs) console.log('  eval:', JSON.stringify(await page.evaluate(async (code) => { const w = window.bfWorld; const T = await import('/vendor/three.js'); return eval(code); }, postJs)));
   if (r.breakdown) console.log(r.breakdown.map(([k, n, t]) => `   ${String(n).padStart(4)}  ${String(Math.round(t / 1000)).padStart(5)} k  ${k}`).join('\n'));   // [w2-budget] calls, triangles
   console.log(`${errors.length ? 'ERR ' : 'ok  '} ${shot.spec.padEnd(34)} ${String(r.calls).padStart(5)} calls ${(r.triangles / 1e6).toFixed(2).padStart(6)} M tris${r.areas ? ` · areas ${r.areas}` : ''} · ${r.memory.geometries} geometries, ${r.memory.textures} textures, heap ${r.memory.heapMB} MB  → ${file}`);
   for (const e of errors) console.log(`       ${e.slice(0, 200)}`);

@@ -3,7 +3,7 @@
 // (js/world/toolbox/city/bridges.js) and everything that moves (js/world/toolbox/city/life.js).
 // Data: "bikefree-city-1" from tools/build_city.py; ground from js/world/toolbox/city/landscape.js.
 import { ghostAt } from '../../ghost.js';
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { decodeCity, LAND, POND_KINDS, cityStreetsJob, STREET_W } from './landscape.js';
 import { makeLakeWaterMaterial } from '../materials/surfaces.js';   // [6.5] hill water
 import { drain, due, each, runSlice } from '../core/jobs.js';   // [F30] the city is built as a job (in frame slices on the ride)

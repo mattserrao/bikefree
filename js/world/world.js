@@ -1,6 +1,6 @@
 // The 3D ride view: real terrain + aerial imagery, the road, a pedalling rider, sky and cameras.
 import { cutRouteRibbon, junctionPlan } from './toolbox/city/junction-mesh.js';   // [junctions] (the road's overlay: city.js)
-import * as THREE from '../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.js';
 import { installEffects } from './toolbox/effects/index.js';   // [blocks]
 import { makeProjection, makeRouteIndex } from './geo.js';
 import { Terrain } from './terrain.js';

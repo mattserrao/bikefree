@@ -3,7 +3,7 @@
 // instead of the logarithmic one, which stopped the GPU skipping hidden pixels). The final pass
 // tone-maps to the screen. Hero scenery adds a soft bloom on the brightest light (sun glint on the
 // sea, the low sun, lamps at night), a gentle grade and a vignette; off on Light detail.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 
 // Cartoon ink outlines (lean cartoon look): darken pixels where the depth jumps, near the rider only.
 // Read in the final pass from the scene target's depth, so outlines add no full-screen pass of their own.

@@ -8,7 +8,7 @@
 // it stands on. The scene's `views` add postcard camera positions for the scenic ("vista") camera.
 // The landmarks outside downtown (Oakland's icons, the churches, the Homestead steel heritage: PLAN 7.7) are in
 // city/landmark-heroes.js and share this build's builders and helpers.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { ROAD_WIDTH } from '../../pose.js';
 import { V, TAU, centroid, area2, orient, scaleRing, lerp2, inPoly, prism, cap, block, chamfer } from './hero-geom.js';

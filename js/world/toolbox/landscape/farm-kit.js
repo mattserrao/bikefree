@@ -8,7 +8,7 @@
 //               an old fieldstone wall by the woods and the crops; a verge of mown grass tufts and wildflowers
 //               (chicory, Queen Anne's lace, goldenrod, asters); the odd farm stand with pumpkins by a farmhouse
 // Everything is built once per tile (static), the small near things in a mesh shown only near the camera.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { due } from '../core/jobs.js';
 import { hash } from '../core/mesh-builder.js';
 

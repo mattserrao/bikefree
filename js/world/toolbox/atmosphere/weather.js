@@ -3,7 +3,7 @@
 // and rain with a wet, shiny road. Wind moves grass, flowers and trees in every preset.
 // Changes ease in over a few seconds. Works on every stylized route; the fog bank hugs the real
 // shoreline where the scene has one (the Big Sur hero map), elsewhere it lies in the valleys.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 
 export const WEATHER = {
   clear: { label: 'Clear', cloud: .12, shadow: .5, wind: .3, bank: 0, rain: 0, overcast: 0, bankTop: 140 },

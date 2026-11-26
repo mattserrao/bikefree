@@ -5,7 +5,7 @@
 // gulls wheeling along the cliffs, a California condor soaring over the ridges, cattle grazing the
 // marine terrace by Point Sur, and the Point Sur lighthouse on its rock (its lamp turns at night).
 // Birds flap in the vertex shader; everything is instanced.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { randomSequence } from '../core/random.js';
 

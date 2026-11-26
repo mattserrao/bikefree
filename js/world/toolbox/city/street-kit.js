@@ -21,7 +21,7 @@
 // shops, car parks, fences) come from the city data's `streetKit` block (tools/citylib/street_kit.py); the
 // kit's own spacing rules fill in the rest. See docs/pittsburgh/detail/s3.md.
 import { ghostAt } from '../../ghost.js';
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { MeshBuilder, hash } from '../core/mesh-builder.js';
 import { drain, due, clock, each } from '../core/jobs.js';   // [F30]
 import { ROAD_WIDTH, ROAD_LIFT } from '../../pose.js';

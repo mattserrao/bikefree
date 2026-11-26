@@ -5,7 +5,7 @@
 // turn themselves from them), and the graph world's ground for their heights. No streets, no route: PGH has neither.
 //
 //   const h = await buildGraphHeroes(world, json)   → { group, tick(time, dt), setNight(v), dispose(), heroes }
-import * as THREE from '../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.js';
 
 export async function buildGraphHeroes(world, json) {
   const [{ CityScene }, { buildHeroes }, { buildPghLandmarks }, { frameOf, orient }] = await Promise.all([import('./toolbox/city/city.js'), import('./toolbox/city/heroes.js'),

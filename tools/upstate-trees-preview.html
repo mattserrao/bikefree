@@ -2,7 +2,7 @@
 <script type="module">
 // Preview of the upstate trees (js/world/toolbox/vegetation/upstate-trees.js): every species' variants, near model in
 // the front row, mid and far behind. ?lod=0|1|2 shows one level only. Triangle counts in window.stats.
-import * as THREE from '../vendor/three.module.min.js';
+import * as THREE from '../vendor/three.js';
 import { makeUpstateTrees, makeLeafTexture } from '../js/world/toolbox/vegetation/upstate-trees.js';
 import { decorateTreeMaterial } from '../js/world/toolbox/packs/northern-rockies.js';
 const P = new URLSearchParams(location.search), only = P.has('lod') ? +P.get('lod') : null;

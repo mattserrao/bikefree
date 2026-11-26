@@ -11,7 +11,7 @@
 //  - Logan Pass Visitor Center and its parking, Lake McDonald Lodge, Rising Sun, the St. Mary visitor centre,
 //    midsummer snowbanks, and Wild Goose Island's handful of trees
 // Everything is merged into a few vertex-coloured meshes (a draw call or two per landmark).
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { randomSequence, smoothstep } from '../core/random.js';
 import { Builder, M, blob, box } from '../core/model-builder.js';
 import { decorateSceneryMaterial } from '../materials/surfaces.js';

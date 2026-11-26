@@ -13,7 +13,7 @@
 //              shadow map round the rider; on desktop High the post pipeline (contact shading, bloom, grade)
 // The course (js/endless/course.js) is generated ahead of the rider; a terrain change at a mile mark regenerates the road
 // past it, and the tiles out there ease to their new shape over a second and a half.
-import * as THREE from '../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.js';
 import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean } from './pose.js';
 import { loadRider, RIDER_RIM } from './rider.js';
 import { makeSkyDome } from './toolbox/atmosphere/sky-dome.js';

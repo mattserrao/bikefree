@@ -10,7 +10,7 @@
 //
 // Brush (goldenrod, Queen Anne's lace, chicory, tall grass, cattails in the wet bottoms) and the utility poles go
 // into a MeshBuilder; sumac thickets come from the tree engine (graph-city's _ruralTrees).
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { hash } from '../core/mesh-builder.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);

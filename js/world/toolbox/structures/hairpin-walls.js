@@ -4,7 +4,7 @@
 // above the ground beside it and another leg of the road is near. Merged into one mesh per 2 km.
 //
 //   "hairpinWalls": { "minDropM": 1, "parapetM": 0.55, "color": "#9a958a" }
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 
 const ROAD_HALF = 3.5, EDGE = ROAD_HALF + .8, STEP = 2, CHUNK = 2000;
 

@@ -6,7 +6,7 @@
 // sampled on a fine grid and its zero contour traced (marching squares); each contour vertex is offset along the
 // field's own gradient, so neighbouring pieces share their edges (no seams, no overlaps).
 // Options: { cell: 2 (m), beach: [1.5, 4] (m inland), shallows: 9 (m out), reeds: 0.35 (clumps per 10 m of gentle shore) }
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { due } from '../core/jobs.js';
 
 const hash = (x, z) => { const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return s - Math.floor(s); };

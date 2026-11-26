@@ -1,6 +1,6 @@
 // Toolbox: far tree cards — the flat, camera-facing silhouettes that carry a forest out past the real trees
 // (Balanced and High). Used by every stylized scene with trees.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 
 /**
  * The tree-card materials: an alpha-tested silhouette (conifer or broadleaf) on a quad that turns about

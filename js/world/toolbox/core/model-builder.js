@@ -1,7 +1,7 @@
 // Toolbox core: the procedural model builder every regional pack and structure kit is made with. Low-poly,
 // vertex-coloured, flat-shaded geometry merged into one BufferGeometry per model, in metres, Y up, +Z along
 // the road. Primitives (cyl, cone, blob, box) sit on the ground (y = 0); M() composes a transform.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 
 export const linear = (hex) => new THREE.Color(hex);   // THREE.Color(hex) converts sRGB hex → linear working space
 // Cartoon look: smooth shading instead of flat facets, for the length of one withSmooth(true, …) call;

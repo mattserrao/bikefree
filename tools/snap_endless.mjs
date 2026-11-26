@@ -52,7 +52,7 @@ for (const spec of args) {
     const i = w.renderer.info.render, st = window.route.endlessRide.stateAt(w.p);
     return { calls: i.calls, triangles: i.triangles, tiles: w.tiles.size, biome: st.biome, mode: st.mode, day: w.dayAt.toFixed(2) };
   }, view);
-  if (evalJs) console.log('  eval:', JSON.stringify(await page.evaluate(async (code) => { const w = window.bfWorld; const T = await import('/vendor/three.module.min.js'); return eval(code); }, evalJs)));
+  if (evalJs) console.log('  eval:', JSON.stringify(await page.evaluate(async (code) => { const w = window.bfWorld; const T = await import('/vendor/three.js'); return eval(code); }, evalJs)));
   const file = resolve(ROOT, out, `endless-${name}.png`);
   await page.screenshot({ path: file });
   console.log(`${name}: ${stats.biome}, ${stats.mode}, day ${stats.day} · ${stats.calls} draw calls, ${(stats.triangles / 1e6).toFixed(2)} M triangles, ${stats.tiles} tiles · ${((Date.now() - t0) / 1000).toFixed(1)} s → ${file.slice(ROOT.length)}${errors.length ? `\n  errors: ${errors.slice(0, 4).join(' | ')}` : ''}`);

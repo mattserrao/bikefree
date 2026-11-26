@@ -11,7 +11,7 @@
 // in the shader). Per instance (instanceColor, as data): r phase 0–1, g walking 0/1, b walking circle radius / 20.
 // A walker goes slowly round a small circle about its spot (a pond bird drifts round it); the rest stand grazing.
 // Animation is all in the vertex shader (uTime): no per-frame CPU work.
-import * as THREE from '../../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../../vendor/three.js';
 import { VehBuilder } from './vehicles.js';
 
 export const PART_ANIM = { BODY: 0, HEAD: 1, TAIL: 2, FL: 3, FR: 4, BL: 5, BR: 6, SHADOW: 8, PATCH: 10 };   // (PATCH: + a part, a Holstein's coat)

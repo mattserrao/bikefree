@@ -1,4 +1,4 @@
-import * as THREE from '../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.js';
 import { randomSequence, smoothstep, vhash, vnoise } from './toolbox/core/random.js';
 import { makeTreeCards } from './toolbox/vegetation/tree-cards.js';
 import { loadSceneryAssets } from './toolbox/packs/blender-kits.js';

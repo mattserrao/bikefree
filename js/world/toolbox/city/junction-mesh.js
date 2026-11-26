@@ -1,7 +1,7 @@
 // Junction meshes (three.js side of js/world/toolbox/city/junctions.js): the junction surfaces and the plain asphalt over the
 // route's road inside a junction go into the city's street builders (no extra draw calls), the corner sidewalks
 // into the sidewalk builders, and the paint — crosswalks, stop lines, curb edges — into one merged mesh per chunk.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { streetPieces, LIFT_BLEND_M, junctionPaintJob, routeLine } from './junctions.js';
 import { drain, due } from '../core/jobs.js';   // [F30]
 import { ROAD_WIDTH } from '../../pose.js';

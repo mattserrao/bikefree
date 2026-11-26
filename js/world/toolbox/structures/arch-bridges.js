@@ -4,7 +4,7 @@
 // a real gorge gets a deck with parapets; the deep ones (Bixby Creek, Rocky Creek, Garrapata) get the
 // open-spandrel arch of the 1930s Highway 1 bridges — twin ribs, spandrel columns, and tall piers that
 // reach the real ground. Built from instanced boxes so the whole set is a handful of draw calls.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { decorateSceneryMaterial } from '../materials/surfaces.js';
 import { ROAD_WIDTH } from '../../pose.js';
 

@@ -7,7 +7,7 @@
 // Options: { kinds: ['drive'], share: .35 (of each side in stretches), offset: 2 (m past the edge and any sidewalk: clear of the
 // verge the QC keeps free — tools/qc-map.js edgeLip probes 1.2 m out),
 // height: 1.05, post: 2.7 (m between posts), both: .4 (chance a stretch has its twin across the way) }.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { hash } from '../core/mesh-builder.js';
 import { due } from '../core/jobs.js';
 

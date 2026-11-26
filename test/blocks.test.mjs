@@ -54,7 +54,7 @@ test('the building engine: one front door, every graph code has a kind', async (
 });
 
 test('the planting API: matrices become engine records (yaw only)', async () => {
-  const THREE = await import('../vendor/three.module.min.js');
+  const THREE = await import('../vendor/three.js');
   const { recordsFromMatrices, treeRecord } = await import('../js/world/toolbox/vegetation/planting.js');
   const m = new THREE.Matrix4().compose(new THREE.Vector3(3, 4, 5), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.7), new THREE.Vector3(2, 3, 2));
   const [t] = recordsFromMatrices({ maple: [m], gone: [m] }, (n) => n === 'maple');

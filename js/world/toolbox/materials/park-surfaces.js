@@ -11,7 +11,7 @@
 //   wood     woodland floor: leaf litter and moss
 //   scrub    rough grass and low brush
 // Each detail fades to its average with distance, so far ground doesn't shimmer.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 
 const BASE = {
   lawn: ['#5f8f43', '#6e9d4c'], plaza: ['#b8b2a6', '#a9a397'], granite: ['#9b958a', '#8a847a'], walk: ['#c2bdb2', '#b5afa3'],

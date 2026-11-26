@@ -11,7 +11,7 @@
 // down beside the roads so a street on a hillside never disappears into it (the road's own height is the truth:
 // the ground steps down to just under it and eases back up). Anything below the river level is river bed: one
 // water plane at the pool level shows through there.
-import * as THREE from '../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.js';
 import { makeProjection } from './geo.js';
 import { decodeTerrain } from './toolbox/landscape/real-terrain.js';
 import { CANAL, canalAt } from './toolbox/city/cny-landmarks.js';
@@ -20,6 +20,7 @@ import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean, ROAD_
 import { loadRider, RIDER_RIM } from './rider.js';
 import { makeSkyDome } from './toolbox/atmosphere/sky-dome.js';
 import { PostFX } from './toolbox/atmosphere/post.js';
+import { createRenderer, pixelRatioFor, QualityGovernor, GpuTimer } from './render-core.js';
 import { SURFACE, SURFACE_SUN, SURFACE_GLSL, loadSurfaceDetail, withSurfaceDetail } from './toolbox/materials/surface-detail.js';
 import { MOBILE } from './graph-city.js';
 /** The clouds' clock (their shadows drifting over the ground and the roads; puddles' glints): seconds. */
@@ -47,7 +48,6 @@ const WATER_ABOVE = 0.35;           // the water plane this far above the pool l
 const BED_BELOW = 1.2;              // ground this close above the pool (or under it) is pushed down to river bed
 // the drawing buffer's pixel ratio by quality: with 4× MSAA on, 1.5 on a 2× (Retina) screen looks all but the same as 2
 // and shades 44% fewer pixels — the anti-aliasing review (23 Nov): edges are the multisample's job, not resolution's
-const PIXEL_RATIO = { low: 1, balanced: 1.5, high: 2 };
 const SPILL_IN = 350, SPILL_OUT = 550;   // the ways' spill strips: built within, dropped past (m from a tile's edge)
 const KERB = 0.35;                  // the ground's top this far under the road beside it…
 const SHELF = 13;                   // …for this far beyond its edge (a ground cell: no triangle reaches over the road)…
@@ -265,12 +265,10 @@ export class GraphWorld {
     // (no logarithmic depth: it writes gl_FragDepth, which turns off a phone GPU's early depth test and hidden-surface
     // removal — every layer of overdraw shaded in full; the near and far planes below keep plain depth precise enough.
     // No MSAA on Low: phones. Both are fixed for the renderer's life: a quality change applies from the next ride.)
-    this.renderer = new THREE.WebGLRenderer({ antialias: this.qualityKey !== 'low', powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[this.qualityKey] ?? 1.5));
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    container.prepend(this.renderer.domElement);
-    this.renderer.domElement.className = 'world-canvas';
+    this.renderer = createRenderer({ container, quality: this.qualityKey });
+    // [render-core] adaptive resolution (then thinner new tiles, then a shorter shadow box) when frames run long
+    this.governor = new QualityGovernor({ quality: this.qualityKey, onScale: () => this._pixelRatio(), onLevel: (l) => { this._govLevel = l; this._reach(); } });
+    this.gpuTimer = new GpuTimer(this.renderer);
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(60, 1, 0.6, 9000);   // (the fog ends at 2.6 km; the farthest tile 3.2 km)
     this.camTarget = new THREE.Vector3();
@@ -415,12 +413,13 @@ export class GraphWorld {
   setQuality(key) {
     this.qualityKey = key || 'balanced';
     this._reach();
+    this.governor?.setQuality(this.qualityKey);
     this._pixelRatio();
     if (this.city && this.gfx) this.city.setGfx(this.gfx);
   }
   _pixelRatio() {
-    const scale = this._saving ? .75 : 1;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[this.qualityKey] ?? 1.5) * scale);
+    const scale = (this._saving ? .75 : 1) * (this.governor?.scale ?? 1);
+    this.renderer.setPixelRatio(pixelRatioFor(this.qualityKey, scale));
     this._resize();
   }
   /**
@@ -602,7 +601,12 @@ export class GraphWorld {
     }
     this.shaders?.tick(dt, this._warmStart || this._frames > 600);
     if (this._preload && this._frames % 4) return;
+    this.gpuTimer?.begin('frame');
     this._draw();
+    this.gpuTimer?.end();
+    if ((this._frames & 7) === 0) this.gpuTimer?.poll();
+    // the governor reads the GPU's own time where the timer exists, else the frame interval
+    if (!this._preload) this.governor?.sample(this.gpuTimer?.ms.frame ?? (dt * 1000), dt);
     this.perf?.end(performance.now());
   }
 
@@ -870,7 +874,7 @@ export class GraphWorld {
   /** How far the tiles are built and the fog closes in, by quality (Low: phones). */
   _reach() {
     const low = this.qualityKey === 'low';
-    const k = this.gfx?.distance || 1;
+    const k = (this.gfx?.distance || 1) * ((this._govLevel || 0) >= 4 ? .85 : 1);   // (the governor's level 4+: a nearer horizon)
     const mobile = (() => { try { const ua = navigator.userAgent || ''; return /iPhone|iPad|iPod|Android|Mobile/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1); } catch { return false; } })();
     const lowReach = low || mobile;   // (phones and tablets: Light's reach at any quality — memory, user 23 Nov)
     this.nearM = (lowReach ? REACH_LOW.near : NEAR_M) * k; this.farM = (lowReach ? REACH_LOW.far : FAR_M) * k;

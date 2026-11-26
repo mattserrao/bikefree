@@ -6,7 +6,7 @@
 // Space: metres, Y up, +Z forward (the way a figure faces), the figure's left is +X. Rest pose: standing straight,
 // arms down. Bone rotations are local (relative to the parent), Euler 'XYZ'; pitch about X (+X tips the top of a
 // bone forward), abduction about Z (+Z swings a hanging limb toward +X).
-import * as THREE from '../../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../../vendor/three.js';
 
 export const FRAMES = 24;   // keyframes per clip (one loop); the shader interpolates between them
 

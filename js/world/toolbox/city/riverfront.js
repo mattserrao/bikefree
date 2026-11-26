@@ -11,7 +11,7 @@
 // where each span may set "side": "left" | "right" (default: the side the water is on) and "maxGapM" (how far
 // from the route's centre the water may be for the walk to reach it). The planner is pure (no three.js), so
 // tools and tests can run it in Node.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { drain, due, mapJob } from '../core/jobs.js';   // [F30] planned as a job (in frame slices on the ride)
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { ROAD_WIDTH, routePoint } from '../../pose.js';

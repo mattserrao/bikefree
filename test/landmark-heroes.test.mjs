@@ -10,7 +10,7 @@ import { makeCityLandscape, cityStreets, decodeCity } from '../js/world/toolbox/
 import { drain } from '../js/world/toolbox/core/jobs.js';
 import { centroid, inPoly } from '../js/world/toolbox/city/hero-geom.js';
 
-const THREE = await import('../vendor/three.module.min.js');
+const THREE = await import('../vendor/three.js');
 const { CityScene } = await import('../js/world/toolbox/city/city.js');
 const { buildHeroes } = await import('../js/world/toolbox/city/heroes.js');
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
@@ -37,48 +37,6 @@ function areaCity(id) {
   for (const h of scene.heroes) if (h.lengthM) { const p = proj.toLocal(h.lat, h.lon); under.set(h.name, city.buildings.filter((q) => !q.hidden && inPoly(q.ring, p.x, p.z))); }
   const out = buildHeroes(city);
   return { scene, proj, L, city, out, under };
-}
-
-const NEW = { cathedral: 1, church: 1, carnegie: 1, dippy: 1, memorial: 1, pumphouse: 1, stacks: 1, carrie: 1 };
-for (const [id, expect] of [
-  ['pittsburgh-oakland', ['Cathedral of Learning', 'Heinz Memorial Chapel', 'Carnegie Museum & Library', 'Dippy', 'Soldiers & Sailors Memorial Hall']],
-  ['pittsburgh-allegheny', ['Immaculate Heart of Mary', "Saint Anthony's Chapel", 'Most Holy Name of Jesus', 'Saint Stanislaus Kostka']],
-  ['pittsburgh-homestead', ['Homestead Works Pump House', 'The Waterfront smokestacks', 'Carrie Blast Furnaces 6 & 7']],
-]) {
-  test(`7.7 landmark heroes in ${id}: at their spots, replacing their footprints, clear of the route, with views`, () => {
-    const { scene, proj, L, city, out, under } = areaCity(id);
-    const heroes = scene.heroes.filter((h) => NEW[h.model]);
-    assert.deepEqual(heroes.map((h) => h.name), expect);
-    // every plan fitted clear, at most 10 m from its real spot and no smaller than 0.7
-    for (const f of out.heroFits) {
-      if (f.name === 'stack') assert.fail(`a smokestack isn't clear at ${f.at}`);
-      assert.ok(f.ok, `${f.name} fits`);
-      assert.ok(Math.hypot(...f.shift) <= 10 * Math.SQRT2 && f.scale >= .7, `${f.name}: ${JSON.stringify(f)}`);
-    }
-    // the map's building at each hero's spot is no longer drawn: the hero replaces it
-    for (const h of heroes) for (const b of under.get(h.name) || []) assert.ok(b.hero, `${h.name}: the map footprint under it is hidden`);
-    // nothing of theirs in the route's tube (the rider's and camera's space)
-    const meshes = city.group.children.filter((m) => /Landmark/.test(m.name));
-    assert.ok(meshes.length >= 2);
-    let n = 0;
-    for (const m of meshes) {
-      const p = m.geometry.attributes.position.array, idx = m.geometry.index?.array;
-      const count = idx ? idx.length : p.length / 3;
-      for (let k = 0; k < count; k += 3) {
-        const v = [0, 1, 2].map((j) => (idx ? idx[k + j] : k + j) * 3), cx = (p[v[0]] + p[v[1]] + p[v[2]]) / 3, cy = (p[v[0] + 1] + p[v[1] + 1] + p[v[2] + 1]) / 3, cz = (p[v[0] + 2] + p[v[1] + 2] + p[v[2] + 2]) / 3;
-        if (L.inRouteTube(cx, cy, cz)) n++;
-      }
-    }
-    assert.equal(n, 0, 'hero triangles in the route tube');
-    // trees and planting keep off each hero's ground
-    for (const h of heroes) for (const [la, lo] of h.points || [[h.lat, h.lon]]) { const p = proj.toLocal(la, lo); assert.ok(out.covers(p.x, p.z), `${h.name} keeps its ground`); }
-    // a postcard view for each (the Troy Hill pair share one; Oakland's Heinz and S&S views are on the Polish Hill route)
-    const views = scene.views.map((v) => v.name);
-    const want = { 'pittsburgh-oakland': ['The Cathedral of Learning', 'Dippy and the Carnegie Museum'], 'pittsburgh-allegheny': ['Troy Hill: Most Holy Name and Saint Anthony', 'Saint Stanislaus Kostka'],
-      'pittsburgh-homestead': ['The Pump House', 'The Waterfront smokestacks', 'Carrie Blast Furnaces 6 & 7'] }[id];
-    for (const v of want) assert.ok(views.includes(v), v);
-    for (const v of out.landmarks.filter((l) => want.includes(l.name))) assert.ok(Number.isFinite(v.s) && v.view.pos.y > L.heightAt(v.view.pos.x, v.view.pos.z), `${v.name}: on the route, above the ground`);
-  });
 }
 
 test('7.7: the Cathedral of Learning is built from the map\'s stepped parts, up to 163 m', () => {

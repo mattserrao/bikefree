@@ -77,7 +77,7 @@ test('every module named in the scene schema exists', () => {
 });
 
 test('road surface: unused zone slots end the shader\'s zone loop (w = 0), so they never act as zones at 0 m (F12)', async () => {
-  const THREE = await import('../vendor/three.module.min.js');
+  const THREE = await import('../vendor/three.js');
   const { decorateRoad } = await import('../js/world/toolbox/materials/road-surface.js');
   const m = new THREE.MeshStandardMaterial();
   decorateRoad(m, { surface: 'fresh', zones: [{ fromM: 100, toM: 200, surface: 'worn' }] });

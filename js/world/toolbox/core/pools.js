@@ -3,7 +3,7 @@
 // mesh, and the plants share one InstancedMesh per kind and quarter around the camera (the quarters keep
 // frustum culling useful: the ones behind you are skipped). Tiles still exist on the CPU, as unrendered
 // proxy meshes, for the clipping QC and anything else that inspects them.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 
 const SECTORS = 12, RING_M = 400;   // sectors around the camera, split again beyond RING_M
 

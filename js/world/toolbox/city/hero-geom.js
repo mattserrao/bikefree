@@ -1,6 +1,6 @@
 // Geometry helpers for the hand-made hero landmarks (city/heroes.js, city/landmark-heroes.js): polygon
 // helpers on {x, z} rings, solid prisms and caps, a footprint's oriented frame, lathes, discs, gabled roofs.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 
 export const V = (x, y, z) => new THREE.Vector3(x, y, z);
 export const TAU = Math.PI * 2;

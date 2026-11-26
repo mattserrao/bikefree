@@ -25,7 +25,7 @@
 //   og.floorH(x, z)                 the ground as the skirt draws it (null outside the trails' band)
 //   yield* og.treesJob(x0, z0, size, out, kit)   a tile's trees and understory for the tree engine
 //   og.tick(camera, time)          builds / drops the near pieces as the rider moves
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { hash, MeshBuilder } from '../core/mesh-builder.js';
 import { due } from '../core/jobs.js';
 import { grassAtlas } from '../landscape/grass-cards.js';

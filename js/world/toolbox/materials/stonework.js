@@ -6,7 +6,7 @@
 //
 //   makeMasonryMaterial({ stones: ['#8a8276', …], mortar: '#a39d90', courseM: .2, moss: '#55603f' })
 //   makeParapetGeometry()  → a unit parapet (x across −.5….5, y 0…1, z 0…1): battered sides, a rounded cap
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 
 const lin = (hex) => new THREE.Color(hex);
 

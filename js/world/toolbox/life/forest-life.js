@@ -10,7 +10,7 @@
 // Instanced, one draw call a kind. The animals stay where they are put; a head goes down to graze (or peck) and comes
 // up to look about, each on its own clock (a vertex attribute marks the head; the shader turns it about the neck);
 // the crows circle, flapping in bursts (coast-life.js's birds).
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { birdGeometry, birdMaterial } from './coast-life.js';
 

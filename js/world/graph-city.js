@@ -14,7 +14,7 @@
 // and the land cover itself (landAt, a texture for the ground shader) and what each edge is made of (edgeInfo).
 //
 //   const c = new GraphCity(world, heroes, index); await c.loadLand()   → c.stream(cx, cz, ms) (sectors fetched as the rider nears them), c.tick(cam)
-import * as THREE from '../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.js';
 import { MeshBuilder, hash } from './toolbox/core/mesh-builder.js';
 import { ParkedCars, pickCar, carMaterial } from './toolbox/life/figures/cars.js';
 import { Herds } from './toolbox/life/figures/animals.js';

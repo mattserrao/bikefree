@@ -9,7 +9,7 @@
 //
 //   const crowd = new Crowd(parent, { uTime, name: 'Visitors', capacity: 60, dogs: 6, strollers: 4 });
 //   crowd.begin(camera.position); crowd.add(look, x, y, z, yaw, CLIP.walk, phase, walkRate(1.3, look)); crowd.end();
-import * as THREE from '../../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../../vendor/three.js';
 import { FRAMES, BONES, CLIP_META, CLIP_DATA } from './clips.js';
 import { PERSON, BIKE, HOLD, FISH_HAND } from './rig.js';
 

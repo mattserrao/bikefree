@@ -9,7 +9,7 @@
 //   shed (24)       a farm's small outbuilding: a low gable of boards, red or grey
 //   long barn (22)  a free-stall barn: long and low, white metal, a shallow roof with a ridge vent, the curtain sides
 //                   a dark band
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { hash } from '../core/mesh-builder.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);

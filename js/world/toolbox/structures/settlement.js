@@ -1,6 +1,6 @@
 // Villages, lakeside camps, docks and boats, utility poles with wires, mailboxes and guardrails.
 // Planned once per route from the real shoreline (no per-tile work), then drawn as instanced meshes.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { randomSequence } from '../core/random.js';
 import { roadFrame } from '../roadside/details.js';
 import { makeClearings } from '../vegetation/forest.js';

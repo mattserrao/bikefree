@@ -8,7 +8,7 @@
 //   - smooth crowns and rocks (the kit is built with { smooth: true })
 //   - a flat road: clean grey, crisp paint, no grain or bump
 //   - ink outlines where depth jumps, fading with distance (drawn in post.js's final pass)
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 
 export const LOOKS = {
   gentle: {

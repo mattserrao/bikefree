@@ -58,8 +58,9 @@ test('a sideways kink in the road (a cut spur, a junction step) is caught', () =
 // a city scene carries its bundled city data (buildings, streets, height grid), as the app loads it
 const withCity = (scene) => (scene.cityData ? { ...scene, city: JSON.parse(readFileSync(new URL(`../${scene.cityData}`, import.meta.url), 'utf8')) } : scene);
 
-test('every scenic route rides clean end to end: no discontinuities, no warnings', () => {
-  const catalog = JSON.parse(readFileSync(new URL('../routes/parks/index.json', import.meta.url), 'utf8'));
+test('every scenic route in the app rides clean end to end: no discontinuities, no warnings', () => {
+  // (the routes the app lists: retired maps — the old Pittsburgh city, Yosemite, Zion, Route 28 — aren't ridden any more)
+  const catalog = JSON.parse(readFileSync(new URL('../routes/parks/index.json', import.meta.url), 'utf8')).filter((p) => !p.retired);
   for (const item of catalog) {
     const r = qcRoute({ id: item.id, item, gpxText: readFileSync(new URL(`../${item.file}`, import.meta.url), 'utf8'),
       scene: withCity(loadSceneSync(item.scene)) });

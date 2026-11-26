@@ -3,7 +3,7 @@
 // download), and each plant two crossed cards that sway in the wind. Replaces the single-triangle blades, which read
 // as a spiky saw-tooth fringe. The scrub, cattails and the rest still draw as geometry in the same mesh: their
 // texture coordinates sit on the atlas's solid white corner.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 
 const W = 1024, H = 256, CELLS = 4, CW = W / CELLS;
 export const CARD = { turf: 0, tall: 1, goldenrod: 2, lace: 3 };

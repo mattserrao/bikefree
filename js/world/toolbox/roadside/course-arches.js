@@ -10,7 +10,7 @@
 // banner (one shared canvas atlas) and ballast feet; a painted line across the road under it. About
 // 5k triangles and 3 draw calls per arch. The legs reach down to the ground beside the road; the arch
 // slides a few metres along the road if one side drops away (a cliff edge, a bridge).
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { riderPose, routePoint, ROAD_WIDTH, ROAD_LIFT } from '../../pose.js';
 import { wrapDist } from '../../../gpx.js';
 

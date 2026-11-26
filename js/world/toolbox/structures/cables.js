@@ -5,7 +5,7 @@
 // steel and stations, one for the wires, per kind. Portable: any route with a places file and "cables": {…}.
 //
 //   "cables": { "lifts": true, "power": true, "reachM": 7000 }
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { Builder, M, cyl, box, cone } from '../core/model-builder.js';
 
 const SPAN = { chair_lift: 110, gondola: 160, cable_car: 400, mixed_lift: 130, drag_lift: 80, t_bar: 80, j_bar: 80, platter: 70, rope_tow: 50, magic_carpet: 1e9 };

@@ -14,7 +14,7 @@
 //
 // Cost: one draw call per stretch for the buildings, one per stretch for the near detail (Balanced: about
 // 10 + 2 in view). Everything uses the one facade material (facade-material.js).
-import * as THREE from '../../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../../vendor/three.js';
 import { planBuildingsJob, ROAD_HALF } from './recipe.js';
 import { drain, due } from '../../core/jobs.js';   // [F30]
 import { Writer, NullWriter } from './assemble.js';

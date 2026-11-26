@@ -6,7 +6,7 @@
 //     rocks under the rider, hips bob over the pushing leg); and the tuck on descents (flat back, hands
 //     in the drops, knees in, pedals level when coasting)
 //   - what triggers them: grade + effort (see POSTURE_RULES)
-import * as THREE from '../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.js';
 
 const MODEL_URL = new URL('../../models/rider.json', import.meta.url);
 const atlasUrl = (file) => new URL(`../../models/${file}`, import.meta.url);

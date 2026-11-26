@@ -21,7 +21,7 @@
 //   E.setTile(key, trees)   trees: [{ x, y, z, sp, v, s, rot, tint, deep }]  (sp: species name in kit, v: variant, s: scale;
 //                           deep: > 30 m from any road — the cards take it sooner)
 //   E.removeTile(key); E.tick(camera); E.stats; E.dispose()
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { decorateTreeMaterial } from '../packs/northern-rockies.js';
 import { makeLeafTexture } from './upstate-trees.js';
 import { SURFACE } from '../materials/surface-detail.js';

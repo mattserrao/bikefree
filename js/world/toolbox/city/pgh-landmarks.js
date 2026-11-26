@@ -5,7 +5,7 @@
 // as a closed glasshouse, both inclines, Grandview's overlooks and the subway's street entrances.
 //
 //   buildPghLandmarks(host, data) → { tick(time), count }      (host: the CityScene stand-in of js/world/graph-heroes.js)
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { V, TAU, centroid, scaleRing, orient, prism, cap, block, chamfer, frameOf, makeFrame, lathe, disc, gable } from './hero-geom.js';
 import { buildStadiums } from './bridges.js';

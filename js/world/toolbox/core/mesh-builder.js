@@ -1,6 +1,6 @@
 // Small mesh-building helpers for the city: one merged buffer per material and chunk,
 // so thousands of buildings, beams and lamp posts stay a handful of draw calls.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { drain, due } from './jobs.js';   // [F30] keepOutOf as a job
 
 export class MeshBuilder {
