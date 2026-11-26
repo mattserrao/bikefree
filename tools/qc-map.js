@@ -106,7 +106,8 @@ export async function runMapQC(w, T, { radius = 420, heroes = null } = {}) {
       //  80 cm within 1.2 m — steeper than a verge's slope)
       for (const [x, z, h, lim] of [[...near1, 0.3], [...near2, 0.8]]) {
         if (!h || w.poolAt(x, z) + WATER_ABOVE >= h.point.y - 0.05) continue;
-        if (/landmark|Bench|lamp/i.test(h.object.name)) continue;
+        if (/landmark|Bench|lamp|Street furniture/i.test(h.object.name)) continue;   // (set beside a way on purpose)
+        if (h.point.y > y + 2.5) continue;   // (overhead — a bridge's deck over the way — clearance, not a lip)
         // (another way's embankment rising beside this one — a path at the foot of a raised drive: grade separation, no lip)
         if (h.point.y > y + 0.5 && (w.cut?.fill?.(x, z) ?? -1e9) > y + 0.5) continue;
         if (h.point.y > y + 0.12 && !(w.walkOf?.(e) > 0) && !E.some((o) => wayNear(o, x, z, 0.2))) { add('edgeLip', x, z, `${e.kind} +${(h.point.y - y).toFixed(2)} m (${h.object.name || h.object.parent?.name || 'mesh'})`); break; }
@@ -169,12 +170,18 @@ export async function runMapQC(w, T, { radius = 420, heroes = null } = {}) {
   //  ground or the water within 0.35 m, nor another piece (a ray down from just under the foot)
   const prims = (lm?.qc?.prims || []).filter((p) => near(p.x ?? p.a.x, p.z ?? p.a.z, radius + 60));
   const segD = (a, b, x, z) => { const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / l2)); return Math.hypot(a.x + dx * t - x, a.z + dz * t - z); };
+  // (the floor under a piece may be a detail mesh hidden at this distance — a landmark's near model, 1–2 km from a sweep
+  //  site: those count too, so the support is judged as it is when the rider is there)
+  let castAll = null;
+  const allCaster = () => { const all = []; w.scene.traverse((o) => { if (o.isMesh && !o.isInstancedMesh && o.geometry?.attributes?.position?.array && !/rider|sky/i.test(o.name)) all.push(o); }); return bvhCaster(T, all); };
   for (const p of prims) {
     if (p.beam || !near(p.x, p.z)) continue;
     const g = Math.max(G(p.x, p.z), w.poolAt(p.x, p.z) + WATER_ABOVE);
     if (p.y - g < 0.35) continue;
     if (E.some((e) => wayNear(e, p.x, p.z, 0.3)) && p.y - (wayY(p.x, p.z) ?? -1e9) < 0.4) continue;
-    const held = prims.some((q) => q !== p && q.top >= p.y - 0.45 && (q.beam ? q.bot <= p.y + 0.02 : q.y <= p.y + 0.02) && (q.beam ? segD(q.a, q.b, p.x, p.z) <= q.w / 2 + (p.foot ?? p.r) + 0.3 : Math.hypot(q.x - p.x, q.z - p.z) <= Math.max(q.r, p.r) + 0.3));   // (either over the other: a rail on its posts, a deck on its piles)
+    // (held from the side too: a pilaster on a drum's wall, a piece against a taller one — touching, spanning its foot)
+    const side = prims.some((q) => q !== p && !q.beam && !p.beam && q.y <= p.y + 0.02 && q.top >= p.y + 0.3 && Math.hypot(q.x - p.x, q.z - p.z) <= q.r + (p.foot ?? p.r) + 0.3);
+    const held = side || prims.some((q) => q !== p && q.top >= p.y - 0.45 && (q.beam ? q.bot <= p.y + 0.02 : q.y <= p.y + 0.02) && (q.beam ? segD(q.a, q.b, p.x, p.z) <= q.w / 2 + (p.foot ?? p.r) + 0.3 : Math.hypot(q.x - p.x, q.z - p.z) <= Math.max(q.r, p.r) + 0.3));   // (either over the other: a rail on its posts, a deck on its piles)
     // (else a ray down from under its foot — its middle and four points round it — onto anything drawn: walls built
     //  outside the probe, PGH's towers, hold their roofs)
     let under = held;
@@ -182,7 +189,7 @@ export async function runMapQC(w, T, { radius = 420, heroes = null } = {}) {
       // (from just over the foot: a flush top — a tower's roof under its pinnacles — is caught; the piece's own
       //  underside faces down and isn't hit from above)
       const k = (p.foot ?? p.r) * 0.5;
-      if (cast.any(p.x + dx * k, p.y + 0.05, p.z + dz * k, 0.65)) { under = true; break; }
+      if ((castAll ||= await allCaster()).any(p.x + dx * k, p.y + 0.05, p.z + dz * k, 0.65)) { under = true; break; }
     }
     if (!under) add('floating', p.x, p.z, `${p.lm} ${p.what} ${(p.y - g).toFixed(1)} m up`, p.y);
   }

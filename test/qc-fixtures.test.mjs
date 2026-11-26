@@ -41,6 +41,11 @@ test('fixture floating: a piece on the ground, on another piece or on a drawn ro
   assert.equal(good.counts.floating, 0);
   const roof = await run(world({ prims: [{ lm: 'Fixture', what: 'pinnacle', x: -20, y: 6, z: 20, r: 0.3, top: 8 }], meshes: [box(4, 6, 4, -20, 0, 20, 'Tower')] }));
   assert.equal(roof.counts.floating, 0, 'a pinnacle on a drawn roof (the ray from just over its foot)');
+  const pilaster = await run(world({ prims: [{ lm: 'Fixture', what: 'drum', x: 20, y: 0, z: 20, r: 8, top: 14 }, { lm: 'Fixture', what: 'pilaster', x: 28.4, y: 6, z: 20, r: 0.3, top: 13 }] }));
+  assert.equal(pilaster.counts.floating, 0, 'a pilaster on a drum\'s wall is held from the side');
+  const hidden = box(4, 6, 4, -20, 0, 20, 'Tower near model'); hidden.visible = false;
+  const lod = await run(world({ prims: [{ lm: 'Fixture', what: 'pinnacle', x: -20, y: 6, z: 20, r: 0.3, top: 8 }], meshes: [hidden] }));
+  assert.equal(lod.counts.floating, 0, 'on a roof hidden at this distance (a near model): held');
   const bad = await run(world({ prims: [{ lm: 'Fixture', what: 'colonnade', x: 20, y: 3, z: 20, r: 0.5, top: 6 }] }));
   assert.equal(bad.counts.floating, 1);
   assert.match(bad.examples.floating[0].at(-1), /colonnade 3\.0 m up/);
@@ -51,6 +56,8 @@ test('fixture edgeLip: flat ground beside the way passes; a 40 cm kerb block rig
   const good = await run(world({ roadDeck: true }));
   assert.equal(good.counts.edgeLip, 0); assert.equal(good.counts.edgeDitch, 0);
   assert.equal(good.counts.edgeSamples, 10, 'both edges sampled every 20 m');
+  const over = await run(world({ roadDeck: true, meshes: [box(10, 0.6, 30, 0, 5.5, 0, 'PGH bridge: Fixture Bridge')] }));
+  assert.equal(over.counts.edgeLip, 0, 'a bridge deck over the way is clearance, not a lip');
   const bad = await run(world({ roadDeck: true, meshes: [box(100, 0.4, 1.2, 0, 0, 3.8, 'Kerb')] }));
   assert.ok(bad.counts.edgeLip >= 4, `lips found: ${bad.counts.edgeLip}`);
   assert.match(bad.examples.edgeLip[0].at(-1), /\+0\.28 m \(Kerb\)/);
@@ -114,7 +121,7 @@ test('qc_fix: a blocked view gets a corridor proposal in the heroes file; a defe
   assert.equal(props[0].file, 'routes/cities/nyc-heroes.json');
   assert.deepEqual(props[0].after.views.at(-1), [40.7765, -73.9721]);
   const json = { landmarks: [{ label: 'Bow Bridge', views: [] }] }; props[0].apply(json);
-  assert.deepEqual(json.landmarks[0].views.at(-1), [40.7765, -73.9721]); assert.ok(json.landmarks[0].clearM >= 0, 'the clearing on');
+  assert.deepEqual(json.landmarks[0].views.at(-1), [40.7765, -73.9721]); assert.equal(json.landmarks[0].clearM, undefined, 'only the corridor: no outline clearing added');
 });
 
 test('qc.mjs: one entry for every map kind', async () => {

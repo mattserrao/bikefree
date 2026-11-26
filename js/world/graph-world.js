@@ -801,7 +801,9 @@ export class GraphWorld {
           // (the curb's radius, then smaller ones until the return fits its arms — a sharp fork on short arms gets a
           //  tight return, not none: the map QC's sharpCorner, 25 Nov fix pass)
           const r0 = Math.min(A.r, B.r);
-          for (const r of [r0, r0 * 0.5, 1.5, 0.8]) {
+          // (then larger ones: an obtuse corner of a narrow path on a wide road has its small returns' centres behind the
+          //  road's mouth — a wider return sits in front of it)
+          for (const r of [r0, r0 * 0.5, 1.5, 0.8, Math.max(r0 * 2, 3), Math.max(r0 * 3, 5)]) {
             const pA = along(N, nA, A.h + r), pB = along(N, nB, -(B.h + r)), m = meet(pA, A.u, pB, B.u);
             const fits = m && m[0] <= maxT(A) + 0.01 && m[1] <= maxT(B) + 0.01;   // (a return that fits is as before)
             if (m && m[0] > 0 && m[1] > 0 && m[0] < 26 && m[1] < 26 && fits) { const O = along(pA, A.u, m[0]); c.tA = dot({ x: O.x - N.x, z: O.z - N.z }, A.u); c.tB = dot({ x: O.x - N.x, z: O.z - N.z }, B.u); c.arc = { O, r }; break; }
@@ -1207,7 +1209,14 @@ export class GraphWorld {
         const list = this.arms.get(nd.id) || [];
         // (a map that matches its joins — NYC: two ways meeting at a bend joined by a disc as wide as the wider, in its
         //  colour and surface, so the bend's outside has no wedge gap and a paved path no dark patch)
-        const r = list.length ? Math.max(0.5, (list.length >= 3 || this.profile.junctionCurbs ? Math.max : Math.min)(...list.map(({ e }) => this.wOf(e) / 2))) : 3.5;
+        // (and on any map, a real bend — over 20° — joined as wide as its wider way: the narrower disc left a wedge gap at
+        //  the wider way's outside, the map QC's joinGap; PGH's path/primary and primary/residential bends, 25 Nov)
+        let bend = false;
+        if (list.length === 2) {
+          const d = list.map(({ e, end }) => { const k = end ? Math.max(0, e.n - 1) : Math.min(e.n, 1), x0 = end ? e.x[e.n] : e.x[0], z0 = end ? e.z[e.n] : e.z[0], dx = e.x[k] - x0, dz = e.z[k] - z0, l = Math.hypot(dx, dz) || 1; return [dx / l, dz / l]; });
+          bend = Math.PI - Math.acos(Math.max(-1, Math.min(1, d[0][0] * d[1][0] + d[0][1] * d[1][1]))) > 0.35;
+        }
+        const r = list.length ? Math.max(0.5, (list.length >= 3 || bend || this.profile.junctionCurbs ? Math.max : Math.min)(...list.map(({ e }) => this.wOf(e) / 2))) : 3.5;
         const jc = this.profile.junctionCurbs ? joinLook(list) : null;
         if (jc) R.discX(nd.x, nd.y + ROAD_LIFT + (jc.path ? -0.03 : 0) + 0.004, nd.z, r, jc.color, 24, jc.surf);
         else R.discX(nd.x, nd.y + ROAD_LIFT + 0.004, nd.z, r, asphalt, 16);

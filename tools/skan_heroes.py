@@ -194,6 +194,11 @@ def main():
             P = pts(wid)
             c = P[len(P) // 2] if P else None
             if c and any(inside(a['pts'], *c) for a in areas if a['kind'] == 'park'): lines.append({'kind': 'walk', 'width': 2, 'pts': P})
+    # view corridors the QC fixer added (tools/qc_fix.mjs viewBlocked, verified by a re-run, 25 Nov): kept on a rebuild
+    QC_VIEWS = {'Crown Mill, Marcellus Falls': [[43.00488, -76.33812]]}
+    for l in out['landmarks']:
+        for v in QC_VIEWS.get(l['label'], []):
+            if v not in l.get('views', []): l.setdefault('views', []).append(v)
     json.dump(out, open(os.path.join(ROOT, 'routes/cities/skan-heroes.json'), 'w'), separators=(',', ':'))
     json.dump({'format': 'bikefree-dressing-1', 'areas': areas, 'lines': lines, 'trees': []}, open(os.path.join(ROOT, 'routes/cities/skan-dressing.json'), 'w'), separators=(',', ':'))
     print(f"  skan-heroes.json: {len(out['heroes'])} churches, {len(out['landmarks'])} landmarks, {len(out['shops'])} shops, {len(out['styles'])} styled houses")

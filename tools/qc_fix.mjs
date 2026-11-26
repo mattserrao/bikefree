@@ -13,8 +13,8 @@
 //
 // The fixers (FIXERS below) only touch map data, never code:
 //   viewBlocked   trees between a landmark and the way it's seen from → a view corridor from that way spot to the
-//                 landmark in its heroes file (`views`, trees kept `viewM` off the line; `clearM` set to 0 if it had
-//                 none, which is what turns the clearing on: js/world/graph-city.js _landmarkClear)
+//                 landmark in its heroes file (`views`, trees kept `viewM` off the line: js/world/graph-city.js
+//                 _landmarkClear — a landmark's corridors count with or without its own clearM)
 // A defect no fixer knows is listed as unfixable, for a person (or a new fixer).
 import { readFile, writeFile, copyFile, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
@@ -35,12 +35,12 @@ export const FIXERS = {
     if (!l || !l.center) return null;
     const from = d.from.map((v) => +v.toFixed(6));
     if ((l.views || []).some(([a, o]) => Math.abs(a - from[0]) < 2e-5 && Math.abs(o - from[1]) < 2e-5)) return null;   // (already there: not this)
-    const before = { views: l.views || null, clearM: l.clearM ?? null };
-    const after = { views: [...(l.views || []), from], clearM: l.clearM >= 0 ? l.clearM : 0 };
+    const before = { views: l.views || null };
+    const after = { views: [...(l.views || []), from] };
     return {
       id: d.id, check: d.check, file, landmark: d.landmark, before, after,
       why: `${d.note}: keep trees ${l.viewM || 3.5} m off the line from the way at ${from.join(',')} to ${d.landmark}`,
-      apply: (json) => { const q = json.landmarks.find((x) => x.label === d.landmark); q.views = after.views; q.clearM = after.clearM; },
+      apply: (json) => { const q = json.landmarks.find((x) => x.label === d.landmark); q.views = after.views; },
     };
   },
 };

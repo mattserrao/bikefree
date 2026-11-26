@@ -531,11 +531,15 @@ export class GraphCity {
   _landmarkClear() {
     const proj = this.world.proj, list = [];
     for (const l of this.heroes.json?.landmarks || []) {
-      if (!(l.clearM >= 0) || (!l.ring && !l.center)) continue;
-      const r = l.ring && l.ring.length >= 3 ? l.ring.map(([a, o]) => proj.toLocal(a, o)) : [proj.toLocal(l.center[0], l.center[1])];
-      let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; for (const p of r) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); }
-      const m = l.clearM; list.push({ r, m, x0: x0 - m, x1: x1 + m, z0: z0 - m, z1: z1 + m });
+      // (a landmark with view corridors and no clearM — the QC fixer's, tools/qc_fix.mjs — keeps just its corridors)
+      if ((!(l.clearM >= 0) && !l.views?.length) || (!l.ring && !l.center)) continue;
+      if (l.clearM >= 0) {
+        const r = l.ring && l.ring.length >= 3 ? l.ring.map(([a, o]) => proj.toLocal(a, o)) : [proj.toLocal(l.center[0], l.center[1])];
+        let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; for (const p of r) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); }
+        const m = l.clearM; list.push({ r, m, x0: x0 - m, x1: x1 + m, z0: z0 - m, z1: z1 + m });
+      }
       // its view corridors: from a way to it, trees kept viewM off the line
+      if (!l.center) continue;
       const c = proj.toLocal(l.center[0], l.center[1]), vm = l.viewM || 3.5;
       for (const [la, lo] of l.views || []) { const a = proj.toLocal(la, lo), seg = [a, c]; list.push({ r: seg, m: vm, view: true, x0: Math.min(a.x, c.x) - vm, x1: Math.max(a.x, c.x) + vm, z0: Math.min(a.z, c.z) - vm, z1: Math.max(a.z, c.z) + vm }); }
     }
