@@ -1,0 +1,485 @@
+{
+ "note": "Out West's rides (tools/pgh_routes.mjs --city outwest; plan in the Project doc claude/out-west-map.md). user, 26 Nov 2026: \"6+ well thought out rides for cycling (some flat, varied, climbs, rolling etc)\"; options chosen: ride through the tunnel, the gravel Butte Valley road, the Kolob Terrace climb. A waypoint: { near: [lat, lon], prefer: [way names] }; outAndBack: ridden up and back the same road (the corridors are canyons).",
+ "trails": [
+  "Trail",
+  "Pinnacles Trail",
+  "Tom's Canyon Trail",
+  "Savage Point Trail"
+ ],
+ "routes": [
+  {
+   "id": "ow-kanab-town",
+   "name": "Kanab Town Loop",
+   "tags": [
+    "flat",
+    "short",
+    "town"
+   ],
+   "note": "An easy spin round Kanab under the Vermilion Cliffs: up 100 East past the shops, across 300 North, down the old highway and out along Kanab Creek Drive, home on 100 East",
+   "way": [
+    {
+     "near": [
+      37.04794,
+      -112.52671
+     ]
+    },
+    {
+     "near": [
+      37.05329,
+      -112.52638
+     ],
+     "prefer": [
+      "100 East"
+     ]
+    },
+    {
+     "near": [
+      37.05331,
+      -112.53505
+     ],
+     "prefer": [
+      "300 North"
+     ]
+    },
+    {
+     "near": [
+      37.02646,
+      -112.54458
+     ],
+     "prefer": [
+      "300 West",
+      "US 89",
+      "Street",
+      "Powell Drive"
+     ]
+    },
+    {
+     "near": [
+      37.02983,
+      -112.52485
+     ],
+     "prefer": [
+      "Kanab Creek Drive"
+     ]
+    },
+    {
+     "near": [
+      37.04794,
+      -112.52671
+     ],
+     "prefer": [
+      "100 East"
+     ]
+    }
+   ],
+   "kindCost": {
+    "path": 10
+   }
+  },
+  {
+   "id": "ow-kolob-climb",
+   "name": "Kolob Terrace Climb",
+   "tags": [
+    "climb",
+    "long",
+    "canyon"
+   ],
+   "note": "The big one: 390 m up US 89 through Kanab Creek Canyon, between the Vermilion and White Cliffs, to the summit at 1,877 m \u2014 and the long descent home the same way",
+   "way": [
+    {
+     "near": [
+      37.04794,
+      -112.52671
+     ]
+    },
+    {
+     "near": [
+      37.1541,
+      -112.5744
+     ],
+     "on": "US 89",
+     "prefer": [
+      "US 89",
+      "300 West",
+      "Center Street"
+     ]
+    },
+    {
+     "near": [
+      37.1797,
+      -112.6351
+     ],
+     "on": "US 89",
+     "prefer": [
+      "US 89"
+     ],
+     "avoid": [
+      "BLM 60",
+      "BLM 64K",
+      "BLM 61",
+      "Hancock Road",
+      "Cave Lake Canyon Road",
+      "BLM 106",
+      "BLM 102",
+      "Kanab Canyon Road",
+      "Trail"
+     ]
+    },
+    {
+     "near": [
+      37.1541,
+      -112.5744
+     ],
+     "on": "US 89",
+     "prefer": [
+      "US 89"
+     ],
+     "avoid": [
+      "BLM 60",
+      "BLM 64K",
+      "BLM 61",
+      "Hancock Road",
+      "Cave Lake Canyon Road",
+      "BLM 106",
+      "BLM 102",
+      "Kanab Canyon Road",
+      "Trail"
+     ]
+    },
+    {
+     "near": [
+      37.04794,
+      -112.52671
+     ],
+     "prefer": [
+      "US 89",
+      "300 West",
+      "Center Street"
+     ],
+     "avoid": [
+      "BLM 60",
+      "BLM 64K",
+      "BLM 61",
+      "Hancock Road",
+      "Cave Lake Canyon Road",
+      "BLM 106",
+      "BLM 102",
+      "Kanab Canyon Road",
+      "Trail"
+     ]
+    }
+   ],
+   "kindCost": {
+    "path": 10
+   },
+   "outAndBack": true
+  },
+  {
+   "id": "ow-tunnel-hoodoos",
+   "name": "Hoodoo Rim & the Tunnel",
+   "tags": [
+    "hilly",
+    "views",
+    "tunnel"
+   ],
+   "outAndBack": true,
+   "note": "From the summit down past Hoodoo Rim's orange spires, through the galleried Kanab Creek Tunnel to the East Fork at Mt Carmel, and back up through it all",
+   "way": [
+    {
+     "near": [
+      37.1797,
+      -112.6351
+     ],
+     "on": "US 89"
+    },
+    {
+     "near": [
+      37.2159,
+      -112.6841
+     ],
+     "prefer": [
+      "US 89",
+      "Street"
+     ]
+    },
+    {
+     "near": [
+      37.1797,
+      -112.6351
+     ],
+     "on": "US 89",
+     "prefer": [
+      "US 89"
+     ]
+    }
+   ],
+   "kindCost": {
+    "path": 10
+   }
+  },
+  {
+   "id": "ow-coral-pink",
+   "name": "Arch Garden & Coral Pink Dunes",
+   "tags": [
+    "rolling",
+    "long",
+    "arches",
+    "dunes"
+   ],
+   "outAndBack": true,
+   "note": "Off the canyon road onto Hancock Road: rolling through juniper benches past the Arch Garden to the Coral Pink Sand Dunes, along the dunes and back",
+   "way": [
+    {
+     "near": [
+      37.14525,
+      -112.56832
+     ]
+    },
+    {
+     "near": [
+      37.07635,
+      -112.70268
+     ],
+     "prefer": [
+      "Hancock Road"
+     ]
+    },
+    {
+     "near": [
+      37.03314,
+      -112.74635
+     ],
+     "prefer": [
+      "Coral Pink Sand Dunes Road"
+     ]
+    },
+    {
+     "near": [
+      37.07635,
+      -112.70268
+     ],
+     "prefer": [
+      "Coral Pink Sand Dunes Road"
+     ]
+    },
+    {
+     "near": [
+      37.14525,
+      -112.56832
+     ],
+     "prefer": [
+      "Hancock Road"
+     ]
+    }
+   ],
+   "kindCost": {
+    "path": 10
+   }
+  },
+  {
+   "id": "ow-butte-valley",
+   "name": "Butte Valley Gravel",
+   "tags": [
+    "gravel",
+    "flat",
+    "buttes"
+   ],
+   "note": "Monument Valley's mittens and Merrick Butte over the sage: the Eight Mile Gap gravel loop, east through the Vermillion subdivisions to Johnson Canyon, back west on US 89 under the buttes and home on the old highway",
+   "way": [
+    {
+     "near": [
+      37.021869,
+      -112.432554
+     ]
+    },
+    {
+     "near": [
+      37.021859,
+      -112.430956
+     ],
+     "prefer": [
+      "Eight Mile Gap Road"
+     ],
+     "avoid": [
+      "e517"
+     ]
+    },
+    {
+     "near": [
+      37.03723,
+      -112.36712
+     ],
+     "prefer": [
+      "Grande Vermillion Avenue",
+      "Vermillion Avenue",
+      "East Zion Road",
+      "6400 East"
+     ]
+    },
+    {
+     "near": [
+      37.024892,
+      -112.460456
+     ],
+     "prefer": [
+      "US 89"
+     ]
+    },
+    {
+     "near": [
+      37.021869,
+      -112.432554
+     ],
+     "prefer": [
+      "Old US Highway 89"
+     ],
+     "avoid": [
+      "US 89"
+     ]
+    }
+   ],
+   "kindCost": {
+    "path": 10
+   }
+  },
+  {
+   "id": "ow-johnson-canyon",
+   "name": "Johnson Canyon & the Movie Set",
+   "tags": [
+    "canyon",
+    "western",
+    "long"
+   ],
+   "outAndBack": true,
+   "note": "Up Johnson Canyon between its red walls \u2014 a gentle climb all the way, past the old western movie set's false fronts \u2014 to the canyon's head, and back down",
+   "way": [
+    {
+     "near": [
+      37.03723,
+      -112.36712
+     ]
+    },
+    {
+     "near": [
+      37.163,
+      -112.38952
+     ],
+     "prefer": [
+      "Johnson Canyon Road"
+     ]
+    },
+    {
+     "near": [
+      37.03723,
+      -112.36712
+     ],
+     "prefer": [
+      "Johnson Canyon Road"
+     ]
+    }
+   ],
+   "kindCost": {
+    "path": 10
+   }
+  },
+  {
+   "id": "ow-vermilion-rollers",
+   "name": "Vermilion Cliffs Rollers",
+   "tags": [
+    "rolling",
+    "medium"
+   ],
+   "note": "Rollers under the Vermilion Cliffs: south out of Kanab on 100 East, then Kaneplex Drive's swells out across the sage toward the Arizona line, and back",
+   "way": [
+    {
+     "near": [
+      37.04794,
+      -112.52671
+     ]
+    },
+    {
+     "near": [
+      37.01755,
+      -112.52493
+     ],
+     "prefer": [
+      "100 East"
+     ]
+    },
+    {
+     "near": [
+      36.995599,
+      -112.513263
+     ],
+     "prefer": [
+      "Kaneplex Drive"
+     ]
+    },
+    {
+     "near": [
+      37.01755,
+      -112.52493
+     ],
+     "prefer": [
+      "Kaneplex Drive"
+     ]
+    },
+    {
+     "near": [
+      37.04794,
+      -112.52671
+     ],
+     "prefer": [
+      "100 East"
+     ]
+    }
+   ],
+   "kindCost": {
+    "path": 10
+   },
+   "outAndBack": true
+  },
+  {
+   "id": "ow-pinnacles",
+   "name": "Pinnacles Trail",
+   "tags": [
+    "trail",
+    "gravel",
+    "hilly"
+   ],
+   "note": "Onto the dirt: Tom's Canyon Trail and the Pinnacles Trail up through the slickrock above Kanab to the top of the bench, and back down",
+   "prefer": [
+    "Pinnacles Trail",
+    "Tom's Canyon Trail",
+    "Trail"
+   ],
+   "way": [
+    {
+     "near": [
+      37.07323,
+      -112.50193
+     ]
+    },
+    {
+     "near": [
+      37.07159,
+      -112.49227
+     ]
+    },
+    {
+     "near": [
+      37.08519,
+      -112.49658
+     ]
+    },
+    {
+     "near": [
+      37.07323,
+      -112.50193
+     ]
+    }
+   ],
+   "outAndBack": true
+  }
+ ]
+}

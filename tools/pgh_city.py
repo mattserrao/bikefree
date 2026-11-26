@@ -88,6 +88,10 @@ def urban_land(img, UNTAGGED, res_n, com_n, lx, ly, gs, gw, gn, ge, E, pix):
 
 # the land cover codes (js/world/graph-city.js LAND): WorldCover class → code, away from the buildings
 WC_LAND = {10: 2, 20: 2, 30: 11, 40: 10, 50: 1, 60: 5, 70: 5, 80: 3, 90: 12, 95: 12, 100: 1}
+# (Out West, profile 'desert': WorldCover's 'trees' there are pinyon-juniper, its shrubland and grassland sagebrush flats,
+#  its bare ground slickrock; the dunes are sand (5) — js/world/graph-city.js LAND.pj / sage / slick)
+DESERT_LAND = {10: 40, 20: 41, 30: 41, 40: 10, 50: 42, 60: 42, 70: 42, 80: 3, 90: 12, 95: 12, 100: 41}
+if (CFG.get('profile') or {}).get('preset') == 'desert': WC_LAND = DESERT_LAND
 
 
 def rural_land(L, UNTAGGED, res_n, com_n, kept, pix, lx, ly, gs, gw, gn, ge, lat0, lon0):
@@ -103,6 +107,10 @@ def rural_land(L, UNTAGGED, res_n, com_n, kept, pix, lx, ly, gs, gw, gn, ge, lat
     un = L == UNTAGGED
     base = np.full(L.shape, 1, np.uint8)
     for c, code in WC_LAND.items(): base[W == c] = code
+    # (a desert map's dunes, config sandAreas [[lat, lon, radius m], …]: the open ground there is sand)
+    for la, lo, r in CFG.get('sandAreas', []):
+        d = np.hypot((lat - la) * 110540, (lon - lo) * 111320 * np.cos(np.radians(la)))
+        base[(d < r) & np.isin(W, (20, 30, 60))] = 5
     # a village: the buildings close together (the same 90 m window as the city's yards)
     built = (res_n + com_n) > 0.04
     out = L.copy()
@@ -122,7 +130,7 @@ def rural_land(L, UNTAGGED, res_n, com_n, kept, pix, lx, ly, gs, gw, gn, ge, lat
     farm = ndimage.distance_transform_edt(np.asarray(marks[13]) == 0) * LM <= 6
     free = un & ~built & (W != 80)
     out[free & yard] = 1
-    out[free & farm & ~yard] = 5
+    out[free & farm & ~yard] = 42 if WC_LAND is DESERT_LAND else 5   # (desert: a ranch's packed earth, not dune sand)
     return out
 
 

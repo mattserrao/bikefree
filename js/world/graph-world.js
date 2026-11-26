@@ -304,7 +304,7 @@ export class GraphWorld {
     this.mats = {
       road: sideMaterial(this.qualityKey === 'low'),
       paint: this.profile.roads === 'worn' ? wornPaintMaterial() : litMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }, 'paint'),
-      ground: groundMaterial(this.qualityKey === 'low', this.profile.ground === 'upstate', !!this.profile.softCover),
+      ground: groundMaterial(this.qualityKey === 'low', this.profile.ground === 'upstate', !!this.profile.softCover, this.profile.ground === 'desert'),
       roadSurface: roadSurfaceMaterial(this.qualityKey === 'low', this.profile.roads === 'worn'),
       spill: roadSurfaceMaterial(this.qualityKey === 'low', this.profile.roads === 'worn', true),
       water: litMaterial({ color: '#4f7f97', transparent: true, opacity: 0.92 }, 'water'),
@@ -1339,12 +1339,19 @@ export class GraphWorld {
     const nx = Math.round(TILE / GROUND_CELL), x0 = t.i * TILE, z0 = t.j * TILE, cell = TILE / nx, n1 = nx + 1;
     const pos = new Float32Array(n1 * n1 * 3), color = new Float32Array(n1 * n1 * 3), landW = new Float32Array(n1 * n1);
     const grass = new THREE.Color('#89a868'), dry = new THREE.Color('#a7a27a'), bed = new THREE.Color('#6f6a58'), tmp = new THREE.Color();
+    const desert = this.profile.ground === 'desert', sand = new THREE.Color('#c8875a'), rockA = new THREE.Color('#b0532f'), rockB = new THREE.Color('#d08a55'), white = new THREE.Color('#ddcfb2');
     for (let j = 0, k = 0; j <= nx; j++) for (let i = 0; i <= nx; i++, k++) {
       if (i === 0 && due()) yield;
       const x = x0 + i * cell, z = z0 + j * cell, h = this._groundH(x, z), pool = this.poolAt(x, z);
       pos[3 * k] = x; pos[3 * k + 1] = h; pos[3 * k + 2] = z;
       const raw = this.ground.at(x, z), cutDepth = Math.max(0, raw - h);
-      tmp.copy(h < pool ? bed : grass).lerp(dry, Math.min(1, cutDepth / 6));
+      if (desert) {
+        // [out-west] red-rock ground: sand on the flats, sandstone on the slopes, in strata bands by height (the
+        // Vermilion, then the White Cliffs higher up), darker in the washes
+        const sl = Math.min(1, Math.hypot(this._groundH(x + 6, z) - h, this._groundH(x, z + 6) - h) / 6);
+        const band = Math.sin(h * .21 + Math.sin(x * .004 + z * .003) * 2.2) * .5 + .5, high = THREE.MathUtils.smoothstep(h, 1860, 2050);
+        tmp.copy(sand).lerp(rockA, THREE.MathUtils.smoothstep(sl, .25, .7)).lerp(rockB, band * .45 * sl).lerp(white, high * (.25 + .35 * sl));   // (the White Cliffs: pale on the faces, the flats still sand)
+      } else tmp.copy(h < pool ? bed : grass).lerp(dry, Math.min(1, cutDepth / 6));
       landW[k] = h < pool + 0.2 ? 0 : 1 - Math.min(1, cutDepth / 6) * 0.7;   // (the land cover's colour: not on the river bed, less on a cut)
       const v = 0.94 + 0.06 * Math.sin(x * 0.013 + z * 0.021) * Math.cos(x * 0.007 - z * 0.011);
       color[3 * k] = tmp.r * v; color[3 * k + 1] = tmp.g * v; color[3 * k + 2] = tmp.b * v;
@@ -2131,12 +2138,13 @@ function sideMaterial(low = false) {
 }
 
 const ROOTS_N = 24;
-function groundMaterial(low = false, rural = false, soft = false) {
+function groundMaterial(low = false, rural = false, soft = false, desert = false) {
   const m = litMaterial({ vertexColors: true }, 'ground');
   m.defines = {};
   if (soft) m.defines.SOFTCOVER = '';   // (NYC: the covers' edges only wander — no scatter of grains, read as a blocky stipple)
   if (low) m.defines.LOWQ = '';
   if (rural) m.defines.NYGRASS = '';
+  if (desert) m.defines.DESERT = '';   // (Out West: the red-rock covers, 40–42)
   const blank = new THREE.DataTexture(new Uint8Array([1]), 1, 1, THREE.RedFormat); blank.needsUpdate = true;
   const U = { uLand: { value: blank }, uLandBox: { value: new THREE.Vector4(0, 0, 1, 1) }, uLandOn: { value: 0 },
     // a hero area's big trees near the camera (old-growth.js): x, z, trunk radius, seed — their root tops and bare soil
@@ -2209,7 +2217,11 @@ function groundMaterial(low = false, rural = false, soft = false) {
           }
           else if (k < 3.5 && k > 2.5) lc = mix(vec3(.17, .31, .38), vec3(.22, .37, .44), n);  // water: a canal or a pond at its own level (CNY's Erie Canal; PGH's rivers are under the water plane anyway)
           else if (k < 4.5 && k > 3.5) lc = vec3(.42, .4, .36);                               // under a building
+          #ifdef DESERT
+          else if (k < 5.5 && k > 4.5) lc = mix(vec3(.84, .54, .4), vec3(.9, .62, .46), n) * (.92 + .12 * sin(dot(vGW.xz, vec2(.8, .6)) * .35 + gwN(vGW.xz * .05) * 6.));   // the Coral Pink dunes: ripples
+          #else
           else if (k < 5.5 && k > 4.5) lc = vec3(.66, .6, .46);                               // sand, bare rock
+          #endif
           else if (k < 6.5 && k > 5.5) lc = mix(vec3(.62, .59, .54), vec3(.68, .65, .6), n);  // plaza
           else if (k < 7.5 && k > 6.5) lc = mix(vec3(.3, .42, .22), vec3(.38, .44, .25), n);  // beyond: suburbs and hills
           else if (k > 7.5 && k < 8.5) {
@@ -2304,6 +2316,19 @@ function groundMaterial(low = false, rural = false, soft = false) {
             }
             lc *= .9 + .18 * gwN(vec2(dot(vGW.xz, vec2(.7, .7)) * 3.5, dot(vGW.xz, vec2(-.7, .7)) * .6));   // the matted blades' streaks
           }
+          #ifdef DESERT
+          // [out-west] the red-rock covers (tools/pgh_city.py DESERT_LAND): the ground's own sand and sandstone show through
+          // (lc stays unset) — pinyon-juniper duff a shade darker with needle litter, sage flats flecked grey-green, the
+          // slickrock bare; the flecks fade to their mean off past ~150 m
+          if (k > 39.5 && k < 42.5) {
+            float fd = 1. - smoothstep(40., 160., length(vGW - cameraPosition));
+            float sp = step(k < 40.5 ? .7 : k < 41.5 ? .78 : .95, gwH(floor(vGW.xz * 1.6) + k));
+            vec3 sage = pow(mix(vec3(.46, .5, .4), vec3(.56, .58, .46), n), vec3(2.2));
+            diffuseColor.rgb *= mix(1., k < 40.5 ? .84 : k < 41.5 ? .95 : 1.04, vLandW);
+            diffuseColor.rgb = mix(diffuseColor.rgb, k < 41.5 ? sage : diffuseColor.rgb * .7, sp * vLandW * mix(.12, .5, fd));
+            if (k < 40.5) diffuseColor.rgb = mix(diffuseColor.rgb, pow(vec3(.36, .28, .2), vec3(2.2)), smoothstep(.6, .8, gwN(vGW.xz * .12 + 7.)) * .35 * vLandW);
+          }
+          #endif
           #ifdef NYGRASS
           // the rural maps in early fall (user, 22 Nov: "grass + farms need to improve"): corn gone tan, soybeans gold,
           // and the grass close by with blades in it — lawns mown in stripes, pastures and hay tufted, with dry patches
@@ -2403,6 +2428,6 @@ function groundMaterial(low = false, rural = false, soft = false) {
         diffuseColor.rgb *= 1. - .2 * smoothstep(.55, .75, gwN((vGW.xz + uCloudT * vec2(3., 1.2)) * .0025));   // a cloud's shadow drifting over (user, 23 Nov)
         #endif`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-21${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-22${low ? '-low' : ''}${rural ? '-ny2' : ''}${desert ? '-desert' : ''}`;
   return m;
 }

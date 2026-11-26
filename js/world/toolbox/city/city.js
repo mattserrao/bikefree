@@ -290,8 +290,18 @@ export class CityScene {
     }
   }
 
-  /** Is (x, z) inside a building footprint, or within r metres of one? */
+  /** A round place nothing else is put (a landmark's rock — Out West's tunnel, hoodoos, arches, buttes): the trees,
+   *  poles, furniture and cars keep out of it as they keep out of a building (buildingNear). */
+  addKeepOut(x, z, rad) {
+    const g = (this.keepGrid ||= new Map()), o = { keepOut: true, kind: -1, x, z, rad };
+    for (let gx = Math.floor((x - rad) / 40); gx <= Math.floor((x + rad) / 40); gx++) for (let gz = Math.floor((z - rad) / 40); gz <= Math.floor((z + rad) / 40); gz++) {
+      const k = `${gx},${gz}`; if (!g.has(k)) g.set(k, []); g.get(k).push(o);
+    }
+  }
+
+  /** Is (x, z) inside a building footprint, or within r metres of one? (or of a keep-out place) */
   buildingNear(x, z, r = 0) {
+    if (this.keepGrid) for (const o of this.keepGrid.get(`${Math.floor(x / 40)},${Math.floor(z / 40)}`) || []) if (Math.hypot(x - o.x, z - o.z) < o.rad + r) return o;
     for (let gx = Math.floor((x - r) / 40); gx <= Math.floor((x + r) / 40); gx++) for (let gz = Math.floor((z - r) / 40); gz <= Math.floor((z + r) / 40); gz++) {
       for (const b of this.buildingGrid.get(`${gx},${gz}`) || []) {
         if (b.kind === 12 || x < b.bb[0] - r || x > b.bb[1] + r || z < b.bb[2] - r || z > b.bb[3] + r) continue;

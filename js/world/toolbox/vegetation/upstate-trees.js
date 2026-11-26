@@ -643,7 +643,63 @@ const PARK_SPECIES = {
     greens: ['#41622f', '#4a6c34'], fall: ['#9a4a24', '#b2622c', '#7e3f22'], turn: [0, .4, .8] },
 };
 
-export function makeUpstateTrees({ oldGrowth = false, park = false, bushes = false } = {}) {
+// [out-west] the red-rock desert's trees (makeUpstateTrees({ desert: true }), Out West 26 Nov 2026): Fremont cottonwood
+// by the washes and in town (a broad, open crown, gold in fall), Utah juniper and two-needle pinyon on the benches —
+// short, gnarled, their foliage in loose clumps over a twisted trunk (no leaf cards: tufts, as the lodgepole's)
+const DESERT_SPECIES = {
+  cottonwood: { H: 19, R: 8.5, fork: .32, trunkR: .62, trunk: '#7d7266', bark: BARK, gnarl: .4, up: .02,
+    levels: [[5, .45, .8, .46], [4, .35, .7, .26], [3, .35, .6, .13]],
+    greens: ['#7c9a48', '#86a34e', '#6f8e42'], fall: ['#e6bd3a', '#f0cc4e', '#d9a72e', '#c9a33a'], turn: [.55, .85, 1] },
+};
+function desertConifer(seed, o, lod) {
+  // a juniper or pinyon: short, twisted trunks splitting low, the foliage in many small, dense, irregular clumps from
+  // near the ground up (a ragged ovoid, flat in places, gaps you see the trunk through), darker underneath; the far
+  // tier a few blobs
+  const rand = randomSequence(seed), b = new Builder(), H = o.H, R = o.R;
+  const stems = o.stems ?? 1;
+  b.as(BARK);
+  for (let s = 0; s < stems; s++) {
+    const a = rand() * 6.28, lean = (stems > 1 ? .32 : .1) + rand() * .15;
+    b.add(cyl(.06, o.trunkR, H * .5, lod ? 4 : 6), M(Math.cos(a) * .12, 0, Math.sin(a) * .12, 1, 1, 1, -a, 0, lean), o.trunk);
+    if (!lod) for (let k = 0; k < 4; k++) { const ka = a + (rand() - .5) * 3; b.add(cyl(.025, .06, R * .75, 4), M(Math.cos(a) * H * .1, H * (.18 + rand() * .25), Math.sin(a) * H * .1, 1, 1, 1, -ka, 0, .8 + rand() * .6), o.trunk); }
+  }
+  b.as(0);
+  const n = lod === 2 ? 4 : lod ? 9 : 22, det = lod ? 0 : 1;
+  for (let k = 0; k < n; k++) {
+    // a point in a ragged ovoid (wider low on a juniper, higher on a pinyon), pushed out toward its skin
+    const a = k * 2.399 + rand() * .8, t = (k + rand()) / n, y = H * (o.low ?? .2) + t * H * (.95 - (o.low ?? .2));
+    const env = Math.sin(Math.min(1, t * 1.15) * Math.PI) * (o.bulge ?? 1);
+    const d = R * (.25 + .7 * env) * (.55 + rand() * .45);
+    const sc = (lod === 2 ? 1.7 : lod ? 1.3 : 1) * R * (.2 + rand() * .14);
+    b.add(blob(det), M(Math.cos(a) * d, y, Math.sin(a) * d, sc * (1 + rand() * .3), sc * (.65 + rand() * .25), sc), o.colors[Math.floor(rand() * o.colors.length)], .22, rand);
+  }
+  return b.build();
+}
+const utahJuniper = (v, lod) => desertConifer(7101 + v, { H: 4.6 + v * 1.1, R: 2.3 + v * .3, stems: v === 1 ? 3 : 2, low: .08, bulge: 1.1, trunkR: .22, trunk: '#76604f', colors: ['#6b7d5c', '#758764', '#5f7253', '#7d8b66', '#66765a'] }, lod);
+const pinyon = (v, lod) => desertConifer(7201 + v, { H: 6.5 + v * 1.4, R: 2.7 + v * .3, low: .22, bulge: .95, trunkR: .26, trunk: '#5f4c3e', colors: ['#4d6a3c', '#577440', '#466237', '#5e7a45', '#53703f'] }, lod);
+function sageBrush(seed, R, tones, bloom = null) {
+  // big sagebrush (grey-green, silvery) or rubber rabbitbrush (yellow-green, gold in bloom): a low mound of small
+  // clumps on a few woody stems
+  const rand = randomSequence(seed), b = new Builder();
+  b.as(BARK);
+  for (let k = 0; k < 4; k++) { const a = rand() * 6.28; b.add(cyl(.015, .035, R * .7, 3), M(0, 0, 0, 1, 1, 1, -a, 0, .5 + rand() * .5), '#6b5d4c'); }
+  b.as(SHRUB);
+  for (let k = 0; k < 9; k++) {
+    const a = k * 2.399 + rand(), d = rand() * R * .6;
+    b.add(blob(0), M(Math.cos(a) * d, R * (.42 + rand() * .3), Math.sin(a) * d, R * (.32 + rand() * .14), R * (.24 + rand() * .1), R * (.32 + rand() * .14)), tones[k % tones.length], .14, rand);
+  }
+  if (bloom) for (let k = 0; k < 7; k++) { const a = rand() * 6.28, d = rand() * R * .5; b.add(blob(0), M(Math.cos(a) * d, R * (.75 + rand() * .2), Math.sin(a) * d, R * .16, R * .1, R * .16), bloom, .1, rand); }
+  return b.build();
+}
+function redRock(seed, w, h) {
+  // a sandstone boulder: a squarish red block, its top weathered paler
+  const rand = randomSequence(seed), b = new Builder(); b.as(BARK);
+  b.add(blob(1), M(0, h * .35, 0, w, h, w * (.7 + rand() * .3), rand() * 6), ['#a95736', '#b8673f', '#9a4c30'][Math.floor(rand() * 3)], 0, rand);
+  b.add(blob(1), M(w * .05, h * .78, 0, w * .75, h * .22, w * .6, rand() * 6), '#cf9468', 0, rand);
+  return b.build();
+}
+
+export function makeUpstateTrees({ oldGrowth = false, park = false, bushes = false, desert = false } = {}) {
   return withSmooth(true, () => {
     const species = {};
     for (const [name, o] of Object.entries(SPECIES)) {
@@ -659,6 +715,14 @@ export function makeUpstateTrees({ oldGrowth = false, park = false, bushes = fal
     if (park) for (const [name, o] of Object.entries(PARK_SPECIES)) {
       const k = Object.keys(PARK_SPECIES).indexOf(name);
       species[name] = { h: o.H, r: o.R, variants: o.turn.map((turn, v) => [0, 1, 2].map((lod) => grow(4901 + k * 43 + v * 11, o, lod, turn))), turn: o.turn };
+    }
+    if (desert) {
+      for (const [name, o] of Object.entries(DESERT_SPECIES)) {
+        const k = Object.keys(DESERT_SPECIES).indexOf(name);
+        species[name] = { h: o.H, r: o.R, variants: o.turn.map((turn, v) => [0, 1, 2].map((lod) => grow(5101 + k * 47 + v * 13, o, lod, turn))), turn: o.turn };
+      }
+      species.juniper = { h: 5.5, r: 2.5, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => utahJuniper(v, lod))), turn: [0, 0] };
+      species.pinyon = { h: 7.5, r: 3, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => pinyon(v, lod))), turn: [0, 0] };
     }
     species.whitepine = { h: 30, r: 5.5, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => whitePine(v, lod))), turn: [0, 0] };
     species.hemlock = { h: 22, r: 4.2, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => hemlock(v, lod))), turn: [0, 0] };
@@ -686,6 +750,11 @@ export function makeUpstateTrees({ oldGrowth = false, park = false, bushes = fal
     if (oldGrowth) Object.assign(understory, {
       herb: herb(6231), seedling: grow(6241, { ...SPECIES.sugarmaple, H: 1.4, R: .5, trunkR: .02 }, 1, .2),
       beechSapling: grow(6251, { ...FOREST_FORMS.beechF, H: 4.5, R: 1.5, trunkR: .06, fork: .3, fluff: .6 }, 0, .1),
+    });
+    if (desert) Object.assign(understory, {
+      sage: sageBrush(7301, .75, ['#8d8f78', '#9a9b82', '#83866f']), sage2: sageBrush(7302, 1.05, ['#918f76', '#a3a184', '#888a70']),
+      rabbitbrush: sageBrush(7311, .8, ['#8a9a5a', '#95a060'], '#e0b830'),
+      redrock: redRock(7321, .7, .5), redrock2: redRock(7322, 1.4, .9),
     });
     if (bushes) for (const [name, o] of Object.entries(PARK_BUSHES)) understory[name] = angledBush(o.seed, o);
     // the old growth's fallen trunks: 3D models drawn by old-growth.js (not cards, so not in the engine's atlas)

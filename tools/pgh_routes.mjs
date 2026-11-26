@@ -8,7 +8,7 @@
 // Prints each route: its length, climb, the ways it rides (in order, merged by name) and its checks (closes, no
 // U-turn, no way ridden twice, no wrong-way one-way). --write: the routes become routes/cities/pgh.json's "presets"
 // and routes/cities/pgh-presets.json (the app's list), replacing the 48 mapped from the Pittsburgh network.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodeGraph, graphNetwork } from '../js/graph.js';
@@ -525,8 +525,12 @@ const NYC_ROUTES = [
   },
 ];
 
-const TRAILS = CITY === 'cny' ? CNY_TRAILS : CITY === 'skan' ? SKAN_TRAILS : CITY === 'nyc' ? [] : PGH_TRAILS;
-const ROUTES = CITY === 'cny' ? CNY_ROUTES : CITY === 'skan' ? SKAN_ROUTES : CITY === 'nyc' ? NYC_ROUTES : CITY === 'pgh' ? PGH_ROUTES : [];
+// (a map's own rides as data, tools/city/<id>-routes.json { trails, routes } — Out West's, 26 Nov 2026: the newer maps
+//  keep their rides beside their config instead of here)
+const ROUTE_FILE = resolve(root, `tools/city/${CITY}-routes.json`);
+const FILE_ROUTES = existsSync(ROUTE_FILE) ? JSON.parse(readFileSync(ROUTE_FILE, 'utf8')) : null;
+const TRAILS = FILE_ROUTES ? FILE_ROUTES.trails || [] : CITY === 'cny' ? CNY_TRAILS : CITY === 'skan' ? SKAN_TRAILS : CITY === 'nyc' ? [] : PGH_TRAILS;
+const ROUTES = FILE_ROUTES ? FILE_ROUTES.routes : CITY === 'cny' ? CNY_ROUTES : CITY === 'skan' ? SKAN_ROUTES : CITY === 'nyc' ? NYC_ROUTES : CITY === 'pgh' ? PGH_ROUTES : [];
 
 // ---------------------------------------------------------------- the graph as a router
 const M_LAT = 111320, mLon = M_LAT * Math.cos(json.origin.lat * Math.PI / 180);
@@ -583,6 +587,7 @@ function route(a, b, used, prefer = [], avoid = [], arriveHeading = null, kindCo
     const up = Math.max(0, dir > 0 ? e.ele[e.n] - e.ele[0] : e.ele[0] - e.ele[e.n]); c += up * 4;
     if (prefer.includes(e.name)) c *= 0.75;
     if (avoid.includes(e.name)) c *= 8;
+    if (avoid.includes(e.id)) c += 1e7;   // (an edge by id: kept off altogether)
     if (used.has(e.id)) c *= 6;
     return c;
   };
@@ -627,9 +632,10 @@ for (const R of ROUTES) {
     for (const s of leg) { steps.push(s); used.add(s.e.id); }
   }
   // tidy: a step straight back along the way just ridden (a spur out and back) is cut out
-  for (let k = 0; k + 1 < steps.length; ) { if (steps[k].e.id === steps[k + 1].e.id) { steps.splice(k, 2); k = Math.max(0, k - 1); } else k++; }
+  // (R.outAndBack — a climb or a canyon ridden up and back the same road: its turnaround stays, and the road twice is the ride)
+  if (!R.outAndBack) for (let k = 0; k + 1 < steps.length; ) { if (steps[k].e.id === steps[k + 1].e.id) { steps.splice(k, 2); k = Math.max(0, k - 1); } else k++; }
   const keys = steps.map((s) => `${s.e.id}${s.dir > 0 ? '+' : '-'}`);
-  const preset = { id: R.id, name: R.name, path: keys, tags: R.tags, note: R.note };
+  const preset = { id: R.id, name: R.name, path: keys, tags: R.tags, note: R.note, ...(R.outAndBack ? { outAndBack: true } : {}) };
   const r = makePathRoute(net, preset);
   preset.lengthM = Math.round(r.lapM); preset.climbM = Math.round(r.lapClimbM);
   // checks
@@ -637,12 +643,13 @@ for (const R of ROUTES) {
   if (!planCloses(net, keys)) issues.push('does not close');
   const seen = new Map(); for (const s of steps) seen.set(s.e.id, (seen.get(s.e.id) || 0) + 1);
   const twice = [...seen].filter(([, n]) => n > 1).map(([id]) => `${G.byId.get(id).name || id}`);
-  if (twice.length) issues.push(`ridden twice: ${[...new Set(twice)].join(', ')}`);
-  for (let k = 0; k < steps.length; k++) { const s = steps[k], n = steps[(k + 1) % steps.length]; if (s.e.id === n.e.id) issues.push(`U-turn on ${s.e.name}`); }
+  if (twice.length && !R.outAndBack) issues.push(`ridden twice: ${[...new Set(twice)].join(', ')}`);
+  let turns = 0; for (let k = 0; k < steps.length; k++) { const s = steps[k], n = steps[(k + 1) % steps.length]; if (s.e.id === n.e.id) { turns++; if (!R.outAndBack) issues.push(`U-turn on ${s.e.name}`); } }
+  if (R.outAndBack && turns > 2) issues.push(`${turns} turnarounds (an out-and-back has its one, and its start)`);
   for (let k = 0; k < steps.length; k++) {
     const s = steps[k], n = steps[(k + 1) % steps.length];
     let d = Math.abs(heading(n.e, n.dir, false) - heading(s.e, s.dir, true)); if (d > Math.PI) d = 2 * Math.PI - d;
-    if (d > 2.6 && s.e.id !== n.e.id) issues.push(`hairpin ${s.e.name || s.e.id} → ${n.e.name || n.e.id}`);
+    if (d > 2.6 && s.e.id !== n.e.id && !R.outAndBack) issues.push(`hairpin ${s.e.name || s.e.id} → ${n.e.name || n.e.id}`);
   }
   const wrong = steps.filter((s) => { const o = ow(s.e); return o && o !== s.dir && s.e.kind !== 'path'; });
   if (wrong.length) issues.push(`wrong way: ${wrong.map((s) => s.e.name).join(', ')}`);

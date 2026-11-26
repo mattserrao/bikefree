@@ -39,7 +39,7 @@ import { skanCrop, cropMaterial, cropCardsJob, bale, verge, bay, farmStand, hayW
 import { makeUpstateTrees, fallVariant } from './toolbox/vegetation/upstate-trees.js';
 import { OldGrowth } from './toolbox/vegetation/old-growth.js';
 import { planParkPlanting } from './toolbox/vegetation/park-planting.js';
-import { profileY, ditchFits, ditchGeometry, culvertEnd, goldenrod, laceAndChicory, tallGrass, cattails, utilityPole, wires, scrubClump, roadSign } from './toolbox/landscape/roadside-ny.js';
+import { profileY, ditchFits, ditchGeometry, DITCH_DESERT, culvertEnd, goldenrod, laceAndChicory, tallGrass, cattails, utilityPole, wires, scrubClump, sageClump, roadSign } from './toolbox/landscape/roadside-ny.js';
 import { CANAL, canalAt } from './toolbox/city/cny-landmarks.js';
 import { ROAD_LIFT } from './pose.js';
 
@@ -49,7 +49,9 @@ export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand:
   corn: 20, grain: 24, hay: 28, farmyard: 29,
   // 30–33: an old-growth hero area's own (tools/cny_forest.py: Camillus Forest Unique Area) — old growth, its woods,
   // its tall meadows, the blowdown; dressed by toolbox/vegetation/old-growth.js
-  oldGrowth: 30, ogForest: 31, ogMeadow: 32, ogBlowdown: 33 };
+  oldGrowth: 30, ogForest: 31, ogMeadow: 32, ogBlowdown: 33,
+  // 40–42: the red-rock desert's (Out West): pinyon-juniper benches, sagebrush flats, bare slickrock
+  pj: 40, sage: 41, slick: 42 };
 const TILE = 400;
 // how far the city is built, by quality (Low: phones)
 const VERGE_IN = 260, VERGE_OUT = 420;
@@ -201,7 +203,8 @@ export class GraphCity {
     if (this.profile.life === 'cyclists' || this.profile.life === 'park') this.life = new GraphLife(world, host.group, { quality: world.qualityKey, uTime: this.treeTime, park: this.profile.life === 'park' });
     // the tree engine (one for the game: toolbox/vegetation/tree-engine.js) with the northeastern hardwood kit — every
     // road-graph map (PGH's western Pennsylvania has the same trees); the rural maps in early fall, PGH in summer
-    this.treeKit = makeUpstateTrees({ oldGrowth: !!world.json?.oldGrowth, park: !!this.profile.parkTrees, bushes: !!this.profile.understory });
+    this.desert = this.profile.ground === 'desert';
+    this.treeKit = makeUpstateTrees({ oldGrowth: !!world.json?.oldGrowth, park: !!this.profile.parkTrees, bushes: !!this.profile.understory, desert: this.desert });
     this.fall = this.profile.season === 'early-fall' || this.profile.season === 'peak-fall';
     this.peak = this.profile.season === 'peak-fall';   // (NYC: the canopy at its height — most trees turned)
     this.cars = this.profile.cars !== false;            // (NYC: no parked cars — the streets round the park stay empty)
@@ -808,7 +811,7 @@ export class GraphCity {
       if (nearCf(x, z)) return false;
       const r1 = hash(seed * 7.13 + 1), r2 = hash(seed * 3.71 + 2), r3 = hash(seed * 9.17 + 3), r4 = hash(seed * 1.93 + 4);
       // ~6% dead (user, 23 Nov): snags in the woods, wet ground, hedgerows and pastures, a few by the road; none in yards or on streets
-      const dead = role !== 'yard' && role !== 'street' && role !== 'osm' && kit.snag && hash(seed * 5.37 + 9) < .06;
+      const dead = role !== 'yard' && role !== 'street' && role !== 'osm' && kit.snag && hash(seed * 5.37 + 9) < (this.desert ? .015 : .06);
       const name = dead ? 'snag' : pick(MIX[role], r1), sp = kit[name];
       // the age mix: saplings and young trees, mostly mature, a few old giants away from the road
       let k = age ?? (r2 < .08 ? .3 + r2 * 2.5 : r2 < .22 ? .55 + (r2 - .08) * 1.8 : r2 > .95 ? 1.15 + (r2 - .95) * 3 : .85 + (r2 - .22) * .32);
@@ -905,6 +908,16 @@ export class GraphCity {
       const h1 = hash(Math.round(x * 3.1) * 92821 + Math.round(z * 1.7)), jx = x + (h1 - .5) * step * .9, jz = z + (hash(Math.round(x * 5.3) + Math.round(z * 7.9) * 31) - .5) * step * .9;
       const c = this.landAt(jx, jz), seed = Math.round(jx * 11) + Math.round(jz * 13) * 7, h2 = hash(seed * 1.31);
       if (c >= LAND.oldGrowth && c <= LAND.ogBlowdown) continue;   // (the hero area's: placed above)
+      if (c >= LAND.pj && c <= LAND.slick) {
+        // [out-west] the desert's covers: pinyon and juniper scattered on the benches with sage between, sagebrush and
+        // rabbitbrush on the flats with the odd juniper, red boulders on the slickrock; cottonwoods where it's wet
+        const r = hash(seed * 2.3), wet = this.world.nearWater?.(jx, jz);
+        if (wet && h1 < .3) { tree(jx, jz, 'wet', seed); continue; }
+        if (c === LAND.pj) { if (h1 < .22 * this.q.trees) tree(jx, jz, 'woods', seed); else if (r < .35) under(jx, jz, r < .2 ? 'sage' : 'sage2', seed); else if (r < .38) under(jx, jz, 'redrock', seed); }
+        else if (c === LAND.sage) { if (h1 < .025 * this.q.trees) tree(jx, jz, 'woods', seed, .6 + h2 * .4); else if (r < .5) under(jx, jz, r < .2 ? 'sage' : r < .38 ? 'sage2' : 'rabbitbrush', seed); else if (r < .52) under(jx, jz, 'redrock', seed); }
+        else { if (r < .05) under(jx, jz, r < .03 ? 'redrock' : 'redrock2', seed); else if (r < .09) under(jx, jz, 'sage', seed, .7); }
+        continue;
+      }
       if (c === LAND.woods || c === LAND.outside) {
         // how open it is round here: the woodlot's edge
         let open = 0; for (const [ox, oz] of [[11, 0], [-11, 0], [0, 11], [0, -11]]) if (this.landAt(jx + ox, jz + oz) !== c) open++;
@@ -949,7 +962,7 @@ export class GraphCity {
       }
     }
     // roadside thickets: sumac (scarlet now), dogwood and buckthorn in clumps behind the brush, every so often
-    if (this.rural) for (const piece of W.tiles.get(t.key)?.pieces || []) {
+    if (this.rural && !this.desert) for (const piece of W.tiles.get(t.key)?.pieces || []) {
       const e = piece.e; if (!ROADS.has(e.kind) || e.kind === 'alley' || (W.walkOf && W.walkOf(e))) continue;
       const half = W.wOf(e) / 2;
       for (let i = Math.max(piece.a, 1); i < Math.min(piece.b, e.n - 1); i += 2) for (const side of [-1, 1]) {
@@ -1127,7 +1140,9 @@ export class GraphCity {
   /** A soft plant card (grass-cards.js): its size by kind and scale, a per-plant tint and turn. */
   _card(N, x, y, z, seed, cell, sc) {
     const SZ = [[.75, .38], [1.05, .95], [1.15, 1.3], [.95, 1.05]][cell], k = hash(seed * 7.7 + 3.1);
-    const tint = (this._tint ||= new THREE.Color()).setRGB(.62 + k * .18, .66 + hash(seed * 5.3) * .16, .58 + hash(seed * 2.9) * .14);
+    const tint = (this._tint ||= new THREE.Color());
+    if (this.desert) tint.setRGB(1.05 + k * .2, .8 + hash(seed * 5.3) * .1, .42 + hash(seed * 2.9) * .1);   // (desert: cured bunchgrass, tan)
+    else tint.setRGB(.62 + k * .18, .66 + hash(seed * 5.3) * .16, .58 + hash(seed * 2.9) * .14);
     grassCard(N, x, y, z, cell, SZ[0] * (.8 + k * .4) * Math.min(1.3, sc), SZ[1] * sc, seed * 6.283, tint);
   }
   /**
@@ -1246,15 +1261,15 @@ export class GraphCity {
             // run, a thin one, shorter where the mower last reached), each plant's own height varied on top
             const lush = vnoise(px / 23 + side * 7.1, pz / 23), tall = vnoise(px / 11 + 3.3, pz / 11 - side * 4.4);
             // the mowed strip: tufts and the odd wildflower
-            const tufts = 2 + Math.floor(hash(seed * 23) * (1 + lush * 2.5));
+            const tufts = this.desert ? Math.floor(hash(seed * 23) * 1.6) : 2 + Math.floor(hash(seed * 23) * (1 + lush * 2.5));   // (desert: a sparse, dry verge)
             for (let r = 0; r < tufts; r++) {
               const j = (hash(seed * 29 + r) - .5) * 1.9, d = .3 + hash(seed * 13 + r * 5) * 2.1, [x0, z0] = at(d), x = x0 + tx * j, z = z0 + tz * j;
               // (wildflowers sparse and clumped: a few 14 m cells have a clump, most none — user, 23 Nov)
               const hs = hash(x * 1.3 + z * 2.1), fl = hash(Math.floor(x / 14) * 3 + Math.floor(z / 14)) < .16 && hs < .3;
-              this._card(N, x, yAt(d), z, hs, fl ? CARD.lace : CARD.turf, .6 + tall * .7 + hash(seed * 37 + r) * .35);
+              this._card(N, x, yAt(d), z, hs, this.desert ? CARD.tall : fl ? CARD.lace : CARD.turf, (this.desert ? .45 : .6) + tall * .7 + hash(seed * 37 + r) * .35);
             }
             // the ditch bottom: cattails where it stays wet, else grass
-            if (ok && hash(Math.floor((px + pz) / 31) * 7.7 + side) < .14 && seed < .45) { const [x, z] = at(2.5 + (seed - .25) * .6); cattails(N, x, profileY(2.5, rY, base), z, seed, .75 + hash(seed * 41) * .5); }
+            if (ok && !this.desert && hash(Math.floor((px + pz) / 31) * 7.7 + side) < .14 && seed < .45) { const [x, z] = at(2.5 + (seed - .25) * .6); cattails(N, x, profileY(2.5, rY, base), z, seed, .75 + hash(seed * 41) * .5); }
             // the brush: berm out to the fence line, unless it's a lawn, or the crew mowed farther here
             const lawn = lc === LAND.yards || this.host.buildingNear(...at(10), 6);
             const mowed = hash(Math.floor((px * .7 + pz * .3) / 35) * 3.3 + e.n + side) < .18;
@@ -1270,6 +1285,7 @@ export class GraphCity {
               // patches of scrubby brush (sumac, dogwood, raspberry canes: user, 23 Nov "more scrubby brush"), goldenrod in
               // sparser drifts, tall grass between, the odd lace or chicory
               const drift = hash(Math.floor(x / 14) * 5.1 + Math.floor(z / 14) * 2.3), scrub = hash(Math.floor(x / 22) * 1.7 + Math.floor(z / 22) * 4.3 + side) < .38;
+              if (this.desert) { if (k < .22) sageClump(N, x, y, z, h, sc * .8); else if (k < .6) this._card(N, x, y, z, h, CARD.tall, sc * .8); continue; }   // (desert: sage and dry grass)
               if (scrub && k < .45) scrubClump(N, x, y, z, h, sc);
               else if (k < .08 + drift * .22) this._card(N, x, y, z, h, CARD.goldenrod, sc);
               else if (k < .9) this._card(N, x, y, z, h, CARD.tall, sc);
@@ -1306,7 +1322,7 @@ export class GraphCity {
         }
       }
     }
-    const geo = struct ? ditchGeometry(runs) : null;
+    const geo = struct ? ditchGeometry(runs, this.desert ? DITCH_DESERT : null) : null;
     if (geo) { const m = new THREE.Mesh(geo, this.ditchMat ||= (this.world.qualityKey === 'low' ? (x) => x : withSurfaceDetail)(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }), 'ditch')); m.name = `Ditches ${t.key}`; m.receiveShadow = true; m.userData.lodM = 700; this._add(t, m); }
   }
   /**

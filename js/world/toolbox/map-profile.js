@@ -10,6 +10,7 @@
 //   roads      'worn'            upstate winter-worn asphalt and worn paint, trail banks, road-end trims, spill aprons
 //              'city'            clean city asphalt and fresh paint
 //   ground     'upstate'         the ground shader's upstate grass and early-fall crops (NYGRASS)
+//              'desert'          red-rock country: sand on the flats, sandstone on the slopes, strata bands by height
 //              'plain'
 //   life       'cyclists'        other cyclists and walkers, no cars (graph-life.js)
 //              'none'
@@ -28,6 +29,13 @@ const PITTSBURGH_STYLES = [{ preset: 'pittsburgh-rowhouse', kinds: ['rowhouse'] 
 export const PROFILE_PRESETS = {
   upstate: { light: 'golden-upstate', roads: 'worn', ground: 'upstate', life: 'cyclists', dressing: 'country', season: 'early-fall', clouds: 0.5, verge: '#78974a',
     buildingStyles: [{ preset: 'cny-suburban', kinds: ['house', 'rowhouse'] }], hideInWater: false, classifyHomes: null, softCover: true },
+  // (Out West, 26 Nov 2026: red-rock desert round Kanab — golden hour baked, desert ground by slope and strata, dry
+  // shrubland cover, cottonwoods by the washes, pinyon and juniper on the benches)
+  desert: { light: 'golden-upstate', roads: 'worn', ground: 'desert', life: 'cyclists', dressing: 'country', season: 'early-fall', clouds: 0.35, verge: '#a99a6a',
+    buildingStyles: [{ preset: 'cny-suburban', kinds: ['house', 'rowhouse'] }], hideInWater: false, classifyHomes: null, softCover: true,
+    treeMix: { woods: [['juniper', 60], ['pinyon', 40]], wet: [['cottonwood', 1]], hedge: [['juniper', 70], ['cottonwood', 30]],
+      yard: [['cottonwood', 55], ['juniper', 30], ['pinyon', 15]], street: [['cottonwood', 1]], pasture: [['juniper', 70], ['cottonwood', 30]],
+      orn: [['juniper', 60], ['pinyon', 40]], arbor: [['juniper', 1]], osm: [['cottonwood', 1]] } },
   city: { light: 'free', roads: 'city', ground: 'plain', life: 'none', dressing: 'city', season: 'summer', clouds: 0.35, verge: '#7b8556',
     buildingStyles: PITTSBURGH_STYLES, hideInWater: false, classifyHomes: null, softCover: true },
 };

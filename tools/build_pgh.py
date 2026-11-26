@@ -287,26 +287,29 @@ class RouteLines:
     the ways they ride are kept through the cleanup (real mapped ways, never new ones), so the routes map onto PGH."""
     def __init__(self, path, reach):
         self.reach, self.grid = reach, defaultdict(list)
+        self.cell = max(20, reach)
         self.kx, self.ky = 111320 * math.cos(math.radians(40.44)), 110540
-        try: lines = json.load(open(path))
-        except FileNotFoundError: lines = []
+        if isinstance(path, list): lines = path   # (lines given directly: [{'line': [[lat, lon], …]}])
+        else:
+            try: lines = json.load(open(path))
+            except FileNotFoundError: lines = []
         for r in lines:
             pts = r['line']
             for (a, b), (c, d) in zip(pts, pts[1:]):   # (every ~5 m)
                 k = max(1, int(hv((a, b), (c, d)) / 5))
                 for i in range(k):
                     la, lo = a + (c - a) * i / k, b + (d - b) * i / k
-                    self.grid[(int(lo * self.kx / 20), int(la * self.ky / 20))].append((lo * self.kx, la * self.ky))
+                    self.grid[(int(lo * self.kx / self.cell), int(la * self.ky / self.cell))].append((lo * self.kx, la * self.ky))
         self.n = len(lines)
 
     def near(self, la, lo):
         x, y = lo * self.kx, la * self.ky
-        cx, cy = int(x / 20), int(y / 20)
+        cx, cy = int(x / self.cell), int(y / self.cell)
         return any(math.hypot(px - x, py - y) < self.reach for i in (-1, 0, 1) for j in (-1, 0, 1) for px, py in self.grid.get((cx + i, cy + j), ()))
 
     def dist(self, la, lo, cap=30):
         x, y = lo * self.kx, la * self.ky
-        cx, cy = int(x / 20), int(y / 20)
+        cx, cy = int(x / self.cell), int(y / self.cell)
         best = cap
         for i in (-2, -1, 0, 1, 2):
             for j in (-2, -1, 0, 1, 2):
@@ -324,6 +327,8 @@ class RouteLines:
 
 
 ROUTES = None
+CORRIDOR = None   # (area.keepCorridorRoads: the through roads along the area's corridor lines, kept out-and-back)
+MAJOR_KINDS = ('primary', 'secondary', 'tertiary')
 
 
 def route_share(e):
@@ -338,8 +343,10 @@ def route_share(e):
 
 def protected(e):
     """An edge the Pittsburgh routes ride: never removed by the cleanup (cached; merged and cut edges are measured again)."""
-    if ROUTES is None or not ROUTES.n: return False
-    if e.get('prot') is None: e['prot'] = ROUTES.follows(list(zip(e['lat'], e['lon'])))
+    if e.get('prot') is None:
+        pts = list(zip(e['lat'], e['lon']))
+        e['prot'] = bool((ROUTES is not None and ROUTES.n and ROUTES.follows(pts))
+                         or (CORRIDOR is not None and e.get('kind') in MAJOR_KINDS and CORRIDOR.follows(pts, 0.7)))
     return e['prot']
 
 
@@ -361,6 +368,11 @@ def build(cfg):
     dropped = defaultdict(int)
     global ROUTES
     ROUTES = RouteLines(os.path.join(ROOT, 'tools', 'city', f'{CITY}-route-lines.json'), cfg['routeKeepM'])
+    global CORRIDOR
+    if cfg.get('area', {}).get('keepCorridorRoads') and cfg['area'].get('lines'):
+        src = json.load(open(os.path.join(ROOT, 'tools', 'city', cfg['area']['lines'])))
+        CORRIDOR = RouteLines([{'line': l['pts']} for l in src['lines']], cfg['area'].get('keepCorridorM', 300))
+        print(f'  corridor roads kept out-and-back along {CORRIDOR.n} lines')
     kept_for_routes = 0
     # the rideable ways' points (a way the routes ride is only added where none of these carries the route already)
     rgrid = defaultdict(list)
@@ -427,7 +439,7 @@ def build(cfg):
     edges = []   # dict: a, b (graph node ids = OSM ids for now), refs, name, kind, bridge flags per segment
     for refs, t, kind, wid in kept:
         bridge = t.get('bridge') not in (None, 'no') or t.get('tunnel') not in (None, 'no')
-        name = t.get('name') or t.get('bridge:name') or ''
+        name = t.get('name') or t.get('bridge:name') or (t.get('ref') if cfg.get('nameFromRef') else '') or ''
         cur = [refs[0]]
         for r in refs[1:]:
             cur.append(r)
@@ -1635,6 +1647,24 @@ def build_all(cfg):
             la0_, lo0_, r0_ = cfg['area']['circle']; kx_ = 111320 * math.cos(math.radians(la0_))
             out_km = sum(STEP for e in E for la, lo in zip(e['lat'], e['lon']) if math.hypot((lo - lo0_) * kx_, (la - la0_) * 110540) > r0_) / 1000
         print(f'  outside the circle: removed {nt} ways ({kt:.1f} km); {out_km:.1f} km left outside it, closing loops')
+    # (the cleanup after the first pass can strand a few ways — a trim at the circle's rim, a dead end peeled back
+    #  to a lone loop: Out West's dunes, 26 Nov 2026 — so the one piece is kept again, the rest dropped)
+    adj = defaultdict(set)
+    for k, e in enumerate(E): adj[e['a']].add(k); adj[e['b']].add(k)
+    comp, best = {}, None
+    for n0 in adj:
+        if n0 in comp: continue
+        st, ks = [n0], set(); comp[n0] = n0
+        while st:
+            n = st.pop()
+            for k in adj[n]:
+                ks.add(k)
+                for m in (E[k]['a'], E[k]['b']):
+                    if m not in comp: comp[m] = n0; st.append(m)
+        if best is None or len(ks) > len(best): best = ks
+    if best is not None and len(best) < len(E):
+        print(f'  stranded: dropped {len(E) - len(best)} ways off the main piece')
+        E = [e for k, e in enumerate(E) if k in best]
     used = {e['a'] for e in E} | {e['b'] for e in E}
     jpos = {n: p for n, p in jpos.items() if n in used}
     return nodes, E, jpos, jh, cor

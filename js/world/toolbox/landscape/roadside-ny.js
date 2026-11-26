@@ -26,6 +26,8 @@ export const DITCH = [
   [3.8, '#82944a'],   // the berm: rougher, unmowed
   [4.8, '#7ea045'],   // back down into the field
 ];
+/** [out-west] The desert's: the same profile in red sand and gravel, the bottom a darker wash (no mown grass). */
+export const DITCH_DESERT = ['#b4936c', '#b98258', '#b27a52', '#9f6b47', '#ad774f', '#b98459', '#c08a5c'];
 /** Height at d m from the edge, given the road's surface rY and the ground's surface base. */
 export function profileY(d, rY, base) {
   const bottom = base + .02, lip = rY - .05, shoulder = rY - .15, berm = base + .42;
@@ -41,7 +43,7 @@ export function ditchFits(rY, base) { const drop = rY - base; return drop > .22 
  * The ditch strips: runs of stations along one side of a road. rows: [{ x, z, nx, nz, rY, base }] (nx, nz: outward);
  * consecutive rows join. Returns a BufferGeometry (vertex colours, smooth across the profile) or null.
  */
-export function ditchGeometry(runs) {
+export function ditchGeometry(runs, palette = null) {
   const pos = [], nor = [], col = [], idx = [];
   const c = new THREE.Color();
   for (const rows of runs) {
@@ -57,7 +59,7 @@ export function ditchGeometry(runs) {
         const no = -dy / l, nu = dd / l;
         nor.push(r.nx * no, nu, r.nz * no);
         const h = hash(r.x * .37 + r.z * .91 + k * 3.1);
-        c.set(DITCH[k][1]).multiplyScalar(.9 + h * .2);
+        c.set(palette ? palette[k] : DITCH[k][1]).multiplyScalar(.9 + h * .2);
         if (k === 3 && h < .3) c.lerp(new THREE.Color('#5d5a3e'), .5);   // a muddy stretch where the water stands
         col.push(c.r, c.g, c.b);
       }
@@ -175,6 +177,18 @@ export function scrubClump(M, x, y, z, seed, s = 1) {
     const h = (.5 + hash(seed * 5 + k) * 1.1) * s, w = (.4 + hash(seed * 3 + k) * .45) * Math.min(1.2, s);
     blade(M, px, y, pz, a, h * .55, .03, .08, hash(seed * 13 + k) < .5 ? '#7a3328' : '#5e4a36');   // (a stem)
     M.color(tones[Math.floor(hash(seed * 17 + k) * tones.length)]).pyramid(px, y + h * .3, pz, w, h * .7, w * .8, a);
+  }
+}
+
+/** [out-west] A desert verge's clump: sagebrush or rabbitbrush — low, rounded grey-green mounds on woody stems (the
+ *  desert profile's stand-in for scrubClump's sumac and dogwood). */
+export function sageClump(M, x, y, z, seed, s = 1) {
+  const n = 1 + Math.floor(seed * 2.4), tones = ['#8f8e74', '#9a977c', '#85856b', '#a29c7c', '#948f66', '#aa9c62'];
+  for (let k = 0; k < n; k++) {
+    const a = k * 2.3 + seed * 7, d = .1 + hash(seed * 11 + k) * .5, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
+    const h = (.28 + hash(seed * 5 + k) * .42) * s, w = (.28 + hash(seed * 3 + k) * .3) * Math.min(1.1, s);
+    M.color(tones[Math.floor(hash(seed * 17 + k) * tones.length)]);
+    M.cylinder(px, y - .05, pz, w * .7, h * .5, 8, w); M.cylinder(px, y + h * .45, pz, w, h * .35, 8, w * .7); M.cylinder(px, y + h * .8, pz, w * .7, h * .2, 8, w * .25);
   }
 }
 

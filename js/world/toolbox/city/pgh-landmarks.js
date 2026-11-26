@@ -14,6 +14,7 @@ import { glasshouseFrame } from '../structures/glasshouse.js';
 import { cnyLandmarkModels, canalWaterMaterial } from './cny-landmarks.js';
 import { skanLandmarkModels } from './skan-landmarks.js';
 import { nycLandmarkModels, nycPark } from './nyc-landmarks.js';
+import { outwestLandmarkModels } from './outwest-landmarks.js';   // (Out West's: the tunnel, hoodoos, arches, buttes, the movie set)
 import { qcOn, qcProbe } from './qc-probe.js';   // (a QC run: tools/qc_map.mjs)   // (NYC's: Central Park — Bethesda, Bow Bridge, Belvedere…, the wall and its gates)   // (SKAN's: Clift Park's pier and gazebo, the Sherwood Inn, mansions…)   // (CNY's: the aqueduct, Sims' Store, the Octagon House…)
 
 export function buildPghLandmarks(host, data) {
@@ -336,12 +337,16 @@ export function buildPghLandmarks(host, data) {
   Object.assign(M, cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa, Ca }));
   Object.assign(M, skanLandmarkModels({ S, N, glows, plan, ground, local, L, Wa }));
   for (const [k, f] of Object.entries(nycLandmarkModels({ S, N, glows, plan, ground, local, L, Wa }))) M[`nyc_${k}`] = f;   // (prefixed: PGH has its own obelisk, statue, reservoir…)
+  const ow = outwestLandmarkModels({ S, glows, local, L, host });
+  Object.assign(M, ow.models);
   for (const l of data.landmarks || []) {
     const f = M[l.model];
     if (!f) continue;
     if (L.qc?.prims) L.qc.prims.cur = l.label;
     try { f(l); made++; if (L.qc && !/lawn|reservoir|view|conservatory/.test(l.model) && l.center) { const c = local(l.center[0], l.center[1]); L.qc.views.push({ x: c.x, z: c.z, name: l.label }); if (/bowbridge|gapstow/.test(l.model)) L.qc.bridges.push({ x: c.x, z: c.z, name: l.label, onWay: !!L.qc.onWay?.includes(l.label) }); } } catch (err) { console.warn(`PGH landmark ${l.label}: ${err.message}`); }
   }
+
+  ow.finish();   // (the red rock's own meshes, one per landmark)
 
   // the stadiums, closed (user, 21 Nov): the map's bowl builder, on their OSM outlines
   host.landscape.data = { stadiums: (data.stadiums || []).filter((s) => s.ring && s.ring.length >= 4).map((s) => ({ ...s })) };
