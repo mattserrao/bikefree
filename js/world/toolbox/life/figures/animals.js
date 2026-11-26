@@ -120,6 +120,43 @@ function muleDeer(M, { buck = false } = {}) {
   M.paint('#1f1a16', P.TAIL, 1.12, -0.7, 0.3).blob([0, 0.9, -0.74], [0.035, 0.04, 0.03], 0, 2, 4);
   M.legs(0.12, 0.85, 0.4, -0.48, 0.036, '#7e6d5a', '#2a2420', 0.3, 4);
 }
+/** [out-west] A black-tailed jackrabbit: crouched, the huge black-tipped ears up, long hind feet. */
+function jackrabbit(M) {
+  const fur = '#9a8468';
+  M.shadow(0.12, 0.22);
+  M.paint(fur).blob([0, 0.16, -0.03], [0.1, 0.12, 0.2], -0.2, 4, 7);
+  M.paint('#e6ddd0').blob([0, 0.1, 0.02], [0.08, 0.06, 0.14], 0, 3, 6);
+  M.paint(fur).blob([0, 0.06, -0.12], [0.05, 0.04, 0.14], 0, 3, 5);   // the hind feet
+  const H = [P.HEAD, 0.24, 0.12, 0.35];
+  M.paint(fur, ...H).blob([0, 0.26, 0.17], [0.06, 0.065, 0.08], 0.2, 3, 6);
+  M.paint(fur, ...H); for (const s of [1, -1]) M.blob([s * 0.035, 0.42, 0.12], [0.022, 0.13, 0.04], -0.15, 2, 5);
+  M.paint('#2a2420', ...H); for (const s of [1, -1]) M.blob([s * 0.035, 0.53, 0.1], [0.018, 0.03, 0.03], 0, 2, 4);
+  M.paint('#2a2420', P.TAIL, 0.2, -0.22, 0.3).blob([0, 0.2, -0.23], [0.03, 0.035, 0.03], 0, 2, 4);
+  M.legs(0.05, 0.12, 0.1, -0.05, 0.016, fur, '#8a7458', 0.2, 3);
+}
+/** [out-west] A coyote: lean, grizzled grey-tan, a bushy black-tipped tail hanging low, the nose down to scent. */
+function coyote(M) {
+  const fur = '#9c8466', pale = '#d9cbb4';
+  M.shadow(0.22, 0.5);
+  M.paint(fur).blob([0, 0.5, 0], [0.13, 0.15, 0.4], 0, 5, 9);
+  M.paint(pale).blob([0, 0.42, 0.05], [0.1, 0.07, 0.3], 0, 3, 7);
+  const H = [P.HEAD, 0.58, 0.32, 0.6];
+  M.paint(fur, ...H).blob([0, 0.58, 0.42], [0.08, 0.1, 0.12], -0.4, 3, 6);
+  M.paint(fur, ...H).blob([0, 0.52, 0.56], [0.06, 0.06, 0.12], 0.5, 3, 6);
+  M.paint('#2a2420', ...H).blob([0, 0.46, 0.66], [0.025, 0.025, 0.025], 0, 2, 4);
+  M.paint(fur, ...H); for (const s of [1, -1]) M.rod([s * 0.04, 0.64, 0.46], [s * 0.05, 0.74, 0.44], 0.025, 3);
+  M.paint(fur, P.TAIL, 0.5, -0.38, 0.3).blob([0, 0.36, -0.5], [0.06, 0.16, 0.06], 0.4, 3, 6);
+  M.paint('#2a2420', P.TAIL, 0.5, -0.38, 0.3).blob([0, 0.23, -0.55], [0.04, 0.05, 0.04], 0, 2, 4);
+  M.legs(0.07, 0.42, 0.28, -0.28, 0.025, fur, '#5a4a3a', 0.35, 4);
+}
+/** [out-west] A side-blotched lizard basking on the rock: a low, flat body, a long tapering tail. */
+function lizard(M) {
+  const skin = '#8a7a5c';
+  M.paint(skin).blob([0, 0.025, 0], [0.025, 0.018, 0.06], 0, 3, 6);
+  M.paint(skin, P.HEAD, 0.03, 0.06, 0.3).blob([0, 0.03, 0.075], [0.018, 0.014, 0.025], 0, 2, 5);
+  M.paint('#6a5a44', P.TAIL, 0.02, -0.06, 0.5).rod([0, 0.02, -0.055], [0.02, 0.012, -0.17], 0.01, 3);
+  for (const [x, z, part] of [[0.03, 0.04, P.FL], [-0.03, 0.04, P.FR], [0.03, -0.035, P.BL], [-0.03, -0.035, P.BR]]) M.paint(skin, part, 0.02, z, 0.1).rod([x * .6, 0.02, z], [x * 1.4, 0.003, z + 0.01], 0.006, 3);
+}
 function sheep(M, { wool = '#e6dfcd', face = '#efe9dc' } = {}) {
   M.shadow(0.36, 0.6);
   M.paint(wool).blob([0, 0.68, 0], [0.3, 0.3, 0.52], 0, 5, 9);
@@ -199,6 +236,9 @@ export const ANIMALS = {
   cat: { build: (M) => cat(M), walk: 0 },
   muleDeer: { build: (M) => muleDeer(M), walk: 0.5 },
   muleDeerBuck: { build: (M) => muleDeer(M, { buck: true }), walk: 0.5 },
+  jackrabbit: { build: (M) => jackrabbit(M), walk: 0.35, peck: true },
+  coyote: { build: (M) => coyote(M), walk: 0.6 },
+  lizard: { build: (M) => lizard(M), walk: 0 },
   goose: { build: (M) => goose(M), walk: 0.18, swim: true },
   gooseGrey: { build: (M) => goose(M, { plumage: '#8f8a80', bill: '#d27a2a' }), walk: 0.18, swim: true },
   gooseShore: { build: (M) => goose(M, { swim: false }), walk: 0.3, peck: true },

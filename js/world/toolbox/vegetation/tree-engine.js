@@ -22,7 +22,8 @@
 //                           deep: > 30 m from any road — the cards take it sooner)
 //   E.removeTile(key); E.tick(camera); E.stats; E.dispose()
 import * as THREE from '../../../../vendor/three.js';
-import { WIND, WIND_GLSL } from '../atmosphere/wind.js';   // (the shared wind: fidelity step 6)
+import { WIND, WIND_GLSL } from '../atmosphere/wind.js';
+import { billboardLeaves, leafDepthMaterial, CARD_PARS, CARD_OPEN } from './leaf-cards.js';   // (camera-facing leaf clumps)   // (the shared wind: fidelity step 6)
 import { decorateTreeMaterial } from '../packs/northern-rockies.js';
 import { makeLeafTexture } from './upstate-trees.js';
 import { SURFACE } from '../materials/surface-detail.js';
@@ -200,7 +201,7 @@ function leafMaterial(map, a2c = false, opaque = false) {
     if (opaque) shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', 'diffuseColor.a = 1.0;\n#include <opaque_fragment>');
   };
   m.customProgramCacheKey = () => `tree-engine-leaf-${size}${opaque ? '-opaque' : ''}`;
-  return m;
+  return billboardLeaves(m);   // (the cards open to whichever camera draws them: leaf-cards.js)
 }
 
 export class TreeEngine {
@@ -249,6 +250,7 @@ export class TreeEngine {
         const im = new THREE.InstancedMesh(geo, mat, 16);
         im.count = 0; im.visible = false; im.frustumCulled = false; im.name = `Trees ${key} ${part} ${tier ? 'mid' : 'near'}`;
         im.castShadow = this.shadows && tier === 0 && !nearOnly; im.receiveShadow = this.shadows;
+        if (part === 'leaves' && geo.userData.cards) im.customDepthMaterial = (this._leafDepth ||= leafDepthMaterial(this.leafTexture));   // (its shadow: the clumps opened to the sun)
         im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); im.setColorAt(0, new THREE.Color(1, 1, 1));
         fadeAttr(im, 16);
         this.group.add(im); parts.push(im);
@@ -311,7 +313,8 @@ export class TreeEngine {
       rtN = new THREE.WebGLRenderTarget(cN * ANGLES, cN * list.length, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter });
       const NV = 'varying vec3 vN; varying vec2 vUv; void main() { vN = normalize(mat3(modelMatrix) * normal); vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }';
       const woodN = new THREE.ShaderMaterial({ vertexShader: NV, fragmentShader: 'varying vec3 vN; varying vec2 vUv; void main() { gl_FragColor = vec4(normalize(vN) * .5 + .5, 1.); }' });
-      const leafN = new THREE.ShaderMaterial({ uniforms: { map: { value: this.leafTexture } }, side: THREE.DoubleSide, vertexShader: NV,
+      const NVC = `${CARD_PARS} varying vec3 vN; varying vec2 vUv; void main() { vN = normalize(mat3(modelMatrix) * normal); vUv = uv; vec4 mvPosition = modelViewMatrix * vec4(position, 1.); gl_Position = projectionMatrix * mvPosition; ${CARD_OPEN} }`;
+      const leafN = new THREE.ShaderMaterial({ uniforms: { map: { value: this.leafTexture } }, side: THREE.DoubleSide, vertexShader: NVC,
         fragmentShader: 'uniform sampler2D map; varying vec3 vN; varying vec2 vUv; void main() { if (texture2D(map, vUv).a < .45) discard; vec3 n = normalize(vN) * (gl_FrontFacing ? 1. : -1.); gl_FragColor = vec4(n * .5 + .5, 1.); }' });
       r.setRenderTarget(rtN); r.setClearColor(0x8080ff, 0); r.clear(); r.setScissorTest(true);
       list.forEach((e, row) => {
@@ -644,7 +647,7 @@ export class TreeEngine {
     for (const e of this.entries) for (const tier of e.pools) for (const im of tier || []) im.dispose();
     for (const t of this.mats) { t.wood.dispose(); t.leaves.dispose(); }
     for (const m of this._own.values()) m.dispose();   // (clones of the kit's own materials)
-    this.impGeo.dispose(); this.impMat.dispose(); this.atlas.dispose(); this.normAtlas?.dispose(); this.leafTexture.dispose();
+    this.impGeo.dispose(); this.impMat.dispose(); this.atlas.dispose(); this.normAtlas?.dispose(); this._leafDepth?.dispose(); this.leafTexture.dispose();
   }
 }
 

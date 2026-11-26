@@ -4,6 +4,7 @@ import * as THREE from '/vendor/three.js';
 import { makeUpstateTrees, makeLeafTexture } from '/js/world/toolbox/vegetation/upstate-trees.js';
 import { decorateTreeMaterial } from '/js/world/toolbox/packs/northern-rockies.js';
 import { RockBuilder, redRockMaterial } from '/js/world/toolbox/landscape/redrock.js';
+import { billboardLeaves } from '/js/world/toolbox/vegetation/leaf-cards.js';
 const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(1280, 720); document.body.appendChild(r.domElement);
 const s = new THREE.Scene(); s.background = new THREE.Color('#bcd4e8');
 const cam = new THREE.PerspectiveCamera(40, 1280 / 720, .5, 4000);
@@ -11,16 +12,17 @@ s.add(new THREE.HemisphereLight('#dfefff', '#8a5a3a', 1.1));
 const sun = new THREE.DirectionalLight('#ffe0b0', 2.6); sun.position.set(-60, 50, 70); s.add(sun);
 const g = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshLambertMaterial({ color: '#c8875a' })); g.rotation.x = -Math.PI / 2; s.add(g);
 const mat = decorateTreeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 }), { uTime: { value: 0 } });
-const leafMat = new THREE.MeshStandardMaterial({ vertexColors: true, map: makeLeafTexture(), alphaTest: .45, side: THREE.DoubleSide, roughness: .9 });
+const leafMat = billboardLeaves(new THREE.MeshStandardMaterial({ vertexColors: true, map: makeLeafTexture(), alphaTest: .45, side: THREE.DoubleSide, roughness: .9 }));
 const P = new URLSearchParams(location.search), mode = P.get('mode') || 'kit';
 if (mode === 'kit') {
-  const kit = makeUpstateTrees({ desert: true });
+  const kit = makeUpstateTrees({ desert: true, bushes: true });
   let x = 0;
-  for (const name of (P.get('sp') || 'juniper,pinyon').split(',')) { const sp = kit.species[name];
+  for (const name of (P.get('sp') || 'juniper,pinyon').split(',')) { const sp = kit.species[name]; if (!sp) continue;
     sp.variants.forEach((tiers, v) => { tiers.forEach((geo, lod) => { const parts = geo.isBufferGeometry ? [[geo, mat]] : [[geo.wood, mat], [geo.leaves, leafMat]];
       for (const [gg, mm] of parts) { if (!gg) continue; const m = new THREE.Mesh(gg, mm); m.position.set(x, 0, -lod * 25); s.add(m); } }); x += sp.r * 2 + 3; }); }
-  for (const name of ['sage', 'sage2', 'rabbitbrush', 'redrock', 'redrock2']) { const gg = kit.understory[name]; const m = new THREE.Mesh(gg.isBufferGeometry ? gg : gg.wood, mat); m.position.set(x, 0, 8); s.add(m); x += 4; }
+  for (const name of (P.get('under') || 'sage,sage2,rabbitbrush,redrock,redrock2').split(',')) { const gg = kit.understory[name]; if (!gg) continue; const parts = gg.isBufferGeometry ? [[gg, mat]] : [[gg.wood, mat], [gg.leaves, leafMat]]; for (const [g2, m2] of parts) { if (!g2) continue; const m = new THREE.Mesh(g2, m2); m.position.set(x, 0, 8); s.add(m); } x += 4; }
   cam.position.set(x / 2, 6, x * .7); cam.lookAt(x / 2, 2, 0);
+  if (P.has('cam')) { const [a, b, c, d, e, f] = P.get('cam').split(',').map(Number); cam.position.set(a, b, c); cam.lookAt(d, e, f); }
 } else {
   const R = new RockBuilder(), H = () => 0;
   if (mode === 'hoodoo') { for (let k = 0; k < 30; k++) R.hoodoo((k % 6) * 9 - 25, 0, Math.floor(k / 6) * 9 - 20, 8 + (k * 7 % 13) * 1.6, 2 + (k % 3) * .6, k + 1, H); cam.position.set(0, 14, 50); cam.lookAt(0, 8, 0); }

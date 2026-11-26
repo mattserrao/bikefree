@@ -2347,10 +2347,12 @@ function groundMaterial(low = false, rural = false, soft = false, desert = false
           // slickrock bare; the flecks fade to their mean off past ~150 m
           if (k > 39.5 && k < 42.5) {
             float fd = 1. - smoothstep(40., 160., length(vGW - cameraPosition));
-            float sp = step(k < 40.5 ? .7 : k < 41.5 ? .78 : .95, gwH(floor(vGW.xz * 1.6) + k));
+            // (small round specks — pebbles, a tuft, a dark crust — on a 25 cm cell, not the square cells' checker)
+            vec2 spq = vGW.xz * 4., spf = floor(spq);
+            float sp = step(k < 40.5 ? .72 : k < 41.5 ? .8 : .94, gwH(spf + k)) * (1. - smoothstep(.18, .34, length(fract(spq) - .5 - (vec2(gwH(spf + 3.), gwH(spf + 7.)) - .5) * .3)));
             vec3 sage = pow(mix(vec3(.46, .5, .4), vec3(.56, .58, .46), n), vec3(2.2));
             diffuseColor.rgb *= mix(1., k < 40.5 ? .84 : k < 41.5 ? .95 : 1.04, vLandW);
-            diffuseColor.rgb = mix(diffuseColor.rgb, k < 41.5 ? sage : diffuseColor.rgb * .7, sp * vLandW * mix(.12, .5, fd));
+            diffuseColor.rgb = mix(diffuseColor.rgb, k < 41.5 ? sage : diffuseColor.rgb * .7, sp * vLandW * mix(.06, .4, fd));
             if (k < 40.5) diffuseColor.rgb = mix(diffuseColor.rgb, pow(vec3(.36, .28, .2), vec3(2.2)), smoothstep(.6, .8, gwN(vGW.xz * .12 + 7.)) * .35 * vLandW);
           }
           #endif
@@ -2453,6 +2455,6 @@ function groundMaterial(low = false, rural = false, soft = false, desert = false
         diffuseColor.rgb *= 1. - .2 * smoothstep(.55, .75, gwN((vGW.xz + uCloudT * vec2(3., 1.2)) * .0025));   // a cloud's shadow drifting over (user, 23 Nov)
         #endif`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-22${low ? '-low' : ''}${rural ? '-ny2' : ''}${desert ? '-desert' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-23${low ? '-low' : ''}${rural ? '-ny2' : ''}${desert ? '-desert' : ''}`;
   return m;
 }

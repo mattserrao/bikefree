@@ -1,6 +1,9 @@
 {
  "profile": {
-  "preset": "desert"
+  "preset": "desert",
+  "trees": {
+   "nearM": 55
+  }
  },
  "id": "outwest",
  "name": "Out West",

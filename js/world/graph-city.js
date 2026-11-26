@@ -913,9 +913,31 @@ export class GraphCity {
         // rabbitbrush on the flats with the odd juniper, red boulders on the slickrock; cottonwoods where it's wet
         const r = hash(seed * 2.3), wet = this.world.nearWater?.(jx, jz);
         if (wet && h1 < .3) { tree(jx, jz, 'wet', seed); continue; }
-        if (c === LAND.pj) { if (h1 < .22 * this.q.trees) tree(jx, jz, 'woods', seed); else if (r < .35) under(jx, jz, r < .2 ? 'sage' : 'sage2', seed); else if (r < .38) under(jx, jz, 'redrock', seed); }
-        else if (c === LAND.sage) { if (h1 < .025 * this.q.trees) tree(jx, jz, 'woods', seed, .6 + h2 * .4); else if (r < .5) under(jx, jz, r < .2 ? 'sage' : r < .38 ? 'sage2' : 'rabbitbrush', seed); else if (r < .52) under(jx, jz, 'redrock', seed); }
-        else { if (r < .05) under(jx, jz, r < .03 ? 'redrock' : 'redrock2', seed); else if (r < .09) under(jx, jz, 'sage', seed, .7); }
+        const de = edgeOf(jx, jz);
+        // (tumbleweeds fetch up along the roadside — against the ditch, the fence line — and in the lee of the sage)
+        if (de > 3 && de < 14 && c !== LAND.pj && r > .985) { under(jx, jz, r > .993 ? 'tumbleweed2' : 'tumbleweed', seed); continue; }
+        if (c === LAND.pj) {
+          if (h1 < .22 * this.q.trees) tree(jx, jz, 'woods', seed);
+          else if (r < .16) under(jx, jz, r < .09 ? 'sage' : 'sage2', seed);
+          else if (r < .22) under(jx, jz, 'cliffrose', seed);
+          else if (r < .3) under(jx, jz, r < .27 ? 'yucca' : 'yuccaStalk', seed);
+          else if (r < .36) under(jx, jz, 'pricklyPear', seed);
+          else if (r < .38) under(jx, jz, 'redrock', seed);
+          else if (r < .4) under(jx, jz, 'cholla', seed);
+        } else if (c === LAND.sage) {
+          if (h1 < .025 * this.q.trees) tree(jx, jz, 'woods', seed, .6 + h2 * .4);
+          else if (r < .22) { under(jx, jz, r < .09 ? 'sage' : r < .16 ? 'sage2' : 'rabbitbrush', seed); if (hash(seed * 4.7) < .07) under(jx + 1.1, jz + .6, 'tumbleweed', seed + 1); }
+          else if (r < .28) under(jx, jz, 'ephedra', seed);
+          else if (r < .36) under(jx, jz, r < .33 ? 'pricklyPear' : 'pricklyPear2', seed);
+          else if (r < .43) under(jx, jz, r < .41 ? 'yucca' : 'yuccaStalk', seed);
+          else if (r < .455) under(jx, jz, 'cholla', seed);
+          else if (r < .47) under(jx, jz, 'redrock', seed);
+        } else {
+          if (r < .05) under(jx, jz, r < .03 ? 'redrock' : 'redrock2', seed);
+          else if (r < .08) under(jx, jz, 'sage', seed, .7);
+          else if (r < .1) under(jx, jz, 'barrel', seed);
+          else if (r < .12) under(jx, jz, 'pricklyPear', seed);
+        }
         continue;
       }
       if (c === LAND.woods || c === LAND.outside) {
@@ -1285,7 +1307,7 @@ export class GraphCity {
               // patches of scrubby brush (sumac, dogwood, raspberry canes: user, 23 Nov "more scrubby brush"), goldenrod in
               // sparser drifts, tall grass between, the odd lace or chicory
               const drift = hash(Math.floor(x / 14) * 5.1 + Math.floor(z / 14) * 2.3), scrub = hash(Math.floor(x / 22) * 1.7 + Math.floor(z / 22) * 4.3 + side) < .38;
-              if (this.desert) { if (k < .22) sageClump(N, x, y, z, h, sc * .8); else if (k < .6) this._card(N, x, y, z, h, CARD.tall, sc * .8); continue; }   // (desert: sage and dry grass)
+              if (this.desert) { if (k < .07) sageClump(N, x, y, z, h, sc * .75); else if (k < .55) this._card(N, x, y, z, h, CARD.tall, sc * .8); continue; }   // (desert: sage and dry grass)
               if (scrub && k < .45) scrubClump(N, x, y, z, h, sc);
               else if (k < .08 + drift * .22) this._card(N, x, y, z, h, CARD.goldenrod, sc);
               else if (k < .9) this._card(N, x, y, z, h, CARD.tall, sc);
@@ -1460,6 +1482,14 @@ export class GraphCity {
         if (!clear(x, z, 26, 3)) continue;
         put(q === 0 && R(k++) < .4 ? 'muleDeerBuck' : 'muleDeer', x, z, null, R(k++) < .25, 3 + R(k++) * 4);
       }
+    }
+    // [out-west] the small life: a jackrabbit or two in the sage, now and then a coyote crossing, lizards basking on the
+    // rock beside the road (the camera passes close: they're seen)
+    if (this.desert) for (let gx = 20; gx < TILE; gx += 40) for (let gz = 20; gz < TILE; gz += 40) {
+      const x = x0 + gx + (R(gx * 7 + gz * 3) - .5) * 30, z = z0 + gz + (R(gx * 2 + gz * 9) - .5) * 30, c = this.landAt(x, z), r = R(gx * 17 + gz * 5);
+      if (c === LAND.sage && r < .1 && clear(x, z, 10, 2)) { put('jackrabbit', x, z, null, R(k++) < .4, 2 + R(k++) * 3); if (R(k++) < .4 && clear(x + 3, z + 2, 10, 2)) put('jackrabbit', x + 3, z + 2, null, false, 0); }
+      else if ((c === LAND.sage || c === LAND.pj) && r > .985 && clear(x, z, 30, 4)) put('coyote', x, z, null, true, 6 + R(k++) * 6);
+      if ((c === LAND.slick || c === LAND.sage) && R(gx * 3 + gz * 13) < .35 && this.roadNear(x, z, 24) && !this.roadNear(x, z, 4) && clear(x, z, 4, .5)) put('lizard', x, z, null, false, 0);
     }
     if (!H.count) return;
     this.animalMats ||= new Map();
