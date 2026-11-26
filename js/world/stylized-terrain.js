@@ -66,7 +66,7 @@ export const SCENERY_QUALITY = {
   // buildMs: time per frame for building streamed tiles (ground, plants, forest) while riding;
   // farTreeM: how far the flat tree cards reach beyond the real trees (0 = none)
   low: { pixelRatio: 1, samples: 2, shadows: false, scatterRange: 2, candidates: 150, coverCandidates: 100, forestRange: 3, nearM: 0, midM: 380, buildMs: 3, farTreeM: 0 },
-  balanced: { pixelRatio: 2, samples: 2, shadows: true, scatterRange: 3, candidates: 230, coverCandidates: 320, forestRange: 4, nearM: 170, midM: 450, buildMs: 4, farTreeM: 1600 },
+  balanced: { pixelRatio: 1.5, samples: 2, shadows: true, scatterRange: 3, candidates: 230, coverCandidates: 320, forestRange: 4, nearM: 170, midM: 450, buildMs: 4, farTreeM: 1600 },
   high: { pixelRatio: 2, samples: 4, shadows: true, scatterRange: 4, candidates: 310, coverCandidates: 480, forestRange: 5, nearM: 240, midM: 560, buildMs: 5, farTreeM: 2200 },
 };
 

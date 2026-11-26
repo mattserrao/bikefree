@@ -418,6 +418,7 @@ export class GraphWorld {
     if (this.city && this.gfx) this.city.setGfx(this.gfx);
   }
   _pixelRatio() {
+    this.governor?.setTarget(this._saving ? 30 : (this.gfx?.fps || 0));
     const scale = (this._saving ? .75 : 1) * (this.governor?.scale ?? 1);
     this.renderer.setPixelRatio(pixelRatioFor(this.qualityKey, scale));
     this._resize();
@@ -606,7 +607,7 @@ export class GraphWorld {
     this.gpuTimer?.end();
     if ((this._frames & 7) === 0) this.gpuTimer?.poll();
     // the governor reads the GPU's own time where the timer exists, else the frame interval
-    if (!this._preload) this.governor?.sample(this.gpuTimer?.ms.frame ?? (dt * 1000), dt);
+    if (!this._preload) { const g = this.gpuTimer?.ms.frame; this.governor?.sample(g ?? dt * 1000, dt, g == null); }
     this.perf?.end(performance.now());
   }
 

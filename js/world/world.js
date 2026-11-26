@@ -1,6 +1,7 @@
 // The 3D ride view: real terrain + aerial imagery, the road, a pedalling rider, sky and cameras.
 import { cutRouteRibbon, junctionPlan } from './toolbox/city/junction-mesh.js';   // [junctions] (the road's overlay: city.js)
 import * as THREE from '../../vendor/three.js';
+import { createRenderer, pixelRatioFor, QualityGovernor } from './render-core.js';
 import { installEffects } from './toolbox/effects/index.js';   // [blocks]
 import { makeProjection, makeRouteIndex } from './geo.js';
 import { Terrain } from './terrain.js';
@@ -109,13 +110,11 @@ export class World {
     // use a reversed depth buffer (the logarithmic one writes depth per pixel, which stops the GPU
     // skipping hidden pixels; it stays only as the fallback without EXT_clip_control).
     const reversed = this.stylized && hasClipControl();
-    this.renderer = new THREE.WebGLRenderer({ antialias: !this.stylized, logarithmicDepthBuffer: !reversed,
-      reversedDepthBuffer: reversed, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.stylized ? SCENERY_QUALITY[this.qualityKey].pixelRatio : 2));
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    container.prepend(this.renderer.domElement);
-    this.renderer.domElement.className = 'world-canvas';
+    // [render-core] one tier table for every world: Balanced draws at 1.5 here too (it was 2; with 4× MSAA the
+    // anti-aliasing review found 1.5 all but the same and 44 % fewer pixels shaded)
+    this.renderer = createRenderer({ container, quality: this.stylized ? this.qualityKey : 'high', antialias: !this.stylized, reversedDepth: reversed, logDepth: !reversed });
+    this.governor = new QualityGovernor({ quality: this.qualityKey, onScale: () => this.setQuality(this.qualityKey) });
+    if (!this.stylized) this.governor.enabled = false;
     // cartoon look: the scene's "look" (Route 28: gentle), or ?look=gentle|bold|none in the preview
     // [suite] the common scenery suite (user, 25 Nov: "Migrate the scenery for Big Sur, Going to the sun, and Alpe
     // d'huez to the new, common scenery suite" — the blocks CNY, SKAN and Endless are drawn with): a scene's
@@ -596,7 +595,8 @@ export class World {
     if (!this.stylized) return;
     this.qualityKey = Object.hasOwn(SCENERY_QUALITY, key) ? key : 'balanced';
     const quality = SCENERY_QUALITY[this.qualityKey];
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.pixelRatio));
+    this.governor?.setQuality(this.qualityKey);
+    this.renderer.setPixelRatio(pixelRatioFor(this.qualityKey, this.governor?.scale ?? 1));
     this.renderer.shadowMap.enabled = quality.shadows && !(this.baked && this._time?.night);   // [baked-light]
     const resolution = this.qualityKey === 'high' ? 2048 : 1024;
     if (this.sun.shadow.mapSize.x !== resolution) {
@@ -716,6 +716,7 @@ export class World {
     this._frames = (this._frames || 0) + 1;
     this.perf?.begin(now);
     const dt = Math.min(1.0, (now - this._last) / 1000); // real time (movement must not lag on slow frames)
+    this.governor?.sample(dt * 1000, dt, true);   // [render-core] adaptive resolution from the frame interval
     this._last = now;
 
     // Follow the ride position smoothly: advance at the current speed, ease toward the real value.

@@ -53,29 +53,40 @@ export function watchDeviceLoss(renderer, fn) {
 const AUTOMATED = (() => { try { return !!globalThis.navigator?.webdriver; } catch { return false; } })();
 
 /**
- * Adaptive quality. Feed it each frame's work time (ms); it holds a smoothed value against the tier's frame budget
- * (budget × 0.85 to step down, × 0.6 to step back up, a few seconds between moves) and walks one ladder:
+ * Adaptive quality. Feed it each frame's time and it walks one ladder, a few seconds between moves:
  *   level 0  full resolution
  *   1..3     render scale 0.9, 0.8, 0.7
- *   4        + less vegetation (onLevel lets the world thin new tiles)
- *   5        + shorter shadow reach
+ *   4        + a nearer horizon (fewer tiles, less vegetation: onLevel)
+ *   5        + a shorter shadow reach
+ * Two kinds of sample:
+ *   work time (the GPU timer's ms per frame): down past 85 % of the budget, up below 60 %
+ *   frame interval (no timer: vsync quantises it, so it reads ~the budget when all is well): down when frames are
+ *   missed (the average past 120 % of the budget), up again after 15 s of steady frames
+ * The budget is the tier's frame time, or the frame-rate cap's (setTarget: the battery saver's 30 fps).
  */
 export class QualityGovernor {
   constructor({ quality = 'balanced', onScale = () => {}, onLevel = () => {}, enabled = !AUTOMATED } = {}) {
-    this.budget = tierOf(quality).frameMs; this.onScale = onScale; this.onLevel = onLevel; this.enabled = enabled;
+    this.tierMs = tierOf(quality).frameMs; this.capMs = 0; this.onScale = onScale; this.onLevel = onLevel; this.enabled = enabled;
     this.level = 0; this.avg = 0; this.since = 0; this.frames = 0;
   }
+  get budget() { return Math.max(this.tierMs, this.capMs); }
   get scale() { return [1, .9, .8, .7, .7, .7][this.level]; }
-  setQuality(quality) { this.budget = tierOf(quality).frameMs; }
-  /** ms: this frame's time (render work, or the frame interval); dt: seconds since the last call. */
-  sample(ms, dt) {
-    if (!this.enabled || !(ms > 0)) return;
+  setQuality(quality) { this.tierMs = tierOf(quality).frameMs; }
+  /** A frame-rate cap (fps; 0: none): the interval the frames are meant to take. */
+  setTarget(fps) { this.capMs = fps > 0 ? 1000 / fps : 0; }
+  /** ms: this frame's time; dt: seconds since the last call; interval: ms is the frame interval, not work time. */
+  sample(ms, dt, interval = false) {
+    if (!this.enabled || !(ms > 0) || ms > 500) return;   // (a stall — a tab switch, a load — says nothing)
     this.frames++; this.since += dt;
     this.avg = this.frames < 10 ? ms : this.avg * .95 + ms * .05;
     if (this.since < 3) return;
+    const b = this.budget;
     let next = this.level;
-    if (this.avg > this.budget * .85 && this.level < 5) next++;
-    else if (this.avg < this.budget * .6 && this.level > 0) next--;
+    if (interval) {
+      if (this.avg > b * 1.2 && this.level < 5) next++;
+      else if (this.avg < b * 1.08 && this.level > 0 && this.since > 15) next--;
+    } else if (this.avg > b * .85 && this.level < 5) next++;
+    else if (this.avg < b * .6 && this.level > 0) next--;
     if (next === this.level) return;
     const scaled = this.scale; this.level = next; this.since = 0;
     if (this.scale !== scaled) this.onScale(this.scale);
