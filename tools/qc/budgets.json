@@ -1,9 +1,81 @@
 {
-  "_doc": "Per-map frame budgets for the GPU QC (tools/qc-gpu.js; npm run qc:map -- <map> --gpu, tools/qc.mjs): one frame at a QC site, Balanced quality, 1280x720. Over budget = a failing check. Set from the 25 Nov measurements with headroom; '*' is the default for any map not listed.",
-  "*":        { "calls": 1200, "triangles": 5000000, "geometries": 2500, "textures": 160, "programs": 160, "heapMB": 1000 },
-  "skan":     { "calls": 600,  "triangles": 3000000 },
-  "endless":  { "calls": 600,  "triangles": 3000000 },
-  "bigsur":   { "calls": 300,  "triangles": 2000000 },
-  "goingtothesun": { "calls": 400, "triangles": 3000000 },
-  "alpedhuez": { "calls": 400, "triangles": 4500000, "heapMB": 900 }
+ "_doc": "Per-map frame budgets for the GPU QC (tools/qc-gpu.js; npm run qc:map -- <map> --gpu, tools/qc.mjs): one frame at a QC site, Balanced quality, 1280x720. Over budget = a failing check. Set from the 25 Nov measurements with headroom; '*' is the default for any map not listed. 'target' (fidelity plan v5, 26 Nov 2026): the tier budgets the maps are moving to \u2014 over a target is a warning (overTarget), over a map's own cap still fails.",
+ "*": {
+  "calls": 1200,
+  "triangles": 5000000,
+  "geometries": 2500,
+  "textures": 160,
+  "programs": 160,
+  "heapMB": 1000,
+  "target": {
+   "calls": 500,
+   "triangles": 3500000,
+   "programs": 40,
+   "heapMB": 600
+  }
+ },
+ "skan": {
+  "calls": 600,
+  "triangles": 3000000
+ },
+ "endless": {
+  "calls": 600,
+  "triangles": 3000000
+ },
+ "bigsur": {
+  "calls": 300,
+  "triangles": 2000000
+ },
+ "goingtothesun": {
+  "calls": 400,
+  "triangles": 3000000
+ },
+ "alpedhuez": {
+  "calls": 400,
+  "triangles": 4500000,
+  "heapMB": 900
+ },
+ "_tiers": {
+  "_doc": "Fidelity plan v5 budgets per tier (provisional until the step 2 sweep). gpuMs: sustained GPU ms a frame; renderMP: render megapixels; gpuMB: GPU memory; programs: shader programs (pipelines).",
+  "low": {
+   "fps": 30,
+   "renderMP": 1.3,
+   "gpuMs": 18,
+   "calls": 150,
+   "triangles": 1000000,
+   "programs": 25,
+   "gpuMB": 200,
+   "heapMB": 250
+  },
+  "balanced": {
+   "fps": 60,
+   "renderMP": 3.2,
+   "gpuMs": 10.5,
+   "calls": 500,
+   "triangles": 3500000,
+   "programs": 40,
+   "gpuMB": 450,
+   "heapMB": 600
+  },
+  "high": {
+   "fps": 60,
+   "renderMP": 4.5,
+   "gpuMs": 11,
+   "calls": 600,
+   "triangles": 6000000,
+   "programs": 40,
+   "gpuMB": 700,
+   "heapMB": 800
+  },
+  "ultra": {
+   "fps": 60,
+   "renderMP": null,
+   "gpuMs": 12,
+   "calls": 700,
+   "triangles": 9000000,
+   "programs": 50,
+   "gpuMB": 1000,
+   "heapMB": 900
+  }
+ }
 }

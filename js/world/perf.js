@@ -1,8 +1,8 @@
 // Performance overlay for the 3D view (I on the ride screen; ?perf=1 in the preview).
 // Frame rate, frame time (median, 95th percentile, worst), draw calls and triangles summed over every
 // render pass of a frame (post-processing renders more than once), against the M4 Air budget:
-// under 600 draw calls and 2M triangles, 60 fps, no frame over 25 ms.
-export const BUDGET = { calls: 600, triangles: 2e6, frameMs: 1000 / 60, worstMs: 25 };
+// under 500 draw calls and 3.5M triangles (fidelity plan v5 Balanced), 60 fps, no frame over 25 ms.
+export const BUDGET = { calls: 500, triangles: 3.5e6, frameMs: 1000 / 60, worstMs: 25 };   // (fidelity plan v5: Balanced, provisional until the step 2 sweep; tools/qc/budgets.json _tiers)
 
 export class PerfMonitor {
   constructor(renderer, container, describe = () => ({}), place = { top: '74px' }) {

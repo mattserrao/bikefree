@@ -24,6 +24,7 @@
 // aren't ported yet, and ShaderMaterials (sky, impostors' own shaders) are drawn plain. CPU cost per draw is
 // representative; GPU time is a floor, not the ported look's.
 import * as THREE from '../vendor/three.js';
+globalThis.BF_KEEP_GEOMETRY = 1;   // (the scene is uploaded again by each renderer measured: its geometry keeps its CPU copy)
 const q = new URLSearchParams(location.search);
 const out = document.getElementById('out');
 const say = (s) => { out.textContent = s; };

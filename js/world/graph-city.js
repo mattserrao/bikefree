@@ -72,7 +72,7 @@ const HOUSE_CLOSE_M = 160;
  *  "even on high … should not run out of memory"); its bounds kept first. Not for anything read back later. */
 function gpuOnly(m) {
   const g = m.geometry; g.computeBoundingSphere(); if (!g.boundingBox) g.computeBoundingBox();
-  const drop = function () { this.array = null; };
+  const drop = function () { if (!globalThis.BF_KEEP_GEOMETRY) this.array = null; };   // (BF_KEEP_GEOMETRY: a bench that uploads the scene to a second renderer)
   for (const a of Object.values(g.attributes)) a.onUpload(drop);
   g.index?.onUpload(drop);
   return m;
@@ -1178,7 +1178,7 @@ export class GraphCity {
     for (const c of [this.life?.bikes, this.life?.walkers, this.life?.locals]) for (const m of c?.meshes || []) m.visible = life;
   }
   /** The verge's arrays let go once they're on the GPU (no second copy in the page's memory: phones). */
-  _gpuOnly(m) { m.geometry.computeBoundingSphere(); m.geometry.computeBoundingBox(); for (const a of Object.values(m.geometry.attributes)) a.onUpload(function () { this.array = null; }); if (m.geometry.index) m.geometry.index.onUpload(function () { this.array = null; }); return m; }
+  _gpuOnly(m) { m.geometry.computeBoundingSphere(); m.geometry.computeBoundingBox(); for (const a of Object.values(m.geometry.attributes)) a.onUpload(function () { if (!globalThis.BF_KEEP_GEOMETRY) this.array = null; }); if (m.geometry.index) m.geometry.index.onUpload(function () { if (!globalThis.BF_KEEP_GEOMETRY) this.array = null; }); return m; }
   /** A far tile's verge dropped (built again when the camera comes back). */
   _dropVerge(t) {
     const m = t.vergeMesh; if (!m) return;

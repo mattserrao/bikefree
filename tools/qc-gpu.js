@@ -19,7 +19,7 @@ async function loadSpector() {
 const draw = (w) => (w._draw ? w._draw() : w._render ? w._render() : w.renderer.render(w.scene, w.camera));   // (the world's own frame: graph, route)
 
 export async function runGpuQC(w, T, { budget = null, spector = true } = {}) {
-  const r = w.renderer, gl = r.getContext(), out = { shaderErrors: 0, glErrors: 0, overBudget: 0 }, ex = {}, defects = [];
+  const r = w.renderer, gl = r.getContext(), out = { shaderErrors: 0, glErrors: 0, overBudget: 0, overTarget: 0 }, ex = {}, defects = [];
   const add = (k, note) => { out[k]++; (ex[k] ||= []).length < 6 && ex[k].push([note]); defects.push({ id: `${k}-${note.replace(/[^a-z0-9]+/gi, '').slice(0, 24).toLowerCase()}`, check: k, note }); };
   // shaders: every material in the scene compiled now, failures reported
   const prev = r.debug.onShaderError;
@@ -52,5 +52,7 @@ export async function runGpuQC(w, T, { budget = null, spector = true } = {}) {
     stats.capture = { commands: cmds.length, draws: names(/^draw/), programBinds: names(/^useProgram$/), textureBinds: names(/^bindTexture$/), bufferBinds: names(/^bind(Buffer|VertexArray)/), uniforms: names(/^uniform/), redundant: cmds.filter((c) => c.status === 30).length };
   }
   if (budget) for (const k of ['calls', 'triangles', 'geometries', 'textures', 'programs', 'heapMB']) if (budget[k] && stats[k] > budget[k]) add('overBudget', `${k} ${stats[k]} > ${budget[k]}`);
+  // (the fidelity plan's tier budget the maps are moving to: a warning until the map meets it)
+  if (budget?.target) for (const [k, v] of Object.entries(budget.target)) if (stats[k] > v) add('overTarget', `${k} ${stats[k]} > ${v}`);
   return { counts: out, examples: ex, defects, gpu: stats };
 }

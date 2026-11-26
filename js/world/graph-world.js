@@ -21,6 +21,7 @@ import { loadRider, RIDER_RIM } from './rider.js';
 import { makeSkyDome } from './toolbox/atmosphere/sky-dome.js';
 import { PostFX } from './toolbox/atmosphere/post.js';
 import { createRenderer, pixelRatioFor, QualityGovernor, GpuTimer } from './render-core.js';
+import { resolveMapDefinition } from './toolbox/map-definition.js';
 import { SURFACE, SURFACE_SUN, SURFACE_GLSL, loadSurfaceDetail, withSurfaceDetail } from './toolbox/materials/surface-detail.js';
 import { MOBILE } from './graph-city.js';
 /** The clouds' clock (their shadows drifting over the ground and the roads; puddles' glints): seconds. */
@@ -180,6 +181,7 @@ export class GraphWorld {
     this.json = this.G.json;
     // the map's rules, from its data (toolbox/map-profile.js: CNY's and SKAN's are the defaults; PGH pins "city")
     this.profile = mapProfile(this.json);
+    this.def = resolveMapDefinition({ kind: 'graph', json: this.json });   // [map-definition] the one shape every map resolves to
     this.rural = this.profile.dressing === 'country';   // (countryside dressing: graph-city.js)
     this.log = opts.log || (() => {});
     this.path = opts.path || null;
@@ -1402,7 +1404,7 @@ export class GraphWorld {
     const parts = [...this.tiles.values()].map((t) => t.spillMesh?.geometry).filter(Boolean);
     if (this.spillAll) { this.group.remove(this.spillAll); this.spillAll.geometry.dispose(); this.spillAll = null; }
     if (!parts.length) return;
-    const g = new THREE.BufferGeometry(), drop = function () { this.array = null; };
+    const g = new THREE.BufferGeometry(), drop = function () { if (!globalThis.BF_KEEP_GEOMETRY) this.array = null; };
     for (const [name, size] of [['position', 3], ['normal', 3], ['color', 3], ['aRd', 4]]) {
       const n = parts.reduce((a, p) => a + p.attributes[name].array.length, 0), out = new Float32Array(n);
       let o = 0; for (const p of parts) { out.set(p.attributes[name].array, o); o += p.attributes[name].array.length; }

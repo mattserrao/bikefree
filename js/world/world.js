@@ -2,6 +2,7 @@
 import { cutRouteRibbon, junctionPlan } from './toolbox/city/junction-mesh.js';   // [junctions] (the road's overlay: city.js)
 import * as THREE from '../../vendor/three.js';
 import { createRenderer, pixelRatioFor, QualityGovernor } from './render-core.js';
+import { resolveMapDefinition } from './toolbox/map-definition.js';
 import { installEffects } from './toolbox/effects/index.js';   // [blocks]
 import { makeProjection, makeRouteIndex } from './geo.js';
 import { Terrain } from './terrain.js';
@@ -89,6 +90,7 @@ export class World {
     this.running = false;
     this.source = null;       // () => {pos, speed, cadence, riding, grade, power, ftp} (grade/power/ftp pick the rider's posture)
     this.stylized = route.scene?.style === 'stylized';
+    this.def = route.scene ? resolveMapDefinition({ kind: 'scene', id: route.id, json: route.scene }) : null;   // [map-definition]
     // a new route's placeholder before its scenery: the real ground as contour/grid lines (scene.wire)
     this.wireframe = route.scene?.style === 'wireframe';
     this.qualityKey = Object.hasOwn(SCENERY_QUALITY, opts.quality) ? opts.quality : 'balanced';

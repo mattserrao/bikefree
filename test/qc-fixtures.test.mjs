@@ -94,7 +94,7 @@ test('fixture GPU: a clean frame passes; GL errors, failed shaders and an over-b
     return { renderer: r, scene: {}, camera: {}, _draw() {} };
   };
   const ok = await runGpuQC(fake(), T, { budget: { calls: 500 }, spector: false });
-  assert.deepEqual(ok.counts, { shaderErrors: 0, glErrors: 0, overBudget: 0 });
+  assert.deepEqual(ok.counts, { shaderErrors: 0, glErrors: 0, overBudget: 0, overTarget: 0 });
   const bad = await runGpuQC(fake({ calls: 900, shaderFail: true }), T, { budget: { calls: 500 }, spector: false });
   assert.equal(bad.counts.overBudget, 1); assert.match(bad.examples.overBudget[0][0], /calls 900 > 500/);
   assert.equal(bad.counts.shaderErrors, 1);

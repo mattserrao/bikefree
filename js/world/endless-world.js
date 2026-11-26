@@ -15,6 +15,7 @@
 // past it, and the tiles out there ease to their new shape over a second and a half.
 import * as THREE from '../../vendor/three.js';
 import { createRenderer, pixelRatioFor, QualityGovernor } from './render-core.js';
+import { resolveMapDefinition } from './toolbox/map-definition.js';
 import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean } from './pose.js';
 import { loadRider, RIDER_RIM } from './rider.js';
 import { makeSkyDome } from './toolbox/atmosphere/sky-dome.js';
@@ -91,6 +92,7 @@ export class EndlessWorld {
     this.gfx = {};
     // the rules: the map profile's defaults — CNY's and SKAN's
     this.profile = mapProfile({});
+    this.def = resolveMapDefinition({ kind: 'endless' });   // [map-definition]
     this.R = REACH[this.qualityKey];
 
     this.renderer = createRenderer({ container, quality: this.qualityKey });
