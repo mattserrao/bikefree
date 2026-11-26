@@ -969,7 +969,15 @@ export class GraphCity {
       const G = new Map(), C = 6, gk = (x, z) => Math.floor(x / C) * 100003 + Math.floor(z / C);
       for (const o of out) { const k = gk(o.x, o.z); (G.get(k) || G.set(k, []).get(k)).push(o); }
       const occupied = (x, z, r) => { for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const o of G.get(gk(x + a * C, z + b * C)) || []) if (Math.hypot(o.x - x, o.z - z) < r && kit[o.sp]) return true; return false; };
-      const landOk = (x, z) => { const c = this.landAt(x, z); return c !== LAND.water && c !== LAND.building && c !== LAND.plaza && c !== LAND.paved && !this.inWater(x, z) && !(c >= LAND.oldGrowth && c <= LAND.ogBlowdown); };
+      // (none of it across a landmark's view: the line from it to the nearest way sample 25–160 m off — the QC's
+      //  viewBlocked rule — kept 4 m clear)
+      const LV = (this._lmViews ||= (this.heroes.json?.landmarks || []).filter((l) => l.center).map((l) => {
+        const c = this.world.proj.toLocal(l.center[0], l.center[1]); let best = null;
+        for (const e of this.world.G.edges) for (let i = 0; i <= e.n; i++) { const d = Math.hypot(e.x[i] - c.x, e.z[i] - c.z); if (d > 25 && d < 160 && (!best || d < best.d)) best = { d, x: e.x[i], z: e.z[i] }; }
+        return best && { ax: best.x, az: best.z, dx: c.x - best.x, dz: c.z - best.z };
+      }).filter(Boolean));
+      const nearLm = (x, z) => LV.some((v) => { const L2 = v.dx * v.dx + v.dz * v.dz, t = ((x - v.ax) * v.dx + (z - v.az) * v.dz) / L2; return t > .03 && t < .92 && Math.hypot(v.ax + v.dx * t - x, v.az + v.dz * t - z) < 4; });
+      const landOk = (x, z) => { if (nearLm(x, z)) return false; const c = this.landAt(x, z); return c !== LAND.water && c !== LAND.building && c !== LAND.plaza && c !== LAND.paved && !this.inWater(x, z) && !(c >= LAND.oldGrowth && c <= LAND.ogBlowdown); };
       yield* planParkPlanting({ pieces: (W.tiles.get(t.key)?.pieces || []).filter((p) => !p.e._cf), half: (e) => W.wOf(e) / 2, walk: (e) => (W.walkOf ? W.walkOf(e) : 0),
         tree, under, occupied, landOk, avenue: this.profile.avenue, understory: this.profile.understory });
     }

@@ -34,6 +34,8 @@ import { SURFACE_SUN, loadSurfaceDetail } from './toolbox/materials/surface-deta
 import { roadSurfaceMaterial, wornPaintMaterial, makeStandIn, CLOUD_T } from './graph-world.js';
 import { biomeAt, MILE_M, STEP, rng } from '../endless/course.js';
 
+// [zwift-look] the near band (m): trees inside it drawn as their grown models (leaf clusters, limbs), cards beyond
+const ENDLESS_NEAR_M = 55;
 const MOBILE = (() => { try { const ua = navigator.userAgent || ''; return /iPhone|iPad|iPod|Android|Mobile/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1); } catch { return false; } })();
 const TILE = 256;
 const CHUNK = 20;                              // road samples per road mesh (200 m)
@@ -132,7 +134,7 @@ export class EndlessWorld {
     this.sea.name = 'Sea'; this.sea.position.y = 0; this.sea.visible = false; this.scene.add(this.sea);
     // the shared effects (the same registry the free-ride maps use)
     this.city = { forest: null, landAt: (x, z) => this._landAt(x, z) };
-    this.effects = installEffects(this, { water: {}, atmosphere: {} });
+    this.effects = installEffects(this, { water: {}, atmosphere: {}, grade: { saturation: 1.1, contrast: .1, warm: .3, lift: .02, sun: 1.12, sky: .9 } });   // ([zwift-look] the grade)
 
     this.tiles = new Map(); this.roads = new Map(); this.homes = new Map(); this.morphs = [];
     this._lakeCache = new Map();
@@ -144,7 +146,7 @@ export class EndlessWorld {
       if (this.disposed) return;
       try {
         this.kit = makeEndlessTrees();
-        this.forest = new TreeEngine({ renderer: this.renderer, parent: this.group, quality: this.qualityKey, uTime: this.treeTime, lights: { hemi: this.hemi, sun: this.sun }, kit: this.kit });
+        this.forest = new TreeEngine({ renderer: this.renderer, parent: this.group, quality: this.qualityKey, uTime: this.treeTime, lights: { hemi: this.hemi, sun: this.sun }, kit: this.kit, near: (MOBILE ? .6 : 1) * ENDLESS_NEAR_M });
         this.city.forest = this.forest;
         this._treesState = 'ok';
         for (const t of this.tiles.values()) t.planted = false;
@@ -598,9 +600,10 @@ export class EndlessWorld {
   _applyDay(f) {
     const t = dayAt(f), el = THREE.MathUtils.degToRad(t.elev), az = THREE.MathUtils.degToRad(t.az);
     this.sunDir.set(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)).normalize();
-    this.sun.color.set(t.sun); this.sun.intensity = t.sunI * sm(-4, 3, t.elev);
-    this.hemi.color.set(t.hemiSky); this.hemi.groundColor.set(t.hemiGround); this.hemi.intensity = t.hemiI;
-    this.renderer.toneMappingExposure = t.exposure;
+    const LT = t.elev > 0 && this.lightTune ? this.lightTune : { sun: 1, sky: 1, exposure: 1 };   // ([zwift-look] the grade's key light)
+    this.sun.color.set(t.sun); this.sun.intensity = t.sunI * sm(-4, 3, t.elev) * LT.sun;
+    this.hemi.color.set(t.hemiSky); this.hemi.groundColor.set(t.hemiGround); this.hemi.intensity = t.hemiI * LT.sky;
+    this.renderer.toneMappingExposure = t.exposure * LT.exposure;
     RIDER_RIM.value.set(t.sun);
     // the biome's own tint on the haze and the clouds
     const bi = this._biome(this.p), fogB = _cA.set(bi.A.sky.fog).lerp(_cB.set(bi.B.sky.fog), bi.t);

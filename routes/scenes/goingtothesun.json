@@ -1,6 +1,8 @@
 {
   "format": "bikefree-scene-1",
   "style": "stylized",
+  "trees": { "nearM": 0, "note": "user, 26 Nov: the Zwift look rolled out (dappled canopy shade, grade); its trees stay cards near the road too — the scene pack's near models are faceted low-poly, not leaf clusters" },
+  "effects": {"canopyShade": {}, "grade": {"saturation": 1.1, "contrast": 0.08, "warm": 0.25, "lift": 0.015, "sun": 1.1, "sky": 0.92}},
   "terrain": "real-mountain",
   "terrainGridFile": "routes/scenes/goingtothesun-terrain.grid.bin.gz",
   "realHorizon": false,

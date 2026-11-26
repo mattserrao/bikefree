@@ -286,7 +286,10 @@ export class GraphWorld {
     const goldenUpstate = this.profile.light === 'golden-upstate';
     this.fixedTime = goldenUpstate ? 'golden' : null;
     if (goldenUpstate) {
-      this.baked = BakedLighting.create(this._bakeView(), { baked: 'golden', windowM: 3200, windowMoveM: 700, reachM: 900, cellM: 2, marginM: 0, dynamicSpanM: 40,
+      // (a city's bake — PGH, user 26 Nov: "change the lighting style to match" — on a phone at 3 m cells: a third of
+      //  the memory of the 2 m maps, for the map that has run phones out of memory before)
+      const phoneCity = this.profile.preset === 'city' && /iPhone|iPad|iPod|Android|Mobile/.test(globalThis.navigator?.userAgent || '');
+      this.baked = BakedLighting.create(this._bakeView(), { baked: 'golden', windowM: 3200, windowMoveM: 700, reachM: 900, cellM: phoneCity ? 3 : 2, marginM: 0, dynamicSpanM: 40,
         prepTimeoutS: 45, groundAt: (x, z) => (this.ground ? this._groundH(x, z) : 0) }, { golden: GOLDEN_UPSTATE });
       if (this.baked) {
         const sh = this.sun.shadow; sh.mapSize.set(1024, 1024); sh.bias = -0.0006; sh.normalBias = 0.04; sh.camera.near = 1; sh.camera.far = 12000;

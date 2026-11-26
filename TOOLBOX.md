@@ -379,7 +379,17 @@ Built on NYC first, every piece switched on by data so any graph map can take it
   (a map's own sun for its fixed time of day).
 - Effects (`effects` block): `canopyShade`, `roadLook`, `grade`, `parkFence`, `leafLitter` — see
   `js/world/toolbox/effects/README.md`.
-- Rolling out to another graph map: add the effects block and the profile keys to `tools/city/<map>.json` (NYC:
-  `tools/nyc_sync.py` copies them into the built map). `canopyShade` and `leafLitter`'s crown term need baked light (the
-  upstate profile: CNY, SKAN, NYC); PGH (light `free`) gets the rest. Start with `grade`, `roadLook`, `trees.nearM`, then
-  `canopyShade`, then the planting keys (they change what grows where: check `npm run qc:map -- <map>`).
+- Rolled out (26 Nov, branch `zwift-rollout-test`; user: "Bring these changes into all other maps. For pgh change the
+  lighting style to match"):
+  | Map | Near band | Canopy shade | Grade | Road look | Planting (avenue / understory) | Fence | Litter |
+  |---|---|---|---|---|---|---|---|
+  | NYC | 70 m | yes | yes | paint + park asphalt | drives, paths, bridle | drives | 1 |
+  | CNY, SKAN | 55 m | yes | yes | asphalt tone + gutter leaves (worn geometric paint kept) | paths / paths, residential, tertiary (thin) | paths | 0.45 |
+  | PGH | 55 m | yes (now baked light) | yes | paint + tone | paths / paths | paths | — (summer) |
+  | Big Sur, Alpe d'Huez | 50 m (`trees.nearM` in the scene) | yes | mild | — (their own road) | — | — | — |
+  | Going-to-the-Sun | 0 (its pack's near models are faceted low-poly; cards stay) | yes | mild | — | — | — | — |
+  | Endless | 55 m | — (live day cycle, no bake) | mild | — | — | — | — |
+- PGH's light: `profile.light: "golden-upstate"` with NYC's `sun` (27° from 228°) — baked shadows, one fixed time; on a
+  phone the city's bake uses 3 m cells.
+- The canopy shade reads any world's tree engine (`TreeEngine.crownsNear`): the graph city's, Endless's, every scenic
+  area's terrain's.

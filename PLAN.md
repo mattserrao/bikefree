@@ -2254,3 +2254,14 @@ config (TOOLBOX.md → *Zwift look*). NYC has them all.
 - [ ] Roll out: CNY and SKAN (`grade`, `roadLook`, `trees.nearM`, `canopyShade`, `leafLitter`; the planting keys by
       choice), PGH (no baked light: everything but `canopyShade`), the scenic routes (their own world: the tree engine and
       the effects registry are shared, the bake's canopy hook too).
+
+### Zwift look rolled out — branch `zwift-rollout-test` (stacked on `zwift-look-test`, PR #64) *(user, 26 Nov: "Bring these changes into all other maps. For pgh change the lighting style to match")*
+- [x] CNY, SKAN: near band 55 m, canopy shade, grade, road tone + gutter leaves (their winter-worn geometric paint kept),
+      understory drifts thin along residential/tertiary roads and fuller along paths, avenue + fence on paths, litter 0.45
+      (early fall); NYC's sun (27° from 228°).
+- [x] PGH: the baked afternoon light (golden-upstate + NYC's sun; 3 m bake cells on phones), near band 55 m, canopy shade,
+      grade, shader paint, planting and fence on its park paths; no litter (summer).
+- [x] Big Sur, Alpe d'Huez: near band 50 m, canopy shade, a milder grade (they keep their own road and post). Going-to-the-
+      Sun: canopy shade and grade; its trees stay cards near the road (its pack's near models are faceted low-poly).
+- [x] Endless: near band 55 m and a mild grade (no bake: no canopy shade).
+- [x] Tree engine `crownsNear()` (any world's crowns for the canopy shade); scene schema `trees.nearM` and the new effects.

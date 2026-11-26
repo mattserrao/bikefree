@@ -115,6 +115,7 @@ for (const shot of shots) {
     t.city?.streetKit?.flush();   // [street-kit] chunks whose kit work is still queued
     window.__bake = w.baked?.bakeNow();   // [baked-light] build the static scenery and bake before the one frame
     t.city?.streetKit?.flush();   // [street-kit] kit work queued by the chunks the bake just built
+    w.effects?.prepare?.();   // [zwift-look] time-sliced effects (the canopy shade's map) finished for this camera
     w.renderer.info.autoReset = false; w.renderer.info.reset();
     // [w2-budget] --breakdown: the frame's real draw calls by object name (wraps renderBufferDirect for the one frame;
     // the shadow pass calls it with no scene)
