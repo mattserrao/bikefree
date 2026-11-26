@@ -22,6 +22,8 @@ import { makeSkyDome } from './toolbox/atmosphere/sky-dome.js';
 import { PostFX } from './toolbox/atmosphere/post.js';
 import { createRenderer, pixelRatioFor, QualityGovernor, GpuTimer } from './render-core.js';
 import { litMaterial } from './toolbox/materials/lit.js';
+import { GroundCover } from './toolbox/landscape/ground-cover.js';
+import { grassMaterial } from './toolbox/landscape/grass-cards.js';
 import { loadPbrSets, PBR_GLSL, PBR_NORMAL_GLSL, ROAD_PBR, GROUND_PBR, roadSetFor } from './toolbox/materials/pbr-sets.js';
 import { SkyEnvironment } from './toolbox/atmosphere/environment.js';
 import { resolveMapDefinition } from './toolbox/map-definition.js';
@@ -551,7 +553,7 @@ export class GraphWorld {
   get loading() { return (this._queued || 0) > 6 || this.baked?.preparing ? 4 : 0; }
 
   dispose() {
-    this.post?.dispose(); this.post = null; this.env?.dispose(); this.sky?.dispose();
+    this.post?.dispose(); this.post = null; this.env?.dispose(); this.groundCover?.dispose(); this.sky?.dispose();
     this.effects?.dispose();
     this.stop();
     this.disposed = true;
@@ -607,6 +609,7 @@ export class GraphWorld {
     const low = this.qualityKey === 'low';
     this._stream(this.camera.position.x, this.camera.position.z, this._preload ? PRELOAD_BUDGET_MS : low ? 3 : BUDGET_MS);
     this.city?.stream(this.camera.position.x, this.camera.position.z, this._preload ? 30 : low ? 2.5 : 4);
+    this.groundCover?.tick(this.camera.position);
     this.water.position.x = Math.round(this.camera.position.x / 100) * 100;
     this.water.position.z = Math.round(this.camera.position.z / 100) * 100;
     this.sun.position.copy(this.camera.position).addScaledVector(this.sunDir, 5000);
@@ -921,6 +924,14 @@ export class GraphWorld {
           if (this.disposed) return;
           const b = c.landBox, U = this.mats.ground.userData.land;
           if (U) { U.uLand.value = c.landTexture; U.uLandBox.value.set(b.x0, b.z0, b.x1, b.z1); U.uLandOn.value = 1; }
+          // [vegetation] tufts on every lawn, yard and pasture near the rider (toolbox/landscape/ground-cover.js); not on Phone
+          if (this.qualityKey !== 'low' && !this.groundCover) {
+            const GRASS = { 1: 1, 8: .7, 11: .9 };   // LAND.grass, yards, pasture: how thick
+            const mat = c.vergeMat || grassMaterial(this.renderer, c.treeTime || { value: 0 }, this.qualityKey !== 'low');
+            this.groundCover = new GroundCover({ parent: this.scene, material: mat, radius: this.qualityKey === 'high' ? 48 : 38, density: 3.2,
+              isGrass: (x, z) => { const g = GRASS[c.landAt(x, z)] || 0; return g && !c.onRoad(x, z, 1.2) && !c.inWater?.(x, z) ? g : 0; },
+              heightAt: (x, z) => this.surfaceH(x, z) });
+          }
           for (const t of this.tiles.values()) if (t.built) this._release(t);
           this._cityState = 'ok';
           this.log('3d', `PGH city: ${Object.keys(cj.sectors.list).length} sectors, streamed`, 'debug');
