@@ -22,6 +22,7 @@ import { makeSkyDome } from './toolbox/atmosphere/sky-dome.js';
 import { PostFX } from './toolbox/atmosphere/post.js';
 import { createRenderer, pixelRatioFor, QualityGovernor, GpuTimer } from './render-core.js';
 import { litMaterial } from './toolbox/materials/lit.js';
+import { loadPbrSets, PBR_GLSL, ROAD_PBR, roadSetFor } from './toolbox/materials/pbr-sets.js';
 import { SkyEnvironment } from './toolbox/atmosphere/environment.js';
 import { resolveMapDefinition } from './toolbox/map-definition.js';
 import { SURFACE, SURFACE_SUN, SURFACE_GLSL, loadSurfaceDetail, withSurfaceDetail } from './toolbox/materials/surface-detail.js';
@@ -314,6 +315,12 @@ export class GraphWorld {
       trunk: litMaterial({ color: '#5b4636' }, 'wood'),
       crown: litMaterial({ color: '#ffffff', flatShading: true }, 'foliage'),
     };
+    // [surfaces] the road's PBR set (KTX2: toolbox/materials/pbr-sets.js), near the camera; not on Phone
+    if (this.qualityKey !== 'low') {
+      const set = this.def.assets.textures.find((n) => n.startsWith('asphalt')) || roadSetFor(this.profile);
+      loadPbrSets(this.renderer, [set]).then((t) => { if (!t[set] || this.disposed) return; ROAD_PBR.albedo.value = t[set].albedo; ROAD_PBR.nra.value = t[set].nra; ROAD_PBR.on.value = 1; })
+        .catch((e) => this.log('3d', `road textures: ${e.message}`, 'debug'));
+    }
     // the graphics effects this map asks for (toolbox/effects: the JSON's "effects" block; none when absent)
     this.TILE = TILE;
     // where people stay put (fishing, benches, groups, farm stands: toolbox/city/graph-life.js): the landmarks' (fixed)
@@ -1794,7 +1801,7 @@ const NY_ROAD_GLSL = /* glsl */`
     float worn = smoothstep(.35, .8, gwN(w.xz * .012 + 9.)) * (1. - fresh);
     // tar snakes: the centre joint, and the wheel paths' edges, wandering
     float wob = (gwN(vec2(along * .12, 3.)) - .5) * .35 + (gwN(vec2(along * 1.3, 9.)) - .5) * .1;
-    float tarW = .022 + .025 * gwN(vec2(along * .2, 1.));
+    float tarW = .012 + .012 * gwN(vec2(along * .2, 1.));   // [surfaces] (was .022–.047: read as painted black lines)
     float snake = (1. - smoothstep(tarW * .6, tarW, abs(q.x - wob))) * step(.3, gwN(vec2(along * .025, 5.)));
     for (int s = 0; s < 2; s++) {
       float lane = (float(s) * 2. - 1.) * (hw * .5 + .55);
@@ -1805,10 +1812,10 @@ const NY_ROAD_GLSL = /* glsl */`
     // transverse frost cracks: every 8–20 m, across the whole width, kinked
     float seg = floor(along / 13.), sp = 13. * (.5 + .4 * (gwH(vec2(seg, 2.)) - .5));
     float tx = along - seg * 13. - sp - (gwN(vec2(q.x * .9, seg)) - .5) * .9 - q.x * (gwH(vec2(seg, 4.)) - .5) * .25;
-    float trans = (1. - smoothstep(.03, .06, abs(tx))) * step(.25, gwH(vec2(seg, 6.))) * step(ax, hw - .15 * gwH(vec2(seg, 8.)) * hw);
+    float trans = (1. - smoothstep(.014, .028, abs(tx))) * step(.25, gwH(vec2(seg, 6.))) * step(ax, hw - .15 * gwH(vec2(seg, 8.)) * hw);
     float sealed = step(.4, gwH(vec2(seg, 11.)));             // most are sealed (black tar), some are open hairlines
     snake = max(snake * step(.25, age + worn), trans * sealed);
-    lin = mix(lin, base * .6, snake * .65 * det);   // (tar: dark, not black — close up they read as cracks, not lines)
+    lin = mix(lin, base * .62, snake * .5 * det);   // (tar: dark, not black — close up they read as cracks, not lines)
     lin *= 1. - trans * (1. - sealed) * .45 * det;
     // alligator cracking in the wheel paths, in the worst stretches
     vec2 cell = nyCell(vec2(q.x, along) * 4.2);
@@ -1892,9 +1899,17 @@ export function roadSurfaceMaterial(low = false, ny = false, spill = false) {
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uCloudT = CLOUD_T; shader.uniforms.uSurf = SURFACE; shader.uniforms.uSurfSun = SURFACE_SUN;
     shader.uniforms.uRoadTone = ROAD_LOOK.tone; shader.uniforms.uRoadLeaves = ROAD_LOOK.leaves;
+    shader.uniforms.uPbrA = ROAD_PBR.albedo; shader.uniforms.uPbrN = ROAD_PBR.nra; shader.uniforms.uPbrOn = ROAD_PBR.on;
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aRd; varying vec4 vRd; varying vec3 vGW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRd = aRd; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vRd; varying vec3 vGW; uniform float uCloudT; uniform vec3 uRoadTone; uniform float uRoadLeaves;\n' + NOISE_GLSL + SURFACE_GLSL + (ny ? NY_ROAD_GLSL : ''))
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vRd; varying vec3 vGW; uniform float uCloudT; uniform vec3 uRoadTone; uniform float uRoadLeaves;\nuniform sampler2D uPbrA, uPbrN; uniform float uPbrOn;\nfloat bfPbrW = 0.; float bfPbrR = .85; vec3 bfPbrN = vec3(0., 0., 1.);\n' + NOISE_GLSL + SURFACE_GLSL + PBR_GLSL + (ny ? NY_ROAD_GLSL : ''))
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, bfPbrR, bfPbrW);')
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        if (bfPbrW > 0.) {   // [surfaces] the set's relief, in a frame laid on the road (u along world x, v along world z)
+          vec3 nw = normalize(transpose(mat3(viewMatrix)) * normal), tw = normalize(vec3(1., 0., 0.) - nw * nw.x), bw = -cross(nw, tw);
+          vec3 pw = normalize(tw * bfPbrN.x * .8 + bw * bfPbrN.y * .8 + nw * bfPbrN.z);
+          normal = normalize(mix(normal, normalize(mat3(viewMatrix) * pw), bfPbrW));
+        }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         {
           vec3 c = diffuseColor.rgb;
@@ -2008,6 +2023,15 @@ export function roadSurfaceMaterial(low = false, ny = false, spill = false) {
             float cr = abs(gwN(vGW.xz * .55 + 11.) - .5);
             c *= 1. - wear * .22 * step(.62, gwN(vGW.xz * .05 + 2.)) * (1. - smoothstep(.0, .01, cr)) * det;   // sealed cracks (in the worn places)
             c *= 1. - .08 * (1. - smoothstep(0., .5, rdw.w - abs(q.x)));                     // the edge, darker
+            if (uPbrOn > .5) {
+              // [surfaces] the PBR asphalt (hex-tiled, 3.5 m): its aggregate and stains as a ratio to its own average (the
+              // map's palette and wear stay), its relief and roughness; it fades with the detail so far road stays even
+              PbrSample ps = pbrSurface(uPbrA, uPbrN, vGW.xz / 3.5);
+              vec3 mean = max(textureLod(uPbrA, vec2(.5), 12.).rgb, vec3(.01));
+              float w = det * smoothstep(60., 25., length(vGW - cameraPosition));
+              c *= mix(vec3(1.), clamp(ps.albedo / mean, .3, 2.5), w * .85) * mix(1., ps.ao, w);
+              bfPbrW = w; bfPbrR = ps.roughness; bfPbrN = ps.normal;
+            }
             #endif
             #ifdef NYWEAR
             c = nyWinterRoad(c, q, rdw.w, det, track, vGW);
@@ -2066,7 +2090,7 @@ export function roadSurfaceMaterial(low = false, ny = false, spill = false) {
           #endif
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-road-surface-12${low ? '-low' : ''}${ny ? '-ny1' : ''}${spill ? '-spill' : ''}${Object.keys(m.defines || {}).join('')}`;
+  m.customProgramCacheKey = () => `pgh-road-surface-13${low ? '-low' : ''}${ny ? '-ny1' : ''}${spill ? '-spill' : ''}${Object.keys(m.defines || {}).join('')}`;
   return m;
 }
 

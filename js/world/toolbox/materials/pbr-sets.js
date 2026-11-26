@@ -11,6 +11,13 @@ import * as THREE from '../../../../vendor/three.js';
 import { KTX2Loader } from '../../../../vendor/addons/loaders/KTX2Loader.js';
 
 const BASE = new URL('../../../../', import.meta.url);
+
+// neutral stand-ins until a set has loaded (and on Phone, which doesn't load them): mid albedo, flat normal, rough, no AO
+const neutral = (rgba, srgb) => { const t = new THREE.DataTexture(new Uint8Array(rgba), 1, 1, THREE.RGBAFormat); t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.needsUpdate = true; return t; };
+/** The road surface's set (shared uniforms: every road material reads them; set once the textures arrive). */
+export const ROAD_PBR = { albedo: { value: neutral([128, 128, 128, 128], true) }, nra: { value: neutral([128, 128, 230, 255], false) }, on: { value: 0 } };
+/** The road set a map's profile asks for: worn upstate asphalt, or clean city asphalt. */
+export const roadSetFor = (profile) => (profile?.roads === 'worn' ? 'asphalt-worn' : 'asphalt-new');
 let manifestP = null;
 const perRenderer = new WeakMap();
 
