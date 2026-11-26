@@ -5,3 +5,6 @@ tools/qc-report.html
 tools/qc-clipping-report.html
 tools/snapshots/
 tools/qc-pgh-report.json
+
+# PBR set sources (tools/make_pbr_sets.py regenerates them; the KTX2 builds in textures/ktx2 are committed)
+textures/src/
