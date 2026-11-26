@@ -231,7 +231,15 @@ export class EndlessWorld {
       const bi = this._biome(sc), def = bi.t < .5 ? bi.A : bi.B;
       if (r() < def.lakes * .5 && def.lakeR) {
         const side = r() < .5 ? -1 : 1, R = def.lakeR * (.6 + r() * .7), C = this.course, h = C.heading[i], off = R + 26 + r() * 30;
-        L = { x: C.x[i] + Math.cos(h) * off * side, z: C.z[i] - Math.sin(h) * off * side, r: R, level: C.ele[i] - 2.2, frozen: !!def.frozen, s: sc, side };
+        const x = C.x[i] + Math.cos(h) * off * side, z = C.z[i] - Math.sin(h) * off * side;
+        // (its level 2.2 m under the road wherever the road passes near its water — the disc reaches 1.25 r — not just at
+        //  its own station: a road dipping or bending toward it ran under the water, the map QC's sweep, 25 Nov)
+        //  — a lake that would have to sit over a metre lower than that for it is left out: its bowl would cut a cliff
+        //  beside the road's high side)
+        let level = C.ele[i] - 2.2;
+        const reach = R * 1.25 + 14, k = Math.ceil((off + reach) / STEP);
+        for (let j = Math.max(0, i - k); j <= Math.min(C.n - 1, i + k); j++) if (Math.hypot(C.x[j] - x, C.z[j] - z) < reach) level = Math.min(level, C.ele[j] - 2.2);
+        if (C.ele[i] - 2.2 - level <= 1) L = { x, z, r: R, level, frozen: !!def.frozen, s: sc, side };
       }
     }
     this._lakeCache.set(b, L);
