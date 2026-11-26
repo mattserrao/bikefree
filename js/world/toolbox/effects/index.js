@@ -7,6 +7,7 @@
 //   tick(t, dt)        every frame (t: seconds)
 //   *tileJob(tile)     after a tile's ground is built (a generator: yield when due()); meshes it makes go in
 //                      tile.extra so the world releases them with the tile
+//   prepare()          before a still frame (a tool's snapshot): finish any time-sliced work for the camera now
 //   dispose()
 // The world it is given needs: scene, group, mats, sun, sunDir, camera, poolAt(x, z), surfaceH(x, z), waterTop(x, z)
 // and (for tiles) TILE.
@@ -21,8 +22,13 @@ import { village } from './village.js';
 import { frontYards } from './front-yards.js';
 import { sky } from './sky.js';
 import { atmosphere } from './atmosphere.js';
+import { canopyShade } from './canopy-shade.js';
+import { roadLook } from './road-look.js';
+import { grade } from './grade.js';
+import { parkFence } from './park-fence.js';
+import { leafLitter } from './leaf-litter.js';
 
-export const EFFECTS = { water: waterSurface, shoreline, village, frontYards, sky, atmosphere };
+export const EFFECTS = { water: waterSurface, shoreline, village, frontYards, sky, atmosphere, canopyShade, roadLook, grade, parkFence, leafLitter };
 
 /** The world methods each effect calls (checked at install; the properties they read — group, sun, sunDir, mats,
  *  TILE — may be set after the effects are installed, so they're read per frame and not checked here). */
@@ -33,6 +39,11 @@ export const NEEDS = {
   frontYards: [],
   sky: [],
   atmosphere: ['surfaceH'],
+  canopyShade: [],
+  roadLook: [],
+  grade: [],
+  parkFence: ['poolAt'],
+  leafLitter: [],
 };
 
 /** The methods an effect calls that this world doesn't have (empty: it can be installed). */
@@ -52,6 +63,8 @@ export function installEffects(world, cfg = {}) {
     /** Turn one effect off or on (the graphics menu): it stops ticking and hides what it draws. */
     set(name, v) { for (const e of on) if (e.name === name) { e.off = !v; e.h.setVisible?.(!!v); } },
     *tileJob(tile) { for (const e of on) if (e.h.tileJob) yield* e.h.tileJob(tile); },
+    /** A tool drawing one still frame (snapshots, QC): every effect brought up to date for the camera now. */
+    prepare() { for (const e of on) if (!e.off) e.h.prepare?.(); },
     dispose() { for (const e of on) e.h.dispose?.(); },
   };
 }

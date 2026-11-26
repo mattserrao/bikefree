@@ -25,6 +25,7 @@ import * as THREE from '../../../../vendor/three.module.min.js';
 import { decorateTreeMaterial } from '../packs/northern-rockies.js';
 import { makeLeafTexture } from './upstate-trees.js';
 import { SURFACE } from '../materials/surface-detail.js';
+import { withBarkDetail } from './near-trunks.js';
 
 // m: [near end, mid end] per quality; FADE: the crossfade's half width; IMP_END: where the impostors stop (the
 // tiles beyond are released anyway)
@@ -68,6 +69,8 @@ export const TREE_GRADE = /* glsl */`
 export const NEAR_TRUNK = [55, 60];
 /** A whole card swapped for a 3D model near the camera (a tree given a negative `cut`: the floor's ferns and herbs). */
 export const NEAR_PLANT = [11, 14];
+/** [zwift-look] The near band per quality, × the map's own (phones: a shorter reach, the cards' memory kept). */
+const NEAR_BAND = { low: .55, balanced: 1, high: 1.2 };
 const CELL_2D = { low: 128, balanced: 192, high: 256 };   // (low: phones — the atlas 88 → 56 MB with its mipmaps, user 23 Nov)
 const DEEP = [.55, .6];  // band scale for a tree > 30 m from any road (t.deep): seen only through the trees in front
 const FADE = [15, 50];   // m: each tree swaps at its own distance within ± this of the band's edge
@@ -84,6 +87,13 @@ export const treeJitter = (x, z) => {
   const d = a * (b + 33.33) + b * (c + 33.33) + c * (a + 33.33); a += d; b += d; c += d;
   return fr((a + b) * c);
 };
+/** [zwift-look] A tree's lean ([lx, lz]: the top's offset per metre of height, toward the road) as a rotation. */
+const _la = new THREE.Vector3();
+function leanQ(lean, out) {
+  const [lx, lz] = lean, a = Math.atan(Math.hypot(lx, lz));
+  if (a < 1e-4) return out.identity();
+  return out.setFromAxisAngle(_la.set(lz, 0, -lx).normalize(), a);
+}
 const ANGLES = 12;   // photos round each tree (cross-blended in the card: no snap as the angle changes)
 
 const WIND_GLSL = /* glsl */`
@@ -191,8 +201,12 @@ function leafMaterial(map, a2c = false, opaque = false) {
 }
 
 export class TreeEngine {
-  constructor({ renderer, parent, quality = 'balanced', uTime, lights, kit, shadows = false }) {
+  constructor({ renderer, parent, quality = 'balanced', uTime, lights, kit, shadows = false, near = 0 }) {
     this.renderer = renderer; this.shadows = shadows; this.parent = parent; this.uTime = uTime; this.kit = kit;
+    // [zwift-look] a near band (m) where a tree is its grown model — the leaf-cluster cards and limbs the card was
+    // photographed from — and not the flat card (user, 25 Nov: "crowns built from many leaf-cluster sprites … near the
+    // road, impostors beyond"); 0: every tree its card (TREES_2D as before). A map sets it (profile.trees.nearM).
+    this.nearM = TREES_2D ? (NEAR_BAND[quality] ?? 1) * near : 0;
     const [b0, b1] = BANDS[quality] || BANDS.balanced;
     this.b0 = b0; this.b1 = b1;
     this.group = new THREE.Group(); this.group.name = 'Trees (tree engine)'; parent.add(this.group);
@@ -202,7 +216,7 @@ export class TreeEngine {
     // "speckled tree edges"): far shorter there — a swap in 0.2 s, a new tile's cards in 0.35 s
     this.msaa = hasMSAA(renderer);
     this.ft = this.msaa ? FT : .2; this.tileIn = this.msaa ? 1.5 : .35;
-    const wood = (key) => engineMaterial(decorateTreeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 }), { uTime }), uTime, false, key, this.ft);
+    const wood = (key) => engineMaterial((this.nearM && key === 'w0' ? withBarkDetail : (m) => m)(decorateTreeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 }), { uTime })), uTime, false, key, this.ft);
     const leaves = (key) => engineMaterial(leafMaterial(this.leafTexture, this.msaa), uTime, true, key, this.ft);
     this.mats = [{ wood: wood('w0'), leaves: leaves('l0') }, { wood: wood('w1'), leaves: leaves('l1') }];
     // the models: every (species, variant) an entry; the understory near-only entries
@@ -297,6 +311,7 @@ export class TreeEngine {
       uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uAtlas: { value: rt.texture }, uRows: { value: this.rows }, uNow: { value: 0 }, uAtlasSize: { value: new THREE.Vector2(W, H) } }]),
       vertexShader: /* glsl */`
         attribute vec4 iA; attribute vec4 iB; attribute float iT; attribute vec2 iS;   // iA: x, y, z, rotation; iB: width, height, row, tint; iT: when its tile came; iS: its swap (when, 0 hidden / 1 shown / 2 in / 3 out)
+        attribute vec2 iL;    // [zwift-look] the lean: the top's offset per metre up (x, z)
         attribute float iC;   // a trunk cut (m above the base; 0: none): below it, near the camera, a 3D trunk stands in
         uniform float uRows; uniform float uNow;
         varying vec2 vUv; varying vec2 vUv2; varying float vBlend; varying float vKeep; varying float vOut; varying float vTint;
@@ -327,6 +342,7 @@ export class TreeEngine {
           // (iB.w: the tint, plus 10 × a colour grade — 1 a hero woods' tree, 2 its understory: old-growth.js)
           vGrade = floor(iB.w / 10.); vTint = iB.w - vGrade * 10.;
           vec3 p = o + right * position.x * iB.x + vec3(0., position.y * iB.y, 0.);
+          p.xz += iL * position.y * iB.y;
           // (a tree beside the path, inside ~30 m: its card's trunk gives way to a 3D bark trunk, in the same dither as
           //  the trunk's own — old-growth.js NEAR_TRUNK — the crown stays the card: user, 24 Nov)
           vH = position.y * iB.y; vWP = p;
@@ -435,7 +451,8 @@ export class TreeEngine {
     let n = 0; for (const t of this.tiles.values()) n += t.length;
     if (n > this.impCap) {
       this.impCap = Math.ceil(n * 1.3);
-      this.iA = new Float32Array(this.impCap * 4); this.iB = new Float32Array(this.impCap * 4); this.iT = new Float32Array(this.impCap); this.iS = new Float32Array(this.impCap * 2); this.iC = new Float32Array(this.impCap);
+      this.iA = new Float32Array(this.impCap * 4); this.iB = new Float32Array(this.impCap * 4); this.iT = new Float32Array(this.impCap); this.iS = new Float32Array(this.impCap * 2); this.iC = new Float32Array(this.impCap); this.iL = new Float32Array(this.impCap * 2);
+      this.impGeo.setAttribute('iL', new THREE.InstancedBufferAttribute(this.iL, 2));
       this.impGeo.setAttribute('iC', new THREE.InstancedBufferAttribute(this.iC, 1));
       this.impGeo.setAttribute('iA', new THREE.InstancedBufferAttribute(this.iA, 4)); this.impGeo.setAttribute('iB', new THREE.InstancedBufferAttribute(this.iB, 4)); this.impGeo.setAttribute('iT', new THREE.InstancedBufferAttribute(this.iT, 1));
       this.impGeo.setAttribute('iS', new THREE.InstancedBufferAttribute(this.iS, 2)); this.impGeo.attributes.iS.setUsage(THREE.DynamicDrawUsage);
@@ -450,12 +467,12 @@ export class TreeEngine {
       const born = this._born.get(key) ?? -99;
       for (const t of list) {
         const e = t.e; if (!e.imp) continue;
-        this.iA.set([t.x, t.y, t.z, t.rot], k * 4); this.iB.set([e.imp.half * 2 * t.s, e.imp.top * t.sy, e.imp.row, t.tint + 10 * (t.grade || 0)], k * 4); this.iT[k] = born; this.iC[k] = t.cut || 0;
+        this.iA.set([t.x, t.y, t.z, t.rot], k * 4); this.iB.set([e.imp.half * 2 * t.s, e.imp.top * t.sy, e.imp.row, t.tint + 10 * (t.grade || 0)], k * 4); this.iT[k] = born; this.iC[k] = t.cut || 0; this.iL[k * 2] = t.lean ? t.lean[0] : 0; this.iL[k * 2 + 1] = t.lean ? t.lean[1] : 0;
         this.iS[k * 2] = t.ts ?? -1e9; this.iS[k * 2 + 1] = t.tier === 2 ? 1 : 0; t.ik = k; k++;
       }
     }
     this.impGeo.instanceCount = k;
-    this.impGeo.attributes.iA.needsUpdate = true; this.impGeo.attributes.iB.needsUpdate = true; this.impGeo.attributes.iT.needsUpdate = true; this.impGeo.attributes.iS.needsUpdate = true; this.impGeo.attributes.iC.needsUpdate = true;
+    this.impGeo.attributes.iA.needsUpdate = true; this.impGeo.attributes.iB.needsUpdate = true; this.impGeo.attributes.iT.needsUpdate = true; this.impGeo.attributes.iS.needsUpdate = true; this.impGeo.attributes.iC.needsUpdate = true; this.impGeo.attributes.iL.needsUpdate = true;
     this._at = null;   // (the tiers: a re-sort now)
     this.stats.far = k;
   }
@@ -493,7 +510,7 @@ export class TreeEngine {
     const iS = this.iS;
     // (the stutter, 23 Nov: every re-sort walked every tree on the map — 65–90 k, every 2.5 m of riding: tens of ms.
     //  A tile wholly past the mid band whose trees are all settled cards is skipped: nothing in it can change)
-    const farEdge = b1 * (TREES_2D ? 1.6 : 1) + FADE[1] + HYST + 10;   // (2D: the shrubs reach past the mid band)
+    const farEdge = Math.max(b1 * (TREES_2D ? 1.6 : 1), this.nearM * 1.3) + FADE[1] + HYST + 10;   // (2D: the shrubs reach past the mid band)
     for (const list of this.tiles.values()) {
       const bb = list._bb || (list._bb = tileBounds(list));
       if (list._settled && bb && Math.hypot(Math.max(0, Math.abs(cx - bb.cx) - bb.hx), Math.max(0, Math.abs(cz - bb.cz) - bb.hz)) > farEdge && now > list._settled) continue;
@@ -507,7 +524,9 @@ export class TreeEngine {
         const B0 = t.deep ? b0 * DEEP[0] : b0, B1 = t.deep ? b1 * DEEP[1] : b1;
         // (2D: the shrubs too, as the trees — user, 23 Nov: "they appear all at once … behaviour and detail mimics trees":
         //  their card out to well past the mid band, each at its own distance, dissolving in and out as a tree's does)
-        const want = hidden ? -1 : t.e.nearOnly ? (TREES_2D ? (d1 < B1 * 1.6 + (cur === 2 ? HYST : -HYST) ? 2 : -1) : d0 < B0 * .8 + (cur === 0 ? HYST : -HYST) ? 0 : -1)
+        // ([zwift-look] the near band: inside it the grown model, its own distance jittered ± a fifth of the band)
+        const NB = this.nearM, dn = d - t.j0 * NB / 90, inBand = NB > 0 && dn < (t.e.nearOnly ? NB * .75 : NB) + (cur === 0 ? HYST : -HYST);
+        const want = hidden ? -1 : inBand ? 0 : t.e.nearOnly ? (TREES_2D ? (d1 < B1 * 1.6 + (cur === 2 ? HYST : -HYST) ? 2 : -1) : d0 < B0 * .8 + (cur === 0 ? HYST : -HYST) ? 0 : -1)
           : TREES_2D ? 2 : d0 < B0 + (cur === 0 ? HYST : -HYST) ? 0 : d1 < B1 + (cur === 1 ? HYST : -HYST) ? 1 : 2;
         if (cur === undefined) { t.tier = want; t.from = -1; t.ts = -1e9; }
         else if (want !== cur) { t.from = cur; t.tier = want; t.ts = now; }
@@ -533,7 +552,7 @@ export class TreeEngine {
     if (impDirty) this.impGeo.attributes.iS.needsUpdate = true;
     // dissolves under way: re-sort again once they're done (so the ones dissolved out leave the lists)
     this._fadeUntil = anyFade ? now + FT + .05 : 0;   // (only when a dissolve is under way: not a re-sort every 0.65 s standing still)
-    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), p = new THREE.Vector3(), s = new THREE.Vector3(), c = new THREE.Color();
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), ql = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), p = new THREE.Vector3(), s = new THREE.Vector3(), c = new THREE.Color();
     this.entries.forEach((e, i) => lists[i].forEach((list, tier) => {
       for (let pi = 0; pi < (e.pools[tier] || []).length; pi++) {
         let im = e.pools[tier][pi];
@@ -544,7 +563,7 @@ export class TreeEngine {
           this.group.remove(im); im.dispose(); this.group.add(nim); e.pools[tier][pi] = im = nim;
         }
         const fa = im.geometry.attributes.aFade, fd = fa.array, mk = tier ? '_m1' : '_m0';
-        list.forEach((t, k) => { q.setFromAxisAngle(Y, t.rot); p.set(t.x, t.y, t.z); s.set(t.s, t.sy, t.s); im.setMatrixAt(k, m.compose(p, q, s)); im.setColorAt(k, c.setScalar(t.tint)); fd[k * 2] = t.ts; fd[k * 2 + 1] = t[mk]; });
+        list.forEach((t, k) => { q.setFromAxisAngle(Y, t.rot); if (t.lean) q.premultiply(leanQ(t.lean, ql)); p.set(t.x, t.y, t.z); s.set(t.s, t.sy, t.s); im.setMatrixAt(k, m.compose(p, q, s)); im.setColorAt(k, c.setScalar(t.tint)); fd[k * 2] = t.ts; fd[k * 2 + 1] = t[mk]; });
         fa.clearUpdateRanges(); fa.addUpdateRange(0, list.length * 2); fa.needsUpdate = true;
         im.count = list.length; im.visible = list.length > 0;
         im.instanceMatrix.clearUpdateRanges(); im.instanceMatrix.addUpdateRange(0, list.length * 16); im.instanceMatrix.needsUpdate = true;

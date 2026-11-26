@@ -39,6 +39,7 @@
 // (e.g. thin props that would otherwise be skipped). Moving things: InstancedMesh with DynamicDrawUsage,
 // or `userData.dynamic = true`, keep casting into the small live shadow map.
 import * as THREE from '../../../../vendor/three.module.min.js';
+import { CANOPY, CANOPY_GLSL } from './canopy-shade.js';
 
 export const BAKE_DEFAULTS = {
   cellM: 2.5,           // texel size of the baked maps (m)
@@ -74,7 +75,7 @@ const quadVertex = /* glsl */`
   void main() { vUv = position.xy * .5 + .5; gl_Position = vec4(position.xy, 0., 1.); }`;
 
 /** GLSL for lit materials: uniforms + bfBakedLight() giving (sun visibility, sky-light AO). */
-const BAKE_PARS = /* glsl */`
+const BAKE_PARS = CANOPY_GLSL + /* glsl */`
   uniform sampler2D bfBakeSun;   // R: shadow height from up-sun occluders, G: top of whatever is in this column
   uniform sampler2D bfBakeAO;    // R: ambient occlusion of the top surface
   uniform vec4 bfBakeBox;        // x0, z1, 1/width, 1/depth (m)
@@ -91,6 +92,10 @@ const BAKE_PARS = /* glsl */`
     lit *= 1. - cover * .9;
     float ao = mix(texture2D(bfBakeAO, uv).r, 1., smoothstep(0., bfBakeOn.z, y - s.y));
     ao *= 1. - cover * bfBakeOn.w;
+    // [zwift-look] under the crowns near the camera the canopy map decides the sun (dappled, sun flecks through the
+    // leaves: canopy-shade.js); the bake's crown blobs give way to it there
+    vec2 cn = bfCanopy(w);
+    lit = mix(lit, cn.x, smoothstep(.03, .25, cn.y));
     return vec2(mix(1., lit, bfBakeOn.x), mix(1., ao, bfBakeOn.y));
   }`;
 
@@ -273,7 +278,7 @@ export class BakedLighting {
     const prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey(), u = this.uniforms;
     m.onBeforeCompile = (shader, renderer) => {
       prev.call(m, shader, renderer);
-      Object.assign(shader.uniforms, u);
+      Object.assign(shader.uniforms, u, CANOPY);
       const decl = `
           mat3 bfVT = transpose(mat3(viewMatrix));
           vec2 bfBaked = bfBakedLight(bfVT * (-vViewPosition - viewMatrix[3].xyz), normalize(bfVT * normal));`;
@@ -289,7 +294,7 @@ export class BakedLighting {
       shader.fragmentShader = fs.replace('#include <aomap_fragment>', `reflectedLight.indirectDiffuse *= bfBaked.y; reflectedLight.indirectSpecular *= bfBaked.y;
           #include <aomap_fragment>`);
     };
-    m.customProgramCacheKey = () => `${prevKey}|bf-baked-1`;
+    m.customProgramCacheKey = () => `${prevKey}|bf-baked-2`;
     m.needsUpdate = true;
   }
 

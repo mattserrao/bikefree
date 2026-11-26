@@ -32,6 +32,8 @@ import { installEffects } from './toolbox/effects/index.js';
 import { mapProfile } from './toolbox/map-profile.js';
 import { makeParkMaterial } from './toolbox/materials/park-surfaces.js';
 import { makeMasonryMaterial } from './toolbox/materials/stonework.js';
+import { ROAD_LOOK, GROUND_LOOK } from './toolbox/materials/road-look.js';
+import { CANOPY, CANOPY_GLSL } from './toolbox/atmosphere/canopy-shade.js';
 
 export const TILE = 400;            // m: a streaming tile
 export const PIECE = 32;            // samples: an edge is cut into pieces of at most this many (320 m) for the tiles
@@ -443,7 +445,11 @@ export class GraphWorld {
   setTimeOfDay(key) {
     if (this.fixedTime) key = this.fixedTime;   // (CNY, SKAN: golden hour only, its shadows baked)
     if (!TIMES[key]) key = 'midday';
-    const t = this.profile.light === 'golden-upstate' && key === 'golden' ? GOLDEN_UPSTATE : TIMES[key];
+    let t = this.profile.light === 'golden-upstate' && key === 'golden' ? GOLDEN_UPSTATE : TIMES[key];
+    // [zwift-look] a map's key light (the grade effect: a stronger sun against a softer sky light)
+    if (this.lightTune && !t.night) t = { ...t, sunI: t.sunI * this.lightTune.sun, hemiI: t.hemiI * this.lightTune.sky, exposure: t.exposure * this.lightTune.exposure };
+    // (a map's own sun for its fixed time: NYC's early fall afternoon a little higher than upstate's golden hour)
+    if (this.profile.sun && key === this.fixedTime) t = { ...t, ...this.profile.sun };
     this.timeKey = key;
     const el = THREE.MathUtils.degToRad(t.elev), az = THREE.MathUtils.degToRad(t.az);
     this.sunDir = new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)).normalize();
@@ -1081,6 +1087,10 @@ export class GraphWorld {
       // paint: clear of the junctions' mouths and their crosswalks
       const lenM = e.n * 10, r0 = tr[0] > 0 ? tr[0] + 3.4 : 0, r1 = tr[1] > 0 ? tr[1] + 3.4 : 0;
       const atS = (c) => c.i * 10;
+      // [zwift-look] which of this way's lines the shader draws (bits: 1 edges, 2 bike lane, 4 double centre, 8 dashed
+      // centre, 16 a path's dashes); the rest stay geometry below
+      const P0 = this.roadLook?.paint ? this._paintOf(e) : null;
+      const spaint = !P0 ? 0 : (P0.edges && !P0.oneway ? 1 : 0) | (P0.bikeLane ? 2 : 0) | (P0.centre === 'double' ? 4 : 0) | (P0.centre === 'dash-yellow' ? (path ? 24 : 8) : 0);
       const L = [], Rt = [], cols = [], ext = [];
       for (const c of C) {
         const y = c.y + lift;
@@ -1091,7 +1101,10 @@ export class GraphWorld {
         ext.push(surf);
       }
       for (let k = 0; k + 1 < n; k++) {
-        const uv = (c, x) => [ext[k], x, c.s, half];
+        // ([zwift-look] the paint drawn in the road's own shader — roadLook effect: crisp at any distance, no geometry —
+        //  its lines' code in the surface code, × 64, where the paint runs: clear of the junctions, not on brick or setts)
+        const pc = spaint && atS(C[k]) >= r0 && atS(C[k + 1]) <= lenM - r1 && ext[k] !== 1 && ext[k] !== 2 ? spaint : 0;
+        const uv = (c, x) => [ext[k] + pc * 64, x, c.s, half];
         R.quadX(L[k], Rt[k], Rt[k + 1], L[k + 1], cols[k], [uv(C[k], -half), uv(C[k], half), uv(C[k + 1], half), uv(C[k + 1], -half)]);
       }
       // a trail's gravel or dirt carried out onto the road where it meets one (its end at a junction's mouth)
@@ -1184,10 +1197,10 @@ export class GraphWorld {
           P.quad([A.x + c0.dz * w, A.y, A.z - c0.dx * w], [A.x - c0.dz * w, A.y, A.z + c0.dx * w], [B.x - c1.dz * w, B.y, B.z + c1.dx * w], [B.x + c1.dz * w, B.y, B.z - c1.dx * w], color);
         }
       };
-      if (paint.centre === 'double') { line(-0.18, 0.06, 0, 0, yellow); line(0.18, 0.06, 0, 0, yellow); }
-      else if (paint.centre === 'dash-yellow') line(0, path ? 0.05 : 0.07, path ? 3 : 3.3, path ? 6 : 6.7, yellow);
-      if (paint.edges) { line(half - 0.35, 0.07, 0, 0, white); line(-(half - 0.35), 0.07, 0, 0, paint.oneway ? yellow : white); }
-      if (paint.bikeLane) { line(-(half - 2.2), 0.1, 0, 0, white); line(-(half - 2.2) - 0.35, 0.1, 0, 0, white); }   // (the bike lane: a double white line 2 m in from the edge)
+      if (paint.centre === 'double' && !(spaint & 4)) { line(-0.18, 0.06, 0, 0, yellow); line(0.18, 0.06, 0, 0, yellow); }
+      else if (paint.centre === 'dash-yellow' && !(spaint & 8)) line(0, path ? 0.05 : 0.07, path ? 3 : 3.3, path ? 6 : 6.7, yellow);
+      if (paint.edges && !(spaint & 1)) { line(half - 0.35, 0.07, 0, 0, white); line(-(half - 0.35), 0.07, 0, 0, paint.oneway ? yellow : white); }
+      if (paint.bikeLane && !(spaint & 2)) { line(-(half - 2.2), 0.1, 0, 0, white); line(-(half - 2.2) - 0.35, 0.1, 0, 0, white); }   // (the bike lane: a double white line 2 m in from the edge)
       if (paint.oneway && paint.lanes >= 2) for (let q = 1; q < paint.lanes; q++) line(-half + (2 * half) * q / paint.lanes, 0.06, 3, 9, white);
     }
     // junctions (_planJunctions): the surface — the mouths joined by the curb returns, a fan from the centre — the
@@ -1860,13 +1873,15 @@ export function roadSurfaceMaterial(low = false, ny = false, spill = false) {
   if (ny) m.defines.NYWEAR = '';
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uCloudT = CLOUD_T; shader.uniforms.uSurf = SURFACE; shader.uniforms.uSurfSun = SURFACE_SUN;
+    shader.uniforms.uRoadTone = ROAD_LOOK.tone; shader.uniforms.uRoadLeaves = ROAD_LOOK.leaves;
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aRd; varying vec4 vRd; varying vec3 vGW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRd = aRd; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vRd; varying vec3 vGW; uniform float uCloudT;\n' + NOISE_GLSL + SURFACE_GLSL + (ny ? NY_ROAD_GLSL : ''))
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vRd; varying vec3 vGW; uniform float uCloudT; uniform vec3 uRoadTone; uniform float uRoadLeaves;\n' + NOISE_GLSL + SURFACE_GLSL + (ny ? NY_ROAD_GLSL : ''))
       .replace('#include <color_fragment>', `#include <color_fragment>
         {
           vec3 c = diffuseColor.rgb;
-          int sf = int(vRd.x + .25);
+          float pcode = floor((vRd.x + .25) / 64.);   // ([zwift-look] the shader's paint lines: roadLook)
+          int sf = int(vRd.x + .25 - pcode * 64.);
           bool bank = fract(vRd.x) > .25 && fract(vRd.x) < .75;   // a raised trail's embankment (_trailBank)
           bool bankWoods = vRd.w > 50.;
           vec4 rdw = vRd; if (bankWoods) rdw.w -= 100.;
@@ -1980,6 +1995,49 @@ export function roadSurfaceMaterial(low = false, ny = false, spill = false) {
             c = nyWinterRoad(c, q, rdw.w, det, track, vGW);
             #endif
           }
+          #ifdef PARKROAD
+          if (sf == 0 && !bank) {
+            // [zwift-look] a park drive's asphalt (roadLook): a shade lighter and warmer, the aggregate's speckle, a
+            // darker gutter along each edge where the leaves gather, a few strays on the lanes
+            float ax = abs(q.x), hw = rdw.w;
+            c *= uRoadTone;
+            float gut = 1. - smoothstep(.15, .55, hw - ax);
+            c *= 1. - .18 * gut;
+            #ifndef LOWQ
+            float spk = gwH(floor(vGW.xz * 26.)), spk2 = gwH(floor(vGW.xz * 43.) + 7.);
+            c *= mix(1., .9 + .2 * spk * .7 + .12 * spk2, det);
+            #endif
+            if (uRoadLeaves > 0.) {
+              float drift = gut * smoothstep(.3, .7, gwN(vGW.xz * .07 + 13.)) * 1.2 + .012;
+              vec2 lq = mat2(.8, -.6, .6, .8) * vGW.xz * 6.5, lf = floor(lq);
+              float leaf = step(1. - drift * .4, gwH(lf + 91.)) * (1. - smoothstep(.22, .34, length(fract(lq) - .5)));
+              c = mix(c, pow(mix(vec3(.62, .32, .1), vec3(.78, .6, .2), gwH(lf + 92.)) * (.75 + .3 * gwH(lf + 93.)), vec3(2.2)), leaf * det * .85 * uRoadLeaves);
+            }
+          }
+          #endif
+          #ifdef SHADERPAINT
+          if (pcode > .5 && !bank) {
+            // [zwift-look] the paint, box-filtered across a pixel (crisp near, a faint even line far off — no crawl, no
+            // MSAA needed): edge lines, the bike lane's double line, a double or dashed yellow centre
+            float aaX = max(fwidth(q.x), 1e-3), aaY = max(fwidth(q.y), 1e-3), hw = rdw.w;
+            float cw = 0., cy = 0.;
+            #define BFL(c0, h) (clamp((q.x - (c0) + (h)) / aaX + .5, 0., 1.) - clamp((q.x - (c0) - (h)) / aaX + .5, 0., 1.))
+            if (mod(pcode, 2.) > .5) cw = max(cw, max(BFL(hw - .35, .07), BFL(-(hw - .35), .07)));
+            if (mod(floor(pcode / 2.), 2.) > .5) cw = max(cw, max(BFL(-(hw - 2.2), .1), BFL(-(hw - 2.2) - .35, .1)));
+            if (mod(floor(pcode / 4.), 2.) > .5) cy = max(cy, max(BFL(-.18, .06), BFL(.18, .06)));
+            if (mod(floor(pcode / 8.), 2.) > .5) {
+              bool pth = mod(floor(pcode / 16.), 2.) > .5;
+              float dl = pth ? 3. : 3.3, per = pth ? 9. : 10., m = mod(q.y, per);
+              float on = clamp((dl - m) / aaY + .5, 0., 1.) * clamp(m / aaY + .5, 0., 1.);
+              cy = max(cy, BFL(0., pth ? .05 : .07) * on);
+            }
+            #undef BFL
+            // worn a little: patchy, the aggregate showing through near the camera
+            float pw = (.82 + .18 * gwN(vGW.xz * 1.9)) * mix(1., .86 + .2 * gwH(floor(vGW.xz * 30.)), det);
+            vec3 pcol = cy > cw ? pow(vec3(.89, .71, .23), vec3(2.2)) : pow(vec3(.93, .92, .88), vec3(2.2));
+            c = mix(c, pcol * pw, max(cw, cy) * .94);
+          }
+          #endif
           #ifndef LOWQ
           // the surface's texture near the camera (asphalt aggregate; a trail's gravel): user, 24 Nov — Zwift parity
           { float sdist = length(vGW - cameraPosition); c *= (bank && bankG < .5) ? surfaceDetail(vGW.xz, bankWoods ? 1 : 2, bankWoods ? 5. : 3., sdist, .8) : (sf == 5 || sf == 6) ? surfaceDetail(vGW.xz, 1, 3.5, sdist, .9) : surfaceDetail(vGW.xz, 0, 5., sdist, .75); }
@@ -1990,7 +2048,7 @@ export function roadSurfaceMaterial(low = false, ny = false, spill = false) {
           #endif
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-road-surface-11${low ? '-low' : ''}${ny ? '-ny1' : ''}${spill ? '-spill' : ''}`;
+  m.customProgramCacheKey = () => `pgh-road-surface-12${low ? '-low' : ''}${ny ? '-ny1' : ''}${spill ? '-spill' : ''}${Object.keys(m.defines || {}).join('')}`;
   return m;
 }
 
@@ -2020,10 +2078,10 @@ function groundMaterial(low = false, rural = false, soft = false) {
     uRoots: { value: Array.from({ length: ROOTS_N }, () => new THREE.Vector4()) }, uRootN: { value: 0 } };
   m.userData.land = U;
   m.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, U); shader.uniforms.uCloudT = CLOUD_T; shader.uniforms.uSurf = SURFACE; shader.uniforms.uSurfSun = SURFACE_SUN;
+    Object.assign(shader.uniforms, U, CANOPY); shader.uniforms.uLitter = GROUND_LOOK.litter; shader.uniforms.uCloudT = CLOUD_T; shader.uniforms.uSurf = SURFACE; shader.uniforms.uSurfSun = SURFACE_SUN;
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aLandW; attribute float aTread; varying float vLandW; varying vec3 vGW; varying float vTread;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLandW = aLandW; vTread = aTread; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLand; uniform vec4 uLandBox; uniform float uLandOn; uniform float uCloudT; uniform vec4 uRoots[24]; uniform float uRootN; varying float vLandW; varying vec3 vGW; varying float vTread;\n' + NOISE_GLSL + SURFACE_GLSL)
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLand; uniform vec4 uLandBox; uniform float uLandOn; uniform float uCloudT; uniform vec4 uRoots[24]; uniform float uRootN; varying float vLandW; varying vec3 vGW; varying float vTread;\n' + NOISE_GLSL + SURFACE_GLSL + (m.defines.LITTER !== undefined ? CANOPY_GLSL + '\nuniform float uLitter;\n' : ''))
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         #ifndef LOWQ
         {
@@ -2201,6 +2259,27 @@ function groundMaterial(low = false, rural = false, soft = false) {
           #endif
           if ((k > 1.5 && k < 2.5) || (k > 29.5 && k < 31.5) || (k > 32.5 && k < 33.5)) sdCh = 1;   // (the woods' floor: stone dust and grit, not turf)
           if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * mix(clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vec3(1.), step(19.5, k) * .7), vLandW * (k > 19.5 || (k > 1.5 && k < 2.5) ? .95 : .85));   // (CNY's fields: their own colour, less of the ground's tint)
+          #ifdef LITTER
+          // [zwift-look] fall's leaves on the grass (leafLitter effect): thickest under the crowns (the canopy map near the
+          // camera), a light scatter everywhere, drifts here and there; flecks near, their colour's mean farther off
+          if ((k > .5 && k < 1.5) || (k > 7.5 && k < 8.5)) {
+            vec2 lcn = bfCanopy(vGW);
+            float ld = length(vGW - cameraPosition), ldet = 1. - smoothstep(15., 45., ld);
+            float dens = uLitter * (.04 + .45 * lcn.y + .12 * smoothstep(.6, .85, gwN(vGW.xz * .035 + 3.)));
+            vec3 lacc = vec3(0.); float lcov = 0.;
+            for (int q = 0; q < 2; q++) {
+              float sc = q == 0 ? 5.2 : 8.6;
+              vec2 lq = mat2(.8, -.6, .6, .8) * vGW.xz * sc + float(q) * 3.7, lf = floor(lq);
+              float lr = length(fract(lq) - .5 + (vec2(gwH(lf + 2.), gwH(lf + 3.)) - .5) * .3), hl = gwH(lf + 5. + float(q) * 9.);
+              vec3 leaf = hl < .3 ? vec3(.7, .52, .18) : hl < .55 ? vec3(.66, .38, .14) : hl < .85 ? vec3(.55, .42, .24) : vec3(.56, .26, .12);
+              float on = step(1. - dens * .5, gwH(lf + 13.)) * (1. - smoothstep(.16, .3, lr));
+              lacc = mix(lacc, leaf, on); lcov = max(lcov, on);
+            }
+            vec3 lmean = pow(vec3(.66, .43, .17), vec3(2.2));
+            diffuseColor.rgb = mix(diffuseColor.rgb, pow(lacc, vec3(2.2)) * (.8 + .3 * gwN(vGW.xz * 3.)), lcov * ldet * .9);
+            diffuseColor.rgb = mix(diffuseColor.rgb, lmean, (1. - ldet) * dens * .12);
+          }
+          #endif
         }
         // a hero area's singletrack, worn into the floor (old-growth.js: aTread = its signed distance from the line the
         // tires take, + 50; 0 on every other ground): user, 24 Nov — "Start with the ground material and almost overlay

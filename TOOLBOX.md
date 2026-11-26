@@ -172,6 +172,9 @@ js/world/toolbox/
 | `vegetation/tree-cards.js` | Far tree cards: camera-facing silhouettes that carry the forest past the real trees (Balanced and High). |
 | `vegetation/old-growth.js` | An old-growth hero area on a road-graph map (first: CNY's Camillus Forest Unique Area). It's driven by a data file from `tools/cny_forest.py` (boundary, trail edges, green tunnel, apple trees) and land codes 30–33 (old growth, woods, tall meadow, blowdown). It does placement for the tree engine: dominants on a jittered grid by stand, intermediates only where no dominant is near, saplings in the shade and a thicket in the blowdown, ~6 % snags, thick tree walls at meadow edges, and nothing leafy within ~9–10 m of the singletrack. It also draws a fine floor skirt along the trails (2 m cells, pit-and-mound relief), 3D fallen logs, nurse logs and tip-ups, a leaf layer overhead with gaps, god rays and sun pools, and tall swaying hay grass in the meadows with a mown slit. |
 | `vegetation/near-trunks.js` | Near 3D for 2D-card trees (first: Camillus Forest). A tree given `cut` keeps its card from the cut up; inside `NEAR_TRUNK` (55–60 m) a tapered, bark-textured tube on the tree's own skeleton stands below it, swapping with the card's trunk in complementary screen dither. Bark textures from `tools/make_bark.py`. Also `NearPlants` (ferns and herbs in 3D inside `NEAR_PLANT`, a negative `cut`) and the bark-textured root-flare foot (`flareGeometry`, `flareMaterial`). The cards' hero-woods colour grade is `tree-engine.js TREE_GRADE`. |
+| `vegetation/tree-engine.js` `near` (profile `trees.nearM`) | The near band (zwift-look, 25 Nov): inside ~`nearM` m of the camera (× 0.55 Low, × 1.2 High, × 0.6 on phones) a tree is its grown model — trunk, forks, limbs and its own leaf-cluster cards in its fall colours — dissolving to and from its card. The near wood gets bark detail (`near-trunks.js withBarkDetail`: the maple bark's furrows projected three ways, scaling the species' own colour). A tree may carry `lean: [lx, lz]` (the top's offset per metre up): its model and its card lean the same. |
+| `vegetation/upstate-trees.js` `angledBush`, `makeUpstateTrees({ bushes: true })` | Park bushes of angled leaf sprites (zwift-look): cards in three shells over a half dome, each facing out along its own direction and rolled at random, dark at the foot and inside, lit at the top and rim, colour jittered card to card. Understory entries `bushGreen`, `bushYellow`, `bushRed`, `bushLow`, `bushHedge`. |
+| `vegetation/park-planting.js` (profile `avenue`, `understory`) | Planting along the ways of given kinds: an avenue of leaning trees each side, let to arch over the way (`{ kinds, every, offset, lean, gap }`); continuous drifts of bushes in a band beside the way (`{ kinds, band, step, density, mix }`). |
 | `vegetation/upstate-trees.js` `makeUpstateTrees({ oldGrowth: true })` | Adds the forest-grown forms (long clean boles, high crowns): `sugarmapleF`, `beechF`, `hickory`, `basswood`. It also adds the understory `herb`, `seedling` and `beechSapling`, and the 3D `logs` (`bigLog`, `nurseLog`, `tipup`, `log`). |
 | `stylized-terrain.js` (scatter) | Other layouts: plants scattered per tile from `trees`, `shrubs` and `cover`, with ground-cover tiles near the camera. |
 
@@ -209,6 +212,7 @@ js/world/toolbox/
 | `atmosphere/haze.js` | (with vista) | Height fog: thick in the valleys, thin on the ridges. |
 | `atmosphere/weather.js` | `weather` | Clear, marine layer or valley fog, clouds with sweeping shadows, rain on a wet road, wildfire smoke, wind. |
 | `atmosphere/post.js` | `post` | HDR pipeline, bloom, grade, vignette and the ink pass. |
+| `atmosphere/canopy-shade.js` | (effect `canopyShade`) | Dappled sun under the crowns: a canopy-plane map of every crown near the camera along the sun ray; `bfCanopy()` in every baked-lit material (sun flecks through the leaves). |
 
 ### Life
 
@@ -367,3 +371,15 @@ The full review, with duplicates and follow-ups, is in `docs/toolbox/INVENTORY.m
 - Map JSON `pads`: `[{ ring, y, blendM }]` — level ground (after the roads' fill): Bethesda's lower terrace. tools/nyc_sync.py copies profile, pools, effects and pads into the built map.
 - Pools with a `ring`: banks graded through the water's edge (`_ringBank`), never a drop under the water plane's rim; tools/nyc_pools.py sets a pool's level 0.9 m under the lowest way along its shore.
 - City config: `landWater: "pools"` (cover water only under the pools, small waters paved), `landWaterInsetM`, `landWaterLines: false`, `allees: [{ way | name, offsetsM, everyM }]` (written to the city data as `allee`); `treeMix.osm` for mapped trees, which may stand 1.5 m off a way and in a landmark's margin. Landmarks' `views` (two way points each) keep trees `viewM` off the sight line.
+
+## Zwift look (25 Nov 2026, branch `zwift-look-test`) — portable keys
+Built on NYC first, every piece switched on by data so any graph map can take it (plan and findings: the Project doc
+`claude/zwift-look-gap.md`):
+- Profile: `trees: { nearM }` (the near band of grown trees), `avenue`, `understory` (park-planting.js), `sun: { elev, az }`
+  (a map's own sun for its fixed time of day).
+- Effects (`effects` block): `canopyShade`, `roadLook`, `grade`, `parkFence`, `leafLitter` — see
+  `js/world/toolbox/effects/README.md`.
+- Rolling out to another graph map: add the effects block and the profile keys to `tools/city/<map>.json` (NYC:
+  `tools/nyc_sync.py` copies them into the built map). `canopyShade` and `leafLitter`'s crown term need baked light (the
+  upstate profile: CNY, SKAN, NYC); PGH (light `free`) gets the rest. Start with `grade`, `roadLook`, `trees.nearM`, then
+  `canopyShade`, then the planting keys (they change what grows where: check `npm run qc:map -- <map>`).

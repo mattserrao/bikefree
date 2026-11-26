@@ -2214,3 +2214,43 @@ Answers: the drives and the main paths (paved; stairs and dirt trails left out);
 - [x] Big Sur, Going-to-the-Sun and Alpe d'Huez on the common scenery suite *(user, 25 Nov: "Migrate the scenery … to the new, common scenery suite"; look + vegetation, light per route, heroes kept, QC and ship)*. An opt-in scene `"suite": {"kit": "common", …}` block (js/world/toolbox/scene-schema.js) in the route world: the sky dome effect (no toon look, real sky except at night), baked light per route (Big Sur golden, the other two midday), the shared surface detail on the road and ground (asphalt; turf and gravel on cliffs), Big Sur's trees from the common procedural kit (cypress, shore pine, fir, red oak), and swaying grass cards along the verge (tints per route; none on water, creeks, lookouts, bridges, burns, steep or snowy ground). Terrain, road paint and heroes unchanged. Verge distance is measured to the road line, not the nearest route point (Alpe's sparse points put grass on the asphalt). qc:clipping skips verge cards (soft). QC: course 0/0, clipping 0/0 on all three; 363/363 tests.
 - [x] QC tools, the ones the user picked (25 Nov: "Whole-map sweep, Fast raycasts (BVH), One check suite"; "GPU frame capture, Budgets"; "Defect evidence, Calibration fixtures"; "Propose + verify"): `tools/qc.mjs` (`npm run qc:all`, every map kind, one findings list with severities and an exit code); `qc_map --sweep [600]` (the whole map) and `--evidence N` (close-ups + defects.json with stable ids, tools/qc-defects.js); BVH raycasts (tools/qc-bvh.js, the preview pages map three-mesh-bvh); `--gpu` (tools/qc-gpu.js: shader / GL errors, a Spector.js capture, tools/qc/budgets.json); calibration fixtures (test/qc-fixtures.test.mjs); fixers (tools/qc_fix.mjs, `npm run qc:fix -- <map> [--apply]`: propose, apply, re-run, keep or revert; one fixer, viewBlocked → a view corridor — NYC Belvedere fixed and kept). Details: claude/qc-tooling-review.md.
 - [x] Fix pass on every production map *(user, 25 Nov: "Perform fix passes on all maps in production")*: whole-map sweeps (NYC 600 m, CNY 2 km, PGH 3 km, SKAN 5 km, Endless 4 km over 60 km), fixes, re-checks. NYC 52 → 3 warns, CNY 249 → 1, SKAN 1 → 0, PGH ~90 → 8 lips / 7 corners / 17 floating flags at distance (close-ups fine), Endless: lakes no longer drawn over the road (a lake whose water would sit over a metre under its station's level is left out). Map fixes: curb returns that fit (smaller, then larger radii), bend joins as wide as the wider way, soft cover edges on every profile, view corridors (fixer). QC false positives fixed with fixtures. Details: claude/production-qc.md.
+
+### Zwift look — branch `zwift-look-test` (from main after PR #63) *(user, 25 Nov: a Zwift Central Park Loop screenshot — "what visual differences exist between current bikefree graphics and achieving the level of detail and style in the attached image?"; then "Proceed with all 9 suggestions … work on nyc map first but ensure the changes are portable and can be rolled out to other maps after"; decisions: clustered-card crowns OK, +3–5 MB textures OK, overhang on park roads OK; project doc claude/zwift-look-gap.md)*
+Every piece is switched on by the map's data (profile keys and the `effects` block), so another graph map takes it by
+config (TOOLBOX.md → *Zwift look*). NYC has them all.
+- [x] **1 Dappled sunlight** — `toolbox/atmosphere/canopy-shade.js` + effect `canopyShade`: every crown near the camera
+      drawn into a 160 m canopy-plane map along the sun ray (256², redrawn in ~2 ms slices every 16 m); `bfCanopy()` in the
+      bake's patch of every lit material: under a crown the sun is its leaves' — sun flecks through them, a little sway —
+      so the road, the verge, the rider, the bushes and the near trees' lower leaves share one dappled shade. Snapshot tools
+      call `effects.prepare()` (the map finished for a still).
+- [x] **2 Bushes** — `upstate-trees.js angledBush`: angled leaf sprites over a half dome (three shells, each card facing
+      out its own way, rolled at random), dark foot, lit top, colours jittered card to card; five park bushes
+      (`makeUpstateTrees({ bushes: true })`).
+- [x] **3 Crowns** — the tree engine's near band (`profile.trees.nearM`, NYC 70 m; × 0.55 Low, × 1.2 High, × 0.6 phones):
+      inside it a tree is its grown model (limbs and its own leaf-cluster cards in its fall colours), the card beyond,
+      dissolving between them.
+- [x] **4 Canopy tunnel** — `toolbox/vegetation/park-planting.js` `avenue` (NYC: the drives, a tree every ~11 m each side,
+      4.5–8 m out, leaning 3–8° over the way and let to reach over it — elms and planes); `lean` per tree in the engine
+      (model and card alike).
+- [x] **5 Road** — effect `roadLook`: the paint drawn in the road's shader (box-filtered: crisp near, no crawl, no MSAA
+      needed; one-way lane dashes stay geometry) and a park drive's asphalt (lighter tone, aggregate speckle, darker
+      gutters with leaves gathered).
+- [x] **6 Trunks** — bark detail on the near band's wood (`near-trunks.js withBarkDetail`: maple bark projected three ways,
+      scaling the species' colour), forks and limbs from the grown models.
+- [x] **7 Density** — `park-planting.js` `understory`: continuous drifts of bushes 2.6–9 m from the drives, paths and the
+      bridle path (a slow noise decides where a drift runs; ~55 % of each side).
+- [x] **8 Light and colour** — effect `grade`: ACES then saturation, contrast, warmth and lift inside the tone mapping
+      (every path: canvas, the post pass, the tree cards); the key light (sun × 1.2, sky × 0.85); profile `sun` — NYC's
+      fixed afternoon sun at 27° from 228° (it was upstate's 16° golden hour: too low for sun and shade to read on the
+      ground).
+- [x] **9 Props and verge** — effect `parkFence` (weathered split rail in stretches along the drives, gaps at junctions,
+      crossing ways, decks and water) and `leafLitter` (leaves on the lawns, thickest under the crowns).
+- [x] **Checks:** `npm test`; `npm run qc:map -- nyc` against a baseline from main — every check unchanged (the fence
+      first stood 1.3 m out and read as an edge lip at 9 spots: moved to 2 m, clean); headless Balanced on the drives
+      110–200 draw calls, 0.70–0.97 M triangles (main 80–140, 0.6–0.8 M; CNY budget); phone Low (iPhone agent) 84 calls,
+      0.59 M triangles, the same JS heap as main (~280 MB), the tree atlas 104 px cells (main 112).
+- [ ] Look on a real GPU and a phone (the dissolve between a tree's card and its model as you ride, the canopy map's
+      redraw, High's post pass with the grade — darker than Balanced).
+- [ ] Roll out: CNY and SKAN (`grade`, `roadLook`, `trees.nearM`, `canopyShade`, `leafLitter`; the planting keys by
+      choice), PGH (no baked light: everything but `canopyShade`), the scenic routes (their own world: the tree engine and
+      the effects registry are shared, the bake's canopy hook too).
