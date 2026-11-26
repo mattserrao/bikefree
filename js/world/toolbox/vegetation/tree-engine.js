@@ -251,7 +251,11 @@ export class TreeEngine {
         this.group.add(im); parts.push(im);
       }
       e.pools[tier] = parts;
-      if (tier === 0) { const b = new THREE.Box3(); for (const g of [t.wood, t.leaves]) if (g) { g.computeBoundingBox(); b.union(g.boundingBox); } e.box = b; }
+      if (tier === 0) {
+        const b = new THREE.Box3(); for (const g of [t.wood, t.leaves]) if (g) { g.computeBoundingBox(); b.union(g.boundingBox); } e.box = b;
+        // ([zwift-look] the crown's own box — its leaves — for the canopy shade: crownsNear)
+        if (t.leaves) { t.leaves.computeBoundingBox(); e.leafBox = t.leaves.boundingBox.clone(); }
+      }
     });
     e.i = this.entries.length; this.entries.push(e); this.index.set(key, e);
   }
@@ -478,6 +482,27 @@ export class TreeEngine {
   }
 
   // ------------------------------------------------------------------ tiles
+  /**
+   * [zwift-look] The crowns near (x, z) (within R, square), for the canopy shade (toolbox/atmosphere/canopy-shade.js):
+   * { x, y, z, r, cy (crown centre above the base), ry (half depth), cb (crown bottom above the base), dens } — from each
+   * tree's model's leaf box, scaled; a leaning crown sits out over its lean. Understory and leafless pieces skipped.
+   */
+  crownsNear(x, z, R) {
+    const out = [];
+    for (const list of this.tiles.values()) for (const t of list) {
+      if (t.e.nearOnly || Math.abs(t.x - x) > R || Math.abs(t.z - z) > R) continue;
+      // (a kit whose near model has no separate leaves — a pack's one-piece trees: the whole model, its crown taken as
+      //  the top two-thirds)
+      const lb = t.e.leafBox || t.e.box; if (!lb) continue;
+      const sy = t.sy ?? t.s, top = lb.max.y * sy, bot = Math.max(0, (t.e.leafBox ? lb.min.y : lb.max.y * .34) * sy);
+      if (top - bot < 1.5) continue;
+      const cy = (top + bot) / 2, lx = t.lean ? t.lean[0] * cy : 0, lz = t.lean ? t.lean[1] * cy : 0;
+      const r = Math.max(lb.max.x - lb.min.x, lb.max.z - lb.min.z) * .5 * t.s;
+      out.push({ x: t.x + lx, y: t.y, z: t.z + lz, r: r * .85, cy, ry: (top - bot) / 2, cb: bot + (top - bot) * .15, dens: .92 });
+    }
+    return out;
+  }
+
   setTile(key, trees) {
     const list = [];
     for (const t of trees) {

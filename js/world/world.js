@@ -616,6 +616,8 @@ export class World {
     if (this.stylized && key === 'night') t = { ...t, sunI: .55, hemiI: .42 };
     else if (this.stylized) t = { ...t, sunI: key === 'golden' ? 2.5 : 2.1, hemiI: key === 'golden' ? .95 : 1.1,
       ...(key === 'midday' ? { elev: 46, az: 238, top: '#70a9d2', horizon: '#d5e2db', hemiSky: '#e8f0ed', hemiGround: '#9c9d7e', sun: '#fff2d5', exposure: 1.03 } : {}) };
+    // [zwift-look] a scene's key light (the grade effect: sun ×, sky light ×)
+    if (this.lightTune && !t.night) t = { ...t, sunI: t.sunI * this.lightTune.sun, hemiI: t.hemiI * this.lightTune.sky, exposure: t.exposure * this.lightTune.exposure };
     this.timeKey = key;
     this._time = t;
     this._applyLight();

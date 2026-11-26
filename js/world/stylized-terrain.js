@@ -1267,7 +1267,9 @@ export class StylizedTerrain {
     // pack models' names onto them, so the planners keep their names and the engine draws the common species
     const swap = this.config.suite?.kit === 'common' ? this.config.suite.trees : null;
     if (swap) { const common = makeEndlessTrees(); for (const [name, sp] of Object.entries(swap)) if (common.species[sp]) kit.species[name] = common.species[sp]; }
-    this._te = new TreeEngine({ renderer: this.renderer, parent: this.group, quality: this.qualityKey, uTime: this.uniforms.uTime, lights, kit, shadows: !!this.quality.shadows });
+    // ([zwift-look] a scene's near band — "trees": { "nearM" } — its trees inside it drawn as their grown models)
+    const phone = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android|Mobile/.test(navigator.userAgent || '');
+    this._te = new TreeEngine({ renderer: this.renderer, parent: this.group, quality: this.qualityKey, uTime: this.uniforms.uTime, lights, kit, shadows: !!this.quality.shadows, near: (phone ? .6 : 1) * (this.config.trees?.nearM || 0) });
     return this._te;
   }
 

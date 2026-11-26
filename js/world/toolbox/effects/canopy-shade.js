@@ -3,7 +3,10 @@
 // canopy map as the camera moves on, and turns the shared uniforms on. Drawn by every material the baked lighting
 // patches (a map with baked light: the upstate profile's golden hour — CNY, SKAN, NYC).
 // Options: { strength: 1 (0–1: how dark the shade), lift: 7 (m: the canopy plane above the rider) }.
+import * as THREE from '../../../../vendor/three.module.min.js';
 import { CanopyShade } from '../atmosphere/canopy-shade.js';
+
+const _sd = new THREE.Vector3();
 
 const CONIFER = /pine|hemlock|spruce|arborvitae/;
 
@@ -37,18 +40,26 @@ export const canopyShade = {
     if (world.qualityKey === 'low' && opts.low === false) return {};
     const shade = new CanopyShade({ strength: opts.strength ?? 1, planeLift: opts.lift ?? 7 });
     shade.attach();
-    const trees = graphCanopyTrees(world);
+    // the crowns: any world's tree engine (graph maps: the city's; the endless world's; a scenic route's terrain's)
+    const engines = () => {
+      const out = [world.city?.forest, world.forest, world.terrain?._te];
+      if (world.areas) for (const a of world.areas.values()) out.push(a.terrain?._te);
+      return [...new Set(out.filter((e) => e && e.crownsNear))];
+    };
+    const engine = () => engines()[0] || null;
+    const trees = (x, z, R) => { const E = engines(); return E.length ? E.flatMap((e) => e.crownsNear(x, z, R)) : graphCanopyTrees(world)(x, z, R); };
+    const sunDir = () => world.sunDir || (world.sun ? _sd.copy(world.sun.position).sub(world.sun.target.position).normalize() : null);
+    const groundY = () => { const c = world.camera.position; return world.ground && world._groundH ? world._groundH(c.x, c.z) : world.rider?.group ? world.rider.group.position.y : c.y - 2; };
     let lastTrees = 0, frame = 0;
     world.canopy = shade;
     return {
       tick(t) {
-        if (!world.sunDir || !world.camera) return;
+        const sd = sunDir(); if (!sd || !world.camera) return;
         // the city's trees changed (a tile came or went): redraw at the next step
-        if ((frame++ & 31) === 0) { const n = world.city?.stats?.trees || 0; if (n !== lastTrees) { lastTrees = n; shade.dirty = true; } }
-        const c = world.camera.position, gy = world.ground ? world._groundH(c.x, c.z) : c.y - 2;
-        shade.update(world.camera, world.sunDir, trees, gy, t, world._preload ? 12 : world.qualityKey === 'low' ? 1.2 : 2.5);
+        if ((frame++ & 31) === 0) { const n = engines().reduce((a, e) => a + e.tiles.size, 0) || world.city?.stats?.trees || 0; if (n !== lastTrees) { lastTrees = n; shade.dirty = true; } }
+        shade.update(world.camera, sd, trees, groundY(), t, world._preload ? 12 : world.qualityKey === 'low' ? 1.2 : 2.5);
       },
-      prepare() { if (!world.sunDir || !world.camera) return; const c = world.camera.position; shade.flush(world.camera, world.sunDir, trees, world.ground ? world._groundH(c.x, c.z) : c.y - 2, world.cloudTime?.value || 0); },
+      prepare() { const sd = sunDir(); if (!sd || !world.camera) return; shade.flush(world.camera, sd, trees, groundY(), 0); },
       setVisible(v) { shade.setVisible(v); },
       dispose() { shade.dispose(); if (world.canopy === shade) world.canopy = null; },
     };
