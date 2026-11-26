@@ -24,7 +24,7 @@ export class Visitors {
     this.L = landscape; this.route = route; this.index = index; this.u = uniforms;
     this.group = new THREE.Group(); this.group.name = 'Visitors'; parent.add(this.group);
     const rand = (this.rand = randomSequence(6061));
-    const scale = quality === 'low' ? .5 : quality === 'high' ? 1.25 : 1;
+    const scale = quality === 'low' ? .5 : quality === 'ultra' ? 1.5 : quality === 'high' ? 1.25 : 1;
     const walking = config.walking ?? .45, people = [];
     const spot = (cx, cz, rIn, rOut, count, face) => {
       for (let k = 0, tries = 0; k < Math.round(count * scale) && tries < 400; tries++) {
@@ -59,7 +59,7 @@ export class Visitors {
     }
     this.people = people;
     const n = Math.max(1, people.length);
-    this.crowd = new Crowd(this.group, { uTime: uniforms.uTime, name: 'Visitors', capacity: n, nearM: quality === 'low' ? 25 : quality === 'high' ? 60 : 40,
+    this.crowd = new Crowd(this.group, { uTime: uniforms.uTime, name: 'Visitors', capacity: n, nearM: quality === 'low' ? 25 : quality === 'ultra' ? 80 : quality === 'high' ? 60 : 40,
       dogs: people.filter((p) => p.look.dog).length, strollers: people.filter((p) => p.look.stroller).length });
     this._place(null, 0, true);
   }

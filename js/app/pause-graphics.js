@@ -2,13 +2,14 @@
 // and mobile same menus)"): scenery detail, time of day, weather, camera, minimap and power bar size, applied at once
 // and saved (the same settings as the Settings dialog). Filled each time the pause overlay opens.
 // (Part of the app: js/app.js imports it.)
-import { saveSettings } from '../settings.js';
+import { saveSettings, hideDesktopOnlyOptions } from '../settings.js';
+hideDesktopOnlyOptions();
 import { $, settings, log } from './core.js';
 import { applyHudPrefs, world } from './ride-screen.js';
 
 const TIMES = [['auto', "Route's default"], ['morning', 'Morning'], ['midday', 'Midday'], ['golden', 'Golden hour'], ['night', 'Night']];
 const WEATHER = [['clear', 'Clear'], ['marine', 'Marine layer'], ['clouds', 'Clouds'], ['rain', 'Rain']];
-const QUALITY_LABEL = { low: 'Light', balanced: 'Balanced', high: 'High' };
+const QUALITY_LABEL = { low: 'Light', balanced: 'Balanced', high: 'High', ultra: 'Ultra' };
 
 function options(select, list, value) {
   select.replaceChildren(...list.map(([v, label]) => { const o = document.createElement('option'); o.value = v; o.textContent = label; return o; }));

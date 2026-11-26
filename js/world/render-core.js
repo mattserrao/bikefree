@@ -19,6 +19,8 @@ export const TIERS = {
 };
 export const TIER_KEYS = Object.keys(TIERS);
 export const tierOf = (key) => TIERS[key] || TIERS.balanced;
+/** Whether a tier is at least another (Ultra counts as High everywhere High gets more): tierAtLeast('ultra', 'high'). */
+export const tierAtLeast = (key, min) => TIER_KEYS.indexOf(key) >= TIER_KEYS.indexOf(min);
 
 /** The device pixel ratio a tier draws at (× scale: the battery saver, the governor). */
 export function pixelRatioFor(key, scale = 1) {

@@ -1,5 +1,6 @@
 import * as THREE from '../../../../vendor/three.js';
 import { decorateSceneryMaterial } from '../materials/surfaces.js';
+import { MOUNTAIN_BUILDERS } from './northern-rockies.js';
 
 const unpack = (text, Type) => {
   const bytes = Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
@@ -43,5 +44,10 @@ export async function loadSceneryAssets(path, opts = {}) {
     geometry.computeBoundingSphere();
     assets[name] = { geometry, material: materialFor(name) };
   }
+  // the kit's old lupine (stacked octahedra) and poppy (flat discs on sticks) read as toys: grown the way the
+  // mountain packs grow their flowers — silver bush lupine's purple spikes, California poppies' orange cups
+  const swap = (name, geo) => { if (!assets[name]) return; assets[name].geometry.dispose(); geo.computeBoundingSphere(); assets[name].geometry = geo; };
+  swap('lupine', MOUNTAIN_BUILDERS.spikes(4401, 14, .45, '#6f8a5a', '#7a68c8', '#9a8ee0', .32));
+  swap('poppy', MOUNTAIN_BUILDERS.daisies(4411, 7, .3, '#f08a1c', '#e8b020'));
   return { assets, dispose() { for (const a of Object.values(assets)) a.geometry.dispose(); Object.values(materials).forEach((m) => m.dispose()); } };
 }

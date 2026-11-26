@@ -9,6 +9,7 @@ import { makeProjection, makeRouteIndex } from './geo.js';
 import { Terrain } from './terrain.js';
 import { Weather } from './toolbox/atmosphere/weather.js';
 import { PostFX } from './toolbox/atmosphere/post.js';
+import { SkyEnvironment } from './toolbox/atmosphere/environment.js';   // [one lighting model] the sky as environment light, as on the graph maps
 import { Look, LOOKS } from './toolbox/atmosphere/look.js';
 import { StylizedTerrain, SCENERY_QUALITY } from './stylized-terrain.js';
 import { lockedChase, riderPose, routePoint, ROAD_WIDTH, CHASE, CHASE_CLOSE, CAMERAS, DEFAULT_CAMERA, PACER_LANE, leanAlong, stepLean } from './pose.js';
@@ -139,7 +140,7 @@ export class World {
       this.renderer.shadowMap.enabled = SCENERY_QUALITY[this.qualityKey].shadows;
       this.renderer.shadowMap.type = THREE.PCFShadowMap;   // PCFSoftShadowMap was removed from three.js
       this.sun.castShadow = true;
-      const shadowResolution = this.qualityKey === 'high' ? 2048 : 1024;
+      const shadowResolution = this.qualityKey === 'ultra' ? 4096 : this.qualityKey === 'high' ? 2048 : 1024;
       this.sun.shadow.mapSize.set(shadowResolution, shadowResolution);
       Object.assign(this.sun.shadow.camera, { near: 10, far: 800, left: -170, right: 170, top: 170, bottom: -170 });
       this.sun.shadow.bias = -.00015; this.sun.shadow.normalBias = .055;
@@ -198,6 +199,7 @@ export class World {
     // every stylized scene goes through it; only hero scenes (scene.post) get the bloom, grade and vignette
     if (this.stylized) this.post = new PostFX(this.renderer, { samples: SCENERY_QUALITY[this.qualityKey].samples });
     this.heroPost = !!(this.stylized && route.scene.post);
+    this._postAO();   // [one lighting model] contact shading, as on the graph maps
     // [blocks] the shared graphics effects (toolbox/effects, the same registry the free-ride maps use): a scene's
     // "effects" field; none when absent, so a scene without it draws exactly as before
     const fx = this.suite ? { sky: { clouds: this.suite.clouds ?? 0.4 }, ...(route.scene.effects || {}) } : route.scene.effects;
@@ -601,15 +603,26 @@ export class World {
     this.governor?.setQuality(this.qualityKey);
     this.renderer.setPixelRatio(pixelRatioFor(this.qualityKey, this.governor?.scale ?? 1));
     this.renderer.shadowMap.enabled = quality.shadows && !(this.baked && this._time?.night);   // [baked-light]
-    const resolution = this.qualityKey === 'high' ? 2048 : 1024;
+    const resolution = this.qualityKey === 'ultra' ? 4096 : this.qualityKey === 'high' ? 2048 : 1024;   // (the near cascade, as on the graph maps)
+    if (this.baked) this.baked.dynamicSpan = this.qualityKey === 'ultra' ? 80 : this.qualityKey === 'high' ? 60 : this.baked.opts.dynamicSpanM;
     if (this.sun.shadow.mapSize.x !== resolution) {
       this.sun.shadow.map?.dispose(); this.sun.shadow.map = null;
       this.sun.shadow.mapSize.set(resolution, resolution);
     }
     this.post?.setSamples(quality.samples);
+    this._postAO();
     for (const a of this.areas.values()) a.terrain?.setQuality(this.qualityKey);
     this.scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => { m.needsUpdate = true; }); });
     this._resize?.();
+  }
+
+  /** [one lighting model] the graph maps' contact shading (post.js): High and Ultra on laptops and desktops at full
+   *  strength, Balanced lighter, none on Light or on phones. */
+  _postAO() {
+    if (!this.post) return;
+    const mobile = /iPhone|iPad|Android/i.test(globalThis.navigator?.userAgent || '');
+    const k = this.qualityKey;
+    this.post.setAO(mobile || k === 'low' ? null : k === 'balanced' ? { strength: .55, radiusM: .6 } : { strength: .7, radiusM: .7 });
   }
 
   setTimeOfDay(key) {
@@ -661,6 +674,19 @@ export class World {
     u.sunColor.value.set(t.sun);
     u.sunDir.value.copy(dir);
     u.uNight.value = t.night ? 1 : 0;
+    // [one lighting model] the sky as environment light (environment.js, as on the graph maps): the PBR scenery's
+    // ambient and its reflections come from the sky above and the ground below; the hemisphere light stays a small fill.
+    // Rebuilt only when the light really changes (weather eases in over many frames).
+    if (this.stylized && !this.wireframe) {
+      const sig = `${this.timeKey}|${o.toFixed(1)}|${sm.toFixed(1)}`;
+      if (sig !== this._envSig) {
+        this._envSig = sig;
+        this.env ||= new SkyEnvironment(this.renderer);
+        this.scene.environment = this.env.update({ mesh: this.sky }, t.hemiGround);
+      }
+      this.scene.environmentIntensity = t.hemiI * (t.night ? .4 : .75);
+      this.hemi.intensity = t.hemiI * .3;
+    }
     this.scene.fog.color.set(t.horizon);
     // valley haze (haze.js): low air thickens in the morning, thins at midday; a scene can scale or deepen it
     if (this.stylized) {
@@ -1000,7 +1026,7 @@ export class World {
     this.effects?.dispose();   // [blocks]
     this.baked?.dispose();   // [baked-light]
     this._bakeEl?.remove();   // [w2-bake]
-    this.post?.dispose();
+    this.post?.dispose(); this.env?.dispose();
     this.courseArches?.dispose();
     for (const a of this.areas.values()) if (a !== this.area) a.terrain?.dispose();
     this._fadeEl?.remove();
