@@ -558,6 +558,68 @@ function rock(seed, w, h) {
   return b.build();
 }
 
+
+/**
+ * [zwift-look] A park bush of angled leaf sprites (user, 25 Nov — the Zwift reference: "bushes are several sprites on
+ * angled", "5–10 leaf-cluster sprites per clump, each tilted a different way … dark at the base, sunlit on top; they
+ * merge into continuous hedge masses"): leaf-cluster cards in three nested shells over a half dome, each card turned
+ * to face out along its own direction (outward, up, sideways — never all upright), rolled at random about it; small and
+ * dark inside, larger and lit at the rim; the colour graded from a dark base to a sunlit top and jittered card to card
+ * between the bush's two tones; normals spherized from the dome's centre so the mass shades as one soft form. A few
+ * short stems under it. o: { R, H (m), tones: [hex…], seed, wide (x stretch), cards (× count) }.
+ */
+export function angledBush(seed, o = {}) {
+  const rand = randomSequence(seed), R = o.R ?? 1.2, H = o.H ?? R * .95, wide = o.wide ?? 1, tones = o.tones || ['#4f7434', '#5e8240', '#46682e'];
+  const wood = new Builder(); wood.as(BARK);
+  for (let k = 0; k < 4; k++) limb(wood, new THREE.Vector3((rand() - .5) * R * .4 * wide, 0, (rand() - .5) * R * .4), dirOf(rand() * 6.28, 1.05 + rand() * .35), H * .55, .03, .012, 3, '#4e4034');
+  const pos = [], nor = [], uv = [], col = [];
+  const cc = new THREE.Vector3(0, H * .38, 0), n = new THREE.Vector3(), t1 = new THREE.Vector3(), t2 = new THREE.Vector3(), p = new THREE.Vector3(), q = new THREE.Vector3();
+  const c0 = new THREE.Color(), c1 = new THREE.Color();
+  // [radius fraction, cards, size (× R), shade]
+  const shells = [[.32, 6, .38, .5], [.66, 11, .46, .75], [.97, 17, .52, 1]];
+  const k0 = o.cards ?? 1;
+  for (const [fr, count, sz, shade] of shells) for (let i = 0; i < Math.round(count * k0); i++) {
+    // a direction over the upper dome (the base row low and wide, a few near the top)
+    const a = i * 2.39996 + rand() * .9 + fr * 3, el = Math.asin(Math.min(1, .05 + Math.pow(rand(), 1.3) * .95));
+    const dx = Math.cos(a) * Math.cos(el), dy = Math.sin(el), dz = Math.sin(a) * Math.cos(el);
+    const size = R * sz * (.78 + rand() * .44);
+    p.set(dx * R * fr * wide, Math.max(size * .55, cc.y + dy * (H - cc.y) * fr * 1.05), dz * R * fr);
+    // its facing: out along its direction, tipped at random (± ~40°), never edge-on to everything
+    n.set(dx * wide + (rand() - .5) * .8, dy + .25 + (rand() - .5) * .6, dz + (rand() - .5) * .8).normalize();
+    t1.set(0, 1, 0); if (Math.abs(n.y) > .9) t1.set(1, 0, 0);
+    t1.crossVectors(t1, n).normalize(); t2.crossVectors(n, t1).normalize();
+    const roll = rand() * Math.PI * 2, cr = Math.cos(roll), sr = Math.sin(roll);
+    const ax = t1.clone().multiplyScalar(cr).addScaledVector(t2, sr), ay = t2.clone().multiplyScalar(cr).addScaledVector(t1, -sr);
+    // colour: the bush's tones, card to card; dark at the foot and inside, lit at the top and rim
+    const ti = Math.floor(rand() * tones.length), tj = Math.floor(rand() * tones.length);
+    c0.set(tones[ti]).lerp(c1.set(tones[tj]), rand() * .5);
+    const up = Math.min(1, p.y / H), lit = (.5 + .6 * up) * shade * (.9 + rand() * .2);
+    c0.multiplyScalar(lit);
+    const u0 = Math.floor(rand() * 2) * .5, v0 = Math.floor(rand() * 2) * .5;
+    const corner = (sx, sy) => q.copy(p).addScaledVector(ax, sx * size).addScaledVector(ay, sy * size).clone();
+    const P = [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, -1), corner(1, 1), corner(-1, 1)], U = [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]];
+    P.forEach((pp, j) => {
+      if (pp.y < .02) pp.y = .02;   // (nothing under the ground)
+      pos.push(pp.x, pp.y, pp.z);
+      const m = new THREE.Vector3((pp.x - cc.x) / (R * wide), (pp.y - cc.y) / H + .3, (pp.z - cc.z) / R).normalize();
+      nor.push(m.x, m.y, m.z); uv.push(u0 + U[j][0] * .5, v0 + U[j][1] * .5); col.push(c0.r, c0.g, c0.b);
+    });
+  }
+  const leaves = new THREE.BufferGeometry();
+  leaves.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); leaves.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  leaves.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); leaves.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  leaves.computeBoundingSphere(); leaves.computeBoundingBox();
+  return { wood: wood.build(), leaves };
+}
+/** [zwift-look] The park bushes (makeUpstateTrees({ bushes: true })): greens, a yellow-green, a burgundy viburnum, a
+ *  low spreading one and a long hedge piece — each a row in the impostor atlas, its angled sprites near the camera. */
+const PARK_BUSHES = {
+  bushGreen: { seed: 6301, R: 1.25, tones: ['#4b7232', '#587e3b', '#42662c', '#6a8c45'] },
+  bushYellow: { seed: 6311, R: 1.1, tones: ['#7f8f3a', '#9a9a3e', '#6f8636', '#b3a446'] },
+  bushRed: { seed: 6321, R: 1.15, tones: ['#7a2a26', '#93392c', '#6a2a2a', '#a3532e'] },
+  bushLow: { seed: 6331, R: 1.5, H: .85, wide: 1.25, tones: ['#4f7434', '#5e8240', '#7c8a3a'] },
+  bushHedge: { seed: 6341, R: 1.3, H: 1.25, wide: 1.9, cards: 1.5, tones: ['#3f652c', '#4b7232', '#557a38'] },
+};
 /** The kit: every species' variants in three levels of detail, and the understory pieces. */
 // the city park's trees (NYC's Central Park, user 25 Nov: "Mapped woods + real rows … London planes, elms, oaks, maples,
 // tupelo in peak color"): only for a map that asks (makeUpstateTrees({ park: true })) — each is a row in the impostor atlas
@@ -581,7 +643,7 @@ const PARK_SPECIES = {
     greens: ['#41622f', '#4a6c34'], fall: ['#9a4a24', '#b2622c', '#7e3f22'], turn: [0, .4, .8] },
 };
 
-export function makeUpstateTrees({ oldGrowth = false, park = false } = {}) {
+export function makeUpstateTrees({ oldGrowth = false, park = false, bushes = false } = {}) {
   return withSmooth(true, () => {
     const species = {};
     for (const [name, o] of Object.entries(SPECIES)) {
@@ -625,6 +687,7 @@ export function makeUpstateTrees({ oldGrowth = false, park = false } = {}) {
       herb: herb(6231), seedling: grow(6241, { ...SPECIES.sugarmaple, H: 1.4, R: .5, trunkR: .02 }, 1, .2),
       beechSapling: grow(6251, { ...FOREST_FORMS.beechF, H: 4.5, R: 1.5, trunkR: .06, fork: .3, fluff: .6 }, 0, .1),
     });
+    if (bushes) for (const [name, o] of Object.entries(PARK_BUSHES)) understory[name] = angledBush(o.seed, o);
     // the old growth's fallen trunks: 3D models drawn by old-growth.js (not cards, so not in the engine's atlas)
     const logs = oldGrowth ? { bigLog: bigLog(6201, { L: 16, r: .52 }), nurseLog: bigLog(6211, { L: 13, r: .6, nurse: true }), tipup: bigLog(6221, { L: 17, r: .5, tipup: true }), log: MOUNTAIN_BUILDERS.log(1) } : {};
     return { species, understory, logs };

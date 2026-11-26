@@ -84,6 +84,7 @@ for (const spec of args) {
     w.camera.updateMatrixWorld();
     w.city?.oldGrowth?.prepare(w.camera);   // (an old-growth hero area's near pieces: built now for this camera)
     if (w.city?.forest) { w.city.forest._at = null; w.city.forest._lastRebuild = -99; w.city.forest.tick(w.camera); w.city.forest.impMat.uniforms.uNow.value = 1e9; }   // (every tile's impostors in: no dissolve in a still)
+    w.effects?.prepare?.();   // (time-sliced effects — the canopy shade's map — finished for this camera)
     w.renderer.info.autoReset = false; w.renderer.info.reset();
     if (w._draw) w._draw(); else w.renderer.render(w.scene, w.camera);   // (the world's own draw: its post pass on High)
     const i = w.renderer.info.render;

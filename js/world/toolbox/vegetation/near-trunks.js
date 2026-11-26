@@ -25,7 +25,7 @@ const BARK_TONE = { maple: [1.62, 1.42, 1.24], beech: [1.06, 1.04, 1.0], hickory
 const SEG = 14;
 
 let textures = null;
-function barkTextures() {
+export function barkTextures() {
   if (textures) return textures;
   const L = new THREE.TextureLoader();
   const load = (f, srgb) => {
@@ -314,4 +314,33 @@ export function flareMaterial() {
   };
   m.customProgramCacheKey = () => 'near-flare-2';
   return m;
+}
+
+/**
+ * [zwift-look] Bark detail on any wood material (the tree engine's grown models near the camera: trunks, forks and
+ * limbs — user, 25 Nov: "bark texture, visible forks and limbs into the crown"): the maple bark's furrows, projected
+ * three ways from the model's own frame (no UVs on the grown tubes) and blended by the surface's facing, scale the
+ * wood's own colour (the species' tone stays) and shade its relief toward the sun; faded out by ~70 m. Chains any
+ * onBeforeCompile. Needs vTO (the model-space position) and vTK (the surface kind) from decorateTreeMaterial.
+ */
+export function withBarkDetail(material) {
+  const prev = material.onBeforeCompile, prevKey = material.customProgramCacheKey?.() || '';
+  const T = barkTextures();
+  material.onBeforeCompile = (shader, r) => {
+    prev?.call(material, shader, r);
+    shader.uniforms.uBarkMap = { value: T.maple.map };
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uBarkMap;')
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        if (vTK > .5 && vTK < 3.5) {
+          float bkD = length(cameraPosition - vTW), bkF = 1. - smoothstep(35., 70., bkD);
+          if (bkF > 0.) {
+            vec3 bkN = normalize(cross(dFdx(vTO), dFdy(vTO))), bkW = pow(abs(bkN), vec3(4.)); bkW /= bkW.x + bkW.y + bkW.z + 1e-4;
+            vec3 bkP = vTO / vec3(.9, 1.6, .9);
+            float bl = dot(texture2D(uBarkMap, bkP.zy).rgb, vec3(.3, .59, .11)) * bkW.x + dot(texture2D(uBarkMap, bkP.xz).rgb, vec3(.3, .59, .11)) * bkW.y + dot(texture2D(uBarkMap, bkP.xy).rgb, vec3(.3, .59, .11)) * bkW.z;
+            diffuseColor.rgb *= mix(1., clamp(pow(bl / .095, .65), .5, 1.6), bkF * .85);   // (the map's linear mean ~0.095: around 1)
+          }
+        }`);
+  };
+  material.customProgramCacheKey = () => `${prevKey}|bark-detail-1`;
+  return material;
 }

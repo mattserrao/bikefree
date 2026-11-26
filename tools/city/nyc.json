@@ -139,6 +139,28 @@
      "pinoak",
      15
     ]
+   ],
+   "avenue": [
+    [
+     "elm",
+     45
+    ],
+    [
+     "plane",
+     25
+    ],
+    [
+     "redoak",
+     10
+    ],
+    [
+     "pinoak",
+     10
+    ],
+    [
+     "sugarmaple",
+     10
+    ]
    ]
   },
   "pathPaint": false,
@@ -162,6 +184,38 @@
    "plaza": 4,
    "bridle": 3,
    "drive": 9
+  },
+  "trees": {
+   "nearM": 70
+  },
+  "avenue": {
+   "kinds": [
+    "drive"
+   ],
+   "every": 11,
+   "offset": [
+    4.5,
+    8
+   ],
+   "lean": 0.09,
+   "gap": 0.2
+  },
+  "understory": {
+   "kinds": [
+    "drive",
+    "path",
+    "bridle"
+   ],
+   "band": [
+    2.6,
+    9
+   ],
+   "step": 1.7,
+   "density": 0.55
+  },
+  "sun": {
+   "elev": 27,
+   "az": 228
   }
  },
  "id": "nyc",
@@ -3175,7 +3229,19 @@
  "effects": {
   "water": {},
   "sky": {},
-  "atmosphere": {}
+  "atmosphere": {},
+  "canopyShade": {},
+  "roadLook": {},
+  "grade": {
+   "sun": 1.2,
+   "sky": 0.85
+  },
+  "parkFence": {
+   "kinds": [
+    "drive"
+   ]
+  },
+  "leafLitter": {}
  },
  "files": {
   "ground": "routes/cities/nyc-ground.grid.bin.gz",

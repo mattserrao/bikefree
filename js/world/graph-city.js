@@ -37,6 +37,7 @@ import { planHomestead, drawHomestead, driveStrips, nearDrive } from './toolbox/
 import { skanCrop, cropMaterial, cropCardsJob, bale, verge, bay, farmStand, hayWagon } from './toolbox/landscape/farm-kit.js';
 import { makeUpstateTrees, fallVariant } from './toolbox/vegetation/upstate-trees.js';
 import { OldGrowth } from './toolbox/vegetation/old-growth.js';
+import { planParkPlanting } from './toolbox/vegetation/park-planting.js';
 import { profileY, ditchFits, ditchGeometry, culvertEnd, goldenrod, laceAndChicory, tallGrass, cattails, utilityPole, wires, scrubClump, roadSign } from './toolbox/landscape/roadside-ny.js';
 import { CANAL, canalAt } from './toolbox/city/cny-landmarks.js';
 import { ROAD_LIFT } from './pose.js';
@@ -199,11 +200,12 @@ export class GraphCity {
     if (this.profile.life === 'cyclists' || this.profile.life === 'park') this.life = new GraphLife(world, host.group, { quality: world.qualityKey, uTime: this.treeTime, park: this.profile.life === 'park' });
     // the tree engine (one for the game: toolbox/vegetation/tree-engine.js) with the northeastern hardwood kit — every
     // road-graph map (PGH's western Pennsylvania has the same trees); the rural maps in early fall, PGH in summer
-    this.treeKit = makeUpstateTrees({ oldGrowth: !!world.json?.oldGrowth, park: !!this.profile.parkTrees });
+    this.treeKit = makeUpstateTrees({ oldGrowth: !!world.json?.oldGrowth, park: !!this.profile.parkTrees, bushes: !!this.profile.understory });
     this.fall = this.profile.season === 'early-fall' || this.profile.season === 'peak-fall';
     this.peak = this.profile.season === 'peak-fall';   // (NYC: the canopy at its height — most trees turned)
     this.cars = this.profile.cars !== false;            // (NYC: no parked cars — the streets round the park stay empty)
-    this.forest = new TreeEngine({ renderer: world.renderer, parent: host.group, quality: world.qualityKey, uTime: this.treeTime, lights: { hemi: world.hemi, sun: world.sun }, kit: this.treeKit });
+    // ([zwift-look] a map's near band: its trees within ~nearM m drawn as their grown leaf-cluster models, not cards)
+    this.forest = new TreeEngine({ renderer: world.renderer, parent: host.group, quality: world.qualityKey, uTime: this.treeTime, lights: { hemi: world.hemi, sun: world.sun }, kit: this.treeKit, near: (MOBILE ? .6 : 1) * (this.profile.trees?.nearM || 0) });
   }
 
   /** The land cover's codes (a gzipped file of nx × ny bytes): then the ground shader and landAt have them. */
@@ -795,11 +797,13 @@ export class GraphCity {
       arbor: [['arborvitae', 1]],
       ...(this.profile.treeMix || {}),   // (a map's own mix by role: NYC's park — elms, London planes, oaks, tupelo)
     };
+    MIX.avenue ||= MIX.osm || MIX.street;
     /** A tree of `role` at (x, z) if it fits (shrunk to clear a roof or the road if it must): true if placed. */
     // (a hero area's singletrack — narrow, so the camera rides close to everything beside it: no low crown or brush
     //  card within 10 m, where it would be all magnified blur)
     const nearCf = (x, z) => { const r = this.roadNear(x, z, 11); return !!(r && r.e._cf && r.d - r.half < 10); };
-    const tree = (x, z, role, seed, age = null) => {
+    // (extra — [zwift-look] park planting: { lean: [lx, lz] the top's offset per metre up, overhang: may reach over the way })
+    const tree = (x, z, role, seed, age = null, extra = null) => {
       if (nearCf(x, z)) return false;
       const r1 = hash(seed * 7.13 + 1), r2 = hash(seed * 3.71 + 2), r3 = hash(seed * 9.17 + 3), r4 = hash(seed * 1.93 + 4);
       // ~6% dead (user, 23 Nov): snags in the woods, wet ground, hedgerows and pastures, a few by the road; none in yards or on streets
@@ -810,13 +814,17 @@ export class GraphCity {
       k *= .92 + r3 * .16;
       const de = edgeOf(x, z);
       const mapped = role === 'osm';   // (a map's own mapped trees — NYC's Mall elms: where OSM puts them, close to the walk, the crowns over it)
-      if (de < (mapped ? 1.5 : 4)) return false;   // trunks ≥ 4 m from the road's edge
+      const over = !!extra?.overhang;
+      if (de < (mapped ? 1.5 : over ? 3 : 4)) return false;   // trunks ≥ 4 m from the road's edge (3 m: an avenue's)
       if (k > 1.1 && de < 25) k = 1;
-      // a crown reaching over the road: smaller, so it clears the chase camera
-      if (sp.r * k > de + 1.5 && !mapped) k = Math.max(.45, (de + 1.5) / sp.r);
+      // a crown reaching over the road: smaller, so it clears the chase camera (an avenue's: let to arch over, its
+      // crown high above the camera)
+      if (sp.r * k > de + 1.5 && !mapped && !over) k = Math.max(.45, (de + 1.5) / sp.r);
       let crown = sp.r * k * .85;
       if (!clearOf(x, z, crown, mapped)) { k *= .6; crown = sp.r * k * .85; if (k < .35 || !clearOf(x, z, crown, mapped)) return false; }
-      out.push({ x, z, y: W._groundH(x, z) - .15, sp: name, v: this.fall ? fallVariant(sp, r4, this.peak) : 0, s: k, sy: k * (.94 + r3 * .12), rot: seed * 40 % 6.283, tint: .9 + r3 * .18, deep: de > 30 });
+      const T = { x, z, y: W._groundH(x, z) - .15, sp: name, v: this.fall ? fallVariant(sp, r4, this.peak) : 0, s: k, sy: k * (.94 + r3 * .12), rot: seed * 40 % 6.283, tint: .9 + r3 * .18, deep: de > 30 };
+      if (extra?.lean && !/pine|hemlock|spruce|arborvitae/.test(name)) T.lean = extra.lean;
+      out.push(T);
       return true;
     };
     const under = (x, z, name, seed, s = 1) => {
@@ -955,6 +963,15 @@ export class GraphCity {
           under(x, z, r < .55 ? (r < .3 ? 'sumac' : 'sumac2') : r < .8 ? 'buckthorn' : 'dogwood', seed);
         }
       }
+    }
+    // [zwift-look] the park planting along the ways (profile.avenue, profile.understory: park-planting.js)
+    if (this.profile.avenue || this.profile.understory) {
+      const G = new Map(), C = 6, gk = (x, z) => Math.floor(x / C) * 100003 + Math.floor(z / C);
+      for (const o of out) { const k = gk(o.x, o.z); (G.get(k) || G.set(k, []).get(k)).push(o); }
+      const occupied = (x, z, r) => { for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const o of G.get(gk(x + a * C, z + b * C)) || []) if (Math.hypot(o.x - x, o.z - z) < r && kit[o.sp]) return true; return false; };
+      const landOk = (x, z) => { const c = this.landAt(x, z); return c !== LAND.water && c !== LAND.building && c !== LAND.plaza && c !== LAND.paved && !this.inWater(x, z) && !(c >= LAND.oldGrowth && c <= LAND.ogBlowdown); };
+      yield* planParkPlanting({ pieces: (W.tiles.get(t.key)?.pieces || []).filter((p) => !p.e._cf), half: (e) => W.wOf(e) / 2, walk: (e) => (W.walkOf ? W.walkOf(e) : 0),
+        tree, under, occupied, landOk, avenue: this.profile.avenue, understory: this.profile.understory });
     }
     yield;
     plantTile(this.forest, t.key, out);   // [blocks] the planting API
