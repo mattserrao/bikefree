@@ -54,9 +54,9 @@ vec2 bfWave(vec2 p, vec2 d, float k, float a, float c) { return d * (a * k * cos
   if (uReflectOn > .5) {
     // the mirrored scene, nudged by the ripples' slope (more up close), the sky where it shows nothing
     vec4 rc = uReflectMat * vec4(bfWaterP, 1.0);
-    vec2 ruv = rc.xy / rc.w + N.xz * (0.05 * near + 0.012);
+    vec2 ruv = rc.xy / rc.w + N.xz * (0.018 * near + 0.004);
     vec4 rs = texture2D(tReflect, clamp(ruv, 0.002, 0.998));
-    mirrored = mix(uSky, rs.rgb, rs.a);
+    mirrored = rs.rgb;   // (the target is cleared to the sky's background: alpha-to-coverage leaves read as specks if blended by alpha)
   }
   outgoingLight = mix(outgoingLight, mirrored, fres * mix(uSkyMix, max(uSkyMix, 0.75), uReflectOn));
   // the sun's glitter: a sharp highlight broken up by the ripples (wider and softer for a low sun)
@@ -97,7 +97,7 @@ function planarReflection(world, waterMat, U, opts) {
   const q = world.qualityKey;
   if (opts.reflect === false || mobile || !(q === 'high' || q === 'ultra') || !world.renderer) return null;
   const scale = q === 'ultra' ? .5 : .34, every = q === 'ultra' ? 1 : 2;
-  const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 0 });
+  const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: q === 'ultra' ? 4 : 2 });   // (MSAA: the trees' alpha-to-coverage edges resolve smooth)
   rt.texture.generateMipmaps = false;
   const cam = new THREE.PerspectiveCamera(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   const P = new THREE.Vector3(), N = new THREE.Vector3(0, 1, 0), view = new THREE.Vector3(), target = new THREE.Vector3(),
