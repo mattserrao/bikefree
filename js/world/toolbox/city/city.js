@@ -1025,7 +1025,34 @@ export class CityScene {
     } else if (b.name === 'Fifth Avenue Place' || b.name === 'BNY Mellon Center') {
       M.color('#8d9aa3'); M.cylinder(cx, y1, cz, .5, 30, 6, .15);
     } else if (b.h > 60) {
-      M.color('#7b7f82'); M.box(cx, y1, cz, 9, 4.5, 9);
+      // (gap 13, user 26 Nov — "the skyline is plain white towers"): a tall building's top as the city's are built —
+      // a stone tower steps back in two or three setbacks to a penthouse and a water tank or two (the pre-war towers
+      // round Central Park); a glass tower ends in a mechanical screen and, the tallest, a mast. Along the footprint's
+      // own long side, sized to fit inside it.
+      let r = Infinity; for (const p of ring) r = Math.min(r, Math.hypot(p.x - cx, p.z - cz));
+      let yaw = 0, best = 0;
+      for (let i = 0; i < ring.length; i++) { const a = ring[i], c = ring[(i + 1) % ring.length], l = Math.hypot(c.x - a.x, c.z - a.z); if (l > best) { best = l; yaw = Math.atan2(c.x - a.x, c.z - a.z); } }
+      const w = Math.max(6, r * 1.35), tiers = b.h > 120 ? 3 : 2;
+      if (b.kind === 5 || b.kind === 6) {
+        M.color('#5f6d78'); M.box(cx, y1, cz, w * .82, 5.5, w * .82, yaw);
+        M.color('#7c868d'); M.box(cx, y1 + 5.5, cz, w * .5, 3, w * .5, yaw);
+        if (b.h > 150) { M.color('#9aa3a8'); M.cylinder(cx, y1 + 8.5, cz, .6, b.h * .12, 6, .15); }
+      } else {
+        const stone = new THREE.Color(KIND_COLORS[4][Math.floor(seed * 5) % 5]).multiplyScalar(.92);
+        let y = y1, k = 1;
+        for (let t = 0; t < tiers; t++) {
+          k *= .74; const h = 5 + seed * 5 + t * 1.5;
+          M.color(stone); M.box(cx, y, cz, w * k, h, w * k * (.8 + seed * .2), yaw);
+          M.color('#8f8676'); M.box(cx, y + h, cz, w * k + .5, .45, w * k * (.8 + seed * .2) + .5, yaw);   // the cornice
+          y += h + .45;
+        }
+        M.color('#6e6a64'); M.box(cx, y, cz, w * k * .55, 3.2, w * k * .45, yaw);   // the penthouse
+        if (seed > .35) {   // a timber water tank on its legs
+          const tx = cx + Math.cos(yaw) * w * k * .2, tz = cz - Math.sin(yaw) * w * k * .2;
+          M.color('#6f5f4e'); M.cylinder(tx, y + 3.2 + 1.8, tz, 1.6, 2.8, 10, 1.6); M.color('#4f4943'); M.pyramid(tx, y + 3.2 + 4.6, tz, 3.4, 1.1);
+          M.color('#4b4744'); for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) M.box(tx + dx, y + 3.2, tz + dz, .2, 1.8, .2);
+        }
+      }
     } else if (kit) {   // [street-kit] the kit dresses ordinary roofs
     } else if (b.kind === 0 && seed > .8 && b.h < 14) {
       M.color('#5a524b'); M.box(cx, y1, cz, 1.2, 1.4, 1.2);   // chimney

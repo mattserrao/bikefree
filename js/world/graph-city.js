@@ -65,7 +65,7 @@ const vnoise = (x, z) => {
   const a = H(i, j), b = H(i + 1, j), c = H(i, j + 1), d = H(i + 1, j + 1), fu = f(u), fv = f(v);
   return a + (b - a) * fu + (c - a) * fv + (a - b - c + d) * fu * fv;
 };   // the verges' grass and brush: built within, dropped beyond (m from a tile's edge)
-const REACH = { low: { near: 1300, far: 1800, trees: 0.6, treeNear: 450 }, balanced: { near: 2300, far: 3100, trees: 1, treeNear: 750 }, high: { near: 2300, far: 3100, trees: 1.2, treeNear: 900 } };
+const REACH = { low: { near: 1300, far: 1800, trees: 0.6, treeNear: 450 }, balanced: { near: 2300, far: 3100, trees: 1, treeNear: 750 }, high: { near: 2300, far: 3100, trees: 1.2, treeNear: 900 }, ultra: { near: 2600, far: 3500, trees: 1.4, treeNear: 1100 } };
 const CAR_NEAR = 340;           // m: parked cars (the kit's lo LOD) within this, its far LOD beyond
 const CAR_HI = 110;
 const ANIMAL_M = 480;           // m: farm animals drawn within this             // m: the kit's detailed cars within this

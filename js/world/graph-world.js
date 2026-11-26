@@ -19,6 +19,7 @@ import { CANAL, canalAt } from './toolbox/city/cny-landmarks.js';
 import { loadTerrainGrid } from '../terrain-grid.js';
 import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean, ROAD_LIFT, PACER_LANE } from './pose.js';
 import { loadRider, RIDER_RIM } from './rider.js';
+import { RoadRiders } from './toolbox/life/road-riders.js';   // [gap 15] other riders on the road
 import { makeSkyDome } from './toolbox/atmosphere/sky-dome.js';
 import { PostFX } from './toolbox/atmosphere/post.js';
 import { createRenderer, pixelRatioFor, QualityGovernor, GpuTimer } from './render-core.js';
@@ -578,6 +579,7 @@ export class GraphWorld {
   get loading() { return (this._queued || 0) > 6 || this.baked?.preparing ? 4 : 0; }
 
   dispose() {
+    this.roadRiders?.dispose(); this.roadRiders = null;
     this.post?.dispose(); this.post = null; this.env?.dispose(); this.groundCover?.dispose(); this.sky?.dispose();
     this.effects?.dispose();
     this.stop();
@@ -625,6 +627,10 @@ export class GraphWorld {
     if ((this._frames & 15) === 0) this.bridges?.tick(this.camera.position, this.qualityKey === 'low' ? 3000 : 4500);
     this.rider.update(out.pos, out.fwd, this.crank, src.speed || 0, Math.min(dt, 0.1), src);
     this._updatePacer(dt);
+    // [gap 15] company on the road: a few riders in other kits on the way you ride (none on Light, or where a map says so)
+    if (this.path && !this.roadRiders && this.qualityKey !== 'low' && this.profile.riders !== false && !this.gfx?.noRiders)
+      this.roadRiders = new RoadRiders(this, { count: { ultra: 8, high: 6, balanced: 4 }[this.qualityKey] ?? 4 });
+    this.roadRiders?.tick(dt, this.p, src.speed || 0);
     if (this.path) {
       const tmp = this._leanTmp ||= { pos: new THREE.Vector3(), fwd: new THREE.Vector3(), flat: new THREE.Vector3() };
       this._lean = stepLean(this._lean, leanAlong((s) => this._place(s, RIDER_LANE, tmp), this.p, src.speed || 0, { minS: 0 }), Math.min(dt, 0.1));
