@@ -15,7 +15,7 @@ export function setWind(dir = [.8, .6], k = 1) { WIND.uWindDir.value.set(dir[0],
 export const WIND_GLSL = /* glsl */`
   uniform vec2 uWindDir; uniform float uWindK;
   // the push at p (world x, z) at time t: along the wind, 0.35 between the gusts, up to 1 in one
-  vec2 bfWind(vec2 p, float t) {
+  vec2 bfWindAt(vec2 p, float t) {
     float along = dot(p, uWindDir), across = dot(p, vec2(-uWindDir.y, uWindDir.x));
     float front = .5 + .5 * sin(along * .05 - t * .3 + sin(across * .013 + t * .05) * 2.);
     return uWindDir * (.35 + .65 * front * front * front) * uWindK;

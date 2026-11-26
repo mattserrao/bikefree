@@ -136,7 +136,7 @@ function engineMaterial(material, uTime, leaf, key, ft = FT) {
           float ph = teO.x * .05 + teO.z * .043;
           float sw = sin(uTime * 1.1 + ph) * .6 + sin(uTime * 2.3 + ph * 1.7) * .3 + sin(uTime * 4.7 + ph * 2.9 + position.x) * .1;
           // (the shared wind: the crown leans downwind with the gusts, the sines its sway about that — atmosphere/wind.js)
-          vec2 teW = bfWind(teO.xz, uTime);
+          vec2 teW = bfWindAt(teO.xz, uTime);
           transformed.xz += (teW * (.3 + .12 * sw) + vec2(sw * .06, sw * .03)) * hk;
           if (uLeaf > .5 && teD < 160.) transformed += normal * sin(uTime * 9. + position.x * 3.1 + position.z * 2.7 + position.y) * .05 * (1. - teD / 160.);
         }`);

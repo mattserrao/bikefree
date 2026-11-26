@@ -75,7 +75,7 @@ export function grassMaterial(renderer, uTime, msaa = true) {
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         // a card's top (its uv.y above the cell's foot) sways; geometry on the white corner stays put
         if (uv.y > .05 && uv.x > .004) { vec3 wp = (modelMatrix * vec4(position, 1.)).xyz; float k = uv.y * uv.y;
-          transformed.xz += (bfWind(wp.xz, uTime) * .1 + vec2(sin(uTime * 1.9 + wp.x * .35 + wp.z * .21), cos(uTime * 1.4 + wp.z * .3)) * .035) * k; }`)   // (the shared wind, and each blade's own flutter)
+          transformed.xz += (bfWindAt(wp.xz, uTime) * .1 + vec2(sin(uTime * 1.9 + wp.x * .35 + wp.z * .21), cos(uTime * 1.4 + wp.z * .3)) * .035) * k; }`)   // (the shared wind, and each blade's own flutter)
       .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nvCard = uv.x > .004 ? 1. : 0.;')
       .replace('#include <common>', '#include <common>\nvarying float vCard;');
     // the cards lit as the ground under them (facing up), whichever side faces the camera
