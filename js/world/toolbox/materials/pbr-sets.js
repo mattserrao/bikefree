@@ -16,6 +16,15 @@ const BASE = new URL('../../../../', import.meta.url);
 const neutral = (rgba, srgb) => { const t = new THREE.DataTexture(new Uint8Array(rgba), 1, 1, THREE.RGBAFormat); t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.needsUpdate = true; return t; };
 /** The road surface's set (shared uniforms: every road material reads them; set once the textures arrive). */
 export const ROAD_PBR = { albedo: { value: neutral([128, 128, 128, 128], true) }, nra: { value: neutral([128, 128, 230, 255], false) }, on: { value: 0 } };
+/** The ground's turf set (lawns, verges, fields near the camera): the same shape as ROAD_PBR. */
+export const GROUND_PBR = { albedo: { value: neutral([128, 128, 128, 128], true) }, nra: { value: neutral([128, 128, 230, 255], false) }, on: { value: 0 } };
+/** The ground's relief and roughness from a set, in a frame laid on the ground (GLSL: after normal_fragment_maps). */
+export const PBR_NORMAL_GLSL = /* glsl */`
+  if (bfPbrW > 0.) {
+    vec3 nw = normalize(transpose(mat3(viewMatrix)) * normal), tw = normalize(vec3(1., 0., 0.) - nw * nw.x), bw = -cross(nw, tw);
+    vec3 pw = normalize(tw * bfPbrN.x * .8 + bw * bfPbrN.y * .8 + nw * bfPbrN.z);
+    normal = normalize(mix(normal, normalize(mat3(viewMatrix) * pw), bfPbrW));
+  }`;
 /** The road set a map's profile asks for: worn upstate asphalt, or clean city asphalt. */
 export const roadSetFor = (profile) => (profile?.roads === 'worn' ? 'asphalt-worn' : 'asphalt-new');
 let manifestP = null;

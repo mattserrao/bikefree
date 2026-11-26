@@ -22,7 +22,7 @@ import { makeSkyDome } from './toolbox/atmosphere/sky-dome.js';
 import { PostFX } from './toolbox/atmosphere/post.js';
 import { createRenderer, pixelRatioFor, QualityGovernor, GpuTimer } from './render-core.js';
 import { litMaterial } from './toolbox/materials/lit.js';
-import { loadPbrSets, PBR_GLSL, ROAD_PBR, roadSetFor } from './toolbox/materials/pbr-sets.js';
+import { loadPbrSets, PBR_GLSL, PBR_NORMAL_GLSL, ROAD_PBR, GROUND_PBR, roadSetFor } from './toolbox/materials/pbr-sets.js';
 import { SkyEnvironment } from './toolbox/atmosphere/environment.js';
 import { resolveMapDefinition } from './toolbox/map-definition.js';
 import { SURFACE, SURFACE_SUN, SURFACE_GLSL, loadSurfaceDetail, withSurfaceDetail } from './toolbox/materials/surface-detail.js';
@@ -318,7 +318,11 @@ export class GraphWorld {
     // [surfaces] the road's PBR set (KTX2: toolbox/materials/pbr-sets.js), near the camera; not on Phone
     if (this.qualityKey !== 'low') {
       const set = this.def.assets.textures.find((n) => n.startsWith('asphalt')) || roadSetFor(this.profile);
-      loadPbrSets(this.renderer, [set]).then((t) => { if (!t[set] || this.disposed) return; ROAD_PBR.albedo.value = t[set].albedo; ROAD_PBR.nra.value = t[set].nra; ROAD_PBR.on.value = 1; })
+      loadPbrSets(this.renderer, [set, 'turf']).then((t) => {
+        if (this.disposed) return;
+        if (t[set]) { ROAD_PBR.albedo.value = t[set].albedo; ROAD_PBR.nra.value = t[set].nra; ROAD_PBR.on.value = 1; }
+        if (t.turf) { GROUND_PBR.albedo.value = t.turf.albedo; GROUND_PBR.nra.value = t.turf.nra; GROUND_PBR.on.value = 1; }
+      })
         .catch((e) => this.log('3d', `road textures: ${e.message}`, 'debug'));
     }
     // the graphics effects this map asks for (toolbox/effects: the JSON's "effects" block; none when absent)
@@ -2120,11 +2124,13 @@ function groundMaterial(low = false, rural = false, soft = false) {
     uRoots: { value: Array.from({ length: ROOTS_N }, () => new THREE.Vector4()) }, uRootN: { value: 0 } };
   m.userData.land = U;
   m.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, U, CANOPY); shader.uniforms.uLitter = GROUND_LOOK.litter; shader.uniforms.uCloudT = CLOUD_T; shader.uniforms.uSurf = SURFACE; shader.uniforms.uSurfSun = SURFACE_SUN;
+    Object.assign(shader.uniforms, U, CANOPY); shader.uniforms.uPbrA = GROUND_PBR.albedo; shader.uniforms.uPbrN = GROUND_PBR.nra; shader.uniforms.uPbrOn = GROUND_PBR.on; shader.uniforms.uLitter = GROUND_LOOK.litter; shader.uniforms.uCloudT = CLOUD_T; shader.uniforms.uSurf = SURFACE; shader.uniforms.uSurfSun = SURFACE_SUN;
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aLandW; attribute float aTread; varying float vLandW; varying vec3 vGW; varying float vTread;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLandW = aLandW; vTread = aTread; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLand; uniform vec4 uLandBox; uniform float uLandOn; uniform float uCloudT; uniform vec4 uRoots[24]; uniform float uRootN; varying float vLandW; varying vec3 vGW; varying float vTread;\n' + NOISE_GLSL + SURFACE_GLSL + (m.defines.LITTER !== undefined ? CANOPY_GLSL + '\nuniform float uLitter;\n' : ''))
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLand; uniform vec4 uLandBox; uniform float uLandOn; uniform float uCloudT; uniform vec4 uRoots[24]; uniform float uRootN; varying float vLandW; varying vec3 vGW; varying float vTread;\nuniform sampler2D uPbrA, uPbrN; uniform float uPbrOn;\nfloat bfPbrW = 0.; float bfPbrR = .95; vec3 bfPbrN = vec3(0., 0., 1.);\n' + NOISE_GLSL + SURFACE_GLSL + PBR_GLSL + (m.defines.LITTER !== undefined ? CANOPY_GLSL + '\nuniform float uLitter;\n' : ''))
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, bfPbrR, bfPbrW);')
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        ${PBR_NORMAL_GLSL}
         #ifndef LOWQ
         {
           // the ground's small relief near the camera (the height grid is 12.8 m: hummocks, ruts and hollows of 1–6 m
@@ -2362,6 +2368,15 @@ function groundMaterial(low = false, rural = false, soft = false) {
         #ifndef LOWQ
         // the ground's texture near the camera: turf, or the woods' floor's grit (user, 24 Nov — Zwift parity)
         diffuseColor.rgb *= surfaceDetail(vGW.xz, sdCh, sdCh == 1 ? 5. : 3., length(vGW - cameraPosition), sdCh == 1 ? .6 : .8);
+        if (uPbrOn > .5 && sdCh == 2) {
+          // [surfaces] the PBR turf on grass (hex-tiled, 2.5 m): clumps, dry patches, relief, as a ratio to its own mean so the
+          // map's greens stay; it fades out by 45 m (the grass cards and the cover's colour carry it beyond)
+          PbrSample ps = pbrSurface(uPbrA, uPbrN, vGW.xz / 2.5);
+          vec3 mean = max(textureLod(uPbrA, vec2(.5), 12.).rgb, vec3(.01));
+          float w = smoothstep(45., 18., length(vGW - cameraPosition));
+          diffuseColor.rgb *= mix(vec3(1.), clamp(ps.albedo / mean, .4, 2.), w * .7) * mix(1., ps.ao, w * .8);
+          bfPbrW = w * .8; bfPbrR = ps.roughness; bfPbrN = ps.normal;
+        }
         #else
         if (vTread > 10.) diffuseColor.rgb *= surfaceDetail(vGW.xz, sdCh, sdCh == 1 ? 5. : 3., length(vGW - cameraPosition), sdCh == 1 ? .6 : .8);   // (a hero area's floor: on Low too)
         #endif
@@ -2369,6 +2384,6 @@ function groundMaterial(low = false, rural = false, soft = false) {
         diffuseColor.rgb *= 1. - .2 * smoothstep(.55, .75, gwN((vGW.xz + uCloudT * vec2(3., 1.2)) * .0025));   // a cloud's shadow drifting over (user, 23 Nov)
         #endif`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-20${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-21${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
   return m;
 }
