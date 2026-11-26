@@ -73,7 +73,7 @@ export const NEAR_TRUNK = [55, 60];
 export const NEAR_PLANT = [11, 14];
 /** [zwift-look] The near band per quality, × the map's own (phones: a shorter reach, the cards' memory kept). */
 const NEAR_BAND = { low: .55, balanced: 1, high: 1.2 };
-const CELL_2D = { low: 128, balanced: 192, high: 256 };   // (low: phones — the atlas 88 → 56 MB with its mipmaps, user 23 Nov)
+const CELL_2D = { low: 128, balanced: 192, high: 256, ultra: 256 };   // (low: phones — the atlas 88 → 56 MB with its mipmaps, user 23 Nov)
 const DEEP = [.55, .6];  // band scale for a tree > 30 m from any road (t.deep): seen only through the trees in front
 const FADE = [15, 50];   // m: each tree swaps at its own distance within ± this of the band's edge
 const HYST = 3;          // m: hysteresis at each band's edge
@@ -136,7 +136,7 @@ function engineMaterial(material, uTime, leaf, key, ft = FT) {
           float ph = teO.x * .05 + teO.z * .043;
           float sw = sin(uTime * 1.1 + ph) * .6 + sin(uTime * 2.3 + ph * 1.7) * .3 + sin(uTime * 4.7 + ph * 2.9 + position.x) * .1;
           // (the shared wind: the crown leans downwind with the gusts, the sines its sway about that — atmosphere/wind.js)
-          vec2 teW = bfWind(teO.xz, uTime);
+          vec2 teW = bfWindAt(teO.xz, uTime);
           transformed.xz += (teW * (.3 + .12 * sw) + vec2(sw * .06, sw * .03)) * hk;
           if (uLeaf > .5 && teD < 160.) transformed += normal * sin(uTime * 9. + position.x * 3.1 + position.z * 2.7 + position.y) * .05 * (1. - teD / 160.);
         }`);
@@ -273,7 +273,7 @@ export class TreeEngine {
     // ~226 MB with its mipmaps, on a phone): the atlas kept to a memory budget, a phone's or tablet's far smaller
     const nav = globalThis.navigator, ua = nav?.userAgent || '', mobile = /iPhone|iPad|iPod|Android|Mobile/.test(ua) || (/Macintosh/.test(ua) && nav.maxTouchPoints > 1);
     const budgetPx = (mobile ? 56e6 : 140e6) / (4 * 1.34), fit = Math.floor(Math.sqrt(budgetPx / (ANGLES * Math.max(1, list.length))) / 8) * 8;
-    const cell = TREES_2D ? Math.max(64, Math.min(CELL_2D[quality] || 192, fit, Math.floor(max / Math.max(1, list.length)), Math.floor(max / ANGLES))) : quality === 'low' ? 64 : quality === 'high' ? 160 : 128;
+    const cell = TREES_2D ? Math.max(64, Math.min(CELL_2D[quality] || 192, fit, Math.floor(max / Math.max(1, list.length)), Math.floor(max / ANGLES))) : quality === 'low' ? 64 : quality === 'ultra' ? 192 : quality === 'high' ? 160 : 128;
     const W = cell * ANGLES, H = cell * list.length;
     // (laptops and desktops: the photos taken with 4× MSAA — smoother leaf edges in the atlas, so a near card's
     //  crown isn't a staircase of texels: user, 24 Nov)

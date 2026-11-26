@@ -833,7 +833,10 @@ export class BakedLighting {
   _groundSampler(t = this.world.terrain) {
     const L = t.landscape;
     if (this.opts.groundAt) return this.opts.groundAt;
-    if (L?.baseHeight) return L.baseHeight;
+    // the lower of the base ground and the terrain as built: a road cut into a hillside (Alpe d'Huez's hairpin
+    // terraces, a graded street) sits metres under the base ground, which would otherwise read as a deck over it and
+    // put the road, its verges and the crowds in shadow
+    if (L?.baseHeight) return (x, z) => { const b = L.baseHeight(x, z), h = t.heightAt?.(x, z); return Number.isFinite(h) ? Math.min(b, h) : b; };
     return (x, z) => t.heightAt(x, z);
   }
 

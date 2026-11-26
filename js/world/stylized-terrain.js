@@ -68,6 +68,8 @@ export const SCENERY_QUALITY = {
   low: { pixelRatio: 1, samples: 2, shadows: false, scatterRange: 2, candidates: 150, coverCandidates: 100, forestRange: 3, nearM: 0, midM: 380, buildMs: 3, farTreeM: 0 },
   balanced: { pixelRatio: 1.5, samples: 2, shadows: true, scatterRange: 3, candidates: 230, coverCandidates: 320, forestRange: 4, nearM: 170, midM: 450, buildMs: 4, farTreeM: 1600 },
   high: { pixelRatio: 2, samples: 4, shadows: true, scatterRange: 4, candidates: 310, coverCandidates: 480, forestRange: 5, nearM: 240, midM: 560, buildMs: 5, farTreeM: 2200 },
+  // Ultra (desktops with headroom): denser scatter and cover, forest and near detail farther out
+  ultra: { pixelRatio: 2, samples: 4, shadows: true, scatterRange: 5, candidates: 380, coverCandidates: 620, forestRange: 6, nearM: 300, midM: 680, buildMs: 6, farTreeM: 2800 },
 };
 
 /** Bundled style-C coastal scene. No tile/imagery requests, including offline. */
@@ -259,7 +261,7 @@ export class StylizedTerrain {
     const near = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 });
     // a pack can give its near trees a surface shader (northern-rockies: bark, foliage clumps, aspen flutter, moss)
     if (decorateNear) decorateNear(near, this.uniforms);
-    const far = new THREE.MeshLambertMaterial({ vertexColors: true });
+    const far = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });   // [one lighting model] PBR: lit by the sky environment
     const soft = decorateSceneryMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .98, side: THREE.DoubleSide }), 'groundcover', this.uniforms);
     const first = !this.kitMaterials;
     (this.kitMaterials ||= []).push(near, far, soft);
@@ -862,7 +864,7 @@ export class StylizedTerrain {
           const width = .6 + rand() * 1.1;
           add(rand() < .25 ? 'sage' : `shrub${Math.floor(rand() * 2)}`, x, y - .12, z, width, width * (.7 + v.scrub * .4));
           if (detailed) add('shadow', x, y + .04, z, width * 2.5);
-        } else if (slope > .45 && pick < .85 && rand() < .35) add(`rock${Math.floor(rand() * 2)}`, x, y - .3, z, .5 + rand() * 1.3);
+        } else if (slope > .45 && pick < .85 && rand() < .35) { const rs = .5 + rand() * 1.3; add(`rock${Math.floor(rand() * 2)}`, x, y - .3 - slope * rs * 1.2, z, rs); }
         else if (detailed && pick < .92) add(v.alpine > .3 && rand() < .5 ? 'alpineflowers' : 'grass', x, y - .08, z, .8 + rand() * .8);
         continue;
       }
@@ -882,7 +884,7 @@ export class StylizedTerrain {
           const width = .6 + rand() * 1.2;
           add(rand() < .3 ? 'sage' : `shrub${Math.floor(rand() * 2)}`, x, y - .12, z, width, width * (.7 + v.scrub * .5));
           if (detailed) add('shadow', x, y + .04, z, width * 2.5);
-        } else if (slope > .5 && pick < .8 && rand() < .25) add(`rock${Math.floor(rand() * 2)}`, x, y - .3, z, .5 + rand() * 1.4);
+        } else if (slope > .5 && pick < .8 && rand() < .25) { const rs = .5 + rand() * 1.4; add(`rock${Math.floor(rand() * 2)}`, x, y - .3 - slope * rs * 1.2, z, rs); }
         else if (detailed && pick < .9) add('grass', x, y - .08, z, .9 + rand());
         continue;
       }
@@ -896,14 +898,14 @@ export class StylizedTerrain {
         if (detailed) add('shadow', x, y + .045, z, width * 8);
       } else if (slope > .25 && pick < .16 && !this.index.nearest(x, z, 16)) {
         const width = .45 + rand() * .95;
-        add(`outcrop${Math.floor(rand() * 2)}`, x, y - width * .9, z, width, width * (.65 + rand() * .65));
+        add(`outcrop${Math.floor(rand() * 2)}`, x, y - width * (.9 + slope * 2.4), z, width, width * (.65 + rand() * .65));   // (sunk by the slope: the downhill edge never floats)
       } else if (pick < .57) {
         const width = .65 + rand() * 1.1;
         const shrub = vegetation.shrubs ? vegetation.shrubs[Math.floor(rand() * vegetation.shrubs.length)] : `shrub${Math.floor(rand() * 2)}`;
         add(shrub, x, y - .12, z, width);
         if (detailed) add('shadow', x, y + .04, z, width * 2.5);
       }
-      else if (pick < .69) add(`rock${Math.floor(rand() * 2)}`, x, y - .3, z, .5 + rand() * 1.4);
+      else if (pick < .69) { const rs = .5 + rand() * 1.4; add(`rock${Math.floor(rand() * 2)}`, x, y - .3 - slope * rs * 1.2, z, rs); }
       else if (detailed && pick < .79) add('grass', x, y - .08, z, .9 + rand());
     }
     if (coverOnly && !this.landscape.city) {
@@ -994,7 +996,7 @@ export class StylizedTerrain {
         }
       }
       if (M.count) {
-        this._vergeMat ||= grassMaterial(this.renderer, this.uniforms.uTime, this.renderer?.getContextAttributes?.()?.antialias || this.qualityKey === 'high');
+        this._vergeMat ||= grassMaterial(this.renderer, this.uniforms.uTime, this.renderer?.getContextAttributes?.()?.antialias || this.qualityKey === 'high' || this.qualityKey === 'ultra');
         cards = new THREE.Mesh(M.geometry(), this._vergeMat); cards.name = `Verge cards ${cx},${cz}`; cards.frustumCulled = true; cards.receiveShadow = true;
         this.group.add(cards);
       }

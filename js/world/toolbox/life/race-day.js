@@ -134,7 +134,7 @@ export class RaceDay {
     this.end = route.turnS || route.total;
     this.chunks = []; this.dispose_ = [];
     this.reach = { people: config.peopleReachM ?? 230, cards: config.cardReachM ?? 2600, camps: config.campReachM ?? 3200 };
-    const scale = quality === 'low' ? .45 : quality === 'high' ? 1.2 : 1;
+    const scale = quality === 'low' ? .45 : quality === 'ultra' ? 1.4 : quality === 'high' ? 1.2 : 1;
     const rand = randomSequence(2026);
     const F = (s) => landscape.frameAt(Math.max(0, Math.min(this.end - .5, s)));
     const free = (x, z, y, pad = 0) => !index.nearest(x, z, ROAD_HALF + .6 + pad) && !landscape.isWater?.(x, z, y) && !landscape.bridgeAt(x, z, 8) && !landscape.creekAt?.(x, z) && (!landscape.canPlant || landscape.canPlant(x, z));

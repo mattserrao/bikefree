@@ -46,6 +46,7 @@ export function loadSettings() {
     // 21 Nov: phones ride on Light scenery (no antialiasing, pixel ratio 1, the simpler shaders, a nearer horizon) — set
     // once, so a phone already saved on Balanced moves to Light; a choice made after that is kept
     if (!s.phoneQuality) { if (isPhone()) s.worldQuality = 'low'; s.phoneQuality = true; }
+    if (s.worldQuality === 'ultra' && isTouchDevice()) s.worldQuality = 'high';   // (Ultra is for laptops and desktops)
     // 23 Nov (user: "on mobile set default to off"): phones ride without the minimap — set once; turning it on is kept
     if (!s.phoneMap) { if (isPhone()) { if (s.minimap !== 'off') s.minimapView = s.minimap; s.minimap = 'off'; } s.phoneMap = true; }
     return s;
@@ -68,3 +69,14 @@ export function saveSettings(s) {
 
 export const KG_PER_LB = 0.45359237;
 export const MI_PER_KM = 0.621371;
+
+/** A phone or a tablet (iPadOS reports a Mac with touch): Ultra isn't offered there. */
+export function isTouchDevice() {
+  const nav = globalThis.navigator, ua = nav?.userAgent || '';
+  return /iPhone|iPad|iPod|Android|Mobile/.test(ua) || (/Macintosh/.test(ua) && nav?.maxTouchPoints > 1);
+}
+/** Hide the Ultra choice (data-desktop options) on phones and tablets. */
+export function hideDesktopOnlyOptions(root = globalThis.document) {
+  if (!isTouchDevice()) return;
+  for (const o of root?.querySelectorAll?.('option[data-desktop]') || []) o.remove();
+}

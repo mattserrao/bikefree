@@ -136,7 +136,7 @@ export class OldGrowth {
     this.uTime = city.treeTime;
     this.stats = { skirtBlocks: 0, finBlocks: 0, blades: 0, canopyCards: 0, rays: 0 };
     const q = world.qualityKey;
-    this.q = { cell: q === 'low' ? 2.5 : CELL, rays: q !== 'low', bladeS: q === 'low' ? .68 : q === 'high' ? .46 : .52, };
+    this.q = { cell: q === 'low' ? 2.5 : CELL, rays: q !== 'low', bladeS: q === 'low' ? .68 : q === 'high' || q === 'ultra' ? .46 : .52, };
   }
 
   /** Inside the hero area (its boundary, with a margin). */

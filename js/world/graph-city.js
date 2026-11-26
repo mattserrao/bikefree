@@ -591,7 +591,7 @@ export class GraphCity {
     // the verges' grass and brush: one-triangle blades, both faces drawn
     // the trees: the tree engine (constructor); its wind clock
     this.treeTime = { value: 0 };
-    this.vergeMat = grassMaterial(this.world.renderer, this.treeTime, this.world.renderer.getContextAttributes?.()?.antialias || this.world.qualityKey === 'high');   // (soft picture cards: grass-cards.js)
+    this.vergeMat = grassMaterial(this.world.renderer, this.treeTime, this.world.renderer.getContextAttributes?.()?.antialias || (this.world.qualityKey === 'high' || this.world.qualityKey === 'ultra'));   // (soft picture cards: grass-cards.js)
 
     // the street kit's facade dressing (shop fronts, signs, awnings, cornices, belt courses, sills)
     this.glassNight = { value: 0 };   // (the shop glass: lit, not floodlit; follows the night in tick; the signs: the windows' night)

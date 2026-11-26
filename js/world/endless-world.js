@@ -109,7 +109,7 @@ export class EndlessWorld {
     this.sunDir = new THREE.Vector3(0, 1, 0);
     if (this.renderer.shadowMap.enabled) {
       this.sun.castShadow = true;
-      const sz = this.qualityKey === 'high' && !MOBILE ? 2048 : 1024, sh = this.sun.shadow;
+      const sz = this.qualityKey === 'ultra' && !MOBILE ? 4096 : this.qualityKey === 'high' && !MOBILE ? 2048 : 1024, sh = this.sun.shadow;
       sh.mapSize.set(sz, sz); sh.bias = -0.0005; sh.normalBias = 0.04;
       Object.assign(sh.camera, { near: 1, far: 3000, left: -60, right: 60, top: 60, bottom: -60 }); sh.camera.updateProjectionMatrix();
     }
@@ -676,7 +676,7 @@ export class EndlessWorld {
     this.camera.lookAt(this.camTarget);
   }
   /** Post-processing: desktop High (contact shading, bloom, grade), as the free-ride maps; elsewhere straight to the canvas. */
-  _postOn() { return this.qualityKey === 'high' && !MOBILE && (this.gfx?.post ?? true); }
+  _postOn() { return (this.qualityKey === 'high' || this.qualityKey === 'ultra') && !MOBILE && (this.gfx?.post ?? true); }
   _draw() {
     if (this._postOn()) {
       if (!this.post) {

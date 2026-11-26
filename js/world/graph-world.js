@@ -961,7 +961,7 @@ export class GraphWorld {
           if (this.qualityKey !== 'low' && !this.groundCover) {
             const GRASS = { 1: 1, 8: .7, 11: .9 };   // LAND.grass, yards, pasture: how thick
             const mat = c.vergeMat || grassMaterial(this.renderer, c.treeTime || { value: 0 }, this.qualityKey !== 'low');
-            this.groundCover = new GroundCover({ parent: this.scene, material: mat, radius: this.qualityKey === 'high' ? 48 : 38, density: 3.2,
+            this.groundCover = new GroundCover({ parent: this.scene, material: mat, radius: this.qualityKey === 'ultra' ? 64 : this.qualityKey === 'high' ? 48 : 38, density: 3.2,
               isGrass: (x, z) => { const g = GRASS[c.landAt(x, z)] || 0; return g && !c.onRoad(x, z, 1.2) && !c.inWater?.(x, z) ? g : 0; },
               heightAt: (x, z) => this.surfaceH(x, z) });
           }
