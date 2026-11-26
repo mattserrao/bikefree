@@ -699,18 +699,27 @@ export function makeUpstateTrees({ oldGrowth = false, park = false, bushes = fal
  * (vertex colour tints them by species and season), a little darker toward the middle, on transparent ground.
  */
 export function makeLeafTexture(size = 512) {
+  // [vegetation] painterly clusters (fidelity plan, step 6): fewer, larger leaves that merge into one soft mass, lit
+  // from above (a light top, a shaded underside) with little leaf-to-leaf contrast and no midribs — the old 130 small
+  // leaves a quadrant, each its own shade with a dark rib, read as single-pixel noise once photographed into the
+  // impostor atlas and seen from the road
   const cv = document.createElement('canvas'); cv.width = cv.height = size;
   const g = cv.getContext('2d'), rand = randomSequence(777), h = size / 2;
   for (let q = 0; q < 4; q++) {
     const ox = (q % 2) * h, oy = Math.floor(q / 2) * h;
-    for (let k = 0; k < 130; k++) {
-      const r = Math.pow(rand(), .65) * h * .44, a = rand() * 6.28, x = ox + h / 2 + Math.cos(a) * r, y = oy + h / 2 + Math.sin(a) * r;
-      const L = h * (.08 + rand() * .04), W = L * (.5 + rand() * .2), rot = a + (rand() - .5) * 1.2;
-      const v = Math.round(255 * (.72 + rand() * .28) * (.86 + .14 * r / (h * .44)));
-      g.save(); g.translate(x, y); g.rotate(rot);
+    const leaves = [];
+    for (let k = 0; k < 62; k++) {
+      const r = Math.pow(rand(), .6) * h * .4, a = rand() * 6.28, x = ox + h / 2 + Math.cos(a) * r, y = oy + h / 2 + Math.sin(a) * r;
+      leaves.push({ x, y, r, a, L: h * (.13 + rand() * .06), w: .55 + rand() * .2, rot: a + (rand() - .5) * 1.2, n: rand() });
+    }
+    leaves.sort((p, q2) => p.y - q2.y);   // (drawn top to bottom: the lit upper leaves overlap the shaded lower ones' tips)
+    for (const l of leaves) {
+      const up = 1 - (l.y - oy) / h;                               // 1 at the cluster's top, 0 at its foot
+      const v = Math.round(255 * (.8 + .2 * up) * (.94 + .06 * l.n) * (.9 + .1 * (1 - l.r / (h * .4))));
+      g.save(); g.translate(l.x, l.y); g.rotate(l.rot);
       g.fillStyle = `rgb(${v},${v},${v})`;
+      const L = l.L, W = L * l.w;
       g.beginPath(); g.moveTo(-L * .5, 0); g.quadraticCurveTo(0, -W, L * .5, 0); g.quadraticCurveTo(0, W, -L * .5, 0); g.fill();
-      g.strokeStyle = `rgba(0,0,0,.18)`; g.lineWidth = Math.max(1, size / 512); g.beginPath(); g.moveTo(-L * .45, 0); g.lineTo(L * .45, 0); g.stroke();
       g.restore();
     }
   }
