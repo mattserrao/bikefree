@@ -425,7 +425,7 @@ export function decorateTreeMaterial(material, uniforms) {
     shader.uniforms.uTime = uniforms.uTime;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>
-        attribute float aTree; varying float vTK; varying vec3 vTO; varying vec3 vTW; uniform float uTime;`)
+        attribute float aTree; varying float vTK; varying vec3 vTO; varying vec3 vTW; uniform float uTime; varying vec3 vSph;`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         vTK = aTree; vTO = position;
         {
@@ -437,10 +437,17 @@ export function decorateTreeMaterial(material, uniforms) {
           // aspen leaves quake
           if (aTree > 4.5 && aTree < 5.5) transformed += objectNormal * sin(uTime * 11. + tw.x * 3.1 + tw.z * 2.3 + position.y * 4.) * .07;
           vTW = tw.xyz;
+          // [vegetation] the crown as one volume (fidelity plan, step 6): a normal pointing out of the crown and a
+          // little up, in world space, so the leaves light as a mass (sunlit side, shaded side), not card by card
+          mat3 tm = mat3(modelMatrix);
+          #ifdef USE_INSTANCING
+            tm = tm * mat3(instanceMatrix);
+          #endif
+          vSph = normalize(tm * vec3(position.x, .55 * length(position.xz) + .15 * position.y, position.z) + vec3(0., 1e-4, 0.));
         }`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
-        varying float vTK; varying vec3 vTO; varying vec3 vTW; uniform float uTime;
+        varying float vTK; varying vec3 vTO; varying vec3 vTW; uniform float uTime; varying vec3 vSph;
         float tH(vec2 p) { vec3 q = fract(vec3(p.xyx) * .1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
         float tN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
           return mix(mix(tH(i), tH(i + vec2(1., 0.)), f.x), mix(tH(i + vec2(0., 1.)), tH(i + 1.), f.x), f.y); }
@@ -492,9 +499,24 @@ export function decorateTreeMaterial(material, uniforms) {
           float c0 = tClump(tw), cx = tClump(tw + vec3(.35, 0., 0.)), cz = tClump(tw + vec3(0., 0., .35)), cy = tClump(tw + vec3(0., .35, 0.));
           vec3 g = vec3(cx - c0, cy - c0, cz - c0) * 2.6 * (1. - smoothstep(.2, .5, tPx));
           normal = normalize(normal - (viewMatrix * vec4(g, 0.)).xyz);
+        }
+        if (vTK < .5 || (vTK > 7.5 && vTK < 8.5)) {
+          // [vegetation] the crown's volume: most of the card's own normal swapped for the crown's outward one
+          normal = normalize(mix(normal, normalize((viewMatrix * vec4(vSph, 0.)).xyz), .65));
+        }`)
+      .replace('#include <aomap_fragment>', `#include <aomap_fragment>
+        if (vTK < .5 || (vTK > 7.5 && vTK < 8.5)) {
+          // [vegetation] inside and under the crown, darker (the light doesn't get in); the sun shining through the
+          // leaves when it's behind them (translucency: a warm glow against the low sun)
+          float tIn = .62 + .38 * smoothstep(-.6, .7, vSph.y);
+          reflectedLight.indirectDiffuse *= tIn; reflectedLight.directDiffuse *= mix(1., tIn, .5);
+          #if NUM_DIR_LIGHTS > 0
+            float tBack = pow(clamp(dot(-normalize(vViewPosition), directionalLights[0].direction), 0., 1.), 4.);
+            reflectedLight.directDiffuse += diffuseColor.rgb * directionalLights[0].color * tBack * .4 * vec3(1., .95, .6);
+          #endif
         }`);
   };
-  material.customProgramCacheKey = () => `${prevKey}|bf-glacier-trees-1`;
+  material.customProgramCacheKey = () => `${prevKey}|bf-glacier-trees-2`;
   return material;
 }
 
