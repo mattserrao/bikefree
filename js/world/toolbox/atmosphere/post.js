@@ -57,7 +57,32 @@ const aoChunk = /* glsl */`
     }
     return 1. - uAO.x * occ / 8. * (1. - smoothstep(90., 160., z));
   }`;
-const inkUniforms = () => ({ uAO: { value: new THREE.Vector2() }, uFocal: { value: 1 }, tDepth: { value: null }, uInkTexel: { value: new THREE.Vector2() }, uInk: { value: new THREE.Vector4() }, uInkFar: { value: new THREE.Vector3() }, uNearFar: { value: new THREE.Vector2() } });
+// Aerial perspective (fidelity plan, step 8): the air between the camera and every pixel, from the depth — thicker
+// low down (height fog: valleys, water, the canyon floor), lit by the sun when you look toward it (in-scatter: the
+// glow round a low sun, hills going pale and warm against it, cool and blue away from it). Replaces the scenes' linear
+// fog on the tiers with the frame pipeline; the sky (depth at the far plane) is left to the sky dome.
+const atmoChunk = /* glsl */`
+  uniform vec4 uAtmo;        // density (1/m), height falloff (1/m), base height (m), strength (0: off)
+  uniform vec3 uSunDirW, uSunCol, uHaze, uCamPos;
+  uniform mat4 uInvProj, uCamWorld;
+  vec3 atmoWorldDir(vec2 uv) {
+    vec4 v = uInvProj * vec4(uv * 2. - 1., 1., 1.); v /= v.w;
+    return normalize((uCamWorld * vec4(v.xyz, 0.)).xyz);
+  }
+  vec3 applyAtmo(vec3 col, vec2 uv, float z) {
+    if (uAtmo.w <= 0.) return col;
+    vec3 dir = atmoWorldDir(uv);
+    float dist = z / max(dot(dir, -normalize(uCamWorld[2].xyz)), .05);   // (z is view depth: the ray is longer off-centre)
+    // height fog integrated along the ray: exp(-k (y - base)) from the camera's height to the pixel's
+    float k = uAtmo.y, y0 = uCamPos.y - uAtmo.z, dy = dir.y * dist;
+    float h = abs(dy) > .01 ? (exp(-k * y0) - exp(-k * (y0 + dy))) / (k * dy) : exp(-k * y0);
+    float tau = uAtmo.x * dist * clamp(h, 0., 4.);
+    float f = (1. - exp(-tau)) * uAtmo.w;
+    float mu = max(dot(dir, uSunDirW), 0.);
+    vec3 inscatter = uHaze + uSunCol * (pow(mu, 8.) * .55 + pow(mu, 48.) * .9);
+    return mix(col, inscatter, f);
+  }`;
+const inkUniforms = () => ({ uAtmo: { value: new THREE.Vector4() }, uSunDirW: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color() }, uHaze: { value: new THREE.Color() }, uCamPos: { value: new THREE.Vector3() }, uInvProj: { value: new THREE.Matrix4() }, uCamWorld: { value: new THREE.Matrix4() }, tShaft: { value: null }, uShaft: { value: 0 }, uAO: { value: new THREE.Vector2() }, uFocal: { value: 1 }, tDepth: { value: null }, uInkTexel: { value: new THREE.Vector2() }, uInk: { value: new THREE.Vector4() }, uInkFar: { value: new THREE.Vector3() }, uNearFar: { value: new THREE.Vector2() } });
 
 const quadVertex = /* glsl */`
   varying vec2 vUv;
@@ -116,9 +141,13 @@ export class PostFX {
         uniform sampler2D tScene; uniform sampler2D tBloom; uniform float uBloom; uniform float uVignette; uniform float uWarm; varying vec2 vUv;
         ${inkChunk}
         ${aoChunk}
+        ${atmoChunk}
+        uniform sampler2D tShaft; uniform float uShaft;
         void main() {
           vec3 c = texture2D(tScene, vUv).rgb;
           if (uAO.x > 0.) c *= contactAO(vUv, inkZ(vUv));
+          if (uAtmo.w > 0. && texture2D(tDepth, vUv).x < .99999) c = applyAtmo(c, vUv, inkZ(vUv));
+          if (uShaft > 0.) c += texture2D(tShaft, vUv).rgb * uShaft;
           c = applyInk(c, vUv) + texture2D(tBloom, vUv).rgb * uBloom;
           // grade: a touch more contrast and colour, warm highlights in low sun
           float l = dot(c, vec3(.2126, .7152, .0722));
@@ -142,6 +171,30 @@ export class PostFX {
         void main() { vec4 c = texture2D(tSrc, vUv); gl_FragColor = vec4(applyInk(c.rgb, vUv), c.a); }`,
       depthTest: false, depthWrite: false, toneMapped: false,
     });
+    // sun shafts (step 8): the sky's bright pixels near the sun, smeared toward it (radial blur at a quarter size)
+    this.shaftMat = new THREE.ShaderMaterial({
+      uniforms: { tSrc: { value: null }, tDepth: { value: null }, uSun: { value: new THREE.Vector2(.5, .5) }, uSunCol: { value: new THREE.Color() }, uFirst: { value: 1 } },
+      vertexShader: quadVertex,
+      fragmentShader: /* glsl */`
+        uniform sampler2D tSrc, tDepth; uniform vec2 uSun; uniform vec3 uSunCol; uniform float uFirst; varying vec2 vUv;
+        float src(vec2 uv) {
+          if (uFirst < .5) return texture2D(tSrc, uv).r;
+          float sky = step(.99999, texture2D(tDepth, uv).x);
+          return sky * max(0., 1. - distance(uv, uSun) * 2.2);
+        }
+        void main() {
+          vec2 d = (vUv - uSun) * (uFirst > .5 ? .55 : .3) / 16.;
+          float acc = 0., w = 1.;
+          vec2 uv = vUv;
+          for (int i = 0; i < 16; i++) { acc += src(uv) * w; w *= .94; uv -= d; }
+          acc /= 9.;
+          gl_FragColor = uFirst > .5 ? vec4(vec3(acc), 1.) : vec4(uSunCol * acc, 1.);
+        }`,
+      depthTest: false, depthWrite: false,
+    });
+    this.c = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, depthBuffer: false });
+    this.d = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, depthBuffer: false });
+    this.atmo = null;
     this.quad = new THREE.Mesh(tri, this.bright);
     this.quad.frustumCulled = false;
     this.quadScene = new THREE.Scene(); this.quadScene.add(this.quad);
@@ -154,7 +207,7 @@ export class PostFX {
         type: hdr ? THREE.HalfFloatType : THREE.UnsignedByteType, depthBuffer: true, samples: this.samples,
         // 32-bit float depth: what makes the reversed depth buffer precise out to the horizon
         depthTexture: new THREE.DepthTexture(this._size[0], this._size[1], THREE.FloatType) });
-      t.resolveDepthBuffer = !!this.ink || !!this.ao;   // read back only for the cartoon outlines and the contact shading
+      t.resolveDepthBuffer = !!this.ink || !!this.ao || !!this.atmo;   // read back only for the cartoon outlines and the contact shading
       if (!hdr) {
         t.isXRRenderTarget = true; t.texture.colorSpace = THREE.SRGBColorSpace;
         t.texture.internalFormat = 'RGBA8';   // holds the already-encoded values as they are: no decode on the blit
@@ -173,6 +226,13 @@ export class PostFX {
     this.ink = ink || null;
   }
 
+  /** Aerial perspective and sun shafts: { density, falloff, baseY, strength, haze, shafts }, or null (off). The world's
+   *  scene fog should stand back when this is on (the post pass is the air then). Needs the scene's depth (resolved). */
+  setAtmosphere(a) {
+    if (!!a !== !!this.atmo) for (const key of ['scene', 'plain']) if (this[key]) { this[key].depthTexture?.dispose(); this[key].dispose(); this[key] = null; }
+    this.atmo = a || null;
+  }
+
   /** Contact shading: { strength, radiusM }, or null. */
   setAO(ao) {
     if (!!ao !== !!this.ao) for (const key of ['scene', 'plain']) if (this[key]) { this[key].depthTexture?.dispose(); this[key].dispose(); this[key] = null; }
@@ -181,6 +241,13 @@ export class PostFX {
 
   _inkUniforms(material, target, camera) {
     const u = material.uniforms, ink = this.ink;
+    if (this.atmo && u.uAtmo) {
+      const a = this.atmo;
+      u.tDepth.value = target.depthTexture; u.uNearFar.value.set(camera.near, camera.far);
+      u.uAtmo.value.set(a.density, a.falloff, a.baseY, a.strength ?? 1);
+      u.uSunDirW.value.copy(a.sunDir); u.uSunCol.value.copy(a.sunColor); u.uHaze.value.copy(a.haze); u.uCamPos.value.copy(camera.position);
+      u.uInvProj.value.copy(camera.projectionMatrixInverse); u.uCamWorld.value.copy(camera.matrixWorld);
+    } else if (u.uAtmo) u.uAtmo.value.set(0, 0, 0, 0);
     if (this.ao) {
       u.tDepth.value = target.depthTexture; u.uInkTexel.value.set(1 / this._size[0], 1 / this._size[1]); u.uNearFar.value.set(camera.near, camera.far);
       u.uAO.value.set(this.ao.strength, this.ao.radiusM); u.uFocal.value = camera.projectionMatrix.elements[5] * .5;
@@ -206,7 +273,7 @@ export class PostFX {
     this._size = [width, height];
     this.scene?.setSize(width, height); this.plain?.setSize(width, height);
     const w = Math.max(2, Math.floor(width / 4)), h = Math.max(2, Math.floor(height / 4));
-    this.a.setSize(w, h); this.b.setSize(w, h);
+    this.a.setSize(w, h); this.b.setSize(w, h); this.c.setSize(w, h); this.d.setSize(w, h);
     this.bright.uniforms.uTexel.value.set(1 / width, 1 / height);
     this._w = w; this._h = h;
   }
@@ -235,6 +302,22 @@ export class PostFX {
       this.blur.uniforms.tSrc.value = this.a.texture; this.blur.uniforms.uDir.value.set((1 + k) / this._w, 0); this._pass(this.blur, this.b);
       this.blur.uniforms.tSrc.value = this.b.texture; this.blur.uniforms.uDir.value.set(0, (1 + k) / this._h); this._pass(this.blur, this.a);
     }
+    const cu = this.composite.uniforms;
+    cu.uShaft.value = 0;
+    if (this.atmo?.shafts > 0) {
+      // the sun on screen (only when it's in front of the camera and near the frame)
+      const sp = this._sunScreen ||= new THREE.Vector3();
+      sp.copy(this.atmo.sunDir).multiplyScalar(10000).add(camera.position).project(camera);
+      const inFront = this.atmo.sunDir.dot(camera.getWorldDirection(this._fwd ||= new THREE.Vector3())) > 0;
+      if (inFront && Math.abs(sp.x) < 1.6 && Math.abs(sp.y) < 1.6) {
+        const S = this.shaftMat.uniforms;
+        S.uSun.value.set(sp.x * .5 + .5, sp.y * .5 + .5); S.uSunCol.value.copy(this.atmo.sunColor); S.tDepth.value = target.depthTexture;
+        S.uFirst.value = 1; this._pass(this.shaftMat, this.c);
+        S.uFirst.value = 0; S.tSrc.value = this.c.texture; this._pass(this.shaftMat, this.d);
+        const edge = 1 - Math.min(1, Math.max(0, Math.hypot(sp.x, sp.y) - .6) / 1);
+        cu.tShaft.value = this.d.texture; cu.uShaft.value = this.atmo.shafts * edge;
+      }
+    }
     this.composite.uniforms.tScene.value = target.texture;
     this.composite.uniforms.tBloom.value = this.a.texture;
     this.composite.uniforms.uBloom.value = opts.bloom ?? .32;
@@ -245,8 +328,8 @@ export class PostFX {
 
   dispose() {
     for (const t of [this.scene, this.plain]) if (t) { t.depthTexture?.dispose(); t.dispose(); }
-    for (const t of [this.a, this.b]) t.dispose();
-    for (const m of [this.bright, this.blur, this.composite, this.copy]) m.dispose();
+    for (const t of [this.a, this.b, this.c, this.d]) t.dispose();
+    for (const m of [this.bright, this.blur, this.composite, this.copy, this.shaftMat]) m.dispose();
     this.geometry.dispose();
   }
 }

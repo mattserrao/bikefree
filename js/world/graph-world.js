@@ -656,7 +656,15 @@ export class GraphWorld {
         const w = this.container?.clientWidth || this.renderer.domElement.clientWidth || 1, h = this.container?.clientHeight || this.renderer.domElement.clientHeight || 1;
         this.post.setSize(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
       }
+      // [sky] aerial perspective and sun shafts in the post pass; the scene's linear fog stands back (the post is the air)
+      const A = this._atmo ||= { sunDir: new THREE.Vector3(), sunColor: new THREE.Color(), haze: new THREE.Color() };
+      const sky = this.def?.sky || {};
+      A.density = sky.airDensity ?? 4.5e-4; A.falloff = sky.airFalloff ?? 1 / 220; A.baseY = (this.waterY ?? 0) - 5; A.strength = 1; A.shafts = sky.shafts ?? .5;
+      A.sunDir.copy(this.sunDir); A.sunColor.copy(this.sun.color).multiplyScalar(this.sun.intensity * .35); A.haze.copy(this.scene.fog.color).multiplyScalar(.9);
+      this.post.setAtmosphere(A);
+      const fog = this.scene.fog, near = fog.near, far = fog.far; fog.near = near * 2.2; fog.far = far * 1.6;
       this.post.render(this.scene, this.camera, { bloom: .22, threshold: 1.15, warm: this.timeKey === 'golden' ? 1 : 0 });
+      fog.near = near; fog.far = far;
     } else {
       if (this.post) { this.post.dispose(); this.post = null; }
       this.renderer.render(this.scene, this.camera);
