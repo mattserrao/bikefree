@@ -91,6 +91,9 @@ for (const l of LM) {
   if (!ring && tall && ['building'].includes(l.type)) ring = tall.ring;
   landmarks.push({ label: l.label, model, type: l.type, center, ring: ring ? ring.map(([a, o]) => [+a.toFixed(7), +o.toFixed(7)]) : null, h: tall ? tall.h : null });
 }
+// view corridors the QC fixer added (tools/qc_fix.mjs viewBlocked, verified by a re-run, 25 Nov): kept on a rebuild
+const QC_VIEWS = { 'Allegheny Observatory': [[40.48353, -80.0203]], 'Station Square': [[40.43187, -80.00306]] };
+for (const l of landmarks) if (QC_VIEWS[l.label]) l.views = QC_VIEWS[l.label];
 // the stadiums, as closed bowls (user, 21 Nov): their OSM outlines
 const stadiums = LM.filter((l) => /PNC Park|Acrisure/.test(l.label)).map((l) => ({ name: l.label, ring: l.poly, center: l.center,
   seats: /PNC/.test(l.label) ? '#1d3f6e' : '#c9a227', open: true, heightM: /PNC/.test(l.label) ? 28 : 42 }));

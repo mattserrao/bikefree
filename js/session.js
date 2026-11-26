@@ -148,7 +148,7 @@ export class Session extends EventTarget {
   /** Where you are on the scenery's path (metres since it was set). */
   get sceneryPos() { return Math.max(0, this.distanceM - this.sceneryOffset); }
   /** The network path whose turns you choose now — a network route's, or (off a route) the scenery's — and where you are on it. */
-  get turnRide() { return this.mode === 'route' ? this.route?.netRide || null : this.sceneryRoute?.netRide || null; }
+  get turnRide() { return this.mode === 'route' ? this.route?.netRide || this.route?.endlessRide || null : this.sceneryRoute?.netRide || null; }   // ([endless] the mile prompts)
   get turnPos() { return this.mode === 'route' ? this.routePos : this.sceneryPos; }
   /** On a network route (or network scenery): change the way you'll go at the next junction (−1 left, +1 right). */
   turn(dir) {
@@ -286,6 +286,7 @@ export class Session extends EventTarget {
     this.mode = 'route';
     this.route = route;
     route.netRide?.reset();   // a network route (js/network.js): the plan again, nothing chosen yet
+    route.endlessRide?.reset();   // [endless] the course from the start, its first terrain type
     this.routeOffset = this.distanceM;
     this.routeDone = false;
     this._lastLap = 1;
@@ -442,6 +443,7 @@ export class Session extends EventTarget {
       }
       return;
     }
+    if (this.route.endlessRide) { this.route.endlessRide.update(this.routePos); return; }   // [endless] the road grows ahead; the mile's choice locks
     if (this.route.netRide) {
       // a network route: the path follows the plan (or your turns); a lap each time the plan comes round
       this.route.netRide.update(this.routePos);

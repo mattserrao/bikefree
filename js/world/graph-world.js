@@ -23,7 +23,7 @@ import { PostFX } from './toolbox/atmosphere/post.js';
 import { SURFACE, SURFACE_SUN, SURFACE_GLSL, loadSurfaceDetail, withSurfaceDetail } from './toolbox/materials/surface-detail.js';
 import { MOBILE } from './graph-city.js';
 /** The clouds' clock (their shadows drifting over the ground and the roads; puddles' glints): seconds. */
-const CLOUD_T = { value: 0 };
+export const CLOUD_T = { value: 0 };
 import { PerfMonitor } from './perf.js';
 import { BakedLighting } from './toolbox/atmosphere/baked-light.js';
 import { ShaderWarmer } from './toolbox/core/shader-warm.js';
@@ -57,6 +57,7 @@ const FILL_REACH = 25;              // m from a road's edge the fill reaches
 const ABUT_M = 12;                  // m of a deck from its end that stand on an abutment (the ground filled up to under it)
 const BANK_CAP = 22;                // m: a walled bank's promenade, from the wall back
 const BANK_SLOPE = 14;
+const BANK_RING_M = 9;              // m round a pool's outline its bank is shaped (pools with a ring: NYC)
 const PIER_STEP = 7;
 const PROM_M = 6;                   // m of granite paving along the top of a river wall                // samples (70 m) between a deck's piers              // m: a natural bank, from the water's edge to its top
 const LAND_PAVED = 0;
@@ -93,7 +94,7 @@ export function freezeMatrix(o) {
 export const cellKey = (i, j) => (i + 0x8000) * 0x10000 + (j + 0x8000);
 /** Spatial hash of road samples, for shaping the ground: cell → [x, z, top, halfWidth, fill, …] (top: the highest the ground may be at the
  *  road's edge; fill: the lowest — an embankment under a road above the ground, an abutment under a deck's end; NaN: none). */
-export function roadHash(edges, widths, cell = 32) {
+export function roadHash(edges, widths, cell = 32, kerbM = KERB) {
   const grid = new Map(), wf = typeof widths === 'function' ? widths : (e) => widths[e.kind] || 7;
   for (const e of edges) {
     const half = wf(e) / 2 + (e._walk ? e._walk : 0);   // (a sidewalk: the ground keeps under it too)
@@ -106,7 +107,7 @@ export function roadHash(edges, widths, cell = 32) {
     for (let i = e.n - 1; i >= 0; i--) toEnd[i] = Math.min(toEnd[i], toEnd[i + 1] + 10);
     // (a hero area's singletrack: the coarse ground kept well under it — the area's fine floor, old-growth.js, is drawn
     //  over the cut and meets the trail's tread)
-    const kerb = e._cf ? 0.6 : KERB;
+    const kerb = e._cf ? 0.6 : kerbM;
     const fillAt = (k) => (!deck[k] ? e.ele[k] - kerb : toEnd[k] <= ABUT_M ? e.ele[k] - 1.2 : NaN);
     for (let i = 0; i <= e.n; i++) {
       // the sample and, between samples, the midpoint (10 m samples: a 5 m cut-off would leave notches)
@@ -227,10 +228,36 @@ export class GraphWorld {
       slot(tileOf(q.x, q.z)).nodes.push({ id: nd.id, x: q.x, z: q.z, y: nd.ele });
     }
     for (const [key, t] of this.tiles) { const [i, j] = key.split(',').map(Number); t.cx = (i + 0.5) * TILE; t.cz = (j + 0.5) * TILE; t.i = i; t.j = j; }
-    this.cut = roadHash(this.G.edges, this.widths);
+    this._grainOn = !this.profile.softCover;   // (tools/qc-park.js)
+    this.cut = roadHash(this.G.edges, this.widths, 32, this.profile.edgeFlush ? 0.05 : KERB);   // (NYC: the lawns flush with the paths' edges, no step down)
     this.waterY = (this.json.waterLevelM ?? 216.6) + WATER_ABOVE;
     // upper pools (above a dam: the Allegheny above Lock & Dam 2) — their own water level inside their box
-    this.pools = (this.json.pools || []).map((p) => { const a = this.proj.toLocal(p.box[0], p.box[1]), b = this.proj.toLocal(p.box[2], p.box[3]); return { level: p.level, x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), z0: Math.min(a.z, b.z), z1: Math.max(a.z, b.z), west: a.x, dam: p.dam !== false }; });
+    // (a pool may carry its outline — "ring": NYC's park lakes — and then it's water only inside it, drawn by its shape)
+    this.pools = (this.json.pools || []).map((p) => { const a = this.proj.toLocal(p.box[0], p.box[1]), b = this.proj.toLocal(p.box[2], p.box[3]); const ring = p.ring ? p.ring.map(([la, lo]) => this.proj.toLocal(la, lo)) : null; return { level: p.level, x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), z0: Math.min(a.z, b.z), z1: Math.max(a.z, b.z), west: a.x, dam: p.dam !== false, ring, name: p.name }; });
+    // bridges a landmark model draws on a way's own deck (NYC's Bow Bridge, Gapstow): the deck's samples within r of
+    // each [lat, lon, r] — no slab sides, parapets, underside or piers of the world's own there (bits 1|2|4)
+    this.modelDecks = null;
+    for (const [la, lo, r] of this.profile.modelBridges || []) {
+      const c = this.proj.toLocal(la, lo);
+      for (const e of this.G.edges) for (const [a, b] of e.bridges) {
+        let hit = false; for (let i = a; i <= b; i++) if (Math.hypot(e.x[i] - c.x, e.z[i] - c.z) < r) hit = true;
+        if (!hit) continue;
+        const m = ((this.modelDecks ||= new Map()).get(e.id)) || new Uint8Array(e.n + 1); this.modelDecks.set(e.id, m);
+        for (let i = a; i <= b; i++) m[i] |= 7;
+      }
+    }
+    // ground pads (NYC: Bethesda's lower terrace): level ground inside each outline, easing back over blendM outside
+    this.pads = (this.json.pads || []).map((q) => { const ring = q.ring.map(([la, lo]) => this.proj.toLocal(la, lo)); let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; for (const p of ring) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); } const m = q.blendM ?? 2; return { ring, y: q.y, m, x0: x0 - m, x1: x1 + m, z0: z0 - m, z1: z1 + m }; });
+    // the pools drawn on their outlines (NYC): a grid of their shore segments, for the banks (_ringBank)
+    this._bankGrid = null;
+    if (this.pools.some((p) => p.ring)) {
+      const g = this._bankGrid = new Map(), C = 16;
+      for (const p of this.pools) if (p.ring) for (let k = 0; k < p.ring.length; k++) {
+        const a = p.ring[k], b = p.ring[(k + 1) % p.ring.length];
+        for (let x = Math.floor((Math.min(a.x, b.x) - BANK_RING_M) / C); x <= Math.floor((Math.max(a.x, b.x) + BANK_RING_M) / C); x++)
+          for (let z = Math.floor((Math.min(a.z, b.z) - BANK_RING_M) / C); z <= Math.floor((Math.max(a.z, b.z) + BANK_RING_M) / C); z++) { const key = x * 100003 + z; if (!g.has(key)) g.set(key, []); g.get(key).push(p, k); }
+      }
+    }
 
     // renderer, scene, light
     // (no logarithmic depth: it writes gl_FragDepth, which turns off a phone GPU's early depth test and hidden-surface
@@ -267,7 +294,7 @@ export class GraphWorld {
     this.mats = {
       road: sideMaterial(this.qualityKey === 'low'),
       paint: this.profile.roads === 'worn' ? wornPaintMaterial() : new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
-      ground: groundMaterial(this.qualityKey === 'low', this.profile.ground === 'upstate'),
+      ground: groundMaterial(this.qualityKey === 'low', this.profile.ground === 'upstate', !!this.profile.softCover),
       roadSurface: roadSurfaceMaterial(this.qualityKey === 'low', this.profile.roads === 'worn'),
       spill: roadSurfaceMaterial(this.qualityKey === 'low', this.profile.roads === 'worn', true),
       water: new THREE.MeshLambertMaterial({ color: '#4f7f97', transparent: true, opacity: 0.92 }),
@@ -292,6 +319,15 @@ export class GraphWorld {
     this.water.position.y = this.waterY;
     this.scene.add(this.water);
     for (const p of this.pools) {
+      if (p.ring) {   // its shape, grown 2 m (the ground rises from under it at the edge)
+        const sh = new THREE.Shape(p.ring.map((q) => new THREE.Vector2(q.x, -q.z)));
+        const g = new THREE.ShapeGeometry(sh).rotateX(-Math.PI / 2), cx = (p.x0 + p.x1) / 2, cz = (p.z0 + p.z1) / 2;
+        const pos = g.attributes.position;
+        for (let i = 0; i < pos.count; i++) { const dx = pos.getX(i) - cx, dz = pos.getZ(i) - cz, d = Math.hypot(dx, dz) || 1; pos.setXYZ(i, pos.getX(i) + dx / d * 2, 0, pos.getZ(i) + dz / d * 2); }
+        g.computeVertexNormals();
+        const w = new THREE.Mesh(g, this.mats.water); w.name = p.name || 'Pool'; w.position.y = p.level + WATER_ABOVE; this.scene.add(w);
+        continue;
+      }
       const w = new THREE.Mesh(new THREE.PlaneGeometry(p.x1 - p.x0, p.z1 - p.z0).rotateX(-Math.PI / 2), this.mats.water);
       w.position.set((p.x0 + p.x1) / 2, p.level + WATER_ABOVE, (p.z0 + p.z1) / 2);
       this.scene.add(w);
@@ -612,7 +648,7 @@ export class GraphWorld {
   }
   /** The pool level at (x, z): an upper pool inside its box, else the main one. */
   poolAt(x, z) {
-    for (const p of this.pools || []) if (x >= p.x0 && x <= p.x1 && z >= p.z0 && z <= p.z1) return p.level;
+    for (const p of this.pools || []) if (x >= p.x0 && x <= p.x1 && z >= p.z0 && z <= p.z1 && (!p.ring || inRing(p.ring, x, z, 3))) return p.level;
     return this.waterY - WATER_ABOVE;
   }
   /** The water's surface here (the pool level and the plane's lift above it). */
@@ -626,12 +662,34 @@ export class GraphWorld {
     const H = tt.gridH, a0 = H[j * n1 + i], b0 = H[j * n1 + i + 1], c0 = H[(j + 1) * n1 + i], d0 = H[(j + 1) * n1 + i + 1];
     return fu + fv <= 1 ? a0 + (b0 - a0) * fu + (c0 - a0) * fv : d0 + (c0 - d0) * (1 - fu) + (b0 - d0) * (1 - fv);
   }
+  /** In a ground pad's outline (or its blend)? */
+  _inPad(x, z) { return this.pads.some((q) => x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1 && inRing(q.ring, x, z, q.m)); }
+  /** The nearest pool outline within BANK_RING_M of (x, z): { p, s } with s the signed distance (m, < 0 in the water). */
+  _ringBank(x, z) {
+    const list = this._bankGrid?.get(Math.floor(x / 16) * 100003 + Math.floor(z / 16));
+    if (!list) return null;
+    let best = null;
+    for (let q = 0; q < list.length; q += 2) {
+      const p = list[q], k = list[q + 1], a = p.ring[k], b = p.ring[(k + 1) % p.ring.length];
+      const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / l2));
+      const d = Math.hypot(a.x + dx * t - x, a.z + dz * t - z);
+      if (d < BANK_RING_M && (!best || d < best.d)) best = { p, d };
+    }
+    if (!best) return null;
+    return { p: best.p, s: inRing(best.p.ring, x, z) ? -best.d : best.d };
+  }
   _groundH(x, z) {
     const raw = this.ground.at(x, z);
-    let h = raw;
+    let h = raw, rb = null;
     const pool = this.poolAt(x, z);
     const f = this.cut.fill(x, z);
     if (f > h) h = f;   // under a road above the ground: its embankment, a deck's abutment
+    // (a pad after the roads' fill: a terrace is cut level right up to its wall, the road's bank stops there)
+    for (const q of this.pads) {
+      if (x < q.x0 || x > q.x1 || z < q.z0 || z > q.z1) continue;
+      const r = q.ring; let d = Infinity; for (let i = 0; i < r.length; i++) { const a = r[i], b = r[(i + 1) % r.length], dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / l2)); d = Math.min(d, Math.hypot(a.x + dx * t - x, a.z + dz * t - z)); }
+      if (inRing(r, x, z)) h = q.y; else if (d < q.m) h = q.y + (h - q.y) * (d / q.m);
+    }
     const sh = this.shore ? this.shore.at(x, z) : null;
     if (sh && sh.s > -16 && sh.s < (sh.walled ? BANK_CAP + 12 : BANK_SLOPE)) {
       // the riverbank (tools/pgh_shore.mjs): drawn by the bank mesh; the ground keeps out of its way
@@ -642,13 +700,24 @@ export class GraphWorld {
         else { const t = (sh.s - BANK_CAP) / 12; h = (sh.top - 0.15) * (1 - t) + Math.max(h, pool + BED_BELOW) * t; }
       } else if (sh.s < 0) h = Math.min(h, pool - 2.5);
       else h = bankProfile(sh.s, sh.top, sh.pool + WATER_ABOVE, sh.pool) - 0.15;
-    } else if (h < pool + BED_BELOW) h = Math.min(h, pool - 2.5);
+    } else if (this._bankGrid && (rb = this._ringBank(x, z))) {
+      // a pool drawn on its outline (NYC's lakes): its bank one smooth slope through the water's edge — under the water
+      // inside (no ground poking up through it), up to the water 1 m out (the water plane reaches 2 m out: its rim
+      // is never left standing over a drop), on up at 1 : 2.2, then the ground as it is
+      const top = rb.p.level + WATER_ABOVE, want = Math.max(rb.p.level - 2.2, top + (rb.s - 1) * 0.45);
+      if (rb.s < 1) h = Math.min(h, want);
+      if (rb.s > -0.5) h = Math.max(h, Math.min(want, top + 0.5));   // (a low shore filled to just over the water, no more)
+    } else if (h < pool + BED_BELOW && !(this._bankGrid && pool > -1e3 && this.pools.some((p) => p.ring && p.level === pool))) h = Math.min(h, pool - 2.5);
     // under the canal (CNY, once its water is built): the ground cut down below the water, so the coarse grid's
     // triangles — and the raised towpath's fill — never show through it as green streaks (user, 23 Nov)
     // (the grid's 12.8 m triangles span the water's edge: the ground rises from under the water gently — 12 cm a metre
     // out to 14 m past the edge — so no triangle from a bank vertex reaches up through the water)
     if (this._canalCut) { const c = canalAt(x, z, 14); if (c && !c.creek) { const o = (x - c.x) * c.nx + (z - c.z) * c.nz, s = Math.max(0, o > 0 ? o - c.w1 : -o - c.w2); h = Math.min(h, c.y - .45 + s * .12); } }
-    return Math.min(h, this.cut.cap(x, z));
+    h = Math.min(h, this.cut.cap(x, z));
+    // (a bridge's ground cut beside a pool drawn on its outline: the bank still rises to the water's edge, so the water
+    //  plane's rim never hangs over the cut — the deck stands well over the water anyway)
+    if (rb && rb.s > -0.5 && rb.s < 2.5) h = Math.max(h, Math.min(rb.p.level + WATER_ABOVE + (rb.s - 1) * 0.45, rb.p.level + WATER_ABOVE + 0.2));
+    return h;
   }
   /** The canal's built (the landmarks): cut the ground under it, and again in the tiles already built. */
   _cutCanal() {
@@ -705,7 +774,7 @@ export class GraphWorld {
    * → this.jn (node id → { x, z, y, poly, corners, arms, J }), this.trim (edge id → [m cut at from, m cut at to]).
    */
   _planJunctions() {
-    const CURB = { primary: 7, secondary: 6, tertiary: 5, residential: 4, alley: 2.5, plaza: 2, path: 1.5 };
+    const CURB = { primary: 7, secondary: 6, tertiary: 5, residential: 4, alley: 2.5, plaza: 2, path: 1.5, ...(this.profile.junctionCurbs || {}) };   // (NYC: rounder park corners)
     const left = (u) => ({ x: -u.z, z: u.x }), along = (p, u, t) => ({ x: p.x + u.x * t, z: p.z + u.z * t }), dot = (a, b) => a.x * b.x + a.z * b.z;
     const meet = (p, u, q, v) => { const den = u.x * v.z - u.z * v.x; if (Math.abs(den) < 1e-6) return null; const wx = q.x - p.x, wz = q.z - p.z; return [(wx * v.z - wz * v.x) / den, (wx * u.z - wz * u.x) / den]; };
     this.jn = new Map(); this.trim = new Map();
@@ -722,13 +791,23 @@ export class GraphWorld {
         return { e, end, u: { x: ux / l, z: uz / l }, h: this.wOf(e) / 2, walk: this.walkOf(e) || 0, r: CURB[e.kind] || 4, len, other, theta: Math.atan2(uz, ux) };
       }).sort((a, b) => a.theta - b.theta);
       const n = arms.length, corners = [];
+      // (how far each arm's mouth can sit from the node: a return whose tangent runs past it is dropped below)
+      const maxT = (A) => Math.min(26, A.other ? A.len * 0.45 : Math.max(1.5, A.len - 4));
       for (let q = 0; q < n; q++) {
         const A = arms[q], B = arms[(q + 1) % n];
         let gap = B.theta - A.theta; if (gap <= 0) gap += Math.PI * 2;
         const nA = left(A.u), nB = left(B.u), c = { A, B, gap, arc: null, tA: 0, tB: 0 };
         if (gap < Math.PI * 0.86 && gap > 0.3) {
-          const r = Math.min(A.r, B.r), pA = along(N, nA, A.h + r), pB = along(N, nB, -(B.h + r)), m = meet(pA, A.u, pB, B.u);
-          if (m && m[0] > 0 && m[1] > 0 && m[0] < 26 && m[1] < 26) { const O = along(pA, A.u, m[0]); c.tA = dot({ x: O.x - N.x, z: O.z - N.z }, A.u); c.tB = dot({ x: O.x - N.x, z: O.z - N.z }, B.u); c.arc = { O, r }; }
+          // (the curb's radius, then smaller ones until the return fits its arms — a sharp fork on short arms gets a
+          //  tight return, not none: the map QC's sharpCorner, 25 Nov fix pass)
+          const r0 = Math.min(A.r, B.r);
+          // (then larger ones: an obtuse corner of a narrow path on a wide road has its small returns' centres behind the
+          //  road's mouth — a wider return sits in front of it)
+          for (const r of [r0, r0 * 0.5, 1.5, 0.8, Math.max(r0 * 2, 3), Math.max(r0 * 3, 5)]) {
+            const pA = along(N, nA, A.h + r), pB = along(N, nB, -(B.h + r)), m = meet(pA, A.u, pB, B.u);
+            const fits = m && m[0] <= maxT(A) + 0.01 && m[1] <= maxT(B) + 0.01;   // (a return that fits is as before)
+            if (m && m[0] > 0 && m[1] > 0 && m[0] < 26 && m[1] < 26 && fits) { const O = along(pA, A.u, m[0]); c.tA = dot({ x: O.x - N.x, z: O.z - N.z }, A.u); c.tB = dot({ x: O.x - N.x, z: O.z - N.z }, B.u); c.arc = { O, r }; break; }
+          }
         }
         if (!c.arc && gap < Math.PI * 0.95) {   // sharp or awkward: where the two edges cross
           const m = meet(along(N, nA, A.h), A.u, along(N, nB, -B.h), B.u);
@@ -801,7 +880,7 @@ export class GraphWorld {
         this.city = c;
         if (this.gfx) c.setGfx(this.gfx);
         this._classify(c);
-        this.cut = roadHash(this.G.edges, this.wOf);
+        this.cut = roadHash(this.G.edges, this.wOf, 32, this.profile.edgeFlush ? 0.05 : KERB);
         this._nodeWidths();
         return c.loadLand().then(() => {
           if (this.disposed) return;
@@ -952,6 +1031,8 @@ export class GraphWorld {
   /** How a way is painted: centre line, lane lines, edge lines (one-ways and lanes from the city data). */
   _paintOf(e) {
     const ow = this.city?.edgeInfo(e).ow || 0, lanes = this.city?.edgeInfo(e).lanes || 0;
+    if (this.profile.pathPaint === false && (e.kind === 'path' || e.kind === 'bridle')) return { centre: null, edges: false, lanes: 0 };   // (NYC: the park's paths are unpainted)
+    if (e.kind === 'drive' && this.profile.drivePaint === 'park') return { centre: null, edges: true, lanes: 0, bikeLane: true };   // (Central Park's drives: edge lines and a painted bike lane)
     if (e.kind === 'path') {
       // (a gravel or dirt trail has no paint: CNY's stone-dust towpath)
       const loose = this.city && ['gravel', 'dirt'].includes(this.city.edgeInfo(e).surf(e.n >> 1));
@@ -983,7 +1064,7 @@ export class GraphWorld {
       const base = e._rw ? new THREE.Color('#a9a59c') : e._cf ? new THREE.Color('#6e553c') : col(e.kind), lift = e._cf ? 0.05 : ROAD_LIFT + (path ? -0.03 : 0);   // (a singletrack: packed, lighter earth, right on the floor)
       const deck = new Uint8Array(e.n + 1);
       for (const [p, q] of e.bridges) for (let i = p; i <= q; i++) deck[i] = 1;
-      const bm = this.bridgeMask?.get(e.id);
+      const bm = this.bridgeMask?.get(e.id) || this.modelDecks?.get(e.id);
       // the ribbon stops at a junction's mouth (_planJunctions), its end exactly on the mouth
       const tr = this.trim?.get(e.id) || [0, 0], f0 = tr[0] / 10, f1 = e.n - tr[1] / 10;
       if (f0 >= b || f1 <= a) continue;
@@ -1028,6 +1109,7 @@ export class GraphWorld {
           const o0 = [c0.dz * sgn, -c0.dx * sgn], o1 = [c1.dz * sgn, -c1.dx * sgn];   // outward
           const out = (p, o, d, dy) => [p[0] + o[0] * d, p[1] + dy, p[2] + o[1] * d];
           if (br) {
+            if (bm && (bm[i0] & 4) && (bm[i1] & 4)) continue;   // (a landmark model's deck: it draws the sides)
             W.wall(p0, p1, -1.0, 0, deckC, flip);
             if (!(bm && (bm[i0] & 2) && (bm[i1] & 2))) W.wall(p0, p1, 0, 0.9, rail, flip);
             continue;
@@ -1065,8 +1147,15 @@ export class GraphWorld {
               else R.quadX(i0, e0, e1, i1, cols[k], [u0, v0, v1, u1]);
             }
           } else {
+          if (this.profile.edgeFlush) {
+            // (NYC: a park path's edge — a narrow stone edging, then the lawn at its level; the slope only where the
+            //  ground falls away, under the lawn elsewhere)
+            W.quad(out(p0, o0, 0, -0.01), out(p1, o1, 0, -0.01), out(p1, o1, 0.18, -0.02), out(p0, o0, 0.18, -0.02), curbC, !flip);
+            W.quad(out(p0, o0, 0.18, -0.02), out(p1, o1, 0.18, -0.02), out(p1, o1, 1.6, -0.9), out(p0, o0, 1.6, -0.9), verge, !flip);
+          } else {
           W.quad(out(p0, o0, 0, -0.01), out(p1, o1, 0, -0.01), out(p1, o1, band, -0.06), out(p0, o0, band, -0.06), path ? gravelC : verge, !flip);
           W.quad(out(p0, o0, band, -0.06), out(p1, o1, band, -0.06), out(p1, o1, 1.6, -0.9), out(p0, o0, 1.6, -0.9), verge, !flip);
+          }
           }
           // on an embankment, the slope runs on down (1 : 1.5) to meet the ground, then a short face below it
           const toe = (p, o) => { const q = out(p, o, 1.6, -0.9), gy = this.ground ? this._groundH(q[0], q[2]) : q[1] - 2; const drop = Math.max(0, q[1] - 0.2 - gy); const d = Math.min(9, drop * 1.5); return [out(p, o, 1.6 + d, -0.9 - d / 1.5), gy]; };
@@ -1074,11 +1163,14 @@ export class GraphWorld {
           // the spill beyond the shoulder's foot (user, 23 Nov: "texture blending … gravel dust blowing onto a road"):
           // drawn with the tile's ground (_spillJob), draped on it
           if (this.profile.roads === 'worn') t.spills.push({ a: ta, b: tb, o0, o1, s0: c0.s, s1: c1.s, half, sgn, surf: ext[k] === 5 || ext[k] === 6 ? ext[k] : 5 });
+          // (over a pad — Bethesda's terrace, cut down below the drive — no embankment: the landmark's wall stands there)
+          if (!(this.pads.length && (this._inPad(ta[0], ta[2]) || this._inPad(tb[0], tb[2])))) {
           W.quad(out(p0, o0, 1.6, -0.9), out(p1, o1, 1.6, -0.9), tb, ta, verge, !flip);
           W.quad(ta, tb, [tb[0], Math.min(tb[1], gb) - 1.5, tb[2]], [ta[0], Math.min(ta[1], ga) - 1.5, ta[2]], verge, flip);
+          }
           W.wall(p0, p1, -0.6, -0.01, side, flip);
         }
-        if (br) W.quad([L[k][0], L[k][1] - 1, L[k][2]], [Rt[k][0], Rt[k][1] - 1, Rt[k][2]], [Rt[k + 1][0], Rt[k + 1][1] - 1, Rt[k + 1][2]], [L[k + 1][0], L[k + 1][1] - 1, L[k + 1][2]], under, true);
+        if (br && !(bm && (bm[i0] & 4) && (bm[i1] & 4))) W.quad([L[k][0], L[k][1] - 1, L[k][2]], [Rt[k][0], Rt[k][1] - 1, Rt[k][2]], [Rt[k + 1][0], Rt[k + 1][1] - 1, Rt[k + 1][2]], [L[k + 1][0], L[k + 1][1] - 1, L[k + 1][2]], under, true);
       }
       // paint, clear of the junctions
       const paint = this._paintOf(e), yellow = new THREE.Color('#e3b53a'), white = new THREE.Color('#f2efe6');
@@ -1095,6 +1187,7 @@ export class GraphWorld {
       if (paint.centre === 'double') { line(-0.18, 0.06, 0, 0, yellow); line(0.18, 0.06, 0, 0, yellow); }
       else if (paint.centre === 'dash-yellow') line(0, path ? 0.05 : 0.07, path ? 3 : 3.3, path ? 6 : 6.7, yellow);
       if (paint.edges) { line(half - 0.35, 0.07, 0, 0, white); line(-(half - 0.35), 0.07, 0, 0, paint.oneway ? yellow : white); }
+      if (paint.bikeLane) { line(-(half - 2.2), 0.1, 0, 0, white); line(-(half - 2.2) - 0.35, 0.1, 0, 0, white); }   // (the bike lane: a double white line 2 m in from the edge)
       if (paint.oneway && paint.lanes >= 2) for (let q = 1; q < paint.lanes; q++) line(-half + (2 * half) * q / paint.lanes, 0.06, 3, 9, white);
     }
     // junctions (_planJunctions): the surface — the mouths joined by the curb returns, a fan from the centre — the
@@ -1102,6 +1195,8 @@ export class GraphWorld {
     // mouth where a main street meets two or more others among the buildings. Two ways meeting: a disc as wide as the
     // narrower, filling the bend's outside; a dead end: rounded.
     const white = new THREE.Color('#ece9de'), asphalt = col('residential');
+    // a junction's look: its widest way's colour and surface (at its end there)
+    const joinLook = (arms) => { let A = null; for (const a of arms) if (!A || this.wOf(a.e) > this.wOf(A.e)) A = a; if (!A) return null; const e = A.e, i = A.end ? e.n : 0, sf = SURF_CODE[e._surf?.[i] || 'asphalt'] ?? 0; return { color: e._rw ? new THREE.Color('#a9a59c') : sf === 3 ? new THREE.Color('#a7a399') : sf === 4 ? new THREE.Color('#a49c8f') : col(e.kind), surf: sf, path: e.kind === 'path' }; };
     const facing = (a, b, c, d, color, dx, dy, dz, M = W) => {   // a quad whose normal points along (dx, dy, dz)
       const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
       const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
@@ -1112,14 +1207,26 @@ export class GraphWorld {
       const J = this.jn?.get(nd.id);
       if (!J) {
         const list = this.arms.get(nd.id) || [];
-        const r = list.length ? Math.max(0.5, (list.length >= 3 ? Math.max : Math.min)(...list.map(({ e }) => this.wOf(e) / 2))) : 3.5;
-        R.discX(nd.x, nd.y + ROAD_LIFT + 0.004, nd.z, r, asphalt, 16);
+        // (a map that matches its joins — NYC: two ways meeting at a bend joined by a disc as wide as the wider, in its
+        //  colour and surface, so the bend's outside has no wedge gap and a paved path no dark patch)
+        // (and on any map, a real bend — over 20° — joined as wide as its wider way: the narrower disc left a wedge gap at
+        //  the wider way's outside, the map QC's joinGap; PGH's path/primary and primary/residential bends, 25 Nov)
+        let bend = false;
+        if (list.length === 2) {
+          const d = list.map(({ e, end }) => { const k = end ? Math.max(0, e.n - 1) : Math.min(e.n, 1), x0 = end ? e.x[e.n] : e.x[0], z0 = end ? e.z[e.n] : e.z[0], dx = e.x[k] - x0, dz = e.z[k] - z0, l = Math.hypot(dx, dz) || 1; return [dx / l, dz / l]; });
+          bend = Math.PI - Math.acos(Math.max(-1, Math.min(1, d[0][0] * d[1][0] + d[0][1] * d[1][1]))) > 0.35;
+        }
+        const r = list.length ? Math.max(0.5, (list.length >= 3 || bend || this.profile.junctionCurbs ? Math.max : Math.min)(...list.map(({ e }) => this.wOf(e) / 2))) : 3.5;
+        const jc = this.profile.junctionCurbs ? joinLook(list) : null;
+        if (jc) R.discX(nd.x, nd.y + ROAD_LIFT + (jc.path ? -0.03 : 0) + 0.004, nd.z, r, jc.color, 24, jc.surf);
+        else R.discX(nd.x, nd.y + ROAD_LIFT + 0.004, nd.z, r, asphalt, 16);
         continue;
       }
-      const P = J.poly, cy = J.y + ROAD_LIFT, RD = [0, 0, 0, 40];
+      const jl = this.profile.junctionCurbs ? joinLook(J.arms) : null;
+      const P = J.poly, cy = J.y + ROAD_LIFT, RD = [jl ? jl.surf : 0, 0, 0, 40], jcol = jl ? jl.color : asphalt;
       for (let k = 0; k < P.length; k++) {
         const p = P[k], q = P[(k + 1) % P.length];
-        R._tri([J.x, cy, J.z], [q.x, q.y + ROAD_LIFT, q.z], [p.x, p.y + ROAD_LIFT, p.z], asphalt, RD, RD, RD);
+        R._tri([J.x, cy, J.z], [q.x, q.y + ROAD_LIFT, q.z], [p.x, p.y + ROAD_LIFT, p.z], jcol, RD, RD, RD);
       }
       for (const c of J.corners) {
         const pts = c.curb; if (!pts || pts.length < 2 || c.gap < 0.3) continue;   // (a straight side too: the sidewalk runs on across the mouth of the way opposite)
@@ -1141,6 +1248,7 @@ export class GraphWorld {
             facing(o0, o1, [o1[0], yq - 1.4, o1[2]], [o0[0], yp - 1.4, o0[2]], walkSide, mdx, 0, mdz);                                       // its outer side
           } else {
             const i0 = [p.x, yp - 0.01, p.z], i1 = [q.x, yq - 0.01, q.z], o0 = [p.x + nxp * 1.6, yp - 0.9, p.z + nzp * 1.6], o1 = [q.x + nxq * 1.6, yq - 0.9, q.z + nzq * 1.6];
+            if (this.profile.edgeFlush) facing(i0, i1, [q.x + nxq * .18, yq - .02, q.z + nzq * .18], [p.x + nxp * .18, yp - .02, p.z + nzp * .18], curbC, 0, 1, 0);   // (the stone edging round the corner)
             facing(i0, i1, o1, o0, verge, 0, 1, 0);                                                                                          // the verge
             facing([p.x, yp - 0.6, p.z], [q.x, yq - 0.6, q.z], i1, i0, side, -mdx, 0, -mdz);
           }
@@ -1438,7 +1546,7 @@ export class GraphWorld {
       for (let i = 0; i <= e.n; i++) if (!deck[i]) toEnd[i] = 0;
       for (let i = 1; i <= e.n; i++) toEnd[i] = Math.min(toEnd[i], toEnd[i - 1] + 10);
       for (let i = e.n - 1; i >= 0; i--) toEnd[i] = Math.min(toEnd[i], toEnd[i + 1] + 10);
-      const half = this.wOf(e) / 2 - 0.4, pm = this.bridgeMask?.get(e.id);
+      const half = this.wOf(e) / 2 - 0.4, pm = this.bridgeMask?.get(e.id) || this.modelDecks?.get(e.id);
       for (let i = Math.max(a, 1); i <= Math.min(b, e.n - 1); i++) {
         if (!deck[i] || toEnd[i] < 20 || i % PIER_STEP) continue;
         if (pm && pm[i] & 1) continue;   // a bridge model stands here (its own piers)
@@ -1472,10 +1580,11 @@ class Mesher {
   }
   /** A road quad with its aRd per corner. */
   quadX(a, b, c, d, color, r) { this._tri(a, b, c, color, r[0], r[1], r[2]); this._tri(a, c, d, color, r[0], r[2], r[3]); }
-  discX(x, y, z, r, color, seg = 14) {
+  discX(x, y, z, r, color, seg = 14, surf = 0) {
+    const rd = [surf, 0, 0, r];
     for (let k = 0; k < seg; k++) {
       const a0 = (k / seg) * Math.PI * 2, a1 = ((k + 1) / seg) * Math.PI * 2;
-      this._tri([x, y, z], [x + Math.cos(a1) * r, y, z + Math.sin(a1) * r], [x + Math.cos(a0) * r, y, z + Math.sin(a0) * r], color, [0, 0, 0, r], [0, 0, 0, r], [0, 0, 0, r]);
+      this._tri([x, y, z], [x + Math.cos(a1) * r, y, z + Math.sin(a1) * r], [x + Math.cos(a0) * r, y, z + Math.sin(a0) * r], color, rd, rd, rd);
     }
   }
   quad(a, b, c, d, color, flip = false) {
@@ -1509,7 +1618,7 @@ class Mesher {
 }
 
 /** A simple rider until the model loads. */
-function makeStandIn() {
+export function makeStandIn() {
   const group = new THREE.Group();
   const body = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.5, 1.6), new THREE.MeshLambertMaterial({ color: '#ff7a1a' }));
   body.position.y = 0.75;
@@ -1522,6 +1631,13 @@ function makeStandIn() {
 
 /** A natural bank's height s metres in from the water's edge (− out in the river): under the water to the edge, then
  *  ≥ 1.5 m up within 5 m (no mud ramp), easing to the bank's top by BANK_SLOPE. */
+/** Inside a ring of local points (or within `grow` m of it, roughly: its edge tested at a few offsets). */
+function inRing(ring, x, z, grow = 0) {
+  const inside = (px, pz) => { let c = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], b = ring[j]; if ((a.z > pz) !== (b.z > pz) && px < ((b.x - a.x) * (pz - a.z)) / (b.z - a.z) + a.x) c = !c; } return c; };
+  if (inside(x, z)) return true;
+  return grow > 0 && (inside(x + grow, z) || inside(x - grow, z) || inside(x, z + grow) || inside(x, z - grow));
+}
+
 export function bankProfile(s, top, waterY, pool) {
   const T = Math.max(top, waterY + 1.6), y5 = waterY + Math.max(1.5, 0.5 * (T - waterY));
   if (s <= -4) return pool - 2;
@@ -1705,7 +1821,7 @@ const NY_ROAD_GLSL = /* glsl */`
   }
 `;
 /** Rural maps' road paint: worn by plows and salt — faded, scuffed through in the wheel paths, patchy by stretch. */
-function wornPaintMaterial() {
+export function wornPaintMaterial() {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vPW;')
@@ -1736,7 +1852,7 @@ const NOISE_GLSL = /* glsl */`
  * gravel and dirt. Patterns fade to their average when a brick is a few pixels, so nothing shimmers far off.
  */
 /** low (Light, phones): the patterns only up close (brick, setts, slabs, pavers), plain asphalt with one noise. */
-function roadSurfaceMaterial(low = false, ny = false, spill = false) {
+export function roadSurfaceMaterial(low = false, ny = false, spill = false) {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: spill, polygonOffsetFactor: spill ? -1 : 0, polygonOffsetUnits: spill ? -3 : 0 });
   m.defines = {};
   if (spill) m.defines.SPILL = '';
@@ -1892,9 +2008,10 @@ function sideMaterial(low = false) {
 }
 
 const ROOTS_N = 24;
-function groundMaterial(low = false, rural = false) {
+function groundMaterial(low = false, rural = false, soft = false) {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true });
   m.defines = {};
+  if (soft) m.defines.SOFTCOVER = '';   // (NYC: the covers' edges only wander — no scatter of grains, read as a blocky stipple)
   if (low) m.defines.LOWQ = '';
   if (rural) m.defines.NYGRASS = '';
   const blank = new THREE.DataTexture(new Uint8Array([1]), 1, 1, THREE.RedFormat); blank.needsUpdate = true;
@@ -1937,6 +2054,9 @@ function groundMaterial(low = false, rural = false) {
           // (an old-growth hero area's covers — dark litter beside bright hay — read the grains as a checker up close:
           //  there the edge only wanders, a soft ragged line, no scatter)
           float kh = floor(texture2D(uLand, uv0).r * 255. + .5), grains = kh > 29.5 && kh < 33.5 ? 0. : 6.;
+          #ifdef SOFTCOVER
+          grains = 0.;
+          #endif
           vec2 uv = uv0 + ((vec2(gwN(vGW.xz * .21), gwN(vGW.xz * .21 + 19.)) - .5) * 7. + (vec2(gwN(vGW.xz * .9 + 5.), gwN(vGW.xz * .9 + 23.)) - .5) * (6. - grains) * .5 + (vec2(gwH(gr + 3.1), gwH(gr + 8.7)) - .5) * grains * (1. - smoothstep(60., 220., length(vGW - cameraPosition)))) / size;
           float k = floor(texture2D(uLand, uv).r * 255. + .5);
           // water isn't wobbled: a canal or a creek is only a few cells wide, and the wobble broke it into pools

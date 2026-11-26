@@ -559,7 +559,29 @@ function rock(seed, w, h) {
 }
 
 /** The kit: every species' variants in three levels of detail, and the understory pieces. */
-export function makeUpstateTrees({ oldGrowth = false } = {}) {
+// the city park's trees (NYC's Central Park, user 25 Nov: "Mapped woods + real rows … London planes, elms, oaks, maples,
+// tupelo in peak color"): only for a map that asks (makeUpstateTrees({ park: true })) — each is a row in the impostor atlas
+const PARK_SPECIES = {
+  // American elm: the Mall's cathedral — a tall trunk splitting low into a few long limbs that rise and arch out, a vase
+  // with drooping tips; clear yellow in fall
+  elm: { H: 26, R: 9, fork: .3, trunkR: .55, trunk: '#5a5048', bark: BARK, gnarl: .18, up: .1,
+    levels: [[4, .35, .42, .55], [4, .45, .6, .28], [3, .4, .7, .14]],
+    greens: ['#4f7a36', '#58843b', '#476f32'], fall: ['#d9b84a', '#cfa83c', '#e3c75e', '#c79a36'], turn: [.2, .6, .95] },
+  // London plane: a broad, high crown on a straight trunk with mottled cream-and-olive bark; turns late, tawny
+  plane: { H: 25, R: 8.5, fork: .38, trunkR: .6, trunk: '#9d9784', bark: BARK, leader: true, gnarl: .3, up: .04,
+    levels: [[6, .38, .85, .42], [4, .3, .7, .22], [3, .35, .6, .11]],
+    greens: ['#4c7234', '#557b38', '#466a30'], fall: ['#b79a48', '#a5843c', '#c4a656', '#8f7a42'], turn: [.15, .5, .85] },
+  // black tupelo: a dense, flat-topped crown on short horizontal limbs; the brightest scarlet in the park
+  tupelo: { H: 17, R: 5, fork: .45, trunkR: .35, trunk: '#4a3f37', bark: PLATED, leader: true, flat: true, gnarl: .3, up: .02,
+    levels: [[7, .35, 1.2, .3], [3, .3, .7, .18], [3, .35, .6, .1]],
+    greens: ['#3f6a30', '#477234'], fall: ['#c2241c', '#d8361f', '#a91c1a', '#e0502a'], turn: [.3, .8, 1] },
+  // pin oak: a pyramid with drooping lower limbs; russet and bronze
+  pinoak: { H: 22, R: 6.5, fork: .4, trunkR: .45, trunk: '#5a5048', bark: BARK, leader: true, gnarl: .35, up: -.02,
+    levels: [[8, .3, 1.35, .32], [3, .3, .7, .18], [3, .35, .6, .1]],
+    greens: ['#41622f', '#4a6c34'], fall: ['#9a4a24', '#b2622c', '#7e3f22'], turn: [0, .4, .8] },
+};
+
+export function makeUpstateTrees({ oldGrowth = false, park = false } = {}) {
   return withSmooth(true, () => {
     const species = {};
     for (const [name, o] of Object.entries(SPECIES)) {
@@ -571,6 +593,10 @@ export function makeUpstateTrees({ oldGrowth = false } = {}) {
     if (oldGrowth) for (const [name, o] of Object.entries(FOREST_FORMS)) {
       const k = Object.keys(FOREST_FORMS).indexOf(name);
       species[name] = { h: o.H, r: o.R, variants: o.turn.map((turn, v) => [0, 1, 2].map((lod) => grow(4701 + k * 41 + v * 9, o, lod, turn))), turn: o.turn, forest: true };
+    }
+    if (park) for (const [name, o] of Object.entries(PARK_SPECIES)) {
+      const k = Object.keys(PARK_SPECIES).indexOf(name);
+      species[name] = { h: o.H, r: o.R, variants: o.turn.map((turn, v) => [0, 1, 2].map((lod) => grow(4901 + k * 43 + v * 11, o, lod, turn))), turn: o.turn };
     }
     species.whitepine = { h: 30, r: 5.5, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => whitePine(v, lod))), turn: [0, 0] };
     species.hemlock = { h: 22, r: 4.2, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => hemlock(v, lod))), turn: [0, 0] };
@@ -630,8 +656,9 @@ export function makeLeafTexture(size = 512) {
 }
 
 /** The early-fall pick among a species' variants (green / turning / turned): about a quarter of the trees in colour. */
-export function fallVariant(sp, r) {
+export function fallVariant(sp, r, peak = false) {
   const n = sp.variants.length;
+  if (peak) return n === 2 ? (r < .2 ? 0 : 1) : r < .12 ? 0 : r < .42 ? 1 : 2;   // (peak foliage — NYC: most of the canopy turned)
   if (n === 2) return r < .5 ? 0 : 1;
   return r < .66 ? 0 : r < .86 ? 1 : 2;
 }

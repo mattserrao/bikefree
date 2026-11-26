@@ -38,7 +38,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # the city (user, 22 Nov: CNY, "following the guide used for PGH"): routes/cities/<id>.json and its files; PGH by default
 CITY = sys.argv[sys.argv.index('--city') + 1] if '--city' in sys.argv else 'pgh'
 CFG = json.load(open(os.path.join(ROOT, 'tools', 'city', f'{CITY}.json'))) if os.path.exists(os.path.join(ROOT, 'tools', 'city', f'{CITY}.json')) else {}
-REACH = 250          # m from a PGH way: buildings, trees, the street kit
+REACH = CFG.get('cityReachM', 250)   # m from a PGH way: buildings, trees, the street kit
 TALL = 40            # towers this tall are kept anywhere in the box
 LAND_M = CFG.get('landM', 6)            # (SKAN: 10 — its long box at 6 m would pass the 4096 texels a phone allows)
 UNIT = CFG.get('cityUnit', UNIT)        # (SKAN: 5e-6 — 33 km north to south passes Int16 at 3e-6)
@@ -130,7 +130,7 @@ def main():
     pgh = json.load(open(os.path.join(ROOT, f'routes/cities/{CITY}.json')))
     E = decode_edges(pgh)
     la_all = [v for e in E for v in e['lat']]; lo_all = [v for e in E for v in e['lon']]
-    pad = 0.004
+    pad = CFG.get('cityPadM', 444) / 111000   # (NYC: 900 m — the skyline round the park)
     gs, gn, gw, ge = min(la_all) - pad, max(la_all) + pad, min(lo_all) - pad * 1.3, max(lo_all) + pad * 1.3
     lat0, lon0 = (gs + gn) / 2, (gw + ge) / 2
     kx, ky = 111319.49 * math.cos(math.radians(lat0)), 111319.49
@@ -213,11 +213,33 @@ def main():
         if c and rel[1].get('type') == 'multipolygon':
             try: layers[c] += rings_of(rel, ways, nodes)
             except Exception: pass
+    if CFG.get('landWater') == 'pools':
+        # (NYC: the cover draws water only under the map's pools — they have their own water planes; a fountain's
+        #  basin or a pool that isn't one is paved (the landmarks draw the fountains), a larger one left to the grass:
+        #  as cover cells they were blocky teal patches at ground level — the review, 25 Nov)
+        from shapely.geometry import Polygon as _P, Point as _Pt
+        rings_ = [_P([(lo, la) for la, lo in q['ring']]) for q in CFG.get('pools', []) if q.get('ring')]
+        kx_ = 111320 * math.cos(math.radians((gn + gs) / 2))
+        keep, moved = [], 0
+        for pts in layers[3]:
+            if len(pts) < 3: continue
+            P_ = _P([(lo, la) for la, lo in pts])
+            if not P_.is_valid: P_ = P_.buffer(0)
+            if any(r.contains(P_.representative_point()) for r in rings_):
+                # (drawn 5 m inside its outline: the 4 m cells spilled a teal band onto the graded bank — under the
+                #  water plane the bed's colour barely shows anyway)
+                Q = P_.buffer(-CFG.get('landWaterInsetM', 0) / 100000) if CFG.get('landWaterInsetM') else P_
+                for g_ in getattr(Q, 'geoms', [Q]):
+                    if not g_.is_empty and g_.geom_type == 'Polygon': keep.append([(la, lo) for lo, la in g_.exterior.coords])
+            elif P_.area * kx_ * 110540 < 600: layers[6].append(pts); moved += 1
+            else: moved += 1
+        layers[3] = keep
+        print(f'  water cover: {len(keep)} pools kept, {moved} small waters paved or left to the grass')
     for code in (8, 9, 1, 2, 5, 6, 3):
         for pts in layers[code]: poly(pts, 0 if code == 9 else code)
     # the waterways OSM draws as lines (no area): CNY's Erie Canal, Nine Mile Creek — water at their width (PGH's rivers
     # are areas, under its water plane)
-    if CITY != 'pgh':
+    if CITY != 'pgh' and CFG.get('landWaterLines', True):
         # (CNY: the canal and the creeks are ribbons of water of their own, tools/cny_heroes.py — as cells they were a chain of diamonds)
         WIDE = {} if CITY == 'cny' else {'canal': 14, 'river': 16, 'stream': 4}
         nw_ = 0
@@ -536,6 +558,33 @@ def main():
         if t.get('natural') == 'tree' and i in nodes:
             la, lo = nodes[i]
             if gs < la < gn and gw < lo < ge and way_dist(la, lo, REACH) < REACH: trees += q(la, lo)
+    if CFG.get('treeRows'):
+        # (NYC: OSM's tree rows — the Mall's elms, the allées — a tree every treeRowM along each)
+        step, nrow = CFG.get('treeRowM', 9), 0
+        for nd, t in ways.values():
+            if t.get('natural') != 'tree_row': continue
+            pts = [nodes[i] for i in nd if i in nodes]
+            for a, b in zip(pts, pts[1:]):
+                L = math.hypot((b[0] - a[0]) * ky, (b[1] - a[1]) * kx); k = max(1, round(L / step))
+                for j in range(k):
+                    la, lo = a[0] + (b[0] - a[0]) * j / k, a[1] + (b[1] - a[1]) * j / k
+                    if gs < la < gn and gw < lo < ge and way_dist(la, lo, REACH) < REACH: trees += q(la, lo); nrow += 1
+        print(f'  tree rows: {nrow} trees')
+    allee_pts = []
+    for al in CFG.get('allees', []):
+        # (NYC: the Mall — four rows of American elms over Literary Walk; a tree every everyM at each offset, both sides)
+        nal = 0
+        for wid_, (nd, t) in ways.items():
+            if ('way' in al and str(wid_) != al['way']) or ('way' not in al and t.get('name') != al['name']) or 'highway' not in t: continue
+            pts = [nodes[i] for i in nd if i in nodes]
+            for a, b in zip(pts, pts[1:]):
+                dy, dx = (b[0] - a[0]) * ky, (b[1] - a[1]) * kx; L = math.hypot(dx, dy)
+                if L < 1: continue
+                k = max(1, round(L / al.get('everyM', 8))); ny, nx = dx / L, -dy / L
+                for j in range(k):
+                    la, lo = a[0] + (b[0] - a[0]) * (j + .5) / k, a[1] + (b[1] - a[1]) * (j + .5) / k
+                    for off in al['offsetsM']: trees += q(la + ny * off / ky, lo + nx * off / kx); allee_pts.append([round(la + ny * off / ky, 6), round(lo + nx * off / kx, 6)]); nal += 1
+        print(f"  allée {al.get('name', al.get('way'))}: {nal} trees")
     kit = street_kit.extract(nodes, ntags, ways, q, way_dist, radius=REACH)
 
     # 4. what each PGH edge is made of: the nearest OSM highway (same name preferred) at each sample
@@ -576,7 +625,7 @@ def main():
             if CITY != 'pgh' and e['kind'] == 'path' and (not s or re.search(r'Canalway|Towpath', e['name'] or '', re.I)): code = 5
             codes.append(code)
             # one-way, against or along this edge's direction
-            if t.get('oneway') in ('yes', '1', '-1') or t.get('highway') in ('motorway', 'motorway_link'):
+            if not CFG.get('bothWays') and (t.get('oneway') in ('yes', '1', '-1') or t.get('highway') in ('motorway', 'motorway_link')):   # (NYC, user 25 Nov: the drives free both ways)
                 i1 = min(n - 1, i + 1); i0 = max(0, i - 1)
                 ex, ey = (e['lon'][i1] - e['lon'][i0]) * kx, (e['lat'][i1] - e['lat'][i0]) * ky
                 along = ex * hit[2][0] + ey * hit[2][1]
@@ -748,6 +797,7 @@ def main():
         'sectors': {'south': gs, 'west': gw, 'dlat': DLAT, 'dlon': DLON, 'folder': f'routes/cities/{CITY}-city', 'pointKinds': kit.get('pointKinds', []), 'lineKinds': kit.get('lineKinds', []), 'list': sectors},
         'edges': edges,
     }
+    if allee_pts: out['allee'] = allee_pts   # (the allées' planned trees: tools/qc-park.js counts how many stand)
     path = os.path.join(ROOT, f'routes/cities/{CITY}-city.json')
     json.dump(out, open(path, 'w'), separators=(',', ':'))
     tot = sum(os.path.getsize(f) for f in glob.glob(os.path.join(folder, '*.json')))

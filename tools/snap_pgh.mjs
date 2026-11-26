@@ -20,6 +20,7 @@ const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf(k); if (i < 0) return d; const v = args[i + 1]; args.splice(i, 2); return v; };
 const flag = (k) => { const i = args.indexOf(k); if (i < 0) return false; args.splice(i, 1); return true; };
 const software = flag('--software');
+const qc = flag('--qc');   // (tools/qc_map.mjs: the page's QC probes on)
 const [width, height] = opt('--size', '1280x720').split('x').map(Number);
 const view = opt('--view', null);   // "<back>,<up>": an overview camera this far behind and above the rider
 const evalJs = opt('--eval', null);   // run in the page after the frame (the world as `w`, THREE as `T`): its result is printed
@@ -61,7 +62,7 @@ for (const spec of args) {
   const [lat, lon, dir] = where.split(',');
   errors.length = 0;
   const t0 = Date.now();
-  await page.goto(`${base}/tools/pgh-preview.html?${new URLSearchParams({ graph, lat, lon, dir: dir || '+', at: at || 40, time, quality })}`);
+  await page.goto(`${base}/tools/pgh-preview.html?${new URLSearchParams({ graph, lat, lon, dir: dir || '+', at: at || 40, time, quality, ...(qc ? { qc: 1 } : {}) })}`);
   await page.waitForFunction(() => window.bfWorld && window.bfWorld.readiness().ready, null, { timeout: +(process.env.SNAP_WAIT || 240000), polling: 500 })
     .catch(async (e) => { console.log('  not ready:', await page.evaluate(() => JSON.stringify([window.bfWorld?._frames, window.bfWorld?._nearTiles?.length, window.bfWorld?.tiles?.size, window.bfWorld?.readiness?.()?.steps?.map((s) => s.p)])).catch(() => '?'), errors.slice(0, 3)); throw e; });
   const stats = await page.evaluate(([view, cam, pre]) => {
