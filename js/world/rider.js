@@ -89,9 +89,12 @@ function buildGeometry(m) {
 
 /** The rider's rim light (user, 23 Nov: cheap wins — "rim light on rider"): the sun's colour, set by the world. */
 export const RIDER_RIM = { value: new THREE.Color('#ffcf92') };
-/** Semi-realistic shading: the atlas, baked AO, per-vertex specular. The cartoon look leaves it alone. */
+/** Semi-realistic shading: the atlas, baked AO, a gloss per vertex. The cartoon look leaves it alone.
+ *  [rider] PBR (fidelity plan, step 9): lit by the sky's environment like the scenery; the per-vertex gloss (aShade.y)
+ *  sets the roughness — matte fabric and skin, satin shoes and helmet — and a clearcoat on the glossiest parts (the bike's
+ *  paint) catches the sky. */
 function riderMaterial(map) {
-  const m = new THREE.MeshPhongMaterial({ map, shininess: 36, specular: new THREE.Color(0.3, 0.3, 0.3) });
+  const m = new THREE.MeshPhysicalMaterial({ map, roughness: .7, metalness: 0, clearcoat: 1, clearcoatRoughness: .12 });
   m.userData.keepShading = true;
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uRim = RIDER_RIM;
@@ -112,9 +115,10 @@ function riderMaterial(map) {
           diffuseColor.rgb *= 1. + ((knit - .5) * .07 + (dith - .5) * .035) * near;
         }`)
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n{ float rim = pow(1. - clamp(dot(normal, normalize(vViewPosition)), 0., 1.), 3.); totalEmissiveRadiance += uRim * rim * .38 * vShade.x; }')
-      .replace('#include <specularmap_fragment>', 'float specularStrength = vShade.y;');
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(.82, .3, smoothstep(.1, .6, vShade.y));')
+      .replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\n#ifdef USE_CLEARCOAT\nmaterial.clearcoat *= smoothstep(.55, .8, vShade.y);\n#endif');
   };
-  m.customProgramCacheKey = () => 'bf-rider-4';
+  m.customProgramCacheKey = () => 'bf-rider-5';
   return m;
 }
 
