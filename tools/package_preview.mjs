@@ -15,7 +15,7 @@ const match = html.match(/<script type="module">([\s\S]*?)<\/script>/);
 const entry = match[1].replace("registerServiceWorker((...args) => console.log(...args));", '');
 const catalog = JSON.parse(read('routes/parks/index.json')).filter((p) => p.id === 'bigsur');
 const scene = JSON.parse(read(catalog[0].scene));
-const paths = [...walk('js').filter((p) => p.endsWith('.js')), 'vendor/three.js', 'vendor/three.module.min.js',
+const paths = [...walk('js').filter((p) => p.endsWith('.js')), 'vendor/three.js', 'vendor/three.module.min.js', 'vendor/three.core.min.js',
   'models/rider.json', catalog[0].file, catalog[0].scene, scene.assets];
 const files = Object.fromEntries(paths.map((p) => [`/${p}`, read(p)]));
 files['/routes/parks/index.json'] = JSON.stringify(catalog);

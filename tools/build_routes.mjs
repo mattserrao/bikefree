@@ -190,7 +190,7 @@ const cityIndex = JSON.stringify({ format: 'bikefree-graph-cities-1', note: 'Gen
 const index = JSON.stringify(output, (k, v) => (k === 'outline' ? `@@${JSON.stringify(v)}@@` : v), 2).replace(/"@@(.*?)@@"/g, (m, s) => JSON.parse(`"${s}"`)) + '\n';
 const walk = (dir) => readdirSync(resolve(root, dir), { withFileTypes: true }).flatMap((p) => p.isDirectory() ? walk(`${dir}/${p.name}`) : [`${dir}/${p.name}`]);
 const files = [...new Set(['./', 'index.html', 'css/style.css', 'sw-assets.js',
-  ...walk('js').filter((p) => p.endsWith('.js')), 'vendor/three.js', 'vendor/three.module.min.js', 'models/rider.json', 'models/rider-atlas.png', 'models/pacer-atlas.png', 'textures/surface-detail.png', ...['maple', 'beech', 'hickory'].flatMap((b) => [`textures/bark-${b}.jpg`, `textures/bark-${b}-n.jpg`]),
+  ...walk('js').filter((p) => p.endsWith('.js')), 'vendor/three.js', 'vendor/three.module.min.js', 'vendor/three.core.min.js', 'models/rider.json', 'models/rider-atlas.png', 'models/pacer-atlas.png', 'textures/surface-detail.png', ...['maple', 'beech', 'hickory'].flatMap((b) => [`textures/bark-${b}.jpg`, `textures/bark-${b}-n.jpg`]),
   'routes/demo-hills.gpx', 'routes/scenes/demo-hills.json', 'routes/parks/index.json', 'routes/cities/index.json', 'routes/ideas.json', 'tools/world-preview.html',
   // route pictures (PLAN 6.8): the manifest is precached; the pictures themselves are cached on first view (sw.js)
   ...(existsSync(resolve(root, 'routes/previews/index.json')) ? ['routes/previews/index.json'] : []), ...paths,
