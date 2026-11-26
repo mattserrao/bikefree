@@ -12,6 +12,7 @@
 // the ground steps down to just under it and eases back up). Anything below the river level is river bed: one
 // water plane at the pool level shows through there.
 import * as THREE from '../../vendor/three.js';
+import { setWind } from './toolbox/atmosphere/wind.js';
 import { makeProjection } from './geo.js';
 import { decodeTerrain } from './toolbox/landscape/real-terrain.js';
 import { CANAL, canalAt } from './toolbox/city/cny-landmarks.js';
@@ -489,6 +490,7 @@ export class GraphWorld {
     SURFACE_SUN.value.copy(this.sunDir);
     if (this.qualityKey !== 'low') loadSurfaceDetail(this.renderer);
     this.scene.fog.color.set(t.fog);
+    setWind(this.profile.wind || [.8, .6], (this.profile.windK ?? 1) * (t.night ? .5 : 1));   // (one wind for the trees and the grass: the map's own)
     this.heroes?.setNight(t.night ? 1 : 0);
     if (this.baked) { this.baked.setLight(t); this.sun.castShadow = (this.gfx?.shadows ?? true) && !!this.baked.world.terrain.quality.shadows; }
   }
@@ -645,9 +647,12 @@ export class GraphWorld {
   _treeShadows() {
     const on = this._postOn() && (this.gfx?.shadows ?? true) && !!this.baked;
     this.city?.forest?.castShadows(on);
-    if (this.baked) { this.baked.dynamicSpan = on ? 60 : this.baked.opts.dynamicSpanM; const sz = on ? 2048 : 1024; if (this.sun.shadow.mapSize.x !== sz) { this.sun.shadow.mapSize.set(sz, sz); this.sun.shadow.map?.dispose(); this.sun.shadow.map = null; } }
+    // (the near cascade — fidelity step 4: the live map is the crisp near one round the rider, the bake the far one;
+    //  Ultra's twice the texels over a wider box: ~3.9 cm a texel to 80 m, High's ~5.9 cm to 60 m)
+    const ultra = this.qualityKey === 'ultra' && on;
+    if (this.baked) { this.baked.dynamicSpan = ultra ? 80 : on ? 60 : this.baked.opts.dynamicSpanM; const sz = ultra ? 4096 : on ? 2048 : 1024; if (this.sun.shadow.mapSize.x !== sz) { this.sun.shadow.mapSize.set(sz, sz); this.sun.shadow.map?.dispose(); this.sun.shadow.map = null; } }
   }
-  _postOn() { return this.qualityKey === 'high' && !MOBILE && (this.gfx?.post ?? true); }
+  _postOn() { return (this.qualityKey === 'high' || this.qualityKey === 'ultra') && !MOBILE && (this.gfx?.post ?? true); }
   _draw() {
     if (this._postOn()) {
       if (!this.post) {
@@ -659,16 +664,36 @@ export class GraphWorld {
       // [sky] aerial perspective and sun shafts in the post pass; the scene's linear fog stands back (the post is the air)
       const A = this._atmo ||= { sunDir: new THREE.Vector3(), sunColor: new THREE.Color(), haze: new THREE.Color() };
       const sky = this.def?.sky || {};
-      A.density = sky.airDensity ?? 4.5e-4; A.falloff = sky.airFalloff ?? 1 / 220; A.baseY = (this.waterY ?? 0) - 5; A.strength = 1; A.shafts = sky.shafts ?? .5;
+      A.density = sky.airDensity ?? 4.5e-4; A.falloff = sky.airFalloff ?? 1 / 220; A.baseY = sky.airBaseM ?? (this.waterY ?? 0) - 5;   // (a high map's air from its own valley floor: Out West's at 1,450 m) A.strength = 1; A.shafts = sky.shafts ?? .5;
       A.sunDir.copy(this.sunDir); A.sunColor.copy(this.sun.color).multiplyScalar(this.sun.intensity * .35); A.haze.copy(this.scene.fog.color).multiplyScalar(.9);
       this.post.setAtmosphere(A);
       const fog = this.scene.fog, near = fog.near, far = fog.far; fog.near = near * 2.2; fog.far = far * 1.6;
       this.post.render(this.scene, this.camera, { bloom: .22, threshold: 1.15, warm: this.timeKey === 'golden' ? 1 : 0 });
       fog.near = near; fog.far = far;
+    } else if (this._liteOn()) {
+      // [fidelity step 4] Balanced on a laptop or desktop, with headroom: the plain picture through 2× MSAA with the
+      // contact shading (the AO's 8 taps, near only) — no HDR, bloom or air; off again the moment the governor steps down
+      if (!this.post) {
+        this.post = new PostFX(this.renderer, { samples: 2 });
+        this.post.setAO({ strength: .55, radiusM: .6 });
+        const w = this.container?.clientWidth || this.renderer.domElement.clientWidth || 1, h = this.container?.clientHeight || this.renderer.domElement.clientHeight || 1;
+        this.post.setSize(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
+      }
+      this.post.render(this.scene, this.camera, { grade: false });
     } else {
       if (this.post) { this.post.dispose(); this.post = null; }
       this.renderer.render(this.scene, this.camera);
     }
+  }
+  /** Balanced's lite post (AO + MSAA): desktop only, More graphics' post on, the governor at full resolution, and the
+   *  GPU's measured frame (where the timer exists) under 60 % of the budget (until it passes 80 %). */
+  _liteOn() {
+    if (this.qualityKey !== 'balanced' || MOBILE || !(this.gfx?.post ?? true) || (this.governor?.level ?? 0) > 0) return false;
+    const g = this.gpuTimer?.ms?.frame, b = 10.5;
+    if (g == null) return true;   // (no timer — Safari: the governor alone gates it)
+    // (hysteresis: on under 60 % of the budget, off over 80 %, so it doesn't flap with its own cost)
+    this._lite = this._lite ? g < b * .8 : g < b * .6;
+    return this._lite;
   }
 
   /** The rider's lane on a narrow way (a hero area's singletrack, under ~2 m): the middle of the tread, eased in and out
@@ -1424,7 +1449,7 @@ export class GraphWorld {
     for (const [p, o, w] of [[p0, o0, w0], [p1, o1, w1]]) { const [x, z] = at(p, o, w * .6); const c = canalAt(x, z, 1); if (c && !c.creek) return false; }
     // the ground cover at the foot: woods (litter, roots) or open grass — the colour the slope's lower part takes
     const lc = this.city?.landAt?.(...at(p0, o0, w0 + 1));
-    const woods = lc === 2, cover = woods ? new THREE.Color('#54432e') : new THREE.Color('#5d7539');
+    const woods = lc === 2, cover = woods ? new THREE.Color('#54432e') : this.profile.ground === 'desert' ? new THREE.Color('#a8734c') : new THREE.Color('#5d7539');   // (desert: red sand, not grass)
     const RINGS = [0, .08, .2, .36, .55, .74, .9, 1];
     const ring = (p, o, w, g, f) => {
       // the profile: a smootherstep from the crest to the ground (convex at the top, concave at the foot)
@@ -1688,7 +1713,7 @@ class Mesher {
 /** A simple rider until the model loads. */
 export function makeStandIn() {
   const group = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.5, 1.6), new THREE.MeshLambertMaterial({ color: '#ff7a1a' }));
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.5, 1.6), litMaterial({ color: '#ff7a1a' }, 'paint'));
   body.position.y = 0.75;
   group.add(body);
   return {

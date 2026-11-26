@@ -21,3 +21,15 @@ test('every module takes three.js from vendor/three.js (one entry point for the 
   const hits = walk('js').filter((f) => /from ['"][^'"]*vendor\/three\.(module|core|webgpu)\.min\.js['"]/.test(read(f)));
   assert.deepEqual(hits, []);
 });
+
+test('the toolbox\'s lit surfaces come from the material factory (toolbox/materials/lit.js), never a bare Lambert', () => {
+  const hits = walk('js/world/toolbox').filter((f) => /new THREE\.MeshLambertMaterial/.test(read(f)));
+  assert.deepEqual(hits, []);
+});
+
+test('a map\'s rides can live beside its config (tools/city/<id>-routes.json) and every graph map has its QC sites', () => {
+  for (const id of JSON.parse(read('routes/cities/index.json')).cities.map((c) => c.id)) {
+    if (id === 'outwest') assert.ok(statSync(join(ROOT, `tools/city/${id}-routes.json`)).isFile(), `${id} rides`);
+  }
+  assert.ok(statSync(join(ROOT, 'tools/qc/sites/outwest.json')).isFile());
+});

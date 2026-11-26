@@ -39,7 +39,7 @@ import { skanCrop, cropMaterial, cropCardsJob, bale, verge, bay, farmStand, hayW
 import { makeUpstateTrees, fallVariant } from './toolbox/vegetation/upstate-trees.js';
 import { OldGrowth } from './toolbox/vegetation/old-growth.js';
 import { planParkPlanting } from './toolbox/vegetation/park-planting.js';
-import { profileY, ditchFits, ditchGeometry, DITCH_DESERT, culvertEnd, goldenrod, laceAndChicory, tallGrass, cattails, utilityPole, wires, scrubClump, sageClump, roadSign } from './toolbox/landscape/roadside-ny.js';
+import { profileY, ditchFits, ditchGeometry, DITCH_DESERT, culvertEnd, goldenrod, laceAndChicory, tallGrass, cattails, utilityPole, wires, scrubClump, sageClump, roadSign, delineator, mileMarker } from './toolbox/landscape/roadside-ny.js';
 import { CANAL, canalAt } from './toolbox/city/cny-landmarks.js';
 import { ROAD_LIFT } from './pose.js';
 
@@ -1313,6 +1313,15 @@ export class GraphCity {
           const kind = Math.min(turn, Math.PI * 2 - turn) > .35 ? 'curve' : hs < .14 ? 'deer' : 'speed';
           roadSign(M, x, sH(x, z), z, Math.atan2(-n[2] * side, -n[3] * side), kind);
         }
+        // delineators along the through roads' shoulders every ~50 m (amber on the left of the traffic), a mile marker
+        // every so often — the roadside kit (fidelity step 10)
+        if (e.kind === 'primary' || e.kind === 'secondary' || e.kind === 'tertiary') for (let i = Math.ceil(i0 / 5) * 5 + 2; i < i1 - 1; i += 5) {
+          if (hash(e.x[i] * .13 + e.z[i] * .29 + side * 2) > .7) continue;
+          const n = nAt(i), nx = n[0] * side, nz = n[1] * side, x = e.x[i] + nx * (half + .9), z = e.z[i] + nz * (half + .9);
+          if (this.onRoad(x, z, .3) || this._drivewayNear(x, z, 1.5) || this.host.buildingNear(x, z, 1) || this.inWater(x, z) || e._deck?.[i]) continue;
+          const yaw = Math.atan2(-n[2] * side, -n[3] * side);
+          if (i % 160 === 7) mileMarker(M, x + nx * .6, sH(x, z), z + nz * .6, yaw); else delineator(M, x, sH(x, z), z, yaw, side < 0);
+        }
         for (let i = Math.ceil(i0 / 4) * 4; i < i1; i += 4) {
           const P = pole(i); if (!P) continue;
           const A = utilityPole(M, P.x, P.y, P.z, P.yaw, P.seed);
@@ -1439,6 +1448,17 @@ export class GraphCity {
             } else if (geese && clear(x, z, 15, 1)) put('gooseShore', x, z, null, false, 0);
           }
         }
+      }
+    }
+    // [out-west] mule deer browsing the sage and the juniper's edge (a small band every so often, off the roads)
+    if (this.desert) for (let gx = 40; gx < TILE; gx += 80) for (let gz = 40; gz < TILE; gz += 80) {
+      const cx = x0 + gx + (R(gx * 5 + gz) - .5) * 60, cz = z0 + gz + (R(gx + gz * 7) - .5) * 60, c = this.landAt(cx, cz);
+      if ((c !== LAND.sage && c !== LAND.pj) || R(gx * 13 + gz * 3) > .1 || !clear(cx, cz, 30, 8)) continue;
+      const n = 2 + Math.floor(R(gx * 3 + gz * 11) * 4);
+      for (let q = 0; q < n; q++) {
+        const a = R(k++) * 6.283, d = Math.sqrt(R(k++)) * 14, x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d;
+        if (!clear(x, z, 26, 3)) continue;
+        put(q === 0 && R(k++) < .4 ? 'muleDeerBuck' : 'muleDeer', x, z, null, R(k++) < .25, 3 + R(k++) * 4);
       }
     }
     if (!H.count) return;

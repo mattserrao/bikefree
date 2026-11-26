@@ -212,6 +212,28 @@ export const STYLE_PRESETS = {
     sundial: 0, shops: 0, ivy: .02, age: [.1, .7], upkeep: [.55, 1], stone: '#b9b4a8',
     dressing: { steps: 1, shrubs: .7, bins: .5, bench: .05, pots: .2, garden: .12, fence: .15, laundry: 0, dish: .2, hay: 0, bikes: .1, trough: 0 },
   },
+  // Out West's Kanab (26 Nov 2026): the desert town — low ranch houses in stucco and adobe colours, low hipped roofs in
+  // tile, standing seam or pale asphalt, wide eaves for the sun, few shutters, no dormers; the odd board-and-batten
+  'kanab-western': {
+    houseEngine: true, cleanShapes: true,
+    archetypes: { cottage: 1, village: .05, farmhouse: .12, chalet: 0, mazot: 0, block: 0, shed: .35 },
+    schemes: [
+      { wall: '#d8b48c', trim: '#6b4a34', frame: '#efe6d6', accent: '#efe6d6', roof: '#8e5240' },   // adobe tan, tile
+      { wall: '#e6d2b0', trim: '#5a4636', frame: '#f4efe4', accent: '#f4efe4' },                     // sand stucco
+      { wall: '#c98e66', trim: '#4e3a2c', frame: '#efe6d6', accent: '#efe6d6', roof: '#7a4a3a' },    // terracotta
+      { wall: '#efe7d8', trim: '#7a5236', frame: '#f6f2ea', accent: '#f6f2ea' },                     // white stucco
+      { wall: '#b9a58a', trim: '#4a3b30', frame: '#efe6d6', accent: '#efe6d6' },                     // dun
+      { wall: '#a8b0a0', trim: '#4a3b30', frame: '#f2eee4', accent: '#f2eee4' },                     // sage green
+      { wall: '#9c6e52', trim: '#e9dcc4', frame: '#efe6d6', accent: '#efe6d6' },                     // board-and-batten brown
+    ],
+    walls: { render: .62, lap: .2, brick: .1, shingle: .08 }, plinth: .2, gable: { lap: .3 }, barn: { boards: 1 },
+    roofs: { tile: .3, seam: .3, asphalt: .4 }, forms: { gable: .3, hip: .65, halfHip: .05 }, pitch: 18, pitchJitter: 5, eaveM: .7, rakeM: .45,
+    windows: 'sash', bayM: 4.6, ranch: .8, maxFloors: 2,
+    shutters: .08, surrounds: .2, lintels: 0, quoins: 0, flowerBoxes: 0, genoise: 0, frontEnd: .1,
+    balconies: 0, galleries: 0, dormers: 0, chimneys: .2, solar: .15, leanTo: .08, garage: .6, porch: .4, frontPorch: .3, stair: 0, woodpile: .05,
+    sundial: 0, shops: 0, ivy: 0, age: [.1, .6], upkeep: [.5, .95], stone: '#c4a582',
+    dressing: { steps: 1, shrubs: .3, bins: .5, bench: .05, pots: .3, garden: .03, fence: .25, laundry: 0, dish: .25, hay: .02, bikes: .1, trough: .02 },
+  },
   // CNY's village cores (Camillus, Warners, Amboy, Memphis…; tools/pgh_city.py "the country", kind 16): houses of the
   // 1850s-1920s — two storeys of clapboard, the gable to the street, a front porch on most, steeper roofs, no garages
   'cny-village': {

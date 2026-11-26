@@ -29,8 +29,9 @@ export function resolveMapDefinition({ kind, id = null, json = {} }) {
   if (kind === 'graph') {
     const profile = mapProfile(json);
     const baked = profile.light === 'golden-upstate' ? 'golden' : json?.lighting?.baked || null;
+    // (sky: the profile's clouds, then the map's own air — effects.sky { airDensity, airFalloff, airBaseM, shafts, grade })
     return { id: id ?? json.id ?? null, kind, profile, effects: { ...(json.effects || {}) }, lighting: { baked, time: baked },
-      sky: { clouds: profile.clouds }, budget: TIER_BUDGETS, assets: assetsOf(json) };
+      sky: { clouds: profile.clouds, ...(json.effects?.sky || {}) }, budget: TIER_BUDGETS, assets: assetsOf(json) };
   }
   if (kind === 'scene') {
     const scene = normalizeScene({ ...json });

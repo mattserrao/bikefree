@@ -7,6 +7,8 @@
 // upload (js/world/toolbox/core/release.js) are counted as "released".
 //
 //   node tools/memory_check.mjs "Three Rivers Loop" [/tmp/memory.txt]
+//   node tools/memory_check.mjs --map outwest [--ride "Kanab Town Loop"] [/tmp/memory.txt]   (any graph map: its first ride
+//        by default; the heap checked against the map definition's budget — js/world/toolbox/map-definition.js, phone = low)
 import { createServer } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -14,7 +16,12 @@ import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const [name = 'Three Rivers Loop', out = null] = process.argv.slice(2);
+const argv = process.argv.slice(2), opt = (k) => { const i = argv.indexOf(k); if (i < 0) return null; const v = argv[i + 1]; argv.splice(i, 2); return v; };
+const MAP = opt('--map'), RIDE = opt('--ride');
+const mapJson = MAP ? JSON.parse(await readFile(join(ROOT, `routes/cities/${MAP}.json`), 'utf8')) : null;
+const [name0 = 'Three Rivers Loop', out = null] = argv;
+const name = RIDE || (MAP ? mapJson.presets?.[0]?.name : name0);
+const { TIER_BUDGETS } = await import('../js/world/toolbox/map-definition.js');
 const T = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.css': 'text/css' };
 const server = createServer(async (req, res) => { const p = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^\/+/, ''); try { res.writeHead(200, { 'content-type': T[extname(p)] || 'application/octet-stream' }).end(await readFile(join(ROOT, p || 'index.html'))); } catch { res.writeHead(404).end(); } });
 await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
@@ -27,7 +34,7 @@ const cdp = await ctx.newCDPSession(page);
 await cdp.send('HeapProfiler.enable');
 await cdp.send('HeapProfiler.startSampling', { samplingInterval: 32768 });
 await page.click('.ride-tab[data-mode="route"]');
-await page.waitForSelector('.city-card'); await page.click('#demoBtn'); await page.click('.city-card'); await page.waitForSelector('#cityDlg[open]');
+await page.waitForSelector('.city-card'); await page.click('#demoBtn'); await page.click(MAP ? `.city-card[data-city="${MAP}"]` : '.city-card'); await page.waitForSelector('#cityDlg[open]');
 await page.locator('.city-row-btn', { has: page.locator('.cr-name', { hasText: new RegExp(`^${name}$`) }) }).first().click();
 await page.evaluate(() => { setInterval(() => { const w = window.bikefree?.world; if (w && !w.__nd) { w.__nd = 1; w._render = () => {}; } }, 20); });
 await page.locator('#cityList [data-ride]').first().click();
@@ -45,6 +52,9 @@ const upl = await page.evaluate(async () => {
 console.log('released', JSON.stringify(upl));
 await page.evaluate(() => { window.gc(); window.gc(); });
 const heapMB = await page.evaluate(() => Math.round(performance.memory.usedJSHeapSize / 1e6));
+const budgetMB = TIER_BUDGETS.low.heapMB;   // (the phone's tier: this check rides in a phone-sized window)
+console.log(`heap ${heapMB} MB of the low tier's ${budgetMB} MB budget${heapMB > budgetMB ? ' — OVER' : ''} (${MAP || 'pgh'} · ${name})`);
+if (heapMB > budgetMB) process.exitCode = 1;
 const { profile } = await cdp.send('HeapProfiler.stopSampling');
 // live sampled bytes by allocating function (self) and by file (inclusive along the stack, deduped per sample)
 const self = new Map(), byFile = new Map();

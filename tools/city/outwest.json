@@ -110,8 +110,33 @@
  "routeKeepM": 18,
  "routeLinkMaxM": 50,
  "effects": {
-  "sky": {},
-  "atmosphere": {}
+  "sky": {
+   "clouds": 0.35,
+   "airDensity": 0.00028,
+   "airFalloff": 0.002631578947368421,
+   "airBaseM": 1450,
+   "shafts": 0.75
+  },
+  "atmosphere": {},
+  "grade": {
+   "saturation": 1.17,
+   "contrast": 0.2,
+   "warm": 0.65,
+   "lift": 0.012,
+   "shadows": [
+    0.93,
+    0.94,
+    1.06
+   ],
+   "highlights": [
+    1.05,
+    1.0,
+    0.92
+   ],
+   "split": 0.45,
+   "sun": 1.15,
+   "sky": 0.85
+  }
  },
  "files": {
   "ground": "routes/cities/outwest-ground.grid.bin.gz",
@@ -169,5 +194,11 @@
  "nameFromRef": true,
  "buildSteps": [
   "tools/outwest_heroes.py"
- ]
+ ],
+ "surfaceByName": {
+  "Eight Mile Gap Road": "gravel",
+  "Old US Highway 89": "gravel",
+  "Hog Canyon Road": "gravel",
+  "Monument Road": "gravel"
+ }
 }

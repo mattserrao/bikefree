@@ -168,7 +168,8 @@ export class PostFX {
         #include <packing>
         uniform sampler2D tSrc; varying vec2 vUv;
         ${inkChunk}
-        void main() { vec4 c = texture2D(tSrc, vUv); gl_FragColor = vec4(applyInk(c.rgb, vUv), c.a); }`,
+        ${aoChunk}
+        void main() { vec4 c = texture2D(tSrc, vUv); vec3 o = applyInk(c.rgb, vUv); if (uAO.x > 0.) o *= contactAO(vUv, inkZ(vUv)); gl_FragColor = vec4(o, c.a); }`,   // (Balanced's lite pass: the contact shading on the plain picture)
       depthTest: false, depthWrite: false, toneMapped: false,
     });
     // sun shafts (step 8): the sky's bright pixels near the sun, smeared toward it (radial blur at a quarter size)

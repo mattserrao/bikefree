@@ -2,6 +2,7 @@
 import { cutRouteRibbon, junctionPlan } from './toolbox/city/junction-mesh.js';   // [junctions] (the road's overlay: city.js)
 import * as THREE from '../../vendor/three.js';
 import { createRenderer, pixelRatioFor, QualityGovernor } from './render-core.js';
+import { litMaterial } from './toolbox/materials/lit.js';
 import { resolveMapDefinition } from './toolbox/map-definition.js';
 import { installEffects } from './toolbox/effects/index.js';   // [blocks]
 import { makeProjection, makeRouteIndex } from './geo.js';
@@ -1314,7 +1315,7 @@ function makeGravelTexture(stylized = false, city = false) {
 // ---------- Rider ----------
 function makeRider() {
   const group = new THREE.Group();
-  const mat = (c) => new THREE.MeshLambertMaterial({ color: c });
+  const mat = (c) => litMaterial({ color: c }, 'paint');   // (the material factory: lit.js)
   const jersey = mat('#ff7a1a'), shorts = mat('#1d1f24'), skin = mat('#d9a882'), frameM = mat('#22252b'),
     tyre = mat('#111111'), helmet = mat('#f2f2f2'), shoe = mat('#f2f2f2');
 

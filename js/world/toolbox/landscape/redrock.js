@@ -73,33 +73,51 @@ export class RockBuilder {
   }
 
   /** A Bryce hoodoo: a spire of stacked, waisted beads under a hard white caprock (h tall, r at the foot). */
-  hoodoo(x, g, z, h, r, seed, ground) {
-    const R = rand(seed * 7919 + 17), beads = 1.5 + R() * 2.5, ph = R() * 6, lean = (R() - .5) * .08, amp = .06 + R() * .14, capT = .84 + R() * .06;
+  /**
+   * A Bryce hoodoo, one of five forms (by seed, or `form`): 'spire' (slim, tall, a small cap), 'stack' (fat, beaded,
+   * squat), 'capped' (the classic: a waist under a wide white caprock), 'broken' (its cap fallen: a ragged point) and
+   * 'fin' (a narrow wall, elongated along `yaw`). h tall, r at the foot.
+   */
+  hoodoo(x, g, z, h, r, seed, ground, { form = null, yaw = 0 } = {}) {
+    const R = rand(seed * 7919 + 17);
+    const F = form || ['spire', 'stack', 'capped', 'capped', 'broken', 'fin'][Math.floor(R() * 6)];
+    const beads = F === 'stack' ? 3 + R() * 2 : 1.5 + R() * 2.5, ph = R() * 6, lean = (R() - .5) * .08;
+    const amp = F === 'stack' ? .16 + R() * .08 : F === 'spire' ? .05 + R() * .06 : .06 + R() * .14;
+    const capT = F === 'broken' ? 2 : F === 'spire' ? .9 + R() * .04 : .82 + R() * .07;
+    const taper = F === 'spire' ? .62 : F === 'stack' ? .3 : F === 'broken' ? .8 : .5;
+    const capW = F === 'spire' ? .5 : F === 'stack' ? .78 : .7;
+    if (F === 'spire') { r *= .72; h *= 1.25; } else if (F === 'stack') { r *= 1.3; h *= .72; }
     const prof = [];
     const N = 30;
     for (let i = 0; i <= N; i++) {
       const t = i / N;
       // tapering, softly waisted where the softer beds wear back (each hoodoo its own rhythm), ledges where the hard
-      // ones stand out; the neck under the cap thinnest; the cap a wide, flat, broken stone
+      // ones stand out; the neck under the cap thinnest; the cap a wide, flat, broken stone; a fallen cap's top ragged
       const ledge = Math.pow(Math.max(0, Math.sin(t * 23 + ph * 3)), 8) * .1;
-      let rr = r * (1 - .5 * t) * (1 - amp + amp * Math.sin(t * beads * TAU + ph) + ledge);
-      if (t > capT) rr = r * (t < capT + .03 ? .36 : t < .985 ? .66 + R() * .08 : .5);
-      prof.push([Math.max(.2, rr), h * t]);
+      let rr = r * (1 - taper * t) * (1 - amp + amp * Math.sin(t * beads * TAU + ph) + ledge);
+      if (t > capT) rr = r * (t < capT + .03 ? capW * .5 : t < .985 ? capW + R() * .08 : capW * .7);
+      if (F === 'broken' && t > .9) rr *= 1 - (t - .9) * 7;
+      prof.push([Math.max(.15, rr), h * t * (F === 'broken' && t > .9 ? 1 - (t - .9) * (.3 + R() * .5) : 1)]);
     }
     prof.unshift([r * 1.6, -1.5]);   // (a skirt of its own debris)
     const pal = ROCK.claron;
-    const tmp = new THREE.Color();
-    this.lathe(x, g, z, prof, 11, {
+    const tmp = new THREE.Color(), seg = 11;
+    // the fin: an ellipse 2.6:1 along yaw (a wall the beds run along), else a lumpy round
+    const fin = F === 'fin';
+    this.lathe(x, g, z, prof, seg, {
       seed, rough: .34, freq: .6, ground, sink: 1.5,
-      rOf: (a) => 1 + .16 * Math.cos(a * 2 + ph) + .08 * Math.cos(a * 3 + ph * 2),
+      rOf: fin ? (a) => { const c = Math.cos(a - yaw), sn = Math.sin(a - yaw); return 1.7 / Math.hypot(c / 1.6, sn * 1.6) * .6 + .06 * Math.cos(a * 3 + ph); }
+        : (a) => 1 + .16 * Math.cos(a * 2 + ph) + .08 * Math.cos(a * 3 + ph * 2),
       colorAt: (t, y) => {
         const b = .5 + .5 * Math.sin(y * 1.3 + ph);
         if (t > capT) return tmp.copy(pal[2]).multiplyScalar(.97 + .06 * b).clone();
-        return tmp.copy(pal[0]).lerp(pal[1], b * .7 + t * .2).lerp(pal[2], Math.max(0, t - .65) * 1.2).clone();
+        // the pink and orange bands, the tops bleached; a fallen cap's tip orange (no white cap to bleach)
+        return tmp.copy(pal[0]).lerp(pal[1], b * .7 + t * .2).lerp(pal[2], Math.max(0, t - (F === 'broken' ? .85 : .65)) * 1.2).clone();
       },
     });
     // the lean: shear the spire a little (its vertices from the base up)
-    if (lean) { const base = this.n - (prof.length * 11 + 1); for (let k = base; k < this.n; k++) { const y = this.pos[3 * k + 1] - g; this.pos[3 * k] += y * lean; } }
+    if (lean) { const base = this.n - (prof.length * seg + 1); for (let k = base; k < this.n; k++) { const y = this.pos[3 * k + 1] - g; this.pos[3 * k] += y * lean; } }
+    return F;
   }
 
   /**
@@ -321,10 +339,12 @@ float rrBump(vec3 p) { return rrN(p * .7) * .7 + rrN(vec3(p.x * 2.2, p.y * .8, p
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.86, .8, .7), smoothstep(.93, .99, sin(vRW.y * .19 + wob * .3)) * .35 * steep);   // a pale one
         // desert varnish: dark streaks down the cliffs, long in y, narrow across, under the ledges
         float sx = rrN(vec3(vRW.x * .35 + vRW.z * .35, vRW.y * .015, (vRW.z - vRW.x) * .35));
-        diffuseColor.rgb *= 1. - .42 * smoothstep(.55, .8, sx) * smoothstep(.55, .85, steep);
+        // (a shaded face — the tunnel's bore, its vertex colour dark — keeps its own colour: no varnish or dust there)
+        float lit = smoothstep(.115, .16, dot(vColor.rgb, vec3(.33)));
+        diffuseColor.rgb *= 1. - .42 * smoothstep(.55, .8, sx) * smoothstep(.55, .85, steep) * lit;
         // grain; flats catch the dust (paler, sandier)
-        diffuseColor.rgb *= .92 + .16 * rrN(vRW * 2.7);
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.78, .58, .42), (1. - steep) * .25);
+        diffuseColor.rgb *= .92 + .16 * rrN(vRW * 2.7) * mix(.4, 1., lit);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.78, .58, .42), (1. - steep) * .25 * lit);
       }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       {
@@ -334,10 +354,15 @@ float rrBump(vec3 p) { return rrN(p * .7) * .7 + rrN(vec3(p.x * 2.2, p.y * .8, p
         float dhx = dFdx(bh), dhy = dFdy(bh);
         vec3 r1 = cross(dpy, normal), r2 = cross(normal, dpx); float det = dot(dpx, r1);
         vec3 grad = sign(det) * (dhx * r1 + dhy * r2);
-        normal = normalize(abs(det) * normal - grad * .55);
-      }`);
+        normal = normalize(abs(det) * normal - grad * .55 * (.35 + .65 * smoothstep(.115, .16, dot(vColor.rgb, vec3(.33)))));
+      }`)
+      // the big rock reads through the haze from far off (a butte at 4 km is the landscape, not a speck in the fog):
+      // the linear fog stretched to twice its reach on the rock, and never quite closing over it
+      .replace('#include <fog_fragment>', `#ifdef USE_FOG
+        { float rf = smoothstep(fogNear, fogFar * 2.2, vFogDepth) * .88; gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, rf); }
+      #endif`);
   };
-  m.customProgramCacheKey = () => 'bf-redrock-1';
+  m.customProgramCacheKey = () => 'bf-redrock-3';
   return (shared = m);
 }
 export function disposeRedRock() { shared?.dispose(); shared = null; }

@@ -631,6 +631,8 @@ def main():
             # CNY's trails: the Erie Canalway Trail is stone dust through Camillus (user, 22 Nov: "gravel" for the path),
             # and a trail OSM gives no surface is gravel in the country, not asphalt
             if CITY != 'pgh' and e['kind'] == 'path' and (not s or re.search(r'Canalway|Towpath', e['name'] or '', re.I)): code = 5
+            # (a map's own surfaces by way name, config surfaceByName — Out West's Butte Valley gravel roads, 26 Nov 2026)
+            if e['name'] in CFG.get('surfaceByName', {}): code = SURF.index(CFG['surfaceByName'][e['name']])
             codes.append(code)
             # one-way, against or along this edge's direction
             if not CFG.get('bothWays') and (t.get('oneway') in ('yes', '1', '-1') or t.get('highway') in ('motorway', 'motorway_link')):   # (NYC, user 25 Nov: the drives free both ways)

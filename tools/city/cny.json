@@ -104,7 +104,7 @@
  "junctionEaseM": 30,
  "routeKeepM": 18,
  "routeLinkMaxM": 50,
- "effects": {"water": {}, "shoreline": {}, "village": {}, "frontYards": {}, "sky": {}, "atmosphere": {}, "canopyShade": {}, "roadLook": {"paint": false, "tone": [1.05, 1.05, 1.04], "leaves": 0.45}, "grade": {"sun": 1.2, "sky": 0.85, "contrast": 0.12, "lift": 0.025}, "parkFence": {"kinds": ["path"], "share": 0.3}, "leafLitter": {"amount": 0.45}},
+ "effects": {"water": {}, "shoreline": {}, "village": {}, "frontYards": {}, "sky": {}, "atmosphere": {}, "canopyShade": {}, "roadLook": {"paint": false, "tone": [1.05, 1.05, 1.04], "leaves": 0.45}, "grade": {"shadows": [0.95, 0.96, 1.04], "highlights": [1.04, 1.0, 0.94], "split": 0.5, "sun": 1.2, "sky": 0.85, "contrast": 0.12, "lift": 0.025}, "parkFence": {"kinds": ["path"], "share": 0.3}, "leafLitter": {"amount": 0.45}},
  "files": {
   "ground": "routes/cities/cny-ground.grid.bin.gz",
   "heroes": "routes/cities/cny-heroes.json",

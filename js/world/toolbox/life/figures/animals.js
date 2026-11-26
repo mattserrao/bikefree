@@ -101,6 +101,25 @@ function horse(M, { coat = '#6b3e22', mane = '#1e1612', socks = null, blanket = 
     M.paint('#2a2420', part, 1.05, lz, 0.3).rod([lx, 0.06, lz + 0.03], [lx, 0.0, lz + 0.04], 0.06, 5);
   }
 }
+/** [out-west] A mule deer: a slim grey-brown body on long thin legs, the big mule ears, a white rump patch and a small
+ *  black-tipped tail, the head down to browse (a buck: forked antlers). */
+function muleDeer(M, { buck = false } = {}) {
+  const coat = '#8c7a66', pale = '#e6ddd0';
+  M.shadow(0.36, 0.78);
+  M.paint(coat).blob([0, 1.0, -0.05], [0.21, 0.24, 0.6], 0, 6, 10);                  // barrel
+  M.paint(coat).blob([0, 1.04, -0.45], [0.21, 0.22, 0.24], 0, 4, 8);                 // haunch
+  M.paint(pale).blob([0, 1.06, -0.66], [0.15, 0.17, 0.06], 0, 3, 6);                 // the white rump
+  M.paint(pale).blob([0, 0.84, 0.0], [0.17, 0.08, 0.45], 0, 3, 8);                   // the pale belly
+  const H = [P.HEAD, 1.18, 0.42, 0.9];
+  M.paint(coat, ...H).blob([0, 1.14, 0.62], [0.09, 0.24, 0.12], -0.75, 4, 8);         // the neck, reaching down
+  M.paint('#6f6152', ...H).blob([0, 0.96, 0.86], [0.08, 0.09, 0.2], 0.9, 4, 8);       // the head
+  M.paint('#1f1a16', ...H).blob([0, 0.86, 1.0], [0.04, 0.04, 0.04], 0, 2, 4);         // the nose
+  M.paint(coat, ...H); for (const s of [1, -1]) M.blob([s * 0.13, 1.1, 0.8], [0.1, 0.05, 0.03], 0.3, 2, 5);   // the mule ears
+  if (buck) { M.paint('#cbbfa8', ...H); for (const s of [1, -1]) { M.rod([s * 0.05, 1.1, 0.78], [s * 0.18, 1.34, 0.7], 0.018, 3); M.rod([s * 0.18, 1.34, 0.7], [s * 0.2, 1.45, 0.8], 0.014, 3); M.rod([s * 0.18, 1.34, 0.7], [s * 0.26, 1.42, 0.6], 0.014, 3); } }
+  M.paint(pale, P.TAIL, 1.12, -0.7, 0.3).blob([0, 1.0, -0.73], [0.04, 0.1, 0.03], -0.2, 2, 5);
+  M.paint('#1f1a16', P.TAIL, 1.12, -0.7, 0.3).blob([0, 0.9, -0.74], [0.035, 0.04, 0.03], 0, 2, 4);
+  M.legs(0.12, 0.85, 0.4, -0.48, 0.036, '#7e6d5a', '#2a2420', 0.3, 4);
+}
 function sheep(M, { wool = '#e6dfcd', face = '#efe9dc' } = {}) {
   M.shadow(0.36, 0.6);
   M.paint(wool).blob([0, 0.68, 0], [0.3, 0.3, 0.52], 0, 5, 9);
@@ -178,6 +197,8 @@ export const ANIMALS = {
   chickenWhite: { build: (M) => chicken(M), walk: 0.25, peck: true },
   chickenRed: { build: (M) => chicken(M, { plumage: '#8a3e1e' }), walk: 0.25, peck: true },
   cat: { build: (M) => cat(M), walk: 0 },
+  muleDeer: { build: (M) => muleDeer(M), walk: 0.5 },
+  muleDeerBuck: { build: (M) => muleDeer(M, { buck: true }), walk: 0.5 },
   goose: { build: (M) => goose(M), walk: 0.18, swim: true },
   gooseGrey: { build: (M) => goose(M, { plumage: '#8f8a80', bill: '#d27a2a' }), walk: 0.18, swim: true },
   gooseShore: { build: (M) => goose(M, { swim: false }), walk: 0.3, peck: true },

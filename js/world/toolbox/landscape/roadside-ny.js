@@ -210,3 +210,17 @@ export function roadSign(M, x, y, z, yaw, kind) {
   if (kind === 'curve') { M.triangle(C(-.05, -.25, 1), C(.05, -.25, 1), C(.05, .1, 1)); M.triangle(C(-.05, -.25, 1), C(.05, .1, 1), C(-.05, .1, 1)); M.triangle(C(-.05, .1, 1), C(.18, .18, 1), C(.05, .25, 1)); }
   else { M.triangle(C(-.2, -.05, 1), C(.18, -.05, 1), C(.12, .08, 1)); M.triangle(C(-.2, -.05, 1), C(.12, .08, 1), C(-.15, .08, 1)); M.triangle(C(.12, .08, 1), C(.22, .25, 1), C(.16, .08, 1)); for (const u of [-.15, .1]) M.triangle(C(u, -.25, 1), C(u + .04, -.25, 1), C(u + .02, -.05, 1)); }
 }
+
+/** [fidelity step 10: the roadside kit] A delineator: a white flexible post at the shoulder with its reflector (amber on
+ *  the left of the traffic, white on the right; it glows a little at night in the headlights' stead). */
+export function delineator(M, x, y, z, yaw, amber = false) {
+  M.color('#eeeeea').box(x, y, z, .1, 1.15, .05, yaw);
+  M.color(amber ? '#e8a321' : '#f4f4f0').set({ aGlow: [.6] }).box(x, y + .85, z, .11, .22, .055, yaw).set({ aGlow: [0] });
+}
+/** A mile marker: a small green plate on a post, the mile in white (suggested). */
+export function mileMarker(M, x, y, z, yaw) {
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  M.color('#7a7c7e').box(x, y, z, .06, 1.25, .06, yaw);
+  M.color('#1f6a3d').box(x, y + 1.15, z, .3, .55, .02, yaw);
+  M.color('#f2f2ee').box(x + s * .015, y + 1.25, z + c * .015, .12, .26, .01, yaw);
+}
