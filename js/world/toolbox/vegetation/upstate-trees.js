@@ -116,7 +116,10 @@ function grow(seed, o, lod, turn, lodScale = 1) {
       const keep = lod ? pts.map((_, i) => i).filter((i) => i % 2 === 0 || i === pts.length - 1) : null;
       wood.add(keep ? tube(keep.map((i) => pts[i]), keep.map((i) => radii[i]), seg) : tube(pts, radii, seg), new THREE.Matrix4(), o.trunk);
     }
-    if (lv === 0 && !o.stems) for (let k = 0; k < 5; k++) { const a = k * 1.26 + rand() * .4; if (!lod) wood.add(cone(br.r * .5, 1.3, 3), M(Math.cos(a) * br.r * .6, 0, Math.sin(a) * br.r * .6, 1, 1, 1, -a, 0, .32), o.trunk); }
+    // the root flare (user, 26 Nov — the five 3-sided cones read as spikes round every trunk): a smooth 10-sided skirt
+    // widening into the ground, its foot sunk so it never shows an edge, slightly out of round
+    // (five draws from the sequence as before, at every level of detail, so the near and far models grow alike)
+    if (lv === 0 && !o.stems) { const r5 = [rand(), rand(), rand(), rand(), rand()]; if (!lod) wood.add(cyl(br.r * 1.02, br.r * 1.6, .75, 10), M(0, -.2, 0, 1, 1, .88 + r5[0] * .2, r5[1] * 6.28), o.trunk); }
     // children
     if (lv < maxLevel) {
       const [nc, start, angle, ratio] = L[lv];

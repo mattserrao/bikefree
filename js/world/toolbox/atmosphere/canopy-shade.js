@@ -60,7 +60,11 @@ vec2 bfCanopy(vec3 w) {
   vec2 q = p * 1.15 + vec2(sin(t * .9 + p.y * .07), cos(t * .7 + p.x * .06)) * .22;
   float n = bfcN(q) * .55 + bfcN(q * 2.6 + 17.) * .3 + bfcN(q * .23 + 5.) * .15;
   float th = mix(.4, .58, c.r);
-  float holes = smoothstep(th, th + .05, n);
+  // (soft dapples, user 26 Nov — "the sun patches look like paint"): each fleck is an image of the sun through a gap in
+  // the leaves, its edge blurred by the sun's 0.53° width over the drop from the leaves (~1 cm a metre): flecks under a
+  // high crown are soft, under a low branch crisp; a little more blur with distance so they never shimmer
+  float drop = max(0., bottom - w.y), pen = clamp(.06 + drop * .016 + length(w.xz - cameraPosition.xz) * .0012, .06, .3);
+  float holes = smoothstep(th - pen * .35, th + pen, n);
   return vec2(1. - dens * (1. - holes) * .93 * min(1., bfCanopyK.z), dens);
 }
 #endif

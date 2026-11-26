@@ -604,6 +604,7 @@ export class World {
     this.renderer.setPixelRatio(pixelRatioFor(this.qualityKey, this.governor?.scale ?? 1));
     this.renderer.shadowMap.enabled = quality.shadows && !(this.baked && this._time?.night);   // [baked-light]
     const resolution = this.qualityKey === 'ultra' ? 4096 : this.qualityKey === 'high' ? 2048 : 1024;   // (the near cascade, as on the graph maps)
+    this.sun.shadow.radius = this.qualityKey === 'ultra' ? 3 : this.qualityKey === 'high' ? 2.2 : 1.5;   // (PCF's Vogel disk: soft edges)
     if (this.baked) this.baked.dynamicSpan = this.qualityKey === 'ultra' ? 80 : this.qualityKey === 'high' ? 60 : this.baked.opts.dynamicSpanM;
     if (this.sun.shadow.mapSize.x !== resolution) {
       this.sun.shadow.map?.dispose(); this.sun.shadow.map = null;

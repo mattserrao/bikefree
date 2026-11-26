@@ -607,6 +607,14 @@ export class GraphWorld {
       this.rider.setLean?.(this._lean);
     }
     this._updateCamera(out.pos, out.flat, out.fwd, dt);
+    // [night lights] the bike's headlight, as in the route scenes (world.js): lights the road and anyone ahead at night
+    if (this.timeKey === 'night' && this.qualityKey !== 'low') {
+      if (!this.headlight) { this.headlight = new THREE.SpotLight('#fff1d6', 650, 85, .58, 1, 1.5); this.scene.add(this.headlight, this.headlight.target); }
+      this.headlight.visible = true;
+      this.headlight.position.copy(out.pos).addScaledVector(out.flat, .6).y += 1.1;
+      this.headlight.target.position.copy(out.pos).addScaledVector(out.flat, 22);
+    } else if (this.headlight) this.headlight.visible = false;
+    this._lampLights(out.pos);
     // building as you ride: a few ms a frame (less on Light: phones, whose frames are tighter), all of it while loading
     const low = this.qualityKey === 'low';
     this._stream(this.camera.position.x, this.camera.position.z, this._preload ? PRELOAD_BUDGET_MS : low ? 3 : BUDGET_MS);
@@ -650,7 +658,23 @@ export class GraphWorld {
     // (the near cascade — fidelity step 4: the live map is the crisp near one round the rider, the bake the far one;
     //  Ultra's twice the texels over a wider box: ~3.9 cm a texel to 80 m, High's ~5.9 cm to 60 m)
     const ultra = this.qualityKey === 'ultra' && on;
-    if (this.baked) { this.baked.dynamicSpan = ultra ? 80 : on ? 60 : this.baked.opts.dynamicSpanM; const sz = ultra ? 4096 : on ? 2048 : 1024; if (this.sun.shadow.mapSize.x !== sz) { this.sun.shadow.mapSize.set(sz, sz); this.sun.shadow.map?.dispose(); this.sun.shadow.map = null; } }
+    if (this.baked) { this.baked.dynamicSpan = ultra ? 80 : on ? 60 : this.baked.opts.dynamicSpanM; const sz = ultra ? 4096 : on ? 2048 : 1024; this.sun.shadow.radius = ultra ? 3 : on ? 2.2 : 1.5;   /* (PCF's Vogel disk: softer edges, no stair-steps) */ if (this.sun.shadow.mapSize.x !== sz) { this.sun.shadow.mapSize.set(sz, sz); this.sun.shadow.map?.dispose(); this.sun.shadow.map = null; } }
+  }
+  /** [night lights] the six lamps nearest the rider as real lights (the pools on the ground are decals; these light the
+   *  rider, the figures and the cars as they pass under them, as Zwift's lamps do since its 2025 lighting update). */
+  _lampLights(at) {
+    const on = this.timeKey === 'night' && this.qualityKey !== 'low';
+    if (!on) { if (this._lamps) for (const l of this._lamps) l.visible = false; return; }
+    if (!this._lamps) { this._lamps = Array.from({ length: 6 }, () => { const l = new THREE.PointLight('#ffd9a0', 0, 22, 2); this.scene.add(l); return l; }); this._lampT = -1; }
+    if ((this._frames & 31) !== 0 && this._lampT >= 0) return;
+    this._lampT = this._frames;
+    const m = new THREE.Matrix4(), p = new THREE.Vector3(), near = [];
+    this.scene.traverse((o) => {
+      if (!o.isInstancedMesh || o.name !== 'Lamp glows' || !o.visible) return;
+      for (let i = 0; i < o.count; i++) { o.getMatrixAt(i, m); p.setFromMatrixPosition(m).applyMatrix4(o.matrixWorld); const d = p.distanceToSquared(at); if (d < 120 * 120) near.push([d, p.clone()]); }
+    });
+    near.sort((a, b) => a[0] - b[0]);
+    this._lamps.forEach((l, i) => { const n = near[i]; l.visible = true; l.intensity = n ? 60 : 0; if (n) l.position.copy(n[1]); });
   }
   _postOn() { return (this.qualityKey === 'high' || this.qualityKey === 'ultra') && !MOBILE && (this.gfx?.post ?? true); }
   _draw() {
@@ -1574,7 +1598,19 @@ export class GraphWorld {
       if (this.mats.park[k] && k !== 'granite' || k === 'water') { const n = m.geometry.attributes.normal; for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0); }   // (draped: lit as the flat ground it lies on, not facet by facet)
       (t.extra ||= []).push(m); this.group.add(m);
     }
-    if (trees.length) {
+    const forest = this.city?.forest, kitSp = forest?.kit?.species || this.city?.treeKit?.species;
+    if (trees.length && forest && kitSp && (kitSp.plane || kitSp.redoak)) {
+      // (user, 26 Nov — one tree look: the faceted ball trees beside the clumped crowns) the park's trees grown by the
+      // tree engine like every other tree on the map: London planes, red oaks and lindens (basswood), by seed
+      const pick = ['plane', 'redoak', 'basswood', 'plane'].filter((n) => kitSp[n]);
+      const key = `park:${Math.round(trees[0][0])}:${Math.round(trees[0][1])}:${trees.length}`;
+      forest.setTile(key, trees.map(([x, z]) => {
+        const r = Math.abs(Math.sin(x * 12.9898 + z * 78.233)) % 1, sp = pick[Math.floor(r * pick.length) % pick.length];
+        return { x, y: this._groundH(x, z) - .1, z, sp, v: Math.floor(r * 7) % (kitSp[sp].variants?.length || 1), s: .45 + r * .3, rot: r * 6.28 };
+      }));
+      const handle = new THREE.Object3D(); handle.name = 'Park trees (tree engine)'; handle.geometry = { dispose: () => forest.removeTile(key) };
+      (t.extra ||= []).push(handle);
+    } else if (trees.length) {
       // the park's trees: a trunk and a broad crown each (the Point's planes, oaks and lindens), sized and tinted by seed
       const trunkG = new THREE.CylinderGeometry(0.22, 0.32, 1, 6).translate(0, 0.5, 0), crownG = new THREE.IcosahedronGeometry(1, 1);
       const T1 = new THREE.InstancedMesh(trunkG, this.mats.trunk, trees.length), T2 = new THREE.InstancedMesh(crownG, this.mats.crown, trees.length);

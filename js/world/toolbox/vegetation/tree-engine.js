@@ -72,7 +72,7 @@ export const NEAR_TRUNK = [55, 60];
 /** A whole card swapped for a 3D model near the camera (a tree given a negative `cut`: the floor's ferns and herbs). */
 export const NEAR_PLANT = [11, 14];
 /** [zwift-look] The near band per quality, × the map's own (phones: a shorter reach, the cards' memory kept). */
-const NEAR_BAND = { low: .55, balanced: 1, high: 1.2 };
+const NEAR_BAND = { low: .55, balanced: 1, high: 1.2, ultra: 1.4 };
 const CELL_2D = { low: 128, balanced: 192, high: 256, ultra: 256 };   // (low: phones — the atlas 88 → 56 MB with its mipmaps, user 23 Nov)
 const DEEP = [.55, .6];  // band scale for a tree > 30 m from any road (t.deep): seen only through the trees in front
 const FADE = [15, 50];   // m: each tree swaps at its own distance within ± this of the band's edge
