@@ -3236,7 +3236,7 @@
   "atmosphere": {},
   "canopyShade": {},
   "roadLook": {},
-  "grade": {
+  "grade": {"shadows": [0.96, 0.97, 1.03], "highlights": [1.03, 1.0, 0.95], "split": 0.5, 
    "sun": 1.2,
    "sky": 0.85,
    "contrast": 0.12,

@@ -10,7 +10,8 @@
 // Instanced, one draw call a kind. The animals stay where they are put; a head goes down to graze (or peck) and comes
 // up to look about, each on its own clock (a vertex attribute marks the head; the shader turns it about the neck);
 // the crows circle, flapping in bursts (coast-life.js's birds).
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
+import { litMaterial } from '../materials/lit.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { birdGeometry, birdMaterial } from './coast-life.js';
 
@@ -104,7 +105,7 @@ function chipmunkGeometry() {
 }
 
 function headMaterial(uTime, { swing = 1.05, pivot = [0, 1.12, .55], rate = .23, color = null } = {}) {
-  const m = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const m = litMaterial({ vertexColors: true });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = uTime;
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; attribute float aHead;')

@@ -2,7 +2,7 @@
 // colour, so distant land melts into it), a glow round the sun (warm, wide at golden hour), and a few clouds drifting
 // across it, lit warm on the sun's side and cool-grey under. One draw call, drawn first, never fogged.
 // Options: { clouds: 0.42 (cover), glow: 1, speed: 1 }.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { NOISE_GLSL } from '../materials/glsl-noise.js';   // [blocks] shared GLSL
 
 const VERT = /* glsl */`

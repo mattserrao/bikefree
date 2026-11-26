@@ -24,7 +24,7 @@
 // edge lines under 6.6 m of paving and no centre line under 5.2 m (or where a zone says "centre": 0). The
 // asphalt gets the detail of the Alpine reference photos: light aggregate in a darker binder, bleached and oily
 // mottling, the paving seam down the middle, and repair strips along the edges.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 
 // tone (×brightness), warm (toward brown), wear (polished wheel tracks), patches, cracks, edge (crumbling
 // edges and dust), fade (paint faded), speckle (chip-seal stones), runoff (snowmelt across the road), grime

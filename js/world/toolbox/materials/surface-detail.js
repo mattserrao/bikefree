@@ -3,7 +3,7 @@
 // R asphalt aggregate, G gravel and stone dust, B grass turf, A clapboard siding. The road, path and ground shaders
 // multiply their own colour by it near the camera (the palettes stay) and light its slopes from the sun, so the
 // surfaces catch the light. A blank (no effect) until the image has loaded; on Light it's never loaded.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 
 const blank = new THREE.DataTexture(new Uint8Array([128, 128, 128, 128]), 1, 1, THREE.RGBAFormat); blank.needsUpdate = true;
 /** The detail texture (shared uniform) and the sun's direction for its relief (set by the world). */

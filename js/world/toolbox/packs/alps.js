@@ -6,7 +6,7 @@
 // martagon lily, ox-eye daisy, umbellifers, willowherb), limestone boulders and scree; and the farm edge: round
 // hay bales, post-and-rail fences, dry-stone walls, wayside crosses and fountain troughs.
 // Low-poly, vertex-coloured, metres, built once per scene from the shared mountain builders.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { randomSequence } from '../core/random.js';
 import { PACK_META } from './meta.js';
 import { Builder, M, cyl, cone, blob, box, withSmooth } from '../core/model-builder.js';

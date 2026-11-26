@@ -7,14 +7,15 @@
 // Options: { kinds: ['drive'], share: .35 (of each side in stretches), offset: 2 (m past the edge and any sidewalk: clear of the
 // verge the QC keeps free — tools/qc-map.js edgeLip probes 1.2 m out),
 // height: 1.05, post: 2.7 (m between posts), both: .4 (chance a stretch has its twin across the way) }.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
+import { litMaterial } from '../materials/lit.js';
 import { hash } from '../core/mesh-builder.js';
 import { due } from '../core/jobs.js';
 
 const vn = (x, seed) => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f), a = hash(i * 127.1 + seed * 311.7), b = hash((i + 1) * 127.1 + seed * 311.7); return a + (b - a) * u; };
 
 function woodMaterial() {
-  const m = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const m = litMaterial({ vertexColors: true });
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aGr; varying vec2 vGr; varying vec3 vWW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGr = aGr; vWW = (modelMatrix * vec4(transformed, 1.)).xyz;');

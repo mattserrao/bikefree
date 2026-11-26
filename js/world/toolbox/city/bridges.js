@@ -1,7 +1,7 @@
 // Pittsburgh's bridges (each in its own structural style), the two stadiums on the North Shore,
 // and the landmarks: Point State Park's fountain, USS Requin, storefronts on East Carson Street,
 // aircraft beacons and the Gulf Tower's weather beacon.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { MeshBuilder, resample, makePath, hash } from '../core/mesh-builder.js';
 import { drain, due, each } from '../core/jobs.js';   // [F30]
 import { ROAD_WIDTH } from '../../pose.js';

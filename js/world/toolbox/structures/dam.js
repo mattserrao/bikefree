@@ -2,7 +2,7 @@
 // gorge floor up to a crest a little above the reservoir, battered on the downstream face, with a parapet and a
 // walkway. Built for the Barrage du Sautet (Alpe d'Huez stage); any route with mapped dams can switch it on with
 // "dams": { "crestM": { "Barrage du Sautet": 772 } } (optional crest heights by name; default: the lower abutment).
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 
 export class Dams {
   constructor(parent, places, landscape, proj, config = {}) {

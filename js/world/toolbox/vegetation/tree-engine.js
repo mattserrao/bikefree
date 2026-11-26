@@ -21,7 +21,9 @@
 //   E.setTile(key, trees)   trees: [{ x, y, z, sp, v, s, rot, tint, deep }]  (sp: species name in kit, v: variant, s: scale;
 //                           deep: > 30 m from any road — the cards take it sooner)
 //   E.removeTile(key); E.tick(camera); E.stats; E.dispose()
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
+import { WIND, WIND_GLSL } from '../atmosphere/wind.js';
+import { billboardLeaves, leafDepthMaterial, CARD_PARS, CARD_OPEN } from './leaf-cards.js';   // (camera-facing leaf clumps)   // (the shared wind: fidelity step 6)
 import { decorateTreeMaterial } from '../packs/northern-rockies.js';
 import { makeLeafTexture } from './upstate-trees.js';
 import { SURFACE } from '../materials/surface-detail.js';
@@ -96,7 +98,7 @@ function leanQ(lean, out) {
 }
 const ANGLES = 12;   // photos round each tree (cross-blended in the card: no snap as the angle changes)
 
-const WIND_GLSL = /* glsl */`
+const TE_GLSL = /* glsl */`
   uniform float uLeaf;
   attribute vec2 aFade;   // (instanced) when this tree swapped tier (the world clock), and 1 steady / 2 fading in / 3 fading out
   varying float vKeep0; varying float vKeep1;
@@ -114,8 +116,8 @@ function engineMaterial(material, uTime, leaf, key, ft = FT) {
   const prev = material.onBeforeCompile, prevKey = material.customProgramCacheKey ? material.customProgramCacheKey() : '';
   material.onBeforeCompile = (shader, r) => {
     prev?.call(material, shader, r);
-    shader.uniforms.uTime = uTime; shader.uniforms.uLeaf = { value: leaf ? 1 : 0 };
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>\n${WIND_GLSL}${leaf || !/uniform float uTime/.test(shader.vertexShader) ? '\nuniform float uTime;' : ''}`)
+    shader.uniforms.uTime = uTime; shader.uniforms.uLeaf = { value: leaf ? 1 : 0 }; shader.uniforms.uWindDir = WIND.uWindDir; shader.uniforms.uWindK = WIND.uWindK;
+    shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>\n${TE_GLSL}${WIND_GLSL}${leaf || !/uniform float uTime/.test(shader.vertexShader) ? '\nuniform float uTime;' : ''}`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         {
           #ifdef USE_INSTANCING
@@ -133,7 +135,9 @@ function engineMaterial(material, uTime, leaf, key, ft = FT) {
           float hk = clamp(position.y / 20., 0., 1.4); hk *= hk;
           float ph = teO.x * .05 + teO.z * .043;
           float sw = sin(uTime * 1.1 + ph) * .6 + sin(uTime * 2.3 + ph * 1.7) * .3 + sin(uTime * 4.7 + ph * 2.9 + position.x) * .1;
-          transformed.x += sw * .22 * hk; transformed.z += sw * .12 * hk;
+          // (the shared wind: the crown leans downwind with the gusts, the sines its sway about that — atmosphere/wind.js)
+          vec2 teW = bfWind(teO.xz, uTime);
+          transformed.xz += (teW * (.3 + .12 * sw) + vec2(sw * .06, sw * .03)) * hk;
           if (uLeaf > .5 && teD < 160.) transformed += normal * sin(uTime * 9. + position.x * 3.1 + position.z * 2.7 + position.y) * .05 * (1. - teD / 160.);
         }`);
     shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vKeep0; varying float vKeep1;')
@@ -144,7 +148,7 @@ function engineMaterial(material, uTime, leaf, key, ft = FT) {
           if (vKeep0 <= 1. - teDz || vKeep1 <= teDz) discard;
         }`);
   };
-  material.customProgramCacheKey = () => `${prevKey}|tree-engine-4-${key}-${ft}`;
+  material.customProgramCacheKey = () => `w1-${prevKey}|tree-engine-4-${key}-${ft}`;
   return material;
 }
 
@@ -197,7 +201,7 @@ function leafMaterial(map, a2c = false, opaque = false) {
     if (opaque) shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', 'diffuseColor.a = 1.0;\n#include <opaque_fragment>');
   };
   m.customProgramCacheKey = () => `tree-engine-leaf-${size}${opaque ? '-opaque' : ''}`;
-  return m;
+  return billboardLeaves(m);   // (the cards open to whichever camera draws them: leaf-cards.js)
 }
 
 export class TreeEngine {
@@ -224,7 +228,7 @@ export class TreeEngine {
     for (const [name, sp] of Object.entries(kit.species)) sp.variants.forEach((tiers, v) => this._entry(`${name}:${v}`, [tiers[0], tiers[1]], false));
     for (const [name, g] of Object.entries(kit.understory)) this._entry(`${name}:0`, [g.isBufferGeometry ? { wood: g, leaves: null } : g], true);
     this.tiles = new Map(); this._born = new Map();
-    this._impostors(lights, quality);
+    this._lights = lights; this._impostors(lights, quality);
     this.stats = { near: 0, mid: 0, far: 0 };
     this._at = null; this._dir = new THREE.Vector3();
     this._frustum = new THREE.Frustum(); this._m = new THREE.Matrix4(); this._sphere = new THREE.Sphere();
@@ -246,12 +250,17 @@ export class TreeEngine {
         const im = new THREE.InstancedMesh(geo, mat, 16);
         im.count = 0; im.visible = false; im.frustumCulled = false; im.name = `Trees ${key} ${part} ${tier ? 'mid' : 'near'}`;
         im.castShadow = this.shadows && tier === 0 && !nearOnly; im.receiveShadow = this.shadows;
+        if (part === 'leaves' && geo.userData.cards) im.customDepthMaterial = (this._leafDepth ||= leafDepthMaterial(this.leafTexture));   // (its shadow: the clumps opened to the sun)
         im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); im.setColorAt(0, new THREE.Color(1, 1, 1));
         fadeAttr(im, 16);
         this.group.add(im); parts.push(im);
       }
       e.pools[tier] = parts;
-      if (tier === 0) { const b = new THREE.Box3(); for (const g of [t.wood, t.leaves]) if (g) { g.computeBoundingBox(); b.union(g.boundingBox); } e.box = b; }
+      if (tier === 0) {
+        const b = new THREE.Box3(); for (const g of [t.wood, t.leaves]) if (g) { g.computeBoundingBox(); b.union(g.boundingBox); } e.box = b;
+        // ([zwift-look] the crown's own box — its leaves — for the canopy shade: crownsNear)
+        if (t.leaves) { t.leaves.computeBoundingBox(); e.leafBox = t.leaves.boundingBox.clone(); }
+      }
     });
     e.i = this.entries.length; this.entries.push(e); this.index.set(key, e);
   }
@@ -295,6 +304,34 @@ export class TreeEngine {
       }
       for (const m of g) scene.remove(m);
     });
+    // [fidelity step 6] the impostors' normals (laptops and desktops): every photo again at half size, each texel the
+    // tree's own normal (its frame, unturned) — so a card turned to its tree's rotation is lit for the sun where it
+    // really is, not where it was in the photo (a turned tree had its lit side turned with it); phones keep the photos
+    let rtN = null;
+    if (!mobile) {
+      const cN = Math.max(32, cell >> 1);
+      rtN = new THREE.WebGLRenderTarget(cN * ANGLES, cN * list.length, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter });
+      const NV = 'varying vec3 vN; varying vec2 vUv; void main() { vN = normalize(mat3(modelMatrix) * normal); vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }';
+      const woodN = new THREE.ShaderMaterial({ vertexShader: NV, fragmentShader: 'varying vec3 vN; varying vec2 vUv; void main() { gl_FragColor = vec4(normalize(vN) * .5 + .5, 1.); }' });
+      const NVC = `${CARD_PARS} varying vec3 vN; varying vec2 vUv; void main() { vN = normalize(mat3(modelMatrix) * normal); vUv = uv; vec4 mvPosition = modelViewMatrix * vec4(position, 1.); gl_Position = projectionMatrix * mvPosition; ${CARD_OPEN} }`;
+      const leafN = new THREE.ShaderMaterial({ uniforms: { map: { value: this.leafTexture } }, side: THREE.DoubleSide, vertexShader: NVC,
+        fragmentShader: 'uniform sampler2D map; varying vec3 vN; varying vec2 vUv; void main() { if (texture2D(map, vUv).a < .45) discard; vec3 n = normalize(vN) * (gl_FrontFacing ? 1. : -1.); gl_FragColor = vec4(n * .5 + .5, 1.); }' });
+      r.setRenderTarget(rtN); r.setClearColor(0x8080ff, 0); r.clear(); r.setScissorTest(true);
+      list.forEach((e, row) => {
+        const t = e.pools[0], g = [], { half, top } = e.imp;
+        for (const im of t) { const m = new THREE.Mesh(im.geometry, im.material.map ? leafN : woodN); g.push(m); scene.add(m); }
+        cam.left = -half; cam.right = half; cam.top = top; cam.bottom = 0; cam.updateProjectionMatrix();
+        for (let k = 0; k < ANGLES; k++) {
+          const a = k / ANGLES * Math.PI * 2;
+          cam.position.set(Math.sin(a) * 200, 0, Math.cos(a) * 200); cam.lookAt(0, 0, 0);
+          r.setViewport(k * cN, row * cN, cN, cN); r.setScissor(k * cN, row * cN, cN, cN);
+          r.render(scene, cam);
+        }
+        for (const m of g) scene.remove(m);
+      });
+      woodN.dispose(); leafN.dispose();
+    }
+    this.normAtlas = rtN; this.bakeSun = sunDir.clone();
     r.setScissorTest(prev.scissor); r.autoClear = prev.autoClear; r.setClearColor(prev.color, prev.alpha); r.setRenderTarget(prev.target);
     const sz = new THREE.Vector2(); r.getSize(sz); r.setViewport(0, 0, sz.x, sz.y);
     woodM.dispose(); leafM.dispose();
@@ -308,14 +345,14 @@ export class TreeEngine {
     const [b0, b1] = [this.b0, this.b1];
     this.impMat = new THREE.ShaderMaterial({
       fog: true,
-      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uAtlas: { value: rt.texture }, uRows: { value: this.rows }, uNow: { value: 0 }, uAtlasSize: { value: new THREE.Vector2(W, H) } }]),
+      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uAtlas: { value: rt.texture }, uRows: { value: this.rows }, uNow: { value: 0 }, uAtlasSize: { value: new THREE.Vector2(W, H) }, uNorm: { value: null }, uRelight: { value: 0 }, uSunNow: { value: new THREE.Vector3(0, 1, 0) }, uSunBake: { value: new THREE.Vector3(0, 1, 0) } }]),
       vertexShader: /* glsl */`
         attribute vec4 iA; attribute vec4 iB; attribute float iT; attribute vec2 iS;   // iA: x, y, z, rotation; iB: width, height, row, tint; iT: when its tile came; iS: its swap (when, 0 hidden / 1 shown / 2 in / 3 out)
         attribute vec2 iL;    // [zwift-look] the lean: the top's offset per metre up (x, z)
         attribute float iC;   // a trunk cut (m above the base; 0: none): below it, near the camera, a 3D trunk stands in
         uniform float uRows; uniform float uNow;
         varying vec2 vUv; varying vec2 vUv2; varying float vBlend; varying float vKeep; varying float vOut; varying float vTint;
-        varying float vH; varying float vCut; varying float vTrunk; varying float vGrade; varying vec3 vWP;
+        varying float vH; varying float vCut; varying float vTrunk; varying float vGrade; varying vec3 vWP; varying vec2 vRot;
         #include <fog_pars_vertex>
         void main() {
           vec3 o = iA.xyz; vec2 to = o.xz - cameraPosition.xz; float d = length(to);
@@ -331,7 +368,7 @@ export class TreeEngine {
           vec2 dir = to / max(d, 1e-3);
           vec3 right = normalize(vec3(-dir.y, 0., dir.x));
           // the side it's seen from, in the tree's own frame (its rotation about y), → one of the photos
-          float cr = cos(iA.w), sr = sin(iA.w);
+          float cr = cos(iA.w), sr = sin(iA.w); vRot = vec2(cr, sr);
           vec2 vl = vec2(-dir.x * cr + dir.y * sr, -dir.x * sr - dir.y * cr);
           float a = atan(vl.x, vl.y); if (a < 0.) a += 6.2831853;
           // the two photos either side of the view, and how far between (the card blends them)
@@ -355,7 +392,8 @@ export class TreeEngine {
         }`,
       fragmentShader: /* glsl */`
         uniform sampler2D uAtlas; uniform sampler2D uSurf; uniform vec2 uAtlasSize; varying vec2 vUv; varying vec2 vUv2; varying float vBlend; varying float vKeep; varying float vOut; varying float vTint;
-        varying float vH; varying float vCut; varying float vTrunk; varying float vGrade; varying vec3 vWP;
+        varying float vH; varying float vCut; varying float vTrunk; varying float vGrade; varying vec3 vWP; varying vec2 vRot;
+        uniform sampler2D uNorm; uniform float uRelight; uniform vec3 uSunNow, uSunBake;
         #include <common>
         #include <fog_pars_fragment>
         ${TREE_GRADE}
@@ -404,6 +442,14 @@ export class TreeEngine {
             ${this.msaa ? 'cov *= 1. - up; if (cov <= 0.) discard;' : 'if (up > teDz) discard;'}
             col = treeGrade(col, vGrade, vH);
           }
+          if (uRelight > .5) {
+            // the photo relit: its normal (the tree's frame) against the sun now (turned into the tree's frame) over the sun
+            // it was photographed in — the lit side follows the real sun however the tree is turned
+            vec3 n = normalize(mix(texture2D(uNorm, vUv).xyz, texture2D(uNorm, vUv2).xyz, vBlend) * 2. - 1.);
+            vec3 sT = vec3(uSunNow.x * vRot.x - uSunNow.z * vRot.y, uSunNow.y, uSunNow.x * vRot.y + uSunNow.z * vRot.x);
+            float d0 = max(dot(n, uSunBake), 0.), d1 = max(dot(n, sT), 0.);
+            col *= clamp((.6 + d1) / (.6 + d0), .65, 1.5);
+          }
           gl_FragColor = vec4(col * vTint, cov);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
@@ -415,7 +461,8 @@ export class TreeEngine {
     this.impMat.uniforms.uAtlas.value = rt.texture;
     this.impMat.uniforms.uSurf = SURFACE;   // (the shared detail texture: a blank until loaded)
     this.impMat.alphaToCoverage = !!this.msaa;
-    this.impMat.customProgramCacheKey = () => `tree-engine-impostor-15-${this.ft}-${this.msaa ? 1 : 0}`;
+    this.impMat.customProgramCacheKey = () => `tree-engine-impostor-16-${this.ft}-${this.msaa ? 1 : 0}`;
+    if (this.normAtlas) { const U = this.impMat.uniforms; U.uNorm.value = this.normAtlas.texture; U.uRelight.value = 1; U.uSunBake.value.copy(this.bakeSun); }
     this.impMesh = new THREE.Mesh(geo, this.impMat);
     this.impMesh.frustumCulled = false; this.impMesh.name = 'Trees (impostors)';
     this.group.add(this.impMesh);
@@ -478,6 +525,27 @@ export class TreeEngine {
   }
 
   // ------------------------------------------------------------------ tiles
+  /**
+   * [zwift-look] The crowns near (x, z) (within R, square), for the canopy shade (toolbox/atmosphere/canopy-shade.js):
+   * { x, y, z, r, cy (crown centre above the base), ry (half depth), cb (crown bottom above the base), dens } — from each
+   * tree's model's leaf box, scaled; a leaning crown sits out over its lean. Understory and leafless pieces skipped.
+   */
+  crownsNear(x, z, R) {
+    const out = [];
+    for (const list of this.tiles.values()) for (const t of list) {
+      if (t.e.nearOnly || Math.abs(t.x - x) > R || Math.abs(t.z - z) > R) continue;
+      // (a kit whose near model has no separate leaves — a pack's one-piece trees: the whole model, its crown taken as
+      //  the top two-thirds)
+      const lb = t.e.leafBox || t.e.box; if (!lb) continue;
+      const sy = t.sy ?? t.s, top = lb.max.y * sy, bot = Math.max(0, (t.e.leafBox ? lb.min.y : lb.max.y * .34) * sy);
+      if (top - bot < 1.5) continue;
+      const cy = (top + bot) / 2, lx = t.lean ? t.lean[0] * cy : 0, lz = t.lean ? t.lean[1] * cy : 0;
+      const r = Math.max(lb.max.x - lb.min.x, lb.max.z - lb.min.z) * .5 * t.s;
+      out.push({ x: t.x + lx, y: t.y, z: t.z + lz, r: r * .85, cy, ry: (top - bot) / 2, cb: bot + (top - bot) * .15, dens: .92 });
+    }
+    return out;
+  }
+
   setTile(key, trees) {
     const list = [];
     for (const t of trees) {
@@ -495,6 +563,7 @@ export class TreeEngine {
   /** Re-sort the trees round the camera when it has moved STEP m or turned ~3.5°; impostors when tiles changed. */
   tick(camera) {
     this.impMat.uniforms.uNow.value = this.uTime.value;
+    const L = this._lights?.sun; if (L && this.normAtlas) this.impMat.uniforms.uSunNow.value.copy(L.position).sub(L.target.position).normalize();
     if (!this._started && this.tiles.size) this._started = true;
     // (tiles arriving while riding: at most one rebuild a second — each one rewrites every card's data, ~30 ms; the new
     //  tile's cards dissolve in anyway)
@@ -578,7 +647,7 @@ export class TreeEngine {
     for (const e of this.entries) for (const tier of e.pools) for (const im of tier || []) im.dispose();
     for (const t of this.mats) { t.wood.dispose(); t.leaves.dispose(); }
     for (const m of this._own.values()) m.dispose();   // (clones of the kit's own materials)
-    this.impGeo.dispose(); this.impMat.dispose(); this.atlas.dispose(); this.leafTexture.dispose();
+    this.impGeo.dispose(); this.impMat.dispose(); this.atlas.dispose(); this.normAtlas?.dispose(); this._leafDepth?.dispose(); this.leafTexture.dispose();
   }
 }
 

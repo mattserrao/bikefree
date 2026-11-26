@@ -13,10 +13,11 @@
 //
 //   const kit = makeUpstateTrees()  → { species: { name: { h, r, kind, variants: [[g0, g1, g2], …], turn: [p0, p1, p2] } },
 //                                       understory: { name: geometry } }
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { randomSequence } from '../core/random.js';
 import { Builder, M, cyl, cone, blob, withSmooth } from '../core/model-builder.js';
 import { MOUNTAIN_BUILDERS } from '../packs/northern-rockies.js';
+import { cardArrays, pushCard, cardGeometry } from './leaf-cards.js';   // (camera-facing leaf clumps: user, 26 Nov)
 
 // surface kinds (decorateTreeMaterial): 0 foliage clumps, 1 bark, 3 plated bark (pine), 4 white bark with eyes (birch),
 // 7 silver deadwood, 8 broadleaf shrub leaves
@@ -182,59 +183,45 @@ function grow(seed, o, lod, turn, lodScale = 1) {
   // near and mid: a hidden inner shell (darker: the canopy's shaded inside — keeps the crown from reading see-through),
   // then leaf-cluster cards — three crossed quads near, two larger ones mid — normals spherized from the crown's centre
   // (no inner shell any more: it read as a dense ball at the core. Sparse small sprays on the inner limbs fill instead.)
+  // then the leaf clumps (user, 26 Nov: the old three crossed quads per cluster read as "crosses"): each cluster one
+  // or two camera-facing cards (leaf-cards.js) — a main clump and a smaller one tucked beside it near, one larger mid —
+  // normals spherized from the crown's centre, so the crown shades as soft overlapping volumes from any side
   wood.as(leafKind);
-  const pos = [], nor = [], uv = [], col = [], tw = [];
-  const v = new THREE.Vector3(), qn = new THREE.Vector3();
+  const C = cardArrays();
+  const qn = new THREE.Vector3(), p2 = new THREE.Vector3();
+  const nAt = (p, lift = .25) => qn.set((p.x - cc.x) / rad, (p.y - cc.y) / radY + lift, (p.z - cc.z) / rad).normalize();
   for (const c of clusters) {
     const { c: hex, out } = c.col, k = new THREE.Color(hex).multiplyScalar((lod ? .86 : .8) + out * (lod ? .24 : .28));   // depth: darker inside
-    // (a leaf cluster's size is a tree's: on a small plant — a shrub, a sapling, a seedling — scaled down with it, so a
-    //  1.4 m seedling isn't a 4 m ball of leaf cards and a bush isn't a few huge blobs: user, 24 Nov, "bushes remain a
-    //  weak spot"; their fullness comes from the fluff sheets below)
-    const size = (lod ? c.half ?? 2.3 * c.size : 1.75 * c.size) * (o.droop ? .9 : 1) * leafScale, quads = lod ? 2 : 3;
-    for (let q = 0; q < quads; q++) {
-      const yaw = rand() * Math.PI, pitch = q === 2 || (lod && q === 1) ? Math.PI / 2 - .3 + rand() * .3 : (rand() - .5) * .6;
-      const ax = new THREE.Vector3(Math.cos(yaw), 0, Math.sin(yaw)), ay = new THREE.Vector3(0, Math.cos(pitch), 0).addScaledVector(new THREE.Vector3(-Math.sin(yaw), 0, Math.cos(yaw)), Math.sin(pitch));
-      const hy = o.droop ? size * 1.5 : size;
-      const corner = (sx, sy) => v.copy(c.p).addScaledVector(ax, sx * size).addScaledVector(ay, sy * hy - (o.droop ? hy * .6 : 0)).clone();
-      const P = [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, -1), corner(1, 1), corner(-1, 1)], U = [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]];
-      const u0 = (Math.floor(rand() * 2)) * .5, v0 = (Math.floor(rand() * 2)) * .5;   // one of the texture's four leaf clusters
-      P.forEach((pp, i) => {
-        pos.push(pp.x, pp.y, pp.z);
-        qn.set((pp.x - cc.x) / rad, (pp.y - cc.y) / radY + .25, (pp.z - cc.z) / rad).normalize();
-        nor.push(qn.x, qn.y, qn.z);
-        uv.push(u0 + U[i][0] * .5, v0 + U[i][1] * .5);
-        col.push(k.r, k.g, k.b);
-        tw.push(Math.min(1, Math.max(0, pp.y / H)));
-      });
+    // (a leaf cluster's size is a tree's: on a small plant — a shrub, a sapling, a seedling — scaled down with it)
+    const size = (lod ? (c.half ?? 2.3 * c.size) * .92 : 1.5 * c.size) * (o.droop ? .9 : 1) * leafScale;
+    const u0 = (Math.floor(rand() * 2)) * .5, v0 = (Math.floor(rand() * 2)) * .5;   // one of the texture's four leaf clusters
+    if (o.droop) {
+      // a willow's spray: an upright curtain hanging from the cluster
+      p2.copy(c.p); p2.y -= size * .9;
+      pushCard(C, p2, size, size * 1.5, (rand() - .5) * .25, true, nAt(p2), u0, v0, k);
+    } else pushCard(C, c.p, size, size, rand() * 6.283, false, nAt(c.p), u0, v0, k);
+    if (!lod) {
+      // a second, smaller clump tucked in beside it (outward and a little down), a shade darker: depth inside the mass
+      const a = rand() * 6.283, d = size * (.45 + rand() * .3);
+      p2.set(c.p.x + Math.cos(a) * d, c.p.y - size * (.1 + rand() * .3), c.p.z + Math.sin(a) * d);
+      const k2 = k.clone().multiplyScalar(.82 + rand() * .1);
+      pushCard(C, p2, size * (.6 + rand() * .2), size * (o.droop ? .9 : .6 + rand() * .2), rand() * 6.283, !!o.droop, nAt(p2), Math.floor(rand() * 2) * .5, Math.floor(rand() * 2) * .5, k2);
     }
   }
-  // a bush's fluff (user, 24 Nov: "Bushes remain a weak spot visually … fluff them with 2D vertical sheets over various
-  // size to intermediate layers"): upright leaf sheets in three nested shells round the crown's middle — small and dark
-  // deep inside, middling halfway, large and lit at the rim — each turned to face out (give or take), so the bush reads
-  // as a full, soft mass with depth from any side, not a scatter of clusters on twigs
+  // a bush's fluff (user, 24 Nov: "fluff them with 2D vertical sheets over various size to intermediate layers"):
+  // clumps in three nested shells round the crown's middle — small and dark deep inside, middling halfway, large and lit
+  // at the rim — upright and facing the camera, so the bush reads as a full, soft mass with depth from any side
   if (o.fluff && lod === 0) {
     const shells = [[.3, 7, .32, .55], [.62, 11, .42, .74], [.92, 15, .5, .96]];   // [radius fraction, sheets, size (× crown radius), shade]
     for (const [fr, n, sz, shade] of shells) for (let q = 0; q < n * o.fluff; q++) {
       const a = q * 2.39996 + rand() * .7, hf = rand() * 2 - 1, ring = Math.sqrt(Math.max(0, 1 - hf * hf * .8));
       const size = rad * sz * (.75 + rand() * .5);
       const p = new THREE.Vector3(cc.x + Math.cos(a) * rad * fr * ring, Math.max(size * .85, cc.y + hf * radY * fr * .9), cc.z + Math.sin(a) * rad * fr * ring);
-      const yaw = a + Math.PI / 2 + (rand() - .5) * 1.1;
-      const ax = new THREE.Vector3(Math.cos(yaw), 0, Math.sin(yaw)), ay = new THREE.Vector3(0, 1, 0);
       const { c: hex } = colourAt(p), k = new THREE.Color(hex).multiplyScalar(shade * (.9 + rand() * .2));
-      const corner = (sx, sy) => p.clone().addScaledVector(ax, sx * size).addScaledVector(ay, sy * size * .85);
-      const P = [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, -1), corner(1, 1), corner(-1, 1)], U = [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]];
-      const u0 = Math.floor(rand() * 2) * .5, v0 = Math.floor(rand() * 2) * .5;
-      P.forEach((pp, i) => {
-        pos.push(pp.x, pp.y, pp.z);
-        qn.set((pp.x - cc.x) / rad, (pp.y - cc.y) / radY + .1, (pp.z - cc.z) / rad).normalize();
-        nor.push(qn.x, qn.y, qn.z); uv.push(u0 + U[i][0] * .5, v0 + U[i][1] * .5); col.push(k.r, k.g, k.b); tw.push(Math.min(1, Math.max(0, pp.y / H)));
-      });
+      pushCard(C, p, size, size * .85, (rand() - .5) * .5, true, nAt(p, .1), Math.floor(rand() * 2) * .5, Math.floor(rand() * 2) * .5, k);
     }
   }
-  const leaves = new THREE.BufferGeometry();
-  leaves.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); leaves.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-  leaves.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); leaves.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  leaves.computeBoundingSphere(); leaves.computeBoundingBox();
+  const leaves = cardGeometry(C);
   // (the crown's underside: the lowest leaves, a few strays aside — a near 3D trunk is cut a little below it)
   if (trunk) { const ys = clusters.map((c) => c.p.y).sort((a, b) => a - b); trunk.crown = ys.length ? ys[Math.floor(ys.length * .03)] : H * .5; }
   return { wood: wood.build(), leaves, trunk };
@@ -572,43 +559,30 @@ export function angledBush(seed, o = {}) {
   const rand = randomSequence(seed), R = o.R ?? 1.2, H = o.H ?? R * .95, wide = o.wide ?? 1, tones = o.tones || ['#4f7434', '#5e8240', '#46682e'];
   const wood = new Builder(); wood.as(BARK);
   for (let k = 0; k < 4; k++) limb(wood, new THREE.Vector3((rand() - .5) * R * .4 * wide, 0, (rand() - .5) * R * .4), dirOf(rand() * 6.28, 1.05 + rand() * .35), H * .55, .03, .012, 3, '#4e4034');
-  const pos = [], nor = [], uv = [], col = [];
-  const cc = new THREE.Vector3(0, H * .38, 0), n = new THREE.Vector3(), t1 = new THREE.Vector3(), t2 = new THREE.Vector3(), p = new THREE.Vector3(), q = new THREE.Vector3();
+  // the clumps (user, 26 Nov: "review and improve how the sprite sheets are stacked"): camera-facing leaf clumps
+  // (leaf-cards.js) in three nested shells over a half dome — small and dark inside, middling halfway, large and lit at
+  // the rim and top — each its own roll, the tones jittered clump to clump; a ring of low clumps at the foot so the bush
+  // sits on the ground, not on a stalk; normals spherized from the dome's centre so the mass shades as one soft form
+  const C = cardArrays();
+  const cc = new THREE.Vector3(0, H * .38, 0), p = new THREE.Vector3(), m = new THREE.Vector3();
   const c0 = new THREE.Color(), c1 = new THREE.Color();
-  // [radius fraction, cards, size (× R), shade]
-  const shells = [[.32, 6, .38, .5], [.66, 11, .46, .75], [.97, 17, .52, 1]];
+  const shells = [[.32, 6, .4, .5], [.66, 10, .48, .75], [.97, 14, .54, 1]];   // [radius fraction, cards, size (× R), shade]
   const k0 = o.cards ?? 1;
-  for (const [fr, count, sz, shade] of shells) for (let i = 0; i < Math.round(count * k0); i++) {
-    // a direction over the upper dome (the base row low and wide, a few near the top)
-    const a = i * 2.39996 + rand() * .9 + fr * 3, el = Math.asin(Math.min(1, .05 + Math.pow(rand(), 1.3) * .95));
-    const dx = Math.cos(a) * Math.cos(el), dy = Math.sin(el), dz = Math.sin(a) * Math.cos(el);
-    const size = R * sz * (.78 + rand() * .44);
-    p.set(dx * R * fr * wide, Math.max(size * .55, cc.y + dy * (H - cc.y) * fr * 1.05), dz * R * fr);
-    // its facing: out along its direction, tipped at random (± ~40°), never edge-on to everything
-    n.set(dx * wide + (rand() - .5) * .8, dy + .25 + (rand() - .5) * .6, dz + (rand() - .5) * .8).normalize();
-    t1.set(0, 1, 0); if (Math.abs(n.y) > .9) t1.set(1, 0, 0);
-    t1.crossVectors(t1, n).normalize(); t2.crossVectors(n, t1).normalize();
-    const roll = rand() * Math.PI * 2, cr = Math.cos(roll), sr = Math.sin(roll);
-    const ax = t1.clone().multiplyScalar(cr).addScaledVector(t2, sr), ay = t2.clone().multiplyScalar(cr).addScaledVector(t1, -sr);
-    // colour: the bush's tones, card to card; dark at the foot and inside, lit at the top and rim
+  const clump = (x, y, z, size, shade) => {
+    p.set(x, Math.max(size * .5, y), z);
     const ti = Math.floor(rand() * tones.length), tj = Math.floor(rand() * tones.length);
     c0.set(tones[ti]).lerp(c1.set(tones[tj]), rand() * .5);
-    const up = Math.min(1, p.y / H), lit = (.5 + .6 * up) * shade * (.9 + rand() * .2);
-    c0.multiplyScalar(lit);
-    const u0 = Math.floor(rand() * 2) * .5, v0 = Math.floor(rand() * 2) * .5;
-    const corner = (sx, sy) => q.copy(p).addScaledVector(ax, sx * size).addScaledVector(ay, sy * size).clone();
-    const P = [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, -1), corner(1, 1), corner(-1, 1)], U = [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]];
-    P.forEach((pp, j) => {
-      if (pp.y < .02) pp.y = .02;   // (nothing under the ground)
-      pos.push(pp.x, pp.y, pp.z);
-      const m = new THREE.Vector3((pp.x - cc.x) / (R * wide), (pp.y - cc.y) / H + .3, (pp.z - cc.z) / R).normalize();
-      nor.push(m.x, m.y, m.z); uv.push(u0 + U[j][0] * .5, v0 + U[j][1] * .5); col.push(c0.r, c0.g, c0.b);
-    });
+    const up = Math.min(1, p.y / H); c0.multiplyScalar((.5 + .6 * up) * shade * (.9 + rand() * .2));
+    m.set((p.x - cc.x) / (R * wide), (p.y - cc.y) / H + .3, (p.z - cc.z) / R).normalize();
+    pushCard(C, p, size, size * (.85 + rand() * .2), rand() * 6.283, false, m, Math.floor(rand() * 2) * .5, Math.floor(rand() * 2) * .5, c0);
+  };
+  for (const [fr, count, sz, shade] of shells) for (let i = 0; i < Math.round(count * k0); i++) {
+    const a = i * 2.39996 + rand() * .9 + fr * 3, el = Math.asin(Math.min(1, .05 + Math.pow(rand(), 1.3) * .95));
+    const dx = Math.cos(a) * Math.cos(el), dy = Math.sin(el), dz = Math.sin(a) * Math.cos(el);
+    clump(dx * R * fr * wide, cc.y + dy * (H - cc.y) * fr * 1.05, dz * R * fr, R * sz * (.78 + rand() * .44), shade);
   }
-  const leaves = new THREE.BufferGeometry();
-  leaves.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); leaves.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-  leaves.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); leaves.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  leaves.computeBoundingSphere(); leaves.computeBoundingBox();
+  for (let i = 0; i < Math.round(6 * k0); i++) { const a = i / 6 * 6.283 + rand() * .6; clump(Math.cos(a) * R * .8 * wide, R * .22, Math.sin(a) * R * .8, R * .34 * (.8 + rand() * .4), .55); }
+  const leaves = cardGeometry(C);
   return { wood: wood.build(), leaves };
 }
 /** [zwift-look] The park bushes (makeUpstateTrees({ bushes: true })): greens, a yellow-green, a burgundy viburnum, a
@@ -643,7 +617,131 @@ const PARK_SPECIES = {
     greens: ['#41622f', '#4a6c34'], fall: ['#9a4a24', '#b2622c', '#7e3f22'], turn: [0, .4, .8] },
 };
 
-export function makeUpstateTrees({ oldGrowth = false, park = false, bushes = false } = {}) {
+// [out-west] the red-rock desert's trees (makeUpstateTrees({ desert: true }), Out West 26 Nov 2026): Fremont cottonwood
+// by the washes and in town (a broad, open crown, gold in fall), Utah juniper and two-needle pinyon on the benches —
+// short, gnarled, their foliage in loose clumps over a twisted trunk (no leaf cards: tufts, as the lodgepole's)
+const DESERT_SPECIES = {
+  cottonwood: { H: 19, R: 8.5, fork: .32, trunkR: .62, trunk: '#7d7266', bark: BARK, gnarl: .4, up: .02,
+    levels: [[5, .45, .8, .46], [4, .35, .7, .26], [3, .35, .6, .13]],
+    greens: ['#7c9a48', '#86a34e', '#6f8e42'], fall: ['#e6bd3a', '#f0cc4e', '#d9a72e', '#c9a33a'], turn: [.55, .85, 1] },
+};
+function desertConifer(seed, o, lod) {
+  // a juniper or pinyon: short, twisted trunks splitting low, the foliage in many small, dense, irregular clumps from
+  // near the ground up (a ragged ovoid, flat in places, gaps you see the trunk through), darker underneath; the far
+  // tier a few blobs
+  const rand = randomSequence(seed), b = new Builder(), H = o.H, R = o.R;
+  const stems = o.stems ?? 1;
+  b.as(BARK);
+  for (let s = 0; s < stems; s++) {
+    const a = rand() * 6.28, lean = (stems > 1 ? .32 : .1) + rand() * .15;
+    b.add(cyl(.06, o.trunkR, H * .5, lod ? 4 : 6), M(Math.cos(a) * .12, 0, Math.sin(a) * .12, 1, 1, 1, -a, 0, lean), o.trunk);
+    if (!lod) for (let k = 0; k < 4; k++) { const ka = a + (rand() - .5) * 3; b.add(cyl(.025, .06, R * .75, 4), M(Math.cos(a) * H * .1, H * (.18 + rand() * .25), Math.sin(a) * H * .1, 1, 1, 1, -ka, 0, .8 + rand() * .6), o.trunk); }
+  }
+  b.as(0);
+  const n = lod === 2 ? 4 : lod ? 9 : 22, det = lod ? 0 : 1;
+  for (let k = 0; k < n; k++) {
+    // a point in a ragged ovoid (wider low on a juniper, higher on a pinyon), pushed out toward its skin
+    const a = k * 2.399 + rand() * .8, t = (k + rand()) / n, y = H * (o.low ?? .2) + t * H * (.95 - (o.low ?? .2));
+    const env = Math.sin(Math.min(1, t * 1.15) * Math.PI) * (o.bulge ?? 1);
+    const d = R * (.25 + .7 * env) * (.55 + rand() * .45);
+    const sc = (lod === 2 ? 1.7 : lod ? 1.3 : 1) * R * (.2 + rand() * .14);
+    b.add(blob(det), M(Math.cos(a) * d, y, Math.sin(a) * d, sc * (1 + rand() * .3), sc * (.65 + rand() * .25), sc), o.colors[Math.floor(rand() * o.colors.length)], .22, rand);
+  }
+  return b.build();
+}
+const utahJuniper = (v, lod) => desertConifer(7101 + v, { H: 4.6 + v * 1.1, R: 2.3 + v * .3, stems: v === 1 ? 3 : 2, low: .08, bulge: 1.1, trunkR: .22, trunk: '#76604f', colors: ['#6b7d5c', '#758764', '#5f7253', '#7d8b66', '#66765a'] }, lod);
+const pinyon = (v, lod) => desertConifer(7201 + v, { H: 6.5 + v * 1.4, R: 2.7 + v * .3, low: .22, bulge: .95, trunkR: .26, trunk: '#5f4c3e', colors: ['#4d6a3c', '#577440', '#466237', '#5e7a45', '#53703f'] }, lod);
+function sageBrush(seed, R, tones, bloom = null) {
+  // big sagebrush (grey-green, silvery) or rubber rabbitbrush (yellow-green, gold in bloom): a low mound of small
+  // clumps on a few woody stems
+  const rand = randomSequence(seed), b = new Builder();
+  b.as(BARK);
+  for (let k = 0; k < 4; k++) { const a = rand() * 6.28; b.add(cyl(.015, .035, R * .7, 3), M(0, 0, 0, 1, 1, 1, -a, 0, .5 + rand() * .5), '#6b5d4c'); }
+  b.as(SHRUB);
+  for (let k = 0; k < 9; k++) {
+    const a = k * 2.399 + rand(), d = rand() * R * .6;
+    b.add(blob(0), M(Math.cos(a) * d, R * (.42 + rand() * .3), Math.sin(a) * d, R * (.32 + rand() * .14), R * (.24 + rand() * .1), R * (.32 + rand() * .14)), tones[k % tones.length], .14, rand);
+  }
+  if (bloom) for (let k = 0; k < 7; k++) { const a = rand() * 6.28, d = rand() * R * .5; b.add(blob(0), M(Math.cos(a) * d, R * (.75 + rand() * .2), Math.sin(a) * d, R * .16, R * .1, R * .16), bloom, .1, rand); }
+  return b.build();
+}
+// [out-west] the desert's own plants round Kanab (user, 26 Nov: "cacti, tumbleweeds, appropriate shrubbery", chose the
+// regionally accurate set — no saguaro): plains prickly pear, a cholla, banana yucca and Utah yucca, a fishhook barrel,
+// cliffrose, Mormon tea; and tumbleweeds (Russian thistle) fetched up against things
+const _tmpC = new THREE.Color();
+function pricklyPear(seed, R = .9) {
+  // flat, round pads in a sprawling clump, each on the rim of the one below at its own tilt; red-purple fruit on the rims
+  const rand = randomSequence(seed), b = new Builder();
+  const pads = [];
+  for (let k = 0; k < 6 + Math.floor(rand() * 4); k++) pads.push({ x: (rand() - .5) * R, y: .14, z: (rand() - .5) * R * .8, a: rand() * 6.28, t: (rand() - .5) * .8 });
+  for (let k = 0; k < 7; k++) { const p = pads[Math.floor(rand() * pads.length)]; pads.push({ x: p.x + (rand() - .5) * .2, y: p.y + .2 + rand() * .06, z: p.z + (rand() - .5) * .2, a: p.a + (rand() - .5) * 1.2, t: (rand() - .5) * .9 }); }
+  for (const p of pads) {
+    b.add(blob(1), M(p.x, p.y, p.z, .14, .17, .035, p.a, p.t, (rand() - .5) * .3), ['#6f8a4a', '#7a9152', '#64804a', '#8a9658'][Math.floor(rand() * 4)], .08, rand);
+    if (rand() < .35) b.add(blob(0), M(p.x + Math.cos(p.a) * .1, p.y + .16, p.z + Math.sin(p.a) * .1, .03, .04, .03), '#8a2a48');
+  }
+  return b.build();
+}
+function cholla(seed, H = 1.4) {
+  // a little tree of jointed, spiny stems — pale straw-green in the low sun (the spines catch it), dark wood below
+  const rand = randomSequence(seed), b = new Builder();
+  b.as(BARK).add(cyl(.05, .07, H * .2, 5), M(), '#5d4f3e'); b.as(0);
+  const grow = (x, y, z, dir, len, depth) => {
+    const ex = x + dir.x * len, ey = y + dir.y * len, ez = z + dir.z * len;
+    const n = 3;
+    for (let k = 0; k < n; k++) { const t0 = k / n, t1 = (k + 1) / n; b.add(blob(0), M(x + (ex - x) * (t0 + t1) / 2, y + (ey - y) * (t0 + t1) / 2, z + (ez - z) * (t0 + t1) / 2, .065, len / n * .6, .065, 0, Math.atan2(Math.hypot(dir.x, dir.z), dir.y) * Math.sign(dir.x || 1), 0), ['#a8a874', '#b4b07a', '#9c9c6a'][k % 3], .12, rand); }
+    if (depth < 2) for (let j = 0; j < 2 + Math.floor(rand() * 2); j++) { const a = rand() * 6.28, t = .6 + rand() * .6, d = new THREE.Vector3(Math.cos(a) * Math.sin(t), Math.cos(t), Math.sin(a) * Math.sin(t)); grow(ex, ey, ez, d, len * (.75 + rand() * .2), depth + 1); }
+  };
+  grow(0, H * .2, 0, new THREE.Vector3(0, 1, 0), H * .3, 0);
+  return b.build();
+}
+function yucca(seed, R = .6, stalk = false) {
+  // a rosette of stiff, narrow, pointed leaves fanning out from the ground, blue-green, curling threads at the edges;
+  // in fall a dry flower stalk standing out of it, its pods split open
+  const rand = randomSequence(seed), b = new Builder();
+  const n = 26 + Math.floor(rand() * 10);
+  for (let k = 0; k < n; k++) {
+    const a = k * 2.39996 + rand() * .4, up = .25 + Math.pow(rand(), .7) * 1.2, len = R * (.7 + rand() * .45);
+    b.add(cone(.04, len, 3), M(0, .05, 0, 1, 1, 1, -a, 0, Math.PI / 2 - up), ['#7a8a6a', '#86956f', '#6e7f60', '#93986c'][k % 4], .1, rand);
+  }
+  if (stalk) {
+    b.as(BARK).add(cyl(.015, .025, R * 2.4, 4), M(0, .2, 0, 1, 1, 1, 0, 0, (rand() - .5) * .15), '#8a7458'); b.as(0);
+    for (let k = 0; k < 8; k++) b.add(blob(0), M((rand() - .5) * .1, .2 + R * (1.6 + k * .1), (rand() - .5) * .1, .035, .06, .035), '#9a8462');
+  }
+  return b.build();
+}
+function barrel(seed, h = .45) {
+  // a fishhook barrel: a squat ribbed column, its spines a reddish haze, a ring of yellow fruit on top
+  const rand = randomSequence(seed), b = new Builder();
+  for (let k = 0; k < 12; k++) { const a = k / 12 * 6.283; b.add(blob(1), M(Math.cos(a) * .1, h * .5, Math.sin(a) * .1, .06, h * .5, .06), k % 2 ? '#5f7a46' : '#a0705a', .05, rand); }
+  b.add(blob(1), M(0, h * .5, 0, .14, h * .5, .14), '#5a7444', .05, rand);
+  for (let k = 0; k < 6; k++) { const a = k / 6 * 6.283; b.add(blob(0), M(Math.cos(a) * .07, h * .98, Math.sin(a) * .07, .025, .035, .025), '#d8b83a'); }
+  return b.build();
+}
+function ephedra(seed, R = .6) {
+  // Mormon tea: a broom of bare, jointed, yellow-green stems straight up out of the sand
+  const rand = randomSequence(seed), b = new Builder();
+  for (let k = 0; k < 40; k++) { const a = rand() * 6.28, d = rand() * R * .5, h = R * (.8 + rand() * .7); b.add(cyl(.008, .012, h, 3), M(Math.cos(a) * d, 0, Math.sin(a) * d, 1, 1, 1, -a, 0, (rand() - .5) * .5), ['#8f9a4e', '#a3a85a', '#7e8a48'][k % 3]); }
+  return b.build();
+}
+function tumbleweed(seed, R = .45) {
+  // Russian thistle, dead and dry: an open ball of fine tangled stems, straw to grey, a little flat where it's come to rest
+  const rand = randomSequence(seed), b = new Builder();
+  for (let k = 0; k < 70; k++) {
+    const a = rand() * 6.28, e = Math.asin(rand() * 2 - 1), r0 = R * (.2 + rand() * .75);
+    const p = new THREE.Vector3(Math.cos(a) * Math.cos(e) * r0, R * .85 + Math.sin(e) * r0 * .8, Math.sin(a) * Math.cos(e) * r0);
+    b.add(cyl(.004, .007, R * (.35 + rand() * .45), 3), M(p.x, p.y, p.z, 1, 1, 1, rand() * 6.28, rand() * 3, rand() * 3), ['#b59a68', '#a68c5e', '#c2aa7a', '#8f7c5a'][k % 4]);
+  }
+  return b.build();
+}
+function redRock(seed, w, h) {
+  // a sandstone boulder: a squarish red block, its top weathered paler
+  const rand = randomSequence(seed), b = new Builder(); b.as(BARK);
+  b.add(blob(1), M(0, h * .35, 0, w, h, w * (.7 + rand() * .3), rand() * 6), ['#a95736', '#b8673f', '#9a4c30'][Math.floor(rand() * 3)], 0, rand);
+  b.add(blob(1), M(w * .05, h * .78, 0, w * .75, h * .22, w * .6, rand() * 6), '#cf9468', 0, rand);
+  return b.build();
+}
+
+export function makeUpstateTrees({ oldGrowth = false, park = false, bushes = false, desert = false } = {}) {
   return withSmooth(true, () => {
     const species = {};
     for (const [name, o] of Object.entries(SPECIES)) {
@@ -659,6 +757,14 @@ export function makeUpstateTrees({ oldGrowth = false, park = false, bushes = fal
     if (park) for (const [name, o] of Object.entries(PARK_SPECIES)) {
       const k = Object.keys(PARK_SPECIES).indexOf(name);
       species[name] = { h: o.H, r: o.R, variants: o.turn.map((turn, v) => [0, 1, 2].map((lod) => grow(4901 + k * 43 + v * 11, o, lod, turn))), turn: o.turn };
+    }
+    if (desert) {
+      for (const [name, o] of Object.entries(DESERT_SPECIES)) {
+        const k = Object.keys(DESERT_SPECIES).indexOf(name);
+        species[name] = { h: o.H, r: o.R, variants: o.turn.map((turn, v) => [0, 1, 2].map((lod) => grow(5101 + k * 47 + v * 13, o, lod, turn))), turn: o.turn };
+      }
+      species.juniper = { h: 5.5, r: 2.5, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => utahJuniper(v, lod))), turn: [0, 0] };
+      species.pinyon = { h: 7.5, r: 3, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => pinyon(v, lod))), turn: [0, 0] };
     }
     species.whitepine = { h: 30, r: 5.5, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => whitePine(v, lod))), turn: [0, 0] };
     species.hemlock = { h: 22, r: 4.2, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => hemlock(v, lod))), turn: [0, 0] };
@@ -687,6 +793,14 @@ export function makeUpstateTrees({ oldGrowth = false, park = false, bushes = fal
       herb: herb(6231), seedling: grow(6241, { ...SPECIES.sugarmaple, H: 1.4, R: .5, trunkR: .02 }, 1, .2),
       beechSapling: grow(6251, { ...FOREST_FORMS.beechF, H: 4.5, R: 1.5, trunkR: .06, fork: .3, fluff: .6 }, 0, .1),
     });
+    if (desert) Object.assign(understory, {
+      sage: sageBrush(7301, .75, ['#8d8f78', '#9a9b82', '#83866f']), sage2: sageBrush(7302, 1.05, ['#918f76', '#a3a184', '#888a70']),
+      rabbitbrush: sageBrush(7311, .8, ['#8a9a5a', '#95a060'], '#e0b830'),
+      cliffrose: sageBrush(7331, 1.3, ['#6f7a56', '#7c8660', '#66704f'], '#e8dcc0'),
+      pricklyPear: pricklyPear(7341), pricklyPear2: pricklyPear(7342, 1.3), cholla: cholla(7351), yucca: yucca(7361), yuccaStalk: yucca(7362, .65, true),
+      barrel: barrel(7371), ephedra: ephedra(7381), tumbleweed: tumbleweed(7391), tumbleweed2: tumbleweed(7392, .6),
+      redrock: redRock(7321, .7, .5), redrock2: redRock(7322, 1.4, .9),
+    });
     if (bushes) for (const [name, o] of Object.entries(PARK_BUSHES)) understory[name] = angledBush(o.seed, o);
     // the old growth's fallen trunks: 3D models drawn by old-growth.js (not cards, so not in the engine's atlas)
     const logs = oldGrowth ? { bigLog: bigLog(6201, { L: 16, r: .52 }), nurseLog: bigLog(6211, { L: 13, r: .6, nurse: true }), tipup: bigLog(6221, { L: 17, r: .5, tipup: true }), log: MOUNTAIN_BUILDERS.log(1) } : {};
@@ -699,18 +813,27 @@ export function makeUpstateTrees({ oldGrowth = false, park = false, bushes = fal
  * (vertex colour tints them by species and season), a little darker toward the middle, on transparent ground.
  */
 export function makeLeafTexture(size = 512) {
+  // [vegetation] painterly clusters (fidelity plan, step 6): fewer, larger leaves that merge into one soft mass, lit
+  // from above (a light top, a shaded underside) with little leaf-to-leaf contrast and no midribs — the old 130 small
+  // leaves a quadrant, each its own shade with a dark rib, read as single-pixel noise once photographed into the
+  // impostor atlas and seen from the road
   const cv = document.createElement('canvas'); cv.width = cv.height = size;
   const g = cv.getContext('2d'), rand = randomSequence(777), h = size / 2;
   for (let q = 0; q < 4; q++) {
     const ox = (q % 2) * h, oy = Math.floor(q / 2) * h;
-    for (let k = 0; k < 130; k++) {
-      const r = Math.pow(rand(), .65) * h * .44, a = rand() * 6.28, x = ox + h / 2 + Math.cos(a) * r, y = oy + h / 2 + Math.sin(a) * r;
-      const L = h * (.08 + rand() * .04), W = L * (.5 + rand() * .2), rot = a + (rand() - .5) * 1.2;
-      const v = Math.round(255 * (.72 + rand() * .28) * (.86 + .14 * r / (h * .44)));
-      g.save(); g.translate(x, y); g.rotate(rot);
+    const leaves = [];
+    for (let k = 0; k < 62; k++) {
+      const r = Math.pow(rand(), .6) * h * .4, a = rand() * 6.28, x = ox + h / 2 + Math.cos(a) * r, y = oy + h / 2 + Math.sin(a) * r;
+      leaves.push({ x, y, r, a, L: h * (.13 + rand() * .06), w: .55 + rand() * .2, rot: a + (rand() - .5) * 1.2, n: rand() });
+    }
+    leaves.sort((p, q2) => p.y - q2.y);   // (drawn top to bottom: the lit upper leaves overlap the shaded lower ones' tips)
+    for (const l of leaves) {
+      const up = 1 - (l.y - oy) / h;                               // 1 at the cluster's top, 0 at its foot
+      const v = Math.round(255 * (.8 + .2 * up) * (.94 + .06 * l.n) * (.9 + .1 * (1 - l.r / (h * .4))));
+      g.save(); g.translate(l.x, l.y); g.rotate(l.rot);
       g.fillStyle = `rgb(${v},${v},${v})`;
+      const L = l.L, W = L * l.w;
       g.beginPath(); g.moveTo(-L * .5, 0); g.quadraticCurveTo(0, -W, L * .5, 0); g.quadraticCurveTo(0, W, -L * .5, 0); g.fill();
-      g.strokeStyle = `rgba(0,0,0,.18)`; g.lineWidth = Math.max(1, size / 512); g.beginPath(); g.moveTo(-L * .45, 0); g.lineTo(L * .45, 0); g.stroke();
       g.restore();
     }
   }

@@ -3,7 +3,8 @@
 // download), and each plant two crossed cards that sway in the wind. Replaces the single-triangle blades, which read
 // as a spiky saw-tooth fringe. The scrub, cattails and the rest still draw as geometry in the same mesh: their
 // texture coordinates sit on the atlas's solid white corner.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
+import { WIND, WIND_GLSL } from '../atmosphere/wind.js';
 
 const W = 1024, H = 256, CELLS = 4, CW = W / CELLS;
 export const CARD = { turf: 0, tall: 1, goldenrod: 2, lace: 3 };
@@ -69,19 +70,19 @@ export function grassAtlas(renderer) {
 export function grassMaterial(renderer, uTime, msaa = true) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95, metalness: 0, side: THREE.DoubleSide, map: grassAtlas(renderer), alphaTest: msaa ? .35 : .5, alphaToCoverage: msaa });
   m.onBeforeCompile = (shader) => {
-    shader.uniforms.uTime = uTime;
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;')
+    shader.uniforms.uTime = uTime; shader.uniforms.uWindDir = WIND.uWindDir; shader.uniforms.uWindK = WIND.uWindK;
+    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;\n' + WIND_GLSL)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         // a card's top (its uv.y above the cell's foot) sways; geometry on the white corner stays put
         if (uv.y > .05 && uv.x > .004) { vec3 wp = (modelMatrix * vec4(position, 1.)).xyz; float k = uv.y * uv.y;
-          transformed.xz += vec2(sin(uTime * 1.9 + wp.x * .35 + wp.z * .21), cos(uTime * 1.4 + wp.z * .3)) * .06 * k; }`)
+          transformed.xz += (bfWind(wp.xz, uTime) * .1 + vec2(sin(uTime * 1.9 + wp.x * .35 + wp.z * .21), cos(uTime * 1.4 + wp.z * .3)) * .035) * k; }`)   // (the shared wind, and each blade's own flutter)
       .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nvCard = uv.x > .004 ? 1. : 0.;')
       .replace('#include <common>', '#include <common>\nvarying float vCard;');
     // the cards lit as the ground under them (facing up), whichever side faces the camera
     shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vCard;')
       .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nif (vCard > .5) normal = normalize((viewMatrix * vec4(0., 1., 0., 0.)).xyz);');
   };
-  m.customProgramCacheKey = () => `grass-cards-2-${msaa}`;
+  m.customProgramCacheKey = () => `grass-cards-3-${msaa}`;
   return m;
 }
 

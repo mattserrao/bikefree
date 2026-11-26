@@ -1,0 +1,122 @@
+{
+ "asphalt-worn": {
+  "albedo": {
+   "file": "textures/ktx2/asphalt-worn-albedo.ktx2",
+   "bytes": 314301,
+   "gpuBytes": 1398101
+  },
+  "nra": {
+   "file": "textures/ktx2/asphalt-worn-nra.ktx2",
+   "bytes": 324803,
+   "gpuBytes": 349525
+  }
+ },
+ "asphalt-new": {
+  "albedo": {
+   "file": "textures/ktx2/asphalt-new-albedo.ktx2",
+   "bytes": 296215,
+   "gpuBytes": 1398101
+  },
+  "nra": {
+   "file": "textures/ktx2/asphalt-new-nra.ktx2",
+   "bytes": 316176,
+   "gpuBytes": 349525
+  }
+ },
+ "asphalt-patched": {
+  "albedo": {
+   "file": "textures/ktx2/asphalt-patched-albedo.ktx2",
+   "bytes": 280755,
+   "gpuBytes": 1398101
+  },
+  "nra": {
+   "file": "textures/ktx2/asphalt-patched-nra.ktx2",
+   "bytes": 320978,
+   "gpuBytes": 349525
+  }
+ },
+ "cobble": {
+  "albedo": {
+   "file": "textures/ktx2/cobble-albedo.ktx2",
+   "bytes": 141584,
+   "gpuBytes": 1398101
+  },
+  "nra": {
+   "file": "textures/ktx2/cobble-nra.ktx2",
+   "bytes": 111742,
+   "gpuBytes": 349525
+  }
+ },
+ "concrete": {
+  "albedo": {
+   "file": "textures/ktx2/concrete-albedo.ktx2",
+   "bytes": 271565,
+   "gpuBytes": 1398101
+  },
+  "nra": {
+   "file": "textures/ktx2/concrete-nra.ktx2",
+   "bytes": 189146,
+   "gpuBytes": 349525
+  }
+ },
+ "dirt-path": {
+  "albedo": {
+   "file": "textures/ktx2/dirt-path-albedo.ktx2",
+   "bytes": 221656,
+   "gpuBytes": 1398101
+  },
+  "nra": {
+   "file": "textures/ktx2/dirt-path-nra.ktx2",
+   "bytes": 224452,
+   "gpuBytes": 349525
+  }
+ },
+ "gravel": {
+  "albedo": {
+   "file": "textures/ktx2/gravel-albedo.ktx2",
+   "bytes": 360035,
+   "gpuBytes": 1398101
+  },
+  "nra": {
+   "file": "textures/ktx2/gravel-nra.ktx2",
+   "bytes": 340375,
+   "gpuBytes": 349525
+  }
+ },
+ "leaf-litter": {
+  "albedo": {
+   "file": "textures/ktx2/leaf-litter-albedo.ktx2",
+   "bytes": 343550,
+   "gpuBytes": 1398101
+  },
+  "nra": {
+   "file": "textures/ktx2/leaf-litter-nra.ktx2",
+   "bytes": 316637,
+   "gpuBytes": 349525
+  }
+ },
+ "rock": {
+  "albedo": {
+   "file": "textures/ktx2/rock-albedo.ktx2",
+   "bytes": 205497,
+   "gpuBytes": 1398101
+  },
+  "nra": {
+   "file": "textures/ktx2/rock-nra.ktx2",
+   "bytes": 172792,
+   "gpuBytes": 349525
+  }
+ },
+ "turf": {
+  "albedo": {
+   "file": "textures/ktx2/turf-albedo.ktx2",
+   "bytes": 328909,
+   "gpuBytes": 1398101
+  },
+  "nra": {
+   "file": "textures/ktx2/turf-nra.ktx2",
+   "bytes": 323261,
+   "gpuBytes": 349525
+  }
+ }
+}

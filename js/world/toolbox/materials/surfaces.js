@@ -1,6 +1,6 @@
 // World-space surfaces keep the style-C palette while adding detail at both
 // riding and scenic camera distances. Everything is procedural and offline.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { vistaGroundGLSL, vistaCanopyGLSL } from '../atmosphere/vista.js';
 import { SURFACE, SURFACE_SUN, SURFACE_GLSL } from './surface-detail.js';   // [suite]
 

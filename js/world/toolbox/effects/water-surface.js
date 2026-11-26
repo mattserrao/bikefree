@@ -1,7 +1,7 @@
 // The lake surface: wind ripples (a few travelling wave trains, fading with distance so they never shimmer), the sky
 // in the water at grazing angles (Fresnel) and the sun's glitter path — on the world's own water material, so every
 // water plane (the main level and each pool) gets it. Options: { ripple: 1 (strength), glint: 1, sky: 0.4 (the most of the sky it shows, at grazing angles) }.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 
 export const waterSurface = {
   install(world, opts = {}) {

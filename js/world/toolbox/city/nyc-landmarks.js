@@ -16,7 +16,8 @@
 //                 on Sheep Meadow and the Great Lawn; rowboats on the Lake, ducks on the ponds, squirrels on the lawns
 //
 //   Object.assign(M, nycLandmarkModels(ctx)); … nycPark(ctx, data.park) → { tick(time) }
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
+import { litMaterial } from '../materials/lit.js';
 import { V, TAU, centroid, scaleRing, orient, inPoly, prism, cap, block, frameOf, makeFrame, lathe, gable } from './hero-geom.js';
 
 const SCHIST = '#7c7870', SANDSTONE = '#c8b48d', LIMESTONE = '#d8ccb2', BRONZE = '#5d7a68', IRON = '#2c3a33', GILT = '#d2a634', BRICK = '#8c5a45';
@@ -566,7 +567,7 @@ export function nycPark({ S, N, glows, local, L, host }, park) {
   })();
   const lake = pools.find((p) => /Lake/.test(p.name || ''));
   const meshOf = (geo, n, color = null) => {
-    const m = new THREE.InstancedMesh(host.own(geo), host.own(new THREE.MeshLambertMaterial(color ? { color } : { vertexColors: true })), n);
+    const m = new THREE.InstancedMesh(host.own(geo), host.own(litMaterial(color ? { color } : { vertexColors: true })), n);
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.frustumCulled = false; host.group.add(m); return m;
   };
   if (lake) {

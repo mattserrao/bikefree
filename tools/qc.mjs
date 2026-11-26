@@ -28,7 +28,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // (what a rider can't miss or that breaks the frame fails; looks-wrong-up-close warns)
 export const SEVERITY = {
   floating: 'fail', roadHole: 'fail', waterOverWay: 'fail', waterOverRoad: 'fail', bridgeDup: 'fail', treeOnRoad: 'fail', buried: 'fail',
-  shaderErrors: 'fail', glErrors: 'fail', overBudget: 'fail',
+  shaderErrors: 'fail', glErrors: 'fail', overBudget: 'fail', overTarget: 'warn',
   strayWater: 'warn', bankShard: 'warn', bankCliff: 'warn', dryBasin: 'warn', pathPaint: 'warn', edgeLip: 'warn', edgeDitch: 'warn',
   joinGap: 'warn', sharpCorner: 'warn', benchOnWay: 'warn', viewBlocked: 'warn', alleeMissing: 'warn',
 };

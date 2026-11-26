@@ -8,12 +8,12 @@
 //           drifting a little), strongest at golden hour
 //   leaves  falling leaves in a box round the camera: fluttering, spinning, drifting with the wind, wrapping round
 //   motes   tiny dust and pollen points floating in the air, catching the light when you look toward the sun
-//   birds   a few crows wheeling over the open fields near you, wings flapping
+//   birds   a few crows wheeling over the open fields near you, wings flapping (a desert map's: ravens, in pairs, higher)
 //   smoke   a thin plume from some of the farmhouses' chimneys near you (user, 23 Nov: cheap wins)
 // Options: { beams: 1, mist: 1, leaves: 1, motes: 1 } (each a strength; 0 turns it off).
 // The world it needs: scene, camera, sunDir, sun, and (for beams and mist) city.forest.tiles, city.landAt / LAND codes,
 // poolAt(x, z), surfaceH(x, z).
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { CHIMNEYS } from '../structures/houses/house-engine.js';
 
 const BEAMS = 14, MIST = 12, LEAVES = 160, MOTES = 420, SMOKERS = 12, PUFFS = 9, FLOCKS = 3, BIRDS = 9;
@@ -305,7 +305,9 @@ export const atmosphere = {
         for (let tries = 0; tries < 60 && f < FLOCKS; tries++) {
           const a = Math.random() * 6.283, r = 50 + Math.random() * 110, x = cam.x + Math.cos(a) * r, z = cam.z + Math.sin(a) * r, c = world.city.landAt(x, z);
           if (!(c >= 10 && c !== 12)) continue;
-          const y = (world.surfaceH?.(x, z) ?? cam.y) + 25 + Math.random() * 20, n = 4 + Math.floor(Math.random() * (BIRDS - 3)), ph = Math.random();
+          // (a desert map's are ravens: pairs and threes riding the air higher up, along the cliffs)
+          const raven = world.profile?.ground === 'desert';
+          const y = (world.surfaceH?.(x, z) ?? cam.y) + (raven ? 40 + Math.random() * 50 : 25 + Math.random() * 20), n = raven ? 2 + Math.floor(Math.random() * 2) : 4 + Math.floor(Math.random() * (BIRDS - 3)), ph = Math.random();
           for (let j = 0; j < n; j++) A.setXYZW(k++, x, y, z, ph + j * .037 + Math.random() * .01);
           f++;
         }

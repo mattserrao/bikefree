@@ -14,7 +14,7 @@
 //   nt.cutOf(name, v)              the cut (m above the base, unscaled) for a species' variant, or 0
 //   nt.draw(list)                  [{ x, y, z, rot, s, sy, name, v, tint }] — the trees near the camera now
 //   nt.dispose()
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { hash } from '../core/mesh-builder.js';
 import { NEAR_TRUNK, NEAR_PLANT, TREE_GRADE } from './tree-engine.js';
 

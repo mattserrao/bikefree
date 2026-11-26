@@ -9,7 +9,7 @@
 //      hoods), corner boards and pilasters, eave brackets, porch rails and pickets, door surrounds, chimney caps,
 //      gutters and downpipes
 // Close detail is what a house shows as you ride past it; beyond ~160 m the main mesh alone reads the same.
-import * as THREE from '../../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../../vendor/three.js';
 import { S, W } from '../buildings/presets.js';
 import { F } from '../buildings/facade-material.js';
 import { kitRoof, srgb, toU8, frameIndex } from '../buildings/assemble.js';

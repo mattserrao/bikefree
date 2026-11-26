@@ -8,7 +8,7 @@
 // Bounds are computed first (culling and the bake use them); counts and draw ranges stay valid without the arrays.
 // After the release a marked geometry can't be re-uploaded: a lost WebGL context can't restore it (the world isn't
 // restored after a context loss anyway).
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 
 let enabled = false;
 export const releaseStats = { geometries: 0, bytes: 0 };

@@ -9,7 +9,7 @@ import { lintGraphMap, SCENE_FIELDS } from '../js/world/toolbox/scene-schema.js'
 const graph = (id) => JSON.parse(readFileSync(new URL(`../routes/cities/${id}.json`, import.meta.url)));
 const EFFECT_NAMES = Object.fromEntries(SCENE_FIELDS.effects.keys.map((k) => [k, true]));
 
-test('CNY and SKAN rules are the defaults; PGH pins the city preset', () => {
+test('CNY and SKAN rules are the defaults; PGH pins the city preset (with the other maps\' baked light)', () => {
   assert.equal(mapProfile({}).preset, 'upstate');
   assert.deepEqual(mapProfile({}), mapProfile({ profile: 'upstate' }));
   for (const id of ['cny', 'skan']) {
@@ -17,7 +17,7 @@ test('CNY and SKAN rules are the defaults; PGH pins the city preset', () => {
     assert.equal(p.light, 'golden-upstate'); assert.equal(p.roads, 'worn'); assert.equal(p.dressing, 'country'); assert.equal(p.life, 'cyclists');
   }
   const pgh = mapProfile(graph('pgh'));
-  assert.equal(pgh.light, 'free'); assert.equal(pgh.dressing, 'city'); assert.equal(pgh.life, 'none');
+  assert.equal(pgh.light, 'golden-upstate'); assert.equal(pgh.dressing, 'city');   // (user, 26 Nov: PGH's lighting matches the other maps) assert.equal(pgh.life, 'none');
   // SKAN pins what it drew before the profiles (no visual change): its lakefront rule, home classes and styles
   const skan = mapProfile(graph('skan'));
   assert.equal(skan.hideInWater, true); assert.equal(skan.classifyHomes, 'by-neighbours');
@@ -54,7 +54,7 @@ test('the building engine: one front door, every graph code has a kind', async (
 });
 
 test('the planting API: matrices become engine records (yaw only)', async () => {
-  const THREE = await import('../vendor/three.module.min.js');
+  const THREE = await import('../vendor/three.js');
   const { recordsFromMatrices, treeRecord } = await import('../js/world/toolbox/vegetation/planting.js');
   const m = new THREE.Matrix4().compose(new THREE.Vector3(3, 4, 5), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.7), new THREE.Vector3(2, 3, 2));
   const [t] = recordsFromMatrices({ maple: [m], gone: [m] }, (n) => n === 'maple');

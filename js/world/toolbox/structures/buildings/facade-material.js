@@ -14,7 +14,7 @@
 // muntins, curtains, reflections, shutters open or closed, sills, surrounds, flower boxes), doors, shopfronts,
 // quoins, ivy and weathering (damp at the foot, drips under sills, sun fade, moss on shady roofs) are all
 // drawn here. Every detail fades to its average once it's a couple of pixels, so nothing shimmers far off.
-import * as THREE from '../../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../../vendor/three.js';
 import { SKY_REFLECT } from '../../atmosphere/sky-dome.js';
 
 export const FRAMES = ['#efebe2', '#e4dac4', '#6b4a32', '#3b3d3f', '#9ea4a8'];

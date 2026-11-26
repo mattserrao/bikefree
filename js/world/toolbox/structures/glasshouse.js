@@ -14,7 +14,7 @@
 // fresnel edge; its white frames, the stone plinth, benches and beds are one opaque draw (not in the light bake:
 // the sun shines in through the glass). Hanging glass art is generic abstract forms (teardrops, spires, discs,
 // coils) in bright colours. Budget (Phipps): ~20 draws and well under 1 M triangles in any view.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { Builder, M, cyl, cone, blob, box, withSmooth } from '../core/model-builder.js';
 import { randomSequence, smoothstep, vnoise } from '../core/random.js';

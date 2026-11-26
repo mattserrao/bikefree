@@ -10,7 +10,7 @@
 //       "stone": 0.6, "pitch": 30 },
 //     { "fromM": 60000, "walls": ["#e3d3b5", "#d9c19a"], "roofs": ["#8b4a36", "#6d5446"], "trim": ["#7d4a2d"], "balconies": 0.5 } ],
 //   "buildings": { "reachM": 9000, "chunkM": 3000, "landmarks": [ { "name": "Notre-Dame des Neiges", "shape": "tent" } ] }
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { randomSequence } from '../core/random.js';
 
 const ROAD_HALF = 3.5;

@@ -8,7 +8,7 @@ import { routeAt, haversine } from '../js/gpx.js';
 import { makeProjection, makeRouteIndex } from '../js/world/geo.js';
 import { makeRealCoastLandscape } from '../js/world/toolbox/landscape/real-terrain.js';
 import { roadFrame, fitBridgeToRoad } from '../js/world/toolbox/roadside/details.js';
-import * as THREE from '../vendor/three.module.min.js';
+import * as THREE from '../vendor/three.js';
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const catalog = JSON.parse(read('routes/catalog.json'));

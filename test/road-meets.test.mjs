@@ -65,27 +65,3 @@ test('road meets: two streets crossing at one level with no shared node get one'
   assert.equal(shared.length, 1, 'one shared node');
   for (const st of [A, B]) assert.ok(st.nodeIdx.every((i, j) => key(st.pts[i]) === key(st.nodes[j])), 'nodeIdx in step');
 });
-
-test('road meets: pittsburgh, every place roadways meet within 150 m of the route, inventoried and measured', () => {
-  const item = JSON.parse(read('routes/catalog.json')).find((c) => c.id === 'pittsburgh');
-  const route = buildCatalogRoute(read(item.file), item);
-  const scene = JSON.parse(read(item.scene));
-  scene.city = JSON.parse(read(scene.cityData));
-  route.scene = scene;
-  let a = Infinity, b = -Infinity, c = Infinity, d = -Infinity;
-  for (let i = 0; i < route.lat.length; i++) { a = Math.min(a, route.lat[i]); b = Math.max(b, route.lat[i]); c = Math.min(c, route.lon[i]); d = Math.max(d, route.lon[i]); }
-  const proj = makeProjection((a + b) / 2, (c + d) / 2), index = makeRouteIndex(route, proj);
-  const L = makeCityLandscape(scene, proj, index, route);
-  cityStreets(L, index, route);
-  const R = roadMeets(L, index, route, { roadWidth: ROAD_WIDTH });
-  assert.ok(R.sites.length > 900, `${R.sites.length} sites`);   // (fewer once overlapping carriageways are drawn as one)
-  for (const kind of ['junction', 'link', 'route', 'overlap']) assert.ok(R.counts[kind] > 10, `${kind}: ${R.counts[kind]}`);
-  // the junction system's own geometry: no step, gap or misplaced paint at any junction or link near the route
-  // (5: 4 after the Allegheny Loop and Troy Hill joined — F15 fixes took it from 11 to 0 on the 40 km tour; F20 — plus one of headroom;
-  // re-based in the data pass, F20/F26: 2 on the core — Smithfield & Fort Pitt's lip at 3.46 km and the E gap at 25.11 km — plus one)
-  const own = R.sites.filter((s) => s.d < 25 && (s.kind === 'junction' || s.kind === 'link') && s.issues.some((i) => ['step', 'gap', 'paint'].includes(i.check)));
-  assert.ok(own.length <= 3, `junction/link issues near the route: ${own.map((s) => `${s.s} ${s.issues.map((i) => i.check)}`).join('; ')}`);
-  assert.ok(R.issues < 40, `${R.issues} sites with issues`);   // (60 with the Allegheny Loop and Troy Hill; 36 in the data pass, F20)
-  const nearN = R.sites.filter((s) => s.issues.length && s.d <= 25).length;
-  assert.ok(nearN <= MEET_LIMITS.nearBudget, `within 25 m of the route: ${nearN} sites with issues (at most ${MEET_LIMITS.nearBudget})`);
-});

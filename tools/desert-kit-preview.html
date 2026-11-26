@@ -1,0 +1,40 @@
+<!doctype html><html><body style="margin:0">
+<script type="module">
+import * as THREE from '/vendor/three.js';
+import { makeUpstateTrees, makeLeafTexture } from '/js/world/toolbox/vegetation/upstate-trees.js';
+import { decorateTreeMaterial } from '/js/world/toolbox/packs/northern-rockies.js';
+import { RockBuilder, redRockMaterial } from '/js/world/toolbox/landscape/redrock.js';
+import { billboardLeaves } from '/js/world/toolbox/vegetation/leaf-cards.js';
+const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(1280, 720); document.body.appendChild(r.domElement);
+const s = new THREE.Scene(); s.background = new THREE.Color('#bcd4e8');
+const cam = new THREE.PerspectiveCamera(40, 1280 / 720, .5, 4000);
+s.add(new THREE.HemisphereLight('#dfefff', '#8a5a3a', 1.1));
+const sun = new THREE.DirectionalLight('#ffe0b0', 2.6); sun.position.set(-60, 50, 70); s.add(sun);
+const g = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshLambertMaterial({ color: '#c8875a' })); g.rotation.x = -Math.PI / 2; s.add(g);
+const mat = decorateTreeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 }), { uTime: { value: 0 } });
+const leafMat = billboardLeaves(new THREE.MeshStandardMaterial({ vertexColors: true, map: makeLeafTexture(), alphaTest: .45, side: THREE.DoubleSide, roughness: .9 }));
+const P = new URLSearchParams(location.search), mode = P.get('mode') || 'kit';
+if (mode === 'kit') {
+  const kit = makeUpstateTrees({ desert: true, bushes: true });
+  let x = 0;
+  for (const name of (P.get('sp') || 'juniper,pinyon').split(',')) { const sp = kit.species[name]; if (!sp) continue;
+    sp.variants.forEach((tiers, v) => { tiers.forEach((geo, lod) => { const parts = geo.isBufferGeometry ? [[geo, mat]] : [[geo.wood, mat], [geo.leaves, leafMat]];
+      for (const [gg, mm] of parts) { if (!gg) continue; const m = new THREE.Mesh(gg, mm); m.position.set(x, 0, -lod * 25); s.add(m); } }); x += sp.r * 2 + 3; }); }
+  for (const name of (P.get('under') || 'sage,sage2,rabbitbrush,redrock,redrock2').split(',')) { const gg = kit.understory[name]; if (!gg) continue; const parts = gg.isBufferGeometry ? [[gg, mat]] : [[gg.wood, mat], [gg.leaves, leafMat]]; for (const [g2, m2] of parts) { if (!g2) continue; const m = new THREE.Mesh(g2, m2); m.position.set(x, 0, 8); s.add(m); } x += 4; }
+  cam.position.set(x / 2, 6, x * .7); cam.lookAt(x / 2, 2, 0);
+  if (P.has('cam')) { const [a, b, c, d, e, f] = P.get('cam').split(',').map(Number); cam.position.set(a, b, c); cam.lookAt(d, e, f); }
+} else {
+  const R = new RockBuilder(), H = () => 0;
+  if (mode === 'hoodoo') { for (let k = 0; k < 30; k++) R.hoodoo((k % 6) * 9 - 25, 0, Math.floor(k / 6) * 9 - 20, 8 + (k * 7 % 13) * 1.6, 2 + (k % 3) * .6, k + 1, H); cam.position.set(0, 14, 50); cam.lookAt(0, 8, 0); }
+  if (mode === 'arch') { R.arch({ o: { x: -40, z: 0 }, u: { x: 1, z: 0 } }, H, { span: 11, height: 14, thick: 2.2, deep: 2.6, foot: 2.1, seed: 51 });
+    const u = { x: 1, z: 0 }; for (const sd of [-1, 1]) R.arch({ o: { x: sd * 9.5, z: -10 }, u }, H, { span: 13, height: 12, thick: 5, deep: 8, foot: 1.5, seed: 62 + sd, pedestal: false });
+    for (const sd of [-1, 1]) R.fin({ o: { x: sd * 27, z: -10 }, u }, H, { len: 20, h: 20, w: 9, seed: 64 + sd }); R.fin({ o: { x: 0, z: -10 }, u }, H, { len: 7, h: 19, w: 8.5, seed: 66 });
+    R.arch({ o: { x: 60, z: 20 }, u: { x: 1, z: 0 } }, H, { span: 52, height: 15, thick: 2.4, deep: 3.4, foot: 3.2, seed: 71 }); cam.position.set(0, 12, 110); cam.lookAt(10, 10, 0); }
+  if (mode === 'butte') { R.butte(-250, 0, H, { R: 95, H: 160, aspect: 1.25, yaw: .4, seed: 11 }); R.spire(-250 + Math.cos(.4) * 154, Math.sin(.4) * 154, H, { r: 14, h: 144, seed: 91 });
+    R.butte(250, -150, H, { R: 120, H: 120, aspect: 1.6, seed: 18 }); R.spire(0, 100, H, { r: 9, h: 95, seed: 21 }); cam.position.set(0, 20, 700); cam.lookAt(0, 70, 0); }
+  if (mode === 'tunnel') { const pts = []; for (let k = 0; k < 90; k++) pts.push({ x: 0, z: -k * 4 }); R.tunnel(pts, H, H, { hill: 1, galleries: [.32, .5, .68] });
+    cam.position.set(P.has('in') ? 0 : -30, P.has('in') ? 2.5 : 3, P.has('in') ? -120 : -150); cam.lookAt(P.has('in') ? 0 : -6, P.has('in') ? 5 : 3.5, P.has('in') ? -200 : -185); }
+  const m = R.mesh(redRockMaterial()); s.add(m); window.tris = R.tris;
+}
+r.render(s, cam); window.done = true;
+</script></body></html>

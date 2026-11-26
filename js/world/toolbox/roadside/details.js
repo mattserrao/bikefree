@@ -1,6 +1,6 @@
 // Toolbox: roadside details (signs, markers, turnouts, fitted bridge decks) and roadFrame(), the outbound-road
 // frame every kit uses to place things by distance and side. Every stylized scene.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { randomSequence } from '../core/random.js';
 import { curveOn, curveXZ } from '../../road-align.js';   // [w2-align]
 

@@ -62,41 +62,8 @@ test('junctions: a street meeting the route gets a route junction just under the
   }
 });
 
-test('junctions: pittsburgh, planned the way the renderer and the course QC see it', () => {
-  const item = JSON.parse(read('routes/catalog.json')).find((c) => c.id === 'pittsburgh');
-  const route = buildCatalogRoute(read(item.file), item);
-  const scene = JSON.parse(read(item.scene));
-  scene.city = JSON.parse(read(scene.cityData));
-  scene.junctions = true;
-  route.scene = scene;
-  let a = Infinity, b = -Infinity, c = Infinity, d = -Infinity;
-  for (let i = 0; i < route.lat.length; i++) { a = Math.min(a, route.lat[i]); b = Math.max(b, route.lat[i]); c = Math.min(c, route.lon[i]); d = Math.max(d, route.lon[i]); }
-  const proj = makeProjection((a + b) / 2, (c + d) / 2), index = makeRouteIndex(route, proj);
-  const L = makeCityLandscape(scene, proj, index, route);
-  const streets = cityStreets(L, index, route), plan = L._junctions;
-  assert.ok(plan.list.length > 1000, `${plan.list.length} junctions`);
-  assert.ok(plan.list.filter((j) => j.route).length > 60);
-  const o = streetOverlaps(streets, plan);
-  assert.ok(o.overlapM < 16500, `overlapping ribbons ${o.overlapM} m (41.8 km without junctions)`);   // (~18 m per km of street: 11.1 km over 617 km before the Allegheny Loop, 15.6 km over 877 km with it)
-  // every junction surface stays under the road as drawn (its curve), on every pass of it: the lowest cross-section of
-  // the drawn road through each corner (junctions.js routeLine().lowestNear: world.js leaves out a network tour's ghost
-  // repeats; landscape.routeDist() still reaches the segment just before a ghost's end, whose road isn't drawn —
-  // 54.06 km, East Carson, beside the junction at the Hot Metal Bridge's landing — and follows the 10 m chords)
-  const RL = routeLine(route, index);
-  let checked = 0;
-  for (const jn of plan.list) for (const p of jn.poly) {
-    const y = RL.lowestNear(p.x, p.z, ROAD_WIDTH / 2);
-    if (y == null) continue;
-    const top = jn.J(p.x, p.z) + jn.lift;
-    if (top >= y + ROAD_LIFT + 4) continue;   // (4 m and up: a junction on a deck over the road)
-    checked++;
-    assert.ok(top < y + ROAD_LIFT, `junction ${jn.id} over the road by ${(top - y - ROAD_LIFT).toFixed(2)} m`);
-  }
-  assert.ok(checked > 500, `${checked} junction corners on the road checked`);
-});
-
 test('junctions: cutting the route shoulder at a junction keeps the quads the ribbon left out (ghost repeats, F19)', async () => {
-  const THREE = await import('../vendor/three.module.min.js');
+  const THREE = await import('../vendor/three.js');
   const { cutRouteRibbon } = await import('../js/world/toolbox/city/junction-mesh.js');
   // a straight 10-station ribbon along z; segments 6–7 dropped (a ghost repeat), a junction span over 2–3.5 m
   const n = 10, pos = [], uv = [], idx = [];

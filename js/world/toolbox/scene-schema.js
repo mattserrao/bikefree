@@ -57,11 +57,12 @@ export const SCENE_FIELDS = {
   sites: { type: 'array', keys: ['name', 'lat', 'lon', 'widthM', 'lengthM', 'angle', 'atRoad'], doc: 'flat built pads (lodges, car parks, visitor centres): cleared of trees' },
 
   // look
-  effects: { type: 'object', tool: T + 'effects/index.js', keys: ['water', 'shoreline', 'village', 'frontYards', 'sky', 'atmosphere'], doc: '[blocks] the shared graphics effects, as the free-ride maps use them: a key present turns one on, its object holds options; effects the route world can\'t host (needs) are skipped' },
+  effects: { type: 'object', tool: T + 'effects/index.js', keys: ['water', 'shoreline', 'village', 'frontYards', 'sky', 'atmosphere', 'canopyShade', 'roadLook', 'grade', 'parkFence', 'leafLitter'], doc: '[blocks] the shared graphics effects, as the free-ride maps use them: a key present turns one on, its object holds options; effects the route world can\'t host (needs) are skipped' },
   palette: { type: 'object', required: true, tool: T + 'materials/surfaces.js', keys: ['grass', 'meadow', 'rock', 'cliff', 'water', 'shallowWater', 'sand', 'forest', 'forestFloor', 'canopy', 'snow', 'ice', 'scree', 'cutRock', 'burn', 'fireweed', 'shrub', 'bluff', 'argillite', 'farTint', 'farTintAmount', 'hay', 'farmland', 'village'], doc: '6–10 muted colours (hay, farmland, village: mapped land cover)' },
   look: { type: 'string', tool: T + 'atmosphere/look.js', doc: 'cartoon look: "gentle" (the standard) | "bold"' },
   suite: { type: 'object', tool: 'js/world/world.js', keys: ['kit', 'clouds', 'trees', 'vergeCards', 'note'], doc: '[suite] the common scenery suite (as CNY, SKAN, Endless): kit "common" — no cartoon look, the shared sky dome, surface detail on ground and road, trees: { pack model → common kit species }, vergeCards: { density, tint, flowers } soft grass cards along the verge' },
   timeOfDay: { type: 'string', doc: 'default time: midday | morning | afternoon | golden | night' },
+  trees: { type: 'object', tool: T + 'vegetation/tree-engine.js', keys: ['nearM', 'note'], doc: '[zwift-look] the near band: trees within nearM m drawn as their grown models, cards beyond (0: cards all the way in)' },
   lighting: { type: 'object', tool: T + 'atmosphere/baked-light.js', keys: ['baked', 'sun', 'cellM', 'marginM', 'reachM', 'maxTexels', 'windowM', 'windowMoveM'], doc: 'fixed sun with baked shadows/AO: { "baked": "midday" }' },
   post: { type: 'any', tool: T + 'atmosphere/post.js', doc: 'hero post chain: bloom, grade, vignette' },
   atmosphere: { type: 'object', keys: ['fogNearM', 'fogFarM', 'fogFarRealM', 'lakeMist'], doc: 'fog distances and lake mist' },

@@ -5,7 +5,7 @@
 // The parameters live in one shared object, HAZE ({x: base height m, y: thickness m, z: strength 0–1}),
 // handed by reference to every material's uniforms (three clones uniform values only when they are
 // vectors or colours; a plain object stays shared). A shader without the uniform reads zeros: no haze.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 
 export const HAZE = { x: 0, y: 80, z: 0 };
 // Aerial perspective (vista kit, js/world/toolbox/atmosphere/vista.js): distant ground fades toward a pale sky blue, more in

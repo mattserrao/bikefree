@@ -19,7 +19,7 @@
 //
 //   const b = buildGraphBridges(world, json) → { group, glows: [{x, y, z, size, color}], mask: Map(edgeId → Uint8Array), count }
 //   mask bits: 1 = no generic piers, 2 = no parapet (the model has the railings).
-import * as THREE from '../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.js';
 import { MeshBuilder, resample, makePath } from './toolbox/core/mesh-builder.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);

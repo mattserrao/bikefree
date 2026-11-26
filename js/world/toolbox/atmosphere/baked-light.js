@@ -38,7 +38,7 @@
 // triggers re-bakes; it still receives the baked shadow and AO). `userData.bake = true` forces a mesh in
 // (e.g. thin props that would otherwise be skipped). Moving things: InstancedMesh with DynamicDrawUsage,
 // or `userData.dynamic = true`, keep casting into the small live shadow map.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { CANOPY, CANOPY_GLSL } from './canopy-shade.js';
 
 export const BAKE_DEFAULTS = {

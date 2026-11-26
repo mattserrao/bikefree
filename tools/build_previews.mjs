@@ -185,7 +185,7 @@ async function renderPark(park, files) {
         // a subject (bridge, tower, landform, the view from an overlook): a postcard camera over the road, `back`
         // metres behind the rider and `up` over it, pointed at the subject's points (their middle)
         let pts = null, mid = null;
-        const THREE = render.subject ? await import('/vendor/three.module.min.js') : null;
+        const THREE = render.subject ? await import('/vendor/three.js') : null;
         if (render.subject) {
           const S = render.subject, V = THREE.Vector3, s = render.s;
           const r = w.pointAt(s), fwd = new V().subVectors(w.pointAt(s + 5), w.pointAt(Math.max(0, s - 5))).setY(0).normalize();

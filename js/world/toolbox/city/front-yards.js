@@ -4,7 +4,7 @@
 // Modular: works on any building-kit house with a homestead plan (toolbox/city/homesteads.js) — no map knowledge.
 //   const Y = planFrontYard(R, H, { free, driveNear }, { fence: .22, hedge: .2, shrubs: .8 })
 //   drawFrontYard(M, Y, groundH)
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { hash } from '../core/mesh-builder.js';
 
 const FRONT = [[0, -1], [1, 0], [0, 1], [-1, 0]];   // the kit's front index → (u, v) out of the house

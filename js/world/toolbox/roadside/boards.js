@@ -8,7 +8,7 @@
 //
 //   "boards": [ { "atM": 120781, "kind": "bend", "number": 7, "alt": 1390, "lines": ["Gianni Bugno 1990"], "side": "left" },
 //               { "atM": 33000, "kind": "town", "title": "Saint-Étienne-en-Dévoluy" } ]
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { roadFrame } from './details.js';
 
 const SW = 256, SH = 128, COLS = 8;

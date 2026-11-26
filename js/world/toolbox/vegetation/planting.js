@@ -12,7 +12,7 @@
 //   scatter        the route scenes' per-tile scatter and far planting           stylized-terrain.js _scatter*
 //   old-growth     a hero old-growth area (Camillus Forest)                      old-growth.js
 // A new map picks a planner by its data (the graph maps' profile, a scene's "vegetation.layout") — never by its id.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 
 export const PLANNERS = {
   rural: 'js/world/graph-city.js _ruralTrees',

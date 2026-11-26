@@ -1,7 +1,7 @@
 // Northern-forest placement for "forest-edge" scenes: a continuous canopy that starts a few metres
 // past a mown verge, thinned by distance from the camera in nested tiers (near ⊃ mid ⊃ far), so a
 // tree never moves when its tile changes tier — trees only appear as you approach.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { randomSequence, smoothstep } from '../core/random.js';
 import { PACK_META } from '../packs/meta.js';
 

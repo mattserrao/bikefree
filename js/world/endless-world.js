@@ -13,7 +13,10 @@
 //              shadow map round the rider; on desktop High the post pipeline (contact shading, bloom, grade)
 // The course (js/endless/course.js) is generated ahead of the rider; a terrain change at a mile mark regenerates the road
 // past it, and the tiles out there ease to their new shape over a second and a half.
-import * as THREE from '../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.js';
+import { litMaterial } from './toolbox/materials/lit.js';
+import { createRenderer, pixelRatioFor, QualityGovernor } from './render-core.js';
+import { resolveMapDefinition } from './toolbox/map-definition.js';
 import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean } from './pose.js';
 import { loadRider, RIDER_RIM } from './rider.js';
 import { makeSkyDome } from './toolbox/atmosphere/sky-dome.js';
@@ -34,11 +37,12 @@ import { SURFACE_SUN, loadSurfaceDetail } from './toolbox/materials/surface-deta
 import { roadSurfaceMaterial, wornPaintMaterial, makeStandIn, CLOUD_T } from './graph-world.js';
 import { biomeAt, MILE_M, STEP, rng } from '../endless/course.js';
 
+// [zwift-look] the near band (m): trees inside it drawn as their grown models (leaf clusters, limbs), cards beyond
+const ENDLESS_NEAR_M = 55;
 const MOBILE = (() => { try { const ua = navigator.userAgent || ''; return /iPhone|iPad|iPod|Android|Mobile/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1); } catch { return false; } })();
 const TILE = 256;
 const CHUNK = 20;                              // road samples per road mesh (200 m)
 const HALF = 3.3, LANE = -1.6;                 // the road's half width; the rider's lane (+ is the course's right normal, which draws on screen left: the rider keeps right)
-const PIXEL_RATIO = { low: 1, balanced: 1.5, high: 2 };
 // how far things are built, by quality (Low: phones — the memory cap)
 const REACH = { low: { near: 520, far: 1700, trees: 520, road: 1800 }, balanced: { near: 760, far: 2600, trees: 800, road: 2800 }, high: { near: 900, far: 3000, trees: 950, road: 3200 } };
 const MORPH_S = 1.5;
@@ -89,16 +93,13 @@ export class EndlessWorld {
     this.gfx = {};
     // the rules: the map profile's defaults — CNY's and SKAN's
     this.profile = mapProfile({});
+    this.def = resolveMapDefinition({ kind: 'endless' });   // [map-definition]
     this.R = REACH[this.qualityKey];
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: this.qualityKey !== 'low', powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[this.qualityKey]));
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer = createRenderer({ container, quality: this.qualityKey });
     this.renderer.shadowMap.enabled = this.qualityKey !== 'low';
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    container.prepend(this.renderer.domElement);
-    this.renderer.domElement.className = 'world-canvas';
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;   // (PCFSoftShadowMap was removed in r186: three fell back to this anyway)
+    this.governor = new QualityGovernor({ quality: this.qualityKey, onScale: () => this.setQuality() });
     this.scene = new THREE.Scene();
     this.scene.fog = new THREE.Fog('#cfdde8', 400, this.R.far * 0.95);
     this.camera = new THREE.PerspectiveCamera(60, 1, 0.5, 7000);
@@ -121,9 +122,9 @@ export class EndlessWorld {
     this.mats = {
       ground: groundMaterial(low),
       road: roadSurfaceMaterial(low, this.profile.roads === 'worn'),
-      paint: this.profile.roads === 'worn' ? wornPaintMaterial() : new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
-      water: new THREE.MeshLambertMaterial({ color: '#3f6f86', transparent: true, opacity: 0.93 }),
-      ice: new THREE.MeshLambertMaterial({ color: '#dfeaf0' }),
+      paint: this.profile.roads === 'worn' ? wornPaintMaterial() : litMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+      water: litMaterial({ color: '#3f6f86', transparent: true, opacity: 0.93 }),
+      ice: litMaterial({ color: '#dfeaf0' }),
       facade: makeFacadeMaterial(this.uniforms),
     };
     if (!low) loadSurfaceDetail(this.renderer);
@@ -132,7 +133,7 @@ export class EndlessWorld {
     this.sea.name = 'Sea'; this.sea.position.y = 0; this.sea.visible = false; this.scene.add(this.sea);
     // the shared effects (the same registry the free-ride maps use)
     this.city = { forest: null, landAt: (x, z) => this._landAt(x, z) };
-    this.effects = installEffects(this, { water: {}, atmosphere: {} });
+    this.effects = installEffects(this, { water: {}, atmosphere: {}, grade: { saturation: 1.1, contrast: .1, warm: .3, lift: .02, sun: 1.12, sky: .9 } });   // ([zwift-look] the grade)
 
     this.tiles = new Map(); this.roads = new Map(); this.homes = new Map(); this.morphs = [];
     this._lakeCache = new Map();
@@ -144,7 +145,7 @@ export class EndlessWorld {
       if (this.disposed) return;
       try {
         this.kit = makeEndlessTrees();
-        this.forest = new TreeEngine({ renderer: this.renderer, parent: this.group, quality: this.qualityKey, uTime: this.treeTime, lights: { hemi: this.hemi, sun: this.sun }, kit: this.kit });
+        this.forest = new TreeEngine({ renderer: this.renderer, parent: this.group, quality: this.qualityKey, uTime: this.treeTime, lights: { hemi: this.hemi, sun: this.sun }, kit: this.kit, near: (MOBILE ? .6 : 1) * ENDLESS_NEAR_M });
         this.city.forest = this.forest;
         this._treesState = 'ok';
         for (const t of this.tiles.values()) t.planted = false;
@@ -183,8 +184,8 @@ export class EndlessWorld {
   setWeather(key) { this.weatherKey = key; }
   timeOptions() { return [{ key: 'cycle', label: 'Day cycle' }]; }
   setTimeOfDay() { this.timeKey = 'cycle'; }
-  setQuality(key) { this.qualityKey = key || this.qualityKey; this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[this.qualityKey] ?? 1.5)); this._resize(); }
-  setGfx(g = {}) { this.gfx = { ...g }; this._leafy = null; }
+  setQuality(key) { this.qualityKey = key || this.qualityKey; this.governor?.setQuality(this.qualityKey); this.renderer.setPixelRatio(pixelRatioFor(this.qualityKey, this.governor?.scale ?? 1)); this._resize(); }
+  setGfx(g = {}) { this.gfx = { ...g }; this._leafy = null; this.governor?.setTarget(this.gfx.fps || 0); }
   setCamera(key) { this.camKey = CAMERAS[key] ? key : DEFAULT_CAMERA; this._camInit = false; }
   togglePerf() {}
   start() { if (this.running || this.disposed) return; this.running = true; this._last = performance.now(); this._raf = requestAnimationFrame(this._frame); }
@@ -598,9 +599,10 @@ export class EndlessWorld {
   _applyDay(f) {
     const t = dayAt(f), el = THREE.MathUtils.degToRad(t.elev), az = THREE.MathUtils.degToRad(t.az);
     this.sunDir.set(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)).normalize();
-    this.sun.color.set(t.sun); this.sun.intensity = t.sunI * sm(-4, 3, t.elev);
-    this.hemi.color.set(t.hemiSky); this.hemi.groundColor.set(t.hemiGround); this.hemi.intensity = t.hemiI;
-    this.renderer.toneMappingExposure = t.exposure;
+    const LT = t.elev > 0 && this.lightTune ? this.lightTune : { sun: 1, sky: 1, exposure: 1 };   // ([zwift-look] the grade's key light)
+    this.sun.color.set(t.sun); this.sun.intensity = t.sunI * sm(-4, 3, t.elev) * LT.sun;
+    this.hemi.color.set(t.hemiSky); this.hemi.groundColor.set(t.hemiGround); this.hemi.intensity = t.hemiI * LT.sky;
+    this.renderer.toneMappingExposure = t.exposure * LT.exposure;
     RIDER_RIM.value.set(t.sun);
     // the biome's own tint on the haze and the clouds
     const bi = this._biome(this.p), fogB = _cA.set(bi.A.sky.fog).lerp(_cB.set(bi.B.sky.fog), bi.t);
@@ -633,6 +635,7 @@ export class EndlessWorld {
     if (cap && now - (this._lastDraw || 0) < 1000 / cap - 2) return;
     this._lastDraw = now; this._frames = (this._frames || 0) + 1;
     const dt = Math.min(1, (now - this._last) / 1000); this._last = now;
+    this.governor?.sample(dt * 1000, dt, true);   // [render-core] adaptive resolution from the frame interval
     const src = this.source ? this.source() : { pos: 0, speed: 0, cadence: 0 };
     let x = this.p + (src.speed || 0) * dt; const err = (src.pos || 0) - x;
     x = Math.abs(err) > 60 ? src.pos || 0 : x + err * Math.min(1, dt * 1.5);
@@ -706,7 +709,7 @@ const _cA = new THREE.Color(), _cB = new THREE.Color(), _cC = new THREE.Color(),
 
 /** The ground: vertex colours (the biomes' blend, computed per vertex) with fine noise detail near and a broad mottle. */
 function groundMaterial(low) {
-  const m = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const m = litMaterial({ vertexColors: true });
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vEW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvEW = (modelMatrix * vec4(transformed, 1.)).xyz;');

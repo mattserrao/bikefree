@@ -1,5 +1,5 @@
 {
- "profile": {"preset":"upstate","hideInWater":true,"classifyHomes":"by-neighbours","buildingStyles":[{"preset":"pittsburgh-rowhouse","kinds":["rowhouse"]},{"preset":"pittsburgh-frame","kinds":["house","barn","shed"]}]},
+ "profile": {"preset": "upstate", "hideInWater": true, "classifyHomes": "by-neighbours", "buildingStyles": [{"preset": "pittsburgh-rowhouse", "kinds": ["rowhouse"]}, {"preset": "pittsburgh-frame", "kinds": ["house", "barn", "shed"]}], "trees": {"nearM": 55}, "sun": {"elev": 27, "az": 228}, "avenue": {"kinds": ["path"], "every": 13, "offset": [4, 7], "lean": 0.07, "gap": 0.4}, "understory": {"kinds": ["path", "residential", "tertiary"], "band": [3, 9], "step": 2.2, "density": {"path": 0.45, "residential": 0.18, "tertiary": 0.12}}},
  "id": "skan",
  "name": "SKAN",
  "cityName": "Skaneateles, NY",
@@ -282,7 +282,7 @@
  "junctionEaseM": 30,
  "routeKeepM": 18,
  "routeLinkMaxM": 50,
- "effects": {"water": {}, "shoreline": {}, "village": {}, "frontYards": {}, "sky": {}, "atmosphere": {}},
+ "effects": {"water": {}, "shoreline": {}, "village": {}, "frontYards": {}, "sky": {}, "atmosphere": {}, "canopyShade": {}, "roadLook": {"paint": false, "tone": [1.05, 1.05, 1.04], "leaves": 0.45}, "grade": {"shadows": [0.95, 0.96, 1.04], "highlights": [1.04, 1.0, 0.94], "split": 0.5, "sun": 1.2, "sky": 0.85, "contrast": 0.12, "lift": 0.025}, "parkFence": {"kinds": ["path"], "share": 0.3}, "leafLitter": {"amount": 0.45}},
  "files": {
   "ground": "routes/cities/skan-ground.grid.bin.gz",
   "heroes": "routes/cities/skan-heroes.json",

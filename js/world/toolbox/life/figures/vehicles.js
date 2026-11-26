@@ -6,7 +6,7 @@
 // One indexed geometry per kind (+Z forward, ground at y = 0). Per vertex aVeh: (part, wheel, axle y, axle z);
 // part 0 is paint (tinted by the instance's iPaint), 1 fixed colour, 2 glass, 10 headlight, 11 tail / brake
 // light, 12 lit sign or interior. Per instance: iPaint (linear RGB), iMove (distance driven in metres, braking 0–1).
-import * as THREE from '../../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../../vendor/three.js';
 import { posedFigure, CLIP, randomLook, FIT } from './people.js';
 
 export const VEHICLE_KINDS = ['sedan', 'hatch', 'suv', 'pickup', 'van', 'taxi', 'bus', 'rv', 'camper', 'moto', 'jammer'];

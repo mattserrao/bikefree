@@ -1,4 +1,4 @@
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { decorateSceneryMaterial } from '../materials/surfaces.js';
 
 const unpack = (text, Type) => {

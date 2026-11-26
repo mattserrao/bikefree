@@ -3,7 +3,7 @@
 // and a layer of soft fair-weather cumulus painted in the shader (fbm on a plane at cloud height), drifting slowly
 // on the breeze and lit warm on their sun side. One draw call, no textures. (User, 24 Nov: Zwift parity, item 2 —
 // "the sky is one flat colour".)
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { NOISE_GLSL } from '../materials/glsl-noise.js';   // [blocks] shared GLSL
 
 /** The sky's colours, for things that reflect it (the canal): the horizon's and overhead (linear), the sun's. */

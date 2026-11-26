@@ -1,6 +1,9 @@
 // The 3D ride view: real terrain + aerial imagery, the road, a pedalling rider, sky and cameras.
 import { cutRouteRibbon, junctionPlan } from './toolbox/city/junction-mesh.js';   // [junctions] (the road's overlay: city.js)
-import * as THREE from '../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.js';
+import { createRenderer, pixelRatioFor, QualityGovernor } from './render-core.js';
+import { litMaterial } from './toolbox/materials/lit.js';
+import { resolveMapDefinition } from './toolbox/map-definition.js';
 import { installEffects } from './toolbox/effects/index.js';   // [blocks]
 import { makeProjection, makeRouteIndex } from './geo.js';
 import { Terrain } from './terrain.js';
@@ -88,6 +91,7 @@ export class World {
     this.running = false;
     this.source = null;       // () => {pos, speed, cadence, riding, grade, power, ftp} (grade/power/ftp pick the rider's posture)
     this.stylized = route.scene?.style === 'stylized';
+    this.def = route.scene ? resolveMapDefinition({ kind: 'scene', id: route.id, json: route.scene }) : null;   // [map-definition]
     // a new route's placeholder before its scenery: the real ground as contour/grid lines (scene.wire)
     this.wireframe = route.scene?.style === 'wireframe';
     this.qualityKey = Object.hasOwn(SCENERY_QUALITY, opts.quality) ? opts.quality : 'balanced';
@@ -109,13 +113,11 @@ export class World {
     // use a reversed depth buffer (the logarithmic one writes depth per pixel, which stops the GPU
     // skipping hidden pixels; it stays only as the fallback without EXT_clip_control).
     const reversed = this.stylized && hasClipControl();
-    this.renderer = new THREE.WebGLRenderer({ antialias: !this.stylized, logarithmicDepthBuffer: !reversed,
-      reversedDepthBuffer: reversed, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.stylized ? SCENERY_QUALITY[this.qualityKey].pixelRatio : 2));
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    container.prepend(this.renderer.domElement);
-    this.renderer.domElement.className = 'world-canvas';
+    // [render-core] one tier table for every world: Balanced draws at 1.5 here too (it was 2; with 4× MSAA the
+    // anti-aliasing review found 1.5 all but the same and 44 % fewer pixels shaded)
+    this.renderer = createRenderer({ container, quality: this.stylized ? this.qualityKey : 'high', antialias: !this.stylized, reversedDepth: reversed, logDepth: !reversed });
+    this.governor = new QualityGovernor({ quality: this.qualityKey, onScale: () => this.setQuality(this.qualityKey) });
+    if (!this.stylized) this.governor.enabled = false;
     // cartoon look: the scene's "look" (Route 28: gentle), or ?look=gentle|bold|none in the preview
     // [suite] the common scenery suite (user, 25 Nov: "Migrate the scenery for Big Sur, Going to the sun, and Alpe
     // d'huez to the new, common scenery suite" — the blocks CNY, SKAN and Endless are drawn with): a scene's
@@ -596,7 +598,8 @@ export class World {
     if (!this.stylized) return;
     this.qualityKey = Object.hasOwn(SCENERY_QUALITY, key) ? key : 'balanced';
     const quality = SCENERY_QUALITY[this.qualityKey];
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.pixelRatio));
+    this.governor?.setQuality(this.qualityKey);
+    this.renderer.setPixelRatio(pixelRatioFor(this.qualityKey, this.governor?.scale ?? 1));
     this.renderer.shadowMap.enabled = quality.shadows && !(this.baked && this._time?.night);   // [baked-light]
     const resolution = this.qualityKey === 'high' ? 2048 : 1024;
     if (this.sun.shadow.mapSize.x !== resolution) {
@@ -616,6 +619,8 @@ export class World {
     if (this.stylized && key === 'night') t = { ...t, sunI: .55, hemiI: .42 };
     else if (this.stylized) t = { ...t, sunI: key === 'golden' ? 2.5 : 2.1, hemiI: key === 'golden' ? .95 : 1.1,
       ...(key === 'midday' ? { elev: 46, az: 238, top: '#70a9d2', horizon: '#d5e2db', hemiSky: '#e8f0ed', hemiGround: '#9c9d7e', sun: '#fff2d5', exposure: 1.03 } : {}) };
+    // [zwift-look] a scene's key light (the grade effect: sun ×, sky light ×)
+    if (this.lightTune && !t.night) t = { ...t, sunI: t.sunI * this.lightTune.sun, hemiI: t.hemiI * this.lightTune.sky, exposure: t.exposure * this.lightTune.exposure };
     this.timeKey = key;
     this._time = t;
     this._applyLight();
@@ -714,6 +719,7 @@ export class World {
     this._frames = (this._frames || 0) + 1;
     this.perf?.begin(now);
     const dt = Math.min(1.0, (now - this._last) / 1000); // real time (movement must not lag on slow frames)
+    this.governor?.sample(dt * 1000, dt, true);   // [render-core] adaptive resolution from the frame interval
     this._last = now;
 
     // Follow the ride position smoothly: advance at the current speed, ease toward the real value.
@@ -1309,7 +1315,7 @@ function makeGravelTexture(stylized = false, city = false) {
 // ---------- Rider ----------
 function makeRider() {
   const group = new THREE.Group();
-  const mat = (c) => new THREE.MeshLambertMaterial({ color: c });
+  const mat = (c) => litMaterial({ color: c }, 'paint');   // (the material factory: lit.js)
   const jersey = mat('#ff7a1a'), shorts = mat('#1d1f24'), skin = mat('#d9a882'), frameM = mat('#22252b'),
     tyre = mat('#111111'), helmet = mat('#f2f2f2'), shoe = mat('#f2f2f2');
 

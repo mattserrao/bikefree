@@ -14,7 +14,7 @@
 // LODs: 'hi' (≈ 700–900 triangles), 'lo' (≈ 250), 'far' (≈ 60: the two lofts at their coarsest, wheels as blocks).
 // +Z is the front, the ground y = 0. Per vertex aCar: (part, wear class); parts as vehicles.js (0 paint, 1 fixed
 // colour, 2 glass, 10 headlight, 11 tail light).
-import * as THREE from '../../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../../vendor/three.js';
 import { VehBuilder, PART } from './vehicles.js';
 
 export const CAR_KINDS = ['hatch', 'sedan', 'wagon', 'suv', 'pickup', 'van', 'farmtruck'];

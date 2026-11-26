@@ -11,7 +11,7 @@
 //   railbridge   the Finger Lakes Railway over Genesee Street: two steel plate girders on stone abutments
 //   library      the Maxwell Memorial Library: one storey of brick, a gabled entrance
 //   firehouse    the Warners Volunteer Fire Department: the apparatus bays and a hose tower
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { SKY_REFLECT } from '../atmosphere/sky-dome.js';
 import { V, centroid, scaleRing, orient, prism, cap, block, frameOf, makeFrame, lathe, gable, faceOut } from './hero-geom.js';
 

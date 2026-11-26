@@ -5,7 +5,8 @@
 // as a closed glasshouse, both inclines, Grandview's overlooks and the subway's street entrances.
 //
 //   buildPghLandmarks(host, data) → { tick(time), count }      (host: the CityScene stand-in of js/world/graph-heroes.js)
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
+import { litMaterial } from '../materials/lit.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { V, TAU, centroid, scaleRing, orient, prism, cap, block, chamfer, frameOf, makeFrame, lathe, disc, gable } from './hero-geom.js';
 import { buildStadiums } from './bridges.js';
@@ -13,6 +14,7 @@ import { glasshouseFrame } from '../structures/glasshouse.js';
 import { cnyLandmarkModels, canalWaterMaterial } from './cny-landmarks.js';
 import { skanLandmarkModels } from './skan-landmarks.js';
 import { nycLandmarkModels, nycPark } from './nyc-landmarks.js';
+import { outwestLandmarkModels } from './outwest-landmarks.js';   // (Out West's: the tunnel, hoodoos, arches, buttes, the movie set)
 import { qcOn, qcProbe } from './qc-probe.js';   // (a QC run: tools/qc_map.mjs)   // (NYC's: Central Park — Bethesda, Bow Bridge, Belvedere…, the wall and its gates)   // (SKAN's: Clift Park's pier and gazebo, the Sherwood Inn, mansions…)   // (CNY's: the aqueduct, Sims' Store, the Octagon House…)
 
 export function buildPghLandmarks(host, data) {
@@ -290,7 +292,7 @@ export function buildPghLandmarks(host, data) {
     reservoir(l) {
       const ring = orient(l.ring.map(([a, o]) => local(a, o))), c = centroid(ring), g = ground(ring);
       S.color('#a8a294'); prism(S, scaleRing(ring, 1.01, c), g - 1.5, g + .4);
-      const w = new THREE.Mesh(host.own(new THREE.ShapeGeometry(new THREE.Shape(ring.map((p) => new THREE.Vector2(p.x, -p.z))))), host.own(new THREE.MeshLambertMaterial({ color: '#4f8aa3' })));
+      const w = new THREE.Mesh(host.own(new THREE.ShapeGeometry(new THREE.Shape(ring.map((p) => new THREE.Vector2(p.x, -p.z))))), host.own(litMaterial({ color: '#4f8aa3' })));
       w.rotation.x = -Math.PI / 2; w.position.y = g - .2; host.group.add(w);
     },
     // Randyland: a three-storey corner house painted every colour there is
@@ -335,12 +337,16 @@ export function buildPghLandmarks(host, data) {
   Object.assign(M, cnyLandmarkModels({ S, N, glows, plan, ground, local, L, Wa, Ca }));
   Object.assign(M, skanLandmarkModels({ S, N, glows, plan, ground, local, L, Wa }));
   for (const [k, f] of Object.entries(nycLandmarkModels({ S, N, glows, plan, ground, local, L, Wa }))) M[`nyc_${k}`] = f;   // (prefixed: PGH has its own obelisk, statue, reservoir…)
+  const ow = outwestLandmarkModels({ S, glows, local, L, host });
+  Object.assign(M, ow.models);
   for (const l of data.landmarks || []) {
     const f = M[l.model];
     if (!f) continue;
     if (L.qc?.prims) L.qc.prims.cur = l.label;
     try { f(l); made++; if (L.qc && !/lawn|reservoir|view|conservatory/.test(l.model) && l.center) { const c = local(l.center[0], l.center[1]); L.qc.views.push({ x: c.x, z: c.z, name: l.label }); if (/bowbridge|gapstow/.test(l.model)) L.qc.bridges.push({ x: c.x, z: c.z, name: l.label, onWay: !!L.qc.onWay?.includes(l.label) }); } } catch (err) { console.warn(`PGH landmark ${l.label}: ${err.message}`); }
   }
+
+  ow.finish();   // (the red rock's own meshes, one per landmark)
 
   // the stadiums, closed (user, 21 Nov): the map's bowl builder, on their OSM outlines
   host.landscape.data = { stadiums: (data.stadiums || []).filter((s) => s.ring && s.ring.length >= 4).map((s) => ({ ...s })) };
@@ -387,7 +393,7 @@ export function buildPghLandmarks(host, data) {
     S.color('#8a5a3c'); S.box(a.x - dir.x * 7, a.y - 1.5, a.z - dir.z * 7, 9, 6, 10, yaw); S.color('#6b3d26'); S.pyramid(a.x - dir.x * 7, a.y + 4.5, a.z - dir.z * 7, 10, 2.5, 11, yaw);
     S.color('#8a5a3c'); S.box(b.x + dir.x * 6, b.y - 1.5, b.z + dir.z * 6, 10, 7, 11, yaw); S.color('#6b3d26'); S.pyramid(b.x + dir.x * 6, b.y + 5.5, b.z + dir.z * 6, 11, 2.5, 12, yaw);
     for (const side of [-1.7, 1.7]) {
-      const car = new THREE.Mesh(host.own(new THREE.BoxGeometry(3, 3, 6)), host.own(new THREE.MeshLambertMaterial({ color: /Mon/.test(inc.name) ? '#c9b02e' : '#a2372b' })));
+      const car = new THREE.Mesh(host.own(new THREE.BoxGeometry(3, 3, 6)), host.own(litMaterial({ color: /Mon/.test(inc.name) ? '#c9b02e' : '#a2372b' })));
       host.group.add(car); cars.push({ car, a: a.clone().addScaledVector(right, side), dir, len, phase: side > 0 ? 0 : .5, pitch: Math.atan2(b.y - a.y, Math.hypot(b.x - a.x, b.z - a.z)), yaw });
     }
     made++;

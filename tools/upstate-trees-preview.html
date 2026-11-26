@@ -2,9 +2,10 @@
 <script type="module">
 // Preview of the upstate trees (js/world/toolbox/vegetation/upstate-trees.js): every species' variants, near model in
 // the front row, mid and far behind. ?lod=0|1|2 shows one level only. Triangle counts in window.stats.
-import * as THREE from '../vendor/three.module.min.js';
+import * as THREE from '../vendor/three.js';
 import { makeUpstateTrees, makeLeafTexture } from '../js/world/toolbox/vegetation/upstate-trees.js';
 import { decorateTreeMaterial } from '../js/world/toolbox/packs/northern-rockies.js';
+import { billboardLeaves } from '../js/world/toolbox/vegetation/leaf-cards.js';
 const P = new URLSearchParams(location.search), only = P.has('lod') ? +P.get('lod') : null;
 const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(innerWidth, innerHeight); document.body.appendChild(r.domElement);
 r.shadowMap.enabled = true;
@@ -15,7 +16,7 @@ const sun = new THREE.DirectionalLight('#fff3dc', 2.2); sun.position.set(-60, 90
 const g = new THREE.Mesh(new THREE.PlaneGeometry(800, 400), new THREE.MeshLambertMaterial({ color: '#6f9147' })); g.rotation.x = -Math.PI / 2; g.receiveShadow = true; s.add(g);
 const mat = decorateTreeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 }), { uTime: { value: 0 } });
 const kit = makeUpstateTrees(), stats = {};
-const leafMat = new THREE.MeshStandardMaterial({ vertexColors: true, map: makeLeafTexture(), alphaTest: .45, side: THREE.DoubleSide, roughness: .9 });
+const leafMat = billboardLeaves(new THREE.MeshStandardMaterial({ vertexColors: true, map: makeLeafTexture(), alphaTest: .45, side: THREE.DoubleSide, roughness: .9 }));
 let x = 0;
 for (const [name, sp] of Object.entries(kit.species)) {
   sp.variants.forEach((tiers, v) => {

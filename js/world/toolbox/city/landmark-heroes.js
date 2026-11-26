@@ -8,7 +8,7 @@
 //   the Homestead steel heritage: the Pump House, the Waterfront's row of smokestacks and Carrie Furnaces 6 & 7.
 // Each replaces the map footprints under it, and a plan that would reach a street, the route or water is
 // shifted and shrunk until it is clear (`out.heroFits` records the fit).
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { ROAD_WIDTH } from '../../pose.js';
 import { V, TAU, centroid, orient, scaleRing, lerp2, inPoly, prism, cap, block, makeFrame, lathe, disc, gable } from './hero-geom.js';
 

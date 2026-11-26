@@ -6,7 +6,7 @@
 // grizzly working a meadow far below the road, ducks on Lake McDonald and St. Mary Lake, ravens wheeling
 // over the pass and a golden eagle soaring above the Garden Wall. Instanced; only the birds, the bear and
 // the ducks move.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { randomSequence } from '../core/random.js';
 import { birdGeometry, birdMaterial } from './coast-life.js';

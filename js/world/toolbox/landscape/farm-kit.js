@@ -8,7 +8,8 @@
 //               an old fieldstone wall by the woods and the crops; a verge of mown grass tufts and wildflowers
 //               (chicory, Queen Anne's lace, goldenrod, asters); the odd farm stand with pumpkins by a farmhouse
 // Everything is built once per tile (static), the small near things in a mesh shown only near the camera.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
+import { litMaterial } from '../materials/lit.js';
 import { due } from '../core/jobs.js';
 import { hash } from '../core/mesh-builder.js';
 
@@ -59,7 +60,7 @@ function cropTexture() {
 }
 /** The crop cards' material: alpha-cut, two-sided, swaying a little at the top. */
 export function cropMaterial(uTime) {
-  const m = new THREE.MeshLambertMaterial({ map: cropTexture(), alphaTest: .5, side: THREE.DoubleSide });
+  const m = litMaterial({ map: cropTexture(), alphaTest: .5, side: THREE.DoubleSide });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = uTime;
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;')

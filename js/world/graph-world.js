@@ -11,7 +11,8 @@
 // down beside the roads so a street on a hillside never disappears into it (the road's own height is the truth:
 // the ground steps down to just under it and eases back up). Anything below the river level is river bed: one
 // water plane at the pool level shows through there.
-import * as THREE from '../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.js';
+import { setWind } from './toolbox/atmosphere/wind.js';
 import { makeProjection } from './geo.js';
 import { decodeTerrain } from './toolbox/landscape/real-terrain.js';
 import { CANAL, canalAt } from './toolbox/city/cny-landmarks.js';
@@ -20,6 +21,13 @@ import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean, ROAD_
 import { loadRider, RIDER_RIM } from './rider.js';
 import { makeSkyDome } from './toolbox/atmosphere/sky-dome.js';
 import { PostFX } from './toolbox/atmosphere/post.js';
+import { createRenderer, pixelRatioFor, QualityGovernor, GpuTimer } from './render-core.js';
+import { litMaterial } from './toolbox/materials/lit.js';
+import { GroundCover } from './toolbox/landscape/ground-cover.js';
+import { grassMaterial } from './toolbox/landscape/grass-cards.js';
+import { loadPbrSets, PBR_GLSL, PBR_NORMAL_GLSL, ROAD_PBR, GROUND_PBR, roadSetFor } from './toolbox/materials/pbr-sets.js';
+import { SkyEnvironment } from './toolbox/atmosphere/environment.js';
+import { resolveMapDefinition } from './toolbox/map-definition.js';
 import { SURFACE, SURFACE_SUN, SURFACE_GLSL, loadSurfaceDetail, withSurfaceDetail } from './toolbox/materials/surface-detail.js';
 import { MOBILE } from './graph-city.js';
 /** The clouds' clock (their shadows drifting over the ground and the roads; puddles' glints): seconds. */
@@ -47,7 +55,6 @@ const WATER_ABOVE = 0.35;           // the water plane this far above the pool l
 const BED_BELOW = 1.2;              // ground this close above the pool (or under it) is pushed down to river bed
 // the drawing buffer's pixel ratio by quality: with 4× MSAA on, 1.5 on a 2× (Retina) screen looks all but the same as 2
 // and shades 44% fewer pixels — the anti-aliasing review (23 Nov): edges are the multisample's job, not resolution's
-const PIXEL_RATIO = { low: 1, balanced: 1.5, high: 2 };
 const SPILL_IN = 350, SPILL_OUT = 550;   // the ways' spill strips: built within, dropped past (m from a tile's edge)
 const KERB = 0.35;                  // the ground's top this far under the road beside it…
 const SHELF = 13;                   // …for this far beyond its edge (a ground cell: no triangle reaches over the road)…
@@ -180,6 +187,7 @@ export class GraphWorld {
     this.json = this.G.json;
     // the map's rules, from its data (toolbox/map-profile.js: CNY's and SKAN's are the defaults; PGH pins "city")
     this.profile = mapProfile(this.json);
+    this.def = resolveMapDefinition({ kind: 'graph', json: this.json });   // [map-definition] the one shape every map resolves to
     this.rural = this.profile.dressing === 'country';   // (countryside dressing: graph-city.js)
     this.log = opts.log || (() => {});
     this.path = opts.path || null;
@@ -265,12 +273,10 @@ export class GraphWorld {
     // (no logarithmic depth: it writes gl_FragDepth, which turns off a phone GPU's early depth test and hidden-surface
     // removal — every layer of overdraw shaded in full; the near and far planes below keep plain depth precise enough.
     // No MSAA on Low: phones. Both are fixed for the renderer's life: a quality change applies from the next ride.)
-    this.renderer = new THREE.WebGLRenderer({ antialias: this.qualityKey !== 'low', powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[this.qualityKey] ?? 1.5));
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    container.prepend(this.renderer.domElement);
-    this.renderer.domElement.className = 'world-canvas';
+    this.renderer = createRenderer({ container, quality: this.qualityKey });
+    // [render-core] adaptive resolution (then thinner new tiles, then a shorter shadow box) when frames run long
+    this.governor = new QualityGovernor({ quality: this.qualityKey, onScale: () => this._pixelRatio(), onLevel: (l) => { this._govLevel = l; this._reach(); } });
+    this.gpuTimer = new GpuTimer(this.renderer);
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(60, 1, 0.6, 9000);   // (the fog ends at 2.6 km; the farthest tile 3.2 km)
     this.camTarget = new THREE.Vector3();
@@ -286,7 +292,10 @@ export class GraphWorld {
     const goldenUpstate = this.profile.light === 'golden-upstate';
     this.fixedTime = goldenUpstate ? 'golden' : null;
     if (goldenUpstate) {
-      this.baked = BakedLighting.create(this._bakeView(), { baked: 'golden', windowM: 3200, windowMoveM: 700, reachM: 900, cellM: 2, marginM: 0, dynamicSpanM: 40,
+      // (a city's bake — PGH, user 26 Nov: "change the lighting style to match" — on a phone at 3 m cells: a third of
+      //  the memory of the 2 m maps, for the map that has run phones out of memory before)
+      const phoneCity = this.profile.preset === 'city' && /iPhone|iPad|iPod|Android|Mobile/.test(globalThis.navigator?.userAgent || '');
+      this.baked = BakedLighting.create(this._bakeView(), { baked: 'golden', windowM: 3200, windowMoveM: 700, reachM: 900, cellM: phoneCity ? 3 : 2, marginM: 0, dynamicSpanM: 40,
         prepTimeoutS: 45, groundAt: (x, z) => (this.ground ? this._groundH(x, z) : 0) }, { golden: GOLDEN_UPSTATE });
       if (this.baked) {
         const sh = this.sun.shadow; sh.mapSize.set(1024, 1024); sh.bias = -0.0006; sh.normalBias = 0.04; sh.camera.near = 1; sh.camera.far = 12000;
@@ -295,20 +304,30 @@ export class GraphWorld {
     this._reach();
     this.mats = {
       road: sideMaterial(this.qualityKey === 'low'),
-      paint: this.profile.roads === 'worn' ? wornPaintMaterial() : new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
-      ground: groundMaterial(this.qualityKey === 'low', this.profile.ground === 'upstate', !!this.profile.softCover),
+      paint: this.profile.roads === 'worn' ? wornPaintMaterial() : litMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }, 'paint'),
+      ground: groundMaterial(this.qualityKey === 'low', this.profile.ground === 'upstate', !!this.profile.softCover, this.profile.ground === 'desert'),
       roadSurface: roadSurfaceMaterial(this.qualityKey === 'low', this.profile.roads === 'worn'),
       spill: roadSurfaceMaterial(this.qualityKey === 'low', this.profile.roads === 'worn', true),
-      water: new THREE.MeshLambertMaterial({ color: '#4f7f97', transparent: true, opacity: 0.92 }),
+      water: litMaterial({ color: '#4f7f97', transparent: true, opacity: 0.92 }, 'water'),
       // the dressed places and the river walls: textured from world position (toolbox/materials)
       park: Object.fromEntries(['lawn', 'plaza', 'granite', 'walk', 'garden', 'wood', 'scrub', 'fairway', 'green', 'sand'].map((k) => [k, makeParkMaterial(k)])),
       riverWall: makeMasonryMaterial({ stones: ['#8f897d', '#9b9487', '#857f74', '#a29b8e', '#8a8376', '#7f796f'], mortar: '#b3ada1', courseM: 0.45, moss: '#4f5a3c', mossM: 1.2 }),
       parkWall: makeMasonryMaterial({ stones: ['#a39a8a', '#958c7c', '#ab9f8c', '#8f8576', '#9c9282', '#b0a693'], mortar: '#c2b9a8', courseM: 0.3, mossM: 0.4 }),
-      fountainWater: new THREE.MeshLambertMaterial({ color: '#5d93ad', transparent: true, opacity: 0.88 }),
-      spray: new THREE.MeshLambertMaterial({ color: '#f4f8fb', transparent: true, opacity: 0.55, depthWrite: false }),
-      trunk: new THREE.MeshLambertMaterial({ color: '#5b4636' }),
-      crown: new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true }),
+      fountainWater: litMaterial({ color: '#5d93ad', transparent: true, opacity: 0.88 }, 'water'),
+      spray: litMaterial({ color: '#f4f8fb', transparent: true, opacity: 0.55, depthWrite: false }),
+      trunk: litMaterial({ color: '#5b4636' }, 'wood'),
+      crown: litMaterial({ color: '#ffffff', flatShading: true }, 'foliage'),
     };
+    // [surfaces] the road's PBR set (KTX2: toolbox/materials/pbr-sets.js), near the camera; not on Phone
+    if (this.qualityKey !== 'low') {
+      const set = this.def.assets.textures.find((n) => n.startsWith('asphalt')) || roadSetFor(this.profile);
+      loadPbrSets(this.renderer, [set, 'turf']).then((t) => {
+        if (this.disposed) return;
+        if (t[set]) { ROAD_PBR.albedo.value = t[set].albedo; ROAD_PBR.nra.value = t[set].nra; ROAD_PBR.on.value = 1; }
+        if (t.turf) { GROUND_PBR.albedo.value = t.turf.albedo; GROUND_PBR.nra.value = t.turf.nra; GROUND_PBR.on.value = 1; }
+      })
+        .catch((e) => this.log('3d', `road textures: ${e.message}`, 'debug'));
+    }
     // the graphics effects this map asks for (toolbox/effects: the JSON's "effects" block; none when absent)
     this.TILE = TILE;
     // where people stay put (fishing, benches, groups, farm stands: toolbox/city/graph-life.js): the landmarks' (fixed)
@@ -338,7 +357,7 @@ export class GraphWorld {
       const lowY = this.waterY - WATER_ABOVE - 3, topY = p.level + WATER_ABOVE + 0.6;
       const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(p.west, lowY, p.z0), new THREE.Vector3(p.west, lowY, p.z1), new THREE.Vector3(p.west, topY, p.z1), new THREE.Vector3(p.west, topY, p.z0)]);
       g.setIndex([0, 1, 2, 0, 2, 3]); g.computeVertexNormals();
-      this.scene.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: '#a09c92', side: THREE.DoubleSide })));
+      this.scene.add(new THREE.Mesh(g, litMaterial({ color: '#a09c92', side: THREE.DoubleSide }, 'concrete')));
     }
     this.group = new THREE.Group();
     this.scene.add(this.group);
@@ -412,12 +431,14 @@ export class GraphWorld {
   setQuality(key) {
     this.qualityKey = key || 'balanced';
     this._reach();
+    this.governor?.setQuality(this.qualityKey);
     this._pixelRatio();
     if (this.city && this.gfx) this.city.setGfx(this.gfx);
   }
   _pixelRatio() {
-    const scale = this._saving ? .75 : 1;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[this.qualityKey] ?? 1.5) * scale);
+    this.governor?.setTarget(this._saving ? 30 : (this.gfx?.fps || 0));
+    const scale = (this._saving ? .75 : 1) * (this.governor?.scale ?? 1);
+    this.renderer.setPixelRatio(pixelRatioFor(this.qualityKey, scale));
     this._resize();
   }
   /**
@@ -460,9 +481,16 @@ export class GraphWorld {
     this.scene.background = new THREE.Color(t.sky);
     if (!this.sky) { this.sky = makeSkyDome({ radius: 8500 }); this.scene.add(this.sky.mesh); }
     this.sky.set(t, this.sunDir, this.profile.clouds);
+    // [lighting] the sky as environment light (toolbox/atmosphere/environment.js): the PBR scenery's ambient and its
+    // reflections come from the sky above and the ground below; the hemisphere light stays as a small fill
+    this.env ||= new SkyEnvironment(this.renderer);
+    this.scene.environment = this.env.update(this.sky, t.hemiGround);
+    this.scene.environmentIntensity = t.hemiI * (t.night ? .4 : .75);   // (tuned against the Lambert look: the sun-to-shade contrast kept, the shade a little cooler)
+    this.hemi.intensity = t.hemiI * .3;
     SURFACE_SUN.value.copy(this.sunDir);
     if (this.qualityKey !== 'low') loadSurfaceDetail(this.renderer);
     this.scene.fog.color.set(t.fog);
+    setWind(this.profile.wind || [.8, .6], (this.profile.windK ?? 1) * (t.night ? .5 : 1));   // (one wind for the trees and the grass: the map's own)
     this.heroes?.setNight(t.night ? 1 : 0);
     if (this.baked) { this.baked.setLight(t); this.sun.castShadow = (this.gfx?.shadows ?? true) && !!this.baked.world.terrain.quality.shadows; }
   }
@@ -527,7 +555,7 @@ export class GraphWorld {
   get loading() { return (this._queued || 0) > 6 || this.baked?.preparing ? 4 : 0; }
 
   dispose() {
-    this.post?.dispose(); this.post = null; this.sky?.dispose();
+    this.post?.dispose(); this.post = null; this.env?.dispose(); this.groundCover?.dispose(); this.sky?.dispose();
     this.effects?.dispose();
     this.stop();
     this.disposed = true;
@@ -583,6 +611,7 @@ export class GraphWorld {
     const low = this.qualityKey === 'low';
     this._stream(this.camera.position.x, this.camera.position.z, this._preload ? PRELOAD_BUDGET_MS : low ? 3 : BUDGET_MS);
     this.city?.stream(this.camera.position.x, this.camera.position.z, this._preload ? 30 : low ? 2.5 : 4);
+    this.groundCover?.tick(this.camera.position);
     this.water.position.x = Math.round(this.camera.position.x / 100) * 100;
     this.water.position.z = Math.round(this.camera.position.z / 100) * 100;
     this.sun.position.copy(this.camera.position).addScaledVector(this.sunDir, 5000);
@@ -599,7 +628,12 @@ export class GraphWorld {
     }
     this.shaders?.tick(dt, this._warmStart || this._frames > 600);
     if (this._preload && this._frames % 4) return;
+    this.gpuTimer?.begin('frame');
     this._draw();
+    this.gpuTimer?.end();
+    if ((this._frames & 7) === 0) this.gpuTimer?.poll();
+    // the governor reads the GPU's own time where the timer exists, else the frame interval
+    if (!this._preload) { const g = this.gpuTimer?.ms.frame; this.governor?.sample(g ?? dt * 1000, dt, g == null); }
     this.perf?.end(performance.now());
   }
 
@@ -613,9 +647,12 @@ export class GraphWorld {
   _treeShadows() {
     const on = this._postOn() && (this.gfx?.shadows ?? true) && !!this.baked;
     this.city?.forest?.castShadows(on);
-    if (this.baked) { this.baked.dynamicSpan = on ? 60 : this.baked.opts.dynamicSpanM; const sz = on ? 2048 : 1024; if (this.sun.shadow.mapSize.x !== sz) { this.sun.shadow.mapSize.set(sz, sz); this.sun.shadow.map?.dispose(); this.sun.shadow.map = null; } }
+    // (the near cascade — fidelity step 4: the live map is the crisp near one round the rider, the bake the far one;
+    //  Ultra's twice the texels over a wider box: ~3.9 cm a texel to 80 m, High's ~5.9 cm to 60 m)
+    const ultra = this.qualityKey === 'ultra' && on;
+    if (this.baked) { this.baked.dynamicSpan = ultra ? 80 : on ? 60 : this.baked.opts.dynamicSpanM; const sz = ultra ? 4096 : on ? 2048 : 1024; if (this.sun.shadow.mapSize.x !== sz) { this.sun.shadow.mapSize.set(sz, sz); this.sun.shadow.map?.dispose(); this.sun.shadow.map = null; } }
   }
-  _postOn() { return this.qualityKey === 'high' && !MOBILE && (this.gfx?.post ?? true); }
+  _postOn() { return (this.qualityKey === 'high' || this.qualityKey === 'ultra') && !MOBILE && (this.gfx?.post ?? true); }
   _draw() {
     if (this._postOn()) {
       if (!this.post) {
@@ -624,11 +661,39 @@ export class GraphWorld {
         const w = this.container?.clientWidth || this.renderer.domElement.clientWidth || 1, h = this.container?.clientHeight || this.renderer.domElement.clientHeight || 1;
         this.post.setSize(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
       }
+      // [sky] aerial perspective and sun shafts in the post pass; the scene's linear fog stands back (the post is the air)
+      const A = this._atmo ||= { sunDir: new THREE.Vector3(), sunColor: new THREE.Color(), haze: new THREE.Color() };
+      const sky = this.def?.sky || {};
+      A.density = sky.airDensity ?? 4.5e-4; A.falloff = sky.airFalloff ?? 1 / 220; A.baseY = sky.airBaseM ?? (this.waterY ?? 0) - 5;   // (a high map's air from its own valley floor: Out West's at 1,450 m) A.strength = 1; A.shafts = sky.shafts ?? .5;
+      A.sunDir.copy(this.sunDir); A.sunColor.copy(this.sun.color).multiplyScalar(this.sun.intensity * .35); A.haze.copy(this.scene.fog.color).multiplyScalar(.9);
+      this.post.setAtmosphere(A);
+      const fog = this.scene.fog, near = fog.near, far = fog.far; fog.near = near * 2.2; fog.far = far * 1.6;
       this.post.render(this.scene, this.camera, { bloom: .22, threshold: 1.15, warm: this.timeKey === 'golden' ? 1 : 0 });
+      fog.near = near; fog.far = far;
+    } else if (this._liteOn()) {
+      // [fidelity step 4] Balanced on a laptop or desktop, with headroom: the plain picture through 2× MSAA with the
+      // contact shading (the AO's 8 taps, near only) — no HDR, bloom or air; off again the moment the governor steps down
+      if (!this.post) {
+        this.post = new PostFX(this.renderer, { samples: 2 });
+        this.post.setAO({ strength: .55, radiusM: .6 });
+        const w = this.container?.clientWidth || this.renderer.domElement.clientWidth || 1, h = this.container?.clientHeight || this.renderer.domElement.clientHeight || 1;
+        this.post.setSize(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
+      }
+      this.post.render(this.scene, this.camera, { grade: false });
     } else {
       if (this.post) { this.post.dispose(); this.post = null; }
       this.renderer.render(this.scene, this.camera);
     }
+  }
+  /** Balanced's lite post (AO + MSAA): desktop only, More graphics' post on, the governor at full resolution, and the
+   *  GPU's measured frame (where the timer exists) under 60 % of the budget (until it passes 80 %). */
+  _liteOn() {
+    if (this.qualityKey !== 'balanced' || MOBILE || !(this.gfx?.post ?? true) || (this.governor?.level ?? 0) > 0) return false;
+    const g = this.gpuTimer?.ms?.frame, b = 10.5;
+    if (g == null) return true;   // (no timer — Safari: the governor alone gates it)
+    // (hysteresis: on under 60 % of the budget, off over 80 %, so it doesn't flap with its own cost)
+    this._lite = this._lite ? g < b * .8 : g < b * .6;
+    return this._lite;
   }
 
   /** The rider's lane on a narrow way (a hero area's singletrack, under ~2 m): the middle of the tread, eased in and out
@@ -867,7 +932,7 @@ export class GraphWorld {
   /** How far the tiles are built and the fog closes in, by quality (Low: phones). */
   _reach() {
     const low = this.qualityKey === 'low';
-    const k = this.gfx?.distance || 1;
+    const k = (this.gfx?.distance || 1) * ((this._govLevel || 0) >= 4 ? .85 : 1);   // (the governor's level 4+: a nearer horizon)
     const mobile = (() => { try { const ua = navigator.userAgent || ''; return /iPhone|iPad|iPod|Android|Mobile/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1); } catch { return false; } })();
     const lowReach = low || mobile;   // (phones and tablets: Light's reach at any quality — memory, user 23 Nov)
     this.nearM = (lowReach ? REACH_LOW.near : NEAR_M) * k; this.farM = (lowReach ? REACH_LOW.far : FAR_M) * k;
@@ -892,6 +957,14 @@ export class GraphWorld {
           if (this.disposed) return;
           const b = c.landBox, U = this.mats.ground.userData.land;
           if (U) { U.uLand.value = c.landTexture; U.uLandBox.value.set(b.x0, b.z0, b.x1, b.z1); U.uLandOn.value = 1; }
+          // [vegetation] tufts on every lawn, yard and pasture near the rider (toolbox/landscape/ground-cover.js); not on Phone
+          if (this.qualityKey !== 'low' && !this.groundCover) {
+            const GRASS = { 1: 1, 8: .7, 11: .9 };   // LAND.grass, yards, pasture: how thick
+            const mat = c.vergeMat || grassMaterial(this.renderer, c.treeTime || { value: 0 }, this.qualityKey !== 'low');
+            this.groundCover = new GroundCover({ parent: this.scene, material: mat, radius: this.qualityKey === 'high' ? 48 : 38, density: 3.2,
+              isGrass: (x, z) => { const g = GRASS[c.landAt(x, z)] || 0; return g && !c.onRoad(x, z, 1.2) && !c.inWater?.(x, z) ? g : 0; },
+              heightAt: (x, z) => this.surfaceH(x, z) });
+          }
           for (const t of this.tiles.values()) if (t.built) this._release(t);
           this._cityState = 'ok';
           this.log('3d', `PGH city: ${Object.keys(cj.sectors.list).length} sectors, streamed`, 'debug');
@@ -1291,12 +1364,19 @@ export class GraphWorld {
     const nx = Math.round(TILE / GROUND_CELL), x0 = t.i * TILE, z0 = t.j * TILE, cell = TILE / nx, n1 = nx + 1;
     const pos = new Float32Array(n1 * n1 * 3), color = new Float32Array(n1 * n1 * 3), landW = new Float32Array(n1 * n1);
     const grass = new THREE.Color('#89a868'), dry = new THREE.Color('#a7a27a'), bed = new THREE.Color('#6f6a58'), tmp = new THREE.Color();
+    const desert = this.profile.ground === 'desert', sand = new THREE.Color('#c8875a'), rockA = new THREE.Color('#b0532f'), rockB = new THREE.Color('#d08a55'), white = new THREE.Color('#ddcfb2');
     for (let j = 0, k = 0; j <= nx; j++) for (let i = 0; i <= nx; i++, k++) {
       if (i === 0 && due()) yield;
       const x = x0 + i * cell, z = z0 + j * cell, h = this._groundH(x, z), pool = this.poolAt(x, z);
       pos[3 * k] = x; pos[3 * k + 1] = h; pos[3 * k + 2] = z;
       const raw = this.ground.at(x, z), cutDepth = Math.max(0, raw - h);
-      tmp.copy(h < pool ? bed : grass).lerp(dry, Math.min(1, cutDepth / 6));
+      if (desert) {
+        // [out-west] red-rock ground: sand on the flats, sandstone on the slopes, in strata bands by height (the
+        // Vermilion, then the White Cliffs higher up), darker in the washes
+        const sl = Math.min(1, Math.hypot(this._groundH(x + 6, z) - h, this._groundH(x, z + 6) - h) / 6);
+        const band = Math.sin(h * .21 + Math.sin(x * .004 + z * .003) * 2.2) * .5 + .5, high = THREE.MathUtils.smoothstep(h, 1860, 2050);
+        tmp.copy(sand).lerp(rockA, THREE.MathUtils.smoothstep(sl, .25, .7)).lerp(rockB, band * .45 * sl).lerp(white, high * (.25 + .35 * sl));   // (the White Cliffs: pale on the faces, the flats still sand)
+      } else tmp.copy(h < pool ? bed : grass).lerp(dry, Math.min(1, cutDepth / 6));
       landW[k] = h < pool + 0.2 ? 0 : 1 - Math.min(1, cutDepth / 6) * 0.7;   // (the land cover's colour: not on the river bed, less on a cut)
       const v = 0.94 + 0.06 * Math.sin(x * 0.013 + z * 0.021) * Math.cos(x * 0.007 - z * 0.011);
       color[3 * k] = tmp.r * v; color[3 * k + 1] = tmp.g * v; color[3 * k + 2] = tmp.b * v;
@@ -1369,7 +1449,7 @@ export class GraphWorld {
     for (const [p, o, w] of [[p0, o0, w0], [p1, o1, w1]]) { const [x, z] = at(p, o, w * .6); const c = canalAt(x, z, 1); if (c && !c.creek) return false; }
     // the ground cover at the foot: woods (litter, roots) or open grass — the colour the slope's lower part takes
     const lc = this.city?.landAt?.(...at(p0, o0, w0 + 1));
-    const woods = lc === 2, cover = woods ? new THREE.Color('#54432e') : new THREE.Color('#5d7539');
+    const woods = lc === 2, cover = woods ? new THREE.Color('#54432e') : this.profile.ground === 'desert' ? new THREE.Color('#a8734c') : new THREE.Color('#5d7539');   // (desert: red sand, not grass)
     const RINGS = [0, .08, .2, .36, .55, .74, .9, 1];
     const ring = (p, o, w, g, f) => {
       // the profile: a smootherstep from the crest to the ground (convex at the top, concave at the foot)
@@ -1394,7 +1474,7 @@ export class GraphWorld {
     const parts = [...this.tiles.values()].map((t) => t.spillMesh?.geometry).filter(Boolean);
     if (this.spillAll) { this.group.remove(this.spillAll); this.spillAll.geometry.dispose(); this.spillAll = null; }
     if (!parts.length) return;
-    const g = new THREE.BufferGeometry(), drop = function () { this.array = null; };
+    const g = new THREE.BufferGeometry(), drop = function () { if (!globalThis.BF_KEEP_GEOMETRY) this.array = null; };
     for (const [name, size] of [['position', 3], ['normal', 3], ['color', 3], ['aRd', 4]]) {
       const n = parts.reduce((a, p) => a + p.attributes[name].array.length, 0), out = new Float32Array(n);
       let o = 0; for (const p of parts) { out.set(p.attributes[name].array, o); o += p.attributes[name].array.length; }
@@ -1633,7 +1713,7 @@ class Mesher {
 /** A simple rider until the model loads. */
 export function makeStandIn() {
   const group = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.5, 1.6), new THREE.MeshLambertMaterial({ color: '#ff7a1a' }));
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.5, 1.6), litMaterial({ color: '#ff7a1a' }, 'paint'));
   body.position.y = 0.75;
   group.add(body);
   return {
@@ -1776,7 +1856,7 @@ const NY_ROAD_GLSL = /* glsl */`
     float worn = smoothstep(.35, .8, gwN(w.xz * .012 + 9.)) * (1. - fresh);
     // tar snakes: the centre joint, and the wheel paths' edges, wandering
     float wob = (gwN(vec2(along * .12, 3.)) - .5) * .35 + (gwN(vec2(along * 1.3, 9.)) - .5) * .1;
-    float tarW = .022 + .025 * gwN(vec2(along * .2, 1.));
+    float tarW = .012 + .012 * gwN(vec2(along * .2, 1.));   // [surfaces] (was .022–.047: read as painted black lines)
     float snake = (1. - smoothstep(tarW * .6, tarW, abs(q.x - wob))) * step(.3, gwN(vec2(along * .025, 5.)));
     for (int s = 0; s < 2; s++) {
       float lane = (float(s) * 2. - 1.) * (hw * .5 + .55);
@@ -1787,10 +1867,10 @@ const NY_ROAD_GLSL = /* glsl */`
     // transverse frost cracks: every 8–20 m, across the whole width, kinked
     float seg = floor(along / 13.), sp = 13. * (.5 + .4 * (gwH(vec2(seg, 2.)) - .5));
     float tx = along - seg * 13. - sp - (gwN(vec2(q.x * .9, seg)) - .5) * .9 - q.x * (gwH(vec2(seg, 4.)) - .5) * .25;
-    float trans = (1. - smoothstep(.03, .06, abs(tx))) * step(.25, gwH(vec2(seg, 6.))) * step(ax, hw - .15 * gwH(vec2(seg, 8.)) * hw);
+    float trans = (1. - smoothstep(.014, .028, abs(tx))) * step(.25, gwH(vec2(seg, 6.))) * step(ax, hw - .15 * gwH(vec2(seg, 8.)) * hw);
     float sealed = step(.4, gwH(vec2(seg, 11.)));             // most are sealed (black tar), some are open hairlines
     snake = max(snake * step(.25, age + worn), trans * sealed);
-    lin = mix(lin, base * .6, snake * .65 * det);   // (tar: dark, not black — close up they read as cracks, not lines)
+    lin = mix(lin, base * .62, snake * .5 * det);   // (tar: dark, not black — close up they read as cracks, not lines)
     lin *= 1. - trans * (1. - sealed) * .45 * det;
     // alligator cracking in the wheel paths, in the worst stretches
     vec2 cell = nyCell(vec2(q.x, along) * 4.2);
@@ -1835,7 +1915,7 @@ const NY_ROAD_GLSL = /* glsl */`
 `;
 /** Rural maps' road paint: worn by plows and salt — faded, scuffed through in the wheel paths, patchy by stretch. */
 export function wornPaintMaterial() {
-  const m = new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const m = litMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }, 'paint');
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vPW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPW = (modelMatrix * vec4(transformed, 1.)).xyz;');
@@ -1866,7 +1946,7 @@ const NOISE_GLSL = /* glsl */`
  */
 /** low (Light, phones): the patterns only up close (brick, setts, slabs, pavers), plain asphalt with one noise. */
 export function roadSurfaceMaterial(low = false, ny = false, spill = false) {
-  const m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: spill, polygonOffsetFactor: spill ? -1 : 0, polygonOffsetUnits: spill ? -3 : 0 });
+  const m = litMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: spill, polygonOffsetFactor: spill ? -1 : 0, polygonOffsetUnits: spill ? -3 : 0 }, 'asphalt');
   m.defines = {};
   if (spill) m.defines.SPILL = '';
   if (low) m.defines.LOWQ = '';
@@ -1874,9 +1954,17 @@ export function roadSurfaceMaterial(low = false, ny = false, spill = false) {
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uCloudT = CLOUD_T; shader.uniforms.uSurf = SURFACE; shader.uniforms.uSurfSun = SURFACE_SUN;
     shader.uniforms.uRoadTone = ROAD_LOOK.tone; shader.uniforms.uRoadLeaves = ROAD_LOOK.leaves;
+    shader.uniforms.uPbrA = ROAD_PBR.albedo; shader.uniforms.uPbrN = ROAD_PBR.nra; shader.uniforms.uPbrOn = ROAD_PBR.on;
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aRd; varying vec4 vRd; varying vec3 vGW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRd = aRd; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vRd; varying vec3 vGW; uniform float uCloudT; uniform vec3 uRoadTone; uniform float uRoadLeaves;\n' + NOISE_GLSL + SURFACE_GLSL + (ny ? NY_ROAD_GLSL : ''))
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vRd; varying vec3 vGW; uniform float uCloudT; uniform vec3 uRoadTone; uniform float uRoadLeaves;\nuniform sampler2D uPbrA, uPbrN; uniform float uPbrOn;\nfloat bfPbrW = 0.; float bfPbrR = .85; vec3 bfPbrN = vec3(0., 0., 1.);\n' + NOISE_GLSL + SURFACE_GLSL + PBR_GLSL + (ny ? NY_ROAD_GLSL : ''))
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, bfPbrR, bfPbrW);')
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        if (bfPbrW > 0.) {   // [surfaces] the set's relief, in a frame laid on the road (u along world x, v along world z)
+          vec3 nw = normalize(transpose(mat3(viewMatrix)) * normal), tw = normalize(vec3(1., 0., 0.) - nw * nw.x), bw = -cross(nw, tw);
+          vec3 pw = normalize(tw * bfPbrN.x * .8 + bw * bfPbrN.y * .8 + nw * bfPbrN.z);
+          normal = normalize(mix(normal, normalize(mat3(viewMatrix) * pw), bfPbrW));
+        }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         {
           vec3 c = diffuseColor.rgb;
@@ -1990,6 +2078,15 @@ export function roadSurfaceMaterial(low = false, ny = false, spill = false) {
             float cr = abs(gwN(vGW.xz * .55 + 11.) - .5);
             c *= 1. - wear * .22 * step(.62, gwN(vGW.xz * .05 + 2.)) * (1. - smoothstep(.0, .01, cr)) * det;   // sealed cracks (in the worn places)
             c *= 1. - .08 * (1. - smoothstep(0., .5, rdw.w - abs(q.x)));                     // the edge, darker
+            if (uPbrOn > .5) {
+              // [surfaces] the PBR asphalt (hex-tiled, 3.5 m): its aggregate and stains as a ratio to its own average (the
+              // map's palette and wear stay), its relief and roughness; it fades with the detail so far road stays even
+              PbrSample ps = pbrSurface(uPbrA, uPbrN, vGW.xz / 3.5);
+              vec3 mean = max(textureLod(uPbrA, vec2(.5), 12.).rgb, vec3(.01));
+              float w = det * smoothstep(60., 25., length(vGW - cameraPosition));
+              c *= mix(vec3(1.), clamp(ps.albedo / mean, .3, 2.5), w * .85) * mix(1., ps.ao, w);
+              bfPbrW = w; bfPbrR = ps.roughness; bfPbrN = ps.normal;
+            }
             #endif
             #ifdef NYWEAR
             c = nyWinterRoad(c, q, rdw.w, det, track, vGW);
@@ -2048,7 +2145,7 @@ export function roadSurfaceMaterial(low = false, ny = false, spill = false) {
           #endif
         }`);
   };
-  m.customProgramCacheKey = () => `pgh-road-surface-12${low ? '-low' : ''}${ny ? '-ny1' : ''}${spill ? '-spill' : ''}${Object.keys(m.defines || {}).join('')}`;
+  m.customProgramCacheKey = () => `pgh-road-surface-13${low ? '-low' : ''}${ny ? '-ny1' : ''}${spill ? '-spill' : ''}${Object.keys(m.defines || {}).join('')}`;
   return m;
 }
 
@@ -2061,28 +2158,31 @@ export function roadSurfaceMaterial(low = false, ny = false, spill = false) {
 /** The ways' sides (verges, shoulders, kerbs, embankments): vertex colour, and near the camera the surface texture
  *  (user, 24 Nov — Zwift parity). */
 function sideMaterial(low = false) {
-  const m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  const m = litMaterial({ vertexColors: true, side: THREE.DoubleSide }, 'asphalt');
   return low ? m : withSurfaceDetail(m, 'graph-side');
 }
 
 const ROOTS_N = 24;
-function groundMaterial(low = false, rural = false, soft = false) {
-  const m = new THREE.MeshLambertMaterial({ vertexColors: true });
+function groundMaterial(low = false, rural = false, soft = false, desert = false) {
+  const m = litMaterial({ vertexColors: true }, 'ground');
   m.defines = {};
   if (soft) m.defines.SOFTCOVER = '';   // (NYC: the covers' edges only wander — no scatter of grains, read as a blocky stipple)
   if (low) m.defines.LOWQ = '';
   if (rural) m.defines.NYGRASS = '';
+  if (desert) m.defines.DESERT = '';   // (Out West: the red-rock covers, 40–42)
   const blank = new THREE.DataTexture(new Uint8Array([1]), 1, 1, THREE.RedFormat); blank.needsUpdate = true;
   const U = { uLand: { value: blank }, uLandBox: { value: new THREE.Vector4(0, 0, 1, 1) }, uLandOn: { value: 0 },
     // a hero area's big trees near the camera (old-growth.js): x, z, trunk radius, seed — their root tops and bare soil
     uRoots: { value: Array.from({ length: ROOTS_N }, () => new THREE.Vector4()) }, uRootN: { value: 0 } };
   m.userData.land = U;
   m.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, U, CANOPY); shader.uniforms.uLitter = GROUND_LOOK.litter; shader.uniforms.uCloudT = CLOUD_T; shader.uniforms.uSurf = SURFACE; shader.uniforms.uSurfSun = SURFACE_SUN;
+    Object.assign(shader.uniforms, U, CANOPY); shader.uniforms.uPbrA = GROUND_PBR.albedo; shader.uniforms.uPbrN = GROUND_PBR.nra; shader.uniforms.uPbrOn = GROUND_PBR.on; shader.uniforms.uLitter = GROUND_LOOK.litter; shader.uniforms.uCloudT = CLOUD_T; shader.uniforms.uSurf = SURFACE; shader.uniforms.uSurfSun = SURFACE_SUN;
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aLandW; attribute float aTread; varying float vLandW; varying vec3 vGW; varying float vTread;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLandW = aLandW; vTread = aTread; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLand; uniform vec4 uLandBox; uniform float uLandOn; uniform float uCloudT; uniform vec4 uRoots[24]; uniform float uRootN; varying float vLandW; varying vec3 vGW; varying float vTread;\n' + NOISE_GLSL + SURFACE_GLSL + (m.defines.LITTER !== undefined ? CANOPY_GLSL + '\nuniform float uLitter;\n' : ''))
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLand; uniform vec4 uLandBox; uniform float uLandOn; uniform float uCloudT; uniform vec4 uRoots[24]; uniform float uRootN; varying float vLandW; varying vec3 vGW; varying float vTread;\nuniform sampler2D uPbrA, uPbrN; uniform float uPbrOn;\nfloat bfPbrW = 0.; float bfPbrR = .95; vec3 bfPbrN = vec3(0., 0., 1.);\n' + NOISE_GLSL + SURFACE_GLSL + PBR_GLSL + (m.defines.LITTER !== undefined ? CANOPY_GLSL + '\nuniform float uLitter;\n' : ''))
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, bfPbrR, bfPbrW);')
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        ${PBR_NORMAL_GLSL}
         #ifndef LOWQ
         {
           // the ground's small relief near the camera (the height grid is 12.8 m: hummocks, ruts and hollows of 1–6 m
@@ -2142,7 +2242,11 @@ function groundMaterial(low = false, rural = false, soft = false) {
           }
           else if (k < 3.5 && k > 2.5) lc = mix(vec3(.17, .31, .38), vec3(.22, .37, .44), n);  // water: a canal or a pond at its own level (CNY's Erie Canal; PGH's rivers are under the water plane anyway)
           else if (k < 4.5 && k > 3.5) lc = vec3(.42, .4, .36);                               // under a building
+          #ifdef DESERT
+          else if (k < 5.5 && k > 4.5) lc = mix(vec3(.84, .54, .4), vec3(.9, .62, .46), n) * (.92 + .12 * sin(dot(vGW.xz, vec2(.8, .6)) * .35 + gwN(vGW.xz * .05) * 6.));   // the Coral Pink dunes: ripples
+          #else
           else if (k < 5.5 && k > 4.5) lc = vec3(.66, .6, .46);                               // sand, bare rock
+          #endif
           else if (k < 6.5 && k > 5.5) lc = mix(vec3(.62, .59, .54), vec3(.68, .65, .6), n);  // plaza
           else if (k < 7.5 && k > 6.5) lc = mix(vec3(.3, .42, .22), vec3(.38, .44, .25), n);  // beyond: suburbs and hills
           else if (k > 7.5 && k < 8.5) {
@@ -2237,6 +2341,21 @@ function groundMaterial(low = false, rural = false, soft = false) {
             }
             lc *= .9 + .18 * gwN(vec2(dot(vGW.xz, vec2(.7, .7)) * 3.5, dot(vGW.xz, vec2(-.7, .7)) * .6));   // the matted blades' streaks
           }
+          #ifdef DESERT
+          // [out-west] the red-rock covers (tools/pgh_city.py DESERT_LAND): the ground's own sand and sandstone show through
+          // (lc stays unset) — pinyon-juniper duff a shade darker with needle litter, sage flats flecked grey-green, the
+          // slickrock bare; the flecks fade to their mean off past ~150 m
+          if (k > 39.5 && k < 42.5) {
+            float fd = 1. - smoothstep(40., 160., length(vGW - cameraPosition));
+            // (small round specks — pebbles, a tuft, a dark crust — on a 25 cm cell, not the square cells' checker)
+            vec2 spq = vGW.xz * 4., spf = floor(spq);
+            float sp = step(k < 40.5 ? .72 : k < 41.5 ? .8 : .94, gwH(spf + k)) * (1. - smoothstep(.18, .34, length(fract(spq) - .5 - (vec2(gwH(spf + 3.), gwH(spf + 7.)) - .5) * .3)));
+            vec3 sage = pow(mix(vec3(.46, .5, .4), vec3(.56, .58, .46), n), vec3(2.2));
+            diffuseColor.rgb *= mix(1., k < 40.5 ? .84 : k < 41.5 ? .95 : 1.04, vLandW);
+            diffuseColor.rgb = mix(diffuseColor.rgb, k < 41.5 ? sage : diffuseColor.rgb * .7, sp * vLandW * mix(.06, .4, fd));
+            if (k < 40.5) diffuseColor.rgb = mix(diffuseColor.rgb, pow(vec3(.36, .28, .2), vec3(2.2)), smoothstep(.6, .8, gwN(vGW.xz * .12 + 7.)) * .35 * vLandW);
+          }
+          #endif
           #ifdef NYGRASS
           // the rural maps in early fall (user, 22 Nov: "grass + farms need to improve"): corn gone tan, soybeans gold,
           // and the grass close by with blades in it — lawns mown in stripes, pastures and hay tufted, with dry patches
@@ -2320,6 +2439,15 @@ function groundMaterial(low = false, rural = false, soft = false) {
         #ifndef LOWQ
         // the ground's texture near the camera: turf, or the woods' floor's grit (user, 24 Nov — Zwift parity)
         diffuseColor.rgb *= surfaceDetail(vGW.xz, sdCh, sdCh == 1 ? 5. : 3., length(vGW - cameraPosition), sdCh == 1 ? .6 : .8);
+        if (uPbrOn > .5 && sdCh == 2) {
+          // [surfaces] the PBR turf on grass (hex-tiled, 2.5 m): clumps, dry patches, relief, as a ratio to its own mean so the
+          // map's greens stay; it fades out by 45 m (the grass cards and the cover's colour carry it beyond)
+          PbrSample ps = pbrSurface(uPbrA, uPbrN, vGW.xz / 2.5);
+          vec3 mean = max(textureLod(uPbrA, vec2(.5), 12.).rgb, vec3(.01));
+          float w = smoothstep(45., 18., length(vGW - cameraPosition));
+          diffuseColor.rgb *= mix(vec3(1.), clamp(ps.albedo / mean, .4, 2.), w * .7) * mix(1., ps.ao, w * .8);
+          bfPbrW = w * .8; bfPbrR = ps.roughness; bfPbrN = ps.normal;
+        }
         #else
         if (vTread > 10.) diffuseColor.rgb *= surfaceDetail(vGW.xz, sdCh, sdCh == 1 ? 5. : 3., length(vGW - cameraPosition), sdCh == 1 ? .6 : .8);   // (a hero area's floor: on Low too)
         #endif
@@ -2327,6 +2455,6 @@ function groundMaterial(low = false, rural = false, soft = false) {
         diffuseColor.rgb *= 1. - .2 * smoothstep(.55, .75, gwN((vGW.xz + uCloudT * vec2(3., 1.2)) * .0025));   // a cloud's shadow drifting over (user, 23 Nov)
         #endif`);
   };
-  m.customProgramCacheKey = () => `pgh-ground-land-20${low ? '-low' : ''}${rural ? '-ny2' : ''}`;
+  m.customProgramCacheKey = () => `pgh-ground-land-23${low ? '-low' : ''}${rural ? '-ny2' : ''}${desert ? '-desert' : ''}`;
   return m;
 }

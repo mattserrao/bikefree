@@ -9,7 +9,7 @@
 //
 //   const H = planHomestead(R, ctx)  → { drive: { pts, w, gravel, pad }, mailbox, extras } | null
 //   drawHomestead(M, H, groundH)     boxes and roofs into a MeshBuilder;  driveStrips(list, groundH) → BufferGeometry
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { hash } from '../core/mesh-builder.js';
 
 const corner = (r, a, b) => [r.cx + r.ux * a + r.vx * b, r.cz + r.uz * a + r.vz * b];

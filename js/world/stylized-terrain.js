@@ -1,4 +1,4 @@
-import * as THREE from '../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.js';
 import { randomSequence, smoothstep, vhash, vnoise } from './toolbox/core/random.js';
 import { makeTreeCards } from './toolbox/vegetation/tree-cards.js';
 import { loadSceneryAssets } from './toolbox/packs/blender-kits.js';
@@ -66,7 +66,7 @@ export const SCENERY_QUALITY = {
   // buildMs: time per frame for building streamed tiles (ground, plants, forest) while riding;
   // farTreeM: how far the flat tree cards reach beyond the real trees (0 = none)
   low: { pixelRatio: 1, samples: 2, shadows: false, scatterRange: 2, candidates: 150, coverCandidates: 100, forestRange: 3, nearM: 0, midM: 380, buildMs: 3, farTreeM: 0 },
-  balanced: { pixelRatio: 2, samples: 2, shadows: true, scatterRange: 3, candidates: 230, coverCandidates: 320, forestRange: 4, nearM: 170, midM: 450, buildMs: 4, farTreeM: 1600 },
+  balanced: { pixelRatio: 1.5, samples: 2, shadows: true, scatterRange: 3, candidates: 230, coverCandidates: 320, forestRange: 4, nearM: 170, midM: 450, buildMs: 4, farTreeM: 1600 },
   high: { pixelRatio: 2, samples: 4, shadows: true, scatterRange: 4, candidates: 310, coverCandidates: 480, forestRange: 5, nearM: 240, midM: 560, buildMs: 5, farTreeM: 2200 },
 };
 
@@ -1267,7 +1267,9 @@ export class StylizedTerrain {
     // pack models' names onto them, so the planners keep their names and the engine draws the common species
     const swap = this.config.suite?.kit === 'common' ? this.config.suite.trees : null;
     if (swap) { const common = makeEndlessTrees(); for (const [name, sp] of Object.entries(swap)) if (common.species[sp]) kit.species[name] = common.species[sp]; }
-    this._te = new TreeEngine({ renderer: this.renderer, parent: this.group, quality: this.qualityKey, uTime: this.uniforms.uTime, lights, kit, shadows: !!this.quality.shadows });
+    // ([zwift-look] a scene's near band — "trees": { "nearM" } — its trees inside it drawn as their grown models)
+    const phone = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android|Mobile/.test(navigator.userAgent || '');
+    this._te = new TreeEngine({ renderer: this.renderer, parent: this.group, quality: this.qualityKey, uTime: this.uniforms.uTime, lights, kit, shadows: !!this.quality.shadows, near: (phone ? .6 : 1) * (this.config.trees?.nearM || 0) });
     return this._te;
   }
 

@@ -1,7 +1,7 @@
 // Streaming terrain: a quadtree of web-mercator tiles. Elevation from AWS Terrain Tiles
 // (Terrarium encoding), ground texture from USGS National Map orthoimagery (NAIP).
 // Tiles get finer near the camera; coarse parent tiles stay visible until their children load.
-import * as THREE from '../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.js';
 import {
   lonToTileX, latToTileY, tileXToLon, tileYToLat, terrarium, tileSizeM,
   DEM_URL, IMG_URL, ROOT_Z, MAX_Z, IMG_MAX_Z, SPLIT, ROOT_PAD_DEG, splitDistance,

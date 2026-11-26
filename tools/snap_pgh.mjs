@@ -91,7 +91,7 @@ for (const spec of args) {
     const up = window.route.netRide.upcoming(w.p);
     return { bridges: `${w._bridgesState} ${w.bridges?.count ?? ''}`, calls: i.calls, triangles: i.triangles, tiles: [...w.tiles.values()].filter((t) => t.built).length, next: `${up.node.name} in ${Math.round(up.distTo)} m: ${up.options.map((o) => o.label).join(' / ')}` };
   }, [view, cam, preJs]);
-  if (evalJs) console.log('  eval:', JSON.stringify(await page.evaluate(async (code) => { const w = window.bfWorld; const T = await import('/vendor/three.module.min.js'); return eval(code); }, evalJs)));
+  if (evalJs) console.log('  eval:', JSON.stringify(await page.evaluate(async (code) => { const w = window.bfWorld; const T = await import('/vendor/three.js'); return eval(code); }, evalJs)));
   const file = resolve(ROOT, out, `pgh-${name}${view || cam ? '-view' : ''}.png`);
   await page.screenshot({ path: file });
   rows.push({ shot: spec, file: file.slice(ROOT.length), calls: stats.calls, triangles: stats.triangles, errors: [...errors] });

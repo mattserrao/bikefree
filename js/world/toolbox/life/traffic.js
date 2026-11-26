@@ -9,7 +9,7 @@
 // turn with the distance driven, brake lights come on when slowing). Traffic overtakes the rider
 // when the oncoming lane is clear (and waits behind when it isn't), and some vehicles pull into the
 // overlooks for a while. Agents live in a window around the rider and are recycled; instanced draws.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { ROAD_WIDTH } from '../../pose.js';
 import { vehicleMesh, vehicleMaterial, setPaint, setMove, PAINTS } from './figures/vehicles.js';
 import { carGeometry, carMaterial, PALETTES } from './figures/cars.js';

@@ -1,5 +1,6 @@
 {
- "profile": "city",
+ "profile": {"preset": "city", "light": "golden-upstate", "sun": {"elev": 27, "az": 228}, "trees": {"nearM": 55}, "avenue": {"kinds": ["path"], "every": 12, "offset": [4, 7], "lean": 0.08, "gap": 0.35}, "understory": {"kinds": ["path"], "band": [2.6, 9], "step": 2, "density": {"path": 0.35}}},
+ "effects": {"sky": {}, "atmosphere": {}, "canopyShade": {}, "roadLook": {"tone": [1.08, 1.08, 1.07], "leaves": 0}, "grade": {"shadows": [0.97, 0.98, 1.02], "highlights": [1.02, 1.0, 0.97], "split": 0.5, "sun": 1.2, "sky": 0.85, "contrast": 0.12, "lift": 0.025}, "parkFence": {"kinds": ["path"], "share": 0.25}},
  "id": "pgh",
  "note": "PGH free-ride graph (tools/build_pgh.py). Corridor: corridorM around the existing Pittsburgh areas' lines. Trunk boulevards (connectors) are kept only as pieces of at most connectorM between streets: crossing them, not riding along them. Motorways never.",
  "corridorM": 900,

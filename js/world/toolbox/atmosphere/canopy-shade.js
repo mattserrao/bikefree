@@ -20,7 +20,7 @@
 // The world gives the trees: an `{ x, y, z, r (crown radius), cy (crown centre above the base), ry (half depth),
 // cb (crown bottom above the base) }` list near a point (canopyTrees(x, z, R)). A map turns it on with the
 // "canopyShade" effect (toolbox/effects/canopy-shade.js).
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 
 const N = 256;               // texels a side
 const CELL = 0.625;          // m a texel

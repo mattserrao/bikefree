@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>WebGPU gate bench</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html,body{margin:0;height:100%;background:#000;color:#eee;font:13px/1.4 -apple-system,system-ui,sans-serif}
+  #v{position:absolute;inset:0}#v canvas{width:100%;height:100%;display:block;position:absolute;inset:0}
+  #out{position:absolute;left:8px;top:8px;right:8px;z-index:9;background:#000c;padding:10px;border-radius:8px;white-space:pre-wrap;max-height:90%;overflow:auto}
+  button{font:inherit;padding:6px 12px;margin:4px 4px 0 0}
+</style></head>
+<body><div id="v"></div><div id="out">WebGPU gate bench — building the world…</div>
+<script type="importmap">{ "imports": { "three": "../vendor/three.js", "three-mesh-bvh": "../node_modules/three-mesh-bvh/src/index.js" } }</script>
+<script type="module">
+// The WebGPU gate (fidelity plan, step 1.2): one map at one spot, the same scene drawn by
+//   classic   WebGLRenderer (today)
+//   webgpu    WebGPURenderer on WebGPU
+//   fallback  WebGPURenderer on its WebGL2 backend (devices without WebGPU)
+// and for each: cold start (a fresh renderer: compile + first frame), CPU ms per frame (renderer.render), GPU ms
+// per frame (timer queries where the browser has them), draw calls, triangles and JS heap.
+//   ?map=endless&at=2000                               the Endless world
+//   ?map=routes/cities/pgh.json&lat=40.4413&lon=-80.0005   a graph map at a spot (PGH downtown by default)
+//   &quality=balanced  &frames=240  &auto=1 (run at once)
+// Results: on screen, window.gateResult (JSON; tools/webgpu_gate.mjs prints it), and a Copy button.
+// NOTE: the WebGPU passes draw the scene's materials as three converts them; the custom shader patches (onBeforeCompile)
+// aren't ported yet, and ShaderMaterials (sky, impostors' own shaders) are drawn plain. CPU cost per draw is
+// representative; GPU time is a floor, not the ported look's.
+import * as THREE from '../vendor/three.js';
+globalThis.BF_KEEP_GEOMETRY = 1;   // (the scene is uploaded again by each renderer measured: its geometry keeps its CPU copy)
+const q = new URLSearchParams(location.search);
+const out = document.getElementById('out');
+const say = (s) => { out.textContent = s; };
+const frames = +(q.get('frames') || 240), quality = q.get('quality') || 'balanced';
+const mapKey = q.get('map') || 'routes/cities/pgh.json';
+const ua = navigator.userAgent;
+
+let world;
+if (mapKey === 'endless') {
+  const { makeEndlessRoute } = await import('../js/endless/course.js');
+  const { EndlessWorld } = await import('../js/world/endless-world.js');
+  const route = makeEndlessRoute({ seed: 1, startMode: 'rolling' });
+  const at = +(q.get('at') || 2000);
+  route.endlessRide._fill(at + 6000); route.endlessRide.update(at);
+  world = new EndlessWorld(document.getElementById('v'), route, { quality, log: () => {} });
+  world.setCamera('close'); world.setSource(() => ({ pos: at, speed: 0, cadence: 0, riding: true })); world.p = at;
+} else {
+  const { graphNetwork, nearestEdge } = await import('../js/graph.js');
+  const { loadNetwork, makePathRoute } = await import('../js/network.js');
+  const { GraphWorld } = await import('../js/world/graph-world.js');
+  const json = await (await fetch('../' + mapKey)).json();
+  const { base, network, graph } = graphNetwork(json);
+  const lat = +(q.get('lat') || 40.4413), lon = +(q.get('lon') || -80.0005);
+  const e = nearestEdge(graph, lat, lon);
+  const net = loadNetwork(network, base);
+  const route = makePathRoute(net, { id: 'gate', name: 'gate', path: null, first: e.e.id + '+' });
+  world = new GraphWorld(document.getElementById('v'), base, { path: route.netRide, quality, log: () => {} });
+  world.setCamera('close'); world.setSource(() => ({ pos: 40, speed: 0, cadence: 0, riding: true })); world.p = 40;
+}
+window.bfWorld = world;
+world.setPreload(true); world.start();
+const t0 = performance.now();
+while (!world.readiness().ready && performance.now() - t0 < 240000) await new Promise((r) => setTimeout(r, 300));
+world.stop();
+const scene = world.scene, camera = world.camera, classicCanvas = world.renderer.domElement;
+const size = { w: classicCanvas.width, h: classicCanvas.height, pr: world.renderer.getPixelRatio() };
+const heapMB = () => (performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(0) : null);
+const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
+const median = (a) => { const s = [...a].sort((x, y) => x - y); return s.length ? +s[s.length >> 1].toFixed(2) : null; };
+const p95 = (a) => { const s = [...a].sort((x, y) => x - y); return s.length ? +s[Math.floor(s.length * .95)].toFixed(2) : null; };
+
+async function runClassic() {
+  // a fresh renderer, so its cold start is comparable with WebGPU's
+  const r = new THREE.WebGLRenderer({ antialias: quality !== 'low', powerPreference: 'high-performance' });
+  r.setPixelRatio(size.pr); r.setSize(size.w / size.pr, size.h / size.pr, false);
+  r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping;
+  r.shadowMap.enabled = world.renderer.shadowMap.enabled; r.shadowMap.type = world.renderer.shadowMap.type;
+  r.domElement.style.cssText = 'position:absolute;inset:0;width:100%;height:100%'; document.getElementById('v').append(r.domElement);
+  classicCanvas.style.display = 'none';
+  const c0 = performance.now(); await r.compileAsync(scene, camera); r.render(scene, camera); r.getContext().finish(); const cold = performance.now() - c0;
+  const gl = r.getContext(), ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+  const cpu = [], gpu = [], qs = [];
+  for (let k = 0; k < frames; k++) {
+    await nextFrame();
+    let qy = null; if (ext) { qy = gl.createQuery(); gl.beginQuery(ext.TIME_ELAPSED_EXT, qy); }
+    const a = performance.now(); r.render(scene, camera); cpu.push(performance.now() - a);
+    if (qy) { gl.endQuery(ext.TIME_ELAPSED_EXT); qs.push(qy); }
+    for (let i = qs.length - 1; i >= 0; i--) if (gl.getQueryParameter(qs[i], gl.QUERY_RESULT_AVAILABLE)) { if (!gl.getParameter(ext.GPU_DISJOINT_EXT)) gpu.push(gl.getQueryParameter(qs[i], gl.QUERY_RESULT) / 1e6); gl.deleteQuery(qs[i]); qs.splice(i, 1); }
+  }
+  const info = r.info.render;
+  const res = { renderer: 'classic', coldMs: +cold.toFixed(0), cpuMs: median(cpu), cpuP95: p95(cpu), gpuMs: median(gpu), calls: info.calls, triangles: info.triangles, heapMB: heapMB() };
+  r.dispose(); r.domElement.remove();
+  return res;
+}
+
+async function runWebGPU(forceWebGL) {
+  const W = await import('../vendor/three-webgpu.js');
+  if (!forceWebGL && !navigator.gpu) return { renderer: 'webgpu', skipped: 'no navigator.gpu (this browser has no WebGPU)' };
+  const r = new W.WebGPURenderer({ antialias: quality !== 'low', forceWebGL, trackTimestamp: true, powerPreference: 'high-performance' });
+  const i0 = performance.now(); await r.init(); const initMs = performance.now() - i0;
+  if (!forceWebGL && !r.backend.isWebGPUBackend) { r.dispose(); return { renderer: 'webgpu', skipped: 'WebGPU unavailable: the renderer fell back' }; }
+  r.setPixelRatio(size.pr); r.setSize(size.w / size.pr, size.h / size.pr, false);
+  r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping;
+  r.shadowMap.enabled = world.renderer.shadowMap.enabled;
+  r.domElement.style.cssText = 'position:absolute;inset:0;width:100%;height:100%'; document.getElementById('v').append(r.domElement);
+  // materials the node system can't take (raw GLSL) are drawn plain for the measurement, then put back
+  const swapped = [];
+  scene.traverse((o) => {
+    if (!o.material) return;
+    const ms = [].concat(o.material);
+    const fixed = ms.map((m) => (m.isShaderMaterial || m.isRawShaderMaterial ? new W.MeshBasicNodeMaterial({ color: 0x8899aa, transparent: m.transparent, side: m.side, depthWrite: m.depthWrite }) : m));
+    if (fixed.some((m, k) => m !== ms[k])) { swapped.push([o, o.material]); o.material = Array.isArray(o.material) ? fixed : fixed[0]; }
+  });
+  const c0 = performance.now(); await r.compileAsync(scene, camera); r.render(scene, camera); await r.resolveTimestampsAsync?.(); const cold = performance.now() - c0;
+  const cpu = [], gpu = [];
+  for (let k = 0; k < frames; k++) {
+    await nextFrame();
+    const a = performance.now(); r.render(scene, camera); cpu.push(performance.now() - a);
+    if (k % 4 === 0 && r.resolveTimestampsAsync) { const t = await r.resolveTimestampsAsync(W.TimestampQuery?.RENDER ?? 'render'); if (t > 0) gpu.push(t); }
+  }
+  const info = r.info.render;
+  const res = { renderer: forceWebGL ? 'fallback' : 'webgpu', initMs: +initMs.toFixed(0), coldMs: +cold.toFixed(0), cpuMs: median(cpu), cpuP95: p95(cpu), gpuMs: median(gpu), calls: info.drawCalls ?? info.calls, triangles: info.triangles, heapMB: heapMB(), plainMaterials: swapped.length };
+  for (const [o, m] of swapped) o.material = m;
+  r.dispose(); r.domElement.remove();
+  return res;
+}
+
+async function run() {
+  const results = { map: mapKey, quality, frames, size: `${size.w}x${size.h} @${size.pr}`, ua, at: new Date().toISOString(), runs: [] };
+  for (const step of [() => runClassic(), () => runWebGPU(false), () => runWebGPU(true)]) {
+    try { results.runs.push(await step()); } catch (e) { results.runs.push({ error: String(e?.message || e) }); }
+    say(table(results) + '\n\nrunning…');
+  }
+  const c = results.runs.find((x) => x.renderer === 'classic'), g = results.runs.find((x) => x.renderer === 'webgpu' && !x.skipped);
+  results.verdict = !c || !g ? 'incomplete' : {
+    cpu: g.cpuMs <= c.cpuMs ? 'pass' : `fail (${g.cpuMs} vs ${c.cpuMs} ms)`,
+    gpu: g.gpuMs == null || c.gpuMs == null ? 'unmeasured here' : g.gpuMs <= c.gpuMs * 1.05 ? 'pass' : `fail (${g.gpuMs} vs ${c.gpuMs} ms)`,
+    coldStart: g.coldMs - c.coldMs <= 1000 ? 'pass' : `fail (+${g.coldMs - c.coldMs} ms)`,
+  };
+  window.gateResult = results;
+  say(table(results) + '\n\nverdict: ' + JSON.stringify(results.verdict) + '\n');
+  const b = document.createElement('button'); b.textContent = 'Copy results'; b.onclick = () => navigator.clipboard.writeText(JSON.stringify(results, null, 1)); out.append(b);
+}
+function table(R) {
+  const rows = R.runs.map((x) => x.error ? `  ${'error'.padEnd(9)} ${x.error}` : x.skipped ? `  ${x.renderer.padEnd(9)} skipped: ${x.skipped}` :
+    `  ${x.renderer.padEnd(9)} cold ${String(x.coldMs).padStart(6)} ms   cpu ${String(x.cpuMs).padStart(6)} ms (p95 ${x.cpuP95})   gpu ${x.gpuMs ?? '—'} ms   ${x.calls} calls  ${(x.triangles / 1e6).toFixed(2)} M tris   heap ${x.heapMB ?? '—'} MB`);
+  return `WebGPU gate · ${R.map} · ${R.quality} · ${R.size}\n${rows.join('\n')}`;
+}
+if (q.get('auto') === '1') run();
+else { say(`World ready (${size.w}x${size.h}). Tap Run: classic, WebGPU, then the WebGL2 fallback, ${frames} frames each.`); const b = document.createElement('button'); b.textContent = 'Run'; b.onclick = () => { b.remove(); run(); }; out.append(b); }
+</script></body></html>

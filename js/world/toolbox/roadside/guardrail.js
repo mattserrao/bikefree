@@ -1,6 +1,7 @@
 // Toolbox: post-and-rail guardrail along stretches of road (a scene's "roadside": [{ fromM, toM, side }]).
 // Two instanced meshes for the whole route; gaps at overlook entrances and on bridges.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
+import { litMaterial } from '../materials/lit.js';
 
 export function buildGuardrail(config, route, index, landscape) {
   const posts = [], rails = [];
@@ -25,7 +26,7 @@ export function buildGuardrail(config, route, index, landscape) {
     }
   }
   const group = new THREE.Group();
-  const material = new THREE.MeshLambertMaterial({ color: '#b7b5a1' });
+  const material = litMaterial({ color: '#b7b5a1' });
   for (const [geometry, matrices] of [[new THREE.BoxGeometry(.16, 1.1, .16), posts], [new THREE.BoxGeometry(.16, .23, 1), rails]]) {
     const mesh = new THREE.InstancedMesh(geometry, material, matrices.length);
     matrices.forEach((m, i) => mesh.setMatrixAt(i, m)); mesh.castShadow = mesh.receiveShadow = true; mesh.computeBoundingSphere(); group.add(mesh);

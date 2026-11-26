@@ -5,7 +5,7 @@
 // (canopies, steps, gutters, awnings) go to a second writer for the near detail mesh.
 //
 // Every face carries the attributes facade-material.js reads; nothing here draws a pattern itself.
-import * as THREE from '../../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../../vendor/three.js';
 import { S, W } from './presets.js';
 import { F, FRAMES } from './facade-material.js';
 import { bays } from './recipe.js';

@@ -1,0 +1,98 @@
+[
+ {
+  "id": "ow-kanab-town",
+  "name": "Kanab Town Loop",
+  "tags": [
+   "flat",
+   "short",
+   "town"
+  ],
+  "note": "An easy spin round Kanab under the Vermilion Cliffs: up 100 East past the shops, across 300 North, down the old highway and out along Kanab Creek Drive, home on 100 East",
+  "lengthM": 9340,
+  "climbM": 99
+ },
+ {
+  "id": "ow-kolob-climb",
+  "name": "Kolob Terrace Climb",
+  "tags": [
+   "climb",
+   "long",
+   "canyon"
+  ],
+  "note": "The big one: 390 m up US 89 through Kanab Creek Canyon, between the Vermilion and White Cliffs, to the summit at 1,877 m — and the long descent home the same way",
+  "lengthM": 39860,
+  "climbM": 475
+ },
+ {
+  "id": "ow-tunnel-hoodoos",
+  "name": "Hoodoo Rim & the Tunnel",
+  "tags": [
+   "hilly",
+   "views",
+   "tunnel"
+  ],
+  "note": "From the summit down past Hoodoo Rim's orange spires, through the galleried Kanab Creek Tunnel to the East Fork at Mt Carmel, and back up through it all",
+  "lengthM": 13890,
+  "climbM": 311
+ },
+ {
+  "id": "ow-coral-pink",
+  "name": "Arch Garden & Coral Pink Dunes",
+  "tags": [
+   "rolling",
+   "long",
+   "arches",
+   "dunes"
+  ],
+  "note": "Off the canyon road onto Hancock Road: rolling through juniper benches past the Arch Garden to the Coral Pink Sand Dunes, along the dunes and back",
+  "lengthM": 45740,
+  "climbM": 579
+ },
+ {
+  "id": "ow-butte-valley",
+  "name": "Butte Valley Gravel",
+  "tags": [
+   "gravel",
+   "flat",
+   "buttes"
+  ],
+  "note": "Monument Valley's mittens and Merrick Butte over the sage: the Eight Mile Gap gravel loop, east through the Vermillion subdivisions to Johnson Canyon, back west on US 89 under the buttes and home on the old highway",
+  "lengthM": 22050,
+  "climbM": 119
+ },
+ {
+  "id": "ow-johnson-canyon",
+  "name": "Johnson Canyon & the Movie Set",
+  "tags": [
+   "canyon",
+   "western",
+   "long"
+  ],
+  "note": "Up Johnson Canyon between its red walls — a gentle climb all the way, past the old western movie set's false fronts — to the canyon's head, and back down",
+  "lengthM": 29640,
+  "climbM": 156
+ },
+ {
+  "id": "ow-vermilion-rollers",
+  "name": "Vermilion Cliffs Rollers",
+  "tags": [
+   "rolling",
+   "medium"
+  ],
+  "note": "Rollers under the Vermilion Cliffs: south out of Kanab on 100 East, then Kaneplex Drive's swells out across the sage toward the Arizona line, and back",
+  "lengthM": 21590,
+  "climbM": 178
+ },
+ {
+  "id": "ow-pinnacles",
+  "name": "Pinnacles Trail",
+  "tags": [
+   "trail",
+   "gravel",
+   "hilly"
+  ],
+  "note": "Onto the dirt: Tom's Canyon Trail and the Pinnacles Trail up through the slickrock above Kanab to the top of the bench, and back down",
+  "lengthM": 15240,
+  "climbM": 490
+ }
+]

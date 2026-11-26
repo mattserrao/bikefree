@@ -1,7 +1,7 @@
 // Regional pack "northeast" (was the Adirondack kit, Route 28): northern forest trees (three levels of detail), forest-edge plants,
 // boulders, and the lakeside built world (houses, camps, docks, boats, poles, mailboxes).
 // Low-poly, vertex-coloured, built once per scene at load — no extra downloads.
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { randomSequence } from '../core/random.js';
 import { PACK_META } from './meta.js';
 import { Builder, M, cyl, cone, blob, box, linear, withSmooth } from '../core/model-builder.js';

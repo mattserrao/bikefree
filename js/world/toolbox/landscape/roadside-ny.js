@@ -10,7 +10,7 @@
 //
 // Brush (goldenrod, Queen Anne's lace, chicory, tall grass, cattails in the wet bottoms) and the utility poles go
 // into a MeshBuilder; sumac thickets come from the tree engine (graph-city's _ruralTrees).
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { hash } from '../core/mesh-builder.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -26,6 +26,8 @@ export const DITCH = [
   [3.8, '#82944a'],   // the berm: rougher, unmowed
   [4.8, '#7ea045'],   // back down into the field
 ];
+/** [out-west] The desert's: the same profile in red sand and gravel, the bottom a darker wash (no mown grass). */
+export const DITCH_DESERT = ['#b4936c', '#b98258', '#b27a52', '#9f6b47', '#ad774f', '#b98459', '#c08a5c'];
 /** Height at d m from the edge, given the road's surface rY and the ground's surface base. */
 export function profileY(d, rY, base) {
   const bottom = base + .02, lip = rY - .05, shoulder = rY - .15, berm = base + .42;
@@ -41,7 +43,7 @@ export function ditchFits(rY, base) { const drop = rY - base; return drop > .22 
  * The ditch strips: runs of stations along one side of a road. rows: [{ x, z, nx, nz, rY, base }] (nx, nz: outward);
  * consecutive rows join. Returns a BufferGeometry (vertex colours, smooth across the profile) or null.
  */
-export function ditchGeometry(runs) {
+export function ditchGeometry(runs, palette = null) {
   const pos = [], nor = [], col = [], idx = [];
   const c = new THREE.Color();
   for (const rows of runs) {
@@ -57,7 +59,7 @@ export function ditchGeometry(runs) {
         const no = -dy / l, nu = dd / l;
         nor.push(r.nx * no, nu, r.nz * no);
         const h = hash(r.x * .37 + r.z * .91 + k * 3.1);
-        c.set(DITCH[k][1]).multiplyScalar(.9 + h * .2);
+        c.set(palette ? palette[k] : DITCH[k][1]).multiplyScalar(.9 + h * .2);
         if (k === 3 && h < .3) c.lerp(new THREE.Color('#5d5a3e'), .5);   // a muddy stretch where the water stands
         col.push(c.r, c.g, c.b);
       }
@@ -178,6 +180,18 @@ export function scrubClump(M, x, y, z, seed, s = 1) {
   }
 }
 
+/** [out-west] A desert verge's clump: sagebrush or rabbitbrush — low, rounded grey-green mounds on woody stems (the
+ *  desert profile's stand-in for scrubClump's sumac and dogwood). */
+export function sageClump(M, x, y, z, seed, s = 1) {
+  const n = 1 + Math.floor(seed * 2.4), tones = ['#8f8e74', '#9a977c', '#85856b', '#a29c7c', '#948f66', '#aa9c62'];
+  for (let k = 0; k < n; k++) {
+    const a = k * 2.3 + seed * 7, d = .1 + hash(seed * 11 + k) * .5, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
+    const h = (.28 + hash(seed * 5 + k) * .42) * s, w = (.28 + hash(seed * 3 + k) * .3) * Math.min(1.1, s);
+    M.color(tones[Math.floor(hash(seed * 17 + k) * tones.length)]);
+    M.cylinder(px, y - .05, pz, w * .7, h * .5, 8, w); M.cylinder(px, y + h * .45, pz, w, h * .35, 8, w * .7); M.cylinder(px, y + h * .8, pz, w * .7, h * .2, 8, w * .25);
+  }
+}
+
 /** A road sign on its post (user, 23 Nov: cheap wins): 'speed' (a white plate, its black figures), 'curve' or 'deer'
  *  (a yellow diamond, a black symbol). yaw: the way it faces (toward the traffic it's for). */
 export function roadSign(M, x, y, z, yaw, kind) {
@@ -195,4 +209,18 @@ export function roadSign(M, x, y, z, yaw, kind) {
   M.color('#1d1d1d');
   if (kind === 'curve') { M.triangle(C(-.05, -.25, 1), C(.05, -.25, 1), C(.05, .1, 1)); M.triangle(C(-.05, -.25, 1), C(.05, .1, 1), C(-.05, .1, 1)); M.triangle(C(-.05, .1, 1), C(.18, .18, 1), C(.05, .25, 1)); }
   else { M.triangle(C(-.2, -.05, 1), C(.18, -.05, 1), C(.12, .08, 1)); M.triangle(C(-.2, -.05, 1), C(.12, .08, 1), C(-.15, .08, 1)); M.triangle(C(.12, .08, 1), C(.22, .25, 1), C(.16, .08, 1)); for (const u of [-.15, .1]) M.triangle(C(u, -.25, 1), C(u + .04, -.25, 1), C(u + .02, -.05, 1)); }
+}
+
+/** [fidelity step 10: the roadside kit] A delineator: a white flexible post at the shoulder with its reflector (amber on
+ *  the left of the traffic, white on the right; it glows a little at night in the headlights' stead). */
+export function delineator(M, x, y, z, yaw, amber = false) {
+  M.color('#eeeeea').box(x, y, z, .1, 1.15, .05, yaw);
+  M.color(amber ? '#e8a321' : '#f4f4f0').set({ aGlow: [.6] }).box(x, y + .85, z, .11, .22, .055, yaw).set({ aGlow: [0] });
+}
+/** A mile marker: a small green plate on a post, the mile in white (suggested). */
+export function mileMarker(M, x, y, z, yaw) {
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  M.color('#7a7c7e').box(x, y, z, .06, 1.25, .06, yaw);
+  M.color('#1f6a3d').box(x, y + 1.15, z, .3, .55, .02, yaw);
+  M.color('#f2f2ee').box(x + s * .015, y + 1.25, z + c * .015, .12, .26, .01, yaw);
 }

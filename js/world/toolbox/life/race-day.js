@@ -18,7 +18,7 @@
 //     "kom": [ { "atM": 4800, "title": "Col Bayard" } ],
 //     "kmToGo": [10, 5, 4, 3, 2], "flammeRouge": true, "finishM": 126960, "helicopter": true
 //   }
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { randomSequence } from '../core/random.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { Builder, M, box, cyl, cone } from '../core/model-builder.js';

@@ -1,6 +1,8 @@
 {
   "format": "bikefree-scene-1",
   "style": "stylized",
+  "trees": { "nearM": 50, "note": "user, 26 Nov: the Zwift look rolled out (near grown trees, dappled canopy shade, grade)" },
+  "effects": {"canopyShade": {}, "grade": {"saturation": 1.1, "contrast": 0.08, "warm": 0.25, "lift": 0.015, "sun": 1.1, "sky": 0.92}},
   "region": "california-coast",
   "terrain": "real-coast",
   "terrainGridFile": "routes/scenes/bigsur-terrain.grid.bin.gz",

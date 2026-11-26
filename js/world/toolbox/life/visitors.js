@@ -10,7 +10,7 @@
 //     "walking": 0.45,        // share who stroll (the rest stand, facing the view)
 //     "kids": 0.14, "dogs": 0.12, "strollers": 0.06   // optional: shares among visitors / strollers
 //   }
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { randomSequence } from '../core/random.js';
 import { Crowd, CLIP, FIT, randomLook, dogLook, clipRate, PALETTES } from './figures/people.js';
 

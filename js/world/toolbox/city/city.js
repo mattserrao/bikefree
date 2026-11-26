@@ -3,7 +3,7 @@
 // (js/world/toolbox/city/bridges.js) and everything that moves (js/world/toolbox/city/life.js).
 // Data: "bikefree-city-1" from tools/build_city.py; ground from js/world/toolbox/city/landscape.js.
 import { ghostAt } from '../../ghost.js';
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { decodeCity, LAND, POND_KINDS, cityStreetsJob, STREET_W } from './landscape.js';
 import { makeLakeWaterMaterial } from '../materials/surfaces.js';   // [6.5] hill water
 import { drain, due, each, runSlice } from '../core/jobs.js';   // [F30] the city is built as a job (in frame slices on the ride)
@@ -290,8 +290,18 @@ export class CityScene {
     }
   }
 
-  /** Is (x, z) inside a building footprint, or within r metres of one? */
+  /** A round place nothing else is put (a landmark's rock — Out West's tunnel, hoodoos, arches, buttes): the trees,
+   *  poles, furniture and cars keep out of it as they keep out of a building (buildingNear). */
+  addKeepOut(x, z, rad) {
+    const g = (this.keepGrid ||= new Map()), o = { keepOut: true, kind: -1, x, z, rad };
+    for (let gx = Math.floor((x - rad) / 40); gx <= Math.floor((x + rad) / 40); gx++) for (let gz = Math.floor((z - rad) / 40); gz <= Math.floor((z + rad) / 40); gz++) {
+      const k = `${gx},${gz}`; if (!g.has(k)) g.set(k, []); g.get(k).push(o);
+    }
+  }
+
+  /** Is (x, z) inside a building footprint, or within r metres of one? (or of a keep-out place) */
   buildingNear(x, z, r = 0) {
+    if (this.keepGrid) for (const o of this.keepGrid.get(`${Math.floor(x / 40)},${Math.floor(z / 40)}`) || []) if (Math.hypot(x - o.x, z - o.z) < o.rad + r) return o;
     for (let gx = Math.floor((x - r) / 40); gx <= Math.floor((x + r) / 40); gx++) for (let gz = Math.floor((z - r) / 40); gz <= Math.floor((z + r) / 40); gz++) {
       for (const b of this.buildingGrid.get(`${gx},${gz}`) || []) {
         if (b.kind === 12 || x < b.bb[0] - r || x > b.bb[1] + r || z < b.bb[2] - r || z > b.bb[3] + r) continue;
@@ -386,10 +396,23 @@ export class CityScene {
             float cw = small ? 2.3 : glass ? 1.55 : bfKind == 9 ? 1.9 : 2.6;
             vec2 cell = vec2(along / cw, up / fh), id = floor(cell), f = fract(cell);
             vec2 lo = glass ? vec2(.05, .1) : vec2(.24, .28), hi = glass ? vec2(.95, .94) : vec2(.76, .86);
-            bfWin = step(lo.x, f.x) * step(f.x, hi.x) * step(lo.y, f.y) * step(f.y, hi.y);
+            // [fidelity step 10] façade depth: the punched windows set 15 cm into the wall — the glass seen through the
+            // opening shifted by the view (parallax), the reveal (jamb and head in shade) showing round it, a sill below
+            vec3 bfV = normalize(cameraPosition - vWPos); float bfDn = max(dot(bfV, vWNorm), .2);
+            vec2 bfSh = glass ? vec2(0.) : vec2(dot(bfV.xz, t) / cw, bfV.y / fh) / bfDn * .15;
+            vec2 fg = f + bfSh;
+            float bfOpen = step(lo.x, f.x) * step(f.x, hi.x) * step(lo.y, f.y) * step(f.y, hi.y);
+            bfWin = bfOpen * step(lo.x, fg.x) * step(fg.x, hi.x) * step(lo.y, fg.y) * step(fg.y, hi.y);
+            if (!glass) {
+              diffuseColor.rgb *= 1. - .45 * max(bfOpen - bfWin, 0.);   // the reveal, in shade
+              float bfSill = step(lo.x - .03, f.x) * step(f.x, hi.x + .03) * step(lo.y - .045, f.y) * step(f.y, lo.y - .005);
+              diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.72, .7, .66), bfSill * step(1., id.y) * .85);
+            }
             if (id.y < 1.) bfWin = (bfKind == 2 || (bfKind == 0 && bfH(id + vBld.y) > .45)) ? step(.07, f.x) * step(f.x, .93) * step(.12, f.y) * step(f.y, .78) : bfWin * step(.5, bfH(id.xx + vBld.y));
             if (bfKind == 3 || bfKind == 8 || bfKind == 7) bfWin *= step(.55, bfH(vec2(id.y, vBld.y)));
             vec3 glassCol = (bfKind == 6 ? vec3(.07, .09, .11) : vec3(.13, .16, .2)) + uSkyTop * (glass ? .22 : .12) * (1. - uNight);
+            // (the glass mirrors the sky more at a glancing angle: Fresnel)
+            glassCol += uSkyTop * pow(1. - bfDn, 4.) * .5 * (1. - uNight);
             diffuseColor.rgb = mix(diffuseColor.rgb, glassCol, bfWin * (glass ? .93 : .86));
             bfLit = bfWin * step(glass ? .5 : .58, bfH(id * 1.37 + vBld.y * 17.));
           }`)
@@ -397,7 +420,7 @@ export class CityScene {
         .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
           totalEmissiveRadiance += mix(vec3(1., .74, .42), vec3(.85, .9, 1.), step(.8, bfH(vWPos.xz * .01 + vBld.y))) * bfLit * uNight * 1.25;`);
     };
-    bm.customProgramCacheKey = () => facades ? 'city-buildings-facades-1' : 'city-buildings-1';
+    bm.customProgramCacheKey = () => facades ? 'city-buildings-facades-1' : 'city-buildings-2';
     this.buildingMaterial = bm;
 
     // Streets: asphalt with lane paint; sidewalks; paths.

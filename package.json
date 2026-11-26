@@ -35,10 +35,14 @@
     "qc:fix": "node tools/qc_fix.mjs",
     "qc:nyc": "node tools/qc_map.mjs nyc",
     "nyc:build": "python3 tools/build_pgh.py --city nyc && python3 tools/nyc_pools.py && python3 tools/pgh_city.py --city nyc && python3 tools/nyc_heroes.py && python3 tools/nyc_sync.py && node tools/pgh_routes.mjs --city nyc --write && node tools/qc_pgh.mjs routes/cities/nyc.json --rides 200",
-    "skan:routes": "node tools/pgh_routes.mjs --city skan"
+    "skan:routes": "node tools/pgh_routes.mjs --city skan",
+    "textures": "python3 tools/make_pbr_sets.py && node tools/build_textures.mjs",
+    "gate": "node tools/webgpu_gate.mjs",
+    "map:build": "node tools/build_map.mjs"
   },
   "devDependencies": {
     "@garmin/fitsdk": "^21.221.0",
+    "ktx2-encoder": "^0.6.0",
     "playwright-core": "^1.65.1",
     "spectorjs": "^0.9.33",
     "three-mesh-bvh": "^0.9.18"

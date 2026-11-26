@@ -9,7 +9,7 @@
 // river: [a, b]} (the stretch under the river: aqua tiles and cool light). The line is the path's centre; the
 // tracks run on its left (riding outbound) at TRACKS. Generic: any scene with these data and `subway` in its
 // config gets it (another line, an incline's shaft later).
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../../../vendor/three.js';
 import { routePoint } from '../../pose.js';
 import { randomSequence } from '../core/random.js';
 import { Builder, M, box, linear } from '../core/model-builder.js';
