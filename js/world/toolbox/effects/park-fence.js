@@ -4,7 +4,8 @@
 // irregular, each its own shade) and textured in the shader — the grain along the rail, checks and splits, silver-grey
 // weathering with brown where it's sheltered. A gap wherever another way passes within reach of the line, at the
 // junctions, on decks and in water. One mesh per tile (in tile.extra).
-// Options: { kinds: ['drive'], share: .35 (of each side in stretches), offset: 1.3 (m past the edge and any sidewalk),
+// Options: { kinds: ['drive'], share: .35 (of each side in stretches), offset: 2 (m past the edge and any sidewalk: clear of the
+// verge the QC keeps free — tools/qc-map.js edgeLip probes 1.2 m out),
 // height: 1.05, post: 2.7 (m between posts), both: .4 (chance a stretch has its twin across the way) }.
 import * as THREE from '../../../../vendor/three.module.min.js';
 import { hash } from '../core/mesh-builder.js';
@@ -39,7 +40,7 @@ function woodMaterial() {
 
 export const parkFence = {
   install(world, opts = {}) {
-    const kinds = new Set(opts.kinds || ['drive']), share = opts.share ?? .35, offset = opts.offset ?? 1.3, H = opts.height ?? 1.05, P = opts.post ?? 2.7, both = opts.both ?? .4;
+    const kinds = new Set(opts.kinds || ['drive']), share = opts.share ?? .35, offset = opts.offset ?? 2, H = opts.height ?? 1.05, P = opts.post ?? 2.7, both = opts.both ?? .4;
     const mat = woodMaterial();
     return {
       *tileJob(t) {

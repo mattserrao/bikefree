@@ -6,7 +6,8 @@
 //               from its edge (past any sidewalk), each leaning out over the way (lean: the top's offset per metre of
 //               height) and let to reach over it — the canopy tunnel ("trunks lean in, branches arch over the road").
 //               Where a tree already stands within ~5 m (OSM's mapped rows) none is added.
-//   understory  { kinds: ['drive', 'path'], band: [2.2, 9], step: 1.7, density: .55, mix: [[name, weight]…] }
+//   understory  { kinds: ['drive', 'path'], band: [2.2, 9], step: 1.7, density: .55 (or by kind: { drive: .55, path: .3 }),
+//               mix: [[name, weight]…] }
 //               bushes in continuous drifts along the way's sides: a slow noise along each side decides where a drift
 //               runs (density: the share of the side in drifts), and in a drift a bush every ~`step` m somewhere in the
 //               band (m out from the edge), the odd fern or sapling among them ("a continuous understory band").
@@ -61,7 +62,7 @@ export function* planParkPlanting(ctx) {
     }
     // ---- the understory drifts
     if (understory && understory.kinds.includes(e.kind)) {
-      const step = understory.step ?? 1.7, [b0, b1] = understory.band || [2.2, 9], dens = understory.density ?? .55, mix = understory.mix || BUSH_MIX;
+      const step = understory.step ?? 1.7, [b0, b1] = understory.band || [2.2, 9], D = understory.density ?? .55, dens = typeof D === 'number' ? D : D[e.kind] ?? .4, mix = understory.mix || BUSH_MIX;
       for (const side of [-1, 1]) {
         const seedSide = (e.n * 31 + Math.round(e.x[0] * 7 + e.z[0] * 3)) % 9973 + side * 5;
         const s0 = Math.ceil(a * 10 / step) * step, s1 = b * 10;
