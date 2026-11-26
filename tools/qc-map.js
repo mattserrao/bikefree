@@ -59,12 +59,16 @@ export async function runMapQC(w, T, { radius = 420, heroes = null } = {}) {
         const x = a.x + (b.x - a.x) * t / L, z = a.z + (b.z - a.z) * t / L;
         if (!near(x, z)) continue;
         // which side is out: the one not in the ring
-        const s = inRing(r, x + nx * 2, z + nz * 2) ? -1 : 1, ox = nx * s, oz = nz * s;
-        if (G(x - ox * 3, z - oz * 3) > top + 0.05) add('bankShard', x - ox * 3, z - oz * 3, p.name);
+        // (a seam — an outline doubling back on itself, OSM multipolygons — has water, or land, on both sides: no shore)
+        const inA = inRing(r, x + nx * 2, z + nz * 2);
+        if (inA === inRing(r, x - nx * 2, z - nz * 2)) continue;
+        const s = inA ? -1 : 1, ox = nx * s, oz = nz * s;
+        // (each probe on its own side of the outline as a whole: a narrow inlet puts 2–3 m out back in the water)
+        if (inRing(r, x - ox * 3, z - oz * 3) && G(x - ox * 3, z - oz * 3) > top + 0.05) add('bankShard', x - ox * 3, z - oz * 3, p.name);
         // the water plane reaches 2 m past the outline: there the ground should be up to the water, not a drop under it
         const g2 = G(x + ox * 2.2, z + oz * 2.2);
         const underDeck = E.some((e) => e.bridges.some(([a0, b0]) => { for (let k = a0; k <= b0; k++) if (Math.hypot(e.x[k] - x, e.z[k] - z) < 14) return true; return false; }));
-        if (g2 < top - 0.6 && !underDeck && !E.some((e) => wayNear(e, x + ox * 2.2, z + oz * 2.2, 1))) add('bankCliff', x + ox * 2.2, z + oz * 2.2, `${p.name} ${(top - g2).toFixed(1)} m (cap ${(w.cut.cap(x + ox * 2.2, z + oz * 2.2) - top).toFixed(1)})`);
+        if (g2 < top - 0.6 && !inRing(r, x + ox * 2.2, z + oz * 2.2) && !underDeck && !E.some((e) => wayNear(e, x + ox * 2.2, z + oz * 2.2, 1))) add('bankCliff', x + ox * 2.2, z + oz * 2.2, `${p.name} ${(top - g2).toFixed(1)} m (cap ${(w.cut.cap(x + ox * 2.2, z + oz * 2.2) - top).toFixed(1)})`);
       }
     }
   }
@@ -92,14 +96,20 @@ export async function runMapQC(w, T, { radius = 420, heroes = null } = {}) {
     const half = w.wOf(e) / 2, dx = e.x[i + 1] - e.x[i - 1], dz = e.z[i + 1] - e.z[i - 1], l = Math.hypot(dx, dz) || 1, y = e.ele[i] + 0.12;
     for (const s of [-1, 1]) {
       edgeN++;
-      const at = (d) => { const x = e.x[i] - dz / l * s * (half + d), z = e.z[i] + dx / l * s * (half + d); return [x, z, topAt(x, z, y)]; };
+      // (a hero area's floor — CNY's old growth — is built only round the rider: where it reaches, its height as drawn
+      //  there, not the bare ground under it; tools/qc-map.js 25 Nov fix pass)
+      const floor = (x, z, h) => { const f = w.city?.oldGrowth?.floorH?.(x, z); return f != null && (!h || h.point.y < f - 0.05) ? { point: { y: f }, object: { name: 'Old growth floor' } } : h; };
+      const at = (d) => { const x = e.x[i] - dz / l * s * (half + d), z = e.z[i] + dx / l * s * (half + d); return [x, z, floor(x, z, topAt(x, z, y))]; };
       const near1 = at(0.4), near2 = at(1.2);
-      // (a lip: anything 12 cm over the way just beside it; a ditch: a step down at the edge — 30 cm within 0.4 m, or
+      // (on a curve the spot past one stretch's edge can land on the same way further along: the way itself, not a lip —
+      //  so no way of any kind may be there. A lip: anything 12 cm over the way just beside it; a ditch: a step down at the edge — 30 cm within 0.4 m, or
       //  80 cm within 1.2 m — steeper than a verge's slope)
       for (const [x, z, h, lim] of [[...near1, 0.3], [...near2, 0.8]]) {
         if (!h || w.poolAt(x, z) + WATER_ABOVE >= h.point.y - 0.05) continue;
         if (/landmark|Bench|lamp/i.test(h.object.name)) continue;
-        if (h.point.y > y + 0.12 && !(w.walkOf?.(e) > 0) && !E.some((o) => o !== e && wayNear(o, x, z, 0.2))) { add('edgeLip', x, z, `${e.kind} +${(h.point.y - y).toFixed(2)} m (${h.object.name || h.object.parent?.name || 'mesh'})`); break; }
+        // (another way's embankment rising beside this one — a path at the foot of a raised drive: grade separation, no lip)
+        if (h.point.y > y + 0.5 && (w.cut?.fill?.(x, z) ?? -1e9) > y + 0.5) continue;
+        if (h.point.y > y + 0.12 && !(w.walkOf?.(e) > 0) && !E.some((o) => wayNear(o, x, z, 0.2))) { add('edgeLip', x, z, `${e.kind} +${(h.point.y - y).toFixed(2)} m (${h.object.name || h.object.parent?.name || 'mesh'})`); break; }
         if (h.point.y < y - lim) { add('edgeDitch', x, z, `${e.kind} -${(y - h.point.y).toFixed(2)} m`); break; }
       }
     }
@@ -132,7 +142,9 @@ export async function runMapQC(w, T, { radius = 420, heroes = null } = {}) {
   out.trees = trees.length;
   if (heroes?.allee) {
     let want = 0, have = 0;
-    for (const [la, lo] of heroes.allee) { const p = w.proj.toLocal(la, lo); if (!near(p.x, p.z)) continue; want++; if (trees.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < 1.5)) have++; else add('alleeMissing', p.x, p.z); }
+    // (a planned tree on a crossing path, within 1.5 m of its edge, or in a landmark's clearing is rightly not planted)
+    const kept = (x, z) => { const r = city?.roadNear?.(x, z, 30); return (r && r.d - r.half < 1.5) || !!city?.landmarkClear?.(x, z, false); };
+    for (const [la, lo] of heroes.allee) { const p = w.proj.toLocal(la, lo); if (!near(p.x, p.z) || kept(p.x, p.z)) continue; want++; if (trees.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < 1.5)) have++; else add('alleeMissing', p.x, p.z); }
     out.alleeTrees = `${have}/${want}`;
   }
   out.gritEdges = w.profile?.softCover && w._grainOn !== false ? 1 : 0;   // (only where the map asks for soft cover edges)

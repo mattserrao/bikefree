@@ -791,15 +791,20 @@ export class GraphWorld {
         return { e, end, u: { x: ux / l, z: uz / l }, h: this.wOf(e) / 2, walk: this.walkOf(e) || 0, r: CURB[e.kind] || 4, len, other, theta: Math.atan2(uz, ux) };
       }).sort((a, b) => a.theta - b.theta);
       const n = arms.length, corners = [];
+      // (how far each arm's mouth can sit from the node: a return whose tangent runs past it is dropped below)
+      const maxT = (A) => Math.min(26, A.other ? A.len * 0.45 : Math.max(1.5, A.len - 4));
       for (let q = 0; q < n; q++) {
         const A = arms[q], B = arms[(q + 1) % n];
         let gap = B.theta - A.theta; if (gap <= 0) gap += Math.PI * 2;
         const nA = left(A.u), nB = left(B.u), c = { A, B, gap, arc: null, tA: 0, tB: 0 };
         if (gap < Math.PI * 0.86 && gap > 0.3) {
-          // (the curb's radius, then — a map that asks for round corners, NYC — smaller ones until the return fits)
-          for (const r of this.profile.junctionCurbs ? [Math.min(A.r, B.r), Math.min(A.r, B.r) * 0.5, 1.5] : [Math.min(A.r, B.r)]) {
+          // (the curb's radius, then smaller ones until the return fits its arms — a sharp fork on short arms gets a
+          //  tight return, not none: the map QC's sharpCorner, 25 Nov fix pass)
+          const r0 = Math.min(A.r, B.r);
+          for (const r of [r0, r0 * 0.5, 1.5, 0.8]) {
             const pA = along(N, nA, A.h + r), pB = along(N, nB, -(B.h + r)), m = meet(pA, A.u, pB, B.u);
-            if (m && m[0] > 0 && m[1] > 0 && m[0] < 26 && m[1] < 26) { const O = along(pA, A.u, m[0]); c.tA = dot({ x: O.x - N.x, z: O.z - N.z }, A.u); c.tB = dot({ x: O.x - N.x, z: O.z - N.z }, B.u); c.arc = { O, r }; break; }
+            const fits = m && m[0] <= maxT(A) + 0.01 && m[1] <= maxT(B) + 0.01;   // (a return that fits is as before)
+            if (m && m[0] > 0 && m[1] > 0 && m[0] < 26 && m[1] < 26 && fits) { const O = along(pA, A.u, m[0]); c.tA = dot({ x: O.x - N.x, z: O.z - N.z }, A.u); c.tB = dot({ x: O.x - N.x, z: O.z - N.z }, B.u); c.arc = { O, r }; break; }
           }
         }
         if (!c.arc && gap < Math.PI * 0.95) {   // sharp or awkward: where the two edges cross

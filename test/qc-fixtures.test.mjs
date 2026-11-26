@@ -12,7 +12,7 @@ import { bvhCaster } from '../tools/qc-bvh.js';
 
 /** A fixture world: a 100 m way along x (6 m wide, at height 0), a ground plane at `groundY`, and extra meshes / QC
  *  probe data. The ground function (the world's own) is `groundY` too. */
-function world({ groundY = 0, meshes = [], prims = [], benches = [], basins = [], roadDeck = false } = {}) {
+function world({ groundY = 0, meshes = [], prims = [], benches = [], basins = [], roadDeck = false, pools = [], groundH = null, city = null } = {}) {
   const scene = new T.Scene();
   const ground = new T.Mesh(new T.PlaneGeometry(400, 400).rotateX(-Math.PI / 2), new T.MeshBasicMaterial());
   ground.position.y = groundY; ground.name = 'Ground'; scene.add(ground);
@@ -25,8 +25,8 @@ function world({ groundY = 0, meshes = [], prims = [], benches = [], basins = []
     camera: { position: { x: 0, z: 0 } },
     proj: { toLatLon: (px, pz) => ({ lat: 40 - pz / 111320, lon: -74 + px / 85000 }) },
     G: { edges: [{ id: 1, x, z, ele, n, bridges: [], kind: 'road', name: 'Fixture Rd', from: 1, to: 2 }] },
-    pools: [], city: null, profile: {}, scene,
-    _groundH: () => groundY, poolAt: () => -1e9, wOf: () => 6,
+    pools, city, profile: {}, scene, cut: { cap: () => 1e9 },
+    _groundH: groundH || (() => groundY), poolAt: () => -1e9, wOf: () => 6,
     heroes: { landmarks: { qc: { prims, benches, basins, bridges: [], views: [] } } },
   };
 }
@@ -122,4 +122,36 @@ test('qc.mjs: one entry for every map kind', async () => {
   assert.equal(await kindOf('skan'), 'graph'); assert.equal(await kindOf('endless'), 'endless');
   assert.equal(await kindOf('bigsur'), 'route'); assert.equal(await kindOf('nowhere'), null);
   assert.equal(SEVERITY.floating, 'fail'); assert.equal(SEVERITY.sharpCorner, 'warn');
+});
+
+// a pool drawn on its outline: a 40 m square of water at level 0 (top 0.35) out at (100..140, 100..140)
+const inPoly = (r, x, z) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) c = !c; } return c; };
+const pool = (ring) => ({ name: 'Fixture Pond', level: 0, ring, x0: 90, x1: 150, z0: 90, z1: 150 });
+const sq = (x0, z0, x1, z1) => [{ x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 }];
+
+test('fixture banks: a shore rising from the water passes, a drop outside fails; an outline\'s seam and a narrow inlet are no shore', async () => {
+  const ring = sq(100, 100, 140, 140), bank = (out) => (x, z) => (inPoly(ring, x, z) ? -1 : out);
+  const good = await run(world({ pools: [pool(ring)], groundH: bank(0.5) }));
+  assert.equal(good.counts.bankCliff, 0); assert.equal(good.counts.bankShard, 0);
+  const bad = await run(world({ pools: [pool(ring)], groundH: bank(-1.5) }));
+  assert.ok(bad.counts.bankCliff >= 30, `cliffs found: ${bad.counts.bankCliff}`);
+  // (an island cut out through a seam — the outline runs in and back out along the same line, as OSM multipolygons
+  //  are joined: water on both sides of the seam; the island's own shore is real)
+  const seamRing = [{ x: 100, z: 100 }, { x: 140, z: 100 }, { x: 140, z: 140 }, { x: 100, z: 140 }, { x: 100, z: 120 }, { x: 112, z: 120 }, { x: 112, z: 128 }, { x: 128, z: 128 }, { x: 128, z: 112 }, { x: 112, z: 112 }, { x: 112, z: 120 }, { x: 100, z: 120 }];
+  const seam = await run(world({ pools: [pool(seamRing)], groundH: (x, z) => (inPoly(seamRing, x, z) ? -1 : 0.5) }));
+  assert.equal(seam.counts.bankCliff, 0, 'no cliff along the seam'); assert.equal(seam.counts.bankShard, 0);
+  // (a 3 m inlet: 2.2 m out from one side is the water again, under the other side's bank)
+  const inlet = [{ x: 100, z: 100 }, { x: 140, z: 100 }, { x: 140, z: 140 }, { x: 121.5, z: 140 }, { x: 121.5, z: 170 }, { x: 118.5, z: 170 }, { x: 118.5, z: 140 }, { x: 100, z: 140 }];
+  const inl = await run(world({ pools: [{ ...pool(inlet), z1: 180 }], groundH: (x, z) => (inPoly(inlet, x, z) ? -1 : 0.5) }));
+  assert.equal(inl.counts.bankCliff, 0, 'no cliff across the inlet');
+});
+
+test('fixture allée: a planned tree on a crossing path or in a landmark clearing is not missing; one on open lawn is', async () => {
+  const W = (trees) => world({ city: { tiles: new Map([['0,0', { trees }]]), roadNear: (x, z) => (Math.abs(z - 30) < 4 ? { d: Math.abs(z - 30), half: 1.7 } : null), landmarkClear: (x) => x > 40 } });
+  const ll = (x, z) => { const p = { lat: 40 - z / 111320, lon: -74 + x / 85000 }; return [p.lat, p.lon]; };
+  const w = W([{ x: 0, z: 20 }]);
+  w.proj.toLocal = (la, lo) => ({ x: (lo + 74) * 85000, z: (40 - la) * 111320 });
+  const r = await runMapQC(w, T, { radius: 200, heroes: { allee: [ll(0, 20), ll(10, 30), ll(50, 10), ll(20, 10)] } });
+  assert.equal(r.counts.alleeTrees, '1/2', 'the lawn trees counted; the path and clearing ones left out');
+  assert.equal(r.defects.filter((d) => d.check === 'alleeMissing').length, 1);
 });
