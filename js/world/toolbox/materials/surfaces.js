@@ -139,6 +139,15 @@ export function makeGroundMaterial(palette, config = {}, farUniform = null, cano
         #endif
         diffuseColor.rgb = mix(diffuseColor.rgb, bfStone, bfCliff * .88);
         ${sd ? `diffuseColor.rgb *= mix(surfaceDetail(bp.xz, 2, 2.6, bfDistance, 1.), surfaceDetail(bp.xz, 1, 3.4, bfDistance, .8), bfCliff);` : ''}
+        // [gap 11] the middle distance (user, 26 Nov — the open hills read as one flat colour): grass clumps and bare
+        // patches at 9 m and 3 m, and run-off streaks down the slope, from where the near detail tile stops out to ~2 km
+        {
+          float bfMid = smoothstep(30., 120., bfDistance) * (1. - smoothstep(900., 2200., bfDistance));
+          float bfClump = bfFbm(bp.xz * .11) * .62 + bfNoise(bp.xz * .33) * .38;
+          vec2 bfDown = normalize(vBfGroundNormal.xz + 1e-4);
+          float bfStreak = bfNoise(vec2(dot(bp.xz, vec2(-bfDown.y, bfDown.x)) * .09, dot(bp.xz, bfDown) * .012)) * smoothstep(.08, .3, bfSlope);
+          diffuseColor.rgb *= 1. + ((bfClump - .5) * .34 + (bfStreak - .5) * .26) * bfMid;
+        }
         diffuseColor.rgb *= 1. + (bfFine - .5) * .12 * bfNear;
         float bfSnow = smoothstep(bfSnowLine, bfSnowLine + 240., bp.y) * smoothstep(.15, .65, abs(normalize(vBfGroundNormal).y));
         #ifdef BF_FORMATIONS

@@ -17,7 +17,7 @@ import { makeProjection } from './geo.js';
 import { decodeTerrain } from './toolbox/landscape/real-terrain.js';
 import { CANAL, canalAt } from './toolbox/city/cny-landmarks.js';
 import { loadTerrainGrid } from '../terrain-grid.js';
-import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean, ROAD_LIFT } from './pose.js';
+import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean, ROAD_LIFT, PACER_LANE } from './pose.js';
 import { loadRider, RIDER_RIM } from './rider.js';
 import { makeSkyDome } from './toolbox/atmosphere/sky-dome.js';
 import { PostFX } from './toolbox/atmosphere/post.js';
@@ -420,7 +420,30 @@ export class GraphWorld {
 
   // ---------- the app's World API ----------
   setSource(fn) { this.source = fn; }
-  setPacerSource(fn) { this.pacerSource = fn; }   // (no pacer drawn on a graph yet)
+  setPacerSource(fn) { this.pacerSource = fn; this._pacerInit = false; }
+  /** [gap 15] the virtual pacer drawn on the graph maps too (as in the route scenes, world.js): the checker-jersey rider
+   *  on its own path through the junctions, a bike-width further in so you can ride alongside or pass. */
+  _updatePacer(dt) {
+    const src = this.pacerSource ? this.pacerSource() : null;
+    if (!src || !this.path) { if (this.pacer) this.pacer.group.visible = false; return; }
+    if (!this.pacer) {
+      if (!this._pacerLoading && !this._pacerFailed) this._pacerLoading = loadRider({ jersey: 'checker' }).then((r) => {
+        if (this.disposed) return; this.pacer = r; this.scene.add(r.group);
+      }).catch((err) => { this._pacerFailed = true; this.log('3d', `Pacer model: ${err.message}`, 'debug'); });
+      return;
+    }
+    if (!this._pacerInit) { this.ps = src.pos; this.pacerCrank = 0; this._pacerInit = true; }
+    let x = this.ps + (src.speed || 0) * dt;
+    const err = src.pos - x;
+    this.ps = Math.max(0, Math.abs(err) > 60 ? src.pos : x + err * Math.min(1, dt * 1.5));
+    const path = src.path || this.path;
+    const lane = this.city ? PACER_LANE * this._laneScale(this.ps) : PACER_LANE;
+    const pose = path.pose(this.ps, this.index, lane), P = this._pacerPose ||= { pos: new THREE.Vector3(), fwd: new THREE.Vector3() };
+    P.pos.set(pose.pos.x, pose.pos.y, pose.pos.z); P.fwd.set(pose.fwd.x, pose.fwd.y, pose.fwd.z);
+    this.pacerCrank += ((src.cadence || 0) / 60) * Math.PI * 2 * dt;
+    this.pacer.group.visible = true;
+    this.pacer.update(P.pos, P.fwd, this.pacerCrank, src.speed || 0, Math.min(dt, 0.1), src);
+  }
   setPath(path) { this.path = path || null; }
   setCourseMarks() {}                             // (no arches on a free ride)
   setPreload(on) { this._preload = !!on; }
@@ -601,6 +624,7 @@ export class GraphWorld {
     this.city?.tick(this.camera.position, now / 1000, this.path ? out : null, dt);
     if ((this._frames & 15) === 0) this.bridges?.tick(this.camera.position, this.qualityKey === 'low' ? 3000 : 4500);
     this.rider.update(out.pos, out.fwd, this.crank, src.speed || 0, Math.min(dt, 0.1), src);
+    this._updatePacer(dt);
     if (this.path) {
       const tmp = this._leanTmp ||= { pos: new THREE.Vector3(), fwd: new THREE.Vector3(), flat: new THREE.Vector3() };
       this._lean = stepLean(this._lean, leanAlong((s) => this._place(s, RIDER_LANE, tmp), this.p, src.speed || 0, { minS: 0 }), Math.min(dt, 0.1));
