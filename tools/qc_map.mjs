@@ -8,6 +8,10 @@
 //                         [--sweep [600]]   the whole map: a site every 600 m over its ways (radius 0.75 × step)
 //                         [--evidence 12]   close-ups of the first 12 defects → <out>/defects/, <out>/defects.json
 //                         [--gpu]           + shader / GL errors and the frame against tools/qc/budgets.json (tools/qc-gpu.js)
+//                         [--frozen]        deterministic: seeded Math.random, a frozen clock, the chase camera on its
+//                                           pose (tools/snap_pgh.mjs --frozen) and the moving life hidden (FROZEN_PRE),
+//                                           (graph maps only). SKAN: two runs byte-identical; NYC: the counts the
+//                                           same, ±1 tree of ~3,800 (tiles still arrive in async load order)
 //   npm run qc:map -- nyc            npm run qc:map -- skan --auto 6
 //
 // Sites: tools/qc/sites/<map>.json — { "<name>": "<lat>,<lon>[,<dir>][@<metres>][#<eye lat>,<eye lon>,<up>,<look lat>,<look lon>,<up>]" }
@@ -28,6 +32,21 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const qcOut = (name) => resolve(ROOT, 'tools', '.cache', 'qc', name);
 export const KEYS_ALL = ['strayWater', 'bankShard', 'bankCliff', 'dryBasin', 'bridgeDup', 'floating', 'waterOverWay', 'pathPaint', 'edgeLip', 'edgeDitch', 'joinGap', 'sharpCorner', 'alleeTrees', 'gritEdges', 'benchOnWay', 'viewBlocked', 'trees'];
 export const KEYS = KEYS_ALL;
+
+/** [wave 3] --frozen: what moves with time or is placed by load order — people, riders, traffic, animals — hidden
+ *  before the checks (qc-map.js walks only the visible scene), so a run's counts don't depend on where they were. */
+export const LIFE = /^(Road rider|Cyclists|Walkers|Locals|People|Animals|Parked cars|Cars|Buses)\b/;
+export const FROZEN_PRE = `const L = ${LIFE}; w.scene.traverse((o) => { if (L.test(o.name || '')) o.visible = false; });`;
+
+/** The command line of the page run for a set of sites (snap_pgh.mjs for a graph map, snap_endless.mjs for endless). */
+export function snapArgs(map, specs, { out, size = '1280x720', frozen = false, evalJs = null } = {}) {
+  if (map === 'endless') {
+    if (frozen) throw new Error('--frozen: graph maps only (tools/snap_endless.mjs has no frozen clock)');
+    return ['tools/snap_endless.mjs', '--software', '--size', size, '--out', out, ...specs, ...(evalJs ? ['--eval', evalJs] : [])];
+  }
+  return ['tools/snap_pgh.mjs', '--software', '--qc', '--size', size, '--graph', `routes/cities/${map}.json`, '--out', out, '--time', 'afternoon',
+    ...(frozen ? ['--frozen', '--pre', FROZEN_PRE] : []), ...specs, ...(evalJs ? ['--eval', evalJs] : [])];
+}
 
 /** The sites of a map: its site file, else spread over its ways and landmarks. */
 export async function sitesOf(map, { file = null, auto = 0, sweep = 0 } = {}) {
@@ -72,7 +91,7 @@ export async function sweepSites(map, step = 600) {
 
 /** Close-up shots of the defects found (deduplicated by id, the first `n`): <out>/defects/<id>.png beside
  *  <out>/defects.json (each defect with its site and shot). The endless map: the rider's view at the defect. */
-export async function evidence(map, res, { out = qcOut(map), n = 12, log = (s) => process.stderr.write(s) } = {}) {
+export async function evidence(map, res, { out = qcOut(map), n = 12, frozen = false, log = (s) => process.stderr.write(s) } = {}) {
   const { closeup } = await import('./qc-defects.js');
   const seen = new Map();
   for (const [site, r] of Object.entries(res)) for (const d of r?.defects || []) if (!seen.has(d.id)) seen.set(d.id, { ...d, site });
@@ -82,8 +101,7 @@ export async function evidence(map, res, { out = qcOut(map), n = 12, log = (s) =
     const endless = map === 'endless';
     const specs = pick.map((d) => (endless ? `${d.id}@${Math.max(0, d.s - 25)}` : `${d.id}@${d.at[0]},${d.at[1]}@20#${closeup(d)}`));
     await new Promise((ok, bad) => {
-      const p = spawn('node', endless ? ['tools/snap_endless.mjs', '--software', '--size', '960x540', '--out', dir, ...specs]
-        : ['tools/snap_pgh.mjs', '--software', '--qc', '--size', '960x540', '--graph', `routes/cities/${map}.json`, '--out', dir, '--time', 'afternoon', ...specs], { cwd: ROOT });
+      const p = spawn('node', snapArgs(map, specs, { out: dir, size: '960x540', frozen }), { cwd: ROOT });
       let buf = ''; p.stdout.on('data', (d) => { buf += d; log('+'); }); p.stderr.on('data', (d) => { buf += d; });
       p.on('close', (code) => (code ? bad(new Error(buf.slice(-2000))) : ok(buf)));
     });
@@ -103,7 +121,7 @@ export async function budgetOf(map) {
 /** The GPU check's results folded into a site's map-check results (counts, examples, defects; its stats as `gpu`). */
 export const MERGE_GPU = `([a, g]) => ({ ...a, counts: { ...a.counts, ...g.counts }, examples: { ...a.examples, ...g.examples }, defects: [...(a.defects || []), ...g.defects], gpu: g.gpu })`;
 
-export async function runQC(map, sites, { out = qcOut(map), radius = 420, gpu = false, log = (s) => process.stderr.write(s) } = {}) {
+export async function runQC(map, sites, { out = qcOut(map), radius = 420, gpu = false, frozen = false, log = (s) => process.stderr.write(s) } = {}) {
   const endless = map === 'endless';
   const net = endless ? {} : JSON.parse(await readFile(resolve(ROOT, `routes/cities/${map}.json`), 'utf8'));
   const city = net.cityData ? `/${net.cityData}` : null;
@@ -113,9 +131,7 @@ export async function runQC(map, sites, { out = qcOut(map), radius = 420, gpu = 
   await mkdir(out, { recursive: true });
   const names = Object.keys(sites);
   const text = await new Promise((ok, bad) => {
-    const p = spawn('node', endless ? ['tools/snap_endless.mjs', '--software', '--size', '1280x720', '--out', out, ...names.map((n) => `${n}@${sites[n]}`), '--eval', EVAL]
-      : ['tools/snap_pgh.mjs', '--software', '--qc', '--size', '1280x720', '--graph', `routes/cities/${map}.json`, '--out', out, '--time', 'afternoon',
-        ...names.map((n) => `${n}@${sites[n]}`), '--eval', EVAL], { cwd: ROOT });
+    const p = spawn('node', snapArgs(map, names.map((n) => `${n}@${sites[n]}`), { out, frozen, evalJs: EVAL }), { cwd: ROOT });
     let buf = ''; p.stdout.on('data', (d) => { buf += d; log('.'); }); p.stderr.on('data', (d) => { buf += d; });
     p.on('close', (code) => (code ? bad(new Error(buf.slice(-2000))) : ok(buf)));
   });
@@ -152,15 +168,17 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   let sweep = 0; if (sweepI >= 0) { const v = +args[sweepI + 1]; sweep = v > 0 ? v : 600; args.splice(sweepI, v > 0 ? 2 : 1); }
   const radius = +opt('--radius', sweep ? Math.round(sweep * 0.75) : 420), nEvidence = +opt('--evidence', 0);
   const gpuI = args.indexOf('--gpu'), gpu = gpuI >= 0; if (gpu) args.splice(gpuI, 1);
+  const frI = args.indexOf('--frozen'), frozen = frI >= 0; if (frozen) args.splice(frI, 1);
   const jsonOut = opt('--json', null), baseline = opt('--baseline', null);
   const map = args.shift();
-  if (!map) { console.error('usage: node tools/qc_map.mjs <map> [site …] [--sites f] [--auto N] [--out dir] [--json f] [--baseline f]'); process.exit(2); }
+  if (!map) { console.error('usage: node tools/qc_map.mjs <map> [site …] [--sites f] [--auto N] [--sweep [m]] [--evidence N] [--gpu] [--frozen] [--out dir] [--json f] [--baseline f]'); process.exit(2); }
+  if (frozen && map === 'endless') { console.error('--frozen: graph maps only (tools/snap_endless.mjs has no frozen clock)'); process.exit(2); }
   const out = opt('--out', qcOut(map));
   let sites = await sitesOf(map, { file: sitesFile, auto, sweep });
   if (args.length) sites = Object.fromEntries(args.map((n) => [n, sites[n]]).filter(([, v]) => v));
-  const res = await runQC(map, sites, { out, radius, gpu });
+  const res = await runQC(map, sites, { out, radius, gpu, frozen });
   const base = baseline ? JSON.parse(await readFile(baseline, 'utf8')) : null;
   console.log(`\n${report(res, base)}`);
-  if (nEvidence) { const all = await evidence(map, res, { out, n: nEvidence }); console.log(`\n${all.length} defects (${Math.min(all.length, nEvidence)} shot) → ${out}/defects.json`); }
+  if (nEvidence) { const all = await evidence(map, res, { out, n: nEvidence, frozen }); console.log(`\n${all.length} defects (${Math.min(all.length, nEvidence)} shot) → ${out}/defects.json`); }
   if (jsonOut) { await mkdir(dirname(resolve(ROOT, jsonOut)), { recursive: true }); await writeFile(resolve(ROOT, jsonOut), JSON.stringify(res, null, 1)); }
 }
