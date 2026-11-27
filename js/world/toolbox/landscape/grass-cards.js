@@ -6,8 +6,11 @@
 import * as THREE from '../../../../vendor/three.js';
 import { WIND, WIND_GLSL } from '../atmosphere/wind.js';
 
-const W = 1280, H = 256, CELLS = 5, CW = W / CELLS;
-export const CARD = { turf: 0, tall: 1, goldenrod: 2, lace: 3, scrub: 4 };
+const W = 2048, H = 256, CELLS = 8, CW = W / CELLS;
+// [plants phase 3] 5–7: the desert's — bunchgrass (Indian ricegrass, needle-and-thread, galleta), cheatgrass, forbs
+export const CARD = { turf: 0, tall: 1, goldenrod: 2, lace: 3, scrub: 4, bunch: 5, cheat: 6, forb: 7 };
+/** The u offset from one card cell to the next (GroundCover's per-tuft cell: shifted in the shader). */
+export const CELL_U = CW / W;
 /** The texture coordinate of the atlas's opaque white corner (for geometry that isn't a card). */
 export const SOLID_UV = [1.5 / W, 1.5 / H];
 
@@ -60,6 +63,30 @@ function drawAtlas() {
     }
     g.strokeStyle = 'rgb(120,110,100)'; g.lineWidth = 2;
     for (let k = 0; k < 6; k++) { const x = cx + (r() - .5) * CW * .3; g.beginPath(); g.moveTo(x, H); g.lineTo(x + (r() - .5) * 30, H * .55); g.stroke(); } }
+  // 5: desert bunchgrass (Indian ricegrass, needle-and-thread, galleta) in fall: a stiff upright fountain of fine
+  // straw and grey-green blades, cured gold at the tips, airy seed sprays above (drawn near neutral: the tuft's tint
+  // shifts it per cover)
+  { const r = rnd(83), x0 = CW * 5, cx = x0 + CW / 2;
+    const cured = ['#b7a678', '#c4b585', '#a99a6c', '#9fa07a', '#8f9670', '#c9bb8e'];
+    for (let k = 0; k < 120; k++) { const x = cx + (r() - .5) * CW * .34, len = H * (.4 + r() * .45); blade(r, x, len, (x - cx) / (CW * .17) * .35 + (r() - .5) * .25, 1 + r() * 1.1, cured[Math.floor(r() * cured.length)]); }
+    g.strokeStyle = '#d8cca2'; g.lineWidth = 1;
+    for (let k = 0; k < 26; k++) { const x = cx + (r() - .5) * CW * .3, top = H * (.02 + r() * .16), bend = (x - cx) * .6; g.beginPath(); g.moveTo(x, H * .45); g.quadraticCurveTo(x + bend * .3, top + 30, x + bend, top); g.stroke();
+      for (let j = 0; j < 6; j++) { g.fillStyle = '#e0d4ac'; g.beginPath(); g.ellipse(x + bend * (j / 6) + (r() - .5) * 10, top + 6 + j * 7, 1.6, 3.2, r(), 0, Math.PI * 2); g.fill(); } } }
+  // 6: cheatgrass (downy brome) gone over: short, soft, nodding heads, tan with a purple cast; carpets disturbed ground
+  { const r = rnd(97), x0 = CW * 6;
+    const brome = ['#b59d76', '#a88f6c', '#c2ab82', '#9c8466', '#b8a07e'];
+    for (let k = 0; k < 110; k++) { const x = x0 + CW * (.08 + r() * .84), len = H * (.25 + r() * .35); blade(r, x, len, (r() - .5) * 1.1, 1.2 + r(), brome[Math.floor(r() * brome.length)]); }
+    for (let k = 0; k < 40; k++) { const x = x0 + CW * (.1 + r() * .8), y = H * (.38 + r() * .3), dx = (r() < .5 ? -1 : 1) * (6 + r() * 10); g.strokeStyle = '#a58a6a'; g.lineWidth = 1; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + dx, y - 4, x + dx * 1.3, y + 10); g.stroke();
+      g.fillStyle = r() < .5 ? '#9a7e6e' : '#b39a78'; g.beginPath(); g.ellipse(x + dx * 1.3, y + 12, 2, 6, .3, 0, Math.PI * 2); g.fill(); } }
+  // 7: fall forbs: dry stalks with seed heads, a few late globemallow (orange) and aster (lilac) flowers, low leaves
+  { const r = rnd(109), x0 = CW * 7;
+    for (let k = 0; k < 12; k++) {
+      const x = x0 + CW * (.12 + r() * .76), top = H * (.12 + r() * .4), bend = (r() - .5) * 26;
+      g.strokeStyle = '#8a7c5c'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(x, H); g.quadraticCurveTo(x + bend * .3, (H + top) / 2, x + bend, top); g.stroke();
+      const kind = r();
+      for (let j = 0; j < 5; j++) { const py = top + j * 12, px = x + bend * (1 - j * .08); g.fillStyle = kind < .3 ? '#d9743a' : kind < .45 ? '#b7a6c9' : '#8f7f5c'; g.beginPath(); g.arc(px + (r() - .5) * 6, py, kind < .45 ? 3.6 : 2.6, 0, Math.PI * 2); g.fill(); }
+    }
+    for (let k = 0; k < 24; k++) { g.fillStyle = r() < .5 ? '#8c9468' : '#7f8a60'; g.beginPath(); g.ellipse(x0 + CW * (.1 + r() * .8), H - 6 - r() * 20, 6, 3, r(), 0, Math.PI * 2); g.fill(); } }
   // the solid white corner (bottom-left: texture (0, 0) with the image flipped) for non-card geometry
   g.fillStyle = '#ffffff'; g.fillRect(0, H - 4, 4, 4);
   return cv;
@@ -87,13 +114,17 @@ export function grassMaterial(renderer, uTime, msaa = true) {
         // a card's top (its uv.y above the cell's foot) sways; geometry on the white corner stays put
         if (uv.y > .05 && uv.x > .004) { vec3 wp = (modelMatrix * vec4(position, 1.)).xyz; float k = uv.y * uv.y;
           transformed.xz += (bfWindAt(wp.xz, uTime) * .1 + vec2(sin(uTime * 1.9 + wp.x * .35 + wp.z * .21), cos(uTime * 1.4 + wp.z * .3)) * .035) * k; }`)   // (the shared wind, and each blade's own flutter)
+      .replace('#include <uv_vertex>', `#include <uv_vertex>
+        #ifdef USE_INSTANCING
+        vMapUv.x += iCell * ${CELL_U.toFixed(6)};   // [plants phase 3] a ground-cover tuft's own card (GroundCover: one mesh, many plants)
+        #endif`)
       .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nvCard = uv.x > .004 ? 1. : 0.;')
-      .replace('#include <common>', '#include <common>\nvarying float vCard;');
+      .replace('#include <common>', '#include <common>\nvarying float vCard;\n#ifdef USE_INSTANCING\nattribute float iCell;\n#endif');
     // the cards lit as the ground under them (facing up), whichever side faces the camera
     shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vCard;')
       .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nif (vCard > .5) normal = normalize((viewMatrix * vec4(0., 1., 0., 0.)).xyz);');
   };
-  m.customProgramCacheKey = () => `grass-cards-3-${msaa}`;
+  m.customProgramCacheKey = () => `grass-cards-4-${msaa}`;
   return m;
 }
 

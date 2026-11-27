@@ -635,6 +635,22 @@ const DESERT_SPECIES = {
   rolive: { H: 7, R: 4.2, fork: .25, trunkR: .3, trunk: '#4f453c', bark: BARK, gnarl: .7, up: -.02,
     levels: [[5, .45, .85, .45], [4, .4, .7, .25], [3, .35, .6, .12]],
     greens: ['#9aa58e', '#a9b39b', '#8f9b84'], fall: ['#a3a47e', '#aaa784', '#9a9a76'], turn: [.2, .5, .8] },
+  // [plants phase 2, 27 Nov] (claude/desert-plant-life-plan.md) — the creek's thicket: tamarisk (saltcedar: feathery
+  // grey-green sprays on many stems, rust-orange in fall; it lines Kanab Creek) and coyote willow (dense, thin, upright
+  // stems, gold in fall); Gambel oak above ~1,800 m (clumps of small crooked trees, orange-red to brown in fall); and
+  // the town's Siberian elm (the commonest street and alley tree in Utah towns, a rough rounded crown, yellow late)
+  tamarisk: { H: 5, R: 3, fluff: 1.2, fork: .2, trunkR: .09, trunk: '#6a4f3e', bark: BARK, stems: 6, gnarl: .45, up: .02,
+    levels: [[5, .35, .7, .45], [4, .35, .6, .25], [3, .4, .6, .12]],
+    greens: ['#7d8a6a', '#86926f', '#748263'], fall: ['#b5733a', '#c4844a', '#a3683a', '#c79a5a'], turn: [.85] },
+  cwillow: { H: 3.6, R: 1.5, fluff: .9, fork: .15, trunkR: .04, trunk: '#8a5a38', bark: BARK, stems: 9, gnarl: .2, up: .28,
+    levels: [[4, .3, .55, .4], [3, .3, .5, .22], [2, .4, .5, .1]],
+    greens: ['#7c9450', '#869c56', '#72894a'], fall: ['#c9b346', '#d4bd52', '#b9a43e'], turn: [.8] },
+  gambel: { H: 6, R: 3, fork: .3, trunkR: .16, trunk: '#5c5148', bark: BARK, stems: 3, gnarl: .6, up: 0,
+    levels: [[5, .4, .8, .45], [4, .35, .65, .25], [3, .35, .6, .12]],
+    greens: ['#4f6c35', '#58753a'], fall: ['#b4552a', '#c46a30', '#9a4a26', '#a8743a'], turn: [.6, .9] },
+  selm: { H: 13, R: 6, fork: .35, trunkR: .42, trunk: '#5e554c', bark: BARK, gnarl: .45, up: .02,
+    levels: [[5, .45, .8, .46], [4, .35, .7, .26], [3, .35, .6, .13]],
+    greens: ['#56773a', '#5f803f'], fall: ['#b9a84a', '#c6b553', '#a8a04a'], turn: [.5] },
 };
 function desertConifer(seed, o, lod) {
   // a juniper or pinyon: short, twisted trunks splitting low, the foliage in many small, dense, irregular clumps from
@@ -649,6 +665,11 @@ function desertConifer(seed, o, lod) {
     if (!lod) for (let k = 0; k < 4; k++) { const ka = a + (rand() - .5) * 3; b.add(cyl(.025, .06, R * .75, 4), M(Math.cos(a) * H * .1, H * (.18 + rand() * .25), Math.sin(a) * H * .1, 1, 1, 1, -ka, 0, .8 + rand() * .6), o.trunk); }
   }
   b.as(0);
+  // (a dead one — pinyon die-off, an old juniper gone silver: user-facing plan, P1 — bare twisted limbs, no foliage)
+  if (o.dead) {
+    if (lod !== 2) for (let k = 0; k < (lod ? 4 : 9); k++) { const ka = rand() * 6.28, y = H * (.2 + rand() * .45); b.add(cyl(.02, .07, R * (.6 + rand() * .5), 3), M(Math.cos(ka) * .15, y, Math.sin(ka) * .15, 1, 1, 1, -ka, 0, .6 + rand() * .7), o.trunk); }
+    return b.build();
+  }
   const n = lod === 2 ? 4 : lod ? 9 : 22, det = lod ? 0 : 1;
   for (let k = 0; k < n; k++) {
     // a point in a ragged ovoid (wider low on a juniper, higher on a pinyon), pushed out toward its skin
@@ -661,6 +682,13 @@ function desertConifer(seed, o, lod) {
   return b.build();
 }
 const utahJuniper = (v, lod) => desertConifer(7101 + v, { H: 4.6 + v * 1.1, R: 2.3 + v * .3, stems: v === 1 ? 3 : 2, low: .08, bulge: 1.1, trunkR: .22, trunk: '#76604f', colors: ['#6b7d5c', '#758764', '#5f7253', '#7d8b66', '#66765a'] }, lod);
+// (dead: silver, bark-shed limbs — a pinyon or juniper killed by drought and beetles)
+const deadPJ = (v, lod) => desertConifer(7251 + v, { H: 4.4 + v * 2, R: 2 + v * .4, stems: v ? 1 : 2, trunkR: .2, trunk: v ? '#a39c90' : '#9a9286', dead: true }, lod);
+// ponderosa pine (the Moquith plateau above ~1,900 m): a tall straight orange-brown trunk, the crown open and flat-topped
+// in clumps from half its height up
+const ponderosa = (v, lod) => desertConifer(7271 + v, { H: 16 + v * 5, R: 3.8 + v * .6, low: .5, bulge: .85, trunkR: .42, trunk: '#8a5636', colors: ['#4f6b37', '#5a763d', '#466131', '#61793f'] }, lod);
+// curl-leaf mountain mahogany: a many-stemmed small tree, dark leathery clumps
+const mahogany = (v, lod) => desertConifer(7291 + v, { H: 3.6 + v, R: 1.9, stems: 3, low: .25, bulge: 1, trunkR: .1, trunk: '#5d4d42', colors: ['#4f5a3c', '#566142', '#4a5537'] }, lod);
 const pinyon = (v, lod) => desertConifer(7201 + v, { H: 6.5 + v * 1.4, R: 2.7 + v * .3, low: .22, bulge: .95, trunkR: .26, trunk: '#5f4c3e', colors: ['#4d6a3c', '#577440', '#466237', '#5e7a45', '#53703f'] }, lod);
 function sageBrush(seed, R, tones, bloom = null) {
   // big sagebrush (grey-green, silvery) or rubber rabbitbrush (yellow-green, gold in bloom): a low mound of small
@@ -752,10 +780,15 @@ function redRock(seed, w, h) {
   return b.build();
 }
 
-export function makeUpstateTrees({ oldGrowth = false, park = false, bushes = false, desert = false } = {}) {
+export function makeUpstateTrees({ oldGrowth = false, park = false, bushes = false, desert = false, only = null } = {}) {
+  // [plants phase 0, 27 Nov] `only`: the species a map actually plants (its tree mix, its snag). Every species and shrub
+  // built is a row of the impostor atlas, whose memory is fixed, so a row nobody sees costs every tree that is seen
+  // its sharpness: Out West built 85 rows and drew ~28 (the upstate hardwoods, conifers and understory never appear)
+  const want = (name) => !only || only.has(name);
   return withSmooth(true, () => {
     const species = {};
     for (const [name, o] of Object.entries(SPECIES)) {
+      if (!want(name)) continue;
       const k = Object.keys(SPECIES).indexOf(name);
       const variants = o.turn.map((turn, v) => [0, 1, 2].map((lod) => grow(4001 + k * 37 + v * 7, o, lod, turn)));
       species[name] = { h: o.H, r: o.R, variants, turn: o.turn, wet: !!o.droop };
@@ -771,23 +804,31 @@ export function makeUpstateTrees({ oldGrowth = false, park = false, bushes = fal
     }
     if (desert) {
       for (const [name, o] of Object.entries(DESERT_SPECIES)) {
+        if (!want(name)) continue;
         const k = Object.keys(DESERT_SPECIES).indexOf(name);
         species[name] = { h: o.H, r: o.R, variants: o.turn.map((turn, v) => [0, 1, 2].map((lod) => grow(5101 + k * 47 + v * 13, o, lod, turn))), turn: o.turn };
       }
-      species.juniper = { h: 5.5, r: 2.5, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => utahJuniper(v, lod))), turn: [0, 0] };
-      species.pinyon = { h: 7.5, r: 3, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => pinyon(v, lod))), turn: [0, 0] };
+      if (want('juniper')) species.juniper = { h: 5.5, r: 2.5, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => utahJuniper(v, lod))), turn: [0, 0] };
+      if (want('pinyon')) species.pinyon = { h: 7.5, r: 3, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => pinyon(v, lod))), turn: [0, 0] };
+      if (want('deadpj')) species.deadpj = { h: 5, r: 2.2, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => deadPJ(v, lod))), turn: [0, 0] };
+      if (want('ponderosa')) species.ponderosa = { h: 20, r: 4.2, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => ponderosa(v, lod))), turn: [0, 0] };
+      if (want('mahogany')) species.mahogany = { h: 4, r: 1.9, variants: [0].map((v) => [0, 1, 2].map((lod) => mahogany(v, lod))), turn: [0] };
+      // (Lombardy poplar: the town's windbreaks and motel rows — a narrow column, gold in fall)
+      if (want('poplar')) species.poplar = { h: 16, r: 1.7, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => MOUNTAIN_BUILDERS.conifer(7281 + v, { H: 14 + v * 3, R: 1.6, colors: v ? ['#c9a838', '#d4b445', '#b8983a'] : ['#a9a43c', '#b8ad45', '#9a9838'], trunk: '#5b5048',
+        trunkBase: .25, droop: 0, jag: .35, seg: 6, layers: 9, crown: .06, top: 'leader', under: 2 }, lod))), turn: [0, 0] };
     }
-    species.whitepine = { h: 30, r: 5.5, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => whitePine(v, lod))), turn: [0, 0] };
-    species.hemlock = { h: 22, r: 4.2, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => hemlock(v, lod))), turn: [0, 0] };
-    species.spruce = { h: 20, r: 3.6, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => spruce(v, lod))), turn: [0, 0] };
+    if (want('whitepine')) species.whitepine = { h: 30, r: 5.5, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => whitePine(v, lod))), turn: [0, 0] };
+    if (want('hemlock')) species.hemlock = { h: 22, r: 4.2, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => hemlock(v, lod))), turn: [0, 0] };
+    if (want('spruce')) species.spruce = { h: 20, r: 3.6, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => spruce(v, lod))), turn: [0, 0] };
     // yard evergreens: Colorado blue spruce (a blue-grey cone) and arborvitae (a narrow dark-green column)
-    species.bluespruce = { h: 10, r: 2.8, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => MOUNTAIN_BUILDERS.conifer(5401 + v, { H: 9 + v * 2, R: 2.8, colors: ['#62818a', '#6d8d94', '#57747c'], trunk: '#4d3b2e',
+    if (want('bluespruce')) species.bluespruce = { h: 10, r: 2.8, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => MOUNTAIN_BUILDERS.conifer(5401 + v, { H: 9 + v * 2, R: 2.8, colors: ['#62818a', '#6d8d94', '#57747c'], trunk: '#4d3b2e',
       trunkBase: .22, droop: .25, jag: .25, seg: 7, layers: 9, crown: .02, top: 'leader', under: 3 }, lod))), turn: [0, 0] };
-    species.arborvitae = { h: 6, r: 1.1, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => MOUNTAIN_BUILDERS.conifer(5501 + v, { H: 5.5 + v, R: 1.1, colors: ['#3f5f33', '#4a6b3a', '#36552e'], trunk: '#4d3b2e',
+    if (want('arborvitae')) species.arborvitae = { h: 6, r: 1.1, variants: [0, 1].map((v) => [0, 1, 2].map((lod) => MOUNTAIN_BUILDERS.conifer(5501 + v, { H: 5.5 + v, R: 1.1, colors: ['#3f5f33', '#4a6b3a', '#36552e'], trunk: '#4d3b2e',
       trunkBase: .1, droop: .05, jag: .15, seg: 6, layers: 8, crown: .3, top: 'leader', under: 2 }, lod))), turn: [0, 0] };
     // every species' near and mid tiers as { wood, leaves } (leaves: the leaf-cluster cards, null for the conifers)
     for (const s of Object.values(species)) for (const t of s.variants) for (const k of [0, 1]) if (t[k].isBufferGeometry) t[k] = { wood: t[k], leaves: null };
-    const understory = {
+    // (a desert map plants none of the upstate understory: its own is added below)
+    const understory = desert && only ? {} : {
       // the shrubs grown as the trees are (user, 23 Nov: "confirm shrubs are included in the new tree generating"): several
       // thin stems from the ground, short twiggy branching, leaf-cluster cards — not the old solid blobs
       dogwood: grow(6101, SHRUBS.dogwood, 0, .55),          // red-osier dogwood / honeysuckle: red stems, wine-red turning
@@ -810,6 +851,16 @@ export function makeUpstateTrees({ oldGrowth = false, park = false, bushes = fal
       cliffrose: sageBrush(7331, 1.3, ['#6f7a56', '#7c8660', '#66704f'], '#e8dcc0'),
       pricklyPear: pricklyPear(7341), pricklyPear2: pricklyPear(7342, 1.3), cholla: cholla(7351), yucca: yucca(7361), yuccaStalk: yucca(7362, .65, true),
       barrel: barrel(7371), ephedra: ephedra(7381), tumbleweed: tumbleweed(7391), tumbleweed2: tumbleweed(7392, .6),
+      // [plants phase 2] the shrubs the plan found missing (claude/desert-plant-life-plan.md): broom snakeweed (small
+      // round mounds, gold in fall bloom — every roadside and grazed flat), four-wing saltbush (pale grey, tan seed
+      // wings), blackbrush (dark grey, low), sand sagebrush (silvery, feathery: the dunes' own), antelope bitterbrush
+      // and green manzanita (the upper benches); one shape each, their kin by the instance colour (phase 1)
+      snakeweed: sageBrush(7401, .38, ['#7f8a52', '#8a9358'], '#d6b22c'), snakeweed2: sageBrush(7402, .3, ['#858d55', '#7c874e'], '#cfa92a'),
+      saltbush: sageBrush(7411, .85, ['#9c9f89', '#a7aa93', '#92967f'], '#c8bd8c'),
+      blackbrush: sageBrush(7421, .55, ['#4f5149', '#5a5b51', '#46483f']),
+      sandsage: sageBrush(7431, .9, ['#8d937d', '#989e87', '#848a75']),
+      bitterbrush: sageBrush(7441, 1.05, ['#5e6a47', '#69754f', '#55613f']),
+      manzanita: sageBrush(7451, .95, ['#55704a', '#607a52', '#4d6743']),
       redrock: redRock(7321, .7, .5), redrock2: redRock(7322, 1.4, .9),
     });
     if (bushes) for (const [name, o] of Object.entries(PARK_BUSHES)) understory[name] = angledBush(o.seed, o);

@@ -1,0 +1,29 @@
+{
+ "note": "answer key for the blind A/B sheet (A and B per view): keep it out of the sheet",
+ "pairs": [
+  {
+   "n": 1,
+   "photo": "Coral_Pink_Sand_Dunes_State_Park_Utah_USA3.jpg",
+   "A": "before",
+   "B": "after"
+  },
+  {
+   "n": 2,
+   "photo": "Coral_Pink_Sand_Dunes_State_Park_Utah_USA4.jpg",
+   "A": "before",
+   "B": "after"
+  },
+  {
+   "n": 3,
+   "photo": "Kanab_-_panoramio.jpg",
+   "A": "after",
+   "B": "before"
+  },
+  {
+   "n": 4,
+   "photo": "Kanab_street_01.jpg",
+   "A": "after",
+   "B": "before"
+  }
+ ]
+}

@@ -41,6 +41,7 @@ import { OldGrowth } from './toolbox/vegetation/old-growth.js';
 import { planParkPlanting } from './toolbox/vegetation/park-planting.js';
 import { profileY, ditchFits, ditchGeometry, DITCH_DESERT, culvertEnd, goldenrod, laceAndChicory, tallGrass, cattails, utilityPole, wires, scrubClump, sageClump, roadSign, delineator, mileMarker } from './toolbox/landscape/roadside-ny.js';
 import { CANAL, canalAt } from './toolbox/city/cny-landmarks.js';
+import { DESERT_COMMUNITIES, pickShrub, desertCommunity as desertCommunityOf } from './toolbox/vegetation/desert-communities.js';   // [plants phase 4]
 import { ROAD_LIFT } from './pose.js';
 
 // (9 is the toolbox's pond; 10–12: a rural map's fields from WorldCover — tools/pgh_city.py rural_land, SKAN;
@@ -212,7 +213,10 @@ export class GraphCity {
     // the tree engine (one for the game: toolbox/vegetation/tree-engine.js) with the northeastern hardwood kit — every
     // road-graph map (PGH's western Pennsylvania has the same trees); the rural maps in early fall, PGH in summer
     this.desert = this.profile.ground === 'desert';
-    this.treeKit = makeUpstateTrees({ oldGrowth: !!world.json?.oldGrowth, park: !!this.profile.parkTrees, bushes: !!this.profile.understory, desert: this.desert });
+    // [plants phase 0] a desert map builds only what it plants: its tree mix's species and the snag (the rest were
+    // atlas rows never drawn)
+    const only = this.desert ? new Set([...Object.values(this.profile.treeMix || {}).flat().map(([n]) => n)]) : null;
+    this.treeKit = makeUpstateTrees({ oldGrowth: !!world.json?.oldGrowth, park: !!this.profile.parkTrees, bushes: !!this.profile.understory, desert: this.desert, only });
     this.fall = this.profile.season === 'early-fall' || this.profile.season === 'peak-fall';
     this.peak = this.profile.season === 'peak-fall';   // (NYC: the canopy at its height — most trees turned)
     this.cars = this.profile.cars !== false;            // (NYC: no parked cars — the streets round the park stay empty)
@@ -835,8 +839,9 @@ export class GraphCity {
       if (nearCf(x, z)) return false;
       const r1 = hash(seed * 7.13 + 1), r2 = hash(seed * 3.71 + 2), r3 = hash(seed * 9.17 + 3), r4 = hash(seed * 1.93 + 4);
       // ~6% dead (user, 23 Nov): snags in the woods, wet ground, hedgerows and pastures, a few by the road; none in yards or on streets
-      const dead = role !== 'yard' && role !== 'street' && role !== 'osm' && kit.snag && hash(seed * 5.37 + 9) < (this.desert ? .015 : .06);
-      const name = dead ? 'snag' : pick(MIX[role], r1), sp = kit[name];
+      const dead = role !== 'yard' && role !== 'street' && role !== 'osm' && (kit.snag || kit.deadpj) && hash(seed * 5.37 + 9) < (this.desert ? .04 : .06);
+      const name = dead ? (this.desert ? 'deadpj' : 'snag') : pick(MIX[role], r1), sp = kit[name];   // (the desert's dead: silver pinyon and juniper)
+      if (!sp) return false;   // (a species this map doesn't build)
       // the age mix: saplings and young trees, mostly mature, a few old giants away from the road
       let k = age ?? (r2 < .08 ? .3 + r2 * 2.5 : r2 < .22 ? .55 + (r2 - .08) * 1.8 : r2 > .95 ? 1.15 + (r2 - .95) * 3 : .85 + (r2 - .22) * .32);
       k *= .92 + r3 * .16;
@@ -855,7 +860,9 @@ export class GraphCity {
       out.push(T);
       return true;
     };
+    const shrubs = this.treeKit.understory;
     const under = (x, z, name, seed, s = 1) => {
+      if (!shrubs[name]) return;   // (a shrub this map doesn't build)
       if (edgeOf(x, z) < 2.5 || !clearOf(x, z, 1.5) || (!/fern|rock|stump|log/.test(name) && nearCf(x, z))) return;
       out.push({ x, z, y: W._groundH(x, z) - .05, sp: name, v: 0, s: s * (.8 + hash(seed) * .5), rot: seed * 23 % 6.283, tint: .9 + hash(seed * 3) * .2 });
     };
@@ -932,42 +939,25 @@ export class GraphCity {
       const h1 = hash(Math.round(x * 3.1) * 92821 + Math.round(z * 1.7)), jx = x + (h1 - .5) * step * .9, jz = z + (hash(Math.round(x * 5.3) + Math.round(z * 7.9) * 31) - .5) * step * .9;
       const c = this.landAt(jx, jz), seed = Math.round(jx * 11) + Math.round(jz * 13) * 7, h2 = hash(seed * 1.31);
       if (c >= LAND.oldGrowth && c <= LAND.ogBlowdown) continue;   // (the hero area's: placed above)
-      // [evidence 27 Nov] the dunes' edges (Coral Pink, matched photos: sage, rabbitbrush, ephedra and grass scattered
-      // over the sand everywhere but the bare crests): a thin cover, thicker in the hollows' patches
-      if (c === LAND.sand && this.desert) {
-        const r = hash(seed * 2.3), patch = hash(Math.floor(jx / 60) * 3.7 + Math.floor(jz / 60) * 9.1);
-        if (r < .05 + .1 * patch) under(jx, jz, r < .04 ? 'sage' : r < .08 ? 'rabbitbrush' : 'ephedra', seed, .8);
-        continue;
-      }
-      if (c >= LAND.pj && c <= LAND.slick) {
-        // [out-west] the desert's covers: pinyon and juniper scattered on the benches with sage between, sagebrush and
-        // rabbitbrush on the flats with the odd juniper, red boulders on the slickrock; cottonwoods where it's wet
-        const r = hash(seed * 2.3), wet = this.world.nearWater?.(jx, jz);
-        if (wet && h1 < .3) { tree(jx, jz, 'wet', seed); continue; }
-        const de = edgeOf(jx, jz);
-        // (tumbleweeds fetch up along the roadside — against the ditch, the fence line — and in the lee of the sage)
-        if (de > 3 && de < 14 && c !== LAND.pj && r > .985) { under(jx, jz, r > .993 ? 'tumbleweed2' : 'tumbleweed', seed); continue; }
-        if (c === LAND.pj) {
-          if (h1 < .22 * this.q.trees) tree(jx, jz, 'woods', seed);
-          else if (r < .16) under(jx, jz, r < .09 ? 'sage' : 'sage2', seed);
-          else if (r < .22) under(jx, jz, 'cliffrose', seed);
-          else if (r < .3) under(jx, jz, r < .27 ? 'yucca' : 'yuccaStalk', seed);
-          else if (r < .36) under(jx, jz, 'pricklyPear', seed);
-          else if (r < .38) under(jx, jz, 'redrock', seed);
-          else if (r < .4) under(jx, jz, 'cholla', seed);
-        } else if (c === LAND.sage) {
-          if (h1 < .025 * this.q.trees) tree(jx, jz, 'woods', seed, .6 + h2 * .4);
-          else if (r < .34) { under(jx, jz, r < .14 ? 'sage' : r < .25 ? 'sage2' : 'rabbitbrush', seed); if (hash(seed * 4.7) < .07) under(jx + 1.1, jz + .6, 'tumbleweed', seed + 1); }
-          else if (r < .39) under(jx, jz, 'ephedra', seed);
-          else if (r < .45) under(jx, jz, r < .43 ? 'pricklyPear' : 'pricklyPear2', seed);
-          else if (r < .51) under(jx, jz, r < .49 ? 'yucca' : 'yuccaStalk', seed);
-          else if (r < .525) under(jx, jz, 'cholla', seed);
-          else if (r < .54) under(jx, jz, 'redrock', seed);
-        } else {
-          if (r < .05) under(jx, jz, r < .03 ? 'redrock' : 'redrock2', seed);
-          else if (r < .08) under(jx, jz, 'sage', seed, .7);
-          else if (r < .1) under(jx, jz, 'barrel', seed);
-          else if (r < .12) under(jx, jz, 'pricklyPear', seed);
+      // [plants phase 4, 27 Nov] the desert by plant community (DESERT_COMMUNITIES, below the class): which one from the
+      // cover, the height, the slope and its aspect, the creek and the road (claude/desert-plant-life-plan.md)
+      if (this.desert && (c === LAND.sand || (c >= LAND.pj && c <= LAND.slick) || c === LAND.wetland || (c === 43 && h1 < .5))) {
+        const de = edgeOf(jx, jz), cm = desertCommunityOf(this, jx, jz, c, de, LAND), r = hash(seed * 2.3);
+        if (h1 < cm.trees * this.q.trees) {
+          tree(jx, jz, cm.role, seed, cm.role === 'woods' && c === LAND.sage ? .6 + h2 * .4 : null);
+          if (cm.grove && hash(seed * 6.1) < cm.grove) { const a = hash(seed * 7.9) * 6.283, d = 3.5 + hash(seed * 2.6) * 2.5; tree(jx + Math.cos(a) * d, jz + Math.sin(a) * d, cm.role, seed * 17 + 3); }
+          continue;
+        }
+        if (r < cm.shrubs) {
+          const name = pickShrub(cm.list, hash(seed * 5.9));
+          under(jx, jz, name, seed, name.startsWith('tumble') ? 1 : .8 + h2 * .4);
+          // (shrubs grow in clumps round the first — sage and saltbush flats run 20–40% cover, the photos' dune margins
+          //  as thick: one spot every 8 m can't reach that alone)
+          for (let q = 0, nq = Math.floor(hash(seed * 8.3) * (cm.clump || 0) + .5); q < nq; q++) {
+            const a = hash(seed * 3.1 + q) * 6.283, d = 1.6 + hash(seed * 6.7 + q) * 2.4, nm = hash(seed * 2.2 + q) < .6 ? name : pickShrub(cm.list, hash(seed * 9.4 + q));
+            if (!nm.startsWith('tumble') && !nm.startsWith('redrock')) under(jx + Math.cos(a) * d, jz + Math.sin(a) * d, nm, seed * 13 + q, .7 + hash(seed * 1.7 + q) * .5);
+          }
+          if (cm.tumble && hash(seed * 4.7) < cm.tumble) under(jx + 1.1, jz + .6, 'tumbleweed', seed + 1);
         }
         continue;
       }
@@ -1192,9 +1182,10 @@ export class GraphCity {
 
   /** A soft plant card (grass-cards.js): its size by kind and scale, a per-plant tint and turn. */
   _card(N, x, y, z, seed, cell, sc) {
-    const SZ = [[.75, .38], [1.05, .95], [1.15, 1.3], [.95, 1.05], [1.7, 1.25]][cell], k = hash(seed * 7.7 + 3.1);
+    const SZ = [[.75, .38], [1.05, .95], [1.15, 1.3], [.95, 1.05], [1.7, 1.25], [.7, .6], [.85, .38], [.75, .62]][cell], k = hash(seed * 7.7 + 3.1);
     const tint = (this._tint ||= new THREE.Color());
-    if (this.desert) tint.setRGB(1.05 + k * .2, .8 + hash(seed * 5.3) * .1, .42 + hash(seed * 2.9) * .1);   // (desert: cured bunchgrass, tan)
+    if (this.desert && cell >= CARD.bunch) tint.setRGB(.95 + k * .12, .93 + hash(seed * 5.3) * .1, .9 + hash(seed * 2.9) * .1);   // (the desert's own cards: drawn in their colours)
+    else if (this.desert) tint.setRGB(1.05 + k * .2, .8 + hash(seed * 5.3) * .1, .42 + hash(seed * 2.9) * .1);   // (desert: cured bunchgrass, tan)
     else tint.setRGB(.62 + k * .18, .66 + hash(seed * 5.3) * .16, .58 + hash(seed * 2.9) * .14);
     if (cell === CARD.scrub && !this.desert) {   // (scrub: early-fall dogwood and sumac reds, olive and green)
       const SCRUB = [[.52, .62, .3], [.46, .58, .28], [.62, .26, .18], [.72, .42, .2], [.6, .56, .26], [.4, .52, .26]];
@@ -1342,7 +1333,7 @@ export class GraphCity {
               // patches of scrubby brush (sumac, dogwood, raspberry canes: user, 23 Nov "more scrubby brush"), goldenrod in
               // sparser drifts, tall grass between, the odd lace or chicory
               const drift = hash(Math.floor(x / 14) * 5.1 + Math.floor(z / 14) * 2.3), scrub = hash(Math.floor(x / 22) * 1.7 + Math.floor(z / 22) * 4.3 + side) < .38;
-              if (this.desert) { if (k < .07) sageClump(N, x, y, z, h, sc * .75); else if (k < .55) this._card(N, x, y, z, h, CARD.tall, sc * .8); continue; }   // (desert: sage and dry grass)
+              if (this.desert) { if (k < .07) sageClump(N, x, y, z, h, sc * .75); else if (k < .4) this._card(N, x, y, z, h, CARD.cheat, sc); else if (k < .55) this._card(N, x, y, z, h, CARD.bunch, sc * .9); else if (k < .62) this._card(N, x, y, z, h, CARD.forb, sc * .9); continue; }   // (desert: sage; cheatgrass, bunchgrass and fall forbs on the disturbed strip — plants phase 3)
               if (scrub && k < .45) { this._card(N, x, y, z, h, CARD.scrub, sc); if (k < .2) this._card(N, x + .5, y, z + .3, h + 1, CARD.scrub, sc * .7); }
               else if (k < .08 + drift * .22) this._card(N, x, y, z, h, CARD.goldenrod, sc);
               else if (k < .9) this._card(N, x, y, z, h, CARD.tall, sc);

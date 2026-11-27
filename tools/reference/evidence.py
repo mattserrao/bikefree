@@ -4,7 +4,7 @@ holds it to tools/reference/budgets.json).
 
   python3 tools/reference/compare.py <before>/outwest-shots.json
   python3 tools/reference/compare.py <after>/outwest-shots.json
-  python3 tools/reference/evidence.py outwest <before>/outwest-shots.json <after>/outwest-shots.json [--note "…"]
+  python3 tools/reference/evidence.py outwest <before>/outwest-shots.json <after>/outwest-shots.json [--note "…"] [--name evidence]
 
 Writes tools/reference/<map>-evidence.json: per photo, the view, the photo's licence, and the before and after
 numbers (land and sky stats from compare.py, the frame counters from frame-audit.js). The renders themselves stay out
@@ -33,6 +33,7 @@ if __name__ == '__main__':
                      'view': {k: v[k] for k in ('lat', 'lon', 'heading', 'hfov', 'pitch', 'fitPx') if k in v},
                      'before': slim(B[photo]), 'after': slim(A[photo])})
     out = {'format': 'bikefree-visual-evidence-1', 'map': city, 'date': datetime.date.today().isoformat(), 'note': note, 'shots': rows}
-    path = os.path.join(ROOT, 'tools', 'reference', f'{city}-evidence.json')
+    name = sys.argv[sys.argv.index('--name') + 1] if '--name' in sys.argv else 'evidence'
+    path = os.path.join(ROOT, 'tools', 'reference', f'{city}-{name}.json')
     json.dump(out, open(path, 'w'), indent=1)
     print(f'wrote {os.path.relpath(path, ROOT)}: {len(rows)} shots')

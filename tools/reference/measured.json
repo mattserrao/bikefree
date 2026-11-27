@@ -1,20 +1,159 @@
 {
-  "note": "Measured real-world values the maps are checked against (user, 27 Nov 2026: the outside reference is the real places). Albedo = broadband diffuse reflectance (0-1, linear); a surface's rendered base colour should land inside its range. Sources below each entry.",
-  "albedo": {
-    "asphalt-fresh":    { "range": [0.04, 0.05], "src": ["https://en.wikipedia.org/wiki/Albedo", "https://eta-publications.lbl.gov/sites/default/files/lbnl-49283.pdf"] },
-    "asphalt-worn":     { "range": [0.10, 0.18], "src": ["https://en.wikipedia.org/wiki/Albedo", "https://eta-publications.lbl.gov/sites/default/files/lbnl-49283.pdf"], "note": "aged AC and aged chip seal ~0.12 (LBNL)" },
-    "concrete":         { "range": [0.18, 0.35], "src": ["https://eta-publications.lbl.gov/sites/default/files/lbnl-49283.pdf"], "note": "new concrete up to 0.55 (Wikipedia)" },
-    "gravel":           { "range": [0.13, 0.20], "src": ["https://docs.studio-397.com/x/EgBDAg"] },
-    "bare-soil":        { "range": [0.13, 0.17], "src": ["https://en.wikipedia.org/wiki/Albedo", "https://dev.epicgames.com/documentation/en-us/unreal-engine/physically-based-materials-in-unreal-engine"] },
-    "dry-sandy-soil":   { "range": [0.25, 0.45], "src": ["https://docs.studio-397.com/x/EgBDAg"] },
-    "desert-sand":      { "range": [0.36, 0.40], "src": ["https://en.wikipedia.org/wiki/Albedo", "https://dev.epicgames.com/documentation/en-us/unreal-engine/physically-based-materials-in-unreal-engine"] },
-    "rock":             { "range": [0.30, 0.40], "src": ["https://docs.studio-397.com/x/EgBDAg"], "note": "red sandstone sits low in this range and strongly red: check hue against the photos" },
-    "green-grass":      { "range": [0.21, 0.25], "src": ["https://en.wikipedia.org/wiki/Albedo", "https://dev.epicgames.com/documentation/en-us/unreal-engine/physically-based-materials-in-unreal-engine"] },
-    "conifer":          { "range": [0.08, 0.15], "src": ["https://en.wikipedia.org/wiki/Albedo"] },
-    "deciduous":        { "range": [0.15, 0.18], "src": ["https://en.wikipedia.org/wiki/Albedo"] },
-    "pinyon-juniper":   { "range": [0.12, 0.13], "src": ["https://journals.uair.arizona.edu/index.php/jrm/article/download/6166/5776"], "note": "whole woodland incl. ground between trees, SW Utah (Gifford 1973); canopy alone darker, conifer-like" }
+ "note": "Measured real-world values the maps are checked against (user, 27 Nov 2026: the outside reference is the real places). Albedo = broadband diffuse reflectance (0-1, linear); a surface's rendered base colour should land inside its range. Sources below each entry.",
+ "albedo": {
+  "asphalt-fresh": {
+   "range": [
+    0.04,
+    0.05
+   ],
+   "src": [
+    "https://en.wikipedia.org/wiki/Albedo",
+    "https://eta-publications.lbl.gov/sites/default/files/lbnl-49283.pdf"
+   ]
   },
-  "limits": {
-    "dielectric-srgb": { "range": [30, 240], "src": ["https://www.adobe.com/learn/substance-3d-designer/web/the-pbr-guide-part-2"], "note": "no non-metal base colour darker than 30-50 or brighter than 240 sRGB" }
+  "asphalt-worn": {
+   "range": [
+    0.1,
+    0.18
+   ],
+   "src": [
+    "https://en.wikipedia.org/wiki/Albedo",
+    "https://eta-publications.lbl.gov/sites/default/files/lbnl-49283.pdf"
+   ],
+   "note": "aged AC and aged chip seal ~0.12 (LBNL)"
+  },
+  "concrete": {
+   "range": [
+    0.18,
+    0.35
+   ],
+   "src": [
+    "https://eta-publications.lbl.gov/sites/default/files/lbnl-49283.pdf"
+   ],
+   "note": "new concrete up to 0.55 (Wikipedia)"
+  },
+  "gravel": {
+   "range": [
+    0.13,
+    0.2
+   ],
+   "src": [
+    "https://docs.studio-397.com/x/EgBDAg"
+   ]
+  },
+  "bare-soil": {
+   "range": [
+    0.13,
+    0.17
+   ],
+   "src": [
+    "https://en.wikipedia.org/wiki/Albedo",
+    "https://dev.epicgames.com/documentation/en-us/unreal-engine/physically-based-materials-in-unreal-engine"
+   ]
+  },
+  "dry-sandy-soil": {
+   "range": [
+    0.25,
+    0.45
+   ],
+   "src": [
+    "https://docs.studio-397.com/x/EgBDAg"
+   ]
+  },
+  "desert-sand": {
+   "range": [
+    0.36,
+    0.4
+   ],
+   "src": [
+    "https://en.wikipedia.org/wiki/Albedo",
+    "https://dev.epicgames.com/documentation/en-us/unreal-engine/physically-based-materials-in-unreal-engine"
+   ]
+  },
+  "rock": {
+   "range": [
+    0.3,
+    0.4
+   ],
+   "src": [
+    "https://docs.studio-397.com/x/EgBDAg"
+   ],
+   "note": "red sandstone sits low in this range and strongly red: check hue against the photos"
+  },
+  "green-grass": {
+   "range": [
+    0.21,
+    0.25
+   ],
+   "src": [
+    "https://en.wikipedia.org/wiki/Albedo",
+    "https://dev.epicgames.com/documentation/en-us/unreal-engine/physically-based-materials-in-unreal-engine"
+   ]
+  },
+  "conifer": {
+   "range": [
+    0.08,
+    0.15
+   ],
+   "src": [
+    "https://en.wikipedia.org/wiki/Albedo"
+   ]
+  },
+  "deciduous": {
+   "range": [
+    0.15,
+    0.18
+   ],
+   "src": [
+    "https://en.wikipedia.org/wiki/Albedo"
+   ]
+  },
+  "pinyon-juniper": {
+   "range": [
+    0.12,
+    0.13
+   ],
+   "src": [
+    "https://journals.uair.arizona.edu/index.php/jrm/article/download/6166/5776"
+   ],
+   "note": "whole woodland incl. ground between trees, SW Utah (Gifford 1973); canopy alone darker, conifer-like"
   }
+ },
+ "limits": {
+  "dielectric-srgb": {
+   "range": [
+    30,
+    240
+   ],
+   "src": [
+    "https://www.adobe.com/learn/substance-3d-designer/web/the-pbr-guide-part-2"
+   ],
+   "note": "no non-metal base colour darker than 30-50 or brighter than 240 sRGB"
+  }
+ },
+ "plantCover": {
+  "note": "canopy cover targets for the plant census (tools/reference/plant_census.py), percent of ground area",
+  "sagebrush": {
+   "range": [
+    6,
+    20
+   ],
+   "mean": 12.3,
+   "source": "Davies et al. 2006, Rangeland Ecology & Management 59(6): 107 intact Wyoming big sagebrush communities, mean sagebrush cover 12.3%, 90% of sites 6\u201320%"
+  },
+  "sagebrushColoradoPlateau": {
+   "range": [
+    10,
+    50
+   ],
+   "source": "USGS NVC CEGL002775 (Wyoming big sagebrush / muttongrass, northern Colorado Plateau): shrub layer ~10% on hot dry sites, >50% sheltered"
+  },
+  "pinyonJuniperTrees": {
+   "range": [
+    15,
+    30
+   ],
+   "source": "NRCS ecological site R048AY342UT: tree canopy 15\u201330% is the diverse woodland phase; >30% understory and diversity at their lowest"
+  }
+ }
 }
