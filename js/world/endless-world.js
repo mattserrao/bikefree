@@ -2,7 +2,7 @@
 // different biomes and utilize high quality post processing and lighting effects"; chose all six biomes in a seeded
 // sequence, moderate grades, a slow day cycle). Built only from the toolbox's shared blocks:
 //   rules      the map profile's defaults (toolbox/map-profile.js: CNY's and SKAN's — worn upstate roads, the verge)
-//   road       the graph maps' road surface and worn paint (graph-world.js roadSurfaceMaterial, wornPaintMaterial)
+//   road       the graph maps' road surface and worn paint (toolbox/materials/graph-road.js roadSurfaceMaterial, wornPaintMaterial)
 //   trees      the tree engine (one for the game) with the endless kit (upstate + the other biomes' species), planted
 //              through the planting API
 //   buildings  the building engine (house engine for the farmhouses, the kit for barns and sheds), planned by the
@@ -34,7 +34,8 @@ import { Writer, NullWriter } from './toolbox/structures/buildings/assemble.js';
 import { makeFacadeMaterial } from './toolbox/structures/buildings/facade-material.js';
 import { dress } from './toolbox/structures/buildings/kit.js';
 import { SURFACE_SUN, loadSurfaceDetail } from './toolbox/materials/surface-detail.js';
-import { roadSurfaceMaterial, wornPaintMaterial, makeStandIn, CLOUD_T } from './graph-world.js';
+import { makeStandIn } from './graph-world.js';
+import { roadSurfaceMaterial, wornPaintMaterial, CLOUD_T } from './toolbox/materials/graph-road.js';   // [review 27 Nov] W13: moved out of graph-world.js
 import { biomeAt, MILE_M, STEP, rng } from '../endless/course.js';
 
 // [zwift-look] the near band (m): trees inside it drawn as their grown models (leaf clusters, limbs), cards beyond
