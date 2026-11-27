@@ -45,7 +45,7 @@ test('the building engine: one front door, every graph code has a kind', async (
   for (const k of ['house', 'village-house', 'farmhouse-ny']) assert.ok(E.GENERATORS['house-engine'].kinds.includes(k));
   assert.equal(E.generatorOf({ house: {} }), 'house-engine'); assert.equal(E.generatorOf({}), 'building-kit');
   // nothing outside the engine draws a building straight through a generator any more
-  for (const f of ['../js/world/graph-city.js', '../js/world/toolbox/structures/buildings/kit.js']) {
+  for (const f of ['../js/world/graph-city.js', '../js/world/graph/kit-adapter.js', '../js/world/toolbox/structures/buildings/kit.js']) {   // ([review 27 Nov] W14: the kit adapter's own module)
     const src = readFileSync(new URL(f, import.meta.url), 'utf8');
     assert.doesNotMatch(src, /[^.]\bassemble\(R|buildHouse\(R/, f);
     // (and the front door is imported where it's called)
