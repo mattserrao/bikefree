@@ -12,6 +12,7 @@
 //   }
 import * as THREE from '../../../../vendor/three.js';
 import { randomSequence } from '../core/random.js';
+import { pedestrians } from './population.js';   // [27 Nov] no pedestrians
 import { Crowd, CLIP, FIT, randomLook, dogLook, clipRate, PALETTES } from './figures/people.js';
 
 const ROAD_HALF = 3.5;
@@ -24,7 +25,7 @@ export class Visitors {
     this.L = landscape; this.route = route; this.index = index; this.u = uniforms;
     this.group = new THREE.Group(); this.group.name = 'Visitors'; parent.add(this.group);
     const rand = (this.rand = randomSequence(6061));
-    const scale = quality === 'low' ? .5 : quality === 'ultra' ? 1.5 : quality === 'high' ? 1.25 : 1;
+    const scale = pedestrians(quality === 'low' ? .5 : quality === 'ultra' ? 1.5 : quality === 'high' ? 1.25 : 1);   // [27 Nov] no pedestrians: nobody at the overlooks
     const walking = config.walking ?? .45, people = [];
     const spot = (cx, cz, rIn, rOut, count, face) => {
       for (let k = 0, tries = 0; k < Math.round(count * scale) && tries < 400; tries++) {

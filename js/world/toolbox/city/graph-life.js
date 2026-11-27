@@ -16,8 +16,9 @@
 //   const life = new GraphLife(world, parent, { quality, uTime }); life.tick(cam, riderPos, dt); life.dispose()
 import { Crowd, CLIP, randomLook, dogLook, clipRate } from '../life/figures/people.js';
 import { randomSequence } from '../core/random.js';
+import { PEDESTRIANS, cyclists, pedestrians } from '../life/population.js';   // (27 Nov: no pedestrians, half the cyclists)
 
-const COUNT = { low: { bikes: 8, walkers: 8 }, balanced: { bikes: 18, walkers: 18 }, high: { bikes: 26, walkers: 26 } };
+const COUNT = { low: { bikes: cyclists(8), walkers: pedestrians(8) }, balanced: { bikes: cyclists(18), walkers: pedestrians(18) }, high: { bikes: cyclists(26), walkers: pedestrians(26) } };
 const SPAWN_MIN = 160, SPAWN_MAX = 900, DROP_M = 1100, CLEAR_M = 90;
 const ROAD_PATHS = new Set(['primary', 'secondary', 'tertiary', 'residential', 'path']);
 const PARK_PATHS = new Set(['drive', 'path', 'bridle', 'plaza']);
@@ -41,10 +42,10 @@ export class GraphLife {
     // every ~50 m of each way, in 500 m cells: a spot is picked from the cells round the camera
     const grid = (list) => { const g = new Map(); for (const e of list) for (let k = 1; k < e.n; k += 5) { const c = `${Math.floor(e.x[k] / 500)},${Math.floor(e.z[k] / 500)}`; (g.get(c) || g.set(c, []).get(c)).push({ e, k, x: e.x[k], z: e.z[k] }); } return g; };
     this.mid = grid(this.edges); this.walkMid = grid(this.walkEdges);
-    this.bikes = new Crowd(parent, { uTime, name: 'Cyclists', kind: 'cyclist', capacity: N.bikes + 4, nearM: quality === 'low' ? 30 : 60 });
-    this.walkers = new Crowd(parent, { uTime, name: 'Walkers', capacity: N.walkers + 2, nearM: quality === 'low' ? 25 : 45, dogs: Math.ceil(N.walkers * 0.35) });
-    this.locals = new Crowd(parent, { uTime, name: 'Locals', capacity: quality === 'low' ? 40 : 90, nearM: quality === 'low' ? 25 : 45 });
-    this.localCap = quality === 'low' ? 40 : 90;
+    this.bikes = new Crowd(parent, { uTime, name: 'Cyclists', kind: 'cyclist', capacity: N.bikes + 1, nearM: quality === 'low' ? 30 : 60 });
+    this.walkers = new Crowd(parent, { uTime, name: 'Walkers', capacity: PEDESTRIANS ? N.walkers + 2 : 1, nearM: quality === 'low' ? 25 : 45, dogs: Math.ceil(N.walkers * 0.35) });
+    this.locals = new Crowd(parent, { uTime, name: 'Locals', capacity: PEDESTRIANS ? (quality === 'low' ? 40 : 90) : 1, nearM: quality === 'low' ? 25 : 45 });
+    this.localCap = PEDESTRIANS ? (quality === 'low' ? 40 : 90) : 0;   // (no locals standing at benches, docks or stands)
     this.agents = [];
     for (let k = 0; k < N.bikes; k++) this.agents.push(this._agent('bike'));
     for (let k = 0; k < N.walkers; k++) this.agents.push(this._agent('walk'));
