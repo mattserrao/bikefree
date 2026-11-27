@@ -8,6 +8,7 @@
 //   const mesh = R.mesh(redRockMaterial())            (one draw; null if nothing was added)
 import * as THREE from '../../../../vendor/three.js';
 import { litMaterial } from '../materials/lit.js';
+import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
 
 const TAU = Math.PI * 2;
 // a smooth 3D value noise in [0, 1] (the same hash as the shaders')
@@ -321,35 +322,32 @@ export function redRockMaterial() {
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvRW = (modelMatrix * vec4(transformed, 1.)).xyz; vRN = normalize(mat3(modelMatrix) * objectNormal);');
     const GL = `
 varying vec3 vRW; varying vec3 vRN;
-float rrH(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
-float rrN(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
-  return mix(mix(mix(rrH(i), rrH(i + vec3(1, 0, 0)), f.x), mix(rrH(i + vec3(0, 1, 0)), rrH(i + vec3(1, 1, 0)), f.x), f.y),
-             mix(mix(rrH(i + vec3(0, 0, 1)), rrH(i + vec3(1, 0, 1)), f.x), mix(rrH(i + vec3(0, 1, 1)), rrH(i + vec3(1, 1, 1)), f.x), f.y), f.z); }
-float rrBump(vec3 p) { return rrN(p * .7) * .7 + rrN(vec3(p.x * 2.2, p.y * .8, p.z * 2.2)) * .3; }
+${HASH_GLSL}
+float rrBump(vec3 p) { return vn3(p * .7) * .7 + vn3(vec3(p.x * 2.2, p.y * .8, p.z * 2.2)) * .3; }
 `;
     shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\n' + GL)
       .replace('#include <color_fragment>', `#include <color_fragment>
       {
         float steep = 1. - abs(vRN.y);
-        float wob = rrN(vRW * .03) * 4. + rrN(vRW * .11) * .8;
+        float wob = vn3(vRW * .03) * 4. + vn3(vRW * .11) * .8;
         float s1 = sin(vRW.y * 2.1 + wob), s2 = sin(vRW.y * .43 + wob * .5);
         float strata = .5 + .5 * s1;
         diffuseColor.rgb *= .9 + .14 * strata * (.6 + .4 * steep);
         diffuseColor.rgb *= mix(1., .82, smoothstep(.75, .95, s2) * steep);                    // a darker bed now and then
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.86, .8, .7), smoothstep(.93, .99, sin(vRW.y * .19 + wob * .3)) * .35 * steep);   // a pale one
         // desert varnish: dark streaks down the cliffs, long in y, narrow across, under the ledges
-        float sx = rrN(vec3(vRW.x * .35 + vRW.z * .35, vRW.y * .015, (vRW.z - vRW.x) * .35));
+        float sx = vn3(vec3(vRW.x * .35 + vRW.z * .35, vRW.y * .015, (vRW.z - vRW.x) * .35));
         // (a shaded face — the tunnel's bore, its vertex colour dark — keeps its own colour: no varnish or dust there)
         float lit = smoothstep(.115, .16, dot(vColor.rgb, vec3(.33)));
         diffuseColor.rgb *= 1. - .42 * smoothstep(.55, .8, sx) * smoothstep(.55, .85, steep) * lit;
         // grain; flats catch the dust (paler, sandier)
-        diffuseColor.rgb *= .92 + .16 * rrN(vRW * 2.7) * mix(.4, 1., lit);
+        diffuseColor.rgb *= .92 + .16 * vn3(vRW * 2.7) * mix(.4, 1., lit);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.78, .58, .42), (1. - steep) * .25 * lit);
       }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       {
         // a bump from world position (perturbNormalArb, as three's bump map): the grain and the bedding's ledges
-        float bh = rrBump(vRW) + .35 * smoothstep(.2, .8, .5 + .5 * sin(vRW.y * 2.1 + rrN(vRW * .03) * 4.));
+        float bh = rrBump(vRW) + .35 * smoothstep(.2, .8, .5 + .5 * sin(vRW.y * 2.1 + vn3(vRW * .03) * 4.));
         vec3 dpx = dFdx(-vViewPosition), dpy = dFdy(-vViewPosition);
         float dhx = dFdx(bh), dhy = dFdy(bh);
         vec3 r1 = cross(dpy, normal), r2 = cross(normal, dpx); float det = dot(dpx, r1);

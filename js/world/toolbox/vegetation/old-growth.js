@@ -35,6 +35,7 @@ import { ForestLife } from '../life/forest-life.js';
 import { NearTrunks, NearPlants, flareGeometry, flareMaterial } from './near-trunks.js';
 import { NEAR_TRUNK, NEAR_PLANT } from './tree-engine.js';
 import { LEAF_V } from './leaf-cards.js';
+import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
 
 export const OG = { old: 30, forest: 31, meadow: 32, blow: 33 };
 const isWood = (c) => c === OG.old || c === OG.forest || c === OG.blow;
@@ -789,7 +790,7 @@ export class OldGrowth {
     this.bladeThick = !msaa;
     m.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = this.uTime;
-      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; attribute float aH; attribute float aB;')
+      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; attribute float aH; attribute float aB;\n' + HASH_GLSL)
         .replace('#include <begin_vertex>', `#include <begin_vertex>
           vec3 ip = vec3(0.);
           #ifdef USE_INSTANCING
@@ -798,7 +799,7 @@ export class OldGrowth {
           // (user, 24 Nov: "The pop-in for grass is distracting" → fixed tiles, grown in, blended into the floor):
           // nothing appears or vanishes at full height — a clump grows up out of the hay floor between ~25 and 40 m
           // (each at its own distance), and its blades thin out from ~12 m (half gone by 30 m), each shrinking down
-          float gd = length(ip.xz - cameraPosition.xz), gr = fract(sin(dot(ip.xz, vec2(12.9898, 78.233))) * 43758.5453);
+          float gd = length(ip.xz - cameraPosition.xz), gr = hw21(ip.xz);   // [review 27 Nov] (sin of ~1e5: imprecise on GPUs, neighbours' jitter correlated far from the origin)
           float grow = 1. - smoothstep(${GRASS_FADE[0].toFixed(1)} + gr * 6., ${GRASS_FADE[1].toFixed(1)} - (1. - gr) * 2., gd);
           float keep = mix(1.02, .5, smoothstep(12., 30., gd));
           float gs = grow * (1. - smoothstep(keep - .1, keep, aB));

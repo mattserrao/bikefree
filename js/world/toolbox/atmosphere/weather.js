@@ -5,6 +5,7 @@
 // shoreline where the scene has one (the Big Sur hero map), elsewhere it lies in the valleys.
 import * as THREE from '../../../../vendor/three.js';
 import { randomSequence } from '../core/random.js';
+import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
 
 export const WEATHER = {
   clear: { label: 'Clear', cloud: .12, shadow: .5, wind: .3, bank: 0, rain: 0, overcast: 0, bankTop: 140 },
@@ -21,10 +22,8 @@ for (const w of Object.values(WEATHER)) { w.smoke ??= 0; w.peaks ??= 0; }
 WEATHER.clouds.peaks = 1; WEATHER.rain.peaks = 1.3;
 
 const noise = /* glsl */`
-  float wHash(vec2 p) { vec3 q = fract(vec3(p.xyx) * .1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
-  float wNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
-    return mix(mix(wHash(i), wHash(i + vec2(1., 0.)), f.x), mix(wHash(i + vec2(0., 1.)), wHash(i + 1.), f.x), f.y); }
-  float wFbm(vec2 p) { return wNoise(p) * .5 + wNoise(p * 2.03 + 7.) * .27 + wNoise(p * 4.1 - 3.) * .15 + wNoise(p * 8.3 + 1.) * .08; }
+${HASH_GLSL}
+  float wFbm(vec2 p) { return vn2(p) * .5 + vn2(p * 2.03 + 7.) * .27 + vn2(p * 4.1 - 3.) * .15 + vn2(p * 8.3 + 1.) * .08; }
 `;
 
 const SMOKE = new THREE.Color('#b7987a');

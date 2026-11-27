@@ -3,6 +3,7 @@
 import * as THREE from '../../../../vendor/three.js';
 import { randomSequence } from '../core/random.js';
 import { curveOn, curveXZ } from '../../road-align.js';   // [w2-align]
+import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
 
 /** The same outbound-road frame is used for signs, markers and turnouts. */
 export function roadFrame(route, index, distance, lateral = 0) {
@@ -282,14 +283,12 @@ export class RoadsideDetails {
           .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBfCreek = uv; vBfFoam = aFoam;');
         shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>
             varying vec2 vBfCreek; uniform float uTime; varying float vBfFoam;
-            float bfCH(vec2 p) { vec3 q = fract(vec3(p.xyx) * .1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
-            float bfCN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
-              return mix(mix(bfCH(i), bfCH(i + vec2(1., 0.)), f.x), mix(bfCH(i + vec2(0., 1.)), bfCH(i + 1.), f.x), f.y); }`)
+${HASH_GLSL}`)
           .replace('#include <color_fragment>', `#include <color_fragment>
             float bfFlow = sin(vBfCreek.y * 35. - uTime * 1.6 + sin(vBfCreek.x * 18.) * 2.);
             diffuseColor.rgb *= .96 + bfFlow * .055;
             // rapids: white water streaming downstream, thickest mid-channel and over the steepest drops
-            float bfWW = bfCN(vec2(vBfCreek.x * 9., vBfCreek.y * 12. - uTime * 3.2)) * .6 + bfCN(vec2(vBfCreek.x * 23., vBfCreek.y * 30. - uTime * 5.)) * .4;
+            float bfWW = vn2(vec2(vBfCreek.x * 9., vBfCreek.y * 12. - uTime * 3.2)) * .6 + vn2(vec2(vBfCreek.x * 23., vBfCreek.y * 30. - uTime * 5.)) * .4;
             float bfMid = 1. - abs(vBfCreek.x - .5) * 1.4;
             float bfWhite = smoothstep(.55 - vBfFoam * .35, .62 - vBfFoam * .35, bfWW * bfMid + vBfFoam * .2) * smoothstep(.02, .15, vBfFoam + .03);
             diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.93, .96, .97), bfWhite * .85);

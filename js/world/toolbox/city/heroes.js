@@ -13,22 +13,15 @@ import { MeshBuilder } from '../core/mesh-builder.js';
 import { ROAD_WIDTH } from '../../pose.js';
 import { V, TAU, centroid, area2, orient, scaleRing, lerp2, inPoly, prism, cap, block, chamfer } from './hero-geom.js';
 import { landmarkModels } from './landmark-heroes.js';
+import { withNightGlow } from '../materials/night-glow.js';
 import { northShoreModels } from './heroes-northshore.js';   // [7.7] PPG Place, the PNC Park statues, Mister Rogers, USS Requin
 
 // ---------------------------------------------------------------- materials
 /** Lit at night: an `aGlow` colour added as emission, scaled by the city's night. */
 function neonMaterial(city) {
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .55, metalness: .1 });
-  m.onBeforeCompile = (shader) => {
-    shader.uniforms.uNight = city.windowNight || city.night;   // (windowNight: a host's softer night light — js/world/graph-heroes.js)
-    shader.uniforms.uPulse = city.heroPulse;
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 aGlow; varying vec3 vGlow;')
-      .replace('#include <fog_vertex>', '#include <fog_vertex>\nvGlow = aGlow;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight, uPulse; varying vec3 vGlow;')
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vGlow * uNight * 2.2 * (.8 + .2 * uPulse);');
-  };
-  m.customProgramCacheKey = () => 'city-heroes-neon-1';
-  return city.own(m);
+  // (windowNight: a host's softer night light — js/world/graph-heroes.js) [review 27 Nov] the shared night glow
+  return city.own(withNightGlow(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .55, metalness: .1 }), () => city.windowNight || city.night,
+    'vGlow * uNight * 2.2 * (.8 + .2 * uPulse)', 'city-heroes-neon-1', { glow: 'vec3', decl: 'uniform float uPulse;', patch: (sh) => { sh.uniforms.uPulse = city.heroPulse; } }));
 }
 
 // ---------------------------------------------------------------- the build

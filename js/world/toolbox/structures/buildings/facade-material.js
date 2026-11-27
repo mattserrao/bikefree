@@ -16,6 +16,7 @@
 // drawn here. Every detail fades to its average once it's a couple of pixels, so nothing shimmers far off.
 import * as THREE from '../../../../../vendor/three.js';
 import { SKY_REFLECT } from '../../atmosphere/sky-dome.js';
+import { HASH_GLSL } from '../../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
 
 export const FRAMES = ['#efebe2', '#e4dac4', '#6b4a32', '#3b3d3f', '#9ea4a8'];
 /** Flags (aWin.w / 256). */
@@ -31,10 +32,8 @@ const GLSL_COMMON = /* glsl */`
  *  building material (city.js), which draws its facades with them when the scene has a buildingKit. */
 export const FACADE_GLSL = /* glsl */`
   vec3 bkLin(vec3 c) { return pow(c, vec3(2.2)); }
-  float bkH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-  float bkN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
-    return mix(mix(bkH(i), bkH(i + vec2(1, 0)), f.x), mix(bkH(i + vec2(0, 1)), bkH(i + vec2(1, 1)), f.x), f.y); }
-  float bkF(vec2 p) { return bkN(p) * .6 + bkN(p * 2.13 + 7.1) * .3 + bkN(p * 4.7 + 3.3) * .1; }
+${HASH_GLSL}
+  float bkF(vec2 p) { return vn2(p) * .6 + vn2(p * 2.13 + 7.1) * .3 + vn2(p * 4.7 + 3.3) * .1; }
   // a line of width w (m) every period p along x, antialiased by the pixel size px
   float bkLine(float x, float p, float w, float px) { float d = abs(fract(x / p + .5) - .5) * p; return 1. - smoothstep(w * .5, w * .5 + px, d); }
   float bkBox(vec2 q, vec2 lo, vec2 hi, float px) { vec2 a = smoothstep(lo - px, lo, q) * (1. - smoothstep(hi, hi + px, q)); return a.x * a.y; }
@@ -42,14 +41,14 @@ export const FACADE_GLSL = /* glsl */`
   // ---- masonry and wood, each returning a colour around 'base' (and averaging to it far off)
   vec3 bkRubble(vec3 base, float u, float v, float det, float seed) {
     // irregular courses: the bed joints wander, stones vary in length and tone, a few big quoin-like ones
-    float vw = v + (bkN(vec2(u * 1.7, seed)) - .5) * .09;
+    float vw = v + (vn2(vec2(u * 1.7, seed)) - .5) * .09;
     float row = floor(vw / .26); float rv = fract(vw / .26);
-    float len = .28 + .38 * bkH(vec2(row, seed + 4.));
-    float x = u / len + bkH(vec2(row, seed)) * 3.;
-    float col = floor(x + (bkN(vec2(row * 3.1, u * .8)) - .5) * .5); float cx = fract(x + (bkN(vec2(row * 3.1, u * .8)) - .5) * .5);
-    float h = bkH(vec2(col, row) + seed * 17.);
+    float len = .28 + .38 * hw21(vec2(row, seed + 4.));
+    float x = u / len + hw21(vec2(row, seed)) * 3.;
+    float col = floor(x + (vn2(vec2(row * 3.1, u * .8)) - .5) * .5); float cx = fract(x + (vn2(vec2(row * 3.1, u * .8)) - .5) * .5);
+    float h = hw21(vec2(col, row) + seed * 17.);
     vec3 tint = mix(vec3(1.), vec3(1.07, .99, .9), step(.68, h)) * mix(vec3(1.), vec3(.94, .97, 1.03), step(h, .22));
-    vec3 c = base * (.84 + .3 * bkH(vec2(row, col) + 2.3)) * tint;
+    vec3 c = base * (.84 + .3 * hw21(vec2(row, col) + 2.3)) * tint;
     float edge = min(min(cx, 1. - cx) * len, min(rv, 1. - rv) * .26);
     c *= mix(1., .8 + .2 * smoothstep(0., .07, edge), det);
     float mortar = 1. - smoothstep(.01, .028, edge);
@@ -58,7 +57,7 @@ export const FACADE_GLSL = /* glsl */`
   }
   vec3 bkCourses(vec3 base, float u, float v, float det, float seed, float ch, float bw, float joint, float vary) {
     float row = floor(v / ch); float x = u / bw + mod(row, 2.) * .5; float col = floor(x);
-    float h = bkH(vec2(col, row) + seed * 13.);
+    float h = hw21(vec2(col, row) + seed * 13.);
     vec3 c = base * (1. - vary * .5 + vary * h);
     float e = min(min(fract(x), 1. - fract(x)) * bw, min(fract(v / ch), 1. - fract(v / ch)) * ch);
     c = mix(c, base * 1.15, (1. - smoothstep(joint, joint * 2., e)) * .8);
@@ -67,9 +66,9 @@ export const FACADE_GLSL = /* glsl */`
   vec3 bkBoards(vec3 base, float u, float v, float det, float seed, float w, bool horiz) {
     float x = horiz ? v : u, y = horiz ? u : v;
     float k = floor(x / w), f = fract(x / w);
-    float h = bkH(vec2(k, seed * 9.));
+    float h = hw21(vec2(k, seed * 9.));
     vec3 c = base * (.86 + .26 * h);
-    c *= .93 + .1 * bkN(vec2(k * 3.1, y * 1.3));            // grain
+    c *= .93 + .1 * vn2(vec2(k * 3.1, y * 1.3));            // grain
     float gap = horiz ? (1. - smoothstep(0., .16, f)) * .45 : (1. - smoothstep(.03, .09, min(f, 1. - f))) * .55;
     c *= 1. - gap;
     return mix(base * .92, c, det);
@@ -81,63 +80,63 @@ export const FACADE_GLSL = /* glsl */`
     if (code == 40) {          // canal tiles: rounded channels down the slope
       float col = floor(u / .21), row = floor(v / .42);
       float round_ = abs(sin(3.14159 * u / .21));
-      float h = bkH(vec2(col, row) + seed);
+      float h = hw21(vec2(col, row) + seed);
       c = base * (.78 + .32 * round_) * (.86 + .28 * h);
       c *= 1. - (1. - smoothstep(0., .07, fract(v / .42))) * .35;
       c = mix(c, base * vec3(.7, .66, .6), step(.96, h) * .7);
     } else if (code == 41) {   // interlocking flat tiles
       float row = floor(v / .34); float x = u / .24 + mod(row, 2.) * .5;
-      float h = bkH(vec2(floor(x), row) + seed);
+      float h = hw21(vec2(floor(x), row) + seed);
       c = base * (.86 + .24 * h) * (.92 + .1 * abs(sin(6.2832 * x)));
       c *= 1. - (1. - smoothstep(0., .1, fract(v / .34))) * .4;
     } else if (code == 42) {   // fish-scale tiles (several shades: the Dauphiné's patterned roofs)
       float row = floor(v / .16); float x = u / .17 + mod(row, 2.) * .5;
       vec2 q = vec2(fract(x) - .5, fract(v / .16));
-      float h = bkH(vec2(floor(x), row) + seed);
+      float h = hw21(vec2(floor(x), row) + seed);
       c = base * (.8 + .34 * h) * mix(vec3(1.), vec3(.92, .95, 1.05), step(.75, h));
       float scallop = length(vec2(q.x * 1.06, (q.y - .55) * .9));
       c *= 1. - smoothstep(.42, .5, scallop) * .4 * step(q.y, .55);
     } else if (code == 43) {   // slate
       float row = floor(v / .2); float x = u / .26 + mod(row, 2.) * .5;
-      float h = bkH(vec2(floor(x), row) + seed);
+      float h = hw21(vec2(floor(x), row) + seed);
       c = base * (.84 + .3 * h) * mix(vec3(1.), vec3(.93, .97, 1.06), step(.6, h));
       c *= 1. - (1. - smoothstep(0., .1, fract(v / .2))) * .45;
       c *= 1. - bkLine(x, 1., .05, .02) * .3;
     } else if (code == 44) {   // lauze: big irregular stone slabs, lichen
-      float rh = .38 + .14 * bkH(vec2(floor(v / .45), seed));
-      float row = floor(v / rh); float x = u / (.5 + .3 * bkH(vec2(row, seed + 1.))) + bkH(vec2(row, 2.)) * 4.;
-      float h = bkH(vec2(floor(x), row) + seed);
+      float rh = .38 + .14 * hw21(vec2(floor(v / .45), seed));
+      float row = floor(v / rh); float x = u / (.5 + .3 * hw21(vec2(row, seed + 1.))) + hw21(vec2(row, 2.)) * 4.;
+      float h = hw21(vec2(floor(x), row) + seed);
       c = base * (.78 + .4 * h) * mix(vec3(1.), vec3(1.06, 1., .9), step(.66, h));
       float e = min(min(fract(x), 1. - fract(x)) * .6, fract(v / rh) * rh);
       c *= .62 + .38 * smoothstep(0., .05, e);
-      float lichen = step(.86, bkN(vec2(u, v) * 3.1 + seed)) * step(.4, bkH(floor(vec2(u, v) * 9.)));
+      float lichen = step(.86, vn2(vec2(u, v) * 3.1 + seed)) * step(.4, hw21(floor(vec2(u, v) * 9.)));
       c = mix(c, bkLin(vec3(.78, .7, .38)), lichen * .55);
     } else if (code == 45) {   // standing-seam metal
       float seam = bkLine(u, .52, .035, .02);
-      c = base * (.95 + .07 * bkN(vec2(u * .5, v * .3) + seed));
+      c = base * (.95 + .07 * vn2(vec2(u * .5, v * .3) + seed));
       c = mix(c, base * 1.28, seam);
       c = mix(c, base * .78, bkLine(u + .03, .52, .03, .02) * .6);
-      float rust = wear * smoothstep(.55, .9, bkN(vec2(u * 3., v * .25) + seed * 5.));
+      float rust = wear * smoothstep(.55, .9, vn2(vec2(u * 3., v * .25) + seed * 5.));
       c = mix(c, bkLin(vec3(.52, .32, .2)), rust * .6);
     } else if (code == 46) {   // corrugated
       c = base * (.86 + .2 * sin(6.2832 * u / .076) * .5 + .1);
-      float rust = wear * smoothstep(.5, .85, bkN(vec2(u * 2., v * .3) + seed * 5.));
+      float rust = wear * smoothstep(.5, .85, vn2(vec2(u * 2., v * .3) + seed * 5.));
       c = mix(c, bkLin(vec3(.5, .3, .18)), rust * .7);
     } else if (code == 47) {   // wood shingles, silvered
-      float row = floor(v / .14); float x = u / .11 + mod(row, 2.) * .5 + bkH(vec2(row, seed)) * .3;
-      float h = bkH(vec2(floor(x), row) + seed);
+      float row = floor(v / .14); float x = u / .11 + mod(row, 2.) * .5 + hw21(vec2(row, seed)) * .3;
+      float h = hw21(vec2(floor(x), row) + seed);
       c = base * (.8 + .34 * h);
       c *= 1. - (1. - smoothstep(0., .14, fract(v / .14))) * .45;
     } else if (code == 49) {   // asphalt shingles: three-tab strips, blended granules, the odd replaced patch
-      float row = floor(v / .145); float x = u / .33 + mod(row, 2.) * .5 + bkH(vec2(row, seed)) * .2;
-      float h = bkH(vec2(floor(x), row) + seed);
-      c = base * (.88 + .2 * h) * (.94 + .12 * bkH(floor(vec2(u, v) * 40.)));
+      float row = floor(v / .145); float x = u / .33 + mod(row, 2.) * .5 + hw21(vec2(row, seed)) * .2;
+      float h = hw21(vec2(floor(x), row) + seed);
+      c = base * (.88 + .2 * h) * (.94 + .12 * hw21(floor(vec2(u, v) * 40.)));
       c *= 1. - (1. - smoothstep(0., .12, fract(v / .145))) * .42;
       c *= 1. - bkLine(x, 1., .012 / .33, .01) * .35;
-      c = mix(c, base * vec3(.9, .95, 1.05) * 1.1, step(.93, bkH(vec2(floor(x / 6.), floor(row / 5.)) + seed * 3.)) * .6);
+      c = mix(c, base * vec3(.9, .95, 1.05) * 1.1, step(.93, hw21(vec2(floor(x / 6.), floor(row / 5.)) + seed * 3.)) * .6);
     } else if (code == 48) {   // flat: gravel and patched membrane
-      c = base * (.9 + .2 * bkH(floor(vec2(u, v) * 18.)));
-      c *= .92 + .14 * smoothstep(.4, .7, bkN(vec2(u, v) * .4 + seed));
+      c = base * (.9 + .2 * hw21(floor(vec2(u, v) * 18.)));
+      c *= .92 + .14 * smoothstep(.4, .7, vn2(vec2(u, v) * .4 + seed));
     }
     c = mix(base * .97, c, det);
     // moss and dark weather on the shady slope, near the eaves
@@ -178,7 +177,7 @@ const GLSL_FRAG = /* glsl */`
     float bi = floor(u / bw), fi = floor(vv / fh);
     float cu = u - (bi + .5) * bw, fv = vv - fi * fh;
     if (gable) { bi = 0.; fi = 9.; cu = u - L * .5; fv = vv; if (L < 4.) return vec4(wall, 0.); }
-    float h = bkH(vec2(bi, fi) + seed * 91.7), h2 = bkH(vec2(fi, bi) * 1.7 + seed * 13.1);
+    float h = hw21(vec2(bi, fi) + seed * 91.7), h2 = hw21(vec2(fi, bi) * 1.7 + seed * 13.1);
     // window size by set
     vec2 hw = vec2(.5, .7); float y0 = .95;
     if (ws == 2) { hw = vec2(.33, .42); y0 = 1.; }
@@ -220,12 +219,12 @@ const GLSL_FRAG = /* glsl */`
       float sw = bw * .5 - .3;
       float glass = bkBox(q, vec2(-sw, .45), vec2(sw, 2.55), px);
       float riser = bkBox(q, vec2(-sw - .12, 0.), vec2(sw + .12, 2.7), px) - glass;
-      vec3 sc = mix(bkLin(vec3(.18, .21, .24)), bkLin(vec3(.85, .78, .62)), smoothstep(.55, .8, bkN(q * 2.3 + bi)) * .35);
+      vec3 sc = mix(bkLin(vec3(.18, .21, .24)), bkLin(vec3(.85, .78, .62)), smoothstep(.55, .8, vn2(q * 2.3 + bi)) * .35);
       sc = mix(sc, bkLin(vec3(.62, .72, .84)), smoothstep(.2, .9, fract((q.x + q.y * .6) * .4 + h)) * .2);
       c = mix(c, trim * .9, riser); c = mix(c, sc, glass);
       // the sign band across the wall
       float sign = bkBox(vec2(u, fv), vec2(.25, 2.8), vec2(L - .25, 3.15), px);
-      vec3 signC = bkLin(mix(vec3(.55, .16, .14), vec3(.12, .27, .42), step(.5, bkH(vec2(seed, 3.)))));
+      vec3 signC = bkLin(mix(vec3(.55, .16, .14), vec3(.12, .27, .42), step(.5, hw21(vec2(seed, 3.)))));
       signC = mix(signC, bkLin(vec3(.95, .9, .78)), bkLine(u, .34, .16, px) * bkBox(vec2(u, fv), vec2(L * .3, 2.9), vec2(L * .7, 3.05), px));
       c = mix(c, signC, sign);
       return vec4(c, max(glass, sign));
@@ -252,7 +251,7 @@ const GLSL_FRAG = /* glsl */`
     float sill = bkBox(q, vec2(-hw.x - .1, -hw.y - .11), vec2(hw.x + .1, -hw.y - frameW + .01), px);
     c = mix(c, ws == 3 ? frameC * .85 : bkLin(vec3(.83, .81, .77)), sill);
     // drips under the sill
-    float drip = wear * (1. - smoothstep(0., 1.4, -q.y - hw.y)) * step(-q.y, hw.y + 1.4) * step(hw.y, -q.y) * step(abs(q.x), hw.x + .05) * bkN(vec2(u * 9., v * .4));
+    float drip = wear * (1. - smoothstep(0., 1.4, -q.y - hw.y)) * step(-q.y, hw.y + 1.4) * step(hw.y, -q.y) * step(abs(q.x), hw.x + .05) * vn2(vec2(u * 9., v * .4));
     c *= 1. - drip * .35;
     // the glass, frame, muntins
     vec3 g = bkGlass(q, hw, h2, px);
@@ -298,16 +297,16 @@ const GLSL_FRAG = /* glsl */`
     if (flowers && (fi > .5 || ws == 3) && h2 > .25 && !gable) {
       vec2 fq = vec2(q.x, q.y + hw.y);
       float box = bkBox(fq, vec2(-hw.x - .06, -.02), vec2(hw.x + .06, .2), px);
-      float fl = bkBox(fq, vec2(-hw.x - .04, .18), vec2(hw.x + .04, .42), px) * smoothstep(.35, .5, bkN(fq * vec2(9., 7.) + bi * 3.) + (.42 - fq.y) * 1.6 - .2);
-      vec3 flc = mix(bkLin(vec3(.3, .45, .2)), mix(bkLin(vec3(.85, .12, .14)), bkLin(vec3(.93, .4, .62)), step(.6, h2)), step(.55, bkN(fq * 22. + h)));
+      float fl = bkBox(fq, vec2(-hw.x - .04, .18), vec2(hw.x + .04, .42), px) * smoothstep(.35, .5, vn2(fq * vec2(9., 7.) + bi * 3.) + (.42 - fq.y) * 1.6 - .2);
+      vec3 flc = mix(bkLin(vec3(.3, .45, .2)), mix(bkLin(vec3(.85, .12, .14)), bkLin(vec3(.93, .4, .62)), step(.6, h2)), step(.55, vn2(fq * 22. + h)));
       c = mix(c, ws == 3 || h2 > .7 ? bkLin(vec3(.45, .3, .2)) : bkLin(vec3(.7, .38, .25)), box);
       c = mix(c, flc, fl * (1. - box));
       a = max(a, box + fl);
     }
     // shutters: open beside the window, closed over it, the odd one half shut or missing
     if (shutters && !gable && ws != 4 && ws != 5) {
-      float st = openOnly ? 0. : bkH(vec2(bi, fi) * 3.7 + seed);
-      float miss = openOnly ? 0. : step(1. - wear * .25, bkH(vec2(fi, bi) + seed * 5.));
+      float st = openOnly ? 0. : hw21(vec2(bi, fi) * 3.7 + seed);
+      float miss = openOnly ? 0. : step(1. - wear * .25, hw21(vec2(fi, bi) + seed * 5.));
       vec3 sc = trim * (.92 + .16 * h2);
       sc = mix(sc, mix(sc, vec3(dot(sc, vec3(.33))), .5) * 1.25, wear * .5);   // sun-faded
       float sw = hw.x + .02, sh = hw.y + .04;
@@ -369,35 +368,35 @@ const GLSL_MAIN = /* glsl */`
       else if (code == 5) c = bkCourses(base, u, v, det, seed, .075, .23, .006, .22);
       else if (code == 6) c = bkBoards(base, u, v, det, seed, .19, true);
       else if (code == 7) c = bkBoards(base, u, v, det, seed, .2, false);
-      else if (code == 8) { float f = fract(v / .23); c = base * (.68 + .42 * sin(3.14159 * f)) * (.9 + .2 * bkH(vec2(floor(v / .23), seed))); c = mix(base * .92, c, det); }
+      else if (code == 8) { float f = fract(v / .23); c = base * (.68 + .42 * sin(3.14159 * f)) * (.9 + .2 * hw21(vec2(floor(v / .23), seed))); c = mix(base * .92, c, det); }
       else if (code == 9) { c = bkCourses(base, u, v, det, seed, .16, .12, .01, .3); c *= 1. - (1. - smoothstep(0., .25, fract(v / .16))) * .3 * det; }
       else if (code == 10) {
         float post = bkLine(u, 1.2, .18, px), beam = bkLine(v - vWin.z, vWin.x > 0. ? vWin.x : 2.9, .2, px);
         float br = bkLine(fract(u / 1.2) * 1.2 - mod(v, 2.9) * .41, 1.2, .16, px);
         c = mix(base, bkLin(vec3(.3, .2, .14)), clamp(post + beam + br * .8, 0., 1.) * detW);
       }
-      else if (code == 11) { c = base * (.88 + .16 * sin(6.2832 * u / .076) * det); c = mix(c, bkLin(vec3(.5, .3, .18)), wear * smoothstep(.6, .9, bkN(vec2(u * 2., v * .2) + seed)) * .6); }
+      else if (code == 11) { c = base * (.88 + .16 * sin(6.2832 * u / .076) * det); c = mix(c, bkLin(vec3(.5, .3, .18)), wear * smoothstep(.6, .9, vn2(vec2(u * 2., v * .2) + seed)) * .6); }
       else if (code == 12) { c = bkCourses(base, u, v, detW, seed, 2.85, 3., .015, .08); }
-      else if (code == 13) { c = mix(bkLin(vec3(.16, .2, .24)), bkLin(vec3(.55, .66, .78)), .2 + .2 * bkN(vec2(u, v) * .2)); c = mix(c, base, max(bkLine(u, 1.5, .08, px), bkLine(v, vWin.x > 0. ? vWin.x : 3.6, .12, px)) * detW); }
+      else if (code == 13) { c = mix(bkLin(vec3(.16, .2, .24)), bkLin(vec3(.55, .66, .78)), .2 + .2 * vn2(vec2(u, v) * .2)); c = mix(c, base, max(bkLine(u, 1.5, .08, px), bkLine(v, vWin.x > 0. ? vWin.x : 3.6, .12, px)) * detW); }
       // soft patches, sun fade high up, damp at the foot, long weather streaks
       c *= .95 + .1 * blot;
       float vv = v - vWin.z;
-      float damp = (1. - smoothstep(0., .25 + .8 * wear, vv + .25 * bkN(vec2(u * 1.3, 0.)))) * (.12 + .4 * wear);
+      float damp = (1. - smoothstep(0., .25 + .8 * wear, vv + .25 * vn2(vec2(u * 1.3, 0.)))) * (.12 + .4 * wear);
       c = mix(c, c * vec3(.7, .74, .66), damp);
-      c *= 1. - wear * .16 * smoothstep(.55, 1., bkN(vec2(u * 1.8, v * .09) + seed)) ;
+      c *= 1. - wear * .16 * smoothstep(.55, 1., vn2(vec2(u * 1.8, v * .09) + seed)) ;
       // corner quoins
       float flags = floor(floor(vWin.w + .5) / 256.);
       if (mod(floor(flags / 4.), 2.) > .5 && vv > -.3) {
         float k = floor(v / .34), w = mod(k, 2.) < .5 ? .62 : .36;
         float q = max(step(u, w), step(L - u, w));
         float gap = bkLine(v, .34, .025, px) * .5;
-        c = mix(c, vAcc * (1. - gap) * (.95 + .1 * bkH(vec2(k, step(u, w)))), q * detW);
+        c = mix(c, vAcc * (1. - gap) * (.95 + .1 * hw21(vec2(k, step(u, w)))), q * detW);
       }
       // ivy up from one corner
       if (mod(floor(flags / 256.), 2.) > .5) {
         float iv = bkF(vec2(u * .7, v * .5) + seed * 3.) * 1.6 - u / 3.5 - max(0., vv) / 7. - .35;
-        float leaf = smoothstep(0., .08, iv) * (.75 + .5 * bkH(floor(vec2(u, v) * 14.)) * det);
-        c = mix(c, bkLin(vec3(.24, .36, .16)) * (.8 + .4 * bkN(vec2(u, v) * 6.)), clamp(leaf, 0., 1.));
+        float leaf = smoothstep(0., .08, iv) * (.75 + .5 * hw21(floor(vec2(u, v) * 14.)) * det);
+        c = mix(c, bkLin(vec3(.24, .36, .16)) * (.8 + .4 * vn2(vec2(u, v) * 6.)), clamp(leaf, 0., 1.));
       }
       // windows, doors and shopfronts
       if (vWin.x > 0. || mod(floor(flags / 32.), 2.) > .5) {
@@ -411,7 +410,7 @@ const GLSL_MAIN = /* glsl */`
       c = bkRoof(code, base, u, v, det, seed, wear, smoothstep(.1, -.6, vWN.z) * .7 + .3);
     } else if (code == 14) {   // balcony balustrade: planks with cut-outs
       float k = floor(u / .14), f = fract(u / .14);
-      c = base * (.86 + .26 * bkH(vec2(k, seed)));
+      c = base * (.86 + .26 * hw21(vec2(k, seed)));
       c *= 1. - (1. - smoothstep(.02, .07, min(f, 1. - f))) * .5;
       float hole = (1. - smoothstep(.05, .07, length(vec2((f - 1.) * .14, (v - .55) * .55)))) + (1. - smoothstep(.05, .07, length(vec2(f * .14, (v - .55) * .55))));
       c = mix(c, base * .25, clamp(hole, 0., 1.) * mod(k, 2.));
@@ -434,21 +433,21 @@ const GLSL_MAIN = /* glsl */`
     else if (code == 21) { float s = step(.5, fract(u / .6)); c = mix(base, bkLin(vec3(.93, .9, .84)), s); c *= 1. - bkLine(v, 100., .04, px) * .2; }
     else if (code == 22) {   // woodpile: log ends
       vec2 g = vec2(u / .17 + mod(floor(v / .15), 2.) * .5, v / .15);
-      vec2 q = fract(g) - .5; float h = bkH(floor(g));
+      vec2 q = fract(g) - .5; float h = hw21(floor(g));
       float r = length(q * vec2(1., 1.13));
       c = mix(bkLin(vec3(.2, .14, .1)), base * (.85 + .3 * h) * (1. - smoothstep(.15, .45, r) * .25), 1. - smoothstep(.42, .5, r));
       c = mix(base * .7, c, det);
     } else if (code == 23) {   // foliage
-      c = base * (.72 + .5 * bkN(vec2(u, v) * 5. + seed));
-      c = mix(c, base * 1.35, step(.82, bkH(floor(vec2(u, v) * 11.))) * det);
-      float fl = step(.93, bkH(floor(vec2(u, v) * 13.) + 7.)) * step(.5, fract(seed * 7.));
+      c = base * (.72 + .5 * vn2(vec2(u, v) * 5. + seed));
+      c = mix(c, base * 1.35, step(.82, hw21(floor(vec2(u, v) * 11.))) * det);
+      float fl = step(.93, hw21(floor(vec2(u, v) * 13.) + 7.)) * step(.5, fract(seed * 7.));
       c = mix(c, mix(bkLin(vec3(.95, .9, .82)), bkLin(vec3(.9, .3, .45)), step(.5, fract(seed * 13.))), fl * det);
     } else if (code == 25) {   // solar panels
       vec2 g = fract(vec2(u / .17, v / .17));
       c = mix(bkLin(vec3(.08, .12, .22)), bkLin(vec3(.2, .28, .45)), smoothstep(.2, .8, fract((u + v) * .3)) * .4);
       c = mix(c, bkLin(vec3(.7, .72, .75)), (1. - smoothstep(.04, .1, min(min(g.x, 1. - g.x), min(g.y, 1. - g.y)))) * .45 * det);
-    } else if (code == 26) c = base * (.8 + .4 * bkH(floor(vec2(u, v) * 22.)) * det + .2 * (1. - det));
-    else if (code == 27) { c = mix(base, bkLin(vec3(.28, .45, .18)), bkLine(u, .45, .18, px) * smoothstep(.3, .6, bkN(vec2(u, v) * 7.)) * det); }
+    } else if (code == 26) c = base * (.8 + .4 * hw21(floor(vec2(u, v) * 22.)) * det + .2 * (1. - det));
+    else if (code == 27) { c = mix(base, bkLin(vec3(.28, .45, .18)), bkLine(u, .45, .18, px) * smoothstep(.3, .6, vn2(vec2(u, v) * 7.)) * det); }
     else if (code == 28) c = mix(base, base * 1.5, bkLine(u, .65, .12, px) * detW);   // soffit: rafter ends
     else if (code == 18) c = base;
     diffuseColor.rgb = c;

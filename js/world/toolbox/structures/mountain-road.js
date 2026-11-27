@@ -18,6 +18,7 @@ import { decorateSceneryMaterial } from '../materials/surfaces.js';
 import { appendToBuilder } from '../life/figures/vehicles.js';
 import { staticCar } from '../life/figures/cars.js';
 import { makeMasonryMaterial, makeParapetGeometry } from '../materials/stonework.js';
+import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
 
 const ROAD_HALF = 3.5;
 const STONE = ['#837d72', '#77716a', '#8c857a', '#6f6a63', '#7f786c', '#8a8174'];
@@ -44,10 +45,8 @@ class Tris {
 }
 
 const noise = /* glsl */`
-  float gHash(vec2 p) { vec3 q = fract(vec3(p.xyx) * .1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
-  float gNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
-    return mix(mix(gHash(i), gHash(i + vec2(1., 0.)), f.x), mix(gHash(i + vec2(0., 1.)), gHash(i + 1.), f.x), f.y); }
-  float gFbm(vec2 p) { return gNoise(p) * .55 + gNoise(p * 2.1 + 5.) * .3 + gNoise(p * 4.3 - 2.) * .15; }
+${HASH_GLSL}
+  float gFbm(vec2 p) { return vn2(p) * .55 + vn2(p * 2.1 + 5.) * .3 + vn2(p * 4.3 - 2.) * .15; }
 `;
 
 export class MountainRoad {
@@ -395,7 +394,7 @@ export class MountainRoad {
           #include <logdepthbuf_fragment>
           float flow = vUv.y * .09 + uTime * 1.5;
           float streak = gFbm(vec2(vUv.x * 7., flow));
-          float fine = gNoise(vec2(vUv.x * 23., flow * 3.1));
+          float fine = vn2(vec2(vUv.x * 23., flow * 3.1));
           float edge = smoothstep(0., .22, vUv.x) * smoothstep(1., .78, vUv.x);
           float a = edge * (.28 + .62 * smoothstep(.32, .72, streak) + fine * .12);
           vec3 col = mix(vec3(.72, .82, .86), vec3(.98), smoothstep(.4, .8, streak));

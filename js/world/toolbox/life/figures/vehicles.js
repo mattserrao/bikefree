@@ -8,6 +8,7 @@
 // light, 12 lit sign or interior. Per instance: iPaint (linear RGB), iMove (distance driven in metres, braking 0–1).
 import * as THREE from '../../../../../vendor/three.js';
 import { posedFigure, CLIP, randomLook, FIT } from './people.js';
+import { nightGlowShader } from '../../materials/night-glow.js';
 
 export const VEHICLE_KINDS = ['sedan', 'hatch', 'suv', 'pickup', 'van', 'taxi', 'bus', 'rv', 'camper', 'moto', 'jammer'];
 // length in metres (traffic spacing) and default paint, where a kind has one
@@ -342,7 +343,6 @@ export function disposeVehicleGeometries() { for (const g of [...CACHE.values(),
 export function vehicleMaterial(night = { value: 0 }) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .5, metalness: .08 });
   m.onBeforeCompile = (shader) => {
-    shader.uniforms.uNight = night;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>
         attribute vec4 aVeh; attribute vec3 iPaint; attribute vec2 iMove; varying float vPart; varying float vBrake;
@@ -356,13 +356,13 @@ export function vehicleMaterial(night = { value: 0 }) {
         if (aVeh.x < .5) vColor.rgb *= iPaint;
         vPart = aVeh.x; vBrake = iMove.y;`);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uNight; varying float vPart; varying float vBrake;')
+      .replace('#include <common>', '#include <common>\nvarying float vPart; varying float vBrake;')
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-        if (vPart > 1.5 && vPart < 2.5) roughnessFactor = .18;`)
-      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        if (vPart > 1.5 && vPart < 2.5) roughnessFactor = .18;`);
+    nightGlowShader(shader, night, `
         if (vPart > 9.5 && vPart < 10.5) totalEmissiveRadiance += vec3(1., .93, .78) * (.15 + uNight * 4.);
         if (vPart > 10.5 && vPart < 11.5) totalEmissiveRadiance += vec3(1., .1, .06) * (.2 + uNight * 2.2 + vBrake * 2.2);
-        if (vPart > 11.5 && vPart < 12.5) totalEmissiveRadiance += vec3(1., .86, .6) * (.1 + uNight * 1.2);`);
+        if (vPart > 11.5 && vPart < 12.5) totalEmissiveRadiance += vec3(1., .86, .6) * (.1 + uNight * 1.2);`);   // [review 27 Nov] the shared night glow
   };
   m.customProgramCacheKey = () => 'bf-vehicles-1';
   return m;

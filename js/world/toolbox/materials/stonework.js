@@ -7,6 +7,7 @@
 //   makeMasonryMaterial({ stones: ['#8a8276', …], mortar: '#a39d90', courseM: .2, moss: '#55603f' })
 //   makeParapetGeometry()  → a unit parapet (x across −.5….5, y 0…1, z 0…1): battered sides, a rounded cap
 import * as THREE from '../../../../vendor/three.js';
+import { HASH_GLSL } from './glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
 
 const lin = (hex) => new THREE.Color(hex);
 
@@ -43,9 +44,7 @@ export function makeMasonryMaterial(opts = {}) {
       .replace('#include <common>', `#include <common>
         varying vec3 vMsP; varying vec3 vMsN; varying float vMsFoot;
         uniform vec3 msStones[6]; uniform vec3 msMortar; uniform vec3 msMoss; uniform float msCourse; uniform float msMossH;
-        float msHash(vec2 p) { vec3 q = fract(vec3(p.xyx) * .1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
-        float msNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
-          return mix(mix(msHash(i), msHash(i + vec2(1., 0.)), f.x), mix(msHash(i + vec2(0., 1.)), msHash(i + 1.), f.x), f.y); }`)
+${HASH_GLSL}`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         {
           vec3 n = normalize(vMsN);
@@ -56,34 +55,34 @@ export function makeMasonryMaterial(opts = {}) {
           float H = top ? msCourse * 1.8 : msCourse;
           // rubble, not brick: wavy courses, stones of very different lengths, and every other stone
           // split or raised so the courses don't run straight through
-          float v = uv.y / H + (msNoise(vec2(uv.x * 1.3, floor(uv.y / H))) - .5) * .6;
+          float v = uv.y / H + (vn2(vec2(uv.x * 1.3, floor(uv.y / H))) - .5) * .6;
           float row = floor(v), fv = fract(v);
-          float L = H * (1.2 + msHash(vec2(row, 3.1)) * 1.3);
-          float u0 = (uv.x + msHash(vec2(row, 7.7)) * L) / L;
+          float L = H * (1.2 + hw21(vec2(row, 3.1)) * 1.3);
+          float u0 = (uv.x + hw21(vec2(row, 7.7)) * L) / L;
           float id = floor(u0);
-          float u = u0 + (msNoise(vec2(fv * 2., id)) - .5) * .35;        // ragged vertical joints
+          float u = u0 + (vn2(vec2(fv * 2., id)) - .5) * .35;        // ragged vertical joints
           id = floor(u); float fu = fract(u);
-          if (msHash(vec2(id, row) + 5.5) < .3) { fv = fract(v * 2.); }  // two small stones stacked
+          if (hw21(vec2(id, row) + 5.5) < .3) { fv = fract(v * 2.); }  // two small stones stacked
 
           // distance to the stone's edge in metres (rounded corners), mortar in the joints
           float eu = min(fu, 1. - fu) * L, ev = min(fv, 1. - fv) * H;
           float edge = min(eu, ev);
           float px = length(fwidth(uv)) + 1e-4;
           float joint = 1. - smoothstep(.018, .018 + px, edge);
-          float k = msHash(vec2(id, row) + 11.3);
+          float k = hw21(vec2(id, row) + 11.3);
           int ci = int(k * 5.999);
           vec3 stone = msStones[0];
           for (int i = 1; i < 6; i++) if (i == ci) stone = msStones[i];
-          stone *= .84 + msHash(vec2(id, row) + 2.7) * .28;
+          stone *= .84 + hw21(vec2(id, row) + 2.7) * .28;
           stone *= .78 + .22 * smoothstep(0., .05, edge);                // rounded: darker toward the joints
           float small = 1. - smoothstep(.12 * H, .35 * H, px);               // stones still several pixels wide?
           vec3 avg = mix((msStones[0] + msStones[1] + msStones[2] + msStones[3] + msStones[4] + msStones[5]) / 6., msMortar, .25);
           vec3 c = mix(avg, mix(stone, msMortar, joint), small);
           // weather streaks down the faces, moss and damp toward the foot
-          float streak = msNoise(vec2(uv.x * 2.3, vMsP.y * .4));
+          float streak = vn2(vec2(uv.x * 2.3, vMsP.y * .4));
           if (!top) c *= .9 + streak * .14;
           float foot = vMsP.y - vMsFoot;
-          if (msMossH > 0. && !top) c = mix(c, msMoss * (.8 + streak * .3), (1. - smoothstep(0., msMossH, foot)) * smoothstep(.45, .65, msNoise(uv * 1.3)) * .7);
+          if (msMossH > 0. && !top) c = mix(c, msMoss * (.8 + streak * .3), (1. - smoothstep(0., msMossH, foot)) * smoothstep(.45, .65, vn2(uv * 1.3)) * .7);
           diffuseColor.rgb *= c;   // instance colours are near-white tints
         }`);
   };

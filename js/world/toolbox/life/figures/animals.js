@@ -14,6 +14,7 @@
 import * as THREE from '../../../../../vendor/three.js';
 import { VehBuilder } from './vehicles.js';
 import { vhash } from '../../core/random.js';
+import { HASH_GLSL } from '../../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
 
 export const PART_ANIM = { BODY: 0, HEAD: 1, TAIL: 2, FL: 3, FR: 4, BL: 5, BR: 6, SHADOW: 8, PATCH: 10 };   // (PATCH: + a part, a Holstein's coat)
 const P = PART_ANIM;
@@ -330,14 +331,11 @@ export function animalMaterial(kind, uTime) {
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
         varying vec3 vAnimP; varying float vAnimPart;
-        float aN(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
-          float n = dot(i, vec3(1., 57., 113.));
-          vec4 a = fract(sin(vec4(n, n + 1., n + 57., n + 58.)) * 43758.5453), b = fract(sin(vec4(n + 113., n + 114., n + 170., n + 171.)) * 43758.5453);
-          vec4 mm = mix(a, b, f.z); vec2 m2 = mix(mm.xy, mm.zw, f.y); return mix(m2.x, m2.y, f.x); }`)
+        ${HASH_GLSL}`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         float ap = mod(vAnimPart, 10.);
         if (vAnimPart > 9.5) {   // a Holstein's coat: black patches, the legs' lower half and the belly mostly white
-          float nz = aN(vAnimP * 2.6) * .7 + aN(vAnimP * 6.) * .3;
+          float nz = vn3(vAnimP * 2.6) * .7 + vn3(vAnimP * 6.) * .3;
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.07, .065, .065), smoothstep(.5, .54, nz));
         }
         if (ap > 7.5 && ap < 8.5) { diffuseColor.rgb = vec3(.2, .22, .14); }`)

@@ -10,6 +10,7 @@
  * true distance (the scene's fog would have swallowed it).
  */
 import * as THREE from '../../../../vendor/three.js';
+import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
 const HAZE_BLUE = new THREE.Color(.42, .55, .78);   // (the far haze's blue, lerped into the fog colour)
 
 const VERT = /* glsl */`
@@ -29,9 +30,7 @@ const VERT = /* glsl */`
 const FRAG = /* glsl */`
   uniform vec3 uSunDir, uSunCol, uAmb, uHaze, uHazeFar; uniform float uVis, uDesert;
   varying vec3 vN; varying float vD; varying vec3 vW;
-  float fh(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-  float fn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
-    return mix(mix(fh(i), fh(i + vec2(1., 0.)), f.x), mix(fh(i + vec2(0., 1.)), fh(i + vec2(1., 1.)), f.x), f.y); }
+${HASH_GLSL}
   void main() {
     vec3 n = normalize(vN);
     float sl = 1. - n.y, h = vW.y;
@@ -40,18 +39,18 @@ const FRAG = /* glsl */`
       // (linear albedo, as calibrated for the near ground: sand ~0.38, red rock ~0.18, juniper woodland ~0.12)
       vec3 sand = vec3(.63, .36, .21), rock = vec3(.39, .14, .075), pale = vec3(.55, .3, .155), white = vec3(.63, .55, .42);
       vec3 pj = vec3(.085, .1, .06);
-      float band = .5 + .5 * sin(h * .21 + fn(vW.xz * .0004) * 6.);
+      float band = .5 + .5 * sin(h * .21 + vn2(vW.xz * .0004) * 6.);
       c = mix(sand, mix(rock, pale, band * .5), smoothstep(.12, .35, sl));
       c = mix(c, white, smoothstep(1860., 2050., h) * (.35 + .4 * smoothstep(.1, .4, sl)));
       // pinyon-juniper on the benches and plateaus above ~1,650 m, thinning on the faces
-      float wood = smoothstep(1600., 1800., h) * (1. - smoothstep(.25, .5, sl)) * smoothstep(.35, .65, fn(vW.xz * .0011) * .7 + fn(vW.xz * .006) * .3);
+      float wood = smoothstep(1600., 1800., h) * (1. - smoothstep(.25, .5, sl)) * smoothstep(.35, .65, vn2(vW.xz * .0011) * .7 + vn2(vW.xz * .006) * .3);
       c = mix(c, pj, wood * .75);
     } else {
       vec3 grass = vec3(.12, .2, .06), forest = vec3(.045, .075, .03), rockg = vec3(.25, .24, .21);
-      c = mix(grass, forest, smoothstep(.4, .6, fn(vW.xz * .0012)));
+      c = mix(grass, forest, smoothstep(.4, .6, vn2(vW.xz * .0012)));
       c = mix(c, rockg, smoothstep(.45, .8, sl));
     }
-    c *= .9 + .2 * fn(vW.xz * .003);
+    c *= .9 + .2 * vn2(vW.xz * .003);
     vec3 L = c * (uSunCol * max(dot(n, uSunDir), 0.) + uAmb * (.6 + .4 * n.y));
     // aerial perspective by the true distance: the near haze, then the far blue
     float f = 1. - exp(-vD / uVis);

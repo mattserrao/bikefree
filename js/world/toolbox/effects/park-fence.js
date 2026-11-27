@@ -11,6 +11,7 @@ import * as THREE from '../../../../vendor/three.js';
 import { litMaterial } from '../materials/lit.js';
 import { hash } from '../core/mesh-builder.js';
 import { due } from '../core/jobs.js';
+import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
 
 const vn = (x, seed) => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f), a = hash(i * 127.1 + seed * 311.7), b = hash((i + 1) * 127.1 + seed * 311.7); return a + (b - a) * u; };
 
@@ -21,15 +22,14 @@ function woodMaterial() {
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGr = aGr; vWW = (modelMatrix * vec4(transformed, 1.)).xyz;');
     shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>
       varying vec2 vGr; varying vec3 vWW;
-      float pfH(vec2 p) { vec3 q = fract(vec3(p.xyx) * .1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
-      float pfN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(pfH(i), pfH(i + vec2(1., 0.)), f.x), mix(pfH(i + vec2(0., 1.)), pfH(i + 1.), f.x), f.y); }`)
+${HASH_GLSL}`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         {
           // aGr: x metres along the piece's grain, y across it (round the rail or post); the grain's long streaks,
           // a check (split) here and there, silver weathering on top, brown in the sheltered underside
           float d = length(vWW - cameraPosition), fine = 1. - smoothstep(25., 70., d);
-          float g = pfN(vec2(vGr.x * .9, vGr.y * 22.)) * .6 + pfN(vec2(vGr.x * 3.1, vGr.y * 55.)) * .4;
-          float chk = (1. - smoothstep(.0, .035, abs(fract(vGr.y * 3.3 + pfN(vec2(vGr.x * .35, 7.)) * .8) - .5))) * step(.55, pfN(vec2(vGr.x * .25, vGr.y * 2.)));
+          float g = vn2(vec2(vGr.x * .9, vGr.y * 22.)) * .6 + vn2(vec2(vGr.x * 3.1, vGr.y * 55.)) * .4;
+          float chk = (1. - smoothstep(.0, .035, abs(fract(vGr.y * 3.3 + vn2(vec2(vGr.x * .35, 7.)) * .8) - .5))) * step(.55, vn2(vec2(vGr.x * .25, vGr.y * 2.)));
           vec3 c = diffuseColor.rgb * mix(1., .78 + g * .42, fine) * (1. - chk * .45 * fine);
           float top = clamp(vNormal.y, 0., 1.);
           diffuseColor.rgb = mix(c, c * vec3(1.18, 1.17, 1.14), top * .5);

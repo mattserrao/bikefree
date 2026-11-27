@@ -67,11 +67,11 @@ export function vistaGroundGLSL(v, palette, vkAttr = false) {
     // octaves that would be narrower than about two pixels fade to their mean (no shimmer far away)
     float vkRibs(vec2 q, float px) {
       vec2 s = vec2(q.x / ${f(R.ribWidthM)}, q.y / ${f(R.ribLengthM)});
-      s.x += bfNoise(vec2(q.x * .0035, q.y * .005)) * 2.4;
-      float n = bfNoise(s), r = 1. - abs(2. * n - 1.);                      // ridged: sharp spurs, round gullies
+      s.x += vn2(vec2(q.x * .0035, q.y * .005)) * 2.4;
+      float n = vn2(s), r = 1. - abs(2. * n - 1.);                      // ridged: sharp spurs, round gullies
       float fade1 = 1. - smoothstep(.35, .8, px * 2.1 / ${f(R.ribWidthM)});
       float fade2 = 1. - smoothstep(.35, .8, px * 4.3 / ${f(R.ribWidthM)});
-      float a = r * .62 + mix(.5, bfNoise(s * 2.1 + 7.3), fade1) * .26 + mix(.5, bfNoise(s * 4.3 - 3.1), fade2) * .12;
+      float a = r * .62 + mix(.5, vn2(s * 2.1 + 7.3), fade1) * .26 + mix(.5, vn2(s * 4.3 - 3.1), fade2) * .12;
       return a;
     }`;
   const color = /* glsl */`
@@ -118,7 +118,7 @@ export function vistaGroundGLSL(v, palette, vkAttr = false) {
     ${M.mottle > 0 ? `
     // open slopes: shrub patches and a slow drift between yellow-green and blue-green
     float vkOpen = (1. - vkRock) * (1. - smoothstep(.62, .72, bfSnow));
-    float vkPatch = bfFbm(bp.xz * .045 + vec2(bfNoise(bp.xz * .004) * 3.));
+    float vkPatch = bfFbm(bp.xz * .045 + vec2(vn2(bp.xz * .004) * 3.));
     float vkPatchFade = 1. - smoothstep(.5, 1., vkPx * 1.6 / 22.);
     diffuseColor.rgb = mix(diffuseColor.rgb, vkShrub * 1.05, vkOpen * smoothstep(.56, .6, vkPatch) * mix(.4, .8, vkPatchFade) * ${f(M.mottle)});
     float vkDrift = bfFbm(bp.xz * .0016 + 11.);
@@ -129,8 +129,8 @@ export function vistaGroundGLSL(v, palette, vkAttr = false) {
     float vkCutK = ${f(cuts)} * smoothstep(.7, 2.4, vVk.x) * smoothstep(.12, .3, bfSlope) * (1. - smoothstep(250., 450., bfDistance));
     // patterns sampled on each fixed face projection and blended (blending the coordinates would shear them)
     #define VK_FACE(F) (F(bp.z) * vkW.x + F(bp.x) * vkW.y)
-    #define VK_SEEP(u) (bfNoise(vec2((u) * .18, 3.)) + bfNoise(vec2((u) * .5, bp.y * .03)) * .25)
-    #define VK_GRAIN(u) bfNoise(vec2((u) * .35, bp.y * .06))
+    #define VK_SEEP(u) (vn2(vec2((u) * .18, 3.)) + vn2(vec2((u) * .5, bp.y * .03)) * .25)
+    #define VK_GRAIN(u) vn2(vec2((u) * .35, bp.y * .06))
     float vkSeep = smoothstep(.62, .7, VK_FACE(VK_SEEP));
     vec3 vkCutRock = vkCutCol * (.82 + VK_FACE(VK_GRAIN) * .26);
     vkCutRock = mix(vkCutRock, vkCutRock * vec3(.55, .58, .52), vkSeep * .8);
@@ -141,7 +141,7 @@ export function vistaGroundGLSL(v, palette, vkAttr = false) {
     float vkBurnK = vVk.y;
     if (vkBurnK > .01) {
       // mostly green-grey regrowth, pink drifts of fireweed
-      float vkFw = smoothstep(.58, .64, bfFbm(bp.xz * .09 + 7.) + (bfNoise(bp.xz * .6) - .5) * .12) * (1. - vkRock);
+      float vkFw = smoothstep(.58, .64, bfFbm(bp.xz * .09 + 7.) + (vn2(bp.xz * .6) - .5) * .12) * (1. - vkRock);
       vec3 vkRegrowth = mix(diffuseColor.rgb, vkBurnCol * .8, .4);
       diffuseColor.rgb = mix(diffuseColor.rgb, mix(vkRegrowth, mix(vkRegrowth, vkFireweed, .6), vkFw * .5), vkBurnK * .7);
     }` : ''}
@@ -181,11 +181,11 @@ export function vistaCanopyGLSL(v, vkAttr = false) {
     {
       float vkPxC = length(cameraPosition - vBfGround) * .0017 + .02;
       vec2 vkG = vBfGround.xz / 7.5, vkI = floor(vkG), vkF = fract(vkG) - .5;
-      vec2 vkO = (vec2(bfHash(vkI + 3.1), bfHash(vkI + 7.7)) - .5) * .45;
+      vec2 vkO = (vec2(hw21(vkI + 3.1), hw21(vkI + 7.7)) - .5) * .45;
       vec2 vkD = vkF - vkO;
       float vkCrown = 1. - smoothstep(.3, .42, length(vkD));
       float vkLit = smoothstep(-.1, .2, -vkD.x - vkD.y);               // the sun side of each crown
-      float vkTone = mix(.5, .92 + vkLit * .32, vkCrown) * (.9 + bfHash(vkI) * .2);
+      float vkTone = mix(.5, .92 + vkLit * .32, vkCrown) * (.9 + hw21(vkI) * .2);
       vkTone = mix(vkTone, .72, smoothstep(.12, .4, vkPxC / 7.5));      // small on screen: the average
       vec3 vkTop = bfCanopyColor * (vkTone + (bfFbm(vBfGround.xz * .012) - .5) * .18);
       ${vkAttr ? 'vkTop = mix(vkTop, vec3(.36, .35, .33) * vkTone * 1.2, vVk.y);   // burned: silver snags' : ''}

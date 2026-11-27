@@ -16,6 +16,8 @@
 // colour, 2 glass, 10 headlight, 11 tail light).
 import * as THREE from '../../../../../vendor/three.js';
 import { VehBuilder, PART } from './vehicles.js';
+import { nightGlowShader } from '../../materials/night-glow.js';
+import { HASH_GLSL } from '../../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
 
 export const CAR_KINDS = ['hatch', 'sedan', 'wagon', 'suv', 'pickup', 'van', 'farmtruck'];
 export const CAR_INFO = {
@@ -326,7 +328,7 @@ export function carMaterial({ dirt = 0.1, rust = 0, night = { value: 0 } } = {})
       .replace('#include <common>', `#include <common>
         attribute vec2 aCar; varying float vPart; varying vec3 vCarP; varying vec2 vWear;
         uniform float uDirt; uniform float uRust;
-        float carHash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }`)
+        ${HASH_GLSL}`)
       .replace('#include <color_vertex>', `#include <color_vertex>
         vPart = aCar.x; vCarP = position;
         #ifdef USE_INSTANCING
@@ -334,7 +336,7 @@ export function carMaterial({ dirt = 0.1, rust = 0, night = { value: 0 } } = {})
         #else
           vec2 at = vec2(0.);
         #endif
-        float h1 = carHash(at), h2 = carHash(at + 17.3);
+        float h1 = hw21(at), h2 = hw21(at + 17.3);
         // dirt: the region's, more on a lived-in car, most on a farm truck; rust: old cars only, the farm truck always
         vWear = vec2(clamp(uDirt * (.4 + 1.2 * h1) + aCar.y * .28, 0., 1.), clamp(uRust * step(.72, h2) * h2 + (aCar.y > 1.5 ? .35 + .4 * h2 : 0.), 0., 1.));
         #ifdef USE_INSTANCING_COLOR
@@ -342,19 +344,17 @@ export function carMaterial({ dirt = 0.1, rust = 0, night = { value: 0 } } = {})
         #endif`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
-        uniform float uNight; varying float vPart; varying vec3 vCarP; varying vec2 vWear;
-        float cN(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
-          float n = dot(i, vec3(1., 57., 113.));
-          vec4 a = fract(sin(vec4(n, n + 1., n + 57., n + 58.)) * 43758.5453), b = fract(sin(vec4(n + 113., n + 114., n + 170., n + 171.)) * 43758.5453);
-          vec4 m = mix(a, b, f.z); vec2 m2 = mix(m.xy, m.zw, f.y); return mix(m2.x, m2.y, f.x); }`)
+        varying float vPart; varying vec3 vCarP; varying vec2 vWear;
+        ${HASH_GLSL}
+`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         float glassP = step(1.5, vPart) * step(vPart, 2.5);
         // dirt: up from the ground, splashed behind the wheels (noisy edge); a film on the glass's lower edge
-        float dn = cN(vCarP * vec3(3., 6., 3.)) * .5 + cN(vCarP * 13.) * .25;
+        float dn = vn3(vCarP * vec3(3., 6., 3.)) * .5 + vn3(vCarP * 13.) * .25;
         float dirtH = 1. - smoothstep(.15, .95, vCarP.y + dn * .35 - vWear.x * .35);
         float dirtA = clamp(vWear.x * dirtH * 1.4, 0., .85) * (1. - glassP * .6);
         // rust: paint only, low on the body (sills, arches, tailgate), in blotches
-        float rn = cN(vCarP * 7.) * .65 + cN(vCarP * 21.) * .35;
+        float rn = vn3(vCarP * 7.) * .65 + vn3(vCarP * 21.) * .35;
         float rustA = step(vPart, .5) * smoothstep(.0, .1, vWear.y * (1.1 - smoothstep(.25, .8, vCarP.y)) - rn * .62);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.33, .16, .08) * (.7 + rn * .6), rustA);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.36, .31, .24), dirtA);`)
@@ -365,10 +365,10 @@ export function carMaterial({ dirt = 0.1, rust = 0, night = { value: 0 } } = {})
       .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
         metalnessFactor = vPart < .5 ? mix(.18, 0., max(dirtA, rustA)) : vPart > 1.5 && vPart < 2.5 ? .3 : .05;`)
       .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>
-        material.clearcoat = vPart < .5 ? 1. - max(dirtA, rustA) : vPart > 1.5 && vPart < 2.5 ? .6 : 0.;`)
-      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        material.clearcoat = vPart < .5 ? 1. - max(dirtA, rustA) : vPart > 1.5 && vPart < 2.5 ? .6 : 0.;`);
+    nightGlowShader(shader, m.userData.uniforms.uNight, `
         if (vPart > 9.5 && vPart < 10.5) totalEmissiveRadiance += vec3(1., .94, .8) * (.05 + uNight * .3);
-        if (vPart > 10.5 && vPart < 11.5) totalEmissiveRadiance += vec3(.9, .08, .05) * (.12 + uNight * .3);`);
+        if (vPart > 10.5 && vPart < 11.5) totalEmissiveRadiance += vec3(.9, .08, .05) * (.12 + uNight * .3);`);   // [review 27 Nov] the shared night glow
   };
   m.customProgramCacheKey = () => 'bf-cars-2';
   return m;

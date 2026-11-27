@@ -59,6 +59,7 @@ test('every toolbox material factory patches only anchors its three.js shader ha
   const { decorateTreeMaterial } = await import('../js/world/toolbox/packs/northern-rockies.js');
   const { BakedLighting } = await import('../js/world/toolbox/atmosphere/baked-light.js');
   const { Look } = await import('../js/world/toolbox/atmosphere/look.js');
+  const { withNightGlow } = await import('../js/world/toolbox/materials/night-glow.js');
   const palette = { low: '#6f8f4a', mid: '#7d8a55', high: '#8a8a80', rock: '#7a756c', snow: '#f4f4f4' };
   const made = {
     ground: () => S.makeGroundMaterial(palette, {}, null, null, U()),
@@ -68,6 +69,9 @@ test('every toolbox material factory patches only anchors its three.js shader ha
     scenery: () => S.decorateSceneryMaterial(new THREE.MeshStandardMaterial(), 'tree', U()),
     lit: () => litMaterial({ vertexColors: true }),
     tree: () => decorateTreeMaterial(new THREE.MeshStandardMaterial(), U()),
+    // [review 27 Nov] the shared night glow, on the material types its sites use
+    glow: () => withNightGlow(new THREE.MeshStandardMaterial({ vertexColors: true }), { value: 0 }, 'vColor.rgb * uNight', 'glow-test', { glow: 'float' }),
+    glowPhysical: () => withNightGlow(new THREE.MeshPhysicalMaterial(), { value: 0 }, 'vec3(1.) * uNight', 'glow-test-p'),
   };
   const optional = {
     flare: async () => (await import('../js/world/toolbox/vegetation/near-trunks.js')).flareMaterial(),

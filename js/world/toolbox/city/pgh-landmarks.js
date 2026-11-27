@@ -7,6 +7,7 @@
 //   buildPghLandmarks(host, data) → { tick(time), count }      (host: the CityScene stand-in of js/world/graph-heroes.js)
 import * as THREE from '../../../../vendor/three.js';
 import { litMaterial } from '../materials/lit.js';
+import { withNightGlow } from '../materials/night-glow.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { V, TAU, centroid, scaleRing, orient, prism, cap, block, chamfer, frameOf, makeFrame, lathe, disc, gable } from './hero-geom.js';
 import { buildStadiums } from './bridges.js';
@@ -434,7 +435,7 @@ export function buildPghLandmarks(host, data) {
   add(S, host.solidMaterial, 'PGH landmarks');
   if (Wa.count) add(Wa, host.waterMaterial || host.solidMaterial, 'Landmark water');
   if (Ca.count) add(Ca, host.own(canalWaterMaterial(host.waterTime || { value: 0 })), 'Canal water');
-  if (N.count) { const nm = host.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .5 })); nm.onBeforeCompile = (shader) => { shader.uniforms.uNight = host.night; shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 aGlow; varying vec3 vGlow;').replace('#include <fog_vertex>', '#include <fog_vertex>\nvGlow = aGlow;'); shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight; varying vec3 vGlow;').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vGlow * uNight * 2.;'); }; nm.customProgramCacheKey = () => 'pgh-landmark-neon'; add(N, nm, 'PGH landmark lights'); }
+  if (N.count) { const nm = host.own(withNightGlow(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .5 }), () => host.night, 'vGlow * uNight * 2.', 'pgh-landmark-neon', { glow: 'vec3' })); add(N, nm, 'PGH landmark lights'); }   // [review 27 Nov] the shared night glow
   host.addGlows(glows, 'PGH landmark lamps');
   host.addGlows(beacons.map((b) => ({ ...b, size: 6, color: '#ff3b2e' })), 'PGH tower beacons');
   return {

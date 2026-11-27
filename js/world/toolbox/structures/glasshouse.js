@@ -18,6 +18,7 @@ import * as THREE from '../../../../vendor/three.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { Builder, M, cyl, cone, blob, box, withSmooth } from '../core/model-builder.js';
 import { randomSequence, smoothstep, vnoise } from '../core/random.js';
+import { nightGlowShader, withNightGlow } from '../materials/night-glow.js';   // [review 27 Nov] the shared night glow
 import { ghostMask } from '../../ghost.js';
 import { drain, due } from '../core/jobs.js';
 import { figureMaterial, staticCrowdMesh, randomLook, CLIP } from '../life/figures/people.js';
@@ -291,7 +292,7 @@ const THEMES = {
 function plantMaterial(night) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .78, metalness: 0 });
   m.onBeforeCompile = (sh) => {
-    nightGlow(sh, night, 'vColor.rgb * vec3(1., .86, .62) * .16');   // [F116] the house's own lamps on the beds after dark
+    nightGlowShader(sh, night, 'vColor.rgb * vec3(1., .86, .62) * .16 * uNight');   // [F116] the house's own lamps on the beds after dark
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aTree;')
       .replace('#include <color_vertex>', `#include <color_vertex>
         #ifdef USE_INSTANCING_COLOR
@@ -318,27 +319,13 @@ function glassMaterial(night) {
   return m;
 }
 function artMaterial(night) {
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .18, metalness: .05, side: THREE.DoubleSide });
-  m.onBeforeCompile = (sh) => {
-    // (the glass art and the path lamps' globes: a little glow by day, lit up after dark [F116])
-    sh.uniforms.uNight = night;
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight;')
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vColor.rgb * (.38 + uNight * 1.25);');
-  };
-  m.customProgramCacheKey = () => 'glasshouse-art-2';
-  return m;
-}
-/** [F116] Adds `uNight` and an emissive term (GLSL, in terms of vColor) that comes up after dark. */
-function nightGlow(sh, night, term) {
-  sh.uniforms.uNight = night;
-  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight;')
-    .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\ntotalEmissiveRadiance += ${term} * uNight;`);
+  // (the glass art and the path lamps' globes: a little glow by day, lit up after dark [F116])
+  return withNightGlow(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .18, metalness: .05, side: THREE.DoubleSide }),
+    night, 'vColor.rgb * (.38 + uNight * 1.25)', 'glasshouse-art-2');
 }
 function frameMaterial(night) {
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .62, metalness: .05, side: THREE.DoubleSide });
-  m.onBeforeCompile = (sh) => nightGlow(sh, night, 'vColor.rgb * vec3(1., .82, .58) * .2');   // the white frames lit from inside
-  m.customProgramCacheKey = () => 'glasshouse-frames-1';
-  return m;
+  return withNightGlow(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .62, metalness: .05, side: THREE.DoubleSide }),
+    night, 'vColor.rgb * vec3(1., .82, .58) * .2 * uNight', 'glasshouse-frames-1');   // the white frames lit from inside
 }
 function waterMaterial(uTime) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .12, metalness: .1, transparent: true, opacity: .88, side: THREE.DoubleSide });

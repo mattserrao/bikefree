@@ -25,6 +25,7 @@
 // asphalt gets the detail of the Alpine reference photos: light aggregate in a darker binder, bleached and oily
 // mottling, the paving seam down the middle, and repair strips along the edges.
 import * as THREE from '../../../../vendor/three.js';
+import { HASH_GLSL } from './glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
 
 // tone (×brightness), warm (toward brown), wear (polished wheel tracks), patches, cracks, edge (crumbling
 // edges and dust), fade (paint faded), speckle (chip-seal stones), runoff (snowmelt across the road), grime
@@ -119,9 +120,7 @@ export function decorateRoad(material, road, { widthM = 7, repeatM = 24, marks =
         uniform vec4 rsBaseA; uniform vec4 rsBaseB; uniform vec4 rsBaseC; uniform vec4 rsBaseD;
         uniform vec4 rsSpan[${MAX_ZONES}]; uniform vec4 rsA[${MAX_ZONES}]; uniform vec4 rsB[${MAX_ZONES}]; uniform vec4 rsC[${MAX_ZONES}]; uniform vec4 rsD[${MAX_ZONES}];
         uniform vec2 rsDims;
-        float rsHash(vec2 p) { vec3 q = fract(vec3(p.xyx) * .1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
-        float rsNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
-          return mix(mix(rsHash(i), rsHash(i + vec2(1., 0.)), f.x), mix(rsHash(i + vec2(0., 1.)), rsHash(i + 1.), f.x), f.y); }
+${HASH_GLSL}
         // a line of width w (m) at distance d (m), antialiased over a pixel of size px (m); thin lines fade out
         float rsLine(float d, float w, float px) { return (1. - smoothstep(w * .5, w * .5 + px, abs(d))) * smoothstep(px * .8, px * 2.5, w * 2.); }`)
       .replace('#include <map_fragment>', `#include <map_fragment>
@@ -139,7 +138,7 @@ export function decorateRoad(material, road, { widthM = 7, repeatM = 24, marks =
             A = mix(A, rsA[i], k); B = mix(B, rsB[i], k); C = mix(C, rsC[i], k); D = mix(D, rsD[i], k); wet = max(wet, z.z * k);
           }
           // a little variety within a stretch (every 300 m or so)
-          float vary = rsNoise(vec2(s / 310., 4.2));
+          float vary = vn2(vec2(s / 310., 4.2));
           float tone = A.x * (.95 + vary * .1), warm = A.y, wearK = A.z, patchK = A.w * (.6 + vary * .8);
           float crackK = B.x * (.7 + vary * .6), edgeK = B.y, fadeK = B.z, speckK = B.w, runK = C.x, grime = C.y;
           vec3 col = diffuseColor.rgb;${fr ? ' vec3 paintCol = col;' : ''}
@@ -149,7 +148,7 @@ export function decorateRoad(material, road, { widthM = 7, repeatM = 24, marks =
           float W0 = rsDims.x, xc = x - W0 * .5;                               // across the road from its centre
           // which line is it? the centre pair, or the edge lines; the centre fades, breaks up or goes
           float centreLine = 1. - smoothstep(.3, .45, abs(xc));
-          float keepCentre = C.w >= .99 ? 1. : C.w * step(.35, rsNoise(vec2(s * .08, 9.)) + C.w * .5);
+          float keepCentre = C.w >= .99 ? 1. : C.w * step(.35, vn2(vec2(s * .08, 9.)) + C.w * .5);
           float edgeLine = smoothstep(W0 * .5 - .75, W0 * .5 - .6, abs(xc));
           float paved = C.z * .5;                                              // paved half-width (m)
           float narrowed = smoothstep(.05, .2, W0 * .5 - paved);
@@ -177,17 +176,17 @@ export function decorateRoad(material, road, { widthM = 7, repeatM = 24, marks =
           // polished wheel tracks, a darker oily strip down the middle of each lane
           float xl = mod(x, lane);
           float tracks = rsLine(xl - lane * .27, .7, px) + rsLine(xl - lane * .73, .7, px);
-          asphalt *= 1. + tracks * .1 * wearK * (.7 + rsNoise(vec2(x, s * .05)) * .6);
+          asphalt *= 1. + tracks * .1 * wearK * (.7 + vn2(vec2(x, s * .05)) * .6);
           asphalt *= 1. - rsLine(xl - lane * .5, .9, px) * .035 * wearK;
           // patches: rectangles of newer, darker asphalt, a lane or a wheel path wide, 5–25 m long
           float cellS = floor(s / 17.);
-          float ph = rsHash(vec2(cellS, 1.7));
+          float ph = hw21(vec2(cellS, 1.7));
           if (ph < patchK * .55) {
-            float p0 = cellS * 17. + rsHash(vec2(cellS, 2.3)) * 8., p1 = p0 + 5. + rsHash(vec2(cellS, 3.9)) * 20.;
-            float side = step(.5, rsHash(vec2(cellS, 5.1)));
-            float x0 = side * lane + rsHash(vec2(cellS, 6.3)) * 1.2, x1 = x0 + 1.6 + rsHash(vec2(cellS, 7.7)) * (lane - 1.4);
+            float p0 = cellS * 17. + hw21(vec2(cellS, 2.3)) * 8., p1 = p0 + 5. + hw21(vec2(cellS, 3.9)) * 20.;
+            float side = step(.5, hw21(vec2(cellS, 5.1)));
+            float x0 = side * lane + hw21(vec2(cellS, 6.3)) * 1.2, x1 = x0 + 1.6 + hw21(vec2(cellS, 7.7)) * (lane - 1.4);
             float inP = smoothstep(p0 - px, p0, s) * (1. - smoothstep(p1, p1 + px, s)) * smoothstep(x0 - px, x0, x) * (1. - smoothstep(x1, x1 + px, x));
-            asphalt = mix(asphalt, asphalt * vec3(.7, .72, .76) * (.92 + rsHash(vec2(cellS, 8.1)) * .14), inP);
+            asphalt = mix(asphalt, asphalt * vec3(.7, .72, .76) * (.92 + hw21(vec2(cellS, 8.1)) * .14), inP);
             // the patch's seam: a thin dark rim of sealant
             float rim = max(max(rsLine(s - p0, .08, px), rsLine(s - p1, .08, px)), max(rsLine(x - x0, .08, px), rsLine(x - x1, .08, px)));
             asphalt *= 1. - rim * .45 * step(p0 - .1, s) * step(s, p1 + .1) * step(x0 - .1, x) * step(x, x1 + .1);
@@ -195,15 +194,15 @@ export function decorateRoad(material, road, { widthM = 7, repeatM = 24, marks =
           // sealed cracks: wandering transverse ones every 6–20 m, and along the centre joint and the edges
           float tc = s / (6. + 14. * (1. - crackK * .7));
           float tcI = floor(tc + .5);
-          float tcD = (tc - tcI) * (6. + 14. * (1. - crackK * .7)) + (rsNoise(vec2(x * .8, tcI)) - .5) * 1.1;
-          float trans = rsLine(tcD, .05, px) * step(rsHash(vec2(tcI, 9.1)), crackK) * smoothstep(.2, .45, rsNoise(vec2(x * .5, tcI + 3.)));
-          float longi = rsLine(x - lane + (rsNoise(vec2(s * .09, 1.)) - .5) * .5, .05, px) * smoothstep(.45, .6, rsNoise(vec2(s * .05, 2.))) * crackK * .7;
+          float tcD = (tc - tcI) * (6. + 14. * (1. - crackK * .7)) + (vn2(vec2(x * .8, tcI)) - .5) * 1.1;
+          float trans = rsLine(tcD, .05, px) * step(hw21(vec2(tcI, 9.1)), crackK) * smoothstep(.2, .45, vn2(vec2(x * .5, tcI + 3.)));
+          float longi = rsLine(x - lane + (vn2(vec2(s * .09, 1.)) - .5) * .5, .05, px) * smoothstep(.45, .6, vn2(vec2(s * .05, 2.))) * crackK * .7;
           ${fr ? `          longi = 0.;   // French roads: the centre joint is the paving seam below, not a crack
           trans *= .55; // and sealed cracks are fewer and fainter (the reference roads are well kept)` : ''}
-          longi = max(longi, rsLine(x - W * .1 + (rsNoise(vec2(s * .11, 5.)) - .5) * .6, .04, px) * smoothstep(.4, .6, rsNoise(vec2(s * .04, 6.))) * crackK);
+          longi = max(longi, rsLine(x - W * .1 + (vn2(vec2(s * .11, 5.)) - .5) * .6, .04, px) * smoothstep(.4, .6, vn2(vec2(s * .04, 6.))) * crackK);
           asphalt *= 1. - max(trans, longi) * .55;
           // chip seal: a speckle of light and dark stones (fades to its average far off)
-          float sp = rsNoise(vec2(x, s) * 16.) * .6 + rsNoise(vec2(x, s) * 37.) * .4;
+          float sp = vn2(vec2(x, s) * 16.) * .6 + vn2(vec2(x, s) * 37.) * .4;
           float spSmall = 1. - smoothstep(.015, .05, px);
           asphalt *= 1. + (mix(.5, sp, spSmall) - .5) * .22 * speckK;
           // [finish] brick: courses 10.5 cm deep laid across the road, bricks 21.5 cm long in running bond, dark sand
@@ -213,27 +212,27 @@ export function decorateRoad(material, road, { widthM = 7, repeatM = 24, marks =
             float bx = (x + mod(row, 2.) * bl * .5) / bl, bc = floor(bx), fx = fract(bx), fy = fract(s / rowH);
             float nearB = 1. - smoothstep(.012, .05, px);
             float joint = max(1. - smoothstep(.0, .06, min(fx, 1. - fx)), 1. - smoothstep(.0, .1, min(fy, 1. - fy)));
-            float bh = rsHash(vec2(bc, row));
-            vec3 brickCol = mix(vec3(.2, .085, .06), vec3(.29, .13, .085), bh) * (.8 + rsNoise(vec2(x * .4, s * .25)) * .3);   // weathered red-brown (linear)
+            float bh = hw21(vec2(bc, row));
+            vec3 brickCol = mix(vec3(.2, .085, .06), vec3(.29, .13, .085), bh) * (.8 + vn2(vec2(x * .4, s * .25)) * .3);   // weathered red-brown (linear)
             brickCol = mix(brickCol, vec3(.05, .045, .04), joint * .85 * nearB);
             brickCol = mix(brickCol, vec3(.19, .09, .065), (1. - nearB) * .35);
             brickCol *= 1. - tracks * .22 * wearK;
-            brickCol = mix(brickCol, vec3(.11, .1, .095), smoothstep(.62, .7, rsNoise(vec2(x * .7, s * .12))) * .55);   // grime and sunken spots
+            brickCol = mix(brickCol, vec3(.11, .1, .095), smoothstep(.62, .7, vn2(vec2(x * .7, s * .12))) * .55);   // grime and sunken spots
             asphalt = mix(asphalt, brickCol * tone, D.y);
           }
           // cobble: granite setts ~12 cm deep and 20–28 cm long in courses across the road, rounded tops (lit a little
           // lighter in the middle), wide dark joints; grey-brown with some stones bluer or warmer; fades to its mean far off
           if (D.z > .01) {
-            float rowH = .13, row = floor(s / rowH), off = rsHash(vec2(row, 3.7)) * .24;
+            float rowH = .13, row = floor(s / rowH), off = hw21(vec2(row, 3.7)) * .24;
             float bl = .24, bx = (x + off) / bl, bc = floor(bx);
-            float len = .8 + rsHash(vec2(bc, row)) * .35, fx = fract(bx) / len, fy = fract(s / rowH);
+            float len = .8 + hw21(vec2(bc, row)) * .35, fx = fract(bx) / len, fy = fract(s / rowH);
             float nearC = 1. - smoothstep(.012, .05, px);
             float jx = min(fract(bx), 1. - fract(bx)), jy = min(fy, 1. - fy);
             float joint = max(1. - smoothstep(.0, .09, jx), 1. - smoothstep(.0, .13, jy));
-            float ch = rsHash(vec2(bc + 17., row));
+            float ch = hw21(vec2(bc + 17., row));
             vec3 setCol = mix(vec3(.13, .125, .12), vec3(.2, .19, .175), ch);
-            setCol = mix(setCol, vec3(.12, .13, .15), step(.82, rsHash(vec2(bc, row + 5.))) * .6);     // bluer granite
-            setCol = mix(setCol, vec3(.19, .15, .12), step(.88, rsHash(vec2(bc + 3., row))) * .5);      // warmer stones
+            setCol = mix(setCol, vec3(.12, .13, .15), step(.82, hw21(vec2(bc, row + 5.))) * .6);     // bluer granite
+            setCol = mix(setCol, vec3(.19, .15, .12), step(.88, hw21(vec2(bc + 3., row))) * .5);      // warmer stones
             setCol *= .9 + .2 * (1. - abs(fy - .5) * 2.) * (1. - abs(fract(bx) - .5) * 2.);             // rounded tops
             setCol = mix(setCol, vec3(.035, .033, .03), joint * .9 * nearC);
             setCol = mix(setCol, vec3(.14, .135, .125), (1. - nearC) * .4);
@@ -244,53 +243,53 @@ export function decorateRoad(material, road, { widthM = 7, repeatM = 24, marks =
           ${fr ? `          {
             // aggregate: light grey stones a centimetre or two across in a darker binder (fades to its mean far off)
             float near = 1. - smoothstep(.006, .04, px);
-            float ag = rsNoise(vec2(x, s) * 55.) * .55 + rsNoise(vec2(x, s) * 131.) * .45;
+            float ag = vn2(vec2(x, s) * 55.) * .55 + vn2(vec2(x, s) * 131.) * .45;
             float stones = smoothstep(.6, .78, ag);
             asphalt *= 1. + (mix(.2, stones, near) - .2) * .3;
             // bleached and oily mottling, a metre to a few metres across
-            float mot = rsNoise(vec2(x * .33, s * .16)) * .6 + rsNoise(vec2(x * .9, s * .45)) * .4;
+            float mot = vn2(vec2(x * .33, s * .16)) * .6 + vn2(vec2(x * .9, s * .45)) * .4;
             asphalt *= .93 + mot * .14;
             // the seam down the middle where the two passes of the paver meet: a slightly darker, straighter line
             asphalt *= 1. - rsLine(xc - .03, .04, px) * .1 * (.4 + crackK);
             // repair strips along the edges: newer, darker asphalt a metre or so wide, tens of metres long
-            float rs = floor(s / 61.), rside = step(.5, rsHash(vec2(rs, 4.4))) * 2. - 1.;
-            float rIn = step(rsHash(vec2(rs, 2.2)), patchK * .45) * step(mod(s, 61.), 18. + rsHash(vec2(rs, 3.3)) * 40.);
-            float rw = .9 + rsHash(vec2(rs, 5.5)) * .7, rEdge = C.z * .5 - rw + (rsNoise(vec2(s * .3, rs)) - .5) * .12;
+            float rs = floor(s / 61.), rside = step(.5, hw21(vec2(rs, 4.4))) * 2. - 1.;
+            float rIn = step(hw21(vec2(rs, 2.2)), patchK * .45) * step(mod(s, 61.), 18. + hw21(vec2(rs, 3.3)) * 40.);
+            float rw = .9 + hw21(vec2(rs, 5.5)) * .7, rEdge = C.z * .5 - rw + (vn2(vec2(s * .3, rs)) - .5) * .12;
             float strip = rIn * smoothstep(rEdge - px, rEdge + px, xc * rside);
             asphalt = mix(asphalt, asphalt * vec3(.78, .79, .82), strip);
           }` : ''}
           // the edges: dust and grit along the shoulders, crumbling in bites where the frost gets in
           float e = min(x, W - x);
-          float bite = rsNoise(vec2(s * .35, x < lane ? 1. : 7.)) * .55 * edgeK;
+          float bite = vn2(vec2(s * .35, x < lane ? 1. : 7.)) * .55 * edgeK;
           asphalt = mix(asphalt, vec3(.2, .18, .15), (1. - smoothstep(.0, .35 + bite, e)) * .55 * edgeK);
           asphalt = mix(asphalt, asphalt * vec3(1.15, 1.1, 1.), (1. - smoothstep(.2, .9, e)) * .5 * edgeK);
           // snowmelt: dark wet bands across the road below the snowfields, and wet stretches (zones)
-          float rn = rsNoise(vec2(s / 47., 3.3));
-          float run = smoothstep(.72, .76, rn + (rsNoise(vec2(x * .4, s * .2)) - .5) * .08) * runK;
-          float damp = max(run, wet * (.7 + .3 * rsNoise(vec2(x * .6, s * .3))));
+          float rn = vn2(vec2(s / 47., 3.3));
+          float run = smoothstep(.72, .76, rn + (vn2(vec2(x * .4, s * .2)) - .5) * .08) * runK;
+          float damp = max(run, wet * (.7 + .3 * vn2(vec2(x * .6, s * .3))));
           asphalt = mix(asphalt, asphalt * vec3(.55, .6, .68), damp);
           // tunnels: grime darkest along the walls
           asphalt *= 1. - grime * (.15 + .3 * (1. - smoothstep(.0, 1.6, e)));
           // loose gravel spread over the lanes (patches thrown up from the shoulders and the cuts)
           float gv = D.x;
           if (gv > .01) {
-            float gp = smoothstep(.55, .62, rsNoise(vec2(x * .35, s * .05)) * .7 + rsNoise(vec2(x * 1.3, s * .25)) * .3 + (1. - smoothstep(.0, 1.8, abs(abs(xc) - paved))) * .25);
-            float grit = mix(.5, rsNoise(vec2(x, s) * 22.) * .6 + rsNoise(vec2(x, s) * 51.) * .4, 1. - smoothstep(.008, .03, px));
+            float gp = smoothstep(.55, .62, vn2(vec2(x * .35, s * .05)) * .7 + vn2(vec2(x * 1.3, s * .25)) * .3 + (1. - smoothstep(.0, 1.8, abs(abs(xc) - paved))) * .25);
+            float grit = mix(.5, vn2(vec2(x, s) * 22.) * .6 + vn2(vec2(x, s) * 51.) * .4, 1. - smoothstep(.008, .03, px));
             asphalt = mix(asphalt, vec3(.24, .21, .17) * (.8 + grit * .4), gp * gv * .7);
           }
           // a narrower paved road: the rest of the strip is a gravel shoulder with a ragged paving edge
-          float pe = paved + (rsNoise(vec2(s * .6, xc > 0. ? 3. : 8.)) - .5) * .18;
+          float pe = paved + (vn2(vec2(s * .6, xc > 0. ? 3. : 8.)) - .5) * .18;
           float shoulder = smoothstep(pe - px, pe + px, abs(xc)) * narrowed;
-          float grit2 = mix(.5, rsNoise(vec2(x, s) * 18.) * .6 + rsNoise(vec2(x, s) * 43.) * .4, 1. - smoothstep(.008, .03, px));
-          vec3 gravelCol = vec3(.27, .24, .19) * (.82 + grit2 * .36 + rsNoise(vec2(x * 2., s * .3)) * .1);
+          float grit2 = mix(.5, vn2(vec2(x, s) * 18.) * .6 + vn2(vec2(x, s) * 43.) * .4, 1. - smoothstep(.008, .03, px));
+          vec3 gravelCol = vec3(.27, .24, .19) * (.82 + grit2 * .36 + vn2(vec2(x * 2., s * .3)) * .1);
           asphalt = mix(asphalt, gravelCol, shoulder);
           // paint: worn through in the wheel tracks and faded with age
-          float paintLeft = paint * (1. - fadeK * (.5 + .5 * rsNoise(vec2(x * 3., s * .4)))) * (1. - tracks * .4 * wearK) * (1. - damp * .3);
+          float paintLeft = paint * (1. - fadeK * (.5 + .5 * vn2(vec2(x * 3., s * .4)))) * (1. - tracks * .4 * wearK) * (1. - damp * .3);
           // the edge lines, repainted just inside the narrower paving
           float newEdge = rsLine(abs(xc) - (paved - .22), .11, px) * narrowed;
           vec3 edgePaint = vec3(.82, .79, .68) * (1. - damp * .25);
           ${fr ? `          newEdge = 0.;   // the French edge lines are drawn above, by the rules` : ''}
-          diffuseColor.rgb = mix(mix(asphalt, ${fr ? 'paintCol' : 'col'} * (1. - damp * .25), paintLeft), edgePaint, newEdge * (1. - fadeK * .5 * rsNoise(vec2(x * 3., s * .4))));
+          diffuseColor.rgb = mix(mix(asphalt, ${fr ? 'paintCol' : 'col'} * (1. - damp * .25), paintLeft), edgePaint, newEdge * (1. - fadeK * .5 * vn2(vec2(x * 3., s * .4))));
         }
         #endif`);
   };

@@ -7,6 +7,7 @@ import * as THREE from '../../../../vendor/three.js';
 import { randomSequence } from '../core/random.js';
 import { PACK_META } from './meta.js';
 import { Builder, M, cyl, cone, blob, withSmooth } from '../core/model-builder.js';
+import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
 
 // lod 0 near, 1 mid, 2 far (one or two primitives)
 // Surface kinds (aTree), drawn by decorateTreeMaterial: 0 foliage, 1 bark, 2 cedar bark, 3 pine bark,
@@ -448,10 +449,8 @@ export function decorateTreeMaterial(material, uniforms) {
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
         varying float vTK; varying vec3 vTO; varying vec3 vTW; uniform float uTime; varying vec3 vSph;
-        float tH(vec2 p) { vec3 q = fract(vec3(p.xyx) * .1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
-        float tN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
-          return mix(mix(tH(i), tH(i + vec2(1., 0.)), f.x), mix(tH(i + vec2(0., 1.)), tH(i + 1.), f.x), f.y); }
-        float tClump(vec3 w) { return tN(w.xz * 1.5 + w.y * .7) * .6 + tN(vec2(w.x + w.z, w.y) * 2.9) * .4; }`)
+${HASH_GLSL}
+        float tClump(vec3 w) { return vn2(w.xz * 1.5 + w.y * .7) * .6 + vn2(vec2(w.x + w.z, w.y) * 2.9) * .4; }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         float tPx = length(cameraPosition - vTW) * .0017;
         float tFine = 1. - smoothstep(.04, .16, tPx);          // bark and leaf detail fade past ~60 m
@@ -461,27 +460,27 @@ export function decorateTreeMaterial(material, uniforms) {
           float c = tClump(vTW * (vTK > 7.5 ? 1.8 : 1.));
           diffuseColor.rgb *= mix(1., .78 + c * .42, .35 + .65 * (1. - smoothstep(.1, .5, tPx)));
         } else if (vTK < 1.5) {
-          float f = tN(vec2(tA * 6., vTO.y * .7));
+          float f = vn2(vec2(tA * 6., vTO.y * .7));
           diffuseColor.rgb *= mix(1., .7 + smoothstep(.3, .7, f) * .42, tFine);
-          float moss = (1. - smoothstep(.4, 2., vTO.y)) * smoothstep(.45, .6, tN(vec2(tA * 3., vTO.y * 2.)));
+          float moss = (1. - smoothstep(.4, 2., vTO.y)) * smoothstep(.45, .6, vn2(vec2(tA * 3., vTO.y * 2.)));
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.24, .3, .14), moss * .4);
         } else if (vTK < 2.5) {
           // red cedar: long stringy strips, mossy buttresses
-          float f = tN(vec2(tA * 16., vTO.y * .2)) * .7 + tN(vec2(tA * 41., vTO.y * .5)) * .3;
+          float f = vn2(vec2(tA * 16., vTO.y * .2)) * .7 + vn2(vec2(tA * 41., vTO.y * .5)) * .3;
           diffuseColor.rgb *= mix(1., .74 + f * .44, tFine);
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.24, .3, .14), (1. - smoothstep(.3, 1.6, vTO.y)) * smoothstep(.5, .62, tN(vec2(tA * 4., vTO.y * 1.5))) * .45);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.24, .3, .14), (1. - smoothstep(.3, 1.6, vTO.y)) * smoothstep(.5, .62, vn2(vec2(tA * 4., vTO.y * 1.5))) * .45);
         } else if (vTK < 3.5) {
           // pine and larch: orange-brown plates between dark cracks
-          float f = tN(vec2(tA * 4.5, vTO.y * 1.6));
+          float f = vn2(vec2(tA * 4.5, vTO.y * 1.6));
           float crack = 1. - smoothstep(.04, .1, abs(f - .5));
-          diffuseColor.rgb *= mix(1., (1.04 + (tN(vec2(tA * 9., vTO.y * 3.)) - .5) * .2) * (1. - crack * .5), tFine);
+          diffuseColor.rgb *= mix(1., (1.04 + (vn2(vec2(tA * 9., vTO.y * 3.)) - .5) * .2) * (1. - crack * .5), tFine);
         } else if (vTK < 4.5) {
           // aspen: chalky white, black eyes where branches fell, dark rough bark at the foot
           vec2 cell = vec2(floor(tA * 1.6), floor(vTO.y / .8));
           vec2 lc = vec2(fract(tA * 1.6) - .5, fract(vTO.y / .8) - .5);
-          float eye = step(tH(cell), .45) * (1. - smoothstep(.12, .2, length(lc * vec2(1., 3.2) - vec2((tH(cell + 3.) - .5) * .4, 0.))));
+          float eye = step(hw21(cell), .45) * (1. - smoothstep(.12, .2, length(lc * vec2(1., 3.2) - vec2((hw21(cell + 3.) - .5) * .4, 0.))));
           diffuseColor.rgb *= 1. - eye * .78 * tFine;
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.12, .11, .1), (1. - smoothstep(.4, 1.3, vTO.y + (tN(vec2(tA * 5., 1.)) - .5) * .5)) * .75);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.12, .11, .1), (1. - smoothstep(.4, 1.3, vTO.y + (vn2(vec2(tA * 5., 1.)) - .5) * .5)) * .75);
         } else if (vTK < 5.5) {
           // aspen leaves: silver undersides flashing as they turn
           float flick = .5 + .5 * sin(uTime * 13. + vTW.x * 5.3 + vTW.z * 4.1 + vTW.y * 3.);
@@ -489,7 +488,7 @@ export function decorateTreeMaterial(material, uniforms) {
           diffuseColor.rgb *= .85 + tClump(vTW * 2.) * .3;
         } else if (vTK > 6.5 && vTK < 7.5) {
           // silver deadwood: weathered, checked with fine cracks
-          float f = tN(vec2(tA * 22., vTO.y * .3));
+          float f = vn2(vec2(tA * 22., vTO.y * .3));
           diffuseColor.rgb *= mix(1., .82 + f * .3, tFine);
         }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
