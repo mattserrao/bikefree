@@ -224,6 +224,11 @@ export class World {
       this.log('3d', `Rider model loaded (${r.triangles.toLocaleString()} triangles)`, 'debug');
     }).catch((err) => { this._riderModel = 'failed'; this.log('3d', `Using the simple rider: ${err.message}`, 'debug'); });
 
+    // a front light on the bike, so the road ahead reads in the dark (stylized scenes). [review 27 Nov] made here, at
+    // nothing by day (setTimeOfDay sets 650 at night), always visible: added on the first night frame — or hidden by day,
+    // which takes it out of the light count too — it changed the lights every lit material compiled with, so the first
+    // night frame recompiled them all (graph-world.js _nightLights did the same: W7)
+    if (this.stylized) { this.headlight = new THREE.SpotLight('#fff1d6', 0, 85, .58, 1, 1.5); this.scene.add(this.headlight, this.headlight.target); }
     this.setTimeOfDay('midday');
 
     this._resize = () => {
@@ -707,12 +712,7 @@ export class World {
     } else AERIAL.y = 0;
     this._fogBase = { near: this._fogBase?.near ?? this.scene.fog.near, far: this._fogBase?.far ?? this.scene.fog.far, color: new THREE.Color(t.horizon) };
     for (const a of this.areas?.values() || [{ terrain: this.terrain }]) { a.terrain?.setTime?.(this.timeKey); a.terrain?.setNight?.(t.night ? 1 : 0); }
-    if (t.night && this.stylized && !this.headlight) {
-      // a front light on the bike, so the road ahead reads in the dark
-      this.headlight = new THREE.SpotLight('#fff1d6', 650, 85, .58, 1, 1.5);
-      this.scene.add(this.headlight, this.headlight.target);
-    }
-    if (this.headlight) this.headlight.visible = !!t.night;
+    if (this.headlight) this.headlight.intensity = t.night ? 650 : 0;   // ([review 27 Nov] made with the world: the constructor)
     for (const tu of [this.terrain?.uniforms, this.farTerrain?.uniforms]) {
       if (tu?.uSunDir) { tu.uSunDir.value.copy(dir); tu.uSkyTop.value.set(t.top); tu.uSkyHorizon.value.set(t.horizon); }
     }
@@ -797,7 +797,7 @@ export class World {
       this.terrain.camera = this.camera;   // (the tree engine's per-tree view test)
       this.terrain.tick(this.camera.position, dt, rider);
     }
-    if (this.headlight?.visible) {
+    if (this.headlight?.intensity > 0) {
       this.headlight.position.copy(riderPos).addScaledVector(flat, .6).y += 1.1;
       this.headlight.target.position.copy(riderPos).addScaledVector(flat, 22);
     }
