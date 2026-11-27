@@ -38,6 +38,7 @@ $('routeOffline').addEventListener('click', async () => {
   const urls = tileKeysToUrls(keys, { imagery: !wire });
   const estMB = Math.round((urls.length * 35) / 1000);
   if (!confirm(`Download ${urls.length.toLocaleString()} terrain and imagery files (about ${estMB} MB) for ${previewRoute.name}?`)) return;
+  store.persistStorage();   // [review 27 Nov] ask once that the browser keep the downloaded tiles (and rides) when space runs low
   offlineAbort = new AbortController();
   $('routeOffline').textContent = 'Cancel download';
   const status = $('offlineStatus');

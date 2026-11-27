@@ -28,10 +28,31 @@ export const DEFAULT_SETTINGS = {
   gfx: { fps: 0, battery: 'off', distance: 1, trees: 1, shadows: true, atmosphere: true, verge: true, life: true, post: true },
 };
 
+/**
+ * [review 27 Nov] The ride's numbers, each [min, max, whole number?]: a stored value that isn't a finite number (NaN,
+ * a string, null) falls back to its default, and one out of range is clamped (a NaN bike weight or gear poisoned the
+ * whole ride's physics). The ranges are the settings form's.
+ */
+const NUMERIC = {
+  riderKg: [20, 300], bikeKg: [1, 100], difficulty: [50, 150], hillFeel: [0, 100], realRatio: [0, 6],
+  startGear: [1, 24, true], ftp: [30, 2000, true],
+};
+/** Coerce and clamp the numeric settings in place (see NUMERIC). @returns the same object */
+export function sanitizeSettings(s) {
+  for (const [k, [lo, hi, int]] of Object.entries(NUMERIC)) {
+    let v = typeof s[k] === 'string' && s[k].trim() !== '' ? Number(s[k]) : s[k];
+    if (typeof v !== 'number' || !Number.isFinite(v)) v = DEFAULT_SETTINGS[k];
+    v = Math.min(hi, Math.max(lo, int ? Math.round(v) : v));
+    s[k] = v;
+  }
+  return s;
+}
+
 export function loadSettings() {
   try {
     const raw = localStorage.getItem(KEY);
-    const s = { ...DEFAULT_SETTINGS, ...(raw ? JSON.parse(raw) : {}) };
+    const stored = raw ? JSON.parse(raw) : {};
+    const s = sanitizeSettings({ ...DEFAULT_SETTINGS, ...(stored && typeof stored === 'object' ? stored : {}) });
     s.gfx = { ...DEFAULT_SETTINGS.gfx, ...(s.gfx || {}) };
     // v0.13: 'midday' was the old default, so a saved 'midday' becomes "Route's default" once.
     if (!s.timeAuto) { if (s.worldTime === 'midday') s.worldTime = 'auto'; s.timeAuto = true; }
@@ -64,6 +85,7 @@ export function isPhone() {
 }
 
 export function saveSettings(s) {
+  sanitizeSettings(s);   // [review 27 Nov] (the form's empty or odd numbers too: the settings the ride uses, in place)
   try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* storage unavailable */ }
 }
 

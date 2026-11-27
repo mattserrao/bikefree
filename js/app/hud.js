@@ -240,14 +240,15 @@ function wake() {
 document.addEventListener('mousemove', wake);
 
 // FTP test: average power over the 20-minute all-out segment
-let ftpRun = null, ftpLast = 0;
-function trackFtpTest() {
-  const now = performance.now(), dt = Math.min(1, (now - ftpLast) / 1000);
-  ftpLast = now;
+// ([review 27 Nov] timed by the session's clock — the running steps since the last tick — not the wall clock, which
+// lost time past 1 s gaps and counted a pause's last tick)
+let ftpRun = null;
+function trackFtpTest(runSteps = 0, stepS = 0.25) {
   const w = session.mode === 'workout' ? session.workout : null;
   if (!w?.ftpTest) return;
   if (!ftpRun || ftpRun.workout !== w) ftpRun = { workout: w, sum: 0, secs: 0 };
-  if (session.running && session.segment?.ftpTest) { ftpRun.sum += session.power * dt; ftpRun.secs += dt; }
+  const dt = runSteps * stepS;
+  if (dt && session.segment?.ftpTest) { ftpRun.sum += session.power * dt; ftpRun.secs += dt; }
 }
 
 // Keep the Mac's screen from sleeping while a trainer is connected or a ride is going (ride-feel-test).
@@ -255,10 +256,11 @@ const screenAwake = new ScreenAwake(log);
 session.addEventListener('tick', () => {
   screenAwake.want(trainer.connected || session.running || session.hasRide);
 });
-session.addEventListener('tick', () => {
+session.addEventListener('tick', (e) => {
+  const { runSteps = 0, dt = 0.25 } = e.detail || {};   // [review 27 Nov] one tick per timer, after all its steps
   holdForWorld();   // [phase 8]
-  trackFtpTest();
-  stepPacer();
+  trackFtpTest(runSteps, dt);
+  stepPacer(runSteps);
   renderHud();
   renderDiag();
   if (!onRideScreen) {

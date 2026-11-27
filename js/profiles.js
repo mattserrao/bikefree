@@ -32,6 +32,8 @@ export class Profiles {
     if (!data.firstId) data.firstId = data.profiles[0].id;
     // v0.11.3: FTP lives in the profile (each rider has their own); older profiles take the old setting
     for (const p of data.profiles) if (!Number.isFinite(p.ftp)) p.ftp = fallbackFtp;
+    // [review 27 Nov] the weight too (it becomes the ride's riderKg): not a number → the fallback
+    for (const p of data.profiles) if (!Number.isFinite(p.weightKg) || p.weightKg <= 0) p.weightKg = fallbackKg;
     this.data = data;
     this._save();
   }

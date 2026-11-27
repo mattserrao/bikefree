@@ -66,6 +66,7 @@ function openSummary(title) {
   }
   const wasRunning = session.running;
   if (wasRunning) session.pause();
+  session.holdResume = true;   // [review 27 Nov] an auto-paused ride doesn't resume behind the dialog when you pedal
   $('sumTitle').textContent = title || 'Finish ride?';
   $('sumSub').textContent = `${snap.name} · ${new Date(snap.startedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`;
   $('sumGrid').innerHTML = statCells(snap.summary);
@@ -74,6 +75,7 @@ function openSummary(title) {
   const dlg = $('summary');
   dlg.returnValue = '';
   dlg.onclose = async () => {
+    session.holdResume = false;
     const v = dlg.returnValue;
     if (v === 'resume' || v === '') {
       if (wasRunning) session.start();
@@ -84,16 +86,20 @@ function openSummary(title) {
       return;
     }
     const finished = session.finish();
-    await store.saveCurrent(null).catch(() => {});
-    if (!finished || v === 'discard') { log('app', 'Ride discarded'); showSetup(); return; }
+    if (!finished || v === 'discard') { await store.saveCurrent(null).catch(() => {}); log('app', 'Ride discarded'); showSetup(); return; }
     finished.profileId = profiles.active.id;
+    // [review 27 Nov] save first; the crash-recovery copy is cleared only once the ride is saved (it was cleared
+    // before, so a failed save — a full disk — lost the ride). On failure the ride stays the recovery copy, and its
+    // .fit is offered so it isn't lost.
+    let saved = false;
     try {
-      await store.saveRide(finished);
+      await store.saveFinishedRide(finished);
+      saved = true;
       log('app', `Ride saved: ${finished.name}, ${fmtTime(finished.summary.timerS)}`, 'ok');
     } catch (err) {
-      log('app', `Could not save ride: ${err.message}`, 'error');
+      log('app', `Could not save ride: ${err?.message || err}`, 'error');
     }
-    if (v === 'download') downloadFit(finished);
+    if (v === 'download' || (!saved && confirm('This ride couldn\'t be saved in the browser (is the disk full?). Download its .fit file so it isn\'t lost?'))) downloadFit(finished);
     renderProfile();
     showSetup();
   };
@@ -151,22 +157,33 @@ $('histList').addEventListener('click', async (e) => {
 $('historyBtn').addEventListener('click', async () => { await renderHistory(); $('history').showModal(); });
 
 // ---------- Crash recovery ----------
-setInterval(() => {
+// A snapshot of the ride every 15 s, and ([review 27 Nov]) at once when the page is hidden or put away (a closed tab
+// or a phone's app switch would lose up to 15 s otherwise).
+function flushRecovery() {
   if (!session.hasRide) return;
   const snap = session.recorder.snapshot(session.rideMeta());
-  if (snap) store.saveCurrent(snap).catch(() => {});
-}, 15000);
+  if (snap) store.saveCurrent(snap).catch((err) => log('app', `Could not keep the ride's recovery copy: ${err?.message || err}`, 'debug'));
+}
+setInterval(flushRecovery, 15000);
+addEventListener('pagehide', flushRecovery);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushRecovery(); });
 
 async function checkRecovery() {
-  const cur = await store.getCurrent().catch(() => null);
-  if (!cur || !cur.samples?.length) return;
-  const when = new Date(cur.startedAt).toLocaleString();
-  if (confirm(`An unfinished ride from ${when} (${fmtTime(cur.summary.timerS)}) was found. Save it to your rides?`)) {
-    cur.profileId ??= profiles.active.id;
-    await store.saveRide(cur);
-    log('app', 'Recovered unfinished ride and saved it', 'ok');
+  // ([review 27 Nov] caught and logged: it ran at boot with no catch, so a failed save was an unhandled rejection —
+  // and the copy is kept, to be offered again, when it can't be saved)
+  try {
+    const cur = await store.getCurrent().catch(() => null);
+    if (!cur || !cur.samples?.length) return;
+    const when = new Date(cur.startedAt).toLocaleString();
+    if (confirm(`An unfinished ride from ${when} (${fmtTime(cur.summary.timerS)}) was found. Save it to your rides?`)) {
+      cur.profileId ??= profiles.active.id;
+      await store.saveRide(cur, { clearCurrent: true });
+      log('app', 'Recovered unfinished ride and saved it', 'ok');
+      renderProfile();
+    } else await store.saveCurrent(null);
+  } catch (err) {
+    log('app', `Could not recover the unfinished ride: ${err?.message || err}`, 'error');
   }
-  await store.saveCurrent(null);
 }
 
 export { openSummary, checkRecovery };
