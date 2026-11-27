@@ -33,7 +33,7 @@ checkRecovery();
 // The service worker's first install precaches the app (code, styles and the catalogs, ~4 MB): not while the menu is
 // loading (PLAN 7.11) — once the list and its background routes are in and the page is idle
 const whenIdle = (fn) => (window.requestIdleCallback ? requestIdleCallback(fn, { timeout: 5000 }) : setTimeout(fn, 1000));
-listShown.catch(() => {}).then(() => routesLoaded).catch(() => {}).then(() => whenIdle(() => registerServiceWorker(log, onUpdateReady)));   // ([review 27 Nov] A7: "Update ready")
+listShown.catch((err) => log('app', `Could not show the routes: ${err?.message || err}`, 'error')).then(() => routesLoaded).catch(() => {}).then(() => whenIdle(() => registerServiceWorker(log, onUpdateReady)));   // ([review 27 Nov] A7: "Update ready")
 log('app', 'Ready. Close Zwift, Zwift Companion and the Wahoo app, then connect your devices.');
 
 // For debugging in the browser console.

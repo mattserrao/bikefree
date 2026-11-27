@@ -4,7 +4,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { groupCityItems, cityCardsFirst, defaultRouteId, citySubline, filterByGoal, segmentRoutes, pickOnSegment, pathEdges, nearestLine, fitProjection, mergeRivers, shortName, cityName, isNetItem } from '../js/city-routes.js';
-import { appSource } from './app-source.mjs';
 
 const json = JSON.parse(readFileSync(new URL('../routes/cities/pittsburgh-network.json', import.meta.url), 'utf8'));
 const base = { kind: 'route', park: 'Pittsburgh, Pennsylvania', stage: 'draft', baseId: 'builtin-park-pittsburgh', network: 'routes/cities/pittsburgh-network.json' };
@@ -165,23 +164,12 @@ test('the city card goes first, above every park and outside its stage group; th
   assert.deepEqual(cityCardsFirst([other, demo]), { top: [], rest: [other, demo] });
 });
 
+// (the menu opening on it, the city card marked: driven in a DOM in test/dom-menu.test.mjs)
 test('the route selected when the app opens is the city\'s first preset, else the first route', () => {
   assert.equal(defaultRouteId([other, mine, free, ...presets, demo]), presets[0].id, 'a preset: not your own route, not the free ride');
   assert.equal(defaultRouteId([other, mine, demo]), mine.id, 'only your own route on the network');
   assert.equal(defaultRouteId([other, demo]), other.id);
   assert.equal(defaultRouteId([]), null);
-});
-
-test('the main menu: one ride-type tab row (Routes, the default, Workouts, Free ride)', () => {
-  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const tabs = [...html.matchAll(/<button type="button" role="tab" data-mode="(\w+)" class="ride-tab( on)?" aria-selected="(\w+)"/g)].map((m) => [m[1], !!m[2], m[3]]);
-  assert.deepEqual(tabs, [['route', true, 'true'], ['workout', false, 'false'], ['free', false, 'false']]);
-  assert.match(html, /<section class="mode-pane" data-pane="route">/, 'the route pane shows at first');
-  assert.match(html, /<section class="mode-pane" data-pane="free" hidden>/);
-  assert.match(html, /<details class="ride-opts" id="rideOpts">/, 'ride options folded');
-  const app = appSource();
-  assert.match(app, /^let chosen = 'route';/m);
-  assert.match(app, /selectedRouteId = selectId \|\| defaultRouteId\(routeItems\)/);
 });
 
 // PLAN 7.9: landmarks on the panel map — baked from the map spec, placed with labels that never overlap, and the
