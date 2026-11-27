@@ -124,15 +124,27 @@ export function nycLandmarkModels({ S, N, glows, plan, ground, local, L, Wa = nu
       // falling water: a sheet all the way round each basin's lip, down to the next
       S.color('#d7e6e8'); lathe(S, c.x, g + 3.95, c.z, [[3.55, 0], [3.62, -.8], [3.7, -3.2], [3.6, -3.25]].map(([r, y]) => [r, y + 0]), 28);
       lathe(S, c.x, g + 6.05, c.z, [[2.05, 0], [2.12, -.5], [2.3, -2.05]], 20);
-      // the Angel: robed, wings up, one hand blessing the water
+      // the Angel (gap 13, user 26 Nov — "the angel is an abstract shape"): a robed figure turned on a lathe, the robe
+      // flaring to its hem; shoulders, neck and head; two wings raised behind, each a fan of feathers lengthening
+      // toward the tip; the right arm out over the water in blessing, the lily in the left
       const y = g + 5.9;
-      S.color(BRONZE); S.cylinder(c.x, y, c.z, .55, 1.6, 10, .32); S.cylinder(c.x, y + 1.6, c.z, .3, .65, 10, .22); S.cylinder(c.x, y + 2.25, c.z, .18, .32, 8, .14);
+      S.color(BRONZE);
+      lathe(S, c.x, y, c.z, [[.66, 0], [.6, .25], [.5, .7], [.4, 1.2], [.33, 1.6], [.3, 1.82], [.36, 1.95], [.3, 2.08], [.12, 2.16], [0, 2.17]], 16);
+      lathe(S, c.x, y + 2.14, c.z, [[.07, 0], [.08, .1], [.15, .16], [.17, .28], [.15, .4], [.09, .47], [0, .49]], 12);
+      const back = V(-u.x, 0, -u.z);
       for (const s of [-1, 1]) {
-        const w = V(v.x * s, 0, v.z * s);
-        S.beam(V(c.x, y + 1.9, c.z), V(c.x + w.x * 1.6 - u.x * .4, y + 3.2, c.z + w.z * 1.6 - u.z * .4), .1, .85);
-        S.beam(V(c.x + w.x * .3, y + 1.8, c.z + w.z * .3), V(c.x + w.x * 1.2 - u.x * .3, y + 2.4, c.z + w.z * 1.2 - u.z * .3), .08, .7);
+        const side = V(v.x * s, 0, v.z * s), root = V(c.x + side.x * .2 + back.x * .22, y + 1.9, c.z + side.z * .2 + back.z * .22);
+        for (let f = 0; f < 7; f++) {
+          const t = f / 6, len = .9 + t * 1.5, up = .55 + t * 1.15, out = .35 + (1 - t) * .9;
+          const tip = V(root.x + side.x * out * len + back.x * (.35 + t * .3), root.y + up * len * .62, root.z + side.z * out * len + back.z * (.35 + t * .3));
+          S.beam(root, tip, .06, .32 - t * .08);
+        }
       }
-      S.beam(V(c.x, y + 1.9, c.z), V(c.x + u.x * .9, y + 2.3, c.z + u.z * .9), .14, .14);
+      // the arms: the right raised out over the basin, the left low with the lily
+      const sh = (s) => V(c.x + v.x * s * .3, y + 1.92, c.z + v.z * s * .3);
+      S.beam(sh(1), V(c.x + v.x * .55 + u.x * .75, y + 2.35, c.z + v.z * .55 + u.z * .75), .09, .09);
+      S.beam(sh(-1), V(c.x - v.x * .45 + u.x * .35, y + 1.35, c.z - v.z * .45 + u.z * .35), .09, .09);
+      S.beam(V(c.x - v.x * .45 + u.x * .35, y + 1.3, c.z - v.z * .45 + u.z * .35), V(c.x - v.x * .5 + u.x * .45, y + 2.1, c.z - v.z * .5 + u.z * .45), .03, .03);
       // the arcade under the drive: its face on the terrace's far edge, its mass under the road (the drive is its roof)
       if (Dr) {
         const face = Dr.hw + 1, top = Dr.y - .18, A = F.at(-(Dr.dist - face), 0), depth = Dr.hw * 2 + 2;

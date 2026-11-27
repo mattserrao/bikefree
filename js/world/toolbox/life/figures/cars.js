@@ -213,11 +213,11 @@ function running(M, S, B) {
   }
   M.set(DARK);
   if (lod === 'hi') for (const za of [zF, zR]) M.rbox([0, r + 0.2, za], [W - 0.18, 0.42, 2 * (r + 0.07) * 0.95], 0.002);
-  for (const za of [zF, zR]) for (const s of [1, -1]) M.wheel(s * (W / 2 - inset), r, za, r, tw, s, lod === 'hi' ? 10 : 6);
+  for (const za of [zF, zR]) for (const s of [1, -1]) M.wheel(s * (W / 2 - inset), r, za, r, tw, s, lod === 'hi' ? 18 : 8);   // (gap 12: round tyres up close)
   if (false) {   // the rims: a ring of spokes' shadow (the vehicles.js hub is the centre cap)
     M.set(RIM);
     for (const za of [zF, zR]) for (const s of [1, -1]) {
-      const x = s * (W / 2 - inset + tw / 2 + 0.004), seg = 10, ids = [];
+      const x = s * (W / 2 - inset + tw / 2 + 0.004), seg = 16, ids = [];
       for (let k = 0; k <= seg; k++) { const a = k / seg * Math.PI * 2; ids.push(M.v(x, r + Math.cos(a) * r * 0.72, za + Math.sin(a) * r * 0.72, s, 0, 0), M.v(x - s * 0.01, r + Math.cos(a) * r * 0.62, za + Math.sin(a) * r * 0.62, s, 0, 0)); }
       for (let k = 0; k < seg; k++) { const a = ids[k * 2], b = ids[k * 2 + 1], c = ids[k * 2 + 2], d = ids[k * 2 + 3]; s > 0 ? (M.tri(a, c, d), M.tri(a, d, b)) : (M.tri(a, d, c), M.tri(a, b, d)); }
     }
@@ -316,7 +316,9 @@ export function carStats(lod = 'hi') { return Object.fromEntries(CAR_KINDS.map((
  * ≈ .35 / .15). night: a { value } uniform (lights glow at dusk).
  */
 export function carMaterial({ dirt = 0.1, rust = 0, night = { value: 0 } } = {}) {
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, metalness: 0.12 });
+  // (gap 12, user 26 Nov — the cars read as flat-shaded toys): physical paint, a clear coat over it that mirrors the
+  // sky (the sky environment light), glass that reflects, satin trim
+  const m = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.38, metalness: 0.12, clearcoat: 1, clearcoatRoughness: 0.07 });
   m.userData.uniforms = { uDirt: { value: dirt }, uRust: { value: rust }, uNight: night };
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, m.userData.uniforms);
@@ -362,11 +364,13 @@ export function carMaterial({ dirt = 0.1, rust = 0, night = { value: 0 } } = {})
         roughnessFactor = mix(roughnessFactor, .95, max(dirtA, rustA));`)
       .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
         metalnessFactor = vPart < .5 ? mix(.18, 0., max(dirtA, rustA)) : vPart > 1.5 && vPart < 2.5 ? .3 : .05;`)
+      .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>
+        material.clearcoat = vPart < .5 ? 1. - max(dirtA, rustA) : vPart > 1.5 && vPart < 2.5 ? .6 : 0.;`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         if (vPart > 9.5 && vPart < 10.5) totalEmissiveRadiance += vec3(1., .94, .8) * (.05 + uNight * .3);
         if (vPart > 10.5 && vPart < 11.5) totalEmissiveRadiance += vec3(.9, .08, .05) * (.12 + uNight * .3);`);
   };
-  m.customProgramCacheKey = () => 'bf-cars-1';
+  m.customProgramCacheKey = () => 'bf-cars-2';
   return m;
 }
 

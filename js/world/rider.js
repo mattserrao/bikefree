@@ -157,6 +157,32 @@ function loadAtlas(file) {
   });
 }
 
+/** [riders] A kit in another colour (other riders on the road): the atlas with its saturated kit colours (the orange
+ *  jersey, the bike's accents) turned by `hue` degrees and `light` scaled; skin, black shorts and grey stay as they are. */
+const kitAtlases = {};
+function kitAtlas(file, hue, light = 1) {
+  const key = `${file}|${hue}|${light}`;
+  return kitAtlases[key] ||= loadAtlas(file).then((base) => {
+    const img = base.image, cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
+    const g = cv.getContext('2d'); g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, cv.width, cv.height), px = d.data, turn = hue / 360;
+    for (let i = 0; i < px.length; i += 4) {
+      const r = px[i] / 255, gg = px[i + 1] / 255, b = px[i + 2] / 255, mx = Math.max(r, gg, b), mn = Math.min(r, gg, b), c = mx - mn;
+      if (c < .32 || mx < .25) continue;   // (greys, blacks, skin: left alone)
+      let h = mx === r ? ((gg - b) / c) % 6 : mx === gg ? (b - r) / c + 2 : (r - gg) / c + 4; h /= 6; if (h < 0) h += 1;
+      const l = (mx + mn) / 2, sat = c / (1 - Math.abs(2 * l - 1) || 1);
+      h = (h + turn) % 1;
+      const L = Math.min(1, l * light), C = (1 - Math.abs(2 * L - 1)) * sat, X = C * (1 - Math.abs((h * 6) % 2 - 1)), m = L - C / 2;
+      const [R, G, B] = h < 1 / 6 ? [C, X, 0] : h < 2 / 6 ? [X, C, 0] : h < 3 / 6 ? [0, C, X] : h < 4 / 6 ? [0, X, C] : h < 5 / 6 ? [X, 0, C] : [C, 0, X];
+      px[i] = (R + m) * 255; px[i + 1] = (G + m) * 255; px[i + 2] = (B + m) * 255;
+    }
+    g.putImageData(d, 0, 0);
+    const t = new THREE.CanvasTexture(cv);
+    t.colorSpace = THREE.SRGBColorSpace; t.flipY = false; t.anisotropy = 8; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true;
+    return t;
+  });
+}
+
 // --------------------------------------------------------------------------------------------- pose maths
 const X = new THREE.Vector3(1, 0, 0);
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
@@ -189,6 +215,7 @@ function limbRotation(restFrameT, dir, n, out) {
 /**
  * Load the model. Resolves to {group, update(pos, fwd, crank, speed, dt, effort), setPosture, posture, triangles}.
  * opts.jersey = 'checker' dresses the rider as the pacer (yellow-and-black kit, black bike with yellow accents).
+ * opts.kitHue (degrees) / opts.kitLight: the kit in another colour (the other riders on the road).
  * effort = {grade (%), power (W), ftp (W), cadence (rpm)} picks the posture; omit it to stay seated.
  */
 export async function loadRider(opts = {}) {
@@ -197,7 +224,8 @@ export async function loadRider(opts = {}) {
   try { data = await modelData; } catch (err) { modelData = null; throw err; }
   if (data.format !== 'bikefree-model-2') throw new Error('Unknown rider model format');
   const checker = opts.jersey === 'checker';
-  const map = await loadAtlas(checker ? data.atlas.pacer : data.atlas.rider);
+  const map = opts.kitHue != null ? await kitAtlas(checker ? data.atlas.pacer : data.atlas.rider, opts.kitHue, opts.kitLight ?? 1)
+    : await loadAtlas(checker ? data.atlas.pacer : data.atlas.rider);
   geometry ||= buildGeometry(data.mesh);
 
   const R = data.rig;

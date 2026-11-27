@@ -480,10 +480,11 @@ function patch(shader, uniforms, depth) {
  */
 export function figureMaterial(uTime, { near = null, mid = null, nearMode = 0 } = {}) {
   const uniforms = { uTime, uClips: { value: clipTexture() }, uNear: near || { value: new THREE.Vector4(0, 0, 0, 0) }, uMid: mid || { value: 1e9 } };
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .8 });
+  // (gap 12: cloth that catches the light at its edges — a soft sheen — instead of flat matte plastic)
+  const m = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: .78, sheen: .55, sheenRoughness: .7, sheenColor: new THREE.Color(.85, .85, .85) });
   if (nearMode) m.defines = { FIG_NEAR: nearMode };
   m.onBeforeCompile = (s) => patch(s, uniforms, false);
-  m.customProgramCacheKey = () => `bf-figures-2-${nearMode}`;
+  m.customProgramCacheKey = () => `bf-figures-3-${nearMode}`;
   const d = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
   if (nearMode) d.defines = { FIG_NEAR: nearMode };
   d.onBeforeCompile = (s) => patch(s, uniforms, true);
