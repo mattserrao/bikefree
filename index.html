@@ -153,12 +153,14 @@
       </aside>
     </div>
     <div class="ver" id="ver"></div>
+    <div class="update-bar" id="updateBar" role="status" hidden><span id="updateText">Update ready</span><button type="button" class="hbtn" id="updateBtn">Reload</button></div>
   </div>
 
   <!-- ================= RIDE ================= -->
   <div id="rideScreen" class="ride-screen" hidden>
     <div class="world-view" id="worldView"></div>
     <div class="loadbar" id="hLoading" hidden></div>
+    <div class="world-note" id="worldNote" role="status" title="Tap to dismiss" hidden></div>
     <div class="hud">
       <div class="glass hud-tl">
         <div class="cell"><b id="hTime">0:00</b><small>time</small></div>

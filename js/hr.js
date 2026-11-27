@@ -1,5 +1,5 @@
 // Bluetooth heart-rate strap (standard Heart Rate service).
-const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 15000, 30000];
+import { RECONNECT_DELAYS, init, next, check, watchDevice, listen, sleep, Superseded } from './ble.js';
 
 /** Parse a Heart Rate Measurement (0x2A37). */
 export function parseHeartRate(dv) {
@@ -17,38 +17,51 @@ export class HeartRate extends EventTarget {
     this.reconnecting = false;
     this._char = null;
     this._userDisconnect = false;
+    init(this);   // [review 27 Nov] A6: connection generations, listeners once per device / characteristic (js/ble.js)
   }
 
   get connected() { return !!this.device?.gatt?.connected && !!this._char; }
 
   async connect() {
-    this.device = await navigator.bluetooth.requestDevice({ filters: [{ services: ['heart_rate'] }] });
-    this.device.addEventListener('gattserverdisconnected', () => this._onDisconnected());
+    const device = await navigator.bluetooth.requestDevice({ filters: [{ services: ['heart_rate'] }] });
+    const gen = next(this);   // [review 27 Nov] A6 (as trainer.js)
+    this.device = device;
     this._userDisconnect = false;
-    await this._setup();
+    this.reconnecting = false;
+    watchDevice(this, device);
+    try { await this._setup(gen); }
+    catch (err) { if (!(err instanceof Superseded)) throw err; }
   }
 
   disconnect() {
+    next(this);
     this._userDisconnect = true;
+    if (this.reconnecting) { this.reconnecting = false; this.dispatchEvent(new Event('status')); }
     if (this.device?.gatt?.connected) this.device.gatt.disconnect();
   }
 
-  async _setup() {
+  async _setup(gen = this._gen) {
     this._char = null;
     const server = await this.device.gatt.connect();
+    check(this, gen);
     const svc = await server.getPrimaryService('heart_rate');
+    check(this, gen);
     const ch = await svc.getCharacteristic('heart_rate_measurement');
-    ch.addEventListener('characteristicvaluechanged', (e) => {
+    check(this, gen);
+    listen(this, ch, (e) => {
       this.bpm = parseHeartRate(e.target.value);
       this.lastAt = performance.now();
     });
     await ch.startNotifications();
+    check(this, gen);
     this._char = ch;
     this.log('hr', `Connected to ${this.device.name}`, 'ok');
     this.dispatchEvent(new Event('status'));
   }
 
-  async _onDisconnected() {
+  async _onDisconnected(device = this.device) {
+    if (device !== this.device) return;
+    const gen = next(this);
     this._char = null;
     this.bpm = null;
     this.dispatchEvent(new Event('status'));
@@ -57,10 +70,10 @@ export class HeartRate extends EventTarget {
     this.log('hr', 'Connection lost — reconnecting…', 'warn');
     this.dispatchEvent(new Event('status'));
     for (const delay of RECONNECT_DELAYS) {
-      await new Promise((r) => setTimeout(r, delay));
-      if (this._userDisconnect) break;
-      try { await this._setup(); this.reconnecting = false; this.dispatchEvent(new Event('status')); return; }
-      catch { /* keep trying */ }
+      await sleep(delay);
+      if (gen !== this._gen) return;
+      try { await this._setup(gen); this.reconnecting = false; this.dispatchEvent(new Event('status')); return; }
+      catch { if (gen !== this._gen) return; /* keep trying */ }
     }
     this.reconnecting = false;
     this.dispatchEvent(new Event('status'));

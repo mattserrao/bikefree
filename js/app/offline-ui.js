@@ -3,7 +3,7 @@
 import { saveSettings } from '../settings.js';
 import * as store from '../store.js';
 import { parseGpx, buildRoute } from '../gpx.js';
-import { planRouteTiles, tileKeysToUrls, downloadUrls, offlineStatus, setOfflineStatus } from '../offline.js';
+import { planRouteTiles, tileKeysToUrls, downloadUrls, offlineStatus, setOfflineStatus, applyUpdate } from '../offline.js';
 import { $, toast, log, settings, session } from './core.js';
 import { routeItems, routeCache, selectedRouteId, resetRouteList, refreshRouteList } from './routes-menu.js';
 import { previewRoute, closeMenus } from './route-loading.js';
@@ -100,4 +100,41 @@ $('gpxFile').addEventListener('change', async (e) => {
 session.addEventListener('routeFinished', () => openSummary(`Route complete — ${session.route.name}`));
 session.addEventListener('routeGoal', () => toast('Goal reached — keep riding, or finish when you like'));
 
-export { renderOffline, removeNetRoute };
+// ---------- A new version (sw.js) ----------
+/**
+ * [review 27 Nov] A7: a new revision is installed and waiting (sw.js no longer takes over mid-session). The menu shows
+ * "Update ready · Reload"; with a ride in progress it waits for the ride to be finished. With no ride going, leaving
+ * the page (hidden) lets it take over quietly: this tab keeps its own files, the next load is the new version.
+ * `apply(worker, reload?)`: js/offline.js applyUpdate. Returns { ready(worker), render(), hidden() }.
+ */
+function updatePrompt(bar, text, btn, session, apply, reload) {
+  let waiting = null, applying = false;
+  const render = () => {
+    bar.hidden = !waiting;
+    if (!waiting || applying) return;
+    const riding = session.hasRide;
+    text.textContent = riding ? 'Update ready — reload after this ride' : 'Update ready';
+    btn.disabled = riding;
+  };
+  btn.addEventListener('click', () => {
+    if (!waiting || applying || session.hasRide) return;
+    applying = true; btn.disabled = true; text.textContent = 'Updating…';
+    apply(waiting, reload);
+  });
+  return {
+    ready(worker) { waiting = worker; render(); },
+    render,
+    hidden() {   // (the page was hidden: no ride going → let it take over now; no reload)
+      if (!waiting || applying || session.hasRide) return;
+      apply(waiting, null);
+      waiting = null; render();
+    },
+  };
+}
+const update = updatePrompt($('updateBar'), $('updateText'), $('updateBtn'), session,
+  (w, reload) => applyUpdate(w, navigator.serviceWorker, reload), () => location.reload());
+for (const ev of ['change', 'routeFinished']) session.addEventListener(ev, update.render);
+document.addEventListener('visibilitychange', () => { if (document.hidden) update.hidden(); });
+const onUpdateReady = (worker) => { log('app', 'A new version is ready: reload to use it', 'info'); update.ready(worker); };
+
+export { renderOffline, removeNetRoute, onUpdateReady };

@@ -17,15 +17,66 @@ const scope = new URL(self.registration?.scope || self.location.href);
 const dataPath = (url) => (url.origin === self.location.origin && url.pathname.startsWith(scope.pathname) ? decodeURIComponent(url.pathname.slice(scope.pathname.length)) : null);
 const dataKey = (path) => new URL(`${path}?h=${DATA_FILES[path]}`, scope).href;
 
+// [review 27 Nov] A7: a new revision no longer takes over mid-session. The world modules are imported lazily, so a tab
+// opened before a deploy that switched to the new files mid-ride mixed module versions ("does not provide an export
+// named …" → "Could not start the 3D view"). The new worker installs and waits; the page shows "Update ready" and
+// sends 'skipWaiting' when you reload with it (or quietly when no ride is going: js/offline.js watchForUpdate).
+// The tabs open when it activates (other tabs, mid-ride) are still served from their own revision's cache, which is
+// kept until they're gone (LEGACY_KEY).
+const DEV = ['localhost', '127.0.0.1'].includes(self.location.hostname);   // (A8: editing locally, the network first)
+const META_CACHE = 'bikefree-meta';
+const LEGACY_KEY = new URL('sw-legacy-clients.json', scope).href;
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(APP_CACHE).then((c) => c.addAll(APP_FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(APP_CACHE).then((c) => c.addAll(APP_FILES)));
 });
+self.addEventListener('message', (e) => {
+  if (e.data?.type === 'skipWaiting') self.skipWaiting();
+});
+
+/** The tabs from before this revision activated, and their revisions' caches: { caches: [names], ids: [client ids] }. */
+let legacy;
+async function getLegacy() {
+  if (legacy === undefined) {
+    try { legacy = await (await (await caches.open(META_CACHE)).match(LEGACY_KEY))?.json() || null; } catch { legacy = null; }
+  }
+  return legacy;
+}
+async function setLegacy(v) {
+  legacy = v;
+  const c = await caches.open(META_CACHE);
+  if (v) await c.put(LEGACY_KEY, new Response(JSON.stringify(v), { headers: { 'Content-Type': 'application/json' } }));
+  else await c.delete(LEGACY_KEY);
+}
+/** The open tabs' client ids (the uncontrolled ones too). */
+const openTabs = async () => ((await self.clients.matchAll?.({ type: 'window', includeUncontrolled: true })) || []).map((c) => c.id);
+/** Once none of the old tabs is open, their revisions' caches go. */
+async function pruneLegacy() {
+  const old = await getLegacy();
+  if (!old) return;
+  const open = new Set(await openTabs());
+  const ids = old.ids.filter((id) => open.has(id));
+  if (ids.length) { if (ids.length < old.ids.length) await setLegacy({ ...old, ids }); return; }
+  for (const key of old.caches) await caches.delete(key);
+  await setLegacy(null);
+}
+/** An old tab's request: from its own revision's cache first (the files it started with), else the network. */
+async function legacyResponse(request, old) {
+  for (const name of old.caches) {
+    const hit = await (await caches.open(name)).match(request, { ignoreSearch: true });
+    if (hit) return hit;
+  }
+  return null;
+}
 
 self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {
-    for (const key of await caches.keys()) {
-      if (key.startsWith('bikefree-app-') && key !== APP_CACHE) await caches.delete(key);
-    }
+    // [review 27 Nov] A7: older revisions' caches stay while a tab from before this activation is open
+    const prev = (await caches.keys()).filter((key) => key.startsWith('bikefree-app-') && key !== APP_CACHE);
+    const tabs = await openTabs();
+    const old = await getLegacy();
+    const keepCaches = [...new Set([...prev, ...(old?.caches || [])])].filter((k) => k !== APP_CACHE);
+    if (tabs.length && keepCaches.length) await setLegacy({ caches: keepCaches, ids: [...new Set([...tabs, ...(old?.ids || [])])] });
+    else { for (const key of prev) await caches.delete(key); await setLegacy(null); }
     // data files whose content changed (or that are gone): their old copies go
     const data = await caches.open(DATA_CACHE);
     const keep = new Set(Object.keys(DATA_FILES).map(dataKey));
@@ -48,6 +99,7 @@ async function trimTiles() {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
+  if (e.request.mode === 'navigate') e.waitUntil?.(pruneLegacy().catch(() => {}));   // (a tab opened or reloaded)
 
   // Map tiles: cache first (they never change), store what we fetch.
   if (TILE_HOSTS.includes(url.hostname)) {
@@ -103,12 +155,25 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // The app itself: network first so updates show up, cache when offline.
+  // The app itself. [review 27 Nov] A8: cache first from this revision's cache (it was network first with no timeout:
+  // a slow start on weak Wi-Fi with everything cached). The revision's cache is its own files, precached at install:
+  // a deploy is a new sw-assets.js, so a new worker and cache, and the "Update ready" prompt (A7), not a refresh.
+  // A7: a tab from before this revision activated keeps its own revision's files. Locally (DEV): network first.
   if (url.origin === self.location.origin) {
     e.respondWith((async () => {
+      const old = e.clientId && !DEV ? await getLegacy() : null;
+      if (old?.ids.includes(e.clientId)) {
+        const hit = await legacyResponse(e.request, old);
+        if (hit) return hit;
+      }
+      const c = await caches.open(APP_CACHE);
+      if (!DEV) {
+        const hit = await c.match(e.request, { ignoreSearch: true });
+        if (hit) return hit;
+      }
       try {
         const res = await fetch(e.request);
-        if (res.ok) (await caches.open(APP_CACHE)).put(e.request, res.clone());
+        if (res.ok) c.put(e.request, res.clone()).catch(() => {});
         return res;
       } catch {
         const hit = await caches.match(e.request, { ignoreSearch: true });

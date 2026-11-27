@@ -3,6 +3,7 @@ import {
   parseIndoorBikeData, parseControlPointResponse, parseCyclingPower, cadenceFromCrank,
   encodeRequestControl, encodeStart, encodeTargetPower, encodeSimParams, FTMS_OP, toHex,
 } from './parsers.js';
+import { RECONNECT_DELAYS, init, next, check, watchDevice, listen, sleep, Superseded } from './ble.js';
 
 const FTMS = 0x1826;
 const INDOOR_BIKE_DATA = 0x2ad2;
@@ -12,7 +13,6 @@ const CYCLING_POWER = 0x1818;
 const CP_MEASUREMENT = 0x2a63;
 
 const OP_NAMES = Object.fromEntries(Object.entries(FTMS_OP).map(([k, v]) => [v, k]));
-const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 15000, 30000];
 
 export class Trainer extends EventTarget {
   constructor(log) {
@@ -29,6 +29,7 @@ export class Trainer extends EventTarget {
     this._queue = Promise.resolve();
     this._inFlight = 0;
     this._userDisconnect = false;
+    init(this);   // [review 27 Nov] A6: connection generations, listeners once per device / characteristic (js/ble.js)
   }
 
   get connected() { return this.demo || (!!this.device?.gatt?.connected && !!this.controlPoint); }
@@ -36,13 +37,18 @@ export class Trainer extends EventTarget {
   get busy() { return this._inFlight > 0; }
 
   async connect() {
-    this.device = await navigator.bluetooth.requestDevice({
+    const device = await navigator.bluetooth.requestDevice({
       filters: [{ services: [FTMS] }],
       optionalServices: [CYCLING_POWER, 'device_information'],
     });
-    this.device.addEventListener('gattserverdisconnected', () => this._onDisconnected());
+    // [review 27 Nov] A6: a new generation (an old reconnect loop stops), the device's drops listened to once
+    const gen = next(this);
+    this.device = device;
     this._userDisconnect = false;
-    await this._setup();
+    this.reconnecting = false;
+    watchDevice(this, device);
+    try { await this._setup(gen); }
+    catch (err) { if (!(err instanceof Superseded)) throw err; }   // (it dropped meanwhile: its reconnect loop carries on)
   }
 
   /**
@@ -60,6 +66,7 @@ export class Trainer extends EventTarget {
 
   startDemo(generate) {
     if (this.device?.gatt?.connected) this.disconnect();
+    next(this); this.reconnecting = false;   // [review 27 Nov] A6: (a reconnect loop in its backoff stops)
     this.demo = true;
     this.device = { name: 'Demo trainer' };
     this.hasControl = true;
@@ -84,48 +91,67 @@ export class Trainer extends EventTarget {
 
   disconnect() {
     if (this.demo) { this.stopDemo(); return; }
+    next(this);   // [review 27 Nov] A6: a reconnect loop sleeping in its backoff stops there
     this._userDisconnect = true;
+    if (this.reconnecting) {
+      this.reconnecting = false;
+      this.log('trainer', 'Disconnected');
+      this.dispatchEvent(new Event('status'));
+    }
     if (this.device?.gatt?.connected) this.device.gatt.disconnect();
   }
 
-  async _setup() {
+  /** Connect and subscribe. `gen`: the connection generation this belongs to (A6: it stops if superseded). */
+  async _setup(gen = this._gen) {
     this.log('trainer', `Connecting to ${this.device.name}…`);
     this.controlPoint = null;
     this.hasControl = false;
     this._ftmsHasCadence = false;
     this._lastCrank = null;
     const server = await this.device.gatt.connect();
+    check(this, gen);
     const ftms = await server.getPrimaryService(FTMS);
+    check(this, gen);
 
+    // ([review 27 Nov] A6: each characteristic's listener once — Chrome hands back the same objects on a reconnect)
     const bikeData = await ftms.getCharacteristic(INDOOR_BIKE_DATA);
-    bikeData.addEventListener('characteristicvaluechanged', (e) => this._onBikeData(e.target.value));
+    check(this, gen);
+    listen(this, bikeData, (e) => this._onBikeData(e.target.value));
     await bikeData.startNotifications();
+    check(this, gen);
 
     const cp = await ftms.getCharacteristic(CONTROL_POINT);
-    cp.addEventListener('characteristicvaluechanged', (e) => this._onControlResponse(e.target.value));
+    check(this, gen);
+    listen(this, cp, (e) => this._onControlResponse(e.target.value));
     await cp.startNotifications(); // indications
+    check(this, gen);
 
     try {
       const status = await ftms.getCharacteristic(MACHINE_STATUS);
-      status.addEventListener('characteristicvaluechanged', (e) =>
+      listen(this, status, (e) =>
         this.log('trainer', `Machine status: ${toHex(new Uint8Array(e.target.value.buffer))}`, 'debug'));
       await status.startNotifications();
     } catch { /* optional */ }
+    check(this, gen);
 
     // Cycling Power as a cadence fallback, in case FTMS bike data doesn't include cadence.
     try {
       const cps = await server.getPrimaryService(CYCLING_POWER);
       const meas = await cps.getCharacteristic(CP_MEASUREMENT);
-      meas.addEventListener('characteristicvaluechanged', (e) => this._onCyclingPower(e.target.value));
+      listen(this, meas, (e) => this._onCyclingPower(e.target.value));
       await meas.startNotifications();
     } catch { /* optional */ }
+    check(this, gen);
 
     this.controlPoint = cp;
     this.log('trainer', `Connected to ${this.device.name}`, 'ok');
     this.dispatchEvent(new Event('status'));
   }
 
-  async _onDisconnected() {
+  async _onDisconnected(device = this.device) {
+    if (device !== this.device || this.demo) return;   // (a trainer you've since switched from)
+    // [review 27 Nov] A6: one loop per drop: a newer connect, drop or disconnect ends this one at its next await
+    const gen = next(this);
     this.controlPoint = null;
     this.hasControl = false;
     this.data = {};
@@ -138,15 +164,16 @@ export class Trainer extends EventTarget {
     this.reconnecting = true;
     this.dispatchEvent(new Event('status'));
     for (const delay of RECONNECT_DELAYS) {
-      await new Promise((r) => setTimeout(r, delay));
-      if (this._userDisconnect) break;
+      await sleep(delay);
+      if (gen !== this._gen) return;
       try {
-        await this._setup();
+        await this._setup(gen);
         this.reconnecting = false;
         this.dispatchEvent(new Event('reconnected'));
         this.dispatchEvent(new Event('status'));
         return;
       } catch (err) {
+        if (gen !== this._gen) return;
         this.log('trainer', `Reconnect failed: ${err.message}`, 'debug');
       }
     }

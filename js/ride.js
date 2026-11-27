@@ -1,6 +1,7 @@
 // Zwift Ride handlebars over Web Bluetooth.
 // Protocol details from BikeControl (github.com/jonasbark/swiftcontrol, MIT).
 import { RIDE_ON, ZWIFT_OPCODE, decodeRideKeyPad, pressedButtons, toHex } from './parsers.js';
+import { RECONNECT_DELAYS, init, next, check, watchDevice, listen, sleep, Superseded } from './ble.js';
 
 const ZWIFT_MANUFACTURER_ID = 0x094a;
 const RIDE_LEFT_SIDE = 0x08; // first byte of Zwift manufacturer data; the left hood is the one to connect to
@@ -10,7 +11,6 @@ const ASYNC_CHAR = '00000002-19ca-4651-86e5-fa29dcdd09d1';   // notifications (b
 const SYNC_RX_CHAR = '00000003-19ca-4651-86e5-fa29dcdd09d1'; // we write commands here
 const SYNC_TX_CHAR = '00000004-19ca-4651-86e5-fa29dcdd09d1'; // indications (responses)
 const VIBRATE = new Uint8Array([0x12, 0x12, 0x08, 0x0a, 0x06, 0x08, 0x02, 0x10, 0x00, 0x18, 0x20]);
-const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 15000, 30000];
 
 export class Ride extends EventTarget {
   constructor(log) {
@@ -24,6 +24,7 @@ export class Ride extends EventTarget {
     this._syncRx = null;
     this._pressed = new Set();
     this._userDisconnect = false;
+    init(this);   // [review 27 Nov] A6: connection generations, listeners once per device / characteristic (js/ble.js)
   }
 
   get connected() { return !!this.device?.gatt?.connected && !!this._syncRx; }
@@ -34,28 +35,36 @@ export class Ride extends EventTarget {
       ? [{ namePrefix: 'Zwift' }, { manufacturerData: [{ companyIdentifier: ZWIFT_MANUFACTURER_ID }] }]
       : [{ manufacturerData: [{ companyIdentifier: ZWIFT_MANUFACTURER_ID, dataPrefix: new Uint8Array([RIDE_LEFT_SIDE]) }] }];
 
-    this.device = await navigator.bluetooth.requestDevice({
+    const device = await navigator.bluetooth.requestDevice({
       filters,
       optionalServices: [RIDE_SERVICE, ZWIFT_SERVICE, 'device_information', 'battery_service'],
     });
-    this.device.addEventListener('gattserverdisconnected', () => this._onDisconnected());
+    const gen = next(this);   // [review 27 Nov] A6 (as trainer.js)
+    this.device = device;
     this._userDisconnect = false;
-    await this._setup();
+    this.reconnecting = false;
+    watchDevice(this, device);
+    try { await this._setup(gen); }
+    catch (err) { if (!(err instanceof Superseded)) throw err; }
   }
 
   disconnect() {
+    next(this);
     this._userDisconnect = true;
+    if (this.reconnecting) { this.reconnecting = false; this.log('ride', 'Disconnected'); this.dispatchEvent(new Event('status')); }
     if (this.device?.gatt?.connected) this.device.gatt.disconnect();
   }
 
-  async _setup() {
+  async _setup(gen = this._gen) {
     this.log('ride', `Connecting to ${this.device.name}…`);
     this._syncRx = null;
     this._pressed = new Set();
     const server = await this.device.gatt.connect();
+    check(this, gen);
 
     await this._readFirmware(server);
     await this._readBattery(server);
+    check(this, gen);
 
     let service;
     try {
@@ -73,23 +82,29 @@ export class Ride extends EventTarget {
       }
     }
 
+    check(this, gen);
     const asyncChar = await service.getCharacteristic(ASYNC_CHAR);
     const syncTx = await service.getCharacteristic(SYNC_TX_CHAR);
     const syncRx = await service.getCharacteristic(SYNC_RX_CHAR);
+    check(this, gen);
 
-    asyncChar.addEventListener('characteristicvaluechanged', (e) => this._onMessage('async', e.target.value));
-    syncTx.addEventListener('characteristicvaluechanged', (e) => this._onMessage('syncTx', e.target.value));
+    listen(this, asyncChar, (e) => this._onMessage('async', e.target.value));
+    listen(this, syncTx, (e) => this._onMessage('syncTx', e.target.value));
     await asyncChar.startNotifications();
     await syncTx.startNotifications();
+    check(this, gen);
 
     await syncRx.writeValueWithoutResponse(RIDE_ON);
+    check(this, gen);
     this._syncRx = syncRx;
 
     this.log('ride', `Connected to ${this.device.name}`, 'ok');
     this.dispatchEvent(new Event('status'));
   }
 
-  async _onDisconnected() {
+  async _onDisconnected(device = this.device) {
+    if (device !== this.device) return;
+    const gen = next(this);   // [review 27 Nov] A6
     this._syncRx = null;
     this.dispatchEvent(new Event('status'));
     if (this._userDisconnect) {
@@ -100,16 +115,17 @@ export class Ride extends EventTarget {
     this.reconnecting = true;
     this.dispatchEvent(new Event('status'));
     for (const delay of RECONNECT_DELAYS) {
-      await new Promise((r) => setTimeout(r, delay));
-      if (this._userDisconnect) break;
+      await sleep(delay);
+      if (gen !== this._gen) return;
       try {
-        await this._setup();
+        await this._setup(gen);
         if (this.connected) {
           this.reconnecting = false;
           this.dispatchEvent(new Event('status'));
           return;
         }
       } catch (err) {
+        if (gen !== this._gen) return;
         this.log('ride', `Reconnect failed: ${err.message}`, 'debug');
       }
     }
