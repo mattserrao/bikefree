@@ -54,6 +54,7 @@ export const LAND = { paved: 0, grass: 1, woods: 2, water: 3, building: 4, sand:
   // 40–42: the red-rock desert's (Out West): pinyon-juniper benches, sagebrush flats, bare slickrock
   pj: 40, sage: 41, slick: 42 };
 const TILE = 400;
+const WANT_STEP = 50;   // m the camera goes before stream() sorts its tiles again ([review 27 Nov])
 // how far the city is built, by quality (Low: phones)
 const VERGE_IN = 260, VERGE_OUT = 420;
 /** Phones and tablets (user, 23 Nov: "even on high performance on mobile, the game should not run out of memory"):
@@ -253,7 +254,7 @@ export class GraphCity {
   }
   _requestSector(key) {
     if (this.sectors.has(key)) return;
-    const st = { state: 'loading', job: null };
+    const st = { key, state: 'loading', job: null };
     this.sectors.set(key, st);
     fetch(new URL(`../../${this.index.sectors.folder}/s_${key}.json`, import.meta.url)).then((r) => r.json())
       .then((d) => { if (this.disposed) return; st.data = d; st.state = 'decode'; })
@@ -653,22 +654,19 @@ export class GraphCity {
   stream(cx, cz, ms) {
     const t0 = performance.now();
     if (!this.world.ground || !this.ready) return;
-    const ci = Math.floor(cx / TILE), cj = Math.floor(cz / TILE), NEAR_M = this.q.near, r = Math.ceil(NEAR_M / TILE), want = [];
-    for (let i = ci - r; i <= ci + r; i++) for (let j = cj - r; j <= cj + r; j++) {
-      const d = Math.hypot((i + 0.5) * TILE - cx, (j + 0.5) * TILE - cz);
-      if (d > NEAR_M) continue;
-      const key = `${i},${j}`;
-      if (this.tiles.get(key)?.built) continue;
-      const secs = this._sectorsOf(i, j);
-      for (const s of secs) this._requestSector(s);
-      want.push({ key, i, j, d, secs });
-    }
-    want.sort((a, b) => a.d - b.d);
-    this.queued = want.length;
+    // [review 27 Nov] the tiles round the camera, nearest first, with the sectors each reaches into, made again only when
+    // the camera has gone WANT_STEP or the reach changed (it had made a key string, an object and — for every tile not
+    // yet built — _sectorsOf's 4 projections, a Set and strings, every frame); the sectors of a tile kept (_secs)
+    const NEAR_M = this.q.near, W = this._want;
+    if (!W || W.near !== NEAR_M || Math.abs(cx - W.x) > WANT_STEP || Math.abs(cz - W.z) > WANT_STEP) this._wantAt(cx, cz, NEAR_M);
+    const want = this._want.list;
+    let queued = 0; for (let k = 0; k < want.length; k++) if (!this.tiles.get(want[k].key)?.built) queued++;
+    this.queued = queued;
     // sectors: decode one that came in, then plan (its homes) in slices
-    for (const [key, st] of this.sectors) {
+    for (const st of this.sectors.values()) {   // ([review 27 Nov] values: an entries loop made a [key, st] pair a sector a frame)
+      if (st.state === 'ready' || st.state === 'failed' || st.state === 'loading') continue;
       if (performance.now() - t0 > ms) return;
-      if (st.state === 'decode') { st.state = 'adding'; st.add = this._addSector(key, st); }
+      if (st.state === 'decode') { st.state = 'adding'; st.add = this._addSector(st.key, st); }
       if (st.state === 'adding') { if (!runSlice(st.add, Math.max(0.5, ms - (performance.now() - t0))).done) return; st.add = null; }
       if (st.state === 'planning') {
         const res = runSlice(st.job, Math.max(0.5, ms - (performance.now() - t0)));
@@ -678,7 +676,8 @@ export class GraphCity {
     // tiles: one at a time, as a job in frame-sized slices (no hitch on the ride), once its sectors are ready
     while (performance.now() - t0 < ms) {
       if (!this._job) {
-        const w = want.find((q) => !this.tiles.get(q.key)?.built && q.secs.every((s) => { const st = this.sectors.get(s); return st && (st.state === 'ready' || st.state === 'failed'); }));
+        let w = null;
+        for (let k = 0; k < want.length && !w; k++) { const q = want[k]; if (!this.tiles.get(q.key)?.built && this._secsReady(q.secs)) w = q; }
         if (!w) break;
         this._job = this._tileJob(w.key, w.i, w.j);
       }
@@ -715,6 +714,21 @@ export class GraphCity {
     }
     if ((this._f = (this._f || 0) + 1) % 30 === 0) for (const [key, t] of this.tiles) if (t.built && !t.building && Math.hypot(t.cx - cx, t.cz - cz) > this.q.far) this._release(key, t);
   }
+  /** [review 27 Nov] The tiles within NEAR of (cx, cz), nearest first, each with its sectors (requested here). */
+  _wantAt(cx, cz, NEAR) {
+    const ci = Math.floor(cx / TILE), cj = Math.floor(cz / TILE), r = Math.ceil(NEAR / TILE), W = this._want ||= { list: [] }, S = this._secs ||= new Map();
+    W.x = cx; W.z = cz; W.near = NEAR; W.list.length = 0;
+    for (let i = ci - r; i <= ci + r; i++) for (let j = cj - r; j <= cj + r; j++) {
+      const d = Math.hypot((i + 0.5) * TILE - cx, (j + 0.5) * TILE - cz);
+      if (d > NEAR) continue;
+      const key = `${i},${j}`;
+      let secs = S.get(key); if (!secs) S.set(key, (secs = this._sectorsOf(i, j)));
+      for (const s of secs) this._requestSector(s);
+      W.list.push({ key, i, j, d, secs });
+    }
+    W.list.sort((a, b) => a.d - b.d);
+  }
+  _secsReady(secs) { for (const s of secs) { const st = this.sectors.get(s); if (!st || (st.state !== 'ready' && st.state !== 'failed')) return false; } return true; }
   /** Tiles within r of (x, z) not yet built (the loading screen waits for the start's). */
   pendingNear(x, z, r) {
     if (!this.ready) return 1;
@@ -1745,6 +1759,9 @@ export class GraphCity {
     lampMesh(lamps, this.lampGeo, 'Lamps', [0, 6.85, 1.75]);
     lampMesh(acorns, this.acornGeo, 'Riverwalk lamps', [0, 4.25, 0]);
     if (glows.length) { const g = this.host.addGlows(glows, `Lamp glows ${t.key}`); if (g) t.meshes.push({ m: g, parent: this.host.group }); }
+    // [review 27 Nov] the lamp heads kept by tile (x, y, z): the world's night lights take the nearest from here
+    // (graph-world.js _lampLights had walked the scene for every lamp instance's matrix every 32 frames)
+    if (glows.length) { const H = t.lampHeads = new Float32Array(glows.length * 3); glows.forEach((g, k) => { H[k * 3] = g.x; H[k * 3 + 1] = g.y; H[k * 3 + 2] = g.z; }); }
   }
 
   /** Parked cars (toolbox/life/figures/cars.js, the shared kit): instanced by kind, the detailed LOD within CAR_HI,
