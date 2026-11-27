@@ -52,6 +52,8 @@ class Dem:
             path = os.path.join(CACHE, f'dem-{DEM_Z}-{tx}-{ty}.png')
             if not os.path.exists(path):
                 import urllib.request
+                from .offline import guard
+                guard(f'DEM tile {DEM_Z}/{tx}/{ty}')
                 req = urllib.request.Request(f'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{DEM_Z}/{tx}/{ty}.png', headers={'User-Agent': 'bikefree-warp/0.1'})
                 open(path, 'wb').write(urllib.request.urlopen(req, timeout=60).read())
             a = np.asarray(Image.open(path).convert('RGB'), dtype=np.float64)

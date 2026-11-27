@@ -290,7 +290,9 @@ def main():
         cfg = json.load(open(cfgp))
         cfg['underground'] = {k: v for k, v in meta.items() if k != 'synthetic'}
         json.dump(cfg, open(cfgp, 'w'), indent=1, ensure_ascii=False); open(cfgp, 'a').write('\n')
-    json.dump(meta, open('/tmp/subway-line-meta.json', 'w'))
+    scratch = os.path.join(ROOT, 'tools', '.cache', 'subway-line-meta.json')   # (scratch: the synthetic way too — not /tmp, code review P10)
+    os.makedirs(os.path.dirname(scratch), exist_ok=True)
+    json.dump(meta, open(scratch, 'w'))
     print('  ', json.dumps({k: v for k, v in meta.items() if k != 'synthetic'}))
 
 

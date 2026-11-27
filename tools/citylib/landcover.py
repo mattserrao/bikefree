@@ -30,6 +30,8 @@ def _fetch(name):
     os.makedirs(CACHE, exist_ok=True)
     path = os.path.join(CACHE, f'ESA_WorldCover_10m_2021_v200_{name}_Map.tif')
     if not os.path.exists(path):
+        from .offline import guard
+        guard(URL.format(name))
         print(f'  WorldCover: fetching {name} (~90 MB, once)')
         with urllib.request.urlopen(URL.format(name), timeout=600) as r, open(path + '.part', 'wb') as f:
             while True:

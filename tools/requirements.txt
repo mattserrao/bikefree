@@ -1,0 +1,10 @@
+# Python packages the map tools import (tools/*.py, tools/citylib, tools/reference), pinned to the versions the maps
+# were last built with (Python 3.13).   pip install -r tools/requirements.txt
+numpy==2.5.3          # everything: grids, DEM sampling, the warp
+scipy==1.18.1         # ndimage (land cover, slopes), spatial (the warp's KD-trees)
+Pillow==12.3.0        # DEM tiles, land-cover rasters, textures
+tifffile==2026.9.20   # ESA WorldCover tiles (tools/citylib/landcover.py: SKAN, Out West)
+shapely==2.2.0        # NYC: tools/nyc_pools.py, tools/nyc_heroes.py, pgh_city.py's pool water
+scikit-image==0.26.0  # tools/reference/compare.py (photo comparisons) only
+# not here: bpy (tools/build_rider.py and tools/build_coastal_assets.py run in Blender; README "Rebuilding the park
+# routes and the rider")

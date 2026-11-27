@@ -40,6 +40,36 @@ npm install   # once, for the FIT decoder used in tests
 npm test      # Node 18+
 ```
 
+## Building the maps
+
+The graph maps (Pittsburgh, CNY, Skaneateles, NYC, Out West) are generated offline from OpenStreetMap, AWS Terrain
+Tiles and ESA WorldCover by the tools in `tools/`, and the results are committed under `routes/cities/`. You only
+need this to change a map; riding never runs it.
+
+Prerequisites: Node 18+ (`npm install`), Python 3.13 with the pinned packages, and internet for the first build:
+
+```sh
+pip install -r tools/requirements.txt
+```
+
+| Command | Builds |
+| --- | --- |
+| `npm run map:build -- <id> [--offline] [--no-qc]` | any map from its config `tools/city/<id>.json` (graph, city layer, the config's `buildSteps`, preset routes, QC) |
+| `npm run cny:build` / `skan:build` / `nyc:build` | the same chain for CNY, Skaneateles, NYC (their older one-line scripts) |
+| `npm run pgh:build -- [--offline] [--from <step>]` | Pittsburgh from scratch, every clean-up step in order (`tools/pgh_pipeline.mjs`) |
+
+A full build takes many minutes per map. Downloads are cached in `tools/.cache/` (git-ignored, about 1 GB:
+`osm-<id>/` OSM API tiles, `dem-*.png` terrain tiles, WorldCover rasters, photos); delete a folder there to refresh it.
+Only the OSM tiles inside a map's current box are read, and the city step stops instead of writing an empty map when
+they are missing.
+
+**Offline:** `--offline` (or `BIKEFREE_OFFLINE=1` in the environment, e.g. `BIKEFREE_OFFLINE=1 npm run cny:build`)
+uses the cache only: every step gets it, and any download stops the build naming the missing file.
+
+After a rebuild, `npm run routes:build` regenerates the catalog and offline manifest (`sw-assets.js`), and
+`npm run check` verifies that the generated files are current (CI runs `npm test`, which includes the generated-files
+checks, and the network check).
+
 ## Rebuilding the park routes and the rider
 
 To add a GPX route, prepare the catalog, or rebuild the style-C regional scenery,

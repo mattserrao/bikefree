@@ -46,7 +46,7 @@ for p in PLACES[a.map]:
     lat, lon = (p['lat'], p['lon']) if p.get('map') or not W else W.fwd_any(p['lat'], p['lon'])
     tla = lat + 400 / 110540
     spec = f"census-{p['id']}@{lat:.7f},{lon:.7f}@0#{lat:.7f},{lon:.7f},30,{tla:.7f},{lon:.7f},0"
-    cmd = ['node', 'tools/snap_pgh.mjs', '--software', '--size', '640x360', '--quality', 'high', '--out', '/tmp/census', '--graph', f'routes/cities/{a.map}.json', spec, '--eval', EV]
+    cmd = ['node', 'tools/snap_pgh.mjs', '--software', '--size', '640x360', '--quality', 'high', '--out', os.path.join(ROOT, 'tools', '.cache', 'census'), '--graph', f'routes/cities/{a.map}.json', spec, '--eval', EV]
     r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, env={**os.environ, 'SNAP_WAIT': os.environ.get('SNAP_WAIT', '900000')}, timeout=1800)
     m = re.search(r'eval: (\{.*\})', r.stdout)
     res = json.loads(m.group(1)) if m else {'error': (r.stdout + r.stderr)[-400:]}

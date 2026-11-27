@@ -25,11 +25,14 @@ import base64, gzip, json, math, os, re, struct, sys, time, urllib.error, urllib
 import xml.etree.ElementTree as ET
 from collections import defaultdict, Counter
 from PIL import Image
+import numpy as np   # (required: the junction planes below used to fall back to flat ones without it — code review P11)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(ROOT, 'tools', '.cache')
 UA = {'User-Agent': 'bikefree-graph-builder/0.1 (personal project)'}
-OFFLINE = '--offline' in sys.argv
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from citylib.offline import offline as _offline, guard as _guard
+OFFLINE = _offline()   # (--offline or BIKEFREE_OFFLINE=1: the cache only)
 # (user, 22 Nov: "create a new map CNY following the guide used for PGH") the city: tools/city/<id>.json; PGH by default
 CITY = sys.argv[sys.argv.index('--city') + 1] if '--city' in sys.argv else 'pgh'
 STEP = 10
@@ -37,7 +40,7 @@ REVIEW = {}   # what the build left out, for tools/review_pgh.py
 
 
 def http_get(url, pause=1.0):
-    if OFFLINE: raise RuntimeError(f'offline: {url} is not cached')
+    _guard(url)
     time.sleep(pause)
     with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=300) as r:
         return r.read()
@@ -1122,7 +1125,7 @@ def write_ground(cfg, E):
     pad = (4 - (8 + len(js)) % 4) % 4
     blob = b'BFTG' + struct.pack('<I', len(js)) + js + b'\0' * pad + bytes(rows)
     path = os.path.join(ROOT, cfg['groundFile'])
-    open(path, 'wb').write(gzip.compress(blob, 9))
+    open(path, 'wb').write(gzip.compress(blob, 9, mtime=0))
     print(f'  wrote {cfg["groundFile"]}: {nx} × {ny} at {cell} m, {os.path.getsize(path) / 1e6:.2f} MB')
 
 
@@ -1508,7 +1511,7 @@ def smooth_heights(cfg, E, jh):
         for end, idx in ((e['a'], range(1, min(n, 4))), (e['b'], range(n - 1, max(0, n - 4), -1))):
             for i in idx: pts[end].append((e['lon'][i], e['lat'][i], e['ele'][i]))
     gmax = cfg['maxGradePct'] / 100
-    planes = {}
+    planes, flat = {}, []
     for nd, P in pts.items():
         e0 = next(e for e in E if e['a'] == nd or e['b'] == nd)
         lo0, la0 = (e0['lon'][0], e0['lat'][0]) if e0['a'] == nd else (e0['lon'][-1], e0['lat'][-1])
@@ -1520,15 +1523,17 @@ def smooth_heights(cfg, E, jh):
                 r[i] += v[i] * z
                 for j in range(3): S[i][j] += v[i] * v[j]
         S[1][1] += 200.0; S[2][2] += 200.0
-        try:
-            import numpy as np
-            a, b, c = np.linalg.solve(np.array(S), np.array(r))
-        except Exception:
+        try: a, b, c = np.linalg.solve(np.array(S), np.array(r))
+        except np.linalg.LinAlgError:   # (singular: a flat plane at the mean height — counted, below)
             a, b, c = sum(p[2] for p in P) / len(P), 0.0, 0.0
+            flat.append(nd)
         sl = math.hypot(b, c)
         if sl > gmax: b, c = b * gmax / sl, c * gmax / sl
         planes[nd] = (lo0, la0, float(a), float(b), float(c))
         jh[nd] = float(a)
+    if flat:
+        print(f'  junction planes: {len(flat)} of {len(pts)} singular, flat at the mean height (first: node {flat[0]})')
+        if len(flat) > max(20, 0.02 * len(pts)): raise SystemExit(f'build_pgh: {len(flat)} of {len(pts)} junction planes singular — bad heights?')
     g = cfg['maxGradePct'] / 100
     for e in E:
         n, sm, br = e['n'], e['ele'], e['br']

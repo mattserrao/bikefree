@@ -68,6 +68,8 @@ def fetch_osm():
     if not os.path.exists(path):
         w, s, e, n = BBOX
         url = f'https://api.openstreetmap.org/api/0.6/map?bbox={w},{s},{e},{n}'
+        from citylib.offline import guard
+        guard(url)
         print(f'  fetching {url}')
         data = urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'bikefree/1.0 (map build)'}), timeout=300).read()
         open(path, 'wb').write(data)
@@ -385,7 +387,7 @@ def main():
     if CHECK: print('  (--check: nothing written)'); return
     json.dump(G, open(GRAPH, 'w'), ensure_ascii=False, separators=(',', ':'))
     json.dump(C, open(CITY, 'w'), separators=(',', ':'))
-    open(os.path.join(ROOT, land['file']), 'wb').write(gzip.compress(L.tobytes(), 9))
+    open(os.path.join(ROOT, land['file']), 'wb').write(gzip.compress(L.tobytes(), 9, mtime=0))
     json.dump(og, open(os.path.join(ROOT, OUT), 'w'), separators=(',', ':'))
     print(f'  wrote routes/cities/cny.json, cny-city.json, cny-land.bin.gz, {OUT}')
 
