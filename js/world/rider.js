@@ -144,6 +144,14 @@ function makeShadow() {
 let modelData = null;          // shared by the rider and the pacer
 let geometry = null;
 const atlases = {};
+const LOADED = new Set();      // the atlases' textures, as they load (disposeRiderAssets)
+
+/** [review 27 Nov] The model's shared parts (the skinned geometry, the kit atlases) off the GPU: a world's teardown
+ *  (render-core.js teardownWorld). The CPU copies stay — the next world uploads them to its own renderer. */
+export function disposeRiderAssets() {
+  geometry?.dispose();
+  for (const t of LOADED) t.dispose();
+}
 
 function loadAtlas(file) {
   return atlases[file] ||= new Promise((resolve, reject) => {
@@ -152,7 +160,7 @@ function loadAtlas(file) {
       t.flipY = false;
       t.anisotropy = 8;
       t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true;
-      resolve(t);
+      LOADED.add(t); resolve(t);
     }, undefined, () => { delete atlases[file]; reject(new Error(`rider atlas ${file} failed to load`)); });
   });
 }
@@ -179,7 +187,7 @@ function kitAtlas(file, hue, light = 1) {
     g.putImageData(d, 0, 0);
     const t = new THREE.CanvasTexture(cv);
     t.colorSpace = THREE.SRGBColorSpace; t.flipY = false; t.anisotropy = 8; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true;
-    return t;
+    LOADED.add(t); return t;
   });
 }
 
@@ -378,8 +386,16 @@ export async function loadRider(opts = {}) {
   }
 
   update(new THREE.Vector3(), new THREE.Vector3(0, 0, 1), 0, 0, 0);
+  const shadow = group.children[1];
   return {
     group, mesh, update,
+    /** [review 27 Nov] This rider's own GPU parts: its material, bone texture and ground shadow (the geometry and the
+     *  atlases are shared by every rider: disposeRiderAssets). */
+    dispose() {
+      group.removeFromParent();
+      mesh.material.dispose(); mesh.skeleton?.dispose();
+      shadow.geometry.dispose(); shadow.material.map?.dispose(); shadow.material.dispose();
+    },
     triangles: data.mesh.tris,
     /**
      * [7.5] Lean the bike and rider into a turn: radians, + to the rider's right. The whole model (bike, rider, the

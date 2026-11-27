@@ -8,7 +8,14 @@
 //                              vegetation, then a shorter shadow reach; climbs back when there's headroom
 //   GpuTimer                   GPU ms per named pass (EXT_disjoint_timer_query_webgl2 where there is one)
 //   watchDeviceLoss(r, fn)     the GPU was reset (context lost): fn() rebuilds
+//   snapShadowBox(...)         a live shadow box's centre on whole texels of its map (no shimmer as it follows)
+//   teardownWorld(r, scene)    a world's last step: what's left in its scene, the figures' shared caches, the renderer
+//                              and its WebGL context
 import * as THREE from '../../vendor/three.js';
+import { disposeCarGeometries } from './toolbox/life/figures/cars.js';
+import { disposeAnimalGeometries } from './toolbox/life/figures/animals.js';
+import { disposeVehicleGeometries } from './toolbox/life/figures/vehicles.js';
+import { disposeRiderAssets } from './rider.js';
 
 /** The tier table. pixelRatio caps the device's; samples: MSAA of the offscreen targets; shadowMap: live map px. */
 export const TIERS = {
@@ -49,6 +56,51 @@ export function watchDeviceLoss(renderer, fn) {
   const el = renderer.domElement, h = (e) => { e.preventDefault?.(); fn(e); };
   el.addEventListener('webglcontextlost', h);
   return () => el.removeEventListener('webglcontextlost', h);
+}
+
+/**
+ * [review 27 Nov] A directional light's shadow box centred near `target`, moved only in whole texels of its map
+ * (2·span / mapSize m) across the light's view, so the shadow edges don't crawl as the box follows the rider. The
+ * axes are the shadow camera's own (three's lookAt from the sun with +Y up: right = Y × d, up = d × right). Writes
+ * the snapped centre to `out` (default: target) and returns it. As world.js _placeShadows.
+ */
+const _sr = new THREE.Vector3(), _su = new THREE.Vector3();
+export function snapShadowBox(target, sunDir, span, mapSize, out = target) {
+  const right = _sr.set(0, 1, 0).cross(sunDir);
+  if (right.lengthSq() < 1e-6) right.set(1, 0, 0);
+  right.normalize();
+  const up = _su.copy(sunDir).cross(right).normalize(), texel = (2 * span) / mapSize;
+  const a = Math.round(target.dot(right) / texel) * texel, b = Math.round(target.dot(up) / texel) * texel, c = target.dot(sunDir);
+  return out.copy(right).multiplyScalar(a).addScaledVector(up, b).addScaledVector(sunDir, c);
+}
+
+/** Every texture a material holds (its maps, and textures in its uniforms). */
+function texturesOf(m) {
+  const out = [];
+  for (const v of Object.values(m)) if (v?.isTexture) out.push(v);
+  for (const u of Object.values(m.uniforms || {})) if (u?.value?.isTexture) out.push(u.value);
+  return out;
+}
+
+/**
+ * [review 27 Nov] A world's last step (graph maps, route scenes, Endless), after its own parts' dispose(): whatever is
+ * still in the scene — geometry, materials and their textures — then the figures' shared geometry caches (cars,
+ * vehicles, animals, the rider's model: built for this renderer, cleared so the next world builds its own), then the
+ * renderer and its WebGL context (forceContextLoss: the browser frees the GPU memory now, not at some later GC —
+ * a phone that rides two maps in a row ran out of it), and its canvas.
+ */
+export function teardownWorld(renderer, scene) {
+  scene?.traverse((o) => {
+    o.geometry?.dispose?.();
+    if (o.material) for (const m of [].concat(o.material)) { for (const t of texturesOf(m)) t.dispose(); m.dispose?.(); }
+    o.skeleton?.dispose?.();
+  });
+  if (scene) { scene.environment = null; if (scene.background?.isTexture) scene.background.dispose(); }
+  for (const f of [disposeCarGeometries, disposeVehicleGeometries, disposeAnimalGeometries, disposeRiderAssets]) { try { f(); } catch { /* (a cache never built) */ } }
+  if (!renderer) return;
+  renderer.dispose();
+  try { renderer.forceContextLoss(); } catch { /* (already lost) */ }
+  renderer.domElement?.remove();
 }
 
 /** Automation (headless snapshots, QC): no adaptive changes, so frames are comparable run to run. */

@@ -24,7 +24,7 @@ import { RoadsideCommerce } from './toolbox/city/roadside-commerce.js';   // [bu
 import { FarTerrain } from './toolbox/landscape/far-terrain.js';   // [evidence 27 Nov] the land beyond the ground, out to ~45 km
 import { makeSkyDome } from './toolbox/atmosphere/sky-dome.js';
 import { PostFX } from './toolbox/atmosphere/post.js';
-import { createRenderer, pixelRatioFor, QualityGovernor, GpuTimer } from './render-core.js';
+import { createRenderer, pixelRatioFor, QualityGovernor, GpuTimer, snapShadowBox, teardownWorld } from './render-core.js';
 import { litMaterial } from './toolbox/materials/lit.js';
 import { GroundCover } from './toolbox/landscape/ground-cover.js';
 import { grassMaterial } from './toolbox/landscape/grass-cards.js';
@@ -56,8 +56,8 @@ const BUDGET_MS = 6, PRELOAD_BUDGET_MS = 40;
 const RIDER_LANE = 0.22;
 const WATER_ABOVE = 0.35;           // the water plane this far above the pool level
 const BED_BELOW = 1.2;              // ground this close above the pool (or under it) is pushed down to river bed
-// the drawing buffer's pixel ratio by quality: with 4× MSAA on, 1.5 on a 2× (Retina) screen looks all but the same as 2
-// and shades 44% fewer pixels — the anti-aliasing review (23 Nov): edges are the multisample's job, not resolution's
+// ([review 27 Nov] the drawing buffer's pixel ratio by quality — 1.5 on a 2× screen with 4× MSAA, the anti-aliasing
+//  review of 23 Nov — lives in render-core.js pixelRatioFor; its constant left this file, its comment stayed)
 const SPILL_IN = 350, SPILL_OUT = 550;   // the ways' spill strips: built within, dropped past (m from a tile's edge)
 const KERB = 0.35;                  // the ground's top this far under the road beside it…
 const SHELF = 13;                   // …for this far beyond its edge (a ground cell: no triangle reaches over the road)…
@@ -68,14 +68,15 @@ const FILL_SLOPE = 0.66;            // an embankment's side: down 1 m per 1.5 m 
 const FILL_REACH = 25;              // m from a road's edge the fill reaches
 const ABUT_M = 12;                  // m of a deck from its end that stand on an abutment (the ground filled up to under it)
 const BANK_CAP = 22;                // m: a walled bank's promenade, from the wall back
-const BANK_SLOPE = 14;
+const BANK_SLOPE = 14;              // m: a natural bank, from the water's edge to its top
 const BANK_RING_M = 9;              // m round a pool's outline its bank is shaped (pools with a ring: NYC)
-const PIER_STEP = 7;
-const PROM_M = 6;                   // m of granite paving along the top of a river wall                // samples (70 m) between a deck's piers              // m: a natural bank, from the water's edge to its top
+const PIER_STEP = 7;                // samples (70 m) between a deck's piers
+const PROM_M = 6;                   // m of granite paving along the top of a river wall
+// ([review 27 Nov] the comments above had run onto one line in a merge: each back beside its own constant)
 const LAND_PAVED = 0;
 const ZERO4 = [0, 0, 0, 3];
 const SUB = 3;                      // a drawn way: each 10 m sample span in this many pieces (a Catmull-Rom curve through the samples)
-const SURF_CODE = { asphalt: 0, brick: 1, sett: 2, concrete: 3, paving: 4, gravel: 5, dirt: 6, wood: 7 };                // m: no centre or edge lines this close to a junction
+const SURF_CODE = { asphalt: 0, brick: 1, sett: 2, concrete: 3, paving: 4, gravel: 5, dirt: 6, wood: 7 };   // ([review 27 Nov] a stray comment for a constant long gone dropped here)
 
 const COLORS = {
   primary: '#4c4e52', secondary: '#4c4e52', tertiary: '#4c4e52', residential: '#4c4e52', alley: '#57554f',
@@ -351,10 +352,13 @@ export class GraphWorld {
       spill: roadSurfaceMaterial(this.qualityKey === 'low', this.profile.roads === 'worn', true),
       water: litMaterial({ color: '#4f7f97', transparent: true, opacity: 0.92 }, 'water'),
       // the dressed places and the river walls: textured from world position (toolbox/materials)
-      park: Object.fromEntries(['lawn', 'plaza', 'granite', 'walk', 'garden', 'wood', 'scrub', 'fairway', 'green', 'sand'].map((k) => [k, makeParkMaterial(k)])),
+      // [review 27 Nov] the dressed places' materials made two-sided here, before they compile (the dressing job had
+      // flipped .side on them after, with no needsUpdate — and on the granite the promenade draws one-sided: its own)
+      park: Object.fromEntries(['lawn', 'plaza', 'granite', 'walk', 'garden', 'wood', 'scrub', 'fairway', 'green', 'sand'].map((k) => [k, twoSided(makeParkMaterial(k))])),
+      promenade: makeParkMaterial('granite'),
       riverWall: makeMasonryMaterial({ stones: ['#8f897d', '#9b9487', '#857f74', '#a29b8e', '#8a8376', '#7f796f'], mortar: '#b3ada1', courseM: 0.45, moss: '#4f5a3c', mossM: 1.2 }),
-      parkWall: makeMasonryMaterial({ stones: ['#a39a8a', '#958c7c', '#ab9f8c', '#8f8576', '#9c9282', '#b0a693'], mortar: '#c2b9a8', courseM: 0.3, mossM: 0.4 }),
-      fountainWater: litMaterial({ color: '#5d93ad', transparent: true, opacity: 0.88 }, 'water'),
+      parkWall: twoSided(makeMasonryMaterial({ stones: ['#a39a8a', '#958c7c', '#ab9f8c', '#8f8576', '#9c9282', '#b0a693'], mortar: '#c2b9a8', courseM: 0.3, mossM: 0.4 })),
+      fountainWater: litMaterial({ color: '#5d93ad', transparent: true, opacity: 0.88, side: THREE.DoubleSide }, 'water'),
       spray: litMaterial({ color: '#f4f8fb', transparent: true, opacity: 0.55, depthWrite: false }),
       trunk: litMaterial({ color: '#5b4636' }, 'wood'),
       crown: litMaterial({ color: '#ffffff', flatShading: true }, 'foliage'),
@@ -380,6 +384,7 @@ export class GraphWorld {
     this.water = new THREE.Mesh(new THREE.PlaneGeometry(2 * FAR_M + 4000, 2 * FAR_M + 4000).rotateX(-Math.PI / 2), this.mats.water);
     this.water.position.y = this.waterY;
     this.scene.add(this.water);
+    this._fixed = [];   // [review 27 Nov] the pools' water and the dams: their geometry freed in dispose()
     for (const p of this.pools) {
       if (p.ring) {   // its shape, grown 2 m (the ground rises from under it at the edge)
         const sh = new THREE.Shape(p.ring.map((q) => new THREE.Vector2(q.x, -q.z)));
@@ -387,18 +392,19 @@ export class GraphWorld {
         const pos = g.attributes.position;
         for (let i = 0; i < pos.count; i++) { const dx = pos.getX(i) - cx, dz = pos.getZ(i) - cz, d = Math.hypot(dx, dz) || 1; pos.setXYZ(i, pos.getX(i) + dx / d * 2, 0, pos.getZ(i) + dz / d * 2); }
         g.computeVertexNormals();
-        const w = new THREE.Mesh(g, this.mats.water); w.name = p.name || 'Pool'; w.position.y = p.level + WATER_ABOVE; this.scene.add(w);
+        const w = new THREE.Mesh(g, this.mats.water); w.name = p.name || 'Pool'; w.position.y = p.level + WATER_ABOVE; this.scene.add(w); this._fixed.push(w);
         continue;
       }
       const w = new THREE.Mesh(new THREE.PlaneGeometry(p.x1 - p.x0, p.z1 - p.z0).rotateX(-Math.PI / 2), this.mats.water);
       w.position.set((p.x0 + p.x1) / 2, p.level + WATER_ABOVE, (p.z0 + p.z1) / 2);
-      this.scene.add(w);
+      this.scene.add(w); this._fixed.push(w);
       if (!p.dam) continue;   // (a lake's pieces: SKAN's Skaneateles and Otisco lakes — no dam)
       // the dam: a concrete face across the box's downstream edge, from the lower pool's bed to the upper water
       const lowY = this.waterY - WATER_ABOVE - 3, topY = p.level + WATER_ABOVE + 0.6;
       const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(p.west, lowY, p.z0), new THREE.Vector3(p.west, lowY, p.z1), new THREE.Vector3(p.west, topY, p.z1), new THREE.Vector3(p.west, topY, p.z0)]);
       g.setIndex([0, 1, 2, 0, 2, 3]); g.computeVertexNormals();
-      this.scene.add(new THREE.Mesh(g, litMaterial({ color: '#a09c92', side: THREE.DoubleSide }, 'concrete')));
+      const dam = new THREE.Mesh(g, this.mats.dam ||= litMaterial({ color: '#a09c92', side: THREE.DoubleSide }, 'concrete'));   // [review 27 Nov] (one material for every dam, freed with the rest)
+      this.scene.add(dam); this._fixed.push(dam);
     }
     this.group = new THREE.Group();
     this.scene.add(this.group);
@@ -420,14 +426,9 @@ export class GraphWorld {
         this.shore = shore ? decodeShore(shore, this.proj) : null;
         this.dressing = dressing ? decodeDressing(dressing, this.proj, TILE) : null;
         this.ground = decodeTerrain(grid, this.proj);
-        // the landmarks (the Pittsburgh map's hero models: js/world/graph-heroes.js), once the ground is there to stand on
-        if (this.json.heroes) {
-          this._heroesState = 'loading';
-          fetch(new URL(`../../${this.json.heroes}`, import.meta.url)).then((r) => r.json())
-            .then((hj) => import('./graph-heroes.js').then(({ buildGraphHeroes }) => buildGraphHeroes(this, hj)))
-            .then((h) => { if (this.disposed) { h.dispose(); return; } this.heroes = h; this.scene.add(h.group); h.setNight(this.timeKey === 'night' ? 1 : 0); this._heroesState = 'ok'; this._cutCanal(); this._loadBridges(); this._loadCity(); })
-            .catch((err) => { this._heroesState = 'failed'; this.log('3d', `PGH landmarks: ${err.message} ${(err.stack || '').split('\n').slice(0, 4).join(' | ')}`, 'error'); });
-        }
+        // the landmarks, the bridges and the city, once the ground is there to stand on
+        this._loadHeroes();
+        this._loadBridges();
         for (const t of this.tiles.values()) if (t.built && !t.groundMesh) t.needsGround = true;
         this.log('3d', 'PGH ground loaded', 'debug');
       }).catch((err) => { this.groundFailed = true; this.log('3d', `PGH ground: ${err.message}`, 'error'); });
@@ -438,8 +439,8 @@ export class GraphWorld {
     this._riderModel = 'loading';
     loadRider().then((r) => {
       this._riderModel = 'ok';
-      if (this.disposed) return;
-      this.scene.remove(this.rider.group);
+      if (this.disposed) { r.dispose(); return; }
+      this.scene.remove(this.rider.group); this.rider.dispose?.();   // [review 27 Nov] (the stand-in's box and material)
       this.rider = r;
       this.scene.add(r.group);
     }).catch((err) => { this._riderModel = 'failed'; this.log('3d', `Using the simple rider: ${err.message}`, 'debug'); });
@@ -469,7 +470,7 @@ export class GraphWorld {
     if (!src || !this.path) { if (this.pacer) this.pacer.group.visible = false; return; }
     if (!this.pacer) {
       if (!this._pacerLoading && !this._pacerFailed) this._pacerLoading = loadRider({ jersey: 'checker' }).then((r) => {
-        if (this.disposed) return; this.pacer = r; this.scene.add(r.group);
+        if (this.disposed) { r.dispose(); return; } this.pacer = r; this.scene.add(r.group);
       }).catch((err) => { this._pacerFailed = true; this.log('3d', `Pacer model: ${err.message}`, 'debug'); });
       return;
     }
@@ -498,6 +499,7 @@ export class GraphWorld {
     this.governor?.setQuality(this.qualityKey);
     this._pixelRatio();
     if (this.city && this.gfx) this.city.setGfx(this.gfx);
+    if (this._postMode !== (this._postOn() ? 'full' : this.qualityKey === 'balanced' ? 'lite' : null)) this._postFor(null);   // [review 27 Nov] (the next frame makes the new level's)
   }
   _pixelRatio() {
     this.governor?.setTarget(this._saving ? 30 : (this.gfx?.fps || 0));
@@ -523,7 +525,13 @@ export class GraphWorld {
     this.city?.setGfx(this.gfx);
     const apply = (saving) => { if (saving !== this._saving) { this._saving = saving; this._pixelRatio(); } };
     if (this.gfx.battery === 'auto' && globalThis.navigator?.getBattery) {
-      navigator.getBattery().then((b) => { const f = () => apply(this.gfx.battery === 'auto' && !b.charging); f(); if (!this._batteryHooked) { this._batteryHooked = true; b.addEventListener('chargingchange', f); } }).catch(() => apply(false));
+      // [review 27 Nov] the listener kept (battery, handler) so dispose() takes it off: it held `this` — every finished
+      // world kept alive, and a plug-in after a ride called _pixelRatio on a disposed renderer
+      navigator.getBattery().then((b) => {
+        if (this.disposed) return;
+        const f = () => { if (!this.disposed) apply(this.gfx.battery === 'auto' && !b.charging); }; f();
+        if (!this._battery) { this._battery = { b, f }; b.addEventListener('chargingchange', f); }
+      }).catch(() => apply(false));
     } else apply(this.gfx.battery === 'on');
   }
   setCamera(key) { this.camKey = CAMERAS[key] ? key : DEFAULT_CAMERA; this._camInit = false; }
@@ -604,21 +612,25 @@ export class GraphWorld {
     add('streets', 'Roads', (this._frames || 0) > 0 ? roads : 0);
     add('ground', 'Ground', ground);
     add('riders', 'Rider', this._riderModel !== 'loading' ? 1 : 0);
-    if (this.json.heroes) add('landmarks', 'Landmarks', this._heroesState && this._heroesState !== 'loading' ? 1 : 0);
-    if (this.json.bridges && this._heroesState === 'ok') add('bridges', 'Bridges', this._bridgesState && this._bridgesState !== 'loading' ? 1 : 0);
-    if (this.json.cityData && this._heroesState === 'ok') {
-      const c = this.city, p = this._cityState === 'failed' ? 1 : !c ? 0 : !c.ready ? 0.3 : c.pendingNear(this.camera.position.x, this.camera.position.z, 900) ? 0.7 : 1;
+    // [review 27 Nov] the bridges and the city wait on the ground, not on the landmarks: a failed landmarks load is
+    // reported (its step marked failed, and in `degraded`), the rest of the map still loads
+    if (this.json.heroes) { add('landmarks', this._heroesState === 'failed' ? 'Landmarks (failed to load)' : 'Landmarks', this._heroesState && this._heroesState !== 'loading' ? 1 : 0); if (this._heroesState === 'failed') steps.at(-1).failed = true; }
+    if (this.json.bridges && (this.ground || this.groundFailed)) add('bridges', 'Bridges', this.groundFailed || this._bridgesState && this._bridgesState !== 'loading' ? 1 : 0);
+    if (this.json.cityData && (this.ground || this.groundFailed)) {
+      const c = this.city, p = this._cityState === 'failed' || this.groundFailed ? 1 : !c ? 0 : !c.ready ? 0.3 : c.pendingNear(this.camera.position.x, this.camera.position.z, 900) ? 0.7 : 1;
       add('city', 'Buildings and trees', p);
     }
     if (this.baked && this.running) add('light', 'Lighting', this.baked.preparing ? this.baked.progress : this.baked.ready || !this.baked.preparing ? 1 : 0);
     // last: the shader programs, once everything above is in the scene
     if (steps.every((s) => s.done)) this._warmStart = true;
     if (this.shaders && this.running) add('shaders', 'Shaders', this._warmStart ? this.shaders.progress : 0);
-    return { ready: steps.every((s) => s.done), failed: this.groundFailed, progress: steps.reduce((a, s) => a + s.p, 0) / steps.length, steps };
+    const degraded = [['landmarks', this._heroesState], ['bridges', this._bridgesState], ['city', this._cityState]].filter(([, st]) => st === 'failed').map(([k]) => k);
+    return { ready: steps.every((s) => s.done), failed: this.groundFailed, degraded, progress: steps.reduce((a, s) => a + s.p, 0) / steps.length, steps };
   }
   get loading() { return (this._queued || 0) > 6 || this.baked?.preparing ? 4 : 0; }
 
   dispose() {
+    if (this.disposed) return;
     this.roadRiders?.dispose(); this.roadRiders = null;
     this.commerce?.dispose(); this.commerce = null;
     if (this.far) { this.scene.remove(this.far.mesh); this.far.dispose(); this.far = null; }
@@ -627,16 +639,22 @@ export class GraphWorld {
     this.stop();
     this.disposed = true;
     this._ro?.disconnect();
+    // [review 27 Nov] the battery listener held this world (and called _pixelRatio on its disposed renderer)
+    if (this._battery) { this._battery.b.removeEventListener('chargingchange', this._battery.f); this._battery = null; }
     for (const t of this.tiles.values()) this._release(t);
+    if (this.spillAll) { this.spillAll.geometry.dispose(); this.spillAll = null; }
     for (const m of Object.values(this.mats)) { if (m.dispose) m.dispose(); else for (const x of Object.values(m)) x.dispose?.(); }
     this.heroes?.dispose();
     this.bridges?.dispose();
     this.city?.dispose();
     this.water.geometry.dispose();
-    this.renderer.dispose();
-    this.renderer.domElement.remove();
+    // [review 27 Nov] what dispose() had left on the GPU: the pools and dams, the riders, the live shadow map
+    for (const m of this._fixed) m.geometry.dispose();
+    this.rider?.dispose?.(); this.pacer?.dispose?.(); this.pacer = null;
+    for (const l of [this.sun, this.headlight]) if (l?.shadow?.map) { l.shadow.map.dispose(); l.shadow.map = null; }
     this.perf?.dispose?.();
     this.baked?.dispose();
+    teardownWorld(this.renderer, this.scene);   // (the rest of the scene, the figures' caches, forceContextLoss)
   }
 
   // ---------- the frame ----------
@@ -697,14 +715,16 @@ export class GraphWorld {
     this.groundCover?.tick(this.camera.position);
     this.water.position.x = Math.round(this.camera.position.x / 100) * 100;
     this.water.position.z = Math.round(this.camera.position.z / 100) * 100;
-    this.sun.position.copy(this.camera.position).addScaledVector(this.sunDir, 5000);
-    this.sun.target.position.copy(this.camera.position);
-    if (this.baked) {
+    if (!this.baked) { this.sun.position.copy(this.camera.position).addScaledVector(this.sunDir, 5000); this.sun.target.position.copy(this.camera.position); }
+    else {
       this.baked.tick(dt);
       // the live shadow map: the moving things in a small box round the rider (the bake has the rest)
       const c = this.sun.shadow.camera, span = this.baked.dynamicSpan;
       if (c.right !== span) { c.left = -span; c.right = span; c.top = span; c.bottom = -span; c.updateProjectionMatrix(); }
-      this.sun.position.copy(this.rider.group.position).addScaledVector(this.sunDir, 2000); this.sun.target.position.copy(this.rider.group.position);
+      // [review 27 Nov] the box moved in whole texels of the map (render-core.js snapShadowBox, as world.js
+      // _placeShadows), not with the rider's every centimetre: the shadows' edges had shimmered as you rode
+      const at = snapShadowBox(this.rider.group.position, this.sunDir, span, this.sun.shadow.mapSize.x, this._shadowAt ||= new THREE.Vector3());
+      this.sun.position.copy(at).addScaledVector(this.sunDir, 2000); this.sun.target.position.copy(at);
       if ((this._frames % 120) === 7) this._treeShadows();
       if ((this._frames % 30) === 0) for (const g of [this.group, this.heroes?.group]) g?.traverse((o) => { if (o.isMesh && !o.userData._rs) { o.userData._rs = 1; o.receiveShadow = true; } });
       if (this.baked.preparing) { this.perf?.end(performance.now()); return; }   // (nothing drawn behind the loader: the bake has the GPU)
@@ -752,37 +772,38 @@ export class GraphWorld {
     this._lamps.forEach((l, i) => { const n = near[i]; l.visible = true; l.intensity = n ? 60 : 0; if (n) l.position.copy(n[1]); });
   }
   _postOn() { return (this.qualityKey === 'high' || this.qualityKey === 'ultra') && !MOBILE && (this.gfx?.post ?? true); }
+  /** [review 27 Nov] the post pass for a mode ('full': High/Ultra's 4× MSAA HDR, the air; 'lite': Balanced's 2×, AO
+   *  only), made afresh when the mode changes — a High→Balanced switch had kept the 4× HDR target and drew the air
+   *  over the scene's own fog, no longer pushed back (double haze). */
+  _postFor(mode) {
+    if (this.post && this._postMode === mode) return this.post;
+    this.post?.dispose(); this.post = null; this._postMode = mode;
+    if (!mode) return null;
+    this.post = new PostFX(this.renderer, { samples: mode === 'full' ? 4 : 2 });
+    this.post.setAO(mode === 'full' ? { strength: .7, radiusM: .7 } : { strength: .55, radiusM: .6 });
+    const w = this.container?.clientWidth || this.renderer.domElement.clientWidth || 1, h = this.container?.clientHeight || this.renderer.domElement.clientHeight || 1;
+    this.post.setSize(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
+    return this.post;
+  }
   _draw() {
-    if (this._postOn()) {
-      if (!this.post) {
-        this.post = new PostFX(this.renderer, { samples: 4 });
-        this.post.setAO({ strength: .7, radiusM: .7 });
-        const w = this.container?.clientWidth || this.renderer.domElement.clientWidth || 1, h = this.container?.clientHeight || this.renderer.domElement.clientHeight || 1;
-        this.post.setSize(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
-      }
+    const mode = this._postOn() ? 'full' : this._liteOn() ? 'lite' : null;
+    this._postFor(mode);
+    if (mode === 'full') {
       // [sky] aerial perspective and sun shafts in the post pass; the scene's linear fog stands back (the post is the air)
       const A = this._atmo ||= { sunDir: new THREE.Vector3(), sunColor: new THREE.Color(), haze: new THREE.Color() };
       const sky = this.def?.sky || {};
-      A.density = sky.airDensity ?? 4.5e-4; A.falloff = sky.airFalloff ?? 1 / 220; A.baseY = sky.airBaseM ?? (this.waterY ?? 0) - 5;   // (a high map's air from its own valley floor: Out West's at 1,450 m) A.strength = 1; A.shafts = sky.shafts ?? .5;
+      A.density = sky.airDensity ?? 4.5e-4; A.falloff = sky.airFalloff ?? 1 / 220; A.baseY = sky.airBaseM ?? (this.waterY ?? 0) - 5;   // (a high map's air from its own valley floor: Out West's at 1,450 m)
+      A.strength = 1; A.shafts = sky.shafts ?? .5;   // [review 27 Nov] (was behind the comment above: no sun shafts on any graph map)
       A.sunDir.copy(this.sunDir); A.sunColor.copy(this.sun.color).multiplyScalar(this.sun.intensity * .35); A.haze.copy(this.scene.fog.color).multiplyScalar(.9);
       this.post.setAtmosphere(A);
       const fog = this.scene.fog, near = fog.near, far = fog.far; fog.near = near * 2.2; fog.far = far * 1.6;
       this.post.render(this.scene, this.camera, { bloom: .22, threshold: 1.15, warm: this.timeKey === 'golden' ? 1 : 0 });
       fog.near = near; fog.far = far;
-    } else if (this._liteOn()) {
+    } else if (mode === 'lite') {
       // [fidelity step 4] Balanced on a laptop or desktop, with headroom: the plain picture through 2× MSAA with the
       // contact shading (the AO's 8 taps, near only) — no HDR, bloom or air; off again the moment the governor steps down
-      if (!this.post) {
-        this.post = new PostFX(this.renderer, { samples: 2 });
-        this.post.setAO({ strength: .55, radiusM: .6 });
-        const w = this.container?.clientWidth || this.renderer.domElement.clientWidth || 1, h = this.container?.clientHeight || this.renderer.domElement.clientHeight || 1;
-        this.post.setSize(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
-      }
       this.post.render(this.scene, this.camera, { grade: false });
-    } else {
-      if (this.post) { this.post.dispose(); this.post = null; }
-      this.renderer.render(this.scene, this.camera);
-    }
+    } else this.renderer.render(this.scene, this.camera);
   }
   /** Balanced's lite post (AO + MSAA): desktop only, More graphics' post on, the governor at full resolution, and the
    *  GPU's measured frame (where the timer exists) under 60 % of the budget (until it passes 80 %). */
@@ -893,6 +914,10 @@ export class GraphWorld {
   _cutCanal() {
     if (!CANAL.samples.some((p) => !p.creek)) return;
     this._canalCut = true;
+    // [review 27 Nov] a tile whose ground job is part-way through its grid (groundRows) started again: the rows it had
+    // done were sampled uncut (CNY's green streaks in the canal). Nothing of its ground is in the scene before the
+    // mesh, so dropping the job is enough; _stream starts it afresh (its roads, built, skipped)
+    if (this._tjob?.t.groundRows) { this._tjob.t.groundRows = false; this._tjob = null; }
     for (const t of this.tiles.values()) {
       const m = t.groundMesh; if (!m || !t.gridH) continue;
       const near = CANAL.samples.some((p) => !p.creek && p.x > t.i * TILE - 40 && p.x < (t.i + 1) * TILE + 40 && p.z > t.j * TILE - 40 && p.z < (t.j + 1) * TILE + 40);
@@ -1038,12 +1063,37 @@ export class GraphWorld {
     if (this.scene?.fog) { this.scene.fog.near = lowReach ? 700 : 900; this.scene.fog.far = this.nearM + 200; }
   }
 
+  /**
+   * The landmarks (the map's hero models: js/world/graph-heroes.js), then the city. [review 27 Nov] The landmarks are
+   * optional: a 404 (now checked) or a failed build leaves a bare host (graph-heroes' stand-in for the city scene, with
+   * no heroes in it) so the city still streams — before, the city and the bridges started only from the landmarks'
+   * success, and a failure dropped every building while readiness() said ready. The failure shows in readiness().
+   */
+  _loadHeroes() {
+    if (this._heroesState || !(this.json.heroes || this.json.cityData)) return;
+    this._heroesState = 'loading';
+    const build = (hj) => import('./graph-heroes.js').then(({ buildGraphHeroes }) => buildGraphHeroes(this, hj));
+    const err3d = (what, err) => this.log('3d', `${what}: ${err.message} ${(err.stack || '').split('\n').slice(0, 4).join(' | ')}`, 'error');
+    (this.json.heroes ? fetch(new URL(`../../${this.json.heroes}`, import.meta.url)).then((r) => { if (!r.ok) throw new Error(`${r.status} for ${this.json.heroes}`); return r.json(); }).then(build)
+      : Promise.resolve(null))
+      .then((h) => { this._heroesState = h ? 'ok' : 'none'; return h; }, (err) => { this._heroesState = 'failed'; err3d('PGH landmarks', err); return null; })
+      .then((h) => h || (this.json.cityData && !this.disposed ? build({ heroes: [], buildings: [], landmarks: [] }) : null))
+      .then((h) => {
+        if (!h) return;
+        if (this.disposed) { h.dispose(); return; }
+        this.heroes = h; this.scene.add(h.group); h.setNight(this.timeKey === 'night' ? 1 : 0);
+        if (this.bridges?.glows) h.addGlows?.(this.bridges.glows, 'Bridge lamps');   // (the bridges in first)
+        this._cutCanal(); this._loadCity();
+      })
+      .catch((err) => { if (this.json.cityData) this._cityState = 'failed'; err3d('PGH landmarks (bare host)', err); });
+  }
+
   /** PGH's city (js/world/graph-city.js, tools/pgh_city.py): buildings, trees, furniture, the land cover and what each
    *  edge is made of. Once it's in, the edges take their widths and sidewalks and the tiles are rebuilt. */
   _loadCity() {
     if (!this.json.cityData || this._cityState || !this.heroes) return;
     this._cityState = 'loading';
-    fetch(new URL(`../../${this.json.cityData}`, import.meta.url)).then((r) => r.json())
+    fetch(new URL(`../../${this.json.cityData}`, import.meta.url)).then((r) => { if (!r.ok) throw new Error(`${r.status} for ${this.json.cityData}`); return r.json(); })
       .then((cj) => import('./graph-city.js').then(({ GraphCity }) => {
         if (this.disposed) return;
         const c = new GraphCity(this, this.heroes, cj);
@@ -1119,7 +1169,7 @@ export class GraphWorld {
   _loadBridges() {
     if (!this.json.bridges || this._bridgesState) return;
     this._bridgesState = 'loading';
-    fetch(new URL(`../../${this.json.bridges}`, import.meta.url)).then((r) => r.json())
+    fetch(new URL(`../../${this.json.bridges}`, import.meta.url)).then((r) => { if (!r.ok) throw new Error(`${r.status} for ${this.json.bridges}`); return r.json(); })
       .then((bj) => import('./graph-bridges.js').then(({ buildGraphBridges }) => buildGraphBridges(this, bj)))
       .then((b) => {
         if (this.disposed) { b.dispose(); return; }
@@ -1191,7 +1241,7 @@ export class GraphWorld {
     if (this._sjob?.t === t) this._sjob = null;
     if (t.spillMesh) this._spillDirty = true;
     for (const m of [t.roadMesh, t.paintMesh, t.groundMesh, t.bankMesh, t.spillMesh, ...(t.extra || []), ...(t.extraRoad || [])]) if (m) { this.group.remove(m); m.geometry.dispose(); }
-    t.roadMesh = t.paintMesh = t.groundMesh = t.bankMesh = t.spillMesh = null; t.spillPending = false; t.extra = []; t.extraRoad = [];
+    t.roadMesh = t.paintMesh = t.groundMesh = t.bankMesh = t.spillMesh = null; t.spillPending = t.groundRows = false; t.extra = []; t.extraRoad = [];
     t.built = false;
   }
 
@@ -1480,6 +1530,7 @@ export class GraphWorld {
     //  measured reflectance (tools/reference/measured.json): the sand was 2.3× too colourful and 25° too red, the rock 3×
     //  too colourful — sand now ~0.38 albedo, chroma ~24, hue ~65°; the red sandstone ~0.18, chroma ~30, hue ~48°)
     const desert = this.profile.ground === 'desert', sand = new THREE.Color('#d0a27c'), rockA = new THREE.Color('#a8644a'), rockB = new THREE.Color('#c4906a'), white = new THREE.Color('#ddcfb2');
+    t.groundRows = true;   // [review 27 Nov] (until the mesh is in: _cutCanal restarts a job caught here)
     for (let j = 0, k = 0; j <= nx; j++) for (let i = 0; i <= nx; i++, k++) {
       if (i === 0 && due()) yield;
       const x = x0 + i * cell, z = z0 + j * cell, h = this._groundH(x, z), pool = this.poolAt(x, z);
@@ -1509,7 +1560,7 @@ export class GraphWorld {
     g.setAttribute('aLandW', new THREE.BufferAttribute(landW, 1));
     g.setIndex(new THREE.BufferAttribute(idx, 1));
     g.computeVertexNormals();
-    t.groundMesh = new THREE.Mesh(g, this.mats.ground);
+    t.groundMesh = new THREE.Mesh(g, this.mats.ground); t.groundRows = false;
     this.group.add(t.groundMesh);
     t.spillPending = !!(t.spills?.length || t.endSpills?.length);   // (built when the camera comes near: _stream)
     yield* this._bankJob(t);
@@ -1685,7 +1736,6 @@ export class GraphWorld {
     for (const [k, M] of by) {
       const m = M.mesh(mats[k] || this.mats.park[k]);
       if (!m) continue;
-      m.material.side = THREE.DoubleSide;
       if (this.mats.park[k] && k !== 'granite' || k === 'water') { const n = m.geometry.attributes.normal; for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0); }   // (draped: lit as the flat ground it lies on, not facet by facet)
       (t.extra ||= []).push(m); this.group.add(m);
     }
@@ -1781,7 +1831,7 @@ export class GraphWorld {
     }
     t.bankMesh = M.mesh(this.mats.road);
     if (t.bankMesh) this.group.add(t.bankMesh);
-    t.extra = [Face.mesh(this.mats.riverWall), Prom.mesh(this.mats.park.granite)].filter(Boolean);   // (the railings: in the bank's mesh, the same material)
+    t.extra = [Face.mesh(this.mats.riverWall), Prom.mesh(this.mats.promenade)].filter(Boolean);   // (the railings: in the bank's mesh, the same material)
     for (const m of t.extra) this.group.add(m);
     if (this.dressing) yield* this._dressingJob(t);
   }
@@ -1837,6 +1887,9 @@ class Mesher {
   }
 }
 
+/** A material set two-sided (before its first compile). */
+function twoSided(m) { m.side = THREE.DoubleSide; return m; }
+
 /** A simple rider until the model loads. */
 export function makeStandIn() {
   const group = new THREE.Group();
@@ -1846,6 +1899,7 @@ export function makeStandIn() {
   return {
     group,
     update(pos, fwd) { group.position.copy(pos); group.lookAt(_v.copy(pos).add(new THREE.Vector3(fwd.x, 0, fwd.z))); },
+    dispose() { group.removeFromParent(); body.geometry.dispose(); body.material.dispose(); },   // [review 27 Nov]
   };
 }
 

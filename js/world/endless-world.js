@@ -15,7 +15,7 @@
 // past it, and the tiles out there ease to their new shape over a second and a half.
 import * as THREE from '../../vendor/three.js';
 import { litMaterial } from './toolbox/materials/lit.js';
-import { createRenderer, pixelRatioFor, QualityGovernor } from './render-core.js';
+import { createRenderer, pixelRatioFor, QualityGovernor, teardownWorld } from './render-core.js';
 import { resolveMapDefinition } from './toolbox/map-definition.js';
 import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean } from './pose.js';
 import { loadRider, RIDER_RIM } from './rider.js';
@@ -153,7 +153,7 @@ export class EndlessWorld {
     }, 30);
 
     this.rider = makeStandIn(); this.scene.add(this.rider.group); this._riderModel = 'loading';
-    loadRider().then((r) => { this._riderModel = 'ok'; if (this.disposed) return; this.scene.remove(this.rider.group); this.rider = r; this.scene.add(r.group); })
+    loadRider().then((r) => { this._riderModel = 'ok'; if (this.disposed) { r.dispose(); return; } this.scene.remove(this.rider.group); this.rider.dispose?.(); this.rider = r; this.scene.add(r.group); })
       .catch((err) => { this._riderModel = 'failed'; this.log('3d', `Using the simple rider: ${err.message}`, 'debug'); });
 
     this._t0 = performance.now();
@@ -702,7 +702,9 @@ export class EndlessWorld {
     for (const h of this.homes.values()) { h.mesh?.geometry.dispose(); h.detail?.geometry.dispose(); }
     for (const m of Object.values(this.mats)) m.dispose?.();
     this.sea.geometry.dispose();
-    this.renderer.dispose(); this.renderer.domElement.remove();
+    this.rider?.dispose?.(); this.pacer?.dispose?.();
+    this.sun?.shadow?.map?.dispose();
+    teardownWorld(this.renderer, this.scene);   // [review 27 Nov] the rest of the scene, the figures' caches, forceContextLoss()
   }
 }
 const _cA = new THREE.Color(), _cB = new THREE.Color(), _cC = new THREE.Color(), _cD = new THREE.Color();

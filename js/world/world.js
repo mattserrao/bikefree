@@ -1,7 +1,7 @@
 // The 3D ride view: real terrain + aerial imagery, the road, a pedalling rider, sky and cameras.
 import { cutRouteRibbon, junctionPlan } from './toolbox/city/junction-mesh.js';   // [junctions] (the road's overlay: city.js)
 import * as THREE from '../../vendor/three.js';
-import { createRenderer, pixelRatioFor, QualityGovernor } from './render-core.js';
+import { createRenderer, pixelRatioFor, QualityGovernor, teardownWorld } from './render-core.js';
 import { litMaterial } from './toolbox/materials/lit.js';
 import { resolveMapDefinition } from './toolbox/map-definition.js';
 import { installEffects } from './toolbox/effects/index.js';   // [blocks]
@@ -215,8 +215,9 @@ export class World {
     this._riderModel = 'loading';   // [phase 8] (the loading screen waits for it: 'ok' or 'failed')
     loadRider().then((r) => {
       this._riderModel = 'ok';
-      if (this.disposed) return;
+      if (this.disposed) { r.dispose(); return; }
       this.scene.remove(this.rider.group);
+      this.rider.group.traverse((o) => { o.geometry?.dispose(); o.material?.dispose?.(); });   // [review 27 Nov] (the stand-in's parts)
       this.rider = r;
       if (this.stylized) r.group.traverse((o) => { if (o.isMesh && !o.material.transparent) { o.castShadow = true; o.receiveShadow = true; } });
       this.scene.add(r.group);
@@ -541,7 +542,7 @@ export class World {
     if (!this.pacer) {
       if (!this._pacerLoading) {
         this._pacerLoading = loadRider({ jersey: 'checker' }).then((r) => {
-          if (this.disposed) return;
+          if (this.disposed) { r.dispose(); return; }
           if (this.stylized) r.group.traverse((o) => { if (o.isMesh && !o.material.transparent) { o.castShadow = true; o.receiveShadow = true; } });
           this.pacer = r;
           this.scene.add(r.group);
@@ -1034,12 +1035,10 @@ export class World {
     this.terrain.dispose();
     this.farTerrain?.dispose();
     this.sun.shadow.map?.dispose(); this.sun.shadow.mapPass?.dispose();
-    this.scene.traverse((o) => {
-      if (o.geometry) o.geometry.dispose();
-      if (o.material) [].concat(o.material).forEach((m) => { for (const key of ['map', 'bumpMap', 'roughnessMap']) m[key]?.dispose(); m.dispose(); });
-    });
-    this.renderer.dispose();
-    this.renderer.domElement.remove();
+    this.rider?.dispose?.(); this.pacer?.dispose?.();
+    // [review 27 Nov] the scene sweep, the figures' shared caches, then the renderer and forceContextLoss()
+    // (render-core.js teardownWorld: the GPU memory freed now, not when the canvas is collected)
+    teardownWorld(this.renderer, this.scene);
   }
 }
 
