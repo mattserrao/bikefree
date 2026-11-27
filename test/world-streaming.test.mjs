@@ -99,3 +99,15 @@ test('route worlds: the look is told to sweep when the terrain builds, not only 
   look.dirty = false; w.terrain = { stats: { queued: 4, ready: 10 }, city: { _pending: [1] } }; w._lookWatch(); assert.equal(look.dirty, true, 'another area drawn');
   w.look = null; w._lookWatch();   // (no look: nothing to do)
 });
+
+// [flash fix 27 Nov] anything new — a landmark, the crowd, a rider — marks the look dirty too, by the renderer's counts
+test('route worlds: a new geometry or shader program marks the look dirty (no unstyled frames)', async () => {
+  const { World } = await import('../js/world/world.js');
+  const look = { dirty: false }, terrain = { stats: { queued: 0, ready: 1 }, city: { _pending: [] } };
+  const renderer = { info: { memory: { geometries: 10 }, programs: [1, 2] } };
+  const w = Object.assign(Object.create(World.prototype), { look, terrain, renderer });
+  w._lookWatch(); look.dirty = false;
+  w._lookWatch(); assert.equal(look.dirty, false);
+  renderer.info.memory.geometries = 11; w._lookWatch(); assert.equal(look.dirty, true, 'a new geometry');
+  look.dirty = false; renderer.info.programs.push(3); w._lookWatch(); assert.equal(look.dirty, true, 'a new program');
+});

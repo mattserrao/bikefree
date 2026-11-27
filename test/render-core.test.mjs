@@ -38,3 +38,27 @@ test('tiers: one table, Phone to Ultra, each capping the pixel ratio', () => {
   assert.equal(pixelRatioFor('low', .7), .7);
   delete globalThis.window;
 });
+
+// [flash fix 27 Nov] a device just short of 60 fps at full resolution on a 60 Hz display: the frame interval reads a
+// clean 16.7 ms one step down, so the governor kept retrying full resolution (and missing) every ~18 s — a canvas
+// resize each time. Failed retries now wait longer.
+test('governor: a full-resolution retry that keeps failing backs off instead of flapping every ~18 s', () => {
+  const changes = [];
+  const g = new QualityGovernor({ quality: 'balanced', enabled: true, onScale: (s) => changes.push(s) });
+  for (let f = 0; f < 60 * 600; f++) {   // ten minutes
+    const work = 17.5 * g.scale * g.scale, iv = Math.ceil(work / (1000 / 60) - 1e-9) * (1000 / 60);
+    g.sample(iv, iv / 1000, true);
+  }
+  // (unchecked it changed ~66 times in ten minutes; now the retries come after 15 s, 60 s, 4 min, 10 min)
+  assert.ok(changes.length <= 10, `${changes.length} resolution changes in 10 min`);
+  assert.ok(g.hold >= 240, `hold ${g.hold}`);
+});
+
+test('governor: a level that holds after stepping back up keeps the normal retry time', () => {
+  const g = new QualityGovernor({ quality: 'balanced', enabled: true });
+  run(g, 1000 / 40, 10, true);          // overloaded: steps down
+  assert.ok(g.level > 0);
+  run(g, 1000 / 60, 120, true);         // then fine at every level
+  assert.equal(g.level, 0);
+  assert.equal(g.hold, 15);
+});

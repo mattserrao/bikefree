@@ -117,7 +117,9 @@ export class World {
     // [render-core] one tier table for every world: Balanced draws at 1.5 here too (it was 2; with 4× MSAA the
     // anti-aliasing review found 1.5 all but the same and 44 % fewer pixels shaded)
     this.renderer = createRenderer({ container, quality: this.stylized ? this.qualityKey : 'high', antialias: !this.stylized, reversedDepth: reversed, logDepth: !reversed });
-    this.governor = new QualityGovernor({ quality: this.qualityKey, onScale: () => this.setQuality(this.qualityKey) });
+    // [flash fix 27 Nov] a resolution step changes the resolution only: it had run the whole quality change, which
+    // flags every material in the scene for recompiling (a stall of a frame or several, with each step)
+    this.governor = new QualityGovernor({ quality: this.qualityKey, onScale: (s) => { if (!this.stylized) return; this.renderer.setPixelRatio(pixelRatioFor(this.qualityKey, s)); this._resize?.(); } });
     if (!this.stylized) this.governor.enabled = false;
     // cartoon look: the scene's "look" (Route 28: gentle), or ?look=gentle|bold|none in the preview
     // [suite] the common scenery suite (user, 25 Nov: "Migrate the scenery for Big Sur, Going to the sun, and Alpe
@@ -237,6 +239,9 @@ export class World {
       this.post?.setSize(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
       this.camera.aspect = w / h;
       this.camera.updateProjectionMatrix();
+      // [flash fix 27 Nov] resizing the canvas clears it: draw it again now (a window resize, a phone's rotation or
+      // its address bar fire between frames; the page would show the cleared canvas)
+      if (this._drewOnce && !this.disposed) this._draw();
     };
     this._ro = new ResizeObserver(this._resize);
     this._ro.observe(container);
@@ -945,12 +950,21 @@ export class World {
    *  or the drawn area changed (and by _areaBuilt), so a new material is tooned the frame it arrives. */
   _lookWatch() {
     if (!this.look) return;
-    const T = this.terrain, a = T?.stats?.queued ?? -1, b = T?.city?._pending?.length ?? -1, c = T?.stats?.ready ?? -1, R = this._lookRev ||= [NaN, NaN, NaN, null];
-    if (a !== R[0] || b !== R[1] || c !== R[2] || T !== R[3]) { R[0] = a; R[1] = b; R[2] = c; R[3] = T; this.look.dirty = true; }
+    const T = this.terrain, a = T?.stats?.queued ?? -1, b = T?.city?._pending?.length ?? -1, c = T?.stats?.ready ?? -1, R = this._lookRev ||= [NaN, NaN, NaN, null, NaN, NaN];
+    // [flash fix 27 Nov] and when anything else arrives — a landmark, the crowd, the weather, a rider: a new geometry or
+    // a new shader program. Unswept, its materials drew unstyled for up to SWEEP_EVERY frames, then snapped to the look
+    const inf = this.renderer?.info, g = inf?.memory?.geometries ?? -1, p = inf?.programs?.length ?? -1;
+    if (a !== R[0] || b !== R[1] || c !== R[2] || T !== R[3] || g !== R[4] || p !== R[5]) { R[0] = a; R[1] = b; R[2] = c; R[3] = T; R[4] = g; R[5] = p; this.look.dirty = true; }
   }
   _render() {
     this._lookWatch();
     this.look?.sweep();   // patch any material that arrived since the last frame (new tiles reuse patched ones)
+    this._draw();
+    this.perf?.end(performance.now());
+  }
+  /** The scene to the canvas (through the post pass where there is one). */
+  _draw() {
+    this._drewOnce = true;
     if (this.post && (!this.heroPost || this.qualityKey === 'low')) this.post.render(this.scene, this.camera, { grade: false });
     else if (this.post) {
       const k = this.timeKey, o = this._weatherLight?.overcast || 0;
@@ -958,7 +972,6 @@ export class World {
         bloom: (k === 'night' ? .38 : k === 'golden' ? .42 : .26) * (1 - o * .5),
         threshold: k === 'night' ? .7 : 1.15, warm: k === 'golden' || k === 'morning' ? 1 - o : 0 });
     } else this.renderer.render(this.scene, this.camera);
-    this.perf?.end(performance.now());
   }
 
   /** Performance overlay (fps, frame time, draw calls, triangles). Returns a summary line when switched off. */

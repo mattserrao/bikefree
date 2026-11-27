@@ -476,6 +476,10 @@ export class GraphWorld {
       this.post?.setSize(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
       this.camera.aspect = w / h;
       this.camera.updateProjectionMatrix();
+      // [flash fix 27 Nov] resizing the canvas clears it: once frames are being drawn, draw this one again now, or the
+      // page shows the cleared canvas for a frame (the governor's resolution steps come after the frame's draw; the
+      // ResizeObserver fires between frames — a window resize, a phone's rotation or its address bar)
+      if (this._drewOnce && !this.disposed) this._draw();
     };
     this._ro = new ResizeObserver(this._resize);
     this._ro.observe(container);
@@ -819,6 +823,7 @@ export class GraphWorld {
     return this.post;
   }
   _draw() {
+    this._drewOnce = true;
     const mode = this._postOn() ? 'full' : this._liteOn() ? 'lite' : null;
     this._postFor(mode);
     if (mode === 'full') {
@@ -845,8 +850,12 @@ export class GraphWorld {
     const g = this.gpuTimer?.ms?.frame, b = 10.5;
     if (g == null) return true;   // (no timer — Safari: the governor alone gates it)
     // (hysteresis: on under 60 % of the budget, off over 80 %, so it doesn't flap with its own cost)
-    this._lite = this._lite ? g < b * .8 : g < b * .6;
-    return this._lite;
+    // [flash fix 27 Nov] and once its cost has switched it off, it stays off 30 s: the GPU time is smoothed and polled
+    // every 8 frames, so a pass costing more than the band could still blink its contact shading and MSAA on and off
+    const now = performance.now();
+    if (this._lite) { if (!(g < b * .8)) { this._lite = false; this._liteOffAt = now; } }
+    else if (g < b * .6 && now - (this._liteOffAt ?? -Infinity) > 30000) this._lite = true;
+    return !!this._lite;
   }
 
   /** The rider's lane on a narrow way (a hero area's singletrack, under ~2 m): the middle of the tread, eased in and out
