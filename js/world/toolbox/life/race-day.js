@@ -25,6 +25,7 @@ import { Builder, M, box, cyl, cone } from '../core/model-builder.js';
 import { Crowd, CLIP, FIT, randomLook, clipRate, figureMaterial, staticCrowdMesh, posedFigure } from './figures/people.js';
 import { staticVehicle, appendToBuilder, PAINTS } from './figures/vehicles.js';
 import { staticCar } from './figures/cars.js';
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 const ROAD_HALF = 3.5;
 const CHUNK_M = 100;          // crowd people per 100 m of road (each chunk draws its people at one detail level)
@@ -54,12 +55,12 @@ function flagMaterial(uTime, map) {
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = uTime;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform float uTime; attribute float iFlag; attribute float iPhase;')
-      .replace('#include <begin_vertex>', `#include <begin_vertex>
+      .replace(anchor('#include <common>'), '#include <common>\nuniform float uTime; attribute float iFlag; attribute float iPhase;')
+      .replace(anchor('#include <begin_vertex>'), `#include <begin_vertex>
         // the cloth flaps out from the pole (u = 0) and the pole sways as it is waved
         float wave = sin(uTime * 7. + uv.x * 5. + iPhase) * .12 * uv.x;
         transformed.z += wave; transformed.x += sin(uTime * 2.2 + iPhase) * .25 * (position.y - 1.72);`)
-      .replace('#include <uv_vertex>', `#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = vec2((iFlag + uv.x) / ${FLAGS.length}., uv.y);\n#endif`);
+      .replace(anchor('#include <uv_vertex>'), `#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = vec2((iFlag + uv.x) / ${FLAGS.length}., uv.y);\n#endif`);
   };
   m.customProgramCacheKey = () => 'bf-raceday-flags-1';
   return m;
@@ -71,14 +72,14 @@ function cardMaterial(uTime, near) {
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = uTime; shader.uniforms.uNear = near;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec3 aCard; varying vec3 vCard; varying float vCamD;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCard = aCard; vCamD = distance((modelMatrix * vec4(position, 1.)).xyz, cameraPosition);');
+      .replace(anchor('#include <common>'), '#include <common>\nattribute vec3 aCard; varying vec3 vCard; varying float vCamD;')
+      .replace(anchor('#include <begin_vertex>'), '#include <begin_vertex>\nvCard = aCard; vCamD = distance((modelMatrix * vec4(position, 1.)).xyz, cameraPosition);');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>
+      .replace(anchor('#include <common>'), `#include <common>
         uniform float uTime; varying vec3 vCard;
         uniform float uNear; varying float vCamD;
         float cH(float n) { n = mod(n, 1009.); return fract(sin(n * 12.9898 + 4.1) * 43758.5453); }`)
-      .replace('#include <color_fragment>', `#include <color_fragment>
+      .replace(anchor('#include <color_fragment>'), `#include <color_fragment>
         {
           // vCard: x metres along the strip, y metres up, z seed (+ orange share in the integer part)
           if (vCamD < uNear) discard;   // near the camera the crowd is people

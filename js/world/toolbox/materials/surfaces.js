@@ -1,7 +1,7 @@
 // World-space surfaces keep the style-C palette while adding detail at both
 // riding and scenic camera distances. Everything is procedural and offline.
 import * as THREE from '../../../../vendor/three.js';
-import { patchShader } from '../core/shader-patch.js';   // [review 27 Nov]
+import { patchShader, anchor } from '../core/shader-patch.js';   // [review 27 Nov]
 import { vistaGroundGLSL, vistaCanopyGLSL } from '../atmosphere/vista.js';
 import { SURFACE, SURFACE_SUN, SURFACE_GLSL } from './surface-detail.js';   // [suite]
 import { HASH_GLSL } from './glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
@@ -29,22 +29,22 @@ export function makeGroundMaterial(palette, config = {}, farUniform = null, cano
     if (vk) Object.assign(shader.uniforms, vk.uniforms);
     if (vkAttr) {
       // vista kit: road-cut depth (x) and fire scar (y) per vertex
-      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aVk; varying vec2 vVk;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvVk = aVk;');
-      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vVk;');
+      shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), '#include <common>\nattribute vec2 aVk; varying vec2 vVk;')
+        .replace(anchor('#include <begin_vertex>'), '#include <begin_vertex>\nvVk = aVk;');
+      shader.fragmentShader = shader.fragmentShader.replace(anchor('#include <common>'), '#include <common>\nvarying vec2 vVk;');
     }
     if (canopy) {
       // Distant forest: beyond the last real trees the ground rises into a mottled canopy shell
       shader.uniforms.bfCanopy = canopyUniform;
       shader.uniforms.bfCanopyColor = { value: new THREE.Color(palette.canopy || '#2f4a36') };
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute float aCanopy; uniform vec4 bfCanopy; varying float vBfCanopy;')
-        .replace('#include <begin_vertex>', `#include <begin_vertex>
+        .replace(anchor('#include <common>'), '#include <common>\nattribute float aCanopy; uniform vec4 bfCanopy; varying float vBfCanopy;')
+        .replace(anchor('#include <begin_vertex>'), `#include <begin_vertex>
           vBfCanopy = aCanopy * smoothstep(bfCanopy.x, bfCanopy.x + bfCanopy.y, length(position.xz - cameraPosition.xz));
           transformed.y += vBfCanopy * bfCanopy.z;`);
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform vec3 bfCanopyColor; varying float vBfCanopy;')
-        .replace('#include <color_fragment>', vkCanopy ? `#include <color_fragment>
+        .replace(anchor('#include <common>'), '#include <common>\nuniform vec3 bfCanopyColor; varying float vBfCanopy;')
+        .replace(anchor('#include <color_fragment>'), vkCanopy ? `#include <color_fragment>
           if (vBfCanopy > .001) ${vkCanopy}` : `#include <color_fragment>
           if (vBfCanopy > .001) {
             float bfCrowns = bfFbm(vBfGround.xz * .09) * .65 + vn2(vBfGround.xz * .31) * .35;
@@ -68,18 +68,18 @@ export function makeGroundMaterial(palette, config = {}, farUniform = null, cano
     shader.uniforms.uTime = uniforms.uTime || { value: 0 };
     shader.uniforms.bfCloud = uniforms.bfCloud || { value: new THREE.Vector4(0, 0, 0, 0) };
     shader.uniforms.bfWet = uniforms.bfWet || { value: 0 };
-    if (sd) { shader.uniforms.uSurf = SURFACE; shader.uniforms.uSurfSun = SURFACE_SUN; shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>\n${SURFACE_GLSL}`); }
+    if (sd) { shader.uniforms.uSurf = SURFACE; shader.uniforms.uSurfSun = SURFACE_SUN; shader.fragmentShader = shader.fragmentShader.replace(anchor('#include <common>'), `#include <common>\n${SURFACE_GLSL}`); }
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vBfGround; varying vec3 vBfGroundNormal;\nattribute float aRealH; uniform vec4 bfFar;')
+      .replace(anchor('#include <common>'), '#include <common>\nvarying vec3 vBfGround; varying vec3 vBfGroundNormal;\nattribute float aRealH; uniform vec4 bfFar;')
       // Approaching the hand-off, the stylized ground eases onto the real terrain's height so the two meet without a step.
-      .replace('#include <begin_vertex>', `#include <begin_vertex>
+      .replace(anchor('#include <begin_vertex>'), `#include <begin_vertex>
         if (bfFar.z > .5) {
           float bfMorph = smoothstep(bfFar.x - 1000., bfFar.x - bfFar.y * .5, length(position.xz - cameraPosition.xz));
           transformed.y = mix(transformed.y, aRealH, bfMorph);
         }`)
-      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvBfGround = (modelMatrix * vec4(transformed, 1.)).xyz; vBfGroundNormal = normalize(mat3(modelMatrix) * objectNormal);');
+      .replace(anchor('#include <worldpos_vertex>'), '#include <worldpos_vertex>\nvBfGround = (modelMatrix * vec4(transformed, 1.)).xyz; vBfGroundNormal = normalize(mat3(modelMatrix) * objectNormal);');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>
+      .replace(anchor('#include <common>'), `#include <common>
         varying vec3 vBfGround; varying vec3 vBfGroundNormal;
         uniform vec3 bfRock; uniform vec3 bfSoil; uniform float bfSnowLine; uniform vec4 bfFar;
         uniform float uTime; uniform vec4 bfCloud; uniform float bfWet;
@@ -89,7 +89,7 @@ export function makeGroundMaterial(palette, config = {}, farUniform = null, cano
         #endif
         ${noise}
         ${vk ? vk.pars : ''}`)
-      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+      .replace(anchor('#include <clipping_planes_fragment>'), `#include <clipping_planes_fragment>
         for (int i = 0; i < 4; i++) {
           if (bfHoleB[i].z < .5) continue;
           vec2 bfD = vBfGround.xz - bfHoleA[i].xy;
@@ -104,8 +104,8 @@ export function makeGroundMaterial(palette, config = {}, farUniform = null, cano
           if (bfFarT > .996) discard;
           bfFarA = 1. - bfFarT;
         }`)
-      .replace('#include <opaque_fragment>', 'diffuseColor.a *= bfFarA;\n#include <opaque_fragment>')
-      .replace('#include <color_fragment>', `#include <color_fragment>
+      .replace(anchor('#include <opaque_fragment>'), 'diffuseColor.a *= bfFarA;\n#include <opaque_fragment>')
+      .replace(anchor('#include <color_fragment>'), `#include <color_fragment>
         vec3 bp = vBfGround;
         float bfDistance = length(cameraPosition - bp);
         float bfNear = 1. - smoothstep(180., 1200., bfDistance);
@@ -158,7 +158,7 @@ export function makeGroundMaterial(palette, config = {}, farUniform = null, cano
         diffuseColor.rgb *= 1. - bfShadowC * .45;
         diffuseColor.rgb *= 1. - bfWet * .2;
       `);
-    if (vk) shader.fragmentShader = shader.fragmentShader.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+    if (vk) shader.fragmentShader = shader.fragmentShader.replace(anchor('#include <normal_fragment_maps>'), `#include <normal_fragment_maps>
       ${vk.normal}`);
     if (vk) {
       // vista kit: object shadows fade on steep faces (vkShadowK, set with the colour)
@@ -323,8 +323,8 @@ export function decorateSceneryMaterial(material, category, uniforms) {
   material.onBeforeCompile = (shader) => {
     if (category === 'groundcover') {
       shader.uniforms.uTime = uniforms.uTime; shader.uniforms.bfWind = uniforms.bfWind || { value: .3 };
-      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; uniform float bfWind;')
-        .replace('#include <begin_vertex>', `#include <begin_vertex>
+      shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), '#include <common>\nuniform float uTime; uniform float bfWind;')
+        .replace(anchor('#include <begin_vertex>'), `#include <begin_vertex>
           float bfPhase = 0.;
           #ifdef USE_INSTANCING
             bfPhase = instanceMatrix[3].x * .13 + instanceMatrix[3].z * .09;
@@ -336,8 +336,8 @@ export function decorateSceneryMaterial(material, category, uniforms) {
     } else if (category === 'foliage') {
       // trees and shrubs lean and sway with the wind (more at the top)
       shader.uniforms.uTime = uniforms.uTime; shader.uniforms.bfWind = uniforms.bfWind || { value: .3 };
-      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; uniform float bfWind;')
-        .replace('#include <begin_vertex>', `#include <begin_vertex>
+      shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), '#include <common>\nuniform float uTime; uniform float bfWind;')
+        .replace(anchor('#include <begin_vertex>'), `#include <begin_vertex>
           float bfPhase = 0.;
           #ifdef USE_INSTANCING
             bfPhase = instanceMatrix[3].x * .07 + instanceMatrix[3].z * .05;
@@ -348,10 +348,10 @@ export function decorateSceneryMaterial(material, category, uniforms) {
           transformed.z += cos(uTime * .9 + bfPhase) * bfTop * bfTop * bfWind * bfGust * .08;
         `);
     } else if (category === 'concrete') {
-      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vBfConcrete;')
-        .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvBfConcrete = (modelMatrix * vec4(transformed, 1.)).xyz;');
-      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>\nvarying vec3 vBfConcrete;\n${noise}`)
-        .replace('#include <color_fragment>', `#include <color_fragment>
+      shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), '#include <common>\nvarying vec3 vBfConcrete;')
+        .replace(anchor('#include <worldpos_vertex>'), '#include <worldpos_vertex>\nvBfConcrete = (modelMatrix * vec4(transformed, 1.)).xyz;');
+      shader.fragmentShader = shader.fragmentShader.replace(anchor('#include <common>'), `#include <common>\nvarying vec3 vBfConcrete;\n${noise}`)
+        .replace(anchor('#include <color_fragment>'), `#include <color_fragment>
           float bfStreaks = vn2(vec2((vBfConcrete.x + vBfConcrete.z) * .65, vBfConcrete.y * .025));
           float bfGrain = vn2(vBfConcrete.xz * 2. + vBfConcrete.y);
           diffuseColor.rgb *= .88 + bfStreaks * .16 + bfGrain * .07;

@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from '../vendor/three.js';
-import { patchShader } from '../js/world/toolbox/core/shader-patch.js';
+import { patchShader, anchor } from '../js/world/toolbox/core/shader-patch.js';
 
 const LIB = { MeshStandardMaterial: 'standard', MeshPhysicalMaterial: 'physical', MeshLambertMaterial: 'lambert', MeshPhongMaterial: 'phong', MeshBasicMaterial: 'basic', MeshDepthMaterial: 'depth', MeshDistanceMaterial: 'distance', PointsMaterial: 'points', MeshToonMaterial: 'toon' };
 const renderer = { capabilities: { getMaxAnisotropy: () => 1, isWebGL2: true }, getContextAttributes: () => ({ antialias: true }), extensions: { has: () => true } };
@@ -21,7 +21,8 @@ function missingAnchors(m) {
     if (typeof a === 'string' && a.startsWith('#include <') && !String(this).includes(a)) miss.push(a);
     return replace.call(this, a, b);
   };
-  try { m.onBeforeCompile(shader, renderer); } finally { String.prototype.replace = replace; }
+  // ([review 27 Nov] T8: a patch at anchor('#include <…>') throws where the anchor is missing)
+  try { m.onBeforeCompile(shader, renderer); } catch (e) { const a = /anchor not found: (#include <[^>]+>)/.exec(e.message); if (!a) throw e; miss.push(a[1]); } finally { String.prototype.replace = replace; }
   return miss;
 }
 
@@ -30,6 +31,24 @@ test('patchShader puts code at its anchor and throws when the anchor is missing'
   assert.equal(patchShader('#include <x>', '#include <x>', 'c', 'before'), 'c\n#include <x>');
   assert.equal(patchShader('a $& b', '$&', '$1', 'replace'), 'a $1 b');   // (no String.replace $-patterns)
   assert.throws(() => patchShader('void main() {}', '#include <logdepthbuf_fragment>', 'x'), /anchor not found/);
+});
+
+test('anchor() is a String.replace pattern that patches like a plain string and throws when the anchor is missing', () => {
+  const src = 'a\n#include <x>\nb\n#include <x>';
+  for (const code of ['#include <x>\nc', 'c\n#include <x>', 'gone', '$& $1 $$']) assert.equal(src.replace(anchor('#include <x>'), code), patchShader(src, '#include <x>', code, 'replace'));
+  assert.equal(src.replace(anchor('#include <x>'), '#include <x>\nc'), src.replace('#include <x>', '#include <x>\nc'), 'the first occurrence only, as a string pattern');
+  assert.equal(anchor('#include <x>'), anchor('#include <x>'), 'one pattern per anchor');
+  assert.throws(() => 'void main() {}'.replace(anchor('#include <logdepthbuf_fragment>'), 'x'), /anchor not found: #include <logdepthbuf_fragment>/);
+});
+
+test('no toolbox shader patch at an #include is a plain String.replace (T8)', async () => {
+  const { execSync } = await import('node:child_process');
+  const { readFileSync } = await import('node:fs');
+  const root = new URL('..', import.meta.url).pathname;
+  const files = execSync('git ls-files js/world/toolbox', { cwd: root, encoding: 'utf8' }).trim().split('\n').filter((f) => f.endsWith('.js'));
+  const plain = [];
+  for (const f of files) readFileSync(root + f, 'utf8').split('\n').forEach((l, i) => { if (/\.replace\(\s*['"`]#include </.test(l) && !/^\s*(\/\/|\*)/.test(l)) plain.push(`${f}:${i + 1}`); });
+  assert.deepEqual(plain, [], "use .replace(anchor('#include <…>'), …) (toolbox/core/shader-patch.js)");
 });
 
 test('the bake and the vista kit patch exact lines that are in three\'s lights_fragment_begin', () => {

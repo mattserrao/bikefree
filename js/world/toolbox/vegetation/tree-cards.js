@@ -2,6 +2,7 @@
 // (Balanced and High). Used by every stylized scene with trees.
 import * as THREE from '../../../../vendor/three.js';
 import { litMaterial } from '../materials/lit.js';
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 /**
  * The tree-card materials: an alpha-tested silhouette (conifer or broadleaf) on a quad that turns about
@@ -30,7 +31,7 @@ export function makeTreeCards(uniforms) {
     // coverage as a dither pattern (a fine speckle over the distant forest). A plain alpha test instead, with
     // the mip-blurred alpha scaled up by mip level so distant cards keep their size rather than thinning out.
     material.onBeforeCompile = (shader) => {
-      shader.fragmentShader = shader.fragmentShader.replace('#include <alphatest_fragment>', `
+      shader.fragmentShader = shader.fragmentShader.replace(anchor('#include <alphatest_fragment>'), `
         #ifdef USE_MAP
           vec2 bfTx = vMapUv * 128.;
           float bfLod = max(0., .5 * log2(max(dot(dFdx(bfTx), dFdx(bfTx)), dot(dFdy(bfTx), dFdy(bfTx)))));
@@ -39,10 +40,10 @@ export function makeTreeCards(uniforms) {
         #include <alphatest_fragment>`);
       shader.uniforms.bfHide = hide; shader.uniforms.bfReach = reach; shader.uniforms.uTime = uniforms.uTime; shader.uniforms.bfWind = uniforms.bfWind || { value: .3 };
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nuniform vec4 bfHide; uniform float bfReach; uniform float uTime; uniform float bfWind;')
-        .replace('#include <uv_vertex>', `#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = vec2(${u0.toFixed(2)} + uv.x * .5, uv.y);\n#endif`)
-        .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = vec3(0., 1., 0.);')
-        .replace('#include <project_vertex>', `
+        .replace(anchor('#include <common>'), '#include <common>\nuniform vec4 bfHide; uniform float bfReach; uniform float uTime; uniform float bfWind;')
+        .replace(anchor('#include <uv_vertex>'), `#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = vec2(${u0.toFixed(2)} + uv.x * .5, uv.y);\n#endif`)
+        .replace(anchor('#include <beginnormal_vertex>'), 'vec3 objectNormal = vec3(0., 1., 0.);')
+        .replace(anchor('#include <project_vertex>'), `
           vec4 bfC = modelMatrix * instanceMatrix * vec4(0., 0., 0., 1.);
           vec3 bfR = normalize(vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]));
           float bfW = length(instanceMatrix[0].xyz), bfH = length(instanceMatrix[1].xyz);

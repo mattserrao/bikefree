@@ -12,6 +12,7 @@
 //   "buildings": { "reachM": 9000, "chunkM": 3000, "landmarks": [ { "name": "Notre-Dame des Neiges", "shape": "tent" } ] }
 import * as THREE from '../../../../vendor/three.js';
 import { randomSequence } from '../core/random.js';
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 const ROAD_HALF = 3.5;
 const KIND = ['house', 'farm', 'barn', 'shed', 'church', 'chapel', 'apartments', 'hotel', 'commercial', 'public', 'garage', 'industrial', 'chalet', 'ruin'];
@@ -92,12 +93,12 @@ function material(uniforms) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9, metalness: 0, side: THREE.DoubleSide });
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec4 aFacade; attribute vec3 aTrim; varying vec4 vFac; varying vec3 vTrim; varying float vFpx;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFac = aFacade; vTrim = aTrim;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\nvFpx = -mvPosition.z;');
+      .replace(anchor('#include <common>'), '#include <common>\nattribute vec4 aFacade; attribute vec3 aTrim; varying vec4 vFac; varying vec3 vTrim; varying float vFpx;')
+      .replace(anchor('#include <begin_vertex>'), '#include <begin_vertex>\nvFac = aFacade; vTrim = aTrim;')
+      .replace(anchor('#include <project_vertex>'), '#include <project_vertex>\nvFpx = -mvPosition.z;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec4 vFac; varying vec3 vTrim; varying float vFpx;')
-      .replace('#include <color_fragment>', `#include <color_fragment>
+      .replace(anchor('#include <common>'), '#include <common>\nvarying vec4 vFac; varying vec3 vTrim; varying float vFpx;')
+      .replace(anchor('#include <color_fragment>'), `#include <color_fragment>
         if (vFac.w >= 0.) {
           // facades: windows with shutters on each floor; style 0 house, 1 church (tall narrow), 2 block (balcony bands), 3 barn (planks)
           float u = vFac.x, v = vFac.y, fh = vFac.z, st = vFac.w;

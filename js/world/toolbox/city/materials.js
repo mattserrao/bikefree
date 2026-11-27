@@ -7,6 +7,7 @@ import { FACADE_GLSL } from '../structures/buildings/facade-material.js';   // [
 import { randomSequence } from '../core/random.js';   // [review 27 Nov] seeded content
 import { nightGlowShader, withNightGlow } from '../materials/night-glow.js';   // [review 27 Nov] the shared night glow
 import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 // [review 27 Nov] The street height-slot depth bias, in the vertex shader (keeps early-Z). It sat under USE_LOGDEPTHBUF,
 // a define r187 no longer emits, so it never ran; graph maps have a plain 24-bit depth buffer and route worlds a
@@ -175,14 +176,14 @@ export function cityBuildingMaterial(U, nightOf, facades) {
   bm.onBeforeCompile = (shader) => {
     shader.uniforms.uSkyTop = U.uSkyTop;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec4 aBld; varying vec4 vBld; varying vec3 vWPos; varying vec3 vWNorm;')
-      .replace('#include <fog_vertex>', '#include <fog_vertex>\nvBld = aBld; vWPos = (modelMatrix * vec4(transformed, 1.)).xyz; vWNorm = normalize(mat3(modelMatrix) * objectNormal);');
+      .replace(anchor('#include <common>'), '#include <common>\nattribute vec4 aBld; varying vec4 vBld; varying vec3 vWPos; varying vec3 vWNorm;')
+      .replace(anchor('#include <fog_vertex>'), '#include <fog_vertex>\nvBld = aBld; vWPos = (modelMatrix * vec4(transformed, 1.)).xyz; vWNorm = normalize(mat3(modelMatrix) * objectNormal);');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>
+      .replace(anchor('#include <common>'), `#include <common>
           uniform vec3 uSkyTop; varying vec4 vBld; varying vec3 vWPos; varying vec3 vWNorm;
           ${HASH_GLSL}
           ${facades ? FACADE_GLSL : ''}`)
-      .replace('#include <color_fragment>', `#include <color_fragment>
+      .replace(anchor('#include <color_fragment>'), `#include <color_fragment>
           float bfWin = 0., bfLit = 0.;
           int bfKind = int(mod(vBld.x + .5, 16.));   // (aBld.x: kind + 16 × the building's height in m, when known)
           float bfTop = floor((vBld.x + .5) / 16.);
@@ -216,7 +217,7 @@ export function cityBuildingMaterial(U, nightOf, facades) {
             diffuseColor.rgb = mix(diffuseColor.rgb, glassCol, bfWin * (glass ? .93 : .86));
             bfLit = bfWin * step(glass ? .5 : .58, hw21(id * 1.37 + vBld.y * 17.));
           }`)
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, .22, bfWin);');
+      .replace(anchor('#include <roughnessmap_fragment>'), '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, .22, bfWin);');
     // (windowNight: a host's own, softer window light — js/world/graph-heroes.js) [review 27 Nov] the shared night glow
     nightGlowShader(shader, nightOf(), 'mix(vec3(1., .74, .42), vec3(.85, .9, 1.), step(.8, hw21(vWPos.xz * .01 + vBld.y))) * bfLit * uNight * 1.25');
   };
@@ -252,13 +253,13 @@ export function cityStreetMaterials(own, junctions) {
   // relative to each other inside a junction, which a 2 cm lift alone can't outweigh).
   streetMaterial.userData.slotDepthBias = true;
   streetMaterial.onBeforeCompile = (shader) => {
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aSlot; varying float vSlot;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSlot = aSlot;')
+    shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), '#include <common>\nattribute float aSlot; varying float vSlot;')
+      .replace(anchor('#include <begin_vertex>'), '#include <begin_vertex>\nvSlot = aSlot;')
       // [junctions] road paint (slot 9: crosswalks, stop lines, the plain asphalt over the route's road in a junction) is
       // drawn a hair nearer along the view ray (same pixel, nearer depth), so it always wins over the road it lies on
-      .replace('#include <project_vertex>', '#include <project_vertex>\nif (aSlot > 8.5) { mvPosition.xyz *= .9994; gl_Position = projectionMatrix * mvPosition; }\n' + SLOT_BIAS_VERTEX);
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vSlot;')
-      .replace('#include <logdepthbuf_fragment>', '#include <logdepthbuf_fragment>\n#if defined( USE_LOGARITHMIC_DEPTH_BUFFER )\ngl_FragDepth -= vSlot * 2e-6;\n#endif');
+      .replace(anchor('#include <project_vertex>'), '#include <project_vertex>\nif (aSlot > 8.5) { mvPosition.xyz *= .9994; gl_Position = projectionMatrix * mvPosition; }\n' + SLOT_BIAS_VERTEX);
+    shader.fragmentShader = shader.fragmentShader.replace(anchor('#include <common>'), '#include <common>\nvarying float vSlot;')
+      .replace(anchor('#include <logdepthbuf_fragment>'), '#include <logdepthbuf_fragment>\n#if defined( USE_LOGARITHMIC_DEPTH_BUFFER )\ngl_FragDepth -= vSlot * 2e-6;\n#endif');
   };
   streetMaterial.customProgramCacheKey = () => 'city-streets-slot-4';   // [junctions]; [review 27 Nov] slot bias in the vertex shader
   // [finish] brick streets (scene "brickStreets"): Pittsburgh's red paving brick in running bond, laid across the street,

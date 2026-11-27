@@ -1,0 +1,257 @@
+{
+ "ground": {
+  "vs": "5ff754b6b4f783e3",
+  "fs": "da3181ece35778a8",
+  "key": "97f2cd7e271ddb47"
+ },
+ "groundVista": {
+  "vs": "5ff754b6b4f783e3",
+  "fs": "2af7233fd18b1770",
+  "key": "3ae983a05bab5319"
+ },
+ "lakeWater": {
+  "vs": "c423afde9a094359",
+  "fs": "5a2419cd6adc480d",
+  "key": "d9dff89e12a260c2"
+ },
+ "lakeMist": {
+  "vs": "2852263bb932538c",
+  "fs": "0f6331aa9127e5c7",
+  "key": "d9dff89e12a260c2"
+ },
+ "sceneryTree": {
+  "vs": "d3257679d2240f66",
+  "fs": "f757cebeec471546",
+  "key": "1e7ec538b799e278"
+ },
+ "sceneryGrass": {
+  "vs": "d3257679d2240f66",
+  "fs": "f757cebeec471546",
+  "key": "d5b1fceb3b305b93"
+ },
+ "sceneryConcrete": {
+  "vs": "79ef2fa32f8d686c",
+  "fs": "ca0967db35308aca",
+  "key": "8edfe6ee7975db88"
+ },
+ "lit": {
+  "vs": "d3257679d2240f66",
+  "fs": "f757cebeec471546",
+  "key": "01332a9e9c716e0c"
+ },
+ "tree": {
+  "vs": "08dd13e33223a994",
+  "fs": "f452297faa7de7d8",
+  "key": "2295aa577e4ae483"
+ },
+ "glow": {
+  "vs": "64f3fd46403267af",
+  "fs": "181b2cba8e0c3682",
+  "key": "362912838224c80d"
+ },
+ "glowPhysical": {
+  "vs": "d3257679d2240f66",
+  "fs": "b7a8dd862f0c301b",
+  "key": "69f3d9fcbce5634e"
+ },
+ "flare": {
+  "vs": "b25aaefb15ca0aae",
+  "fs": "12b324586da5999d",
+  "key": "2da1986140faf325"
+ },
+ "barkDetail": {
+  "vs": "08dd13e33223a994",
+  "fs": "88b94d86d831b3a5",
+  "key": "f236ea8a8a66ae4f"
+ },
+ "animal": {
+  "vs": "965e2a70e7bb0563",
+  "fs": "18f32f8b0358e89f",
+  "key": "45e94031cb75fe2e"
+ },
+ "crop": {
+  "vs": "59e712d3c592a007",
+  "fs": "f757cebeec471546",
+  "key": "a5fb95b699ec10f9"
+ },
+ "redRock": {
+  "vs": "ca8bc639e47da505",
+  "fs": "d3da1f17f80b21b6",
+  "key": "8bcb66a566c2cd4c"
+ },
+ "facade": {
+  "vs": "283af184f2979ded",
+  "fs": "bb133d1b92c79acc",
+  "key": "9ce0d58cf08e747f"
+ },
+ "vehicle": {
+  "vs": "5a5a84d9daf210f9",
+  "fs": "84bf73027633b55c",
+  "key": "82c20c76f176733b"
+ },
+ "car": {
+  "vs": "85fe5e2c9876d26e",
+  "fs": "3212f07eac207e8b",
+  "key": "38d3f4c682cf6d2e"
+ },
+ "figure": {
+  "vs": "488340b0e96803c7",
+  "fs": "f68ac4963ca2e4e8",
+  "key": "af57086bac7ce834"
+ },
+ "canal": {
+  "vs": "6baaecb8bca7dc0f",
+  "fs": "e71ad6f1b9aa66bc",
+  "key": "dc8b2bf89db40475"
+ },
+ "surfaceDetail": {
+  "vs": "5ed3380339abd943",
+  "fs": "5cb8c052d8d54358",
+  "key": "04313e97be440a86"
+ },
+ "parkPath": {
+  "vs": "7b1675644745055e",
+  "fs": "82a6b33ef46c6bc8",
+  "key": "e05d23e8f480eb1c"
+ },
+ "parkLawn": {
+  "vs": "7b1675644745055e",
+  "fs": "82a6b33ef46c6bc8",
+  "key": "929e4a1053f44816"
+ },
+ "leaves": {
+  "vs": "1acfee0ff176a0d7",
+  "fs": "f757cebeec471546",
+  "key": "d2003f1581e4cdee"
+ },
+ "masonry": {
+  "vs": "3aae41c3e6688354",
+  "fs": "44d7ab0fe508a507",
+  "key": "ff71cfecb1b020e2"
+ },
+ "roadWorn": {
+  "vs": "d3257679d2240f66",
+  "fs": "5a745a0d415c36f2",
+  "key": "96d784631198a79c"
+ },
+ "treeCards#0": {
+  "vs": "7b564ef00a75cd43",
+  "fs": "b2ebfcfa59843a1e",
+  "key": "d107e1cb6de4a45b"
+ },
+ "treeCards#1": {
+  "vs": "6bab828206fbb066",
+  "fs": "b2ebfcfa59843a1e",
+  "key": "f051408711b5424c"
+ },
+ "grass": {
+  "vs": "97b96c40a518afb6",
+  "fs": "1b29cd5ec262c623",
+  "key": "89efffda2c08357a"
+ },
+ "bird": {
+  "vs": "b59fe3ed3a33eff0",
+  "fs": "f757cebeec471546",
+  "key": "d1c50c8f36df3a92"
+ },
+ "cityBuildings": {
+  "vs": "23bc3f9d02e52ea3",
+  "fs": "e6dec4f0f041e745",
+  "key": "3dc64718a2cb0971"
+ },
+ "cityBuildingsFacades": {
+  "vs": "23bc3f9d02e52ea3",
+  "fs": "3d5adf0b1d9896de",
+  "key": "08e4bbb0462e8f45"
+ },
+ "cityStreets#0": {
+  "vs": "b16dec343dd1feb5",
+  "fs": "d3b27257f1a18d84",
+  "key": "4913fee5b05fa16b"
+ },
+ "cityStreets#1": {
+  "vs": "b16dec343dd1feb5",
+  "fs": "d3b27257f1a18d84",
+  "key": "b416dd603135edeb"
+ },
+ "cityGlow": {
+  "vs": "a046edb00a743046",
+  "fs": "72a55aedc43f509f",
+  "key": "d9dff89e12a260c2"
+ },
+ "cityRiver": {
+  "vs": "303fb1cbad09ca31",
+  "fs": "49ac6b6ea573c3a1",
+  "key": "d9dff89e12a260c2"
+ },
+ "cityRiverBeyond": {
+  "vs": "303fb1cbad09ca31",
+  "fs": "49ac6b6ea573c3a1",
+  "key": "d9dff89e12a260c2"
+ },
+ "cityLamp": {
+  "vs": "d3257679d2240f66",
+  "fs": "3736441caf89085b",
+  "key": "dfe4ce39cfa6ccab"
+ },
+ "impostor#0": {
+  "vs": "46f41083d7f963ed",
+  "fs": "350dfae425ac890e",
+  "key": "541cd341f9abd704"
+ },
+ "impostor#1": {
+  "vs": "7adc20d27d7059cd",
+  "fs": "e5cfe34c7c28d717",
+  "key": "a5ba34cd0c1ce648"
+ },
+ "ground+bake": {
+  "vs": "5ff754b6b4f783e3",
+  "fs": "a5136087071674a7",
+  "key": "5f56390628576fbf"
+ },
+ "ground+look": {
+  "vs": "5ff754b6b4f783e3",
+  "fs": "24dea346365ae813",
+  "key": "9b6655cb7562abcd"
+ },
+ "groundVista+bake": {
+  "vs": "5ff754b6b4f783e3",
+  "fs": "62846a416c45d7ab",
+  "key": "81923742832ff539"
+ },
+ "groundVista+look": {
+  "vs": "5ff754b6b4f783e3",
+  "fs": "9e6a333d5403e28a",
+  "key": "c6c7fedc8785a634"
+ },
+ "sceneryTree+bake": {
+  "vs": "d3257679d2240f66",
+  "fs": "0f016e6182776a65",
+  "key": "3f8a9a196b8d34e3"
+ },
+ "sceneryTree+look": {
+  "vs": "d3257679d2240f66",
+  "fs": "32589cf5c454cd07",
+  "key": "50dcefd3fe4a5ebf"
+ },
+ "lit+bake": {
+  "vs": "d3257679d2240f66",
+  "fs": "0f016e6182776a65",
+  "key": "0b89e7404b6f5780"
+ },
+ "lit+look": {
+  "vs": "d3257679d2240f66",
+  "fs": "32589cf5c454cd07",
+  "key": "ec5f8f5d42ea8aea"
+ },
+ "tree+bake": {
+  "vs": "08dd13e33223a994",
+  "fs": "f248583f32270c9e",
+  "key": "ea965fbe239b243e"
+ },
+ "tree+look": {
+  "vs": "08dd13e33223a994",
+  "fs": "15b454ff71f98266",
+  "key": "760ce781edf48d83"
+ }
+}

@@ -9,6 +9,7 @@
 import * as THREE from '../../../../../vendor/three.js';
 import { posedFigure, CLIP, randomLook, FIT } from './people.js';
 import { nightGlowShader } from '../../materials/night-glow.js';
+import { anchor } from '../../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 export const VEHICLE_KINDS = ['sedan', 'hatch', 'suv', 'pickup', 'van', 'taxi', 'bus', 'rv', 'camper', 'moto', 'jammer'];
 // length in metres (traffic spacing) and default paint, where a kind has one
@@ -344,20 +345,20 @@ export function vehicleMaterial(night = { value: 0 }) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .5, metalness: .08 });
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>
+      .replace(anchor('#include <common>'), `#include <common>
         attribute vec4 aVeh; attribute vec3 iPaint; attribute vec2 iMove; varying float vPart; varying float vBrake;
         vec3 vehSpin(vec3 p, float a) { float c = cos(a), s = sin(a), y = p.y - aVeh.z, z = p.z - aVeh.w; return vec3(p.x, aVeh.z + y * c - z * s, aVeh.w + y * s + z * c); }
         vec3 vehSpinN(vec3 n, float a) { float c = cos(a), s = sin(a); return vec3(n.x, n.y * c - n.z * s, n.y * s + n.z * c); }`)
-      .replace('#include <beginnormal_vertex>', `vec3 objectNormal = normal;
+      .replace(anchor('#include <beginnormal_vertex>'), `vec3 objectNormal = normal;
         float vehA = aVeh.y > .5 ? iMove.x / max(aVeh.z, .1) : 0.;
         if (aVeh.y > .5) objectNormal = vehSpinN(objectNormal, vehA);`)
-      .replace('#include <begin_vertex>', 'vec3 transformed = aVeh.y > .5 ? vehSpin(position, vehA) : position;')
-      .replace('#include <color_vertex>', `#include <color_vertex>
+      .replace(anchor('#include <begin_vertex>'), 'vec3 transformed = aVeh.y > .5 ? vehSpin(position, vehA) : position;')
+      .replace(anchor('#include <color_vertex>'), `#include <color_vertex>
         if (aVeh.x < .5) vColor.rgb *= iPaint;
         vPart = aVeh.x; vBrake = iMove.y;`);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vPart; varying float vBrake;')
-      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+      .replace(anchor('#include <common>'), '#include <common>\nvarying float vPart; varying float vBrake;')
+      .replace(anchor('#include <roughnessmap_fragment>'), `#include <roughnessmap_fragment>
         if (vPart > 1.5 && vPart < 2.5) roughnessFactor = .18;`);
     nightGlowShader(shader, night, `
         if (vPart > 9.5 && vPart < 10.5) totalEmissiveRadiance += vec3(1., .93, .78) * (.15 + uNight * 4.);

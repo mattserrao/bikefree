@@ -15,6 +15,7 @@ import { randomSequence } from '../core/random.js';
 import { Builder, M, box, linear } from '../core/model-builder.js';
 import { figureMaterial, staticCrowdMesh, randomLook, CLIP } from '../life/figures/people.js';
 import { worldSound, noiseLoop, toneLoop } from '../core/sound.js';
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 const FLOOR = .1;                    // the path surface above the line (the rider's wheels)
 export const TRACKS = [-4, -8];      // track centres, metres right of the line (left: negative)
@@ -413,8 +414,8 @@ export class Subway {
     const geo = B.build();
     const mat = new THREE.MeshBasicMaterial({ vertexColors: true });
     mat.onBeforeCompile = (sh) => {
-      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aTree; attribute vec2 aDoor;')
-        .replace('#include <begin_vertex>', `#include <begin_vertex>
+      sh.vertexShader = sh.vertexShader.replace(anchor('#include <common>'), '#include <common>\nattribute float aTree; attribute vec2 aDoor;')
+        .replace(anchor('#include <begin_vertex>'), `#include <begin_vertex>
           if (aTree > .5) {   // a door leaf: slides along the car when this section's doors on its side are open
             float side = aTree < 2.5 ? -1. : 1., sl = mod(aTree, 2.) > .5 ? -1. : 1.;
             transformed.z += sl * .62 * aDoor.x * step(.5, side * aDoor.y);

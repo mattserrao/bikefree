@@ -8,6 +8,7 @@ import { randomSequence } from '../core/random.js';
 import { PACK_META } from './meta.js';
 import { Builder, M, cyl, cone, blob, withSmooth } from '../core/model-builder.js';
 import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 // lod 0 near, 1 mid, 2 far (one or two primitives)
 // Surface kinds (aTree), drawn by decorateTreeMaterial: 0 foliage, 1 bark, 2 cedar bark, 3 pine bark,
@@ -425,9 +426,9 @@ export function decorateTreeMaterial(material, uniforms) {
     prev.call(material, shader, renderer);
     shader.uniforms.uTime = uniforms.uTime;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>
+      .replace(anchor('#include <common>'), `#include <common>
         attribute float aTree; varying float vTK; varying vec3 vTO; varying vec3 vTW; uniform float uTime; varying vec3 vSph;`)
-      .replace('#include <begin_vertex>', `#include <begin_vertex>
+      .replace(anchor('#include <begin_vertex>'), `#include <begin_vertex>
         vTK = aTree; vTO = position;
         {
           vec4 tw = vec4(transformed, 1.);
@@ -447,11 +448,11 @@ export function decorateTreeMaterial(material, uniforms) {
           vSph = normalize(tm * vec3(position.x, .55 * length(position.xz) + .15 * position.y, position.z) + vec3(0., 1e-4, 0.));
         }`);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>
+      .replace(anchor('#include <common>'), `#include <common>
         varying float vTK; varying vec3 vTO; varying vec3 vTW; uniform float uTime; varying vec3 vSph;
 ${HASH_GLSL}
         float tClump(vec3 w) { return vn2(w.xz * 1.5 + w.y * .7) * .6 + vn2(vec2(w.x + w.z, w.y) * 2.9) * .4; }`)
-      .replace('#include <color_fragment>', `#include <color_fragment>
+      .replace(anchor('#include <color_fragment>'), `#include <color_fragment>
         float tPx = length(cameraPosition - vTW) * .0017;
         float tFine = 1. - smoothstep(.04, .16, tPx);          // bark and leaf detail fade past ~60 m
         float tA = atan(vTO.z, vTO.x);
@@ -491,7 +492,7 @@ ${HASH_GLSL}
           float f = vn2(vec2(tA * 22., vTO.y * .3));
           diffuseColor.rgb *= mix(1., .82 + f * .3, tFine);
         }`)
-      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+      .replace(anchor('#include <normal_fragment_maps>'), `#include <normal_fragment_maps>
         if ((vTK < .5 || (vTK > 4.5 && vTK < 5.5) || (vTK > 7.5 && vTK < 8.5)) && tPx < .5) {
           // clumps catch the light: tilt the normal toward each clump's centre
           vec3 tw = vTW * (vTK > 4.5 ? 2. : 1.);
@@ -503,7 +504,7 @@ ${HASH_GLSL}
           // [vegetation] the crown's volume: most of the card's own normal swapped for the crown's outward one
           normal = normalize(mix(normal, normalize((viewMatrix * vec4(vSph, 0.)).xyz), .65));
         }`)
-      .replace('#include <aomap_fragment>', `#include <aomap_fragment>
+      .replace(anchor('#include <aomap_fragment>'), `#include <aomap_fragment>
         if (vTK < .5 || (vTK > 7.5 && vTK < 8.5)) {
           // [vegetation] inside and under the crown, darker (the light doesn't get in); the sun shining through the
           // leaves when it's behind them (translucency: a warm glow against the low sun)

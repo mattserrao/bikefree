@@ -22,6 +22,7 @@ import { nightGlowShader, withNightGlow } from '../materials/night-glow.js';   /
 import { ghostMask } from '../core/ghost.js';
 import { drain, due } from '../core/jobs.js';
 import { figureMaterial, staticCrowdMesh, randomLook, CLIP } from '../life/figures/people.js';
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 const R_ = 6371008.8 * Math.PI / 180;
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -293,8 +294,8 @@ function plantMaterial(night) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .78, metalness: 0 });
   m.onBeforeCompile = (sh) => {
     nightGlowShader(sh, night, 'vColor.rgb * vec3(1., .86, .62) * .16 * uNight');   // [F116] the house's own lamps on the beds after dark
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aTree;')
-      .replace('#include <color_vertex>', `#include <color_vertex>
+    sh.vertexShader = sh.vertexShader.replace(anchor('#include <common>'), '#include <common>\nattribute float aTree;')
+      .replace(anchor('#include <color_vertex>'), `#include <color_vertex>
         #ifdef USE_INSTANCING_COLOR
           vColor.xyz = color.xyz * mix(vec3(1.), instanceColor.xyz, aTree);
         #endif`);
@@ -307,7 +308,7 @@ function glassMaterial(night) {
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uNight = night;
     // [F116] after dark the glass glows warm, lit from inside: a lantern seen from the park (brighter at the edges)
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight;').replace('#include <opaque_fragment>', `
+    sh.fragmentShader = sh.fragmentShader.replace(anchor('#include <common>'), '#include <common>\nuniform float uNight;').replace(anchor('#include <opaque_fragment>'), `
       float bfFres = pow(1. - abs(dot(normalize(vNormal), normalize(vViewPosition))), 3.);
       diffuseColor.a = clamp(diffuseColor.a + bfFres * .42 + uNight * (.1 + bfFres * .12), 0., .7);
       outgoingLight += vec3(.10, .13, .13) * bfFres * (1. - uNight);
@@ -331,9 +332,9 @@ function waterMaterial(uTime) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .12, metalness: .1, transparent: true, opacity: .88, side: THREE.DoubleSide });
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = uTime;
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vFlow;').replace('#include <uv_vertex>', '#include <uv_vertex>\nvFlow = uv;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uTime; varying vec2 vFlow;')
-      .replace('#include <color_fragment>', `#include <color_fragment>
+    sh.vertexShader = sh.vertexShader.replace(anchor('#include <common>'), '#include <common>\nvarying vec2 vFlow;').replace(anchor('#include <uv_vertex>'), '#include <uv_vertex>\nvFlow = uv;');
+    sh.fragmentShader = sh.fragmentShader.replace(anchor('#include <common>'), '#include <common>\nuniform float uTime; varying vec2 vFlow;')
+      .replace(anchor('#include <color_fragment>'), `#include <color_fragment>
         float bfFall = step(.5, vFlow.x);
         float bfS = bfFall > .5 ? fract(vFlow.y * .35 - uTime * 1.6 + sin(vFlow.x * 37.) * .3) : .5 + .5 * sin(vFlow.y * .9 + uTime * 1.3) * sin(vFlow.x * 1.1 - uTime);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.92, .97, 1.), bfFall > .5 ? smoothstep(.55, .95, bfS) * .8 : smoothstep(.7, 1., bfS) * .35);`);

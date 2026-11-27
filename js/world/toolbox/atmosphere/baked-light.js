@@ -39,7 +39,7 @@
 // (e.g. thin props that would otherwise be skipped). Moving things: InstancedMesh with DynamicDrawUsage,
 // or `userData.dynamic = true`, keep casting into the small live shadow map.
 import * as THREE from '../../../../vendor/three.js';
-import { patchShader } from '../core/shader-patch.js';   // [review 27 Nov]
+import { patchShader, anchor } from '../core/shader-patch.js';   // [review 27 Nov]
 import { CANOPY, CANOPY_GLSL } from './canopy-shade.js';
 
 export const BAKE_DEFAULTS = {
@@ -284,7 +284,7 @@ export class BakedLighting {
           mat3 bfVT = transpose(mat3(viewMatrix));
           vec2 bfBaked = bfBakedLight(bfVT * (-vViewPosition - viewMatrix[3].xyz), normalize(bfVT * normal));`;
       const sunLine = 'getDirectionalLightInfo( directionalLight, directLight );', scaled = `${sunLine}\n\t\tdirectLight.color *= bfBaked.x;`;
-      let fs = shader.fragmentShader.replace('#include <common>', `#include <common>\n${BAKE_PARS}`);
+      let fs = shader.fragmentShader.replace(anchor('#include <common>'), `#include <common>\n${BAKE_PARS}`);
       // [review 27 Nov] patchShader: the sun line and the chunk's start are exact lines of three's lights_fragment_begin
       // (a three.js update that rewords them throws here, and in test/shader-anchors.test.mjs, instead of dropping the bake)
       if (fs.includes('#include <lights_fragment_begin>')) fs = patchShader(fs, '#include <lights_fragment_begin>', `${decl}\n          ${patchShader(THREE.ShaderChunk.lights_fragment_begin, sunLine, scaled, 'replace')}`, 'replace');
@@ -294,7 +294,7 @@ export class BakedLighting {
         const start = 'vec3 geometryPosition = - vViewPosition;';
         fs = patchShader(patchShader(fs, start, decl, 'before'), sunLine, scaled, 'replace');
       }
-      shader.fragmentShader = fs.replace('#include <aomap_fragment>', `reflectedLight.indirectDiffuse *= bfBaked.y; reflectedLight.indirectSpecular *= bfBaked.y;
+      shader.fragmentShader = fs.replace(anchor('#include <aomap_fragment>'), `reflectedLight.indirectDiffuse *= bfBaked.y; reflectedLight.indirectSpecular *= bfBaked.y;
           #include <aomap_fragment>`);
     };
     m.customProgramCacheKey = () => `${prevKey}|bf-baked-2`;

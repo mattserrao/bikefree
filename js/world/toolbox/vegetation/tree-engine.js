@@ -28,6 +28,7 @@ import { decorateTreeMaterial } from '../packs/northern-rockies.js';
 import { makeLeafTexture } from './upstate-trees.js';
 import { withBarkDetail } from './near-trunks.js';
 import { impostorMaterial, ANGLES } from './impostor-material.js';   // [review 27 Nov] the impostor cards' shader (T14)
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 // m: [near end, mid end] per quality; FADE: the crossfade's half width; IMP_END: where the impostors stop (the
 // tiles beyond are released anyway)
@@ -137,8 +138,8 @@ function engineMaterial(material, uTime, leaf, key, ft = FT) {
   material.onBeforeCompile = (shader, r) => {
     prev?.call(material, shader, r);
     shader.uniforms.uTime = uTime; shader.uniforms.uLeaf = { value: leaf ? 1 : 0 }; shader.uniforms.uWindDir = WIND.uWindDir; shader.uniforms.uWindK = WIND.uWindK;
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>\n${TE_GLSL}${WIND_GLSL}${leaf || !/uniform float uTime/.test(shader.vertexShader) ? '\nuniform float uTime;' : ''}`)
-      .replace('#include <begin_vertex>', `#include <begin_vertex>
+    shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), `#include <common>\n${TE_GLSL}${WIND_GLSL}${leaf || !/uniform float uTime/.test(shader.vertexShader) ? '\nuniform float uTime;' : ''}`)
+      .replace(anchor('#include <begin_vertex>'), `#include <begin_vertex>
         {
           #ifdef USE_INSTANCING
           vec3 teO = (modelMatrix * instanceMatrix * vec4(0., 0., 0., 1.)).xyz;
@@ -160,8 +161,8 @@ function engineMaterial(material, uTime, leaf, key, ft = FT) {
           transformed.xz += (teW * (.3 + .12 * sw) + vec2(sw * .06, sw * .03)) * hk;
           if (uLeaf > .5 && teD < 160.) transformed += normal * sin(uTime * 9. + position.x * 3.1 + position.z * 2.7 + position.y) * .05 * (1. - teD / 160.);
         }`);
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vKeep0; varying float vKeep1;')
-      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+    shader.fragmentShader = shader.fragmentShader.replace(anchor('#include <common>'), '#include <common>\nvarying float vKeep0; varying float vKeep1;')
+      .replace(anchor('#include <clipping_planes_fragment>'), `#include <clipping_planes_fragment>
         {
           // complementary screen-door dither: the tier fading in keeps where the one fading out drops
           float teDz = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(.06711056, .00583715))));
@@ -209,7 +210,7 @@ function leafMaterial(map, a2c = false, opaque = false) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, map, alphaTest: .45, alphaToCoverage: a2c, side: THREE.DoubleSide, roughness: .9 });
   const size = map.image?.width || 512;
   m.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace('#include <alphatest_fragment>', `
+    shader.fragmentShader = shader.fragmentShader.replace(anchor('#include <alphatest_fragment>'), `
       #ifdef USE_MAP
         vec2 teTx = vMapUv * ${size.toFixed(1)};
         float teLod = max(0., .5 * log2(max(dot(dFdx(teTx), dFdx(teTx)), dot(dFdy(teTx), dFdy(teTx)))));
@@ -218,7 +219,7 @@ function leafMaterial(map, a2c = false, opaque = false) {
       #include <alphatest_fragment>`);
     // (the impostor atlas: a leaf that passes the test is fully opaque there, so the cards' edges un-premultiply to
     //  the leaf's own colour — a part-alpha texel had come out brightened: a glowing outline on the far trees)
-    if (opaque) shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', 'diffuseColor.a = 1.0;\n#include <opaque_fragment>');
+    if (opaque) shader.fragmentShader = shader.fragmentShader.replace(anchor('#include <opaque_fragment>'), 'diffuseColor.a = 1.0;\n#include <opaque_fragment>');
   };
   m.customProgramCacheKey = () => `tree-engine-leaf-${size}${opaque ? '-opaque' : ''}`;
   return billboardLeaves(m);   // (the cards open to whichever camera draws them: leaf-cards.js)
@@ -393,7 +394,7 @@ export class TreeEngine {
     this.impMesh.userData.bake = false;
     if (!on || this.impMesh.customDepthMaterial) return;
     const src = this.impMat;
-    const vs = src.vertexShader.replace('#include <fog_pars_vertex>', '').replace('#include <fog_vertex>', '');
+    const vs = src.vertexShader.replace(anchor('#include <fog_pars_vertex>'), '').replace(anchor('#include <fog_vertex>'), '');
     this.impMesh.customDepthMaterial = new THREE.ShaderMaterial({
       uniforms: src.uniforms, vertexShader: vs,
       fragmentShader: /* glsl */`

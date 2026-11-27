@@ -9,6 +9,7 @@ import * as THREE from '../../../../vendor/three.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { randomSequence } from '../core/random.js';
 import { withNightGlow } from '../materials/night-glow.js';
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const _P = new THREE.Vector3(), ONE = new THREE.Vector3(1, 1, 1);   // [review 27 Nov] tick's scratch (was a V() per animal per frame)
@@ -48,8 +49,8 @@ export function birdMaterial(uniforms, flap) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9, side: THREE.DoubleSide });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = uniforms.uTime;
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; attribute float aWing;')
-      .replace('#include <begin_vertex>', `#include <begin_vertex>
+    shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), '#include <common>\nuniform float uTime; attribute float aWing;')
+      .replace(anchor('#include <begin_vertex>'), `#include <begin_vertex>
         float bfPh = 0.;
         #ifdef USE_INSTANCING
           bfPh = instanceMatrix[3].x * .37 + instanceMatrix[3].z * .23;

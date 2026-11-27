@@ -14,6 +14,7 @@ import * as THREE from '../../../../vendor/three.js';
 import { litMaterial } from '../materials/lit.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { birdGeometry, birdMaterial } from './coast-life.js';
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -108,8 +109,8 @@ function headMaterial(uTime, { swing = 1.05, pivot = [0, 1.12, .55], rate = .23,
   const m = litMaterial({ vertexColors: true });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = uTime;
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; attribute float aHead;')
-      .replace('#include <begin_vertex>', `#include <begin_vertex>
+    shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), '#include <common>\nuniform float uTime; attribute float aHead;')
+      .replace(anchor('#include <begin_vertex>'), `#include <begin_vertex>
         // the head down to graze (or peck) and back up to look about: each animal on its own clock (its place)
         if (aHead > .5) {
           float ph = 0.;

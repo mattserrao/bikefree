@@ -9,6 +9,7 @@
 import * as THREE from '../../../../vendor/three.js';
 import { litMaterial } from '../materials/lit.js';
 import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 const TAU = Math.PI * 2;
 // a smooth 3D value noise in [0, 1] (the same hash as the shaders')
@@ -318,15 +319,15 @@ export function redRockMaterial() {
   if (shared) return shared;
   const m = litMaterial({ vertexColors: true, roughness: .93, side: THREE.DoubleSide }, 'ground');
   m.onBeforeCompile = (shader) => {
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vRW; varying vec3 vRN;')
-      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvRW = (modelMatrix * vec4(transformed, 1.)).xyz; vRN = normalize(mat3(modelMatrix) * objectNormal);');
+    shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), '#include <common>\nvarying vec3 vRW; varying vec3 vRN;')
+      .replace(anchor('#include <worldpos_vertex>'), '#include <worldpos_vertex>\nvRW = (modelMatrix * vec4(transformed, 1.)).xyz; vRN = normalize(mat3(modelMatrix) * objectNormal);');
     const GL = `
 varying vec3 vRW; varying vec3 vRN;
 ${HASH_GLSL}
 float rrBump(vec3 p) { return vn3(p * .7) * .7 + vn3(vec3(p.x * 2.2, p.y * .8, p.z * 2.2)) * .3; }
 `;
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\n' + GL)
-      .replace('#include <color_fragment>', `#include <color_fragment>
+    shader.fragmentShader = shader.fragmentShader.replace(anchor('#include <common>'), '#include <common>\n' + GL)
+      .replace(anchor('#include <color_fragment>'), `#include <color_fragment>
       {
         float steep = 1. - abs(vRN.y);
         float wob = vn3(vRW * .03) * 4. + vn3(vRW * .11) * .8;
@@ -344,7 +345,7 @@ float rrBump(vec3 p) { return vn3(p * .7) * .7 + vn3(vec3(p.x * 2.2, p.y * .8, p
         diffuseColor.rgb *= .92 + .16 * vn3(vRW * 2.7) * mix(.4, 1., lit);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.78, .58, .42), (1. - steep) * .25 * lit);
       }`)
-      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+      .replace(anchor('#include <normal_fragment_maps>'), `#include <normal_fragment_maps>
       {
         // a bump from world position (perturbNormalArb, as three's bump map): the grain and the bedding's ledges
         float bh = rrBump(vRW) + .35 * smoothstep(.2, .8, .5 + .5 * sin(vRW.y * 2.1 + vn3(vRW * .03) * 4.));
@@ -356,7 +357,7 @@ float rrBump(vec3 p) { return vn3(p * .7) * .7 + vn3(vec3(p.x * 2.2, p.y * .8, p
       }`)
       // the big rock reads through the haze from far off (a butte at 4 km is the landscape, not a speck in the fog):
       // the linear fog stretched to twice its reach on the rock, and never quite closing over it
-      .replace('#include <fog_fragment>', `#ifdef USE_FOG
+      .replace(anchor('#include <fog_fragment>'), `#ifdef USE_FOG
         { float rf = smoothstep(fogNear, fogFar * 2.2, vFogDepth) * .88; gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, rf); }
       #endif`);
   };

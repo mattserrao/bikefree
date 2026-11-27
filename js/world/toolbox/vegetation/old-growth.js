@@ -36,6 +36,7 @@ import { NearTrunks, NearPlants, flareGeometry, flareMaterial } from './near-tru
 import { NEAR_TRUNK, NEAR_PLANT } from './tree-engine.js';
 import { LEAF_V } from './leaf-cards.js';
 import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 export const OG = { old: 30, forest: 31, meadow: 32, blow: 33 };
 const isWood = (c) => c === OG.old || c === OG.forest || c === OG.blow;
@@ -790,8 +791,8 @@ export class OldGrowth {
     this.bladeThick = !msaa;
     m.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = this.uTime;
-      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; attribute float aH; attribute float aB;\n' + HASH_GLSL)
-        .replace('#include <begin_vertex>', `#include <begin_vertex>
+      shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), '#include <common>\nuniform float uTime; attribute float aH; attribute float aB;\n' + HASH_GLSL)
+        .replace(anchor('#include <begin_vertex>'), `#include <begin_vertex>
           vec3 ip = vec3(0.);
           #ifdef USE_INSTANCING
             ip = instanceMatrix[3].xyz;
@@ -910,13 +911,13 @@ export class OldGrowth {
     const m = litMaterial({ vertexColors: true, side: THREE.DoubleSide, map: grassAtlas(r), alphaTest: msaa ? .35 : .5, alphaToCoverage: msaa });
     m.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = this.uTime;
-      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; attribute float aTall;')
-        .replace('#include <begin_vertex>', `#include <begin_vertex>
+      shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), '#include <common>\nuniform float uTime; attribute float aTall;')
+        .replace(anchor('#include <begin_vertex>'), `#include <begin_vertex>
           if (aTall > 0.) { vec3 wp = (modelMatrix * vec4(position, 1.)).xyz; float k = aTall * aTall / 2.5;
             float gust = .5 + .5 * sin(dot(wp.xz, vec2(.09, .03)) - uTime * 1.3) * sin(dot(wp.xz, vec2(.021, -.05)) - uTime * .55);
             vec2 sw = vec2(sin(uTime * 1.7 + wp.x * .41 + wp.z * .23), cos(uTime * 1.3 + wp.z * .37)) * .07 + vec2(.2, .07) * gust;
             transformed.xz += sw * k; }`)
-        .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nobjectNormal = vec3(0., 1., 0.);');
+        .replace(anchor('#include <beginnormal_vertex>'), '#include <beginnormal_vertex>\nobjectNormal = vec3(0., 1., 0.);');
     };
     m.customProgramCacheKey = () => `old-growth-grass-2-${msaa}`;
     return (this.grassMat = m);
@@ -980,20 +981,20 @@ export class OldGrowth {
     const mat = new THREE.MeshBasicMaterial({ vertexColors: true, map: tex, alphaTest: .42, side: THREE.DoubleSide, fog: true });
     mat.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = this.uTime;
-      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; varying float vCanD;')
-        .replace('#include <begin_vertex>', `#include <begin_vertex>
+      shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), '#include <common>\nuniform float uTime; varying float vCanD;')
+        .replace(anchor('#include <begin_vertex>'), `#include <begin_vertex>
           { vec3 wp = (modelMatrix * vec4(position, 1.)).xyz; vCanD = length(wp.xz - cameraPosition.xz);
             transformed.xz += vec2(sin(uTime * .9 + wp.x * .07), cos(uTime * .7 + wp.z * .06)) * .35;
             if (vCanD > 190.) transformed = vec3(0.); }`);
-      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vCanD;')
-        .replace('#include <alphatest_fragment>', `
+      shader.fragmentShader = shader.fragmentShader.replace(anchor('#include <common>'), '#include <common>\nvarying float vCanD;')
+        .replace(anchor('#include <alphatest_fragment>'), `
           // (fades out past ~150 m in a dither: the trees in front take over)
           float cdz = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(.06711056, .00583715))));
           if (smoothstep(140., 185., vCanD) > cdz) discard;
           #include <alphatest_fragment>
           diffuseColor.rgb *= .78 + .3 * diffuseColor.a;`)
         // (the leaf texture's own colour dropped — its greens read as specks on the gold: only its light and shade kept)
-        .replace('#include <map_fragment>', `
+        .replace(anchor('#include <map_fragment>'), `
           vec4 texelColor = texture2D(map, vMapUv);
           diffuseColor.rgb *= vec3(.4 + 1.1 * dot(texelColor.rgb, vec3(.3, .59, .11)));
           diffuseColor.a *= texelColor.a;`);

@@ -18,6 +18,7 @@ import * as THREE from '../../../../../vendor/three.js';
 import { VehBuilder, PART } from './vehicles.js';
 import { nightGlowShader } from '../../materials/night-glow.js';
 import { HASH_GLSL } from '../../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
+import { anchor } from '../../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 export const CAR_KINDS = ['hatch', 'sedan', 'wagon', 'suv', 'pickup', 'van', 'farmtruck'];
 export const CAR_INFO = {
@@ -325,11 +326,11 @@ export function carMaterial({ dirt = 0.1, rust = 0, night = { value: 0 } } = {})
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, m.userData.uniforms);
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>
+      .replace(anchor('#include <common>'), `#include <common>
         attribute vec2 aCar; varying float vPart; varying vec3 vCarP; varying vec2 vWear;
         uniform float uDirt; uniform float uRust;
         ${HASH_GLSL}`)
-      .replace('#include <color_vertex>', `#include <color_vertex>
+      .replace(anchor('#include <color_vertex>'), `#include <color_vertex>
         vPart = aCar.x; vCarP = position;
         #ifdef USE_INSTANCING
           vec2 at = instanceMatrix[3].xz;
@@ -343,11 +344,11 @@ export function carMaterial({ dirt = 0.1, rust = 0, night = { value: 0 } } = {})
           vColor.rgb = color.rgb * (aCar.x < .5 ? instanceColor.rgb : vec3(1.));
         #endif`);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>
+      .replace(anchor('#include <common>'), `#include <common>
         varying float vPart; varying vec3 vCarP; varying vec2 vWear;
         ${HASH_GLSL}
 `)
-      .replace('#include <color_fragment>', `#include <color_fragment>
+      .replace(anchor('#include <color_fragment>'), `#include <color_fragment>
         float glassP = step(1.5, vPart) * step(vPart, 2.5);
         // dirt: up from the ground, splashed behind the wheels (noisy edge); a film on the glass's lower edge
         float dn = vn3(vCarP * vec3(3., 6., 3.)) * .5 + vn3(vCarP * 13.) * .25;
@@ -358,13 +359,13 @@ export function carMaterial({ dirt = 0.1, rust = 0, night = { value: 0 } } = {})
         float rustA = step(vPart, .5) * smoothstep(.0, .1, vWear.y * (1.1 - smoothstep(.25, .8, vCarP.y)) - rn * .62);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.33, .16, .08) * (.7 + rn * .6), rustA);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.36, .31, .24), dirtA);`)
-      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+      .replace(anchor('#include <roughnessmap_fragment>'), `#include <roughnessmap_fragment>
         if (vPart > 1.5 && vPart < 2.5) roughnessFactor = .12;
         else if (vPart > .5) roughnessFactor = .7;
         roughnessFactor = mix(roughnessFactor, .95, max(dirtA, rustA));`)
-      .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
+      .replace(anchor('#include <metalnessmap_fragment>'), `#include <metalnessmap_fragment>
         metalnessFactor = vPart < .5 ? mix(.18, 0., max(dirtA, rustA)) : vPart > 1.5 && vPart < 2.5 ? .3 : .05;`)
-      .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>
+      .replace(anchor('#include <lights_physical_fragment>'), `#include <lights_physical_fragment>
         material.clearcoat = vPart < .5 ? 1. - max(dirtA, rustA) : vPart > 1.5 && vPart < 2.5 ? .6 : 0.;`);
     nightGlowShader(shader, m.userData.uniforms.uNight, `
         if (vPart > 9.5 && vPart < 10.5) totalEmissiveRadiance += vec3(1., .94, .8) * (.05 + uNight * .3);

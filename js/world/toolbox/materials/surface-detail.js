@@ -4,6 +4,7 @@
 // multiply their own colour by it near the camera (the palettes stay) and light its slopes from the sun, so the
 // surfaces catch the light. A blank (no effect) until the image has loaded; on Light it's never loaded.
 import * as THREE from '../../../../vendor/three.js';
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 const blank = new THREE.DataTexture(new Uint8Array([128, 128, 128, 128]), 1, 1, THREE.RGBAFormat); blank.needsUpdate = true;
 /** The detail texture (shared uniform) and the sun's direction for its relief (set by the world). */
@@ -46,10 +47,10 @@ export function withSurfaceDetail(m, key = 'sd') {
   m.onBeforeCompile = (shader, r) => {
     prev?.call(m, shader, r);
     shader.uniforms.uSurf = SURFACE; shader.uniforms.uSurfSun = SURFACE_SUN;
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vSW;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSW = (modelMatrix * vec4(transformed, 1.)).xyz;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vSW;\n' + SURFACE_GLSL)
-      .replace('#include <color_fragment>', `#include <color_fragment>
+    shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), '#include <common>\nvarying vec3 vSW;')
+      .replace(anchor('#include <begin_vertex>'), '#include <begin_vertex>\nvSW = (modelMatrix * vec4(transformed, 1.)).xyz;');
+    shader.fragmentShader = shader.fragmentShader.replace(anchor('#include <common>'), '#include <common>\nvarying vec3 vSW;\n' + SURFACE_GLSL)
+      .replace(anchor('#include <color_fragment>'), `#include <color_fragment>
         { bool green = diffuseColor.g > diffuseColor.r * 1.12 && diffuseColor.g > diffuseColor.b * 1.3;
           diffuseColor.rgb *= surfaceDetail(vSW.xz + vSW.y * .7, green ? 2 : 1, 3., length(vSW - cameraPosition), green ? .85 : .7); }`);
   };

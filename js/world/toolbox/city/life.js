@@ -14,6 +14,7 @@ import { LAND } from './landscape.js';
 import { nightGlowShader } from '../materials/night-glow.js';
 import { ROAD_WIDTH, LANE_OFFSET, PACER_LANE, ROAD_LIFT, routePoint, leanTarget, stepLean } from '../core/road-frame.js';
 import { powerRequired } from '../../../physics.js';
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 // car models by share (the city's mix)
@@ -41,16 +42,16 @@ function animatedMaterial(life, kind) {
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = life.city.uniforms.uTime;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>
+      .replace(anchor('#include <common>'), `#include <common>
         uniform float uTime; attribute float aPart; attribute vec3 aMask; attribute vec3 iA; attribute vec3 iB; attribute vec3 iC; attribute vec2 iAnim;
         varying float vLight;`)
-      .replace('#include <begin_vertex>', `
+      .replace(anchor('#include <begin_vertex>'), `
         vec3 transformed = vec3(position);`)
-      .replace('#include <color_vertex>', `#include <color_vertex>
+      .replace(anchor('#include <color_vertex>'), `#include <color_vertex>
         vColor.rgb = vColor.rgb * clamp(1. - aMask.x - aMask.y - aMask.z, 0., 1.) + iA * aMask.x + iB * aMask.y + iC * aMask.z;
         vLight = aPart;`);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vLight;');
+      .replace(anchor('#include <common>'), '#include <common>\nvarying float vLight;');
     nightGlowShader(shader, life.city.night, `
         if (vLight > 9.5 && vLight < 10.5) totalEmissiveRadiance += vec3(1., .93, .78) * uNight * 4.;
         if (vLight > 10.5 && vLight < 11.5) totalEmissiveRadiance += vec3(1., .08, .05) * uNight * 2.5;

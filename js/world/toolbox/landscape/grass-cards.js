@@ -5,6 +5,7 @@
 // texture coordinates sit on the atlas's solid white corner.
 import * as THREE from '../../../../vendor/three.js';
 import { WIND, WIND_GLSL } from '../atmosphere/wind.js';
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 const W = 2048, H = 256, CELLS = 8, CW = W / CELLS;
 // [plants phase 3] 5–7: the desert's — bunchgrass (Indian ricegrass, needle-and-thread, galleta), cheatgrass, forbs
@@ -109,20 +110,20 @@ export function grassMaterial(renderer, uTime, msaa = true) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95, metalness: 0, side: THREE.DoubleSide, map: grassAtlas(renderer), alphaTest: msaa ? .35 : .5, alphaToCoverage: msaa });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = uTime; shader.uniforms.uWindDir = WIND.uWindDir; shader.uniforms.uWindK = WIND.uWindK;
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;\n' + WIND_GLSL)
-      .replace('#include <begin_vertex>', `#include <begin_vertex>
+    shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), '#include <common>\nuniform float uTime;\n' + WIND_GLSL)
+      .replace(anchor('#include <begin_vertex>'), `#include <begin_vertex>
         // a card's top (its uv.y above the cell's foot) sways; geometry on the white corner stays put
         if (uv.y > .05 && uv.x > .004) { vec3 wp = (modelMatrix * vec4(position, 1.)).xyz; float k = uv.y * uv.y;
           transformed.xz += (bfWindAt(wp.xz, uTime) * .1 + vec2(sin(uTime * 1.9 + wp.x * .35 + wp.z * .21), cos(uTime * 1.4 + wp.z * .3)) * .035) * k; }`)   // (the shared wind, and each blade's own flutter)
-      .replace('#include <uv_vertex>', `#include <uv_vertex>
+      .replace(anchor('#include <uv_vertex>'), `#include <uv_vertex>
         #ifdef USE_INSTANCING
         vMapUv.x += iCell * ${CELL_U.toFixed(6)};   // [plants phase 3] a ground-cover tuft's own card (GroundCover: one mesh, many plants)
         #endif`)
-      .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nvCard = uv.x > .004 ? 1. : 0.;')
-      .replace('#include <common>', '#include <common>\nvarying float vCard;\n#ifdef USE_INSTANCING\nattribute float iCell;\n#endif');
+      .replace(anchor('#include <beginnormal_vertex>'), '#include <beginnormal_vertex>\nvCard = uv.x > .004 ? 1. : 0.;')
+      .replace(anchor('#include <common>'), '#include <common>\nvarying float vCard;\n#ifdef USE_INSTANCING\nattribute float iCell;\n#endif');
     // the cards lit as the ground under them (facing up), whichever side faces the camera
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vCard;')
-      .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nif (vCard > .5) normal = normalize((viewMatrix * vec4(0., 1., 0., 0.)).xyz);');
+    shader.fragmentShader = shader.fragmentShader.replace(anchor('#include <common>'), '#include <common>\nvarying float vCard;')
+      .replace(anchor('#include <normal_fragment_begin>'), '#include <normal_fragment_begin>\nif (vCard > .5) normal = normalize((viewMatrix * vec4(0., 1., 0., 0.)).xyz);');
   };
   m.customProgramCacheKey = () => `grass-cards-4-${msaa}`;
   return m;

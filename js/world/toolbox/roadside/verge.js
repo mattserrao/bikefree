@@ -13,6 +13,7 @@
 import * as THREE from '../../../../vendor/three.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { randomSequence } from '../core/random.js';
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const ROAD_HALF = 3.5;
@@ -173,8 +174,8 @@ export class Verge {
       plateNums.forEach((n, i) => cells.set([(n % cols) / cols, 1 - (Math.floor(n / cols) + 1) / 8], i * 2));
       const mat = this._own(new THREE.MeshStandardMaterial({ map: atlas, roughness: .8 }));
       mat.onBeforeCompile = (shader) => {
-        shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aCell;')
-          .replace('#include <uv_vertex>', cols === 8 ? '#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = aCell + uv / 8.;\n#endif' : `#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = aCell + uv / vec2(${cols}., 8.);\n#endif`);
+        shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), '#include <common>\nattribute vec2 aCell;')
+          .replace(anchor('#include <uv_vertex>'), cols === 8 ? '#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = aCell + uv / 8.;\n#endif' : `#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = aCell + uv / vec2(${cols}., 8.);\n#endif`);
       };
       mat.customProgramCacheKey = () => (cols === 8 ? 'bf-verge-plates' : `bf-verge-plates-${cols}`);
       this._build(plate, mat, lists.plates, 'Mile marker plates', false, (geo, ids) => {

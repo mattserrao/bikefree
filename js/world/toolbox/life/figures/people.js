@@ -12,6 +12,7 @@
 import * as THREE from '../../../../../vendor/three.js';
 import { FRAMES, BONES, CLIP_META, CLIP_DATA } from './clips.js';
 import { PERSON, BIKE, HOLD, FISH_HAND } from './rig.js';
+import { anchor } from '../../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 export const CLIP = Object.fromEntries(CLIP_META.map((c, i) => [c.name, i]));
 export { CLIP_META };
@@ -458,17 +459,17 @@ const GLSL_COLOR = `
 
 function patch(shader, uniforms, depth) {
   Object.assign(shader.uniforms, uniforms);
-  shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>\n${GLSL_COMMON}`);
+  shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), `#include <common>\n${GLSL_COMMON}`);
   if (depth) {
-    shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `figSkin(position, vec3(0., 1., 0.));\nvec3 transformed = figHide > .5 ? vec3(0.) : figP;`);
+    shader.vertexShader = shader.vertexShader.replace(anchor('#include <begin_vertex>'), `figSkin(position, vec3(0., 1., 0.));\nvec3 transformed = figHide > .5 ? vec3(0.) : figP;`);
   } else {
     shader.vertexShader = shader.vertexShader
-      .replace('#include <beginnormal_vertex>', 'figSkin(position, normal);\nvec3 objectNormal = figN;')
-      .replace('#include <begin_vertex>', 'vec3 transformed = figHide > .5 ? vec3(0.) : figP;')
-      .replace('#include <color_vertex>', `#include <color_vertex>\n${GLSL_COLOR}`);
+      .replace(anchor('#include <beginnormal_vertex>'), 'figSkin(position, normal);\nvec3 objectNormal = figN;')
+      .replace(anchor('#include <begin_vertex>'), 'vec3 transformed = figHide > .5 ? vec3(0.) : figP;')
+      .replace(anchor('#include <color_vertex>'), `#include <color_vertex>\n${GLSL_COLOR}`);
     // a soft rim of sky light on the edges turned from the camera: reads the shape (shoulders, head, limbs) against
     // the background at no geometry cost — a few instructions a fragment
-    shader.fragmentShader = shader.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+    shader.fragmentShader = shader.fragmentShader.replace(anchor('#include <emissivemap_fragment>'), `#include <emissivemap_fragment>
       { float rim = 1. - max(dot(normalize(normal), normalize(vViewPosition)), 0.); totalEmissiveRadiance += diffuseColor.rgb * .35 * rim * rim; }`);
   }
 }
