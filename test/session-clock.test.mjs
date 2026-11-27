@@ -3,30 +3,34 @@
 // distance and the trainer stopped following the grade. Now a Worker timer ticks the clock, the trainer's data
 // notifications tick it too, and a gap the trainer's data streamed all through is caught up in full; a gap without
 // data (a sleeping laptop) is still capped at MAX_CATCHUP_MS.
-import { test, after } from 'node:test';
+import { test, before, after, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { Session, TICK_MS, MAX_CATCHUP_MS, startClockTimer } from '../js/session.js';
 
+// A fake clock for everything the session reads (performance.now, Date.now): whole milliseconds from 1000, so no
+// real time passes between steps and no floating-point drift decides whether a step is due. (CI, 27 Nov: on the
+// real performance.now() origin, (t + 250) - t could come out 249.99999997 and skip a step.)
+const WALL0 = Date.UTC(2026, 10, 27, 7, 0, 0);
+let clock = 1000;
+before(() => { mock.method(performance, 'now', () => clock); mock.method(Date, 'now', () => WALL0 + clock); });
 const sessions = [];
-const realNow = Date.now;
-after(() => { Date.now = realNow; for (const s of sessions) s.stopClock(); });
+after(() => { for (const s of sessions) s.stopClock(); mock.restoreAll(); });
 
-/** A session at 200 W / 90 rpm on a fake clock `s.t` (performance time); `s.data(ms)` delivers trainer data every 250 ms. */
+/** A session at 200 W / 90 rpm on its own fake time `s.t` (setting it sets the clock); `s.data(ms)`: trainer data every 250 ms. */
 function makeSession() {
+  clock = 1000;
   const trainer = Object.assign(new EventTarget(), { connected: true, demo: false, lastDataAt: Infinity, data: { powerW: 200, cadenceRpm: 90, speedKph: 30 },
     setErgWatts() { return Promise.resolve(); }, setGrade() { return Promise.resolve(); } });
   const ride = Object.assign(new EventTarget(), { vibrate() {} });
   const s = new Session({ trainer, ride, hr: new EventTarget(), log: () => {}, settings: { riderKg: 75, bikeKg: 9, ftp: 200, difficulty: 100, startGear: 12 } });
   s.stopClock();   // (ticked by hand)
   sessions.push(s);
-  const wall0 = realNow();
-  s.t = s._clockAt;
-  const t0 = s.t;
-  s._now = () => s.t;
-  const at = (t) => { s.t = t; Date.now = () => wall0 + (t - t0); };
-  s.timer = (ms) => { at(s.t + ms); return s._clock(); };
+  assert.equal(s._clockAt, 1000);
+  let own = 1000;
+  Object.defineProperty(s, 't', { get: () => own, set: (v) => { own = v; clock = v; } });
+  s.timer = (ms) => { s.t += ms; return s._clock(); };
   /** `ms` of trainer notifications every 250 ms (the page's timers stalled meanwhile). */
-  s.data = (ms, notify = () => trainer.dispatchEvent(new CustomEvent('data'))) => { for (let e = 0; e < ms; e += TICK_MS) { at(s.t + TICK_MS); notify(); } };
+  s.data = (ms, notify = () => trainer.dispatchEvent(new CustomEvent('data'))) => { for (let e = 0; e < ms; e += TICK_MS) { s.t += TICK_MS; notify(); } };
   return s;
 }
 

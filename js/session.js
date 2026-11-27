@@ -94,7 +94,8 @@ export class Session extends EventTarget {
   _onTrainerData(now = this._now()) {
     if (now - this._dataLastAt > DATA_STALE_MS) this._dataSince = now;   // (a new streak after a gap in the data)
     this._dataLastAt = now;
-    if (!this._inClock && !this.trainer.demo && now - this._clockAt >= TICK_MS) this._clock(now);
+    // (a step is due a hair early too: (t + 250) − t can come out 249.99999997 ms; the clock carries the remainder)
+    if (!this._inClock && !this.trainer.demo && now - this._clockAt >= TICK_MS - 1) this._clock(now);
   }
 
   /**
