@@ -1,0 +1,20 @@
+# The tests on every push and pull request (code review 27 Nov 2026, item P5): the ~40 s suite (which includes the
+# generated-files checks: routes, presets, figures, textures) and the network graph's staleness check.
+name: test
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: node tools/build_network.mjs --check

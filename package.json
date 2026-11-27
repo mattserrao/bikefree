@@ -38,13 +38,15 @@
     "skan:routes": "node tools/pgh_routes.mjs --city skan",
     "textures": "python3 tools/make_pbr_sets.py && node tools/build_textures.mjs",
     "gate": "node tools/webgpu_gate.mjs",
-    "map:build": "node tools/build_map.mjs"
+    "map:build": "node tools/build_map.mjs",
+    "check": "node tools/build_network.mjs --check && node tools/build_routes.mjs --check && python3 tools/build_stadiums.py --check"
   },
   "devDependencies": {
     "@garmin/fitsdk": "^21.221.0",
     "ktx2-encoder": "^0.6.0",
     "playwright-core": "^1.65.1",
     "spectorjs": "^0.9.33",
+    "three": "0.187.0",
     "three-mesh-bvh": "^0.9.18"
   },
   "version": "0.15.0"
