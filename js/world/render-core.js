@@ -122,6 +122,11 @@ export class QualityGovernor {
   constructor({ quality = 'balanced', onScale = () => {}, onLevel = () => {}, enabled = !AUTOMATED } = {}) {
     this.tierMs = tierOf(quality).frameMs; this.capMs = 0; this.onScale = onScale; this.onLevel = onLevel; this.enabled = enabled;
     this.level = 0; this.avg = 0; this.since = 0; this.frames = 0;
+    // [flash fix 27 Nov] how long a level must hold before the next step back up is tried (s). From the frame interval
+    // a 60 Hz display shows 16.7 ms whenever the GPU keeps up, so a device just short of 60 fps at full resolution
+    // stepped down, held, stepped back up 15 s later, missed frames, stepped down 3 s after that — a resolution change
+    // (a canvas resize: a blank frame, a blur) every ~18 s for the whole ride. A retry that fails soon waits 4× longer.
+    this.hold = 15; this._betterAt = -Infinity; this.t = 0;
   }
   get budget() { return Math.max(this.tierMs, this.capMs); }
   get scale() { return [1, .9, .8, .7, .7, .7][this.level]; }
@@ -131,17 +136,19 @@ export class QualityGovernor {
   /** ms: this frame's time; dt: seconds since the last call; interval: ms is the frame interval, not work time. */
   sample(ms, dt, interval = false) {
     if (!this.enabled || !(ms > 0) || ms > 500) return;   // (a stall — a tab switch, a load — says nothing)
-    this.frames++; this.since += dt;
+    this.frames++; this.since += dt; this.t += dt;
     this.avg = this.frames < 10 ? ms : this.avg * .95 + ms * .05;
     if (this.since < 3) return;
     const b = this.budget;
     let next = this.level;
     if (interval) {
       if (this.avg > b * 1.2 && this.level < 5) next++;
-      else if (this.avg < b * 1.08 && this.level > 0 && this.since > 15) next--;
+      else if (this.avg < b * 1.08 && this.level > 0 && this.since > this.hold) next--;
     } else if (this.avg > b * .85 && this.level < 5) next++;
-    else if (this.avg < b * .6 && this.level > 0) next--;
+    else if (this.avg < b * .6 && this.level > 0 && this.since > this.hold / 5) next--;   // (3 s, longer after failed retries)
     if (next === this.level) return;
+    if (next > this.level && this.t - this._betterAt < 30) this.hold = Math.min(600, this.hold * 4);   // (the last step back to sharper didn't hold)
+    if (next < this.level) this._betterAt = this.t;
     const scaled = this.scale; this.level = next; this.since = 0;
     if (this.scale !== scaled) this.onScale(this.scale);
     this.onLevel(this.level);

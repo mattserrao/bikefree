@@ -79,3 +79,17 @@ test('GraphCity.lods: the tiles\' near / far pieces and the kit\'s detail for a 
   for (let k = 0; k < 16; k++) GraphCity.prototype.tick.call(host, { x: 0, z: 0 }, 0);
   assert.equal(passes, 2);
 });
+
+// [flash fix 27 Nov] once its cost switches the lite post off, it stays off 30 s (it had blinked AO and MSAA on and off)
+test('graph-world\'s lite post: off for its cost, it stays off 30 s before trying again', async () => {
+  const { GraphWorld } = await import('../js/world/graph-world.js');
+  const w = { qualityKey: 'balanced', gfx: { post: true }, governor: { level: 0 }, gpuTimer: { ms: { frame: 3 } } };
+  const lite = () => GraphWorld.prototype._liteOn.call(w);
+  const real = performance.now; let t = 1e6; performance.now = () => t;
+  try {
+    assert.equal(lite(), true);
+    w.gpuTimer.ms.frame = 9; assert.equal(lite(), false);           // (over 80 % of the budget)
+    w.gpuTimer.ms.frame = 3; t += 10000; assert.equal(lite(), false); // (fast again, 10 s later: still off)
+    t += 25000; assert.equal(lite(), true);                         // (35 s on: back)
+  } finally { performance.now = real; }
+});

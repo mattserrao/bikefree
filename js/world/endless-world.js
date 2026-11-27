@@ -165,6 +165,7 @@ export class EndlessWorld {
       this.renderer.setSize(w, h, false);
       this.post?.setSize(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
       this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
+      if (this._drewOnce && !this.disposed) this._draw();   // [flash fix 27 Nov] (a resized canvas is cleared: draw it again now)
     };
     this._ro = new ResizeObserver(this._resize); this._ro.observe(container);
     this._resize();
@@ -679,6 +680,7 @@ export class EndlessWorld {
   /** Post-processing: desktop High (contact shading, bloom, grade), as the free-ride maps; elsewhere straight to the canvas. */
   _postOn() { return (this.qualityKey === 'high' || this.qualityKey === 'ultra') && !MOBILE && (this.gfx?.post ?? true); }
   _draw() {
+    this._drewOnce = true;
     if (this._postOn()) {
       if (!this.post) {
         this.post = new PostFX(this.renderer, { samples: 4 });
