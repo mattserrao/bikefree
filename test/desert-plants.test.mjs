@@ -56,3 +56,10 @@ test('phase 5: the census puts sagebrush and pinyon-juniper cover inside the pub
   for (const p of withTarget) assert.ok(p.target.within, `${p.id}: ${p.target.what} ${p.target.got}% (published ${p.target.range.join('–')}%)`);
   for (const p of census.places) assert.ok(p.plants > 0, `${p.id}: no plants`);
 });
+
+test('shrub style: small shrubs are picture cards; junipers, pinyons and the woody shrubs faceted (no round balls)', () => {
+  for (const n of ['sage', 'sage2', 'sandsage', 'rabbitbrush', 'snakeweed', 'saltbush', 'blackbrush', 'bitterbrush']) assert.ok(kit.understory[n].leaves?.userData.cards, `${n}: cards`);
+  const flat = (g) => { const n = g.attributes.normal.array; let same = 0, tris = n.length / 9; for (let i = 0; i < n.length; i += 9) if (n[i] === n[i + 3] && n[i + 1] === n[i + 4] && n[i + 2] === n[i + 5] && n[i] === n[i + 6]) same++; return same / tris; };
+  for (const sp of ['juniper', 'pinyon', 'mahogany']) { const t = kit.species[sp].variants[0][0]; const g = t.wood || t; assert.ok(flat(g) > .95, `${sp}: ${(flat(g) * 100).toFixed(0)}% flat facets`); }
+  for (const n of ['cliffrose', 'manzanita']) { const g = kit.understory[n]; assert.ok(flat(g.wood || g) > .95, `${n}: faceted`); }
+});

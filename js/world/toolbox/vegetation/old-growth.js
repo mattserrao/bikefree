@@ -34,6 +34,7 @@ import { decorateTreeMaterial } from '../packs/northern-rockies.js';
 import { ForestLife } from '../life/forest-life.js';
 import { NearTrunks, NearPlants, flareGeometry, flareMaterial } from './near-trunks.js';
 import { NEAR_TRUNK, NEAR_PLANT } from './tree-engine.js';
+import { LEAF_V } from './leaf-cards.js';
 
 export const OG = { old: 30, forest: 31, meadow: 32, blow: 33 };
 const isWood = (c) => c === OG.old || c === OG.forest || c === OG.blow;
@@ -941,7 +942,7 @@ export class OldGrowth {
           const base = P.length / 3, u0 = Math.floor(h2(gi, gj, 324 + q) * 2) * .5, v0 = Math.floor(h2(gi, gj, 326 + q) * 2) * .5;
           for (const [s, tt] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
             P.push(cx + ax * s * hs + bx * tt * hs, cy + by * tt * hs, cz + az * s * hs + bz * tt * hs);
-            U.push(u0 + (s + 1) * .25, v0 + (tt + 1) * .25); C.push(...c);
+            U.push(u0 + (s + 1) * .25, (v0 + (tt + 1) * .25) * LEAF_V); C.push(...c);   // (the leaf texture's lower half: leaf-cards.js LEAF_V)
           }
           I.push(base, base + 1, base + 2, base, base + 2, base + 3);
         }

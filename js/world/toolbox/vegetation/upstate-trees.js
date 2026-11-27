@@ -17,7 +17,7 @@ import * as THREE from '../../../../vendor/three.js';
 import { randomSequence } from '../core/random.js';
 import { Builder, M, cyl, cone, blob, withSmooth } from '../core/model-builder.js';
 import { MOUNTAIN_BUILDERS } from '../packs/northern-rockies.js';
-import { cardArrays, pushCard, cardGeometry } from './leaf-cards.js';   // (camera-facing leaf clumps: user, 26 Nov)
+import { cardArrays, pushCard, cardGeometry, SHRUB_CELL } from './leaf-cards.js';   // (camera-facing leaf clumps: user, 26 Nov)
 
 // surface kinds (decorateTreeMaterial): 0 foliage clumps, 1 bark, 3 plated bark (pine), 4 white bark with eyes (birch),
 // 7 silver deadwood, 8 broadleaf shrub leaves
@@ -652,7 +652,10 @@ const DESERT_SPECIES = {
     levels: [[5, .45, .8, .46], [4, .35, .7, .26], [3, .35, .6, .13]],
     greens: ['#56773a', '#5f803f'], fall: ['#b9a84a', '#c6b553', '#a8a04a'], turn: [.5] },
 };
-function desertConifer(seed, o, lod) {
+// [shrub style, 27 Nov] faceted (flat-shaded, a shade per facet, ragged lumps): the kit is built smooth for the grown
+// trees' leaf clumps, and these read as bunches of balls ("circular balls … not the desired style")
+const desertConifer = (seed, o, lod) => withSmooth(false, () => desertConiferBody(seed, o, lod));
+function desertConiferBody(seed, o, lod) {
   // a juniper or pinyon: short, twisted trunks splitting low, the foliage in many small, dense, irregular clumps from
   // near the ground up (a ragged ovoid, flat in places, gaps you see the trunk through), darker underneath; the far
   // tier a few blobs
@@ -670,14 +673,14 @@ function desertConifer(seed, o, lod) {
     if (lod !== 2) for (let k = 0; k < (lod ? 4 : 9); k++) { const ka = rand() * 6.28, y = H * (.2 + rand() * .45); b.add(cyl(.02, .07, R * (.6 + rand() * .5), 3), M(Math.cos(ka) * .15, y, Math.sin(ka) * .15, 1, 1, 1, -ka, 0, .6 + rand() * .7), o.trunk); }
     return b.build();
   }
-  const n = lod === 2 ? 4 : lod ? 9 : 22, det = lod ? 0 : 1;
+  const n = lod === 2 ? 6 : lod ? 14 : 34, det = lod ? 0 : 1;   // (more, overlapping pads: one full ragged mass, not pads on sticks)
   for (let k = 0; k < n; k++) {
     // a point in a ragged ovoid (wider low on a juniper, higher on a pinyon), pushed out toward its skin
     const a = k * 2.399 + rand() * .8, t = (k + rand()) / n, y = H * (o.low ?? .2) + t * H * (.95 - (o.low ?? .2));
     const env = Math.sin(Math.min(1, t * 1.15) * Math.PI) * (o.bulge ?? 1);
-    const d = R * (.25 + .7 * env) * (.55 + rand() * .45);
-    const sc = (lod === 2 ? 1.7 : lod ? 1.3 : 1) * R * (.2 + rand() * .14);
-    b.add(blob(det), M(Math.cos(a) * d, y, Math.sin(a) * d, sc * (1 + rand() * .3), sc * (.65 + rand() * .25), sc), o.colors[Math.floor(rand() * o.colors.length)], .22, rand);
+    const d = R * (.2 + .62 * env) * (.6 + rand() * .4);
+    const sc = (lod === 2 ? 1.6 : lod ? 1.3 : 1) * R * (.26 + rand() * .14);
+    b.add(lod === 2 ? blob(0) : lump(rand), M(Math.cos(a) * d, y, Math.sin(a) * d, sc * (1.1 + rand() * .35), sc * (.5 + rand() * .2), sc * (1 + rand() * .2), rand() * 6.28), o.colors[Math.floor(rand() * o.colors.length)], .3, rand);   // (flattened ragged pads)
   }
   return b.build();
 }
@@ -846,21 +849,22 @@ export function makeUpstateTrees({ oldGrowth = false, park = false, bushes = fal
       beechSapling: grow(6251, { ...FOREST_FORMS.beechF, H: 4.5, R: 1.5, trunkR: .06, fork: .3, fluff: .6 }, 0, .1),
     });
     if (desert) Object.assign(understory, {
-      sage: sageBrush(7301, .75, ['#8d8f78', '#9a9b82', '#83866f']), sage2: sageBrush(7302, 1.05, ['#918f76', '#a3a184', '#888a70']),
-      rabbitbrush: sageBrush(7311, .8, ['#8a9a5a', '#95a060'], '#e0b830'),
-      cliffrose: sageBrush(7331, 1.3, ['#6f7a56', '#7c8660', '#66704f'], '#e8dcc0'),
+      // [shrub style, 27 Nov] the small shrubs as picture cards (shrubCards), the woody ones faceted (facetedShrub)
+      sage: shrubCards(7301, 'sage', .75, 1.1, ['#8d8f78', '#9a9b82', '#83866f']), sage2: shrubCards(7302, 'sage', 1.05, 1.4, ['#918f76', '#a3a184', '#888a70']),
+      rabbitbrush: shrubCards(7311, 'broom', .7, 1.2, ['#8a9a5a', '#95a060'], '#e0b830'),
+      cliffrose: facetedShrub(7331, 1.3, 2.2, ['#6f7a56', '#7c8660', '#66704f'], '#e8dcc0'),
       pricklyPear: pricklyPear(7341), pricklyPear2: pricklyPear(7342, 1.3), cholla: cholla(7351), yucca: yucca(7361), yuccaStalk: yucca(7362, .65, true),
       barrel: barrel(7371), ephedra: ephedra(7381), tumbleweed: tumbleweed(7391), tumbleweed2: tumbleweed(7392, .6),
       // [plants phase 2] the shrubs the plan found missing (claude/desert-plant-life-plan.md): broom snakeweed (small
       // round mounds, gold in fall bloom — every roadside and grazed flat), four-wing saltbush (pale grey, tan seed
       // wings), blackbrush (dark grey, low), sand sagebrush (silvery, feathery: the dunes' own), antelope bitterbrush
       // and green manzanita (the upper benches); one shape each, their kin by the instance colour (phase 1)
-      snakeweed: sageBrush(7401, .38, ['#7f8a52', '#8a9358'], '#d6b22c'), snakeweed2: sageBrush(7402, .3, ['#858d55', '#7c874e'], '#cfa92a'),
-      saltbush: sageBrush(7411, .85, ['#9c9f89', '#a7aa93', '#92967f'], '#c8bd8c'),
-      blackbrush: sageBrush(7421, .55, ['#4f5149', '#5a5b51', '#46483f']),
-      sandsage: sageBrush(7431, .9, ['#8d937d', '#989e87', '#848a75']),
-      bitterbrush: sageBrush(7441, 1.05, ['#5e6a47', '#69754f', '#55613f']),
-      manzanita: sageBrush(7451, .95, ['#55704a', '#607a52', '#4d6743']),
+      snakeweed: shrubCards(7401, 'broom', .38, .55, ['#7f8a52', '#8a9358'], '#d6b22c'), snakeweed2: shrubCards(7402, 'broom', .3, .42, ['#858d55', '#7c874e'], '#cfa92a'),
+      saltbush: shrubCards(7411, 'twig', .85, 1.2, ['#9c9f89', '#a7aa93', '#92967f']),
+      blackbrush: shrubCards(7421, 'twig', .55, .7, ['#4f5149', '#5a5b51', '#46483f']),
+      sandsage: shrubCards(7431, 'sage', .9, 1, ['#a3a892', '#aeb39c', '#989e87']),
+      bitterbrush: shrubCards(7441, 'twig', 1.05, 1.5, ['#5e6a47', '#69754f', '#55613f']),
+      manzanita: facetedShrub(7451, .95, 1.4, ['#55704a', '#607a52', '#4d6743']),
       redrock: redRock(7321, .7, .5), redrock2: redRock(7322, 1.4, .9),
     });
     if (bushes) for (const [name, o] of Object.entries(PARK_BUSHES)) understory[name] = angledBush(o.seed, o);
@@ -879,10 +883,11 @@ export function makeLeafTexture(size = 512) {
   // from above (a light top, a shaded underside) with little leaf-to-leaf contrast and no midribs — the old 130 small
   // leaves a quadrant, each its own shade with a dark rib, read as single-pixel noise once photographed into the
   // impostor atlas and seen from the road
-  const cv = document.createElement('canvas'); cv.width = cv.height = size;
+  // (two squares tall since 27 Nov: the leaf clusters below, the desert shrubs' pictures above — leaf-cards.js LEAF_V)
+  const cv = document.createElement('canvas'); cv.width = size; cv.height = size * 2;
   const g = cv.getContext('2d'), rand = randomSequence(777), h = size / 2;
   for (let q = 0; q < 4; q++) {
-    const ox = (q % 2) * h, oy = Math.floor(q / 2) * h;
+    const ox = (q % 2) * h, oy = size + Math.floor(q / 2) * h;
     const leaves = [];
     for (let k = 0; k < 62; k++) {
       const r = Math.pow(rand(), .6) * h * .4, a = rand() * 6.28, x = ox + h / 2 + Math.cos(a) * r, y = oy + h / 2 + Math.sin(a) * r;
@@ -899,8 +904,107 @@ export function makeLeafTexture(size = 512) {
       g.restore();
     }
   }
+  drawShrubCells(g, size, randomSequence(911));
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
   return t;
+}
+
+/**
+ * [shrub style, 27 Nov — user: the desert shrubs were "circular balls, not consistent with the desired style"; chose
+ * pictures for the small shrubs] The upper half of the leaf texture: four shrub pictures, each a cell h × h with the
+ * plant's foot on the cell's bottom edge, drawn light and neutral so a card's vertex colour gives the species:
+ *   sage  (SHRUB_CELL.sage)  big and sand sagebrush: a broad, ragged mound of short silvery sprigs on crooked stems
+ *   broom (.broom)           snakeweed and rabbitbrush: a fan of fine upright stems
+ *   tips  (.tips)            their flower heads alone (a second card in the bloom's colour, over the broom)
+ *   twig  (.twig)            saltbush, blackbrush, bitterbrush: a dense twiggy clump of small leaves
+ * Canvas y is down; the texture is flipped, so the top half of the canvas is the top half of v.
+ */
+function drawShrubCells(g, size, rand) {
+  const h = size / 2, cell = (u0, v0) => [u0 * size, (1.5 - v0) * size];   // (SHRUB_CELL [u0, v0] → the cell's canvas corner)
+  const grey = (v) => `rgb(${v},${v},${Math.round(v * .97)})`;
+  const sprig = (x, y, len, a, w, v) => {   // a short tapered sprig from (x, y) at angle a (0: straight up)
+    const tx = x + Math.sin(a) * len, ty = y - Math.cos(a) * len, nx = Math.cos(a) * w, ny = Math.sin(a) * w;
+    g.fillStyle = grey(v); g.beginPath(); g.moveTo(x - nx, y - ny); g.lineTo(tx, ty); g.lineTo(x + nx, y + ny); g.closePath(); g.fill();
+  };
+  // sage: crooked stems, then ~900 sprigs whose tips fill a broad, flat-topped, ragged dome (darker low and inside)
+  { const [ox, oy] = cell(0, 1.5), cx = ox + h / 2, foot = oy + h - 2;
+    g.strokeStyle = 'rgb(118,104,90)';
+    for (let k = 0; k < 7; k++) { const x = cx + (rand() - .5) * h * .3; g.lineWidth = 2 + rand() * 2; g.beginPath(); g.moveTo(x, foot); g.quadraticCurveTo(x + (rand() - .5) * h * .3, foot - h * .2, x + (rand() - .5) * h * .55, foot - h * (.3 + rand() * .2)); g.stroke(); }
+    for (let k = 0; k < 900; k++) {
+      const t = rand(), ax = (rand() * 2 - 1), dome = Math.sqrt(Math.max(0, 1 - ax * ax)) * (.85 + rand() * .3);
+      const x = cx + ax * h * .46, y = foot - (h * .12 + dome * h * .62) * Math.pow(t, .5);
+      const v = Math.round(150 + 95 * Math.pow(t, .7) * (.8 + .2 * rand()));
+      sprig(x, y, h * (.03 + rand() * .05), (rand() - .5) * 1.4 + ax * .5, 1 + rand() * 1.4, v);
+    } }
+  // broom: ~140 fine stems fanning from a narrow foot, a little curved, lighter up top
+  { const [ox, oy] = cell(.5, 1.5), cx = ox + h / 2, foot = oy + h - 2;
+    for (let k = 0; k < 140; k++) {
+      const spread = (rand() - .5) * 2, top = foot - h * (.55 + rand() * .35), tx = cx + spread * h * .4;
+      g.strokeStyle = grey(Math.round(165 + rand() * 70)); g.lineWidth = .8 + rand() * 1.1;
+      g.beginPath(); g.moveTo(cx + spread * h * .06, foot); g.quadraticCurveTo(cx + spread * h * .12, (foot + top) / 2, tx, top); g.stroke();
+      if (rand() < .6) sprig(tx, top + h * .05, h * .05, spread * .6, 1.2, 225);
+    } }
+  // tips: the flower heads alone, in the broom's top third — small round clusters in a ragged band
+  { const [ox, oy] = cell(0, 1), cx = ox + h / 2, foot = oy + h - 2;
+    for (let k = 0; k < 420; k++) {
+      const spread = (rand() - .5) * 2, y = foot - h * (.55 + rand() * .38), x = cx + spread * h * .42 * (.6 + .4 * (foot - y) / h);
+      g.fillStyle = grey(Math.round(200 + rand() * 55)); g.beginPath(); g.arc(x, y, 1.4 + rand() * 2.2, 0, Math.PI * 2); g.fill();
+    } }
+  // twig: zigzag twigs to a dense, irregular, wider-than-tall clump of small leaves
+  { const [ox, oy] = cell(.5, 1), cx = ox + h / 2, foot = oy + h - 2;
+    g.strokeStyle = 'rgb(110,98,86)';
+    for (let k = 0; k < 18; k++) { let x = cx + (rand() - .5) * h * .2, y = foot; g.lineWidth = 1.2 + rand(); g.beginPath(); g.moveTo(x, y); for (let j = 0; j < 4; j++) { x += (rand() - .5) * h * .22; y -= h * (.08 + rand() * .07); g.lineTo(x, y); } g.stroke(); }
+    for (let k = 0; k < 700; k++) {
+      const ax = rand() * 2 - 1, up = rand(), dome = Math.sqrt(Math.max(0, 1 - ax * ax));
+      const x = cx + ax * h * .45 + (rand() - .5) * 8, y = foot - h * (.06 + dome * .56 * Math.pow(up, .6)) + (rand() - .5) * 8;
+      const v = Math.round(140 + 105 * up * (.75 + .25 * rand()));
+      g.fillStyle = grey(v); g.beginPath(); g.ellipse(x, y, 2.4 + rand() * 2.4, 1.3 + rand() * 1.3, rand() * Math.PI, 0, Math.PI * 2); g.fill();
+    } }
+}
+
+/**
+ * [shrub style] A small desert shrub as picture cards (the leaf material's camera-facing clumps: leaf-cards.js) — a
+ * main card, two smaller ones beside and behind it a shade darker (depth), and for a bloomer a card of its flower heads
+ * in the bloom's colour — on a few woody stems. cell: a SHRUB_CELL name; R its half-width, H its height (m).
+ */
+function shrubCards(seed, cell, R, H, tones, bloom = null) {
+  const rand = randomSequence(seed), C = cardArrays(), n = new THREE.Vector3(), p = new THREE.Vector3(), [u0, v0] = SHRUB_CELL[cell];
+  const col = (hex, k) => new THREE.Color(hex).multiplyScalar(k);   // (THREE.Color takes sRGB hex to linear itself)
+  const card = (x, z, w, hgt, hex, k, cu = u0, cv = v0) => { p.set(x, hgt, z); n.set(x / R, .6, z / R).normalize(); pushCard(C, p, w, hgt, (rand() - .5) * .12, true, n, cu, cv, col(hex, k)); };
+  for (let q = 0; q < 2; q++) { const a = rand() * 6.283 + q * 3.14, d = R * (.35 + rand() * .2); card(Math.cos(a) * d, Math.sin(a) * d, R * (.7 + rand() * .15), H * (.38 + rand() * .08), tones[(q + 1) % tones.length], .82); }
+  card(0, 0, R, H * .5, tones[0], 1);
+  if (bloom) { const [bu, bv] = SHRUB_CELL.tips; card(0, .01, R * 1.02, H * .52, bloom, 1, bu, bv); }
+  const wood = new Builder(); wood.as(BARK);
+  for (let k = 0; k < 3; k++) { const a = rand() * 6.28; wood.add(cyl(.012, .03, H * .45, 3), M(0, 0, 0, 1, 1, 1, -a, 0, .35 + rand() * .4), '#6b5d4c'); }
+  return { wood: wood.build(), leaves: cardGeometry(C) };
+}
+
+/** [shrub style] A woody shrub, faceted (house style: flat-shaded, each facet its own shade): a few flattened, ragged
+ *  lumps — not round balls — over short crooked stems. Cliffrose, manzanita. */
+function facetedShrub(seed, R, H, tones, bloom = null) {
+  return withSmooth(false, () => {
+    const rand = randomSequence(seed), b = new Builder();
+    b.as(BARK);
+    for (let k = 0; k < 5; k++) { const a = rand() * 6.28; b.add(cyl(.02, .05, H * .55, 3), M(0, 0, 0, 1, 1, 1, -a, 0, .4 + rand() * .45), '#5e4c3e'); }
+    b.as(SHRUB);
+    const n = 5 + Math.floor(rand() * 3);
+    for (let k = 0; k < n; k++) {
+      const a = k * 2.399 + rand(), d = R * (.15 + rand() * .45), s = R * (.38 + rand() * .2);
+      b.add(lump(rand), M(Math.cos(a) * d, H * (.35 + rand() * .35), Math.sin(a) * d, s * (1 + rand() * .3), s * (.5 + rand() * .2), s, rand() * 6.28), tones[k % tones.length], .3, rand);
+    }
+    if (bloom) for (let k = 0; k < 4; k++) { const a = rand() * 6.28, d = rand() * R * .5; b.add(lump(rand), M(Math.cos(a) * d, H * (.85 + rand() * .1), Math.sin(a) * d, R * .2, R * .07, R * .2, rand() * 6.28), bloom, .15, rand); }
+    return b.build();
+  });
+}
+/** A ragged low-poly lump: an icosahedron (20 faces) with each corner pushed in or out — a facet mass, not a ball. */
+function lump(rand) {
+  const g = new THREE.IcosahedronGeometry(1, 0), p = g.attributes.position, seen = new Map();
+  for (let i = 0; i < p.count; i++) {
+    const key = `${p.getX(i).toFixed(3)},${p.getY(i).toFixed(3)},${p.getZ(i).toFixed(3)}`;   // (a shared corner moves once: no cracks)
+    if (!seen.has(key)) seen.set(key, .72 + rand() * .5);
+    const k = seen.get(key); p.setXYZ(i, p.getX(i) * k, p.getY(i) * k, p.getZ(i) * k);
+  }
+  return g;
 }
 
 /** The early-fall pick among a species' variants (green / turning / turned): about a quarter of the trees in colour. */
