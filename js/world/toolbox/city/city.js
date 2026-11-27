@@ -23,6 +23,7 @@ import { decorateTreeMaterial } from '../packs/northern-rockies.js';   // [finis
 import { FACADE_GLSL } from '../structures/buildings/facade-material.js';   // [buildings] brick, stone, metal and window detail
 import { CityBuildingKit } from '../structures/buildings/kit.js';   // [buildings] homes drawn by the building kit
 import { releaseAfterUpload } from '../core/release.js';   // [F399]
+import { randomSequence } from '../core/random.js';   // [review 27 Nov] seeded content
 
 export { STREET_W };
 const CHUNK = 320;
@@ -32,6 +33,17 @@ const CHUNK = 320;
 export const SECTOR = 3;
 const LAMP_LOD = { light: 420, balanced: 600, high: 800 };   // [w2-budget] lamp posts drawn up to this far from their sector's box (m)
 const SECTOR_M = CHUNK * SECTOR;
+// [review 27 Nov] The street height-slot depth bias, in the vertex shader (keeps early-Z). It sat under USE_LOGDEPTHBUF,
+// a define r187 no longer emits, so it never ran; graph maps have a plain 24-bit depth buffer and route worlds a
+// reversed float one. Plain: a constant NDC step per slot (≈3 depth-buffer steps of 2^-24 at every distance, as depth
+// precision falls with w² too). Reversed: a relative step (≈3 float32 ulps). Log depth keeps the fragment bias.
+export const SLOT_BIAS_VERTEX = `#ifndef USE_LOGARITHMIC_DEPTH_BUFFER
+#ifdef USE_REVERSED_DEPTH_BUFFER
+gl_Position.z *= 1. + aSlot * 4e-7;
+#else
+gl_Position.z -= aSlot * 4e-7 * gl_Position.w;
+#endif
+#endif`;
 const sectorOf = (key) => { const [x, z] = key.split(',').map(Number); return `${Math.floor(x / SECTOR)},${Math.floor(z / SECTOR)}`; };
 
 /** [w2-budget] One geometry from several with the same attributes (indexed; 32-bit index when it needs one). */
@@ -485,7 +497,8 @@ export class CityScene {
     const c = document.createElement('canvas'); c.width = 256; c.height = 256;
     const ctx = c.getContext('2d');
     ctx.fillStyle = this.landscape.junctions ? '#555c60' : '#505457'; ctx.fillRect(0, 0, 256, 256);   // [junctions] the route's road's asphalt
-    for (let k = 0; k < 10000; k++) { const g = 70 + Math.random() * 26; ctx.fillStyle = `rgba(${g},${g + 2},${g + 4},.45)`; ctx.fillRect(Math.random() * 256, Math.random() * 256, 1, 1); }
+    const ar = randomSequence(4127);   // [review 27 Nov] seeded (TOOLBOX rule 3: the asphalt the same every build)
+    for (let k = 0; k < 10000; k++) { const g = 70 + ar() * 26; ctx.fillStyle = `rgba(${g},${g + 2},${g + 4},.45)`; ctx.fillRect(ar() * 256, ar() * 256, 1, 1); }
     ctx.fillStyle = '#e4e1d6'; ctx.fillRect(196, 0, 56, 256);   // [junctions] crosswalk and stop-line white
     ctx.fillStyle = '#d9d6c8'; ctx.fillRect(3, 0, 1.5, 256); ctx.fillRect(59.5, 0, 1.5, 256);
     ctx.fillStyle = '#d6b44c'; ctx.fillRect(30.5, 0, 1.4, 150); ctx.fillRect(32.6, 0, 1.4, 150);
@@ -504,11 +517,11 @@ export class CityScene {
         .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSlot = aSlot;')
         // [junctions] road paint (slot 9: crosswalks, stop lines, the plain asphalt over the route's road in a junction) is
         // drawn a hair nearer along the view ray (same pixel, nearer depth), so it always wins over the road it lies on
-        .replace('#include <project_vertex>', '#include <project_vertex>\nif (aSlot > 8.5) { mvPosition.xyz *= .9994; gl_Position = projectionMatrix * mvPosition; }');
+        .replace('#include <project_vertex>', '#include <project_vertex>\nif (aSlot > 8.5) { mvPosition.xyz *= .9994; gl_Position = projectionMatrix * mvPosition; }\n' + SLOT_BIAS_VERTEX);
       shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vSlot;')
-        .replace('#include <logdepthbuf_fragment>', '#include <logdepthbuf_fragment>\n#if defined( USE_LOGDEPTHBUF )\ngl_FragDepth -= vSlot * 2e-6;\n#endif');
+        .replace('#include <logdepthbuf_fragment>', '#include <logdepthbuf_fragment>\n#if defined( USE_LOGARITHMIC_DEPTH_BUFFER )\ngl_FragDepth -= vSlot * 2e-6;\n#endif');
     };
-    this.streetMaterial.customProgramCacheKey = () => 'city-streets-slot-3';   // [junctions]
+    this.streetMaterial.customProgramCacheKey = () => 'city-streets-slot-4';   // [junctions]; [review 27 Nov] slot bias in the vertex shader
     // [finish] brick streets (scene "brickStreets"): Pittsburgh's red paving brick in running bond, laid across the street,
     // worn darker in the wheel tracks, with the odd asphalt patch. One 256 px tile is the street's width × 4 m.
     {
@@ -526,7 +539,7 @@ export class CityScene {
       this.brickMaterial = this.own(new THREE.MeshStandardMaterial({ map: bt, roughness: .9, ...offset(-1.6) }));
       this.brickMaterial.userData.slotDepthBias = true;
       this.brickMaterial.onBeforeCompile = this.streetMaterial.onBeforeCompile;   // the same height-slot depth rule as the streets
-      this.brickMaterial.customProgramCacheKey = () => 'city-streets-slot-3-brick';
+      this.brickMaterial.customProgramCacheKey = () => 'city-streets-slot-4-brick';
     }
     this.sidewalkMaterial = this.own(new THREE.MeshStandardMaterial({ color: '#aca59a', roughness: .95, ...offset(-1.1) }));
     this.pathMaterial = this.own(new THREE.MeshStandardMaterial({ color: '#9d978a', roughness: .95, ...offset(-1.3) }));

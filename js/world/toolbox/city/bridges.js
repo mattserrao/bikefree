@@ -5,6 +5,7 @@ import * as THREE from '../../../../vendor/three.js';
 import { MeshBuilder, resample, makePath, hash } from '../core/mesh-builder.js';
 import { drain, due, each } from '../core/jobs.js';   // [F30]
 import { ROAD_WIDTH } from '../../pose.js';
+import { randomSequence } from '../core/random.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -452,7 +453,8 @@ export function buildLandmarks(city) {
     pool.rotation.x = -Math.PI / 2; pool.position.set(p.x, y + .35, p.z); city.group.add(pool);
     out.poolMat = pool.material;
     const N = 2400, seeds = new Float32Array(N * 4);
-    for (let i = 0; i < N; i++) seeds.set([Math.random(), Math.random(), Math.random(), Math.random()], i * 4);
+    const fr = randomSequence(Math.floor(Math.abs(p.x * 7.31 + p.z * 3.17)) + 29);   // [review 27 Nov] seeded by its place (TOOLBOX rule 3)
+    for (let i = 0; i < N; i++) seeds.set([fr(), fr(), fr(), fr()], i * 4);
     const g = city.own(new THREE.BufferGeometry());
     g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(N * 3), 3));
     g.setAttribute('aSeed', new THREE.Float32BufferAttribute(seeds, 4));

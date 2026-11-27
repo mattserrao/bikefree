@@ -2,6 +2,7 @@
 // vertex-coloured, flat-shaded geometry merged into one BufferGeometry per model, in metres, Y up, +Z along
 // the road. Primitives (cyl, cone, blob, box) sit on the ground (y = 0); M() composes a transform.
 import * as THREE from '../../../../vendor/three.js';
+import { randomSequence } from './random.js';
 
 export const linear = (hex) => new THREE.Color(hex);   // THREE.Color(hex) converts sRGB hex → linear working space
 // Cartoon look: smooth shading instead of flat facets, for the length of one withSmooth(true, …) call;
@@ -11,11 +12,12 @@ let SMOOTH = false;
 export function withSmooth(on, fn) { const was = SMOOTH; SMOOTH = !!on; try { return fn(); } finally { SMOOTH = was; } }
 
 export class Builder {
-  constructor() { this.pos = []; this.nor = []; this.col = []; this.prt = []; this.part = 0; this.anyPart = false; }
+  // [review 27 Nov] rand: the jitter's default, seeded per builder (was Math.random: TOOLBOX rule 3)
+  constructor() { this.pos = []; this.nor = []; this.col = []; this.prt = []; this.part = 0; this.anyPart = false; this.rand = randomSequence(1); }
   /** Tag what follows as a surface kind (aTree attribute: bark, leaves …) for kits with a surface shader. */
   as(part) { this.part = part; if (part) this.anyPart = true; return this; }
   /** Add a geometry, transformed, flat-coloured (with optional per-vertex jitter). */
-  add(geometry, matrix, color, jitter = 0, rand = Math.random) {
+  add(geometry, matrix, color, jitter = 0, rand = this.rand) {
     // smooth: crowns and rocks (icosahedra) take unit-sphere normals, cylinders and cones keep their own
     // round normals; boxes and roofs keep hard edges because their source normals are already per face
     const smooth = SMOOTH && (geometry.userData.sphere || !!geometry.index);

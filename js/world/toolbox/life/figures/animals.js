@@ -13,6 +13,7 @@
 // Animation is all in the vertex shader (uTime): no per-frame CPU work.
 import * as THREE from '../../../../../vendor/three.js';
 import { VehBuilder } from './vehicles.js';
+import { vhash } from '../../core/random.js';
 
 export const PART_ANIM = { BODY: 0, HEAD: 1, TAIL: 2, FL: 3, FR: 4, BL: 5, BR: 6, SHADOW: 8, PATCH: 10 };   // (PATCH: + a part, a Holstein's coat)
 const P = PART_ANIM;
@@ -357,7 +358,8 @@ export function animalMaterial(kind, uTime) {
  */
 export class Herds {
   constructor() { this.list = []; }
-  add(kind, x, y, z, yaw, { walk = false, radius = 4, phase = Math.random() } = {}) { this.list.push({ kind, x, y, z, yaw, walk, radius, phase }); return this; }
+  // [review 27 Nov] the default phase from the animal's place (was Math.random: TOOLBOX rule 3, a scene builds the same every time)
+  add(kind, x, y, z, yaw, { walk = false, radius = 4, phase = vhash(x * .37, z * .37) } = {}) { this.list.push({ kind, x, y, z, yaw, walk, radius, phase }); return this; }
   get count() { return this.list.length; }
   meshes(materials, uTime, name = 'Animals') {
     const by = new Map();

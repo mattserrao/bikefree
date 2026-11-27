@@ -432,18 +432,21 @@ export class TreeEngine {
         #include <fog_pars_fragment>
         ${TREE_GRADE}
         // a cubic B-spline sample from four bilinear taps: smooth, no blocks, when the card's magnified
-        vec4 cubic(vec2 uv) {
+        // [review 27 Nov] every mipmapped sample below takes its gradients from outside the branches (textureGrad): the
+        // magnified-card branch isn't uniform across a pixel quad, where implicit derivatives are undefined (iPhone)
+        vec4 cubic(vec2 uv, vec2 gx, vec2 gy) {
           vec2 st = uv * uAtlasSize - .5, i = floor(st), f = st - i;
           vec2 w0 = (1. - f) * (1. - f) * (1. - f) / 6., w1 = (4. - 6. * f * f + 3. * f * f * f) / 6., w3 = f * f * f / 6., w2 = 1. - w0 - w1 - w3;
           vec2 s0 = w0 + w1, s1 = w2 + w3, o0 = i - .5 + w1 / s0, o1 = i + 1.5 + w3 / s1;
-          return (texture2D(uAtlas, vec2(o0.x, o0.y) / uAtlasSize) * s0.x + texture2D(uAtlas, vec2(o1.x, o0.y) / uAtlasSize) * s1.x) * s0.y
-               + (texture2D(uAtlas, vec2(o0.x, o1.y) / uAtlasSize) * s0.x + texture2D(uAtlas, vec2(o1.x, o1.y) / uAtlasSize) * s1.x) * s1.y;
+          return (textureGrad(uAtlas, vec2(o0.x, o0.y) / uAtlasSize, gx, gy) * s0.x + textureGrad(uAtlas, vec2(o1.x, o0.y) / uAtlasSize, gx, gy) * s1.x) * s0.y
+               + (textureGrad(uAtlas, vec2(o0.x, o1.y) / uAtlasSize, gx, gy) * s0.x + textureGrad(uAtlas, vec2(o1.x, o1.y) / uAtlasSize, gx, gy) * s1.x) * s1.y;
         }
         void main() {
-          vec2 tpx = fwidth(vUv) * uAtlasSize;
+          vec2 gx = dFdx(vUv), gy = dFdy(vUv), gx2 = dFdx(vUv2), gy2 = dFdy(vUv2);
+          vec2 tpx = (abs(gx) + abs(gy)) * uAtlasSize;   // (fwidth(vUv))
           float mag = clamp(1.25 - max(tpx.x, tpx.y) * 1.25, 0., 1.);
           vec4 c0, c1;
-          if (mag > 0.) { c0 = cubic(vUv); c1 = cubic(vUv2); } else { c0 = texture2D(uAtlas, vUv); c1 = texture2D(uAtlas, vUv2); }
+          if (mag > 0.) { c0 = cubic(vUv, gx, gy); c1 = cubic(vUv2, gx2, gy2); } else { c0 = textureGrad(uAtlas, vUv, gx, gy); c1 = textureGrad(uAtlas, vUv2, gx2, gy2); }
           vec4 c = mix(c0, c1, vBlend);
           // (the photo's colour, un-premultiplied from its own alpha before the edge is roughened below: dividing by the
           //  roughened alpha brightened every part-covered texel up to 3× — the washed-out, too-light bushes, user 24 Nov,
@@ -452,7 +455,8 @@ export class TreeEngine {
           // a near card, magnified past its photo's texels (user, 24 Nov: "softening the pixelation", trees staying 2D):
           // leaf clusters from the detail texture break up the blocks of colour and roughen the silhouette's staircase
           if (mag > 0.) {
-            float lf = texture2D(uSurf, vUv * uAtlasSize / 22.).g, lf2 = texture2D(uSurf, vUv * uAtlasSize / 9. + .37).g;
+            vec2 k1 = uAtlasSize / 22., k2 = uAtlasSize / 9.;
+            float lf = textureGrad(uSurf, vUv * k1, gx * k1, gy * k1).g, lf2 = textureGrad(uSurf, vUv * k2 + .37, gx * k2, gy * k2).g;
             c.rgb *= 1. + (lf * .6 + lf2 * .4 - .5) * .75 * mag;
             c.a = clamp(c.a + (lf2 - .5) * .55 * mag * smoothstep(.15, .85, c.a) * (1. - smoothstep(.85, 1., c.a)) * 2., 0., 1.);
           }
@@ -495,7 +499,7 @@ export class TreeEngine {
     this.impMat.uniforms.uAtlas.value = rt.texture;
     this.impMat.uniforms.uSurf = SURFACE;   // (the shared detail texture: a blank until loaded)
     this.impMat.alphaToCoverage = !!this.msaa;
-    this.impMat.customProgramCacheKey = () => `tree-engine-impostor-16-${this.ft}-${this.msaa ? 1 : 0}`;
+    this.impMat.customProgramCacheKey = () => `tree-engine-impostor-17-${this.ft}-${this.msaa ? 1 : 0}`;
     if (this.normAtlas) { const U = this.impMat.uniforms; U.uNorm.value = this.normAtlas.texture; U.uRelight.value = 1; U.uSunBake.value.copy(this.bakeSun); }
     this.impMesh = new THREE.Mesh(geo, this.impMat);
     this.impMesh.frustumCulled = false; this.impMesh.name = 'Trees (impostors)';
@@ -683,7 +687,8 @@ export class TreeEngine {
     for (const e of this.entries) for (const tier of e.pools) for (const im of tier || []) im.dispose();
     for (const t of this.mats) { t.wood.dispose(); t.leaves.dispose(); }
     for (const m of this._own.values()) m.dispose();   // (clones of the kit's own materials)
-    this.impGeo.dispose(); this.impMat.dispose(); this.atlas.dispose(); this.normAtlas?.dispose(); this._leafDepth?.dispose(); this.leafTexture.dispose();
+    this.impGeo.dispose(); this.impMat.dispose(); this.impMesh?.customDepthMaterial?.dispose();   // [review 27 Nov] castShadows()' depth material
+    this.atlas.dispose(); this.normAtlas?.dispose(); this._leafDepth?.dispose(); this.leafTexture.dispose();
   }
 }
 

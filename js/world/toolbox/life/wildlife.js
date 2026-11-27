@@ -12,6 +12,7 @@ import { randomSequence } from '../core/random.js';
 import { birdGeometry, birdMaterial } from './coast-life.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const _P = new THREE.Vector3(), ONE = new THREE.Vector3(1, 1, 1);   // (tick's scratch)
 const HIDE = new THREE.Matrix4().makeScale(0, 0, 0);
 
 function legs(M, color, w, l, h, t = .12) { M.color(color); for (const [x, z] of [[-w, -l], [w, -l], [-w, l], [w, l]]) M.box(x, 0, z, t, h, t); }
@@ -195,21 +196,21 @@ export class Wildlife {
   }
 
   tick(dt, camera) {
-    const cam = camera.position || camera, t = this.u.uTime.value;
+    const cam = camera.position || camera, t = this.u.uTime.value;   // [review 27 Nov] scratch _P / ONE (was a new Vector3 per animal per frame)
     // the grizzly: a slow amble with a rolling gait, turning at the ends of its beat
     this.bears.forEach((b, i) => {
       b.t += dt;
       const along = Math.sin(b.t * .02) * 30, x = b.x + Math.cos(b.a) * along, z = b.z + Math.sin(b.a) * along;
       const dir = Math.cos(b.t * .02) >= 0 ? 1 : -1;
       this.e.set(0, Math.atan2(Math.cos(b.a) * dir, Math.sin(b.a) * dir), Math.sin(b.t * 2.4) * .03); this.q.setFromEuler(this.e);
-      this.bearMesh.setMatrixAt(i, this.m.compose(V(x, this.L.heightAt(x, z) - .05 + Math.abs(Math.sin(b.t * 2.4)) * .05, z), this.q, V(1, 1, 1)));
+      this.bearMesh.setMatrixAt(i, this.m.compose(_P.set(x, this.L.heightAt(x, z) - .05 + Math.abs(Math.sin(b.t * 2.4)) * .05, z), this.q, ONE));
     });
     if (this.bearMesh) this.bearMesh.instanceMatrix.needsUpdate = true;
     this.ducks.forEach((d, i) => {
       d.a += d.w * dt;
       const x = d.x + Math.cos(d.a) * d.r, z = d.z + Math.sin(d.a) * d.r;
       this.e.set(0, Math.atan2(-Math.sin(d.a) * Math.sign(d.w || 1), Math.cos(d.a) * Math.sign(d.w || 1)), 0); this.q.setFromEuler(this.e);
-      this.duckMesh.setMatrixAt(i, Math.hypot(x - cam.x, z - cam.z) > 700 ? HIDE : this.m.compose(V(x, d.y + Math.sin(t * 1.3 + i) * .02, z), this.q, V(1, 1, 1)));
+      this.duckMesh.setMatrixAt(i, Math.hypot(x - cam.x, z - cam.z) > 700 ? HIDE : this.m.compose(_P.set(x, d.y + Math.sin(t * 1.3 + i) * .02, z), this.q, ONE));
     });
     if (this.duckMesh) this.duckMesh.instanceMatrix.needsUpdate = true;
     // ravens circle low over the ground near you; the eagle soars high over the ridges
@@ -223,7 +224,7 @@ export class Wildlife {
         a.a += a.w * dt;
         const x = a.cx + Math.cos(a.a) * a.r, z = a.cz + Math.sin(a.a) * a.r;
         this.e.set(0, Math.atan2(-Math.sin(a.a) * Math.sign(a.w), Math.cos(a.a) * Math.sign(a.w)), -Math.sign(a.w) * .3); this.q.setFromEuler(this.e);
-        mesh.setMatrixAt(i, this.m.compose(V(x, Math.max(a.h, this.L.heightAt(x, z) + 25) + Math.sin(t * .7 + i) * 2, z), this.q, V(1, 1, 1)));
+        mesh.setMatrixAt(i, this.m.compose(_P.set(x, Math.max(a.h, this.L.heightAt(x, z) + 25) + Math.sin(t * .7 + i) * 2, z), this.q, ONE));
       });
       mesh.instanceMatrix.needsUpdate = true;
     };

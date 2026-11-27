@@ -179,6 +179,7 @@ export class NearTrunks {
   dispose() {
     for (const im of this.meshes.values()) { this.group.remove(im); im.geometry.dispose(); im.dispose(); }
     for (const m of Object.values(this.mats)) m.dispose();
+    for (const im of this._warm || []) { this.group.remove(im); im.geometry.dispose(); }   // [review 27 Nov] the warm boxes
     this.meshes.clear();
   }
 }
@@ -243,6 +244,12 @@ export class NearPlants {
     return n;
   }
   hide() { for (const im of this.meshes.values()) im.count = 0; }
+  /** [review 27 Nov] Its meshes and material (the models are the tree kit's: not freed here). */
+  dispose() {
+    for (const im of this.meshes.values()) { this.group.remove(im); im.dispose(); }
+    if (this._warm) { this.group.remove(this._warm); this._warm.geometry.dispose(); }
+    this.mat?.dispose(); this.meshes.clear();
+  }
   /** Its material on an empty mesh in the scene now (compiled behind the loading screen: see NearTrunks.warm). */
   warm() {
     if (this._warm) return;

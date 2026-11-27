@@ -98,6 +98,8 @@ const baseR = (t) => (TRUNK_R[t.name] || .45) * 2 * .95 * 1.06 * t.k;
 const FLARE_TONE = (name) => new THREE.Color(name === 'beechF' ? '#c4c6c8' : name === 'hickory' ? '#ffffff' : '#ffffff').multiplyScalar(name === 'beechF' ? 1.1 : 1);
 const TRUNK = { sugarmapleF: '#5a4d42', beechF: '#7f7c75', hickory: '#6a6259', basswood: '#655c52', whiteash: '#6b6259' };
 
+const byD = (a, b) => a.d - b.d;
+
 export class OldGrowth {
   constructor({ world, city, data }) {
     this.world = world; this.city = city; this.data = data;
@@ -138,6 +140,23 @@ export class OldGrowth {
     this.stats = { skirtBlocks: 0, finBlocks: 0, blades: 0, canopyCards: 0, rays: 0 };
     const q = world.qualityKey;
     this.q = { cell: q === 'low' ? 2.5 : CELL, rays: q !== 'low', bladeS: q === 'low' ? .68 : q === 'high' || q === 'ultra' ? .46 : .52, };
+  }
+
+  /**
+   * [review 27 Nov] Everything the hero area made, freed (the world calls this.oldGrowth?.dispose?.() on teardown): its
+   * meshes, their own geometries and materials. Not what it borrows: the land material (world.mats.ground), the tree
+   * kit's log and plant models, the forest's leaf texture, the shared grass atlas and bark textures.
+   */
+  dispose() {
+    this.group.removeFromParent();
+    this._nt?.dispose(); this._np?.dispose(); this.life?.dispose();
+    for (const B of this.blocks.values()) { this._dropSkirt(B); this._dropFins(B); }
+    this._dropCanopy();
+    for (const im of Object.values(this.logMeshes || {})) im.dispose();
+    this.flareMesh?.dispose(); this.flareGeo?.dispose();
+    for (const im of Object.values(this.blades || {})) { im.geometry.dispose(); im.dispose(); }
+    for (const m of [this.logMat, this.flareMat, this.bladeMat, this.grassMat, this.rootMat]) m?.dispose();
+    this.logMeshes = this.flareMesh = this.blades = null;
   }
 
   /** Inside the hero area (its boundary, with a margin). */
@@ -650,7 +669,10 @@ export class OldGrowth {
     const jumped = !this._last || Math.hypot(cx - this._last.x, cz - this._last.z) > 150;
     this._last = { x: cx, z: cz };
     let budget = this.world._preload || jumped ? 999 : 1;
-    const list = [...this.blocks.values()].map((B) => ({ B, d: Math.hypot(B.cx - cx, B.cz - cz) - BLOCK * .71 })).sort((a, b) => a.d - b.d);
+    // [review 27 Nov] one list of the blocks, kept: its distances refreshed and re-sorted in place (was spread/map/sort a frame)
+    const list = (this._blockList ||= [...this.blocks.values()].map((B) => ({ B, d: 0 })));
+    for (const o of list) o.d = Math.hypot(o.B.cx - cx, o.B.cz - cz) - BLOCK * .71;
+    list.sort(byD);
     for (const { B, d } of list) {
       if (d > SKIRT_FAR) this._dropSkirt(B); else if (d < SKIRT_NEAR && !B.skirt && budget > 0) { this._buildSkirt(B); budget--; }
       if (d > FIN_FAR) this._dropFins(B); else if (d < FIN_NEAR && !B.fins && budget > 0) { this._buildFins(B); budget--; }

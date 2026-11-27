@@ -557,6 +557,8 @@ export class Subway {
  * and the station chime ~8 s before a train comes in at the platform you're near. Quiet; heard only below ground
  * (and faintly at the headhouses).
  */
+const fall = (d, R) => { const k = Math.max(0, 1 - d / R); return k * k; };
+
 class SubwaySound {
   constructor() { this.prev = new Map(); this.voices = null; }
   _voices() {
@@ -569,12 +571,12 @@ class SubwaySound {
   update(sub, rider, dt) {
     if (rider?.out == null || !worldSound.touch()) return;
     const V = this._voices(), r = rider.out, U = sub.under;
-    const fall = (d, R) => { const k = Math.max(0, 1 - d / R); return k * k; };
+    // [review 27 Nov] no per-frame arrays: the nearest escalator top and run in one loop (was two map() + spread a frame)
     const deep = r > U.fromM + 4 && r < U.toM - 4 ? 1 : 0;
-    const nearTop = Math.min(...sub.conv.map((c) => Math.abs(r - (c.dir === 'down' ? c.fromM : c.toM))));
+    let nearTop = Infinity, dEsc = Infinity;
+    for (const c of sub.conv) { nearTop = Math.min(nearTop, Math.abs(r - (c.dir === 'down' ? c.fromM : c.toM))); dEsc = Math.min(dEsc, Math.max(0, c.fromM - r, r - c.toM)); }
     const hear = deep || fall(nearTop, 40) * .5;   // up at the headhouses: faintly
     V.air.set(.18 * (deep ? 1 : fall(nearTop, 30)));
-    const dEsc = Math.min(...sub.conv.map((c) => Math.max(0, c.fromM - r, r - c.toM)));
     V.hum.set(.3 * fall(dEsc, 45) * Math.max(hear, fall(dEsc, 45)));
     // trains: the nearest one's rumble; events by leg
     let loud = 0, pitch = 0;
@@ -599,7 +601,7 @@ class SubwaySound {
           if (P) worldSound.play('chime', fall(Math.max(0, P.fromM - r, r - P.toM), 120) * hear);
         }
       }
-      this.prev.set(st.dir, { leg: st.leg, u: st.u, d: st.d });
+      const pr = pv || {}; pr.leg = st.leg; pr.u = st.u; pr.d = st.d; if (!pv) this.prev.set(st.dir, pr);
     }
     V.rumble.set(.55 * loud);
     if (this._rf) this._rf.frequency.setTargetAtTime(90 + 170 * pitch, this._rf.context.currentTime, .3);
