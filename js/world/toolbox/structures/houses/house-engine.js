@@ -18,7 +18,7 @@ import { at } from './house-plan.js';
 const KIND_WS = { win: W.SASH, tall: W.TALL, pic: W.PICTURE, low: W.LOW, door: W.SASH };
 // the painted window's half size and sill height by set (as the shader draws them)
 const WIN_DIM = { [W.SASH]: [.45, .72, .8], [W.TALL]: [.4, 1, .62], [W.PICTURE]: [1.15, .72, .8], [W.LOW]: [.55, .3, 1.55], [W.FARM]: [.33, .42, 1] };
-const WALL_CODE = { lap: S.LAP, brick: S.BRICK, shingle: S.WSHINGLE, concrete: S.CONCRETE, stone: S.RUBBLE };
+const WALL_CODE = { lap: S.LAP, brick: S.BRICK, shingle: S.WSHINGLE, concrete: S.CONCRETE, stone: S.RUBBLE, render: S.RENDER, sandstone: S.ASHLAR, rubble: S.RUBBLE };
 const BRICKS = ['#8c4b3b', '#9a5643', '#7d4436', '#a0624c', '#86503f'];
 const WHITE = '#f3f1ea';
 
@@ -42,7 +42,8 @@ export function buildHouse(R, P, w, d, n, L) {
   const wood = srgb('#7d6a58'), C = (c) => toU8(c);
   const st = { trim: [...toU8(shutterC), frameIndex(sc.frame || WHITE)], acc: [...toU8(trimC), 0], b: [R.seed, R.wear * .6] };
   for (const x of [w, d, n]) x.set({ ...st, win: [0, 0, 0, 0] });
-  const codeCol = (name) => name === 'brick' ? brick : name === 'concrete' ? found : wall;
+  const stone = srgb(R.style?.stone || '#b9a58a'); stone.offsetHSL(0, 0, ((R.seed * 13.7) % 1 - .5) * .06);   // (Kanab's sandstone: the style's stone)
+  const codeCol = (name) => name === 'brick' ? brick : name === 'concrete' ? found : name === 'sandstone' || name === 'rubble' ? stone : wall;
 
   // ground: the lowest and highest corner of every volume; the ground floor sits a little over the front
   let lo = Infinity, hi = -Infinity;

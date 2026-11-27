@@ -6,8 +6,8 @@
 import * as THREE from '../../../../vendor/three.js';
 import { WIND, WIND_GLSL } from '../atmosphere/wind.js';
 
-const W = 1024, H = 256, CELLS = 4, CW = W / CELLS;
-export const CARD = { turf: 0, tall: 1, goldenrod: 2, lace: 3 };
+const W = 1280, H = 256, CELLS = 5, CW = W / CELLS;
+export const CARD = { turf: 0, tall: 1, goldenrod: 2, lace: 3, scrub: 4 };
 /** The texture coordinate of the atlas's opaque white corner (for geometry that isn't a card). */
 export const SOLID_UV = [1.5 / W, 1.5 / H];
 
@@ -49,6 +49,17 @@ function drawAtlas() {
       else { g.fillStyle = r() < .3 ? '#8b7552' : '#e4e1d6'; g.beginPath(); g.ellipse(x, top, 22, 7, 0, 0, Math.PI * 2); g.fill(); g.fillStyle = 'rgba(160,150,120,.5)'; for (let j = 0; j < 10; j++) { g.beginPath(); g.arc(x + (r() - .5) * 34, top + (r() - .5) * 8, 1.6, 0, Math.PI * 2); g.fill(); } }
     }
     for (let k = 0; k < 40; k++) blade(r, x0 + CW * (.1 + r() * .8), H * (.15 + r() * .3), (r() - .5) * .8, 2, greens[k % greens.length]); }
+  // 4: scrub (user, 26 Nov — the verge's shrubs were faceted pyramids, then mounds): a leafy dome of overlapping
+  // leaves to the ground, drawn light and neutral so each plant's tint gives its colour (dogwood red, sumac, green)
+  { const r = rnd(71), x0 = CW * 4, cx = x0 + CW / 2;
+    for (let k = 0; k < 520; k++) {
+      const a = r() * Math.PI, rr = Math.sqrt(r()), px = cx + Math.cos(a) * rr * CW * .44 * (r() < .5 ? -1 : 1), py = H - Math.sin(a) * rr * H * .86 - 4;
+      const v = 92 + Math.floor((1 - rr * .4) * 80 * (.5 + r() * .5)) + (py < H * .45 ? 16 : 0);
+      g.fillStyle = `rgb(${v},${v},${Math.floor(v * .96)})`;
+      g.beginPath(); g.ellipse(px, py, 4 + r() * 5, 2.2 + r() * 2.6, r() * Math.PI, 0, Math.PI * 2); g.fill();
+    }
+    g.strokeStyle = 'rgb(120,110,100)'; g.lineWidth = 2;
+    for (let k = 0; k < 6; k++) { const x = cx + (r() - .5) * CW * .3; g.beginPath(); g.moveTo(x, H); g.lineTo(x + (r() - .5) * 30, H * .55); g.stroke(); } }
   // the solid white corner (bottom-left: texture (0, 0) with the image flipped) for non-card geometry
   g.fillStyle = '#ffffff'; g.fillRect(0, H - 4, 4, 4);
   return cv;
@@ -93,7 +104,8 @@ export function grassMaterial(renderer, uTime, msaa = true) {
 export function grassCard(M, x, y, z, cell, w, h, yaw, tint) {
   const u0 = (cell * CW + 8) / W, u1 = ((cell + 1) * CW - 3) / W;
   M.color(tint);
-  for (const a of [yaw, yaw + Math.PI / 2]) {
+  // (a shrub: three cards at 60°, so its dome reads round from every side; the grasses: two)
+  for (const a of cell === CARD.scrub ? [yaw, yaw + Math.PI / 3, yaw + 2 * Math.PI / 3] : [yaw, yaw + Math.PI / 2]) {
     const c = Math.cos(a) * w / 2, s = Math.sin(a) * w / 2;
     const a0 = M.vertex(x - c, y - .03, z - s, 0, 1, 0, u0, .03), a1 = M.vertex(x + c, y - .03, z + s, 0, 1, 0, u1, .03);
     const a2 = M.vertex(x + c, y + h, z + s, 0, 1, 0, u1, .99), a3 = M.vertex(x - c, y + h, z - s, 0, 1, 0, u0, .99);

@@ -65,7 +65,7 @@ const vnoise = (x, z) => {
   const a = H(i, j), b = H(i + 1, j), c = H(i, j + 1), d = H(i + 1, j + 1), fu = f(u), fv = f(v);
   return a + (b - a) * fu + (c - a) * fv + (a - b - c + d) * fu * fv;
 };   // the verges' grass and brush: built within, dropped beyond (m from a tile's edge)
-const REACH = { low: { near: 1300, far: 1800, trees: 0.6, treeNear: 450 }, balanced: { near: 2300, far: 3100, trees: 1, treeNear: 750 }, high: { near: 2300, far: 3100, trees: 1.2, treeNear: 900 } };
+const REACH = { low: { near: 1300, far: 1800, trees: 0.6, treeNear: 450 }, balanced: { near: 2300, far: 3100, trees: 1, treeNear: 750 }, high: { near: 2300, far: 3100, trees: 1.2, treeNear: 900 }, ultra: { near: 2600, far: 3500, trees: 1.4, treeNear: 1100 } };
 const CAR_NEAR = 340;           // m: parked cars (the kit's lo LOD) within this, its far LOD beyond
 const CAR_HI = 110;
 const ANIMAL_M = 480;           // m: farm animals drawn within this             // m: the kit's detailed cars within this
@@ -125,9 +125,14 @@ export const KIT_STYLES = { cny: [{ preset: 'cny-village', kinds: ['village-hous
   // SKAN: the same upstate styles; its houses are sorted at load (_addSector: a house by a barn is a farmhouse, one
   // among many close neighbours a village house)
   skan: [{ preset: 'cny-village', kinds: ['village-house'] }, { preset: 'cny-farmhouse', kinds: ['farmhouse-ny', 'barn', 'shed'] },
-    { preset: 'cny-suburban', kinds: ['house', 'rowhouse'] }] };
+    { preset: 'cny-suburban', kinds: ['house', 'rowhouse'] }],
+  // Out West's Kanab (user, 26 Nov: "restyle", mixed and true to Kanab): ranch homes in stucco, brick and the odd
+  // sandstone or siding; the pioneer brick and sandstone houses of the old town centre; pole barns in metal
+  outwest: [{ preset: 'kanab-pioneer', kinds: ['village-house'] }, { preset: 'kanab-barn', kinds: ['barn', 'shed', 'farmhouse-ny'] },
+    { preset: 'kanab-western', kinds: ['house', 'rowhouse'] }] };
 const ROADS = new Set(['primary', 'secondary', 'tertiary', 'residential', 'alley']);
 const MAIN = new Set(['primary', 'secondary', 'tertiary']);
+const ROAD_RANK = { primary: 3, secondary: 2, tertiary: 1 };   // (Kanab's false fronts: which street a block faces)
 const POINT_FN = { signal: 'signal', bus_stop: 'busSign', bench: 'bench', hydrant: 'hydrant', bike_rack: 'bikeRack', waste: 'waste', picnic: 'picnic',
   post_box: 'postBox', drinking: 'drinking', bollard: 'bollard', shelter: 'shelter', stop_sign: 'stopSign', bike_share: 'bikeRack' };
 const u8 = (t) => Uint8Array.from(atob(t), (c) => c.charCodeAt(0)).buffer;
@@ -193,7 +198,7 @@ export class GraphCity {
     }
     host.index = { xs: Float64Array.from(xs), zs: Float64Array.from(zs), nearest: () => null };
     this.kitStreets = makeStreetIndex(lines);
-    this.kitScene = { ...host.route.scene, buildingKit: { ...KIT_CFG, styles: KIT_STYLES[world.json?.id] || KIT_CFG.styles } };
+    this.kitScene = { ...host.route.scene, buildingKit: { ...KIT_CFG, styles: KIT_STYLES[world.json?.id] || world.profile?.buildingStyles || KIT_CFG.styles } };   // (Kanab 26 Nov: a map's own profile styles before Pittsburgh's)
     this.kit = this._kitAdapter();
     host.buildingKit = this.kit;
     this._materials();
@@ -314,6 +319,17 @@ export class GraphCity {
         if (n >= 13) b.kind = 23;
       }
     }
+    // Kanab (classifyHomes 'town-core', user 26 Nov): about a third of the houses within the old town's blocks are the
+    // pioneer brick and sandstone houses (village-house); every building capped at the map's height (three storeys at
+    // most, the shops one or two — the defaults gave 15 m rows and a 25 m "tower"); the commercial blocks on the town's streets get false fronts
+    if (this.profile.classifyHomes === 'town-core') {
+      const T = this.profile.townCore, c = T && this.world.proj.toLocal(T.lat, T.lon);
+      for (const b of mine) {
+        if (this.profile.maxBuildingM && !b.name) b.h = Math.min(b.h, b.kind === 1 || b.kind === 0 ? 7.2 : b.kind === 13 ? 7 : b.kind === 2 || b.kind === 3 ? 6.2 : this.profile.maxBuildingM);
+        if (c && b.kind === 1 && Math.hypot(b.cx - c.x, b.cz - c.z) < T.r && hash(b.k * 3.17 + 5) < (T.share ?? .35)) b.kind = 23;
+        if (b.kind === 0) b.kind = 2;   // (no row houses in Kanab: its few "rows" are the commercial blocks)
+      }
+    }
     // the homes' plan: rowhouses and houses (the kit's), the rest as neighbours
     const kinds = MAP_KINDS, homes = [], neighbours = [];   // [blocks] the building engine's codes   // (13, 14: a rural map's barns and sheds, SKAN; 20, 23: CNY's farmhouses and village houses)
     for (const b of mine) {
@@ -323,6 +339,7 @@ export class GraphCity {
       let r = 0; for (const [px, pz] of pts) r = Math.max(r, Math.hypot(px - b.cx, pz - b.cz));
       // a brick row on a main street (East Carson, Butler, Penn…): a shop row, dressed by _storefronts, not a home
       if (b.kind === 0 && b.h >= 6.5 && this._frontsOf(b, b.ring, null, !b.shop).length) b.shopRow = true;
+      if (this.profile.falseFronts && (b.kind === 2 || b.kind === 3) && !b.hidden) b.falseFront = this._streetFace(b, 45);
       if (b.shop && !b.shopRow) { b.shopRow = true; }   // (a village core's: a storefront row even round a corner)
       const e = { x: b.cx, z: b.cz, pts, levels: 0, kind: b.shopRow ? 'other' : kinds[b.kind] || 'other', roof: -1, height: b.h, s: 0, r, name: b.name || '', key: b.k, force: b.force };
       (kinds[b.kind] && !b.shopRow ? homes : neighbours).push(e);
@@ -1161,10 +1178,14 @@ export class GraphCity {
 
   /** A soft plant card (grass-cards.js): its size by kind and scale, a per-plant tint and turn. */
   _card(N, x, y, z, seed, cell, sc) {
-    const SZ = [[.75, .38], [1.05, .95], [1.15, 1.3], [.95, 1.05]][cell], k = hash(seed * 7.7 + 3.1);
+    const SZ = [[.75, .38], [1.05, .95], [1.15, 1.3], [.95, 1.05], [1.7, 1.25]][cell], k = hash(seed * 7.7 + 3.1);
     const tint = (this._tint ||= new THREE.Color());
     if (this.desert) tint.setRGB(1.05 + k * .2, .8 + hash(seed * 5.3) * .1, .42 + hash(seed * 2.9) * .1);   // (desert: cured bunchgrass, tan)
     else tint.setRGB(.62 + k * .18, .66 + hash(seed * 5.3) * .16, .58 + hash(seed * 2.9) * .14);
+    if (cell === CARD.scrub && !this.desert) {   // (scrub: early-fall dogwood and sumac reds, olive and green)
+      const SCRUB = [[.52, .62, .3], [.46, .58, .28], [.62, .26, .18], [.72, .42, .2], [.6, .56, .26], [.4, .52, .26]];
+      const c = SCRUB[Math.floor(hash(seed * 4.1) * SCRUB.length)]; tint.setRGB(c[0] * (.9 + k * .25), c[1] * (.9 + k * .25), c[2] * (.9 + k * .25));
+    }
     grassCard(N, x, y, z, cell, SZ[0] * (.8 + k * .4) * Math.min(1.3, sc), SZ[1] * sc, seed * 6.283, tint);
   }
   /**
@@ -1308,7 +1329,7 @@ export class GraphCity {
               // sparser drifts, tall grass between, the odd lace or chicory
               const drift = hash(Math.floor(x / 14) * 5.1 + Math.floor(z / 14) * 2.3), scrub = hash(Math.floor(x / 22) * 1.7 + Math.floor(z / 22) * 4.3 + side) < .38;
               if (this.desert) { if (k < .07) sageClump(N, x, y, z, h, sc * .75); else if (k < .55) this._card(N, x, y, z, h, CARD.tall, sc * .8); continue; }   // (desert: sage and dry grass)
-              if (scrub && k < .45) scrubClump(N, x, y, z, h, sc);
+              if (scrub && k < .45) { this._card(N, x, y, z, h, CARD.scrub, sc); if (k < .2) this._card(N, x + .5, y, z + .3, h + 1, CARD.scrub, sc * .7); }
               else if (k < .08 + drift * .22) this._card(N, x, y, z, h, CARD.goldenrod, sc);
               else if (k < .9) this._card(N, x, y, z, h, CARD.tall, sc);
               else this._card(N, x, y, z, h, CARD.lace, sc);
@@ -1384,7 +1405,7 @@ export class GraphCity {
             const y = p.y - .05 + Math.max(0, Math.min(1, (o - w + .2) / 1.2)) * top, kind = hash(h * 31 + k), sc = .6 + vnoise(x / 13, z / 13) * .6 + hash(h * 7) * .35;
             if (o < w + .1) { if (kind < .35) cattails(N, x, p.y - .02, z, h, sc); else if (kind < .7) this._card(N, x, p.y, z, h, CARD.tall, sc); continue; }
             if (room < 1) { this._card(N, x, y, z, h, CARD.tall, sc); continue; }
-            if (kind < .45) scrubClump(N, x, y, z, h, sc);
+            if (kind < .45) this._card(N, x, y, z, h, CARD.scrub, sc);
             else if (kind < .75) this._card(N, x, y, z, h, CARD.tall, sc);
             else if (kind < .9) this._card(N, x, y, z, h, CARD.goldenrod, sc);
             else this._card(N, x, y, z, h, CARD.lace, sc);
@@ -1569,6 +1590,44 @@ export class GraphCity {
       out.push({ i, a, c, len, tx, tz, nx, nz, mx, mz, yaw: Math.atan2(nx, nz), walk, base: walk && ground != null ? Math.max(ground, r.y + 0.15) : ground });
     }
     return out;
+  }
+  /**
+   * The wall of b that faces its street (Kanab's false fronts): the edge, 5 m or longer, whose outward normal points at
+   * the nearest street within maxD (a parking lot between is fine) — { a, c, len, nx, nz, mx, mz, yaw } or null.
+   */
+  _streetFace(b, maxD) {
+    let best = null, bestD = Infinity;
+    const ring = b.ring;
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i], c = ring[(i + 1) % ring.length], len = Math.hypot(c.x - a.x, c.z - a.z);
+      if (len < 5) continue;
+      const tx = (c.x - a.x) / len, tz = (c.z - a.z) / len, mx = (a.x + c.x) / 2, mz = (a.z + c.z) / 2;
+      let nx = tz, nz = -tx; if ((mx - b.cx) * nx + (mz - b.cz) * nz < 0) { nx = -nx; nz = -nz; }
+      // (walk out along the wall's normal: roadNear only looks a cell or so round its point, and a block can stand
+      //  40 m back behind its parking lot)
+      let r = null;
+      for (let k = 2; k <= maxD && !r; k += 10) { const q = this.roadNear(mx + nx * k, mz + nz * k, 8); if (q && ROADS.has(q.e.kind) && q.e.kind !== 'alley') r = q; }
+      if (!r) continue;
+      const dx = r.px - mx, dz = r.pz - mz, d = Math.hypot(dx, dz);
+      if (d < 1 || (dx * nx + dz * nz) / d < .7 || Math.abs(r.dx * tx + r.dz * tz) < .75) continue;   // (facing it, and running along it)
+      // (user, 26 Nov: the false front on the main street's side — the bigger the street and the longer the wall facing
+      //  it, the likelier the front: a primary beats a secondary beats a side street, whatever the setback)
+      const score = d - len * .6 - (ROAD_RANK[r.e.kind] || 0) * 25;
+      if (score < bestD) { bestD = score; best = { i, a, c, len, tx, tz, nx, nz, mx, mz, yaw: Math.atan2(nx, nz), road: r.e.kind, street: r.e.name }; }
+    }
+    if (!best) return null;
+    // (a traced footprint's street wall comes in pieces: every edge in line with the chosen one — same facing, on its
+    //  line within 2.5 m — carries the false front too, so it spans the whole frontage)
+    best.parts = [];
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i], c = ring[(i + 1) % ring.length], len = Math.hypot(c.x - a.x, c.z - a.z);
+      if (len < 2) continue;
+      const tx = (c.x - a.x) / len, tz = (c.z - a.z) / len, mx = (a.x + c.x) / 2, mz = (a.z + c.z) / 2;
+      let nx = tz, nz = -tx; if ((mx - b.cx) * nx + (mz - b.cz) * nz < 0) { nx = -nx; nz = -nz; }
+      if (nx * best.nx + nz * best.nz < .97 || Math.abs((mx - best.mx) * best.nx + (mz - best.mz) * best.nz) > 2.5) continue;
+      best.parts.push({ len, nx, nz, mx, mz, yaw: Math.atan2(nx, nz) });
+    }
+    return best;
   }
   /** A village core's shop (b.shop) within r of (x, z)? */
   _shopNear(x, z, r) {

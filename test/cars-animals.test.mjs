@@ -9,7 +9,7 @@ import { MOVING_TRAFFIC } from '../js/world/toolbox/city/life.js';
 test('parked cars: every kind in its triangle budget, LODs in order', () => {
   const hi = carStats('hi'), lo = carStats('lo'), far = carStats('far');
   for (const k of CAR_KINDS) {
-    assert.ok(hi[k] <= 1500, `${k} hi ${hi[k]}`);
+    assert.ok(hi[k] <= 1600, `${k} hi ${hi[k]}`);   // (1500 → 1600, 26 Nov: 18-sided wheels up close)
     assert.ok(lo[k] <= 700, `${k} lo ${lo[k]}`);
     assert.ok(far[k] <= 130, `${k} far ${far[k]}`);
     assert.ok(far[k] < lo[k] && lo[k] < hi[k], `${k}: LODs in order`);

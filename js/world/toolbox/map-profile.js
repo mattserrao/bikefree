@@ -23,6 +23,8 @@
 //   softCover        the land covers' edges only wander (a soft ragged line), no scatter of grains — read as a blocky
 //                    stipple (NYC's review; on every map since the 25 Nov fix pass, CNY's meadow/forest edges)
 //   hideInWater      hide map footprints standing past the drawn shore (SKAN's lakefront)
+//   classifyHomes    'town-core': houses within townCore.r of townCore's centre are a share (townCore.share) village
+//                    houses, heights capped at maxBuildingM; falseFronts: commercial blocks get Western false fronts
 //   classifyHomes    'by-neighbours': a house with a barn near is a farmhouse, one in a dozen a village house, and
 //                    the village cores' shops become storefront rows (SKAN's data has every house as kind 1)
 const PITTSBURGH_STYLES = [{ preset: 'pittsburgh-rowhouse', kinds: ['rowhouse'] }, { preset: 'pittsburgh-frame', kinds: ['house', 'barn', 'shed'] }];
@@ -32,10 +34,15 @@ export const PROFILE_PRESETS = {
   // (Out West, 26 Nov 2026: red-rock desert round Kanab — golden hour baked, desert ground by slope and strata, dry
   // shrubland cover, cottonwoods by the washes, pinyon and juniper on the benches)
   desert: { light: 'golden-upstate', roads: 'worn', ground: 'desert', life: 'cyclists', dressing: 'country', season: 'early-fall', clouds: 0.35, verge: '#a99a6a',
-    buildingStyles: [{ preset: 'kanab-western', kinds: ['house', 'rowhouse', 'barn', 'shed'] }], hideInWater: false, classifyHomes: null, softCover: true,
+    buildingStyles: [{ preset: 'kanab-pioneer', kinds: ['village-house'] }, { preset: 'kanab-barn', kinds: ['barn', 'shed', 'farmhouse-ny'] },
+      { preset: 'kanab-western', kinds: ['house', 'rowhouse'] }], hideInWater: false, softCover: true,
+    // Kanab's old town (user, 26 Nov): a third of its houses the pioneer type; two storeys at most unless named; false fronts
+    classifyHomes: 'town-core', townCore: { lat: 37.0475, lon: -112.5266, r: 650, share: .35 }, maxBuildingM: 10.5, falseFronts: true,
     treeMix: { woods: [['juniper', 60], ['pinyon', 40]], wet: [['cottonwood', 1]], hedge: [['juniper', 70], ['cottonwood', 30]],
-      yard: [['cottonwood', 55], ['juniper', 30], ['pinyon', 15]], street: [['cottonwood', 1]], pasture: [['juniper', 70], ['cottonwood', 30]],
-      orn: [['juniper', 60], ['pinyon', 40]], arbor: [['juniper', 1]], osm: [['cottonwood', 1]] },
+      // (town, user 26 Nov: cottonwood, Arizona ash, Russian olive, juniper)
+      yard: [['cottonwood', 30], ['aash', 25], ['rolive', 20], ['juniper', 20], ['pinyon', 5]], street: [['cottonwood', 40], ['aash', 40], ['rolive', 20]],
+      pasture: [['juniper', 70], ['cottonwood', 30]],
+      orn: [['rolive', 40], ['juniper', 45], ['pinyon', 15]], arbor: [['juniper', 1]], osm: [['cottonwood', 50], ['aash', 50]] },
     // the desert's fall golden hour: a lower, redder sun, warm dust in the air, red light bounced up off the rock
     wind: [.75, .66], windK: 1.25,   // (the afternoon wind up the desert from the south-west)
     sun: { elev: 11, az: 248, sky: '#93abd2', fog: '#e2c3a0', hemiSky: '#ffd6aa', hemiGround: '#9a5a3a', sun: '#ffb36a', sunI: 3.0, hemiI: 1.05, exposure: 1.1 } },

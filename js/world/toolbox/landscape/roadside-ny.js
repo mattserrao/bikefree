@@ -176,7 +176,15 @@ export function scrubClump(M, x, y, z, seed, s = 1) {
     const a = k * 2.3 + seed * 7, d = .15 + hash(seed * 11 + k) * .55, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
     const h = (.5 + hash(seed * 5 + k) * 1.1) * s, w = (.4 + hash(seed * 3 + k) * .45) * Math.min(1.2, s);
     blade(M, px, y, pz, a, h * .55, .03, .08, hash(seed * 13 + k) < .5 ? '#7a3328' : '#5e4a36');   // (a stem)
-    M.color(tones[Math.floor(hash(seed * 17 + k) * tones.length)]).pyramid(px, y + h * .3, pz, w, h * .7, w * .8, a);
+    // a leafy mass (user, 26 Nov — the 4-sided pyramids, then mushrooms on stalks, read as toys): a low lumpy mound
+    // sitting on the ground, leafy to the bottom, in three overlapping lumps of neighbouring tones
+    const base = y - .05, mh = h * .85;
+    for (let j = 0; j < 3; j++) {
+      const b2 = j * 2.1 + a, off = j ? w * (.35 + hash(seed * 23 + k * 3 + j) * .25) : 0, sc = j ? .55 + hash(seed * 29 + k + j) * .25 : 1;
+      const ox = px + Math.cos(b2) * off, oz = pz + Math.sin(b2) * off, ww = w * sc, hh = mh * sc;
+      M.color(tones[Math.floor(hash(seed * 17 + k + j * 5) * tones.length)]);
+      M.cylinder(ox, base, oz, ww * .72, hh * .38, 7, ww); M.cylinder(ox, base + hh * .38, oz, ww, hh * .36, 7, ww * .72); M.cylinder(ox, base + hh * .74, oz, ww * .72, hh * .26, 7, ww * .2);
+    }
   }
 }
 

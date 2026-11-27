@@ -226,13 +226,54 @@ export const STYLE_PRESETS = {
       { wall: '#a8b0a0', trim: '#4a3b30', frame: '#f2eee4', accent: '#f2eee4' },                     // sage green
       { wall: '#9c6e52', trim: '#e9dcc4', frame: '#efe6d6', accent: '#efe6d6' },                     // board-and-batten brown
     ],
-    walls: { render: .62, lap: .2, brick: .1, shingle: .08 }, plinth: .2, gable: { lap: .3 }, barn: { boards: 1 },
-    roofs: { tile: .3, seam: .3, asphalt: .4 }, forms: { gable: .3, hip: .65, halfHip: .05 }, pitch: 18, pitchJitter: 5, eaveM: .7, rakeM: .45,
+    // (user, 26 Nov: "mixed, true to Kanab" — tan and white stucco, red brick, some sandstone or siding; metal and
+    //  asphalt roofs, the odd tile; mostly ranches, a few raised ranches and capes)
+    walls: { render: .45, brick: .25, lap: .18, rubble: .12 }, plinth: .2, gable: { lap: .3 }, barn: { boards: .5, metal: .5 },
+    houseWalls: { render: .45, brick: .25, lap: .18, sandstone: .12 },
+    houseTypes: { house: { ranch: .72, raised: .1, cape: .12, split: .06 }, rowhouse: { ranch: .8, cape: .2 } },
+    roofs: { seam: .42, asphalt: .48, tile: .1 }, forms: { gable: .45, hip: .52, halfHip: .03 }, pitch: 18, pitchJitter: 5, eaveM: .7, rakeM: .45,
     windows: 'sash', bayM: 4.6, ranch: .8, maxFloors: 2,
     shutters: .08, surrounds: .2, lintels: 0, quoins: 0, flowerBoxes: 0, genoise: 0, frontEnd: .1,
     balconies: 0, galleries: 0, dormers: 0, chimneys: .2, solar: .15, leanTo: .08, garage: .6, porch: .4, frontPorch: .3, stair: 0, woodpile: .05,
     sundial: 0, shops: 0, ivy: 0, age: [.1, .6], upkeep: [.5, .95], stone: '#c4a582',
     dressing: { steps: 1, shrubs: .3, bins: .5, bench: .05, pots: .3, garden: .03, fence: .25, laundry: 0, dish: .25, hay: .02, bikes: .1, trough: .02 },
+  },
+  // Kanab's pioneer houses (user, 26 Nov): the 1870s-1910s brick and sandstone houses of the old town blocks — a
+  // storey and a half, steep gables, a hall-and-parlor or I-house front, a small porch, tall sash windows
+  'kanab-pioneer': {
+    houseEngine: true, cleanShapes: true,
+    archetypes: { cottage: 1, village: .2, farmhouse: 0, chalet: 0, mazot: 0, block: 0, shed: .3 },
+    schemes: [
+      { wall: '#e9e1d0', trim: '#4a3b30', frame: '#f4efe4', accent: '#f4efe4' },   // whitewashed
+      { wall: '#d9c2a0', trim: '#5a4636', frame: '#f4efe4', accent: '#f4efe4' },   // plaster tan
+      { wall: '#c9a27a', trim: '#4e3a2c', frame: '#efe6d6', accent: '#efe6d6' },   // adobe
+    ],
+    walls: { brick: .55, rubble: .3, render: .15 }, plinth: .4, gable: {}, barn: { boards: 1 },
+    houseWalls: { brick: .55, sandstone: .33, render: .12 },
+    houseTypes: { 'village-house': { ihouse: .4, gablefront: .3, upright: .3 }, house: { ihouse: .4, gablefront: .3, upright: .3 } },
+    roofs: { seam: .45, shingle: .3, asphalt: .25 }, forms: { gable: .85, hip: .15 }, pitch: 36, pitchJitter: 5, eaveM: .35, rakeM: .2,
+    windows: 'sash', bayM: 3.4, ranch: .2, maxFloors: 2,
+    shutters: .05, surrounds: .3, lintels: .6, quoins: .05, flowerBoxes: 0, genoise: 0, frontEnd: .2,
+    balconies: 0, galleries: 0, dormers: .1, chimneys: .7, solar: .03, leanTo: .3, garage: .15, porch: .5, frontPorch: .55, stair: 0, woodpile: .1,
+    sundial: 0, shops: 0, ivy: 0, age: [.5, .95], upkeep: [.5, .95], stone: '#c7a37c',
+    dressing: { steps: 1, shrubs: .3, bins: .4, bench: .1, pots: .3, garden: .08, fence: .45, laundry: 0, dish: .1, hay: 0, bikes: .1, trough: 0 },
+  },
+  // Kanab's barns and sheds (user, 26 Nov: "timber pole barns with metal roofs"): low, wide, boards or steel, seam roofs
+  'kanab-barn': {
+    houseEngine: false, cleanShapes: true,
+    archetypes: { cottage: 0, village: 0, farmhouse: .1, chalet: 0, mazot: 0, block: 0, shed: 1 },
+    schemes: [
+      { wall: '#8a6a50', trim: '#4a3b30', frame: '#d8cbb4', accent: '#d8cbb4', roof: '#8a8d8f' },   // weathered boards, galvanised
+      { wall: '#a5a8a6', trim: '#5a5e60', frame: '#e0e0dc', accent: '#e0e0dc', roof: '#7a2f28' },   // steel, red roof
+      { wall: '#b9a58a', trim: '#4a3b30', frame: '#e0d6c4', accent: '#e0d6c4', roof: '#5f6164' },   // tan steel, grey roof
+    ],
+    walls: { boards: .5, metal: .5 }, plinth: 0, gable: { boards: 1 }, barn: { boards: .5, metal: .5 },
+    roofs: { seam: .7, corrugated: .3 }, forms: { gable: 1 }, pitch: 16, pitchJitter: 4, eaveM: .5, rakeM: .3,
+    windows: 'barn', bayM: 5, ranch: 1, maxFloors: 1,
+    shutters: 0, surrounds: 0, lintels: 0, quoins: 0, flowerBoxes: 0, genoise: 0, frontEnd: 0,
+    balconies: 0, galleries: 0, dormers: 0, chimneys: 0, solar: .05, leanTo: .45, garage: 0, porch: 0, frontPorch: 0, stair: 0, woodpile: .05,
+    sundial: 0, shops: 0, ivy: 0, age: [.3, .9], upkeep: [.4, .85], stone: '#c4a582',
+    dressing: { steps: 0, shrubs: .1, bins: .2, bench: 0, pots: 0, garden: 0, fence: .3, laundry: 0, dish: 0, hay: .3, bikes: 0, trough: .2 },
   },
   // CNY's village cores (Camillus, Warners, Amboy, Memphis…; tools/pgh_city.py "the country", kind 16): houses of the
   // 1850s-1920s — two storeys of clapboard, the gable to the street, a front porch on most, steeper roofs, no garages

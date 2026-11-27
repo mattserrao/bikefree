@@ -40,14 +40,14 @@ const aoChunk = /* glsl */`
   uniform vec2 uAO;   // strength, world radius (m)
   uniform float uFocal;   // the projection's y scale (px per unit at 1 m: × half the target height)
   float contactAO(vec2 uv, float z) {
-    if (uAO.x <= 0. || z > 160.) return 1.;
+    if (uAO.x <= 0. || z > 220.) return 1.;
     float r = uAO.y * uFocal / max(z, 1.);   // the radius in uv
     // pairs of opposite taps: 1/z is linear across a plane on screen, so a flat surface (the road seen low) has the
     // centre on the line between them and shades nothing; a crease (the ground meeting a wall, a car, a kerb) has the
     // centre farther than that line: shaded by how much (0.05–1.5 m)
     float occ = 0., rot = fract(sin(dot(uv, vec2(12.9898, 78.233))) * 43758.5) * .785;
-    for (int i = 0; i < 4; i++) {
-      float a = float(i) * .785398 + rot;
+    for (int i = 0; i < 6; i++) {   // (12 taps in two rings: user 26 Nov — the contact shading was faint)
+      float a = float(i) * .523599 + rot;
       for (int j = 1; j <= 2; j++) {
         vec2 o = vec2(cos(a), sin(a) * uInkTexel.x / uInkTexel.y) * r * float(j) * .5;
         float wa = 1. / max(inkZ(uv + o), .1), wb = 1. / max(inkZ(uv - o), .1);
@@ -55,7 +55,7 @@ const aoChunk = /* glsl */`
         occ += smoothstep(.04, .3, dz) * (1. - smoothstep(.8, 1.6, dz));
       }
     }
-    return 1. - uAO.x * occ / 8. * (1. - smoothstep(90., 160., z));
+    return 1. - uAO.x * min(1., occ / 12. * 1.25) * (1. - smoothstep(120., 220., z));
   }`;
 // Aerial perspective (fidelity plan, step 8): the air between the camera and every pixel, from the depth — thicker
 // low down (height fog: valleys, water, the canyon floor), lit by the sun when you look toward it (in-scatter: the

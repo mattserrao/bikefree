@@ -50,11 +50,15 @@ export function planHouse(R) {
   const b = [-n[0], -n[1]], a = [-b[1], b[0]];
   const frontT = -(f % 2 === 0 ? r0.hv : r0.hu);
   const area = R.rects.reduce((s, r) => s + 4 * r.hu * r.hv, 0);
-  const type = R.force?.type && BUILD[R.force.type] ? R.force.type : pickW(TYPES[R.kind], rand());   // (a historic house: its real type)
+  // (a style's own mix of types — Kanab's: mostly ranches; its pioneer houses I-houses, uprights and gable fronts)
+  const types = R.style?.houseTypes?.[R.kind] || TYPES[R.kind];
+  const type = R.force?.type && BUILD[R.force.type] ? R.force.type : pickW(types, rand());   // (a historic house: its real type)
   const P = { type, o: [r0.cx, r0.cz], a, b, vols: [], parts: {}, seed: R.seed };
   const build = BUILD[type];
   build(P, area, frontT, rand, R);
-  if (R.force?.wall) for (const v of P.vols) if (v.name === 'body' || v.name === 'split') v.wall = R.force.wall;
+  if (R.force?.wall) { for (const v of P.vols) if (v.name === 'body' || v.name === 'split') v.wall = R.force.wall; }
+  // a style's own wall mix (Kanab, user 26 Nov: stucco, red brick, some sandstone or siding), for the whole house
+  else if (R.style?.houseWalls) { const wl = pickW(R.style.houseWalls, rand()); for (const v of P.vols) if (v.wall && v.wall !== 'concrete') v.wall = wl; }
   // the volumes as the kit's rects (u along the longer side, v = (−uz, ux)), the main body first
   P.rects = P.vols.filter((v) => !v.noRect).map((v) => volRect(P, v));
   return P;
