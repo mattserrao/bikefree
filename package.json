@@ -43,6 +43,7 @@
   },
   "devDependencies": {
     "@garmin/fitsdk": "^21.221.0",
+    "happy-dom": "21.0.4",
     "ktx2-encoder": "^0.6.0",
     "playwright-core": "^1.65.1",
     "spectorjs": "^0.9.33",
