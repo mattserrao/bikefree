@@ -15,6 +15,11 @@ import { segmentIndexAt, targetWatts } from './workout.js';
 export const TICK_MS = 250;
 /** Longest gap the clock catches up after (a hidden tab ticks about once a second; a sleeping laptop is not riding). */
 export const MAX_CATCHUP_MS = 2000;
+/**
+ * [review 27 Nov] A3: the longest gap caught up when the trainer's data kept coming all through it (the rider was
+ * riding: a throttled hidden tab, a stalled main thread). A sleeping laptop's Bluetooth stops, so its gap stays capped.
+ */
+export const MAX_RIDING_CATCHUP_MS = 10 * 60 * 1000;
 /** Steps per recorded sample: one sample a second of ride time. */
 const SAMPLE_STEPS = 1000 / TICK_MS;
 const DATA_STALE_MS = 2500;
@@ -22,6 +27,29 @@ const HR_STALE_MS = 5000;
 const AUTO_PAUSE_MS = 3000;
 const DEFAULT_REAL_RATIO = 2.4;
 const FREE_START_ALT = 100;
+
+/**
+ * [review 27 Nov] A3: the ride clock's timer. Chrome's intensive throttling (a tab hidden > 5 min) wakes chained page
+ * timers about once a minute; a dedicated Worker's timers aren't throttled that way, so it posts the ticks (a blob:
+ * Worker, no extra file). Where there is no Worker (or it fails to start) a page setInterval, as before.
+ * Returns { kind, id, stop() }.
+ */
+export function startClockTimer(fn, ms, env = globalThis) {
+  const interval = () => { const id = setInterval(fn, ms); return { kind: 'interval', id, stop: () => clearInterval(id) }; };
+  if (typeof env.Worker !== 'function' || typeof env.Blob !== 'function' || !env.URL?.createObjectURL) return interval();
+  let url = null, w = null;
+  try {
+    url = env.URL.createObjectURL(new env.Blob([`setInterval(() => postMessage(0), ${ms});`], { type: 'text/javascript' }));
+    w = new env.Worker(url);
+  } catch { if (url) env.URL.revokeObjectURL?.(url); return interval(); }
+  const t = { kind: 'worker', id: null, worker: w };
+  const end = () => { w.terminate?.(); env.URL.revokeObjectURL?.(url); };
+  w.onmessage = () => fn();
+  // (a CSP without worker-src blob:, or a script error: fall back to the page's timer)
+  w.onerror = () => { if (t.kind !== 'worker') return; end(); Object.assign(t, interval()); };
+  t.stop = () => { if (t.kind === 'worker') { t.kind = 'stopped'; end(); } else clearInterval(t.id); };
+  return t;
+}
 
 export class Session extends EventTarget {
   constructor({ trainer, ride, hr, log, settings }) {
@@ -49,18 +77,50 @@ export class Session extends EventTarget {
 
     ride.addEventListener('press', (e) => this._onPress(e.detail));
     trainer.addEventListener('reconnected', () => { this._lastSent = null; });
-    this._clockAt = performance.now();
+    // [review 27 Nov] A3: the trainer's notifications (~4 Hz, not timers: not throttled in a hidden tab) also drive
+    // the clock, and their streak says whether a gap was ridden (see _catchupCap)
+    trainer.addEventListener('data', () => this._onTrainerData());
+    this._dataSince = null; this._dataLastAt = -Infinity;
+    this._clockAt = this._now();
     this._clockDebt = 0;
-    this._timer = setInterval(() => this._clock(), TICK_MS);
+    this._clockTimer = startClockTimer(() => this._clock(), TICK_MS);
+    this._timer = this._clockTimer.id;   // (tests stop the page timer with clearInterval(s._timer); stopClock() stops either)
+  }
+
+  _now() { return performance.now(); }
+  stopClock() { this._clockTimer?.stop(); }
+
+  /** [review 27 Nov] A3: a trainer data notification: note its streak, and run the clock if a step is due. */
+  _onTrainerData(now = this._now()) {
+    if (now - this._dataLastAt > DATA_STALE_MS) this._dataSince = now;   // (a new streak after a gap in the data)
+    this._dataLastAt = now;
+    if (!this._inClock && !this.trainer.demo && now - this._clockAt >= TICK_MS) this._clock(now);
+  }
+
+  /**
+   * [review 27 Nov] A3: how much of a gap the clock catches up. A trainer (not the demo) whose data streamed all through
+   * it — the streak began before the gap and is still fresh — means the rider rode it: up to MAX_RIDING_CATCHUP_MS.
+   * Otherwise (no data, a dropout, a laptop waking from sleep) MAX_CATCHUP_MS, as before.
+   */
+  _catchupCap(now) {
+    const streamed = !this.trainer.demo && this._dataSince != null && this._dataSince <= this._clockAt && now - this._dataLastAt < DATA_STALE_MS;
+    return streamed ? MAX_RIDING_CATCHUP_MS : MAX_CATCHUP_MS;
   }
 
   /**
    * The timer: one fixed 0.25 s step per TICK_MS of real time. Late timers (a hidden tab is throttled to about once a
    * second; a long frame while scenery builds) run the missed steps, so time and distance follow the wall clock.
+   * ([review 27 Nov] A3: ticked by a Worker timer and by the trainer's data; the catch-up cap by _catchupCap.)
    */
-  _clock(now = performance.now()) {
-    this._clockDebt += Math.min(MAX_CATCHUP_MS, Math.max(0, now - this._clockAt));
+  _clock(now = this._now()) {
+    if (this._inClock) return 0;   // (the demo trainer's 'data' fires inside a step)
+    this._clockDebt += Math.min(this._catchupCap(now), Math.max(0, now - this._clockAt));
     this._clockAt = now;
+    this._inClock = true;
+    try { return this._clockSteps(); } finally { this._inClock = false; }
+  }
+
+  _clockSteps() {
     let steps = 0, runSteps = 0;
     // (rounded to the nearest step, the remainder carried: a timer 1 ms early or late neither drops nor doubles a step)
     const n = Math.max(0, Math.floor((this._clockDebt + TICK_MS / 2) / TICK_MS));
