@@ -164,11 +164,63 @@ const CITY_FACADE_GLSL = /* glsl */`
           float m = max(1. - smoothstep(.025, .025 + px, abs(q.y)), small ? 1. - smoothstep(.02, .02 + px, abs(q.x)) : 0.);
           g = mix(g, frameC, m * detW);
         }
+        // (business pass, user 26 Nov — "window life"): frames in a building's own colour now and then (green, oxblood,
+        // bronze), not only white or black
+        float fv = fract(vBld.y * .61);
+        if (fv > .78 && bfKind != 3 && bfKind != 8) frameC = fv > .93 ? bkLin(vec3(.2, .3, .24)) : fv > .86 ? bkLin(vec3(.36, .14, .12)) : bkLin(vec3(.33, .27, .2));
         float fr = 1. - bkBox(q, -hw + .06, hw - .06, px);
         g = mix(g, frameC, fr * detW);
         diffuseColor.rgb = mix(diffuseColor.rgb, mix(glassCol, g, detW), bfWin * .95);
+        // a window air conditioner in about one upper window in nine (older brick and stone blocks): a grey box on
+        // the sill with its grille, a dark drip under it
+        if (!shopRow && id.y >= 1. && bfH(id * 3.17 + vBld.y * 7.3) > .89 && (bfKind == 0 || bfKind == 2 || bfKind == 4)) {
+          float ac = bkBox(q, vec2(-.34, -hw.y - .04), vec2(.34, -hw.y + .4), px);
+          vec3 acC = bkLin(vec3(.72, .72, .69)) * (.9 + .1 * step(.5, fract(q.y * 18.)));
+          diffuseColor.rgb = mix(diffuseColor.rgb, acC, ac * detW);
+          diffuseColor.rgb *= 1. - .25 * detW * step(abs(q.x), .2) * step(q.y, -hw.y - .04) * (1. - smoothstep(0., .9, -hw.y - .04 - q.y));
+        }
       }
       bfLit = bfWin * step(glass ? .5 : .58, bfH(id * 1.37 + vBld.y * 17.));
+      // [business pass] at dusk and night more of an office block's windows burn (the cleaners, the late workers),
+      // in two colour temperatures; a shop row's upper flats less
+      if (uNight > .01 && !glass && bfKind == 2) bfLit = max(bfLit, bfWin * step(.42, bfH(id * 2.31 + vBld.y * 5.)));
+    }
+    // [business pass] wall detail on the masonry blocks (user, 26 Nov): a stone belt course at every floor line on
+    // some, a cornice band under the parapet, cast-iron downspouts, a fire escape on a share of the older brick
+    // blocks, and now and then a faded painted sign (a ghost sign) high on the wall
+    if (!glass && (bfKind == 0 || bfKind == 2 || bfKind == 3 || bfKind == 4) && vBld.w < .5) {
+      float fh2 = (bfKind == 0 || bfKind == 1) ? 3.1 : 3.6, fl = up / fh2, ff = fract(fl), top = bfTop > .5 ? bfTop : 1e4;
+      vec3 trim = bkLin(vec3(.78, .74, .66)) * (.9 + .15 * fract(vBld.y * .29));
+      if (fract(vBld.y * .43) > .45 && fl > .9) diffuseColor.rgb = mix(diffuseColor.rgb, trim, (1. - smoothstep(.035, .035 + px / fh2, abs(ff - .985))) * detW * .9);
+      diffuseColor.rgb = mix(diffuseColor.rgb, trim * .92, bkBox(vec2(along, up), vec2(-1e5, top - 1.15), vec2(1e5, top - .7), px) * detW * step(.3, fract(vBld.y * .77)));
+      // downspouts every 11–17 m, dark, with a lighter edge
+      float sp = 11. + 6. * fract(vBld.y * .19), ds = abs(fract(along / sp + fract(vBld.y * .07)) - .5) * sp;
+      diffuseColor.rgb = mix(diffuseColor.rgb, bkLin(vec3(.16, .16, .16)), (1. - smoothstep(.06, .06 + px, ds)) * step(.5, up) * step(up, top) * det * .85);
+      // the fire escape: one bay of the older brick blocks — a black platform at each floor, a ladder between
+      if ((bfKind == 0 || bfKind == 2) && fract(vBld.y * .91) > .62 && up > 3.4 && up < top - .6) {
+        float bay = 2.6 * (1. + floor(fract(vBld.y * 1.3) * 3.)), bx = along - bay, w2 = 3.4;
+        if (bx > -.2 && bx < w2) {
+          float plat = 1. - smoothstep(.05, .05 + px, abs(ff - .02) * fh2);
+          float rail = 1. - smoothstep(.03, .03 + px, abs(ff - .3) * fh2);
+          float slat = (1. - smoothstep(.02, .02 + px, abs(fract(bx / .45) - .5) * .45)) * step(ff, .3);
+          float stair = 1. - smoothstep(.05, .05 + px, abs((ff * fh2) - (mod(floor(fl), 2.) > .5 ? bx : w2 - bx) * .95));
+          diffuseColor.rgb = mix(diffuseColor.rgb, bkLin(vec3(.06, .06, .065)), clamp(plat + rail * .9 + slat * .7 + stair * .9, 0., 1.) * det * .92);
+        }
+      }
+      // a ghost sign: a faded painted panel with a lettered band, high on a third of the works and old blocks
+      if ((bfKind == 3 || bfKind == 2) && fract(vBld.y * 1.77) > .7 && top > 7. && top < 1e3) {
+        float gx = 2. + 6. * fract(vBld.y * 2.3), gw = 9. + 5. * fract(vBld.y * 3.1);
+        float panel = bkBox(vec2(along, up), vec2(gx, top - 5.2), vec2(gx + gw, top - 1.6), px);
+        float letters = step(.45, bkN(vec2(along * 1.4, floor((up - top) * 1.1)) + vBld.y)) * bkBox(vec2(along, up), vec2(gx + .6, top - 4.2), vec2(gx + gw - .6, top - 2.6), px);
+        vec3 paint = mix(bkLin(vec3(.86, .82, .7)), bkLin(vec3(.55, .2, .16)), step(.5, fract(vBld.y * 5.7)));
+        float fade = .38 + .2 * bkN(vec2(along, up) * .6);
+        diffuseColor.rgb = mix(diffuseColor.rgb, paint, panel * fade * (1. - bfWin) * detW);
+        diffuseColor.rgb = mix(diffuseColor.rgb, bkLin(vec3(.93, .9, .8)), letters * fade * (1. - bfWin) * detW * .8);
+      }
+      // weathering: streaks down from each window's sill corners and from the parapet, grime gathering near the base
+      float streaks = bkN(vec2(along * 2.3, vWPos.y * .12) + vBld.y) * smoothstep(top - 4., top, up);
+      diffuseColor.rgb *= 1. - wear * .14 * smoothstep(.6, .9, streaks);
+      diffuseColor.rgb *= 1. - wear * .1 * (1. - smoothstep(.0, 2.2, up));
     }
   } else if (vBld.w > .5 && vWNorm.y > .5) {
     // flat roofs: gravel and patched membrane
@@ -385,7 +437,8 @@ export class CityScene {
           ${facades ? FACADE_GLSL : ''}`)
         .replace('#include <color_fragment>', `#include <color_fragment>
           float bfWin = 0., bfLit = 0.;
-          int bfKind = int(vBld.x + .5);
+          int bfKind = int(mod(vBld.x + .5, 16.));   // (aBld.x: kind + 16 × the building's height in m, when known)
+          float bfTop = floor((vBld.x + .5) / 16.);
           ${facades ? CITY_FACADE_GLSL : ''}
           if (!${facades ? 'true' : 'false'} && vBld.w < .5 && abs(vWNorm.y) < .5) {
             vec2 t = normalize(vec2(-vWNorm.z, vWNorm.x));
@@ -931,7 +984,7 @@ export class CityScene {
       const base = new THREE.Color(palette[Math.floor(seed * palette.length)]).multiplyScalar(.9 + hash(b.k) * .18);
       const kit = this.streetKit?.building(b, ring, ground, y0, y1, base, key, B);   // [street-kit] facade detail (bays into B); window grid base, roof colour
       if (!kit && this.buildingKit?.take(b, key)) continue;   // [buildings] a home the building kit draws
-      B.color(base).set({ aBld: [b.kind, seed * 100, kit ? kit.winBase : ground, 0] });
+      B.color(base).set({ aBld: [b.kind + 16 * Math.max(0, Math.round(y1 - (kit ? kit.winBase : ground))), seed * 100, kit ? kit.winBase : ground, 0] });   // [business pass] kind + 16 × the wall's top above its window base: the wall shader's parapet, ghost signs, fire escapes
       const facets = b.kind === 6 && b.h > 18;   // PPG Place: glass in rows of projecting prisms
       let mx = 0, mz = 0; for (const p of ring) { mx += p.x; mz += p.z; } mx /= ring.length; mz /= ring.length;
       for (let i = 0; i < ring.length; i++) {
@@ -960,6 +1013,7 @@ export class CityScene {
         if (az * bx - ax * bz > 0) B.tri(first + i, first + j, first + k); else B.tri(first + i, first + k, first + j);
       }
       this._rooftop(B, b, ring, y1, seed, !!kit);   // [w2-budget] (was its own mesh in the solid material)
+      if (b.falseFront && !kit) this._falseFront(B, b, ground, y1, seed, base);   // (Kanab: a Western false front and porch)
     }
     if (due()) yield;
     const mesh = new THREE.Mesh(this.own(B.geometry()), this.buildingMaterial);
@@ -999,6 +1053,37 @@ export class CityScene {
   }
 
   /** Rooftops that make the skyline: PPG Place's glass spires, the Gulf Tower's stepped pyramid, masts, water tanks. */
+  /**
+   * Out West's commercial blocks (user, 26 Nov: "1–2 storey Western false-fronts with covered wood porches"): the
+   * street wall carried up past the roof as a square or stepped false front with a cornice, and a wood porch roof on
+   * posts over the sidewalk. b.falseFront: the street face (graph-city _frontsOf). Merged into the chunk's one mesh.
+   */
+  _falseFront(M, b, ground, y1, seed, base) {
+    const f = b.falseFront, len = f.len, mx = f.mx, mz = f.mz, nx = f.nx, nz = f.nz, yaw = f.yaw;
+    if (len < 5 || b.h > 11) return;
+    const r = (k) => hash(seed * 131 + k * 17.3);
+    const g = this.landscape.heightAt(mx + nx * 2, mz + nz * 2);
+    const face = base.clone().lerp(new THREE.Color(['#e9dcc0', '#c9a27a', '#b5c0b0', '#d8c7a0', '#a65a3e'][Math.floor(r(1) * 5)]), .55);
+    M.set({ aBld: [b.kind, seed * 100, ground, 1] });
+    // the false front: up 1.4–2.6 m past the roof, flat or stepped, a cornice on top
+    const ffH = 1.4 + r(2) * 1.2, top = y1 + ffH;
+    M.color(face).box(mx + nx * .1, y1 - .3, mz + nz * .1, len + .2, ffH + .3, .25, yaw);
+    if (r(3) < .45) M.box(mx + nx * .1, top, mz + nz * .1, len * (.35 + r(4) * .2), .6 + r(5) * .4, .25, yaw);
+    const trim = face.clone().multiplyScalar(.62);
+    M.color(trim).box(mx + nx * .2, top - .22, mz + nz * .2, len + .5, .24, .5, yaw);
+    M.box(mx + nx * .16, y1 - .45, mz + nz * .16, len + .3, .2, .36, yaw);   // (the sign band's lower moulding)
+    // the porch: a wood roof on posts over the walk, 2.2–2.8 m deep
+    if (r(6) < .8) {
+      const d = 2.2 + r(7) * .6, ph = Math.min(3.2, Math.max(2.7, y1 - ground - .6)), wood = new THREE.Color(r(8) < .5 ? '#7a5a3e' : '#8a7a66');
+      const tx = -nz, tz = nx, n = Math.max(2, Math.round(len / 3.2));
+      M.color(wood).box(mx + nx * d / 2, g + ph, mz + nz * d / 2, len, .16, d + .1, yaw);
+      for (let k = 0; k <= n; k++) {
+        const s = (k / n - .5) * (len - .3);
+        M.box(mx + nx * (d - .15) + tx * s, g, mz + nz * (d - .15) + tz * s, .16, ph, .16, yaw);
+      }
+      M.box(mx + nx * (d - .15), g + ph - .3, mz + nz * (d - .15), len, .18, .1, yaw);   // (the beam)
+    }
+  }
   _rooftop(M, b, ring, y1, seed, kit = false) {
     let cx = 0, cz = 0; for (const p of ring) { cx += p.x; cz += p.z; } cx /= ring.length; cz /= ring.length;
     if (b.kind === 6 && b.h > 18) {
@@ -1052,6 +1137,27 @@ export class CityScene {
           M.color('#6f5f4e'); M.cylinder(tx, y + 3.2 + 1.8, tz, 1.6, 2.8, 10, 1.6); M.color('#4f4943'); M.pyramid(tx, y + 3.2 + 4.6, tz, 3.4, 1.1);
           M.color('#4b4744'); for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) M.box(tx + dx, y + 3.2, tz + dz, .2, 1.8, .2);
         }
+      }
+    } else if (!kit && (b.kind === 2 || b.kind === 3) && b.h >= 6) {   // (a street-kit building has its own rooftop clutter)
+      // [business pass] (user 26 Nov — "rooftop clutter"): a commercial block's or a works' flat roof — rooftop units
+      // with their fan grilles, a vent stack or two, now and then a satellite dish and, on a low block by the road, a
+      // billboard. In the building's own mesh (no draw call of its own), sized to fit inside the footprint.
+      let r = Infinity; for (const p of ring) r = Math.min(r, Math.hypot(p.x - cx, p.z - cz));
+      if (r < 3) return;
+      let yaw = 0, best = 0;
+      for (let i = 0; i < ring.length; i++) { const a = ring[i], c = ring[(i + 1) % ring.length], l = Math.hypot(c.x - a.x, c.z - a.z); if (l > best) { best = l; yaw = Math.atan2(c.x - a.x, c.z - a.z); } }
+      const ca = Math.cos(yaw), sa = Math.sin(yaw), at = (u, v) => [cx + sa * u + ca * v, cz + ca * u - sa * v];
+      const n = 1 + Math.floor(seed * 3 + r / 12);
+      for (let k = 0; k < Math.min(n, 4); k++) {
+        const h = hash(seed * 31 + k), [x, z] = at((h - .5) * r * .9, (hash(seed * 17 + k) - .5) * r * .9);
+        M.color(h > .5 ? '#9fa3a4' : '#b7b8b2'); M.box(x, y1, z, 2.2, 1.3, 1.5, yaw);
+        M.color('#55595c'); M.cylinder(x + sa * .5, y1 + 1.3, z + ca * .5, .45, .08, 10, .45);   // the condenser fan
+      }
+      M.color('#7d8184'); for (let k = 0; k < 2; k++) { const [x, z] = at((hash(seed * 7 + k) - .5) * r, (hash(seed * 11 + k) - .5) * r); M.cylinder(x, y1, z, .14, .9 + k * .4, 6, .14); }
+      if (seed > .72) { const [x, z] = at(r * .35, -r * .3); M.color('#d9d9d4'); M.cylinder(x, y1 + .9, z, .45, .12, 12, .5); M.color('#6a6d70'); M.box(x, y1, z, .1, .9, .1); }
+      if (b.kind === 2 && b.h < 14 && seed > .9) {   // a billboard on its frame
+        const [x, z] = at(0, 0); M.color('#3d3f42'); for (const o of [-2.5, 2.5]) { const [px, pz] = at(0, o); M.box(px, y1, pz, .25, 4, .25, yaw); }
+        M.color(['#e8e2d2', '#c63f2e', '#1f4f7a', '#f2c230'][Math.floor(seed * 40) % 4]); M.box(x, y1 + 3.2, z, .25, 3, 7.5, yaw);
       }
     } else if (kit) {   // [street-kit] the kit dresses ordinary roofs
     } else if (b.kind === 0 && seed > .8 && b.h < 14) {

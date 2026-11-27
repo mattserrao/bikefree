@@ -627,6 +627,14 @@ const DESERT_SPECIES = {
   cottonwood: { H: 19, R: 8.5, fork: .32, trunkR: .62, trunk: '#7d7266', bark: BARK, gnarl: .4, up: .02,
     levels: [[5, .45, .8, .46], [4, .35, .7, .26], [3, .35, .6, .13]],
     greens: ['#7c9a48', '#86a34e', '#6f8e42'], fall: ['#e6bd3a', '#f0cc4e', '#d9a72e', '#c9a33a'], turn: [.55, .85, 1] },
+  // Kanab's town trees (user, 26 Nov): Arizona ash (a tidy round crown, dark glossy green, yellow in fall) and Russian
+  // olive (small, crooked, the leaves a dusty silver-grey that barely turns)
+  aash: { H: 11, R: 5.2, fork: .38, trunkR: .36, trunk: '#6f675e', bark: BARK, gnarl: .25, up: .05,
+    levels: [[4, .5, .75, .5], [4, .4, .65, .3], [3, .35, .6, .15]],
+    greens: ['#4f7436', '#5a7f3c', '#486a31'], fall: ['#d9c24a', '#e2cf5c', '#c7b043'], turn: [.4, .8, 1] },
+  rolive: { H: 7, R: 4.2, fork: .25, trunkR: .3, trunk: '#4f453c', bark: BARK, gnarl: .7, up: -.02,
+    levels: [[5, .45, .85, .45], [4, .4, .7, .25], [3, .35, .6, .12]],
+    greens: ['#9aa58e', '#a9b39b', '#8f9b84'], fall: ['#a3a47e', '#aaa784', '#9a9a76'], turn: [.2, .5, .8] },
 };
 function desertConifer(seed, o, lod) {
   // a juniper or pinyon: short, twisted trunks splitting low, the foliage in many small, dense, irregular clumps from

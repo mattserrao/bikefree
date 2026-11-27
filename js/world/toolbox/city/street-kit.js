@@ -803,14 +803,42 @@ export class StreetKit {
         const col = style.awnings ? new THREE.Color(style.awnings[Math.floor(r * 89) % style.awnings.length])
           : new THREE.Color(SIGN_COLORS[Math.floor(r * 97) % SIGN_COLORS.length][0]).lerp(new THREE.Color('#b33a3a'), r > .9 ? .6 : 0);
         const [a0x, a0z] = at(u0 + .35, .1), [a1x, a1z] = at(u0 + uw - .35, .1), yA = base + h - 1.05;
+        // [business pass] (user 26 Nov — "awning and canopy variety"): the shape by shop — a sloped canvas with a
+        // straight or scalloped valance, a rounded dome (quarter-round in three slopes), or (masonry and towers) a flat
+        // metal canopy whose underside glows at night
+        const shape = hash(r * 613 + 11), metal = !style.awnings && shape > .72;
         // a striped canvas (style.stripes of them): ~.45 m stripes, the colour and cream in turn
-        const ns = style.stripes && hash(r * 977 + 3) < style.stripes ? Math.max(3, Math.round((uw - .7) / .45)) : 1, cream = new THREE.Color('#efe9da');
-        for (let q = 0; q < ns; q++) {
-          N.color(ns > 1 && q % 2 ? cream : col);
-          const f0 = q / ns, f1 = (q + 1) / ns, lx = (t) => a0x + (a1x - a0x) * t, lz = (t) => a0z + (a1z - a0z) * t;
-          const p0 = V(lx(f0), yA, lz(f0)), p1 = V(lx(f1), yA, lz(f1)), p2 = V(lx(f1) + f.nx * 1.3, yA - .65, lz(f1) + f.nz * 1.3), p3 = V(lx(f0) + f.nx * 1.3, yA - .65, lz(f0) + f.nz * 1.3);
-          face(N, p0, p1, p2, p3, UP); face(N, p0, p1, p2, p3, V(0, -1, 0));
-          face(N, p3, p2, V(p2.x, p2.y - .25, p2.z), V(p3.x, p3.y - .25, p3.z), V(f.nx, 0, f.nz));   // (the valance)
+        const ns = !metal && style.stripes && hash(r * 977 + 3) < style.stripes ? Math.max(3, Math.round((uw - .7) / .45)) : 1, cream = new THREE.Color('#efe9da');
+        const lx = (t) => a0x + (a1x - a0x) * t, lz = (t) => a0z + (a1z - a0z) * t;
+        if (metal) {
+          const d = 1.5, p0 = V(a0x, yA + .1, a0z), p1 = V(a1x, yA + .1, a1z), p2 = V(a1x + f.nx * d, yA + .1, a1z + f.nz * d), p3 = V(a0x + f.nx * d, yA + .1, a0z + f.nz * d);
+          N.color('#3c4044'); face(N, p0, p1, p2, p3, UP);
+          N.set({ aGlow: [1] }).color('#c9c2b0'); face(N, p0, p1, p2, p3, V(0, -1, 0)); N.set({ aGlow: [0] });
+          N.color('#2c2f32'); face(N, p3, p2, V(p2.x, p2.y - .3, p2.z), V(p3.x, p3.y - .3, p3.z), V(f.nx, 0, f.nz));
+          for (const t of [0, 1]) N.block(lx(t) + f.nx * d * .5, yA + .32, lz(t) + f.nz * d * .5, .04, .04, d * 1.1, f.yaw);   // the tie rods
+        } else {
+          const dome = shape > .5, scallop = !dome && shape > .25;
+          const prof = dome ? [[0, 0], [.55, -.12], [1, -.42], [1.25, -.95]] : [[0, 0], [1.3, -.65]];
+          for (let q = 0; q < ns; q++) {
+            N.color(ns > 1 && q % 2 ? cream : col);
+            const f0 = q / ns, f1 = (q + 1) / ns;
+            for (let j = 0; j + 1 < prof.length; j++) {
+              const [da, ya] = prof[j], [db, yb] = prof[j + 1];
+              const p0 = V(lx(f0) + f.nx * da, yA + ya, lz(f0) + f.nz * da), p1 = V(lx(f1) + f.nx * da, yA + ya, lz(f1) + f.nz * da);
+              const p2 = V(lx(f1) + f.nx * db, yA + yb, lz(f1) + f.nz * db), p3 = V(lx(f0) + f.nx * db, yA + yb, lz(f0) + f.nz * db);
+              face(N, p0, p1, p2, p3, UP); face(N, p0, p1, p2, p3, V(0, -1, 0));
+            }
+            const [de, ye] = prof[prof.length - 1], e0 = V(lx(f0) + f.nx * de, yA + ye, lz(f0) + f.nz * de), e1 = V(lx(f1) + f.nx * de, yA + ye, lz(f1) + f.nz * de);
+            if (dome) continue;
+            if (scallop) {   // (the valance cut in scallops, ~.3 m each)
+              const sc = Math.max(1, Math.round(Math.hypot(e1.x - e0.x, e1.z - e0.z) / .3));
+              for (let j = 0; j < sc; j++) {
+                const t0 = j / sc, t1 = (j + 1) / sc, tm = (t0 + t1) / 2, P = (t, dy) => V(e0.x + (e1.x - e0.x) * t, e0.y + dy, e0.z + (e1.z - e0.z) * t);
+                face(N, P(t0, 0), P(t1, 0), P(t1, -.12), P(t0, -.12), V(f.nx, 0, f.nz));
+                N.tri(N.vertex(...P(t0, -.12).toArray(), f.nx, 0, f.nz), N.vertex(...P(t1, -.12).toArray(), f.nx, 0, f.nz), N.vertex(...P(tm, -.27).toArray(), f.nx, 0, f.nz));
+              }
+            } else face(N, e0, e1, V(e1.x, e1.y - .25, e1.z), V(e0.x, e0.y - .25, e0.z), V(f.nx, 0, f.nz));   // (the valance)
+          }
         }
       } else if (r < style.blade && h > 3 && !this.lampNear(...at(u0 + .5, .6), 1.2)) {
         const [bx, bz] = at(u0 + .5, .1), y = base + h + .3;
@@ -819,6 +847,23 @@ export class StreetKit {
         const cx = bx + f.nx * .55, cz = bz + f.nz * .55;
         this._signQuad(C.near, cx + f.tx * .03, cz + f.tz * .03, f.tx, f.tz, .8, y, y + 1.2, L2);
         this._signQuad(C.near, cx - f.tx * .03, cz - f.tz * .03, -f.tx, -f.tz, .8, y, y + 1.2, L2);
+      }
+      // [business pass] (user 26 Nov — "sign variety"): lettering on the glass or a small neon in the window (it glows
+      // at night like the fascia), and a sandwich board out on the sidewalk by the door of some cafés and shops
+      const s2 = hash(r * 431 + 5);
+      if (uw > 3.2 && s2 < .45) {
+        const [wx, wz] = at(um + (s2 < .2 ? 0 : uw * .22), .07), ww = s2 < .2 ? Math.min(2.2, uw - 1.2) : .9;
+        this._signQuad(C.near, wx, wz, f.nx, f.nz, ww, base + 1.5, base + 1.5 + ww * .22, label);
+      }
+      if (s2 > .82 && !lampHere) {
+        const [px, pz] = at(u0 + (r > .5 ? 1.6 : uw - 1.6), 1.25), sb = .6, hb = .95;
+        N.color('#3a2f26');
+        for (const sgn of [1, -1]) {   // the A-frame's two boards, leaning together
+          const bx = px + f.nx * sgn * .14, bz = pz + f.nz * sgn * .14;
+          face(N, V(bx - f.tx * sb / 2 + f.nx * sgn * .12, base, bz - f.tz * sb / 2 + f.nz * sgn * .12), V(bx + f.tx * sb / 2 + f.nx * sgn * .12, base, bz + f.tz * sb / 2 + f.nz * sgn * .12),
+            V(bx + f.tx * sb / 2, base + hb, bz + f.tz * sb / 2), V(bx - f.tx * sb / 2, base + hb, bz - f.tz * sb / 2), V(f.nx * sgn, .2, f.nz * sgn));
+        }
+        this._signQuad(C.near, px + f.nx * .22, pz + f.nz * .22, f.nx, f.nz, .5, base + .35, base + .85, label);
       }
     }
   }
@@ -901,7 +946,7 @@ export class StreetKit {
    */
   _bayWalls(B, f, g, b, seed, winBase, wall) {
     const { y0, y1, w, d, u, at, mid } = g, p = [at(u - w / 2, 0), at(u - w / 2 + .6, d), at(u + w / 2 - .6, d), at(u + w / 2, 0)];
-    B.set({ aBld: [b.kind, seed * 100, winBase, 0] }).color(wall);
+    B.set({ aBld: [b.kind + 16 * Math.max(0, Math.round(y1 - winBase)), seed * 100, winBase, 0] }).color(wall);
     for (let k = 0; k < 3; k++) {
       const a = p[k], c = p[k + 1];
       face(B, V(a.x, y0, a.z), V(c.x, y0, c.z), V(c.x, y1, c.z), V(a.x, y1, a.z), V((a.x + c.x) / 2 - mid.x + f.nx * .01, 0, (a.z + c.z) / 2 - mid.z + f.nz * .01));

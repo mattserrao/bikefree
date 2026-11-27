@@ -20,6 +20,7 @@ import { loadTerrainGrid } from '../terrain-grid.js';
 import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean, ROAD_LIFT, PACER_LANE } from './pose.js';
 import { loadRider, RIDER_RIM } from './rider.js';
 import { RoadRiders } from './toolbox/life/road-riders.js';   // [gap 15] other riders on the road
+import { RoadsideCommerce } from './toolbox/city/roadside-commerce.js';   // [business pass] gas stations, fast food, strip malls
 import { makeSkyDome } from './toolbox/atmosphere/sky-dome.js';
 import { PostFX } from './toolbox/atmosphere/post.js';
 import { createRenderer, pixelRatioFor, QualityGovernor, GpuTimer } from './render-core.js';
@@ -580,6 +581,7 @@ export class GraphWorld {
 
   dispose() {
     this.roadRiders?.dispose(); this.roadRiders = null;
+    this.commerce?.dispose(); this.commerce = null;
     this.post?.dispose(); this.post = null; this.env?.dispose(); this.groundCover?.dispose(); this.sky?.dispose();
     this.effects?.dispose();
     this.stop();
@@ -624,6 +626,7 @@ export class GraphWorld {
     this.heroes?.tick(now / 1000, dt);
     this.effects.tick(now / 1000, dt);
     this.city?.tick(this.camera.position, now / 1000, this.path ? out : null, dt);
+    this.commerce?.tick(this.camera);
     if ((this._frames & 15) === 0) this.bridges?.tick(this.camera.position, this.qualityKey === 'low' ? 3000 : 4500);
     this.rider.update(out.pos, out.fwd, this.crank, src.speed || 0, Math.min(dt, 0.1), src);
     this._updatePacer(dt);
@@ -1009,6 +1012,10 @@ export class GraphWorld {
         this._nodeWidths();
         return c.loadLand().then(() => {
           if (this.disposed) return;
+          // [business pass] the roadside businesses OpenStreetMap maps here (tools/fetch_commerce.py): gas stations, fast food,
+          // strip malls — not on Light
+          if (this.qualityKey !== 'low') fetch(new URL(`../../routes/cities/${this.json.id}-commerce.json`, import.meta.url)).then((r) => (r.ok ? r.json() : null))
+            .then((j) => { if (j && !this.disposed) this.commerce = new RoadsideCommerce(this, c, j); }).catch(() => {});
           const b = c.landBox, U = this.mats.ground.userData.land;
           if (U) { U.uLand.value = c.landTexture; U.uLandBox.value.set(b.x0, b.z0, b.x1, b.z1); U.uLandOn.value = 1; }
           // [vegetation] tufts on every lawn, yard and pasture near the rider (toolbox/landscape/ground-cover.js); not on Phone
