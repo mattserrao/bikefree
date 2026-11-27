@@ -14,6 +14,7 @@ import { LAND } from './landscape.js';
 import { nightGlowShader } from '../materials/night-glow.js';
 import { ROAD_WIDTH, LANE_OFFSET, PACER_LANE, ROAD_LIFT, routePoint, leanTarget, stepLean } from '../core/road-frame.js';
 import { powerRequired } from '../../../physics.js';
+import { cyclists, pedestrians } from '../life/population.js';   // [27 Nov] no pedestrians, half the cyclists
 import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -22,7 +23,8 @@ const CAR_MIX = [['sedan', .34], ['hatch', .2], ['suv', .22], ['pickup', .07], [
 // [6.10] people and traffic about half what they were (low 70 / 40, balanced 160 / 85, high 260 / 140; buses
 // max(4, cars / 12) → max(2, cars / 12); 4 oncoming cars → 2); `cyclists` ride the side streets and trails as before,
 // `routeRiders` ride the route's own road with you (ROUTE_RIDE below)
-const COUNTS = { low: { people: 35, cars: 20, cyclists: 6, routeRiders: 5 }, balanced: { people: 80, cars: 42, cyclists: 12, routeRiders: 8 }, high: { people: 130, cars: 70, cyclists: 18, routeRiders: 10 } };
+// [27 Nov] no pedestrians (people: 0), half the cyclists (population.js)
+const COUNTS = { low: { people: pedestrians(35), cars: 20, cyclists: cyclists(6), routeRiders: cyclists(5) }, balanced: { people: pedestrians(80), cars: 42, cyclists: cyclists(12), routeRiders: cyclists(8) }, high: { people: pedestrians(130), cars: 70, cyclists: cyclists(18), routeRiders: cyclists(10) } };
 const ONCOMING = 2;
 export const MOVING_TRAFFIC = false;   // (cars and buses driving the streets: off — parked cars only)
 // [6.10] riders on the route with you (_updateRouteRiders): their lanes (m right of the centre line, riding their way:
@@ -449,8 +451,8 @@ export class CityLife {
     const n = this.counts.people, scene = this.city.route.scene || {};
     const uTime = this.city.uniforms.uTime, nearM = { low: 25, balanced: 45, high: 70 }[this.city.qualityKey] ?? 45;
     const farM = { low: 70, balanced: 110, high: 160 }[this.city.qualityKey] ?? 110;
-    this.crowd = new Crowd(this.city.group, { uTime, name: 'People', capacity: n, nearM, farM, dogs: Math.ceil(n * .08), strollers: Math.ceil(n * .05) });
-    this.cyclistCrowd = new Crowd(this.city.group, { uTime, name: 'Cyclists', capacity: this.counts.cyclists + this.counts.routeRiders, nearM: Infinity, kind: 'cyclist' });
+    this.crowd = new Crowd(this.city.group, { uTime, name: 'People', capacity: Math.max(1, n), nearM, farM, dogs: Math.ceil(n * .08), strollers: Math.ceil(n * .05) });
+    this.cyclistCrowd = new Crowd(this.city.group, { uTime, name: 'Cyclists', capacity: Math.max(1, this.counts.cyclists + this.counts.routeRiders), nearM: Infinity, kind: 'cyclist' });
     this.walkers = [];
     for (let i = 0; i < n; i++) this.walkers.push({ id: i, alive: false });
     this.riders = [];

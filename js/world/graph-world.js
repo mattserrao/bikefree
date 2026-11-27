@@ -19,6 +19,7 @@ import { CANAL, canalAt } from './toolbox/city/cny-landmarks.js';
 import { loadTerrainGrid } from '../terrain-grid.js';
 import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean, PACER_LANE } from './pose.js';
 import { loadRider, RIDER_RIM } from './rider.js';
+import { cyclists } from './toolbox/life/population.js';   // [27 Nov] half the cyclists
 import { RoadRiders } from './toolbox/life/road-riders.js';   // [gap 15] other riders on the road
 import { RoadsideCommerce } from './toolbox/city/roadside-commerce.js';   // [business pass] gas stations, fast food, strip malls
 import { FarTerrain } from './toolbox/landscape/far-terrain.js';   // [evidence 27 Nov] the land beyond the ground, out to ~45 km
@@ -721,7 +722,7 @@ export class GraphWorld {
     this._updatePacer(dt);
     // [gap 15] company on the road: a few riders in other kits on the way you ride (none on Light, or where a map says so)
     if (this.path && !this.roadRiders && this.qualityKey !== 'low' && this.profile.riders !== false && !this.gfx?.noRiders)
-      this.roadRiders = new RoadRiders(this, { count: { ultra: 8, high: 6, balanced: 4 }[this.qualityKey] ?? 4 });
+      this.roadRiders = new RoadRiders(this, { count: cyclists({ ultra: 8, high: 6, balanced: 4 }[this.qualityKey] ?? 4) });
     this.roadRiders?.tick(dt, this.p, src.speed || 0);
     if (this.path) {
       const tmp = this._leanTmp ||= { pos: new THREE.Vector3(), fwd: new THREE.Vector3(), flat: new THREE.Vector3() };

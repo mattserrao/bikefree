@@ -16,6 +16,7 @@ import { carGeometry, carMaterial, PALETTES } from './figures/cars.js';
 // the traffic kinds → the parked-car kit's (the jammer keeps its own model)
 const KIT = { car: 'sedan', hatch: 'hatch', suv: 'suv', pickup: 'pickup', camper: 'van', rv: 'van' };
 import { Crowd, CLIP, randomLook, clipRate } from './figures/people.js';
+import { cyclists } from './population.js';   // [27 Nov] half the cyclists
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 // kind (the scene's "mix" names) → model in the figures kit; bikes are cyclists from the people kit
@@ -76,7 +77,7 @@ export class HighwayTraffic {
       }
       this.meshes[k.kind] = mesh; this.group.add(mesh);
     }
-    this.agents = Array.from({ length: this.n }, (_, id) => ({ id, alive: false }));
+    this.agents = Array.from({ length: cyclists(this.n) }, (_, id) => ({ id, alive: false }));   // [27 Nov] half the cyclists (the parked cars keep this.n)
     // overlooks (turnouts) where traffic can pull in
     this.turnouts = (route.scene?.lookouts || []).map((l) => ({ s: l.atM, side: l.side === 'inland' ? -1 : 1, width: l.widthM || 10, length: l.lengthM || 30, used: 0 }));
     this.parked = [];
