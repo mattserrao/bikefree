@@ -66,6 +66,22 @@ they are missing.
 **Offline:** `--offline` (or `BIKEFREE_OFFLINE=1` in the environment, e.g. `BIKEFREE_OFFLINE=1 npm run cny:build`)
 uses the cache only: every step gets it, and any download stops the build naming the missing file.
 
+**Reproducible builds:** every map file the tools write carries a `provenance` block (the tool and a hash of its
+source, the data sources, the boxes fetched, and the count, size, dates and sha256 digest of the cache files it was
+built from). A config may pin OpenStreetMap to a date, `"osmDate": "2026-11-01"` in `tools/city/<id>.json` (scenes:
+`"osm": {"osmDate": …}`): that map's OSM fetches then go to the Overpass API with `[date:"…"]`, cached apart in
+`osm-<id>@<date>/`, so a rebuild next year fetches the same data. Without it the OSM API is read live and the cache is
+the only snapshot. To keep or move that snapshot:
+
+```sh
+python3 tools/cache_manifest.py write  <id>   # tools/.cache/manifest-<id>.json: every file, size, sha256
+python3 tools/cache_manifest.py verify <id>   # the cache still matches (exit 1 if not)
+python3 tools/cache_manifest.py pack   <id>   # one tarball in tools/.cache/packs/ (nothing is uploaded)
+python3 tools/cache_manifest.py unpack <tarball>
+```
+
+The manifest's digest is the one in the map's `provenance.inputs.sha256` when the map was built from exactly those files.
+
 After a rebuild, `npm run routes:build` regenerates the catalog and offline manifest (`sw-assets.js`), and
 `npm run check` verifies that the generated files are current (CI runs `npm test`, which includes the generated-files
 checks, and the network check).

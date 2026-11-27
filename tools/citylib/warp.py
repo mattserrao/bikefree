@@ -25,6 +25,7 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage
 from scipy.spatial import cKDTree
+from . import dem
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CACHE = os.path.join(ROOT, 'tools', '.cache')
@@ -48,16 +49,8 @@ class Dem:
         self.tiles = {}
 
     def _tile(self, tx, ty):
-        if (tx, ty) not in self.tiles:
-            path = os.path.join(CACHE, f'dem-{DEM_Z}-{tx}-{ty}.png')
-            if not os.path.exists(path):
-                import urllib.request
-                from .offline import guard
-                guard(f'DEM tile {DEM_Z}/{tx}/{ty}')
-                req = urllib.request.Request(f'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{DEM_Z}/{tx}/{ty}.png', headers={'User-Agent': 'bikefree-warp/0.1'})
-                open(path, 'wb').write(urllib.request.urlopen(req, timeout=60).read())
-            a = np.asarray(Image.open(path).convert('RGB'), dtype=np.float64)
-            self.tiles[(tx, ty)] = (a[..., 0] * 256 + a[..., 1] + a[..., 2] / 256 - 32768).astype(np.float32)
+        if (tx, ty) not in self.tiles:   # (citylib/dem.py: the shared cache, offline mode, provenance)
+            self.tiles[(tx, ty)] = dem.tile_heights(DEM_Z, tx, ty, dtype=np.float32, headers={'User-Agent': 'bikefree-warp/0.1'})
         return self.tiles[(tx, ty)]
 
     def px(self, gx, gy):

@@ -19,7 +19,8 @@ Three kinds:
 """
 import io, json, math, os, sys, urllib.request, urllib.parse
 from xml.sax.saxutils import escape
-from PIL import Image
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from citylib import dem, geo, net, provenance  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, 'routes', 'parks')
@@ -35,57 +36,25 @@ with open(os.path.join(ROOT, 'routes', 'catalog.json')) as catalog_file:
              for p in json.load(catalog_file) if p.get('routing')}
 
 
+UA = {'User-Agent': 'bikefree-route-builder/0.6 (personal project)'}
+
+
 def http_get(url):
-    import time
-    time.sleep(3)  # be polite to the free public services
-    req = urllib.request.Request(url, headers={'User-Agent': 'bikefree-route-builder/0.6 (personal project)'})
-    with urllib.request.urlopen(req, timeout=90) as r:
-        return r.read()
+    # (be polite to the free public services; offline mode refuses: citylib/net.py)
+    return net.http_get(url, pause=3, timeout=90, headers=UA)
 
 
-def haversine(a, b):
-    R = 6371008.8
-    la1, lo1, la2, lo2 = map(math.radians, (a[0], a[1], b[0], b[1]))
-    h = math.sin((la2 - la1) / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2
-    return 2 * R * math.asin(math.sqrt(h))
-
-
-_tiles = {}
+haversine = geo.hv
+DEM = dem.Sampler(DEM_Z, pause=3, timeout=90, headers=UA, nodata_fallback=True)
+NODATA_M = dem.NODATA_M   # Terrain Tiles has holes (whole z14 tiles of -32768 near Valbonnais, France)
 
 
 def dem_tile(x, y, z=DEM_Z):
-    key = (z, x, y)
-    if key not in _tiles:
-        os.makedirs(CACHE, exist_ok=True)
-        path = os.path.join(CACHE, f'dem-{z}-{x}-{y}.png')
-        if not os.path.exists(path):
-            data = http_get(f'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png')
-            open(path, 'wb').write(data)
-        _tiles[key] = Image.open(path).convert('RGB').load()
-    return _tiles[key]
-
-
-NODATA_M = -1000   # Terrain Tiles has holes (whole z14 tiles of -32768 near Valbonnais, France)
+    return DEM.rgb(z, x, y)
 
 
 def elevation(lat, lon, z=DEM_Z):
-    n = 2 ** z
-    fx = (lon + 180) / 360 * n * 256
-    lr = math.radians(lat)
-    fy = (1 - math.log(math.tan(lr) + 1 / math.cos(lr)) / math.pi) / 2 * n * 256
-
-    def px(gx, gy):
-        tx, ty = int(gx // 256), int(gy // 256)
-        r, g, b = dem_tile(tx, ty, z)[int(gx % 256), int(gy % 256)]
-        return r * 256 + g + b / 256 - 32768
-
-    x0, y0 = math.floor(fx - 0.5), math.floor(fy - 0.5)
-    ax, ay = fx - 0.5 - x0, fy - 0.5 - y0
-    h = [px(x0, y0), px(x0 + 1, y0), px(x0, y0 + 1), px(x0 + 1, y0 + 1)]
-    if min(h) < NODATA_M and z > 10:
-        return elevation(lat, lon, z - 1)   # a hole in this zoom: the coarser tile has the ground
-    return (h[0] * (1 - ax) * (1 - ay) + h[1] * ax * (1 - ay)
-            + h[2] * (1 - ax) * ay + h[3] * ax * ay)
+    return DEM(lat, lon, z)
 
 
 def route(key, park):
@@ -99,9 +68,10 @@ def route(key, park):
     if raw is None:
         data = json.loads(http_get(url))
         data['_url'] = url
-        json.dump(data, open(cache, 'w'))
+        net.write_atomic(cache, json.dumps(data).encode())
     else:
         data = json.loads(raw)
+    provenance.used(cache)
     coords = data['features'][0]['geometry']['coordinates']
     return [(c[1], c[0]) for c in coords]
 
@@ -290,6 +260,9 @@ def write_gpx(key, park, pts, eles, oab):
         f.write('<gpx version="1.1" creator="bikefree" xmlns="http://www.topografix.com/GPX/1/1">\n')
         f.write(f'  <metadata><name>{escape(park["name"])}</name><desc>{escape(park["park"])}.{" Out and back." if oab else ""} Routed with BRouter on '
                 'OpenStreetMap data (© OpenStreetMap contributors, ODbL); elevation from AWS Terrain Tiles.</desc></metadata>\n')
+        # (code review P1: what the line was built from — the BRouter answer and DEM tiles in tools/.cache)
+        prov = provenance.block(__file__, ['BRouter (brouter.de) on OpenStreetMap, live at fetch time (ODbL)', dem.SOURCE], map_id=f'park-{key}')
+        f.write(f'  <!-- bikefree-provenance {json.dumps(prov, separators=(",", ":")).replace("--", "- -")} -->\n')
         f.write(f'  <trk><name>{escape(park["name"])}</name><trkseg>\n')
         for (lat, lon), e in zip(pts, eles):
             f.write(f'    <trkpt lat="{lat:.6f}" lon="{lon:.6f}"><ele>{e:.1f}</ele></trkpt>\n')
@@ -359,6 +332,7 @@ def prune_existing(key):
 
 
 def build(key):
+    provenance.reset()   # (this route's own inputs only)
     park = PARKS[key]
     oab = park.get('out_and_back', False)
     one = park.get('one_way', False)

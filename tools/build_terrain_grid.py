@@ -23,7 +23,7 @@ Layout
           the hydro-flattened river surfaces (dead flat, near the city's water level) connected to the
           rivers the city's own data maps. The city's land grid covers only the middle of the box.
 """
-import base64, io, json, math, os, re, sys, urllib.request
+import base64, io, json, math, os, re, sys
 from pathlib import Path
 
 import numpy as np
@@ -31,7 +31,8 @@ from scipy import ndimage
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
-CACHE = Path.home() / '.cache' / 'bikefree-dem'
+sys.path.insert(0, str(ROOT / 'tools'))
+from citylib import dem, provenance  # noqa: E402
 Z = 14
 BASE, SCALE = -100.0, 0.1
 
@@ -44,19 +45,12 @@ def tile_xy(lat, lon, z):
     return x, y
 
 
-NODATA_M = -1000   # Terrain Tiles has holes: whole z14 tiles of -32768 m (near Valbonnais, France)
+NODATA_M = dem.NODATA_M   # Terrain Tiles has holes: whole z14 tiles of -32768 m (near Valbonnais, France)
 
 
 def fetch(z, x, y):
-    path = CACHE / f'{z}-{x}-{y}.png'
-    if not path.exists():
-        CACHE.mkdir(parents=True, exist_ok=True)
-        url = f'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'
-        from citylib.offline import guard
-        guard(url)
-        with urllib.request.urlopen(url, timeout=60) as r: path.write_bytes(r.read())
-    a = np.asarray(Image.open(path).convert('RGB'), dtype=np.float64)
-    h = a[..., 0] * 256 + a[..., 1] + a[..., 2] / 256 - 32768
+    # (code review P8: citylib/dem.py — tools/.cache/dem-<z>-<x>-<y>.png, or one already in the old ~/.cache/bikefree-dem)
+    h = dem.tile_heights(z, x, y)
     bad = h < NODATA_M
     if bad.any() and z > 10:
         # fill the hole from the coarser parent tile (its quadrant, upsampled ×2)
@@ -312,6 +306,7 @@ def finish(rid, cfg, pts, gpx, M, H, north, west, south, east, fnx, fny, mlat, m
     out = {
         'format': 'bikefree-terrain-grid-1', 'rowDelta': True,
         'attribution': 'Elevation: AWS Terrain Tiles (USGS 3DEP, NOAA and others)',
+        'provenance': provenance.block(__file__, [dem.SOURCE], map_id=f'scene-{rid}', box=(south, west, north, east)),
         'north': north, 'west': west, 'south': south, 'east': east,
         'base': BASE, 'scale': SCALE, 'floorM': cfg['floorM'],
         'coarse': {'nx': cnx, 'ny': cny, 'step': k, 'h': pack(coarse, cfg['floorM'])},

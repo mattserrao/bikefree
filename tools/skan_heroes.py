@@ -18,7 +18,9 @@ golf course and other landmarks"). From OSM (tools/.cache/osm-skan, fetched by b
     python3 tools/skan_heroes.py
 Data © OpenStreetMap contributors (ODbL).
 """
-import glob, json, math, os, xml.etree.ElementTree as ET
+import glob, json, math, os, sys, xml.etree.ElementTree as ET
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from citylib import osm_source  # noqa: E402  (a config's osmDate: the dated tiles, code review P1)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 KX, KZ = 111320 * math.cos(math.radians(42.96)), 110540
@@ -66,7 +68,7 @@ MANSIONS = [
 
 def main():
     nodes, ways = {}, {}
-    for f in glob.glob(os.path.join(ROOT, 'tools/.cache/osm-skan/*.osm')):
+    for f in glob.glob(os.path.join(osm_source.city_dir('skan'), '*.osm')):
         for ev, el in ET.iterparse(f, events=('end',)):
             if el.tag == 'node': nodes[el.get('id')] = (float(el.get('lat')), float(el.get('lon'))); el.clear()
             elif el.tag == 'way':

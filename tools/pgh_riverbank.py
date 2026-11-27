@@ -21,6 +21,8 @@ from collections import defaultdict
 sys.argv.append('--offline')
 sys.path.insert(0, os.path.dirname(__file__))
 import build_pgh as B
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from citylib import osm_source  # noqa: E402  (a config's osmDate: the dated tiles, code review P1)
 
 ROOT = B.ROOT
 cfg = json.load(open(os.path.join(ROOT, 'tools', 'city', 'pgh.json')))
@@ -41,7 +43,7 @@ LL = lambda x, y: (y / KY + 40.44, x / KX - 80)
 nodes, wayrefs, rings, walls = {}, {}, [], []
 WALLS = {('barrier', 'wall'), ('barrier', 'retaining_wall'), ('man_made', 'embankment'), ('man_made', 'quay'), ('man_made', 'pier'), ('natural', 'cliff'), ('man_made', 'breakwater')}
 river_members = set()
-for f in glob.glob(os.path.join(ROOT, 'tools', '.cache', 'osm-pgh', '*.osm')):
+for f in glob.glob(os.path.join(osm_source.city_dir('pgh'), '*.osm')):
     r = ET.parse(f).getroot()
     for nd in r.iter('node'): nodes[nd.get('id')] = (float(nd.get('lat')), float(nd.get('lon')))
     for w in r.iter('way'):

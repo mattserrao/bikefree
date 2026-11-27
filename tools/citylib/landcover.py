@@ -39,6 +39,8 @@ def _fetch(name):
                 if not b: break
                 f.write(b)
         os.replace(path + '.part', path)
+    from . import provenance
+    provenance.used(path)
     return path
 
 
