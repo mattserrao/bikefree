@@ -14,6 +14,7 @@
 import * as THREE from '../../../../vendor/three.js';
 import { SKY_REFLECT } from '../atmosphere/sky-dome.js';
 import { V, centroid, scaleRing, orient, prism, cap, block, frameOf, makeFrame, lathe, gable, faceOut } from './hero-geom.js';
+import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
 
 /**
  * The canal's channel, for the planters (graph-city: no tree, house or brush in it; scrub on its banks): its samples
@@ -59,20 +60,19 @@ export function canalWaterMaterial(uTime) {
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWW = (modelMatrix * vec4(transformed, 1.)).xyz;');
     shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>
         varying vec3 vWW; uniform vec3 uHor, uZen, uSunC, uSunD; uniform float uTime;
-        float cwH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-        float cwN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(cwH(i), cwH(i + vec2(1, 0)), f.x), mix(cwH(i + vec2(0, 1)), cwH(i + vec2(1, 1)), f.x), f.y); }`)
+${HASH_GLSL}`)
       .replace('#include <opaque_fragment>', `
         {
           vec3 V = normalize(cameraPosition - vWW);
           // ripples: a slow wobble in the surface's normal
           vec2 rp = vWW.xz * .9 + uTime * vec2(.25, .1);
-          vec3 Nw = normalize(vec3((cwN(rp) - .5) * .06 + (cwN(rp * 2.7 + 5.) - .5) * .04, 1., (cwN(rp + 9.) - .5) * .06));
+          vec3 Nw = normalize(vec3((vn2(rp) - .5) * .06 + (vn2(rp * 2.7 + 5.) - .5) * .04, 1., (vn2(rp + 9.) - .5) * .06));
           float cosV = max(dot(V, Nw), 0.), fres = .02 + .98 * pow(1. - cosV, 5.);
           vec3 R = reflect(-V, Nw);
           // the sky it mirrors, and the dark band of the trees on the far bank (low in the reflection)
           vec3 sky = mix(uHor, uZen, smoothstep(0., .5, R.y));
           sky = mix(sky * .18, sky, smoothstep(.05, .22, R.y));
-          float glint = pow(max(dot(R, uSunD), 0.), 400.) * 6. * (.5 + cwN(rp * 6.));
+          float glint = pow(max(dot(R, uSunD), 0.), 400.) * 6. * (.5 + vn2(rp * 6.));
           outgoingLight = mix(outgoingLight, sky * .4, clamp(fres * .7, 0., .38)) + uSunC * glint;   // (inky: a dim mirror)
         }
         #include <opaque_fragment>`);

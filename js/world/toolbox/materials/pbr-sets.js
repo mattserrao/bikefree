@@ -9,6 +9,7 @@
 // "assets": { "textures": [...] } (map-definition.js), at most MAP_TEXTURE_MB of them.
 import * as THREE from '../../../../vendor/three.js';
 import { KTX2Loader } from '../../../../vendor/addons/loaders/KTX2Loader.js';
+import { HASH_GLSL } from './glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
 
 const BASE = new URL('../../../../', import.meta.url);
 
@@ -73,7 +74,7 @@ export async function loadPbrSets(renderer, names) {
  * set at world uv: albedo (linear), height, normal (tangent space), roughness, ao.
  */
 export const PBR_GLSL = /* glsl */`
-  vec2 hexHash(vec2 p) { p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3))); return fract(sin(p) * 43758.5453); }
+${HASH_GLSL}
   vec4 hexSample(sampler2D tex, vec2 uv) {
     vec2 st = uv * mat2(1., 0., -.57735027, 1.15470054) * 3.4641016;   // skew onto the hex lattice (cells ≈ 1/2 tile)
     vec2 ip = floor(st), f = fract(st);
@@ -83,7 +84,7 @@ export const PBR_GLSL = /* glsl */`
     else { w = vec3(s - 1., 1. - f.y, 1. - f.x); v1 = ip + 1.; v2 = ip + vec2(0., 1.); v3 = ip + vec2(1., 0.); }
     w = pow(w, vec3(6.)); w /= (w.x + w.y + w.z);
     vec2 dx = dFdx(uv), dy = dFdy(uv);
-    return textureGrad(tex, uv + hexHash(v1), dx, dy) * w.x + textureGrad(tex, uv + hexHash(v2), dx, dy) * w.y + textureGrad(tex, uv + hexHash(v3), dx, dy) * w.z;
+    return textureGrad(tex, uv + hw22(v1), dx, dy) * w.x + textureGrad(tex, uv + hw22(v2), dx, dy) * w.y + textureGrad(tex, uv + hw22(v3), dx, dy) * w.z;
   }
   struct PbrSample { vec3 albedo; float height; vec3 normal; float roughness; float ao; };
   PbrSample pbrSurface(sampler2D albedoTex, sampler2D nraTex, vec2 uv) {

@@ -42,7 +42,9 @@ CNY's and SKAN's rules won and became the defaults; the other maps pin what they
 | Effects | `toolbox/effects/index.js` | One registry for both worlds: a graph map's `"effects"`, a scene's `"effects"`. `NEEDS` lists the world methods each effect calls; one a world can't host is skipped with a warning. |
 | Building engine | `toolbox/structures/building-engine.js` | The front door for every building: `GENERATORS` (house engine, building kit, farm, city facades, footprints, settlement, named models), `MAP_KINDS` / `kindOfCode` (graph footprint codes), `buildBuilding()` (draws a planned building through its generator). |
 | Planting | `toolbox/vegetation/planting.js` | The one record every planner hands the tree engine (`treeRecord`, `recordsFromMatrices`, `plantTile`); `PLANNERS` lists rural, forest-edge, scatter and old-growth. |
-| Shared GLSL | `toolbox/materials/glsl-noise.js` | `NOISE_GLSL` (h21, vn, fbm) for every shader that needs value noise. |
+| Shared GLSL | `toolbox/materials/glsl-noise.js` | `NOISE_GLSL` (h21, vn, fbm) for every shader that needs value noise. `HASH_GLSL` (27 Nov: hw21, hw31, hw22, vn2, vn3): the sin-free hashes and value noise, guarded so one shader can include it twice. Never write `fract(sin(dot(p, k)) * 43758.5)` (it loses its bits for world-metre inputs on GPUs) or a private value noise; `npm test` (test/shader-noise.test.mjs) fails on both. |
+| Shader patches | `toolbox/core/shader-patch.js` | `patchShader(src, anchor, code, where)` (27 Nov): every onBeforeCompile patch at an `#include <…>` anchor. It throws when three's shader lacks the anchor, where a `String.replace` would drop the patch silently; test/shader-anchors.test.mjs runs the factories against `THREE.ShaderLib`. |
+| Night glow | `toolbox/materials/night-glow.js` | `withNightGlow(material, night, glsl, key, opts)` / `nightGlowShader(shader, night, glsl, opts)` (27 Nov): lamps, windows, lenses and signs that come up after dark (`uNight` + a term after the emissive map; `glow: 'float'` passes an `aGlow` attribute). Keep a distinct cache key per site. |
 
 `npm run guard` now covers the graph maps too (`GRAPH_SHOTS`: PGH, CNY, SKAN through `tools/snap_pgh.mjs --frozen`). Their tiles
 stream in async order, so they are compared within `GRAPH_TOLERANCE` (pixels off by > 32 levels ≤ 1 %, draw calls ±8 %,
@@ -146,6 +148,8 @@ js/world/toolbox/
 | `materials/surfaces.js` | `palette`, `water`, `vista` | Ground shader: palette by slope, height, shore and canopy, with vista detail far off. Also sea, lake water, lake mist, and scenery decorations (wind on soft plants, foliage, concrete). |
 | `materials/road-surface.js` | `road` | Road kind by stretch: fresh, worn, patched, chip seal, alpine, frost-heaved, tunnel, brick (running bond across the road), wet. Costs no draw calls. `markings: "fr"` draws the paint in metres by the French rules (T1 centre 3/10 m, T2 edges 3/3.5 m, short dashes and no edges in villages, solid centre on blind bends with T3 warning dashes, no paint on narrow roads) and adds aggregate, mottling, the paving seam and edge repair strips. A city route's trail stretches take their own `road.trail: { surface, zones }`. |
 | `materials/stonework.js` | (used by structures) | `makeMasonryMaterial({ stones })`: rubble masonry in world space for walls, parapets and portals. |
+| `materials/glsl-noise.js` | (used by shaders) | `NOISE_GLSL` (the sky's h21 / vn / fbm) and `HASH_GLSL` (hw21, hw31, hw22, vn2, vn3): the one copy of GLSL hashes and value noise. |
+| `materials/night-glow.js` | (used by kits) | `withNightGlow` / `nightGlowShader`: the after-dark emissive glow on a lit material. |
 
 ### Packs: regional models (`"packs"`)
 

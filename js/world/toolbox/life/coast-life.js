@@ -8,6 +8,7 @@
 import * as THREE from '../../../../vendor/three.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { randomSequence } from '../core/random.js';
+import { withNightGlow } from '../materials/night-glow.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const _P = new THREE.Vector3(), ONE = new THREE.Vector3(1, 1, 1);   // [review 27 Nov] tick's scratch (was a V() per animal per frame)
@@ -204,13 +205,7 @@ export class CoastLife {
     const geometry = this._own(M.geometry());
     const material = this._own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .85 }));
     this.lampNight = { value: 0 };
-    material.onBeforeCompile = (shader) => {
-      shader.uniforms.uNight = this.lampNight;
-      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aGlow; varying float vGlow;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = aGlow;');
-      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight; varying float vGlow;')
-        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\nif (vGlow > .5) totalEmissiveRadiance += vec3(1., .9, .65) * (.2 + uNight * 5.);');
-    };
+    withNightGlow(material, this.lampNight, 'if (vGlow > .5) totalEmissiveRadiance += vec3(1., .9, .65) * (.2 + uNight * 5.);', 'coast-lighthouse-1', { glow: 'float' });   // [review 27 Nov] the shared night glow
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(p.x, y * (1 - 1.35), p.z); mesh.scale.setScalar(1.35); mesh.castShadow = mesh.receiveShadow = true; mesh.name = 'Point Sur Lighthouse';
     this.group.add(mesh);

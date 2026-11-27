@@ -102,6 +102,10 @@ vec2 bfWave(vec2 p, vec2 d, float k, float a, float c) { return d * (a * k * cos
  * [reflections] (user, 26 Nov — Zwift Ultra reflects the world in water): a mirrored camera renders the scene, water
  * hidden and clipped at the surface, into a reduced target; the water samples it projectively. High and Ultra on
  * laptops and desktops: Ultra every frame at half size, High every other frame at a third. Off on phones and lower.
+ * [review 27 Nov] Clipped by the mirrored camera's own projection (an oblique near plane: obliqueNear), not by
+ * renderer.clippingPlanes: in r187 numClippingPlanes is a program parameter, so the old pass made every lit material
+ * switch program twice a frame (parameters and cache key rebuilt each time) and compiled a clipped twin of each on the
+ * first reflected frame (not shader-warmed).
  */
 function planarReflection(world, waterMat, U, opts) {
   const nav = globalThis.navigator, ua = nav?.userAgent || '';
@@ -111,11 +115,11 @@ function planarReflection(world, waterMat, U, opts) {
   const scale = q === 'ultra' ? .5 : .34, every = q === 'ultra' ? 1 : 2;
   const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: q === 'ultra' ? 4 : 2 });   // (MSAA: the trees' alpha-to-coverage edges resolve smooth)
   rt.texture.generateMipmaps = false;
-  const cam = new THREE.PerspectiveCamera(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  const cam = new THREE.PerspectiveCamera(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), clip = new THREE.Vector4();
   const P = new THREE.Vector3(), N = new THREE.Vector3(0, 1, 0), view = new THREE.Vector3(), target = new THREE.Vector3(),
     look = new THREE.Vector3(), rot = new THREE.Matrix4(), size = new THREE.Vector2();
   const bias = new THREE.Matrix4().set(.5, 0, 0, .5, 0, .5, 0, .5, 0, 0, .5, .5, 0, 0, 0, 1);
-  let frame = 0, waters = [], found = -1, clearCol = new THREE.Color();
+  let frame = 0, waters = [], found = -Infinity, clearCol = new THREE.Color();   // [review 27 Nov] (-1 left the first 60 frames without a water list: no reflection on a ride's first ~2 s, nor in a still)
   U.tReflect.value = rt.texture;
   const surfaceY = () => {
     // the water plane the camera is over or nearest (the river level, or a pool's)
@@ -155,20 +159,51 @@ function planarReflection(world, waterMat, U, opts) {
       cam.position.copy(view);
       cam.up.set(0, 1, 0).applyMatrix4(rot).reflect(N);
       cam.lookAt(target);
-      cam.near = camera.near; cam.far = camera.far; cam.projectionMatrix.copy(camera.projectionMatrix); cam.projectionMatrixInverse.copy(camera.projectionMatrixInverse);
+      cam.near = camera.near; cam.far = camera.far; cam.projectionMatrix.copy(camera.projectionMatrix);
+      // (the renderer recomputes a camera's projection from fov and aspect the first time it meets a reversed depth
+      //  buffer: flag it as the world camera is, so it keeps the oblique matrix)
+      cam._reversedDepth = camera.reversedDepth === true;
       cam.updateMatrixWorld(); cam.matrixWorldInverse.copy(cam.matrixWorld).invert();
       U.uReflectMat.value.copy(bias).multiply(cam.projectionMatrix).multiply(cam.matrixWorldInverse);
-      // draw: the water hidden, everything below the surface clipped, no shadow-map refresh
+      // everything below the surface clipped by the projection's near plane (2 cm under it)
       plane.constant = -reflY + .02;
-      const prevT = r.getRenderTarget(), prevClip = r.clippingPlanes, prevAuto = r.shadowMap.autoUpdate, prevVis = waterMat.visible;
+      obliqueNear(cam.projectionMatrix, plane, cam.matrixWorldInverse, cam.reversedDepth, clip);
+      cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
+      // draw: the water hidden, no shadow-map refresh
+      const prevT = r.getRenderTarget(), prevAuto = r.shadowMap.autoUpdate, prevVis = waterMat.visible;
       r.getClearColor(clearCol); const prevA = r.getClearAlpha();
-      waterMat.visible = false; r.shadowMap.autoUpdate = false; r.clippingPlanes = [plane];
+      waterMat.visible = false; r.shadowMap.autoUpdate = false;
       r.setRenderTarget(rt); r.setClearColor(0x000000, 0); r.clear();
       r.render(world.scene, cam);
-      r.setRenderTarget(prevT); r.clippingPlanes = prevClip; r.shadowMap.autoUpdate = prevAuto; waterMat.visible = prevVis;
+      r.setRenderTarget(prevT); r.shadowMap.autoUpdate = prevAuto; waterMat.visible = prevVis;
       r.setClearColor(clearCol, prevA);
       U.uReflectOn.value = 1;
     },
     dispose() { rt.dispose(); U.tReflect.value = null; U.uReflectOn.value = 0; },
   };
 }
+
+/**
+ * [review 27 Nov] Makes the perspective projection P's near plane the world plane `plane` (what is on its normal's side
+ * is kept), for a camera with view matrix `view` (Lengyel's oblique near-plane clipping, as three's Reflector does it).
+ * The far plane tilts to pass through the frustum's far corner, so the original view volume above the plane stays in.
+ * reversed: P is a reversed-depth matrix (near at z = w, far at z = 0) rather than OpenGL's (-w … w). out: a Vector4
+ * scratch. Returns P.
+ */
+export function obliqueNear(P, plane, view, reversed, out = new THREE.Vector4()) {
+  const n = _plane.copy(plane).applyMatrix4(view), e = P.elements;
+  const C = out.set(n.normal.x, n.normal.y, n.normal.z, n.constant);   // the plane in view space (the camera on its back side)
+  // the far corner on the side away from the plane, in view space (w scaled so that clip w = 1)
+  const q = _q.set((Math.sign(C.x) + e[8]) / e[0], (Math.sign(C.y) + e[9]) / e[5], -1, reversed ? e[10] / e[14] : (1 + e[10]) / e[14]);
+  if (reversed) {
+    // near: row4 - row3 = aC; far (row3 = 0) through q: a = 1 / (C·q)
+    C.multiplyScalar(1 / C.dot(q));
+    e[2] = -C.x; e[6] = -C.y; e[10] = -1 - C.z; e[14] = -C.w;
+  } else {
+    // near: row4 + row3 = aC; far (row4 - row3 = 0) through q: a = 2 / (C·q)
+    C.multiplyScalar(2 / C.dot(q));
+    e[2] = C.x; e[6] = C.y; e[10] = C.z + 1; e[14] = C.w;
+  }
+  return P;
+}
+const _plane = new THREE.Plane(), _q = new THREE.Vector4();

@@ -21,6 +21,7 @@
 // cb (crown bottom above the base) }` list near a point (canopyTrees(x, z, R)). A map turns it on with the
 // "canopyShade" effect (toolbox/effects/canopy-shade.js).
 import * as THREE from '../../../../vendor/three.js';
+import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
 
 const N = 256;               // texels a side
 const CELL = 0.625;          // m a texel
@@ -41,9 +42,7 @@ export const CANOPY_GLSL = /* glsl */`
 #ifndef BF_CANOPY
 #define BF_CANOPY
 uniform sampler2D bfCanopyTex; uniform vec4 bfCanopyBox; uniform vec4 bfCanopyK;
-float bfcH(vec2 p) { vec3 q = fract(vec3(p.xyx) * .1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
-float bfcN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
-  return mix(mix(bfcH(i), bfcH(i + vec2(1., 0.)), f.x), mix(bfcH(i + vec2(0., 1.)), bfcH(i + 1.), f.x), f.y); }
+${HASH_GLSL}
 vec2 bfCanopy(vec3 w) {
   if (bfCanopyK.z <= 0.) return vec2(1., 0.);
   vec2 p = w.xz + bfCanopyK.xy * (bfCanopyBox.w - w.y);   // along the ray toward the sun, up (or down) to the plane
@@ -58,7 +57,7 @@ vec2 bfCanopy(vec3 w) {
   // sun flecks: more where the crown is thin, fewer under the thick of it; swaying a little with the wind
   float t = bfCanopyK.w;
   vec2 q = p * 1.15 + vec2(sin(t * .9 + p.y * .07), cos(t * .7 + p.x * .06)) * .22;
-  float n = bfcN(q) * .55 + bfcN(q * 2.6 + 17.) * .3 + bfcN(q * .23 + 5.) * .15;
+  float n = vn2(q) * .55 + vn2(q * 2.6 + 17.) * .3 + vn2(q * .23 + 5.) * .15;
   float th = mix(.4, .58, c.r);
   // (soft dapples, user 26 Nov — "the sun patches look like paint"): each fleck is an image of the sun through a gap in
   // the leaves, its edge blurred by the sun's 0.53° width over the drop from the leaves (~1 cm a metre): flecks under a

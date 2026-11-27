@@ -24,6 +24,8 @@ import { FACADE_GLSL } from '../structures/buildings/facade-material.js';   // [
 import { CityBuildingKit } from '../structures/buildings/kit.js';   // [buildings] homes drawn by the building kit
 import { releaseAfterUpload } from '../core/release.js';   // [F399]
 import { randomSequence } from '../core/random.js';   // [review 27 Nov] seeded content
+import { nightGlowShader, withNightGlow } from '../materials/night-glow.js';   // [review 27 Nov] the shared night glow
+import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
 
 export { STREET_W };
 const CHUNK = 320;
@@ -125,7 +127,7 @@ const CITY_FACADE_GLSL = /* glsl */`
       if (painted) c = mix(c, base * 1.12, .55);
       // weather: long streaks from the parapet, soot low down, big soft patches
       c *= .95 + .1 * bkF(vec2(along, vWPos.y) * .15 + sd * 9.);
-      c *= 1. - wear * .16 * smoothstep(.55, 1., bkN(vec2(along * 1.6, vWPos.y * .08) + sd * 5.));
+      c *= 1. - wear * .16 * smoothstep(.55, 1., vn2(vec2(along * 1.6, vWPos.y * .08) + sd * 5.));
       c *= 1. - wear * .12 * (1. - smoothstep(0., 1.4, up + 3.));
       diffuseColor.rgb = c;
     }
@@ -138,32 +140,32 @@ const CITY_FACADE_GLSL = /* glsl */`
       bool shopRow = false;
       bfWin = step(lo.x, f.x) * step(f.x, hi.x) * step(lo.y, f.y) * step(f.y, hi.y);
       if (id.y < 1.) {
-        shopRow = bfKind == 2 || (bfKind == 0 && bfH(id + vBld.y) > .45);
+        shopRow = bfKind == 2 || (bfKind == 0 && hw21(id + vBld.y) > .45);
         if (shopRow) { lo = vec2(.07, .12); hi = vec2(.93, .78); bfWin = step(lo.x, f.x) * step(f.x, hi.x) * step(lo.y, f.y) * step(f.y, hi.y); }
-        else bfWin *= step(.5, bfH(id.xx + vBld.y));
+        else bfWin *= step(.5, hw21(id.xx + vBld.y));
       }
-      if (bfKind == 3 || bfKind == 8 || bfKind == 7) bfWin *= step(.55, bfH(vec2(id.y, vBld.y)));
+      if (bfKind == 3 || bfKind == 8 || bfKind == 7) bfWin *= step(.55, hw21(vec2(id.y, vBld.y)));
       vec3 glassCol = (bfKind == 6 ? vec3(.07, .09, .11) : vec3(.13, .16, .2)) + uSkyTop * (glass ? .22 : .12) * (1. - uNight);
       if (glass) diffuseColor.rgb = mix(diffuseColor.rgb, glassCol, bfWin * .93);
       else {
         // the window in metres, centred
         vec2 hw = vec2((hi.x - lo.x) * .5 * cw, (hi.y - lo.y) * .5 * fh);
         vec2 q = vec2((f.x - (lo.x + hi.x) * .5) * cw, (f.y - (lo.y + hi.y) * .5) * fh);
-        float h = bfH(id * 1.91 + vBld.y), h2 = bfH(id.yx * 2.7 + vBld.y * 3.1);
+        float h = hw21(id * 1.91 + vBld.y), h2 = hw21(id.yx * 2.7 + vBld.y * 3.1);
         bool brick = bfKind == 0 || bfKind == 2 || bfKind == 3;
         vec3 frameC = bfKind == 3 || bfKind == 8 ? vec3(.06, .065, .07) : mix(vec3(.82, .8, .76), vec3(.08, .07, .065), step(.82, fract(vBld.y * .37)));
         vec3 stoneC = bkLin(vec3(.78, .75, .69));
         float inWin = bfWin;
         // lintel and sill (only round real windows)
         if (inWin > .5 || bkBox(q, -hw - vec2(.2, .3), hw + vec2(.2, .35), px) > 0.) {
-          bool has = id.y < 1. ? (shopRow || bfH(id.xx + vBld.y) > .5) : true;
-          if (bfKind == 3 || bfKind == 8 || bfKind == 7) has = has && bfH(vec2(id.y, vBld.y)) > .55;
+          bool has = id.y < 1. ? (shopRow || hw21(id.xx + vBld.y) > .5) : true;
+          if (bfKind == 3 || bfKind == 8 || bfKind == 7) has = has && hw21(vec2(id.y, vBld.y)) > .55;
           if (has && !shopRow && brick) {
             vec3 lin = fract(vBld.y * .53) > .4 ? stoneC : diffuseColor.rgb * .8;
             diffuseColor.rgb = mix(diffuseColor.rgb, lin, bkBox(q, vec2(-hw.x - .12, hw.y + .02), vec2(hw.x + .12, hw.y + .26), px) * detW);
             diffuseColor.rgb = mix(diffuseColor.rgb, stoneC, bkBox(q, vec2(-hw.x - .08, -hw.y - .11), vec2(hw.x + .08, -hw.y - .01), px) * detW);
             // a dark drip below the sill
-            diffuseColor.rgb *= 1. - wear * .3 * detW * step(abs(q.x), hw.x) * (1. - smoothstep(0., 1.1, -q.y - hw.y)) * step(hw.y, -q.y) * bkN(vec2(along * 9., vWPos.y * .4));
+            diffuseColor.rgb *= 1. - wear * .3 * detW * step(abs(q.x), hw.x) * (1. - smoothstep(0., 1.1, -q.y - hw.y)) * step(hw.y, -q.y) * vn2(vec2(along * 9., vWPos.y * .4));
           }
         }
         // glass: a sky streak, blinds or curtains, the sash's meeting rail and frame
@@ -186,17 +188,17 @@ const CITY_FACADE_GLSL = /* glsl */`
         diffuseColor.rgb = mix(diffuseColor.rgb, mix(glassCol, g, detW), bfWin * .95);
         // a window air conditioner in about one upper window in nine (older brick and stone blocks): a grey box on
         // the sill with its grille, a dark drip under it
-        if (!shopRow && id.y >= 1. && bfH(id * 3.17 + vBld.y * 7.3) > .89 && (bfKind == 0 || bfKind == 2 || bfKind == 4)) {
+        if (!shopRow && id.y >= 1. && hw21(id * 3.17 + vBld.y * 7.3) > .89 && (bfKind == 0 || bfKind == 2 || bfKind == 4)) {
           float ac = bkBox(q, vec2(-.34, -hw.y - .04), vec2(.34, -hw.y + .4), px);
           vec3 acC = bkLin(vec3(.72, .72, .69)) * (.9 + .1 * step(.5, fract(q.y * 18.)));
           diffuseColor.rgb = mix(diffuseColor.rgb, acC, ac * detW);
           diffuseColor.rgb *= 1. - .25 * detW * step(abs(q.x), .2) * step(q.y, -hw.y - .04) * (1. - smoothstep(0., .9, -hw.y - .04 - q.y));
         }
       }
-      bfLit = bfWin * step(glass ? .5 : .58, bfH(id * 1.37 + vBld.y * 17.));
+      bfLit = bfWin * step(glass ? .5 : .58, hw21(id * 1.37 + vBld.y * 17.));
       // [business pass] at dusk and night more of an office block's windows burn (the cleaners, the late workers),
       // in two colour temperatures; a shop row's upper flats less
-      if (uNight > .01 && !glass && bfKind == 2) bfLit = max(bfLit, bfWin * step(.42, bfH(id * 2.31 + vBld.y * 5.)));
+      if (uNight > .01 && !glass && bfKind == 2) bfLit = max(bfLit, bfWin * step(.42, hw21(id * 2.31 + vBld.y * 5.)));
     }
     // [business pass] wall detail on the masonry blocks (user, 26 Nov): a stone belt course at every floor line on
     // some, a cornice band under the parapet, cast-iron downspouts, a fire escape on a share of the older brick
@@ -224,21 +226,21 @@ const CITY_FACADE_GLSL = /* glsl */`
       if ((bfKind == 3 || bfKind == 2) && fract(vBld.y * 1.77) > .7 && top > 7. && top < 1e3) {
         float gx = 2. + 6. * fract(vBld.y * 2.3), gw = 9. + 5. * fract(vBld.y * 3.1);
         float panel = bkBox(vec2(along, up), vec2(gx, top - 5.2), vec2(gx + gw, top - 1.6), px);
-        float letters = step(.45, bkN(vec2(along * 1.4, floor((up - top) * 1.1)) + vBld.y)) * bkBox(vec2(along, up), vec2(gx + .6, top - 4.2), vec2(gx + gw - .6, top - 2.6), px);
+        float letters = step(.45, vn2(vec2(along * 1.4, floor((up - top) * 1.1)) + vBld.y)) * bkBox(vec2(along, up), vec2(gx + .6, top - 4.2), vec2(gx + gw - .6, top - 2.6), px);
         vec3 paint = mix(bkLin(vec3(.86, .82, .7)), bkLin(vec3(.55, .2, .16)), step(.5, fract(vBld.y * 5.7)));
-        float fade = .38 + .2 * bkN(vec2(along, up) * .6);
+        float fade = .38 + .2 * vn2(vec2(along, up) * .6);
         diffuseColor.rgb = mix(diffuseColor.rgb, paint, panel * fade * (1. - bfWin) * detW);
         diffuseColor.rgb = mix(diffuseColor.rgb, bkLin(vec3(.93, .9, .8)), letters * fade * (1. - bfWin) * detW * .8);
       }
       // weathering: streaks down from each window's sill corners and from the parapet, grime gathering near the base
-      float streaks = bkN(vec2(along * 2.3, vWPos.y * .12) + vBld.y) * smoothstep(top - 4., top, up);
+      float streaks = vn2(vec2(along * 2.3, vWPos.y * .12) + vBld.y) * smoothstep(top - 4., top, up);
       diffuseColor.rgb *= 1. - wear * .14 * smoothstep(.6, .9, streaks);
       diffuseColor.rgb *= 1. - wear * .1 * (1. - smoothstep(.0, 2.2, up));
     }
   } else if (vBld.w > .5 && vWNorm.y > .5) {
     // flat roofs: gravel and patched membrane
     vec2 rp = vWPos.xz;
-    diffuseColor.rgb *= (.9 + .2 * bfH(floor(rp * 18.))) * (.92 + .14 * smoothstep(.4, .7, bkN(rp * .35 + vBld.y)));
+    diffuseColor.rgb *= (.9 + .2 * hw21(floor(rp * 18.))) * (.92 + .14 * smoothstep(.4, .7, vn2(rp * .35 + vBld.y)));
   }
 `;
 
@@ -439,14 +441,14 @@ export class CityScene {
     const facades = !!this.route.scene?.buildingKit && this.route.scene.buildingKit.cityFacades !== false;
     const bm = this.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .86, metalness: .02 }));
     bm.onBeforeCompile = (shader) => {
-      shader.uniforms.uNight = this.windowNight || night; shader.uniforms.uSkyTop = U.uSkyTop;   // (windowNight: a host's own, softer window light — js/world/graph-heroes.js)
+      shader.uniforms.uSkyTop = U.uSkyTop;
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', '#include <common>\nattribute vec4 aBld; varying vec4 vBld; varying vec3 vWPos; varying vec3 vWNorm;')
         .replace('#include <fog_vertex>', '#include <fog_vertex>\nvBld = aBld; vWPos = (modelMatrix * vec4(transformed, 1.)).xyz; vWNorm = normalize(mat3(modelMatrix) * objectNormal);');
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', `#include <common>
-          uniform float uNight; uniform vec3 uSkyTop; varying vec4 vBld; varying vec3 vWPos; varying vec3 vWNorm;
-          float bfH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+          uniform vec3 uSkyTop; varying vec4 vBld; varying vec3 vWPos; varying vec3 vWNorm;
+          ${HASH_GLSL}
           ${facades ? FACADE_GLSL : ''}`)
         .replace('#include <color_fragment>', `#include <color_fragment>
           float bfWin = 0., bfLit = 0.;
@@ -474,17 +476,17 @@ export class CityScene {
               float bfSill = step(lo.x - .03, f.x) * step(f.x, hi.x + .03) * step(lo.y - .045, f.y) * step(f.y, lo.y - .005);
               diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.72, .7, .66), bfSill * step(1., id.y) * .85);
             }
-            if (id.y < 1.) bfWin = (bfKind == 2 || (bfKind == 0 && bfH(id + vBld.y) > .45)) ? step(.07, f.x) * step(f.x, .93) * step(.12, f.y) * step(f.y, .78) : bfWin * step(.5, bfH(id.xx + vBld.y));
-            if (bfKind == 3 || bfKind == 8 || bfKind == 7) bfWin *= step(.55, bfH(vec2(id.y, vBld.y)));
+            if (id.y < 1.) bfWin = (bfKind == 2 || (bfKind == 0 && hw21(id + vBld.y) > .45)) ? step(.07, f.x) * step(f.x, .93) * step(.12, f.y) * step(f.y, .78) : bfWin * step(.5, hw21(id.xx + vBld.y));
+            if (bfKind == 3 || bfKind == 8 || bfKind == 7) bfWin *= step(.55, hw21(vec2(id.y, vBld.y)));
             vec3 glassCol = (bfKind == 6 ? vec3(.07, .09, .11) : vec3(.13, .16, .2)) + uSkyTop * (glass ? .22 : .12) * (1. - uNight);
             // (the glass mirrors the sky more at a glancing angle: Fresnel)
             glassCol += uSkyTop * pow(1. - bfDn, 4.) * .5 * (1. - uNight);
             diffuseColor.rgb = mix(diffuseColor.rgb, glassCol, bfWin * (glass ? .93 : .86));
-            bfLit = bfWin * step(glass ? .5 : .58, bfH(id * 1.37 + vBld.y * 17.));
+            bfLit = bfWin * step(glass ? .5 : .58, hw21(id * 1.37 + vBld.y * 17.));
           }`)
-        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, .22, bfWin);')
-        .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-          totalEmissiveRadiance += mix(vec3(1., .74, .42), vec3(.85, .9, 1.), step(.8, bfH(vWPos.xz * .01 + vBld.y))) * bfLit * uNight * 1.25;`);
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, .22, bfWin);');
+      // (windowNight: a host's own, softer window light — js/world/graph-heroes.js) [review 27 Nov] the shared night glow
+      nightGlowShader(shader, this.windowNight || night, 'mix(vec3(1., .74, .42), vec3(.85, .9, 1.), step(.8, hw21(vWPos.xz * .01 + vBld.y))) * bfLit * uNight * 1.25');
     };
     bm.customProgramCacheKey = () => facades ? 'city-buildings-facades-1' : 'city-buildings-2';
     this.buildingMaterial = bm;
@@ -903,10 +905,7 @@ export class CityScene {
         uniform float uTime, uNight, uHasFlow; uniform vec3 uSunDir, uSkyTop, uSkyHorizon, uDeep, uShallow, uAlleDeep, uAlleShallow, uMonDeep, uMonShallow;
         uniform sampler2D uMask, uFlow; uniform vec4 uBox, uHole;
         varying vec3 vW;
-        float n2(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
-          float a = fract(sin(dot(i, vec2(12.9, 78.2))) * 43758.5), b = fract(sin(dot(i + vec2(1, 0), vec2(12.9, 78.2))) * 43758.5),
-                c = fract(sin(dot(i + vec2(0, 1), vec2(12.9, 78.2))) * 43758.5), d = fract(sin(dot(i + vec2(1, 1), vec2(12.9, 78.2))) * 43758.5);
-          return mix(mix(a, b, f.x), mix(c, d, f.x), f.y); }
+        ${HASH_GLSL}
         void main() {
           #include <logdepthbuf_fragment>
           if (vW.x > uHole.x && vW.z > uHole.y && vW.x < uHole.z && vW.z < uHole.w) discard;
@@ -921,10 +920,10 @@ export class CityScene {
           // the current: ripples carried downstream (flow-mapped: two phases, cross-faded), plus long slick lines
           float ph = fract(uTime * .04), w0 = abs(ph - .5) * 2.;
           vec2 o0 = dir * ph * 46. * flowing, o1 = dir * fract(ph + .5) * 46. * flowing;
-          float r1 = mix(n2((p - o1) * .09 + vec2(uTime * .05)), n2((p - o0) * .09 + vec2(7.3, 1.1) + vec2(uTime * .05)), w0);
-          float r2 = mix(n2((p - o1) * .23 + 3.1), n2((p - o0) * .23 + 9.4), w0);
+          float r1 = mix(vn2((p - o1) * .09 + vec2(uTime * .05)), vn2((p - o0) * .09 + vec2(7.3, 1.1) + vec2(uTime * .05)), w0);
+          float r2 = mix(vn2((p - o1) * .23 + 3.1), vn2((p - o0) * .23 + 9.4), w0);
           vec2 q = vec2(dot(p, dir), dot(p, vec2(-dir.y, dir.x)));
-          float slick = smoothstep(.55, .9, n2(vec2((q.x - uTime * 1.1) * .012, q.y * .11))) * flowing;
+          float slick = smoothstep(.55, .9, vn2(vec2((q.x - uTime * 1.1) * .012, q.y * .11))) * flowing;
           vec3 N = normalize(vec3((r1 - .5) * .09 * near, 1., (r2 - .5) * .09 * near));
           vec3 V = normalize(cameraPosition - vW);
           float fres = .04 + .5 * pow(1. - max(dot(N, V), 0.), 4.);
@@ -932,22 +931,22 @@ export class CityScene {
           vec3 sky = mix(uSkyHorizon, uSkyTop, sqrt(max(R.y, 0.)));
           float alle = uHasFlow > .5 ? fl.b : .5, blend = uHasFlow > .5 ? fl.a : 1.;
           vec3 deepC = mix(mix(uMonDeep, uAlleDeep, alle), uDeep, blend), shallowC = mix(mix(uMonShallow, uAlleShallow, alle), uShallow, blend);
-          vec3 col = mix(shallowC, deepC, smoothstep(.15, .85, m.g)) * (.92 + n2(p * .01) * .16);
+          vec3 col = mix(shallowC, deepC, smoothstep(.15, .85, m.g)) * (.92 + vn2(p * .01) * .16);
           col *= 1. + slick * .07;
           col = mix(col, sky, fres * (1. - slick * .5) * .8);
           // the sun on the water: a broad warm sheen, a tight highlight, and sparkles that glitter in it
           vec3 Ls = normalize(uSunDir);
           float spec = max(dot(reflect(-Ls, N), V), 0.);
           float low = 1. - smoothstep(.15, .6, Ls.y);   // strongest with the sun low (golden hour)
-          float sparkle = step(.93, n2(p * 1.7 + vec2(uTime * 2.3, -uTime * 1.9))) * pow(spec, 12.) * near;
+          float sparkle = step(.93, vn2(p * 1.7 + vec2(uTime * 2.3, -uTime * 1.9))) * pow(spec, 12.) * near;
           col += vec3(1., .86, .6) * (pow(spec, 140.) * .8 + pow(spec, 22.) * .18 * (.4 + low) + sparkle * 1.4 * (.5 + low)) * (1. - uNight);
           col *= mix(1., .16, uNight);
           // city lights on the water at night: streaks stretched toward the viewer, strongest near the banks
           vec2 toCam = normalize(cameraPosition.xz - p + 1e-3);
           vec2 sq = vec2(dot(p, vec2(-toCam.y, toCam.x)), dot(p, toCam));
-          float lights = smoothstep(.7, .95, n2(vec2(sq.x * .45, sq.y * .018 + uTime * .02))) * (1. - smoothstep(.15, .75, m.g));
+          float lights = smoothstep(.7, .95, vn2(vec2(sq.x * .45, sq.y * .018 + uTime * .02))) * (1. - smoothstep(.15, .75, m.g));
           float wob = .75 + .25 * sin(sq.y * .5 + uTime * 2. + sq.x);
-          col += mix(vec3(1., .74, .4), vec3(.85, .9, 1.), step(.6, n2(vec2(sq.x * .2, 3.)))) * lights * wob * uNight * .7;
+          col += mix(vec3(1., .74, .4), vec3(.85, .9, 1.), step(.6, vn2(vec2(sq.x * .2, 3.)))) * lights * wob * uNight * .7;
           col = mix(col, vec3(.78, .82, .76), (1. - smoothstep(.0, .14, m.g)) * .35 * (1. - uNight * .7));
           gl_FragColor = vec4(col, 1.);
           #include <tonemapping_fragment>
@@ -1406,12 +1405,7 @@ export class CityScene {
     pole.color('#fff4d6'); pole.box(0, 6.9, 1.75, .36, .06, .6);
     const poleGeo = this.own(pole.geometry());
     const poleMat = this.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .6, metalness: .4 }));
-    poleMat.onBeforeCompile = (shader) => {
-      shader.uniforms.uNight = this.night;
-      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight;')
-        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += step(.95, vColor.b) * vec3(1., .85, .6) * uNight * 3.;');
-    };
-    poleMat.customProgramCacheKey = () => 'city-lamp-1';
+    withNightGlow(poleMat, this.night, 'step(.95, vColor.b) * vec3(1., .85, .6) * uNight * 3.', 'city-lamp-1');   // [review 27 Nov] the shared night glow
     const glowGeo = this.own(new THREE.PlaneGeometry(1, 1));
     const poolTex = (() => {
       const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');

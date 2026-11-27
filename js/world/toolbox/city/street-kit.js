@@ -74,6 +74,8 @@ class KitBuilder extends MeshBuilder {
 const GROUND_CELL = 6;   // [w2-clip] the near ground's grid (stylized-terrain.js: 96 m patches, 16 cells a side)
 import { CURB_H, ROUTE_CURB, streetKitConfig, routeCurbAt, zoneCurbAt, walkTopAt } from './street-grade.js';
 import { releaseAfterUpload } from '../core/release.js';   // [F399]
+import { withNightGlow } from '../materials/night-glow.js';   // [review 27 Nov]
+import { patchShader } from '../core/shader-patch.js';
 export { streetKitConfig, zoneCurbAt, walkTopAt, CURB_H, ROUTE_CURB };
 const LOD = { light: { near: 160, mid: 450, carDetail: 40 }, balanced: { near: 260, mid: 750, carDetail: 90 }, high: { near: 320, mid: 900, carDetail: 90 } };   // [finish] High: near 380 → 320, mid 1100 → 900, detailed cars 140 → 90 m (the 2 M triangle budget)   // [w2-polish] carDetail: detailed parked cars within this of them
 
@@ -292,17 +294,11 @@ export class StreetKit {
     // shelters); 2 the vertex colour, bright (signal lenses, walk signals); 3 the texture's own colours (shop signs)
     const kitMaterial = (map = null) => {
       const m = city.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .78, metalness: .04, map }));
-      m.onBeforeCompile = (shader) => {
-        shader.uniforms.uNight = night;
-        shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aGlow; varying float vGlow;')
-          .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = aGlow;');
-        shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight; varying float vGlow;')
-          .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, .2, step(.05, vGlow) * step(vGlow, 2.5));')
-          .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n'
-            + 'totalEmissiveRadiance += (vGlow > 2.5 ? diffuseColor.rgb * .95 : mix(vec3(1., .78, .5), vColor.rgb * 3., step(1.5, vGlow))) * min(vGlow, 1.) * uNight * 1.4;');
-      };
-      m.customProgramCacheKey = () => (map ? 'street-kit-1-map' : 'street-kit-1');
-      return m;
+      // [review 27 Nov] the shared night glow
+      return withNightGlow(m, night, '(vGlow > 2.5 ? diffuseColor.rgb * .95 : mix(vec3(1., .78, .5), vColor.rgb * 3., step(1.5, vGlow))) * min(vGlow, 1.) * uNight * 1.4',
+        map ? 'street-kit-1-map' : 'street-kit-1', { glow: 'float', patch: (shader) => {
+          shader.fragmentShader = patchShader(shader.fragmentShader, '#include <roughnessmap_fragment>', 'roughnessFactor = mix(roughnessFactor, .2, step(.05, vGlow) * step(vGlow, 2.5));');
+        } });
     };
     this.material = kitMaterial();
     // sidewalks, curbs, parking lanes, car parks: ground surfaces (drawn under the furniture, over the old ribbons)

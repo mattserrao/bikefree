@@ -11,6 +11,7 @@ import { MeshBuilder, makePath, hash, ribbon } from '../core/mesh-builder.js';
 import { drain, due, each } from '../core/jobs.js';   // [F30] built as a job (in frame slices on the ride)
 import { handOffLife } from './life-handoff.js';   // [F31] life carried across an area swap
 import { LAND } from './landscape.js';
+import { nightGlowShader } from '../materials/night-glow.js';
 import { ROAD_WIDTH, LANE_OFFSET, PACER_LANE, ROAD_LIFT, routePoint, leanTarget, stepLean } from '../../pose.js';
 import { powerRequired } from '../../../physics.js';
 
@@ -38,7 +39,7 @@ const CARS = ['#c0392b', '#1f3a5f', '#ecf0f1', '#2c2c2c', '#7f8c8d', '#bdc3c7', 
 function animatedMaterial(life, kind) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .8 });
   m.onBeforeCompile = (shader) => {
-    shader.uniforms.uTime = life.city.uniforms.uTime; shader.uniforms.uNight = life.city.night;
+    shader.uniforms.uTime = life.city.uniforms.uTime;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>
         uniform float uTime; attribute float aPart; attribute vec3 aMask; attribute vec3 iA; attribute vec3 iB; attribute vec3 iC; attribute vec2 iAnim;
@@ -49,11 +50,11 @@ function animatedMaterial(life, kind) {
         vColor.rgb = vColor.rgb * clamp(1. - aMask.x - aMask.y - aMask.z, 0., 1.) + iA * aMask.x + iB * aMask.y + iC * aMask.z;
         vLight = aPart;`);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uNight; varying float vLight;')
-      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      .replace('#include <common>', '#include <common>\nvarying float vLight;');
+    nightGlowShader(shader, life.city.night, `
         if (vLight > 9.5 && vLight < 10.5) totalEmissiveRadiance += vec3(1., .93, .78) * uNight * 4.;
         if (vLight > 10.5 && vLight < 11.5) totalEmissiveRadiance += vec3(1., .08, .05) * uNight * 2.5;
-        if (vLight > 11.5 && vLight < 12.5) totalEmissiveRadiance += vec3(1., .82, .55) * uNight * .9;`);
+        if (vLight > 11.5 && vLight < 12.5) totalEmissiveRadiance += vec3(1., .82, .55) * uNight * .9;`);   // [review 27 Nov] the shared night glow
   };
   m.customProgramCacheKey = () => `city-anim-${kind}-1`;
   return life.city.own(m);

@@ -4,20 +4,12 @@ import * as THREE from '../../../../vendor/three.js';
 import { patchShader } from '../core/shader-patch.js';   // [review 27 Nov]
 import { vistaGroundGLSL, vistaCanopyGLSL } from '../atmosphere/vista.js';
 import { SURFACE, SURFACE_SUN, SURFACE_GLSL } from './surface-detail.js';   // [suite]
+import { HASH_GLSL } from './glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
 
 const noise = /* glsl */`
-  float bfHash(vec2 p) {
-    vec3 q = fract(vec3(p.xyx) * .1031);
-    q += dot(q, q.yzx + 33.33);
-    return fract((q.x + q.y) * q.z);
-  }
-  float bfNoise(vec2 p) {
-    vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
-    return mix(mix(bfHash(i), bfHash(i + vec2(1., 0.)), f.x),
-               mix(bfHash(i + vec2(0., 1.)), bfHash(i + 1.), f.x), f.y);
-  }
+${HASH_GLSL}
   float bfFbm(vec2 p) {
-    return bfNoise(p) * .57 + bfNoise(p * 2.07 + 17.) * .28 + bfNoise(p * 4.13 - 9.) * .15;
+    return vn2(p) * .57 + vn2(p * 2.07 + 17.) * .28 + vn2(p * 4.13 - 9.) * .15;
   }
 `;
 
@@ -55,7 +47,7 @@ export function makeGroundMaterial(palette, config = {}, farUniform = null, cano
         .replace('#include <color_fragment>', vkCanopy ? `#include <color_fragment>
           if (vBfCanopy > .001) ${vkCanopy}` : `#include <color_fragment>
           if (vBfCanopy > .001) {
-            float bfCrowns = bfFbm(vBfGround.xz * .09) * .65 + bfNoise(vBfGround.xz * .31) * .35;
+            float bfCrowns = bfFbm(vBfGround.xz * .09) * .65 + vn2(vBfGround.xz * .31) * .35;
             vec3 bfTop = bfCanopyColor * (.62 + bfCrowns * .7);
             diffuseColor.rgb = mix(diffuseColor.rgb, bfTop, smoothstep(0., .6, vBfCanopy));
           }`);
@@ -121,7 +113,7 @@ export function makeGroundMaterial(palette, config = {}, farUniform = null, cano
         float bfCliff = smoothstep(.12, .48, bfSlope);
         float bfPatches = bfFbm(bp.xz * .025);
         float bfFine = bfFbm(bp.xz * .65);
-        float bfGrass = bfFbm(bp.xz * .16 + vec2(0., bfNoise(bp.xz * .008) * 4.));
+        float bfGrass = bfFbm(bp.xz * .16 + vec2(0., vn2(bp.xz * .008) * 4.));
         diffuseColor.rgb *= .72 + bfPatches * .48;
         diffuseColor.rgb = mix(diffuseColor.rgb, bfSoil * (.82 + bfFine * .28), smoothstep(.62, .83, bfPatches) * .38 * (1. - bfCliff));
         diffuseColor.rgb *= 1. + (bfGrass - .5) * .23 * bfNear * (1. - bfCliff);
@@ -144,9 +136,9 @@ export function makeGroundMaterial(palette, config = {}, farUniform = null, cano
         // patches at 9 m and 3 m, and run-off streaks down the slope, from where the near detail tile stops out to ~2 km
         {
           float bfMid = smoothstep(30., 120., bfDistance) * (1. - smoothstep(900., 2200., bfDistance));
-          float bfClump = bfFbm(bp.xz * .11) * .62 + bfNoise(bp.xz * .33) * .38;
+          float bfClump = bfFbm(bp.xz * .11) * .62 + vn2(bp.xz * .33) * .38;
           vec2 bfDown = normalize(vBfGroundNormal.xz + 1e-4);
-          float bfStreak = bfNoise(vec2(dot(bp.xz, vec2(-bfDown.y, bfDown.x)) * .09, dot(bp.xz, bfDown) * .012)) * smoothstep(.08, .3, bfSlope);
+          float bfStreak = vn2(vec2(dot(bp.xz, vec2(-bfDown.y, bfDown.x)) * .09, dot(bp.xz, bfDown) * .012)) * smoothstep(.08, .3, bfSlope);
           diffuseColor.rgb *= 1. + ((bfClump - .5) * .34 + (bfStreak - .5) * .26) * bfMid;
         }
         diffuseColor.rgb *= 1. + (bfFine - .5) * .12 * bfNear;
@@ -252,7 +244,7 @@ ${shore ? `
         float t = uTime;
         float swell = sin(p.x * .043 + p.y * .027 + t * .78);
         float crossWave = sin(p.y * .071 - p.x * .013 - t * .53);
-        float chop = (bfNoise(p * .09 + t * .35) - .5) * bfRough;
+        float chop = (vn2(p * .09 + t * .35) - .5) * bfRough;
         vec3 N = normalize(vec3((swell * .03 + crossWave * .014 + chop * .08) * waveDetail, 1., (cos(p.x * .029 - p.y * .047 + t * .61) * .03 + chop * .06) * waveDetail));
         vec3 V = normalize(cameraPosition - vBfSea);
         vec3 R = reflect(-V, N);
@@ -269,10 +261,10 @@ ${shore ? `
         color *= .96 + (.02 * swell + .014 * crossWave) * waveDetail;
         color = mix(color, sky, fresnel);
         float sun = pow(max(dot(reflect(-normalize(uSunDir), N), V), 0.), 160.);
-        float sparkle = smoothstep(.55, .95, bfNoise(p * .7 + t * .1));
+        float sparkle = smoothstep(.55, .95, vn2(p * .7 + t * .1));
         color += vec3(1., .92, .72) * sun * (.35 + sparkle * waveDetail * .7);
         // breakers: lines of white water rolling in to the shore, broken up along their length
-        float along = bfNoise(p * .021 + vec2(0., t * .05)) * 5.;
+        float along = vn2(p * .021 + vec2(0., t * .05)) * 5.;
         float phase = offshore * .075 + t * (.85 + bfRough * .3) + along;
         float crest = smoothstep(.86, .985, sin(phase)) * (1. - smoothstep(15., 60. + bfRough * 40., offshore)) * smoothstep(3., 10., offshore);
         float trail = smoothstep(.2, .95, sin(phase - .55)) * (1. - smoothstep(10., 70., offshore)) * .55;
@@ -309,9 +301,9 @@ ${shore ? `
         color *= .97 + (.018 * swell + .012 * crossWave) * waveDetail;
         color = mix(color, sky, fresnel);
         float sun = pow(max(dot(reflect(-normalize(uSunDir), N), V), 0.), 150.);
-        float sparkle = smoothstep(.55, .95, bfNoise(p * .7 + uTime * .1));
+        float sparkle = smoothstep(.55, .95, vn2(p * .7 + uTime * .1));
         color += vec3(1., .91, .69) * sun * (.3 + sparkle * waveDetail * .55);
-        float breaker = .5 + .5 * sin(offshore * .35 - uTime * 1.3 + bfNoise(p * .027) * 4.);
+        float breaker = .5 + .5 * sin(offshore * .35 - uTime * 1.3 + vn2(p * .027) * 4.);
         float foam = smoothstep(.74, .96, breaker) * (1. - smoothstep(3., 48., offshore));
         foam += (1. - smoothstep(1., 6., offshore)) * .5;
         color = mix(color, vec3(.83, .9, .83), clamp(foam * .76, 0., .9));`}
@@ -360,8 +352,8 @@ export function decorateSceneryMaterial(material, category, uniforms) {
         .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvBfConcrete = (modelMatrix * vec4(transformed, 1.)).xyz;');
       shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>\nvarying vec3 vBfConcrete;\n${noise}`)
         .replace('#include <color_fragment>', `#include <color_fragment>
-          float bfStreaks = bfNoise(vec2((vBfConcrete.x + vBfConcrete.z) * .65, vBfConcrete.y * .025));
-          float bfGrain = bfNoise(vBfConcrete.xz * 2. + vBfConcrete.y);
+          float bfStreaks = vn2(vec2((vBfConcrete.x + vBfConcrete.z) * .65, vBfConcrete.y * .025));
+          float bfGrain = vn2(vBfConcrete.xz * 2. + vBfConcrete.y);
           diffuseColor.rgb *= .88 + bfStreaks * .16 + bfGrain * .07;
         `);
     }
@@ -405,8 +397,8 @@ export function makeLakeWaterMaterial(uniforms, waterColor, shallowColor, treeCo
         float detail = 1. - smoothstep(300., 2500., dist);
         // cat's-paw wind patches: some water ruffled, some glassy
         float gust = smoothstep(.35, .75, bfFbm(p * .004 + vec2(uTime * .006, 0.)));
-        float r1 = bfNoise(p * .55 + vec2(uTime * .35, uTime * .21)) - .5;
-        float r2 = bfNoise(p * 1.3 - vec2(uTime * .27, -uTime * .31)) - .5;
+        float r1 = vn2(p * .55 + vec2(uTime * .35, uTime * .21)) - .5;
+        float r2 = vn2(p * 1.3 - vec2(uTime * .27, -uTime * .31)) - .5;
         float amp = (.035 + gust * .11) * detail;
         vec3 N = normalize(vec3(r1 * amp, 1., r2 * amp));
         vec3 V = normalize(cameraPosition - vBfLake);
@@ -414,8 +406,8 @@ export function makeLakeWaterMaterial(uniforms, waterColor, shallowColor, treeCo
         float fresnel = .03 + .6 * pow(1. - max(dot(N, V), 0.), 5.);
         // reflection: sky above, the dark far-shore treeline in a band just over the horizon
         vec3 sky = mix(uSkyHorizon, uSkyTop, sqrt(max(R.y, 0.)));
-        float band = 1. - smoothstep(.02, .085 + bfNoise(vec2(atan(R.z, R.x) * 30., 0.)) * .05, R.y);
-        vec3 refl = mix(sky, bfTrees * (.8 + bfNoise(p * .02) * .3), band * .92);
+        float band = 1. - smoothstep(.02, .085 + vn2(vec2(atan(R.z, R.x) * 30., 0.)) * .05, R.y);
+        vec3 refl = mix(sky, bfTrees * (.8 + vn2(p * .02) * .3), band * .92);
         float depth = smoothstep(0., 28., -vBfShore);
         vec3 body = mix(bfShallow, bfWater * (.85 + bfFbm(p * .01) * .25), depth);
         vec3 color = mix(body, refl, fresnel);
