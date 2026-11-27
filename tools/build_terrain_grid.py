@@ -52,6 +52,8 @@ def fetch(z, x, y):
     if not path.exists():
         CACHE.mkdir(parents=True, exist_ok=True)
         url = f'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'
+        from citylib.offline import guard
+        guard(url)
         with urllib.request.urlopen(url, timeout=60) as r: path.write_bytes(r.read())
     a = np.asarray(Image.open(path).convert('RGB'), dtype=np.float64)
     h = a[..., 0] * 256 + a[..., 1] + a[..., 2] / 256 - 32768
@@ -114,7 +116,7 @@ def pack_terrain_grid(grid):
             blobs.append(raw); offset += len(raw)
     js = json.dumps(header, separators=(',', ':')).encode()
     pad = (4 - (8 + len(js)) % 4) % 4
-    return gzip.compress(b'BFTG' + struct.pack('<I', len(js)) + js + b'\0' * pad + b''.join(blobs), 9)
+    return gzip.compress(b'BFTG' + struct.pack('<I', len(js)) + js + b'\0' * pad + b''.join(blobs), 9, mtime=0)
 
 
 def main():

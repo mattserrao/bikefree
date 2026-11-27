@@ -61,6 +61,7 @@ from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from citylib import road_align   # [road-align]
 from citylib import street_kit   # [street-kit]
+from citylib.offline import guard
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(ROOT, 'tools', '.cache')
@@ -69,6 +70,7 @@ UNIT = 2e-6          # coordinate unit in the data file (degrees); ±0.065° fit
 
 
 def http_get(url, pause=1.0):
+    guard(url)   # (--offline or BIKEFREE_OFFLINE=1: the cache only)
     time.sleep(pause)
     with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=180) as r:
         return r.read()

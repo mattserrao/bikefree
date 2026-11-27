@@ -30,7 +30,8 @@ from scipy import ndimage
 from collections import Counter, defaultdict
 from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from citylib import street_kit
+from citylib import street_kit, osm_tiles
+from citylib.skips import Skips
 from build_city import elevation, rings_of, parse_m, simplify, point_in, pack_int16, pack_uint16, pack_uint32, rle, BRICK_SURFACES
 UNIT = 3e-6          # coordinate unit (degrees): PGH is bigger than one city scene (±0.098° in Int16)
 
@@ -143,6 +144,7 @@ def rural_land(L, UNTAGGED, res_n, com_n, kept, pix, lx, ly, gs, gw, gn, ge, lat
 
 
 def main():
+    SKIPS = Skips('pgh_city')
     pgh = json.load(open(os.path.join(ROOT, f'routes/cities/{CITY}.json')))
     E = decode_edges(pgh)
     la_all = [v for e in E for v in e['lat']]; lo_all = [v for e in E for v in e['lon']]
@@ -172,7 +174,10 @@ def main():
 
     # OSM (the tiles are big: parse each one and keep only what's needed)
     nodes, ntags, ways, rels = {}, {}, {}, {}
-    files = sorted(glob.glob(os.path.join(ROOT, f'tools/.cache/osm-{CITY}/*.osm')))
+    # (only the tiles inside this box — a larger old box's are left out — and none at all, or too few nodes, stops the
+    #  build before it overwrites the committed city with an empty one: code review P2)
+    files = osm_tiles.require_tiles(os.path.join(ROOT, f'tools/.cache/osm-{CITY}'), WARP.real_box(gs, gw, gn, ge) if WARP else (gs, gw, gn, ge),
+                                    CFG.get('osmTile', [0.01, 0.008]), CITY)
     for k, f in enumerate(files):
         for ev, el in ET.iterparse(f, events=('end',)):
             if el.tag == 'node':
@@ -188,6 +193,7 @@ def main():
                 el.clear()
         if (k + 1) % 50 == 0: print(f'  OSM {k + 1}/{len(files)} tiles')
     print(f'  OSM: {len(nodes)} nodes, {len(ways)} ways, {len(rels)} relations')
+    osm_tiles.check_nodes(len(nodes), CFG.get('osmMinNodes', 1000), CITY)
     if WARP:   # (moved; a way the warp cut into is dropped whole — a building or an area isn't drawn half)
         had = {w for w, (refs, _) in ways.items() if all(r in nodes for r in refs)}
         nodes = WARP.osm_nodes(nodes)
@@ -197,8 +203,9 @@ def main():
     # the Pittsburgh map's settings, gathered from its scenes
     special, res_boxes, drop_b = {}, [], set()
     for f in (glob.glob(os.path.join(ROOT, 'tools/city/pittsburgh*.json')) if CITY == 'pgh' else []):   # (the Pittsburgh map's own settings: PGH only)
+        # (a broken settings file fails the build: it used to be skipped, and its buildings came back — code review P11)
         try: c = json.load(open(f))
-        except Exception: continue
+        except (OSError, ValueError) as err: raise SystemExit(f'pgh_city: can\'t read {os.path.relpath(f, ROOT)}: {err}')
         special.update(c.get('specialBuildings', {})); res_boxes += c.get('residentialBoxes', [])
         drop_b |= {str(d['way']) for d in c.get('dropBuildings', [])}
 
@@ -229,11 +236,10 @@ def main():
     for nd, t in ways.values():
         c = classify(t)
         if c and nd and nd[0] == nd[-1]: layers[c].append([nodes[i] for i in nd if i in nodes])
-    for rel in rels.values():
+    for rel_id, rel in rels.items():
         c = classify(rel[1])
         if c and rel[1].get('type') == 'multipolygon':
-            try: layers[c] += rings_of(rel, ways, nodes)
-            except Exception: pass
+            layers[c] += SKIPS.attempt('land-use multipolygons', f'relation {rel_id}', lambda: rings_of(rel, ways, nodes)) or []
     if CFG.get('landWater') == 'pools':
         # (NYC: the cover draws water only under the map's pools — they have their own water planes; a fountain's
         #  basin or a pool that isn't one is paved (the landmarks draw the fountains), a larger one left to the grass:
@@ -292,9 +298,8 @@ def main():
     for rid, rel in rels.items():
         t = rel[1]
         if t.get('type') == 'multipolygon' and 'building' in t and t['building'] not in ('no', 'roof'):
-            try:
-                for k, ring in enumerate(rings_of(rel, ways, nodes)): outlines.append((f'r{rid}_{k}', ring, t))
-            except Exception: pass
+            for k, ring in enumerate(SKIPS.attempt('building multipolygons', f'relation {rid}', lambda: rings_of(rel, ways, nodes)) or []):
+                outlines.append((f'r{rid}_{k}', ring, t))
     part_centres = [(sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)) for _, pts, _ in parts if pts]
     pc_grid = defaultdict(list)
     for k, (la, lo) in enumerate(part_centres): pc_grid[(round(la * 500), round(lo * 500))].append(k)
@@ -425,10 +430,9 @@ def main():
                 if c and len(pts) > 2: fd.polygon([pix(*p) for p in pts], fill=c)
         for nd, t in ways.values():
             if t.get('landuse') in FARM and nd and nd[0] == nd[-1]: fpoly(t, [[nodes[i] for i in nd if i in nodes]])
-        for rel in rels.values():
+        for rel_id, rel in rels.items():
             if rel[1].get('landuse') in FARM and rel[1].get('type') == 'multipolygon':
-                try: fpoly(rel[1], rings_of(rel, ways, nodes))
-                except Exception: pass
+                SKIPS.attempt('farm multipolygons', f'relation {rel_id}', lambda: fpoly(rel[1], rings_of(rel, ways, nodes)))
         F = np.asarray(fimg)
         bf = np.asarray(bm[0], dtype=np.float32) + np.asarray(bm[1], dtype=np.float32)
         Rc = int(COUNTRY.get('farmR', 180) / LAND_M)
@@ -791,6 +795,7 @@ def main():
         for k, c in enumerate(kit['lines']['kind']):
             pts = [(xy[2 * i], xy[2 * i + 1]) for i in range(st[k], st[k + 1])]
             if pts: m = pts[len(pts) // 2]; S[sec(lat0 + m[0] * UNIT, lon0 + m[1] * UNIT)]['n'].append((c, pts))
+    SKIPS.report()   # (what was left out; too much of it stops the build before anything is written)
     folder = os.path.join(ROOT, f'routes/cities/{CITY}-city')
     os.makedirs(folder, exist_ok=True)
     for f in glob.glob(os.path.join(folder, '*.json')): os.remove(f)
@@ -810,7 +815,7 @@ def main():
         sectors[key] = len(bl)
     # the land cover: raw codes, gzipped (the world inflates it: DecompressionStream)
     import gzip
-    open(os.path.join(ROOT, f'routes/cities/{CITY}-land.bin.gz'), 'wb').write(gzip.compress(img.tobytes(), 9))
+    open(os.path.join(ROOT, f'routes/cities/{CITY}-land.bin.gz'), 'wb').write(gzip.compress(img.tobytes(), 9, mtime=0))
     out = {
         'format': 'bikefree-pgh-city-2',
         'attribution': 'Map data © OpenStreetMap contributors (ODbL)',

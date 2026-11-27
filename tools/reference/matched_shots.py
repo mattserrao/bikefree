@@ -7,7 +7,7 @@ map (a warped map's places move with their piece, tools/citylib/warp.py), and re
 photo's aspect, the frame audit (js/world/toolbox/core/frame-audit.js) run on the same view. Writes the renders and
 <out>/<map>-shots.json (each shot: photo, render, counters).
 
-  python3 tools/reference/matched_shots.py <map> [--out /tmp/ev/shots] [--only file …] [--quality high] [--time afternoon]
+  python3 tools/reference/matched_shots.py <map> [--out tools/.cache/ev/shots] [--only file …] [--quality high] [--time afternoon]
 """
 import argparse, json, math, os, re, subprocess, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.join(ROOT, 'tools'))
 from citylib import warp
 
 ap = argparse.ArgumentParser()
-ap.add_argument('map'); ap.add_argument('--out', default='/tmp/ev/shots'); ap.add_argument('--only', nargs='*')
+ap.add_argument('map'); ap.add_argument('--out', default=os.path.join(ROOT, 'tools', '.cache', 'ev', 'shots')); ap.add_argument('--only', nargs='*')
 ap.add_argument('--quality', default='high'); ap.add_argument('--time', default='afternoon'); ap.add_argument('--width', type=int, default=960)
 ap.add_argument('--tag', default=''); ap.add_argument('--probe', default='', help='x,y;x,y in 0–1 screen fractions: what each pixel shows (object, material, land code)'); ap.add_argument('--pre', default='', help='JS run on the world (w, T) before the audit: an experiment'); ap.add_argument('--albedo', action='store_true')
 a = ap.parse_args()

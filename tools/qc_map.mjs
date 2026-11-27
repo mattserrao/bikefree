@@ -3,7 +3,7 @@
 // shot is saved beside the counts. The checks that need a map's own data (ring pools, landmarks, benches, allées)
 // count nothing on a map without it.
 //
-//   node tools/qc_map.mjs <map> [site …] [--sites tools/qc/sites/<map>.json] [--auto 8] [--out /tmp/qc/<map>]
+//   node tools/qc_map.mjs <map> [site …] [--sites tools/qc/sites/<map>.json] [--auto 8] [--out tools/.cache/qc/<map>]
 //                         [--json tools/qc/<map>-qc.json] [--baseline <json>] [--radius 420]
 //                         [--sweep [600]]   the whole map: a site every 600 m over its ways (radius 0.75 × step)
 //                         [--evidence 12]   close-ups of the first 12 defects → <out>/defects/, <out>/defects.json
@@ -24,6 +24,8 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+// the QC's evidence (shots, reports): tools/.cache/qc/<map>, git-ignored scratch in the checkout (was /tmp/qc: code review P10)
+export const qcOut = (name) => resolve(ROOT, 'tools', '.cache', 'qc', name);
 export const KEYS_ALL = ['strayWater', 'bankShard', 'bankCliff', 'dryBasin', 'bridgeDup', 'floating', 'waterOverWay', 'pathPaint', 'edgeLip', 'edgeDitch', 'joinGap', 'sharpCorner', 'alleeTrees', 'gritEdges', 'benchOnWay', 'viewBlocked', 'trees'];
 export const KEYS = KEYS_ALL;
 
@@ -70,7 +72,7 @@ export async function sweepSites(map, step = 600) {
 
 /** Close-up shots of the defects found (deduplicated by id, the first `n`): <out>/defects/<id>.png beside
  *  <out>/defects.json (each defect with its site and shot). The endless map: the rider's view at the defect. */
-export async function evidence(map, res, { out = `/tmp/qc/${map}`, n = 12, log = (s) => process.stderr.write(s) } = {}) {
+export async function evidence(map, res, { out = qcOut(map), n = 12, log = (s) => process.stderr.write(s) } = {}) {
   const { closeup } = await import('./qc-defects.js');
   const seen = new Map();
   for (const [site, r] of Object.entries(res)) for (const d of r?.defects || []) if (!seen.has(d.id)) seen.set(d.id, { ...d, site });
@@ -101,7 +103,7 @@ export async function budgetOf(map) {
 /** The GPU check's results folded into a site's map-check results (counts, examples, defects; its stats as `gpu`). */
 export const MERGE_GPU = `([a, g]) => ({ ...a, counts: { ...a.counts, ...g.counts }, examples: { ...a.examples, ...g.examples }, defects: [...(a.defects || []), ...g.defects], gpu: g.gpu })`;
 
-export async function runQC(map, sites, { out = `/tmp/qc/${map}`, radius = 420, gpu = false, log = (s) => process.stderr.write(s) } = {}) {
+export async function runQC(map, sites, { out = qcOut(map), radius = 420, gpu = false, log = (s) => process.stderr.write(s) } = {}) {
   const endless = map === 'endless';
   const net = endless ? {} : JSON.parse(await readFile(resolve(ROOT, `routes/cities/${map}.json`), 'utf8'));
   const city = net.cityData ? `/${net.cityData}` : null;
@@ -153,7 +155,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const jsonOut = opt('--json', null), baseline = opt('--baseline', null);
   const map = args.shift();
   if (!map) { console.error('usage: node tools/qc_map.mjs <map> [site …] [--sites f] [--auto N] [--out dir] [--json f] [--baseline f]'); process.exit(2); }
-  const out = opt('--out', `/tmp/qc/${map}`);
+  const out = opt('--out', qcOut(map));
   let sites = await sitesOf(map, { file: sitesFile, auto, sweep });
   if (args.length) sites = Object.fromEntries(args.map((n) => [n, sites[n]]).filter(([, v]) => v));
   const res = await runQC(map, sites, { out, radius, gpu });

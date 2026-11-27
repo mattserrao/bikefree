@@ -21,7 +21,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { sitesOf, runQC, evidence, budgetOf } from './qc_map.mjs';
+import { sitesOf, runQC, evidence, budgetOf, qcOut } from './qc_map.mjs';
 import { defectId } from './qc-defects.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -50,7 +50,7 @@ export async function kindOf(t) {
 /** A graph map or the endless map: its sites' defects as findings. */
 async function mapTarget(t, o) {
   const sites = await sitesOf(t, { sweep: o.sweep });
-  const out = `/tmp/qc/${t}`, radius = o.sweep ? Math.round(o.sweep * 0.75) : 420;
+  const out = qcOut(t), radius = o.sweep ? Math.round(o.sweep * 0.75) : 420;
   process.stderr.write(`${t}: ${Object.keys(sites).length} sites `);
   const res = await runQC(t, sites, { out, radius, gpu: o.gpu });
   process.stderr.write('\n');
@@ -65,7 +65,7 @@ async function mapTarget(t, o) {
 
 /** A route scene: lint, course and clipping QC, and the GPU check at its preview spot. */
 async function routeTarget(t, o) {
-  const F = [], tmp = `/tmp/qc/${t}`; await mkdir(tmp, { recursive: true });
+  const F = [], tmp = qcOut(t); await mkdir(tmp, { recursive: true });
   const add = (source, f) => F.push({ target: t, source, ...f, id: f.id || defectId(f.check, f.s ?? 0, 0) });
   const cat = JSON.parse(await readFile(resolve(ROOT, 'routes/parks/index.json'), 'utf8')), item = cat.find((r) => r.id === t);
   const lint = await run('node', ['tools/lint_scene.mjs', item.scene]);

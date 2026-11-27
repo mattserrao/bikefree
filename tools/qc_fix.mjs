@@ -8,8 +8,8 @@
 //   node tools/qc_fix.mjs <map> [site …] --apply                                        apply, verify, keep or revert
 //   npm run qc:fix -- nyc --apply
 //
-// Proposals → /tmp/qc/<map>/fix-proposals.json (each: the defect, the file, what changes, before → after), and the
-// verdict of each with --apply → /tmp/qc/<map>/fix-verdicts.json.
+// Proposals → tools/.cache/qc/<map>/fix-proposals.json (each: the defect, the file, what changes, before → after), and the
+// verdict of each with --apply → tools/.cache/qc/<map>/fix-verdicts.json.
 //
 // The fixers (FIXERS below) only touch map data, never code:
 //   viewBlocked   trees between a landmark and the way it's seen from → a view corridor from that way spot to the
@@ -19,7 +19,7 @@
 import { readFile, writeFile, copyFile, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { sitesOf, runQC } from './qc_map.mjs';
+import { sitesOf, runQC, qcOut } from './qc_map.mjs';
 import { diffDefects } from './qc-defects.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -81,7 +81,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const sI = args.indexOf('--sweep'); let sweep = 0; if (sI >= 0) { const v = +args[sI + 1]; sweep = v > 0 ? v : 600; args.splice(sI, v > 0 ? 2 : 1); }
   const map = args.shift();
   if (!map) { console.error('usage: node tools/qc_fix.mjs <map> [site …] [--sweep [m]] [--check <check>] [--apply]'); process.exit(2); }
-  const out = `/tmp/qc/${map}`; await mkdir(out, { recursive: true });
+  const out = qcOut(map); await mkdir(out, { recursive: true });
   let sites = await sitesOf(map, { sweep });
   if (args.length) sites = Object.fromEntries(args.map((n) => [n, sites[n]]).filter(([, v]) => v));
   const radius = sweep ? Math.round(sweep * 0.75) : 420;

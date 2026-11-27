@@ -238,7 +238,7 @@ def main():
     header['landcover']['h'] = {'$bin': [0, len(blob)]}
     js = json.dumps(header, separators=(',', ':'), ensure_ascii=False).encode()
     pad = (4 - (8 + len(js)) % 4) % 4
-    data = gzip.compress(b'BFTG' + struct.pack('<I', len(js)) + js + b'\0' * pad + blob, 9)
+    data = gzip.compress(b'BFTG' + struct.pack('<I', len(js)) + js + b'\0' * pad + blob, 9, mtime=0)
     out = os.path.join(ROOT, 'routes', 'scenes', f'{rid}-places.bin.gz')
     open(out, 'wb').write(data)
     print(f'  wrote {os.path.relpath(out, ROOT)} ({len(data) / 1e6:.2f} MB)')
