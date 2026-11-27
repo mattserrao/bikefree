@@ -40,7 +40,7 @@ test('the bake and the vista kit patch exact lines that are in three\'s lights_f
 });
 
 test('the street slot bias uses defines three r187 emits', async () => {
-  const { SLOT_BIAS_VERTEX } = await import('../js/world/toolbox/city/city.js');
+  const { SLOT_BIAS_VERTEX } = await import('../js/world/toolbox/city/materials.js');
   for (const d of SLOT_BIAS_VERTEX.match(/USE_[A-Z_]+/g)) assert.ok(['USE_LOGARITHMIC_DEPTH_BUFFER', 'USE_REVERSED_DEPTH_BUFFER'].includes(d), d);
   const src = THREE.ShaderChunk.logdepthbuf_fragment + THREE.ShaderChunk.logdepthbuf_vertex;
   assert.ok(src.includes('USE_LOGARITHMIC_DEPTH_BUFFER') && !src.includes('USE_LOGDEPTHBUF'));

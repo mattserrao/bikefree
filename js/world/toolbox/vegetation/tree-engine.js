@@ -26,8 +26,8 @@ import { WIND, WIND_GLSL } from '../atmosphere/wind.js';
 import { billboardLeaves, leafDepthMaterial, CARD_PARS, CARD_OPEN } from './leaf-cards.js';   // (camera-facing leaf clumps)   // (the shared wind: fidelity step 6)
 import { decorateTreeMaterial } from '../packs/northern-rockies.js';
 import { makeLeafTexture } from './upstate-trees.js';
-import { SURFACE } from '../materials/surface-detail.js';
 import { withBarkDetail } from './near-trunks.js';
+import { impostorMaterial, ANGLES } from './impostor-material.js';   // [review 27 Nov] the impostor cards' shader (T14)
 
 // m: [near end, mid end] per quality; FADE: the crossfade's half width; IMP_END: where the impostors stop (the
 // tiles beyond are released anyway)
@@ -96,7 +96,6 @@ function leanQ(lean, out) {
   if (a < 1e-4) return out.identity();
   return out.setFromAxisAngle(_la.set(lz, 0, -lx).normalize(), a);
 }
-const ANGLES = 12;
 /** Copy a baked row (a render target's texture) into a row of an atlas target, texel for texel (no blending, no colour
  *  conversion). The atlas's mipmaps are built only with the last row (built after every row they'd cost a full pass each). */
 function rowCopier() {
@@ -376,131 +375,7 @@ export class TreeEngine {
     geo.setIndex([0, 1, 2, 0, 2, 3]);
     this.impGeo = geo; this.impCap = 0;
     const [b0, b1] = [this.b0, this.b1];
-    this.impMat = new THREE.ShaderMaterial({
-      fog: true,
-      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uAtlas: { value: rt.texture }, uRows: { value: this.rows }, uNow: { value: 0 }, uAtlasSize: { value: new THREE.Vector2(W, H) }, uNorm: { value: null }, uRelight: { value: 0 }, uSunNow: { value: new THREE.Vector3(0, 1, 0) }, uSunBake: { value: new THREE.Vector3(0, 1, 0) } }]),
-      vertexShader: /* glsl */`
-        attribute vec4 iA; attribute vec4 iB; attribute float iT; attribute vec2 iS;   // iA: x, y, z, rotation; iB: width, height, row, tint; iT: when its tile came; iS: its swap (when, 0 hidden / 1 shown / 2 in / 3 out)
-        attribute vec2 iL;    // [zwift-look] the lean: the top's offset per metre up (x, z)
-        attribute vec3 iH;    // [plants phase 1] a colour tint (r, g, b): one shrub's shape serves several plants
-        attribute float iC;   // a trunk cut (m above the base; 0: none): below it, near the camera, a 3D trunk stands in
-        uniform float uRows; uniform float uNow;
-        varying vec2 vUv; varying vec2 vUv2; varying float vBlend; varying float vKeep; varying float vOut; varying float vTint; varying vec3 vHue;
-        varying float vH; varying float vCut; varying float vTrunk; varying float vGrade; varying vec3 vWP; varying vec2 vRot;
-        #include <fog_pars_vertex>
-        void main() {
-          vec3 o = iA.xyz; vec2 to = o.xz - cameraPosition.xz; float d = length(to);
-          // shown when the engine says (iS: the tree's tier), dissolving in or out as it swaps with the mid tier, and
-          // in over 1.5 s after its tile comes
-          float k = clamp((uNow - iS.x) / ${this.ft.toFixed(2)}, 0., 1.);
-          vOut = iS.y > 2.5 ? 1. : 0.;
-          vKeep = (iS.y > 2.5 ? 1. - k : iS.y > 1.5 ? k : 1.) * clamp((uNow - iT) / ${this.tileIn.toFixed(2)}, 0., 1.);
-          // a card the camera is about to pass through (a sapling at the trail's edge, a trunk at a bend): gone in a
-          // dither inside ~3 m — a card that close is all magnified blur (Camillus Forest's narrow trails, 24 Nov)
-          vKeep *= smoothstep(1.4, 3.4, d);
-          if (iS.y < .5 || vKeep <= 0. || iB.x <= 0.) { gl_Position = vec4(2., 2., 2., 1.); return; }
-          vec2 dir = to / max(d, 1e-3);
-          vec3 right = normalize(vec3(-dir.y, 0., dir.x));
-          // the side it's seen from, in the tree's own frame (its rotation about y), → one of the photos
-          float cr = cos(iA.w), sr = sin(iA.w); vRot = vec2(cr, sr);
-          vec2 vl = vec2(-dir.x * cr + dir.y * sr, -dir.x * sr - dir.y * cr);
-          float a = atan(vl.x, vl.y); if (a < 0.) a += 6.2831853;
-          // the two photos either side of the view, and how far between (the card blends them)
-          float fa = a / 6.2831853 * ${ANGLES}., f0 = mod(floor(fa), ${ANGLES}.), f1 = mod(f0 + 1., ${ANGLES}.);
-          vBlend = fract(fa);
-          vUv = vec2((f0 + uv.x) / ${ANGLES}., (iB.z + uv.y) / uRows);
-          vUv2 = vec2((f1 + uv.x) / ${ANGLES}., (iB.z + uv.y) / uRows);
-          // (iB.w: the tint, plus 10 × a colour grade — 1 a hero woods' tree, 2 its understory: old-growth.js)
-          vGrade = floor(iB.w / 10.); vTint = iB.w - vGrade * 10.; vHue = iH;
-          vec3 p = o + right * position.x * iB.x + vec3(0., position.y * iB.y, 0.);
-          p.xz += iL * position.y * iB.y;
-          // (a tree beside the path, inside ~30 m: its card's trunk gives way to a 3D bark trunk, in the same dither as
-          //  the trunk's own — old-growth.js NEAR_TRUNK — the crown stays the card: user, 24 Nov)
-          vH = position.y * iB.y; vWP = p;
-          // (a negative cut: the whole card gives way, nearer — a fern, a herb: near-trunks.js NearPlants)
-          vCut = iC < 0. ? 1e4 : iC;
-          vTrunk = iC > 0. ? 1. - smoothstep(${NEAR_TRUNK[0].toFixed(1)}, ${NEAR_TRUNK[1].toFixed(1)}, d) : iC < 0. ? 1. - smoothstep(${NEAR_PLANT[0].toFixed(1)}, ${NEAR_PLANT[1].toFixed(1)}, d) : 0.;
-          vec4 mvPosition = viewMatrix * vec4(p, 1.);
-          gl_Position = projectionMatrix * mvPosition;
-          #include <fog_vertex>
-        }`,
-      fragmentShader: /* glsl */`
-        uniform sampler2D uAtlas; uniform sampler2D uSurf; uniform vec2 uAtlasSize; varying vec2 vUv; varying vec2 vUv2; varying float vBlend; varying float vKeep; varying float vOut; varying float vTint; varying vec3 vHue;
-        varying float vH; varying float vCut; varying float vTrunk; varying float vGrade; varying vec3 vWP; varying vec2 vRot;
-        uniform sampler2D uNorm; uniform float uRelight; uniform vec3 uSunNow, uSunBake;
-        #include <common>
-        #include <fog_pars_fragment>
-        ${TREE_GRADE}
-        // a cubic B-spline sample from four bilinear taps: smooth, no blocks, when the card's magnified
-        // [review 27 Nov] every mipmapped sample below takes its gradients from outside the branches (textureGrad): the
-        // magnified-card branch isn't uniform across a pixel quad, where implicit derivatives are undefined (iPhone)
-        vec4 cubic(vec2 uv, vec2 gx, vec2 gy) {
-          vec2 st = uv * uAtlasSize - .5, i = floor(st), f = st - i;
-          vec2 w0 = (1. - f) * (1. - f) * (1. - f) / 6., w1 = (4. - 6. * f * f + 3. * f * f * f) / 6., w3 = f * f * f / 6., w2 = 1. - w0 - w1 - w3;
-          vec2 s0 = w0 + w1, s1 = w2 + w3, o0 = i - .5 + w1 / s0, o1 = i + 1.5 + w3 / s1;
-          return (textureGrad(uAtlas, vec2(o0.x, o0.y) / uAtlasSize, gx, gy) * s0.x + textureGrad(uAtlas, vec2(o1.x, o0.y) / uAtlasSize, gx, gy) * s1.x) * s0.y
-               + (textureGrad(uAtlas, vec2(o0.x, o1.y) / uAtlasSize, gx, gy) * s0.x + textureGrad(uAtlas, vec2(o1.x, o1.y) / uAtlasSize, gx, gy) * s1.x) * s1.y;
-        }
-        void main() {
-          vec2 gx = dFdx(vUv), gy = dFdy(vUv), gx2 = dFdx(vUv2), gy2 = dFdy(vUv2);
-          vec2 tpx = (abs(gx) + abs(gy)) * uAtlasSize;   // (fwidth(vUv))
-          float mag = clamp(1.25 - max(tpx.x, tpx.y) * 1.25, 0., 1.);
-          vec4 c0, c1;
-          if (mag > 0.) { c0 = cubic(vUv, gx, gy); c1 = cubic(vUv2, gx2, gy2); } else { c0 = textureGrad(uAtlas, vUv, gx, gy); c1 = textureGrad(uAtlas, vUv2, gx2, gy2); }
-          vec4 c = mix(c0, c1, vBlend);
-          // (the photo's colour, un-premultiplied from its own alpha before the edge is roughened below: dividing by the
-          //  roughened alpha brightened every part-covered texel up to 3× — the washed-out, too-light bushes, user 24 Nov,
-          //  whose small, magnified cards are mostly part-covered edge)
-          float a0 = c.a;
-          // a near card, magnified past its photo's texels (user, 24 Nov: "softening the pixelation", trees staying 2D):
-          // leaf clusters from the detail texture break up the blocks of colour and roughen the silhouette's staircase
-          if (mag > 0.) {
-            vec2 k1 = uAtlasSize / 22., k2 = uAtlasSize / 9.;
-            float lf = textureGrad(uSurf, vUv * k1, gx * k1, gy * k1).g, lf2 = textureGrad(uSurf, vUv * k2 + .37, gx * k2, gy * k2).g;
-            c.rgb *= 1. + (lf * .6 + lf2 * .4 - .5) * .75 * mag;
-            c.a = clamp(c.a + (lf2 - .5) * .55 * mag * smoothstep(.15, .85, c.a) * (1. - smoothstep(.85, 1., c.a)) * 2., 0., 1.);
-          }
-          // the edge's coverage over about a pixel (alpha to coverage under MSAA: soft silhouettes, no sorting)
-          // (a hero woods' crown against the sky: its edge feathered over ~2.5 px, not a stepped cut-out — user, 24 Nov)
-          float cov = clamp((c.a - .5) / max(fwidth(c.a) * (vGrade > .5 ? 2.5 : 1.), 1e-4) + .5, 0., 1.);
-          if (cov <= 0.) discard;
-          ${this.msaa ? '' : `// no alpha to coverage (phones): a plain cut at half alpha. The card's faint edge texels, drawn solid with their
-          // colour un-premultiplied from a few levels of 8-bit, came out near white: the light halo round the trees.
-          if (c.a < .5) discard;`}
-          float teDz = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(.06711056, .00583715))));
-          if (vOut > .5 ? vKeep <= teDz : vKeep <= 1. - teDz) discard;   // the complement of the mid tier's dissolve
-          if (vH < vCut && vTrunk > teDz) discard;   // the 3D trunk's place (its own dither the exact complement)
-          vec3 col = c.rgb / max(a0, .3);
-          if (vGrade > .5) {
-            // a hero woods' tree seen from below: its side photo gives way, in a dither, to the overhead leaf layer (the
-            // crowns' undersides: old-growth.js canopy) as it comes overhead — user, 24 Nov: "Underside view"
-            vec3 dv = vWP - cameraPosition;
-            float up = vGrade < 1.5 ? smoothstep(.72, .92, dv.y / max(length(dv), 1e-3)) : 0.;
-            // (under MSAA a smooth fade in the edge's coverage — a fixed stipple overhead read as a screen; phones: the dither)
-            ${this.msaa ? 'cov *= 1. - up; if (cov <= 0.) discard;' : 'if (up > teDz) discard;'}
-            col = treeGrade(col, vGrade, vH);
-          }
-          if (uRelight > .5) {
-            // the photo relit: its normal (the tree's frame) against the sun now (turned into the tree's frame) over the sun
-            // it was photographed in — the lit side follows the real sun however the tree is turned
-            vec3 n = normalize(mix(texture2D(uNorm, vUv).xyz, texture2D(uNorm, vUv2).xyz, vBlend) * 2. - 1.);
-            vec3 sT = vec3(uSunNow.x * vRot.x - uSunNow.z * vRot.y, uSunNow.y, uSunNow.x * vRot.y + uSunNow.z * vRot.x);
-            float d0 = max(dot(n, uSunBake), 0.), d1 = max(dot(n, sT), 0.);
-            col *= clamp((.6 + d1) / (.6 + d0), .65, 1.5);
-          }
-          gl_FragColor = vec4(col * vTint * vHue, cov);
-          #include <tonemapping_fragment>
-          #include <colorspace_fragment>
-          #include <fog_fragment>
-        }`,
-    });
-    // (the atlas after the merge: UniformsUtils.merge won't clone a render target's texture — it set uAtlas to null,
-    //  and the impostors drew nothing: every tree past the mid band was missing)
-    this.impMat.uniforms.uAtlas.value = rt.texture;
-    this.impMat.uniforms.uSurf = SURFACE;   // (the shared detail texture: a blank until loaded)
-    this.impMat.alphaToCoverage = !!this.msaa;
-    this.impMat.customProgramCacheKey = () => `tree-engine-impostor-17-${this.ft}-${this.msaa ? 1 : 0}`;
-    if (this.normAtlas) { const U = this.impMat.uniforms; U.uNorm.value = this.normAtlas.texture; U.uRelight.value = 1; U.uSunBake.value.copy(this.bakeSun); }
+    this.impMat = impostorMaterial(rt.texture, this.rows, W, H, this);   // [review 27 Nov] vegetation/impostor-material.js
     this.impMesh = new THREE.Mesh(geo, this.impMat);
     this.impMesh.frustumCulled = false; this.impMesh.name = 'Trees (impostors)';
     this.group.add(this.impMesh);
