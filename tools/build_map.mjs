@@ -17,7 +17,7 @@ const offline = rest.includes('--offline') ? ['--offline'] : [];
 const steps = [
   ['python3', ['tools/build_pgh.py', '--city', id, ...offline]],
   ['python3', ['tools/pgh_city.py', '--city', id, ...offline]],
-  ...(cfg.buildSteps || []).map((s) => (s.endsWith('.py') ? ['python3', [s, ...offline]] : ['node', [s]])),
+  ...(cfg.buildSteps || []).map((s) => { const [f, ...args] = s.split(' '); return f.endsWith('.py') ? ['python3', [f, ...args, ...offline]] : ['node', [f, ...args]]; }),   // (a step may carry its own arguments)
   ['node', ['tools/pgh_routes.mjs', '--city', id, '--write']],
   ...(rest.includes('--no-qc') ? [] : [['node', ['tools/qc_pgh.mjs', `routes/cities/${id}.json`, '--rides', '200']]]),
 ];

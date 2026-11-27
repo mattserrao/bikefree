@@ -21,6 +21,7 @@ import { lockedChase, CAMERAS, CHASE, DEFAULT_CAMERA, leanAlong, stepLean, ROAD_
 import { loadRider, RIDER_RIM } from './rider.js';
 import { RoadRiders } from './toolbox/life/road-riders.js';   // [gap 15] other riders on the road
 import { RoadsideCommerce } from './toolbox/city/roadside-commerce.js';   // [business pass] gas stations, fast food, strip malls
+import { FarTerrain } from './toolbox/landscape/far-terrain.js';   // [evidence 27 Nov] the land beyond the ground, out to ~45 km
 import { makeSkyDome } from './toolbox/atmosphere/sky-dome.js';
 import { PostFX } from './toolbox/atmosphere/post.js';
 import { createRenderer, pixelRatioFor, QualityGovernor, GpuTimer } from './render-core.js';
@@ -582,6 +583,7 @@ export class GraphWorld {
   dispose() {
     this.roadRiders?.dispose(); this.roadRiders = null;
     this.commerce?.dispose(); this.commerce = null;
+    if (this.far) { this.scene.remove(this.far.mesh); this.far.dispose(); this.far = null; }
     this.post?.dispose(); this.post = null; this.env?.dispose(); this.groundCover?.dispose(); this.sky?.dispose();
     this.effects?.dispose();
     this.stop();
@@ -627,6 +629,8 @@ export class GraphWorld {
     this.effects.tick(now / 1000, dt);
     this.city?.tick(this.camera.position, now / 1000, this.path ? out : null, dt);
     this.commerce?.tick(this.camera);
+    if (this.far) this.far.tick(this.camera, { sunDir: this.sunDir, sun: this.sun, fogColor: this.scene.fog?.color, ambient: this._farAmb ||= new THREE.Color() });
+    if (this.far) this._farAmb.copy(this.hemi.color).multiplyScalar(this.hemi.intensity * .55);
     if ((this._frames & 15) === 0) this.bridges?.tick(this.camera.position, this.qualityKey === 'low' ? 3000 : 4500);
     this.rider.update(out.pos, out.fwd, this.crank, src.speed || 0, Math.min(dt, 0.1), src);
     this._updatePacer(dt);
@@ -1016,15 +1020,22 @@ export class GraphWorld {
           // strip malls — not on Light
           if (this.qualityKey !== 'low') fetch(new URL(`../../routes/cities/${this.json.id}-commerce.json`, import.meta.url)).then((r) => (r.ok ? r.json() : null))
             .then((j) => { if (j && !this.disposed) this.commerce = new RoadsideCommerce(this, c, j); }).catch(() => {});
+          // [evidence 27 Nov] the land beyond the ground (tools/far_terrain.py): the mesas and mountains the photos'
+          // skylines are made of, 4–45 km off, one mesh (a map's profile asks for it: farTerrain)
+          if (this.profile.farTerrain && !this.far) fetch(new URL(`../../routes/cities/${this.json.id}-far.json`, import.meta.url)).then((r) => (r.ok ? r.json() : null))
+            .then((j) => { if (!j || this.disposed) return; this.far = new FarTerrain(j, this.proj, { desert: this.profile.ground === 'desert', farPlane: this.camera.far * .95 }); this.scene.add(this.far.mesh); }).catch(() => {});
           const b = c.landBox, U = this.mats.ground.userData.land;
           if (U) { U.uLand.value = c.landTexture; U.uLandBox.value.set(b.x0, b.z0, b.x1, b.z1); U.uLandOn.value = 1; }
           // [vegetation] tufts on every lawn, yard and pasture near the rider (toolbox/landscape/ground-cover.js); not on Phone
           if (this.qualityKey !== 'low' && !this.groundCover) {
-            const GRASS = { 1: 1, 8: .7, 11: .9 };   // LAND.grass, yards, pasture: how thick
+            const desert = this.profile.ground === 'desert';
+            // [evidence 27 Nov] the desert's flats are bunchgrass between the sage (the photos), not bare sand: pinyon-juniper
+            // benches thin, sage flats thick, the town's gravel lots sparse
+            const GRASS = desert ? { 5: .22, 40: .35, 41: .75, 43: .3 } : { 1: 1, 8: .7, 11: .9 };   // LAND.grass, yards, pasture: how thick
             const mat = c.vergeMat || grassMaterial(this.renderer, c.treeTime || { value: 0 }, this.qualityKey !== 'low');
             this.groundCover = new GroundCover({ parent: this.scene, material: mat, radius: this.qualityKey === 'ultra' ? 64 : this.qualityKey === 'high' ? 48 : 38, density: 3.2,
               isGrass: (x, z) => { const g = GRASS[c.landAt(x, z)] || 0; return g && !c.onRoad(x, z, 1.2) && !c.inWater?.(x, z) ? g : 0; },
-              heightAt: (x, z) => this.surfaceH(x, z) });
+              heightAt: (x, z) => this.surfaceH(x, z), tint: desert ? [1.45, 1.12, 1.05] : null });
           }
           for (const t of this.tiles.values()) if (t.built) this._release(t);
           this._cityState = 'ok';
@@ -1425,7 +1436,10 @@ export class GraphWorld {
     const nx = Math.round(TILE / GROUND_CELL), x0 = t.i * TILE, z0 = t.j * TILE, cell = TILE / nx, n1 = nx + 1;
     const pos = new Float32Array(n1 * n1 * 3), color = new Float32Array(n1 * n1 * 3), landW = new Float32Array(n1 * n1);
     const grass = new THREE.Color('#89a868'), dry = new THREE.Color('#a7a27a'), bed = new THREE.Color('#6f6a58'), tmp = new THREE.Color();
-    const desert = this.profile.ground === 'desert', sand = new THREE.Color('#c8875a'), rockA = new THREE.Color('#b0532f'), rockB = new THREE.Color('#d08a55'), white = new THREE.Color('#ddcfb2');
+    // (Out West's colours calibrated, 27 Nov 2026, against photos of Kanab and the Coral Pink dunes (tools/reference) and
+    //  measured reflectance (tools/reference/measured.json): the sand was 2.3× too colourful and 25° too red, the rock 3×
+    //  too colourful — sand now ~0.38 albedo, chroma ~24, hue ~65°; the red sandstone ~0.18, chroma ~30, hue ~48°)
+    const desert = this.profile.ground === 'desert', sand = new THREE.Color('#d0a27c'), rockA = new THREE.Color('#a8644a'), rockB = new THREE.Color('#c4906a'), white = new THREE.Color('#ddcfb2');
     for (let j = 0, k = 0; j <= nx; j++) for (let i = 0; i <= nx; i++, k++) {
       if (i === 0 && due()) yield;
       const x = x0 + i * cell, z = z0 + j * cell, h = this._groundH(x, z), pool = this.poolAt(x, z);
@@ -2254,6 +2268,34 @@ function groundMaterial(low = false, rural = false, soft = false, desert = false
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLandW = aLandW; vTread = aTread; vGW = (modelMatrix * vec4(transformed, 1.)).xyz;');
     shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLand; uniform vec4 uLandBox; uniform float uLandOn; uniform float uCloudT; uniform vec4 uRoots[24]; uniform float uRootN; varying float vLandW; varying vec3 vGW; varying float vTread;\nuniform sampler2D uPbrA, uPbrN; uniform float uPbrOn;\nfloat bfPbrW = 0.; float bfPbrR = .95; vec3 bfPbrN = vec3(0., 0., 1.);\n' + NOISE_GLSL + SURFACE_GLSL + PBR_GLSL + (m.defines.LITTER !== undefined ? CANOPY_GLSL + '\nuniform float uLitter;\n' : ''))
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, bfPbrR, bfPbrW);')
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        #if defined(DESERT) && !defined(LOWQ)
+        {
+          // [evidence 27 Nov] the cliffs as layered rock (the photos' buttes are beds of red and pale sandstone, ledges
+          // and overhang shadows, varnish streaks — the 12.8 m ground read as smooth orange hills): per pixel on the steep
+          // ground, beds ~2.6 m deep wandering with the land, each its own shade; a shadow line under each bed; streaks
+          // down the face; the bed tops tilted up in the light. Fades with distance and where the beds get finer than a pixel.
+          vec3 nW = normalize(cross(dFdx(vGW), dFdy(vGW))); if (nW.y < 0.) nW = -nW;
+          float steep = smoothstep(.1, .3, 1. - nW.y);   // (25°–45° and steeper: the 12.8 m ground softens the real faces)
+          if (steep > .001) {
+            float camD = length(vGW - cameraPosition);
+            float y = vGW.y + gwN(vGW.xz * .02) * 6. + gwN(vGW.xz * .11) * 1.2;
+            float yb = y / 2.6, bedI = floor(yb), f = fract(yb);
+            float aa = 1. - smoothstep(.25, .7, fwidth(yb));   // (beds finer than a pixel: their mean)
+            float bed = gwH(vec2(bedI, 3.7));
+            vec3 bc = bed < .62 ? vec3(.39, .125, .068) : bed < .9 ? vec3(.55, .3, .155) : vec3(.63, .53, .38);   // (linear: red sRGB 168/99/74, pale 196/148/110, white 208/192/165)
+            bc *= .86 + .22 * gwH(vec2(bedI, 9.1));
+            float ledge = smoothstep(0., .08, f) * (1. - smoothstep(.86, 1., f));
+            float varn = smoothstep(.55, .85, gwN(vec2(dot(vGW.xz, vec2(.71, .71)) * .35, vGW.y * .025)));
+            vec3 rock = bc * mix(1., mix(.62, 1., ledge), aa) * (1. - .3 * varn);
+            float fade = 1. - smoothstep(1800., 4200., camD);
+            vec3 mean = vec3(.43, .18, .09) * .9;
+            diffuseColor.rgb = mix(diffuseColor.rgb, mix(mean, rock, aa), steep * mix(.5, .85, fade));
+            float dfy = (smoothstep(0., .08, f) - smoothstep(.86, 1., f)) * aa;
+            normal = normalize(normal + (viewMatrix * vec4(0., dfy * .55 * steep * fade, 0., 0.)).xyz);
+          }
+        }
+        #endif`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         ${PBR_NORMAL_GLSL}
         #ifndef LOWQ
@@ -2316,7 +2358,7 @@ function groundMaterial(low = false, rural = false, soft = false, desert = false
           else if (k < 3.5 && k > 2.5) lc = mix(vec3(.17, .31, .38), vec3(.22, .37, .44), n);  // water: a canal or a pond at its own level (CNY's Erie Canal; PGH's rivers are under the water plane anyway)
           else if (k < 4.5 && k > 3.5) lc = vec3(.42, .4, .36);                               // under a building
           #ifdef DESERT
-          else if (k < 5.5 && k > 4.5) lc = mix(vec3(.84, .54, .4), vec3(.9, .62, .46), n) * (.92 + .12 * sin(dot(vGW.xz, vec2(.8, .6)) * .35 + gwN(vGW.xz * .05) * 6.));   // the Coral Pink dunes: ripples
+          else if (k < 5.5 && k > 4.5) lc = mix(vec3(.84, .67, .54), vec3(.9, .74, .6), n) * (.92 + .12 * sin(dot(vGW.xz, vec2(.8, .6)) * .35 + gwN(vGW.xz * .05) * 6.));   // the Coral Pink dunes: ripples (calibrated 27 Nov: pale coral, chroma ~24, hue ~68°, as photographed)
           #else
           else if (k < 5.5 && k > 4.5) lc = vec3(.66, .6, .46);                               // sand, bare rock
           #endif
@@ -2418,6 +2460,15 @@ function groundMaterial(low = false, rural = false, soft = false, desert = false
           // [out-west] the red-rock covers (tools/pgh_city.py DESERT_LAND): the ground's own sand and sandstone show through
           // (lc stays unset) — pinyon-juniper duff a shade darker with needle litter, sage flats flecked grey-green, the
           // slickrock bare; the flecks fade to their mean off past ~150 m
+          // the town's ground (43, WorldCover built-up — 27 Nov, from photos of Kanab: gravel lots, verges and dry lawns,
+          // pale grey-tan with green where it's watered; albedo ~0.25–0.3, not the slickrock's pink sand)
+          if (k > 42.5 && k < 43.5) {
+            float fd = 1. - smoothstep(40., 160., length(vGW - cameraPosition));
+            vec3 grav = mix(vec3(.62, .58, .5), vec3(.7, .66, .57), n), lawn = mix(vec3(.42, .48, .3), vec3(.5, .53, .34), n);
+            vec3 tg = mix(grav, lawn, smoothstep(.55, .75, gwN(vGW.xz * .03 + 11.)) * .8);
+            tg *= .9 + .2 * gwH(floor(vGW.xz * 3.)) * fd;
+            diffuseColor.rgb = mix(diffuseColor.rgb, pow(tg, vec3(2.2)), vLandW * .92);
+          }
           if (k > 39.5 && k < 42.5) {
             float fd = 1. - smoothstep(40., 160., length(vGW - cameraPosition));
             // (small round specks — pebbles, a tuft, a dark crust — on a 25 cm cell, not the square cells' checker)
@@ -2450,7 +2501,14 @@ function groundMaterial(low = false, rural = false, soft = false, desert = false
           }
           #endif
           if ((k > 1.5 && k < 2.5) || (k > 29.5 && k < 31.5) || (k > 32.5 && k < 33.5)) sdCh = 1;   // (the woods' floor: stone dust and grit, not turf)
-          if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * mix(clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vec3(1.), step(19.5, k) * .7), vLandW * (k > 19.5 || (k > 1.5 && k < 2.5) ? .95 : .85));   // (CNY's fields: their own colour, less of the ground's tint)
+          // (the ground's tint carried into the cover is a ratio to the green ground's mean: on the desert's red sand it
+          //  came out (1.4, .9, 1.4) — every lot and paved yard in Out West magenta [evidence 27 Nov, pixel probe: code 0,
+          //  albedo (164, 123, 128)] — so the desert's covers keep their own colour)
+          float tintOff = step(19.5, k) * .7;
+          #ifdef DESERT
+          tintOff = 1.;
+          #endif
+          if (lc.x >= 0.) diffuseColor.rgb = mix(diffuseColor.rgb, pow(lc, vec3(2.2)) * mix(clamp(diffuseColor.rgb / vec3(.25, .39, .14), .6, 1.4), vec3(1.), tintOff), vLandW * (k > 19.5 || (k > 1.5 && k < 2.5) ? .95 : .85));   // (CNY's fields: their own colour, less of the ground's tint)
           #ifdef LITTER
           // [zwift-look] fall's leaves on the grass (leafLitter effect): thickest under the crowns (the canopy map near the
           // camera), a light scatter everywhere, drifts here and there; flecks near, their colour's mean farther off

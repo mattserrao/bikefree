@@ -1,0 +1,24 @@
+{
+ "outwest": [
+  {"id": "kanab-center", "label": "Kanab, Center Street and US 89", "lat": 37.0475, "lon": -112.5263, "r": 900, "time": "afternoon"},
+  {"id": "kanab-homes", "label": "Kanab's residential grid", "lat": 37.0530, "lon": -112.5300, "r": 900},
+  {"id": "us89-canyon", "label": "US 89 up Kanab Creek Canyon", "lat": 37.1150, "lon": -112.5580, "r": 5000},
+  {"id": "coral-pink", "label": "Coral Pink Sand Dunes", "lat": 37.0350, "lon": -112.7200, "r": 4000},
+  {"id": "johnson-canyon", "label": "Johnson Canyon and the movie set", "lat": 37.0670, "lon": -112.3610, "r": 4000},
+  {"id": "vermilion", "label": "US 89 east under the Vermilion Cliffs", "lat": 37.0300, "lon": -112.4300, "r": 6000}
+ ],
+ "nyc": [
+  {"id": "west-drive", "label": "Central Park West Drive", "lat": 40.7750, "lon": -73.9730, "r": 600},
+  {"id": "bethesda", "label": "Bethesda Terrace and the Lake", "lat": 40.7740, "lon": -73.9708, "r": 300}
+ ],
+ "pgh": [
+  {"id": "point", "label": "Point State Park and the rivers", "lat": 40.4416, "lon": -80.0127, "r": 500},
+  {"id": "schenley", "label": "Schenley Park", "lat": 40.4362, "lon": -79.9468, "r": 800}
+ ],
+ "cny": [
+  {"id": "camillus", "label": "Camillus village and the Erie Canal", "lat": 43.0392, "lon": -76.3044, "r": 2500}
+ ],
+ "skan": [
+  {"id": "skaneateles", "label": "Skaneateles village and the lake", "lat": 42.9470, "lon": -76.4290, "r": 1200}
+ ]
+}

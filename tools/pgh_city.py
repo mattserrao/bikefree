@@ -95,7 +95,7 @@ def urban_land(img, UNTAGGED, res_n, com_n, lx, ly, gs, gw, gn, ge, E, pix):
 WC_LAND = {10: 2, 20: 2, 30: 11, 40: 10, 50: 1, 60: 5, 70: 5, 80: 3, 90: 12, 95: 12, 100: 1}
 # (Out West, profile 'desert': WorldCover's 'trees' there are pinyon-juniper, its shrubland and grassland sagebrush flats,
 #  its bare ground slickrock; the dunes are sand (5) — js/world/graph-city.js LAND.pj / sage / slick)
-DESERT_LAND = {10: 40, 20: 41, 30: 41, 40: 10, 50: 42, 60: 42, 70: 42, 80: 3, 90: 12, 95: 12, 100: 41}
+DESERT_LAND = {10: 40, 20: 41, 30: 41, 40: 10, 50: 43, 60: 42, 70: 42, 80: 3, 90: 12, 95: 12, 100: 41}   # (50 built-up → 43 the town's ground: gravel, dry lawn — 27 Nov, from photos of Kanab: not bare slickrock)
 if (CFG.get('profile') or {}).get('preset') == 'desert': WC_LAND = DESERT_LAND
 
 

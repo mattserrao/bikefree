@@ -96,7 +96,28 @@ function leanQ(lean, out) {
   if (a < 1e-4) return out.identity();
   return out.setFromAxisAngle(_la.set(lz, 0, -lx).normalize(), a);
 }
-const ANGLES = 12;   // photos round each tree (cross-blended in the card: no snap as the angle changes)
+const ANGLES = 12;
+/** Copy a baked row (a render target's texture) into a row of an atlas target, texel for texel (no blending, no colour
+ *  conversion). The atlas's mipmaps are built only with the last row (built after every row they'd cost a full pass each). */
+function rowCopier() {
+  const mat = new THREE.ShaderMaterial({ uniforms: { t: { value: null } }, blending: THREE.NoBlending, depthTest: false, depthWrite: false,
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }',
+    fragmentShader: 'uniform sampler2D t; varying vec2 vUv; void main() { gl_FragColor = texture2D(t, vUv); }' });
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat); quad.frustumCulled = false;
+  const scene = new THREE.Scene(); scene.add(quad); const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  let first = true;
+  const copy = (r, tex, atlas, y, h, last) => {
+    // (the atlas's storage is made with its mip levels on the first copy; the in-between copies skip the rebuild)
+    atlas.texture.generateMipmaps = first || last; first = false;
+    mat.uniforms.t.value = tex;
+    r.setRenderTarget(atlas); r.setScissorTest(true); r.setViewport(0, y, atlas.width, h); r.setScissor(0, y, atlas.width, h);
+    r.render(scene, cam); r.setScissorTest(false);
+    atlas.texture.generateMipmaps = true;
+  };
+  copy.dispose = () => { quad.geometry.dispose(); mat.dispose(); };
+  return copy;
+}
+   // photos round each tree (cross-blended in the card: no snap as the angle changes)
 
 const TE_GLSL = /* glsl */`
   uniform float uLeaf;
@@ -277,7 +298,13 @@ export class TreeEngine {
     const W = cell * ANGLES, H = cell * list.length;
     // (laptops and desktops: the photos taken with 4× MSAA — smoother leaf edges in the atlas, so a near card's
     //  crown isn't a staircase of texels: user, 24 Nov)
-    const rt = new THREE.WebGLRenderTarget(W, H, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, samples: mobile ? 0 : 4 });
+    // [evidence 27 Nov] the photos are taken a row at a time in a small target (W × cell, with the MSAA and the depth
+    // buffer the drawing needs) and each row copied into the atlas, which keeps neither: the frame audit had the atlas
+    // at 133 MB with its mipmaps, and behind it a 4-sample colour and depth buffer the size of the whole atlas (~8 B ×
+    // 4 samples a texel: ~0.8 GB at High) kept for the life of the map; the mipmaps are built once, not after every photo
+    const rt = new THREE.WebGLRenderTarget(W, H, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false });
+    const rowRT = new THREE.WebGLRenderTarget(W, cell, { generateMipmaps: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, samples: mobile ? 0 : 4 });
+    const copy = rowCopier();
     this.atlasSize = [W, H];
     const scene = new THREE.Scene();
     const hemi = new THREE.HemisphereLight(lights?.hemi?.color || 0xffffff, lights?.hemi?.groundColor || 0x666655, lights?.hemi?.intensity ?? 1.2);
@@ -287,9 +314,10 @@ export class TreeEngine {
     const woodM = decorateTreeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 }), { uTime: { value: 0 } });
     const leafM = leafMaterial(this.leafTexture, false, true);
     const r = this.renderer, prev = { target: r.getRenderTarget(), autoClear: r.autoClear, color: r.getClearColor(new THREE.Color()), alpha: r.getClearAlpha(), scissor: r.getScissorTest() };
-    r.setRenderTarget(rt); r.setClearColor(0x000000, 0); r.clear(); r.autoClear = false; r.setScissorTest(true);
+    r.setClearColor(0x000000, 0); r.autoClear = false;
     const cam = new THREE.OrthographicCamera(-1, 1, 1, 0, .1, 400);
     list.forEach((e, row) => {
+      r.setRenderTarget(rowRT); r.setScissorTest(false); r.setViewport(0, 0, W, cell); r.clear(); r.setScissorTest(true);
       const t = e.pools[0], g = [], b = e.box, half = Math.max(-b.min.x, b.max.x, -b.min.z, b.max.z) * 1.02, top = b.max.y * 1.01;
       for (const im of t) { const m = new THREE.Mesh(im.geometry, im.material.map ? leafM : im.material.userData.orig || woodM); g.push(m); scene.add(m); }
       e.imp = { row, half, top };
@@ -299,42 +327,47 @@ export class TreeEngine {
         cam.position.set(Math.sin(a) * D, 0, Math.cos(a) * D); cam.lookAt(0, 0, 0);
         // the light keeps its place in the world: the tree turns, not the sun (one angle's photo is one side lit)
         sun.position.copy(sunDir).multiplyScalar(100);
-        r.setViewport(k * cell, row * cell, cell, cell); r.setScissor(k * cell, row * cell, cell, cell);
+        r.setViewport(k * cell, 0, cell, cell); r.setScissor(k * cell, 0, cell, cell);
         r.render(scene, cam);
       }
       for (const m of g) scene.remove(m);
+      copy(r, rowRT.texture, rt, row * cell, cell, row === list.length - 1);
     });
+    rowRT.dispose();
     // [fidelity step 6] the impostors' normals (laptops and desktops): every photo again at half size, each texel the
     // tree's own normal (its frame, unturned) — so a card turned to its tree's rotation is lit for the sun where it
     // really is, not where it was in the photo (a turned tree had its lit side turned with it); phones keep the photos
     let rtN = null;
     if (!mobile) {
       const cN = Math.max(32, cell >> 1);
-      rtN = new THREE.WebGLRenderTarget(cN * ANGLES, cN * list.length, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter });
+      rtN = new THREE.WebGLRenderTarget(cN * ANGLES, cN * list.length, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false });
+      const rowN = new THREE.WebGLRenderTarget(cN * ANGLES, cN, { generateMipmaps: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
       const NV = 'varying vec3 vN; varying vec2 vUv; void main() { vN = normalize(mat3(modelMatrix) * normal); vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }';
       const woodN = new THREE.ShaderMaterial({ vertexShader: NV, fragmentShader: 'varying vec3 vN; varying vec2 vUv; void main() { gl_FragColor = vec4(normalize(vN) * .5 + .5, 1.); }' });
       const NVC = `${CARD_PARS} varying vec3 vN; varying vec2 vUv; void main() { vN = normalize(mat3(modelMatrix) * normal); vUv = uv; vec4 mvPosition = modelViewMatrix * vec4(position, 1.); gl_Position = projectionMatrix * mvPosition; ${CARD_OPEN} }`;
       const leafN = new THREE.ShaderMaterial({ uniforms: { map: { value: this.leafTexture } }, side: THREE.DoubleSide, vertexShader: NVC,
         fragmentShader: 'uniform sampler2D map; varying vec3 vN; varying vec2 vUv; void main() { if (texture2D(map, vUv).a < .45) discard; vec3 n = normalize(vN) * (gl_FrontFacing ? 1. : -1.); gl_FragColor = vec4(n * .5 + .5, 1.); }' });
-      r.setRenderTarget(rtN); r.setClearColor(0x8080ff, 0); r.clear(); r.setScissorTest(true);
+      r.setClearColor(0x8080ff, 0);
       list.forEach((e, row) => {
+        r.setRenderTarget(rowN); r.setScissorTest(false); r.setViewport(0, 0, cN * ANGLES, cN); r.clear(); r.setScissorTest(true);
         const t = e.pools[0], g = [], { half, top } = e.imp;
         for (const im of t) { const m = new THREE.Mesh(im.geometry, im.material.map ? leafN : woodN); g.push(m); scene.add(m); }
         cam.left = -half; cam.right = half; cam.top = top; cam.bottom = 0; cam.updateProjectionMatrix();
         for (let k = 0; k < ANGLES; k++) {
           const a = k / ANGLES * Math.PI * 2;
           cam.position.set(Math.sin(a) * 200, 0, Math.cos(a) * 200); cam.lookAt(0, 0, 0);
-          r.setViewport(k * cN, row * cN, cN, cN); r.setScissor(k * cN, row * cN, cN, cN);
+          r.setViewport(k * cN, 0, cN, cN); r.setScissor(k * cN, 0, cN, cN);
           r.render(scene, cam);
         }
         for (const m of g) scene.remove(m);
+        copy(r, rowN.texture, rtN, row * cN, cN, row === list.length - 1);
       });
-      woodN.dispose(); leafN.dispose();
+      rowN.dispose(); woodN.dispose(); leafN.dispose();
     }
     this.normAtlas = rtN; this.bakeSun = sunDir.clone();
     r.setScissorTest(prev.scissor); r.autoClear = prev.autoClear; r.setClearColor(prev.color, prev.alpha); r.setRenderTarget(prev.target);
     const sz = new THREE.Vector2(); r.getSize(sz); r.setViewport(0, 0, sz.x, sz.y);
-    woodM.dispose(); leafM.dispose();
+    woodM.dispose(); leafM.dispose(); copy.dispose();
     this.atlas = rt; this.rows = list.length;
     // the card: a unit quad standing on its base, turned to the camera about its vertical axis in the shader
     const geo = new THREE.InstancedBufferGeometry();
