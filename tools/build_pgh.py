@@ -1060,6 +1060,38 @@ def write(cfg, E, jpos, jh, cor):
     return out
 
 
+def terrace_ground(H, cell, T, E, to_ij):
+    """[evidence 27 Nov] The red-rock country's stepped slopes (Out West: groundTerrace). The 30 m elevation model rounds
+    every cliff band into a smooth dome (matched shots against photos of Kanab's mesas: the render's slopes one even
+    30–35°, the photos' ledges and near-vertical walls); on the steep ground the heights are put back into level beds —
+    a flat bench, then a riser — about `bandM` deep (with a slow wander of the beds' level), blended in from `slopeLo`
+    to `slopeHi` (tan of the slope) and kept `roadM` off every road (`trailM` off a trail), so no road, its cut or its verge moves."""
+    import numpy as np
+    from scipy.ndimage import distance_transform_edt, gaussian_filter
+    A = np.array(H, dtype=np.float64); ny, nx = A.shape
+    gy, gx = np.gradient(A, cell); slope = np.hypot(gx, gy)
+    sm = lambda x, a, b: np.clip((x - a) / (b - a), 0, 1) ** 2 * (3 - 2 * np.clip((x - a) / (b - a), 0, 1))
+    w = sm(gaussian_filter(slope, 1.0), T.get('slopeLo', .45), T.get('slopeHi', .8))
+    # (roads keep `roadM` clear; trails — narrow, their ground cut to their own profile — only `trailM`: the mesas' sides
+    #  are crossed by trails, and at the roads' distance none of the cliffs in the matched views were terraced)
+    for kinds, dm in ((lambda k: k != 'path', T.get('roadM', 80)), (lambda k: k == 'path', T.get('trailM', 30))):
+        road = np.zeros_like(A, dtype=bool)
+        for e in E:
+            if not kinds(e.get('kind')): continue
+            for la_, lo_ in zip(e['lat'], e['lon']):
+                j, i = to_ij(la_, lo_); j, i = int(round(j)), int(round(i))
+                if 0 <= j < ny and 0 <= i < nx: road[j, i] = True
+        if road.any(): w *= sm(distance_transform_edt(~road) * cell, dm, dm * 1.6)
+    jj, ii = np.mgrid[0:ny, 0:nx]
+    wander = 3.0 * np.sin(ii * cell / 2300 + 1.3) + 2.0 * np.sin(jj * cell / 1700 + .4)   # (the beds' level drifts a few metres over km)
+    band = T.get('bandM', 36.0); q = (A + wander) / band; f = q - np.floor(q)
+    rise = sm(f, T.get('benchFrac', .55), .97)
+    At = (np.floor(q) + rise) * band - wander
+    out = A + (At - A) * w
+    print(f'  ground terraced: {(w > .05).sum()} of {w.size} cells on the steep ground, mean shift {np.abs(out - A)[w > .05].mean():.1f} m')
+    return out.tolist()
+
+
 def write_ground(cfg, E):
     """The ground: terrain heights on a `groundCellM` grid over the graph's box (+ margin), as a terrain-grid container."""
     la = [v for e in E for v in e['lat']]; lo = [v for e in E for v in e['lon']]
@@ -1073,11 +1105,13 @@ def write_ground(cfg, E):
     ny = int(math.ceil((north - south) * ky / cell)) + 1
     east = west + (nx - 1) * cell / kx; south = north - (ny - 1) * cell / ky
     base, scale = cfg.get('groundBaseM', 100.0), 0.1   # (NYC: −20 — Central Park lies 5–45 m up)
+    H = [[elevation(north - j * cell / ky, west + i * cell / kx) for i in range(nx)] for j in range(ny)]
+    if cfg.get('groundTerrace'): H = terrace_ground(H, cell, cfg['groundTerrace'], E, lambda la_, lo_: ((north - la_) * ky / cell, (lo_ - west) * kx / cell))
     rows = bytearray()
     for j in range(ny):
         acc = 0
         for i in range(nx):
-            h = elevation(north - j * cell / ky, west + i * cell / kx)
+            h = H[j][i]
             v = max(0, min(65535, round((h - base) / scale)))
             rows += struct.pack('<H', (v - acc) & 0xffff); acc = v
     header = {'format': 'bikefree-terrain-grid-1', 'rowDelta': True, 'attribution': 'Elevation: AWS Terrain Tiles (USGS 3DEP, NOAA and others)',

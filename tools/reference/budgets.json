@@ -1,0 +1,24 @@
+{
+  "note": "Budgets for the matched shots (tools/reference: matched_shots.py \u2192 compare.py \u2192 evidence.py), held by test/visual-evidence.test.mjs. Counters are machine-independent (draw calls, triangles, programs, memory, overdraw); cpuMs is the software renderer's and only guards against large regressions. Image limits: an after-shot may not move further from its photo than its before-shot, and its land must stay within these bounds of the photo.",
+  "counters": {
+    "calls": 160,
+    "triangles": 1400000,
+    "programs": 110,
+    "geometryMB": 170,
+    "textureMB": 300,
+    "overdrawMean": 4,
+    "overdrawP95": 14,
+    "cpuMs": 45
+  },
+  "image": {
+    "landDeMax": 18,
+    "landDeSlack": 0.5,
+    "chromaRatioMax": 2.0,
+    "hueAbsMax": 45
+  },
+  "knownGaps": {
+    "Kanab_-_panoramio.jpg": {
+      "chroma": "the photo is of brown log-cabin motels; the map has an adobe block here, lit by the golden-hour sun against a midday photo: chroma 3.3x the photo. Held to not getting worse than before (51) until the building and the time of day match."
+    }
+  }
+}

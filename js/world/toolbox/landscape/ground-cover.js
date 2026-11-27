@@ -8,7 +8,7 @@
 //   - what grows where is the map's: isGrass(x, z) → 0 (none) … 1 (full), heightAt(x, z) the ground
 // Cost (Balanced): ~6–9 k tufts × 8 triangles ≈ 60 k triangles, one draw. Not on Phone.
 //
-//   const gc = new GroundCover({ parent, material: grassMaterial(...), isGrass, heightAt, density, radius })
+//   const gc = new GroundCover({ parent, material: grassMaterial(...), isGrass, heightAt, density, radius, tint })
 //   gc.tick(cameraPosition); gc.dispose()
 import * as THREE from '../../../../vendor/three.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
@@ -28,7 +28,8 @@ function tuftGeometry() {
 }
 
 export class GroundCover {
-  constructor({ parent, material, isGrass, heightAt, density = 1.6, radius = 40 }) {
+  constructor({ parent, material, isGrass, heightAt, density = 1.6, radius = 40, tint = null }) {
+    this.tint = tint;   // [evidence 27 Nov] (r, g, b) multiplier for the tufts' colour: the desert's are dry bunchgrass, not lawn
     this.parent = parent; this.isGrass = isGrass; this.heightAt = heightAt; this.radius = radius; this.density = density;
     const per = Math.ceil(CELL * CELL * density), cells = Math.ceil((2 * radius / CELL + 2) ** 2);
     this.capacity = per * cells;
@@ -73,7 +74,7 @@ export class GroundCover {
       if (fade <= .02) continue;
       p.set(x, c.tufts[k + 1], z); q.setFromAxisAngle(Y, c.tufts[k + 3]); s.setScalar(c.tufts[k + 4] * fade);
       this.mesh.setMatrixAt(n, m.compose(p, q, s));
-      const t = c.tufts[k + 5]; col.setRGB(.6 + .16 * t, .74 + .14 * t, .5 + .08 * (1 - t)); this.mesh.setColorAt(n, col);   // (a shade darker than the cards' green: tufts sit in the lawn)
+      const t = c.tufts[k + 5], T = this.tint; col.setRGB((.6 + .16 * t) * (T ? T[0] : 1), (.74 + .14 * t) * (T ? T[1] : 1), (.5 + .08 * (1 - t)) * (T ? T[2] : 1)); this.mesh.setColorAt(n, col);   // (a shade darker than the cards' green: tufts sit in the lawn)
       n++;
     }
     this.mesh.count = n;

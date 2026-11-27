@@ -932,6 +932,13 @@ export class GraphCity {
       const h1 = hash(Math.round(x * 3.1) * 92821 + Math.round(z * 1.7)), jx = x + (h1 - .5) * step * .9, jz = z + (hash(Math.round(x * 5.3) + Math.round(z * 7.9) * 31) - .5) * step * .9;
       const c = this.landAt(jx, jz), seed = Math.round(jx * 11) + Math.round(jz * 13) * 7, h2 = hash(seed * 1.31);
       if (c >= LAND.oldGrowth && c <= LAND.ogBlowdown) continue;   // (the hero area's: placed above)
+      // [evidence 27 Nov] the dunes' edges (Coral Pink, matched photos: sage, rabbitbrush, ephedra and grass scattered
+      // over the sand everywhere but the bare crests): a thin cover, thicker in the hollows' patches
+      if (c === LAND.sand && this.desert) {
+        const r = hash(seed * 2.3), patch = hash(Math.floor(jx / 60) * 3.7 + Math.floor(jz / 60) * 9.1);
+        if (r < .05 + .1 * patch) under(jx, jz, r < .04 ? 'sage' : r < .08 ? 'rabbitbrush' : 'ephedra', seed, .8);
+        continue;
+      }
       if (c >= LAND.pj && c <= LAND.slick) {
         // [out-west] the desert's covers: pinyon and juniper scattered on the benches with sage between, sagebrush and
         // rabbitbrush on the flats with the odd juniper, red boulders on the slickrock; cottonwoods where it's wet
@@ -950,12 +957,12 @@ export class GraphCity {
           else if (r < .4) under(jx, jz, 'cholla', seed);
         } else if (c === LAND.sage) {
           if (h1 < .025 * this.q.trees) tree(jx, jz, 'woods', seed, .6 + h2 * .4);
-          else if (r < .22) { under(jx, jz, r < .09 ? 'sage' : r < .16 ? 'sage2' : 'rabbitbrush', seed); if (hash(seed * 4.7) < .07) under(jx + 1.1, jz + .6, 'tumbleweed', seed + 1); }
-          else if (r < .28) under(jx, jz, 'ephedra', seed);
-          else if (r < .36) under(jx, jz, r < .33 ? 'pricklyPear' : 'pricklyPear2', seed);
-          else if (r < .43) under(jx, jz, r < .41 ? 'yucca' : 'yuccaStalk', seed);
-          else if (r < .455) under(jx, jz, 'cholla', seed);
-          else if (r < .47) under(jx, jz, 'redrock', seed);
+          else if (r < .34) { under(jx, jz, r < .14 ? 'sage' : r < .25 ? 'sage2' : 'rabbitbrush', seed); if (hash(seed * 4.7) < .07) under(jx + 1.1, jz + .6, 'tumbleweed', seed + 1); }
+          else if (r < .39) under(jx, jz, 'ephedra', seed);
+          else if (r < .45) under(jx, jz, r < .43 ? 'pricklyPear' : 'pricklyPear2', seed);
+          else if (r < .51) under(jx, jz, r < .49 ? 'yucca' : 'yuccaStalk', seed);
+          else if (r < .525) under(jx, jz, 'cholla', seed);
+          else if (r < .54) under(jx, jz, 'redrock', seed);
         } else {
           if (r < .05) under(jx, jz, r < .03 ? 'redrock' : 'redrock2', seed);
           else if (r < .08) under(jx, jz, 'sage', seed, .7);

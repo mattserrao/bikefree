@@ -85,6 +85,15 @@
   "pools": [],
   "groundCellM": 24,
   "groundMarginM": 1200,
+  "groundTerrace": {
+    "note": "evidence 27 Nov: the steep ground put back into level beds (a bench, then a riser) — the DEM rounds the cliff bands into domes (matched shots of Kanab's mesas); tools/build_pgh.py terrace_ground",
+    "bandM": 36,
+    "benchFrac": 0.55,
+    "slopeLo": 0.45,
+    "slopeHi": 0.8,
+    "roadM": 80,
+    "trailM": 30
+  },
   "groundFile": "routes/cities/outwest-ground.grid.bin.gz",
   "start": {
     "lat": 37.0475,
@@ -122,23 +131,24 @@
     },
     "atmosphere": {},
     "grade": {
-      "saturation": 1.17,
+      "saturation": 1.05,
       "contrast": 0.2,
-      "warm": 0.65,
+      "warm": 0.5,
       "lift": 0.012,
       "shadows": [
-        0.93,
-        0.94,
-        1.06
+        0.97,
+        0.97,
+        1.02
       ],
       "highlights": [
         1.05,
         1.0,
         0.92
       ],
-      "split": 0.45,
+      "split": 0.25,
       "sun": 1.15,
-      "sky": 0.85
+      "sky": 0.85,
+      "note": "calibrated 27 Nov 2026 against photos (tools/reference): the land was 1.4-2.3x too colourful and 30-46 degrees toward magenta; the violet split-tone pushed sunlit sand pink"
     }
   },
   "files": {
@@ -197,7 +207,8 @@
   "nameFromRef": true,
   "buildSteps": [
     "tools/outwest_heroes.py",
-    "tools/outwest_warp.py"
+    "tools/outwest_warp.py",
+    "tools/far_terrain.py outwest"
   ],
   "surfaceByName": {
     "Eight Mile Gap Road": "gravel",
