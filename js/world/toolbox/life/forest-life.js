@@ -127,6 +127,8 @@ function headMaterial(uTime, { swing = 1.05, pivot = [0, 1.12, .55], rate = .23,
   return m;
 }
 
+const TICK = { m: new THREE.Matrix4(), q: new THREE.Quaternion(), e: new THREE.Euler(), one: new THREE.Vector3(1, 1, 1), p: new THREE.Vector3() };
+
 export class ForestLife {
   constructor(parent, { uTime }) {
     this.parent = parent; this.uTime = uTime;
@@ -166,14 +168,14 @@ export class ForestLife {
 
   tick(time) {
     if (!this.birdMesh) return;
-    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), one = V(1, 1, 1);
+    const { m, q, e, one, p } = TICK;   // [review 27 Nov] scratch hoisted (was new Matrix4/Quaternion/Euler + a Vector3 per bird per frame)
     let k = 0;
     for (const c of this.circles) for (let b = 0; b < (c.n || 3); b++) {
       const w = .16 + b * .013, a = time * w + b * 2.1 + c.x * .01, r = c.r * (1 + .15 * Math.sin(time * .2 + b));
       const x = c.x + Math.cos(a) * r, z = c.z + Math.sin(a) * r, y = c.y + 3 * Math.sin(time * .3 + b * 1.7);
       // heading along the circle (counter-clockwise: the tangent), banked into it
       e.set(0, -a, -.35); q.setFromEuler(e);
-      this.birdMesh.setMatrixAt(k++, m.compose(V(x, y, z), q, one));
+      this.birdMesh.setMatrixAt(k++, m.compose(p.set(x, y, z), q, one));
     }
     this.birdMesh.count = k; this.birdMesh.instanceMatrix.needsUpdate = true;
   }

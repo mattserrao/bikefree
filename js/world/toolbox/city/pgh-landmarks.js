@@ -16,6 +16,7 @@ import { skanLandmarkModels } from './skan-landmarks.js';
 import { nycLandmarkModels, nycPark } from './nyc-landmarks.js';
 import { outwestLandmarkModels } from './outwest-landmarks.js';   // (Out West's: the tunnel, hoodoos, arches, buttes, the movie set)
 import { qcOn, qcProbe } from './qc-probe.js';   // (a QC run: tools/qc_map.mjs)   // (NYC's: Central Park — Bethesda, Bow Bridge, Belvedere…, the wall and its gates)   // (SKAN's: Clift Park's pier and gazebo, the Sherwood Inn, mansions…)   // (CNY's: the aqueduct, Sims' Store, the Octagon House…)
+const _CAR = new THREE.Vector3();   // (the inclines' cars: tick's scratch)
 
 export function buildPghLandmarks(host, data) {
   const L = host.landscape, proj = host.D.proj;
@@ -442,7 +443,7 @@ export function buildPghLandmarks(host, data) {
       park?.tick(time);
       for (const c of cars) {
         const t = (Math.sin((time / 90 + c.phase) * TAU) + 1) / 2;   // up and down, a trip every 45 s
-        const p = c.a.clone().addScaledVector(c.dir, t * c.len);
+        const p = _CAR.copy(c.a).addScaledVector(c.dir, t * c.len);   // [review 27 Nov] scratch (was a clone per car per frame)
         c.car.position.set(p.x, p.y + 1.6, p.z); c.car.rotation.set(0, c.yaw, 0); c.car.rotateX(-c.pitch);
       }
     },

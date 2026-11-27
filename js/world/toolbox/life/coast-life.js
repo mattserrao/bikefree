@@ -10,6 +10,7 @@ import { MeshBuilder } from '../core/mesh-builder.js';
 import { randomSequence } from '../core/random.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const _P = new THREE.Vector3(), ONE = new THREE.Vector3(1, 1, 1);   // [review 27 Nov] tick's scratch (was a V() per animal per frame)
 
 // aWing: 0 body, ±1 along each wing (|x| from the body sets how far a vertex lifts)
 export function birdGeometry(kind) {
@@ -144,7 +145,7 @@ export class CoastLife {
         const x = f.x - f.tx * back - f.tz * side, z = f.z - f.tz * back + f.tx * side;
         const y = f.y + Math.sin(t * .6 + i * .9) * .7;
         this.e.set(0, yaw, Math.sin(t * .4 + i) * .08); this.q.setFromEuler(this.e);
-        this.pelicans.setMatrixAt(k, this.m.compose(V(x, y, z), this.q, V(1, 1, 1)));
+        this.pelicans.setMatrixAt(k, this.m.compose(_P.set(x, y, z), this.q, ONE));
       }
     }
     for (; k < this.pelicans.count; k++) this.pelicans.setMatrixAt(k, this.m.makeScale(0, 0, 0));
@@ -163,7 +164,7 @@ export class CoastLife {
       const x = a.cx + Math.cos(a.a) * a.r, z = a.cz + Math.sin(a.a) * a.r;
       const yaw = Math.atan2(-Math.sin(a.a) * Math.sign(a.w), Math.cos(a.a) * Math.sign(a.w));
       this.e.set(0, yaw, -Math.sign(a.w) * .35); this.q.setFromEuler(this.e);
-      this.gulls.setMatrixAt(i, this.m.compose(V(x, a.h + Math.sin(t + i) * 2, z), this.q, V(1, 1, 1)));
+      this.gulls.setMatrixAt(i, this.m.compose(_P.set(x, a.h + Math.sin(t + i) * 2, z), this.q, ONE));
     });
     this.gulls.instanceMatrix.needsUpdate = true;
     // condors: big slow circles high over the ridges inland
@@ -182,7 +183,7 @@ export class CoastLife {
       a.a += a.w * dt; a.cx += .8 * dt;
       const x = a.cx + Math.cos(a.a) * a.r, z = a.cz + Math.sin(a.a) * a.r;
       this.e.set(0, Math.atan2(-Math.sin(a.a), Math.cos(a.a)), -.25); this.q.setFromEuler(this.e);
-      this.condors.setMatrixAt(i, this.m.compose(V(x, a.h, z), this.q, V(1, 1, 1)));
+      this.condors.setMatrixAt(i, this.m.compose(_P.set(x, a.h, z), this.q, ONE));
     });
     this.condors.instanceMatrix.needsUpdate = true;
     if (this.beam) this.beam.rotation.y = t * .9;

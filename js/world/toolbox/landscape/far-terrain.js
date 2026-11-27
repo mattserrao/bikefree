@@ -10,6 +10,7 @@
  * true distance (the scene's fog would have swallowed it).
  */
 import * as THREE from '../../../../vendor/three.js';
+const HAZE_BLUE = new THREE.Color(.42, .55, .78);   // (the far haze's blue, lerped into the fog colour)
 
 const VERT = /* glsl */`
   uniform vec3 uCam; uniform float uNear, uK, uSinkM;
@@ -127,7 +128,7 @@ export class FarTerrain {
     if (!h || Math.hypot(p.x - h[0], p.z - h[1]) > 300) this._hole(p.x, p.z);
     if (sunDir) U.uSunDir.value.copy(sunDir).normalize();
     if (sun) U.uSunCol.value.copy(sun.color).multiplyScalar(sun.intensity);
-    if (fogColor) { U.uHaze.value.copy(fogColor); U.uHazeFar.value.copy(fogColor).lerp(new THREE.Color(.42, .55, .78), .35); }
+    if (fogColor) { U.uHaze.value.copy(fogColor); U.uHazeFar.value.copy(fogColor).lerp(HAZE_BLUE, .35); }   // [review 27 Nov] HAZE_BLUE a constant (was a new Color a tick)
     if (ambient) U.uAmb.value.copy(ambient);
   }
 

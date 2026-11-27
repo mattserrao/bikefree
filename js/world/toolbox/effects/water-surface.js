@@ -17,24 +17,49 @@ export const waterSurface = {
       // [reflections] the scene mirrored in the water (High and Ultra on laptops and desktops): tReflect, its projective
       // matrix, on (0/1)
       tReflect: { value: null }, uReflectMat: { value: new THREE.Matrix4() }, uReflectOn: { value: 0 },
+      uWaterOn: { value: 1 },   // [review 27 Nov] dispose() switches the surface off here (see below)
     };
     const R = planarReflection(world, m, U, opts);
-    const prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey();
-    m.onBeforeCompile = (shader, renderer) => {
-      prev?.call(m, shader, renderer);
-      Object.assign(shader.uniforms, U);
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 bfWaterP;')
-        .replace('#include <project_vertex>', '#include <project_vertex>\nbfWaterP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-      shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', `#include <common>
+    // [review 27 Nov] The wrapper stays on the material for good: dispose() used to put back the onBeforeCompile and
+    // cache key from before install, dropping the baked-light and look patches chained on after it (their WeakSets
+    // never patch a material twice, so they were lost for good). Off is a uniform now; a second install on the same
+    // material swaps in its uniforms (H.U) and recompiles, rather than wrapping again.
+    const H = m.userData.bfWater;
+    if (H) { H.U = U; m.needsUpdate = true; } else install(m, (m.userData.bfWater = { U }));
+    return {
+      tick(t) {
+        U.uTime.value = t;
+        R?.tick();
+        if (world.sunDir) U.uSunDir.value.copy(world.sunDir);
+        if (world.sun) U.uSunCol.value.copy(world.sun.color).multiplyScalar(Math.min(1.4, world.sun.intensity * 0.5));
+        // the sky it mirrors: the sky's own colour, a little toward the horizon's haze
+        const bg = world.scene?.background;
+        if (bg?.isColor) { U.uSky.value.copy(bg); if (world.scene.fog) U.uSky.value.lerp(world.scene.fog.color, 0.3); }
+      },
+      dispose() { R?.dispose(); U.uWaterOn.value = 0; },
+    };
+  },
+};
+
+/** The surface's shader patch, chained on the water material's own onBeforeCompile (once per material). */
+function install(m, H) {
+  const prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey();
+  m.onBeforeCompile = (shader, renderer) => {
+    prev?.call(m, shader, renderer);
+    Object.assign(shader.uniforms, H.U);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 bfWaterP;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nbfWaterP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
 varying vec3 bfWaterP;
 uniform float uTime, uRipple, uGlint, uSkyMix;
 uniform vec3 uSunDir, uSunCol, uSky;
-uniform sampler2D tReflect; uniform mat4 uReflectMat; uniform float uReflectOn;
+uniform sampler2D tReflect; uniform mat4 uReflectMat; uniform float uReflectOn, uWaterOn;
 // a wave train's slope: amplitude a, wave number k (rad/m), along d, at speed c (m/s)
 vec2 bfWave(vec2 p, vec2 d, float k, float a, float c) { return d * (a * k * cos(dot(p, d) * k - uTime * c * k)); }`)
-        .replace('#include <opaque_fragment>', `{
+      .replace('#include <opaque_fragment>', `if (uWaterOn > .5) {
+
   vec3 V = cameraPosition - bfWaterP; float dist = length(V); V /= dist;
   vec2 p = bfWaterP.xz;
   // the ripples: a long swell and three wind trains, their slopes summed; small ones fade first with distance
@@ -68,23 +93,10 @@ vec2 bfWave(vec2 p, vec2 d, float k, float a, float c) { return d * (a * k * cos
   diffuseColor.a = mix(diffuseColor.a, 1.0, fres * 0.5);
 }
 #include <opaque_fragment>`);
-    };
-    m.customProgramCacheKey = () => `${prevKey}|bf-water-2`;
-    m.needsUpdate = true;
-    return {
-      tick(t) {
-        U.uTime.value = t;
-        R?.tick();
-        if (world.sunDir) U.uSunDir.value.copy(world.sunDir);
-        if (world.sun) U.uSunCol.value.copy(world.sun.color).multiplyScalar(Math.min(1.4, world.sun.intensity * 0.5));
-        // the sky it mirrors: the sky's own colour, a little toward the horizon's haze
-        const bg = world.scene?.background;
-        if (bg?.isColor) { U.uSky.value.copy(bg); if (world.scene.fog) U.uSky.value.lerp(world.scene.fog.color, 0.3); }
-      },
-      dispose() { R?.dispose(); m.onBeforeCompile = prev; m.customProgramCacheKey = () => prevKey; m.needsUpdate = true; },
-    };
-  },
-};
+  };
+  m.customProgramCacheKey = () => `${prevKey}|bf-water-3`;
+  m.needsUpdate = true;
+}
 
 /**
  * [reflections] (user, 26 Nov — Zwift Ultra reflects the world in water): a mirrored camera renders the scene, water

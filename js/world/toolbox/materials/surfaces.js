@@ -1,6 +1,7 @@
 // World-space surfaces keep the style-C palette while adding detail at both
 // riding and scenic camera distances. Everything is procedural and offline.
 import * as THREE from '../../../../vendor/three.js';
+import { patchShader } from '../core/shader-patch.js';   // [review 27 Nov]
 import { vistaGroundGLSL, vistaCanopyGLSL } from '../atmosphere/vista.js';
 import { SURFACE, SURFACE_SUN, SURFACE_GLSL } from './surface-detail.js';   // [suite]
 
@@ -170,9 +171,9 @@ export function makeGroundMaterial(palette, config = {}, farUniform = null, cano
     if (vk) {
       // vista kit: object shadows fade on steep faces (vkShadowK, set with the colour)
       const line = 'directLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;';
-      const chunk = THREE.ShaderChunk.lights_fragment_begin;
-      if (chunk.includes(line)) shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_begin>',
-        chunk.replace(line, line.replace('? getShadow(', '? mix( 1.0, getShadow(').replace(') : 1.0;', '), vkShadowK ) : 1.0;')));
+      // [review 27 Nov] patchShader: an exact line of three's lights_fragment_begin (was skipped silently if three reworded it)
+      const chunk = patchShader(THREE.ShaderChunk.lights_fragment_begin, line, line.replace('? getShadow(', '? mix( 1.0, getShadow(').replace(') : 1.0;', '), vkShadowK ) : 1.0;'), 'replace');
+      shader.fragmentShader = patchShader(shader.fragmentShader, '#include <lights_fragment_begin>', chunk, 'replace');
     }
   };
   return material;

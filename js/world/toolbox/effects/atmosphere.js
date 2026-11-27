@@ -14,12 +14,15 @@
 // The world it needs: scene, camera, sunDir, sun, and (for beams and mist) city.forest.tiles, city.landAt / LAND codes,
 // poolAt(x, z), surfaceH(x, z).
 import * as THREE from '../../../../vendor/three.js';
+import { randomSequence } from '../core/random.js';
 import { CHIMNEYS } from '../structures/houses/house-engine.js';
 
 const BEAMS = 14, MIST = 12, LEAVES = 160, MOTES = 420, SMOKERS = 12, PUFFS = 9, FLOCKS = 3, BIRDS = 9;
 
 export const atmosphere = {
   install(world, opts = {}) {
+    // [review 27 Nov] seeded (TOOLBOX rule 3): the leaves, motes, beams, mist and flocks the same on every build and ride
+    const rand = randomSequence(opts.seed ?? 9173);
     const on = (k) => (opts[k] ?? 1) > 0;
     const group = new THREE.Group(); group.name = 'Atmosphere'; world.scene.add(group);
     const uTime = { value: 0 }, uCam = { value: new THREE.Vector3() }, uSun = { value: new THREE.Vector3(0, 1, 0) }, uSunCol = { value: new THREE.Color(1, .9, .7) };
@@ -194,7 +197,7 @@ export const atmosphere = {
       g.setIndex([0, 1, 2, 0, 2, 3]);
       const n = Math.round(LEAVES * Math.min(1.5, opts.leaves ?? 1)), seed = new Float32Array(n * 4), col = new Float32Array(n * 3);
       const tones = ['#c4561f', '#d8892a', '#b3341d', '#c9a43a', '#8a5a2a', '#9c7a2c'].map((h) => new THREE.Color(h));
-      for (let i = 0; i < n; i++) { seed.set([Math.random(), Math.random(), Math.random(), Math.random()], i * 4); const c = tones[i % tones.length]; col.set([c.r, c.g, c.b], i * 3); }
+      for (let i = 0; i < n; i++) { seed.set([rand(), rand(), rand(), rand()], i * 4); const c = tones[i % tones.length]; col.set([c.r, c.g, c.b], i * 3); }
       g.setAttribute('iS', new THREE.InstancedBufferAttribute(seed, 4)); g.setAttribute('iC', new THREE.InstancedBufferAttribute(col, 3)); g.instanceCount = n;
       const mat = new THREE.ShaderMaterial({
         uniforms: { uTime, uCam, uSunCol, ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog) }, side: THREE.DoubleSide, fog: true,
@@ -237,7 +240,7 @@ export const atmosphere = {
     // ---------------------------------------------------------------- dust and pollen motes
     if (on('motes')) {
       const n = Math.round(MOTES * Math.min(1.5, opts.motes ?? 1)), pos = new Float32Array(n * 3);
-      for (let i = 0; i < n; i++) pos.set([Math.random(), Math.random(), Math.random()], i * 3);
+      for (let i = 0; i < n; i++) pos.set([rand(), rand(), rand()], i * 3);
       const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
       const mat = new THREE.ShaderMaterial({
         uniforms: { uTime, uCam, uSun, uSunCol, uPx: { value: 1 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
@@ -281,7 +284,7 @@ export const atmosphere = {
         for (let q = 0; q < cands.length && k < BEAMS; q += Math.max(1, Math.floor(cands.length / BEAMS))) {
           const tr = cands[q], top = new THREE.Vector3(tr.x, tr.y + tr.h * .8, tr.z);
           A.setXYZW(k, top.x, top.y, top.z, tr.h * 1.8 + 6);
-          B.setXYZW(k, 2 + Math.random() * 3.5, t, Math.random(), .6 + Math.random() * .6);
+          B.setXYZW(k, 2 + rand() * 3.5, t, rand(), .6 + rand() * .6);
           k++;
         }
         beams.geometry.instanceCount = k; A.needsUpdate = true; B.needsUpdate = true;
@@ -292,10 +295,10 @@ export const atmosphere = {
         const wet = C.waterNear ? (x, z) => C.waterNear(x, z) : (x, z) => { const c = C.landAt(x, z); return c === 3 || c === 12; };   // (LAND.water, LAND.wetland)
         let k = 0;
         for (let tries = 0; tries < 160 && k < MIST; tries++) {
-          const a = Math.random() * 6.283, r = 12 + Math.random() * 90, x = cam.x + Math.cos(a) * r, z = cam.z + Math.sin(a) * r;
+          const a = rand() * 6.283, r = 12 + rand() * 90, x = cam.x + Math.cos(a) * r, z = cam.z + Math.sin(a) * r;
           if (!wet(x, z)) continue;
-          const y = Math.max(world.poolAt?.(x, z) ?? -1e9, world.surfaceH?.(x, z) ?? 0) + .35 + Math.random() * .5;
-          A.setXYZW(k, x, y, z, 7 + Math.random() * 10); B.setXY(k, t, Math.random()); k++;
+          const y = Math.max(world.poolAt?.(x, z) ?? -1e9, world.surfaceH?.(x, z) ?? 0) + .35 + rand() * .5;
+          A.setXYZW(k, x, y, z, 7 + rand() * 10); B.setXY(k, t, rand()); k++;
         }
         mist.geometry.instanceCount = k; A.needsUpdate = true; B.needsUpdate = true;
       }
@@ -303,12 +306,12 @@ export const atmosphere = {
         // flocks over open land 50–160 m off: fields, pasture (LAND codes ≥ 10), 25–45 m up
         const A = birds.geometry.attributes.iF; let k = 0, f = 0;
         for (let tries = 0; tries < 60 && f < FLOCKS; tries++) {
-          const a = Math.random() * 6.283, r = 50 + Math.random() * 110, x = cam.x + Math.cos(a) * r, z = cam.z + Math.sin(a) * r, c = world.city.landAt(x, z);
+          const a = rand() * 6.283, r = 50 + rand() * 110, x = cam.x + Math.cos(a) * r, z = cam.z + Math.sin(a) * r, c = world.city.landAt(x, z);
           if (!(c >= 10 && c !== 12)) continue;
           // (a desert map's are ravens: pairs and threes riding the air higher up, along the cliffs)
           const raven = world.profile?.ground === 'desert';
-          const y = (world.surfaceH?.(x, z) ?? cam.y) + (raven ? 40 + Math.random() * 50 : 25 + Math.random() * 20), n = raven ? 2 + Math.floor(Math.random() * 2) : 4 + Math.floor(Math.random() * (BIRDS - 3)), ph = Math.random();
-          for (let j = 0; j < n; j++) A.setXYZW(k++, x, y, z, ph + j * .037 + Math.random() * .01);
+          const y = (world.surfaceH?.(x, z) ?? cam.y) + (raven ? 40 + rand() * 50 : 25 + rand() * 20), n = raven ? 2 + Math.floor(rand() * 2) : 4 + Math.floor(rand() * (BIRDS - 3)), ph = rand();
+          for (let j = 0; j < n; j++) A.setXYZW(k++, x, y, z, ph + j * .037 + rand() * .01);
           f++;
         }
         birds.geometry.instanceCount = k; A.needsUpdate = true;

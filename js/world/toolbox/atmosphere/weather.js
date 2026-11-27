@@ -4,6 +4,7 @@
 // Changes ease in over a few seconds. Works on every stylized route; the fog bank hugs the real
 // shoreline where the scene has one (the Big Sur hero map), elsewhere it lies in the valleys.
 import * as THREE from '../../../../vendor/three.js';
+import { randomSequence } from '../core/random.js';
 
 export const WEATHER = {
   clear: { label: 'Clear', cloud: .12, shadow: .5, wind: .3, bank: 0, rain: 0, overcast: 0, bankTop: 140 },
@@ -131,9 +132,9 @@ export class Weather {
   }
 
   _makeRain() {
-    const N = 5200, pos = new Float32Array(N * 2 * 3), seed = new Float32Array(N * 2 * 4);
+    const N = 5200, pos = new Float32Array(N * 2 * 3), seed = new Float32Array(N * 2 * 4), rr = randomSequence(5200);   // [review 27 Nov] seeded (TOOLBOX rule 3)
     for (let i = 0; i < N; i++) {
-      const s = [Math.random(), Math.random(), Math.random(), Math.random()];
+      const s = [rr(), rr(), rr(), rr()];
       for (let e = 0; e < 2; e++) { seed.set(s, (i * 2 + e) * 4); pos.set([0, e, 0], (i * 2 + e) * 3); }
     }
     const geometry = new THREE.BufferGeometry();

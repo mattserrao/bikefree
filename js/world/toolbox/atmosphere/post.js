@@ -99,8 +99,10 @@ export class PostFX {
     // so the look is unchanged and the copy to the screen is a plain blit
     this.plain = null;
     this._size = [2, 2];
-    this.a = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, depthBuffer: false });
-    this.b = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, depthBuffer: false });
+    // [review 27 Nov] the quarter-size half-float targets (a, b: bloom; c, d: sun shafts) made on first use (_q): the
+    // plain path never draws into them; and only the path in use keeps its full-size target (_target drops the other)
+    this.a = this.b = this.c = this.d = null;
+    this._w = this._h = 2;
     const tri = new THREE.BufferGeometry();
     tri.setAttribute('position', new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
     this.geometry = tri;
@@ -193,17 +195,22 @@ export class PostFX {
         }`,
       depthTest: false, depthWrite: false,
     });
-    this.c = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, depthBuffer: false });
-    this.d = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, depthBuffer: false });
     this.atmo = null;
     this.quad = new THREE.Mesh(tri, this.bright);
     this.quad.frustumCulled = false;
     this.quadScene = new THREE.Scene(); this.quadScene.add(this.quad);
   }
 
+  /** A quarter-size half-float target (a–d), made the first time it's drawn into. */
+  _q(key) { return (this[key] ||= new THREE.WebGLRenderTarget(this._w, this._h, { type: THREE.HalfFloatType, depthBuffer: false })); }
+  _drop(keys) { for (const key of keys) if (this[key]) { this[key].depthTexture?.dispose(); this[key].dispose(); this[key] = null; } }
+
   _target(hdr) {
     const key = hdr ? 'scene' : 'plain';
     if (!this[key]) {
+      // [review 27 Nov] the path changed (a detail level, a hero scene): the other path's target (full size, MSAA,
+      // float depth) freed, and the quarter-size ones with the graded path
+      this._drop([hdr ? 'plain' : 'scene']); if (!hdr) { this._drop(['a', 'b', 'c', 'd']); this.composite.uniforms.tShaft.value = null; }
       const t = new THREE.WebGLRenderTarget(this._size[0], this._size[1], {
         type: hdr ? THREE.HalfFloatType : THREE.UnsignedByteType, depthBuffer: true, samples: this.samples,
         // 32-bit float depth: what makes the reversed depth buffer precise out to the horizon
@@ -223,20 +230,20 @@ export class PostFX {
    * the scene's depth (which is then resolved from the multisampled target, the only extra cost).
    */
   setInk(ink) {
-    if (!!ink !== !!this.ink) for (const key of ['scene', 'plain']) if (this[key]) { this[key].depthTexture?.dispose(); this[key].dispose(); this[key] = null; }
+    if (!!ink !== !!this.ink) this._drop(['scene', 'plain']);
     this.ink = ink || null;
   }
 
   /** Aerial perspective and sun shafts: { density, falloff, baseY, strength, haze, shafts }, or null (off). The world's
    *  scene fog should stand back when this is on (the post pass is the air then). Needs the scene's depth (resolved). */
   setAtmosphere(a) {
-    if (!!a !== !!this.atmo) for (const key of ['scene', 'plain']) if (this[key]) { this[key].depthTexture?.dispose(); this[key].dispose(); this[key] = null; }
+    if (!!a !== !!this.atmo) this._drop(['scene', 'plain']);
     this.atmo = a || null;
   }
 
   /** Contact shading: { strength, radiusM }, or null. */
   setAO(ao) {
-    if (!!ao !== !!this.ao) for (const key of ['scene', 'plain']) if (this[key]) { this[key].depthTexture?.dispose(); this[key].dispose(); this[key] = null; }
+    if (!!ao !== !!this.ao) this._drop(['scene', 'plain']);
     this.ao = ao || null;
   }
 
@@ -266,7 +273,7 @@ export class PostFX {
   setSamples(samples) {
     if (this.samples === samples) return;
     this.samples = samples;
-    for (const key of ['scene', 'plain']) if (this[key]) { this[key].depthTexture?.dispose(); this[key].dispose(); this[key] = null; }
+    this._drop(['scene', 'plain']);
   }
 
   setSize(width, height) {
@@ -274,7 +281,7 @@ export class PostFX {
     this._size = [width, height];
     this.scene?.setSize(width, height); this.plain?.setSize(width, height);
     const w = Math.max(2, Math.floor(width / 4)), h = Math.max(2, Math.floor(height / 4));
-    this.a.setSize(w, h); this.b.setSize(w, h); this.c.setSize(w, h); this.d.setSize(w, h);
+    for (const t of [this.a, this.b, this.c, this.d]) t?.setSize(w, h);
     this.bright.uniforms.uTexel.value.set(1 / width, 1 / height);
     this._w = w; this._h = h;
   }
@@ -298,10 +305,11 @@ export class PostFX {
     }
     this.bright.uniforms.tSrc.value = target.texture;
     this.bright.uniforms.uThreshold.value = opts.threshold ?? 1.1;
-    this._pass(this.bright, this.a);
+    const A = this._q('a'), B = this._q('b');
+    this._pass(this.bright, A);
     for (let k = 0; k < 2; k++) {
-      this.blur.uniforms.tSrc.value = this.a.texture; this.blur.uniforms.uDir.value.set((1 + k) / this._w, 0); this._pass(this.blur, this.b);
-      this.blur.uniforms.tSrc.value = this.b.texture; this.blur.uniforms.uDir.value.set(0, (1 + k) / this._h); this._pass(this.blur, this.a);
+      this.blur.uniforms.tSrc.value = A.texture; this.blur.uniforms.uDir.value.set((1 + k) / this._w, 0); this._pass(this.blur, B);
+      this.blur.uniforms.tSrc.value = B.texture; this.blur.uniforms.uDir.value.set(0, (1 + k) / this._h); this._pass(this.blur, A);
     }
     const cu = this.composite.uniforms;
     cu.uShaft.value = 0;
@@ -313,14 +321,15 @@ export class PostFX {
       if (inFront && Math.abs(sp.x) < 1.6 && Math.abs(sp.y) < 1.6) {
         const S = this.shaftMat.uniforms;
         S.uSun.value.set(sp.x * .5 + .5, sp.y * .5 + .5); S.uSunCol.value.copy(this.atmo.sunColor); S.tDepth.value = target.depthTexture;
-        S.uFirst.value = 1; this._pass(this.shaftMat, this.c);
-        S.uFirst.value = 0; S.tSrc.value = this.c.texture; this._pass(this.shaftMat, this.d);
+        const C = this._q('c'), D = this._q('d');
+        S.uFirst.value = 1; this._pass(this.shaftMat, C);
+        S.uFirst.value = 0; S.tSrc.value = C.texture; this._pass(this.shaftMat, D);
         const edge = 1 - Math.min(1, Math.max(0, Math.hypot(sp.x, sp.y) - .6) / 1);
-        cu.tShaft.value = this.d.texture; cu.uShaft.value = this.atmo.shafts * edge;
+        cu.tShaft.value = D.texture; cu.uShaft.value = this.atmo.shafts * edge;
       }
     }
     this.composite.uniforms.tScene.value = target.texture;
-    this.composite.uniforms.tBloom.value = this.a.texture;
+    this.composite.uniforms.tBloom.value = A.texture;
     this.composite.uniforms.uBloom.value = opts.bloom ?? .32;
     this.composite.uniforms.uWarm.value = opts.warm ?? 0;
     this._inkUniforms(this.composite, target, camera);
@@ -328,8 +337,7 @@ export class PostFX {
   }
 
   dispose() {
-    for (const t of [this.scene, this.plain]) if (t) { t.depthTexture?.dispose(); t.dispose(); }
-    for (const t of [this.a, this.b, this.c, this.d]) t.dispose();
+    this._drop(['scene', 'plain', 'a', 'b', 'c', 'd']);
     for (const m of [this.bright, this.blur, this.composite, this.copy, this.shaftMat]) m.dispose();
     this.geometry.dispose();
   }

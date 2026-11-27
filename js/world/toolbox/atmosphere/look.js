@@ -32,6 +32,7 @@ export const LOOKS = {
 };
 
 const LUMA = 'vec3(.2126, .7152, .0722)';
+const SWEEP_EVERY = 20;   // frames between the look's scene walks (as baked-light.js's sweeps)
 
 export class Look {
   constructor(world, key) {
@@ -49,6 +50,7 @@ export class Look {
       uToonShade: { value: new THREE.Color() },
     };
     this.patched = new WeakSet();
+    this._frames = 0; this.dirty = false;   // (sweep's cadence)
     world.renderer.toneMapping = THREE.NeutralToneMapping;
   }
 
@@ -67,11 +69,19 @@ export class Look {
     w.renderer.toneMappingExposure *= d.exposure;
   }
 
-  /** Patch every lit scenery material in the scene (new tiles reuse patched kit materials). */
-  sweep() {
-    this.world.scene.traverse((o) => {
-      if (!o.isMesh || !o.material) return;
-      for (const m of [].concat(o.material)) this._patch(m);
+  /**
+   * Patch every lit scenery material in the scene (new tiles reuse patched kit materials).
+   * [review 27 Nov] The world calls this every frame; the scene walk runs on the first call, then every SWEEP_EVERY
+   * frames (baked-light.js's cadence), or on the next call after `dirty` is set, or with force — and allocates
+   * nothing per mesh (one visitor, no [].concat). A material that arrives between walks draws untooned for at most
+   * SWEEP_EVERY frames.
+   */
+  sweep(force = false) {
+    if (!force && !this.dirty && this._frames++ % SWEEP_EVERY) return;
+    this.dirty = false;
+    this.world.scene.traverse(this._visit ||= (o) => {
+      const m = o.isMesh && o.material; if (!m) return;
+      if (Array.isArray(m)) for (const x of m) this._patch(x); else this._patch(m);
     });
     this._flattenRoad();
   }
