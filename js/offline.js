@@ -115,7 +115,38 @@ export function setOfflineStatus(id, value) {
   } catch { /* storage unavailable */ }
 }
 
-export function registerServiceWorker(log) {
-  if (!('serviceWorker' in navigator)) return;
-  navigator.serviceWorker.register(new URL('../sw.js', import.meta.url), { updateViaCache: 'none' }).catch((err) => log?.('app', `Offline support unavailable: ${err.message}`, 'debug'));
+/** Register sw.js; `onUpdate(worker)`: [review 27 Nov] A7, a new revision is installed and waiting (watchForUpdate). */
+export function registerServiceWorker(log, onUpdate) {
+  if (!('serviceWorker' in navigator)) return null;
+  const sw = navigator.serviceWorker;
+  return sw.register(new URL('../sw.js', import.meta.url), { updateViaCache: 'none' })
+    .then((reg) => { if (onUpdate) watchForUpdate(reg, sw, onUpdate); return reg; })
+    .catch((err) => { log?.('app', `Offline support unavailable: ${err.message}`, 'debug'); return null; });
+}
+
+/**
+ * [review 27 Nov] A7: a new revision's worker waits (sw.js no longer skips waiting): call `onReady(worker)` when one is
+ * installed and waiting behind the worker that runs this page — at once if there is one already. (The first install,
+ * with no worker running the page yet, simply activates: nothing to report.)
+ */
+export function watchForUpdate(reg, container, onReady) {
+  const ready = (w) => { if (w && container.controller) onReady(w); };
+  if (reg.waiting) ready(reg.waiting);
+  reg.addEventListener('updatefound', () => {
+    const w = reg.installing;
+    w?.addEventListener('statechange', () => { if (w.state === 'installed') ready(w); });
+  });
+}
+
+/**
+ * [review 27 Nov] A7: let the waiting worker take over. `reload`: reload this tab onto it once it does (the "Reload"
+ * button); without, the tab carries on with its own revision's files (sw.js serves it from its old cache) and the
+ * next load is the new one. Only a takeover this tab asked for reloads it: another tab's doesn't (it may be mid-ride).
+ */
+export function applyUpdate(worker, container, reload = null) {
+  if (reload) {
+    if (worker.state === 'activated') { reload(); return; }
+    container.addEventListener('controllerchange', () => reload(), { once: true });
+  }
+  worker.postMessage({ type: 'skipWaiting' });
 }

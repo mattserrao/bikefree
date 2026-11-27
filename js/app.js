@@ -16,7 +16,7 @@ import './app/route-options.js';
 import './app/preview.js';
 import './app/city-panel.js';
 import './app/route-loading.js';
-import './app/offline-ui.js';
+import { onUpdateReady } from './app/offline-ui.js';
 import './app/settings-ui.js';
 import './app/pause-graphics.js';
 import './app/hud-layout.js';
@@ -33,7 +33,7 @@ checkRecovery();
 // The service worker's first install precaches the app (code, styles and the catalogs, ~4 MB): not while the menu is
 // loading (PLAN 7.11) — once the list and its background routes are in and the page is idle
 const whenIdle = (fn) => (window.requestIdleCallback ? requestIdleCallback(fn, { timeout: 5000 }) : setTimeout(fn, 1000));
-listShown.catch(() => {}).then(() => routesLoaded).catch(() => {}).then(() => whenIdle(() => registerServiceWorker(log)));
+listShown.catch(() => {}).then(() => routesLoaded).catch(() => {}).then(() => whenIdle(() => registerServiceWorker(log, onUpdateReady)));   // ([review 27 Nov] A7: "Update ready")
 log('app', 'Ready. Close Zwift, Zwift Companion and the Wahoo app, then connect your devices.');
 
 // For debugging in the browser console.
