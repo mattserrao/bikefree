@@ -2,6 +2,7 @@
 """Build a city route and its city data from OpenStreetMap and AWS Terrain Tiles.
 
     python3 tools/build_city.py pittsburgh
+    python3 tools/build_city.py pittsburgh --offline   # --offline (or BIKEFREE_OFFLINE=1): the cache only; a download stops the run naming the missing file (citylib/offline.py)
 
 Reads tools/city/<id>.json and writes two files:
 
@@ -1732,5 +1733,5 @@ def underground_ranges(cfg, rs):
 
 
 if __name__ == '__main__':
-    for cid in sys.argv[1:] or [f[:-5] for f in os.listdir(os.path.join(ROOT, 'tools', 'city')) if f.endswith('.json') and '.network' not in f and '.spec' not in f]:
+    for cid in [a for a in sys.argv[1:] if not a.startswith('--')] or [f[:-5] for f in os.listdir(os.path.join(ROOT, 'tools', 'city')) if f.endswith('.json') and '.network' not in f and '.spec' not in f]:
         build(cid)

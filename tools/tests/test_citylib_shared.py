@@ -1,6 +1,6 @@
 """Unit tests for the map tools' shared code (code review 27 Nov 2026, wave 2: P1 provenance and dated OSM, P8 shared
 DEM / network / geometry). Run by test/pipeline-wave2.test.mjs:  python3 -m unittest discover -s tools/tests
-Tests that need numpy, scipy or Pillow skip without them (CI's python3 has none)."""
+Tests that need numpy, scipy or Pillow skip without them (CI installs tools/requirements.txt since wave 3, so they run there)."""
 import io, json, math, os, shutil, sys, tarfile, tempfile, unittest, urllib.error, urllib.parse
 from unittest import mock
 

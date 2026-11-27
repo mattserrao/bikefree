@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // One QC suite for every map: the right checks for each target, one findings list, one exit code.
 //
-//   node tools/qc.mjs <target …> [--sweep [600]] [--gpu] [--evidence 12] [--json tools/qc/out.json] [--strict] [--fast]
+//   node tools/qc.mjs <target …> [--sweep [600]] [--gpu] [--evidence 12] [--json tools/qc/out.json] [--strict] [--fast] [--frozen]
 //   npm run qc:all -- skan endless bigsur --gpu
 //
 // Targets:
@@ -12,7 +12,9 @@
 //                                                                    and clipping QC (tools/qc_clipping.mjs, no city life)
 // --gpu adds the GPU check to every site (tools/qc-gpu.js: shader / GL errors, the frame against tools/qc/budgets.json;
 // a route scene gets it at its preview spot). --evidence N shoots close-ups of a map's first N defects. --fast skips
-// a route scene's clipping QC (the slow one: ~10 min a route on a software GPU).
+// a route scene's clipping QC (the slow one: ~10 min a route on a software GPU). --frozen makes a graph map's run
+// deterministic (seeded random, frozen clock, pinned camera, moving life hidden: tools/qc_map.mjs FROZEN_PRE); the
+// endless map has no frozen mode and runs as usual, and a route scene's clipping QC already runs without life.
 //
 // Every finding comes out as { target, source, check, severity: fail|warn|info, id, at, note }; the exit code is 1
 // when any is a fail (or any warn, with --strict). Severity of the map checks: see SEVERITY below.
@@ -52,9 +54,10 @@ async function mapTarget(t, o) {
   const sites = await sitesOf(t, { sweep: o.sweep });
   const out = qcOut(t), radius = o.sweep ? Math.round(o.sweep * 0.75) : 420;
   process.stderr.write(`${t}: ${Object.keys(sites).length} sites `);
-  const res = await runQC(t, sites, { out, radius, gpu: o.gpu });
+  const frozen = o.frozen && t !== 'endless';
+  const res = await runQC(t, sites, { out, radius, gpu: o.gpu, frozen });
   process.stderr.write('\n');
-  if (o.evidence) await evidence(t, res, { out, n: o.evidence });
+  if (o.evidence) await evidence(t, res, { out, n: o.evidence, frozen });
   const seen = new Set(), F = [];
   for (const [site, r] of Object.entries(res)) {
     if (!r) { F.push({ target: t, source: 'map', check: 'siteFailed', severity: 'fail', id: `siteFailed-${site}`, at: site, note: 'the site did not build' }); continue; }
@@ -97,8 +100,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const flag = (k) => { const i = args.indexOf(k); if (i < 0) return false; args.splice(i, 1); return true; };
   const jsonOut = opt('--json', null), nEv = +opt('--evidence', 0);
   const sI = args.indexOf('--sweep'); let sweep = 0; if (sI >= 0) { const v = +args[sI + 1]; sweep = v > 0 ? v : 600; args.splice(sI, v > 0 ? 2 : 1); }
-  const o = { sweep, evidence: nEv, gpu: flag('--gpu'), fast: flag('--fast') }, strict = flag('--strict');
-  if (!args.length) { console.error('usage: node tools/qc.mjs <map|endless|route …> [--sweep [m]] [--gpu] [--evidence N] [--json f] [--strict] [--fast]'); process.exit(2); }
+  const o = { sweep, evidence: nEv, gpu: flag('--gpu'), fast: flag('--fast'), frozen: flag('--frozen') }, strict = flag('--strict');
+  if (!args.length) { console.error('usage: node tools/qc.mjs <map|endless|route …> [--sweep [m]] [--gpu] [--evidence N] [--json f] [--strict] [--fast] [--frozen]'); process.exit(2); }
   const all = [], detail = {};
   for (const t of args) {
     const k = await kindOf(t);

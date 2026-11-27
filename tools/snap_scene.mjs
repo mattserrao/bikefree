@@ -101,6 +101,9 @@ for (const shot of shots) {
   // stop the loop, let every queued scenery tile build, then draw one frame and read it back
   const r = await page.evaluate(async (evalJs) => {
     const w = window.bfWorld, t = w.terrain, c = w.camera.position;
+    // (--fingerprint needs THREE: imported here, before the frame — an await between the render and the readback
+    // lets the browser present and clear the WebGL drawing buffer, and every still came back blank)
+    const THREE = window.__fingerprint ? await import('/vendor/three.js') : null;
     w.stop();
     if (evalJs) new Function('w', evalJs)(w);
     for (let k = 0; k < 600 && (t.forestQueue?.length || k < 2); k++) { t._lastX = Infinity; t.update(c.x, c.z); }
@@ -121,6 +124,8 @@ for (const shot of shots) {
     // the app's own frame: with the post-processing chain where the scene has one (Big Sur)
     w.renderer.shadowMap.needsUpdate = true;   // the ride redraws shadows only as needed
     if (w._render) w._render(); else w.renderer.render(w.scene, w.camera);
+    // read the frame back in the same task as the render (nothing asynchronous before this line: see above)
+    const url = w.renderer.domElement.toDataURL(window.__png ? 'image/png' : 'image/jpeg', .9);
     const info = w.renderer.info.render;
     w.renderer.renderBufferDirect = rbd;   // [w2-budget]
     let breakdown = null;
@@ -130,7 +135,6 @@ for (const shot of shots) {
     // [toolbox] --fingerprint: one hash per object of its geometry, transforms and material settings, so a refactor
     // can prove the scene is built identically (pixels alone miss off-screen changes)
     let fp = null;
-    const THREE = window.__fingerprint ? await import('/vendor/three.js') : null;
     if (window.__fingerprint) {
       const H = (h, bytes) => { for (let i = 0; i < bytes.length; i++) h = Math.imul(h ^ bytes[i], 16777619) >>> 0; return h; };
       const num = (h, v) => H(h, new Uint8Array(new Float64Array([Math.round(v * 1e4) / 1e4]).buffer));
@@ -165,7 +169,7 @@ for (const shot of shots) {
       });
       fp = { all: all.toString(16), objects: n, per };
     }
-    return { fp, breakdown, url: w.renderer.domElement.toDataURL(window.__png ? 'image/png' : 'image/jpeg', .9), calls: info.calls, triangles: info.triangles, bake: window.__bake || null,
+    return { fp, breakdown, url, calls: info.calls, triangles: info.triangles, bake: window.__bake || null,
       areas: w._multi ? [...w.areas.values()].map((a) => `${a.id}${a === w.area ? '*' : ''}`).join(' ') : null, memory: { ...w.renderer.info.memory, heapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null } };
   }, evalJs);
   const file = join(out, `${shot.name}.${png ? 'png' : 'jpg'}`);

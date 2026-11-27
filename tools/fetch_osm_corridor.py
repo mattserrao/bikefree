@@ -3,6 +3,7 @@
 
   python3 tools/fetch_osm_corridor.py alpedhuez              # corridor from scene "osm.corridorM" (default 1500 m)
   python3 tools/fetch_osm_corridor.py alpedhuez --census     # also print counts per 10 km
+  python3 tools/fetch_osm_corridor.py alpedhuez --offline    # --offline (or BIKEFREE_OFFLINE=1): the cache only; a download stops the run naming the missing file (citylib/offline.py)
 
 Reads   routes/parks/<id>.gpx, routes/scenes/<id>.json ("osm": { corridorM, tileDeg })
 Writes  tools/.cache/osm-<id>/t_<lat>_<lon>.osm   raw OSM API tiles (cached; delete to refresh)
