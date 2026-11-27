@@ -46,11 +46,15 @@ function setPacer(watts) {
   renderHud();
 }
 $('pacerSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setPacer(Number(b.dataset.w)); });
-function stepPacer() {
-  // Same fixed step as the session, so you and the pacer share one clock.
+function stepPacer(runSteps = session.running ? 1 : 0) {
+  // Same fixed step as the session, so you and the pacer share one clock ([review 27 Nov] one 'tick' per timer now
+  // carries every step it ran: the pacer takes as many of them as ran with the clock going)
   const dt = TICK_MS / 1000;
-  if (!pacer.on || !session.running) return;
+  if (!pacer.on || !runSteps) return;
   if (pacerKey !== rideKey()) resetPacer();
+  for (let i = 0; i < runSteps; i++) stepPacerOnce(dt);
+}
+function stepPacerOnce(dt) {
   const r = onRoute() ? session.route : null;
   const track = r ? pacerPath(r) : null;
   const gradeAt = track ? (d) => track.grade(session.routeStart + d) : r ? (d) => routeAt(r, wrapDist(r, session.routeStart + d)).grade : () => session.gradePct;

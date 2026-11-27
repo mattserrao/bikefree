@@ -15,6 +15,8 @@ import { segmentIndexAt, targetWatts } from './workout.js';
 export const TICK_MS = 250;
 /** Longest gap the clock catches up after (a hidden tab ticks about once a second; a sleeping laptop is not riding). */
 export const MAX_CATCHUP_MS = 2000;
+/** Steps per recorded sample: one sample a second of ride time. */
+const SAMPLE_STEPS = 1000 / TICK_MS;
 const DATA_STALE_MS = 2500;
 const HR_STALE_MS = 5000;
 const AUTO_PAUSE_MS = 3000;
@@ -40,6 +42,7 @@ export class Session extends EventTarget {
     this.workoutBias = 1;
     this.demoSpeedMps = null;
     this.autoStart = true;      // the app turns this off while you're on the menu (and behind the loading screen)
+    this.holdResume = false;    // [review 27 Nov] the app turns this on while the summary is open: no auto start or resume
     this.held = false;          // [phase 8] the world is loading the streets ahead: time and distance wait (setHeld)
     this._resumeAfterHold = false;
     this._resetRideState();
@@ -58,9 +61,19 @@ export class Session extends EventTarget {
   _clock(now = performance.now()) {
     this._clockDebt += Math.min(MAX_CATCHUP_MS, Math.max(0, now - this._clockAt));
     this._clockAt = now;
-    let steps = 0;
+    let steps = 0, runSteps = 0;
     // (rounded to the nearest step, the remainder carried: a timer 1 ms early or late neither drops nor doubles a step)
-    while (this._clockDebt >= TICK_MS / 2) { this._clockDebt -= TICK_MS; this._tick(); steps++; }
+    const n = Math.max(0, Math.floor((this._clockDebt + TICK_MS / 2) / TICK_MS));
+    while (this._clockDebt >= TICK_MS / 2) {
+      this._clockDebt -= TICK_MS;
+      this._lagMs = (n - 1 - steps) * TICK_MS;   // [review 27 Nov] a caught-up step happened this long ago (its sample's time)
+      this._tick(); steps++;
+      if (this.running) runSteps++;
+    }
+    this._lagMs = 0;
+    // [review 27 Nov] one 'tick' per timer, after its steps (the HUD drew up to 8× in one task): `steps` is how many
+    // 0.25 s steps ran, `runSteps` how many of them with the clock running (the pacer and the FTP test step by these)
+    if (steps) this.dispatchEvent(new CustomEvent('tick', { detail: { steps, runSteps, dt: TICK_MS / 1000 } }));
     return steps;
   }
 
@@ -376,14 +389,15 @@ export class Session extends EventTarget {
     if (pedalling) this._lastActiveAt = nowPerf;
 
     // Auto start / auto pause
-    if (this.autoStart && !this.held && !this.running && !this.autoPaused && pedalling && this.movingS === 0) this.start();
+    // ([review 27 Nov] `holdResume`: the summary is open — pedalling neither starts nor resumes the ride behind it)
+    if (this.autoStart && !this.holdResume && !this.held && !this.running && !this.autoPaused && pedalling && this.movingS === 0) this.start();
     if (this.running && !pedalling && this.speedMps < 0.5 && nowPerf - this._lastActiveAt > AUTO_PAUSE_MS) {
       this.running = false;
       this.autoPaused = true;
       this.recorder.stop(now);
       this._changed();
     }
-    if (this.autoPaused && pedalling && !this.held) this.start();
+    if (this.autoPaused && pedalling && !this.held && !this.holdResume) this.start();
 
     // Physics
     const p = this.physicsParams();
@@ -419,9 +433,8 @@ export class Session extends EventTarget {
 
     this._updateRoute();
     this._updateWorkout(now);
-    this._record(now, carry ? 0 : grade);
+    this._record(now - (this._lagMs || 0), carry ? 0 : grade);
     this._control(nowPerf, p, grade, carry, dt);
-    this.dispatchEvent(new Event('tick'));
   }
 
   _updateRoute() {
@@ -500,12 +513,18 @@ export class Session extends EventTarget {
     }
   }
 
+  /**
+   * [review 27 Nov] One sample per 4 running steps (1 s of the session's clock), stamped with the wall time. (It was
+   * one per ≥ 1000 ms of Date.now(): timer jitter dropped 13–37 % of them, and summarize() counts a sample as 1 s.)
+   * A part-second at a pause carries over to the next running steps, so the samples add up to the timer.
+   */
   _record(now, grade) {
-    if (!this.running) { this._acc = { n: 0, p: 0, c: 0 }; return; }
+    if (!this.running) return;
     this._acc.n++; this._acc.p += this.power; this._acc.c += this.cadence;
-    if (now - this._lastSampleAt < 1000) return;
+    if (this._acc.n < SAMPLE_STEPS) return;
+    now = Math.max(now, this._lastSampleAt + 1);   // (in time order, even when a caught-up step's time is estimated)
     this._lastSampleAt = now;
-    const n = this._acc.n || 1;
+    const n = this._acc.n;
     let lat = null, lon = null;
     if (this.mode === 'route' && this.route) {
       const at = routeAt(this.route, this.routePos);

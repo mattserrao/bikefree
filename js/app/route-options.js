@@ -48,11 +48,21 @@ function renderStart() {
   const btn = $('startBtn');
   btn.disabled = !ready;
   btn.textContent = !ready ? 'Connect the trainer to start' : inProgress ? (sameAsCurrent() ? 'Resume ride' : 'Switch & resume') : 'Start riding';
-  $('startNote').innerHTML = inProgress
-    ? `Ride in progress · ${fmtTime(session.movingS)} · ${fmtDist(session.distanceM)} ${distUnit()} · <button class="link" id="finishFromMenu">Finish ride</button>`
-    : ready ? 'Recording starts when you pedal.' : 'No bike handy? Turn on <b>Demo</b> in the top right.';
-  $('finishFromMenu')?.addEventListener('click', () => openSummary());
+  // [review 27 Nov] the note is rebuilt only when what it says changes kind: during a ride it re-rendered every 250 ms
+  // tick, so the Finish ride button was replaced under the pointer and clicks were lost. The ride's time and distance
+  // go into their own span; the button's click is handled on the note (below).
+  const note = $('startNote'), kind = inProgress ? 'ride' : ready ? 'ready' : 'none';
+  if (note.dataset.kind !== kind) {
+    note.dataset.kind = kind;
+    note.innerHTML = kind === 'ride' ? 'Ride in progress · <span id="startNoteRide"></span> · <button type="button" class="link" id="finishFromMenu">Finish ride</button>'
+      : kind === 'ready' ? 'Recording starts when you pedal.' : 'No bike handy? Turn on <b>Demo</b> in the top right.';
+  }
+  if (kind === 'ride') {
+    const text = `${fmtTime(session.movingS)} · ${fmtDist(session.distanceM)} ${distUnit()}`, el = $('startNoteRide');
+    if (el.textContent !== text) el.textContent = text;
+  }
 }
+$('startNote').addEventListener('click', (e) => { if (e.target.closest('#finishFromMenu')) openSummary(); });
 
 // ---------- Route selector: direction, start point and length ----------
 // Every route rides there and back; Reverse starts at the far end. The start is any point along the leg
