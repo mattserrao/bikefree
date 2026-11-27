@@ -280,7 +280,9 @@ export function cityStreetMaterials(own, junctions) {
     brickMaterial = own(new THREE.MeshStandardMaterial({ map: bt, roughness: .9, ...offset(-1.6) }));
     brickMaterial.userData.slotDepthBias = true;
     brickMaterial.onBeforeCompile = streetMaterial.onBeforeCompile;   // the same height-slot depth rule as the streets
-    brickMaterial.customProgramCacheKey = () => 'city-streets-slot-4-brick';
+    // [review 27 Nov] the streets' key too: the same shader (only the map differs, a uniform), so one program, not two
+    // (its own '-brick' key compiled an identical twin: Pittsburgh at night, 58 programs → 57)
+    brickMaterial.customProgramCacheKey = streetMaterial.customProgramCacheKey;
   }
   return { streetMaterial, brickMaterial };
 }
