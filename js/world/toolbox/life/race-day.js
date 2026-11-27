@@ -25,6 +25,7 @@ import { Builder, M, box, cyl, cone } from '../core/model-builder.js';
 import { Crowd, CLIP, FIT, randomLook, clipRate, figureMaterial, staticCrowdMesh, posedFigure } from './figures/people.js';
 import { staticVehicle, appendToBuilder, PAINTS } from './figures/vehicles.js';
 import { staticCar } from './figures/cars.js';
+import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash
 import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 const ROAD_HALF = 3.5;
@@ -78,7 +79,8 @@ function cardMaterial(uTime, near) {
       .replace(anchor('#include <common>'), `#include <common>
         uniform float uTime; varying vec3 vCard;
         uniform float uNear; varying float vCamD;
-        float cH(float n) { n = mod(n, 1009.); return fract(sin(n * 12.9898 + 4.1) * 43758.5453); }`)
+        ${HASH_GLSL}
+        float cH(float n) { n = mod(n, 1009.); return hw21(vec2(n, 4.1)); }   // [review 27 Nov] the shared sin-free hash`)
       .replace(anchor('#include <color_fragment>'), `#include <color_fragment>
         {
           // vCard: x metres along the strip, y metres up, z seed (+ orange share in the integer part)
