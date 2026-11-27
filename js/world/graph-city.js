@@ -1161,10 +1161,14 @@ export class GraphCity {
 
   /** A soft plant card (grass-cards.js): its size by kind and scale, a per-plant tint and turn. */
   _card(N, x, y, z, seed, cell, sc) {
-    const SZ = [[.75, .38], [1.05, .95], [1.15, 1.3], [.95, 1.05]][cell], k = hash(seed * 7.7 + 3.1);
+    const SZ = [[.75, .38], [1.05, .95], [1.15, 1.3], [.95, 1.05], [1.7, 1.25]][cell], k = hash(seed * 7.7 + 3.1);
     const tint = (this._tint ||= new THREE.Color());
     if (this.desert) tint.setRGB(1.05 + k * .2, .8 + hash(seed * 5.3) * .1, .42 + hash(seed * 2.9) * .1);   // (desert: cured bunchgrass, tan)
     else tint.setRGB(.62 + k * .18, .66 + hash(seed * 5.3) * .16, .58 + hash(seed * 2.9) * .14);
+    if (cell === CARD.scrub && !this.desert) {   // (scrub: early-fall dogwood and sumac reds, olive and green)
+      const SCRUB = [[.52, .62, .3], [.46, .58, .28], [.62, .26, .18], [.72, .42, .2], [.6, .56, .26], [.4, .52, .26]];
+      const c = SCRUB[Math.floor(hash(seed * 4.1) * SCRUB.length)]; tint.setRGB(c[0] * (.9 + k * .25), c[1] * (.9 + k * .25), c[2] * (.9 + k * .25));
+    }
     grassCard(N, x, y, z, cell, SZ[0] * (.8 + k * .4) * Math.min(1.3, sc), SZ[1] * sc, seed * 6.283, tint);
   }
   /**
@@ -1308,7 +1312,7 @@ export class GraphCity {
               // sparser drifts, tall grass between, the odd lace or chicory
               const drift = hash(Math.floor(x / 14) * 5.1 + Math.floor(z / 14) * 2.3), scrub = hash(Math.floor(x / 22) * 1.7 + Math.floor(z / 22) * 4.3 + side) < .38;
               if (this.desert) { if (k < .07) sageClump(N, x, y, z, h, sc * .75); else if (k < .55) this._card(N, x, y, z, h, CARD.tall, sc * .8); continue; }   // (desert: sage and dry grass)
-              if (scrub && k < .45) scrubClump(N, x, y, z, h, sc);
+              if (scrub && k < .45) { this._card(N, x, y, z, h, CARD.scrub, sc); if (k < .2) this._card(N, x + .5, y, z + .3, h + 1, CARD.scrub, sc * .7); }
               else if (k < .08 + drift * .22) this._card(N, x, y, z, h, CARD.goldenrod, sc);
               else if (k < .9) this._card(N, x, y, z, h, CARD.tall, sc);
               else this._card(N, x, y, z, h, CARD.lace, sc);
@@ -1384,7 +1388,7 @@ export class GraphCity {
             const y = p.y - .05 + Math.max(0, Math.min(1, (o - w + .2) / 1.2)) * top, kind = hash(h * 31 + k), sc = .6 + vnoise(x / 13, z / 13) * .6 + hash(h * 7) * .35;
             if (o < w + .1) { if (kind < .35) cattails(N, x, p.y - .02, z, h, sc); else if (kind < .7) this._card(N, x, p.y, z, h, CARD.tall, sc); continue; }
             if (room < 1) { this._card(N, x, y, z, h, CARD.tall, sc); continue; }
-            if (kind < .45) scrubClump(N, x, y, z, h, sc);
+            if (kind < .45) this._card(N, x, y, z, h, CARD.scrub, sc);
             else if (kind < .75) this._card(N, x, y, z, h, CARD.tall, sc);
             else if (kind < .9) this._card(N, x, y, z, h, CARD.goldenrod, sc);
             else this._card(N, x, y, z, h, CARD.lace, sc);
