@@ -155,6 +155,7 @@ function pollLoad(run) {
   if (!world || document.body.classList.contains('no-world')) { run.finish('ready'); return; }
   world.setPreload?.(true);
   const r = world.readiness();
+  renderDegraded(r);   // [review 27 Nov]
   const next = r.steps.find((x) => !x.done);
   showLoadProgress(r.progress, r.ready ? 'Ready' : `Loading ${next.label.toLowerCase()}…`);
   const key = r.steps.map((x) => +x.done).join('');
@@ -169,6 +170,31 @@ function pollLoad(run) {
   }
   if (!run.valve && (r.failed || s > LOAD_VALVE_S)) offerRideAnyway(run, r.failed, r.steps.filter((x) => !x.done).map((x) => x.key).join(', '));
 }
+// [review 27 Nov] A graph world's readiness() lists the parts that failed to load (`degraded`: landmarks, bridges, the
+// city) while the rest of the map rides on: a small note on the ride screen says so (tap to dismiss). Checked while
+// loading and every couple of seconds on the ride (a part can fail after the start).
+const DEGRADED_NAMES = { landmarks: 'landmarks', bridges: 'bridges', city: 'buildings and trees' };
+let degradedKey = '', degradedAt = 0;
+function degradedText(list) {
+  if (!list?.length) return '';
+  return `Some scenery couldn’t load (${list.map((k) => DEGRADED_NAMES[k] || k).join(', ')}) — riding on without it`;
+}
+function renderDegraded(r) {
+  const list = r?.degraded || [], key = list.join(',');
+  if (key === degradedKey) return;
+  degradedKey = key;
+  const note = $('worldNote');
+  note.textContent = degradedText(list);
+  note.hidden = !key;
+  if (key) log('3d', `Scenery partly loaded: ${key} failed`, 'warn');
+}
+function checkDegraded(now = performance.now()) {
+  if (!onRideScreen || !world?.readiness || now - degradedAt < 2000) return;
+  degradedAt = now;
+  renderDegraded(world.readiness());
+}
+function resetDegraded() { degradedKey = ''; $('worldNote').hidden = true; }
+$('worldNote').addEventListener('click', () => { $('worldNote').hidden = true; });
 function offerRideAnyway(run, failed, what) {
   run.valve = true;
   $('loadAnyway').hidden = false;
@@ -199,6 +225,7 @@ $('loadCancel').addEventListener('click', () => { if (loadRun) showSetup(); });
 let holdSince = 0, holdGaveUp = false;
 function holdForWorld() {
   if (loadRun) return;   // (the loading screen holds it)
+  checkDegraded();   // [review 27 Nov] (called each tick)
   const wait = onRideScreen && !!world?.waitingForArea;
   if (!wait) { holdGaveUp = false; session.setHeld(false); return; }
   const now = performance.now();
@@ -372,6 +399,7 @@ async function openWorld(route) {
     return;
   }
   if (world) { world.dispose(); world = null; }
+  resetDegraded();   // [review 27 Nov] (a new world: its own note)
   try {
     world = new WorldClass($('worldView'), base, { log, quality: settings.worldQuality, path: route.netRide || null });
   } catch (err) {
