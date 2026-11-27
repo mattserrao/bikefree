@@ -2,17 +2,21 @@
 // then compares two runs pixel-for-pixel and object-by-object. Use it whenever shared toolbox code moves, so a
 // refactor can prove that no route changed.
 //
-//   node tools/toolbox_guard.mjs record /tmp/before          # on the old code
-//   node tools/toolbox_guard.mjs record /tmp/after           # on the new code
-//   node tools/toolbox_guard.mjs compare /tmp/before /tmp/after
-//   node tools/toolbox_guard.mjs record /tmp/x route28 bigsur   # only some routes
+//   npm run guard -- record tools/.cache/guard/before          # on the old code
+//   npm run guard -- record tools/.cache/guard/after           # on the new code
+//   npm run guard -- compare tools/.cache/guard/before tools/.cache/guard/after
+//   npm run guard -- record tools/.cache/guard/x route28 bigsur   # only some routes (graph maps: pgh, cny, skan)
 //
 // Shots are 640x360 PNGs, software GPU, Balanced quality. "compare" lists every shot whose pixels or object
-// fingerprints differ, and which named objects changed.
+// fingerprints differ, and which named objects changed. Both commands refuse a blank still (nothing drawn: see
+// tools/lib/png.mjs) and a still that is missing on disk — before wave 3 of the code review every route still was
+// blank and every graph-map pixel check read a missing file as 0 % changed, so only the fingerprints and the
+// draw-call / triangle counts were really compared.
 import { spawnSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { imageStats, pixelShare } from './lib/png.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -45,6 +49,12 @@ export const NOISY = ['Point State Park fountain', 'Buses', 'Cars', 'People', 'C
 // to render without errors (no pixel or fingerprint comparison).
 export const LIVE_SHOTS = {};
 
+// a still's stats, or why it can't be used ('missing', 'blank', 'unreadable: …')
+export function stillProblem(file) {
+  if (!existsSync(file)) return 'missing';
+  try { return imageStats(readFileSync(file)).blank ? 'blank' : null; } catch (e) { return `unreadable: ${e.message}`; }
+}
+
 const [cmd, ...rest] = process.argv.slice(2);
 if (cmd === 'record') {
   const [out, ...routes] = rest;
@@ -69,6 +79,10 @@ if (cmd === 'record') {
     if (r.status) failed = true;
     if (existsSync(join(dir, 'snapshots.json'))) rows.push(...JSON.parse(readFileSync(join(dir, 'snapshots.json'))).rows.map((x) => ({ ...x, shot: `${g}:${x.shot}`, route: g })));
   }
+  for (const r of rows) {   // a blank or missing still would make every later compare of it meaningless
+    const bad = /\.png$/.test(r.file) ? stillProblem(resolve(ROOT, r.file)) : null;
+    if (bad) { console.log(`STILL ${bad.toUpperCase()}  ${r.shot}  ${r.file}`); failed = true; }
+  }
   console.log(`\n${rows.length} shots recorded in ${out}${failed ? ' (with errors)' : ''}`);
   process.exitCode = failed ? 1 : 0;
 } else if (cmd === 'compare') {
@@ -87,9 +101,12 @@ if (cmd === 'record') {
   for (const [shot, ra] of A) {
     const rb = B.get(shot);
     if (!rb) { console.log(`missing  ${shot}`); diffs++; continue; }
+    if (ra.fingerprint || ra.graph) {   // a blank or missing still can't prove anything
+      const bad = [ra, rb].map((r) => stillProblem(resolve(ROOT, r.file)));
+      if (bad[0] || bad[1]) { console.log(`STILL    ${shot.padEnd(36)} ${bad[0] || 'ok'} → ${bad[1] || 'ok'}  (re-record)`); diffs++; continue; }
+    }
     if (ra.graph) {   // [blocks] a graph map's shot: within tolerance
-      const px = spawnSync('python3', [join(ROOT, 'tools/png_diff.py'), resolve(ROOT, ra.file), resolve(ROOT, rb.file)], { encoding: 'utf8' });
-      const share = +px.stdout.trim(), rel = (x, y) => Math.abs(y - x) / Math.max(1, x), T = GRAPH_TOLERANCE;
+      const share = pixelShare(readFileSync(resolve(ROOT, ra.file)), readFileSync(resolve(ROOT, rb.file))), rel = (x, y) => Math.abs(y - x) / Math.max(1, x), T = GRAPH_TOLERANCE;
       const ok = share <= T.pixels && rel(ra.calls, rb.calls) <= T.calls && rel(ra.triangles, rb.triangles) <= T.triangles && !rb.errors?.filter((e) => !/404/.test(e)).length;
       if (!ok) diffs++;
       console.log(`${ok ? 'within  ' : 'CHANGED '} ${shot.padEnd(36)} pixels ${(share * 100).toFixed(2)} %  calls ${ra.calls}→${rb.calls}  tris ${ra.triangles}→${rb.triangles}`);
