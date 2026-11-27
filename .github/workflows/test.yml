@@ -1,5 +1,10 @@
 # The tests on every push and pull request (code review 27 Nov 2026, item P5): the ~40 s suite (which includes the
-# generated-files checks: routes, presets, figures, textures) and the network graph's staleness check.
+# generated-files checks: routes, presets, figures, textures) and `npm run check` (the network graph's, the routes'
+# and the stadiums' staleness checks).
+# Wave 3: the map tools' Python packages (tools/requirements.txt, pinned, Python 3.13 as the maps were built with) are
+# installed, so the Python unit tests that need numpy / scipy / Pillow run here instead of skipping (~5 s from the
+# pip cache). The browser tests (test/tools-guard.test.mjs: a real guard record) run where Chrome is installed —
+# ubuntu-latest has it; BF_SKIP_BROWSER=1 turns them off.
 name: test
 on:
   push:
@@ -15,6 +20,12 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: tools/requirements.txt
+      - run: pip install -r tools/requirements.txt
       - run: npm ci
       - run: npm test
-      - run: node tools/build_network.mjs --check
+      - run: npm run check
