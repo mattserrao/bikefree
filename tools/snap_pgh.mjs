@@ -41,6 +41,16 @@ if (frozen) await page.addInitScript(() => {
   const T0 = 1767268800000; let tick = 0; window.__tick = (ms) => { tick += ms; };
   // the clock creeps 1 ms per read so time-sliced builds still finish; the same reads give the same times every run
   performance.now = () => 1000 + (tick += 0.001); Date.now = () => T0 + Math.floor(tick);
+  // no GPU timer: graph-world's Balanced lite post (2× MSAA + contact AO, _liteOn) is gated on the timer's measured frame,
+  // real GPU time that the frozen clock can't pin. Under SwiftShader the extension exists but its first result lands
+  // after a varying number of frames: when one landed before the still (a slow, busy run) the lite post went off — one
+  // draw call and one triangle fewer and no AO, 2.4 % of SKAN country's pixels (the guard's "#84 changed skan:country",
+  // 27 Nov). Without the timer the lite post is always on, as on a browser with none (Safari).
+  for (const C of [globalThis.WebGL2RenderingContext, globalThis.WebGLRenderingContext]) {
+    if (!C) continue;
+    const get = C.prototype.getExtension;
+    C.prototype.getExtension = function (name) { return /disjoint_timer_query/i.test(name) ? null : get.call(this, name); };
+  }
 });
 const rows = [];
 const errors = [];
@@ -78,6 +88,7 @@ for (const spec of args) {
     if (w.baked) { w.baked.bakeNow(); w.baked.tick(1); w.baked.tick(1); }
     // the tree engine sorts its trees round the camera it last ticked with: once more for this (moved) camera
     w.camera.updateMatrixWorld();
+    w.city?.lods?.(w.camera.position);   // (the city's near / far pieces and the kit's home detail for this camera: chunks the loop above built are otherwise drawn with their defaults)
     w.city?.oldGrowth?.prepare(w.camera);   // (an old-growth hero area's near pieces: built now for this camera)
     if (w.city?.forest) { w.city.forest._at = null; w.city.forest._lastRebuild = -99; w.city.forest.tick(w.camera); w.city.forest.impMat.uniforms.uNow.value = 1e9; }   // (every tile's impostors in: no dissolve in a still)
     w.effects?.prepare?.();   // (time-sliced effects — the canopy shade's map — finished for this camera)
