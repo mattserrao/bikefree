@@ -15,6 +15,8 @@ Writes tools/.cache/pgh-landmarks.json for the review map.
 import json, math, os, re, sys
 import xml.etree.ElementTree as ET
 from collections import defaultdict
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from citylib import osm_source  # noqa: E402  (a config's osmDate: the dated tiles, code review P1)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(ROOT, 'tools', '.cache')
@@ -81,11 +83,8 @@ def norm(s):
     return re.sub(r'[^a-z0-9 ]', '', s.lower().replace('&', 'and').replace('saint ', 'st ').replace('st. ', 'st '))
 
 
-def hv(a, b):
-    R = 6371008.8
-    la1, lo1, la2, lo2 = map(math.radians, (a[0], a[1], b[0], b[1]))
-    h = math.sin((la2 - la1) / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2
-    return 2 * R * math.asin(math.sqrt(h))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from citylib.geo import hv   # (as js/gpx.js measures: code review P8, one copy)
 
 
 def point_in(poly, x, y):
@@ -116,7 +115,7 @@ def main():
         if norm(label) in have: continue
         items.append({'label': label, 'names': names, 'type': typ, 'hint': hint, 'list': 'on the map' if (label, names, typ, hint) in EXTRA else 'future list'})
     # named features in the cached OSM tiles
-    folder = os.path.join(CACHE, 'osm-pgh')
+    folder = osm_source.city_dir('pgh')
     nodes, feats = {}, []
     keys = ('building', 'historic', 'tourism', 'memorial', 'artwork_type', 'amenity', 'leisure', 'man_made', 'landuse', 'railway', 'aerialway', 'shop', 'office')
     wayrefs = {}

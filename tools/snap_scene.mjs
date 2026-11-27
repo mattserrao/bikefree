@@ -18,11 +18,11 @@
 // --eval '<js>' (run with the world as `w` just before the frame: `w.terrain.subway.t = 95` puts the trains at 95 s),
 // --far (wait for the real far horizon), --png (lossless), --fingerprint (hash of every object for refactor checks, with a frozen clock, seeded
 // random and no streamed real horizon, so runs repeat exactly; see tools/toolbox_guard.mjs).
-import { createServer } from 'node:http';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { extname, join, dirname, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { serve, findChrome } from './lib/harness.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -43,8 +43,7 @@ const postJs = opt('--post', null);   // run in the page after the frame (the wo
 const evalJs = opt('--eval', null);   // JavaScript run on the stopped world (as `w`) before each frame, e.g. to set the subway trains' clock
 const waitFar = flag('--far');   // stylized scenes: wait (up to 2 min) for the real far horizon to stream in, so the ~1.5 km hand-off is drawn
 const areasNow = flag('--areas-now');   // a city of areas: build the other areas at once (world.areaBudget Infinity), not in frame slices — headless frames can be slow enough that a second area takes minutes
-const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync));
+const chrome = opt('--chrome', findChrome());
 if (!args.length) { console.log('usage: npm run snap -- <park>[@metres][:camera][:time][:season][:weather][:gentle|bold|current|standard] …'); process.exit(1); }
 
 const LOOKS = ['gentle', 'bold', 'current', 'standard'];   // current = no cartoon look, whatever the scene says; standard = the toolbox standard (gentle + baked light)
@@ -62,14 +61,7 @@ const shots = args.map((spec) => {
 });
 
 // a tiny static server for the repo (the preview needs http, not file://)
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.css': 'text/css', '.gpx': 'application/gpx+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.bin': 'application/octet-stream' };
-const server = createServer(async (req, res) => {
-  const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^([/\\])+/, '');
-  if (path.startsWith('..')) { res.writeHead(403).end(); return; }
-  try { const body = await readFile(join(ROOT, path || 'index.html')); res.writeHead(200, { 'content-type': TYPES[extname(path)] || 'application/octet-stream' }).end(body); }
-  catch { res.writeHead(404).end(); }
-});
-await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
+const { server } = await serve(ROOT);   // (tools/lib/harness.mjs: code review P9)
 const base = `http://127.0.0.1:${server.address().port}`;
 
 let chromium;

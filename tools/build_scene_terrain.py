@@ -20,11 +20,11 @@ Binary layout (little-endian), each a row-major W x H grid, row 0 = north:
 import json, math, os, re, sys
 import numpy as np
 from scipy import ndimage
-from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'tools'))
-import build_park_routes as parks  # noqa: E402  (shares the DEM tile cache and downloader)
+import build_park_routes as parks  # noqa: E402  (its user agent)
+from citylib import dem  # noqa: E402  (the DEM tiles: code review P8)
 
 Z = 14
 CELL_M = 30           # output grid
@@ -54,9 +54,7 @@ def mosaic(lat0, lat1, lon0, lon1):
     M = np.zeros(((y1 - y0 + 1) * 256, (x1 - x0 + 1) * 256), np.float64)
     for y in range(y0, y1 + 1):
         for x in range(x0, x1 + 1):
-            parks.dem_tile(x, y)
-            im = np.asarray(Image.open(os.path.join(parks.CACHE, f'dem-{Z}-{x}-{y}.png')).convert('RGB')).astype(np.float64)
-            M[(y - y0) * 256:(y - y0 + 1) * 256, (x - x0) * 256:(x - x0 + 1) * 256] = im[..., 0] * 256 + im[..., 1] + im[..., 2] / 256 - 32768
+            M[(y - y0) * 256:(y - y0 + 1) * 256, (x - x0) * 256:(x - x0 + 1) * 256] = dem.tile_heights(Z, x, y, pause=3, timeout=90, headers=parks.UA)
     return M, x0, y0
 
 

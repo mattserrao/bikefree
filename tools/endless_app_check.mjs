@@ -3,23 +3,16 @@
 // the endless world, the session's turn ride is the mile prompt (four terrain types, the current one picked), that a
 // choice regenerates the road past the mark, and that nothing threw. Exits 1 on a failure.
 //   node tools/endless_app_check.mjs [--draw]
-import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, normalize, extname, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { serve, findChrome } from './lib/harness.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const draw = process.argv.includes('--draw');
-const chrome = process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/chromium'].find(existsSync);
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.css': 'text/css', '.gpx': 'application/gpx+xml', '.png': 'image/png', '.svg': 'image/svg+xml' };
-const server = createServer(async (req, res) => {
-  const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^([/\\])+/, '');
-  if (path.startsWith('..')) { res.writeHead(403).end(); return; }
-  let body; try { body = await readFile(join(ROOT, path || 'index.html')); } catch { res.writeHead(404).end(); return; }
-  res.writeHead(200, { 'content-type': TYPES[extname(path)] || 'application/octet-stream' }).end(body);
-});
-await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
+const chrome = findChrome();
+const { server } = await serve(ROOT);   // (tools/lib/harness.mjs: code review P9)
 const base = `http://127.0.0.1:${server.address().port}`;
 const { chromium } = await import('playwright-core');
 const browser = await chromium.launch({ executablePath: chrome, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });

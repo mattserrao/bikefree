@@ -8,11 +8,11 @@
 // median / 95th-percentile / worst frame and how many went over 16.7 ms. Load: seconds until the world is ready.
 // Headless Chrome here may fall back to a software GPU (SwiftShader): its GPU ms then track the pixel and vertex work,
 // not a real card's time. Compare runs on the same machine, never across machines.
-import { createServer } from 'node:http';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, normalize, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { serve, findChrome } from '../lib/harness.mjs';
 const ROOT = fileURLToPath(new URL('../../', import.meta.url)), HERE = fileURLToPath(new URL('./', import.meta.url));
 const args = process.argv.slice(2), opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
 const RESULTS = resolve(HERE, 'results');
@@ -43,20 +43,17 @@ if (args.includes('--compare')) {
 const label = opt('--label', 'run'), VIEWS = JSON.parse(await readFile(resolve(HERE, 'views.json'), 'utf8'));
 const maps = opt('--maps', Object.keys(VIEWS).filter((k) => k !== 'note').join(',')).split(','), only = opt('--only', null)?.split(',');
 const [VW, VH] = opt('--size', '640x360').split('x').map(Number);
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.wasm': 'application/wasm' };
 // --effects a,b (or none): the maps' "effects" block replaced for this run (an A/B of one effect on the same code)
 const fx = opt('--effects', null), fxOnly = fx == null ? null : fx === 'none' ? [] : fx.split(',');
-const server = createServer(async (req, res) => {
-  const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^([/\\])+/, '');
-  let body; try { body = await readFile(join(ROOT, path)); } catch { res.writeHead(404).end(); return; }
+// (tools/lib/harness.mjs: code review P9) a map's graph JSON with its effects replaced, on the way out
+const { server } = await serve(ROOT, { transform: (path, body) => {
   if (fxOnly && /^routes[/\\]cities[/\\][a-z]+\.json$/.test(path)) {
-    const j = JSON.parse(body); if (j.format === 'bikefree-graph-1') { const all = j.effects || {}; j.effects = Object.fromEntries(fxOnly.map((k) => [k, all[k] || {}])); body = Buffer.from(JSON.stringify(j)); }
+    const j = JSON.parse(body); if (j.format === 'bikefree-graph-1') { const all = j.effects || {}; j.effects = Object.fromEntries(fxOnly.map((k) => [k, all[k] || {}])); return Buffer.from(JSON.stringify(j)); }
   }
-  res.writeHead(200, { 'content-type': TYPES[extname(path)] || 'application/octet-stream' }).end(body);
-});
-await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  return body;
+} });
 const base = `http://127.0.0.1:${server.address().port}`;
-const chrome = opt('--chrome', process.env.CHROME || ['/usr/bin/google-chrome', '/usr/bin/chromium'].find(existsSync));
+const chrome = opt('--chrome', findChrome());
 const { chromium } = await import('playwright-core');
 const software = args.includes('--software');
 const browser = await chromium.launch({ executablePath: chrome, args: [...(software ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] : ['--enable-gpu']), '--ignore-gpu-blocklist', '--enable-precise-memory-info', '--js-flags=--expose-gc'] });

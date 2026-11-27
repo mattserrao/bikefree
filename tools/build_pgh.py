@@ -31,7 +31,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(ROOT, 'tools', '.cache')
 UA = {'User-Agent': 'bikefree-graph-builder/0.1 (personal project)'}
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from citylib.offline import offline as _offline, guard as _guard
+from citylib.offline import offline as _offline
+from citylib import net as _net, dem as _dem, osm_source as _osm, provenance as _prov
+from citylib.geo import hv
 OFFLINE = _offline()   # (--offline or BIKEFREE_OFFLINE=1: the cache only)
 # (user, 22 Nov: "create a new map CNY following the guide used for PGH") the city: tools/city/<id>.json; PGH by default
 CITY = sys.argv[sys.argv.index('--city') + 1] if '--city' in sys.argv else 'pgh'
@@ -40,17 +42,7 @@ REVIEW = {}   # what the build left out, for tools/review_pgh.py
 
 
 def http_get(url, pause=1.0):
-    _guard(url)
-    time.sleep(pause)
-    with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=300) as r:
-        return r.read()
-
-
-def hv(a, b):
-    R = 6371008.8
-    la1, lo1, la2, lo2 = map(math.radians, (a[0], a[1], b[0], b[1]))
-    h = math.sin((la2 - la1) / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2
-    return 2 * R * math.asin(math.sqrt(h))
+    return _net.http_get(url, pause=pause, timeout=300, headers=UA)
 
 
 # ------------------------------------------------------------------ corridor
@@ -183,25 +175,28 @@ def area_lines():
 
 
 # ------------------------------------------------------------------ OSM
-def fetch_box(folder, s, w, n, e, depth=0):
+def fetch_box(folder, s, w, n, e, depth=0, date=None):
     path = os.path.join(folder, f't_{s:.4f}_{w:.4f}_{depth}.osm')
-    if os.path.exists(path) and os.path.getsize(path) > 200: return [path]
+    _prov.bbox(s, w, n, e)
+    if os.path.exists(path) and os.path.getsize(path) > 200: _prov.used(path); return [path]
     try:
-        data = http_get(f'https://api.openstreetmap.org/api/0.6/map?bbox={w:.5f},{s:.5f},{e:.5f},{n:.5f}')
+        data = http_get(_osm.map_url(s, w, n, e, date))   # (the OSM API; the config's osmDate: Overpass, dated)
     except urllib.error.HTTPError as err:
         if err.code in (400, 509) and depth < 4:   # too many nodes: split in four
             ms, mw = (s + n) / 2, (w + e) / 2
             out = []
             for a, b, c, d in ((s, w, ms, mw), (s, mw, ms, e), (ms, w, n, mw), (ms, mw, n, e)):
-                out += fetch_box(folder, a, b, c, d, depth + 1)
+                out += fetch_box(folder, a, b, c, d, depth + 1, date)
             return out
         raise
-    open(path, 'wb').write(data)
+    _net.write_atomic(path, data)
+    _prov.used(path)
     return [path]
 
 
 def load_osm(cfg, cor):
-    folder = os.path.join(CACHE, f'osm-{CITY}')
+    date = _osm.config_date(cfg)
+    folder = _osm.cache_dir(CACHE, f'osm-{CITY}', date)
     os.makedirs(folder, exist_ok=True)
     dx, dy = cfg['osmTile']
     w0, s0 = cfg['osmOrigin']
@@ -219,7 +214,7 @@ def load_osm(cfg, cor):
             if cor.dist(s + dy / 2, w + dx / 2, reach + half + 50) < reach + half: tiles.append((s, w))
     print(f'  OSM: {len(tiles)} tiles of {dx}° × {dy}° touch the corridor')
     for k, (s, w) in enumerate(tiles):
-        files += fetch_box(folder, round(s, 4), round(w, 4), round(s + dy, 4), round(w + dx, 4))
+        files += fetch_box(folder, round(s, 4), round(w, 4), round(s + dy, 4), round(w + dx, 4), date=date)
         if (k + 1) % 20 == 0: print(f'    {k + 1}/{len(tiles)} tiles')
     nodes, ways = {}, {}
     for f in files:
@@ -262,30 +257,14 @@ def rideable(t, cfg):
     return None
 
 
-# ------------------------------------------------------------------ elevation (AWS Terrain Tiles, terrarium)
+# ------------------------------------------------------------------ elevation (AWS Terrain Tiles, terrarium: citylib/dem.py)
 DEM_Z = 14
-_tiles = {}
-
-
-def dem_px(gx, gy):
-    tx, ty = int(gx // 256), int(gy // 256)
-    if (tx, ty) not in _tiles:
-        path = os.path.join(CACHE, f'dem-{DEM_Z}-{tx}-{ty}.png')
-        if not os.path.exists(path): open(path, 'wb').write(http_get(f'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{DEM_Z}/{tx}/{ty}.png', 0.2))
-        _tiles[(tx, ty)] = Image.open(path).convert('RGB').load()
-    r, g, b = _tiles[(tx, ty)][int(gx % 256), int(gy % 256)]
-    return r * 256 + g + b / 256 - 32768
+_SAMPLER = _dem.Sampler(DEM_Z, pause=0.2, timeout=300, headers=UA)
+dem_px = _SAMPLER.px
 
 
 def elevation(lat, lon):
-    n = 2 ** DEM_Z
-    fx = (lon + 180) / 360 * n * 256
-    lr = math.radians(lat)
-    fy = (1 - math.log(math.tan(lr) + 1 / math.cos(lr)) / math.pi) / 2 * n * 256
-    x0, y0 = math.floor(fx - .5), math.floor(fy - .5)
-    ax, ay = fx - .5 - x0, fy - .5 - y0
-    return (dem_px(x0, y0) * (1 - ax) * (1 - ay) + dem_px(x0 + 1, y0) * ax * (1 - ay)
-            + dem_px(x0, y0 + 1) * (1 - ax) * ay + dem_px(x0 + 1, y0 + 1) * ax * ay)
+    return _SAMPLER(lat, lon)
 
 
 # (Out West, user 26 Nov 2026: a map's build-time warp — the empty middles of its corridors cut out, tools/citylib/warp.py:
@@ -1004,6 +983,12 @@ def drop_unrideable(cfg, E):
     return out
 
 
+def provenance(cfg):
+    """The output's "provenance" block (code review P1, citylib/provenance.py): the OSM tiles and DEM tiles read so far."""
+    date = _osm.config_date(cfg)
+    return _prov.block(__file__, [_osm.source(date), _dem.SOURCE], map_id=CITY, osm_date=date)
+
+
 def junction_name(names):
     uniq = []
     for x in names:
@@ -1049,6 +1034,7 @@ def write(cfg, E, jpos, jh, cor):
         if start: la_, lo_ = WARP.fwd_any(start['lat'], start['lon']); start = {**start, 'lat': round(la_, 6), 'lon': round(lo_, 6)}
     out = {'format': 'bikefree-graph-1', **({'profile': cfg['profile']} if cfg.get('profile') else {}), 'id': CITY, 'name': cfg.get('name', 'PGH'), 'city': cfg.get('cityName', 'Pittsburgh, PA'),
            'attribution': 'Map data © OpenStreetMap contributors (ODbL); elevation: AWS Terrain Tiles (USGS 3DEP)',
+           'provenance': provenance(cfg),
            'origin': {'lat': round(lat0, 6), 'lon': round(lon0, 6)}, 'unit': {'latlon': 1e-6, 'ele': 0.1},
            'widths': cfg['widths'], 'waterLevelM': cfg['waterLevelM'], **files,
            # the graphics effects the map switches on (js/world/toolbox/effects)
@@ -1118,6 +1104,7 @@ def write_ground(cfg, E):
             v = max(0, min(65535, round((h - base) / scale)))
             rows += struct.pack('<H', (v - acc) & 0xffff); acc = v
     header = {'format': 'bikefree-terrain-grid-1', 'rowDelta': True, 'attribution': 'Elevation: AWS Terrain Tiles (USGS 3DEP, NOAA and others)',
+              'provenance': provenance(cfg),
               'north': north, 'west': west, 'south': south, 'east': east, 'base': base, 'scale': scale, 'cellM': cell,
               'coarse': {'nx': nx, 'ny': ny, 'step': 1, 'h': {'$bin': [0, len(rows)]}},
               'fine': {'cellM': cell, 'block': 64, 'bnx': 1, 'bny': 1, 'nx': nx, 'ny': ny, 'blocks': [], 'h': {'$bin': [len(rows), 0]}}}

@@ -25,7 +25,7 @@ What it does:
 Idempotent: a second run first takes out what the first added (the trails, the junction; Thompson Road joined again).
 Data © OpenStreetMap contributors (ODbL); land cover © ESA WorldCover 2021 (CC BY 4.0); elevation AWS Terrain Tiles.
 """
-import gzip, json, math, os, struct, sys, urllib.request
+import gzip, json, math, os, struct, sys
 import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
 import numpy as np
@@ -33,6 +33,8 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(ROOT, 'tools', '.cache', 'cny-forest')
+from citylib import net, osm_source, provenance  # noqa: E402
+OSM_DATE = osm_source.config_date(json.load(open(os.path.join(ROOT, 'tools', 'city', 'cny.json'))))
 GRAPH = os.path.join(ROOT, 'routes', 'cities', 'cny.json')
 CITY = os.path.join(ROOT, 'routes', 'cities', 'cny-city.json')
 OUT = 'routes/cities/cny-oldgrowth.json'
@@ -64,15 +66,15 @@ def dist(a, b): return math.hypot((a[0] - b[0]) * KY, (a[1] - b[1]) * KX)
 
 def fetch_osm():
     os.makedirs(CACHE, exist_ok=True)
-    path = os.path.join(CACHE, 'osm.xml')
+    date = OSM_DATE   # (code review P1: cny.json's osmDate — the forest as of that date, from Overpass)
+    path = os.path.join(CACHE, 'osm.xml' if not date else f'osm@{date[:10]}.xml')
+    w, s, e, n = BBOX
+    provenance.bbox(s, w, n, e)
     if not os.path.exists(path):
-        w, s, e, n = BBOX
-        url = f'https://api.openstreetmap.org/api/0.6/map?bbox={w},{s},{e},{n}'
-        from citylib.offline import guard
-        guard(url)
+        url = osm_source.map_url(s, w, n, e, date, fmt=None)
         print(f'  fetching {url}')
-        data = urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'bikefree/1.0 (map build)'}), timeout=300).read()
-        open(path, 'wb').write(data)
+        net.write_atomic(path, net.http_get(url, timeout=300, headers={'User-Agent': 'bikefree/1.0 (map build)'}))
+    provenance.used(path)
     r = ET.parse(path).getroot()
     nodes = {n.get('id'): (float(n.get('lat')), float(n.get('lon'))) for n in r.iter('node')}
     ways = {}
@@ -379,7 +381,12 @@ def main():
           'junction': jid, 'tunnel': {'edge': tun_edge}, 'apples': apples, 'rays': RAYS,
           'blowdown': {'center': BLOWDOWN['center'], 'r': BLOWDOWN['r'], 'rot': BLOWDOWN['rot']},
           'codes': {'oldGrowth': OLD, 'forest': FOREST, 'meadow': MEADOW, 'blowdown': BLOW},
-          'sources': ['DEC Camillus Forest Unique Area Unit Management Plan', 'OpenStreetMap (ODbL)', 'ESA WorldCover 2021 (CC BY 4.0)']}
+          'sources': ['DEC Camillus Forest Unique Area Unit Management Plan', 'OpenStreetMap (ODbL)', 'ESA WorldCover 2021 (CC BY 4.0)'],
+          'provenance': provenance.block(__file__, [osm_source.source(OSM_DATE), 'ESA WorldCover 10 m 2021 v200 (CC BY 4.0)'], map_id='cny', osm_date=OSM_DATE)}
+    # (the graph and city files keep build_pgh.py's provenance; this step adds its own, replacing an earlier run's)
+    for doc in (G, C):
+        pv = doc.get('provenance')
+        if isinstance(pv, dict): pv['after'] = [x for x in pv.get('after', []) if x.get('tool') != og['provenance']['tool']] + [og['provenance']]
     G['oldGrowth'] = OUT
     lbl = ['Camillus Forest', 43.0695, -76.2860, 2]
     if not any(m.get('text') == lbl[0] for m in G.get('mapLabels', [])): G.setdefault('mapLabels', []).append({'text': lbl[0], 'lat': lbl[1], 'lon': lbl[2], 'kind': 'area', 'rank': lbl[3]})

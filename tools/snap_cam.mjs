@@ -7,11 +7,11 @@
 //   (or pass the same JSON in the SHOTS environment variable)
 //   node tools/snap_cam.mjs pittsburgh-oakland --views [--time night]   (the scene's postcard `views`: each camera
 //   `up` metres over the ground at its spot, looking at its `look` point `up` metres over the ground there; PLAN F111)
-import { createServer } from 'node:http';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { extname, join, dirname, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { serve, findChrome } from './lib/harness.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -21,21 +21,13 @@ const out = opt('--out', 'tools/snapshots');   // relative to the repo, or an ab
 const quality = opt('--quality', 'balanced');
 const [width, height] = opt('--size', '1280x720').split('x').map(Number);
 const software = flag('--software');
-const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync));
+const chrome = opt('--chrome', findChrome());
 const shotsFile = opt('--shots', '');
 const views = flag('--views'), viewTime = opt('--time', null);
 if (!args.length || (!shotsFile && !process.env.SHOTS && !views)) { console.log('usage: node tools/snap_cam.mjs <park> --shots shots.json [--software]'); process.exit(1); }
 
 // a tiny static server for the repo (the preview needs http, not file://)
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.css': 'text/css', '.gpx': 'application/gpx+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.bin': 'application/octet-stream' };
-const server = createServer(async (req, res) => {
-  const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^([/\\])+/, '');
-  if (path.startsWith('..')) { res.writeHead(403).end(); return; }
-  try { const body = await readFile(join(ROOT, path || 'index.html')); res.writeHead(200, { 'content-type': TYPES[extname(path)] || 'application/octet-stream' }).end(body); }
-  catch { res.writeHead(404).end(); }
-});
-await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
+const { server } = await serve(ROOT);   // (tools/lib/harness.mjs: code review P9)
 const base = `http://127.0.0.1:${server.address().port}`;
 
 let chromium;

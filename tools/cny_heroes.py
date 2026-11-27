@@ -12,7 +12,9 @@ its OSM outline (tools/.cache/osm-cny) → routes/cities/cny-heroes.json, which 
     python3 tools/cny_heroes.py
 Data © OpenStreetMap contributors (ODbL).
 """
-import glob, json, math, os, xml.etree.ElementTree as ET
+import glob, json, math, os, sys, xml.etree.ElementTree as ET
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from citylib import osm_source  # noqa: E402  (a config's osmDate: the dated tiles, code review P1)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 KX = 111320 * math.cos(math.radians(43.06))
@@ -44,7 +46,7 @@ LOOKS = {
 
 def main():
     nodes, ways = {}, {}
-    for f in glob.glob(os.path.join(ROOT, 'tools/.cache/osm-cny/*.osm')):
+    for f in glob.glob(os.path.join(osm_source.city_dir('cny'), '*.osm')):
         for ev, el in ET.iterparse(f, events=('end',)):
             if el.tag == 'node': nodes[el.get('id')] = (float(el.get('lat')), float(el.get('lon'))); el.clear()
             elif el.tag == 'way': ways['w' + el.get('id')] = [x.get('ref') for x in el.iter('nd')]; el.clear()
@@ -83,7 +85,7 @@ def main():
     # the Erie Canal's water (user, 22 Nov: "the water in the canal … is cutting out"): OSM's canal ways as ribbons of
     # water on the ground (js/world/toolbox/city/cny-landmarks.js canal) — not the aqueduct (its trunk has its own)
     tags = {}
-    for f in glob.glob(os.path.join(ROOT, 'tools/.cache/osm-cny/*.osm')):
+    for f in glob.glob(os.path.join(osm_source.city_dir('cny'), '*.osm')):
         for ev, el in ET.iterparse(f, events=('end',)):
             if el.tag == 'way':
                 t = {x.get('k'): x.get('v') for x in el.iter('tag')}

@@ -7,12 +7,14 @@ outline: a pair of stone piers and a closed gate — the gates are closed, user 
 
   python3 tools/nyc_heroes.py      (after python3 tools/build_pgh.py --city nyc has fetched the OSM tiles)
 Data © OpenStreetMap contributors (ODbL)."""
-import glob, json, math, os, xml.etree.ElementTree as ET
+import glob, json, math, os, sys, xml.etree.ElementTree as ET
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 from shapely.geometry import Polygon, LineString, Point
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from citylib import osm_source  # noqa: E402  (a config's osmDate: the dated tiles, code review P1)
 
 nodes, ntags, ways, rels = {}, {}, {}, {}
-for f in glob.glob(os.path.join(ROOT, 'tools/.cache/osm-nyc/*.osm')):
+for f in glob.glob(os.path.join(osm_source.city_dir('nyc'), '*.osm')):
     r = ET.parse(f).getroot()
     for nd in r.iter('node'):
         nodes[nd.get('id')] = (float(nd.get('lat')), float(nd.get('lon')))

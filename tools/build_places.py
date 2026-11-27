@@ -29,6 +29,7 @@ from PIL import Image, ImageDraw
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'tools'))
 from fetch_osm_corridor import route_points, RouteIndex, hv  # noqa: E402
+from citylib import provenance  # noqa: E402
 
 KINDS = ['house', 'farm', 'barn', 'shed', 'church', 'chapel', 'apartments', 'hotel', 'commercial', 'public', 'garage', 'industrial', 'chalet', 'ruin']
 ROOFS = ['gabled', 'hipped', 'flat', 'pyramidal', 'skillion']
@@ -126,7 +127,8 @@ def main():
     rid = sys.argv[1]
     scene = json.load(open(os.path.join(ROOT, 'routes', 'scenes', f'{rid}.json')))
     cfg = {'buildingsM': 400, 'liftsM': 3000, 'powerM': 300, 'landcoverCellM': 20, **scene.get('places', {})}
-    feat = json.load(open(os.path.join(ROOT, 'tools', '.cache', f'osm-{rid}', 'features.json')))
+    feat_path = os.path.join(ROOT, 'tools', '.cache', f'osm-{rid}', 'features.json')
+    feat = json.load(open(feat_path))
     pts = route_points(rid)
     idx = RouteIndex(pts)
     lat0 = sum(p[0] for p in pts) / len(pts)
@@ -229,6 +231,9 @@ def main():
 
     header = {
         'format': 'bikefree-places-1', 'attribution': 'Data © OpenStreetMap contributors (ODbL)',
+        # (code review P1: what it was built from — the features file, and the OSM tiles behind it)
+        'provenance': provenance.block(__file__, ['tools/.cache/osm-<id>/features.json (tools/fetch_osm_corridor.py)'], files=[feat_path],
+                                       **({'extra': {'osm': feat['provenance']}} if feat.get('provenance') else {})),
         'kinds': KINDS, 'roofs': ROOFS, 'landcoverClasses': names,
         'landcover': {'north': north, 'south': south, 'west': west, 'east': east, 'cellM': cell, 'nx': nx, 'ny': ny, 'mlat': mlat, 'mlon': mlon,
                       'h': base64.b64encode(lc.tobytes()).decode()},

@@ -10,13 +10,13 @@
 // has installed (its precache done) and the page settled. Recorded per run: first route card, the city card,
 // every card's thumbnail drawn (canvas painted), requests / bytes before the first card, long tasks before it,
 // and the biggest / slowest requests of the load.
-import { createServer } from 'node:http';
 import { readFile, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { extname, join, dirname, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
+import { serve, findChrome } from './lib/harness.mjs';
 
 const args = process.argv.slice(2);
 const opt = (name, dflt) => { const i = args.indexOf(name); return i < 0 ? dflt : args[i + 1]; };
@@ -24,34 +24,9 @@ const ROOT = resolve(opt('--root', join(dirname(fileURLToPath(import.meta.url)),
 const runs = Number(opt('--runs', '1'));
 const jsonOut = opt('--json', null);
 const only = opt('--only', null);   // e.g. "cold-10mbps"
-const chrome = opt('--chrome', process.env.CHROME || ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser',
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].find(existsSync));
+const chrome = opt('--chrome', findChrome());
 
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.css': 'text/css',
-  '.gpx': 'application/gpx+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml',
-  '.bin': 'application/octet-stream', '.gz': 'application/gzip', '.glb': 'model/gltf-binary' };
-const TEXT = new Set(['.html', '.js', '.mjs', '.json', '.css', '.gpx', '.svg']);
-const memo = new Map();
-const server = createServer(async (req, res) => {
-  const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^([/\\])+/, '') || 'index.html';
-  if (path.startsWith('..')) { res.writeHead(403).end(); return; }
-  try {
-    const file = join(ROOT, path.endsWith('/') ? `${path}index.html` : path);
-    const st = await stat(file);
-    let m = memo.get(file);
-    if (!m || m.mtime !== st.mtimeMs) {
-      const body = await readFile(file);
-      const ext = extname(file);
-      m = { mtime: st.mtimeMs, ext, body, gz: TEXT.has(ext) ? gzipSync(body, { level: 6 }) : null, etag: `"${createHash('md5').update(body).digest('hex')}"` };
-      memo.set(file, m);
-    }
-    const head = { 'content-type': TYPES[m.ext] || 'application/octet-stream', 'cache-control': 'max-age=600', etag: m.etag };
-    if (req.headers['if-none-match'] === m.etag) { res.writeHead(304, head).end(); return; }
-    if (m.gz && /gzip/.test(req.headers['accept-encoding'] || '')) res.writeHead(200, { ...head, 'content-encoding': 'gzip' }).end(m.gz);
-    else res.writeHead(200, head).end(m.body);
-  } catch { res.writeHead(404).end(); }
-});
-await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
+const { server } = await serve(ROOT, { gzip: true, cacheControl: 'max-age=600', types: { '.gz': 'application/gzip' } });   // (tools/lib/harness.mjs: code review P9)
 const base = `http://127.0.0.1:${server.address().port}/`;
 const { chromium } = await import('playwright-core');
 

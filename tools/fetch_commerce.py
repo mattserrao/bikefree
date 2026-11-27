@@ -13,10 +13,12 @@ Writes  tools/.cache/osm-commerce-<id>/t_<lat>_<lon>.osm   raw OSM API tiles (ca
 Source  the OSM API map call, 0.02° tiles along the map's roads, one at a time with a pause (as build_city.py).
         Data © OpenStreetMap contributors, ODbL.
 """
-import json, math, os, sys, time, urllib.error, urllib.request
+import json, math, os, sys, urllib.error
 import xml.etree.ElementTree as ET
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, 'tools'))
+from citylib import net, osm_source, provenance  # noqa: E402
 UA = {'User-Agent': 'bikefree-route-builder/0.13 (personal project)'}
 TILE = 0.02
 MAPS = ['pgh', 'nyc', 'cny', 'skan', 'outwest']
@@ -41,33 +43,35 @@ def tiles_for(graph):
     return sorted(t)
 
 
-def fetch_box(d, s, w, size):
+SKIPPED = []   # tiles that failed three times (the output's provenance counts them)
+
+
+def fetch_box(d, s, w, size, date=None):
     """One tile's file(s): a tile over the API's node limit (HTTP 400) is split in four, down to 0.005°."""
     f = os.path.join(d, f't_{s:.4f}_{w:.4f}_{size:.4f}.osm')
-    if os.path.exists(f): return [f]
-    url = f'https://api.openstreetmap.org/api/0.6/map?bbox={w:.4f},{s:.4f},{w + size:.4f},{s + size:.4f}'
-    for attempt in range(3):
-        time.sleep(0.6)
-        try:
-            with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=180) as r: data = r.read()
-            open(f, 'wb').write(data); return [f]
-        except urllib.error.HTTPError as err:
-            if err.code == 400 and size > .006:
-                h = size / 2
-                return [x for (a, b) in ((s, w), (s + h, w), (s, w + h), (s + h, w + h)) for x in fetch_box(d, a, b, h)]
-            if attempt == 2: print('  skip', url, err); return []
-        except Exception as err:
-            if attempt == 2: print('  skip', url, err); return []
-            time.sleep(3)
-    return []
+    provenance.bbox(s, w, s + size, w + size)
+    if os.path.exists(f): provenance.used(f); return [f]
+    url = osm_source.map_url(s, w, s + size, w + size, date, fmt='.4f')
+    try:
+        data = net.http_get(url, pause=0.6, timeout=180, headers=UA, retries=2, backoff=1.5)   # (offline mode refuses)
+    except urllib.error.HTTPError as err:
+        if err.code == 400 and size > .006:
+            h = size / 2
+            return [x for (a, b) in ((s, w), (s + h, w), (s, w + h), (s + h, w + h)) for x in fetch_box(d, a, b, h, date)]
+        print('  skip', url, err); SKIPPED.append(url); return []
+    except RuntimeError:
+        raise   # (offline: not cached)
+    except Exception as err:
+        print('  skip', url, err); SKIPPED.append(url); return []
+    net.write_atomic(f, data); provenance.used(f); return [f]
 
 
-def fetch(mid, ty, tx):
-    d = os.path.join(ROOT, 'tools', '.cache', f'osm-commerce-{mid}')
+def fetch(mid, ty, tx, date=None):
+    d = osm_source.cache_dir(os.path.join(ROOT, 'tools', '.cache'), f'osm-commerce-{mid}', date)
     os.makedirs(d, exist_ok=True)
     old = os.path.join(d, f't_{ty * TILE:.4f}_{tx * TILE:.4f}.osm')
-    if os.path.exists(old): return [old]
-    return fetch_box(d, ty * TILE, tx * TILE, TILE)
+    if os.path.exists(old): provenance.used(old); return [old]
+    return fetch_box(d, ty * TILE, tx * TILE, TILE, date)
 
 
 def parse(files):
@@ -125,13 +129,17 @@ def inside(ring, y, x):
 
 
 def main(mid):
+    provenance.reset(); SKIPPED.clear()
     graph = json.load(open(os.path.join(ROOT, 'routes', 'cities', f'{mid}.json')))
+    cfg_path = os.path.join(ROOT, 'tools', 'city', f'{mid}.json')
+    date = osm_source.config_date(json.load(open(cfg_path))) if os.path.exists(cfg_path) else None
     sys.path.insert(0, os.path.join(ROOT, 'tools'))
     from citylib import warp as _warp
     W = _warp.load(mid)
     if W:   # (a warped map, tools/citylib/warp.py: the real tiles already fetched, every place moved with its piece)
         import glob
-        files = sorted(glob.glob(os.path.join(ROOT, 'tools', '.cache', f'osm-commerce-{mid}', '*.osm')))
+        files = sorted(glob.glob(os.path.join(osm_source.cache_dir(os.path.join(ROOT, 'tools', '.cache'), f'osm-commerce-{mid}', date), '*.osm')))
+        provenance.used(*files)
         print(f'{mid}: {len(files)} cached tiles (warped)')
         places = []
         for p in parse(files):
@@ -146,9 +154,10 @@ def main(mid):
     else:
         tl = tiles_for(graph)
         print(f'{mid}: {len(tl)} tiles')
-        files = [f for ty, tx in tl for f in fetch(mid, ty, tx)]
+        files = [f for ty, tx in tl for f in fetch(mid, ty, tx, date)]
         places = parse(files)
-    out = {'format': 'bikefree-commerce-1', 'attribution': 'Map data © OpenStreetMap contributors (ODbL)', 'places': places}
+    pv = provenance.block(__file__, [osm_source.source(date)], map_id=mid, osm_date=date, extra={'skippedTiles': len(SKIPPED)} if SKIPPED else None)
+    out = {'format': 'bikefree-commerce-1', 'attribution': 'Map data © OpenStreetMap contributors (ODbL)', 'provenance': pv, 'places': places}
     json.dump(out, open(os.path.join(ROOT, 'routes', 'cities', f'{mid}-commerce.json'), 'w'), separators=(',', ':'))
     kinds = {}
     for p in places: kinds[p['kind']] = kinds.get(p['kind'], 0) + 1

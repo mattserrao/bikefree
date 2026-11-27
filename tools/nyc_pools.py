@@ -9,12 +9,14 @@ sys.argv = [sys.argv[0], '--city', 'nyc']
 sys.path.insert(0, os.path.join(ROOT, 'tools'))
 import build_pgh as B
 from shapely.geometry import Polygon, Point
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from citylib import osm_source  # noqa: E402  (a config's osmDate: the dated tiles, code review P1)
 
 cfg_path = os.path.join(ROOT, 'tools/city/nyc.json')
 cfg = json.load(open(cfg_path))
 park = Polygon([(p[1], p[0]) for p in json.load(open(os.path.join(ROOT, 'tools/city/nyc-area.json')))['polygon']])
 nodes, ways, rels = {}, {}, {}
-for f in glob.glob(os.path.join(ROOT, 'tools/.cache/osm-nyc/*.osm')):
+for f in glob.glob(os.path.join(osm_source.city_dir('nyc'), '*.osm')):
     r = ET.parse(f).getroot()
     for nd in r.iter('node'): nodes[nd.get('id')] = (float(nd.get('lat')), float(nd.get('lon')))
     for w in r.iter('way'): ways[w.get('id')] = ([x.get('ref') for x in w.iter('nd')], {x.get('k'): x.get('v') for x in w.iter('tag')})

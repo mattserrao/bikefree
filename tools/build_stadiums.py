@@ -25,10 +25,7 @@ K = R_E * math.pi / 180
 KX = K * math.cos(math.radians(LAT0))
 
 
-def hv(a, b):   # (as tools/build_city.py and js/gpx.js measure)
-    la1, lo1, la2, lo2 = map(math.radians, (a[0], a[1], b[0], b[1]))
-    h = math.sin((la2 - la1) / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2
-    return 2 * R_E * math.asin(math.sqrt(h))
+from citylib.geo import hv   # (as js/gpx.js measures: code review P8, one copy)
 
 
 def to_local(lat, lon): return ((lon - LON0) * KX, -(lat - LAT0) * K)

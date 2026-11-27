@@ -9,12 +9,12 @@
 //   node tools/memory_check.mjs "Three Rivers Loop" [/tmp/memory.txt]
 //   node tools/memory_check.mjs --map outwest [--ride "Kanab Town Loop"] [/tmp/memory.txt]   (any graph map: its first ride
 //        by default; the heap checked against the map definition's budget — js/world/toolbox/map-definition.js, phone = low)
-import { createServer } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
+import { serve, findChrome } from './lib/harness.mjs';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2), opt = (k) => { const i = argv.indexOf(k); if (i < 0) return null; const v = argv[i + 1]; argv.splice(i, 2); return v; };
 const MAP = opt('--map'), RIDE = opt('--ride');
@@ -22,11 +22,9 @@ const mapJson = MAP ? JSON.parse(await readFile(join(ROOT, `routes/cities/${MAP}
 const [name0 = 'Three Rivers Loop', out = null] = argv;
 const name = RIDE || (MAP ? mapJson.presets?.[0]?.name : name0);
 const { TIER_BUDGETS } = await import('../js/world/toolbox/map-definition.js');
-const T = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.css': 'text/css' };
-const server = createServer(async (req, res) => { const p = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^\/+/, ''); try { res.writeHead(200, { 'content-type': T[extname(p)] || 'application/octet-stream' }).end(await readFile(join(ROOT, p || 'index.html'))); } catch { res.writeHead(404).end(); } });
-await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
+const { server } = await serve(ROOT);   // (tools/lib/harness.mjs: code review P9)
 const { chromium } = await import('playwright-core');
-const browser = await chromium.launch({ executablePath: process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/chromium'].find((p) => existsSync(p)), args: ['--enable-precise-memory-info', '--js-flags=--expose-gc'] });
+const browser = await chromium.launch({ executablePath: findChrome(), args: ['--enable-precise-memory-info', '--js-flags=--expose-gc'] });
 const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3, serviceWorkers: 'block' });
 const page = await ctx.newPage();
 await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);

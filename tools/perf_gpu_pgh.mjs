@@ -1,21 +1,15 @@
 // PGH GPU cost by feature (A/B): renders the same frame with one thing changed at a time and times render + finish.
 //   node tools/perf_gpu_pgh.mjs [--lat --lon] [--size 640x360] [--software]
-import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, normalize, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { serve, findChrome } from './lib/harness.mjs';
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const args = process.argv.slice(2), opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json' };
-const server = createServer(async (req, res) => {
-  const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^([/\\])+/, '');
-  let body; try { body = await readFile(join(ROOT, path)); } catch { res.writeHead(404).end(); return; }
-  res.writeHead(200, { 'content-type': TYPES[extname(path)] || 'application/octet-stream' }).end(body);
-});
-await new Promise((r) => server.listen(0, '127.0.0.1', r));
+const { server } = await serve(ROOT);   // (tools/lib/harness.mjs: code review P9)
 const base = `http://127.0.0.1:${server.address().port}`;
-const chrome = opt('--chrome', process.env.CHROME || ['/usr/bin/google-chrome', '/usr/bin/chromium'].find(existsSync));
+const chrome = opt('--chrome', findChrome());
 const { chromium } = await import('playwright-core');
 const software = args.includes('--software');
 const browser = await chromium.launch({ executablePath: chrome, args: software ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : ['--ignore-gpu-blocklist', '--enable-gpu'] });

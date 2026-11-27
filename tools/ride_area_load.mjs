@@ -18,11 +18,11 @@
 // Options: --park pittsburgh, --quality low|balanced|high, --size WxH (960x540), --draw (draw the view: on a
 // software GPU a frame takes 100s of ms and hides the rest; default: everything but the draw), --chrome <path>,
 // --profile <file.cpuprofile> (a CPU profile of the ride, for chrome://inspect / speedscope).
-import { createServer } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { extname, join, dirname, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { serve, findChrome } from './lib/harness.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -36,17 +36,9 @@ const draw = flag('--draw');
 const picks = (opt('--pick', '') || '').split(',').filter(Boolean);   // [F220] choose these ways (network keys, "E>I-" or ids "e3-") at the junctions that offer them
 const trace = flag('--trace');
 const gapsOpt = flag('--gaps');   // (debug: with a jobs.js that records gaps between pause points — see the F30 notes)   // list the slow calls (> 25 ms) of the build's and streaming's main methods
-const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync));
+const chrome = opt('--chrome', findChrome());
 
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.css': 'text/css', '.gpx': 'application/gpx+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.bin': 'application/octet-stream', '.gz': 'application/octet-stream' };
-const server = createServer(async (req, res) => {
-  const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^([/\\])+/, '');
-  if (path.startsWith('..')) { res.writeHead(403).end(); return; }
-  try { const body = await readFile(join(ROOT, path || 'index.html')); res.writeHead(200, { 'content-type': TYPES[extname(path)] || 'application/octet-stream' }).end(body); }
-  catch { res.writeHead(404).end(); }
-});
-await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
+const { server } = await serve(ROOT);   // (tools/lib/harness.mjs: code review P9)
 const base = `http://127.0.0.1:${server.address().port}`;
 const { chromium } = await import('playwright-core');
 const browser = await chromium.launch({ executablePath: chrome, args: ['--ignore-gpu-blocklist', '--enable-gpu', '--enable-precise-memory-info'] });

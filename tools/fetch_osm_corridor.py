@@ -17,26 +17,21 @@ Source  the OSM API map call (api.openstreetmap.org/api/0.6/map), one tile at a 
         build_city.py. Tiles that hit the 50,000-node limit are split in four. Only tiles that touch the
         corridor are fetched. Data © OpenStreetMap contributors, ODbL.
 """
-import json, math, os, re, sys, time, urllib.error, urllib.request
+import json, math, os, re, sys, urllib.error
 import xml.etree.ElementTree as ET
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UA = {'User-Agent': 'bikefree-route-builder/0.13 (personal project)'}
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from citylib import net, osm_source, provenance  # noqa: E402
+from citylib.geo import hv  # noqa: E402
+
 KEEP_POINT = re.compile(r'^(place|amenity|natural|tourism|historic|man_made|highway|leisure|aerialway|railway)$')
 
 
 def http_get(url, pause=0.6):
-    time.sleep(pause)
-    with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=180) as r:
-        return r.read()
-
-
-def hv(a, b):
-    R = 6371008.8
-    la1, lo1, la2, lo2 = map(math.radians, (a[0], a[1], b[0], b[1]))
-    h = math.sin((la2 - la1) / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2
-    return 2 * R * math.asin(math.sqrt(h))
+    return net.http_get(url, pause=pause, timeout=180, headers=UA)   # (offline mode refuses: citylib/net.py)
 
 
 def route_points(rid):
@@ -57,22 +52,25 @@ def tiles_for(pts, corridor, deg):
     return sorted(need), th, tw
 
 
-def fetch_box(folder, s, w, n, e, depth=0):
+def fetch_box(folder, s, w, n, e, depth=0, date=None):
     name = f't_{s:.4f}_{w:.4f}_{depth}.osm'
     path = os.path.join(folder, name)
+    provenance.bbox(s, w, n, e)
     if os.path.exists(path) and os.path.getsize(path) > 200:
+        provenance.used(path)
         return [path]
     try:
-        data = http_get(f'https://api.openstreetmap.org/api/0.6/map?bbox={w:.5f},{s:.5f},{e:.5f},{n:.5f}')
+        data = http_get(osm_source.map_url(s, w, n, e, date))
     except urllib.error.HTTPError as err:
         if err.code in (400, 509) and depth < 4:      # too many nodes: split in four
             ms, mw = (s + n) / 2, (w + e) / 2
             out = []
             for a, b, c, d in ((s, w, ms, mw), (s, mw, ms, e), (ms, w, n, mw), (ms, mw, n, e)):
-                out += fetch_box(folder, a, b, c, d, depth + 1)
+                out += fetch_box(folder, a, b, c, d, depth + 1, date)
             return out
         raise
-    open(path, 'wb').write(data)
+    net.write_atomic(path, data)
+    provenance.used(path)
     return [path]
 
 
@@ -229,19 +227,24 @@ def main():
     scene = json.load(open(os.path.join(ROOT, 'routes', 'scenes', f'{rid}.json')))
     cfg = {'corridorM': 1500, 'tileDeg': 0.02, **scene.get('osm', {})}
     pts = route_points(rid)
-    folder = os.path.join(ROOT, 'tools', '.cache', f'osm-{rid}')
+    # (code review P1: "osm": {"osmDate": "YYYY-MM-DD"} in the scene fetches the map as of that date, citylib/osm_source.py)
+    date = osm_source.config_date(cfg)
+    folder = osm_source.cache_dir(os.path.join(ROOT, 'tools', '.cache'), f'osm-{rid}', date)
     os.makedirs(folder, exist_ok=True)
     need, th, tw = tiles_for(pts, cfg['corridorM'], cfg['tileDeg'])
     print(f'{rid}: {len(need)} OSM tiles for a {cfg["corridorM"]} m corridor')
     files = []
     for k, (y, x) in enumerate(need):
         s, w = y * th, x * tw
-        files += fetch_box(folder, round(s, 4), round(w, 4), round(s + th, 4), round(w + tw, 4))
+        files += fetch_box(folder, round(s, 4), round(w, 4), round(s + th, 4), round(w + tw, 4), date=date)
         if k % 20 == 0:
             print(f'  {k + 1}/{len(need)}')
     feat = parse(files, pts, cfg['corridorM'])
-    json.dump(feat, open(os.path.join(folder, 'features.json'), 'w'), separators=(',', ':'), ensure_ascii=False)
-    print(f"{len(feat['buildings'])} buildings, {len(feat['areas'])} areas, {len(feat['lines'])} lines, {len(feat['points'])} points → {folder}/features.json")
+    feat['provenance'] = provenance.block(__file__, [osm_source.source(date)], map_id=f'scene-{rid}', osm_date=date)
+    out = os.path.join(ROOT, 'tools', '.cache', f'osm-{rid}', 'features.json')   # (dated tiles or not: the builders read it here)
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    json.dump(feat, open(out, 'w'), separators=(',', ':'), ensure_ascii=False)
+    print(f"{len(feat['buildings'])} buildings, {len(feat['areas'])} areas, {len(feat['lines'])} lines, {len(feat['points'])} points → {out}")
     if '--census' in sys.argv:
         census(rid, feat, pts)
 

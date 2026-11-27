@@ -30,7 +30,7 @@ from scipy import ndimage
 from collections import Counter, defaultdict
 from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from citylib import street_kit, osm_tiles
+from citylib import street_kit, osm_tiles, osm_source, provenance
 from citylib.skips import Skips
 from build_city import elevation, rings_of, parse_m, simplify, point_in, pack_int16, pack_uint16, pack_uint32, rle, BRICK_SURFACES
 UNIT = 3e-6          # coordinate unit (degrees): PGH is bigger than one city scene (±0.098° in Int16)
@@ -176,8 +176,10 @@ def main():
     nodes, ntags, ways, rels = {}, {}, {}, {}
     # (only the tiles inside this box — a larger old box's are left out — and none at all, or too few nodes, stops the
     #  build before it overwrites the committed city with an empty one: code review P2)
-    files = osm_tiles.require_tiles(os.path.join(ROOT, f'tools/.cache/osm-{CITY}'), WARP.real_box(gs, gw, gn, ge) if WARP else (gs, gw, gn, ge),
-                                    CFG.get('osmTile', [0.01, 0.008]), CITY)
+    # (the tiles build_pgh.py fetched: the config's osmDate ones when it pins a date — code review P1)
+    files = osm_tiles.require_tiles(osm_source.cache_dir(os.path.join(ROOT, 'tools', '.cache'), f'osm-{CITY}', osm_source.config_date(CFG)),
+                                    WARP.real_box(gs, gw, gn, ge) if WARP else (gs, gw, gn, ge), CFG.get('osmTile', [0.01, 0.008]), CITY)
+    provenance.used(*files)
     for k, f in enumerate(files):
         for ev, el in ET.iterparse(f, events=('end',)):
             if el.tag == 'node':
@@ -819,6 +821,8 @@ def main():
     out = {
         'format': 'bikefree-pgh-city-2',
         'attribution': 'Map data © OpenStreetMap contributors (ODbL)',
+        'provenance': provenance.block(__file__, [osm_source.source(osm_source.config_date(CFG)), provenance.DEM_SOURCE, 'ESA WorldCover 10 m 2021 v200 (CC BY 4.0)'],
+                                       map_id=CITY, osm_date=osm_source.config_date(CFG), box=(gs, gw, gn, ge)),
         'note': 'tools/pgh_city.py: the Pittsburgh map\'s city data over PGH (within 250 m of its ways), in sectors fetched as the rider nears them',
         'origin': [lat0, lon0], 'unit': UNIT, 'surfaces': SURF,
         'land': {'west': gw, 'south': gs, 'east': ge, 'north': gn, 'nx': lx, 'ny': ly, 'm': LAND_M, 'file': f'routes/cities/{CITY}-land.bin.gz'},

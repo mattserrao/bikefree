@@ -2,11 +2,11 @@
 //   npm run snap:rider -- seated:chase standing:side@1.2 tuck:quarter pacer/standing:back …
 // A shot is  [pacer/]<posture>[:<camera>][@<crank radians>][#<grade>]  (posture: seated | standing | tuck | auto;
 // camera: chase | side | front | back | quarter | top). --size WxH (default 1280x800), --chrome <path>, --software.
-import { createServer } from 'node:http';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, extname, normalize, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { serve, findChrome } from './lib/harness.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
@@ -14,18 +14,10 @@ const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv.splice(i
 const flag = (k) => { const i = argv.indexOf(k); return i >= 0 ? (argv.splice(i, 1), true) : false; };
 const [width, height] = opt('--size', '1280x800').split('x').map(Number);
 const software = flag('--software');
-const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync));
+const chrome = opt('--chrome', findChrome());
 if (!argv.length) { console.log('usage: npm run snap:rider -- [pacer/]<posture>[:camera][@crank][#grade] …'); process.exit(1); }
 
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.png': 'image/png' };
-const server = createServer(async (req, res) => {
-  const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^([/\\])+/, '');
-  if (path.startsWith('..')) { res.writeHead(403).end(); return; }
-  try { const body = await readFile(join(ROOT, path)); res.writeHead(200, { 'content-type': TYPES[extname(path)] || 'application/octet-stream' }).end(body); }
-  catch { res.writeHead(404).end(); }
-});
-await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
+const { server } = await serve(ROOT);   // (tools/lib/harness.mjs: code review P9)
 const base = `http://127.0.0.1:${server.address().port}`;
 const { chromium } = await import('playwright-core');
 const browser = await chromium.launch({ executablePath: chrome,
