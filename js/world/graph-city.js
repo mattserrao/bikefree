@@ -20,13 +20,15 @@ import { MeshBuilder, hash } from './toolbox/core/mesh-builder.js';
 import { ParkedCars, pickCar, carMaterial } from './toolbox/life/figures/cars.js';
 import { Herds } from './toolbox/life/figures/animals.js';
 import { cellKey, freezeMatrix } from './graph-world.js';
+import { inRing } from './graph/poly.js';
+import { gpuOnly } from './graph/mesh.js';
+import { makeKitAdapter } from './graph/kit-adapter.js';
+import { MOBILE } from './graph/device.js';
 import { drain, runSlice, due } from './toolbox/core/jobs.js';
-import { planBuildingKitJob, makeStreetIndex, dress } from './toolbox/structures/buildings/kit.js';
-import { assemble, Writer } from './toolbox/structures/buildings/assemble.js';
+import { planBuildingKitJob, makeStreetIndex } from './toolbox/structures/buildings/kit.js';
 import { withSurfaceDetail } from './toolbox/materials/surface-detail.js';
 import { grassCard, grassMaterial, CARD } from './toolbox/landscape/grass-cards.js';
-import { buildBuilding, MAP_KINDS, FARM_CODES } from './toolbox/structures/building-engine.js';   // [blocks] one front door
-import { makeFacadeMaterial } from './toolbox/structures/buildings/facade-material.js';
+import { MAP_KINDS, FARM_CODES } from './toolbox/structures/building-engine.js';   // [blocks] one front door (buildBuilding: graph/kit-adapter.js)
 import { villageFurniture } from './toolbox/city/village-street.js';
 import { planFrontYard, drawFrontYard } from './toolbox/city/front-yards.js';
 import { FURNITURE, makeFacadeDresser } from './toolbox/city/street-kit.js';
@@ -59,7 +61,7 @@ const WANT_STEP = 50;   // m the camera goes before stream() sorts its tiles aga
 const VERGE_IN = 260, VERGE_OUT = 420;
 /** Phones and tablets (user, 23 Nov: "even on high performance on mobile, the game should not run out of memory"):
  *  the city's tiles built no farther than Light's at any quality — the fog closes in a little sooner. */
-export const MOBILE = (() => { try { const ua = navigator.userAgent || ''; return /iPhone|iPad|iPod|Android|Mobile/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1); } catch { return false; } })();
+export { MOBILE };   // ([review 27 Nov] W15: one copy, js/world/graph/device.js)
 const capReach = (q) => (MOBILE ? { ...q, near: Math.min(q.near, 1300), far: Math.min(q.far, 1800) } : q);
 /** Smooth value noise in [0, 1] (the verges' slow patches). */
 const vnoise = (x, z) => {
@@ -71,17 +73,6 @@ const REACH = { low: { near: 1300, far: 1800, trees: 0.6, treeNear: 450 }, balan
 const CAR_NEAR = 340;           // m: parked cars (the kit's lo LOD) within this, its far LOD beyond
 const CAR_HI = 110;
 const ANIMAL_M = 480;           // m: farm animals drawn within this             // m: the kit's detailed cars within this
-const pipXZ = (r, x, z) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) c = !c; } return c; };
-const HOUSE_CLOSE_M = 160;
-/** A static mesh's arrays let go once they're on the GPU (no second copy in the page's memory: phones, user 23 Nov —
- *  "even on high … should not run out of memory"); its bounds kept first. Not for anything read back later. */
-function gpuOnly(m) {
-  const g = m.geometry; g.computeBoundingSphere(); if (!g.boundingBox) g.computeBoundingBox();
-  const drop = function () { if (!globalThis.BF_KEEP_GEOMETRY) this.array = null; };   // (BF_KEEP_GEOMETRY: a bench that uploads the scene to a second renderer)
-  for (const a of Object.values(g.attributes)) a.onUpload(drop);
-  g.index?.onUpload(drop);
-  return m;
-}
 const PROXY_MAT = new THREE.MeshStandardMaterial({ color: '#000000' });
 /** One mesh of every tree's crown (an ellipsoid; a cone for the conifers) and trunk, for the bake only: on no camera
  *  layer (the bake draws it on its own), static (bake: true). */
@@ -115,9 +106,7 @@ function* treeProxiesJob(trees, kit, out) {
   const mesh = new THREE.Mesh(geo, PROXY_MAT);
   mesh.name = 'Tree shadow proxies'; mesh.layers.mask = 0; mesh.userData.bake = true; mesh.castShadow = false; mesh.frustumCulled = false;
   out.mesh = mesh;
-}   // the house engine's close detail (casings, rails, brackets) drawn this far
-/** The landscape as a lakefront house reads it: never lower than `floor` (its footings go down into the water). */
-const dryLand = (L, floor) => { const o = Object.create(L); o.heightAt = (x, z) => Math.max(L.heightAt(x, z), floor); return o; };
+}
 const KIT_CFG = { detailM: 150, dressingM: 80, detailReachM: 550,
   styles: [{ preset: 'pittsburgh-rowhouse', kinds: ['rowhouse'] }, { preset: 'pittsburgh-frame', kinds: ['house', 'barn', 'shed'] }] };
 /** Each road-graph city's homes (CNY: the suburbs' ranches and colonials, the villages' older houses, the farmhouses:
@@ -314,7 +303,7 @@ export class GraphCity {
       // builds as their real type
       const V = this._villageData ||= this._skanVillages();
       for (const b of mine) {
-        const s = V.shops.find((q) => b.cx > q.bb[0] && b.cx < q.bb[1] && b.cz > q.bb[2] && b.cz < q.bb[3] && pipXZ(q.ring, b.cx, b.cz));
+        const s = V.shops.find((q) => b.cx > q.bb[0] && b.cx < q.bb[1] && b.cz > q.bb[2] && b.cz < q.bb[3] && inRing(q.ring, b.cx, b.cz));
         if (s) { b.kind = 0; b.h = Math.max(b.h, s.h); b.shop = true; continue; }
         const f = V.styles.find((q) => Math.hypot(q.x - b.cx, q.z - b.cz) < 7);
         if (f) { b.force = f; b.kind = 23; }
@@ -361,106 +350,8 @@ export class GraphCity {
     this.stats.sectors++;
   }
 
-  /** The building kit's part of the city chunk builder: the homes it plans (by sector) drawn in place of the boxes. */
-  _kitAdapter() {
-    const self = this, material = makeFacadeMaterial(this.host.uniforms), group = new THREE.Group();
-    group.name = 'Buildings (building kit)'; this.host.group.add(group);
-    const plans = new Map(), lists = new Map(), extents = new Map(), details = [];
-    // the houses' close detail, per 120 m cell: built when the camera comes within reach, dropped past it (user, 23 Nov:
-    // "even on high … should not run out of memory" — built up front it was 50–65 MB in the villages)
-    const closeCells = new Map();   // cell key → { tile, houses: [R], box, mesh, pending }
-    let closeJob = null;
-    const addExt = (e) => { for (let i = Math.floor((e.x - e.r) / 20); i <= Math.floor((e.x + e.r) / 20); i++) for (let j = Math.floor((e.z - e.r) / 20); j <= Math.floor((e.z + e.r) / 20); j++) { const k = i * 100003 + j; let a = extents.get(k); if (!a) extents.set(k, (a = [])); a.push(e); } };
-    return {
-      group, material, details, plans,
-      /** A sector's plan is in: its homes, and what they add outside their footprints (for the trees and lamps). */
-      planned(plan) {
-        // (none in the canal: a footprint OSM puts in the channel, or a house the clean shape pushed into it)
-        for (const R of plan.buildings) R.inCanal = (R.rects.length ? R.rects : [{ cx: R.x, cz: R.z, ux: 1, uz: 0, vx: 0, vz: 1, hu: 1, hv: 1 }])
-          .some((r) => [[0, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]].some(([a, b]) => canalAt(r.cx + r.ux * a * r.hu + r.vx * b * r.hv, r.cz + r.uz * a * r.hu + r.vz * b * r.hv, .5)));
-        // (a lakefront house whose footprint runs past the drawn shore: stood on its floor above the water, not in it;
-        //  one whose middle is in the lake is left out)
-        if (self.world.ground) for (const R of plan.buildings) {
-          if (R.inCanal) continue;
-          const pts = (R.rects.length ? R.rects : [{ cx: R.x, cz: R.z, ux: 1, uz: 0, vx: 0, vz: 1, hu: 1, hv: 1 }]).flatMap((r) => [[0, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]].map(([a, b]) => [r.cx + r.ux * a * r.hu + r.vx * b * r.hv, r.cz + r.uz * a * r.hu + r.vz * b * r.hv]));
-          const wet = pts.filter(([x, z]) => self.inWater(x, z)).length;
-          if (!wet) continue;
-          if (self.inWater(R.x, R.z) || wet > pts.length / 2) { R.inCanal = true; continue; }
-          R.floorAbove = self.world.poolAt(R.x, R.z) + 0.9;
-        }
-        for (const R of plan.buildings) {
-          plans.set(R.key, R);
-          if (R.inCanal) continue;   // (taken, never drawn)
-          for (const [k, r] of R.rects.entries()) {
-            const front = k === 0 ? R.front : -1, porch = R.parts.frontPorch ? R.parts.frontPorch.depth + 0.3 : R.parts.porch || R.dress ? 1.2 : 0;
-            const ea = R.form === 'flat' ? 0.3 : (R.form === 'hip' ? R.eave : R.rake) + 0.2, eb = R.form === 'flat' ? 0.3 : R.eave + 0.2;
-            const ext = [eb + (front === 0 ? porch : 0), ea + (front === 1 ? porch : 0), eb + (front === 2 ? porch : 0), ea + (front === 3 ? porch : 0)];
-            addExt({ rect: r, ext, x: r.cx, z: r.cz, r: Math.hypot(r.hu, r.hv) + Math.max(...ext) });
-          }
-          for (const it of R.dressing || []) addExt({ x: it.x, z: it.z, r: Math.max(...it.size.slice(0, 2)) * 0.6 + 0.2, item: true });
-        }
-      },
-      occupied(x, z, pad = 0) {
-        for (const e of extents.get(Math.floor(x / 20) * 100003 + Math.floor(z / 20)) || []) {
-          if (Math.hypot(e.x - x, e.z - z) > e.r + pad) continue;
-          if (e.item) return true;
-          const r = e.rect, dx = x - r.cx, dz = z - r.cz, a = dx * r.ux + dz * r.uz, b = dx * r.vx + dz * r.vz;
-          if (a > -r.hu - e.ext[3] - pad && a < r.hu + e.ext[1] + pad && b > -r.hv - e.ext[0] - pad && b < r.hv + e.ext[2] + pad) return true;
-        }
-        return false;
-      },
-      take(b, key) { const R = plans.get(b.k); if (!R) return false; if (!lists.has(key)) lists.set(key, []); lists.get(key).push(R); return true; },
-      *chunkBuiltJob(key) {
-        const list = lists.get(key); lists.delete(key);
-        if (!list?.length) return;
-        const w = new Writer(8192), d = new Writer(4096), L = self.host.landscape;
-        // the house engine's close detail (casings, rails, brackets, gutters): one mesh per 120 m cell, drawn to ~160 m,
-        // built later when the camera nears the cell (_closeJob); here a writer that's thrown away
-        const scrap = new Writer(4096), closeOf = (R) => {
-          const k = `${key}|${Math.floor(R.x / 120)},${Math.floor(R.z / 120)}`; let c = closeCells.get(k);
-          if (!c) closeCells.set(k, (c = { tile: key, houses: [], box: new THREE.Box3(), mesh: null }));
-          c.houses.push(R); c.box.expandByPoint(new THREE.Vector3(R.x, (L.heightAt?.(R.x, R.z) ?? 0), R.z)); scrap.n = 0; scrap.ni = 0; return scrap;
-        };
-        for (const R of list) {
-          if (due()) yield;
-          if (R.inCanal) continue;
-          const LR = R.floorAbove ? dryLand(L, R.floorAbove) : L;
-          const res = buildBuilding(R, w, d, R.house ? closeOf(R) : null, LR);   // [blocks] (closeOf only for the house engine's)
-          if (R.dressing?.length) for (const it of R.dressing) dress(d, it, R, L, res);
-        }
-        if (w.n) { const m = gpuOnly(new THREE.Mesh(w.geometry(), material)); m.name = `Homes ${key}`; m.castShadow = m.receiveShadow = true; group.add(m); }
-        if (d.n) { const dm = gpuOnly(new THREE.Mesh(d.geometry(), material)); dm.userData.bake = false; dm.name = `Home detail ${key}`; dm.receiveShadow = true; dm.geometry.computeBoundingBox(); dm.userData.box = dm.geometry.boundingBox; group.add(dm); details.push(dm); }
-        for (const c of closeCells.values()) if (c.tile === key) c.box.expandByScalar(18);   // (the houses' own size round their centres)
-      },
-      tick(cam) {
-        for (const m of details) m.visible = m.userData.box.distanceToPoint(cam) < (m.userData.reach || KIT_CFG.detailReachM);
-        for (const c of closeCells.values()) {
-          const d = c.box.distanceToPoint(cam);
-          if (c.mesh) { c.mesh.visible = d < HOUSE_CLOSE_M; if (d > HOUSE_CLOSE_M + 140 && closeJob?.c !== c) { group.remove(c.mesh); c.mesh.geometry.dispose(); c.mesh = null; } }
-        }
-      },
-      /** The nearest cell within reach whose close detail isn't built, built as a job (sliced: graph-city stream). */
-      *closeJob(cam) {
-        let best = null, bd = HOUSE_CLOSE_M + 60;
-        for (const c of closeCells.values()) if (!c.mesh) { const d = c.box.distanceToPoint(cam); if (d < bd) { bd = d; best = c; } }
-        if (!best) return false;
-        closeJob = { c: best };
-        const W = new Writer(8192), D = new Writer(4096), C = new Writer(4096), L = self.host.landscape;
-        for (const R of best.houses) {
-          if (due()) yield;
-          if (!closeCells.has(`${best.tile}|${Math.floor(R.x / 120)},${Math.floor(R.z / 120)}`)) { closeJob = null; return true; }   // (its tile released meanwhile)
-          W.n = W.ni = 0; D.n = D.ni = 0;
-          buildBuilding(R, W, D, C, R.floorAbove ? dryLand(L, R.floorAbove) : L);
-        }
-        if (C.n) { const cm = gpuOnly(new THREE.Mesh(C.geometry(), material)); cm.userData.bake = false; cm.name = `House close detail ${best.tile}`; cm.receiveShadow = true; cm.visible = best.box.distanceToPoint(cam) < HOUSE_CLOSE_M; group.add(cm); best.mesh = cm; }
-        else best.mesh = new THREE.Object3D();   // (nothing to draw: marked done)
-        closeJob = null;
-        return true;
-      },
-      /** A tile's cells forgotten (graph-city _release). */
-      releaseTile(key) { for (const [k, c] of closeCells) if (c.tile === key) { if (c.mesh) { group.remove(c.mesh); c.mesh.geometry?.dispose(); } closeCells.delete(k); } },
-    };
-  }
+  /** The building kit's part of the city chunk builder (graph/kit-adapter.js; [review 27 Nov] W14: its own module). */
+  _kitAdapter() { return makeKitAdapter(this, { detailReachM: KIT_CFG.detailReachM }); }
 
   // ------------------------------------------------------------------ queries
   /** Land-cover code at (x, z) (LAND). */
@@ -549,14 +440,13 @@ export class GraphCity {
     for (const s of hj.stadiums || []) if (s.ring) rings.push(s.ring.map(([a, o]) => proj.toLocal(a, o)));
     if (hj.phipps) { const p = hj.phipps.origin, c = proj.toLocal(p.lat, p.lon); rings.push([[-130, -130], [130, -130], [130, 130], [-130, 130]].map(([x, z]) => ({ x: c.x + x, z: c.z + z }))); }
     const boxes = rings.map((r) => { let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; for (const p of r) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); } return { r, x0, x1, z0, z1 }; });
-    const pip = (r, x, z) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) c = !c; } return c; };
     const covers = this.heroes.heroes?.covers;
     return (b) => {
       if (covers && covers(b.cx, b.cz, 2)) return true;
       if (this._railCovers(b.cx, b.cz, 1) || b.ring.some((p) => this._railCovers(p.x, p.z, 0))) return true;   // (on a rail approach)
       for (const q of boxes) {
         if (b.cx < q.x0 - 4 || b.cx > q.x1 + 4 || b.cz < q.z0 - 4 || b.cz > q.z1 + 4) continue;
-        if (pip(q.r, b.cx, b.cz) || q.r.some((p) => pip(b.ring, p.x, p.z))) return true;
+        if (inRing(q.r, b.cx, b.cz) || q.r.some((p) => inRing(b.ring, p.x, p.z))) return true;
       }
       return false;
     };
@@ -579,10 +469,9 @@ export class GraphCity {
       for (const [la, lo] of l.views || []) { const a = proj.toLocal(la, lo), seg = [a, c]; list.push({ r: seg, m: vm, view: true, x0: Math.min(a.x, c.x) - vm, x1: Math.max(a.x, c.x) + vm, z0: Math.min(a.z, c.z) - vm, z1: Math.max(a.z, c.z) + vm }); }
     }
     if (!list.length) return () => false;
-    const pip = (r, x, z) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) c = !c; } return c; };
     const near = (r, x, z, m) => { for (let i = 0; i < r.length; i++) { const a = r[i], b = r[(i + 1) % r.length], dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / l2)); if (Math.hypot(a.x + dx * t - x, a.z + dz * t - z) < m) return true; } return false; };
     // (margin false: only inside an outline or a view corridor — a mapped tree stands in a landmark's margin)
-    return (x, z, margin = true) => list.some((q) => x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1 && ((q.r.length >= 3 && pip(q.r, x, z)) || ((margin || q.view) && near(q.r, x, z, q.m))));
+    return (x, z, margin = true) => list.some((q) => x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1 && ((q.r.length >= 3 && inRing(q.r, x, z)) || ((margin || q.view) && near(q.r, x, z, q.m))));
   }
   _deckIndex() {
     const grid = new Map();
@@ -593,12 +482,11 @@ export class GraphCity {
   }
   /** A deck (bridge, ramp) running through a footprint within its height: the building isn't drawn. */
   _underDeck(b) {
-    const pip = (r, x, z) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], q = r[j]; if ((a.z > z) !== (q.z > z) && x < (q.x - a.x) * (z - a.z) / (q.z - a.z) + a.x) c = !c; } return c; };
     for (let gx = Math.floor(b.bb[0] / 40); gx <= Math.floor(b.bb[1] / 40); gx++) for (let gz = Math.floor(b.bb[2] / 40); gz <= Math.floor(b.bb[3] / 40); gz++) {
       const a = this._deckGrid.get(`${gx},${gz}`); if (!a) continue;
       for (let k = 0; k < a.length; k += 3) {
         if (a[k] < b.bb[0] - 3 || a[k] > b.bb[1] + 3 || a[k + 2] < b.bb[2] - 3 || a[k + 2] > b.bb[3] + 3) continue;
-        if (pip(b.ring, a[k], a[k + 2]) && a[k + 1] < this.world._groundH(b.cx, b.cz) + b.h + 1) return true;
+        if (inRing(b.ring, a[k], a[k + 2]) && a[k + 1] < this.world._groundH(b.cx, b.cz) + b.h + 1) return true;
       }
     }
     return false;
@@ -1785,7 +1673,7 @@ export class GraphCity {
     let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
     for (const p of ring) { const a = p.x * ux + p.z * uz, b = p.x * vx + p.z * vz; a0 = Math.min(a0, a); a1 = Math.max(a1, a); b0 = Math.min(b0, b); b1 = Math.max(b1, b); }
     if ((a1 - a0) * (b1 - b0) > 60000) return;   // (a huge lot: leave it to the paving)
-    const pip = (x, z) => { let c = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], b = ring[j]; if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) c = !c; } return c; };
+    const pip = (x, z) => inRing(ring, x, z);
     const W = this.world;
     for (let b = b0 + 3; b < b1 - 2.5; b += 6.2) for (let a = a0 + 2; a < a1 - 1.5; a += 2.7) {
       const x = ux * a + vx * b, z = uz * a + vz * b, h0 = hash(Math.round(x * 3) * 7919 + Math.round(z * 3));
@@ -1826,7 +1714,7 @@ export class GraphCity {
       let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
       for (const p of ring) { const a = p.x * ux + p.z * uz, b = p.x * vx + p.z * vz; a0 = Math.min(a0, a); a1 = Math.max(a1, a); b0 = Math.min(b0, b); b1 = Math.max(b1, b); }
       if ((a1 - a0) * (b1 - b0) > 60000) continue;
-      const pip = (x, z) => { let c = false; for (let i2 = 0, j2 = ring.length - 1; i2 < ring.length; j2 = i2++) { const a = ring[i2], b = ring[j2]; if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) c = !c; } return c; };
+      const pip = (x, z) => inRing(ring, x, z);
       for (let b = b0 + 0.5; b < b1 - 2.5; b += 6.2) for (let a = a0 + 0.65; a < a1 - 1.5; a += 2.7) {
         const x0 = ux * a + vx * b, z0 = uz * a + vz * b, x1 = x0 + vx * 5, z1 = z0 + vz * 5;
         if (!pip(x0, z0) || !pip(x1, z1)) continue;

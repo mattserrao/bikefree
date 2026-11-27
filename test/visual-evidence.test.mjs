@@ -60,7 +60,8 @@ test('the tree impostor atlas keeps no multisample or depth buffer of its own (b
   assert.match(src, /rowRT\.dispose\(\)/); assert.match(src, /rowN\.dispose\(\)/);
 });
 
+// ([review 27 Nov] W13: the ground's shader moved to toolbox/materials/graph-ground.js)
 test('the desert ground keeps its covers\' own colour (no green-ground tint ratio on red sand)', () => {
-  const src = read('js/world/graph-world.js');
+  const src = read('js/world/toolbox/materials/graph-ground.js');
   assert.match(src, /#ifdef DESERT\s+tintOff = 1\.;/);
 });
