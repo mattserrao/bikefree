@@ -143,7 +143,15 @@ export function* planBuildingsJob(plan, config, index, opts = {}, tierIndex = nu
   const styles = (kit.styles?.length ? kit.styles : [{}]).map(resolveStyle);
   // a style can be limited to some kinds of map building ("kinds": ["rowhouse"]): cities pick by kind, routes by stretch
   const fits = (st, kind) => !st.kinds || st.kinds.includes(kind);
-  const styleAt = (s, kind) => styles.find((st) => fits(st, kind) && s >= st.fromM && s < st.toM) || styles.find((st) => fits(st, kind)) || styles[0];
+  // (styles with a "share" (Out West's adobe, user 26 Nov: half of Kanab's homes): one of them by the building's place)
+  const styleAt = (s, kind, b = null) => {
+    const shared = b ? styles.filter((st) => st.share && fits(st, kind)) : [];
+    if (shared.length) {
+      let h = Math.abs(Math.sin(b.x * 12.9898 + b.z * 78.233) * 43758.5453) % 1;
+      for (const st of shared) { if (h < st.share) return st; h -= st.share; }
+    }
+    return styles.find((st) => !st.share && fits(st, kind) && s >= st.fromM && s < st.toM) || styles.find((st) => !st.share && fits(st, kind)) || styles.find((st) => fits(st, kind)) || styles[0];
+  };
   const seed0 = ((config.seed || 1) * 7919 + 31) | 0;
   // neighbour grid (35 m density, 30 m scheme rule)
   const G = 40, grid = new Map(), key = (x, z) => `${Math.floor(x / G)},${Math.floor(z / G)}`;
@@ -189,7 +197,7 @@ export function* planBuildingsJob(plan, config, index, opts = {}, tierIndex = nu
     if (due()) yield;
     const b = sorted[n];
     const rand = randomSequence(seed0 ^ Math.imul(Math.round(b.x * 10) | 0, 73856093) ^ Math.imul(Math.round(b.z * 10) | 0, 19349663));
-    const style = styleAt(b.s, b.kind);
+    const style = styleAt(b.s, b.kind, b);
     const area = Math.abs(polyArea(b.pts));
     let dec = decompose(b.pts);
     if (!dec) continue;

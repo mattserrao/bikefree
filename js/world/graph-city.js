@@ -120,6 +120,10 @@ const KIT_CFG = { detailM: 150, dressingM: 80, detailReachM: 550,
   styles: [{ preset: 'pittsburgh-rowhouse', kinds: ['rowhouse'] }, { preset: 'pittsburgh-frame', kinds: ['house', 'barn', 'shed'] }] };
 /** Each road-graph city's homes (CNY: the suburbs' ranches and colonials, the villages' older houses, the farmhouses:
  *  presets.js cny-*; tools/pgh_city.py's zones give kinds 23 and 20). */
+// (Out West: half the homes adobe, town and country — user, 26 Nov 2026; the shares pick by the building's place)
+const OUTWEST_STYLES = [{ preset: 'kanab-pueblo', kinds: ['house', 'village-house'], share: .5 }, { preset: 'kanab-adobe-ranch', kinds: ['barn', 'shed'], share: .2 },
+  { preset: 'kanab-pioneer', kinds: ['village-house'] }, { preset: 'kanab-barn', kinds: ['barn', 'shed', 'farmhouse-ny'] },
+  { preset: 'kanab-western', kinds: ['house', 'rowhouse'] }];
 export const KIT_STYLES = { cny: [{ preset: 'cny-village', kinds: ['village-house'] }, { preset: 'cny-farmhouse', kinds: ['farmhouse-ny', 'barn', 'shed'] },
   { preset: 'cny-suburban', kinds: ['house', 'rowhouse'] }],
   // SKAN: the same upstate styles; its houses are sorted at load (_addSector: a house by a barn is a farmhouse, one
@@ -128,8 +132,7 @@ export const KIT_STYLES = { cny: [{ preset: 'cny-village', kinds: ['village-hous
     { preset: 'cny-suburban', kinds: ['house', 'rowhouse'] }],
   // Out West's Kanab (user, 26 Nov: "restyle", mixed and true to Kanab): ranch homes in stucco, brick and the odd
   // sandstone or siding; the pioneer brick and sandstone houses of the old town centre; pole barns in metal
-  outwest: [{ preset: 'kanab-pioneer', kinds: ['village-house'] }, { preset: 'kanab-barn', kinds: ['barn', 'shed', 'farmhouse-ny'] },
-    { preset: 'kanab-western', kinds: ['house', 'rowhouse'] }] };
+  outwest: OUTWEST_STYLES };
 const ROADS = new Set(['primary', 'secondary', 'tertiary', 'residential', 'alley']);
 const MAIN = new Set(['primary', 'secondary', 'tertiary']);
 const ROAD_RANK = { primary: 3, secondary: 2, tertiary: 1 };   // (Kanab's false fronts: which street a block faces)
@@ -339,7 +342,11 @@ export class GraphCity {
       let r = 0; for (const [px, pz] of pts) r = Math.max(r, Math.hypot(px - b.cx, pz - b.cz));
       // a brick row on a main street (East Carson, Butler, Penn…): a shop row, dressed by _storefronts, not a home
       if (b.kind === 0 && b.h >= 6.5 && this._frontsOf(b, b.ring, null, !b.shop).length) b.shopRow = true;
-      if (this.profile.falseFronts && (b.kind === 2 || b.kind === 3) && !b.hidden) b.falseFront = this._streetFace(b, 45);
+      if (this.profile.falseFronts && (b.kind === 2 || b.kind === 3) && !b.hidden) {
+        b.falseFront = this._streetFace(b, 45);
+        // (a share of the shop blocks Pueblo-style adobe instead — user, 26 Nov: adobe across the map)
+        if (b.falseFront && hash(b.k * 5.71 + 2) < (this.profile.puebloShops ?? 0)) b.falseFront.pueblo = true;
+      }
       if (b.shop && !b.shopRow) { b.shopRow = true; }   // (a village core's: a storefront row even round a corner)
       const e = { x: b.cx, z: b.cz, pts, levels: 0, kind: b.shopRow ? 'other' : kinds[b.kind] || 'other', roof: -1, height: b.h, s: 0, r, name: b.name || '', key: b.k, force: b.force };
       (kinds[b.kind] && !b.shopRow ? homes : neighbours).push(e);

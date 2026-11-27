@@ -7,6 +7,7 @@
 //   ow_hoodoos    Hoodoo Rim: Bryce's orange-and-white hoodoos, the tallest away from the road
 //   ow_arches     the Arch Garden: a Delicate-style freestanding arch, a double window in a fin, a long thin span
 //   ow_buttes     Butte Valley: two mittens, Merrick Butte, a long mesa, the Totem spire, the Three Sisters
+//   ow_adobe      the country's old adobe: homestead ruins, hornos (beehive ovens), adobe-walled corrals
 //   ow_frontier   the Johnson Canyon movie set: false fronts on a boardwalk, hitching rails, a water tower
 //
 // The rock is one RockBuilder per landmark (its own mesh: culled on its own) in the shared red-rock material
@@ -122,6 +123,46 @@ export function outwestLandmarkModels({ S, glows, local, L, host }) {
       }
     },
 
+    ow_adobe(l) {
+      // the country's old adobe (user, 26 Nov 2026: adobe structures, rural too): roofless homestead ruins — four
+      // earth walls broken to uneven heights, a doorway, the plaster worn off at the foot; hornos (beehive ovens) of
+      // stacked rings with a dark mouth; corrals walled in adobe with a pole gate
+      const MUD = ['#b88a64', '#a87a58', '#c49a72', '#9c7050'];
+      for (const [k, st] of (l.sites || []).entries()) {
+        const c = local(st.center[0], st.center[1]), yaw = (st.yawDeg || 0) * Math.PI / 180, F = makeFrame(c, { x: Math.sin(yaw), z: -Math.cos(yaw) });
+        const g = H(c.x, c.z), mud = MUD[k % MUD.length];
+        const wall = (a0, b0, a1, b1, h, th = .45) => {   // a wall from (a0, b0) to (a1, b1) in pieces of uneven height
+          const L = Math.hypot(a1 - a0, b1 - b0), n = Math.max(1, Math.round(L / 1.6));
+          for (let j = 0; j < n; j++) {
+            const t0 = j / n, t1 = (j + 1) / n, p = F.at(a0 + (a1 - a0) * (t0 + t1) / 2, b0 + (b1 - b0) * (t0 + t1) / 2);
+            const hh = h * (st.kind === 'ruin' ? .35 + hash(k * 31 + j * 7.3 + a0) * .75 : 1);
+            const yw = Math.abs(a1 - a0) > Math.abs(b1 - b0) ? F.yawU : F.yawV;
+            S.color(mud); S.box(p.x, g - .3, p.z, th, hh + .3, L / n + .02, yw);
+            S.color(new THREE.Color(mud).multiplyScalar(.78).getStyle()); S.box(p.x, g - .3, p.z, th + .06, .55, L / n + .04, yw);
+          }
+        };
+        if (st.kind === 'ruin') {
+          const A = 3 + hash(k * 2.2) * 1.5, B = 2.4 + hash(k * 3.1) * 1.2, h = 2.6;
+          wall(-A, -B, -.7, -B, h); wall(.7, -B, A, -B, h);   // (the front, a doorway in it)
+          wall(-A, B, A, B, h); wall(-A, -B, -A, B, h); wall(A, -B, A, B, h);
+          if (hash(k * 5.5) < .5) wall(-A, 0, 0, 0, h * .7, .35);   // (an inside wall)
+          // a fallen viga or two
+          S.color('#6f5a44'); const v = F.at(-.5, .6); S.box(v.x, g + .1, v.z, .2, .2, A * 1.6, F.yawU);
+          clear(c.x, c.z, Math.max(A, B) + 2);
+        } else if (st.kind === 'horno') {
+          S.color('#a87a58'); S.box(c.x, g - .2, c.z, 2.4, .6, 2.4, F.yawU);   // (its hearth)
+          for (const [r, y, hh, rt] of [[1.0, .4, .45, .9], [.9, .85, .35, .72], [.72, 1.2, .3, .48], [.48, 1.5, .25, .12]]) { S.color(mud); S.cylinder(c.x, g + y, c.z, r, hh, 12, rt); }
+          const m = F.at(0, -.95); S.color('#2a1f18'); S.box(m.x, g + .45, m.z, .12, .5, .5, F.yawV);
+          clear(c.x, c.z, 3);
+        } else {   // corral
+          const A = 7 + hash(k * 4.1) * 3, B = 5 + hash(k * 6.3) * 2;
+          wall(-A, -B, -1.6, -B, 1.4, .4); wall(1.6, -B, A, -B, 1.4, .4); wall(-A, B, A, B, 1.4, .4); wall(-A, -B, -A, B, 1.4, .4); wall(A, -B, A, B, 1.4, .4);
+          S.color('#6a5440'); for (const pa of [-1.6, 1.6]) { const p = F.at(pa, -B); S.box(p.x, g, p.z, .2, 1.8, .2, F.yawU); }
+          for (const y of [.5, 1.1]) { const p = F.at(0, -B); S.box(p.x, g + y, p.z, .1, .12, 3.2, F.yawU); }
+          clear(c.x, c.z, Math.max(A, B) + 2);
+        }
+      }
+    },
     ow_frontier(l) {
       // a western street of false fronts, both sides of a dirt street running along axisDeg: each store a plain box
       // behind a tall board front — stepped, gabled or flat-capped — with a cornice, two upper windows, a painted sign

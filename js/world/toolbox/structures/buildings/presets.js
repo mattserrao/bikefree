@@ -258,6 +258,46 @@ export const STYLE_PRESETS = {
     sundial: 0, shops: 0, ivy: 0, age: [.5, .95], upkeep: [.5, .95], stone: '#c7a37c',
     dressing: { steps: 1, shrubs: .3, bins: .4, bench: .1, pots: .3, garden: .08, fence: .45, laundry: 0, dish: .1, hay: 0, bikes: .1, trough: 0 },
   },
+  // Out West's adobe (user, 26 Nov 2026: "adobe structures in the buildings of the map — residential and rural", half
+  // of the homes): Pueblo Revival — one storey of earth-plastered walls in tan, rose, ochre and sand, flat roofs behind
+  // soft parapets stepped up over the front, vigas and canales (assemble.js puebloRoof), small deep-set windows, a
+  // portal on posts, a low adobe wall round the yard; turquoise or blue doors and trim
+  'kanab-pueblo': {
+    houseEngine: false, cleanShapes: true, pueblo: true,
+    archetypes: { cottage: 1, village: .15, farmhouse: 0, chalet: 0, mazot: 0, block: 0, shed: .3 },
+    schemes: [
+      { wall: '#c9a27a', trim: '#3f7f8a', frame: '#e9dcc4', accent: '#3f7f8a' },   // adobe tan, turquoise
+      { wall: '#c98e7a', trim: '#2f5d7a', frame: '#efe2cc', accent: '#2f5d7a' },   // rose, Taos blue
+      { wall: '#cf9e5a', trim: '#5a3e2c', frame: '#efe2cc', accent: '#3f7f8a' },   // ochre
+      { wall: '#d9bf94', trim: '#3f7f8a', frame: '#f1e7d4', accent: '#7a3a2c' },   // sand, red door
+      { wall: '#a87a58', trim: '#e8dcc4', frame: '#e8dcc4', accent: '#2f5d7a' },   // earth brown
+      { wall: '#d6b08a', trim: '#4e6b3a', frame: '#efe2cc', accent: '#4e6b3a' },   // pale adobe, sage
+    ],
+    walls: { rough: 1 }, plinth: 0, gable: {}, barn: { rough: .7, boards: .3 },
+    roofs: { flat: 1 }, forms: { flat: 1 }, pitch: 8, pitchJitter: 2, eaveM: 0, rakeM: 0,
+    windows: 'farm', bayM: 3.6, ranch: 1, maxFloors: 1,
+    shutters: 0, surrounds: .5, lintels: .7, quoins: 0, flowerBoxes: 0, genoise: 0, frontEnd: 0,
+    balconies: 0, galleries: 0, dormers: 0, chimneys: 0, solar: .05, leanTo: .2, garage: .25, porch: .55, frontPorch: .45, stair: 0, woodpile: .15,
+    sundial: 0, shops: 0, ivy: 0, age: [.2, .9], upkeep: [.5, .95], stone: '#b9906c',
+    dressing: { steps: .8, shrubs: .3, bins: .4, bench: .15, pots: .6, garden: .05, fence: .55, laundry: 0, dish: .1, hay: 0, bikes: .05, trough: 0 },
+  },
+  // Out West's rural adobe: ranch outbuildings and old homesteads of earth walls, flat or low seam roofs
+  'kanab-adobe-ranch': {
+    houseEngine: false, cleanShapes: true, pueblo: true,
+    archetypes: { cottage: .5, village: 0, farmhouse: .2, chalet: 0, mazot: 0, block: 0, shed: 1 },
+    schemes: [
+      { wall: '#b88a64', trim: '#5a4636', frame: '#d8cbb4', accent: '#5a4636' },
+      { wall: '#a87a58', trim: '#4a3b30', frame: '#d8cbb4', accent: '#4a3b30' },
+      { wall: '#c9a27a', trim: '#3f7f8a', frame: '#e0d6c4', accent: '#3f7f8a' },
+    ],
+    walls: { rough: 1 }, plinth: 0, gable: {}, barn: { rough: 1 },
+    roofs: { flat: .6, seam: .4 }, forms: { flat: .6, shed: .4 }, pitch: 10, pitchJitter: 3, eaveM: .2, rakeM: .1,
+    windows: 'farm', bayM: 4.5, ranch: 1, maxFloors: 1,
+    shutters: 0, surrounds: 0, lintels: .5, quoins: 0, flowerBoxes: 0, genoise: 0, frontEnd: 0,
+    balconies: 0, galleries: 0, dormers: 0, chimneys: 0, solar: 0, leanTo: .4, garage: 0, porch: .2, frontPorch: 0, stair: 0, woodpile: .2,
+    sundial: 0, shops: 0, ivy: 0, age: [.5, 1], upkeep: [.3, .8], stone: '#a8825e',
+    dressing: { steps: .3, shrubs: .1, bins: .1, bench: 0, pots: .2, garden: 0, fence: .4, laundry: 0, dish: 0, hay: .2, bikes: 0, trough: .3 },
+  },
   // Kanab's barns and sheds (user, 26 Nov: "timber pole barns with metal roofs"): low, wide, boards or steel, seam roofs
   'kanab-barn': {
     houseEngine: false, cleanShapes: true,
