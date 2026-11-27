@@ -126,10 +126,28 @@ def inside(ring, y, x):
 
 def main(mid):
     graph = json.load(open(os.path.join(ROOT, 'routes', 'cities', f'{mid}.json')))
-    tl = tiles_for(graph)
-    print(f'{mid}: {len(tl)} tiles')
-    files = [f for ty, tx in tl for f in fetch(mid, ty, tx)]
-    places = parse(files)
+    sys.path.insert(0, os.path.join(ROOT, 'tools'))
+    from citylib import warp as _warp
+    W = _warp.load(mid)
+    if W:   # (a warped map, tools/citylib/warp.py: the real tiles already fetched, every place moved with its piece)
+        import glob
+        files = sorted(glob.glob(os.path.join(ROOT, 'tools', '.cache', f'osm-commerce-{mid}', '*.osm')))
+        print(f'{mid}: {len(files)} cached tiles (warped)')
+        places = []
+        for p in parse(files):
+            q = W.fwd(p['lat'], p['lon'])
+            if not q: continue
+            p = {**p, 'lat': round(q[0], 6), 'lon': round(q[1], 6)}
+            if p.get('ring'):
+                r = [W.fwd(a, o) for a, o in p['ring']]
+                if all(r): p['ring'] = [[round(a, 7), round(o, 7)] for a, o in r]
+                else: p.pop('ring')
+            places.append(p)
+    else:
+        tl = tiles_for(graph)
+        print(f'{mid}: {len(tl)} tiles')
+        files = [f for ty, tx in tl for f in fetch(mid, ty, tx)]
+        places = parse(files)
     out = {'format': 'bikefree-commerce-1', 'attribution': 'Map data © OpenStreetMap contributors (ODbL)', 'places': places}
     json.dump(out, open(os.path.join(ROOT, 'routes', 'cities', f'{mid}-commerce.json'), 'w'), separators=(',', ':'))
     kinds = {}

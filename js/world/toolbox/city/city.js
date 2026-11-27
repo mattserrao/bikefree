@@ -60,6 +60,7 @@ export function mergeGeometries(list) {
   return out;
 }
 
+const PUEBLO_WALLS = ['#c9a27a', '#c98e7a', '#cf9e5a', '#d9bf94', '#b88a64'];   // (Out West's adobe shop blocks)
 const KIND_COLORS = [
   ['#8c4a37', '#9a5a41', '#7b3f30', '#a46a4f', '#6e4a3a', '#b08a6a', '#94503c', '#c2b49a'],   // 0 brick rowhouses
   ['#c9c2b0', '#a9b6b8', '#d8ccb0', '#8e9a87', '#c08f6f', '#e2dccc', '#b7a58a'],               // 1 houses
@@ -982,6 +983,7 @@ export class CityScene {
       const palette = KIND_COLORS[b.kind] || KIND_COLORS[2];
       const seed = hash(b.k * 7919 + 13);
       const base = new THREE.Color(palette[Math.floor(seed * palette.length)]).multiplyScalar(.9 + hash(b.k) * .18);
+      if (b.falseFront?.pueblo) base.set(PUEBLO_WALLS[Math.floor(seed * PUEBLO_WALLS.length)]).multiplyScalar(.92 + hash(b.k) * .14);   // (Out West's adobe shops)
       const kit = this.streetKit?.building(b, ring, ground, y0, y1, base, key, B);   // [street-kit] facade detail (bays into B); window grid base, roof colour
       if (!kit && this.buildingKit?.take(b, key)) continue;   // [buildings] a home the building kit draws
       B.color(base).set({ aBld: [b.kind + 16 * Math.max(0, Math.round(y1 - (kit ? kit.winBase : ground))), seed * 100, kit ? kit.winBase : ground, 0] });   // [business pass] kind + 16 × the wall's top above its window base: the wall shader's parapet, ghost signs, fire escapes
@@ -1060,8 +1062,51 @@ export class CityScene {
    */
   _falseFront(M, b, ground, y1, seed, base) {
     if (b.h > 11) return;
+    if (b.falseFront.pueblo) { this._puebloFront(M, b, ground, y1, seed, base); return; }
     const parts = b.falseFront.parts?.length ? b.falseFront.parts : [b.falseFront];
     parts.forEach((f, k) => this._falseFrontPart(M, b, f, ground, y1, seed, base, k));
+  }
+  /**
+   * A Pueblo Revival shop block (Out West, user 26 Nov 2026: adobe across the map): a soft adobe parapet round the
+   * roof, stepped up over the middle of the street front; vigas out of the front below it; a portal — a deep porch on
+   * round log posts carrying its own row of vigas — along the street. One merged mesh with the chunk.
+   */
+  _puebloFront(M, b, ground, y1, seed, base) {
+    const r = (k) => hash(seed * 171 + k * 13.7);
+    const ring = b.ring, adobe = base.clone().multiplyScalar(.97), wood = new THREE.Color(r(1) < .5 ? '#6f5a44' : '#7d6550');
+    M.set({ aBld: [b.kind, seed * 100, ground, 1] });
+    // the parapet round the roof
+    const ph = .5 + r(2) * .3;
+    M.color(adobe);
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i], c = ring[(i + 1) % ring.length], len = Math.hypot(c.x - a.x, c.z - a.z);
+      if (len < .5) continue;
+      let nx = (c.z - a.z) / len, nz = -(c.x - a.x) / len;
+      if (((a.x + c.x) / 2 - b.cx) * nx + ((a.z + c.z) / 2 - b.cz) * nz < 0) { nx = -nx; nz = -nz; }
+      M.box((a.x + c.x) / 2 - nx * .15, y1 - .05, (a.z + c.z) / 2 - nz * .15, len + .3, ph, .32, Math.atan2(nx, nz));
+    }
+    const parts = b.falseFront.parts?.length ? b.falseFront.parts : [b.falseFront];
+    const g = this.landscape.heightAt(b.falseFront.mx + b.falseFront.nx * 2, b.falseFront.mz + b.falseFront.nz * 2);
+    parts.forEach((f, k) => {
+      const { len, mx, mz, nx, nz, yaw } = f, tx = -nz, tz = nx;
+      if (len < 2) return;
+      // the stepped middle of the front parapet (the first stretch of the frontage)
+      if (k === 0 && len > 5) M.color(adobe).box(mx - nx * .15, y1 + ph - .05, mz - nz * .15, len * (.3 + r(3) * .2), .4, .32, yaw);
+      // vigas along the wall, below the roof line
+      M.color(wood);
+      for (let s = -len / 2 + .5; s <= len / 2 - .5; s += .9) M.box(mx + nx * .22 + tx * s, y1 - .6, mz + nz * .22 + tz * s, .2, .2, .45, yaw);
+      // the portal: posts, a beam, its own vigas and a flat roof
+      if (r(4 + k) < .85) {
+        const d = 2.4 + r(5) * .6, ph2 = Math.min(3.1, Math.max(2.6, y1 - ground - .9)), n = Math.max(1, Math.round(len / 3));
+        for (let j = 0; j <= n; j++) {
+          const s = (j / n - .5) * (len - .4);
+          M.color(wood).box(mx + nx * (d - .2) + tx * s, g, mz + nz * (d - .2) + tz * s, .26, ph2, .26, yaw);
+        }
+        M.box(mx + nx * (d - .2), g + ph2, mz + nz * (d - .2), len, .26, .3, yaw);   // (the beam)
+        for (let s = -len / 2 + .4; s <= len / 2 - .4; s += .8) M.box(mx + nx * (d / 2) + tx * s, g + ph2 + .26, mz + nz * (d / 2) + tz * s, .16, .16, d + .3, yaw);
+        M.color(adobe.clone().multiplyScalar(.8)).box(mx + nx * d / 2, g + ph2 + .42, mz + nz * d / 2, len + .2, .14, d + .2, yaw);
+      }
+    });
   }
   _falseFrontPart(M, b, f, ground, y1, seed, base, part) {
     const len = f.len, mx = f.mx, mz = f.mz, nx = f.nx, nz = f.nz, yaw = f.yaw;

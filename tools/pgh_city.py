@@ -46,6 +46,11 @@ UNIT = CFG.get('cityUnit', UNIT)        # (SKAN: 5e-6 — 33 km north to south p
 # villages / towns. Ensure these are accurate"): 'worldcover' — ESA WorldCover 10 m (tools/citylib/landcover.py) for the
 # fields, pasture and hay, forest and wetland OSM leaves blank; OSM's own areas (homes, works, parks, water) on top
 RURAL = CFG.get('landCover') == 'worldcover'
+# (Out West, user 26 Nov 2026: the map's build-time warp, tools/citylib/warp.py — heights, OSM and land cover moved with
+#  the road graph's corridors)
+from citylib import warp as _warp
+WARP = _warp.load(CITY)
+if WARP: elevation = WARP.elevation
 SURF = ['asphalt', 'brick', 'sett', 'concrete', 'paving', 'gravel', 'dirt', 'wood']
 SURF_OF = {'asphalt': 0, 'paved': 0, 'chipseal': 0, 'brick': 1, 'bricks': 1, 'sett': 2, 'cobblestone': 2, 'unhewn_cobblestone': 2,
            'concrete': 3, 'concrete:plates': 3, 'concrete:lanes': 3, 'paving_stones': 4, 'gravel': 5, 'fine_gravel': 5, 'compacted': 5,
@@ -99,7 +104,10 @@ def rural_land(L, UNTAGGED, res_n, com_n, kept, pix, lx, ly, gs, gw, gn, ge, lat
     round each farmhouse its yard and round each barn its farmyard; everywhere else what WorldCover saw — crops (10),
     pasture and hay (11), forest (2), wetland (12), water, bare ground."""
     from citylib.landcover import worldcover_window
-    _, wc = worldcover_window(gs, gw, gn, ge)
+    if WARP:   # (the warped box's land cover: sampled back where each piece of it really is)
+        _, wc0 = worldcover_window(*WARP.real_box(gs, gw, gn, ge))
+        wc = WARP.raster_sampler(wc0)
+    else: _, wc = worldcover_window(gs, gw, gn, ge)
     jj, ii = np.mgrid[0:ly, 0:lx]
     lat = gn - (jj + 0.5) / ly * (gn - gs); lon = gw + (ii + 0.5) / lx * (ge - gw)
     W = wc(lat, lon)
@@ -108,7 +116,7 @@ def rural_land(L, UNTAGGED, res_n, com_n, kept, pix, lx, ly, gs, gw, gn, ge, lat
     base = np.full(L.shape, 1, np.uint8)
     for c, code in WC_LAND.items(): base[W == c] = code
     # (a desert map's dunes, config sandAreas [[lat, lon, radius m], …]: the open ground there is sand)
-    for la, lo, r in CFG.get('sandAreas', []):
+    for la, lo, r in ([[*WARP.fwd_any(a, o), r_] for a, o, r_ in CFG.get('sandAreas', [])] if WARP else CFG.get('sandAreas', [])):
         d = np.hypot((lat - la) * 110540, (lon - lo) * 111320 * np.cos(np.radians(la)))
         base[(d < r) & np.isin(W, (20, 30, 60))] = 5
     # a village: the buildings close together (the same 90 m window as the city's yards)
@@ -180,6 +188,11 @@ def main():
                 el.clear()
         if (k + 1) % 50 == 0: print(f'  OSM {k + 1}/{len(files)} tiles')
     print(f'  OSM: {len(nodes)} nodes, {len(ways)} ways, {len(rels)} relations')
+    if WARP:   # (moved; a way the warp cut into is dropped whole — a building or an area isn't drawn half)
+        had = {w for w, (refs, _) in ways.items() if all(r in nodes for r in refs)}
+        nodes = WARP.osm_nodes(nodes)
+        ntags = {k: v for k, v in ntags.items() if k in nodes}
+        ways = {w: v for w, v in ways.items() if w not in had or all(r in nodes for r in v[0])}
 
     # the Pittsburgh map's settings, gathered from its scenes
     special, res_boxes, drop_b = {}, [], set()

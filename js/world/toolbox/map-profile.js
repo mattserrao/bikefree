@@ -34,8 +34,9 @@ export const PROFILE_PRESETS = {
   // (Out West, 26 Nov 2026: red-rock desert round Kanab — golden hour baked, desert ground by slope and strata, dry
   // shrubland cover, cottonwoods by the washes, pinyon and juniper on the benches)
   desert: { light: 'golden-upstate', roads: 'worn', ground: 'desert', life: 'cyclists', dressing: 'country', season: 'early-fall', clouds: 0.35, verge: '#a99a6a',
-    buildingStyles: [{ preset: 'kanab-pioneer', kinds: ['village-house'] }, { preset: 'kanab-barn', kinds: ['barn', 'shed', 'farmhouse-ny'] },
-      { preset: 'kanab-western', kinds: ['house', 'rowhouse'] }], hideInWater: false, softCover: true,
+    buildingStyles: [{ preset: 'kanab-pueblo', kinds: ['house', 'village-house'], share: .5 }, { preset: 'kanab-adobe-ranch', kinds: ['barn', 'shed'], share: .2 },
+      { preset: 'kanab-pioneer', kinds: ['village-house'] }, { preset: 'kanab-barn', kinds: ['barn', 'shed', 'farmhouse-ny'] },
+      { preset: 'kanab-western', kinds: ['house', 'rowhouse'] }], hideInWater: false, softCover: true, puebloShops: .3,
     // Kanab's old town (user, 26 Nov): a third of its houses the pioneer type; two storeys at most unless named; false fronts
     classifyHomes: 'town-core', townCore: { lat: 37.0475, lon: -112.5266, r: 650, share: .35 }, maxBuildingM: 10.5, falseFronts: true,
     treeMix: { woods: [['juniper', 60], ['pinyon', 40]], wet: [['cottonwood', 1]], hedge: [['juniper', 70], ['cottonwood', 30]],

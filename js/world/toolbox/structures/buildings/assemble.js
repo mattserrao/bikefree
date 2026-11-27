@@ -418,8 +418,10 @@ function flat(ctx, r, k = 0) {
   const { w, d, R, top, corner, C, wall } = ctx;
   const K = [corner(r, -r.hu, -r.hv), corner(r, r.hu, -r.hv), corner(r, r.hu, r.hv), corner(r, -r.hu, r.hv)].map((p) => [p[0], top, p[1]]);
   if (!ccwUp(K)) K.reverse();
-  w.set({ code: S.R_FLAT, col: C(srgb('#8f8b84')), win: [0, 0, 0, 0], L: 2 * r.hu });
+  const pueblo = !!R.style.pueblo;
+  w.set({ code: S.R_FLAT, col: C(srgb(pueblo ? '#9a7c62' : '#8f8b84')), win: [0, 0, 0, 0], L: 2 * r.hu });
   w.poly(K, K.map((p) => [p[0], p[2]]));
+  if (pueblo) { puebloRoof(ctx, r, k); return; }
   // parapet
   const f = { ...r };
   w.set({ code: R.wall, col: C(wall.clone().multiplyScalar(.95)), win: [0, 0, 0, 0] });
@@ -435,6 +437,40 @@ function flat(ctx, r, k = 0) {
   }
   // rooftop: a plant box or two on the big ones
   if (r.hu * r.hv > 60) { d.set({ code: S.METAL, col: C(srgb('#9a9c9e')) }); d.box(f, -r.hu * .3, -r.hu * .3 + 1.6, -.8, .8, top, top + 1.2); }
+}
+
+/**
+ * A Pueblo Revival roof (Out West's adobe, user 26 Nov 2026): the walls carried up as a soft parapet, higher in a step
+ * over the middle of the front; a row of vigas (round roof beams) out of the wall below it; two canales (wooden roof
+ * spouts) through the parapet. The parapet in the wall's own adobe; vigas and canales in weathered wood.
+ */
+function puebloRoof(ctx, r, k) {
+  const { w, d, R, top, C, wall } = ctx;
+  const f = { ...r }, ph = .55 + ((R.seed * 13.1) % 1) * .3;
+  w.set({ code: R.wall, col: C(wall.clone().multiplyScalar(.97)), win: [0, 0, 0, 0] });
+  for (const [a0, a1, b0, b1] of [[-r.hu, r.hu, -r.hv, -r.hv + .3], [-r.hu, r.hu, r.hv - .3, r.hv], [-r.hu, -r.hu + .3, -r.hv, r.hv], [r.hu - .3, r.hu, -r.hv, r.hv]])
+    w.box(f, a0, a1, b0, b1, top - .05, top + ph);
+  // the stepped middle of the front parapet (the long side facing the street)
+  if (k === 0) {
+    const fb = R.front === 2 ? 1 : -1, sw = r.hu * (.28 + ((R.seed * 7.7) % 1) * .2);
+    w.box(f, -sw, sw, Math.min(fb * r.hv, fb * (r.hv - .3)), Math.max(fb * r.hv, fb * (r.hv - .3)), top + ph - .05, top + ph + .38);
+  }
+  // vigas: round beam ends every 0.9 m along the two long walls, 0.45 m out, a little below the roof line
+  const viga = srgb(R.age > .5 ? '#6f5a44' : '#8a6a4a');
+  d.set({ code: S.WOOD, col: C(viga), win: [0, 0, 0, 0] });
+  const y = top - .55;
+  for (const sb of [-1, 1]) {
+    for (let a = -r.hu + .6; a <= r.hu - .6; a += .9) {
+      const b0 = sb < 0 ? -r.hv - .45 : r.hv, b1 = sb < 0 ? -r.hv : r.hv + .45;
+      d.box(f, a - .1, a + .1, b0, b1, y, y + .2);
+    }
+  }
+  // canales through the parapet at the two ends
+  d.set({ code: S.WOOD, col: C(viga.clone().multiplyScalar(.85)) });
+  for (const sa of [-1, 1]) {
+    const a0 = sa < 0 ? -r.hu - .8 : r.hu - .1, a1 = sa < 0 ? -r.hu + .1 : r.hu + .8, bm = ((R.seed * 3.3) % 1 - .5) * r.hv;
+    d.box(f, a0, a1, bm - .14, bm + .14, top + .02, top + .2);
+  }
 }
 
 function stepped(ctx, r, tan) {

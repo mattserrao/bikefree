@@ -527,7 +527,10 @@ const NYC_ROUTES = [
 
 // (a map's own rides as data, tools/city/<id>-routes.json { trails, routes } — Out West's, 26 Nov 2026: the newer maps
 //  keep their rides beside their config instead of here)
-const ROUTE_FILE = resolve(root, `tools/city/${CITY}-routes.json`);
+// (a warped map, tools/citylib/warp.py: its rides moved with it — tools/outwest_warp.py writes <id>-routes.warped.json)
+const CFG_FILE = resolve(root, `tools/city/${CITY}.json`);
+const WARPED = existsSync(CFG_FILE) && JSON.parse(readFileSync(CFG_FILE, 'utf8')).warp && existsSync(resolve(root, `tools/city/${CITY}-routes.warped.json`));
+const ROUTE_FILE = resolve(root, `tools/city/${CITY}-routes${WARPED ? '.warped' : ''}.json`);
 const FILE_ROUTES = existsSync(ROUTE_FILE) ? JSON.parse(readFileSync(ROUTE_FILE, 'utf8')) : null;
 const TRAILS = FILE_ROUTES ? FILE_ROUTES.trails || [] : CITY === 'cny' ? CNY_TRAILS : CITY === 'skan' ? SKAN_TRAILS : CITY === 'nyc' ? [] : PGH_TRAILS;
 const ROUTES = FILE_ROUTES ? FILE_ROUTES.routes : CITY === 'cny' ? CNY_ROUTES : CITY === 'skan' ? SKAN_ROUTES : CITY === 'nyc' ? NYC_ROUTES : CITY === 'pgh' ? PGH_ROUTES : [];

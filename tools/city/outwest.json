@@ -1,207 +1,250 @@
 {
- "profile": {
-  "preset": "desert",
-  "trees": {
-   "nearM": 55
-  }
- },
- "id": "outwest",
- "name": "Out West",
- "cityName": "Kanab, UT",
- "note": "Out West free-ride graph (tools/build_map.mjs outwest; user, 26 Nov 2026: a showcase map blending Utah/Arizona parks; base region chosen: Kanab, UT, with Moab's Arches and Bryce's hoodoos (and Monument Valley-style buttes) brought in as hero landscapes; fall golden hour; a ride through a tunnel, a gravel butte-valley road and a big climb). Area: a circle round Kanab plus corridors up US-89 through Kanab Creek canyon (the big climb toward Mount Carmel Junction), out Hancock Road to the Coral Pink Sand Dunes, and up Johnson Canyon.",
- "area": {
-  "circle": [
-   37.055,
-   -112.53,
-   6500
-  ],
-  "lines": "outwest-area-lines.json",
-  "corridorM": 800,
-  "marginM": 1200,
-  "keepCorridorRoads": true,
-  "keepCorridorM": 350
- },
- "corridorM": 0,
- "osmTile": [
-  0.02,
-  0.016
- ],
- "osmOrigin": [
-  -112.9,
-  36.9
- ],
- "roads": {
-  "primary": "primary",
-  "primary_link": "primary",
-  "secondary": "secondary",
-  "secondary_link": "secondary",
-  "tertiary": "tertiary",
-  "tertiary_link": "tertiary",
-  "unclassified": "residential",
-  "residential": "residential",
-  "living_street": "residential",
-  "service": "alley",
-  "track": "path",
-  "busway": null,
-  "trunk": "primary",
-  "trunk_link": "primary"
- },
- "serviceKinds": [
-  "alley"
- ],
- "skipService": [
-  "driveway",
-  "parking_aisle",
-  "drive-through",
-  "emergency_access"
- ],
- "paths": {
-  "cycleway": "path",
-  "path": "path",
-  "footway": "path",
-  "bridleway": "path",
-  "pedestrian": "plaza"
- },
- "skipSurfaces": [
-  "stairs"
- ],
- "maxTunnelM": 120,
- "mergeM": 15,
- "snapM": 4,
- "dupM": 25,
- "minLoopM": 40,
- "spurM": 30,
- "smoothM": 35,
- "widths": {
-  "primary": 12,
-  "secondary": 10,
-  "tertiary": 8.5,
-  "residential": 7,
-  "alley": 4.5,
-  "path": 3.2,
-  "plaza": 6
- },
- "waterLevelM": 0,
- "pools": [],
- "groundCellM": 24,
- "groundMarginM": 1200,
- "groundFile": "routes/cities/outwest-ground.grid.bin.gz",
- "start": {
-  "lat": 37.0475,
-  "lon": -112.5263,
-  "note": "Kanab, Center Street at Main Street (US-89)"
- },
- "connectors": [],
- "connectorM": 180,
- "maxGradePct": 30,
- "maxAvgGradePct": 34,
- "bridgeClearM": 11,
- "bridgeRampPct": 6,
- "riverFloorM": 2.5,
- "riversideM": 25,
- "denseM": 40,
- "removeAlleys": true,
- "overpassClearM": 4.5,
- "connectMaxM": 350,
- "connectSnapM": 8,
- "connectMaxGradePct": 12,
- "parallelM": 30,
- "parallelMinM": 60,
- "smoothMaxShiftM": 8,
- "smoothPasses": 8,
- "junctionEaseM": 30,
- "routeKeepM": 18,
- "routeLinkMaxM": 50,
- "effects": {
-  "sky": {
-   "clouds": 0.35,
-   "airDensity": 0.00028,
-   "airFalloff": 0.002631578947368421,
-   "airBaseM": 1450,
-   "shafts": 0.75
+  "profile": {
+    "preset": "desert",
+    "trees": {
+      "nearM": 55
+    }
   },
-  "atmosphere": {},
-  "grade": {
-   "saturation": 1.17,
-   "contrast": 0.2,
-   "warm": 0.65,
-   "lift": 0.012,
-   "shadows": [
-    0.93,
-    0.94,
-    1.06
-   ],
-   "highlights": [
-    1.05,
-    1.0,
-    0.92
-   ],
-   "split": 0.45,
-   "sun": 1.15,
-   "sky": 0.85
+  "id": "outwest",
+  "name": "Out West",
+  "cityName": "Kanab, UT",
+  "note": "Out West free-ride graph (tools/build_map.mjs outwest; user, 26 Nov 2026: a showcase map blending Utah/Arizona parks; base region chosen: Kanab, UT, with Moab's Arches and Bryce's hoodoos (and Monument Valley-style buttes) brought in as hero landscapes; fall golden hour; a ride through a tunnel, a gravel butte-valley road and a big climb). Area: a circle round Kanab plus corridors up US-89 through Kanab Creek canyon (the big climb toward Mount Carmel Junction), out Hancock Road to the Coral Pink Sand Dunes, and up Johnson Canyon.",
+  "area": {
+    "circle": [
+      37.0475,
+      -112.5263,
+      2500
+    ],
+    "lines": "outwest-area-lines.json",
+    "corridorM": 800,
+    "marginM": 1200,
+    "keepCorridorRoads": true,
+    "keepCorridorM": 350
+  },
+  "corridorM": 0,
+  "osmTile": [
+    0.02,
+    0.016
+  ],
+  "osmOrigin": [
+    -112.9,
+    36.9
+  ],
+  "roads": {
+    "primary": "primary",
+    "primary_link": "primary",
+    "secondary": "secondary",
+    "secondary_link": "secondary",
+    "tertiary": "tertiary",
+    "tertiary_link": "tertiary",
+    "unclassified": "residential",
+    "residential": "residential",
+    "living_street": "residential",
+    "service": "alley",
+    "track": "path",
+    "busway": null,
+    "trunk": "primary",
+    "trunk_link": "primary"
+  },
+  "serviceKinds": [
+    "alley"
+  ],
+  "skipService": [
+    "driveway",
+    "parking_aisle",
+    "drive-through",
+    "emergency_access"
+  ],
+  "paths": {
+    "cycleway": "path",
+    "path": "path",
+    "footway": "path",
+    "bridleway": "path",
+    "pedestrian": "plaza"
+  },
+  "skipSurfaces": [
+    "stairs"
+  ],
+  "maxTunnelM": 120,
+  "mergeM": 15,
+  "snapM": 4,
+  "dupM": 25,
+  "minLoopM": 40,
+  "spurM": 30,
+  "smoothM": 35,
+  "widths": {
+    "primary": 12,
+    "secondary": 10,
+    "tertiary": 8.5,
+    "residential": 7,
+    "alley": 4.5,
+    "path": 3.2,
+    "plaza": 6
+  },
+  "waterLevelM": 0,
+  "pools": [],
+  "groundCellM": 24,
+  "groundMarginM": 1200,
+  "groundFile": "routes/cities/outwest-ground.grid.bin.gz",
+  "start": {
+    "lat": 37.0475,
+    "lon": -112.5263,
+    "note": "Kanab, Center Street at Main Street (US-89)"
+  },
+  "connectors": [],
+  "connectorM": 180,
+  "maxGradePct": 30,
+  "maxAvgGradePct": 34,
+  "bridgeClearM": 11,
+  "bridgeRampPct": 6,
+  "riverFloorM": 2.5,
+  "riversideM": 25,
+  "denseM": 40,
+  "removeAlleys": true,
+  "overpassClearM": 4.5,
+  "connectMaxM": 350,
+  "connectSnapM": 8,
+  "connectMaxGradePct": 12,
+  "parallelM": 30,
+  "parallelMinM": 60,
+  "smoothMaxShiftM": 8,
+  "smoothPasses": 8,
+  "junctionEaseM": 30,
+  "routeKeepM": 18,
+  "routeLinkMaxM": 50,
+  "effects": {
+    "sky": {
+      "clouds": 0.35,
+      "airDensity": 0.00028,
+      "airFalloff": 0.002631578947368421,
+      "airBaseM": 1450,
+      "shafts": 0.75
+    },
+    "atmosphere": {},
+    "grade": {
+      "saturation": 1.17,
+      "contrast": 0.2,
+      "warm": 0.65,
+      "lift": 0.012,
+      "shadows": [
+        0.93,
+        0.94,
+        1.06
+      ],
+      "highlights": [
+        1.05,
+        1.0,
+        0.92
+      ],
+      "split": 0.45,
+      "sun": 1.15,
+      "sky": 0.85
+    }
+  },
+  "files": {
+    "ground": "routes/cities/outwest-ground.grid.bin.gz",
+    "heroes": "routes/cities/outwest-heroes.json",
+    "cityData": "routes/cities/outwest-city.json",
+    "dressing": "routes/cities/outwest-dressing.json"
+  },
+  "mapLabels": [
+    [
+      "Kanab",
+      37.0475,
+      -112.5263,
+      1
+    ],
+    [
+      "Kanab Creek Canyon",
+      37.14,
+      -112.57,
+      1
+    ],
+    [
+      "Coral Pink Sand Dunes",
+      37.035,
+      -112.73,
+      1
+    ],
+    [
+      "Johnson Canyon",
+      37.12,
+      -112.4,
+      2
+    ],
+    [
+      "Fredonia",
+      36.945,
+      -112.526,
+      2
+    ]
+  ],
+  "landCover": "worldcover",
+  "landM": 10,
+  "cityUnit": 8e-06,
+  "sandAreas": [
+    [
+      37.032,
+      -112.728,
+      1700
+    ],
+    [
+      37.045,
+      -112.705,
+      900
+    ]
+  ],
+  "nameFromRef": true,
+  "buildSteps": [
+    "tools/outwest_heroes.py",
+    "tools/outwest_warp.py"
+  ],
+  "surfaceByName": {
+    "Eight Mile Gap Road": "gravel",
+    "Old US Highway 89": "gravel",
+    "Hog Canyon Road": "gravel",
+    "Monument Road": "gravel"
+  },
+  "warp": {
+    "note": "user, 26 Nov 2026: the empty middles cut out of the corridors (option C), Kanab shrunk to 2.5 km; plan: Project doc claude/out-west-squeeze-plan.md; tools/citylib/warp.py",
+    "center": [
+      37.0475,
+      -112.5263
+    ],
+    "captureM": 3000,
+    "blendM": 350,
+    "captureByLine": {
+      "US-89 east to Johnson Canyon": 6500,
+      "Johnson Canyon": 3000
+    },
+    "trimLines": {
+      "Johnson Canyon": 4.6
+    },
+    "cuts": [
+      {
+        "line": "US-89 Kanab Creek Canyon climb",
+        "fromKm": 2.0,
+        "toKm": 6.0,
+        "note": "the valley floor north of town (near level)"
+      },
+      {
+        "line": "US-89 Kanab Creek Canyon climb",
+        "fromKm": 12.0,
+        "toKm": 17.0,
+        "note": "the canyon climb above Hancock Road (user: the climb may shrink)"
+      },
+      {
+        "line": "Hancock Road to the Coral Pink Sand Dunes",
+        "fromKm": 1.0,
+        "toKm": 7.0,
+        "note": "the bench between US 89 and the Arch Garden"
+      },
+      {
+        "line": "US-89 east to Johnson Canyon",
+        "fromKm": 0.8,
+        "toKm": 4.2,
+        "note": "between town and Butte Avenue"
+      }
+    ]
   }
- },
- "files": {
-  "ground": "routes/cities/outwest-ground.grid.bin.gz",
-  "heroes": "routes/cities/outwest-heroes.json",
-  "cityData": "routes/cities/outwest-city.json",
-  "dressing": "routes/cities/outwest-dressing.json"
- },
- "mapLabels": [
-  [
-   "Kanab",
-   37.0475,
-   -112.5263,
-   1
-  ],
-  [
-   "Kanab Creek Canyon",
-   37.14,
-   -112.57,
-   1
-  ],
-  [
-   "Coral Pink Sand Dunes",
-   37.035,
-   -112.73,
-   1
-  ],
-  [
-   "Johnson Canyon",
-   37.12,
-   -112.4,
-   2
-  ],
-  [
-   "Fredonia",
-   36.945,
-   -112.526,
-   2
-  ]
- ],
- "landCover": "worldcover",
- "landM": 10,
- "cityUnit": 8e-06,
- "sandAreas": [
-  [
-   37.032,
-   -112.728,
-   1700
-  ],
-  [
-   37.045,
-   -112.705,
-   900
-  ]
- ],
- "nameFromRef": true,
- "buildSteps": [
-  "tools/outwest_heroes.py"
- ],
- "surfaceByName": {
-  "Eight Mile Gap Road": "gravel",
-  "Old US Highway 89": "gravel",
-  "Hog Canyon Road": "gravel",
-  "Monument Road": "gravel"
- }
 }

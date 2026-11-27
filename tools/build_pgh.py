@@ -156,7 +156,7 @@ class PolygonArea:
     def inside(self, la, lo): return self.dist(la, lo, 1.0) <= 0.0
 
 
-def shape_of(cfg, grow=0.0):
+def shape_of(cfg, grow=0.0, real=False):
     """The area's ShapeArea when it has corridor lines (else None: a plain circle)."""
     A = cfg.get('area', {})
     if A.get('polygon'):
@@ -164,6 +164,7 @@ def shape_of(cfg, grow=0.0):
         return PolygonArea(poly, grow, A.get('fetchM', 0))
     if not A.get('lines'): return None
     lines = json.load(open(os.path.join(ROOT, 'tools', 'city', A['lines'])))
+    if WARP and not real: lines = {'lines': WARP.area_lines()}
     lines = [ln['pts'] if isinstance(ln, dict) else ln for ln in (lines['lines'] if isinstance(lines, dict) else lines)]
     circles = [tuple(A['circle'])] if A.get('circle') else []
     return ShapeArea(circles, lines, A.get('corridorM', 800), grow)
@@ -201,6 +202,7 @@ def load_osm(cfg, cor):
     os.makedirs(folder, exist_ok=True)
     dx, dy = cfg['osmTile']
     w0, s0 = cfg['osmOrigin']
+    if WARP: cor = shape_of(cfg, cfg['area'].get('marginM', 0), real=True)   # (the tiles: where the real roads are)
     pts = cor.pts_all
     la0, la1 = min(p[0] for p in pts), max(p[0] for p in pts)
     lo0, lo1 = min(p[1] for p in pts), max(p[1] for p in pts)
@@ -227,6 +229,8 @@ def load_osm(cfg, cor):
                 # (an old rail bed is never ridden on its own — only where a Pittsburgh route rode it, as a trail)
                 ways[wy.get('id')] = ([x.get('ref') for x in wy.iter('nd')], dict(t, highway='rail_bed'))
     print(f'  OSM: {len(nodes)} nodes, {len(ways)} highway ways')
+    if WARP:
+        nodes, ways = WARP.osm_ways(nodes, ways)
     return nodes, ways
 
 
@@ -279,6 +283,16 @@ def elevation(lat, lon):
     ax, ay = fx - .5 - x0, fy - .5 - y0
     return (dem_px(x0, y0) * (1 - ax) * (1 - ay) + dem_px(x0 + 1, y0) * ax * (1 - ay)
             + dem_px(x0, y0 + 1) * (1 - ax) * ay + dem_px(x0 + 1, y0 + 1) * ax * ay)
+
+
+# (Out West, user 26 Nov 2026: a map's build-time warp — the empty middles of its corridors cut out, tools/citylib/warp.py:
+#  every height comes from the warped ground; the OSM nodes, the area's lines and the labels are moved)
+sys.path.insert(0, os.path.join(ROOT, 'tools'))
+from citylib import warp as _warp
+WARP = _warp.load(CITY)
+if WARP:
+    _real_elevation = elevation
+    def elevation(lat, lon): return WARP.elevation(lat, lon)
 
 
 # ------------------------------------------------------------------ the graph
@@ -371,6 +385,7 @@ def build(cfg):
     global CORRIDOR
     if cfg.get('area', {}).get('keepCorridorRoads') and cfg['area'].get('lines'):
         src = json.load(open(os.path.join(ROOT, 'tools', 'city', cfg['area']['lines'])))
+        if WARP: src = {'lines': WARP.area_lines()}
         CORRIDOR = RouteLines([{'line': l['pts']} for l in src['lines']], cfg['area'].get('keepCorridorM', 300))
         print(f'  corridor roads kept out-and-back along {CORRIDOR.n} lines')
     kept_for_routes = 0
@@ -1025,6 +1040,10 @@ def write(cfg, E, jpos, jh, cor):
     files = cfg.get('files') or {'map': 'routes/cities/pittsburgh-map.json', 'ground': 'routes/cities/pgh-ground.grid.bin.gz', 'shore': 'routes/cities/pgh-shore.json', 'dressing': 'routes/cities/pgh-dressing.json',
              'heroes': 'routes/cities/pgh-heroes.json', 'bridges': 'routes/cities/pgh-bridges.json', 'cityData': 'routes/cities/pgh-city.json'}
     labels = cfg.get('mapLabels') or PGH_MAP_LABELS
+    start = cfg.get('start')
+    if WARP:
+        labels = [[t, *WARP.fwd_any(la, lo), r] for t, la, lo, r in labels]
+        if start: la_, lo_ = WARP.fwd_any(start['lat'], start['lon']); start = {**start, 'lat': round(la_, 6), 'lon': round(lo_, 6)}
     out = {'format': 'bikefree-graph-1', **({'profile': cfg['profile']} if cfg.get('profile') else {}), 'id': CITY, 'name': cfg.get('name', 'PGH'), 'city': cfg.get('cityName', 'Pittsburgh, PA'),
            'attribution': 'Map data © OpenStreetMap contributors (ODbL); elevation: AWS Terrain Tiles (USGS 3DEP)',
            'origin': {'lat': round(lat0, 6), 'lon': round(lon0, 6)}, 'unit': {'latlon': 1e-6, 'ele': 0.1},
@@ -1032,7 +1051,7 @@ def write(cfg, E, jpos, jh, cor):
            # the graphics effects the map switches on (js/world/toolbox/effects)
            **({'effects': cfg['effects']} if cfg.get('effects') else {}),
            # the card's map (js/app.js): a few neighbourhoods named, no landmark dots (user, 21 Nov: "greatly simplify")
-           'mapLabels': [{'text': t, 'lat': la, 'lon': lo, 'kind': 'area', 'rank': r} for t, la, lo, r in labels], 'pools': cfg.get('pools', []), 'start': cfg.get('start'),
+           'mapLabels': [{'text': t, 'lat': la, 'lon': lo, 'kind': 'area', 'rank': r} for t, la, lo, r in labels], 'pools': cfg.get('pools', []), 'start': start,
            'nodes': nodes_out, 'edges': edges_out}
     path = os.path.join(ROOT, 'routes', 'cities', f'{CITY}.json')
     open(path, 'w').write(json.dumps(out, separators=(',', ':')))
