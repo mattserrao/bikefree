@@ -16,7 +16,7 @@ const DEFAULT = 'vec3 CustomToneMapping( vec3 color ) { return color; }';
 const f = (v) => Number(v).toFixed(4);
 
 /** The grade's GLSL (a CustomToneMapping that runs ACES first). */
-export function gradeChunk({ saturation = 1.15, contrast = .16, warm = .4, lift = .015, shadows = null, highlights = null, split = .5 } = {}) {
+function gradeChunk({ saturation = 1.15, contrast = .16, warm = .4, lift = .015, shadows = null, highlights = null, split = .5 } = {}) {
   const v3 = (a) => `vec3( ${a.map(f).join(', ')} )`;
   const tone = shadows || highlights ? `{ float sl = smoothstep( .0, ${f(split)}, l ), sh = 1. - sl;
     g *= mix( vec3( 1. ), ${v3(shadows || [1, 1, 1])}, sh * .9 ) * mix( vec3( 1. ), ${v3(highlights || [1, 1, 1])}, sl * smoothstep( ${f(split)}, 1., l + .3 ) ); }` : '';

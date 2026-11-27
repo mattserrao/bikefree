@@ -3,7 +3,7 @@
 // the two inclines up Mount Washington, barges, the riverboat, motorboats and kayaks, and birds.
 // Agents live near the camera and are recycled as you ride; all draw calls are instanced. People, cyclists, dogs,
 // strollers, cars and buses come from the figures kit (life/figures): soft cartoon models, baked walk cycles.
-import { ghostAt, offStreetAt } from '../../ghost.js';
+import { ghostAt, offStreetAt } from '../core/ghost.js';
 import * as THREE from '../../../../vendor/three.js';
 import { Crowd, CLIP, FIT, randomLook, dogLook, clipRate, PALETTES } from '../life/figures/people.js';
 import { vehicleMesh, vehicleMaterial, setPaint, setMove } from '../life/figures/vehicles.js';
@@ -12,8 +12,9 @@ import { drain, due, each } from '../core/jobs.js';   // [F30] built as a job (i
 import { handOffLife } from './life-handoff.js';   // [F31] life carried across an area swap
 import { LAND } from './landscape.js';
 import { nightGlowShader } from '../materials/night-glow.js';
-import { ROAD_WIDTH, LANE_OFFSET, PACER_LANE, ROAD_LIFT, routePoint, leanTarget, stepLean } from '../../pose.js';
+import { ROAD_WIDTH, LANE_OFFSET, PACER_LANE, ROAD_LIFT, routePoint, leanTarget, stepLean } from '../core/road-frame.js';
 import { powerRequired } from '../../../physics.js';
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 // car models by share (the city's mix)
@@ -21,7 +22,7 @@ const CAR_MIX = [['sedan', .34], ['hatch', .2], ['suv', .22], ['pickup', .07], [
 // [6.10] people and traffic about half what they were (low 70 / 40, balanced 160 / 85, high 260 / 140; buses
 // max(4, cars / 12) → max(2, cars / 12); 4 oncoming cars → 2); `cyclists` ride the side streets and trails as before,
 // `routeRiders` ride the route's own road with you (ROUTE_RIDE below)
-export const COUNTS = { low: { people: 35, cars: 20, cyclists: 6, routeRiders: 5 }, balanced: { people: 80, cars: 42, cyclists: 12, routeRiders: 8 }, high: { people: 130, cars: 70, cyclists: 18, routeRiders: 10 } };
+const COUNTS = { low: { people: 35, cars: 20, cyclists: 6, routeRiders: 5 }, balanced: { people: 80, cars: 42, cyclists: 12, routeRiders: 8 }, high: { people: 130, cars: 70, cyclists: 18, routeRiders: 10 } };
 const ONCOMING = 2;
 export const MOVING_TRAFFIC = false;   // (cars and buses driving the streets: off — parked cars only)
 // [6.10] riders on the route with you (_updateRouteRiders): their lanes (m right of the centre line, riding their way:
@@ -31,7 +32,7 @@ export const MOVING_TRAFFIC = false;   // (cars and buses driving the streets: o
 // their way to a pass; slower ones start `aheadMin`–`aheadMax` m ahead (out of sight), faster ones `behindMin`–`behindMax`
 // m behind; their share slower / faster than you (`unseen`: how far that may go while out of sight: more than `unseenM` m
 // behind or ahead; and at least `minDv` m/s); your speed taken as at least `minRef` m/s, smoothed over `refTau` s
-export const ROUTE_RIDE = { lane: 2.8, edge: 3.15, pass: .3, passWide: -.75, clear: .95, clearNear: 1.25, latRate: .7, every: 80, soonest: 15, horizon: 600, behindLead: 75, pending: 3,
+const ROUTE_RIDE = { lane: 2.8, edge: 3.15, pass: .3, passWide: -.75, clear: .95, clearNear: 1.25, latRate: .7, every: 80, soonest: 15, horizon: 600, behindLead: 75, pending: 3,
   aheadMin: 175, aheadMax: 650, behindMin: 14, behindMax: 260, slower: [.06, .2], faster: [.06, .2], unseen: [.5, .6], unseenM: [15, 110], minDv: .5, endM: 60, minRef: 1, refTau: 3 };
 const CARS = ['#c0392b', '#1f3a5f', '#ecf0f1', '#2c2c2c', '#7f8c8d', '#bdc3c7', '#1e8449', '#f4d03f', '#5b2c6f', '#a04000', '#ffffff', '#566573'];
 
@@ -41,16 +42,16 @@ function animatedMaterial(life, kind) {
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = life.city.uniforms.uTime;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>
+      .replace(anchor('#include <common>'), `#include <common>
         uniform float uTime; attribute float aPart; attribute vec3 aMask; attribute vec3 iA; attribute vec3 iB; attribute vec3 iC; attribute vec2 iAnim;
         varying float vLight;`)
-      .replace('#include <begin_vertex>', `
+      .replace(anchor('#include <begin_vertex>'), `
         vec3 transformed = vec3(position);`)
-      .replace('#include <color_vertex>', `#include <color_vertex>
+      .replace(anchor('#include <color_vertex>'), `#include <color_vertex>
         vColor.rgb = vColor.rgb * clamp(1. - aMask.x - aMask.y - aMask.z, 0., 1.) + iA * aMask.x + iB * aMask.y + iC * aMask.z;
         vLight = aPart;`);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vLight;');
+      .replace(anchor('#include <common>'), '#include <common>\nvarying float vLight;');
     nightGlowShader(shader, life.city.night, `
         if (vLight > 9.5 && vLight < 10.5) totalEmissiveRadiance += vec3(1., .93, .78) * uNight * 4.;
         if (vLight > 10.5 && vLight < 11.5) totalEmissiveRadiance += vec3(1., .08, .05) * uNight * 2.5;

@@ -20,14 +20,14 @@
 // crowd's far figures, drawn only within ~1.5 km; the near rows and the players only within ~300 m).
 import * as THREE from '../../../../vendor/three.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
-import { routePoint } from '../../pose.js';
+import { routePoint } from '../core/road-frame.js';
 import { randomSequence } from '../core/random.js';
 import { figureMaterial, staticCrowdMesh, randomLook, CLIP, Crowd, clipRate } from '../life/figures/people.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
-export const DECK = { width: 7, lift: .1, slab: .7, rail: 1.15 };   // the ridden deck: as wide as a road, its top just under the rider's wheels
+const DECK = { width: 7, lift: .1, slab: .7, rail: 1.15 };   // the ridden deck: as wide as a road, its top just under the rider's wheels
 const R_ = 6371008.8 * DEG;
 
 // ---------------------------------------------------------------- geometry helpers (pure)
@@ -40,7 +40,7 @@ const inPoly = (ring, x, z) => {
   return inside;
 };
 /** Distance along the ray (o + t·d) to the first crossing of a closed ring beyond tMin, or Infinity. */
-export function rayRing(ring, ox, oz, dx, dz, tMin = 0) {
+function rayRing(ring, ox, oz, dx, dz, tMin = 0) {
   let best = Infinity;
   for (let i = 0; i < ring.length; i++) {
     const a = ring[i], b = ring[(i + 1) % ring.length], ex = b.x - a.x, ez = b.z - a.z;
@@ -53,7 +53,7 @@ export function rayRing(ring, ox, oz, dx, dz, tMin = 0) {
 }
 
 /** The kit's frame (its `origin`, x east, z south) → this scene's local frame. */
-export function kitToLocal(kit, proj) {
+function kitToLocal(kit, proj) {
   const o = kit.origin, kx = R_ * Math.cos(o.lat * DEG);
   const a = proj.toLocal(o.lat, o.lon), b = proj.toLocal(o.lat, o.lon + 100 / kx), c = proj.toLocal(o.lat - 100 / R_, o.lon);
   const ax = (b.x - a.x) / 100, az = (b.z - a.z) / 100, bx = (c.x - a.x) / 100, bz = (c.z - a.z) / 100;
@@ -65,7 +65,7 @@ export function kitToLocal(kit, proj) {
  * inside it the stands are laid out round. Baseball: the fair territory to the fence and the foul ground along the
  * lines and behind home. Football: the field and its sidelines, a rounded rectangle.
  */
-export function fieldPlan(st, L) {
+function fieldPlan(st, L) {
   const f = st.field;
   if (st.sport === 'baseball') {
     const H = L(...f.home), c = L(f.home[0] + f.cf[0] * 100, f.home[1] + f.cf[1] * 100);
@@ -139,7 +139,7 @@ const SHELLS = new Map();
 export const NEAR_M = 300, CROWD_FAR_M = 1500;   // the near rows and the players within NEAR_M of the stands; the crowd within CROWD_FAR_M
 
 /** The stadiums this area's own line rides through (its `routeDecks`): those are built in full, the rest as far shells. */
-export function riddenStadiums(data) { return new Set((data?.routeDecks || []).map((d) => d.name)); }
+function riddenStadiums(data) { return new Set((data?.routeDecks || []).map((d) => d.name)); }
 
 export function buildStadiumKit(city) {
   const kit = city.route.scene?.stadiumKit;
@@ -248,8 +248,6 @@ export function buildStadiumKit(city) {
   return out;
 }
 
-/** Far shells cached now (tests). */
-export function stadiumShellCount() { return SHELLS.size; }
 
 // ---------------------------------------------------------------- the stands
 /**

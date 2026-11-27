@@ -11,7 +11,7 @@ const _sd = new THREE.Vector3();
 const CONIFER = /pine|hemlock|spruce|arborvitae/;
 
 /** The world's crowns near (x, z) for the canopy map: the graph city's tile lists, sized from its tree kit. */
-export function graphCanopyTrees(world) {
+function graphCanopyTrees(world) {
   return (x, z, R) => {
     const city = world.city, kit = city?.treeKit?.species, out = [];
     if (!city?.tiles || !kit) return out;

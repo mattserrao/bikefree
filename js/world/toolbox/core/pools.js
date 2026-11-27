@@ -15,7 +15,7 @@ export function packMatrices(list) {
 }
 
 /** One mesh for every ground patch. All patches share a topology, so each gets a fixed slot. */
-export class GroundPool {
+class GroundPool {
   /**
    * @param {THREE.Object3D} parent
    * @param {THREE.Material} material

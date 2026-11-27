@@ -12,6 +12,7 @@
 import * as THREE from '../../../../../vendor/three.js';
 import { FRAMES, BONES, CLIP_META, CLIP_DATA } from './clips.js';
 import { PERSON, BIKE, HOLD, FISH_HAND } from './rig.js';
+import { anchor } from '../../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 export const CLIP = Object.fromEntries(CLIP_META.map((c, i) => [c.name, i]));
 export { CLIP_META };
@@ -19,7 +20,7 @@ export { CLIP_META };
 export const FIT = { SLEEVES: 1, LONG_PANTS: 2, SKIRT: 4, LONG_HAIR: 8, CAP: 16, PACK: 32, PROP: 64, HELMET: 128,
   JACKET: 256, HOOD: 512, BEANIE: 1024, ROD: 2048, STYLE: 4096 };
 // hair styles (three bits at FIT.STYLE: look.bits += style × FIT.STYLE); long hair stays its own bit
-export const HAIR_STYLE = { SHORT: 0, PONYTAIL: 1, BUN: 2, CURLY: 3, BUZZ: 4 };
+const HAIR_STYLE = { SHORT: 0, PONYTAIL: 1, BUN: 2, CURLY: 3, BUZZ: 4 };
 // vertex selectors (aSkin.w): what a vertex belongs to, for the outfit
 const SEL = { ALWAYS: 0, FOREARM: 1, SHIN: 2, SKIRT: 3, THIGH: 4, LONG_HAIR: 5, CAP: 6, PACK: 7, PROP: 8, HELMET: 9, HAIR: 10,
   PONYTAIL: 11, BUN: 12, CURLY: 13, JACKET: 14, HOOD: 15, BEANIE: 16, ROD: 17 };
@@ -55,7 +56,7 @@ function clipFloats() {
   return (CLIP_FLOATS = f);
 }
 /** The clips as a float texture: row = clip × FRAMES + frame, two texels per bone (quaternion, translation). */
-export function clipTexture() {
+function clipTexture() {
   if (CLIP_TEXTURE) return CLIP_TEXTURE;
   const f = clipFloats(), rows = CLIP_META.length * FRAMES, data = new Float32Array(rows * BONES * 2 * 4);
   for (let r = 0; r < rows; r++) for (let b = 0; b < BONES; b++) {
@@ -387,7 +388,7 @@ export function dogGeometry() {
 }
 
 /** A stroller pushed by a walker (rest frame of the walker: the handle at HOLD.stroller.handle). iA fabric. */
-export function strollerGeometry() {
+function strollerGeometry() {
   const M = new FigBuilder(), [, hy, hz] = HOLD.stroller.handle;
   const fab = () => M.set({ b0: 0, b1: 0, w: 1, mask: SHIRT, sel: 0, color: '#ffffff' });
   const fix = (c) => M.set({ b0: 0, b1: 0, w: 1, mask: FIXED, sel: 0, color: c });
@@ -458,17 +459,17 @@ const GLSL_COLOR = `
 
 function patch(shader, uniforms, depth) {
   Object.assign(shader.uniforms, uniforms);
-  shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>\n${GLSL_COMMON}`);
+  shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), `#include <common>\n${GLSL_COMMON}`);
   if (depth) {
-    shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `figSkin(position, vec3(0., 1., 0.));\nvec3 transformed = figHide > .5 ? vec3(0.) : figP;`);
+    shader.vertexShader = shader.vertexShader.replace(anchor('#include <begin_vertex>'), `figSkin(position, vec3(0., 1., 0.));\nvec3 transformed = figHide > .5 ? vec3(0.) : figP;`);
   } else {
     shader.vertexShader = shader.vertexShader
-      .replace('#include <beginnormal_vertex>', 'figSkin(position, normal);\nvec3 objectNormal = figN;')
-      .replace('#include <begin_vertex>', 'vec3 transformed = figHide > .5 ? vec3(0.) : figP;')
-      .replace('#include <color_vertex>', `#include <color_vertex>\n${GLSL_COLOR}`);
+      .replace(anchor('#include <beginnormal_vertex>'), 'figSkin(position, normal);\nvec3 objectNormal = figN;')
+      .replace(anchor('#include <begin_vertex>'), 'vec3 transformed = figHide > .5 ? vec3(0.) : figP;')
+      .replace(anchor('#include <color_vertex>'), `#include <color_vertex>\n${GLSL_COLOR}`);
     // a soft rim of sky light on the edges turned from the camera: reads the shape (shoulders, head, limbs) against
     // the background at no geometry cost — a few instructions a fragment
-    shader.fragmentShader = shader.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+    shader.fragmentShader = shader.fragmentShader.replace(anchor('#include <emissivemap_fragment>'), `#include <emissivemap_fragment>
       { float rim = 1. - max(dot(normalize(normal), normalize(vViewPosition)), 0.); totalEmissiveRadiance += diffuseColor.rgb * .35 * rim * rim; }`);
   }
 }
@@ -494,7 +495,7 @@ export function figureMaterial(uTime, { near = null, mid = null, nearMode = 0 } 
 }
 
 /** An instanced mesh of figures with the per-instance attributes set up (count starts at 0). */
-export function figureMesh(geometry, material, capacity, name, { shadows = true } = {}) {
+function figureMesh(geometry, material, capacity, name, { shadows = true } = {}) {
   const g = geometry.clone();
   for (const [k, n] of [['iA', 3], ['iB', 3], ['iC', 3], ['iAnim', 4], ['iLook', 4]]) {
     const a = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, capacity) * n), n); a.setUsage(THREE.DynamicDrawUsage); g.setAttribute(k, a);

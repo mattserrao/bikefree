@@ -5,7 +5,7 @@
 // (tiles, mats, cut, ground, shore, dressing, city…) through `this` — the class split over two files, not yet a
 // builder with its own interface.
 import * as THREE from '../../../vendor/three.js';
-import { ROAD_LIFT } from '../pose.js';
+import { ROAD_LIFT } from '../toolbox/core/road-frame.js';   // [review 27 Nov] the toolbox's road frame (pose.js re-exports it)
 import { canalAt } from '../toolbox/city/cny-landmarks.js';
 import { due } from '../toolbox/core/jobs.js';
 import { deckSpans } from './curves.js';

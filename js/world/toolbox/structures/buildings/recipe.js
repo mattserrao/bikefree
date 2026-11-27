@@ -422,7 +422,7 @@ function cleanShape(b, dec, area, index, rand) {
 }
 
 /** Which wall of the main block faces the road: 0 (−v long side), 1 (+u end), 2 (+v long side), 3 (−u end). */
-export function frontWall(r, to, preferEnd = false, party = null) {
+function frontWall(r, to, preferEnd = false, party = null) {
   const dots = [-(r.vx * to.x + r.vz * to.z), r.ux * to.x + r.uz * to.z, r.vx * to.x + r.vz * to.z, -(r.ux * to.x + r.uz * to.z)];
   if (party) for (let i = 0; i < 4; i++) if (party[i]) dots[i] = -9;   // never against a neighbour
   if (preferEnd && !(party && (party[1] || party[3]))) return dots[1] > dots[3] ? 1 : 3;

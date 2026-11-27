@@ -112,7 +112,7 @@ function nearestOnLine(points, x, z) {
 }
 
 /** Lakes baked by tools/build_terrain_grid.py in "lakes" mode: a 20 m raster of lake ids, each lake at its own level. */
-export function decodeLakes(data, T) {
+function decodeLakes(data, T) {
   const L = data.lakes;
   if (!L) return null;
   const ids = new Uint8Array(L.nx * L.ny);

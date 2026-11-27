@@ -12,18 +12,19 @@ import { litMaterial } from '../materials/lit.js';
 import { hash } from '../core/mesh-builder.js';
 import { due } from '../core/jobs.js';
 import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 const vn = (x, seed) => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f), a = hash(i * 127.1 + seed * 311.7), b = hash((i + 1) * 127.1 + seed * 311.7); return a + (b - a) * u; };
 
 function woodMaterial() {
   const m = litMaterial({ vertexColors: true });
   m.onBeforeCompile = (shader) => {
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aGr; varying vec2 vGr; varying vec3 vWW;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGr = aGr; vWW = (modelMatrix * vec4(transformed, 1.)).xyz;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>
+    shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), '#include <common>\nattribute vec2 aGr; varying vec2 vGr; varying vec3 vWW;')
+      .replace(anchor('#include <begin_vertex>'), '#include <begin_vertex>\nvGr = aGr; vWW = (modelMatrix * vec4(transformed, 1.)).xyz;');
+    shader.fragmentShader = shader.fragmentShader.replace(anchor('#include <common>'), `#include <common>
       varying vec2 vGr; varying vec3 vWW;
 ${HASH_GLSL}`)
-      .replace('#include <color_fragment>', `#include <color_fragment>
+      .replace(anchor('#include <color_fragment>'), `#include <color_fragment>
         {
           // aGr: x metres along the piece's grain, y across it (round the rail or post); the grain's long streaks,
           // a check (split) here and there, silver weathering on top, brown in the sheltered underside

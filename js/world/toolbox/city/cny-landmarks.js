@@ -15,6 +15,7 @@ import * as THREE from '../../../../vendor/three.js';
 import { SKY_REFLECT } from '../atmosphere/sky-dome.js';
 import { V, centroid, scaleRing, orient, prism, cap, block, frameOf, makeFrame, lathe, gable, faceOut } from './hero-geom.js';
 import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 /**
  * The canal's channel, for the planters (graph-city: no tree, house or brush in it; scrub on its banks): its samples
@@ -56,12 +57,12 @@ export function canalWaterMaterial(uTime) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, { uHor: SKY_REFLECT.horizon, uZen: SKY_REFLECT.zenith, uSunC: SKY_REFLECT.sun, uSunD: SKY_REFLECT.sunDir, uTime });
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWW;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWW = (modelMatrix * vec4(transformed, 1.)).xyz;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>
+    shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), '#include <common>\nvarying vec3 vWW;')
+      .replace(anchor('#include <begin_vertex>'), '#include <begin_vertex>\nvWW = (modelMatrix * vec4(transformed, 1.)).xyz;');
+    shader.fragmentShader = shader.fragmentShader.replace(anchor('#include <common>'), `#include <common>
         varying vec3 vWW; uniform vec3 uHor, uZen, uSunC, uSunD; uniform float uTime;
 ${HASH_GLSL}`)
-      .replace('#include <opaque_fragment>', `
+      .replace(anchor('#include <opaque_fragment>'), `
         {
           vec3 V = normalize(cameraPosition - vWW);
           // ripples: a slow wobble in the surface's normal

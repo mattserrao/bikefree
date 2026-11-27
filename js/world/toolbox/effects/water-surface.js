@@ -2,6 +2,7 @@
 // in the water at grazing angles (Fresnel) and the sun's glitter path — on the world's own water material, so every
 // water plane (the main level and each pool) gets it. Options: { ripple: 1 (strength), glint: 1, sky: 0.4 (the most of the sky it shows, at grazing angles) }.
 import * as THREE from '../../../../vendor/three.js';
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 export const waterSurface = {
   install(world, opts = {}) {
@@ -48,17 +49,17 @@ function install(m, H) {
     prev?.call(m, shader, renderer);
     Object.assign(shader.uniforms, H.U);
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 bfWaterP;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\nbfWaterP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      .replace(anchor('#include <common>'), '#include <common>\nvarying vec3 bfWaterP;')
+      .replace(anchor('#include <project_vertex>'), '#include <project_vertex>\nbfWaterP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>
+      .replace(anchor('#include <common>'), `#include <common>
 varying vec3 bfWaterP;
 uniform float uTime, uRipple, uGlint, uSkyMix;
 uniform vec3 uSunDir, uSunCol, uSky;
 uniform sampler2D tReflect; uniform mat4 uReflectMat; uniform float uReflectOn, uWaterOn;
 // a wave train's slope: amplitude a, wave number k (rad/m), along d, at speed c (m/s)
 vec2 bfWave(vec2 p, vec2 d, float k, float a, float c) { return d * (a * k * cos(dot(p, d) * k - uTime * c * k)); }`)
-      .replace('#include <opaque_fragment>', `if (uWaterOn > .5) {
+      .replace(anchor('#include <opaque_fragment>'), `if (uWaterOn > .5) {
 
   vec3 V = cameraPosition - bfWaterP; float dist = length(V); V /= dist;
   vec2 p = bfWaterP.xz;

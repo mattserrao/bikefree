@@ -1,6 +1,6 @@
 // Deterministic authored landscape. GPX controls the road; this is an artistic
 // coastal landform, not a replacement for surveyed terrain/elevation data.
-import { makeRouteIndex } from '../../geo.js';
+import { makeRouteIndex } from '../core/geo.js';
 import { smoothstep, ROAD_CORRIDOR_M } from '../core/random.js';
 
 export function makeCoastLandscape(config, proj, index, route) {

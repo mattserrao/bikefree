@@ -3,8 +3,8 @@
 // into the sidewalk builders, and the paint — crosswalks, stop lines, curb edges — into one merged mesh per chunk.
 import * as THREE from '../../../../vendor/three.js';
 import { streetPieces, LIFT_BLEND_M, junctionPaintJob, routeLine } from './junctions.js';
-import { drain, due } from '../core/jobs.js';   // [F30]
-import { ROAD_WIDTH } from '../../pose.js';
+import { due } from '../core/jobs.js';   // [F30]
+import { ROAD_WIDTH } from '../core/road-frame.js';
 import { cityStreets } from './landscape.js';
 
 /** A city landscape's junction plan (planned with its streets on first use; null when the scene doesn't opt in). */
@@ -52,10 +52,9 @@ const upNormal = (a, b, c) => {   // the face normal of a triangle (pointing up)
 /**
  * Build everything for a plan. `city`: the CityScene; `get(map, x, z)`: its per-chunk builder lookup; `roads`,
  * `walks`: its street and sidewalk builder maps; `liftOf(k)`: a street's ribbon lift. Junction surfaces, paint and
- * corner sidewalks join the street and sidewalk chunks (no extra draw calls); the route's overlay is one mesh.
+ * corner sidewalks join the street and sidewalk chunks (no extra draw calls); the route's overlay is one mesh. A job
+ * ([F30]: js/world/toolbox/core/jobs.js).
  */
-export function buildJunctionMeshes(...args) { return drain(buildJunctionMeshesJob(...args)); }
-/** buildJunctionMeshes as a job ([F30]: js/world/toolbox/core/jobs.js). */
 export function* buildJunctionMeshesJob(city, plan, { get, roads, walks, liftOf }) {
   const streets = city.streets, O = plan.options;
   const route = city.route, index = city.index;
@@ -176,7 +175,7 @@ export function cutRouteRibbon(mesh, plan, dist) {
  * it; the same texture, shade and normals as the junction surface around it) and the route's crosswalks. Drawn with
  * a stronger depth offset than the road so it always lies on top. Follows the road's curve (routeLine).
  */
-export function routeJunctionOverlay(route, index, plan, paint, streetMaterial) {
+function routeJunctionOverlay(route, index, plan, paint, streetMaterial) {
   if (!plan?.spans.length || !streetMaterial) return null;
   const RL = routeLine(route, index), D = RL.route.dist, total = RL.length;
   const pos = [], nor = [], uv = [], idx = [];

@@ -9,6 +9,7 @@
 import * as THREE from '../../../../vendor/three.js';
 import { litMaterial } from '../materials/lit.js';
 import { due } from '../core/jobs.js';
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 const hash = (x, z) => { const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return s - Math.floor(s); };
 
@@ -47,9 +48,9 @@ export const shoreline = {
       // the water band's edge laps: its alpha breathes along the shore
       m.onBeforeCompile = (s) => {
         s.uniforms.uTime = uTime;
-        s.vertexShader = s.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 bfShoreP;').replace('#include <project_vertex>', '#include <project_vertex>\nbfShoreP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-        s.fragmentShader = s.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 bfShoreP;\nuniform float uTime;')
-          .replace('#include <opaque_fragment>', 'diffuseColor.a *= 0.78 + 0.22 * sin(uTime * 1.3 + bfShoreP.x * 0.31 + bfShoreP.z * 0.23);\n#include <opaque_fragment>');
+        s.vertexShader = s.vertexShader.replace(anchor('#include <common>'), '#include <common>\nvarying vec3 bfShoreP;').replace(anchor('#include <project_vertex>'), '#include <project_vertex>\nbfShoreP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+        s.fragmentShader = s.fragmentShader.replace(anchor('#include <common>'), '#include <common>\nvarying vec3 bfShoreP;\nuniform float uTime;')
+          .replace(anchor('#include <opaque_fragment>'), 'diffuseColor.a *= 0.78 + 0.22 * sin(uTime * 1.3 + bfShoreP.x * 0.31 + bfShoreP.z * 0.23);\n#include <opaque_fragment>');
       };
       m.customProgramCacheKey = () => 'bf-shore-lap-1';
       return m;

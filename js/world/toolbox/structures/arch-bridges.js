@@ -6,7 +6,7 @@
 // reach the real ground. Built from instanced boxes so the whole set is a handful of draw calls.
 import * as THREE from '../../../../vendor/three.js';
 import { decorateSceneryMaterial } from '../materials/surfaces.js';
-import { ROAD_WIDTH } from '../../pose.js';
+import { ROAD_WIDTH } from '../core/road-frame.js';
 
 const DECK_HALF = ROAD_WIDTH / 2 + 1.7;   // road + walkway
 const RIB = 3.0;                           // ribs either side of the centre line

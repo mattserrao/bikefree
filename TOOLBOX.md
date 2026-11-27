@@ -5,6 +5,10 @@ the place's data (palette, species, distances, landmarks). Code is never written
 feature goes into the toolbox behind a scene field, so the next route can use it too.
 
 - **Code:** `js/world/toolbox/` (the kits) and `js/world/` (the engine that assembles a scene)
+- **The import rule** (27 Nov): a file under `js/world/toolbox/` imports only `js/world/toolbox/` and `vendor/`. What a kit
+  needs of the app's world lives in `toolbox/core/` (the road frame, the local frame, ghosts, road alignment), and the app's
+  files re-export it. `test/toolbox-boundary.test.mjs` fails on any other import; its allowlist names the four left, each
+  with its reason
 - **Scene fields:** `js/world/toolbox/scene-schema.js`, checked by `npm run lint:scenes`
 - **Models:** `tools/toolbox-gallery.html`, rendered headlessly by `npm run gallery`
 - **New route:** `npm run new-route -- <id> --preset <biome>`, starting from `routes/presets/`
@@ -43,7 +47,7 @@ CNY's and SKAN's rules won and became the defaults; the other maps pin what they
 | Building engine | `toolbox/structures/building-engine.js` | The front door for every building: `GENERATORS` (house engine, building kit, farm, city facades, footprints, settlement, named models), `MAP_KINDS` / `kindOfCode` (graph footprint codes), `buildBuilding()` (draws a planned building through its generator). |
 | Planting | `toolbox/vegetation/planting.js` | The one record every planner hands the tree engine (`treeRecord`, `recordsFromMatrices`, `plantTile`); `PLANNERS` lists rural, forest-edge, scatter and old-growth. |
 | Shared GLSL | `toolbox/materials/glsl-noise.js` | `NOISE_GLSL` (h21, vn, fbm) for every shader that needs value noise. `HASH_GLSL` (27 Nov: hw21, hw31, hw22, vn2, vn3): the sin-free hashes and value noise, guarded so one shader can include it twice. Never write `fract(sin(dot(p, k)) * 43758.5)` (it loses its bits for world-metre inputs on GPUs) or a private value noise; `npm test` (test/shader-noise.test.mjs) fails on both. |
-| Shader patches | `toolbox/core/shader-patch.js` | `patchShader(src, anchor, code, where)` (27 Nov): every onBeforeCompile patch at an `#include <…>` anchor. It throws when three's shader lacks the anchor, where a `String.replace` would drop the patch silently; test/shader-anchors.test.mjs runs the factories against `THREE.ShaderLib`. |
+| Shader patches | `toolbox/core/shader-patch.js` | `patchShader(src, anchor, code, where)` (27 Nov) and `anchor(text)`, its String.replace pattern: every onBeforeCompile patch at an `#include <…>` is `src.replace(anchor('#include <x>'), code)` — the same first, literal replacement, but it throws when three's shader lacks the anchor, where a plain `String.replace` drops the patch silently. `npm test` fails on a plain `.replace('#include <…>'` (test/shader-anchors.test.mjs), and test/shader-sources.test.mjs snapshots the generated source of 51 materials (after an intended shader change: `node test/shader-sources.mjs --write`). |
 | Night glow | `toolbox/materials/night-glow.js` | `withNightGlow(material, night, glsl, key, opts)` / `nightGlowShader(shader, night, glsl, opts)` (27 Nov): lamps, windows, lenses and signs that come up after dark (`uNight` + a term after the emissive map; `glow: 'float'` passes an `aGlow` attribute). Keep a distinct cache key per site. |
 
 `npm run guard` now covers the graph maps too (`GRAPH_SHOTS`: PGH, CNY, SKAN through `tools/snap_pgh.mjs --frozen`). Their tiles
@@ -103,7 +107,7 @@ js/world/                    engine: assembles a scene from the toolbox
   stylized-terrain.js        scene builder: ground patches, plant scatter, forest tiles, sea, lakes, clouds;
                              loads kits and packs and switches each toolbox part on from its scene field
   terrain.js                 streamed real horizon and wireframe terrain (AWS Terrain Tiles)
-  pose.js  rider.js  road-align.js  geo.js  terrain-data.js  perf.js
+  pose.js  rider.js  road-align.js  geo.js  terrain-data.js  perf.js   (pose, road-align, geo, ghost: re-exports of toolbox/core/)
 js/world/toolbox/
   scene-schema.js            every scene field, which module reads it, old-name mapping (normalizeScene)
   core/                      shared building blocks
@@ -127,6 +131,9 @@ js/world/toolbox/
 | `core/random.js` | `randomSequence(seed)`: seeded, so a scene builds the same every time. Never use `Math.random` for placement. Also `smoothstep`, `vnoise`/`vhash` (planting patterns), `ROAD_CORRIDOR_M`. |
 | `core/jobs.js` | Jobs: long builds as generators that pause at `due()` (`each`, `mapJob`, `mapGen`), run all at once (`drain`) or in frame slices (`runSlice(job, ms)`; `yield { wait: promise }` to wait). The same steps in the same order either way, so the result is the same: the city's areas are built this way on the ride (PLAN F30, `tools/area_build_check.mjs` proves it). |
 | `core/pools.js` | `InstancePool`, `GroundBlocks`, `packMatrices`: one instanced draw per plant kind per quarter around the camera. |
+| `core/road-frame.js` | The route's road frame (27 Nov, from `js/world/pose.js`, which re-exports it): `ROAD_WIDTH`, `ROAD_LIFT`, `LANE_OFFSET`, `PACER_LANE`, `routePoint(route, index, s)` (the centre line, on the curve when `roadAlign` asks), `riderPose` (the lane, the U-turn drift), `headingSpan`, the lean (`LEAN`, `pathCurvature`, `leanTarget`, `stepLean`, `leanAlong`), `wrapDist`. Use it to place anything by distance along the route. |
+| `core/geo.js` | `makeProjection(lat0, lon0)` (the local metre frame) and `makeRouteIndex(route, proj)` (the route's spatial index, with eased turns), from `js/world/geo.js` (which re-exports them and keeps the tile maths). |
+| `core/ghost.js`, `core/road-align.js` | Moved whole from `js/world/` (the old paths re-export them): a network tour's ghost, underground and deck stretches (`ghostMask`, `ghostAt`, `offStreetAt`…); the curved centre line, smooth turns, street profiles and junction heights (`curveXZ`, `denseRoad`, `alignStreetProfilesJob`…). |
 | `core/sound.js` | `worldSound`: a tiny Web Audio mixer for the world's ambience, all synthesised (no files): looping voices (`loop`, `noiseLoop`, `toneLoop`) and one-shots (`play`: chime, doors, brakes, depart); quiet, off with Settings → World sounds; call `touch()` each frame something plays (it fades out and suspends otherwise). The subway kit's `SubwaySound` is the first user. |
 
 ### Landscape: the ground (`"terrain"`)
@@ -173,6 +180,7 @@ js/world/toolbox/
 | Module | What it does |
 | --- | --- |
 | `vegetation/forest.js` | The `forest-edge` layout: a continuous canopy past a mown verge, in nested near ⊃ mid ⊃ far tiers so trees never jump. View windows (`windows`), clearings for sites and villages. It has two species planners: northeast lake forest (`species` weights) and mountain zones (`treelineM`, `divide`, `rich`). Mountain species come from data, `vegetation.zones`: bands by elevation with shady, sunny and wet mixes, alpine and broadleaf lists, and roles mapping the planner's needs (snag, log, krummholz…) to the pack's models. Without `zones` the Glacier defaults apply. |
+| `vegetation/impostor-material.js` | The tree engine's far impostor cards (27 Nov, out of tree-engine.js): `impostorMaterial(atlas, rows, W, H, engine)`, `ANGLES` photos per tree. |
 | `vegetation/tree-cards.js` | Far tree cards: camera-facing silhouettes that carry the forest past the real trees (Balanced and High). |
 | `vegetation/old-growth.js` | An old-growth hero area on a road-graph map (first: CNY's Camillus Forest Unique Area). It's driven by a data file from `tools/cny_forest.py` (boundary, trail edges, green tunnel, apple trees) and land codes 30–33 (old growth, woods, tall meadow, blowdown). It does placement for the tree engine: dominants on a jittered grid by stand, intermediates only where no dominant is near, saplings in the shade and a thicket in the blowdown, ~6 % snags, thick tree walls at meadow edges, and nothing leafy within ~9–10 m of the singletrack. It also draws a fine floor skirt along the trails (2 m cells, pit-and-mound relief), 3D fallen logs, nurse logs and tip-ups, a leaf layer overhead with gaps, god rays and sun pools, and tall swaying hay grass in the meadows with a mown slit. |
 | `vegetation/near-trunks.js` | Near 3D for 2D-card trees (first: Camillus Forest). A tree given `cut` keeps its card from the cut up; inside `NEAR_TRUNK` (55–60 m) a tapered, bark-textured tube on the tree's own skeleton stands below it, swapping with the card's trunk in complementary screen dither. Bark textures from `tools/make_bark.py`. Also `NearPlants` (ferns and herbs in 3D inside `NEAR_PLANT`, a negative `cut`) and the bark-textured root-flare foot (`flareGeometry`, `flareMaterial`). The cards' hero-woods colour grade is `tree-engine.js TREE_GRADE`. |
@@ -234,6 +242,7 @@ js/world/toolbox/
 | Module | What it does |
 | --- | --- |
 | `city/city.js` | The city scene (`brickStreets`: brick and sett streets from OSM, and steep residential streets, in brick) |
+| `city/materials.js` | Its materials (27 Nov, out of city.js): buildings with windows and the kit's facades (`cityBuildingMaterial`, `CITY_FACADE_GLSL`), streets and brick streets with the height-slot depth rule (`cityStreetMaterials`, `SLOT_BIAS_VERTEX`), night glows, rivers (`cityRiverMaterial`), lamps |
 | `city/landscape.js` `pondAt`, `city.js` `_pondsJob` | Hill water at its own level (PLAN 6.5): the city data's `ponds` (`tools/build_city.py`: flat water polygons more than `inlandWaterAboveM` over the rivers; land code 9) drawn as still lake water at each one's level, in a basin with a bank — a stone wall and coping for reservoirs, fountain basins and pools, a sloping earth bank for ponds; streets along one are kept 35 cm over its water. Streams that fall along a hollow stay park |
 | `city/street-kit.js` | Facades and furniture (`streetKit.zones`; a zone with `"sidewalks": false` is a park drive: no sidewalks or sidewalk grading along the route) |
 | `city/junctions.js`, `junction-mesh.js`, `road-meets.js` | Junctions and where roads meet |
@@ -302,7 +311,7 @@ Styles can be picked by map kind (`kinds`) instead of by stretch. **Added for ci
 
 1. **Opt-in by a scene field.** Add the field to `SCENE_FIELDS` in `scene-schema.js`, with its module, the keys inside it and a doc line. The linter and the gallery's field table pick it up from there.
 2. **Data in the scene, not the code.** Names, distances, coordinates and species weights all belong in the scene JSON. Defaults should be generic.
-3. **Build with `core/`.** Use `Builder` or `MeshBuilder` for geometry, `randomSequence(seed)` for anything random, and `roadFrame()` to place things by distance and side.
+3. **Build with `core/`.** Use `Builder` or `MeshBuilder` for geometry, `randomSequence(seed)` for anything random, and `roadFrame()` to place things by distance and side. Import only from the toolbox and `vendor/` (the import rule above): take the road frame from `core/road-frame.js`, not `js/world/pose.js`; a world hook (the rider model, physics) comes in through the host object.
 4. **Cheap by construction.**
    - Use instanced or merged draws, grouped by stretch of road and hidden past a reach.
    - Fade fine shader detail to its average under about 2 px.

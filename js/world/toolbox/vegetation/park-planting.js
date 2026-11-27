@@ -24,7 +24,7 @@ const vnoise1 = (x, seed) => {
   return a + (b - a) * u;
 };
 const pick = (mix, r) => { let tot = 0; for (const [, w] of mix) tot += w; let a = 0; for (const [n, w] of mix) { a += w / tot; if (r <= a) return n; } return mix[mix.length - 1][0]; };
-export const BUSH_MIX = [['bushGreen', 34], ['bushLow', 20], ['bushYellow', 16], ['bushRed', 12], ['bushHedge', 12], ['fern', 4], ['sapling', 2]];
+const BUSH_MIX = [['bushGreen', 34], ['bushLow', 20], ['bushYellow', 16], ['bushRed', 12], ['bushHedge', 12], ['fern', 4], ['sapling', 2]];
 
 export function* planParkPlanting(ctx) {
   const { pieces, avenue, understory } = ctx;

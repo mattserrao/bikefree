@@ -11,10 +11,9 @@
 // 5k triangles and 3 draw calls per arch. The legs reach down to the ground beside the road; the arch
 // slides a few metres along the road if one side drops away (a cliff edge, a bridge).
 import * as THREE from '../../../../vendor/three.js';
-import { riderPose, routePoint, ROAD_WIDTH, ROAD_LIFT } from '../../pose.js';
-import { wrapDist } from '../../../gpx.js';
+import { riderPose, routePoint, ROAD_WIDTH, ROAD_LIFT, wrapDist } from '../core/road-frame.js';   // [review 27 Nov] the toolbox's own road frame
 
-export const ARCH = {
+const ARCH = {
   halfSpan: 6.1,      // centre of each leg from the road's centre line (clear of verge posts and boards)
   height: 6.7,        // centre of the tube across the top, above the road
   corner: 1.7,        // radius of the rounded top corners

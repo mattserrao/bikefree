@@ -4,6 +4,7 @@
 // tone-maps to the screen. Hero scenery adds a soft bloom on the brightest light (sun glint on the
 // sea, the low sun, lamps at night), a gentle grade and a vignette; off on Light detail.
 import * as THREE from '../../../../vendor/three.js';
+import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash (the contact shading's tap rotation)
 
 // Cartoon ink outlines (lean cartoon look): darken pixels where the depth jumps, near the rider only.
 // Read in the final pass from the scene target's depth, so outlines add no full-screen pass of their own.
@@ -36,7 +37,7 @@ const inkChunk = /* glsl */`
 // Contact shading (graph worlds, High on laptops and desktops: user, 24 Nov — Zwift parity): a screen-space ambient
 // occlusion from the depth alone — 8 taps in a ring sized to ~0.7 m in the world, a neighbour that stands nearer by
 // 0.1–2 m shades the pixel. Read in the final pass (no extra pass); fades out by 160 m.
-const aoChunk = /* glsl */`
+const aoChunk = /* glsl */`${HASH_GLSL}
   uniform vec2 uAO;   // strength, world radius (m)
   uniform float uFocal;   // the projection's y scale (px per unit at 1 m: × half the target height)
   float contactAO(vec2 uv, float z) {
@@ -45,7 +46,7 @@ const aoChunk = /* glsl */`
     // pairs of opposite taps: 1/z is linear across a plane on screen, so a flat surface (the road seen low) has the
     // centre on the line between them and shades nothing; a crease (the ground meeting a wall, a car, a kerb) has the
     // centre farther than that line: shaded by how much (0.05–1.5 m)
-    float occ = 0., rot = fract(sin(dot(uv, vec2(12.9898, 78.233))) * 43758.5) * .785;
+    float occ = 0., rot = hw21(floor(uv / uInkTexel)) * .785;   // [review 27 Nov] the shared sin-free hash, per texel
     for (int i = 0; i < 6; i++) {   // (12 taps in two rings: user 26 Nov — the contact shading was faint)
       float a = float(i) * .523599 + rot;
       for (int j = 1; j <= 2; j++) {

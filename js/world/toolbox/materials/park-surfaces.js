@@ -14,6 +14,7 @@
 import * as THREE from '../../../../vendor/three.js';
 import { litMaterial } from './lit.js';
 import { HASH_GLSL } from './glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 const BASE = {
   lawn: ['#5f8f43', '#6e9d4c'], plaza: ['#b8b2a6', '#a9a397'], granite: ['#9b958a', '#8a847a'], walk: ['#c2bdb2', '#b5afa3'],
@@ -41,11 +42,11 @@ export function makeParkMaterial(kind) {
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vPkW;')
-      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvPkW = (modelMatrix * vec4(transformed, 1.)).xyz;');
+      .replace(anchor('#include <common>'), '#include <common>\nvarying vec3 vPkW;')
+      .replace(anchor('#include <worldpos_vertex>'), '#include <worldpos_vertex>\nvPkW = (modelMatrix * vec4(transformed, 1.)).xyz;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\nvarying vec3 vPkW;\nuniform vec3 pkA; uniform vec3 pkB; uniform int pkKind;\n${GLSL}`)
-      .replace('#include <color_fragment>', `#include <color_fragment>
+      .replace(anchor('#include <common>'), `#include <common>\nvarying vec3 vPkW;\nuniform vec3 pkA; uniform vec3 pkB; uniform int pkKind;\n${GLSL}`)
+      .replace(anchor('#include <color_fragment>'), `#include <color_fragment>
       {
         vec2 p = vPkW.xz;
         float far = clamp(length(vPkW - cameraPosition) / 140., 0., 1.);   // detail fades with distance

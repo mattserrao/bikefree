@@ -9,11 +9,11 @@ import { HASH_GLSL, NOISE_GLSL } from '../js/world/toolbox/materials/glsl-noise.
 
 const TOOLBOX = new URL('../js/world/toolbox/', import.meta.url).pathname;
 const files = (d) => readdirSync(d).flatMap((f) => { const p = join(d, f); return statSync(p).isDirectory() ? files(p) : p.endsWith('.js') ? [p] : []; });
-// ground-cover.js belongs to another area; race-day's crowd hash wraps its input (mod 1009) and the post pass hashes
-// screen uv: both stay small
+// ground-cover.js belongs to another area ([review 27 Nov] race-day's crowd and the post pass's contact shading moved
+// onto hw21 too)
 // materials/graph-road.js: the graph maps' roads and ground keep their own gwH / gwN (GW_NOISE_GLSL) — moved there from
 // graph-world.js unchanged (W13, 27 Nov); swapping the hash would move every grain of those maps: a look change, not a refactor
-const SKIP = ['landscape/ground-cover.js', 'life/race-day.js', 'atmosphere/post.js', 'materials/graph-road.js'];
+const SKIP = ['landscape/ground-cover.js', 'materials/graph-road.js'];
 const src = Object.fromEntries(files(TOOLBOX).map((f) => [f.slice(TOOLBOX.length), readFileSync(f, 'utf8')]).filter(([f]) => !SKIP.includes(f)));
 const f32 = Math.fround, fract = (x) => f32(x - Math.floor(x));
 

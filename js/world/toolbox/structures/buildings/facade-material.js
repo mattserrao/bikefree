@@ -17,6 +17,7 @@
 import * as THREE from '../../../../../vendor/three.js';
 import { SKY_REFLECT } from '../../atmosphere/sky-dome.js';
 import { HASH_GLSL } from '../../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
+import { anchor } from '../../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 export const FRAMES = ['#efebe2', '#e4dac4', '#6b4a32', '#3b3d3f', '#9ea4a8'];
 /** Flags (aWin.w / 256). */
@@ -463,17 +464,17 @@ export function makeFacadeMaterial(uniforms = {}) {
     shader.uniforms.uSunDir = sun;
     shader.uniforms.uBkHor = SKY_REFLECT.horizon; shader.uniforms.uBkZen = SKY_REFLECT.zenith;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>\n${GLSL_COMMON}`)
-      .replace('#include <color_vertex>', `#include <color_vertex>
+      .replace(anchor('#include <common>'), `#include <common>\n${GLSL_COMMON}`)
+      .replace(anchor('#include <color_vertex>'), `#include <color_vertex>
         #ifdef USE_COLOR
           vColor.rgb = pow(color.rgb, vec3(2.2));
         #endif
         vSurf = aSurf; vWin = aWin; vB = aB; vTrim = pow(aTrim.rgb, vec3(2.2)); vFrame = aTrim.a * 255.; vAcc = pow(aAcc.rgb, vec3(2.2));`)
-      .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+      .replace(anchor('#include <worldpos_vertex>'), `#include <worldpos_vertex>
         vWP = (modelMatrix * vec4(transformed, 1.)).xyz; vWN = normalize(mat3(modelMatrix) * objectNormal);`);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\n${FACADE_GLSL}\n${GLSL_FRAG}`)
-      .replace('#include <color_fragment>', `#include <color_fragment>\n${GLSL_MAIN}`);
+      .replace(anchor('#include <common>'), `#include <common>\n${FACADE_GLSL}\n${GLSL_FRAG}`)
+      .replace(anchor('#include <color_fragment>'), `#include <color_fragment>\n${GLSL_MAIN}`);
   };
   m.customProgramCacheKey = () => 'bf-building-kit-2';
   m.userData.buildingKit = true;

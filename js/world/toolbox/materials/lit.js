@@ -6,11 +6,11 @@
 import * as THREE from '../../../../vendor/three.js';
 
 /** Roughness by surface: what each kind of scenery reads as under a low sun. */
-export const ROUGHNESS = { ground: .95, asphalt: .9, paint: .6, concrete: .85, stone: .9, wood: .85, foliage: .8, water: .08, glass: .06, metal: .5, plastic: .55, default: .9 };
+const ROUGHNESS = { ground: .95, asphalt: .9, paint: .6, concrete: .85, stone: .9, wood: .85, foliage: .8, water: .08, glass: .06, metal: .5, plastic: .55, default: .9 };
 
 /** How much of the sky environment each surface takes (its ambient and its sheen): dark rough asphalt mostly keeps
  *  its own colour (the snapshots: at 1 the road read sky-blue at a glancing angle). */
-export const ENV_INTENSITY = { asphalt: .55, paint: .7, ground: .85, default: 1 };
+const ENV_INTENSITY = { asphalt: .55, paint: .7, ground: .85, default: 1 };
 
 /** A lit scenery material: Standard, metalness 0, roughness from the surface kind (or params.roughness). */
 export function litMaterial(params = {}, surface = 'default') {

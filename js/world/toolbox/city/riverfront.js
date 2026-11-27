@@ -14,9 +14,9 @@
 import * as THREE from '../../../../vendor/three.js';
 import { drain, due, mapJob } from '../core/jobs.js';   // [F30] planned as a job (in frame slices on the ride)
 import { MeshBuilder } from '../core/mesh-builder.js';
-import { ROAD_WIDTH, routePoint } from '../../pose.js';
+import { ROAD_WIDTH, routePoint } from '../core/road-frame.js';
 
-export const RIVERFRONT_DEFAULTS = {
+const RIVERFRONT_DEFAULTS = {
   stepM: 2,          // sample spacing along the route (m)
   maxGapM: 26,       // the water must be within this of the route's centre
   innerM: ROAD_WIDTH / 2 + 1.8,   // the walk starts under the edge of the route's shoulder
@@ -51,7 +51,7 @@ const smoothAvg = (a, r) => a.map((_, i) => { let s = 0, n = 0; for (let k = Mat
  */
 export function planRiverfront(...args) { return drain(planRiverfrontJob(...args)); }
 /** planRiverfront as a job ([F30]: js/world/toolbox/core/jobs.js). */
-export function* planRiverfrontJob({ landscape: L, route, index, streets = [], config }) {
+function* planRiverfrontJob({ landscape: L, route, index, streets = [], config }) {
   if (typeof streets === 'function') streets = streets();
   const O = { ...RIVERFRONT_DEFAULTS, ...config };
   const runs = [], ground = meshGround(L.heightAt, O.meshCellM);
@@ -130,7 +130,7 @@ function* finishRun(run, L, O) {
  * "riverfront": { "waterSteps": { "top": {lat, lon}, "bottom": {lat, lon}, "widthM": 20, "tiers": 6 } }.
  * Tier heights run from the ground at the top to the ground at the bottom (never under the water).
  */
-export function planWaterSteps(L, spec) {
+function planWaterSteps(L, spec) {
   const proj = L.decoded?.proj;
   if (!spec?.top || !spec?.bottom || !proj) return null;
   const T = proj.toLocal(spec.top.lat, spec.top.lon), B = proj.toLocal(spec.bottom.lat, spec.bottom.lon);
@@ -151,7 +151,7 @@ export function planWaterSteps(L, spec) {
  * bank shows in front of the wall; it eases back over 20 m past each end of a run).
  */
 export function riverfrontField(...args) { return drain(riverfrontFieldJob(...args)); }
-export function* riverfrontFieldJob(runs, level, { pad = 4, cutInM = 3, cutOutM = 40, taperM = 20, steps = null } = {}) {
+function* riverfrontFieldJob(runs, level, { pad = 4, cutInM = 3, cutOutM = 40, taperM = 20, steps = null } = {}) {
   const C = 2, cover = new Set(), cap = new Map();
   const key = (x, z) => (Math.floor(x / C) + 32768) * 65536 + Math.floor(z / C) + 32768;
   const mark = (q, along, lift) => {
@@ -181,10 +181,9 @@ export function* riverfrontFieldJob(runs, level, { pad = 4, cutInM = 3, cutOutM 
 }
 
 /**
- * Plan the scene's promenades on a city landscape and push the ground past their walls under the water.
+ * Plan the scene's promenades on a city landscape and push the ground past their walls under the water (a job).
  * Called once by the landscape (city-landscape.js) so the ground mesh, the city and the QC tools agree.
  */
-export function riverfrontGround(...args) { return drain(riverfrontGroundJob(...args)); }
 export function* riverfrontGroundJob(L, { route, index, streets, config }) {
   const runs = yield* planRiverfrontJob({ landscape: L, route, index, streets, config });
   const steps = planWaterSteps(L, config.waterSteps);

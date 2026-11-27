@@ -5,14 +5,14 @@
 // `terrainGridFile`, tools/build_terrain_grid.py in rivers mode) the ground is 10 m elevation along the route
 // and 40 m out to ~9 km, and the rivers beyond the city's own box come from that grid's river mask.
 import { makeGlasshousePads } from '../structures/glasshouse.js';
-import { ghostMask } from '../../ghost.js';
-import { makeRouteIndex } from '../../geo.js';
+import { ghostMask } from '../core/ghost.js';
+import { makeRouteIndex } from '../core/geo.js';
 import { smoothstep } from '../core/random.js';
-import { ROAD_WIDTH } from '../../pose.js';
+import { ROAD_WIDTH } from '../core/road-frame.js';
 import { decodeTerrain } from '../landscape/real-terrain.js';
 import { planJunctionsJob, junctionGround, junctionTopsJob } from './junctions.js';   // [junctions]
 import { joinCrossingsJob, densifyAlongsideJob, clearOverpassesJob, alignAlongRouteJob, trimAtRouteJob, followMovedNodesJob, keepUnderRoadJob, resolveOverlapsJob, hideCrossingsAtRouteJob, landFreeDeckEndsJob, streetSlots, dropCutStubsJob } from './road-meets.js';   // [junctions] ([F30] as jobs)
-import { alignStreetProfilesJob, syncPinnedNodesJob } from '../../road-align.js';   // [road-align]
+import { alignStreetProfilesJob, syncPinnedNodesJob } from '../core/road-align.js';   // [road-align]
 import { drain, due } from '../core/jobs.js';   // [F30] the city's streets are built as a job (in frame slices on the ride)
 import { makeStreetGrade } from './street-grade.js';   // [street-kit]
 import { riverfrontGroundJob } from './riverfront.js';   // [s1-riverfront]
@@ -26,7 +26,7 @@ export const POND_KINDS = {
   reservoir: { rim: .55, wall: true }, fountain: { rim: .45, wall: true }, pool: { rim: .45, wall: true }, pond: { rim: .3, wall: false },
 };
 /** The ground a pond holds (metres out from its edge): raised to its bank, easing back to the hillside. */
-export const POND_BANK_M = 9;
+const POND_BANK_M = 9;
 
 const decode = (text, Type) => {
   const bytes = Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
@@ -112,7 +112,7 @@ export function* makeCityLandscapeJob(config, proj, index, route) {
   };
   // outbound route samples on a 20 m grid, for "every stretch of road near here"
   const near = new Map();
-  const ghost = ghostMask(route);   // (a network tour's repeated stretches are never the route's road here: js/world/ghost.js)
+  const ghost = ghostMask(route);   // (a network tour's repeated stretches are never the route's road here: js/world/toolbox/core/ghost.js)
   for (let i = 0; i <= end; i++) { if (ghost?.[i] || (ghost?.[i + 1] && i < end)) continue; const k = `${Math.floor(index.xs[i] / 20)},${Math.floor(index.zs[i] / 20)}`; if (!near.has(k)) near.set(k, []); near.get(k).push(i); }
   const nearbyRoute = (x, z) => {
     const out = [], cx = Math.floor(x / 20), cz = Math.floor(z / 20);
@@ -695,7 +695,7 @@ export function* cityStreetsJob(landscape, index, route) {
     streets.push({ cls, bridge, oneway, layer, pts, width, ...(brick ? { brick } : {}), underRoute: under, rides: width > ROAD_WIDTH + 1 && pts.some((p) => p.along),   // [road-align] rides (wider than the road: sticks out)
       nodes: raw, nodeIdx });   // [junctions] OSM nodes → pts index
   }
-  // [road-align] smooth, grade-limited street profiles with one height per junction (js/world/road-align.js)
+  // [road-align] smooth, grade-limited street profiles with one height per junction (js/world/toolbox/core/road-align.js)
   if (align?.streets) {
     const nearRoute = (x, z) => { const r = index.nearest(x, z, 24); return r ? 1 - smoothstep(12, 22, r.d) : 0; };
     yield* alignStreetProfilesJob(streets, { ...align, ground: landscape.baseHeight, nearRoute, floor: landscape.level + .6 });

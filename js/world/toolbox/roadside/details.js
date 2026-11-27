@@ -2,8 +2,9 @@
 // frame every kit uses to place things by distance and side. Every stylized scene.
 import * as THREE from '../../../../vendor/three.js';
 import { randomSequence } from '../core/random.js';
-import { curveOn, curveXZ } from '../../road-align.js';   // [w2-align]
+import { curveOn, curveXZ } from '../core/road-align.js';   // [w2-align]
 import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 /** The same outbound-road frame is used for signs, markers and turnouts. */
 export function roadFrame(route, index, distance, lateral = 0) {
@@ -11,7 +12,7 @@ export function roadFrame(route, index, distance, lateral = 0) {
   const i = Math.min((route.turnIdx || route.dist.length - 1) - 1, Math.floor(s / 10));
   const j = i + 1, f = Math.min(1, (s - route.dist[i]) / (route.dist[j] - route.dist[i] || 1));
   if (curveOn(route)) {
-    // [w2-align] on the curved centre line (js/world/road-align.js), so decks, rails and pads follow the drawn road
+    // [w2-align] on the curved centre line (js/world/toolbox/core/road-align.js), so decks, rails and pads follow the drawn road
     const p = curveXZ(index, i, f), a = curveXZ(index, i, Math.max(0, f - .05)), b = curveXZ(index, i, Math.min(1, f + .05));
     const forward = new THREE.Vector3(b.x - a.x, (route.ele[j] - route.ele[i]) * (Math.min(1, f + .05) - Math.max(0, f - .05)), b.z - a.z).normalize();
     const right = new THREE.Vector3(-forward.z, 0, forward.x).normalize();
@@ -279,12 +280,12 @@ export class RoadsideDetails {
       const material = this._material('#67948c', { roughness: .32, metalness: .08, side: THREE.DoubleSide });
       material.onBeforeCompile = (shader) => {
         shader.uniforms.uTime = this.uniforms.uTime;
-        shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vBfCreek; attribute float aFoam; varying float vBfFoam;')
-          .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBfCreek = uv; vBfFoam = aFoam;');
-        shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>
+        shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), '#include <common>\nvarying vec2 vBfCreek; attribute float aFoam; varying float vBfFoam;')
+          .replace(anchor('#include <begin_vertex>'), '#include <begin_vertex>\nvBfCreek = uv; vBfFoam = aFoam;');
+        shader.fragmentShader = shader.fragmentShader.replace(anchor('#include <common>'), `#include <common>
             varying vec2 vBfCreek; uniform float uTime; varying float vBfFoam;
 ${HASH_GLSL}`)
-          .replace('#include <color_fragment>', `#include <color_fragment>
+          .replace(anchor('#include <color_fragment>'), `#include <color_fragment>
             float bfFlow = sin(vBfCreek.y * 35. - uTime * 1.6 + sin(vBfCreek.x * 18.) * 2.);
             diffuseColor.rgb *= .96 + bfFlow * .055;
             // rapids: white water streaming downstream, thickest mid-channel and over the steepest drops

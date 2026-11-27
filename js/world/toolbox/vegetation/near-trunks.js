@@ -17,6 +17,7 @@
 import * as THREE from '../../../../vendor/three.js';
 import { hash } from '../core/mesh-builder.js';
 import { NEAR_TRUNK, NEAR_PLANT, TREE_GRADE } from './tree-engine.js';
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 const BARK_OF = { sugarmapleF: 'maple', basswood: 'maple', whiteash: 'maple', beechF: 'beech', hickory: 'hickory' };
 // each bark's colour against its card's trunk colour (the texture's mean is a little off the species' hex: matched so the
@@ -25,7 +26,7 @@ const BARK_TONE = { maple: [1.62, 1.42, 1.24], beech: [1.06, 1.04, 1.0], hickory
 const SEG = 14;
 
 let textures = null;
-export function barkTextures() {
+function barkTextures() {
   if (textures) return textures;
   const L = new THREE.TextureLoader();
   const load = (f, srgb) => {
@@ -87,8 +88,8 @@ function barkMaterial(bark) {
   m.color.setRGB(...BARK_TONE[bark]);
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying float vTrk; varying float vYb; varying vec3 vWN;')
-      .replace('#include <begin_vertex>', `#include <begin_vertex>
+      .replace(anchor('#include <common>'), '#include <common>\nvarying float vTrk; varying float vYb; varying vec3 vWN;')
+      .replace(anchor('#include <begin_vertex>'), `#include <begin_vertex>
         {
           mat4 im = modelMatrix;
           #ifdef USE_INSTANCING
@@ -99,12 +100,12 @@ function barkMaterial(bark) {
           vYb = position.y; vWN = normalize(mat3(im) * objectNormal);
         }`);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\nvarying float vTrk; varying float vYb; varying vec3 vWN;\n${TREE_GRADE}`)
-      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+      .replace(anchor('#include <common>'), `#include <common>\nvarying float vTrk; varying float vYb; varying vec3 vWN;\n${TREE_GRADE}`)
+      .replace(anchor('#include <clipping_planes_fragment>'), `#include <clipping_planes_fragment>
         // the card's dither, complemented (tree-engine.js: the card's trunk gone where vTrk > the dither)
         float teDz = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(.06711056, .00583715))));
         if (vTrk <= teDz) discard;`)
-      .replace('#include <map_fragment>', `#include <map_fragment>
+      .replace(anchor('#include <map_fragment>'), `#include <map_fragment>
         {
           // moss on the north (−z) side, low; the foot darker where it's damp and splashed with soil
           float north = smoothstep(-.1, .75, -vWN.z), low = 1. - smoothstep(1.5, 7., vYb);
@@ -198,8 +199,8 @@ export class NearPlants {
     const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95, side: THREE.DoubleSide });
     m.onBeforeCompile = (shader) => {
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying float vNp; varying float vYb;')
-        .replace('#include <begin_vertex>', `#include <begin_vertex>
+        .replace(anchor('#include <common>'), '#include <common>\nvarying float vNp; varying float vYb;')
+        .replace(anchor('#include <begin_vertex>'), `#include <begin_vertex>
           {
             mat4 im = modelMatrix;
             #ifdef USE_INSTANCING
@@ -210,11 +211,11 @@ export class NearPlants {
             vYb = position.y;
           }`);
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', `#include <common>\nvarying float vNp; varying float vYb;\n${TREE_GRADE}`)
-        .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+        .replace(anchor('#include <common>'), `#include <common>\nvarying float vNp; varying float vYb;\n${TREE_GRADE}`)
+        .replace(anchor('#include <clipping_planes_fragment>'), `#include <clipping_planes_fragment>
           float teDz = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(.06711056, .00583715))));
           if (vNp <= teDz) discard;`)
-        .replace('#include <color_fragment>', `#include <color_fragment>
+        .replace(anchor('#include <color_fragment>'), `#include <color_fragment>
           diffuseColor.rgb = treeGrade(diffuseColor.rgb, 2., vYb);`);
     };
     m.customProgramCacheKey = () => 'near-plant-2';
@@ -301,15 +302,15 @@ export function flareMaterial() {
   const m = new THREE.MeshStandardMaterial({ roughness: .94, metalness: 0 });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uBark = { value: t.map };
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vFW; varying vec3 vFN; varying float vFY;')
-      .replace('#include <begin_vertex>', `#include <begin_vertex>
+    shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), '#include <common>\nvarying vec3 vFW; varying vec3 vFN; varying float vFY;')
+      .replace(anchor('#include <begin_vertex>'), `#include <begin_vertex>
         { mat4 im = modelMatrix;
           #ifdef USE_INSTANCING
             im = modelMatrix * instanceMatrix;
           #endif
           vFW = (im * vec4(position, 1.)).xyz; vFN = normalize(mat3(im) * objectNormal); vFY = position.y; }`);
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>\nuniform sampler2D uBark; varying vec3 vFW; varying vec3 vFN; varying float vFY;\n${TREE_GRADE}`)
-      .replace('#include <color_fragment>', `#include <color_fragment>
+    shader.fragmentShader = shader.fragmentShader.replace(anchor('#include <common>'), `#include <common>\nuniform sampler2D uBark; varying vec3 vFW; varying vec3 vFN; varying float vFY;\n${TREE_GRADE}`)
+      .replace(anchor('#include <color_fragment>'), `#include <color_fragment>
         {
           vec3 w = pow(abs(vFN), vec3(4.)); w /= w.x + w.y + w.z;
           vec3 b = texture2D(uBark, vFW.zy / vec2(1.5, 1.7)).rgb * w.x + texture2D(uBark, vFW.xz / 1.5).rgb * w.y + texture2D(uBark, vFW.xy / vec2(1.5, 1.7)).rgb * w.z;
@@ -336,8 +337,8 @@ export function withBarkDetail(material) {
   material.onBeforeCompile = (shader, r) => {
     prev?.call(material, shader, r);
     shader.uniforms.uBarkMap = { value: T.maple.map };
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uBarkMap;')
-      .replace('#include <color_fragment>', `#include <color_fragment>
+    shader.fragmentShader = shader.fragmentShader.replace(anchor('#include <common>'), '#include <common>\nuniform sampler2D uBarkMap;')
+      .replace(anchor('#include <color_fragment>'), `#include <color_fragment>
         if (vTK > .5 && vTK < 3.5) {
           float bkD = length(cameraPosition - vTW), bkF = 1. - smoothstep(35., 70., bkD);
           if (bkF > 0.) {

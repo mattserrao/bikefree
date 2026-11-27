@@ -15,3 +15,17 @@ export function patchShader(src, anchor, code, where = 'after') {
   if (put == null) throw new Error(`patchShader: where must be after, before or replace (got ${where})`);
   return src.slice(0, i) + put + src.slice(i + anchor.length);
 }
+
+const ANCHORS = new Map();
+/**
+ * [review 27 Nov] (T8) The anchor as a String.replace pattern: `src.replace(anchor('#include <common>'), code)` puts code
+ * in the anchor's place as a plain string pattern does (its first occurrence; code taken literally, as the toolbox's
+ * patches have no $-patterns), but through patchShader, so a missing anchor throws. Every onBeforeCompile chain of
+ * `.replace('#include <…>', …)` became `.replace(anchor('#include <…>'), …)`: the same chains, the same source
+ * (test/shader-sources.test.mjs), loud when three's shader changes.
+ */
+export function anchor(text) {
+  let a = ANCHORS.get(text);
+  if (!a) ANCHORS.set(text, (a = Object.freeze({ text, toString: () => text, [Symbol.replace]: (src, code) => patchShader(String(src), text, typeof code === 'function' ? String(code(text)) : String(code), 'replace') })));
+  return a;
+}

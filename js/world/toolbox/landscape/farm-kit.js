@@ -12,6 +12,7 @@ import * as THREE from '../../../../vendor/three.js';
 import { litMaterial } from '../materials/lit.js';
 import { due } from '../core/jobs.js';
 import { hash } from '../core/mesh-builder.js';
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 // ------------------------------------------------------------------ the GLSL noise, in JS (to agree with the ground)
 const fract = (x) => x - Math.floor(x);
@@ -63,8 +64,8 @@ export function cropMaterial(uTime) {
   const m = litMaterial({ map: cropTexture(), alphaTest: .5, side: THREE.DoubleSide });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = uTime;
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;')
-      .replace('#include <begin_vertex>', `#include <begin_vertex>
+    shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), '#include <common>\nuniform float uTime;')
+      .replace(anchor('#include <begin_vertex>'), `#include <begin_vertex>
         if (uv.y > .5) { vec3 wp = (modelMatrix * vec4(position, 1.)).xyz; transformed.xz += vec2(sin(uTime * 1.7 + wp.x * .3 + wp.z * .2), cos(uTime * 1.3 + wp.z * .25)) * .07 * (uv.y - .5); }`);
   };
   m.customProgramCacheKey = () => 'farm-kit-crops-1';
@@ -80,7 +81,6 @@ export function* cropCardsJob(x0, z0, size, crop, groundH, out) {
   let r = it.next(); while (!r.done) { if (due()) yield; r = it.next(); }
   out.geo = r.value;
 }
-export function cropCards(x0, z0, size, crop, groundH) { const it = cropCardsGen(x0, z0, size, crop, groundH); let r = it.next(); while (!r.done) r = it.next(); return r.value; }
 function* cropCardsGen(x0, z0, size, crop, groundH) {
   const pos = [], uv = [], nrm = [];
   const seen = new Map();

@@ -44,7 +44,7 @@ const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
  */
 export function streetSlots(...args) { return drain(streetSlotsJob(...args)); }
 /** streetSlots as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
-export function* streetSlotsJob(landscape, streets) {
+function* streetSlotsJob(landscape, streets) {
   if (streets._slots) return streets._slots;
   const n = streets.length, slots = new Array(n).fill(-1), G = 24, grid = new Map();
   yield* each(streets, (st, k) => {
@@ -146,7 +146,6 @@ export function* joinCrossingsJob(streets, options = {}) {
  * made at most `stepM` apart, so the trims (trimOverlaps) follow the other ribbon's edge instead of cutting
  * across it in 7 m wedges. Keeps st.nodeIdx in step. Run before anything indexes the streets' points.
  */
-export function densifyAlongside(...args) { return drain(densifyAlongsideJob(...args)); }
 /** densifyAlongside as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
 export function* densifyAlongsideJob(streets, options = {}) {
   const O = { cos: .85, level: .9, stepM: 2.5, ...options };
@@ -197,7 +196,7 @@ export function* densifyAlongsideJob(streets, options = {}) {
  * A street as drawn: its pieces (trimmed at junctions), each point with `top` — the ribbon's surface height
  * (its line plus its lift, blended to the junction surface's at a cut, as junction-mesh.js drawnPieces draws it).
  */
-export function drawnStreet(st, k, plan, lift) {
+function drawnStreet(st, k, plan, lift) {
   const pieces = plan ? streetPieces(st, plan.cuts.get(k)) : [st.pts];
   const JL = plan ? plan.options.lift : lift;
   return pieces.map((pc) => {
@@ -306,7 +305,6 @@ export function* alignAlongRouteJob(streets, ctx, options = {}) {
  * clearance tube, leaving its two halves hanging. It is lifted to `clearM` over the road where it crosses, easing
  * back along the deck at no more than `grade`, so it passes over in one piece. ctx: { route, index, roadWidth }.
  */
-export function clearOverpasses(...args) { return drain(clearOverpassesJob(...args)); }
 /** clearOverpasses as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
 export function* clearOverpassesJob(streets, ctx, options = {}) {
   const { route, index } = ctx, RW = ctx.roadWidth || 7;
@@ -348,7 +346,6 @@ export function* clearOverpassesJob(streets, ctx, options = {}) {
  * different level isn't drawn. Streets flush with the road (alignAlongRoute), crossings (cos < `cos`) and
  * over/underpasses (more than `pass` apart) are left alone. ctx: { route, index, landscape, roadWidth }.
  */
-export function trimAtRoute(...args) { return drain(trimAtRouteJob(...args)); }
 /** trimAtRoute as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
 export function* trimAtRouteJob(streets, ctx, options = {}) {
   const { route, index, landscape } = ctx, RW = ctx.roadWidth || 7;
@@ -402,7 +399,6 @@ export function* trimAtRouteJob(streets, ctx, options = {}) {
  * the road (its width plus `marginM`) with its top between the road's surface less `under` and 4 m above it is put
  * just under the road there (decks that cross over it were lifted clear by clearOverpasses first).
  */
-export function keepUnderRoad(...args) { return drain(keepUnderRoadJob(...args)); }
 /** keepUnderRoad as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
 export function* keepUnderRoadJob(streets, ctx, options = {}) {
   const { route, index, landscape } = ctx, RW = ctx.roadWidth || 7, O = { under: .05, marginM: 1, ...options };
@@ -424,47 +420,6 @@ export function* keepUnderRoadJob(streets, ctx, options = {}) {
   return n;
 }
 
-/**
- * A street, path or deck end that meets nothing (no other street shares it, it isn't on the route's road) yet
- * hangs above the ground or is buried in it (a footpath stub on a bluff, a deck whose ground street the data cut
- * off) comes down to the ground: its end sits `onM` over the bare ground and the last stretch eases there at no more
- * than `grade` (at most half the street). ctx: { route, index, landscape, roadWidth }.
- */
-export function settleFreeEnds(streets, ctx, options = {}) {
-  const { index, landscape } = ctx, RW = ctx.roadWidth || 7, O = { tol: .3, onM: .05, grade: .12, ...options };
-  const key = (p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`, count = new Map();
-  for (const st of streets) for (const p of st.pts) count.set(key(p), (count.get(key(p)) || 0) + 1);
-  const G = 24, grid = new Map();
-  streets.forEach((st, k) => { for (let i = 1; i < st.pts.length; i++) { const a = st.pts[i - 1], b = st.pts[i]; for (const q of [a, b]) { const kk = `${Math.floor(q.x / G)},${Math.floor(q.z / G)}`; if (!grid.has(kk)) grid.set(kk, []); grid.get(kk).push([k, i]); } } });
-  const touches = (st, p) => {
-    for (let gx = -1; gx <= 1; gx++) for (let gz = -1; gz <= 1; gz++) for (const [k, i] of grid.get(`${Math.floor(p.x / G) + gx},${Math.floor(p.z / G) + gz}`) || []) {
-      const o = streets[k]; if (o === st) continue;
-      if (segDist(p.x, p.z, o.pts[i - 1], o.pts[i]).d < o.width / 2 + st.width / 2 + 1) return true;
-    }
-    return false;
-  };
-  let n = 0;
-  for (const st of streets) {
-    const P = st.pts; if (P.length < 2) continue;
-    const acc = [0]; for (let i = 1; i < P.length; i++) acc.push(acc[i - 1] + Math.hypot(P[i].x - P[i - 1].x, P[i].z - P[i - 1].z));
-    for (const e of [0, P.length - 1]) {
-      const p = P[e];
-      if (count.get(key(p)) > 1 || p.jn != null || p.je != null || p.along || p.under) continue;
-      const r = index.nearest(p.x, p.z, RW / 2 + st.width / 2 + 4); if (r) continue;   // (at the route: its own rules)
-      // (nor where it ends against another street's ribbon: that is a meet, not a free end)
-      if (touches(st, p)) continue;
-      const g = landscape.baseHeight(p.x, p.z) + O.onM, dy = g - p.y;
-      if (Math.abs(dy) < O.tol) continue;
-      const L = Math.min(acc[acc.length - 1] / 2, Math.max(6, Math.abs(dy) / O.grade));
-      for (let i = 0; i < P.length; i++) {
-        const d = Math.abs(acc[i] - acc[e]); if (d >= L) continue;
-        P[i].y += dy * (1 - smooth(d / L));
-      }
-      n++;
-    }
-  }
-  return n;
-}
 
 /**
  * [w2-meets] A street crossing the route's road at another level with no junction there (a motorway a metre under a
@@ -472,7 +427,6 @@ export function settleFreeEnds(streets, ctx, options = {}) {
  * the road and its shoulders isn't drawn: it goes in under the road's bank and comes out the other side. Junction
  * arms and ease zones are left alone. Run after the junctions are planned. ctx: { route, index, landscape, roadWidth }.
  */
-export function hideCrossingsAtRoute(...args) { return drain(hideCrossingsAtRouteJob(...args)); }
 /** hideCrossingsAtRoute as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
 export function* hideCrossingsAtRouteJob(streets, ctx, options = {}) {
   const { route, index, landscape } = ctx, RW = ctx.roadWidth || 7;
@@ -503,7 +457,6 @@ export function* hideCrossingsAtRouteJob(streets, ctx, options = {}) {
  * [finish] A stub (a few metres of street, e.g. the mapped mouth of a driveway) that the passes above have already cut
  * away at one end is not drawn at all: what is left is a wedge that meets nothing at its height.
  */
-export function dropCutStubs(...args) { return drain(dropCutStubsJob(...args)); }
 /** dropCutStubs as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
 export function* dropCutStubsJob(streets, options = {}) {
   const O = { maxM: 8, ...options };
@@ -524,7 +477,6 @@ export function* dropCutStubsJob(streets, options = {}) {
  * route comes down to the ground it would land on, over its last metres at no more than `grade` (at most half the
  * deck), instead of stopping in the air. Run in cityStreets() while the ground is still the bare one.
  */
-export function landFreeDeckEnds(...args) { return drain(landFreeDeckEndsJob(...args)); }
 /** landFreeDeckEnds as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
 export function* landFreeDeckEndsJob(streets, ctx, options = {}) {
   const { index, landscape } = ctx, O = { tol: .3, grade: .12, routeM: 8, ...options };
@@ -554,7 +506,6 @@ export function* landFreeDeckEndsJob(streets, ctx, options = {}) {
  * moved point (`jn`, `je`, `along`) but wasn't moved itself takes the same height there, easing back to its own
  * profile at no more than `grade` (so footpaths and service roads don't meet a junction with a step).
  */
-export function followMovedNodes(...args) { return drain(followMovedNodesJob(...args)); }
 /** followMovedNodes as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
 export function* followMovedNodesJob(streets, options = {}) {
   const O = { grade: .08, level: 1.2, maxEaseM: 30, rounds: 4, ...options };
@@ -612,7 +563,6 @@ export function* followMovedNodesJob(streets, options = {}) {
  * over anything. A street that lost width takes the neighbour's height there (easing out at `grade`), so the two
  * meet flush. Gores fill themselves: a ramp leaving a road keeps only what lies beyond the road's edge.
  */
-export function resolveOverlaps(...args) { return drain(resolveOverlapsJob(...args)); }
 /** resolveOverlaps as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
 export function* resolveOverlapsJob(streets, landscape, options = {}) {
   const O = { cos: .7, level: .6, grade: .08, ...options };

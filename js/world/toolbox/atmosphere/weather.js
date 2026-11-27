@@ -6,6 +6,7 @@
 import * as THREE from '../../../../vendor/three.js';
 import { randomSequence } from '../core/random.js';
 import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 export const WEATHER = {
   clear: { label: 'Clear', cloud: .12, shadow: .5, wind: .3, bank: 0, rain: 0, overcast: 0, bankTop: 140 },
@@ -191,8 +192,8 @@ export class Weather {
         shader.uniforms.bfWet = this.u.bfWet;
         shader.uniforms.bfSkyH = this.u.uSkyHorizon || { value: new THREE.Color('#c6d2d8') };
         shader.fragmentShader = shader.fragmentShader
-          .replace('#include <common>', `#include <common>\nuniform float bfWet; uniform vec3 bfSkyH;\n${noise}`)
-          .replace('#include <fog_fragment>', `
+          .replace(anchor('#include <common>'), `#include <common>\nuniform float bfWet; uniform vec3 bfSkyH;\n${noise}`)
+          .replace(anchor('#include <fog_fragment>'), `
             #ifdef USE_MAP
               float puddle = smoothstep(.58, .72, wFbm(vMapUv * vec2(9., 2.2))) * (smoothstep(.2, .02, vMapUv.x) + smoothstep(.8, .98, vMapUv.x) + .35);
             #else

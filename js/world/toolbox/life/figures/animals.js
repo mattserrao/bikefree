@@ -15,8 +15,9 @@ import * as THREE from '../../../../../vendor/three.js';
 import { VehBuilder } from './vehicles.js';
 import { vhash } from '../../core/random.js';
 import { HASH_GLSL } from '../../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
+import { anchor } from '../../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
-export const PART_ANIM = { BODY: 0, HEAD: 1, TAIL: 2, FL: 3, FR: 4, BL: 5, BR: 6, SHADOW: 8, PATCH: 10 };   // (PATCH: + a part, a Holstein's coat)
+const PART_ANIM = { BODY: 0, HEAD: 1, TAIL: 2, FL: 3, FR: 4, BL: 5, BR: 6, SHADOW: 8, PATCH: 10 };   // (PATCH: + a part, a Holstein's coat)
 const P = PART_ANIM;
 
 class AnimalBuilder extends VehBuilder {
@@ -302,14 +303,14 @@ const VERT_HEAD = `
 function inject(shader, uniforms, depth) {
   Object.assign(shader.uniforms, uniforms);
   shader.vertexShader = shader.vertexShader
-    .replace('#include <common>', '#include <common>' + VERT_HEAD)
-    .replace('#include <beginnormal_vertex>', `vec3 objectNormal = normal; vec3 animN = normal; vec3 animP = animate(position, animN); objectNormal = animN;`)
-    .replace('#include <begin_vertex>', `vec3 transformed = animP; vAnimP = position; vAnimPart = aAnim.x;`);
+    .replace(anchor('#include <common>'), '#include <common>' + VERT_HEAD)
+    .replace(anchor('#include <beginnormal_vertex>'), `vec3 objectNormal = normal; vec3 animN = normal; vec3 animP = animate(position, animN); objectNormal = animN;`)
+    .replace(anchor('#include <begin_vertex>'), `vec3 transformed = animP; vAnimP = position; vAnimPart = aAnim.x;`);
   if (depth) {
     // (the depth material has no normals: run animate() for the position)
     shader.vertexShader = shader.vertexShader.replace('vec3 transformed = animP;', 'vec3 dn = vec3(0., 1., 0.); vec3 transformed = animate(position, dn);');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vAnimPart;')
-      .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (vAnimPart > 7.5 && vAnimPart < 8.5) discard;');
+    shader.fragmentShader = shader.fragmentShader.replace(anchor('#include <common>'), '#include <common>\nvarying float vAnimPart;')
+      .replace(anchor('#include <clipping_planes_fragment>'), '#include <clipping_planes_fragment>\nif (vAnimPart > 7.5 && vAnimPart < 8.5) discard;');
   }
 }
 
@@ -324,22 +325,22 @@ export function animalMaterial(kind, uTime) {
   m.onBeforeCompile = (shader) => {
     inject(shader, uniforms, false);
     // the instance colour is data, not a tint
-    shader.vertexShader = shader.vertexShader.replace('#include <color_vertex>', `vColor = vec4(1.0);
+    shader.vertexShader = shader.vertexShader.replace(anchor('#include <color_vertex>'), `vColor = vec4(1.0);
       #ifdef USE_COLOR
         vColor.rgb *= color;
       #endif`);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>
+      .replace(anchor('#include <common>'), `#include <common>
         varying vec3 vAnimP; varying float vAnimPart;
         ${HASH_GLSL}`)
-      .replace('#include <color_fragment>', `#include <color_fragment>
+      .replace(anchor('#include <color_fragment>'), `#include <color_fragment>
         float ap = mod(vAnimPart, 10.);
         if (vAnimPart > 9.5) {   // a Holstein's coat: black patches, the legs' lower half and the belly mostly white
           float nz = vn3(vAnimP * 2.6) * .7 + vn3(vAnimP * 6.) * .3;
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.07, .065, .065), smoothstep(.5, .54, nz));
         }
         if (ap > 7.5 && ap < 8.5) { diffuseColor.rgb = vec3(.2, .22, .14); }`)
-      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      .replace(anchor('#include <emissivemap_fragment>'), `#include <emissivemap_fragment>
         if (ap > 7.5 && ap < 8.5) { totalEmissiveRadiance = vec3(0.); }`);
   };
   m.customProgramCacheKey = () => 'bf-animals-1';

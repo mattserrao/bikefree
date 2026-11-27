@@ -26,10 +26,11 @@
 // mottling, the paving seam down the middle, and repair strips along the edges.
 import * as THREE from '../../../../vendor/three.js';
 import { HASH_GLSL } from './glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 // tone (×brightness), warm (toward brown), wear (polished wheel tracks), patches, cracks, edge (crumbling
 // edges and dust), fade (paint faded), speckle (chip-seal stones), runoff (snowmelt across the road), grime
-export const SURFACES = {
+const SURFACES = {
   fresh:    { tone: .78, warm: 0,   wear: .15, patches: .04, cracks: .05, edge: .15, fade: 0,   speckle: .1, runoff: 0,  grime: 0 },
   worn:     { tone: 1,   warm: .1,  wear: .6,  patches: .4,  cracks: .45, edge: .5,  fade: .25, speckle: .2, runoff: 0,  grime: 0 },
   chipseal: { tone: 1.06, warm: .35, wear: .35, patches: .2, cracks: .2,  edge: .45, fade: .15, speckle: .9, runoff: 0,  grime: 0 },
@@ -115,7 +116,7 @@ export function decorateRoad(material, road, { widthM = 7, repeatM = 24, marks =
     prev.call(material, shader, renderer);
     Object.assign(shader.uniforms, uniforms);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>
+      .replace(anchor('#include <common>'), `#include <common>
         ${fr ? '#define RS_FR\n        uniform sampler2D rsMarks; uniform vec3 rsMarksDims;' : ''}
         uniform vec4 rsBaseA; uniform vec4 rsBaseB; uniform vec4 rsBaseC; uniform vec4 rsBaseD;
         uniform vec4 rsSpan[${MAX_ZONES}]; uniform vec4 rsA[${MAX_ZONES}]; uniform vec4 rsB[${MAX_ZONES}]; uniform vec4 rsC[${MAX_ZONES}]; uniform vec4 rsD[${MAX_ZONES}];
@@ -123,7 +124,7 @@ export function decorateRoad(material, road, { widthM = 7, repeatM = 24, marks =
 ${HASH_GLSL}
         // a line of width w (m) at distance d (m), antialiased over a pixel of size px (m); thin lines fade out
         float rsLine(float d, float w, float px) { return (1. - smoothstep(w * .5, w * .5 + px, abs(d))) * smoothstep(px * .8, px * 2.5, w * 2.); }`)
-      .replace('#include <map_fragment>', `#include <map_fragment>
+      .replace(anchor('#include <map_fragment>'), `#include <map_fragment>
         #ifdef USE_MAP
         {
           // road coordinates in metres: x across (0 at the left edge), s along from the start

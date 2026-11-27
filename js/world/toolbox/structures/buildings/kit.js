@@ -178,7 +178,7 @@ export function makeStreetIndex(lines, cell = 40) {
  * `city` needs buildings (decoded: { k, ring, h, kind, name, hero, hidden }), streets (cityStreets), index, route.
  */
 export function planCityHomes(...args) { return drain(planCityHomesJob(...args)); }
-export function* planCityHomesJob(city, cfg) {
+function* planCityHomesJob(city, cfg) {
   const kinds = { 0: 'rowhouse', 1: 'house', 13: 'barn', 14: 'shed' };
   const homes = [], neighbours = [];
   for (const b of city.buildings) {

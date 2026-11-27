@@ -9,6 +9,7 @@
 //   const C = cardArrays(); pushCard(C, centre, w, h, roll, upright, normal, u0, v0, colour) …; const g = cardGeometry(C)
 //   billboardLeaves(material)   patches a leaf material (and returns it); leafDepthMaterial(map) for its shadow
 import * as THREE from '../../../../vendor/three.js';
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 const CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, -1], [1, 1], [-1, 1]], UVS = [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]];
 
@@ -71,8 +72,8 @@ export function billboardLeaves(m) {
   const prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey ? m.customProgramCacheKey() : '';
   m.onBeforeCompile = (shader, r) => {
     prev?.call(m, shader, r);
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>\n${CARD_PARS}`)
-      .replace('#include <project_vertex>', `#include <project_vertex>\n${CARD_OPEN}`);
+    shader.vertexShader = shader.vertexShader.replace(anchor('#include <common>'), `#include <common>\n${CARD_PARS}`)
+      .replace(anchor('#include <project_vertex>'), `#include <project_vertex>\n${CARD_OPEN}`);
   };
   m.customProgramCacheKey = () => `${prevKey}|cards1`;
   return m;

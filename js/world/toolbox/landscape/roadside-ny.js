@@ -17,7 +17,7 @@ const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
 // ------------------------------------------------------------------ the cross-section
 /** The profile's stations: [m from the road edge, colour]; heights from profileY. */
-export const DITCH = [
+const DITCH = [
   [.2, '#9a9479'],    // sandy lip: winter sand and gravel swept off the road
   [.9, '#7a9d44'],    // mowed shoulder
   [1.9, '#6f9240'],   // foreslope

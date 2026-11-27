@@ -47,7 +47,7 @@ export const NEEDS = {
 };
 
 /** The methods an effect calls that this world doesn't have (empty: it can be installed). */
-export function missingNeeds(world, name) { return (NEEDS[name] || []).filter((k) => typeof world[k] !== 'function'); }
+function missingNeeds(world, name) { return (NEEDS[name] || []).filter((k) => typeof world[k] !== 'function'); }
 
 export function installEffects(world, cfg = {}) {
   const on = Object.entries(cfg || {}).filter(([k, v]) => EFFECTS[k] && v !== false).filter(([k]) => {

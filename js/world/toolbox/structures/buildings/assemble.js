@@ -263,7 +263,7 @@ function body(ctx, r, k) {
 
 
 /** A wall of rect r cut into the house and barn ends (farmhouses' long walls), each left → right from outside. */
-export function wallSegments(R, r, k, i, p, q, corner) {
+function wallSegments(R, r, k, i, p, q, corner) {
   if (!(k === 0 && R.barnEnd && i % 2 === 0)) return [{ p, q, barn: false }];
   const t = R.barnSplit;   // the house's share of the length
   const along = (s) => [p[0] + (q[0] - p[0]) * s, p[1] + (q[1] - p[1]) * s];
@@ -274,7 +274,7 @@ export function wallSegments(R, r, k, i, p, q, corner) {
 }
 
 /** Which bay of a wall segment has the door (15: none). */
-export function doorBayOf(R, n, barn, isFront, i) {
+function doorBayOf(R, n, barn, isFront, i) {
   if (barn) return Math.floor(n / 2);
   if (R.archetype === 'shed' && i === R.front) return Math.floor(n / 2);
   if (!isFront) return 15;
@@ -741,7 +741,7 @@ function parts(ctx) {
 }
 
 /** Where the door is: the foot of the front wall at the door bay, with the wall's outward normal and tangent. */
-export function doorPoint(R, gv) {
+function doorPoint(R, gv) {
   const f = frontSegment(R); if (!f) return null;
   const k = R.parts?.stair ? f.bays.n - 1 : doorBayOf(R, f.bays.n, false, true, R.front);
   const uD = (k + .5) * f.bays.w;

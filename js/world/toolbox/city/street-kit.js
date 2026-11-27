@@ -20,11 +20,11 @@
 // building's style comes from its kind (AUTO_STYLE). OSM details (signals, bus stops, benches, hydrants,
 // shops, car parks, fences) come from the city data's `streetKit` block (tools/citylib/street_kit.py); the
 // kit's own spacing rules fill in the rest. See docs/pittsburgh/detail/s3.md.
-import { ghostAt } from '../../ghost.js';
+import { ghostAt } from '../core/ghost.js';
 import * as THREE from '../../../../vendor/three.js';
 import { MeshBuilder, hash } from '../core/mesh-builder.js';
 import { drain, due, clock, each } from '../core/jobs.js';   // [F30]
-import { ROAD_WIDTH, ROAD_LIFT } from '../../pose.js';
+import { ROAD_WIDTH, ROAD_LIFT } from '../core/road-frame.js';
 import { LAND } from './landscape.js';
 import { appendToMeshBuilder } from '../life/figures/vehicles.js';
 import { staticCar, pickCar } from '../life/figures/cars.js';
@@ -115,7 +115,7 @@ export const FACADE_STYLES = {
     sills: false, roof: ['#8e9296'], trim: ['#9aa4ab'], frame: ['#1f2428'] },
 };
 /** Building kind (tools/build_city.py) → facade style outside a zone; null: left plain. */
-export const AUTO_STYLE = { 0: 'rowhouse', 1: null, 2: 'masonry', 3: 'industrial', 4: 'tower', 5: 'glass', 7: 'masonry', 8: 'industrial', 11: 'masonry' };
+const AUTO_STYLE = { 0: 'rowhouse', 1: null, 2: 'masonry', 3: 'industrial', 4: 'tower', 5: 'glass', 7: 'masonry', 8: 'industrial', 11: 'masonry' };
 
 const SHOP_LABELS = {
   food: ['PIZZA', 'TACOS', 'DINER', 'NOODLES', 'BBQ', 'DELI', 'PIEROGIES', 'RAMEN', 'BURGERS', 'THAI'],

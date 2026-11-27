@@ -9,6 +9,7 @@
 //   - a flat road: clean grey, crisp paint, no grain or bump
 //   - ink outlines where depth jumps, fading with distance (drawn in post.js's final pass)
 import * as THREE from '../../../../vendor/three.js';
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 export const LOOKS = {
   gentle: {
@@ -98,10 +99,10 @@ export class Look {
       prev.call(m, shader, renderer);
       Object.assign(shader.uniforms, u);
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', `#include <common>
+        .replace(anchor('#include <common>'), `#include <common>
           uniform vec2 uToonGrade; uniform vec3 uToonBands; uniform float uToonSun;
           uniform vec3 uToonLit; uniform vec3 uToonMid; uniform vec3 uToonShade;`)
-        .replace('#include <opaque_fragment>', `{
+        .replace(anchor('#include <opaque_fragment>'), `{
           // cartoon bands: how much direct sun reaches this point (N·L and the shadow map)?
           vec3 tAlb = max(diffuseColor.rgb, vec3(1e-4));
           float tY = dot(tAlb, ${LUMA});

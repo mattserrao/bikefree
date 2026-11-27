@@ -8,6 +8,7 @@
 //   makeParapetGeometry()  → a unit parapet (x across −.5….5, y 0…1, z 0…1): battered sides, a rounded cap
 import * as THREE from '../../../../vendor/three.js';
 import { HASH_GLSL } from './glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
+import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 const lin = (hex) => new THREE.Color(hex);
 
@@ -25,8 +26,8 @@ export function makeMasonryMaterial(opts = {}) {
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vMsP; varying vec3 vMsN; varying float vMsFoot;')
-      .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+      .replace(anchor('#include <common>'), '#include <common>\nvarying vec3 vMsP; varying vec3 vMsN; varying float vMsFoot;')
+      .replace(anchor('#include <worldpos_vertex>'), `#include <worldpos_vertex>
         {
           vec4 msP = vec4(transformed, 1.);
           mat3 msM = mat3(modelMatrix);
@@ -41,11 +42,11 @@ export function makeMasonryMaterial(opts = {}) {
           vMsN = normalize(msM * msN);
         }`);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>
+      .replace(anchor('#include <common>'), `#include <common>
         varying vec3 vMsP; varying vec3 vMsN; varying float vMsFoot;
         uniform vec3 msStones[6]; uniform vec3 msMortar; uniform vec3 msMoss; uniform float msCourse; uniform float msMossH;
 ${HASH_GLSL}`)
-      .replace('#include <color_fragment>', `#include <color_fragment>
+      .replace(anchor('#include <color_fragment>'), `#include <color_fragment>
         {
           vec3 n = normalize(vMsN);
           bool top = abs(n.y) > .7;
