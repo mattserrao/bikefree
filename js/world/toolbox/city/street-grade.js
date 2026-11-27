@@ -13,7 +13,7 @@
 // Other streets (cross streets, alleys) keep their own grading: within 5–12 m of their carriageways the
 // sidewalk grade fades out, so no street is buried. Their ends inside a junction belong to the junctions module.
 // Pure functions (no three.js): the city landscape, the QC sweep and the renderer all see the same ground.
-import { ROAD_WIDTH, ROAD_LIFT } from '../../pose.js';
+import { ROAD_WIDTH, ROAD_LIFT } from '../core/road-frame.js';
 
 export const CURB_H = .15;                          // sidewalk top above the carriageway
 export const ROUTE_CURB = ROAD_WIDTH / 2 + 2.4;     // default curb line from the route's centre: lanes + a parking lane

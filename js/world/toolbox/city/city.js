@@ -2,7 +2,7 @@
 // at night, streets with sidewalks, street lamps and trees, the bridges and landmarks
 // (js/world/toolbox/city/bridges.js) and everything that moves (js/world/toolbox/city/life.js).
 // Data: "bikefree-city-1" from tools/build_city.py; ground from js/world/toolbox/city/landscape.js.
-import { ghostAt } from '../../ghost.js';
+import { ghostAt } from '../core/ghost.js';
 import * as THREE from '../../../../vendor/three.js';
 import { decodeCity, LAND, POND_KINDS, cityStreetsJob, STREET_W } from './landscape.js';
 import { makeLakeWaterMaterial } from '../materials/surfaces.js';   // [6.5] hill water
@@ -15,7 +15,7 @@ import { buildGlasshousesJob } from '../structures/glasshouse.js';
 import { buildStadiumKit } from '../structures/stadium.js';   // [7.8]
 import { CityLife } from './life.js';
 import { StreetKit, streetKitConfig } from './street-kit.js';   // [street-kit]
-import { ROAD_WIDTH } from '../../pose.js';
+import { ROAD_WIDTH } from '../core/road-frame.js';
 import { buildJunctionMeshesJob, drawnPieces } from './junction-mesh.js';   // [junctions]
 import { junctionsNear } from './junctions.js';   // [junctions]
 import { streetSlots } from './road-meets.js';   // [junctions]

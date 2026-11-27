@@ -1,6 +1,6 @@
 // Regional style-C landforms. These are authored interpretations around the
 // actual GPX, with explicit lakes, rivers, peaks, cliffs and bridge ranges.
-import { makeRouteIndex } from '../../geo.js';
+import { makeRouteIndex } from '../core/geo.js';
 import { smoothstep, ROAD_CORRIDOR_M } from '../core/random.js';
 import { makeTerrainSampler } from '../../terrain-data.js';
 

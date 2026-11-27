@@ -4,7 +4,7 @@
 import * as THREE from '../../../../vendor/three.js';
 import { streetPieces, LIFT_BLEND_M, junctionPaintJob, routeLine } from './junctions.js';
 import { drain, due } from '../core/jobs.js';   // [F30]
-import { ROAD_WIDTH } from '../../pose.js';
+import { ROAD_WIDTH } from '../core/road-frame.js';
 import { cityStreets } from './landscape.js';
 
 /** A city landscape's junction plan (planned with its streets on first use; null when the scene doesn't opt in). */

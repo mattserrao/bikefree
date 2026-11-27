@@ -10,7 +10,7 @@
 // tracks run on its left (riding outbound) at TRACKS. Generic: any scene with these data and `subway` in its
 // config gets it (another line, an incline's shaft later).
 import * as THREE from '../../../../vendor/three.js';
-import { routePoint } from '../../pose.js';
+import { routePoint } from '../core/road-frame.js';
 import { randomSequence } from '../core/random.js';
 import { Builder, M, box, linear } from '../core/model-builder.js';
 import { figureMaterial, staticCrowdMesh, randomLook, CLIP } from '../life/figures/people.js';

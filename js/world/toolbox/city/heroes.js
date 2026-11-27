@@ -10,7 +10,7 @@
 // city/landmark-heroes.js and share this build's builders and helpers.
 import * as THREE from '../../../../vendor/three.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
-import { ROAD_WIDTH } from '../../pose.js';
+import { ROAD_WIDTH } from '../core/road-frame.js';
 import { V, TAU, centroid, area2, orient, scaleRing, lerp2, inPoly, prism, cap, block, chamfer } from './hero-geom.js';
 import { landmarkModels } from './landmark-heroes.js';
 import { withNightGlow } from '../materials/night-glow.js';

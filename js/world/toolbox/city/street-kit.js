@@ -20,11 +20,11 @@
 // building's style comes from its kind (AUTO_STYLE). OSM details (signals, bus stops, benches, hydrants,
 // shops, car parks, fences) come from the city data's `streetKit` block (tools/citylib/street_kit.py); the
 // kit's own spacing rules fill in the rest. See docs/pittsburgh/detail/s3.md.
-import { ghostAt } from '../../ghost.js';
+import { ghostAt } from '../core/ghost.js';
 import * as THREE from '../../../../vendor/three.js';
 import { MeshBuilder, hash } from '../core/mesh-builder.js';
 import { drain, due, clock, each } from '../core/jobs.js';   // [F30]
-import { ROAD_WIDTH, ROAD_LIFT } from '../../pose.js';
+import { ROAD_WIDTH, ROAD_LIFT } from '../core/road-frame.js';
 import { LAND } from './landscape.js';
 import { appendToMeshBuilder } from '../life/figures/vehicles.js';
 import { staticCar, pickCar } from '../life/figures/cars.js';

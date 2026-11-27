@@ -19,7 +19,7 @@ import { MeshBuilder } from '../core/mesh-builder.js';
 import { Builder, M, cyl, cone, blob, box, withSmooth } from '../core/model-builder.js';
 import { randomSequence, smoothstep, vnoise } from '../core/random.js';
 import { nightGlowShader, withNightGlow } from '../materials/night-glow.js';   // [review 27 Nov] the shared night glow
-import { ghostMask } from '../../ghost.js';
+import { ghostMask } from '../core/ghost.js';
 import { drain, due } from '../core/jobs.js';
 import { figureMaterial, staticCrowdMesh, randomLook, CLIP } from '../life/figures/people.js';
 

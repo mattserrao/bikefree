@@ -3,7 +3,7 @@
 // the two inclines up Mount Washington, barges, the riverboat, motorboats and kayaks, and birds.
 // Agents live near the camera and are recycled as you ride; all draw calls are instanced. People, cyclists, dogs,
 // strollers, cars and buses come from the figures kit (life/figures): soft cartoon models, baked walk cycles.
-import { ghostAt, offStreetAt } from '../../ghost.js';
+import { ghostAt, offStreetAt } from '../core/ghost.js';
 import * as THREE from '../../../../vendor/three.js';
 import { Crowd, CLIP, FIT, randomLook, dogLook, clipRate, PALETTES } from '../life/figures/people.js';
 import { vehicleMesh, vehicleMaterial, setPaint, setMove } from '../life/figures/vehicles.js';
@@ -12,7 +12,7 @@ import { drain, due, each } from '../core/jobs.js';   // [F30] built as a job (i
 import { handOffLife } from './life-handoff.js';   // [F31] life carried across an area swap
 import { LAND } from './landscape.js';
 import { nightGlowShader } from '../materials/night-glow.js';
-import { ROAD_WIDTH, LANE_OFFSET, PACER_LANE, ROAD_LIFT, routePoint, leanTarget, stepLean } from '../../pose.js';
+import { ROAD_WIDTH, LANE_OFFSET, PACER_LANE, ROAD_LIFT, routePoint, leanTarget, stepLean } from '../core/road-frame.js';
 import { powerRequired } from '../../../physics.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);

@@ -14,7 +14,7 @@
 import * as THREE from '../../../../vendor/three.js';
 import { drain, due, mapJob } from '../core/jobs.js';   // [F30] planned as a job (in frame slices on the ride)
 import { MeshBuilder } from '../core/mesh-builder.js';
-import { ROAD_WIDTH, routePoint } from '../../pose.js';
+import { ROAD_WIDTH, routePoint } from '../core/road-frame.js';
 
 export const RIVERFRONT_DEFAULTS = {
   stepM: 2,          // sample spacing along the route (m)

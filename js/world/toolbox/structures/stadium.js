@@ -20,7 +20,7 @@
 // crowd's far figures, drawn only within ~1.5 km; the near rows and the players only within ~300 m).
 import * as THREE from '../../../../vendor/three.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
-import { routePoint } from '../../pose.js';
+import { routePoint } from '../core/road-frame.js';
 import { randomSequence } from '../core/random.js';
 import { figureMaterial, staticCrowdMesh, randomLook, CLIP, Crowd, clipRate } from '../life/figures/people.js';
 

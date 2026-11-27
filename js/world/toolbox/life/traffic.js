@@ -10,7 +10,7 @@
 // when the oncoming lane is clear (and waits behind when it isn't), and some vehicles pull into the
 // overlooks for a while. Agents live in a window around the rider and are recycled; instanced draws.
 import * as THREE from '../../../../vendor/three.js';
-import { ROAD_WIDTH } from '../../pose.js';
+import { ROAD_WIDTH } from '../core/road-frame.js';
 import { vehicleMesh, vehicleMaterial, setPaint, setMove, PAINTS } from './figures/vehicles.js';
 import { carGeometry, carMaterial, PALETTES } from './figures/cars.js';
 // the traffic kinds → the parked-car kit's (the jammer keeps its own model)
