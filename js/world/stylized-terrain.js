@@ -199,7 +199,7 @@ export class StylizedTerrain {
     this.details = new RoadsideDetails(this.group, this.route, this.index, this.landscape, kit, this.uniforms);
     if (this.config.verge && this.landscape.frameAt) this.verge = new Verge(this.group, this.landscape, this.route, this.config.verge);
     if (this.config.hairpinWalls) this.hairpinWalls = new HairpinWalls(this.group, this.landscape, this.route, this.config.hairpinWalls);   // retaining walls on switchbacks (toolbox/structures)
-    if (this.config.raceDay && this.landscape.frameAt) this.raceDay = new RaceDay(this.group, this.landscape, this.route, this.index, this.uniforms, this.config.raceDay, this.qualityKey);   // race day (toolbox/life)
+    if (this.config.raceDay && this.landscape.frameAt) this.raceDay = new RaceDay(this.group, this.landscape, this.route, this.index, this.uniforms, this.config.raceDay, this.qualityKey, this.renderer);   // race day (toolbox/life; the renderer bakes the crowd's impostors)
     if (this.config.visitors && this.landscape.frameAt) this.visitors = new Visitors(this.group, this.landscape, this.route, this.index, this.uniforms, this.config.visitors, this.qualityKey, this.config.lookouts || []);
     if (this.config.mountainRoad) {   // tunnels, masonry guardwalls, arches, waterfalls (toolbox/structures)
       this.landmarks = new MountainRoad(this.group, this.landscape, this.route, this.index, this.proj, this.config, kit, this.uniforms);

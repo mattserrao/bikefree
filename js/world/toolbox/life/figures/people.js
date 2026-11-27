@@ -659,7 +659,16 @@ export function staticCrowdMesh(list, material, name, lod = 'lo') {
  * A figure frozen in one frame of a clip, with its colours baked in: for people built into other models
  * (passengers, motorbike riders, spectators on chairs). Returns a plain indexed geometry (position, normal, color).
  */
-export function posedFigure(look, clip, { frame = 0, lod = 'lo', geometry = null } = {}) {
+/** A look's hair colour (bald: the skin a shade darker), as the figures draw it. */
+export const hairColor = (look) => (look.hair >= 7 ? look.skin.clone().multiplyScalar(.92) : col(HAIR[look.hair]));
+
+/**
+ * (opts.channels: instead of colours, the paint's weights for a crowd impostor atlas (life/impostors.js): aCh0 =
+ * shirt, trousers, skin, hair; aCh1 = 0, shin, forearm, 0 — the shin and the forearm apart, so an impostor can show
+ * long or short trousers and sleeves by its own look. Bake with FIT.SLEEVES | FIT.LONG_PANTS. Everything else
+ * (shoes, eyes, props) weighs nothing: it draws dark.)
+ */
+export function posedFigure(look, clip, { frame = 0, lod = 'lo', geometry = null, channels = false } = {}) {
   const src = geometry || personGeometry(lod), f = clipFloats();
   const P = src.attributes.position, N = src.attributes.normal, C = src.attributes.color, S = src.attributes.aSkin, Mk = src.attributes.aMask;
   const pos = [], nor = [], colr = [], keep = new Int32Array(P.count).fill(-1);
@@ -679,13 +688,23 @@ export function posedFigure(look, clip, { frame = 0, lod = 'lo', geometry = null
     pos.push(p0.x * look.g, p0.y * look.h, p0.z * gz); n0.normalize(); nor.push(n0.x, n0.y, n0.z);
     let mk = [Mk.getX(i), Mk.getY(i), Mk.getZ(i), Mk.getW(i)];
     if ((sel === SEL.FOREARM && !(bits & FIT.SLEEVES)) || (sel === SEL.SHIN && !(bits & FIT.LONG_PANTS)) || (sel === SEL.THIGH && (bits & FIT.SKIRT))) mk = [0, 0, 1, 0];
+    if (channels) {
+      const fore = sel === SEL.FOREARM ? mk[0] : 0, shin = sel === SEL.SHIN ? mk[1] : 0;
+      colr.push(sel === SEL.FOREARM ? 0 : mk[0], sel === SEL.SHIN ? 0 : mk[1], mk[2], mk[3], 0, shin, fore, 0);
+      continue;
+    }
     const k = Math.max(0, 1 - mk[0] - mk[1] - mk[2] - mk[3]);
     for (const [ch, base] of [['r', C.getX(i)], ['g', C.getY(i)], ['b', C.getZ(i)]]) colr.push(base * k + look.shirt[ch] * mk[0] + look.pants[ch] * mk[1] + look.skin[ch] * mk[2] + hair[ch] * mk[3]);
   }
   const idx = [], I = src.index.array;
   for (let t = 0; t < I.length; t += 3) { const a = keep[I[t]], b = keep[I[t + 1]], c = keep[I[t + 2]]; if (a >= 0 && b >= 0 && c >= 0) idx.push(a, b, c); }
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(colr, 3));
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  if (channels) {
+    const a0 = [], a1 = [];
+    for (let i = 0; i < colr.length; i += 8) { a0.push(colr[i], colr[i + 1], colr[i + 2], colr[i + 3]); a1.push(colr[i + 4], colr[i + 5], colr[i + 6], colr[i + 7]); }
+    g.setAttribute('aCh0', new THREE.Float32BufferAttribute(a0, 4)); g.setAttribute('aCh1', new THREE.Float32BufferAttribute(a1, 4));
+  } else g.setAttribute('color', new THREE.Float32BufferAttribute(colr, 3));
   g.setIndex(idx); g.computeBoundingSphere();
   if (!geometry) src.dispose();
   return g;

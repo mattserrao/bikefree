@@ -5,10 +5,12 @@
 // slogans only — no sponsors, no trademarks.
 //
 // Cheap by construction: everything is static and merged or instanced per stretch of road (one draw per kind per
-// stretch, hidden past a reach); the crowd's cheering, the flags and the rotor move in the vertex shaders. Near
-// the rider the crowd is people from the figures kit — detailed within a few tens of metres of the camera, light
-// beyond — and further off it is crowd cards (a strip of heads and shirts drawn by the shader); some sit on chairs
-// at the camps. Portable: a scene's "raceDay" block.
+// stretch, hidden past a reach); the cheering, the flags and the rotor move in the shaders. The crowd (race-day
+// crowds plan, 27 Nov): nothing per person is built at load — the road's 25 m buckets make their people from their
+// own seed as the camera nears; within the pool's reach they are impostor cards from an atlas photographed from the
+// figures kit at load (one draw, no shadow cast; life/figures/impostors.js, life/crowd-pool.js), the nearest few
+// (Balanced 40, within 12 m) are 3D figures, beyond the reach crowd cards (a strip of heads and shirts drawn by the
+// shader) over a soft contact shadow on the ground; the people in the camps' chairs are cards too. Portable: a scene's "raceDay" block.
 //
 //   "raceDay": {
 //     "crowd": [ { "fromM": 111600, "toM": 126900, "perM": 0.9, "rows": 3, "orange": 0.15 },
@@ -22,15 +24,20 @@ import * as THREE from '../../../../vendor/three.js';
 import { randomSequence } from '../core/random.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
 import { Builder, M, box, cyl, cone } from '../core/model-builder.js';
-import { Crowd, CLIP, FIT, randomLook, clipRate, figureMaterial, staticCrowdMesh, posedFigure } from './figures/people.js';
+import { Crowd, CLIP, FIT, randomLook, clipRate } from './figures/people.js';
+import { bakeCrowdAtlas, POSE_OF } from './figures/impostors.js';   // [27 Nov] the crowd as impostor cards
+import { CrowdPool, STRIDE, writePerson } from './crowd-pool.js';
 import { staticVehicle, appendToBuilder, PAINTS } from './figures/vehicles.js';
 import { staticCar } from './figures/cars.js';
 import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash
 import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 const ROAD_HALF = 3.5;
-const CHUNK_M = 100;          // crowd people per 100 m of road (each chunk draws its people at one detail level)
-const CARD_CHUNK_M = 2000;    // crowd cards and camps per 2 km
+const BUCKET_M = 25;          // [27 Nov] the road's crowd buckets: each one's people come from its own seed, when the camera nears
+const BUCKET_CACHE = 900;     // buckets kept made (the rest are made again, the same, when you come back)
+const CARD_MERGE_M = 5000;    // crowd cards and contact shadows merged per 5 km
+const CARD_CHUNK_M = 2000;    // camps and barriers per 2 km
+const MOODS = [[CLIP.idle, CLIP.look, CLIP.photo, CLIP.idle], [CLIP.cheer, CLIP.cheer, CLIP.wave], [CLIP.clap]];
 const ORANGE = ['#ff7a00', '#ff8c1a', '#f26a00', '#ffa033'];
 // generic flags: [stripes direction, colours] (national tricolours and plain fan flags)
 const FLAGS = [['v', '#0055a4', '#ffffff', '#ef4135'], ['h', '#ae1c28', '#ffffff', '#21468b'], ['v', '#000000', '#fdda24', '#ef3340'], ['d', '#c8102e', '#ffffff'],
@@ -131,7 +138,7 @@ function bannerTexture(texts) {
 }
 
 export class RaceDay {
-  constructor(parent, landscape, route, index, uniforms, config = {}, quality = 'balanced') {
+  constructor(parent, landscape, route, index, uniforms, config = {}, quality = 'balanced', renderer = null) {
     this.L = landscape; this.route = route; this.index = index; this.u = uniforms; this.cfg = config;
     this.group = new THREE.Group(); this.group.name = 'Race day'; parent.add(this.group);
     this.end = route.turnS || route.total;
@@ -144,43 +151,56 @@ export class RaceDay {
     const barrierAt = (s) => (config.barriers || []).some((b) => s >= b.fromM && s <= b.toM);
     const tunnelAt = (s) => (config.noCrowd || []).some((b) => s >= b.fromM && s <= b.toM);
 
-    // ---- people and cards
-    const people = new Map(), cards = new Map(), camps = new Map();
     const crowdAt = (s) => { let best = null; for (const c of config.crowd || []) if (s >= c.fromM && s < c.toM && (!best || (c.perM ?? 0) > (best.perM ?? 0))) best = c; return best; };
-    const step = 1.0;
-    for (let s = 30; s < this.end - 5; s += step) {
-      const c = crowdAt(s);
-      if (!c || tunnelAt(s)) continue;
-      const per = (c.perM ?? .3) * scale, rows = c.rows ?? 1;
-      const p = F(s);
-      // behind barriers on a sharp corner the panels kink at the road's 10 m joints: leave the corner empty
-      if (barrierAt(s)) { const a = F(s - 6), b = F(s + 6); if (a.fx * b.fx + a.fz * b.fz < .94) continue; }
-      for (const side of [1, -1]) {
-        if (rand() > per * step / rows * rows) continue;   // people per metre per side
-        for (let r = 0; r < rows; r++) {
-          if (r && rand() > .75) continue;
-          const fenced = barrierAt(s), lat = ROAD_HALF + (fenced ? 1.6 : .9) + r * .75 + rand() * .35;
-          const j = (rand() - .5) * .5, x = p.x - p.fz * side * lat + p.fx * j, z = p.z + p.fx * side * lat + p.fz * j, y = landscape.heightAt(x, z);   // jitter along the road, never toward it
-          if (Math.abs(y - p.y) > 2.5 || !free(x, z, y, fenced ? .9 : .3)) continue;   // behind the barriers, also on the inside of a bend
-          const yaw = Math.atan2(p.fz * side, -p.fx * side) + (rand() - .5) * .9;   // facing the road
-          const orange = rand() < (c.orange ?? 0);
-          const key = Math.floor(s / CHUNK_M);
-          (people.get(key) || people.set(key, []).get(key)).push({ x, y, z, yaw, orange, flag: rand() < (c.flags ?? .08), mood: rand() < (c.cheer ?? .55) ? (rand() < .7 ? 1 : 2) : 0, phase: rand() * 6.28 });
-        }
-      }
+    // ---- people: seeded by the road (race-day crowds plan, 27 Nov). Nothing is built per person at load: the road is
+    // cut into BUCKET_M buckets, and a bucket's people (where they stand, their look, pose and phase) come from its own
+    // seed when the camera first comes near — the same people every time. Near the camera they're impostor cards in
+    // one draw (life/crowd-pool.js); the nearest few are 3D figures; past the pool's reach, the crowd cards.
+    this.crowdAt = crowdAt; this.tunnelAt = tunnelAt; this.barrierAt = barrierAt; this.free = free; this.F = F; this.scale = scale;
+    this.buckets = [];
+    for (let s0 = 30; s0 < this.end - 5; s0 += BUCKET_M) {
+      const c = F(s0 + BUCKET_M / 2);
+      this.buckets.push({ s0, x: c.x, y: c.y, z: c.z, people: null, block: null, used: 0 });
     }
-    // crowd cards: a strip either side of the road, where the crowd is thick enough to read from afar
+    this.cache = 0;
+    const Q = { low: [1500, 160, 0, 10], balanced: [4000, 250, 40, 12], high: [6000, 320, 80, 12], ultra: [8000, 380, 80, 12] }[quality] || [4000, 250, 40, 12];
+    [this.poolCap, this.poolR, this.frontCap, this.frontR] = [Q[0], config.peopleReachM ?? Q[1], Q[2], Q[3]];
+    this.reach.people = this.poolR;
+    this.near = { value: new THREE.Vector4(0, -1e5, 0, 0) };
+    this.atlas = bakeCrowdAtlas(renderer);
+    if (this.atlas) {
+      this._own(this.atlas);
+      this.pool = new CrowdPool(this.group, { atlas: this.atlas, uTime: uniforms.uTime, near: this.near, capacity: this.poolCap, farM: this.poolR + BUCKET_M, name: 'Crowd (cards)' });
+    } else this.frontCap = 0;   // (no renderer to bake with: the crowd cards only)
+    this.nearCrowd = this.frontCap ? new Crowd(this.group, { uTime: uniforms.uTime, name: 'Crowd (front row)', capacity: this.frontCap, nearM: Infinity }) : null;
+    // the front row's flags (the cards carry their own in the atlas)
+    this.flagMat = this._own(flagMaterial(uniforms.uTime, this._own(flagAtlas())));
+    if (this.frontCap) {
+      const fg = this._own(new THREE.PlaneGeometry(.9, .6, 4, 1).translate(.45 - .27, 2.45, .12)), pg = this._own(new THREE.CylinderGeometry(.015, .015, 1.6, 4).translate(-.27, 1.95, .12));
+      this.flagIds = new THREE.InstancedBufferAttribute(new Float32Array(this.frontCap), 1); this.flagPh = new THREE.InstancedBufferAttribute(new Float32Array(this.frontCap), 1);
+      fg.setAttribute('iFlag', this.flagIds); fg.setAttribute('iPhase', this.flagPh);
+      this.frontFlags = new THREE.InstancedMesh(fg, this.flagMat, this.frontCap); this.framePoles = new THREE.InstancedMesh(pg, this._own(new THREE.MeshStandardMaterial({ color: '#8c8c88' })), this.frontCap);
+      for (const m of [this.frontFlags, this.framePoles]) { m.count = 0; m.frustumCulled = false; m.userData.dynamic = true; m.castShadow = true; this.group.add(m); }
+      this.frontFlags.name = 'Fan flags (front row)'; this.framePoles.name = 'Flag poles (front row)';
+    }
+    this.peopleCount = 0;
+
+    // ---- crowd cards (the far stand-in) and contact shadows under the crowd, where it's thick enough to read
+    const cards = new Map(), strips = new Map(), camps = new Map();
     for (let s = 30; s < this.end - 5; s += 6) {
       const c = crowdAt(s);
       if (!c || (c.perM ?? 0) < .25 || tunnelAt(s)) continue;
-      const a = F(s), b = F(s + 6);
+      const a = F(s), b = F(s + 6), key = Math.floor(s / CARD_MERGE_M), fenced = barrierAt(s);
       for (const side of [1, -1]) {
-        const lat = ROAD_HALF + (barrierAt(s) ? 1.3 : 1.0) + .3;
+        const lat = ROAD_HALF + (fenced ? 1.3 : 1.0) + .3;
         const A = { x: a.x - a.fz * side * lat, z: a.z + a.fx * side * lat }, B = { x: b.x - b.fz * side * lat, z: b.z + b.fx * side * lat };
         const ya = landscape.heightAt(A.x, A.z), yb = landscape.heightAt(B.x, B.z);
         if (Math.abs(ya - a.y) > 2.5 || Math.abs(yb - b.y) > 2.5 || !free(A.x, A.z, ya)) continue;
-        const key = Math.floor(s / CARD_CHUNK_M);
         (cards.get(key) || cards.set(key, []).get(key)).push({ A, B, ya, yb, s, seed: rand(), orange: c.orange ?? 0 });
+        // a soft dark band on the ground under the rows: inner edge, middle, outer edge (the middle darkest)
+        const l0 = ROAD_HALF + (fenced ? 1.4 : .7), l2 = l0 + (c.rows ?? 1) * .75 + .9, dark = Math.min(.42, .16 + (c.perM ?? .3) * .22);
+        const row = [l0, (l0 + l2) / 2, l2].map((l, k) => [a, b].map((f) => { const x = f.x - f.fz * side * l, z = f.z + f.fx * side * l; return { x, y: landscape.heightAt(x, z) + .04, z, k: k === 1 ? dark : 0 }; }));
+        (strips.get(key) || strips.set(key, []).get(key)).push(row);
       }
     }
     // camps: camper vans, tents, parked cars and folding chairs on the flatter verges
@@ -194,59 +214,8 @@ export class RaceDay {
         (camps.get(key) || camps.set(key, []).get(key)).push({ x, y, z, yaw: Math.atan2(p.fx, p.fz) + (rand() < .5 ? 0 : Math.PI) + (rand() - .5) * .3, kind: rand(), c: rand() });
       }
     }
-
-    // ---- build: people (instanced per chunk), flags, cards and camps (merged per chunk)
-    // the near band (detailed figures, refilled as the camera moves) and the far chunks share this sphere
-    // three bands around the camera: detailed figures within nearR (a Crowd refilled as the camera moves; the chunks
-    // hide those in their shader), the light figures in chunks closer than midR, the lightest ones beyond
-    const nearR = { low: 14, balanced: 20, high: 34 }[quality] ?? 20;
-    this.midR = { low: 45, balanced: 70, high: 110 }[quality] ?? 70;
-    this.near = { value: new THREE.Vector4(0, -1e5, 0, nearR) };
-    const midMat = this._own(figureMaterial(uniforms.uTime, { near: this.near, nearMode: 1 }));
-    const farMat = this._own(figureMaterial(uniforms.uTime));
-    this._own(midMat.userData.depth); this._own(farMat.userData.depth);
-    this.nearCrowd = new Crowd(this.group, { uTime: uniforms.uTime, name: 'Crowd (near)', capacity: { low: 160, balanced: 420, high: 800 }[quality] ?? 420, nearM: Infinity });
-    this.nearLists = [];
-    const flagMat = this._own(flagMaterial(uniforms.uTime, this._own(flagAtlas())));
-    const flagGeo = new THREE.PlaneGeometry(.9, .6, 4, 1).translate(.45 - .27, 2.45, .12);
-    const poleGeo = new THREE.CylinderGeometry(.015, .015, 1.6, 4).translate(-.27, 1.95, .12);
-    const MOODS = [[CLIP.idle, CLIP.look, CLIP.photo, CLIP.idle], [CLIP.cheer, CLIP.cheer, CLIP.wave], [CLIP.clap]];
-    const col = new THREE.Color(), mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1), pos = new THREE.Vector3();
-    let total = 0;
-    for (const [key, list] of people) {
-      const n = list.length;
-      const flags = list.filter((p) => p.flag);
-      list.forEach((p, i) => {
-        const look = randomLook(rand, { kids: .1, caps: .25, packs: .12, skirts: .1, ...(p.orange ? { shirt: ORANGE[i % ORANGE.length] } : {}) });
-        if (p.orange && rand() < .5) look.pants = col.set('#ff8c1a').clone();
-        const table = MOODS[p.mood] || MOODS[0];
-        p.look = look; p.clip = p.flag ? CLIP.flag : table[Math.floor(rand() * table.length)];
-        if (p.clip === CLIP.photo) look.bits |= FIT.PROP;
-        if (p.flag) { look.h = 1; look.g = 1; look.kid = false; }   // the flag's pole is built for an adult's raised hand
-        p.phase = rand(); p.rate = clipRate(p.clip) * (.85 + rand() * .3);
-      });
-      const name = `Crowd ${(key * CHUNK_M / 1000).toFixed(1)} km`;
-      const mesh = this._own(staticCrowdMesh(list, midMat, name, 'lo')), farMesh = this._own(staticCrowdMesh(list, farMat, `${name} (far)`, 'far'));
-      for (const m of [mesh, farMesh]) { m.castShadow = true; m.customDepthMaterial = m.material.userData.depth; this._chunk(m, 'people', m.geometry); }
-      mesh.userData.band = 'mid'; farMesh.userData.band = 'far';
-      this.nearLists.push({ mesh, farMesh, list });
-      total += n;
-      if (flags.length) {
-        const fg = flagGeo.clone(), fm = new THREE.InstancedMesh(fg, flagMat, flags.length), pm = new THREE.InstancedMesh(poleGeo, this._own(new THREE.MeshStandardMaterial({ color: '#8c8c88' })), flags.length);
-        const id = new Float32Array(flags.length), ph = new Float32Array(flags.length);
-        flags.forEach((p, i) => {
-          q.setFromAxisAngle(up, p.yaw); mtx.compose(pos.set(p.x, p.y, p.z), q, one);
-          fm.setMatrixAt(i, mtx); pm.setMatrixAt(i, mtx);
-          id[i] = p.orange ? 6 : Math.floor(rand() * FLAGS.length); ph[i] = p.phase;
-        });
-        fg.setAttribute('iFlag', new THREE.InstancedBufferAttribute(id, 1)); fg.setAttribute('iPhase', new THREE.InstancedBufferAttribute(ph, 1));
-        fm.name = 'Fan flags'; pm.name = 'Flag poles'; fm.userData.dynamic = true; pm.userData.dynamic = true;
-        fm.computeBoundingSphere(); pm.computeBoundingSphere();
-        this._chunk(fm, 'people', fg); this._chunk(pm, 'people');
-      }
-    }
-    this.peopleCount = total;
-    const cardMat = this._own(cardMaterial(uniforms.uTime, { value: this.reach.people * .8 }));
+    this.cardNear = { value: this.atlas ? this.poolR * .8 : 0 };
+    const cardMat = this._own(cardMaterial(uniforms.uTime, this.cardNear));
     for (const [key, list] of cards) {
       const P = [], N = [], Cc = [], K = [], I = [];
       for (const c of list) {
@@ -261,15 +230,34 @@ export class RaceDay {
       g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
       g.setAttribute('color', new THREE.Float32BufferAttribute(Cc, 3)); g.setAttribute('aCard', new THREE.Float32BufferAttribute(K, 3)); g.setIndex(I);
       g.computeBoundingSphere();
-      const mesh = new THREE.Mesh(g, cardMat); mesh.name = `Crowd cards ${(key * CARD_CHUNK_M / 1000).toFixed(0)} km`; mesh.userData.bake = false; mesh.userData.standIn = true;   // the far stand-in for the people
+      const mesh = new THREE.Mesh(g, cardMat); mesh.name = `Crowd cards ${(key * CARD_MERGE_M / 1000).toFixed(0)} km`; mesh.userData.bake = false; mesh.userData.standIn = true;   // the far stand-in for the people
       this._chunk(mesh, 'cards', g);
     }
-    // camps: motorhomes, camper vans, tents, cars, chairs (some with people in them), parasols — merged per 2 km
-    let rvGeo = null; const vanGeo = [];
+    const stripMat = this._own(new THREE.MeshBasicMaterial({ color: '#000000', vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
+    stripMat.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace(anchor('#include <color_fragment>'), '#include <color_fragment>\n diffuseColor = vec4(0., 0., 0., vColor.a);'); };
+    stripMat.customProgramCacheKey = () => 'bf-crowd-contact-1';
+    for (const [key, list] of strips) {
+      const P = [], C = [], I = [];
+      for (const row of list) {
+        const b = P.length / 3;
+        for (const [pa, pb] of row) for (const p of [pa, pb]) { P.push(p.x, p.y, p.z); C.push(0, 0, 0, p.k); }
+        // vertices: (inner a, inner b), (mid a, mid b), (outer a, outer b)
+        for (const k of [0, 2]) I.push(b + k, b + k + 1, b + k + 3, b + k, b + k + 3, b + k + 2);
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 4)); g.setIndex(I); g.computeBoundingSphere();
+      const mesh = new THREE.Mesh(g, stripMat); mesh.name = `Crowd contact shadow ${(key * CARD_MERGE_M / 1000).toFixed(0)} km`; mesh.userData.bake = false; mesh.renderOrder = 15;
+      this._chunk(mesh, 'cards', g);
+    }
+    // camps: motorhomes, camper vans, tents, cars, chairs, parasols — merged per 2 km; the people in the chairs are
+    // impostor cards (one draw for all of them)
+    let rvGeo = null; const vanGeo = [], sitters = [];
+    const sit = (x, y, z, yaw) => sitters.push({ x, y, z, yaw, look: randomLook(rand, { kids: .15, caps: .35 }), pose: POSE_OF[CLIP.sit], phase: rand(), rate: clipRate(CLIP.sit) });
     for (const [key, list] of camps) {
       const b = new Builder();
       for (const c of list) {
         const m = (x, y, z, ry = 0) => M(c.x + Math.cos(c.yaw) * x + Math.sin(c.yaw) * z, c.y + y, c.z - Math.sin(c.yaw) * x + Math.cos(c.yaw) * z, 1, 1, 1, c.yaw + ry);
+        const at = (x, z, ry = 0) => sit(c.x + Math.cos(c.yaw) * x + Math.sin(c.yaw) * z, c.y, c.z - Math.sin(c.yaw) * x + Math.cos(c.yaw) * z, c.yaw + ry);
         if (c.kind < .45) {
           // a motorhome or a camper van, an awning, and people in folding chairs beside it
           const rv = c.c < .6;
@@ -278,7 +266,7 @@ export class RaceDay {
           for (const [x, z, ry] of [[2.3, -.6, -.4], [2.6, .7, .3]]) {
             b.add(box(.5, .06, .5), m(x, .44, z), '#3b5ba5'); b.add(box(.5, .5, .06), m(x, .44, z - .24), '#3b5ba5');
             for (const lx of [-.22, .22]) b.add(box(.03, .44, .03), m(x + lx, 0, z), '#666');
-            if (rand() < .75) appendToBuilder(b, posedFigure(randomLook(rand, { kids: .15, caps: .35 }), CLIP.sit, { frame: Math.floor(rand() * 24) }), m(x, 0, z + .1, ry));
+            if (rand() < .75) at(x, z + .1, ry);
           }
         } else if (c.kind < .7) {
           // a tent and a table
@@ -294,13 +282,19 @@ export class RaceDay {
           b.add(cone(1.4, .45, 8), m(0, 1.9, 0), ['#e74c3c', '#f1c40f', '#3498db'][Math.floor(c.c * 3)]);
           for (const x of [.7, -.7]) {
             b.add(box(.5, .06, .5), m(x, .44, 0), '#3b5ba5'); b.add(box(.5, .5, .06), m(x, .44, -.24), '#3b5ba5');
-            if (rand() < .6) appendToBuilder(b, posedFigure(randomLook(rand, { kids: .15, caps: .35 }), CLIP.sit, { frame: Math.floor(rand() * 24) }), m(x, 0, .1));
+            if (rand() < .6) at(x, .1);
           }
         }
       }
       const mesh = new THREE.Mesh(b.build(), this._own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .75 })));
       mesh.name = `Race camps ${(key * CARD_CHUNK_M / 1000).toFixed(0)} km`; mesh.castShadow = true; mesh.receiveShadow = true;
       mesh.geometry.computeBoundingSphere(); this._chunk(mesh, 'camps', mesh.geometry);
+    }
+    if (this.atlas && sitters.length) {
+      const block = new Float32Array(sitters.length * STRIDE);
+      sitters.forEach((p, i) => writePerson(block, i, p));
+      this.sitters = new CrowdPool(this.group, { atlas: this.atlas, uTime: uniforms.uTime, near: { value: new THREE.Vector4(0, 0, 0, 0) }, capacity: sitters.length, farM: 700, name: 'Camp sitters (cards)' });
+      this.sitters.show([block]);
     }
     this._barriers(F, rand);
     if (config.paint?.length) this._paint(F, rand);
@@ -439,26 +433,110 @@ export class RaceDay {
     this.group.add(this.heli);
   }
 
-  /** Every frame: show the stretches near the camera, hand the nearest spectators to the detailed figures, fly the helicopter. */
+  /** A bucket's people, from its own seed (the old load-time placement, a bucket at a time). */
+  _makeBucket(bk, i) {
+    const { L, F, free, crowdAt, tunnelAt, barrierAt, scale } = this, rand = randomSequence(2026 + i * 7919), people = [];
+    for (let s = bk.s0; s < Math.min(bk.s0 + BUCKET_M, this.end - 5); s += 1) {
+      const c = crowdAt(s);
+      if (!c || tunnelAt(s)) continue;
+      const per = (c.perM ?? .3) * scale, rows = c.rows ?? 1, p = F(s);
+      // behind barriers on a sharp corner the panels kink at the road's 10 m joints: leave the corner empty
+      if (barrierAt(s)) { const a = F(s - 6), b = F(s + 6); if (a.fx * b.fx + a.fz * b.fz < .94) continue; }
+      for (const side of [1, -1]) {
+        if (rand() > per) continue;   // people per metre per side
+        for (let r = 0; r < rows; r++) {
+          if (r && rand() > .75) continue;
+          const fenced = barrierAt(s), lat = ROAD_HALF + (fenced ? 1.6 : .9) + r * .75 + rand() * .35;
+          const j = (rand() - .5) * .5, x = p.x - p.fz * side * lat + p.fx * j, z = p.z + p.fx * side * lat + p.fz * j, y = L.heightAt(x, z);   // jitter along the road, never toward it
+          if (Math.abs(y - p.y) > 2.5 || !free(x, z, y, fenced ? .9 : .3)) continue;   // behind the barriers, also on the inside of a bend
+          const yaw = Math.atan2(p.fz * side, -p.fx * side) + (rand() - .5) * .9;   // facing the road
+          const orange = rand() < (c.orange ?? 0), flag = rand() < (c.flags ?? .08), mood = rand() < (c.cheer ?? .55) ? (rand() < .7 ? 1 : 2) : 0;
+          const look = randomLook(rand, { kids: .1, caps: .25, packs: .12, skirts: .1, ...(orange ? { shirt: ORANGE[people.length % ORANGE.length] } : {}) });
+          if (orange && rand() < .5) look.pants = new THREE.Color('#ff8c1a');
+          const table = MOODS[mood] || MOODS[0], clip = flag ? CLIP.flag : table[Math.floor(rand() * table.length)];
+          if (clip === CLIP.photo) look.bits |= FIT.PROP;
+          if (flag) { look.h = 1; look.g = 1; look.kid = false; }   // the flag's pole is built for an adult's raised hand
+          const flagId = orange ? 6 : Math.floor(rand() * FLAGS.length);
+          people.push({ x, y, z, yaw, look, clip, pose: Math.max(0, POSE_OF[clip]), phase: rand(), rate: clipRate(clip) * (.85 + rand() * .3), flagId, flag: flag ? new THREE.Color(FLAGS[flagId][1 + Math.floor(rand() * (FLAGS[flagId].length - 1))]) : null });
+        }
+      }
+    }
+    bk.people = people;
+    bk.block = new Float32Array(people.length * STRIDE);
+    people.forEach((p, k) => writePerson(bk.block, k, p));
+    this.cache++;
+  }
+
+  /** Buckets within the pool's reach, nearest first; made as needed (all at once the first time, then a few ms a frame). */
+  _refresh(cam, first) {
+    const R = this.poolR + BUCKET_M, near = [];
+    for (let i = 0; i < this.buckets.length; i++) {
+      const b = this.buckets[i], d = Math.hypot(b.x - cam.x, b.y - cam.y, b.z - cam.z) - BUCKET_M / 2;
+      if (d < R) near.push([d, i]);
+    }
+    near.sort((a, b) => a[0] - b[0]);
+    const t0 = performance.now(), blocks = [], front = [];
+    let n = 0, edge = this.poolR, waiting = false;
+    for (const [d, i] of near) {
+      const b = this.buckets[i];
+      if (!b.people) {
+        if (!first && performance.now() - t0 > 2.5) { waiting = true; edge = Math.min(edge, Math.max(0, d)); break; }
+        this._makeBucket(b, i);
+      }
+      b.used = this.frame;
+      if (n + b.people.length > this.poolCap) { edge = Math.min(edge, Math.max(0, d)); break; }
+      n += b.people.length; blocks.push(b.block);
+      if (d < this.frontR) front.push(b);
+    }
+    this.pool.show(blocks);
+    this.peopleCount = n; this.frontBuckets = front;
+    // the crowd cards take over where the pool stops (its reach, or its capacity, or a bucket still to be made)
+    this.cardNear.value = edge;
+    if (this.cache > BUCKET_CACHE) {   // forget the buckets used longest ago (made again, the same, on the way back)
+      const old = this.buckets.filter((b) => b.people && b.used !== this.frame).sort((a, b) => a.used - b.used);
+      for (const b of old.slice(0, this.cache - BUCKET_CACHE)) { b.people = null; b.block = null; this.cache--; }
+    }
+    return waiting;
+  }
+
+  /** Every frame: show the stretches near the camera, keep the pool round it, the nearest people in 3D, fly the helicopter. */
   tick(dt, camera, riderS = null) {
     const cam = camera.position || camera, cx = cam.x, cz = cam.z;
+    this.frame = (this.frame || 0) + 1;
     for (const m of this.chunks) {
       const b = m.isInstancedMesh ? m.boundingSphere : m.geometry.boundingSphere;
       if (!b) continue;
-      const d = Math.hypot(b.center.x - cx, b.center.z - cz) - b.radius;
-      m.visible = d < this.reach[m.userData.kind] && (!m.userData.band || (m.userData.band === 'mid') === (d < this.midR));
+      m.visible = Math.hypot(b.center.x - cx, b.center.z - cz) - b.radius < this.reach[m.userData.kind];
     }
-    // the near band: within near.w of the camera the far chunks hide their people (in the shader) and the
-    // detailed crowd draws the same people, same clip and phase
-    const R = this.near.value.w;
+    if (this.pool) {
+      const moved = !this._at || Math.hypot(cam.x - this._at.x, cam.y - this._at.y, cam.z - this._at.z) > 3;
+      if (moved || this._waiting) { this._waiting = this._refresh(cam, !this._at); this._at = { x: cam.x, y: cam.y, z: cam.z }; }
+    }
+    // the front row: the nearest people (up to the cap, within frontR) drawn as 3D figures; the cards drop the same ones
+    let R = 0;
+    if (this.nearCrowd) {
+      const list = [];
+      for (const b of this.frontBuckets || []) for (const p of b.people) { const d = Math.hypot(p.x - cam.x, p.y - cam.y, p.z - cam.z); if (d < this.frontR) list.push([d, p]); }
+      list.sort((a, b) => a[0] - b[0]);
+      R = list.length > this.frontCap ? (list[this.frontCap - 1][0] + list[this.frontCap][0]) / 2 : this.frontR;
+      this.nearCrowd.begin(cam);
+      let f = 0;
+      const one = new THREE.Vector3(1, 1, 1), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), mtx = new THREE.Matrix4(), pos = new THREE.Vector3();
+      for (const [d, p] of list) {
+        if (d >= R) break;
+        this.nearCrowd.add(p.look, p.x, p.y, p.z, p.yaw, p.clip, p.phase, p.rate);
+        if (p.clip === CLIP.flag && this.frontFlags) {
+          mtx.compose(pos.set(p.x, p.y, p.z), q.setFromAxisAngle(up, p.yaw), one);
+          this.frontFlags.setMatrixAt(f, mtx); this.framePoles.setMatrixAt(f, mtx); this.flagIds.array[f] = p.flagId; this.flagPh.array[f] = p.phase * 6.28; f++;
+        }
+      }
+      this.nearCrowd.end();
+      if (this.frontFlags) {
+        this.frontFlags.count = this.framePoles.count = f;
+        this.frontFlags.instanceMatrix.needsUpdate = this.framePoles.instanceMatrix.needsUpdate = true; this.flagIds.needsUpdate = this.flagPh.needsUpdate = true;
+      }
+    }
     this.near.value.set(cam.x, cam.y, cam.z, R);
-    this.nearCrowd.begin(cam);
-    for (const { mesh, list } of this.nearLists) {
-      const b = mesh.boundingSphere;
-      if (!mesh.visible || Math.hypot(b.center.x - cam.x, b.center.y - cam.y, b.center.z - cam.z) - b.radius > R) continue;
-      for (const p of list) if (Math.hypot(p.x - cam.x, p.y - cam.y, p.z - cam.z) < R) this.nearCrowd.add(p.look, p.x, p.y, p.z, p.yaw, p.clip, p.phase, p.rate);
-    }
-    this.nearCrowd.end();
     if (this.heli) {
       this._t = (this._t || 0) + dt;
       const t = this._t;
@@ -471,8 +549,9 @@ export class RaceDay {
   }
 
   dispose() {
-    this.nearCrowd.dispose();
+    this.nearCrowd?.dispose(); this.pool?.dispose(); this.sitters?.dispose();
     for (const m of this.chunks) m.dispose?.();
+    this.frontFlags?.dispose(); this.framePoles?.dispose();
     this.dispose_.forEach((x) => x.dispose?.());
     this.group.removeFromParent();
   }
