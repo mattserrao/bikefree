@@ -32,8 +32,9 @@ export const GUARD_SHOTS = {
 };
 
 // [blocks] The free-ride road-graph maps (graph world: tools/snap_pgh.mjs with a seeded, frozen clock). Their tiles
-// stream in async load order, so two runs of the same code differ in a few pixels (~0.2 %): these shots are compared
-// with a tolerance (GRAPH_TOLERANCE), not byte for byte.
+// stream in async load order, so two runs of the same code differ in a few pixels and draw calls: these shots are
+// compared with a tolerance (GRAPH_TOLERANCE), not byte for byte. (Measured in wave 3 on SKAN, with the chase camera
+// and live shadows now pinned under --frozen: 0.07-0.3 % of pixels, draw calls up to 4 %; before the pin, 3-5 %.)
 export const GRAPH_SHOTS = {
   pgh: ['north-shore@40.4469,-80.0061', 'oakland@40.442,-79.9555'],
   cny: ['village@43.0392,-76.3041', 'farms@43.0465,-76.256', 'south@43.0173,-76.3347'],

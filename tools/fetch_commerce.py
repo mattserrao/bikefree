@@ -3,6 +3,7 @@
 
   python3 tools/fetch_commerce.py pgh            # one map
   python3 tools/fetch_commerce.py all            # every graph map
+  python3 tools/fetch_commerce.py pgh --offline  # --offline (or BIKEFREE_OFFLINE=1): the cache only; a download stops the run naming the missing file (citylib/offline.py)
 
 Reads   routes/cities/<id>.json (the graph: its edges' polylines decide which tiles are fetched)
 Writes  tools/.cache/osm-commerce-<id>/t_<lat>_<lon>.osm   raw OSM API tiles (cached; delete to refresh)
@@ -165,4 +166,5 @@ def main(mid):
 
 
 if __name__ == '__main__':
-    for m in (MAPS if sys.argv[1:] == ['all'] else sys.argv[1:]): main(m)
+    ids = [a for a in sys.argv[1:] if not a.startswith('--')]   # (--offline is read by citylib/offline.py, not a map)
+    for m in (MAPS if ids == ['all'] else ids): main(m)

@@ -83,8 +83,21 @@ python3 tools/cache_manifest.py unpack <tarball>
 The manifest's digest is the one in the map's `provenance.inputs.sha256` when the map was built from exactly those files.
 
 After a rebuild, `npm run routes:build` regenerates the catalog and offline manifest (`sw-assets.js`), and
-`npm run check` verifies that the generated files are current (CI runs `npm test`, which includes the generated-files
-checks, and the network check).
+`npm run check` verifies that the generated files are current (the network graph, the routes, the stadiums).
+
+## Checking changes
+
+CI (`.github/workflows/test.yml`) installs `tools/requirements.txt` and runs `npm test` and `npm run check` on every
+push and pull request. Locally:
+
+| Command | Checks |
+| --- | --- |
+| `npm test` | the unit tests, the generated-files checks, the Python tests in `tools/tests` (the numpy / scipy / Pillow ones skip without the packages) and, where Chrome is installed, one real guard still (`BF_SKIP_BROWSER=1` skips it) |
+| `npm run check` | the generated files are current |
+| `npm run guard -- record tools/.cache/guard/before` (old code), `… record tools/.cache/guard/after` (new code), then `npm run guard -- compare tools/.cache/guard/before tools/.cache/guard/after` | the refactor guard: fixed shots on every route and graph map with a frozen clock and seeded random; route stills pixel for pixel plus every object's fingerprint, graph maps within a tolerance. Add route or map ids after the folder to record only those |
+| `npm run qc:map -- <map> [--frozen]`, `npm run qc:all -- <map or route …>` | visual QC (`tools/qc_map.mjs`, `tools/qc.mjs`); evidence in `tools/.cache/qc/<map>`. `--frozen`: seeded, frozen clock, moving life hidden, for comparable runs |
+
+The browser tools find Chrome by `--chrome`, `$CHROME`, `$CHROME_PATH` or the usual install paths (`tools/lib/harness.mjs`).
 
 ## Rebuilding the park routes and the rider
 
