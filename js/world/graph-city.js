@@ -20,6 +20,8 @@ import { MeshBuilder, hash } from './toolbox/core/mesh-builder.js';
 import { ParkedCars, pickCar, carMaterial } from './toolbox/life/figures/cars.js';
 import { Herds } from './toolbox/life/figures/animals.js';
 import { cellKey, freezeMatrix } from './graph-world.js';
+import { inRing } from './graph/poly.js';
+import { MOBILE } from './graph/device.js';
 import { drain, runSlice, due } from './toolbox/core/jobs.js';
 import { planBuildingKitJob, makeStreetIndex, dress } from './toolbox/structures/buildings/kit.js';
 import { assemble, Writer } from './toolbox/structures/buildings/assemble.js';
@@ -59,7 +61,7 @@ const WANT_STEP = 50;   // m the camera goes before stream() sorts its tiles aga
 const VERGE_IN = 260, VERGE_OUT = 420;
 /** Phones and tablets (user, 23 Nov: "even on high performance on mobile, the game should not run out of memory"):
  *  the city's tiles built no farther than Light's at any quality — the fog closes in a little sooner. */
-export const MOBILE = (() => { try { const ua = navigator.userAgent || ''; return /iPhone|iPad|iPod|Android|Mobile/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1); } catch { return false; } })();
+export { MOBILE };   // ([review 27 Nov] W15: one copy, js/world/graph/device.js)
 const capReach = (q) => (MOBILE ? { ...q, near: Math.min(q.near, 1300), far: Math.min(q.far, 1800) } : q);
 /** Smooth value noise in [0, 1] (the verges' slow patches). */
 const vnoise = (x, z) => {
@@ -71,7 +73,6 @@ const REACH = { low: { near: 1300, far: 1800, trees: 0.6, treeNear: 450 }, balan
 const CAR_NEAR = 340;           // m: parked cars (the kit's lo LOD) within this, its far LOD beyond
 const CAR_HI = 110;
 const ANIMAL_M = 480;           // m: farm animals drawn within this             // m: the kit's detailed cars within this
-const pipXZ = (r, x, z) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) c = !c; } return c; };
 const HOUSE_CLOSE_M = 160;
 /** A static mesh's arrays let go once they're on the GPU (no second copy in the page's memory: phones, user 23 Nov —
  *  "even on high … should not run out of memory"); its bounds kept first. Not for anything read back later. */
@@ -314,7 +315,7 @@ export class GraphCity {
       // builds as their real type
       const V = this._villageData ||= this._skanVillages();
       for (const b of mine) {
-        const s = V.shops.find((q) => b.cx > q.bb[0] && b.cx < q.bb[1] && b.cz > q.bb[2] && b.cz < q.bb[3] && pipXZ(q.ring, b.cx, b.cz));
+        const s = V.shops.find((q) => b.cx > q.bb[0] && b.cx < q.bb[1] && b.cz > q.bb[2] && b.cz < q.bb[3] && inRing(q.ring, b.cx, b.cz));
         if (s) { b.kind = 0; b.h = Math.max(b.h, s.h); b.shop = true; continue; }
         const f = V.styles.find((q) => Math.hypot(q.x - b.cx, q.z - b.cz) < 7);
         if (f) { b.force = f; b.kind = 23; }
@@ -549,14 +550,13 @@ export class GraphCity {
     for (const s of hj.stadiums || []) if (s.ring) rings.push(s.ring.map(([a, o]) => proj.toLocal(a, o)));
     if (hj.phipps) { const p = hj.phipps.origin, c = proj.toLocal(p.lat, p.lon); rings.push([[-130, -130], [130, -130], [130, 130], [-130, 130]].map(([x, z]) => ({ x: c.x + x, z: c.z + z }))); }
     const boxes = rings.map((r) => { let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; for (const p of r) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); } return { r, x0, x1, z0, z1 }; });
-    const pip = (r, x, z) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) c = !c; } return c; };
     const covers = this.heroes.heroes?.covers;
     return (b) => {
       if (covers && covers(b.cx, b.cz, 2)) return true;
       if (this._railCovers(b.cx, b.cz, 1) || b.ring.some((p) => this._railCovers(p.x, p.z, 0))) return true;   // (on a rail approach)
       for (const q of boxes) {
         if (b.cx < q.x0 - 4 || b.cx > q.x1 + 4 || b.cz < q.z0 - 4 || b.cz > q.z1 + 4) continue;
-        if (pip(q.r, b.cx, b.cz) || q.r.some((p) => pip(b.ring, p.x, p.z))) return true;
+        if (inRing(q.r, b.cx, b.cz) || q.r.some((p) => inRing(b.ring, p.x, p.z))) return true;
       }
       return false;
     };
@@ -579,10 +579,9 @@ export class GraphCity {
       for (const [la, lo] of l.views || []) { const a = proj.toLocal(la, lo), seg = [a, c]; list.push({ r: seg, m: vm, view: true, x0: Math.min(a.x, c.x) - vm, x1: Math.max(a.x, c.x) + vm, z0: Math.min(a.z, c.z) - vm, z1: Math.max(a.z, c.z) + vm }); }
     }
     if (!list.length) return () => false;
-    const pip = (r, x, z) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) c = !c; } return c; };
     const near = (r, x, z, m) => { for (let i = 0; i < r.length; i++) { const a = r[i], b = r[(i + 1) % r.length], dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / l2)); if (Math.hypot(a.x + dx * t - x, a.z + dz * t - z) < m) return true; } return false; };
     // (margin false: only inside an outline or a view corridor — a mapped tree stands in a landmark's margin)
-    return (x, z, margin = true) => list.some((q) => x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1 && ((q.r.length >= 3 && pip(q.r, x, z)) || ((margin || q.view) && near(q.r, x, z, q.m))));
+    return (x, z, margin = true) => list.some((q) => x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1 && ((q.r.length >= 3 && inRing(q.r, x, z)) || ((margin || q.view) && near(q.r, x, z, q.m))));
   }
   _deckIndex() {
     const grid = new Map();
@@ -593,12 +592,11 @@ export class GraphCity {
   }
   /** A deck (bridge, ramp) running through a footprint within its height: the building isn't drawn. */
   _underDeck(b) {
-    const pip = (r, x, z) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], q = r[j]; if ((a.z > z) !== (q.z > z) && x < (q.x - a.x) * (z - a.z) / (q.z - a.z) + a.x) c = !c; } return c; };
     for (let gx = Math.floor(b.bb[0] / 40); gx <= Math.floor(b.bb[1] / 40); gx++) for (let gz = Math.floor(b.bb[2] / 40); gz <= Math.floor(b.bb[3] / 40); gz++) {
       const a = this._deckGrid.get(`${gx},${gz}`); if (!a) continue;
       for (let k = 0; k < a.length; k += 3) {
         if (a[k] < b.bb[0] - 3 || a[k] > b.bb[1] + 3 || a[k + 2] < b.bb[2] - 3 || a[k + 2] > b.bb[3] + 3) continue;
-        if (pip(b.ring, a[k], a[k + 2]) && a[k + 1] < this.world._groundH(b.cx, b.cz) + b.h + 1) return true;
+        if (inRing(b.ring, a[k], a[k + 2]) && a[k + 1] < this.world._groundH(b.cx, b.cz) + b.h + 1) return true;
       }
     }
     return false;
@@ -1785,7 +1783,7 @@ export class GraphCity {
     let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
     for (const p of ring) { const a = p.x * ux + p.z * uz, b = p.x * vx + p.z * vz; a0 = Math.min(a0, a); a1 = Math.max(a1, a); b0 = Math.min(b0, b); b1 = Math.max(b1, b); }
     if ((a1 - a0) * (b1 - b0) > 60000) return;   // (a huge lot: leave it to the paving)
-    const pip = (x, z) => { let c = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], b = ring[j]; if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) c = !c; } return c; };
+    const pip = (x, z) => inRing(ring, x, z);
     const W = this.world;
     for (let b = b0 + 3; b < b1 - 2.5; b += 6.2) for (let a = a0 + 2; a < a1 - 1.5; a += 2.7) {
       const x = ux * a + vx * b, z = uz * a + vz * b, h0 = hash(Math.round(x * 3) * 7919 + Math.round(z * 3));
@@ -1826,7 +1824,7 @@ export class GraphCity {
       let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
       for (const p of ring) { const a = p.x * ux + p.z * uz, b = p.x * vx + p.z * vz; a0 = Math.min(a0, a); a1 = Math.max(a1, a); b0 = Math.min(b0, b); b1 = Math.max(b1, b); }
       if ((a1 - a0) * (b1 - b0) > 60000) continue;
-      const pip = (x, z) => { let c = false; for (let i2 = 0, j2 = ring.length - 1; i2 < ring.length; j2 = i2++) { const a = ring[i2], b = ring[j2]; if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) c = !c; } return c; };
+      const pip = (x, z) => inRing(ring, x, z);
       for (let b = b0 + 0.5; b < b1 - 2.5; b += 6.2) for (let a = a0 + 0.65; a < a1 - 1.5; a += 2.7) {
         const x0 = ux * a + vx * b, z0 = uz * a + vz * b, x1 = x0 + vx * 5, z1 = z0 + vz * 5;
         if (!pip(x0, z0) || !pip(x1, z1)) continue;

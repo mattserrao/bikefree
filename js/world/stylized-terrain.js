@@ -36,6 +36,7 @@ import { Dams } from './toolbox/structures/dam.js';
 import { RaceDay } from './toolbox/life/race-day.js';
 import { HairpinWalls } from './toolbox/structures/hairpin-walls.js';
 import { Boards } from './toolbox/roadside/boards.js';
+import { PHONE_UA } from './graph/device.js';
 
 // Tree cards stream in large tiles, at a fraction of the scatter's candidate density.
 const FAR_TREE_TILE_M = 768, FAR_TREE_DENSITY = .3;
@@ -1270,7 +1271,7 @@ export class StylizedTerrain {
     const swap = this.config.suite?.kit === 'common' ? this.config.suite.trees : null;
     if (swap) { const common = makeEndlessTrees(); for (const [name, sp] of Object.entries(swap)) if (common.species[sp]) kit.species[name] = common.species[sp]; }
     // ([zwift-look] a scene's near band — "trees": { "nearM" } — its trees inside it drawn as their grown models)
-    const phone = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android|Mobile/.test(navigator.userAgent || '');
+    const phone = typeof navigator !== 'undefined' && PHONE_UA.test(navigator.userAgent || '');   // ([review 27 Nov] W15: graph/device.js)
     this._te = new TreeEngine({ renderer: this.renderer, parent: this.group, quality: this.qualityKey, uTime: this.uniforms.uTime, lights, kit, shadows: !!this.quality.shadows, near: (phone ? .6 : 1) * (this.config.trees?.nearM || 0) });
     return this._te;
   }

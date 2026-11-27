@@ -40,7 +40,7 @@ import { biomeAt, MILE_M, STEP, rng } from '../endless/course.js';
 
 // [zwift-look] the near band (m): trees inside it drawn as their grown models (leaf clusters, limbs), cards beyond
 const ENDLESS_NEAR_M = 55;
-const MOBILE = (() => { try { const ua = navigator.userAgent || ''; return /iPhone|iPad|iPod|Android|Mobile/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1); } catch { return false; } })();
+import { MOBILE } from './graph/device.js';   // ([review 27 Nov] W15: one copy)
 const TILE = 256;
 const CHUNK = 20;                              // road samples per road mesh (200 m)
 const HALF = 3.3, LANE = -1.6;                 // the road's half width; the rider's lane (+ is the course's right normal, which draws on screen left: the rider keeps right)

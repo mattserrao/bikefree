@@ -35,7 +35,7 @@ test('no map rule is keyed by a map id in the graph world', () => {
   for (const f of ['../js/world/graph-world.js', '../js/world/graph-city.js', '../js/world/graph-heroes.js']) {
     const src = readFileSync(new URL(f, import.meta.url), 'utf8');
     assert.doesNotMatch(src, /json\?\.id === '(cny|skan|pgh)'/, f);
-    assert.doesNotMatch(src, /RURAL_MAPS\.has/, f);
+    assert.doesNotMatch(src, /RURAL_MAPS/, f);   // ([review 27 Nov] W15: the deprecated set itself is gone)
   }
 });
 

@@ -32,7 +32,10 @@ import { loadPbrSets, ROAD_PBR, GROUND_PBR, roadSetFor } from './toolbox/materia
 import { SkyEnvironment } from './toolbox/atmosphere/environment.js';
 import { resolveMapDefinition } from './toolbox/map-definition.js';
 import { SURFACE_SUN, loadSurfaceDetail } from './toolbox/materials/surface-detail.js';
-import { MOBILE } from './graph-city.js';
+import { MOBILE, PHONE_UA } from './graph/device.js';
+import { inRing, inRingGrown, inPairs } from './graph/poly.js';
+import { curvePoint, curve, deckSpans } from './graph/curves.js';
+import { planJunctions } from './graph/junction-plan.js';
 // [review 27 Nov] W13: the roads' and the ground's shaders live in the toolbox now (pure factories, cache keys as they were)
 import { CLOUD_T, roadSurfaceMaterial, wornPaintMaterial, sideMaterial } from './toolbox/materials/graph-road.js';
 import { groundMaterial } from './toolbox/materials/graph-ground.js';
@@ -41,7 +44,7 @@ export { CLOUD_T };
 import { PerfMonitor } from './perf.js';
 import { BakedLighting } from './toolbox/atmosphere/baked-light.js';
 import { ShaderWarmer } from './toolbox/core/shader-warm.js';
-import { drain, runSlice, due } from './toolbox/core/jobs.js';
+import { runSlice, due } from './toolbox/core/jobs.js';
 import { installEffects } from './toolbox/effects/index.js';
 import { mapProfile } from './toolbox/map-profile.js';
 import { makeParkMaterial } from './toolbox/materials/park-surfaces.js';
@@ -75,16 +78,13 @@ const BANK_RING_M = 9;              // m round a pool's outline its bank is shap
 const PIER_STEP = 7;                // samples (70 m) between a deck's piers
 const PROM_M = 6;                   // m of granite paving along the top of a river wall
 // ([review 27 Nov] the comments above had run onto one line in a merge: each back beside its own constant)
-const LAND_PAVED = 0;
 const ZERO4 = [0, 0, 0, 3];
-const SUB = 3;                      // a drawn way: each 10 m sample span in this many pieces (a Catmull-Rom curve through the samples)
 const SURF_CODE = { asphalt: 0, brick: 1, sett: 2, concrete: 3, paving: 4, gravel: 5, dirt: 6, wood: 7 };   // ([review 27 Nov] a stray comment for a constant long gone dropped here)
 
 const COLORS = {
   primary: '#4c4e52', secondary: '#4c4e52', tertiary: '#4c4e52', residential: '#4c4e52', alley: '#57554f',
   path: '#5f5d59', plaza: '#8e8a83', side: '#7d7a5e', deck: '#8a8780', rail: '#a29e95', under: '#57544f',
 };
-const PAINTED = { primary: 'double', secondary: 'double', tertiary: 'dash', residential: null, alley: null, path: 'dash-white', plaza: null };
 
 const TIMES = {
   morning: { label: 'Morning', elev: 16, az: 105, sky: '#9cc0e6', fog: '#e8dccb', hemiSky: '#f6eedf', hemiGround: '#8e8a78', sun: '#ffe2b8', sunI: 1.5, hemiI: 1.25, exposure: 1.0 },
@@ -113,13 +113,8 @@ export function roadHash(edges, widths, cell = 32, kerbM = KERB) {
   const grid = new Map(), wf = typeof widths === 'function' ? widths : (e) => widths[e.kind] || 7;
   for (const e of edges) {
     const half = wf(e) / 2 + (e._walk ? e._walk : 0);   // (a sidewalk: the ground keeps under it too)
-    const deck = new Uint8Array(e.n + 1);
-    for (const [a, b] of e.bridges) for (let i = a + 1; i < b; i++) deck[i] = 1;
-    // a deck sample this near its deck's end stands on the abutment
-    const toEnd = new Float32Array(e.n + 1).fill(Infinity);
-    for (let i = 0; i <= e.n; i++) if (!deck[i]) toEnd[i] = 0;
-    for (let i = 1; i <= e.n; i++) toEnd[i] = Math.min(toEnd[i], toEnd[i - 1] + 10);
-    for (let i = e.n - 1; i >= 0; i--) toEnd[i] = Math.min(toEnd[i], toEnd[i + 1] + 10);
+    // a deck sample this near its deck's end (toEnd) stands on the abutment
+    const { deck, toEnd } = deckSpans(e);
     // (a hero area's singletrack: the coarse ground kept well under it — the area's fine floor, old-growth.js, is drawn
     //  over the cut and meets the trail's tread)
     const kerb = e._cf ? 0.6 : kerbM;
@@ -373,7 +368,7 @@ export class GraphWorld {
     if (goldenUpstate) {
       // (a city's bake — PGH, user 26 Nov: "change the lighting style to match" — on a phone at 3 m cells: a third of
       //  the memory of the 2 m maps, for the map that has run phones out of memory before)
-      const phoneCity = this.profile.preset === 'city' && /iPhone|iPad|iPod|Android|Mobile/.test(globalThis.navigator?.userAgent || '');
+      const phoneCity = this.profile.preset === 'city' && PHONE_UA.test(globalThis.navigator?.userAgent || '');
       this.baked = BakedLighting.create(this._bakeView(), { baked: 'golden', windowM: 3200, windowMoveM: 700, reachM: 900, cellM: phoneCity ? 3 : 2, marginM: 0, dynamicSpanM: 40,
         prepTimeoutS: 45, groundAt: (x, z) => (this.ground ? this._groundH(x, z) : 0) }, { golden: GOLDEN_UPSTATE });
       if (this.baked) {
@@ -887,7 +882,7 @@ export class GraphWorld {
   }
   /** The pool level at (x, z): an upper pool inside its box, else the main one. */
   poolAt(x, z) {
-    for (const p of this.pools || []) if (x >= p.x0 && x <= p.x1 && z >= p.z0 && z <= p.z1 && (!p.ring || inRing(p.ring, x, z, 3))) return p.level;
+    for (const p of this.pools || []) if (x >= p.x0 && x <= p.x1 && z >= p.z0 && z <= p.z1 && (!p.ring || inRingGrown(p.ring, x, z, 3))) return p.level;
     return this.waterY - WATER_ABOVE;
   }
   /** The water's surface here (the pool level and the plane's lift above it). */
@@ -906,7 +901,7 @@ export class GraphWorld {
     return fu + fv <= 1 ? a0 + (b0 - a0) * fu + (c0 - a0) * fv : d0 + (c0 - d0) * (1 - fu) + (b0 - d0) * (1 - fv);
   }
   /** In a ground pad's outline (or its blend)? */
-  _inPad(x, z) { return this.pads.some((q) => x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1 && inRing(q.ring, x, z, q.m)); }
+  _inPad(x, z) { return this.pads.some((q) => x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1 && inRingGrown(q.ring, x, z, q.m)); }
   /** The nearest pool outline within BANK_RING_M of (x, z): { p, s } with s the signed distance (m, < 0 in the water). */
   _ringBank(x, z) {
     const list = this._bankGrid?.get(Math.floor(x / 16) * 100003 + Math.floor(z / 16));
@@ -999,118 +994,21 @@ export class GraphWorld {
     if (this.arms) this._planJunctions();
   }
 
-  /** A point on edge e's drawn centre line (the Catmull-Rom curve _curve draws) at fractional sample f:
-   *  {x, y, z, dx, dz} (dx, dz: unit, along increasing f). */
-  _curvePoint(e, f) {
-    f = Math.max(0, Math.min(e.n, f));
-    const at = (g) => {
-      const i = Math.min(e.n - 1, Math.floor(g)), t = g - i, P = (k) => Math.max(0, Math.min(e.n, k)), i0 = P(i - 1), i2 = P(i + 1), i3 = P(i + 2);
-      const cr = (v) => { const p0 = v[i0], p1 = v[i], p2 = v[i2], p3 = v[i3]; return 0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t); };
-      return { x: cr(e.x), z: cr(e.z), y: e.ele[i] + (e.ele[i2] - e.ele[i]) * t };
-    };
-    const p = at(f), a = at(Math.max(0, f - 0.05)), b = at(Math.min(e.n, f + 0.05)), l = Math.hypot(b.x - a.x, b.z - a.z) || 1;
-    return { x: p.x, y: p.y, z: p.z, dx: (b.x - a.x) / l, dz: (b.z - a.z) / l };
-  }
+  /** A point on edge e's drawn centre line at fractional sample f (graph/curves.js curvePoint; graph-life.js walks it). */
+  _curvePoint(e, f) { return curvePoint(e, f); }
 
-  /**
-   * Junctions (user, 21 Nov: "the way intersections connect is poor and jarring"), as the Pittsburgh map's
-   * (js/world/toolbox/city/junctions.js) on PGH's graph: where three or more ways meet, each way's ribbon stops at
-   * its mouth, square to it; between neighbouring ways a curb return (a fillet, its radius by the ways' class); the
-   * surface is one polygon — the mouths joined by the curb returns — on a plane through the mouths' heights (each
-   * mouth exactly at its ribbon's end); the sidewalks wrap round the corners, the verges where there are none.
-   * → this.jn (node id → { x, z, y, poly, corners, arms, J }), this.trim (edge id → [m cut at from, m cut at to]).
-   */
+  /** The junctions' plan (graph/junction-plan.js): → this.jn (node id → { x, z, y, poly, corners, arms, J }), this.trim
+   *  (edge id → [m cut at from, m cut at to]). [review 27 Nov] W14: a pure module now; re-run when the widths change. */
   _planJunctions() {
-    const CURB = { primary: 7, secondary: 6, tertiary: 5, residential: 4, alley: 2.5, plaza: 2, path: 1.5, ...(this.profile.junctionCurbs || {}) };   // (NYC: rounder park corners)
-    const left = (u) => ({ x: -u.z, z: u.x }), along = (p, u, t) => ({ x: p.x + u.x * t, z: p.z + u.z * t }), dot = (a, b) => a.x * b.x + a.z * b.z;
-    const meet = (p, u, q, v) => { const den = u.x * v.z - u.z * v.x; if (Math.abs(den) < 1e-6) return null; const wx = q.x - p.x, wz = q.z - p.z; return [(wx * v.z - wz * v.x) / den, (wx * u.z - wz * u.x) / den]; };
-    this.jn = new Map(); this.trim = new Map();
-    const deckEnd = (e, end) => e.bridges.some(([a, b]) => (end ? b >= e.n - 1 : a <= 1));
-    for (const [id, list] of this.arms) {
-      if (list.length < 3 || list.some(({ e, end }) => deckEnd(e, end))) continue;
-      if (list.every(({ e }) => e._cf)) continue;   // (singletrack meeting singletrack: the treads just run together)
-      const e0 = list[0].e, N = { x: list[0].end ? e0.x[e0.n] : e0.x[0], z: list[0].end ? e0.z[e0.n] : e0.z[0] };
-      // the arms, round the node
-      const arms = list.map(({ e, end }) => {
-        const len = e.n * 10, d = Math.min(8, len * 0.5), p = this._curvePoint(e, end ? e.n - d / 10 : d / 10);
-        const ux = p.x - N.x, uz = p.z - N.z, l = Math.hypot(ux, uz) || 1;
-        const other = this.arms.get(end ? e.from : e.to)?.length >= 3;
-        return { e, end, u: { x: ux / l, z: uz / l }, h: this.wOf(e) / 2, walk: this.walkOf(e) || 0, r: CURB[e.kind] || 4, len, other, theta: Math.atan2(uz, ux) };
-      }).sort((a, b) => a.theta - b.theta);
-      const n = arms.length, corners = [];
-      // (how far each arm's mouth can sit from the node: a return whose tangent runs past it is dropped below)
-      const maxT = (A) => Math.min(26, A.other ? A.len * 0.45 : Math.max(1.5, A.len - 4));
-      for (let q = 0; q < n; q++) {
-        const A = arms[q], B = arms[(q + 1) % n];
-        let gap = B.theta - A.theta; if (gap <= 0) gap += Math.PI * 2;
-        const nA = left(A.u), nB = left(B.u), c = { A, B, gap, arc: null, tA: 0, tB: 0 };
-        if (gap < Math.PI * 0.86 && gap > 0.3) {
-          // (the curb's radius, then smaller ones until the return fits its arms — a sharp fork on short arms gets a
-          //  tight return, not none: the map QC's sharpCorner, 25 Nov fix pass)
-          const r0 = Math.min(A.r, B.r);
-          // (then larger ones: an obtuse corner of a narrow path on a wide road has its small returns' centres behind the
-          //  road's mouth — a wider return sits in front of it)
-          for (const r of [r0, r0 * 0.5, 1.5, 0.8, Math.max(r0 * 2, 3), Math.max(r0 * 3, 5)]) {
-            const pA = along(N, nA, A.h + r), pB = along(N, nB, -(B.h + r)), m = meet(pA, A.u, pB, B.u);
-            const fits = m && m[0] <= maxT(A) + 0.01 && m[1] <= maxT(B) + 0.01;   // (a return that fits is as before)
-            if (m && m[0] > 0 && m[1] > 0 && m[0] < 26 && m[1] < 26 && fits) { const O = along(pA, A.u, m[0]); c.tA = dot({ x: O.x - N.x, z: O.z - N.z }, A.u); c.tB = dot({ x: O.x - N.x, z: O.z - N.z }, B.u); c.arc = { O, r }; break; }
-          }
-        }
-        if (!c.arc && gap < Math.PI * 0.95) {   // sharp or awkward: where the two edges cross
-          const m = meet(along(N, nA, A.h), A.u, along(N, nB, -B.h), B.u);
-          if (m && m[0] > 0 && m[1] > 0) { c.tA = Math.min(26, m[0]); c.tB = Math.min(26, m[1]); }
-        }
-        corners.push(c);
-      }
-      for (let q = 0; q < n; q++) {
-        const A = arms[q];
-        A.t = Math.min(Math.max(corners[(q - 1 + n) % n].tB, corners[q].tA, 1.5), 26, A.other ? A.len * 0.45 : Math.max(1.5, A.len - 4));
-      }
-      for (const c of corners) if (c.arc && (c.tA > c.A.t + 0.01 || c.tB > c.B.t + 0.01)) c.arc = null;   // (clamped short: a straight corner)
-      // each mouth: where its ribbon ends, square to it, at the ribbon's height
-      for (const A of arms) {
-        const f = A.end ? A.e.n - A.t / 10 : A.t / 10, p = this._curvePoint(A.e, f), sg = A.end ? -1 : 1, ud = { x: p.dx * sg, z: p.dz * sg }, L = left(ud);
-        A.cut = { x: p.x, y: p.y, z: p.z }; A.ud = ud;
-        A.mouth = [{ x: p.x - L.x * A.h, z: p.z - L.z * A.h, y: p.y }, { x: p.x + L.x * A.h, z: p.z + L.z * A.h, y: p.y }];
-        const tr = this.trim.get(A.e.id) || [0, 0]; tr[A.end] = A.t; this.trim.set(A.e.id, tr);
-      }
-      // the surface's plane: least squares through the mouths' heights (never steeper than 10 %)
-      let sx = 0, sz = 0, sy = 0, sxx = 0, szz = 0, sxz = 0, sxy = 0, szy = 0;
-      for (const A of arms) { const x = A.cut.x - N.x, z = A.cut.z - N.z, y = A.cut.y; sx += x; sz += z; sy += y; sxx += x * x; szz += z * z; sxz += x * z; sxy += x * y; szy += z * y; }
-      const mx = sx / n, mz = sz / n, my = sy / n, cxx = sxx / n - mx * mx, czz = szz / n - mz * mz, cxz = sxz / n - mx * mz, cxy = sxy / n - mx * my, czy = szy / n - mz * my, det = cxx * czz - cxz * cxz;
-      let gx = 0, gz = 0; if (Math.abs(det) > 1e-3) { gx = (cxy * czz - czy * cxz) / det; gz = (czy * cxx - cxy * cxz) / det; }
-      const g = Math.hypot(gx, gz); if (g > 0.1) { gx *= 0.1 / g; gz *= 0.1 / g; }
-      const c0 = my - gx * mx - gz * mz, J = (x, z) => c0 + gx * (x - N.x) + gz * (z - N.z);
-      // the polygon (counter-clockwise in x/z): each mouth, then the curb round to the next
-      const poly = [];
-      const edge = (A, side, t) => { const p = along(along(N, A.u, t), left(A.u), side * A.h); return { x: p.x, z: p.z, y: J(p.x, p.z) }; };
-      for (let q = 0; q < n; q++) {
-        const A = arms[q], c = corners[q], B = c.B;
-        poly.push(A.mouth[0], A.mouth[1]);
-        const curb = [A.mouth[1]];
-        if (c.arc) {
-          if (c.tA < A.t - 0.05) curb.push(edge(A, 1, c.tA));
-          const { O, r } = c.arc, last = curb[curb.length - 1], a0 = Math.atan2(last.z - O.z, last.x - O.x);
-          const pB = c.tB < B.t - 0.05 ? edge(B, -1, c.tB) : B.mouth[0];
-          let da = Math.atan2(pB.z - O.z, pB.x - O.x) - a0; while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
-          const steps = Math.max(2, Math.ceil(Math.abs(da) / (Math.PI / 12)));
-          for (let k = 1; k < steps; k++) { const x = O.x + Math.cos(a0 + da * k / steps) * r, z = O.z + Math.sin(a0 + da * k / steps) * r; curb.push({ x, z, y: J(x, z) }); }
-          curb.push(pB);
-          if (c.tB < B.t - 0.05) curb.push(B.mouth[0]);
-        } else curb.push(B.mouth[0]);
-        for (let k = 1; k < curb.length - 1; k++) poly.push(curb[k]);
-        c.curb = curb;
-      }
-      this.jn.set(id, { x: N.x, z: N.z, y: J(N.x, N.z), J, poly, corners, arms });
-    }
+    const { jn, trim } = planJunctions(this.arms, { wOf: this.wOf, walkOf: this.walkOf, curbs: this.profile.junctionCurbs });
+    this.jn = jn; this.trim = trim;
   }
 
   /** How far the tiles are built and the fog closes in, by quality (Low: phones). */
   _reach() {
     const low = this.qualityKey === 'low';
     const k = (this.gfx?.distance || 1) * ((this._govLevel || 0) >= 4 ? .85 : 1);   // (the governor's level 4+: a nearer horizon)
-    const mobile = (() => { try { const ua = navigator.userAgent || ''; return /iPhone|iPad|iPod|Android|Mobile/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1); } catch { return false; } })();
-    const lowReach = low || mobile;   // (phones and tablets: Light's reach at any quality — memory, user 23 Nov)
+    const lowReach = low || MOBILE;   // (phones and tablets: Light's reach at any quality — memory, user 23 Nov)
     this.nearM = (lowReach ? REACH_LOW.near : NEAR_M) * k; this.farM = (lowReach ? REACH_LOW.far : FAR_M) * k;
     if (this.scene?.fog) { this.scene.fog.near = lowReach ? 700 : 900; this.scene.fog.far = this.nearM + 200; }
   }
@@ -1316,29 +1214,8 @@ export class GraphWorld {
     t.built = false;
   }
 
-  /** A way drawn smooth: a Catmull-Rom curve through its samples from a to b, SUB points a span:
-   *  [{x, z, y, i (the sample, fractional), s (m from a), dx, dz}]. */
-  _curve(e, a, b) {
-    const out = [], P = (k) => Math.max(0, Math.min(e.n, k));
-    let s = 0, px = null, pz = null;
-    for (let i = a; i < b || (i === b && true); i++) {
-      for (let q = 0; q < (i === b ? 1 : SUB); q++) {
-        const t = q / SUB, i0 = P(i - 1), i1 = i, i2 = P(i + 1), i3 = P(i + 2);
-        // (past an end, the end's own line carried on — as js/graph.js pads the base line the rider rides, so the
-        //  drawn curve and the ridden one are the same)
-        const cr = (v) => { const p0 = i - 1 < 0 ? 2 * v[0] - v[Math.min(1, e.n)] : v[i0], p1 = v[i1], p2 = v[i2], p3 = i + 2 > e.n ? 2 * v[e.n] - v[Math.max(0, e.n - 1)] : v[i3]; return 0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t); };
-        const x = i === b ? e.x[b] : cr(e.x), z = i === b ? e.z[b] : cr(e.z), y = i === b ? e.ele[b] : e.ele[i1] + (e.ele[i2] - e.ele[i1]) * t;
-        if (px !== null) s += Math.hypot(x - px, z - pz);
-        out.push({ x, z, y, i: i + t, s }); px = x; pz = z;
-      }
-      if (i === b) break;
-    }
-    for (let k = 0; k < out.length; k++) {
-      const p0 = out[Math.max(0, k - 1)], p1 = out[Math.min(out.length - 1, k + 1)];
-      let dx = p1.x - p0.x, dz = p1.z - p0.z; const l = Math.hypot(dx, dz) || 1; out[k].dx = dx / l; out[k].dz = dz / l;
-    }
-    return out;
-  }
+  /** A way drawn smooth from sample a to b (graph/curves.js curve). */
+  _curve(e, a, b) { return curve(e, a, b); }
 
   /** How a way is painted: centre line, lane lines, edge lines (one-ways and lanes from the city data). */
   _paintOf(e) {
@@ -1357,7 +1234,6 @@ export class GraphWorld {
     return { centre: null, edges: false, lanes: 0 };
   }
 
-  _buildRoads(t) { drain(this._roadsJob(t)); }
   /** A tile's roads as a job: pauses between ways when its slice is used up (no stall on a phone). */
   *_roadsJob(t) {
     t.built = true; t.spills = []; t.endSpills = []; this._built.add(t);
@@ -1591,7 +1467,6 @@ export class GraphWorld {
     if (sm) { this.group.add(sm); (t.extraRoad ||= []).push(sm); }
   }
 
-  _buildGround(t) { drain(this._groundJob(t)); }
   /** A tile's ground, its river banks and the dressed places in it, as a job (row by row, a shore at a time). */
   *_groundJob(t) {
     const nx = Math.round(TILE / GROUND_CELL), x0 = t.i * TILE, z0 = t.j * TILE, cell = TILE / nx, n1 = nx + 1;
@@ -1724,7 +1599,6 @@ export class GraphWorld {
 
   /** The dressed places' ground in this tile (toolbox/materials/park-surfaces.js): lawns, beds, woods, plazas and walks
    *  draped on the ground; the fountain and pools; retaining walls and low walls in dressed stone; the trees. */
-  _buildDressing(t) { drain(this._dressingJob(t)); }
   *_dressingJob(t) {
     const D = this.dressing, key = `${t.i},${t.j}`;
     const areas = D.areas.get(key) || [], lines = D.lines.get(key) || [], trees = D.trees.get(key) || [];
@@ -1732,16 +1606,9 @@ export class GraphWorld {
     const by = new Map(), grey = new THREE.Color('#ffffff');
     const mesher = (k) => { if (!by.has(k)) by.set(k, new Mesher()); return by.get(k); };
     // the surface here: the ground, or a walled bank's promenade over it
-    // the ground as its mesh draws it (the 12.8 m grid's triangles, a → c → b, b → c → d), so a drape lies on it everywhere
-    const meshH = (x, z) => {
-      const tt = this.tiles.get(`${Math.floor(x / TILE)},${Math.floor(z / TILE)}`);
-      if (!tt || !tt.gridH) return this._groundH(x, z);
-      const c = tt.gridCell, n1 = Math.round(TILE / c) + 1, u = (x - tt.i * TILE) / c, v = (z - tt.j * TILE) / c;
-      const i = Math.min(n1 - 2, Math.max(0, Math.floor(u))), j = Math.min(n1 - 2, Math.max(0, Math.floor(v))), fu = u - i, fv = v - j;
-      const H = tt.gridH, a0 = H[j * n1 + i], b0 = H[j * n1 + i + 1], c0 = H[(j + 1) * n1 + i], d0 = H[(j + 1) * n1 + i + 1];
-      return fu + fv <= 1 ? a0 + (b0 - a0) * fu + (c0 - a0) * fv : d0 + (c0 - d0) * (1 - fu) + (b0 - d0) * (1 - fv);
-    };
-    const surf = (x, z) => { const h = Math.max(this._groundH(x, z), meshH(x, z)), sh = this.shore?.at(x, z); return sh && sh.walled && sh.s >= 0 && sh.s <= BANK_CAP ? Math.max(h, sh.top + 0.03) : h; };
+    // the ground as its mesh draws it (surfaceH: the 12.8 m grid's triangles), so a drape lies on it everywhere
+    // ([review 27 Nov] W15: was a private copy of surfaceH, line for line)
+    const surf = (x, z) => { const h = Math.max(this._groundH(x, z), this.surfaceH(x, z)), sh = this.shore?.at(x, z); return sh && sh.walled && sh.s >= 0 && sh.s <= BANK_CAP ? Math.max(h, sh.top + 0.03) : h; };
     const under = (x, z, y) => Math.min(y, this.cut.cap(x, z) + 0.2);   // (never over a road: its surface is ≥ 0.35 m over its cut)
     const drape = (M, tri, lift) => {
       const split = (a, b, c, depth) => {
@@ -1838,7 +1705,6 @@ export class GraphWorld {
   }
 
   /** The riverbank along the shore lines in this tile: a stone face and a promenade where walled, a firm slope elsewhere. */
-  _buildBank(t) { drain(this._bankJob(t)); }
   *_bankJob(t) {
     const x0 = t.i * TILE, z0 = t.j * TILE, M = new Mesher(), Face = new Mesher(), Prom = new Mesher(), Rail = M, iron = new THREE.Color('#202325');
     const grass = new THREE.Color('#89a868'), stone = new THREE.Color('#8f8a80'), bed = new THREE.Color('#6f6a58');
@@ -1881,12 +1747,7 @@ export class GraphWorld {
     const pier = new THREE.Color('#9a968c');
     for (const { e, a, b } of t.pieces) {
       if (!e.bridges.length) continue;
-      const deck = new Uint8Array(e.n + 1);
-      for (const [p, q] of e.bridges) for (let i = p + 1; i < q; i++) deck[i] = 1;
-      const toEnd = new Float32Array(e.n + 1).fill(Infinity);
-      for (let i = 0; i <= e.n; i++) if (!deck[i]) toEnd[i] = 0;
-      for (let i = 1; i <= e.n; i++) toEnd[i] = Math.min(toEnd[i], toEnd[i - 1] + 10);
-      for (let i = e.n - 1; i >= 0; i--) toEnd[i] = Math.min(toEnd[i], toEnd[i + 1] + 10);
+      const { deck, toEnd } = deckSpans(e);
       const half = this.wOf(e) / 2 - 0.4, pm = this.bridgeMask?.get(e.id) || this.modelDecks?.get(e.id);
       for (let i = Math.max(a, 1); i <= Math.min(b, e.n - 1); i++) {
         if (!deck[i] || toEnd[i] < 20 || i % PIER_STEP) continue;
@@ -1932,19 +1793,9 @@ class Mesher {
     if (flip) { this._tri(a, c, b, color); this._tri(a, d, c, color); }
     else { this._tri(a, b, c, color); this._tri(a, c, d, color); }
   }
-  /** A ribbon between a left and a right edge (as ridden: forward along the lists), facing up. */
-  strip(L, R, color) {
-    for (let k = 0; k + 1 < L.length; k++) this.quad(L[k], R[k], R[k + 1], L[k + 1], color);
-  }
   /** A vertical wall under/over the edge p0 → p1, from y + y0 to y + y1. */
   wall(p0, p1, y0, y1, color, flip) {
     this.quad([p0[0], p0[1] + y0, p0[2]], [p1[0], p1[1] + y0, p1[2]], [p1[0], p1[1] + y1, p1[2]], [p0[0], p0[1] + y1, p0[2]], color, flip);
-  }
-  disc(x, y, z, r, color, seg = 14) {
-    for (let k = 0; k < seg; k++) {
-      const a0 = (k / seg) * Math.PI * 2, a1 = ((k + 1) / seg) * Math.PI * 2;
-      this._tri([x, y, z], [x + Math.cos(a1) * r, y, z + Math.sin(a1) * r], [x + Math.cos(a0) * r, y, z + Math.sin(a0) * r], color);
-    }
   }
   mesh(material) {
     if (!this.pos.length) return null;
@@ -1976,13 +1827,6 @@ export function makeStandIn() {
 
 /** A natural bank's height s metres in from the water's edge (− out in the river): under the water to the edge, then
  *  ≥ 1.5 m up within 5 m (no mud ramp), easing to the bank's top by BANK_SLOPE. */
-/** Inside a ring of local points (or within `grow` m of it, roughly: its edge tested at a few offsets). */
-function inRing(ring, x, z, grow = 0) {
-  const inside = (px, pz) => { let c = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], b = ring[j]; if ((a.z > pz) !== (b.z > pz) && px < ((b.x - a.x) * (pz - a.z)) / (b.z - a.z) + a.x) c = !c; } return c; };
-  if (inside(x, z)) return true;
-  return grow > 0 && (inside(x + grow, z) || inside(x - grow, z) || inside(x, z + grow) || inside(x, z - grow));
-}
-
 export function bankProfile(s, top, waterY, pool) {
   const T = Math.max(top, waterY + 1.6), y5 = waterY + Math.max(1.5, 0.5 * (T - waterY));
   if (s <= -4) return pool - 2;
@@ -2054,6 +1898,6 @@ export function decodeDressing(json, proj, tile) {
   for (const p of json.trees) { const [x, z] = P(p); put(trees, x, z, [x, z]); }
   // the dressed places' extent (their 'park' areas): the bank's plain grass gives way to the dressing there
   const parks = json.areas.filter((a) => a.kind === 'park').map((a) => a.pts.map(P));
-  const inside = (x, z) => parks.some((pts) => { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, zi] = pts[i], [xj, zj] = pts[j]; if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c; } return c; });
+  const inside = (x, z) => parks.some((pts) => inPairs(pts, x, z));
   return { areas, lines, trees, inside };
 }
