@@ -58,6 +58,7 @@ const WATER_ABOVE = 0.35;           // the water plane this far above the pool l
 const BED_BELOW = 1.2;              // ground this close above the pool (or under it) is pushed down to river bed
 // ([review 27 Nov] the drawing buffer's pixel ratio by quality — 1.5 on a 2× screen with 4× MSAA, the anti-aliasing
 //  review of 23 Nov — lives in render-core.js pixelRatioFor; its constant left this file, its comment stayed)
+const WANT_STEP = 50;                // m the camera goes before the wanted tiles are sorted again ([review 27 Nov] _stream)
 const SPILL_IN = 350, SPILL_OUT = 550;   // the ways' spill strips: built within, dropped past (m from a tile's edge)
 const KERB = 0.35;                  // the ground's top this far under the road beside it…
 const SHELF = 13;                   // …for this far beyond its edge (a ground cell: no triangle reaches over the road)…
@@ -181,7 +182,7 @@ export function roadHash(edges, widths, cell = 32, kerbM = KERB) {
 // grass card, its colour and height by the cover under it (claude/desert-plant-life-plan.md) — bunchgrass on the flats
 // and benches, cheatgrass thick on the disturbed strip beside the road and in town, fall forbs scattered, Indian
 // ricegrass pale on the dunes, a few in the slickrock's cracks
-const TUFT = {
+const TUFT = Object.freeze({
   bunch: { cell: 5, h: 2, tint: [.95, .95, .92] }, cheat: { cell: 6, h: 1.25, tint: [1, .96, .95] },
   forb: { cell: 7, h: 2.3, tint: [1, 1, 1] }, rice: { cell: 5, h: 1.7, tint: [1.08, 1.04, .98] }, lawn: { cell: 0, h: 1, tint: [.8, .82, .62] },
   // (the shrubs near the rider, at the cover the ecology reports — big sagebrush 6–20%, Davies et al. 2006: the tree
@@ -191,9 +192,12 @@ const TUFT = {
   snake: { cell: 4, h: 1.1, w: 1.1, tint: [.78, .74, .36] }, rabbit: { cell: 4, h: 2, w: 1.8, tint: [.8, .76, .42] },
   salt: { cell: 4, h: 2, w: 2, tint: [.82, .83, .74] }, sandsage: { cell: 4, h: 2, w: 2, tint: [.86, .89, .78] },   // (silvery: lighter than they're drawn — the first census shots had them charcoal in the low sun)
   black: { cell: 4, h: 1.4, w: 1.5, tint: [.42, .43, .39] },
-};
+});
+for (const k of Object.values(TUFT)) Object.freeze(k);
 const tuftHash = (x, z) => { const v = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return v - Math.floor(v); };
-function desertTuft(c, x, z, GRASS) {
+// ([review 27 Nov] the answer written into `out` (one object a world, read at once by ground-cover.js) from the frozen
+//  kinds: it had spread a new { d, ...kind } for every tuft planted — ~460 a cell, 7–9 cells a crossing)
+export function desertTuft(c, x, z, GRASS, out = {}) {
   if (c.onRoad(x, z, 1.2) || c.inWater?.(x, z)) return 0;
   const k = c.landAt(x, z), r = tuftHash(x, z), verge = c.onRoad(x, z, 7);
   let d = GRASS[k] || 0;
@@ -208,11 +212,40 @@ function desertTuft(c, x, z, GRASS) {
       : k === 40 ? (s < .08 ? (s < .05 ? TUFT.sage : TUFT.snake) : null)
         : k === 5 ? (s < .35 ? (s < .28 ? TUFT.sandsage : TUFT.rabbit) : null)
           : k === 42 ? (s < .15 ? TUFT.black : null) : null;
-  if (shrub) return { d, ...shrub };
-  const kind = verge ? (r < .7 ? TUFT.cheat : r < .85 ? TUFT.forb : TUFT.bunch)
+  const kind = shrub || (verge ? (r < .7 ? TUFT.cheat : r < .85 ? TUFT.forb : TUFT.bunch)
     : k === 5 ? TUFT.rice : k === 43 ? (r < .5 ? TUFT.cheat : r < .8 ? TUFT.lawn : TUFT.forb)
-      : k === 41 ? (r < .6 ? TUFT.bunch : r < .82 ? TUFT.cheat : TUFT.forb) : (r < .75 ? TUFT.bunch : TUFT.forb);
-  return { d, ...kind };
+      : k === 41 ? (r < .6 ? TUFT.bunch : r < .82 ? TUFT.cheat : TUFT.forb) : (r < .75 ? TUFT.bunch : TUFT.forb));
+  out.d = d; out.cell = kind.cell; out.h = kind.h; out.w = kind.w; out.tint = kind.tint;
+  return out;
+}
+
+/** [review 27 Nov] every mesh in `root`, now and as it's added (to root or to any group in it, however deep), takes
+ *  the live shadow map — the baked maps' moving shadows (_frame had walked the tiles' and the city's trees every 30
+ *  frames to find the new ones: thousands of objects). */
+export function receiveOnAdd(root) {
+  const hook = (g) => { g.userData._rsAdd = 1; const add = g.add; g.add = function (...objs) { const r = add.apply(this, objs); for (const o of objs) mark(o); return r; }; };
+  const mark = (o) => o.traverse((c) => { if (c.isMesh) { if (!c.userData._rs) { c.userData._rs = 1; c.receiveShadow = true; } } else if (!c.userData._rsAdd) hook(c); });
+  mark(root);
+}
+
+/** [review 27 Nov] the n lamp heads nearest (x, z) within r, from a city's tiles (graph-city.js t.lampHeads: x, y, z),
+ *  written to out (x, y, z each), nearest first; the count found. No allocation: the 3 × 3 tiles round the point. */
+export function nearestLampHeads(city, x, z, r, out, n) {
+  const T = city?.tiles; if (!T) return 0;
+  const D = nearestLampHeads.d ||= new Float64Array(16);
+  let found = 0;
+  const ci = Math.floor(x / TILE), cj = Math.floor(z / TILE), r2 = r * r;
+  for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) {
+    const H = T.get(`${i},${j}`)?.lampHeads; if (!H) continue;
+    for (let k = 0; k < H.length; k += 3) {
+      const dx = H[k] - x, dz = H[k + 2] - z, d = dx * dx + dz * dz;
+      if (d >= r2 || (found === n && d >= D[n - 1])) continue;
+      let q = found < n ? found++ : n - 1;   // (insertion into the sorted few)
+      while (q > 0 && D[q - 1] > d) { D[q] = D[q - 1]; out[q * 3] = out[q * 3 - 3]; out[q * 3 + 1] = out[q * 3 - 2]; out[q * 3 + 2] = out[q * 3 - 1]; q--; }
+      D[q] = d; out[q * 3] = H[k]; out[q * 3 + 1] = H[k + 1]; out[q * 3 + 2] = H[k + 2];
+    }
+  }
+  return found;
 }
 
 export class GraphWorld {
@@ -261,6 +294,9 @@ export class GraphWorld {
       for (let i = 0; i <= e.n; i++) { const q = this.proj.toLocal(e.lat[i], e.lon[i]); e.x[i] = q.x; e.z[i] = q.z; }
     }
     this.tiles = new Map();
+    // [review 27 Nov] the tiles with work or meshes, kept as they change (_stream had scanned every tile in the map —
+    // PGH: > 1000 — each frame for these): built, waiting for their spill, with a spill mesh
+    this._built = new Set(); this._spillWait = new Set(); this._spilled = new Set();
     const tileOf = (x, z) => `${Math.floor(x / TILE)},${Math.floor(z / TILE)}`;
     const slot = (key) => { let t = this.tiles.get(key); if (!t) this.tiles.set(key, (t = { key, pieces: [], nodes: [], built: false })); return t; };
     for (const e of this.G.edges) {
@@ -411,6 +447,7 @@ export class GraphWorld {
     // the tiles' meshes never move: their matrices are set once, not recomputed every frame (850 objects: a few ms a
     // frame on a phone)
     { const add = this.group.add.bind(this.group); this.group.add = (...objs) => { for (const o of objs) freezeMatrix(o); return add(...objs); }; }
+    if (this.baked) receiveOnAdd(this.group);   // ([review 27 Nov] the live shadow on each mesh as it's added: _frame had walked both trees every 30 frames)
 
     // the ground grid (fetched; the roads stream without it and the ground follows)
     this.ground = null;
@@ -445,6 +482,7 @@ export class GraphWorld {
       this.scene.add(r.group);
     }).catch((err) => { this._riderModel = 'failed'; this.log('3d', `Using the simple rider: ${err.message}`, 'debug'); });
 
+    this._nightLights();
     this.setTimeOfDay('midday');
     this._resize = () => {
       const w = container.clientWidth || 1, h = container.clientHeight || 1;
@@ -495,6 +533,7 @@ export class GraphWorld {
   timeOptions() { return Object.entries(TIMES).filter(([key]) => !this.fixedTime || key === this.fixedTime).map(([key, t]) => ({ key, label: t.label })); }
   setQuality(key) {
     this.qualityKey = key || 'balanced';
+    this._nightLights();   // (off Light: the night's lights, if this map has night)
     this._reach();
     this.governor?.setQuality(this.qualityKey);
     this._pixelRatio();
@@ -701,12 +740,12 @@ export class GraphWorld {
     }
     this._updateCamera(out.pos, out.flat, out.fwd, dt);
     // [night lights] the bike's headlight, as in the route scenes (world.js): lights the road and anyone ahead at night
-    if (this.timeKey === 'night' && this.qualityKey !== 'low') {
-      if (!this.headlight) { this.headlight = new THREE.SpotLight('#fff1d6', 650, 85, .58, 1, 1.5); this.scene.add(this.headlight, this.headlight.target); }
-      this.headlight.visible = true;
-      this.headlight.position.copy(out.pos).addScaledVector(out.flat, .6).y += 1.1;
-      this.headlight.target.position.copy(out.pos).addScaledVector(out.flat, 22);
-    } else if (this.headlight) this.headlight.visible = false;
+    // ([review 27 Nov] made with the world, dark by day: _nightLights)
+    if (this.headlight) {
+      const on = this.timeKey === 'night' && this.qualityKey !== 'low';
+      this.headlight.intensity = on ? 650 : 0;
+      if (on) { this.headlight.position.copy(out.pos).addScaledVector(out.flat, .6).y += 1.1; this.headlight.target.position.copy(out.pos).addScaledVector(out.flat, 22); }
+    }
     this._lampLights(out.pos);
     // building as you ride: a few ms a frame (less on Light: phones, whose frames are tighter), all of it while loading
     const low = this.qualityKey === 'low';
@@ -726,7 +765,6 @@ export class GraphWorld {
       const at = snapShadowBox(this.rider.group.position, this.sunDir, span, this.sun.shadow.mapSize.x, this._shadowAt ||= new THREE.Vector3());
       this.sun.position.copy(at).addScaledVector(this.sunDir, 2000); this.sun.target.position.copy(at);
       if ((this._frames % 120) === 7) this._treeShadows();
-      if ((this._frames % 30) === 0) for (const g of [this.group, this.heroes?.group]) g?.traverse((o) => { if (o.isMesh && !o.userData._rs) { o.userData._rs = 1; o.receiveShadow = true; } });
       if (this.baked.preparing) { this.perf?.end(performance.now()); return; }   // (nothing drawn behind the loader: the bake has the GPU)
     }
     this.shaders?.tick(dt, this._warmStart || this._frames > 600);
@@ -758,18 +796,27 @@ export class GraphWorld {
   /** [night lights] the six lamps nearest the rider as real lights (the pools on the ground are decals; these light the
    *  rider, the figures and the cars as they pass under them, as Zwift's lamps do since its 2025 lighting update). */
   _lampLights(at) {
+    if (!this._lamps) return;
     const on = this.timeKey === 'night' && this.qualityKey !== 'low';
-    if (!on) { if (this._lamps) for (const l of this._lamps) l.visible = false; return; }
-    if (!this._lamps) { this._lamps = Array.from({ length: 6 }, () => { const l = new THREE.PointLight('#ffd9a0', 0, 22, 2); this.scene.add(l); return l; }); this._lampT = -1; }
+    if (!on) { if (this._lampT !== -2) { for (const l of this._lamps) l.intensity = 0; this._lampT = -2; } return; }
     if ((this._frames & 31) !== 0 && this._lampT >= 0) return;
     this._lampT = this._frames;
-    const m = new THREE.Matrix4(), p = new THREE.Vector3(), near = [];
-    this.scene.traverse((o) => {
-      if (!o.isInstancedMesh || o.name !== 'Lamp glows' || !o.visible) return;
-      for (let i = 0; i < o.count; i++) { o.getMatrixAt(i, m); p.setFromMatrixPosition(m).applyMatrix4(o.matrixWorld); const d = p.distanceToSquared(at); if (d < 120 * 120) near.push([d, p.clone()]); }
-    });
-    near.sort((a, b) => a[0] - b[0]);
-    this._lamps.forEach((l, i) => { const n = near[i]; l.visible = true; l.intensity = n ? 60 : 0; if (n) l.position.copy(n[1]); });
+    // ([review 27 Nov] from the city's lamp heads by tile (graph-city.js t.lampHeads), not a walk of the scene for every
+    //  lamp instance's matrix and a clone each: the old walk looked for 'Lamp glows', a name the graph city's glows
+    //  ('Lamp glows <tile>') never had, so no lamp had ever lit)
+    const P = this._lampAt ||= new Float32Array(this._lamps.length * 3), n = nearestLampHeads(this.city, at.x, at.z, 120, P, this._lamps.length);
+    this._lamps.forEach((l, i) => { l.intensity = i < n ? 60 : 0; if (i < n) l.position.set(P[i * 3], P[i * 3 + 1], P[i * 3 + 2]); });
+  }
+  /** [review 27 Nov] the night's lights made with the world, at nothing by day: the headlight and the six lamps had been
+   *  added on the first night frame, a change in the light count that recompiles every lit material then (the shader
+   *  warm-up had only seen the day). On the maps whose time can't be night (a fixed golden hour) and on Light, none:
+   *  seven lights at nothing still cost their loop in every lit pixel. (Visible always: a hidden light leaves the
+   *  count too.) */
+  _nightLights() {
+    if (this.fixedTime || this.qualityKey === 'low' || this._lamps) return;
+    this.headlight = new THREE.SpotLight('#fff1d6', 0, 85, .58, 1, 1.5); this.scene.add(this.headlight, this.headlight.target);
+    this._lamps = Array.from({ length: 6 }, () => { const l = new THREE.PointLight('#ffd9a0', 0, 22, 2); this.scene.add(l); return l; });
+    this._lampT = -1;
   }
   _postOn() { return (this.qualityKey === 'high' || this.qualityKey === 'ultra') && !MOBILE && (this.gfx?.post ?? true); }
   /** [review 27 Nov] the post pass for a mode ('full': High/Ultra's 4× MSAA HDR, the air; 'lite': Balanced's 2×, AO
@@ -846,7 +893,11 @@ export class GraphWorld {
   waterTop(x, z) { return this.poolAt(x, z) + WATER_ABOVE; }
   /** The ground as its mesh draws it here (the 12.8 m grid's triangles), or the raw height where that tile isn't built. */
   surfaceH(x, z) {
-    const tt = this.tiles.get(`${Math.floor(x / TILE)},${Math.floor(z / TILE)}`);
+    // ([review 27 Nov] the last tile looked up kept: the ground cover asks ~460 times a cell, all in one tile — a key
+    //  string each time. Tiles stay in the map once made, released or not, so a kept one never goes stale)
+    const ti = Math.floor(x / TILE), tj = Math.floor(z / TILE), L = this._shTile;
+    let tt = L && L.i === ti && L.j === tj ? L : null;
+    if (!tt && (tt = this.tiles.get(`${ti},${tj}`))) this._shTile = tt;
     if (!tt || !tt.gridH) return this._groundH(x, z);
     const c = tt.gridCell, n1 = Math.round(TILE / c) + 1, u = (x - tt.i * TILE) / c, v = (z - tt.j * TILE) / c;
     const i = Math.min(n1 - 2, Math.max(0, Math.floor(u))), j = Math.min(n1 - 2, Math.max(0, Math.floor(v))), fu = u - i, fv = v - j;
@@ -1082,6 +1133,7 @@ export class GraphWorld {
         if (!h) return;
         if (this.disposed) { h.dispose(); return; }
         this.heroes = h; this.scene.add(h.group); h.setNight(this.timeKey === 'night' ? 1 : 0);
+        if (this.baked) receiveOnAdd(h.group);   // ([review 27 Nov] the landmarks' and the city's meshes take the live shadows as they come)
         if (this.bridges?.glows) h.addGlows?.(this.bridges.glows, 'Bridge lamps');   // (the bridges in first)
         this._cutCanal(); this._loadCity();
       })
@@ -1124,7 +1176,7 @@ export class GraphWorld {
             //  contact shading doesn't take a tuft's back card for a crease: ground-cover.js)
             const mat = grassMaterial(this.renderer, c.treeTime || { value: 0 }, this.qualityKey !== 'low'); mat.depthWrite = false; mat.side = THREE.FrontSide;
             this.groundCover = new GroundCover({ parent: this.scene, material: mat, radius: this.qualityKey === 'ultra' ? 64 : this.qualityKey === 'high' ? 48 : 38, density: 3.2,
-              isGrass: desert ? (x, z) => desertTuft(c, x, z, GRASS) : (x, z) => { const g = GRASS[c.landAt(x, z)] || 0; return g && !c.onRoad(x, z, 1.2) && !c.inWater?.(x, z) ? g : 0; },
+              isGrass: desert ? ((o) => (x, z) => desertTuft(c, x, z, GRASS, o))({}) : (x, z) => { const g = GRASS[c.landAt(x, z)] || 0; return g && !c.onRoad(x, z, 1.2) && !c.inWater?.(x, z) ? g : 0; },
               heightAt: (x, z) => this.surfaceH(x, z), tint: desert ? [1.45, 1.12, 1.05] : null });
           }
           for (const t of this.tiles.values()) if (t.built) this._release(t);
@@ -1184,52 +1236,69 @@ export class GraphWorld {
 
   _stream(cx, cz, budgetMs) {
     const t0 = performance.now();
-    const NEAR = this.nearM || NEAR_M, ci = Math.floor(cx / TILE), cj = Math.floor(cz / TILE), r = Math.ceil(NEAR / TILE);
-    const want = [];
+    const NEAR = this.nearM || NEAR_M;
+    // [review 27 Nov] the tiles wanted, nearest first, made again only when the camera has gone WANT_STEP from where
+    // they were last sorted or the reach changed (it had made ~170 key strings, as many objects, a sort, a filter and
+    // a map every frame); a tile's centre moves < WANT_STEP in the order, at 400 m tiles nothing a rider sees
+    const W = this._want;
+    if (!W || W.near !== NEAR || Math.abs(cx - W.x) > WANT_STEP || Math.abs(cz - W.z) > WANT_STEP) this._wantAt(cx, cz, NEAR);
+    const want = this._want.list;
+    // one tile at a time, as a job run in this frame's slice (a tile's roads, then its ground, banks and dressed
+    // places), nearest first; it carries on next frame where it paused
+    for (;;) {
+      const left = budgetMs - (performance.now() - t0);
+      if (left <= 0) break;
+      if (!this._tjob) {
+        let w = null;
+        for (let k = 0; k < want.length; k++) if (this._todo(want[k])) { w = want[k]; break; }
+        if (!w) break;
+        this._tjob = { t: w, gen: this._tileWork(w) };
+      }
+      if (runSlice(this._tjob.gen, left).done) this._tjob = null; else break;
+    }
+    let q = 0; for (let k = 0; k < want.length; k++) if (this._todo(want[k])) q++;
+    this._queued = q;
+    // the ways' spill (_spillJob): only near the camera — within SPILL_IN of a tile's edge, dropped past SPILL_OUT
+    // (it's a fine detail; built for every tile out to 2.3 km it was ~34 MB on High). [review 27 Nov] From the tiles
+    // waiting for it (_spillWait), not a scan of every tile in the map (PGH: > 1000) every frame
+    const SW = this._spillWait;
+    while ((this._sjob || SW.size) && performance.now() - t0 < budgetMs) {
+      if (!this._sjob) {
+        let best = null, bd = SPILL_IN;
+        for (const t of SW) if (t.groundMesh) { const d = Math.hypot(t.cx - cx, t.cz - cz) - TILE * .71; if (d < bd) { bd = d; best = t; } }
+        if (!best) break;
+        this._spillPending(best, false); this._sjob = { t: best, gen: this._spillJob(best) };
+      }
+      if (runSlice(this._sjob.gen, budgetMs - (performance.now() - t0)).done) this._sjob = null; else break;
+    }
+    if (this._frames % 30 === 15) for (const t of this._spilled) if (t !== this._sjob?.t && Math.hypot(t.cx - cx, t.cz - cz) - TILE * .71 > SPILL_OUT) {
+      t.spillMesh.geometry.dispose(); t.spillMesh = null; this._spilled.delete(t); this._spillPending(t, true); this._spillDirty = true;
+    }
+    if (this._spillDirty && !this._sjob && this._frames % 20 === 0) this._mergeSpill();
+    // release far tiles (a few a frame) — [review 27 Nov] of the built ones (_built), not every tile ever made
+    if (this._frames % 30 === 0) for (const t of this._built) {
+      if (t !== this._tjob?.t && Math.hypot(t.cx - cx, t.cz - cz) > (this.farM || FAR_M)) this._release(t);
+    }
+  }
+  /** [review 27 Nov] The tiles within NEAR of (cx, cz), nearest first (made once a WANT_STEP: _stream), and the near
+   *  ones the loading screen counts. */
+  _wantAt(cx, cz, NEAR) {
+    const ci = Math.floor(cx / TILE), cj = Math.floor(cz / TILE), r = Math.ceil(NEAR / TILE), W = this._want ||= { list: [], d: new Map() };
+    W.x = cx; W.z = cz; W.near = NEAR; W.list.length = 0; W.d.clear();
     for (let i = ci - r; i <= ci + r; i++) for (let j = cj - r; j <= cj + r; j++) {
       const d = Math.hypot((i + 0.5) * TILE - cx, (j + 0.5) * TILE - cz);
       if (d > NEAR) continue;
       const key = `${i},${j}`;
       let t = this.tiles.get(key);
       if (!t) this.tiles.set(key, (t = { key, pieces: [], nodes: [], built: false, cx: (i + 0.5) * TILE, cz: (j + 0.5) * TILE, i, j }));
-      want.push({ t, d });
+      W.list.push(t); W.d.set(t, d);
     }
-    want.sort((a, b) => a.d - b.d);
-    this._nearTiles = want.filter((w) => w.d < 700).map((w) => w.t);
-    // one tile at a time, as a job run in this frame's slice (a tile's roads, then its ground, banks and dressed
-    // places), nearest first; it carries on next frame where it paused
-    const todo = (t) => !t.built || (this.ground && !t.groundMesh);
-    for (;;) {
-      const left = budgetMs - (performance.now() - t0);
-      if (left <= 0) break;
-      if (!this._tjob) {
-        const w = want.find((q) => todo(q.t));
-        if (!w) break;
-        this._tjob = { t: w.t, gen: this._tileWork(w.t) };
-      }
-      if (runSlice(this._tjob.gen, left).done) this._tjob = null; else break;
-    }
-    this._queued = want.reduce((n, q) => n + (todo(q.t) ? 1 : 0), 0);
-    // the ways' spill (_spillJob): only near the camera — within SPILL_IN of a tile's edge, dropped past SPILL_OUT
-    // (it's a fine detail; built for every tile out to 2.3 km it was ~34 MB on High)
-    while (performance.now() - t0 < budgetMs) {
-      if (!this._sjob) {
-        let best = null, bd = SPILL_IN;
-        for (const t of this.tiles.values()) if (t.spillPending && t.groundMesh) { const d = Math.hypot(t.cx - cx, t.cz - cz) - TILE * .71; if (d < bd) { bd = d; best = t; } }
-        if (!best) break;
-        best.spillPending = false; this._sjob = { t: best, gen: this._spillJob(best) };
-      }
-      if (runSlice(this._sjob.gen, budgetMs - (performance.now() - t0)).done) this._sjob = null; else break;
-    }
-    if (this._frames % 30 === 15) for (const t of this.tiles.values()) if (t.spillMesh && t !== this._sjob?.t && Math.hypot(t.cx - cx, t.cz - cz) - TILE * .71 > SPILL_OUT) {
-      t.spillMesh.geometry.dispose(); t.spillMesh = null; t.spillPending = true; this._spillDirty = true;
-    }
-    if (this._spillDirty && !this._sjob && this._frames % 20 === 0) this._mergeSpill();
-    // release far tiles (a few a frame)
-    if (this._frames % 30 === 0) for (const t of this.tiles.values()) {
-      if (t.built && t !== this._tjob?.t && Math.hypot(t.cx - cx, t.cz - cz) > (this.farM || FAR_M)) this._release(t);
-    }
+    W.list.sort((a, b) => W.d.get(a) - W.d.get(b));
+    this._nearTiles = W.list.filter((t) => W.d.get(t) < 700);
   }
+  _todo(t) { return !t.built || (this.ground && !t.groundMesh); }
+  /** A tile waiting for its spill (or not): the flag and the set _stream looks in. */
+  _spillPending(t, on) { t.spillPending = on; if (on) this._spillWait.add(t); else this._spillWait.delete(t); }
 
   *_tileWork(t) {
     if (!t.built) yield* this._roadsJob(t);
@@ -1241,7 +1310,8 @@ export class GraphWorld {
     if (this._sjob?.t === t) this._sjob = null;
     if (t.spillMesh) this._spillDirty = true;
     for (const m of [t.roadMesh, t.paintMesh, t.groundMesh, t.bankMesh, t.spillMesh, ...(t.extra || []), ...(t.extraRoad || [])]) if (m) { this.group.remove(m); m.geometry.dispose(); }
-    t.roadMesh = t.paintMesh = t.groundMesh = t.bankMesh = t.spillMesh = null; t.spillPending = t.groundRows = false; t.extra = []; t.extraRoad = [];
+    t.roadMesh = t.paintMesh = t.groundMesh = t.bankMesh = t.spillMesh = null; t.groundRows = false; t.extra = []; t.extraRoad = [];
+    this._spillPending(t, false); this._spilled.delete(t); this._built.delete(t);
     t.built = false;
   }
 
@@ -1289,7 +1359,7 @@ export class GraphWorld {
   _buildRoads(t) { drain(this._roadsJob(t)); }
   /** A tile's roads as a job: pauses between ways when its slice is used up (no stall on a phone). */
   *_roadsJob(t) {
-    t.built = true; t.spills = []; t.endSpills = [];
+    t.built = true; t.spills = []; t.endSpills = []; this._built.add(t);
     if (!t.pieces.length && !t.nodes.length) return;
     const R = new Mesher(true), P = new Mesher(), W = new Mesher(), P_ = P;
     const col = (k) => new THREE.Color(COLORS[k] || COLORS.residential);
@@ -1562,7 +1632,7 @@ export class GraphWorld {
     g.computeVertexNormals();
     t.groundMesh = new THREE.Mesh(g, this.mats.ground); t.groundRows = false;
     this.group.add(t.groundMesh);
-    t.spillPending = !!(t.spills?.length || t.endSpills?.length);   // (built when the camera comes near: _stream)
+    this._spillPending(t, !!(t.spills?.length || t.endSpills?.length));   // (built when the camera comes near: _stream)
     yield* this._bankJob(t);
     yield* this.effects.tileJob(t);
   }
@@ -1597,7 +1667,7 @@ export class GraphWorld {
       }
     }
     const m = R.mesh(this.mats.spill);
-    if (m) { t.spillMesh = m; this._spillDirty = true; }   // (drawn merged with the other near tiles': _mergeSpill)
+    if (m) { t.spillMesh = m; this._spilled.add(t); this._spillDirty = true; }   // (drawn merged with the other near tiles': _mergeSpill)
   }
 
   /**
@@ -1637,7 +1707,7 @@ export class GraphWorld {
   /** The near tiles' spill strips as one mesh (one draw call, not one a tile), rebuilt when the set changes. */
   _mergeSpill() {
     this._spillDirty = false;
-    const parts = [...this.tiles.values()].map((t) => t.spillMesh?.geometry).filter(Boolean);
+    const parts = [...this._spilled].map((t) => t.spillMesh?.geometry).filter(Boolean);
     if (this.spillAll) { this.group.remove(this.spillAll); this.spillAll.geometry.dispose(); this.spillAll = null; }
     if (!parts.length) return;
     const g = new THREE.BufferGeometry(), drop = function () { if (!globalThis.BF_KEEP_GEOMETRY) this.array = null; };

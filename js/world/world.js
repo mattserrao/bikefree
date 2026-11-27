@@ -407,6 +407,7 @@ export class World {
     rec.job = null;
     if (this.disposed || this.areas.get(rec.id) !== rec || !rec.terrain) return;
     rec.ready = true;
+    if (this.look) this.look.dirty = true;   // ([review 27 Nov] its materials tooned at the next sweep, not up to 20 frames on)
     const w = this.areaWork?.[rec.id]?.steps?.build;
     rec.buildMs = Math.round(w?.ms || 0);
     this.log('3d', `Area ${rec.id} ready: ${rec.buildMs} ms of building in ${w?.n || 0} slices (longest ${Math.round(w?.maxMs || 0)} ms), ${Math.round((performance.now() - rec.t0) / 1000)} s after it was asked for`, 'debug');
@@ -939,7 +940,16 @@ export class World {
     }
   }
 
+  /** [review 27 Nov] the look's sweep (toolbox/atmosphere/look.js) walks the scene only every 20 frames unless told:
+   *  told here when the drawn area's terrain built a tile (its queue or its swapped-in count moved), its city a chunk,
+   *  or the drawn area changed (and by _areaBuilt), so a new material is tooned the frame it arrives. */
+  _lookWatch() {
+    if (!this.look) return;
+    const T = this.terrain, a = T?.stats?.queued ?? -1, b = T?.city?._pending?.length ?? -1, c = T?.stats?.ready ?? -1, R = this._lookRev ||= [NaN, NaN, NaN, null];
+    if (a !== R[0] || b !== R[1] || c !== R[2] || T !== R[3]) { R[0] = a; R[1] = b; R[2] = c; R[3] = T; this.look.dirty = true; }
+  }
   _render() {
+    this._lookWatch();
     this.look?.sweep();   // patch any material that arrived since the last frame (new tiles reuse patched ones)
     if (this.post && (!this.heroPost || this.qualityKey === 'low')) this.post.render(this.scene, this.camera, { grade: false });
     else if (this.post) {
