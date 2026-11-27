@@ -236,7 +236,7 @@ export class GraphCity {
     // an old-growth hero area (CNY: the Camillus Forest Unique Area): its data, then its dressing
     const ogFile = this.world.json?.oldGrowth;
     if (ogFile) {
-      try { const data = await (await fetch(new URL(`../../${ogFile}`, import.meta.url))).json(); this.oldGrowth = new OldGrowth({ world: this.world, city: this, data }); }
+      try { const data = await (await fetch(new URL(`../../${ogFile}`, import.meta.url))).json(); if (!this.disposed) this.oldGrowth = new OldGrowth({ world: this.world, city: this, data }); }   // [review 27 Nov] (not built for a world already gone)
       catch (err) { console.warn('old growth: not loaded', err); }
     }
     this.ready = true;
@@ -1869,6 +1869,7 @@ export class GraphCity {
     for (const g of [this.lampGeo, this.acornGeo]) g.dispose();
     for (const m of [this.kitMaterial, this.vergeMat, this.wireMat, this.lampMaterial, this.lotMaterial, this.cropMat, this.ditchMat].filter(Boolean)) m.dispose();
     this.landTexture?.dispose();
+    this.oldGrowth?.dispose?.(); this.oldGrowth = null;   // [review 27 Nov] CNY's Camillus Forest (its dispose: toolbox, this wave)
   }
 }
 
