@@ -109,6 +109,19 @@ function cardMaterial(uTime, near) {
   return m;
 }
 
+/** A crowd barrier panel ("Vauban", 2.4 m × 1.2 m): two rails, nine bars and the feet, in grey, the rest clear. */
+function barrierTexture() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+  const x = c.getContext('2d'), y = (m) => 128 - m / 1.2 * 128;   // metres up → pixels
+  x.fillStyle = '#a9adb1';
+  for (const h of [.15, 1.1]) x.fillRect(0, y(h) - 3, 256, 6);
+  for (let k = 0; k <= 8; k++) x.fillRect(4 + k * 31, y(1.1), 3, y(.15) - y(1.1));
+  for (const fx of [0, 250]) x.fillRect(fx, y(.2), 6, y(0) - y(.2));
+  x.fillRect(0, y(.03), 40, 4); x.fillRect(216, y(.03), 40, 4);   // the feet
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  return t;
+}
+
 /** Banner atlas: 512×128 cells — kilometres to go, the red flame, the finish, the summit banners. */
 function bannerTexture(texts) {
   const c = document.createElement('canvas'); c.width = 1024; c.height = 128 * Math.ceil(texts.length / 2);
@@ -321,22 +334,19 @@ export class RaceDay {
         }
       }
     }
+    // [triangle audit, 27 Nov] a panel is one cut-out quad (a barrier drawn in a texture, alpha-tested), not 11 boxes
+    const H = 1.2, tex = this._own(barrierTexture());
+    const mat = this._own(new THREE.MeshStandardMaterial({ map: tex, alphaTest: .5, side: THREE.DoubleSide, metalness: .5, roughness: .45 }));
     for (const [key, list] of by) {
-      const P = [], I = [];
-      const bar = (ax, ay, az, bx, by_, bz, t) => {
-        // a thin box along a→b, t thick
-        const dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz) || 1, nx = -dz / L * t, nz = dx / L * t, b = P.length / 3;
-        P.push(ax - nx, ay - t, az - nz, bx - nx, by_ - t, bz - nz, bx + nx, by_ + t, bz + nz, ax + nx, ay + t, az + nz,
-          ax - nx, ay + t, az - nz, bx - nx, by_ + t, bz - nz, bx + nx, by_ - t, bz + nz, ax + nx, ay - t, az + nz);
-        I.push(b, b + 1, b + 2, b, b + 2, b + 3, b + 4, b + 5, b + 6, b + 4, b + 6, b + 7);
-      };
+      const P = [], U = [], I = [];
       for (const p of list) {
-        for (const h of [.15, 1.1]) bar(p.A.x, p.ya + h, p.A.z, p.B.x, p.yb + h, p.B.z, .03);
-        for (let k = 0; k <= 8; k++) { const t = k / 8, x = p.A.x + (p.B.x - p.A.x) * t, z = p.A.z + (p.B.z - p.A.z) * t, y = p.ya + (p.yb - p.ya) * t; bar(x, y + .15, z, x + .001, y + 1.1, z + .001, .012); }
-        bar(p.A.x, p.ya, p.A.z, p.A.x + .001, p.ya + .2, p.A.z + .001, .05);
+        const b = P.length / 3;
+        P.push(p.A.x, p.ya, p.A.z, p.B.x, p.yb, p.B.z, p.B.x, p.yb + H, p.B.z, p.A.x, p.ya + H, p.A.z);
+        U.push(0, 0, 1, 0, 1, 1, 0, 1);
+        I.push(b, b + 1, b + 2, b, b + 2, b + 3);
       }
-      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setIndex(I); g.computeVertexNormals(); g.computeBoundingSphere();
-      const mesh = new THREE.Mesh(g, this._own(new THREE.MeshStandardMaterial({ color: '#a9adb1', metalness: .5, roughness: .45, side: THREE.DoubleSide })));
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); g.setIndex(I); g.computeVertexNormals(); g.computeBoundingSphere();
+      const mesh = new THREE.Mesh(g, mat);
       mesh.name = `Crowd barriers ${(key * CARD_CHUNK_M / 1000).toFixed(0)} km`; mesh.castShadow = true;
       this._chunk(mesh, 'camps', g);
     }

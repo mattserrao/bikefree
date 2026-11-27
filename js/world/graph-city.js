@@ -70,8 +70,8 @@ const vnoise = (x, z) => {
   return a + (b - a) * fu + (c - a) * fv + (a - b - c + d) * fu * fv;
 };   // the verges' grass and brush: built within, dropped beyond (m from a tile's edge)
 const REACH = { low: { near: 1300, far: 1800, trees: 0.6, treeNear: 450 }, balanced: { near: 2300, far: 3100, trees: 1, treeNear: 750 }, high: { near: 2300, far: 3100, trees: 1.2, treeNear: 900 }, ultra: { near: 2600, far: 3500, trees: 1.4, treeNear: 1100 } };
-const CAR_NEAR = 340;           // m: parked cars (the kit's lo LOD) within this, its far LOD beyond
-const CAR_HI = 110;
+const CAR_HI = 40;              // m: parked cars at the kit's hi LOD within this of the camera (each car by its own distance)
+const CAR_LO = 150;             // m: the lo LOD within this, the far LOD beyond
 const ANIMAL_M = 480;           // m: farm animals drawn within this             // m: the kit's detailed cars within this
 const PROXY_MAT = new THREE.MeshStandardMaterial({ color: '#000000' });
 /** One mesh of every tree's crown (an ellipsoid; a cone for the conifers) and trunk, for the bake only: on no camera
@@ -697,6 +697,8 @@ export class GraphCity {
       const d = Math.hypot(t.cx - cam.x, t.cz - cam.z) - TILE * 0.71;
       for (const m of t.near) m.visible = d < (m.userData.lodM || this.q.treeNear) && !(d < m.userData.lodMin) && (this.gfx.life || !/^(Parked cars|Animals)/.test(m.name));
       for (const m of t.far) m.visible = d >= (m.userData.lodM || this.q.treeNear);
+      // parked cars: per car near the camera; a tile out of reach all at the far LOD (once)
+      if (t.cars) { if (this.gfx.life && d < CAR_LO) { t.cars.update(cam, CAR_HI, CAR_LO); t.carsFar = false; } else if (!t.carsFar) { t.cars.allFar(); t.carsFar = true; } }
     }
     this.kit.tick(cam);
   }
@@ -1659,18 +1661,16 @@ export class GraphCity {
     if (glows.length) { const H = t.lampHeads = new Float32Array(glows.length * 3); glows.forEach((g, k) => { H[k * 3] = g.x; H[k * 3 + 1] = g.y; H[k * 3 + 2] = g.z; }); }
   }
 
-  /** Parked cars (toolbox/life/figures/cars.js, the shared kit): instanced by kind, the detailed LOD within CAR_HI,
-   *  the lo LOD to CAR_NEAR, the far LOD beyond. */
+  /** Parked cars (toolbox/life/figures/cars.js, the shared kit): instanced by kind, each car at the detail for its own
+   *  distance ([triangle audit, 27 Nov] was per tile: a tile within CAR_HI of its nearest edge drew all its cars at the
+   *  hi LOD) — hi within CAR_HI, lo to CAR_LO, far beyond (lods() keeps them up to date). */
   _parked(t, P) {
     if (!P.count) return;
     this.carMat ||= carMaterial({ dirt: this.rural ? 0.35 : 0.12, rust: this.rural ? 0.22 : 0.05, night: this.host.night });
-    const d = Math.hypot(t.cx - this.world.camera.position.x, t.cz - this.world.camera.position.z) - TILE * 0.71;
-    const bands = [['hi', 'near', 0, CAR_HI], ['lo', 'near', CAR_HI, CAR_NEAR], ['far', 'far', 0, CAR_NEAR]];
-    for (const [lod, set, lo, hi] of bands) for (const im of P.meshes(this.carMat, lod, `Parked cars ${lod}`)) {
-      im.name += ` ${t.key}`; im.userData.lodM = hi; if (lo) im.userData.lodMin = lo;
-      im.visible = set === 'far' ? d >= hi : d < hi && !(lo && d < lo);
-      this._add(t, im, set);
-    }
+    const set = t.cars = P.lodSet(this.carMat, 'Parked cars');
+    for (const im of set.meshes) { im.name += ` ${t.key}`; im.userData.bake = false; this._add(t, im); }
+    const cam = this.world.camera.position;
+    if (this.gfx.life) set.update(cam, CAR_HI, CAR_LO); else set.allFar();
   }
   _lotCars(ring, Mc) {
     // rows along the lot's longest side, 2.7 m stalls, 5.5 m rows, ~55% taken

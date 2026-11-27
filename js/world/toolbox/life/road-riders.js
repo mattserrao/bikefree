@@ -9,6 +9,11 @@
 //   R.dispose()
 import * as THREE from '../../../../vendor/three.js';
 import { loadRider } from '../../rider.js';
+import { Crowd, CLIP, randomLook, clipRate } from './figures/people.js';   // [triangle audit, 27 Nov] the far stand-in
+
+// past NEAR_M from the camera a rider is the figures kit's cyclist in its kit colour (1,352 / 685 tris in one draw)
+// instead of the full rider model (~65k tris, skinned, casting shadows)
+const NEAR_M = 35;
 
 // kit colours: the atlas's orange turned by these hues (blue, green, red, purple, teal, yellow) and lightness
 const KITS = [[205, 1], [115, .9], [-28, .95], [255, 1], [160, .95], [30, 1.1], [190, .7], [300, .9]];
@@ -19,9 +24,14 @@ export class RoadRiders {
     this.world = world; this.count = count; this.riders = []; this.disposed = false;
     let s = seed;
     this.rand = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+    this.uTime = { value: 0 };
+    this.far = count ? new Crowd(world.scene, { uTime: this.uTime, name: 'Road riders (far)', kind: 'cyclist', capacity: count, nearM: 120 }) : null;
     for (let i = 0; i < count; i++) {
       const [hue, light] = KITS[i % KITS.length];
-      const r = { model: null, p: null, lane: LANES[i % LANES.length], base: 7.2 + this.rand() * 3.6, speed: 0, crank: this.rand() * 6, cadence: 82 + this.rand() * 14,
+      // the far figure's kit: the rider atlas's orange turned as the model's is
+      const look = randomLook(this.rand, { helmet: true, sporty: true, kids: 0 });
+      look.shirt = new THREE.Color('#f07a1e').offsetHSL(hue / 360, 0, 0).multiplyScalar(light); look.pants = new THREE.Color('#1b1b1b');
+      const r = { look, phase: this.rand(), model: null, p: null, lane: LANES[i % LANES.length], base: 7.2 + this.rand() * 3.6, speed: 0, crank: this.rand() * 6, cadence: 82 + this.rand() * 14,
         pose: { pos: new THREE.Vector3(), fwd: new THREE.Vector3() } };
       this.riders.push(r);
       loadRider({ kitHue: hue, kitLight: light }).then((m) => {
@@ -41,7 +51,9 @@ export class RoadRiders {
   tick(dt, p, speed) {
     const W = this.world;
     if (!W.path || p == null) return;
-    const step = Math.min(dt, .1);
+    const step = Math.min(dt, .1), cam = W.camera?.position;
+    this.uTime.value += step;
+    this.far?.begin(cam || { x: 0, y: 0, z: 0 });
     this.riders.forEach((r, i) => {
       if (!r.model) return;
       if (r.p == null) { r.p = Math.max(0, p + (i % 3 !== 2 ? 22 + i * 30 : -(30 + i * 8))); r.speed = r.base; }   // (two in three start ahead, spread along the road)
@@ -58,14 +70,18 @@ export class RoadRiders {
       r.p += r.speed * step;
       r.pose.pos.set(pose.pos.x, pose.pos.y, pose.pos.z); r.pose.fwd.set(pose.fwd.x, pose.fwd.y, pose.fwd.z);
       r.crank += (r.cadence / 60) * Math.PI * 2 * step * Math.min(1, r.speed / 6);
-      r.model.group.visible = Math.abs(gap) < 700;
-      r.model.update(r.pose.pos, r.pose.fwd, r.crank, r.speed, step, { grade: slope * 100, power: 180 + slope * 1200, ftp: 250, cadence: r.cadence });
+      const shown = Math.abs(gap) < 700, near = !cam || !this.far || r.pose.pos.distanceTo(cam) < NEAR_M;
+      r.model.group.visible = shown && near;
+      if (shown && near) r.model.update(r.pose.pos, r.pose.fwd, r.crank, r.speed, step, { grade: slope * 100, power: 180 + slope * 1200, ftp: 250, cadence: r.cadence });
+      else if (shown) this.far.add(r.look, r.pose.pos.x, r.pose.pos.y, r.pose.pos.z, Math.atan2(r.pose.fwd.x, r.pose.fwd.z), CLIP.cycle, r.phase, clipRate(CLIP.cycle, r.speed), 0);
     });
+    this.far?.end();
   }
 
   dispose() {
     this.disposed = true;
     for (const r of this.riders) if (r.model) this.world.scene.remove(r.model.group);
+    this.far?.dispose();
     this.riders = [];
   }
 }
