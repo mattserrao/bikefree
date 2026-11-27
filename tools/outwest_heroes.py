@@ -203,7 +203,7 @@ else:
                       'note': "Kanab's 'Little Hollywood': a western street of false fronts on a boardwalk, hitching rails, a water tower"})
 
 # ---- the country's old adobe (user, 26 Nov 2026: adobe structures, rural too): homestead ruins, hornos and adobe
-# corrals beside the country roads — every ~1.8 km along them outside town, 45–110 m off, clear of every way
+# corrals beside the country roads — every ~1.8 km along them outside town, 30–60 m off (seen from the saddle), clear of every way
 sites, acc, n = [], 0.0, 0
 TOWN = F(37.0475, -112.5263)
 for e, la, lo in EDGES:
@@ -216,7 +216,7 @@ for e, la, lo in EDGES:
             kind = ('ruin', 'corral', 'horno', 'ruin')[len(sites) % 4]
             need = {'ruin': 14, 'corral': 22, 'horno': 6}[kind]
             side = 1 if h < .5 else -1
-            c = place(*off(a, o, -uy * side * (45 + h * 65), ux * side * (45 + h * 65)), need + 20, step=15, seed=len(sites))
+            c = place(*off(a, o, -uy * side * (30 + h * 30), ux * side * (30 + h * 30)), need + 8, step=10, seed=len(sites))
             if c and all(math.hypot((c[0] - q['center'][0]) * KY, (c[1] - q['center'][1]) * KX) > 700 for q in sites):
                 sites.append({'kind': kind, 'center': [round(c[0], 7), round(c[1], 7)], 'yawDeg': round(math.degrees(math.atan2(ux, uy)), 1)})
         s += 1800

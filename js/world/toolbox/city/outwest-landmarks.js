@@ -127,7 +127,7 @@ export function outwestLandmarkModels({ S, glows, local, L, host }) {
       // the country's old adobe (user, 26 Nov 2026: adobe structures, rural too): roofless homestead ruins — four
       // earth walls broken to uneven heights, a doorway, the plaster worn off at the foot; hornos (beehive ovens) of
       // stacked rings with a dark mouth; corrals walled in adobe with a pole gate
-      const MUD = ['#b88a64', '#a87a58', '#c49a72', '#9c7050'];
+      const MUD = ['#a68a72', '#9a7e66', '#b09478', '#8e7460'];   // (earth, a little greyed: the low sun saturates it)
       for (const [k, st] of (l.sites || []).entries()) {
         const c = local(st.center[0], st.center[1]), yaw = (st.yawDeg || 0) * Math.PI / 180, F = makeFrame(c, { x: Math.sin(yaw), z: -Math.cos(yaw) });
         const g = H(c.x, c.z), mud = MUD[k % MUD.length];
@@ -142,7 +142,7 @@ export function outwestLandmarkModels({ S, glows, local, L, host }) {
           }
         };
         if (st.kind === 'ruin') {
-          const A = 3 + hash(k * 2.2) * 1.5, B = 2.4 + hash(k * 3.1) * 1.2, h = 2.6;
+          const A = 3.5 + hash(k * 2.2) * 1.5, B = 2.8 + hash(k * 3.1) * 1.2, h = 3.2;
           wall(-A, -B, -.7, -B, h); wall(.7, -B, A, -B, h);   // (the front, a doorway in it)
           wall(-A, B, A, B, h); wall(-A, -B, -A, B, h); wall(A, -B, A, B, h);
           if (hash(k * 5.5) < .5) wall(-A, 0, 0, 0, h * .7, .35);   // (an inside wall)
